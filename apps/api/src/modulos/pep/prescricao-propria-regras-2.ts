@@ -4,12 +4,14 @@
 // esquemaFicha), que já validaram a entrada.
 //   - gravarRegra: nova versão da regra de alerta pelo código (regra_alerta + regra_alerta_versao, com a justificativa
 //     como motivo da alteração); código novo cria a regra no estabelecimento da sessão (versão 1). O cenário é o tipo de
-//     alerta (cenario_alerta.codigo). Regra do produto (editavel = falso) só liga, desliga ou muda a vigência;
+//     alerta (cenario_alerta.codigo). Regra do produto (editavel = falso) só liga, desliga ou muda a vigência; a regra
+//     do cliente (estabelecimento_id nulo, vale para todos os estabelecimentos) e a de outro estabelecimento recusam 409
+//     (o código é único no cliente, e um estabelecimento não altera o que vale para os outros);
 //   - registrarFicha: ficha_antimicrobiano do item prescrito (o item informado ou, sem ele, o último item do produto na
 //     prescrição ou no atendimento), com o antimicrobiano pelo princípio ativo do produto, a finalidade pelo tipo
 //     (empírico, dirigido, profilático), o sítio de infecção do catálogo e a duração (a informada ou a sugerida).
 // Trilha, versão e idempotência pelo executor, na mesma transação. Nada é apagado: a regra muda por nova versão.
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { type ContextoOperacao, definirOperacao, ErroOperacao, type Executor, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import type { ContextoPrescricao } from './prescricao-porta.js';
@@ -65,6 +67,16 @@ export function hojeLocal(fuso: string, agora = new Date()): string {
 export function periodoDaFicha(hoje: string, diaTratamento: number, dias: number): { inicio: string; fim: string } {
   const inicio = somarDias(hoje, -(diaTratamento - 1));
   return { inicio, fim: somarDias(inicio, dias - 1) };
+}
+
+/**
+ * Chave de idempotência da gravação: derivada da chave da requisição quando o contexto a traz (a repetição da mesma
+ * requisição devolve o que já foi gravado, sem nova versão nem nova ficha); sem ela, uma chave única da chamada.
+ */
+export function chaveDaGravacao(operacao: string, chaveRequisicao: unknown): string {
+  if (typeof chaveRequisicao === 'string' && chaveRequisicao.trim().length >= 8)
+    return `${operacao}:${createHash('sha256').update(chaveRequisicao).digest('hex').slice(0, 48)}`.slice(0, 80);
+  return `${operacao}:${randomUUID()}`.slice(0, 80);
 }
 
 const num = (v: unknown): number => Number(v);
@@ -130,7 +142,13 @@ export class RegrasPrescricaoPropria2 {
       } else {
         id = num(atual['id']);
         const dono = numOuNull(atual['estabelecimento_id']);
-        if (dono !== null && dono !== est.id)
+        if (dono === null)
+          throw recusar(
+            409,
+            'regra-do-cliente',
+            'A regra vale para todos os estabelecimentos do cliente; um estabelecimento não a altera sozinho.',
+          );
+        if (dono !== est.id)
           throw recusar(409, 'regra-de-outro-estabelecimento', 'O código já é de uma regra de outro estabelecimento.');
         const muda =
           num(atual['cenario_alerta_id']) !== num(cen['id']) ||
@@ -302,7 +320,7 @@ export class RegrasPrescricaoPropria2 {
       estabelecimento: ident.est.id,
       usuario: ident.usuario,
       correlacao: (c.correlacao || operacao).slice(0, 64),
-      chaveIdempotencia: `${operacao}:${randomUUID()}`.slice(0, 80),
+      chaveIdempotencia: chaveDaGravacao(operacao, (c as Partial<Record<'chaveIdempotencia', unknown>>).chaveIdempotencia),
     };
     const r = await this.executor.executar(op, cliente, { pedido: impressaoDoPedido(pedido) }, ctx);
     if (!feito) {

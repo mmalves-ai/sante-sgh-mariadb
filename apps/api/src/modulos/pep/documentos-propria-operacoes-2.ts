@@ -10,6 +10,7 @@
 // resumo do conteúdo, como a memória devolve `documento`. A gravação exige o profissional da sessão com inscrição ativa
 // no conselho (a indicada em `cbo`). Trilha, versão e idempotência pelo executor, na mesma transação. Registro clínico
 // nunca é apagado (SBIS-26).
+import { createHash } from 'node:crypto';
 import {
   type ArmazemArquivos,
   type ContextoOperacao,
@@ -50,6 +51,14 @@ const num = (v: unknown): number => Number(v);
 const marcadores = (n: number): string => Array.from({ length: n }, () => '?').join(', ');
 const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao =>
   new ErroOperacao(status, codigo, 'Operação recusada', detalhe);
+
+/**
+ * Chave de idempotência do registro do arquivo, derivada da chave da requisição: sempre no formato do núcleo (8 a 80
+ * caracteres), qualquer que seja o tamanho da chave de origem. A mesma requisição gera a mesma chave.
+ */
+export function chaveDoArquivoDoAnexo(chaveRequisicao: string): string {
+  return `pep.anexo.arquivo:${createHash('sha256').update(chaveRequisicao).digest('hex').slice(0, 48)}`;
+}
 
 /** O conteúdo do anexo (base64) como PDF; outro formato é recusado como a memória (422 arquivo-invalido). */
 export function pdfDoAnexo(conteudo: string): Buffer {
@@ -189,9 +198,6 @@ export function operacoesDocumentosPropria2(
             });
           throw recusar(409, 'tipo-anexo-sem-cadastro', 'O cliente não tem tipo de anexo ativo.');
         }
-        const repetido = await tx.uma('SELECT id FROM anexo_prontuario WHERE arquivo_id = ?', [arquivo]);
-        if (repetido)
-          throw recusar(409, 'anexo-repetido', 'Este mesmo arquivo já está anexado ao prontuário.');
         const agora = new Date();
         const clinico = instanteLocal(x.dataHoraClinica, s.fuso);
         if (clinico.getTime() > agora.getTime() + 5 * 60_000)
@@ -226,8 +232,10 @@ export function operacoesDocumentosPropria2(
         return { tabela: 'anexo_prontuario', id, anexo: id, origem: id, documento, trilha: null };
       },
       (r) => ({ evento: 'pep.anexo.incluido', paciente: x.paciente, documento: r['documento'], arquivo }),
-      // O arquivo vai ao disco ANTES da transação (endereçado pelo hash: a repetição reaproveita o mesmo registro);
-      // se a gravação do anexo falhar, sobra um arquivo sem anexo, que nunca é servido (a leitura parte do anexo).
+      // O arquivo vai ao disco ANTES da transação (endereçado pelo hash: o mesmo conteúdo no mesmo dia reaproveita o
+      // mesmo registro de `arquivo`, e cada anexo é uma linha própria de anexo_prontuario; o mesmo PDF pode ser anexado
+      // de novo, a outro atendimento ou a outro paciente, como na memória, e nada revela onde mais ele está). Se a
+      // gravação do anexo falhar, sobra um arquivo sem anexo, que nunca é servido (a leitura parte do anexo).
       async (est, banco) => {
         const g = await guardar(
           {
@@ -243,7 +251,7 @@ export function operacoesDocumentosPropria2(
             ...ctx,
             cliente: banco,
             estabelecimento: est.id,
-            chaveIdempotencia: `${ctx.chaveIdempotencia ?? 'pep.anexo'}:arquivo`.slice(0, 120),
+            chaveIdempotencia: chaveDoArquivoDoAnexo(ctx.chaveIdempotencia),
           },
         );
         arquivo = g.id;

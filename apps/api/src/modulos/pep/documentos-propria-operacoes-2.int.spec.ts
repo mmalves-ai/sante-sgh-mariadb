@@ -43,6 +43,8 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
     inscricao: 0,
     paciente: 0,
     atendimento: 0,
+    paciente2: 0,
+    atendimento2: 0,
     alergeno: 0,
     principio: 0,
   };
@@ -250,6 +252,24 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
           agora,
         ],
       );
+      // Segundo paciente com o próprio atendimento: o mesmo PDF anexado aos dois.
+      const pessoaPac2 = await pessoa(`PESSOA SINTETICA ${P} PACIENTE 2`);
+      ids.paciente2 = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pessoaPac2],
+        'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+        [pessoaPac2, 902_493_002, agora],
+      );
+      ids.atendimento2 = await garantir(
+        e,
+        'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+        [ids.est, 'L93-2'],
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
+         VALUES (?, 'L93-2', ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
+        [ids.est, ids.paciente2, categoriaAt, carater, fonte, ids.prof, new Date('2026-11-20T10:00:00Z'), agora],
+      );
       await garantir(
         e,
         'SELECT id FROM tipo_receita WHERE codigo = ?',
@@ -407,7 +427,7 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
     expect(lido.conteudo.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
-  it('anexar: sem tipo usa o tipo ativo do cliente; não-PDF, tipo inexistente e o mesmo arquivo de novo recusam', async () => {
+  it('anexar: sem tipo usa o tipo ativo do cliente; não-PDF e tipo inexistente recusam', async () => {
     const r = await ops()['pep.anexarDocumento']!(C(), anexo('a2'), ctx('an2'));
     expect(Number(r['anexo'])).toBeGreaterThan(0);
     expect(
@@ -418,12 +438,42 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
     expect(
       await codigo(ops()['pep.anexarDocumento']!(C(), anexo('a4', { tipoAnexo: 999_999_999 }), ctx('an4'))),
     ).toBe('entrada-invalida');
-    const repetido = anexo('a5');
-    await ops()['pep.anexarDocumento']!(C(), repetido, ctx('an5'));
-    expect(await codigo(ops()['pep.anexarDocumento']!(C(), repetido, ctx('an6')))).toBe('anexo-repetido');
     expect(
       await codigo(operacoesDocumentosPropria2(nucleo, CLIENTE, null)['pep.anexarDocumento']!(C(), anexo('a7'), ctx('an7'))),
     ).toBe('armazenamento-indisponivel');
+  });
+
+  it('anexar: o mesmo PDF vai a dois pacientes (como a memória): dois anexos, o registro do arquivo reaproveitado', async () => {
+    const mesmo = anexo('a5');
+    const r1 = await ops()['pep.anexarDocumento']!(C(), mesmo, ctx('an5'));
+    const r2 = await ops()['pep.anexarDocumento']!(
+      C(),
+      {
+        ...mesmo,
+        paciente: ids.paciente2,
+        atendimento: ids.atendimento2,
+        retratos: { htAtendimento: ids.atendimento2, htPaciente: ids.paciente2 },
+      },
+      ctx('an6'),
+    );
+    const r3 = await ops()['pep.anexarDocumento']!(C(), mesmo, ctx('an6b'));
+    expect(new Set([r1['anexo'], r2['anexo'], r3['anexo']]).size).toBe(3);
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (l) =>
+      l.consultar('SELECT id, paciente_id, arquivo_id FROM anexo_prontuario WHERE id IN (?, ?, ?) ORDER BY id', [
+        r1['anexo'],
+        r2['anexo'],
+        r3['anexo'],
+      ]),
+    );
+    expect(linhas.map((x) => Number(x['paciente_id']))).toEqual([ids.paciente, ids.paciente2, ids.paciente]);
+    expect(new Set(linhas.map((x) => Number(x['arquivo_id']))).size).toBe(1);
+  });
+
+  it('anexar: chave da requisição de 80 caracteres (o máximo do formato) grava o arquivo e o anexo', async () => {
+    const chave = `${P}:${randomUUID()}:${'k'.repeat(80)}`.slice(0, 80);
+    expect(chave).toHaveLength(80);
+    const r = await ops()['pep.anexarDocumento']!(C(), anexo('a8'), { ...ctx('an8'), chaveIdempotencia: chave });
+    expect(Number(r['anexo'])).toBeGreaterThan(0);
   });
 
   it('pedir exames: uma requisição por setor executante, itens na ordem e documento do prontuário', async () => {
