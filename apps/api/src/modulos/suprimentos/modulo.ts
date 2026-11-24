@@ -32,6 +32,8 @@ import { PortaOpmeMemoria } from './opme-porta-memoria.js';
 import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from './porta.js';
 import { PortaSuprimentosMemoria } from './porta-memoria.js';
 import { SuprimentosController } from './suprimentos.controller.js';
+import { VinculoReferenciaPrecoController } from './vinculo-referencia-preco.controller.js';
+import { PORTA_VINCULO_REFERENCIA, portaVinculoReferenciaIndisponivel } from './vinculo-referencia-preco.js';
 
 export interface OpcoesModuloSuprimentos {
   /** Testes: as portas já montadas. */
@@ -105,6 +107,11 @@ export async function modulo(
     (ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./cadastro-estoque-porta-propria.js')).PortaCadastroEstoquePropria(ctx.nucleo)
       : portaCadastroEstoqueIndisponivel());
+  // F3.6 (05-SUP linha 28): o vínculo do item com a referência de preço grava só no banco próprio; sem o núcleo, 503.
+  const vinculoReferencia =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./vinculo-referencia-preco.js')).PortaVinculoReferenciaPropria(ctx.nucleo)
+      : portaVinculoReferenciaIndisponivel();
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =
     memoria && !pedidos.includes('config')
@@ -122,6 +129,7 @@ export async function modulo(
       CadastroEstoqueController,
       // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
       PedidoGestaoController,
+      VinculoReferenciaPrecoController,
       ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
     ],
     providers: [
@@ -130,6 +138,7 @@ export async function modulo(
       { provide: PORTA_OPME, useValue: opme },
       { provide: PORTA_MANIPULACAO, useValue: manipulacao },
       { provide: PORTA_CADASTRO_ESTOQUE, useValue: cadastroEstoque },
+      { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO],
   };
