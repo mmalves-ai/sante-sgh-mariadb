@@ -21,3 +21,5 @@ export * from './conta/admissao.js';
 export * from './competencia/reabertura.js';
 // F3.7 (06-FAT linhas 10 e 12): período da conta parcial, segurado na conta e campo adicional da operadora na guia.
 export * from './conta/complementos.js';
+// F3.7 (06-FAT linhas 14, 15 e 16): equipe do item, kit de cobrança e transferência de itens entre contas.
+export * from './conta/movimentos.js';
