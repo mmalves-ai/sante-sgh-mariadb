@@ -69,6 +69,21 @@ export const gravarEscopo = (
   chave: string,
 ): Promise<ResultadoFinanceiro> => enviar(`${P}/escopo-contas`, e, confiar<ResultadoFinanceiro>(), chave);
 
+export interface LancamentoAchado {
+  readonly id: number;
+  readonly rotulo: string;
+  readonly data: string;
+  readonly valor: number;
+  readonly natureza: string | null;
+}
+export const buscarLancamentos = (alvo: AlvoReclassificacao, termo: string): Promise<LancamentoAchado[]> =>
+  ler(`${P}/lancamentos${qs({ alvo, termo })}`, z.array(confiar<LancamentoAchado>()));
+export const gravarRestricaoDoPerfil = (
+  e: { perfil: number; restrito: boolean },
+  chave: string,
+): Promise<ResultadoFinanceiro> =>
+  enviar(`${P}/tipos-lancamento/restricao`, e, confiar<ResultadoFinanceiro>(), chave);
+
 export const lerPerfis = (): Promise<Opcao[]> => ler(`${P}/perfis`, z.array(confiar<Opcao>()));
 export const lerTiposDoPerfil = (perfil: number): Promise<{ restrito: boolean; tipos: TipoDoPerfil[] }> =>
   ler(`${P}/tipos-lancamento${qs({ perfil })}`, confiar<{ restrito: boolean; tipos: TipoDoPerfil[] }>());

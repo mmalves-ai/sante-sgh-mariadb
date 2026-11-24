@@ -10,7 +10,14 @@ import { useRoute } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import { novaChave } from '../api-financeiro.js';
-import { type AlvoReclassificacao, lerCentros, lerClassificacao, reclassificar } from '../api-gestao.js';
+import {
+  type AlvoReclassificacao,
+  buscarLancamentos,
+  type LancamentoAchado,
+  lerCentros,
+  lerClassificacao,
+  reclassificar,
+} from '../api-gestao.js';
 import { quando, reais, usarFinanceiro } from '../usar-financeiro.js';
 
 const MINIMO = 10;
@@ -24,7 +31,8 @@ const alvo = ref<AlvoReclassificacao>(
     ? (rota.query['alvo'] as AlvoReclassificacao)
     : 'titulo_pagar',
 );
-const numero = ref(String(rota.query['id'] ?? ''));
+const numero = ref('');
+const achados = ref<LancamentoAchado[] | null>(null);
 const aberto = ref<number | null>(Number(rota.query['id']) || null);
 const atual = useQuery({
   queryKey: computed(() => ['financeiro', 'classificacao', alvo.value, aberto.value]),
@@ -73,8 +81,21 @@ const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const gravando = ref(false);
 let chave = novaChave('reclassificar');
-function abrir() {
-  aberto.value = Number(numero.value) || null;
+// A busca é pelo número de negócio (título) ou pelo documento e histórico (movimento); um só achado abre direto. Das
+// telas do título e do movimento, o botão Reclassificar chega com alvo e id na rota, sem busca.
+async function buscar() {
+  mensagem.value = null;
+  erro.value = null;
+  try {
+    const r = await buscarLancamentos(alvo.value, numero.value);
+    achados.value = r;
+    aberto.value = r.length === 1 ? r[0]!.id : null;
+  } catch (e) {
+    erro.value = e;
+  }
+}
+function abrir(id: number) {
+  aberto.value = id;
   mensagem.value = null;
   erro.value = null;
 }
@@ -116,7 +137,7 @@ async function confirmar() {
     <MensagemFaturamento :texto="mensagem" />
     <ErroFaturamento v-if="erro" :erro="erro" />
 
-    <form class="formulario" @submit.prevent="abrir">
+    <form class="formulario" @submit.prevent="buscar">
       <span class="campo">
         <label for="rc-alvo">{{ t('financeiro.gestao.reclassificar.alvo') }}</label>
         <select id="rc-alvo" v-model="alvo" data-testid="rc-alvo">
@@ -127,10 +148,33 @@ async function confirmar() {
       </span>
       <span class="campo">
         <label for="rc-numero">{{ t('financeiro.gestao.reclassificar.numero') }}</label>
-        <input id="rc-numero" v-model="numero" inputmode="numeric" data-testid="rc-numero" />
+        <input id="rc-numero" v-model="numero" minlength="2" data-testid="rc-numero" />
       </span>
-      <button type="submit" data-testid="rc-abrir">{{ t('financeiro.gestao.reclassificar.abrir') }}</button>
+      <button type="submit" data-testid="rc-buscar">{{ t('financeiro.gestao.reclassificar.buscar') }}</button>
     </form>
+    <p v-if="achados && achados.length === 0" data-testid="rc-nenhum">
+      {{ t('financeiro.gestao.reclassificar.nenhum') }}
+    </p>
+    <table v-else-if="achados && achados.length > 1" class="tabela" data-testid="rc-achados">
+      <caption>
+        {{
+          t('financeiro.gestao.reclassificar.escolher')
+        }}
+      </caption>
+      <tbody>
+        <tr v-for="x in achados" :key="x.id">
+          <td>{{ x.rotulo }}</td>
+          <td>{{ quando(x.data) }}</td>
+          <td>{{ reais(x.valor) }}</td>
+          <td>{{ x.natureza ?? '' }}</td>
+          <td>
+            <button type="button" :data-testid="`rc-abrir-${x.id}`" @click="abrir(x.id)">
+              {{ t('financeiro.gestao.reclassificar.abrir') }}
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
 
     <ErroFaturamento v-if="atual.error.value" :erro="atual.error.value" />
     <div v-else-if="atual.data.value" class="colunas" data-testid="rc-lancamento">

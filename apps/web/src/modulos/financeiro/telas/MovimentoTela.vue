@@ -6,6 +6,7 @@ import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
@@ -161,6 +162,7 @@ async function lancar() {
           <th scope="col">{{ t('financeiro.movimento.debito') }}</th>
           <th scope="col">{{ t('financeiro.valor') }}</th>
           <th scope="col">{{ t('financeiro.usuario') }}</th>
+          <th scope="col">{{ t('financeiro.gestao.reclassificar.titulo') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -173,6 +175,13 @@ async function lancar() {
           <td>{{ m.contaDebito ?? '—' }}</td>
           <td>{{ reais(m.valor) }}</td>
           <td>{{ m.usuario }}</td>
+          <td>
+            <RouterLink
+              :to="`/financeiro/gerencial/reclassificar?alvo=movimento_bancario&id=${m.id}`"
+              :data-testid="`mv-reclassificar-${m.id}`"
+              >{{ t('financeiro.gestao.reclassificar.titulo') }}</RouterLink
+            >
+          </td>
         </tr>
       </tbody>
     </table>

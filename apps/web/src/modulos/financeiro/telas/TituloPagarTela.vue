@@ -48,6 +48,11 @@ async function excluir() {
   <section class="tela-agenda" aria-labelledby="tpd-titulo" data-testid="tela-fin-titulo-pagar">
     <h1 id="tpd-titulo">{{ t('financeiro.pagar.detalhe') }} {{ id }}</h1>
     <RouterLink to="/financeiro/pagar/titulos">{{ t('financeiro.voltar') }}</RouterLink>
+    <RouterLink
+      :to="`/financeiro/gerencial/reclassificar?alvo=titulo_pagar&id=${id}`"
+      data-testid="tpd-reclassificar"
+      >{{ t('financeiro.gestao.reclassificar.titulo') }}</RouterLink
+    >
     <ErroFaturamento v-if="titulo.error.value" :erro="titulo.error.value" />
     <p v-else-if="titulo.isLoading.value">{{ t('financeiro.carregando') }}</p>
     <template v-else-if="titulo.data.value">

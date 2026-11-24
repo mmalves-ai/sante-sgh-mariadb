@@ -13,6 +13,7 @@ import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamen
 import { novaChave } from '../api-financeiro.js';
 import {
   gravarEscopo,
+  gravarRestricaoDoPerfil,
   gravarTipoDoPerfil,
   lerEscopo,
   lerPerfis,
@@ -104,6 +105,8 @@ const gravarConta = (conta: number) => {
 };
 const alternarTipo = (tipo: number, liberado: boolean) =>
   void acao((chave) => gravarTipoDoPerfil({ perfil: Number(perfil.value), tipo, liberado }, chave));
+const alternarRestricao = (restrito: boolean) =>
+  void acao((chave) => gravarRestricaoDoPerfil({ perfil: Number(perfil.value), restrito }, chave));
 </script>
 
 <template>
@@ -209,6 +212,18 @@ const alternarTipo = (tipo: number, liberado: boolean) =>
             : t('financeiro.gestao.permissoes.tiposLivre')
         }}
       </p>
+      <button
+        type="button"
+        :disabled="gravando || !podeEditar"
+        data-testid="pfin-restricao"
+        @click="alternarRestricao(!tipos.data.value.restrito)"
+      >
+        {{
+          tipos.data.value.restrito
+            ? t('financeiro.gestao.permissoes.desfazerRestricao')
+            : t('financeiro.gestao.permissoes.restringir')
+        }}
+      </button>
       <table class="tabela" data-testid="pfin-tipos">
         <thead>
           <tr>
