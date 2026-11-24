@@ -86,7 +86,6 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
       );
       await e.executar('DELETE FROM lancamento_repasse WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM favorecido_repasse WHERE estabelecimento_id = ?', [est]);
-      await e.executar('DELETE FROM evento_repasse WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM estorno_repasse WHERE estabelecimento_id = ?', [est]);
       await e.executar(
         'DELETE x FROM apuracao_repasse_item x JOIN apuracao_repasse a ON a.id = x.apuracao_repasse_id WHERE a.estabelecimento_id = ?',
@@ -669,11 +668,18 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     const agora = new Date();
     const lancamentos = await escrever(async (e) => {
       await e.executar("UPDATE apuracao_repasse SET situacao = 'aprovada' WHERE id = ?", [apuracao]);
-      const evento = await e.inserir(
+      // O evento do fixture (a regra já o usa) e o favorecido do profissional.
+      const evento = await garantir(
+        e,
+        'SELECT id FROM evento_repasse WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, `${P}-HON`],
         "INSERT INTO evento_repasse (estabelecimento_id, codigo, nome, natureza, tipo_lancamento, vigencia_inicio, criado_em) VALUES (?, ?, 'HONORARIOS', 'rendimento', 'credito', '2026-01-01', ?)",
         [ids.est, `${P}-HON`, agora],
       );
-      const fav = await e.inserir(
+      const fav = await garantir(
+        e,
+        'SELECT id FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ?',
+        [ids.est, ids.profissional],
         "INSERT INTO favorecido_repasse (estabelecimento_id, profissional_id, tipo_favorecido, vigencia_inicio, criado_em) VALUES (?, ?, 'proprio_profissional', '2026-01-01', ?)",
         [ids.est, ids.profissional, agora],
       );
