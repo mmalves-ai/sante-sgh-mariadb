@@ -1,4 +1,5 @@
 // Vínculos do paciente (F3.1): cobertura permanente, pré-cadastro da marcação e origem e indicação.
+//   GET  /api/cadastros/vinculos/opcoes                          fontes, planos, tipos de indicação, parentescos, canais
 //   GET  /api/cadastros/pacientes/:id/coberturas                 carteiras, situação no dia, proposta e avisos
 //   POST /api/cadastros/pacientes/:id/coberturas                 incluir carteira
 //   PUT  /api/cadastros/pacientes/:id/coberturas/:cid            alterar (validade, vigência, plano, titular, principal)
@@ -33,6 +34,7 @@ import {
   esquemaIncluirCobertura,
   esquemaPreCadastro,
   type IndicadorOrigem,
+  type OpcoesVinculos,
   type PreCadastroResumo,
 } from './paciente-vinculos-proprio.js';
 
@@ -65,6 +67,17 @@ export class PacienteVinculosController {
 
   private trilha(s: SessaoCadastro, recurso: string, op: string, tabela: string, paciente: number | null) {
     return linhaTrilha(s, EVENTO, recurso, op, { tabela, paciente });
+  }
+
+  @Get('vinculos/opcoes')
+  @Permissao('cadastro.paciente.ler')
+  async opcoes(@Req() req: RequisicaoAutorizada): Promise<OpcoesVinculos> {
+    const s = sessaoDe(req);
+    try {
+      return await this.servico().opcoes(s.porta);
+    } catch (e) {
+      throw problemaDoCadastro(e);
+    }
   }
 
   @Get('pacientes/:id/coberturas')

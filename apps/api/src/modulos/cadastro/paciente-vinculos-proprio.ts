@@ -618,6 +618,19 @@ export interface IndicadorOrigem {
   readonly porTipo: { id: number; descricao: string; total: number }[];
 }
 
+export interface OpcoesVinculos {
+  readonly fontes: { id: number; nome: string; particular: boolean; exigeValidade: boolean }[];
+  readonly planos: { id: number; fontePagadora: number; descricao: string }[];
+  readonly tiposIndicacao: {
+    id: number;
+    descricao: string;
+    exigeProfissional: boolean;
+    exigeComplemento: boolean;
+  }[];
+  readonly parentescos: { id: number; descricao: string }[];
+  readonly canais: string[];
+}
+
 // ───────────────────────────── Serviço ─────────────────────────────
 
 export class CadastroVinculosProprio {
@@ -957,6 +970,47 @@ export class CadastroVinculosProprio {
           descricao: String(x['descricao']),
           total: n(x['total']),
         })),
+      };
+    });
+  }
+
+  /** Opções dos formulários (uma chamada): fontes e planos ativos, tipos de indicação ativos, parentescos e canais. */
+  async opcoes(c: ContextoPorta): Promise<OpcoesVinculos> {
+    return this.ler(c, async (l) => {
+      const fontes = await l.consultar(
+        `SELECT id, nome, tipo, exige_validade_carteira FROM fonte_pagadora
+          WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome LIMIT 1000`,
+      );
+      const planos = await l.consultar(
+        `SELECT id, fonte_pagadora_id, descricao FROM plano_fonte_pagadora
+          WHERE situacao = 'ativo' AND excluido_em IS NULL ORDER BY descricao LIMIT 5000`,
+      );
+      const tipos = await l.consultar(
+        'SELECT id, descricao, exige_profissional, exige_complemento FROM tipo_indicacao WHERE ativo ORDER BY descricao LIMIT 500',
+      );
+      const parentescos = await l.consultar(
+        'SELECT id, descricao FROM tipo_parentesco WHERE ativo AND usado_em_dependente ORDER BY descricao LIMIT 200',
+      );
+      return {
+        fontes: fontes.map((x: Linha) => ({
+          id: n(x['id']),
+          nome: String(x['nome']),
+          particular: x['tipo'] === 'particular',
+          exigeValidade: bool(x['exige_validade_carteira']),
+        })),
+        planos: planos.map((x: Linha) => ({
+          id: n(x['id']),
+          fontePagadora: n(x['fonte_pagadora_id']),
+          descricao: String(x['descricao']),
+        })),
+        tiposIndicacao: tipos.map((x: Linha) => ({
+          id: n(x['id']),
+          descricao: String(x['descricao']),
+          exigeProfissional: bool(x['exige_profissional']),
+          exigeComplemento: bool(x['exige_complemento']),
+        })),
+        parentescos: parentescos.map((x: Linha) => ({ id: n(x['id']), descricao: String(x['descricao']) })),
+        canais: [...CANAIS_CAPTACAO],
       };
     });
   }

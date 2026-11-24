@@ -39,6 +39,7 @@ import { mensagensManutencao } from '../modulos/manutencao/i18n.js';
 import { mensagensContabil } from '../modulos/contabil/i18n.js';
 import { mensagensPatrimonio } from '../modulos/patrimonio/i18n.js';
 import { mensagensPessoas } from '../modulos/pessoas/i18n.js';
+import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
 import { mensagensSesmt } from '../modulos/pessoas/sesmt/i18n.js';
 import { mensagensPonto } from '../modulos/pessoas/ponto/i18n.js';
 import { mensagensF6 } from '../modulos/pessoas/f6/i18n.js';
@@ -2367,6 +2368,7 @@ export const mensagensWeb = {
   // M54 (etapa 7): orçamento empresarial (versões, valores por mês, aprovação, orçado × realizado).
   orcamentoEmpresarial: mensagensOrcamento,
   pessoas: mensagensPessoas,
+  vinculos: mensagensVinculos,
   // M52.5: SESMT (ASO, vacinas, acidentes e CAT, riscos e EPI).
   sesmt: mensagensSesmt,
   // M52.4: ponto (arquivo do relógio, espelho, ajustes, período, banco de horas, ciência).

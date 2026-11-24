@@ -23,6 +23,15 @@ export const rotasCadastro: RouteRecordRaw[] = [
     meta: { permissao: 'cadastro.paciente.criar' },
   },
   {
+    path: '/cadastros/pacientes/pre-cadastros',
+    name: 'cadastro.preCadastros',
+    component: () => import('./telas/PreCadastrosTela.vue'),
+    meta: {
+      permissao: 'cadastro.paciente.ler',
+      menu: 'Cadastros > Pacientes (cadastro único) > Pré-cadastro da marcação',
+    },
+  },
+  {
     path: '/cadastros/pacientes/duplicidades',
     name: 'cadastro.duplicidades',
     component: () => import('./telas/DuplicidadesTela.vue'),
