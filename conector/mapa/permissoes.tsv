@@ -5758,6 +5758,7 @@ opcao_menu	3689	enfermagem.kitProcedimento.criar
 opcao_menu	3689	enfermagem.kitProcedimento.editar
 opcao_menu	3689	enfermagem.kitProcedimento.exportar
 opcao_menu	3689	enfermagem.kitProcedimento.ler
+opcao_menu	3690	cadastro.calendario.editar
 opcao_menu	3690	cadastro.geralAL.feriados
 opcao_menu	3690	organizacao.feriado.criar
 opcao_menu	3690	organizacao.feriado.editar
