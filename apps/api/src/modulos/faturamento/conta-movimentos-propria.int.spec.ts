@@ -457,6 +457,65 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(v.fonte.length).toBeGreaterThan(0);
   });
 
+  it('lançamento manual com a equipe no mesmo pedido: item e equipe juntos; equipe recusada não deixa o item', async () => {
+    const contar = async () =>
+      Number(
+        (
+          await linhas('SELECT COUNT(*) AS q FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [
+            ids['contaA'],
+          ])
+        )[0]!['q'],
+      );
+    const antes = await contar();
+    const agora = new Date();
+    const pedido = {
+      tipo: 2,
+      codigo: 83740001,
+      quantidade: 1,
+      data: agora.toISOString().slice(0, 10),
+      hora: '10:00',
+      local: 0,
+      ato: 0,
+    };
+    expect(
+      await codigoDo(
+        s.gravar('lancar.equipe', op(), {
+          ...pedido,
+          conta: ids['contaA'],
+          equipe: [
+            { profissionalId: ids['cirurgiao'], funcaoId: ids['fCir'] },
+            { profissionalId: ids['auxiliar'], funcaoId: ids['fCir'] },
+          ],
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    expect(await contar()).toBe(antes);
+    const r = await s.gravar('lancar.equipe', op(), {
+      ...pedido,
+      conta: ids['contaA'],
+      equipe: [
+        { profissionalId: ids['cirurgiao'], funcaoId: ids['fCir'] },
+        { profissionalId: ids['auxiliar'], funcaoId: ids['fAux'] },
+      ],
+    });
+    expect(await contar()).toBe(antes + 1);
+    const eq = await linhas(
+      `SELECT sequencia, funcao_equipe_cobranca_id AS f, valor_ato FROM conta_hospitalar_item_participante
+        WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+      [Number(r['id'])],
+    );
+    const hon = Number(
+      (await linhas('SELECT valor_honorario FROM conta_hospitalar_item WHERE id = ?', [Number(r['id'])]))[0]![
+        'valor_honorario'
+      ],
+    );
+    expect(hon).toBeGreaterThan(0);
+    expect(eq.map((x) => [Number(x['sequencia']), Number(x['f']), Number(x['valor_ato'])])).toEqual([
+      [1, ids['fCir'], hon],
+      [2, ids['fAux'], Math.round(hon * 30) / 100],
+    ]);
+  });
+
   it('kit de cobrança: cadastro, lançamento aberto e fechado na conta, fonte errada recusada', async () => {
     const aberto = await s.gravar('kit.cadastrar', op(), {
       codigo: `${P}KA`,
