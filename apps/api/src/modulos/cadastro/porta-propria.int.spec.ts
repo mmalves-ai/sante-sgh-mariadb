@@ -293,12 +293,19 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
         [idDois],
       ),
     ).toBe(3);
+    // Cada item guarda a versão do registro logo depois da transferência (base da conferência do desfazer).
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM unificacao_cadastro_item i JOIN unificacao_cadastro u ON u.id = i.unificacao_cadastro_id WHERE u.absorvido_paciente_id = ? AND i.versao_registro = 2',
+        [idDois],
+      ),
+    ).toBe(3);
     const [abs] = await porta.lerPacientes(c, [idDois]);
     expect(abs).toMatchObject({ ativo: false, unificadoEm: idUm });
     expect(await porta.unificacoes(c, idUm)).toEqual([
       expect.objectContaining({ absorvido: idDois, sobrevivente: idUm }),
     ]);
-    expect((await porta.lerPar(c, par!.id))?.situacao).toBe('unificado_no_legado');
+    expect((await porta.lerPar(c, par!.id))?.situacao).toBe('unificado');
     await expect(
       porta.unificar(c, { idAbsorvido: idDois, idSobrevivente: idUm }, contextoGravacao(mm)),
     ).rejects.toMatchObject({ problema: { codigo: 'ja-unificado' } });
@@ -360,7 +367,22 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
     expect(await contar('SELECT COUNT(*) AS n FROM paciente_versao WHERE paciente_id = ?', [idDois])).toBe(
       retratosAntes + 1,
     );
-    expect(await porta.unificacoes(c, idUm)).toEqual([]);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM paciente_versao WHERE paciente_id = ? AND motivo = 'unificacao_desfeita'",
+        [idDois],
+      ),
+    ).toBe(1);
+    // A desfeita continua no histórico, marcada, com data, motivo e responsável.
+    expect(await porta.unificacoes(c, idUm)).toEqual([
+      expect.objectContaining({
+        id: u!.id,
+        situacao: 'revertida',
+        motivoReversao: 'Eram pessoas diferentes (teste)',
+        revertidaPor: expect.any(String),
+        revertidaEm: expect.any(String),
+      }),
+    ]);
     // Desfazer de novo é recusado (já revertida); nada muda.
     await expect(
       porta.desfazerUnificacao(
@@ -369,6 +391,59 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
         contextoGravacao(mm),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'ja-revertida' } });
+
+    // Registro alterado depois da unificação: o desfazer recusa sem devolver nada, marca o item em conflito e a
+    // unificação como não reversível (gravado), e o atendimento continua no cadastro que ficou.
+    await porta.unificar(
+      c,
+      {
+        idAbsorvido: idDois,
+        idSobrevivente: idUm,
+        par: par!.id,
+        justificativa: 'Segunda unificação de teste',
+      },
+      contextoGravacao(mm),
+    );
+    const u2 = (await porta.unificacoes(c, idUm)).find((x) => x.situacao === 'efetivada');
+    expect(u2?.id).toBeGreaterThan(u!.id!);
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-altera' }, async (w) => {
+      await w.executar('UPDATE atendimento SET versao = versao + 1, alterado_em = ? WHERE id = ?', [
+        new Date(),
+        dep.atendimento,
+      ]);
+    });
+    await expect(
+      porta.desfazerUnificacao(
+        c,
+        { idUnificacao: u2!.id!, motivo: 'Tentativa com atendimento alterado' },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'desfazer-registro-alterado' } });
+    for (const [t, id] of [
+      ['alergia_paciente', dep.alergia],
+      ['cobertura_paciente', dep.cobertura],
+      ['atendimento', dep.atendimento],
+    ] as const)
+      expect(
+        await contar(`SELECT COUNT(*) AS n FROM ${t} WHERE id = ? AND paciente_id = ?`, [id, idUm]),
+      ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM unificacao_cadastro WHERE id = ? AND situacao = 'efetivada' AND reversivel = 0",
+        [u2!.id],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM unificacao_cadastro_item WHERE unificacao_cadastro_id = ? AND situacao = 'conflito' AND tabela = 'atendimento'",
+        [u2!.id],
+      ),
+    ).toBe(1);
+    expect((await porta.unificacoes(c, idUm)).find((x) => x.id === u2!.id)?.reversivel).toBe(false);
+    // Uma vez não reversível, nova tentativa é recusada pelo domínio.
+    await expect(
+      porta.desfazerUnificacao(c, { idUnificacao: u2!.id!, motivo: 'Outra tentativa' }, contextoGravacao(mm)),
+    ).rejects.toMatchObject({ problema: { codigo: 'unificacao-irreversivel' } });
   });
 
   it('e-mail de volta a um valor já usado (A→B→A) reativa a linha; o mesmo e-mail não muda nada', async () => {

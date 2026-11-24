@@ -1,6 +1,8 @@
-// Origem e indicação do paciente (F3.1, 02-CAD linha 12): de onde o paciente veio (canal) e quem indicou. A regra fica
-// no domínio: cada canal exige o seu indicador (profissional, paciente, parceiro ou campanha), o captado tem de ser
-// identificado (paciente, pré-cadastro ou contato) e ninguém indica a si mesmo. Vocabulário neutro: ids e texto.
+// Origem e indicação do paciente (F3.1, 02-CAD linha 12): de onde o paciente veio e quem indicou. Fonte única da regra
+// de quem indicou: o tipo de indicação que o hospital mantém (domínio tipo_indicacao: categoria, exige o profissional,
+// exige o complemento). O canal é só o meio por onde o contato chegou (site, telefone, campanha...), e o único canal
+// com exigência própria é a campanha (o nome dela). O captado tem de ser identificado (paciente, pré-cadastro ou
+// contato) e ninguém indica a si mesmo. Vocabulário neutro: ids, booleanos e texto.
 
 export const CANAIS_CAPTACAO = [
   'indicacao_profissional',
@@ -15,8 +17,19 @@ export const CANAIS_CAPTACAO = [
 ] as const;
 export type CanalCaptacao = (typeof CANAIS_CAPTACAO)[number];
 
+/** O tipo de indicação como o hospital o cadastrou (lido do domínio na gravação). */
+export interface TipoIndicacaoRegra {
+  readonly id: number;
+  readonly ativo: boolean;
+  readonly categoria: string;
+  readonly exigeProfissional: boolean;
+  readonly exigeComplemento: boolean;
+}
+
 export interface CaptacaoProposta {
   readonly canal: CanalCaptacao;
+  /** Obrigatório (a coluna é NOT NULL): null quando o id informado não existe no domínio. */
+  readonly tipoIndicacao: TipoIndicacaoRegra | null;
   readonly paciente?: number | null;
   readonly preCadastro?: number | null;
   readonly contatoNome?: string | null;
@@ -44,42 +57,34 @@ export function conferirCaptacao(c: CaptacaoProposta): RecusaCaptacao[] {
       campo: 'paciente',
       mensagem: 'Informe o paciente, o pré-cadastro ou o nome do contato captado.',
     });
-  switch (c.canal) {
-    case 'indicacao_profissional':
-      if (!c.indicadorProfissional && !preenchido(c.indicadorNome))
-        r.push({
-          codigo: 'indicador-obrigatorio',
-          campo: 'indicadorProfissional',
-          mensagem: 'Indicação de profissional: escolha o profissional ou escreva o nome de quem indicou.',
-        });
-      break;
-    case 'indicacao_paciente':
-      if (!c.indicadorPaciente && !preenchido(c.indicadorNome))
-        r.push({
-          codigo: 'indicador-obrigatorio',
-          campo: 'indicadorPaciente',
-          mensagem: 'Indicação de paciente: escolha o paciente ou escreva o nome de quem indicou.',
-        });
-      break;
-    case 'parceiro':
-      if (!c.parceiro && !preenchido(c.indicadorNome))
-        r.push({
-          codigo: 'indicador-obrigatorio',
-          campo: 'parceiro',
-          mensagem: 'Parceiro: escolha a empresa parceira ou escreva o nome dela.',
-        });
-      break;
-    case 'campanha':
-      if (!preenchido(c.campanha))
-        r.push({
-          codigo: 'campanha-obrigatoria',
-          campo: 'campanha',
-          mensagem: 'Escreva o nome da campanha.',
-        });
-      break;
-    default:
-      break;
+  const t = c.tipoIndicacao;
+  if (!t || !t.ativo)
+    r.push({
+      codigo: 'tipo-indicacao-obrigatorio',
+      campo: 'tipoIndicacao',
+      mensagem: 'Escolha um tipo de indicação ativo no cadastro do hospital.',
+    });
+  else {
+    if (t.exigeProfissional && !c.indicadorProfissional)
+      r.push({
+        codigo: 'indicador-obrigatorio',
+        campo: 'indicadorProfissional',
+        mensagem: 'Este tipo de indicação pede o profissional que indicou.',
+      });
+    if (t.exigeComplemento && !preenchido(c.indicadorNome) && !c.indicadorPaciente && !c.parceiro)
+      r.push({
+        codigo: 'complemento-obrigatorio',
+        campo: 'indicadorNome',
+        mensagem:
+          'Este tipo de indicação pede quem indicou: escolha o paciente, o parceiro ou escreva o nome.',
+      });
   }
+  if (c.canal === 'campanha' && !preenchido(c.campanha))
+    r.push({
+      codigo: 'campanha-obrigatoria',
+      campo: 'campanha',
+      mensagem: 'Escreva o nome da campanha.',
+    });
   if (c.paciente && c.indicadorPaciente && c.paciente === c.indicadorPaciente)
     r.push({
       codigo: 'autoindicacao',

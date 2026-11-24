@@ -20,6 +20,7 @@ import {
   type UnificarPacienteEntrada,
 } from '@sgh/contratos';
 import { erroConflitoVersao, erroEntradaInvalida, type Linha, recusa } from '@sgh/nucleo';
+import { planoDeDesfazer } from '@sgh/dominio-cadastro';
 import { lerVersaoColunas, versaoDasColunas } from './memoria-versao.js';
 import type {
   ConsentimentoPaciente,
@@ -361,6 +362,19 @@ const SOLICITANTES = [
   },
 ] as const;
 
+interface UnificacaoMemoria {
+  id: number;
+  absorvido: number;
+  sobrevivente: number;
+  em: string;
+  /** Os cadastros que o absorvido já tinha absorvido antes e que passaram ao que fica junto com ele. */
+  levados: number[];
+  situacao: 'efetivada' | 'revertida';
+  revertidaEm: string | null;
+  motivoReversao: string | null;
+  revertidaPor: string | null;
+}
+
 interface Estado {
   pacientes: Map<number, Linha>;
   historico: Map<number, VersaoCadastro[]>;
@@ -371,6 +385,9 @@ interface Estado {
   geradorHt: number;
   geradorFila: number;
   geradorCons: number;
+  /** F3.1: as unificações feitas na memória, com id próprio (a desfeita continua, marcada). */
+  unificacoes: Map<number, UnificacaoMemoria>;
+  geradorUnif: number;
   /** Revisão do M39: os solicitantes incluídos pela tela (sintéticos, além dos fixos). */
   /** D-PROF-39: o corpo clínico sintético (lido e gravado pelas regras das receitas). */
   profissionais: ProfissionaisMemoria;
@@ -514,6 +531,8 @@ export class PortaCadastroMemoria implements PortaCadastro {
         geradorHt: 1,
         geradorFila: 1,
         geradorCons: 1,
+        unificacoes: new Map(),
+        geradorUnif: 9001,
         solicitantes: [],
         profissionais: new ProfissionaisMemoria(),
       };
@@ -667,18 +686,32 @@ export class PortaCadastroMemoria implements PortaCadastro {
   }
 
   async unificacoes(c: ContextoPorta, id: number) {
-    const l = this.e(c).pacientes.get(id);
-    const u = l ? Number(l['UNIFICADO_EM']) : id;
-    // Na memória, a unificação é identificada pelo prontuário absorvido (um absorvido só tem uma unificação viva).
-    if (l && u !== id) return [{ id, absorvido: id, sobrevivente: u, em: '2025-06-01T10:00:00.000' }];
-    return [...this.e(c).pacientes.values()]
-      .filter((x) => Number(x['UNIFICADO_EM']) === id && Number(x['ID']) !== id)
-      .map((x) => ({
-        id: Number(x['ID']),
-        absorvido: Number(x['ID']),
-        sobrevivente: id,
-        em: '2025-06-01T10:00:00.000',
+    const s = this.e(c);
+    const registradas = [...s.unificacoes.values()]
+      .filter((u) => u.absorvido === id || u.sobrevivente === id)
+      .sort((a, b) => b.id - a.id)
+      .map((u) => ({
+        id: u.id,
+        absorvido: u.absorvido,
+        sobrevivente: u.sobrevivente,
+        em: u.em,
+        situacao: u.situacao,
+        reversivel: true,
+        revertidaEm: u.revertidaEm,
+        motivoReversao: u.motivoReversao,
+        revertidaPor: u.revertidaPor,
       }));
+    // A massa sintética já nasce com cadastros unificados (sem registro da unificação): aparecem, sem desfazer.
+    const vivos = new Set(registradas.filter((u) => u.situacao === 'efetivada').map((u) => u.absorvido));
+    const l = s.pacientes.get(id);
+    const u = l ? Number(l['UNIFICADO_EM']) : id;
+    const daMassa =
+      l && u !== id
+        ? [{ absorvido: id, sobrevivente: u, em: '2025-06-01T10:00:00.000' }]
+        : [...s.pacientes.values()]
+            .filter((x) => Number(x['UNIFICADO_EM']) === id && Number(x['ID']) !== id)
+            .map((x) => ({ absorvido: Number(x['ID']), sobrevivente: id, em: '2025-06-01T10:00:00.000' }));
+    return [...registradas, ...daMassa.filter((x) => !vivos.has(x.absorvido))];
   }
 
   async homonimos(c: ContextoPorta, ids: readonly number[]) {
@@ -845,19 +878,34 @@ export class PortaCadastroMemoria implements PortaCadastro {
         'Este prontuário já foi unificado em outro (está inativo). Releia a fila de duplicidades.',
       );
     const agora = new Date();
+    const levados: number[] = [];
     for (const [id, l] of s.pacientes)
-      if (id === e.idAbsorvido || Number(l['UNIFICADO_EM']) === e.idAbsorvido)
+      if (id === e.idAbsorvido || Number(l['UNIFICADO_EM']) === e.idAbsorvido) {
+        if (id !== e.idAbsorvido) levados.push(id);
         s.pacientes.set(id, {
           ...l,
           ATIVO: false,
           UNIFICADO_EM: e.idSobrevivente,
           CARIMBO: agora,
         });
+      }
+    const idUnif = s.geradorUnif++;
+    s.unificacoes.set(idUnif, {
+      id: idUnif,
+      absorvido: e.idAbsorvido,
+      sobrevivente: e.idSobrevivente,
+      em: agora.toISOString(),
+      levados,
+      situacao: 'efetivada',
+      revertidaEm: null,
+      motivoReversao: null,
+      revertidaPor: null,
+    });
     for (const [id, p] of s.fila)
       if (p.situacao === 'aberto' && (p.a === e.idAbsorvido || p.b === e.idAbsorvido))
         s.fila.set(id, {
           ...p,
-          situacao: 'unificado_no_legado',
+          situacao: 'unificado',
           decididoPor: ctx.login,
           decididoEm: agora.toISOString(),
           ...(e.justificativa ? { justificativa: e.justificativa } : {}),
@@ -866,22 +914,47 @@ export class PortaCadastroMemoria implements PortaCadastro {
   }
 
   /**
-   * F3.1: desfaz a unificação (na memória, o id da unificação é o do absorvido): o absorvido volta a ativo e os pares
-   * da fila que a unificação decidiu voltam a abertos. Mesma regra de motivo do domínio.
+   * F3.1: desfaz a unificação pelo id dela, com a mesma regra do domínio (motivo, já revertida). O absorvido volta a
+   * ativo, os cadastros que ele já tinha absorvido voltam a apontar para ele, a unificação fica revertida (com data,
+   * motivo e responsável) e os pares que ela decidiu voltam a abertos. A memória não tem registros clínicos ligados.
    */
-  async desfazerUnificacao(c: ContextoPorta, bruta: DesfazerUnificacaoEntrada) {
+  async desfazerUnificacao(c: ContextoPorta, bruta: DesfazerUnificacaoEntrada, ctx: ContextoGravacao) {
     const r = esquemaDesfazerUnificacao.safeParse(bruta);
     if (!r.success) throw erroEntradaInvalida([...new Set(r.error.issues.map((i) => i.path.join('.')))]);
     const s = this.e(c);
-    const id = r.data.idUnificacao;
+    const u = s.unificacoes.get(r.data.idUnificacao);
+    if (!u) throw recusa('registro-inexistente', 'A unificação não existe.');
+    const plano = planoDeDesfazer(
+      { situacao: u.situacao, reversivel: true, mantido: u.sobrevivente, absorvido: u.absorvido },
+      [],
+      r.data.motivo,
+    );
+    if (!plano.ok) throw recusa(plano.recusa.codigo, plano.recusa.mensagem);
+    const id = u.absorvido;
+    const sobrevivente = u.sobrevivente;
     const a = s.pacientes.get(id);
-    const sobrevivente = a ? Number(a['UNIFICADO_EM']) : id;
-    if (!a || sobrevivente === id)
-      throw recusa('registro-inexistente', 'A unificação não existe ou já foi desfeita.');
-    s.pacientes.set(id, { ...a, ATIVO: true, UNIFICADO_EM: id, CARIMBO: new Date() });
+    if (!a || Number(a['UNIFICADO_EM']) !== sobrevivente)
+      throw recusa(
+        'desfazer-conflito',
+        'O cadastro absorvido não está mais unificado neste: nada foi desfeito.',
+      );
+    const agora = new Date();
+    s.pacientes.set(id, { ...a, ATIVO: true, UNIFICADO_EM: id, CARIMBO: agora });
+    for (const n of u.levados) {
+      const l = s.pacientes.get(n);
+      if (l && Number(l['UNIFICADO_EM']) === sobrevivente)
+        s.pacientes.set(n, { ...l, UNIFICADO_EM: id, CARIMBO: agora });
+    }
+    s.unificacoes.set(u.id, {
+      ...u,
+      situacao: 'revertida',
+      revertidaEm: agora.toISOString(),
+      motivoReversao: r.data.motivo.trim(),
+      revertidaPor: ctx.login,
+    });
     for (const [n, p] of s.fila)
       if (
-        p.situacao === 'unificado_no_legado' &&
+        p.situacao === 'unificado' &&
         ((p.a === id && p.b === sobrevivente) || (p.b === id && p.a === sobrevivente))
       ) {
         const reaberto: ParFila & { justificativa?: string } = {
@@ -966,7 +1039,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
     }
     for (const f of s.fila.values())
       if (f.situacao === 'aberto' && (inativos.includes(f.a) || inativos.includes(f.b)))
-        s.fila.set(f.id, { ...f, situacao: 'unificado_no_legado' });
+        s.fila.set(f.id, { ...f, situacao: 'unificado' });
     return n;
   }
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { conferirRegistroDevolvido, planoDeDesfazer, type ItemTransferido } from './desfazer.js';
+import {
+  conferirRegistroDevolvido,
+  planoDeDesfazer,
+  RECUSA_REGISTRO_ALTERADO,
+  type ItemTransferido,
+} from './desfazer.js';
 
 const U = { situacao: 'efetivada', reversivel: true, mantido: 10, absorvido: 20 };
 const item = (sequencia: number, situacao = 'transferido'): ItemTransferido => ({
@@ -9,6 +14,7 @@ const item = (sequencia: number, situacao = 'transferido'): ItemTransferido => (
   registroId: 100 + sequencia,
   coluna: 'paciente_id',
   situacao,
+  versaoRegistro: 2,
 });
 
 describe('desfazer a unificação de prontuários', () => {
@@ -38,8 +44,20 @@ describe('desfazer a unificação de prontuários', () => {
   });
 
   it('recusa o registro que sumiu ou que já aponta para outro cadastro', () => {
-    expect(conferirRegistroDevolvido(item(1), 10, 10)).toBeNull();
+    expect(conferirRegistroDevolvido(item(1), { apontaPara: 10, versao: 2 }, 10)).toBeNull();
     expect(conferirRegistroDevolvido(item(1), null, 10)?.codigo).toBe('desfazer-registro-inexistente');
-    expect(conferirRegistroDevolvido(item(1), 30, 10)?.codigo).toBe('desfazer-conflito');
+    expect(conferirRegistroDevolvido(item(1), { apontaPara: 30, versao: 2 }, 10)?.codigo).toBe(
+      'desfazer-conflito',
+    );
+  });
+
+  it('recusa o registro alterado depois da unificação (versão diferente da gravada no item)', () => {
+    const r = conferirRegistroDevolvido(item(1), { apontaPara: 10, versao: 3 }, 10);
+    expect(r?.codigo).toBe(RECUSA_REGISTRO_ALTERADO);
+    expect(r?.mensagem).toContain('não reversível');
+    // Item antigo, sem a versão gravada: só o ponteiro é conferido.
+    expect(
+      conferirRegistroDevolvido({ ...item(1), versaoRegistro: null }, { apontaPara: 10, versao: 9 }, 10),
+    ).toBeNull();
   });
 });

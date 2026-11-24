@@ -94,8 +94,9 @@ async function confirmarDesfazer(): Promise<void> {
         <ul>
           <li
             v-for="u in h.unificacoes"
-            :key="`${u.absorvido}-${u.sobrevivente}`"
-            :data-testid="`unificacao-${u.absorvido}`"
+            :key="u.id ?? `${u.absorvido}-${u.sobrevivente}`"
+            :data-testid="u.id ? `unificacao-${u.id}` : `unificacao-absorvido-${u.absorvido}`"
+            :data-situacao="u.situacao ?? 'efetivada'"
           >
             {{
               t('cadastro.historico.unificacao', {
@@ -104,11 +105,27 @@ async function confirmarDesfazer(): Promise<void> {
                 em: carimboBr(u.em),
               })
             }}
+            <span
+              v-if="u.situacao === 'revertida'"
+              class="unificacao-desfeita"
+              :data-testid="`unificacao-desfeita-${u.id}`"
+            >
+              {{
+                t('cadastro.historico.revertida', {
+                  em: carimboBr(u.revertidaEm ?? null),
+                  por: u.revertidaPor ?? '—',
+                  motivo: u.motivoReversao ?? '—',
+                })
+              }}
+            </span>
+            <span v-else-if="u.reversivel === false" :data-testid="`unificacao-nao-reversivel-${u.id}`">
+              {{ t('cadastro.historico.naoReversivel') }}
+            </span>
             <SanteBotao
-              v-if="podeDesfazer && u.id"
+              v-else-if="podeDesfazer && u.id"
               variante="secundario"
               :rotulo="t('cadastro.historico.desfazer')"
-              :data-testid="`desfazer-unificacao-${u.absorvido}`"
+              :data-testid="`desfazer-unificacao-${u.id}`"
               @click="abrirDesfazer(u)"
             />
           </li>

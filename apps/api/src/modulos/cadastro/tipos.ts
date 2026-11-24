@@ -92,7 +92,7 @@ export interface ParFila {
   readonly b: number;
   readonly escore: number;
   readonly criterios: readonly string[];
-  readonly situacao: 'aberto' | 'outra_pessoa' | 'unificado_no_legado';
+  readonly situacao: 'aberto' | 'outra_pessoa' | 'unificado';
   readonly decididoPor: string | null;
   readonly decididoEm: string | null;
 }

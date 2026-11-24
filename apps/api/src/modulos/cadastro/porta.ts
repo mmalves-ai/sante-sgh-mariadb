@@ -13,6 +13,7 @@ import type {
   EnderecoCep,
   EntidadeBusca,
   EstadoOperacao,
+  HistoricoCadastro,
   UnificarPacienteEntrada,
   DesfazerUnificacaoEntrada,
 } from '@sgh/contratos';
@@ -113,10 +114,7 @@ export interface PortaCadastro {
     pagina: number,
     porPagina: number,
   ): Promise<{ versoes: VersaoCadastro[]; total: number; anterior: VersaoCadastro | null }>;
-  unificacoes(
-    c: ContextoPorta,
-    id: number,
-  ): Promise<{ absorvido: number; sobrevivente: number; em: string | null }[]>;
+  unificacoes(c: ContextoPorta, id: number): Promise<HistoricoCadastro['unificacoes']>;
   homonimos(c: ContextoPorta, ids: readonly number[]): Promise<Set<number>>;
   candidatosPorCpf(c: ContextoPorta, cpf: number): Promise<PacienteFicha[]>;
   cepExiste(c: ContextoPorta, cep: string): Promise<boolean>;

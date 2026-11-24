@@ -1905,6 +1905,9 @@ export const mensagensWeb = {
       unificacoes: 'Unificações de prontuário registradas',
       unificacao: 'Prontuário de ID {absorvido} unificado no de ID {sobrevivente} em {em}',
       desfazer: 'Desfazer unificação',
+      revertida: 'Unificação desfeita em {em} por {por}. Motivo: {motivo}',
+      naoReversivel:
+        'Não reversível: um registro transferido foi alterado depois da unificação. Corrija os registros um a um.',
       desfazerTitulo: 'Desfazer a unificação do prontuário {absorvido}',
       desfazerAviso:
         'Os registros que passaram ao prontuário {sobrevivente} voltam ao {absorvido}, que fica ativo de novo. A unificação continua no histórico, com o seu motivo.',
@@ -1926,7 +1929,7 @@ export const mensagensWeb = {
       situacoes: {
         aberto: 'Em aberto',
         outra_pessoa: 'É outra pessoa',
-        unificado_no_legado: 'Unificado',
+        unificado: 'Unificado',
       },
       legenda: 'Pares ({n})',
       escore: 'Escore',

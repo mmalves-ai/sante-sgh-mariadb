@@ -4,19 +4,19 @@
 //   GET  /api/cadastros/pacientes/:id                     ficha (registro de acesso; documentos e sensíveis por perfil)
 //   POST /api/cadastros/pacientes                         cadastrar (executor: cadastro.cadastrarPaciente)
 //   PUT  /api/cadastros/pacientes/:id                     alterar (executor: cadastro.alterarPaciente; colisão 409)
-//   GET  /api/cadastros/pacientes/:id/historico           linha do tempo e unificações do legado
-//   GET|POST /api/cadastros/pacientes/:id/consentimentos  consentimentos (SGH_CAD_CONSENTIMENTO)
+//   GET  /api/cadastros/pacientes/:id/historico           linha do tempo e unificações (efetivadas e desfeitas)
+//   GET|POST /api/cadastros/pacientes/:id/consentimentos  consentimentos (consentimento_titular)
 //   GET  /api/cadastros/pacientes/duplicidades[/:id]      fila e comparação lado a lado (registro de acesso)
 //   GET  /api/cadastros/pacientes/gravacao                cadastrar grava agora? (passo 0 do executor; motivo)
 //   GET  /api/cadastros/pacientes/cep/:cep                endereço pelo CEP (cadastro de CEPs do estabelecimento)
 //   POST /api/cadastros/pacientes/duplicidades/atualizar  pares novos pela regra do escore
-//   POST /api/cadastros/pacientes/duplicidades/:id/decisao  "É outra pessoa" (só SGH_CAD_DUPLICIDADE)
+//   POST /api/cadastros/pacientes/duplicidades/:id/decisao  "É outra pessoa" (só suspeita_duplicidade)
 //   POST /api/cadastros/pacientes/duplicidades/:id/unificar  M57.2: "Unificar" (executor: cadastro.unificarPaciente;
 //                                                           crítica, com a senha; só a permissão cadastro.paciente.unificar)
 //   POST /api/cadastros/pacientes/unificacoes/:id/desfazer   F3.1: desfazer a unificação, com motivo e senha
 // A busca e a abertura da ficha são eventos de acesso (cap-06a §6.1; cap-08 §8.12): "sem trilha, sem dado".
-// As gravações no legado passam pelo executor (trilha dupla na mesma transação); as SGH_, pela transação SGH_
-// com a SGH_TRILHA junto. Com a porta em memória (sessão sintética), o registrador da API registra.
+// As gravações no banco próprio passam pelo executor, com a trilha na mesma transação. Com a porta em memória
+// (sessão sintética), o registrador da API registra.
 import {
   Body,
   Controller,
@@ -85,12 +85,12 @@ const POR_PAGINA_HISTORICO = 100;
 const POR_PAGINA_FILA = 25;
 const OPERACAO_UNIFICAR = 'cadastro.unificarPaciente';
 /**
- * Correção do M57.2 (ADR 0021): na sessão "como", a unificação é recusada (falha fechada). O gatilho do banco altera o
- * prontuário absorvido fora do comando retratado e a linha da unificação não se apaga: o Corrigir do suporte não a
- * desfaria.
+ * Sessão "como" (suporte, ADR 0021): a unificação e o desfazer são recusados (falha fechada). Não é por gatilho (não há)
+ * nem por falta de desfazer (existe, F3.1): a fusão de prontuários é decisão clínico-administrativa do hospital, com
+ * senha de quem decide e responsável nominal na unificação; o operador do suporte não é esse responsável.
  */
 const MOTIVO_UNIFICACAO_COMO =
-  'Numa sessão de suporte, a unificação não é feita: ela não se desfaz pelo Corrigir. Fica com o gestor de cadastro, na própria conta.';
+  'Numa sessão de suporte, a unificação e o desfazer não são feitos: a decisão e a senha são do gestor de cadastro do hospital, na própria conta.';
 
 @Controller('cadastros/pacientes')
 export class PacientesController {
@@ -203,7 +203,7 @@ export class PacientesController {
     // A fila mostra os dois lados de cada par (nome, nascimento, mãe): é evento de acesso. Na trilha, só a
     // situação, a página e a quantidade (nenhum dado de paciente).
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_CAD_DUPLICIDADE',
+      tabelaAlvo: 'suspeita_duplicidade',
       chaveNaturalAlvo: `fila:${situacao};p:${pg};n:${f.itens.length}`,
     };
     return f;
@@ -258,7 +258,7 @@ export class PacientesController {
     const [um] = await montarPares(this.porta, s.porta, [p]);
     if (!um) throw new ErroProblema('nao-encontrado', 404, 'Par não encontrado');
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_CAD_DUPLICIDADE',
+      tabelaAlvo: 'suspeita_duplicidade',
       idAlvo: String(p.id),
       chaveNaturalAlvo: `par:${p.a}:${p.b}`,
     };
@@ -268,12 +268,12 @@ export class PacientesController {
   @Post('duplicidades/atualizar')
   @HttpCode(200)
   @Permissao('cadastro.duplicidade.decidir')
-  @AuditadoNoHandler('SGH_TRILHA na mesma transação SGH_ da fila (memória: registrador da API)')
+  @AuditadoNoHandler('trilha na mesma transação da fila (memória: registrador da API)')
   async atualizar(@Req() req: RequisicaoAutorizada): Promise<{ novos: number; total: number }> {
     const s = sessaoDe(req);
     const ev = EVENTOS_AUDITAVEIS.duplicidadeFilaAtualizada.codigo;
     const trilha = linhaTrilha(s, ev, 'cadastro.duplicidade', 'cadastro.atualizarFila', {
-      tabela: 'SGH_CAD_DUPLICIDADE',
+      tabela: 'suspeita_duplicidade',
     });
     const r = await atualizarFila(this.porta, s.porta, trilha).catch((e: unknown) => {
       throw problemaDoCadastro(e);
@@ -285,7 +285,7 @@ export class PacientesController {
   @Post('duplicidades/:id/decisao')
   @HttpCode(200)
   @Permissao('cadastro.duplicidade.decidir')
-  @AuditadoNoHandler('SGH_TRILHA na mesma transação SGH_ da decisão (memória: registrador da API)')
+  @AuditadoNoHandler('trilha na mesma transação da decisão (memória: registrador da API)')
   async decidir(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -312,7 +312,7 @@ export class PacientesController {
         s.login,
         d.data.justificativa,
         linhaTrilha(s, ev, 'cadastro.duplicidade', 'cadastro.decidirDuplicidade', {
-          tabela: 'SGH_CAD_DUPLICIDADE',
+          tabela: 'suspeita_duplicidade',
         }),
       )
       .catch((e: unknown) => {
@@ -331,7 +331,7 @@ export class PacientesController {
   @HttpCode(200)
   @Permissao('cadastro.paciente.unificar')
   @AuditadoNoHandler(
-    'executor: SGH_TRILHA na mesma transação da receita, com a fila de duplicidades (memória: registrador da API)',
+    'executor: trilha na mesma transação da receita, com a fila de duplicidades (memória: registrador da API)',
   )
   async unificar(
     @Param('id') id: string,
@@ -586,7 +586,7 @@ export class PacientesController {
   @Post(':id/consentimentos')
   @HttpCode(200)
   @Permissao('cadastro.consentimento.registrar')
-  @AuditadoNoHandler('SGH_TRILHA na mesma transação SGH_ do consentimento (memória: registrador da API)')
+  @AuditadoNoHandler('trilha na mesma transação do consentimento (memória: registrador da API)')
   async registrarConsentimento(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -601,7 +601,7 @@ export class PacientesController {
     if (!p) throw new ErroProblema('nao-encontrado', 404, 'Paciente não encontrado');
     const ev = EVENTOS_AUDITAVEIS.consentimentoRegistrado.codigo;
     const trilha = linhaTrilha(s, ev, 'cadastro.consentimento', 'cadastro.registrarConsentimento', {
-      tabela: 'SGH_CAD_CONSENTIMENTO',
+      tabela: 'consentimento_titular',
       paciente: n,
       chave: ped.data.acao === 'registrar' ? `${ped.data.finalidade}:${ped.data.versao}` : 'revogacao',
     });

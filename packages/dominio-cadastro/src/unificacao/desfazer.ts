@@ -2,7 +2,11 @@
 // passou do cadastro absorvido ao que ficou. Desfazer devolve esses registros na ordem inversa, reativa o absorvido e
 // marca a unificação como revertida, com motivo e responsável. Nada se apaga: os itens e a unificação continuam como
 // histórico. Se algum registro transferido já não aponta para o cadastro que ficou (foi movido de novo, por outra
-// unificação ou correção), a reversão inteira é recusada: nunca se devolve só uma parte.
+// unificação ou correção), a reversão inteira é recusada: nunca se devolve só uma parte. Se algum registro foi alterado
+// depois da unificação (a versão dele não é mais a que a unificação gravou: recebeu evolução, foi faturado, teve a
+// cobertura mudada), devolvê-lo em silêncio ao outro paciente criaria divergência clínica e de faturamento: a reversão
+// automática é recusada e a unificação passa a não reversível (a correção segue registro a registro, com decisão).
+// Os registros criados para a pessoa depois da unificação não são itens dela: ficam no cadastro que ficou.
 
 export interface UnificacaoParaDesfazer {
   readonly situacao: string;
@@ -18,6 +22,14 @@ export interface ItemTransferido {
   readonly registroId: number;
   readonly coluna: string;
   readonly situacao: string;
+  /** Versão do registro logo depois da transferência; null nos itens gravados antes de a unificação guardá-la. */
+  readonly versaoRegistro: number | null;
+}
+
+/** O registro como está agora no banco (null quando não existe mais). */
+export interface RegistroAtual {
+  readonly apontaPara: number;
+  readonly versao: number;
 }
 
 export interface RecusaDesfazer {
@@ -71,24 +83,33 @@ export function planoDeDesfazer(
   return { ok: true, devolver };
 }
 
+/** Código da recusa que torna a unificação não reversível (registro alterado depois dela). */
+export const RECUSA_REGISTRO_ALTERADO = 'desfazer-registro-alterado';
+
 /**
- * Confere o registro no banco antes de devolvê-lo: ele tem de existir e ainda apontar para o cadastro que ficou. Senão,
- * a reversão é recusada com o lugar do conflito (tabela e id, nunca valores do paciente).
+ * Confere o registro no banco antes de devolvê-lo: ele tem de existir, ainda apontar para o cadastro que ficou e não ter
+ * sido alterado depois da unificação. Senão, a reversão é recusada com o lugar do conflito (tabela e id, nunca valores
+ * do paciente).
  */
 export function conferirRegistroDevolvido(
   item: ItemTransferido,
-  apontaPara: number | null,
+  atual: RegistroAtual | null,
   mantido: number,
 ): RecusaDesfazer | null {
-  if (apontaPara === null)
+  if (atual === null)
     return {
       codigo: 'desfazer-registro-inexistente',
       mensagem: `O registro ${item.registroId} de ${item.tabela} não existe mais: a unificação não pode ser desfeita automaticamente.`,
     };
-  if (apontaPara !== mantido)
+  if (atual.apontaPara !== mantido)
     return {
       codigo: 'desfazer-conflito',
       mensagem: `O registro ${item.registroId} de ${item.tabela} já foi movido depois da unificação: nada foi desfeito.`,
+    };
+  if (item.versaoRegistro !== null && atual.versao !== item.versaoRegistro)
+    return {
+      codigo: RECUSA_REGISTRO_ALTERADO,
+      mensagem: `O registro ${item.registroId} de ${item.tabela} foi alterado depois da unificação: nada foi desfeito, e a unificação passa a não reversível. Corrija os registros um a um, decidindo cada um.`,
     };
   return null;
 }

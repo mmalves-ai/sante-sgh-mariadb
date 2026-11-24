@@ -88,7 +88,7 @@ export const esquemaFichaPaciente = z.object({
   prontuario: z.number().int(),
   prontuarioAnterior: z.number().int().nullable(),
   situacao: z.enum(SITUACOES_CADASTRO),
-  /** Cadastro absorvido numa unificação do legado: o sobrevivente. */
+  /** Cadastro absorvido numa unificação: o cadastro que ficou (null quando não está unificado). */
   unificadoEm: z.number().int().nullable(),
   /** Versão para o controle otimista da alteração (opaca). */
   versao: z.string(),
@@ -207,6 +207,13 @@ export const esquemaHistoricoCadastro = z.object({
       absorvido: z.number().int(),
       sobrevivente: z.number().int(),
       em: z.string().nullable(),
+      /** F3.1: a desfeita continua no histórico, marcada, com data, motivo e responsável (nada se esconde). */
+      situacao: z.enum(['efetivada', 'revertida']).optional(),
+      /** Falso quando um registro transferido foi alterado depois da unificação (corrige-se registro a registro). */
+      reversivel: z.boolean().optional(),
+      revertidaEm: z.string().nullable().optional(),
+      motivoReversao: z.string().nullable().optional(),
+      revertidaPor: z.string().nullable().optional(),
     }),
   ),
 });
@@ -214,7 +221,7 @@ export type HistoricoCadastro = z.infer<typeof esquemaHistoricoCadastro>;
 
 // ── Fila de duplicidades ──────────────────────────────────────────────────────────────────────────────
 
-export const SITUACOES_DUPLICIDADE = ['aberto', 'outra_pessoa', 'unificado_no_legado'] as const;
+export const SITUACOES_DUPLICIDADE = ['aberto', 'outra_pessoa', 'unificado'] as const;
 export type SituacaoDuplicidade = (typeof SITUACOES_DUPLICIDADE)[number];
 
 export const CRITERIOS_DUPLICIDADE = ['cpf', 'fonetica', 'nascimento', 'mae', 'telefone'] as const;
