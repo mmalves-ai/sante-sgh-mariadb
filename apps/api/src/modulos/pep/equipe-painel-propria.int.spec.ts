@@ -3,7 +3,9 @@
 // teste, atendimento e setor fictícios (chaves de catálogo desligadas só no preparo), funções de equipe do teste;
 // usuário, paciente e profissional são ids já existentes do cliente de teste (só lidos, nunca alterados).
 // Prova o que fica no banco: período aberto e fechado do acompanhamento (nada apagado), colunas por usuário, a
-// configuração do setor com versão, a equipe aberta na primeira inclusão, o responsável único e a saída com motivo.
+// configuração do setor com versão (sem versão com linha existente = 409), a equipe aberta na primeira inclusão, o
+// responsável único, a saída com motivo, a recusa entre estabelecimentos (unidade, atendimento, profissional sem
+// lotação), a categoria e a especialidade, a trilha da operação e o encerramento da equipe no fim do atendimento.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -13,19 +15,31 @@ import { PortaEquipePainelPropria } from './equipe-painel-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'l0333eq';
+const P2 = 'l0333eq2';
 
 interface Massa {
   est: number;
   usuario: number;
   paciente: number;
-  prof: [number, number];
+  prof: [number, number, number];
   atd: number;
+  est2: number;
+  unidade2: number;
+  atd2: number;
+  especialidade: number | null;
   setor: number;
   fResp: number;
   fEnf: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
+  for (const cod of [P, P2]) await limparEst(e, cod);
+  await e.executar("DELETE FROM funcao_equipe_assistencial WHERE codigo IN ('l0333-resp','l0333-enf')");
+  await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
+}
+
+async function limparEst(e: Escritor, P: string): Promise<void> {
   const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
   await e.executar(
     `DELETE m FROM equipe_assistencial_membro m JOIN equipe_assistencial_paciente q
@@ -38,9 +52,8 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM configuracao_setor_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN ${est}`, [P]);
-  await e.executar("DELETE FROM funcao_equipe_assistencial WHERE codigo IN ('l0333-resp','l0333-enf')");
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await e.executar(`DELETE FROM unidade_assistencial WHERE estabelecimento_id IN ${est}`, [P]);
+  await e.executar(`DELETE FROM lotacao_profissional WHERE estabelecimento_id IN ${est}`, [P]);
 }
 
 describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato de efeito)', () => {
@@ -67,10 +80,24 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
       const usuario = await e.uma('SELECT MIN(id) AS id FROM usuario WHERE excluido_em IS NULL');
       const paciente = await e.uma('SELECT MIN(id) AS id FROM paciente WHERE excluido_em IS NULL');
       const profs = await e.consultar(
-        'SELECT id FROM profissional WHERE excluido_em IS NULL ORDER BY id LIMIT 2',
+        'SELECT id FROM profissional WHERE excluido_em IS NULL ORDER BY id LIMIT 3',
       );
-      if (!usuario?.['id'] || !paciente?.['id'] || profs.length < 2)
-        throw new Error('O cliente de teste precisa de usuário, paciente e dois profissionais.');
+      const cboMed = await e.uma(
+        "SELECT MIN(id) AS id FROM ocupacao_cbo WHERE codigo_cbo LIKE '225%' AND ativo = TRUE",
+      );
+      const cboEnf = await e.uma(
+        "SELECT MIN(id) AS id FROM ocupacao_cbo WHERE codigo_cbo LIKE '2235%' AND ativo = TRUE",
+      );
+      if (!usuario?.['id'] || !paciente?.['id'] || profs.length < 3 || !cboMed?.['id'] || !cboEnf?.['id'])
+        throw new Error(
+          'O cliente de teste precisa de usuário, paciente, três profissionais e o CBO carregado.',
+        );
+      // Especialidade ativa do primeiro profissional, se houver (só lida).
+      const esp = await e.uma(
+        `SELECT MIN(especialidade_medica_id) AS id FROM profissional_especialidade
+          WHERE profissional_id = ? AND ativo = TRUE AND excluido_em IS NULL`,
+        [profs[0]!['id']],
+      );
       const est = await e.inserir(
         `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
          VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
@@ -94,6 +121,32 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
            VALUES (?, ?, ?, 1, 1, 1, ?, ?, ?)`,
           [est, `${P}-1`, paciente['id'], profs[0]!['id'], agora, agora],
         );
+        const est2 = await e.inserir(
+          `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+           VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
+          [P2, `Hospital sintético ${P2}`, `Hospital sintético ${P2} (fictício)`, agora],
+        );
+        const unidade2 = await e.inserir(
+          `INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em)
+           VALUES (?, ?, 'Unidade sintética do outro', 'internacao', ?)`,
+          [est2, `${P2}-u`, agora],
+        );
+        const atd2 = await e.inserir(
+          `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+             carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em)
+           VALUES (?, ?, ?, 1, 1, 1, ?, ?, ?)`,
+          [est2, `${P2}-1`, paciente['id'], profs[0]!['id'], agora, agora],
+        );
+        // Lotações sintéticas: o 1º médico e o 2º enfermeiro no estabelecimento do teste; o 3º só no outro.
+        const lotar = (prof: unknown, estab: number, cbo: unknown) =>
+          e.inserir(
+            `INSERT INTO lotacao_profissional (profissional_id, estabelecimento_id, ocupacao_cbo_id, vigencia_inicio, criado_em)
+             VALUES (?, ?, ?, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), ?)`,
+            [prof, estab, cbo, agora],
+          );
+        await lotar(profs[0]!['id'], est, cboMed['id']);
+        await lotar(profs[1]!['id'], est, cboEnf['id']);
+        await lotar(profs[2]!['id'], est2, cboMed['id']);
         const setor = await e.inserir(
           `INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em)
            VALUES (?, ?, 'Setor sintético', 'assistencial', ?)`,
@@ -103,8 +156,16 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
           est,
           usuario: Number(usuario['id']),
           paciente: Number(paciente['id']),
-          prof: [Number(profs[0]!['id']), Number(profs[1]!['id'])] as [number, number],
+          prof: [Number(profs[0]!['id']), Number(profs[1]!['id']), Number(profs[2]!['id'])] as [
+            number,
+            number,
+            number,
+          ],
           atd,
+          est2,
+          unidade2,
+          atd2,
+          especialidade: esp?.['id'] ? Number(esp['id']) : null,
           setor,
           fResp,
           fEnf,
@@ -200,6 +261,10 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
     await expect(porta.gravarFiltroPadrao(ctx(), { unidade: 987_654_321 })).rejects.toMatchObject({
       problema: { status: 404 },
     });
+    // Unidade de OUTRO estabelecimento: recusada como inexistente aqui.
+    await expect(porta.gravarFiltroPadrao(ctx(), { unidade: m.unidade2 })).rejects.toMatchObject({
+      problema: { status: 404, codigo: 'Unidade-inexistente' },
+    });
   });
 
   it('configuração do setor: inclui, altera com versão e resolve a que vale; tolerância sem retroativo recusa', async () => {
@@ -235,6 +300,10 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
         toleranciaRetroativoHoras: 4,
       }),
     ).rejects.toMatchObject({ problema: { status: 422, codigo: 'tolerancia-sem-retroativo' } });
+    // Sem versão com a linha já gravada (por outro usuário): conflito, nada muda.
+    await expect(
+      porta.gravarConfiguracaoSetor(ctx(), { ...base, toleranciaRetroativoHoras: 3 }),
+    ).rejects.toMatchObject({ problema: { status: 409, codigo: 'configuracao-existente' } });
     // Versão velha: conflito, nada muda.
     await expect(porta.gravarConfiguracaoSetor(ctx(), { ...base, versao: 1 })).rejects.toMatchObject({
       problema: { status: 409 },
@@ -251,7 +320,9 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
     expect(r2.equipe).toBe(r1.equipe);
     await expect(
       porta.incluirMembro(ctx(), m.atd, { profissional: m.prof[1], funcao: m.fResp }),
-    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'responsavel-duplicado' } });
+    ).rejects.toMatchObject({
+      problema: { status: 422, detail: expect.stringContaining('já tem responsável principal') },
+    });
     const eq = await porta.equipe(ctx(), m.atd);
     expect(eq.paciente).toBe(m.paciente);
     expect(eq.membros.map((x) => [x.profissional, x.responsavelPrincipal, x.fim])).toEqual([
@@ -281,5 +352,62 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
       Number(eqLinha!['paciente_id']),
       eqLinha!['situacao'],
     ]).toEqual([m.est, m.paciente, 'ativa']);
+    // A trilha da operação ficou no estabelecimento da sessão, com o usuário.
+    const trilha = await ler<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM trilha_auditoria
+        WHERE estabelecimento_id = ? AND usuario_id = ? AND entidade = 'equipe_assistencial_membro'`,
+      [m.est, m.usuario],
+    );
+    expect(Number(trilha[0]!.n)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('equipe: recusa profissional sem lotação aqui, categoria trocada, especialidade alheia e atendimento de outro estabelecimento', async () => {
+    await expect(
+      porta.incluirMembro(ctx(), m.atd, { profissional: m.prof[2], funcao: m.fEnf }),
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'profissional-sem-lotacao' } });
+    await expect(
+      porta.incluirMembro(ctx(), m.atd, { profissional: m.prof[1], funcao: m.fResp }),
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'categoria-incompativel' } });
+    await expect(
+      porta.incluirMembro(ctx(), m.atd, { profissional: m.prof[1], funcao: m.fEnf, especialidade: 1 }),
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'especialidade-sem-funcao-medica' } });
+    await expect(
+      porta.incluirMembro(ctx(), m.atd2, { profissional: m.prof[0], funcao: m.fEnf }),
+    ).rejects.toMatchObject({ problema: { status: 404, codigo: 'Atendimento-inexistente' } });
+    await expect(porta.pacienteDoAtendimento(ctx(), m.atd2)).rejects.toMatchObject({
+      problema: { status: 404 },
+    });
+    if (m.especialidade !== null) {
+      const esp = await porta.especialidadesDoProfissional(ctx(), m.prof[0]);
+      expect(esp.map((x) => x.id)).toContain(m.especialidade);
+    }
+  });
+
+  it('equipe: encerra no fim do atendimento (vigentes saem com motivo), não recebe inclusão e deixa de dar vínculo', async () => {
+    expect(await porta.vinculoPelaEquipe(ctx(), m.paciente, m.prof[0])).toBe(true);
+    const r = await porta.encerrarEquipe(ctx(), m.atd, { motivo: 'alta hospitalar' });
+    expect(r.membros).toBe(1);
+    const [eq] = await ler<Record<string, unknown>>(
+      'SELECT situacao, fim_em, versao FROM equipe_assistencial_paciente WHERE id = ?',
+      [r.id],
+    );
+    expect([eq!['situacao'], eq!['fim_em'] !== null, Number(eq!['versao'])]).toEqual(['encerrada', true, 2]);
+    const abertos = await ler<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM equipe_assistencial_membro WHERE equipe_assistencial_paciente_id = ? AND fim_em IS NULL',
+      [r.id],
+    );
+    expect(Number(abertos[0]!.n)).toBe(0);
+    const total = await ler<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM equipe_assistencial_membro WHERE equipe_assistencial_paciente_id = ? AND excluido_em IS NULL',
+      [r.id],
+    );
+    expect(Number(total[0]!.n)).toBe(2);
+    expect(await porta.vinculoPelaEquipe(ctx(), m.paciente, m.prof[0])).toBe(false);
+    await expect(
+      porta.incluirMembro(ctx(), m.atd, { profissional: m.prof[0], funcao: m.fResp }),
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'equipe-encerrada' } });
+    await expect(porta.encerrarEquipe(ctx(), m.atd, { motivo: 'de novo' })).rejects.toMatchObject({
+      problema: { status: 422, codigo: 'equipe-encerrada' },
+    });
   });
 });
