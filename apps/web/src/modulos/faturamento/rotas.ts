@@ -32,6 +32,28 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     props: { destino: 'sigtap' },
     meta: { permissao: 'faturamento.item.ler' },
   },
+  // F3.7 (06-FAT linhas 10 e 12): período da conta parcial e segurado; campo adicional da operadora (cadastro e guia).
+  {
+    path: '/faturamento/contas/:id(\\d+)/complementos',
+    name: 'faturamento.contaComplementos',
+    component: () => import('./telas/ComplementosContaTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
+    path: '/faturamento/fontes/:fonte(\\d+)/atributos-guia',
+    name: 'faturamento.atributosFonte',
+    component: () => import('./telas/AtributosGuiaTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
+    path: '/faturamento/guias/:guia(\\d+)/atributos',
+    name: 'faturamento.atributosGuia',
+    component: () => import('./telas/AtributosGuiaTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.guia.ler' },
+  },
   {
     path: '/faturamento/contas/:id(\\d+)',
     name: 'faturamento.conta',

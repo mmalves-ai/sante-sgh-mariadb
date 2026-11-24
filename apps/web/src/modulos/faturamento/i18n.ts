@@ -103,6 +103,7 @@ export const mensagensFaturamento = {
     motivoReabrir: 'Motivo da reabertura',
     lancamentos: 'Lançamentos',
     auditoria: 'Auditoria',
+    complementos: 'Períodos e segurado',
     sigtap: 'Itens SUS',
     iniciarConferencia: 'Iniciar a conferência',
     concluirConferencia: 'Concluir a conferência',
