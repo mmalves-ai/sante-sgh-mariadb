@@ -23,6 +23,7 @@ import {
   situacaoItem,
 } from '../api-cadastro-estoque.js';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
+import VinculoReferenciaPreco from '../componentes/VinculoReferenciaPreco.vue';
 
 const { t } = useI18n();
 const rota = useRoute();
@@ -462,5 +463,7 @@ const remover = <T,>(lista: readonly T[], i: number): T[] => lista.filter((_, k)
         </button>
       </template>
     </form>
+    <!-- F3.6 (05-SUP linha 28): o vínculo com a referência de preço, na ficha do item já gravado. -->
+    <VinculoReferenciaPreco v-if="id" :item="id" />
   </section>
 </template>
