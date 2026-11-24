@@ -22,7 +22,14 @@ const T = 'F24LSINT';
 /** Parâmetros das obrigações válidos pelo esquema do contrato (sem empresa e início, que são colunas). */
 const dadosObrigacoes = (razaoSocial: string, codigoPagamentoGps: string) => ({
   razaoSocial,
-  endereco: { logradouro: 'Rua Um', bairro: 'Centro', cep: '01001000', cidade: 'Cidade', uf: 'SP', municipio: '3550308' },
+  endereco: {
+    logradouro: 'Rua Um',
+    bairro: 'Centro',
+    cep: '01001000',
+    cidade: 'Cidade',
+    uf: 'SP',
+    municipio: '3550308',
+  },
   contato: { nome: 'Contato', telefone: '1130000000', email: 'contato@exemplo.test' },
   naturezaJuridica: '3999',
   codigoRecolhimentoSefip: '115',
@@ -45,7 +52,12 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
   let m: MassaPessoasO3;
   let porta: LeiturasCalculoFolhaPropria;
   const ids: Record<string, number> = {};
-  const c = (est = m.est) => ({ cliente: CLIENTE_O3, estabelecimento: est, usuario: m.usuario, correlacao: 't-f24l' });
+  const c = (est = m.est) => ({
+    cliente: CLIENTE_O3,
+    estabelecimento: est,
+    usuario: m.usuario,
+    correlacao: 't-f24l',
+  });
 
   async function limpar(e: Escritor) {
     const est = [m.est];
@@ -83,7 +95,10 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
           [T, ...vals, agora],
         );
       const tipoRubrica = await cat('tipo_rubrica', 'descricao, natureza', ['Tipo sintético', 'provento']);
-      const tipoRef = await cat('tipo_referencia_rubrica', 'descricao, unidade', ['Referência sintética', 'valor']);
+      const tipoRef = await cat('tipo_referencia_rubrica', 'descricao, unidade', [
+        'Referência sintética',
+        'valor',
+      ]);
       const natureza = await garantir(
         e,
         'SELECT id FROM natureza_rubrica WHERE codigo_esocial = ?',
@@ -105,16 +120,50 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
           `INSERT INTO processamento_folha (estabelecimento_id, competencia, tipo, numero, situacao, pagamento_em, totais,
              quantidade_fora_da_folha, tabela_legal_inicio, parametros_inicio, resumo, motivo, criado_em, criado_por,
              alterado_em, alterado_por) VALUES (?, ?, ?, ?, ?, ?, ?, 2, '2026-01-01', '2026-02-01', 'Resumo sintético', ?, ?, ?, ?, ?)`,
-          [m.est, comp, tipo, numero, situacao, ...extra, agora, u, situacao === 'calculada' ? null : agora,
-            situacao === 'calculada' ? null : u],
+          [
+            m.est,
+            comp,
+            tipo,
+            numero,
+            situacao,
+            ...extra,
+            agora,
+            u,
+            situacao === 'calculada' ? null : agora,
+            situacao === 'calculada' ? null : u,
+          ],
         );
-      ids['p0'] = await proc('2026-08-01', 'mensal', 1, 'substituida', [null, '{"colaboradores":1}', 'recálculo']);
+      ids['p0'] = await proc('2026-08-01', 'mensal', 1, 'substituida', [
+        null,
+        '{"colaboradores":1}',
+        'recálculo',
+      ]);
       ids['p1'] = await proc('2026-08-01', 'mensal', 2, 'calculada', [null, '{"colaboradores":1}', null]);
       ids['p2'] = await proc('2026-09-01', 'mensal', 1, 'calculada', [null, '{"colaboradores":1}', null]);
-      ids['p3'] = await proc('2026-10-01', 'ferias', 1, 'calculada', ['2026-10-03', '{"colaboradores":1}', null]);
-      ids['p4'] = await proc('2026-11-01', 'rescisao', 1, 'calculada', ['2026-11-20', '{"colaboradores":1}', null]);
-      ids['p5'] = await proc('2026-12-01', 'decimo_terceiro_2', 1, 'calculada', ['2026-12-20', '{"colaboradores":1}', null]);
-      const linha = (p: number, papel: string, tipo: string, rub: number | null, qt: number, un: string, valor: number) =>
+      ids['p3'] = await proc('2026-10-01', 'ferias', 1, 'calculada', [
+        '2026-10-03',
+        '{"colaboradores":1}',
+        null,
+      ]);
+      ids['p4'] = await proc('2026-11-01', 'rescisao', 1, 'calculada', [
+        '2026-11-20',
+        '{"colaboradores":1}',
+        null,
+      ]);
+      ids['p5'] = await proc('2026-12-01', 'decimo_terceiro_2', 1, 'calculada', [
+        '2026-12-20',
+        '{"colaboradores":1}',
+        null,
+      ]);
+      const linha = (
+        p: number,
+        papel: string,
+        tipo: string,
+        rub: number | null,
+        qt: number,
+        un: string,
+        valor: number,
+      ) =>
         e.executar(
           `INSERT INTO processamento_folha_linha (processamento_folha_id, vinculo_trabalho_id, papel, tipo, rubrica_id,
              quantidade, unidade, valor, memoria_calculo, centro_custo_id, dias_pagos, criado_em, criado_por)
@@ -132,7 +181,10 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
       await linha(ids['p4']!, 'salario', 'provento', ids['r101']!, 10, 'dias', 333.33);
 
       // Férias: período aquisitivo, a calculada com o recibo (processamento p3) e a programada.
-      const tipoFerias = await cat('tipo_ferias', 'descricao, categoria', ['Férias sintéticas', 'individual']);
+      const tipoFerias = await cat('tipo_ferias', 'descricao, categoria', [
+        'Férias sintéticas',
+        'individual',
+      ]);
       const aq = await e.inserir(
         'INSERT INTO periodo_aquisitivo (estabelecimento_id, colaborador_id, inicio, fim, limite_concessivo, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
         [m.est, m.colaborador, '2025-09-01', '2026-08-31', '2027-07-31', agora],
@@ -143,8 +195,24 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
              tipo_ferias_id, numero_parcela, inicio_gozo, fim_gozo, dias_gozo, dias_abono, dias_dobra,
              adianta_decimo_terceiro, pagamento_previsto_em, situacao, criado_em, criado_por, alterado_em, alterado_por)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)`,
-          [m.est, m.colaborador, m.vinculo, aq, tipoFerias, parcela, ini, fim, dias, parcela === 1, ini, situacao,
-            agora, u, situacao === 'programada' ? null : agora, situacao === 'programada' ? null : u],
+          [
+            m.est,
+            m.colaborador,
+            m.vinculo,
+            aq,
+            tipoFerias,
+            parcela,
+            ini,
+            fim,
+            dias,
+            parcela === 1,
+            ini,
+            situacao,
+            agora,
+            u,
+            situacao === 'programada' ? null : agora,
+            situacao === 'programada' ? null : u,
+          ],
         );
       ids['f1'] = await prog(1, '2026-10-05', '2026-10-24', 20, 'calculada');
       ids['f2'] = await prog(2, '2027-01-10', '2027-01-19', 10, 'aprovada');
@@ -170,7 +238,10 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
         "INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) VALUES (?, 'Z1', 'Motivo sintético', ?)",
         [tabela, agora],
       );
-      const tipoRescisao = await cat('tipo_rescisao', 'descricao, iniciativa', ['Rescisão sintética', 'empregador']);
+      const tipoRescisao = await cat('tipo_rescisao', 'descricao, iniciativa', [
+        'Rescisão sintética',
+        'empregador',
+      ]);
       const deslig = await e.inserir(
         `INSERT INTO desligamento (estabelecimento_id, vinculo_trabalho_id, motivo_codigo_esocial_id, iniciativa,
            data_comunicacao, data_desligamento, aviso_previo, criado_em)
@@ -189,9 +260,22 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
 
       await e.executar(
         'INSERT INTO parametro_obrigacao (estabelecimento_id, vigencia_inicio, dados, criado_em, criado_por) VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (NULL, ?, ?, ?, ?)',
-        [m.est, '2026-01-01', JSON.stringify(dadosObrigacoes('Empresa sintética', '2100')), agora, u,
-          m.est, '2026-06-01', JSON.stringify(dadosObrigacoes('Empresa sintética', '2200')), agora, u,
-          '2026-09-01', JSON.stringify(dadosObrigacoes(REDE, '2300')), agora, u],
+        [
+          m.est,
+          '2026-01-01',
+          JSON.stringify(dadosObrigacoes('Empresa sintética', '2100')),
+          agora,
+          u,
+          m.est,
+          '2026-06-01',
+          JSON.stringify(dadosObrigacoes('Empresa sintética', '2200')),
+          agora,
+          u,
+          '2026-09-01',
+          JSON.stringify(dadosObrigacoes(REDE, '2300')),
+          agora,
+          u,
+        ],
       );
     });
   });
@@ -221,11 +305,13 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
       totais: { colaboradores: 1 },
     });
     expect(todos.find((p) => p.id === ids['p1'])).toMatchObject({ situacaoPor: null, situacaoEm: null });
-    expect((await porta.processos(c(), { competencia: '2026-08', situacao: 'calculada' })).map((p) => p.id)).toEqual([
-      ids['p1'],
-    ]);
+    expect(
+      (await porta.processos(c(), { competencia: '2026-08', situacao: 'calculada' })).map((p) => p.id),
+    ).toEqual([ids['p1']]);
     expect((await porta.processos(c(), { tipo: 'mensal' })).length).toBe(3);
-    expect((await porta.processos(c(), { semTipo: 'ferias', semTipos: ['rescisao', 'decimo2'] })).length).toBe(3);
+    expect(
+      (await porta.processos(c(), { semTipo: 'ferias', semTipos: ['rescisao', 'decimo2'] })).length,
+    ).toBe(3);
     expect(
       (await porta.processos(c(), { competenciaDe: '2026-09', competenciaAte: '2026-11' })).map((p) => p.id),
     ).toEqual([ids['p4'], ids['p3'], ids['p2']]);
@@ -297,7 +383,9 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
     expect(doVinculo[0]).toMatchObject({ situacao: 'programada', processo: null, situacaoPor: null });
     expect((await porta.ferias(c(), {})).map((f) => f.id)).toEqual([ids['f1'], ids['f2']]);
     expect((await porta.ferias(c(), { situacao: 'programada' })).map((f) => f.id)).toEqual([ids['f2']]);
-    expect((await porta.ferias(c(), { de: '2026-10-20', ate: '2026-11-30' })).map((f) => f.id)).toEqual([ids['f1']]);
+    expect((await porta.ferias(c(), { de: '2026-10-20', ate: '2026-11-30' })).map((f) => f.id)).toEqual([
+      ids['f1'],
+    ]);
     expect(await porta.ferias(c(), { empresa: m.outro })).toEqual([]);
     expect((await porta.feriasPorId(c(), ids['f2']!))?.id).toBe(ids['f2']);
     expect(await porta.feriasPorId(c(m.outro), ids['f2']!)).toBeNull();
@@ -426,12 +514,20 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
       });
     await situar('paga', 'gozada');
     try {
-      expect(await porta.rescisaoPorId(c(), ids['res']!)).toMatchObject({ situacao: 'calculada', situacaoPor: m.login });
-      expect(await porta.feriasPorId(c(), ids['f1']!)).toMatchObject({ situacao: 'calculada', situacaoPor: m.login });
+      expect(await porta.rescisaoPorId(c(), ids['res']!)).toMatchObject({
+        situacao: 'calculada',
+        situacaoPor: m.login,
+      });
+      expect(await porta.feriasPorId(c(), ids['f1']!)).toMatchObject({
+        situacao: 'calculada',
+        situacaoPor: m.login,
+      });
       await expect(
         m.nucleo.lerSomente(ctx, (l) => exigirRescisaoAlteravel(l, m.est, ids['res']!)),
       ).rejects.toMatchObject({ problema: { codigo: 'rescisao-encerrada' } });
-      await expect(m.nucleo.lerSomente(ctx, (l) => exigirFeriasAlteravel(l, m.est, ids['f1']!))).rejects.toMatchObject({
+      await expect(
+        m.nucleo.lerSomente(ctx, (l) => exigirFeriasAlteravel(l, m.est, ids['f1']!)),
+      ).rejects.toMatchObject({
         problema: { codigo: 'ferias-encerradas' },
       });
     } finally {

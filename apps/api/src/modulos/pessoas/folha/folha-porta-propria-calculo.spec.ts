@@ -146,8 +146,22 @@ describe('filtros dos processamentos', () => {
 
   it('código da rubrica numérico; a linha sem rubrica não tem código', async () => {
     const l = leitor([
-      { vinculo_trabalho_id: 1, papel: 'salario', tipo: 'provento', rubrica_id: 3, codigo_rubrica: '10', valor: '10.50' },
-      { vinculo_trabalho_id: 1, papel: 'baseInss', tipo: 'base', rubrica_id: null, codigo_rubrica: null, valor: '7' },
+      {
+        vinculo_trabalho_id: 1,
+        papel: 'salario',
+        tipo: 'provento',
+        rubrica_id: 3,
+        codigo_rubrica: '10',
+        valor: '10.50',
+      },
+      {
+        vinculo_trabalho_id: 1,
+        papel: 'baseInss',
+        tipo: 'base',
+        rubrica_id: null,
+        codigo_rubrica: null,
+        valor: '7',
+      },
     ]);
     const [x, y] = await lerLinhas(l, 5, 9, 1);
     expect(x).toMatchObject({ rubrica: 3, codigoRubrica: 10, valor: 10.5, quantidade: 0 });
@@ -157,8 +171,19 @@ describe('filtros dos processamentos', () => {
 
   it('rubrica com código alfanumérico, com zero à esquerda ou vazio recusa a leitura (não some em silêncio)', async () => {
     for (const codigo of ['A1', '0010', '', null]) {
-      const l = leitor([{ vinculo_trabalho_id: 1, papel: 'salario', tipo: 'provento', rubrica_id: 3, codigo_rubrica: codigo, valor: '1' }]);
-      await expect(lerLinhas(l, 5, 9)).rejects.toMatchObject({ problema: { codigo: 'rubrica-codigo-invalido' } });
+      const l = leitor([
+        {
+          vinculo_trabalho_id: 1,
+          papel: 'salario',
+          tipo: 'provento',
+          rubrica_id: 3,
+          codigo_rubrica: codigo,
+          valor: '1',
+        },
+      ]);
+      await expect(lerLinhas(l, 5, 9)).rejects.toMatchObject({
+        problema: { codigo: 'rubrica-codigo-invalido' },
+      });
     }
     expect(codigoRubricaDe(3, '0')).toBe(0);
     expect(codigoRubricaDe(null, 'A1')).toBeNull();
@@ -227,7 +252,14 @@ describe('estados encerrados não se cancelam nem se recalculam', () => {
 
 const DADOS_OBRIGACOES = {
   razaoSocial: 'Hospital Sintético',
-  endereco: { logradouro: 'Rua Um', bairro: 'Centro', cep: '01001000', cidade: 'Cidade', uf: 'SP', municipio: '3550308' },
+  endereco: {
+    logradouro: 'Rua Um',
+    bairro: 'Centro',
+    cep: '01001000',
+    cidade: 'Cidade',
+    uf: 'SP',
+    municipio: '3550308',
+  },
   contato: { nome: 'Contato', telefone: '1130000000', email: 'contato@exemplo.test' },
   naturezaJuridica: '3999',
   codigoRecolhimentoSefip: '115',
@@ -263,9 +295,17 @@ describe('parâmetros das obrigações pelo esquema do contrato', () => {
   });
 
   it('JSON inválido, de outro formato ou sem campo obrigatório recusa (nunca objeto vazio)', () => {
-    for (const dados of ['{nao json', '[]', null, '{"codigoGps":"2100"}', { ...DADOS_OBRIGACOES, razaoSocial: undefined }])
+    for (const dados of [
+      '{nao json',
+      '[]',
+      null,
+      '{"codigoGps":"2100"}',
+      { ...DADOS_OBRIGACOES, razaoSocial: undefined },
+    ])
       expect(() => parametrosObrigacoesDe(linhaParam(dados))).toThrow(
-        expect.objectContaining({ problema: expect.objectContaining({ codigo: 'parametros-obrigacoes-invalidos' }) }),
+        expect.objectContaining({
+          problema: expect.objectContaining({ codigo: 'parametros-obrigacoes-invalidos' }),
+        }),
       );
   });
 });

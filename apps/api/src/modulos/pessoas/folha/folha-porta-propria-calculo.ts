@@ -74,7 +74,9 @@ const objetoJson = (v: unknown): Record<string, unknown> | undefined => {
   if (typeof v === 'object') return v as Record<string, unknown>;
   try {
     const x: unknown = JSON.parse(String(v));
-    return x !== null && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : undefined;
+    return x !== null && typeof x === 'object' && !Array.isArray(x)
+      ? (x as Record<string, unknown>)
+      : undefined;
   } catch {
     return undefined;
   }
@@ -116,7 +118,7 @@ function processoDe(r: Linha): ProcessoDaFolha {
     numero: n(r['numero']),
     situacao,
     pagamento: dia(r['pagamento_em']),
-    totais: json<ProcessoDaFolha['totais']>(r['totais'], {} as ProcessoDaFolha['totais']),
+    totais: (objetoJson(r['totais']) ?? {}) as unknown as ProcessoDaFolha['totais'],
     foraDaFolha: n(r['quantidade_fora_da_folha']),
     tabelaLegal: diaObrigatorio(r['tabela_legal_inicio']),
     parametros: diaObrigatorio(r['parametros_inicio']),
@@ -317,7 +319,11 @@ function feriasDe(r: Linha): FeriasDoVinculo {
 }
 
 /** Férias do estabelecimento pelo filtro: do vínculo, a mais recente primeiro; de todos, pela data do gozo. */
-export async function lerFerias(l: LeitorFolha, est: number, f: FiltroFeriasDaFolha): Promise<FeriasDoVinculo[]> {
+export async function lerFerias(
+  l: LeitorFolha,
+  est: number,
+  f: FiltroFeriasDaFolha,
+): Promise<FeriasDoVinculo[]> {
   if (f.empresa !== undefined && f.empresa !== est) return [];
   const filtros: string[] = [];
   const p: unknown[] = [est];
@@ -338,13 +344,19 @@ export async function lerFerias(l: LeitorFolha, est: number, f: FiltroFeriasDaFo
     filtros.push(`pf.situacao IN (${marcas(s)})`);
     p.push(...s);
   }
-  const ordem =
-    f.vinculo !== undefined ? 'pf.inicio_gozo DESC, pf.id DESC' : 'pf.inicio_gozo, pf.id';
-  const rs = await l.consultar(`${SQL_FERIAS}${filtros.map((x) => ` AND ${x}`).join('')} ORDER BY ${ordem}`, p);
+  const ordem = f.vinculo !== undefined ? 'pf.inicio_gozo DESC, pf.id DESC' : 'pf.inicio_gozo, pf.id';
+  const rs = await l.consultar(
+    `${SQL_FERIAS}${filtros.map((x) => ` AND ${x}`).join('')} ORDER BY ${ordem}`,
+    p,
+  );
   return rs.map(feriasDe);
 }
 
-export async function lerFeriasPorId(l: LeitorFolha, est: number, id: number): Promise<FeriasDoVinculo | null> {
+export async function lerFeriasPorId(
+  l: LeitorFolha,
+  est: number,
+  id: number,
+): Promise<FeriasDoVinculo | null> {
   const r = await l.uma(`${SQL_FERIAS} AND pf.id = ?`, [est, id]);
   return r ? feriasDe(r) : null;
 }
@@ -375,8 +387,9 @@ const RESCISAO_NO_BANCO: Readonly<Record<SituacaoRescisao, readonly string[]>> =
 /** Rescisão conferida, paga ou homologada: lê como `calculada` (a que vale), mas não se cancela nem se recalcula. */
 export const RESCISAO_ENCERRADA = ['conferida', 'paga', 'homologada'] as const;
 const situacaoRescisao = (v: unknown): SituacaoRescisao =>
-  (Object.keys(RESCISAO_NO_BANCO) as SituacaoRescisao[]).find((k) => RESCISAO_NO_BANCO[k].includes(texto(v))) ??
-  'calculada';
+  (Object.keys(RESCISAO_NO_BANCO) as SituacaoRescisao[]).find((k) =>
+    RESCISAO_NO_BANCO[k].includes(texto(v)),
+  ) ?? 'calculada';
 const hifen = (v: unknown) => texto(v).replace(/_/g, '-');
 
 const SQL_RESCISOES = `
@@ -459,7 +472,11 @@ export async function lerRescisoes(
   return rs.map(rescisaoDe);
 }
 
-export async function lerRescisaoPorId(l: LeitorFolha, est: number, id: number): Promise<RescisaoDaFolha | null> {
+export async function lerRescisaoPorId(
+  l: LeitorFolha,
+  est: number,
+  id: number,
+): Promise<RescisaoDaFolha | null> {
   const r = await l.uma(`${SQL_RESCISOES} AND r.id = ?`, [est, id]);
   return r ? rescisaoDe(r) : null;
 }
@@ -539,7 +556,11 @@ export class LeiturasCalculoFolhaPropria {
     return this.ler(c, (l, est) => lerResumoVinculos(l, est, processo));
   }
 
-  linhasDoVinculo(c: ContextoCalculoFolha, processo: number, vinculo: number): Promise<LinhaCalculoDoVinculo[]> {
+  linhasDoVinculo(
+    c: ContextoCalculoFolha,
+    processo: number,
+    vinculo: number,
+  ): Promise<LinhaCalculoDoVinculo[]> {
     return this.ler(c, (l, est) => lerLinhas(l, est, processo, vinculo));
   }
 
@@ -684,7 +705,10 @@ export class LeiturasCalculoFolhaPropria {
    * empregador nos arquivos (razão social, endereço, natureza jurídica, contato e regimes de cada CNPJ), que não se
    * herda da rede; o gravador só grava com o estabelecimento da sessão, como a porta de memória (uma por empresa).
    */
-  parametrosObrigacoes(c: ContextoCalculoFolha, empresa: number | null): Promise<ParametrosObrigacoesLidos[]> {
+  parametrosObrigacoes(
+    c: ContextoCalculoFolha,
+    empresa: number | null,
+  ): Promise<ParametrosObrigacoesLidos[]> {
     return this.ler(c, async (l, est) => {
       if (empresa !== null && empresa !== est) return [];
       const rs = await l.consultar(
