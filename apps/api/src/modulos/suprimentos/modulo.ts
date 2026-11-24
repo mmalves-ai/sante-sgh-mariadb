@@ -16,6 +16,12 @@ import {
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
 import { type ContextoModulo, modulosPedidos } from '../registro.js';
+import { CadastroEstoqueController } from './cadastro-estoque.controller.js';
+import {
+  PORTA_CADASTRO_ESTOQUE,
+  type PortaCadastroEstoque,
+  portaCadastroEstoqueIndisponivel,
+} from './cadastro-estoque-porta.js';
 import { ManipulacaoController } from './manipulacao.controller.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
 import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
@@ -31,6 +37,8 @@ export interface OpcoesModuloSuprimentos {
   readonly suprimentos?: PortaSuprimentos;
   readonly opme?: PortaOpme;
   readonly manipulacao?: PortaManipulacao;
+  /** Testes: a porta do cadastro do estoque (F3.6) já montada. */
+  readonly cadastroEstoque?: PortaCadastroEstoque;
   /** Testes: as chaves de liberação da memória sem estas (a funcionalidade desligada fica em consulta). */
   readonly semChaves?: readonly string[];
 }
@@ -90,6 +98,12 @@ export async function modulo(
     new Logger('suprimentos').warn(
       'OPME e manipulação fora do ar: dependem do módulo cirurgia em API_MODULOS (a porta do centro cirúrgico).',
     );
+  // O cadastro do estoque (F3.6) grava só no banco próprio; sem o núcleo, 503 em tudo.
+  const cadastroEstoque =
+    opcoes.cadastroEstoque ??
+    (ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./cadastro-estoque-porta-propria.js')).PortaCadastroEstoquePropria(ctx.nucleo)
+      : portaCadastroEstoqueIndisponivel());
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =
     memoria && !pedidos.includes('config')
@@ -102,12 +116,17 @@ export async function modulo(
       : null;
   return {
     module: ModuloSuprimentos,
-    controllers: [SuprimentosController, ...(comCirurgia ? [OpmeController, ManipulacaoController] : [])],
+    controllers: [
+      SuprimentosController,
+      CadastroEstoqueController,
+      ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
+    ],
     providers: [
       ...(configuracaoMemoria ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracaoMemoria }] : []),
       { provide: PORTA_SUPRIMENTOS, useValue: suprimentos },
       { provide: PORTA_OPME, useValue: opme },
       { provide: PORTA_MANIPULACAO, useValue: manipulacao },
+      { provide: PORTA_CADASTRO_ESTOQUE, useValue: cadastroEstoque },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO],
   };
