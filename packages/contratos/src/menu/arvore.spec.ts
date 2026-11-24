@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('409 itens: M 190, P 57, N 162, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 409, M: 190, P: 57, N: 162 });
+  it('411 itens: M 192, P 57, N 162, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 411, M: 192, P: 57, N: 162 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(409);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(411);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -498,6 +498,8 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/sadt/laudos',
         '/sadt/laudos/emissao',
         '/sadt/orcamentos',
+        '/sadt/pedido', // F3.5 (05-SADT linha 4)
+        '/sadt/recoletas', // F3.5 (05-SADT linha 7)
         '/sadt/resultados/digitacao',
         '/sadt/resultados/liberacao',
         '/sadt/solicitantes/autocadastro',

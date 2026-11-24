@@ -7,7 +7,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // estão neste repositório); a contagem do cabeçalho acompanha.
 // F3.3 (03-PEP L128): o item "Grupos comparativos de resultados" entrou à mão (mesmo motivo); a contagem acompanha.
 // F3.7 (06-FAT L46): o item "Favorecidos e prestadores terceiros" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":409,"M":190,"P":57,"N":162};
+// F3.5 (05-SADT linhas 4 e 7): os itens "Pedido de exames" e "Recoletas" entraram à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":411,"M":192,"P":57,"N":162};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -142,9 +144,11 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"farmacia-clinica.interacoes-medicamentosas-e-validacao-de-dose","area":"ASSISTÊNCIA","grupo":"Farmácia clínica","caminho":["Farmácia clínica","Interações medicamentosas e validação de dose"],"titulo":"Interações medicamentosas e validação de dose","selo":"P","fase":2,"rota":"/farmacia-clinica/interacoes","permissao":"pep.regraAlerta.ler"},
   {"id":"diagnostico-sadt.atendimento-sadt-ficha-e-requisicao","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Atendimento SADT"],"titulo":"Atendimento SADT","selo":"M","fase":2,"rota":"/sadt/atendimentos","permissao":"sadt.requisicao.ler"},
   {"id":"diagnostico-sadt.lancamento-e-solicitacao-de-exames","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Lançamento e solicitação de exames"],"titulo":"Lançamento e solicitação de exames","selo":"M","fase":2,"rota":"/sadt/exames","permissao":"sadt.lancamento.ler"},
+  {"id":"diagnostico-sadt.pedido-de-exames","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Pedido de exames"],"titulo":"Pedido de exames","selo":"M","fase":2,"rota":"/sadt/pedido","permissao":"sadt.requisicao.criar"},
   {"id":"diagnostico-sadt.orcamento-de-exames-particular","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Orçamento de exames"],"titulo":"Orçamento de exames","selo":"M","fase":2,"rota":"/sadt/orcamentos","permissao":"sadt.orcamento.ler"},
   {"id":"diagnostico-sadt.laboratorio.coleta-etiquetas-e-mapa-de-trabalho","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Coleta, etiquetas e mapa de trabalho"],"titulo":"Coleta, etiquetas e mapa de trabalho","selo":"P","fase":2,"rota":"/sadt/coleta","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.laboratorio.rastreio-de-amostra","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Rastreio de amostra"],"titulo":"Rastreio de amostra","selo":"N","fase":2,"rota":"/sadt/amostras","permissao":"sadt.amostra.ler"},
+  {"id":"diagnostico-sadt.laboratorio.recoletas","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Recoletas"],"titulo":"Recoletas","selo":"M","fase":2,"rota":"/sadt/recoletas","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.laboratorio.digitacao-e-importacao-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Digitação e importação de resultados"],"titulo":"Digitação e importação de resultados","selo":"M","fase":2,"rota":"/sadt/resultados/digitacao","permissao":"sadt.resultado.ler"},
   {"id":"diagnostico-sadt.laboratorio.interfaces-de-equipamento","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Interfaces de equipamento"],"titulo":"Interfaces de equipamento","selo":"P","fase":3,"rota":"/sadt/laboratorio/interfaces","permissao":"sadt.interface.ler"},
   {"id":"diagnostico-sadt.laboratorio.laboratorio-de-apoio-envio-e-retorno","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Laboratório de apoio"],"titulo":"Laboratório de apoio","selo":"M","fase":3,"rota":"/sadt/laboratorio/apoio","permissao":"sadt.apoio.ler"},
