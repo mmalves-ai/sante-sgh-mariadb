@@ -1252,8 +1252,8 @@ async function gravarEdicaoTerminologia(
   for (const x of m.termos) {
     const tabela = CATALOGO_DO_TIPO[x.tipo];
     if (!tabela || !CATALOGOS.has(tabela)) continue;
-    const atual = await tx.uma<{ id: number; ativo: unknown; versao: number }>(
-      `SELECT id, ativo, versao FROM ${tabela} WHERE codigo = ? FOR UPDATE`,
+    const [atual] = await tx.consultarParaAtualizar<{ id: number; ativo: unknown; versao: number }>(
+      `SELECT id, ativo, versao FROM ${tabela} WHERE codigo = ?`,
       [x.codigo],
     );
     if (atual) {

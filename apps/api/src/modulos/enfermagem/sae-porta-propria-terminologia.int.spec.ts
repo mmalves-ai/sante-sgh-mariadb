@@ -189,10 +189,8 @@ describe.skipIf(SEM_BANCO)(
       expect(
         await contar('SELECT COUNT(*) n FROM diagnostico_enfermagem WHERE codigo LIKE ?', [`${pre}%`]),
       ).toBe(2);
-      const divergente = [
-        ...termos,
-        { ...termos[2]!, pai: `${pre}D2`, descricao: 'Outra descrição sintética' },
-      ];
+      // O fator F1 de novo como característica (outro tipo, mesmo código no NANDA-I): termo divergente.
+      const divergente = [...termos, { ...termos[4]!, tipo: 'caracteristica', pai: `${pre}D1` }];
       expect(await recusada(carregar(`T${run}-3`, divergente))).toBe('termo-divergente');
       expect(
         await contar('SELECT COUNT(*) n FROM edicao_terminologia_enfermagem WHERE edicao = ?', [`T${run}-3`]),
