@@ -1,23 +1,23 @@
 <script setup lang="ts">
 // Kits e carrinhos de parada rastreáveis (ficha do M28, seção 7): `/suprimentos/kits`. Os carrinhos (kits
 // rastreáveis) por local, com os itens, lotes, validades e o saldo de cada um; a conferência com o lacre numerado e
-// o checklist (gravada no novo, com o conferente); os kits padrão (composição) em consulta. A reposição pelo documento
+// o checklist (gravada no novo, com o conferente); os kits padrão com o cadastro da composição e dos procedimentos. A reposição pelo documento
 // de saída é P2 e segue desligada enquanto a receita não for provada (POL-3).
 import type { KitRastreavel } from '@sgh/contratos';
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { conferirCarrinho, listarKits, listarKitsPadrao, novaChave } from '../api-suprimentos.js';
+import { conferirCarrinho, listarKits, novaChave } from '../api-suprimentos.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
+import KitPadraoCadastro from '../componentes/KitPadraoCadastro.vue';
 import { data, qtd, quando, usarSuprimentos } from '../usar-suprimentos.js';
 
 const { t } = useI18n();
 const cliente = useQueryClient();
 const { pode, motivo, motivoFuncionalidade } = usarSuprimentos();
 const kits = useQuery({ queryKey: ['suprimentos', 'kits'], queryFn: () => listarKits() });
-const padrao = useQuery({ queryKey: ['suprimentos', 'kits-padrao'], queryFn: () => listarKitsPadrao() });
 const aberto = ref<number | null>(null);
 const lacre = ref('');
 const pendencias = ref('');
@@ -154,12 +154,8 @@ async function conferir(k: KitRastreavel): Promise<void> {
     </div>
     <p v-if="mensagem" role="status" data-testid="kit-mensagem">{{ mensagem }}</p>
     <ErroSuprimentos v-if="erro" :erro="erro" />
-    <h2>{{ t('suprimentos.kits.padrao') }}</h2>
-    <ul v-if="padrao.data.value">
-      <li v-for="p in padrao.data.value" :key="p.codigo">
-        {{ p.codigo }} · {{ p.nome }}: {{ p.itens.map((i) => `${i.nome} (${qtd(i.quantidade)})`).join(', ') }}
-      </li>
-    </ul>
+    <!-- F3.6 (05-SUP linha 13): o kit padrão é cadastrado aqui (composição e procedimentos), não só consultado. -->
+    <KitPadraoCadastro :pode-editar="pode('suprimentos.gravarKitPadrao')" />
   </section>
 </template>
 
