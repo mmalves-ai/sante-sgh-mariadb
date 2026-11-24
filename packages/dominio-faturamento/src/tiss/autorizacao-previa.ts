@@ -24,6 +24,8 @@ export type CanalAutorizacao = (typeof CANAIS_AUTORIZACAO)[number];
 
 export type SituacaoSolicitacaoAutorizacao =
   | 'rascunho'
+  /** Mensagem montada, validada no XSD e guardada, à espera da transmissão (nenhuma saiu do hospital ainda). */
+  | 'pronta_envio'
   | 'enviada'
   | 'em_analise'
   | 'autorizada'
@@ -59,6 +61,8 @@ export interface ItemPedidoAutorizacao {
   readonly opme: boolean;
   readonly registroAnvisa: string | null;
   readonly fabricante: number | null;
+  /** O item faturável do procedimento (base do limite de OPME); nulo quando não identificado. */
+  readonly itemFaturavel?: number | null;
 }
 
 export interface PedidoAutorizacao {
@@ -131,12 +135,41 @@ export function conferirPedidoAutorizacao(p: PedidoAutorizacao): Problema[] {
   });
   if (p.tipo === 'opme' && p.itens.some((i) => !i.opme))
     r.push({ campo: 'itens', mensagem: 'O pedido de OPME só leva itens de OPME.' });
+  // A guia de solicitação (SP/SADT e internação) leva ao menos um procedimento; a OPME vai no anexo dele.
+  if (TIPOS_COM_MENSAGEM.includes(p.tipo) && p.itens.length > 0 && !p.itens.some((i) => !i.opme))
+    r.push({
+      campo: 'itens',
+      mensagem: 'A guia leva ao menos um procedimento além da OPME (a OPME vai no anexo do procedimento).',
+    });
   return r;
 }
 
 export interface LimiteOpme {
   readonly valorLimite: number | null;
   readonly quantidadeLimite: number | null;
+}
+
+/**
+ * O procedimento a que a OPME se refere precisa estar identificado (item faturável) para o limite ser conferido: os
+ * procedimentos do próprio pedido ou, no pedido só de OPME, os da guia principal. Sem isso o pedido é recusado, em vez
+ * de seguir sem conferência.
+ */
+export function conferirProcedimentoDaOpme(
+  itens: readonly ItemPedidoAutorizacao[],
+  procedimentosDaPrincipal: number,
+): Problema[] {
+  if (!itens.some((i) => i.opme)) return [];
+  const proc = itens.filter((i) => !i.opme);
+  if (proc.length ? proc.some((i) => !i.itemFaturavel) : procedimentosDaPrincipal === 0)
+    return [
+      {
+        campo: 'itens',
+        mensagem: proc.length
+          ? 'Com OPME, cada procedimento do pedido indica o item faturável (base do limite de OPME).'
+          : 'O pedido de OPME pede a guia principal com o procedimento identificado (base do limite de OPME).',
+      },
+    ];
+  return [];
 }
 
 /** Os itens de OPME do pedido contra os limites vigentes do procedimento na fonte pagadora (o menor vale). */
@@ -146,11 +179,20 @@ export function conferirLimiteOpme(
 ): Problema[] {
   const opme = itens.filter((i) => i.opme);
   if (!opme.length || !limites.length) return [];
-  const total = opme.reduce((s, i) => s + Math.round((i.valorUnitario ?? 0) * 100) * i.quantidade, 0) / 100;
-  const qtd = opme.reduce((s, i) => s + i.quantidade, 0);
   const r: Problema[] = [];
   const valores = limites.map((l) => l.valorLimite).filter((v): v is number => v !== null);
   const quantidades = limites.map((l) => l.quantidadeLimite).filter((v): v is number => v !== null);
+  // Com limite de valor, a OPME sem valor não entra como zero: o valor é pedido.
+  if (valores.length)
+    opme.forEach((i) => {
+      if (i.valorUnitario === null)
+        r.push({
+          campo: 'itens',
+          mensagem: `Informe o valor da OPME ${i.codigoProcedimento}: o procedimento tem limite de valor nesta fonte pagadora.`,
+        });
+    });
+  const total = opme.reduce((s, i) => s + Math.round((i.valorUnitario ?? 0) * 100) * i.quantidade, 0) / 100;
+  const qtd = opme.reduce((s, i) => s + i.quantidade, 0);
   if (valores.length && total > Math.min(...valores))
     r.push({
       campo: 'itens',
@@ -167,8 +209,9 @@ export function conferirLimiteOpme(
 const TRANSICOES: Readonly<
   Record<SituacaoSolicitacaoAutorizacao, readonly SituacaoSolicitacaoAutorizacao[]>
 > = {
-  rascunho: ['enviada', 'cancelada', 'erro_envio'],
-  erro_envio: ['enviada', 'cancelada'],
+  rascunho: ['pronta_envio', 'enviada', 'cancelada', 'erro_envio'],
+  pronta_envio: ['enviada', 'cancelada'],
+  erro_envio: ['pronta_envio', 'enviada', 'cancelada'],
   enviada: ['em_analise', 'autorizada', 'autorizada_parcial', 'negada', 'cancelada'],
   em_analise: ['em_analise', 'autorizada', 'autorizada_parcial', 'negada', 'cancelada'],
   autorizada: ['cancelada'],
@@ -345,6 +388,7 @@ export function faltasParaMensagem(d: DadosMensagemSolicitacao): string[] {
     if (!d.tipoInternacao) f.push('tipo de internação');
     if (!d.dataAdmissao) f.push('data provável da admissão');
   }
+  if (!d.itens.some((i) => !i.opme)) f.push('ao menos um procedimento além da OPME');
   if (d.itens.some((i) => i.opme) && !d.solicitante.telefone)
     f.push('telefone do solicitante (anexo de OPME)');
   return f;
@@ -507,8 +551,6 @@ function guiaInternacao(d: DadosMensagemSolicitacao): Elemento {
 export function mensagemSolicitacaoAutorizacao(d: DadosMensagemSolicitacao): MensagemTiss {
   const faltas = faltasParaMensagem(d);
   if (faltas.length) throw new Error(`Faltam dados para a mensagem: ${faltas.join(', ')}.`);
-  if (!d.itens.some((i) => !i.opme))
-    throw new Error('A guia de solicitação leva ao menos um procedimento além da OPME.');
   const cabecalho = el(
     'cabecalho',
     el(

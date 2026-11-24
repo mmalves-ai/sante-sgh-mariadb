@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   conferirLimiteOpme,
   conferirPedidoAutorizacao,
+  conferirProcedimentoDaOpme,
   type DadosMensagemSolicitacao,
   faltasParaMensagem,
   type ItemPedidoAutorizacao,
@@ -80,8 +81,40 @@ describe('pedido de autorização prévia', () => {
     expect(conferirLimiteOpme(itens, [{ valorLimite: null, quantidadeLimite: 1 }])).toHaveLength(1);
   });
 
+  it('não deixa a OPME sem valor passar pelo limite de valor como zero', () => {
+    const semValor = [item({ opme: true, registroAnvisa: '80000000001', quantidade: 1 })];
+    expect(conferirLimiteOpme(semValor, [{ valorLimite: 5000, quantidadeLimite: null }])).toEqual([
+      expect.objectContaining({ mensagem: expect.stringMatching(/Informe o valor da OPME/) }),
+    ]);
+    // Só limite de quantidade: o valor não é exigido.
+    expect(conferirLimiteOpme(semValor, [{ valorLimite: null, quantidadeLimite: 3 }])).toEqual([]);
+  });
+
+  it('pede o procedimento identificado quando há OPME (base do limite)', () => {
+    const opme = item({ opme: true, codigoProcedimento: '70000001', registroAnvisa: '80000000001' });
+    expect(conferirProcedimentoDaOpme([item()], 0)).toEqual([]);
+    expect(conferirProcedimentoDaOpme([item(), opme], 0)).toHaveLength(1);
+    expect(conferirProcedimentoDaOpme([item({ itemFaturavel: 7 }), opme], 0)).toEqual([]);
+    expect(conferirProcedimentoDaOpme([opme], 0)).toHaveLength(1);
+    expect(conferirProcedimentoDaOpme([opme], 1)).toEqual([]);
+  });
+
+  it('recusa na hora a guia de SP/SADT ou internação só com OPME', () => {
+    const opme = item({ opme: true, registroAnvisa: '80000000001' });
+    const sp = conferirPedidoAutorizacao(pedido({ itens: [opme] }));
+    expect(sp.map((p) => p.mensagem).join(' ')).toMatch(/ao menos um procedimento além da OPME/);
+    expect(
+      conferirPedidoAutorizacao(pedido({ canal: 'portal', itens: [opme] })).map((p) => p.campo),
+    ).toContain('itens');
+    expect(conferirPedidoAutorizacao(pedido({ itens: [item(), opme] }))).toEqual([]);
+  });
+
   it('segue as transições e o intervalo da consulta do andamento', () => {
     expect(podeMudar('rascunho', 'enviada')).toBe(true);
+    expect(podeMudar('rascunho', 'pronta_envio')).toBe(true);
+    expect(podeMudar('pronta_envio', 'enviada')).toBe(true);
+    expect(podeMudar('pronta_envio', 'cancelada')).toBe(true);
+    expect(podeMudar('pronta_envio', 'autorizada')).toBe(false);
     expect(podeMudar('enviada', 'autorizada')).toBe(true);
     expect(podeMudar('negada', 'autorizada')).toBe(false);
     expect(podeMudar('autorizada', 'rascunho')).toBe(false);
@@ -237,6 +270,9 @@ describe('mensagem SOLICITACAO_PROCEDIMENTOS (TISS 04.03.00)', () => {
       'CBO do solicitante',
     ]);
     expect(() => mensagemSolicitacaoAutorizacao(d)).toThrow(/Faltam dados/);
+    const soOpme = dados().itens.map((i) => ({ ...i, opme: true, registroAnvisa: '80000000001' }));
+    expect(faltasParaMensagem(dados({ itens: soOpme }))).toContain('ao menos um procedimento além da OPME');
+    expect(() => mensagemSolicitacaoAutorizacao(dados({ itens: soOpme }))).toThrow(/Faltam dados/);
     expect(faltasParaMensagem(dados({ tipo: 'radioterapia' }))).toContain(
       'tipo sem mensagem eletrônica (use o portal)',
     );
