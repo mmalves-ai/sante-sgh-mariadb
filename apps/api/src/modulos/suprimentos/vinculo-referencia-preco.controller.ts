@@ -70,7 +70,9 @@ export class VinculoReferenciaPrecoController {
   @Post()
   @HttpCode(201)
   @Permissao('suprimentos.item.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.vincularReferenciaPreco pelo executor (trilha na mesma transação)')
+  @AuditadoNoHandler(
+    'suprimentos.cadastro.vincular-referencia-preco pelo executor (trilha na mesma transação)',
+  )
   vincular(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const e = corpo(esquemaVincular, b);
     return this.porta.vincular(
@@ -85,7 +87,7 @@ export class VinculoReferenciaPrecoController {
   @HttpCode(200)
   @Permissao('suprimentos.item.editar')
   @AuditadoNoHandler(
-    'suprimentos.cadastro.encerrarVinculoReferenciaPreco pelo executor (trilha na mesma transação)',
+    'suprimentos.cadastro.encerrar-vinculo-referencia-preco pelo executor (trilha na mesma transação)',
   )
   encerrar(
     @Param('id') id: string,

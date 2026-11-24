@@ -804,7 +804,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
 
   incluirItem(c: ContextoPortaM18, e: ItemEstoqueEntrada) {
     recusarTodas(conferirItemEstoque(e));
-    return this.gravar(c, 'incluirItem', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
+    return this.gravar(c, 'incluir-item', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
       if (await tx.uma('SELECT id FROM insumo WHERE codigo = ?', [e.codigo.trim()]))
         throw recusa('item-codigo-existente', `Já existe item com o código ${e.codigo.trim()}.`, {
           campos: ['codigo'],
@@ -819,7 +819,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
 
   alterarItem(c: ContextoPortaM18, id: number, versao: number, e: ItemEstoqueEntrada) {
     recusarTodas(conferirItemEstoque(e));
-    return this.gravar(c, 'alterarItem', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
+    return this.gravar(c, 'alterar-item', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
       const atual = await tx.uma<Linha>(
         'SELECT * FROM insumo WHERE id = ? AND excluido_em IS NULL FOR UPDATE',
         [id],
@@ -873,7 +873,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
   situacaoItem(c: ContextoPortaM18, id: number, versao: number, ativo: boolean, motivo: string) {
     return this.gravar(
       c,
-      ativo ? 'reativarItem' : 'inativarItem',
+      ativo ? 'reativar-item' : 'inativar-item',
       'insumo',
       { ativo, motivo },
       async (tx) => {
@@ -968,7 +968,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarTodas(conferirLocalEstoque(e));
     return this.gravar(
       c,
-      'incluirLocal',
+      'incluir-local',
       'local_estoque',
       { codigo: e.codigo, tipo: e.tipo },
       async (tx, est) => {
@@ -993,7 +993,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarTodas(conferirLocalEstoque(e, id));
     return this.gravar(
       c,
-      'alterarLocal',
+      'alterar-local',
       'local_estoque',
       { codigo: e.codigo, tipo: e.tipo },
       async (tx, est) => {
@@ -1026,7 +1026,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
   situacaoLocal(c: ContextoPortaM18, id: number, versao: number, ativo: boolean, motivo: string) {
     return this.gravar(
       c,
-      ativo ? 'reativarLocal' : 'inativarLocal',
+      ativo ? 'reativar-local' : 'inativar-local',
       'local_estoque',
       { ativo, motivo },
       async (tx, est) => {
@@ -1153,7 +1153,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarUma(conferirEscopoLocal(e));
     return this.gravar(
       c,
-      'escopoLocal',
+      'escopo-local',
       'local_estoque_usuario',
       { usuario, local, permissoes: e.permissoes },
       async (tx, est) => {
@@ -1194,7 +1194,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
   retirarEscopoLocal(c: ContextoPortaM18, usuario: number, local: number) {
     return this.gravar(
       c,
-      'retirarEscopoLocal',
+      'retirar-escopo-local',
       'local_estoque_usuario',
       { usuario, local },
       async (tx, est) => {
@@ -1228,7 +1228,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarUma(conferirConcessaoVigente({ inicio: e.inicio, fim: e.fim ?? null, permissoes: perms }));
     return this.gravar(
       c,
-      'concederClassificacao',
+      'conceder-classificacao',
       'usuario_estoque_classificacao',
       { usuario, grupo: e.grupo, subgrupo: e.subgrupo ?? null },
       async (tx, est) => {
@@ -1285,7 +1285,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarUma(conferirConcessaoVigente({ inicio: e.inicio, fim: e.fim ?? null, permissoes: perms }));
     return this.gravar(
       c,
-      'concederCentroCusto',
+      'conceder-centro-custo',
       'usuario_estoque_centro_custo',
       { usuario, centroCusto: e.centroCusto },
       async (tx, est) => {
@@ -1338,7 +1338,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
   retirarConcessao(c: ContextoPortaM18, tipo: 'classificacao' | 'centro-custo', id: number, motivo = '') {
     const tabela =
       tipo === 'classificacao' ? 'usuario_estoque_classificacao' : 'usuario_estoque_centro_custo';
-    return this.gravar(c, 'retirarConcessao', tabela, { tipo, id, motivo }, async (tx, est) => {
+    return this.gravar(c, 'retirar-concessao', tabela, { tipo, id, motivo }, async (tx, est) => {
       const r = await tx.uma<Linha>(
         `SELECT id, versao, vigencia_inicio, vigencia_fim FROM ${tabela} WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
         [id, est],

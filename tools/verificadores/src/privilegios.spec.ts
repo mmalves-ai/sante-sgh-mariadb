@@ -4,7 +4,11 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { deleteClinicoProibido, EXCECOES_DELETE_CLINICO as EXCECOES_CONTRATO } from '@sgh/contratos';
+import {
+  deleteClinicoProibido,
+  ehTabelaClinica,
+  EXCECOES_DELETE_CLINICO as EXCECOES_CONTRATO,
+} from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import {
   alcanceVersionado,
@@ -472,7 +476,10 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
     const doContrato = new Map(EXCECOES_CONTRATO.map((e) => [e.tabela, e.motivo]));
     for (const e of EXCECOES_DELETE_CLINICO) {
       expect(e.motivo.length, e.tabela).toBeGreaterThan(40);
-      expect(doContrato.get(e.tabela.toUpperCase()), e.tabela).toBe(e.motivo);
+      // Clínica pelo contrato: a exceção tem de estar lá, com o mesmo motivo. Fora da lista clínica do contrato
+      // (gerada do DDL), o DELETE já não é proibido e o contrato não a repete (a exceção do contrato é só de clínica).
+      if (ehTabelaClinica(e.tabela)) expect(doContrato.get(e.tabela.toUpperCase()), e.tabela).toBe(e.motivo);
+      else expect(doContrato.has(e.tabela.toUpperCase()), e.tabela).toBe(false);
       expect(deleteClinicoProibido(e.tabela), e.tabela).toBe(false);
     }
   });

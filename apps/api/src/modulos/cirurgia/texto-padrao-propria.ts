@@ -220,7 +220,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     const e = entradaValida(esquemaTexto, entrada);
     return this.gravar(
       c,
-      'cirurgia.textoPadrao.incluir',
+      'cirurgia.texto-padrao.incluir',
       ['texto_padrao_cirurgia'],
       async (tx: TxOperacao, _est, usuario) => {
         await this.conferirDono(tx, usuario, quem, e.cirurgiao);
@@ -243,7 +243,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     );
     return this.gravar(
       c,
-      'cirurgia.textoPadrao.alterar',
+      'cirurgia.texto-padrao.alterar',
       ['texto_padrao_cirurgia'],
       async (tx: TxOperacao, _est, usuario) => {
         const a = await tx.uma('SELECT id, profissional_id FROM texto_padrao_cirurgia WHERE id = ?', [id]);
@@ -270,7 +270,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     );
     return this.gravar(
       c,
-      'cirurgia.textoPadrao.uso',
+      'cirurgia.texto-padrao.uso',
       ['texto_padrao_cirurgia'],
       async (tx, _est, usuario) => {
         const a = await tx.uma('SELECT id, profissional_id FROM texto_padrao_cirurgia WHERE id = ?', [id]);

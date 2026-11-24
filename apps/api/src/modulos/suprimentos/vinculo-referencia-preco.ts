@@ -354,7 +354,7 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
   ): Promise<{ id: number }> {
     return this.gravar(
       c,
-      'vincularReferenciaPreco',
+      'vincular-referencia-preco',
       chave,
       { insumo, referencia: e.referencia, edicao: e.edicao, fator: e.fator, inicio: e.inicio },
       async (tx) => {
@@ -421,14 +421,20 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
     fim: string,
     chave: string,
   ): Promise<{ id: number }> {
-    return this.gravar(c, 'encerrarVinculoReferenciaPreco', chave, { insumo, vinculo, fim }, async (tx) => {
-      const linha = await this.linhaDoTempo(tx, insumo);
-      const v = linha.find((x) => x.id === vinculo) as
-        (VinculoReferenciaPrecoVigencia & { versao: number }) | undefined;
-      if (!v) throw recusa('vinculo-inexistente', 'O vínculo não é deste item.', { campos: ['vinculo'] });
-      recusarTodas(conferirEncerramentoVinculoReferencia(v, fim, await hojeDo(tx)));
-      await tx.alterar('insumo_referencia_preco', v.id, v.versao, { vigencia_fim: fim });
-      return v.id;
-    });
+    return this.gravar(
+      c,
+      'encerrar-vinculo-referencia-preco',
+      chave,
+      { insumo, vinculo, fim },
+      async (tx) => {
+        const linha = await this.linhaDoTempo(tx, insumo);
+        const v = linha.find((x) => x.id === vinculo) as
+          (VinculoReferenciaPrecoVigencia & { versao: number }) | undefined;
+        if (!v) throw recusa('vinculo-inexistente', 'O vínculo não é deste item.', { campos: ['vinculo'] });
+        recusarTodas(conferirEncerramentoVinculoReferencia(v, fim, await hojeDo(tx)));
+        await tx.alterar('insumo_referencia_preco', v.id, v.versao, { vigencia_fim: fim });
+        return v.id;
+      },
+    );
   }
 }
