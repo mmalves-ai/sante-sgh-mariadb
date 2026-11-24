@@ -1,8 +1,9 @@
 // M59-F1 (regra 4): os artefatos do privilégio mínimo por módulo estão em dia com o código, só trazem privilégio, e
 // toda tabela que uma operação declara ao Executor tem INSERT e UPDATE no papel do módulo (conferido por uma
 // extração independente do gerador, direto do texto de cada arquivo).
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   alcanceVersionado,
@@ -10,6 +11,7 @@ import {
   calcularAlcances,
   caminhoAlcance,
   caminhoScript,
+  entradaDoRepositorio,
   gerarArtefatos,
   gerarScriptsPapeis,
   lerConstantes,
@@ -216,6 +218,151 @@ function declaracoesDoArquivo(texto: string): string[] {
   return saida.filter(Boolean);
 }
 
+/** Árvore temporária com DDL, pacote de persistência e módulos (cada chave é um caminho relativo à raiz). */
+function arvore(arquivos: Record<string, string>): string {
+  const raiz = mkdtempSync(join(tmpdir(), 'privilegios-'));
+  const ddl = ['leito', 'paciente', 'vinculo', 'evolucao', 'regra', 'producao']
+    .map((t) => `CREATE TABLE ${t} (\n  id BIGINT NOT NULL\n);\n`)
+    .join('');
+  for (const [p, texto] of Object.entries({ 'db/migracoes/01_X/01_tabelas.sql': ddl, ...arquivos })) {
+    mkdirSync(dirname(join(raiz, p)), { recursive: true });
+    writeFileSync(join(raiz, p), texto);
+  }
+  return raiz;
+}
+
+function recusa(f: () => unknown): string[] {
+  try {
+    f();
+  } catch (e) {
+    if (e instanceof PlanoPrivilegioRecusado) return [...e.motivos];
+    throw e;
+  }
+  return [];
+}
+
+describe('privilégio mínimo por módulo: imports seguidos até a definição (árvore temporária)', () => {
+  const M = 'apps/api/src/modulos';
+  it('resolve alias, reexportação relativa, operação importada de outro módulo (op.tabelas) e porta compartilhada', () => {
+    const raiz = arvore({
+      'packages/persistencia/src/porta-prod.ts': `export const TABELAS_PROD: readonly string[] = ['producao'];
+export const SQL = 'SELECT id FROM regra WHERE id = ?';
+export async function gravar(tx: { executar(s: string): Promise<void> }) {
+  await tx.executar('INSERT INTO producao (id) VALUES (1)');
+}
+`,
+      // Lista só num arquivo relativo do app (fora de pacotes): o mapa dos pacotes não a resolveria.
+      [`${M}/fat/base.ts`]: `export const LISTA_BASE = ['vinculo'];\n`,
+      [`${M}/fat/nomes.ts`]: `export { LISTA_BASE as LISTA_LOCAL } from './base.js';\n`,
+      [`${M}/fat/ops.ts`]: `import { TABELAS_PROD } from '@sgh/persistencia';
+import { LISTA_LOCAL as LISTA } from './nomes.js';
+export const lancar = definirOperacao({
+  nome: 'fat.lancar',
+  tabelas: ['leito', ...LISTA, ...TABELAS_PROD],
+  gravar: async () => undefined,
+});
+`,
+      [`${M}/atd/extra.ts`]: `import { lancar } from '../fat/ops.js';
+const OP = definirOperacao({ nome: 'atd.extra', tabelas: [...lancar.tabelas] });
+`,
+      // Ciclo x ↔ y: x é lido primeiro (pela ordem dos módulos) e deixa y incompleto; z importa de y por outro caminho.
+      [`${M}/m8/x.ts`]: `import { TABELAS_Y } from '../m9/y.js';\nexport const TABELAS_X = ['paciente'];\n`,
+      [`${M}/m9/y.ts`]: `import { TABELAS_X } from '../m8/x.js';
+export const TABELAS_Y = [...TABELAS_X];
+const OP = definirOperacao({ nome: 'y', tabelas: TABELAS_Y });
+`,
+      [`${M}/m10/z.ts`]: `import { TABELAS_Y } from '../m9/y.js';
+const OP = definirOperacao({ nome: 'z', tabelas: TABELAS_Y });
+`,
+    });
+    try {
+      const e = entradaDoRepositorio(raiz);
+      const { alcances } = calcularAlcances(e);
+      const de = (m: string) => alcances.find((a) => a.modulo === m)?.objetos;
+      const gravacao = { leito: ['INSERT', 'UPDATE'], vinculo: ['INSERT', 'UPDATE'] };
+      expect(de('fat')).toEqual({ ...gravacao, producao: ['INSERT', 'UPDATE'], regra: ['SELECT'] });
+      expect(de('atd')).toEqual(de('fat'));
+      expect(e.modulos['atd']).toMatchObject({ dinamicos: [] });
+      expect(de('m9')).toEqual({ paciente: ['INSERT', 'UPDATE'] });
+      expect(de('m10')).toEqual({ paciente: ['INSERT', 'UPDATE'] });
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
+  });
+
+  it('recusa (nunca o catálogo) o nome ligado a import que não se resolve: membro em minúsculas, export *, import type e ciclo', () => {
+    const raiz = arvore({
+      [`${M}/m1/a.ts`]: `import { op } from '../m2/b.js';
+export const CATALOGO = [{ tabela: 'leito' }, { tabela: 'paciente' }];
+const X = definirOperacao({ nome: 'x', tabelas: [...op.tabelas] });
+`,
+      [`${M}/m2/b.ts`]: `export const op = criarOperacao();\n`,
+      [`${M}/m3/c.ts`]: `import { TABELAS_S } from '../m4/estrela.js';
+const X = definirOperacao({ nome: 'c', tabelas: TABELAS_S });
+`,
+      [`${M}/m4/estrela.ts`]: `export * from './def.js';\n`,
+      [`${M}/m4/def.ts`]: `export const TABELAS_S = ['leito'];\nexport const TABELAS_T = ['vinculo'];\n`,
+      [`${M}/m5/e.ts`]: `import type { TABELAS_T } from '../m4/def.js';
+const X = definirOperacao({ nome: 'e', tabelas: TABELAS_T });
+`,
+      [`${M}/m6/a.ts`]: `import { TABELAS_B } from '../m7/b.js';
+export const TABELAS_A = [...TABELAS_B];
+const X = definirOperacao({ nome: 'a', tabelas: TABELAS_A });
+`,
+      [`${M}/m7/b.ts`]: `import { TABELAS_A } from '../m6/a.js';\nexport const TABELAS_B = [...TABELAS_A];\n`,
+    });
+    try {
+      const e = entradaDoRepositorio(raiz);
+      expect(e.modulos['m1']).toMatchObject({ catalogo: ['leito', 'paciente'] });
+      const motivos = recusa(() => calcularAlcances(e));
+      const naoResolvida = (m: string, acao: string, x: string, onde: string) =>
+        `${m}: constante de tabelas não resolvida (${acao} em ${x} em ${M}/${onde}); siga o import até a definição ou declare a lista literal`;
+      expect(motivos).toEqual([
+        naoResolvida('m1', 'INSERT', '...op.tabelas', 'm1/a.ts:3'),
+        naoResolvida('m1', 'UPDATE', '...op.tabelas', 'm1/a.ts:3'),
+        naoResolvida('m3', 'INSERT', 'TABELAS_S', 'm3/c.ts:2'),
+        naoResolvida('m3', 'UPDATE', 'TABELAS_S', 'm3/c.ts:2'),
+        naoResolvida('m5', 'INSERT', 'TABELAS_T', 'm5/e.ts:2'),
+        naoResolvida('m5', 'UPDATE', 'TABELAS_T', 'm5/e.ts:2'),
+        naoResolvida('m6', 'INSERT', 'TABELAS_A', 'm6/a.ts:3'),
+        naoResolvida('m6', 'UPDATE', 'TABELAS_A', 'm6/a.ts:3'),
+      ]);
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
+  });
+
+  it('função sem parâmetro que devolve um campo de lista de objetos (com filtro de igualdade) vira lista de tabelas', () => {
+    const c = lerConstantes([
+      `export const REFS: readonly Ref[] = [
+  { tabela: 'leito', destino: 'transferir' },
+  { tabela: 'vinculo', destino: 'manter' },
+  { tabela: 'leito', destino: 'transferir' },
+];
+export function transferidas(): string[] {
+  return [...new Set(REFS.filter((r) => r.destino === 'transferir').map((r) => r.tabela))];
+}
+export function todas(): string[] {
+  return REFS.map((r) => r.tabela);
+}
+export function outra(): string[] {
+  return REFS.filter((r) => r.destino !== 'manter').map((r) => r.tabela);
+}`,
+    ]);
+    expect(c.get('transferidas()')).toEqual(['leito']);
+    expect(c.get('todas()')).toEqual(['leito', 'vinculo']);
+    expect(c.has('outra()')).toBe(false);
+    const modelo: ModeloBanco = { tabelas: new Set(['leito', 'paciente']), exclusaoLogica: new Set() };
+    const r = analisarTexto(
+      `const OP = definirOperacao({ nome: 'u', tabelas: [\n  ...new Set([\n    'paciente',\n    ...transferidas(),\n  ]),\n] });`,
+      modelo,
+      c,
+    );
+    expect(r.uso).toEqual({ paciente: ['INSERT', 'UPDATE'], leito: ['INSERT', 'UPDATE'] });
+    expect(r.dinamicos).toEqual([]);
+  });
+});
+
 describe('privilégio mínimo por módulo: artefatos do repositório', () => {
   const a = gerarArtefatos();
   const modelo = lerModelo();
@@ -247,6 +394,25 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
     );
     for (const t of ['producao_repasse', 'estorno_repasse'])
       expect(porModulo.get('faturamento')?.[t]).toEqual(['SELECT', 'INSERT', 'UPDATE']);
+  });
+
+  it('operação importada de outro módulo (tabelas: [...lancarItem.tabelas]) e a leitura da porta compartilhada', () => {
+    // atendimento.lancar-procedimento-extra declara as tabelas do lançamento do faturamento, que roda a produção do
+    // repasse na mesma transação: o papel do atendimento grava a produção e lê o que a sincronização lê.
+    expect(ler('apps/api/src/modulos/atendimento/porta-propria.ts')).toMatch(
+      /tabelas: \[\.\.\.lancarItem\.tabelas\]/,
+    );
+    for (const m of ['atendimento', 'faturamento']) {
+      for (const t of ['producao_repasse', 'estorno_repasse', 'lancamento_repasse'])
+        expect(porModulo.get(m)?.[t], `${m} ${t}`).toEqual(['SELECT', 'INSERT', 'UPDATE']);
+      for (const t of [
+        'regra_repasse',
+        'regra_repasse_item',
+        'glosa_item',
+        'conta_hospitalar_item_participante',
+      ])
+        expect(porModulo.get(m)?.[t], `${m} ${t}`).toContain('SELECT');
+    }
   });
 
   it('toda tabela declarada a uma operação (tabelas: [...]) tem INSERT e UPDATE no papel do módulo', () => {

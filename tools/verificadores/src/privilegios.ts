@@ -127,7 +127,7 @@ export type Constantes = ReadonlyMap<string, ValorConstante>;
 // `...new Set([` (lista sem repetição montada de outras) é só o invólucro: consumido sem captura, os elementos de
 // dentro seguem pelas outras alternativas (sem isso, `new` virava um espalhamento não resolvido e a lista inteira caía).
 const ELEMENTO =
-  /\.\.\.\s*new\s+Set\(\[|\.\.\.\s*([A-Za-z_$][\w$]*)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$]*)/g;
+  /\.\.\.\s*new\s+Set\(\[|\.\.\.\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?:\(\s*\))?)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$]*)/g;
 
 // `...LISTA.filter((t) => <condição>)`, com um nível de parênteses dentro da condição (`!B.includes(t as never)`).
 const FILTRO =
@@ -169,12 +169,38 @@ function filtrarLista(
   return (origem as string[]).filter((x) => !fora.has(x));
 }
 
+/** O trecho `{ ... }` que começa em `i` (chaves balanceadas; texto entre aspas não conta). */
+function objetoBalanceado(t: string, i: number): string {
+  let prof = 0;
+  let aspas: string | null = null;
+  for (let j = i; j < t.length; j++) {
+    const c = t[j]!;
+    if (aspas) {
+      if (c === '\\') j++;
+      else if (c === aspas) aspas = null;
+      continue;
+    }
+    if (c === "'" || c === '"') aspas = c;
+    else if (c === '{') prof++;
+    else if (c === '}' && --prof === 0) return t.slice(i, j + 1);
+  }
+  return t.slice(i);
+}
+
+const FUNCAO_DE_LISTA =
+  /^(?:export\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(\s*\)\s*(?::[^{]+)?\{\s*return\s+(?:\[\s*\.\.\.\s*new\s+Set\(\s*)?([A-Z][A-Z0-9_]*)(?:\.filter\(\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*\3\.([A-Za-z_$][\w$]*)\s*===\s*(['"])([^'"\n]*)\5\s*\))?\.map\(\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*\7\.([A-Za-z_$][\w$]*)\s*\)\s*(?:\)\s*\])?\s*;?\s*\}/gm;
+
 /** As constantes de nível de arquivo (string, template sem expressão não resolvida e lista de nomes). */
 export function lerConstantes(
   textos: readonly string[],
   base: Constantes = new Map(),
 ): Map<string, ValorConstante> {
   const brutos = new Map<string, { tipo: 'texto' | 'lista'; corpo: string }>();
+  const objetos = new Map<string, Record<string, string>[]>();
+  const funcoes = new Map<
+    string,
+    { lista: string; campoF: string | undefined; valorF: string | undefined; campoM: string }
+  >();
   for (const bruto of textos) {
     const t = semComentarios(bruto);
     for (const m of t.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]+)?=\s*(['"])([^'"\n]*)\2/g))
@@ -191,6 +217,37 @@ export function lerConstantes(
     for (const m of t.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\s*(?::[^=;\n]+)?=\s*\{([^{}]*)\}/g))
       for (const p of m[2]!.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*\[([^\]]*)\]/g))
         brutos.set(`${m[1]}.${p[1]}`, { tipo: 'lista', corpo: p[2]! });
+    // Operação de nível de arquivo (`const op = definirOperacao({ ..., tabelas: [...] })`): vira `op.tabelas`, para quem
+    // declara `tabelas: [...op.tabelas]` (no mesmo arquivo ou importando a operação de outro módulo).
+    for (const m of t.matchAll(
+      /^(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]+)?=\s*definirOperacao\s*(?:<[^(]*?>)?\(\s*\{/gm,
+    )) {
+      const obj = objetoBalanceado(t, m.index! + m[0].length - 1);
+      const tb = /(?:^|[\s,{])tabelas\s*:\s*(\[[^\]]*\]|[A-Za-z_$][\w$.]*(?=\s*[,}\n]))/.exec(obj.slice(1));
+      if (tb)
+        brutos.set(`${m[1]}.tabelas`, {
+          tipo: 'lista',
+          corpo: tb[1]!.startsWith('[') ? tb[1]!.slice(1, -1) : `...${tb[1]}`,
+        });
+    }
+    // Lista de objetos de nível de arquivo (`const R = [{ tabela: 'x', destino: 'y' }, ...]`), só para a função abaixo.
+    for (const m of t.matchAll(
+      /^(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*(?::[^=;\n]+)?=\s*\[(\s*\{[^\]]*)\]/gm,
+    )) {
+      const itens: Record<string, string>[] = [];
+      for (const o of m[2]!.matchAll(/\{([^{}]*)\}/g)) {
+        const r: Record<string, string> = {};
+        for (const p of o[1]!.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*(['"])([^'"\n]*)\2/g)) r[p[1]!] = p[3]!;
+        itens.push(r);
+      }
+      objetos.set(m[1]!, itens);
+    }
+    // Função sem parâmetro que devolve um campo de uma lista de objetos, com filtro de igualdade exata opcional:
+    // `function f(): string[] { return [...new Set(R.filter((r) => r.k === 'v').map((r) => r.tabela))]; }`. Vira `f()`.
+    for (const m of t.matchAll(FUNCAO_DE_LISTA)) {
+      const [, nome, lista, , campoF, , valorF, , campoM] = m;
+      funcoes.set(`${nome}()`, { lista: lista!, campoF, valorF, campoM: campoM! });
+    }
   }
   const saida = new Map<string, ValorConstante>(base);
   const resolvendo = new Set<string>();
@@ -241,6 +298,16 @@ export function lerConstantes(
       resolvendo.delete(nome);
     }
   };
+  for (const [n, f] of funcoes) {
+    const itens = objetos.get(f.lista);
+    if (!itens) continue;
+    const vals = itens
+      .filter((o) => f.campoF === undefined || o[f.campoF] === f.valorF)
+      .map((o) => o[f.campoM]);
+    // Item sem o campo (ou com valor que não é texto literal): a função não se resolve.
+    if (vals.some((v) => v === undefined)) continue;
+    saida.set(n, [...new Set(vals as string[])]);
+  }
   for (const n of brutos.keys()) {
     const v = resolver(n);
     if (v === undefined) saida.delete(n);
@@ -256,6 +323,8 @@ export interface UsoDinamico {
   readonly expressao: string;
   /** Veio de tx.incluir/alterar/excluir (o excluir em exclusão lógica é UPDATE). */
   readonly porExecutor?: boolean;
+  /** A raiz da expressão é nome importado ou declarado no nível do arquivo (constante que não se resolveu). */
+  readonly ligado?: boolean;
 }
 
 export interface UsoDoTexto {
@@ -374,9 +443,7 @@ export function analisarTexto(
     if (corpo.startsWith('[')) {
       for (const e of corpo
         .slice(1, -1)
-        .matchAll(
-          /\.\.\.\s*(?:new Set\(\[\s*\.\.\.\s*)?([^,\]\s]+)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$.]*)/g,
-        )) {
+        .matchAll(/\.\.\.\s*new\s+Set\(\[|\.\.\.\s*([^,\]\s]+)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$.]*)/g)) {
         if (e[1]) {
           const r = constantes.get(e[1].trim());
           if (Array.isArray(r)) nomes.push(...(r as string[]));
@@ -413,7 +480,54 @@ export function analisarTexto(
       for (const acao of ['INSERT', 'UPDATE'] as const)
         dinamicos.push({ onde: linhaDe(naOrigem(m.index!)), acao, expressao: x });
   }
-  return { uso: ordenarAcoes(u), dinamicos, foraDoModelo: [...foraDoModelo].sort() };
+  // Expressão cuja raiz é nome ligado a import ou a declaração de nível de arquivo: é constante do código, não dado de
+  // tempo de execução. Se chegou aqui, não se resolveu, e o gerador recusa (nunca o catálogo do módulo).
+  const ligados = nomesLigados(original);
+  const marcados = dinamicos.map((d) => {
+    const raiz = raizDaExpressao(d.expressao);
+    return raiz !== null && ligados.has(raiz) ? { ...d, ligado: true } : d;
+  });
+  return { uso: ordenarAcoes(u), dinamicos: marcados, foraDoModelo: [...foraDoModelo].sort() };
+}
+
+/** Os nomes ligados no nível do arquivo: importados (menos `import type`) e declarados (const, let, var, function, class). */
+export function nomesLigados(texto: string): Set<string> {
+  const t = semComentarios(texto);
+  const s = new Set<string>();
+  for (const m of t.matchAll(/^\s*import\s+(?!type\b)([^'";]*?)\s+from\s+['"][^'"]+['"]/gm)) {
+    const clausula = m[1]!;
+    const chaves = /\{([^}]*)\}/.exec(clausula);
+    if (chaves)
+      for (const item of chaves[1]!.split(',')) {
+        const x = /^\s*(type\s+)?([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/.exec(item);
+        if (x && !x[1]) s.add(x[3] ?? x[2]!);
+      }
+    const fora = clausula.replace(/\{[^}]*\}/, '');
+    const ns = /\*\s*as\s+([A-Za-z_$][\w$]*)/.exec(fora);
+    if (ns) s.add(ns[1]!);
+    const padrao = /^\s*([A-Za-z_$][\w$]*)\s*(?:,|$)/.exec(fora);
+    if (padrao) s.add(padrao[1]!);
+  }
+  for (const m of t.matchAll(
+    /^(?:export\s+)?(?:declare\s+)?(?:const|let|var|(?:async\s+)?function\s*\*?|(?:abstract\s+)?class)\s+([A-Za-z_$][\w$]*)/gm,
+  ))
+    s.add(m[1]!);
+  return s;
+}
+
+/** O primeiro identificador de uma expressão (`...x.y` → x, `conferirNome(X)` → X, `(a?.b ?? [])` → a), ou null. */
+export function raizDaExpressao(expressao: string): string | null {
+  let e = expressao.trim();
+  for (;;) {
+    const antes = e;
+    e = e
+      .replace(/^\.\.\.\s*/, '')
+      .replace(/^\(\s*/, '')
+      .replace(/^(?:conferirNome|String)\s*\(\s*/, '');
+    if (e === antes) break;
+  }
+  const m = /^[A-Za-z_$][\w$]*/.exec(e);
+  return m && m[0] !== 'this' && m[0] !== 'new' ? m[0] : null;
 }
 
 /** Compatibilidade: só o uso resolvido de um texto (sem constantes externas). */
@@ -502,12 +616,13 @@ export function calcularAlcances(e: EntradaAlcance): {
     // Constante de tabelas (nome em maiúsculas) que não se resolveu: ERRO, nunca o catálogo do módulo. O catálogo vale
     // só para o nome que de fato só se conhece em tempo de execução; a constante que não se resolve (importada de
     // arquivo que o gerador não seguiu, montada de forma que ele não lê) daria ao papel as tabelas erradas.
-    const constantesNaoResolvidas = m.dinamicos.filter((d) => ehNomeDeConstante(d.expressao));
+    const ehConstante = (d: UsoDinamico) => d.ligado === true || ehNomeDeConstante(d.expressao);
+    const constantesNaoResolvidas = m.dinamicos.filter(ehConstante);
     for (const d of constantesNaoResolvidas)
       motivos.push(
         `${modulo}: constante de tabelas não resolvida (${d.acao} em ${d.expressao} em ${d.onde}); siga o import até a definição ou declare a lista literal`,
       );
-    const dinamicosDeFato = m.dinamicos.filter((d) => !ehNomeDeConstante(d.expressao));
+    const dinamicosDeFato = m.dinamicos.filter((d) => !ehConstante(d));
     if (dinamicosDeFato.length > 0) {
       if (m.catalogo.length === 0)
         for (const d of dinamicosDeFato)
@@ -578,10 +693,46 @@ function constantesDosPacotes(raiz: string): Map<string, ValorConstante> {
   const textos = arquivos(resolve(raiz, 'packages'), /\.ts$/)
     .filter((f) => /[\\/]src[\\/]/.test(f))
     .map((f) => readFileSync(f, 'utf8'))
-    .filter((t) => /\bexport const\b/.test(t));
+    .filter((t) => /\bexport (?:const|function)\b/.test(t));
   const todas = lerConstantes(textos);
   // Só as listas e os nomes de tabela simples (um trecho de SQL de outro pacote não entra).
   return new Map([...todas].filter(([, v]) => Array.isArray(v) || IDENT_TABELA.test(v as string)));
+}
+
+export const PASTA_PERSISTENCIA = 'packages/persistencia/src';
+
+/** Porta compartilhada da persistência: a lista exportada das tabelas que ela grava e o uso do seu SQL. */
+export interface PortaCompartilhada {
+  readonly arquivo: string;
+  readonly gravadas: readonly string[];
+  readonly uso: UsoObjetos;
+}
+
+/**
+ * As portas compartilhadas da persistência: arquivo com SQL que exporta uma lista `TABELAS_*` (as tabelas que a porta
+ * grava, para a operação que a roda declarar). A operação que declara a lista inteira roda a porta na transação; o
+ * papel do módulo precisa também do que o SQL dela lê (a produção do repasse lê regra, participante, glosa, parâmetro).
+ */
+function portasCompartilhadas(raiz: string, modelo: ModeloBanco, pacotes: Constantes): PortaCompartilhada[] {
+  const pasta = resolve(raiz, PASTA_PERSISTENCIA);
+  if (!existsSync(pasta)) return [];
+  const saida: PortaCompartilhada[] = [];
+  for (const f of arquivos(pasta, /\.ts$/)) {
+    const texto = readFileSync(f, 'utf8');
+    const nomes = [...semComentarios(texto).matchAll(/^export\s+const\s+(TABELAS_[A-Z0-9_]+)\b/gm)].map(
+      (m) => m[1]!,
+    );
+    if (nomes.length === 0) continue;
+    const c = lerConstantes([texto], pacotes);
+    const uso = analisarTexto(texto, modelo, c, relative(raiz, f)).uso;
+    if (Object.keys(uso).length === 0) continue;
+    for (const n of nomes) {
+      const v = c.get(n);
+      if (Array.isArray(v) && v.length > 0)
+        saida.push({ arquivo: relative(raiz, f), gravadas: v as string[], uso });
+    }
+  }
+  return saida;
 }
 
 const EXTENSOES_IMPORT = ['', '.ts', '/index.ts'];
@@ -601,11 +752,13 @@ function importsRelativos(arquivo: string, texto: string): [string, string, stri
   const saida: [string, string, string][] = [];
   const t = semComentarios(texto);
   for (const m of t.matchAll(
-    /\b(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"](\.{1,2}\/[^'"]+)['"]/g,
+    /\b(?:import|export)\s+(type\s+)?\{([^}]*)\}\s*from\s*['"](\.{1,2}\/[^'"]+)['"]/g,
   )) {
-    const alvo = arquivoDoImport(arquivo, m[2]!);
+    // `import type` / `export type` só traz tipo: nenhum valor a seguir.
+    if (m[1]) continue;
+    const alvo = arquivoDoImport(arquivo, m[3]!);
     if (!alvo) continue;
-    for (const item of m[1]!.split(',')) {
+    for (const item of m[2]!.split(',')) {
       const x = /^\s*(?:type\s+)?([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/.exec(item);
       if (x && !/^\s*type\s/.test(item)) saida.push([x[2] ?? x[1]!, x[1]!, alvo]);
     }
@@ -613,30 +766,47 @@ function importsRelativos(arquivo: string, texto: string): [string, string, stri
   return saida;
 }
 
+/** Copia o nome importado e os seus membros (`op.tabelas`, `TABELAS_X.ciclos`, `f()`) com o nome local. */
+function trazerNome(
+  de: ReadonlyMap<string, ValorConstante>,
+  origem: string,
+  local: string,
+  para: Map<string, ValorConstante>,
+): void {
+  for (const [k, v] of de)
+    if (k === origem) para.set(local, v);
+    else if (k.startsWith(`${origem}.`) || k === `${origem}()`)
+      para.set(`${local}${k.slice(origem.length)}`, v);
+}
+
 /**
  * As constantes de um arquivo seguindo os imports relativos até a definição (inclusive em outro módulo: a lista de
- * tabelas da produção do repasse usada pelo faturamento). Memoizado por arquivo; import circular fica sem o nome.
+ * tabelas da produção do repasse usada pelo faturamento). Memoizado por arquivo. No import circular o nome que depende
+ * do ciclo fica sem valor (o plano que o usa é recusado), e o resultado parcial de quem está no ciclo não entra no memo
+ * (senão outro arquivo que importasse dele por outro caminho herdaria a falta).
  */
 function constantesSeguindoImports(
   arquivo: string,
   pacotes: Constantes,
   memo: Map<string, Map<string, ValorConstante>>,
   pilha: Set<string> = new Set(),
-): Map<string, ValorConstante> {
+): { mapa: Map<string, ValorConstante>; parcial: boolean } {
   const pronto = memo.get(arquivo);
-  if (pronto) return pronto;
-  if (pilha.has(arquivo)) return new Map();
+  if (pronto) return { mapa: pronto, parcial: false };
+  if (pilha.has(arquivo)) return { mapa: new Map(), parcial: true };
   pilha.add(arquivo);
   const texto = readFileSync(arquivo, 'utf8');
   const base = new Map<string, ValorConstante>(pacotes);
+  let parcial = false;
   for (const [local, origem, alvo] of importsRelativos(arquivo, texto)) {
-    const v = constantesSeguindoImports(alvo, pacotes, memo, pilha).get(origem);
-    if (v !== undefined) base.set(local, v);
+    const r = constantesSeguindoImports(alvo, pacotes, memo, pilha);
+    if (r.parcial) parcial = true;
+    trazerNome(r.mapa, origem, local, base);
   }
   pilha.delete(arquivo);
   const saida = lerConstantes([texto], base);
-  memo.set(arquivo, saida);
-  return saida;
+  if (!parcial) memo.set(arquivo, saida);
+  return { mapa: saida, parcial };
 }
 
 /** Só os nomes importados (resolvidos na origem) de um arquivo. */
@@ -647,10 +817,8 @@ function constantesImportadas(
   memo: Map<string, Map<string, ValorConstante>>,
 ): Map<string, ValorConstante> {
   const saida = new Map<string, ValorConstante>();
-  for (const [local, origem, alvo] of importsRelativos(arquivo, texto)) {
-    const v = constantesSeguindoImports(alvo, pacotes, memo).get(origem);
-    if (v !== undefined) saida.set(local, v);
-  }
+  for (const [local, origem, alvo] of importsRelativos(arquivo, texto))
+    trazerNome(constantesSeguindoImports(alvo, pacotes, memo).mapa, origem, local, saida);
   return saida;
 }
 
@@ -661,6 +829,7 @@ export function entradaDoRepositorio(raiz = RAIZ): EntradaAlcance {
   const textosExecutor = executor.map((f) => readFileSync(f, 'utf8'));
   const comum = analisarTexto(textosExecutor.join('\n'), modelo, lerConstantes(textosExecutor)).uso;
   const pacotes = constantesDosPacotes(raiz);
+  const portas = portasCompartilhadas(raiz, modelo, pacotes);
   const modulos: Record<string, UsoModulo> = {};
   const memo = new Map<string, Map<string, ValorConstante>>();
   const pasta = resolve(raiz, PASTA_MODULOS);
@@ -688,6 +857,11 @@ export function entradaDoRepositorio(raiz = RAIZ): EntradaAlcance {
       dinamicos.push(...r.dinamicos);
       for (const x of r.foraDoModelo) fora.add(x);
     });
+    // Operação que declara todas as tabelas que uma porta compartilhada grava roda essa porta: o uso do SQL dela entra.
+    for (const porta of portas)
+      if (porta.gravadas.every((t) => uso[t]?.includes('INSERT')))
+        for (const [t, a] of Object.entries(porta.uso))
+          for (const x of a) if (!(uso[t] ??= []).includes(x)) uso[t]!.push(x);
     const catalogo = new Set(catalogoDoTexto(textos.join('\n'), modelo));
     for (const ext of CATALOGOS_EXTERNOS[m] ?? [])
       for (const t of catalogoDoTexto(readFileSync(resolve(raiz, ext), 'utf8'), modelo)) catalogo.add(t);
