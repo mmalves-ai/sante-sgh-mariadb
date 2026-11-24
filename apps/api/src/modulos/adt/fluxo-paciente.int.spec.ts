@@ -266,6 +266,33 @@ describe.skipIf(SEM_BANCO_ADT)(
           [conta, item, M().medico],
         );
       expect(await producao()).toBe(1);
+      // Prévia da produção: base = cobrado do procedimento (300), 60% da regra da massa = 180.
+      const previa = async () =>
+        lerAdt<{
+          valor_base: string;
+          percentual: string | null;
+          valor_repasse: string | null;
+          situacao: string;
+        }>(
+          M(),
+          'SELECT valor_base, percentual, valor_repasse, situacao FROM producao_repasse WHERE conta_hospitalar_item_id = ?',
+          [item],
+        );
+      const p1 = await previa();
+      expect(Number(p1?.valor_base)).toBe(PRECO.proc);
+      expect(Number(p1?.percentual)).toBe(60);
+      expect(Number(p1?.valor_repasse)).toBe(180);
+      // A regra aplicada é a da massa (evento da massa, percentual do convênio) e é a única do estabelecimento.
+      expect(
+        await num(
+          `SELECT COUNT(*) AS n FROM regra_repasse r JOIN regra_repasse_item i ON i.regra_repasse_id = r.id
+            WHERE r.id = ? AND r.evento_repasse_id = ? AND i.fonte_pagadora_id = ? AND i.percentual = ?`,
+          [cfg.regra, cfg.evento, M().convenio, Number(p1?.percentual)],
+        ),
+      ).toBe(1);
+      expect(
+        await num('SELECT COUNT(*) AS n FROM regra_repasse WHERE estabelecimento_id = ?', [M().est]),
+      ).toBe(1);
 
       // Alta: nenhuma conta nova. Sem horaSaida: a hora "HH:MM" do mesmo minuto da entrada cairia antes dela (segundos).
       const v = await lerAdt<{ versao: number }>(M(), 'SELECT versao FROM internacao WHERE id = ?', [
@@ -303,13 +330,47 @@ describe.skipIf(SEM_BANCO_ADT)(
       expect(c?.situacao).toBe('fechada');
       expect(Number(c?.calculada)).toBe(1);
       expect(Number(c?.valor_total)).toBe(Number(c?.soma));
-      // Diária (1 ou mais, conforme a hora da alta), 2 mat/med e o procedimento: soma >= 150 + 25 + 300.
-      expect(Number(c?.itens)).toBeGreaterThanOrEqual(3);
-      expect(Number(c?.soma)).toBeGreaterThanOrEqual(PRECO.diaria + 2 * PRECO.med + PRECO.proc);
+      // Valores exatos: n diárias lançadas (1 ou mais, conforme a hora da alta), o mat/med (2 × 12,5) e o
+      // procedimento (300). Uma diária em dobro ou um item sem preço não fecha a conta.
+      const n = await diarias();
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(Number(c?.itens)).toBe(n + 2);
+      expect(Number(c?.soma)).toBe(n * PRECO.diaria + 2 * PRECO.med + PRECO.proc);
+      const valorDo = async (id: number) =>
+        Number(
+          (
+            await lerAdt<{ v: string }>(
+              M(),
+              'SELECT valor_total AS v FROM conta_hospitalar_item WHERE id = ?',
+              [id],
+            )
+          )?.v,
+        );
+      expect(await valorDo(Number(med['id']))).toBe(2 * PRECO.med);
+      expect(await valorDo(item)).toBe(PRECO.proc);
+      // Repasse: uma produção só (o mat/med sem executor fica fora), com a base e o valor da regra; nenhum estorno.
       expect(await producao()).toBe(1);
       expect(
         await num('SELECT COUNT(*) AS n FROM producao_repasse WHERE conta_hospitalar_id = ?', [conta]),
       ).toBe(1);
+      expect(
+        await num('SELECT COUNT(*) AS n FROM producao_repasse WHERE conta_hospitalar_item_id = ?', [
+          Number(med['id']),
+        ]),
+      ).toBe(0);
+      const p2 = await previa();
+      expect(p2?.situacao).toBe('pendente');
+      expect(Number(p2?.valor_base)).toBe(PRECO.proc);
+      expect(Number(p2?.valor_repasse)).toBe(180);
+      expect(
+        await num('SELECT COUNT(*) AS n FROM estorno_repasse WHERE conta_hospitalar_id = ?', [conta]),
+      ).toBe(0);
+      expect(
+        await num(
+          'SELECT COUNT(*) AS n FROM estorno_repasse e JOIN producao_repasse p ON p.id = e.producao_repasse_id WHERE p.conta_hospitalar_id = ?',
+          [conta],
+        ),
+      ).toBe(0);
     }, 120_000);
   },
 );
