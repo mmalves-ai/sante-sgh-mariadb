@@ -36,6 +36,7 @@ export const REFERENCIAS_PACIENTE: readonly ReferenciaPaciente[] = [
   { tabela: 'anotacao_administrativa_caso', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'aplicacao_escala', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'atendimento', coluna: 'paciente_id', destino: 'transferir' },
+  { tabela: 'atividade_cuidado_enfermagem', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'ato_cirurgico', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'ato_transfusional', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'auditoria_prescricao_ccih', coluna: 'paciente_id', destino: 'transferir' },
