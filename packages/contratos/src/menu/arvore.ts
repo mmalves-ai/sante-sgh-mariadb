@@ -15,7 +15,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F7 (09-AREA linha 68): o item "Análise das culturas positivas" entrou à mão (mesmo motivo); a contagem acompanha.
 // F78.04-1 (04-INT linhas 74, 75 e 78): os itens "Quadro clínico e evolução da regulação", "Auditoria do isolamento" e
 // "Formulários da declaração de óbito" entraram à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":418,"M":195,"P":57,"N":166};
+// F8 (05-SADT linha 6): o item "Limites do pedido de exame" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":419,"M":195,"P":57,"N":167};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -158,6 +159,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"diagnostico-sadt.laboratorio.coleta-etiquetas-e-mapa-de-trabalho","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Coleta, etiquetas e mapa de trabalho"],"titulo":"Coleta, etiquetas e mapa de trabalho","selo":"P","fase":2,"rota":"/sadt/coleta","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.laboratorio.rastreio-de-amostra","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Rastreio de amostra"],"titulo":"Rastreio de amostra","selo":"N","fase":2,"rota":"/sadt/amostras","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.laboratorio.recoletas","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Recoletas"],"titulo":"Recoletas","selo":"M","fase":2,"rota":"/sadt/recoletas","permissao":"sadt.amostra.ler"},
+  {"id":"diagnostico-sadt.limites-do-pedido-de-exame","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Limites do pedido de exame"],"titulo":"Limites do pedido de exame","selo":"N","fase":7,"rota":"/sadt/limites","permissao":"sadt.catalogo.ler"},
   {"id":"diagnostico-sadt.laboratorio.digitacao-e-importacao-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Digitação e importação de resultados"],"titulo":"Digitação e importação de resultados","selo":"M","fase":2,"rota":"/sadt/resultados/digitacao","permissao":"sadt.resultado.ler"},
   {"id":"diagnostico-sadt.laboratorio.interfaces-de-equipamento","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Interfaces de equipamento"],"titulo":"Interfaces de equipamento","selo":"P","fase":3,"rota":"/sadt/laboratorio/interfaces","permissao":"sadt.interface.ler"},
   {"id":"diagnostico-sadt.laboratorio.laboratorio-de-apoio-envio-e-retorno","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Laboratório de apoio"],"titulo":"Laboratório de apoio","selo":"M","fase":3,"rota":"/sadt/laboratorio/apoio","permissao":"sadt.apoio.ler"},
