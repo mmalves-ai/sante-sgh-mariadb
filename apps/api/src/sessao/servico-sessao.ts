@@ -4,6 +4,8 @@
 // bloqueio da porta por tentativas (só no novo), termo e troca de senha. As regras são de
 // @sgh/dominio-acesso; o adaptador só lê. Nenhuma senha, hash ou token vai a log ou corpo.
 import { createHash, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
+import type { GanchoSegundoFatorEmail } from './acesso-email-tardio.js';
+import { ErroCodigoEmail } from './codigo-email.js';
 import {
   CATALOGO_ACESSO,
   type FalhaSenha,
@@ -231,6 +233,9 @@ const CACHE_SITUACAO_PLATAFORMA_MS = 180_000;
  */
 export const PREFIXO_LOGIN_PLATAFORMA = 'plataforma:';
 
+/** Os métodos do segundo fator que a conta escolhe (o mesmo conjunto de codigo-email.ts). */
+type MetodoSegundoFatorSessao = 'aplicativo' | 'email';
+
 /** Login do administrador da plataforma sem o prefixo da sessão. */
 export function loginPuroPlataforma(login: string): string {
   return login.startsWith(PREFIXO_LOGIN_PLATAFORMA) ? login.slice(PREFIXO_LOGIN_PLATAFORMA.length) : login;
@@ -293,6 +298,11 @@ export interface ConfigServicoSessao {
    * o cookie de um cliente valeria na API de outro. null só na fonte sintética (montar.ts recusa a própria sem ele).
    */
   readonly cliente?: string | null;
+  /**
+   * modulos-proprios-3 (acesso-ligacao): o segundo fator por código no e-mail, escolhido pela conta ao lado do
+   * aplicativo (usuário do cliente e administrador da plataforma). Sem ele, a entrada é a de antes.
+   */
+  readonly segundoFatorEmail?: GanchoSegundoFatorEmail;
 }
 
 /**
@@ -398,6 +408,7 @@ export class ServicoSessao {
   private readonly portaSenha: PortaSenha | null;
   private readonly cliente: string | null;
   private readonly plataforma: FontePlataforma | null;
+  private readonly segundoFatorEmail: GanchoSegundoFatorEmail | null;
 
   constructor(
     private readonly fonte: FonteAcesso,
@@ -417,6 +428,57 @@ export class ServicoSessao {
     this.portaSenha = config.senha ?? null;
     this.cliente = config.cliente ?? null;
     this.plataforma = config.plataforma ?? null;
+    this.segundoFatorEmail = config.segundoFatorEmail ?? null;
+  }
+
+  /**
+   * O segundo fator por código no e-mail, depois da senha conferida. Sem código: envia um novo e pede (401 com o
+   * código segundo-fator-email). Com código: confere (uso único, tentativas limitadas). Devolve verdadeiro quando o
+   * e-mail é o método da conta (o do aplicativo não é pedido); falso, segue o fluxo de antes.
+   */
+  private async conferirSegundoFatorEmail(
+    alvo: { rede: string; estabelecimento: string; login: string },
+    metodo: () => Promise<MetodoSegundoFatorSessao | null>,
+    emitir: () => Promise<{ validadeMinutos: number }>,
+    conferir: (codigo: string) => Promise<'ok' | 'invalido' | 'esgotado'>,
+    codigo: string | undefined,
+    origem: OrigemPedido,
+  ): Promise<boolean> {
+    if (!this.segundoFatorEmail) return false;
+    let escolhido: MetodoSegundoFatorSessao | null;
+    try {
+      escolhido = await metodo();
+    } catch {
+      throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
+    if (escolhido !== 'email') return false;
+    try {
+      if (!codigo) {
+        const { validadeMinutos } = await emitir();
+        throw new ErroSessao(
+          'segundo-fator-necessario',
+          `Enviamos um código de 6 dígitos ao seu e-mail. Ele vale por ${validadeMinutos} minutos.`,
+          'segundo-fator-email',
+        );
+      }
+      const d = await conferir(codigo);
+      if (d === 'ok') return true;
+      await this.registrar(EVENTOS_AUDITAVEIS.loginFalho.codigo, alvo, origem, false, 'falha');
+      throw d === 'esgotado'
+        ? new ErroSessao(
+            'segundo-fator-necessario',
+            'O código venceu ou as tentativas acabaram. Entre de novo para receber outro código.',
+            'segundo-fator-email-esgotado',
+          )
+        : new ErroSessao('segundo-fator-necessario', 'Código do segundo fator inválido.', 'segundo-fator-invalido');
+    } catch (e) {
+      if (e instanceof ErroSessao) throw e;
+      if (e instanceof ErroCodigoEmail && e.codigo === 'muitos-envios')
+        throw new ErroSessao('muitas-tentativas', e.message, 'segundo-fator-email-envios');
+      if (e instanceof ErroCodigoEmail && e.codigo === 'sem-email')
+        throw new ErroSessao('segundo-fator-necessario', e.message, 'segundo-fator-sem-email');
+      throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
   }
 
   /** ADR 0022: o serviço de autorização (a tela "Perfis e permissões" explica e invalida o cache). */
@@ -707,10 +769,26 @@ export class ServicoSessao {
     const trocaSenha: Sessao['trocaSenha'] =
       conta.trocaObrigatoria || provisoria ? 'senha-provisoria' : expirada ? 'senha-expirada' : null;
 
+    // Código no e-mail (método escolhido pela conta): confere aqui e dispensa o do aplicativo.
+    const porEmail = await this.conferirSegundoFatorEmail(
+      { rede, estabelecimento, login: conta.login },
+      () => this.segundoFatorEmail!.metodoUsuario(rede, estabelecimento, conta.login),
+      () => this.segundoFatorEmail!.emitirUsuario(rede, estabelecimento, conta.login),
+      (c) => this.segundoFatorEmail!.conferirUsuario(rede, estabelecimento, conta.login, c),
+      entrada.codigoSegundoFator,
+      origem,
+    );
     // M59-F2: o segundo fator confere dentro da abertura (precisa do perfil); a tentativa só é apagada depois dele.
-    const r = await this.abrirSessao(rede, estabelecimento, conta, dados, trocaSenha, falhasAntes, origem, {
-      codigo: entrada.codigoSegundoFator,
-    });
+    const r = await this.abrirSessao(
+      rede,
+      estabelecimento,
+      conta,
+      dados,
+      trocaSenha,
+      falhasAntes,
+      origem,
+      porEmail ? undefined : { codigo: entrada.codigoSegundoFator },
+    );
     await this.armazem.apagar(chaveTent);
     // Regra 2: a senha do legado conferiu: regrava no esquema forte (falha só avisa; a próxima entrada tenta de novo).
     if (!pelaForte && this.identidade) {
@@ -737,7 +815,13 @@ export class ServicoSessao {
    * troca. Mesma porta da entrada comum: contagem de tentativas, trilha obrigatória, identificador novo.
    */
   async entrarPlataforma(
-    entrada: { estabelecimento: string; login: string; senha: string; cliente?: string | undefined },
+    entrada: {
+      estabelecimento: string;
+      login: string;
+      senha: string;
+      cliente?: string | undefined;
+      codigoSegundoFator?: string | undefined;
+    },
     redeDoEndereco: string | null,
     idAnterior: string | null = null,
     origem: OrigemPedido = ORIGEM_SERVIDOR,
@@ -784,6 +868,14 @@ export class ServicoSessao {
       );
     }
     const ator = auth.ator;
+    await this.conferirSegundoFatorEmail(
+      { rede, estabelecimento, login },
+      () => this.segundoFatorEmail!.metodoPlataforma(ator.idAdministrador),
+      () => this.segundoFatorEmail!.emitirPlataforma(ator.idAdministrador, origem.correlacao),
+      (c) => this.segundoFatorEmail!.conferirPlataforma(ator.idAdministrador, c, origem.correlacao),
+      entrada.codigoSegundoFator,
+      origem,
+    );
     const dados: DadosSessao = {
       papeis: [],
       unidades: [],

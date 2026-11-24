@@ -29,6 +29,7 @@ import {
   type SituacaoPinTela,
   esquemaEntrar,
   esquemaEntrarAdministradorPlataforma,
+  esquemaCodigoSegundoFator,
   esquemaEscolherUnidade,
   esquemaReautenticar,
   esquemaTrocarSenha,
@@ -69,6 +70,7 @@ import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/e
 import { descreverDispositivo } from '../../sessao/dispositivo.js';
 import { SessaoSintetica } from './sessao-sintetica.js';
 import type { ServicoTrocaRapida } from '../../sessao/troca-rapida.js';
+import { problemaDoAcessoEmail } from './acesso-email-erros.js';
 
 export const SERVICO_SESSAO = Symbol('SERVICO_SESSAO');
 export const SESSAO_SINTETICA = Symbol('SESSAO_SINTETICA');
@@ -216,6 +218,8 @@ export class AcessoController {
         ...(regras?.length ? { regras } : {}),
       });
     }
+    const p = problemaDoAcessoEmail(e);
+    if (p) throw p;
     throw e;
   }
 
@@ -351,10 +355,14 @@ export class AcessoController {
         'Dados inválidos',
         'Informe estabelecimento, login e senha (e o cliente, se houver mais de um).',
       );
+    // O código do segundo fator (aplicativo ou e-mail) vem à parte: o contrato da entrada da plataforma não o descreve.
+    const codigo = esquemaCodigoSegundoFator.safeParse(
+      corpo && typeof corpo === 'object' ? (corpo as Record<string, unknown>)['codigoSegundoFator'] : undefined,
+    );
     try {
       const posto = this.postoDaEntrada(req);
       const login = await servico.entrarPlataforma(
-        r.data,
+        { ...r.data, ...(codigo.success ? { codigoSegundoFator: codigo.data } : {}) },
         this.rede(req),
         this.idSessao(req),
         this.origem(req, posto),
