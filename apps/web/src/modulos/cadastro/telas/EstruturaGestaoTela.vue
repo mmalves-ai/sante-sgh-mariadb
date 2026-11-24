@@ -320,7 +320,9 @@ const nomeUnidade = (id: number | null) =>
           >
             <button type="button" class="link" @click="editarSetor(s)">{{ s.codigo }} — {{ s.nome }}</button>
             <span> · {{ t(`estruturaGestao.setor.tipos.${s.tipo}`) }} · {{ nomeUnidade(s.unidade) }}</span>
-            <span v-if="s.ramalPrincipal">{{ ` · ${t('estruturaGestao.setor.ramal')} ${s.ramalPrincipal}` }}</span>
+            <span v-if="s.ramalPrincipal">{{
+              ` · ${t('estruturaGestao.setor.ramal')} ${s.ramalPrincipal}`
+            }}</span>
             <span v-if="s.responsavelNome"> · {{ s.responsavelNome }}</span>
             <em v-if="!s.ativo"> · {{ t('estruturaGestao.comum.inativo') }} {{ s.dataInativacao }}</em>
           </li>
@@ -394,6 +396,24 @@ const nomeUnidade = (id: number | null) =>
             {{ t(`estruturaGestao.setor.${c}`)
             }}<input v-model="setor[c] as string" type="date" :name="`setor-${c}`" />
           </label>
+          <div
+            v-if="((setor['responsaveis'] as Setor['responsaveis'] | undefined) ?? []).length"
+            class="historico-responsaveis"
+            data-testid="setor-historico-responsaveis"
+          >
+            <strong>{{ t('estruturaGestao.setor.historicoResponsaveis') }}</strong>
+            <ul>
+              <li v-for="r in setor['responsaveis'] as Setor['responsaveis']" :key="r.id">
+                {{
+                  t('estruturaGestao.setor.periodoResponsavel', {
+                    nome: r.nome ?? String(r.profissional),
+                    inicio: r.inicio,
+                    fim: r.fim ?? t('estruturaGestao.setor.semFim'),
+                  })
+                }}
+              </li>
+            </ul>
+          </div>
           <label
             v-for="c in [
               'podeSolicitarExames',

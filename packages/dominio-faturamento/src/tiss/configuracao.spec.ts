@@ -101,12 +101,33 @@ describe('faixa de numeração de guias', () => {
     expect(
       errosFaixa({ ...faixa, numeroInicial: 50, numeroFinal: 10, tamanhoFixo: 1, prefixo: 'A B' }, []),
     ).toEqual(['faixa-invertida', 'prefixo-invalido', 'tamanho-insuficiente']);
-    expect(errosFaixa(faixa, [{ id: 1, numeroInicial: 900, numeroFinal: 2000, situacao: 'ativa' }])).toEqual([
+    expect(
+      errosFaixa(faixa, [
+        { id: 1, numeroInicial: 900, numeroFinal: 2000, proximoNumero: 900, situacao: 'ativa' },
+      ]),
+    ).toEqual(['faixa-sobreposta']);
+    // Encerrada sem uso não reserva número.
+    expect(
+      errosFaixa(faixa, [
+        { id: 1, numeroInicial: 900, numeroFinal: 2000, proximoNumero: 900, situacao: 'encerrada' },
+      ]),
+    ).toEqual([]);
+  });
+  it('a faixa encerrada no meio do consumo reserva os números já usados em guias', () => {
+    // 1 a 100 encerrada com o próximo em 50: os números 1 a 49 já foram para guias.
+    const usada = { id: 7, numeroInicial: 1, numeroFinal: 100, proximoNumero: 50, situacao: 'encerrada' };
+    expect(errosFaixa({ ...faixa, numeroInicial: 1, numeroFinal: 500 }, [usada])).toEqual([
       'faixa-sobreposta',
     ]);
+    expect(errosFaixa({ ...faixa, numeroInicial: 49, numeroFinal: 60 }, [usada])).toEqual([
+      'faixa-sobreposta',
+    ]);
+    // A parte não consumida (50 a 100) pode ser pedida de novo.
+    expect(errosFaixa({ ...faixa, numeroInicial: 50, numeroFinal: 500 }, [usada])).toEqual([]);
+    // Encerrada já esgotada reserva a faixa inteira.
     expect(
-      errosFaixa(faixa, [{ id: 1, numeroInicial: 900, numeroFinal: 2000, situacao: 'encerrada' }]),
-    ).toEqual([]);
+      errosFaixa({ ...faixa, numeroInicial: 100, numeroFinal: 200 }, [{ ...usada, proximoNumero: 101 }]),
+    ).toEqual(['faixa-sobreposta']);
     expect(errosFaixa({ ...faixa, prefixo: 'ABCDEFGHIJ', tamanhoFixo: 11 }, [])).toEqual(['numero-longo']);
   });
   it('escolhe a faixa vigente mais antiga e consome em ordem até esgotar', () => {

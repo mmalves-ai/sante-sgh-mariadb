@@ -3,15 +3,19 @@
 //   endereço e contato, com versão (conflito 409) e trilha;
 // - unidades assistenciais: incluir, alterar, inativar e reativar (nunca apagar);
 // - setores: incluir e alterar numa tela só, com tipo, superior (sem ciclo na árvore), unidade, centro de custo,
-//   responsável com vigência, regras de agendamento e de lançamento na conta, e os ramais do setor gravados na mesma
+//   responsável com histórico (responsavel_setor_funcional: a troca encerra o anterior na véspera e abre outro
+//   período; o setor espelha o vigente), regras de agendamento e de lançamento na conta, e os ramais do setor gravados na mesma
 //   transação (o ramal retirado fica com a exclusão lógica; o principal é espelhado em `ramal_principal`);
-//   inativar com data só sem filhos ativos, e reativar.
+//   inativar com data (hoje ou passada) só sem uso vivo (filhos ativos, leitos ativos, paciente no leito, atendimento
+//   aberto), e reativar.
 // A regra é a do domínio (@sgh/dominio-organizacao); aqui só leitura, conferência no banco e gravação pelo executor
 // (trilha e idempotência na mesma transação).
 import { randomUUID } from 'node:crypto';
 import {
   errosEstabelecimento,
   errosInativarSetor,
+  errosTrocaResponsavel,
+  planoResponsavel,
   errosRamais,
   errosSetor,
   errosUnidade,
@@ -55,7 +59,10 @@ const MENSAGENS: Record<string, [string, string]> = {
   'cep-invalido': ['O CEP tem 8 dígitos.', 'cep'],
   'email-invalido': ['E-mail inválido.', 'email'],
   'atividade-invertida': ['O fim da atividade é anterior ao início.', 'fimAtividade'],
-  'codigo-invalido': ['O código tem até 30 letras, dígitos, ponto, hífen ou sublinhado, sem espaço.', 'codigo'],
+  'codigo-invalido': [
+    'O código tem até 30 letras, dígitos, ponto, hífen ou sublinhado, sem espaço.',
+    'codigo',
+  ],
   'nome-vazio': ['Informe o nome.', 'nome'],
   'tipo-unidade-invalido': ['Tipo de unidade inválido.', 'tipo'],
   'tipo-setor-invalido': ['Tipo de setor inválido.', 'tipo'],
@@ -70,6 +77,17 @@ const MENSAGENS: Record<string, [string, string]> = {
   'agendamento-sem-sigla': ['A regra de agendamento precisa da sigla de agendamento.', 'siglaAgendamento'],
   'logistico-solicita-exame': ['Setor logístico não solicita exames.', 'podeSolicitarExames'],
   'setor-com-filhos-ativos': ['Inative antes os setores subordinados a este.', 'situacao'],
+  'setor-com-leitos-ativos': ['Inative antes os leitos das unidades de internação deste setor.', 'situacao'],
+  'setor-com-pacientes-internados': [
+    'Há paciente ocupando leito neste setor: transfira ou dê alta antes.',
+    'situacao',
+  ],
+  'setor-com-atendimentos-abertos': ['Há atendimentos abertos neste setor: encerre-os antes.', 'situacao'],
+  'inativacao-futura': ['A inativação vale no dia em que é gravada: use hoje ou uma data passada.', 'data'],
+  'responsavel-inicio-antes-do-anterior': [
+    'O novo responsável começa depois do início do responsável atual.',
+    'responsavelInicio',
+  ],
   'inativacao-antes-da-criacao': ['A inativação não pode ser anterior à criação do setor.', 'data'],
   'ramal-invalido': ['O ramal tem de 2 a 10 dígitos.', 'ramais'],
   'ramal-repetido': ['Ramal repetido no setor.', 'ramais'],
@@ -112,15 +130,24 @@ const esquemaEstabelecimento = z
     versao: idPos,
     razaoSocial: z.string().trim().min(1).max(150),
     nomeFantasia: z.string().trim().min(1).max(150),
-    cnpj: z.string().regex(/^\d{14}$/).nullable(),
+    cnpj: z
+      .string()
+      .regex(/^\d{14}$/)
+      .nullable(),
     inscricaoEstadual: txt(20),
     inscricaoMunicipal: txt(20),
-    cnes: z.string().regex(/^\d{7}$/).nullable(),
+    cnes: z
+      .string()
+      .regex(/^\d{7}$/)
+      .nullable(),
     tipo: idPos.nullable(),
     porte: idPos.nullable(),
     esfera: idPos.nullable(),
     hospitalDia: z.boolean(),
-    cep: z.string().regex(/^\d{8}$/).nullable(),
+    cep: z
+      .string()
+      .regex(/^\d{8}$/)
+      .nullable(),
     logradouro: txt(150),
     numero: txt(10),
     complemento: txt(100),
@@ -225,7 +252,8 @@ const opGravarUnidade = (t: RegistroTrilhaTela) =>
             AND id <> ? AND excluido_em IS NULL`,
         [ctx.estabelecimento, e.codigo, e.nome, e.id ?? 0],
       );
-      if (repetida) throw recusaCampo('unidade-repetida', 'Já existe unidade com este código ou nome.', 'codigo');
+      if (repetida)
+        throw recusaCampo('unidade-repetida', 'Já existe unidade com este código ou nome.', 'codigo');
       const valores = {
         codigo: e.codigo,
         nome: e.nome,
@@ -263,7 +291,13 @@ const opGravarUnidade = (t: RegistroTrilhaTela) =>
   });
 
 const esquemaSituacao = z
-  .object({ id: idPos, versao: idPos, ativo: z.boolean(), data: dia.nullable(), motivo: z.string().trim().max(200) })
+  .object({
+    id: idPos,
+    versao: idPos,
+    ativo: z.boolean(),
+    data: dia.nullable(),
+    motivo: z.string().trim().max(200),
+  })
   .strict();
 export type EntradaSituacao = z.infer<typeof esquemaSituacao>;
 
@@ -274,7 +308,8 @@ const opSituacaoUnidade = (t: RegistroTrilhaTela) =>
     entrada: esquemaSituacao,
     acao: 'alteracao',
     async gravar(tx, e, ctx) {
-      if (e.motivo.length < 10) throw recusaCampo('motivo-curto', 'Escreva o motivo com ao menos 10 letras.', 'motivo');
+      if (e.motivo.length < 10)
+        throw recusaCampo('motivo-curto', 'Escreva o motivo com ao menos 10 letras.', 'motivo');
       const x = await tx.uma(
         `SELECT id, ativo FROM unidade_assistencial WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [e.id, ctx.estabelecimento],
@@ -288,7 +323,11 @@ const opSituacaoUnidade = (t: RegistroTrilhaTela) =>
           [e.id],
         );
         if (Number(setores?.n ?? 0) > 0)
-          throw recusaCampo('unidade-com-setores-ativos', 'Inative antes os setores desta unidade.', 'situacao');
+          throw recusaCampo(
+            'unidade-com-setores-ativos',
+            'Inative antes os setores desta unidade.',
+            'situacao',
+          );
       }
       await tx.alterar('unidade_assistencial', e.id, e.versao, { ativo: e.ativo });
       return { id: e.id };
@@ -340,7 +379,7 @@ export type EntradaSetor = z.infer<typeof esquemaSetor>;
 const opGravarSetor = (t: RegistroTrilhaTela) =>
   definirOperacao({
     nome: 'cadastro.setor.gravar',
-    tabelas: ['setor_funcional', 'ramal_setor'],
+    tabelas: ['setor_funcional', 'ramal_setor', 'responsavel_setor_funcional'],
     entrada: esquemaSetor,
     async gravar(tx, e, ctx) {
       const est = ctx.estabelecimento;
@@ -356,12 +395,45 @@ const opGravarSetor = (t: RegistroTrilhaTela) =>
       if (e.superior !== null && !superiores.has(e.superior))
         throw recusaCampo('superior-inexistente', 'Setor superior não encontrado.', 'superior');
       if (formaCiclo(e.id, e.superior, superiores))
-        throw recusaCampo('superior-em-ciclo', 'O setor superior não pode ser o próprio setor nem um subordinado dele.', 'superior');
+        throw recusaCampo(
+          'superior-em-ciclo',
+          'O setor superior não pode ser o próprio setor nem um subordinado dele.',
+          'superior',
+        );
       const repetido = await tx.uma(
         'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ? AND id <> ?',
         [est, e.codigo, e.id ?? 0],
       );
       if (repetido) throw recusaCampo('codigo-repetido', 'Já existe setor com este código.', 'codigo');
+      // Responsável: o histórico fica em responsavel_setor_funcional (um período por linha); o setor espelha o vigente.
+      const hoje = data((await tx.uma<{ d: unknown }>('SELECT CURRENT_DATE AS d', []))?.d)!;
+      const aberto =
+        e.id === null
+          ? null
+          : await tx.uma(
+              `SELECT id, profissional_id, vigencia_inicio, vigencia_fim, versao FROM responsavel_setor_funcional
+                WHERE setor_funcional_id = ? AND excluido_em IS NULL
+                  AND (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio)
+                ORDER BY vigencia_inicio DESC, id DESC LIMIT 1 FOR UPDATE`,
+              [e.id],
+            );
+      const vigente = aberto
+        ? {
+            id: Number(aberto['id']),
+            profissional: Number(aberto['profissional_id']),
+            inicio: data(aberto['vigencia_inicio'])!,
+            fim: data(aberto['vigencia_fim']),
+          }
+        : null;
+      const novoResp = { profissional: e.responsavel, inicio: e.responsavelInicio, fim: e.responsavelFim };
+      recusarErros(errosTrocaResponsavel(vigente, novoResp));
+      const plano = planoResponsavel(vigente, novoResp, hoje);
+      const inicioEspelho =
+        e.responsavel === null
+          ? null
+          : plano.tipo === 'trocar' && plano.incluir
+            ? plano.incluir.inicio
+            : (vigente?.inicio ?? e.responsavelInicio ?? hoje);
       const valores = {
         codigo: e.codigo,
         nome: e.nome,
@@ -371,7 +443,7 @@ const opGravarSetor = (t: RegistroTrilhaTela) =>
         unidade_assistencial_id: e.unidade,
         centro_custo_id: e.centroCusto,
         responsavel_profissional_id: e.responsavel,
-        responsavel_vigencia_inicio: e.responsavelInicio,
+        responsavel_vigencia_inicio: inicioEspelho,
         responsavel_vigencia_fim: e.responsavelFim,
         ramal_principal: ramalPrincipal(e.ramais),
         pode_solicitar_exames: e.podeSolicitarExames,
@@ -389,6 +461,23 @@ const opGravarSetor = (t: RegistroTrilhaTela) =>
         if (!superiores.has(e.id)) throw naoAchado('Setor');
         await tx.alterar('setor_funcional', e.id, e.versao ?? 0, valores);
         id = e.id;
+      }
+      if (plano.tipo === 'ajustar-fim') {
+        await tx.alterar('responsavel_setor_funcional', plano.id, Number(aberto!['versao']), {
+          vigencia_fim: plano.fim,
+        });
+      } else if (plano.tipo === 'trocar') {
+        if (plano.encerrar)
+          await tx.alterar('responsavel_setor_funcional', plano.encerrar.id, Number(aberto!['versao']), {
+            vigencia_fim: plano.encerrar.fim,
+          });
+        if (plano.incluir)
+          await tx.incluir('responsavel_setor_funcional', {
+            setor_funcional_id: id,
+            profissional_id: plano.incluir.profissional,
+            vigencia_inicio: plano.incluir.inicio,
+            vigencia_fim: plano.incluir.fim,
+          });
       }
       // Ramais: os da lista ficam (alterados ou novos); os que saíram, exclusão lógica (a linha fica).
       const atuais = await tx.consultar(
@@ -412,7 +501,11 @@ const opGravarSetor = (t: RegistroTrilhaTela) =>
         } else {
           const a = atuais.find((x) => Number(x['id']) === r.id);
           if (!a) throw recusaCampo('ramal-inexistente', 'Ramal não pertence ao setor.', 'ramais');
-          await tx.alterar('ramal_setor', r.id, Number(a['versao']), { ...v, excluido_em: null, excluido_por: null });
+          await tx.alterar('ramal_setor', r.id, Number(a['versao']), {
+            ...v,
+            excluido_em: null,
+            excluido_por: null,
+          });
         }
       }
       const vivosNoBanco = await tx.consultar(
@@ -441,22 +534,42 @@ const opSituacaoSetor = (t: RegistroTrilhaTela) =>
     entrada: esquemaSituacao,
     acao: 'alteracao',
     async gravar(tx, e, ctx) {
-      if (e.motivo.length < 10) throw recusaCampo('motivo-curto', 'Escreva o motivo com ao menos 10 letras.', 'motivo');
+      if (e.motivo.length < 10)
+        throw recusaCampo('motivo-curto', 'Escreva o motivo com ao menos 10 letras.', 'motivo');
       const x = await tx.uma(
         `SELECT id, ativo, criado_em FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [e.id, ctx.estabelecimento],
       );
       if (!x) throw naoAchado('Setor');
-      if (bool(x['ativo']) === e.ativo) throw recusaCampo('situacao-igual', 'O setor já está nesta situação.', 'situacao');
+      if (bool(x['ativo']) === e.ativo)
+        throw recusaCampo('situacao-igual', 'O setor já está nesta situação.', 'situacao');
       if (!e.ativo) {
         const hoje = data((await tx.uma<{ d: unknown }>('SELECT CURRENT_DATE AS d', []))?.d)!;
         const quando = e.data ?? hoje;
-        const filhos = await tx.uma<{ n: unknown }>(
-          'SELECT COUNT(*) AS n FROM setor_funcional WHERE setor_superior_id = ? AND ativo AND excluido_em IS NULL',
-          [e.id],
-        );
+        // Uso vivo do setor, contado por tipo: filhos ativos, leitos ativos e ocupação aberta nas unidades de
+        // internação do setor, e atendimentos ainda abertos no setor.
+        const n = async (sql: string) => Number((await tx.uma<{ n: unknown }>(sql, [e.id]))?.n ?? 0);
         recusarErros(
-          errosInativarSetor({ filhosAtivos: Number(filhos?.n ?? 0), data: quando, criadoEm: data(x['criado_em'])! }),
+          errosInativarSetor({
+            filhosAtivos: await n(
+              'SELECT COUNT(*) AS n FROM setor_funcional WHERE setor_superior_id = ? AND ativo AND excluido_em IS NULL',
+            ),
+            leitosAtivos: await n(
+              `SELECT COUNT(*) AS n FROM leito_hospitalar l JOIN unidade_internacao u ON u.id = l.unidade_internacao_id
+                WHERE u.setor_funcional_id = ? AND l.ativo AND l.excluido_em IS NULL`,
+            ),
+            pacientesNoLeito: await n(
+              `SELECT COUNT(*) AS n FROM ocupacao_leito o JOIN unidade_internacao u ON u.id = o.unidade_internacao_id
+                WHERE u.setor_funcional_id = ? AND o.situacao = 'ativa' AND o.data_hora_fim IS NULL`,
+            ),
+            atendimentosAbertos: await n(
+              `SELECT COUNT(*) AS n FROM atendimento
+                WHERE setor_funcional_id = ? AND situacao IN ('aberto','em_atendimento','em_observacao')`,
+            ),
+            data: quando,
+            hoje,
+            criadoEm: data(x['criado_em'])!,
+          }),
         );
         await tx.alterar('setor_funcional', e.id, e.versao, { ativo: false, data_inativacao: quando });
       } else {
@@ -504,7 +617,13 @@ export class EstruturaGestaoPropria {
           ]),
         )
       : null;
-    if (!r) throw new ErroOperacao(403, 'sem-estabelecimento', 'Sem estabelecimento', 'A sessão não tem estabelecimento.');
+    if (!r)
+      throw new ErroOperacao(
+        403,
+        'sem-estabelecimento',
+        'Sem estabelecimento',
+        'A sessão não tem estabelecimento.',
+      );
     return Number(r.id);
   }
 
@@ -552,6 +671,17 @@ export class EstruturaGestaoPropria {
             `SELECT id, setor_funcional_id, ramal, contato, principal, responsavel, telefone_externo, observacao
                FROM ramal_setor WHERE excluido_em IS NULL
                 AND setor_funcional_id IN (${setores.map(() => '?').join(',')}) ORDER BY sequencia`,
+            setores.map((s) => s['id']),
+          )
+        : [];
+      const responsaveis = setores.length
+        ? await l.consultar(
+            `SELECT r.id, r.setor_funcional_id, r.profissional_id, r.vigencia_inicio, r.vigencia_fim, pf.nome
+               FROM responsavel_setor_funcional r
+               JOIN profissional p ON p.id = r.profissional_id
+               LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+              WHERE r.excluido_em IS NULL AND r.setor_funcional_id IN (${setores.map(() => '?').join(',')})
+              ORDER BY r.vigencia_inicio DESC, r.id DESC`,
             setores.map((s) => s['id']),
           )
         : [];
@@ -627,24 +757,37 @@ export class EstruturaGestaoPropria {
           observacaoAgendamento: texto(s['observacao_agendamento']),
           ativo: bool(s['ativo']),
           dataInativacao: data(s['data_inativacao']),
+          responsaveis: responsaveis
+            .filter((r) => Number(r['setor_funcional_id']) === Number(s['id']))
+            .map((r) => ({
+              id: Number(r['id']),
+              profissional: Number(r['profissional_id']),
+              nome: texto(r['nome']),
+              inicio: data(r['vigencia_inicio'])!,
+              fim: data(r['vigencia_fim']),
+            })),
           ramais: ramais
             .filter((r) => Number(r['setor_funcional_id']) === Number(s['id']))
-            .map(
-              (r): RamalLido => ({
-                id: Number(r['id']),
-                ramal: String(r['ramal']),
-                contato: texto(r['contato']),
-                principal: bool(r['principal']),
-                responsavel: bool(r['responsavel']),
-                telefoneExterno: texto(r['telefone_externo']),
-                observacao: texto(r['observacao']),
-              }),
-            ),
+            .map((r): RamalLido => ({
+              id: Number(r['id']),
+              ramal: String(r['ramal']),
+              contato: texto(r['contato']),
+              principal: bool(r['principal']),
+              responsavel: bool(r['responsavel']),
+              telefoneExterno: texto(r['telefone_externo']),
+              observacao: texto(r['observacao']),
+            })),
         })),
         opcoes: {
-          tipos: await opcoes('SELECT id, descricao AS nome FROM tipo_estabelecimento WHERE ativo ORDER BY descricao'),
-          portes: await opcoes('SELECT id, descricao AS nome FROM porte_estabelecimento WHERE ativo ORDER BY descricao'),
-          esferas: await opcoes('SELECT id, descricao AS nome FROM esfera_administrativa WHERE ativo ORDER BY descricao'),
+          tipos: await opcoes(
+            'SELECT id, descricao AS nome FROM tipo_estabelecimento WHERE ativo ORDER BY descricao',
+          ),
+          portes: await opcoes(
+            'SELECT id, descricao AS nome FROM porte_estabelecimento WHERE ativo ORDER BY descricao',
+          ),
+          esferas: await opcoes(
+            'SELECT id, descricao AS nome FROM esfera_administrativa WHERE ativo ORDER BY descricao',
+          ),
           centrosCusto: await opcoes(
             `SELECT id, CONCAT(codigo, ' — ', nome) AS nome FROM centro_custo
               WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL ORDER BY codigo`,

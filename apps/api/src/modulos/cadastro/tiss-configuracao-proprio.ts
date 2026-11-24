@@ -6,8 +6,9 @@
 // - faixas de números de guia (`faixa_numeracao_guia`) por fonte pagadora e tipo de guia: sem sobreposição, cabendo
 //   no campo de 20 posições; encerrar a faixa grava a situação e o fim (nunca apaga);
 // - consumo da faixa na emissão: `reservarNumeroGuia(tx, ...)` trava a faixa vigente, devolve o número formatado,
-//   avança o próximo e marca "esgotada" no último; usado pela numeração da guia (POST /tiss/guias/:id/numerar) e
-//   exportado para a emissão da guia chamar na mesma transação.
+//   avança o próximo e marca "esgotada" no último; exportado para a emissão da guia chamar na mesma transação,
+//   antes de incluir a guia_tiss (o número nasce com a guia: nada de número provisório). Nenhuma operação insere
+//   guia_tiss ainda, por isso o consumo na emissão segue como falta da 02-CAD linha 25.
 // A regra é a do domínio (@sgh/dominio-faturamento); aqui só leitura, conferência no banco e gravação pelo executor.
 import { randomUUID } from 'node:crypto';
 import {
@@ -60,7 +61,10 @@ const MENSAGENS: Record<string, [string, string]> = {
     'Identificação pelo código da operadora exige o código do prestador.',
     'codigoPrestadorOperadora',
   ],
-  'codigo-prestador-invalido': ['O código do prestador tem até 20 letras, dígitos, ponto, barra ou hífen.', 'codigoPrestadorOperadora'],
+  'codigo-prestador-invalido': [
+    'O código do prestador tem até 20 letras, dígitos, ponto, barra ou hífen.',
+    'codigoPrestadorOperadora',
+  ],
   'cnpj-contratado-invalido': ['O CNPJ do contratado não confere.', 'cnpjContratado'],
   'contratado-incompleto': ['Informe o CNPJ e a razão social do contratado juntos.', 'razaoSocialContratado'],
   'limite-lote-invalido': ['O lote tem de 1 a 100 guias.', 'limiteGuiasLote'],
@@ -69,7 +73,10 @@ const MENSAGENS: Record<string, [string, string]> = {
     'Reapresentação eletrônica exige o faturamento eletrônico.',
     'reapresentacaoEletronica',
   ],
-  'retorno-sem-faturamento-eletronico': ['Retorno eletrônico exige o faturamento eletrônico.', 'retornoEletronico'],
+  'retorno-sem-faturamento-eletronico': [
+    'Retorno eletrônico exige o faturamento eletrônico.',
+    'retornoEletronico',
+  ],
   'elegibilidade-eletronica-sem-exigencia': [
     'A consulta eletrônica de elegibilidade só vale quando a elegibilidade é exigida.',
     'elegibilidadeEletronica',
@@ -177,7 +184,12 @@ const opGravarConfiguracao = (t: RegistroTrilhaTela) =>
       if (!(await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ?', [e.fontePagadora])))
         throw naoAchado('Fonte pagadora');
       const v = await tx.uma('SELECT id FROM versao_padrao_tiss WHERE id = ? AND ativo', [e.versaoPadrao]);
-      if (!v) throw recusaCampo('versao-padrao-inexistente', 'Versão do padrão não encontrada ou inativa.', 'versaoPadrao');
+      if (!v)
+        throw recusaCampo(
+          'versao-padrao-inexistente',
+          'Versão do padrão não encontrada ou inativa.',
+          'versaoPadrao',
+        );
       const atuais = await tx.consultar(
         `SELECT id, vigencia_inicio, vigencia_fim, versao FROM configuracao_tiss_fonte_pagadora
           WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND ativo FOR UPDATE`,
@@ -207,7 +219,9 @@ const opGravarConfiguracao = (t: RegistroTrilhaTela) =>
       for (const c of vigenciasQueCruzam(lidas, { inicio: e.vigenciaInicio, fim: e.vigenciaFim })) {
         const x = lidas.find((l) => l.id === c.id)!;
         if (x.inicio < e.vigenciaInicio && x.fim === null)
-          await tx.alterar('configuracao_tiss_fonte_pagadora', x.id, x.versao, { vigencia_fim: vespera(e.vigenciaInicio) });
+          await tx.alterar('configuracao_tiss_fonte_pagadora', x.id, x.versao, {
+            vigencia_fim: vespera(e.vigenciaInicio),
+          });
         else
           throw recusaCampo(
             'vigencia-sobreposta',
@@ -255,7 +269,7 @@ const opIncluirFaixa = (t: RegistroTrilhaTela) =>
       if (!(await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ?', [e.fontePagadora])))
         throw naoAchado('Fonte pagadora');
       const existentes = await tx.consultar(
-        `SELECT id, numero_inicial, numero_final, situacao FROM faixa_numeracao_guia
+        `SELECT id, numero_inicial, numero_final, proximo_numero, situacao FROM faixa_numeracao_guia
           WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ? FOR UPDATE`,
         [ctx.estabelecimento, e.fontePagadora, e.tipoGuia],
       );
@@ -266,6 +280,7 @@ const opIncluirFaixa = (t: RegistroTrilhaTela) =>
             id: Number(x['id']),
             numeroInicial: Number(x['numero_inicial']),
             numeroFinal: Number(x['numero_final']),
+            proximoNumero: Number(x['proximo_numero']),
             situacao: String(x['situacao']),
           })),
         ),
@@ -382,34 +397,6 @@ export async function reservarNumeroGuia(
   };
 }
 
-const esquemaNumerar = z.object({ guia: idPos, versao: idPos }).strict();
-
-/** Numera a guia ainda sem número do prestador (montada com o número provisório "PENDENTE-<id>"). */
-const opNumerarGuia = (t: RegistroTrilhaTela) =>
-  definirOperacao({
-    nome: 'cadastro.tiss.numerar-guia',
-    tabelas: ['guia_tiss', 'faixa_numeracao_guia'],
-    entrada: esquemaNumerar,
-    acao: 'alteracao',
-    async gravar(tx, e, ctx) {
-      const g = await tx.uma(
-        `SELECT id, tipo_guia, fonte_pagadora_id, numero_guia_prestador, situacao FROM guia_tiss
-          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-        [e.guia, ctx.estabelecimento],
-      );
-      if (!g) throw naoAchado('Guia');
-      if (!String(g['numero_guia_prestador']).startsWith('PENDENTE'))
-        throw recusaCampo('guia-ja-numerada', 'A guia já tem número.', 'guia');
-      if (String(g['situacao']) !== 'montada')
-        throw recusaCampo('guia-fora-da-montagem', 'Só a guia em montagem recebe número.', 'guia');
-      const r = await reservarNumeroGuia(tx, ctx.estabelecimento, Number(g['fonte_pagadora_id']), String(g['tipo_guia']));
-      await tx.alterar('guia_tiss', e.guia, e.versao, { numero_guia_prestador: r.numero });
-      return { id: e.guia, numero: r.numero, restantes: r.restantes, noFim: r.noFim };
-    },
-    alvo: (e) => ({ tabela: 'guia_tiss', id: e.guia }),
-    trilha: () => ({ dados: t.dadosDepois ?? null, motivo: null }),
-  });
-
 export class TissConfiguracaoPropria {
   private readonly executor: Executor;
 
@@ -434,7 +421,13 @@ export class TissConfiguracaoPropria {
           ]),
         )
       : null;
-    if (!r) throw new ErroOperacao(403, 'sem-estabelecimento', 'Sem estabelecimento', 'A sessão não tem estabelecimento.');
+    if (!r)
+      throw new ErroOperacao(
+        403,
+        'sem-estabelecimento',
+        'Sem estabelecimento',
+        'A sessão não tem estabelecimento.',
+      );
     return Number(r.id);
   }
 
@@ -460,14 +453,20 @@ export class TissConfiguracaoPropria {
     const est = await this.estabelecimento(c);
     return this.lerSo(c, async (l) => {
       const fontes = (
-        await l.consultar('SELECT id, codigo, nome FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome', [])
+        await l.consultar(
+          'SELECT id, codigo, nome FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome',
+          [],
+        )
       ).map((r) => ({ id: Number(r['id']), nome: `${String(r['codigo'])} — ${String(r['nome'])}` }));
       const versoes = (
         await l.consultar(
           `SELECT id, codigo_tiss, descricao FROM versao_padrao_tiss WHERE ativo ORDER BY vigencia_inicio DESC`,
           [],
         )
-      ).map((r) => ({ id: Number(r['id']), nome: `${String(r['codigo_tiss'])} — ${String(r['descricao'])}` }));
+      ).map((r) => ({
+        id: Number(r['id']),
+        nome: `${String(r['codigo_tiss'])} — ${String(r['descricao'])}`,
+      }));
       if (fontePagadora === null) return { fontes, versoes, configuracoes: [], faixas: [] };
       const cfg = await l.consultar(
         `SELECT * FROM configuracao_tiss_fonte_pagadora WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND ativo
@@ -531,7 +530,9 @@ export class TissConfiguracaoPropria {
             proximoNumero: prox,
             usados: prox - ini,
             restantes: Math.max(0, fim - prox + 1),
-            noFim: String(r['situacao']) === 'ativa' && faixaNoFim({ numeroInicial: ini, numeroFinal: fim, proximoNumero: prox }),
+            noFim:
+              String(r['situacao']) === 'ativa' &&
+              faixaNoFim({ numeroInicial: ini, numeroFinal: fim, proximoNumero: prox }),
             vigenciaInicio: data(r['vigencia_inicio']),
             vigenciaFim: data(r['vigencia_fim']),
             situacao: String(r['situacao']),
@@ -547,11 +548,11 @@ export class TissConfiguracaoPropria {
   async incluirFaixa(c: ContextoPorta, e: EntradaFaixa, t: RegistroTrilhaTela) {
     return Number((await this.executar(c, opIncluirFaixa(t), e, t))['id']);
   }
-  async encerrarFaixa(c: ContextoPorta, e: { id: number; versao: number; motivo: string }, t: RegistroTrilhaTela) {
+  async encerrarFaixa(
+    c: ContextoPorta,
+    e: { id: number; versao: number; motivo: string },
+    t: RegistroTrilhaTela,
+  ) {
     return Number((await this.executar(c, opEncerrarFaixa(t), e, t))['id']);
-  }
-  async numerarGuia(c: ContextoPorta, e: { guia: number; versao: number }, t: RegistroTrilhaTela) {
-    const r = await this.executar(c, opNumerarGuia(t), e, t);
-    return { id: Number(r['id']), numero: String(r['numero']), restantes: Number(r['restantes']), noFim: r['noFim'] === true };
   }
 }

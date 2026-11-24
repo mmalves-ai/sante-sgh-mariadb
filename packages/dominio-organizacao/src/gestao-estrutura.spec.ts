@@ -5,9 +5,12 @@ import {
   errosInativarSetor,
   errosRamais,
   errosSetor,
+  errosTrocaResponsavel,
   errosUnidade,
   formaCiclo,
+  planoResponsavel,
   ramalPrincipal,
+  vespera,
 } from './gestao-estrutura.js';
 
 // CNPJ sintético válido pelos dígitos verificadores (nenhuma empresa real é usada).
@@ -118,11 +121,108 @@ describe('setor', () => {
     expect(formaCiclo(null, 1, sup)).toBe(false);
   });
   it('inativar só sem filhos ativos e não antes da criação', () => {
-    expect(errosInativarSetor({ filhosAtivos: 2, data: '2026-01-01', criadoEm: '2026-02-01' })).toEqual([
+    const livre = {
+      filhosAtivos: 0,
+      leitosAtivos: 0,
+      pacientesNoLeito: 0,
+      atendimentosAbertos: 0,
+      hoje: '2026-06-01',
+      criadoEm: '2026-02-01',
+    };
+    expect(errosInativarSetor({ ...livre, filhosAtivos: 2, data: '2026-01-01' })).toEqual([
       'setor-com-filhos-ativos',
       'inativacao-antes-da-criacao',
     ]);
-    expect(errosInativarSetor({ filhosAtivos: 0, data: '2026-03-01', criadoEm: '2026-02-01' })).toEqual([]);
+    expect(errosInativarSetor({ ...livre, data: '2026-03-01' })).toEqual([]);
+    expect(errosInativarSetor({ ...livre, data: '2026-06-01' })).toEqual([]);
+  });
+  it('recusa inativar com uso vivo, um erro por tipo, e com data futura', () => {
+    const base = { filhosAtivos: 0, hoje: '2026-06-01', criadoEm: '2026-02-01', data: '2026-06-01' };
+    expect(
+      errosInativarSetor({ ...base, leitosAtivos: 4, pacientesNoLeito: 1, atendimentosAbertos: 3 }),
+    ).toEqual([
+      'setor-com-leitos-ativos',
+      'setor-com-pacientes-internados',
+      'setor-com-atendimentos-abertos',
+    ]);
+    expect(
+      errosInativarSetor({
+        ...base,
+        leitosAtivos: 0,
+        pacientesNoLeito: 0,
+        atendimentosAbertos: 0,
+        data: '2026-06-02',
+      }),
+    ).toEqual(['inativacao-futura']);
+  });
+});
+
+describe('responsável pelo setor com histórico', () => {
+  const hoje = '2026-06-10';
+  const vigente = { id: 5, profissional: 10, inicio: '2026-01-01', fim: null };
+  it('calcula a véspera atravessando mês e ano', () => {
+    expect(vespera('2026-03-01')).toBe('2026-02-28');
+    expect(vespera('2026-01-01')).toBe('2025-12-31');
+  });
+  it('troca de profissional encerra o anterior na véspera e abre período novo', () => {
+    expect(planoResponsavel(vigente, { profissional: 11, inicio: '2026-06-15', fim: null }, hoje)).toEqual({
+      tipo: 'trocar',
+      encerrar: { id: 5, fim: '2026-06-14' },
+      incluir: { profissional: 11, inicio: '2026-06-15', fim: null },
+    });
+    // Sem início informado, o novo começa hoje.
+    expect(planoResponsavel(null, { profissional: 11, inicio: null, fim: null }, hoje)).toEqual({
+      tipo: 'trocar',
+      encerrar: null,
+      incluir: { profissional: 11, inicio: hoje, fim: null },
+    });
+  });
+  it('o mesmo profissional só ajusta o fim; sem mudança, nada', () => {
+    expect(
+      planoResponsavel(vigente, { profissional: 10, inicio: '2026-01-01', fim: '2026-12-31' }, hoje),
+    ).toEqual({
+      tipo: 'ajustar-fim',
+      id: 5,
+      fim: '2026-12-31',
+    });
+    expect(planoResponsavel(vigente, { profissional: 10, inicio: '2026-01-01', fim: null }, hoje)).toEqual({
+      tipo: 'nada',
+    });
+    expect(planoResponsavel(null, { profissional: null, inicio: null, fim: null }, hoje)).toEqual({
+      tipo: 'nada',
+    });
+  });
+  it('retirar o responsável encerra o período hoje (o histórico fica)', () => {
+    expect(planoResponsavel(vigente, { profissional: null, inicio: null, fim: null }, hoje)).toEqual({
+      tipo: 'trocar',
+      encerrar: { id: 5, fim: hoje },
+      incluir: null,
+    });
+  });
+  it('nunca estende um período que já terminou', () => {
+    const terminado = { ...vigente, fim: '2026-03-31' };
+    expect(planoResponsavel(terminado, { profissional: 11, inicio: '2026-06-15', fim: null }, hoje)).toEqual({
+      tipo: 'trocar',
+      encerrar: null,
+      incluir: { profissional: 11, inicio: '2026-06-15', fim: null },
+    });
+    expect(planoResponsavel(terminado, { profissional: null, inicio: null, fim: null }, hoje)).toEqual({
+      tipo: 'nada',
+    });
+    // O mesmo profissional volta depois do fim: período novo, o antigo fica como está.
+    expect(planoResponsavel(terminado, { profissional: 10, inicio: '2026-06-15', fim: null }, hoje)).toEqual({
+      tipo: 'trocar',
+      encerrar: null,
+      incluir: { profissional: 10, inicio: '2026-06-15', fim: null },
+    });
+    expect(errosTrocaResponsavel(terminado, { profissional: 10, inicio: '2026-06-15' })).toEqual([]);
+  });
+  it('recusa o novo período que começa no início do anterior ou antes', () => {
+    expect(errosTrocaResponsavel(vigente, { profissional: 11, inicio: '2026-01-01' })).toEqual([
+      'responsavel-inicio-antes-do-anterior',
+    ]);
+    expect(errosTrocaResponsavel(vigente, { profissional: 11, inicio: '2026-01-02' })).toEqual([]);
+    expect(errosTrocaResponsavel(vigente, { profissional: 10, inicio: '2025-01-01' })).toEqual([]);
   });
 });
 

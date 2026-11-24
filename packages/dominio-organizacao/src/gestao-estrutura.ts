@@ -157,16 +157,119 @@ export function formaCiclo(
   return false;
 }
 
-/** Inativar o setor só sem setores filhos ativos (o filho seria órfão na árvore); a linha e o histórico ficam. */
+/**
+ * Inativar o setor só sem uso vivo: setores filhos ativos (ficariam órfãos na árvore), leitos ativos nas unidades de
+ * internação do setor, pacientes ocupando leito nele e atendimentos abertos no setor. Um erro por tipo de vínculo,
+ * para a tela dizer o que resolver antes. A inativação vale no dia em que é gravada: data futura é recusada (o
+ * estado "inativo" e a data não podem se contradizer); data antes da criação também. A linha e o histórico ficam.
+ */
 export function errosInativarSetor(i: {
   readonly filhosAtivos: number;
+  readonly leitosAtivos: number;
+  readonly pacientesNoLeito: number;
+  readonly atendimentosAbertos: number;
   readonly data: string;
+  readonly hoje: string;
   readonly criadoEm: string;
 }): string[] {
   const e: string[] = [];
   if (i.filhosAtivos > 0) e.push('setor-com-filhos-ativos');
+  if (i.leitosAtivos > 0) e.push('setor-com-leitos-ativos');
+  if (i.pacientesNoLeito > 0) e.push('setor-com-pacientes-internados');
+  if (i.atendimentosAbertos > 0) e.push('setor-com-atendimentos-abertos');
+  if (i.data > i.hoje) e.push('inativacao-futura');
   if (i.data < i.criadoEm) e.push('inativacao-antes-da-criacao');
   return e;
+}
+
+// ── Responsável pelo setor (histórico com vigência) ──
+
+export interface ResponsavelVigente {
+  readonly id: number;
+  readonly profissional: number;
+  readonly inicio: string;
+  readonly fim: string | null;
+}
+
+/** O dia anterior a uma data ISO (AAAA-MM-DD), em UTC para não depender do fuso. */
+export function vespera(dia: string): string {
+  const d = new Date(`${dia}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function mesmoPeriodo(
+  vigente: ResponsavelVigente | null,
+  profissional: number | null,
+  inicio: string,
+): boolean {
+  return (
+    vigente !== null &&
+    vigente.profissional === profissional &&
+    (vigente.fim === null || vigente.fim >= inicio || inicio <= vigente.inicio)
+  );
+}
+
+export type PlanoResponsavel =
+  | { readonly tipo: 'nada' }
+  | { readonly tipo: 'ajustar-fim'; readonly id: number; readonly fim: string | null }
+  | {
+      readonly tipo: 'trocar';
+      /** O período em aberto a encerrar na véspera do novo início (nulo quando não havia responsável). */
+      readonly encerrar: { readonly id: number; readonly fim: string } | null;
+      /** O novo período (nulo quando o setor fica sem responsável a partir de agora). */
+      readonly incluir: {
+        readonly profissional: number;
+        readonly inicio: string;
+        readonly fim: string | null;
+      } | null;
+    };
+
+/**
+ * O que gravar no histórico de responsáveis ao salvar o setor. O mesmo profissional só ajusta o fim do período
+ * vigente; outro profissional encerra o anterior na véspera do novo início e abre um período novo (nada é
+ * sobrescrito: quem respondeu pelo setor em cada período fica consultável). Sem responsável e sem período aberto,
+ * nada a fazer. `hoje` encerra o período quando o responsável é retirado sem substituto.
+ */
+export function planoResponsavel(
+  vigente: ResponsavelVigente | null,
+  novo: { profissional: number | null; inicio: string | null; fim: string | null },
+  hoje: string,
+): PlanoResponsavel {
+  if (novo.profissional === null) {
+    // Sem responsável: encerra hoje o período que ainda vale; o que já terminou fica como está.
+    if (vigente === null || (vigente.fim !== null && vigente.fim <= hoje)) return { tipo: 'nada' };
+    const fim = vigente.inicio > hoje ? vespera(vigente.inicio) : hoje;
+    return { tipo: 'trocar', encerrar: { id: vigente.id, fim }, incluir: null };
+  }
+  const inicio = novo.inicio ?? hoje;
+  // O mesmo profissional com o período ainda valendo no início pedido: só o fim muda. Período já terminado: abre outro.
+  if (mesmoPeriodo(vigente, novo.profissional, inicio)) {
+    return vigente!.fim === novo.fim
+      ? { tipo: 'nada' }
+      : { tipo: 'ajustar-fim', id: vigente!.id, fim: novo.fim };
+  }
+  return {
+    tipo: 'trocar',
+    // O anterior só é encerrado se ainda valeria no novo início (nunca se estende um período já terminado).
+    encerrar:
+      vigente === null || (vigente.fim !== null && vigente.fim < inicio)
+        ? null
+        : { id: vigente.id, fim: vespera(inicio) },
+    incluir: { profissional: novo.profissional, inicio, fim: novo.fim },
+  };
+}
+
+/** Erros da troca de responsável: o novo período começa depois do início do anterior (e depois do fim dele, quando
+ *  já terminou), para os períodos do histórico não se cruzarem. */
+export function errosTrocaResponsavel(
+  vigente: ResponsavelVigente | null,
+  novo: { profissional: number | null; inicio: string | null },
+): string[] {
+  if (vigente === null || novo.profissional === null || novo.inicio === null) return [];
+  if (mesmoPeriodo(vigente, novo.profissional, novo.inicio)) return [];
+  const limite = vigente.fim !== null && vigente.fim < novo.inicio ? vigente.fim : vigente.inicio;
+  return novo.inicio <= limite ? ['responsavel-inicio-antes-do-anterior'] : [];
 }
 
 // ── Ramais do setor ──

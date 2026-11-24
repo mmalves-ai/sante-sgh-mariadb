@@ -13,8 +13,8 @@
 //   PUT  /api/cadastros/tiss-configuracao/:id                     altera a vigência (versão; o início não muda)
 //   POST /api/cadastros/tiss-configuracao/faixas                  inclui a faixa de números de guia
 //   POST /api/cadastros/tiss-configuracao/faixas/:id/encerrar     encerra a faixa, com motivo (nunca apaga)
-//   POST /api/cadastros/tiss-configuracao/guias/:id/numerar       numera a guia em montagem pela faixa vigente
-// Acesso só pelos níveis de cada cargo (cadastro.estrutura.editar, cadastro.tiss.editar, cadastro.tiss.numerarGuia).
+// Acesso só pelos níveis de cada cargo (cadastro.estrutura.editar, cadastro.tiss.editar). A numeração da guia é feita
+// pela emissão, na mesma transação (reservarNumeroGuia), sem rota própria.
 // Gravações pelo executor, com a trilha na mesma transação.
 import {
   Body,
@@ -49,7 +49,6 @@ import {
 
 export const PERMISSAO_ESTRUTURA_EDITAR = 'cadastro.estrutura.editar';
 export const PERMISSAO_TISS_EDITAR = 'cadastro.tiss.editar';
-export const PERMISSAO_TISS_NUMERAR = 'cadastro.tiss.numerarGuia';
 
 type Corpo = Record<string, unknown>;
 const corpoDe = (c: unknown): Corpo => (c && typeof c === 'object' && !Array.isArray(c) ? (c as Corpo) : {});
@@ -457,16 +456,5 @@ export class EstruturaGestaoController {
     };
     const t = this.trilha(s, 'cadastro.tiss.gravada', 'encerrarFaixa', 'faixa_numeracao_guia', e.id);
     return { id: await this.rodar(() => this.disponivel(this.tiss).encerrarFaixa(s.porta, e, t)) };
-  }
-
-  @Post('tiss-configuracao/guias/:id/numerar')
-  @HttpCode(200)
-  @Permissao(PERMISSAO_TISS_NUMERAR)
-  @AuditadoNoHandler('executor: trilha na mesma transação')
-  async numerarGuia(@Param('id') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
-    const s = sessaoDe(req);
-    const e = { guia: idDaRota(p), versao: id(corpoDe(corpo)['versao']) ?? 0 };
-    const t = this.trilha(s, 'cadastro.tiss.gravada', 'numerarGuia', 'guia_tiss', e.guia);
-    return this.rodar(() => this.disponivel(this.tiss).numerarGuia(s.porta, e, t));
   }
 }

@@ -101,7 +101,21 @@ export interface FaixaGravada {
   readonly id: number;
   readonly numeroInicial: number;
   readonly numeroFinal: number;
+  /** Próximo número a emitir: na faixa encerrada, os números antes dele já foram usados em guias. */
+  readonly proximoNumero: number;
   readonly situacao: string;
+}
+
+/**
+ * O trecho de números da faixa gravada que a nova não pode cruzar: a faixa viva inteira (ainda será consumida) ou,
+ * na encerrada, a parte já consumida (do inicial ao anterior ao próximo), porque esses números já foram para guias e
+ * reemiti-los duplicaria o número da guia do prestador para a mesma fonte pagadora e tipo de guia. Encerrada sem uso
+ * não reserva nada. Nulo = nenhum número reservado.
+ */
+export function trechoReservado(x: FaixaGravada): { inicio: number; fim: number } | null {
+  if (x.situacao !== 'encerrada') return { inicio: x.numeroInicial, fim: x.numeroFinal };
+  const fim = Math.min(x.numeroFinal, x.proximoNumero - 1);
+  return fim >= x.numeroInicial ? { inicio: x.numeroInicial, fim } : null;
 }
 
 /** Número da guia como vai no arquivo: prefixo + número com zeros à esquerda até o tamanho fixo. */
@@ -125,10 +139,10 @@ export function errosFaixa(d: DadosFaixa, existentes: readonly FaixaGravada[]): 
   if (formatarNumeroGuia(d.prefixo, d.tamanhoFixo, d.numeroFinal).length > 20) e.push('numero-longo');
   if (d.vigenciaFim !== null && d.vigenciaFim < d.vigenciaInicio) e.push('vigencia-invertida');
   if (
-    existentes.some(
-      (x) =>
-        x.situacao !== 'encerrada' && x.numeroInicial <= d.numeroFinal && d.numeroInicial <= x.numeroFinal,
-    )
+    existentes.some((x) => {
+      const r = trechoReservado(x);
+      return r !== null && r.inicio <= d.numeroFinal && d.numeroInicial <= r.fim;
+    })
   )
     e.push('faixa-sobreposta');
   return e;

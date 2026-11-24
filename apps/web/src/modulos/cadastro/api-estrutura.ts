@@ -113,6 +113,14 @@ export interface Setor {
   observacaoAgendamento: string | null;
   ativo: boolean;
   dataInativacao: string | null;
+  /** Histórico de quem respondeu pelo setor, do mais recente ao mais antigo (fim nulo = sem fim). */
+  responsaveis: {
+    id: number;
+    profissional: number;
+    nome: string | null;
+    inicio: string;
+    fim: string | null;
+  }[];
   ramais: Ramal[];
 }
 export interface Estrutura {

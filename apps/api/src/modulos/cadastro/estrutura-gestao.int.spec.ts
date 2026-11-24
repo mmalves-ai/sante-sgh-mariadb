@@ -5,10 +5,13 @@
 // - unidade: incluir, alterar e inativar com motivo (a linha fica, ativo = falso); código repetido recusado;
 // - setor: incluir com ramais (principal espelhado), superior em ciclo recusado, lançamento na conta sem centro de
 //   custo recusado, alterar trocando ramais (o que saiu fica com exclusão lógica), inativar com data só sem filhos
-//   ativos e reativar;
-// - configuração TISS: nova vigência encerra a aberta na véspera (o histórico fica); erros todos de uma vez;
+//   ativos (data futura recusada; trilha com o motivo) e reativar; histórico do responsável (retirar encerra hoje,
+//   voltar abre período novo, nada sobrescrito);
+// - configuração TISS: nova vigência encerra a aberta na véspera (o histórico fica); erros todos de uma vez; versão
+//   velha na alteração da vigência = 409;
 // - faixa: sobreposição recusada; consumo em ordem com zeros e prefixo, "esgotada" no último número, sem faixa = recusa;
-//   encerrar grava a situação (nunca apaga).
+//   encerrar grava a situação (nunca apaga) e a trilha com o motivo; a encerrada no meio do consumo segue reservando
+//   os números já usados (a faixa nova que os cruza é recusada).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
 import { definirOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -54,6 +57,14 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
     correlacao: COR,
   });
   const c = () => contextoPorta(m!, COR);
+  /** A linha da trilha da operação no alvo, com o motivo gravado (a prova de que a alteração ficou auditada). */
+  const trilhaDe = async (entidade: string, id: number, motivo: string) =>
+    Number(
+      (await um<{ n: unknown }>(
+        'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ? AND motivo = ?',
+        [entidade, id, motivo],
+      ))!.n,
+    );
   const versao = async (tabela: string, id: number) =>
     Number((await um<{ versao: unknown }>(`SELECT versao FROM ${tabela} WHERE id = ?`, [id]))!.versao);
 
@@ -62,6 +73,11 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
     await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, async (e) => {
       await e.executar(
         `DELETE r FROM ramal_setor r JOIN setor_funcional s ON s.id = r.setor_funcional_id
+          WHERE s.estabelecimento_id = ? AND s.codigo LIKE ?`,
+        [m!.estabelecimento, `${COD}%`],
+      );
+      await e.executar(
+        `DELETE r FROM responsavel_setor_funcional r JOIN setor_funcional s ON s.id = r.setor_funcional_id
           WHERE s.estabelecimento_id = ? AND s.codigo LIKE ?`,
         [m!.estabelecimento, `${COD}%`],
       );
@@ -335,6 +351,20 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
       (await um('SELECT ramal_principal FROM setor_funcional WHERE id = ?', [pai]))!['ramal_principal'],
     ).toBe('2003');
     // Inativar o pai com filho ativo é recusado; o filho primeiro, com data; depois o pai; reativar volta.
+    // Data futura recusada: o estado "inativo" vale no dia em que é gravado.
+    await expect(
+      es.situacaoSetor(
+        c(),
+        {
+          id: filho,
+          versao: await versao('setor_funcional', filho),
+          ativo: false,
+          data: '2099-01-01',
+          motivo: 'Setor desativado na reforma',
+        },
+        t('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'inativacao-futura' } });
     await expect(
       es.situacaoSetor(
         c(),
@@ -359,6 +389,7 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
       },
       t('x'),
     );
+    expect(await trilhaDe('setor_funcional', filho, 'Setor desativado na reforma')).toBe(1);
     const f = await um('SELECT ativo, data_inativacao, excluido_em FROM setor_funcional WHERE id = ?', [
       filho,
     ]);
@@ -385,6 +416,50 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
     const s = lido.setores.find((x) => x.id === pai)!;
     expect(s.ramais.map((r) => r.ramal)).toEqual(['2002', '2003']);
     expect(s.responsavel).toBe(m!.profissional);
+    // Histórico do responsável: retirar encerra o período hoje; o mesmo profissional volta com período novo; nada é
+    // sobrescrito e a leitura devolve os dois períodos.
+    const hoje = String(
+      (await um<{ d: unknown }>("SELECT DATE_FORMAT(CURRENT_DATE, '%Y-%m-%d') AS d", []))!.d,
+    );
+    const amanha = String(
+      (await um<{ d: unknown }>("SELECT DATE_FORMAT(CURRENT_DATE + INTERVAL 1 DAY, '%Y-%m-%d') AS d", []))!.d,
+    );
+    const corpoPai = { ...base, id: pai, ramais: [] as typeof base.ramais };
+    await es.gravarSetor(
+      c(),
+      {
+        ...corpoPai,
+        versao: await versao('setor_funcional', pai),
+        responsavel: null,
+        responsavelInicio: null,
+      },
+      t('x'),
+    );
+    await es.gravarSetor(
+      c(),
+      { ...corpoPai, versao: await versao('setor_funcional', pai), responsavelInicio: amanha },
+      t('x'),
+    );
+    const periodos = await todos(
+      `SELECT profissional_id, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS i, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS f
+         FROM responsavel_setor_funcional WHERE setor_funcional_id = ? ORDER BY vigencia_inicio`,
+      [pai],
+    );
+    expect(periodos.map((r) => [Number(r['profissional_id']), r['i'], r['f']])).toEqual([
+      [m!.profissional, '2026-01-01', hoje],
+      [m!.profissional, amanha, null],
+    ]);
+    expect(
+      await um(
+        "SELECT DATE_FORMAT(responsavel_vigencia_inicio, '%Y-%m-%d') AS i FROM setor_funcional WHERE id = ?",
+        [pai],
+      ),
+    ).toMatchObject({ i: amanha });
+    const relido = (await es.lerTudo(c())).setores.find((x) => x.id === pai)!;
+    expect(relido.responsaveis.map((r) => [r.inicio, r.fim])).toEqual([
+      [amanha, null],
+      ['2026-01-01', hoje],
+    ]);
   });
 
   it('configuração TISS: erros de uma vez; nova vigência encerra a aberta na véspera e o histórico fica', async () => {
@@ -454,6 +529,27 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
         t('x'),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'inicio-imutavel' } });
+    // Alterar a vigência com a versão velha: conflito 409, nada muda.
+    const v = await versao('configuracao_tiss_fonte_pagadora', b);
+    await ts.gravarConfiguracao(
+      c(),
+      { ...base, id: b, versao: v, vigenciaInicio: '2026-07-01', limiteGuiasLote: 60 },
+      t('x'),
+    );
+    await expect(
+      ts.gravarConfiguracao(
+        c(),
+        { ...base, id: b, versao: v, vigenciaInicio: '2026-07-01', limiteGuiasLote: 70 },
+        t('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { status: 409 } });
+    expect(
+      Number(
+        (await um('SELECT limite_guias_lote FROM configuracao_tiss_fonte_pagadora WHERE id = ?', [b]))![
+          'limite_guias_lote'
+        ],
+      ),
+    ).toBe(60);
   });
 
   it('faixa: sobreposição recusada, consumo em ordem até esgotar, sem faixa recusa, encerrar grava a situação', async () => {
@@ -520,6 +616,15 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
     ).toMatchObject({
       situacao: 'encerrada',
     });
+    expect(await trilhaDe('faixa_numeracao_guia', f2, 'Operadora trocou a faixa')).toBe(1);
+    // A faixa encerrada no meio do consumo (3 a 100, o 3 já usado) segue reservando o número usado: a nova que o
+    // cruza é recusada; a que começa depois do último usado é aceita.
+    await expect(
+      ts.incluirFaixa(c(), { ...base, numeroInicial: 3, numeroFinal: 10 }, t('x')),
+    ).rejects.toMatchObject({ problema: { codigo: 'faixa-sobreposta' } });
+    const f3 = await ts.incluirFaixa(c(), { ...base, numeroInicial: 4, numeroFinal: 10 }, t('x'));
+    expect(await reservar()).toMatchObject({ numero: 'SP000004' });
+    expect(f3).toBeGreaterThan(f2);
     const painel = await ts.painel(c(), m!.fonte);
     expect(painel.faixas.map((f) => [f.situacao, f.usados])).toEqual(
       expect.arrayContaining([
