@@ -17,6 +17,8 @@ const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = resolve(import.meta.dirname, '../../../../..');
 const P = 'l97ex';
 const PM = P.toUpperCase();
+/** O segundo estabelecimento sintético (isolamento: nada dele aparece no primeiro). */
+const PB = `${P}b`;
 const LOGIN = `${P}.medico`;
 const SEM_VINCULO = `${P}.semvinculo`;
 const CBO = '225125';
@@ -63,43 +65,46 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaExames contra o MariaDB (cliente f2
 
   const limpar = (e: Escritor) =>
     (async () => {
-      const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+      const est = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
       await e.executar(
         `DELETE FROM termo_consentimento_paciente WHERE estabelecimento_id IN ${est} ORDER BY id DESC`,
-        [P],
+        [P, PB],
       );
       await e.executar(
         `DELETE ev FROM documento_prontuario_evento ev JOIN documento_prontuario d ON d.id = ev.documento_prontuario_id
           WHERE d.estabelecimento_id IN ${est}`,
-        [P],
+        [P, PB],
       );
-      await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
+      await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P, PB]);
       const itens = `(SELECT ei.id FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
                        WHERE r.estabelecimento_id IN ${est})`;
       await e.executar(
         `DELETE ra FROM resultado_analito ra JOIN resultado_exame re ON re.id = ra.resultado_exame_id
           WHERE re.exame_item_id IN ${itens}`,
-        [P],
+        [P, PB],
       );
-      await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN ${itens}`, [P]);
+      await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN ${itens}`, [P, PB]);
       await e.executar(
         `DELETE ei FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
           WHERE r.estabelecimento_id IN ${est}`,
-        [P],
+        [P, PB],
       );
-      await e.executar(`DELETE FROM requisicao_exame WHERE estabelecimento_id IN ${est}`, [P]);
+      await e.executar(`DELETE FROM requisicao_exame WHERE estabelecimento_id IN ${est}`, [P, PB]);
       await e.executar(
         `DELETE v FROM exame_lancado_valor v JOIN exame_lancado_prontuario x ON x.id = v.exame_lancado_prontuario_id
           WHERE x.estabelecimento_id IN ${est}`,
-        [P],
+        [P, PB],
       );
-      await e.executar(`DELETE FROM exame_lancado_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
-      await e.executar(`DELETE FROM anexo_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
+      await e.executar(`DELETE FROM exame_lancado_prontuario WHERE estabelecimento_id IN ${est}`, [P, PB]);
+      await e.executar(`DELETE FROM anexo_prontuario WHERE estabelecimento_id IN ${est}`, [P, PB]);
       await e.executar(`DELETE FROM arquivo WHERE estabelecimento_id IN ${est} AND finalidade = 'anexo'`, [
         P,
+        PB,
       ]);
     })();
 
+  const linhas = (sql: string, p: unknown[]) =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) => l.consultar(sql, p));
   const contar = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, async (l) =>
       Number((await l.uma(sql, p))?.['n'] ?? 0),
@@ -658,6 +663,27 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaExames contra o MariaDB (cliente f2
       [revogado, assinado, 'revogado', e.documento],
     ]);
     expect(ts[2]!.motivo).toBe('Paciente desistiu do procedimento (sintético)');
+    // A trilha: uma linha por gravação, com a operação, o alvo (a versão gravada), o usuário da sessão e o evento.
+    const trilha = await linhas(
+      `SELECT entidade_id, acao, usuario_id, estabelecimento_id, JSON_VALUE(dados_depois, '$.operacao') AS operacao,
+              JSON_VALUE(dados_depois, '$.dados.evento') AS evento
+         FROM trilha_auditoria WHERE entidade = 'termo_consentimento_paciente' AND entidade_id IN (?, ?, ?)
+        ORDER BY id`,
+      [e.id, assinado, revogado],
+    );
+    expect(
+      trilha.map((x) => [
+        Number(x['entidade_id']),
+        x['operacao'],
+        Number(x['usuario_id']),
+        Number(x['estabelecimento_id']),
+        x['evento'],
+      ]),
+    ).toEqual([
+      [e.id, 'pep.tcle.emitir', ids.usuario, ids.est, 'pep.tcle.gravado'],
+      [assinado, 'pep.tcle.assinar', ids.usuario, ids.est, 'pep.tcle.gravado'],
+      [revogado, 'pep.tcle.revogar', ids.usuario, ids.est, 'pep.tcle.gravado'],
+    ]);
     expect(
       await contar(
         `SELECT COUNT(*) AS n FROM termo_consentimento_paciente WHERE paciente_id = ? AND excluido_em IS NULL
@@ -667,7 +693,7 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaExames contra o MariaDB (cliente f2
     ).toBe(2);
   });
 
-  it('termo: login sem profissional vinculado é recusado; atendimento de outro estabelecimento também', async () => {
+  it('termo: login sem profissional vinculado é recusado; atendimento inexistente também', async () => {
     const base = {
       paciente: ids.paciente,
       atendimento: ids.atendimento,
@@ -682,5 +708,256 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaExames contra o MariaDB (cliente f2
     await expect(porta.emitirTcle(G(), { ...base, atendimento: 999_999_999 })).rejects.toMatchObject({
       problema: { status: 404, codigo: 'atendimento-inexistente' },
     });
+  });
+  it('isolamento: termo, anexo, pedido, resultado e exame de fora de OUTRO estabelecimento não aparecem nem se gravam', async () => {
+    const agora = new Date();
+    const antes = {
+      pedidos: await porta.pedidos(C(), ids.paciente),
+      resultados: await porta.resultados(C(), ids.paciente),
+      externos: await porta.examesExternos(C(), ids.paciente),
+      anexos: await porta.anexos(C(), ids.paciente),
+      tcles: await porta.tcles(C(), ids.paciente),
+    };
+    const b = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-outro` }, async (e) => {
+      const est = await garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [PB],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [PB, `Hospital sintético ${PB}`, `Hospital sintético ${PB} (fictício)`, agora],
+      );
+      const doA = await e.uma(
+        `SELECT categoria_atendimento_id, carater_atendimento_tiss_id, fonte_pagadora_id FROM atendimento WHERE id = ?`,
+        [ids.atendimento],
+      );
+      const atendimento = await garantir(
+        e,
+        'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+        [est, 'L97B-1'],
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
+         VALUES (?, 'L97B-1', ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
+        [
+          est,
+          ids.paciente,
+          doA!['categoria_atendimento_id'],
+          doA!['carater_atendimento_tiss_id'],
+          doA!['fonte_pagadora_id'],
+          ids.prof,
+          agora,
+          agora,
+        ],
+      );
+      const situacao = await e.uma(
+        "SELECT id FROM situacao_termo_consentimento WHERE etapa = 'assinado' AND ativo = TRUE LIMIT 1",
+      );
+      const termo = await e.inserir(
+        `INSERT INTO termo_consentimento_paciente (estabelecimento_id, atendimento_id, paciente_id,
+           situacao_termo_consentimento_id, procedimento_descricao, texto_simples, profissional_id, emitido_em,
+           assinado_em, origem, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sistema', ?)`,
+        [
+          est,
+          atendimento,
+          ids.paciente,
+          situacao!['id'],
+          'Procedimento sintético B',
+          'Texto sintético B.',
+          ids.prof,
+          agora,
+          agora,
+          agora,
+        ],
+      );
+      const requisicao = await e.inserir(
+        `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, solicitante_profissional_id,
+           fonte_pagadora_id, prioridade, solicitado_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'rotina', ?, ?)`,
+        [est, `${PB}-1`, ids.paciente, atendimento, ids.prof, doA!['fonte_pagadora_id'], agora, agora],
+      );
+      const item = await e.inserir(
+        `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, situacao, liberado_em, criado_em)
+         VALUES (?, 1, ?, 'liberado', ?, ?)`,
+        [requisicao, ids.exameLab, agora, agora],
+      );
+      const setor = await e.uma('SELECT setor_diagnostico_id FROM resultado_exame WHERE exame_item_id = ?', [
+        ids.itemLiberado,
+      ]);
+      await e.inserir(
+        `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, situacao, resultado_em,
+           liberado_em, autoliberado, conclusao, criado_em) VALUES (?, ?, ?, 'liberado', ?, ?, TRUE, ?, ?)`,
+        [item, ids.paciente, setor!['setor_diagnostico_id'], agora, agora, 'Conclusão sintética B', agora],
+      );
+      await e.inserir(
+        `INSERT INTO exame_lancado_prontuario (estabelecimento_id, paciente_id, nome_exame, realizado_em, lancado_em,
+           profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [est, ids.paciente, `${PM} DE FORA NO OUTRO`, agora, agora, ids.prof, agora],
+      );
+      return { est, atendimento, termo };
+    });
+    const guardado = await armazem.guardar(
+      {
+        conteudo: Buffer.from('%PDF-1.4\n% anexo sintético B\n%%EOF\n', 'latin1'),
+        nomeOriginal: 'b.pdf',
+        tipoMime: 'application/pdf',
+        finalidade: 'anexo',
+      },
+      {
+        cliente: CLIENTE,
+        estabelecimento: b.est,
+        usuario: ids.usuario,
+        correlacao: `${P}-arquivo-b`,
+        chaveIdempotencia: `${P}-arquivo-b-${Date.now()}`,
+      },
+    );
+    const anexoB = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-anexo-b` }, (e) =>
+      e.inserir(
+        `INSERT INTO anexo_prontuario (estabelecimento_id, paciente_id, tipo_anexo_id, arquivo_id, titulo, importado_em,
+           importado_profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          b.est,
+          ids.paciente,
+          ids.tipoAnexo,
+          guardado.id,
+          'Laudo sintético B',
+          new Date(),
+          ids.prof,
+          new Date(),
+        ],
+      ),
+    );
+    // As linhas do outro estabelecimento existem (o mesmo paciente) ...
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM termo_consentimento_paciente WHERE estabelecimento_id = ?', [
+        b.est,
+      ]),
+    ).toBe(1);
+    // ... e nenhuma leitura do primeiro as traz.
+    expect(await porta.pedidos(C(), ids.paciente)).toEqual(antes.pedidos);
+    expect(await porta.resultados(C(), ids.paciente)).toEqual(antes.resultados);
+    expect(await porta.examesExternos(C(), ids.paciente)).toEqual(antes.externos);
+    expect(await porta.anexos(C(), ids.paciente)).toEqual(antes.anexos);
+    expect(await porta.tcles(C(), ids.paciente)).toEqual(antes.tcles);
+    expect(await porta.arquivoAnexo(C(), anexoB)).toBeNull();
+    // Gravar sobre o outro estabelecimento: o atendimento e o termo não existem para a sessão.
+    await expect(
+      porta.emitirTcle(G(), {
+        paciente: ids.paciente,
+        atendimento: b.atendimento,
+        tipo: null,
+        procedimento: 'Procedimento sintético',
+        cbo: null,
+        hashConteudo: 'b'.repeat(64),
+      }),
+    ).rejects.toMatchObject({ problema: { status: 404, codigo: 'atendimento-inexistente' } });
+    await expect(
+      porta.mudarSituacaoTcle(G(), {
+        paciente: ids.paciente,
+        versao: b.termo,
+        situacao: 'revogado',
+        motivo: 'Tentativa sintética sobre o outro estabelecimento',
+      }),
+    ).rejects.toMatchObject({ problema: { status: 404, codigo: 'registro-inexistente' } });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM termo_consentimento_paciente WHERE termo_anterior_id = ?', [
+        b.termo,
+      ]),
+    ).toBe(0);
+  });
+
+  it('teto reduzido: o corte é do histórico antigo; o mais recente sempre aparece (e a versão vigente do termo)', async () => {
+    const recente = new Date(Date.now() + 60_000);
+    const novos = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-recentes` }, async (e) => {
+      const doA = await e.uma('SELECT fonte_pagadora_id FROM atendimento WHERE id = ?', [ids.atendimento]);
+      const requisicao = await e.inserir(
+        `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, solicitante_profissional_id,
+           fonte_pagadora_id, prioridade, solicitado_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'rotina', ?, ?)`,
+        [
+          ids.est,
+          `${P}-2`,
+          ids.paciente,
+          ids.atendimento,
+          ids.prof,
+          doA!['fonte_pagadora_id'],
+          recente,
+          recente,
+        ],
+      );
+      const item = await e.inserir(
+        `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, situacao, liberado_em, criado_em)
+         VALUES (?, 1, ?, 'liberado', ?, ?)`,
+        [requisicao, ids.exameLab, recente, recente],
+      );
+      const setor = await e.uma('SELECT setor_diagnostico_id FROM resultado_exame WHERE exame_item_id = ?', [
+        ids.itemLiberado,
+      ]);
+      await e.inserir(
+        `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, situacao, resultado_em,
+           liberado_em, autoliberado, conclusao, criado_em) VALUES (?, ?, ?, 'liberado', ?, ?, TRUE, ?, ?)`,
+        [
+          item,
+          ids.paciente,
+          setor!['setor_diagnostico_id'],
+          recente,
+          recente,
+          'Potássio sintético de hoje',
+          recente,
+        ],
+      );
+      const externo = await e.inserir(
+        `INSERT INTO exame_lancado_prontuario (estabelecimento_id, paciente_id, nome_exame, realizado_em, lancado_em,
+           profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [ids.est, ids.paciente, `${PM} DE FORA RECENTE`, recente, recente, ids.prof, recente],
+      );
+      return { item, externo };
+    });
+    const guardado = await armazem.guardar(
+      {
+        conteudo: Buffer.from('%PDF-1.4\n% anexo sintético recente\n%%EOF\n', 'latin1'),
+        nomeOriginal: 'r.pdf',
+        tipoMime: 'application/pdf',
+        finalidade: 'anexo',
+      },
+      {
+        cliente: CLIENTE,
+        estabelecimento: ids.est,
+        usuario: ids.usuario,
+        correlacao: `${P}-arquivo-r`,
+        chaveIdempotencia: `${P}-arquivo-r-${Date.now()}`,
+      },
+    );
+    const anexo = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-anexo-r` }, (e) =>
+      e.inserir(
+        `INSERT INTO anexo_prontuario (estabelecimento_id, paciente_id, tipo_anexo_id, arquivo_id, titulo, importado_em,
+           importado_profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ids.est,
+          ids.paciente,
+          ids.tipoAnexo,
+          guardado.id,
+          'Laudo sintético recente',
+          recente,
+          ids.prof,
+          recente,
+        ],
+      ),
+    );
+    // A porta completa tem mais de uma linha em cada leitura; com teto 1, fica só a mais recente.
+    const um = new DocumentosPropriaExames(nucleo, CLIENTE, armazem, undefined, 1);
+    expect((await porta.pedidos(C(), ids.paciente)).length).toBeGreaterThan(1);
+    expect((await um.pedidos(C(), ids.paciente)).map((x) => x.id)).toEqual([novos.item]);
+    expect((await porta.resultados(C(), ids.paciente)).length).toBeGreaterThan(1);
+    expect((await um.resultados(C(), ids.paciente)).map((x) => [x.exame, x.texto])).toEqual([
+      [novos.item, 'Potássio sintético de hoje'],
+    ]);
+    expect((await porta.examesExternos(C(), ids.paciente)).length).toBeGreaterThan(1);
+    expect((await um.examesExternos(C(), ids.paciente)).map((x) => x.id)).toEqual([novos.externo]);
+    expect((await porta.anexos(C(), ids.paciente)).length).toBeGreaterThan(1);
+    expect((await um.anexos(C(), ids.paciente)).map((x) => x.id)).toEqual([anexo]);
+    // O termo da cadeia emitido → assinado → revogado: com teto 1 a revogação (vigente) vem, e o serviço não o vê assinado.
+    const todos = await porta.tcles(C(), ids.paciente);
+    expect(todos).toHaveLength(3);
+    const cortados = await um.tcles(C(), ids.paciente);
+    expect(cortados.map((t) => [t.id, t.situacao])).toEqual(todos.slice(1).map((t) => [t.id, t.situacao]));
+    const substituidos = new Set(cortados.map((t) => t.anterior));
+    expect(cortados.filter((t) => !substituidos.has(t.id)).map((t) => t.situacao)).toEqual(['revogado']);
   });
 });

@@ -180,34 +180,35 @@ describe('DocumentosPropriaExames (núcleo trocado)', () => {
     const { nucleo } = nucleoFalso([
       [
         /FROM requisicao_exame r/,
-        () => [
-          {
-            id: 11,
-            requisicao: 10,
-            exame_id: 5,
-            nome: 'POTÁSSIO',
-            tipo_servico: 'laboratorio',
-            solicitado_em: new Date('2026-11-20T13:00:00Z'),
-            prioridade: 'urgente',
-            urgente: 0,
-            situacao: 'solicitado',
-            indicacao_clinica: 'controle',
-            profissional: 'Profissional sintético',
-          },
-          {
-            id: 12,
-            requisicao: 10,
-            exame_id: 6,
-            nome: 'RX',
-            tipo_servico: 'imagem',
-            solicitado_em: new Date('2026-11-20T13:00:00Z'),
-            prioridade: 'rotina',
-            urgente: 0,
-            situacao: 'liberado',
-            indicacao_clinica: null,
-            profissional: null,
-          },
-        ],
+        () =>
+          [
+            {
+              id: 11,
+              requisicao: 10,
+              exame_id: 5,
+              nome: 'POTÁSSIO',
+              tipo_servico: 'laboratorio',
+              solicitado_em: new Date('2026-11-20T13:00:00Z'),
+              prioridade: 'urgente',
+              urgente: 0,
+              situacao: 'solicitado',
+              indicacao_clinica: 'controle',
+              profissional: 'Profissional sintético',
+            },
+            {
+              id: 12,
+              requisicao: 10,
+              exame_id: 6,
+              nome: 'RX',
+              tipo_servico: 'imagem',
+              solicitado_em: new Date('2026-11-20T13:00:00Z'),
+              prioridade: 'rotina',
+              urgente: 0,
+              situacao: 'liberado',
+              indicacao_clinica: null,
+              profissional: null,
+            },
+          ].reverse(), // o banco devolve do mais recente para trás (ORDER BY ... DESC)
       ],
     ]);
     const [a, b] = await new DocumentosPropriaExames(nucleo, 'teste').pedidos(C, 1);
@@ -313,34 +314,35 @@ describe('DocumentosPropriaExames (núcleo trocado)', () => {
     const { nucleo } = nucleoFalso([
       [
         /FROM termo_consentimento_paciente t/,
-        () => [
-          {
-            id: 1,
-            termo_anterior_id: null,
-            atendimento_id: 2,
-            termo_consentimento_modelo_id: 3,
-            procedimento_descricao: 'Cateterismo',
-            etapa: 'emitido',
-            motivo_revogacao: null,
-            motivo_recusa: null,
-            documento_prontuario_id: 9,
-            criado_em: new Date('2026-11-20T10:00:00Z'),
-            login: 'medico',
-          },
-          {
-            id: 4,
-            termo_anterior_id: 1,
-            atendimento_id: 2,
-            termo_consentimento_modelo_id: 3,
-            procedimento_descricao: 'Cateterismo',
-            etapa: 'revogado',
-            motivo_revogacao: 'Paciente desistiu do exame',
-            motivo_recusa: null,
-            documento_prontuario_id: 9,
-            criado_em: new Date('2026-11-20T11:00:00Z'),
-            login: null,
-          },
-        ],
+        (sql) =>
+          [
+            {
+              id: 1,
+              termo_anterior_id: null,
+              atendimento_id: 2,
+              termo_consentimento_modelo_id: 3,
+              procedimento_descricao: 'Cateterismo',
+              etapa: 'emitido',
+              motivo_revogacao: null,
+              motivo_recusa: null,
+              documento_prontuario_id: 9,
+              criado_em: new Date('2026-11-20T10:00:00Z'),
+              login: 'medico',
+            },
+            {
+              id: 4,
+              termo_anterior_id: 1,
+              atendimento_id: 2,
+              termo_consentimento_modelo_id: 3,
+              procedimento_descricao: 'Cateterismo',
+              etapa: 'revogado',
+              motivo_revogacao: 'Paciente desistiu do exame',
+              motivo_recusa: null,
+              documento_prontuario_id: 9,
+              criado_em: new Date('2026-11-20T11:00:00Z'),
+              login: null,
+            },
+          ].filter((x) => (/AND NOT EXISTS/.test(sql) ? x.id === 4 : x.id === 1)),
       ],
     ]);
     const ts = await new DocumentosPropriaExames(nucleo, 'teste').tcles(C, 1);
@@ -503,5 +505,64 @@ describe('DocumentosPropriaExames (núcleo trocado)', () => {
       revogado_em: null,
     });
     expect(gravados[0]!.valores['assinado_em']).toBeInstanceOf(Date);
+  });
+});
+
+describe('teto das leituras do histórico: corta o antigo, nunca o recente', () => {
+  it('pedidos, resultados, exames de fora e anexos buscam do mais recente para trás com o teto e devolvem em ordem crescente', async () => {
+    const sqls: string[] = [];
+    const linhas = (ids: number[]) => () =>
+      ids.map((id) => ({ id, item: id, requisicao: 1, exame_id: 1, nome: 'X' }));
+    const { nucleo } = nucleoFalso([
+      [/FROM requisicao_exame r/, (sql) => (sqls.push(sql), linhas([3, 2])())],
+      [/FROM resultado_exame re/, (sql) => (sqls.push(sql), linhas([3, 2])())],
+      [/FROM exame_lancado_prontuario el/, (sql) => (sqls.push(sql), linhas([3, 2])())],
+      [/FROM anexo_prontuario ap/, (sql) => (sqls.push(sql), linhas([3, 2])())],
+    ]);
+    const porta = new DocumentosPropriaExames(nucleo, 'teste', null, undefined, 2);
+    expect((await porta.pedidos(C, 1)).map((x) => x.id)).toEqual([2, 3]);
+    expect((await porta.resultados(C, 1)).map((x) => x.exame)).toEqual([2, 3]);
+    expect((await porta.examesExternos(C, 1)).map((x) => x.id)).toEqual([2, 3]);
+    expect((await porta.anexos(C, 1)).map((x) => x.id)).toEqual([2, 3]);
+    expect(sqls).toHaveLength(4);
+    for (const sql of sqls) expect(sql).toMatch(/ORDER BY \S+ DESC, \S+ DESC[^`]*LIMIT 2$/);
+  });
+
+  it('termos: a versão vigente de cada cadeia vem sempre (sem teto); o teto corta só as substituídas antigas', async () => {
+    const sqls: string[] = [];
+    const termo = (id: number, anterior: number | null, etapa: string) => ({
+      id,
+      termo_anterior_id: anterior,
+      atendimento_id: 2,
+      termo_consentimento_modelo_id: null,
+      procedimento_descricao: 'Procedimento sintético',
+      etapa,
+      motivo_revogacao: etapa === 'revogado' ? 'Motivo sintético' : null,
+      motivo_recusa: null,
+      documento_prontuario_id: null,
+      criado_em: new Date('2026-11-20T10:00:00Z'),
+      login: 'medico',
+    });
+    const { nucleo } = nucleoFalso([
+      [
+        /FROM termo_consentimento_paciente t/,
+        (sql) => (
+          sqls.push(sql),
+          /AND NOT EXISTS/.test(sql)
+            ? [termo(9, 8, 'revogado'), termo(1, null, 'emitido')]
+            : [termo(8, 7, 'assinado')]
+        ),
+      ],
+    ]);
+    const ts = await new DocumentosPropriaExames(nucleo, 'teste', null, undefined, 1).tcles(C, 1);
+    expect(ts.map((t) => [t.id, t.situacao])).toEqual([
+      [1, 'pendente'],
+      [8, 'assinado'],
+      [9, 'revogado'],
+    ]);
+    const vigentes = sqls.find((s) => /AND NOT EXISTS/.test(s))!;
+    const substituidas = sqls.find((s) => !/AND NOT EXISTS/.test(s))!;
+    expect(vigentes).not.toMatch(/LIMIT/);
+    expect(substituidas).toMatch(/ORDER BY t\.id DESC LIMIT 1$/);
   });
 });

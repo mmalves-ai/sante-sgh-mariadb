@@ -64,6 +64,9 @@ const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao 
   new ErroOperacao(status, codigo, 'Operação recusada', detalhe);
 
 /** Grupo do exame pelo tipo de serviço do catálogo (15 laboratório, 16 imagem, 0 outros: grupoDoAto do domínio). */
+/** As linhas lidas do mais recente para trás, devolvidas do mais antigo ao mais recente. */
+export const crescente = <T>(ls: readonly T[]): T[] => [...ls].reverse();
+
 export function atoDoServico(tipoServico: unknown): number {
   if (tipoServico === 'laboratorio') return 15;
   if (tipoServico === 'imagem') return 16;
@@ -135,6 +138,11 @@ export class DocumentosPropriaExames {
     /** A porta de armazenamento de arquivos (disco); sem ela, o conteúdo do anexo é recusado (falha fechada). */
     private readonly arquivos: LeitorArquivos | null = null,
     executor?: Executor,
+    /**
+     * Teto de linhas das leituras do histórico do paciente. O corte é sempre do histórico MAIS ANTIGO: a leitura busca
+     * do mais recente para trás e devolve em ordem crescente (o resultado de hoje nunca some atrás do teto).
+     */
+    private readonly teto: number = TETO_LEITURA,
   ) {
     this.executor = executor ?? nucleo.criarExecutor();
   }
@@ -255,10 +263,10 @@ export class DocumentosPropriaExames {
            LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
           WHERE r.estabelecimento_id = ? AND r.paciente_id = ? AND r.excluido_em IS NULL AND r.situacao <> 'cancelada'
             AND ei.situacao NOT IN ('cancelado', 'recusado')
-          ORDER BY r.solicitado_em, r.id, ei.sequencia LIMIT ${TETO_LEITURA}`,
+          ORDER BY r.solicitado_em DESC, r.id DESC, ei.sequencia DESC LIMIT ${this.teto}`,
         [est.id, paciente],
       );
-      return ls.map((x) => {
+      return crescente(ls).map((x) => {
         const situacao = String(x['situacao']);
         const solicitadoEm = dataHora(x['solicitado_em'], est.fuso);
         return {
@@ -286,8 +294,9 @@ export class DocumentosPropriaExames {
    */
   resultados(c: ContextoDocs, paciente: number): Promise<ResultadoLido[]> {
     return this.ler(c, 'exames.resultados', async (l, est) => {
-      const rs = await l.consultar(
-        `SELECT re.id, ei.id AS item, ei.sequencia, ex.nome, ex.codigo, ex.tipo_servico, r.id AS requisicao,
+      const rs = await l
+        .consultar(
+          `SELECT re.id, ei.id AS item, ei.sequencia, ex.nome, ex.codigo, ex.tipo_servico, r.id AS requisicao,
                 a.numero AS atendimento, re.liberado_em, re.texto_resultado, re.conclusao
            FROM resultado_exame re
            JOIN exame_item ei ON ei.id = re.exame_item_id AND ei.excluido_em IS NULL
@@ -296,9 +305,10 @@ export class DocumentosPropriaExames {
            LEFT JOIN atendimento a ON a.id = r.atendimento_id
           WHERE r.estabelecimento_id = ? AND re.paciente_id = ? AND re.excluido_em IS NULL
             AND re.situacao IN ('liberado', 'retificado')
-          ORDER BY re.liberado_em, re.id LIMIT ${TETO_LEITURA}`,
-        [est.id, paciente],
-      );
+          ORDER BY re.liberado_em DESC, re.id DESC LIMIT ${this.teto}`,
+          [est.id, paciente],
+        )
+        .then(crescente);
       if (!rs.length) return [];
       const ids = rs.map((r) => num(r['id']));
       const vs = await l.consultar(
@@ -357,14 +367,16 @@ export class DocumentosPropriaExames {
     paciente: number,
   ): Promise<{ id: number; nome: string; em: string | null; elementos: string[] }[]> {
     return this.ler(c, 'exames.externos', async (l, est) => {
-      const ls = await l.consultar(
-        `SELECT el.id, COALESCE(ex.nome, el.nome_exame) AS nome, el.realizado_em
+      const ls = await l
+        .consultar(
+          `SELECT el.id, COALESCE(ex.nome, el.nome_exame) AS nome, el.realizado_em
            FROM exame_lancado_prontuario el
            LEFT JOIN exame ex ON ex.id = el.exame_id
           WHERE el.estabelecimento_id = ? AND el.paciente_id = ? AND el.excluido_em IS NULL AND el.situacao = 'ativo'
-          ORDER BY el.realizado_em, el.id LIMIT ${TETO_LEITURA}`,
-        [est.id, paciente],
-      );
+          ORDER BY el.realizado_em DESC, el.id DESC LIMIT ${this.teto}`,
+          [est.id, paciente],
+        )
+        .then(crescente);
       if (!ls.length) return [];
       const ids = ls.map((x) => num(x['id']));
       const vs = await l.consultar(
@@ -398,10 +410,10 @@ export class DocumentosPropriaExames {
            LEFT JOIN profissional p ON p.id = ap.importado_profissional_id
            LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
           WHERE ap.estabelecimento_id = ? AND ap.paciente_id = ? AND ap.excluido_em IS NULL
-          ORDER BY ap.importado_em, ap.id LIMIT ${TETO_LEITURA}`,
+          ORDER BY ap.importado_em DESC, ap.id DESC LIMIT ${this.teto}`,
         [est.id, paciente],
       );
-      return ls.map((x) => ({
+      return crescente(ls).map((x) => ({
         id: num(x['id']),
         paciente: num(x['paciente_id']),
         nome: textoOuNull(x['titulo']),
@@ -491,19 +503,28 @@ export class DocumentosPropriaExames {
     });
   }
 
-  /** Todas as versões dos termos do paciente no estabelecimento, da mais antiga à mais recente. */
+  /**
+   * As versões dos termos do paciente no estabelecimento, da mais antiga à mais recente. A versão VIGENTE de cada cadeia
+   * (a sem sucessor) vem sempre, sem teto: é ela que diz se o termo autoriza o procedimento, e cortá-la mostraria como
+   * vigente uma versão já substituída (um termo revogado apareceria assinado). O teto só corta as versões substituídas
+   * mais antigas.
+   */
   tcles(c: ContextoDocs, paciente: number): Promise<TcleLido[]> {
     return this.ler(c, 'tcle.lista', async (l, est) => {
-      const ls = await l.consultar(
+      const sql = (vigentes: boolean) =>
         `SELECT t.id, t.termo_anterior_id, t.atendimento_id, t.termo_consentimento_modelo_id, t.procedimento_descricao,
                 s.etapa, t.motivo_revogacao, t.motivo_recusa, t.documento_prontuario_id, t.criado_em, u.login
            FROM termo_consentimento_paciente t
            JOIN situacao_termo_consentimento s ON s.id = t.situacao_termo_consentimento_id
            LEFT JOIN usuario u ON u.id = t.criado_por
           WHERE t.estabelecimento_id = ? AND t.paciente_id = ? AND t.excluido_em IS NULL
-          ORDER BY t.id LIMIT ${TETO_LEITURA}`,
-        [est.id, paciente],
-      );
+            AND ${vigentes ? 'NOT ' : ''}EXISTS (SELECT 1 FROM termo_consentimento_paciente su
+                         WHERE su.termo_anterior_id = t.id AND su.excluido_em IS NULL)
+          ORDER BY t.id DESC${vigentes ? '' : ` LIMIT ${this.teto}`}`;
+      const ls = [
+        ...(await l.consultar(sql(true), [est.id, paciente])),
+        ...(await l.consultar(sql(false), [est.id, paciente])),
+      ].sort((a, b) => num(a['id']) - num(b['id']));
       return ls.map((x) => ({
         id: num(x['id']),
         anterior: numOuNull(x['termo_anterior_id']),
