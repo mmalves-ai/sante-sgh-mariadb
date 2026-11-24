@@ -50,3 +50,5 @@ export * from './cadastro-estoque.js';
 export * from './kit-padrao.js';
 // F3.6 (05-SUP linha 16): recálculo auditado do saldo e do custo médio pelo razão.
 export * from './recalculo-saldo.js';
+// F3.6 (05-SUP linha 28): vínculo do item com a referência de preço de material e medicamento (código, edição, fator).
+export * from './vinculo-referencia-preco.js';
