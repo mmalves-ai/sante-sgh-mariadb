@@ -100,9 +100,8 @@ const recusasRegra = computed(() => {
 });
 
 function editar(r: RegraIntegracaoLida): void {
-  const resto: Partial<RegraIntegracaoLida> = { ...r };
-  delete resto.escopoNome;
-  delete resto.localNome;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { escopoNome, localNome, ...resto } = r;
   form.value = { ...vazio(), ...resto };
   mensagem.value = null;
 }
