@@ -46,7 +46,9 @@ import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propri
 import { CatalogoSadtController } from './catalogo.controller.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
+import { EscalaExecucaoController, SERVICO_ESCALA_EXECUCAO } from './escala-execucao.controller.js';
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
+import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
 
 export interface OpcoesModuloSadt {
   /** Testes: as portas já montadas. */
@@ -141,6 +143,8 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       LaudoRedacaoController,
       ApoioRemessaController,
       LimitesExameController,
+      EscalaExecucaoController,
+      MicrobiologiaController,
     ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
@@ -203,6 +207,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           return new ServicoLaudoRedacao(ctx.nucleo);
         },
       },
+      // Escala de execução (05-SADT linha 19): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_ESCALA_EXECUCAO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoEscalaExecucao } = await import('./aplicacao/escala-execucao-propria.js');
+          return new ServicoEscalaExecucao(ctx.nucleo);
+        },
+      },
       // Limites do pedido de exame (05-SADT linha 6): só no banco do cliente (sem ele, 503).
       {
         provide: SERVICO_LIMITES_EXAME,
@@ -210,6 +223,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoLimitesExame } = await import('./aplicacao/limites-exame-propria.js');
           return new ServicoLimitesExame(ctx.nucleo);
+        },
+      },
+      // Microbiologia estruturada: cultura, isolados e antibiograma (05-SADT linha 12): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_MICROBIOLOGIA,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoMicrobiologia } = await import('./aplicacao/microbiologia-propria.js');
+          return new ServicoMicrobiologia(ctx.nucleo);
         },
       },
       // A central de avisos (o sino) é a comunicação do módulo acesso: sem ele, o aviso do crítico fica no painel do SADT.
