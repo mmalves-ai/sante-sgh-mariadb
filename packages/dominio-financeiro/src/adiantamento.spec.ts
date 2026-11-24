@@ -5,7 +5,11 @@ import {
   conferirCompensacao,
   conferirConcessao,
   conferirDevolucao,
+  conferirPedidoEmAberto,
+  conferirSaida,
+  credorDoTitulo,
   parcelaAposCompensacao,
+  tipoAlcadaDoAdiantamento,
 } from './adiantamento.js';
 
 const forn = { tipo: 'fornecedor' as const, id: 7 };
@@ -63,5 +67,39 @@ describe('devolver e situação', () => {
     expect(aposUso(1000, 600, 600)).toEqual({ saldo: 0, situacao: 'compensado' });
     expect(parcelaAposCompensacao(500, 200)).toEqual({ saldo: 300, situacao: 'parcial' });
     expect(parcelaAposCompensacao(500, 500)).toEqual({ saldo: 0, situacao: 'paga' });
+  });
+});
+
+describe('dois olhos antes da saída (pedido, aprovação na alçada, pagamento)', () => {
+  it('só o pedido em aberto é aprovado; só o aprovado sai da conta', () => {
+    expect(conferirPedidoEmAberto('aberto')).toBeNull();
+    expect(conferirPedidoEmAberto('aprovado')?.codigo).toBe('adiantamento-ja-aprovado');
+    expect(conferirSaida('aberto')?.codigo).toBe('sem-aprovacao');
+    expect(conferirSaida('aprovado')).toBeNull();
+    expect(conferirSaida('pago')?.codigo).toBe('adiantamento-ja-pago');
+  });
+  it('a faixa da alçada é a do tipo de credor do título (fornecedor F, médico M)', () => {
+    expect(tipoAlcadaDoAdiantamento('fornecedor')).toBe('F');
+    expect(tipoAlcadaDoAdiantamento('profissional')).toBe('M');
+  });
+});
+
+describe('credor do título pelo par (tipo, id)', () => {
+  it('não colapsa ids de cadastros diferentes', () => {
+    expect(credorDoTitulo({ profissional: 7, fornecedor: null, outro: null })).toEqual({
+      tipo: 'profissional',
+      id: 7,
+    });
+    expect(credorDoTitulo({ profissional: null, fornecedor: 7, outro: null })).toEqual(forn);
+    expect(credorDoTitulo({ profissional: null, fornecedor: null, outro: 7 })).toEqual({
+      tipo: 'outro',
+      id: 7,
+    });
+  });
+  it('recusa compensar título de outro tipo de credor com o mesmo id', () => {
+    for (const tipo of ['profissional', 'outro'] as const)
+      expect(conferirCompensacao(ad, { credor: { tipo, id: 7 }, saldo: 100 }, 50)?.codigo).toBe(
+        'credor-diferente',
+      );
   });
 });

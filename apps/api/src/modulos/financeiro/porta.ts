@@ -9,9 +9,11 @@
 import type {
   AdiantamentoResposta,
   AtribuirCreditoEntrada,
+  AprovarAdiantamentoEntrada,
   CompensarAdiantamentoEntrada,
   ConcederAdiantamentoEntrada,
   DevolverAdiantamentoEntrada,
+  PagarAdiantamentoEntrada,
   BorderoResposta,
   ConciliarEntrada,
   ContaBancariaResposta,
@@ -43,6 +45,8 @@ export interface FiltroPagar {
   readonly vencimentoAte: string | null;
   readonly credor: number | null;
   readonly tipo: string | null;
+  /** O tipo do credor do adiantamento: com `credor`, filtra pela coluna certa (ids de cadastros diferentes colidem). */
+  readonly credorDe?: 'fornecedor' | 'profissional' | null;
   readonly pagina: number;
   readonly hoje: string;
 }
@@ -121,10 +125,19 @@ export interface GravadorSghFinanceiro {
   atribuirCredito(
     d: AtribuirCreditoEntrada & { usuario: string; contasEscopo: readonly number[] },
   ): Promise<{ id: number }>;
-  /** F3.8 (07-FIN linha 67): o adiantamento sai da conta do escopo; compensa só título do mesmo credor. */
+  /**
+   * F3.8 (07-FIN linha 67): o pedido (sem saída) na conta do escopo; a aprovação na alçada do título a pagar (quem pediu
+   * não aprova); o pagamento por outra pessoa (a saída); a compensação só em título aprovado do mesmo credor (tipo, id).
+   */
   concederAdiantamento(
     d: ConcederAdiantamentoEntrada & { usuario: string; contasEscopo: readonly number[] },
-  ): Promise<{ id: number; numero: string; movimento: number }>;
+  ): Promise<{ id: number; numero: string }>;
+  aprovarAdiantamento(
+    d: AprovarAdiantamentoEntrada & { usuario: string; temPermissao: (p: string) => boolean },
+  ): Promise<{ id: number; ordem: number; aprovado: boolean; faltam: number }>;
+  pagarAdiantamento(
+    d: PagarAdiantamentoEntrada & { usuario: string; contasEscopo: readonly number[] },
+  ): Promise<{ id: number; movimento: number }>;
   compensarAdiantamento(
     d: CompensarAdiantamentoEntrada & { usuario: string },
   ): Promise<{ id: number; baixa: number; saldo: number }>;

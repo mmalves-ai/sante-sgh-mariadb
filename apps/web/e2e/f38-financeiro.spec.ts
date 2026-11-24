@@ -1,5 +1,8 @@
-// F3.8 (financeiro): o adiantamento ponta a ponta. Conceder ao fornecedor (sai da conta), compensar no título em aberto
-// do mesmo credor (a tela lista só os títulos dele e sugere o valor) e registrar a devolução do saldo; axe em cada passo.
+// F3.8 (financeiro): o adiantamento ponta a ponta, com dois olhos antes de cada saída. Quem lança pede o adiantamento
+// (sem saída) e não o aprova; outra pessoa aprova na alçada; uma terceira paga (a saída na conta). A compensação é uma
+// baixa: o título não aprovado é recusado e, aprovado por outra pessoa, é compensado (a tela lista só os títulos do mesmo
+// credor e sugere o valor). Depois, a devolução do saldo; o título aparece pago e a saída e a entrada aparecem no
+// movimento da conta. Axe em cada passo.
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -19,14 +22,17 @@ const linhaCom = (page: Page, tabela: string, texto: string) =>
   page.getByTestId(tabela).locator('tbody tr', { hasText: texto });
 
 test.describe('financeiro: adiantamento @F3.8', () => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
 
-  test('conceder → compensar no título do mesmo credor → devolver o saldo; axe', async ({ page }) => {
+  test('pedir → aprovar → pagar → compensar só o título aprovado → devolver; título pago e movimento; axe', async ({
+    page,
+  }) => {
     const externas = vigiarExternas(page);
     const documento = String(600_000 + (Date.now() % 100_000));
     const finalidade = `Viagem técnica ${documento}`;
+    const motivo = `Sobra devolvida ${documento}`;
 
-    // O título em aberto do credor 5001, lançado por quem lança.
+    // Quem lança: o título em aberto do credor 5001 e o pedido do adiantamento de 2.000,00 ao mesmo credor.
     await entrar(page, 'SINT.FIN.LANCA');
     await page.goto('/financeiro/pagar/titulos');
     await page.getByTestId('tp-novo').click();
@@ -38,8 +44,6 @@ test.describe('financeiro: adiantamento @F3.8', () => {
     await page.getByTestId('tp-lancar').click();
     await expect(page.getByTestId('tp-mensagem')).toContainText('lançado');
 
-    // A tesouraria concede o adiantamento de 2.000,00 ao mesmo credor.
-    await entrar(page, 'SINT.FIN.PAGA');
     await page.goto('/financeiro/pagar/adiantamentos');
     await expect(page.getByTestId('tela-fin-adiantamentos')).toBeVisible();
     await expect(page.getByTestId('ad-conceder')).toBeDisabled();
@@ -48,27 +52,68 @@ test.describe('financeiro: adiantamento @F3.8', () => {
     await page.getByTestId('ad-novo-referente').fill(finalidade);
     await semViolacaoAxe(page, '/financeiro/pagar/adiantamentos (novo)');
     await page.getByTestId('ad-conceder').click();
-    await expect(page.getByTestId('ad-mensagem')).toContainText('concedido');
+    await expect(page.getByTestId('ad-mensagem')).toContainText('aguarda a aprovação');
+    await expect(linhaCom(page, 'ad-lista', finalidade)).toContainText('Aguardando aprovação');
+    // Quem pediu não aprova (a segregação no servidor).
+    await linhaCom(page, 'ad-lista', finalidade).getByRole('button', { name: 'Aprovar' }).click();
+    await expect(page.getByTestId('recusa-faturamento')).toContainText('Quem lançou');
+
+    // Outra pessoa aprova o adiantamento na alçada.
+    await entrar(page, 'SINT.FIN.APROVA');
+    await page.goto('/financeiro/pagar/adiantamentos');
+    await linhaCom(page, 'ad-lista', finalidade).getByRole('button', { name: 'Aprovar' }).click();
+    await expect(page.getByTestId('ad-mensagem')).toContainText('aprovado na alçada');
+    await expect(linhaCom(page, 'ad-lista', finalidade)).toContainText('Aprovado, a pagar');
+    await semViolacaoAxe(page, '/financeiro/pagar/adiantamentos (aprovado)');
+
+    // Um terceiro paga (a saída) e tenta compensar no título ainda não aprovado: recusado.
+    await entrar(page, 'SINT.FIN.PAGA');
+    await page.goto('/financeiro/pagar/adiantamentos');
+    await linhaCom(page, 'ad-lista', finalidade).getByRole('button', { name: 'Pagar' }).click();
+    await expect(page.getByTestId('ad-mensagem')).toContainText('Adiantamento pago');
     const linha = linhaCom(page, 'ad-lista', finalidade);
     await expect(linha).toContainText('2.000,00');
-
-    // Compensa no título do credor: o valor sugerido é o saldo do título (1.500,00); sobra 500,00.
-    await linha.getByRole('button').click();
+    await linha.getByRole('button', { name: 'Compensar' }).click();
     const titulo = page.getByTestId('ad-titulos').locator('li', { hasText: `${documento}/1` });
     await expect(titulo).toContainText('1.500,00');
-    await semViolacaoAxe(page, '/financeiro/pagar/adiantamentos (compensar)');
     await titulo.getByRole('button').click();
+    await expect(page.getByTestId('recusa-faturamento')).toContainText('aprovação');
+
+    // Outra pessoa aprova o título; aí o terceiro compensa: o valor sugerido é o saldo do título (1.500,00); sobra 500,00.
+    await entrar(page, 'SINT.FIN.APROVA');
+    await page.goto('/financeiro/pagar/aprovacao');
+    await linhaCom(page, 'ap-lista', `${documento}/1`).getByRole('button').click();
+    await expect(linhaCom(page, 'ap-lista', `${documento}/1`)).toContainText('1 / 1');
+
+    await entrar(page, 'SINT.FIN.PAGA');
+    await page.goto('/financeiro/pagar/adiantamentos');
+    await linhaCom(page, 'ad-lista', finalidade).getByRole('button', { name: 'Compensar' }).click();
+    await semViolacaoAxe(page, '/financeiro/pagar/adiantamentos (compensar)');
+    await page
+      .getByTestId('ad-titulos')
+      .locator('li', { hasText: `${documento}/1` })
+      .getByRole('button')
+      .click();
     await expect(page.getByTestId('ad-mensagem')).toContainText('compensado');
     await expect(linhaCom(page, 'ad-lista', finalidade)).toContainText('500,00');
 
     // O painel segue aberto: a devolução do saldo pede o motivo e encerra o adiantamento.
     await expect(page.getByTestId('ad-devolver')).toBeDisabled();
     await page.getByTestId('ad-dev-valor').fill('500');
-    await page.getByTestId('ad-dev-motivo').fill('Sobra devolvida pelo fornecedor');
+    await page.getByTestId('ad-dev-motivo').fill(motivo);
     await page.getByTestId('ad-devolver').click();
     await expect(page.getByTestId('ad-mensagem')).toContainText('Devolução');
     await expect(linhaCom(page, 'ad-lista', finalidade)).toContainText('Encerrado');
     await semViolacaoAxe(page, '/financeiro/pagar/adiantamentos (encerrado)');
+
+    // O título aparece pago, e a saída e a entrada aparecem no movimento da conta.
+    await page.goto('/financeiro/pagar/titulos');
+    await escolher(page.getByTestId('tp-situacao'), 'pago');
+    await page.getByTestId('tp-consultar').click();
+    await expect(page.getByTestId('tp-lista')).toContainText(documento);
+    await page.goto('/financeiro/tesouraria/movimento');
+    await expect(page.getByTestId('mv-lista')).toContainText(finalidade);
+    await expect(page.getByTestId('mv-lista')).toContainText(motivo);
     expect(externas).toEqual([]);
   });
 });

@@ -35,6 +35,9 @@ import {
   conferirFaixas,
   conferirMovimento,
   conferirPagamento,
+  conferirPedidoEmAberto,
+  conferirSaida,
+  tipoAlcadaDoAdiantamento,
   conferirParcelas,
   conferirSegregacao,
   devedorDaConta,
@@ -176,7 +179,8 @@ interface Estado {
     por: string;
   }[];
   creditos: CreditoPendenteResposta[];
-  adiantamentos: AdiantamentoResposta[];
+  /** O adiantamento com quem pediu e quem aprovou (a segregação dos dois olhos antes da saída). */
+  adiantamentos: (AdiantamentoResposta & { pedidoPor: string; aprovadores: AprovacaoRegistrada[] })[];
   rateios: { documento: number; credor: number; centroCusto: number; percentual: number; valor: number }[];
   fiscais: Record<'nfse' | 'declaracao' | 'lote' | 'remessa', RegistroFiscalResposta[]>;
   pagosPeloNovo: Set<number>;
@@ -350,6 +354,11 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           valor: 1_000,
           compensado: 400,
           saldo: 600,
+          conta: null,
+          aprovacoes: 1,
+          exigidas: 1,
+          pedidoPor: 'SINT.FIN.LANCA',
+          aprovadores: [],
         },
       ],
       rateios: [],
@@ -721,6 +730,18 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     return alcadaAplicavel(
       s.faixas,
       { empresa: 1, centroCusto: centro?.centroCusto ?? null, tipo: t.tipo, valor: t.valorDocumento },
+      s.hoje,
+    );
+  }
+
+  private faixaDoAdiantamento(
+    s: Estado,
+    tipo: 'fornecedor' | 'profissional',
+    valor: number,
+  ): FaixaAlcada | null {
+    return alcadaAplicavel(
+      s.faixas,
+      { empresa: 1, centroCusto: null, tipo: tipoAlcadaDoAdiantamento(tipo), valor },
       s.hoje,
     );
   }
@@ -1107,12 +1128,66 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           emissao: d.data,
           prazo: d.prazo,
           referente: d.referente,
-          situacao: 'pago',
+          situacao: 'aberto',
           valor: d.valor,
           compensado: 0,
-          saldo: d.valor,
+          saldo: 0,
+          conta: d.conta,
+          aprovacoes: 0,
+          exigidas: this.faixaDoAdiantamento(s, d.tipoCredor, d.valor)?.aprovacoes ?? 1,
+          pedidoPor: d.usuario,
+          aprovadores: [],
         });
-        return { id, numero, movimento: ++s.seq };
+        return { id, numero };
+      },
+      aprovarAdiantamento: async (d) => {
+        const i = s.adiantamentos.findIndex((x) => x.id === d.adiantamento);
+        const a = s.adiantamentos[i];
+        if (!a) throw recusa('adiantamento-inexistente', 'O adiantamento não existe.');
+        this.recusar(conferirPedidoEmAberto(a.situacao));
+        const faixa = this.faixaDoAdiantamento(s, a.tipoCredor, a.valor);
+        this.recusar(
+          conferirAprovacao({
+            faixa,
+            aprovacoes: a.aprovadores,
+            aprovador: d.usuario,
+            lancador: a.pedidoPor,
+            temPermissaoDaFaixa: faixa ? d.temPermissao(faixa.permissao) : false,
+            valor: a.valor,
+            emAberto: true,
+          }),
+        );
+        if (!faixa) throw recusa('sem-alcada', 'Nenhuma faixa de alçada cobre o adiantamento.');
+        const ordem = a.aprovadores.filter((x) => x.faixa === faixa.id).length + 1;
+        const aprovadores = [
+          ...a.aprovadores,
+          { aprovador: d.usuario, ordem: (ordem >= 2 ? 2 : 1) as 1 | 2, faixa: faixa.id, em: s.hoje },
+        ];
+        const aprovado = ordem >= faixa.aprovacoes;
+        s.adiantamentos[i] = {
+          ...a,
+          aprovadores,
+          aprovacoes: ordem,
+          situacao: aprovado ? 'aprovado' : 'aberto',
+        };
+        return { id: ++s.seq, ordem, aprovado, faltam: Math.max(0, faixa.aprovacoes - ordem) };
+      },
+      pagarAdiantamento: async (d) => {
+        const i = s.adiantamentos.findIndex((x) => x.id === d.adiantamento);
+        const a = s.adiantamentos[i];
+        if (!a) throw recusa('adiantamento-inexistente', 'O adiantamento não existe.');
+        this.recusar(conferirSaida(a.situacao));
+        if (a.conta === null || !d.contasEscopo.includes(a.conta)) throw foraDoEscopo();
+        this.recusar(
+          conferirPagamento({
+            faixa: this.faixaDoAdiantamento(s, a.tipoCredor, a.valor),
+            aprovacoes: a.aprovadores,
+            pagador: d.usuario,
+            lancador: a.pedidoPor,
+          }),
+        );
+        s.adiantamentos[i] = { ...a, situacao: 'pago', saldo: a.valor };
+        return { id: a.id, movimento: ++s.seq };
       },
       compensarAdiantamento: async (d) => {
         const i = s.adiantamentos.findIndex((x) => x.id === d.adiantamento);
@@ -1125,11 +1200,24 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           conferirCompensacao(
             { credor: { tipo: a.tipoCredor, id: a.credor }, saldo: a.saldo, situacao: a.situacao },
             {
-              credor: { tipo: t.tipo === 'M' ? 'profissional' : 'fornecedor', id: t.credor },
+              credor: {
+                tipo:
+                  t.tipo === 'M' ? 'profissional' : t.tipo === 'F' || t.tipo === 'E' ? 'fornecedor' : 'outro',
+                id: t.credor,
+              },
               saldo: saldoTitulo,
             },
             d.valor,
           ),
+        );
+        // A compensação é uma baixa do título: a mesma alçada e a mesma segregação da baixa normal.
+        this.recusar(
+          conferirPagamento({
+            faixa: this.faixaDo(s, t),
+            aprovacoes: this.aprovacoesDo(s, t.id),
+            pagador: d.usuario,
+            lancador: t.lancadoPor,
+          }),
         );
         s.titulos.set(d.parcela, { ...t, pago: centavos(t.pago + d.valor) });
         const novo = aposUso(a.valor, a.saldo, d.valor);
@@ -1307,6 +1395,8 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           (!f.vencimentoDe || (t.vencimento ?? '') >= f.vencimentoDe) &&
           (!f.vencimentoAte || (t.vencimento ?? '') <= f.vencimentoAte) &&
           (!f.credor || t.credor === f.credor) &&
+          (!f.credorDe ||
+            (f.credorDe === 'profissional' ? t.tipo === 'M' : t.tipo === 'F' || t.tipo === 'E')) &&
           (!f.tipo || t.tipo === f.tipo),
       )
       .sort((a, b) => (b.vencimento ?? '').localeCompare(a.vencimento ?? '') || b.id - a.id);
@@ -1390,8 +1480,13 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     return [...this.e(c).borderos].reverse();
   }
 
-  async adiantamentos(c: ContextoFinanceiro) {
-    return [...this.e(c).adiantamentos].reverse();
+  async adiantamentos(c: ContextoFinanceiro): Promise<AdiantamentoResposta[]> {
+    return [...this.e(c).adiantamentos].reverse().map((a) => {
+      const r: Record<string, unknown> = { ...a };
+      delete r['pedidoPor'];
+      delete r['aprovadores'];
+      return r as unknown as AdiantamentoResposta;
+    });
   }
 
   private receberDe(s: Estado, t: TituloReceberM): TituloReceberResposta {

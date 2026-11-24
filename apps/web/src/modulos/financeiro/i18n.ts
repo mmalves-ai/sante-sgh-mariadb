@@ -134,7 +134,7 @@ export const mensagensFinanceiro = {
   adiantamentos: {
     titulo: 'Adiantamentos a fornecedores e médicos',
     texto:
-      'Conceda o adiantamento (sai da conta na hora), compense o saldo no título do mesmo credor e registre a devolução do que sobrar.',
+      'Peça o adiantamento, que só sai da conta depois da aprovação na alçada e do pagamento por outra pessoa. Compense o saldo no título aprovado do mesmo credor e registre a devolução do que sobrar.',
     compensado: 'Compensado',
     saldo: 'Saldo',
     novo: 'Novo adiantamento',
@@ -144,7 +144,11 @@ export const mensagensFinanceiro = {
     credor: 'Código do credor',
     referente: 'Finalidade',
     prazo: 'Prazo para compensar',
-    conceder: 'Conceder',
+    conceder: 'Pedir adiantamento',
+    aprovar: 'Aprovar',
+    pagar: 'Pagar',
+    aprovacoes: 'Aprovações',
+    acoes: 'Ações',
     situacao: 'Situação',
     titulosDoCredor: 'Títulos em aberto do mesmo credor',
     compensar: 'Compensar',
@@ -152,11 +156,11 @@ export const mensagensFinanceiro = {
     motivo: 'Motivo da devolução',
     semTitulos: 'Nenhum título em aberto deste credor.',
     situacoes: {
-      pago: 'Concedido',
+      pago: 'Pago',
       compensado_parcial: 'Compensado em parte',
       compensado: 'Encerrado',
-      aberto: 'Em aberto',
-      aprovado: 'Aprovado',
+      aberto: 'Aguardando aprovação',
+      aprovado: 'Aprovado, a pagar',
     },
   },
   receber: {

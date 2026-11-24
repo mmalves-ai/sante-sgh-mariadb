@@ -138,6 +138,11 @@ export interface AdiantamentoResposta {
   readonly valor: number;
   readonly compensado: number;
   readonly saldo: number;
+  /** Conta de saída escolhida no pedido. */
+  readonly conta: number | null;
+  /** Aprovações registradas na alçada e quantas a faixa exige (o pedido só é pago com todas). */
+  readonly aprovacoes: number;
+  readonly exigidas: number;
 }
 
 export interface TituloReceberResposta {

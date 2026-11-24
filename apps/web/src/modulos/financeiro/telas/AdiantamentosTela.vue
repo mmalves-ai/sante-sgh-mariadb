@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Adiantamentos a fornecedores e médicos (F3.8, 07-FIN linha 67): `/financeiro/pagar/adiantamentos`. Conceder (a saída
-// sai da conta na hora), compensar o saldo num título em aberto do MESMO credor (a lista já vem filtrada pelo credor, e o
-// valor sugerido é o menor entre o saldo e o título) e registrar a devolução do que sobrou. As regras ficam no domínio;
-// a tela só evita o clique inútil.
+// Adiantamentos a fornecedores e médicos (F3.8, 07-FIN linha 67): `/financeiro/pagar/adiantamentos`. Pedir (sem saída),
+// aprovar na alçada (quem pediu não aprova), pagar (a saída, por outra pessoa), compensar o saldo num título aprovado do
+// MESMO credor (a lista vem filtrada pelo par tipo e código do credor, e o valor sugerido é o menor entre o saldo e o
+// título) e registrar a devolução do que sobrou. As regras ficam no domínio; a tela só evita o clique inútil.
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
@@ -11,12 +11,14 @@ import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import {
+  aprovarAdiantamento,
   compensarAdiantamento,
   concederAdiantamento,
   devolverAdiantamento,
   listarAdiantamentos,
   listarTitulosPagar,
   novaChave,
+  pagarAdiantamento,
 } from '../api-financeiro.js';
 import { data, opcoesContas, reais, usarFinanceiro } from '../usar-financeiro.js';
 
@@ -52,8 +54,19 @@ const novoValido = computed(
 const aberto = ref<number | null>(null);
 const escolhido = computed(() => lista.data.value?.find((a) => a.id === aberto.value) ?? null);
 const titulos = useQuery({
-  queryKey: computed(() => ['financeiro', 'adiantamentos', 'titulos', escolhido.value?.credor ?? 0]),
-  queryFn: () => listarTitulosPagar({ credor: String(escolhido.value?.credor ?? ''), situacao: 'aberto' }),
+  queryKey: computed(() => [
+    'financeiro',
+    'adiantamentos',
+    'titulos',
+    escolhido.value?.tipoCredor ?? '',
+    escolhido.value?.credor ?? 0,
+  ]),
+  queryFn: () =>
+    listarTitulosPagar({
+      credor: String(escolhido.value?.credor ?? ''),
+      credorDe: escolhido.value?.tipoCredor ?? '',
+      situacao: 'aberto',
+    }),
   enabled: computed(() => !!escolhido.value && escolhido.value.saldo > 0),
 });
 const abertos = computed(() => (titulos.data.value?.itens ?? []).filter((x) => x.valor - x.pago > 0));
@@ -110,6 +123,10 @@ const compensar = (id: number, parcela: number, saldoTitulo: number) =>
       novaChave('compensar'),
     ),
   );
+const aprovar = (id: number) =>
+  gravar(() => aprovarAdiantamento(id, { observacao: '' }, novaChave('aprovar-adiantamento')));
+const pagar = (id: number) =>
+  gravar(() => pagarAdiantamento(id, { data: hoje() }, novaChave('pagar-adiantamento')));
 const devolver = (id: number) =>
   gravar(() =>
     devolverAdiantamento(
@@ -178,7 +195,8 @@ const devolver = (id: number) =>
           <th scope="col">{{ t('financeiro.adiantamentos.compensado') }}</th>
           <th scope="col">{{ t('financeiro.adiantamentos.saldo') }}</th>
           <th scope="col">{{ t('financeiro.adiantamentos.situacao') }}</th>
-          <th scope="col">{{ t('financeiro.adiantamentos.compensar') }}</th>
+          <th scope="col">{{ t('financeiro.adiantamentos.aprovacoes') }}</th>
+          <th scope="col">{{ t('financeiro.adiantamentos.acoes') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -193,7 +211,26 @@ const devolver = (id: number) =>
             <td>{{ reais(a.compensado) }}</td>
             <td>{{ reais(a.saldo) }}</td>
             <td>{{ rotuloSituacao(a.situacao) }}</td>
+            <td>{{ a.aprovacoes }}/{{ a.exigidas }}</td>
             <td>
+              <button
+                v-if="a.situacao === 'aberto' && pode('aprovarAdiantamento')"
+                type="button"
+                :disabled="gravando"
+                :data-testid="`ad-aprovar-${a.id}`"
+                @click="aprovar(a.id)"
+              >
+                {{ t('financeiro.adiantamentos.aprovar') }}
+              </button>
+              <button
+                v-if="a.situacao === 'aprovado' && pode('pagarAdiantamento')"
+                type="button"
+                :disabled="gravando"
+                :data-testid="`ad-pagar-${a.id}`"
+                @click="pagar(a.id)"
+              >
+                {{ t('financeiro.adiantamentos.pagar') }}
+              </button>
               <button
                 v-if="a.saldo > 0 && pode('compensarAdiantamento')"
                 type="button"
@@ -206,7 +243,7 @@ const devolver = (id: number) =>
             </td>
           </tr>
           <tr v-if="aberto === a.id">
-            <td colspan="10" :data-testid="`ad-painel-${a.id}`">
+            <td colspan="11" :data-testid="`ad-painel-${a.id}`">
               <p>{{ t('financeiro.adiantamentos.titulosDoCredor') }}</p>
               <ul v-if="abertos.length" data-testid="ad-titulos">
                 <li v-for="x in abertos" :key="x.id">

@@ -1,16 +1,69 @@
-// Adiantamento a fornecedor e a médico (F3.8, 07-FIN linha 67): conceder (saída na conta), compensar na baixa de um
-// título do MESMO credor com o saldo conferido aqui, e devolver o saldo que sobrou (entrada na conta). O registro nunca
-// se apaga: cada passo é um lançamento com trilha, e a situação deriva do valor, do compensado e do devolvido.
-import { centavos, type RecusaFinanceiro, recusaFin } from '@sgh/contratos/regras-financeiro';
+// Adiantamento a fornecedor e a médico (F3.8, 07-FIN linha 67). O dinheiro só sai com dois olhos, como no título a
+// pagar: quem pede registra o pedido (sem saída), a alçada aprova (faixa por valor e tipo de credor, dupla aprovação
+// acima do limite, quem pediu não aprova) e outra pessoa paga (a saída na conta; quem pediu ou aprovou não paga).
+// Depois, compensar na baixa de um título do MESMO credor (o título também precisa estar aprovado na alçada) e devolver
+// o saldo que sobrou (entrada na conta). O registro nunca se apaga: cada passo é um lançamento com trilha.
+import {
+  centavos,
+  type RecusaFinanceiro,
+  recusaFin,
+  type TipoCredor,
+} from '@sgh/contratos/regras-financeiro';
 
 export const TIPOS_CREDOR_ADIANTAMENTO = ['fornecedor', 'profissional'] as const;
 export type TipoCredorAdiantamento = (typeof TIPOS_CREDOR_ADIANTAMENTO)[number];
 
-export type SituacaoAdiantamento = 'pago' | 'compensado_parcial' | 'compensado';
+export type SituacaoAdiantamento = 'aberto' | 'aprovado' | 'pago' | 'compensado_parcial' | 'compensado';
 
 export interface CredorAdiantamento {
   readonly tipo: TipoCredorAdiantamento;
   readonly id: number;
+}
+
+/**
+ * O credor de um título a pagar: fornecedor, profissional ou outro (colaborador, tributo...). O par (tipo, id) é a
+ * identidade: ids de cadastros diferentes colidem, e o título de outro tipo nunca é do credor do adiantamento.
+ */
+export interface CredorTitulo {
+  readonly tipo: TipoCredorAdiantamento | 'outro';
+  readonly id: number;
+}
+
+/** O credor do título pelas colunas: profissional, fornecedor ou outro (sem colapsar ids de cadastros diferentes). */
+export function credorDoTitulo(r: {
+  readonly profissional: number | null;
+  readonly fornecedor: number | null;
+  readonly outro: number | null;
+}): CredorTitulo {
+  if (r.profissional) return { tipo: 'profissional', id: r.profissional };
+  if (r.fornecedor) return { tipo: 'fornecedor', id: r.fornecedor };
+  return { tipo: 'outro', id: r.outro ?? 0 };
+}
+
+/** O tipo de credor da alçada (a mesma faixa do título a pagar): fornecedor F, médico M. */
+export const tipoAlcadaDoAdiantamento = (t: TipoCredorAdiantamento): TipoCredor =>
+  t === 'profissional' ? 'M' : 'F';
+
+/** Aprovar o pedido: só o pedido em aberto (as regras da alçada vêm de conferirAprovacao, as mesmas do título). */
+export function conferirPedidoEmAberto(situacao: string): RecusaFinanceiro | null {
+  return situacao === 'aberto'
+    ? null
+    : recusaFin('adiantamento-ja-aprovado', 'O adiantamento não está mais aguardando aprovação.', [
+        'adiantamento',
+      ]);
+}
+
+/** Pagar o pedido (a saída na conta): só o aprovado na alçada; a segregação vem de conferirPagamento. */
+export function conferirSaida(situacao: string): RecusaFinanceiro | null {
+  if (situacao === 'aberto')
+    return recusaFin(
+      'sem-aprovacao',
+      'O adiantamento não tem aprovação na alçada: nenhuma saída sem aprovação registrada.',
+      ['adiantamento'],
+    );
+  if (situacao !== 'aprovado')
+    return recusaFin('adiantamento-ja-pago', 'O adiantamento já foi pago.', ['adiantamento']);
+  return null;
 }
 
 export interface ConcessaoInformada {
@@ -42,7 +95,7 @@ const usavel = (s: string) => s === 'pago' || s === 'compensado_parcial';
 /** Compensar na baixa do título: mesmo credor, valor até o saldo do adiantamento e até o saldo da parcela. */
 export function conferirCompensacao(
   a: AdiantamentoParaUso,
-  parcela: { readonly credor: CredorAdiantamento; readonly saldo: number },
+  parcela: { readonly credor: CredorTitulo; readonly saldo: number },
   valor: number,
 ): RecusaFinanceiro | null {
   if (!usavel(a.situacao))

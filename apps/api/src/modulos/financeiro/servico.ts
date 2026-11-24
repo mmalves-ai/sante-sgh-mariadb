@@ -7,9 +7,11 @@ import { createHash } from 'node:crypto';
 import {
   type AprovarTituloEntrada,
   type AtribuirCreditoEntrada,
+  type AprovarAdiantamentoEntrada,
   type CompensarAdiantamentoEntrada,
   type ConcederAdiantamentoEntrada,
   type DevolverAdiantamentoEntrada,
+  type PagarAdiantamentoEntrada,
   type BaixarTituloEntrada,
   type ConciliacaoResposta,
   type CreditoPendenteResposta,
@@ -588,7 +590,48 @@ export class ServicoFinanceiro {
       (x: { id: number }) => ({ tabela: 'adiantamento', id: String(x.id) }),
       (g) => g.concederAdiantamento({ ...e, usuario: s.login, contasEscopo }),
     );
-    return resultadoFin(`Adiantamento ${r.numero} concedido.`, false, { adiantamento: r.id });
+    return resultadoFin(
+      `Pedido do adiantamento ${r.numero} registrado: aguarda a aprovação na alçada e o pagamento por outra pessoa.`,
+      false,
+      { adiantamento: r.id },
+    );
+  }
+
+  async aprovarAdiantamento(s: SessaoCadastro, e: AprovarAdiantamentoEntrada): Promise<ResultadoFinanceiro> {
+    const r = await this.apoios.apoios.contasPagar.sgh(
+      comChave(s),
+      E.financeiroAdiantamentoAprovado.codigo,
+      'financeiro.contasPagar',
+      () => ({ tabela: 'adiantamento', id: String(e.adiantamento) }),
+      (g) =>
+        g.aprovarAdiantamento({
+          ...e,
+          usuario: s.login,
+          temPermissao: (p) => this.podeSessao(s, p),
+        }),
+    );
+    return resultadoFin(
+      r.aprovado
+        ? 'Adiantamento aprovado na alçada: pode ser pago (por outra pessoa).'
+        : `Primeira aprovação do adiantamento registrada: falta ${r.faltam} aprovação(ões) de outra pessoa.`,
+      false,
+      { aprovacao: r.id, ordem: r.ordem },
+    );
+  }
+
+  async pagarAdiantamento(s: SessaoCadastro, e: PagarAdiantamentoEntrada): Promise<ResultadoFinanceiro> {
+    const contasEscopo = await this.idsDoEscopo(s);
+    const r = await this.apoios.apoios.contasPagar.sgh(
+      comChave(s),
+      E.financeiroAdiantamentoPago.codigo,
+      'financeiro.contasPagar',
+      () => ({ tabela: 'adiantamento', id: String(e.adiantamento) }),
+      (g) => g.pagarAdiantamento({ ...e, usuario: s.login, contasEscopo }),
+    );
+    return resultadoFin('Adiantamento pago: a saída foi lançada na conta.', false, {
+      adiantamento: r.id,
+      movimento: r.movimento,
+    });
   }
 
   async compensarAdiantamento(

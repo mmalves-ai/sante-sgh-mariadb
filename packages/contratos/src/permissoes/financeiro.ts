@@ -67,7 +67,31 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
   p('financeiro.adiantamento.ler', 'Consultar adiantamentos a fornecedores e médicos e as compensações'),
   p(
     'financeiro.adiantamento.conceder',
-    'Conceder o adiantamento a fornecedor ou médico, compensá-lo no título e devolver o saldo',
+    'Pedir o adiantamento a fornecedor ou médico (o pedido não tira dinheiro da conta)',
+
+    { criticidade: 'sensivel', ...CONTA },
+  ),
+  p(
+    'financeiro.adiantamento.aprovar',
+    'Aprovar o pedido de adiantamento na alçada (a faixa do título a pagar; quem pediu não aprova)',
+
+    { criticidade: 'sensivel', ...CONTA },
+  ),
+  p(
+    'financeiro.adiantamento.pagar',
+    'Pagar o adiantamento aprovado (a saída na conta; quem pediu ou aprovou não paga)',
+
+    { criticidade: 'sensivel', ...CONTA },
+  ),
+  p(
+    'financeiro.adiantamento.compensar',
+    'Compensar o adiantamento na baixa de título aprovado do mesmo credor (quem lançou ou aprovou não compensa)',
+
+    { criticidade: 'sensivel', ...CONTA },
+  ),
+  p(
+    'financeiro.adiantamento.devolver',
+    'Registrar a devolução do saldo do adiantamento pelo credor (a entrada na conta)',
 
     { criticidade: 'sensivel', ...CONTA },
   ),

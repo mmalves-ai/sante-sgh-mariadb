@@ -27,9 +27,11 @@ import {
   type EscrituracaoResposta,
   esquemaAprovarTitulo,
   esquemaAtribuirCredito,
+  esquemaAprovarAdiantamento,
   esquemaCompensarAdiantamento,
   esquemaConcederAdiantamento,
   esquemaDevolverAdiantamento,
+  esquemaPagarAdiantamento,
   esquemaBaixarTitulo,
   esquemaConciliar,
   esquemaCriarTituloPagar,
@@ -217,6 +219,12 @@ export class FinanceiroController {
       vencimentoAte: q['ate'] ? dataOu(q['ate'], hoje) : null,
       credor: inteiroOuNulo(q['credor']),
       tipo: (q['tipo'] ?? '').trim() || null,
+      credorDe:
+        q['credorDe'] === 'profissional'
+          ? 'profissional'
+          : q['credorDe'] === 'fornecedor'
+            ? 'fornecedor'
+            : null,
       pagina: pagina(q['pagina']),
       hoje,
     });
@@ -363,9 +371,39 @@ export class FinanceiroController {
     return this.servico.concederAdiantamento(sessaoDe(req), corpo(esquemaConcederAdiantamento, b));
   }
 
+  @Post('pagar/adiantamentos/:id/aprovar')
+  @HttpCode(200)
+  @Permissao('financeiro.adiantamento.aprovar')
+  @AuditadoNoHandler('aprovação do adiantamento na alçada com a trilha na mesma transação')
+  aprovarAdiantamento(
+    @Param('id') id: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoFinanceiro> {
+    return this.servico.aprovarAdiantamento(
+      sessaoDe(req),
+      corpo(esquemaAprovarAdiantamento, { ...((b ?? {}) as object), adiantamento: Number(id) }),
+    );
+  }
+
+  @Post('pagar/adiantamentos/:id/pagar')
+  @HttpCode(200)
+  @Permissao('financeiro.adiantamento.pagar')
+  @AuditadoNoHandler('pagamento do adiantamento (a saída) com a trilha na mesma transação')
+  pagarAdiantamento(
+    @Param('id') id: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoFinanceiro> {
+    return this.servico.pagarAdiantamento(
+      sessaoDe(req),
+      corpo(esquemaPagarAdiantamento, { ...((b ?? {}) as object), adiantamento: Number(id) }),
+    );
+  }
+
   @Post('pagar/adiantamentos/:id/compensar')
   @HttpCode(200)
-  @Permissao('financeiro.adiantamento.conceder')
+  @Permissao('financeiro.adiantamento.compensar')
   @AuditadoNoHandler('compensação do adiantamento com a trilha na mesma transação')
   compensar(
     @Param('id') id: string,
@@ -380,7 +418,7 @@ export class FinanceiroController {
 
   @Post('pagar/adiantamentos/:id/devolver')
   @HttpCode(200)
-  @Permissao('financeiro.adiantamento.conceder')
+  @Permissao('financeiro.adiantamento.devolver')
   @AuditadoNoHandler('devolução do saldo do adiantamento com a trilha na mesma transação')
   devolver(
     @Param('id') id: string,

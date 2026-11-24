@@ -122,6 +122,10 @@ export const compensarAdiantamento = (
   corpo: { parcela: number; valor: number; data: string },
   chave: string,
 ) => gravar(`${F}/pagar/adiantamentos/${id}/compensar`, corpo, chave);
+export const aprovarAdiantamento = (id: number, corpo: { observacao: string }, chave: string) =>
+  gravar(`${F}/pagar/adiantamentos/${id}/aprovar`, corpo, chave);
+export const pagarAdiantamento = (id: number, corpo: { data: string }, chave: string) =>
+  gravar(`${F}/pagar/adiantamentos/${id}/pagar`, corpo, chave);
 export const devolverAdiantamento = (
   id: number,
   corpo: { conta: number; valor: number; data: string; motivo: string },

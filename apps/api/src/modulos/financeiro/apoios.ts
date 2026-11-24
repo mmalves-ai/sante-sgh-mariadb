@@ -22,8 +22,10 @@ export const FUNCIONALIDADES_FINANCEIRO = {
       editarAlcada: 'financeiro.parametro.editar',
       gerarRemessa: 'financeiro.remessa.gerar',
       concederAdiantamento: 'financeiro.adiantamento.conceder',
-      compensarAdiantamento: 'financeiro.adiantamento.conceder',
-      devolverAdiantamento: 'financeiro.adiantamento.conceder',
+      aprovarAdiantamento: 'financeiro.adiantamento.aprovar',
+      pagarAdiantamento: 'financeiro.adiantamento.pagar',
+      compensarAdiantamento: 'financeiro.adiantamento.compensar',
+      devolverAdiantamento: 'financeiro.adiantamento.devolver',
     },
   },
   contasReceber: {

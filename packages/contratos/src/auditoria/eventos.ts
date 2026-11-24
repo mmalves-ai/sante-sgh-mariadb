@@ -3475,7 +3475,18 @@ export const EVENTOS_AUDITAVEIS = {
   },
   financeiroAdiantamentoConcedido: {
     codigo: 'financeiro.adiantamento.concedido',
-    descricao: 'Adiantamento concedido a fornecedor ou médico, com a saída na conta bancária',
+    descricao:
+      'Pedido de adiantamento a fornecedor ou médico registrado (sem saída até a aprovação e o pagamento)',
+    legado: null,
+  },
+  financeiroAdiantamentoAprovado: {
+    codigo: 'financeiro.adiantamento.aprovado',
+    descricao: 'Pedido de adiantamento aprovado na alçada (primeira ou segunda aprovação)',
+    legado: null,
+  },
+  financeiroAdiantamentoPago: {
+    codigo: 'financeiro.adiantamento.pago',
+    descricao: 'Adiantamento aprovado pago ao credor, com a saída na conta bancária',
     legado: null,
   },
   financeiroAdiantamentoCompensado: {
