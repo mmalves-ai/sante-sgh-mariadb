@@ -127,7 +127,8 @@ async function rodar(fn: () => Promise<unknown>, ok: string): Promise<void> {
   aviso.value = '';
   try {
     await fn();
-    aviso.value = ok;
+    // A geração das móveis escreve o próprio resumo; o aviso fixo vazio não o apaga.
+    if (ok) aviso.value = ok;
     await fila.invalidateQueries({ queryKey: ['cadastro', 'calendario'] });
   } catch (e) {
     erro.value = e;

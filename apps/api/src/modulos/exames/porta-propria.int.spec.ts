@@ -18,6 +18,7 @@ import type { ContextoPortaM18 } from './apoio-gravacao.js';
 import type { PortaExame } from './porta.js';
 import { PortaExameMemoria } from './porta-memoria.js';
 import { PortaExamePropria } from './porta-propria.js';
+import { ServicoExame } from './servico.js';
 import { horaCivil, instanteCivil } from './relogio.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
@@ -769,6 +770,59 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     expect(hs.map((h) => Number(h['vagas']))).toEqual([2, 2]);
     const [g] = await ler('SELECT inclui_feriados FROM geracao_grade WHERE id = ?', [r.resultado['geracao']]);
     expect(Number(g?.['inclui_feriados'])).toBe(1);
+  });
+
+  it('02-CAD 28: a prévia da grade pula só a faixa do meio expediente do calendário (o resto do dia é gerado)', async () => {
+    // Um dia útil (segunda a sexta) sem horários desta agenda, a partir de 9 dias à frente.
+    let dia4 = '';
+    for (let k = 9; !dia4; k++) {
+      const d = horaCivil(new Date(Date.now() + k * 86_400_000)).data;
+      const s = new Date(`${d}T00:00:00Z`).getUTCDay();
+      if (s >= 1 && s <= 5) dia4 = d;
+    }
+    const semana = new Date(`${dia4}T00:00:00Z`).getUTCDay() + 1;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-28-meio-expediente' }, (e) =>
+      e.executar(
+        `INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, facultativo,
+           hora_inicio, hora_fim, criado_em)
+         VALUES ('FERIADO SINTETICO 20 C', 'estabelecimento', ?, 'data_unica', ?, FALSE, '09:00', '10:00', NOW(3))`,
+        [ids.est, dia4],
+      ),
+    );
+    expect(await porta.feriados(ctx, dia4, dia4)).toEqual([
+      expect.objectContaining({
+        data: dia4,
+        nome: 'FERIADO SINTETICO 20 C',
+        horaInicio: '09:00',
+        horaFim: '10:00',
+      }),
+    ]);
+    const { entrada } = await new ServicoExame(porta).previa(ctx, {
+      agenda: ids.agenda,
+      de: dia4,
+      ate: dia4,
+      duracaoMinutos: 20,
+      faixas: [{ semana, inicio: '08:00', fim: '11:00', intervaloInicio: null, intervaloFim: null }],
+      incluirFeriados: false,
+    });
+    expect(entrada.horarios.map((h) => h.hora)).toEqual([
+      '08:00',
+      '08:20',
+      '08:40',
+      '10:00',
+      '10:20',
+      '10:40',
+    ]);
+    // A faixa do meio expediente vira bloqueio do dia (regra do domínio): "incluir feriados" vale só para o dia inteiro.
+    const tudo = await new ServicoExame(porta).previa(ctx, {
+      agenda: ids.agenda,
+      de: dia4,
+      ate: dia4,
+      duracaoMinutos: 20,
+      faixas: [{ semana, inicio: '08:00', fim: '11:00', intervaloInicio: null, intervaloFim: null }],
+      incluirFeriados: true,
+    });
+    expect(tudo.entrada.horarios.map((h) => h.hora)).toEqual(entrada.horarios.map((h) => h.hora));
   });
 
   it('02-AGE 44: a marcação sem prontuário está ligada (só a permissão do cargo controla)', async () => {
