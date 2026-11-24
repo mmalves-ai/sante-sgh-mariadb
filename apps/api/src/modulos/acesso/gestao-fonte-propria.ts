@@ -19,8 +19,8 @@
 // limites de sessão por perfil (limite_sessao_perfil); as exceções das contas dormentes (excecao_conta_dormente); a
 // conferência do registro no conselho (conferencia_registro_conselho, sobre inscricao_conselho do profissional da conta);
 // o RH (perfil_cargo_rh, resolucao_tarefa_rh, com vínculos, histórico de cargo, férias e afastamentos lidos do RH).
-// Todas só por inclusão (linha nova), com a trilha na mesma transação. Pedidos de acesso e campanhas de recertificação:
-// tabelas existem, adaptador a escrever (pedido ao orquestrador; respondem "adaptador-pendente").
+// Todas só por inclusão (linha nova), com a trilha na mesma transação. Pedidos de acesso: pedido-acesso-propria.ts
+// (01-ADM L57). Campanhas de recertificação: tabelas existem, adaptador a escrever (respondem "adaptador-pendente").
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -52,6 +52,7 @@ import {
   type TrilhaGestao,
   type UsuarioGestao,
 } from './gestao-tipos.js';
+import { PedidoAcessoProprio } from './pedido-acesso-propria.js';
 import type { ValidarResolucaoRhMemoria } from './rh-memoria.js';
 import {
   type AfastamentoRhLido,
@@ -1757,26 +1758,37 @@ class FonteGestaoPropria implements FonteGestao {
   fecharCampanhaRecert(): Promise<never> {
     return adaptadorPendenteGestao('A campanha de recertificação');
   }
-  pedidosAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  // ── Pedido de acesso (01-ADM L57): adaptador em pedido-acesso-propria.ts ─────────────────────────
+  private readonly pedidos = new PedidoAcessoProprio(
+    (hospital, fn) => this.ler(hospital, fn),
+    (def, hospital, quem, entrada, fn) => this.gravar(def, hospital, quem, entrada, fn),
+  );
+  pedidosAcesso(...[, hospital, filtro]: Parameters<FonteGestao['pedidosAcesso']>) {
+    return this.pedidos.pedidosAcesso(hospital, filtro);
   }
-  pedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  pedidoAcesso(...[, hospital, id]: Parameters<FonteGestao['pedidoAcesso']>) {
+    return this.pedidos.pedidoAcesso(hospital, id);
   }
-  pedirAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  pedirAcesso(...[, hospital, p, t]: Parameters<FonteGestao['pedirAcesso']>) {
+    return this.pedidos.pedirAcesso(hospital, p, t);
   }
-  decidirPedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  decidirPedidoAcesso(
+    ...[, hospital, p, t, validar, conceder]: Parameters<FonteGestao['decidirPedidoAcesso']>
+  ) {
+    return this.pedidos.decidirPedidoAcesso(hospital, p, t, validar, conceder);
   }
-  concederPedidoAprovado(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  concederPedidoAprovado(...[, hospital, pedido, c]: Parameters<FonteGestao['concederPedidoAprovado']>) {
+    return this.pedidos.concederPedidoAprovado(hospital, pedido, c);
   }
-  concessaoPedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  concessaoPedidoAcesso(
+    ...[, hospital, pedido, concessao, t]: Parameters<FonteGestao['concessaoPedidoAcesso']>
+  ) {
+    return this.pedidos.concessaoPedidoAcesso(hospital, pedido, concessao, t);
   }
-  cancelarPedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  cancelarPedidoAcesso(
+    ...[, hospital, pedido, motivo, por, t]: Parameters<FonteGestao['cancelarPedidoAcesso']>
+  ) {
+    return this.pedidos.cancelarPedidoAcesso(hospital, pedido, motivo, por, t);
   }
 }
 
