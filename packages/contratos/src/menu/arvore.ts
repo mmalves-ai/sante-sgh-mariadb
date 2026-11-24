@@ -9,7 +9,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F3.7 (06-FAT L46): o item "Favorecidos e prestadores terceiros" entrou à mão (mesmo motivo); a contagem acompanha.
 // F3.5 (05-SADT linhas 4 e 7): os itens "Pedido de exames" e "Recoletas" entraram à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":411,"M":192,"P":57,"N":162};
+// F3.1 (02-CAD linha 2): o item "Campos obrigatórios do cadastro" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":412,"M":193,"P":57,"N":162};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -338,6 +339,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"cadastros.pacientes-cadastro-unico.cadastro-e-busca-de-paciente","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Cadastro e busca de paciente"],"titulo":"Cadastro e busca de paciente","selo":"M","fase":1,"rota":"/cadastros/pacientes","permissao":"cadastro.paciente.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.unificacao-de-prontuarios","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Unificação de prontuários"],"titulo":"Unificação de prontuários","selo":"P","fase":1,"rota":"/cadastros/pacientes/duplicidades","permissao":"cadastro.duplicidade.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.historico-de-alteracoes-do-cadastro","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Histórico de alterações do cadastro"],"titulo":"Histórico de alterações do cadastro","selo":"M","fase":1,"rota":"/cadastros/pacientes/historico","permissao":"cadastro.historico.ler"},
+  {"id":"cadastros.pacientes-cadastro-unico.campos-obrigatorios-do-cadastro","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Campos obrigatórios do cadastro"],"titulo":"Campos obrigatórios do cadastro","selo":"M","fase":1,"rota":"/cadastros/regras-campo","permissao":"config.parametro.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.pessoas-cpf-cnpj","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Pessoas"],"titulo":"Pessoas","selo":"M","fase":1,"rota":"/cadastros/pessoas","permissao":"cadastro.pessoa.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.mpi-da-rede-paciente-unico-entre-os-dois-hospitais","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","MPI da Rede"],"titulo":"MPI da Rede","selo":"N","fase":7,"rota":"/cadastros/pacientes/rede","permissao":"rede.mpi.ler"},
   {"id":"cadastros.profissionais.profissionais-registros-cbo-conselho-e-especialidades","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Profissionais","Profissionais, registros e especialidades"],"titulo":"Profissionais, registros e especialidades","selo":"M","fase":1,"rota":"/cadastros/profissionais","permissao":"cadastro.profissional.ler"},
