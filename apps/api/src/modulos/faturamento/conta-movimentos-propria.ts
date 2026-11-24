@@ -1,0 +1,798 @@
+// Movimentos da conta do paciente sobre o banco do cliente (F3.7, 06-FAT linhas 14, 15 e 16). Leituras pelo Leitor e
+// gravações pelo Executor (trilha, autoria e idempotência na mesma transação). As regras são do
+// @sgh/dominio-faturamento (conta/movimentos): aqui só se lê, confere pelo domínio e grava.
+// Contrato de efeito (conta-movimentos-propria.int.spec.ts):
+// - equipe: conta_hospitalar_item_participante por item (sequencial, função, grau, forma de pagamento, valor do ato pelo
+//   honorário do item); quem sai da equipe fica marcado excluído (com autor e data), quem volta é restaurado na mesma
+//   linha; a memória do item (conta_hospitalar_item_memoria, operação "alteracao") guarda a equipe calculada.
+// - kit.lancar: um conta_hospitalar_item por linha do kit (kit_cobranca_id preenchido, preço da tabela da conta ou zero
+//   com a memória "sem_preco_vigente"), a memória de cada um e o total da conta refeito.
+// - kit.cadastrar: kit_cobranca e kit_cobranca_item.
+// - transferir: transferencia_conta (número de negócio, tipo pelo domínio, valores de origem e de destino) e uma
+//   transferencia_conta_item por item; o item de origem fica "transferido" (nunca apagado) e nasce o item na conta de
+//   destino com o preço refeito pela tabela do destino (sem preço lá: o valor de origem, com a memória dizendo isso);
+//   os participantes acompanham o item; o total das duas contas é refeito.
+import {
+  calcularEquipeItem,
+  contaEditavel,
+  FORMAS_PAGAMENTO_PARTICIPANTE,
+  type FuncaoEquipe,
+  type KitCobranca,
+  lancamentoDoKit,
+  validarDefinicaoKit,
+  validarEquipeItem,
+  validarTransferencia,
+} from '@sgh/dominio-faturamento';
+import {
+  type ContextoOperacao,
+  definirOperacao,
+  type Executor,
+  type Leitor,
+  recusa,
+  type TxOperacao,
+} from '@sgh/nucleo';
+import { z } from 'zod';
+import { totalDosItens } from './operacoes.js';
+import { precoVigente, tabelasDePreco } from './preco-conta.js';
+
+type Linha = Record<string, unknown>;
+type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
+
+const n = (v: unknown) => Number(v ?? 0);
+const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+const r2 = (x: number) => Math.round(x * 100) / 100;
+const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
+const hoje = () => new Date().toISOString().slice(0, 10);
+
+function exigirValido(erros: Record<string, string>) {
+  const campos = Object.keys(erros);
+  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+}
+function estDe(ctx: ContextoOperacao): number {
+  if (ctx.estabelecimento === null)
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.', { campos: [] });
+  return ctx.estabelecimento;
+}
+
+interface ContaLida {
+  id: number;
+  versao: number;
+  estabelecimento: number;
+  numero: string;
+  situacao: string;
+  paciente: number;
+  fontePagadora: number;
+  plano: number | null;
+  tabela: number | null;
+}
+const COLUNAS_CONTA = `id, versao, estabelecimento_id, numero, situacao, paciente_id, fonte_pagadora_id,
+  plano_fonte_pagadora_id, tabela_preco_id`;
+const comoConta = (c: Linha): ContaLida => ({
+  id: n(c['id']),
+  versao: n(c['versao']),
+  estabelecimento: n(c['estabelecimento_id']),
+  numero: txt(c['numero']),
+  situacao: txt(c['situacao']),
+  paciente: n(c['paciente_id']),
+  fontePagadora: n(c['fonte_pagadora_id']),
+  plano: nn(c['plano_fonte_pagadora_id']),
+  tabela: nn(c['tabela_preco_id']),
+});
+
+/** A conta do estabelecimento da sessão (a de destino de uma transferência pode ser de outro: `qualquerEst`). */
+async function contaDo(l: Consulta, est: number | null, conta: number): Promise<ContaLida> {
+  const c = await l.uma<Linha>(
+    `SELECT ${COLUNAS_CONTA} FROM conta_hospitalar WHERE id = ? AND excluido_em IS NULL${est === null ? '' : ' AND estabelecimento_id = ?'}`,
+    est === null ? [conta] : [conta, est],
+  );
+  if (!c)
+    throw recusa('nao-encontrado', 'A conta não existe neste estabelecimento.', { campos: ['contaId'] });
+  return comoConta(c);
+}
+
+async function funcoesEquipe(l: Consulta): Promise<Map<number, FuncaoEquipe>> {
+  const fs = await l.consultar<Linha>(
+    `SELECT id, codigo, descricao, ativo, tipo_funcao, percentual_cobranca, grau_participacao_termo_terminologia_id AS grau,
+            ordem_auxiliar, ordem_apresentacao
+       FROM funcao_equipe_cobranca WHERE excluido_em IS NULL ORDER BY COALESCE(ordem_apresentacao, 1000), id`,
+    [],
+    { teto: 500 },
+  );
+  return new Map(
+    fs.map((f) => [
+      n(f['id']),
+      {
+        id: n(f['id']),
+        tipo: txt(f['tipo_funcao']),
+        ativo: Boolean(n(f['ativo'])),
+        percentual: f['percentual_cobranca'] === null ? null : n(f['percentual_cobranca']),
+        grau: nn(f['grau']),
+        ordemAuxiliar: nn(f['ordem_auxiliar']),
+        ordemApresentacao: nn(f['ordem_apresentacao']),
+        codigo: txt(f['codigo']),
+        descricao: txt(f['descricao']),
+      } as FuncaoEquipe & { codigo: string; descricao: string },
+    ]),
+  );
+}
+
+async function kitDo(
+  l: Consulta,
+  est: number,
+  id: number,
+): Promise<KitCobranca & { codigo: string; descricao: string }> {
+  const k = await l.uma<Linha>(
+    `SELECT id, codigo, descricao, ativo, modo_cobranca, item_faturavel_id, fonte_pagadora_id, plano_fonte_pagadora_id
+       FROM kit_cobranca WHERE id = ? AND excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+    [id, est],
+  );
+  if (!k) throw recusa('nao-encontrado', 'O kit não existe.', { campos: ['kitId'] });
+  const cs = await l.consultar<Linha>(
+    `SELECT item_faturavel_id, equipamento_saude_id, quantidade FROM kit_cobranca_item
+      WHERE kit_cobranca_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+    [id],
+    { teto: 500 },
+  );
+  return {
+    id,
+    codigo: txt(k['codigo']),
+    descricao: txt(k['descricao']),
+    ativo: Boolean(n(k['ativo'])),
+    modo: txt(k['modo_cobranca']) === 'fechado' ? 'fechado' : 'aberto',
+    item: nn(k['item_faturavel_id']),
+    fontePagadora: nn(k['fonte_pagadora_id']),
+    plano: nn(k['plano_fonte_pagadora_id']),
+    componentes: cs.map((c) => ({
+      item: nn(c['item_faturavel_id']),
+      equipamento: nn(c['equipamento_saude_id']),
+      quantidade: n(c['quantidade']),
+    })),
+  };
+}
+
+// ── Leitura: a visão da conta para os três movimentos ─────────────────────────────────────────────
+
+export async function movimentosContaPropria(l: Leitor, est: number, conta: number) {
+  const c = await contaDo(l, est, conta);
+  const itens = await l.consultar<Linha>(
+    `SELECT i.id, i.sequencia, i.quantidade, i.valor_total, i.valor_honorario, i.situacao, i.kit_cobranca_id,
+            f.codigo, f.descricao
+       FROM conta_hospitalar_item i JOIN item_faturavel f ON f.id = i.item_faturavel_id
+      WHERE i.conta_hospitalar_id = ? AND i.excluido_em IS NULL ORDER BY i.sequencia`,
+    [c.id],
+    { teto: 5000 },
+  );
+  const ids = itens.map((i) => n(i['id']));
+  const parts = ids.length
+    ? await l.consultar<Linha>(
+        `SELECT p.id, p.conta_hospitalar_item_id AS item, p.sequencia, p.profissional_id, p.funcao_equipe_cobranca_id AS funcao,
+                p.grau_participacao_termo_terminologia_id AS grau, p.forma_pagamento, p.valor_ato, pf.nome
+           FROM conta_hospitalar_item_participante p
+           JOIN profissional pr ON pr.id = p.profissional_id JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+          WHERE p.conta_hospitalar_item_id IN (${lista(ids.length)}) AND p.excluido_em IS NULL ORDER BY p.sequencia`,
+        ids,
+        { teto: 20000 },
+      )
+    : [];
+  const funcoes = [...(await funcoesEquipe(l)).values()].filter((f) => f.ativo) as (FuncaoEquipe & {
+    codigo: string;
+    descricao: string;
+  })[];
+  const kits = await l.consultar<Linha>(
+    `SELECT id, codigo, descricao, modo_cobranca FROM kit_cobranca
+      WHERE ativo = TRUE AND excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
+        AND (fonte_pagadora_id IS NULL OR fonte_pagadora_id = ?)
+        AND (plano_fonte_pagadora_id IS NULL OR plano_fonte_pagadora_id <=> ?) ORDER BY descricao`,
+    [est, c.fontePagadora, c.plano],
+    { teto: 1000 },
+  );
+  // As contas de destino: as outras contas do mesmo paciente, abertas para lançamento (qualquer estabelecimento).
+  const destinos = await l.consultar<Linha>(
+    `SELECT c.id, c.numero, c.situacao, c.estabelecimento_id, fp.nome AS fonte
+       FROM conta_hospitalar c JOIN fonte_pagadora fp ON fp.id = c.fonte_pagadora_id
+      WHERE c.paciente_id = ? AND c.id <> ? AND c.excluido_em IS NULL ORDER BY c.id DESC`,
+    [c.paciente, c.id],
+    { teto: 200 },
+  );
+  const transferencias = await l.consultar<Linha>(
+    `SELECT t.id, t.numero, t.tipo, t.conta_origem_id, t.conta_destino_id, t.motivo, t.transferido_em,
+            t.valor_total_origem, t.valor_total_destino, t.situacao,
+            (SELECT COUNT(*) FROM transferencia_conta_item ti WHERE ti.transferencia_conta_id = t.id) AS itens
+       FROM transferencia_conta t WHERE (t.conta_origem_id = ? OR t.conta_destino_id = ?) AND t.excluido_em IS NULL
+      ORDER BY t.id DESC`,
+    [c.id, c.id],
+    { teto: 500 },
+  );
+  return {
+    contaId: c.id,
+    numero: c.numero,
+    situacao: c.situacao,
+    editavel: contaEditavel(c.situacao),
+    itens: itens.map((i) => ({
+      id: n(i['id']),
+      sequencia: n(i['sequencia']),
+      codigo: txt(i['codigo']),
+      descricao: txt(i['descricao']),
+      quantidade: n(i['quantidade']),
+      valorTotal: n(i['valor_total']),
+      honorario: n(i['valor_honorario']),
+      situacao: txt(i['situacao']),
+      kitId: nn(i['kit_cobranca_id']),
+      equipe: parts
+        .filter((p) => n(p['item']) === n(i['id']))
+        .map((p) => ({
+          sequencia: n(p['sequencia']),
+          profissionalId: n(p['profissional_id']),
+          nome: txt(p['nome']),
+          funcaoId: n(p['funcao']),
+          grauId: nn(p['grau']),
+          formaPagamento: txt(p['forma_pagamento']),
+          valorAto: n(p['valor_ato']),
+        })),
+    })),
+    funcoes: funcoes.map((f) => ({
+      id: f.id,
+      codigo: f.codigo,
+      descricao: f.descricao,
+      tipo: f.tipo,
+      percentual: f.percentual,
+    })),
+    kits: kits.map((k) => ({
+      id: n(k['id']),
+      codigo: txt(k['codigo']),
+      descricao: txt(k['descricao']),
+      modo: txt(k['modo_cobranca']),
+    })),
+    destinos: destinos.map((d) => ({
+      id: n(d['id']),
+      numero: txt(d['numero']),
+      situacao: txt(d['situacao']),
+      fonte: txt(d['fonte']),
+      outroEstabelecimento: n(d['estabelecimento_id']) !== est,
+      aberta: contaEditavel(txt(d['situacao'])),
+    })),
+    transferencias: transferencias.map((t) => ({
+      id: n(t['id']),
+      numero: n(t['numero']),
+      tipo: txt(t['tipo']),
+      saiu: n(t['conta_origem_id']) === c.id,
+      outraConta: n(t['conta_origem_id']) === c.id ? n(t['conta_destino_id']) : n(t['conta_origem_id']),
+      motivo: txt(t['motivo']),
+      em:
+        t['transferido_em'] instanceof Date
+          ? (t['transferido_em'] as Date).toISOString()
+          : txt(t['transferido_em']),
+      valorOrigem: n(t['valor_total_origem']),
+      valorDestino: n(t['valor_total_destino']),
+      situacao: txt(t['situacao']),
+      itens: n(t['itens']),
+    })),
+  };
+}
+
+// ── Linha 15: equipe do item ──────────────────────────────────────────────────────────────────────
+
+const id = z.number().int().positive();
+export const esquemaEquipe = z.object({
+  itemId: id,
+  participantes: z
+    .array(
+      z.object({
+        profissionalId: id,
+        funcaoId: id,
+        grauId: id.nullable().default(null),
+        percentual: z.number().min(0).max(100).nullable().default(null),
+        formaPagamento: z.enum(FORMAS_PAGAMENTO_PARTICIPANTE).default('via_hospital'),
+      }),
+    )
+    .max(30),
+});
+
+async function itemDaConta(tx: TxOperacao, est: number, item: number) {
+  const i = await tx.uma<Linha>(
+    `SELECT i.id, i.versao, i.conta_hospitalar_id, i.situacao, i.valor_honorario, i.valor_total
+       FROM conta_hospitalar_item i JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id
+      WHERE i.id = ? AND c.estabelecimento_id = ? AND i.excluido_em IS NULL`,
+    [item, est],
+  );
+  if (!i) throw recusa('nao-encontrado', 'O item não existe nesta conta.', { campos: ['itemId'] });
+  return i;
+}
+
+export const opGravarEquipe = definirOperacao({
+  nome: 'faturamento.gravar-equipe-item',
+  tabelas: ['conta_hospitalar_item_participante', 'conta_hospitalar_item_memoria'],
+  entrada: esquemaEquipe,
+  async gravar(tx, e, ctx) {
+    const est = estDe(ctx);
+    const i = await itemDaConta(tx, est, e.itemId);
+    const c = await contaDo(tx, est, n(i['conta_hospitalar_id']));
+    if (!contaEditavel(c.situacao))
+      throw recusa('conta-fechada', 'A conta não está aberta: reabra-a para mudar a equipe.', { campos: [] });
+    if (['estornado', 'transferido'].includes(txt(i['situacao'])))
+      throw recusa('item-inativo', 'O item foi estornado ou transferido: a equipe não muda.', {
+        campos: ['itemId'],
+      });
+    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar_item WHERE id = ?', [e.itemId]);
+    const funcoes = await funcoesEquipe(tx);
+    const informados = e.participantes.map((p) => ({
+      profissional: p.profissionalId,
+      funcao: p.funcaoId,
+      grau: p.grauId,
+      percentual: p.percentual,
+      formaPagamento: p.formaPagamento,
+    }));
+    exigirValido(validarEquipeItem(informados, funcoes));
+    const profs = [...new Set(informados.map((p) => p.profissional))];
+    if (profs.length) {
+      const achados = await tx.consultar<Linha>(
+        `SELECT id FROM profissional WHERE id IN (${lista(profs.length)}) AND excluido_em IS NULL`,
+        profs,
+        { teto: profs.length },
+      );
+      if (achados.length !== profs.length)
+        throw recusa('referencia-inexistente', 'Há profissional que não existe.', {
+          campos: ['participantes'],
+        });
+    }
+    const calc = calcularEquipeItem(informados, funcoes, n(i['valor_honorario']));
+    const atuais = await tx.consultar<Linha>(
+      `SELECT id, versao, sequencia, profissional_id, funcao_equipe_cobranca_id, excluido_em
+         FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ?`,
+      [e.itemId],
+      { teto: 500 },
+    );
+    const chave = (p: number, f: number) => `${p}:${f}`;
+    const chaveDe = (a: Linha) => chave(n(a['profissional_id']), n(a['funcao_equipe_cobranca_id']));
+    const desejado = new Map(calc.map((p) => [chave(p.profissional, p.funcao), p]));
+    const agora = new Date();
+    // A unicidade (item, sequência) vale também para as linhas retiradas: primeiro todas sobem para uma faixa livre,
+    // depois a equipe recebe 1..n na ordem calculada e as retiradas, n+1 em diante (nada se apaga).
+    // A faixa livre fica acima de qualquer número final (equipe nova + todas as linhas já gravadas).
+    const topo =
+      Math.max(
+        atuais.reduce((m, a) => Math.max(m, n(a['sequencia'])), 0),
+        atuais.length + calc.length,
+      ) + 1;
+    const versoes = new Map<number, number>();
+    let k = 0;
+    for (const a of atuais) {
+      const fora = !desejado.has(chaveDe(a));
+      versoes.set(
+        n(a['id']),
+        await tx.alterar('conta_hospitalar_item_participante', n(a['id']), n(a['versao']), {
+          sequencia: topo + k++,
+          ...(fora && a['excluido_em'] === null ? { excluido_em: agora, excluido_por: ctx.usuario } : {}),
+        }),
+      );
+    }
+    for (const p of calc) {
+      const a = atuais.find((x) => chaveDe(x) === chave(p.profissional, p.funcao));
+      const valores = {
+        sequencia: p.sequencia,
+        grau_participacao_termo_terminologia_id: p.grau,
+        forma_pagamento: p.formaPagamento,
+        valor_ato: p.valorAto,
+        valor_liquido: p.valorAto,
+        paciente_paga: p.formaPagamento === 'paciente',
+      };
+      if (a)
+        versoes.set(
+          n(a['id']),
+          await tx.alterar('conta_hospitalar_item_participante', n(a['id']), versoes.get(n(a['id']))!, {
+            ...valores,
+            excluido_em: null,
+            excluido_por: null,
+          }),
+        );
+      else
+        await tx.incluir('conta_hospitalar_item_participante', {
+          conta_hospitalar_item_id: e.itemId,
+          profissional_id: p.profissional,
+          funcao_equipe_cobranca_id: p.funcao,
+          ...valores,
+        });
+    }
+    let fora = calc.length;
+    for (const a of atuais)
+      if (!desejado.has(chaveDe(a)))
+        await tx.alterar('conta_hospitalar_item_participante', n(a['id']), versoes.get(n(a['id']))!, {
+          sequencia: ++fora,
+        });
+    await tx.incluir('conta_hospitalar_item_memoria', {
+      conta_hospitalar_item_id: e.itemId,
+      valor_total_calculado: n(i['valor_total']),
+      preco_manual: 0,
+      operacao: 'alteracao',
+      dados: JSON.stringify({ origem: 'equipe', honorario: n(i['valor_honorario']), equipe: calc }),
+      ocorrido_em: agora,
+      usuario_id: ctx.usuario,
+    });
+    return { itemId: e.itemId, participantes: calc.length };
+  },
+  alvo: (e) => ({ tabela: 'conta_hospitalar_item', id: e.itemId }),
+});
+
+// ── Linha 16: kit de cobrança ─────────────────────────────────────────────────────────────────────
+
+const dataZ = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data AAAA-MM-DD.');
+export const esquemaLancarKit = z.object({
+  contaId: id,
+  kitId: id,
+  vezes: z.number().positive().max(1000).default(1),
+  data: dataZ.optional(),
+});
+
+export const opLancarKit = definirOperacao({
+  nome: 'faturamento.lancar-kit',
+  tabelas: ['conta_hospitalar_item', 'conta_hospitalar_item_memoria', 'conta_hospitalar'],
+  entrada: esquemaLancarKit,
+  async gravar(tx, e, ctx) {
+    const est = estDe(ctx);
+    const c = await contaDo(tx, est, e.contaId);
+    if (!contaEditavel(c.situacao))
+      throw recusa('conta-fechada', 'A conta não está aberta: o kit não entra nela.', { campos: [] });
+    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [c.id]);
+    const kit = await kitDo(tx, est, e.kitId);
+    const r = lancamentoDoKit(kit, { fontePagadora: c.fontePagadora, plano: c.plano }, e.vezes);
+    exigirValido(r.erros);
+    const ids = [...new Set(r.linhas.map((x) => x.item))];
+    const ativos = new Map(
+      (
+        await tx.consultar<Linha>(
+          `SELECT id, grupo_faturamento_id FROM item_faturavel WHERE id IN (${lista(ids.length)}) AND situacao = 'ativo' AND excluido_em IS NULL`,
+          ids,
+          { teto: ids.length },
+        )
+      ).map((x) => [n(x['id']), nn(x['grupo_faturamento_id'])] as const),
+    );
+    if (ativos.size !== ids.length)
+      throw recusa('item-inativo', 'O kit tem item inativo ou fora do catálogo: ajuste o kit.', {
+        campos: ['kitId'],
+      });
+    const data = e.data ?? hoje();
+    const tabelas = await tabelasDePreco(tx, est, c.fontePagadora, c.plano, c.tabela);
+    const agora = new Date();
+    const lancados: number[] = [];
+    let semPreco = 0;
+    for (const linha of r.linhas) {
+      const preco = await precoVigente(tx, tabelas, linha.item, data);
+      if (!preco) semPreco += 1;
+      const unitario = preco?.unitario ?? 0;
+      const seq = await tx.uma<Linha>(
+        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+        [c.id],
+      );
+      const item = await tx.incluir('conta_hospitalar_item', {
+        conta_hospitalar_id: c.id,
+        sequencia: n(seq?.['s']),
+        item_faturavel_id: linha.item,
+        grupo_faturamento_id: ativos.get(linha.item) ?? null,
+        kit_cobranca_id: kit.id,
+        realizado_em: agora,
+        quantidade: linha.quantidade,
+        valor_unitario: unitario,
+        valor_honorario: preco ? r2(preco.honorario * linha.quantidade) : 0,
+        valor_custo_operacional: preco ? r2(preco.custoOperacional * linha.quantidade) : 0,
+        valor_filme: preco ? r2(preco.filme * linha.quantidade) : 0,
+        valor_total: r2(unitario * linha.quantidade),
+        tipo_valorizacao: preco ? 'tabela' : 'manual',
+        situacao: 'lancado',
+      });
+      await tx.incluir('conta_hospitalar_item_memoria', {
+        conta_hospitalar_item_id: item,
+        tabela_preco_id: preco?.tabela ?? null,
+        valor_unitario_calculado: unitario,
+        valor_total_calculado: r2(unitario * linha.quantidade),
+        preco_manual: 0,
+        operacao: 'inclusao',
+        dados: JSON.stringify({
+          origem: 'kit',
+          kit: kit.codigo,
+          modo: kit.modo,
+          papel: linha.papel,
+          vezes: e.vezes,
+          origemPreco: preco ? 'tabela' : 'sem_preco_vigente',
+          vigencia: preco?.vigencia ?? null,
+        }),
+        ocorrido_em: agora,
+        usuario_id: ctx.usuario,
+      });
+      lancados.push(item);
+    }
+    await tx.alterar('conta_hospitalar', c.id, c.versao, await totalDosItens(tx, c.id));
+    return { contaId: c.id, itens: lancados, semPreco, avisos: r.avisos };
+  },
+  alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.contaId }),
+});
+
+export const esquemaCadastrarKit = z.object({
+  codigo: z.string().trim().max(30),
+  descricao: z.string().trim().max(150),
+  tipoKit: z.enum(['procedimento', 'sala', 'cota', 'outro']).default('procedimento'),
+  modo: z.enum(['aberto', 'fechado']).default('aberto'),
+  itemId: id.nullable().default(null),
+  fontePagadoraId: id.nullable().default(null),
+  planoId: id.nullable().default(null),
+  todosEstabelecimentos: z.boolean().default(false),
+  componentes: z
+    .array(
+      z.object({
+        itemId: id.nullable().default(null),
+        equipamentoId: id.nullable().default(null),
+        quantidade: z.number(),
+        inclusoNoPacote: z.boolean().default(false),
+      }),
+    )
+    .max(200),
+});
+
+export const opCadastrarKit = definirOperacao({
+  nome: 'faturamento.cadastrar-kit',
+  tabelas: ['kit_cobranca', 'kit_cobranca_item'],
+  entrada: esquemaCadastrarKit,
+  async gravar(tx, e, ctx) {
+    const est = estDe(ctx);
+    exigirValido(
+      validarDefinicaoKit({
+        codigo: e.codigo,
+        descricao: e.descricao,
+        modo: e.modo,
+        item: e.itemId,
+        componentes: e.componentes.map((c) => ({
+          item: c.itemId,
+          equipamento: c.equipamentoId,
+          quantidade: c.quantidade,
+        })),
+      }),
+    );
+    if (await tx.uma('SELECT id FROM kit_cobranca WHERE codigo = ?', [e.codigo]))
+      throw recusa('codigo-repetido', 'Já existe kit com este código.', { campos: ['codigo'] });
+    const kit = await tx.incluir('kit_cobranca', {
+      estabelecimento_id: e.todosEstabelecimentos ? null : est,
+      codigo: e.codigo,
+      descricao: e.descricao,
+      tipo_kit: e.tipoKit,
+      item_faturavel_id: e.itemId,
+      fonte_pagadora_id: e.fontePagadoraId,
+      plano_fonte_pagadora_id: e.planoId,
+      modo_cobranca: e.modo,
+      ativo: true,
+    });
+    let s = 0;
+    for (const c of e.componentes)
+      await tx.incluir('kit_cobranca_item', {
+        kit_cobranca_id: kit,
+        sequencia: ++s,
+        item_faturavel_id: c.itemId,
+        equipamento_saude_id: c.equipamentoId,
+        quantidade: c.quantidade,
+        incluso_no_pacote: c.inclusoNoPacote,
+      });
+    return { id: kit, componentes: s };
+  },
+  alvo: (_e, r) => ({ tabela: 'kit_cobranca', id: r.id }),
+});
+
+// ── Linha 14: transferência de itens entre contas ─────────────────────────────────────────────────
+
+export const esquemaTransferir = z.object({
+  contaOrigemId: id,
+  contaDestinoId: id,
+  itens: z.array(id).max(2000),
+  motivo: z.string().trim().max(500),
+  observacao: z.string().trim().max(1000).nullable().default(null),
+});
+
+export const opTransferir = definirOperacao({
+  nome: 'faturamento.transferir-itens-conta',
+  tabelas: [
+    'transferencia_conta',
+    'transferencia_conta_item',
+    'conta_hospitalar_item',
+    'conta_hospitalar_item_participante',
+    'conta_hospitalar_item_memoria',
+    'conta_hospitalar',
+  ],
+  entrada: esquemaTransferir,
+  async gravar(tx, e, ctx) {
+    const est = estDe(ctx);
+    if (ctx.usuario === null)
+      throw recusa('sem-usuario', 'A transferência exige o usuário da sessão (autor).', { campos: [] });
+    // Trava as duas contas na ordem do id (sem impasse com outra transferência no sentido contrário).
+    for (const x of [e.contaOrigemId, e.contaDestinoId].sort((a, b) => a - b))
+      await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [x]);
+    const origem = await contaDo(tx, est, e.contaOrigemId);
+    const destino = await contaDo(tx, null, e.contaDestinoId);
+    const itens = e.itens.length
+      ? await tx.consultar<Linha>(
+          `SELECT * FROM conta_hospitalar_item WHERE id IN (${lista(e.itens.length)}) AND excluido_em IS NULL`,
+          e.itens,
+          { teto: e.itens.length },
+        )
+      : [];
+    const comoConta = (c: ContaLida) => ({
+      id: c.id,
+      situacao: c.situacao,
+      estabelecimento: c.estabelecimento,
+      fontePagadora: c.fontePagadora,
+      paciente: c.paciente,
+    });
+    const v = validarTransferencia(
+      comoConta(origem),
+      comoConta(destino),
+      itens.map((i) => ({
+        id: n(i['id']),
+        conta: n(i['conta_hospitalar_id']),
+        situacao: txt(i['situacao']),
+      })),
+      e.itens,
+      e.motivo,
+    );
+    exigirValido(v.erros);
+    const agora = new Date();
+    const numero = await tx.proximoNumero('transferencia_conta');
+    const tabelasDestino = await tabelasDePreco(
+      tx,
+      destino.estabelecimento,
+      destino.fontePagadora,
+      destino.plano,
+      destino.tabela,
+    );
+    const transf = await tx.incluir('transferencia_conta', {
+      estabelecimento_id: est,
+      numero: numero.valor,
+      tipo: v.tipo,
+      conta_origem_id: origem.id,
+      conta_destino_id: destino.id,
+      fonte_pagadora_origem_id: origem.fontePagadora,
+      fonte_pagadora_destino_id: destino.fontePagadora,
+      estabelecimento_destino_id: v.tipo === 'estabelecimento' ? destino.estabelecimento : null,
+      motivo: e.motivo,
+      observacao: e.observacao,
+      transferido_em: agora,
+      usuario_id: ctx.usuario,
+      situacao: 'efetivada',
+    });
+    let totalOrigem = 0;
+    let totalDestino = 0;
+    let s = 0;
+    let semPreco = 0;
+    for (const idItem of e.itens) {
+      const i = itens.find((x) => n(x['id']) === idItem)!;
+      const qtd = n(i['quantidade']);
+      const realizado =
+        i['realizado_em'] instanceof Date ? (i['realizado_em'] as Date) : new Date(txt(i['realizado_em']));
+      const dia = Number.isNaN(realizado.getTime()) ? hoje() : realizado.toISOString().slice(0, 10);
+      const preco = await precoVigente(tx, tabelasDestino, n(i['item_faturavel_id']), dia);
+      if (!preco) semPreco += 1;
+      const unitario = preco?.unitario ?? n(i['valor_unitario']);
+      const valorDestino = r2(unitario * qtd);
+      totalOrigem += n(i['valor_total']);
+      totalDestino += valorDestino;
+      const seq = await tx.uma<Linha>(
+        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+        [destino.id],
+      );
+      const novo = await tx.incluir('conta_hospitalar_item', {
+        conta_hospitalar_id: destino.id,
+        sequencia: n(seq?.['s']),
+        item_faturavel_id: i['item_faturavel_id'],
+        grupo_faturamento_id: i['grupo_faturamento_id'],
+        tipo_lancamento_id: i['tipo_lancamento_id'],
+        item_pai_id: null,
+        realizado_em: i['realizado_em'],
+        realizado_fim_em: i['realizado_fim_em'],
+        quantidade: qtd,
+        valor_unitario: unitario,
+        valor_honorario: preco ? r2(preco.honorario * qtd) : i['valor_honorario'],
+        valor_custo_operacional: preco ? r2(preco.custoOperacional * qtd) : i['valor_custo_operacional'],
+        valor_filme: preco ? r2(preco.filme * qtd) : i['valor_filme'],
+        valor_total: valorDestino,
+        executante_profissional_id: i['executante_profissional_id'],
+        solicitante_profissional_id: i['solicitante_profissional_id'],
+        funcao_equipe_cobranca_id: i['funcao_equipe_cobranca_id'] ?? null,
+        setor_funcional_id: v.tipo === 'estabelecimento' ? null : i['setor_funcional_id'],
+        produtor_setor_funcional_id: v.tipo === 'estabelecimento' ? null : i['produtor_setor_funcional_id'],
+        kit_cobranca_id: i['kit_cobranca_id'],
+        numero_lote: i['numero_lote'],
+        numero_serie: i['numero_serie'],
+        registro_anvisa: i['registro_anvisa'],
+        tipo_valorizacao: preco ? 'tabela' : 'manual',
+        situacao: 'lancado',
+        observacao: `Transferido da conta ${origem.numero} (transferência ${numero.formatado}).`.slice(
+          0,
+          2000,
+        ),
+      });
+      await tx.alterar('conta_hospitalar_item', idItem, n(i['versao']), { situacao: 'transferido' });
+      await tx.incluir('transferencia_conta_item', {
+        transferencia_conta_id: transf,
+        sequencia: ++s,
+        item_origem_id: idItem,
+        item_destino_id: novo,
+        item_faturavel_id: i['item_faturavel_id'],
+        quantidade: qtd,
+        valor_origem: n(i['valor_total']),
+        valor_recalculado: valorDestino,
+      });
+      await tx.incluir('conta_hospitalar_item_memoria', {
+        conta_hospitalar_item_id: novo,
+        tabela_preco_id: preco?.tabela ?? null,
+        valor_unitario_calculado: unitario,
+        valor_total_calculado: valorDestino,
+        preco_manual: 0,
+        operacao: 'inclusao',
+        dados: JSON.stringify({
+          origem: 'transferencia',
+          transferencia: numero.formatado,
+          itemOrigem: idItem,
+          valorOrigem: n(i['valor_total']),
+          origemPreco: preco ? 'tabela_destino' : 'valor_origem_sem_preco_destino',
+          vigencia: preco?.vigencia ?? null,
+        }),
+        ocorrido_em: agora,
+        usuario_id: ctx.usuario,
+      });
+      // A equipe acompanha o item (a do item de origem fica onde estava, com ele).
+      const equipe = await tx.consultar<Linha>(
+        `SELECT * FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL`,
+        [idItem],
+        { teto: 100 },
+      );
+      for (const p of equipe)
+        await tx.incluir('conta_hospitalar_item_participante', {
+          conta_hospitalar_item_id: novo,
+          sequencia: p['sequencia'],
+          profissional_id: p['profissional_id'],
+          funcao_equipe_cobranca_id: p['funcao_equipe_cobranca_id'],
+          grau_participacao_termo_terminologia_id: p['grau_participacao_termo_terminologia_id'],
+          ocupacao_cbo_id: p['ocupacao_cbo_id'],
+          recebedor_prestador_terceiro_id: p['recebedor_prestador_terceiro_id'],
+          forma_pagamento: p['forma_pagamento'],
+          valor_ato: p['valor_ato'],
+          valor_liquido: p['valor_liquido'],
+          paciente_paga: p['paciente_paga'],
+        });
+    }
+    const vo = await tx.uma<Linha>('SELECT versao FROM conta_hospitalar WHERE id = ?', [origem.id]);
+    await tx.alterar('conta_hospitalar', origem.id, n(vo?.['versao']), await totalDosItens(tx, origem.id));
+    const vd = await tx.uma<Linha>('SELECT versao FROM conta_hospitalar WHERE id = ?', [destino.id]);
+    await tx.alterar('conta_hospitalar', destino.id, n(vd?.['versao']), await totalDosItens(tx, destino.id));
+    await tx.alterar('transferencia_conta', transf, 1, {
+      valor_total_origem: r2(totalOrigem),
+      valor_total_destino: r2(totalDestino),
+    });
+    return {
+      id: transf,
+      numero: numero.formatado,
+      tipo: v.tipo,
+      itens: s,
+      valorOrigem: r2(totalOrigem),
+      valorDestino: r2(totalDestino),
+      semPreco,
+    };
+  },
+  alvo: (_e, r) => ({ tabela: 'transferencia_conta', id: r.id }),
+  trilha: (e) => ({ motivo: e.motivo }),
+});
+
+export const OPERACOES_MOVIMENTOS = {
+  equipe: opGravarEquipe,
+  'kit.lancar': opLancarKit,
+  'kit.cadastrar': opCadastrarKit,
+  transferir: opTransferir,
+} as const;
+export type NomeOperacaoMovimentos = keyof typeof OPERACOES_MOVIMENTOS;
+
+export async function gravarMovimentos(
+  executor: Executor,
+  nome: NomeOperacaoMovimentos,
+  ctx: ContextoOperacao,
+  entrada: unknown,
+): Promise<Record<string, unknown>> {
+  const op = OPERACOES_MOVIMENTOS[nome] as Parameters<Executor['executar']>[0];
+  const r = await executor.executar(op, ctx.cliente, entrada, ctx);
+  return r.resultado as Record<string, unknown>;
+}

@@ -10,6 +10,11 @@ import {
   SERVICO_COMPLEMENTOS_CONTA,
   ServicoComplementosConta,
 } from './conta-complementos.controller.js';
+import {
+  MovimentosContaController,
+  SERVICO_MOVIMENTOS_CONTA,
+  ServicoMovimentosConta,
+} from './conta-movimentos.controller.js';
 import { FaturamentoController } from './faturamento.controller.js';
 import { PORTA_FATURAMENTO, type PortaFaturamento, portaFaturamentoIndisponivel } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
@@ -36,7 +41,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
   const porta = opcoes.porta ?? portaDoFaturamento(ctx);
   return {
     module: ModuloFaturamento,
-    controllers: [FaturamentoController, ComplementosContaController],
+    controllers: [FaturamentoController, ComplementosContaController, MovimentosContaController],
     providers: [
       { provide: PORTA_FATURAMENTO, useValue: porta },
       // 06-FAT linhas 10 e 12: período da conta parcial, segurado na conta e campo adicional da guia (banco próprio).
@@ -45,6 +50,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoComplementosConta(ctx.nucleo)
+            : null,
+      },
+      // 06-FAT linhas 14, 15 e 16: equipe do item, kit de cobrança e transferência de itens entre contas (banco próprio).
+      {
+        provide: SERVICO_MOVIMENTOS_CONTA,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoMovimentosConta(ctx.nucleo)
             : null,
       },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.
