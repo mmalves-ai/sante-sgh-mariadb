@@ -65,4 +65,11 @@ export const rotasTiss: RouteRecordRaw[] = [
     component: () => import('./telas/PainelGlosasTela.vue'),
     meta: { permissao: 'relatorio.glosa.ler' },
   },
+  // F3.9 (08-INTG L128 (31)): elegibilidade do beneficiário, visão por paciente.
+  {
+    path: '/faturamento/elegibilidade',
+    name: 'tiss.elegibilidade',
+    component: () => import('./telas/ElegibilidadeTela.vue'),
+    meta: { permissao: 'atendimento.atendimento.ler' },
+  },
 ];

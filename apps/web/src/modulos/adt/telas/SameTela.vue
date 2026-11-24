@@ -176,6 +176,8 @@ const cobrar = (contaId: number, movimento: number) =>
     <p>{{ t('adt.same.texto') }}</p>
     <p>
       <RouterLink to="/same/guarda" data-testid="same-ir-guarda">{{ t('adt.sameGuarda.titulo') }}</RouterLink>
+      ·
+      <RouterLink to="/same/tramite" data-testid="same-ir-tramite">{{ t('sameTramite.titulo') }}</RouterLink>
     </p>
     <AvisoAdt :motivo="aviso" />
     <form class="filtros" role="search" @submit.prevent="ler">
