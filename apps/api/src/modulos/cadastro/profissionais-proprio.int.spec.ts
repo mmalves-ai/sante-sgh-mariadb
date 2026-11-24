@@ -2,8 +2,13 @@
 // f22_o1, a massa do cadastro). Profissional SINTÉTICO (marca PROFPROPRIO, CPF de dígito calculado), apagado no fim.
 // Contrato de efeito: cadastrar (pessoa, profissional, inscrição principal, ocupação, credenciamento), alterar pela
 // versão (pessoa e profissional; versão velha 409), registro novo e repetido, especialidade pelo registro,
-// descredenciar (vigência fechada, nunca apagada), inativar e reativar (registros e situação), excluir por engano
-// (excluido_em) e as pendências de modelo (lotação e login: 501). SGH_NUCLEO_SEM_BANCO=1 pula.
+// descredenciar (vigência fechada, nunca apagada) e credenciar de novo no mesmo dia (a mesma vigência reabre), alterar o
+// registro à mão (a marca da inativação sai), inativar e reativar (só o que a inativação desligou, com situação, data e
+// motivo lidos do banco e a trilha com o motivo), retrato em profissional_versao (historicoProfissional), registro
+// repetido entre profissionais, recusa da exclusão com login ligado (histórico do vínculo do usuário), excluir o registro
+// principal (o próximo vira principal) e o profissional por engano (excluido_em), recadastro do mesmo CPF (a mesma linha
+// volta), CPF de pessoa excluída (recusa própria, sem 500) e as pendências de modelo (lotação e login: 501).
+// SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -44,7 +49,10 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
   let cbo = 0;
   let sigla = '';
   const cpf = cpfSintetico(String(100_000_000 + Math.floor(Math.random() * 800_000_000)));
+  const cpf2 = cpfSintetico(String(100_000_000 + Math.floor(Math.random() * 800_000_000)));
+  const cpf3 = cpfSintetico(String(100_000_000 + Math.floor(Math.random() * 800_000_000)));
   const numero = 700_000 + Math.floor(Math.random() * 99_999);
+  const VIGENCIA_LOGIN = '2001-01-01';
 
   const ler = <T>(fn: (l: Parameters<Parameters<NucleoProprio['lerSomente']>[1]>[0]) => Promise<T>) =>
     nucleo.lerSomente({ cliente: CLIENTE_F22, correlacao: 'prof-proprio' }, fn);
@@ -59,7 +67,15 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'prof-proprio-limpa' }, async (e) => {
       const prof = `SELECT pr.id FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id WHERE pf.nome LIKE '%${M}%'`;
-      for (const t of ['profissional_fonte_pagadora', 'profissional_especialidade', 'profissional_ocupacao'])
+      await e.executar(
+        `DELETE FROM usuario_vinculo_profissional WHERE vigencia_inicio = '${VIGENCIA_LOGIN}' AND profissional_id IN (${prof})`,
+      );
+      for (const t of [
+        'profissional_fonte_pagadora',
+        'profissional_especialidade',
+        'profissional_ocupacao',
+        'profissional_versao',
+      ])
         await e.executar(`DELETE FROM ${t} WHERE profissional_id IN (${prof})`);
       await e.executar(`DELETE FROM inscricao_conselho WHERE profissional_id IN (${prof})`);
       await e.executar(
@@ -130,6 +146,20 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
     expect(
       (await falha(gravar('cadastro.cadastrarProfissional', { nome: `OUTRA ${M}`, cpf, registro }))).codigo,
     ).toBe('cpf-existente');
+    // O mesmo conselho, número e UF ativo em outro profissional recusa (outra pessoa, nada gravado).
+    expect(
+      (await falha(gravar('cadastro.cadastrarProfissional', { nome: `OUTRA ${M}`, cpf: cpf2, registro })))
+        .codigo,
+    ).toBe('registro-repetido');
+    expect(
+      Number(
+        (
+          await ler((l) =>
+            l.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM pessoa_fisica WHERE cpf = ?', [cpf2]),
+          )
+        )?.n,
+      ),
+    ).toBe(0);
 
     // Alterar pela versão lida: sobe a versão; a versão velha é conflito.
     const v1 = (await porta.dadosProfissional(contextoPorta(m), prof))!.versao;
@@ -141,6 +171,11 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
     const d = (await porta.dadosProfissional(contextoPorta(m), prof))!;
     expect(d).toMatchObject({ nomeMae: `MAE ${M}`, celular: '31988887777' });
     expect(d.versao).not.toBe(v1);
+    // Retrato de cada gravação em profissional_versao: o histórico mostra o valor anterior.
+    const h = await porta.historicoProfissional(contextoPorta(m), prof, 1, 10);
+    expect(h.total).toBe(2);
+    expect(h.versoes[0]!.valores).toMatchObject({ nomeMae: `MAE ${M}`, celular: '31988887777' });
+    expect(h.versoes[1]!.valores).toMatchObject({ nomeMae: null, nome: `MEDICA ${M}` });
     expect(
       (
         await falha(
@@ -202,6 +237,13 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
         )
       ).codigo,
     ).toBe('sem-alteracao');
+    const esp = await ler((l) =>
+      l.uma(
+        'SELECT inscricao_conselho_id, ativo FROM profissional_especialidade WHERE profissional_id = ? AND especialidade_medica_id = ? AND excluido_em IS NULL',
+        [prof, m.especialidade],
+      ),
+    );
+    expect([Number(esp?.['inscricao_conselho_id']), Number(esp?.['ativo'])]).toEqual([reg, 1]);
 
     // Descredenciar fecha a vigência (a linha fica); descredenciar de novo recusa.
     await gravar('cadastro.credenciarProfissional', { registro: reg, convenio: m.fonte, credenciado: false });
@@ -219,13 +261,63 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
         )
       ).codigo,
     ).toBe('sem-alteracao');
+    // Credenciar de novo no mesmo dia: a mesma vigência reabre (nenhuma linha nova).
+    await gravar('cadastro.credenciarProfissional', { registro: reg, convenio: m.fonte, credenciado: true });
+    const cred2 = await ler((l) =>
+      l.uma<{ n: unknown; abertas: unknown }>(
+        'SELECT COUNT(*) AS n, SUM(vigencia_fim IS NULL) AS abertas FROM profissional_fonte_pagadora WHERE inscricao_conselho_id = ?',
+        [reg],
+      ),
+    );
+    expect([Number(cred2?.n), Number(cred2?.abertas ?? 0)]).toEqual([1, 1]);
 
-    // Inativar: os dois registros e o profissional; de novo recusa. Reativar volta os dois.
+    // Terceiro registro inativado à mão (alterar o registro, com motivo) no mesmo dia, antes da inativação do
+    // profissional: a reativação do profissional não o devolve.
+    const reg3 = (
+      await gravar('cadastro.incluirRegistroProfissional', {
+        ...registro,
+        uf: 'RJ',
+        convenios: [],
+        profissional: prof,
+      })
+    ).resultado['registro']!;
+    const v3 = await ler((l) =>
+      l.uma<{ versao: unknown }>('SELECT versao FROM inscricao_conselho WHERE id = ?', [reg3]),
+    );
+    await gravar('cadastro.alterarRegistroProfissional', {
+      registro: reg3,
+      versao: `v${Number(v3?.versao)}`,
+      alteracoes: { ativo: false },
+      motivo: 'Inscrição cancelada no conselho (teste)',
+    });
+
+    // Inativar: os dois registros ativos e o profissional (data e motivo); de novo recusa. Reativar volta só os dois.
     const ina = await gravar('cadastro.inativarProfissional', {
       profissional: prof,
       motivo: 'Saiu do corpo clínico (teste)',
     });
     expect(ina.resultado['registros']).toBe(2);
+    const situacoes = () =>
+      ler(async (l) => ({
+        p: await l.uma<{ situacao: unknown; hoje: unknown; motivo_inativacao: unknown }>(
+          'SELECT situacao, data_inativacao = CURRENT_DATE AS hoje, motivo_inativacao FROM profissional WHERE id = ?',
+          [prof],
+        ),
+        r: (
+          await l.consultar(
+            'SELECT id, situacao, inativado_com_profissional AS marca FROM inscricao_conselho WHERE profissional_id = ? ORDER BY id',
+            [prof],
+          )
+        ).map((x) => [Number(x['id']), String(x['situacao']), Number(x['marca'])]),
+      }));
+    const s1 = await situacoes();
+    expect(s1.p).toMatchObject({ situacao: 'inativo', motivo_inativacao: 'Saiu do corpo clínico (teste)' });
+    expect(Number(s1.p?.hoje)).toBe(1);
+    expect(s1.r).toEqual([
+      [reg, 'inativa', 1],
+      [reg2, 'inativa', 1],
+      [reg3, 'inativa', 0],
+    ]);
     expect(
       (
         await falha(
@@ -238,6 +330,23 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
       motivo: 'Voltou ao corpo clínico (teste)',
     });
     expect(rea.resultado['registros']).toBe(2);
+    const s2 = await situacoes();
+    expect(s2.p).toMatchObject({ situacao: 'ativo', motivo_inativacao: null });
+    expect(s2.p?.hoje ?? null).toBeNull();
+    expect(s2.r).toEqual([
+      [reg, 'ativa', 0],
+      [reg2, 'ativa', 0],
+      [reg3, 'inativa', 0],
+    ]);
+    // Trilha com o motivo de cada operação, na mesma transação.
+    const trilha = await ler((l) =>
+      l.uma<{ n: unknown }>(
+        `SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'profissional' AND entidade_id = ?
+            AND motivo IN ('Saiu do corpo clínico (teste)', 'Voltou ao corpo clínico (teste)')`,
+        [prof],
+      ),
+    );
+    expect(Number(trilha?.n)).toBeGreaterThanOrEqual(2);
 
     // Pendências de modelo: 501.
     expect(
@@ -255,11 +364,46 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
       ).status,
     ).toBe(501);
 
-    // Excluir o registro e o profissional cadastrados por engano: excluido_em (nada some do banco).
+    // Login ligado (aqui, o histórico de um vínculo do usuário já encerrado) impede excluir, com a frase da memória.
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'prof-proprio-login' }, (e) =>
+      e.executar(
+        `INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio,
+            vigencia_fim, criado_em) VALUES (?, ?, ?, '${VIGENCIA_LOGIN}', '2001-01-31', NOW(3))`,
+        [m.usuario, m.estabelecimento, prof],
+      ),
+    );
+    expect(await porta.vinculosProfissional(contextoPorta(m), prof)).toEqual([
+      { grupo: 'Histórico do login do sistema', quantidade: 1 },
+    ]);
+    expect(
+      (
+        await falha(
+          gravar('cadastro.excluirProfissional', {
+            profissional: prof,
+            motivo: 'Cadastrado por engano (teste)',
+          }),
+        )
+      ).codigo,
+    ).toBe('profissional-com-vinculos');
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'prof-proprio-login' }, (e) =>
+      e.executar(
+        `DELETE FROM usuario_vinculo_profissional WHERE profissional_id = ? AND vigencia_inicio = '${VIGENCIA_LOGIN}'`,
+        [prof],
+      ),
+    );
+
+    // Excluir o registro principal por engano: o próximo registro ativo passa a ser o principal.
     await gravar('cadastro.excluirRegistroProfissional', {
-      registro: reg2,
+      registro: reg,
       motivo: 'Incluído por engano (teste)',
     });
+    const princ = await ler((l) =>
+      l.consultar(
+        'SELECT id FROM inscricao_conselho WHERE profissional_id = ? AND principal AND excluido_em IS NULL',
+        [prof],
+      ),
+    );
+    expect(princ.map((x) => Number(x['id']))).toEqual([reg2]);
     await gravar('cadastro.excluirProfissional', {
       profissional: prof,
       motivo: 'Cadastrado por engano (teste)',
@@ -271,7 +415,50 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
         [prof, prof],
       ),
     );
-    expect([Number(fim?.p), Number(fim?.i)]).toEqual([1, 2]);
+    expect([Number(fim?.p), Number(fim?.i)]).toEqual([1, 3]);
     expect(reg2).toBeGreaterThan(reg);
+    expect(
+      Number(
+        (
+          await ler((l) =>
+            l.uma<{ n: unknown }>(
+              "SELECT COUNT(*) AS n FROM profissional_versao WHERE profissional_id = ? AND operacao = 'exclusao'",
+              [prof],
+            ),
+          )
+        )?.n,
+      ),
+    ).toBe(1);
+
+    // Recadastro do mesmo CPF depois da exclusão por engano: a mesma linha do profissional e do registro volta.
+    const r3 = await gravar('cadastro.cadastrarProfissional', { nome: `MEDICA ${M}`, cpf, registro });
+    expect([r3.resultado['profissional'], r3.resultado['registro']]).toEqual([prof, reg]);
+    const volta = await ler((l) =>
+      l.uma(
+        `SELECT pr.situacao, pr.excluido_em IS NULL AS vivo, ic.situacao AS reg, ic.principal, ic.excluido_em IS NULL AS reg_vivo
+           FROM profissional pr JOIN inscricao_conselho ic ON ic.id = ? WHERE pr.id = ?`,
+        [reg, prof],
+      ),
+    );
+    expect(volta).toMatchObject({ situacao: 'ativo', reg: 'ativa' });
+    expect([Number(volta?.['vivo']), Number(volta?.['principal']), Number(volta?.['reg_vivo'])]).toEqual([
+      1, 1, 1,
+    ]);
+
+    // CPF de pessoa excluída: recusa própria (nunca o UNIQUE como 500).
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'prof-proprio-pessoa' }, (e) =>
+      e.executar(
+        'INSERT INTO pessoa_fisica (nome, cpf, criado_em, excluido_em) VALUES (?, ?, NOW(3), NOW(3))',
+        [`EXCLUIDA ${M}`, cpf3],
+      ),
+    );
+    const f3 = await falha(
+      gravar('cadastro.cadastrarProfissional', {
+        nome: `EXCLUIDA ${M}`,
+        cpf: cpf3,
+        registro: { ...registro, uf: 'BA', convenios: [] },
+      }),
+    );
+    expect([f3.status, f3.codigo]).toEqual([409, 'cpf-pessoa-excluida']);
   });
 });

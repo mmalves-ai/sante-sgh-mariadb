@@ -215,7 +215,7 @@ function analisar<T>(esquema: z.ZodType<T>, bruta: unknown): T {
 const comparavel = (v: unknown): string | null =>
   v === null || v === undefined ? null : v instanceof Date ? v.toISOString() : String(v).trimEnd();
 
-function fraseVinculos(
+export function fraseVinculos(
   v: readonly { grupo: string; quantidade: number }[],
   oQue: string,
   saida: string,

@@ -51,7 +51,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPorta, GravacaoFeita, PortaCadastro } from './porta.js';
 import { CadastroProprioConsentimento } from './porta-propria-consentimento.js';
 import type { OperacaoProfissionalTela } from './profissionais-memoria.js';
-import { operacaoProfissionalPropria } from './profissionais-proprio.js';
+import { operacaoProfissionalPropria, vinculosDoProfissional } from './profissionais-proprio.js';
 import type {
   ContextoGravacao,
   CriterioBuscaDireta,
@@ -1220,19 +1220,9 @@ export class PortaCadastroPropria implements PortaCadastro {
     });
   }
 
-  /** O que impede excluir o profissional: atendimentos em que ele atende. */
+  /** O que impede excluir o profissional (os grupos da memória): atendimentos, login ligado e histórico do login. */
   vinculosProfissional(c: ContextoPorta, id: number) {
-    return this.ler(c, async (l) => {
-      const n = Number(
-        (
-          await l.uma<{ n: unknown }>(
-            'SELECT COUNT(*) AS n FROM atendimento WHERE profissional_id = ? AND excluido_em IS NULL',
-            [id],
-          )
-        )?.n ?? 0,
-      );
-      return n > 0 ? [{ grupo: 'Atendimentos', quantidade: n }] : [];
-    });
+    return this.ler(c, (l) => vinculosDoProfissional(l, id));
   }
 
   procedimentosDaEspecialidade(c: ContextoPorta, especialidade: number, pagina: number, porPagina: number) {
