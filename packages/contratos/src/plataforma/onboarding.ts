@@ -9,9 +9,11 @@ export const ESTADOS_EXECUCAO_CONECTOR = [
   'lendo',
   'gravando',
   'conciliando',
+  'pausando',
   'concluida',
   'falhou',
   'cancelada',
+  'pausada',
 ] as const;
 export type EstadoExecucaoConector = (typeof ESTADOS_EXECUCAO_CONECTOR)[number];
 export const ESTADOS_EXECUCAO_ATIVOS: readonly EstadoExecucaoConector[] = [
@@ -20,8 +22,12 @@ export const ESTADOS_EXECUCAO_ATIVOS: readonly EstadoExecucaoConector[] = [
   'lendo',
   'gravando',
   'conciliando',
+  'pausando',
 ];
 export const TIPOS_EXECUCAO_CONECTOR = ['importar', 'sincronizar'] as const;
+/** Tipo da origem do conector (0093): arquivo .fdb vinculado ou leitura direta do servidor Firebird do hospital. */
+export const TIPOS_ORIGEM_CONECTOR = ['firebird_arquivo', 'firebird_servidor'] as const;
+export type TipoOrigemConector = (typeof TIPOS_ORIGEM_CONECTOR)[number];
 
 export const esquemaCodigoCliente = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/);
 

@@ -10,12 +10,16 @@ import pymysql
 
 from . import caminho
 
-ATIVOS = ("fila", "abrindo", "lendo", "gravando", "conciliando")
+# `pausando` (0093): ativo e rodando (entra na trava de uma execução ativa por cliente e em recuperar_orfas); o motor
+# para no próximo ponto seguro e termina em `pausada`, que é FINAL (concluido_em preenchido). A retomada é uma execução
+# nova com continuação (enfileirar(continuar=True)), nunca uma transição a partir de `pausada`.
+ATIVOS = ("fila", "abrindo", "lendo", "gravando", "conciliando", "pausando")
 RODANDO = ATIVOS[1:]
-FINAIS = ("concluida", "falhou", "cancelada")
-TRANSICOES = {"fila": {"abrindo", "cancelada", "falhou"}, "abrindo": {"lendo", "falhou"},
-              "lendo": {"gravando", "falhou"}, "gravando": {"conciliando", "falhou"},
-              "conciliando": {"concluida", "falhou"}}
+FINAIS = ("concluida", "falhou", "cancelada", "pausada")
+CONTINUAVEIS = ("falhou", "pausada")
+TRANSICOES = {"fila": {"abrindo", "cancelada", "falhou"}, "abrindo": {"lendo", "falhou", "pausando"},
+              "lendo": {"gravando", "falhou", "pausando"}, "gravando": {"conciliando", "falhou", "pausando"},
+              "conciliando": {"concluida", "falhou", "pausando"}, "pausando": {"pausada", "falhou"}}
 EVENTO = {"importar": "conector_carga", "sincronizar": "conector_diferencial"}
 AGORA = "UTC_TIMESTAMP(3)"
 
@@ -88,9 +92,9 @@ def vincular_origem(conn, codigo, relativo, admin_id=None, sha256=None):
 def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=False, continuar=False):
     """Põe uma execução na fila. ExecucaoAtiva (409) se já houver uma ativa para o cliente (índice único).
     `confirmar_exclusao_em_massa` (só Sincronizar): exclui o que o alerta de exclusão em massa reteve; quem pediu
-    fica no evento. `continuar` (só Importar): continua a última importação do cliente, interrompida (`falhou`) com a
-    mesma origem vinculada; a execução nova leva `contadores.continuar_de` e o motor pula as tabelas que ela concluiu
-    (continuar.py)."""
+    fica no evento. `continuar` (só Importar): continua a última importação do cliente, interrompida (`falhou`) ou
+    pausada (`pausada`, 0093) com a mesma origem vinculada; a execução nova leva `contadores.continuar_de` e o motor
+    pula as tabelas que ela concluiu (continuar.py)."""
     if continuar and tipo != "importar":
         raise PlataformaErro("continuar só vale para o Importar")
     if tipo not in EVENTO:
@@ -115,9 +119,9 @@ def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=Fa
                 cur.execute("SELECT id, estado, cliente_origem_id FROM conector_execucao WHERE cliente_id=%s"
                             " AND tipo='importar' ORDER BY id DESC LIMIT 1", (cli["id"],))
                 u = cur.fetchone()
-                if not u or u[1] != "falhou":
+                if not u or u[1] not in CONTINUAVEIS:
                     raise PlataformaErro("continuar exige que a última importação do cliente tenha sido interrompida"
-                                         " (falhou)")
+                                         " (falhou) ou pausada")
                 if u[2] != r[0]:
                     raise PlataformaErro("continuar exige a mesma origem vinculada da importação interrompida")
                 contadores = json.dumps({"continuar_de": u[0]})
