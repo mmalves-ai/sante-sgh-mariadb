@@ -27,6 +27,7 @@ import {
   trocarCredencial,
 } from '../api-integracoes.js';
 import SegredosParceiros from '../componentes/SegredosParceiros.vue';
+import PacotesParceiroPainel from '../componentes/PacotesParceiroPainel.vue';
 
 const { t } = useI18n();
 const rota = useRoute();
@@ -325,6 +326,8 @@ const marcar = (lista: string[], v: string, ligado: boolean) => {
         </form>
       </section>
     </template>
+    <!-- F3.9 (L134): pacotes de dados e entregas agendadas de cada parceiro. -->
+    <PacotesParceiroPainel v-if="vista === 'parceiros'" :pode-editar="podeEditar" />
   </section>
 </template>
 

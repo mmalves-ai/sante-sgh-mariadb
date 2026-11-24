@@ -24,6 +24,9 @@ export const PERMISSOES_M34_CODIGOS = {
   parceiroLer: 'integracao.parceiro.ler',
   parceiroEditar: 'integracao.parceiro.editar',
   mensagemLer: 'integracao.mensagem.ler',
+  mensagemConfigurar: 'integracao.mensagem.configurar',
+  mensagemEnviar: 'integracao.mensagem.enviar',
+  classificacaoExternaConfigurar: 'integracao.classificacaoExterna.configurar',
   filaLer: 'integracao.fila.ler',
   filaReprocessar: 'integracao.fila.reprocessar',
   interfaceLer: 'sadt.interface.ler',
@@ -193,6 +196,37 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.mensagemLer,
     descricao: 'Ver a configuração da comunicação com o paciente (pela Hal-AI) e os domínios das mensagens',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'tecnica',
+    criticidade: 'normal',
+  },
+  // F3.9-6 (L133 e L140): modelos e regras de envio ao paciente, o pedido e os retornos da Hal-AI, e os perfis de
+  // prioridade da classificação de risco externa.
+  {
+    codigo: C.mensagemConfigurar,
+    descricao:
+      'Cadastrar os modelos de mensagem ao paciente e as regras de envio por tipo de aviso (pela Hal-AI)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'tecnica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: C.mensagemEnviar,
+    descricao:
+      'Pedir o envio de mensagem ao paciente pela regra, cancelar o pendente e registrar os retornos da Hal-AI',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: C.classificacaoExternaConfigurar,
+    descricao: 'Cadastrar os perfis de prioridade enviados ao sistema de triagem externo',
 
     concessaoPorPerfil: 'por-perfil',
     perfis: [...ADMIN],

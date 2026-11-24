@@ -32,6 +32,13 @@ import {
 import { ARMAZEM_CONTEUDO, ESTABELECIMENTOS_ENTRADA, IntegracaoController } from './integracao.controller.js';
 import { PORTA_INTEGRACAO, type PortaIntegracao } from './porta.js';
 import { PortaIntegracaoMemoria } from './porta-memoria.js';
+import {
+  PORTA_CLASSIFICACAO_EXTERNA,
+  PortaClassificacaoExternaPropria,
+} from './classificacao-externa-propria.js';
+import { ComunicacaoController } from './comunicacao.controller.js';
+import { PORTA_MENSAGENS_PACIENTE, PortaMensagensPacientePropria } from './mensagens-paciente-propria.js';
+import { PORTA_PACOTES_PARCEIRO, PortaPacotesParceiroPropria } from './pacotes-parceiro-propria.js';
 import { portaIntegracaoIndisponivel, PortaIntegracaoPropria } from './porta-propria.js';
 
 export interface OpcoesModuloIntegracao {
@@ -85,12 +92,25 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       : null);
   return {
     module: class ModuloIntegracao {},
-    controllers: [IntegracaoController, FachadaController],
+    controllers: [IntegracaoController, FachadaController, ComunicacaoController],
     providers: [
       { provide: PORTA_INTEGRACAO, useValue: porta },
       { provide: PORTA_FACHADA, useValue: fachada },
       { provide: ARMAZEM_CONTEUDO, useValue: armazem },
       { provide: ESTABELECIMENTOS_ENTRADA, useValue: o.estabelecimentosEntrada ?? [] },
+      // F3.9-6 (L133, L134, L140): mensagens ao paciente, pacotes de parceiros e classificação externa; sem núcleo, 503.
+      {
+        provide: PORTA_MENSAGENS_PACIENTE,
+        useValue: nucleo && cliente ? new PortaMensagensPacientePropria(nucleo, cliente) : null,
+      },
+      {
+        provide: PORTA_PACOTES_PARCEIRO,
+        useValue: nucleo && cliente ? new PortaPacotesParceiroPropria(nucleo, cliente) : null,
+      },
+      {
+        provide: PORTA_CLASSIFICACAO_EXTERNA,
+        useValue: nucleo && cliente ? new PortaClassificacaoExternaPropria(nucleo, cliente) : null,
+      },
       ...(local ? [{ provide: FONTE_CONFIGURACAO, useValue: local }] : []),
       {
         provide: SERVICO_FACHADA,

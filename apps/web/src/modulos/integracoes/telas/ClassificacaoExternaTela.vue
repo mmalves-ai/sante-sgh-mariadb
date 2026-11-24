@@ -5,6 +5,7 @@
 import { useQuery } from '@tanstack/vue-query';
 import { useI18n } from 'vue-i18n';
 import GrupoDominiosTela from '../../config/telas/GrupoDominiosTela.vue';
+import ClassificacaoExternaPainel from '../componentes/ClassificacaoExternaPainel.vue';
 import { lerHl7 } from '../api-integracoes.js';
 
 const { t } = useI18n();
@@ -23,6 +24,8 @@ const hl7 = useQuery({ queryKey: ['integracoes', 'hl7'], queryFn: () => lerHl7()
       <p>{{ t(`integracoes.hl7.caminhos.${hl7.data.value.classificacaoExterna.caminho}`) }}</p>
       <p class="secundario">{{ hl7.data.value.classificacaoExterna.decisao }}</p>
     </section>
+    <!-- F3.9 (L140): perfis enviados à triagem e as classificações recebidas por atendimento. -->
+    <ClassificacaoExternaPainel />
     <GrupoDominiosTela subitem="classificacaoExterna" embutida />
   </section>
 </template>

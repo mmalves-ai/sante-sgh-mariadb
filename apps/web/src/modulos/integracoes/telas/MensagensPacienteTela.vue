@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/vue-query';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import GrupoDominiosTela from '../../config/telas/GrupoDominiosTela.vue';
+import MensagensPacientePainel from '../componentes/MensagensPacientePainel.vue';
 import { lerMensagens } from '../api-integracoes.js';
 
 const { t } = useI18n();
@@ -54,6 +55,8 @@ const estado = useQuery({ queryKey: ['integracoes', 'mensagens'], queryFn: () =>
         />
       </div>
     </section>
+    <!-- F3.9 (L133): modelos, regras por aviso e a visão por paciente dos pedidos e retornos. -->
+    <MensagensPacientePainel />
     <h2>{{ t('integracoes.mensagens.dominios') }}</h2>
     <GrupoDominiosTela subitem="integracaoMensagens" embutida />
   </section>
