@@ -279,12 +279,12 @@ const OP = definirOperacao({ nome: 'z', tabelas: TABELAS_Y });
       const e = entradaDoRepositorio(raiz);
       const { alcances } = calcularAlcances(e);
       const de = (m: string) => alcances.find((a) => a.modulo === m)?.objetos;
-      const gravacao = { leito: ['INSERT', 'UPDATE'], vinculo: ['INSERT', 'UPDATE'] };
-      expect(de('fat')).toEqual({ ...gravacao, producao: ['INSERT', 'UPDATE'], regra: ['SELECT'] });
+      const gravacao = { leito: ['SELECT', 'INSERT', 'UPDATE'], vinculo: ['SELECT', 'INSERT', 'UPDATE'] };
+      expect(de('fat')).toEqual({ ...gravacao, producao: ['SELECT', 'INSERT', 'UPDATE'], regra: ['SELECT'] });
       expect(de('atd')).toEqual(de('fat'));
       expect(e.modulos['atd']).toMatchObject({ dinamicos: [] });
-      expect(de('m9')).toEqual({ paciente: ['INSERT', 'UPDATE'] });
-      expect(de('m10')).toEqual({ paciente: ['INSERT', 'UPDATE'] });
+      expect(de('m9')).toEqual({ paciente: ['SELECT', 'INSERT', 'UPDATE'] });
+      expect(de('m10')).toEqual({ paciente: ['SELECT', 'INSERT', 'UPDATE'] });
     } finally {
       rmSync(raiz, { recursive: true, force: true });
     }
@@ -358,7 +358,10 @@ export function outra(): string[] {
       modelo,
       c,
     );
-    expect(r.uso).toEqual({ paciente: ['INSERT', 'UPDATE'], leito: ['INSERT', 'UPDATE'] });
+    expect(r.uso).toEqual({
+      paciente: ['SELECT', 'INSERT', 'UPDATE'],
+      leito: ['SELECT', 'INSERT', 'UPDATE'],
+    });
     expect(r.dinamicos).toEqual([]);
   });
 });
