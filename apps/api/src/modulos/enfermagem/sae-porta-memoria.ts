@@ -7,7 +7,7 @@
 // Nada é de pessoa real (marca "SINTETICO M45").
 import type { ChecagemCuidadoLida } from '@sgh/contratos';
 import { type ContextoOperacao, recusa } from '@sgh/nucleo';
-import { doseVigenteDaVacina } from '@sgh/dominio-enfermagem';
+import { doseVigenteDaVacina, montarEdicaoTerminologia } from '@sgh/dominio-enfermagem';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
 import {
   type ConsultaDeEnfermagem,
@@ -373,6 +373,9 @@ export class PortaSaeMemoria implements PortaSae {
         return id;
       },
       carregarTerminologia: async (t) => {
+        // A mesma regra da porta própria: o termo é único por sistema + código + edição (montarEdicaoTerminologia).
+        const m = montarEdicaoTerminologia({ pacote: t.sistema, termos: t.termos });
+        if (!m.ok) throw recusa(m.codigo, m.mensagem);
         if (s.termos.some((x) => x.sistema === t.sistema && x.versao === t.versao))
           throw recusa(
             'versao-ja-carregada',

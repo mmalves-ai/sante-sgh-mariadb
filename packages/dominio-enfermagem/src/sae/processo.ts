@@ -361,3 +361,80 @@ export function conferirTerminologia(
   }
   return { ok: true };
 }
+
+/** O sistema de classificação de enfermagem de uma edição: a chave única do termo é sistema + código + edição. */
+export type SistemaEdicaoEnfermagem = 'NANDA-I' | 'NIC' | 'NOC' | 'CIPE';
+
+/**
+ * O sistema de cada termo da carga: no pacote NNN, o diagnóstico com as características e os fatores é NANDA-I, o
+ * resultado é NOC e a intervenção com as atividades é NIC; no pacote CIPE, tudo é CIPE.
+ */
+export function sistemaDoTermoSae(pacote: 'NNN' | 'CIPE', tipo: string): SistemaEdicaoEnfermagem {
+  if (pacote === 'CIPE') return 'CIPE';
+  if (tipo === 'resultado') return 'NOC';
+  if (tipo === 'intervencao' || tipo === 'atividade') return 'NIC';
+  return 'NANDA-I';
+}
+
+export interface EdicaoTerminologiaMontada {
+  readonly ok: true;
+  /** Uma edição por sistema presente na carga, todas com a mesma versão. */
+  readonly edicoes: readonly { readonly sistema: SistemaEdicaoEnfermagem; readonly termos: number }[];
+  /** Um termo por sistema + código (a característica que aparece em vários diagnósticos é um termo só). */
+  readonly termos: readonly {
+    readonly sistema: SistemaEdicaoEnfermagem;
+    readonly codigo: string;
+    readonly tipo: string;
+    readonly descricao: string;
+    readonly risco: boolean;
+  }[];
+  /** A ligação do termo ao superior (característica e fator ao diagnóstico; atividade à intervenção), no mesmo sistema. */
+  readonly ligacoes: readonly {
+    readonly sistema: SistemaEdicaoEnfermagem;
+    readonly codigo: string;
+    readonly superior: string;
+  }[];
+}
+
+/**
+ * Monta a edição versionada da terminologia licenciada (NANDA-I, NIC, NOC ou CIPE) a partir da carga: confere a carga
+ * (conferirTerminologia), separa os termos por sistema e recusa o mesmo código num sistema com tipo, descrição ou risco
+ * diferentes (termo-divergente), porque a chave única do termo é sistema + código + edição.
+ */
+export function montarEdicaoTerminologia(carga: {
+  readonly pacote: 'NNN' | 'CIPE';
+  readonly termos: readonly {
+    readonly tipo: string;
+    readonly codigo: string;
+    readonly pai: string | null;
+    readonly descricao: string;
+    readonly risco: boolean;
+  }[];
+}): EdicaoTerminologiaMontada | RecusaSae {
+  const k = conferirTerminologia(carga.termos);
+  if (!k.ok) return k;
+  const termos = new Map<string, EdicaoTerminologiaMontada['termos'][number]>();
+  const ligacoes = new Map<string, EdicaoTerminologiaMontada['ligacoes'][number]>();
+  for (const [i, x] of carga.termos.entries()) {
+    const sistema = sistemaDoTermoSae(carga.pacote, x.tipo);
+    const chave = `${sistema}|${x.codigo}`;
+    const ja = termos.get(chave);
+    const descricao = x.descricao.trim();
+    if (!ja) termos.set(chave, { sistema, codigo: x.codigo, tipo: x.tipo, descricao, risco: x.risco });
+    else if (ja.tipo !== x.tipo || ja.descricao !== descricao || ja.risco !== x.risco)
+      return recusa(
+        'termo-divergente',
+        `O código ${x.codigo} aparece em ${sistema} com tipo, descrição ou risco diferentes: um código é um termo só na edição.`,
+        `termos.${i}`,
+      );
+    if (x.pai) ligacoes.set(`${chave}|${x.pai}`, { sistema, codigo: x.codigo, superior: x.pai });
+  }
+  const contagem = new Map<SistemaEdicaoEnfermagem, number>();
+  for (const t of termos.values()) contagem.set(t.sistema, (contagem.get(t.sistema) ?? 0) + 1);
+  return {
+    ok: true,
+    edicoes: [...contagem].map(([sistema, n]) => ({ sistema, termos: n })),
+    termos: [...termos.values()],
+    ligacoes: [...ligacoes.values()],
+  };
+}

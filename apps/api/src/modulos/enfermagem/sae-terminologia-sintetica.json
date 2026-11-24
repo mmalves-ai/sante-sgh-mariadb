@@ -1,0 +1,45 @@
+{
+  "aviso": "Arquivo SINTÉTICO de teste do carregador da edição licenciada: nenhum termo de NANDA-I, NIC, NOC ou CIPE. Os códigos ganham o prefixo da execução no teste.",
+  "sistema": "NNN",
+  "licenca": "Licença sintética de teste (sem conteúdo licenciado)",
+  "termos": [
+    {
+      "tipo": "diagnostico",
+      "codigo": "D1",
+      "pai": null,
+      "descricao": "Diagnóstico sintético real",
+      "risco": false
+    },
+    {
+      "tipo": "diagnostico",
+      "codigo": "D2",
+      "pai": null,
+      "descricao": "Diagnóstico sintético de risco",
+      "risco": true
+    },
+    {
+      "tipo": "caracteristica",
+      "codigo": "C1",
+      "pai": "D1",
+      "descricao": "Característica sintética",
+      "risco": false
+    },
+    {
+      "tipo": "caracteristica",
+      "codigo": "C1",
+      "pai": "D2",
+      "descricao": "Característica sintética",
+      "risco": false
+    },
+    { "tipo": "fator", "codigo": "F1", "pai": "D2", "descricao": "Fator sintético", "risco": false },
+    { "tipo": "resultado", "codigo": "R1", "pai": null, "descricao": "Resultado sintético", "risco": false },
+    {
+      "tipo": "intervencao",
+      "codigo": "I1",
+      "pai": null,
+      "descricao": "Intervenção sintética",
+      "risco": false
+    },
+    { "tipo": "atividade", "codigo": "A1", "pai": "I1", "descricao": "Atividade sintética", "risco": false }
+  ]
+}

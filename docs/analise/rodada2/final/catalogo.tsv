@@ -2460,7 +2460,7 @@ parametro_dimensionamento	RH	configuracao	F7	Horas de enfermagem por tipo de cui
 parcela_decimo_terceiro	RH	item	F7	Parcela do 13º salário, com base, média e pagamento	new-sgh M53.4	07	0
 parcela_dimensionamento	RH	item	F7	Parcela do cálculo por tipo de cuidado: pacientes, horas e profissionais	new-sgh M52.3	07	0
 pensao_alimenticia	RH	item	F3	Pensão alimentícia descontada, com beneficiário, base e forma de pagamento	SPDATA FPTPPENSAOALI; paridade estrutural: era F7	07	1
-periodo_aquisitivo	RH	principal	F7	Período aquisitivo de férias, com faltas, direito e saldo	new-sgh M53.3	07	0
+periodo_aquisitivo	RH	principal	F7	Período aquisitivo de férias por vínculo (contrato de trabalho, CLT art. 130; migração 15_RH/98), com faltas, direito e saldo	new-sgh M53.3	07	0
 plantao	RH	principal	F7	Plantão presencial ou de sobreaviso, com profissional, setor e horário	new-sgh M52.3; repasse do plantão é do 06	07	7
 presenca_treinamento	RH	item	F7	Presença e aproveitamento do colaborador na turma	new-sgh M52.6	07	0
 processo_trabalhista	RH	principal	F3	Processo judicial ou administrativo trabalhista, com decisão e valores	SPDATA FPPROCTRAB_ESOCIAL_CR, FPTPPROCESSO, FPPROCESSOTEOR, FPESOCAUTORIA; paridade estrutural: era F7	07	4
@@ -3689,3 +3689,6 @@ checagem_cuidado_enfermagem	PEP	historico	F7	Checagem de cada horário previsto 
 estorno_checagem_cuidado_enfermagem	PEP	historico	F7	Estorno da checagem do cuidado com a justificativa (a checagem fica), só inclusão	Produto: prescrição de enfermagem (migração 06_PEP/96_cuidado_enfermagem)	03	0
 preferencia_segundo_fator	ADM	principal	F3	Segundo fator escolhido por cada usuário: aplicativo autenticador ou código enviado ao e-mail	modulos-proprios-2, família acesso-email (pedido do dono de 23/11; db/migracoes)	01	0
 ficha_esocial_vinculo	RH	principal	F7	Ficha do eSocial do vínculo (dados do trabalhador para os eventos), cifrada pela API, com versão	modulos-proprios-2: família folha-executor (gravarFicha do eSocial)	07	0
+edicao_terminologia_enfermagem	PEP	historico	F7	Edição carregada de cada terminologia de enfermagem licenciada (NANDA-I, NIC, NOC, CIPE) com licença, impressão SHA-256 e contagem; imutável	fecho-1, família sae-terminologia (migração 06_PEP/91_terminologia_enfermagem)	03	0
+termo_terminologia_enfermagem	PEP	catalogo_publico	F7	Termo da edição da terminologia de enfermagem licenciada (catálogo do espelho, sem conteúdo no repositório), único por sistema, código e edição; só inclusão	fecho-1, família sae-terminologia (migração 06_PEP/91_terminologia_enfermagem)	03	0
+ligacao_termo_enfermagem	PEP	vinculo	F7	Ligação do termo de enfermagem ao superior na mesma edição (característica e fator ao diagnóstico, atividade à intervenção)	fecho-1, família sae-terminologia (migração 06_PEP/91_terminologia_enfermagem)	03	0
