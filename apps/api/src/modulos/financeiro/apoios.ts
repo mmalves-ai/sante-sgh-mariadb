@@ -45,6 +45,10 @@ export const FUNCIONALIDADES_FINANCEIRO = {
       // F3.8 (07-FIN linha 85): fechar a competência é da tesouraria; reabrir, de quem edita o parâmetro do financeiro.
       'financeiro.fecharPeriodo': 'financeiro.movimento.criar',
       'financeiro.reabrirPeriodo': 'financeiro.parametro.editar',
+      // F3.8 (07-FIN linhas 98 e 99): reclassificação gerencial e permissões do financeiro.
+      'financeiro.reclassificarLancamento': 'financeiro.classificacao.editar',
+      'financeiro.manterEscopoConta': 'financeiro.parametro.editar',
+      'financeiro.manterTipoLancamento': 'financeiro.parametro.editar',
     },
     extras: {
       importarExtrato: 'financeiro.conciliacao.conciliar',

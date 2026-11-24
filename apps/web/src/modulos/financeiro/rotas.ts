@@ -104,6 +104,20 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.classificacao.ler' },
   },
   {
+    // F3.8, 07-FIN linha 98: reclassificação gerencial de lançamento já gravado (?alvo=&id=).
+    path: '/financeiro/gerencial/reclassificar',
+    name: 'financeiro.gerencial.reclassificar',
+    component: () => import('./telas/ReclassificacaoTela.vue'),
+    meta: { permissao: 'financeiro.classificacao.ler' },
+  },
+  {
+    // F3.8, 07-FIN linha 99: escopo de contas por usuário e tipos de lançamento por perfil.
+    path: '/financeiro/parametros/permissoes',
+    name: 'financeiro.parametros.permissoes',
+    component: () => import('./telas/PermissoesFinanceiroTela.vue'),
+    meta: { permissao: 'financeiro.parametro.ler' },
+  },
+  {
     path: '/financeiro/parametros',
     name: 'financeiro.parametros',
     component: () => import('./telas/ParametrosTela.vue'),

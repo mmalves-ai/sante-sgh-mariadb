@@ -37,6 +37,9 @@ export interface PedidoReclassificacao {
   readonly natureza: number;
   readonly rateio: readonly LinhaRateio[];
   readonly motivo: string;
+  /** O tipo (receita, despesa, transferência) da natureza atual e da nova: uma despesa não vira receita. */
+  readonly tipoNaturezaAntes?: string | null;
+  readonly tipoNaturezaNova?: string | null;
 }
 
 export type PlanoReclassificacao =
@@ -75,6 +78,12 @@ export function planejarReclassificacao(p: PedidoReclassificacao): PlanoReclassi
       'reclassificacao-sem-motivo',
       `Diga o motivo da reclassificação (ao menos ${MOTIVO_RECLASSIFICACAO_MINIMO} letras).`,
       ['motivo'],
+    );
+  if (p.tipoNaturezaAntes && p.tipoNaturezaNova && p.tipoNaturezaAntes !== p.tipoNaturezaNova)
+    return falha(
+      'reclassificacao-tipo-trocado',
+      `A natureza nova é de ${p.tipoNaturezaNova} e o lançamento é de ${p.tipoNaturezaAntes}: escolha uma do mesmo tipo.`,
+      ['classificacao'],
     );
   if (p.rateio.length === 0)
     return falha('reclassificacao-sem-centro', 'Informe ao menos um centro de custo (100%).', ['rateio']);

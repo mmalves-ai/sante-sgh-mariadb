@@ -50,6 +50,7 @@ import {
 import type { z } from 'zod';
 import { ESQUEMAS_OPERACAO_FINANCEIRO } from './esquemas.js';
 import { exigirPeriodoAberto, OPERACOES_PERIODO } from './periodo-propria.js';
+import { exigirTipoLancamentoLiberado, OPERACOES_GESTAO } from './gestao-propria.js';
 import {
   CREDOR_DO_TIPO,
   dataIso,
@@ -1127,6 +1128,8 @@ const lancarMovimento = definirOperacao<LancarMovimentoEntrada, ResultadoOperaca
     const natureza = await naturezaDaClassificacao(tx, e.classificacao);
     const mapa = MOVIMENTO_DO_TIPO[e.tipo];
     const tipoMov = await tipoLancamento(tx, mapa.codigo);
+    // F3.8, 07-FIN linha 99: o tipo de lançamento liberado aos perfis do usuário (lista branca, quando há).
+    await exigirTipoLancamentoLiberado(tx, est, usuario, tipoMov);
     await garantirSequencia(
       tx,
       { tipo: 'movimento_bancario', estabelecimento: est, prefixo: null },
@@ -1172,4 +1175,6 @@ export const OPERACOES_FINANCEIRO: Readonly<Record<string, Operacao<never, Resul
     never,
     ResultadoOperacao
   >,
+  // F3.8, 07-FIN linhas 98 e 99 (gestao-propria.ts).
+  ...(OPERACOES_GESTAO as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
 };

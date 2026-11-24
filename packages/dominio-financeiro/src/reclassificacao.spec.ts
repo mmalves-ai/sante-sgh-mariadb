@@ -48,6 +48,10 @@ describe('reclassificação gerencial', () => {
       return r.ok ? null : r.recusa.codigo;
     };
     expect(cod({ natureza: 1 })).toBe('reclassificacao-sem-mudanca');
+    expect(cod({ tipoNaturezaAntes: 'despesa', tipoNaturezaNova: 'receita' })).toBe(
+      'reclassificacao-tipo-trocado',
+    );
+    expect(cod({ tipoNaturezaAntes: 'despesa', tipoNaturezaNova: 'despesa' })).toBeNull();
     expect(cod({ motivo: ' erro ' })).toBe('reclassificacao-sem-motivo');
     expect(cod({ rateio: [] })).toBe('reclassificacao-sem-centro');
     expect(cod({ cancelado: true })).toBe('reclassificacao-cancelado');

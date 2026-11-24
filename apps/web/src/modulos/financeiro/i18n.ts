@@ -1,6 +1,10 @@
 // Textos das telas do financeiro e fiscal (M32): contas a pagar e a receber, tesouraria, gerencial, parâmetros, fiscal
 // e a exportação contábil. Sem nome de sistema antigo (ADR 0023) nem "outro sistema" (escopo estrito do verificador).
+import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
+
 export const mensagensFinanceiro = {
+  // F3.8, 07-FIN linhas 98 e 99: reclassificação e permissões (i18n-gestao.ts).
+  gestao: mensagensGestaoFinanceiro,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   todos: 'Todos',
