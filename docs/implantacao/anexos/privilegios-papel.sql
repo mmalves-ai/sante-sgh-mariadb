@@ -7,7 +7,7 @@
 -- Só cria o papel, concede e retira: nenhuma tabela nem dado é alterado. Cada GRANT vem seguido do REVOKE do que a
 -- tabela não deve ter, para que reaplicar o anexo convirja (a tabela que passou à exclusão lógica perde o DELETE).
 -- Depois, atribua o papel à conta da aplicação e torne-o o papel padrão dela (GRANT e SET DEFAULT ROLE).
--- 3690 tabelas. Só de acréscimo: cliente_evento, conta_plataforma_evento, modelo_documento_evento, sessao_suporte_aviso, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
+-- 3690 tabelas. Só de acréscimo: cliente_evento, conta_plataforma_evento, modelo_documento_evento, sessao_suporte_aviso, sugestao_notificacao_resolvida, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
 
 CREATE ROLE IF NOT EXISTS papel_aplicacao;
 
@@ -2230,6 +2230,8 @@ GRANT SELECT, INSERT, UPDATE ON glosa_rateio TO papel_aplicacao;
 REVOKE DELETE ON glosa_rateio FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON glosa_titulo_receber TO papel_aplicacao;
 REVOKE DELETE ON glosa_titulo_receber FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE ON grade_horario_classe TO papel_aplicacao;
+REVOKE DELETE ON grade_horario_classe FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON grade_horario_unidade TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON grade_sala_cirurgica TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON graduacao_oftalmologica TO papel_aplicacao;
@@ -4721,6 +4723,8 @@ GRANT SELECT, INSERT, UPDATE ON relatorio_tela TO papel_aplicacao;
 REVOKE DELETE ON relatorio_tela FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON relatorio_tela_parametro TO papel_aplicacao;
 REVOKE DELETE ON relatorio_tela_parametro FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE ON relatorio_transferencia TO papel_aplicacao;
+REVOKE DELETE ON relatorio_transferencia FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON relatorio_versao TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON relogio_ponto TO papel_aplicacao;
 REVOKE DELETE ON relogio_ponto FROM papel_aplicacao;
@@ -5056,9 +5060,12 @@ GRANT SELECT, INSERT, UPDATE ON sessao_quimioterapia TO papel_aplicacao;
 REVOKE DELETE ON sessao_quimioterapia FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON sessao_radioterapia TO papel_aplicacao;
 REVOKE DELETE ON sessao_radioterapia FROM papel_aplicacao;
-GRANT SELECT, INSERT, UPDATE, DELETE ON sessao_suporte TO papel_aplicacao;
-GRANT SELECT, INSERT, UPDATE, DELETE ON sessao_suporte_acao TO papel_aplicacao;
-GRANT SELECT, INSERT, UPDATE, DELETE ON sessao_suporte_leitura TO papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE ON sessao_suporte TO papel_aplicacao;
+REVOKE DELETE ON sessao_suporte FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE ON sessao_suporte_acao TO papel_aplicacao;
+REVOKE DELETE ON sessao_suporte_acao FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE ON sessao_suporte_leitura TO papel_aplicacao;
+REVOKE DELETE ON sessao_suporte_leitura FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON sessao_terapeutica TO papel_aplicacao;
 REVOKE DELETE ON sessao_terapeutica FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON setor_diagnostico TO papel_aplicacao;
@@ -5218,6 +5225,8 @@ GRANT SELECT, INSERT, UPDATE ON sugestao_compra_item TO papel_aplicacao;
 REVOKE DELETE ON sugestao_compra_item FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON sugestao_notificacao_incidente TO papel_aplicacao;
 REVOKE DELETE ON sugestao_notificacao_incidente FROM papel_aplicacao;
+GRANT SELECT, INSERT ON sugestao_notificacao_resolvida TO papel_aplicacao;
+REVOKE UPDATE, DELETE ON sugestao_notificacao_resolvida FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON sujeito_cuidado TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON sumario_alta TO papel_aplicacao;
 REVOKE DELETE ON sumario_alta FROM papel_aplicacao;

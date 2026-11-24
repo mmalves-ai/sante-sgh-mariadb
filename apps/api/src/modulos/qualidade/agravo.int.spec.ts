@@ -48,7 +48,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
     atendimento: null,
     exame: null,
     paciente,
-    cid: 'A90',
+    cid: 'U49',
     periodicidade: 'imediata',
     gatilhoEm: '2026-11-20T08:00',
     prazoEm: '2026-11-21T08:00:00',
@@ -76,9 +76,11 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
         "INSERT INTO terminologia (codigo, nome, tipo, criado_em) VALUES ('cid10', 'CID-10', 'diagnostico', ?)",
         [agora],
       );
+      // CIDs sintéticos U48/U49: o capítulo de propósitos especiais não os atribui, e assim não colidem com a CID-10
+      // oficial que o cliente de teste pode ter carregada (termo e descrição ficam os do preparo).
       for (const [cod, desc] of [
-        ['A90', 'DENGUE SINTETICA'],
-        ['A15.0', 'TUBERCULOSE SINTETICA'],
+        ['U49', 'DENGUE SINTETICA'],
+        ['U48.0', 'TUBERCULOSE SINTETICA'],
       ] as const)
         await g(
           'SELECT id FROM termo_terminologia WHERE terminologia_id = ? AND codigo_termo = ?',
@@ -105,11 +107,11 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
           'INSERT INTO agravo_notificavel (codigo, descricao, periodicidade_notificacao_id, criado_em) VALUES (?, ?, ?, ?)',
           [cod, desc, p, agora],
         );
-      const dengue = await ag('SINT_AGRAVO_DENGUE', 'DENGUE (SINTETICO)', per);
-      const tb = await ag('SINT_AGRAVO_TB', 'TUBERCULOSE (SINTETICO)', sem);
+      const dengue = await ag('SINT_AGRAVO_U49', 'DENGUE (SINTETICO)', per);
+      const tb = await ag('SINT_AGRAVO_U48', 'TUBERCULOSE (SINTETICO)', sem);
       for (const [a, cid] of [
-        [dengue, 'A90'],
-        [tb, 'A15'],
+        [dengue, 'U49'],
+        [tb, 'U48'],
       ] as const)
         await g(
           'SELECT id FROM agravo_notificavel_cid WHERE agravo_notificavel_id = ? AND codigo_cid10 = ?',
@@ -149,22 +151,22 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
     const cids = await porta.cidsNotificaveis(c);
     expect(cids).toEqual(
       expect.arrayContaining([
-        { cid: 'A90', nome: 'DENGUE SINTETICA', codigoCadastro: 2 },
-        { cid: 'A15', nome: 'TUBERCULOSE (SINTETICO)', codigoCadastro: 1 },
+        { cid: 'U49', nome: 'DENGUE SINTETICA', codigoCadastro: 2 },
+        { cid: 'U48', nome: 'TUBERCULOSE (SINTETICO)', codigoCadastro: 1 },
       ]),
     );
-    expect(await porta.cidDoCadastro(c, 'A90')).toEqual({
-      cid: 'A90',
+    expect(await porta.cidDoCadastro(c, 'U49')).toEqual({
+      cid: 'U49',
       nome: 'DENGUE SINTETICA',
       codigoCadastro: 2,
     });
-    expect(await porta.cidDoCadastro(c, 'A150')).toEqual({
-      cid: 'A150',
+    expect(await porta.cidDoCadastro(c, 'U480')).toEqual({
+      cid: 'U480',
       nome: 'TUBERCULOSE SINTETICA',
       codigoCadastro: 0,
     });
     expect(await porta.cidDoCadastro(c, 'Z9999')).toBeNull();
-    expect(await porta.modelosFicha(c)).toEqual(expect.arrayContaining([{ id: agravo, nome: 'A90' }]));
+    expect(await porta.modelosFicha(c)).toEqual(expect.arrayContaining([{ id: agravo, nome: 'U49' }]));
     expect(await porta.perguntasFicha(c, agravo)).toEqual([
       { codigo: 7, subcodigo: 0, texto: 'Data dos primeiros sintomas' },
     ]);
@@ -180,7 +182,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
     expect(lido).toMatchObject({
       origem: 'manual',
       paciente,
-      cid: 'A90',
+      cid: 'U49',
       situacao: 'aberto',
       fichaModelo: agravo,
       gatilhoEm: '2026-11-20T08:00:00',
@@ -230,7 +232,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
       encerrado_por_usuario_id: m.usuario,
     });
     const b = await porta.gravarSgh(c, T(), (g) =>
-      g.abrirCaso(novo({ cid: 'A150', periodicidade: 'semanal', gatilhoEm: '2026-11-19T08:00' })),
+      g.abrirCaso(novo({ cid: 'U480', periodicidade: 'semanal', gatilhoEm: '2026-11-19T08:00' })),
     );
     await porta.gravarSgh(c, T(b.id), (g) =>
       g.descartarCaso({
@@ -267,7 +269,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
   });
 
   it('a chave do gatilho é única, e CID, paciente e agravo inexistentes são recusados sem gravar', async () => {
-    const chave = 'cid:900001:A90';
+    const chave = 'cid:900001:U49';
     await porta.gravarSgh(c, T(), (g) => g.abrirCaso(novo({ origem: 'cid', chaveGatilho: chave })));
     expect(
       await codigo(porta.gravarSgh(c, T(), (g) => g.abrirCaso(novo({ origem: 'cid', chaveGatilho: chave })))),

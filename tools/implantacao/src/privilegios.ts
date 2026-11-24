@@ -30,6 +30,8 @@ export const SO_ACRESCIMO: ReadonlySet<string> = new Set([
   'cliente_evento',
   // história de aprovação dos modelos de formulário (com o SHA-256 da definição publicada): só inclusão
   'modelo_documento_evento',
+  // qualidade: a sugestão de notificação já resolvida (resumo da origem) é registro histórico, só inclusão
+  'sugestao_notificacao_resolvida',
   // banco plataforma (ADR 0021): auditoria das contas da plataforma e o aviso ao Auditor de cada sessão "como"
   'conta_plataforma_evento',
   'sessao_suporte_aviso',
