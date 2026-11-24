@@ -37,7 +37,8 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     'financeiro.tituloPagar.prorrogar',
     'Prorrogar o vencimento da parcela a pagar (motivo da lista; título já aprovado pede também a permissão de aprovar e outra pessoa que não quem lançou)',
 
-    { criticidade: 'sensivel' },
+    // Recurso novo, sem opção correspondente no menu de origem: concedido ao administrador do sistema.
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
   ),
   p(
     'financeiro.tituloPagar.aprovar',
