@@ -111,6 +111,10 @@ async function salvar() {
       <RouterLink to="/cadastros/dominios/grupo/financeiroCadastros">
         {{ t('financeiro.parametros.cadastrosFinanceiros') }}
       </RouterLink>
+      ·
+      <RouterLink to="/financeiro/parametros/permissoes" data-testid="pr-permissoes">
+        {{ t('financeiro.gestao.permissoes.titulo') }}
+      </RouterLink>
     </p>
     <h2>{{ t('financeiro.parametros.faixas') }}</h2>
     <ErroFaturamento v-if="faixas.error.value" :erro="faixas.error.value" />

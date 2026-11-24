@@ -10,7 +10,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F3.5 (05-SADT linhas 4 e 7): os itens "Pedido de exames" e "Recoletas" entraram à mão (mesmo motivo); a contagem
 // acompanha.
 // F3.1 (02-CAD linha 2): o item "Campos obrigatórios do cadastro" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":412,"M":193,"P":57,"N":162};
+// F3.8 (07-FIN linhas 98 e 99): os itens "Reclassificação gerencial" e "Permissões do financeiro" entraram à mão (mesmo
+// motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":414,"M":195,"P":57,"N":162};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -250,9 +252,11 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.tesouraria.conciliacao-bancaria-extrato","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Conciliação bancária"],"titulo":"Conciliação bancária","selo":"N","fase":3,"rota":"/financeiro/tesouraria/conciliacao","permissao":"financeiro.conciliacao.ler"},
   {"id":"financeiro.tesouraria.fluxo-de-caixa-realizado-e-projetado","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Fluxo de caixa realizado e projetado"],"titulo":"Fluxo de caixa realizado e projetado","selo":"N","fase":3,"rota":"/financeiro/tesouraria/fluxo-caixa","permissao":"financeiro.fluxoCaixa.ler"},
   {"id":"financeiro.apropriacao-gerencial-grupo-subgrupo-item","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Apropriação gerencial"],"titulo":"Apropriação gerencial","selo":"M","fase":3,"rota":"/financeiro/gerencial","permissao":"financeiro.classificacao.ler"},
+  {"id":"financeiro.apropriacao-gerencial-grupo-subgrupo-item.reclassificacao-gerencial","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Apropriação gerencial","Reclassificação gerencial"],"titulo":"Reclassificação gerencial","selo":"M","fase":3,"rota":"/financeiro/gerencial/reclassificar","permissao":"financeiro.classificacao.ler"},
   {"id":"financeiro.orcamento-empresarial","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Orçamento empresarial"],"titulo":"Orçamento empresarial","selo":"P","fase":6,"rota":"/financeiro/orcamento","permissao":"financeiro.orcamento.ler"},
   {"id":"financeiro.cadastros-financeiros-bancos-contas-formas-de-pagamento","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Cadastros financeiros"],"titulo":"Cadastros financeiros","selo":"M","fase":3,"rota":"/cadastros/dominios/grupo/financeiroCadastros","permissao":"config.dominio.ler"},
   {"id":"financeiro.parametros-e-permissoes-financeiras","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Parâmetros e permissões financeiras"],"titulo":"Parâmetros e permissões financeiras","selo":"M","fase":3,"rota":"/financeiro/parametros","permissao":"financeiro.parametro.ler"},
+  {"id":"financeiro.parametros-e-permissoes-financeiras.permissoes-do-financeiro","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Parâmetros e permissões financeiras","Permissões do financeiro"],"titulo":"Permissões do financeiro","selo":"M","fase":3,"rota":"/financeiro/parametros/permissoes","permissao":"financeiro.parametro.ler"},
   {"id":"financeiro.fiscal.escrituracao-de-entradas-sped-cfop-por-item","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","Escrituração de entradas"],"titulo":"Escrituração de entradas","selo":"M","fase":3,"rota":"/financeiro/fiscal/entradas","permissao":"financeiro.escrituracao.ler"},
   {"id":"financeiro.fiscal.tabelas-fiscais-e-sped-importador","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","Tabelas fiscais e SPED"],"titulo":"Tabelas fiscais e SPED","selo":"M","fase":1,"rota":"/financeiro/fiscal/tabelas","permissao":"catalogo.item.ler"},
   {"id":"financeiro.fiscal.naturezas-de-operacao-e-orgaos-arrecadadores","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","Naturezas de operação e órgãos arrecadadores"],"titulo":"Naturezas de operação e órgãos arrecadadores","selo":"M","fase":3,"rota":"/cadastros/dominios/grupo/financeiroNaturezas","permissao":"config.dominio.ler"},
