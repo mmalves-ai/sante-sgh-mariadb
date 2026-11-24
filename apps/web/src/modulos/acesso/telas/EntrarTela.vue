@@ -92,6 +92,8 @@ async function enviar(): Promise<void> {
         estabelecimento: escolhido.value,
         login: login.value.trim(),
         senha: senha.value,
+        // O código do segundo fator (aplicativo ou e-mail, o que a conta escolheu) vai junto quando pedido.
+        ...(segundoFator.value ? { codigoSegundoFator: codigoLimpo(segundoFator.value) } : {}),
       });
       lembrarEscolha(escolhido.value);
       senha.value = '';
@@ -134,7 +136,11 @@ async function enviar(): Promise<void> {
     if (doFator) {
       erro.value = t(doFator);
       segundoFator.value = '';
-      pedeCodigo.value = doFator !== 'entrar.segundoFatorCadastro';
+      pedeCodigo.value = ![
+        'entrar.segundoFatorCadastro',
+        'acessoEmail.semEmail',
+        'acessoEmail.muitosEnvios',
+      ].includes(doFator);
       if (pedeCodigo.value) void nextTick(() => campoCodigo.value?.focus());
       return;
     }
@@ -318,6 +324,12 @@ async function confirmarUnidade(): Promise<void> {
           <input v-model="comoPlataforma" type="checkbox" name="plataforma" data-testid="opcao-plataforma" />
           <span>{{ t('entrar.comoPlataforma') }}</span>
         </label>
+        <RouterLink
+          v-if="comoPlataforma"
+          :to="{ name: 'plataforma.recuperar-senha' }"
+          data-testid="link-esqueci-plataforma"
+          >{{ t('acessoEmail.esqueciPlataforma') }}</RouterLink
+        >
 
         <p v-if="erro" role="alert" class="entrar__erro" data-testid="erro-entrar">{{ erro }}</p>
 

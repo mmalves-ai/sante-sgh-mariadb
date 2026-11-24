@@ -21,6 +21,14 @@ export function textoRecusaSegundoFator(codigo: string | null): string | null {
       return 'entrar.segundoFatorInvalido';
     case 'segundo-fator-cadastro':
       return 'entrar.segundoFatorCadastro';
+    case 'segundo-fator-email':
+      return 'acessoEmail.codigoEnviado';
+    case 'segundo-fator-email-esgotado':
+      return 'acessoEmail.codigoEsgotado';
+    case 'segundo-fator-sem-email':
+      return 'acessoEmail.semEmail';
+    case 'segundo-fator-email-envios':
+      return 'acessoEmail.muitosEnvios';
     default:
       return null;
   }

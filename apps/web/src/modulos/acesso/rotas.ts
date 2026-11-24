@@ -16,6 +16,13 @@ export const rotasAcesso: RouteRecordRaw[] = [
     component: () => import('./telas/RecuperarSenhaTela.vue'),
     meta: { publica: true },
   },
+  // modulos-proprios-3 (acesso-ligacao): "Esqueci a senha" da conta da plataforma (pedido pelo e-mail e o link).
+  {
+    path: '/plataforma/recuperar-senha',
+    name: 'plataforma.recuperar-senha',
+    component: () => import('./telas/RecuperarSenhaPlataformaTela.vue'),
+    meta: { publica: true },
+  },
   {
     path: '/senha',
     name: 'senha',
