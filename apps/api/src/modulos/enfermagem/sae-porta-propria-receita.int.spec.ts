@@ -133,7 +133,7 @@ describe.skipIf(SEM_BANCO)('porta própria da receita do enfermeiro (MariaDB, cl
         itens: [
           {
             medicamento: 'paracetamol',
-            via: 'via oral (comprimido revestido)',
+            via: 'oral (comprimido revestido)',
             posologia: '1 comprimido de 6 em 6 horas',
             quantidade: '2 caixas com 20 comprimidos revestidos cada',
           },
@@ -178,7 +178,7 @@ describe.skipIf(SEM_BANCO)('porta própria da receita do enfermeiro (MariaDB, cl
     expect(lidas[0]!.itens).toEqual([
       {
         medicamento: 'paracetamol',
-        via: 'via oral (comprimido revestido)',
+        via: 'oral (comprimido revestido)',
         posologia: '1 comprimido de 6 em 6 horas',
         quantidade: '2 caixas com 20 comprimidos revestidos cada',
       },
