@@ -4,7 +4,13 @@
 // opções. A liberação das funcionalidades vem da FONTE_CONFIGURACAO do módulo de configuração (global), quando montado.
 import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
+import { arquivosDoAmbiente } from '../arquivos-locais.js';
 import type { ContextoModulo } from '../registro.js';
+import {
+  AuditoriaTramiteController,
+  SERVICO_AUDITORIA_TRAMITE,
+  ServicoAuditoriaTramite,
+} from './auditoria-tramite.controller.js';
 import {
   AjustesContaController,
   SERVICO_AJUSTES_CONTA,
@@ -21,6 +27,16 @@ import {
   ServicoMovimentosConta,
 } from './conta-movimentos.controller.js';
 import { FaturamentoController } from './faturamento.controller.js';
+import {
+  NotaVinculoController,
+  SERVICO_NOTA_VINCULO,
+  ServicoNotaVinculo,
+} from './nota-vinculo.controller.js';
+import {
+  ParticularAdiantamentoController,
+  SERVICO_PARTICULAR_ADIANTAMENTO,
+  ServicoParticularAdiantamento,
+} from './particular-adiantamento.controller.js';
 import { PORTA_FATURAMENTO, type PortaFaturamento, portaFaturamentoIndisponivel } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
@@ -51,6 +67,9 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       ComplementosContaController,
       MovimentosContaController,
       AjustesContaController,
+      NotaVinculoController,
+      ParticularAdiantamentoController,
+      AuditoriaTramiteController,
     ],
     providers: [
       { provide: PORTA_FATURAMENTO, useValue: porta },
@@ -76,6 +95,33 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoAjustesConta(ctx.nucleo)
+            : null,
+      },
+      // 06-FAT linha 36: a nota fiscal de serviço que documenta a fatura ou a conta (banco próprio).
+      {
+        provide: SERVICO_NOTA_VINCULO,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoNotaVinculo(ctx.nucleo)
+            : null,
+      },
+      // 06-FAT linhas 21, 22 e 24: auditoria item a item, protocolo entre setores e acompanhamento da guia.
+      {
+        provide: SERVICO_AUDITORIA_TRAMITE,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoAuditoriaTramite(
+                ctx.nucleo,
+                arquivosDoAmbiente(ctx.nucleo, ctx.configuracao.clientePadrao, ctx.env as NodeJS.ProcessEnv),
+              )
+            : null,
+      },
+      // 06-FAT linhas 39 e 40: adiantamento, caução e conta corrente do paciente; modelo de orçamento (banco próprio).
+      {
+        provide: SERVICO_PARTICULAR_ADIANTAMENTO,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoParticularAdiantamento(ctx.nucleo)
             : null,
       },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.

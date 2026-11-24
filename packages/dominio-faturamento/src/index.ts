@@ -21,6 +21,10 @@ export * from './conta/admissao.js';
 export * from './competencia/reabertura.js';
 // F3.7 (06-FAT linhas 10 e 12): período da conta parcial, segurado na conta e campo adicional da operadora na guia.
 export * from './conta/complementos.js';
+// F3.7 (06-FAT linha 36): a nota fiscal de serviço que documenta a fatura do convênio ou a conta do particular.
+export * from './conta/nota-vinculo.js';
+// F3.7 (06-FAT linha 37): o evento contábil da receita faturada, glosada e recuperada pela regra de conta contábil.
+export * from './conta/receita-contabil.js';
 // F3.7 (06-FAT linhas 14, 15 e 16): equipe do item, kit de cobrança e transferência de itens entre contas.
 export * from './conta/movimentos.js';
 // F3.7 (06-FAT linhas 17, 18 e 20): horário especial, ajuste da conta com alçada e pacote na conta.
@@ -28,7 +32,11 @@ export * from './conta/ajustes.js';
 // F3.1 (02-CAD linha 25): configuração TISS por fonte pagadora e faixa de numeração de guias.
 export * from './tiss/configuracao.js';
 export * from './tiss/elegibilidade.js';
+export * from './tiss/apresentacao.js';
 // F3.7 (06-FAT linhas 21, 22 e 24): parecer do item na auditoria, protocolo entre setores e acompanhamento da guia.
 export * from './conta/auditoria-tramite.js';
 // F3.7 (06-FAT linha 34): o lote de recurso da glosa por item, o retorno da operadora e a situação da glosa.
 export * from './glosa/recurso-lote.js';
+// F3.7 (06-FAT linhas 39 e 40): adiantamento, caução e conta corrente do paciente; modelo de orçamento padrão.
+export * from './conta/adiantamento-paciente.js';
+export * from './conta/modelo-orcamento.js';
