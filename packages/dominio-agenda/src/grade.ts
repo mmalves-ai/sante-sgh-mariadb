@@ -6,8 +6,9 @@
 //   - Duração em minutos (5 a 240); uma duração por geração.
 //   - Janela até 120 dias e 400 horários; começa hoje ou depois; hoje só a partir de 1 h à frente do relógio do
 //     banco (o resto da janela vale inteiro).
-//   - Feriados do cadastro pulados (ano 9999 = todo ano); feriado móvel não cadastrado no ano vira alerta (a base
-//     de origem só tem os móveis de 2020: Carnaval, Sexta-feira Santa e Corpus Christi vazam na grade).
+//   - Dias sem expediente pulados (lista que a porta monta por `diasSemExpediente`); o dia com faixa de horas sem
+//     expediente (meio expediente) não pula o dia: a faixa é pulada como um bloqueio. Carnaval e Corpus Christi são
+//     ponto facultativo federal: só pulam se o cliente os cadastrar como feriado; sem cadastro, viram alerta.
 //   - Bloqueios da agenda pulados; horário que já existe na agenda (mesmo dia e hora) é pulado (a unicidade
 //     recusaria e derrubaria a transação).
 //   - Sábado e domingo: nunca vistos nas gerações da base de origem (escalas só de segunda a sexta): recusados
@@ -55,9 +56,12 @@ export interface FaixaEscala {
 }
 
 export interface Feriado {
-  /** AAAA-MM-DD; o ano 9999 vale para todo ano. */
+  /** AAAA-MM-DD. */
   readonly data: string;
   readonly nome: string;
+  /** Faixa sem expediente (fim exclusivo); ausente quando o dia inteiro fica sem expediente. */
+  readonly horaInicio?: string | null;
+  readonly horaFim?: string | null;
 }
 
 /** Bloqueio do novo: período de datas e, opcionalmente, a faixa de horas do dia (fim exclusivo). */
@@ -167,24 +171,34 @@ export function pascoa(ano: number): string {
   return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 
-/** Feriados móveis nacionais do ano (os três que o legado cadastrou só para 2020). */
+/** Feriado nacional de data móvel do ano: a Sexta-feira Santa (Páscoa menos 2 dias). */
 export function feriadosMoveis(ano: number): Feriado[] {
+  return [{ data: somarDias(pascoa(ano), -2), nome: 'Sexta-feira Santa' }];
+}
+
+/**
+ * Pontos facultativos federais de data móvel: Carnaval (Páscoa menos 47 dias) e Corpus Christi (Páscoa mais 60).
+ * Não são feriado nacional: o dia só fica sem expediente se o cliente cadastrar o feriado (municipal, estadual ou do
+ * estabelecimento).
+ */
+export function pontosFacultativosMoveis(ano: number): Feriado[] {
   const p = pascoa(ano);
   return [
     { data: somarDias(p, -47), nome: 'Carnaval' },
-    { data: somarDias(p, -2), nome: 'Sexta-feira Santa' },
     { data: somarDias(p, 60), nome: 'Corpus Christi' },
   ];
 }
 
-/** Feriado cadastrado que cai na data (ano 9999 = todo ano). */
+/** Dia inteiro sem expediente na data (o de faixa de horas não conta: vira bloqueio da faixa). */
 export function feriadoNaData(data: string, feriados: readonly Feriado[]): Feriado | null {
-  const md = data.slice(5);
-  return (
-    feriados.find((f) => f.data === data) ??
-    feriados.find((f) => f.data.startsWith('9999-') && f.data.slice(5) === md) ??
-    null
-  );
+  return feriados.find((f) => f.data === data && !f.horaInicio) ?? null;
+}
+
+/** Faixas de horas sem expediente (meio expediente) como bloqueios de um dia; sem fim, vai até o fim do dia. */
+export function faixasSemExpediente(feriados: readonly Feriado[]): BloqueioPeriodo[] {
+  return feriados
+    .filter((f) => !!f.horaInicio)
+    .map((f) => ({ inicio: f.data, fim: f.data, horaInicio: f.horaInicio!, horaFim: f.horaFim || '23:59' }));
 }
 
 function bloqueado(data: string, hora: string, bloqueios: readonly BloqueioPeriodo[]): boolean {
@@ -321,6 +335,7 @@ export function planejarGrade(p: PedidoGrade, c: ContextoGrade): PlanoGrade {
   let existentes = 0;
   const alertas: AlertaGrade[] = [];
   const moveisAvisados = new Set<string>();
+  const bloqueios = [...c.bloqueios, ...faixasSemExpediente(c.feriados)];
   for (const data of datasEntre(p.de, p.ate)) {
     const semana = semanaDaData(data);
     const doDia = faixas.filter((f) => f.semana === semana);
@@ -336,12 +351,12 @@ export function planejarGrade(p: PedidoGrade, c: ContextoGrade): PlanoGrade {
         texto: `${data} é feriado (${feriado.nome}) e terá horários, como pedido.`,
       });
     if (!feriado) {
-      const movel = feriadosMoveis(Number(data.slice(0, 4))).find((m) => m.data === data);
+      const movel = pontosFacultativosMoveis(Number(data.slice(0, 4))).find((m) => m.data === data);
       if (movel && !moveisAvisados.has(data)) {
         moveisAvisados.add(data);
         alertas.push({
           codigo: 'feriado-movel',
-          texto: `${data} é ${movel.nome}, que não está no cadastro de feriados deste ano: confirme se haverá atendimento ou cadastre o feriado.`,
+          texto: `${data} é ${movel.nome}, ponto facultativo que não está no cadastro de feriados: os horários serão gerados; cadastre o feriado se não houver atendimento.`,
         });
       }
     }
@@ -356,7 +371,7 @@ export function planejarGrade(p: PedidoGrade, c: ContextoGrade): PlanoGrade {
           existentes++;
           continue;
         }
-        if (bloqueado(data, hora, c.bloqueios)) {
+        if (bloqueado(data, hora, bloqueios)) {
           bloqueados++;
           continue;
         }

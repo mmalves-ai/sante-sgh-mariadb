@@ -239,15 +239,16 @@ export const ESPECIALIDADES_SINTETICAS = [
   { codigo: 21, nome: 'ORTOPEDIA' },
   { codigo: 25, nome: 'PEDIATRIA' },
 ];
+// Feriados fixos da sessão sintética, por mês e dia (repetem todo ano; a regra completa é a da porta própria).
 const FERIADOS = [
-  { data: '9999-01-01', nome: 'CONFRATERNIZACAO' },
-  { data: '9999-04-21', nome: 'TIRADENTES' },
-  { data: '9999-09-07', nome: 'INDEPENDENCIA' },
-  { data: '9999-11-02', nome: 'FINADOS' },
-  { data: '9999-11-15', nome: 'REPUBLICA' },
-  { data: '9999-12-25', nome: 'NATAL' },
+  { mesDia: '01-01', nome: 'CONFRATERNIZACAO' },
+  { mesDia: '04-21', nome: 'TIRADENTES' },
+  { mesDia: '09-07', nome: 'INDEPENDENCIA' },
+  { mesDia: '11-02', nome: 'FINADOS' },
+  { mesDia: '11-15', nome: 'REPUBLICA' },
+  { mesDia: '12-25', nome: 'NATAL' },
 ];
-const ehFeriado = (d: string) => FERIADOS.some((f) => f.data.slice(5) === d.slice(5));
+const ehFeriado = (d: string) => FERIADOS.some((f) => f.mesDia === d.slice(5));
 
 function semear(r: RelogioM): Estado {
   const agendas: AgendaM[] = [
@@ -1293,7 +1294,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
   async feriados(_c: ContextoAgenda, de: string, ate: string) {
     const r: { data: string; nome: string }[] = [];
     for (let a = Number(de.slice(0, 4)); a <= Number(ate.slice(0, 4)); a++)
-      for (const f of FERIADOS) r.push({ data: `${a}${f.data.slice(4)}`, nome: f.nome });
+      for (const f of FERIADOS) r.push({ data: `${a}-${f.mesDia}`, nome: f.nome });
     return r.filter((f) => f.data >= de && f.data <= ate);
   }
   private situacaoNoHorario(h: HorarioM, m: MarcacaoM | null): SituacaoMarcacao | null {

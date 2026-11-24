@@ -1,13 +1,15 @@
-// Dias sem expediente na geração da grade (02-AGE linha 41): os feriados nacionais fixos e móveis, mais os
+// Dias sem expediente na geração da grade (02-AGE linha 41): os feriados nacionais fixos e a Sexta-feira Santa, mais os
 // cadastrados no cliente (feriado nacional, estadual, municipal ou do estabelecimento) e os dias não úteis do
 // cadastro (recorrência anual, data única ou móvel gravada por ano).
 //
 // Regras:
 //   - vale o que tem abrangência nacional, o estadual da UF do estabelecimento, o municipal do município do
 //     estabelecimento e o do próprio estabelecimento; o de outra UF, outro município ou outro estabelecimento não;
-//   - ponto facultativo NÃO pula o dia (o hospital decide abrir); fica fora da lista;
-//   - dia não útil com faixa de horas (meio expediente) não pula o dia inteiro; fica fora da lista (o bloqueio por
-//     período cobre a faixa);
+//   - ponto facultativo NÃO pula o dia (o hospital decide abrir); fica fora da lista. Carnaval e Corpus Christi são
+//     ponto facultativo federal: só entram se o cliente os cadastrar como feriado (municipal, estadual ou do
+//     estabelecimento, sem a marca de ponto facultativo);
+//   - dia não útil com faixa de horas (meio expediente) não pula o dia inteiro: sai na lista com a faixa, e a geração
+//     da grade pula só os horários dentro dela; se o dia inteiro já está sem expediente, a faixa não aparece;
 //   - a mesma data aparece uma vez só, com o primeiro nome pela ordem: cadastro do estabelecimento, municipal,
 //     estadual, nacional (o nome mais local é o que a recepção reconhece).
 import { type Feriado, feriadosMoveis } from './grade.js';
@@ -47,6 +49,8 @@ export interface DiaNaoUtilCadastrado {
   readonly facultativo: boolean;
   /** Preenchida quando o dia não útil é só uma faixa de horas. */
   readonly horaInicio: string | null;
+  /** Fim exclusivo da faixa; vazio com início preenchido = até o fim do dia. */
+  readonly horaFim?: string | null;
 }
 
 /** Feriados nacionais de data fixa (lei federal); os móveis saem de `feriadosMoveis`. */
@@ -92,7 +96,10 @@ export function valeNoLocal(
 
 const dois = (n: number) => String(n).padStart(2, '0');
 
-/** Dias que a geração da grade pula, no período [de, ate], em ordem de data e sem repetição. */
+/**
+ * Dias que a geração da grade pula, no período [de, ate], em ordem de data e sem repetição; o dia com faixa de horas
+ * sem expediente sai com `horaInicio`/`horaFim`.
+ */
 export function diasSemExpediente(
   local: LocalExpediente,
   de: string,
@@ -103,6 +110,7 @@ export function diasSemExpediente(
   },
 ): Feriado[] {
   const cand: { data: string; nome: string; peso: number }[] = [];
+  const faixas: Feriado[] = [];
   const anoDe = Number(de.slice(0, 4));
   const anoAte = Number(ate.slice(0, 4));
   for (let a = anoDe; a <= anoAte; a++) {
@@ -114,16 +122,16 @@ export function diasSemExpediente(
     cand.push({ data: f.data, nome: f.nome, peso: PESO[f.abrangencia] });
   }
   for (const d of cadastro.diasNaoUteis) {
-    if (d.facultativo || d.horaInicio || !valeNoLocal(local, d.abrangencia, d)) continue;
+    if (d.facultativo || !valeNoLocal(local, d.abrangencia, d)) continue;
+    const datas: string[] = [];
     if (d.recorrencia === 'anual') {
       if (d.dia == null || d.mes == null) continue;
-      for (let a = anoDe; a <= anoAte; a++)
-        cand.push({
-          data: `${a}-${dois(d.mes)}-${dois(d.dia)}`,
-          nome: d.descricao,
-          peso: PESO[d.abrangencia],
-        });
-    } else if (d.data) cand.push({ data: d.data, nome: d.descricao, peso: PESO[d.abrangencia] });
+      for (let a = anoDe; a <= anoAte; a++) datas.push(`${a}-${dois(d.mes)}-${dois(d.dia)}`);
+    } else if (d.data) datas.push(d.data);
+    for (const data of datas)
+      if (d.horaInicio)
+        faixas.push({ data, nome: d.descricao, horaInicio: d.horaInicio, horaFim: d.horaFim ?? null });
+      else cand.push({ data, nome: d.descricao, peso: PESO[d.abrangencia] });
   }
   const porData = new Map<string, { nome: string; peso: number }>();
   for (const x of cand) {
@@ -131,7 +139,9 @@ export function diasSemExpediente(
     const atual = porData.get(x.data);
     if (!atual || x.peso < atual.peso) porData.set(x.data, { nome: x.nome, peso: x.peso });
   }
-  return [...porData.entries()]
-    .sort(([x], [y]) => x.localeCompare(y))
-    .map(([data, v]) => ({ data, nome: v.nome }));
+  const inteiros: Feriado[] = [...porData.entries()].map(([data, v]) => ({ data, nome: v.nome }));
+  const parciais = faixas.filter((f) => f.data >= de && f.data <= ate && !porData.has(f.data));
+  return [...inteiros, ...parciais].sort(
+    (x, y) => x.data.localeCompare(y.data) || (x.horaInicio ?? '').localeCompare(y.horaInicio ?? ''),
+  );
 }

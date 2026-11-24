@@ -98,6 +98,9 @@ export interface GeracaoGrade {
 export interface Feriado {
   readonly data: string;
   readonly nome: string;
+  /** Faixa sem expediente (meio expediente), fim exclusivo; ausente = o dia inteiro. */
+  readonly horaInicio?: string | null;
+  readonly horaFim?: string | null;
 }
 
 /** Horário da grade, com a marcação que o ocupa (quando houver). */

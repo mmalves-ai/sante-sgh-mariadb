@@ -31,6 +31,7 @@ const dnu = (p: Partial<DiaNaoUtilCadastrado>): DiaNaoUtilCadastrado => ({
   data: null,
   facultativo: false,
   horaInicio: null,
+  horaFim: null,
   ...p,
 });
 
@@ -54,9 +55,27 @@ describe('valeNoLocal', () => {
 });
 
 describe('diasSemExpediente', () => {
-  it('sem cadastro: os nacionais fixos e os móveis do período', () => {
-    const r = diasSemExpediente(LOCAL, '2030-03-01', '2030-04-30', { feriados: [], diasNaoUteis: [] });
-    expect(r.map((f) => f.data)).toEqual(['2030-03-05', '2030-04-19', '2030-04-21']);
+  it('sem cadastro: os nacionais fixos e a Sexta-feira Santa; Carnaval e Corpus Christi (ponto facultativo) não', () => {
+    const r = diasSemExpediente(LOCAL, '2030-03-01', '2030-06-30', { feriados: [], diasNaoUteis: [] });
+    // Páscoa de 2030: 21/04. Carnaval 05/03 e Corpus Christi 20/06 ficam fora.
+    expect(r.map((f) => f.data)).toEqual(['2030-04-19', '2030-04-21', '2030-05-01']);
+  });
+
+  it('Carnaval e Corpus Christi pulam quando o cliente os cadastra como feriado; como ponto facultativo, não', () => {
+    const r = diasSemExpediente(LOCAL, '2030-03-01', '2030-06-30', {
+      feriados: [
+        fer({ data: '2030-03-05', nome: 'Carnaval', abrangencia: 'municipal', uf: null, municipio: 4314902 }),
+        fer({
+          data: '2030-06-20',
+          nome: 'Corpus Christi',
+          abrangencia: 'nacional',
+          uf: null,
+          pontoFacultativo: true,
+        }),
+      ],
+      diasNaoUteis: [],
+    });
+    expect(r.map((f) => f.data)).toEqual(['2030-03-05', '2030-04-19', '2030-04-21', '2030-05-01']);
   });
 
   it('estadual da UF e municipal do município entram; de outra UF ou município não', () => {
@@ -88,12 +107,20 @@ describe('diasSemExpediente', () => {
     ]);
   });
 
-  it('ponto facultativo e meio expediente não pulam o dia', () => {
+  it('ponto facultativo não pula o dia; meio expediente sai com a faixa de horas, e não sai se o dia inteiro já fecha', () => {
     const r = diasSemExpediente(LOCAL, '2030-03-01', '2030-03-31', {
       feriados: [fer({ data: '2030-03-15', pontoFacultativo: true })],
-      diasNaoUteis: [dnu({ horaInicio: '13:00' }), dnu({ dia: 20, facultativo: true })],
+      diasNaoUteis: [
+        dnu({ horaInicio: '13:00', horaFim: '18:00' }),
+        dnu({ dia: 20, facultativo: true }),
+        dnu({ dia: 25, descricao: 'Dia inteiro' }),
+        dnu({ dia: 25, horaInicio: '08:00', horaFim: '12:00', descricao: 'Faixa no dia fechado' }),
+      ],
     });
-    expect(r.map((f) => f.data)).toEqual(['2030-03-05']);
+    expect(r).toEqual([
+      { data: '2030-03-03', nome: 'Aniversário do hospital', horaInicio: '13:00', horaFim: '18:00' },
+      { data: '2030-03-25', nome: 'Dia inteiro' },
+    ]);
   });
 
   it('dia não útil anual repete em cada ano; data única e móvel só na data; outro estabelecimento não', () => {

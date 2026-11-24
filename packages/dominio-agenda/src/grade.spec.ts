@@ -6,6 +6,7 @@ import {
   faixasDaEscala,
   feriadoNaData,
   feriadosMoveis,
+  pontosFacultativosMoveis,
   mudancasDaEscala,
   pascoa,
   planejarGrade,
@@ -104,8 +105,8 @@ describe('horários da faixa', () => {
 });
 
 describe('feriados, bloqueios, existentes e o corte de hoje', () => {
-  it('feriado fixo (ano 9999) pulado; datado também; incluirFeriados gera com alerta', () => {
-    const feriados = [{ data: '9999-10-26', nome: 'FERIADO FIXO' }];
+  it('feriado da lista pulado; incluirFeriados gera com alerta', () => {
+    const feriados = [{ data: '2026-10-26', nome: 'FERIADO FIXO' }];
     const p = planejarGrade(
       pedido({ ate: '2026-11-02', faixas: [{ semana: 2, inicio: '08:00', fim: '09:00' }] }),
       ctx({ feriados }),
@@ -119,7 +120,23 @@ describe('feriados, bloqueios, existentes e o corte de hoje', () => {
     expect(com.horarios).toHaveLength(4);
     expect(com.alertas.some((a) => a.codigo === 'feriado-incluido')).toBe(true);
   });
-  it('feriado móvel não cadastrado no ano vira alerta (não pula)', () => {
+  it('dia com faixa sem expediente (meio expediente): só a faixa é pulada, o resto do dia gera', () => {
+    const p = planejarGrade(
+      pedido({ faixas: [{ semana: 2, inicio: '08:00', fim: '10:00' }] }),
+      ctx({
+        feriados: [{ data: '2026-10-26', nome: 'Meio expediente', horaInicio: '09:00', horaFim: '18:00' }],
+      }),
+    );
+    expect(p.pulados.feriados).toEqual([]);
+    expect(p.horarios.filter((h) => h.data === '2026-10-26').map((h) => h.hora)).toEqual([
+      '08:00',
+      '08:15',
+      '08:30',
+      '08:45',
+    ]);
+    expect(p.pulados.bloqueados).toBe(4);
+  });
+  it('ponto facultativo móvel (Carnaval, Corpus Christi) não cadastrado vira alerta (não pula)', () => {
     // Corpus Christi de 2027: 2027-05-27 (quinta, 5).
     const p = planejarGrade(
       {
@@ -299,19 +316,20 @@ describe('vetos', () => {
 });
 
 describe('feriados móveis e modelo da escala', () => {
-  it('Páscoa (Meeus) e os três móveis', () => {
+  it('Páscoa (Meeus), o feriado móvel e os pontos facultativos móveis', () => {
     expect(pascoa(2026)).toBe('2026-04-05');
     expect(pascoa(2027)).toBe('2027-03-28');
-    expect(feriadosMoveis(2026).map((f) => f.data)).toEqual(['2026-02-17', '2026-04-03', '2026-06-04']);
+    expect(feriadosMoveis(2026).map((f) => f.data)).toEqual(['2026-04-03']);
+    expect(pontosFacultativosMoveis(2026).map((f) => f.data)).toEqual(['2026-02-17', '2026-06-04']);
   });
-  it('feriado na data: datado vence o fixo', () => {
+  it('feriado na data: só o dia inteiro conta; a faixa de horas não', () => {
     const f = [
-      { data: '9999-12-25', nome: 'NATAL' },
-      { data: '2026-12-25', nome: 'DATADO' },
+      { data: '2026-12-25', nome: 'NATAL' },
+      { data: '2026-12-24', nome: 'VÉSPERA', horaInicio: '12:00', horaFim: null },
     ];
-    expect(feriadoNaData('2026-12-25', f)?.nome).toBe('DATADO');
-    expect(feriadoNaData('2027-12-25', f)?.nome).toBe('NATAL');
-    expect(feriadoNaData('2027-12-24', f)).toBeNull();
+    expect(feriadoNaData('2026-12-25', f)?.nome).toBe('NATAL');
+    expect(feriadoNaData('2026-12-24', f)).toBeNull();
+    expect(feriadoNaData('2027-12-25', f)).toBeNull();
   });
   it('mudanças do modelo pela chave (semana, duração, início)', () => {
     const atual = [

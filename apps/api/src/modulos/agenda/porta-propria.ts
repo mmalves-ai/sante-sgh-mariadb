@@ -605,7 +605,7 @@ export class PortaAgendaPropria implements PortaAgenda {
   }
 
   async feriados(c: ContextoAgenda, de: string, ate: string): Promise<Feriado[]> {
-    // 02-AGE linha 41: nacionais fixos e móveis, mais o cadastro de feriados (nacional, da UF, do município e do
+    // 02-AGE linha 41: nacionais fixos e a Sexta-feira Santa, mais o cadastro de feriados (nacional, da UF, do município e do
     // estabelecimento) e os dias não úteis do cadastro. A regra de qual vale está no domínio.
     return this.ler(c, async (l, e) => {
       const loc = await l.uma(
@@ -623,7 +623,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       );
       const dnu = await l.consultar(
         `SELECT descricao, abrangencia, unidade_federativa_id, municipio_ibge_id, estabelecimento_id, recorrencia,
-                dia, mes, data, facultativo, hora_inicio
+                dia, mes, data, facultativo, hora_inicio, hora_fim
            FROM dia_nao_util
           WHERE ativo AND excluido_em IS NULL AND (recorrencia = 'anual' OR data BETWEEN ? AND ?)`,
         [de, ate],
@@ -658,7 +658,9 @@ export class PortaAgendaPropria implements PortaAgenda {
             mes: numOuNull(x['mes']),
             data: dataIso(x['data']),
             facultativo: Boolean(Number(x['facultativo'])),
-            horaInicio: txt(x['hora_inicio']),
+            // TIME do banco vem com os segundos: a faixa anda em HH:MM.
+            horaInicio: txt(x['hora_inicio'])?.slice(0, 5) ?? null,
+            horaFim: txt(x['hora_fim'])?.slice(0, 5) ?? null,
           })),
         },
       );
