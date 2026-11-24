@@ -12,9 +12,9 @@
 // O atestado fica em atestado_colaborador (um por solicitação), com o CID pelo catálogo CID-10 (termo_terminologia) e o
 // anexo em arquivo; toda leitura do atestado grava o acesso em atestado_colaborador_acesso (quem, quando, a finalidade e
 // se viu o CID), e o CID só sai a quem pediu para vê-lo.
-// Pendente: o efeito da aprovação no ponto, nas férias e no cadastro usa os gravadores das portas próprias desses
-// módulos sobre a mesma transação (`efeitos`, ligados na composição do módulo); enquanto não forem ligados, a aprovação
-// que tem efeito recusa com `modelo-pendente` e nada é gravado pela metade.
+// O efeito da aprovação no ponto, nas férias e no cadastro usa os gravadores das portas próprias desses módulos sobre a
+// mesma transação, com o contexto de quem decide (`efeitos`, em efeitos-proprios.ts, ligados na composição do módulo);
+// sem eles ligados, a aprovação que tem efeito recusa com `modelo-pendente` e nada é gravado pela metade.
 import { ErroOperacao, recusa, type TxOperacao } from '@sgh/nucleo';
 import { type AnotacaoGravacao, gravacaoDireta } from '../../enfermagem/gravacao-direta.js';
 import type { GravacaoFeita, TrilhaDaGravacao } from '../../exames/public-api.js';
@@ -62,7 +62,11 @@ export const TABELAS_SOLICITACAO = [
 /** Os gravadores dos efeitos da aprovação (ponto, férias e cadastro) sobre a MESMA transação. */
 export interface EfeitosAutoatendimento {
   readonly tabelas: readonly string[];
-  gravadores(tx: TxOperacao, est: number): Pick<GravadorAutoatendimento, 'ponto' | 'folha' | 'pessoas'>;
+  gravadores(
+    tx: TxOperacao,
+    est: number,
+    c: ContextoAutoatendimento,
+  ): Pick<GravadorAutoatendimento, 'ponto' | 'folha' | 'pessoas'>;
 }
 
 const PENDENTE_EFEITO = 'O efeito da aprovação no ponto, nas férias ou no cadastro do colaborador';
@@ -250,6 +254,7 @@ function gravador(
   est: number,
   anotacao: AnotacaoGravacao,
   efeitos: EfeitosAutoatendimento | null,
+  c: ContextoAutoatendimento,
 ): GravadorAutoatendimento {
   const agora = async () => paraBanco(await relogioDoEstabelecimento(tx, est));
   const travada = async (id: number, versao: number) => {
@@ -257,7 +262,7 @@ function gravador(
     if (!r || n(r['versao']) !== versao || r['situacao'] !== 'pendente') throw desatualizado();
     return r;
   };
-  const e = efeitos?.gravadores(tx, est) ?? {
+  const e = efeitos?.gravadores(tx, est, c) ?? {
     ponto: efeitoPendente<GravadorAutoatendimento['ponto']>(),
     folha: efeitoPendente<GravadorAutoatendimento['folha']>(),
     pessoas: efeitoPendente<GravadorAutoatendimento['pessoas']>(),
@@ -449,7 +454,7 @@ export class PortaAutoatendimentoPropria implements PortaAutoatendimento {
       nome: 'pessoas.autoatendimento.gravar',
       tabelas: [...TABELAS_SOLICITACAO, ...(efeitos?.tabelas ?? [])],
       trilha,
-      gravador: (tx, est, anotacao) => gravador(tx, est, anotacao, efeitos),
+      gravador: (tx, est, anotacao) => gravador(tx, est, anotacao, efeitos, c),
       fn,
     });
   }
