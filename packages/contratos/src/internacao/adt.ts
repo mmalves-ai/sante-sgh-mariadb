@@ -346,13 +346,10 @@ export const esquemaCancelarAltaMedica = z
 
 // ── internacao.preInternar e o saneamento ─────────────────────────────────────────────────────────
 
-/** "Sem data" da pré-internação, como o legado grava (968 de 1.066 com o ano 2099). */
-export const DATA_SEM_DATA_PRE = '2099-12-31';
-
 export const esquemaPreInternar = z
   .object({
     paciente: id,
-    /** Data prevista; sem ela, "sem data" (2099, como o legado). */
+    /** Data prevista; sem ela, a pré-internação entra na fila de espera com a data nula. */
     dataPrevista: esquemaDataIso.optional(),
     horaPrevista: esquemaHora.optional(),
     convenio: smallint.refine((c) => c > 0, 'Informe o convênio.'),
@@ -397,16 +394,16 @@ export const esquemaCorrigirPreInternacao = z
   .object({
     paciente: id,
     dataPrevista: esquemaDataIso.optional(),
-    /** A data que a tela leu (controle otimista). */
-    lida: esquemaDataIso,
+    /** A data que a tela leu (controle otimista); null = estava sem data (fila de espera). */
+    lida: esquemaDataIso.nullable(),
   })
   .strict();
 export type CorrigirPreInternacaoEntrada = z.infer<typeof esquemaCorrigirPreInternacao>;
 
 /** Ano mínimo e máximo plausíveis da data prevista (fora disso vai à lista de saneamento). */
-export function dataPrevistaPlausivel(iso: string, hojeIso: string): 'ok' | 'sem-data' | 'impossivel' {
+export function dataPrevistaPlausivel(iso: string | null, hojeIso: string): 'ok' | 'sem-data' | 'impossivel' {
+  if (iso === null) return 'sem-data';
   const ano = Number(iso.slice(0, 4));
-  if (ano === 2099) return 'sem-data';
   const hoje = Number(hojeIso.slice(0, 4));
   if (ano < 2000 || ano > hoje + 2) return 'impossivel';
   return 'ok';

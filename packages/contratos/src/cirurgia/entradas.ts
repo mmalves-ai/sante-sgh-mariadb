@@ -154,6 +154,32 @@ const funcoesRegistro = {
   circulante: esquemaProfissional.nullable().optional(),
 };
 
+/**
+ * Participação de um membro da equipe (F3.4, 04-CC linha 95): entrada e saída na sala ("HH:MM" do dia do ato; nulas =
+ * o tempo inteiro do paciente na sala) e o percentual de participação (nulo = o padrão da função).
+ */
+export const esquemaParticipacaoEquipe = z
+  .object({
+    entrada: esquemaHora.nullable(),
+    saida: esquemaHora.nullable(),
+    percentual: z
+      .number()
+      .min(0, 'O percentual vai de 0 a 100.')
+      .max(100, 'O percentual vai de 0 a 100.')
+      .nullable(),
+  })
+  .strict();
+export type ParticipacaoEquipeEntrada = z.infer<typeof esquemaParticipacaoEquipe>;
+export const esquemaParticipacaoPorFuncao = z
+  .object(
+    Object.fromEntries(
+      Object.keys(funcoesRegistro).map((f) => [f, esquemaParticipacaoEquipe.optional()]),
+    ) as {
+      [K in keyof typeof funcoesRegistro]: z.ZodOptional<typeof esquemaParticipacaoEquipe>;
+    },
+  )
+  .strict();
+
 export const esquemaProcedimentoRealizado = z
   .object({
     procedimento: inteiro.refine((v) => v > 0, 'Informe o procedimento.'),
@@ -208,6 +234,8 @@ export const esquemaRegistrarCirurgia = z
       })
       .strict(),
     procedimentos: z.array(esquemaProcedimentoRealizado).min(1).max(10),
+    /** Entrada, saída e percentual de cada função da equipe (vale para o membro em todos os procedimentos). */
+    participacao: esquemaParticipacaoPorFuncao.optional(),
     /**
      * M46 (etapa 2, regra 2): com a trava da incisão ligada, o ato sem agendamento com a hora da incisão é a exceção
      * do supervisor, só em urgência e com o motivo (10 a 100 caracteres; vai à trilha da exceção). Ignorado nos demais.

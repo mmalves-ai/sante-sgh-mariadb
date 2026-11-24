@@ -22,7 +22,6 @@ import { randomUUID } from 'node:crypto';
 import {
   type ApoioInternacaoTela,
   chaveTextoLeito,
-  DATA_SEM_DATA_PRE,
   type DestinoAlta,
   diariasFaturaveis,
   type EstadoLeitoNovo,
@@ -546,20 +545,20 @@ export class PortaAdtPropria implements PortaAdt {
            JOIN pessoa_fisica pfm ON pfm.id = pm.pessoa_fisica_id
            LEFT JOIN categoria_acomodacao ca ON ca.id = a.categoria_acomodacao_id
           WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL
-          ORDER BY a.previsto_para LIMIT ${TETO_LISTA + 1}`,
+          ORDER BY a.previsto_para IS NULL, a.previsto_para LIMIT ${TETO_LISTA + 1}`,
         [est],
       );
       const pendente = (s: unknown) =>
         ['solicitado', 'aguardando_autorizacao', 'autorizado', 'confirmado', 'em_espera'].includes(texto(s));
       const todos: PreInternacaoItem[] = linhas.slice(0, TETO_LISTA).map((r) => {
         const semData = r['situacao'] === 'em_espera';
-        const d = civil(r['previsto_para'] as Date, fuso);
+        const d = semData || r['previsto_para'] === null ? null : civil(r['previsto_para'] as Date, fuso);
         return {
           paciente: n(r['paciente_id']),
           prontuario: n(r['numero_prontuario']),
           nome: texto(r['nome']),
-          dataPrevista: semData ? DATA_SEM_DATA_PRE : d.data,
-          horaPrevista: semData ? '' : d.hora,
+          dataPrevista: d ? d.data : null,
+          horaPrevista: d ? d.hora : '',
           situacao: pendente(r['situacao']) ? 'pendente' : 'outra',
           problema: semData ? 'sem-data' : null,
           convenio: { codigo: n(r['fonte_pagadora_id']), nome: texto(r['convenio']) },
@@ -603,7 +602,9 @@ export class PortaAdtPropria implements PortaAdt {
       if (!r) return null;
       return {
         dataPrevista:
-          r['situacao'] === 'em_espera' ? DATA_SEM_DATA_PRE : civil(r['previsto_para'] as Date, fuso).data,
+          r['situacao'] === 'em_espera' || r['previsto_para'] === null
+            ? null
+            : civil(r['previsto_para'] as Date, fuso).data,
         convenio: n(r['fonte_pagadora_id']),
         especialidade: n(r['especialidade_medica_id']),
         clinica: CLINICA_DA_NATUREZA[texto(r['natureza'])] ?? null,

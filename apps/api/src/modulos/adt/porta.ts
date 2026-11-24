@@ -210,7 +210,8 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     c: ContextoAdt,
     paciente: number,
   ): Promise<{
-    dataPrevista: string;
+    /** Nula na fila de espera (sem data). */
+    dataPrevista: string | null;
     convenio: number;
     especialidade: number;
     /** Clínica da pré-internação (M, C, N); null quando o agendamento não a tem. */

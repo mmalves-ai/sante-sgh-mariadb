@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Pré-internação e agendamento (ficha do M21, seção 7): `/internacao/pre`. As pré-internações pendentes com as
-// contagens (sem data = ano 2099, como sempre foi gravado; as datas impossíveis vão à lista de saneamento) e o
+// contagens (sem data = data nula, a fila de espera; as datas impossíveis vão à lista de saneamento) e o
 // agendamento novo (paciente, convênio, plano, especialidade, médico, procedimento, data opcional, acomodação
 // desejada). A correção da data confere a data lida (outro terminal pode ter mudado). A admissão parte daqui.
 import { CARATERES_INTERNACAO, CLINICAS_INTERNACAO } from '@sgh/contratos';
@@ -41,7 +41,7 @@ const novaData = ref<Record<number, string>>({});
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
-async function corrigir(paciente: number, lida: string): Promise<void> {
+async function corrigir(paciente: number, lida: string | null): Promise<void> {
   erro.value = null;
   mensagem.value = null;
   ocupado.value = true;
@@ -201,7 +201,7 @@ async function agendar(): Promise<void> {
               {{ p.nome }} <span class="secundario">· {{ t('adt.prontuario', { n: p.prontuario }) }}</span>
             </td>
             <td>
-              {{ p.problema === 'sem-data' ? t('adt.pre.semDataRotulo') : dataBr(p.dataPrevista) }}
+              {{ p.dataPrevista === null ? t('adt.pre.semDataRotulo') : dataBr(p.dataPrevista) }}
               {{ hhmm(p.horaPrevista) }}
               <span v-if="p.problema" class="selo">{{ t(`adt.pre.problema.${p.problema}`) }}</span>
             </td>

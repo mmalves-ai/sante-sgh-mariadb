@@ -165,6 +165,13 @@ export const mensagensCirurgia = {
     asa: 'Classificação ASA',
     tecnica: 'Técnica',
     tecnicaAConfirmar: 'Os nomes das técnicas estão em conferência com o bloco e podem mudar.',
+    participacao: 'Participação da equipe',
+    participacaoAjuda:
+      'Em branco, o participante esteve do início ao fim do paciente na sala e vale o percentual padrão da função. Preencha quando houve troca no meio do ato.',
+    participacaoEntrada: 'Entrada: {funcao}',
+    horaFormato: 'HH:MM',
+    participacaoSaida: 'Saída: {funcao}',
+    participacaoPercentual: 'Percentual (%): {funcao}',
     usos: 'Dispositivos e medicamentos',
     uso: {
       tubo: 'Tubo',

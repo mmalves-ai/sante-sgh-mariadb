@@ -896,6 +896,8 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
         },
       ],
       extensao: { entradaSala: '15:55', incisao: '16:10', saidaSala: '17:20', asa: 2, observacao: null },
+      // Troca de anestesista no meio do ato (F3.4, 04-CC linha 95): o que entrou às 16:30 e o percentual padrão.
+      participacao: { anestesista: { entrada: '16:30', saida: null, percentual: null } },
     };
     expect(await porta.podeGravar(ctx(m.est), 'cirurgia.registrarCirurgia')).toMatchObject({ pode: true });
     const r = await porta.executar(ctx(m.est), 'cirurgia.registrarCirurgia', entrada, op(m.est));
@@ -922,9 +924,32 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
         [id],
       ),
     ).toEqual([{ especialidade_medica_id: m.especialidade, principal: 1, tecnica: 'Videolaparoscopia' }]);
-    expect(await ler('SELECT id FROM participante_cirurgia WHERE ato_cirurgico_id = ?', [id])).toHaveLength(
-      2,
-    );
+    expect(
+      await ler(
+        `SELECT f.codigo AS funcao, TIMESTAMPDIFF(MINUTE, t.entrada_sala_em, p.entrada_em) AS entrada,
+                TIMESTAMPDIFF(MINUTE, t.entrada_sala_em, p.saida_em) AS saida, p.percentual_participacao AS perc
+           FROM participante_cirurgia p JOIN funcao_equipe_cirurgica f ON f.id = p.funcao_equipe_cirurgica_id
+           JOIN ato_cirurgico t ON t.id = p.ato_cirurgico_id
+          WHERE p.ato_cirurgico_id = ? ORDER BY p.sequencia`,
+        [id],
+      ),
+    ).toEqual([
+      { funcao: 'cirurgiao', entrada: null, saida: null, perc: '100.0000' },
+      { funcao: 'anestesista', entrada: 35, saida: null, perc: null },
+    ]);
+    // Hora do participante fora do tempo do paciente na sala: recusada antes de gravar.
+    await expect(
+      porta.executar(
+        ctx(m.est),
+        'cirurgia.registrarCirurgia',
+        {
+          ...entrada,
+          agendamento: null,
+          participacao: { cirurgiao: { entrada: '15:00', saida: null, percentual: null } },
+        },
+        op(m.est),
+      ),
+    ).rejects.toThrow(/participacao-invalida/);
     expect(
       await ler('SELECT dispositivo, descricao FROM ato_cirurgico_dispositivo WHERE ato_cirurgico_id = ?', [
         id,

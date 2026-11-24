@@ -25,6 +25,7 @@ import {
 } from '@sgh/contratos';
 import {
   conferirHorarioNaSala,
+  conferirParticipacao,
   conferirTempos,
   conferirTransicao,
   TECNICAS,
@@ -863,6 +864,25 @@ const registrar = definirOperacao<RegistrarCirurgiaEntrada, ResultadoOperacao>({
       situacao: 'realizado',
       observacao: e.extensao.observacao,
     });
+    // Participação de cada função: horas dentro do tempo do paciente na sala e o percentual (padrão da função).
+    const salaEntrada = e.extensao.entradaSala ?? e.inicio;
+    const salaSaida = e.extensao.saidaSala ?? e.fim;
+    const inicioSala = hora(e.extensao.entradaSala, false) ?? base;
+    const participacao = new Map<
+      string,
+      { entrada: Date | null; saida: Date | null; percentual: number | null }
+    >();
+    for (const f of FUNCOES_REGISTRO) {
+      const informado = e.participacao?.[f] ?? { entrada: null, saida: null, percentual: null };
+      const r = conferirParticipacao(f, informado, { entrada: salaEntrada, saida: salaSaida });
+      if (!r.ok) throw recusa('participacao-invalida', r.texto, { campos: [`participacao.${f}.${r.campo}`] });
+      const emData = (m: number | null) => (m === null ? null : new Date(inicioSala.getTime() + m * 60_000));
+      participacao.set(f, {
+        entrada: emData(r.valor.entradaMin),
+        saida: emData(r.valor.saidaMin),
+        percentual: r.valor.percentual,
+      });
+    }
     const funcoes = new Map<string, number>();
     let participante = 0;
     for (const [i, p] of e.procedimentos.entries()) {
@@ -886,6 +906,9 @@ const registrar = definirOperacao<RegistrarCirurgiaEntrada, ResultadoOperacao>({
           funcao_equipe_cirurgica_id: funcoes.get(f),
           ato_cirurgico_procedimento_id: proc,
           principal: i === 0 && f === 'cirurgiao',
+          entrada_em: participacao.get(f)?.entrada ?? null,
+          saida_em: participacao.get(f)?.saida ?? null,
+          percentual_participacao: participacao.get(f)?.percentual ?? null,
         });
       }
     }

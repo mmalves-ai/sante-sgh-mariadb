@@ -415,7 +415,7 @@ describe('bloqueio no novo e o conflito com o outro sistema (regra 8)', () => {
 });
 
 describe('pré-internação e saneamento', () => {
-  it('agenda sem data (2099), corrige a data pela leitura e recusa a correção sobre leitura velha', async () => {
+  it('agenda sem data (data nula, nunca sentinela), corrige a data pela leitura e recusa a correção sobre leitura velha', async () => {
     const s = await entrar('SINT.INTERNACAO');
     const corpo = {
       paciente: 1002,
@@ -431,6 +431,7 @@ describe('pré-internação e saneamento', () => {
     const p = (await get(s, '/internacoes/pre')).json();
     const item = p.itens.find((x: { paciente: number }) => x.paciente === 1002);
     expect(item.problema).toBe('sem-data');
+    expect(item.dataPrevista).toBeNull();
     expect(p.contagens.semData).toBeGreaterThanOrEqual(1);
     const hoje = new Date().toISOString().slice(0, 10);
     expect(
@@ -438,8 +439,7 @@ describe('pré-internação e saneamento', () => {
         .statusCode,
     ).toBe(409);
     expect(
-      (await post(s, '/internacoes/pre/1002/corrigir', { dataPrevista: hoje, lida: '2099-12-31' }))
-        .statusCode,
+      (await post(s, '/internacoes/pre/1002/corrigir', { dataPrevista: hoje, lida: null })).statusCode,
     ).toBe(200);
     expect((await get(s, '/internacoes/pre/1002')).json().pre.dataPrevista).toBe(hoje);
   });

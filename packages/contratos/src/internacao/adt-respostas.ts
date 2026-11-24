@@ -146,7 +146,8 @@ export const esquemaPreInternacaoItem = z.object({
   paciente: z.number().int(),
   prontuario: z.number().int(),
   nome: z.string(),
-  dataPrevista: z.string(),
+  /** Nula na fila de espera (sem data). */
+  dataPrevista: z.string().nullable(),
   horaPrevista: z.string(),
   situacao: z.enum(['pendente', 'outra']),
   problema: z.enum(['sem-data', 'impossivel']).nullable(),

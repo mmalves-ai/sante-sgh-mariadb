@@ -9,7 +9,7 @@
 // ocupação; o cancelamento da alta e a exclusão da internação guardam o retrato e o motivo (cancelamento_alta e
 // cancelamento_internacao) em vez de apagar períodos e conta; a transferência grava a transferência de leito com
 // o trecho anterior encerrado e o novo aberto.
-// Melhoria: a pré-internação é o agendamento de internação (sem a data "2099-12-31": sem data, a situação é
+// Melhoria: a pré-internação é o agendamento de internação (sem data sentinela: sem data, a data fica nula e a situação é
 // "em_espera"); as trocas de convênio, clínica, especialidade e médico gravam a troca com o valor anterior e o novo.
 // Melhoria: a alta pede a limpeza terminal do leito (regra em limpeza-da-alta.ts) e abre o período de higienização com a
 // precaução herdada, na mesma transação; a liberação (pela ação ou pela etapa "liberado") é um caminho só, que encerra o
@@ -1012,7 +1012,8 @@ const excluirInternacao = definirOperacao<ExcluirInternacaoEntrada, ResultadoOpe
 
 /** Data e hora previstas da pré-internação no fuso do estabelecimento; sem data, a lista de espera. */
 async function previsaoDe(tx: TxOperacao, est: number, data: string | undefined, hora: string | undefined) {
-  if (!data) return { previsto: new Date(), situacao: 'em_espera' };
+  // Sem data: a fila de espera, com a data nula (nunca uma sentinela).
+  if (!data) return { previsto: null as Date | null, situacao: 'em_espera' };
   const fuso = await fusoDe(tx, est);
   return { previsto: new Date(dataHoraParaInstante(data, hora ?? '07:00', fuso)), situacao: 'solicitado' };
 }
@@ -1126,9 +1127,7 @@ const corrigirPreInternacao = definirOperacao<CorrigirPreInternacaoEntrada, Resu
       throw naoEncontrado('Pré-internação não encontrada', 'O paciente não tem pré-internação pendente.');
     const fuso = await fusoDe(tx, est);
     const lidaAgora =
-      a['situacao'] === 'em_espera'
-        ? '2099-12-31'
-        : relogioNoFuso(fuso, new Date(a['previsto_para'] as Date)).hoje;
+      a['situacao'] === 'em_espera' ? null : relogioNoFuso(fuso, new Date(a['previsto_para'] as Date)).hoje;
     if (lidaAgora !== e.lida)
       throw new ErroOperacao(
         409,

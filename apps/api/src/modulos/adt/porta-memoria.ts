@@ -10,7 +10,6 @@ import {
   type ChaveLeito,
   chaveTextoLeito,
   dataPrevistaPlausivel,
-  DATA_SEM_DATA_PRE,
   diariasFaturaveis,
   grupoMotivoAlta,
   type HistoricoOcupacao,
@@ -105,7 +104,8 @@ interface PreM {
   paciente: number;
   prontuario: number;
   nome: string;
-  data: string;
+  /** Nula na fila de espera (sem data). */
+  data: string | null;
   hora: string;
   convenio: number;
   especialidade: number;
@@ -701,7 +701,7 @@ export class PortaAdtMemoria implements PortaAdt {
           paciente: p.id,
           prontuario: p.prontuario,
           nome: p.nome,
-          data: x.dataPrevista ?? DATA_SEM_DATA_PRE,
+          data: x.dataPrevista ?? null,
           hora: x.horaPrevista?.replace(':', '') ?? '0000',
           convenio: x.convenio,
           especialidade: x.especialidade,
@@ -719,7 +719,7 @@ export class PortaAdtMemoria implements PortaAdt {
         break;
       }
       case 'internacao.corrigirPreInternacao': {
-        const x = e as unknown as { paciente: number; dataPrevista?: string; lida: string };
+        const x = e as unknown as { paciente: number; dataPrevista?: string; lida: string | null };
         const p = s.pre.get(x.paciente);
         if (!p)
           throw new ErroOperacao(
@@ -736,7 +736,7 @@ export class PortaAdtMemoria implements PortaAdt {
             'O registro foi alterado desde a leitura. Releia e confira antes de salvar.',
             { colunas: ['ENTRADA'] },
           );
-        p.data = x.dataPrevista ?? DATA_SEM_DATA_PRE;
+        p.data = x.dataPrevista ?? null;
         resultado = { paciente: p.paciente, pront: p.prontuario };
         break;
       }

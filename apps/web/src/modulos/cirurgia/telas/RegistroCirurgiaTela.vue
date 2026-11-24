@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { conferirTempos, porteSugerido } from '@sgh/dominio-cirurgia';
 import { dataBr, horaDoContrato } from '../../agenda/formato.js';
+import { PERCENTUAL_PADRAO_FUNCAO } from '@sgh/dominio-cirurgia';
 import {
   buscarProcedimentos,
   lerAgendamento,
@@ -98,6 +99,17 @@ const CAMPOS_HORA = [
   'incisao',
   'saidaSala',
 ] as const;
+/** Participação por função (F3.4): entrada e saída na sala e percentual; em branco = o ato inteiro e o padrão. */
+const FUNCOES_PARTICIPACAO = ['cirurgiao', 'anestesista', 'auxiliar1'] as const;
+const participacao = reactive<
+  Record<(typeof FUNCOES_PARTICIPACAO)[number], { entrada: string; saida: string; percentual: string }>
+>({
+  cirurgiao: { entrada: '', saida: '', percentual: '' },
+  anestesista: { entrada: '', saida: '', percentual: '' },
+  auxiliar1: { entrada: '', saida: '', percentual: '' },
+});
+const escolhaDaFuncao = (f: (typeof FUNCOES_PARTICIPACAO)[number]) =>
+  f === 'cirurgiao' ? fCirurgiao.value : f === 'anestesista' ? fAnestesista.value : fAuxiliar.value;
 const fCid = ref('');
 const fPressao = ref('');
 const fPulso = ref('');
@@ -224,6 +236,22 @@ async function registrar(): Promise<void> {
     const p = profissionalDaEscolha(v);
     if (p) equipe[f] = p;
   }
+  const participacaoInformada = Object.fromEntries(
+    FUNCOES_PARTICIPACAO.filter((f) => equipe[f]).flatMap((f) => {
+      const x = participacao[f];
+      if (!x.entrada.trim() && !x.saida.trim() && !x.percentual.trim()) return [];
+      return [
+        [
+          f,
+          {
+            entrada: h(x.entrada),
+            saida: h(x.saida),
+            percentual: x.percentual.trim() ? Number(x.percentual.replace(',', '.')) : null,
+          },
+        ],
+      ];
+    }),
+  );
   try {
     const r = await registrarCirurgia(
       {
@@ -264,6 +292,7 @@ async function registrar(): Promise<void> {
             equipe,
           },
         ],
+        ...(Object.keys(participacaoInformada).length ? { participacao: participacaoInformada } : {}),
         extensao: {
           entradaSala: h(horas.entradaSala),
           incisao: h(horas.incisao),
@@ -393,6 +422,53 @@ async function registrar(): Promise<void> {
           :opcoes="comVazio(profissionais, t('cirurgia.semProfissional'))"
         />
       </div>
+      <fieldset class="filtros" data-testid="registro-participacao">
+        <legend>{{ t('cirurgia.registro.participacao') }}</legend>
+        <p class="secundario">{{ t('cirurgia.registro.participacaoAjuda') }}</p>
+        <template v-for="f in FUNCOES_PARTICIPACAO" :key="f">
+          <div v-if="escolhaDaFuncao(f)" class="filtros">
+            <div class="campo">
+              <label :for="`part-${f}-entrada`">{{
+                t('cirurgia.registro.participacaoEntrada', { funcao: t(`cirurgia.funcoes.${f}`) })
+              }}</label>
+              <input
+                :id="`part-${f}-entrada`"
+                v-model="participacao[f].entrada"
+                maxlength="5"
+                :placeholder="t('cirurgia.registro.horaFormato')"
+                :data-testid="`part-${f}-entrada`"
+              />
+            </div>
+            <div class="campo">
+              <label :for="`part-${f}-saida`">{{
+                t('cirurgia.registro.participacaoSaida', { funcao: t(`cirurgia.funcoes.${f}`) })
+              }}</label>
+              <input
+                :id="`part-${f}-saida`"
+                v-model="participacao[f].saida"
+                maxlength="5"
+                :placeholder="t('cirurgia.registro.horaFormato')"
+                :data-testid="`part-${f}-saida`"
+              />
+            </div>
+            <div class="campo">
+              <label :for="`part-${f}-perc`">{{
+                t('cirurgia.registro.participacaoPercentual', { funcao: t(`cirurgia.funcoes.${f}`) })
+              }}</label>
+              <input
+                :id="`part-${f}-perc`"
+                v-model="participacao[f].percentual"
+                inputmode="decimal"
+                maxlength="6"
+                :placeholder="
+                  PERCENTUAL_PADRAO_FUNCAO[f] === undefined ? '' : String(PERCENTUAL_PADRAO_FUNCAO[f])
+                "
+                :data-testid="`part-${f}-perc`"
+              />
+            </div>
+          </div>
+        </template>
+      </fieldset>
       <p class="secundario">{{ t('cirurgia.registro.tecnicaAConfirmar') }}</p>
       <fieldset class="filtros">
         <legend>{{ t('cirurgia.registro.usos') }}</legend>
