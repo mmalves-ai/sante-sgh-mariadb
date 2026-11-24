@@ -267,6 +267,7 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
     d: DadosOrigemServidor,
     referenciaSenha: string,
     admin: number | null,
+    antesDeConfirmar?: () => Promise<void>,
   ): Promise<{ origemId: number; nova: boolean }> {
     return this.nucleo.escreverPlataforma('carga-origem-servidor', async (e) => {
       const cid = await clienteTravado(e, codigo);
@@ -318,6 +319,8 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
         { cliente_origem_id: origemId, nova, host: d.host, porta: d.porta, origens_desativadas: desativadas },
         admin,
       );
+      // Por último, ainda na transação: a senha vai ao cofre só quando nada mais pode recusar o pedido.
+      if (antesDeConfirmar) await antesDeConfirmar();
       return { origemId, nova };
     });
   }

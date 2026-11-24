@@ -9,6 +9,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { CargaController } from './carga.controller.js';
 import { PonteConectorScript } from './ponte-script.js';
+import { ErroOnboarding } from './porta.js';
 import {
   acoesDaCarga,
   batimentoAtrasado,
@@ -55,13 +56,19 @@ function linha(p: Partial<LinhaExecucaoCarga> = {}): LinhaExecucaoCarga {
 }
 
 function montar(
-  o: { cofreDisponivel?: boolean; execucao?: LinhaExecucaoCarga | null; pastaLogs?: string | null } = {},
+  o: {
+    cofreDisponivel?: boolean;
+    execucao?: LinhaExecucaoCarga | null;
+    pastaLogs?: string | null;
+    falhaOrigem?: 'conflito' | 'depois';
+  } = {},
 ) {
   const chamadas: string[] = [];
   const cofreValores = new Map<string, string>();
   const cofre: CofreCarga = {
     disponivel: o.cofreDisponivel ?? true,
     existe: async (r) => cofreValores.has(r),
+    ler: async (r) => cofreValores.get(r) ?? null,
     gravar: async (r, v) => {
       cofreValores.set(r, v);
     },
@@ -94,7 +101,12 @@ function montar(
       existe: c !== 'nenhum',
       tipo: c === 'arquivo' ? 'firebird_arquivo' : 'firebird_servidor',
     }),
-    gravarOrigemServidor: async (c, d, ref, a) => {
+    gravarOrigemServidor: async (c, d, ref, a, antesDeConfirmar) => {
+      // Como o repositório real: a carga ativa recusa antes de tudo; a falha 'depois' simula o commit que não fecha.
+      if (o.falhaOrigem === 'conflito')
+        throw new ErroOnboarding('conflito', 'Há uma carga em andamento: pause ou aguarde antes de trocar a origem.');
+      if (antesDeConfirmar) await antesDeConfirmar();
+      if (o.falhaOrigem === 'depois') throw new Error('transação falhou');
       chamadas.push(`origem ${c} ${JSON.stringify(d)} ${ref} ${a}`);
       return { origemId: 3, nova: true };
     },
@@ -186,6 +198,21 @@ describe('carga: origem do servidor e senha no cofre', () => {
     expect(await status(c.origemServidor(PLAT, 'exemplo', { ...corpo, senha: SENHA, extra: 1 }))).toBe(400);
     expect(await status(c.origemServidor(PLAT, 'Exemplo!', { ...corpo, senha: SENHA }))).toBe(400);
     expect(await status(c.origemServidor(PLAT, 'nenhum', { ...corpo, senha: SENHA }))).toBe(404);
+  });
+
+  it('PUT com carga ativa dá 409 e o cofre fica inalterado; transação que falha devolve a senha anterior', async () => {
+    const ref = 'cofre:conector/exemplo/firebird-senha';
+    const a = montar({ falhaOrigem: 'conflito' });
+    a.cofreValores.set(ref, 'anterior');
+    expect(await status(a.c.origemServidor(PLAT, 'exemplo', { ...corpo, senha: SENHA }))).toBe(409);
+    expect(a.cofreValores.get(ref)).toBe('anterior');
+    const sem = montar({ falhaOrigem: 'conflito' });
+    expect(await status(sem.c.origemServidor(PLAT, 'exemplo', { ...corpo, senha: SENHA }))).toBe(409);
+    expect(sem.cofreValores.has(ref)).toBe(false);
+    const b = montar({ falhaOrigem: 'depois' });
+    b.cofreValores.set(ref, 'anterior');
+    await expect(b.s.gravarOrigemServidor('exemplo', { ...corpo, senha: SENHA }, 7)).rejects.toThrow('transação falhou');
+    expect(b.cofreValores.get(ref)).toBe('anterior');
   });
 
   it('testar só com origem de servidor configurada', async () => {

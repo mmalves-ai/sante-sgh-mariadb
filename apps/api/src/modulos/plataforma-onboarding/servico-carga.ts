@@ -232,12 +232,17 @@ export interface DadosOrigemServidor {
 
 export interface RepositorioCarga {
   listarConectores(): Promise<LinhaConectorCarga[]>;
-  /** Grava (ou troca para) a origem de servidor ativa do cliente; 409 com execução ativa. */
+  /**
+   * Grava (ou troca para) a origem de servidor ativa do cliente; 409 com execução ativa. `antesDeConfirmar` roda dentro
+   * da transação, depois da conferência da execução ativa e das gravações, e antes do commit (é onde a senha vai ao
+   * cofre: pedido recusado não toca o cofre).
+   */
   gravarOrigemServidor(
     codigo: string,
     dados: DadosOrigemServidor,
     referenciaSenha: string,
     admin: number | null,
+    antesDeConfirmar?: () => Promise<void>,
   ): Promise<{ origemId: number; nova: boolean }>;
   /** Cliente existe? Tem origem de servidor ativa? (sem segredo) */
   origemDoCliente(codigo: string): Promise<{ existe: boolean; tipo: string | null }>;
@@ -264,6 +269,7 @@ export interface PonteCarga {
 export interface CofreCarga {
   readonly disponivel: boolean;
   existe(referencia: string): Promise<boolean>;
+  ler(referencia: string): Promise<string | null>;
   gravar(referencia: string, valor: string): Promise<void>;
 }
 
@@ -357,13 +363,27 @@ export class ServicoCarga {
     const atual = await this.repo.origemDoCliente(cod);
     if (!atual.existe) throw new ErroOnboarding('inexistente', 'Cliente inexistente.');
     const { senha, ...dados } = r.data;
-    if (senha !== undefined) {
+    if (senha === undefined) {
+      if (!(await this.senhaDefinida(referencia)))
+        throw new ErroOnboarding('invalido', 'Informe a senha do usuário de leitura.');
+      await this.repo.gravarOrigemServidor(cod, dados, referencia, admin);
+    } else {
       if (!this.cofre.disponivel)
         throw new ErroOnboarding('indisponivel', 'O cofre de segredos não está configurado neste ambiente.');
-      await this.cofre.gravar(referencia, senha);
-    } else if (!(await this.senhaDefinida(referencia)))
-      throw new ErroOnboarding('invalido', 'Informe a senha do usuário de leitura.');
-    await this.repo.gravarOrigemServidor(cod, dados, referencia, admin);
+      // A senha só vai ao cofre dentro da transação, depois da conferência da carga ativa (409 não toca o cofre). Se a
+      // transação falhar depois disso, o valor anterior volta ao cofre: a referência é uma por cliente.
+      const anterior = await this.cofre.ler(referencia);
+      let gravou = false;
+      try {
+        await this.repo.gravarOrigemServidor(cod, dados, referencia, admin, async () => {
+          await this.cofre.gravar(referencia, senha);
+          gravou = true;
+        });
+      } catch (e) {
+        if (gravou && anterior !== null) await this.cofre.gravar(referencia, anterior).catch(() => undefined);
+        throw e;
+      }
+    }
     return {
       host: dados.host,
       porta: dados.porta,
