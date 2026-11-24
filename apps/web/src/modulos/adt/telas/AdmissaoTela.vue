@@ -77,6 +77,8 @@ const matricula = ref('');
 const validadeCarteira = ref('');
 const senhaConvenio = ref('');
 const guia = ref('');
+// F3.4 (04-INT 68): a guia da admissão é a inicial do histórico e precisa das diárias autorizadas (validação na hora).
+const diariasGuia = ref('');
 const plano = ref<string>('ENFERMARIA');
 const carater = ref('urgencia');
 const clinica = ref('M');
@@ -185,6 +187,7 @@ const opcoes = computed(() => {
 const leitoEscolhido = computed(() => leitoDaChaveTexto(leito.value));
 const completo = computed(
   () =>
+    (!guia.value.trim() || Number(diariasGuia.value) >= 1) &&
     paciente.value !== null &&
     leitoEscolhido.value !== null &&
     !!convenio.value &&
@@ -229,7 +232,9 @@ async function gravar(): Promise<void> {
         ...(matricula.value.trim() ? { matricula: matricula.value.trim() } : {}),
         ...(validadeCarteira.value ? { validadeCarteira: validadeCarteira.value } : {}),
         ...(senhaConvenio.value.trim() ? { senhaConvenio: senhaConvenio.value.trim() } : {}),
-        ...(guia.value.trim() ? { guia: guia.value.trim() } : {}),
+        ...(guia.value.trim()
+          ? { guia: guia.value.trim(), diariasAutorizadas: Number(diariasGuia.value) }
+          : {}),
         ...(origem.value === 'pa' ? { atendimentoOrigem: Number(atendimentoOrigem.value) } : {}),
         ...(origem.value === 'cirurgia' ? { cirurgia: Number(cirurgia.value) } : {}),
         ...(nivel.value ? { nivelCuidado: nivel.value } : {}),
@@ -371,6 +376,18 @@ const textoLeito = (k: string) => {
             :max-bytes="20"
           />
           <SanteCampoTexto v-model="guia" :rotulo="t('adt.admissao.guia')" :max-bytes="20" />
+          <div v-if="guia.trim()" class="campo">
+            <label for="admissao-diarias-guia">{{ t('adt.guias.validade') }}</label>
+            <input
+              id="admissao-diarias-guia"
+              v-model="diariasGuia"
+              type="number"
+              min="1"
+              max="999"
+              required
+              data-testid="admissao-diarias-guia"
+            />
+          </div>
         </div>
         <div class="filtros">
           <SanteSelecao

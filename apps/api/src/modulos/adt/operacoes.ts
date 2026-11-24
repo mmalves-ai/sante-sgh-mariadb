@@ -66,6 +66,7 @@ import {
 } from './esquemas.js';
 import { limpezaDaAlta } from './limpeza-da-alta.js';
 import {
+  acessoTotalDe,
   exigirOperadorDaUnidade,
   gravarDiagnosticosDaAdmissao,
   gravarGuiaNoHistorico,
@@ -400,7 +401,13 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
     await exigirExiste(tx, 'profissional', e.medicoSolicitante, 'medicoSolicitante', 'O médico solicitante');
     const leito = await leitoDaChave(tx, est, e.leito);
     // F3.4 (04-INT 65): a unidade com operadores definidos só admite pelo usuário liberado nela.
-    await exigirOperadorDaUnidade(tx, nn(leito['unidade_internacao_id']), usuario, 'admitir');
+    await exigirOperadorDaUnidade(
+      tx,
+      nn(leito['unidade_internacao_id']),
+      usuario,
+      'admitir',
+      acessoTotalDe(ctx),
+    );
     const reserva = await exigirLeitoLivre(tx, leito, e.solicitacaoNir ?? null);
     const urgencia = e.carater === 'urgencia';
     const carater = await informadoOuUnico(
@@ -511,7 +518,12 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
       categoriaAcomodacao: nn(leito['categoria_acomodacao_id']),
     });
     if (conta !== null) await apurarContasDoAtendimento(tx, est, atendimento, agora);
-    // F3.4 (04-INT 68): a guia informada na admissão é a inicial do histórico de autorizações.
+    // F3.4 (04-INT 68): a guia informada na admissão é a inicial do histórico de autorizações; sem as diárias
+    // autorizadas ela não tem período, e o histórico divergiria da operadora: a admissão recusa na hora.
+    if (e.guia && !e.diariasAutorizadas)
+      throw recusa('guia-sem-diarias', 'Informe as diárias autorizadas da guia.', {
+        campos: ['diariasAutorizadas'],
+      });
     if (e.guia && e.diariasAutorizadas)
       await gravarGuiaNoHistorico(tx, est, agora, {
         internacao: id,
@@ -580,7 +592,13 @@ const transferirLeito = definirOperacao<TransferirLeitoBancoEntrada, ResultadoOp
     const i = await internacaoTravada(tx, est, e.internacao, e.versao);
     exigirAberta(i);
     const destino = await leitoDaChave(tx, est, e.destino);
-    await exigirOperadorDaUnidade(tx, nn(destino['unidade_internacao_id']), usuario, 'transferir');
+    await exigirOperadorDaUnidade(
+      tx,
+      nn(destino['unidade_internacao_id']),
+      usuario,
+      'transferir',
+      acessoTotalDe(ctx),
+    );
     if (n(destino['id']) === n(i['leito_hospitalar_id']))
       throw recusa('mesmo-leito', 'O destino é o leito atual: escolha outro leito.', { campos: ['destino'] });
     const reserva = await exigirLeitoLivre(tx, destino, e.solicitacaoNir ?? null);
@@ -757,7 +775,7 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
     const usuario = usuarioDe(ctx);
     const i = await internacaoTravada(tx, est, e.internacao, e.versao);
     exigirAberta(i);
-    await exigirOperadorDaUnidade(tx, nn(i['unidade_internacao_id']), usuario, 'darAlta');
+    await exigirOperadorDaUnidade(tx, nn(i['unidade_internacao_id']), usuario, 'darAlta', acessoTotalDe(ctx));
     const m = await tx.uma(
       'SELECT id, tipo_saida, desfecho_internacao_id FROM motivo_saida_hospitalar WHERE id = ? AND ativo = TRUE',
       [e.motivo],
@@ -1346,7 +1364,7 @@ const registrarGuia = definirOperacao<
     const est = estabelecimentoDe(ctx);
     const i = await internacaoTravada(tx, est, e.internacao);
     if (i['situacao'] === 'cancelada') throw recusa('internacao-cancelada', 'A internação foi excluída.');
-    await gravarGuiaNoHistorico(tx, est, i['data_hora_entrada'] as Date, {
+    const nova = await gravarGuiaNoHistorico(tx, est, i['data_hora_entrada'] as Date, {
       internacao: e.internacao,
       conta: e.conta,
       guia: e.guia,
@@ -1359,7 +1377,8 @@ const registrarGuia = definirOperacao<
     const versao = await tx.alterar('internacao', e.internacao, n(i['versao']), {
       numero_guia: e.guia,
       senha_autorizacao: e.senha ?? null,
-      diarias_autorizadas: e.validadeDias,
+      // O retrato guarda a guia vigente e o TOTAL autorizado (soma do histórico), nunca só a última.
+      diarias_autorizadas: nova.diariasTotais,
     });
     return { internacao: e.internacao, versao: carimboVersao(versao) };
   },

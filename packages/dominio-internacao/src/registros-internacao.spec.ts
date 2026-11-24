@@ -3,8 +3,11 @@ import {
   cnpjValido,
   conferirAcidente,
   conferirDiagnostico,
+  conferirMotivo,
+  corrigirGuia,
   decidirPermissaoUnidade,
   diagnosticosDaAdmissao,
+  diariasAutorizadasTotal,
   diariasCobertas,
   ehCausaExterna,
   proximaGuia,
@@ -23,6 +26,17 @@ describe('quem opera a unidade', () => {
     expect(decidirPermissaoUnidade([regra], 8, 'admitir').permitido).toBe(false);
     expect(decidirPermissaoUnidade([regra], null, 'admitir').permitido).toBe(false);
   });
+  it('linha só de material da unidade não conta como regra de internação', () => {
+    const material = { usuario: 5, podeAdmitir: false, podeTransferir: false, podeDarAlta: false };
+    expect(decidirPermissaoUnidade([material], 9, 'admitir')).toEqual({ permitido: true });
+    expect(decidirPermissaoUnidade([material, regra], 5, 'admitir').permitido).toBe(false);
+  });
+  it('o acesso total da sessão (administrador da plataforma) passa sempre', () => {
+    expect(decidirPermissaoUnidade([regra], null, 'transferir', { acessoTotal: true })).toEqual({
+      permitido: true,
+    });
+    expect(decidirPermissaoUnidade([regra], 8, 'admitir', { acessoTotal: false }).permitido).toBe(false);
+  });
 });
 
 describe('diagnósticos da internação', () => {
@@ -32,19 +46,54 @@ describe('diagnósticos da internação', () => {
     expect(ehCausaExterna('Y99')).toBe(false);
     expect(ehCausaExterna('I21.0')).toBe(false);
   });
-  it('admissão grava entrada e secundário', () => {
-    expect(diagnosticosDaAdmissao(10, 11)).toEqual([
+  it('admissão grava entrada e secundário com a mesma conferência da tela', () => {
+    const p = { cid: 10, codigo: 'S72.0' };
+    expect(diagnosticosDaAdmissao(p, { cid: 11, codigo: 'J18' })).toEqual({
+      ok: true,
+      valor: [
+        { cid: 10, tipo: 'entrada', sequencia: 1 },
+        { cid: 11, tipo: 'secundario', sequencia: 2 },
+      ],
+    });
+    const igual = diagnosticosDaAdmissao(p, { cid: 10, codigo: 'S72.0' });
+    expect(igual.ok && igual.valor).toHaveLength(1);
+    const sem = diagnosticosDaAdmissao(p, null);
+    expect(sem.ok && sem.valor).toHaveLength(1);
+    // V01 a Y98 no secundário da admissão é causa externa, nunca secundário.
+    const ce = diagnosticosDaAdmissao(p, { cid: 12, codigo: 'W19' });
+    expect(ce.ok && ce.valor[1]).toEqual({ cid: 12, tipo: 'causa_externa', sequencia: 2 });
+    // V01 a Y98 não é CID de entrada.
+    expect(diagnosticosDaAdmissao({ cid: 12, codigo: 'W19' }, null)).toMatchObject({
+      ok: false,
+      campo: 'cidPrincipal',
+    });
+  });
+  it('o principal novo substitui o principal vigente (um só vigente)', () => {
+    const l = [
       { cid: 10, tipo: 'entrada', sequencia: 1 },
-      { cid: 11, tipo: 'secundario', sequencia: 2 },
-    ]);
-    expect(diagnosticosDaAdmissao(10, 10)).toHaveLength(1);
-    expect(diagnosticosDaAdmissao(10, null)).toHaveLength(1);
+      { cid: 11, tipo: 'principal', sequencia: 2 },
+    ];
+    expect(conferirDiagnostico(l, { cid: 12, codigo: 'I21', tipo: 'principal' })).toEqual({
+      ok: true,
+      valor: { sequencia: 3, substitui: 2 },
+    });
+    expect(conferirDiagnostico(l, { cid: 11, codigo: 'I20', tipo: 'principal' })).toMatchObject({
+      ok: false,
+    });
+    expect(conferirDiagnostico(l.slice(0, 1), { cid: 12, codigo: 'I21', tipo: 'principal' })).toEqual({
+      ok: true,
+      valor: { sequencia: 2, substitui: null },
+    });
+  });
+  it('retirada e correção exigem motivo', () => {
+    expect(conferirMotivo('  ')).toMatchObject({ ok: false, campo: 'motivo' });
+    expect(conferirMotivo(' lançado por engano ')).toEqual({ ok: true, valor: 'lançado por engano' });
   });
   it('confere tipo, causa externa, repetição e devolve a sequência', () => {
     const l = [{ cid: 10, tipo: 'entrada', sequencia: 1 }];
     expect(conferirDiagnostico(l, { cid: 11, codigo: 'J18', tipo: 'secundario' })).toEqual({
       ok: true,
-      valor: { sequencia: 2 },
+      valor: { sequencia: 2, substitui: null },
     });
     expect(conferirDiagnostico(l, { cid: 12, codigo: 'J18', tipo: 'causa_externa' })).toMatchObject({
       ok: false,
@@ -134,5 +183,29 @@ describe('guias da internação', () => {
       campo: 'inicio',
     });
     expect(proximaGuia(h, { diarias: 2, inicio: '2026-11-22' }, entrada)).toMatchObject({ ok: true });
+  });
+});
+
+describe('correção da guia (sem linha nova nem diárias somadas)', () => {
+  const entrada = '2026-11-10T08:00';
+  const h = [
+    { sequencia: 1, tipo: 'inicial' as const, inicio: '2026-11-10', fim: '2026-11-12', diarias: 3 },
+    { sequencia: 2, tipo: 'prorrogacao' as const, inicio: '2026-11-13', fim: '2026-11-16', diarias: 4 },
+  ];
+  it('número ou senha errados: a guia fica como está, sem diárias somadas', () => {
+    expect(corrigirGuia(h, 1, {}, entrada)).toEqual({ ok: true, valor: h[0] });
+    expect(diariasAutorizadasTotal(h)).toBe(7);
+  });
+  it('o período só muda na última guia e passa pela mesma conferência', () => {
+    expect(corrigirGuia(h, 1, { diarias: 5 }, entrada)).toMatchObject({ ok: false, campo: 'validadeDias' });
+    expect(corrigirGuia(h, 2, { diarias: 2 }, entrada)).toEqual({
+      ok: true,
+      valor: { sequencia: 2, tipo: 'prorrogacao', inicio: '2026-11-13', fim: '2026-11-14', diarias: 2 },
+    });
+    expect(corrigirGuia(h, 2, { inicio: '2026-11-20' }, entrada)).toMatchObject({
+      ok: false,
+      campo: 'inicio',
+    });
+    expect(corrigirGuia(h, 9, {}, entrada)).toMatchObject({ ok: false, campo: 'sequencia' });
   });
 });

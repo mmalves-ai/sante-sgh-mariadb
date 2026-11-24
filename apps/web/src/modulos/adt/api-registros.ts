@@ -16,6 +16,8 @@ export const esquemaRegistros = z.object({
       nome: z.string(),
       registradoEm: z.string(),
       observacao: z.string().nullable(),
+      situacao: z.enum(['vigente', 'substituido', 'retirado']),
+      motivoRetirada: z.string().nullable(),
     }),
   ),
   acidentes: z.array(
@@ -42,6 +44,7 @@ export const esquemaRegistros = z.object({
       autorizador: z.string().nullable(),
       conta: z.number().nullable(),
       registradaEm: z.string(),
+      motivoCorrecao: z.string().nullable(),
     }),
   ),
   diariasAutorizadas: z.number(),
@@ -64,6 +67,11 @@ export type OperadorUnidade = z.infer<typeof esquemaOperadores>[number];
 export const lerRegistros = (reg: number) => ler(`${I}/${reg}/registros`, esquemaRegistros);
 export const registrarDiagnostico = (reg: number, corpo: unknown, chave: string) =>
   enviar(`${I}/${reg}/diagnosticos`, corpo, esquemaGravado, chave);
+export const retirarDiagnostico = (reg: number, sequencia: number, motivo: string, chave: string) =>
+  enviar(`${I}/${reg}/diagnosticos/${sequencia}/retirada`, { motivo }, esquemaGravado, chave);
+/** Corrige uma guia do histórico (sem linha nova nem diárias somadas); o período só muda na última. */
+export const corrigirGuia = (reg: number, sequencia: number, corpo: unknown, chave: string) =>
+  enviar(`${I}/${reg}/guias/${sequencia}/correcao`, corpo, esquemaGravado, chave);
 export const registrarAcidente = (reg: number, corpo: unknown, chave: string) =>
   enviar(`${I}/${reg}/acidentes`, corpo, esquemaGravado, chave);
 export const lerOperadores = (unidade: number) => ler(`${U}/${unidade}/operadores`, esquemaOperadores);

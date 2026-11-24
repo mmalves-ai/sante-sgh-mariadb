@@ -30,3 +30,17 @@ CREATE TABLE IF NOT EXISTS guia_internacao (
   UNIQUE KEY uq_guia_internacao_internacao_sequencia (internacao_id, sequencia),
   KEY ix_guia_internacao_conta_hospitalar (conta_hospitalar_id)
 ) COMMENT='Guia inicial e prorrogações da autorização da internação, com validade e quem autorizou';
+
+-- Correção da guia sem linha nova (revisão da F3.4): o motivo da última correção fica na linha; o antes e o depois
+-- de cada correção ficam na trilha (a versão muda a cada uma).
+ALTER TABLE guia_internacao
+  ADD COLUMN IF NOT EXISTS motivo_retificacao VARCHAR(400) NULL COMMENT 'Motivo da última correção da guia';
+
+-- Diagnósticos da internação (04-INT linha 67): um principal vigente só (o anterior fica marcado como substituído
+-- pelo novo) e a retirada do lançado por engano com o motivo (exclusão lógica; o registro nunca é apagado).
+ALTER TABLE diagnostico_internacao
+  ADD COLUMN IF NOT EXISTS substituido_em DATETIME(3) NULL COMMENT 'Quando outro principal tomou o lugar deste',
+  ADD COLUMN IF NOT EXISTS substituido_por_diagnostico_id BIGINT UNSIGNED NULL COMMENT 'Diagnóstico principal que substituiu este',
+  ADD COLUMN IF NOT EXISTS motivo_retirada VARCHAR(400) NULL COMMENT 'Motivo da retirada do diagnóstico lançado por engano';
+ALTER TABLE diagnostico_internacao
+  ADD KEY IF NOT EXISTS ix_diagnostico_internacao_substituido_por_diagnostico (substituido_por_diagnostico_id);

@@ -10,8 +10,11 @@
 import {
   conferirAcidente,
   conferirDiagnostico,
+  conferirMotivo,
+  corrigirGuia,
   decidirPermissaoUnidade,
   diagnosticosDaAdmissao,
+  diariasAutorizadasTotal,
   type AcaoUnidade,
   type GuiaAutorizada,
   proximaGuia,
@@ -97,17 +100,42 @@ const COLUNA_ACAO: Readonly<Record<AcaoUnidade, string>> = {
   darAlta: 'pode_dar_alta',
 };
 
-/** Recusa a ação quando a unidade tem operadores definidos e o usuário não está liberado para ela. */
+/**
+ * O acesso total da sessão (administrador da plataforma, ADR 0022), quando o contexto da operação o traz. Nenhuma
+ * coluna do banco do cliente concede isto: vem só da sessão da plataforma.
+ */
+export const acessoTotalDe = (ctx: object): boolean =>
+  (ctx as { readonly acessoTotal?: unknown }).acessoTotal === true;
+
+/** A linha da tabela compartilhada tem alguma permissão de material da unidade (fora da internação). */
+const COLUNAS_MATERIAL = [
+  'pode_solicitar_material_setor',
+  'pode_solicitar_material_paciente',
+  'pode_movimentar_estoque',
+  'pode_confirmar_recebimento',
+] as const;
+const temPermissaoDeMaterial = (a: Linha): boolean =>
+  a['setor_funcional_id'] !== null && a['setor_funcional_id'] !== undefined
+    ? true
+    : COLUNAS_MATERIAL.some((c) => Boolean(a[c]));
+
+/**
+ * Recusa a ação quando a unidade tem operadores de internação definidos e o usuário não está liberado para ela. As
+ * linhas que só liberam material (a mesma tabela) não contam; o acesso total da sessão passa.
+ */
 export async function exigirOperadorDaUnidade(
   tx: Pick<TxOperacao, 'consultar'>,
   unidade: number | null,
   usuario: number | null,
   acao: AcaoUnidade,
+  acessoTotal = false,
 ): Promise<void> {
-  if (unidade === null) return;
+  if (unidade === null || acessoTotal) return;
   const regras = await tx.consultar(
     `SELECT usuario_id, pode_admitir, pode_transferir, pode_dar_alta
-       FROM permissao_unidade_usuario WHERE unidade_internacao_id = ? AND excluido_em IS NULL`,
+       FROM permissao_unidade_usuario
+      WHERE unidade_internacao_id = ? AND excluido_em IS NULL
+        AND (pode_admitir OR pode_transferir OR pode_dar_alta)`,
     [unidade],
   );
   const d = decidirPermissaoUnidade(
@@ -119,6 +147,7 @@ export async function exigirOperadorDaUnidade(
     })),
     usuario,
     acao,
+    { acessoTotal },
   );
   if (!d.permitido) throw recusa('unidade-sem-permissao', d.motivo, { campos: [COLUNA_ACAO[acao]] });
 }
@@ -172,7 +201,8 @@ const definirOperadoresUnidade = definirOperacao<DefinirOperadoresEntrada, Resul
       if (!us) throw recusaCampo('usuario-inexistente', 'Um dos usuários da lista não existe.', 'operadores');
     }
     const atuais = await tx.consultarParaAtualizar(
-      `SELECT id, usuario_id, versao, excluido_em, pode_admitir, pode_transferir, pode_dar_alta
+      `SELECT id, usuario_id, versao, excluido_em, pode_admitir, pode_transferir, pode_dar_alta, setor_funcional_id,
+              ${COLUNAS_MATERIAL.join(', ')}
          FROM permissao_unidade_usuario WHERE unidade_internacao_id = ?`,
       [e.unidade],
     );
@@ -208,12 +238,20 @@ const definirOperadoresUnidade = definirOperacao<DefinirOperadoresEntrada, Resul
         alterados++;
       }
     }
+    // Quem saiu da lista perde só as ações da internação; a linha é retirada (exclusão lógica) apenas quando não
+    // guarda também permissões de material da unidade, que são de outra função e continuam valendo.
     const naLista = new Set(e.operadores.map((o) => o.usuario));
     for (const a of atuais)
-      if (a['excluido_em'] === null && !naLista.has(num(a['usuario_id']))) {
+      if (
+        a['excluido_em'] === null &&
+        !naLista.has(num(a['usuario_id'])) &&
+        (Boolean(a['pode_admitir']) || Boolean(a['pode_transferir']) || Boolean(a['pode_dar_alta']))
+      ) {
         await tx.alterar('permissao_unidade_usuario', num(a['id']), num(a['versao']), {
-          excluido_em: new Date(),
-          excluido_por: ctx.usuario,
+          pode_admitir: false,
+          pode_transferir: false,
+          pode_dar_alta: false,
+          ...(temPermissaoDeMaterial(a) ? {} : { excluido_em: new Date(), excluido_por: ctx.usuario }),
         });
         retirados++;
       }
@@ -233,7 +271,15 @@ export async function gravarDiagnosticosDaAdmissao(
   registradoEm: Date,
   profissional: number | null,
 ): Promise<void> {
-  for (const d of diagnosticosDaAdmissao(cidPrincipal, cidSecundario))
+  const codigoDe = async (id: number) =>
+    (await tx.uma<{ codigo_termo: string }>('SELECT codigo_termo FROM termo_terminologia WHERE id = ?', [id]))
+      ?.codigo_termo ?? '';
+  const r = diagnosticosDaAdmissao(
+    { cid: cidPrincipal, codigo: await codigoDe(cidPrincipal) },
+    cidSecundario ? { cid: cidSecundario, codigo: await codigoDe(cidSecundario) } : null,
+  );
+  if (!r.ok) throw recusaCampo('diagnostico-invalido', r.motivo, r.campo);
+  for (const d of r.valor)
     await tx.incluir('diagnostico_internacao', {
       internacao_id: internacao,
       sequencia: d.sequencia,
@@ -268,8 +314,10 @@ const registrarDiagnostico = definirOperacao<RegistrarDiagnosticoEntrada, Result
       [e.cid],
     );
     if (!t) throw recusaCampo('cid-inexistente', 'Escolha o CID-10 na busca.', 'cid');
+    // Os vigentes: sem os retirados (lançados por engano) e sem os principais já substituídos.
     const existentes = await tx.consultar(
-      'SELECT cid_termo_terminologia_id AS cid, tipo, sequencia FROM diagnostico_internacao WHERE internacao_id = ? AND excluido_em IS NULL',
+      `SELECT id, versao, cid_termo_terminologia_id AS cid, tipo, sequencia FROM diagnostico_internacao
+        WHERE internacao_id = ? AND excluido_em IS NULL AND substituido_em IS NULL`,
       [e.internacao],
     );
     const todos = await tx.consultar('SELECT sequencia FROM diagnostico_internacao WHERE internacao_id = ?', [
@@ -302,9 +350,66 @@ const registrarDiagnostico = definirOperacao<RegistrarDiagnosticoEntrada, Result
       profissional_id: prof ? num(prof.id) : null,
       observacao: e.observacao ?? null,
     });
-    return { internacao: e.internacao, diagnostico: id, sequencia };
+    // Um principal vigente só: o anterior fica no histórico, marcado como substituído pelo novo.
+    const anterior = existentes.find((x) => num(x['sequencia']) === r.valor.substitui);
+    if (anterior)
+      await tx.alterar('diagnostico_internacao', num(anterior['id']), num(anterior['versao']), {
+        substituido_em: new Date(),
+        substituido_por_diagnostico_id: id,
+      });
+    return {
+      internacao: e.internacao,
+      diagnostico: id,
+      sequencia,
+      ...(anterior ? { substituiu: num(anterior['sequencia']) } : {}),
+    };
   },
   alvo: (e) => ({ tabela: 'internacao', id: e.internacao }),
+});
+
+export const esquemaRetirarDiagnostico = z
+  .object({
+    internacao: z.number().int().positive(),
+    sequencia: z.number().int().positive(),
+    motivo: z.string().trim().max(400),
+  })
+  .strict();
+type RetirarDiagnosticoEntrada = z.infer<typeof esquemaRetirarDiagnostico>;
+
+/**
+ * Retira o diagnóstico lançado por engano: exclusão lógica com quem, quando e o motivo, nunca DELETE. O registro fica
+ * na leitura como "retirado", separado dos vigentes.
+ */
+const retirarDiagnostico = definirOperacao<RetirarDiagnosticoEntrada, ResultadoOperacao>({
+  nome: 'internacao.retirar-diagnostico',
+  tabelas: ['diagnostico_internacao'],
+  entrada: esquemaRetirarDiagnostico,
+  async gravar(tx, e, ctx) {
+    const est = estabelecimento(ctx);
+    await internacaoDoEstabelecimento(tx, est, e.internacao);
+    const m = conferirMotivo(e.motivo);
+    if (!m.ok) throw recusaCampo('motivo-obrigatorio', m.motivo, m.campo);
+    const [d] = await tx.consultarParaAtualizar(
+      'SELECT id, versao, excluido_em FROM diagnostico_internacao WHERE internacao_id = ? AND sequencia = ?',
+      [e.internacao, e.sequencia],
+    );
+    if (!d)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Diagnóstico não encontrado',
+        'O diagnóstico não existe nesta internação.',
+      );
+    if (d['excluido_em'] !== null) throw recusa('diagnostico-retirado', 'O diagnóstico já foi retirado.');
+    await tx.alterar('diagnostico_internacao', num(d['id']), num(d['versao']), {
+      excluido_em: new Date(),
+      excluido_por: ctx.usuario,
+      motivo_retirada: m.valor,
+    });
+    return { internacao: e.internacao, sequencia: e.sequencia };
+  },
+  alvo: (e) => ({ tabela: 'internacao', id: e.internacao }),
+  trilha: (e) => ({ motivo: e.motivo.slice(0, 200) }),
 });
 
 // ── Acidente ─────────────────────────────────────────────────────────────────────────────────────
@@ -411,18 +516,7 @@ export async function gravarGuiaNoHistorico(
   g: GuiaNova,
 ): Promise<GuiaAutorizada & { diariasTotais: number }> {
   const f = await fuso(tx, est);
-  const historico = await tx.consultar(
-    `SELECT sequencia, tipo, inicio_validade, fim_validade, diarias_autorizadas
-       FROM guia_internacao WHERE internacao_id = ? AND excluido_em IS NULL`,
-    [g.internacao],
-  );
-  const h: GuiaAutorizada[] = historico.map((x) => ({
-    sequencia: num(x['sequencia']),
-    tipo: x['tipo'] === 'inicial' ? 'inicial' : 'prorrogacao',
-    inicio: dataIso(x['inicio_validade'])!,
-    fim: dataIso(x['fim_validade'])!,
-    diarias: num(x['diarias_autorizadas']),
-  }));
+  const h = (await historicoDeGuias(tx, g.internacao)).map((x) => x.guia);
   const r = proximaGuia(h, { diarias: g.validadeDias, inicio: g.inicio }, civil(f, entradaEm));
   if (!r.ok) throw recusaCampo('guia-invalida', r.motivo, r.campo);
   if (g.conta !== null) {
@@ -446,14 +540,109 @@ export async function gravarGuiaNoHistorico(
     autorizador_nome: g.autorizador ?? null,
     observacao: g.observacao ?? null,
   });
-  return { ...r.valor, diariasTotais: h.reduce((s, x) => s + x.diarias, 0) + r.valor.diarias };
+  return { ...r.valor, diariasTotais: diariasAutorizadasTotal([...h, r.valor]) };
 }
+
+async function historicoDeGuias(
+  tx: Pick<TxOperacao, 'consultar'>,
+  internacao: number,
+): Promise<{ id: number; versao: number; guia: GuiaAutorizada }[]> {
+  const l = await tx.consultar(
+    `SELECT id, versao, sequencia, tipo, inicio_validade, fim_validade, diarias_autorizadas
+       FROM guia_internacao WHERE internacao_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+    [internacao],
+  );
+  return l.map((x) => ({
+    id: num(x['id']),
+    versao: num(x['versao']),
+    guia: {
+      sequencia: num(x['sequencia']),
+      tipo: x['tipo'] === 'inicial' ? 'inicial' : 'prorrogacao',
+      inicio: dataIso(x['inicio_validade'])!,
+      fim: dataIso(x['fim_validade'])!,
+      diarias: num(x['diarias_autorizadas']),
+    },
+  }));
+}
+
+export const esquemaCorrigirGuia = z
+  .object({
+    internacao: z.number().int().positive(),
+    sequencia: z.number().int().positive(),
+    guia: z.string().trim().min(1, 'Informe o número da guia.').max(20),
+    senha: textoLivre(20),
+    autorizador: textoLivre(150),
+    validadeDias: z.number().int().min(1).max(999).optional(),
+    inicio: DATA.optional(),
+    motivo: z.string().trim().max(400),
+  })
+  .strict();
+type CorrigirGuiaEntrada = z.infer<typeof esquemaCorrigirGuia>;
+
+/**
+ * Corrige uma guia do histórico (número, senha, autorizador e, só na última, o período), com motivo: a linha muda de
+ * versão (a trilha guarda o antes e o depois), sem linha nova e sem somar diárias. O retrato da internação segue a
+ * guia vigente (a última) e o total autorizado.
+ */
+const corrigirGuiaOp = definirOperacao<CorrigirGuiaEntrada, ResultadoOperacao>({
+  nome: 'internacao.corrigir-guia',
+  tabelas: ['guia_internacao', 'internacao'],
+  entrada: esquemaCorrigirGuia,
+  async gravar(tx, e, ctx) {
+    const est = estabelecimento(ctx);
+    const i = await internacaoDoEstabelecimento(tx, est, e.internacao);
+    const m = conferirMotivo(e.motivo);
+    if (!m.ok) throw recusaCampo('motivo-obrigatorio', m.motivo, m.campo);
+    const h = await historicoDeGuias(tx, e.internacao);
+    const alvo = h.find((x) => x.guia.sequencia === e.sequencia);
+    if (!alvo)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Guia não encontrada',
+        'A guia não existe nesta internação.',
+      );
+    const f = await fuso(tx, est);
+    const r = corrigirGuia(
+      h.map((x) => x.guia),
+      e.sequencia,
+      { diarias: e.validadeDias, inicio: e.inicio },
+      civil(f, i['data_hora_entrada'] as Date),
+    );
+    if (!r.ok) throw recusaCampo('guia-invalida', r.motivo, r.campo);
+    await tx.alterar('guia_internacao', alvo.id, alvo.versao, {
+      numero_guia: e.guia,
+      senha: e.senha ?? null,
+      autorizador_nome: e.autorizador ?? null,
+      diarias_autorizadas: r.valor.diarias,
+      inicio_validade: r.valor.inicio,
+      fim_validade: r.valor.fim,
+      motivo_retificacao: m.valor,
+    });
+    const novas = h.map((x) => (x.guia.sequencia === e.sequencia ? r.valor : x.guia));
+    const ultima = h[h.length - 1]!;
+    const retrato = await tx.uma<{ versao: number }>('SELECT versao FROM internacao WHERE id = ?', [
+      e.internacao,
+    ]);
+    await tx.alterar('internacao', e.internacao, num(retrato?.versao), {
+      ...(ultima.guia.sequencia === e.sequencia
+        ? { numero_guia: e.guia, senha_autorizacao: e.senha ?? null }
+        : {}),
+      diarias_autorizadas: diariasAutorizadasTotal(novas),
+    });
+    return { internacao: e.internacao, sequencia: e.sequencia };
+  },
+  alvo: (e) => ({ tabela: 'internacao', id: e.internacao }),
+  trilha: (e) => ({ motivo: e.motivo.slice(0, 200) }),
+});
 
 /** As operações desta função pelo nome da tela (somadas às da internação). */
 export const OPERACOES_REGISTROS_INTERNACAO: Readonly<Record<string, Operacao<never, ResultadoOperacao>>> = {
   'internacao.registrarDiagnostico': registrarDiagnostico as never,
   'internacao.registrarAcidente': registrarAcidente as never,
   'internacao.definirOperadoresUnidade': definirOperadoresUnidade as never,
+  'internacao.retirarDiagnostico': retirarDiagnostico as never,
+  'internacao.corrigirGuia': corrigirGuiaOp as never,
 };
 
 /** A permissão de agir de cada operação desta função. */
@@ -461,6 +650,8 @@ export const PERMISSOES_REGISTROS_INTERNACAO: Readonly<Record<string, string>> =
   'internacao.registrarDiagnostico': 'internacao.internacao.criar',
   'internacao.registrarAcidente': 'internacao.internacao.criar',
   'internacao.definirOperadoresUnidade': 'organizacao.leito.editar',
+  'internacao.retirarDiagnostico': 'internacao.internacao.criar',
+  'internacao.corrigirGuia': 'internacao.guia.editar',
 };
 
 // ── Leituras ─────────────────────────────────────────────────────────────────────────────────────
@@ -474,6 +665,9 @@ export interface RegistrosDaInternacao {
     nome: string;
     registradoEm: string;
     observacao: string | null;
+    /** vigente, substituido (principal trocado por outro) ou retirado (lançado por engano, com o motivo). */
+    situacao: 'vigente' | 'substituido' | 'retirado';
+    motivoRetirada: string | null;
   }[];
   readonly acidentes: {
     sequencia: number;
@@ -496,6 +690,7 @@ export interface RegistrosDaInternacao {
     autorizador: string | null;
     conta: number | null;
     registradaEm: string;
+    motivoCorrecao: string | null;
   }[];
   readonly diariasAutorizadas: number;
 }
@@ -514,9 +709,9 @@ export async function lerRegistrosDaInternacao(
   const [d, a, g] = await Promise.all([
     l.consultar(
       `SELECT d.sequencia, d.tipo, d.cid_termo_terminologia_id AS cid, t.codigo_termo AS codigo, t.descricao AS nome,
-              d.registrado_em, d.observacao
+              d.registrado_em, d.observacao, d.excluido_em, d.substituido_em, d.motivo_retirada
          FROM diagnostico_internacao d JOIN termo_terminologia t ON t.id = d.cid_termo_terminologia_id
-        WHERE d.internacao_id = ? AND d.excluido_em IS NULL ORDER BY d.sequencia`,
+        WHERE d.internacao_id = ? ORDER BY d.sequencia`,
       [internacao],
     ),
     l.consultar(
@@ -527,7 +722,7 @@ export async function lerRegistrosDaInternacao(
     ),
     l.consultar(
       `SELECT sequencia, tipo, numero_guia, senha, diarias_autorizadas, inicio_validade, fim_validade, autorizador_nome,
-              conta_hospitalar_id, criado_em
+              conta_hospitalar_id, criado_em, motivo_retificacao
          FROM guia_internacao WHERE internacao_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
       [internacao],
     ),
@@ -544,6 +739,7 @@ export async function lerRegistrosDaInternacao(
     autorizador: (x['autorizador_nome'] as string | null) ?? null,
     conta: numOuNulo(x['conta_hospitalar_id']),
     registradaEm: quando(x['criado_em']) ?? '',
+    motivoCorrecao: (x['motivo_retificacao'] as string | null) ?? null,
   }));
   return {
     diagnosticos: d.map((x) => ({
@@ -554,6 +750,12 @@ export async function lerRegistrosDaInternacao(
       nome: String(x['nome'] ?? ''),
       registradoEm: quando(x['registrado_em']) ?? '',
       observacao: (x['observacao'] as string | null) ?? null,
+      situacao: (x['excluido_em'] !== null && x['excluido_em'] !== undefined
+        ? 'retirado'
+        : x['substituido_em'] !== null && x['substituido_em'] !== undefined
+          ? 'substituido'
+          : 'vigente') as 'vigente' | 'substituido' | 'retirado',
+      motivoRetirada: (x['motivo_retirada'] as string | null) ?? null,
     })),
     acidentes: a.map((x) => ({
       sequencia: num(x['sequencia']),
@@ -566,7 +768,7 @@ export async function lerRegistrosDaInternacao(
       local: (x['local_ocorrencia'] as string | null) ?? null,
     })),
     guias,
-    diariasAutorizadas: guias.reduce((s, x) => s + x.diarias, 0),
+    diariasAutorizadas: diariasAutorizadasTotal(guias),
   };
 }
 
@@ -591,7 +793,8 @@ export async function lerOperadoresDaUnidade(
   const r = await l.consultar(
     `SELECT p.usuario_id, u.login, p.pode_admitir, p.pode_transferir, p.pode_dar_alta
        FROM permissao_unidade_usuario p JOIN usuario u ON u.id = p.usuario_id
-      WHERE p.unidade_internacao_id = ? AND p.excluido_em IS NULL ORDER BY u.login`,
+      WHERE p.unidade_internacao_id = ? AND p.excluido_em IS NULL
+        AND (p.pode_admitir OR p.pode_transferir OR p.pode_dar_alta) ORDER BY u.login`,
     [unidade],
   );
   return r.map((x) => ({

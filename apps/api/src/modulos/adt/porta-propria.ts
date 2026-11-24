@@ -370,6 +370,12 @@ export class PortaAdtPropria implements PortaAdt {
           WHERE i.id = ?`,
         [reg],
       );
+      const historicoGuias = await l.consultar(
+        `SELECT numero_guia, senha, diarias_autorizadas, conta_hospitalar_id,
+                DATE_FORMAT(inicio_validade, '%Y-%m-%d') AS inicio, DATE_FORMAT(fim_validade, '%Y-%m-%d') AS fim
+           FROM guia_internacao WHERE internacao_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+        [reg],
+      );
       const trechos = await l.consultar(
         `SELECT o.data_hora_inicio, o.data_hora_fim, COALESCE(b.codigo, '') AS bloco, ac.codigo AS acomodacao,
                 lh.codigo AS leito, ca.id AS tipo, ca.descricao AS tipo_nome
@@ -443,18 +449,30 @@ export class PortaAdtPropria implements PortaAdt {
             horaSaida: b?.hora ?? null,
           };
         }),
-        guias: extra?.['numero_guia']
-          ? [
-              {
-                conta: n(extra['atendimento_id']),
-                guia: texto(extra['numero_guia']),
-                inicio: resumo.entrada,
-                fim: null,
-                validadeDias: n(extra['diarias_autorizadas']),
-                temSenha: extra['senha_autorizacao'] !== null,
-              },
-            ]
-          : [],
+        // F3.4 (04-INT 68): as guias vêm do histórico (inicial e prorrogações, cada uma com o seu período); o retrato
+        // da internação (guia vigente e total autorizado) só aparece quando a internação não tem histórico.
+        guias:
+          historicoGuias.length > 0
+            ? historicoGuias.map((g) => ({
+                conta: n(g['conta_hospitalar_id'] ?? extra?.['atendimento_id']),
+                guia: texto(g['numero_guia']),
+                inicio: String(g['inicio']),
+                fim: String(g['fim']),
+                validadeDias: n(g['diarias_autorizadas']),
+                temSenha: g['senha'] !== null,
+              }))
+            : extra?.['numero_guia']
+              ? [
+                  {
+                    conta: n(extra['atendimento_id']),
+                    guia: texto(extra['numero_guia']),
+                    inicio: resumo.entrada,
+                    fim: null,
+                    validadeDias: n(extra['diarias_autorizadas']),
+                    temSenha: extra['senha_autorizacao'] !== null,
+                  },
+                ]
+              : [],
         trocas: trocas.map((t) => {
           const d = dia(t['ocorrido_em'])!;
           const tipo = tipoTroca(texto(t['dado_trocado']));

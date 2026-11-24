@@ -65,6 +65,11 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
   await e.executar(`DELETE FROM barreira_alta WHERE internacao_id IN (${internacoes})`, ests);
   await e.executar(`DELETE FROM previsao_alta WHERE internacao_id IN (${internacoes})`, ests);
   // F3.4 (04-INT 65, 67 e 68): diagnósticos, acidente, guias e operadores das unidades da massa.
+  // O principal substituído aponta para o que o substituiu (FK da própria tabela): solta antes de apagar.
+  await e.executar(
+    `UPDATE diagnostico_internacao SET substituido_por_diagnostico_id = NULL WHERE internacao_id IN (${internacoes})`,
+    ests,
+  );
   await e.executar(`DELETE FROM diagnostico_internacao WHERE internacao_id IN (${internacoes})`, ests);
   await e.executar(`DELETE FROM acidente_internacao WHERE internacao_id IN (${internacoes})`, ests);
   await e.executar(`DELETE FROM guia_internacao WHERE internacao_id IN (${internacoes})`, ests);

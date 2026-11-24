@@ -4,8 +4,12 @@
 //     apagado e as recusas (repetido, causa externa fora do capítulo XX) não gravam;
 //   - o acidente de trabalho conferido na hora (sem empregador, recusa) e gravado com a sequência;
 //   - a prorrogação entra como nova linha do histórico com a validade seguinte e o autorizador; a guia inicial fica;
-//   - os operadores da unidade: com a regra, quem não está liberado não admite; a lista vazia retira (exclusão lógica)
-//     e devolve a unidade ao cargo.
+//   - os operadores da unidade: com a regra, quem não está liberado não admite, não transfere para a unidade nem dá
+//     alta nela; a linha só de material não conta como regra; a lista vazia tira as ações da internação (exclusão
+//     lógica só da linha sem material) e devolve a unidade ao cargo;
+//   - o principal novo substitui o vigente (fica no histórico); a retirada exige motivo e não apaga;
+//   - a correção da guia não cria linha nem soma diárias; o retrato da internação guarda o total autorizado;
+//   - outro estabelecimento não lê nem grava (404 sem vazamento).
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -18,8 +22,9 @@ import {
   prepararMassaAdt,
   SEM_BANCO_ADT,
 } from './massa-adt.spec-util.js';
+import { carimboVersao } from './operacoes.js';
 import { PortaAdtPropria } from './porta-propria.js';
-import { lerRegistrosDaInternacao } from './registros-internacao.js';
+import { lerOperadoresDaUnidade, lerRegistrosDaInternacao } from './registros-internacao.js';
 
 const codigoDe = (e: unknown) =>
   (e as { problema?: { codigo?: string } }).problema?.codigo ?? (e as { codigo?: string }).codigo;
@@ -69,12 +74,37 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
       )?.u,
     );
   let internacao = 0;
+  const versaoDe = async (id: number) =>
+    carimboVersao(
+      (await lerAdt<{ versao: number }>(M(), 'SELECT versao FROM internacao WHERE id = ?', [id]))?.versao,
+    );
+  const cidDe = async (filtro: string, exceto: number[]) =>
+    Number(
+      (
+        await lerAdt<{ id: number }>(
+          M(),
+          `SELECT t.id FROM termo_terminologia t JOIN terminologia tt ON tt.id = t.terminologia_id
+            WHERE tt.codigo = 'cid10' AND t.id NOT IN (${exceto.map(() => '?').join(',')}) AND ${filtro} LIMIT 1`,
+          exceto,
+        )
+      )?.id ?? 0,
+    );
 
   beforeAll(async () => {
     m = await prepararMassaAdt('R');
     porta = new PortaAdtPropria(M().nucleo);
   }, 60_000);
   afterAll(() => encerrarMassaAdt(m));
+
+  it('admissão: guia sem diárias recusada na hora, sem gravar nada', async () => {
+    const antes = await conta('SELECT COUNT(*) AS n FROM internacao WHERE estabelecimento_id = ?', [M().est]);
+    await expect(internar(M().pacientes[0]!, M().leitos[0]!, { guia: 'G-SEM-DIARIAS' })).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'guia-sem-diarias',
+    );
+    expect(await conta('SELECT COUNT(*) AS n FROM internacao WHERE estabelecimento_id = ?', [M().est])).toBe(
+      antes,
+    );
+  });
 
   it('admissão: diagnóstico de entrada e guia inicial no histórico', async () => {
     const r = await internar(M().pacientes[0]!, M().leitos[0]!, {
@@ -234,7 +264,7 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
     });
     expect(
       await lerAdt(M(), 'SELECT numero_guia, senha_autorizacao FROM internacao WHERE id = ?', [internacao]),
-    ).toMatchObject({ numero_guia: 'G-PRORROGA', senha_autorizacao: 'S2' });
+    ).toMatchObject({ numero_guia: 'G-PRORROGA', senha_autorizacao: 'S2', diarias_autorizadas: 7 });
     const leitura = await porta.lerNoEstabelecimento(contextoAdt(M()), (l, est, fuso) =>
       lerRegistrosDaInternacao(l, est, fuso, internacao),
     );
@@ -242,6 +272,118 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
     expect(leitura?.diariasAutorizadas).toBe(7);
     expect(leitura?.acidentes).toHaveLength(1);
     expect(leitura?.diagnosticos[0]?.tipo).toBe('entrada');
+  });
+
+  it('correção da guia: sem linha nova nem diárias somadas; motivo obrigatório; período só na última', async () => {
+    await expect(
+      executar('internacao.corrigirGuia', { internacao, sequencia: 1, guia: 'G-INICIAL-OK', motivo: '' }),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'motivo-obrigatorio');
+    await expect(
+      executar('internacao.corrigirGuia', {
+        internacao,
+        sequencia: 1,
+        guia: 'G-INICIAL',
+        validadeDias: 9,
+        motivo: 'periodo digitado errado',
+      }),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'guia-invalida');
+    await executar('internacao.corrigirGuia', {
+      internacao,
+      sequencia: 1,
+      guia: 'G-INICIAL-OK',
+      senha: 'S1',
+      motivo: 'numero digitado errado',
+    });
+    expect(
+      await lerAdt(
+        M(),
+        `SELECT COUNT(*) AS n, SUM(diarias_autorizadas) AS d,
+                MAX(CASE WHEN sequencia = 1 THEN CONCAT(numero_guia, '|', motivo_retificacao, '|', versao) END) AS ini
+           FROM guia_internacao WHERE internacao_id = ?`,
+        [internacao],
+      ),
+    ).toMatchObject({ n: 2, d: 7, ini: 'G-INICIAL-OK|numero digitado errado|2' });
+    // A correção da última muda o período e o total no retrato; a guia vigente continua a última.
+    await executar('internacao.corrigirGuia', {
+      internacao,
+      sequencia: 2,
+      guia: 'G-PRORROGA',
+      senha: 'S2',
+      autorizador: 'AUDITORIA SINTETICA',
+      validadeDias: 2,
+      motivo: 'operadora autorizou 2 diarias',
+    });
+    expect(
+      await lerAdt(M(), 'SELECT numero_guia, diarias_autorizadas FROM internacao WHERE id = ?', [internacao]),
+    ).toMatchObject({ numero_guia: 'G-PRORROGA', diarias_autorizadas: 5 });
+    const leitura = await porta.lerNoEstabelecimento(contextoAdt(M()), (l, est, fuso) =>
+      lerRegistrosDaInternacao(l, est, fuso, internacao),
+    );
+    expect(leitura?.diariasAutorizadas).toBe(5);
+    expect(leitura?.guias[1]?.motivoCorrecao).toBe('operadora autorizou 2 diarias');
+  });
+
+  it('diagnósticos: o principal novo substitui o vigente; a retirada exige motivo e fica no histórico', async () => {
+    const a = await cidDe("t.codigo_termo REGEXP '^I'", [M().cid]);
+    const b = await cidDe("t.codigo_termo REGEXP '^J'", [M().cid, a]);
+    expect(a * b).toBeGreaterThan(0);
+    const p1 = await executar('internacao.registrarDiagnostico', { internacao, cid: a, tipo: 'principal' });
+    const p2 = await executar('internacao.registrarDiagnostico', { internacao, cid: b, tipo: 'principal' });
+    expect(p2['substituiu']).toBe(p1['sequencia']);
+    expect(
+      await lerAdt(
+        M(),
+        `SELECT SUM(substituido_em IS NULL) AS vigentes, SUM(substituido_por_diagnostico_id = ?) AS trocado
+           FROM diagnostico_internacao WHERE internacao_id = ? AND tipo = 'principal'`,
+        [p2['diagnostico'], internacao],
+      ),
+    ).toMatchObject({ vigentes: 1, trocado: 1 });
+    await expect(
+      executar('internacao.retirarDiagnostico', { internacao, sequencia: p2['sequencia'], motivo: 'x' }),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'motivo-obrigatorio');
+    const total = await conta('SELECT COUNT(*) AS n FROM diagnostico_internacao WHERE internacao_id = ?', [
+      internacao,
+    ]);
+    await executar('internacao.retirarDiagnostico', {
+      internacao,
+      sequencia: p2['sequencia'],
+      motivo: 'lancado na internacao errada',
+    });
+    expect(
+      await conta('SELECT COUNT(*) AS n FROM diagnostico_internacao WHERE internacao_id = ?', [internacao]),
+    ).toBe(total);
+    const leitura = await porta.lerNoEstabelecimento(contextoAdt(M()), (l, est, fuso) =>
+      lerRegistrosDaInternacao(l, est, fuso, internacao),
+    );
+    const situacoes = leitura?.diagnosticos.filter((d) => d.tipo === 'principal').map((d) => d.situacao);
+    expect(situacoes).toEqual(['substituido', 'retirado']);
+    expect(leitura?.diagnosticos.find((d) => d.situacao === 'retirado')?.motivoRetirada).toBe(
+      'lancado na internacao errada',
+    );
+  });
+
+  it('outro estabelecimento: a internação e a unidade não são lidas nem gravadas (404)', async () => {
+    const alheio = contextoAdt(M(), M().outro);
+    expect(
+      await porta.lerNoEstabelecimento(contextoAdt(M()), (l, _est, fuso) =>
+        lerRegistrosDaInternacao(l, M().outro, fuso, internacao),
+      ),
+    ).toBeNull();
+    expect(
+      await porta.lerNoEstabelecimento(contextoAdt(M()), (l) =>
+        lerOperadoresDaUnidade(l, M().outro, await unidadeDaMassa()),
+      ),
+    ).toBeNull();
+    await expect(
+      porta.executar(
+        alheio,
+        'internacao.registrarDiagnostico',
+        { internacao, cid: M().cid, tipo: 'secundario' },
+        { ...operacaoAdt(M()), reautenticadoEm: Date.now() },
+      ),
+    ).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'registro-inexistente' || codigoDe(e) === 'sem-estabelecimento',
+    );
   });
 
   it('operadores da unidade: com a regra, quem não está liberado não admite; lista vazia retira sem apagar', async () => {
@@ -270,13 +412,51 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
     expect(r).toMatchObject({ incluidos: 1, alterados: 0, retirados: 0 });
     const i2 = Number((await internar(M().pacientes[1]!, M().leitos[2]!))['internacao']);
     expect(i2).toBeGreaterThan(0);
+    // O usuário só admite: não transfere para a unidade (destino) nem dá alta nela.
+    await expect(
+      executar('internacao.transferirLeito', {
+        internacao: i2,
+        destino: { bloco: 'B1', acomodacao: 'Q1', leito: M().leitos[1]! },
+        versao: await versaoDe(i2),
+        motivoTroca: M().motivoTroca,
+      }),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'unidade-sem-permissao');
+    await expect(
+      executar('internacao.darAlta', {
+        internacao: i2,
+        motivo: M().motivoSaida,
+        medicoAlta: M().medico,
+        versao: await versaoDe(i2),
+      }),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'unidade-sem-permissao');
+    // A linha do outro usuário também guarda permissão de material da unidade (outra função, mesma tabela).
+    await M().nucleo.escrever({ cliente: CLIENTE_ADT, correlacao: 'int-registros-material' }, (e) =>
+      e.executar(
+        'UPDATE permissao_unidade_usuario SET pode_movimentar_estoque = TRUE WHERE unidade_internacao_id = ? AND usuario_id = ?',
+        [unidade, outroUsuario],
+      ),
+    );
     const vazia = await executar('internacao.definirOperadoresUnidade', { unidade, operadores: [] });
     expect(vazia).toMatchObject({ retirados: 2 });
+    // Sem ação de internação: a linha só de material fica viva (sem as ações) e a do usuário só de ADT sai.
     expect(
-      await conta(
-        'SELECT COUNT(*) AS n FROM permissao_unidade_usuario WHERE unidade_internacao_id = ? AND excluido_em IS NOT NULL',
+      await lerAdt(
+        M(),
+        `SELECT SUM(excluido_em IS NOT NULL) AS fora,
+                SUM(excluido_em IS NULL AND pode_movimentar_estoque AND NOT pode_admitir AND NOT pode_dar_alta) AS material
+           FROM permissao_unidade_usuario WHERE unidade_internacao_id = ?`,
         [unidade],
       ),
-    ).toBe(2);
+    ).toMatchObject({ fora: 1, material: 1 });
+    // A linha só de material não conta como regra: a unidade volta ao cargo e o usuário dá alta.
+    await executar('internacao.darAlta', {
+      internacao: i2,
+      motivo: M().motivoSaida,
+      medicoAlta: M().medico,
+      versao: await versaoDe(i2),
+    });
+    expect(await lerAdt(M(), 'SELECT situacao FROM internacao WHERE id = ?', [i2])).toMatchObject({
+      situacao: 'alta',
+    });
   });
 });

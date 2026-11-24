@@ -26,14 +26,25 @@ const ROTULO_ACAO: Readonly<Record<AcaoUnidade, string>> = {
   darAlta: 'dar alta',
 };
 
-/** A unidade sem regra fica aberta (o cargo decide); com regra, só o usuário listado com a ação marcada opera. */
+/** A linha da unidade conta como regra de internação só quando marca ao menos uma ação (admitir, transferir, alta). */
+export const regraDeInternacao = (r: RegraUnidadeUsuario): boolean =>
+  r.podeAdmitir || r.podeTransferir || r.podeDarAlta;
+
+/**
+ * A unidade sem regra de internação fica aberta (o cargo decide); com regra, só o usuário listado com a ação marcada
+ * opera. As linhas que só liberam material da unidade (a mesma tabela) não contam. O acesso total da sessão (o
+ * administrador da plataforma pode tudo, ADR 0022) passa sempre.
+ */
 export function decidirPermissaoUnidade(
   regras: readonly RegraUnidadeUsuario[],
   usuario: number | null,
   acao: AcaoUnidade,
+  opcoes: { readonly acessoTotal?: boolean } = {},
 ): DecisaoUnidade {
-  if (regras.length === 0) return { permitido: true };
-  const r = usuario === null ? undefined : regras.find((x) => x.usuario === usuario);
+  if (opcoes.acessoTotal === true) return { permitido: true };
+  const daInternacao = regras.filter(regraDeInternacao);
+  if (daInternacao.length === 0) return { permitido: true };
+  const r = usuario === null ? undefined : daInternacao.find((x) => x.usuario === usuario);
   const pode =
     r !== undefined &&
     (acao === 'admitir' ? r.podeAdmitir : acao === 'transferir' ? r.podeTransferir : r.podeDarAlta);
@@ -75,11 +86,15 @@ export type ResultadoRegra<T> =
   | { readonly ok: true; readonly valor: T }
   | { readonly ok: false; readonly campo: string; readonly motivo: string };
 
-/** Confere o diagnóstico novo contra a lista: o tipo, a causa externa e a repetição; devolve a próxima sequência. */
+/**
+ * Confere o diagnóstico novo contra a lista dos vigentes (sem os retirados e os substituídos): o tipo, a causa
+ * externa e a repetição. Devolve a próxima sequência e, para o principal, a sequência do principal vigente que ele
+ * substitui (a internação tem um principal vigente só; o anterior fica no histórico como substituído).
+ */
 export function conferirDiagnostico(
   existentes: readonly DiagnosticoExistente[],
   novo: { readonly cid: number; readonly codigo: string; readonly tipo: TipoDiagnosticoInternacao },
-): ResultadoRegra<{ sequencia: number }> {
+): ResultadoRegra<{ sequencia: number; substitui: number | null }> {
   if (!TIPOS_DIAGNOSTICO_TELA.includes(novo.tipo))
     return { ok: false, campo: 'tipo', motivo: 'Escolha o tipo do diagnóstico.' };
   if (novo.tipo === 'causa_externa' && !ehCausaExterna(novo.codigo))
@@ -98,23 +113,55 @@ export function conferirDiagnostico(
     return { ok: false, campo: 'cid', motivo: 'Este diagnóstico já está registrado com este tipo.' };
   if (novo.tipo === 'entrada' && existentes.some((d) => d.tipo === 'entrada'))
     return { ok: false, campo: 'tipo', motivo: 'O diagnóstico de entrada já foi registrado na admissão.' };
-  return { ok: true, valor: { sequencia: proximaSequencia(existentes) } };
+  const principal = novo.tipo === 'principal' ? existentes.find((d) => d.tipo === 'principal') : undefined;
+  return {
+    ok: true,
+    valor: { sequencia: proximaSequencia(existentes), substitui: principal ? principal.sequencia : null },
+  };
+}
+
+/** O motivo da retirada (diagnóstico lançado por engano) ou da correção de uma guia: obrigatório e descritivo. */
+export function conferirMotivo(motivo: string | null | undefined): ResultadoRegra<string> {
+  const m = (motivo ?? '').trim();
+  if (m.length < 5)
+    return { ok: false, campo: 'motivo', motivo: 'Descreva o motivo (ao menos 5 caracteres).' };
+  return { ok: true, valor: m };
 }
 
 export const proximaSequencia = (l: readonly { readonly sequencia: number }[]): number =>
   l.reduce((m, x) => Math.max(m, x.sequencia), 0) + 1;
 
-/** Os diagnósticos que nascem com a admissão: o CID principal como entrada e o secundário, quando houver. */
+export interface CidInformado {
+  readonly cid: number;
+  readonly codigo: string;
+}
+
+/**
+ * Os diagnósticos que nascem com a admissão, com a mesma conferência da tela: o CID principal entra como diagnóstico
+ * de entrada (nunca um código de causa externa, V01 a Y98) e o secundário, quando houver, entra como secundário ou,
+ * se for código de causa externa, como causa externa.
+ */
 export function diagnosticosDaAdmissao(
-  cidPrincipal: number,
-  cidSecundario: number | null | undefined,
-): { cid: number; tipo: TipoDiagnosticoInternacao; sequencia: number }[] {
+  principal: CidInformado,
+  secundario: CidInformado | null | undefined,
+): ResultadoRegra<{ cid: number; tipo: TipoDiagnosticoInternacao; sequencia: number }[]> {
+  if (ehCausaExterna(principal.codigo))
+    return {
+      ok: false,
+      campo: 'cidPrincipal',
+      motivo:
+        'O CID de entrada não pode ser de causa externa (V01 a Y98): informe a lesão e registre a causa externa como CID secundário.',
+    };
   const l: { cid: number; tipo: TipoDiagnosticoInternacao; sequencia: number }[] = [
-    { cid: cidPrincipal, tipo: 'entrada', sequencia: 1 },
+    { cid: principal.cid, tipo: 'entrada', sequencia: 1 },
   ];
-  if (cidSecundario && cidSecundario !== cidPrincipal)
-    l.push({ cid: cidSecundario, tipo: 'secundario', sequencia: 2 });
-  return l;
+  if (secundario && secundario.cid !== principal.cid)
+    l.push({
+      cid: secundario.cid,
+      tipo: ehCausaExterna(secundario.codigo) ? 'causa_externa' : 'secundario',
+      sequencia: 2,
+    });
+  return { ok: true, valor: l };
 }
 
 // ── Acidente ─────────────────────────────────────────────────────────────────────────────────────
@@ -252,6 +299,42 @@ export function proximaGuia(
     },
   };
 }
+
+/**
+ * A correção de uma guia já registrada (número, senha, autorizador digitados errado, ou o período da última): não cria
+ * linha nova nem soma diárias. Só a última guia pode mudar o período, porque as seguintes começam depois dela; o novo
+ * período passa pela mesma conferência da prorrogação.
+ */
+export function corrigirGuia(
+  historico: readonly GuiaAutorizada[],
+  sequencia: number,
+  nova: { readonly diarias?: number | undefined; readonly inicio?: string | undefined },
+  entradaEm: string,
+): ResultadoRegra<GuiaAutorizada> {
+  const alvo = historico.find((g) => g.sequencia === sequencia);
+  if (!alvo) return { ok: false, campo: 'sequencia', motivo: 'A guia não existe nesta internação.' };
+  const diarias = nova.diarias ?? alvo.diarias;
+  const inicio = nova.inicio ?? alvo.inicio;
+  if (diarias === alvo.diarias && inicio === alvo.inicio) return { ok: true, valor: alvo };
+  const ultima = proximaSequencia(historico) - 1;
+  if (alvo.sequencia !== ultima)
+    return {
+      ok: false,
+      campo: 'validadeDias',
+      motivo: 'Só a última guia pode mudar o período: as seguintes começam depois dela.',
+    };
+  const r = proximaGuia(
+    historico.filter((g) => g.sequencia !== sequencia),
+    { diarias, inicio },
+    entradaEm,
+  );
+  if (!r.ok) return r;
+  return { ok: true, valor: { ...r.valor, sequencia: alvo.sequencia, tipo: alvo.tipo } };
+}
+
+/** Total de diárias autorizadas: a soma das guias do histórico (o retrato da internação guarda este total). */
+export const diariasAutorizadasTotal = (historico: readonly { readonly diarias: number }[]): number =>
+  historico.reduce((s, g) => s + g.diarias, 0);
 
 /** Diárias cobertas pelas guias (dias distintos entre o primeiro início e o último fim, sem contar a sobreposição). */
 export function diariasCobertas(historico: readonly GuiaAutorizada[]): number {

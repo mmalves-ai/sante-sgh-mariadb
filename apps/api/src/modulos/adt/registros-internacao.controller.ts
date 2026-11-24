@@ -1,7 +1,9 @@
 // Registros da internação além do retrato da admissão (F3.4, 04-INT linhas 65, 67 e 68):
 //   GET  /api/internacoes/:reg/registros                    diagnósticos, acidente e guias (inicial e prorrogações)
 //   POST /api/internacoes/:reg/diagnosticos                 internacao.registrarDiagnostico
+//   POST /api/internacoes/:reg/diagnosticos/:seq/retirada   internacao.retirarDiagnostico (motivo; nunca apaga)
 //   POST /api/internacoes/:reg/acidentes                    internacao.registrarAcidente
+//   POST /api/internacoes/:reg/guias/:seq/correcao          internacao.corrigirGuia (motivo; sem linha nova)
 //   GET  /api/cadastros/estrutura/unidades/:id/operadores   quem opera a unidade (admitir, transferir, dar alta)
 //   POST /api/cadastros/estrutura/unidades/:id/operadores   internacao.definirOperadoresUnidade (lista inteira)
 // A guia e a prorrogação continuam pela rota da guia (POST /api/internacoes/:reg/guias), que agora grava o histórico.
@@ -24,9 +26,11 @@ import { ApoiosAdt, ctxAdt } from './apoios.js';
 import { PORTA_ADT, type PortaAdt } from './porta.js';
 import { PortaAdtPropria } from './porta-propria.js';
 import {
+  esquemaCorrigirGuia,
   esquemaDefinirOperadoresUnidade,
   esquemaRegistrarAcidente,
   esquemaRegistrarDiagnostico,
+  esquemaRetirarDiagnostico,
   lerOperadoresDaUnidade,
   lerRegistrosDaInternacao,
   type OperadorDaUnidade,
@@ -92,6 +96,47 @@ export class RegistrosInternacaoController {
       e,
       'Diagnóstico registrado.',
     );
+  }
+
+  @Post('internacoes/:reg/diagnosticos/:seq/retirada')
+  @HttpCode(200)
+  @Permissao('internacao.internacao.criar')
+  @AuditadoNoHandler('internacao.retirarDiagnostico pelo executor (trilha na mesma transação)')
+  retirarDiagnostico(
+    @Param('reg') reg: string,
+    @Param('seq') seq: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const e = corpo(esquemaRetirarDiagnostico, {
+      ...(b as object),
+      internacao: idDaRota(reg),
+      sequencia: idDaRota(seq),
+    });
+    return this.apoios.adt.executar(
+      sessaoDe(req),
+      'internacao.retirarDiagnostico',
+      e,
+      'Diagnóstico retirado.',
+    );
+  }
+
+  @Post('internacoes/:reg/guias/:seq/correcao')
+  @HttpCode(200)
+  @Permissao('internacao.guia.editar')
+  @AuditadoNoHandler('internacao.corrigirGuia pelo executor (trilha na mesma transação)')
+  corrigirGuia(
+    @Param('reg') reg: string,
+    @Param('seq') seq: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const e = corpo(esquemaCorrigirGuia, {
+      ...(b as object),
+      internacao: idDaRota(reg),
+      sequencia: idDaRota(seq),
+    });
+    return this.apoios.adt.executar(sessaoDe(req), 'internacao.corrigirGuia', e, 'Guia corrigida.');
   }
 
   @Post('internacoes/:reg/acidentes')
