@@ -44,7 +44,12 @@ import {
   textoDoMotivo,
   lerIdBanco,
 } from '@sgh/contratos';
-import { type Abrangencia, diasSemExpediente, normalizarHora } from '@sgh/dominio-agenda';
+import {
+  type Abrangencia,
+  diasSemExpediente,
+  normalizarHora,
+  prioridadeNaMarcacao,
+} from '@sgh/dominio-agenda';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -211,7 +216,7 @@ const SELECT_MARCACAO = `SELECT m.id, m.paciente_id, m.retorno, m.encaixe, m.mar
   m.remarcada_marcacao_horario_id, m.horario_agenda_id, h.agenda_servico_id, h.data_referencia, h.inicio_em,
   a.nome AS nome_agenda, s.significado, c.codigo AS canal, fp.codigo AS convenio, fp.nome AS nome_convenio,
   COALESCE(pf.nome, pc.nome) AS paciente, p.numero_prontuario, p.pessoa_fisica_id, pc.telefone AS pc_telefone,
-  pc.celular AS pc_celular, u.login AS marcado_por
+  pc.celular AS pc_celular, u.login AS marcado_por, gpl.descricao AS prioridade_legal
 FROM marcacao_horario m
 JOIN horario_agenda h ON h.id = m.horario_agenda_id
 JOIN agenda_servico a ON a.id = h.agenda_servico_id
@@ -222,6 +227,7 @@ LEFT JOIN paciente p ON p.id = m.paciente_id
 LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
 LEFT JOIN pre_cadastro pc ON pc.id = m.pre_cadastro_id
 LEFT JOIN usuario u ON u.id = m.responsavel_usuario_id
+LEFT JOIN grupo_prioridade_legal gpl ON gpl.id = m.grupo_prioridade_legal_id
 LEFT JOIN cancelamento_marcacao cm ON cm.marcacao_horario_id = m.id AND cm.excluido_em IS NULL
 WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL AND ${MARCACAO_NA_GRADE}`;
 
@@ -684,6 +690,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       canal: String(x['canal'] ?? 'nao-informado'),
       marcadaEm: marcada,
       marcadaPor: txt(x['marcado_por']),
+      prioridadeLegal: txt(x['prioridade_legal']),
     };
   }
 
@@ -1265,6 +1272,7 @@ export class PortaAgendaPropria implements PortaAgenda {
             retorno: e.retorno,
             canal: e.canal,
             observacao: e.observacao ?? null,
+            prioridadeLegal: e.prioridadeLegal ?? null,
             encaixe: encaixe ? ('motivo' in e ? String(e.motivo) : '') : null,
             remarcadaDe: null,
             alertas,
@@ -2187,6 +2195,8 @@ export class PortaAgendaPropria implements PortaAgenda {
       retorno: boolean;
       canal: string;
       observacao: string | null;
+      /** 02-AGE 49: grupo de prioridade legal informado na marcação (a regra do domínio pode subir pela idade ou pelo cadastro). */
+      prioridadeLegal?: number | null;
       /** Motivo do encaixe; null = vaga da grade. */
       encaixe: string | null;
       remarcadaDe: number | null;
@@ -2202,7 +2212,9 @@ export class PortaAgendaPropria implements PortaAgenda {
     if (inicio.getTime() <= this.agora().getTime())
       throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
     const pac = await tx.uma(
-      'SELECT id, numero_prontuario, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      `SELECT p.id, p.numero_prontuario, p.situacao, pf.data_nascimento
+         FROM paciente p LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+        WHERE p.id = ? AND p.excluido_em IS NULL`,
       [p.paciente],
     );
     if (!pac)
@@ -2340,11 +2352,41 @@ export class PortaAgendaPropria implements PortaAgenda {
       { tipo: 'marcacao_horario', estabelecimento: ctx.estabelecimento, prefixo: 'MC-' },
       { usuario: ctx.usuario, agora: this.agora() },
     );
+    // 02-AGE 49: prioridade legal na marcação (informada, do cadastro do paciente ou pela idade), regra no domínio.
+    const grupos = await tx.consultar(
+      'SELECT id, descricao, ativo, peso, idade_minima FROM grupo_prioridade_legal WHERE excluido_em IS NULL',
+    );
+    const doPaciente = await tx.consultar(
+      `SELECT grupo_prioridade_legal_id, vigencia_inicio, vigencia_fim FROM paciente_prioridade_legal
+        WHERE paciente_id = ? AND excluido_em IS NULL`,
+      [p.paciente],
+    );
+    const prio = prioridadeNaMarcacao(
+      grupos.map((g) => ({
+        id: num(g['id']),
+        descricao: String(g['descricao']),
+        ativo: bool(g['ativo']),
+        peso: num(g['peso']),
+        idadeMinima: numOuNull(g['idade_minima']),
+      })),
+      {
+        informada: p.prioridadeLegal ?? null,
+        doPaciente: doPaciente.map((x) => ({
+          grupo: num(x['grupo_prioridade_legal_id']),
+          vigenciaInicio: dataIso(x['vigencia_inicio']) ?? '',
+          vigenciaFim: dataIso(x['vigencia_fim']),
+        })),
+        nascimento: dataIso(pac['data_nascimento']),
+        data: p.data,
+      },
+    );
+    if (!prio.ok) throw recusa(prio.codigo, prio.motivo, { campos: ['prioridadeLegal'] });
     const numero = await tx.proximoNumero('marcacao_horario');
     return tx.incluir('marcacao_horario', {
       estabelecimento_id: ctx.estabelecimento,
       numero: numero.formatado,
       horario_agenda_id: horario,
+      grupo_prioridade_legal_id: prio.grupo,
       paciente_id: p.paciente,
       tipo_marcacao_id: tipo['id'],
       situacao_marcacao_id: await this.situacaoMarcacao(tx, 'aguardando'),

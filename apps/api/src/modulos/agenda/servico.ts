@@ -683,6 +683,7 @@ export class ServicoAgenda {
       canal: canal.rotulo,
       canalAConfirmar: canal.aConfirmar,
       marcadaEm: m.dataMarcacao,
+      prioridadeLegal: m.prioridadeLegal ?? null,
       risco: riscoDeFalta(faixaAntecedencia(m.dataMarcacao, m.data)),
       acoes: {
         ...acoes,

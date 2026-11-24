@@ -187,6 +187,8 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
 
   /** Apaga os registros de agenda dos estabelecimentos do lote (as tabelas de domínio e cadastros ficam). */
   async function limpar(e: Escritor) {
+    if (ids.pacienteB)
+      await e.executar('DELETE FROM paciente_prioridade_legal WHERE paciente_id = ?', [ids.pacienteB]);
     for (const est of [ids.est, ids.estB]) {
       if (!est) continue;
       await e.executar('DELETE FROM feriado WHERE estabelecimento_id = ?', [est]);
@@ -540,6 +542,59 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
         canal: 'telefone',
       }),
     ).rejects.toMatchObject(recusada('registro-inexistente', 404));
+  });
+
+  it('02-AGE 49: a marcação grava a prioridade legal sugerida pelo cadastro do paciente e a mostra; grupo informado inválido é recusado sem gravar', async () => {
+    const grupo = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-l0104-prioridade' },
+      async (e) => {
+        const agora = new Date();
+        const g = await garantir(
+          e,
+          'SELECT id FROM grupo_prioridade_legal WHERE codigo = ?',
+          ['l0104-gestante'],
+          'INSERT INTO grupo_prioridade_legal (codigo, descricao, peso, criado_em) VALUES (?, ?, 2, ?)',
+          ['l0104-gestante', 'Gestante (sintético L0104)', agora],
+        );
+        await e.inserir(
+          'INSERT INTO paciente_prioridade_legal (paciente_id, grupo_prioridade_legal_id, vigencia_inicio, vigencia_fim, criado_em) VALUES (?, ?, ?, ?, ?)',
+          [ids.pacienteB, g, '2030-01-01', '2030-09-30', agora],
+        );
+        return g;
+      },
+    );
+    const pedido = {
+      agenda: ids.agenda,
+      data: DIA,
+      hora: '08:45',
+      paciente: ids.pacienteB,
+      convenio: 9141,
+      retorno: false,
+      canal: 'telefone',
+    };
+    const antes = await contar('SELECT COUNT(*) AS n FROM marcacao_horario WHERE paciente_id = ?', [
+      ids.pacienteB,
+    ]);
+    await expect(
+      porta.executar(ctx(), 'agenda.agendarConsulta', { ...pedido, prioridadeLegal: 999_999_999 }),
+    ).rejects.toMatchObject(recusada('prioridade-invalida'));
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM marcacao_horario WHERE paciente_id = ?', [ids.pacienteB]),
+    ).toBe(antes);
+    const m = await porta.executar(ctx(), 'agenda.agendarConsulta', pedido);
+    const id = Number(m.resultado['marcacao']);
+    expect(
+      await linha('SELECT grupo_prioridade_legal_id FROM marcacao_horario WHERE id = ?', [id]),
+    ).toMatchObject({
+      grupo_prioridade_legal_id: grupo,
+    });
+    const lida = await porta.marcacao(ctx(), id);
+    expect(lida?.marcacao.prioridadeLegal).toBe('Gestante (sintético L0104)');
+    await porta.executar(ctx(), 'agenda.cancelarConsulta', {
+      marcacao: id,
+      motivo: 'PAC-DESISTIU',
+      solicitante: 'paciente',
+    });
   });
 
   it('marcar grava a marcação com número de negócio e ocupa o horário (versao, trilha); confirmar e remarcar liberando', async () => {

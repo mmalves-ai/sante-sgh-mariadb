@@ -237,6 +237,8 @@ export const esquemaMarcacaoResumo = z.object({
   canal: txt,
   canalAConfirmar: z.boolean(),
   marcadaEm: nul(txt),
+  /** 02-AGE 49: grupo de prioridade legal da marcação. */
+  prioridadeLegal: nul(txt).optional(),
   risco: z.object({ percentual: nul(z.number()), nivel: z.enum(['baixo', 'medio', 'alto', 'desconhecido']) }),
   acoes: z.object({
     cancelar: z.boolean(),

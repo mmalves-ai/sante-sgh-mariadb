@@ -148,6 +148,14 @@ async function registrarFaltas(): Promise<void> {
               >
                 {{ m.paciente }}
               </RouterLink>
+              <span
+                v-if="m.prioridadeLegal"
+                class="prioridade-legal"
+                :data-testid="`dia-prioridade-${m.id}`"
+                :title="t('agenda.dia.prioridadeLegal')"
+              >
+                {{ t('agenda.dia.prioridadeLegal') }}: {{ m.prioridadeLegal }}
+              </span>
               <template v-if="podeAbrirAtendimento && ofereceAbertura(m, hoje)">
                 ·
                 <RouterLink
@@ -208,6 +216,15 @@ async function registrarFaltas(): Promise<void> {
 
 <style src="../componentes/estilo-agenda.css"></style>
 <style scoped>
+.prioridade-legal {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  background: var(--sgh-aviso-suave);
+  color: var(--sgh-aviso);
+}
 .candidato td {
   font-weight: 600;
   border-inline-start: 4px solid var(--sgh-aviso);

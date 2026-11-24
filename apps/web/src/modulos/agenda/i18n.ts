@@ -295,6 +295,7 @@ export const mensagensAgenda = {
       'As marcações do dia com o estado de cada uma e o risco de falta pela antecedência. No fechamento, os candidatos a falta aparecem destacados.',
     atualizar: 'Atualizar',
     resumo: '{total} marcação(ões); {alto} com risco alto de falta.',
+    prioridadeLegal: 'Prioridade legal',
     candidatos: '{n} candidato(s) a falta (passou da tolerância e não chegou).',
     legenda: 'Marcações de {data}',
     detalhe: 'Abrir a marcação de {paciente}',
