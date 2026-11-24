@@ -19,3 +19,5 @@ export * from './sus/index.js';
 export * from './conta/admissao.js';
 // F3.7: a reabertura da competência do convênio (motivo e confirmação do impacto da conta já apresentada).
 export * from './competencia/reabertura.js';
+// F3.7 (06-FAT linhas 10 e 12): período da conta parcial, segurado na conta e campo adicional da operadora na guia.
+export * from './conta/complementos.js';
