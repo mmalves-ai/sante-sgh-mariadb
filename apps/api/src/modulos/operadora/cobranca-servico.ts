@@ -52,9 +52,11 @@ import {
   situacaoInadimplencia,
   somarDias,
   ultimoDia,
+  type CalculoCoparticipacao,
   calcularCoparticipacao,
   problemasDaCoparticipacao,
 } from '@sgh/dominio-operadora';
+import { recusa } from '@sgh/nucleo';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { type DadosCobranca, type DadosReajuste, type EntradaCobranca } from './dados-portas.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -532,30 +534,35 @@ export class ServicoCobrancaOperadora {
     const k = await this.contratoDe(s, b.contrato);
     const lancamento = problemasDoLancamento({ competencia: e.competencia, vencimento: e.vencimento });
     recusar(lancamento, 'Coparticipação não lançada');
-    // A regra vigente do contrato (ou do plano) com os tetos por evento, mês e ano do beneficiário (08-SGO L98).
-    const calculo = calcularCoparticipacao(
-      k.coparticipacao,
-      e.valorEvento,
-      await this.porta.coparticipacaoAcumulada(s.porta, b.id, e.competencia),
-    );
-    recusar(problemasDaCoparticipacao(calculo), 'Coparticipação não lançada');
-    const valor = calculo.valor;
     const pagador = k.tipo === 1 ? (b.titular ?? b.id) : null;
+    // A regra vigente na competência do evento (a do contrato ou a do plano) com os tetos por evento, mês e ano: lida,
+    // calculada e gravada na mesma transação, com o beneficiário travado (08-SGO L98). Dois lançamentos simultâneos
+    // não passam juntos do teto: o segundo espera o primeiro e calcula com o que ele gravou.
+    let calculo: CalculoCoparticipacao | null = null;
     const r = await this.gravar(
       s,
       E.operadoraCobrancaGerada.codigo,
       'operadora.lancarCoparticipacao',
       T.cobranca,
       () => `contrato:${k.id};competencia:${e.competencia};tipo:2`,
-      (g) =>
-        g.incluir({
+      async (g) => {
+        const { regra, acumulado } = await g.coparticipacaoTravada({
+          contrato: k.id,
+          beneficiario: b.id,
+          competencia: e.competencia,
+        });
+        const x = calcularCoparticipacao(regra, e.valorEvento, acumulado);
+        const [problema] = problemasDaCoparticipacao(x);
+        if (problema) throw recusa(problema, MENSAGENS_COBRANCA[problema] ?? problema);
+        calculo = x;
+        return g.incluir({
           operadora: k.operadora,
           contrato: k.id,
           beneficiario: pagador,
           tipo: 2,
           competencia: e.competencia,
           descricao: `Coparticipação: ${e.descricao}`.slice(0, 200),
-          valor: valor!,
+          valor: x.valor!,
           vencimento: e.vencimento,
           acordoOrigem: null,
           parcela: null,
@@ -567,20 +574,22 @@ export class ServicoCobrancaOperadora {
               idade: null,
               faixa: null,
               valorBase: e.valorEvento,
-              valor: valor!,
+              valor: x.valor!,
             },
           ],
           por: s.login,
-        }),
+        });
+      },
     );
+    const feito = calculo as CalculoCoparticipacao | null;
     return {
       ok: true,
       id: r.id,
       versao: r.versao,
       mensagem: 'Coparticipação lançada.',
-      avisos: calculo.limitadoPor
+      avisos: feito?.limitadoPor
         ? [
-            `${MENSAGENS_COBRANCA[`coparticipacao-limitada-${calculo.limitadoPor}`]} Calculado R$ ${calculo.calculado!.toFixed(2)}, lançado R$ ${valor!.toFixed(2)}.`,
+            `${MENSAGENS_COBRANCA[`coparticipacao-limitada-${feito.limitadoPor}`]} Calculado R$ ${feito.calculado!.toFixed(2)}, lançado R$ ${feito.valor!.toFixed(2)}.`,
           ]
         : [],
     };

@@ -510,6 +510,11 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
       x.alteradoEm = agora();
     };
     const g: GravadorCobranca = {
+      // Na memória não há concorrência entre transações nem vigência da regra: a regra do produto e o acumulado.
+      coparticipacaoTravada: async (x) => ({
+        regra: (await this.contrato(c, x.contrato))?.coparticipacao ?? { tipo: 1, valor: null },
+        acumulado: await this.coparticipacaoAcumulada(c, x.beneficiario, x.competencia),
+      }),
       incluir: async (d: EntradaCobranca & { por: string }) => {
         if (
           d.tipo === 1 &&

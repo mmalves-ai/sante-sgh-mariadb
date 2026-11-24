@@ -1,7 +1,9 @@
 // F7 (08-SGO linha 98): contrato de efeito da coparticipação no MariaDB real (cliente f22_o2, massa sintética "L0209").
 // O serviço lê a regra geral vigente (a do contrato prevalece sobre a do plano, a vencida não vale), aplica os tetos por
 // evento, mês e ano com o que já foi lançado ao beneficiário (fatura cancelada não conta) e grava a fatura de
-// coparticipação (fatura_plano tipo coparticipacao e fatura_plano_item com o valor do evento). SGH_NUCLEO_SEM_BANCO=1 pula.
+// coparticipação (fatura_plano tipo coparticipacao e fatura_plano_item com o valor do evento). A regra vale pela
+// competência do evento, não pela data de hoje, e dois lançamentos simultâneos não passam juntos do teto (o beneficiário
+// fica travado na transação). SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SessaoCadastro } from '../cadastro/comum.js';
@@ -22,6 +24,11 @@ const hoje = new Date().toISOString().slice(0, 10);
 const ano = hoje.slice(0, 4);
 const competencia = `${ano}-${hoje.slice(5, 7)}`;
 const vencimento = `${competencia}-28`;
+/** A competência anterior (AAAA-MM) e o último dia dela. */
+const anterior = new Date(Date.UTC(Number(ano), Number(hoje.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+const fimAnterior = new Date(Date.UTC(Number(ano), Number(hoje.slice(5, 7)) - 1, 0))
+  .toISOString()
+  .slice(0, 10);
 
 describe.skipIf(SEM_BANCO)('coparticipação com regra e tetos (MariaDB, cliente f22_o2)', () => {
   let nucleo: NucleoProprio;
@@ -62,10 +69,10 @@ describe.skipIf(SEM_BANCO)('coparticipação com regra e tetos (MariaDB, cliente
       Object.values(v),
     );
   };
-  const lancar = (valorEvento: number, beneficiario = m.dependente) =>
+  const lancar = (valorEvento: number, beneficiario = m.dependente, comp = competencia) =>
     servico.coparticipacao(s, {
       beneficiario,
-      competencia,
+      competencia: comp,
       vencimento,
       valorEvento,
       descricao: 'CONSULTA SINTETICA L0982',
@@ -216,5 +223,64 @@ describe.skipIf(SEM_BANCO)('coparticipação com regra e tetos (MariaDB, cliente
     expect(r.avisos[0]).toMatch(/teto por evento/);
     const [f] = await ler('SELECT valor_total FROM fatura_plano WHERE id = ?', [r.id]);
     expect(Number(f?.['valor_total'])).toBe(30);
+  });
+  it('a regra vale pela competência do evento: a vencida hoje, mas vigente na competência anterior, é a usada', async () => {
+    await escrever(
+      'UPDATE regra_coparticipacao SET ativo = FALSE WHERE operadora_saude_id = ? AND codigo LIKE ?',
+      [m.operadora, `${COD}%`],
+    );
+    await regra('ANTIGA', {
+      contrato_plano_id: m.contrato,
+      tipo_coparticipacao: 'percentual',
+      percentual: 10,
+      vigencia_inicio: '2020-01-01',
+      vigencia_fim: fimAnterior,
+    });
+    await regra('NOVA', {
+      contrato_plano_id: m.contrato,
+      tipo_coparticipacao: 'percentual',
+      percentual: 20,
+      vigencia_inicio: `${competencia}-01`,
+    });
+    // Hoje vale a nova (20%); o evento da competência anterior, lançado hoje, sai pela antiga (10%).
+    expect((await porta.contrato(contexto(m), m.contrato))?.coparticipacao).toMatchObject({
+      tipo: 2,
+      valor: 20,
+    });
+    const antigo = await lancar(250, m.beneficiario, anterior);
+    const atual = await lancar(250, m.beneficiario);
+    const valores = await ler('SELECT id, valor_total FROM fatura_plano WHERE id IN (?, ?) ORDER BY id', [
+      antigo.id,
+      atual.id,
+    ]);
+    expect(valores.map((v) => Number(v['valor_total']))).toEqual([25, 50]);
+  });
+
+  it('dois lançamentos simultâneos do mesmo beneficiário não passam do teto mensal (75 lançados, teto 100)', async () => {
+    await escrever(
+      'UPDATE regra_coparticipacao SET ativo = FALSE WHERE operadora_saude_id = ? AND codigo LIKE ?',
+      [m.operadora, `${COD}%`],
+    );
+    await regra('CORRIDA', {
+      contrato_plano_id: m.contrato,
+      tipo_coparticipacao: 'percentual',
+      percentual: 30,
+      teto_mensal: 100,
+    });
+    expect(await porta.coparticipacaoAcumulada(contexto(m), m.dependente, competencia)).toEqual({
+      mes: 75,
+      ano: 75,
+    });
+    const rs = await Promise.allSettled([lancar(250), lancar(250)]);
+    const feitos = rs.filter((x) => x.status === 'fulfilled');
+    const recusados = rs.filter((x) => x.status === 'rejected');
+    expect([feitos.length, recusados.length]).toEqual([1, 1]);
+    expect(await codigo(Promise.reject((recusados[0] as PromiseRejectedResult).reason))).toMatch(
+      /atingiu o teto de coparticipação/,
+    );
+    expect(await porta.coparticipacaoAcumulada(contexto(m), m.dependente, competencia)).toEqual({
+      mes: 100,
+      ano: 100,
+    });
   });
 });

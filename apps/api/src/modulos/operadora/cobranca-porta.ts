@@ -30,6 +30,15 @@ export type ContextoCobranca = ContextoPorta;
 /** O que a gravação da cobrança faz dentro da transação (com a trilha junto). */
 export interface GravadorCobranca {
   incluir(c: EntradaCobranca & { readonly por: string }): Promise<{ id: number; versao: number }>;
+  /**
+   * A regra de coparticipação vigente na competência do evento e o que já foi lançado ao beneficiário no mês e no ano,
+   * lidos dentro da transação com o beneficiário travado: dois lançamentos simultâneos não passam juntos do teto, e o
+   * evento de competência passada usa a regra que valia nela, não a de hoje (08-SGO L98).
+   */
+  coparticipacaoTravada(x: { contrato: number; beneficiario: number; competencia: string }): Promise<{
+    regra: DadosContratoCobranca['coparticipacao'];
+    acumulado: { mes: number; ano: number };
+  }>;
   baixar(b: {
     id: number;
     versao: number;
