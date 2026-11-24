@@ -36,6 +36,10 @@ import {
   apoiosPrevisao,
   encontrosDoEstabelecimento,
   esquemaCancelarEncontro,
+  esquemaCancelarOcorrencia,
+  esquemaEncerrarPrevisao,
+  esquemaEstenderPrevisao,
+  esquemaEstornarEncontro,
   esquemaCriarPrevisao,
   esquemaEfetivarEncontro,
   esquemaLiquidarProvisao,
@@ -148,6 +152,58 @@ export class CompensacaoPrevisaoController {
       'financeiro.cancelarEncontroContas',
       corpo(esquemaCancelarEncontro, b),
       'Encontro de contas cancelado; a proposta fica no histórico.',
+    );
+  }
+
+  @Post('encontros/estornar')
+  @HttpCode(200)
+  @Permissao('financeiro.tituloPagar.aprovar')
+  @AuditadoNoHandler('financeiro.estornarEncontroContas pelo executor (trilha na mesma transação)')
+  estornar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.estornarEncontroContas',
+      corpo(esquemaEstornarEncontro, b),
+      'Encontro de contas estornado; as baixas dos dois lados voltaram e ficam no histórico.',
+    );
+  }
+
+  @Post('previsoes/estender')
+  @HttpCode(200)
+  @Permissao('financeiro.tituloPagar.criar')
+  @AuditadoNoHandler('financeiro.estenderPrevisaoFinanceira pelo executor (trilha na mesma transação)')
+  estender(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.estenderPrevisaoFinanceira',
+      corpo(esquemaEstenderPrevisao, b),
+      'Previsão estendida por mais 12 meses.',
+    );
+  }
+
+  @Post('previsoes/ocorrencias/cancelar')
+  @HttpCode(200)
+  @Permissao('financeiro.tituloPagar.criar')
+  @AuditadoNoHandler('financeiro.cancelarOcorrenciaPrevisao pelo executor (trilha na mesma transação)')
+  cancelarOcorrencia(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.cancelarOcorrenciaPrevisao',
+      corpo(esquemaCancelarOcorrencia, b),
+      'Ocorrência prevista cancelada; a linha fica no histórico.',
+    );
+  }
+
+  @Post('previsoes/encerrar')
+  @HttpCode(200)
+  @Permissao('financeiro.tituloPagar.criar')
+  @AuditadoNoHandler('financeiro.encerrarPrevisaoFinanceira pelo executor (trilha na mesma transação)')
+  encerrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.encerrarPrevisaoFinanceira',
+      corpo(esquemaEncerrarPrevisao, b),
+      'Previsão encerrada; as ocorrências abertas depois da data foram canceladas.',
     );
   }
 

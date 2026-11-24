@@ -7,6 +7,10 @@
 // encontro pendente é recusada; cancelar exige motivo e guarda a linha.
 // Previsão: mensal com fim gera as ocorrências; realizar pelo título grava a conciliação com a diferença; repetir é
 // recusado. Provisão: nasce com saldo; reverter parte com motivo grava o ajuste; liquidar pelo título zera o saldo.
+// Correção da revisão: a efetivação passa pela alçada do título a pagar (faixa de duas aprovações com uma só é
+// recusada; quem aprovou o título não efetiva); o encontro efetivado se estorna com motivo (baixas estornadas, os dois
+// lados voltam, nada se apaga); o título já conciliado e o de outro credor são recusados; a liquidação parcial grava
+// diferença zero; a previsão se estende, a ocorrência se cancela e a previsão se encerra, com motivo.
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -23,6 +27,14 @@ import {
 } from './massa-banco.spec-util.js';
 
 const op = (c: ContextoNucleo) => ({ ...c, chaveIdempotencia: `t-f8-cp-${randomUUID()}` });
+const trilhaDo = (id: number) => ({
+  estabelecimento: null,
+  usuario: null,
+  acao: 'operacao' as const,
+  entidade: 'titulo_pagar',
+  entidadeId: id,
+  correlacao: null,
+});
 const HOJE = new Date().toISOString().slice(0, 10);
 
 describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)', () => {
@@ -40,6 +52,27 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
   const escrever = <T>(fn: Parameters<MassaFinanceiro['nucleo']['escrever']>[1]) =>
     m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f8-cp' }, fn) as Promise<T>;
   const resultado = (r: unknown) => (r as { resultado: Record<string, unknown> }).resultado;
+  /** Aprovação do título na alçada (pelo primeiro id de parcela, como a tela faz). */
+  const aprovarTitulo = (parcela: number, usuario: number) =>
+    porta.gravarSgh(op(m.ctx(usuario)), trilhaDo(0), (g) =>
+      g.aprovarTitulo({ titulo: parcela, observacao: '', usuario: 'x', temPermissao: () => true }),
+    );
+  const faixa = (valorDe: number, valorAte: number | null, aprovacoes: 1 | 2) =>
+    porta.gravarSgh(op(m.ctx(m.lanca)), trilhaDo(0), (g) =>
+      g.salvarFaixa({
+        id: null,
+        centroCusto: null,
+        tipoCredor: null,
+        valorDe,
+        valorAte,
+        aprovacoes,
+        permissao: 'financeiro.tituloPagar.aprovar',
+        vigenciaInicio: '2000-01-01',
+        vigenciaFim: null,
+        ativa: true,
+        usuario: 'x',
+      }),
+    );
 
   /** Um título a receber do cliente financeiro (mesmo CNPJ do fornecedor), com uma parcela. */
   const tituloReceber = (valor: number, documento: string) =>
@@ -86,6 +119,9 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
   beforeAll(async () => {
     m = await montarMassa();
     porta = new PortaFinanceiroPropria(m.nucleo);
+    // A alçada: até 999,99 uma aprovação; de 1.000 em diante, duas.
+    await faixa(0, 999.99, 1);
+    await faixa(1000, null, 2);
     ({ cliente, contaPassivo, naturezaDespesa } = await escrever<{
       cliente: number;
       contaPassivo: number;
@@ -214,7 +250,15 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
     expect(await codigoDaGravacao(executar('financeiro.efetivarEncontroContas', { encontro }, m.lanca))).toBe(
       'aprovador-igual-proponente',
     );
-    const ef = resultado(await executar('financeiro.efetivarEncontroContas', { encontro }, m.aprova));
+    // A alçada do título a pagar vale no encontro: sem aprovação não sai; quem aprovou o título não efetiva.
+    expect(await codigoDaGravacao(executar('financeiro.efetivarEncontroContas', { encontro }, m.paga))).toBe(
+      'sem-aprovacao',
+    );
+    await aprovarTitulo(pagar[0]!, m.aprova);
+    expect(
+      await codigoDaGravacao(executar('financeiro.efetivarEncontroContas', { encontro }, m.aprova)),
+    ).toBe('segregacao-aprovou-paga');
+    const ef = resultado(await executar('financeiro.efetivarEncontroContas', { encontro }, m.paga));
     expect(ef).toMatchObject({ situacao: 'efetivado', itens: 3 });
     const pp = await consultar(
       `SELECT p.saldo, p.valor_pago, p.situacao, b.forma_pagamento, b.conta_bancaria_id, b.valor_pago AS baixa
@@ -248,13 +292,91 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
       Number(fim?.['aprovado_por_usuario_id']),
       Number(fim?.['ok']),
       Number(fim?.['baixas']),
-    ]).toEqual(['efetivado', m.aprova, 1, 2]);
+    ]).toEqual(['efetivado', m.paga, 1, 2]);
     // Efetivado não se cancela.
     expect(
       await codigoDaGravacao(
         executar('financeiro.cancelarEncontroContas', { encontro, motivo: 'erro de digitação' }),
       ),
     ).toBe('encontro-fechado');
+    // Estorno do efetivado, com motivo: as baixas ficam estornadas, os dois lados voltam, nada se apaga.
+    const est = resultado(
+      await executar(
+        'financeiro.estornarEncontroContas',
+        { encontro, motivo: 'valor do parceiro contestado' },
+        m.aprova,
+      ),
+    );
+    expect(est).toMatchObject({ situacao: 'cancelado', estornado: true });
+    const bx = await consultar(
+      `SELECT p.saldo, p.valor_pago, p.situacao, b.situacao AS baixa, b.motivo_estorno IS NOT NULL AS motivo
+         FROM parcela_pagar p JOIN baixa_titulo b ON b.parcela_pagar_id = p.id WHERE p.id IN (?, ?) ORDER BY p.id`,
+      pagar,
+    );
+    expect(
+      bx.map((r) => [
+        Number(r['saldo']),
+        Number(r['valor_pago']),
+        r['situacao'],
+        r['baixa'],
+        Number(r['motivo']),
+      ]),
+    ).toEqual([
+      [250, 0, 'aberta', 'estornada', 1],
+      [250, 0, 'aberta', 'estornada', 1],
+    ]);
+    const [rv] = await consultar(
+      `SELECT p.saldo, p.situacao, t.situacao AS titulo, t.valor_recebido FROM parcela_receber p
+         JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE p.id = ?`,
+      [receber],
+    );
+    expect([Number(rv?.['saldo']), rv?.['situacao'], rv?.['titulo'], Number(rv?.['valor_recebido'])]).toEqual(
+      [350, 'aberta', 'aberto', 0],
+    );
+    const [tp2] = await consultar('SELECT situacao FROM titulo_pagar WHERE id = ?', [
+      Number(t['tituloPagar']),
+    ]);
+    expect(tp2?.['situacao']).toBe('aberto');
+    const [ce] = await consultar(
+      'SELECT situacao, motivo, efetivado_em IS NOT NULL AS ok, (SELECT COUNT(*) FROM encontro_contas_item WHERE encontro_contas_id = ?) AS itens FROM encontro_contas WHERE id = ?',
+      [encontro, encontro],
+    );
+    expect([ce?.['situacao'], ce?.['motivo'], Number(ce?.['ok']), Number(ce?.['itens'])]).toEqual([
+      'cancelado',
+      'Estorno: valor do parceiro contestado',
+      1,
+      3,
+    ]);
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.estornarEncontroContas', { encontro, motivo: 'de novo por engano' }, m.aprova),
+      ),
+    ).toBe('encontro-nao-efetivado');
+  });
+
+  it('título da faixa de duas aprovações com uma só: a efetivação do encontro é recusada e nada muda', async () => {
+    const t = resultado(await executar('financeiro.criarTituloPagar', tituloDaMassa(m, 920_868_005, 2_000)));
+    const pagar = await parcelasPagarDo(Number(t['tituloPagar']));
+    const receber = await tituloReceber(500, '920869005');
+    const encontro = Number(
+      resultado(
+        await executar('financeiro.proporEncontroContas', {
+          fornecedor: m.fornecedor,
+          data: HOJE,
+          parcelasPagar: pagar,
+          parcelasReceber: [receber],
+        }),
+      )['encontro'],
+    );
+    await aprovarTitulo(pagar[0]!, m.aprova);
+    expect(await codigoDaGravacao(executar('financeiro.efetivarEncontroContas', { encontro }, m.paga))).toBe(
+      'sem-aprovacao',
+    );
+    const [c] = await consultar(
+      'SELECT e.situacao, (SELECT COUNT(*) FROM baixa_titulo b WHERE b.parcela_pagar_id = ?) AS baixas FROM encontro_contas e WHERE e.id = ?',
+      [pagar[0], encontro],
+    );
+    expect([c?.['situacao'], Number(c?.['baixas'])]).toEqual(['aguardando_aprovacao', 0]);
   });
 
   it('cancela a proposta pendente com motivo, a linha fica, e a parcela volta a poder entrar', async () => {
@@ -331,6 +453,70 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
         }),
       ),
     ).toBe('previsao-fechada');
+    // O mesmo título não realiza outra ocorrência (o realizado contaria duas vezes).
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.realizarPrevisaoFinanceira', {
+          ocorrencia: Number(oc[1]?.['id']),
+          tituloPagar: Number(t['tituloPagar']),
+        }),
+      ),
+    ).toBe('titulo-ja-conciliado');
+    // Cancelar a ocorrência que não vai acontecer: com motivo, a linha fica.
+    await executar('financeiro.cancelarOcorrenciaPrevisao', {
+      ocorrencia: Number(oc[2]?.['id']),
+      motivo: 'contrato reajustado em janeiro',
+    });
+    const [can] = await consultar('SELECT situacao FROM parcela_previsao_financeira WHERE id = ?', [
+      Number(oc[2]?.['id']),
+    ]);
+    expect(can?.['situacao']).toBe('cancelada');
+    // A previsão com fim já gerado todo não se estende.
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.estenderPrevisaoFinanceira', { previsao: Number(r['previsao']) }),
+      ),
+    ).toBe('sem-ocorrencia-nova');
+  });
+
+  it('previsão sem fim: 12 meses, estende mais 12 continuando a sequência, encerra cancelando as abertas adiante', async () => {
+    const r = resultado(
+      await executar('financeiro.criarPrevisaoFinanceira', {
+        descricao: 'CONTRATO SINTETICO L0207',
+        tipo: 'despesa',
+        natureza: naturezaDespesa,
+        valor: 300,
+        periodicidade: 'mensal',
+        diaVencimento: 5,
+        dataInicio: '2026-12-01',
+        ajuste: 'manter',
+      }),
+    );
+    expect(r).toMatchObject({ ocorrencias: 12 });
+    const previsao = Number(r['previsao']);
+    const x = resultado(await executar('financeiro.estenderPrevisaoFinanceira', { previsao }));
+    expect(x).toMatchObject({ ocorrencias: 12, ate: '2028-11-05' });
+    const [q] = await consultar(
+      'SELECT COUNT(*) AS n, MAX(sequencia) AS s FROM parcela_previsao_financeira WHERE previsao_financeira_id = ?',
+      [previsao],
+    );
+    expect([Number(q?.['n']), Number(q?.['s'])]).toEqual([24, 24]);
+    const enc = resultado(
+      await executar('financeiro.encerrarPrevisaoFinanceira', {
+        previsao,
+        data: '2027-06-30',
+        motivo: 'contrato rescindido',
+      }),
+    );
+    expect(enc).toMatchObject({ canceladas: 17 });
+    const [pv] = await consultar(
+      "SELECT p.ativa, p.data_fim, (SELECT COUNT(*) FROM parcela_previsao_financeira o WHERE o.previsao_financeira_id = p.id AND o.situacao = 'aberta') AS abertas FROM previsao_financeira p WHERE p.id = ?",
+      [previsao],
+    );
+    expect([Number(pv?.['ativa']), Number(pv?.['abertas'])]).toEqual([0, 7]);
+    expect(await codigoDaGravacao(executar('financeiro.estenderPrevisaoFinanceira', { previsao }))).toBe(
+      'previsao-encerrada',
+    );
   });
 
   it('provisão de honorário: reverte parte com motivo (ajuste gravado) e liquida pelo título com conciliação', async () => {
@@ -346,7 +532,12 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
         }),
       ),
     ).toBe('profissional-obrigatorio');
-    const prof = (await consultar('SELECT id FROM profissional ORDER BY id DESC LIMIT 1', []))[0]?.['id'];
+    const prof = (
+      await consultar(
+        "SELECT id FROM profissional WHERE excluido_em IS NULL AND situacao <> 'inativo' ORDER BY id DESC LIMIT 1",
+        [],
+      )
+    )[0]?.['id'];
     const r = resultado(
       await executar('financeiro.provisionarPassivo', {
         tipo: 'honorario_medico',
@@ -382,23 +573,68 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
       4000,
       'parcial',
     ]);
-    const t = resultado(await executar('financeiro.criarTituloPagar', tituloDaMassa(m, 920_868_004, 4_000)));
-    const l = resultado(
+    // Título de outro credor (o fornecedor) não liquida o honorário do profissional.
+    const outro = resultado(
+      await executar('financeiro.criarTituloPagar', tituloDaMassa(m, 920_868_004, 4_000)),
+    );
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.liquidarProvisaoPassivo', {
+          provisao,
+          tituloPagar: Number(outro['tituloPagar']),
+        }),
+      ),
+    ).toBe('credor-diferente');
+    // Provisão de tributo do fornecedor (4.000), liquidada por dois títulos dele: parcial e depois acima do saldo.
+    const provisao2 = Number(
+      resultado(
+        await executar('financeiro.provisionarPassivo', {
+          tipo: 'tributo',
+          competencia,
+          descricao: 'TRIBUTO SINTETICO L0207',
+          contaContabil: contaPassivo,
+          fornecedor: m.fornecedor,
+          valor: 4000,
+        }),
+      )['provisao'],
+    );
+    const doForn = async (documento: number, v: number) =>
+      resultado(await executar('financeiro.criarTituloPagar', tituloDaMassa(m, documento, v)));
+    // Título menor que o saldo: parcial, diferença zero, previsto = consumido.
+    const t1 = await doForn(920_868_006, 1_500);
+    const l1 = resultado(
       await executar('financeiro.liquidarProvisaoPassivo', {
-        provisao,
-        tituloPagar: Number(t['tituloPagar']),
+        provisao: provisao2,
+        tituloPagar: Number(t1['tituloPagar']),
       }),
     );
-    expect(l).toMatchObject({ saldo: 0, situacao: 'liquidada', diferenca: 0 });
-    const [p] = await consultar(
-      'SELECT p.saldo, p.valor_baixado, p.titulo_pagar_id, c.valor_previsto FROM provisao_passivo p JOIN conciliacao_previsao_realizado c ON c.provisao_passivo_id = p.id WHERE p.id = ?',
-      [provisao],
+    expect(l1).toMatchObject({ saldo: 2500, situacao: 'parcial', diferenca: 0 });
+    // Título maior que o saldo: fecha, diferença = realizado − saldo.
+    const t2 = await doForn(920_868_007, 3_000);
+    const l2 = resultado(
+      await executar('financeiro.liquidarProvisaoPassivo', {
+        provisao: provisao2,
+        tituloPagar: Number(t2['tituloPagar']),
+      }),
     );
-    expect([
-      Number(p?.['saldo']),
-      Number(p?.['valor_baixado']),
-      Number(p?.['titulo_pagar_id']),
-      Number(p?.['valor_previsto']),
-    ]).toEqual([0, 4000, Number(t['tituloPagar']), 4000]);
+    expect(l2).toMatchObject({ saldo: 0, situacao: 'liquidada', diferenca: 500 });
+    const linhas = await consultar(
+      'SELECT p.saldo, p.valor_baixado, p.titulo_pagar_id, c.titulo_pagar_id AS titulo, c.valor_previsto, c.valor_realizado, c.diferenca FROM provisao_passivo p JOIN conciliacao_previsao_realizado c ON c.provisao_passivo_id = p.id WHERE p.id = ? ORDER BY c.id',
+      [provisao2],
+    );
+    expect(
+      linhas.map((x) => [
+        Number(x['saldo']),
+        Number(x['valor_baixado']),
+        Number(x['titulo_pagar_id']),
+        Number(x['titulo']),
+        Number(x['valor_previsto']),
+        Number(x['valor_realizado']),
+        Number(x['diferenca']),
+      ]),
+    ).toEqual([
+      [0, 4000, Number(t1['tituloPagar']), Number(t1['tituloPagar']), 1500, 1500, 0],
+      [0, 4000, Number(t1['tituloPagar']), Number(t2['tituloPagar']), 2500, 3000, 500],
+    ]);
   });
 });
