@@ -1638,6 +1638,10 @@
     "src/modulos/enfermagem/sae-porta-propria-terminologia.int.spec.ts",
     "src/sessao/recusa-senha.int.spec.ts",
     "src/modulos/cadastro/profissionais-proprio.ts",
-    "src/modulos/cadastro/profissionais-proprio.int.spec.ts"
+    "src/modulos/cadastro/profissionais-proprio.int.spec.ts",
+    "src/modulos/adt/pre-internacao.int.spec.ts",
+    "src/modulos/farmacia/gravador-parametros.ts",
+    "src/modulos/farmacia/parametros-integracao.int.spec.ts",
+    "src/modulos/financeiro/aplicacao/adiantamento.int.spec.ts"
   ]
 }
