@@ -144,7 +144,7 @@ export class PreferenciaSegundoFatorPropria {
     let alvo: number | null = null;
     let diferenca: string | null = null;
     const op = definirOperacao({
-      nome: 'acesso.segundoFator.escolher',
+      nome: 'acesso.segundo-fator.escolher',
       tabelas: [TABELA_PREFERENCIA_SEGUNDO_FATOR],
       entrada: ENTRADA,
       gravar: async (tx) => {
@@ -184,7 +184,7 @@ export class PreferenciaSegundoFatorPropria {
         dados: {
           evento: 'acesso.segundo-fator.escolhido',
           recurso: 'acesso.sessao',
-          operacao: 'acesso.segundoFator.escolher',
+          operacao: 'acesso.segundo-fator.escolher',
           resultado: 'sucesso',
           estacao: a.estacao,
           diferenca,

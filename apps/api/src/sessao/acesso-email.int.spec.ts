@@ -165,7 +165,6 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
     expect(novas[0]?.texto).toContain('http://127.0.0.1:5173/recuperar-senha?token=');
     const token = tokenDe(novas[0]?.texto ?? '');
     const r = await s.recuperacao.usar(REDE, token, ORIGEM);
-    expect(r.trocaObrigatoria).toBe(true);
     const [resumo, troca] = sql(
       BANCO,
       `SELECT c.resumo_senha, c.troca_obrigatoria FROM credencial_usuario c JOIN usuario u ON u.id = c.usuario_id
@@ -176,6 +175,8 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
     expect(troca).toBe('1');
     expect(await conferirSenha(r.senhaProvisoria, resumo ?? null)).toBe(true);
     await expect(s.recuperacao.usar(REDE, token, ORIGEM)).rejects.toMatchObject({ status: 400 });
+    // A resposta diz a troca obrigatória que o banco gravou (por último: o efeito no banco já foi conferido acima).
+    expect(r.trocaObrigatoria).toBe(true);
   }, 60_000);
 
   it('usuário: escolhe o código no e-mail (Executor) e confere o código uma vez', async () => {
