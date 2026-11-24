@@ -25,6 +25,8 @@ export const PERMISSOES_M34_CODIGOS = {
   parceiroEditar: 'integracao.parceiro.editar',
   mensagemLer: 'integracao.mensagem.ler',
   mensagemConfigurar: 'integracao.mensagem.configurar',
+  mensagemConfigurarCliente: 'integracao.mensagem.configurarCliente',
+  parceiroRevisarMinimizacao: 'integracao.parceiro.revisarMinimizacao',
   mensagemEnviar: 'integracao.mensagem.enviar',
   classificacaoExternaConfigurar: 'integracao.classificacaoExterna.configurar',
   filaLer: 'integracao.fila.ler',
@@ -208,6 +210,26 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     codigo: C.mensagemConfigurar,
     descricao:
       'Cadastrar os modelos de mensagem ao paciente e as regras de envio por tipo de aviso (pela Hal-AI)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'tecnica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: C.mensagemConfigurarCliente,
+    descricao:
+      'Cadastrar o modelo de mensagem ao paciente do cliente inteiro (vale para todos os estabelecimentos)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'tecnica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: C.parceiroRevisarMinimizacao,
+    descricao:
+      'Revisar a minimização de um pacote de dados de parceiro (campos, justificativas e tratamento do dado sensível)',
 
     concessaoPorPerfil: 'por-perfil',
     perfis: [...ADMIN],

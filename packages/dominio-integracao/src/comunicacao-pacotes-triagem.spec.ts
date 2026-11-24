@@ -10,6 +10,8 @@ import {
 } from './classificacao-externa.js';
 import {
   destinoMensagemValido,
+  escolherDestino,
+  fusoEmMinutos,
   interpretarResposta,
   momentoDoEnvio,
   montarTexto,
@@ -24,6 +26,8 @@ import {
   lerAgenda,
   meioAceitaFormato,
   podeMudarEntrega,
+  conferirRevisaoMinimizacao,
+  revisaoEmDia,
   revisaoVencida,
   validarPacote,
 } from './pacotes-entregas.js';
@@ -119,13 +123,101 @@ describe('mensagens ao paciente (L133)', () => {
       }),
     ).toBeNull();
   });
+  it('aviso sem evento futuro fora do horário vai para a próxima abertura; dentro, sai agora', () => {
+    const base = { referencia: null, antecedenciaMinutos: null, horaInicio: '08:00', horaFim: '20:00' };
+    // 22:00 em Brasília (01:00Z): próxima abertura 08:00 do dia seguinte (11:00Z).
+    expect(momentoDoEnvio({ ...base, agora: new Date('2026-11-25T01:00:00Z') })?.toISOString()).toBe(
+      '2026-11-25T11:00:00.000Z',
+    );
+    // 06:00 em Brasília (09:00Z): abertura 08:00 do mesmo dia.
+    expect(momentoDoEnvio({ ...base, agora: new Date('2026-11-24T09:00:00Z') })?.toISOString()).toBe(
+      '2026-11-24T11:00:00.000Z',
+    );
+    const dentro = new Date('2026-11-24T15:00:00Z');
+    expect(momentoDoEnvio({ ...base, agora: dentro })).toEqual(dentro);
+    // O mesmo 23:30Z é 20:30 em Brasília (fora) e 19:30 em Manaus (dentro).
+    const t = new Date('2026-12-01T23:30:00Z');
+    expect(momentoDoEnvio({ ...base, agora: t, fusoMinutos: -240 })).toEqual(t);
+    expect(momentoDoEnvio({ ...base, agora: t })?.toISOString()).toBe('2026-12-02T11:00:00.000Z');
+  });
+  it('o fuso do estabelecimento sai do nome IANA', () => {
+    const t = new Date('2026-12-01T12:00:00Z');
+    expect(fusoEmMinutos('America/Sao_Paulo', t)).toBe(-180);
+    expect(fusoEmMinutos('America/Manaus', t)).toBe(-240);
+    expect(fusoEmMinutos('America/Rio_Branco', t)).toBe(-300);
+    expect(fusoEmMinutos('Fuso/Invalido', t)).toBe(-180);
+  });
+  it('o destino sai do cadastro do paciente, com o consentimento de comunicação do contato', () => {
+    const contatos = [
+      {
+        tipo: 'telefone' as const,
+        endereco: '11988887777',
+        principal: false,
+        aceitaComunicacao: false,
+        usaAplicativo: true,
+      },
+      {
+        tipo: 'telefone' as const,
+        endereco: '11999990000',
+        principal: true,
+        aceitaComunicacao: true,
+        usaAplicativo: true,
+      },
+      {
+        tipo: 'telefone' as const,
+        endereco: '11977776666',
+        principal: false,
+        aceitaComunicacao: true,
+        usaAplicativo: false,
+      },
+      {
+        tipo: 'email' as const,
+        endereco: 'Pac@Exemplo.com',
+        principal: true,
+        aceitaComunicacao: true,
+        usaAplicativo: false,
+      },
+    ];
+    expect(escolherDestino('whatsapp', contatos, null)).toEqual({
+      destino: '11999990000',
+      noCadastro: true,
+      consentido: true,
+    });
+    expect(escolherDestino('whatsapp', contatos, '+55 (11) 99999-0000')).toMatchObject({
+      noCadastro: true,
+      consentido: true,
+    });
+    expect(escolherDestino('whatsapp', contatos, '11988887777')).toMatchObject({
+      noCadastro: true,
+      consentido: false,
+    });
+    expect(escolherDestino('whatsapp', contatos, '11977776666')).toMatchObject({
+      noCadastro: true,
+      consentido: false,
+    });
+    expect(escolherDestino('sms', contatos, '11977776666')).toMatchObject({
+      noCadastro: true,
+      consentido: true,
+    });
+    expect(escolherDestino('sms', contatos, '21911112222')).toMatchObject({
+      noCadastro: false,
+      consentido: false,
+    });
+    expect(escolherDestino('email', contatos, 'pac@exemplo.com')).toMatchObject({
+      noCadastro: true,
+      consentido: true,
+    });
+    expect(escolherDestino('push', contatos, 'aparelho-123')).toMatchObject({ noCadastro: false });
+    expect(escolherDestino('sms', [], null)).toEqual({ destino: null, noCadastro: false, consentido: false });
+  });
   it('destino, consentimento, descadastro e limite por paciente', () => {
     expect(destinoMensagemValido('whatsapp', '(11) 99999-0000')).toBe(true);
     expect(destinoMensagemValido('sms', '1234')).toBe(false);
     expect(destinoMensagemValido('email', 'a@b.com')).toBe(true);
     const base = {
       canal: 'sms' as const,
-      destino: '11999990000',
+      destino: '11999990000' as string | null,
+      destinoNoCadastro: true,
       exigeConsentimento: true,
       temConsentimento: true,
       descadastradoNoCanal: false,
@@ -140,6 +232,12 @@ describe('mensagens ao paciente (L133)', () => {
     expect(codigos(podePedirEnvio({ ...base, exigeConsentimento: false, temConsentimento: false }))).toEqual(
       [],
     );
+    expect(codigos(podePedirEnvio({ ...base, destinoNoCadastro: false, temConsentimento: false }))).toEqual([
+      'destino-fora-do-cadastro',
+    ]);
+    expect(codigos(podePedirEnvio({ ...base, destino: null, destinoNoCadastro: false }))).toEqual([
+      'sem-contato',
+    ]);
   });
   it('monta o texto e aponta o que falta', () => {
     expect(montarTexto('Oi {{paciente_nome}} {{data}}', { paciente_nome: 'Fulano', data: '01/12' })).toEqual({
@@ -255,6 +353,22 @@ describe('pacotes e entregas de parceiros (L134)', () => {
     expect(podeMudarEntrega('gerada', 'confirmada')).toBe(false);
     expect(revisaoVencida('2026-11-01', '2026-11-24')).toBe(true);
     expect(revisaoVencida(null, '2026-11-24')).toBe(false);
+    expect(revisaoEmDia(null, '2026-11-24')).toBe(false);
+    expect(revisaoEmDia('2026-11-01', '2026-11-24')).toBe(false);
+    expect(revisaoEmDia('2027-11-24', '2026-11-24')).toBe(true);
+    const c = (x: Record<string, unknown> = {}) => ({
+      campo: 'entrada',
+      dadoSensivel: false,
+      tratamento: 'original',
+      justificativa: 'Cálculo do índice',
+      ...x,
+    });
+    expect(conferirRevisaoMinimizacao([c()])).toEqual([]);
+    expect(codigos(conferirRevisaoMinimizacao([]))).toEqual(['sem-campos']);
+    expect(codigos(conferirRevisaoMinimizacao([c({ justificativa: 'x' })]))).toEqual(['sem-justificativa']);
+    expect(codigos(conferirRevisaoMinimizacao([c({ dadoSensivel: true })]))).toEqual([
+      'sensivel-sem-tratamento',
+    ]);
   });
 });
 

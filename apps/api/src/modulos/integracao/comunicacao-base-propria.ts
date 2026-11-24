@@ -1,6 +1,7 @@
 // Base das portas próprias da F3.9-6 (mensagens ao paciente, pacotes de parceiros e classificação externa): leitura
 // pelo estabelecimento da sessão e gravação pelo executor (trilha da operação), SQL parametrizado.
 import { randomUUID } from 'node:crypto';
+import { fusoEmMinutos } from '@sgh/dominio-integracao';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -65,6 +66,16 @@ export const conflito = () =>
 
 export const naoEncontrado = (o: string) =>
   new ErroOperacao(404, 'nao-encontrado', 'Não encontrado', `${o} não encontrado.`);
+
+/** O fuso do estabelecimento (nome IANA gravado no cadastro) em minutos no instante dado. */
+export async function fusoDoEstabelecimento(
+  db: { uma: (sql: string, p: unknown[]) => Promise<Record<string, unknown> | null> },
+  est: number,
+  agora: Date,
+): Promise<number> {
+  const e = await db.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  return fusoEmMinutos(txtOuNull(e?.['fuso_horario']), agora);
+}
 
 export class BaseComunicacaoPropria {
   protected readonly executor: Executor;

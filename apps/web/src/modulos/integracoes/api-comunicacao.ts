@@ -130,6 +130,17 @@ export interface EntregaPacote {
 }
 export const lerPacotes = () => ler(`${I}/pacotes`, itens<PacoteParceiro>());
 export const gravarPacote = (c: Record<string, unknown>) => substituir<{ id: number }>(`${I}/pacotes`, c);
+/** O ato explícito de revisão da minimização (gravar o pacote não revisa). */
+export const revisarPacote = (id: number, versao: number) =>
+  enviar(
+    `${I}/pacotes/${id}/revisao`,
+    { versao },
+    confiar<{ id: number; proximaRevisao: string }>(),
+    novaChave('revisao'),
+  );
+/** O modelo do cliente inteiro (todos os estabelecimentos), com a permissão de alcance do cliente. */
+export const gravarModeloCliente = (c: Record<string, unknown>) =>
+  substituir<{ id: number }>(`${I}/mensagens/modelos/cliente`, c);
 export const lerEntregas = (p: number) => ler(`${I}/pacotes/${p}/entregas`, itens<EntregaPacote>());
 export const mudarEntrega = (e: number, c: Record<string, unknown>) =>
   enviar(`${I}/entregas/${e}/situacao`, c, confiar<{ id: number }>(), novaChave('entrega'));

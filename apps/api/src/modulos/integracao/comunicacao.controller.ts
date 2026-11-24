@@ -95,6 +95,15 @@ export class ComunicacaoController {
     return com(this.mensagens, req, (p, c) => p.gravarModelo(c, corpo));
   }
 
+  /** O modelo do cliente inteiro (todos os estabelecimentos): permissão de alcance do cliente. */
+  @Put('mensagens/modelos/cliente')
+  @Permissao(P.mensagemConfigurarCliente)
+  gravarModeloCliente(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return com(this.mensagens, req, (p, c) =>
+      p.gravarModelo(c, { ...((corpo as Record<string, unknown>) ?? {}), doCliente: true }, true),
+    );
+  }
+
   @Get('mensagens/regras')
   @Permissao(P.mensagemLer)
   regras(@Req() req: RequisicaoAutorizada) {
@@ -152,6 +161,18 @@ export class ComunicacaoController {
   @Permissao(P.parceiroEditar)
   gravarPacote(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.pacotes, req, (p, c) => p.gravarPacote(c, corpo));
+  }
+
+  @Post('pacotes/:id/revisao')
+  @HttpCode(200)
+  @Permissao(P.parceiroRevisarMinimizacao)
+  revisarPacote(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    const versao = Number((corpo as Record<string, unknown> | null)?.['versao']);
+    return com(this.pacotes, req, (p, c) => p.revisarPacote(c, id, versao));
   }
 
   @Get('pacotes/:id/entregas')

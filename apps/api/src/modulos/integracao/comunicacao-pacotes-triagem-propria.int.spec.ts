@@ -16,19 +16,23 @@ import { PortaPacotesParceiroPropria } from './pacotes-parceiro-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'f396cpt';
+/** Segundo estabelecimento (fuso de Manaus): isolamento e fuso. */
+const P2 = 'f396cp2';
+const E = [P, P2];
+const NOME_PAC = 'f396 Paciente sintético';
 
 async function limpar(e: Escritor): Promise<void> {
-  const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+  const est = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
   await e.executar(
     `DELETE t FROM pedido_mensagem_paciente_retorno t JOIN pedido_mensagem_paciente q
         ON q.id = t.pedido_mensagem_paciente_id WHERE q.estabelecimento_id IN ${est}`,
-    [P],
+    E,
   );
-  await e.executar(`DELETE FROM pedido_mensagem_paciente WHERE estabelecimento_id IN ${est}`, [P]);
-  await e.executar(`DELETE FROM regra_envio_mensagem_paciente WHERE estabelecimento_id IN ${est}`, [P]);
-  await e.executar(`DELETE FROM modelo_mensagem_paciente WHERE estabelecimento_id IN ${est}`, [P]);
-  await e.executar(`DELETE FROM consentimento_titular WHERE estabelecimento_id IN ${est}`, [P]);
-  await e.executar(`DELETE FROM classificacao_externa_recebida WHERE estabelecimento_id IN ${est}`, [P]);
+  await e.executar(`DELETE FROM pedido_mensagem_paciente WHERE estabelecimento_id IN ${est}`, E);
+  await e.executar(`DELETE FROM regra_envio_mensagem_paciente WHERE estabelecimento_id IN ${est}`, E);
+  await e.executar(`DELETE FROM modelo_mensagem_paciente WHERE estabelecimento_id IN ${est}`, E);
+  await e.executar(`DELETE FROM consentimento_titular WHERE estabelecimento_id IN ${est}`, E);
+  await e.executar(`DELETE FROM classificacao_externa_recebida WHERE estabelecimento_id IN ${est}`, E);
   await e.executar("DELETE FROM perfil_prioridade_externa WHERE codigo LIKE 'f396-%'");
   await e.executar("DELETE FROM sistema_externo WHERE codigo = 'f396-tri'");
   const pac =
@@ -37,10 +41,15 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM pacote_parceiro_campo WHERE pacote_parceiro_id IN ${pac}`);
   await e.executar(`DELETE FROM pacote_parceiro WHERE id IN ${pac}`);
   await e.executar("DELETE FROM parceiro_dados WHERE codigo = 'f396-par'");
-  await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
+  await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, E);
   await e.executar("DELETE FROM categoria_atendimento WHERE codigo IN ('f396-pa','f396-amb')");
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  const pf = '(SELECT x.id FROM (SELECT id FROM pessoa_fisica WHERE nome = ?) x)';
+  await e.executar(`DELETE FROM telefone_pessoa WHERE pessoa_fisica_id IN ${pf}`, [NOME_PAC]);
+  await e.executar(`DELETE FROM email_pessoa WHERE pessoa_fisica_id IN ${pf}`, [NOME_PAC]);
+  await e.executar(`DELETE FROM paciente WHERE pessoa_fisica_id IN ${pf}`, [NOME_PAC]);
+  await e.executar('DELETE FROM pessoa_fisica WHERE nome = ?', [NOME_PAC]);
+  await limparTrilhaDaMassa(e, { codigos: E });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', E);
 }
 
 describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () => {
@@ -48,8 +57,9 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
   let msg: PortaMensagensPacientePropria;
   let pac: PortaPacotesParceiroPropria;
   let cla: PortaClassificacaoExternaPropria;
-  let m: { est: number; usuario: number; paciente: number; atdPa: number; atdAmb: number };
+  let m: { est: number; est2: number; usuario: number; paciente: number; atdPa: number; atdAmb: number };
   const ctx = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P, hospital: P });
+  const ctx2 = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P2, hospital: P2 });
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p)) as Promise<T[]>;
   const erro = async (p: Promise<unknown>) => {
@@ -67,14 +77,18 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
       await limpar(e);
       const agora = new Date();
       const usuario = await e.uma('SELECT MIN(id) AS id FROM usuario WHERE excluido_em IS NULL');
-      const paciente = await e.uma('SELECT MIN(id) AS id FROM paciente WHERE excluido_em IS NULL');
       const prof = await e.uma('SELECT MIN(id) AS id FROM profissional WHERE excluido_em IS NULL');
-      if (!usuario?.['id'] || !paciente?.['id'] || !prof?.['id'])
-        throw new Error('O cliente de teste precisa de usuário, paciente e profissional.');
+      if (!usuario?.['id'] || !prof?.['id'])
+        throw new Error('O cliente de teste precisa de usuário e profissional.');
       const est = await e.inserir(
         `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
          VALUES (?, 'Hospital Teste', 'Hospital sintético (fictício)', 'America/Sao_Paulo', ?)`,
         [P, agora],
+      );
+      const est2 = await e.inserir(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, 'Hospital Manaus', 'Hospital sintético 2 (fictício)', 'America/Manaus', ?)`,
+        [P2, agora],
       );
       const pa = await e.inserir(
         `INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em)
@@ -98,6 +112,33 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
       );
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       try {
+        // Paciente SINTÉTICO, com os contatos do cadastro: um telefone principal com aceite de mensagem e aplicativo,
+        // um sem aceite e um e-mail com aceite.
+        const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+          NOME_PAC,
+          agora,
+        ]);
+        const pront = await e.uma('SELECT COALESCE(MAX(numero_prontuario), 0) + 1 AS n FROM paciente');
+        const paciente = {
+          id: await e.inserir(
+            'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+            [pf, pront!['n'], agora],
+          ),
+        };
+        const fone = (seq: number, numero: string, aceita: boolean, principal: boolean) =>
+          e.executar(
+            `INSERT INTO telefone_pessoa (pessoa_fisica_id, sequencia, tipo_telefone_id, ddd, numero, principal,
+               aceita_mensagem, aceita_mensagem_em, usa_aplicativo_mensagem, criado_em)
+             VALUES (?, ?, 1, '11', ?, ?, ?, ?, TRUE, ?)`,
+            [pf, seq, numero, principal, aceita, aceita ? agora : null, agora],
+          );
+        await fone(1, '999990000', true, true);
+        await fone(2, '988887777', false, false);
+        await e.executar(
+          `INSERT INTO email_pessoa (pessoa_fisica_id, sequencia, email, principal, aceita_comunicacao, criado_em)
+           VALUES (?, 1, 'paciente.f396@exemplo.invalid', TRUE, TRUE, ?)`,
+          [pf, agora],
+        );
         await e.executar(
           `INSERT INTO consentimento_titular (estabelecimento_id, numero, tipo_termo_lgpd_id, paciente_id, finalidade,
              situacao, emitido_em, autorizado_em, criado_em)
@@ -113,6 +154,7 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
           );
         return {
           est,
+          est2,
           usuario: Number(usuario['id']),
           paciente: Number(paciente['id']),
           atdPa: await atd(pa, 'pa'),
@@ -205,6 +247,29 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
       'variavel-sem-valor',
     );
     expect((await erro(msg.pedir(ctx(), entrada({ destino: '123' })))).codigo).toBe('destino-invalido');
+    // Destino de fora do cadastro do paciente: recusado (não vaza dado do atendimento a terceiro).
+    expect((await erro(msg.pedir(ctx(), entrada({ destino: '21911112222' })))).codigo).toBe(
+      'destino-fora-do-cadastro',
+    );
+    // O paciente tem um termo autorizado de outra finalidade, mas o telefone não tem o aceite de mensagem: recusado.
+    expect((await erro(msg.pedir(ctx(), entrada({ destino: '11988887777' })))).codigo).toBe(
+      'sem-consentimento',
+    );
+    // O modelo do cliente inteiro só pela rota de alcance do cliente.
+    expect(
+      (
+        await erro(
+          msg.gravarModelo(ctx(), {
+            doCliente: true,
+            codigo: 'f396-cli',
+            descricao: 'Do cliente',
+            finalidade: 'aviso',
+            canal: 'sms',
+            corpo: 'Aviso',
+          }),
+        )
+      ).codigo,
+    ).toBe('alcance-do-cliente');
     const p1 = await msg.pedir(ctx(), entrada(), agora);
     expect(p1.agendadoPara).toBe(new Date(consulta.getTime() - 86_400_000).toISOString());
     const q = (
@@ -222,7 +287,13 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
     });
     expect(String(q['conteudo'])).toContain('Hospital Teste: confirma a consulta de 01/12 às 14:00?');
 
-    const p2 = await msg.pedir(ctx(), entrada(), agora);
+    // Sem destino: o contato do canal com consentimento, do cadastro.
+    const p2 = await msg.pedir(ctx(), entrada({ destino: null }), agora);
+    expect(
+      (await ler('SELECT destino FROM pedido_mensagem_paciente WHERE id = ?', [p2.id]))[0],
+    ).toMatchObject({
+      destino: '11999990000',
+    });
     expect((await erro(msg.pedir(ctx(), entrada(), agora))).codigo).toBe('limite-atingido');
     await msg.cancelar(ctx(), p2.id, 'Consulta remarcada');
     expect(
@@ -282,6 +353,60 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
     ]);
   }, 120_000);
 
+  it('L133: aviso sem evento fora do horário vai para a próxima abertura, no fuso de cada estabelecimento; isolamento', async () => {
+    const regraSms = async (c: () => ReturnType<typeof ctx>, cod: string) => {
+      const mo = await msg.gravarModelo(c(), {
+        codigo: cod,
+        descricao: 'Resultado disponível',
+        finalidade: 'resultado_disponivel',
+        canal: 'sms',
+        corpo: '{{estabelecimento}}: o seu resultado está disponível.',
+      });
+      return msg.gravarRegra(c(), {
+        codigo: cod,
+        descricao: 'Resultado liberado',
+        modeloId: mo.id,
+        gatilho: 'resultado_liberado',
+        horaInicio: '08:00',
+        horaFim: '20:00',
+      });
+    };
+    const r1 = await regraSms(ctx, 'res1');
+    const r2 = await regraSms(ctx2, 'res2');
+    // 23:30Z = 20:30 em Brasília (fora do horário) e 19:30 em Manaus (dentro).
+    const t = new Date('2026-12-01T23:30:00Z');
+    const pedido = (regraId: number) => ({
+      regraId,
+      pacienteId: m.paciente,
+      entidade: 'resultado',
+      entidadeId: 1,
+    });
+    const a = await msg.pedir(ctx(), pedido(r1.id), t);
+    expect(a.agendadoPara).toBe('2026-12-02T11:00:00.000Z');
+    const b = await msg.pedir(ctx2(), pedido(r2.id), t);
+    expect(b.agendadoPara).toBe(t.toISOString());
+    const linhas = await ler(
+      'SELECT id, estabelecimento_id AS e, agendado_para, situacao FROM pedido_mensagem_paciente WHERE id IN (?, ?) ORDER BY id',
+      [a.id, b.id],
+    );
+    expect(linhas.map((x) => [Number(x['e']), x['situacao']])).toEqual([
+      [m.est, 'pendente'],
+      [m.est2, 'pendente'],
+    ]);
+    // Isolamento: o segundo estabelecimento não enxerga nem mexe no pedido do primeiro.
+    expect((await msg.doPaciente(ctx2(), m.paciente)).map((x) => x.id)).toEqual([b.id]);
+    expect((await erro(msg.cancelar(ctx2(), a.id, 'outro hospital'))).status).toBe(404);
+    expect((await erro(msg.registrarRetorno(ctx2(), a.id, { tipo: 'entrega' }))).status).toBe(404);
+    expect((await erro(msg.marcarEnviado(ctx2(), a.id, 'x'))).status).toBe(404);
+    expect((await erro(msg.pedir(ctx2(), pedido(r1.id), t))).status).toBe(404);
+    expect(await cla.doAtendimento(ctx2(), m.atdPa)).toEqual([]);
+    expect(
+      (await ler('SELECT situacao FROM pedido_mensagem_paciente WHERE id = ?', [a.id]))[0],
+    ).toMatchObject({
+      situacao: 'pendente',
+    });
+  }, 120_000);
+
   it('L134: pacote com campos, entrega devida pela agenda, nada devido depois, transições', async () => {
     const campo = (s: number, c: string, x: Record<string, unknown> = {}) => ({
       sequencia: s,
@@ -330,10 +455,37 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
     const pk = (
       await ler('SELECT revisado_em, proxima_revisao_em, versao FROM pacote_parceiro WHERE id = ?', [id])
     )[0]!;
-    expect(pk['revisado_em']).not.toBeNull();
+    // Gravar não revisa: sem o ato de revisão, a entrega é recusada.
+    expect(pk['revisado_em']).toBeNull();
     expect(Number(pk['versao'])).toBe(2);
-
     const agora = new Date();
+    expect((await erro(pac.registrarEntrega(ctx(), id, { quantidadeRegistros: 1 }, agora))).codigo).toBe(
+      'sem-revisao',
+    );
+    const rev = await pac.revisarPacote(ctx(), id, 2, agora);
+    const pr = (
+      await ler(
+        'SELECT revisado_em, revisado_por_usuario_id AS u, proxima_revisao_em, versao FROM pacote_parceiro WHERE id = ?',
+        [id],
+      )
+    )[0]!;
+    expect(pr['revisado_em']).not.toBeNull();
+    expect(Number(pr['u'])).toBe(m.usuario);
+    // Uma troca de nome depois da revisão não mexe na data de vencimento.
+    await pac.gravarPacote(ctx(), {
+      ...base,
+      nome: 'Índices de UTI (novo nome)',
+      id,
+      versao: Number(pr['versao']),
+      campos: [campo(1, 'saida'), campo(2, 'entrada')],
+    });
+    const depois = (
+      await ler('SELECT revisado_em, proxima_revisao_em FROM pacote_parceiro WHERE id = ?', [id])
+    )[0]!;
+    expect(String(depois['proxima_revisao_em'])).toBe(String(pr['proxima_revisao_em']));
+    expect(String(depois['revisado_em'])).toBe(String(pr['revisado_em']));
+    expect(rev.proximaRevisao).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
     const e1 = await pac.registrarEntrega(
       ctx(),
       id,

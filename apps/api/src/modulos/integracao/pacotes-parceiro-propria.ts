@@ -11,7 +11,9 @@ import {
   FORMATOS_PACOTE,
   MEIOS_ENTREGA,
   PERIODICIDADES_PACOTE,
+  conferirRevisaoMinimizacao,
   podeMudarEntrega,
+  revisaoEmDia,
   revisaoVencida,
   type SituacaoEntrega,
   SITUACOES_ENTREGA,
@@ -27,6 +29,7 @@ import {
   type ContextoComunicacao,
   dataOuNull,
   entradaValida,
+  fusoDoEstabelecimento,
   naoEncontrado,
   num,
   numOuNull,
@@ -62,8 +65,6 @@ export const esquemaPacote = z
     anonimizacao: z.enum(ANONIMIZACOES).default('pseudonimizada'),
     janelaDias: z.number().int().nullable().default(null),
     campos: z.array(esquemaCampoPacote).max(200),
-    /** true: registra a revisão da minimização agora (próxima em 12 meses). */
-    revisado: z.boolean().default(true),
     ativo: z.boolean().default(true),
     versao: z.number().int().positive().nullable().default(null),
   })
@@ -120,7 +121,8 @@ const dataIso = (v: unknown): string | null =>
 
 export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
   pacotes(c: ContextoComunicacao, agora: Date = new Date()): Promise<PacoteLido[]> {
-    return this.ler(c, 'pacotes.listar', async (l) => {
+    return this.ler(c, 'pacotes.listar', async (l, est) => {
+      const fusoMinutos = await fusoDoEstabelecimento(l, est, agora);
       const ps = await l.consultar(
         `SELECT p.*, d.codigo AS parceiro_codigo, d.nome AS parceiro_nome
            FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
@@ -158,6 +160,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
           janelaDias: numOuNull(x['janela_dias']),
           ultimoFim: f?.['fim'] ? new Date(f['fim'] as string) : null,
           agora,
+          fusoMinutos,
         });
         const proxima = dataIso(x['proxima_revisao_em']);
         return {
@@ -214,8 +217,6 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
           x.parceiroCodigo,
         ]);
         if (!d) throw naoEncontrado('Parceiro');
-        const proxima = new Date(agora);
-        proxima.setUTCFullYear(proxima.getUTCFullYear() + 1);
         const valores: Record<string, unknown> = {
           nome: x.nome.trim(),
           conteudo: x.conteudo.trim(),
@@ -226,9 +227,6 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
           anonimizacao: x.anonimizacao,
           janela_dias: x.janelaDias,
           ativo: x.ativo,
-          ...(x.revisado
-            ? { revisado_em: agora, revisado_por_usuario_id: usuario, proxima_revisao_em: hoje(proxima) }
-            : {}),
         };
         const a = await tx.uma(
           'SELECT id, versao FROM pacote_parceiro WHERE parceiro_dados_id = ? AND codigo = ? FOR UPDATE',
@@ -297,6 +295,55 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
     );
   }
 
+  /**
+   * O ato explícito de revisão da minimização (permissão integracao.parceiro.revisarMinimizacao): confere os campos
+   * vigentes (justificativa e tratamento do sensível) e carimba a revisão, com a próxima em 12 meses. Gravar o pacote
+   * não revisa: a data de vencimento só muda por aqui.
+   */
+  revisarPacote(
+    c: ContextoComunicacao,
+    pacote: number,
+    versao: number,
+    agora: Date = new Date(),
+  ): Promise<{ id: number; proximaRevisao: string }> {
+    return this.gravar(
+      c,
+      'integracao.parceiro.revisarMinimizacao',
+      ['pacote_parceiro'],
+      async (tx, _est, usuario) => {
+        const p = await tx.uma(
+          `SELECT p.id, p.versao FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
+            WHERE p.id = ? AND d.excluido_em IS NULL FOR UPDATE`,
+          [pacote],
+        );
+        if (!p) throw naoEncontrado('Pacote');
+        if (num(p['versao']) !== versao) throw conflito();
+        const campos = await tx.consultar(
+          `SELECT campo, dado_sensivel, tratamento, justificativa FROM pacote_parceiro_campo
+            WHERE pacote_parceiro_id = ? AND excluido_em IS NULL`,
+          [pacote],
+        );
+        const erros = conferirRevisaoMinimizacao(
+          campos.map((k) => ({
+            campo: String(k['campo']),
+            dadoSensivel: bool(k['dado_sensivel']),
+            tratamento: String(k['tratamento']),
+            justificativa: txtOuNull(k['justificativa']),
+          })),
+        );
+        if (erros.length) throw recusa(erros, 'Revisão recusada');
+        const proxima = new Date(agora);
+        proxima.setUTCFullYear(proxima.getUTCFullYear() + 1);
+        await tx.alterar('pacote_parceiro', pacote, versao, {
+          revisado_em: agora,
+          revisado_por_usuario_id: usuario,
+          proxima_revisao_em: hoje(proxima),
+        });
+        return { id: pacote, proximaRevisao: hoje(proxima) };
+      },
+    );
+  }
+
   /** Registra a entrega: o período devido pela agenda (ou o informado, no pacote sob demanda), volume e hash. */
   registrarEntrega(
     c: ContextoComunicacao,
@@ -309,7 +356,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
       c,
       'integracao.parceiro.registrarEntrega',
       ['entrega_pacote_parceiro'],
-      async (tx, _est, usuario) => {
+      async (tx, est, usuario) => {
         const p = await tx.uma(
           `SELECT p.id, p.periodicidade, p.agenda, p.janela_dias, p.ativo, p.proxima_revisao_em, d.ativo AS parceiro_ativo
              FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
@@ -324,11 +371,14 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
             codigo: 'pacote-inativo',
             mensagem: 'Pacote ou parceiro fora de uso.',
           });
-        if (revisaoVencida(dataIso(p['proxima_revisao_em']), hoje(agora)))
+        if (!revisaoEmDia(dataIso(p['proxima_revisao_em']), hoje(agora)))
           erros.push({
             campo: 'pacote',
-            codigo: 'revisao-vencida',
-            mensagem: 'A revisão da minimização do pacote venceu: revise os campos antes de entregar.',
+            codigo: p['proxima_revisao_em'] === null ? 'sem-revisao' : 'revisao-vencida',
+            mensagem:
+              p['proxima_revisao_em'] === null
+                ? 'A minimização do pacote nunca foi revisada: revise os campos antes de entregar.'
+                : 'A revisão da minimização do pacote venceu: revise os campos antes de entregar.',
           });
         let inicio: Date | null = null;
         let fim: Date | null = null;
@@ -361,6 +411,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
             janelaDias: numOuNull(p['janela_dias']),
             ultimoFim: u?.['fim'] ? new Date(u['fim'] as string) : null,
             agora,
+            fusoMinutos: await fusoDoEstabelecimento(tx, est, agora),
           });
           if (!d)
             erros.push({

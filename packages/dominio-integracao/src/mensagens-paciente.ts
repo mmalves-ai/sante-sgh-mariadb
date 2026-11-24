@@ -243,40 +243,81 @@ export function validarRegraEnvio(
 }
 
 /**
- * Quando enviar: a referência (o horário do agendamento) menos a antecedência, puxada para DENTRO do horário de envio
- * sempre para mais cedo (o aviso nunca chega depois do evento). Horários em minutos locais do dia, datas em UTC
- * deslocadas pelo fuso informado em minutos. Devolve null quando o momento já passou e não cabe mais enviar antes do
- * evento (o pedido não é criado).
+ * Deslocamento do fuso IANA do estabelecimento (ex.: America/Manaus) no instante dado, em minutos (Brasília: -180).
+ * Fuso inválido cai no de Brasília.
+ */
+export function fusoEmMinutos(zona: string | null | undefined, instante: Date): number {
+  if (!zona) return -180;
+  try {
+    const f = new Intl.DateTimeFormat('en-US', {
+      timeZone: zona,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const p = Object.fromEntries(f.formatToParts(instante).map((x) => [x.type, x.value]));
+    const local = Date.UTC(+p['year']!, +p['month']! - 1, +p['day']!, +p['hour']!, +p['minute']!);
+    const base = instante.getTime() - instante.getUTCSeconds() * 1000 - instante.getUTCMilliseconds();
+    return Math.round((local - base) / 60_000);
+  } catch {
+    return -180;
+  }
+}
+
+/**
+ * Quando enviar. Dois casos:
+ *  - aviso de um evento futuro (`referencia` = o horário do agendamento): a referência menos a antecedência, puxada
+ *    para DENTRO do horário de envio sempre para mais cedo (o aviso nunca chega depois do evento); se esse momento já
+ *    passou, envia agora quando ainda é antes do evento e agora está no horário; senão null (o pedido não é criado);
+ *  - aviso sem evento futuro (`referencia` null: resultado liberado, alta, avulso): agora, empurrado para a PRÓXIMA
+ *    abertura do horário de envio quando agora está fora dele (pedido às 22h com horário até 20h sai às 8h do dia
+ *    seguinte). Nunca é recusado por prazo.
+ * Horários em minutos locais do dia; datas em UTC deslocadas pelo fuso do estabelecimento em minutos.
  */
 export function momentoDoEnvio(p: {
-  readonly referencia: Date;
+  readonly referencia: Date | null;
   readonly antecedenciaMinutos: number | null;
   readonly horaInicio: string | null;
   readonly horaFim: string | null;
   readonly agora: Date;
-  /** Deslocamento do fuso do estabelecimento em minutos (Brasília: -180). */
+  /** Deslocamento do fuso do estabelecimento em minutos (Brasília: -180; Manaus: -240). */
   readonly fusoMinutos?: number;
 }): Date | null {
   const fuso = p.fusoMinutos ?? -180;
   const MIN = 60_000;
-  let alvo = new Date(p.referencia.getTime() - (p.antecedenciaMinutos ?? 0) * MIN);
+  const DIA = 24 * 60 * MIN;
   const hi = minutosDoDia(p.horaInicio);
   const hf = minutosDoDia(p.horaFim);
-  if (hi !== null || hf !== null) {
-    const ini = hi ?? 0;
-    const fim = hf ?? 24 * 60;
-    const local = new Date(alvo.getTime() + fuso * MIN);
+  const temJanela = hi !== null || hf !== null;
+  const ini = hi ?? 0;
+  const fim = hf ?? 24 * 60;
+  const noDia = (t: Date) => {
+    const local = new Date(t.getTime() + fuso * MIN);
     const minuto = local.getUTCHours() * 60 + local.getUTCMinutes();
     const inicioDoDia =
-      alvo.getTime() - minuto * MIN - local.getUTCSeconds() * 1000 - local.getUTCMilliseconds();
+      t.getTime() - minuto * MIN - local.getUTCSeconds() * 1000 - local.getUTCMilliseconds();
+    return { minuto, inicioDoDia };
+  };
+  if (p.referencia === null) {
+    if (!temJanela) return p.agora;
+    const { minuto, inicioDoDia } = noDia(p.agora);
+    if (minuto < ini) return new Date(inicioDoDia + ini * MIN);
+    if (minuto > fim) return new Date(inicioDoDia + DIA + ini * MIN);
+    return p.agora;
+  }
+  let alvo = new Date(p.referencia.getTime() - (p.antecedenciaMinutos ?? 0) * MIN);
+  if (temJanela) {
+    const { minuto, inicioDoDia } = noDia(alvo);
     if (minuto > fim) alvo = new Date(inicioDoDia + fim * MIN);
-    else if (minuto < ini) alvo = new Date(inicioDoDia - 24 * 60 * MIN + fim * MIN);
+    else if (minuto < ini) alvo = new Date(inicioDoDia - DIA + fim * MIN);
   }
   if (alvo.getTime() >= p.agora.getTime()) return alvo;
   // Já passou: envia agora se ainda for antes do evento e se agora estiver no horário de envio.
   if (p.agora.getTime() >= p.referencia.getTime()) return null;
-  const localAgora = new Date(p.agora.getTime() + fuso * MIN);
-  const m = localAgora.getUTCHours() * 60 + localAgora.getUTCMinutes();
+  const m = noDia(p.agora).minuto;
   if ((hi !== null && m < hi) || (hf !== null && m > hf)) return null;
   return p.agora;
 }
@@ -290,11 +331,60 @@ export function destinoMensagemValido(canal: CanalMensagem, destino: string): bo
   return n.length >= 10 && n.length <= 13;
 }
 
-/** Pode registrar o pedido de envio? Confere destino, consentimento, descadastro do canal e limite por paciente. */
+/**
+ * Um contato do cadastro do paciente. `aceitaComunicacao` é o consentimento de COMUNICAÇÃO dado naquele contato (o
+ * aceite de mensagem do telefone; o aceite de comunicação do e-mail, com o termo dele válido): é a base legal
+ * conferida no envio, nunca um termo de outra finalidade (tratamento, pesquisa, imagem).
+ */
+export interface ContatoPaciente {
+  readonly tipo: 'telefone' | 'email';
+  /** Telefone só com dígitos (DDD + número; DDI na frente quando não é do Brasil) ou e-mail. */
+  readonly endereco: string;
+  readonly principal: boolean;
+  readonly aceitaComunicacao: boolean;
+  /** Telefone com aplicativo de mensagem (exigido para WhatsApp). */
+  readonly usaAplicativo: boolean;
+}
+
+const mesmoEndereco = (c: ContatoPaciente, destino: string): boolean => {
+  if (c.tipo === 'email') return c.endereco.trim().toLowerCase() === destino.trim().toLowerCase();
+  const d = destino.replace(/\D/g, '');
+  return d === c.endereco || d === `55${c.endereco}`;
+};
+
+/**
+ * O destino do envio sai SEMPRE do cadastro do paciente: sem destino pedido, o contato do canal com consentimento
+ * (o principal primeiro); com destino pedido, só se ele estiver no cadastro. Push não tem cadastro de aparelho, então
+ * nunca é aceito. Devolve o destino, se está no cadastro e se o contato consentiu a comunicação por aquele canal.
+ */
+export function escolherDestino(
+  canal: CanalMensagem,
+  contatos: readonly ContatoPaciente[],
+  pedido: string | null,
+): { destino: string | null; noCadastro: boolean; consentido: boolean } {
+  const tipo = canal === 'email' ? 'email' : canal === 'push' ? null : 'telefone';
+  const doCanal = tipo ? contatos.filter((c) => c.tipo === tipo) : [];
+  const consentiu = (c: ContatoPaciente) => c.aceitaComunicacao && (canal !== 'whatsapp' || c.usaAplicativo);
+  if (pedido?.trim()) {
+    const c = doCanal.find((x) => mesmoEndereco(x, pedido));
+    return { destino: c ? c.endereco : pedido.trim(), noCadastro: !!c, consentido: !!c && consentiu(c) };
+  }
+  const ordem = [...doCanal].sort((a, b) => Number(b.principal) - Number(a.principal));
+  const c = ordem.find(consentiu) ?? ordem[0];
+  if (!c) return { destino: null, noCadastro: false, consentido: false };
+  return { destino: c.endereco, noCadastro: true, consentido: consentiu(c) };
+}
+
+/**
+ * Pode registrar o pedido de envio? Confere destino (válido e do cadastro do paciente), consentimento de comunicação
+ * no contato, descadastro do canal e limite por paciente.
+ */
 export function podePedirEnvio(p: {
   readonly canal: CanalMensagem;
-  readonly destino: string;
+  readonly destino: string | null;
+  readonly destinoNoCadastro: boolean;
   readonly exigeConsentimento: boolean;
+  /** Consentimento de comunicação dado no contato de destino (ver `ContatoPaciente`). */
   readonly temConsentimento: boolean;
   readonly descadastradoNoCanal: boolean;
   readonly maximoEnviosPaciente: number | null;
@@ -303,14 +393,24 @@ export function podePedirEnvio(p: {
 }): ErroMensagem[] {
   const e: ErroMensagem[] = [];
   if (!p.regraAtiva) e.push(erro('regra', 'regra-inativa', 'A regra de envio está fora de uso.'));
-  if (!destinoMensagemValido(p.canal, p.destino))
+  if (p.destino === null)
+    e.push(erro('destino', 'sem-contato', `O paciente não tem contato cadastrado para ${p.canal}.`));
+  else if (!destinoMensagemValido(p.canal, p.destino))
     e.push(erro('destino', 'destino-invalido', `Destino inválido para ${p.canal}.`));
-  if (p.exigeConsentimento && !p.temConsentimento)
+  else if (!p.destinoNoCadastro)
+    e.push(
+      erro(
+        'destino',
+        'destino-fora-do-cadastro',
+        'O destino não está entre os contatos do paciente; atualize o cadastro antes de enviar.',
+      ),
+    );
+  if (p.destino !== null && p.destinoNoCadastro && p.exigeConsentimento && !p.temConsentimento)
     e.push(
       erro(
         'paciente',
         'sem-consentimento',
-        'O paciente não tem consentimento autorizado para receber mensagens.',
+        `O contato não tem o consentimento do paciente para receber mensagens por ${p.canal}.`,
       ),
     );
   if (p.descadastradoNoCanal)

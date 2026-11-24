@@ -11,6 +11,8 @@
 import {
   CANAIS_MENSAGEM,
   type CanalMensagem,
+  type ContatoPaciente,
+  escolherDestino,
   FINALIDADES_MODELO,
   type FinalidadeModelo,
   GATILHOS_ENVIO,
@@ -36,6 +38,7 @@ import {
   type ContextoComunicacao,
   dataOuNull,
   entradaValida,
+  fusoDoEstabelecimento,
   naoEncontrado,
   num,
   numOuNull,
@@ -99,8 +102,9 @@ export const esquemaPedidoMensagem = z
   .object({
     regraId: z.number().int().positive(),
     pacienteId: z.number().int().positive(),
-    destino: z.string().min(3).max(254),
-    /** O horário do evento (agendamento, alta); sem ele, o envio é agora. */
+    /** Sem destino: o contato do canal com consentimento, do cadastro do paciente. Com destino: só se for do cadastro. */
+    destino: z.string().min(3).max(254).nullable().default(null),
+    /** O horário do evento futuro (agendamento); sem ele, o envio é agora ou na próxima abertura do horário. */
     referenciaEm: z.string().datetime({ offset: true }).nullable().default(null),
     valores: z.record(z.string().max(200)).default({}),
     entidade: z.string().max(64).nullable().default(null),
@@ -199,8 +203,19 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
     );
   }
 
-  gravarModelo(c: ContextoComunicacao, entrada: unknown): Promise<{ id: number }> {
+  /**
+   * Grava o modelo. O modelo do cliente inteiro (`doCliente`) muda o texto de todos os estabelecimentos: só pela rota
+   * de alcance do cliente (`alcanceCliente`, permissão integracao.mensagem.configurarCliente).
+   */
+  gravarModelo(c: ContextoComunicacao, entrada: unknown, alcanceCliente = false): Promise<{ id: number }> {
     const x = entradaValida(esquemaModeloMensagem, entrada);
+    if (x.doCliente && !alcanceCliente)
+      throw new ErroOperacao(
+        403,
+        'alcance-do-cliente',
+        'Operação recusada',
+        'O modelo do cliente inteiro vale para todos os estabelecimentos: exige a permissão de alcance do cliente.',
+      );
     const erros = validarModeloMensagem(x);
     if (erros.length) throw recusa(erros, 'Modelo recusado');
     return this.gravar(
@@ -345,7 +360,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
         const r = await tx.uma(
           `SELECT r.id, r.gatilho, r.canal, r.antecedencia_minutos, r.hora_envio_inicio, r.hora_envio_fim,
                 r.maximo_envios_paciente, r.exige_consentimento, r.ativo, m.id AS modelo_id, m.assunto, m.corpo,
-                m.ativo AS modelo_ativo, e.nome_fantasia
+                m.ativo AS modelo_ativo, e.nome_fantasia, e.fuso_horario
            FROM regra_envio_mensagem_paciente r
            JOIN modelo_mensagem_paciente m ON m.id = r.modelo_mensagem_paciente_id
            JOIN estabelecimento e ON e.id = r.estabelecimento_id
@@ -358,12 +373,34 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
         ]);
         if (!p) throw naoEncontrado('Paciente');
         const canal = String(r['canal']) as CanalMensagem;
-        const consentimento = await tx.uma(
-          `SELECT COUNT(*) AS n FROM consentimento_titular
-          WHERE paciente_id = ? AND situacao = 'autorizado' AND revogado_em IS NULL AND excluido_em IS NULL
-            AND (valido_ate IS NULL OR valido_ate >= CURRENT_DATE())`,
-          [x.pacienteId],
-        );
+        // O consentimento conferido é o de COMUNICAÇÃO dado no contato (aceite de mensagem do telefone; aceite de
+        // comunicação do e-mail com o termo dele válido), nunca um termo de outra finalidade do paciente.
+        const contatos: ContatoPaciente[] = (
+          await tx.consultar(
+            `SELECT 'telefone' AS tipo,
+                    CONCAT(CASE WHEN t.ddi = '55' THEN '' ELSE t.ddi END, COALESCE(t.ddd, ''), t.numero) AS endereco,
+                    t.principal, t.aceita_mensagem AS aceita, t.usa_aplicativo_mensagem AS app
+               FROM paciente p JOIN telefone_pessoa t ON t.pessoa_fisica_id = p.pessoa_fisica_id AND t.excluido_em IS NULL
+              WHERE p.id = ?
+             UNION ALL
+             SELECT 'email', m.email, m.principal,
+                    m.aceita_comunicacao AND (m.consentimento_titular_id IS NULL OR EXISTS (
+                      SELECT 1 FROM consentimento_titular k
+                       WHERE k.id = m.consentimento_titular_id AND k.situacao = 'autorizado' AND k.revogado_em IS NULL
+                         AND k.excluido_em IS NULL AND (k.valido_ate IS NULL OR k.valido_ate >= CURRENT_DATE()))),
+                    0
+               FROM paciente p JOIN email_pessoa m ON m.pessoa_fisica_id = p.pessoa_fisica_id AND m.excluido_em IS NULL
+              WHERE p.id = ?`,
+            [x.pacienteId, x.pacienteId],
+          )
+        ).map((k) => ({
+          tipo: (String(k['tipo']) === 'email' ? 'email' : 'telefone') as ContatoPaciente['tipo'],
+          endereco: String(k['endereco']),
+          principal: bool(k['principal']),
+          aceitaComunicacao: bool(k['aceita']),
+          usaAplicativo: bool(k['app']),
+        }));
+        const escolhido = escolherDestino(canal, contatos, x.destino);
         const descadastro = await tx.uma(
           `SELECT COUNT(*) AS n FROM pedido_mensagem_paciente_retorno t
            JOIN pedido_mensagem_paciente q ON q.id = t.pedido_mensagem_paciente_id
@@ -378,9 +415,10 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
         );
         const erros = podePedirEnvio({
           canal,
-          destino: x.destino,
+          destino: escolhido.destino,
+          destinoNoCadastro: escolhido.noCadastro,
           exigeConsentimento: bool(r['exige_consentimento']),
-          temConsentimento: num(consentimento?.['n']) > 0,
+          temConsentimento: escolhido.consentido,
           descadastradoNoCanal: num(descadastro?.['n']) > 0,
           maximoEnviosPaciente: numOuNull(r['maximo_envios_paciente']),
           enviosDaRegraAoPaciente: num(envios?.['n']),
@@ -397,11 +435,12 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
             mensagem: `Faltam os valores de: ${faltando.join(', ')}.`,
           });
         const momento = momentoDoEnvio({
-          referencia: x.referenciaEm ? new Date(x.referenciaEm) : agora,
-          antecedenciaMinutos: x.referenciaEm ? numOuNull(r['antecedencia_minutos']) : 0,
+          referencia: x.referenciaEm ? new Date(x.referenciaEm) : null,
+          antecedenciaMinutos: numOuNull(r['antecedencia_minutos']),
           horaInicio: hhmm(r['hora_envio_inicio']),
           horaFim: hhmm(r['hora_envio_fim']),
           agora,
+          fusoMinutos: await fusoDoEstabelecimento(tx, est, agora),
         });
         if (!momento)
           erros.push({
@@ -419,7 +458,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
           entidade: x.entidade,
           entidade_id: x.entidadeId,
           canal,
-          destino: x.destino.trim(),
+          destino: escolhido.destino!.trim(),
           assunto: assunto?.texto.slice(0, 200) ?? null,
           conteudo: corpo.texto,
           agendado_para: momento,

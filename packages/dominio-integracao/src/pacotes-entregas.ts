@@ -226,3 +226,34 @@ export function podeMudarEntrega(atual: SituacaoEntrega, nova: SituacaoEntrega):
 export function revisaoVencida(proximaRevisao: string | null, hoje: string): boolean {
   return proximaRevisao !== null && proximaRevisao < hoje;
 }
+
+/**
+ * A minimização está revisada e em dia? O pacote nunca revisado (próxima revisão nula) não está: a entrega só sai
+ * depois do ato explícito de revisão.
+ */
+export function revisaoEmDia(proximaRevisao: string | null, hoje: string): boolean {
+  return proximaRevisao !== null && proximaRevisao >= hoje;
+}
+
+/**
+ * Conferência do ato de revisão da minimização: todo campo sensível tem tratamento (não sai original) e justificativa
+ * de pelo menos 10 caracteres; o pacote tem ao menos um campo.
+ */
+export function conferirRevisaoMinimizacao(
+  campos: readonly {
+    readonly campo: string;
+    readonly dadoSensivel: boolean;
+    readonly tratamento: string;
+    readonly justificativa: string | null;
+  }[],
+): ErroPacote[] {
+  const e: ErroPacote[] = [];
+  if (!campos.length) e.push(erro('campos', 'sem-campos', 'O pacote não tem campos a revisar.'));
+  for (const c of campos) {
+    if ((c.justificativa ?? '').trim().length < 10)
+      e.push(erro('campos', 'sem-justificativa', `O campo ${c.campo} está sem justificativa.`));
+    if (c.dadoSensivel && c.tratamento === 'original')
+      e.push(erro('campos', 'sensivel-sem-tratamento', `O campo sensível ${c.campo} sai sem tratamento.`));
+  }
+  return e;
+}

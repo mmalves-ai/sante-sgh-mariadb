@@ -5,7 +5,7 @@
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { gravarPacote, lerEntregas, lerPacotes, mudarEntrega } from '../api-comunicacao.js';
+import { gravarPacote, lerEntregas, lerPacotes, mudarEntrega, revisarPacote } from '../api-comunicacao.js';
 
 const props = defineProps<{ podeEditar: boolean }>();
 const { t } = useI18n({
@@ -33,6 +33,8 @@ const { t } = useI18n({
       devida: 'Próxima entrega devida: {i} a {f}',
       emDia: 'Entregas em dia',
       revisaoVencida: 'Revisão da minimização vencida',
+      semRevisao: 'Minimização ainda não revisada: a entrega fica bloqueada até a revisão',
+      revisar: 'Revisar minimização',
       entregas: 'Entregas',
       enviada: 'Enviada',
       confirmar: 'Confirmar',
@@ -84,6 +86,8 @@ async function executar(fn: () => Promise<unknown>) {
 const salvar = () =>
   executar(() => gravarPacote({ ...p, agenda: p.periodicidade === 'sob_demanda' ? null : p.agenda }));
 
+const revisar = (id: number, versao: number) => executar(() => revisarPacote(id, versao));
+
 const aberto = ref<number | null>(null);
 const entregas = useQuery({
   queryKey: computed(() => ['integracoes', 'pacotes', 'entregas', aberto.value]),
@@ -114,6 +118,15 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
       </h3>
       <p>{{ x.anonimizacao }} · {{ x.campos.map((c) => c.rotuloSaida).join(', ') }}</p>
       <p v-if="x.revisaoVencida" role="alert">{{ t('revisaoVencida') }}</p>
+      <p v-else-if="!x.proximaRevisao" role="alert">{{ t('semRevisao') }}</p>
+      <button
+        v-if="props.podeEditar"
+        type="button"
+        data-testid="pacote-revisar"
+        @click="revisar(x.id, x.versao)"
+      >
+        {{ t('revisar') }}
+      </button>
       <p>
         {{
           x.proximaDevida
