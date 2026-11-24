@@ -53,6 +53,11 @@ import {
   LeiturasGestaoComplementoQ5,
   TABELAS_COMPLEMENTO_Q5,
 } from './porta-propria-complemento-q5.js';
+import {
+  dependentesDaComissao,
+  gravacoesComissaoSorteio,
+  TABELAS_COMISSAO_SORTEIO,
+} from './porta-propria-comissao-sorteio.js';
 import { gravacaoRevisarProntuario, TABELAS_REVISAR_PRONTUARIO } from './porta-propria-revisar-prontuario.js';
 import { gravacoesComplementoQ6, TABELAS_COMPLEMENTO_Q6 } from './porta-propria-complemento-q6.js';
 import {
@@ -74,6 +79,7 @@ export const TABELAS_GESTAO_COMPLETA = [
     ...TABELAS_REVISAR_PRONTUARIO,
     ...TABELAS_COMPLEMENTO_Q6,
     ...TABELAS_DOCUMENTOS,
+    ...TABELAS_COMISSAO_SORTEIO,
   ]),
 ] as const;
 
@@ -196,6 +202,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
         ...gravacoesComplementoQ3(tx, est),
         ...gravadorComplementoQ4(tx, est, anotacao),
         ...gravacoesComplementoQ5(tx, est, anotacao),
+        ...gravacoesComissaoSorteio(tx, est, anotacao),
         ...gravacaoRevisarProntuario(tx, est, anotacao),
         ...gravacoesComplementoQ6(tx, est, anotacao),
         ...gravacoesDocumentos(tx, est),
@@ -206,6 +213,13 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
       est,
       anotacao,
     );
+  }
+
+  /** As dependências da comissão (checklist vigente e sorteios sem aval) pela mesma consulta da gravação. */
+  override dependentes(c: ContextoGestao, tabela: string, id: number) {
+    if (tabela === 'comissao_hospitalar')
+      return lerNoEstabelecimento(this.nucleoCompleta, c, (l, est) => dependentesDaComissao(l, est, id));
+    return super.dependentes(c, tabela, id);
   }
 
   // ── Complementos Q1 a Q4 (modulos-proprios-3): leituras delegadas ──
