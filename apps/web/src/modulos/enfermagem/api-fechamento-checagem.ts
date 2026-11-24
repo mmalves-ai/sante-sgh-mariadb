@@ -16,12 +16,18 @@ export interface FechamentoChecagem {
   fechadoPor: string | null;
   reabertoEm: string | null;
   motivoReabertura: string | null;
+  justificativaPendencias: string | null;
+  /** Fechamento de turno anterior ao pedido: os pendentes dele chegaram a este turno. */
+  anterior: boolean;
+  travados: number[];
+  pendentes: { horario: number; atendimento: number; previsto: string; anterior: boolean }[];
 }
 
 export interface FechamentoFeito {
   id: number;
   travados: number;
   pendentes: number[];
+  pendentesAnteriores: number[];
   mensagem: string;
 }
 
@@ -43,19 +49,27 @@ async function postar<T>(url: string, corpo: unknown, buscar: typeof fetch): Pro
 export async function lerFechamentos(
   unidade: string,
   data: string,
+  turno: 'diurno' | 'noturno',
   buscar: typeof fetch = fetch,
 ): Promise<FechamentoChecagem[]> {
-  const q = new URLSearchParams({ unidade, data });
+  const q = new URLSearchParams({ unidade, data, turno });
   const r = await buscar(`${BASE}?${q}`, { headers: { accept: 'application/json' } });
   if (!r.ok) throw await erroDaResposta(r);
   return ((await r.json()) as { itens: FechamentoChecagem[] }).itens;
 }
 
 export function fecharTurno(
-  p: { unidade: string; data: string; turno: 'diurno' | 'noturno'; justificativa: string | null },
+  p: {
+    unidade: string;
+    data: string;
+    turno: 'diurno' | 'noturno';
+    /** Só os horários deste atendimento (o fechamento por paciente); nulo fecha o setor da unidade. */
+    atendimento: number | null;
+    justificativa: string | null;
+  },
   buscar: typeof fetch = fetch,
 ): Promise<FechamentoFeito> {
-  return postar(BASE, { ...p, atendimento: null }, buscar);
+  return postar(BASE, p, buscar);
 }
 
 export function reabrirFechamento(id: number, motivo: string, buscar: typeof fetch = fetch) {

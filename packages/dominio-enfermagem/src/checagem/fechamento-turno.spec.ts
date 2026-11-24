@@ -3,6 +3,7 @@ import {
   conferirFechamento,
   conferirReabertura,
   justificativaDaLeitura,
+  lerEtiqueta,
   resultadoLeituraLote,
   resumirFechamento,
 } from './fechamento-turno.js';
@@ -57,5 +58,50 @@ describe('leitura do produto e do lote na administração', () => {
     expect(justificativaDaLeitura('nao_identificado', 'Lote da farmácia satélite, sem cadastro')).toEqual({
       justificativa: 'Lote da farmácia satélite, sem cadastro',
     });
+  });
+});
+
+describe('pendentes passados ao turno seguinte', () => {
+  const a = (id: number, letra: string, extra: { travado?: boolean; passouPendente?: boolean } = {}) => ({
+    id,
+    letra,
+    travado: extra.travado ?? false,
+    anterior: true,
+    passouPendente: extra.passouPendente ?? false,
+  });
+  it('o pendente do turno anterior volta ao fechamento seguinte; o resolvido depois é travado por ele', () => {
+    const r = resumirFechamento([
+      a(1, 'P'),
+      a(2, 'A', { passouPendente: true }),
+      a(3, 'A'),
+      a(4, 'A', { travado: true }),
+      h(5, 'A'),
+    ]);
+    expect(r.pendentes).toEqual([1]);
+    expect(r.pendentesAnteriores).toEqual([1]);
+    expect(r.aTravar).toEqual([2, 5]);
+    expect(r.total).toBe(3);
+    expect(conferirFechamento(r, null)?.codigo).toBe('pendencias-sem-justificativa');
+  });
+});
+
+describe('leitura da etiqueta', () => {
+  const GS = String.fromCharCode(29);
+  it('código linear: só o produto, por código de barras', () => {
+    expect(lerEtiqueta(' 7891234567895 ')).toEqual({
+      codigo: '7891234567895',
+      lote: null,
+      validade: null,
+      meio: 'codigo_barras',
+    });
+  });
+  it('GS1 com parênteses e com separador: GTIN, validade e lote, por DataMatrix', () => {
+    const esperado = { codigo: '7891234567895', lote: 'AB12', validade: '2027-03-31', meio: 'datamatrix' };
+    expect(lerEtiqueta('(01)07891234567895(17)270300(10)AB12')).toEqual(esperado);
+    expect(lerEtiqueta(`]d2010789123456789517270331` + `10AB12${GS}21XYZ`)).toEqual(esperado);
+    expect(lerEtiqueta(`0107891234567895${GS}10AB12${GS}17270331`)).toEqual(esperado);
+  });
+  it('validade GS1 inválida fica nula', () => {
+    expect(lerEtiqueta('(01)07891234567895(17)271301').validade).toBeNull();
   });
 });

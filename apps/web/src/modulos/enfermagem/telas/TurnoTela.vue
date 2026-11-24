@@ -44,6 +44,21 @@ const porHora = computed(() => {
   return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
 });
 const nomes = computed(() => new Map((turno.data.value?.pacientes ?? []).map((p) => [p.paciente, p])));
+// 03-PEP L113: os pacientes do turno para o fechamento por paciente, com os pendentes de cada um.
+const PENDENTES = new Set(['pendente', 'atrasada', 'omitida']);
+const pacientesDoFechamento = computed(() => {
+  const m = new Map<number, { atendimento: number; rotulo: string; pendentes: number }>();
+  for (const h of turno.data.value?.horarios ?? []) {
+    const p = m.get(h.atendimento) ?? {
+      atendimento: h.atendimento,
+      rotulo: `${h.leito ? t('enfermagem.comum.leito', { leito: h.leito }) : t('enfermagem.comum.semLeito')} · ${h.pacienteNome}`,
+      pendentes: 0,
+    };
+    if (PENDENTES.has(h.estado)) p.pendentes++;
+    m.set(h.atendimento, p);
+  }
+  return [...m.values()].sort((a, b) => a.rotulo.localeCompare(b.rotulo));
+});
 const ESTADOS = ['pendente', 'atrasada', 'omitida', 'administrada', 'naoAdministrada', 'suspensa'] as const;
 const hora = (iso: string) => iso.slice(11, 16);
 
@@ -296,6 +311,7 @@ function sinais(paciente: number): void {
         v-if="unidade"
         :unidade="unidade"
         :janela="turno.data.value.turno"
+        :pacientes="pacientesDoFechamento"
         :pendentes="
           (turno.data.value.resumo['pendente'] ?? 0) +
           (turno.data.value.resumo['atrasada'] ?? 0) +

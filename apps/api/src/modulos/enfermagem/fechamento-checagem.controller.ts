@@ -1,5 +1,6 @@
 // Fechamento da checagem do turno (03-PEP L113), no banco próprio do cliente:
-//   GET  /api/enfermagem/fechamento-checagem?unidade&data   os fechamentos do dia (vigentes e reabertos)
+//   GET  /api/enfermagem/fechamento-checagem?unidade&data[&turno]  os fechamentos do dia e do anterior (vigentes e
+//        reabertos), com a composição; com o turno, marca os de turnos anteriores (os pendentes que chegaram a ele)
 //   POST /api/enfermagem/fechamento-checagem                fecha o turno (setor da unidade ou um paciente)
 //   POST /api/enfermagem/fechamento-checagem/:id/reabertura reabre com o motivo (os horários destravam)
 // Quem fecha é quem passa o plantão (enfermagem.plantao.passar); quem reabre é quem pode estornar a checagem
@@ -60,6 +61,7 @@ export class FechamentoChecagemController {
   async listar(
     @Query('unidade') unidade: string | undefined,
     @Query('data') data: string | undefined,
+    @Query('turno') turno: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ) {
     const u = (unidade ?? '').trim();
@@ -71,7 +73,8 @@ export class FechamentoChecagemController {
         'Informe a unidade e a data.',
       );
     const s = sessaoDe(req);
-    const itens = await this.propria().lerNoBanco(s.porta, (l, est) => fechamentosDoDia(l, est, u, data!));
+    const t = turno === 'diurno' || turno === 'noturno' ? turno : null;
+    const itens = await this.propria().lerNoBanco(s.porta, (l, est) => fechamentosDoDia(l, est, u, data!, t));
     req.sghAlvo = { tabelaAlvo: 'fechamento_horario_checagem', chaveNaturalAlvo: `unidade:${u}:${data}` };
     return { itens };
   }
@@ -103,7 +106,7 @@ export class FechamentoChecagemController {
       ...r,
       mensagem:
         r.pendentes.length > 0
-          ? `Turno fechado: ${r.travados} horário(s) travado(s); ${r.pendentes.length} pendente(s) segue(m) para o próximo turno.`
+          ? `Turno fechado: ${r.travados} horário(s) travado(s); ${r.pendentes.length} pendente(s) segue(m) para o próximo turno${r.pendentesAnteriores.length > 0 ? `, ${r.pendentesAnteriores.length} deles vindo(s) de turno anterior` : ''}.`
           : `Turno fechado: ${r.travados} horário(s) travado(s).`,
     };
   }
