@@ -17,3 +17,4 @@ export * from './dourado.js';
 export * from './particular-integral.js';
 export * from './producao.js';
 export * from './producao-conta.js';
+export * from './favorecido.js';

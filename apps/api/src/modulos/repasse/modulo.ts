@@ -17,6 +17,8 @@ import { PORTA_REPASSE, type PortaRepasse } from './porta.js';
 import { PortaRepasseMemoria } from './porta-memoria.js';
 import { portaRepasseIndisponivel, PortaRepassePropria } from './porta-propria.js';
 import { GERADOR_PDF_REPASSE, RepasseController } from './repasse.controller.js';
+import { FavorecidosRepasseController } from './favorecidos.controller.js';
+import { PORTA_FAVORECIDOS_REPASSE, PortaFavorecidosRepassePropria } from './favorecidos-propria.js';
 
 export interface OpcoesModuloRepasse {
   /** Testes: a porta já montada. */
@@ -62,8 +64,17 @@ export async function moduloRepasse(
     module: class ModuloRepasse {},
     // Global: o portal-medico injeta as portas deste módulo (montagem da onda 4).
     global: true,
-    controllers: [RepasseController],
+    controllers: [RepasseController, FavorecidosRepasseController],
     providers: [
+      // Favorecidos e prestadores terceiros (06-FAT linha 46): só com o banco do cliente (sem ele, 503).
+      ...(ctx.nucleo && ctx.configuracao.clientePadrao
+        ? [
+            {
+              provide: PORTA_FAVORECIDOS_REPASSE,
+              useValue: new PortaFavorecidosRepassePropria(ctx.nucleo, ctx.configuracao.clientePadrao),
+            },
+          ]
+        : []),
       { provide: PORTA_REPASSE, useValue: porta },
       { provide: GERADOR_PDF_REPASSE, useValue: geradorPdf },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),

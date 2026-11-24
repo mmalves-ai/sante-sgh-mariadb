@@ -1,5 +1,7 @@
 // Textos das telas do repasse médico (M33): regras e simulador, apuração e demonstrativo, lançamentos, RPA, integração
 // contábil, configurações, cooperativas e o extrato do médico. Sem nome de sistema antigo (ADR 0023).
+import { mensagensFavorecidos } from './i18n-favorecidos.js';
+
 export const mensagensRepasse = {
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
@@ -187,4 +189,5 @@ export const mensagensRepasse = {
     totalDaConta: 'Total (base {base})',
     semApuracao: 'Nenhuma apuração desta competência tem itens seus.',
   },
+  favorecidos: mensagensFavorecidos,
 } as const;

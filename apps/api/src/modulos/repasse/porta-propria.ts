@@ -18,7 +18,7 @@
 // Pendências de modelo (pedidos do lote 03-04, saida/03-04.json): a memória de cálculo completa no item da apuração
 // (dimensões, base, adicional e pendência; item sem profissional), o resumo da apuração (itens, pendentes e
 // pendências) e quem conferiu, o título a pagar e as retenções do RPA ligadas ao contas a pagar, o valor recebido da
-// produção e o adiantamento ao prestador. Até lá, essas partes respondem zero ou vazio.
+// produção. Até lá, essas partes respondem zero ou vazio. O adiantamento ao profissional é o saldo a compensar.
 import { esquemaLancarEventoRepasse, type ItemProducao, type RegraRepasse } from '@sgh/contratos';
 import { debitosNaApuracao, integraisDoDia } from '@sgh/dominio-repasse';
 import {
@@ -1400,8 +1400,21 @@ export class PortaRepassePropria implements PortaRepasse {
     );
   }
 
-  async adiantamentos(): Promise<number> {
-    return 0; // o adiantamento ao prestador aguarda o modelo (pedido do lote)
+  /**
+   * O saldo a compensar dos adiantamentos ao profissional (F3.7, 06-FAT linha 46): os aprovados, pagos ou compensados
+   * em parte, no estabelecimento da sessão; o cancelado, o compensado e o excluído não contam.
+   */
+  adiantamentos(c: ContextoRepasse, prestadores: readonly number[]): Promise<number> {
+    if (prestadores.length === 0) return Promise.resolve(0);
+    return this.ler(c, async (l, est) => {
+      const r = await l.uma(
+        `SELECT COALESCE(SUM(saldo_compensar), 0) AS saldo FROM adiantamento
+          WHERE estabelecimento_id = ? AND tipo_credor = 'profissional' AND profissional_id IN (${marcas(prestadores)})
+            AND excluido_em IS NULL AND situacao IN ('aprovado', 'pago', 'compensado_parcial')`,
+        [est, ...prestadores],
+      );
+      return n(r?.['saldo']);
+    });
   }
 
   basesIndicadores(c: ContextoRepasse, de: string, ate: string): Promise<BasesIndicadoresRepassePorta> {
