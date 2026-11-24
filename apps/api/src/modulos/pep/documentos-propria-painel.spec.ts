@@ -83,7 +83,7 @@ function executorDuble(o: { prof?: Linha | null; doc?: Linha | null }) {
   } as unknown as TxOperacao;
   const executor = {
     executar: async <E, S extends ResultadoOperacao>(op: Operacao<E, S>) => {
-      const s = await op.gravar(tx, {} as E);
+      const s = await op.gravar(tx, {} as E, CTX);
       return { resultado: s, repetida: false };
     },
   } as unknown as Executor;
