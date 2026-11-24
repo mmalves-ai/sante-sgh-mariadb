@@ -126,7 +126,11 @@ describe('apoio da gravação da prescrição própria', () => {
     };
     expect(codigo(() => conferirItensSuportados([item({ ...dieta, unidadeInfusao: 2 })]))).toBeNull();
     expect(codigo(() => conferirItensSuportados([item(dieta)]))).toBe('422:dieta-velocidade-sem-unidade');
-    expect(codigo(() => conferirItensSuportados([item({ ...med, seNecessario: [1, 2] })]))).toBeNull();
+    expect(
+      codigo(() =>
+        conferirItensSuportados([item({ ...med, seNecessario: [1, 2], intervaloMinimoMinutos: 360 })]),
+      ),
+    ).toBeNull();
     expect(codigo(() => conferirItensSuportados([item({ tipo: 'vni', fio2: 10 })]))).toBe(
       '422:ventilacao-fio2-fora-da-faixa',
     );

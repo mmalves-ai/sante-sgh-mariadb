@@ -193,7 +193,8 @@ describe('montarItem (M24)', () => {
     );
     expect(jejum.detalhe).toMatchObject({
       tipo: 'dieta',
-      quantidade: 0,
+      // Jejum e dieta livre sem quantidade: nulo, nunca o sentinela 0.
+      quantidade: null,
       caracteristicas: [{ resposta: '' }],
     });
     const ent = montarItem(

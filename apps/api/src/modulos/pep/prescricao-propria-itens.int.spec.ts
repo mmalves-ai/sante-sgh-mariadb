@@ -427,29 +427,35 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
 
   it('incoerência clínica (solução sem componente principal) e tipo sem adaptador recusam sem gravar nada', async () => {
     await expect(
-      porta.prescrever(c, 'pep.prescrever', gravacao([medicamento(), solucao(false)]), ctx()),
+      Promise.resolve().then(() =>
+        porta.prescrever(c, 'pep.prescrever', gravacao([medicamento(), solucao(false)]), ctx()),
+      ),
     ).rejects.toMatchObject({ problema: { status: 422, codigo: 'solucao-sem-principal' } });
     await expect(
-      porta.prescrever(
-        c,
-        'pep.prescrever',
-        gravacao([
-          base('hem', PLANO_DO_TIPO.hemoterapia, {
-            tipo: 'hemoterapia',
-            ato: 0,
-            codigo: 'X',
-            dose: 1,
-            unidade: 'ml105',
-            tipoInfusao: 1,
-            indicacao: null,
-            agora: false,
-          }),
-        ]),
-        ctx(),
+      Promise.resolve().then(() =>
+        porta.prescrever(
+          c,
+          'pep.prescrever',
+          gravacao([
+            base('hem', PLANO_DO_TIPO.hemoterapia, {
+              tipo: 'hemoterapia',
+              ato: 0,
+              codigo: 'X',
+              dose: 1,
+              unidade: 'ml105',
+              tipoInfusao: 1,
+              indicacao: null,
+              agora: false,
+            }),
+          ]),
+          ctx(),
+        ),
       ),
     ).rejects.toMatchObject({ problema: { status: 501 } });
     const recusa = async (itens: ItemGravacao[], codigo: string) =>
-      expect(porta.prescrever(c, 'pep.prescrever', gravacao(itens), ctx())).rejects.toMatchObject({
+      expect(
+        Promise.resolve().then(() => porta.prescrever(c, 'pep.prescrever', gravacao(itens), ctx())),
+      ).rejects.toMatchObject({
         problema: { status: 422, codigo },
       });
     // "Se necessário" com horário fixo pendente.
@@ -638,7 +644,7 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
         return o;
       });
     // VMI a volume: os tempos não prescritos ficam NULL (nada de 1 s e 2 s inventados).
-    expect(await vent(ven)).toEqual([
+    expect(await vent(ven!)).toEqual([
       {
         modalidade: 'invasiva',
         va: m.cat['viaAerea'],
@@ -657,9 +663,9 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
       },
     ]);
     // VMI a pressão: sem volume corrente.
-    expect(await vent(vmp)).toMatchObject([{ modalidade: 'invasiva', vc: null, pc: 18, peep: 8, fr: 16 }]);
+    expect(await vent(vmp!)).toMatchObject([{ modalidade: 'invasiva', vc: null, pc: 18, peep: 8, fr: 16 }]);
     // VNI: IPAP e EPAP, duração da sessão, pela máscara.
-    expect(await vent(vnn)).toEqual([
+    expect(await vent(vnn!)).toEqual([
       {
         modalidade: 'nao_invasiva',
         va: m.cat['mascara'],
