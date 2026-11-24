@@ -138,7 +138,13 @@ export function montarServicoSessao(
   aviso?: (mensagem: string, campos: Record<string, unknown>) => void,
   como: Pick<
     ConfigServicoSessao,
-    'guardaComo' | 'reautenticarAtor' | 'aoEncerrarComo' | 'identidade' | 'senha' | 'plataforma'
+    | 'guardaComo'
+    | 'reautenticarAtor'
+    | 'aoEncerrarComo'
+    | 'identidade'
+    | 'senha'
+    | 'plataforma'
+    | 'segundoFatorEmail'
   > = {},
 ): ServicoSessao | null {
   const fonte = escolherFonteAcesso(env, real);
