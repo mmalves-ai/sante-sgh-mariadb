@@ -179,7 +179,15 @@ describe('recusas do gravador sem tocar no banco', () => {
     for (const p of [
       g.incluirFerias({} as never),
       g.situacaoFerias({ id: 1, versao: 1, de: 'programada', para: 'calculada', motivo: null, por: 'x' }),
-      g.situacaoFerias({ id: 1, versao: 1, de: 'programada', para: 'cancelada', processo: 9, motivo: 'm', por: 'x' }),
+      g.situacaoFerias({
+        id: 1,
+        versao: 1,
+        de: 'programada',
+        para: 'cancelada',
+        processo: 9,
+        motivo: 'm',
+        por: 'x',
+      }),
       g.obrigacoesEmVigorComTrava(3, 'sefip', '2098-07'),
       g.obrigacaoComTrava(1),
       g.incluirObrigacao({} as never),

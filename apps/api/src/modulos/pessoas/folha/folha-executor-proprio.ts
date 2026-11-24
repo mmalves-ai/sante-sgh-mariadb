@@ -34,11 +34,7 @@ import { ErroOperacao, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo'
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import { lerFerias, lerFeriasPorId, lerRescisaoPorId, lerRescisoes } from './folha-porta-propria-calculo.js';
 import type { GravadorCalculoFolha } from './porta-calculo.js';
-import type {
-  LinhaCalculoDoVinculo,
-  ProcessoDaFolha,
-  ResumoVinculoDoProcesso,
-} from './tipos-folha.js';
+import type { LinhaCalculoDoVinculo, ProcessoDaFolha, ResumoVinculoDoProcesso } from './tipos-folha.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown): number => Number(v ?? 0);
@@ -335,9 +331,10 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
       [x.vinculo, est, x.desligamento],
     );
     if (d) return n(d['id']);
-    const tipoId = v['tipo_rescisao_id'] === null || v['tipo_rescisao_id'] === undefined
-      ? x.tipoRescisao
-      : n(v['tipo_rescisao_id']);
+    const tipoId =
+      v['tipo_rescisao_id'] === null || v['tipo_rescisao_id'] === undefined
+        ? x.tipoRescisao
+        : n(v['tipo_rescisao_id']);
     const t = await tx.uma(
       'SELECT id, iniciativa, motivo_desligamento_codigo_esocial_id AS motivo FROM tipo_rescisao WHERE id = ?',
       [tipoId],

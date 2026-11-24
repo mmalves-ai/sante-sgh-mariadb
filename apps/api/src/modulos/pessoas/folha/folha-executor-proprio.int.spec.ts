@@ -2,6 +2,7 @@
 // real (cliente de teste do lote, SGH_CLIENTE_TESTE): processamento com linhas, vigente com trava, troca de situação
 // pela versão, período fechado, rescisão ligada ao desligamento e ao processamento, parâmetros das obrigações e ficha
 // cifrada com versão. Massa sintética (massa.spec-util), apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { randomBytes } from 'node:crypto';
 import { type PapelLinhaFolha, TIPO_DO_PAPEL } from '@sgh/contratos';
 import { ErroOperacao } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,6 +25,7 @@ import {
   gravadorFolhaExecutor,
   TABELAS_FOLHA_EXECUTOR,
 } from './folha-executor-proprio.js';
+import { CifraCpf } from '../cifra-cpf.js';
 import { PortaPessoasPropria } from '../porta-propria.js';
 import { lerFerias, lerRescisoes } from './folha-porta-propria-calculo.js';
 import type { LinhaCalculoDoVinculo } from './tipos-folha.js';
@@ -374,11 +376,17 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
       'desligamento-nao-registrado',
     );
     // O desligamento pelo caminho real: a porta própria de pessoas (só marca o vínculo), sem INSERT manual.
-    const pessoas = new PortaPessoasPropria(m.nucleo, {} as never, exec);
+    const pessoas = new PortaPessoasPropria(m.nucleo, new CifraCpf(randomBytes(32)), exec);
     const vinculo = (await pessoas.vinculo(ctx(), m.vinculo))!;
     await pessoas.gravarSgh(
       ctx(),
-      { ...trilha, estabelecimento: m.est, usuario: m.usuario, acao: 'alteracao', entidade: 'vinculo_trabalho' },
+      {
+        ...trilha,
+        estabelecimento: m.est,
+        usuario: m.usuario,
+        acao: 'alteracao',
+        entidade: 'vinculo_trabalho',
+      },
       (g) =>
         g.desligarVinculo({
           id: m.vinculo,
@@ -454,7 +462,10 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
       await e.executar("UPDATE rescisao SET situacao = 'conferida' WHERE id = ?", [id]);
     });
     const carimbo = (xs: readonly { id: number; situacao: string; versao: number }[]) =>
-      xs.map((x) => `${x.id}:${x.situacao}:${x.versao}`).sort().join(',');
+      xs
+        .map((x) => `${x.id}:${x.situacao}:${x.versao}`)
+        .sort()
+        .join(',');
     const montagem = await m.nucleo.lerSomente(ctx(), async (l) => ({
       rescisoes: await lerRescisoes(l, m.est, { vinculo: m.vinculo }),
       ferias: await lerFerias(l, m.est, { vinculo: m.vinculo }),
@@ -481,7 +492,10 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
     await troca(r.versao);
     const id2 = await gravar((g) => g.incluirRescisao({ ...nova, tipoRescisao }));
     const depois = (await gravar((g) => g.rescisoesDoVinculoComTrava(m.vinculo))).rescisoes;
-    expect(depois.map((x) => [x.id, x.situacao, x.motivo])).toEqual([
+    // A ordem é a da leitura (desligamento mais recente, id maior primeiro); o serviço compara pelo carimbo ordenado.
+    expect(
+      depois.map((x) => [x.id, x.situacao, x.motivo]).sort((a, b) => Number(a[0]) - Number(b[0])),
+    ).toEqual([
       [id, 'substituida', 'recálculo'],
       [id2, 'calculada', null],
     ]);
@@ -523,14 +537,28 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
     expect(
       await codigo(
         gravar((g) =>
-          g.situacaoFerias({ id: 0, versao: 1, de: 'programada', para: 'cancelada', motivo: 'x', por: m.login }),
+          g.situacaoFerias({
+            id: 0,
+            versao: 1,
+            de: 'programada',
+            para: 'cancelada',
+            motivo: 'x',
+            por: m.login,
+          }),
         ),
       ),
     ).toBe('desatualizado');
     expect(
       await codigo(
         gravar((g) =>
-          g.situacaoFerias({ id: 0, versao: 1, de: 'programada', para: 'calculada', motivo: null, por: m.login }),
+          g.situacaoFerias({
+            id: 0,
+            versao: 1,
+            de: 'programada',
+            para: 'calculada',
+            motivo: null,
+            por: m.login,
+          }),
         ),
       ),
     ).toBe('modelo-pendente');
