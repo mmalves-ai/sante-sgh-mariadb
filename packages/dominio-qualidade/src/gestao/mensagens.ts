@@ -36,6 +36,7 @@ export const MENSAGENS_RECUSA_GESTAO: Readonly<Record<RecusaGestaoQualidade, str
   'analise-ja-registrada': 'A análise deste indicador nesta competência já existe: altere a registrada.',
   'analise-inexistente': 'A análise informada não é deste indicador e desta competência.',
   'plano-obrigatorio': 'Indicador fora da meta: informe as causas, o plano de ação, o responsável e o prazo.',
+  'plano-incompleto': 'O plano de ação precisa do responsável e do prazo juntos (ou de nenhum dos dois).',
   'prazo-antes-da-competencia': 'O prazo do plano tem de ser depois do fim da competência analisada.',
   'indicador-inexistente': 'Indicador fora do catálogo.',
   'sem-valor': 'O indicador não tem valor apurado na competência (sem denominador): não há o que analisar.',

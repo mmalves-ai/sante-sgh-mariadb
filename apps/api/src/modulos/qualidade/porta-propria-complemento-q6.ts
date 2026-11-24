@@ -6,17 +6,22 @@
 //   a apuração da competência (apuracao_indicador, sem recorte) guarda o valor, a meta e a situação apurados no
 //   registro, fechada pela pessoa que analisou; a análise (analise_critica_indicador) guarda o texto, as causas e o plano
 //   em texto, e o plano com responsável e prazo vira plano_acao_qualidade de origem `indicador`, que a leitura do Q2 lê.
-//   Uma análise por indicador e competência (a segunda recusa `analise-ja-registrada`); a alteração confere a versão,
-//   reapura o valor e guarda a análise anterior inteira na trilha da operação (dados.analiseAnterior). O plano retirado
-//   da análise fica cancelado (nunca apagado).
+//   Uma análise por indicador e competência (a segunda recusa `analise-ja-registrada`). A apuração já existente não é
+//   reescrita quando fechada (a análise liga-se a ela como está); a cancelada recusa; só a prévia ou a reaberta é
+//   reapurada, com a linha anterior inteira na trilha (dados.apuracaoAnterior). A alteração confere a versão e guarda a
+//   análise anterior inteira na trilha (dados.analiseAnterior). O plano mantém a situação em que está (só nasce
+//   `planejado`); o concluído nunca é alterado nem cancelado (retirado da análise, só se desliga); o plano retirado e
+//   não concluído fica cancelado (nunca apagado); o plano anterior inteiro vai a dados.planoAnterior.
 // - registrarAuditoria: auditoria_interna concluída, com o número do ano (AUD-AAAA-NNNNNN), a área no setor funcional do
 //   estabelecimento (como risco e não conformidade: inexistente ou ambígua recusa), o referencial na categoria
 //   (catálogo do sistema; entra no banco no primeiro uso), quem registrou como auditor líder (auditoria_interna_auditor)
 //   e os demais auditores em texto, o checklist em auditoria_interna_item (requisito, seção, resultado, evidência; o item
-//   fora de "conforme" leva a evidência como justificativa, pelo CHECK), as contagens e o percentual de conformidade.
+//   fora de "conforme" leva a evidência como justificativa, pelo CHECK), as contagens e a conformidade que a API
+//   calculou no domínio (resultadoChecklist: o banco guarda o mesmo número que a tela mostra).
 // - alterarAuditoria: a auditoria não cancelada, na versão vista; a linha anterior e o checklist anterior vão a
-//   anotacao.dados.versaoAnterior (ação `correcao`, que `versoes` lê); o checklist novo reescreve os itens pela
-//   sequência (os que sobram saem com excluido_em, nunca apagados).
+//   anotacao.dados.versaoAnterior (ação `correcao`, que `versoes` lê), com quem respondeu cada item e quando; o
+//   checklist novo reescreve pela sequência só os itens que mudaram (o item igual guarda o respondente e o instante
+//   originais; os que sobram saem com excluido_em, nunca apagados).
 // Ligação: a porta completa espalha gravacoesComplementoQ6(tx, est, anotacao) no gravador e soma
 // TABELAS_COMPLEMENTO_Q6 às tabelas dela.
 import { recusa, type TxOperacao } from '@sgh/nucleo';
@@ -46,7 +51,8 @@ export const TABELAS_COMPLEMENTO_Q6 = [
 
 /**
  * O plano de ação com dono da análise: responsável e prazo andam juntos (o plano no banco exige os dois). Só o texto do
- * plano, sem responsável nem prazo, fica na análise (ação proposta) e não abre plano; um sem o outro recusa.
+ * plano, sem responsável nem prazo, fica na análise (ação proposta) e não abre plano; um sem o outro recusa. A mesma
+ * regra está no domínio (recusaAnaliseIndicador, `plano-incompleto`), que a API confere antes; aqui é a defesa da porta.
  */
 export function planoComDono(a: {
   readonly responsavel: string | null;
@@ -60,17 +66,6 @@ export function planoComDono(a: {
       'O plano de ação da análise precisa do responsável e do prazo juntos (ou de nenhum dos dois).',
     );
   return { responsavel: r, prazo: a.prazo };
-}
-
-/** Conformes mais metade dos parciais sobre os avaliados (o não aplicável fica fora), em 4 casas; nulo sem avaliado. */
-export function percentualConformidade(c: {
-  readonly conformes: number;
-  readonly parciais: number;
-  readonly naoConformes: number;
-}): number | null {
-  const avaliados = c.conformes + c.parciais + c.naoConformes;
-  if (avaliados <= 0) return null;
-  return Math.round(((c.conformes + 0.5 * c.parciais) / avaliados) * 100 * 10_000) / 10_000;
 }
 
 const RESULTADO_BANCO: Readonly<Record<string, string>> = {
@@ -233,6 +228,25 @@ function valoresApurados(a: AnaliseIndicadorNova, usuario: number) {
   };
 }
 
+/**
+ * A apuração que recebe a análise: a fechada fica como está (fechada por outra pessoa ou rotina, não se reescreve); a
+ * cancelada recusa; a prévia ou a reaberta é reapurada com os valores do registro e fechada por quem analisou, e a
+ * linha anterior inteira volta para a trilha.
+ */
+async function apuracaoParaAnalise(
+  tx: TxOperacao,
+  ap: Linha,
+  a: AnaliseIndicadorNova,
+  usuario: number,
+): Promise<{ id: number; anterior: Record<string, unknown> | null }> {
+  const situacao = texto(ap['situacao']);
+  if (situacao === 'cancelada')
+    throw recusa('apuracao-cancelada', 'A apuração desta competência está cancelada: não recebe análise.');
+  if (situacao === 'fechada') return { id: n(ap['id']), anterior: null };
+  await tx.alterar('apuracao_indicador', n(ap['id']), n(ap['versao']), valoresApurados(a, usuario));
+  return { id: n(ap['id']), anterior: retrato(ap) };
+}
+
 /** A apuração da competência travada (inclui na primeira análise); a do recorte por unidade fica fora. */
 async function apuracaoDaCompetencia(
   tx: TxOperacao,
@@ -240,20 +254,17 @@ async function apuracaoDaCompetencia(
   indicador: { id: number; versao: number },
   a: AnaliseIndicadorNova,
   usuario: number,
-): Promise<number> {
+): Promise<{ id: number; anterior: Record<string, unknown> | null }> {
   const [ap] = await tx.consultarParaAtualizar<Linha>(
-    `SELECT id, versao, excluido_em FROM apuracao_indicador
+    `SELECT * FROM apuracao_indicador
       WHERE estabelecimento_id = ? AND indicador_id = ? AND competencia = ? AND escopo_chave = '0-0'`,
     [est, indicador.id, competenciaBanco(a.competencia)],
     { teto: 1 },
   );
   if (ap && ap['excluido_em'] !== null)
     throw recusa('apuracao-excluida', 'A apuração desta competência foi excluída: não recebe análise.');
-  if (ap) {
-    await tx.alterar('apuracao_indicador', n(ap['id']), n(ap['versao']), valoresApurados(a, usuario));
-    return n(ap['id']);
-  }
-  return tx.incluir('apuracao_indicador', {
+  if (ap) return apuracaoParaAnalise(tx, ap, a, usuario);
+  const id = await tx.incluir('apuracao_indicador', {
     estabelecimento_id: est,
     indicador_id: indicador.id,
     indicador_versao_id: indicador.versao,
@@ -263,54 +274,66 @@ async function apuracaoDaCompetencia(
     forma_insercao: 'carga',
     ...valoresApurados(a, usuario),
   });
+  return { id, anterior: null };
 }
 
-/** Inclui, altera ou cancela o plano de ação com dono da análise; devolve o id do plano que fica ligado. */
+/**
+ * Inclui, altera ou retira o plano de ação com dono da análise; devolve o id do plano que fica ligado e o retrato do
+ * plano anterior (quando mudou). A situação do plano é a dele: só nasce `planejado`, a alteração não a toca; o plano
+ * concluído não muda (retirado da análise, só se desliga); o retirado e não concluído fica cancelado; o cancelado não
+ * volta (o plano novo nasce outro).
+ */
 async function planoDaAnalise(
   tx: TxOperacao,
   est: number,
   a: AnaliseIndicadorNova,
   indicador: number,
   atual: number | null,
-): Promise<number | null> {
+): Promise<{ id: number | null; anterior: Record<string, unknown> | null }> {
   const dono = planoComDono(a);
-  const linhaAtual = atual
-    ? await tx.uma<Linha>(
-        'SELECT id, versao, responsavel_usuario_id FROM plano_acao_qualidade WHERE id = ?',
-        [atual],
-      )
+  const lida = atual
+    ? ((
+        await tx.consultarParaAtualizar<Linha>('SELECT * FROM plano_acao_qualidade WHERE id = ?', [atual], {
+          teto: 1,
+        })
+      )[0] ?? null)
     : null;
+  const linhaAtual = lida && texto(lida['situacao']) !== 'cancelado' ? lida : null;
+  const concluido = linhaAtual !== null && texto(linhaAtual['situacao']) === 'concluido';
   if (!dono) {
-    if (linhaAtual)
+    if (linhaAtual && !concluido) {
       await tx.alterar('plano_acao_qualidade', atual!, n(linhaAtual['versao']), { situacao: 'cancelado' });
-    return null;
+      return { id: null, anterior: retrato(linhaAtual) };
+    }
+    return { id: null, anterior: null };
   }
+  if (linhaAtual && concluido) return { id: atual, anterior: null };
   const responsavel = await responsavelPeloNome(
     tx,
     dono.responsavel,
     linhaAtual ? n(linhaAtual['responsavel_usuario_id']) : null,
   );
-  const dados = {
-    descricao: a.plano,
-    responsavel_usuario_id: responsavel,
-    prazo: dono.prazo,
-    situacao: 'planejado',
-  };
+  const dados = { descricao: a.plano, responsavel_usuario_id: responsavel, prazo: dono.prazo };
   if (linhaAtual) {
     await tx.alterar('plano_acao_qualidade', atual!, n(linhaAtual['versao']), dados);
-    return atual;
+    return { id: atual, anterior: retrato(linhaAtual) };
   }
-  return tx.incluir('plano_acao_qualidade', {
+  const id = await tx.incluir('plano_acao_qualidade', {
     estabelecimento_id: est,
     numero: await numeroDoAno(tx, est, 'plano_acao_qualidade', 'PA', a.agora),
     titulo: `Plano de ação da análise do indicador ${a.indicador} (${a.competencia.slice(0, 7)})`,
     tipo_origem: 'indicador',
     indicador_id: indicador,
+    situacao: 'planejado',
     ...dados,
   });
+  return { id, anterior: null };
 }
 
-/** Reescreve o checklist pela sequência: atualiza a linha que existe (até a excluída volta), inclui a nova e exclui a sobra. */
+/**
+ * Reescreve o checklist pela sequência: atualiza só a linha que mudou (até a excluída volta), com quem respondeu agora;
+ * a linha igual guarda o respondente e o instante originais; inclui a nova e exclui a sobra (nunca apaga).
+ */
 async function gravarChecklist(
   tx: TxOperacao,
   auditoria: number,
@@ -319,7 +342,8 @@ async function gravarChecklist(
   agora: string,
 ): Promise<void> {
   const atuais = await tx.consultar(
-    'SELECT id, versao, sequencia, excluido_em FROM auditoria_interna_item WHERE auditoria_interna_id = ?',
+    `SELECT id, versao, sequencia, pergunta, secao, resultado, evidencia, justificativa, exige_acao, excluido_em
+       FROM auditoria_interna_item WHERE auditoria_interna_id = ?`,
     [auditoria],
     { teto: 1000 },
   );
@@ -336,6 +360,7 @@ async function gravarChecklist(
       respondente_usuario_id: usuario,
     };
     const r = porSequencia.get(i.sequencia);
+    if (r && r['excluido_em'] === null && itemIgual(r, i)) continue;
     if (r)
       await tx.alterar('auditoria_interna_item', n(r['id']), n(r['versao']), {
         ...dados,
@@ -355,6 +380,19 @@ async function gravarChecklist(
         excluido_em: paraBanco(agora),
         excluido_por: usuario,
       });
+}
+
+/** O item gravado tem o mesmo conteúdo do novo (pergunta, seção, resultado, evidência, justificativa e ação). */
+export function itemIgual(r: Linha, i: ItemAuditoriaBanco): boolean {
+  const t = (v: unknown) => (v === null || v === undefined ? null : texto(v));
+  return (
+    t(r['pergunta']) === i.pergunta &&
+    t(r['secao']) === i.secao &&
+    t(r['resultado']) === i.resultado &&
+    t(r['evidencia']) === i.evidencia &&
+    t(r['justificativa']) === i.justificativa &&
+    Boolean(n(r['exige_acao'])) === i.exigeAcao
+  );
 }
 
 type GravacoesQ6 = Pick<
@@ -382,7 +420,13 @@ export function gravacoesComplementoQ6(
       };
       if (x.id === null) {
         const indicador = await indicadorDoCatalogo(tx, x, usuario);
-        const apuracao = await apuracaoDaCompetencia(tx, est, indicador, x, usuario);
+        const { id: apuracao, anterior: apuracaoAnterior } = await apuracaoDaCompetencia(
+          tx,
+          est,
+          indicador,
+          x,
+          usuario,
+        );
         const ja = await tx.uma(
           'SELECT id FROM analise_critica_indicador WHERE apuracao_indicador_id = ? AND excluido_em IS NULL LIMIT 1',
           [apuracao],
@@ -401,9 +445,10 @@ export function gravacoesComplementoQ6(
           sequencia: n(seq?.s ?? 1),
           responsavel_usuario_id: usuario,
           analisado_em: paraBanco(x.agora),
-          plano_acao_qualidade_id: await planoDaAnalise(tx, est, x, indicador.id, null),
+          plano_acao_qualidade_id: (await planoDaAnalise(tx, est, x, indicador.id, null)).id,
           ...analise,
         });
+        if (apuracaoAnterior) anotacao.dados = { ...(anotacao.dados ?? {}), apuracaoAnterior };
         return { id, versao: 1, criada: true };
       }
       const [antes] = await tx.consultarParaAtualizar<Linha>(
@@ -423,15 +468,12 @@ export function gravacoesComplementoQ6(
         texto(antes['ap_competencia']) !== x.competencia.slice(0, 7)
       )
         throw recusaVersaoGestao('A análise');
-      const apuracao = await tx.uma<Linha>('SELECT id, versao FROM apuracao_indicador WHERE id = ?', [
-        n(antes['apuracao_indicador_id']),
-      ]);
-      await tx.alterar(
-        'apuracao_indicador',
-        n(apuracao?.['id']),
-        n(apuracao?.['versao']),
-        valoresApurados(x, usuario),
+      const [ap] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT * FROM apuracao_indicador WHERE id = ?',
+        [n(antes['apuracao_indicador_id'])],
+        { teto: 1 },
       );
+      const { anterior: apuracaoAnterior } = await apuracaoParaAnalise(tx, ap!, x, usuario);
       const plano = await planoDaAnalise(
         tx,
         est,
@@ -441,9 +483,14 @@ export function gravacoesComplementoQ6(
       );
       const versao = await tx.alterar('analise_critica_indicador', x.id, x.versao!, {
         ...analise,
-        plano_acao_qualidade_id: plano,
+        plano_acao_qualidade_id: plano.id,
       });
-      anotacao.dados = { ...(anotacao.dados ?? {}), analiseAnterior: retrato(antes) };
+      anotacao.dados = {
+        ...(anotacao.dados ?? {}),
+        analiseAnterior: retrato(antes),
+        ...(apuracaoAnterior ? { apuracaoAnterior } : {}),
+        ...(plano.anterior ? { planoAnterior: plano.anterior } : {}),
+      };
       return { id: x.id, versao, criada: false };
     },
 
@@ -474,7 +521,7 @@ export function gravacoesComplementoQ6(
         itens_parciais: a.parciais,
         itens_nao_conformes: a.naoConformes,
         itens_nao_aplicaveis: a.naoAplicaveis,
-        percentual_conformidade: percentualConformidade(a),
+        percentual_conformidade: a.conformidade,
         fechada_em: paraBanco(a.agora),
         fechamento: a.conclusao,
       });
@@ -500,7 +547,8 @@ export function gravacoesComplementoQ6(
       const setorAtual = antes['setor_funcional_id'] === null ? null : n(antes['setor_funcional_id']);
       const setor = await setorDaArea(tx, est, a.area, setorAtual);
       const checklistAnterior = await tx.consultar(
-        `SELECT sequencia, pergunta, secao, resultado, evidencia, justificativa FROM auditoria_interna_item
+        `SELECT sequencia, pergunta, secao, resultado, evidencia, justificativa, exige_acao, respondente_usuario_id,
+                respondido_em FROM auditoria_interna_item
           WHERE auditoria_interna_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
         [a.id],
         { teto: 1000 },
@@ -517,7 +565,7 @@ export function gravacoesComplementoQ6(
         itens_parciais: a.contagens.parciais,
         itens_nao_conformes: a.contagens.naoConformes,
         itens_nao_aplicaveis: a.contagens.naoAplicaveis,
-        percentual_conformidade: percentualConformidade(a.contagens),
+        percentual_conformidade: a.contagens.conformidade,
         fechamento: a.conclusao,
       });
       await gravarChecklist(tx, a.id, itens, usuario, a.agora);

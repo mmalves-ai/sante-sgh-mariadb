@@ -1,10 +1,11 @@
 // Regras puras do complemento Q6 da gestão da qualidade (F3.9-Q2): o plano com dono da análise do indicador, o
-// percentual de conformidade da auditoria e o checklist do contrato nas linhas do banco.
+// checklist do contrato nas linhas do banco e a comparação do item gravado (só o item que mudou é regravado). A
+// conformidade da auditoria é a do domínio (resultadoChecklist), que a API passa pronta.
 import { describe, expect, it } from 'vitest';
 import { ErroOperacao } from '@sgh/nucleo';
 import {
+  itemIgual,
   itensDoChecklist,
-  percentualConformidade,
   planoComDono,
   resultadoDoPeriodo,
 } from './porta-propria-complemento-q6.js';
@@ -32,16 +33,6 @@ describe('planoComDono', () => {
   it('um sem o outro recusa', () => {
     expect(codigo(() => planoComDono({ responsavel: 'QUALIDADE01', prazo: null }))).toBe('plano-incompleto');
     expect(codigo(() => planoComDono({ responsavel: null, prazo: '2026-12-20' }))).toBe('plano-incompleto');
-  });
-});
-
-describe('percentualConformidade', () => {
-  it('conformes mais metade dos parciais sobre os avaliados', () => {
-    expect(percentualConformidade({ conformes: 3, parciais: 1, naoConformes: 1 })).toBe(70);
-    expect(percentualConformidade({ conformes: 1, parciais: 0, naoConformes: 2 })).toBe(33.3333);
-  });
-  it('sem avaliado (só não aplicáveis) fica nulo', () => {
-    expect(percentualConformidade({ conformes: 0, parciais: 0, naoConformes: 0 })).toBeNull();
   });
 });
 
@@ -86,5 +77,35 @@ describe('resultadoDoPeriodo', () => {
     expect(resultadoDoPeriodo('na-meta')).toBe('na_meta');
     expect(resultadoDoPeriodo('fora-da-meta')).toBe('fora_da_meta');
     expect(resultadoDoPeriodo('sem-meta')).toBe('sem_meta');
+  });
+});
+
+describe('itemIgual', () => {
+  const [item] = itensDoChecklist(
+    JSON.stringify([
+      {
+        requisito: 'Dupla checagem',
+        secao: 'Medicamentos',
+        resultado: 'naoConforme',
+        evidencia: 'Sem registro',
+      },
+    ]),
+  );
+  const gravado = {
+    pergunta: 'Dupla checagem',
+    secao: 'Medicamentos',
+    resultado: 'nao_conforme',
+    evidencia: 'Sem registro',
+    justificativa: 'Sem registro',
+    exige_acao: 1,
+  };
+  it('o item com o mesmo conteúdo é igual (o banco devolve a ação como 0/1)', () => {
+    expect(itemIgual(gravado, item!)).toBe(true);
+  });
+  it('qualquer campo do conteúdo que muda torna o item diferente', () => {
+    expect(itemIgual({ ...gravado, resultado: 'parcial' }, item!)).toBe(false);
+    expect(itemIgual({ ...gravado, evidencia: 'Outro achado' }, item!)).toBe(false);
+    expect(itemIgual({ ...gravado, secao: null }, item!)).toBe(false);
+    expect(itemIgual({ ...gravado, exige_acao: 0 }, item!)).toBe(false);
   });
 });

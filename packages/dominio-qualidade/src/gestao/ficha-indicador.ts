@@ -316,13 +316,15 @@ export type RecusaAnaliseIndicador =
   | 'analise-inexistente'
   | 'versao-desatualizada'
   | 'plano-obrigatorio'
+  | 'plano-incompleto'
   | 'prazo-antes-da-competencia'
   | 'indicador-inexistente'
   | 'sem-valor';
 
 /**
  * A análise crítica: só de competência terminada, com valor apurado; uma por indicador e competência (a segunda
- * altera, com a versão); fora da meta, causas, plano, responsável e prazo, e o prazo depois do fim da competência.
+ * altera, com a versão); fora da meta, causas, plano, responsável e prazo, e o prazo depois do fim da competência;
+ * responsável e prazo sempre juntos (um sem o outro recusa `plano-incompleto`).
  */
 export function recusaAnaliseIndicador(e: {
   readonly entrada: Pick<
@@ -346,6 +348,8 @@ export function recusaAnaliseIndicador(e: {
     if (!ok(a.causas, 10) || !ok(a.plano, 10) || !ok(a.responsavel, 3) || a.prazo === null)
       return 'plano-obrigatorio';
   }
+  // O plano com dono: responsável e prazo andam juntos (só o texto do plano, sem os dois, fica como ação proposta).
+  if ((a.responsavel?.trim() ? 1 : 0) + (a.prazo !== null ? 1 : 0) === 1) return 'plano-incompleto';
   if (a.prazo !== null && a.prazo <= diasDaCompetenciaQualidade(a.competencia).ate)
     return 'prazo-antes-da-competencia';
   return null;

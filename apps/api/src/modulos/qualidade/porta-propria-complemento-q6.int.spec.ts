@@ -2,13 +2,17 @@
 // (SGH_CLIENTE_TESTE). Só dados sintéticos, nos estabelecimentos da massa 'Q6' e num indicador sintético de código
 // único por execução. Confere o que cada gravação deixa no banco: a análise crítica (indicador do catálogo incluído com
 // a ficha, apuração fechada com o valor e a meta, a análise, o plano de ação com dono, a recusa da segunda análise e do
-// plano incompleto, a alteração com a versão e o plano retirado cancelado) e a auditoria interna (número do ano,
-// categoria do referencial, setor da área, auditor líder, checklist com seção e justificativa, percentual; a
-// alteração que reescreve o checklist e guarda a versão anterior na trilha, lida por `versoes`). Recusas não gravam.
+// plano incompleto; a apuração já existente: a fechada fica intacta, a cancelada recusa, a prévia é reapurada com a
+// linha anterior na trilha; a alteração com a versão, que mantém a apuração fechada, mantém a situação do plano em
+// andamento, cancela o retirado não concluído e só desliga o concluído, com análise e plano anteriores na trilha) e a
+// auditoria interna (número do ano, categoria do referencial, setor da área, auditor líder, checklist com seção e
+// justificativa, a conformidade do domínio; a alteração que regrava só o item que mudou e guarda a versão anterior,
+// com o checklist e quem respondeu, na trilha lida por `versoes`). Outro estabelecimento não altera. Recusas não gravam.
 import { randomInt } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroOperacao } from '@sgh/nucleo';
 import type { FichaIndicadorQualidade } from '@sgh/contratos';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import { gravacaoDireta } from '../enfermagem/gravacao-direta.js';
 import type { GravadorGestao } from './porta-gestao.js';
@@ -70,12 +74,13 @@ describe.skipIf(SEM_BANCO_QUA)(
   () => {
     let m: MassaQualidade;
     let c: ReturnType<typeof ctxBanco>;
+    let cOutro: ReturnType<typeof ctxBanco>;
     let setorNome = '';
     let analiseId = 0;
     let auditoriaId = 0;
 
-    const gravar = <R>(fn: (g: GravadorGestao) => Promise<R>) =>
-      gravacaoDireta(m.nucleo.criarExecutor(), c, {
+    const gravar = <R>(fn: (g: GravadorGestao) => Promise<R>, ctx = c) =>
+      gravacaoDireta(m.nucleo.criarExecutor(), ctx, {
         nome: 'qualidade.gestao',
         tabelas: TABELAS_COMPLEMENTO_Q6,
         trilha: T,
@@ -87,6 +92,18 @@ describe.skipIf(SEM_BANCO_QUA)(
       m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'conferencia-q6' }, (e) =>
         e.uma<Record<string, unknown>>(sql, p),
       );
+    const executar = (sql: string, p: unknown[]) =>
+      m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'preparo-q6' }, (e) => e.executar(sql, p));
+    /** O que a última gravação do estabelecimento deixou na trilha em dados.<chave> (JSON lido). */
+    const naTrilha = async (chave: string): Promise<Record<string, unknown> | null> => {
+      const t = await linha(
+        `SELECT JSON_UNQUOTE(JSON_EXTRACT(dados_depois, CONCAT('$.dados.', ?))) AS x FROM trilha_auditoria
+          WHERE estabelecimento_id = ? ORDER BY id DESC LIMIT 1`,
+        [chave, m.est],
+      );
+      const x = t?.['x'];
+      return x === null || x === undefined ? null : (JSON.parse(String(x)) as Record<string, unknown>);
+    };
     const analise = (x: Partial<AnaliseIndicadorNova> = {}): AnaliseIndicadorNova => ({
       id: null,
       versao: null,
@@ -135,6 +152,7 @@ describe.skipIf(SEM_BANCO_QUA)(
     beforeAll(async () => {
       m = await prepararMassaQualidade('Q6');
       c = ctxBanco(m.est, m.codigoEst, m.usuario);
+      cOutro = ctxBanco(m.outro, m.codigoOutro, m.usuario);
       setorNome = String((await linha('SELECT nome FROM setor_funcional WHERE id = ?', [m.setor]))?.['nome']);
     });
 
@@ -167,9 +185,11 @@ describe.skipIf(SEM_BANCO_QUA)(
             );
             await run('DELETE FROM auditoria_interna WHERE estabelecimento_id IN (?, ?)', [m.est, m.outro]);
             await run(
-              "DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (?, ?) AND tipo LIKE 'auditoria_interna_%'",
+              `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (?, ?)
+                  AND (tipo LIKE 'auditoria_interna_%' OR tipo LIKE 'plano_acao_qualidade_%')`,
               [m.est, m.outro],
             );
+            await limparTrilhaDaMassa(e, { ids: [m.est, m.outro] });
           })
           .catch(() => undefined);
       await encerrarMassaQualidade(m);
@@ -237,40 +257,155 @@ describe.skipIf(SEM_BANCO_QUA)(
       expect(Number(total?.['n'])).toBe(1);
     });
 
-    it('registrarAnaliseIndicador (alteração): confere a versão, reapura e cancela o plano retirado', async () => {
+    it('registrarAnaliseIndicador (alteração): versão, apuração fechada intacta, situação do plano e trilha', async () => {
       expect(
         await codigoDe(gravar((g) => g.registrarAnaliseIndicador(analise({ id: analiseId, versao: 9 })))),
       ).toMatch(/^409:/);
-      const plano = await linha(
-        'SELECT plano_acao_qualidade_id AS p FROM analise_critica_indicador WHERE id = ?',
-        [analiseId],
+      // Outro estabelecimento não alcança a análise deste.
+      expect(
+        await codigoDe(
+          gravar((g) => g.registrarAnaliseIndicador(analise({ id: analiseId, versao: 1 })), cOutro),
+        ),
+      ).toMatch(/^409:/);
+      const p1 = Number(
+        (
+          await linha('SELECT plano_acao_qualidade_id AS p FROM analise_critica_indicador WHERE id = ?', [
+            analiseId,
+          ])
+        )?.['p'],
       );
+      // O plano andou (fora desta gravação): a correção do texto não o devolve a "planejado".
+      await executar("UPDATE plano_acao_qualidade SET situacao = 'em_andamento' WHERE id = ?", [p1]);
       const r = await gravar((g) =>
         g.registrarAnaliseIndicador(
           analise({
             id: analiseId,
             versao: 1,
             valor: 1.2,
-            numerador: 1,
+            numerador: null,
             situacaoMeta: 'na-meta',
-            texto: 'Revisão: o recálculo trouxe o indicador para dentro da meta da competência.',
-            causas: null,
-            plano: null,
-            responsavel: null,
-            prazo: null,
+            texto: 'Revisão: a análise corrigida mantém o plano em andamento com novo prazo.',
+            prazo: '2026-12-31',
           }),
         ),
       );
       expect(r).toEqual({ id: analiseId, versao: 2, criada: false });
       const depois = await linha(
-        `SELECT a.plano_acao_qualidade_id AS p, a.resultado_periodo, a.alterado_por, ap.valor, ap.situacao_meta
-           FROM analise_critica_indicador a JOIN apuracao_indicador ap ON ap.id = a.apuracao_indicador_id WHERE a.id = ?`,
+        `SELECT a.plano_acao_qualidade_id AS p, a.resultado_periodo, ap.valor, ap.numerador, ap.situacao_meta, ap.versao AS va,
+                p.situacao AS sp, DATE_FORMAT(p.prazo, '%Y-%m-%d') AS prazo
+           FROM analise_critica_indicador a JOIN apuracao_indicador ap ON ap.id = a.apuracao_indicador_id
+           JOIN plano_acao_qualidade p ON p.id = a.plano_acao_qualidade_id WHERE a.id = ?`,
         [analiseId],
       );
-      expect(depois).toMatchObject({ p: null, resultado_periodo: 'na_meta', situacao_meta: 'na_meta' });
-      expect(Number(depois?.['valor'])).toBe(1.2);
-      const cancelado = await linha('SELECT situacao FROM plano_acao_qualidade WHERE id = ?', [plano?.['p']]);
-      expect(cancelado).toMatchObject({ situacao: 'cancelado' });
+      // A apuração fechada não é reescrita: valor, numerador e situação da meta ficam os apurados no fechamento.
+      expect(depois).toMatchObject({ resultado_periodo: 'na_meta', situacao_meta: 'fora_da_meta', va: 1 });
+      expect(Number(depois?.['p'])).toBe(p1);
+      expect([Number(depois?.['valor']), Number(depois?.['numerador'])]).toEqual([2.4, 3]);
+      expect(depois).toMatchObject({ sp: 'em_andamento', prazo: '2026-12-31' });
+      expect(await naTrilha('analiseAnterior')).toMatchObject({
+        id: analiseId,
+        versao: 1,
+        resultado_periodo: 'fora_da_meta',
+      });
+      expect(await naTrilha('planoAnterior')).toMatchObject({ id: p1, situacao: 'em_andamento' });
+      expect(await naTrilha('apuracaoAnterior')).toBeNull();
+      // Plano retirado e não concluído: cancelado (nunca apagado), com o retrato na trilha.
+      const sem = {
+        causas: null,
+        plano: null,
+        responsavel: null,
+        prazo: null,
+        situacaoMeta: 'na-meta' as const,
+      };
+      await gravar((g) => g.registrarAnaliseIndicador(analise({ id: analiseId, versao: 2, ...sem })));
+      expect(await linha('SELECT situacao FROM plano_acao_qualidade WHERE id = ?', [p1])).toMatchObject({
+        situacao: 'cancelado',
+      });
+      expect(await naTrilha('planoAnterior')).toMatchObject({ id: p1, situacao: 'em_andamento' });
+      // O plano volta: nasce outro, planejado (o cancelado não volta).
+      await gravar((g) => g.registrarAnaliseIndicador(analise({ id: analiseId, versao: 3 })));
+      const p2 = Number(
+        (
+          await linha('SELECT plano_acao_qualidade_id AS p FROM analise_critica_indicador WHERE id = ?', [
+            analiseId,
+          ])
+        )?.['p'],
+      );
+      expect(p2).not.toBe(p1);
+      expect(await linha('SELECT situacao FROM plano_acao_qualidade WHERE id = ?', [p2])).toMatchObject({
+        situacao: 'planejado',
+      });
+      // O concluído não muda: retirado da análise, só se desliga.
+      await executar(
+        "UPDATE plano_acao_qualidade SET situacao = 'concluido', concluido_em = '2026-11-09 09:00:00' WHERE id = ?",
+        [p2],
+      );
+      await gravar((g) => g.registrarAnaliseIndicador(analise({ id: analiseId, versao: 4, ...sem })));
+      expect(
+        await linha(
+          'SELECT a.plano_acao_qualidade_id AS p, (SELECT situacao FROM plano_acao_qualidade WHERE id = ?) AS sp FROM analise_critica_indicador a WHERE a.id = ?',
+          [p2, analiseId],
+        ),
+      ).toMatchObject({ p: null, sp: 'concluido' });
+    });
+
+    it('registrarAnaliseIndicador: apuração já existente (fechada intacta, cancelada recusa, prévia reapurada)', async () => {
+      const ind = await linha(
+        `SELECT i.id, v.id AS v FROM indicador i JOIN indicador_versao v ON v.indicador_id = i.id WHERE i.codigo = ?`,
+        [COD],
+      );
+      const apuracao = (comp: string, fim: string, situacao: string, valor: number) =>
+        executar(
+          `INSERT INTO apuracao_indicador (estabelecimento_id, indicador_id, indicador_versao_id, competencia, periodo_inicio,
+             periodo_fim, numerador, denominador, valor, situacao_meta, situacao, fechada_em, fechada_por_usuario_id, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, 7, 1000, ?, 'fora_da_meta', ?, ?, ?, NOW(3))`,
+          [
+            m.est,
+            ind?.['id'],
+            ind?.['v'],
+            `${comp}-01`,
+            `${comp}-01`,
+            fim,
+            valor,
+            situacao,
+            situacao === 'fechada' ? '2026-09-05 08:00:00' : null,
+            situacao === 'fechada' ? m.gestor : null,
+          ],
+        );
+      await apuracao('2026-07', '2026-07-31', 'cancelada', 7);
+      await apuracao('2026-08', '2026-08-31', 'fechada', 9);
+      await apuracao('2026-09', '2026-09-30', 'previa', 7);
+      expect(
+        await codigoDe(gravar((g) => g.registrarAnaliseIndicador(analise({ competencia: '2026-07' })))),
+      ).toMatch(/:apuracao-cancelada$/);
+      await gravar((g) => g.registrarAnaliseIndicador(analise({ competencia: '2026-08' })));
+      const fechada = await linha(
+        `SELECT ap.valor, ap.versao, ap.fechada_por_usuario_id AS por, COUNT(a.id) AS analises FROM apuracao_indicador ap
+           LEFT JOIN analise_critica_indicador a ON a.apuracao_indicador_id = ap.id
+          WHERE ap.estabelecimento_id = ? AND ap.indicador_id = ? AND ap.competencia = '2026-08-01' GROUP BY ap.id`,
+        [m.est, ind?.['id']],
+      );
+      expect([
+        Number(fechada?.['valor']),
+        Number(fechada?.['versao']),
+        Number(fechada?.['analises']),
+      ]).toEqual([9, 1, 1]);
+      expect(Number(fechada?.['por'])).toBe(m.gestor);
+      await gravar((g) => g.registrarAnaliseIndicador(analise({ competencia: '2026-09' })));
+      const previa = await linha(
+        `SELECT valor, situacao, versao, fechada_por_usuario_id AS por FROM apuracao_indicador
+          WHERE estabelecimento_id = ? AND indicador_id = ? AND competencia = '2026-09-01'`,
+        [m.est, ind?.['id']],
+      );
+      expect(previa).toMatchObject({ situacao: 'fechada' });
+      expect([Number(previa?.['valor']), Number(previa?.['versao']), Number(previa?.['por'])]).toEqual([
+        2.4,
+        2,
+        m.usuario,
+      ]);
+      const anterior = await naTrilha('apuracaoAnterior');
+      expect(anterior).toMatchObject({ situacao: 'previa', versao: 1 });
+      expect(Number(anterior?.['valor'])).toBe(7);
     });
 
     it('registrarAuditoria: número, categoria, setor, auditor líder, checklist e percentual', async () => {
@@ -285,6 +420,7 @@ describe.skipIf(SEM_BANCO_QUA)(
         parciais: 1,
         naoConformes: 1,
         naoAplicaveis: 1,
+        conformidade: 50,
         conclusao: 'Conclusão sintética da auditoria.',
         agora: AGORA,
         usuario: m.login,
@@ -342,13 +478,15 @@ describe.skipIf(SEM_BANCO_QUA)(
         realizadaEm: '2026-11-04',
         auditores: 'Equipe sintética revisada',
         itens: checklist(2),
-        contagens: { conformes: 1, parciais: 0, naoConformes: 1, naoAplicaveis: 0 },
+        contagens: { conformes: 1, parciais: 0, naoConformes: 1, naoAplicaveis: 0, conformidade: 50 },
         conclusao: 'Conclusão revisada da auditoria.',
         justificativa: 'Checklist lançado com itens a mais',
-        agora: AGORA,
+        agora: '2026-11-10T11:00:00',
         usuario: m.login,
       };
       expect(await codigoDe(gravar((g) => g.alterarAuditoria({ ...mudanca, versao: 7 })))).toMatch(/^409:/);
+      // Outro estabelecimento não alcança a auditoria deste.
+      expect(await codigoDe(gravar((g) => g.alterarAuditoria(mudanca), cOutro))).toMatch(/^409:/);
       expect(await gravar((g) => g.alterarAuditoria(mudanca))).toEqual({ versao: 2 });
       const itens = await linha(
         `SELECT SUM(excluido_em IS NULL) AS ativos, SUM(excluido_em IS NOT NULL) AS excluidos
@@ -362,9 +500,29 @@ describe.skipIf(SEM_BANCO_QUA)(
       );
       expect(a).toMatchObject({ titulo: 'Auditoria sintética Q6 corrigida', ini: '2026-11-04' });
       expect(Number(a?.['percentual_conformidade'])).toBe(50);
+      // O item que não mudou guarda o respondente e o instante originais.
+      const item1 = await linha(
+        "SELECT DATE_FORMAT(respondido_em, '%H:%i') AS h, versao FROM auditoria_interna_item WHERE auditoria_interna_id = ? AND sequencia = 1",
+        [auditoriaId],
+      );
+      expect(item1).toMatchObject({ h: '10:00', versao: 1 });
       const v = await new LeiturasGestaoComplementoD(m.nucleo).versoes(c, 'auditoria_interna', auditoriaId);
       expect(v.length).toBeGreaterThanOrEqual(1);
       expect(v[0]).toMatchObject({ versao: 1 });
+      const ant = (await naTrilha('versaoAnterior')) as { dados: Record<string, unknown> } | null;
+      expect(ant?.dados).toMatchObject({ auditores_descricao: 'Equipe sintética' });
+      expect(String(ant?.dados['titulo'])).toMatch(/^Auditoria sintética Q6 \d+ com título longo/);
+      const checklistAnterior = ant?.dados['checklist'] as Record<string, unknown>[];
+      expect(
+        checklistAnterior.map((x) => [x['sequencia'], x['resultado'], Number(x['respondente_usuario_id'])]),
+      ).toEqual([
+        [1, 'conforme', m.usuario],
+        [2, 'nao_conforme', m.usuario],
+        [3, 'nao_se_aplica', m.usuario],
+        [4, 'parcial', m.usuario],
+      ]);
+      expect(checklistAnterior[0]).toHaveProperty('respondido_em');
+      expect(Number(checklistAnterior[1]?.['exige_acao'])).toBe(1);
       // Voltar a 4 itens reaproveita as sequências excluídas (nada é apagado).
       expect(await gravar((g) => g.alterarAuditoria({ ...mudanca, versao: 2, itens: checklist(4) }))).toEqual(
         {

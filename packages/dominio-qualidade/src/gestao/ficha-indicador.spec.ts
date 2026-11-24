@@ -168,6 +168,12 @@ describe('análise crítica', () => {
       }),
     ).toBe('prazo-antes-da-competencia');
   });
+  it('responsável e prazo juntos: um sem o outro recusa, mesmo na meta', () => {
+    expect(r({ responsavel: 'Enfermeira da CCIH', prazo: null })).toBe('plano-incompleto');
+    expect(r({ responsavel: '   ', prazo: '2026-12-15' })).toBe('plano-incompleto');
+    expect(r({ plano: 'Só a ação proposta, sem dono.', responsavel: null, prazo: null })).toBeNull();
+    expect(r({ responsavel: 'Enfermeira da CCIH', prazo: '2026-12-15' })).toBeNull();
+  });
   it('pendência: fechada sem análise, ou fora da meta sem plano', () => {
     const p = (
       competencia: string,

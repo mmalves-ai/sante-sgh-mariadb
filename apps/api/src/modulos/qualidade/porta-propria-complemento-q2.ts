@@ -202,7 +202,7 @@ export function analise(r: Linha): AnaliseIndicadorRegistrada {
     versao: n(r['versao']),
     indicador: texto(r['indicador']),
     competencia: (dataIso(r['competencia']) ?? '').slice(0, 7),
-    numerador: n(r['numerador']),
+    numerador: r['numerador'] === null ? null : n(r['numerador']),
     denominador: nn(r['denominador']),
     valor: nn(r['valor']),
     meta: nn(r['valor_meta']),

@@ -83,6 +83,8 @@ export interface GravadorGestao {
     readonly parciais: number;
     readonly naoConformes: number;
     readonly naoAplicaveis: number;
+    /** A conformidade do checklist que a API calculou no domínio (resultadoChecklist), gravada como a tela mostra. */
+    readonly conformidade: number | null;
     readonly conclusao: string;
     readonly agora: string;
     readonly usuario: string;
@@ -170,6 +172,7 @@ export interface GravadorGestao {
         readonly parciais: number;
         readonly naoConformes: number;
         readonly naoAplicaveis: number;
+        readonly conformidade: number | null;
       };
       readonly conclusao: string;
     },

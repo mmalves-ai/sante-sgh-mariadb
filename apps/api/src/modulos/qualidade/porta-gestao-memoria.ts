@@ -1136,6 +1136,11 @@ export class PortaGestaoMemoria implements PortaGestao {
         return { id: novo };
       },
       registrarAnaliseIndicador: async (a) => {
+        if ((a.responsavel?.trim() ? 1 : 0) + (a.prazo !== null ? 1 : 0) === 1)
+          throw recusa(
+            'plano-incompleto',
+            'O plano de ação precisa do responsável e do prazo juntos (ou de nenhum dos dois).',
+          );
         const dados = {
           numerador: a.numerador,
           denominador: a.denominador,

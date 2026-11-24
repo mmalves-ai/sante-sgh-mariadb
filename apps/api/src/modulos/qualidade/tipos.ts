@@ -758,7 +758,8 @@ export interface AnaliseIndicadorNova {
   readonly versao: number | null;
   readonly indicador: string;
   readonly competencia: string;
-  readonly numerador: number;
+  /** Nulo quando a apuração não tem o numerador (nunca zero no lugar do desconhecido). */
+  readonly numerador: number | null;
   readonly denominador: number | null;
   readonly valor: number | null;
   readonly meta: number | null;
@@ -779,7 +780,8 @@ export interface AnaliseIndicadorRegistrada {
   readonly versao: number;
   readonly indicador: string;
   readonly competencia: string;
-  readonly numerador: number;
+  /** Nulo quando a apuração não tem o numerador (nunca zero no lugar do desconhecido). */
+  readonly numerador: number | null;
   readonly denominador: number | null;
   readonly valor: number | null;
   readonly meta: number | null;
