@@ -8,7 +8,7 @@ import { hhmm, leitoTexto } from '../regras-tela.js';
 
 defineProps<{ internacao: InternacaoDetalhe; atalhos?: boolean }>();
 const { t } = useI18n();
-const ACOES = ['guias', 'trocas', 'procedimentos', 'alta', 'impressos'] as const;
+const ACOES = ['guias', 'registros', 'trocas', 'procedimentos', 'alta', 'impressos'] as const;
 </script>
 
 <template>

@@ -33,6 +33,21 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    // F3.4, 04-INT L67: diagnósticos e acidente da internação.
+    path: `/internacao/:reg${reg}/registros`,
+    name: 'adt.registros',
+    component: () => import('./telas/RegistrosInternacaoTela.vue'),
+    props: true,
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
+    // F3.4, 04-INT L65: quem opera cada unidade de internação (admitir, transferir para ela, dar alta).
+    path: '/internacao/unidades/operadores',
+    name: 'adt.operadoresUnidade',
+    component: () => import('./telas/OperadoresUnidadeTela.vue'),
+    meta: { permissao: 'organizacao.leito.ler' },
+  },
+  {
     path: `/internacao/:reg${reg}/trocas`,
     name: 'adt.trocas',
     component: () => import('./telas/TrocasTela.vue'),
