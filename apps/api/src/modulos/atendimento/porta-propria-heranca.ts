@@ -150,9 +150,23 @@ export const OPERACAO_ALTERAR_HERANCA = definirOperacao({
       return v === null ? atual !== undefined : atual !== v;
     });
     if (mudadas.length === 0) throw recusa('nada-a-alterar', 'Nada a alterar.');
+    // O que mudou em cada regra (vai à trilha da operação, em dados_depois.resultado.mudancas, como JSON: o resultado é plano): "antes" é o "herda" da regra
+    // do escopo (nulo se não havia regra em vigor) e "depois" o gravado (nulo quando a regra pessoal foi encerrada).
+    const mudancas: {
+      campo: string;
+      escopo: 'estabelecimento' | 'usuario';
+      antes: boolean | null;
+      depois: boolean | null;
+    }[] = [];
     for (const h of mudadas) {
       const v = marcas[h.campo];
       const x = daLinha(h.chave);
+      mudancas.push({
+        campo: h.chave,
+        escopo: e.paraMim ? 'usuario' : 'estabelecimento',
+        antes: x && vale(x) ? Boolean(Number(x['herda'])) : null,
+        depois: v === null || v === undefined ? null : v === true,
+      });
       if (v === null) {
         if (x)
           await tx.alterar('regra_heranca_campo', Number(x['id']), Number(x['versao']), {
@@ -173,7 +187,11 @@ export const OPERACAO_ALTERAR_HERANCA = definirOperacao({
         });
     }
     const depois = await lerMarcasHeranca(tx, est, usuario);
-    return { versao: versaoHeranca(depois), campos: mudadas.map((h) => h.chave).join(',') };
+    return {
+      versao: versaoHeranca(depois),
+      campos: mudadas.map((h) => h.chave).join(','),
+      mudancas: JSON.stringify(mudancas),
+    };
   },
   alvo: () => ({ tabela: 'regra_heranca_campo', id: null }),
 });

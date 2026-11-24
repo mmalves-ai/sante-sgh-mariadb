@@ -766,7 +766,7 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
   it('as operações ainda sem regra no banco respondem 501 (nada gravado)', async () => {
     const mm = m!;
     await expect(
-      porta.executar(contextoPorta(mm), 'atendimento.alterarHeranca', {}, contextoGravacao(mm)),
+      porta.executar(contextoPorta(mm), 'atendimento.alterarSegurado', {}, contextoGravacao(mm)),
     ).rejects.toMatchObject({ problema: { status: 501 } });
     await expect(porta.indicadores()).rejects.toMatchObject({ status: 501 });
   });

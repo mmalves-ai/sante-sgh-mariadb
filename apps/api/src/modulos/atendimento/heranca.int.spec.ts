@@ -37,18 +37,33 @@ describe.skipIf(SEM_BANCO)('herança do atendimento anterior contra o MariaDB (c
         { teto: 100 },
       ),
     );
-  /** A trilha das regras do estabelecimento: quem, qual ação e o "herda" de antes e de depois. */
-  const trilha = () =>
-    nucleo.lerSomente({ cliente: CLIENTE_F22, correlacao: 'f32-heranca-trilha' }, (l) =>
+  /**
+   * A trilha das gravações da herança no estabelecimento: uma linha por operação, com quem gravou e, em
+   * dados_depois.resultado.mudancas, o "herda" de antes e de depois de cada regra mudada.
+   */
+  const trilha = async () => {
+    const ops = await nucleo.lerSomente({ cliente: CLIENTE_F22, correlacao: 'f32-heranca-trilha' }, (l) =>
       l.consultar(
-        `SELECT t.usuario_id, t.acao, r.campo, JSON_VALUE(t.dados_antes, '$.herda') AS antes,
-                JSON_VALUE(t.dados_depois, '$.herda') AS depois
-           FROM trilha_auditoria t JOIN regra_heranca_campo r ON r.id = t.entidade_id
-          WHERE t.entidade = 'regra_heranca_campo' AND r.estabelecimento_id = ? ORDER BY t.id`,
+        `SELECT t.usuario_id, t.acao, CAST(t.dados_depois AS CHAR) AS depois FROM trilha_auditoria t
+          WHERE t.entidade = 'regra_heranca_campo' AND t.estabelecimento_id = ? ORDER BY t.id`,
         [m.estabelecimento],
         { teto: 100 },
       ),
     );
+    return ops.flatMap((t) =>
+      (
+        JSON.parse(
+          String((JSON.parse(String(t['depois'])) as { resultado: { mudancas: string } }).resultado.mudancas),
+        ) as { campo: string; antes: unknown; depois: unknown }[]
+      ).map((x) => ({
+        usuario_id: Number(t['usuario_id']),
+        acao: t['acao'],
+        campo: x.campo,
+        antes: x.antes === null ? null : String(x.antes),
+        depois: x.depois === null ? null : String(x.depois),
+      })),
+    );
+  };
   const apagarRegras = () =>
     nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f32-heranca-limpa' }, async (w) => {
       await limparTrilhaDaMassa(w, { ids: [m.estabelecimento] });
@@ -289,8 +304,9 @@ describe.skipIf(SEM_BANCO)('herança do atendimento anterior contra o MariaDB (c
       centroCusto: m.centroCusto,
     });
     expect(h.anterior?.valores).not.toHaveProperty('guia');
+    // A fonte pagadora deixou de ser herdada no estabelecimento (segundo caso): a marca acompanha a configuração.
     expect(h.heranca).toMatchObject({
-      fonte_pagadora: true,
+      fonte_pagadora: false,
       profissional: true,
       carteira: true,
       unidade: false,
