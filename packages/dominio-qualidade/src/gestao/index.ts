@@ -12,4 +12,3 @@ export * from './ouvidoria-indicadores.js';
 export * from './indicadores-seguranca.js';
 export * from './revisao-prontuario.js';
 export * from './revisao-prontuario-plano.js';
-export * from './comissao-composicao.js';
