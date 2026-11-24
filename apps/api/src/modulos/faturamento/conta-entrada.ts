@@ -15,6 +15,14 @@
 //   a memória do cálculo (conta_hospitalar_item_memoria) e o controle (lancamento_automatico_conta); para cada vigente que
 //   deixou de valer, o item e o controle em "estornado" com o motivo; o total da conta refeito dos itens. Conta que não
 //   aceita lançamento (fechada, enviada) não é tocada.
+// - abrir grava também o vínculo atendimento_conta (é por ele que a recepção e o prontuário acham a conta). Sem tipo de
+//   conta da natureza (ou com dois empatados), a entrada do paciente NÃO é barrada: a conta fica por abrir e o resultado
+//   devolve a pendência para o faturista (a rotina diária tenta abrir de novo).
+// - apurar confere, como o lançamento manual (faturamento.lancar-item), a competência da conta aberta para a fonte
+//   pagadora e no geral (fechada: nada é lançado nem estornado e a pendência volta), o item faturável ativo (inativo:
+//   pendência), o grupo do catálogo quando a regra não traz o seu, e as exceções da regra de lançamento.
+// - cancelar (internação ou atendimento excluídos): estorna os automáticos com o motivo "cancelamento" e cancela a
+//   conta; conta com lançamento manual vigente ou já em faturamento recusa a exclusão (passa pelo faturamento).
 import {
   dataHoraParaInstante,
   FUSO_PADRAO,
@@ -29,13 +37,14 @@ import {
   type NaturezaContaPaciente,
   numeroDaConta,
   type RegraDiaria,
+  type ExcecaoRegraLancamento,
   type TaxaAutomatica,
   type TrechoAcomodacao,
 } from '@sgh/dominio-faturamento';
 import { definirOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import { precoVigente, tabelasDePreco } from './operacoes.js';
-import { contaAceitaLancamento } from './regras-conta.js';
+import { conferirCompetenciaDaConta, contaAceitaLancamento } from './regras-conta.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -46,6 +55,8 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 /** As tabelas que a abertura e a apuração gravam: a operação que as chama as declara junto das suas. */
 export const TABELAS_CONTA_ENTRADA = [
   'conta_hospitalar',
+  'atendimento_conta',
+  'motivo_cancelamento_conta',
   'conta_hospitalar_item',
   'conta_hospitalar_item_memoria',
   'lancamento_automatico_conta',
@@ -61,16 +72,32 @@ const local = (d: unknown, fuso: string) => {
   return `${x.data}T${x.hora}`;
 };
 
+export interface AberturaConta {
+  /** A conta aberta (ou a já aberta); nula quando a entrada não gera cobrança ou ficou pendente. */
+  readonly conta: number | null;
+  /** O que impediu a abertura, para o faturista (a entrada do paciente segue). */
+  readonly pendencia: { readonly codigo: string; readonly mensagem: string } | null;
+}
+
+/** Grava o vínculo atendimento_conta quando falta (a recepção e o prontuário acham a conta por ele). */
+async function vincularConta(tx: TxOperacao, atendimento: number, conta: number): Promise<void> {
+  const v = await tx.uma<Linha>(
+    'SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND conta_hospitalar_id = ? AND excluido_em IS NULL',
+    [atendimento, conta],
+  );
+  if (!v) await tx.incluir('atendimento_conta', { atendimento_id: atendimento, conta_hospitalar_id: conta });
+}
+
 /**
- * Abre a conta do atendimento na fonte pagadora dele (ou devolve a já aberta). Nulo quando a categoria do atendimento
- * não gera cobrança. Recusa sem tipo de conta da natureza (ou com dois empatados).
+ * Abre a conta do atendimento na fonte pagadora dele (ou devolve a já aberta), com o vínculo atendimento_conta. Sem
+ * cobrança, conta nula; sem tipo de conta da natureza (ou com dois empatados), conta nula e a pendência.
  */
 export async function abrirContaDaEntrada(
   tx: TxOperacao,
   est: number,
   atendimento: number,
   o: { readonly categoriaAcomodacao?: number | null } = {},
-): Promise<number | null> {
+): Promise<AberturaConta> {
   const at = await tx.uma<Linha>(
     `SELECT a.id, a.numero, a.paciente_id, a.fonte_pagadora_id, a.entrada_em, ca.tipo_base
        FROM atendimento a JOIN categoria_atendimento ca ON ca.id = a.categoria_atendimento_id
@@ -79,14 +106,17 @@ export async function abrirContaDaEntrada(
   );
   if (!at) throw recusa('registro-inexistente', 'O atendimento da conta não existe neste estabelecimento.');
   const natureza = naturezaDaEntrada(texto(at['tipo_base']));
-  if (natureza === null || at['fonte_pagadora_id'] === null) return null;
+  if (natureza === null || at['fonte_pagadora_id'] === null) return { conta: null, pendencia: null };
   const fonte = n(at['fonte_pagadora_id']);
   const ja = await tx.uma<Linha>(
     `SELECT id FROM conta_hospitalar WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND situacao <> 'cancelada'
         AND excluido_em IS NULL ORDER BY id LIMIT 1`,
     [atendimento, fonte],
   );
-  if (ja) return n(ja['id']);
+  if (ja) {
+    await vincularConta(tx, atendimento, n(ja['id']));
+    return { conta: n(ja['id']), pendencia: null };
+  }
   const tipos = await tx.consultar<Linha>(
     'SELECT id, ordem FROM tipo_conta WHERE natureza = ? AND ativo = TRUE',
     [NATUREZA_TIPO_CONTA[natureza]],
@@ -95,7 +125,8 @@ export async function abrirContaDaEntrada(
     tipos.map((t) => ({ id: n(t['id']), ordem: n(t['ordem']) })),
     natureza,
   );
-  if ('recusa' in tipo) throw recusa(tipo.recusa, tipo.mensagem);
+  // A falta de cadastro do faturamento não barra a entrada do paciente: a conta fica pendente para o faturista.
+  if ('recusa' in tipo) return { conta: null, pendencia: { codigo: tipo.recusa, mensagem: tipo.mensagem } };
   const cob = await tx.uma<Linha>(
     `SELECT plano_fonte_pagadora_id, cobertura_paciente_id, senha_autorizacao FROM cobertura_atendimento
       WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL ORDER BY ordem LIMIT 1`,
@@ -115,7 +146,7 @@ export async function abrirContaDaEntrada(
   const ordem = await tx.uma<Linha>('SELECT COUNT(*) AS n FROM conta_hospitalar WHERE atendimento_id = ?', [
     atendimento,
   ]);
-  return tx.incluir('conta_hospitalar', {
+  const conta = await tx.incluir('conta_hospitalar', {
     estabelecimento_id: est,
     numero: numeroDaConta(texto(at['numero']), n(ordem?.['n']) + 1),
     atendimento_id: atendimento,
@@ -134,6 +165,8 @@ export async function abrirContaDaEntrada(
     situacao: 'aberta',
     origem: 'sistema',
   });
+  await vincularConta(tx, atendimento, conta);
+  return { conta, pendencia: null };
 }
 
 export interface ResultadoApuracaoConta {
@@ -173,16 +206,43 @@ export async function apurarConta(
   est: number,
   contaId: number,
   agora: Date = new Date(),
+  o: { readonly cancelada?: boolean } = {},
 ): Promise<ResultadoApuracaoConta> {
   const [c] = await tx.consultarParaAtualizar(
     `SELECT id, versao, situacao, atendimento_id, natureza, fonte_pagadora_id, plano_fonte_pagadora_id, tabela_preco_id,
-            paciente_id, inicio_em, valor_acrescimo, valor_desconto
+            paciente_id, inicio_em, valor_acrescimo, valor_desconto, competencia,
+            DATE_FORMAT(competencia, '%Y-%m') AS competencia_mes
        FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [contaId, est],
   );
   if (!c) throw recusa('registro-inexistente', 'A conta não existe neste estabelecimento.');
   if (!contaAceitaLancamento(texto(c['situacao'])))
     return { conta: contaId, lancados: 0, estornados: 0, pendencias: [], apurada: false };
+  // Regra 9 do lançamento: a competência da conta aberta para a fonte pagadora e no geral (com trava, como lancarItem).
+  const [daFonte] = await tx.consultarParaAtualizar<Linha>(
+    `SELECT situacao FROM fechamento_competencia_fonte_pagadora
+      WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND competencia = ? AND excluido_em IS NULL`,
+    [est, n(c['fonte_pagadora_id']), c['competencia']],
+    { teto: 1 },
+  );
+  const [geral] = await tx.consultarParaAtualizar<Linha>(
+    `SELECT situacao FROM competencia_faturamento
+      WHERE estabelecimento_id = ? AND modulo = 'fonte_pagadora' AND competencia = ? AND excluido_em IS NULL`,
+    [est, c['competencia']],
+    { teto: 1 },
+  );
+  const fechada = conferirCompetenciaDaConta(
+    daFonte ? texto(daFonte['situacao']) : null,
+    geral ? texto(geral['situacao']) : null,
+  );
+  if (fechada)
+    return {
+      conta: contaId,
+      lancados: 0,
+      estornados: 0,
+      pendencias: [{ dia: texto(c['competencia_mes']), motivo: 'competencia-fechada' }],
+      apurada: false,
+    };
   const fuso = await fusoDoEstabelecimento(tx, est);
   const natureza = texto(c['natureza']) as NaturezaContaPaciente;
   const fonte = n(c['fonte_pagadora_id']);
@@ -193,6 +253,12 @@ export async function apurarConta(
   let modalidade: number | null = null;
   let acompanhante = false;
   let trechos: TrechoAcomodacao[] = [];
+  let cancelada = Boolean(o.cancelada);
+  const at = await tx.uma<Linha>(
+    'SELECT situacao, setor_funcional_id, especialidade_medica_id FROM atendimento WHERE id = ?',
+    [n(c['atendimento_id'])],
+  );
+  if (texto(at?.['situacao']) === 'cancelado') cancelada = true;
   if (natureza === 'internacao') {
     const i = await tx.uma<Linha>(
       `SELECT id, data_hora_entrada, data_hora_alta, situacao, modalidade_internacao_id, tem_acompanhante
@@ -205,11 +271,8 @@ export async function apurarConta(
         limite = local(i['data_hora_alta'], fuso);
         alta = true;
       }
-      // Internação excluída: nada mais é devido (o limite antes da entrada estorna tudo).
-      if (i['situacao'] === 'cancelada') {
-        limite = entrada;
-        alta = true;
-      }
+      // Internação excluída: nada mais é devido (a apuração estorna tudo com o motivo "cancelamento").
+      if (i['situacao'] === 'cancelada') cancelada = true;
       modalidade = nn(i['modalidade_internacao_id']);
       acompanhante = Boolean(n(i['tem_acompanhante']));
       const oc = await tx.consultar<Linha>(
@@ -225,7 +288,6 @@ export async function apurarConta(
         fim: x['data_hora_fim'] === null ? null : local(x['data_hora_fim'], fuso),
         categoriaAcomodacao: nn(x['categoria']),
       }));
-      if (i['situacao'] === 'cancelada') trechos = [];
     }
   }
   if (limite < entrada) limite = entrada;
@@ -266,9 +328,41 @@ export async function apurarConta(
           vigenciaInicio: texto(r['inicio']),
           vigenciaFim: r['fim'] === null ? null : texto(r['fim']),
         }));
+  const excecoes = await tx.consultar<Linha>(
+    `SELECT x.regra_lancamento_id AS regra, x.estabelecimento_id, x.fonte_pagadora_id, x.plano_fonte_pagadora_id,
+            x.setor_funcional_id, x.especialidade_medica_id, x.item_faturavel_id, x.grupo_faturamento_id, x.efeito,
+            x.aplica_internacao, x.aplica_ambulatorial, x.aplica_externo, x.aplica_urgencia, x.aplica_domiciliar,
+            DATE_FORMAT(x.vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(x.vigencia_fim, '%Y-%m-%d') AS fim
+       FROM regra_lancamento_excecao x JOIN regra_lancamento rl ON rl.id = x.regra_lancamento_id
+      WHERE rl.ativo = TRUE AND rl.gatilho IN ('abertura_atendimento','diaria_internacao') AND x.excluido_em IS NULL`,
+    [],
+    { teto: 5000 },
+  );
+  const excecoesDa = (regra: number): ExcecaoRegraLancamento[] =>
+    excecoes
+      .filter((x) => n(x['regra']) === regra)
+      .map((x) => ({
+        estabelecimento: nn(x['estabelecimento_id']),
+        fontePagadora: nn(x['fonte_pagadora_id']),
+        plano: nn(x['plano_fonte_pagadora_id']),
+        setor: nn(x['setor_funcional_id']),
+        especialidade: nn(x['especialidade_medica_id']),
+        item: nn(x['item_faturavel_id']),
+        grupo: nn(x['grupo_faturamento_id']),
+        efeito: texto(x['efeito']) as ExcecaoRegraLancamento['efeito'],
+        aplica: {
+          internacao: Boolean(n(x['aplica_internacao'])),
+          ambulatorial: Boolean(n(x['aplica_ambulatorial'])),
+          externo: Boolean(n(x['aplica_externo'])),
+          urgencia: Boolean(n(x['aplica_urgencia'])),
+          domiciliar: Boolean(n(x['aplica_domiciliar'])),
+        },
+        vigenciaInicio: x['inicio'] === null ? null : texto(x['inicio']),
+        vigenciaFim: x['fim'] === null ? null : texto(x['fim']),
+      }));
   const taxas: TaxaAutomatica[] = (
     await tx.consultar<Linha>(
-      `SELECT rl.id AS regra, ri.id AS regra_item, rl.gatilho, rl.acao, rl.exige_confirmacao, rl.lanca_uma_vez_por_conta,
+      `SELECT rl.id AS regra, ri.id AS regra_item, ri.tabela_preco_id, rl.gatilho, rl.acao, rl.exige_confirmacao, rl.lanca_uma_vez_por_conta,
               ri.item_faturavel_id, ri.grupo_faturamento_id, ri.quantidade, ri.tipo_valor, ri.valor, ri.aplica_internacao,
               ri.aplica_ambulatorial, ri.aplica_externo, ri.aplica_urgencia, ri.aplica_domiciliar,
               DATE_FORMAT(rl.vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(rl.vigencia_fim, '%Y-%m-%d') AS fim
@@ -298,6 +392,8 @@ export async function apurarConta(
     },
     vigenciaInicio: texto(r['inicio']),
     vigenciaFim: r['fim'] === null ? null : texto(r['fim']),
+    tabelaPreco: nn(r['tabela_preco_id']),
+    excecoes: excecoesDa(n(r['regra'])),
   }));
   const vig = await tx.consultar<Linha>(
     `SELECT l.id, l.versao, l.chave, DATE_FORMAT(l.dia_referencia, '%Y-%m-%d') AS dia, l.categoria_acomodacao_id,
@@ -327,6 +423,12 @@ export async function apurarConta(
       item: n(v['item_faturavel_id']),
       categoriaAcomodacao: nn(v['categoria_acomodacao_id']),
     })),
+    cancelada,
+    recorte: {
+      estabelecimento: est,
+      setor: nn(at?.['setor_funcional_id']),
+      especialidade: nn(at?.['especialidade_medica_id']),
+    },
   });
   const quando = new Date();
   for (const e of r.estornar) {
@@ -339,10 +441,32 @@ export async function apurarConta(
     });
   }
   const tabelas = await tabelasDePreco(tx, est, fonte, plano, nn(c['tabela_preco_id']));
+  const pendencias: { dia: string; motivo: string }[] = [...r.pendencias];
+  // O catálogo de itens faturáveis: o item tem de estar ativo (como no lançamento manual) e dá o grupo.
+  const ids = [...new Set(r.lancar.map((d) => d.item))];
+  const catalogo = new Map(
+    (ids.length
+      ? await tx.consultar<Linha>(
+          `SELECT id, grupo_faturamento_id FROM item_faturavel
+            WHERE id IN (${ids.map(() => '?').join(',')}) AND situacao = 'ativo' AND excluido_em IS NULL`,
+          ids,
+          { teto: ids.length },
+        )
+      : []
+    ).map((x) => [n(x['id']), nn(x['grupo_faturamento_id'])] as const),
+  );
+  let lancados = 0;
   for (const d of r.lancar) {
-    const preco = d.valorFixo !== null ? null : await precoVigente(tx, tabelas, d.item, d.dia);
+    if (!catalogo.has(d.item)) {
+      pendencias.push({ dia: d.dia, motivo: 'item-inativo' });
+      continue;
+    }
+    // A tabela forçada pelo item da regra vale antes das tabelas da conta.
+    const daRegra = d.tabelaPreco !== null ? [d.tabelaPreco, ...tabelas.filter((t) => t !== d.tabelaPreco)] : tabelas;
+    const preco = d.valorFixo !== null ? null : await precoVigente(tx, daRegra, d.item, d.dia);
     const unitario = d.valorFixo ?? preco?.unitario ?? 0;
     const origemPreco = d.valorFixo !== null ? 'valor_fixo_regra' : preco ? 'tabela' : 'sem_preco_vigente';
+    if (origemPreco === 'sem_preco_vigente') pendencias.push({ dia: d.dia, motivo: 'sem-preco' });
     const seq = await tx.uma<Linha>(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
       [contaId],
@@ -351,7 +475,7 @@ export async function apurarConta(
       conta_hospitalar_id: contaId,
       sequencia: n(seq?.['proxima']),
       item_faturavel_id: d.item,
-      grupo_faturamento_id: d.grupo,
+      grupo_faturamento_id: d.grupo ?? catalogo.get(d.item) ?? null,
       regra_lancamento_id: d.regraLancamento,
       realizado_em: new Date(dataHoraParaInstante(d.dia, d.hora, fuso)),
       quantidade: d.quantidade,
@@ -360,7 +484,9 @@ export async function apurarConta(
       valor_custo_operacional: preco ? r2(preco.custoOperacional * d.quantidade) : 0,
       valor_filme: preco ? r2(preco.filme * d.quantidade) : 0,
       valor_total: r2(unitario * d.quantidade),
-      tipo_valorizacao: 'tabela',
+      // Só o preço da tabela é "tabela"; o valor fixo da regra e o zero sem preço são valores atribuídos (a memória diz a
+      // origem e o faturista confere a pendência).
+      tipo_valorizacao: origemPreco === 'tabela' ? 'tabela' : 'manual',
       situacao: 'lancado',
     });
     await tx.incluir('conta_hospitalar_item_memoria', {
@@ -394,8 +520,9 @@ export async function apurarConta(
       regra_lancamento_item_id: d.regraItem,
       situacao: 'lancado',
     });
+    lancados += 1;
   }
-  if (r.lancar.length || r.estornar.length) {
+  if (lancados || r.estornar.length) {
     const soma = await tx.uma<Linha>(
       `SELECT COALESCE(SUM(valor_total), 0) AS itens, COALESCE(SUM(valor_filme), 0) AS filme
          FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
@@ -412,11 +539,57 @@ export async function apurarConta(
   }
   return {
     conta: contaId,
-    lancados: r.lancar.length,
+    lancados,
     estornados: r.estornar.length,
-    pendencias: r.pendencias,
+    pendencias,
     apurada: true,
   };
+}
+
+/** Código do motivo de cancelamento que o sistema usa para a conta da entrada excluída. */
+export const MOTIVO_CANCELAMENTO_ENTRADA = 'ENTRADA_EXCLUIDA';
+
+/**
+ * A entrada excluída (internação ou atendimento cancelado): estorna os lançamentos automáticos com o motivo
+ * "cancelamento" e cancela as contas do atendimento, na transação de quem chama. Conta já em faturamento ou com
+ * lançamento que não é automático (lançado por alguém) recusa: a exclusão passa pelo faturamento.
+ */
+export async function cancelarContasDaEntrada(tx: TxOperacao, est: number, atendimento: number): Promise<number> {
+  const contas = await contasDoAtendimento(tx, atendimento);
+  let canceladas = 0;
+  for (const id of contas) {
+    const manuais = await tx.uma<Linha>(
+      `SELECT COUNT(*) AS n FROM conta_hospitalar_item i
+        WHERE i.conta_hospitalar_id = ? AND i.excluido_em IS NULL AND i.situacao NOT IN ('estornado','transferido')
+          AND NOT EXISTS (SELECT 1 FROM lancamento_automatico_conta l WHERE l.conta_hospitalar_item_id = i.id)`,
+      [id],
+    );
+    if (n(manuais?.['n']) > 0)
+      throw recusa('exclusao-recusada', 'A conta do atendimento tem lançamentos: estorne-os no faturamento antes de excluir.');
+    const r = await apurarConta(tx, est, id, new Date(), { cancelada: true });
+    if (!r.apurada)
+      throw recusa('exclusao-recusada', 'A conta do atendimento já está em faturamento: a exclusão passa pelo faturamento.');
+    let motivo = await tx.uma<Linha>('SELECT id FROM motivo_cancelamento_conta WHERE codigo = ?', [
+      MOTIVO_CANCELAMENTO_ENTRADA,
+    ]);
+    const motivoId =
+      motivo !== null && motivo !== undefined
+        ? n(motivo['id'])
+        : await tx.incluir('motivo_cancelamento_conta', {
+            codigo: MOTIVO_CANCELAMENTO_ENTRADA,
+            descricao: 'Entrada do paciente excluída (internação ou atendimento cancelado)',
+            ativo: true,
+            exige_justificativa: false,
+          });
+    motivo = await tx.uma<Linha>('SELECT versao FROM conta_hospitalar WHERE id = ?', [id]);
+    await tx.alterar('conta_hospitalar', id, n(motivo?.['versao']), {
+      situacao: 'cancelada',
+      cancelada_em: new Date(),
+      motivo_cancelamento_conta_id: motivoId,
+    });
+    canceladas += 1;
+  }
+  return canceladas;
 }
 
 const esquemaApurar = z.object({ conta: z.number().int().positive() }).strict();
@@ -443,4 +616,59 @@ export const apurarLancamentosAutomaticos = definirOperacao<z.infer<typeof esque
       ? [{ tipo: 'faturamento.conta.apurada', carga: { conta: Number(r['conta']) } }]
       : [],
   alvo: (_e, r) => ({ tabela: 'conta_hospitalar', id: Number(r['conta']) }),
+});
+
+const esquemaApurarDia = z.object({}).strict();
+
+/**
+ * A rotina diária do estabelecimento da sessão: abre a conta das internações em curso que ficaram sem conta (falta de
+ * tipo de conta no dia da entrada) e apura todas as contas de internação abertas, lançando a diária do dia de corte sem
+ * depender de nenhum evento do ADT (admissão, alta e transferência). Idempotente.
+ */
+export const apurarLancamentosDoDia = definirOperacao<z.infer<typeof esquemaApurarDia>, ResultadoOperacao>({
+  nome: 'faturamento.apurar-lancamentos-do-dia',
+  tabelas: [...TABELAS_CONTA_ENTRADA],
+  entrada: esquemaApurarDia,
+  async gravar(tx) {
+    const est = tx.contexto.estabelecimento;
+    if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    const semConta = await tx.consultar<Linha>(
+      `SELECT i.atendimento_id FROM internacao i
+        WHERE i.estabelecimento_id = ? AND i.situacao IN ('ativa','alta_medica') AND i.excluido_em IS NULL
+          AND NOT EXISTS (SELECT 1 FROM conta_hospitalar c WHERE c.atendimento_id = i.atendimento_id
+                            AND c.situacao <> 'cancelada' AND c.excluido_em IS NULL)`,
+      [est],
+      { teto: 5000 },
+    );
+    let abertas = 0;
+    let pendentes = 0;
+    for (const x of semConta) {
+      const a = await abrirContaDaEntrada(tx, est, n(x['atendimento_id']));
+      if (a.conta !== null) abertas += 1;
+      if (a.pendencia !== null) pendentes += 1;
+    }
+    const contas = (
+      await tx.consultar<Linha>(
+      `SELECT id, situacao FROM conta_hospitalar WHERE estabelecimento_id = ? AND natureza = 'internacao'
+          AND situacao <> 'cancelada' AND excluido_em IS NULL ORDER BY id`,
+      [est],
+      { teto: 20000 },
+    )
+    ).filter((c) => contaAceitaLancamento(texto(c['situacao'])));
+    let lancados = 0;
+    let estornados = 0;
+    let pendencias = 0;
+    for (const c of contas) {
+      const r = await apurarConta(tx, est, n(c['id']));
+      lancados += r.lancados;
+      estornados += r.estornados;
+      pendencias += r.pendencias.length;
+    }
+    return { estabelecimento: est, contas: contas.length, abertas, pendentes, lancados, estornados, pendencias };
+  },
+  eventos: (_e, r) =>
+    Number(r['lancados']) || Number(r['estornados'])
+      ? [{ tipo: 'faturamento.contas.apuradas', carga: { contas: Number(r['contas']) } }]
+      : [],
+  alvo: (_e, r) => ({ tabela: 'estabelecimento', id: Number(r['estabelecimento']) }),
 });

@@ -20,6 +20,7 @@
 import {
   abrirContaDaEntrada,
   apurarContasDoAtendimento,
+  cancelarContasDaEntrada,
   TABELAS_CONTA_ENTRADA,
 } from '../faturamento/conta-entrada.js';
 import {
@@ -491,11 +492,17 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
       await concluirPedido(tx, est, e.solicitacaoNir, id, n(leito['id']), agora);
     await situarLeito(tx, n(leito['id']));
     // F3.0: a conta aberta na entrada (fonte pagadora, plano, tabela vigente, acomodação) e a diária do dia.
-    const conta = await abrirContaDaEntrada(tx, est, atendimento, {
+    // Sem tipo de conta da natureza, a internação acontece e a pendência volta para o faturista (alertaConta).
+    const { conta, pendencia } = await abrirContaDaEntrada(tx, est, atendimento, {
       categoriaAcomodacao: nn(leito['categoria_acomodacao_id']),
     });
     if (conta !== null) await apurarContasDoAtendimento(tx, est, atendimento, agora);
-    return { internacao: id, numero: numero.formatado, ...(conta !== null ? { conta } : {}) };
+    return {
+      internacao: id,
+      numero: numero.formatado,
+      ...(conta !== null ? { conta } : {}),
+      ...(pendencia !== null ? { alertaConta: pendencia.codigo, alertaContaMotivo: pendencia.mensagem } : {}),
+    };
   },
   eventos: (_e, r) => [{ tipo: 'internacao.internada', carga: { internacao: n(r['internacao']) } }],
   alvo: (_e, r) => ({ tabela: 'internacao', id: n(r['internacao']) }),
@@ -993,8 +1000,9 @@ const excluirInternacao = definirOperacao<ExcluirInternacaoEntrada, ResultadoOpe
     if (at)
       await tx.alterar('atendimento', n(i['atendimento_id']), n(at['versao']), { situacao: 'cancelado' });
     if (nn(i['leito_hospitalar_id']) !== null) await situarLeito(tx, n(i['leito_hospitalar_id']));
-    // F3.0: a internação excluída não deve diária nem taxa: a apuração estorna os lançamentos automáticos.
-    await apurarContasDoAtendimento(tx, estabelecimentoDe(ctx), n(i['atendimento_id']));
+    // F3.0: a internação excluída não deve diária nem taxa (nem a de abertura): os automáticos são estornados com o
+    // motivo "cancelamento" e a conta é cancelada (conta com lançamento manual recusa: passa pelo faturamento).
+    await cancelarContasDaEntrada(tx, estabelecimentoDe(ctx), n(i['atendimento_id']));
     return { internacao: e.internacao };
   },
   eventos: (e) => [{ tipo: 'internacao.excluida', carga: { internacao: e.internacao } }],

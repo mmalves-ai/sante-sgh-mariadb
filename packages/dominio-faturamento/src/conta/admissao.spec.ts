@@ -4,6 +4,7 @@ import {
   competenciaDaConta,
   type EntradaApuracao,
   escolherTipoConta,
+  type ExcecaoRegraLancamento,
   naturezaDaEntrada,
   numeroDaConta,
   type RegraDiaria,
@@ -180,5 +181,80 @@ describe('taxas automáticas', () => {
     ]);
     const pa = apurarLancamentos(base({ natureza: 'pronto_atendimento', taxas }));
     expect(pa.lancar.map((l) => l.chave)).toEqual(['taxa:1', 'taxa:6']);
+  });
+});
+
+describe('entrada excluída', () => {
+  it('nada é devido (nem a taxa de abertura) e tudo o que estava vigente é estornado com o motivo "cancelamento"', () => {
+    const taxas = [taxa({ regraItem: 1 })];
+    const aberta = apurarLancamentos(base({ taxas }));
+    expect(aberta.lancar.map((l) => l.chave).sort()).toEqual(['diaria', 'taxa:1']);
+    const vigentes = [
+      { id: 1, chave: 'taxa:1', dia: '2026-11-20', item: 500, categoriaAcomodacao: ENF },
+      { id: 2, chave: 'diaria', dia: '2026-11-20', item: 100, categoriaAcomodacao: ENF },
+    ];
+    const r = apurarLancamentos(base({ taxas, vigentes, cancelada: true, alta: true }));
+    expect(r.lancar).toEqual([]);
+    expect(r.estornar).toEqual([
+      { id: 1, motivo: 'cancelamento' },
+      { id: 2, motivo: 'cancelamento' },
+    ]);
+    // A mesma regra sem cancelamento e com alta: o motivo da diária que sobra é "alta", nunca "cancelamento".
+    const alta = apurarLancamentos(
+      base({ taxas, vigentes: [...vigentes, { id: 3, chave: 'diaria', dia: '2026-11-21', item: 100, categoriaAcomodacao: ENF }], alta: true }),
+    );
+    expect(alta.estornar).toEqual([{ id: 3, motivo: 'alta' }]);
+  });
+});
+
+describe('exceções da regra de lançamento e tabela forçada', () => {
+  const todas = { internacao: true, ambulatorial: true, externo: true, urgencia: true, domiciliar: true };
+  const excecao = (x: Partial<ExcecaoRegraLancamento>): ExcecaoRegraLancamento => ({
+    estabelecimento: null,
+    fontePagadora: null,
+    plano: null,
+    setor: null,
+    especialidade: null,
+    item: null,
+    grupo: null,
+    efeito: 'nao_aplicar',
+    aplica: todas,
+    vigenciaInicio: null,
+    vigenciaFim: null,
+    ...x,
+  });
+  const recorte = { estabelecimento: 3, setor: 40, especialidade: null };
+  const taxas = (excecoes: ExcecaoRegraLancamento[]) => [taxa({ regraItem: 1, excecoes, tabelaPreco: 77 })];
+  const chaves = (x: Partial<EntradaApuracao>) =>
+    apurarLancamentos(base({ natureza: 'ambulatorial', recorte, ...x })).lancar.map((l) => l.chave);
+
+  it('"nao_aplicar" tira a regra só do recorte (estabelecimento, fonte, setor); fora dele a regra vale', () => {
+    expect(chaves({ taxas: taxas([excecao({ estabelecimento: 3 })]) })).toEqual([]);
+    expect(chaves({ taxas: taxas([excecao({ estabelecimento: 4 })]) })).toEqual(['taxa:1']);
+    expect(chaves({ taxas: taxas([excecao({ fontePagadora: 7, setor: 40 })]) })).toEqual([]);
+    expect(chaves({ taxas: taxas([excecao({ fontePagadora: 7, setor: 41 })]) })).toEqual(['taxa:1']);
+    // Exceção fora da vigência ou de outra natureza não vale.
+    expect(chaves({ taxas: taxas([excecao({ estabelecimento: 3, vigenciaFim: '2026-01-01' })]) })).toEqual(['taxa:1']);
+    expect(
+      chaves({ taxas: taxas([excecao({ estabelecimento: 3, aplica: { ...todas, ambulatorial: false } })]) }),
+    ).toEqual(['taxa:1']);
+  });
+
+  it('"aplicar_somente": a regra só vale onde uma exceção casa', () => {
+    expect(chaves({ taxas: taxas([excecao({ efeito: 'aplicar_somente', fontePagadora: 8 })]) })).toEqual([]);
+    expect(
+      chaves({
+        taxas: taxas([
+          excecao({ efeito: 'aplicar_somente', fontePagadora: 8 }),
+          excecao({ efeito: 'aplicar_somente', fontePagadora: 7 }),
+        ]),
+      }),
+    ).toEqual(['taxa:1']);
+  });
+
+  it('a tabela forçada do item da regra segue no lançamento; a diária usa a da conta', () => {
+    const r = apurarLancamentos(base({ taxas: taxas([]) }));
+    expect(r.lancar.find((l) => l.chave === 'taxa:1')?.tabelaPreco).toBe(77);
+    expect(r.lancar.find((l) => l.chave === 'diaria')?.tabelaPreco).toBeNull();
   });
 });

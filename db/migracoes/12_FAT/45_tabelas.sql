@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS lancamento_automatico_conta (
   versao                    INT UNSIGNED NOT NULL DEFAULT 1,
   CONSTRAINT ck_lancamento_automatico_conta_situacao CHECK (situacao IN ('lancado','estornado')),
   CONSTRAINT ck_lancamento_automatico_conta_estorno CHECK ((situacao = 'estornado') = (estornado_em IS NOT NULL AND motivo_estorno IS NOT NULL)),
-  CONSTRAINT ck_lancamento_automatico_conta_motivo CHECK (motivo_estorno IS NULL OR motivo_estorno IN ('troca_acomodacao','alta','regra_alterada')),
+  CONSTRAINT ck_lancamento_automatico_conta_motivo CHECK (motivo_estorno IS NULL OR motivo_estorno IN ('troca_acomodacao','alta','regra_alterada','cancelamento')),
   CONSTRAINT ck_lancamento_automatico_conta_regra CHECK ((regra_diaria_id IS NULL) <> (regra_lancamento_item_id IS NULL)),
   CONSTRAINT ck_lancamento_automatico_conta_chave CHECK ((chave LIKE 'diaria%') = (regra_diaria_id IS NOT NULL)),
   UNIQUE KEY uq_lancamento_automatico_conta_vigente (conta_hospitalar_id, chave, dia_referencia, vigente),

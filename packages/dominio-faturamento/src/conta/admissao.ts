@@ -22,7 +22,13 @@
 //   vigente e só lança o que falta e estorna o que deixou de valer. A mesma apuração repetida não muda nada.
 // - Estorno: o lançamento vigente cujo dia continua devido mas com outro item ou outra acomodação é estornado
 //   ("troca_acomodacao" ou "regra_alterada") e o novo é lançado; o dia que deixou de ser devido é estornado ("alta"
-//   quando a contagem foi fechada pela alta, "regra_alterada" nos demais casos).
+//   quando a contagem foi fechada pela alta, "cancelamento" quando a entrada foi excluída, "regra_alterada" nos demais
+//   casos).
+// - Entrada excluída (internação ou atendimento cancelado): nada é devido, nem a taxa de abertura; tudo o que estava
+//   vigente é estornado com o motivo "cancelamento".
+// - Exceções da regra de lançamento (regra_lancamento_excecao): "nao_aplicar" tira a regra do recorte (estabelecimento,
+//   fonte pagadora, plano, setor, especialidade, item ou grupo); havendo "aplicar_somente", a regra só vale dentro de um
+//   deles. A tabela de preço forçada no item da regra vale antes da tabela da conta.
 
 export type NaturezaContaPaciente = 'ambulatorial' | 'pronto_atendimento' | 'externo' | 'internacao' | 'domiciliar';
 
@@ -131,6 +137,32 @@ export interface TaxaAutomatica {
   readonly aplica: Readonly<Record<'internacao' | 'ambulatorial' | 'externo' | 'urgencia' | 'domiciliar', boolean>>;
   readonly vigenciaInicio: string;
   readonly vigenciaFim: string | null;
+  /** Tabela de preço forçada pelo item da regra (vale antes da tabela da conta). */
+  readonly tabelaPreco?: number | null;
+  /** Exceções vigentes ou não da regra (a apuração confere a vigência pelo dia). */
+  readonly excecoes?: readonly ExcecaoRegraLancamento[];
+}
+
+/** Exceção da regra de lançamento (regra_lancamento_excecao): campos nulos não restringem o recorte. */
+export interface ExcecaoRegraLancamento {
+  readonly estabelecimento: number | null;
+  readonly fontePagadora: number | null;
+  readonly plano: number | null;
+  readonly setor: number | null;
+  readonly especialidade: number | null;
+  readonly item: number | null;
+  readonly grupo: number | null;
+  readonly efeito: 'nao_aplicar' | 'aplicar_somente';
+  readonly aplica: Readonly<Record<'internacao' | 'ambulatorial' | 'externo' | 'urgencia' | 'domiciliar', boolean>>;
+  readonly vigenciaInicio: string | null;
+  readonly vigenciaFim: string | null;
+}
+
+/** O recorte da conta que as exceções da regra de lançamento conferem. */
+export interface RecorteConta {
+  readonly estabelecimento: number;
+  readonly setor: number | null;
+  readonly especialidade: number | null;
 }
 
 /** Trecho de permanência numa acomodação (horários locais "AAAA-MM-DDTHH:MM"; fim nulo = em curso). */
@@ -162,9 +194,11 @@ export interface LancamentoDesejado {
   readonly regraDiaria: number | null;
   readonly regraLancamento: number | null;
   readonly regraItem: number | null;
+  /** Tabela de preço forçada pela regra (nula: a da conta). */
+  readonly tabelaPreco: number | null;
 }
 
-export type MotivoEstorno = 'troca_acomodacao' | 'alta' | 'regra_alterada';
+export type MotivoEstorno = 'troca_acomodacao' | 'alta' | 'regra_alterada' | 'cancelamento';
 
 export interface EntradaApuracao {
   readonly natureza: NaturezaContaPaciente;
@@ -183,6 +217,10 @@ export interface EntradaApuracao {
   readonly regrasDiaria: readonly RegraDiaria[];
   readonly taxas: readonly TaxaAutomatica[];
   readonly vigentes: readonly LancamentoVigente[];
+  /** Verdadeiro: a entrada foi excluída (internação ou atendimento cancelado) e nada é devido. */
+  readonly cancelada?: boolean;
+  /** Recorte das exceções da regra de lançamento (sem ele, só as exceções sem estabelecimento, setor e especialidade). */
+  readonly recorte?: RecorteConta;
 }
 
 export interface ResultadoApuracaoLancamentos {
@@ -292,8 +330,37 @@ const NATUREZA_APLICA: Readonly<Record<NaturezaContaPaciente, keyof TaxaAutomati
   domiciliar: 'domiciliar',
 };
 
-function taxaServe(t: TaxaAutomatica, natureza: NaturezaContaPaciente, dia: string): boolean {
+const vigenteNoDia = (inicio: string | null, fim: string | null, dia: string) =>
+  (inicio === null || inicio <= dia) && (fim === null || fim >= dia);
+
+/** A exceção casa com a conta quando todo campo preenchido dela é o da conta (e vale na natureza e no dia). */
+function excecaoCasa(x: ExcecaoRegraLancamento, t: TaxaAutomatica, e: EntradaApuracao, dia: string): boolean {
+  const igual = (campo: number | null, valor: number | null | undefined) => campo === null || campo === (valor ?? null);
   return (
+    x.aplica[NATUREZA_APLICA[e.natureza]] &&
+    vigenteNoDia(x.vigenciaInicio, x.vigenciaFim, dia) &&
+    igual(x.estabelecimento, e.recorte?.estabelecimento) &&
+    igual(x.fontePagadora, e.fontePagadora) &&
+    igual(x.plano, e.plano) &&
+    igual(x.setor, e.recorte?.setor) &&
+    igual(x.especialidade, e.recorte?.especialidade) &&
+    igual(x.item, t.item) &&
+    igual(x.grupo, t.grupo)
+  );
+}
+
+/** As exceções da regra: "nao_aplicar" que casa tira a regra; com "aplicar_somente", só vale onde uma casa. */
+export function taxaPermitidaPelasExcecoes(t: TaxaAutomatica, e: EntradaApuracao, dia: string): boolean {
+  const xs = t.excecoes ?? [];
+  if (xs.some((x) => x.efeito === 'nao_aplicar' && excecaoCasa(x, t, e, dia))) return false;
+  const somente = xs.filter((x) => x.efeito === 'aplicar_somente');
+  return somente.length === 0 || somente.some((x) => excecaoCasa(x, t, e, dia));
+}
+
+function taxaServe(t: TaxaAutomatica, e: EntradaApuracao, dia: string): boolean {
+  const natureza = e.natureza;
+  return (
+    taxaPermitidaPelasExcecoes(t, e, dia) &&
     t.acao === 'incluir' &&
     !t.exigeConfirmacao &&
     t.item !== null &&
@@ -317,6 +384,7 @@ function desejoDeTaxa(t: TaxaAutomatica, dia: string, hora: string, categoria: n
     regraDiaria: null,
     regraLancamento: t.regraLancamento,
     regraItem: t.regraItem,
+    tabelaPreco: t.tabelaPreco ?? null,
   };
 }
 
@@ -339,6 +407,7 @@ function desejoDeDiaria(
     regraDiaria: r.id,
     regraLancamento: null,
     regraItem: null,
+    tabelaPreco: null,
   };
 }
 
@@ -351,11 +420,13 @@ export function lancamentosDevidos(e: EntradaApuracao): {
   exigirLocal(e.limite, 'Limite');
   const devidos: LancamentoDesejado[] = [];
   const pendencias: { dia: string; motivo: 'sem-regra' | 'regra-ambigua' }[] = [];
+  // Entrada excluída: nada é devido, nem a taxa de abertura.
+  if (e.cancelada) return { devidos, pendencias };
   const diaEntrada = e.entrada.slice(0, 10);
   const horaEntrada = e.entrada.slice(11, 16);
   const categoriaEntrada = acomodacaoNo(e.trechos, e.entrada) ?? e.trechos[0]?.categoriaAcomodacao ?? null;
   for (const t of e.taxas)
-    if (t.gatilho === 'abertura_atendimento' && taxaServe(t, e.natureza, diaEntrada))
+    if (t.gatilho === 'abertura_atendimento' && taxaServe(t, e, diaEntrada))
       devidos.push(desejoDeTaxa(t, diaEntrada, horaEntrada, categoriaEntrada));
   if (e.natureza !== 'internacao') return { devidos, pendencias };
 
@@ -395,7 +466,7 @@ export function lancamentosDevidos(e: EntradaApuracao): {
       if (regras.acompanhante)
         devidos.push(desejoDeDiaria('diaria-acompanhante', regras.acompanhante, dia, hora, categoria));
       for (const t of e.taxas)
-        if (t.gatilho === 'diaria_internacao' && (!t.umaVezPorConta || primeira) && taxaServe(t, e.natureza, dia))
+        if (t.gatilho === 'diaria_internacao' && (!t.umaVezPorConta || primeira) && taxaServe(t, e, dia))
           devidos.push(desejoDeTaxa(t, dia, hora, categoria));
     }
     primeira = false;
@@ -416,7 +487,10 @@ export function apurarLancamentos(e: EntradaApuracao): ResultadoApuracaoLancamen
     const k = chaveDe(v);
     const d = desejo.get(k);
     if (!d || atendidos.has(k)) {
-      estornar.push({ id: v.id, motivo: !d && e.alta ? 'alta' : 'regra_alterada' });
+      estornar.push({
+        id: v.id,
+        motivo: e.cancelada ? 'cancelamento' : !d && e.alta ? 'alta' : 'regra_alterada',
+      });
       continue;
     }
     if (d.item === v.item && d.categoriaAcomodacao === v.categoriaAcomodacao) {

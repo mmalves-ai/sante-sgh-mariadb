@@ -71,7 +71,12 @@ import { ErroProblema } from '../../problema.filter.js';
 import { nomeNoNucleo } from '../cadastro/porta-propria.js';
 import type { LiberacaoOperacao, RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { GravacaoFeita } from '../exames/public-api.js';
-import { abrirContaDaEntrada, apurarConta, TABELAS_CONTA_ENTRADA } from '../faturamento/conta-entrada.js';
+import {
+  abrirContaDaEntrada,
+  apurarConta,
+  cancelarContasDaEntrada,
+  TABELAS_CONTA_ENTRADA,
+} from '../faturamento/conta-entrada.js';
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
@@ -1418,12 +1423,9 @@ const OPERACAO_CANCELAR = definirOperacao({
           ],
         },
       );
-    const conta = await tx.uma(
-      'SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND excluido_em IS NULL LIMIT 1',
-      [a.id],
-    );
-    if (conta)
-      throw recusa('exclusao-recusada', 'O atendimento tem conta: a exclusão passa pelo faturamento.');
+    // F3.0: a conta aberta na entrada é cancelada junto (os automáticos estornados com o motivo "cancelamento"); conta
+    // com lançamento manual ou já em faturamento recusa: a exclusão passa pelo faturamento.
+    await cancelarContasDaEntrada(tx, Number(tx.contexto.estabelecimento), a.id);
     await tx.incluir('cancelamento_atendimento', {
       atendimento_id: a.id,
       motivo_cancelamento_operacao_id: e.motivo,
@@ -1750,9 +1752,11 @@ const OPERACAO_ABRIR = definirOperacao({
     if (tele !== null) await tx.alterar('teleconsulta', tele, teleVersao, { atendimento_id: id });
     await gravarEtapasSePa(tx, id, ['abertura']);
     // F3.0: a conta do atendimento nasce na abertura (mesma transação), com as taxas de abertura da regra.
-    const conta = await abrirContaDaEntrada(tx, est, id);
+    // Sem tipo de conta da natureza, o atendimento abre e a pendência volta para o faturista (alertaConta).
+    const { conta, pendencia } = await abrirContaDaEntrada(tx, est, id);
     if (conta !== null) await apurarConta(tx, est, conta, agora);
     const aberto = {
+      ...(pendencia !== null ? { alertaConta: pendencia.codigo, alertaContaMotivo: pendencia.mensagem } : {}),
       reg: id,
       cabecalho: numero.formatado,
       tipo: String(e['tipo']),
@@ -1805,6 +1809,7 @@ const OPERACAO_LANCAR_EXTRA = definirOperacao({
       );
     const vinculo = await tx.uma(
       `SELECT ac.conta_hospitalar_id FROM atendimento_conta ac
+         JOIN conta_hospitalar c ON c.id = ac.conta_hospitalar_id AND c.situacao <> 'cancelada' AND c.excluido_em IS NULL
         WHERE ac.atendimento_id = ? AND ac.excluido_em IS NULL ORDER BY ac.id LIMIT 1`,
       [Number(a['id'])],
     );
