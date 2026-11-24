@@ -5,6 +5,8 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { ligarMapaEstabelecimentos } from './contexto-nucleo.js';
+import { CadastroVinculosProprio } from './paciente-vinculos-proprio.js';
+import { PacienteVinculosController, VINCULOS_CADASTRO } from './paciente-vinculos.controller.js';
 import { PacientesController } from './pacientes.controller.js';
 import { PORTA_CADASTRO, type PortaCadastro, portaCadastroIndisponivel } from './porta.js';
 import { PortaCadastroMemoria } from './porta-memoria.js';
@@ -32,10 +34,16 @@ export class ModuloCadastro {}
 
 export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro = {}): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDoCadastro(ctx));
+  // Coberturas, pré-cadastro e captação (F3.1): só sobre o banco do cliente; sem ele, 503 nas rotas.
+  const cliente = ctx.configuracao.clientePadrao;
+  const vinculos = ctx.nucleo && cliente ? new CadastroVinculosProprio(ctx.nucleo, cliente) : null;
   return {
     module: ModuloCadastro,
-    controllers: [PacientesController, ProfissionaisController],
-    providers: [{ provide: PORTA_CADASTRO, useValue: porta }],
+    controllers: [PacientesController, ProfissionaisController, PacienteVinculosController],
+    providers: [
+      { provide: PORTA_CADASTRO, useValue: porta },
+      { provide: VINCULOS_CADASTRO, useValue: vinculos },
+    ],
     exports: [PORTA_CADASTRO],
   };
 }
