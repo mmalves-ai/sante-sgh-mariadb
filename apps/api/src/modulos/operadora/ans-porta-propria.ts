@@ -22,12 +22,13 @@
 // atendimento por item (ressarcimento_sus_atendimento), ligados ao envio e aos itens; a GRU paga fica na cobrança; a
 // decisão de cada atendimento marca o atendimento (impugnado ou devido) e abre a impugnação em elaboração.
 // A GRU da TPS (Taxa de Saúde Suplementar) fica no próprio envio da obrigação `tps` (número, valor, pagamento).
-// Pendente (pedido ao orquestrador, ver a saída do lote): arquivo do envio (armazenamento de arquivos),
-// identificação dos beneficiários do aviso, pendências do SIB, bases do SIP, das contraprestações do DIOPS e do
-// monitoramento respondem 501 (falha fechada).
+// Bases das obrigações (pendências do SIB, SIP, DIOPS, monitoramento, beneficiários do aviso de ressarcimento): pelas
+// portas próprias irmãs (ans-bases-proprias.ts), com a regra da porta de memória.
 import { MOTIVOS_IMPUGNACAO_SUS, type MotivoImpugnacaoSus } from '@sgh/contratos';
-import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
-import type { ContextoAns, GravadorAns, PortaAnsOperadora } from './ans-porta.js';
+import { createHash, randomUUID } from 'node:crypto';
+import { type ArmazemArquivos, type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
+import { BasesAnsProprias, type FontesAnsProprias } from './ans-bases-proprias.js';
+import type { ArquivoGravado, ContextoAns, GravadorAns, PortaAnsOperadora } from './ans-porta.js';
 import {
   BasePortaOperadoraPropria,
   bool,
@@ -219,8 +220,23 @@ export class PortaAnsOperadoraPropria
     private readonly f1: Pick<PortaOperadora, 'gruposSip'>,
     /** O destino dos envios deste ambiente (o do serviço: simulador fora de produção). */
     private readonly destinoEnvios: 'simulador' | 'ans',
+    /** As portas próprias irmãs das bases das obrigações (SIB, SIP, DIOPS, monitoramento, ressarcimento). */
+    fontes: FontesAnsProprias | null = null,
+    /**
+     * O armazenamento de arquivos da instalação (ADR 0004: disco local, metadado na tabela `arquivo`). Sem ele (sem
+     * ARQUIVOS_RAIZ), o envio é gerado sem guardar o arquivo e abrir o arquivo responde 501.
+     */
+    private readonly armazem: ArmazemArquivos | null = null,
   ) {
     super(nucleo, cliente, 'operadora.ans', TABELAS_ANS);
+    this.bases = fontes ? new BasesAnsProprias(fontes, (c, b) => this.complementoSib(c, b)) : null;
+  }
+
+  private readonly bases: BasesAnsProprias | null;
+
+  /** As bases das obrigações; sem as portas irmãs (montagem parcial), 501 com o nome do recurso. */
+  private base(recurso: string): BasesAnsProprias {
+    return this.bases ?? pendente(recurso);
   }
 
   private envioDe(e: Linha): DadosEnvioAns {
@@ -376,8 +392,63 @@ export class PortaAnsOperadoraPropria
     });
   }
 
-  async arquivo(): Promise<{ nome: string; base64: string; sha256: string } | null> {
-    return pendente('Arquivo do envio à ANS (armazenamento de arquivos)');
+  /** O arquivo guardado do envio do estabelecimento (sem arquivo ou de outro estabelecimento: null). */
+  async arquivo(
+    c: ContextoAns,
+    id: number,
+  ): Promise<{ nome: string; base64: string; sha256: string } | null> {
+    // Sem o armazenamento ligado (a ligação no modulo.ts aguarda a prova da gravação), 501 com o nome do recurso.
+    if (!this.armazem) return pendente('Arquivo do envio à ANS (armazenamento de arquivos)');
+    const est = c.estabelecimento ?? 0;
+    const e = await this.ler(c, (l) =>
+      l.uma(
+        'SELECT arquivo_id FROM envio_ans WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [id, est],
+      ),
+    );
+    const arq = numOuNulo(e?.['arquivo_id']);
+    if (!arq) return null;
+    const r = await this.armazem.ler(
+      {
+        cliente: this.cliente,
+        estabelecimento: est,
+        usuario: null,
+        correlacao: c.correlacao || 'operadora.ans',
+      },
+      arq,
+    );
+    if (r.metadado.estabelecimento !== est) return null;
+    return { nome: r.metadado.nomeOriginal, base64: r.conteudo.toString('base64'), sha256: r.metadado.hash };
+  }
+
+  /**
+   * Guarda o arquivo do envio no armazenamento (imutável, ligado ao envio) e devolve o id do metadado. O conteúdo é
+   * conferido pelo hash que a geração calculou: divergência recusa (nunca guarda arquivo diferente do declarado).
+   */
+  private async guardarArquivo(tx: TxOperacao, envio: number, a: ArquivoGravado): Promise<number | null> {
+    if (!this.armazem) return null;
+    const conteudo = Buffer.from(a.base64, 'base64');
+    // Confere antes de guardar: o arquivo divergente nunca chega ao disco.
+    if (createHash('sha256').update(conteudo).digest('hex') !== a.sha256.toLowerCase())
+      throw recusa(
+        'arquivo-divergente',
+        'O conteúdo do arquivo não confere com o resumo calculado na geração.',
+      );
+    const g = await this.armazem.guardar(
+      {
+        conteudo,
+        nomeOriginal: a.nome.slice(0, 255),
+        tipoMime: 'application/xml',
+        finalidade: 'envio_ans',
+        entidade: 'envio_ans',
+        entidadeId: envio,
+        imutavel: true,
+      },
+      { ...tx.contexto, chaveIdempotencia: `ans-arquivo:${envio}:${randomUUID()}` },
+      // Na transação do envio (ponto de salvamento): o registro do arquivo e o envio gravam juntos ou nada grava.
+      { escritor: tx },
+    );
+    return g.id;
   }
 
   itens(c: ContextoAns, id: number): Promise<DadosItemEnvioAns[]> {
@@ -499,8 +570,8 @@ export class PortaAnsOperadoraPropria
 
   // ---- bases das obrigações ----
 
-  async beneficiariosSib(): Promise<never> {
-    return pendente('Pendências do SIB (complemento cadastral do beneficiário)');
+  beneficiariosSib(c: ContextoAns, operadora: number, apos: number) {
+    return this.base('Pendências do SIB').beneficiariosSib(c, operadora, apos);
   }
 
   complementoSib(c: ContextoAns, beneficiario: number): Promise<DadosComplementoSib | null> {
@@ -576,16 +647,16 @@ export class PortaAnsOperadoraPropria
     );
   }
 
-  async itensSip(): Promise<never> {
-    return pendente('Base do SIP (eventos assistenciais por grupo)');
+  itensSip(c: ContextoAns, operadora: number, inicio: string, fim: string, apos: number) {
+    return this.base('Base do SIP').itensSip(c, operadora, inicio, fim, apos);
   }
 
-  async vigenciasSip(): Promise<never> {
-    return pendente('Vigência dos procedimentos no SIP');
+  vigenciasSip(c: ContextoAns, procedimentos: readonly number[]) {
+    return this.base('Vigência dos procedimentos no SIP').vigenciasSip(c, procedimentos);
   }
 
-  async cobrancasDiops(): Promise<never> {
-    return pendente('Base do DIOPS (contraprestações)');
+  cobrancasDiops(c: ContextoAns, operadora: number, meses: readonly string[], inicio: string, fim: string) {
+    return this.base('Base do DIOPS').cobrancasDiops(c, operadora, meses, inicio, fim);
   }
 
   contasDiops(
@@ -630,12 +701,16 @@ export class PortaAnsOperadoraPropria
     });
   }
 
-  async guiasMonitoramento(): Promise<never> {
-    return pendente('Base do monitoramento TISS');
+  guiasMonitoramento(c: ContextoAns, operadora: number, inicio: string, fim: string, teto: number) {
+    return this.base('Base do monitoramento TISS').guiasMonitoramento(c, operadora, inicio, fim, teto);
   }
 
-  async beneficiariosRessarcimento(): Promise<never> {
-    return pendente('Identificação dos beneficiários do ressarcimento ao SUS');
+  beneficiariosRessarcimento(c: ContextoAns, operadora: number, identificacoes: readonly string[]) {
+    return this.base('Identificação dos beneficiários do ressarcimento ao SUS').beneficiariosRessarcimento(
+      c,
+      operadora,
+      identificacoes,
+    );
   }
 
   async atendimentosJaCobrados(
@@ -666,15 +741,23 @@ export class PortaAnsOperadoraPropria
       return e;
     };
     return {
-      gerar: (g) => gerarEnvio(tx, est, g),
-      async transmitir(a) {
+      gerar: async (g) => {
+        const r = await gerarEnvio(tx, est, g);
+        const arq = g.arquivo ? await this.guardarArquivo(tx, r.id, g.arquivo) : null;
+        if (arq === null) return r;
+        return { id: r.id, versao: await tx.alterar('envio_ans', r.id, r.versao, { arquivo_id: arq }) };
+      },
+      transmitir: async (a) => {
         const e = await envio(a.id);
         if (txt(e['situacao']) !== 'gerado')
           throw recusa('envio-transmitido', 'Só o envio gerado pode ser transmitido.');
+        // O arquivo do protocolo da transmissão, quando houver, passa a ser o arquivo do envio.
+        const arq = a.arquivo ? await this.guardarArquivo(tx, a.id, a.arquivo) : null;
         const versao = await tx.alterar('envio_ans', a.id, a.versao, {
           situacao: 'enviado',
           enviado_em: new Date(),
           numero_recibo: a.recibo,
+          ...(arq === null ? {} : { arquivo_id: arq }),
         });
         // Cada item pendente passa a enviado pela alteração auditada (versão, alterado_em/por, trilha).
         const pendentes = await tx.consultarParaAtualizar(

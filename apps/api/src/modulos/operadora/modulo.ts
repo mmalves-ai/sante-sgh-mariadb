@@ -128,13 +128,15 @@ export async function portasDaOperadora(
     const operadora = o.operadora ?? new PortaOperadoraPropria(n, cliente);
     const rede = o.rede ?? new PortaRedeOperadoraPropria(n, cliente);
     const autorizacao = o.autorizacao ?? new PortaAutorizacaoOperadoraPropria(n, cliente, operadora, rede);
+    const cobranca = o.cobranca ?? new PortaCobrancaOperadoraPropria(n, cliente);
+    const contas =
+      o.contas ?? new PortaContasOperadoraPropria(n, cliente, operadora, rede, buscaPorSenha(autorizacao));
     return {
       operadora,
       rede,
       autorizacao,
-      cobranca: o.cobranca ?? new PortaCobrancaOperadoraPropria(n, cliente),
-      contas:
-        o.contas ?? new PortaContasOperadoraPropria(n, cliente, operadora, rede, buscaPorSenha(autorizacao)),
+      cobranca,
+      contas,
       ans:
         o.ans ??
         new PortaAnsOperadoraPropria(
@@ -142,6 +144,7 @@ export async function portasDaOperadora(
           cliente,
           operadora,
           ambienteDe(ctx.env) === 'producao' ? 'ans' : 'simulador',
+          { operadora, cobranca, contas },
         ),
       atendimento: o.atendimento ?? new PortaAtendimentoOperadoraPropria(n, cliente, operadora, rede),
     };

@@ -425,7 +425,7 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
     expect(await porta.envio(contexto(m, m.outroEst), r.id)).toBeNull();
   });
 
-  it('bases e domínios: beneficiário da operadora, ativos, planos, motivos; o que falta responde 501', async () => {
+  it('bases e domínios: beneficiário da operadora, ativos, planos, motivos; o arquivo responde 501', async () => {
     expect(await porta.beneficiarioDaOperadora(contexto(m), m.beneficiario)).toMatchObject({
       operadora: m.operadora,
       carteirinha: 'L02090001',
@@ -436,7 +436,7 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
     expect((await porta.planos(contexto(m), m.operadora)).map((p) => p.produto)).toContain(m.produto);
     expect((await porta.motivosSib(contexto(m))).find((x) => x.codigo === 1)).toMatchObject({ grupo: 1 });
     expect((await porta.camposSib()).length).toBeGreaterThan(10);
-    expect(await porta.arquivo().catch((e: unknown) => codigoDe(e))).toBe('modelo-pendente');
+    expect(await porta.arquivo(contexto(m), 0).catch((e: unknown) => codigoDe(e))).toBe('modelo-pendente');
   });
 
   it('complemento do SIB: inclui, altera sobre a versão vista, CCO único e o retrato aceito; endereço só do cadastro', async () => {
