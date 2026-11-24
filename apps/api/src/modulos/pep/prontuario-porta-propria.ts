@@ -58,7 +58,12 @@ interface Estabelecimento {
 /** Instante em UTC do início do dia civil local (AAAA-MM-DD) no fuso; independe do TZ da máquina. */
 export function inicioDoDiaUtc(dia: string, fuso: string): Date {
   if (!DIA.test(dia))
-    throw new ErroOperacao(400, 'data-invalida', 'Data inválida', 'A data do filtro não está no formato AAAA-MM-DD.');
+    throw new ErroOperacao(
+      400,
+      'data-invalida',
+      'Data inválida',
+      'A data do filtro não está no formato AAAA-MM-DD.',
+    );
   const [a, m, d] = dia.split('-').map(Number) as [number, number, number];
   const alvo = Date.UTC(a, m - 1, d);
   const local = (t: number) => Date.parse(`${dataHora(new Date(t), fuso)}Z`);
@@ -123,7 +128,9 @@ export function valorDaResposta(x: Record<string, unknown>, fuso: string): strin
       return v ? `${DATA_BR(v.slice(0, 10))} ${v.slice(11, 16)}` : t;
     }
     case 'hora':
-      return x['valor_hora'] === null || x['valor_hora'] === undefined ? t : String(x['valor_hora']).slice(0, 5);
+      return x['valor_hora'] === null || x['valor_hora'] === undefined
+        ? t
+        : String(x['valor_hora']).slice(0, 5);
     case 'booleano':
       return x['valor_booleano'] === null || x['valor_booleano'] === undefined
         ? t
@@ -364,10 +371,10 @@ export class PortaProntuarioPropria implements PortaProntuario {
     partes: { rtf: boolean; xml: boolean },
   ): Promise<ConteudoLido | null> {
     return this.ler(c, 'conteudo', async (l, est) => {
-      const x = await l.uma(`SELECT r.texto_consolidado FROM registro_assistencial r WHERE r.id = ? AND ${VISIVEL}`, [
-        registro,
-        est.id,
-      ]);
+      const x = await l.uma(
+        `SELECT r.texto_consolidado FROM registro_assistencial r WHERE r.id = ? AND ${VISIVEL}`,
+        [registro, est.id],
+      );
       const texto = textoOuNull(x?.['texto_consolidado']);
       if (!texto) return null;
       // O banco próprio não guarda o formulário da época (XML): a parte xml volta vazia.
@@ -453,9 +460,15 @@ export class PortaProntuarioPropria implements PortaProntuario {
       );
       const publicada = numOuNull(m['publicada']);
       const versoes = new Map<number, number>();
-      for (const x of campos) versoes.set(num(x['numero_versao']), (versoes.get(num(x['numero_versao'])) ?? 0) + 1);
+      for (const x of campos)
+        versoes.set(num(x['numero_versao']), (versoes.get(num(x['numero_versao'])) ?? 0) + 1);
       return {
-        modelo: { id: num(m['id']), codigo: textoOuNull(m['codigo']), descricao: textoOuNull(m['titulo']), fase: null },
+        modelo: {
+          id: num(m['id']),
+          codigo: textoOuNull(m['codigo']),
+          descricao: textoOuNull(m['titulo']),
+          fase: null,
+        },
         vinculos: campos.map((x) => ({
           id: num(x['id']),
           idPergunta: num(x['id']),

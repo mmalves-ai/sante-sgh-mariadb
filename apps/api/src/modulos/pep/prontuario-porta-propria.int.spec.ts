@@ -15,7 +15,14 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l0124p';
 const M = P.toUpperCase();
-const C = { rede: CLIENTE, hospital: P, cliente: CLIENTE, estabelecimento: null, usuario: null, correlacao: P };
+const C = {
+  rede: CLIENTE,
+  hospital: P,
+  cliente: CLIENTE,
+  estabelecimento: null,
+  usuario: null,
+  correlacao: P,
+};
 /** Número de prontuário sintético do lote (fora da faixa de qualquer carga). */
 const PRONTUARIO = 901_240_101;
 
@@ -43,7 +50,10 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioPropria contra o MariaDB (cliente f22
     const est = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
     const ests = [P, `${P}b`];
     const reg = `(SELECT id FROM registro_assistencial WHERE estabelecimento_id IN ${est})`;
-    await e.executar(`DELETE FROM registro_assistencial_resposta WHERE registro_assistencial_id IN ${reg}`, ests);
+    await e.executar(
+      `DELETE FROM registro_assistencial_resposta WHERE registro_assistencial_id IN ${reg}`,
+      ests,
+    );
     await e.executar(
       `UPDATE registro_assistencial SET corrige_registro_assistencial_id = NULL WHERE estabelecimento_id IN ${est}`,
       ests,
@@ -91,14 +101,15 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioPropria contra o MariaDB (cliente f22
         return x ? Number(x.id) : criar();
       };
       const estabelecimento = await achar('SELECT id FROM estabelecimento WHERE codigo = ?', [P], () =>
-        ins('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
-          P,
-          `Hospital sintético ${P}`,
-          `Hospital sintético ${P} (fictício)`,
-          agora,
-        ]),
+        ins(
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [P, `Hospital sintético ${P}`, `Hospital sintético ${P} (fictício)`, agora],
+        ),
       );
-      await e.executar('UPDATE estabelecimento SET fuso_horario = ? WHERE id = ?', ['America/Sao_Paulo', estabelecimento]);
+      await e.executar('UPDATE estabelecimento SET fuso_horario = ? WHERE id = ?', [
+        'America/Sao_Paulo',
+        estabelecimento,
+      ]);
       const outroEst = await ins(
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}b`, `Hospital sintético ${P}b`, `Hospital sintético ${P}b (fictício)`, agora],
@@ -111,12 +122,10 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioPropria contra o MariaDB (cliente f22
           agora,
         ]),
       );
-      const usuario = await ins('INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, ?, ?)', [
-        `${P}.autor`,
-        'Conta sintética autora',
-        'servico',
-        agora,
-      ]);
+      const usuario = await ins(
+        'INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}.autor`, 'Conta sintética autora', 'servico', agora],
+      );
       const tipo = await ins(
         'INSERT INTO tipo_documento_clinico (codigo, descricao, categoria, criado_em) VALUES (?, ?, ?, ?)',
         [`${M}_EVOL`, 'Evolução sintética', 'evolucao', agora],
@@ -182,7 +191,17 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioPropria contra o MariaDB (cliente f22
           `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
              carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
-          [est, numero, paciente, categoria, carater, fonte, profissional, new Date('2026-11-01T10:00:00Z'), agora],
+          [
+            est,
+            numero,
+            paciente,
+            categoria,
+            carater,
+            fonte,
+            profissional,
+            new Date('2026-11-01T10:00:00Z'),
+            agora,
+          ],
         );
       const atend = await atendimento(estabelecimento, '7001');
       const atendOutro = await atendimento(outroEst, '7002');
@@ -306,7 +325,11 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioPropria contra o MariaDB (cliente f22
     const r = await porta.listar(C, m.paciente, {}, 1, 50);
     expect(r.registros.map((x) => x.id)).toEqual([m.sistema, m.importado, m.semTexto, m.suspenso]);
     expect(r.haMais).toBe(false);
-    expect(r.registros[0]).toMatchObject({ dataHora: '2026-11-10T09:30:00', modelo: m.modelo, profissional: m.profissional });
+    expect(r.registros[0]).toMatchObject({
+      dataHora: '2026-11-10T09:30:00',
+      modelo: m.modelo,
+      profissional: m.profissional,
+    });
     expect(r.registros[3]?.justificativaSuspensao).toBe(`Lançado no paciente errado ${P}`);
     expect(r.fontes.get(m.semTexto)?.temConteudo).toBe(false);
     const pag = await porta.listar(C, m.paciente, {}, 2, 3);
@@ -346,7 +369,14 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioPropria contra o MariaDB (cliente f22
   it('exceções agregadas contam o registro sem texto do lote', async () => {
     const e = await porta.excecoes(C);
     expect(e.filter((x) => x.modelo === m.modelo)).toEqual([
-      { tipo: 'sem-conteudo', modelo: m.modelo, codigo: `${M}_PUB`, nome: 'Evolução sintética', mes: '2026-10', registros: 1 },
+      {
+        tipo: 'sem-conteudo',
+        modelo: m.modelo,
+        codigo: `${M}_PUB`,
+        nome: 'Evolução sintética',
+        mes: '2026-10',
+        registros: 1,
+      },
     ]);
   });
 

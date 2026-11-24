@@ -97,12 +97,21 @@ describe('PortaProntuarioPropria (dublê)', () => {
     const r = await new PortaProntuarioPropria(d.nucleo, 'x').listar(
       C,
       10,
-      { de: '2026-11-01', ate: '2026-11-10', modelo: 5, profissional: 3, cboIncluir: ['225'], cboExcluir: ['2515'] },
+      {
+        de: '2026-11-01',
+        ate: '2026-11-10',
+        modelo: 5,
+        profissional: 3,
+        cboIncluir: ['225'],
+        cboExcluir: ['2515'],
+      },
       2,
       2,
     );
     const q = d.chamadas[1]!;
-    expect(q.sql).toMatch(/r\.estabelecimento_id = \? AND r\.excluido_em IS NULL AND r\.confidencial = FALSE/);
+    expect(q.sql).toMatch(
+      /r\.estabelecimento_id = \? AND r\.excluido_em IS NULL AND r\.confidencial = FALSE/,
+    );
     expect(q.sql).toMatch(/LIMIT 3 OFFSET 2/);
     expect(q.sql).toMatch(/o\.codigo_cbo IS NULL OR NOT/);
     expect(q.parametros).toEqual([
@@ -151,7 +160,9 @@ describe('PortaProntuarioPropria (dublê)', () => {
 
   it('conteúdo: texto simples vira texto formatado legível pelo domínio; formatado passa intacto', async () => {
     const d = duble((sql) =>
-      sql.includes('FROM estabelecimento') ? [EST] : [{ texto_consolidado: 'Paciente estável.\nConduta: {manter}' }],
+      sql.includes('FROM estabelecimento')
+        ? [EST]
+        : [{ texto_consolidado: 'Paciente estável.\nConduta: {manter}' }],
     );
     const x = await new PortaProntuarioPropria(d.nucleo, 'x').conteudo(C, 1, { rtf: true, xml: true });
     expect(x?.xml).toBeNull();
@@ -165,7 +176,9 @@ describe('PortaProntuarioPropria (dublê)', () => {
 
   it('conteúdo ausente: null', async () => {
     const d = duble((sql) => (sql.includes('FROM estabelecimento') ? [EST] : [{ texto_consolidado: null }]));
-    expect(await new PortaProntuarioPropria(d.nucleo, 'x').conteudo(C, 1, { rtf: true, xml: false })).toBeNull();
+    expect(
+      await new PortaProntuarioPropria(d.nucleo, 'x').conteudo(C, 1, { rtf: true, xml: false }),
+    ).toBeNull();
   });
 
   it('textos da busca: teto + 1 para o truncado, só do estabelecimento', async () => {
@@ -199,7 +212,9 @@ describe('PortaProntuarioPropria (dublê)', () => {
           ],
     );
     const e = await new PortaProntuarioPropria(d.nucleo, 'x').excecoes(C);
-    expect(e).toEqual([{ tipo: 'sem-conteudo', modelo: 5, codigo: 'E', nome: 'Ev', mes: '2026-10', registros: 5 }]);
+    expect(e).toEqual([
+      { tipo: 'sem-conteudo', modelo: 5, codigo: 'E', nome: 'Ev', mes: '2026-10', registros: 5 },
+    ]);
   });
 
   it('acessos: eventos de leitura do estabelecimento, filtros parametrizados, origem do suporte', async () => {
