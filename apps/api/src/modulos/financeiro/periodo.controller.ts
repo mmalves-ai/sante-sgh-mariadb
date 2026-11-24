@@ -1,7 +1,10 @@
 // F3.8, 07-FIN linha 85: rotas do período financeiro e do saldo diário por conta.
 //   GET  /api/financeiro/periodos                 as competências do estabelecimento (situação, quem fechou e reabriu)
 //   POST /api/financeiro/periodos/fechar          { competencia }                 (financeiro.movimento.criar)
-//   POST /api/financeiro/periodos/reabrir         { competencia, justificativa }  (financeiro.parametro.editar)
+//   POST /api/financeiro/periodos/pedir-reabertura { competencia, justificativa } (financeiro.movimento.criar)
+//   POST /api/financeiro/periodos/reabrir         { competencia, decisao, observacao? } autorizar ou recusar o pedido
+//                                                 (financeiro.parametro.editar; quem pediu não decide)
+//   GET  /api/financeiro/periodos/eventos         o histórico de fechamentos, pedidos e decisões
 //   GET  /api/financeiro/periodos/saldo-diario?conta=&de=&ate=   o saldo gravado por dia (conta do escopo)
 // A gravação vai pelo apoio da tesouraria (liberação, permissão da operação, trilha e idempotência no executor); a
 // leitura, direto no banco do cliente (sem núcleo: 503, falha fechada).
@@ -24,8 +27,11 @@ import { corpo, inteiroOuNulo } from '../exames/public-api.js';
 import { ApoiosFinanceiro } from './apoios.js';
 import { contasDoEscopo } from './operacoes.js';
 import {
+  type EventoPeriodoResposta,
   esquemaFecharPeriodo,
+  esquemaPedirReabertura,
   esquemaReabrirPeriodo,
+  listarEventosPeriodo,
   listarPeriodos,
   type PeriodoFinanceiroResposta,
   type SaldoDiarioResposta,
@@ -77,6 +83,12 @@ export class PeriodoFinanceiroController {
     return this.ler(req, (l, est) => listarPeriodos(l, est));
   }
 
+  @Get('eventos')
+  @Permissao('financeiro.movimento.ler')
+  eventos(@Req() req: RequisicaoAutorizada): Promise<EventoPeriodoResposta[]> {
+    return this.ler(req, (l, est) => listarEventosPeriodo(l, est));
+  }
+
   @Get('saldo-diario')
   @Permissao('financeiro.movimento.ler')
   saldoDiario(
@@ -114,6 +126,23 @@ export class PeriodoFinanceiroController {
     return resultadoFin(r.mensagem, r.repetida, r.resultado);
   }
 
+  @Post('pedir-reabertura')
+  @HttpCode(200)
+  @Permissao('financeiro.movimento.criar')
+  @AuditadoNoHandler('financeiro.pedirReaberturaPeriodo pelo executor (trilha na mesma transação)')
+  async pedirReabertura(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    const op = 'financeiro.pedirReaberturaPeriodo';
+    const r = await this.apoios
+      .daOperacao(op)
+      .executar(
+        sessaoDe(req),
+        op,
+        corpo(esquemaPedirReabertura, b),
+        'Pedido de reabertura registrado; outro usuário autoriza.',
+      );
+    return resultadoFin(r.mensagem, r.repetida, r.resultado);
+  }
+
   @Post('reabrir')
   @HttpCode(200)
   @Permissao('financeiro.parametro.editar')
@@ -122,12 +151,7 @@ export class PeriodoFinanceiroController {
     const op = 'financeiro.reabrirPeriodo';
     const r = await this.apoios
       .daOperacao(op)
-      .executar(
-        sessaoDe(req),
-        op,
-        corpo(esquemaReabrirPeriodo, b),
-        'Competência reaberta, com a justificativa.',
-      );
+      .executar(sessaoDe(req), op, corpo(esquemaReabrirPeriodo, b), 'Decisão sobre a reabertura registrada.');
     return resultadoFin(r.mensagem, r.repetida, r.resultado);
   }
 }

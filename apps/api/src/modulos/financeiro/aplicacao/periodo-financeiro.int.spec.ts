@@ -1,8 +1,11 @@
 // F3.8, 07-FIN linha 85: contrato de efeito do fechamento e da reabertura do período financeiro contra o MariaDB real
-// (massa SINTÉTICA "L0207"). Fechar o mês passado: a competência fica fechada (quem, quando, quantos movimentos), cada
-// conta ganha um saldo por dia com movimento (encadeado: o final de um dia é o anterior do próximo) e o resumo do
-// período (inicial, entradas, saídas, final); o lançamento com data no mês fechado é recusado e não grava. Reabrir:
-// exige justificativa, guarda quem e por quê, solta os dias; o novo fechamento regrava os saldos com o lançamento novo.
+// (massa SINTÉTICA "L0207"). Fechar o mês passado com o anterior nunca fechado: os dois fecham em cadeia (quem, quando,
+// quantos movimentos, evento de cada um), cada conta ganha um saldo por dia com movimento (valores exatos, encadeados)
+// e o resumo do período, com a abertura igual ao saldo inicial da conta mais o movimento anterior. O lançamento e a
+// baixa com data até o fim do último mês fechado são recusados e não gravam; o outro estabelecimento fica intocado.
+// Reabrir: um usuário pede (justificativa), outro decide; quem pediu não autoriza; a recusa e a autorização viram
+// eventos; o novo fechamento regrava os saldos. Concorrência: lançamento e fechamento simultâneos nunca deixam
+// movimento num mês fechado fora do saldo.
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -19,17 +22,30 @@ import {
 const op = (c: ContextoNucleo) => ({ ...c, chaveIdempotencia: `t0207-pf-${randomUUID()}` });
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const hoje = new Date();
-// A competência do mês passado (fechável) e dois dias dela.
-const COMP = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
+const mesAtras = (n: number) =>
+  new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - n, 1)).toISOString().slice(0, 10);
+// O mês passado (pedido), o retrasado (nunca fechado: entra na cadeia) e o atual (em curso).
+const COMP = mesAtras(1);
+const ANTERIOR = mesAtras(2);
+const MES_ATUAL = mesAtras(0);
+const D0 = `${ANTERIOR.slice(0, 8)}05`;
 const D1 = `${COMP.slice(0, 8)}03`;
 const D2 = `${COMP.slice(0, 8)}10`;
-const MES_ATUAL = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 1)).toISOString().slice(0, 10);
+const JUST = 'Tarifa do banco lançada fora do mês';
+const cent = (v: number) => Math.round(v * 100);
 
-describe.skipIf(SEM_BANCO)('período financeiro: fechar, travar e reabrir (MariaDB)', () => {
+describe.skipIf(SEM_BANCO)('período financeiro: fechar em ordem, travar e reabrir (MariaDB)', () => {
   let m: MassaFinanceiro;
   let porta: PortaFinanceiroPropria;
   const consultar = (sql: string, p: unknown[]) =>
     m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'pf-02-07' }, (l) => l.consultar(sql, p));
+  const limparEventos = () =>
+    m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'pf-02-07' }, (e) =>
+      e.executar('DELETE FROM evento_periodo_financeiro WHERE estabelecimento_id IN (?, ?)', [
+        m.est,
+        m.outroEst,
+      ]),
+    );
   const executar = (nome: string, entrada: unknown, usuario = m.lanca) => {
     const c = m.ctx(usuario);
     return porta.executar(c, nome, entrada, op(c));
@@ -44,20 +60,32 @@ describe.skipIf(SEM_BANCO)('período financeiro: fechar, travar e reabrir (Maria
       historico: 'TRANSFERENCIA SINTETICA L0207 PERIODO',
       classificacao: { grupo: 9207, subgrupo: 1, item: 1 },
     });
-  const periodo = async () =>
+  const pedir = (usuario = m.lanca, justificativa = JUST) =>
+    executar('financeiro.pedirReaberturaPeriodo', { competencia: COMP, justificativa }, usuario);
+  const decidir = (decisao: 'autorizar' | 'recusar', usuario = m.aprova) =>
+    executar('financeiro.reabrirPeriodo', { competencia: COMP, decisao }, usuario);
+  const periodo = async (comp = COMP) =>
     (
       await consultar(
-        `SELECT situacao, fechamento_usuario_id, quantidade_registros, reabertura_usuario_id, autorizador_usuario_id,
-                justificativa_reabertura FROM periodo_financeiro WHERE estabelecimento_id = ? AND competencia = ?`,
-        [m.est, COMP],
+        `SELECT id, situacao, fechamento_usuario_id, quantidade_registros, reabertura_usuario_id,
+                autorizador_usuario_id, justificativa_reabertura, bloqueia_banco
+           FROM periodo_financeiro WHERE estabelecimento_id = ? AND competencia = ?`,
+        [m.est, comp],
       )
     )[0];
-  const dias = async (conta: number) =>
+  const eventos = async (comp = COMP) =>
+    (
+      await consultar(
+        'SELECT tipo, usuario_id FROM evento_periodo_financeiro WHERE estabelecimento_id = ? AND competencia = ? ORDER BY id',
+        [m.est, comp],
+      )
+    ).map((r) => `${String(r['tipo'])}:${Number(r['usuario_id'])}`);
+  const dias = async (conta: number, comp = COMP) =>
     (
       await consultar(
         `SELECT data_saldo, saldo_anterior, total_entradas, total_saidas, saldo_final, fechado, operacao
            FROM saldo_diario_conta WHERE conta_bancaria_id = ? AND data_saldo BETWEEN ? AND LAST_DAY(?) ORDER BY data_saldo`,
-        [conta, COMP, COMP],
+        [conta, comp, comp],
       )
     ).map((r) => ({
       data: iso(r['data_saldo']),
@@ -68,70 +96,128 @@ describe.skipIf(SEM_BANCO)('período financeiro: fechar, travar e reabrir (Maria
       fechado: Number(r['fechado']) === 1,
       operacao: String(r['operacao']),
     }));
-  const movimentosDoMes = async () =>
+  const resumo = async (conta: number, comp: string) =>
+    (
+      await consultar(
+        `SELECT s.saldo_inicial, s.total_credito, s.total_debito, s.saldo_final FROM saldo_financeiro_periodo s
+           JOIN periodo_financeiro p ON p.id = s.periodo_financeiro_id
+          WHERE p.estabelecimento_id = ? AND p.competencia = ? AND s.tipo_referencia = 'conta_bancaria'
+            AND s.conta_bancaria_id = ?`,
+        [m.est, comp, conta],
+      )
+    )[0];
+  const movimentosDoMes = async (comp = COMP) =>
     Number(
       (
         await consultar(
           `SELECT COUNT(*) AS n FROM movimento_bancario WHERE estabelecimento_id = ? AND situacao = 'ativo'
               AND excluido_em IS NULL AND data_movimento BETWEEN ? AND LAST_DAY(?)`,
-          [m.est, COMP, COMP],
+          [m.est, comp, comp],
         )
       )[0]?.['n'] ?? 0,
+    );
+  /** A abertura esperada, calculada à parte: saldo inicial da conta e o movimento ativo antes da competência. */
+  const aberturaEsperada = async (conta: number, comp: string) =>
+    Number(
+      (
+        await consultar(
+          `SELECT COALESCE(c.saldo_inicial, 0) + COALESCE((SELECT SUM(CASE WHEN natureza = 'credito' THEN valor ELSE -valor END)
+                    FROM movimento_bancario WHERE conta_bancaria_id = c.id AND situacao = 'ativo'
+                     AND excluido_em IS NULL AND data_movimento < ?), 0) AS s
+             FROM conta_bancaria c WHERE c.id = ?`,
+          [comp, conta],
+        )
+      )[0]?.['s'] ?? NaN,
     );
 
   beforeAll(async () => {
     m = await montarMassa();
     porta = new PortaFinanceiroPropria(m.nucleo);
+    await limparEventos();
   });
 
   afterAll(async () => {
     if (m) {
+      await limparEventos();
       await limparMassa(m.nucleo, [m.est, m.outroEst]);
       await m.nucleo.encerrar();
     }
   });
 
-  it('fecha o mês passado: competência fechada, saldo por dia encadeado e resumo por conta', async () => {
+  it('fecha em cadeia o mês anterior nunca fechado, com saldos exatos e abertura = inicial + anterior', async () => {
+    await transferir(D0, m.contaA, m.contaB, 10);
     await transferir(D1, m.contaA, m.contaB, 77.7);
     await transferir(D2, m.contaB, m.contaA, 20);
+    expect(await periodo(ANTERIOR)).toBeUndefined();
     const r = await executar('financeiro.fecharPeriodo', { competencia: COMP });
+    expect([r.resultado['meses'], r.resultado['desde']]).toEqual([2, ANTERIOR]);
     expect(Number(r.resultado['movimentos'])).toBe(await movimentosDoMes());
 
-    const p = await periodo();
-    expect(p?.['situacao']).toBe('fechado');
-    expect(Number(p?.['fechamento_usuario_id'])).toBe(m.lanca);
-    expect(Number(p?.['quantidade_registros'])).toBe(await movimentosDoMes());
-
-    const a = await dias(m.contaA);
-    const dA1 = a.find((d) => d.data === D1);
-    const dA2 = a.find((d) => d.data === D2);
-    expect(dA1?.saidas).toBeGreaterThanOrEqual(77.7);
-    expect(dA2?.entradas).toBeGreaterThanOrEqual(20);
-    expect(a.every((d) => d.fechado && d.operacao === 'inclusao')).toBe(true);
-    // Encadeado: o final de cada dia é o anterior do próximo, e o final é anterior + entradas - saídas.
-    for (let i = 0; i < a.length; i++) {
-      const d = a[i]!;
-      expect(Math.round((d.anterior + d.entradas - d.saidas) * 100)).toBe(Math.round(d.final * 100));
-      if (i > 0) expect(d.anterior).toBe(a[i - 1]!.final);
+    for (const comp of [ANTERIOR, COMP]) {
+      const p = await periodo(comp);
+      expect([p?.['situacao'], Number(p?.['fechamento_usuario_id']), Number(p?.['bloqueia_banco'])]).toEqual([
+        'fechado',
+        m.lanca,
+        1,
+      ]);
+      expect(Number(p?.['quantidade_registros'])).toBe(await movimentosDoMes(comp));
+      expect(await eventos(comp)).toEqual([`fechamento:${m.lanca}`]);
     }
-    const [resumo] = await consultar(
-      `SELECT s.saldo_inicial, s.total_credito, s.total_debito, s.saldo_final FROM saldo_financeiro_periodo s
-         JOIN periodo_financeiro p ON p.id = s.periodo_financeiro_id
-        WHERE p.estabelecimento_id = ? AND p.competencia = ? AND s.tipo_referencia = 'conta_bancaria'
-          AND s.conta_bancaria_id = ?`,
-      [m.est, COMP, m.contaA],
+
+    // Valores exatos do dia: a conta A só teve a saída de 77,70 em D1 e a entrada de 20 em D2.
+    const a = await dias(m.contaA);
+    expect(a.map((d) => [d.data, d.entradas, d.saidas, d.fechado, d.operacao])).toEqual([
+      [D1, 0, 77.7, true, 'inclusao'],
+      [D2, 20, 0, true, 'inclusao'],
+    ]);
+    const abertura = await aberturaEsperada(m.contaA, COMP);
+    expect(cent(a[0]!.anterior)).toBe(cent(abertura));
+    expect(cent(a[0]!.final)).toBe(cent(abertura - 77.7));
+    expect(a[1]!.anterior).toBe(a[0]!.final);
+    expect(cent(a[1]!.final)).toBe(cent(abertura - 77.7 + 20));
+    // O resumo do mês e o encadeamento com o mês anterior (o final de um é a abertura do outro).
+    const rc = await resumo(m.contaA, COMP);
+    const ra = await resumo(m.contaA, ANTERIOR);
+    expect([cent(Number(rc?.['saldo_inicial'])), cent(Number(rc?.['saldo_final']))]).toEqual([
+      cent(abertura),
+      cent(abertura - 57.7),
+    ]);
+    expect([Number(rc?.['total_credito']), Number(rc?.['total_debito'])]).toEqual([20, 77.7]);
+    expect(cent(Number(ra?.['saldo_final']))).toBe(cent(abertura));
+    expect(cent(Number(ra?.['saldo_inicial']))).toBe(cent(await aberturaEsperada(m.contaA, ANTERIOR)));
+    expect(cent(Number(ra?.['saldo_inicial']) - 10)).toBe(cent(abertura));
+
+    // O outro estabelecimento fica intocado: sem período, sem saldo e sem evento.
+    const outro = await consultar(
+      `SELECT (SELECT COUNT(*) FROM periodo_financeiro WHERE estabelecimento_id = ?) AS p,
+              (SELECT COUNT(*) FROM saldo_diario_conta WHERE conta_bancaria_id = ?) AS s,
+              (SELECT COUNT(*) FROM evento_periodo_financeiro WHERE estabelecimento_id = ?) AS e`,
+      [m.outroEst, m.contaOutroEst, m.outroEst],
     );
-    expect(Number(resumo?.['saldo_final'])).toBe(a[a.length - 1]!.final);
-    expect(Number(resumo?.['saldo_inicial'])).toBe(a[0]!.anterior);
+    expect([Number(outro[0]?.['p']), Number(outro[0]?.['s']), Number(outro[0]?.['e'])]).toEqual([0, 0, 0]);
   });
 
-  it('trava o retroativo: movimento e repetição do fechamento recusados, nada gravado', async () => {
-    const antes = await movimentosDoMes();
+  it('trava toda data até o fim do último mês fechado: movimento e baixa recusados, nada gravado', async () => {
+    const antes = [await movimentosDoMes(ANTERIOR), await movimentosDoMes()];
     expect(await codigoDaGravacao(transferir(D1, m.contaA, m.contaB, 5))).toBe('periodo-fechado');
-    expect(await movimentosDoMes()).toBe(antes);
-    expect(await codigoDaGravacao(executar('financeiro.fecharPeriodo', { competencia: COMP }))).toBe(
-      'periodo-ja-fechado',
-    );
+    expect(await codigoDaGravacao(transferir(D0, m.contaA, m.contaB, 5))).toBe('periodo-fechado');
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.baixarTitulo', {
+          cenario: 'pagar',
+          titulos: [{ titulo: 999_999_999, versao: 1 }],
+          conta: m.contaA,
+          dataPagamento: D0,
+          formaPagamento: 1,
+          porBordero: true,
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    expect([await movimentosDoMes(ANTERIOR), await movimentosDoMes()]).toEqual(antes);
+    for (const comp of [COMP, ANTERIOR])
+      expect(await codigoDaGravacao(executar('financeiro.fecharPeriodo', { competencia: comp }))).toBe(
+        'periodo-ja-fechado',
+      );
     expect(await codigoDaGravacao(executar('financeiro.fecharPeriodo', { competencia: MES_ATUAL }))).toBe(
       'periodo-em-curso',
     );
@@ -142,29 +228,71 @@ describe.skipIf(SEM_BANCO)('período financeiro: fechar, travar e reabrir (Maria
     expect(Number(atual[0]?.['n'])).toBe(0);
   });
 
-  it('reabre com justificativa, guarda quem e por quê, e o novo fechamento regrava o dia', async () => {
+  it('reabertura: um pede, outro decide; quem pediu não autoriza; cada passo vira evento', async () => {
     expect(
       await codigoDaGravacao(
-        executar('financeiro.reabrirPeriodo', { competencia: COMP, justificativa: 'erro' }),
+        executar('financeiro.pedirReaberturaPeriodo', { competencia: ANTERIOR, justificativa: JUST }),
       ),
-    ).toBe('justificativa-obrigatoria');
+    ).toBe('periodo-posterior-fechado');
+    expect(await codigoDaGravacao(pedir(m.lanca, 'erro'))).toBe('justificativa-obrigatoria');
+    expect(await codigoDaGravacao(decidir('autorizar'))).toBe('sem-pedido-reabertura');
+    await pedir();
+    expect(await codigoDaGravacao(pedir())).toBe('pedido-reabertura-pendente');
+    expect(await codigoDaGravacao(decidir('autorizar', m.lanca))).toBe('autorizador-igual-solicitante');
+    expect((await periodo())?.['situacao']).toBe('fechado');
+    await decidir('recusar');
     expect((await periodo())?.['situacao']).toBe('fechado');
 
-    const just = 'Tarifa do banco lançada fora do mês';
-    await executar('financeiro.reabrirPeriodo', { competencia: COMP, justificativa: just }, m.aprova);
+    await pedir();
+    await decidir('autorizar');
     const p = await periodo();
-    expect(p?.['situacao']).toBe('reaberto');
-    expect(Number(p?.['reabertura_usuario_id'])).toBe(m.aprova);
-    expect(Number(p?.['autorizador_usuario_id'])).toBe(m.aprova);
-    expect(p?.['justificativa_reabertura']).toBe(just);
+    expect([
+      p?.['situacao'],
+      Number(p?.['reabertura_usuario_id']),
+      Number(p?.['autorizador_usuario_id']),
+      p?.['justificativa_reabertura'],
+      Number(p?.['bloqueia_banco']),
+    ]).toEqual(['reaberto', m.lanca, m.aprova, JUST, 0]);
     expect((await dias(m.contaA)).every((d) => !d.fechado)).toBe(true);
+    // Reaberto só o último: o anterior continua travado.
+    expect(await codigoDaGravacao(transferir(D0, m.contaA, m.contaB, 5))).toBe('periodo-fechado');
 
     const antes = (await dias(m.contaA)).find((d) => d.data === D1)!;
     await transferir(D1, m.contaA, m.contaB, 5);
-    await executar('financeiro.fecharPeriodo', { competencia: COMP });
+    const r = await executar('financeiro.fecharPeriodo', { competencia: COMP });
+    expect(r.resultado['meses']).toBe(1);
     const depois = (await dias(m.contaA)).find((d) => d.data === D1)!;
-    expect(Math.round((depois.saidas - antes.saidas) * 100)).toBe(500);
+    expect(cent(depois.saidas - antes.saidas)).toBe(500);
     expect([depois.fechado, depois.operacao]).toEqual([true, 'alteracao']);
     expect((await periodo())?.['situacao']).toBe('fechado');
+    expect(await eventos()).toEqual([
+      `fechamento:${m.lanca}`,
+      `pedido_reabertura:${m.lanca}`,
+      `reabertura_recusada:${m.aprova}`,
+      `pedido_reabertura:${m.lanca}`,
+      `reabertura:${m.aprova}`,
+      `fechamento:${m.lanca}`,
+    ]);
+  });
+
+  it('lançamento e fechamento simultâneos: nenhum movimento fica no mês fechado fora do saldo', async () => {
+    await pedir();
+    await decidir('autorizar');
+    const [lanc] = await Promise.allSettled([
+      transferir(D2, m.contaA, m.contaB, 3.33),
+      executar('financeiro.fecharPeriodo', { competencia: COMP }),
+    ]);
+    if (lanc.status === 'rejected')
+      expect(await codigoDaGravacao(Promise.reject(lanc.reason))).toBe('periodo-fechado');
+    const p = await periodo();
+    expect(p?.['situacao']).toBe('fechado');
+    expect(Number(p?.['quantidade_registros'])).toBe(await movimentosDoMes());
+    const [soma] = await consultar(
+      `SELECT COALESCE(SUM(valor), 0) AS s FROM movimento_bancario WHERE conta_bancaria_id = ? AND situacao = 'ativo'
+          AND excluido_em IS NULL AND natureza = 'debito' AND data_movimento = ?`,
+      [m.contaA, D2],
+    );
+    const dia = (await dias(m.contaA)).find((d) => d.data === D2)!;
+    expect(cent(dia.saidas)).toBe(cent(Number(soma?.['s'])));
   });
 });

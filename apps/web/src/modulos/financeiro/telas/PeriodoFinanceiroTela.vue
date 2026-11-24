@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // Fechamento do período financeiro (F3.8, 07-FIN linha 85): `/financeiro/tesouraria/periodo`. A tela já sugere a
 // próxima competência a fechar (um clique); o servidor confere a ordem dos meses e trava os lançamentos com data no mês
-// fechado. Reabrir só aparece no último mês fechado, com a justificativa conferida enquanto se digita. Ao escolher uma
-// competência, o saldo gravado de cada dia da conta aparece abaixo (consulta histórica sem recalcular).
+// fechado (os meses anteriores ainda abertos fecham junto, em ordem). A reabertura só aparece no último mês fechado: um
+// usuário pede, com a justificativa conferida enquanto se digita, e outro autoriza ou recusa na mesma linha. O histórico
+// de fechamentos, pedidos e decisões fica abaixo, e ao escolher uma competência o saldo gravado de cada dia da conta
+// aparece (consulta histórica sem recalcular).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -11,7 +13,14 @@ import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import { novaChave } from '../api-financeiro.js';
-import { fecharPeriodo, lerPeriodos, lerSaldoDiario, reabrirPeriodo } from '../api-periodo.js';
+import {
+  decidirReabertura,
+  fecharPeriodo,
+  lerEventosPeriodo,
+  lerPeriodos,
+  lerSaldoDiario,
+  pedirReabertura,
+} from '../api-periodo.js';
 import { data, opcoesContas, quando, reais, somarMeses, usarFinanceiro } from '../usar-financeiro.js';
 
 const MINIMO = 15;
@@ -19,6 +28,10 @@ const { t } = useI18n();
 const qc = useQueryClient();
 const { apoio, pode, motivo, motivoFuncionalidade } = usarFinanceiro();
 const periodos = useQuery({ queryKey: ['financeiro', 'periodos'], queryFn: () => lerPeriodos() });
+const eventos = useQuery({
+  queryKey: ['financeiro', 'periodos', 'eventos'],
+  queryFn: () => lerEventosPeriodo(),
+});
 const mes = (c: string) => `${c.slice(5, 7)}/${c.slice(0, 4)}`;
 const mesDeHoje = computed(() => (apoio.data.value ? `${apoio.data.value.hoje.slice(0, 7)}-01` : null));
 
@@ -68,8 +81,15 @@ const fechar = (c: string) => acao(() => fecharPeriodo(c, chave));
 const faltam = computed(() => Math.max(0, MINIMO - justificativa.value.trim().length));
 const reabrir = () => {
   const c = reabrindo.value;
-  if (c) void acao(() => reabrirPeriodo(c, justificativa.value, chave));
+  if (c) void acao(() => pedirReabertura(c, justificativa.value, chave));
 };
+const observacao = ref('');
+const decidir = (c: string, decisao: 'autorizar' | 'recusar') =>
+  acao(async () => {
+    const r = await decidirReabertura(c, decisao, observacao.value, chave);
+    observacao.value = '';
+    return r;
+  });
 
 // Saldo diário: a conta do escopo e a competência escolhida (padrão: a última fechada).
 const conta = ref('');
@@ -147,13 +167,52 @@ const saldos = useQuery({
           <td>{{ p.fechadoPor ?? '—' }}</td>
           <td>{{ p.movimentos ?? '—' }}</td>
           <td>
-            {{ p.reabertoEm ? `${quando(p.reabertoEm)} · ${p.reabertoPor} · ${p.justificativa}` : '—' }}
+            <template v-if="p.pedido">
+              <span :data-testid="`pf-pedido-${p.competencia}`">
+                {{
+                  t('financeiro.periodo.pedido', { por: p.pedido.por, justificativa: p.pedido.justificativa })
+                }}
+              </span>
+            </template>
+            <template v-else-if="p.reabertoEm">
+              {{ `${quando(p.reabertoEm)} · ${p.reabertoPor} · ${p.justificativa}` }}
+              <span v-if="p.autorizadoPor">
+                · {{ t('financeiro.periodo.autorizadoPor', { por: p.autorizadoPor }) }}</span
+              >
+            </template>
+            <template v-else>—</template>
           </td>
           <td>
+            <template v-if="p.pedido && pode('financeiro.reabrirPeriodo', 'financeiro.parametro.editar')">
+              <input
+                v-model="observacao"
+                maxlength="500"
+                :aria-label="t('financeiro.periodo.observacao')"
+                :placeholder="t('financeiro.periodo.observacao')"
+                :data-testid="`pf-observacao-${p.competencia}`"
+              />
+              <button
+                type="button"
+                :disabled="gravando"
+                :data-testid="`pf-autorizar-${p.competencia}`"
+                @click="decidir(p.competencia, 'autorizar')"
+              >
+                {{ t('financeiro.periodo.autorizar') }}
+              </button>
+              <button
+                type="button"
+                :disabled="gravando"
+                :data-testid="`pf-recusar-${p.competencia}`"
+                @click="decidir(p.competencia, 'recusar')"
+              >
+                {{ t('financeiro.periodo.recusar') }}
+              </button>
+            </template>
             <button
-              v-if="
+              v-else-if="
+                !p.pedido &&
                 p.competencia === ultimaFechada &&
-                pode('financeiro.reabrirPeriodo', 'financeiro.parametro.editar')
+                pode('financeiro.pedirReaberturaPeriodo', 'financeiro.movimento.criar')
               "
               type="button"
               :data-testid="`pf-reabrir-${p.competencia}`"
@@ -185,6 +244,32 @@ const saldos = useQuery({
       </button>
       <button type="button" @click="reabrindo = null">{{ t('financeiro.cancelar') }}</button>
     </form>
+
+    <h2>{{ t('financeiro.periodo.historico') }}</h2>
+    <ErroFaturamento v-if="eventos.error.value" :erro="eventos.error.value" />
+    <table v-else-if="eventos.data.value?.length" class="tabela" data-testid="pf-historico">
+      <thead>
+        <tr>
+          <th scope="col">{{ t('financeiro.periodo.competencia') }}</th>
+          <th scope="col">{{ t('financeiro.periodo.evento') }}</th>
+          <th scope="col">{{ t('financeiro.periodo.quando') }}</th>
+          <th scope="col">{{ t('financeiro.periodo.quem') }}</th>
+          <th scope="col">{{ t('financeiro.periodo.movimentos') }}</th>
+          <th scope="col">{{ t('financeiro.periodo.justificativa') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(ev, i) in eventos.data.value" :key="i">
+          <td>{{ mes(ev.competencia) }}</td>
+          <td>{{ t(`financeiro.periodo.eventos.${ev.tipo}`) }}</td>
+          <td>{{ ev.em ? quando(ev.em) : '—' }}</td>
+          <td>{{ ev.por ?? '—' }}</td>
+          <td>{{ ev.movimentos ?? '—' }}</td>
+          <td>{{ ev.justificativa ?? '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p v-else-if="eventos.data.value">{{ t('financeiro.nenhum') }}</p>
 
     <h2>{{ t('financeiro.periodo.saldoDiario') }} {{ escolhida ? mes(escolhida) : '' }}</h2>
     <span class="campo">

@@ -1,9 +1,10 @@
 // F3.8, 07-FIN linha 85: fechamento e reabertura do período financeiro (a competência mensal do estabelecimento) e o
 // saldo diário por conta bancária gravado no fechamento. Regra pura, sem banco.
-// Desenho: o fechamento é sequencial (não fecha um mês com outro anterior ainda aberto) e só de mês terminado; fechado,
-// o período recusa todo lançamento com data dentro dele (movimento, baixa, transferência). A reabertura é a exceção:
-// só do último mês fechado, com justificativa e pela permissão de quem autoriza; o fechamento anterior fica no registro
-// (quando, quem e quantos movimentos), e o novo fechamento regrava os saldos daquele mês.
+// Desenho: o fechamento é sequencial pelo que existe no banco (os meses abertos antes da competência pedida, desde a
+// última fechada ou o primeiro movimento, fecham juntos em cadeia) e só de mês terminado; fechado, todo lançamento com
+// data até o fim do último mês fechado é recusado (movimento, baixa, transferência). A reabertura é a exceção: só do
+// último mês fechado, pedida com justificativa por um usuário e autorizada (ou recusada) por outro; cada fechamento,
+// pedido e decisão vira um evento consultável, e o novo fechamento regrava os saldos daquele mês.
 import { type RecusaFinanceiro, recusaFin } from '@sgh/contratos/regras-financeiro';
 
 export type SituacaoPeriodo = 'aberto' | 'fechado' | 'reaberto';
@@ -28,45 +29,98 @@ export interface PeriodoLido {
   readonly situacao: SituacaoPeriodo;
 }
 
-/**
- * Confere o fechamento: competência no formato do primeiro dia do mês, mês já terminado (antes do mês de hoje), ainda
- * não fechado, e nenhuma competência anterior registrada e não fechada (o fechamento segue a ordem dos meses).
- */
-export function conferirFechamentoPeriodo(
-  competencia: string,
-  atual: PeriodoLido | null,
-  hoje: string,
-  anterioresNaoFechadas: readonly string[],
-): RecusaFinanceiro | null {
-  if (!DATA.test(competencia) || competencia.slice(8) !== '01')
-    return recusaFin('competencia-invalida', 'Informe a competência pelo primeiro dia do mês.', [
-      'competencia',
-    ]);
-  if (competencia >= competenciaDe(hoje))
-    return recusaFin(
-      'periodo-em-curso',
-      'Só se fecha um mês já terminado: o mês de hoje e os seguintes continuam abertos.',
-      ['competencia'],
-    );
-  if (atual?.situacao === 'fechado')
-    return recusaFin('periodo-ja-fechado', 'Esta competência já está fechada.', ['competencia']);
-  const pendente = [...anterioresNaoFechadas].filter((c) => c < competencia).sort()[0];
-  if (pendente)
-    return recusaFin(
-      'periodo-anterior-aberto',
-      `Feche antes a competência ${pendente.slice(5, 7)}/${pendente.slice(0, 4)}: o fechamento segue a ordem dos meses.`,
-      ['competencia'],
-    );
-  return null;
+/** A competência seguinte (AAAA-MM-01). */
+export function proximaCompetencia(competencia: string): string {
+  const [a, m] = competencia.split('-').map(Number) as [number, number];
+  return new Date(Date.UTC(a, m, 1)).toISOString().slice(0, 10);
+}
+
+/** O teto de meses fechados de uma vez (a cadeia do primeiro fechamento de um hospital com anos de movimento). */
+export const MESES_POR_FECHAMENTO = 120;
+
+/** O que o fechamento conhece do estabelecimento, lido sob a trava do período. */
+export interface SituacaoDoFechamento {
+  /** A competência pedida (AAAA-MM-01). */
+  readonly competencia: string;
+  /** O registro dela (nulo: ainda sem registro). */
+  readonly atual: PeriodoLido | null;
+  readonly hoje: string;
+  /** A última competência fechada do estabelecimento (nulo: nenhuma). */
+  readonly ultimaFechada: string | null;
+  /** A competência do primeiro movimento ou saldo inicial de conta do estabelecimento (nulo: nenhum). */
+  readonly primeiraComMovimento: string | null;
 }
 
 /**
- * Confere a reabertura: só o período fechado, só o último fechado (os posteriores ainda abertos) e com justificativa.
+ * O plano do fechamento: os meses a fechar, em ordem, até a competência pedida. O fechamento segue a ordem dos meses
+ * pelo que existe no banco (não só pelos registros do período): os meses entre a última fechada (ou o primeiro mês com
+ * movimento, no primeiro fechamento) e a pedida são fechados juntos, em cadeia, cada um com o seu saldo; assim nenhum
+ * mês anterior fica aberto atrás de um fechado. Recusa: competência fora do primeiro dia, mês em curso ou futuro, já
+ * fechada (ou anterior à última fechada) e cadeia acima do teto.
  */
-export function conferirReaberturaPeriodo(
+export function planejarFechamentoPeriodo(
+  s: SituacaoDoFechamento,
+): { readonly recusa: RecusaFinanceiro } | { readonly competencias: readonly string[] } {
+  const comp = s.competencia;
+  if (!DATA.test(comp) || comp.slice(8) !== '01')
+    return {
+      recusa: recusaFin('competencia-invalida', 'Informe a competência pelo primeiro dia do mês.', [
+        'competencia',
+      ]),
+    };
+  if (comp >= competenciaDe(s.hoje))
+    return {
+      recusa: recusaFin(
+        'periodo-em-curso',
+        'Só se fecha um mês já terminado: o mês de hoje e os seguintes continuam abertos.',
+        ['competencia'],
+      ),
+    };
+  if (s.atual?.situacao === 'fechado' || (s.ultimaFechada !== null && comp <= s.ultimaFechada))
+    return { recusa: recusaFin('periodo-ja-fechado', 'Esta competência já está fechada.', ['competencia']) };
+  const inicio =
+    s.ultimaFechada !== null
+      ? proximaCompetencia(s.ultimaFechada)
+      : s.primeiraComMovimento !== null && s.primeiraComMovimento < comp
+        ? s.primeiraComMovimento
+        : comp;
+  const competencias: string[] = [];
+  for (let c = inicio; c <= comp; c = proximaCompetencia(c)) {
+    competencias.push(c);
+    if (competencias.length > MESES_POR_FECHAMENTO) {
+      const limite = competencias[MESES_POR_FECHAMENTO - 1] as string;
+      return {
+        recusa: recusaFin(
+          'periodo-cadeia-longa',
+          `Há mais de ${MESES_POR_FECHAMENTO} meses abertos antes desta competência: feche antes até ${limite.slice(5, 7)}/${limite.slice(0, 4)}.`,
+          ['competencia'],
+        ),
+      };
+    }
+  }
+  return { competencias };
+}
+
+/** A justificativa da reabertura conferida (aparada, com o mínimo de letras). */
+function conferirJustificativa(justificativa: string): RecusaFinanceiro | null {
+  return justificativa.trim().length < JUSTIFICATIVA_REABERTURA_MINIMA
+    ? recusaFin(
+        'justificativa-obrigatoria',
+        `Diga por que a competência é reaberta (ao menos ${JUSTIFICATIVA_REABERTURA_MINIMA} letras).`,
+        ['justificativa'],
+      )
+    : null;
+}
+
+/**
+ * Confere o pedido de reabertura: só a competência fechada, só a última fechada (os posteriores ainda abertos), com
+ * justificativa e sem outro pedido à espera de decisão.
+ */
+export function conferirPedidoReabertura(
   atual: PeriodoLido | null,
   posterioresFechadas: readonly string[],
   justificativa: string,
+  pedidoPendente: boolean,
 ): RecusaFinanceiro | null {
   if (!atual || atual.situacao !== 'fechado')
     return recusaFin('periodo-nao-fechado', 'Só se reabre uma competência fechada.', ['competencia']);
@@ -79,22 +133,58 @@ export function conferirReaberturaPeriodo(
       ['competencia'],
     );
   }
-  if (justificativa.trim().length < JUSTIFICATIVA_REABERTURA_MINIMA)
+  if (pedidoPendente)
     return recusaFin(
-      'justificativa-obrigatoria',
-      `Diga por que a competência é reaberta (ao menos ${JUSTIFICATIVA_REABERTURA_MINIMA} letras).`,
-      ['justificativa'],
+      'pedido-reabertura-pendente',
+      'Já há um pedido de reabertura desta competência à espera da autorização.',
+      ['competencia'],
+    );
+  return conferirJustificativa(justificativa);
+}
+
+/**
+ * Confere a decisão sobre o pedido de reabertura (autorizar ou recusar): a competência continua fechada e sem posterior
+ * fechado, há um pedido pendente, e quem decide não é quem pediu (segregação: um pede, outro autoriza).
+ */
+export function conferirDecisaoReabertura(d: {
+  readonly atual: PeriodoLido | null;
+  readonly posterioresFechadas: readonly string[];
+  readonly solicitante: number | null;
+  readonly decisor: number;
+}): RecusaFinanceiro | null {
+  if (!d.atual || d.atual.situacao !== 'fechado')
+    return recusaFin('periodo-nao-fechado', 'Só se reabre uma competência fechada.', ['competencia']);
+  if (d.posterioresFechadas.some((c) => c > (d.atual as PeriodoLido).competencia))
+    return recusaFin(
+      'periodo-posterior-fechado',
+      'Só o último mês fechado pode ser reaberto: há competência posterior fechada.',
+      ['competencia'],
+    );
+  if (d.solicitante === null)
+    return recusaFin(
+      'sem-pedido-reabertura',
+      'Não há pedido de reabertura desta competência: a reabertura começa pelo pedido, com a justificativa.',
+      ['competencia'],
+    );
+  if (d.solicitante === d.decisor)
+    return recusaFin(
+      'autorizador-igual-solicitante',
+      'Quem pediu a reabertura não a autoriza: outro usuário com a permissão decide.',
+      ['competencia'],
     );
   return null;
 }
 
-/** Confere um lançamento datado: a competência da data não pode estar fechada (o retroativo fica travado). */
+/**
+ * Confere um lançamento datado: a data não pode cair em mês fechado. A trava vale para toda data até o fim da última
+ * competência fechada do estabelecimento (os meses anteriores a ela também estão fechados, pela cadeia do fechamento).
+ */
 export function conferirLancamentoNoPeriodo(
   data: string,
-  situacaoDaCompetencia: SituacaoPeriodo | null,
+  ultimaFechada: string | null,
   campo = 'data',
 ): RecusaFinanceiro | null {
-  if (situacaoDaCompetencia !== 'fechado') return null;
+  if (ultimaFechada === null || data > fimDaCompetencia(ultimaFechada)) return null;
   const c = competenciaDe(data);
   return recusaFin(
     'periodo-fechado',

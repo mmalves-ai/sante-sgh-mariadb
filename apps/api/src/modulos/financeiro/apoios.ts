@@ -43,8 +43,10 @@ export const FUNCIONALIDADES_FINANCEIRO = {
     nome: 'a tesouraria (movimento bancário, extrato e conciliação)',
     operacoes: {
       'financeiro.lancarMovimento': 'financeiro.movimento.criar',
-      // F3.8 (07-FIN linha 85): fechar a competência é da tesouraria; reabrir, de quem edita o parâmetro do financeiro.
+      // F3.8 (07-FIN linha 85): fechar e pedir a reabertura são da tesouraria; autorizar ou recusar a reabertura, de
+      // quem edita o parâmetro do financeiro (e nunca quem pediu: regra no domínio).
       'financeiro.fecharPeriodo': 'financeiro.movimento.criar',
+      'financeiro.pedirReaberturaPeriodo': 'financeiro.movimento.criar',
       'financeiro.reabrirPeriodo': 'financeiro.parametro.editar',
       // F3.8 (07-FIN linhas 98 e 99): reclassificação gerencial e permissões do financeiro.
       'financeiro.reclassificarLancamento': 'financeiro.classificacao.editar',

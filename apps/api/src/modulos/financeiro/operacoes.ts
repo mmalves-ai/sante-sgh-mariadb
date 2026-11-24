@@ -1167,14 +1167,8 @@ export const OPERACOES_FINANCEIRO: Readonly<Record<string, Operacao<never, Resul
   'financeiro.baixarTitulo': baixarTitulo as unknown as Operacao<never, ResultadoOperacao>,
   'financeiro.criarTituloReceber': criarTituloReceber as unknown as Operacao<never, ResultadoOperacao>,
   'financeiro.lancarMovimento': lancarMovimento as unknown as Operacao<never, ResultadoOperacao>,
-  'financeiro.fecharPeriodo': OPERACOES_PERIODO['financeiro.fecharPeriodo'] as unknown as Operacao<
-    never,
-    ResultadoOperacao
-  >,
-  'financeiro.reabrirPeriodo': OPERACOES_PERIODO['financeiro.reabrirPeriodo'] as unknown as Operacao<
-    never,
-    ResultadoOperacao
-  >,
+  // F3.8, 07-FIN linha 85 (periodo-propria.ts): fechar, pedir a reabertura e decidir sobre ela.
+  ...(OPERACOES_PERIODO as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
   // F3.8, 07-FIN linhas 98 e 99 (gestao-propria.ts).
   ...(OPERACOES_GESTAO as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
 };
