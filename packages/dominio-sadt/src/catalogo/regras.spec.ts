@@ -3,6 +3,9 @@ import {
   type FaixaNova,
   padroesADesmarcar,
   planejarNovaVersaoFaixa,
+  planejarNovaVersaoFormula,
+  planejarNovasFaixas,
+  idadesCobertas,
   validarExame,
   validarExameLigado,
   validarFormula,
@@ -150,5 +153,107 @@ describe('catálogo de exames: fórmula', () => {
         .map((f) => f.mensagem)
         .join(' '),
     ).toMatch(/C\..*B\./);
+  });
+});
+
+describe('catálogo de exames: faixa que se cruza só em parte com a em vigor', () => {
+  const adulta = {
+    id: 7,
+    sexoId: null,
+    idadeMinimaDias: 6570,
+    idadeMaximaDias: null,
+    materialBiologicoId: null,
+    metodoAnaliticoId: null,
+    condicao: 'nenhuma',
+    vigenciaInicio: '2026-01-01',
+    vigenciaFim: null,
+  };
+  const nova = (min: number | null, max: number | null): FaixaNova => ({
+    ...faixa,
+    sexoId: null,
+    idadeMinimaDias: min,
+    idadeMaximaDias: max,
+    materialBiologicoId: null,
+    metodoAnaliticoId: null,
+    condicao: 'nenhuma',
+    vigenciaInicio: '2026-12-01',
+  });
+  it('recusa a nova de 18 a 60 anos sobre a adulta sem limite (o idoso ficaria sem referência)', () => {
+    const p = planejarNovaVersaoFaixa(nova(6570, 21900), [adulta], '2026-11-24');
+    expect(p.encerrar).toEqual([]);
+    expect(p.falhas.map((f) => f.campo)).toContain('idadeMinimaDias');
+  });
+  it('aceita a cobertura completa na mesma operação e encerra a antiga na véspera', () => {
+    const p = planejarNovasFaixas([nova(6570, 21900), nova(21901, null)], [adulta], '2026-11-24');
+    expect(p.falhas).toEqual([]);
+    expect(p.encerrar).toEqual([{ id: 7, vigenciaFim: '2026-11-30' }]);
+  });
+  it('a nova que contém a antiga inteira a encerra; as novas da operação não se cruzam', () => {
+    expect(planejarNovaVersaoFaixa(nova(0, null), [adulta], '2026-11-24').encerrar).toHaveLength(1);
+    const p = planejarNovasFaixas([nova(6570, 21900), nova(20000, null)], [adulta], '2026-11-24');
+    expect(p.falhas.some((f) => f.mensagem.includes('Se cruza com a faixa 1'))).toBe(true);
+  });
+  it('cobertura com buraco de idade não vale', () => {
+    expect(idadesCobertas(adulta, [nova(6570, 21000), nova(21002, null)])).toBe(false);
+    expect(idadesCobertas(adulta, [nova(6570, 21000), nova(21001, null)])).toBe(true);
+  });
+});
+
+describe('catálogo de exames: nova versão da fórmula', () => {
+  const ctx = {
+    hoje: '2026-11-24',
+    analitoAlvoId: 3,
+    calculado: true,
+    analitosDoExame: [1, 2, 3],
+    vigentes: [{ id: 50, vigenciaInicio: '2026-01-01', vigenciaFim: null }],
+    dependencias: [] as { analitoId: number; usa: number[] }[],
+  };
+  const formula = {
+    expressao: 'CT - HDL',
+    vigenciaInicio: '2026-12-01',
+    variaveis: [
+      { identificador: 'CT', fonte: 'analito', analitoId: 1, dadoPaciente: null },
+      { identificador: 'HDL', fonte: 'analito', analitoId: 2, dadoPaciente: null },
+    ],
+  };
+  const campos = (p: { falhas: readonly { mensagem: string }[] }) =>
+    p.falhas.map((f) => f.mensagem).join(' | ');
+  it('a válida encerra a anterior na véspera', () => {
+    expect(planejarNovaVersaoFormula(formula, ctx)).toEqual({
+      falhas: [],
+      encerrar: [{ id: 50, vigenciaFim: '2026-11-30' }],
+    });
+  });
+  it('recusa autorreferência, analito fora do exame, analito não calculado e data retroativa', () => {
+    const auto = {
+      ...formula,
+      variaveis: [{ ...formula.variaveis[0]!, analitoId: 3 }, formula.variaveis[1]!],
+    };
+    expect(campos(planejarNovaVersaoFormula(auto, ctx))).toContain('próprio analito');
+    const fora = {
+      ...formula,
+      variaveis: [{ ...formula.variaveis[0]!, analitoId: 99 }, formula.variaveis[1]!],
+    };
+    expect(campos(planejarNovaVersaoFormula(fora, ctx))).toContain('não está neste exame');
+    expect(campos(planejarNovaVersaoFormula(formula, { ...ctx, calculado: false }))).toContain('calculado');
+    const p = planejarNovaVersaoFormula({ ...formula, vigenciaInicio: '2026-11-01' }, ctx);
+    expect(campos(p)).toContain('nada retroativo');
+    expect(p.encerrar).toEqual([]);
+  });
+  it('recusa o ciclo entre fórmulas do exame e a que começa antes da em vigor', () => {
+    const ciclo = { ...ctx, dependencias: [{ analitoId: 2, usa: [3] }] };
+    expect(campos(planejarNovaVersaoFormula(formula, ciclo))).toContain('ciclo');
+    const futura = { ...ctx, vigentes: [{ id: 51, vigenciaInicio: '2026-12-05', vigenciaFim: null }] };
+    expect(campos(planejarNovaVersaoFormula(formula, futura))).toContain('começa depois');
+  });
+  it('analito só com a fonte analito; dado do paciente só com a fonte paciente', () => {
+    const errada = {
+      ...formula,
+      expressao: 'P',
+      variaveis: [{ identificador: 'P', fonte: 'digitado', analitoId: 1, dadoPaciente: 'peso' }],
+    };
+    const m = campos(planejarNovaVersaoFormula(errada, ctx));
+    expect(m).toContain('fonte analito');
+    expect(m).toContain('fonte paciente');
   });
 });

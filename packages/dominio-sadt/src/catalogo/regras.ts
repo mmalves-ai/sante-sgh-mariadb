@@ -202,42 +202,106 @@ export interface PlanoNovaVersaoFaixa {
   readonly encerrar: readonly { readonly id: number; readonly vigenciaFim: string }[];
 }
 
+const MAIOR_IDADE = Number.MAX_SAFE_INTEGER;
+const mesmasChaves = (a: EstratoFaixa, b: EstratoFaixa) =>
+  a.sexoId === b.sexoId &&
+  a.materialBiologicoId === b.materialBiologicoId &&
+  a.metodoAnaliticoId === b.metodoAnaliticoId &&
+  a.condicao === b.condicao;
+const textoIdade = (e: EstratoFaixa) =>
+  `${e.idadeMinimaDias ?? 0} a ${e.idadeMaximaDias === null ? 'sem limite de' : e.idadeMaximaDias} dias`;
+
+/** As idades de `alvo` ficam inteiras dentro da união das idades de `cobertura` (dias inteiros, sem buraco). */
+export function idadesCobertas(alvo: EstratoFaixa, cobertura: readonly EstratoFaixa[]): boolean {
+  const ini = alvo.idadeMinimaDias ?? 0;
+  const fimAlvo = alvo.idadeMaximaDias ?? MAIOR_IDADE;
+  const pedacos = cobertura
+    .map((c) => [c.idadeMinimaDias ?? 0, c.idadeMaximaDias ?? MAIOR_IDADE] as const)
+    .sort((a, b) => a[0] - b[0]);
+  let ate = ini - 1;
+  for (const [a, b] of pedacos) {
+    if (a > ate + 1) break;
+    ate = Math.max(ate, b);
+    if (ate >= fimAlvo) return true;
+  }
+  return ate >= fimAlvo;
+}
+
 /**
- * A nova versão da faixa: valida os limites e encerra, na véspera do início da nova, as faixas em vigor do mesmo
- * estrato. Recusa a nova que começaria no mesmo dia ou antes de uma em vigor do estrato (laudo já emitido com ela
- * mudaria de referência) e a que começaria antes de hoje.
+ * Novas versões de faixa numa operação só. Cada nova é validada (limites, data, condição, idades) e as faixas em vigor
+ * do mesmo estrato que alguma nova alcança se encerram na véspera, mas só quando as novas da operação cobrem inteira a
+ * faixa etária da antiga. Se a cobertura for parcial (antiga de 18 anos em diante, nova de 18 a 60), a operação é
+ * recusada com a idade que ficaria sem referência: a tela manda, na mesma operação, a nova faixa que completa a
+ * cobertura (de 61 em diante). Nunca começa antes de hoje nem no mesmo dia ou antes de uma em vigor do estrato, e as
+ * novas do mesmo estrato não podem se cruzar entre si.
  */
-export function planejarNovaVersaoFaixa(
-  nova: FaixaNova,
+export function planejarNovasFaixas(
+  novas: readonly FaixaNova[],
   vigentes: readonly FaixaVigente[],
   hoje: string,
 ): PlanoNovaVersaoFaixa {
-  const falhas: FalhaCatalogo[] = [...validarLimitesFaixa(nova)];
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(nova.vigenciaInicio))
-    falhas.push({ campo: 'vigenciaInicio', mensagem: 'Data de início inválida.' });
-  else if (nova.vigenciaInicio < hoje)
-    falhas.push({
-      campo: 'vigenciaInicio',
-      mensagem: 'A nova faixa começa hoje ou depois (nada retroativo).',
+  const falhas: FalhaCatalogo[] = [];
+  if (!novas.length)
+    return { falhas: [{ campo: 'faixas', mensagem: 'Informe ao menos uma faixa.' }], encerrar: [] };
+  novas.forEach((nova, i) => {
+    const pre = novas.length > 1 ? `Faixa ${i + 1}: ` : '';
+    const add = (campo: string, mensagem: string) => falhas.push({ campo, mensagem: pre + mensagem });
+    for (const f of validarLimitesFaixa(nova)) add(f.campo, f.mensagem);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nova.vigenciaInicio)) add('vigenciaInicio', 'Data de início inválida.');
+    else if (nova.vigenciaInicio < hoje)
+      add('vigenciaInicio', 'A nova faixa começa hoje ou depois (nada retroativo).');
+    if (!(CONDICOES_FAIXA as readonly string[]).includes(nova.condicao))
+      add('condicao', 'Condição desconhecida.');
+    if (!menorOuIgual(nova.idadeMinimaDias, nova.idadeMaximaDias))
+      add('idadeMaximaDias', 'A idade máxima é menor que a mínima.');
+    novas.slice(0, i).forEach((outra, j) => {
+      if (mesmoEstrato(outra, nova))
+        add('idadeMinimaDias', `Se cruza com a faixa ${j + 1} da mesma operação.`);
     });
-  if (!(CONDICOES_FAIXA as readonly string[]).includes(nova.condicao))
-    falhas.push({ campo: 'condicao', mensagem: 'Condição desconhecida.' });
-  if (!menorOuIgual(nova.idadeMinimaDias, nova.idadeMaximaDias))
-    falhas.push({ campo: 'idadeMaximaDias', mensagem: 'A idade máxima é menor que a mínima.' });
+  });
   const encerrar: { id: number; vigenciaFim: string }[] = [];
   for (const v of vigentes) {
-    if (!mesmoEstrato(v, nova)) continue;
-    if (v.vigenciaFim !== null && v.vigenciaFim < nova.vigenciaInicio) continue;
-    if (v.vigenciaInicio >= nova.vigenciaInicio) {
+    const alcancam = novas.filter((n) => mesmoEstrato(v, n));
+    if (!alcancam.length) continue;
+    const inicio = alcancam.reduce(
+      (m, n) => (n.vigenciaInicio < m ? n.vigenciaInicio : m),
+      alcancam[0]!.vigenciaInicio,
+    );
+    if (v.vigenciaFim !== null && v.vigenciaFim < inicio) continue;
+    if (v.vigenciaInicio >= inicio) {
       falhas.push({
         campo: 'vigenciaInicio',
         mensagem: `Já há faixa deste estrato começando em ${v.vigenciaInicio}: a nova começa depois dela.`,
       });
       continue;
     }
-    encerrar.push({ id: v.id, vigenciaFim: vespera(nova.vigenciaInicio) });
+    if (alcancam.some((n) => n.vigenciaInicio !== inicio)) {
+      falhas.push({
+        campo: 'vigenciaInicio',
+        mensagem: 'As faixas que substituem a mesma faixa em vigor começam no mesmo dia.',
+      });
+      continue;
+    }
+    const cobertura = novas.filter((n) => mesmasChaves(v, n) && n.vigenciaInicio === inicio);
+    if (!idadesCobertas(v, cobertura)) {
+      falhas.push({
+        campo: 'idadeMinimaDias',
+        mensagem: `A faixa em vigor de ${textoIdade(v)} só é coberta em parte: a idade que sobra ficaria sem referência. Inclua na mesma gravação a faixa que completa a cobertura.`,
+      });
+      continue;
+    }
+    encerrar.push({ id: v.id, vigenciaFim: vespera(inicio) });
   }
   return { falhas, encerrar: falhas.length ? [] : encerrar };
+}
+
+/** Uma nova versão de faixa (ver `planejarNovasFaixas`). */
+export function planejarNovaVersaoFaixa(
+  nova: FaixaNova,
+  vigentes: readonly FaixaVigente[],
+  hoje: string,
+): PlanoNovaVersaoFaixa {
+  return planejarNovasFaixas([nova], vigentes, hoje);
 }
 
 export const FUNCOES_FORMULA = ['raiz', 'log', 'ln', 'abs', 'min', 'max', 'arred', 'pot'] as const;
@@ -278,4 +342,115 @@ export function validarFormula(expressao: string, declaradas: readonly string[])
   if (new Set(declaradas).size !== declaradas.length)
     f.push({ campo: 'variaveis', mensagem: 'Variável declarada duas vezes.' });
   return f;
+}
+
+export const FONTES_VARIAVEL = ['analito', 'dado_paciente', 'digitado'] as const;
+
+export interface VariavelFormulaNova {
+  readonly identificador: string;
+  readonly fonte: string;
+  readonly analitoId: number | null;
+  readonly dadoPaciente: string | null;
+}
+
+export interface FormulaNova {
+  readonly expressao: string;
+  /** AAAA-MM-DD. */
+  readonly vigenciaInicio: string;
+  readonly variaveis: readonly VariavelFormulaNova[];
+}
+
+export interface ContextoFormula {
+  readonly hoje: string;
+  /** O analito que a fórmula calcula. */
+  readonly analitoAlvoId: number;
+  /** O analito está marcado como calculado no exame. */
+  readonly calculado: boolean;
+  /** Os analitos ativos do mesmo exame. */
+  readonly analitosDoExame: readonly number[];
+  /** As versões da fórmula deste analito em vigor na data de início ou depois. */
+  readonly vigentes: readonly {
+    readonly id: number;
+    readonly vigenciaInicio: string;
+    readonly vigenciaFim: string | null;
+  }[];
+  /** As fórmulas em vigor dos outros analitos do exame: o analito calculado e os analitos que ela usa. */
+  readonly dependencias: readonly { readonly analitoId: number; readonly usa: readonly number[] }[];
+}
+
+/**
+ * A nova versão da fórmula: a expressão conferida, as variáveis coerentes com a fonte, só analitos do mesmo exame e
+ * nunca o próprio analito calculado, sem ciclo entre fórmulas do exame (A usa B e B usa A), só em analito marcado como
+ * calculado, nada retroativo, e a versão em vigor se encerra na véspera da nova.
+ */
+export function planejarNovaVersaoFormula(nova: FormulaNova, ctx: ContextoFormula): PlanoNovaVersaoFaixa {
+  const falhas: FalhaCatalogo[] = [
+    ...validarFormula(
+      nova.expressao,
+      nova.variaveis.map((v) => v.identificador),
+    ),
+  ];
+  if (!ctx.calculado)
+    falhas.push({ campo: 'calculado', mensagem: 'A fórmula só vale para o analito marcado como calculado.' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nova.vigenciaInicio))
+    falhas.push({ campo: 'vigenciaInicio', mensagem: 'Data de início inválida.' });
+  else if (nova.vigenciaInicio < ctx.hoje)
+    falhas.push({
+      campo: 'vigenciaInicio',
+      mensagem: 'A nova fórmula começa hoje ou depois (nada retroativo).',
+    });
+  const usa: number[] = [];
+  for (const v of nova.variaveis) {
+    const rot = `A variável ${v.identificador}`;
+    if (!(FONTES_VARIAVEL as readonly string[]).includes(v.fonte))
+      falhas.push({ campo: 'variaveis', mensagem: `${rot}: fonte desconhecida.` });
+    if ((v.fonte === 'analito') !== (v.analitoId !== null))
+      falhas.push({
+        campo: 'variaveis',
+        mensagem: `${rot}: o analito vai só (e sempre) com a fonte analito.`,
+      });
+    if ((v.fonte === 'dado_paciente') !== (v.dadoPaciente !== null))
+      falhas.push({
+        campo: 'variaveis',
+        mensagem: `${rot}: o dado do paciente vai só (e sempre) com a fonte paciente.`,
+      });
+    if (v.fonte !== 'analito' || v.analitoId === null) continue;
+    if (v.analitoId === ctx.analitoAlvoId)
+      falhas.push({ campo: 'variaveis', mensagem: `${rot} aponta para o próprio analito calculado.` });
+    else if (!ctx.analitosDoExame.includes(v.analitoId))
+      falhas.push({
+        campo: 'variaveis',
+        mensagem: `${rot} aponta para um analito que não está neste exame.`,
+      });
+    else usa.push(v.analitoId);
+  }
+  // Ciclo: algum analito usado leva, pelas fórmulas em vigor do exame, de volta ao analito calculado?
+  const vistos = new Set<number>();
+  const fila = [...usa];
+  while (fila.length) {
+    const a = fila.shift() as number;
+    if (a === ctx.analitoAlvoId) {
+      falhas.push({
+        campo: 'variaveis',
+        mensagem: 'A fórmula fecharia um ciclo: um analito usado já é calculado a partir deste.',
+      });
+      break;
+    }
+    if (vistos.has(a)) continue;
+    vistos.add(a);
+    for (const d of ctx.dependencias) if (d.analitoId === a) fila.push(...d.usa);
+  }
+  const encerrar: { id: number; vigenciaFim: string }[] = [];
+  for (const v of ctx.vigentes) {
+    if (v.vigenciaFim !== null && v.vigenciaFim < nova.vigenciaInicio) continue;
+    if (v.vigenciaInicio >= nova.vigenciaInicio) {
+      falhas.push({
+        campo: 'vigenciaInicio',
+        mensagem: `Já há fórmula começando em ${v.vigenciaInicio}: a nova começa depois dela.`,
+      });
+      continue;
+    }
+    encerrar.push({ id: v.id, vigenciaFim: vespera(nova.vigenciaInicio) });
+  }
+  return { falhas, encerrar: falhas.length ? [] : encerrar };
 }
