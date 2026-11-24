@@ -6,10 +6,17 @@
 //   período pelo dia do atendimento (`de` e `ate` inclusivos), com a agenda, a natureza (consulta ou exame), a nota de
 //   recomendação e a manifestação aberta a partir dela; a resposta pelo id. A resposta anônima ou sem nota não entra
 //   (o contrato exige o paciente e a nota). Teto de linhas: o excedente marca `cortada`, nunca erro nem corte mudo.
-// - Versões anteriores de um registro corrigido: lidas da trilha_auditoria (dados.versaoAnterior gravado na operação
-//   da correção), da mais nova para a mais antiga, como a CCIH faz; registro sem correção devolve lista vazia.
+// - Versões anteriores de um registro corrigido: lidas da trilha_auditoria (dados.versaoAnterior), da mais nova para a
+//   mais antiga, como a CCIH faz; registro sem correção devolve lista vazia. Quem grava a versão anterior é o
+//   `comVersoesAnteriores` abaixo: embrulha o gravador da gestão e, na correção e no cancelamento da manifestação, lê a
+//   linha antes do UPDATE (travada) e a põe na anotação da trilha da mesma operação (histórico só de acréscimo; a
+//   memória faz o mesmo com `versionar`). A ligação no gravarSgh da porta completa é do integrador.
 // - Protocolos gerenciados: as versões publicadas (do estabelecimento e as da rede) e as inclusões de pacientes do
 //   período (`fim` exclusivo, pela hora da inclusão), com os critérios e os eventos (meta, checklist, encerramento).
+//   O contrato não tem marca de corte e a memória não tem teto: as leituras vão em páginas pela chave (id), sem teto
+//   que vire erro nem corte mudo; o mesmo vale para as versões da trilha.
+import type { TxOperacao } from '@sgh/nucleo';
+import type { AnotacaoGravacao } from '../enfermagem/gravacao-direta.js';
 import type { L, Linha, NucleoQualidade } from './apoio-propria.js';
 import {
   dataIso,
@@ -24,7 +31,7 @@ import {
   texto,
   textoN,
 } from './apoio-propria.js';
-import type { ContextoGestao } from './porta-gestao.js';
+import type { ContextoGestao, GravadorGestao, MudancaGestao } from './porta-gestao.js';
 import type {
   AcaoVersao,
   PesquisaSatisfacaoRespondida,
@@ -41,8 +48,28 @@ export const METODOS_COMPLEMENTO_D = ['pesquisas', 'pesquisa', 'versoes', 'proto
 
 /** Teto das respostas de pesquisa por período (o excedente marca `cortada`). */
 export const TETO_PESQUISAS = 5000;
-const TETO_VERSOES = 500;
-const TETO_PROTOCOLOS = 2000;
+/** Linhas por página nas leituras sem teto no contrato (versões e protocolos). */
+export const PAGINA_LEITURA = 1000;
+
+/**
+ * Lê todas as páginas de uma consulta ordenada pela chave `id` (crescente ou decrescente): `montar` recebe o último id
+ * lido (nulo na primeira página) e devolve o SQL com o filtro da chave, a ordem e o `LIMIT` da página.
+ */
+async function todasAsPaginas(
+  l: L,
+  montar: (apos: number | null) => readonly [string, readonly unknown[]],
+  pagina = PAGINA_LEITURA,
+): Promise<Linha[]> {
+  const todas: Linha[] = [];
+  let apos: number | null = null;
+  for (;;) {
+    const [sql, params] = montar(apos);
+    const r = await l.consultar(`${sql} LIMIT ${pagina}`, params, { teto: pagina });
+    todas.push(...r);
+    if (r.length < pagina) return todas;
+    apos = n(r[r.length - 1]?.['id']);
+  }
+}
 
 // ── Pesquisa de satisfação ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -77,6 +104,63 @@ function pesquisaDaLinha(r: Linha): PesquisaSatisfacaoRespondida {
 // ── Versões anteriores ──────────────────────────────────────────────────────────────────────────────────────────
 
 const campoVersao = (campo: string) => `JSON_VALUE(t.dados_depois, '$.dados.versaoAnterior.${campo}')`;
+
+/** A linha como estava (datas no formato local), para a versão anterior na trilha (como a CCIH). */
+function retrato(r: Linha): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v instanceof Date ? instante(v) : v]));
+}
+
+/**
+ * Embrulha o gravador da gestão para guardar a versão anterior na trilha da operação: na correção e no cancelamento
+ * da manifestação, a linha é lida (travada, do estabelecimento) antes do UPDATE e, se a gravação passar, vai a
+ * `anotacao.dados.versaoAnterior` = { tabela, id, versao, acao, motivo, dados }, que `versoes` lê. Se a gravação
+ * recusar, nada é anotado (e a transação desfaz).
+ */
+export function comVersoesAnteriores(
+  base: GravadorGestao,
+  tx: TxOperacao,
+  est: number,
+  anotacao: AnotacaoGravacao,
+): GravadorGestao {
+  const versionado =
+    <M extends MudancaGestao>(
+      tabela: TabelaCorrigivel,
+      acao: AcaoVersao,
+      fn: (m: M) => Promise<{ versao: number }>,
+    ) =>
+    async (m: M): Promise<{ versao: number }> => {
+      const antes = await tx.uma<Linha>(
+        `SELECT * FROM ${tabela} WHERE id = ? AND estabelecimento_id = ? FOR UPDATE`,
+        [m.id, est],
+      );
+      const feito = await fn(m);
+      if (antes) {
+        const motivo = m.justificativa;
+        anotacao.motivo = motivo;
+        anotacao.dados = {
+          ...(anotacao.dados ?? {}),
+          versaoAnterior: {
+            tabela,
+            id: n(antes['id']),
+            versao: n(antes['versao']),
+            acao,
+            motivo,
+            dados: retrato(antes),
+          },
+        };
+      }
+      return feito;
+    };
+  return {
+    ...base,
+    corrigirManifestacao: versionado('manifestacao_ouvidoria', 'correcao', (m) =>
+      base.corrigirManifestacao(m),
+    ),
+    cancelarManifestacao: versionado('manifestacao_ouvidoria', 'cancelamento', (m) =>
+      base.cancelarManifestacao(m),
+    ),
+  };
+}
 
 // ── Protocolos gerenciados ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -127,14 +211,14 @@ export class LeiturasGestaoComplementoD {
   /** As versões anteriores do registro (da trilha), da mais nova para a mais antiga. */
   versoes(c: ContextoGestao, tabela: TabelaCorrigivel, id: number): Promise<VersaoRegistro[]> {
     return this.ler(c, async (l, est) => {
-      const r = await l.consultar(
-        `SELECT t.ocorrido_em, u.login, JSON_EXTRACT(t.dados_depois, '$.dados.versaoAnterior') AS va
+      const r = await todasAsPaginas(l, (apos) => [
+        `SELECT t.id, t.ocorrido_em, u.login, JSON_EXTRACT(t.dados_depois, '$.dados.versaoAnterior') AS va
            FROM trilha_auditoria t LEFT JOIN usuario u ON u.id = t.usuario_id
           WHERE t.estabelecimento_id = ? AND ${campoVersao('tabela')} = ? AND ${campoVersao('id')} = ?
+            ${apos === null ? '' : 'AND t.id < ?'}
           ORDER BY t.id DESC`,
-        [est, tabela, String(id)],
-        { teto: TETO_VERSOES },
-      );
+        apos === null ? [est, tabela, String(id)] : [est, tabela, String(id), apos],
+      ]);
       return r.map((x) => {
         const va = json<{
           versao?: number;
@@ -161,15 +245,15 @@ export class LeiturasGestaoComplementoD {
     fim: string,
   ): Promise<{ versoes: VersaoProtocoloGerenciado[]; protocolos: ProtocoloDoPaciente[] }> {
     return this.ler(c, async (l, est) => {
-      const vs = await l.consultar(
+      const vs = await todasAsPaginas(l, (apos) => [
         `SELECT v.id, p.tipo, p.nome, v.numero_versao, v.motivo, v.dados, v.vigencia_inicio, ua.login AS autor
            FROM protocolo_gerenciado_versao v JOIN protocolo_gerenciado p ON p.id = v.protocolo_gerenciado_id
            LEFT JOIN usuario ua ON ua.id = v.usuario_id
           WHERE (p.estabelecimento_id = ? OR p.estabelecimento_id IS NULL) AND p.excluido_em IS NULL
+            ${apos === null ? '' : 'AND v.id < ?'}
           ORDER BY v.id DESC`,
-        [est],
-        { teto: TETO_PROTOCOLOS },
-      );
+        apos === null ? [est] : [est, apos],
+      ]);
       const versoes = vs.map((x): VersaoProtocoloGerenciado => {
         const conteudo = json<unknown>(x['dados'], {});
         return {
@@ -185,34 +269,49 @@ export class LeiturasGestaoComplementoD {
           conteudo,
         };
       });
-      const ps = await l.consultar(
+      const periodo = [est, paraBanco(inicio), paraBanco(fim)];
+      const ps = await todasAsPaginas(l, (apos) => [
         `SELECT i.id, i.atendimento_id, i.paciente_id, i.protocolo_gerenciado_id, i.forma_inclusao, i.horario_zero_em,
                 i.criado_em, pg.tipo, ui.login AS incluido_por
            FROM inclusao_protocolo_paciente i JOIN protocolo_gerenciado pg ON pg.id = i.protocolo_gerenciado_id
            LEFT JOIN usuario ui ON ui.id = i.criado_por
           WHERE i.estabelecimento_id = ? AND i.excluido_em IS NULL AND i.criado_em >= ? AND i.criado_em < ?
-          ORDER BY i.criado_em, i.id`,
-        [est, paraBanco(inicio), paraBanco(fim)],
-        { teto: TETO_PROTOCOLOS },
-      );
+            ${apos === null ? '' : 'AND i.id > ?'}
+          ORDER BY i.id`,
+        apos === null ? periodo : [...periodo, apos],
+      ]);
       if (ps.length === 0) return { versoes, protocolos: [] };
-      const ids = ps.map((x) => n(x['id']));
-      const criterios = await l.consultar(
-        `SELECT inclusao_protocolo_paciente_id, identificador FROM inclusao_protocolo_criterio
-          WHERE inclusao_protocolo_paciente_id IN (${marcas(ids.length)}) AND excluido_em IS NULL
-          ORDER BY inclusao_protocolo_paciente_id, sequencia`,
-        ids,
-        { teto: TETO_PROTOCOLOS * 10 },
+      // A ordem do contrato é a da hora da inclusão (empate pelo id); as páginas vêm pela chave.
+      ps.sort(
+        (a, b) => instante(a['criado_em']).localeCompare(instante(b['criado_em'])) || n(a['id']) - n(b['id']),
       );
-      const registros = await l.consultar(
-        `SELECT r.id, r.inclusao_protocolo_paciente_id, r.tipo, r.codigo, r.situacao, r.ocorrido_em, r.prazo_em,
-                r.motivo, r.criado_em, u.login
-           FROM inclusao_protocolo_registro r LEFT JOIN usuario u ON u.id = r.usuario_id
-          WHERE r.inclusao_protocolo_paciente_id IN (${marcas(ids.length)}) AND r.excluido_em IS NULL
-          ORDER BY r.inclusao_protocolo_paciente_id, r.id`,
-        ids,
-        { teto: TETO_PROTOCOLOS * 10 },
-      );
+      const criterios: Linha[] = [];
+      const registros: Linha[] = [];
+      // Os critérios e os eventos por lote de inclusões (o IN fica do tamanho da página), também em páginas.
+      for (let k = 0; k < ps.length; k += PAGINA_LEITURA) {
+        const ids = ps.slice(k, k + PAGINA_LEITURA).map((x) => n(x['id']));
+        criterios.push(
+          ...(await todasAsPaginas(l, (apos) => [
+            `SELECT id, inclusao_protocolo_paciente_id, sequencia, identificador FROM inclusao_protocolo_criterio
+              WHERE inclusao_protocolo_paciente_id IN (${marcas(ids.length)}) AND excluido_em IS NULL
+                ${apos === null ? '' : 'AND id > ?'}
+              ORDER BY id`,
+            apos === null ? ids : [...ids, apos],
+          ])),
+        );
+        registros.push(
+          ...(await todasAsPaginas(l, (apos) => [
+            `SELECT r.id, r.inclusao_protocolo_paciente_id, r.tipo, r.codigo, r.situacao, r.ocorrido_em, r.prazo_em,
+                    r.motivo, r.criado_em, u.login
+               FROM inclusao_protocolo_registro r LEFT JOIN usuario u ON u.id = r.usuario_id
+              WHERE r.inclusao_protocolo_paciente_id IN (${marcas(ids.length)}) AND r.excluido_em IS NULL
+                ${apos === null ? '' : 'AND r.id > ?'}
+              ORDER BY r.id`,
+            apos === null ? ids : [...ids, apos],
+          ])),
+        );
+      }
+      criterios.sort((a, b) => n(a['sequencia']) - n(b['sequencia']));
       const protocolos = ps.map((x): ProtocoloDoPaciente => {
         const id = n(x['id']);
         return {
