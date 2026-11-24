@@ -175,6 +175,11 @@ function recusou(titulo: string, r: { ok: false; codigo: string; mensagem: strin
   throw recusaRegra(titulo, [{ campo: r.codigo, mensagem: r.mensagem }]);
 }
 
+/** Lê uma linha travando-a até o fim da transação (SELECT ... FOR UPDATE pelo escritor). */
+async function travada(tx: TxOperacao, sql: string, p: unknown[]): Promise<Record<string, unknown> | null> {
+  return (await tx.consultarParaAtualizar(sql, p))[0] ?? null;
+}
+
 export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoPropria {
   constructor(nucleo: NucleoPortaPropria, cliente: string) {
     super(nucleo, cliente, TABELAS, 'internacao.controles');
@@ -273,9 +278,10 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
   ): Promise<SituacaoFormularioObito> {
     const declaracaoAlvo = acao === 'usar' ? declaracaoId : numOuNull(f['declaracao_obito_id']);
     const d = declaracaoAlvo
-      ? await tx.uma(
+      ? await travada(
+          tx,
           `SELECT id, numero, situacao, versao, profissional_id, formulario_declaracao_obito_id FROM declaracao_obito
-            WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+            WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [declaracaoAlvo, estId],
         )
       : null;
@@ -320,8 +326,9 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
       `internacao.formulario-obito.${e.acao}`,
       ['formulario_declaracao_obito', 'declaracao_obito'],
       async (tx, est) => {
-        const f = await tx.uma(
-          'SELECT * FROM formulario_declaracao_obito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE',
+        const f = await travada(
+          tx,
+          'SELECT * FROM formulario_declaracao_obito WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [formulario, est.id],
         );
         if (!f) throw naoEncontrado('Formulário de declaração de óbito');
@@ -348,9 +355,7 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
           [est.id],
         );
         for (const p of pares) {
-          const f = await tx.uma('SELECT * FROM formulario_declaracao_obito WHERE id = ? FOR UPDATE', [
-            p['f_id'],
-          ]);
+          const f = await travada(tx, 'SELECT * FROM formulario_declaracao_obito WHERE id = ?', [p['f_id']]);
           await this.aplicarAcao(tx, est.id, f!, 'usar', num(p['d_id']), null, num(f!['versao']));
         }
         const resto = await tx.uma(
@@ -685,9 +690,10 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
   }
 
   private async solicitacaoAberta(tx: TxOperacao, solicitacao: number, estId: number) {
-    const s = await tx.uma(
+    const s = await travada(
+      tx,
       `SELECT id, situacao, versao, central_reguladora_id FROM solicitacao_regulacao
-        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
       [solicitacao, estId],
     );
     if (!s) throw naoEncontrado('Solicitação de regulação');
@@ -818,7 +824,7 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
     const e = entradaValida(esquemaEvento, entrada);
     return this.gravar(
       c,
-      `internacao.regulacao.evento-${e.tipo.replace('_', '-')}`,
+      'internacao.regulacao.evento',
       ['evento_regulacao', 'solicitacao_regulacao'],
       async (tx, est, usuario) => {
         const s = await this.solicitacaoAberta(tx, solicitacao, est.id);
