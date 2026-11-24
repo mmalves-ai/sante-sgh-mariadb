@@ -49,6 +49,7 @@ const EST = { id: 7, fuso_horario: 'America/Sao_Paulo' };
 
 const linhaAlergia = (o: Record<string, unknown>) => ({
   id: 1,
+  estabelecimento_id: 7,
   alergeno_id: 2,
   descricao_livre: null,
   agente_nome: 'PENICILINA',
@@ -115,13 +116,14 @@ function bancoAlergias() {
 }
 
 describe('alergias no banco próprio (dublê)', () => {
-  it('lista toda alergia do paciente no estabelecimento, inclusive a de texto livre e a sem registro clínico', async () => {
+  it('lista toda alergia do paciente no cliente inteiro, inclusive a de texto livre e a sem registro clínico', async () => {
     const { nucleo, chamadas, contextos } = bancoAlergias();
     const r = await alergias(nucleo, 'cli', C, 20);
     expect(contextos[0]).toEqual({ cliente: 'cli', correlacao: 'pep.alergias.lista' });
     const sql = chamadas.find((x) => x.sql.includes('FROM alergia_paciente ap') && !x.sql.includes('UNION'))!;
-    expect(sql.parametros).toEqual([20, 7]);
-    expect(sql.sql).toContain('ap.estabelecimento_id = ?');
+    expect(sql.parametros).toEqual([20]);
+    // O paciente é do cliente inteiro: sem recorte por estabelecimento (a alergia do hospital vizinho nunca some).
+    expect(sql.sql).not.toContain('ap.estabelecimento_id = ?');
     expect(sql.sql).toContain("ap.tipo_registro IN ('alergia','intolerancia')");
     expect(sql.sql).toContain("ap.situacao_registro = 'confirmado'");
     expect(sql.sql).toContain('ap.excluido_em IS NULL');
@@ -134,6 +136,7 @@ describe('alergias no banco próprio (dublê)', () => {
       registro: 10,
       registradaEm: '2026-11-21T12:00:00',
       principios: ['BENZILPENICILINA'],
+      estabelecimentoId: 7,
     });
     expect(r[1]).toMatchObject({
       agenteId: null,
@@ -167,11 +170,12 @@ describe('alergias no banco próprio (dublê)', () => {
     expect(a!.agente).toBe(AGENTE_NAO_INFORMADO);
   });
 
-  it('versão: ids ativos do estabelecimento em ordem, como a memória', async () => {
+  it('versão: ids ativos do paciente no cliente inteiro em ordem, como a memória', async () => {
     const { nucleo, chamadas } = bancoAlergias();
     expect(await versaoAlergias(nucleo, 'cli', C, 20)).toBe('1,2');
     const sql = chamadas.at(-1)!;
-    expect(sql.parametros).toEqual([20, 7]);
+    expect(sql.parametros).toEqual([20]);
+    expect(sql.sql).not.toContain('estabelecimento_id');
     expect(sql.sql).toContain('ap.ativa = TRUE');
   });
 

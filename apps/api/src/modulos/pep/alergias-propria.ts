@@ -12,10 +12,12 @@
 // descrição livre. Fora da lista ficam só o que não é alergia: a declaração "nega/desconhece alergias", o rascunho
 // (só o autor vê; nunca dispara alerta) e o rascunho descartado, além da linha com exclusão lógica.
 //
-// Alcance: os documentos seguem a porta de memória (a lista e a versão são do estabelecimento da sessão, que é onde a
-// gravação acontece). A prescrição segue a porta de memória da prescrição (por paciente, sem recorte de hospital):
-// o alerta considera a alergia registrada em qualquer estabelecimento do mesmo cliente (o mesmo banco), porque uma
-// alergia nunca pode deixar de alertar por ter sido informada no hospital vizinho. Nenhuma leitura cruza bancos.
+// Alcance: o paciente é do cliente inteiro (o mesmo paciente_id em todos os estabelecimentos do banco). Por isso a
+// lista, a versão (documentos) e o contexto da prescrição leem as alergias do paciente em TODOS os estabelecimentos do
+// cliente: uma alergia nunca some da tela, do cabeçalho, do sumário de alta nem da conferência de duplicidade por ter
+// sido informada no hospital vizinho, e a tela, o painel e o alerta da prescrição veem o mesmo conjunto. A linha traz
+// o estabelecimento de origem (estabelecimentoId). A memória recorta por hospital só porque nela cada hospital é um
+// mundo separado; isso não vale para o banco de um cliente. Nenhuma leitura cruza bancos.
 //
 // Alerta da alergia de descrição livre: o motor casa a alergia com o item pelos princípios ativos. A alergia livre
 // alerta pelos princípios registrados nela (alergia_paciente_principio) e, além disso, quando a descrição livre é o
@@ -36,8 +38,7 @@ export interface ContextoAlergias {
  * Alergia lida com o dado completo. Estende localmente AlergiaDoProntuarioLida: o agente do catálogo é opcional
  * (descrição livre) e o registro clínico também (alergia da classificação de risco ou importada).
  */
-export interface AlergiaDoProntuarioCompleta
-  extends Omit<AlergiaDoProntuarioLida, 'agenteId' | 'registro'> {
+export interface AlergiaDoProntuarioCompleta extends Omit<AlergiaDoProntuarioLida, 'agenteId' | 'registro'> {
   /** Alérgeno do catálogo; null na alergia de descrição livre. */
   readonly agenteId: number | null;
   /** Registro clínico em que foi informada; null na alergia sem registro clínico. */
@@ -51,6 +52,8 @@ export interface AlergiaDoProntuarioCompleta
   readonly origemInformacao: string | null;
   readonly inativadaEm: string | null;
   readonly motivoInativacao: string | null;
+  /** Estabelecimento (do mesmo cliente) em que a alergia foi registrada. */
+  readonly estabelecimentoId: number;
 }
 
 export interface CatalogoAlergiasLido {
@@ -90,7 +93,8 @@ const textoOuNull = (v: unknown): string | null => {
   const t = String(v).trim();
   return t === '' ? null : t;
 };
-const verdade = (v: unknown): boolean => v === true || v === 1 || v === '1' || (typeof v === 'bigint' && v === 1n);
+const verdade = (v: unknown): boolean =>
+  v === true || v === 1 || v === '1' || (typeof v === 'bigint' && v === 1n);
 const marcadores = (n: number): string => Array.from({ length: n }, () => '?').join(', ');
 const idsValidos = (ids: readonly number[]): number[] =>
   [...new Set(ids)].filter((i) => Number.isSafeInteger(i) && i > 0);
@@ -181,7 +185,8 @@ async function principiosDe(
 }
 
 /**
- * As alergias do paciente no estabelecimento da sessão (ativas e inativadas), na ordem em que foram registradas.
+ * As alergias do paciente em todos os estabelecimentos do cliente (ativas e inativadas), na ordem em que foram
+ * registradas; as datas no fuso do estabelecimento da sessão.
  * Nunca esconde uma alergia: a de descrição livre e a sem registro clínico entram (agenteId/registro nulos).
  */
 export function alergias(
@@ -192,7 +197,7 @@ export function alergias(
 ): Promise<AlergiaDoProntuarioCompleta[]> {
   return ler(nucleo, cliente, c, 'lista', async (l, est) => {
     const linhas = await l.consultar(
-      `SELECT ap.id, ap.alergeno_id, ap.descricao_livre, ag.descricao AS agente_nome, ag.natureza,
+      `SELECT ap.id, ap.estabelecimento_id, ap.alergeno_id, ap.descricao_livre, ag.descricao AS agente_nome, ag.natureza,
               ta.descricao AS tipo_alergia, ap.tipo_registro, ap.observacao, ap.reacao, ap.gravidade, ap.certeza,
               ap.fonte_informacao, ap.ativa, ap.registro_assistencial_id, ap.registrado_em, ap.inativado_em,
               ap.motivo_inativacao, COALESCE(p.nome_exibicao, pf.nome) AS profissional
@@ -201,9 +206,9 @@ export function alergias(
          LEFT JOIN tipo_alergia ta ON ta.id = ag.tipo_alergia_id
          LEFT JOIN profissional p ON p.id = ap.registrado_profissional_id
          LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
-        WHERE ap.paciente_id = ? AND ap.estabelecimento_id = ? AND ${SQL_E_ALERGIA}
+        WHERE ap.paciente_id = ? AND ${SQL_E_ALERGIA}
         ORDER BY ap.id`,
-      [paciente, est.id],
+      [paciente],
     );
     const princ = await principiosDe(
       l,
@@ -233,6 +238,7 @@ export function alergias(
         origemInformacao: textoOuNull(x['fonte_informacao']),
         inativadaEm: dataHora(x['inativado_em'], est.fuso),
         motivoInativacao: textoOuNull(x['motivo_inativacao']),
+        estabelecimentoId: num(x['estabelecimento_id']),
       };
     });
   });
@@ -312,19 +318,22 @@ export function registrosParaAlergia(
   });
 }
 
-/** A versão da lista de alergias ativas do paciente no estabelecimento: os ids ativos em ordem, separados por vírgula. */
+/**
+ * A versão da lista de alergias ativas do paciente (todos os estabelecimentos do cliente, o mesmo conjunto da lista):
+ * os ids ativos em ordem, separados por vírgula.
+ */
 export function versaoAlergias(
   nucleo: NucleoLeituraPep,
   cliente: string,
   c: ContextoAlergias,
   paciente: number,
 ): Promise<string> {
-  return ler(nucleo, cliente, c, 'versao', async (l, est) => {
+  return ler(nucleo, cliente, c, 'versao', async (l) => {
     const linhas = await l.consultar(
       `SELECT ap.id FROM alergia_paciente ap
-        WHERE ap.paciente_id = ? AND ap.estabelecimento_id = ? AND ap.ativa = TRUE AND ${SQL_E_ALERGIA}
+        WHERE ap.paciente_id = ? AND ap.ativa = TRUE AND ${SQL_E_ALERGIA}
         ORDER BY ap.id`,
-      [paciente, est.id],
+      [paciente],
     );
     return linhas.map((x) => num(x['id'])).join(',');
   });

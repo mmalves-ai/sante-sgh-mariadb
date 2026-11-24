@@ -3,7 +3,8 @@
 // demais integrações do PEP); nenhum dado de pessoa real. Prova (segurança do paciente): a alergia de descrição livre
 // e a sem registro clínico aparecem na leitura dos documentos e alertam na prescrição (pelo princípio registrado nela
 // ou pelo nome do princípio, sem diferença de maiúsculas e acentos); o rascunho, a declaração "nega alergias" e a
-// excluída ficam fora; a versão dos documentos é a das ativas do estabelecimento; a prescrição vê o cliente inteiro.
+// excluída ficam fora; a lista, a versão e a prescrição veem o paciente no cliente inteiro (a alergia registrada no
+// outro estabelecimento do mesmo cliente aparece na tela, entra na versão e alerta).
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { achados, type ContextoAlertas, type ItemAvaliado } from '@sgh/dominio-pep';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -20,7 +21,14 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE_ALERGIAS']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l0199a';
 const M = P.toUpperCase();
-const C = { rede: CLIENTE, hospital: P, cliente: CLIENTE, estabelecimento: null, usuario: null, correlacao: P };
+const C = {
+  rede: CLIENTE,
+  hospital: P,
+  cliente: CLIENTE,
+  estabelecimento: null,
+  usuario: null,
+  correlacao: P,
+};
 const PRONTUARIO = 901_990_101;
 const CBO_MEDICO = '225125';
 
@@ -92,12 +100,10 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
         return x ? Number(x.id) : criar();
       };
       const estabelecimento = await achar('SELECT id FROM estabelecimento WHERE codigo = ?', [P], () =>
-        ins('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
-          P,
-          `Hospital sintético ${P}`,
-          `Hospital sintético ${P} (fictício)`,
-          agora,
-        ]),
+        ins(
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [P, `Hospital sintético ${P}`, `Hospital sintético ${P} (fictício)`, agora],
+        ),
       );
       await e.executar('UPDATE estabelecimento SET fuso_horario = ? WHERE id = ?', [
         'America/Sao_Paulo',
@@ -107,12 +113,10 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}b`, `Hospital sintético ${P}b`, `Hospital sintético ${P}b (fictício)`, agora],
       );
-      const usuario = await ins('INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, ?, ?)', [
-        `${P}.autor`,
-        'Conta sintética autora',
-        'servico',
-        agora,
-      ]);
+      const usuario = await ins(
+        'INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}.autor`, 'Conta sintética autora', 'servico', agora],
+      );
       const tipo = await ins(
         'INSERT INTO tipo_documento_clinico (codigo, descricao, categoria, criado_em) VALUES (?, ?, ?, ?)',
         [`${M}_EVOL`, 'Evolução sintética', 'evolucao', agora],
@@ -123,7 +127,10 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
         [`${M}_EVO`, 'Evolução sintética', tipo, agora],
       );
       const pessoa = (sufixo: string) =>
-        ins('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [`Pessoa sintética ${P} ${sufixo}`, agora]);
+        ins('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+          `Pessoa sintética ${P} ${sufixo}`,
+          agora,
+        ]);
       const paciente = await ins(
         'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
         [await pessoa('paciente'), PRONTUARIO, agora],
@@ -136,11 +143,10 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
       const medico = await profissional('médica');
       const outroMedico = await profissional('outro médico');
       const ocupacao = await achar('SELECT id FROM ocupacao_cbo WHERE codigo_cbo = ?', [CBO_MEDICO], () =>
-        ins('INSERT INTO ocupacao_cbo (codigo_cbo, descricao, area_saude, criado_em) VALUES (?, ?, TRUE, ?)', [
-          CBO_MEDICO,
-          'Ocupação médico (sintética)',
-          agora,
-        ]),
+        ins(
+          'INSERT INTO ocupacao_cbo (codigo_cbo, descricao, area_saude, criado_em) VALUES (?, ?, TRUE, ?)',
+          [CBO_MEDICO, 'Ocupação médico (sintética)', agora],
+        ),
       );
       const conselho = await achar(
         'SELECT id FROM conselho_classe WHERE sigla = ? OR codigo_tiss = ? ORDER BY (sigla = ?) DESC LIMIT 1',
@@ -154,7 +160,9 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
           ]),
       );
       const pais = await achar("SELECT id FROM pais_referencia WHERE codigo_iso = 'BR'", [], () =>
-        ins("INSERT INTO pais_referencia (codigo_iso, descricao, criado_em) VALUES ('BR', 'Brasil', ?)", [agora]),
+        ins("INSERT INTO pais_referencia (codigo_iso, descricao, criado_em) VALUES ('BR', 'Brasil', ?)", [
+          agora,
+        ]),
       );
       const uf = await achar("SELECT id FROM unidade_federativa WHERE sigla = 'RJ'", [], () =>
         ins(
@@ -222,12 +230,10 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
       const regOutro = await registro(outroMedico, '2026-11-22T12:30:00Z');
 
       const principio = (codigo: string, nome: string) =>
-        ins('INSERT INTO principio_ativo (codigo_dcb, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?)', [
-          `${M}${codigo}`,
-          nome,
-          'teste',
-          agora,
-        ]);
+        ins(
+          'INSERT INTO principio_ativo (codigo_dcb, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?)',
+          [`${M}${codigo}`, nome, 'teste', agora],
+        );
       const penicilina = await principio('1', `Benzilpenicilina sintética ${P}`);
       const dipirona = await principio('2', `Dipirona sintetica ${P}`);
       const tartrazina = await principio('3', `Tartrazina sintética ${P}`);
@@ -239,11 +245,10 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
         'INSERT INTO alergeno (codigo, descricao, natureza, criado_em) VALUES (?, ?, ?, ?)',
         [`${M}PEN`, `Penicilina sintética ${P}`, 'medicamento', agora],
       );
-      await ins('INSERT INTO alergeno_principio_ativo (alergeno_id, principio_ativo_id, criado_em) VALUES (?, ?, ?)', [
-        alergeno,
-        penicilina,
-        agora,
-      ]);
+      await ins(
+        'INSERT INTO alergeno_principio_ativo (alergeno_id, principio_ativo_id, criado_em) VALUES (?, ?, ?)',
+        [alergeno, penicilina, agora],
+      );
       const alergia = (o: {
         est?: number;
         tipo?: string;
@@ -319,15 +324,18 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
     }
   }, 120_000);
 
-  it('documentos: toda alergia do estabelecimento, com a de texto livre e a sem registro clínico', async () => {
+  it('documentos: toda alergia do paciente no cliente, com a de texto livre, a sem registro clínico e a do outro estabelecimento', async () => {
     const r = await alergias(nucleo, CLIENTE, C, m.paciente);
     expect(r.map((a) => a.id)).toEqual([
       m.alergia.catalogo,
       m.alergia.livreSemRegistro,
       m.alergia.livreComPrincipio,
       m.alergia.inativa,
+      m.alergia.outroEstabelecimento,
     ]);
-    const [cat, livre, comPrincipio, inativa] = r;
+    const [cat, livre, comPrincipio, inativa, outro] = r;
+    expect(outro).toMatchObject({ agente: `Iodo ${P}`, agenteId: null, ativa: true });
+    expect(outro!.estabelecimentoId).not.toBe(cat!.estabelecimentoId);
     expect(cat).toMatchObject({
       agente: `Penicilina sintética ${P}`,
       tipo: 'Medicamento',
@@ -353,18 +361,35 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
     expect(inativa).toMatchObject({ ativa: false, motivoInativacao: `Refutada no teste ${P}` });
   });
 
-  it('versão: as ativas do estabelecimento em ordem', async () => {
+  it('versão: as ativas do paciente no cliente inteiro em ordem (inclui a do outro estabelecimento)', async () => {
     expect(await versaoAlergias(nucleo, CLIENTE, C, m.paciente)).toBe(
-      [m.alergia.catalogo, m.alergia.livreSemRegistro, m.alergia.livreComPrincipio].join(','),
+      [
+        m.alergia.catalogo,
+        m.alergia.livreSemRegistro,
+        m.alergia.livreComPrincipio,
+        m.alergia.outroEstabelecimento,
+      ].join(','),
     );
   });
 
   it('prescrição: ativas do cliente inteiro e o alerta da alergia de texto livre', async () => {
     const r = await alergiasDaPrescricao(nucleo, CLIENTE, C, m.paciente);
     expect(r).toEqual([
-      { alergia: m.alergia.catalogo, nome: `Penicilina sintética ${P}`, principios: [m.principio.penicilina] },
-      { alergia: m.alergia.livreSemRegistro, nome: `dipirona SINTÉTICA ${P}`, principios: [m.principio.dipirona] },
-      { alergia: m.alergia.livreComPrincipio, nome: `Corante amarelo ${P}`, principios: [m.principio.tartrazina] },
+      {
+        alergia: m.alergia.catalogo,
+        nome: `Penicilina sintética ${P}`,
+        principios: [m.principio.penicilina],
+      },
+      {
+        alergia: m.alergia.livreSemRegistro,
+        nome: `dipirona SINTÉTICA ${P}`,
+        principios: [m.principio.dipirona],
+      },
+      {
+        alergia: m.alergia.livreComPrincipio,
+        nome: `Corante amarelo ${P}`,
+        principios: [m.principio.tartrazina],
+      },
       { alergia: m.alergia.outroEstabelecimento, nome: `Iodo ${P}`, principios: [] },
     ]);
     const item = (chave: string, produto: number, principio: number): ItemAvaliado => ({
@@ -425,14 +450,19 @@ describe.skipIf(SEM_BANCO)('alergias no banco próprio contra o MariaDB (cliente
     expect(r.agentes.filter((a) => a.nome.endsWith(P))).toEqual([
       expect.objectContaining({ nome: `Penicilina sintética ${P}`, tipo: 'Medicamento' }),
     ]);
-    expect(r.principios.filter((x) => x.nome.endsWith(P)).map((x) => x.id).sort((a, b) => a - b)).toEqual(
-      [m.principio.penicilina, m.principio.dipirona, m.principio.tartrazina].sort((a, b) => a - b),
-    );
+    expect(
+      r.principios
+        .filter((x) => x.nome.endsWith(P))
+        .map((x) => x.id)
+        .sort((a, b) => a - b),
+    ).toEqual([m.principio.penicilina, m.principio.dipirona, m.principio.tartrazina].sort((a, b) => a - b));
   });
 
   it('registros para a alergia: só o do profissional da sessão, sem o suspenso', async () => {
     const r = await registrosParaAlergia(nucleo, CLIENTE, C, m.atendimento, [m.inscricao]);
-    expect(r).toEqual([{ registro: m.registro, modelo: 'Evolução sintética', dataHora: '2026-11-20T09:30:00' }]);
+    expect(r).toEqual([
+      { registro: m.registro, modelo: 'Evolução sintética', dataHora: '2026-11-20T09:30:00' },
+    ]);
     expect(r.some((x) => x.registro === m.registroSuspenso || x.registro === m.registroDeOutro)).toBe(false);
   });
 });
