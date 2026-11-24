@@ -11,6 +11,8 @@ export {
   diferencaItensKit,
   type ItemKitPadraoConferido,
   type KitPadraoConferido,
+  type KitPadraoDoProcedimento,
+  linhasDoKitPadrao,
   type ProcedimentoKitPadraoConferido,
   TIPOS_KIT_PADRAO,
   type TipoKitPadrao,

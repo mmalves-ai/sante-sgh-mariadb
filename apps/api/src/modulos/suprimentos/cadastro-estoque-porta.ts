@@ -178,13 +178,34 @@ export function portaCadastroEstoqueIndisponivel(): PortaCadastroEstoque {
   const falha = () =>
     Promise.reject(
       new ErroProblema(
-        'servico-indisponivel',
+        'indisponivel',
         503,
         'Cadastro do estoque indisponível',
         'O cadastro do estoque grava só no banco próprio do cliente.',
+        { codigo: 'servico-indisponivel' },
       ),
     );
-  return new Proxy({ destino: 'indisponivel' } as PortaCadastroEstoque, {
-    get: (alvo, p) => (p === 'destino' ? alvo.destino : falha),
-  });
+  // Objeto com os métodos da porta, não um Proxy que responde a qualquer chave: o Nest procura `then` e os ganchos
+  // (onModuleInit…) em todo provedor, e um Proxy devolveria a recusa para eles (a montagem do módulo travava).
+  return {
+    destino: 'indisponivel',
+    apoio: falha,
+    buscar: falha,
+    fichaItem: falha,
+    incluirItem: falha,
+    alterarItem: falha,
+    situacaoItem: falha,
+    locais: falha,
+    fichaLocal: falha,
+    incluirLocal: falha,
+    alterarLocal: falha,
+    situacaoLocal: falha,
+    escopoUsuario: falha,
+    gravarEscopoLocal: falha,
+    retirarEscopoLocal: falha,
+    concederClassificacao: falha,
+    concederCentroCusto: falha,
+    retirarConcessao: falha,
+    separacao: falha,
+  };
 }
