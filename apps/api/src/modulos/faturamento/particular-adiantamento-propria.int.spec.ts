@@ -40,7 +40,10 @@ async function codigoDo(p: Promise<unknown>): Promise<string> {
   try {
     await p;
   } catch (e) {
-    if (e instanceof ErroOperacao) return String(e.problema['codigo'] ?? e.problema['tipo'] ?? '');
+    if (e instanceof ErroOperacao) {
+      const pr = e.problema as unknown as Record<string, unknown>;
+      return String(pr['codigo'] ?? pr['tipo'] ?? '');
+    }
     throw e;
   }
   throw new Error('esperava recusa');
@@ -222,6 +225,20 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
           [pp, agora, total, total, agora],
         );
       }
+      const pfProf = await garantir(
+        e,
+        'SELECT id FROM pessoa_fisica WHERE nome = ?',
+        [`PROFISSIONAL SINTETICO ${P}`],
+        'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+        [`PROFISSIONAL SINTETICO ${P}`, agora],
+      );
+      ids['prof'] = await garantir(
+        e,
+        'SELECT id FROM profissional WHERE pessoa_fisica_id = ?',
+        [pfProf],
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pfProf, agora],
+      );
       ids['caraterUrg'] = await garantir(
         e,
         'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
@@ -231,15 +248,33 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       );
       ids['atendUrg'] = await e.inserir(
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
-           carater_atendimento_tiss_id, fonte_pagadora_id, situacao, entrada_em, criado_em)
-         VALUES (?, ?, ?, ?, ?, ?, 'aberto', '2026-01-21 08:00:00', ?)`,
-        [ids['est'], `${P}-AU`, ids['paciente'], ids['categoria'], ids['caraterUrg'], ids['fonte'], agora],
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'aberto', '2026-01-21 08:00:00', ?)`,
+        [
+          ids['est'],
+          `${P}-AU`,
+          ids['paciente'],
+          ids['categoria'],
+          ids['caraterUrg'],
+          ids['fonte'],
+          ids['prof'],
+          agora,
+        ],
       );
       const atend = await e.inserir(
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
-           carater_atendimento_tiss_id, fonte_pagadora_id, situacao, entrada_em, criado_em)
-         VALUES (?, ?, ?, ?, ?, ?, 'aberto', '2026-01-20 08:00:00', ?)`,
-        [ids['est'], `${P}-AT`, ids['paciente'], ids['categoria'], ids['carater'], ids['fonte'], agora],
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'aberto', '2026-01-20 08:00:00', ?)`,
+        [
+          ids['est'],
+          `${P}-AT`,
+          ids['paciente'],
+          ids['categoria'],
+          ids['carater'],
+          ids['fonte'],
+          ids['prof'],
+          agora,
+        ],
       );
       ids['conta'] = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
@@ -371,7 +406,7 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
     ).toBe('entrada-invalida');
     const r = await s.gravar('adiantamento.aplicar', op(), { contaId: ids['conta'] });
     expect(r['total']).toBe(700);
-    expect(r['parcelas']).toEqual([
+    expect(JSON.parse(String(r['parcelas']))).toEqual([
       { adiantamento: ids['a1'], valor: 400 },
       { adiantamento: ids['a2'], valor: 300 },
     ]);
@@ -445,7 +480,7 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       valor: 100,
       adiantamentos: [ids['a2']],
     });
-    expect(r['parcelas']).toEqual([{ adiantamento: ids['a2'], valor: 100 }]);
+    expect(JSON.parse(String(r['parcelas']))).toEqual([{ adiantamento: ids['a2'], valor: 100 }]);
     const linhas = await escrever((e) =>
       e.consultar<Record<string, unknown>>(
         'SELECT sequencia, valor, estornado FROM aplicacao_adiantamento_paciente WHERE adiantamento_paciente_id = ? ORDER BY sequencia',

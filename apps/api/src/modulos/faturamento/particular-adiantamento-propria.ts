@@ -71,7 +71,7 @@ const TOTAL_DA_ESPECIE: Readonly<Record<string, string>> = {
 
 function exigirValido(erros: Record<string, string>) {
   const campos = Object.keys(erros);
-  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
 }
 function estDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
@@ -350,7 +350,13 @@ export const opAplicarAdiantamento = definirOperacao({
       );
       await refazerSaldo(tx, p.adiantamento, -p.valor);
     }
-    return { id: aplicacoes[0]!, aplicacoes, total: plano.total, parcelas: plano.parcelas };
+    // O resultado do executor é plano (escalares): as parcelas vão como JSON.
+    return {
+      id: aplicacoes[0]!,
+      aplicacoes: aplicacoes.length,
+      total: plano.total,
+      parcelas: JSON.stringify(plano.parcelas),
+    };
   },
   alvo: (_e, r) => ({ tabela: 'aplicacao_adiantamento_paciente', id: r.id }),
 });
@@ -454,7 +460,7 @@ export const opDevolverAdiantamento = definirOperacao({
       throw recusa(
         'conta-em-aberto',
         `O paciente deve ${devido.toFixed(2)} em conta aberta: use o saldo na conta ou confirme a devolução com o motivo.`,
-        { campos: ['confirmarContaAberta'], devido },
+        { campos: ['confirmarContaAberta'] },
       );
     const formaId = await formaDe(tx, e.forma, ['pagamento', 'ambos', 'recebimento']);
     const agora = new Date();
