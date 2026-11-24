@@ -1,7 +1,13 @@
 <script setup lang="ts">
 // Documento aberto (leitura auditada): texto em parágrafos, situação, suspensão e a prova do documento do novo;
-// imprime o PDF/A (a 2ª via pede o motivo).
+// imprime o PDF/A com a justificativa (01-ADM L82: a 1ª via pede a justificativa, com as razões comuns à mão; a
+// 2ª via, o motivo). O botão só libera com o texto no tamanho mínimo.
 import type { TipoDocumentoAberto } from '@sgh/contratos';
+import {
+  JUSTIFICATIVA_MINIMA_IMPRESSAO,
+  MOTIVO_MINIMO_SEGUNDA_VIA,
+  RAZOES_IMPRESSAO,
+} from '@sgh/dominio-pep';
 import { SanteAlerta, SanteBotao, SanteDialogo } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -21,18 +27,25 @@ const doc = useQuery({
 const impressoes = ref(0);
 const motivo = ref('');
 const erro = ref<unknown>(null);
+const minimo = computed(() =>
+  impressoes.value > 0 ? MOTIVO_MINIMO_SEGUNDA_VIA : JUSTIFICATIVA_MINIMA_IMPRESSAO,
+);
+const textoValido = computed(() => motivo.value.trim().length >= minimo.value);
 async function imprimir(): Promise<void> {
   erro.value = null;
+  if (!textoValido.value) return;
+  const texto = motivo.value.trim();
   try {
     abrirArquivo(
       await imprimirDocumento(
         props.paciente,
         props.tipo,
         props.id,
-        impressoes.value > 0 ? motivo.value : null,
+        impressoes.value > 0 ? { motivo: texto } : { justificativa: texto },
       ),
     );
     impressoes.value++;
+    motivo.value = '';
   } catch (e) {
     erro.value = e;
   }
@@ -80,11 +93,28 @@ async function imprimir(): Promise<void> {
         }}
       </p>
       <form v-if="doc.data.value.pdf" class="imprimir" @submit.prevent="imprimir">
-        <label v-if="impressoes > 0">
-          <span>{{ t('pep.doc.documento.segundaVia') }}</span>
-          <input v-model="motivo" maxlength="200" required />
+        <label>
+          <span>{{
+            impressoes > 0 ? t('pep.doc.documento.segundaVia') : t('pep.doc.documento.justificativaImpressao')
+          }}</span>
+          <input
+            v-model="motivo"
+            data-testid="justificativa-impressao"
+            maxlength="255"
+            :minlength="minimo"
+            list="razoes-impressao"
+            required
+          />
+          <datalist id="razoes-impressao">
+            <option v-for="r in RAZOES_IMPRESSAO" :key="r" :value="r" />
+          </datalist>
         </label>
-        <SanteBotao tipo="submit" variante="secundario" :rotulo="t('pep.doc.imprimir')" />
+        <SanteBotao
+          tipo="submit"
+          variante="secundario"
+          :rotulo="t('pep.doc.imprimir')"
+          :desabilitado="!textoValido"
+        />
       </form>
       <MensagemErro v-if="erro" :erro="erro" />
     </article>

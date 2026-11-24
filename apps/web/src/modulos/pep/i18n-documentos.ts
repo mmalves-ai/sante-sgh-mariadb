@@ -119,6 +119,7 @@ export const mensagensDocumentos = {
     assinadoEm: 'Assinado em {data}',
     semAssinatura: 'Aguardando assinatura',
     segundaVia: 'Motivo da 2ª via',
+    justificativaImpressao: 'Justificativa da impressão',
     situacao: {
       emitido: 'Emitido',
       suspenso: 'Suspenso',

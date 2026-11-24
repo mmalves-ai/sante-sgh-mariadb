@@ -973,3 +973,6 @@ export interface DocumentoGravado {
 }
 
 export const esquemaIdRota = idRota;
+
+// 01-ADM L82: corpo da impressão do documento do prontuário (justificativa ou motivo da nova via).
+export * from './impressao-prontuario.js';

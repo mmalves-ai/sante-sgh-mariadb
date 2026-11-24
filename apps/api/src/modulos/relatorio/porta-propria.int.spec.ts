@@ -721,6 +721,31 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
     expect(await porta.pedido(ctx, terceiro)).toBeNull();
   });
 
+  it('01-ADM L82: a exportação grava a justificativa no motivo da execução', async () => {
+    const just = 'Auditoria do convênio de janeiro';
+    const x = await porta.gravarSgh(
+      ctx,
+      (i: string) => trilha('execucao_relatorio', i),
+      (g) =>
+        g.registrarExecucao({
+          relatorio: 'atendimentosPorDia',
+          tipo: 'exportacao',
+          formato: 'csv',
+          usuario: 'r0404.teste',
+          parametros: '{"fim":"2030-01-31","inicio":"2030-01-01"}',
+          linhas: 3,
+          duracaoMs: 8,
+          dadoPessoal: true,
+          mascarado: false,
+          justificativa: just,
+          situacao: 'ok',
+          agendamento: null,
+        }),
+    );
+    const l = await ler<Record<string, unknown>>('SELECT motivo FROM execucao_relatorio WHERE id = ?', [x]);
+    expect(l?.['motivo']).toBe(just);
+  });
+
   describe('a mesma bateria na memória e no banco', () => {
     const fabricas: [string, () => { porta: PortaRelatorio; c: ContextoRelatorio }][] = [
       ['memoria', () => ({ porta: new PortaRelatorioMemoria(null), c: ctx })],

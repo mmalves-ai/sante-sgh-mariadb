@@ -135,8 +135,13 @@ export function lerLinhaTempo(
 export const abrirDocumento = (p: number, tipo: TipoDocumentoAberto, id: number, b: typeof fetch = fetch) =>
   ler<DocumentoAberto>(`${pac(p)}/documentos/${tipo}/${id}`, b);
 
-export const imprimirDocumento = (p: number, tipo: TipoDocumentoAberto, id: number, motivo: string | null) =>
-  enviarArquivo(`${pac(p)}/documentos/${tipo}/${id}/imprimir`, motivo ? { motivo } : {});
+/** 01-ADM L82: a 1ª via leva a justificativa; a nova via, o motivo. */
+export const imprimirDocumento = (
+  p: number,
+  tipo: TipoDocumentoAberto,
+  id: number,
+  texto: { justificativa: string } | { motivo: string },
+) => enviarArquivo(`${pac(p)}/documentos/${tipo}/${id}/imprimir`, texto);
 
 export const exportarProntuario = (p: number, justificativa: string, senha?: string) =>
   enviarArquivo(`${pac(p)}/exportar`, { justificativa, ...(senha ? { senha } : {}) });

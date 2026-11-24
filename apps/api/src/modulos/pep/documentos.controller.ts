@@ -67,6 +67,7 @@ import {
   esquemaRegistrarAlergia,
   esquemaRelatorioTransferencia,
   esquemaSalvarSumario,
+  esquemaImprimirDocumentoProntuario,
   esquemaSegundaVia,
   esquemaSituacaoProblema,
   esquemaSituacaoTcle,
@@ -91,6 +92,7 @@ import {
   TIPOS_DOCUMENTO_ABERTO,
   type TipoDocumentoAberto,
 } from '@sgh/contratos';
+import { regraJustificativaImpressao } from '@sgh/dominio-pep';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
 import { camposDoDocumentoPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
 import { type ContextoGravacaoPep, ErroProntuario } from './tipos-pep.js';
@@ -456,14 +458,30 @@ export class DocumentosPepController {
     const marca = req.sghComo ? marcaSuporteTecnico(req.sghComo.alvoNome) : null;
     const chave = `${s.hospital}:${tipo}:${id}`;
     const anterior = this.emitidos.get(chave);
+    // 01-ADM L82: toda impressão do prontuário diz por quê (1ª via: justificativa; nova via: motivo).
+    const pedido = validar(esquemaImprimirDocumentoProntuario, corpo ?? {});
+    const just = regraJustificativaImpressao({
+      viaAnterior: !!anterior,
+      justificativa: pedido.justificativa ?? null,
+      motivo: pedido.motivo ?? null,
+    });
+    if (!just.ok)
+      throw new ErroProblema('entrada-invalida', 400, 'Justificativa obrigatória', just.mensagem, {
+        campos: [anterior ? 'motivo' : 'justificativa'],
+        codigo: just.codigo,
+      });
     try {
       const r = anterior
-        ? await fonte.emissao.segundaVia(anterior, validar(esquemaSegundaVia, corpo).motivo, {
-            titulo: TITULOS_PEP[modelo],
-            campos,
-            autor: s.login,
-            marcaSuporte: marca,
-          })
+        ? await fonte.emissao.segundaVia(
+            anterior,
+            validar(esquemaSegundaVia, { motivo: just.justificativa.slice(0, 200) }).motivo,
+            {
+              titulo: TITULOS_PEP[modelo],
+              campos,
+              autor: s.login,
+              marcaSuporte: marca,
+            },
+          )
         : await fonte.emissao.emitir({
             rede: s.rede,
             estabelecimento: s.hospital,
@@ -476,11 +494,19 @@ export class DocumentosPepController {
             marcaSuporte: marca,
           });
       if (!anterior) this.emitidos.set(chave, r.emissao.id);
+      // O evento do documento (tipo, justificativa, quem, quando) fica no prontuário, nunca apagado.
+      const proprio = await this.servico.porta.documentoSghDaOrigem(this.c(s), TABELA_DO_TIPO[tipo], id);
+      if (proprio)
+        await this.servico.porta.registrarEventoDocumento(this.sgh(s, 'pep.documento.impresso'), {
+          documento: proprio.id,
+          tipo: just.tipo,
+          justificativa: just.justificativa,
+        });
       req.sghAlvo = {
         paciente,
         tabelaAlvo: TABELA_DO_TIPO[tipo],
         idAlvo: String(id),
-        chaveNaturalAlvo: `impresso:${tipo};via:${r.emissao.via}`,
+        chaveNaturalAlvo: `impresso:${tipo};via:${r.emissao.via};justificativa:sim`,
       };
       res.header('content-disposition', `inline; filename="${tipo}-${id}-via${r.emissao.via}.pdf"`);
       return Buffer.from(r.pdf);

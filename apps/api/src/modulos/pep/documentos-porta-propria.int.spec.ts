@@ -506,6 +506,22 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
     ).toBe(1);
   });
 
+  it('01-ADM L82: a justificativa da impressão fica no evento do documento, com quem e quando', async () => {
+    const id = (await porta.documentoSghDaOrigem(C(), 'registro_assistencial', ids.registro))!.id;
+    const just = 'Entrega ao paciente ou ao responsável legal';
+    await porta.registrarEventoDocumento(G(), { documento: id, tipo: 'impresso', justificativa: just });
+    const ev = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+      l.uma(
+        `SELECT acao, justificativa, usuario_id, JSON_VALUE(dados, '$.tipo') AS tipo, evento_em IS NOT NULL AS com_hora
+           FROM documento_prontuario_evento WHERE documento_prontuario_id = ? ORDER BY id DESC LIMIT 1`,
+        [id],
+      ),
+    );
+    expect(ev).toMatchObject({ acao: 'impressao', justificativa: just, tipo: 'impresso' });
+    expect(Number(ev!['usuario_id'])).toBe(ids.usuario);
+    expect(Number(ev!['com_hora'])).toBe(1);
+  });
+
   it('operação sem adaptador próprio não é liberada (falha fechada)', async () => {
     expect(await porta.podeGravar(C(), 'pep.operacaoSemAdaptador', LOGIN)).toMatchObject({
       pode: false,
