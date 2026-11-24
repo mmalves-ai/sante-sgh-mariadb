@@ -9,6 +9,7 @@ import { ServicoAuditoriaTramite } from './auditoria-tramite.controller.js';
 import {
   auditoriaItensPropria,
   guiaAcompanhamentoPropria,
+  guiasConvenioPropria,
   protocolosPropria,
 } from './auditoria-tramite-propria.js';
 
@@ -50,6 +51,11 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
   const linhas = (sql: string, p: unknown[]) => escrever((e) => e.consultar<Record<string, unknown>>(sql, p));
 
   const limpar = async (e: Escritor) => {
+    for (const outro of [ids['est'], ids['estB']])
+      if (outro) {
+        await e.executar('DELETE FROM documento_emitido WHERE estabelecimento_id = ?', [outro]);
+        await e.executar('DELETE FROM volume_prontuario WHERE estabelecimento_id = ?', [outro]);
+      }
     const est = ids['est'];
     if (est) {
       const porGuia = 'IN (SELECT id FROM guia_fonte_pagadora WHERE estabelecimento_id = ?)';
@@ -98,6 +104,12 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
         `${P}A`,
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}A`, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, agora],
+      );
+      ids['estB'] = await g(
+        'estabelecimento',
+        `${P}B`,
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}B`, `ESTAB ${P} SINTETICO B`, `ESTAB ${P} SINTETICO B`, agora],
       );
       await limpar(e);
       ids['usuario'] = await garantir(
@@ -161,7 +173,7 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
         e,
         'SELECT id FROM motivo_glosa WHERE codigo_tuss = ?',
         [P],
-        "INSERT INTO motivo_glosa (codigo_tuss, descricao, vigencia_inicio, criado_em) VALUES (?, ?, '2020-01-01', ?)",
+        "INSERT INTO motivo_glosa (codigo_tuss, descricao, vigencia_inicio, versao_fonte, criado_em) VALUES (?, ?, '2020-01-01', 'teste', ?)",
         [P, `MOTIVO GLOSA SINTETICO ${P}`, agora],
       );
       const setor = (c: string, tipo: string) =>
@@ -186,10 +198,25 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
         'INSERT INTO motivo_pendencia_guia (codigo, descricao, criado_em) VALUES (?, ?, ?)',
         [P, `MOTIVO PENDENCIA SINTETICO ${P}`, agora],
       );
+      const carater = await e.uma<{ id: number }>(
+        'SELECT id FROM carater_atendimento_tiss ORDER BY id LIMIT 1',
+        [],
+      );
+      const medico = await e.uma<{ id: number }>('SELECT id FROM profissional ORDER BY id LIMIT 1', []);
       ids['atendimento'] = await e.inserir(
-        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, fonte_pagadora_id,
-           situacao, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, 'aberto', '2026-01-20 08:00:00', ?)`,
-        [ids['est'], `${P}-AT`, ids['paciente'], ids['categoria'], ids['fonte'], agora],
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+           fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'aberto', '2026-01-20 08:00:00', ?)`,
+        [
+          ids['est'],
+          `${P}-AT`,
+          ids['paciente'],
+          ids['categoria'],
+          Number(carater!.id),
+          ids['fonte'],
+          Number(medico!.id),
+          agora,
+        ],
       );
       ids['conta'] = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
@@ -214,6 +241,31 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
          VALUES (?, ?, 'internacao', ?, ?, ?, 5, '2026-01-20 09:00:00', 'solicitada', ?)`,
         [ids['est'], `${P}-G1`, ids['paciente'], ids['atendimento'], ids['fonte'], agora],
       );
+      // Volume de prontuário e documento clínico de OUTRO estabelecimento: o protocolo recusa.
+      const tipoDoc = await e.uma<{ id: number }>(
+        'SELECT id FROM tipo_documento_arquivo ORDER BY id LIMIT 1',
+        [],
+      );
+      const prof = await e.uma<{ id: number }>('SELECT id FROM profissional ORDER BY id LIMIT 1', []);
+      ids['volumeB'] = await e.inserir(
+        `INSERT INTO volume_prontuario (estabelecimento_id, paciente_id, tipo_documento_arquivo_id, numero_volume,
+           aberto_em, abertura_usuario_id, criado_em) VALUES (?, ?, ?, 1, ?, ?, ?)`,
+        [ids['estB'], ids['paciente'], Number(tipoDoc!.id), agora, ids['usuario'], agora],
+      );
+      ids['documentoB'] = await e.inserir(
+        `INSERT INTO documento_emitido (estabelecimento_id, paciente_id, atendimento_id, tipo, profissional_id,
+           emitido_em, lancado_em, texto, criado_em) VALUES (?, ?, ?, 'declaracao', ?, ?, ?, ?, ?)`,
+        [
+          ids['estB'],
+          ids['paciente'],
+          ids['atendimento'],
+          Number(prof!.id),
+          agora,
+          agora,
+          `TEXTO SINTETICO ${P}`,
+          agora,
+        ],
+      );
       ids['arquivo'] = await e.inserir(
         `INSERT INTO arquivo (estabelecimento_id, entidade, entidade_id, finalidade, nome_original, tipo_mime,
            tamanho_bytes, hash_sha256, chave_armazenamento, criado_em)
@@ -228,7 +280,7 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
     if (!nucleo) return;
     await escrever(async (e) => {
       await limpar(e);
-      await limparTrilhaDaMassa(e, { ids: [ids['est']!] });
+      await limparTrilhaDaMassa(e, { ids: [ids['est']!, ids['estB']!] });
     });
     await nucleo.encerrar();
   });
@@ -277,7 +329,13 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
       [aud],
     );
     expect(Number(antes!['valor_total_conta'])).toBe(400);
-    expect((JSON.parse(String(antes!['dados'])) as { itens: unknown[] }).itens).toHaveLength(4);
+    expect(
+      (
+        (typeof antes!['dados'] === 'string' ? JSON.parse(antes!['dados']) : antes!['dados']) as {
+          itens: unknown[];
+        }
+      ).itens,
+    ).toHaveLength(4);
 
     const parecer = (itemId: number, x: Record<string, unknown>) =>
       s.gravar('auditoria.parecer', op(), { auditoriaId: aud, itemId, ...x });
@@ -300,9 +358,24 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
     expect(tela.auditoria).toMatchObject({ id: aud, modalidade: 'operadora' });
     expect(tela.itens.filter((i) => i.parecer)).toHaveLength(4);
 
+    // Item lançado depois da abertura: fora do retrato "antes" e sem parecer, a conclusão é recusada (nunca conta como
+    // mantido sem ter sido visto); com o parecer, entra no valor auditado.
+    ids['i5'] = await escrever((e) =>
+      e.inserir(
+        `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+           realizado_em, quantidade, valor_unitario, valor_honorario, valor_custo_operacional, valor_total, situacao, criado_em)
+         VALUES (?, 5, ?, ?, '2026-01-22 10:00:00', 1, 10, 0, 10, 10, 'lancado', ?)`,
+        [ids['conta'], ids['itemFat'], ids['grupo'], new Date()],
+      ),
+    );
+    expect(await codigoDo(s.gravar('auditoria.concluir', op(), { auditoriaId: aud }))).toBe(
+      'item-sem-parecer',
+    );
+    await parecer(ids['i5']!, { decisao: 'mantido' });
     const fim = await s.gravar('auditoria.concluir', op(), { auditoriaId: aud });
-    // 400 - 50 (alterado) - 30 (glosa) - 60 (excluído) = 260
-    expect(fim).toMatchObject({ resultado: 'com_glosa_interna', valorAuditado: 260, totalConta: 260 });
+    // Itens hoje: 200 + 100 + 60 + 40 + 10 = 410; - 50 (alterado) - 30 (glosa) - 60 (excluído) = 270, igual ao total
+    // refeito da conta.
+    expect(fim).toMatchObject({ resultado: 'com_glosa_interna', valorAuditado: 270, totalConta: 270 });
     const itens = await linhas(
       'SELECT id, quantidade, valor_total, situacao FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? ORDER BY sequencia',
       [ids['conta']],
@@ -310,17 +383,19 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
     expect(itens.map((i) => [Number(i['quantidade']), Number(i['valor_total']), i['situacao']])).toEqual([
       [3, 150, 'lancado'],
       [1, 70, 'lancado'],
-      [0, 0, 'sem_cobranca'],
+      [1, 0, 'sem_cobranca'], // excluído: fica com a quantidade lançada, sem cobrança
       [2, 40, 'lancado'],
+      [1, 10, 'lancado'],
     ]);
     const [conta] = await linhas('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [ids['conta']]);
-    expect(Number(conta!['valor_total'])).toBe(260);
+    expect(Number(conta!['valor_total'])).toBe(270);
     const [cab] = await linhas(
       'SELECT situacao, resultado, valor_auditado, valor_glosa_interna, concluida_em FROM auditoria_conta WHERE id = ?',
       [aud],
     );
     expect(cab).toMatchObject({ situacao: 'concluida', resultado: 'com_glosa_interna' });
     expect(Number(cab!['valor_glosa_interna'])).toBe(140);
+    expect(Number(cab!['valor_auditado'])).toBe(Number(conta!['valor_total']));
     const mem = await linhas(
       `SELECT COUNT(*) AS n FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id
         WHERE i.conta_hospitalar_id = ? AND JSON_VALUE(m.dados, '$.origem') = 'auditoria'`,
@@ -331,7 +406,7 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
       "SELECT valor_total_conta FROM auditoria_conta_versao WHERE auditoria_conta_id = ? AND momento = 'depois'",
       [aud],
     );
-    expect(Number(depois!['valor_total_conta'])).toBe(260);
+    expect(Number(depois!['valor_total_conta'])).toBe(270);
     expect(await codigoDo(s.gravar('auditoria.concluir', op(), { auditoriaId: aud }))).toBe(
       'auditoria-encerrada',
     );
@@ -374,6 +449,19 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
       ],
     });
     expect(p).toMatchObject({ itens: 2 });
+    for (const item of [
+      { tipo: 'volume_prontuario', alvoId: ids['volumeB'] },
+      { tipo: 'documento', alvoId: ids['documentoB'] },
+    ])
+      expect(
+        await codigoDo(
+          s.gravar('protocolo.emitir', op(), {
+            remetenteId: ids['setorFat'],
+            destinatarioId: ids['setorAud'],
+            itens: [item],
+          }),
+        ),
+      ).toBe('nao-encontrado');
     const [cab] = await linhas(
       'SELECT situacao, tipo_conteudo, enviado_em FROM protocolo_tramite WHERE id = ?',
       [p['id']],
@@ -441,6 +529,31 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
     expect(
       await codigoDo(s.gravar('guia.responder', op(), { guiaId: g, resposta: 'autorizada', senha: 'S1' })),
     ).toBe('entrada-invalida');
+    // Negada ou em análise também esperam as pendências: a guia não sai de "pendente" com pendência aberta.
+    for (const resposta of ['negada', 'em_analise'])
+      expect(
+        await codigoDo(
+          s.gravar('guia.responder', op(), { guiaId: g, resposta, motivoNegacao: 'Sem cobertura' }),
+        ),
+      ).toBe('entrada-invalida');
+    const [gp] = await linhas(
+      'SELECT situacao, motivo_pendencia_guia_id FROM guia_fonte_pagadora WHERE id = ?',
+      [g],
+    );
+    expect(gp).toMatchObject({ situacao: 'pendente', motivo_pendencia_guia_id: ids['motivoPend'] });
+    const fila = await ler((l, est) =>
+      guiasConvenioPropria(l, est, { situacao: null, minhas: false, usuario: null }),
+    );
+    expect(fila.find((x) => x.id === g)).toMatchObject({
+      paciente: `PACIENTE SINTETICO ${P}`,
+      prontuario: 837_601,
+      atendimentoId: ids['atendimento'],
+      pendencias: 2,
+    });
+    const filaCc = await ler((l, est) =>
+      guiasConvenioPropria(l, est, { situacao: null, minhas: false, usuario: null, cirurgia: true }),
+    );
+    expect(filaCc.find((x) => x.id === g)).toBeUndefined();
     await s.gravar('guia.pendencia.resolver', op(), { pendenciaId: p1['id'], solucao: 'Laudo anexado' });
     const [g2] = await linhas('SELECT situacao FROM guia_fonte_pagadora WHERE id = ?', [g]);
     expect(g2!['situacao']).toBe('pendente');

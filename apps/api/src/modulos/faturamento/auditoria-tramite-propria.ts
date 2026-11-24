@@ -489,13 +489,17 @@ export const opConcluirAuditoria = definirOperacao({
         );
       const qa = n(p['quantidade_aceita']);
       const va = n(p['valor_aceito']);
-      const semCobranca = txt(p['decisao']) === 'excluido' || va === 0;
-      await tx.alterar('conta_hospitalar_item', n(i['id']), n(i['versao']), {
-        quantidade: qa,
-        valor_unitario: qa > 0 ? Math.round((va / qa) * 10_000) / 10_000 : 0,
-        valor_total: va,
-        ...(semCobranca ? { situacao: 'sem_cobranca' } : {}),
-      });
+      const semCobranca = txt(p['decisao']) === 'excluido' || va === 0 || qa === 0;
+      // Item excluído ou glosado por inteiro: fica na conta como "sem cobrança", com a quantidade lançada (a regra do
+      // banco exige quantidade positiva) e valor zero; o que o auditor aceitou fica no parecer e na memória.
+      await tx.alterar(
+        'conta_hospitalar_item',
+        n(i['id']),
+        n(i['versao']),
+        semCobranca
+          ? { valor_total: 0, situacao: 'sem_cobranca' }
+          : { quantidade: qa, valor_unitario: Math.round((va / qa) * 10_000) / 10_000, valor_total: va },
+      );
       await tx.incluir('conta_hospitalar_item_memoria', {
         conta_hospitalar_item_id: n(i['id']),
         tabela_preco_id: null,
