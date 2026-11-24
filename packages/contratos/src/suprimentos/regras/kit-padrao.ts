@@ -1,0 +1,134 @@
+// Kit padrão de insumos (F3.6, 05-SUP linha 13): a composição (insumo e quantidade) e os procedimentos que usam o kit.
+// Regras puras: a API confere antes de gravar e a tela confere na hora, com as mesmas mensagens e os mesmos campos.
+import { recusa, type RecusaSuprimentos } from './recusa.js';
+
+export const TIPOS_KIT_PADRAO = [
+  'procedimento',
+  'cirurgia',
+  'rotina',
+  'emergencia',
+  'caixa_cirurgica',
+] as const;
+export type TipoKitPadrao = (typeof TIPOS_KIT_PADRAO)[number];
+
+export interface ItemKitPadraoConferido {
+  readonly insumo: number;
+  readonly quantidade: number;
+  readonly obrigatorioRastreavel: boolean;
+}
+
+export interface ProcedimentoKitPadraoConferido {
+  readonly procedimentoCirurgico: number | null;
+  readonly itemFaturavel: number | null;
+  readonly quantidadeKits: number;
+  readonly padrao: boolean;
+}
+
+export interface KitPadraoConferido {
+  readonly codigo: string;
+  readonly nome: string;
+  readonly tipo: TipoKitPadrao;
+  readonly ativo: boolean;
+  readonly itens: readonly ItemKitPadraoConferido[];
+  readonly procedimentos: readonly ProcedimentoKitPadraoConferido[];
+}
+
+/** O alvo do vínculo como chave única (cirurgia ou procedimento faturável). */
+export const chaveProcedimentoKit = (p: {
+  readonly procedimentoCirurgico: number | null;
+  readonly itemFaturavel: number | null;
+}): string => (p.procedimentoCirurgico !== null ? `c${p.procedimentoCirurgico}` : `f${p.itemFaturavel ?? 0}`);
+
+/** As recusas do kit padrão (vazio: pode gravar). */
+export function conferirKitPadrao(k: KitPadraoConferido): RecusaSuprimentos[] {
+  const r: RecusaSuprimentos[] = [];
+  if (!k.codigo.trim()) r.push(recusa('kit-sem-codigo', 'Informe o código do kit.', ['codigo']));
+  if (!k.nome.trim()) r.push(recusa('kit-sem-nome', 'Informe o nome do kit.', ['nome']));
+  if (k.ativo && k.itens.length === 0)
+    r.push(recusa('kit-sem-itens', 'O kit ativo precisa de pelo menos um item.', ['itens']));
+  const vistos = new Set<number>();
+  for (const [i, it] of k.itens.entries()) {
+    if (vistos.has(it.insumo))
+      r.push(
+        recusa(
+          'kit-item-repetido',
+          `O item da linha ${i + 1} já está no kit: some a quantidade na mesma linha.`,
+          [`itens.${i}.insumo`],
+        ),
+      );
+    vistos.add(it.insumo);
+    if (!(it.quantidade > 0))
+      r.push(
+        recusa('kit-quantidade-invalida', `A quantidade da linha ${i + 1} deve ser maior que zero.`, [
+          `itens.${i}.quantidade`,
+        ]),
+      );
+  }
+  if (k.tipo === 'emergencia' && k.itens.length > 0 && !k.itens.some((i) => i.obrigatorioRastreavel))
+    r.push(
+      recusa(
+        'kit-emergencia-sem-obrigatorio',
+        'O kit de emergência precisa de pelo menos um item obrigatório na conferência do carrinho.',
+        ['itens'],
+      ),
+    );
+  const alvos = new Set<string>();
+  for (const [i, p] of k.procedimentos.entries()) {
+    if ((p.procedimentoCirurgico === null) === (p.itemFaturavel === null))
+      r.push(
+        recusa('kit-vinculo-sem-alvo', `Escolha a cirurgia ou o procedimento da linha ${i + 1}.`, [
+          `procedimentos.${i}`,
+        ]),
+      );
+    else {
+      const c = chaveProcedimentoKit(p);
+      if (alvos.has(c))
+        r.push(
+          recusa('kit-vinculo-repetido', `O procedimento da linha ${i + 1} já está vinculado a este kit.`, [
+            `procedimentos.${i}`,
+          ]),
+        );
+      alvos.add(c);
+    }
+    if (!(p.quantidadeKits > 0))
+      r.push(
+        recusa('kit-quantidade-invalida', `A quantidade de kits da linha ${i + 1} deve ser maior que zero.`, [
+          `procedimentos.${i}.quantidadeKits`,
+        ]),
+      );
+  }
+  if (!k.ativo && k.procedimentos.some((p) => p.padrao))
+    r.push(
+      recusa('kit-inativo-padrao', 'Um kit inativo não pode ser o padrão de um procedimento.', ['ativo']),
+    );
+  return r;
+}
+
+/** As mudanças da composição: o que entra, o que muda de quantidade ou marcação e o que sai (sai sem apagar). */
+export function diferencaItensKit<
+  A extends {
+    readonly insumo: number;
+    readonly quantidade: number;
+    readonly obrigatorioRastreavel: boolean;
+    readonly permiteSubstituto: boolean;
+  },
+>(
+  atuais: readonly A[],
+  novos: readonly A[],
+): { readonly entram: A[]; readonly mudam: A[]; readonly saem: A[] } {
+  const porInsumo = new Map(atuais.map((a) => [a.insumo, a]));
+  const ficam = new Set(novos.map((x) => x.insumo));
+  const entram: A[] = [];
+  const mudam: A[] = [];
+  for (const x of novos) {
+    const a = porInsumo.get(x.insumo);
+    if (!a) entram.push(x);
+    else if (
+      a.quantidade !== x.quantidade ||
+      a.obrigatorioRastreavel !== x.obrigatorioRastreavel ||
+      a.permiteSubstituto !== x.permiteSubstituto
+    )
+      mudam.push(x);
+  }
+  return { entram, mudam, saem: atuais.filter((a) => !ficam.has(a.insumo)) };
+}

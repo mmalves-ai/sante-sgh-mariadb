@@ -90,6 +90,7 @@ export * from './pep/prontuario.js';
 export * from './permissoes/pep.js';
 // M23: documentos, exames, resultados e multiprofissional.
 export * from './pep/documentos.js';
+export * from './pep/impressao-prontuario.js';
 // M14: domínios em massa (lote gerado), consultas somente leitura de todas as tabelas e matriz fechada.
 export * from './consultas/tipos.js';
 export * from './consultas/catalogo.js';
@@ -226,6 +227,8 @@ export * from './permissoes/inicio.js';
 // M28: estoque, almoxarifado e compras.
 export * from './suprimentos/vocabulario.js';
 export * from './suprimentos/entradas.js';
+// F3.6 (05-SUP linha 13): kit padrão.
+export * from './suprimentos/kit-padrao.js';
 export * from './suprimentos/respostas.js';
 // M41: onda 3 (setores, operações e chaves da liberação; painel de acompanhamento dos efeitos no estoque).
 export * from './suprimentos/onda3.js';
