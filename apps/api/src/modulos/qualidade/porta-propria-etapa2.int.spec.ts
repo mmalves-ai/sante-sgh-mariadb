@@ -20,6 +20,8 @@ import { PortaQualidadePropria } from './porta-propria.js';
 import type { Acao5w2h, NotificacaoIncidenteNova, QueixaTecnicaNova } from './tipos.js';
 
 const AGORA = '2026-11-20T10:00:00';
+const CODIGO_ITEM = 987650001;
+const CODIGO_GRUPO = 'QSINTE2';
 const trilha: TrilhaDaGravacao = {
   estabelecimento: null,
   usuario: null,
@@ -91,6 +93,9 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
         "DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (?, ?) AND tipo LIKE 'queixa_tecnica_produto_%'",
         ests,
       );
+      await e.executar('DELETE FROM insumo WHERE codigo = ?', [String(CODIGO_ITEM)]);
+      await e.executar('DELETE FROM grupo_insumo WHERE codigo = ?', [CODIGO_GRUPO]);
+      await e.executar('DELETE FROM unidade_medida WHERE codigo = ?', [CODIGO_GRUPO]);
     });
   }
 
@@ -403,6 +408,69 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
     expect(await porta.queixa(fora, q.id)).toBeNull();
     expect(await porta.eventosQueixa(fora, q.id)).toEqual([]);
     expect(await codigo(porta.gravarSgh(fora, trilha, (g) => g.travarQueixa(q.id)))).toBe('nao-encontrado');
+  });
+
+  it('produtos do cadastro: busca por código e por nome, nomes pelos códigos e a queixa ligada ao item', async () => {
+    const insumo = await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'preparo-etapa2' }, async (e) => {
+      const agora = new Date();
+      const um = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
+        const l = await e.uma<{ id: number }>(sel, p);
+        return l ? Number(l.id) : e.inserir(ins, pi);
+      };
+      const grupo = await um(
+        'SELECT id FROM grupo_insumo WHERE codigo = ?',
+        [CODIGO_GRUPO],
+        "INSERT INTO grupo_insumo (codigo, descricao, natureza, criado_em) VALUES (?, 'GRUPO SINTETICO', 'medicamento', ?)",
+        [CODIGO_GRUPO, agora],
+      );
+      const unidade = await um(
+        'SELECT id FROM unidade_medida WHERE codigo = ?',
+        [CODIGO_GRUPO],
+        "INSERT INTO unidade_medida (codigo, descricao, sigla, uso_estoque, criado_em) VALUES (?, 'UNIDADE SINTETICA', 'US', TRUE, ?)",
+        [CODIGO_GRUPO, agora],
+      );
+      return um(
+        'SELECT id FROM insumo WHERE codigo = ?',
+        [String(CODIGO_ITEM)],
+        "INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, criado_em) VALUES (?, 'PRODUTO SINTETICO QUALIDADE ETAPA2', 'medicamento', ?, ?, ?)",
+        [String(CODIGO_ITEM), grupo, unidade, agora],
+      );
+    });
+    expect(insumo).toBeGreaterThan(0);
+    expect(await porta.itens(c, String(CODIGO_ITEM))).toEqual([
+      { codigo: CODIGO_ITEM, nome: 'PRODUTO SINTETICO QUALIDADE ETAPA2' },
+    ]);
+    expect(await porta.itens(c, 'sintetico qualidade etapa2')).toContainEqual({
+      codigo: CODIGO_ITEM,
+      nome: 'PRODUTO SINTETICO QUALIDADE ETAPA2',
+    });
+    expect(await porta.itens(c, '%')).not.toContainEqual(expect.objectContaining({ codigo: CODIGO_ITEM }));
+    const nomes = await porta.nomesDosItens(c, [CODIGO_ITEM, 1]);
+    expect([...nomes]).toEqual([[CODIGO_ITEM, 'PRODUTO SINTETICO QUALIDADE ETAPA2']]);
+    expect((await porta.nomesDosItens(c, [])).size).toBe(0);
+    const q = await porta.gravarSgh(c, trilha, (g) =>
+      g.abrirQueixa({
+        area: 'farmacovigilancia',
+        tipo: 'queixaTecnica',
+        item: CODIGO_ITEM,
+        produto: null,
+        lote: null,
+        serie: null,
+        fabricante: null,
+        registroAnvisa: null,
+        descricao: 'Desvio sintético de qualidade.',
+        notificacao: null,
+        alerta: null,
+        conduta: 'nenhuma',
+        usuario: m.login,
+        agora: AGORA,
+      }),
+    );
+    expect(await porta.queixa(c, q.id)).toMatchObject({
+      item: CODIGO_ITEM,
+      produto: 'PRODUTO SINTETICO QUALIDADE ETAPA2',
+      tipo: 'queixaTecnica',
+    });
   });
 
   it('sugestão resolvida: grava uma vez por resumo e lê só no estabelecimento', async () => {

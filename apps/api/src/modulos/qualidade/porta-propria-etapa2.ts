@@ -292,6 +292,38 @@ export async function lerResolvidas(l: L, est: number, resumos: readonly string[
   return new Set(r.map((x) => texto(x['resumo'])));
 }
 
+// ── Produtos do cadastro (a busca da vigilância de produto) ─────────────────────────────────────────────────────
+
+/** Teto da busca de produtos pela tela da vigilância. */
+export const TETO_BUSCA_ITENS = 30;
+
+/** Os produtos do cadastro pelo código (só dígitos: o código exato) ou por parte do nome (sem os excluídos). */
+export async function lerItens(l: L, termo: string): Promise<{ codigo: number; nome: string }[]> {
+  const t = termo.trim().toUpperCase();
+  if (t === '') return [];
+  const porCodigo = /^\d+$/.test(t);
+  const r = await l.consultar(
+    `SELECT codigo, nome FROM insumo
+      WHERE excluido_em IS NULL AND codigo REGEXP '^[0-9]+$' AND ${porCodigo ? 'codigo = ?' : 'UPPER(nome) LIKE ?'}
+      ORDER BY nome, codigo LIMIT ${TETO_BUSCA_ITENS}`,
+    [porCodigo ? t : `%${t.replace(/[\\%_]/g, (x) => `\\${x}`)}%`],
+    { teto: TETO_BUSCA_ITENS },
+  );
+  return r.map((x) => ({ codigo: Number(x['codigo']), nome: texto(x['nome']) }));
+}
+
+/** Os nomes dos produtos pelos códigos (os que não estão no cadastro ficam de fora). */
+export async function lerNomesDosItens(l: L, codigos: readonly number[]): Promise<Map<number, string>> {
+  const cs = [...new Set(codigos.filter((x) => Number.isSafeInteger(x) && x >= 0).map(String))];
+  if (cs.length === 0) return new Map();
+  const r = await l.consultar(
+    `SELECT codigo, nome FROM insumo WHERE excluido_em IS NULL AND codigo IN (${marcas(cs.length)})`,
+    cs,
+    { teto: cs.length },
+  );
+  return new Map(r.map((x) => [Number(x['codigo']), texto(x['nome'])]));
+}
+
 // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** O que a gravação da etapa 2 usa da notificação (a linha travada, a mudança pela versão e a linha do tempo). */

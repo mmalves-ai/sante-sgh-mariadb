@@ -25,7 +25,7 @@
 // Melhoria: o painel das análises conta pelos prazos e conclusões gravados na própria notificação.
 // Etapa 2 (a análise, o plano de ação, a queixa técnica e a sugestão resolvida): porta-propria-etapa2.ts, na mesma
 // transação da notificação. Pendente: as leituras que dependem de dado de OUTRO módulo ainda sem mapeamento (candidatos
-// à sugestão, adesão aos protocolos, histórico de riscos, protocolos gerenciados e tecnovigilância por item) falham
+// à sugestão, adesão aos protocolos, histórico de riscos, protocolos gerenciados e expostos ao lote) falham
 // fechadas (503 `modelo-pendente`).
 import type { ContextoNotificacaoLido } from '@sgh/contratos';
 import {
@@ -69,6 +69,8 @@ import {
   lerAcoes,
   lerAnalise,
   lerEventosQueixa,
+  lerItens,
+  lerNomesDosItens,
   lerQueixa,
   lerQueixas,
   lerResolvidas,
@@ -914,13 +916,11 @@ export class PortaQualidadePropria implements PortaQualidade {
     return Promise.reject(leituraPendente(DE_OUTROS));
   }
 
-  itens(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(DE_OUTROS));
+  itens(c: ContextoQualidade, termo: string) {
+    return this.ler(c, (l) => lerItens(l, termo));
   }
 
-  nomesDosItens(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(DE_OUTROS));
+  nomesDosItens(c: ContextoQualidade, codigos: readonly number[]) {
+    return this.ler(c, (l) => lerNomesDosItens(l, codigos));
   }
 }

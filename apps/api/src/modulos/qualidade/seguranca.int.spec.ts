@@ -141,7 +141,7 @@ describe.skipIf(SEM_BANCO_QUA)('painel da segurança do paciente no MariaDB (f22
     for (const p of [
       porta.candidatos(c, m.login, '2026-11-01'),
       porta.painelAdesao(c, '2026-11-01', '2026-12-01', '2026-11-20T10:00:00'),
-      porta.itens(c, 'luva'),
+      porta.expostos(c, 1, 'L1'),
     ]) {
       const e = await p.then(
         () => null,
