@@ -17,6 +17,7 @@ import {
   componentesDaFicha,
   documentoDaTrilha,
   documentos,
+  episodio,
   executar,
   fila,
   lerReceita,
@@ -140,6 +141,17 @@ describe('painel', () => {
     expect(sqls.some((s) => /FROM atendimento a/.test(s.sql))).toBe(false);
   });
 
+  it('equipe: a especialidade da internação ou, sem internação, a do atendimento (externo entra)', async () => {
+    const externo = { id: 11, numero: '11', paciente_id: 101, tipo_base: 'pronto_atendimento', nome: 'X', numero_prontuario: 1, alergias: 0 };
+    const { nucleo, sqls } = duble({ consultar: () => [externo] });
+    const r = await painel(nucleo, 'cli', C, { unidade: null, busca: null, equipe: { especialidades: [5, 5, -1, 6] } });
+    expect(r.linhas.map((x) => [x.atendimento, x.tipo])).toEqual([[11, 'externo']]);
+    const q = sqls.at(-1)!;
+    expect(q.sql).toMatch(/COALESCE\(i\.especialidade_medica_id, a\.especialidade_medica_id\) IN \(\?, \?\)/);
+    expect(q.sql).not.toMatch(/AND i\.especialidade_medica_id IN/);
+    expect(q.params).toEqual([7, 7, 5, 6]);
+  });
+
   it('"meus" filtra por quem registrou no episódio ou aceitou parecer', async () => {
     const { nucleo, sqls } = duble();
     await painel(nucleo, 'cli', C, {
@@ -151,6 +163,45 @@ describe('painel', () => {
     expect(q.sql).toMatch(/registro_assistencial r JOIN usuario u/);
     expect(q.sql).toMatch(/aceito_por_profissional_id/);
     expect(q.params).toEqual([7, 7, 'med', 'med']);
+  });
+});
+
+describe('episódio', () => {
+  it('sem internação: vazio, sem ler cirurgia nem exame; id inválido não lê', async () => {
+    const d = duble();
+    expect(await episodio(d.nucleo, 'cli', C, 0)).toEqual({ motivoInternacao: null, procedimentos: [], exames: [] });
+    expect(d.sqls).toHaveLength(0);
+    expect(await episodio(d.nucleo, 'cli', C, 9)).toEqual({ motivoInternacao: null, procedimentos: [], exames: [] });
+    expect(d.sqls.some((x) => /ato_cirurgico|resultado_exame/.test(x.sql))).toBe(false);
+  });
+
+  it('CID da internação, cirurgias realizadas (com CID) e exames liberados unidos aos externos', async () => {
+    const { nucleo, sqls } = duble({
+      uma: (sql) => (/FROM internacao/.test(sql) ? { codigo_termo: 'I20', descricao: 'Angina' } : null),
+      consultar: (sql) =>
+        /FROM ato_cirurgico/.test(sql)
+          ? [
+              { descricao: 'Herniorrafia', cid: 'K40' },
+              { descricao: 'Herniorrafia', cid: 'K40' },
+              { descricao: 'Biópsia', cid: null },
+            ]
+          : [{ nome: 'HEMOGRAMA' }, { nome: 'Exame externo' }],
+    });
+    expect(await episodio(nucleo, 'cli', C, 9)).toEqual({
+      motivoInternacao: 'I20 - Angina',
+      procedimentos: ['Herniorrafia (K40)', 'Biópsia'],
+      exames: ['HEMOGRAMA', 'Exame externo'],
+    });
+    const cir = sqls.find((x) => /FROM ato_cirurgico/.test(x.sql))!;
+    expect(cir.sql).toMatch(/ac\.situacao = 'realizado'/);
+    expect(cir.sql).toMatch(/ac\.excluido_em IS NULL/);
+    expect(cir.sql).toMatch(/ap\.excluido_em IS NULL/);
+    expect(cir.params).toEqual([9, 7]);
+    const ex = sqls.find((x) => /resultado_exame/.test(x.sql))!;
+    expect(ex.sql).toMatch(/re\.situacao = 'liberado'/);
+    expect(ex.sql).toMatch(/re\.excluido_em IS NULL/);
+    expect(ex.sql).toMatch(/exame_lancado_prontuario/);
+    expect(ex.params).toEqual([9, 7, 9, 7]);
   });
 });
 

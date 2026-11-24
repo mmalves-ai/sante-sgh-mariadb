@@ -174,7 +174,8 @@ export function painel(
     if (f.equipe) {
       const esp = idsValidos(f.equipe.especialidades);
       if (esp.length === 0) return { linhas: [], limitado: false };
-      filtros.push(`i.especialidade_medica_id IN (${marcadores(esp.length)})`);
+      // A especialidade da internação; sem internação (pronto atendimento, ambulatório), a do atendimento.
+      filtros.push(`COALESCE(i.especialidade_medica_id, a.especialidade_medica_id) IN (${marcadores(esp.length)})`);
       p.push(...esp);
     }
     const ls = await l.consultar(
@@ -233,8 +234,8 @@ export function painel(
 }
 
 /**
- * O episódio do atendimento para o sumário de alta: o CID principal da internação ("código - descrição"), os
- * procedimentos (diagnósticos ativos secundários do atendimento não entram; só o que foi feito) e os exames. Sem
+ * O episódio do atendimento para o sumário de alta: o CID principal da internação ("código - descrição"), as
+ * cirurgias realizadas (só o que foi feito; diagnósticos não entram) e os exames liberados e externos. Sem
  * internação: tudo vazio (como a memória faz com o atendimento externo).
  */
 export function episodio(
@@ -256,15 +257,46 @@ export function episodio(
     );
     if (!i) return vazio;
     const codigo = textoOuNull(i['codigo_termo']);
-    const exames = await l.consultar(
-      `SELECT DISTINCT COALESCE(e.nome_exame, 'Exame externo') AS nome FROM exame_lancado_prontuario e
-        WHERE e.atendimento_id = ? AND e.estabelecimento_id = ? AND e.excluido_em IS NULL AND e.situacao = 'ativo'
-        ORDER BY nome LIMIT 50`,
+    // Cirurgias do atendimento: atos realizados (nunca o cancelado nem o em andamento), os procedimentos não excluídos,
+    // na ordem do ato e da sequência; o CID do procedimento ou, sem ele, o pós-operatório do ato.
+    const cirurgias = await l.consultar(
+      `SELECT pc.descricao, COALESCE(ap.codigo_cid10, ac.codigo_cid10_pos_operatorio) AS cid
+         FROM ato_cirurgico ac
+         JOIN ato_cirurgico_procedimento ap ON ap.ato_cirurgico_id = ac.id AND ap.excluido_em IS NULL
+         JOIN procedimento_cirurgico pc ON pc.id = ap.procedimento_cirurgico_id
+        WHERE ac.atendimento_id = ? AND ac.estabelecimento_id = ? AND ac.excluido_em IS NULL
+          AND ac.situacao = 'realizado'
+        ORDER BY ac.inicio_cirurgia_em, ac.id, ap.sequencia, ap.id LIMIT 50`,
       [atendimento, est.id],
     );
+    // Exames do atendimento: os resultados liberados (laboratório e imagem do próprio hospital, sem exclusão lógica)
+    // e os exames externos lançados no prontuário (ativos).
+    const exames = await l.consultar(
+      `SELECT nome FROM (
+         SELECT ex.nome AS nome
+           FROM resultado_exame re
+           JOIN exame_item it ON it.id = re.exame_item_id
+           JOIN requisicao_exame rq ON rq.id = it.requisicao_exame_id
+           JOIN exame ex ON ex.id = it.exame_id
+          WHERE rq.atendimento_id = ? AND rq.estabelecimento_id = ? AND re.situacao = 'liberado'
+            AND re.excluido_em IS NULL AND it.excluido_em IS NULL AND rq.excluido_em IS NULL
+         UNION
+         SELECT COALESCE(e.nome_exame, 'Exame externo') AS nome FROM exame_lancado_prontuario e
+          WHERE e.atendimento_id = ? AND e.estabelecimento_id = ? AND e.excluido_em IS NULL AND e.situacao = 'ativo'
+       ) x ORDER BY nome LIMIT 50`,
+      [atendimento, est.id, atendimento, est.id],
+    );
+    const procedimentos = [
+      ...new Set(
+        cirurgias.map((x) => {
+          const cid = textoOuNull(x['cid']);
+          return cid ? `${String(x['descricao'])} (${cid})` : String(x['descricao']);
+        }),
+      ),
+    ];
     return {
       motivoInternacao: codigo ? `${codigo} - ${String(i['descricao'] ?? '')}`.trim() : null,
-      procedimentos: [],
+      procedimentos,
       exames: exames.map((e) => String(e['nome'])),
     };
   });
