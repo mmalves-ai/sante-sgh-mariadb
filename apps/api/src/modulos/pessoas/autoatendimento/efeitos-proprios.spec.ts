@@ -55,7 +55,7 @@ const codigo = async (p: Promise<unknown>) => {
 };
 
 describe('efeitos da aprovação do autoatendimento sobre as portas próprias', () => {
-  it('declara as tabelas do ponto, do cadastro e da trilha (e as do cálculo, quando ligado)', () => {
+  it('declara as tabelas do ponto, do cadastro e da trilha (e as do cálculo, quando ligado; sem ele, as das férias próprias)', () => {
     const p = portas();
     const sem = efeitosAutoatendimentoProprios(p);
     expect(sem.tabelas).toEqual(
@@ -67,7 +67,9 @@ describe('efeitos da aprovação do autoatendimento sobre as portas próprias', 
         'trilha_auditoria',
       ]),
     );
-    expect(sem.tabelas).not.toContain('programacao_ferias');
+    // Sem o cálculo ligado, as férias aprovadas gravam pelo gravador próprio: as tabelas dele entram declaradas.
+    expect(sem.tabelas).toEqual(expect.arrayContaining(['programacao_ferias', 'periodo_aquisitivo']));
+    expect(sem.tabelas).not.toContain('recibo_ferias');
     const com = efeitosAutoatendimentoProprios({
       ...p,
       calculo: { tabelas: ['programacao_ferias', 'ajuste_ponto'], gravadorNaTransacao: () => ({}) as never },
