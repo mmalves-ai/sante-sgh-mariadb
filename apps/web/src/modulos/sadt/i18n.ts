@@ -5,6 +5,7 @@ import { mensagensTransfusao } from './i18n-transfusao.js';
 
 export const mensagensSadt = {
   carregando: 'Carregando…',
+  catalogoAtalho: 'Catálogo de exames: exame, faixas, fórmulas e opções',
   nenhum: 'Nada encontrado.',
   cortada: 'A lista passou do limite e foi cortada; filtre mais.',
   emConsulta: 'Diagnóstico em consulta',

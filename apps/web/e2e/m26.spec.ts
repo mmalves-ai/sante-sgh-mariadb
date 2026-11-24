@@ -210,12 +210,12 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
     await page.goto('/sadt/orcamentos');
     const orc = page.locator('[data-testid^="orcamento-situacao-"]').filter({ hasText: 'Em aberto' }).first();
     const id = (await orc.getAttribute('data-testid'))!.replace('orcamento-situacao-', '');
-    await page.getByTestId(`orcamento-atendimento-${id}`).fill('10031');
-    await page.getByTestId(`orcamento-executante-busca-${id}`).fill('BIOM');
-    await page.getByTestId(`orcamento-executante-buscar-${id}`).click();
-    await page.getByTestId(`orcamento-converter-${id}`).click();
-    await expect(page.getByTestId('orcamento-mensagem')).toContainText('Orçamento convertido');
-    await expect(page.getByTestId(`orcamento-situacao-${id}`)).toContainText('Convertido');
+    // F3.5 (05-SADT linha 26): a conversão parte dos atendimentos do paciente (nunca um id digitado) e só existe com o
+    // banco do cliente; o efeito (requisição, valores aprovados na conta, situação) é provado no contrato de efeito
+    // orcamento-propria.int.spec.ts. Aqui, na fonte sintética, a tela oferece o caminho novo e não o campo antigo.
+    await expect(page.getByTestId(`orcamento-atendimentos-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`orcamento-atendimento-${id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`orcamento-executante-busca-${id}`)).toHaveCount(0);
     await semViolacaoAxe(page, '/sadt/orcamentos');
   });
 

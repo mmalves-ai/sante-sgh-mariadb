@@ -33,6 +33,8 @@ const ATALHOS: Partial<Record<string, { rota: string; rotulo: string; permissao:
     rotulo: 'especialidades.lactario.titulo',
     permissao: PERMISSOES_ESPECIALIDADES_CODIGOS.lactarioLer,
   },
+  // F3.5 (05-SADT linhas 1 a 3): o cadastro completo do exame (faixas, fórmulas, opções) fica na tela do catálogo.
+  exames: { rota: '/sadt/catalogo', rotulo: 'sadt.catalogoAtalho', permissao: 'sadt.catalogo.ler' },
 };
 const atalho = computed(() => {
   const a = ATALHOS[props.subitem];

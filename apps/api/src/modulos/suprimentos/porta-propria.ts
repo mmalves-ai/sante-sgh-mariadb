@@ -2576,7 +2576,8 @@ async function registrarEntradaNF(
     pedido
       ? itensPedido.map((r) => ({
           item: n(r['insumo_id']),
-          quantidade: n(r['quantidade']),
+          // F3.6 (05-SUP linha 20): o cancelado parcial sai do que ainda se espera receber (tolerância e estado).
+          quantidade: n(r['quantidade']) - n(r['quantidade_cancelada']),
           comprada: n(r['quantidade_recebida']),
           valorUnitario: n(r['valor_unitario']),
           entrega: r['data_prevista_entrega'] ? dataIso(r['data_prevista_entrega']) : null,
