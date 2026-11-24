@@ -652,7 +652,7 @@ def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
     """Atende os gravadores até todos devolverem o estado: leituras da origem, próxima tarefa, reserva de ids do
     destino da tabela dividida e o resultado."""
     fluxos, vivos, sid, prox = {}, dict(filhos), itertools.count(1), {}
-    pulsar, lidas = getattr(cm.progresso, "pulsar", None), [0]  # batimento da onda (carga.Batimento), só aqui
+    pulsar, lidas = getattr(getattr(cm, "progresso", None), "pulsar", None), [0]  # batimento da onda (carga.Batimento), só aqui
     while vivos:
         if pulsar is not None:
             pulsar(lidas[0])
