@@ -14,3 +14,5 @@ export * from './quadro.js';
 export * from './teleconsulta/index.js';
 // F2.2: abertura, condução, exclusão, observação e ato médico (regras levadas das portas ao domínio).
 export * from './fluxo-atendimento.js';
+// F3.2 (02-REC linha 30): correção da ficha aberta e do procedimento extra (versão, estorno, correção).
+export * from './correcao-ficha.js';
