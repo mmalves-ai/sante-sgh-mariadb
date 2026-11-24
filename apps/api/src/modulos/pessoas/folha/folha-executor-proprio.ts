@@ -10,11 +10,10 @@
 //     com trava: o mesmo filtro e a mesma tradução de situação, e o carimbo do serviço bate;
 //   - férias (programacao_ferias): as do vínculo com trava (a leitura do cálculo) e a troca de situação para cancelada
 //     ou programada pela versão.
-// Ficam recusando com `modelo-pendente` (sem lugar no modelo): incluir férias e marcá-las calculadas (programacao_ferias
-// exige o período aquisitivo e o tipo de férias, e o processamento liga pelo recibo_ferias) e as obrigações (o arquivo
-// cifrado pela porta de armazenamento e as situações `entregue`/`substituida`); os parâmetros das obrigações gravam
-// (parametro_obrigacao, início AAAA-MM no primeiro dia do mês). O integrador junta este gravador ao de
-// porta-calculo-propria.
+// Aqui ficam recusando com `modelo-pendente` incluir férias, marcá-las calculadas e as obrigações; na porta do cálculo
+// (porta-calculo-propria.ts) essas entradas são sobrescritas pelo gravador de folha-porta-propria-obrigacoes.ts (o
+// período aquisitivo, o recibo de férias e o arquivo cifrado pela porta de armazenamento). Os parâmetros das obrigações
+// gravam aqui (parametro_obrigacao, início AAAA-MM no primeiro dia do mês).
 // Tipos do processamento: o contrato diz `decimo1`/`decimo2`; o banco, `decimo_terceiro_1`/`decimo_terceiro_2`.
 // Quem calculou e quem trocou a situação vêm da auditoria (criado_por e alterado_por), nunca de coluna à parte.
 import {

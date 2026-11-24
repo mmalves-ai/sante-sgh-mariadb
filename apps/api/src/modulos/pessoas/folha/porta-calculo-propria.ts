@@ -8,10 +8,10 @@
 // (fechamento_periodo_folha).
 // O processamento da folha, a rescisão (com o desligamento), as férias e os parâmetros das obrigações são lidos por
 // LeiturasCalculoFolhaPropria (folha-porta-propria-calculo.ts) e gravados por gravadorFolhaExecutor
-// (folha-executor-proprio.ts), na mesma transação do gravador. Ainda recusam com `modelo-pendente` (nunca vazio nem
-// gravação pela metade): a inclusão das férias e a troca para `calculada` (o recibo ligado ao processamento), as
-// obrigações geradas (o arquivo cifrado pela porta de armazenamento e as situações entregue e substituída) e os
-// catálogos oficiais das obrigações.
+// (folha-executor-proprio.ts), na mesma transação do gravador. A inclusão das férias, a troca para `calculada` (o recibo
+// ligado ao processamento), as obrigações geradas (o arquivo cifrado pela porta de armazenamento e as situações entregue
+// e substituída) e os catálogos oficiais das obrigações são gravados e lidos por folha-porta-propria-obrigacoes.ts; sem o
+// armazenamento de arquivos, gravar e baixar o arquivo da obrigação recusam com 503 (falha fechada).
 // Melhoria: o tipo do vínculo sai da categoria do trabalhador (901 estagiário, 902 residente) e do regime, pela regra pura
 // `tipoVinculoDaFolha`; categoria fora da folha de empregados não entra (antes, todo vínculo saía como CLT).
 // Melhoria: o FGTS depositado só é somado das folhas de competência fechada quando todo mês do contrato tem folha; se
@@ -30,14 +30,7 @@ import type {
   SituacaoFechamentoFolha,
   TotaisFechamentoFolha,
 } from '@sgh/contratos';
-import {
-  type ContextoNucleo,
-  ErroOperacao,
-  type Leitor,
-  type NucleoProprio,
-  recusa,
-  type TxOperacao,
-} from '@sgh/nucleo';
+import { type ContextoNucleo, type Leitor, type NucleoProprio, recusa, type TxOperacao } from '@sgh/nucleo';
 import { gravacaoDireta } from '../../enfermagem/gravacao-direta.js';
 import {
   type ContextoPortaM18,
@@ -55,6 +48,12 @@ import {
 } from './porta-calculo.js';
 import { TETO_FECHAMENTOS_FOLHA } from './apoio-folha.js';
 import { gravadorFolhaExecutor, TABELAS_FOLHA_EXECUTOR } from './folha-executor-proprio.js';
+import {
+  type ArquivosObrigacoes,
+  gravadorFolhaObrigacoes,
+  LeiturasObrigacoesFolhaPropria,
+  TABELAS_FOLHA_OBRIGACOES,
+} from './folha-porta-propria-obrigacoes.js';
 import { LeiturasCalculoFolhaPropria } from './folha-porta-propria-calculo.js';
 import {
   competenciasDescobertas,
@@ -97,16 +96,6 @@ function contextoDe(c: ContextoPortaM18): ContextoNucleo {
   };
 }
 
-/** Recusa explícita de operação cujo registro o modelo do banco ainda não tem (pedido de DDL da obra, lote 03-06). */
-function erroModeloPendente(operacao: string, falta: string): ErroOperacao {
-  return new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Operação indisponível no modelo atual',
-    `${operacao}: o modelo do banco ainda não tem ${falta}. A operação volta quando a tabela for criada.`,
-  );
-}
-
 /** Vínculos do estabelecimento ativos em algum dia de [inicio, fim] (com o colaborador e o cargo). */
 const SQL_VINCULOS = `
   SELECT v.id, v.matricula, v.regime_trabalhista, v.data_admissao, v.data_desligamento, v.centro_custo_id,
@@ -128,16 +117,6 @@ export const TABELAS_CALCULO_FOLHA = [
   'parametro_folha',
   'fechamento_periodo_folha',
 ] as const;
-
-const FALTA = {
-  processo:
-    'o processamento da folha no formato do cálculo (situação substituída, a contagem fora da folha, a data da tabela legal e dos parâmetros usados, a unidade e a memória de cada linha)',
-  ferias: 'o processamento da folha no formato do cálculo, a que o recibo de férias se liga',
-  feriasCompetencia: 'o processamento da folha no formato do cálculo, a que o recibo de férias se liga',
-  rescisao: 'o processamento da folha no formato do cálculo, a que a rescisão se liga',
-  obrigacoes:
-    'o arquivo cifrado da obrigação, os parâmetros das obrigações por vigência e os códigos SEFIP, CAGED e RAIS dos catálogos oficiais',
-} as const;
 
 const GRAUS = ['nenhum', 'minimo', 'medio', 'maximo'] as const;
 const GRAU_SQL = `CASE rf.grau_insalubridade WHEN 'maximo' THEN 3 WHEN 'medio' THEN 2 WHEN 'minimo' THEN 1 ELSE 0 END`;
@@ -254,17 +233,23 @@ export function adicionalDaVigencia(
   return null;
 }
 
-/** O gravador do cálculo sobre a transação: o que tem modelo grava; o resto recusa com `modelo-pendente`. */
-function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPropria): GravadorCalculoFolha {
+/** O gravador do cálculo sobre a transação (o executor e as férias e obrigações próprias). */
+function gravadorCalculo(
+  tx: TxOperacao,
+  est: number,
+  cliente: string,
+  porta: PortaCalculoFolhaPropria,
+): GravadorCalculoFolha {
   const agora = async () => paraBanco(await relogioDoEstabelecimento(tx, est));
   const daSessao = (empresa: number) => {
     if (empresa !== est)
       throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
   };
   return {
-    // O processamento, a rescisão, as férias e as obrigações (folha-executor-proprio.ts; o que ainda não tem modelo
-    // recusa lá dentro com `modelo-pendente`, sem gravar nada).
+    // O processamento, a rescisão e as férias (folha-executor-proprio.ts); a inclusão e o cálculo das férias e as
+    // obrigações (folha-porta-propria-obrigacoes.ts) sobrescrevem as entradas de mesmo nome do executor.
     ...gravadorFolhaExecutor(tx, est),
+    ...gravadorFolhaObrigacoes(tx, est, { cliente, arquivos: porta.arquivos }),
     salarios: (vinculos) => lerSalarios(tx, est, vinculos),
     async incluirSalario(x) {
       const [v] = await tx.consultarParaAtualizar(
@@ -426,21 +411,26 @@ async function lerSalarios(
     });
 }
 
-const pendente = (operacao: string, falta: string) => () =>
-  Promise.reject(erroModeloPendente(operacao, falta));
-
 export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
   readonly destino = 'banco' as const;
 
   private executor: ReturnType<NucleoCalculoFolha['criarExecutor']> | null = null;
 
-  constructor(private readonly nucleo: NucleoCalculoFolha) {
+  /** O armazenamento de arquivos da instalação (ADR 0004); null sem ARQUIVOS_RAIZ (o arquivo da obrigação recusa, 503). */
+  readonly arquivos: ArquivosObrigacoes | null;
+
+  constructor(
+    private readonly nucleo: NucleoCalculoFolha,
+    arquivos: ArquivosObrigacoes | null = null,
+  ) {
     this.leituras = new LeiturasCalculoFolhaPropria(nucleo);
+    this.arquivos = arquivos;
+    this.obrigacoesProprias = new LeiturasObrigacoesFolhaPropria(nucleo, arquivos);
   }
 
   /** O gravador do cálculo sobre a transação de outra operação (efeitos do autoatendimento: as férias aprovadas). */
   gravadorNaTransacao(tx: TxOperacao, est: number): GravadorCalculoFolha {
-    return gravadorCalculo(tx, est, this);
+    return gravadorCalculo(tx, est, tx.contexto.cliente, this);
   }
 
   private ler<T>(c: ContextoCalculoFolha, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
@@ -470,9 +460,9 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
     this.executor ??= this.nucleo.criarExecutor();
     return gravacaoDireta(this.executor, contextoDe(c), {
       nome: 'pessoas.calculo_folha.gravar',
-      tabelas: [...TABELAS_CALCULO_FOLHA, ...TABELAS_FOLHA_EXECUTOR],
+      tabelas: [...TABELAS_CALCULO_FOLHA, ...TABELAS_FOLHA_EXECUTOR, ...TABELAS_FOLHA_OBRIGACOES],
       trilha,
-      gravador: (tx, est) => gravadorCalculo(tx, est, this),
+      gravador: (tx, est) => gravadorCalculo(tx, est, c.cliente, this),
       fn,
     });
   }
@@ -776,12 +766,22 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
     return this.leituras.parametrosObrigacoes(...a);
   }
 
-  // ── Leituras que aguardam o modelo (recusa explícita, nunca lista vazia) ────────────────────────────────────
+  // ── Obrigações geradas e catálogos oficiais (folha-porta-propria-obrigacoes.ts) ───────────────────────────────
 
-  obrigacoes = pendente('Listar as obrigações geradas', FALTA.obrigacoes);
-  obrigacao = pendente('Ler a obrigação gerada', FALTA.obrigacoes);
-  conteudoObrigacao = pendente('Baixar o arquivo da obrigação', FALTA.obrigacoes);
-  catalogosObrigacoes = pendente('Ler os códigos dos catálogos oficiais das obrigações', FALTA.obrigacoes);
+  private readonly obrigacoesProprias: LeiturasObrigacoesFolhaPropria;
+
+  obrigacoes(...a: Parameters<PortaCalculoFolha['obrigacoes']>) {
+    return this.obrigacoesProprias.obrigacoes(...a);
+  }
+  obrigacao(...a: Parameters<PortaCalculoFolha['obrigacao']>) {
+    return this.obrigacoesProprias.obrigacao(...a);
+  }
+  conteudoObrigacao(...a: Parameters<PortaCalculoFolha['conteudoObrigacao']>) {
+    return this.obrigacoesProprias.conteudoObrigacao(...a);
+  }
+  catalogosObrigacoes(...a: Parameters<PortaCalculoFolha['catalogosObrigacoes']>) {
+    return this.obrigacoesProprias.catalogosObrigacoes(...a);
+  }
 }
 
 export function portaCalculoFolhaIndisponivel(): PortaCalculoFolha {

@@ -1613,6 +1613,17 @@
     "src/modulos/pep/documentos-propria-operacoes-2.int.spec.ts",
     "src/modulos/pep/prescricao-propria-regras-2.ts",
     "src/modulos/pep/prescricao-propria-regras-2.spec.ts",
-    "src/modulos/pep/prescricao-propria-regras-2.int.spec.ts"
+    "src/modulos/pep/prescricao-propria-regras-2.int.spec.ts",
+    "src/modulos/pessoas/folha/folha-porta-propria-obrigacoes.ts",
+    "src/modulos/pessoas/folha/folha-porta-propria-obrigacoes.spec.ts",
+    "src/modulos/pessoas/folha/folha-porta-propria-obrigacoes.int.spec.ts",
+    "src/sessao/acesso-email-tardio.ts",
+    "src/sessao/acesso-email-ligacao.spec.ts",
+    "src/sessao/acesso-email-ligacao.int.spec.ts",
+    "src/modulos/acesso/acesso-email.controller.ts",
+    "src/modulos/acesso/acesso-email-erros.ts",
+    "src/modulos/enfermagem/sae-porta-propria-receita.ts",
+    "src/modulos/enfermagem/sae-porta-propria-receita.spec.ts",
+    "src/modulos/enfermagem/sae-porta-propria-receita.int.spec.ts"
   ]
 }

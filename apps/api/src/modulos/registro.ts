@@ -9,6 +9,7 @@ import type { Ambiente, NucleoProprio } from '@sgh/nucleo';
 import type { RegistradorTrilha } from '../autorizacao/trilha.js';
 import type { Configuracao } from '../configuracao.js';
 import type { GanchosComoTardios } from '../sessao/ganchos-como.js';
+import type { FontesAcessoTardias } from '../sessao/acesso-email-tardio.js';
 import type { ArmazemSessao } from '../sessao/armazem.js';
 import type { ServicoSessao } from '../sessao/servico-sessao.js';
 
@@ -26,6 +27,8 @@ export interface ContextoModulo {
   readonly trilha: RegistradorTrilha;
   /** Ganchos do "login como" na sessão da base, que o módulo suporte liga (ausente: nenhuma sessão "como" vale). */
   readonly ganchosComo?: GanchosComoTardios;
+  /** A configuração da entrada por e-mail, que o módulo config liga (ausente: recuperação e troca rápida fechadas). */
+  readonly fontesAcesso?: FontesAcessoTardias;
 }
 
 /** O que o arquivo de um módulo migrado exporta (`modulo.ts`). */

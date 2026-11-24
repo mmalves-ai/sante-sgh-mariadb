@@ -48,6 +48,8 @@ export interface ReceitaDoEnfermeiro {
   readonly categoria: string;
   readonly itens: ItemReceitaEnfermeiro[];
   readonly impressao: string;
+  /** O texto como foi assinado (ausente: refeito com o cadastro atual). */
+  readonly texto?: string | null;
   readonly assinadaEm: string;
   readonly vinculo: number;
   readonly usuario: string;
@@ -181,6 +183,8 @@ export interface ReceitaEnfermeiroNova {
   readonly categoria: string;
   readonly itens: readonly ItemReceitaEnfermeiro[];
   readonly impressao: string;
+  /** O texto assinado (a impressão é o SHA-256 dele). */
+  readonly texto: string;
   readonly assinadaEm: string;
   readonly vinculo: number;
   readonly usuario: string;

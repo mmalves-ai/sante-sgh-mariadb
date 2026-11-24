@@ -89,6 +89,8 @@ export class ModuloConfig {}
 export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloConfig = {}): Promise<DynamicModule> {
   const fonte = opcoes.fonte !== undefined ? opcoes.fonte : await fonteDaConfiguracao(ctx);
   const comFonte = fonte ? [{ provide: FONTE_CONFIGURACAO, useValue: fonte }] : [];
+  // A entrada por e-mail (recuperação da senha e troca rápida) lê a chave e os parâmetros por esta mesma fonte.
+  if (fonte) ctx.fontesAcesso?.ligarConfiguracao(() => fonte);
   const cliente = ctx.configuracao.clientePadrao;
   const sintetico = !ctx.nucleo && fontesSinteticas(ctx.env);
   const catalogo = catalogoOperacoesProprio();

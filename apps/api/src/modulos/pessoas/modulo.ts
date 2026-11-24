@@ -11,6 +11,7 @@
 // Melhoria: as opções de teste são tipadas (OpcoesModuloPessoas), e a conferência dos specs prova que chegaram.
 import { randomBytes } from 'node:crypto';
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { criarArmazemLocal, lerRaizArquivos } from '@sgh/nucleo';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import {
   chavesIniciaisSinteticas,
@@ -227,7 +228,11 @@ export function portasDePessoas(
   const calculoFolha: PortaCalculoFolha =
     o.calculoFolha ??
     (n
-      ? new PortaCalculoFolhaPropria(n)
+      ? // O arquivo da obrigação no disco da instalação (ADR 0004); sem ARQUIVOS_RAIZ, gravar e baixar recusam (503).
+        new PortaCalculoFolhaPropria(
+          n,
+          lerRaizArquivos(ctx.env) ? criarArmazemLocal(n, { env: ctx.env }) : null,
+        )
       : memoria
         ? new PortaCalculoFolhaMemoria(pessoas)
         : portaCalculoFolhaIndisponivel());

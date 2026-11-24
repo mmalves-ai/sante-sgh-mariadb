@@ -589,10 +589,11 @@ describe.skipIf(SEM_BANCO)('folha sobre o MariaDB (cliente f22_o3)', () => {
     expect((await calculo.adiantamentosDecimo(c, ids.estA, 2026, ['ferias'])).size).toBe(0);
     expect((await calculo.adiantamentosDecimo(cOutro, ids.estB, 2026)).size).toBe(0);
     // A gravação direta está ligada; o processamento e as rescisões são lidos pela leitura própria (nada no período
-    // sintético nem do outro estabelecimento), e as obrigações geradas seguem recusando com modelo-pendente.
+    // sintético nem do outro estabelecimento), e as obrigações geradas são lidas pela leitura própria (nenhuma no
+    // período sintético).
     expect(await calculo.podeGravar()).toMatchObject({ pode: true });
     expect(await calculo.processos(c, { competencia: '2099-01' })).toEqual([]);
     expect(await calculo.rescisoes(cOutro, { vinculo: ids.vinculoC })).toEqual([]);
-    await expect(calculo.obrigacoes()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    expect(await calculo.obrigacoes(c, { periodo: '2099-01' })).toEqual([]);
   });
 });

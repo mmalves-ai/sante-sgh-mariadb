@@ -248,17 +248,20 @@ export class PrescricaoEnfermeiroController {
         const cab = await this.cabecalho(s, a, r.vinculo, r.segundoIdentificador, r.assinadaEm.slice(0, 10));
         return {
           ...r,
-          texto: textoDaReceitaEnfermeiro(
-            { ...cab, coren: r.coren, categoria: r.categoria },
-            {
-              protocolo: { codigo: r.protocolo, ano: r.ano, tipo: r.tipoProtocolo },
-              modelo: r.modelo,
-              segundoIdentificador: r.segundoIdentificador,
-              listaVersao: r.listaVersao,
-              itens: r.itens,
-              anterior: r.anterior,
-            },
-          ),
+          // O texto como foi assinado; sem ele (receita antiga da memória), refeito com o cadastro atual.
+          texto:
+            r.texto ??
+            textoDaReceitaEnfermeiro(
+              { ...cab, coren: r.coren, categoria: r.categoria },
+              {
+                protocolo: { codigo: r.protocolo, ano: r.ano, tipo: r.tipoProtocolo },
+                modelo: r.modelo,
+                segundoIdentificador: r.segundoIdentificador,
+                listaVersao: r.listaVersao,
+                itens: r.itens,
+                anterior: r.anterior,
+              },
+            ),
         };
       }),
     );
@@ -356,6 +359,7 @@ export class PrescricaoEnfermeiroController {
           categoria: m.cabecalho.categoria,
           itens: m.k.itens,
           impressao: m.impressao,
+          texto: m.texto,
           assinadaEm: m.agora,
           vinculo: m.v.vinculo!,
           usuario: s.login,

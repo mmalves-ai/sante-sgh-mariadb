@@ -19,6 +19,7 @@ import { mensagensAtendimento } from '../modulos/atendimento/i18n.js';
 import { mensagensSadt } from '../modulos/sadt/i18n.js';
 import { mensagensPacs } from '../modulos/sadt/i18n-pacs.js';
 import { mensagensEnfermagem } from '../modulos/enfermagem/i18n.js';
+import { mensagensAcessoEmail } from '../modulos/acesso/i18n-acesso-email.js';
 import { mensagensPortaria } from '../modulos/portaria/i18n.js';
 import { mensagensRelatorios } from '../modulos/relatorios/i18n.js';
 import { mensagensIntegracoes } from '../modulos/integracoes/i18n.js';
@@ -2390,4 +2391,6 @@ export const mensagensWeb = {
   segredos: mensagensSegredos,
   // M59 (etapa 5, F5): certificação SBIS, backup verificado e concessões da coexistência.
   sbis: mensagensSbis,
+  // Entrada por e-mail: recuperação da conta da plataforma e o código do segundo fator no e-mail.
+  acessoEmail: mensagensAcessoEmail,
 } as const;

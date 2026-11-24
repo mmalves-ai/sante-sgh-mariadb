@@ -28,11 +28,14 @@ import { logger } from './logger.js';
 import {
   AcessoController,
   RESOLVEDOR_REDE,
+  SERVICO_RECUPERACAO_SENHA,
   SERVICO_SESSAO,
+  SERVICO_TROCA_RAPIDA,
   SERVICOS_NAO_MIGRADOS,
   type ServicoOpcionalAcesso,
   SESSAO_SINTETICA,
 } from './modulos/acesso/acesso.controller.js';
+import { AcessoEmailController } from './modulos/acesso/acesso-email.controller.js';
 import { SessaoSintetica } from './modulos/acesso/sessao-sintetica.js';
 import {
   portaSenhaDoNucleo,
@@ -40,10 +43,17 @@ import {
   type PortaSenha,
 } from './modulos/acesso/senha/porta-senha.js';
 import { type CarregadorModulo, carregarModulos } from './modulos/registro.js';
+import {
+  FontesAcessoTardias,
+  type LigacaoAcessoEmail,
+  montarLigacaoAcessoEmail,
+  SegundoFatorEmailTardio,
+} from './sessao/acesso-email-tardio.js';
 import { ArmazemMemoria, type ArmazemSessao } from './sessao/armazem.js';
+import { emailAcessoDoAmbiente } from './sessao/email-acesso.js';
 import type { FonteAcesso } from './sessao/fonte-acesso.js';
 import { FontePlataformaPropria, nucleoPlataforma } from './sessao/fonte-plataforma.js';
-import { criarFonteAcessoPropria } from './sessao/fonte-propria.js';
+import { criarFonteAcessoPropria, FonteAcessoPropria } from './sessao/fonte-propria.js';
 import type { FontePlataforma } from './sessao/tipos-acesso.js';
 import { GanchosComoTardios } from './sessao/ganchos-como.js';
 import { fonteAcessoEfetiva, fontesSinteticas, montarServicoSessao } from './sessao/montar.js';
@@ -136,6 +146,12 @@ export class AppBaseModule {
     }
     // O "login como" é do módulo suporte, montado depois da sessão: a sessão recebe ganchos tardios que ele liga.
     const ganchosComo = new GanchosComoTardios();
+    // A entrada por e-mail (recuperação da senha, troca rápida e o segundo fator por código no e-mail), só com a fonte
+    // própria, o núcleo e o cliente: a configuração (módulo config) e a sessão chegam tarde. O gancho do segundo fator
+    // falha fechado (sem ligação, toda entrada responde 503), por isso só vai à sessão onde a ligação é montada.
+    const comEmail = propria && nucleo !== null && cliente !== null;
+    const fontesAcesso = new FontesAcessoTardias();
+    const segundoFatorEmail = new SegundoFatorEmailTardio();
     const servico =
       opcoes.servico !== undefined
         ? opcoes.servico
@@ -143,7 +159,32 @@ export class AppBaseModule {
             ...(senha ? { senha } : {}),
             ...(plataforma ? { plataforma } : {}),
             ...ganchosComo.paraSessao(),
+            ...(comEmail ? segundoFatorEmail.paraSessao() : {}),
           });
+    let ligacaoEmail: LigacaoAcessoEmail | null = null;
+    if (comEmail && nucleo && cliente && servico) {
+      const fonteReal = real;
+      fontesAcesso.ligarEstabelecimento((h) =>
+        fonteReal instanceof FonteAcessoPropria ? fonteReal.idEstabelecimento(h) : null,
+      );
+      ligacaoEmail = montarLigacaoAcessoEmail(
+        {
+          nucleo,
+          cliente,
+          sessao: servico,
+          armazem,
+          email: emailAcessoDoAmbiente(env),
+          trilha,
+          urlPublica: env['WEB_ENDERECO']?.trim() || `http://127.0.0.1:${env['WEB_PORTA']?.trim() || '5300'}`,
+          plataforma: nucleoPlataforma(nucleo),
+          aviso,
+        },
+        fontesAcesso,
+        segundoFatorEmail,
+        { recuperacao: SERVICO_RECUPERACAO_SENHA, trocaRapida: SERVICO_TROCA_RAPIDA },
+        NAO_MIGRADOS_F2L,
+      );
+    }
     // A trava da sintética olha o NÚCLEO (o banco do cliente), não a fonte de acesso: com o núcleo em AMBIENTE=dev e
     // ACESSO_FONTE_DEV=sintetica, a sessão sintética (papéis de administrador) só vale com SESSAO_SINTETICA=sim.
     const sintetica = new SessaoSintetica(env, { nucleoReal: nucleo !== null || real !== null });
@@ -155,7 +196,7 @@ export class AppBaseModule {
       !['dev', 'ci'].includes(configuracao.ambiente),
     );
     const modulos = await carregarModulos(
-      { configuracao, nucleo, env, armazem, servico, trilha, ganchosComo },
+      { configuracao, nucleo, env, armazem, servico, trilha, ganchosComo, fontesAcesso },
       opcoes.registro,
     );
     return {
@@ -163,14 +204,15 @@ export class AppBaseModule {
       // Os módulos migrados injetam a configuração, a sessão, a trilha e o núcleo da base.
       global: true,
       imports: modulos,
-      controllers: [SistemaController, AcessoController],
+      controllers: [SistemaController, AcessoController, AcessoEmailController],
       providers: [
         { provide: CONFIGURACAO, useValue: configuracao },
         { provide: NUCLEO_PROPRIO, useValue: nucleo },
         { provide: SERVICO_SESSAO, useValue: servico },
         { provide: SESSAO_SINTETICA, useValue: sintetica },
         { provide: RESOLVEDOR_REDE, useValue: resolvedorRede },
-        { provide: SERVICOS_NAO_MIGRADOS, useValue: NAO_MIGRADOS_F2L },
+        { provide: SERVICOS_NAO_MIGRADOS, useValue: ligacaoEmail?.naoMigrados ?? NAO_MIGRADOS_F2L },
+        ...(ligacaoEmail?.provedores ?? []),
         { provide: RESOLVEDOR_SESSAO, useValue: resolvedorSessao },
         { provide: REGISTRADOR_TRILHA, useValue: trilha },
         { provide: APP_GUARD, useClass: GuardaPermissao },

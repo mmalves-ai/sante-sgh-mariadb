@@ -27,6 +27,7 @@ import {
   type ReceitaEnfermeiroComTexto,
   SEQUENCIA_RECEITA_ENFERMEIRO,
 } from './sae-porta-propria-receita.js';
+import type { ReceitaEnfermeiroNova } from './sae-tipos.js';
 
 const codigoDe = (e: unknown) => (e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : String(e));
 const recusada = async (p: Promise<unknown>) =>
@@ -156,7 +157,8 @@ describe.skipIf(SEM_BANCO)('porta própria da receita do enfermeiro (MariaDB, cl
       anterior,
       ...outros,
     };
-    return porta.gravarSgh(c(), null, (g) => g.prescreverMedicamento(r));
+    // O texto ausente é provado de propósito (a porta recusa, falha fechada): o tipo do contrato o exige.
+    return porta.gravarSgh(c(), null, (g) => g.prescreverMedicamento(r as ReceitaEnfermeiroNova));
   };
   const MOTIVO_300 = 'Motivo sintético da suspensão. '.repeat(10).slice(0, 300);
   const inativar = (

@@ -212,7 +212,7 @@ describe.skipIf(SEM_BANCO_O3)(
       ).toBe('desatualizado');
     });
 
-    it('processamento: leitura e trava próprias; férias e obrigações ainda recusam com modelo-pendente', async () => {
+    it('processamento: leitura e trava próprias; férias e obrigações pela porta própria', async () => {
       const v = await porta.gravarSgh(c(), trilha('parametro_folha')(null), (g) =>
         g.emVigorComTrava(m.est, '2099-05'),
       );
@@ -220,10 +220,12 @@ describe.skipIf(SEM_BANCO_O3)(
       expect(await porta.processos(c(), { competencia: '2099-05' })).toEqual([]);
       expect(
         await codigo(
-          porta.gravarSgh(c(), trilha('parametro_folha')(null), (g) => g.incluirFerias({} as never)),
+          porta.gravarSgh(c(), trilha('parametro_folha')(null), (g) =>
+            g.incluirFerias({ empresa: m.est + 1_000_000 } as never),
+          ),
         ),
-      ).toBe('modelo-pendente');
-      expect(await codigo(porta.obrigacoes())).toBe('modelo-pendente');
+      ).toBe('empresa-fora-da-sessao');
+      expect(await porta.obrigacoes(c(), { periodo: '2099-05' })).toEqual([]);
     });
   },
 );

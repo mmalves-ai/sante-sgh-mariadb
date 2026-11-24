@@ -32,8 +32,9 @@ import type { ContextoSae, GravadorSae } from './sae-porta.js';
 import type { Escrita } from './sae-porta-propria.js';
 import type { ReceitaDoEnfermeiro, ReceitaEnfermeiroNova } from './sae-tipos.js';
 
-/** A receita nova com o texto assinado (o campo `texto` entra em ReceitaEnfermeiroNova pela ligação do integrador). */
-export type ReceitaEnfermeiroComTexto = ReceitaEnfermeiroNova & {
+/** A receita nova com o texto assinado, como chega à porta (a falta do texto é recusada, nunca gravada). */
+export type ReceitaEnfermeiroComTexto = Omit<ReceitaEnfermeiroNova, 'texto'> & {
+  /** Obrigatório no contrato; a porta ainda confere a falta (falha fechada, `receita-sem-texto`). */
   readonly texto?: string | null | undefined;
 };
 /** A receita lida com o texto como foi assinado (nulo nas gravadas sem o texto). */
@@ -91,7 +92,7 @@ export function validadeDe(emissaoCivil: string, dias: number | null): string | 
 export const sha256 = (t: string): string => createHash('sha256').update(t, 'utf8').digest('hex');
 
 /** A parte da receita que o hash da chave do pedido cobre: o atendimento e o conteúdo clínico, sem o relógio. */
-export function entradaDaChave(r: ReceitaEnfermeiroNova): Record<string, unknown> {
+export function entradaDaChave(r: ReceitaEnfermeiroComTexto): Record<string, unknown> {
   return {
     paciente: r.paciente,
     atendimento: r.atendimento,
