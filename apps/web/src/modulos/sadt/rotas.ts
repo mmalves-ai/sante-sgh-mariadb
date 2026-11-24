@@ -30,6 +30,19 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/EstoqueBolsasTela.vue'),
     meta: { permissao: 'sadt.bolsa.ler' },
   },
+  // F3.5: pedido de exames com restrições na hora e a recoleta com as alíquotas.
+  {
+    path: '/sadt/pedido',
+    name: 'sadt.pedido',
+    component: () => import('./telas/PedidoExamesTela.vue'),
+    meta: { permissao: 'sadt.requisicao.criar' },
+  },
+  {
+    path: '/sadt/recoletas',
+    name: 'sadt.recoletas',
+    component: () => import('./telas/RecoletasTela.vue'),
+    meta: { permissao: 'sadt.amostra.ler' },
+  },
   {
     path: '/sadt/atendimentos',
     name: 'sadt.atendimentos',

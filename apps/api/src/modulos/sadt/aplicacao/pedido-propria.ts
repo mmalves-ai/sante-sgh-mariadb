@@ -586,7 +586,13 @@ export class ServicoPedidoSadt {
 
   /** Motivos ativos de cancelamento do exame e de recoleta (as escolhas da tela). */
   motivos(c: ContextoSadt) {
-    return this.ler(c, async (l) => ({
+    return this.ler(c, async (l, est) => ({
+      setores: (
+        await l.consultar(
+          'SELECT id, nome FROM setor_diagnostico WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome',
+          [est],
+        )
+      ).map((x) => ({ id: n(x['id']), nome: texto(x['nome']) })),
       cancelamento: (
         await l.consultar(
           `SELECT id, descricao, exige_complemento FROM motivo_cancelamento_item_exame
