@@ -83,6 +83,7 @@ import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
 import {
+  lerEscoposHeranca,
   lerMarcasHeranca,
   OPERACAO_ALTERAR_HERANCA,
   valoresHerdaveisDoAnterior,
@@ -921,7 +922,13 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
         motivosExclusao: (
           await lista('SELECT id, descricao FROM motivo_cancelamento_operacao WHERE ativo ORDER BY descricao')
         ).map((x) => ({ codigo: Number(x['id']), nome: texto(x['descricao']) ?? '' })),
-        heranca: await lerMarcasHeranca(l, est, c.usuario),
+        ...(await (async () => {
+          const h = await lerEscoposHeranca(l, est, c.usuario);
+          return {
+            heranca: h.marcas,
+            herancaEscopo: { estabelecimento: h.estabelecimento, pessoal: h.pessoal },
+          };
+        })()),
       };
     });
   }
@@ -995,13 +1002,15 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
       const lista = linhas.map((x) => resumoDaLinha(x, fuso));
       const ult = lista[0];
       return {
+        heranca: await lerMarcasHeranca(l, est, c.usuario),
         anterior: ult
           ? {
               reg: ult.reg,
               data: ult.data,
               valores: {
                 convenio: ult.convenio.codigo,
-                profissional: ult.profissional.crm,
+                // O id do profissional (o que a abertura recebe), nunca o número do conselho.
+                profissional: inteiro(linhas[0]?.['profissional_id']),
                 especialidade: ult.especialidade.codigo,
                 unidade: ult.unidade,
                 ...(await valoresHerdaveisDoAnterior(l, ult.reg)),

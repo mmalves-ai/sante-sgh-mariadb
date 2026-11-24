@@ -131,33 +131,34 @@ watch(
   { immediate: true },
 );
 
-// A herança: os campos marcados vêm do atendimento anterior (a pessoa confere).
-const herdados = computed(() => new Set((apoio.data.value?.heranca ?? []).map((h) => h.campo)));
+// A herança: o servidor aplica as marcas em vigor e as regras da cobertura (plano e carteirinha só com o convênio,
+// validade vencida vira aviso); a tela preenche todos os campos herdados e a pessoa confere.
 const herdou = ref<string[]>([]);
+const avisosHeranca = computed(() => historico.data.value?.anterior?.avisos ?? []);
 watch(
   () => historico.data.value,
   (h) => {
-    const v = h?.anterior?.valores;
+    const v = h?.anterior?.herdados;
     if (!v) return;
     // Do agendamento, o que a marcação trouxe vence a herança (a herança só completa o que ficou vazio).
     const doAgendamento = preenchido.value;
     const usados: string[] = [];
-    const usar = (campo: string, alvo: { value: string }) => {
-      const x = v[campo];
-      if (doAgendamento && alvo.value !== '') return;
-      if (herdados.value.has(campo) && x !== null && x !== undefined && x !== '' && x !== 0) {
-        alvo.value = String(x);
-        usados.push(campo);
-      }
+    const alvos: Record<string, { value: string }> = {
+      convenio,
+      profissional,
+      especialidade,
+      unidade,
+      centroCusto,
+      matricula,
+      plano,
+      validadeCarteira,
     };
-    usar('convenio', convenio);
-    usar('profissional', profissional);
-    usar('especialidade', especialidade);
-    usar('unidade', unidade);
-    usar('centroCusto', centroCusto);
-    usar('matricula', matricula);
-    usar('plano', plano);
-    usar('validadeCarteira', validadeCarteira);
+    for (const [campo, x] of Object.entries(v)) {
+      const alvo = alvos[campo];
+      if (!alvo || (doAgendamento && alvo.value !== '')) continue;
+      alvo.value = String(x);
+      usados.push(campo);
+    }
     herdou.value = usados;
   },
 );
@@ -406,6 +407,13 @@ async function abrir(): Promise<void> {
             t('atendimento.abrir.herdado', { data: dataBr(historico.data.value?.anterior?.data ?? '') })
           "
           data-testid="abrir-atd-herdado"
+        />
+        <SanteAlerta
+          v-for="(aviso, i) in avisosHeranca"
+          :key="`heranca-aviso-${i}`"
+          variante="alerta"
+          :texto="aviso"
+          data-testid="abrir-atd-heranca-aviso"
         />
         <div class="filtros">
           <label

@@ -29,6 +29,7 @@ import {
   calcularIndicadoresAgregados,
   camposHerdados,
   versaoHeranca,
+  aplicarHeranca,
   esperaMinutos,
   horasDeObservacao,
   idadeEmAnos,
@@ -310,8 +311,16 @@ export class ServicoAtendimento {
 
   async configuracaoHeranca(c: ContextoAtendimento): Promise<ConfiguracaoHeranca> {
     const a = await this.porta.apoio(c);
+    const est = a.herancaEscopo?.estabelecimento ?? a.heranca;
+    const pessoal = a.herancaEscopo?.pessoal ?? {};
     return {
-      campos: HERANCAS.map((h) => ({ campo: h.campo, rotulo: h.rotulo, herda: a.heranca[h.chave] === true })),
+      campos: HERANCAS.map((h) => ({
+        campo: h.campo,
+        rotulo: h.rotulo,
+        herda: a.heranca[h.chave] === true,
+        estabelecimento: est[h.chave] === true,
+        pessoal: pessoal[h.chave] ?? null,
+      })),
       versao: versaoHeranca(a.heranca),
     };
   }
@@ -329,8 +338,14 @@ export class ServicoAtendimento {
   }
 
   async historico(c: ContextoAtendimento, paciente: number): Promise<HerancaPaciente> {
-    const r = await this.porta.historico(c, paciente);
-    return { paciente, anterior: r.anterior, historico: r.historico };
+    const [r, { hoje }] = await Promise.all([this.porta.historico(c, paciente), this.porta.relogio(c)]);
+    if (!r.anterior) return { paciente, anterior: null, historico: r.historico };
+    const h = aplicarHeranca(r.heranca, r.anterior.valores, hoje);
+    return {
+      paciente,
+      anterior: { ...r.anterior, herdados: h.valores, avisos: h.avisos },
+      historico: r.historico,
+    };
   }
 
   async previa(

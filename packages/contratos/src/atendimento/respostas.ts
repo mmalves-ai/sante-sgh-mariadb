@@ -287,6 +287,10 @@ export const esquemaHerancaPaciente = z.object({
       reg: n,
       data: txt,
       valores: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
+      /** O que a ficha nova recebe pelas marcas em vigor e pelas regras da cobertura (domínio). */
+      herdados: z.record(z.string(), z.union([z.string(), z.number()])),
+      /** Avisos para a recepção conferir (validade vencida, cobertura sem o convênio). */
+      avisos: z.array(txt),
     }),
   ),
   historico: z.array(z.object({ reg: n, data: txt, tipo: txt, convenio: txt, profissional: txt })),
@@ -341,7 +345,16 @@ export type MarcacaoAbertura = z.infer<typeof esquemaMarcacaoAbertura>;
 
 /** A configuração da herança (o que a ficha nova copia do atendimento anterior). */
 export const esquemaConfiguracaoHeranca = z.object({
-  campos: z.array(z.object({ campo: txt, rotulo: txt, herda: z.boolean() })),
+  /** herda: em vigor para a sessão; estabelecimento: a do estabelecimento; pessoal: a regra própria (nula: segue). */
+  campos: z.array(
+    z.object({
+      campo: txt,
+      rotulo: txt,
+      herda: z.boolean(),
+      estabelecimento: z.boolean(),
+      pessoal: z.boolean().nullable(),
+    }),
+  ),
   /** As marcas lidas (controle otimista da alteração). */
   versao: txt,
 });

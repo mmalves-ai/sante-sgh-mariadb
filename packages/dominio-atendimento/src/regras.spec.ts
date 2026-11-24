@@ -104,10 +104,55 @@ describe('herança do atendimento anterior', () => {
   it('só os campos marcados e com valor no anterior', () => {
     const marcas = { fonte_pagadora: true, profissional: true, carteira: false, plano: true, empresa: null };
     expect(camposHerdados(marcas)).toEqual(['convenio', 'profissional', 'plano']);
-    expect(aplicarHeranca(marcas, { convenio: 306, profissional: 0, plano: '', matricula: 'X' })).toEqual({
-      convenio: 306,
+    expect(
+      aplicarHeranca(marcas, { convenio: 306, profissional: 0, plano: '', matricula: 'X' }, '2026-11-24'),
+    ).toEqual({ valores: { convenio: 306 }, avisos: [] });
+    expect(aplicarHeranca(marcas, null, '2026-11-24')).toEqual({ valores: {}, avisos: [] });
+  });
+
+  it('plano, carteirinha e validade só vêm junto com a fonte pagadora', () => {
+    const anterior = { convenio: 306, plano: 'OURO', matricula: '123', validadeCarteira: '2027-01-31' };
+    const sem = { fonte_pagadora: false, plano: true, carteira: true, validade_carteira: true };
+    const r = aplicarHeranca(sem, anterior, '2026-11-24');
+    expect(r.valores).toEqual({});
+    expect(r.avisos).toEqual([
+      'Plano e carteirinha não foram trazidos: só valem com o convênio do atendimento anterior.',
+    ]);
+    const com = aplicarHeranca({ ...sem, fonte_pagadora: true }, anterior, '2026-11-24');
+    expect(com).toEqual({
+      valores: { convenio: 306, matricula: '123', plano: 'OURO', validadeCarteira: '2027-01-31' },
+      avisos: [],
     });
-    expect(aplicarHeranca(marcas, null)).toEqual({});
+    // Anterior sem fonte pagadora: a cobertura dele também não vem.
+    expect(aplicarHeranca({ ...sem, fonte_pagadora: true }, { plano: 'OURO' }, '2026-11-24').valores).toEqual(
+      {},
+    );
+  });
+
+  it('a validade vencida não é herdada e vira aviso; a do próprio dia ainda vale', () => {
+    const marcas = { fonte_pagadora: true, carteira: true, validade_carteira: true };
+    const r = aplicarHeranca(
+      marcas,
+      { convenio: 306, matricula: '123', validadeCarteira: '2026-11-23' },
+      '2026-11-24',
+    );
+    expect(r.valores).toEqual({ convenio: 306, matricula: '123' });
+    expect(r.avisos).toEqual([
+      'A carteirinha do atendimento anterior venceu em 23/11/2026: confira a validade nova.',
+    ]);
+    expect(
+      aplicarHeranca(marcas, { convenio: 306, validadeCarteira: '2026-11-24' }, '2026-11-24').valores,
+    ).toEqual({ convenio: 306, validadeCarteira: '2026-11-24' });
+  });
+
+  it('a guia nunca é herdada (é de cada evento com o convênio)', () => {
+    expect(camposHerdados({ guia: true, fonte_pagadora: true })).toEqual(['convenio']);
+    expect(
+      resolverHeranca([{ campo: 'guia', herda: true, estabelecimento: 1, usuario: null }], {
+        estabelecimento: 1,
+        usuario: null,
+      })['guia'],
+    ).toBeUndefined();
   });
 
   it('sem regra gravada: o padrão (cobertura e profissional)', () => {
@@ -120,27 +165,27 @@ describe('herança do atendimento anterior', () => {
   it('a regra mais específica vence, campo a campo; outro escopo é ignorado', () => {
     const m = resolverHeranca(
       [
-        { campo: 'guia', herda: true, estabelecimento: null, usuario: null },
-        { campo: 'guia', herda: false, estabelecimento: 1, usuario: null },
-        { campo: 'guia', herda: true, estabelecimento: 1, usuario: 7 },
-        { campo: 'empresa', herda: true, estabelecimento: 1, usuario: null },
-        { campo: 'empresa', herda: false, estabelecimento: null, usuario: null },
+        { campo: 'unidade', herda: true, estabelecimento: null, usuario: null },
+        { campo: 'unidade', herda: false, estabelecimento: 1, usuario: null },
+        { campo: 'unidade', herda: true, estabelecimento: 1, usuario: 7 },
+        { campo: 'especialidade', herda: true, estabelecimento: 1, usuario: null },
+        { campo: 'especialidade', herda: false, estabelecimento: null, usuario: null },
         { campo: 'plano', herda: false, estabelecimento: 2, usuario: null },
         { campo: 'carteira', herda: false, estabelecimento: null, usuario: 8 },
         { campo: 'peso', herda: true, estabelecimento: null, usuario: null },
       ],
       { estabelecimento: 1, usuario: 7 },
     );
-    expect(m['guia']).toBe(true);
-    expect(m['empresa']).toBe(true);
+    expect(m['unidade']).toBe(true);
+    expect(m['especialidade']).toBe(true);
     expect(m['plano']).toBe(true);
     expect(m['carteira']).toBe(true);
     expect(m['peso']).toBeUndefined();
     expect(
-      resolverHeranca([{ campo: 'guia', herda: true, estabelecimento: 1, usuario: 7 }], {
+      resolverHeranca([{ campo: 'unidade', herda: true, estabelecimento: 1, usuario: 7 }], {
         estabelecimento: 1,
         usuario: null,
-      })['guia'],
+      })['unidade'],
     ).toBe(false);
   });
 });

@@ -440,14 +440,18 @@ describe('impressos, exclusão, herança, não identificado e indicadores', () =
   it('a herança configurada e alterada pela versão; a marca do não identificado; os indicadores com as parcelas', async () => {
     const s = await entrar('SINT.ATENDIMENTO');
     const cfg = (await get(s, '/atendimento/heranca')).json();
-    expect(cfg.campos.find((c: { campo: string }) => c.campo === 'guia').herda).toBe(false);
-    const ok = await post(s, '/atendimento/heranca', { marcas: { guia: true }, versao: cfg.versao });
+    expect(cfg.campos.find((c: { campo: string }) => c.campo === 'unidade').herda).toBe(false);
+    const ok = await post(s, '/atendimento/heranca', { marcas: { unidade: true }, versao: cfg.versao });
     expect(ok.statusCode).toBe(200);
     expect(
-      (await post(s, '/atendimento/heranca', { marcas: { guia: false }, versao: cfg.versao })).statusCode,
+      (await post(s, '/atendimento/heranca', { marcas: { unidade: false }, versao: cfg.versao })).statusCode,
     ).toBe(409);
     const hist = (await get(s, '/atendimento/pacientes/1001/historico')).json();
     expect(hist.anterior.valores.convenio).toBe(306);
+    // O servidor aplica a herança: o convênio marcado vem em herdados; a guia nunca é herdada.
+    expect(hist.anterior.herdados.convenio).toBe(306);
+    expect(hist.anterior.herdados).not.toHaveProperty('guia');
+    expect(Array.isArray(hist.anterior.avisos)).toBe(true);
     expect(
       (
         await post(s, '/atendimento/pacientes/1002/nao-identificado', {

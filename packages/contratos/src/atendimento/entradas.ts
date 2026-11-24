@@ -221,15 +221,16 @@ export type AlterarAtendimentoEntrada = z.infer<typeof esquemaAlterarAtendimento
 
 /**
  * O que a ficha nova copia do atendimento anterior do paciente (por escopo: todo o cliente, o estabelecimento ou o usuário): marca por
- * campo. Controle otimista pela configuração lida pela tela (`versao`).
+ * campo. Controle otimista pela configuração lida pela tela (`versao`). Com `paraMim`, a marca nula encerra a regra
+ * pessoal do campo (volta a valer a do estabelecimento).
  */
 export const esquemaAlterarHeranca = z
   .object({
     marcas: z
       .object(
-        Object.fromEntries(HERANCAS.map((h) => [h.campo, z.boolean().optional()])) as Record<
+        Object.fromEntries(HERANCAS.map((h) => [h.campo, z.boolean().nullable().optional()])) as Record<
           CampoHerdado,
-          z.ZodOptional<z.ZodBoolean>
+          z.ZodOptional<z.ZodNullable<z.ZodBoolean>>
         >,
       )
       .strict(),

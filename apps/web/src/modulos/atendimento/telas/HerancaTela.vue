@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// Herança do atendimento anterior (ficha do M20, seção 5): `/recepcao/atendimento/heranca`. O que a ficha nova traz
-// preenchido do último atendimento do paciente (convênio, profissional, carteirinha, plano…). A configuração vale
-// para o estabelecimento ou, marcando "só para mim", para o usuário (a dele vence); a gravação confere a configuração
-// lida (outra estação mudou: o aviso e a releitura).
+// Herança do atendimento anterior: `/recepcao/atendimento/heranca`. O que a ficha nova traz preenchido do último
+// atendimento do paciente (convênio, profissional, carteirinha, plano…). Duas colunas, cada uma com o seu botão: a do
+// estabelecimento (vale para todos) e a pessoal (só para mim: segue o estabelecimento, herda ou não herda). "Seguir o
+// estabelecimento" encerra a regra pessoal sem apagá-la. A gravação confere a configuração lida (outra estação mudou:
+// o aviso e a releitura).
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -11,41 +12,52 @@ import { alterarHeranca, lerConfiguracaoHeranca, novaChave } from '../api-atendi
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
 import { usarAtendimento } from '../usar-atendimento.js';
 
+type Pessoal = 'segue' | 'sim' | 'nao';
 const { t } = useI18n();
 const cliente = useQueryClient();
 const { pode } = usarAtendimento();
 const cfg = useQuery({ queryKey: ['atendimento', 'heranca'], queryFn: () => lerConfiguracaoHeranca() });
-const marcas = ref<Record<string, boolean>>({});
+const doEstabelecimento = ref<Record<string, boolean>>({});
+const pessoal = ref<Record<string, Pessoal>>({});
+const comoPessoal = (v: boolean | null): Pessoal => (v === null ? 'segue' : v ? 'sim' : 'nao');
 watch(
   () => cfg.data.value,
   (c) => {
-    if (c) marcas.value = Object.fromEntries(c.campos.map((x) => [x.campo, x.herda]));
+    if (!c) return;
+    doEstabelecimento.value = Object.fromEntries(c.campos.map((x) => [x.campo, x.estabelecimento]));
+    pessoal.value = Object.fromEntries(c.campos.map((x) => [x.campo, comoPessoal(x.pessoal)]));
   },
   { immediate: true },
 );
 const podeGravar = pode('atendimento.alterarHeranca');
-const mudou = computed(() => (cfg.data.value?.campos ?? []).some((c) => marcas.value[c.campo] !== c.herda));
+const mudouEstabelecimento = computed(() =>
+  (cfg.data.value?.campos ?? []).filter((c) => doEstabelecimento.value[c.campo] !== c.estabelecimento),
+);
+const mudouPessoal = computed(() =>
+  (cfg.data.value?.campos ?? []).filter((c) => pessoal.value[c.campo] !== comoPessoal(c.pessoal)),
+);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
-const paraMim = ref(false);
-async function gravar(): Promise<void> {
+async function gravar(paraMim: boolean): Promise<void> {
   const c = cfg.data.value;
   if (!c) return;
   erro.value = null;
   mensagem.value = null;
   ocupado.value = true;
   try {
+    const marcas = paraMim
+      ? Object.fromEntries(
+          mudouPessoal.value.map((x) => {
+            const v = pessoal.value[x.campo];
+            return [x.campo, v === 'segue' ? null : v === 'sim'];
+          }),
+        )
+      : Object.fromEntries(
+          mudouEstabelecimento.value.map((x) => [x.campo, doEstabelecimento.value[x.campo]]),
+        );
     const r = await alterarHeranca(
-      {
-        versao: c.versao,
-        ...(paraMim.value ? { paraMim: true } : {}),
-        marcas: Object.fromEntries(
-          c.campos
-            .filter((x) => marcas.value[x.campo] !== x.herda)
-            .map((x) => [x.campo, marcas.value[x.campo]]),
-        ),
-      },
+      { versao: c.versao, ...(paraMim ? { paraMim: true } : {}), marcas },
       novaChave('heranca'),
     );
     mensagem.value = r.mensagem;
@@ -65,30 +77,58 @@ async function gravar(): Promise<void> {
     <p>{{ t('atendimento.heranca.texto') }}</p>
     <ErroAtendimento v-if="cfg.isError.value" :erro="cfg.error.value" />
     <p v-else-if="!cfg.data.value" role="status">{{ t('atendimento.carregando') }}</p>
-    <form v-else class="painel" @submit.prevent="gravar">
-      <fieldset class="filtros">
-        <legend>{{ t('atendimento.heranca.campos') }}</legend>
-        <label v-for="c in cfg.data.value.campos" :key="c.campo">
-          <input
-            v-model="marcas[c.campo]"
-            type="checkbox"
-            :disabled="!podeGravar"
-            :data-testid="`heranca-${c.campo}`"
-          />
-          {{ c.rotulo }}
-        </label>
-      </fieldset>
-      <label v-if="podeGravar">
-        <input v-model="paraMim" type="checkbox" data-testid="heranca-para-mim" />
-        {{ t('atendimento.heranca.paraMim') }}
-      </label>
-      <p class="acoes">
+    <form v-else class="painel" @submit.prevent>
+      <table class="tabela" data-testid="tabela-heranca">
+        <thead>
+          <tr>
+            <th scope="col">{{ t('atendimento.heranca.campos') }}</th>
+            <th scope="col">{{ t('atendimento.heranca.estabelecimento') }}</th>
+            <th scope="col">{{ t('atendimento.heranca.paraMim') }}</th>
+            <th scope="col">{{ t('atendimento.heranca.emVigor') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in cfg.data.value.campos" :key="c.campo">
+            <th scope="row">{{ c.rotulo }}</th>
+            <td>
+              <input
+                v-model="doEstabelecimento[c.campo]"
+                type="checkbox"
+                :disabled="!podeGravar"
+                :aria-label="`${c.rotulo}: ${t('atendimento.heranca.estabelecimento')}`"
+                :data-testid="`heranca-${c.campo}`"
+              />
+            </td>
+            <td>
+              <select
+                v-model="pessoal[c.campo]"
+                :disabled="!podeGravar"
+                :aria-label="`${c.rotulo}: ${t('atendimento.heranca.paraMim')}`"
+                :data-testid="`heranca-pessoal-${c.campo}`"
+              >
+                <option value="segue">{{ t('atendimento.heranca.segue') }}</option>
+                <option value="sim">{{ t('atendimento.heranca.herda') }}</option>
+                <option value="nao">{{ t('atendimento.heranca.naoHerda') }}</option>
+              </select>
+            </td>
+            <td :data-testid="`heranca-vigor-${c.campo}`">
+              {{ c.herda ? t('atendimento.heranca.herda') : t('atendimento.heranca.naoHerda') }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="podeGravar" class="acoes">
         <SanteBotao
-          v-if="podeGravar"
-          tipo="submit"
-          :rotulo="t('atendimento.gravar')"
-          :desabilitado="!mudou || ocupado"
+          :rotulo="t('atendimento.heranca.gravarEstabelecimento')"
+          :desabilitado="!mudouEstabelecimento.length || ocupado"
           data-testid="botao-gravar-heranca"
+          @acionar="gravar(false)"
+        />
+        <SanteBotao
+          :rotulo="t('atendimento.heranca.gravarPessoal')"
+          :desabilitado="!mudouPessoal.length || ocupado"
+          data-testid="botao-gravar-heranca-pessoal"
+          @acionar="gravar(true)"
         />
       </p>
       <p v-if="mensagem" role="status">{{ mensagem }}</p>

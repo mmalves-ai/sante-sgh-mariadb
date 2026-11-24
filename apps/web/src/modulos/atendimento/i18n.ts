@@ -340,9 +340,16 @@ export const mensagensAtendimento = {
   heranca: {
     titulo: 'Herança do atendimento anterior',
     texto:
-      'O que a ficha nova traz preenchido do último atendimento do paciente. Vale para o estabelecimento; a configuração pessoal de cada usuário vence.',
-    campos: 'Campos herdados',
-    paraMim: 'Só para mim (meus valores padrão)',
+      'O que a ficha nova traz preenchido do último atendimento do paciente. A configuração do estabelecimento vale para todos; a pessoal, quando existe, vence. Plano e carteirinha só vêm junto com o convênio, e a validade vencida não é trazida.',
+    campos: 'Campo',
+    estabelecimento: 'Estabelecimento',
+    paraMim: 'Só para mim',
+    emVigor: 'Em vigor para mim',
+    segue: 'Segue o estabelecimento',
+    herda: 'Herda',
+    naoHerda: 'Não herda',
+    gravarEstabelecimento: 'Gravar para o estabelecimento',
+    gravarPessoal: 'Gravar só para mim',
   },
   recusas: {
     'paciente-inativo': 'O cadastro do paciente está inativo.',

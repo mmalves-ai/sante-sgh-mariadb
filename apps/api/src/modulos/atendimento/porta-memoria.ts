@@ -870,7 +870,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
           );
         const mudadas = HERANCAS.filter((h) => {
           const v = e['marcas'][h.campo];
-          return v !== undefined && v !== (s.heranca[h.chave] === true);
+          return v !== undefined && v !== null && v !== (s.heranca[h.chave] === true);
         });
         if (mudadas.length === 0) throw recusa('nada-a-alterar', 'Nada a alterar.');
         for (const h of mudadas) s.heranca[h.chave] = e['marcas'][h.campo] === true;
@@ -1453,6 +1453,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     const doPaciente = s.fichas.filter((f) => f.paciente === paciente).sort((a, b) => b.reg - a.reg);
     const a = doPaciente.find((f) => !f.lab) ?? null;
     return {
+      heranca: { ...s.heranca },
       anterior: a
         ? {
             reg: a.reg,

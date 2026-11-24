@@ -157,6 +157,11 @@ export interface ApoioAtendimentoDados {
   readonly motivosExclusao: { codigo: number; nome: string }[];
   /** As marcas da herança em vigor para a sessão, pela chave da regra (`HERANCAS[].chave`). */
   readonly heranca: Record<string, boolean>;
+  /** A configuração por escopo: a do estabelecimento (sem as regras pessoais) e as regras pessoais do usuário. */
+  readonly herancaEscopo?: {
+    readonly estabelecimento: Record<string, boolean>;
+    readonly pessoal: Record<string, boolean>;
+  };
 }
 
 /** A marcação de agenda que a abertura do atendimento preenche. */

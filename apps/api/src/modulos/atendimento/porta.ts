@@ -156,6 +156,8 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     c: ContextoAtendimento,
     paciente: number,
   ): Promise<{
+    /** As marcas da herança em vigor para a sessão, pela chave da regra. */
+    heranca: Record<string, boolean>;
     anterior: { reg: number; data: string; valores: Record<string, string | number | null> } | null;
     historico: { reg: number; data: string; tipo: string; convenio: string; profissional: string }[];
   }>;

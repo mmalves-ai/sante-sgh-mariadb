@@ -187,19 +187,18 @@ export const CODIGOS_IMPRESSO = IMPRESSOS_ATENDIMENTO.map((i) => i.codigo) as [
   ...ImpressoAtendimento[],
 ];
 
-/** Herança do atendimento anterior: o campo da ficha e a chave da regra gravada (regra_heranca_campo.campo). */
+/**
+ * Herança do atendimento anterior: o campo da ficha e a chave da regra gravada (regra_heranca_campo.campo). Só os campos
+ * que a ficha de abertura tem; a guia não entra (o número é de cada evento com o convênio: herdá-lo duplicaria a guia).
+ */
 export const HERANCAS = [
   { chave: 'fonte_pagadora', campo: 'convenio', rotulo: 'Convênio' },
   { chave: 'profissional', campo: 'profissional', rotulo: 'Profissional' },
   { chave: 'centro_custo', campo: 'centroCusto', rotulo: 'Centro de custo' },
   { chave: 'unidade', campo: 'unidade', rotulo: 'Unidade' },
   { chave: 'carteira', campo: 'matricula', rotulo: 'Carteirinha' },
-  { chave: 'guia', campo: 'guia', rotulo: 'Guia' },
   { chave: 'plano', campo: 'plano', rotulo: 'Plano' },
-  { chave: 'clinica', campo: 'clinica', rotulo: 'Clínica' },
   { chave: 'especialidade', campo: 'especialidade', rotulo: 'Especialidade' },
-  { chave: 'empresa', campo: 'empresa', rotulo: 'Empresa' },
   { chave: 'validade_carteira', campo: 'validadeCarteira', rotulo: 'Validade da carteirinha' },
-  { chave: 'titular', campo: 'titular', rotulo: 'Titular do convênio' },
 ] as const;
 export type CampoHerdado = (typeof HERANCAS)[number]['campo'];

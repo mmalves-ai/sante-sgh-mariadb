@@ -59,16 +59,49 @@ export function camposHerdados(marcas: MarcasHeranca): CampoHerdado[] {
   return HERANCAS.filter((h) => marcas[h.chave] === true).map((h) => h.campo);
 }
 
-/** Os valores a pré-preencher: só os campos herdados com valor no atendimento anterior. */
+/** Campos da cobertura que só valem com a fonte pagadora de onde vieram. */
+const DA_COBERTURA: readonly CampoHerdado[] = ['plano', 'matricula', 'validadeCarteira'];
+
+/** O que a ficha nova recebe do anterior e os avisos para a recepção conferir. */
+export interface HerancaAplicada {
+  readonly valores: Partial<Record<CampoHerdado, string | number>>;
+  readonly avisos: string[];
+}
+
+const dataBr = (iso: string): string => iso.slice(0, 10).split('-').reverse().join('/');
+
+/**
+ * Os valores a pré-preencher: só os campos herdados com valor no atendimento anterior, com as regras da cobertura:
+ * plano, carteirinha e validade só vêm junto com a fonte pagadora (sem ela seriam de outro convênio); a validade
+ * vencida em `hoje` não é herdada e vira aviso.
+ */
 export function aplicarHeranca(
   marcas: MarcasHeranca,
   anterior: Readonly<Partial<Record<CampoHerdado, string | number | null>>> | null,
-): Partial<Record<CampoHerdado, string | number>> {
-  if (!anterior) return {};
-  const r: Partial<Record<CampoHerdado, string | number>> = {};
-  for (const c of camposHerdados(marcas)) {
+  hoje: string,
+): HerancaAplicada {
+  const valores: Partial<Record<CampoHerdado, string | number>> = {};
+  const avisos: string[] = [];
+  if (!anterior) return { valores, avisos };
+  const comValor = (c: CampoHerdado) => {
     const v = anterior[c];
-    if (v !== null && v !== undefined && v !== '' && v !== 0) r[c] = v;
+    return v !== null && v !== undefined && v !== '' && v !== 0;
+  };
+  const marcados = camposHerdados(marcas);
+  const comFonte = marcados.includes('convenio') && comValor('convenio');
+  for (const c of marcados) {
+    if (!comValor(c)) continue;
+    if (DA_COBERTURA.includes(c) && !comFonte) continue;
+    const v = anterior[c] as string | number;
+    if (c === 'validadeCarteira' && String(v).slice(0, 10) < hoje.slice(0, 10)) {
+      avisos.push(
+        `A carteirinha do atendimento anterior venceu em ${dataBr(String(v))}: confira a validade nova.`,
+      );
+      continue;
+    }
+    valores[c] = v;
   }
-  return r;
+  if (!comFonte && marcados.some((c) => DA_COBERTURA.includes(c) && comValor(c)))
+    avisos.push('Plano e carteirinha não foram trazidos: só valem com o convênio do atendimento anterior.');
+  return { valores, avisos };
 }
