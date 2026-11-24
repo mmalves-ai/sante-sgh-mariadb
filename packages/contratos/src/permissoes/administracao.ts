@@ -21,6 +21,10 @@ export const PERMISSOES_M10_CODIGOS = {
   termoLer: 'acesso.termo.ler',
   termoAceitar: 'acesso.termo.aceitar',
   alertaLer: 'config.alerta.ler',
+  // Notificação por regra (01-ADM L76): gravar regra de alerta e de consolidação, consolidar e registrar a entrega.
+  alertaEditar: 'config.alerta.editar',
+  // A resposta do destinatário ao aviso recebido (ciência e resolução), sempre da própria conta.
+  notificacaoResponder: 'acesso.notificacao.responder',
   emailLer: 'config.email.ler',
   empresaLer: 'organizacao.empresa.ler',
   estruturaLer: 'organizacao.estrutura.ler',
@@ -139,6 +143,20 @@ export const PERMISSOES_M10: readonly DeclaracaoPermissao[] = [
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
     categoria: 'tecnica',
+  },
+  {
+    codigo: C.alertaEditar,
+    descricao: 'Gravar as regras de alerta e de consolidação dos avisos, consolidar e registrar a entrega por canal',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.notificacaoResponder,
+    descricao: 'Responder aos avisos recebidos (ciência e resolução), sempre da própria conta',
+
+    concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
   },
   {
     codigo: C.emailLer,
