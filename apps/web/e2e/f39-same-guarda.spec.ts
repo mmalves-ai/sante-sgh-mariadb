@@ -106,7 +106,15 @@ test.describe('Guarda do prontuário pelo volume @F39-4 @fase3', () => {
         if (caminho === 'apoio')
           return json(rota, {
             locais: [
-              { id: 20, nivel: 'sala', codigo: 'S1', caminho: 'Sala 1', pai: null, capacidade: null, volumes: 0 },
+              {
+                id: 20,
+                nivel: 'sala',
+                codigo: 'S1',
+                caminho: 'Sala 1',
+                pai: null,
+                capacidade: null,
+                volumes: 0,
+              },
               {
                 id: 21,
                 nivel: 'armario',

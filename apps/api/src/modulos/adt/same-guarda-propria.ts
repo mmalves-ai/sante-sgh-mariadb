@@ -252,7 +252,7 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
     }));
   }
 
-  incluirLocal(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
+  async incluirLocal(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaLocal, entrada);
     // Regra da árvore com a mensagem ao usuário (a entrada inválida só destaca o campo).
     if (e.pai === null && e.nivel !== 'arquivo' && e.nivel !== 'sala')
