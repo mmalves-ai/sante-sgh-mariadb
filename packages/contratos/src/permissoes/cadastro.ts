@@ -191,6 +191,32 @@ export const PERMISSOES_CADASTRO_M11 = [
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
   },
+  // F3.1 (02-CAD linhas 25, 26 e 27): estrutura do estabelecimento e configuração TISS por fonte pagadora.
+  {
+    codigo: 'cadastro.estrutura.editar',
+    descricao:
+      'Manter os dados do estabelecimento, as unidades assistenciais e os setores com responsável, regras e ramais',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
+  {
+    codigo: 'cadastro.tiss.editar',
+    descricao: 'Manter a configuração do padrão TISS por fonte pagadora e as faixas de números de guia',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
+  {
+    codigo: 'cadastro.tiss.numerarGuia',
+    descricao: 'Numerar a guia em montagem pela faixa de números vigente da fonte pagadora',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
   {
     codigo: 'cadastro.solicitante.editar',
     descricao:

@@ -7,6 +7,8 @@ import type { ContextoModulo } from '../registro.js';
 import { ligarMapaEstabelecimentos } from './contexto-nucleo.js';
 import { CadastroLigacoesController } from './cadastro-ligacoes.controller.js';
 import { CadastroLigacoesProprio, LIGACOES_CADASTRO } from './cadastro-ligacoes-proprio.js';
+import { EstruturaGestaoController } from './estrutura-gestao.controller.js';
+import { ESTRUTURA_GESTAO, EstruturaGestaoPropria } from './estrutura-gestao-proprio.js';
 import { FichaComplementarController } from './ficha-complementar.controller.js';
 import { FICHA_COMPLEMENTAR, FichaComplementarPropria } from './ficha-complementar-proprio.js';
 import { CadastroVinculosProprio } from './paciente-vinculos-proprio.js';
@@ -15,6 +17,7 @@ import { PacientesController } from './pacientes.controller.js';
 import { PORTA_CADASTRO, type PortaCadastro, portaCadastroIndisponivel } from './porta.js';
 import { PortaCadastroMemoria } from './porta-memoria.js';
 import { PortaCadastroPropria } from './porta-propria.js';
+import { TISS_CONFIGURACAO, TissConfiguracaoPropria } from './tiss-configuracao-proprio.js';
 import { ProfissionaisController } from './profissionais.controller.js';
 import { ProfissionalComplementoController } from './profissional-complemento.controller.js';
 import {
@@ -52,6 +55,9 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   const complemento = ctx.nucleo && cliente ? new ProfissionalComplementoProprio(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linhas 17, 18 e 20): especialidade, lotação e solicitante, só no banco do cliente.
   const ligacoes = ctx.nucleo && cliente ? new CadastroLigacoesProprio(ctx.nucleo, cliente) : null;
+  // F3.1 (02-CAD linhas 25, 26 e 27): estrutura (estabelecimento, unidades, setores e ramais) e configuração TISS.
+  const estrutura = ctx.nucleo && cliente ? new EstruturaGestaoPropria(ctx.nucleo, cliente) : null;
+  const tiss = ctx.nucleo && cliente ? new TissConfiguracaoPropria(ctx.nucleo, cliente) : null;
   return {
     module: ModuloCadastro,
     controllers: [
@@ -61,6 +67,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       FichaComplementarController,
       ProfissionalComplementoController,
       CadastroLigacoesController,
+      EstruturaGestaoController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: porta },
@@ -68,6 +75,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       { provide: FICHA_COMPLEMENTAR, useValue: ficha },
       { provide: COMPLEMENTO_PROFISSIONAL, useValue: complemento },
       { provide: LIGACOES_CADASTRO, useValue: ligacoes },
+      { provide: ESTRUTURA_GESTAO, useValue: estrutura },
+      { provide: TISS_CONFIGURACAO, useValue: tiss },
     ],
     exports: [PORTA_CADASTRO],
   };
