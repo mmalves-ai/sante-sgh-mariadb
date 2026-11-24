@@ -63,7 +63,7 @@ const dataDe = (v: unknown): string | null => {
   const t = textoOuNull(v);
   return t !== null && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
 };
-const lista = (ids: readonly number[]) => ids.map(() => '?').join(',');
+const lista = (ids: readonly unknown[]) => ids.map(() => '?').join(',');
 
 /**
  * Data e hora civil do estabelecimento (AAAA-MM-DDTHH:MM[:SS]) → instante UTC, sem depender do TZ do processo (a
