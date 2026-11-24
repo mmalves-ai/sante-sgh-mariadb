@@ -12,3 +12,5 @@ ALTER TABLE reuniao_comissao DROP INDEX IF EXISTS ix_reuniao_comissao_ata_assina
 ALTER TABLE reuniao_comissao
   ADD KEY IF NOT EXISTS fk_reuniao_comissao_assinatura_anterior_por (assinatura_anterior_por_usuario_id),
   DROP INDEX IF EXISTS ix_reuniao_comissao_assinatura_anterior_por_usuario;
+ALTER TABLE reuniao_comissao
+  ADD CONSTRAINT fk_reuniao_comissao_assinatura_anterior_por FOREIGN KEY IF NOT EXISTS (assinatura_anterior_por_usuario_id) REFERENCES usuario (id);

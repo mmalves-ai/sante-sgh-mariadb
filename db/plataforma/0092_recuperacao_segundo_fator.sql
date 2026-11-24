@@ -20,9 +20,20 @@ CREATE TABLE IF NOT EXISTS credencial_administrador_evento (
   correlacao                  VARCHAR(64) NULL,
   ocorrido_em                 DATETIME(3) NOT NULL,
   criado_em                   DATETIME(3) NOT NULL,
+  criado_por                  BIGINT UNSIGNED NULL,
+  alterado_em                 DATETIME(3) NULL,
+  alterado_por                BIGINT UNSIGNED NULL,
+  versao                      INT UNSIGNED NOT NULL DEFAULT 1,
   CONSTRAINT ck_credencial_administrador_evento_tipo CHECK (tipo IN
     ('recuperacao_pedida','senha_recuperada','segundo_fator_metodo_alterado','codigo_email_enviado','codigo_email_conferido','codigo_email_recusado')),
   KEY ix_credencial_administrador_evento_adm (administrador_plataforma_id, ocorrido_em),
   CONSTRAINT fk_credencial_administrador_evento_adm
     FOREIGN KEY (administrador_plataforma_id) REFERENCES administrador_plataforma (id) ON DELETE RESTRICT
 ) COMMENT='Linha do tempo da credencial do administrador da plataforma (recuperação e segundo fator); só de acréscimo';
+
+-- Colunas de auditoria do padrão (ADR 0002, parte 2) na base que já tinha a tabela sem elas.
+ALTER TABLE credencial_administrador_evento
+  ADD COLUMN IF NOT EXISTS criado_por   BIGINT UNSIGNED NULL AFTER criado_em,
+  ADD COLUMN IF NOT EXISTS alterado_em  DATETIME(3) NULL AFTER criado_por,
+  ADD COLUMN IF NOT EXISTS alterado_por BIGINT UNSIGNED NULL AFTER alterado_em,
+  ADD COLUMN IF NOT EXISTS versao       INT UNSIGNED NOT NULL DEFAULT 1 AFTER alterado_por;
