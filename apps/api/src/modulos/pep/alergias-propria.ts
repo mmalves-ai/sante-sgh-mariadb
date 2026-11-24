@@ -19,8 +19,9 @@
 //
 // Alerta da alergia de descrição livre: o motor casa a alergia com o item pelos princípios ativos. A alergia livre
 // alerta pelos princípios registrados nela (alergia_paciente_principio) e, além disso, quando a descrição livre é o
-// nome de um princípio ativo (oficial ou do cadastro do cliente), comparação exata pela colação do banco (sem
-// diferença de maiúsculas e acentos). Nada é inferido por semelhança.
+// nome de um princípio ativo (oficial ou do cadastro do cliente), comparação exata na colação utf8mb4_uca1400_ai_ci
+// (sem diferença de maiúsculas e acentos; explícita porque principio_ativo_cliente tem colação própria). Nada é
+// inferido por semelhança.
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
 import type { AlergiaDoProntuarioLida, AlergiaLida } from './tipos-pep.js';
 import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-porta-propria.js';
@@ -135,13 +136,13 @@ async function principiosDe(
   const m = marcadores(alergias.length);
   const partes = [
     `SELECT app.alergia_paciente_id AS alergia, COALESCE(pa.id, pac.principio_ativo_id) AS id,
-            COALESCE(pa.descricao, pac.nome) AS nome, 1 AS ordem, app.id AS seq
+            COALESCE(pa.descricao, pac.nome) COLLATE utf8mb4_uca1400_ai_ci AS nome, 1 AS ordem, app.id AS seq
        FROM alergia_paciente_principio app
        LEFT JOIN principio_ativo pa ON pa.id = app.principio_ativo_id
        LEFT JOIN principio_ativo_cliente pac ON pac.id = app.principio_ativo_cliente_id
       WHERE app.alergia_paciente_id IN (${m}) AND app.excluido_em IS NULL`,
     `SELECT ap.id AS alergia, COALESCE(pa.id, pac.principio_ativo_id) AS id,
-            COALESCE(pa.descricao, pac.nome) AS nome, 2 AS ordem, apa.id AS seq
+            COALESCE(pa.descricao, pac.nome) COLLATE utf8mb4_uca1400_ai_ci AS nome, 2 AS ordem, apa.id AS seq
        FROM alergia_paciente ap
        JOIN alergeno_principio_ativo apa ON apa.alergeno_id = ap.alergeno_id
             AND apa.ativo = TRUE AND apa.excluido_em IS NULL
@@ -152,13 +153,13 @@ async function principiosDe(
   const params: unknown[] = [...alergias, ...alergias];
   if (porNomeLivre) {
     partes.push(
-      `SELECT ap.id AS alergia, pa.id AS id, pa.descricao AS nome, 3 AS ordem, pa.id AS seq
+      `SELECT ap.id AS alergia, pa.id AS id, pa.descricao COLLATE utf8mb4_uca1400_ai_ci AS nome, 3 AS ordem, pa.id AS seq
          FROM alergia_paciente ap
-         JOIN principio_ativo pa ON pa.descricao = TRIM(ap.descricao_livre)
+         JOIN principio_ativo pa ON pa.descricao COLLATE utf8mb4_uca1400_ai_ci = TRIM(ap.descricao_livre) COLLATE utf8mb4_uca1400_ai_ci
         WHERE ap.id IN (${m}) AND ap.descricao_livre IS NOT NULL`,
-      `SELECT ap.id AS alergia, pac.principio_ativo_id AS id, pac.nome AS nome, 4 AS ordem, pac.id AS seq
+      `SELECT ap.id AS alergia, pac.principio_ativo_id AS id, pac.nome COLLATE utf8mb4_uca1400_ai_ci AS nome, 4 AS ordem, pac.id AS seq
          FROM alergia_paciente ap
-         JOIN principio_ativo_cliente pac ON pac.nome = TRIM(ap.descricao_livre)
+         JOIN principio_ativo_cliente pac ON pac.nome COLLATE utf8mb4_uca1400_ai_ci = TRIM(ap.descricao_livre) COLLATE utf8mb4_uca1400_ai_ci
         WHERE ap.id IN (${m}) AND ap.descricao_livre IS NOT NULL`,
     );
     params.push(...alergias, ...alergias);

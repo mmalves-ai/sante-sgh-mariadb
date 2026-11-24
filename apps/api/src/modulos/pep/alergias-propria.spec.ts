@@ -198,8 +198,8 @@ describe('alergias no banco próprio (dublê)', () => {
       { alergia: 2, nome: 'Dipirona', principios: [600] },
     ]);
     const u = chamadas.find((x) => x.sql.includes('UNION ALL'))!;
-    expect(u.sql).toContain('pa.descricao = TRIM(ap.descricao_livre)');
-    expect(u.sql).toContain('pac.nome = TRIM(ap.descricao_livre)');
+    expect(u.sql).toContain('pa.descricao COLLATE utf8mb4_uca1400_ai_ci = TRIM(ap.descricao_livre)');
+    expect(u.sql).toContain('pac.nome COLLATE utf8mb4_uca1400_ai_ci = TRIM(ap.descricao_livre)');
 
     // O motor da prescrição alerta a alergia de texto livre no item com o princípio.
     const item: ItemAvaliado = {
