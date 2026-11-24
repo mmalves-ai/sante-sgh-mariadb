@@ -63,6 +63,7 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
   let eu: ContextoAutoatendimento;
   let gestor: ContextoAutoatendimento;
   let justificativa: number;
+  let movimento: number;
   const ler = (sql: string, p: unknown[]) =>
     m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't' }, (l) =>
       l.consultar<Record<string, unknown>>(sql, p),
@@ -89,6 +90,15 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
             );
       },
     );
+    movimento = await m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-efeitos' }, async (e) => {
+      const t = await e.uma<{ id: number }>('SELECT id FROM tipo_movimento_ponto WHERE codigo = ?', ['L0302EM']);
+      return t
+        ? Number(t.id)
+        : e.inserir(
+            "INSERT INTO tipo_movimento_ponto (codigo, descricao, natureza, criado_em) VALUES ('L0302EM', 'ABONO SINTETICO', 'abono', ?)",
+            [new Date()],
+          );
+    });
     await limparAjustes();
     cifra = new CifraCpf(randomBytes(32));
     const efeitos = efeitosAutoatendimentoProprios({
@@ -192,6 +202,71 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
     expect((await porta.solicitacao(gestor, id))?.situacao).toBe('aprovada');
   });
 
+  // A sequência do ServicoAutoatendimento.decidir para o abono e o atestado aprovados, com o gestor na sessão: o ajuste é
+  // pedido em nome do colaborador (`por` = quem fez a solicitação) e aprovado pelo gestor na mesma transação.
+  for (const [tipo, dia] of [
+    ['abono', '2026-10-22'],
+    ['atestado', '2026-10-23'],
+  ] as const)
+    it(`ponto: ${tipo} aprovado pela sequência do decidir grava o ajuste do colaborador aprovado pelo gestor`, async () => {
+      const id = await porta.gravarSgh(eu, trilha(), (g) =>
+        g.incluirSolicitacao({ ...pedido, tipo, inicio: dia, fim: dia, vinculo: m.vinculo, por: m.login }),
+      );
+      const x = await porta.solicitacao(gestor, id);
+      expect(x?.pedidoPor.toLowerCase()).toBe(m.login);
+      const ajuste = await porta.gravarSgh(gestor, trilha(id), async (g) => {
+        const atual = await g.solicitacao(id);
+        expect(atual?.situacao).toBe('pendente');
+        await g.ponto.travarPessoa(m.colaborador);
+        expect((await g.ponto.eventosPeriodo(m.vinculo)).filter((y) => y.competencia === '2026-10')).toEqual([]);
+        expect(await g.ponto.ajustes(m.vinculo, '2026-10-01', '2026-10-31')).toBeInstanceOf(Array);
+        const ajuste = await g.ponto.incluirAjuste({
+          vinculo: m.vinculo,
+          dia,
+          tipo: 'justificativa',
+          marcacao: null,
+          instante: null,
+          movimento,
+          justificativa,
+          periodo: null,
+          // O serviço manda null (o dia inteiro); o modelo próprio ainda exige os minutos (aviso ao integrador).
+          minutos: 480,
+          motivo: `Solicitação ${id} (${tipo}) aprovada`,
+          por: x!.pedidoPor,
+        });
+        await g.ligarAjuste({ ajuste, solicitacao: id });
+        const a = await g.ponto.ajuste(ajuste);
+        await g.ponto.decidirAjuste({
+          id: a!.id,
+          versao: a!.versao,
+          situacao: 'aprovado',
+          motivo: null,
+          por: m.loginGestor,
+        });
+        await g.decidirSolicitacao({
+          id,
+          versao: atual!.versao,
+          situacao: 'aprovada',
+          motivo: null,
+          ferias: null,
+          por: m.loginGestor,
+        });
+        return ajuste;
+      });
+      const [d] = await ler(
+        'SELECT situacao, solicitante_usuario_id, aprovador_usuario_id, tipo_movimento_ponto_id FROM ajuste_ponto WHERE id = ?',
+        [ajuste],
+      );
+      expect(d?.['situacao']).toBe('aprovado');
+      expect(Number(d?.['solicitante_usuario_id'])).toBe(m.usuario);
+      expect(Number(d?.['aprovador_usuario_id'])).toBe(m.gestor);
+      expect(Number(d?.['tipo_movimento_ponto_id'])).toBe(movimento);
+      expect((await porta.solicitacao(gestor, id))?.situacao).toBe('aprovada');
+      expect((await porta.ajustesDaSolicitacao(gestor, id)).map((y) => [y.id, y.situacao])).toEqual([
+        [ajuste, 'aprovado'],
+      ]);
+    });
+
   it('ponto: a recusa do domínio do ponto (justificativa obrigatória) desfaz o pedido inteiro', async () => {
     const antes = await solicitacoes();
     const ajustes = await contar('SELECT COUNT(*) AS q FROM ajuste_ponto WHERE estabelecimento_id = ?', [
@@ -256,6 +331,53 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
         [m.vinculo, motivo, m.gestor],
       ),
     ).toBe(1);
+  });
+
+  it('cadastro: alteração cadastral aprovada pela sequência do decidir (nome novo, histórico de correção e trilha)', async () => {
+    const nome = `COLABORADOR SINTETICO L0302 ${Date.now() % 1_000_000}`;
+    const porque = `Solicitação sintética do colaborador: nome (${nome})`;
+    const versao = await porta.gravarSgh(gestor, trilha(), async (g) => {
+      const v = await g.pessoas.vinculo(m.vinculo);
+      const antes = { nome: v!.nome };
+      const depois = { nome };
+      await g.pessoas.corrigirVinculo({
+        id: v!.id,
+        versao: v!.versao,
+        nome,
+        matricula: v!.matricula,
+        tipo: v!.tipo,
+        admissao: v!.admissao,
+        por: m.loginGestor,
+      });
+      await g.pessoas.incluirHistorico({
+        vinculo: v!.id,
+        tipo: 'correcao',
+        vigencia: '2026-10-20',
+        antes: `nome: ${antes.nome}`,
+        depois: `nome: ${depois.nome}`,
+        motivo: porque,
+        por: m.loginGestor,
+      });
+      await g.pessoas.registrarCorrecao({
+        vinculo: v!.id,
+        operacao: 'colaborador.corrigido',
+        antes,
+        depois,
+        motivo: porque,
+        por: m.loginGestor,
+      });
+      return v!.versao;
+    });
+    const [c] = await ler('SELECT nome FROM colaborador WHERE id = ?', [m.colaborador]);
+    expect(c?.['nome']).toBe(nome);
+    const [v] = await ler('SELECT versao FROM vinculo_trabalho WHERE id = ?', [m.vinculo]);
+    expect(Number(v?.['versao'])).toBe(versao + 1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS q FROM trilha_auditoria WHERE entidade = 'vinculo_trabalho' AND entidade_id = ? AND motivo = ? AND usuario_id = ?",
+        [m.vinculo, porque, m.gestor],
+      ),
+    ).toBe(2);
   });
 
   it('férias sem o cálculo ligado: modelo-pendente, e o pedido inteiro é desfeito', async () => {

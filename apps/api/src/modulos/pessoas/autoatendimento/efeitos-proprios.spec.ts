@@ -90,6 +90,34 @@ describe('efeitos da aprovação do autoatendimento sobre as portas próprias', 
     expect(p.chamadasPonto).toEqual([[tx, ctx, 3, 'America/Recife']]);
   });
 
+  it('o ponto: o ajuste é pedido com a conta do solicitante (por) e decidido com a de quem decide', async () => {
+    const p = portas();
+    const t = {
+      uma: vi.fn(async (sql: string, a: unknown[]) =>
+        sql.includes('FROM usuario')
+          ? a[0] === 'colab'
+            ? { id: 41 }
+            : null
+          : { fuso_horario: 'America/Recife' },
+      ),
+    } as unknown as TxOperacao;
+    const g = efeitosAutoatendimentoProprios(p).gravadores(t, 3, ctx);
+    const pedido = { vinculo: 1, dia: '2026-10-20', tipo: 'justificativa', por: 'colab' } as never;
+    await g.ponto.incluirAjuste(pedido);
+    await g.ponto.decidirAjuste({ id: 7, versao: 1, situacao: 'aprovado', motivo: null, por: 'gestor' });
+    expect(p.chamadasPonto).toEqual([
+      [t, { ...ctx, usuario: 41 }, 3, 'America/Recife'],
+      [t, ctx, 3, 'America/Recife'],
+    ]);
+    expect(p.gravadorPonto['incluirAjuste']).toHaveBeenCalledWith(pedido);
+    // Solicitante sem conta no cliente: recusa (a operação inteira é desfeita), sem pedir o ajuste.
+    expect(await codigo(g.ponto.incluirAjuste({ ...(pedido as object), por: 'ninguem' } as never))).toBe(
+      'usuario-inexistente',
+    );
+    expect(p.gravadorPonto['incluirAjuste']).toHaveBeenCalledTimes(1);
+    expect(Object.isFrozen(g.ponto)).toBe(true);
+  });
+
   it('o cadastro: o gravador da porta na mesma transação e com o contexto de quem decide', async () => {
     const p = portas();
     const g = efeitosAutoatendimentoProprios(p).gravadores(tx, 3, ctx);

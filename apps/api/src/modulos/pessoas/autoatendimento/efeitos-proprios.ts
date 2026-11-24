@@ -3,7 +3,11 @@
 // o histórico e a correção na trilha) e nas férias (a programação) correm NA MESMA transação da operação do Executor.
 // Cada efeito usa o gravador da porta própria do módulo dono (as mesmas regras, recusas e travas da tela do módulo),
 // montado sobre a transação da solicitação, com o contexto de quem decide.
-//   - ponto: o gravador da porta própria do ponto (o fuso do estabelecimento lido na primeira chamada);
+//   - ponto: o gravador da porta própria do ponto (o fuso do estabelecimento lido na primeira chamada). O ajuste é
+//     PEDIDO pelo colaborador (`por` do incluirAjuste, o login de quem fez a solicitação) e DECIDIDO pelo gestor: o
+//     incluirAjuste corre num gravador com o contexto do solicitante (a conta resolvida pelo login), e o resto (a
+//     decisão, a leitura, a trava) com o de quem decide. Assim a segregação do ponto vale como na memória (quem pediu
+//     não aprova) e o ajuste guarda o colaborador como solicitante e o gestor como aprovador;
 //   - pessoas: o gravador da porta própria do colaborador (com a cifra do CPF da porta);
 //   - folha: o gravador do cálculo da folha, quando a porta oferece `gravadorNaTransacao`; sem ela, as férias aprovadas
 //     recusam com `modelo-pendente` (e a operação inteira é desfeita, nada pela metade).
@@ -12,7 +16,7 @@
 // Melhoria: as tabelas que cada efeito grava entram na operação declaradas (a transação recusa as outras), incluindo a
 // trilha que a correção do cadastro escreve na mesma transação.
 import type { TxOperacao } from '@sgh/nucleo';
-import { modeloPendente } from '../../qualidade/apoio-propria.js';
+import { exigirUsuario, modeloPendente } from '../../qualidade/apoio-propria.js';
 import { fusoDoEstabelecimento } from '../banco-apoio.js';
 import type { GravadorCalculoFolha } from '../folha/porta-calculo.js';
 import { TABELAS_CALCULO_FOLHA } from '../folha/porta-calculo-propria.js';
@@ -133,10 +137,18 @@ export function efeitosAutoatendimentoProprios(p: PortasDosEfeitos): EfeitosAuto
   return {
     tabelas,
     gravadores(tx, est, c) {
+      let fuso: Promise<string> | null = null;
+      const fusoDoEst = () => (fuso ??= fusoDoEstabelecimento(tx, est));
+      const decisor = restrito<EfeitoPonto>(METODOS_EFEITO_PONTO, async () =>
+        ponto.gravador(tx, c, est, await fusoDoEst()),
+      );
+      // O pedido do ajuste: com a conta do solicitante (o login em `por`), nunca com a de quem decide.
+      const incluirAjuste: EfeitoPonto['incluirAjuste'] = async (a) => {
+        const solicitante = await exigirUsuario(tx, a.por);
+        return ponto.gravador(tx, { ...c, usuario: solicitante }, est, await fusoDoEst()).incluirAjuste(a);
+      };
       return {
-        ponto: restrito<EfeitoPonto>(METODOS_EFEITO_PONTO, async () =>
-          ponto.gravador(tx, c, est, await fusoDoEstabelecimento(tx, est)),
-        ),
+        ponto: Object.freeze({ ...decisor, incluirAjuste }),
         pessoas: restrito<EfeitoPessoas>(METODOS_EFEITO_PESSOAS, () => pessoas.gravador(tx, c, est)),
         folha: calculo
           ? restrito<EfeitoFolha>(METODOS_EFEITO_FOLHA, () => calculo.gravadorNaTransacao(tx, est))
