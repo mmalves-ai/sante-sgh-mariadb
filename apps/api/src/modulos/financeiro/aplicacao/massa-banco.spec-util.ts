@@ -87,6 +87,12 @@ export async function limparMassa(nucleo: NucleoProprio, ests: readonly number[]
     );
     await x(`DELETE FROM adiantamento WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM baixa_titulo WHERE estabelecimento_id IN (${q})`);
+    // F3.8 (07-FIN linha 85): o período fechado e os saldos gravados no fechamento.
+    await x(
+      `DELETE s FROM saldo_diario_conta s JOIN conta_bancaria c ON c.id = s.conta_bancaria_id WHERE c.estabelecimento_id IN (${q})`,
+    );
+    await x(`DELETE FROM saldo_financeiro_periodo WHERE estabelecimento_id IN (${q})`);
+    await x(`DELETE FROM periodo_financeiro WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM movimento_bancario WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM grupo_lancamento_financeiro WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM bordero_pagamento WHERE estabelecimento_id IN (${q})`);
