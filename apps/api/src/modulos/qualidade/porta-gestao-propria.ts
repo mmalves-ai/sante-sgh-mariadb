@@ -46,6 +46,7 @@ import type {
 } from './porta-gestao.js';
 import {
   type DependentesRegistro,
+  type EnvioRegulatorioRegistrado,
   type ManifestacaoRegistrada,
   type NaoConformidadeNova,
   type NaoConformidadeRegistrada,
@@ -72,7 +73,7 @@ const PENDENTE = {
 } as const;
 
 /** As tabelas que as gravações da gestão tocam (a transação do Executor recusa as outras). */
-const TABELAS_GESTAO = [
+export const TABELAS_GESTAO = [
   'risco_institucional',
   'nao_conformidade_qualidade',
   'nao_conformidade_qualidade_evento',
@@ -412,7 +413,7 @@ async function travar(
 
 export class PortaGestaoPropria implements PortaGestao {
   readonly destino = 'banco' as const;
-  private readonly executor: Executor;
+  protected readonly executor: Executor;
 
   constructor(
     private readonly nucleo: NucleoQualidade,
@@ -452,7 +453,7 @@ export class PortaGestaoPropria implements PortaGestao {
     });
   }
 
-  private gravador(tx: TxOperacao, est: number): GravadorGestao {
+  protected gravador(tx: TxOperacao, est: number): GravadorGestao {
     const pendente = (o: string) => () => Promise.reject(modeloPendente(o));
     return {
       publicarDocumento: pendente(PENDENTE.documentos),
@@ -1182,10 +1183,14 @@ export class PortaGestaoPropria implements PortaGestao {
   contagem(): Promise<never> {
     return this.pendente(PENDENTE.contagem);
   }
-  envios(): Promise<never> {
+  // A assinatura do contrato (a porta completa sobrescreve com a leitura).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  envios(_c: ContextoGestao, _desde: string): Promise<EnvioRegulatorioRegistrado[]> {
     return this.pendente(PENDENTE.envios);
   }
-  envio(): Promise<never> {
+  // A assinatura do contrato (a porta completa sobrescreve com a leitura).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  envio(_c: ContextoGestao, _id: number): Promise<EnvioRegulatorioRegistrado | null> {
     return this.pendente(PENDENTE.envios);
   }
   versoes(): Promise<never> {
