@@ -61,6 +61,7 @@ export * from './prescricao/busca.js';
 // M23: documentos, exames, resultados e multiprofissional.
 export * from './autorizacao/matriz-acao.js';
 export * from './alergia.js';
+export * from './alergia-historico.js';
 export * from './receita.js';
 export * from './atestado.js';
 export * from './documento-legado.js';
@@ -103,3 +104,4 @@ export * from './especialidades/oncologia.js';
 export * from './especialidades/obstetricia.js';
 export * from './especialidades/lactario.js';
 export * from './especialidades/ciclo-de-vida.js';
+export * from './equipe-painel/regras.js';
