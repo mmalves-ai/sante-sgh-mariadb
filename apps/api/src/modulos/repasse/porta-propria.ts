@@ -15,10 +15,10 @@
 // Melhoria: evento, apuração e regra da entrada são conferidos no estabelecimento da sessão antes de gravar.
 // Melhoria: o lançamento exige o favorecido vigente do profissional; o estorno não passa do valor do original e o
 // lançamento só entra em um RPA (regra no servidor e restrição do banco).
-// Pendências de modelo (pedidos do lote 03-04, saida/03-04.json): a memória de cálculo completa no item da apuração
-// (dimensões, base, adicional e pendência; item sem profissional), o resumo da apuração (itens, pendentes e
-// pendências) e quem conferiu, o título a pagar e as retenções do RPA ligadas ao contas a pagar, o valor recebido da
-// produção. Até lá, essas partes respondem zero ou vazio. O adiantamento ao profissional é o saldo a compensar.
+// A apuração grava a memória de cálculo completa de cada item (item da regra, dimensões, regras descartadas, base,
+// valor fixo, valor antes do adicional, adicional e pendência), inclusive o item sem profissional (pendente, valor
+// zero), o resumo (itens, pendentes e pendências por motivo) e quem conferiu; a produção entrega o valor recebido, o
+// recurso deferido e a conciliação do item. O adiantamento ao profissional é o saldo a compensar.
 import { esquemaLancarEventoRepasse, type ItemProducao, type RegraRepasse } from '@sgh/contratos';
 import { debitosNaApuracao, dividirRepasse, integraisDoDia, type TipoFavorecido } from '@sgh/dominio-repasse';
 import {
@@ -142,13 +142,14 @@ export async function lerIntegraisParticular(
 
 const SQL_APURACAO = `
   SELECT a.id, a.competencia, a.situacao, a.valor_faturado, a.valor_bruto, ui.login AS apurado_por,
-         ua.login AS aprovado_por,
+         ua.login AS aprovado_por, uc.login AS conferido_por, a.quantidade_pendentes, a.pendencias,
          (SELECT COUNT(*) FROM apuracao_repasse_item x WHERE x.apuracao_repasse_id = a.id AND x.excluido_em IS NULL) AS itens,
          (SELECT COUNT(*) FROM apuracao_repasse_item x
            WHERE x.apuracao_repasse_id = a.id AND x.excluido_em IS NULL AND x.valor_repasse > 0) AS com_repasse
     FROM apuracao_repasse a
     LEFT JOIN usuario ui ON ui.id = a.iniciada_por_usuario_id
     LEFT JOIN usuario ua ON ua.id = a.aprovada_por_usuario_id
+    LEFT JOIN usuario uc ON uc.id = a.conferida_por_usuario_id
    WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.situacao <> 'cancelada'`;
 
 function apuracaoDe(r: Linha): ApuracaoRepasseRegistrada {
@@ -160,14 +161,40 @@ function apuracaoDe(r: Linha): ApuracaoRepasseRegistrada {
     simulacao: false,
     itens: n(r['itens']),
     comRepasse: n(r['com_repasse']),
-    pendentes: 0,
-    pendencias: '{}',
+    pendentes: n(r['quantidade_pendentes']),
+    pendencias: pendenciasDe(r['pendencias']),
     base: n(r['valor_faturado']),
     valor: n(r['valor_bruto']),
     apuradoPor: texto(r['apurado_por']),
-    conferidoPor: null,
+    conferidoPor: textoN(r['conferido_por']),
     aprovadoPor: textoN(r['aprovado_por']),
   };
+}
+
+/** As pendências por motivo gravadas em JSON (o driver pode devolver texto ou objeto). */
+function pendenciasDe(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '{}';
+  return typeof v === 'string' ? v : JSON.stringify(v);
+}
+
+/** O adicional em coluna curta ("tipo:percentual") e de volta no JSON da memória. */
+function adicionalParaColuna(v: string | null): string | null {
+  if (!v) return null;
+  const a = JSON.parse(v) as { tipo: string; percentual: number };
+  return `${a.tipo}:${a.percentual}`;
+}
+function adicionalDaColuna(v: unknown): string | null {
+  const t = textoN(v);
+  if (!t) return null;
+  const i = t.lastIndexOf(':');
+  return JSON.stringify({ tipo: t.slice(0, i), percentual: Number(t.slice(i + 1)) });
+}
+
+/** As regras descartadas cabem na coluna (500): sai a lista inteira enquanto couber, nunca JSON cortado ao meio. */
+function ignoradasParaColuna(v: string): string | null {
+  const lista = v ? (JSON.parse(v) as unknown[]) : [];
+  while (lista.length && JSON.stringify(lista).length > 500) lista.pop();
+  return lista.length ? JSON.stringify(lista) : null;
 }
 
 const SQL_LANCAMENTOS = `
@@ -425,6 +452,9 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
       );
       const descontoCentavos = plano.reduce((t, x) => t + x.descontadoCentavos, 0);
       const valores = {
+        quantidade_itens: d.totais.itens,
+        quantidade_pendentes: d.totais.pendentes,
+        pendencias: d.totais.pendencias || '{}',
         valor_faturado: d.totais.base,
         valor_bruto: d.totais.valor,
         valor_descontos: descontoCentavos / 100,
@@ -439,8 +469,11 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
           [new Date(), usuario, id],
         );
         // O recálculo é uma nova apuração: quem recalculou passa a ser quem apurou (segregação na aprovação).
+        // O recálculo desfaz a conferência anterior: a nova memória precisa ser conferida de novo.
         await tx.alterar('apuracao_repasse', id, n(a['versao']), {
           ...valores,
+          conferida_em: null,
+          conferida_por_usuario_id: null,
           iniciada_em: agora,
           iniciada_por_usuario_id: usuario,
         });
@@ -462,8 +495,8 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
       );
       let seq = n(seqAnterior?.['s']);
       for (const m of d.memorias) {
-        // O item sem profissional (pendência) aguarda o modelo (pedido do lote): fica só no resumo.
-        if (m.prestador === null) continue;
+        // O item sem profissional entra com a pendência e valor zero (restrição do banco: sem profissional, só com
+        // pendência), para o resumo e a tela mostrarem o que falta resolver.
         seq += 1;
         await tx.incluir('apuracao_repasse_item', {
           apuracao_repasse_id: id,
@@ -471,10 +504,18 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
           profissional_id: m.prestador,
           producao_repasse_id: m.item,
           regra_repasse_id: m.regra ? await regraDoItem(tx, m.regra, est) : null,
+          regra_repasse_item_id: m.regra,
+          dimensoes: m.dimensoes || null,
+          dimensoes_ignoradas: ignoradasParaColuna(m.ignoradas),
+          base_calculo: m.base,
           competencia_producao: competencia,
           valor_faturado: m.baseValor,
           percentual_repasse: m.percentual || null,
-          valor_repasse: m.valor,
+          valor_fixo: m.valorFixo,
+          valor_sem_adicional: m.valorSemAdicional,
+          adicional: adicionalParaColuna(m.adicional),
+          valor_repasse: m.prestador === null ? 0 : m.valor,
+          pendencia: m.pendencia ?? (m.prestador === null ? 'sem-executante' : null),
         });
       }
       const seguinte = competenciaSeguinte(d.competencia);
@@ -510,6 +551,9 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
       await tx.alterar('apuracao_repasse', d.apuracao, n(a['versao']), {
         situacao: para,
         ...(para === 'aprovada' ? { aprovada_em: new Date(), aprovada_por_usuario_id: usuario } : {}),
+        // Quem conferiu fica gravado; voltar a apuração para aberta desfaz a conferência.
+        ...(para === 'em_auditoria' ? { conferida_em: new Date(), conferida_por_usuario_id: usuario } : {}),
+        ...(para === 'apurada' ? { conferida_em: null, conferida_por_usuario_id: null } : {}),
       });
       return { apuracao: d.apuracao, estado: d.para };
     },
@@ -1105,7 +1149,8 @@ export class PortaRepassePropria implements PortaRepasse {
     return this.ler(c, async (l, est, fuso) => {
       const rs = await l.consultar(
         `SELECT p.id, chi.realizado_em, ch.fonte_pagadora_id, ifa.codigo AS procedimento, ifa.grupo_ato_id, p.funcao_equipe_cobranca_id,
-                p.tipo_lancamento_id, ch.natureza, p.profissional_id, p.valor_base, at.especialidade_medica_id,
+                p.tipo_lancamento_id, ch.natureza, p.profissional_id, p.valor_base, p.valor_recebido,
+                p.valor_recurso_deferido, p.conciliado, at.especialidade_medica_id,
                 at.local_atendimento_id, at.unidade_assistencial_id, COALESCE(chi.centro_custo_id, at.centro_custo_id) AS centro,
                 pr.cooperativa_medica_id
            FROM producao_repasse p
@@ -1139,9 +1184,9 @@ export class PortaRepassePropria implements PortaRepasse {
           tipoConta: texto(r['natureza']) === 'internacao' ? 'I' : 'E',
           executante: nn(r['profissional_id']),
           cobrado: n(r['valor_base']),
-          pago: 0,
-          recursoDeferido: 0,
-          conciliado: false,
+          pago: n(r['valor_recebido']),
+          recursoDeferido: n(r['valor_recurso_deferido']),
+          conciliado: Boolean(Number(r['conciliado'])),
         };
       });
       return { itens, ultimo: rs.length > TETO ? itens[itens.length - 1]!.id : null };
@@ -1208,7 +1253,9 @@ export class PortaRepassePropria implements PortaRepasse {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
-          `SELECT x.producao_repasse_id, x.profissional_id, x.valor_faturado, x.percentual_repasse, x.valor_repasse
+          `SELECT x.producao_repasse_id, x.profissional_id, x.valor_faturado, x.percentual_repasse, x.valor_repasse,
+                  x.regra_repasse_item_id, x.dimensoes, x.dimensoes_ignoradas, x.base_calculo, x.valor_fixo,
+                  x.valor_sem_adicional, x.adicional, x.pendencia
              FROM apuracao_repasse_item x
              JOIN apuracao_repasse a ON a.id = x.apuracao_repasse_id AND a.estabelecimento_id = ?
             WHERE x.apuracao_repasse_id = ? AND x.excluido_em IS NULL${prestador === null ? '' : ' AND x.profissional_id = ?'}
@@ -1219,18 +1266,18 @@ export class PortaRepassePropria implements PortaRepasse {
       ).map((r) => ({
         item: n(r['producao_repasse_id']),
         prestador: nn(r['profissional_id']),
-        // O item de regra aplicado aguarda a coluna (pedido do lote): nunca se adivinha qual item da regra casou.
-        regra: null,
-        dimensoes: '',
-        ignoradas: '',
-        base: null,
+        regra: nn(r['regra_repasse_item_id']),
+        dimensoes: texto(r['dimensoes']),
+        ignoradas: texto(r['dimensoes_ignoradas']),
+        base: textoN(r['base_calculo']),
         baseValor: n(r['valor_faturado']),
         percentual: n(r['percentual_repasse']),
-        valorFixo: 0,
-        valorSemAdicional: n(r['valor_repasse']),
-        adicional: null,
+        valorFixo: n(r['valor_fixo']),
+        valorSemAdicional:
+          r['valor_sem_adicional'] === null ? n(r['valor_repasse']) : n(r['valor_sem_adicional']),
+        adicional: adicionalDaColuna(r['adicional']),
         valor: n(r['valor_repasse']),
-        pendencia: null,
+        pendencia: textoN(r['pendencia']),
       })),
     );
   }
