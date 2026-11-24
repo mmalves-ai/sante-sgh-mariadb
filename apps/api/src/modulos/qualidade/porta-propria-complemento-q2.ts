@@ -15,7 +15,7 @@
 // - Ciências: documento_qualidade_ciencia da revisão, pelo login da conta que registrou (a do colaborador, quando a
 //   conta não está na linha), em maiúsculas como o contrato.
 // - Comissões: comissao_hospitalar do estabelecimento, com o tipo (tipo_comissao.codigo), a periodicidade, a composição
-//   vigente (comissao_membro: nome do colaborador ou do profissional, papel como função e o login quando há conta) no
+//   vigente (comissao_membro: nome do colaborador, do profissional ou o externo, a função escrita (ou o papel) e o login quando há conta, pelo colaborador ou pelo vínculo do profissional) no
 //   JSON do contrato e as datas da última reunião realizada (ordinária e qualquer).
 // - Histórico da análise crítica de um indicador: analise_critica_indicador pela apuração (competência, numerador,
 //   denominador, valor e meta copiada da apuração; a situação da meta é o resultado do período registrado na própria
@@ -151,14 +151,18 @@ const SQL_COMISSAO = `
 
 /** A composição vigente na data (vigência aberta ou ainda não terminada). */
 const SQL_MEMBROS = (k: number) => `
-  SELECT m.comissao_hospitalar_id AS comissao, COALESCE(co.nome, pf.nome) AS nome, m.papel, u.login
+  SELECT m.comissao_hospitalar_id AS comissao, COALESCE(co.nome, pf.nome, m.nome_externo) AS nome,
+         COALESCE(m.funcao, REPLACE(m.papel, '_', ' ')) AS funcao, u.login
     FROM comissao_membro m
     LEFT JOIN colaborador co ON co.id = m.colaborador_id
     LEFT JOIN profissional p ON p.id = COALESCE(m.profissional_id, co.profissional_id)
     LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
     LEFT JOIN usuario u ON u.id = COALESCE(co.usuario_id,
                                            (SELECT MIN(cu.usuario_id) FROM colaborador cu
-                                             WHERE cu.profissional_id = m.profissional_id AND cu.usuario_id IS NOT NULL))
+                                             WHERE cu.profissional_id = m.profissional_id AND cu.usuario_id IS NOT NULL),
+                                           (SELECT MAX(up.usuario_id) FROM usuario_profissional up
+                                             WHERE up.profissional_id = m.profissional_id AND up.vigencia_fim IS NULL
+                                               AND up.excluido_em IS NULL))
    WHERE m.comissao_hospitalar_id IN (${marcas(k)}) AND m.excluido_em IS NULL
      AND m.vigencia_inicio <= CURRENT_DATE AND (m.vigencia_fim IS NULL OR m.vigencia_fim >= CURRENT_DATE)
    ORDER BY m.comissao_hospitalar_id, FIELD(m.papel, 'presidente', 'vice_presidente', 'secretario', 'membro_executor',
@@ -342,7 +346,7 @@ export class LeiturasGestaoComplementoQ2 {
         const lista = membros.get(k) ?? [];
         lista.push({
           nome: texto(m['nome']),
-          funcao: texto(m['papel']).replace(/_/g, ' '),
+          funcao: texto(m['funcao']),
           login: textoN(m['login'])?.toUpperCase() ?? null,
         });
         membros.set(k, lista);
