@@ -501,7 +501,7 @@ describe('prontuário de uso diário (M23)', () => {
     ).toBe(403);
     const ok = await post(medico, `/api/pep/supervisao/${c.id}/coassinar`, { decisao: 'coassinado' });
     expect(ok.statusCode).toBe(200);
-    // A coassinatura é gravada no próprio registro clínico, sem restrição herdada do sistema antigo (L96).
+    // A coassinatura é gravada no próprio registro clínico, sem restrição herdada do modelo base (L96).
     expect(ok.json()).toEqual({ ok: true });
     expect(trilha.eventos.some((e) => e.evento === 'pep.evolucao.coassinada')).toBe(true);
     expect(
