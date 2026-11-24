@@ -3141,6 +3141,7 @@ opcao_menu	2171	suprimentos.utilitariosItensAcerto.acessar
 opcao_menu	2174	suprimentos.utilitariosItensAcertoPrecos.acessar
 opcao_menu	2175	suprimentos.utilitariosItensAcertoPrecos.gravarNoFaturamento
 opcao_menu	2176	suprimentos.utilitariosItensAcertoPrecos.buscarNoFaturamento
+opcao_menu	2177	suprimentos.recalculo.executar
 opcao_menu	2177	suprimentos.recalculo.ler
 opcao_menu	2177	suprimentos.utilitariosItensAcerto.gerarSaldoDeItens
 opcao_menu	2178	suprimentos.lote.corrigir
