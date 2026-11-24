@@ -150,7 +150,10 @@ const observacao = ref('');
 const grupoLegal = ref('');
 const gruposLegais = computed(() => [
   { valor: '', rotulo: t('agenda.espera.prioridadeLegalAuto') },
-  ...(opcoes.data.value?.gruposPrioridadeLegal ?? []).map((g) => ({ valor: String(g.codigo), rotulo: g.nome })),
+  ...(opcoes.data.value?.gruposPrioridadeLegal ?? []).map((g) => ({
+    valor: String(g.codigo),
+    rotulo: g.nome,
+  })),
 ]);
 const prioridadeEscolhida = () => (grupoLegal.value ? { prioridadeLegal: Number(grupoLegal.value) } : {});
 const chave = ref(novaChave('marcar'));

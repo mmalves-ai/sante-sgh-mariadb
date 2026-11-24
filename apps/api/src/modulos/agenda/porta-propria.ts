@@ -223,7 +223,8 @@ const SELECT_MARCACAO = `SELECT m.id, m.paciente_id, m.retorno, m.encaixe, m.mar
   m.remarcada_marcacao_horario_id, m.horario_agenda_id, h.agenda_servico_id, h.data_referencia, h.inicio_em,
   a.nome AS nome_agenda, s.significado, c.codigo AS canal, fp.codigo AS convenio, fp.nome AS nome_convenio,
   COALESCE(pf.nome, pc.nome) AS paciente, p.numero_prontuario, p.pessoa_fisica_id, pc.telefone AS pc_telefone,
-  pc.celular AS pc_celular, u.login AS marcado_por, gpl.descricao AS prioridade_legal
+  pc.celular AS pc_celular, u.login AS marcado_por, gpl.descricao AS prioridade_legal,
+  gpl.peso AS prioridade_legal_peso
 FROM marcacao_horario m
 JOIN horario_agenda h ON h.id = m.horario_agenda_id
 JOIN agenda_servico a ON a.id = h.agenda_servico_id
@@ -706,6 +707,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       marcadaEm: marcada,
       marcadaPor: txt(x['marcado_por']),
       prioridadeLegal: txt(x['prioridade_legal']),
+      pesoPrioridadeLegal: numOuNull(x['prioridade_legal_peso']),
     };
   }
 

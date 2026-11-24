@@ -139,6 +139,8 @@ export interface Marcacao {
   readonly marcadaPor: string | null;
   /** 02-AGE 49: grupo de prioridade legal gravado na marcação (descrição); null sem prioridade. */
   readonly prioridadeLegal?: string | null;
+  /** Peso do grupo de prioridade legal (menor chama antes): a ordem dos encaixes no painel. */
+  readonly pesoPrioridadeLegal?: number | null;
 }
 
 /** O que a marcação tem além da grade (canal, encaixe, remarcação). */

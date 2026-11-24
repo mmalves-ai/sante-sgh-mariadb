@@ -42,6 +42,7 @@ import {
   NOME_DO_DIA,
   nomeMascarado,
   ocupacao,
+  ordenarPainelComEncaixes,
   partesDoNome,
   planejarGrade,
   recortarJanela,
@@ -728,6 +729,10 @@ export class ServicoAgenda {
       const ids = await this.agendasDoEscopo(c);
       if (ids) lista = lista.filter((m) => m.agenda !== null && ids.has(m.agenda));
     }
+    // 02-AGE 49: no mesmo horário, os encaixes na ordem da prioridade legal (regra do domínio).
+    lista = ordenarPainelComEncaixes(
+      lista.map((m) => ({ ...m, pesoPrioridade: m.pesoPrioridadeLegal ?? null })),
+    );
     const ext = await this.porta.complementos(
       c,
       lista.map((m) => m.id),

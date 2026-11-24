@@ -96,6 +96,7 @@ export interface MarcacaoVista {
   readonly temSenha: boolean;
   /** 02-AGE 49: grupo de prioridade legal da marcação. */
   readonly prioridadeLegal?: string | null;
+  readonly pesoPrioridadeLegal?: number | null;
 }
 
 export interface VagaVista {
@@ -161,6 +162,7 @@ export const marcacaoVista = (m: Marcacao): MarcacaoVista => ({
   canal: m.canal,
   dataMarcacao: m.marcadaEm,
   prioridadeLegal: m.prioridadeLegal ?? null,
+  pesoPrioridadeLegal: m.pesoPrioridadeLegal ?? null,
   usuario: m.marcadaPor,
   temSenha: m.situacao === 'chegou' || m.situacao === 'em_atendimento',
 });
