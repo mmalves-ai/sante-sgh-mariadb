@@ -27,6 +27,23 @@ export function lerReferenciaCofre(
   return m ? { hospital: m[1]!, provedor: m[2]!, tipo: m[3] as TipoSegredo } : null;
 }
 
+/**
+ * `cofre:conector/<cliente>/firebird-senha` (obra carga-painel, ADR 0010): a senha do usuário de leitura do servidor
+ * Firebird do hospital, uma por cliente da plataforma (o código do cliente segue `esquemaCodigoCliente`).
+ */
+const REF_CONECTOR = /^cofre:conector\/([a-z][a-z0-9_]{1,39})\/(firebird-senha)$/;
+
+export function referenciaCofreConector(cliente: string): string {
+  const r = `cofre:conector/${cliente}/firebird-senha`;
+  if (!REF_CONECTOR.test(r)) throw new Error('Código de cliente inválido para o cofre.');
+  return r;
+}
+
+export function lerReferenciaCofreConector(r: string): { cliente: string; tipo: 'firebird-senha' } | null {
+  const m = REF_CONECTOR.exec(r);
+  return m ? { cliente: m[1]!, tipo: 'firebird-senha' } : null;
+}
+
 /** O que a tela de provedores mostra do segredo. */
 export const situacaoSegredo = (existeNoCofre: boolean): 'definido' | 'nao-definido' =>
   existeNoCofre ? 'definido' : 'nao-definido';
