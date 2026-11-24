@@ -14,3 +14,7 @@ export * from './registros-internacao.js';
 export * from './gas-cobranca.js';
 // F78.04-1 (04-INT linhas 74, 75 e 78): formulários de declaração de óbito, auditoria do isolamento e regulação.
 export * from './controles-assistenciais.js';
+// F78.04-2 (04-INT linhas 79 e 80): leitos do sistema público (habilitação, programa, capacidade e teto de diárias
+// especiais) e comunicação da internação e da alta à operadora.
+export * from './leitos-sus.js';
+export * from './comunicacao-operadora.js';
