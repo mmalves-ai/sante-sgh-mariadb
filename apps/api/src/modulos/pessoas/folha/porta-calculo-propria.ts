@@ -6,11 +6,12 @@
 // Gravam (gravação direta pelo executor, com a trilha na mesma transação): a vigência do salário (historico_salarial),
 // os parâmetros da folha por vigência (parametro_folha) e o fechamento do período e a reabertura
 // (fechamento_periodo_folha).
-// O processamento da folha (processamento_folha e processamento_folha_linha) tem tabela, mas o DDL aplicado não cabe no
-// contrato: falta a situação `substituida`, `fora_da_folha` é booleano e o contrato conta vínculos, a tabela legal e os
-// parâmetros usados são a data da vigência e não JSON, e a linha não tem a unidade nem a memória do cálculo. Até a
-// correção pedida em docs/obra/fatias/f24/saida/03-pessoas.json, as leituras do processamento e as gravações que
-// dependem dele (férias, rescisão, obrigações) recusam com `modelo-pendente`, nunca vazio nem gravação pela metade.
+// O processamento da folha, a rescisão (com o desligamento), as férias e os parâmetros das obrigações são lidos por
+// LeiturasCalculoFolhaPropria (folha-porta-propria-calculo.ts) e gravados por gravadorFolhaExecutor
+// (folha-executor-proprio.ts), na mesma transação do gravador. Ainda recusam com `modelo-pendente` (nunca vazio nem
+// gravação pela metade): a inclusão das férias e a troca para `calculada` (o recibo ligado ao processamento), as
+// obrigações geradas (o arquivo cifrado pela porta de armazenamento e as situações entregue e substituída) e os
+// catálogos oficiais das obrigações.
 // Melhoria: o tipo do vínculo sai da categoria do trabalhador (901 estagiário, 902 residente) e do regime, pela regra pura
 // `tipoVinculoDaFolha`; categoria fora da folha de empregados não entra (antes, todo vínculo saía como CLT).
 // Melhoria: o FGTS depositado só é somado das folhas de competência fechada quando todo mês do contrato tem folha; se
@@ -53,6 +54,8 @@ import {
   type PortaCalculoFolha,
 } from './porta-calculo.js';
 import { TETO_FECHAMENTOS_FOLHA } from './apoio-folha.js';
+import { gravadorFolhaExecutor, TABELAS_FOLHA_EXECUTOR } from './folha-executor-proprio.js';
+import { LeiturasCalculoFolhaPropria } from './folha-porta-propria-calculo.js';
 import {
   competenciasDescobertas,
   type DependentesDoVinculo,
@@ -258,8 +261,10 @@ function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPr
     if (empresa !== est)
       throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
   };
-  const sem = (operacao: string, falta: string) => () => Promise.reject(erroModeloPendente(operacao, falta));
   return {
+    // O processamento, a rescisão, as férias e as obrigações (folha-executor-proprio.ts; o que ainda não tem modelo
+    // recusa lá dentro com `modelo-pendente`, sem gravar nada).
+    ...gravadorFolhaExecutor(tx, est),
     salarios: (vinculos) => lerSalarios(tx, est, vinculos),
     async incluirSalario(x) {
       const [v] = await tx.consultarParaAtualizar(
@@ -311,18 +316,6 @@ function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPr
         dados: JSON.stringify(dados),
       });
     },
-    emVigorComTrava: sem('Calcular a folha', FALTA.processo),
-    incluirProcesso: sem('Gravar o processamento da folha', FALTA.processo),
-    incluirLinhas: sem('Gravar as linhas do processamento', FALTA.processo),
-    situacaoProcesso: sem('Trocar a situação do processamento', FALTA.processo),
-    processo: sem('Ler o processamento da folha', FALTA.processo),
-    resumoVinculos: sem('Ler o resumo por vínculo do processamento', FALTA.processo),
-    feriasDoVinculoComTrava: sem('Ler as férias do vínculo', FALTA.ferias),
-    incluirFerias: sem('Gravar as férias', FALTA.ferias),
-    situacaoFerias: sem('Trocar a situação das férias', FALTA.ferias),
-    rescisoesDoVinculoComTrava: sem('Ler as rescisões do vínculo', FALTA.rescisao),
-    incluirRescisao: sem('Gravar a rescisão', FALTA.rescisao),
-    situacaoRescisao: sem('Trocar a situação da rescisão', FALTA.rescisao),
     async fechamentoEmVigorComTrava(empresa, apuracao, periodo) {
       daSessao(empresa);
       const rs = await tx.consultarParaAtualizar(
@@ -335,7 +328,6 @@ function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPr
         proximoNumero: rs.reduce((m, r) => Math.max(m, n(r['numero'])), 0) + 1,
       };
     },
-    processosCalculadosComTrava: sem('Ler os processamentos calculados do período', FALTA.processo),
     async incluirFechamento(x) {
       daSessao(x.empresa);
       const usuario = await exigirUsuario(tx, x.por);
@@ -376,13 +368,6 @@ function gravadorCalculo(tx: TxOperacao, est: number, porta: PortaCalculoFolhaPr
         motivo_reabertura: x.motivo,
       });
     },
-    incluirParametrosObrigacoes: sem('Gravar os parâmetros das obrigações', FALTA.obrigacoes),
-    obrigacoesEmVigorComTrava: sem('Ler as obrigações em vigor', FALTA.obrigacoes),
-    obrigacaoComTrava: sem('Ler a obrigação', FALTA.obrigacoes),
-    incluirObrigacao: sem('Gravar a obrigação', FALTA.obrigacoes),
-    substituirObrigacao: sem('Substituir a obrigação', FALTA.obrigacoes),
-    registrarEntregaObrigacao: sem('Registrar a entrega da obrigação', FALTA.obrigacoes),
-    cancelarObrigacao: sem('Cancelar a obrigação', FALTA.obrigacoes),
   };
 }
 
@@ -449,7 +434,14 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
 
   private executor: ReturnType<NucleoCalculoFolha['criarExecutor']> | null = null;
 
-  constructor(private readonly nucleo: NucleoCalculoFolha) {}
+  constructor(private readonly nucleo: NucleoCalculoFolha) {
+    this.leituras = new LeiturasCalculoFolhaPropria(nucleo);
+  }
+
+  /** O gravador do cálculo sobre a transação de outra operação (efeitos do autoatendimento: as férias aprovadas). */
+  gravadorNaTransacao(tx: TxOperacao, est: number): GravadorCalculoFolha {
+    return gravadorCalculo(tx, est, this);
+  }
 
   private ler<T>(c: ContextoCalculoFolha, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
@@ -478,7 +470,7 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
     this.executor ??= this.nucleo.criarExecutor();
     return gravacaoDireta(this.executor, contextoDe(c), {
       nome: 'pessoas.calculo_folha.gravar',
-      tabelas: TABELAS_CALCULO_FOLHA,
+      tabelas: [...TABELAS_CALCULO_FOLHA, ...TABELAS_FOLHA_EXECUTOR],
       trilha,
       gravador: (tx, est) => gravadorCalculo(tx, est, this),
       fn,
@@ -740,21 +732,52 @@ export class PortaCalculoFolhaPropria implements PortaCalculoFolha {
     );
   }
 
+  // ── Leituras do processamento, das férias, das rescisões e dos parâmetros (folha-porta-propria-calculo.ts) ─────
+
+  private readonly leituras: LeiturasCalculoFolhaPropria;
+
+  processos(c: ContextoCalculoFolha, f: Parameters<PortaCalculoFolha['processos']>[1]) {
+    return this.leituras.processos(c, f);
+  }
+  processo(c: ContextoCalculoFolha, id: number) {
+    return this.leituras.processo(c, id);
+  }
+  resumoVinculos(c: ContextoCalculoFolha, processo: number) {
+    return this.leituras.resumoVinculos(c, processo);
+  }
+  linhasDoVinculo(...a: Parameters<PortaCalculoFolha['linhasDoVinculo']>) {
+    return this.leituras.linhasDoVinculo(...a);
+  }
+  processosDoVinculo(...a: Parameters<PortaCalculoFolha['processosDoVinculo']>) {
+    return this.leituras.processosDoVinculo(...a);
+  }
+  historico(...a: Parameters<PortaCalculoFolha['historico']>) {
+    return this.leituras.historico(...a);
+  }
+  ferias(...a: Parameters<PortaCalculoFolha['ferias']>) {
+    return this.leituras.ferias(...a);
+  }
+  feriasPorId(c: ContextoCalculoFolha, id: number) {
+    return this.leituras.feriasPorId(c, id);
+  }
+  feriasNaCompetencia(c: ContextoCalculoFolha, inicio: string, fim: string) {
+    return this.leituras.feriasNaCompetencia(c, inicio, fim);
+  }
+  rescisoes(...a: Parameters<PortaCalculoFolha['rescisoes']>) {
+    return this.leituras.rescisoes(...a);
+  }
+  rescisaoPorId(c: ContextoCalculoFolha, id: number) {
+    return this.leituras.rescisaoPorId(c, id);
+  }
+  itensRubricaDoProcesso(c: ContextoCalculoFolha, processo: number) {
+    return this.leituras.itensRubricaDoProcesso(c, processo);
+  }
+  parametrosObrigacoes(...a: Parameters<PortaCalculoFolha['parametrosObrigacoes']>) {
+    return this.leituras.parametrosObrigacoes(...a);
+  }
+
   // ── Leituras que aguardam o modelo (recusa explícita, nunca lista vazia) ────────────────────────────────────
 
-  processos = pendente('Listar os processamentos da folha', FALTA.processo);
-  processo = pendente('Ler o processamento da folha', FALTA.processo);
-  resumoVinculos = pendente('Ler o resumo por vínculo do processamento', FALTA.processo);
-  linhasDoVinculo = pendente('Ler as linhas do cálculo do vínculo', FALTA.processo);
-  processosDoVinculo = pendente('Listar os processamentos que pagaram o vínculo', FALTA.processo);
-  historico = pendente('Ler o histórico das folhas do vínculo', FALTA.processo);
-  ferias = pendente('Listar as férias', FALTA.ferias);
-  feriasPorId = pendente('Ler as férias', FALTA.ferias);
-  feriasNaCompetencia = pendente('Ler as férias com recibo na competência', FALTA.feriasCompetencia);
-  rescisoes = pendente('Listar as rescisões', FALTA.rescisao);
-  rescisaoPorId = pendente('Ler a rescisão', FALTA.rescisao);
-  itensRubricaDoProcesso = pendente('Ler os itens por rubrica do processamento', FALTA.processo);
-  parametrosObrigacoes = pendente('Ler os parâmetros das obrigações', FALTA.obrigacoes);
   obrigacoes = pendente('Listar as obrigações geradas', FALTA.obrigacoes);
   obrigacao = pendente('Ler a obrigação gerada', FALTA.obrigacoes);
   conteudoObrigacao = pendente('Baixar o arquivo da obrigação', FALTA.obrigacoes);

@@ -1,6 +1,7 @@
 // Integração da porta própria do cálculo da folha contra o MariaDB real (cliente de teste do lote, SGH_CLIENTE_TESTE):
 // a vigência do salário com o adicional conferido contra o risco da função, os parâmetros da folha por vigência e o
-// fechamento do período com a reabertura; o processamento segue recusando com `modelo-pendente`, sem gravar nada.
+// fechamento do período com a reabertura; o processamento é lido e travado pela leitura própria (lista vazia no período
+// sintético), e o que ainda não tem modelo (inclusão das férias, obrigações geradas) recusa com `modelo-pendente`.
 // Massa sintética da avaliação (massa.spec-util), apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import type { ParametrosFolha } from '@sgh/contratos';
 import { ErroOperacao } from '@sgh/nucleo';
@@ -211,13 +212,18 @@ describe.skipIf(SEM_BANCO_O3)(
       ).toBe('desatualizado');
     });
 
-    it('processamento: recusa com modelo-pendente dentro da gravação e nas leituras (nada gravado)', async () => {
+    it('processamento: leitura e trava próprias; férias e obrigações ainda recusam com modelo-pendente', async () => {
+      const v = await porta.gravarSgh(c(), trilha('parametro_folha')(null), (g) =>
+        g.emVigorComTrava(m.est, '2099-05'),
+      );
+      expect(v).toEqual({ vigente: null, proximoNumero: 1 });
+      expect(await porta.processos(c(), { competencia: '2099-05' })).toEqual([]);
       expect(
         await codigo(
-          porta.gravarSgh(c(), trilha('parametro_folha')(null), (g) => g.emVigorComTrava(m.est, '2099-05')),
+          porta.gravarSgh(c(), trilha('parametro_folha')(null), (g) => g.incluirFerias({} as never)),
         ),
       ).toBe('modelo-pendente');
-      expect(await codigo(porta.processos())).toBe('modelo-pendente');
+      expect(await codigo(porta.obrigacoes())).toBe('modelo-pendente');
     });
   },
 );

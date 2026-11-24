@@ -415,8 +415,9 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
     expect(await porta.dadosProfissional(c, mm.profissional)).toMatchObject({ versao: 'v1' });
   });
 
-  it('os recursos ainda sem modelo respondem 501 (nada lido nem gravado)', async () => {
-    await expect(porta.consentimentos()).rejects.toMatchObject({ status: 501 });
-    await expect(porta.procedimentosDaEspecialidade()).rejects.toMatchObject({ status: 501 });
+  it('consentimentos e procedimentos da especialidade ligados ao complemento próprio (nada para quem não existe)', async () => {
+    const c = contextoPorta(m!);
+    expect(await porta.consentimentos(c, 0)).toEqual([]);
+    expect(await porta.procedimentosDaEspecialidade(c, 0, 1, 10)).toMatchObject({ itens: [], total: 0 });
   });
 });

@@ -32,7 +32,14 @@ import {
 } from '@sgh/contratos';
 import { ErroOperacao, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
-import { lerFerias, lerFeriasPorId, lerRescisaoPorId, lerRescisoes } from './folha-porta-propria-calculo.js';
+import {
+  exigirFeriasAlteravel,
+  exigirRescisaoAlteravel,
+  lerFerias,
+  lerFeriasPorId,
+  lerRescisaoPorId,
+  lerRescisoes,
+} from './folha-porta-propria-calculo.js';
 import type { GravadorCalculoFolha } from './porta-calculo.js';
 import type { LinhaCalculoDoVinculo, ProcessoDaFolha, ResumoVinculoDoProcesso } from './tipos-folha.js';
 
@@ -234,7 +241,9 @@ export function resumirLinhas(linhas: readonly LinhaCalculoDoVinculo[]): ResumoV
 /** O leitor da transação que trava o que lê (SELECT ... FOR UPDATE): as releituras do gravador usam as mesmas funções
  * da leitura (folha-porta-propria-calculo.ts), com o mesmo filtro (rescisão migrada, sem modalidade ou em simulação
  * fica de fora) e a mesma tradução de situação (conferida, paga e homologada = calculada; aprovada = programada). Assim
- * o carimbo da releitura bate com o da montagem do serviço. */
+ * o carimbo da releitura bate com o da montagem do serviço. Como a tradução esconde a situação real, a troca de situação
+ * passa também pelas guardas exigirRescisaoAlteravel e exigirFeriasAlteravel, que leem a situação do banco com a trava
+ * (rescisão paga ou homologada e férias em gozo ou gozadas recusam com 409). */
 function leitorComTrava(tx: TxOperacao): Pick<Leitor, 'consultar' | 'uma'> {
   return {
     consultar: ((sql: string, p?: readonly unknown[]) =>
@@ -558,6 +567,8 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
       // A situação relida pela tradução da leitura: `de: calculada` vale para a conferida, a paga e a homologada.
       const r = await lerRescisaoPorId(trava, est, x.id);
       if (!r || r.situacao !== x.de || r.versao !== x.versao) throw desatualizado();
+      // Rescisão paga ou homologada não se cancela nem se substitui (a leitura a mostra como calculada).
+      await exigirRescisaoAlteravel(trava, est, x.id);
       await exigirUsuario(tx, x.por);
       await tx.alterar('rescisao', x.id, x.versao, { situacao: x.para, motivo_situacao: x.motivo });
     },
@@ -571,6 +582,8 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
         throw erroModeloPendente('Marcar as férias como calculadas', FALTA.ferias);
       const f = await lerFeriasPorId(trava, est, x.id);
       if (!f || f.situacao !== x.de || f.versao !== x.versao) throw desatualizado();
+      // Férias em gozo ou gozadas não se cancelam (o throw desfaz a transação inteira).
+      await exigirFeriasAlteravel(trava, est, x.id);
       await exigirUsuario(tx, x.por);
       await tx.alterar('programacao_ferias', x.id, x.versao, {
         situacao: FERIAS_NO_BANCO[x.para],

@@ -4,7 +4,8 @@
 // (pelo @sgh/nucleo) quando o núcleo existe; a de memória só em dev/ci com as fontes sintéticas; fora disso,
 // indisponível (503, falha fechada).
 // A cifra do CPF vem da chave do ambiente (PESSOAS_CHAVE_CPF ou a chave mestra); em dev/ci sem chave, uma chave
-// aleatória do processo. Sem chave fora de dev/ci, as portas que gravam ou leem CPF ficam indisponíveis.
+// aleatória do processo. Sem chave fora de dev/ci, as portas próprias sobem e o que lê ou grava o CPF recusa com 503
+// `chave-cpf-ausente`, dizendo o que falta (chave-cpf-ausente.ts); o que não toca o CPF segue funcionando.
 // A liberação e os parâmetros vêm da FONTE_CONFIGURACAO do módulo de configuração (global); na memória sem ele, a
 // fonte sintética local. Os PDFs (holerite, espelho do ponto, ASO, F6) saem pelo conversor HTML → PDF/A do documento.
 // Melhoria: as opções de teste são tipadas (OpcoesModuloPessoas), e a conferência dos specs prova que chegaram.
@@ -30,6 +31,7 @@ import {
   PORTA_AUTOATENDIMENTO,
   type PortaAutoatendimento,
 } from './autoatendimento/porta-autoatendimento.js';
+import { efeitosAutoatendimentoProprios, fonteCalculoDe } from './autoatendimento/efeitos-proprios.js';
 import { PortaAutoatendimentoMemoria } from './autoatendimento/porta-autoatendimento-memoria.js';
 import { PortaAutoatendimentoPropria } from './autoatendimento/porta-propria.js';
 import {
@@ -48,7 +50,8 @@ import { CargosController } from './cargos/cargos.controller.js';
 import { PORTA_CARGOS, type PortaCargos, portaCargosIndisponivel } from './cargos/porta-cargos.js';
 import { PortaCargosMemoria } from './cargos/porta-cargos-memoria.js';
 import { PortaCargosPropria } from './cargos/porta-propria.js';
-import { CifraCpf, chaveCpfDoAmbiente } from './cifra-cpf.js';
+import { cifraDasPortas, diagnosticoChaveCpf } from './chave-cpf-ausente.js';
+import { CifraCpf } from './cifra-cpf.js';
 import { EscalaController } from './escala/escala.controller.js';
 import { PlantaoController } from './escala/plantao.controller.js';
 import { METODOS_PORTA_ESCALA, PORTA_ESCALA, type PortaEscala } from './escala/porta-escala.js';
@@ -149,13 +152,13 @@ export function portasDePessoas(
 ) {
   const n = ctx.nucleo;
   const memoria = !n && fontesSinteticas(ctx.env);
-  // Fora de dev/ci sem chave do CPF, nada que leia ou grave o CPF sobe (falha fechada).
-  const nc = n && cifra ? n : null;
+  // Sem chave do CPF, as portas próprias sobem com a cifra que recusa (503 chave-cpf-ausente, com o que falta).
+  const cifraPortas = n ? cifraDasPortas(cifra, ctx.env) : null;
 
   const pessoas: PortaPessoas =
     o.pessoas ??
-    (nc && cifra
-      ? new PortaPessoasPropria(nc, cifra)
+    (n && cifraPortas
+      ? new PortaPessoasPropria(n, cifraPortas)
       : memoria
         ? new PortaPessoasMemoria()
         : portaPessoasIndisponivel());
@@ -176,8 +179,8 @@ export function portasDePessoas(
         : portaIndisponivel<PortaRealizado>(METODOS_PORTA_REALIZADO));
   const ponto: PortaPonto =
     o.ponto ??
-    (nc && cifra
-      ? new PortaPontoPropria(nc, cifra)
+    (n && cifraPortas
+      ? new PortaPontoPropria(n, cifraPortas)
       : memoria
         ? new PortaPontoMemoria(pessoasMem)
         : portaPontoIndisponivel());
@@ -216,8 +219,8 @@ export function portasDePessoas(
     (n ? new PortaRubricasPropria(n) : memoria ? new PortaRubricasMemoria() : portaRubricasIndisponivel());
   const folha: PortaFolha =
     o.folha ??
-    (nc && cifra
-      ? new PortaFolhaPropria(nc, cifra)
+    (n && cifraPortas
+      ? new PortaFolhaPropria(n, cifraPortas)
       : memoria
         ? new PortaFolhaMemoria(pessoas)
         : portaFolhaIndisponivel());
@@ -238,7 +241,13 @@ export function portasDePessoas(
   const autoatendimento: PortaAutoatendimento =
     o.autoatendimento ??
     (n
-      ? new PortaAutoatendimentoPropria(n)
+      ? new PortaAutoatendimentoPropria(
+          n,
+          // Os efeitos da aprovação (ajuste do ponto, correção do cadastro, férias) gravam pelas portas próprias.
+          pessoas instanceof PortaPessoasPropria && ponto instanceof PortaPontoPropria
+            ? efeitosAutoatendimentoProprios({ pessoas, ponto, calculo: fonteCalculoDe(calculoFolha) })
+            : null,
+        )
       : memoria &&
           ponto instanceof PortaPontoMemoria &&
           calculoFolha instanceof PortaCalculoFolhaMemoria &&
@@ -276,7 +285,7 @@ export function portasDePessoas(
 export class ModuloPessoas {}
 
 export function moduloPessoas(ctx: ContextoModulo, o: OpcoesModuloPessoas = {}): DynamicModule {
-  const chave = chaveCpfDoAmbiente(ctx.env) ?? (fontesSinteticas(ctx.env) ? randomBytes(32) : null);
+  const chave = diagnosticoChaveCpf(ctx.env).chave ?? (fontesSinteticas(ctx.env) ? randomBytes(32) : null);
   const cifra = o.cifraCpf !== undefined ? o.cifraCpf : chave ? new CifraCpf(chave) : null;
   const p = portasDePessoas(ctx, o, cifra);
   const configuracao =

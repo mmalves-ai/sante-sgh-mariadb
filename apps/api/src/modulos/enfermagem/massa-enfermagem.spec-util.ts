@@ -376,6 +376,13 @@ export async function limparMassa(nucleo: NucleoProprio, m: MassaEnfermagem | nu
       `DELETE x FROM avaliacao_resultado_enfermagem x JOIN diagnostico_enfermagem_paciente d ON d.id = x.diagnostico_enfermagem_paciente_id WHERE d.${emEst}`,
       ests,
     );
+    // Os cuidados prescritos pela SAE (atividade, checagem e estorno) antes das intervenções do plano.
+    for (const t of [
+      'estorno_checagem_cuidado_enfermagem',
+      'checagem_cuidado_enfermagem',
+      'atividade_cuidado_enfermagem',
+    ])
+      await e.executar(`DELETE FROM ${t} WHERE ${emEst}`, ests);
     await e.executar(
       `DELETE x FROM plano_intervencao_enfermagem x JOIN diagnostico_enfermagem_paciente d ON d.id = x.diagnostico_enfermagem_paciente_id WHERE d.${emEst}`,
       ests,

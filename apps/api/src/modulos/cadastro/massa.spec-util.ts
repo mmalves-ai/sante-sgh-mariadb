@@ -413,6 +413,11 @@ export async function limparMassa(nucleo: NucleoProprio, m: Massa | null): Promi
           : `DELETE FROM ${t} WHERE atendimento_id IN (${atend})`,
         ests,
       );
+    // As etapas do PA (gravadas ao abrir, chamar, atender e encerrar um PA no banco próprio) antes do atendimento.
+    await e.executar(
+      'DELETE e FROM atendimento_etapa_pa e JOIN atendimento a ON a.id = e.atendimento_id WHERE a.estabelecimento_id IN (?, ?)',
+      ests,
+    );
     await e.executar('DELETE FROM atendimento WHERE estabelecimento_id IN (?, ?)', ests);
     const pessoas = `SELECT pf.id FROM pessoa_fisica pf WHERE pf.nome LIKE '%${MARCA}%' AND NOT EXISTS (SELECT 1 FROM profissional pr WHERE pr.pessoa_fisica_id = pf.id)`;
     const pacientes = `SELECT p.id FROM paciente p WHERE p.pessoa_fisica_id IN (${pessoas})`;

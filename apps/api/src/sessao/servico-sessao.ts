@@ -1551,7 +1551,8 @@ export class ServicoSessao {
       },
       'redefinicao',
     );
-    let trocaObrigatoria = false;
+    // A redefinição grava troca_obrigatoria (porta-senha); sem gancho de identidade, vale o que foi gravado.
+    let trocaObrigatoria = idUsuario !== null;
     if (this.identidade && idUsuario !== null) {
       trocaObrigatoria = await this.identidade.regravar(
         {

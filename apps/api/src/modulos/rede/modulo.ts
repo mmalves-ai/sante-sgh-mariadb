@@ -41,7 +41,7 @@ export async function portasDaRede(
     const mpi = new PortaRedePropria(ctx.nucleo, cliente, ctx.configuracao.rede);
     // Falha na leitura dos estabelecimentos não derruba a partida: a porta relê na primeira chamada.
     await mpi.carregar().catch(() => undefined);
-    return { mpi, servicos: new PortaServicosRedePropria() };
+    return { mpi, servicos: new PortaServicosRedePropria(ctx.nucleo, cliente) };
   }
   if (!ctx.nucleo && fontesSinteticas(ctx.env)) {
     return {

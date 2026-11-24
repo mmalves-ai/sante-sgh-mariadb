@@ -49,8 +49,8 @@ import { planoDeUnificacao, tabelasDaUnificacao } from '@sgh/dominio-cadastro';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPorta, GravacaoFeita, PortaCadastro } from './porta.js';
+import { CadastroProprioConsentimento } from './porta-propria-consentimento.js';
 import type {
-  ConsentimentoPaciente,
   ContextoGravacao,
   CriterioBuscaDireta,
   DadosProfissional,
@@ -60,7 +60,6 @@ import type {
   IdsEncontrados,
   LiberacaoOperacao,
   LoginCandidato,
-  OpcaoDominio,
   OpcoesEdicaoProfissional,
   PacienteFicha,
   ParCandidato,
@@ -342,6 +341,8 @@ const esquemaDecisaoOutraPessoa = z
 export class PortaCadastroPropria implements PortaCadastro {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
+  /** Consentimentos (LGPD) e procedimentos da especialidade (porta-propria-consentimento.ts). */
+  private readonly complemento: CadastroProprioConsentimento;
 
   constructor(
     private readonly nucleo: NucleoCadastro,
@@ -349,6 +350,7 @@ export class PortaCadastroPropria implements PortaCadastro {
     executor?: Executor,
   ) {
     this.executor = executor ?? nucleo.criarExecutor();
+    this.complemento = new CadastroProprioConsentimento(nucleo, cliente, this.executor);
   }
 
   // ---- apoio ----
@@ -782,23 +784,27 @@ export class PortaCadastroPropria implements PortaCadastro {
     return { a: Number(r.resultado.a), b: Number(r.resultado.b) };
   }
 
-  // ---- consentimentos (pendente: termo, base legal e numeração no modelo de LGPD) ----
+  // ---- consentimentos (LGPD: termo, base legal e numeração; porta-propria-consentimento.ts) ----
 
-  opcoesConsentimento(): Promise<{
-    situacoes: OpcaoDominio[];
-    signatarios: OpcaoDominio[];
-    revogacoes: OpcaoDominio[];
-  }> {
-    return pendente('Consentimentos do paciente');
+  opcoesConsentimento() {
+    return this.complemento.opcoesConsentimento();
   }
-  consentimentos(): Promise<ConsentimentoPaciente[]> {
-    return pendente('Consentimentos do paciente');
+  consentimentos(c: ContextoPorta, id: number) {
+    return this.complemento.consentimentos(c, id);
   }
-  registrarConsentimento(): Promise<number> {
-    return pendente('Registro de consentimento');
+  registrarConsentimento(
+    c: ContextoPorta,
+    r: Parameters<PortaCadastro['registrarConsentimento']>[1],
+    trilha: RegistroTrilhaTela,
+  ) {
+    return this.complemento.registrarConsentimento(c, r, trilha);
   }
-  revogarConsentimento(): Promise<void> {
-    return pendente('Revogação de consentimento');
+  revogarConsentimento(
+    c: ContextoPorta,
+    r: Parameters<PortaCadastro['revogarConsentimento']>[1],
+    trilha: RegistroTrilhaTela,
+  ) {
+    return this.complemento.revogarConsentimento(c, r, trilha);
   }
 
   // ---- profissionais (dado da rede inteira) ----
@@ -1213,11 +1219,8 @@ export class PortaCadastroPropria implements PortaCadastro {
     });
   }
 
-  procedimentosDaEspecialidade(): Promise<{
-    itens: { procedimento: number; descricao: string | null }[];
-    total: number;
-  }> {
-    return pendente('Procedimentos da especialidade');
+  procedimentosDaEspecialidade(c: ContextoPorta, especialidade: number, pagina: number, porPagina: number) {
+    return this.complemento.procedimentosDaEspecialidade(c, especialidade, pagina, porPagina);
   }
 }
 
