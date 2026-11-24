@@ -18,3 +18,5 @@ export * from './srpa/index.js';
 // M46 (etapa 2): checklist de cirurgia segura, trava da incisão, rastreio no bloco e código do painel para familiares.
 export * from './checklist/index.js';
 export * from './rastreio/index.js';
+// F3.4 (04-CC linha 91): texto padrão da descrição cirúrgica por procedimento e cirurgião.
+export * from './texto-padrao.js';

@@ -10,3 +10,5 @@ export * from './portaria/index.js';
 export * from './digitalizacao/index.js';
 export * from './documentos-internacao.js';
 export * from './registros-internacao.js';
+// F3.4 (04-INT linha 82): gases medicinais por tempo de uso (uso por paciente e regra de cobrança).
+export * from './gas-cobranca.js';
