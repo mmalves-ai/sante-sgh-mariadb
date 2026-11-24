@@ -6,7 +6,7 @@
 //     (sugeridos pelo papel), vigência e as pendências (menor sem representante, comprovante ausente).
 // A validação aparece na hora (antes de gravar); o servidor confere tudo de novo pela regra do domínio.
 import { tipoDoProblema } from '@sgh/contratos';
-import { SanteAlerta, SanteBotao } from '@sgh/ui';
+import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -362,14 +362,12 @@ async function confirmarEncerramento(): Promise<void> {
         </li>
       </ul>
       <form v-if="podeEditar" class="barra" data-testid="form-endereco" @submit.prevent="incluirEndereco">
-        <label
-          >{{ t('tipo') }}
-          <select v-model.number="end.tipo" data-testid="endereco-tipo">
-            <option v-for="o in tipos.data.value?.endereco ?? []" :key="o.id" :value="o.id">
-              {{ o.descricao }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="end.tipo"
+          :rotulo="t('tipo')"
+          :opcoes="(tipos.data.value?.endereco ?? []).map((o) => ({ valor: o.id, rotulo: o.descricao }))"
+          data-testid="endereco-tipo"
+        />
         <label
           >{{ t('cep') }}
           <input v-model="end.cep" maxlength="9" inputmode="numeric" data-testid="endereco-cep"
@@ -417,14 +415,12 @@ async function confirmarEncerramento(): Promise<void> {
         </li>
       </ul>
       <form v-if="podeEditar" class="barra" data-testid="form-telefone" @submit.prevent="incluirTelefone">
-        <label
-          >{{ t('tipo') }}
-          <select v-model.number="tel.tipo" data-testid="telefone-tipo">
-            <option v-for="o in tipos.data.value?.telefone ?? []" :key="o.id" :value="o.id">
-              {{ o.descricao }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="tel.tipo"
+          :rotulo="t('tipo')"
+          :opcoes="(tipos.data.value?.telefone ?? []).map((o) => ({ valor: o.id, rotulo: o.descricao }))"
+          data-testid="telefone-tipo"
+        />
         <label>{{ t('ddd') }} <input v-model="tel.ddd" maxlength="2" inputmode="numeric" /></label>
         <label
           >{{ t('telefone') }}
@@ -487,12 +483,11 @@ async function confirmarEncerramento(): Promise<void> {
           >{{ t('email') }}
           <input v-model="mail.email" type="email" maxlength="254" data-testid="email-endereco"
         /></label>
-        <label
-          >{{ t('finalidade') }}
-          <select v-model="mail.finalidade">
-            <option v-for="f in FINALIDADES" :key="f" :value="f">{{ t(`finalidades.${f}`) }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="mail.finalidade"
+          :rotulo="t('finalidade')"
+          :opcoes="FINALIDADES.map((f) => ({ valor: f, rotulo: t(`finalidades.${f}`) }))"
+        />
         <label><input v-model="mail.aceitaComunicacao" type="checkbox" /> {{ t('aceitaComunicacao') }}</label>
         <label v-if="mail.aceitaComunicacao"
           ><input v-model="mail.aceiteDeclarado" type="checkbox" data-testid="email-aceite" />
@@ -561,21 +556,20 @@ async function confirmarEncerramento(): Promise<void> {
           >{{ t('nome') }} <input v-model="resp.nome" maxlength="150" data-testid="responsavel-nome"
         /></label>
         <label>{{ t('nascimento') }} <input v-model="resp.nascimento" type="date" /></label>
-        <label
-          >{{ t('papel') }}
-          <select v-model="resp.papel" data-testid="responsavel-papel">
-            <option v-for="p in PAPEIS" :key="p" :value="p">{{ t(`papeis.${p}`) }}</option>
-          </select>
-        </label>
-        <label
-          >{{ t('parentesco') }}
-          <select v-model.number="resp.parentesco">
-            <option :value="0"></option>
-            <option v-for="o in tipos.data.value?.parentesco ?? []" :key="o.id" :value="o.id">
-              {{ o.descricao }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="resp.papel"
+          :rotulo="t('papel')"
+          :opcoes="PAPEIS.map((p) => ({ valor: p, rotulo: t(`papeis.${p}`) }))"
+          data-testid="responsavel-papel"
+        />
+        <SanteSelecao
+          v-model="resp.parentesco"
+          :rotulo="t('parentesco')"
+          :opcoes="[
+            { valor: 0, rotulo: '—' },
+            ...(tipos.data.value?.parentesco ?? []).map((o) => ({ valor: o.id, rotulo: o.descricao })),
+          ]"
+        />
         <label><input v-model="resp.autorizarProcedimento" type="checkbox" /> {{ t('autorizar') }}</label>
         <label><input v-model="resp.receberInformacao" type="checkbox" /> {{ t('informacao') }}</label>
         <label><input v-model="resp.retirarDocumento" type="checkbox" /> {{ t('documento') }}</label>
@@ -601,7 +595,7 @@ async function confirmarEncerramento(): Promise<void> {
   align-items: flex-end;
 }
 .erro-campo {
-  color: var(--sante-cor-perigo, #b00020);
+  color: var(--sgh-alerta);
   width: 100%;
 }
 </style>

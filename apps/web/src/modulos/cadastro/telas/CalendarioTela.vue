@@ -4,6 +4,7 @@
 // vão pular (com os nacionais calculados) e o formulário já preenchido com o município e a UF do estabelecimento.
 // Validação na hora pelos mesmos códigos do servidor; inativar pede o motivo e nunca apaga; datas móveis (Carnaval,
 // Sexta-feira Santa, Páscoa, Corpus Christi) geradas para vários anos num clique.
+import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -254,18 +255,19 @@ const dataBr = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
           >{{ t('calendario.descricao') }}
           <input v-model="f.descricao" maxlength="150" data-testid="cal-descricao"
         /></label>
-        <label
-          >{{ t('calendario.abrangencia') }}
-          <select v-model="f.abrangencia" data-testid="cal-abrangencia">
-            <option v-for="[v, r] in ABRANGENCIAS" :key="v" :value="v">{{ r }}</option>
-          </select>
-        </label>
-        <label v-if="f.abrangencia === 'estadual'"
-          >{{ t('calendario.uf') }}
-          <select v-model.number="f.ufId" data-testid="cal-uf">
-            <option v-for="u in visao.data.value.ufs" :key="u.id" :value="u.id">{{ u.sigla }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="f.abrangencia"
+          :rotulo="t('calendario.abrangencia')"
+          :opcoes="ABRANGENCIAS.map(([v, r]) => ({ valor: v, rotulo: r }))"
+          data-testid="cal-abrangencia"
+        />
+        <SanteSelecao
+          v-if="f.abrangencia === 'estadual'"
+          v-model="f.ufId"
+          :rotulo="t('calendario.uf')"
+          :opcoes="visao.data.value.ufs.map((u) => ({ valor: u.id, rotulo: u.sigla }))"
+          data-testid="cal-uf"
+        />
         <label v-if="f.abrangencia === 'municipal'"
           >{{ t('calendario.municipio') }}
           <input v-model="municipioNome" data-testid="cal-municipio" @input="procurarMunicipio" />
@@ -275,24 +277,26 @@ const dataBr = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
             <button type="button" @click="escolherMunicipio(m)">{{ m.nome }} ({{ m.uf }})</button>
           </li>
         </ul>
-        <label
-          >{{ t('calendario.repeticao') }}
-          <select v-model="f.recorrencia" data-testid="cal-recorrencia">
-            <option v-for="[v, r] in RECORRENCIAS" :key="v" :value="v">{{ r }}</option>
-            <option v-if="f.recorrencia === 'movel'" value="movel">{{ t('calendario.movel') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="f.recorrencia"
+          :rotulo="t('calendario.repeticao')"
+          :opcoes="[
+            ...RECORRENCIAS.map(([v, r]) => ({ valor: v, rotulo: r })),
+            ...(f.recorrencia === 'movel' ? [{ valor: f.recorrencia, rotulo: t('calendario.movel') }] : []),
+          ]"
+          data-testid="cal-recorrencia"
+        />
         <div v-if="f.recorrencia === 'anual'" class="linha">
           <label
             >{{ t('calendario.dia') }}
             <input v-model.number="f.dia" type="number" min="1" max="31" data-testid="cal-dia"
           /></label>
-          <label
-            >{{ t('calendario.mes') }}
-            <select v-model.number="f.mes" data-testid="cal-mes">
-              <option v-for="(n, i) in MESES" :key="n" :value="i + 1">{{ n }}</option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-model="f.mes"
+            :rotulo="t('calendario.mes')"
+            :opcoes="MESES.map((n, i) => ({ valor: i + 1, rotulo: n }))"
+            data-testid="cal-mes"
+          />
         </div>
         <label v-else
           >{{ t('calendario.data') }} <input v-model="f.data" type="date" data-testid="cal-data"
@@ -325,9 +329,13 @@ const dataBr = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
         </div>
         <fieldset>
           <legend>{{ t('calendario.movelVariosAnos') }}</legend>
-          <select v-model="movel.base" data-testid="cal-base">
-            <option v-for="[v, r] in BASES" :key="v" :value="v">{{ r }}</option>
-          </select>
+          <SanteSelecao
+            v-model="movel.base"
+            :rotulo="t('calendario.movelVariosAnos')"
+            ocultar-rotulo
+            :opcoes="BASES.map(([v, r]) => ({ valor: v, rotulo: r }))"
+            data-testid="cal-base"
+          />
           <label
             >{{ t('calendario.anosAPartir', { ano }) }}
             <input v-model.number="movel.anos" type="number" min="1" max="20"
@@ -375,6 +383,6 @@ const dataBr = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
   margin-bottom: var(--sgh-espaco-1);
 }
 .problemas {
-  color: var(--sgh-perigo, #b00020);
+  color: var(--sgh-alerta);
 }
 </style>

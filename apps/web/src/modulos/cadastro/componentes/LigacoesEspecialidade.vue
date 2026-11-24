@@ -2,7 +2,7 @@
 // Procedimentos permitidos (com vigência) e ocupações (CBO, uma principal) da especialidade (F3.1, 02-CAD linha 17).
 // Tudo na mesma tela: busca por código ou nome, inclusão com a vigência e encerramento em um clique; a recusa da API
 // (vigência cruzada ou invertida) aparece na hora, junto do campo.
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -114,15 +114,19 @@ const incluirProc = () =>
           <label for="lig-esp-termo">{{ t('ligacoes.comum.buscar') }}</label>
           <input id="lig-esp-termo" v-model="termo" maxlength="60" data-testid="lig-esp-termo" />
         </div>
-        <div class="campo">
-          <label for="lig-esp-proc">{{ t('ligacoes.especialidade.procedimento') }}</label>
-          <select id="lig-esp-proc" v-model="proc" data-testid="lig-esp-proc">
-            <option :value="null">{{ t('ligacoes.comum.escolha') }}</option>
-            <option v-for="o in opcoes.data.value?.procedimentos ?? []" :key="o.id" :value="o.id">
-              {{ o.codigo }} {{ o.descricao }}
-            </option>
-          </select>
-        </div>
+        <SanteSelecao
+          id="lig-esp-proc"
+          v-model="proc"
+          :rotulo="t('ligacoes.especialidade.procedimento')"
+          :opcoes="[
+            { valor: null, rotulo: t('ligacoes.comum.escolha') },
+            ...(opcoes.data.value?.procedimentos ?? []).map((o) => ({
+              valor: o.id,
+              rotulo: `${o.codigo} ${o.descricao}`,
+            })),
+          ]"
+          data-testid="lig-esp-proc"
+        />
         <div class="campo">
           <label for="lig-esp-ini">{{ t('ligacoes.comum.inicio') }}</label>
           <input id="lig-esp-ini" v-model="inicio" type="date" />
@@ -137,15 +141,19 @@ const incluirProc = () =>
           data-testid="lig-esp-gravar-proc"
           @acionar="incluirProc"
         />
-        <div class="campo">
-          <label for="lig-esp-cbo">{{ t('ligacoes.especialidade.ocupacao') }}</label>
-          <select id="lig-esp-cbo" v-model="cbo" data-testid="lig-esp-cbo">
-            <option :value="null">{{ t('ligacoes.comum.escolha') }}</option>
-            <option v-for="o in opcoes.data.value?.ocupacoes ?? []" :key="o.id" :value="o.id">
-              {{ o.codigo }} {{ o.descricao }}
-            </option>
-          </select>
-        </div>
+        <SanteSelecao
+          id="lig-esp-cbo"
+          v-model="cbo"
+          :rotulo="t('ligacoes.especialidade.ocupacao')"
+          :opcoes="[
+            { valor: null, rotulo: t('ligacoes.comum.escolha') },
+            ...(opcoes.data.value?.ocupacoes ?? []).map((o) => ({
+              valor: o.id,
+              rotulo: `${o.codigo} ${o.descricao}`,
+            })),
+          ]"
+          data-testid="lig-esp-cbo"
+        />
         <SanteBotao
           :rotulo="t('ligacoes.comum.gravar')"
           :desabilitado="cbo === null"

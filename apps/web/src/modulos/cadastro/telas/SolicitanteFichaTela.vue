@@ -2,7 +2,7 @@
 // Ficha do solicitante externo (F3.1, 02-CAD linha 20): dados editáveis (o registro no conselho fica), o que falta
 // para a guia, os cadastros parecidos (regra do domínio), inativar e reativar com o motivo (nunca apagar) e o código
 // do solicitante em cada fonte pagadora. Tudo numa tela só; a recusa da API aparece junto do campo.
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -169,15 +169,16 @@ const gravarDados = () =>
             fazer(() => gravarCodigoNaFonte(Number(id), { fonte: fonte!, codigo, ativo: true }))
           "
         >
-          <div class="campo">
-            <label for="sol-fonte">{{ t('ligacoes.solicitante.fonte') }}</label>
-            <select id="sol-fonte" v-model="fonte" data-testid="sol-fonte">
-              <option :value="null">{{ t('ligacoes.comum.escolha') }}</option>
-              <option v-for="x in fontes.data.value?.fontes ?? []" :key="x.id" :value="x.id">
-                {{ x.nome }}
-              </option>
-            </select>
-          </div>
+          <SanteSelecao
+            id="sol-fonte"
+            v-model="fonte"
+            :rotulo="t('ligacoes.solicitante.fonte')"
+            :opcoes="[
+              { valor: null, rotulo: t('ligacoes.comum.escolha') },
+              ...(fontes.data.value?.fontes ?? []).map((x) => ({ valor: x.id, rotulo: x.nome })),
+            ]"
+            data-testid="sol-fonte"
+          />
           <div class="campo">
             <label for="sol-codigo">{{ t('ligacoes.solicitante.codigo') }}</label>
             <input

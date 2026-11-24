@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Complemento do cadastro do profissional (F3.1, 02-CAD linha 16) na própria ficha: RQE e assinatura para quem lê o
-// profissional; dados fiscais do repasse e contas só para o cargo do repasse (cadastro.profissional.financeiro.*). Cada
+// profissional; dados fiscais do repasse e contas só para o cargo do repasse (cadastro.profissionalFinanceiro.*). Cada
 // bloco inclui numa linha e encerra ou inativa (nada se apaga). A validação na hora só evita o vaivém: o servidor
 // confere de novo pela regra do domínio.
+import { SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
@@ -29,8 +30,8 @@ const { t } = useI18n();
 const T = (k: string) => t(`complementoProfissional.${k}`);
 
 const podeEditar = computed(() => pode('cadastro.profissional.editar'));
-const podeVerFinanceiro = computed(() => pode('cadastro.profissional.financeiro.ler'));
-const podeEditarFinanceiro = computed(() => pode('cadastro.profissional.financeiro.editar'));
+const podeVerFinanceiro = computed(() => pode('cadastro.profissionalFinanceiro.ler'));
+const podeEditarFinanceiro = computed(() => pode('cadastro.profissionalFinanceiro.editar'));
 
 const comp = ref<Complemento | null>(null);
 const fin = ref<Financeiro | null>(null);
@@ -309,20 +310,22 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
       <label
         >{{ T('rqe.numero') }} <input v-model.trim="rqe.numero" inputmode="numeric" maxlength="10"
       /></label>
-      <label
-        >{{ T('rqe.uf') }}
-        <select v-model="rqe.uf">
-          <option value="" disabled>—</option>
-          <option v-for="u in ufs" :key="u" :value="u">{{ u }}</option>
-        </select>
-      </label>
-      <label
-        >{{ T('rqe.especialidade') }}
-        <select v-model.number="rqe.especialidade">
-          <option :value="0" disabled>—</option>
-          <option v-for="e in opcoes?.especialidades ?? []" :key="e.id" :value="e.id">{{ e.texto }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="rqe.uf"
+        :rotulo="T('rqe.uf')"
+        :opcoes="[
+          { valor: '', rotulo: '—', desabilitada: true },
+          ...ufs.map((u) => ({ valor: u, rotulo: u })),
+        ]"
+      />
+      <SanteSelecao
+        v-model="rqe.especialidade"
+        :rotulo="T('rqe.especialidade')"
+        :opcoes="[
+          { valor: 0, rotulo: '—', desabilitada: true },
+          ...(opcoes?.especialidades ?? []).map((e) => ({ valor: e.id, rotulo: e.texto })),
+        ]"
+      />
       <label>{{ T('rqe.data') }} <input v-model="rqe.dataRegistro" type="date" :max="hoje" /></label>
       <button type="submit" :disabled="!rqeOk">{{ T('gravar') }}</button>
       <small>{{ T('rqe.dicaRegistro') }}</small>
@@ -351,13 +354,14 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
     </table>
     <p v-else>{{ T('nenhum') }}</p>
     <form v-if="podeEditar" class="linha" data-testid="form-assinatura" @submit.prevent="gravarAssinatura">
-      <label
-        >{{ T('assinatura.tipo') }}
-        <select v-model="ass.tipo">
-          <option value="certificado_digital">{{ T('assinatura.tipos.certificado_digital') }}</option>
-          <option value="imagem">{{ T('assinatura.tipos.imagem') }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="ass.tipo"
+        :rotulo="T('assinatura.tipo')"
+        :opcoes="[
+          { valor: 'certificado_digital', rotulo: T('assinatura.tipos.certificado_digital') },
+          { valor: 'imagem', rotulo: T('assinatura.tipos.imagem') },
+        ]"
+      />
       <template v-if="ass.tipo === 'imagem'">
         <label
           >{{ T('assinatura.arquivo') }}
@@ -416,38 +420,40 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
         data-testid="form-fiscal"
         @submit.prevent="gravarFiscal"
       >
-        <label
-          >{{ T('fiscal.estabelecimento') }}
-          <select v-model.number="fiscal.estabelecimento">
-            <option :value="0">{{ T('fiscal.todos') }}</option>
-            <option v-for="e in opcoes?.estabelecimentos ?? []" :key="e.id" :value="e.id">
-              {{ e.texto }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="fiscal.estabelecimento"
+          :rotulo="T('fiscal.estabelecimento')"
+          :opcoes="[
+            { valor: 0, rotulo: T('fiscal.todos') },
+            ...(opcoes?.estabelecimentos ?? []).map((e) => ({ valor: e.id, rotulo: e.texto })),
+          ]"
+        />
         <label>{{ T('inicio') }} <input v-model="fiscal.vigenciaInicio" type="date" /></label>
-        <label
-          >{{ T('fiscal.recebedor') }}
-          <select v-model="fiscal.tipoRecebedor">
-            <option value="pessoa_fisica">{{ T('fiscal.recebedores.pessoa_fisica') }}</option>
-            <option value="pessoa_juridica">{{ T('fiscal.recebedores.pessoa_juridica') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="fiscal.tipoRecebedor"
+          :rotulo="T('fiscal.recebedor')"
+          :opcoes="[
+            { valor: 'pessoa_fisica', rotulo: T('fiscal.recebedores.pessoa_fisica') },
+            { valor: 'pessoa_juridica', rotulo: T('fiscal.recebedores.pessoa_juridica') },
+          ]"
+        />
         <template v-if="fiscal.tipoRecebedor === 'pessoa_juridica'">
           <label>{{ T('fiscal.empresa') }} <input v-model="buscaEmpresa" /></label>
-          <select v-model.number="fiscal.pessoaJuridica" :aria-label="T('fiscal.empresa')">
-            <option :value="0" disabled>—</option>
-            <option v-for="e in opcoes?.empresas ?? []" :key="e.id" :value="e.id">{{ e.texto }}</option>
-          </select>
+          <SanteSelecao
+            v-model="fiscal.pessoaJuridica"
+            :rotulo="T('fiscal.empresa')"
+            ocultar-rotulo
+            :opcoes="[
+              { valor: 0, rotulo: '—', desabilitada: true },
+              ...(opcoes?.empresas ?? []).map((e) => ({ valor: e.id, rotulo: e.texto })),
+            ]"
+          />
         </template>
-        <label
-          >{{ T('fiscal.regime') }}
-          <select v-model="fiscal.regime">
-            <option v-for="r in regimes" :key="r" :value="r">
-              {{ T(`fiscal.regimes.${r}`) }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="fiscal.regime"
+          :rotulo="T('fiscal.regime')"
+          :opcoes="regimes.map((r) => ({ valor: r, rotulo: T(`fiscal.regimes.${r}`) }))"
+        />
         <label
           >{{ T('fiscal.pis') }}
           <input
@@ -493,13 +499,14 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
           >{{ T('fiscal.dependentes') }}
           <input v-model.number="fiscal.dependentesIrrf" type="number" min="0" max="99"
         /></label>
-        <label
-          >{{ T('fiscal.incidencia') }}
-          <select v-model="fiscal.incidencia">
-            <option value="pagamento">{{ T('fiscal.incidencias.pagamento') }}</option>
-            <option value="producao">{{ T('fiscal.incidencias.producao') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="fiscal.incidencia"
+          :rotulo="T('fiscal.incidencia')"
+          :opcoes="[
+            { valor: 'pagamento', rotulo: T('fiscal.incidencias.pagamento') },
+            { valor: 'producao', rotulo: T('fiscal.incidencias.producao') },
+          ]"
+        />
         <button type="submit" :disabled="!fiscalOk">{{ T('gravar') }}</button>
         <small>{{ T('fiscal.dicaVigencia') }}</small>
       </form>
@@ -528,20 +535,22 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
       </table>
       <p v-else>{{ T('nenhum') }}</p>
       <form v-if="podeEditarFinanceiro" class="linha" data-testid="form-conta" @submit.prevent="gravarConta">
-        <label
-          >{{ T('conta.banco') }}
-          <select v-model.number="conta.banco">
-            <option :value="0">—</option>
-            <option v-for="b in opcoes?.bancos ?? []" :key="b.id" :value="b.id">{{ b.texto }}</option>
-          </select>
-        </label>
-        <label
-          >{{ T('conta.tipoConta') }}
-          <select v-model.number="conta.tipoConta">
-            <option :value="0">—</option>
-            <option v-for="b in opcoes?.tiposConta ?? []" :key="b.id" :value="b.id">{{ b.texto }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="conta.banco"
+          :rotulo="T('conta.banco')"
+          :opcoes="[
+            { valor: 0, rotulo: '—' },
+            ...(opcoes?.bancos ?? []).map((b) => ({ valor: b.id, rotulo: b.texto })),
+          ]"
+        />
+        <SanteSelecao
+          v-model="conta.tipoConta"
+          :rotulo="T('conta.tipoConta')"
+          :opcoes="[
+            { valor: 0, rotulo: '—' },
+            ...(opcoes?.tiposConta ?? []).map((b) => ({ valor: b.id, rotulo: b.texto })),
+          ]"
+        />
         <label
           >{{ T('conta.agencia') }} <input v-model.trim="conta.agencia" inputmode="numeric" maxlength="10"
         /></label>
@@ -551,26 +560,29 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
         <label
           >{{ T('conta.digito') }} <input v-model.trim="conta.contaDigito" maxlength="2" size="2"
         /></label>
-        <label
-          >{{ T('conta.tipoChave') }}
-          <select v-model="conta.tipoChavePix">
-            <option value="">—</option>
-            <option v-for="k in ['cpf', 'cnpj', 'email', 'telefone', 'aleatoria']" :key="k" :value="k">
-              {{ T(`conta.tiposChave.${k}`) }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="conta.tipoChavePix"
+          :rotulo="T('conta.tipoChave')"
+          :opcoes="[
+            { valor: '', rotulo: '—' },
+            ...['cpf', 'cnpj', 'email', 'telefone', 'aleatoria'].map((k) => ({
+              valor: k,
+              rotulo: T(`conta.tiposChave.${k}`),
+            })),
+          ]"
+        />
         <label v-if="conta.tipoChavePix"
           >{{ T('conta.chave') }} <input v-model.trim="conta.chavePix" maxlength="77"
         /></label>
         <label>{{ T('conta.favorecido') }} <input v-model="conta.favorecidoNome" maxlength="150" /></label>
-        <label
-          >{{ T('conta.favorecidoTipo') }}
-          <select v-model="conta.favorecidoTipo">
-            <option value="fisica">{{ T('conta.favorecidoTipos.fisica') }}</option>
-            <option value="juridica">{{ T('conta.favorecidoTipos.juridica') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="conta.favorecidoTipo"
+          :rotulo="T('conta.favorecidoTipo')"
+          :opcoes="[
+            { valor: 'fisica', rotulo: T('conta.favorecidoTipos.fisica') },
+            { valor: 'juridica', rotulo: T('conta.favorecidoTipos.juridica') },
+          ]"
+        />
         <label
           >{{ T('conta.documento') }} <input v-model.trim="conta.favorecidoDocumento" inputmode="numeric"
         /></label>
@@ -599,7 +611,7 @@ table {
 td,
 th {
   padding: 0.25rem 0.4rem;
-  border-bottom: 1px solid var(--borda, #ddd);
+  border-bottom: 1px solid var(--sgh-borda);
   text-align: left;
 }
 .inativo {
@@ -625,9 +637,9 @@ th {
 .linha small,
 .dica {
   flex-basis: 100%;
-  color: var(--texto-suave, #666);
+  color: var(--sgh-texto-secundario);
 }
 .ok {
-  color: var(--sucesso, #1b5e20);
+  color: var(--sgh-sucesso);
 }
 </style>
