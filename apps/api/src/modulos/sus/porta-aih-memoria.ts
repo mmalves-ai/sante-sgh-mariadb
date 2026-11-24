@@ -3,6 +3,7 @@
 // dez dias com três diárias na UTI e um OPM, outra curta, sem UTI — e um catálogo SIGTAP sintético da AIH. As gravações
 // seguem as regras das tabelas do faturamento SUS (versão e situação de origem em cada mudança; número único; o retorno não duplica);
 // a transação é a da porta em memória (desfeita se a função falhar).
+import { recusa } from '@sgh/nucleo';
 import type { DadosAihLidos, GravacaoSusAih, LeituraSusAih, SolicitanteAihLido } from './porta-aih.js';
 import {
   type AihRegistro,
@@ -163,6 +164,11 @@ function internacaoSintetica(registro: number, hoje = new Date()): InternacaoAih
   return internacoesAihSinteticas(inicio).internacoes.find((x) => x.registro === registro) ?? null;
 }
 
+/** A AIH já foi apresentada nesta competência (o retorno do gestor dela, na competência, é a prova em memória). */
+function reapresentadaNa(e: EstadoSusAih, aih: number, competencia: string): boolean {
+  return e.retornos.some((r) => r.instrumento === 'aih' && r.aih === aih && r.competencia === competencia);
+}
+
 function erro(): never {
   throw new ErroAih('versao-alterada', 'O registro mudou desde que a tela foi aberta.');
 }
@@ -222,11 +228,14 @@ export function leituraAihMemoria(b: BaseMemoriaAih): LeituraSusAih {
     aihPorNumero: async (n) => s().aihs.find((a) => a.numero === n) ?? null,
     aihsDasInternacoes: async (r) =>
       s().aihs.filter((a) => r.includes(a.registro) && a.situacao !== 'negada' && a.situacao !== 'cancelada'),
+    // A reapresentada não volta à competência em que a AIH já foi apresentada (o número é único por competência),
+    // como na porta própria.
     aihsParaApresentar: async (c) =>
       s()
         .aihs.filter(
           (a) =>
-            a.situacao === 'fechada' || (a.situacao === 'apresentada' && a.competenciaApresentacao === c),
+            (a.situacao === 'fechada' && !reapresentadaNa(s(), a.id, c)) ||
+            (a.situacao === 'apresentada' && a.competenciaApresentacao === c),
         )
         .sort((x, y) => (x.numero ?? '').localeCompare(y.numero ?? '')),
     paginaAihs: async (f) => {
@@ -478,6 +487,12 @@ export function gravacaoAihMemoria(b: BaseMemoriaAih): GravacaoSusAih {
       for (const x of aihs) {
         const a = s().aihs.find((y) => y.id === x.id);
         if (!a || a.versao !== x.versao || (a.situacao !== 'fechada' && a.situacao !== 'apresentada')) erro();
+        if (a.situacao === 'fechada' && reapresentadaNa(s(), a.id, arq.competencia.competencia))
+          throw recusa(
+            'aih-reapresentada-mesma-competencia',
+            `A AIH reapresentada já foi apresentada na competência ${arq.competencia.competencia}: reapresente-a ` +
+              'numa competência seguinte. Nada foi gravado.',
+          );
         s().aihs = s().aihs.map((y) =>
           y.id === x.id
             ? {

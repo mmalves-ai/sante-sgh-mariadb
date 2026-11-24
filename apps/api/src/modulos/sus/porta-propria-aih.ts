@@ -12,7 +12,6 @@
 // O "registro" da tela é o id da internação; o prontuário é o número do prontuário do paciente; o solicitante é o CPF
 // do profissional da casa ou do solicitante externo (o banco guarda a chave, nunca o CPF de novo).
 import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
-import { ErroProblema } from '../../problema.filter.js';
 import type { SolicitanteAihLido } from './porta-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { gravarRemessa } from './porta-propria-arquivos.js';
@@ -197,13 +196,21 @@ export class LeiturasAihPropria {
     return ls.map(aihDaLinha);
   }
 
-  /** As fechadas e as já apresentadas nesta competência, pelo número. */
+  /**
+   * As fechadas e as já apresentadas nesta competência, pelo número. A fechada que é reapresentação de uma AIH já
+   * apresentada nesta mesma competência (outra conta com o mesmo número) fica fora: o número da AIH é único por
+   * competência, e a reapresentação vai para uma competência seguinte (o arquivo desta não fica bloqueado por ela).
+   */
   async aihsParaApresentar(competencia: string): Promise<AihRegistro[]> {
     const ls = await this.l.consultar(
       `SELECT * FROM (${SQL_AIH}) t
-        WHERE t.situacao_tela = 'fechada' OR (t.situacao_tela = 'apresentada' AND t.competencia_apresentacao = ?)
+        WHERE (t.situacao_tela = 'fechada'
+               AND NOT EXISTS (SELECT 1 FROM conta_aih o JOIN competencia_sus oc ON oc.id = o.competencia_sus_id
+                                WHERE o.estabelecimento_id = ? AND o.numero_aih = t.numero_aih AND oc.competencia = ?
+                                  AND o.excluido_em IS NULL))
+           OR (t.situacao_tela = 'apresentada' AND t.competencia_apresentacao = ?)
         ORDER BY t.numero_aih, t.id`,
-      [this.est, competencia],
+      [this.est, this.est, competencia, competencia],
       { teto: 20_000 },
     );
     return ls.map(aihDaLinha);
@@ -654,7 +661,8 @@ export class GravacoesAihPropria {
       const c = await this.contaAtual(ref.id);
       if (!c) versaoAlterada();
       // A reapresentação (conta nova da AIH rejeitada) não volta à competência em que a AIH já foi apresentada: o número
-      // da AIH é único por competência no estabelecimento. A recusa é de negócio (409), antes da gravação.
+      // da AIH é único por competência no estabelecimento. A leitura (aihsParaApresentar) já a deixa fora; esta recusa
+      // de negócio (409) só cobre a corrida, antes do UNIQUE do banco.
       const jaApresentada = await this.tx.uma(
         `SELECT o.id FROM conta_aih o JOIN conta_aih c ON c.id = ?
           WHERE o.estabelecimento_id = ? AND o.numero_aih = c.numero_aih AND o.competencia_sus_id = ?
@@ -662,13 +670,10 @@ export class GravacoesAihPropria {
         [c.id, this.est, competencia.id],
       );
       if (jaApresentada)
-        throw new ErroProblema(
-          'recusa-de-negocio',
-          409,
-          'AIH já apresentada nesta competência',
+        throw recusa(
+          'aih-reapresentada-mesma-competencia',
           `A AIH reapresentada já foi apresentada na competência ${competencia.competencia}: reapresente-a numa ` +
             'competência seguinte. Nada foi gravado.',
-          { codigo: 'aih-reapresentada-mesma-competencia' },
         );
       await this.tx.alterar('conta_aih', c.id, c.versao, {
         situacao: 'apresentada',

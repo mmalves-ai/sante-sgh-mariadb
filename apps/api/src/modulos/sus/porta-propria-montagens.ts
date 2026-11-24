@@ -116,6 +116,12 @@ const lotes = <T>(xs: readonly T[]): T[][] => {
   return r;
 };
 
+/** O tipo de acomodação do SIH pelo código da enfermaria do quarto (só dígitos); sem código válido, nulo. */
+export function codigoAcomodacaoSih(v: unknown): number | null {
+  const t = v === null || v === undefined ? '' : String(v).trim();
+  return /^\d{1,4}$/.test(t) ? Number(t) : null;
+}
+
 /** A remessa do instrumento pelo número do arquivo (o id da tela) no estabelecimento. */
 async function remessaDoNumero(
   l: Leitor,
@@ -736,20 +742,25 @@ export class MontagensSusPropria {
     for (const parte of lotes(internacoes.map((i) => i.registro))) {
       const ls = await this.l.consultar(
         `SELECT o.internacao_id, ${dia('o.data_hora_inicio')} AS entrada, ${dia('o.data_hora_fim')} AS saida,
-                COALESCE(a.codigo_enfermaria_aih, o.acomodacao_id) AS acomodacao
+                a.codigo_enfermaria_aih AS acomodacao
            FROM ocupacao_leito o LEFT JOIN acomodacao a ON a.id = o.acomodacao_id
           WHERE o.estabelecimento_id = ? AND o.excluido_em IS NULL AND o.internacao_id IN (${marcadores(parte.length)})
           ORDER BY o.internacao_id, o.data_hora_inicio, o.id`,
         [this.est, ...parte],
         { teto: TETO_PRODUCAO },
       );
-      for (const x of ls)
+      for (const x of ls) {
+        // O tipo de acomodação do SIH é o código da enfermaria do quarto, nunca o id interno; o quarto sem código
+        // numérico não entra na trajetória (não vira UTI nem diária por acaso).
+        const acomodacao = codigoAcomodacaoSih(x['acomodacao']);
+        if (acomodacao === null) continue;
         passagens.push({
           registro: num(x['internacao_id']),
           entrada: txt(x['entrada']),
           saida: txtOuNulo(x['saida']),
-          acomodacao: num(x['acomodacao']),
+          acomodacao,
         });
+      }
     }
     const porCodigo: { id: number; codigo: string; nome: string }[] = [];
     for (const c of [...new Set(codigos)]) {

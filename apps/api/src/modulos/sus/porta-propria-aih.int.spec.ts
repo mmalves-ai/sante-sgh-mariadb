@@ -11,6 +11,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   definirOperacao,
   type Escritor,
+  ErroOperacao,
   NucleoProprio,
   type ResultadoOperacao,
   type TxOperacao,
@@ -27,7 +28,6 @@ import {
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { GravacaoSusPropria, TABELAS_SUS } from './porta-propria.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
-import { ErroProblema } from '../../problema.filter.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -871,16 +871,18 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
         [{ id, versao: 7 }],
       ),
     );
-    await expect(mesma).rejects.toBeInstanceOf(ErroProblema);
+    await expect(mesma).rejects.toBeInstanceOf(ErroOperacao);
     await expect(mesma).rejects.toMatchObject({
-      extras: { codigo: 'aih-reapresentada-mesma-competencia' },
+      problema: { status: 409, codigo: 'aih-reapresentada-mesma-competencia' },
     });
-    expect(((await mesma.catch((e: unknown) => e)) as ErroProblema).getStatus()).toBe(409);
     expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({
       situacao: 'fechada',
       competenciaApresentacao: null,
       versao: 7,
     });
+    // A leitura já deixa a reapresentada fora da competência em que a AIH foi apresentada (o arquivo dela não fica
+    // bloqueado) e a oferece na seguinte.
+    expect((await ler(ids.est, (l) => l.aihsParaApresentar('202605'))).map((x) => x.id)).not.toContain(id);
     expect((await ler(ids.est, (l) => l.aihsParaApresentar('202606'))).map((x) => x.id)).toContain(id);
     // Reapresentar de novo, sem estar rejeitada: recusa e nada muda.
     await expect(gravar(ids.est, (_g, tx) => ponte.reapresentarAih(tx, ids.est, id))).rejects.toMatchObject({
