@@ -64,6 +64,14 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
   await e.executar(`DELETE FROM cancelamento_internacao WHERE internacao_id IN (${internacoes})`, ests);
   await e.executar(`DELETE FROM barreira_alta WHERE internacao_id IN (${internacoes})`, ests);
   await e.executar(`DELETE FROM previsao_alta WHERE internacao_id IN (${internacoes})`, ests);
+  // F3.4 (04-INT 65, 67 e 68): diagnósticos, acidente, guias e operadores das unidades da massa.
+  await e.executar(`DELETE FROM diagnostico_internacao WHERE internacao_id IN (${internacoes})`, ests);
+  await e.executar(`DELETE FROM acidente_internacao WHERE internacao_id IN (${internacoes})`, ests);
+  await e.executar(`DELETE FROM guia_internacao WHERE internacao_id IN (${internacoes})`, ests);
+  await e.executar(
+    `DELETE FROM permissao_unidade_usuario WHERE unidade_internacao_id IN (SELECT id FROM unidade_internacao WHERE estabelecimento_id IN (${em}))`,
+    ests,
+  );
   await e.executar(
     `UPDATE solicitacao_regulacao SET solicitacao_anterior_id = NULL WHERE estabelecimento_id IN (${em})`,
     ests,
@@ -113,8 +121,9 @@ const BASE_PRONTUARIO: Readonly<Record<string, number>> = {
   C: 930_300,
   P: 930_400,
   J: 930_500,
+  R: 930_600,
 };
-const BASE_ORDEM: Readonly<Record<string, number>> = { A: 3010, N: 3020, C: 3030, P: 3040, J: 3050 };
+const BASE_ORDEM: Readonly<Record<string, number>> = { A: 3010, N: 3020, C: 3030, P: 3040, J: 3050, R: 3060 };
 
 export async function prepararMassaAdt(marca: string): Promise<MassaAdt> {
   const nucleo = new NucleoProprio();

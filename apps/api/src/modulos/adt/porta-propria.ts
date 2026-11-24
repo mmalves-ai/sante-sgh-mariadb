@@ -200,6 +200,14 @@ export class PortaAdtPropria implements PortaAdt {
     });
   }
 
+  /** Leitura no estabelecimento da sessão com o fuso dele (registros da internação, F3.4). */
+  lerNoEstabelecimento<T>(
+    c: ContextoAdt,
+    fn: (l: Leitor, est: number, fuso: string) => Promise<T>,
+  ): Promise<T> {
+    return this.ler(c, fn);
+  }
+
   // ── Gravação ─────────────────────────────────────────────────────────────────────────────────
 
   async podeGravar(c: ContextoAdt, op: string): Promise<LiberacaoGravacao> {

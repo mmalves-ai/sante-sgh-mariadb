@@ -9,6 +9,7 @@ import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../config/public-api.js';
 import type { ContextoAdt, GravadorSghAdt, PortaAdt } from './porta.js';
+import { PERMISSOES_REGISTROS_INTERNACAO } from './registros-internacao.js';
 
 export const CHAVE_ADT = 'internacao.adt';
 export const CHAVE_MAPA = 'leitos.mapa';
@@ -26,6 +27,8 @@ export const OPERACOES_ADT: Readonly<Record<string, string>> = {
   'internacao.trocarMedico': 'internacao.troca.criar',
   'internacao.registrarGuia': 'internacao.guia.editar',
   'internacao.darAlta': 'internacao.alta.registrar',
+  // F3.4 (04-INT 65 e 67): diagnósticos, acidente e quem opera a unidade.
+  ...PERMISSOES_REGISTROS_INTERNACAO,
 };
 export const OPERACOES_MAPA: Readonly<Record<string, string>> = {
   'internacao.transferirLeito': 'leitos.transferencia.criar',

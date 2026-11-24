@@ -468,6 +468,13 @@ export const esquemaRegistrarGuia = z
      * diárias solicitadas e autorizadas ficam 0, como em 100% das guias).
      */
     validadeDias: z.number().int().min(1).max(999),
+    /** F3.4 (04-INT 68): início da validade (AAAA-MM-DD); sem ele, a entrada (inicial) ou o dia seguinte ao fim da anterior. */
+    inicio: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a data no formato AAAA-MM-DD.')
+      .optional(),
+    /** Quem autorizou na operadora. */
+    autorizador: livre(150).optional(),
     observacao: livre(400).optional(),
   })
   .strict();

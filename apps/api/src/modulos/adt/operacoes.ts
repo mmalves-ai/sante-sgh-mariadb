@@ -65,6 +65,12 @@ import {
   type TransferirLeitoBancoEntrada,
 } from './esquemas.js';
 import { limpezaDaAlta } from './limpeza-da-alta.js';
+import {
+  exigirOperadorDaUnidade,
+  gravarDiagnosticosDaAdmissao,
+  gravarGuiaNoHistorico,
+  OPERACOES_REGISTROS_INTERNACAO,
+} from './registros-internacao.js';
 
 type Linha = Record<string, unknown>;
 export const n = (v: unknown) => Number(v ?? 0);
@@ -353,6 +359,9 @@ async function incluirInternacao(tx: TxOperacao, linha: Record<string, unknown>)
 const TABELAS_INTERNAR = [
   'atendimento',
   'internacao',
+  // F3.4 (04-INT 67 e 68): o diagnóstico de entrada e a guia inicial nascem com a admissão.
+  'diagnostico_internacao',
+  'guia_internacao',
   'ocupacao_leito',
   'reserva_leito',
   'pedido_leito',
@@ -390,6 +399,8 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
     await exigirExiste(tx, 'profissional', e.medicoAssistente, 'medicoAssistente', 'O médico assistente');
     await exigirExiste(tx, 'profissional', e.medicoSolicitante, 'medicoSolicitante', 'O médico solicitante');
     const leito = await leitoDaChave(tx, est, e.leito);
+    // F3.4 (04-INT 65): a unidade com operadores definidos só admite pelo usuário liberado nela.
+    await exigirOperadorDaUnidade(tx, nn(leito['unidade_internacao_id']), usuario, 'admitir');
     const reserva = await exigirLeitoLivre(tx, leito, e.solicitacaoNir ?? null);
     const urgencia = e.carater === 'urgencia';
     const carater = await informadoOuUnico(
@@ -482,6 +493,8 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
       registro_usuario_id: usuario,
       situacao: 'ativa',
     });
+    // F3.4 (04-INT 67): o CID da admissão vira o diagnóstico de entrada (e o secundário), na lista da internação.
+    await gravarDiagnosticosDaAdmissao(tx, id, e.cidPrincipal, e.cidSecundario, agora, e.medicoAssistente);
     if (reserva !== null) {
       const r = await tx.uma('SELECT versao FROM reserva_leito WHERE id = ?', [reserva]);
       await tx.alterar('reserva_leito', reserva, n(r?.['versao']), {
@@ -498,6 +511,15 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
       categoriaAcomodacao: nn(leito['categoria_acomodacao_id']),
     });
     if (conta !== null) await apurarContasDoAtendimento(tx, est, atendimento, agora);
+    // F3.4 (04-INT 68): a guia informada na admissão é a inicial do histórico de autorizações.
+    if (e.guia && e.diariasAutorizadas)
+      await gravarGuiaNoHistorico(tx, est, agora, {
+        internacao: id,
+        conta,
+        guia: e.guia,
+        senha: e.senhaConvenio,
+        validadeDias: e.diariasAutorizadas,
+      });
     return {
       internacao: id,
       numero: numero.formatado,
@@ -558,6 +580,7 @@ const transferirLeito = definirOperacao<TransferirLeitoBancoEntrada, ResultadoOp
     const i = await internacaoTravada(tx, est, e.internacao, e.versao);
     exigirAberta(i);
     const destino = await leitoDaChave(tx, est, e.destino);
+    await exigirOperadorDaUnidade(tx, nn(destino['unidade_internacao_id']), usuario, 'transferir');
     if (n(destino['id']) === n(i['leito_hospitalar_id']))
       throw recusa('mesmo-leito', 'O destino é o leito atual: escolha outro leito.', { campos: ['destino'] });
     const reserva = await exigirLeitoLivre(tx, destino, e.solicitacaoNir ?? null);
@@ -734,6 +757,7 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
     const usuario = usuarioDe(ctx);
     const i = await internacaoTravada(tx, est, e.internacao, e.versao);
     exigirAberta(i);
+    await exigirOperadorDaUnidade(tx, nn(i['unidade_internacao_id']), usuario, 'darAlta');
     const m = await tx.uma(
       'SELECT id, tipo_saida, desfecho_internacao_id FROM motivo_saida_hospitalar WHERE id = ? AND ativo = TRUE',
       [e.motivo],
@@ -1308,17 +1332,30 @@ const registrarGuia = definirOperacao<
     guia: string;
     senha?: string | undefined;
     validadeDias: number;
+    inicio?: string | undefined;
+    autorizador?: string | undefined;
     observacao?: string | undefined;
   },
   ResultadoOperacao
 >({
   nome: 'internacao.registrar-guia',
-  tabelas: ['internacao'],
+  // F3.4 (04-INT 68): cada guia (inicial ou prorrogação) entra no histórico; a internação guarda a vigente.
+  tabelas: ['internacao', 'guia_internacao'],
   entrada: esquemaRegistrarGuia as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
     const i = await internacaoTravada(tx, est, e.internacao);
     if (i['situacao'] === 'cancelada') throw recusa('internacao-cancelada', 'A internação foi excluída.');
+    await gravarGuiaNoHistorico(tx, est, i['data_hora_entrada'] as Date, {
+      internacao: e.internacao,
+      conta: e.conta,
+      guia: e.guia,
+      senha: e.senha,
+      validadeDias: e.validadeDias,
+      inicio: e.inicio,
+      autorizador: e.autorizador,
+      observacao: e.observacao,
+    });
     const versao = await tx.alterar('internacao', e.internacao, n(i['versao']), {
       numero_guia: e.guia,
       senha_autorizacao: e.senha ?? null,
@@ -1636,4 +1673,5 @@ export const OPERACOES_ADT_BANCO: Readonly<Record<string, Operacao<never, Result
   'hotelaria.liberarLeito': liberarLeito as never,
   'same.movimentarProntuario': movimentarProntuario as never,
   'same.excluirMovimento': excluirMovimento as never,
+  ...OPERACOES_REGISTROS_INTERNACAO,
 };

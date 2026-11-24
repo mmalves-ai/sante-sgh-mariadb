@@ -36,6 +36,7 @@ import { PortaAdtMemoria } from './porta-memoria.js';
 import { PortaAdtPropria } from './porta-propria.js';
 import { DocumentosInternacaoController, DOCUMENTOS_INTERNACAO } from './documentos-internacao.controller.js';
 import { PortaDocumentosInternacao } from './documentos-internacao.js';
+import { RegistrosInternacaoController } from './registros-internacao.controller.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { SameController } from './same.controller.js';
 import { AVISOS_ADT } from './simbolos.js';
@@ -93,6 +94,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
     global: true,
     controllers: [
       InternacaoController,
+      RegistrosInternacaoController,
       MapaLeitosController,
       NirController,
       RegulacaoController,
