@@ -74,3 +74,21 @@ um log por passo e o resumo `passo: verde|vermelho`. Primeira volta: commit `921
 | E2E @M00 | vermelho (falta) | O servidor do E2E (`nx run-many -t serve -p api web`) não ficou pronto em 240 s na worktree limpa e o `web:serve` foi parado; causa a investigar no log `e1/05-e2e.log` (trecho: [WebServer] web: 17:13:32 [vite] http proxy error: /api/saude [WebServer] web: Error: connect ECONNREFUSED 127.0.0.1:3391 [WebServer] > nx run api:serve ). |
 | seguranca:verificar | não concluído | Ainda rodava ao fim do turno do conferidor (teto de ferramentas); rodar `tools/obra/esteira-local.sh --so instalar,seguranca`. |
 | `.int.spec` contra o banco na VM | falta | Passo próprio da esteira local com cliente de teste `ci2f_<rótulo>` e plataforma de teste, apagados no fim. |
+
+## E2E na VM pelo `tools/obra/e2e-vm.sh` (fecho-1, 2026-11-24)
+
+Árvore limpa do commit (sem `.env`), portas de teste 53xx:33xx, worker completo, fonte sintética. Comando de atalho:
+`./pnpm e2e:vm -- <argumentos do playwright>`. Logs em `sante-sgh-dados/obra/fecho1/e2e/`.
+
+| Spec | Commit | Resultado |
+|---|---|---|
+| `--grep @M00` | `e286593d` | **verde**, 1 passou (14,5 s). Fecha o "E2E @M00 vermelho" de 22/11. |
+| `entrar.spec.ts` (@M05) | `8d8922db` (antes) | vermelho, 1 falhou e 12 passaram: `strict mode violation: getByTestId('seletor-estabelecimento') resolved to 2 elements`. |
+| `entrar.spec.ts` (@M05) | `e286593d` | **verde**, 13 passaram (31,6 s). |
+| `prontuario.spec.ts -g "médico: Ctrl.K"` (@M15, PEP: abrir o paciente) | `e286593d` | **verde**, 1 passou (27,8 s). |
+| `m31.spec.ts` (@M31, faturamento TISS: lote, protocolo, glosa, recurso) | `e286593d` | **verde**, 2 passaram (40,2 s). |
+
+Causa do @M05 vermelho: o combo de troca de estabelecimento da barra superior (`BarraSuperior.vue`) e o combo de
+escolha da tela de entrada (`EntrarTela.vue`) tinham o mesmo `data-testid="seletor-estabelecimento"`, e os dois ficam
+no DOM na tela de entrada. Correção na causa: o da barra passou a `seletor-troca-estabelecimento` (é outro controle, a
+troca dentro da sessão); a asserção do spec não mudou.
