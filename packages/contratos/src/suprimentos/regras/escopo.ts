@@ -30,6 +30,8 @@ export interface EscopoEstoque {
   /** Local → tipos permitidos. */
   readonly locais: ReadonlyMap<number, ReadonlySet<TipoMovimento>>;
   readonly centrosCusto: ReadonlySet<number>;
+  /** Centros para os quais o usuário dá saída (ausente: os mesmos da requisição). */
+  readonly centrosSaida?: ReadonlySet<number>;
   /** Sem restrição de centro de custo cadastrada: todos (como o outro sistema trata). */
   readonly todosCentros: boolean;
   readonly flags: {
@@ -54,12 +56,21 @@ export function conferirLocal(
     : recusa('local-fora-do-escopo', 'Seu usuário não movimenta este local de estoque.', [campo]);
 }
 
-export function conferirCentroCusto(e: EscopoEstoque, cdc: number): RecusaSuprimentos | null {
-  return e.todosCentros || e.centrosCusto.has(cdc)
+export function conferirCentroCusto(
+  e: EscopoEstoque,
+  cdc: number,
+  acao: 'requisitar' | 'saida' = 'requisitar',
+): RecusaSuprimentos | null {
+  const centros = acao === 'saida' ? (e.centrosSaida ?? e.centrosCusto) : e.centrosCusto;
+  return e.todosCentros || centros.has(cdc)
     ? null
-    : recusa('centro-fora-do-escopo', 'Seu usuário não requisita para este centro de custo.', [
-        'centroCusto',
-      ]);
+    : recusa(
+        'centro-fora-do-escopo',
+        acao === 'saida'
+          ? 'Seu usuário não dá saída para este centro de custo.'
+          : 'Seu usuário não requisita para este centro de custo.',
+        ['centroCusto'],
+      );
 }
 
 /** A transferência: os dois locais no escopo (saída da origem, entrada no destino). */

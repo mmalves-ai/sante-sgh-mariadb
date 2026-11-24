@@ -11,7 +11,7 @@
 //   PUT  /api/suprimentos/cadastro/usuarios/:usuario/locais/:local    conceder ou alterar as ações no local
 //   POST /api/suprimentos/cadastro/usuarios/:usuario/locais/:local/retirar
 //   POST /api/suprimentos/cadastro/usuarios/:usuario/classificacoes · centros-custo  conceder com vigência
-//   POST /api/suprimentos/cadastro/concessoes/:tipo/:id/retirar       fecha a vigência (o histórico fica)
+//   POST /api/suprimentos/cadastro/concessoes/:tipo/:id/retirar       com motivo: encerra a que já valia, cancela a que começa hoje ou depois
 //   GET  /api/suprimentos/cadastro/requisicoes/:id/separacao          a lista de separação da requisição a atender
 // Cada gravação é uma operação do executor com a trilha na mesma transação.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
@@ -120,6 +120,8 @@ const esquemaItem = z
             condicao: z.enum(CONDICOES_ESTABILIDADE),
             horas: qtd,
             horasInfusaoMaxima: qtd.nullable().optional(),
+            condicaoArmazenamento: id.nullable().optional(),
+            diluente: id.nullable().optional(),
           })
           .strict(),
       )
@@ -354,9 +356,15 @@ export class CadastroEstoqueController {
   @HttpCode(200)
   @Permissao('acesso.escopo.editar')
   @AuditadoNoHandler('suprimentos.cadastro.retirarConcessao pelo executor')
-  retirarConcessao(@Param('tipo') tipo: string, @Param('id') v: string, @Req() req: RequisicaoAutorizada) {
+  retirarConcessao(
+    @Param('tipo') tipo: string,
+    @Param('id') v: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
     if (tipo !== 'classificacao' && tipo !== 'centro-custo') throw naoEncontrado('Tipo de concessão');
-    return this.porta.retirarConcessao(sessaoDe(req).porta, tipo, idDaRota(v));
+    const e = corpo(z.object({ motivo: texto(500) }).strict(), b ?? {});
+    return this.porta.retirarConcessao(sessaoDe(req).porta, tipo, idDaRota(v), e.motivo);
   }
 
   @Get('requisicoes/:id/separacao')

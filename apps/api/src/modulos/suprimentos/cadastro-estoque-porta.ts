@@ -168,7 +168,8 @@ export interface PortaCadastroEstoque {
     c: ContextoPortaM18,
     tipo: 'classificacao' | 'centro-custo',
     id: number,
-  ): Promise<{ id: number; fim: string }>;
+    motivo: string,
+  ): Promise<{ id: number; fim: string | null; cancelada: boolean }>;
   separacao(c: ContextoPortaM18, requisicao: number): Promise<ListaSeparacao | null>;
 }
 

@@ -139,6 +139,10 @@ export const concederCentroCusto = (
   u: number,
   e: { centroCusto: number; inicio: string; fim?: string | null; requisitar: boolean; movimentar: boolean },
 ) => enviar<{ id: number }>('POST', `${B}/usuarios/${u}/centros-custo`, e);
-export const retirarConcessao = (tipo: 'classificacao' | 'centro-custo', id: number) =>
-  enviar<{ id: number; fim: string }>('POST', `${B}/concessoes/${tipo}/${id}/retirar`);
+export const retirarConcessao = (tipo: 'classificacao' | 'centro-custo', id: number, motivo: string) =>
+  enviar<{ id: number; fim: string | null; cancelada: boolean }>(
+    'POST',
+    `${B}/concessoes/${tipo}/${id}/retirar`,
+    { motivo },
+  );
 export const listaSeparacao = (id: number) => ler<ListaSeparacao>(`${B}/requisicoes/${id}/separacao`);

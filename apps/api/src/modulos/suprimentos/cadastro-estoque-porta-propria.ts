@@ -12,7 +12,10 @@ import {
   conferirInativacaoLocal,
   conferirItemEstoque,
   conferirLocalEstoque,
-  fimDaRetirada,
+  chaveEstabilidade,
+  conferirAlteracaoItem,
+  conferirRequisicaoSeparavel,
+  retiradaDaConcessao,
   type ItemEstoqueEntrada,
   type LocalEstoqueEntrada,
   montarSeparacao,
@@ -305,6 +308,19 @@ async function gravarFilhosItem(tx: TxOperacao, id: number, e: ItemEstoqueEntrad
     [id],
   );
   for (const a of e.apresentacoes) {
+    const ap0 = aps.find(
+      (x) =>
+        chaveAp(x['fabricante_id'], x['nome_comercial'], x['apresentacao']) ===
+        chaveAp(a.fabricante, a.nomeComercial.trim(), nulo(a.apresentacao)),
+    );
+    // O registro substituído (outro número) ou retirado deixa de valer: fica no histórico como cancelado.
+    if (ap0)
+      for (const v of await tx.consultar<Linha>(
+        `SELECT id, versao FROM registro_sanitario WHERE apresentacao_comercial_id = ? AND excluido_em IS NULL
+            AND situacao IN ('valido','em_revalidacao') AND (? IS NULL OR numero_registro <> ?) FOR UPDATE`,
+        [n(ap0['id']), a.registro?.numero ?? null, a.registro?.numero ?? null],
+      ))
+        await tx.alterar('registro_sanitario', n(v['id']), n(v['versao']), { situacao: 'cancelado' });
     if (!a.registro) continue;
     const ap = aps.find(
       (x) =>
@@ -347,15 +363,74 @@ async function gravarFilhosItem(tx: TxOperacao, id: number, e: ItemEstoqueEntrad
     id,
     (r) => `${t(r['condicao'])}|${n(r['condicao_armazenamento_id'])}|${n(r['diluente_insumo_id'])}`,
     e.estabilidades.map((s) => ({
-      chave: `${s.condicao}|0|0`,
+      chave: chaveEstabilidade(s),
       valores: {
         condicao: s.condicao,
+        condicao_armazenamento_id: s.condicaoArmazenamento ?? null,
+        diluente_insumo_id: s.diluente ?? null,
         horas_estabilidade: s.horas,
         horas_infusao_maxima: s.horasInfusaoMaxima ?? null,
       },
     })),
     { inativar: 'ativo' },
   );
+}
+
+/** O que o item já tem no estoque: o saldo e a quantidade de movimentos. */
+async function usoDoItem(l: Leitor, insumo: number): Promise<{ saldoTotal: number; movimentos: number }> {
+  const m = await l.uma<Linha>(
+    'SELECT COUNT(*) AS q FROM movimento_estoque WHERE insumo_id = ? AND excluido_em IS NULL',
+    [insumo],
+  );
+  return { saldoTotal: await saldoDoItem(l, insumo), movimentos: n(m?.['q']) };
+}
+
+/** As requisições e os pedidos de compra em aberto com o item. */
+async function pendenciasDoItem(
+  l: Leitor,
+  insumo: number,
+): Promise<{ requisicoesAbertas: number; pedidosAbertos: number }> {
+  const rq = await l.uma<Linha>(
+    `SELECT COUNT(DISTINCT ri.requisicao_material_id) AS q FROM requisicao_material_item ri
+       JOIN requisicao_material r ON r.id = ri.requisicao_material_id AND r.excluido_em IS NULL
+        AND r.situacao IN ('rascunho','solicitada','autorizada','em_separacao','atendida_parcial')
+      WHERE ri.insumo_id = ? AND ri.excluido_em IS NULL AND ri.situacao IN ('pendente','atendido_parcial')`,
+    [insumo],
+  );
+  const pc = await l.uma<Linha>(
+    `SELECT COUNT(DISTINCT pi.pedido_compra_id) AS q FROM pedido_compra_item pi
+       JOIN pedido_compra p ON p.id = pi.pedido_compra_id AND p.excluido_em IS NULL
+        AND p.situacao IN ('rascunho','em_cotacao','aguardando_aprovacao','aprovado','enviado','parcialmente_recebido')
+      WHERE pi.insumo_id = ? AND pi.excluido_em IS NULL AND pi.cancelado_em IS NULL
+        AND pi.quantidade - pi.quantidade_recebida - pi.quantidade_cancelada > 0`,
+    [insumo],
+  );
+  return { requisicoesAbertas: n(rq?.['q']), pedidosAbertos: n(pc?.['q']) };
+}
+
+/**
+ * Inclui a concessão; a cancelada com o mesmo início (a chave única do par) volta a valer com os novos dados, e a
+ * trilha guarda as duas gravações.
+ */
+async function incluirConcessao(
+  tx: TxOperacao,
+  tabela: 'usuario_estoque_classificacao' | 'usuario_estoque_centro_custo',
+  par: string,
+  valoresPar: readonly unknown[],
+  inicio: string,
+  valores: Record<string, unknown>,
+): Promise<number> {
+  const cancelada = await tx.uma<Linha>(
+    `SELECT id, versao FROM ${tabela} WHERE ${par} AND vigencia_inicio = ? AND excluido_em IS NOT NULL FOR UPDATE`,
+    [...valoresPar, inicio],
+  );
+  if (!cancelada) return tx.incluir(tabela, valores);
+  await tx.alterar(tabela, n(cancelada['id']), n(cancelada['versao']), {
+    ...valores,
+    excluido_em: null,
+    excluido_por: null,
+  });
+  return n(cancelada['id']);
 }
 
 async function saldoDoItem(l: Leitor, insumo: number): Promise<number> {
@@ -713,6 +788,8 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
           condicao: t(s['condicao']) as 'aberto',
           horas: n(s['horas_estabilidade']),
           horasInfusaoMaxima: nn(s['horas_infusao_maxima']),
+          condicaoArmazenamento: nn(s['condicao_armazenamento_id']),
+          diluente: nn(s['diluente_insumo_id']),
         })),
         nomesPrincipios: Object.fromEntries(pas.map((p) => [n(p['principio_ativo_id']), t(p['descricao'])])),
         nomesFabricantes: Object.fromEntries([
@@ -744,10 +821,28 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarTodas(conferirItemEstoque(e));
     return this.gravar(c, 'alterarItem', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
       const atual = await tx.uma<Linha>(
-        'SELECT id, versao FROM insumo WHERE id = ? AND excluido_em IS NULL FOR UPDATE',
+        'SELECT * FROM insumo WHERE id = ? AND excluido_em IS NULL FOR UPDATE',
         [id],
       );
       if (!atual) throw recusa('item-inexistente', 'Item inexistente.', { campos: ['id'] });
+      recusarTodas(
+        conferirAlteracaoItem(
+          {
+            tipo: t(atual['tipo']) as ItemEstoqueEntrada['tipo'],
+            unidadeEstoque: n(atual['estoque_unidade_medida_id']),
+            unidadeCompra: nn(atual['compra_unidade_medida_id']),
+            fatorCompraEstoque: n(atual['fator_compra_estoque']),
+            unidadeConsumo: nn(atual['consumo_unidade_medida_id']),
+            fatorEstoqueConsumo: n(atual['fator_estoque_consumo']),
+            unidadePrescricao: nn(atual['prescricao_unidade_medida_id']),
+            fatorConsumoPrescricao: n(atual['fator_consumo_prescricao']),
+            controlaLote: b(atual['controla_lote']),
+            controlaValidade: b(atual['controla_validade']),
+          },
+          e,
+          await usoDoItem(tx, id),
+        ),
+      );
       if (await tx.uma('SELECT id FROM insumo WHERE codigo = ? AND id <> ?', [e.codigo.trim(), id]))
         throw recusa('item-codigo-existente', `Já existe item com o código ${e.codigo.trim()}.`, {
           campos: ['codigo'],
@@ -782,7 +877,14 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
       'insumo',
       { ativo, motivo },
       async (tx) => {
-        if (!ativo) recusarUma(conferirInativacaoItem({ motivo, saldoTotal: await saldoDoItem(tx, id) }));
+        if (!ativo)
+          recusarUma(
+            conferirInativacaoItem({
+              motivo,
+              saldoTotal: await saldoDoItem(tx, id),
+              ...(await pendenciasDoItem(tx, id)),
+            }),
+          );
         else if (motivo.trim().length < 5)
           throw recusa('reativar-sem-motivo', 'Informe o motivo da reativação.', { campos: ['motivo'] });
         const nova = await tx.alterar('insumo', id, versao, { situacao: ativo ? 'ativo' : 'inativo' });
@@ -1155,17 +1257,24 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
             'Já há concessão vigente desta classificação no período: retire-a antes.',
             { campos: ['inicio'] },
           );
-        const id = await tx.incluir('usuario_estoque_classificacao', {
-          estabelecimento_id: est,
-          usuario_id: usuario,
-          grupo_insumo_id: e.grupo,
-          subgrupo_insumo_id: e.subgrupo ?? null,
-          permite_requisitar: e.requisitar,
-          permite_movimentar: e.movimentar,
-          permite_comprar: e.comprar ?? false,
-          vigencia_inicio: e.inicio,
-          vigencia_fim: e.fim ?? null,
-        });
+        const id = await incluirConcessao(
+          tx,
+          'usuario_estoque_classificacao',
+          'estabelecimento_id = ? AND usuario_id = ? AND grupo_insumo_id = ? AND COALESCE(subgrupo_insumo_id, 0) = ?',
+          [est, usuario, e.grupo, e.subgrupo ?? 0],
+          e.inicio,
+          {
+            estabelecimento_id: est,
+            usuario_id: usuario,
+            grupo_insumo_id: e.grupo,
+            subgrupo_insumo_id: e.subgrupo ?? null,
+            permite_requisitar: e.requisitar,
+            permite_movimentar: e.movimentar,
+            permite_comprar: e.comprar ?? false,
+            vigencia_inicio: e.inicio,
+            vigencia_fim: e.fim ?? null,
+          },
+        );
         return { id };
       },
     );
@@ -1201,36 +1310,59 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
             'Já há concessão vigente deste centro de custo no período: retire-a antes.',
             { campos: ['inicio'] },
           );
-        const id = await tx.incluir('usuario_estoque_centro_custo', {
-          estabelecimento_id: est,
-          usuario_id: usuario,
-          centro_custo_id: e.centroCusto,
-          permite_requisitar: e.requisitar,
-          permite_saida: e.movimentar,
-          vigencia_inicio: e.inicio,
-          vigencia_fim: e.fim ?? null,
-        });
+        const id = await incluirConcessao(
+          tx,
+          'usuario_estoque_centro_custo',
+          'usuario_id = ? AND centro_custo_id = ?',
+          [usuario, e.centroCusto],
+          e.inicio,
+          {
+            estabelecimento_id: est,
+            usuario_id: usuario,
+            centro_custo_id: e.centroCusto,
+            permite_requisitar: e.requisitar,
+            permite_saida: e.movimentar,
+            vigencia_inicio: e.inicio,
+            vigencia_fim: e.fim ?? null,
+          },
+        );
         return { id };
       },
     );
   }
 
-  retirarConcessao(c: ContextoPortaM18, tipo: 'classificacao' | 'centro-custo', id: number) {
+  /**
+   * Retirar a concessão: a que já valia é encerrada na véspera; a que começa hoje ou depois é cancelada (a linha fica
+   * marcada como excluída, com o executor e o motivo na trilha). Nos dois casos deixa de valer na hora.
+   */
+  retirarConcessao(c: ContextoPortaM18, tipo: 'classificacao' | 'centro-custo', id: number, motivo = '') {
     const tabela =
       tipo === 'classificacao' ? 'usuario_estoque_classificacao' : 'usuario_estoque_centro_custo';
-    let fim = '';
-    return this.gravar(c, 'retirarConcessao', tabela, { tipo, id }, async (tx, est) => {
+    return this.gravar(c, 'retirarConcessao', tabela, { tipo, id, motivo }, async (tx, est) => {
       const r = await tx.uma<Linha>(
         `SELECT id, versao, vigencia_inicio, vigencia_fim FROM ${tabela} WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
         [id, est],
       );
       if (!r) throw recusa('concessao-inexistente', 'Concessão inexistente.', { campos: ['id'] });
       const hoje = await hojeDe(tx);
-      fim = fimDaRetirada(dataIso(r['vigencia_inicio']), hoje);
-      if (r['vigencia_fim'] && dataIso(r['vigencia_fim']) <= fim)
-        throw recusa('concessao-encerrada', 'A concessão já está encerrada.', { campos: ['id'] });
-      await tx.alterar(tabela, id, n(r['versao']), { vigencia_fim: fim });
-      return { id, fim };
+      const d = retiradaDaConcessao(
+        {
+          inicio: dataIso(r['vigencia_inicio']),
+          fim: r['vigencia_fim'] ? dataIso(r['vigencia_fim']) : null,
+          motivo,
+        },
+        hoje,
+      );
+      if (d.acao === 'recusar') recusarUma(d.recusa);
+      if (d.acao === 'encerrar') {
+        await tx.alterar(tabela, id, n(r['versao']), { vigencia_fim: d.fim });
+        return { id, fim: d.fim as string | null, cancelada: false };
+      }
+      await tx.alterar(tabela, id, n(r['versao']), {
+        excluido_em: new Date(),
+        excluido_por: c.usuario,
+      });
+      return { id, fim: null as string | null, cancelada: true };
     });
   }
 
@@ -1244,9 +1376,10 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
         [requisicao, est],
       );
       if (!rq) return null;
+      recusarUma(conferirRequisicaoSeparavel(t(rq['situacao'])));
       const local = n(rq['atendente_local_estoque_id']);
       const itens = await l.consultar<Linha>(
-        `SELECT ri.sequencia, ri.insumo_id, i.nome, um.sigla, ri.quantidade_solicitada, ri.quantidade_atendida, ri.quantidade_cancelada
+        `SELECT ri.sequencia, ri.insumo_id, i.nome, i.controla_lote, um.sigla, ri.quantidade_solicitada, ri.quantidade_atendida, ri.quantidade_cancelada
            FROM requisicao_material_item ri JOIN insumo i ON i.id = ri.insumo_id JOIN unidade_medida um ON um.id = ri.unidade_medida_id
           WHERE ri.requisicao_material_id = ? AND ri.excluido_em IS NULL AND ri.situacao IN ('pendente','atendido_parcial') ORDER BY ri.sequencia`,
         [requisicao],
@@ -1268,7 +1401,9 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
           ]);
         for (const r of await l.consultar<Linha>(
           `SELECT li.insumo_id, li.numero_lote, li.validade, sl.quantidade FROM saldo_lote sl JOIN lote_insumo li ON li.id = sl.lote_insumo_id AND li.excluido_em IS NULL
-            WHERE sl.local_estoque_id = ? AND sl.excluido_em IS NULL AND sl.quantidade > 0 AND li.insumo_id IN (${ph})`,
+              AND li.situacao = 'liberado'
+            WHERE sl.local_estoque_id = ? AND sl.excluido_em IS NULL AND sl.quantidade > 0 AND sl.bloqueado = FALSE
+              AND li.insumo_id IN (${ph})`,
           [local, ...ids],
         ))
           lotes.set(n(r['insumo_id']), [
@@ -1294,6 +1429,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
           solicitada: n(x['quantidade_solicitada']),
           atendida: n(x['quantidade_atendida']),
           cancelada: n(x['quantidade_cancelada']),
+          controlaLote: b(x['controla_lote']),
         })),
         enderecos,
         lotes,

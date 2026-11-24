@@ -28,6 +28,10 @@ const achados = ref<Opcao[]>([]);
 const escopo = ref<EscopoCompletoUsuario | null>(null);
 const grade = ref<Record<number, PermissaoLocalUsuario[]>>({});
 const erro = ref<unknown>(null);
+/** O motivo da retirada (vai à trilha); a concessão futura ou de hoje é cancelada, a que já valia é encerrada. */
+const motivoRetirada = ref('');
+const hoje = new Date().toISOString().slice(0, 10);
+const podeRetirar = (x: { fim: string | null }) => !x.fim || x.fim >= hoje;
 const novoLocal = ref('');
 const cl = ref({ grupo: '', inicio: '', fim: '', requisitar: true, movimentar: false, comprar: false });
 const cc = ref({ centro: '', inicio: '', fim: '', requisitar: true, movimentar: false });
@@ -150,16 +154,22 @@ const nomeLocal = (l: number) =>
         </option>
       </select>
 
+      <label
+        >{{ t('cadastroEstoque.escopo.motivoRetirada') }}
+        <input v-model="motivoRetirada" maxlength="500" data-testid="escopo-motivo-retirada"
+      /></label>
       <h3>{{ t('cadastroEstoque.escopo.classificacoes') }}</h3>
       <ul>
         <li v-for="x in escopo.classificacoes" :key="x.id">
           {{ x.nome }} · {{ `${x.inicio} – ${x.fim ?? '…'}` }} · {{ x.permissoes.join(', ') }} ·
           {{ x.vigente ? t('cadastroEstoque.escopo.vigente') : t('cadastroEstoque.escopo.encerrada') }}
           <button
-            v-if="x.vigente"
+            v-if="podeRetirar(x)"
             type="button"
             class="link"
-            @click="tentar(() => retirarConcessao('classificacao', x.id))"
+            :disabled="motivoRetirada.trim().length < 5"
+            :title="t('cadastroEstoque.escopo.motivoRetirada')"
+            @click="tentar(() => retirarConcessao('classificacao', x.id, motivoRetirada))"
           >
             {{ t('cadastroEstoque.escopo.retirar') }}
           </button>
@@ -210,10 +220,12 @@ const nomeLocal = (l: number) =>
           {{ x.nome }} · {{ `${x.inicio} – ${x.fim ?? '…'}` }} · {{ x.permissoes.join(', ') }} ·
           {{ x.vigente ? t('cadastroEstoque.escopo.vigente') : t('cadastroEstoque.escopo.encerrada') }}
           <button
-            v-if="x.vigente"
+            v-if="podeRetirar(x)"
             type="button"
             class="link"
-            @click="tentar(() => retirarConcessao('centro-custo', x.id))"
+            :disabled="motivoRetirada.trim().length < 5"
+            :title="t('cadastroEstoque.escopo.motivoRetirada')"
+            @click="tentar(() => retirarConcessao('centro-custo', x.id, motivoRetirada))"
           >
             {{ t('cadastroEstoque.escopo.retirar') }}
           </button>

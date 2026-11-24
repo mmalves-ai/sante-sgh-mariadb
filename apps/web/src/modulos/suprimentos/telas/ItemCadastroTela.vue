@@ -201,6 +201,11 @@ function incluirVia(ev: Event) {
 }
 const nomeVia = (v: number) => apoio.data.value?.vias.find((x) => x.id === v)?.nome ?? String(v);
 const remover = <T,>(lista: readonly T[], i: number): T[] => lista.filter((_, k) => k !== i);
+/** Troca um campo de uma estabilidade (horas, guarda ou diluente): a chave é a condição, a guarda e o diluente. */
+function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' | 'diluente', valor: string) {
+  const v = valor.trim() === '' ? (campo === 'horas' ? 0 : null) : Number(valor);
+  f.value.estabilidades = f.value.estabilidades.map((s, k) => (k === i ? { ...s, [campo]: v } : s));
+}
 </script>
 
 <template>
@@ -431,7 +436,35 @@ const remover = <T,>(lista: readonly T[], i: number): T[] => lista.filter((_, k)
         <legend>{{ t('cadastroEstoque.item.estabilidades') }}</legend>
         <ul>
           <li v-for="(s, i) in f.estabilidades" :key="i">
-            {{ s.condicao }} · {{ s.horas }} {{ t('cadastroEstoque.item.horas') }}
+            {{ s.condicao }}
+            <label
+              >{{ t('cadastroEstoque.item.horas') }}
+              <input
+                type="number"
+                min="0"
+                step="any"
+                :value="s.horas"
+                :data-testid="`estabilidade-horas-${i}`"
+                @change="mudarEstabilidade(i, 'horas', ($event.target as HTMLInputElement).value)"
+            /></label>
+            <label
+              >{{ t('cadastroEstoque.item.guarda') }}
+              <input
+                type="number"
+                min="1"
+                :value="s.condicaoArmazenamento ?? ''"
+                @change="
+                  mudarEstabilidade(i, 'condicaoArmazenamento', ($event.target as HTMLInputElement).value)
+                "
+            /></label>
+            <label v-if="s.condicao === 'diluido'"
+              >{{ t('cadastroEstoque.item.diluente') }}
+              <input
+                type="number"
+                min="1"
+                :value="s.diluente ?? ''"
+                @change="mudarEstabilidade(i, 'diluente', ($event.target as HTMLInputElement).value)"
+            /></label>
             <button type="button" class="link" @click="f.estabilidades = remover(f.estabilidades, i)">
               {{ t('cadastroEstoque.remover') }}
             </button>

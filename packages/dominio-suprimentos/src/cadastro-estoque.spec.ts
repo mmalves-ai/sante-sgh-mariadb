@@ -7,7 +7,12 @@ import {
   conferirInativacaoLocal,
   conferirItemEstoque,
   conferirLocalEstoque,
-  fimDaRetirada,
+  centrosDasConcessoes,
+  conferirAlteracaoItem,
+  conferirCentroCusto,
+  conferirRequisicaoSeparavel,
+  escopoDasLinhas,
+  retiradaDaConcessao,
   gtinValido,
   type ItemEstoqueEntrada,
   type LocalEstoqueEntrada,
@@ -119,6 +124,54 @@ describe('cadastro do item', () => {
       ]),
     );
     expect(codigos(conferirItemEstoque(item({ tipo: 'opme' })))).toEqual(['item-opme-sem-registro']);
+    // A mesma condição vale em diluentes e guardas diferentes; a repetição é pela tripla.
+    const diluidas = (x: object[]) =>
+      codigos(conferirItemEstoque(item({ estabilidades: x as ItemEstoqueEntrada['estabilidades'] })));
+    expect(
+      diluidas([
+        { condicao: 'diluido', horas: 6, diluente: 10 },
+        { condicao: 'diluido', horas: 4, diluente: 11 },
+        { condicao: 'aberto', horas: 24, condicaoArmazenamento: 1 },
+        { condicao: 'aberto', horas: 72, condicaoArmazenamento: 2 },
+      ]),
+    ).toEqual([]);
+    expect(
+      diluidas([
+        { condicao: 'diluido', horas: 6, diluente: 10 },
+        { condicao: 'diluido', horas: 4, diluente: 10 },
+      ]),
+    ).toEqual(['item-estabilidade-repetida']);
+    expect(diluidas([{ condicao: 'aberto', horas: 6, diluente: 10 }])).toEqual([
+      'item-estabilidade-diluente',
+    ]);
+  });
+
+  it('item com saldo ou movimento não troca unidade, fator, tipo nem controle de lote', () => {
+    const atual = item();
+    expect(
+      conferirAlteracaoItem(atual, item({ fatorEstoqueConsumo: 10 }), { saldoTotal: 0, movimentos: 0 }),
+    ).toEqual([]);
+    const f = conferirAlteracaoItem(
+      atual,
+      item({ fatorEstoqueConsumo: 10, unidadeEstoque: 9, controlaLote: !atual.controlaLote }),
+      {
+        saldoTotal: 0,
+        movimentos: 3,
+      },
+    );
+    expect(f.map((x) => x.campos?.[0]).sort()).toEqual([
+      'controlaLote',
+      'fatorEstoqueConsumo',
+      'unidadeEstoque',
+    ]);
+    expect(new Set(codigos(f))).toEqual(new Set(['item-com-uso-trava']));
+    // O nome e os limites mudam à vontade; o mesmo fator em outra grafia não conta como troca.
+    expect(
+      conferirAlteracaoItem(atual, item({ nome: 'Outro nome', estoqueMinimo: 5 }), {
+        saldoTotal: 4,
+        movimentos: 1,
+      }),
+    ).toEqual([]);
   });
 
   it('registro vencido aparece vencido; inativação exige motivo e saldo zerado', () => {
@@ -130,6 +183,12 @@ describe('cadastro do item', () => {
       'inativar-com-saldo',
     );
     expect(conferirInativacaoItem({ motivo: 'Fora de linha', saldoTotal: 0 })).toBeNull();
+    expect(
+      conferirInativacaoItem({ motivo: 'Fora de linha', saldoTotal: 0, requisicoesAbertas: 2 })?.codigo,
+    ).toBe('inativar-item-com-requisicao');
+    expect(
+      conferirInativacaoItem({ motivo: 'Fora de linha', saldoTotal: 0, pedidosAbertos: 1 })?.codigo,
+    ).toBe('inativar-item-com-pedido');
   });
 });
 
@@ -203,8 +262,48 @@ describe('local de estoque e escopo do usuário', () => {
       'concessao-vazia',
     );
     expect(conferirConcessaoVigente({ inicio: '2026-11-24', permissoes: ['requisitar'] })).toBeNull();
-    expect(fimDaRetirada('2026-01-01', '2026-11-24')).toBe('2026-11-23');
-    expect(fimDaRetirada('2026-11-24', '2026-11-24')).toBe('2026-11-24');
+  });
+
+  it('retirar: encerra a que já valia, cancela a de hoje e a futura, recusa sem motivo e a encerrada', () => {
+    const m = 'Mudou de setor';
+    expect(retiradaDaConcessao({ inicio: '2026-01-01', motivo: m }, '2026-11-24')).toEqual({
+      acao: 'encerrar',
+      fim: '2026-11-23',
+    });
+    expect(retiradaDaConcessao({ inicio: '2026-11-24', motivo: m }, '2026-11-24')).toEqual({
+      acao: 'cancelar',
+    });
+    expect(retiradaDaConcessao({ inicio: '2026-12-10', fim: '2026-12-20', motivo: m }, '2026-11-24')).toEqual(
+      {
+        acao: 'cancelar',
+      },
+    );
+    const semMotivo = retiradaDaConcessao({ inicio: '2026-01-01', motivo: '' }, '2026-11-24');
+    expect(semMotivo.acao === 'recusar' && semMotivo.recusa.codigo).toBe('retirar-sem-motivo');
+    const encerrada = retiradaDaConcessao(
+      { inicio: '2026-01-01', fim: '2026-03-01', motivo: m },
+      '2026-11-24',
+    );
+    expect(encerrada.acao === 'recusar' && encerrada.recusa.codigo).toBe('concessao-encerrada');
+  });
+
+  it('centros do escopo: retirar a última não abre todos; requisitar e saída pesam cada um', () => {
+    const flags = { autorizarRequisicao: false, autorizarPedido: false, desbloquearFechamento: false };
+    const com = (c: Parameters<typeof centrosDasConcessoes>[0]) => ({
+      ...escopoDasLinhas([], [], flags),
+      ...centrosDasConcessoes(c),
+    });
+    expect(conferirCentroCusto(com([]), 7)).toBeNull();
+    const retirada = com([{ centro: 7, requisitar: true, saida: true, vigente: false }]);
+    expect(retirada.todosCentros).toBe(false);
+    expect(conferirCentroCusto(retirada, 7)?.codigo).toBe('centro-fora-do-escopo');
+    expect(conferirCentroCusto(retirada, 8)?.codigo).toBe('centro-fora-do-escopo');
+    const soRequisita = com([{ centro: 7, requisitar: true, saida: false, vigente: true }]);
+    expect(conferirCentroCusto(soRequisita, 7)).toBeNull();
+    expect(conferirCentroCusto(soRequisita, 7, 'saida')?.codigo).toBe('centro-fora-do-escopo');
+    const soSaida = com([{ centro: 7, requisitar: false, saida: true, vigente: true }]);
+    expect(conferirCentroCusto(soSaida, 7)?.codigo).toBe('centro-fora-do-escopo');
+    expect(conferirCentroCusto(soSaida, 7, 'saida')).toBeNull();
   });
 });
 
@@ -273,5 +372,36 @@ describe('lista de separação', () => {
       '2026-11-24',
     );
     expect(x!.falta).toBe(2);
+  });
+});
+
+describe('lista de separação: requisição atendível e item com lote', () => {
+  it('só sai para requisição que o atendimento aceita', () => {
+    for (const x of ['solicitada', 'autorizada', 'em_separacao', 'atendida_parcial'])
+      expect(conferirRequisicaoSeparavel(x)).toBeNull();
+    for (const x of ['rascunho', 'atendida', 'recebida', 'cancelada'])
+      expect(conferirRequisicaoSeparavel(x)?.codigo).toBe('separacao-requisicao-nao-atendivel');
+  });
+
+  it('item com lote sem lote liberado: falta tudo, mesmo com saldo', () => {
+    const [x] = montarSeparacao(
+      [
+        {
+          sequencia: 1,
+          item: 1,
+          nome: 'A',
+          unidade: 'UN',
+          solicitada: 5,
+          atendida: 0,
+          cancelada: 0,
+          controlaLote: true,
+        },
+      ],
+      new Map(),
+      new Map(),
+      new Map([[1, 30]]),
+      '2026-11-24',
+    );
+    expect(x).toMatchObject({ aSeparar: 5, lotes: [], falta: 5 });
   });
 });

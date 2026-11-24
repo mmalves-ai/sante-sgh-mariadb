@@ -86,7 +86,18 @@ export interface EstabilidadeItem {
   readonly condicao: (typeof CONDICOES_ESTABILIDADE)[number];
   readonly horas: number;
   readonly horasInfusaoMaxima?: number | null;
+  /** A guarda a que a estabilidade se refere (ambiente, refrigerado, ao abrigo da luz); nula: qualquer. */
+  readonly condicaoArmazenamento?: number | null;
+  /** O diluente, na estabilidade da solução diluída; nulo: não se aplica. */
+  readonly diluente?: number | null;
 }
+
+/** A chave da estabilidade: a condição, a guarda e o diluente (a mesma condição vale em diluentes diferentes). */
+export const chaveEstabilidade = (s: {
+  readonly condicao: string;
+  readonly condicaoArmazenamento?: number | null;
+  readonly diluente?: number | null;
+}): string => `${s.condicao}|${s.condicaoArmazenamento ?? 0}|${s.diluente ?? 0}`;
 
 export interface ItemEstoqueEntrada {
   readonly codigo: string;
@@ -218,8 +229,16 @@ export function conferirItemEstoque(e: ItemEstoqueEntrada): RecusaCadastroEstoqu
         'apresentacoes',
       ),
     );
-  if (repetidos(e.estabilidades.map((s) => s.condicao)))
-    f.push(r('item-estabilidade-repetida', 'Condição de estabilidade repetida.', 'estabilidades'));
+  if (repetidos(e.estabilidades.map(chaveEstabilidade)))
+    f.push(
+      r(
+        'item-estabilidade-repetida',
+        'Estabilidade repetida (mesma condição, guarda e diluente).',
+        'estabilidades',
+      ),
+    );
+  if (e.estabilidades.some((s) => s.diluente != null && s.condicao !== 'diluido'))
+    f.push(r('item-estabilidade-diluente', 'O diluente só vale na condição diluída.', 'estabilidades'));
   for (const s of e.estabilidades) {
     if (!CONDICOES_ESTABILIDADE.includes(s.condicao))
       f.push(r('item-estabilidade-condicao', 'Condição de estabilidade inválida.', 'estabilidades'));
@@ -238,10 +257,66 @@ export function situacaoRegistroNaData(
   return situacao === 'valido' && validade && validade < hoje ? 'vencido' : situacao;
 }
 
-/** Inativar o item: com motivo e sem saldo em nenhum local (o item nunca é apagado). */
+/** O que o item já tem no estoque: com saldo ou movimento, a unidade, os fatores e o controle de lote ficam. */
+export interface UsoDoItem {
+  readonly saldoTotal: number;
+  readonly movimentos: number;
+}
+type IdentidadeEstoque = Pick<
+  ItemEstoqueEntrada,
+  | 'tipo'
+  | 'unidadeEstoque'
+  | 'unidadeCompra'
+  | 'fatorCompraEstoque'
+  | 'unidadeConsumo'
+  | 'fatorEstoqueConsumo'
+  | 'unidadePrescricao'
+  | 'fatorConsumoPrescricao'
+  | 'controlaLote'
+  | 'controlaValidade'
+>;
+const CAMPOS_TRAVADOS_COM_USO: readonly (keyof IdentidadeEstoque)[] = [
+  'tipo',
+  'unidadeEstoque',
+  'unidadeCompra',
+  'fatorCompraEstoque',
+  'unidadeConsumo',
+  'fatorEstoqueConsumo',
+  'unidadePrescricao',
+  'fatorConsumoPrescricao',
+  'controlaLote',
+  'controlaValidade',
+];
+
+/**
+ * Alterar o item que já tem saldo ou movimento: a unidade do estoque, as unidades e os fatores de conversão, o tipo e
+ * o controle de lote e de validade não mudam, porque mudariam o significado do saldo, do custo e dos lotes gravados.
+ * Para mudar, cadastre um item novo e transfira (ou zere e inative o antigo).
+ */
+export function conferirAlteracaoItem(
+  atual: IdentidadeEstoque,
+  novo: IdentidadeEstoque,
+  uso: UsoDoItem,
+): RecusaCadastroEstoque[] {
+  if (uso.saldoTotal <= 0 && uso.movimentos <= 0) return [];
+  const mudou = CAMPOS_TRAVADOS_COM_USO.filter(
+    (k) => (atual[k] ?? null) !== (novo[k] ?? null) && Number(atual[k] ?? 0) !== Number(novo[k] ?? 0),
+  );
+  return mudou.map((k) =>
+    r(
+      'item-com-uso-trava',
+      'O item já tem saldo ou movimento: unidade, fator de conversão, tipo e controle de lote e validade não mudam. Cadastre um item novo para a nova forma.',
+      k,
+    ),
+  );
+}
+
+/** Inativar o item: com motivo, sem saldo em nenhum local e sem requisição ou pedido de compra em aberto. */
 export function conferirInativacaoItem(e: {
   readonly motivo: string;
   readonly saldoTotal: number;
+  readonly requisicoesAbertas?: number;
+  readonly pedidosAbertos?: number;
 }): RecusaCadastroEstoque | null {
   if (e.motivo.trim().length < 5)
     return r('inativar-sem-motivo', 'Informe o motivo da inativação.', 'motivo');
@@ -249,6 +324,18 @@ export function conferirInativacaoItem(e: {
     return r(
       'inativar-com-saldo',
       `O item ainda tem ${e.saldoTotal} em estoque: zere o saldo (saída, devolução ou acerto) antes de inativar.`,
+      'situacao',
+    );
+  if ((e.requisicoesAbertas ?? 0) > 0)
+    return r(
+      'inativar-item-com-requisicao',
+      `O item está em ${e.requisicoesAbertas} requisição(ões) em aberto: atenda ou cancele antes de inativar.`,
+      'situacao',
+    );
+  if ((e.pedidosAbertos ?? 0) > 0)
+    return r(
+      'inativar-item-com-pedido',
+      `O item está em ${e.pedidosAbertos} pedido(s) de compra em aberto: receba ou cancele antes de inativar.`,
       'situacao',
     );
   return null;
@@ -407,15 +494,73 @@ export function conferirConcessaoVigente(e: {
   return null;
 }
 
-/** Retirar a concessão fecha a vigência na véspera de hoje (ou hoje, se começou hoje): o histórico fica. */
-export function fimDaRetirada(inicio: string, hoje: string): string {
-  if (inicio >= hoje) return inicio;
+/**
+ * Retirar a concessão deixa de valer na hora, com o histórico guardado:
+ * - a que começou antes de hoje é encerrada (o fim vai para a véspera de hoje);
+ * - a que começa hoje ou no futuro nunca valeu um dia inteiro: é cancelada (marca e motivo na trilha);
+ * - a já encerrada é recusada.
+ */
+export type RetiradaConcessao =
+  | { readonly acao: 'encerrar'; readonly fim: string }
+  | { readonly acao: 'cancelar' }
+  | { readonly acao: 'recusar'; readonly recusa: RecusaCadastroEstoque };
+
+export function retiradaDaConcessao(
+  e: { readonly inicio: string; readonly fim?: string | null; readonly motivo: string },
+  hoje: string,
+): RetiradaConcessao {
+  if (e.motivo.trim().length < 5)
+    return { acao: 'recusar', recusa: r('retirar-sem-motivo', 'Informe o motivo da retirada.', 'motivo') };
+  if (e.inicio >= hoje) return { acao: 'cancelar' };
   const d = new Date(`${hoje}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+  const fim = d.toISOString().slice(0, 10);
+  if (e.fim && e.fim <= fim)
+    return { acao: 'recusar', recusa: r('concessao-encerrada', 'A concessão já está encerrada.', 'id') };
+  return { acao: 'encerrar', fim };
+}
+
+/**
+ * Os centros de custo do escopo pelas concessões do usuário no estabelecimento. Sem restrição só quando o usuário
+ * nunca teve concessão de centro de custo ali (nem vigente, nem encerrada, nem cancelada): retirar a última não abre
+ * todos os centros. Requisitar e dar saída pesam cada um pela sua marca.
+ */
+export function centrosDasConcessoes(
+  concessoes: readonly {
+    readonly centro: number;
+    readonly requisitar: boolean;
+    readonly saida: boolean;
+    readonly vigente: boolean;
+  }[],
+): { todosCentros: boolean; centrosCusto: Set<number>; centrosSaida: Set<number> } {
+  const vig = concessoes.filter((x) => x.vigente);
+  return {
+    todosCentros: concessoes.length === 0,
+    centrosCusto: new Set(vig.filter((x) => x.requisitar).map((x) => x.centro)),
+    centrosSaida: new Set(vig.filter((x) => x.saida).map((x) => x.centro)),
+  };
 }
 
 // ── Lista de separação ───────────────────────────────────────────────────────────────────────────────────────────
+
+/** As situações em que a requisição pode ser atendida (as mesmas que o atendimento aceita). */
+export const SITUACOES_REQUISICAO_ATENDIVEIS = [
+  'solicitada',
+  'autorizada',
+  'em_separacao',
+  'atendida_parcial',
+] as const;
+
+/** A lista de separação só sai para requisição que pode ser atendida. */
+export function conferirRequisicaoSeparavel(situacao: string): RecusaCadastroEstoque | null {
+  return (SITUACOES_REQUISICAO_ATENDIVEIS as readonly string[]).includes(situacao)
+    ? null
+    : r(
+        'separacao-requisicao-nao-atendivel',
+        `A requisição está ${situacao.replace('_', ' ')}: não há o que separar.`,
+        'requisicao',
+      );
+}
 
 export interface ItemASeparar {
   readonly sequencia: number;
@@ -425,6 +570,8 @@ export interface ItemASeparar {
   readonly solicitada: number;
   readonly atendida: number;
   readonly cancelada: number;
+  /** O item controla lote: a falta é o que os lotes liberados e válidos não cobrem. */
+  readonly controlaLote?: boolean;
 }
 export interface LoteParaSeparar {
   readonly lote: string;
@@ -481,7 +628,7 @@ export function montarSeparacao(
       resta = q4(resta - tira);
     }
     const saldo = saldos.get(it.item) ?? 0;
-    const comLote = (lotes.get(it.item)?.length ?? 0) > 0;
+    const comLote = it.controlaLote ?? (lotes.get(it.item)?.length ?? 0) > 0;
     const cobre = comLote ? aSeparar - resta : Math.min(aSeparar, saldo);
     linhas.push({
       sequencia: it.sequencia,

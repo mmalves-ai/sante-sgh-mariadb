@@ -68,6 +68,8 @@ export const mensagensCadastroEstoque = {
     estabilidades: 'Estabilidade',
     condicao: 'Condição',
     horas: 'Horas',
+    guarda: 'Guarda (código da condição de armazenamento)',
+    diluente: 'Diluente (código interno do item)',
     saldoTotal: 'Saldo total em estoque: {q}',
     situacao: 'Situação',
     tipos: {
@@ -118,7 +120,7 @@ export const mensagensCadastroEstoque = {
   escopo: {
     titulo: 'Escopo do usuário no estoque',
     texto:
-      'Escolha o usuário e marque o que ele faz em cada local; conceda grupos de itens e centros de custo com vigência. Retirar fecha a vigência: o histórico fica.',
+      'Escolha o usuário e marque o que ele faz em cada local; conceda grupos de itens e centros de custo com vigência. Retirar pede o motivo: a concessão que já valia é encerrada e a que começa hoje ou depois é cancelada; o histórico fica.',
     buscarUsuario: 'Buscar usuário',
     locais: 'Locais e ações',
     local: 'Local',
@@ -130,6 +132,7 @@ export const mensagensCadastroEstoque = {
     fim: 'Fim',
     vigente: 'Vigente',
     encerrada: 'Encerrada',
+    motivoRetirada: 'Motivo da retirada (ao menos 5 letras)',
     requisitar: 'Requisitar',
     movimentar: 'Movimentar',
     comprar: 'Comprar',

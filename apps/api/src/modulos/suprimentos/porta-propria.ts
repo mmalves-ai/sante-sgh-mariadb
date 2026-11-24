@@ -38,6 +38,7 @@ import {
   conferirCabecalhoNota,
   conferirCabecalhoSaida,
   conferirCentroCusto,
+  centrosDasConcessoes,
   conferirCompetencia,
   conferirCorrecaoValidade,
   conferirItensPedido,
@@ -829,6 +830,11 @@ const SQL_CENTROS_USUARIO = `SELECT cc.id, cc.nome FROM usuario_estoque_centro_c
   WHERE uc.estabelecimento_id = ? AND uc.usuario_id = ? AND uc.excluido_em IS NULL
     AND uc.vigencia_inicio <= CURRENT_DATE AND (uc.vigencia_fim IS NULL OR uc.vigencia_fim >= CURRENT_DATE)
   ORDER BY cc.nome, cc.id`;
+/** Todas as concessões de centro de custo do usuário no estabelecimento (vigentes ou não), para o escopo. */
+const SQL_CONCESSOES_CENTRO = `SELECT uc.centro_custo_id, uc.permite_requisitar, uc.permite_saida,
+        (uc.excluido_em IS NULL AND uc.vigencia_inicio <= CURRENT_DATE
+          AND (uc.vigencia_fim IS NULL OR uc.vigencia_fim >= CURRENT_DATE)) AS vigente
+   FROM usuario_estoque_centro_custo uc WHERE uc.estabelecimento_id = ? AND uc.usuario_id = ?`;
 
 /**
  * O escopo do usuário no estoque do estabelecimento, pelo cadastro: os tipos de movimento por local, os centros de
@@ -837,7 +843,14 @@ const SQL_CENTROS_USUARIO = `SELECT cc.id, cc.nome FROM usuario_estoque_centro_c
  */
 async function escopoDoUsuario(l: Leitor, est: number, usuario: number): Promise<EscopoEstoque> {
   const linhas = await l.consultar<Linha>(SQL_PERMISSOES_LOCAL, [est, usuario]);
-  const centros = await l.consultar<Linha>(SQL_CENTROS_USUARIO, [est, usuario]);
+  const centros = centrosDasConcessoes(
+    (await l.consultar<Linha>(SQL_CONCESSOES_CENTRO, [est, usuario])).map((r) => ({
+      centro: n(r['centro_custo_id']),
+      requisitar: verdadeiro(r['permite_requisitar']),
+      saida: verdadeiro(r['permite_saida']),
+      vigente: verdadeiro(r['vigente']),
+    })),
+  );
   const locais = new Map<number, Set<TipoMovimento>>();
   for (const r of linhas) {
     const s = new Set<TipoMovimento>();
@@ -846,8 +859,7 @@ async function escopoDoUsuario(l: Leitor, est: number, usuario: number): Promise
   }
   return {
     locais,
-    centrosCusto: new Set(centros.map((r) => n(r['id']))),
-    todosCentros: centros.length === 0,
+    ...centros,
     flags: {
       autorizarRequisicao: linhas.some((r) => verdadeiro(r['pode_atender'])),
       autorizarPedido: linhas.some((r) => verdadeiro(r['pode_autorizar_pedido'])),
@@ -1885,7 +1897,7 @@ export async function registrarSaida(
   await centroDoEstabelecimento(tx, est, e.centroCusto);
   const escopo = await escopoDaOperacao(tx, est);
   recusar(conferirLocal(escopo, e.local, 'saida'));
-  recusar(conferirCentroCusto(escopo, e.centroCusto));
+  recusar(conferirCentroCusto(escopo, e.centroCusto, 'saida'));
   const paraPaciente = e.destino === 1 || e.destino === 3;
   if (paraPaciente && !e.atendimento)
     throw recusa('sem-paciente', 'Informe o atendimento do paciente.', { campos: ['atendimento'] });

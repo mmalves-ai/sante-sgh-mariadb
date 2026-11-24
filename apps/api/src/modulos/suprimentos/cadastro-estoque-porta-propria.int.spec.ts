@@ -1,13 +1,17 @@
 // Contrato de efeito do cadastro do estoque (F3.6, 05-SUP linhas 1, 3 e 6) na porta própria contra o MariaDB real
 // (cliente de teste do lote; massa SINTÉTICA, nenhuma pessoa real): o item gravado inteiro (filhos pela chave natural,
 // o que sai é excluído ou inativado), inativação recusada com saldo; o local com classificação, inativação recusada
-// com saldo; o escopo do usuário por local (retirado fica marcado, sem ação) e as concessões com vigência (retirar
-// fecha a vigência, o histórico fica); a lista de separação na ordem do endereço com os lotes pela validade; recusas
-// sem gravar e a trilha na mesma transação. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+// com saldo; o item com saldo ou movimento não troca unidade, fator nem controle de lote; a estabilidade pela chave
+// completa (condição, guarda e diluente) e o registro sanitário substituído cancelado; o escopo do usuário por local
+// (retirado fica marcado, sem ação) e as concessões com vigência (retirar com motivo: a que já valia é encerrada, a de
+// hoje ou futura é cancelada; retirar a última concessão de centro de custo recusa a requisição pelo escopo real das
+// gravações); a lista de separação só da requisição atendível, com os lotes liberados e válidos pela validade e a
+// falta exata; recusas sem gravar e a trilha na mesma transação. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { PortaCadastroEstoquePropria } from './cadastro-estoque-porta-propria.js';
+import { PortaSuprimentosPropria } from './porta-propria.js';
 import {
   CLIENTE,
   codigoDe,
@@ -164,8 +168,17 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
       1,
       item({
         vias: [{ via: via1, padrao: true }],
-        apresentacoes: [{ nomeComercial: `${MARCA} Outra`, quantidadeEmbalagem: 20 }],
-        estabilidades: [{ condicao: 'diluido', horas: 6 }],
+        apresentacoes: [
+          {
+            nomeComercial: `${MARCA} Outra`,
+            quantidadeEmbalagem: 20,
+            registro: { numero: '987654321', validade: '2030-01-01', situacao: 'valido' },
+          },
+        ],
+        estabilidades: [
+          { condicao: 'diluido', horas: 6, diluente: m.insumoOpme },
+          { condicao: 'diluido', horas: 4, diluente: m.insumoInativo },
+        ],
       }),
     );
     expect(v2.versao).toBe(2);
@@ -189,17 +202,55 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
           )
         )?.['q'],
       ),
-    ).toBe(1);
-    expect(
+    ).toBe(2);
+    const estab = async () =>
       (
-        await ler<{ condicao: string; ativo: unknown }>(
-          'SELECT condicao, ativo FROM estabilidade_insumo WHERE insumo_id = ? ORDER BY id',
+        await ler<{ condicao: string; diluente_insumo_id: unknown; ativo: unknown }>(
+          'SELECT condicao, diluente_insumo_id, ativo FROM estabilidade_insumo WHERE insumo_id = ? ORDER BY id',
           [id],
         )
-      ).map((x) => [x.condicao, Number(x.ativo)]),
+      ).map((x) => [x.condicao, Number(x.diluente_insumo_id ?? 0), Number(x.ativo)]);
+    expect(await estab()).toEqual([
+      ['aberto', 0, 0],
+      ['diluido', m.insumoOpme, 1],
+      ['diluido', m.insumoInativo, 1],
+    ]);
+    // Gravar de novo o mesmo item não inativa as estabilidades com diluente; trocar o registro cancela o anterior.
+    await porta.alterarItem(
+      c,
+      id,
+      2,
+      item({
+        vias: [{ via: via1, padrao: true }],
+        apresentacoes: [
+          {
+            nomeComercial: `${MARCA} Outra`,
+            quantidadeEmbalagem: 20,
+            registro: { numero: '111222333', validade: '2031-01-01', situacao: 'valido' },
+          },
+        ],
+        estabilidades: [
+          { condicao: 'diluido', horas: 6, diluente: m.insumoOpme },
+          { condicao: 'diluido', horas: 4, diluente: m.insumoInativo },
+        ],
+      }),
+    );
+    expect(await estab()).toEqual([
+      ['aberto', 0, 0],
+      ['diluido', m.insumoOpme, 1],
+      ['diluido', m.insumoInativo, 1],
+    ]);
+    expect(
+      (
+        await ler<{ numero_registro: string; situacao: string }>(
+          `SELECT rs.numero_registro, rs.situacao FROM registro_sanitario rs JOIN apresentacao_comercial a ON a.id = rs.apresentacao_comercial_id
+            WHERE a.insumo_id = ? AND a.ativo = TRUE ORDER BY rs.sequencia`,
+          [id],
+        )
+      ).map((x) => [x.numero_registro, x.situacao]),
     ).toEqual([
-      ['aberto', 0],
-      ['diluido', 1],
+      ['987654321', 'cancelado'],
+      ['111222333', 'valido'],
     ]);
     // Versão velha: conflito, nada muda.
     expect(await codigoDe(porta.alterarItem(c, id, 1, item({ nome: `${MARCA} X` })))).not.toBe('ok');
@@ -210,12 +261,31 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
     );
 
     // Inativar: sem motivo recusa; o item da massa com saldo recusa; o novo (sem saldo) inativa e nada é apagado.
-    expect(await codigoDe(porta.situacaoItem(c, id, 2, false, ''))).toBe('inativar-sem-motivo');
+    expect(await codigoDe(porta.situacaoItem(c, id, 3, false, ''))).toBe('inativar-sem-motivo');
     const massa = await um('SELECT versao FROM insumo WHERE id = ?', [m.insumo]);
+    // O item da massa tem saldo e lote: a unidade, o fator e o controle de lote não mudam (nada gravado).
+    const travado = await codigoDe(
+      porta.alterarItem(
+        c,
+        m.insumo,
+        Number(massa!['versao']),
+        item({
+          codigo: `${MARCA}M`,
+          codigosBarras: [],
+          gtin: null,
+          fatorEstoqueConsumo: 7,
+          controlaLote: false,
+        }),
+      ),
+    );
+    expect(travado).toBe('item-com-uso-trava');
+    expect(await um('SELECT versao FROM insumo WHERE id = ?', [m.insumo])).toMatchObject({
+      versao: massa!['versao'],
+    });
     expect(
       await codigoDe(porta.situacaoItem(c, m.insumo, Number(massa!['versao']), false, 'Fora de linha')),
     ).toBe('inativar-com-saldo');
-    await porta.situacaoItem(c, id, 2, false, 'Fora de linha');
+    await porta.situacaoItem(c, id, 3, false, 'Fora de linha');
     expect(await um('SELECT situacao, excluido_em FROM insumo WHERE id = ?', [id])).toMatchObject({
       situacao: 'inativo',
       excluido_em: null,
@@ -342,8 +412,11 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
         }),
       ),
     ).toBe('concessao-sobreposta');
-    const r = await porta.retirarConcessao(c, 'classificacao', cl);
-    expect(r.fim < hoje || r.fim === '2026-01-01').toBe(true);
+    expect(await codigoDe(porta.retirarConcessao(c, 'classificacao', cl, ''))).toBe('retirar-sem-motivo');
+    // A que já valia é encerrada na véspera de hoje.
+    const r = await porta.retirarConcessao(c, 'classificacao', cl, 'Mudou de função');
+    expect(r.cancelada).toBe(false);
+    expect(r.fim! < hoje).toBe(true);
     expect(
       await um('SELECT excluido_em FROM usuario_estoque_classificacao WHERE id = ?', [cl]),
     ).toMatchObject({ excluido_em: null });
@@ -359,67 +432,188 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
       permissoes: ['requisitar', 'movimentar'],
     });
     expect(esc!.classificacoes.find((x) => x.id === cl)?.vigente).toBe(false);
+
+    // Retirar a única concessão de centro de custo (começou hoje: cancelada na hora) não abre todos os centros: a
+    // requisição para o centro é recusada pelo escopo que as gravações usam, e nada é gravado.
+    const rc = await porta.retirarConcessao(c, 'centro-custo', cc, 'Saiu do setor');
+    expect(rc).toMatchObject({ cancelada: true, fim: null });
+    expect(
+      await um('SELECT excluido_em IS NOT NULL AS cancelada FROM usuario_estoque_centro_custo WHERE id = ?', [
+        cc,
+      ]),
+    ).toMatchObject({ cancelada: 1 });
+    const suprimentos = new PortaSuprimentosPropria(nucleo);
+    const requisicoes = async () =>
+      Number(
+        (await um('SELECT COUNT(*) AS q FROM requisicao_material WHERE estabelecimento_id = ?', [m.estA]))?.[
+          'q'
+        ],
+      );
+    const antes = await requisicoes();
+    expect(
+      await codigoDe(
+        suprimentos.executar(
+          c,
+          'suprimentos.requisitarMaterial',
+          {
+            destino: 2,
+            local: m.localA,
+            centroCusto: m.centroCusto,
+            localConsumo: 1,
+            itens: [{ item: m.insumo, quantidade: 1 }],
+          },
+          { ...c, chaveIdempotencia: `k-${MARCA}-esc` },
+        ),
+      ),
+    ).toBe('centro-fora-do-escopo');
+    expect(await requisicoes()).toBe(antes);
+    // A futura retirada é cancelada (nunca valeu); conceder de novo no mesmo início reaproveita a cancelada.
+    const amanha = new Date(`${hoje}T12:00:00Z`);
+    amanha.setUTCDate(amanha.getUTCDate() + 1);
+    const ini = amanha.toISOString().slice(0, 10);
+    const { id: fut } = await porta.concederCentroCusto(c, m.usuario, {
+      centroCusto: m.centroCusto,
+      inicio: ini,
+      requisitar: true,
+      movimentar: false,
+    });
+    expect(await porta.retirarConcessao(c, 'centro-custo', fut, 'Não vai mais')).toMatchObject({
+      cancelada: true,
+    });
+    const { id: de } = await porta.concederCentroCusto(c, m.usuario, {
+      centroCusto: m.centroCusto,
+      inicio: ini,
+      requisitar: true,
+      movimentar: false,
+    });
+    expect(de).toBe(fut);
+    expect(
+      await um('SELECT excluido_em FROM usuario_estoque_centro_custo WHERE id = ?', [fut]),
+    ).toMatchObject({
+      excluido_em: null,
+    });
   }, 60_000);
 
   it('lista de separação: só o que falta, endereço do local, lotes pela validade e a falta', async () => {
-    const reqId = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f361-req' }, async (e) => {
-      const end = await inserirMinimo(
-        e,
-        'endereco_armazem',
-        {
-          local_estoque_id: m.localA,
-          nivel: 1,
-          tipo_nivel: 'prateleira',
-          codigo: `${MARCA}P1`,
-          codigo_completo: `${MARCA}P1`,
-        },
-        MARCA,
-      );
-      await inserirMinimo(
-        e,
-        'insumo_endereco',
-        { insumo_id: m.insumo, endereco_armazem_id: end, preferencial: true },
-        MARCA,
-      );
-      const r = await inserirMinimo(
-        e,
-        'requisicao_material',
-        {
-          estabelecimento_id: m.estA,
-          numero: 990_000 + Math.floor(Math.random() * 9_999),
-          tipo: 'setor',
-          atendente_local_estoque_id: m.localA,
-          centro_custo_id: m.centroCusto,
-          solicitante_usuario_id: m.usuario,
-          situacao: 'autorizada',
-        },
-        MARCA,
-      );
-      await inserirMinimo(
-        e,
-        'requisicao_material_item',
-        {
-          requisicao_material_id: r,
-          sequencia: 1,
-          insumo_id: m.insumo,
-          unidade_medida_id: m.unidade,
-          quantidade_solicitada: 999_999,
-          quantidade_atendida: 1,
-        },
-        MARCA,
-      );
-      return r;
-    });
+    const [reqId, reqCancelada] = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 't-f361-req' },
+      async (e) => {
+        const end = await inserirMinimo(
+          e,
+          'endereco_armazem',
+          {
+            local_estoque_id: m.localA,
+            nivel: 1,
+            tipo_nivel: 'prateleira',
+            codigo: `${MARCA}P1`,
+            codigo_completo: `${MARCA}P1`,
+          },
+          MARCA,
+        );
+        await inserirMinimo(
+          e,
+          'insumo_endereco',
+          { insumo_id: m.insumo, endereco_armazem_id: end, preferencial: true },
+          MARCA,
+        );
+        // Lotes próprios do teste no local: vencido, bloqueado no local, recolhido e um válido que vence antes do da
+        // massa (L1, 10 unidades, 2027-03-31). Só o válido e o L1 podem ser sugeridos.
+        const lote = async (
+          sufixo: string,
+          validade: string,
+          situacao: string,
+          bloqueado: boolean,
+          q: number,
+        ) => {
+          const li = await inserirMinimo(
+            e,
+            'lote_insumo',
+            {
+              estabelecimento_id: m.estA,
+              insumo_id: m.insumo,
+              numero_lote: `${MARCA}${sufixo}`,
+              validade,
+              situacao,
+            },
+            MARCA,
+          );
+          await inserirMinimo(
+            e,
+            'saldo_lote',
+            {
+              estabelecimento_id: m.estA,
+              local_estoque_id: m.localA,
+              lote_insumo_id: li,
+              quantidade: q,
+              bloqueado,
+              competencia: '2026-11-01',
+            },
+            MARCA,
+          );
+        };
+        await lote('VENC', '2025-01-31', 'liberado', false, 5);
+        await lote('BLOQ', '2026-12-01', 'liberado', true, 5);
+        await lote('RECO', '2026-12-02', 'recolhido', false, 5);
+        await lote('BOM', '2026-12-31', 'liberado', false, 2);
+        const r = await inserirMinimo(
+          e,
+          'requisicao_material',
+          {
+            estabelecimento_id: m.estA,
+            numero: 990_000 + Math.floor(Math.random() * 9_999),
+            tipo: 'setor',
+            atendente_local_estoque_id: m.localA,
+            centro_custo_id: m.centroCusto,
+            solicitante_usuario_id: m.usuario,
+            situacao: 'autorizada',
+          },
+          MARCA,
+        );
+        await inserirMinimo(
+          e,
+          'requisicao_material_item',
+          {
+            requisicao_material_id: r,
+            sequencia: 1,
+            insumo_id: m.insumo,
+            unidade_medida_id: m.unidade,
+            quantidade_solicitada: 15,
+            quantidade_atendida: 1,
+          },
+          MARCA,
+        );
+        const cancelada = await inserirMinimo(
+          e,
+          'requisicao_material',
+          {
+            estabelecimento_id: m.estA,
+            numero: 980_000 + Math.floor(Math.random() * 9_999),
+            tipo: 'setor',
+            atendente_local_estoque_id: m.localA,
+            centro_custo_id: m.centroCusto,
+            solicitante_usuario_id: m.usuario,
+            situacao: 'cancelada',
+          },
+          MARCA,
+        );
+        return [r, cancelada] as const;
+      },
+    );
     const s = await porta.separacao(c, reqId);
     expect(s).toMatchObject({ requisicao: reqId, situacao: 'autorizada', local: { id: m.localA } });
     expect(s!.linhas).toHaveLength(1);
     const l = s!.linhas[0]!;
-    expect(l).toMatchObject({ item: m.insumo, aSeparar: 999_998, endereco: `${MARCA}P1` });
-    expect(l.falta).toBeGreaterThan(0);
+    expect(l).toMatchObject({ item: m.insumo, aSeparar: 14, endereco: `${MARCA}P1` });
+    // 14 a separar: 2 do lote válido que vence antes, 10 do L1 da massa e a falta exata de 2. O vencido, o bloqueado e
+    // o recolhido nunca são sugeridos.
+    expect(l.lotes).toEqual([
+      { lote: `${MARCA}BOM`, validade: '2026-12-31', quantidade: 2 },
+      { lote: `${m.marca}L1`, validade: '2027-03-31', quantidade: 10 },
+    ]);
+    expect(l.falta).toBe(2);
     expect(s!.totalFalta).toBe(1);
-    const validades = l.lotes.map((x) => x.validade);
-    expect([...validades].sort()).toEqual(validades);
-    expect(validades.every((v) => v >= s!.geradaEm.slice(0, 10))).toBe(true);
+    // Requisição cancelada: não há o que separar.
+    expect(await codigoDe(porta.separacao(c, reqCancelada))).toBe('separacao-requisicao-nao-atendivel');
     // Outro estabelecimento não lê a requisição.
     expect(await porta.separacao(contexto(m, m.estB, 't-f361b') as ContextoPortaM18, reqId)).toBeNull();
   }, 60_000);
