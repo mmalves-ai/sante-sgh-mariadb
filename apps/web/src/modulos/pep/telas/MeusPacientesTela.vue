@@ -17,8 +17,10 @@ import {
   acompanhar,
   deixarDeAcompanhar,
   gravarColunas,
+  gravarFiltroPadrao,
   lerAcompanhados,
   lerColunas,
+  lerFiltroPadrao,
 } from '../api-equipe-painel.js';
 import { chavePainel, gravarPreferenciasPainel, lerPreferenciasPainel } from '../preferencias-painel.js';
 
@@ -60,7 +62,8 @@ watch(
   async (k) => {
     if (!k) return;
     try {
-      const [a, c] = await Promise.all([lerAcompanhados(), lerColunas()]);
+      const [a, c, f] = await Promise.all([lerAcompanhados(), lerColunas(), lerFiltroPadrao()]);
+      if (f.unidade !== null) unidade.value = f.unidade;
       favoritos.value = a.itens.map((x) => x.paciente);
       const cols = c.colunas.filter((x): x is ColunaPainel =>
         (COLUNAS_PAINEL as readonly string[]).includes(x),
@@ -118,6 +121,13 @@ const opcoesVinculo = computed(() =>
 );
 /** pep.painel.configurar: colunas e favoritos; sem ela, o painel mostra o padrão. */
 const configurar = computed(() => painel.data.value?.configurar === true);
+// O filtro salvo (unidade) vai ao banco quando o profissional troca a unidade do painel.
+watch(unidade, (u, antes) => {
+  if (!doBanco.value || !configurar.value || u === antes) return;
+  gravarFiltroPadrao(u).catch((e: unknown) => {
+    erroPreferencia.value = e instanceof Error ? e.message : String(e);
+  });
+});
 const aba = computed(() => (typeof rota.query['aba'] === 'string' ? rota.query['aba'] : 'linha-do-tempo'));
 /** Destino do paciente: a aba do prontuário, ou o novo registro (item "Evoluções multiprofissionais"). */
 function destino(paciente: number): string {

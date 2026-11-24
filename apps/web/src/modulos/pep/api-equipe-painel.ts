@@ -39,6 +39,10 @@ export const lerColunas = () => pedir<{ colunas: string[] }>(`${P}/painel/coluna
 export const gravarColunas = (colunas: readonly string[]) =>
   pedir<{ colunas: string[] }>(`${P}/painel/colunas`, 'PUT', { colunas });
 
+export const lerFiltroPadrao = () => pedir<{ unidade: number | null }>(`${P}/painel/filtro-padrao`);
+export const gravarFiltroPadrao = (unidade: number | null) =>
+  pedir<{ id: number }>(`${P}/painel/filtro-padrao`, 'PUT', { unidade });
+
 export type TipoAtendimento =
   'todos' | 'internacao' | 'pronto_atendimento' | 'ambulatorio' | 'hospital_dia' | 'externo';
 export interface ConfiguracaoSetor {

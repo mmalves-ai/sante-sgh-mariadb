@@ -148,6 +148,7 @@ interface Est {
 }
 
 const TABELAS = [
+  'painel_filtro_usuario',
   'paciente_acompanhado',
   'painel_coluna_usuario',
   'configuracao_setor_prontuario',
@@ -376,6 +377,48 @@ export class PortaEquipePainelPropria {
         else await tx.incluir('painel_coluna_usuario', { usuario_id: usuario, coluna, ...valores });
       }
       return { tabela: 'painel_coluna_usuario', id: null, colunas: [...x.colunas] };
+    });
+  }
+
+  /** Filtro salvo padrão do painel (a unidade que abre o painel), no banco por usuário e estabelecimento. */
+  gravarFiltroPadrao(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+    const x = entradaValida(z.object({ unidade: z.number().int().positive().nullable() }).strict(), entrada);
+    return this.gravar(c, 'pep.painel.filtroPadrao', ['painel_filtro_usuario'], async (tx, est, usuario) => {
+      if (x.unidade !== null) {
+        const u = await tx.uma('SELECT id FROM unidade_assistencial WHERE id = ?', [x.unidade]);
+        if (!u) throw naoEncontrado('Unidade');
+      }
+      const a = await tx.uma(
+        `SELECT id, versao FROM painel_filtro_usuario
+          WHERE usuario_id = ? AND estabelecimento_id = ? ORDER BY padrao DESC, id LIMIT 1 FOR UPDATE`,
+        [usuario, est.id],
+      );
+      if (a) {
+        await tx.alterar('painel_filtro_usuario', num(a['id']), num(a['versao']), {
+          unidade_assistencial_id: x.unidade,
+          padrao: true,
+        });
+        return { tabela: 'painel_filtro_usuario', id: num(a['id']) };
+      }
+      const id = await tx.incluir('painel_filtro_usuario', {
+        estabelecimento_id: est.id,
+        usuario_id: usuario,
+        nome: 'Padrão',
+        padrao: true,
+        unidade_assistencial_id: x.unidade,
+      });
+      return { tabela: 'painel_filtro_usuario', id };
+    });
+  }
+
+  filtroPadrao(c: ContextoDocs): Promise<{ unidade: number | null }> {
+    return this.ler(c, 'filtro-padrao', async (l, est) => {
+      const f = await l.uma(
+        `SELECT unidade_assistencial_id FROM painel_filtro_usuario
+          WHERE usuario_id = ? AND estabelecimento_id = ? ORDER BY padrao DESC, id LIMIT 1`,
+        [c.usuario ?? 0, est.id],
+      );
+      return { unidade: f ? numOuNull(f['unidade_assistencial_id']) : null };
     });
   }
 

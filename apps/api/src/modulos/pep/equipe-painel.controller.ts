@@ -4,6 +4,7 @@
 //   POST   /api/pep/painel/acompanhados                 marca { paciente, atendimento?, motivo? }
 //   POST   /api/pep/painel/acompanhados/:paciente/fim   deixa de acompanhar (grava o fim; nada é apagado)
 //   GET    /api/pep/painel/colunas | PUT  { colunas }   colunas do painel do usuário, no banco
+//   GET    /api/pep/painel/filtro-padrao | PUT { unidade } filtro salvo padrão (unidade que abre o painel)
 //   GET    /api/pep/prontuario-setor                    configurações por setor, setores e a que vale (setor, tipo)
 //   PUT    /api/pep/prontuario-setor                    inclui ou altera a configuração do setor e tipo
 //   GET    /api/pep/equipe/funcoes                      funções da equipe
@@ -92,6 +93,18 @@ export class EquipePainelController {
   @Permissao(PERMISSOES_EQUIPE_PAINEL.painelConfigurar)
   gravarColunas(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarColunas(c, corpo));
+  }
+
+  @Get('painel/filtro-padrao')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.painelLer)
+  filtroPadrao(@Req() req: RequisicaoAutorizada) {
+    return this.com(req, (p, c) => p.filtroPadrao(c));
+  }
+
+  @Put('painel/filtro-padrao')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.painelConfigurar)
+  gravarFiltroPadrao(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.gravarFiltroPadrao(c, corpo));
   }
 
   @Get('prontuario-setor')

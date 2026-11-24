@@ -34,6 +34,7 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar(`DELETE FROM equipe_assistencial_paciente WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM paciente_acompanhado WHERE estabelecimento_id IN ${est}`, [P]);
+  await e.executar(`DELETE FROM painel_filtro_usuario WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM configuracao_setor_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN ${est}`, [P]);
@@ -179,6 +180,25 @@ describe.skipIf(SEM_BANCO)('PortaEquipePainelPropria contra o MariaDB (contrato 
     expect(await porta.colunas(ctx())).toEqual(['leito', 'paciente', 'idade']);
     await expect(porta.gravarColunas(ctx(), { colunas: ['leito'] })).rejects.toMatchObject({
       problema: { status: 422, codigo: 'colunas-minimas' },
+    });
+  });
+
+  it('filtro salvo padrão: inclui na primeira vez e altera depois, no estabelecimento da sessão', async () => {
+    expect(await porta.filtroPadrao(ctx())).toEqual({ unidade: null });
+    const { id } = await porta.gravarFiltroPadrao(ctx(), { unidade: null });
+    await porta.gravarFiltroPadrao(ctx(), { unidade: null });
+    const [linha] = await ler<Record<string, unknown>>(
+      'SELECT estabelecimento_id, usuario_id, padrao, versao FROM painel_filtro_usuario WHERE id = ?',
+      [id],
+    );
+    expect([
+      Number(linha!['estabelecimento_id']),
+      Number(linha!['usuario_id']),
+      Number(linha!['padrao']),
+    ]).toEqual([m.est, m.usuario, 1]);
+    expect(Number(linha!['versao'])).toBe(2);
+    await expect(porta.gravarFiltroPadrao(ctx(), { unidade: 987_654_321 })).rejects.toMatchObject({
+      problema: { status: 404 },
     });
   });
 
