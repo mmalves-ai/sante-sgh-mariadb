@@ -195,6 +195,20 @@ export async function movimentosContaPropria(l: Leitor, est: number, conta: numb
     [c.paciente, c.id],
     { teto: 200 },
   );
+  // Os profissionais sugeridos para a equipe: o do atendimento, os executantes e solicitantes da conta e quem já está
+  // em alguma equipe dela (a tela aceita também o código do profissional).
+  const sugeridos = await l.consultar<Linha>(
+    `SELECT pr.id, pf.nome FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+      WHERE pr.id IN (
+        SELECT a.profissional_id FROM atendimento a JOIN conta_hospitalar c ON c.atendimento_id = a.id WHERE c.id = ?
+        UNION SELECT executante_profissional_id FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?
+        UNION SELECT solicitante_profissional_id FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?
+        UNION SELECT p.profissional_id FROM conta_hospitalar_item_participante p
+              JOIN conta_hospitalar_item i ON i.id = p.conta_hospitalar_item_id WHERE i.conta_hospitalar_id = ?)
+      ORDER BY pf.nome`,
+    [c.id, c.id, c.id, c.id],
+    { teto: 300 },
+  );
   const transferencias = await l.consultar<Linha>(
     `SELECT t.id, t.numero, t.tipo, t.conta_origem_id, t.conta_destino_id, t.motivo, t.transferido_em,
             t.valor_total_origem, t.valor_total_destino, t.situacao,
@@ -244,6 +258,7 @@ export async function movimentosContaPropria(l: Leitor, est: number, conta: numb
       descricao: txt(k['descricao']),
       modo: txt(k['modo_cobranca']),
     })),
+    profissionais: sugeridos.map((p) => ({ id: n(p['id']), nome: txt(p['nome']) })),
     destinos: destinos.map((d) => ({
       id: n(d['id']),
       numero: txt(d['numero']),

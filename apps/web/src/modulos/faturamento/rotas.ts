@@ -69,6 +69,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.item.ler' },
   },
   {
+    path: '/faturamento/contas/:id(\\d+)/movimentos',
+    name: 'faturamento.contaMovimentos',
+    component: () => import('./telas/MovimentosContaTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
     path: '/faturamento/contas/:id(\\d+)/auditoria',
     name: 'faturamento.contaAuditoria',
     component: () => import('./telas/AuditoriaTela.vue'),

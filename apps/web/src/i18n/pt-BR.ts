@@ -31,6 +31,7 @@ import { mensagensSuprimentos } from '../modulos/suprimentos/i18n.js';
 import { mensagensFarmacia } from '../modulos/farmacia/i18n.js';
 import { mensagensFaturamento } from '../modulos/faturamento/i18n.js';
 import { mensagensContratualizacao } from '../modulos/faturamento/i18n-contratualizacao.js';
+import { mensagensMovimentosConta } from '../modulos/faturamento/i18n-movimentos.js';
 import { mensagensSus } from '../modulos/faturamento/i18n-sus.js';
 import { mensagensTiss } from '../modulos/tiss/i18n.js';
 import { mensagensFinanceiro } from '../modulos/financeiro/i18n.js';
@@ -2367,6 +2368,7 @@ export const mensagensWeb = {
   faturamentoSus: mensagensSus,
   // M55 (etapa 5): contratualização SUS (contratos com o gestor, metas, apuração e repasse estimado).
   contratualizacaoSus: mensagensContratualizacao,
+  movimentosConta: mensagensMovimentosConta,
   tiss: mensagensTiss,
   financeiro: mensagensFinanceiro,
   repasse: mensagensRepasse,
