@@ -14,7 +14,8 @@
 // competência), com o detalhe em JSON e a justificativa do aviso; a rodada grava criticada_em, a quantidade de registros
 // e o CNES na competência. Faixa de AIH: faixa_numeracao_aih (instrumento `aih`) com o número de 13 dígitos (base e
 // dígito), o órgão emissor, a data de liberação e o motivo do cancelamento; o consumo é lido das autorizações.
-// Ainda por escrever nesta porta (a estrutura existe no banco, ver ddl-aplicado-v3): o arquivo gerado, as linhas do BPA,
+// O arquivo gerado (número, remessa e registro do núcleo) está em porta-propria-arquivos.ts.
+// Ainda por escrever nesta porta (a estrutura existe no banco, ver ddl-aplicado-v3): as linhas do BPA,
 // da APAC e da CIHA ligadas ao arquivo, o ciclo da AIH (laudo, autorização e conta) e da APAC pela tela atual e o
 // retorno por linha. Até lá,
 // essas leituras saem vazias e as gravações recusam com "modelo-pendente". A montagem a partir da conta própria
@@ -46,8 +47,21 @@ import type {
 } from './porta.js';
 import type { DadosAihLidos, SolicitanteAihLido } from './porta-aih.js';
 import {
+  gravarRemessa,
+  lerArquivo,
+  lerArquivos,
+  linhasPendentes,
+  proximoNumeroArquivo,
+  TABELAS_ARQUIVO_SUS,
+} from './porta-propria-arquivos.js';
+import {
+  type ArquivoSus,
   type CompatibilidadeSigtap,
   type CompetenciaSusRegistro,
+  type LinhaApacParaGravar,
+  type LinhaBpaParaGravar,
+  type NovoArquivoSus,
+  type RegistroCihaParaGravar,
   type CriticaSus,
   type EquivalenciaSus,
   type EquivalenciaSusNomeada,
@@ -85,6 +99,7 @@ export const TABELAS_SUS = [
   'equivalencia_sigtap_item',
   'critica_sus',
   'faixa_numeracao_aih',
+  ...TABELAS_ARQUIVO_SUS,
 ] as const;
 
 /** Os instrumentos do faturamento SUS que a tela usa (o modelo também tem RAAS, fora desta tela). */
@@ -375,12 +390,12 @@ export class LeituraSusPropria implements LeituraSus {
     return x ? criticaDaLinha(x) : null;
   }
 
-  async arquivos(): Promise<never[]> {
-    return [];
+  arquivos(instrumento: InstrumentoSusPorta, competencia: string | null): Promise<ArquivoSus[]> {
+    return lerArquivos(this.l, this.est, instrumento, competencia);
   }
 
-  async arquivo(): Promise<null> {
-    return null;
+  arquivo(id: number): Promise<ArquivoSus | null> {
+    return lerArquivo(this.l, this.est, id);
   }
 
   // ── Equivalência SIGTAP (do cliente inteiro) ──
@@ -1044,16 +1059,33 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     });
   }
 
-  proximoArquivo(): Promise<never> {
-    return Promise.reject(modeloPendente('o arquivo gerado do faturamento SUS (chave e versão do objeto)'));
+  proximoArquivo(): Promise<number> {
+    return proximoNumeroArquivo(this.tx);
   }
 
-  gravarArquivo(): Promise<never> {
-    return Promise.reject(modeloPendente('o arquivo da CIHA com os registros'));
+  async gravarArquivo(
+    a: NovoArquivoSus,
+    registros: readonly RegistroCihaParaGravar[],
+  ): Promise<{ substituidos: number }> {
+    if (registros.length > 0)
+      linhasPendentes('os registros da CIHA (registro_ciha com paciente e fonte de remuneração)');
+    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'ciha', {
+      quantidade_registro_internacao: 0,
+      quantidade_registro_ambulatorial: 0,
+    });
+    return { substituidos };
   }
 
-  gravarArquivoBpa(): Promise<never> {
-    return Promise.reject(modeloPendente('o arquivo do BPA com as linhas'));
+  async gravarArquivoBpa(
+    a: NovoArquivoSus,
+    linhas: readonly LinhaBpaParaGravar[],
+  ): Promise<{ substituidos: number }> {
+    if (linhas.length > 0) linhasPendentes('as folhas do BPA (producao_ambulatorial_sus com os itens)');
+    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'bpa', {
+      tipo_bpa: 'misto',
+      quantidade_registros: a.registros,
+    });
+    return { substituidos };
   }
 
   incluirApac(): Promise<never> {
@@ -1064,8 +1096,17 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     return Promise.reject(modeloPendente('a APAC pela tela atual (laudo, solicitante e autorização)'));
   }
 
-  gravarArquivoApac(): Promise<never> {
-    return Promise.reject(modeloPendente('o arquivo da APAC com as linhas'));
+  async gravarArquivoApac(
+    a: NovoArquivoSus,
+    linhas: readonly LinhaApacParaGravar[],
+  ): Promise<{ substituidos: number }> {
+    if (linhas.length > 0) linhasPendentes('a produção da APAC na competência (apac com apac_procedimento)');
+    const { inicio } = periodoDaCompetencia(a.competencia.competencia);
+    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'apac', {
+      competencia_apresentacao: inicio,
+      quantidade_apac: a.registros,
+    });
+    return { substituidos };
   }
 
   private async vigentesDoItem(item: number): Promise<EquivalenciaSusNomeada[]> {
@@ -1233,8 +1274,13 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     return Promise.reject(modeloPendente('o fechamento da AIH com os itens'));
   }
 
-  gravarArquivoSisaih(): Promise<never> {
-    return Promise.reject(modeloPendente('o arquivo da AIH'));
+  async gravarArquivoSisaih(
+    a: NovoArquivoSus,
+    aihs: readonly { id: number; versao: number }[],
+  ): Promise<{ substituidos: number }> {
+    if (aihs.length > 0) linhasPendentes('as contas da AIH apresentadas (conta_aih na remessa)');
+    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'aih', { quantidade_aih: 0 });
+    return { substituidos };
   }
 
   inserirRetornoSus(): Promise<never> {

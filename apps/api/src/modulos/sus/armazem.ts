@@ -4,10 +4,8 @@
 // leitura, a chave já ocupada recusada antes de gravar. A transação recusada remove o arquivo recém-gravado por esta
 // guarda (nenhum dado pessoal fica órfão, fora do registro e do download auditado); `fixar`, depois do COMMIT, tira a
 // chave do conjunto removível, e daí em diante `remover` a recusa (409 `arquivo-retido`), como a chave alheia.
-// ATENÇÃO: a guarda legal de 5 anos depende do registro em `arquivo` com `retencao_ate`, que só nasce quando a
-// gravação do arquivo exportado for construída na porta própria (hoje a porta própria ainda recusa; pedido obrigatório
-// em docs/obra/fatias/arquivos-local/tiss-financeiro-patrimonio-sus.json). Até lá, nenhum arquivo do SUS fica gravado
-// fora da memória sem registro: a transação recusada pela porta remove o arquivo. Em memória na sessão sintética.
+// A guarda legal de 5 anos é o registro em `arquivo` com `retencao_ate`, gravado pela porta própria na mesma transação
+// da remessa (porta-propria-arquivos.ts); a transação recusada remove o arquivo. Em memória na sessão sintética.
 import { guardaLocal, type LocalizadorArquivos } from '../tiss/armazem-xml.js';
 import type { ArmazemArquivoSus } from './servico.js';
 
