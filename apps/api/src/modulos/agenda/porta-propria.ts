@@ -49,8 +49,9 @@ import {
   type Abrangencia,
   diasSemExpediente,
   normalizarHora,
-  PESO_PREFERENCIAL_SEM_GRUPO,
+  conferirOfertaEspera,
   prioridadeGravadaNaEspera,
+  prioridadeVigenteNaEspera,
   prioridadeNaMarcacao,
 } from '@sgh/dominio-agenda';
 import type { PessoaSemProntuario } from '@sgh/dominio-agenda';
@@ -72,7 +73,7 @@ import { z } from 'zod';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { operacaoAgenda } from './operacoes.js';
 import { dataNoFuso, preCadastroDaMarcacao } from './pre-cadastro-marcacao.js';
-import { grupoLegalDaEspera } from './prioridade-espera.js';
+import { grupoLegalDaEspera, gruposVigentesDaEspera } from './prioridade-espera.js';
 import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
 import { agendasOcultas, exigirGravacaoNominal, type PapelNominal } from './usuarios-agenda.js';
 import type {
@@ -1222,11 +1223,20 @@ export class PortaAgendaPropria implements PortaAgenda {
          LEFT JOIN especialidade_medica em ON em.id = le.especialidade_medica_id
          LEFT JOIN grupo_prioridade_legal gpl ON gpl.id = le.grupo_prioridade_legal_id
          WHERE le.estabelecimento_id = ? AND le.excluido_em IS NULL AND le.paciente_id IS NOT NULL ${filtros.join(' ')}
-         ORDER BY le.prioridade = 'urgente' DESC,
-           COALESCE(gpl.peso, IF(le.prioridade = 'preferencial', ${PESO_PREFERENCIAL_SEM_GRUPO}, ${Number.MAX_SAFE_INTEGER})),
-           le.entrada_em, le.id LIMIT ${TETO_LEITURA}`,
+         ORDER BY le.entrada_em, le.id LIMIT ${TETO_LEITURA}`,
         params,
         { teto: TETO_LEITURA },
+      );
+      // 02-AGE 48: o grupo legal reavaliado na data de hoje (idade, cadastro vigente, grupo ativo); a ordem da fila
+      // é a do domínio (ordenarFilaEspera), aplicada por quem lê, não aqui.
+      const vigentes = await gruposVigentesDaEspera(
+        l,
+        linhas.map((x) => ({
+          id: num(x['id']),
+          paciente: num(x['paciente_id']),
+          grupoGravado: numOuNull(x['grupo_prioridade_legal_id']),
+        })),
+        dataNoFuso(this.fuso(e.id), this.agora()),
       );
       return linhas.map((x) => {
         let oferta: ItemListaEspera['oferta'] = null;
@@ -1243,15 +1253,12 @@ export class PortaAgendaPropria implements PortaAgenda {
           prontuario: codigoNum(x['numero_prontuario']),
           agenda: numOuNull(x['agenda_servico_id']),
           especialidade: codigoNum(x['especialidade']),
-          prioridade: String(x['prioridade']),
-          prioridadeLegal:
-            x['grupo_prioridade_legal_id'] === null || x['grupo_prioridade_legal_id'] === undefined
-              ? null
-              : {
-                  id: num(x['grupo_prioridade_legal_id']),
-                  descricao: txt(x['grupo_descricao']) ?? '',
-                  peso: num(x['grupo_peso']),
-                },
+          prioridade: prioridadeVigenteNaEspera(
+            String(x['prioridade']),
+            numOuNull(x['grupo_prioridade_legal_id']),
+            vigentes.get(num(x['id']))?.id ?? null,
+          ),
+          prioridadeLegal: vigentes.get(num(x['id'])) ?? null,
           situacao: String(x['situacao']),
           observacao: txt(x['observacao']),
           desde: instante(x['entrada_em']).toISOString(),
@@ -2061,6 +2068,8 @@ export class PortaAgendaPropria implements PortaAgenda {
           await this.historicoEspera(tx, ctx, n, 'inclusao', 'entrada', {
             prioridade,
             grupoPrioridadeLegal: grupo,
+            // O grupo informado por quem incluiu: candidato na reavaliação da fila (02-AGE 48).
+            informada: e.prioridadeLegal,
           });
           return { id: n };
         },
@@ -2069,14 +2078,25 @@ export class PortaAgendaPropria implements PortaAgenda {
       ofertarEspera: operacao({
         nome: 'agenda.ofertarEspera',
         tabelas: ['lista_espera', 'lista_espera_historico'],
-        entrada: z.object({ id, agenda: id, data, hora: esquemaHora }).strict(),
+        entrada: z
+          .object({
+            id,
+            agenda: id,
+            data,
+            hora: esquemaHora,
+            motivo: z.string().max(300).nullable().default(null),
+          })
+          .strict(),
         gravar: async (tx, e, ctx) => {
           const x = await this.travarEspera(tx, ctx, e.id);
+          // 02-AGE 48: a vaga tem de servir ao pedido, e passar alguém à frente na mesma fila exige motivo.
+          const ofertaOk = await this.conferirOferta(tx, ctx, e);
           await tx.alterar('lista_espera', e.id, num(x['versao']), { situacao: 'ofertado' });
           await this.historicoEspera(tx, ctx, e.id, 'alteracao', 'oferta', {
             agenda: e.agenda,
             data: e.data,
             hora: e.hora,
+            ...(ofertaOk.aFrente > 0 ? { foraDaOrdem: { aFrente: ofertaOk.aFrente, motivo: e.motivo } } : {}),
           });
           return { id: e.id };
         },
@@ -2244,6 +2264,71 @@ export class PortaAgendaPropria implements PortaAgenda {
         'O paciente já fez o check-in: cancelar agora exige o perfil de supervisor da recepção.',
       );
     return m;
+  }
+
+  private async conferirOferta(
+    tx: TxOperacao,
+    ctx: ContextoOperacao,
+    e: { id: number; agenda: number; motivo: string | null },
+  ): Promise<{ aFrente: number }> {
+    const ag = await tx.uma(
+      'SELECT id FROM agenda_servico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [e.agenda, ctx.estabelecimento],
+    );
+    if (!ag)
+      throw recusa('agenda-inexistente', 'A agenda da vaga não existe neste estabelecimento.', {
+        campos: ['agenda'],
+      });
+    const esps = await tx.consultar(
+      `SELECT em.codigo FROM agenda_especialidade x JOIN especialidade_medica em ON em.id = x.especialidade_medica_id
+        WHERE x.agenda_servico_id = ? AND x.excluido_em IS NULL`,
+      [e.agenda],
+    );
+    const fila = await tx.consultar(
+      `SELECT le.id, le.paciente_id, le.agenda_servico_id, em.codigo AS especialidade, le.prioridade, le.situacao,
+          le.entrada_em, le.grupo_prioridade_legal_id
+         FROM lista_espera le LEFT JOIN especialidade_medica em ON em.id = le.especialidade_medica_id
+        WHERE le.estabelecimento_id = ? AND le.excluido_em IS NULL AND le.paciente_id IS NOT NULL
+          AND (le.situacao = 'aguardando' OR le.id = ?)`,
+      [ctx.estabelecimento, e.id],
+    );
+    const vig = await gruposVigentesDaEspera(
+      tx,
+      fila.map((y) => ({
+        id: num(y['id']),
+        paciente: num(y['paciente_id']),
+        grupoGravado: numOuNull(y['grupo_prioridade_legal_id']),
+      })),
+      dataNoFuso(this.fuso(ctx.estabelecimento), this.agora()),
+    );
+    const itens = fila.map((y) => {
+      const g = vig.get(num(y['id'])) ?? null;
+      return {
+        id: num(y['id']),
+        prioridade: prioridadeVigenteNaEspera(
+          String(y['prioridade']),
+          numOuNull(y['grupo_prioridade_legal_id']),
+          g?.id ?? null,
+        ),
+        pesoPrioridadeLegal: g?.peso ?? null,
+        desde: instante(y['entrada_em']).toISOString(),
+        // O pedido ofertado de volta à mesma vaga conta como aguardando na conferência.
+        situacao: num(y['id']) === e.id ? 'aguardando' : String(y['situacao']),
+        agenda: numOuNull(y['agenda_servico_id']),
+        especialidade: codigoNum(y['especialidade']),
+      };
+    });
+    const pedido = itens.find((y) => y.id === e.id);
+    if (!pedido) throw recusa('espera-encerrada', 'O pedido da lista de espera já foi encerrado.');
+    const r = conferirOfertaEspera(
+      itens,
+      pedido,
+      { agenda: e.agenda, especialidadesDaAgenda: esps.map((y) => Number(y['codigo'])) },
+      e.motivo,
+    );
+    if (!r.ok)
+      throw recusa(r.codigo, r.motivo, { campos: [r.codigo === 'vaga-incompativel' ? 'agenda' : 'motivo'] });
+    return { aFrente: r.aFrente };
   }
 
   private async travarEspera(tx: TxOperacao, ctx: ContextoOperacao, id: number): Promise<Linha> {

@@ -100,7 +100,14 @@ export interface GravadorAgenda {
     prioridadeLegal?: number | null;
     observacao: string | null;
   }): Promise<number>;
-  ofertarEspera(r: { id: number; agenda: number; data: string; hora: string }): Promise<void>;
+  /** A vaga tem de servir ao pedido; passar alguém à frente na mesma fila exige `motivo` (02-AGE 48). */
+  ofertarEspera(r: {
+    id: number;
+    agenda: number;
+    data: string;
+    hora: string;
+    motivo?: string | null;
+  }): Promise<void>;
   encerrarEspera(r: {
     id: number;
     situacao: 'atendido' | 'cancelado' | 'aguardando';

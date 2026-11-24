@@ -130,11 +130,18 @@ const oData = ref('');
 const oHora = ref('');
 const oConvenio = ref('');
 const oCanal = ref('telefone');
+// 02-AGE 48: ofertar a quem tem pedidos à frente na mesma fila exige motivo (a API confere de novo).
+const oMotivo = ref('');
 const ofertar = (id: number) =>
   rodar(() =>
     ofertarEspera(
       id,
-      { agenda: Number(oAgenda.value), data: oData.value, hora: horaDoContrato(oHora.value) ?? oHora.value },
+      {
+        agenda: Number(oAgenda.value),
+        data: oData.value,
+        hora: horaDoContrato(oHora.value) ?? oHora.value,
+        motivo: oMotivo.value.trim() || null,
+      },
       novaChave('ofertar'),
     ),
   );
@@ -161,6 +168,7 @@ function abrir(
   oAgenda.value = String(oferta?.agenda ?? agenda ?? '');
   oData.value = oferta?.data ?? '';
   oHora.value = oferta ? horaBr(oferta.hora) : '';
+  oMotivo.value = '';
 }
 
 // ── Remarcação em lote ──
@@ -360,6 +368,17 @@ async function remarcarDia(): Promise<void> {
                 </div>
                 <SanteSelecao v-model="oConvenio" :rotulo="t('agenda.convenio')" :opcoes="convenios" />
                 <SanteSelecao v-model="oCanal" :rotulo="t('agenda.canal')" :opcoes="canais" />
+                <div v-if="podeEditar && e.situacao === 'aguardando' && (e.posicao ?? 1) > 1" class="campo">
+                  <label :for="`oferta-motivo-${e.id}`">{{
+                    t('agenda.espera.motivoForaDaOrdem', { n: (e.posicao ?? 1) - 1 })
+                  }}</label>
+                  <input
+                    :id="`oferta-motivo-${e.id}`"
+                    v-model="oMotivo"
+                    maxlength="300"
+                    data-testid="espera-motivo-oferta"
+                  />
+                </div>
                 <SanteBotao
                   v-if="podeEditar && e.situacao === 'aguardando'"
                   variante="secundario"

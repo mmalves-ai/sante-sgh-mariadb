@@ -32,6 +32,7 @@ import {
 import {
   nomeMascarado,
   ordenarFilaEspera,
+  posicoesNaFilaEspera,
   podeBloquear,
   podeDesbloquear,
   somarDias,
@@ -347,11 +348,16 @@ export class ApoioAgendaController {
         : null,
       posicao: null,
     }));
-    // 02-AGE 48: urgência clínica, grupo de prioridade legal (peso) e antiguidade, pela regra do domínio.
-    const fila = ordenarFilaEspera(
-      itens.map((x) => ({ item: x, ...x, pesoPrioridadeLegal: x.prioridadeLegal?.peso ?? null })),
-    ).map((x) => x.item);
-    const pos = new Map(fila.map((x, i) => [x.id, i + 1]));
+    // 02-AGE 48: urgência clínica, grupo de prioridade legal vigente (peso) e antiguidade, pela regra do domínio; a
+    // posição conta dentro da fila da vaga (agenda, ou especialidade no pedido sem agenda).
+    const regra = itens.map((x) => ({
+      item: x,
+      ...x,
+      especialidade: x.especialidade?.codigo ?? null,
+      pesoPrioridadeLegal: x.prioridadeLegal?.peso ?? null,
+    }));
+    const fila = ordenarFilaEspera(regra).map((x) => x.item);
+    const pos = posicoesNaFilaEspera(regra);
     const ordenados = [...fila, ...itens.filter((x) => !pos.has(x.id))].map((x) => ({
       ...x,
       posicao: pos.get(x.id) ?? null,
@@ -443,7 +449,14 @@ export class ApoioAgendaController {
       EVENTOS_AUDITAVEIS.agendaEsperaAlterada.codigo,
       'agenda.espera',
       { tabela: TABELA_ESPERA, id: String(id), paciente: e.paciente },
-      (g) => g.ofertarEspera({ id, agenda: p.agenda, data: p.data, hora: horaIso(p.hora) }),
+      (g) =>
+        g.ofertarEspera({
+          id,
+          agenda: p.agenda,
+          data: p.data,
+          hora: horaIso(p.hora),
+          motivo: p.motivo ?? null,
+        }),
     );
     return {
       ok: true,

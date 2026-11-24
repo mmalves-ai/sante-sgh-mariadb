@@ -103,6 +103,9 @@ export const mensagensAgenda = {
     'janela-no-passado': 'O período informado já passou.',
     'sem-efeito': 'Nada a mudar.',
     'espera-encerrada': 'O pedido da fila já foi encerrado.',
+    'oferta-fora-da-ordem': 'Há pedidos à frente nesta fila: informe o motivo para ofertar fora da ordem.',
+    'vaga-incompativel':
+      'A vaga não é da agenda do pedido nem de uma agenda que atende a especialidade dele.',
     'fora-do-escopo': 'Seu acesso é restrito a outras unidades ou tipos de agenda.',
   },
   agendas: {
@@ -393,6 +396,7 @@ export const mensagensAgenda = {
     desde: 'Desde',
     situacao: 'Situação',
     ofertar: 'Ofertar vaga',
+    motivoForaDaOrdem: 'Motivo para ofertar fora da ordem ({n} à frente nesta fila)',
     ofertada: 'Vaga ofertada.',
     marcar: 'Marcar',
     marcada: 'Consulta marcada a partir da fila.',

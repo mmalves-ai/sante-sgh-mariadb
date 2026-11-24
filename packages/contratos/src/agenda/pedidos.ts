@@ -122,7 +122,16 @@ export const esquemaPedidoEspera = z
 export type PedidoEspera = z.infer<typeof esquemaPedidoEspera>;
 
 export const esquemaPedidoOfertaEspera = z
-  .object({ agenda: id, data: esquemaDataIso, hora: esquemaHoraAgenda })
+  .object({
+    agenda: id,
+    data: esquemaDataIso,
+    hora: esquemaHoraAgenda,
+    // Obrigatório quando há pedido à frente na mesma fila (02-AGE 48); a regra está no domínio.
+    motivo: textoCp1252(300)
+      .overwrite((t) => t.replace(/\s+/g, ' ').trim())
+      .nullable()
+      .optional(),
+  })
   .strict();
 export type PedidoOfertaEspera = z.infer<typeof esquemaPedidoOfertaEspera>;
 

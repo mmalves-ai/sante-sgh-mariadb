@@ -116,3 +116,12 @@ cada uma com construir, revisão adversarial e correção.
 - **Desperdício:** (1) os dois conferidores fecharam pelo G6 com o verificar:tudo pela metade (o de 10 min deve ficar
   com o orquestrador, em segundo plano, como a diag-cadeia); (2) agentes usando npx deixam log em ~/.npm/_logs e o
   verificar:tudo fica vermelho (o PREFIXO agora proíbe); (3) o orquestrador passou de 150 turnos de novo.
+
+### F3.2-4 corretor (02-AGE 48 e 49), 2026-11-24
+
+- **História:** o commit `bdd412b8` ("02-AGE 48") levou junto código da 02-AGE 42 (operação `agenda.agendarSemProntuario`,
+  `preCadastro` em `marcarNoHorario`, textos `marcar.semProntuario*`), que importa arquivos só entrados em `31d4e8eb`: esse
+  commit isolado não compila. Causa: `git commit --only` de arquivo compartilhado leva o arquivo inteiro. Não reescrito
+  (sem autorização); a correção fez o commit de `porta-propria.ts` e `i18n.ts` só com os próprios trechos (índice
+  temporário sobre o HEAD).
+- **Provas não rodadas:** testes de unidade, `.int.spec` e tsc derrubados pela espera de memória (livre de 5 GB).
