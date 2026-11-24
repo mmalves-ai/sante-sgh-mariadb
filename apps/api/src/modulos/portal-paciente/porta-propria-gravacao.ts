@@ -13,6 +13,13 @@
 // Melhoria: o convite, o e-mail e o código da troca são únicos pelo resumo no banco (UNIQUE), não só no serviço.
 // Melhoria: o contador de erros do convite e de entradas não muda a versão da conta (o formulário aberto continua
 //   válido), como na porta de memória.
+// Escopo: a conta, a troca do e-mail e o vínculo pertencem ao ESTABELECIMENTO da sessão, como na memória (o estado
+//   guardado por ContextoPortal.hospital): toda leitura sob trava filtra estabelecimento_id, e a conta de outro
+//   estabelecimento não é encontrada (a gravação não altera nem zera a credencial de conta alheia). Uma conta vigente
+//   por paciente em cada estabelecimento (uq_conta_portal_paciente_vigente_estab). O e-mail (login) e os resumos do
+//   convite e do código seguem únicos no cliente: melhoria (o login não é ambíguo na rede).
+// Quem decide o vínculo (aprovação no balcão ou decisão) precisa ser usuário do hospital (recusa
+//   'usuario-inexistente'); só o encerramento pelo portal guarda o login da conta sem usuário (CHECK da decisão).
 import {
   ErroOperacao,
   garantirSequencia,
@@ -139,8 +146,8 @@ export function gravadorGravacaoPropria(
   const travarConta = async (id: number) => {
     const [l] = await tx.consultarParaAtualizar<Linha>(
       `SELECT id, versao, situacao, convite_usado_em, ativada_em, tentativas_falhas
-         FROM conta_portal_paciente WHERE id = ? AND excluido_em IS NULL`,
-      [id],
+         FROM conta_portal_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [id, estabelecimento],
     );
     return l
       ? {
@@ -178,6 +185,13 @@ export function gravadorGravacaoPropria(
       return new ErroPortal('email-em-uso', 'E-mail já usado em outra conta.');
     if (r === 'uq_troca_email_conta_portal_codigo')
       return new ErroPortal('convite-repetido', 'Token repetido.');
+    if (r === 'uq_conta_portal_paciente_vigente_estab' || r === 'uq_conta_portal_paciente_vigente')
+      return recusa('conta-existente', 'O paciente já tem conta vigente no portal deste estabelecimento.');
+    if (r === 'uq_troca_email_conta_portal_pendente')
+      return new ErroPortal(
+        'versao-desatualizada',
+        'Outro pedido de troca do e-mail foi feito ao mesmo tempo; recarregue.',
+      );
     return e;
   };
   const conviteUnico = async (resumo: string, exceto: number) => {
@@ -193,6 +207,10 @@ export function gravadorGravacaoPropria(
       exceto,
     ]);
     if (l) throw new ErroPortal('email-em-uso', 'E-mail já usado em outra conta.');
+  };
+  /** A conta precisa ser deste estabelecimento (a de outro não é encontrada). */
+  const contaDoEstabelecimento = async (id: number) => {
+    if (!(await travarConta(id))) throw new ErroPortal('nao-encontrado', 'Conta do portal não encontrada.');
   };
   /** O usuário do hospital pelo login (null quando quem age é a conta do portal ou não é usuário). */
   const usuarioDoLogin = async (login: string | null | undefined): Promise<number | null> => {
@@ -418,6 +436,7 @@ export function gravadorGravacaoPropria(
 
     // ------------------------------------------------------------------ troca do e-mail
     pedirTrocaEmail: async (t) => {
+      await contaDoEstabelecimento(t.conta);
       const agora = new Date();
       const pendentes = await tx.consultarParaAtualizar(
         `SELECT id, versao FROM troca_email_conta_portal
@@ -476,9 +495,10 @@ export function gravadorGravacaoPropria(
     },
     cancelarTrocaEmail: async (troca) => {
       const [t] = await tx.consultarParaAtualizar(
-        `SELECT id, versao FROM troca_email_conta_portal
-          WHERE id = ? AND situacao = 'pendente' AND excluido_em IS NULL`,
-        [troca],
+        `SELECT t.id, t.versao FROM troca_email_conta_portal t
+           JOIN conta_portal_paciente c ON c.id = t.conta_portal_paciente_id
+          WHERE t.id = ? AND c.estabelecimento_id = ? AND t.situacao = 'pendente' AND t.excluido_em IS NULL`,
+        [troca, estabelecimento],
       );
       if (!t) throw new ErroPortal('situacao', 'O pedido de troca do e-mail não está mais pendente.');
       await tx.alterar('troca_email_conta_portal', troca, num(t['versao']), {
@@ -492,8 +512,10 @@ export function gravadorGravacaoPropria(
     pedirVinculo: async (v) => {
       if (v.decididoPor !== null && v.decididoPor === v.por)
         throw recusa('segregacao-decisao', 'Quem pede o vínculo não pode aprová-lo.');
+      await contaDoEstabelecimento(v.conta);
       const agora = new Date();
       const ativo = v.decididoPor !== null;
+      const decisor = v.decididoPor !== null ? await exigirUsuario(v.decididoPor) : null;
       const id = await tx.incluir('vinculo_responsavel_portal', {
         estabelecimento_id: estabelecimento,
         conta_portal_paciente_id: v.conta,
@@ -509,7 +531,7 @@ export function gravadorGravacaoPropria(
         pedido_em: agora,
         pedido_por: v.por.slice(0, 60),
         decidido_por: corte(v.decididoPor, 60),
-        decidido_por_usuario_id: ativo ? await usuarioDoLogin(v.decididoPor) : null,
+        decidido_por_usuario_id: decisor,
         decidido_em: ativo ? agora : null,
       });
       marcar('vinculo_responsavel_portal', id);
@@ -526,7 +548,7 @@ export function gravadorGravacaoPropria(
         throw recusa('segregacao-decisao', 'Quem pede o vínculo não pode decidi-lo.');
       const base = {
         decidido_por: d.por.slice(0, 60),
-        decidido_por_usuario_id: await usuarioDoLogin(d.por),
+        decidido_por_usuario_id: await exigirUsuario(d.por),
         decidido_em: new Date(),
       };
       await tx.alterar(

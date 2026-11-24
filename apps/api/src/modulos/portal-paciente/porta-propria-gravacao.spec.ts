@@ -96,4 +96,53 @@ describe('gravação própria do portal do paciente (unidade)', () => {
       }),
     ).rejects.toMatchObject({ problema: { codigo: 'situacao-invalida' } });
   });
+
+  it('unicidades do banco viram erro de domínio: conta vigente e troca do e-mail pendente', async () => {
+    const dup = (chave: string) =>
+      Object.assign(new Error('dup'), {
+        errno: 1062,
+        code: 'ER_DUP_ENTRY',
+        sqlMessage: `Duplicate entry 'x' for key '${chave}'`,
+      });
+    const comFalha = (chave: string) => {
+      const { tx } = txFalsa([{ id: 1, versao: 1, situacao: 'ativa' }]);
+      (tx as unknown as { incluir: () => Promise<never> }).incluir = () => Promise.reject(dup(chave));
+      return gravadorGravacaoPropria(tx, 1, { tabela: 't', id: null });
+    };
+    await expect(
+      comFalha('uq_conta_portal_paciente_vigente_estab').criarConta({
+        tipo: 'paciente',
+        paciente: 1,
+        prontuario: null,
+        nome: null,
+        nascimento: null,
+        conviteResumo: 'c',
+        conviteValidoAte: new Date(),
+        origem: 'recepcao',
+        por: 'p',
+      }),
+    ).rejects.toMatchObject({ problema: { codigo: 'conta-existente' } });
+    await expect(
+      comFalha('uq_troca_email_conta_portal_pendente').pedirTrocaEmail({
+        conta: 1,
+        emailNovo: 'n@x.test',
+        emailNovoResumo: 'r',
+        tokenResumo: 't',
+        validoAte: new Date(),
+        origem: 'portal',
+        motivo: 'm',
+        pedidoPor: 'c',
+        envio: 'simulador',
+      }),
+    ).rejects.toMatchObject({ codigo: 'versao-desatualizada' });
+  });
+
+  it('quem decide o vínculo precisa ser usuário do hospital (login desconhecido recusa)', async () => {
+    const { tx, chamadas } = txFalsa([{ id: 1, versao: 1, situacao: 'pendente', pedido_por: 'c' }]);
+    const g = gravadorGravacaoPropria(tx, 1, { tabela: 't', id: null });
+    await expect(
+      g.decidirVinculo(1, 1, { aprovar: true, escopos: [], validade: null, por: 'nao.usuario' }),
+    ).rejects.toMatchObject({ problema: { codigo: 'usuario-inexistente' } });
+    expect(chamadas).toEqual([]);
+  });
 });

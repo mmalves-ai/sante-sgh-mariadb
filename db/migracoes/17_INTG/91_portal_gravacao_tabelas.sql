@@ -39,18 +39,20 @@ ALTER TABLE conta_portal_paciente
   DROP CONSTRAINT IF EXISTS ck_conta_portal_paciente_convite_origem,
   ADD KEY IF NOT EXISTS ix_conta_portal_paciente_paciente (paciente_id),
   ADD KEY IF NOT EXISTS ix_conta_portal_paciente_estabelecimento (estabelecimento_id),
-  ADD UNIQUE KEY IF NOT EXISTS uq_conta_portal_paciente_vigente (paciente_vigente),
   ADD UNIQUE KEY IF NOT EXISTS uq_conta_portal_paciente_convite (convite_resumo),
   ADD UNIQUE KEY IF NOT EXISTS uq_conta_portal_paciente_email_resumo (email_resumo);
 -- A conta encerrada libera o paciente para uma conta nova (a unicidade passa à conta vigente).
 ALTER TABLE conta_portal_paciente DROP KEY IF EXISTS uq_conta_portal_paciente_paciente;
+-- A conta pertence ao estabelecimento (como na memória): uma conta vigente por paciente em cada estabelecimento.
+ALTER TABLE conta_portal_paciente ADD UNIQUE KEY IF NOT EXISTS uq_conta_portal_paciente_vigente_estab (estabelecimento_id, paciente_vigente);
+ALTER TABLE conta_portal_paciente DROP KEY IF EXISTS uq_conta_portal_paciente_vigente;
 
 ALTER TABLE vinculo_responsavel_portal
   ADD COLUMN IF NOT EXISTS validade DATE NULL COMMENT 'Fim da validade da prova (procuração)',
   ADD COLUMN IF NOT EXISTS prova_arquivo_chave VARCHAR(300) NULL COMMENT 'Chave do arquivo da prova no armazenamento',
   ADD COLUMN IF NOT EXISTS decidido_por VARCHAR(60) NULL COMMENT 'Quem decidiu ou encerrou (login do hospital ou a conta do portal)',
   DROP CONSTRAINT IF EXISTS ck_vinculo_responsavel_portal_decisao,
-  ADD CONSTRAINT ck_vinculo_responsavel_portal_decisao CHECK (situacao = 'pendente' OR (decidido_em IS NOT NULL AND (decidido_por_usuario_id IS NOT NULL OR decidido_por IS NOT NULL))),
+  ADD CONSTRAINT ck_vinculo_responsavel_portal_decisao CHECK (situacao = 'pendente' OR (decidido_em IS NOT NULL AND (decidido_por_usuario_id IS NOT NULL OR (situacao = 'encerrado' AND decidido_por IS NOT NULL)))),
   DROP CONSTRAINT IF EXISTS ck_vinculo_responsavel_portal_segregacao,
   ADD CONSTRAINT ck_vinculo_responsavel_portal_segregacao CHECK (situacao NOT IN ('ativo','recusado') OR decidido_por IS NULL OR decidido_por <> pedido_por);
 

@@ -20,6 +20,7 @@ import type { RegistroTrilhaPortal } from './tipos.js';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'PB0001';
+const EST2 = 'PB0002';
 const PRONT = [932_101, 932_102];
 const RECEPCAO = 'pb.recepcao';
 const CONFERENTE = 'pb.conferente';
@@ -30,6 +31,16 @@ type G = Omit<GravadorPortal, 'registrarManifestacao'>;
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
   return l ? Number(l.id) : e.inserir(ins, pi);
+}
+
+/** As contas do estabelecimento sintético (com a troca do e-mail e o vínculo). */
+async function limparContas(e: Escritor, est: number): Promise<void> {
+  const contas = 'SELECT id FROM conta_portal_paciente WHERE estabelecimento_id = ?';
+  await e.executar(`DELETE FROM troca_email_conta_portal WHERE conta_portal_paciente_id IN (${contas})`, [
+    est,
+  ]);
+  await e.executar('DELETE FROM vinculo_responsavel_portal WHERE estabelecimento_id = ?', [est]);
+  await e.executar('DELETE FROM conta_portal_paciente WHERE estabelecimento_id = ?', [est]);
 }
 
 async function limpar(e: Escritor, est: number): Promise<void> {
@@ -48,12 +59,7 @@ async function limpar(e: Escritor, est: number): Promise<void> {
     [est],
   );
   await e.executar('DELETE FROM consentimento_titular WHERE estabelecimento_id = ?', [est]);
-  const contas = 'SELECT id FROM conta_portal_paciente WHERE estabelecimento_id = ?';
-  await e.executar(`DELETE FROM troca_email_conta_portal WHERE conta_portal_paciente_id IN (${contas})`, [
-    est,
-  ]);
-  await e.executar('DELETE FROM vinculo_responsavel_portal WHERE estabelecimento_id = ?', [est]);
-  await e.executar('DELETE FROM conta_portal_paciente WHERE estabelecimento_id = ?', [est]);
+  await limparContas(e, est);
   await e.executar('DELETE FROM sequencia_negocio WHERE estabelecimento_id = ?', [est]);
   const pr = PRONT.map(() => '?').join(', ');
   const pfs = await e.consultar(
@@ -67,6 +73,7 @@ async function limpar(e: Escritor, est: number): Promise<void> {
 describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, cliente ${CLIENTE})`, () => {
   const nucleo = new NucleoProprio();
   let est = 0;
+  let est2 = 0;
   let pac: number[] = [];
   const trilhas: RegistroTrilhaPortal[] = [];
   const ler = (sql: string, p: unknown[]) =>
@@ -74,11 +81,11 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
   const um = async (sql: string, p: unknown[]) => (await ler(sql, p))[0]!;
 
   /** Como a porta própria: uma operação do Executor por gravação, com a trilha na tabela gravada de fato. */
-  async function gravar<T>(fn: (g: G) => Promise<T>): Promise<T> {
+  async function gravar<T>(fn: (g: G) => Promise<T>, estab = est): Promise<T> {
     const correlacao = `portal-b-${randomUUID()}`.slice(0, 64);
     const ctx: ContextoOperacao = {
       cliente: CLIENTE,
-      estabelecimento: est,
+      estabelecimento: estab,
       usuario: null,
       correlacao,
       chaveIdempotencia: correlacao,
@@ -91,7 +98,7 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
       entrada: z.object({ correlacao: z.string() }).strict(),
       gravar: async (tx) => {
         try {
-          r = await fn(gravadorGravacaoPropria(tx, est, escrita, (t) => trilhas.push(t)));
+          r = await fn(gravadorGravacaoPropria(tx, estab, escrita, (t) => trilhas.push(t)));
         } catch (e) {
           dominio = erroDeDominio(e);
           throw e;
@@ -156,6 +163,14 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [EST, 'ESTAB SINTETICO PORTAL B', 'ESTAB SINTETICO PORTAL B', agora],
       );
+      est2 = await garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [EST2],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [EST2, 'ESTAB SINTETICO PORTAL B2', 'ESTAB SINTETICO PORTAL B2', agora],
+      );
+      await limparContas(e, est2);
       await limpar(e, est);
       for (const login of [RECEPCAO, CONFERENTE])
         await garantir(
@@ -190,7 +205,10 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
 
   afterAll(async () => {
     if (est)
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-portal-b' }, (e) => limpar(e, est));
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-portal-b' }, async (e) => {
+        if (est2) await limparContas(e, est2);
+        await limpar(e, est);
+      });
     await nucleo.encerrar();
   });
 
@@ -327,6 +345,10 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
     expect((await falha(gravar((g) => g.pedirVinculo(base(k, RECEPCAO, RECEPCAO))))).codigo).toBe(
       'segregacao-decisao',
     );
+    // Quem aprova no balcão ou decide precisa ser usuário do hospital: o vínculo não fica ativo sem decisor.
+    expect((await falha(gravar((g) => g.pedirVinculo(base(k, 'SGH.PORTAL.C9', 'nao.usuario'))))).codigo).toBe(
+      'usuario-inexistente',
+    );
     const p = await gravar((g) => g.pedirVinculo({ ...base(k, 'SGH.PORTAL.C9', null), canal: 'portal' }));
     expect(
       (
@@ -342,6 +364,15 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
         )
       ).codigo,
     ).toBe('versao-desatualizada');
+    expect(
+      (
+        await falha(
+          gravar((g) =>
+            g.decidirVinculo(p.id, 1, { aprovar: true, escopos: [], validade: null, por: 'nao.usuario' }),
+          ),
+        )
+      ).codigo,
+    ).toBe('usuario-inexistente');
     await gravar((g) =>
       g.decidirVinculo(p.id, 1, { aprovar: false, motivo: 'prova ilegível', por: CONFERENTE }),
     );
@@ -359,6 +390,69 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
     expect(
       (await falha(gravar((g) => g.encerrarVinculo(q.id, null, { motivo: 'x', por: RECEPCAO })))).codigo,
     ).toBe('versao-desatualizada');
+  });
+
+  it('escopo do estabelecimento: a conta de outro não é alterada; uma conta vigente por paciente; troca serializada', async () => {
+    // A conta aberta no estabelecimento 2 (o paciente pode ter conta vigente também no 1).
+    const { id: k2 } = await gravar((g) => nova(g, pac[0]!, 'conv-e2'), est2);
+    expect((await falha(gravar((g) => nova(g, pac[0]!, 'conv-e2b'), est2))).codigo).toBe('conta-existente');
+    await gravar((g) => g.ativar(k2, 1, ativacao('e2@x.test')), est2);
+    const antes = await conta(k2);
+    // Pelo estabelecimento 1, nada a altera: bloqueio, refazer, senha e entrada não a encontram.
+    expect((await falha(gravar((g) => g.bloquear(k2, 2, { motivo: 'x', por: RECEPCAO })))).codigo).toBe(
+      'versao-desatualizada',
+    );
+    expect(
+      (
+        await falha(
+          gravar((g) =>
+            g.reemitirConvite(k2, 2, {
+              conviteResumo: res('conv-e2c'),
+              conviteValidoAte: new Date(Date.now() + 86_400_000),
+              origem: 'recepcao',
+              por: RECEPCAO,
+              refazer: true,
+            }),
+          ),
+        )
+      ).codigo,
+    ).toBe('versao-desatualizada');
+    expect((await falha(gravar((g) => g.trocarSenha(k2, 2, 'x')))).codigo).toBe('versao-desatualizada');
+    await gravar((g) => g.registrarEntrada(k2, { acertou: false, tentativas: 9, bloqueadoAte: new Date() }));
+    const troca = (tok: string, estab: number) =>
+      gravar(
+        (g) =>
+          g.pedirTrocaEmail({
+            conta: k2,
+            emailNovo: 'e2b@x.test',
+            emailNovoResumo: res('e2b'),
+            tokenResumo: res(tok),
+            validoAte: new Date(Date.now() + 3_600_000),
+            origem: 'portal',
+            motivo: 'troca pedida pelo titular',
+            pedidoPor: 'SGH.PORTAL.E2',
+            envio: 'simulador',
+          }),
+        estab,
+      );
+    expect((await falha(troca('tok-e1', est))).codigo).toBe('nao-encontrado');
+    expect(await conta(k2)).toEqual(antes);
+    // Dois pedidos de troca ao mesmo tempo: a conta travada os serializa; fica um só pendente.
+    const [a, b] = await Promise.all([troca('tok-e2', est2), troca('tok-e3', est2)]);
+    expect(a.id).not.toBe(b.id);
+    const pend = await um(
+      "SELECT COUNT(*) AS n FROM troca_email_conta_portal WHERE conta_portal_paciente_id = ? AND situacao = 'pendente'",
+      [k2],
+    );
+    expect(Number(pend['n'])).toBe(1);
+    const pendente = await um(
+      "SELECT id FROM troca_email_conta_portal WHERE conta_portal_paciente_id = ? AND situacao = 'pendente'",
+      [k2],
+    );
+    expect((await falha(gravar((g) => g.cancelarTrocaEmail(Number(pendente['id']))))).codigo).toBe(
+      'situacao',
+    );
+    await gravar((g) => g.cancelarTrocaEmail(Number(pendente['id'])), est2);
   });
 
   it('consentimento: registra autorizado pelo portal, revoga (nada apagado) e recusa domínio desconhecido', async () => {
