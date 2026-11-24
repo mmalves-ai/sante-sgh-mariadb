@@ -3,7 +3,14 @@
 //     profissional), com a parte do repasse (0 < % ≤ 100) e a vigência; o terceiro profissional não é o titular;
 //   - um favorecido novo do mesmo tipo e da mesma fonte pagadora não sobrescreve o anterior: a vigência do anterior
 //     aberto termina no dia de antes (o histórico fica, nada é apagado);
-//   - a soma das partes dos favorecidos que valem num mesmo dia (para a mesma fonte, ou para todas) não passa de 100%;
+//   - o favorecido de uma fonte pagadora SUBSTITUI os gerais (fonte nula) naquela fonte: numa fonte com favorecido
+//     próprio valem só os dela; nas demais, os gerais. Assim a cessão de crédito por convênio (100% à empresa naquela
+//     fonte) convive com o geral (100% ao médico). A soma das partes não passa de 100% em cada fonte efetiva, por dia;
+//   - o lançamento divide o valor pelas partes vigentes na data (centavo que sobra da divisão vai à maior parte); a
+//     parte que falta para 100% vai ao próprio profissional quando ele é favorecido, senão o lançamento é recusado;
+//   - encerrar só antecipa o fim (nunca estende nem reabre: prorrogar é incluir favorecido novo);
+//   - a conta de crédito é do credor do tipo: própria e terceiro profissional pelo profissional; empresa e cooperativa
+//     pelo fornecedor da pessoa jurídica (o mesmo cadastro que guarda o enquadramento e as retenções);
 //   - o prestador terceiro tem o documento do tipo de pessoa com dígito válido, o CNES com 7 dígitos, o percentual de
 //     repasse entre 0 e 100 e a base de cálculo conhecida.
 import { cnpjValido, cpfValido } from '@sgh/contratos';
@@ -90,7 +97,16 @@ export function validarFavorecido(f: FavorecidoNovo): ProblemaCampo[] {
 const valeNoDia = (v: { inicio: string; fim: string | null }, dia: string) =>
   v.inicio <= dia && (v.fim === null || v.fim >= dia);
 
-const mesmaFonteOuGeral = (a: number | null, b: number | null) => a === null || b === null || a === b;
+/** As partes que valem numa fonte efetiva (a fonte com favorecido próprio substitui os gerais) num dia. */
+export function partesDaFonte<T extends { fontePagadora: number | null; inicio: string; fim: string | null }>(
+  vigencias: readonly T[],
+  fonte: number | null,
+  dia: string,
+): T[] {
+  const doDia = vigencias.filter((v) => valeNoDia(v, dia));
+  const daFonte = fonte === null ? [] : doDia.filter((v) => v.fontePagadora === fonte);
+  return daFonte.length ? daFonte : doDia.filter((v) => v.fontePagadora === null);
+}
 
 export interface PlanoFavorecido {
   /** Os anteriores abertos do mesmo tipo e fonte que terminam no dia de antes do novo início. */
@@ -100,8 +116,8 @@ export interface PlanoFavorecido {
 
 /**
  * O que gravar ao incluir um favorecido: os anteriores do mesmo tipo e fonte, abertos ou que alcançam o novo início,
- * terminam no dia de antes (o que começa no mesmo dia ou depois é conflito); a soma das partes que valem em cada dia de
- * início do período não passa de 100%.
+ * terminam no dia de antes (o que começa no mesmo dia ou depois é conflito); a soma das partes da fonte efetiva do novo
+ * (a dele, ou a dos gerais) em cada dia de início do período não passa de 100%.
  */
 export function planejarFavorecido(
   novo: FavorecidoNovo,
@@ -126,24 +142,125 @@ export function planejarFavorecido(
     depois.set(e.id, fim);
   }
   if (problemas.length) return { encerrar: [], problemas };
-  const vigencias = existentes.map((e) => ({ ...e, fim: depois.has(e.id) ? depois.get(e.id)! : e.fim }));
+  const vigencias = existentes
+    .map((e) => ({ ...e, fim: depois.has(e.id) ? depois.get(e.id)! : e.fim }))
+    .filter((v) => v.fontePagadora === novo.fontePagadora);
   const dias = new Set([novo.inicio, ...vigencias.map((v) => v.inicio).filter((d) => d > novo.inicio)]);
   for (const dia of [...dias].sort()) {
     if (!valeNoDia(novo, dia)) continue;
     const soma =
-      novo.percentual +
-      vigencias
-        .filter((v) => valeNoDia(v, dia) && mesmaFonteOuGeral(v.fontePagadora, novo.fontePagadora))
-        .reduce((t, v) => t + v.percentual, 0);
+      novo.percentual + vigencias.filter((v) => valeNoDia(v, dia)).reduce((t, v) => t + v.percentual, 0);
     if (soma > 100 + 1e-9) {
       problemas.push({
         campo: 'percentual',
-        mensagem: `A soma das partes dos favorecidos em ${dia} passaria de 100% (${soma.toFixed(2)}%).`,
+        mensagem: `A soma das partes dos favorecidos ${
+          novo.fontePagadora === null ? 'gerais' : 'desta fonte pagadora'
+        } em ${dia} passaria de 100% (${soma.toFixed(2)}%).`,
       });
       break;
     }
   }
   return problemas.length ? { encerrar: [], problemas } : { encerrar, problemas: [] };
+}
+
+/** Encerrar só antecipa o fim: o novo fim fica entre o início e o fim atual (ou qualquer data, se aberto). */
+export function validarEncerramento(
+  atual: { inicio: string; fim: string | null },
+  fim: string,
+): ProblemaCampo[] {
+  if (!DATA.test(fim)) return [{ campo: 'fim', mensagem: 'Informe a data do encerramento.' }];
+  if (fim < atual.inicio)
+    return [{ campo: 'fim', mensagem: 'O fim da vigência não pode ser antes do início.' }];
+  if (atual.fim !== null && fim > atual.fim)
+    return [
+      {
+        campo: 'fim',
+        mensagem: `Encerrar só antecipa o fim (hoje ${atual.fim}); para estender, inclua um favorecido novo.`,
+      },
+    ];
+  return [];
+}
+
+/** O credor que precisa ser o dono da conta de crédito do favorecido. */
+export function donoDaConta(
+  tipo: TipoFavorecido,
+): 'profissional' | 'terceiro_profissional' | 'fornecedor_da_empresa' | 'fornecedor_da_cooperativa' {
+  return {
+    proprio_profissional: 'profissional',
+    terceiro_profissional: 'terceiro_profissional',
+    pessoa_juridica: 'fornecedor_da_empresa',
+    cooperativa: 'fornecedor_da_cooperativa',
+  }[tipo] as ReturnType<typeof donoDaConta>;
+}
+
+// ── Divisão do lançamento ──────────────────────────────────────────────────────────────────────────────────
+
+export interface FavorecidoDaDivisao extends FavorecidoVigente {
+  readonly contaBancaria: number | null;
+}
+
+export interface ParteDoRepasse {
+  readonly favorecido: number;
+  readonly tipo: TipoFavorecido;
+  readonly percentual: number;
+  /** Valor da parte em centavos (com o sinal do valor dividido). */
+  readonly centavos: number;
+}
+
+export type DivisaoRepasse =
+  | { readonly ok: true; readonly partes: readonly ParteDoRepasse[] }
+  | {
+      readonly ok: false;
+      readonly codigo: 'sem-favorecido' | 'favorecidos-incompletos';
+      readonly mensagem: string;
+    };
+
+/**
+ * Divide o valor (centavos) pelos favorecidos da fonte efetiva vigentes no dia. A parte que falta para 100% vai ao
+ * próprio profissional quando ele é favorecido; sem ele, recusa (o resto não teria destino). O centavo que sobra da
+ * divisão vai à maior parte (a primeira: maior percentual, menor id).
+ */
+export function dividirRepasse(
+  valorCentavos: number,
+  favorecidos: readonly FavorecidoDaDivisao[],
+  fonte: number | null,
+  dia: string,
+): DivisaoRepasse {
+  const usar = partesDaFonte(favorecidos, fonte, dia)
+    .map((f) => ({ ...f }))
+    .sort((a, b) => b.percentual - a.percentual || a.id - b.id);
+  if (!usar.length)
+    return {
+      ok: false,
+      codigo: 'sem-favorecido',
+      mensagem: 'O profissional não tem favorecido de repasse vigente.',
+    };
+  const soma = usar.reduce((t, f) => t + f.percentual, 0);
+  if (soma < 100 - 1e-9) {
+    const proprio = usar.find((f) => f.tipo === 'proprio_profissional');
+    if (!proprio)
+      return {
+        ok: false,
+        codigo: 'favorecidos-incompletos',
+        mensagem: `As partes dos favorecidos vigentes somam ${soma.toFixed(2)}% e o próprio profissional não é favorecido para receber o resto.`,
+      };
+    (proprio as { percentual: number }).percentual += 100 - soma;
+    usar.sort((a, b) => b.percentual - a.percentual || a.id - b.id);
+  }
+  const sinal = valorCentavos < 0 ? -1 : 1;
+  const total = Math.abs(Math.round(valorCentavos));
+  const brutas = usar.map((f) => Math.floor((total * f.percentual) / 100 + 1e-9));
+  const sobra = total - brutas.reduce((t, v) => t + v, 0);
+  brutas[0]! += sobra;
+  return {
+    ok: true,
+    partes: usar.map((f, i) => ({
+      favorecido: f.id,
+      tipo: f.tipo,
+      percentual: Math.round(f.percentual * 10000) / 10000,
+      centavos: sinal * brutas[i]!,
+    })),
+  };
 }
 
 // ── Prestador terceiro ─────────────────────────────────────────────────────────────────────────────────────────
@@ -182,4 +299,43 @@ export function validarPrestadorTerceiro(e: PrestadorTerceiroNovo): ProblemaCamp
   if (e.email !== null && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e.email))
     p.push({ campo: 'email', mensagem: 'E-mail inválido.' });
   return p;
+}
+
+// ── Retenções do favorecido pessoa jurídica ────────────────────────────────────────────────────────────────
+
+/** Um enquadramento tributário do fornecedor (o cadastro fiscal do contas a pagar), como a retenção o vê. */
+export interface EnquadramentoDoFornecedor {
+  readonly tributo: number | null;
+  readonly regime: string;
+  readonly retem: boolean;
+  readonly aliquotaIss: number | null;
+  readonly inicio: string;
+  readonly fim: string | null;
+}
+
+export type SituacaoFiscalFavorecido =
+  /** Pessoa física: as retenções saem das tabelas do autônomo (RPA). */
+  | 'pessoa_fisica'
+  /** A empresa não está no cadastro de fornecedores: não há como reter nem pagar pelo contas a pagar. */
+  | 'sem_fornecedor'
+  /** Fornecedor sem enquadramento vigente: a retenção usa a regra geral do tributo. */
+  | 'sem_enquadramento'
+  | 'enquadrado';
+
+/**
+ * As alíquotas e retenções do favorecido vêm do cadastro fiscal do fornecedor (um só lugar para o contas a pagar e o
+ * repasse): a empresa do médico e a cooperativa pelo fornecedor da pessoa jurídica, o prestador terceiro pelo seu
+ * fornecedor. Devolve a situação e os enquadramentos vigentes no dia.
+ */
+export function retencoesDoFavorecido(
+  tipo: TipoFavorecido | 'prestador_terceiro',
+  fornecedor: number | null,
+  enquadramentos: readonly EnquadramentoDoFornecedor[],
+  dia: string,
+): { situacao: SituacaoFiscalFavorecido; vigentes: EnquadramentoDoFornecedor[] } {
+  if (tipo === 'proprio_profissional' || tipo === 'terceiro_profissional')
+    return { situacao: 'pessoa_fisica', vigentes: [] };
+  if (fornecedor === null) return { situacao: 'sem_fornecedor', vigentes: [] };
+  const vigentes = enquadramentos.filter((e) => valeNoDia(e, dia));
+  return { situacao: vigentes.length ? 'enquadrado' : 'sem_enquadramento', vigentes };
 }
