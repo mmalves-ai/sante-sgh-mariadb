@@ -16,11 +16,17 @@
 // - a conta do e-mail já existe sem senha (convite não aceito ou vencido): gera convite novo e reenvia;
 // - a conta do e-mail existe com senha, ou é do suporte técnico: recusa.
 // Nunca imprime link, token ou senha: só "convite enviado para <e-mail>".
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { novoConvite } from '@sgh/dominio-acesso';
 import { type Ambiente, type Escritor, NucleoProprio, ambienteEfetivo } from '@sgh/nucleo';
 import {
   ENDERECO_EMAIL,
   emailAcessoDoAmbiente,
+  type MensagemAcesso,
   type PortaEmailAcesso,
 } from '../../apps/api/src/sessao/email-acesso.ts';
 
@@ -203,15 +209,50 @@ export async function executar(argv: readonly string[], d: Dependencias): Promis
   return decisao;
 }
 
-async function principal(argv: readonly string[]): Promise<number> {
+/** E-mail do dono (canal de avisos da obra): DONO_EMAIL do ambiente, senão o endereço padrão do avisar_dono.py. */
+export function emailDoDono(env: Ambiente): string {
+  return (env['DONO_EMAIL']?.trim() || 'mmalves@hal-ai.com').toLowerCase();
+}
+
+/**
+ * Entrega pelo canal de avisos da obra (decisão do dono, 24/11/2026): o convite da conta do PRÓPRIO dono vai à caixa
+ * real dele por tools/obra/avisar_dono.py (SES), também fora de produção. Só para o e-mail do dono; o texto (com o
+ * link) passa por arquivo temporário 0600, apagado no fim, nunca por argumento de processo, saída ou log.
+ */
+export function envioPeloCanalDoDono(env: Ambiente, raiz: string): PortaEmailAcesso {
+  return {
+    destino: 'smtp',
+    async enviar(m: MensagemAcesso) {
+      if (m.para.toLowerCase() !== emailDoDono(env))
+        throw new Error('recusado: o canal do dono só entrega ao e-mail do dono');
+      const dir = mkdtempSync(join(tmpdir(), 'convite-'));
+      const arq = join(dir, 'convite.txt');
+      try {
+        writeFileSync(arq, m.texto, { mode: 0o600 });
+        execFileSync(
+          'python3',
+          ['-I', join(raiz, 'tools/obra/avisar_dono.py'), '--assunto', m.assunto, '--arquivo', arq, '--para', m.para],
+          { stdio: ['ignore', 'ignore', 'inherit'] },
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  };
+}
+
+async function principal(argvBruto: readonly string[]): Promise<number> {
   const { env } = ambienteEfetivo();
   if (ehProducao(env))
     throw new Error('recusado em produção: a primeira conta é do procedimento de implantação');
+  const peloDono = argvBruto.includes('--entregar-ao-dono');
+  const argv = argvBruto.filter((a) => a !== '--entregar-ao-dono');
+  const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
   const nucleo = new NucleoProprio({ env });
   try {
     await executar(argv, {
       env,
-      email: emailAcessoDoAmbiente(env as NodeJS.ProcessEnv),
+      email: peloDono ? envioPeloCanalDoDono(env, raiz) : emailAcessoDoAmbiente(env as NodeJS.ProcessEnv),
       escrever: (fn) => nucleo.escreverPlataforma('plataforma-criar-admin', fn),
     });
   } finally {

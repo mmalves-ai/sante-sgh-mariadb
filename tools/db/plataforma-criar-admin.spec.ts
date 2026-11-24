@@ -10,6 +10,8 @@ import {
   EVENTO_CONVITE,
   EVENTO_CRIADA,
   analisarArgumentos,
+  emailDoDono,
+  envioPeloCanalDoDono,
   decidir,
   executar,
 } from './plataforma-criar-admin.ts';
@@ -196,5 +198,18 @@ describe('plataforma:criar-admin', () => {
       executar(ARGS, { env: { AMBIENTE: 'dev' }, email: null, escrever: b.escrever }),
     ).rejects.toThrow('envio de e-mail não configurado');
     expect(b.contas).toEqual([]);
+  });
+});
+
+describe('entrega pelo canal do dono (decisão do dono, 24/11/2026)', () => {
+  it('o e-mail do dono vem de DONO_EMAIL, senão o padrão do aviso da obra', () => {
+    expect(emailDoDono({ DONO_EMAIL: 'Dono@Exemplo.dev' })).toBe('dono@exemplo.dev');
+    expect(emailDoDono({})).toBe('mmalves@hal-ai.com');
+  });
+  it('recusa entregar a quem não é o dono, sem chamar o canal', async () => {
+    const porta = envioPeloCanalDoDono({ DONO_EMAIL: 'dono@exemplo.dev' }, '/inexistente');
+    await expect(
+      porta.enviar({ para: 'outra@exemplo.dev', assunto: 'x', texto: 'link' }),
+    ).rejects.toThrow('só entrega ao e-mail do dono');
   });
 });
