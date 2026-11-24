@@ -11,8 +11,8 @@
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
 import { PLANO_DO_TIPO, TIPOS_ALERTA, type SecaoCadastroPrescricao } from '@sgh/contratos';
 import type { ContextoPrescricao, ParametrosPrescricao } from './prescricao-porta.js';
-import { BASE_PLANO_PROPRIO } from './prescricao-porta-propria.js';
-import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-porta-propria.js';
+import { BASE_PLANO_PROPRIO } from './prescricao-propria-gravacao.js';
+import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-propria-comum.js';
 import type {
   ConsultaCadastroLida,
   InteracaoLida,

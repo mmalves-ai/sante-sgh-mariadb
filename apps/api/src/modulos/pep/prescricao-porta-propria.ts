@@ -23,7 +23,7 @@ import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js'
 import { dataHora, fusoValido, PortaRegistroPropria } from './registro-porta-propria.js';
 import { alergiasDaPrescricao } from './alergias-propria.js';
 import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
-import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import { BASE_PLANO_PROPRIO, GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
 import { RegrasPrescricaoPropria2 } from './prescricao-propria-regras-2.js';
 import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import {
@@ -45,8 +45,9 @@ export const MOTIVO_PRESCRICAO_PENDENTE =
 /**
  * Código de plano dos tipos de item sem equivalente na lista de tipos oferecidos (cuidado, exame, material...): fora
  * da faixa dos códigos da lista (até 14), para não se confundir com um tipo oferecido; a tela mostra o nome do tipo.
+ * Definido uma vez só na gravação (o catálogo o importa de lá, sem import circular com esta porta).
  */
-export const BASE_PLANO_PROPRIO = 1000;
+export { BASE_PLANO_PROPRIO };
 
 /** Categoria do tipo de item (CHECK de tipo_item_prescricao) → código de plano da lista de tipos oferecidos. */
 const PLANO_DA_CATEGORIA: Readonly<Record<string, number>> = {

@@ -45,6 +45,7 @@ import {
 } from './documentos-propria-operacoes-2.js';
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
+import type { NucleoDocumentosPep } from './documentos-propria-comum.js';
 import type {
   AtendimentoPepLido,
   ContextoGravacaoPep,
@@ -54,14 +55,8 @@ import type {
   RetratosAtuais,
 } from './tipos-pep.js';
 
-/** O que a porta usa do NucleoProprio (os testes trocam). */
-export interface NucleoDocumentosPep {
-  lerSomente<T>(
-    contexto: { readonly cliente: string; readonly correlacao: string },
-    fn: (l: Leitor) => Promise<T>,
-  ): Promise<T>;
-  criarExecutor(): Executor;
-}
+// A base comum continua exportada por aqui (as partes da porta a importam desta porta).
+export { type NucleoDocumentosPep, recusaPendente } from './documentos-propria-comum.js';
 
 /** Situações em que o documento pode ser assinado (lista positiva). */
 export const CATEGORIAS_ASSINAVEIS: readonly string[] = ['lancado', 'validado', 'aguardando_assinatura'];
@@ -103,15 +98,6 @@ function conteudoDe(v: unknown): Record<string, unknown> {
 function numeroDeNegocio(numero: unknown, id: unknown): number {
   const n = Number(String(numero ?? '').replace(/\D/g, ''));
   return Number.isSafeInteger(n) && n > 0 ? n : num(id);
-}
-
-export function recusaPendente(metodo: string): ErroOperacao {
-  return new ErroOperacao(
-    501,
-    'pendente-modelo-proprio',
-    'Ainda não disponível no banco próprio',
-    `A leitura ou gravação "${metodo}" dos documentos do prontuário ainda não tem adaptador no banco próprio.`,
-  );
 }
 
 const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao =>

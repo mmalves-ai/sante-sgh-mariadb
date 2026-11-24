@@ -17,8 +17,8 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import type { ContextoDocs } from './documentos-porta.js';
-import { type NucleoDocumentosPep, recusaPendente } from './documentos-porta-propria.js';
-import { dataHora, fusoValido } from './registro-porta-propria.js';
+import { type NucleoDocumentosPep, recusaPendente } from './documentos-propria-comum.js';
+import { dataHora, fusoValido } from './registro-propria-comum.js';
 import {
   type CabecalhoDocumentoLido,
   type CompletudePainelLida,

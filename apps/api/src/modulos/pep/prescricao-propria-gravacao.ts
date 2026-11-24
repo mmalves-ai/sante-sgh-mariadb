@@ -99,7 +99,7 @@ export const CATEGORIA_DO_PLANO: Readonly<Record<number, string>> = {
   [PLANO_DO_TIPO.hemoterapia]: 'hemocomponente',
   [PLANO_DO_TIPO.procedimento]: 'procedimento',
 };
-/** Mesmo valor da porta própria: plano acima dele = id do tipo de item próprio. */
+/** Plano a partir dele = id do tipo de item próprio (a porta própria e o catálogo usam este, sem cópia). */
 export const BASE_PLANO_PROPRIO = 1000;
 
 /** Decisão do contrato → decisão gravada (CHECK de decisao_alerta). "exibido" (só aviso) fica como aceito. */
