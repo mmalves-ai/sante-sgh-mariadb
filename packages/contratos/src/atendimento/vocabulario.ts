@@ -187,19 +187,19 @@ export const CODIGOS_IMPRESSO = IMPRESSOS_ATENDIMENTO.map((i) => i.codigo) as [
   ...ImpressoAtendimento[],
 ];
 
-/** Herança do atendimento anterior: o que cada marca copia (nomes de produto). */
+/** Herança do atendimento anterior: o campo da ficha e a chave da regra gravada (regra_heranca_campo.campo). */
 export const HERANCAS = [
-  { coluna: 'CONV_ANT', campo: 'convenio', rotulo: 'Convênio' },
-  { coluna: 'CRM_ANT', campo: 'profissional', rotulo: 'Profissional' },
-  { coluna: 'CDC_ANT', campo: 'centroCusto', rotulo: 'Centro de custo' },
-  { coluna: 'UNID_ANT', campo: 'unidade', rotulo: 'Unidade' },
-  { coluna: 'MATRIC_ANT', campo: 'matricula', rotulo: 'Carteirinha' },
-  { coluna: 'GUIA_ANT', campo: 'guia', rotulo: 'Guia' },
-  { coluna: 'PLANO_ANT', campo: 'plano', rotulo: 'Plano' },
-  { coluna: 'CLIN_ANT', campo: 'clinica', rotulo: 'Clínica' },
-  { coluna: 'ESPEC_ANT', campo: 'especialidade', rotulo: 'Especialidade' },
-  { coluna: 'EMPRESA_ANT', campo: 'empresa', rotulo: 'Empresa' },
-  { coluna: 'VALCAR_ANT', campo: 'validadeCarteira', rotulo: 'Validade da carteirinha' },
-  { coluna: 'TITCONV_ANT', campo: 'titular', rotulo: 'Titular do convênio' },
+  { chave: 'fonte_pagadora', campo: 'convenio', rotulo: 'Convênio' },
+  { chave: 'profissional', campo: 'profissional', rotulo: 'Profissional' },
+  { chave: 'centro_custo', campo: 'centroCusto', rotulo: 'Centro de custo' },
+  { chave: 'unidade', campo: 'unidade', rotulo: 'Unidade' },
+  { chave: 'carteira', campo: 'matricula', rotulo: 'Carteirinha' },
+  { chave: 'guia', campo: 'guia', rotulo: 'Guia' },
+  { chave: 'plano', campo: 'plano', rotulo: 'Plano' },
+  { chave: 'clinica', campo: 'clinica', rotulo: 'Clínica' },
+  { chave: 'especialidade', campo: 'especialidade', rotulo: 'Especialidade' },
+  { chave: 'empresa', campo: 'empresa', rotulo: 'Empresa' },
+  { chave: 'validade_carteira', campo: 'validadeCarteira', rotulo: 'Validade da carteirinha' },
+  { chave: 'titular', campo: 'titular', rotulo: 'Titular do convênio' },
 ] as const;
 export type CampoHerdado = (typeof HERANCAS)[number]['campo'];

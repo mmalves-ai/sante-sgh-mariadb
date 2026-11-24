@@ -220,8 +220,8 @@ export type AlterarAtendimentoEntrada = z.infer<typeof esquemaAlterarAtendimento
 // ── atendimento.alterarHeranca ───────────────────────────────────────────────────────────────────
 
 /**
- * O que a ficha nova copia do atendimento anterior do paciente (configuração única da rede): marca por
- * campo. Controle otimista pelas marcas lidas pela tela (`versao`: as letras na ordem de HERANCAS).
+ * O que a ficha nova copia do atendimento anterior do paciente (por escopo: todo o cliente, o estabelecimento ou o usuário): marca por
+ * campo. Controle otimista pela configuração lida pela tela (`versao`).
  */
 export const esquemaAlterarHeranca = z
   .object({
@@ -233,7 +233,14 @@ export const esquemaAlterarHeranca = z
         >,
       )
       .strict(),
-    versao: z.string().regex(/^[TF ]{12}$/),
+    /** A configuração lida (controle otimista): as chaves herdadas, em ordem, ou "nenhum". */
+    versao: z
+      .string()
+      .min(1)
+      .max(300)
+      .regex(/^[a-z_,]+$/),
+    /** Só para o usuário da sessão (os valores padrão dele); sem isto, vale para o estabelecimento. */
+    paraMim: z.boolean().optional(),
   })
   .strict()
   .refine((e) => Object.values(e.marcas).some((v) => v !== undefined), 'Nada a alterar.');

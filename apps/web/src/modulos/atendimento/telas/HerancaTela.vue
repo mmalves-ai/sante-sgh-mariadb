@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Herança do atendimento anterior (ficha do M20, seção 5): `/recepcao/atendimento/heranca`. O que a ficha nova traz
 // preenchido do último atendimento do paciente (convênio, profissional, carteirinha, plano…). A configuração vale
-// para a rede inteira; a gravação confere as marcas lidas (outra estação mudou: o aviso e a releitura).
+// para o estabelecimento ou, marcando "só para mim", para o usuário (a dele vence); a gravação confere a configuração
+// lida (outra estação mudou: o aviso e a releitura).
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -27,6 +28,7 @@ const mudou = computed(() => (cfg.data.value?.campos ?? []).some((c) => marcas.v
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
+const paraMim = ref(false);
 async function gravar(): Promise<void> {
   const c = cfg.data.value;
   if (!c) return;
@@ -37,6 +39,7 @@ async function gravar(): Promise<void> {
     const r = await alterarHeranca(
       {
         versao: c.versao,
+        ...(paraMim.value ? { paraMim: true } : {}),
         marcas: Object.fromEntries(
           c.campos
             .filter((x) => marcas.value[x.campo] !== x.herda)
@@ -75,6 +78,10 @@ async function gravar(): Promise<void> {
           {{ c.rotulo }}
         </label>
       </fieldset>
+      <label v-if="podeGravar">
+        <input v-model="paraMim" type="checkbox" data-testid="heranca-para-mim" />
+        {{ t('atendimento.heranca.paraMim') }}
+      </label>
       <p class="acoes">
         <SanteBotao
           v-if="podeGravar"

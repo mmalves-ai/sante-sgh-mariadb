@@ -5,7 +5,7 @@ import { caraterGravado, caraterSugerido, rotuloCarater } from './carater.js';
 import { avisoContaSemLancamento, permiteLancar, rotuloConta, situacaoDaConta } from './conta-aberta.js';
 import { desfechosPermitidos, motivoAltaDoDesfecho, podeRegistrarDesfecho } from './desfecho.js';
 import { esperaMinutos, ordenarFilaConsultorio, podeChamar, situacaoPelaLetra } from './fila-consultorio.js';
-import { aplicarHeranca, camposHerdados } from './heranca.js';
+import { aplicarHeranca, camposHerdados, resolverHeranca, versaoHeranca } from './heranca.js';
 import { alertaObservacao, exigeJustificativaSaida, horasDeObservacao } from './observacao.js';
 import { colunaDaEtapa, etapaAtual, montarQuadro, ordenarPa, podeRegistrarEtapa } from './quadro.js';
 
@@ -102,12 +102,46 @@ describe('fila do consultório', () => {
 
 describe('herança do atendimento anterior', () => {
   it('só os campos marcados e com valor no anterior', () => {
-    const marcas = { CONV_ANT: 'T', CRM_ANT: 't ', MATRIC_ANT: 'F', PLANO_ANT: 'T', EMPRESA_ANT: null };
+    const marcas = { fonte_pagadora: true, profissional: true, carteira: false, plano: true, empresa: null };
     expect(camposHerdados(marcas)).toEqual(['convenio', 'profissional', 'plano']);
     expect(aplicarHeranca(marcas, { convenio: 306, profissional: 0, plano: '', matricula: 'X' })).toEqual({
       convenio: 306,
     });
     expect(aplicarHeranca(marcas, null)).toEqual({});
+  });
+
+  it('sem regra gravada: o padrão (cobertura e profissional)', () => {
+    const m = resolverHeranca([], { estabelecimento: 1, usuario: 7 });
+    expect(camposHerdados(m)).toEqual(['convenio', 'profissional', 'matricula', 'plano', 'validadeCarteira']);
+    expect(versaoHeranca(m)).toBe('fonte_pagadora,profissional,carteira,plano,validade_carteira');
+    expect(versaoHeranca({})).toBe('nenhum');
+  });
+
+  it('a regra mais específica vence, campo a campo; outro escopo é ignorado', () => {
+    const m = resolverHeranca(
+      [
+        { campo: 'guia', herda: true, estabelecimento: null, usuario: null },
+        { campo: 'guia', herda: false, estabelecimento: 1, usuario: null },
+        { campo: 'guia', herda: true, estabelecimento: 1, usuario: 7 },
+        { campo: 'empresa', herda: true, estabelecimento: 1, usuario: null },
+        { campo: 'empresa', herda: false, estabelecimento: null, usuario: null },
+        { campo: 'plano', herda: false, estabelecimento: 2, usuario: null },
+        { campo: 'carteira', herda: false, estabelecimento: null, usuario: 8 },
+        { campo: 'peso', herda: true, estabelecimento: null, usuario: null },
+      ],
+      { estabelecimento: 1, usuario: 7 },
+    );
+    expect(m['guia']).toBe(true);
+    expect(m['empresa']).toBe(true);
+    expect(m['plano']).toBe(true);
+    expect(m['carteira']).toBe(true);
+    expect(m['peso']).toBeUndefined();
+    expect(
+      resolverHeranca([{ campo: 'guia', herda: true, estabelecimento: 1, usuario: 7 }], {
+        estabelecimento: 1,
+        usuario: null,
+      })['guia'],
+    ).toBe(false);
   });
 });
 

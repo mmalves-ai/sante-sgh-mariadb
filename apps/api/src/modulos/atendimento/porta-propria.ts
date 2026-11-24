@@ -18,7 +18,8 @@
 // dia à fila e desfaz o vínculo da marcação); ato médico só por médico (CBO 225 ou CRM ativo), relido na operação.
 // Melhoria: observação sem dois leitos para o mesmo atendimento; na transferência a contagem das horas continua a da
 // primeira entrada; justificativa e horas pelo domínio; a saída devolve o atendimento a "em atendimento".
-// Pendente (pedido ao orquestrador): alteração, herança, segurado, procedimento extra, impressos, paciente
+// Herança do atendimento anterior: porta-propria-heranca.ts (regra_heranca_campo por escopo).
+// Pendente (pedido ao orquestrador): alteração, segurado, procedimento extra, impressos, paciente
 // não identificado, escore do PA, sinais, indicadores e marcação respondem 501 (ou vazio no quadro) até a regra e o
 // modelo chegarem.
 import { randomUUID } from 'node:crypto';
@@ -81,6 +82,11 @@ import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
+import {
+  lerMarcasHeranca,
+  OPERACAO_ALTERAR_HERANCA,
+  valoresHerdaveisDoAnterior,
+} from './porta-propria-heranca.js';
 import type {
   ContextoAtendimento,
   DadosImpresso,
@@ -915,7 +921,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
         motivosExclusao: (
           await lista('SELECT id, descricao FROM motivo_cancelamento_operacao WHERE ativo ORDER BY descricao')
         ).map((x) => ({ codigo: Number(x['id']), nome: texto(x['descricao']) ?? '' })),
-        heranca: {},
+        heranca: await lerMarcasHeranca(l, est, c.usuario),
       };
     });
   }
@@ -998,6 +1004,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
                 profissional: ult.profissional.crm,
                 especialidade: ult.especialidade.codigo,
                 unidade: ult.unidade,
+                ...(await valoresHerdaveisDoAnterior(l, ult.reg)),
               } as Record<string, string | number | null>,
             }
           : null,
@@ -1877,4 +1884,5 @@ const OPERACOES_PROPRIAS: Readonly<Record<string, Operacao<any, ResultadoOperaca
   'atendimento.encerrarAtendimento': OPERACAO_ENCERRAR,
   'atendimento.conduzirNoConsultorio': OPERACAO_CONDUZIR,
   'atendimento.lancarProcedimentoExtra': OPERACAO_LANCAR_EXTRA,
+  'atendimento.alterarHeranca': OPERACAO_ALTERAR_HERANCA,
 };

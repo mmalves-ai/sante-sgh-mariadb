@@ -339,8 +339,10 @@ export const mensagensAtendimento = {
   },
   heranca: {
     titulo: 'Herança do atendimento anterior',
-    texto: 'O que a ficha nova traz preenchido do último atendimento do paciente. Vale para toda a rede.',
+    texto:
+      'O que a ficha nova traz preenchido do último atendimento do paciente. Vale para o estabelecimento; a configuração pessoal de cada usuário vence.',
     campos: 'Campos herdados',
+    paraMim: 'Só para mim (meus valores padrão)',
   },
   recusas: {
     'paciente-inativo': 'O cadastro do paciente está inativo.',

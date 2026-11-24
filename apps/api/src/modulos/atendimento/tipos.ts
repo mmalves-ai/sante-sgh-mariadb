@@ -155,7 +155,8 @@ export interface ApoioAtendimentoDados {
   }[];
   readonly centrosCusto: { codigo: number; nome: string }[];
   readonly motivosExclusao: { codigo: number; nome: string }[];
-  readonly heranca: Record<string, string>;
+  /** As marcas da herança em vigor para a sessão, pela chave da regra (`HERANCAS[].chave`). */
+  readonly heranca: Record<string, boolean>;
 }
 
 /** A marcação de agenda que a abertura do atendimento preenche. */

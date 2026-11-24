@@ -28,6 +28,7 @@ import {
   alertaObservacao,
   calcularIndicadoresAgregados,
   camposHerdados,
+  versaoHeranca,
   esperaMinutos,
   horasDeObservacao,
   idadeEmAnos,
@@ -309,10 +310,9 @@ export class ServicoAtendimento {
 
   async configuracaoHeranca(c: ContextoAtendimento): Promise<ConfiguracaoHeranca> {
     const a = await this.porta.apoio(c);
-    const letra = (col: string) => ((a.heranca[col] ?? '').trim().toUpperCase() === 'T' ? 'T' : 'F');
     return {
-      campos: HERANCAS.map((h) => ({ campo: h.campo, rotulo: h.rotulo, herda: letra(h.coluna) === 'T' })),
-      versao: HERANCAS.map((h) => letra(h.coluna)).join(''),
+      campos: HERANCAS.map((h) => ({ campo: h.campo, rotulo: h.rotulo, herda: a.heranca[h.chave] === true })),
+      versao: versaoHeranca(a.heranca),
     };
   }
 

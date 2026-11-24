@@ -19,6 +19,7 @@ import {
   tipoAtendimento,
   type TipoAtendimento,
 } from '@sgh/contratos';
+import { versaoHeranca } from '@sgh/dominio-atendimento';
 import { ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
 import type { ContextoGravacao, LiberacaoOperacao, PacienteFicha } from '../cadastro/tipos.js';
 import type { EstadoCatalogo } from '../cadastro/porta.js';
@@ -157,7 +158,7 @@ interface Estado {
   idem: Map<string, ResultadoOperacao>;
   excluidas: number[];
   /** A configuração da herança do atendimento anterior (as marcas T/F, como a linha única da rede). */
-  heranca: Record<string, string>;
+  heranca: Record<string, boolean>;
 }
 
 const CONVENIOS = [
@@ -288,10 +289,10 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
       excluidas: [],
       heranca: Object.fromEntries(
         HERANCAS.map((h) => [
-          h.coluna,
-          ['CONV_ANT', 'CRM_ANT', 'MATRIC_ANT', 'PLANO_ANT', 'CLIN_ANT', 'VALCAR_ANT'].includes(h.coluna)
-            ? 'T'
-            : 'F',
+          h.chave,
+          ['fonte_pagadora', 'profissional', 'carteira', 'plano', 'clinica', 'validade_carteira'].includes(
+            h.chave,
+          ),
         ]),
       ),
     };
@@ -859,27 +860,21 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
         };
       }
       case 'atendimento.alterarHeranca': {
-        const atual = HERANCAS.map((h) => (s.heranca[h.coluna] === 'T' ? 'T' : 'F')).join('');
+        const atual = versaoHeranca(s.heranca);
         if (atual !== e['versao'])
           throw new ErroOperacao(
             409,
             'conflito-versao',
-            'Registro alterado no outro sistema',
-            'O registro foi alterado no outro sistema desde a leitura. Releia e confira antes de salvar.',
-            {
-              colunas: HERANCAS.filter((_h, i) => atual[i] !== String(e['versao'])[i]).map((h) => h.coluna),
-            },
+            'Configuração alterada por outra pessoa',
+            'A configuração da herança mudou desde a leitura. Releia e confira antes de salvar.',
           );
         const mudadas = HERANCAS.filter((h) => {
           const v = e['marcas'][h.campo];
-          return v !== undefined && (v ? 'T' : 'F') !== s.heranca[h.coluna];
+          return v !== undefined && v !== (s.heranca[h.chave] === true);
         });
         if (mudadas.length === 0) throw recusa('nada-a-alterar', 'Nada a alterar.');
-        for (const h of mudadas) s.heranca[h.coluna] = e['marcas'][h.campo] ? 'T' : 'F';
-        return {
-          versao: HERANCAS.map((h) => s.heranca[h.coluna]).join(''),
-          colunas: mudadas.map((h) => h.coluna).join(','),
-        };
+        for (const h of mudadas) s.heranca[h.chave] = e['marcas'][h.campo] === true;
+        return { versao: versaoHeranca(s.heranca), campos: mudadas.map((h) => h.chave).join(',') };
       }
       default:
         throw new Error(`Operação ${op} sem gravação em memória no atendimento.`);
