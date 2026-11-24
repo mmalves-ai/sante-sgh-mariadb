@@ -5,7 +5,10 @@
 //   que já recebeu algo fica como está; a que nada recebeu e sai da agenda recebe a marca de exclusão.
 // - Acompanhamento: cada contato com o fornecedor é uma linha nova (quem, quando, previsão, pendência), nunca editada.
 // - Cancelamento: do pedido inteiro ou do item (todo o pendente ou parte), com motivo do cadastro e justificativa quando
-//   o motivo exige. Marca quantidade, data e motivo; a agenda de entregas abate da mais distante para a mais próxima.
+//   o motivo exige. Cada cancelamento de item é um evento próprio e imutável (`cancelamento_pedido_compra_item`:
+//   quanto, motivo, justificativa, quem e quando), inclusive o parcial; as entregas abatidas apontam para ele
+//   (`cancelamento_pedido_compra_entrega`). O item guarda só o acumulado; a agenda abate da mais distante para a mais
+//   próxima.
 // - O recebimento pela nota abate a agenda da entrega mais antiga para a mais nova (`baixarEntregasRecebidas`).
 import {
   type AcompanharPedidoEntrada,
@@ -55,6 +58,8 @@ export const TABELAS_GESTAO_PEDIDO = [
   'pedido_compra_entrega',
   'pedido_compra_acompanhamento',
   'motivo_cancelamento_compra',
+  'cancelamento_pedido_compra_item',
+  'cancelamento_pedido_compra_entrega',
 ] as const;
 
 function recusarTodas(rs: readonly RecusaSuprimentos[]): void {
@@ -230,6 +235,9 @@ export async function cancelarCompra(
   });
   recusarTodas(c.recusas);
   const agora = new Date();
+  const usuario = tx.contexto.usuario;
+  if (usuario === undefined || usuario === null)
+    throw recusa('sem-usuario', 'O cancelamento exige o usuário que cancela.');
   const depois = itens.map((i) => ({ ...i }));
   for (const x of c.cancelar) {
     const r = linhas.find((l) => n(l['id']) === x.item) as Linha;
@@ -239,6 +247,17 @@ export async function cancelarCompra(
     await tx.alterar('pedido_compra_item', x.item, n(r['versao']), {
       quantidade_cancelada: i.cancelada,
       ...(tudo ? { cancelado_em: agora, motivo_cancelamento_compra_id: e.motivo } : {}),
+    });
+    // O evento do cancelamento (parcial ou não): nunca alterado; a justificativa fica com ele.
+    const evento = await tx.incluir('cancelamento_pedido_compra_item', {
+      pedido_compra_id: n(p['id']),
+      pedido_compra_item_id: x.item,
+      abrangencia: e.item === null ? 'pedido' : 'item',
+      quantidade: x.quantidade,
+      motivo_cancelamento_compra_id: e.motivo,
+      justificativa: e.justificativa,
+      usuario_id: usuario,
+      ocorrido_em: agora,
     });
     const ents = (await tx.consultarParaAtualizar<Linha>(ENTREGAS_DO_ITEM, [x.item])).map((l) => ({
       ...aberta(l),
@@ -252,6 +271,11 @@ export async function cancelarCompra(
         ...(q3(en.quantidade - en.recebida - cancelada) === 0
           ? { cancelado_em: agora, motivo_cancelamento_compra_id: e.motivo }
           : {}),
+      });
+      await tx.incluir('cancelamento_pedido_compra_entrega', {
+        cancelamento_pedido_compra_item_id: evento,
+        pedido_compra_entrega_id: b.id,
+        quantidade: b.quantidade,
       });
     }
   }
@@ -352,6 +376,15 @@ export async function lerGestaoPedido(
       WHERE x.pedido_compra_id = ? AND e.excluido_em IS NULL ORDER BY e.data_prevista, e.sequencia`,
     [id],
   );
+  const cancelamentos = await l.consultar<Linha>(
+    `SELECT c.id, c.pedido_compra_item_id, c.abrangencia, c.quantidade, c.justificativa, c.ocorrido_em,
+            m.descricao AS motivo, u.login
+       FROM cancelamento_pedido_compra_item c
+       JOIN motivo_cancelamento_compra m ON m.id = c.motivo_cancelamento_compra_id
+       LEFT JOIN usuario u ON u.id = c.usuario_id
+      WHERE c.pedido_compra_id = ? AND c.excluido_em IS NULL ORDER BY c.ocorrido_em, c.id`,
+    [id],
+  );
   const contatos = await l.consultar<Linha>(
     `SELECT a.id, a.ocorrido_em, u.login, a.contato_nome, a.contato_telefone, a.contato_email, a.previsao_entrega,
             a.situacao_acompanhamento, a.andamento, a.acompanhamento_anterior_id
@@ -392,6 +425,17 @@ export async function lerGestaoPedido(
         pendente: pendenteItem(i),
         canceladoEm: instante(x['cancelado_em']),
         motivoCancelamento: textoOuNulo(x['motivo']),
+        cancelamentos: cancelamentos
+          .filter((cx) => n(cx['pedido_compra_item_id']) === i.id)
+          .map((cx) => ({
+            id: n(cx['id']),
+            ocorridoEm: instante(cx['ocorrido_em']) as string,
+            usuario: textoOuNulo(cx['login']),
+            abrangencia: cx['abrangencia'] === 'pedido' ? ('pedido' as const) : ('item' as const),
+            quantidade: n(cx['quantidade']),
+            motivo: String(cx['motivo'] ?? ''),
+            justificativa: textoOuNulo(cx['justificativa']),
+          })),
         entregas: entregas
           .filter((e) => n(e['pedido_compra_item_id']) === i.id)
           .map((e) => {

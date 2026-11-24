@@ -2,7 +2,8 @@
 // Acompanhar o pedido de compra emitido (F3.6, 05-SUP linha 20), numa tela só: cada item com o que falta chegar e a
 // agenda de entregas (atrasada em destaque), a agenda editada no próprio item com a soma conferida na hora, os
 // contatos com o fornecedor (o seguimento aponta o contato anterior) e o cancelamento do item ou do pedido com motivo
-// (a justificativa aparece quando o motivo exige). Nada se apaga: cancelar marca quantidade, data e motivo.
+// (a justificativa aparece quando o motivo exige). Nada se apaga: cada cancelamento, inclusive o parcial, fica no
+// histórico do item com quanto, motivo, justificativa, quem e quando.
 import {
   conferirAcompanhamentoPedido,
   conferirCancelamentoCompra,
@@ -259,6 +260,16 @@ const fechado = computed(() =>
           </li>
         </ul>
         <p v-else class="secundario">{{ M.semAgenda }}</p>
+        <details v-if="i.cancelamentos.length" :data-testid="`pg-cancelamentos-${i.sequencia}`">
+          <summary>{{ M.historicoCancelamentos }} ({{ i.cancelamentos.length }})</summary>
+          <ol class="cancelamentos">
+            <li v-for="cx in i.cancelamentos" :key="cx.id">
+              <strong>{{ quando(cx.ocorridoEm) }}</strong> · {{ cx.usuario }} · {{ qtd(cx.quantidade) }}
+              {{ cx.abrangencia === 'pedido' ? M.noPedidoInteiro : '' }} · {{ cx.motivo
+              }}<span v-if="cx.justificativa">: {{ cx.justificativa }}</span>
+            </li>
+          </ol>
+        </details>
         <div v-if="!fechado && i.pendente > 0" class="acoes">
           <SanteBotao
             v-if="pode('suprimentos.programarEntregasPedido')"

@@ -116,6 +116,17 @@ export interface EntregaProgramadaLida {
   readonly atrasada: boolean;
 }
 
+/** Um cancelamento do item (evento imutável): parcial, de todo o pendente ou do pedido inteiro. */
+export interface CancelamentoItemPedidoLido {
+  readonly id: number;
+  readonly ocorridoEm: string;
+  readonly usuario: string | null;
+  readonly abrangencia: 'item' | 'pedido';
+  readonly quantidade: number;
+  readonly motivo: string;
+  readonly justificativa: string | null;
+}
+
 export interface ItemGestaoPedido {
   readonly id: number;
   readonly sequencia: number;
@@ -127,6 +138,7 @@ export interface ItemGestaoPedido {
   readonly pendente: number;
   readonly canceladoEm: string | null;
   readonly motivoCancelamento: string | null;
+  readonly cancelamentos: readonly CancelamentoItemPedidoLido[];
   readonly entregas: readonly EntregaProgramadaLida[];
 }
 

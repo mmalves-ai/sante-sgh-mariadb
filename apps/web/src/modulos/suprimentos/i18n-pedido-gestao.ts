@@ -41,6 +41,8 @@ export const mensagensPedidoGestao = {
   justificativa: 'Justificativa',
   quantidadeCancelar: 'Quantidade (vazio: tudo o que falta)',
   confirmarCancelamento: 'Confirmar o cancelamento',
+  historicoCancelamentos: 'Cancelamentos do item',
+  noPedidoInteiro: '(pedido inteiro)',
   novoMotivo: 'Novo motivo',
   codigo: 'Código',
   descricao: 'Descrição',
