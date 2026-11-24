@@ -10,8 +10,6 @@
 //   motivo; o recurso e a glosa mudam de situação quando o último item retorna (situacaoDoRecurso,
 //   situacaoDaGlosaNoRecurso). Nada é apagado: o retorno é gravado uma vez no item do recurso.
 import {
-  esquemaRegistrarGlosa,
-  esquemaRegistrarRecurso,
   esquemaRegistrarRetornoRecurso,
   type RegistrarGlosaEntrada,
   type RegistrarRecursoEntrada,
@@ -37,8 +35,8 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { z } from 'zod';
 import { versaoNumero } from '../faturamento/esquemas.js';
+import { esquemaBaixaComPrazo, esquemaRecursoComPrazo } from './esquemas.js';
 import { sincronizarGlosaDoItem, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 
 type Linha = Record<string, unknown>;
@@ -48,14 +46,8 @@ const dataIso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-/**
- * O prazo do recurso pela regra que a grade mostra (prazoRecurso: os dias do convênio no parâmetro
- * `faturamento.recursoPrazoPorOperadora`, contados da data da baixa). O parâmetro é resolvido pelo serviço na sessão e
- * entra só por aqui: o corpo da requisição é conferido pelo esquema estrito do contrato, que não tem este campo.
- */
-const prazoParametro = { prazoParametro: z.string().max(4000).default('') };
-const esquemaBaixa = esquemaRegistrarGlosa.extend(prazoParametro);
-const esquemaRecurso = esquemaRegistrarRecurso.extend(prazoParametro);
+// O prazo do recurso pela regra que a grade mostra (prazoRecurso: os dias do convênio no parâmetro, contados da data
+// da baixa); o parâmetro chega pelo serviço (esquemaBaixaComPrazo e esquemaRecursoComPrazo em ./esquemas.ts).
 type BaixaComPrazo = RegistrarGlosaEntrada & { readonly prazoParametro?: string };
 type RecursoComPrazo = RegistrarRecursoEntrada & { readonly prazoParametro?: string };
 
@@ -134,7 +126,7 @@ async function numeroNegocio(tx: TxOperacao, tipo: string, est: number, usuario:
 const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
   nome: 'faturamento.registrar-glosa',
   tabelas: ['conta_hospitalar_item', 'glosa', 'glosa_item', 'sequencia_negocio', ...TABELAS_PRODUCAO_CONTA],
-  entrada: esquemaBaixa,
+  entrada: esquemaBaixaComPrazo,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
     const linhas = await itensTravados(tx, est, e.itens);
@@ -251,7 +243,7 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
 const registrarRecurso = definirOperacao<RecursoComPrazo, ResultadoOperacao>({
   nome: 'faturamento.registrar-recurso',
   tabelas: ['recurso_glosa', 'recurso_glosa_item', 'glosa', 'glosa_item', 'sequencia_negocio'],
-  entrada: esquemaRecurso,
+  entrada: esquemaRecursoComPrazo,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
     const linhas = await itensTravados(tx, est, e.itens);
