@@ -103,11 +103,11 @@ describe('documentos-propria-operacoes (unidade)', () => {
     expect(validadeLocal(new Date('2026-12-31T12:00:00Z'), 'America/Sao_Paulo', 1)).toBe('2027-01-01');
   });
 
-  it('recusas antes do banco: entrada inválida e exame no futuro (CID e dias vêm depois da sessão, como a memória)', async () => {
+  it('recusas antes do banco: entrada inválida (atestado sem os dias) e exame no futuro (o CID vem depois da sessão, como a memória)', async () => {
     expect(await codigo(ops['pep.registrarAlergia']!(C, alergia, CTX))).toBe('entrada-invalida');
     expect(await codigo(ops['pep.inativarAlergia']!(C, { paciente: 1 }, CTX))).toBe('entrada-invalida');
     // CID sem autorização e atestado sem dias já não recusam antes da sessão: o núcleo intocável é alcançado.
-    expect(await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, cid: 'A09' }, CTX))).toContain(
+    expect(await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, diasAfastamento: 1, cid: 'A09' }, CTX))).toContain(
       'não podia ser tocado',
     );
     expect(
