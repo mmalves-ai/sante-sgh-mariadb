@@ -15,7 +15,7 @@ const codigo = (fn: () => unknown): string => {
     fn();
     return 'ok';
   } catch (e) {
-    return e instanceof ErroOperacao ? e.problema.codigo : 'outro';
+    return e instanceof ErroOperacao ? (e.problema.codigo ?? 'outro') : 'outro';
   }
 };
 

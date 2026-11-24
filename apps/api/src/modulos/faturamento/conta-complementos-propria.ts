@@ -51,7 +51,7 @@ const paraBanco = (iso: string) => iso.replace('T', ' ').replace(/Z$/, '').slice
 
 function exigirValido(erros: Record<string, string>) {
   const campos = Object.keys(erros);
-  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
 }
 function estDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
@@ -537,7 +537,7 @@ export const opGravarSegurado = definirOperacao({
         nn(a['cobertura_paciente_id']) === e.coberturaPacienteId;
       if (mesma) {
         const versao = await tx.alterar('conta_hospitalar_segurado', n(a['id']), e.versao, valores);
-        return { id: n(a['id']), versao, substituido: null, alertas: v.alertas };
+        return { id: n(a['id']), versao, substituido: null, alertas: v.alertas.join(' ') };
       }
       await tx.excluir('conta_hospitalar_segurado', n(a['id']), e.versao);
     }
@@ -554,7 +554,7 @@ export const opGravarSegurado = definirOperacao({
       sequencia: seq,
       ...valores,
     });
-    return { id: novo, versao: 1, substituido: a ? n(a['id']) : null, alertas: v.alertas };
+    return { id: novo, versao: 1, substituido: a ? n(a['id']) : null, alertas: v.alertas.join(' ') };
   },
   alvo: (_e, s) => ({ tabela: 'conta_hospitalar_segurado', id: s.id }),
 });
@@ -752,7 +752,7 @@ export const opGravarValoresGuia = definirOperacao({
         await tx.excluir('valor_atributo_guia', n(a['id']), n(a['versao']));
         retirados++;
       }
-    return { id: g.id, gravados, retirados, faltam: r.faltam };
+    return { id: g.id, gravados, retirados, faltam: r.faltam.join(', ') };
   },
   alvo: (_e, s) => ({ tabela: 'guia_tiss', id: s.id }),
 });

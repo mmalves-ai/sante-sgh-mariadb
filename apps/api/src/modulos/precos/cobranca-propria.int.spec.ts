@@ -483,7 +483,7 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
       permitido: true,
       origem: 'excecao',
     });
-    const excs = await fonte.credenciamentoAtos(c, ids.fonte, false);
+    const excs = await fonte.credenciamentoAtos(c, ids.fonte);
     expect(excs.itens.find((x) => x['fim'] === mais(hoje, 30))?.['efeito']).toBe('Proíbe');
   });
 

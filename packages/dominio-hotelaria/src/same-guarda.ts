@@ -178,8 +178,7 @@ export function conferirMovimentoGuarda(v: VolumeGuarda, p: PedidoGuarda): Probl
   const alvo = entra ? (p.localDestino ?? v.localArquivo) : null;
   if (alvo !== null && p.ocupacaoDestino?.capacidade != null) {
     // O próprio volume já conta no local de guarda dele (emprestado inclusive): não ocupa duas vagas.
-    const jaContado =
-      alvo === v.localArquivo && v.situacao !== 'extraviado' && v.situacao !== 'eliminado' ? 1 : 0;
+    const jaContado = alvo === v.localArquivo && v.situacao !== 'extraviado' ? 1 : 0;
     if (p.ocupacaoDestino.volumes - jaContado >= p.ocupacaoDestino.capacidade)
       recusa('localDestino', 'O local de guarda está cheio.');
   }

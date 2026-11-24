@@ -337,7 +337,7 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
       },
       { ...ctx, chaveIdempotencia: `${P}-div-${Date.now()}`, reautenticadoEm: Date.now() },
     );
-    expect((r.resultado['lancamentos'] as number[]).length).toBe(2);
+    expect((r.resultado['lancamentos'] as unknown as number[]).length).toBe(2);
     const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-f3711' }, (l) =>
       l.consultar<Record<string, unknown>>(
         `SELECT fr.tipo_favorecido AS t, l.tipo_favorecido AS tl, l.valor AS v, l.percentual AS p

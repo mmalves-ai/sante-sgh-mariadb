@@ -275,7 +275,7 @@ export const opVincularNota = definirOperacao({
     const jaNoAlvo = alvo.valorDocumentado - (ativo ? n(existente?.['valor_apropriado']) : 0);
     const erros = validarVinculoNota(notaParaVinculo(ns, jaNaNota), alvoParaVinculo(alvo, jaNoAlvo), e);
     const campos = Object.keys(erros);
-    if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+    if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
     const valores = {
       valor_apropriado: e.valorApropriado,
       valor_desconto: e.valorDesconto,
@@ -325,7 +325,7 @@ export const opDesvincularNota = definirOperacao({
     const est = estDe(ctx);
     const erros = validarDesligamentoNota(e.motivo);
     if (Object.keys(erros).length)
-      throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos: Object.keys(erros), erros });
+      throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos: Object.keys(erros) });
     const v = await tx.uma<Linha>(
       `SELECT v.id, v.valor_apropriado, v.valor_desconto, v.valor_acrescimo, ns.situacao AS situacao_nota
          FROM vinculo_nota_faturamento v JOIN nota_servico ns ON ns.id = v.nota_servico_id

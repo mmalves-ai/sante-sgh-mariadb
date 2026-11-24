@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   atributosDaGuia,
-  competenciaDe,
+  competenciaDoPeriodo,
   dependentesAtivos,
   type DefinicaoAtributoGuia,
   guiaAceitaAtributos,
@@ -64,7 +64,7 @@ describe('período da conta parcial', () => {
     ).toBeNull();
   });
   it('competência do fim da faixa, e recusa faixa invertida, fora da conta ou sobreposta', () => {
-    expect(competenciaDe('2026-02-03T00:00:00.000')).toBe('2026-02-01');
+    expect(competenciaDoPeriodo('2026-02-03T00:00:00.000')).toBe('2026-02-01');
     const ok = validarPeriodoConta(conta, [], {
       inicio: '2026-01-20T08:00:00.000',
       fim: '2026-02-05T00:00:00.000',

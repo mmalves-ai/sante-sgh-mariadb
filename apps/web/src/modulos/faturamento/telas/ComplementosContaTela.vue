@@ -95,8 +95,9 @@ async function acao(f: () => Promise<unknown>, alertas = false) {
   mensagem.value = null;
   gravando.value = true;
   try {
-    const r = (await f()) as { alertas?: string[] };
-    mensagem.value = alertas && r.alertas?.length ? r.alertas.join(' ') : t('gravado');
+    // O resultado da operação é plano: os alertas vêm num texto só.
+    const r = (await f()) as { alertas?: string };
+    mensagem.value = alertas && r.alertas ? r.alertas : t('gravado');
     chave = novaChave('complementos');
     retirando.value = null;
     motivo.value = '';

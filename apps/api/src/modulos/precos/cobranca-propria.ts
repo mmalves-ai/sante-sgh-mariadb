@@ -34,8 +34,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import type { FiltroConvenio } from './fonte.js';
-import type { ItemMatmedPreco, Pagina, VigenciaValor } from './tipos.js';
+import type { FiltroConvenio, ItemMatmedPreco, Pagina, VigenciaValor } from './tipos.js';
 
 type Linha = Record<string, unknown>;
 
@@ -617,7 +616,7 @@ const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 function exigirValido(erros: Record<string, string>) {
   const campos = Object.keys(erros);
-  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
 }
 
 function estDe(ctx: ContextoOperacao): number {
@@ -789,7 +788,7 @@ function opEncerrar(nome: string, tabela: string, porEstabelecimento: boolean, c
       return { id: e.id, versao };
     },
     alvo: (e) => ({ tabela, id: e.id }),
-    trilha: (e) => ({ motivo: e.motivo?.trim() || undefined }),
+    trilha: (e) => (e.motivo?.trim() ? { motivo: e.motivo.trim() } : {}),
   });
 }
 
@@ -1023,7 +1022,7 @@ export const opGravarExcecaoCredenciamento = definirOperacao({
     return { id: novo };
   },
   alvo: (_e, s) => ({ tabela: 'excecao_credenciamento', id: s.id }),
-  trilha: (e) => ({ motivo: e.motivo ?? undefined }),
+  trilha: (e) => (e.motivo ? { motivo: e.motivo } : {}),
 });
 
 export const OPERACOES_COBRANCA = {

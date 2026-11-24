@@ -106,7 +106,7 @@ export const esquemaPedidoMensagem = z
     destino: z.string().min(3).max(254).nullable().default(null),
     /** O horário do evento futuro (agendamento); sem ele, o envio é agora ou na próxima abertura do horário. */
     referenciaEm: z.string().datetime({ offset: true }).nullable().default(null),
-    valores: z.record(z.string().max(200)).default({}),
+    valores: z.record(z.string(), z.string().max(200)).default({}),
     entidade: z.string().max(64).nullable().default(null),
     entidadeId: z.number().int().positive().nullable().default(null),
   })

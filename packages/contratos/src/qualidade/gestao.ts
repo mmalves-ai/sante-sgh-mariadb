@@ -729,7 +729,7 @@ export interface AnaliseIndicadorLida {
   readonly versao: number;
   readonly indicador: string;
   readonly competencia: string;
-  readonly numerador: number;
+  readonly numerador: number | null;
   readonly denominador: number | null;
   readonly valor: number | null;
   readonly meta: number | null;

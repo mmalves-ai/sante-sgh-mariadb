@@ -64,6 +64,8 @@ import type {
   FiltroPagar,
   FiltroReceber,
   GravadorSghFinanceiro,
+  MotivoProrrogacaoPorta,
+  ProrrogacaoPorta,
   LancamentoFluxoPorta,
   PortaFinanceiro,
   RetencaoReinfPorta,

@@ -21,7 +21,7 @@ import {
   type TipoFavorecido,
   validarPrestadorTerceiro,
 } from '@sgh/dominio-repasse';
-import { ErroOperacao } from '@sgh/nucleo';
+import { ErroOperacao, type Leitor } from '@sgh/nucleo';
 import { z } from 'zod';
 import { civil } from '../exames/relogio.js';
 import {
@@ -226,7 +226,7 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
 
   /** Os enquadramentos tributários (o cadastro fiscal do contas a pagar) dos fornecedores, por fornecedor. */
   private async enquadramentos(
-    l: { consultar<T>(sql: string, p: unknown[]): Promise<T[]> },
+    l: Leitor,
     est: number,
     fornecedores: readonly (number | null)[],
   ): Promise<Map<number, EnquadramentoDoFornecedor[]>> {

@@ -71,7 +71,7 @@ const json = (v: unknown): Record<string, unknown> => {
 
 function exigirValido(erros: Record<string, string>) {
   const campos = Object.keys(erros);
-  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
 }
 function estDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
@@ -451,13 +451,13 @@ export const opConcluirAuditoria = definirOperacao({
       throw recusa(
         'item-sem-parecer',
         `Há ${cobertura.semParecer.length} item(ns) da conta sem parecer (lançados depois da abertura ou ainda não vistos): registre o parecer de cada um antes de concluir.`,
-        { campos: ['itemId'], itens: cobertura.semParecer },
+        { campos: ['itemId'] },
       );
     if (cobertura.mudados.length)
       throw recusa(
         'item-mudou',
         'Um item auditado mudou ou saiu da conta depois do parecer: registre o parecer de novo antes de concluir.',
-        { campos: ['itemId'], itens: cobertura.mudados },
+        { campos: ['itemId'] },
       );
     const totalAntes = (await totalDosItens(tx, conta)).valor_total;
     const mudam = pareceres.filter((p) => txt(p['decisao']) !== 'mantido');
@@ -485,7 +485,7 @@ export const opConcluirAuditoria = definirOperacao({
         throw recusa(
           'item-mudou',
           'Um item auditado mudou depois do parecer: registre o parecer de novo antes de concluir.',
-          { campos: ['itemId'], itemId: n(i['id']) },
+          { campos: ['itemId'] },
         );
       const qa = n(p['quantidade_aceita']);
       const va = n(p['valor_aceito']);

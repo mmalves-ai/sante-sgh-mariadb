@@ -294,7 +294,7 @@ export class AuditoriaTramiteController {
         tamanhoBytes: conteudo.length,
       });
       const campos = Object.keys(erros);
-      if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+      if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
       const nome = (typeof c['nomeOriginal'] === 'string' ? c['nomeOriginal'] : 'anexo').slice(0, 255);
       const g = await arquivos.guardar(sessaoDe(req).hospital, {
         conteudo,

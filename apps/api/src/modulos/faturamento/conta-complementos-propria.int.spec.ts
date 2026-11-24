@@ -27,7 +27,7 @@ async function codigoDo(p: Promise<unknown>): Promise<string> {
   try {
     await p;
   } catch (e) {
-    if (e instanceof ErroOperacao) return String(e.problema['codigo'] ?? e.problema['tipo'] ?? '');
+    if (e instanceof ErroOperacao) return String(e.problema['codigo'] ?? e.problema.type ?? '');
     throw e;
   }
   throw new Error('esperava recusa');

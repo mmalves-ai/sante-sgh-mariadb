@@ -311,7 +311,7 @@ export class ServicoFinanceiro {
         'A conta bancária não está no seu escopo de contas.',
       );
     const hoje = await this.porta.hoje(ctx(s));
-    const titulos = [];
+    const titulos: { titulo: number; valor: number; vencimento: string; favorecido: string }[] = [];
     for (const id of e.titulos) {
       const t = await this.porta.tituloPagar(ctx(s), id, hoje);
       if (!t) throw naoEncontrado(`Título ${id}`);

@@ -34,7 +34,7 @@ const ms = (iso: string) => new Date(iso).getTime();
 const valida = (iso: string) => !Number.isNaN(ms(iso));
 
 /** Primeiro dia do mês de uma data e hora ISO (no relógio do texto, sem fuso). */
-export function competenciaDe(iso: string): string {
+export function competenciaDoPeriodo(iso: string): string {
   return `${iso.slice(0, 7)}-01`;
 }
 
@@ -73,7 +73,7 @@ export function sugerirProximoPeriodo(
   if (conta.fim !== null && ms(inicio) >= ms(conta.fim)) return null;
   const fimMes = fimDoMes(inicio);
   const fim = conta.fim !== null && ms(conta.fim) < ms(fimMes) ? conta.fim : fimMes;
-  return { inicio, fim, tipoLancamentoId: null, competencia: competenciaDe(fim) };
+  return { inicio, fim, tipoLancamentoId: null, competencia: competenciaDoPeriodo(fim) };
 }
 
 /** Confere o período novo; devolve os erros por campo e a competência (a informada ou a do fim da faixa). */
@@ -87,7 +87,7 @@ export function validarPeriodoConta(
     erros['conta'] = 'A conta não está aberta: reabra-a para mudar os períodos.';
   if (!valida(novo.inicio)) erros['inicio'] = 'Informe o início do período.';
   if (!valida(novo.fim)) erros['fim'] = 'Informe o fim do período.';
-  const competencia = novo.competencia ?? (valida(novo.fim) ? competenciaDe(novo.fim) : '');
+  const competencia = novo.competencia ?? (valida(novo.fim) ? competenciaDoPeriodo(novo.fim) : '');
   if (Object.keys(erros).some((c) => c === 'inicio' || c === 'fim')) return { erros, competencia };
   if (ms(novo.fim) < ms(novo.inicio)) erros['fim'] = 'O fim do período não pode ser antes do início.';
   else if (ms(novo.fim) === ms(novo.inicio)) erros['fim'] = 'O período não pode ter duração zero.';
@@ -96,7 +96,7 @@ export function validarPeriodoConta(
     erros['fim'] = 'O período termina depois do fim da conta.';
   if (!/^\d{4}-\d{2}-01$/.test(competencia))
     erros['competencia'] = 'A competência é o primeiro dia de um mês.';
-  else if (competencia < competenciaDe(novo.inicio))
+  else if (competencia < competenciaDoPeriodo(novo.inicio))
     erros['competencia'] = 'A competência não pode ser anterior ao mês de início do período.';
   if (!erros['fim'] && !erros['inicio'] && existentes.some((p) => sobrepoe(p, novo)))
     erros['inicio'] = 'O período se sobrepõe a outro período da conta para o mesmo tipo de lançamento.';
