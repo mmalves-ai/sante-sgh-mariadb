@@ -38,6 +38,8 @@ import { portaCirurgiaIndisponivel, PortaCirurgiaPropria } from './porta-propria
 import { TRAVA_INCISAO, TravaIncisao } from './trava-incisao.js';
 import { TextoPadraoCirurgiaController } from './texto-padrao.controller.js';
 import { PORTA_TEXTO_PADRAO_CIRURGIA, PortaTextoPadraoCirurgiaPropria } from './texto-padrao-propria.js';
+import { GastoSalaController } from './gasto-sala.controller.js';
+import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js';
 
 export interface OpcoesModuloCirurgia {
   /** Testes: as portas já montadas. */
@@ -112,6 +114,7 @@ export async function moduloCirurgia(
       BlocoSeguroController,
       TextoPadraoCirurgiaController,
       DescricaoCirurgicaController,
+      GastoSalaController,
     ],
     providers: [
       { provide: PORTA_CIRURGIA, useValue: cirurgia },
@@ -131,6 +134,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaTextoPadraoCirurgiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.4 (04-CC linha 100): gasto de sala do ato no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_GASTO_SALA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaGastoSalaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       { provide: AVISOS_BLOCO, useValue: new AvisosAtendimento(null, 'bloco') },

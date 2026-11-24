@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cirurgiaoDoGasto,
   conferirGastoSala,
   diferencasDaSugestao,
   type ItemGastoSala,
@@ -140,5 +141,40 @@ describe('situação do gasto de sala', () => {
     expect(transicaoGastoSala('conferida', 'reabrir', 'faltou a gaze')).toEqual({ situacao: 'aberta' });
     expect(transicaoGastoSala('aberta', 'cancelar', 'ato lançado errado')).toEqual({ situacao: 'cancelada' });
     expect(transicaoGastoSala('cancelada', 'editar')).toHaveProperty('problema');
+  });
+});
+
+describe('rastreio e cirurgião do gasto de sala (correção F3.4-5)', () => {
+  const it0: ItemGastoSala = {
+    insumo: 1,
+    quantidade: 1,
+    lote: null,
+    implantePermanente: false,
+    faturar: true,
+  };
+  it('exige o lote do OPME pelo cadastro, mesmo sem a marca de implante', () => {
+    expect(conferirGastoSala([{ ...it0, opme: true }], [], [])).toEqual([
+      {
+        campo: 'itens.0.lote',
+        mensagem: 'Item 1: OPME (órtese, prótese e material especial) exige o lote.',
+      },
+    ]);
+    expect(conferirGastoSala([{ ...it0, opme: true, lote: 9 }], [], [])).toEqual([]);
+    expect(conferirGastoSala([it0], [], [])).toEqual([]);
+  });
+  it('só aceita cirurgião da equipe; sem informar, vale o gravado e depois o primeiro da equipe', () => {
+    const equipe = [
+      { profissional: 10, cirurgiao: false },
+      { profissional: 20, cirurgiao: true },
+      { profissional: 30, cirurgiao: true },
+    ];
+    expect(cirurgiaoDoGasto(equipe, 99, null)).toHaveProperty('problema.campo', 'cirurgiao');
+    expect(cirurgiaoDoGasto(equipe, 10, null)).toHaveProperty('problema.campo', 'cirurgiao');
+    expect(cirurgiaoDoGasto(equipe, 30, 20)).toEqual({ cirurgiao: 30 });
+    expect(cirurgiaoDoGasto(equipe, undefined, 30)).toEqual({ cirurgiao: 30 });
+    expect(cirurgiaoDoGasto(equipe, null, 77)).toEqual({ cirurgiao: 20 });
+    expect(cirurgiaoDoGasto([{ profissional: 10, cirurgiao: false }], undefined, null)).toEqual({
+      cirurgiao: null,
+    });
   });
 });

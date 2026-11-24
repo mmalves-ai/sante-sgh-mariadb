@@ -13,7 +13,13 @@
 //     movimento, saldo e, para o item faturável, `conta_hospitalar_item` com a memória do preço); o item que não se
 //     fatura sai para o setor (centro de custo do local); cada `consumo_cirurgia_item` aponta o movimento e o item da
 //     conta; o gasto fica 'debitada' com `debitado_em` e a conta.
+// Correção F3.4-5: toda gravação no gasto trava a linha do ato (FOR UPDATE) antes de procurar ou criar o gasto (dois
+// gastos vivos do mesmo ato nunca nascem juntos) e recusa o ato cancelado; o cirurgião da lista é um cirurgião da
+// equipe viva do ato e fica gravado no gasto (conferir usa o gravado); o lote é conferido pelo id, produto,
+// estabelecimento, exclusão e situação liberada na gravação e no débito, e vai inteiro ao motor; o OPME exige o lote
+// pelo cadastro do produto; a lista padrão só aceita kit, produto, profissional e tipo de anestesia válidos aqui.
 import {
+  cirurgiaoDoGasto,
   conferirGastoSala,
   diferencasDaSugestao,
   type ItemGastoSala,
@@ -121,6 +127,7 @@ export interface GastoSalaLido {
     situacao: SituacaoGastoSala;
     local: number | null;
     conta: number | null;
+    cirurgiao: number | null;
     conferidoEm: Date | null;
     conferidoPor: number | null;
     debitadoEm: Date | null;
@@ -135,6 +142,8 @@ export interface GastoSalaLido {
     registradoEm: Date;
     usuario: number;
   }[];
+  /** O cirurgião cuja lista vale (gravado no gasto ou, sem gasto, o da equipe); null: lista do serviço. */
+  readonly cirurgiaoLista: number | null;
   readonly sugestao: (ItemSugerido & { insumoNome: string })[];
   readonly diferencas: ReturnType<typeof diferencasDaSugestao>;
   readonly pendencias: { campo: string; mensagem: string }[];
@@ -196,6 +205,35 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
       async (tx, est) => {
         const pc = await tx.uma('SELECT id FROM procedimento_cirurgico WHERE id = ?', [e.procedimento]);
         if (!pc) throw naoEncontrado('Procedimento cirúrgico');
+        if (
+          e.kit !== null &&
+          !(await tx.uma(
+            'SELECT id FROM kit_material WHERE id = ? AND estabelecimento_id = ? AND ativo AND excluido_em IS NULL',
+            [e.kit, est.id],
+          ))
+        )
+          throw naoEncontrado('Kit de material');
+        if (
+          e.insumo !== null &&
+          !(await tx.uma(
+            "SELECT id FROM insumo WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
+            [e.insumo],
+          ))
+        )
+          throw naoEncontrado('Produto');
+        if (
+          e.cirurgiao !== null &&
+          !(await tx.uma(
+            "SELECT id FROM profissional WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
+            [e.cirurgiao],
+          ))
+        )
+          throw naoEncontrado('Cirurgião');
+        if (
+          e.tipoAnestesia !== null &&
+          !(await tx.uma('SELECT id FROM tipo_anestesia WHERE id = ? AND ativo', [e.tipoAnestesia]))
+        )
+          throw naoEncontrado('Tipo de anestesia');
         const dup = await tx.uma(
           `SELECT id FROM lista_material_procedimento
             WHERE estabelecimento_id = ? AND procedimento_cirurgico_id = ? AND cirurgiao_profissional_id <=> ?
@@ -261,13 +299,18 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
 
   // ── Gasto de sala do ato ───────────────────────────────────────────────────────────────────────────────
 
-  private async atoDo(l: Leitor, est: number, ato: number) {
-    const a = await l.uma<Linha>(
-      `SELECT id, numero, atendimento_id, situacao, tipo_anestesia_id FROM ato_cirurgico
-        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-      [ato, est],
-    );
+  /** O ato do estabelecimento; `travar` (na gravação) trava a linha do ato e recusa o ato cancelado. */
+  private async atoDo(l: Leitor, est: number, ato: number, travar = false) {
+    const sql = `SELECT id, numero, atendimento_id, situacao, tipo_anestesia_id FROM ato_cirurgico
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`;
+    const a = travar
+      ? (await (l as TxOperacao).consultarParaAtualizar<Linha>(`${sql} FOR UPDATE`, [ato, est]))[0]
+      : await l.uma<Linha>(sql, [ato, est]);
     if (!a) throw naoEncontrado('Ato cirúrgico');
+    if (travar && String(a['situacao']) === 'cancelado')
+      throw recusaRegra('Gasto de sala recusado', [
+        { campo: 'ato', mensagem: 'O ato foi cancelado: o gasto de sala não muda.' },
+      ]);
     const procs = await l.consultar<Linha>(
       `SELECT ap.procedimento_cirurgico_id AS id, pc.descricao FROM ato_cirurgico_procedimento ap
          JOIN procedimento_cirurgico pc ON pc.id = ap.procedimento_cirurgico_id
@@ -282,6 +325,31 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
       tipoAnestesia: numOuNull(a['tipo_anestesia_id']),
       procedimentos: procs.map((p) => ({ id: num(p['id']), descricao: String(p['descricao'] ?? '') })),
     };
+  }
+
+  /** O cirurgião da lista: um cirurgião (grau de participação 00) da equipe viva do ato (domínio). */
+  private async cirurgiaoDe(
+    l: Leitor,
+    ato: number,
+    informado: number | null | undefined,
+    gravado: number | null,
+  ) {
+    const equipe = await l.consultar<Linha>(
+      `SELECT pc.profissional_id, f.grau_participacao_tiss FROM participante_cirurgia pc
+         JOIN funcao_equipe_cirurgica f ON f.id = pc.funcao_equipe_cirurgica_id
+        WHERE pc.ato_cirurgico_id = ? AND pc.excluido_em IS NULL ORDER BY pc.id`,
+      [ato],
+    );
+    const r = cirurgiaoDoGasto(
+      equipe.map((m) => ({
+        profissional: num(m['profissional_id']),
+        cirurgiao: txtOuNull(m['grau_participacao_tiss']) === '00',
+      })),
+      informado,
+      gravado,
+    );
+    if ('problema' in r) throw recusaRegra('Gasto de sala recusado', [r.problema]);
+    return r.cirurgiao;
   }
 
   private async sugestaoDo(
@@ -308,9 +376,10 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     const kits = idsKit.length
       ? (
           await l.consultar<Linha>(
-            `SELECT kit_material_id, insumo_id, quantidade FROM kit_material_item
-              WHERE kit_material_id IN (${idsKit.map(() => '?').join(', ')}) AND excluido_em IS NULL`,
-            idsKit,
+            `SELECT ki.kit_material_id, ki.insumo_id, ki.quantidade FROM kit_material_item ki
+               JOIN kit_material k ON k.id = ki.kit_material_id AND k.estabelecimento_id = ? AND k.excluido_em IS NULL
+              WHERE ki.kit_material_id IN (${idsKit.map(() => '?').join(', ')}) AND ki.excluido_em IS NULL`,
+            [est, ...idsKit],
           )
         ).map((k) => ({
           kit: num(k['kit_material_id']),
@@ -339,7 +408,8 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
   private async itensDo(l: Leitor, gasto: number): Promise<ItemGastoLido[]> {
     return (
       await l.consultar<Linha>(
-        `SELECT ci.*, i.nome AS insumo_nome FROM consumo_cirurgia_item ci JOIN insumo i ON i.id = ci.insumo_id
+        `SELECT ci.*, i.nome AS insumo_nome, i.opme AS insumo_opme FROM consumo_cirurgia_item ci
+           JOIN insumo i ON i.id = ci.insumo_id
           WHERE ci.consumo_cirurgia_id = ? AND ci.excluido_em IS NULL ORDER BY ci.sequencia`,
         [gasto],
       )
@@ -352,6 +422,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
       lote: numOuNull(x['lote_insumo_id']),
       implantePermanente: bool(x['implante_permanente']),
       faturar: bool(x['faturar']),
+      opme: bool(x['insumo_opme']),
       movimento: numOuNull(x['movimento_estoque_id']),
       itemConta: numOuNull(x['conta_hospitalar_item_id']),
     }));
@@ -392,7 +463,11 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
       const g = await this.gastoDo(l, ato);
       const itens = g ? await this.itensDo(l, num(g['id'])) : [];
       const motivos = g ? await this.motivosDo(l, num(g['id'])) : [];
-      const sug = await this.sugestaoDo(l, est.id, a, cirurgiao);
+      // Com gasto, vale o cirurgião gravado (o mesmo da conferência); sem gasto, o escolhido da equipe ou o principal.
+      const cirurgiaoLista = g
+        ? numOuNull(g['cirurgiao_profissional_id'])
+        : await this.cirurgiaoDe(l, ato, cirurgiao, null);
+      const sug = await this.sugestaoDo(l, est.id, a, cirurgiaoLista);
       const nomes = sug.length
         ? await l.consultar<Linha>(
             `SELECT id, nome FROM insumo WHERE id IN (${sug.map(() => '?').join(', ')})`,
@@ -408,6 +483,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
               situacao: String(g['situacao']) as SituacaoGastoSala,
               local: numOuNull(g['local_estoque_id']),
               conta: numOuNull(g['conta_hospitalar_id']),
+              cirurgiao: numOuNull(g['cirurgiao_profissional_id']),
               conferidoEm: (g['conferido_em'] as Date | null) ?? null,
               conferidoPor: numOuNull(g['conferido_por_usuario_id']),
               debitadoEm: (g['debitado_em'] as Date | null) ?? null,
@@ -417,6 +493,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
           : null,
         itens,
         motivos,
+        cirurgiaoLista,
         sugestao: sug.map((s) => ({ ...s, insumoNome: nome.get(s.insumo) ?? '' })),
         diferencas: diferencasDaSugestao(itens, sug),
         pendencias: g ? conferirGastoSala(itens, sug, this.justificativasVigentes(motivos, itens)) : [],
@@ -434,6 +511,27 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     return r ? num(r['id']) : null;
   }
 
+  /** O lote do produto neste estabelecimento, vivo, liberado e na validade; senão, recusa no item. */
+  private async loteValido(tx: Leitor, est: number, insumo: number, lote: number, hoje: string, k: number) {
+    const lt = await tx.uma<Linha>(
+      `SELECT numero_lote, validade, situacao FROM lote_insumo
+        WHERE id = ? AND insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [lote, insumo, est],
+    );
+    const v = lt ? lt['validade'] : null;
+    const validade = v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10);
+    if (!lt || lt['situacao'] !== 'liberado' || validade < hoje)
+      throw recusaRegra('Gasto de sala recusado', [
+        {
+          campo: `itens.${k}.lote`,
+          mensagem: !lt
+            ? `Item ${k + 1}: o lote não é deste produto neste estabelecimento.`
+            : `Item ${k + 1}: o lote não está liberado para uso (bloqueado, em quarentena, recolhido ou vencido).`,
+        },
+      ]);
+    return lt;
+  }
+
   private exigir(situacao: SituacaoGastoSala, acao: Parameters<typeof transicaoGastoSala>[1], m?: string) {
     const t = transicaoGastoSala(situacao, acao, m);
     if ('problema' in t) throw recusaRegra('Gasto de sala recusado', [t.problema]);
@@ -448,24 +546,41 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
       'cirurgia.gastoSala.gravar',
       ['consumo_cirurgia', 'consumo_cirurgia_item', 'consumo_cirurgia_motivo'],
       async (tx, est, usuario) => {
-        const a = await this.atoDo(tx, est.id, ato);
-        if (a.situacao === 'cancelado')
-          throw recusaRegra('Gasto de sala recusado', [
-            { campo: 'ato', mensagem: 'O ato foi cancelado: não recebe gasto de sala.' },
-          ]);
+        const a = await this.atoDo(tx, est.id, ato, true);
         const local = await tx.uma(
           'SELECT id FROM local_estoque WHERE id = ? AND estabelecimento_id = ? AND ativo AND excluido_em IS NULL',
           [e.local, est.id],
         );
         if (!local) throw naoEncontrado('Local de estoque');
         const g = await this.gastoDo(tx, ato, true);
-        const itens: ItemGastoSala[] = e.itens.map((i) => ({
-          insumo: i.insumo,
-          quantidade: i.quantidade,
-          lote: i.lote ?? null,
-          implantePermanente: i.implantePermanente ?? false,
-          faturar: i.faturar ?? true,
-        }));
+        const cirurgiao = await this.cirurgiaoDe(
+          tx,
+          ato,
+          e.cirurgiao,
+          g ? numOuNull(g['cirurgiao_profissional_id']) : null,
+        );
+        // O cadastro do produto decide o rastreio (OPME exige o lote), e o lote é conferido aqui, não só no débito.
+        const hoje = await hojeNoEstabelecimento(tx, est.id);
+        const unidades = new Map<number, number | null>();
+        const itens: ItemGastoSala[] = [];
+        for (const [k, i] of e.itens.entries()) {
+          const ins = await tx.uma<Linha>(
+            'SELECT estoque_unidade_medida_id AS u, opme FROM insumo WHERE id = ? AND excluido_em IS NULL',
+            [i.insumo],
+          );
+          if (!ins) throw naoEncontrado(`Produto ${i.insumo}`);
+          unidades.set(i.insumo, numOuNull(ins['u']));
+          if (i.lote !== null && i.lote !== undefined)
+            await this.loteValido(tx, est.id, i.insumo, i.lote, hoje, k);
+          itens.push({
+            insumo: i.insumo,
+            quantidade: i.quantidade,
+            lote: i.lote ?? null,
+            implantePermanente: i.implantePermanente ?? false,
+            faturar: i.faturar ?? true,
+            opme: bool(ins['opme']),
+          });
+        }
         const anteriores = g ? await this.motivosDo(tx, num(g['id'])) : [];
         const novas = e.justificativas ?? [];
         const justificativas = [
@@ -476,7 +591,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
         ];
         const problemas = conferirGastoSala(
           itens,
-          await this.sugestaoDo(tx, est.id, a, e.cirurgiao ?? null),
+          await this.sugestaoDo(tx, est.id, a, cirurgiao),
           justificativas,
         );
         if (problemas.length) throw recusaRegra('Gasto de sala recusado', problemas);
@@ -486,6 +601,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
             ato_cirurgico_id: ato,
             conta_hospitalar_id: await this.contaAberta(tx, est.id, a.atendimento),
             local_estoque_id: e.local,
+            cirurgiao_profissional_id: cirurgiao,
             situacao: 'aberta',
             observacao: e.observacao ?? null,
           });
@@ -498,6 +614,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
           gasto = num(g['id']);
           await tx.alterar('consumo_cirurgia', gasto, e.versao, {
             local_estoque_id: e.local,
+            cirurgiao_profissional_id: cirurgiao,
             observacao: e.observacao ?? txtOuNull(g['observacao']),
           });
           // Os itens anteriores saem por exclusão lógica (o histórico fica); os novos entram na sequência seguinte.
@@ -516,17 +633,12 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
         );
         let s = num(seq?.['s']);
         for (const it of itens) {
-          const ins = await tx.uma<Linha>(
-            'SELECT estoque_unidade_medida_id AS u FROM insumo WHERE id = ? AND excluido_em IS NULL',
-            [it.insumo],
-          );
-          if (!ins) throw naoEncontrado(`Produto ${it.insumo}`);
           await tx.incluir('consumo_cirurgia_item', {
             consumo_cirurgia_id: gasto,
             sequencia: ++s,
             insumo_id: it.insumo,
             lote_insumo_id: it.lote,
-            unidade_medida_id: numOuNull(ins['u']),
+            unidade_medida_id: unidades.get(it.insumo) ?? null,
             quantidade: it.quantidade,
             local_estoque_id: e.local,
             faturar: it.faturar,
@@ -554,9 +666,9 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
 
   /** Confere o gasto aberto (nova conferência pelo domínio) e marca quem conferiu. */
   conferir(c: ContextoPortaPropria, ato: number, entrada: unknown): Promise<{ id: number }> {
-    const x = entradaValida(z.object({ versao, cirurgiao: id.nullable().optional() }).strict(), entrada);
+    const x = entradaValida(z.object({ versao }).strict(), entrada);
     return this.gravar(c, 'cirurgia.gastoSala.conferir', ['consumo_cirurgia'], async (tx, est, usuario) => {
-      const a = await this.atoDo(tx, est.id, ato);
+      const a = await this.atoDo(tx, est.id, ato, true);
       const g = await this.gastoDo(tx, ato, true);
       if (!g) throw naoEncontrado('Gasto de sala');
       const nova = this.exigir(String(g['situacao']) as SituacaoGastoSala, 'conferir');
@@ -565,7 +677,8 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
         throw recusaRegra('Conferência recusada', [{ campo: 'itens', mensagem: 'O gasto não tem item.' }]);
       const problemas = conferirGastoSala(
         itens,
-        await this.sugestaoDo(tx, est.id, a, x.cirurgiao ?? null),
+        // A conferência usa o cirurgião gravado no gasto, nunca um id do pedido.
+        await this.sugestaoDo(tx, est.id, a, numOuNull(g['cirurgiao_profissional_id'])),
         this.justificativasVigentes(await this.motivosDo(tx, num(g['id'])), itens),
       );
       if (problemas.length) throw recusaRegra('Conferência recusada', problemas);
@@ -584,6 +697,8 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     ato: number,
     acao: 'reabrir' | 'cancelar',
     entrada: unknown,
+    /** Quem tem o nível de conferência: só ele cancela o gasto já conferido (quem lança cancela o aberto). */
+    podeConferir = false,
   ): Promise<{ id: number }> {
     const x = entradaValida(z.object({ versao, motivo }).strict(), entrada);
     return this.gravar(
@@ -591,9 +706,16 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
       `cirurgia.gastoSala.${acao}`,
       ['consumo_cirurgia', 'consumo_cirurgia_motivo'],
       async (tx, est, usuario) => {
-        await this.atoDo(tx, est.id, ato);
+        await this.atoDo(tx, est.id, ato, true);
         const g = await this.gastoDo(tx, ato, true);
         if (!g) throw naoEncontrado('Gasto de sala');
+        if (acao === 'cancelar' && String(g['situacao']) === 'conferida' && !podeConferir)
+          throw new ErroOperacao(
+            403,
+            'sem-permissao',
+            'Cancelamento recusado',
+            'O gasto já foi conferido: só quem confere pode cancelá-lo.',
+          );
         const nova = this.exigir(String(g['situacao']) as SituacaoGastoSala, acao, x.motivo);
         await tx.alterar('consumo_cirurgia', num(g['id']), x.versao, {
           situacao: nova,
@@ -620,7 +742,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
   ): Promise<{ id: number; itensConta: number }> {
     const x = entradaValida(z.object({ versao }).strict(), entrada);
     return this.gravar(c, 'cirurgia.gastoSala.debitar', TABELAS, async (tx, est) => {
-      const a = await this.atoDo(tx, est.id, ato);
+      const a = await this.atoDo(tx, est.id, ato, true);
       const g = await this.gastoDo(tx, ato, true);
       if (!g) throw naoEncontrado('Gasto de sala');
       const nova = this.exigir(String(g['situacao']) as SituacaoGastoSala, 'debitar');
@@ -646,15 +768,13 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
         if (!grupo.length) continue;
         // O lote do item vai com o número e a validade do cadastro (o motor do estoque confere o saldo do lote).
         const lotes = new Map<number, { lote: string; validade: string }>();
-        for (const i of grupo.filter((v) => v.lote !== null)) {
-          const lt = await tx.uma<Linha>(
-            'SELECT numero_lote, validade FROM lote_insumo WHERE id = ? AND insumo_id = ?',
-            [i.lote, i.insumo],
-          );
-          if (!lt) throw naoEncontrado(`Lote do produto ${i.insumo}`);
+        for (const [k, i] of grupo.entries()) {
+          if (i.lote === null) continue;
+          const lt = await this.loteValido(tx, est.id, i.insumo, i.lote, hoje, k);
           const v = lt['validade'];
-          lotes.set(i.lote!, {
-            lote: String(lt['numero_lote']).slice(0, 30),
+          // O número vai inteiro (até 50 no cadastro): o motor do estoque procura o lote pelo número exato.
+          lotes.set(i.lote, {
+            lote: String(lt['numero_lote']),
             validade: v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10),
           });
         }

@@ -2,13 +2,15 @@
 //   GET  /api/cirurgia/gasto-sala/lista?procedimento=          lista padrão de material (com as linhas fora de uso)
 //   POST /api/cirurgia/gasto-sala/lista                        inclui a linha (produto ou kit)
 //   POST /api/cirurgia/gasto-sala/lista/:id                    { versao, ativo?, quantidade?, obrigatorio? } (nada apagado)
-//   GET  /api/cirurgia/gasto-sala/atos/:ato?cirurgiao=         gasto, sugestão pela lista, diferença e pendências
+//   GET  /api/cirurgia/gasto-sala/atos/:ato?cirurgiao=         gasto, sugestão, diferença e pendências (cirurgião da
+//                                                              equipe; com gasto, vale o cirurgião gravado nele)
 //   POST /api/cirurgia/gasto-sala/atos/:ato                    grava o gasto aberto (itens e justificativas)
 //   POST /api/cirurgia/gasto-sala/atos/:ato/conferir           { versao } conferência antes do débito
 //   POST /api/cirurgia/gasto-sala/atos/:ato/reabrir            { versao, motivo }
-//   POST /api/cirurgia/gasto-sala/atos/:ato/cancelar           { versao, motivo }
+//   POST /api/cirurgia/gasto-sala/atos/:ato/cancelar           { versao, motivo } (o conferido: só quem confere)
 //   POST /api/cirurgia/gasto-sala/atos/:ato/debitar            { versao } saída do estoque e item na conta
-// Os níveis de acesso separam quem lança (registro da cirurgia), quem confere (conferência de itens da conta) e quem
+// Os níveis de acesso separam quem mantém a lista padrão (cadastro do bloco cirúrgico, o mesmo das salas), quem lança
+// (registro da cirurgia), quem confere (conferência de itens da conta; só ele cancela o gasto já conferido) e quem
 // debita (lançamento de item na conta); nada depende de chave de liberação.
 import {
   Body,
@@ -31,6 +33,8 @@ import { PORTA_GASTO_SALA, type PortaGastoSalaPropria } from './gasto-sala-propr
 
 export const PERMISSOES_GASTO_SALA = {
   ler: 'cirurgia.registro.ler',
+  /** Manter a lista padrão (incluir, alterar, obrigatoriedade, tirar de uso): cadastro do bloco cirúrgico. */
+  manterLista: 'cirurgia.sala.editar',
   lancar: 'cirurgia.registro.criar',
   conferir: 'faturamento.item.conferir',
   debitar: 'faturamento.item.lancar',
@@ -70,14 +74,14 @@ export class GastoSalaController {
 
   @Post('lista')
   @HttpCode(201)
-  @Permissao(PERMISSOES_GASTO_SALA.lancar)
+  @Permissao(PERMISSOES_GASTO_SALA.manterLista)
   incluirLinha(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.incluirLinhaLista(c, corpo));
   }
 
   @Post('lista/:id')
   @HttpCode(200)
-  @Permissao(PERMISSOES_GASTO_SALA.lancar)
+  @Permissao(PERMISSOES_GASTO_SALA.manterLista)
   alterarLinha(
     @Req() req: RequisicaoAutorizada,
     @Param('id', ParseIntPipe) id: number,
@@ -118,7 +122,7 @@ export class GastoSalaController {
   @HttpCode(200)
   @Permissao(PERMISSOES_GASTO_SALA.conferir)
   reabrir(@Req() req: RequisicaoAutorizada, @Param('ato', ParseIntPipe) ato: number, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.mudarComMotivo(c, ato, 'reabrir', corpo));
+    return this.com(req, (p, c) => p.mudarComMotivo(c, ato, 'reabrir', corpo, true));
   }
 
   @Post('atos/:ato/cancelar')
@@ -129,7 +133,8 @@ export class GastoSalaController {
     @Param('ato', ParseIntPipe) ato: number,
     @Body() corpo: unknown,
   ) {
-    return this.com(req, (p, c) => p.mudarComMotivo(c, ato, 'cancelar', corpo));
+    const podeConferir = sessaoDe(req).pode(PERMISSOES_GASTO_SALA.conferir);
+    return this.com(req, (p, c) => p.mudarComMotivo(c, ato, 'cancelar', corpo, podeConferir));
   }
 
   @Post('atos/:ato/debitar')

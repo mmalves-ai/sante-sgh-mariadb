@@ -4,8 +4,11 @@
 //     junto com as gerais. O kit é aberto nos seus itens. O mesmo produto em dois procedimentos entra uma vez, com a
 //     maior quantidade (a luva do primeiro procedimento serve ao segundo); obrigatório em qualquer lista fica
 //     obrigatório.
-//   - conferência: quantidade positiva, produto repetido no mesmo lote recusado, implante permanente com lote, e item
-//     obrigatório da lista ausente só com justificativa (motivo de pelo menos 5 letras).
+//   - conferência: quantidade positiva, produto repetido no mesmo lote recusado, implante permanente e OPME (órtese,
+//     prótese e material especial, pelo cadastro do produto, nunca pela marca do pedido) com lote, e item obrigatório
+//     da lista ausente só com justificativa (motivo de pelo menos 5 letras).
+//   - cirurgião da lista: só um cirurgião da equipe viva do ato escolhe a lista do cirurgião; o escolhido fica gravado
+//     no gasto e vale para a tela, a gravação e a conferência (o pedido nunca troca a lista por um id de fora).
 //   - situação: aberta → conferida → debitada; conferida volta a aberta só com motivo (reabertura); aberta ou
 //     conferida pode ser cancelada com motivo; debitada não muda (o estorno é na conta e no estoque). Nada é apagado.
 
@@ -120,6 +123,38 @@ export interface ItemGastoSala {
   readonly lote: number | null;
   readonly implantePermanente: boolean;
   readonly faturar: boolean;
+  /** OPME pelo cadastro do produto: exige o lote (rastreio), com ou sem a marca de implante. */
+  readonly opme?: boolean;
+}
+
+/** Um membro da equipe viva do ato; `cirurgiao` é a função de cirurgião (grau de participação 00). */
+export interface MembroEquipeGasto {
+  readonly profissional: number;
+  readonly cirurgiao: boolean;
+}
+
+/**
+ * O cirurgião cuja lista vale no gasto: o informado (só se for cirurgião da equipe viva), senão o gravado no gasto
+ * (se seguir na equipe), senão o primeiro cirurgião da equipe; sem cirurgião, vale a lista do serviço (null).
+ */
+export function cirurgiaoDoGasto(
+  equipe: readonly MembroEquipeGasto[],
+  informado: number | null | undefined,
+  gravado: number | null,
+): { cirurgiao: number | null } | { problema: ProblemaGastoSala } {
+  const cirurgioes = equipe.filter((m) => m.cirurgiao).map((m) => m.profissional);
+  if (informado !== null && informado !== undefined) {
+    if (!cirurgioes.includes(informado))
+      return {
+        problema: {
+          campo: 'cirurgiao',
+          mensagem: 'O cirurgião escolhido não está na equipe do ato com a função de cirurgião.',
+        },
+      };
+    return { cirurgiao: informado };
+  }
+  if (gravado !== null && cirurgioes.includes(gravado)) return { cirurgiao: gravado };
+  return { cirurgiao: cirurgioes[0] ?? null };
 }
 
 export interface JustificativaItem {
@@ -145,8 +180,13 @@ export function conferirGastoSala(
         campo: `itens.${i}.quantidade`,
         mensagem: `Item ${i + 1}: a quantidade tem de ser maior que zero.`,
       });
-    if (it.implantePermanente && it.lote === null)
-      p.push({ campo: `itens.${i}.lote`, mensagem: `Item ${i + 1}: implante permanente exige o lote.` });
+    if ((it.implantePermanente || it.opme === true) && it.lote === null)
+      p.push({
+        campo: `itens.${i}.lote`,
+        mensagem: it.implantePermanente
+          ? `Item ${i + 1}: implante permanente exige o lote.`
+          : `Item ${i + 1}: OPME (órtese, prótese e material especial) exige o lote.`,
+      });
     const chave = `${it.insumo}:${it.lote ?? ''}`;
     if (vistos.has(chave))
       p.push({
