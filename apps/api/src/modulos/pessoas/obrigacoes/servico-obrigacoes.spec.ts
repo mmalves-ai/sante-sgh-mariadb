@@ -503,20 +503,10 @@ describe('FGTS Digital (serviço)', () => {
   });
 });
 
-describe('SEFIP, CAGED e RAIS (serviço)', () => {
-  it('não exigidas pelo regime sugerido; com o regime gravado, a SEFIP e o CAGED com o arquivo; a RAIS com os meses por fechar', async () => {
+describe('SEFIP, CAGED e RAIS encerradas (serviço)', () => {
+  it('sem gerador: a prévia e a geração recusam com obrigacao-encerrada, mesmo com o regime gravado que as exigiria', async () => {
     const m = await montar();
     const { s, servico } = m;
-    await servico.registrarParametros(s, parametros());
-    await m.fechamento.fechar(s, { ...SET, pagamento: '2026-10-05', simular: false });
-    for (const tipo of ['sefip', 'caged'] as const) {
-      const r = await servico.gerar(s, { ...GERAR, tipo, simular: true });
-      expect(
-        r.pendencias.map((p) => p.codigo),
-        tipo,
-      ).toEqual(['nao-exigida']);
-    }
-    // Um regime que ainda exige as duas (sintético, para a prova do arquivo).
     const sempre = { exigidaDe: null, exigidaAte: null, leiaute: 'teste', leiauteConferido: false };
     await servico.registrarParametros(
       s,
@@ -525,52 +515,20 @@ describe('SEFIP, CAGED e RAIS (serviço)', () => {
         regimes: { ...REGIMES_SUGERIDOS_OBRIGACOES, sefip: sempre, caged: sempre, rais: sempre },
       }),
     );
-    const sefip = await servico.gerar(s, {
-      ...GERAR,
-      tipo: 'sefip',
-      simular: false,
-      recolhimento: '2026-10-07',
-    });
-    expect(sefip.pendencias).toEqual([]);
-    expect(sefip.obrigacao).toMatchObject({ nomeArquivo: 'SEFIP.RE', leiaute: 'teste', trabalhadores: 1 });
-    expect(sefip.totais).toMatchObject({ remuneracao: 300_000, fgts: 24_000, admissoes: 1 });
-    const arq = await servico.arquivo(s, sefip.obrigacao!.id);
-    const linhas = arq.conteudo.split('\r\n').filter(Boolean);
-    expect(linhas.map((l) => l.slice(0, 2))).toEqual(['00', '10', '30', '90']);
-    expect(linhas[2]).toContain(NIS);
-    expect(linhas[2]).toContain('PESSOA NOVA SINTETICA');
-    // O banco guarda cifrado: a lista não traz o conteúdo nem o nome.
-    expect(JSON.stringify(await servico.listar(s, {}))).not.toContain('PESSOA NOVA');
-
-    const caged = await servico.gerar(s, { ...GERAR, tipo: 'caged', simular: false });
-    expect(caged.pendencias).toEqual([]);
-    const c = (await servico.arquivo(s, caged.obrigacao!.id)).conteudo.split('\r\n').filter(Boolean);
-    expect(c.map((l) => l[0])).toEqual(['A', 'B', 'C']);
-    expect(c[2]!.slice(65, 67)).toBe('20');
-
-    const rais = await servico.gerar(s, { ...GERAR, tipo: 'rais', periodo: '2026', simular: true });
-    expect(rais.pendencias.map((p) => p.codigo)).toEqual(['periodo-em-curso', 'folha-nao-fechada']);
-    expect(rais.pendencias[1]!.mensagem).toContain('2026-01');
-    expect(rais.pendencias[1]!.mensagem).toContain('2026');
-    // Sem a ficha completa: a pendência do NIS.
-    await m.esocial.registrarFicha(s, m.v, { ficha: { ...FICHA, nis: null }, versao: 0 });
-    const semNis = await servico.gerar(s, { ...GERAR, tipo: 'sefip', simular: true });
-    expect(semNis.pendencias.map((p) => p.codigo)).toEqual(['sem-nis']);
-  });
-
-  it('sem o empregador do eSocial a SEFIP pede os parâmetros; período em curso barra', async () => {
-    const m = await montar();
-    const { s, servico } = m;
-    const sempre = { exigidaDe: null, exigidaAte: null, leiaute: 'teste', leiauteConferido: false };
-    await servico.registrarParametros(
-      s,
-      parametros({ inicio: '2026-01', regimes: { ...REGIMES_SUGERIDOS_OBRIGACOES, sefip: sempre } }),
-    );
     await m.fechamento.fechar(s, { ...SET, pagamento: '2026-10-05', simular: false });
-    m.porta.cnpjsSinteticos = new Map();
-    const r = await servico.gerar(s, { ...GERAR, tipo: 'sefip', simular: true });
-    expect(r.pendencias.map((p) => p.codigo)).toEqual(['sem-empregador']);
-    const corrente = await servico.gerar(s, { ...GERAR, tipo: 'sefip', periodo: '2026-10', simular: true });
-    expect(corrente.pendencias.map((p) => p.codigo)).toEqual(['periodo-em-curso', 'folha-nao-fechada']);
+    const entradas = [
+      { ...GERAR, tipo: 'sefip' as const, recolhimento: '2026-10-07' },
+      { ...GERAR, tipo: 'caged' as const },
+      { ...GERAR, tipo: 'rais' as const, periodo: '2025' },
+    ];
+    for (const e of entradas)
+      for (const simular of [true, false])
+        await expect(servico.gerar(s, { ...e, simular }), `${e.tipo} ${simular}`).rejects.toMatchObject({
+          problema: { status: 409, codigo: 'obrigacao-encerrada' },
+        });
+    // Nada foi gravado: a lista (histórico e consulta) segue vazia, e o FGTS Digital continua gerando a prévia.
+    expect((await servico.listar(s, {})).itens ?? []).toEqual([]);
+    const fgts = await servico.gerar(s, { ...GERAR, tipo: 'fgts-digital', simular: true });
+    expect(fgts.simulado).toBe(true);
   });
 });

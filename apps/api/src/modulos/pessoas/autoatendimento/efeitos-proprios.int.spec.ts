@@ -1,7 +1,7 @@
 // Integração dos EFEITOS da aprovação do autoatendimento contra o MariaDB do cliente de teste (f22_o3), com massa
 // SINTÉTICA: o ajuste do ponto pedido e ligado à solicitação na mesma transação, a decisão do gestor (ajuste aprovado e
 // solicitação aprovada juntos), a correção do cadastro com a trilha, as recusas de domínio do módulo dono (que desfazem
-// o pedido inteiro), as férias sem o cálculo ligado (modelo-pendente) e a porta do cadastro sem a chave do CPF (o erro
+// o pedido inteiro), as férias sem o cálculo ligado (o gravador próprio das férias) e a porta do cadastro sem a chave do CPF (o erro
 // diz o que falta, em vez de derrubar o módulo).
 import { randomBytes } from 'node:crypto';
 import { ErroOperacao } from '@sgh/nucleo';
@@ -387,15 +387,19 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
     ).toBe(2);
   });
 
-  it('férias sem o cálculo ligado: modelo-pendente, e o pedido inteiro é desfeito', async () => {
+  it('férias sem o cálculo ligado: o gravador próprio das férias lê na mesma transação (nunca modelo-pendente)', async () => {
     const antes = await solicitacoes();
-    const p = await erro(
-      porta.gravarSgh(eu, trilha(), async (g) => {
+    let lidas: unknown = null;
+    const desfazer = new Error('desfazer o pedido do teste');
+    const p = await porta
+      .gravarSgh(eu, trilha(), async (g) => {
         await g.incluirSolicitacao({ ...pedido, vinculo: m.vinculo, por: m.login });
-        await g.folha.feriasDoVinculoComTrava(m.vinculo);
-      }),
-    );
-    expect(p?.codigo).toBe('modelo-pendente');
+        lidas = await g.folha.feriasDoVinculoComTrava(m.vinculo);
+        throw desfazer;
+      })
+      .catch((e: unknown) => e);
+    expect(p).toBe(desfazer);
+    expect(Array.isArray(lidas)).toBe(true);
     expect(await solicitacoes()).toBe(antes);
   });
 

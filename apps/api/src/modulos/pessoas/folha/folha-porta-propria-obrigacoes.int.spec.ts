@@ -23,12 +23,11 @@ import {
 import { gravadorFolhaExecutor, TABELAS_FOLHA_EXECUTOR } from './folha-executor-proprio.js';
 import { LeiturasCalculoFolhaPropria } from './folha-porta-propria-calculo.js';
 import {
-  CODIGOS_TABELAS_OBRIGACOES,
   gravadorFolhaObrigacoes,
   LeiturasObrigacoesFolhaPropria,
   TABELAS_FOLHA_OBRIGACOES,
 } from './folha-porta-propria-obrigacoes.js';
-import { CATALOGOS_OBRIGACOES, type NovaObrigacaoDaFolha } from './tipos-folha.js';
+import type { NovaObrigacaoDaFolha } from './tipos-folha.js';
 
 const MARCA = 'TF24OB';
 const trilha: TrilhaDaGravacao = {
@@ -155,6 +154,8 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       empresa: m.est,
       aquisitivoInicio: '2096-01-01',
       aquisitivoFim: '2096-12-31',
+      faltas: 7,
+      direito: 24,
       dias: 10,
       abono: 0,
       dobra: 0,
@@ -184,6 +185,15 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       }),
     ]);
     expect(ids).toHaveLength(3);
+    // Um só período, do VÍNCULO (CLT art. 130), com as faltas e os dias de direito da escala que o domínio calculou.
+    const periodos = await m.nucleo.lerSomente(ctx(), (l) =>
+      l.consultar(
+        `SELECT vinculo_trabalho_id, faltas_injustificadas, dias_direito, dias_saldo FROM periodo_aquisitivo
+          WHERE estabelecimento_id = ? AND inicio = '2096-01-01'`,
+        [m.est],
+      ),
+    );
+    expect(periodos.map((r) => Object.values(r).map(Number))).toEqual([[m.vinculo, 7, 24, 24]]);
     expect(
       await codigo(
         gravar((g) =>
@@ -296,30 +306,21 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       ),
     ).toBe('recibo-ferias-conferido');
     expect(await calculo.feriasPorId(ctx(), ids[0]!)).toMatchObject({ situacao: 'calculada' });
-    // O período aquisitivo de outro estabelecimento com o mesmo início não se reaproveita.
-    await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'periodo-outro-est' }, async (e) => {
-      const [v] = await e.consultar('SELECT colaborador_id FROM vinculo_trabalho WHERE id = ?', [m.vinculo]);
-      await e.inserir(
-        `INSERT INTO periodo_aquisitivo (estabelecimento_id, colaborador_id, inicio, fim, limite_concessivo, criado_em)
-         VALUES (?, ?, '2095-01-01', '2095-12-31', '2096-12-31', NOW(3))`,
-        [m.outro, v!['colaborador_id']],
-      );
-    });
+    // O período é do vínculo: o mesmo início com outro fim no MESMO vínculo recusa (nunca dois períodos por contrato).
     expect(
       await codigo(
         gravar((g) =>
           g.incluirFerias({
             ...nova,
-            aquisitivoInicio: '2095-01-01',
-            aquisitivoFim: '2095-12-31',
-            inicio: '2096-03-01',
-            fim: '2096-03-10',
-            pagamento: '2096-02-27',
+            aquisitivoFim: '2096-12-30',
+            inicio: '2097-11-01',
+            fim: '2097-11-10',
+            pagamento: '2097-10-30',
             por: m.login,
           }),
         ),
       ),
-    ).toBe('periodo-aquisitivo-de-outro-estabelecimento');
+    ).toBe('periodo-aquisitivo-divergente');
     // A versão lida antes não vale mais.
     expect(
       await codigo(
@@ -488,38 +489,18 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
     expect(await leituras.conteudoObrigacao(ctx(m.outro), r.id)).toBeNull();
   });
 
-  it('catálogos oficiais: lê os códigos carregados por fonte e tabela', async () => {
-    await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'catalogos-folha-obrigacoes' }, async (e) => {
-      for (const k of CATALOGOS_OBRIGACOES) {
-        const t = CODIGOS_TABELAS_OBRIGACOES[k];
-        const id = await e.inserir(
-          `INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?, NOW(3))`,
-          [t.fonte, t.tabela, `Tabela sintética ${k}`, MARCA],
-        );
-        await e.inserir(
-          `INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?, NOW(3))`,
-          [id, `9${CATALOGOS_OBRIGACOES.indexOf(k)}`, 'Código sintético', MARCA],
-        );
-        // Código revogado na edição vigente e edição encerrada: nenhum dos dois é oferecido.
-        await e.inserir(
-          `INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, vigencia_inicio, vigencia_fim, versao_fonte, criado_em) VALUES (?, ?, ?, '2000-01-01', '2000-12-31', ?, NOW(3))`,
-          [id, `8${CATALOGOS_OBRIGACOES.indexOf(k)}`, 'Código revogado', MARCA],
-        );
-        const antiga = await e.inserir(
-          `INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, vigencia_inicio, vigencia_fim, versao_fonte, criado_em) VALUES (?, ?, ?, '1999-01-01', '2000-12-31', ?, NOW(3))`,
-          [t.fonte, t.tabela, `Edição encerrada ${k}`, `${MARCA}A`],
-        );
-        await e.inserir(
-          `INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?, NOW(3))`,
-          [antiga, `7${CATALOGOS_OBRIGACOES.indexOf(k)}`, 'Código da edição encerrada', `${MARCA}A`],
-        );
-      }
-    });
-    const c = await leituras.catalogosObrigacoes(ctx());
-    CATALOGOS_OBRIGACOES.forEach((k, i) => {
-      expect(c[k]).toContain(`9${i}`);
-      expect(c[k]).not.toContain(`8${i}`);
-      expect(c[k]).not.toContain(`7${i}`);
+  it('catálogo oficial das obrigações: a edição versionada, sem depender de carga no banco (nunca catalogo-pendente)', async () => {
+    const c = await leituras.catalogosObrigacoes(ctx(), '2026-11-24');
+    expect(c.edicao).toBe('2026-11');
+    const situacao = Object.fromEntries(c.obrigacoes.map((o) => [o.codigo, o.situacao]));
+    expect(situacao).toEqual({
+      esocial: 'vigente',
+      'efd-reinf': 'vigente',
+      dctfweb: 'vigente',
+      'fgts-digital': 'vigente',
+      sefip: 'encerrada',
+      caged: 'encerrada',
+      rais: 'encerrada',
     });
   });
 });

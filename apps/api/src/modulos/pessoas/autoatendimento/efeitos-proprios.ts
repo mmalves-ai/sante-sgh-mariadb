@@ -9,15 +9,17 @@
 //     decisão, a leitura, a trava) com o de quem decide. Assim a segregação do ponto vale como na memória (quem pediu
 //     não aprova) e o ajuste guarda o colaborador como solicitante e o gestor como aprovador;
 //   - pessoas: o gravador da porta própria do colaborador (com a cifra do CPF da porta);
-//   - folha: o gravador do cálculo da folha, quando a porta oferece `gravadorNaTransacao`; sem ela, as férias aprovadas
-//     recusam com `modelo-pendente` (e a operação inteira é desfeita, nada pela metade).
+//   - folha: o gravador do cálculo da folha, quando a porta oferece `gravadorNaTransacao`; sem ela, o gravador próprio
+//     das férias sobre a mesma transação (folha-executor-proprio.ts, que inclui pelo período aquisitivo por vínculo de
+//     folha-porta-propria-obrigacoes.ts): as férias aprovadas gravam sempre, nunca ficam pendentes.
 // Melhoria: o efeito expõe só os métodos que o contrato do autoatendimento lista (o resto do gravador do módulo não é
 // alcançável pela solicitação).
 // Melhoria: as tabelas que cada efeito grava entram na operação declaradas (a transação recusa as outras), incluindo a
 // trilha que a correção do cadastro escreve na mesma transação.
 import type { TxOperacao } from '@sgh/nucleo';
-import { exigirUsuario, modeloPendente } from '../../qualidade/apoio-propria.js';
+import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import { fusoDoEstabelecimento } from '../banco-apoio.js';
+import { gravadorFolhaExecutor } from '../folha/folha-executor-proprio.js';
 import type { GravadorCalculoFolha } from '../folha/porta-calculo.js';
 import { TABELAS_CALCULO_FOLHA } from '../folha/porta-calculo-propria.js';
 import type { GravadorPessoas } from '../porta.js';
@@ -88,7 +90,8 @@ export function fonteCalculoDe(
   };
 }
 
-const PENDENTE_FERIAS = 'O efeito da aprovação das férias (a programação das férias gravada com a decisão)';
+/** As tabelas que as férias aprovadas gravam pelo gravador próprio (sem o cálculo ligado). */
+export const TABELAS_EFEITO_FERIAS = ['programacao_ferias', 'periodo_aquisitivo'] as const;
 
 /** Só os métodos listados, cada um sobre o gravador (criado uma vez, na primeira chamada). */
 function restrito<T extends object>(metodos: readonly string[], criar: () => T | Promise<T>): T {
@@ -107,7 +110,7 @@ function restrito<T extends object>(metodos: readonly string[], criar: () => T |
 export interface PortasDosEfeitos {
   readonly pessoas: PortaPessoasPropria;
   readonly ponto: PortaPontoPropria;
-  /** null: as férias aprovadas recusam com `modelo-pendente`. */
+  /** null: as férias aprovadas gravam pelo gravador próprio das férias (sem o resto do cálculo). */
   readonly calculo?: FonteGravadorCalculo | null;
 }
 
@@ -131,7 +134,7 @@ export function efeitosAutoatendimentoProprios(p: PortasDosEfeitos): EfeitosAuto
       ...TABELAS_EFEITO_PONTO,
       ...TABELAS_EFEITO_PESSOAS,
       ...TABELAS_EFEITO_TRILHA,
-      ...(calculo?.tabelas ?? []),
+      ...(calculo?.tabelas ?? TABELAS_EFEITO_FERIAS),
     ]),
   ];
   return {
@@ -152,9 +155,7 @@ export function efeitosAutoatendimentoProprios(p: PortasDosEfeitos): EfeitosAuto
         pessoas: restrito<EfeitoPessoas>(METODOS_EFEITO_PESSOAS, () => pessoas.gravador(tx, c, est)),
         folha: calculo
           ? restrito<EfeitoFolha>(METODOS_EFEITO_FOLHA, () => calculo.gravadorNaTransacao(tx, est))
-          : restrito<EfeitoFolha>(METODOS_EFEITO_FOLHA, () => {
-              throw modeloPendente(PENDENTE_FERIAS);
-            }),
+          : restrito<EfeitoFolha>(METODOS_EFEITO_FOLHA, () => gravadorFolhaExecutor(tx, est)),
       };
     },
   };

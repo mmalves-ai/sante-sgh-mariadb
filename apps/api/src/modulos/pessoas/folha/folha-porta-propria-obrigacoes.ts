@@ -1,7 +1,8 @@
 // Férias (inclusão e cálculo) e obrigações da folha sobre o MariaDB do cliente (modulos-proprios-3, família
 // folha-obrigacoes), com o comportamento da porta de memória (porta-calculo-memoria.ts).
-//   - Férias (programacao_ferias): a inclusão liga o período aquisitivo do colaborador (o existente com o mesmo início ou
-//     um novo, com o limite concessivo de 12 meses depois do fim, CLT art. 134) e o tipo de férias individual ativo; a
+//   - Férias (programacao_ferias): a inclusão liga o período aquisitivo DO VÍNCULO (migração 15_RH/98: o período é do
+//     contrato de trabalho, CLT art. 130; o existente com o mesmo início ou um novo, com as faltas e os dias de direito
+//     da escala do art. 130 calculados pelo domínio, com o limite concessivo de 12 meses depois do fim, CLT art. 134) e o tipo de férias individual ativo; a
 //     fração é a seguinte das ativas do período (até três, CLT art. 134 § 1º). Marcar `calculada` grava o recibo de
 //     férias (recibo_ferias) ligado ao processamento da folha, com a base e o INSS das linhas do vínculo; cancelar ou
 //     voltar a programar segue a regra do gravador da folha (férias em gozo ou gozadas não se alteram).
@@ -12,8 +13,9 @@
 //     gravado uma vez pelo hash, metadado na tabela `arquivo` na mesma transação); o resumo SHA-256 e o tamanho ficam em
 //     arquivo_obrigacao (sequência 1, o envio); os fechamentos usados, em obrigacao_fechamento. Quem gerou e quem trocou
 //     a situação vêm da auditoria (criado_por e alterado_por).
-//   - Catálogos oficiais das obrigações: os códigos de tabela_esocial/codigo_esocial pela fonte e pelo código da tabela
-//     (CODIGOS_TABELAS_OBRIGACOES). Catálogo não carregado recusa com 409 `catalogo-pendente` (nunca lista vazia).
+//   - Catálogo oficial das obrigações acessórias: a edição versionada de catalogo-obrigacoes-oficiais.ts (eSocial,
+//     EFD-Reinf, DCTFWeb e FGTS Digital vigentes; SEFIP, CAGED e RAIS encerradas, sem gerador). Não depende de carga no
+//     banco: nunca fica pendente.
 // Sem o armazenamento de arquivos configurado, gravar e baixar o arquivo recusam com 503 (falha fechada).
 import type { SituacaoFerias, SituacaoObrigacao, TipoObrigacao, TotaisObrigacao } from '@sgh/contratos';
 import { APURACAO_DA_OBRIGACAO } from '@sgh/contratos';
@@ -31,9 +33,9 @@ import {
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import { exigirFeriasAlteravel, lerFeriasPorId } from './folha-porta-propria-calculo.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha } from './porta-calculo.js';
+import { catalogoObrigacoesNa } from './catalogo-obrigacoes-oficiais.js';
 import {
-  CATALOGOS_OBRIGACOES,
-  type CodigosCatalogosObrigacoes,
+  type CatalogoObrigacoesOficiais,
   type FiltroObrigacoesDaFolha,
   type ObrigacaoDaFolha,
 } from './tipos-folha.js';
@@ -312,62 +314,6 @@ async function obrigacaoParaTrocar(
   return r;
 }
 
-// ── Catálogos oficiais ───────────────────────────────────────────────────────────────────────────────────────
-
-/** Onde cada catálogo das obrigações está em tabela_esocial: a fonte oficial e o código da tabela carregada. */
-export const CODIGOS_TABELAS_OBRIGACOES: Readonly<
-  Record<(typeof CATALOGOS_OBRIGACOES)[number], { readonly fonte: string; readonly tabela: string }>
-> = {
-  categoriasSefip: { fonte: 'sefip', tabela: 'categoria' },
-  movimentacoesSefip: { fonte: 'sefip', tabela: 'movimentacao' },
-  desligamentosCaged: { fonte: 'caged', tabela: 'desligamento' },
-  admissoesCaged: { fonte: 'caged', tabela: 'admissao' },
-  vinculosRais: { fonte: 'rais', tabela: 'vinculo' },
-  desligamentosRais: { fonte: 'rais', tabela: 'desligamento' },
-  admissoesRais: { fonte: 'rais', tabela: 'admissao' },
-};
-
-/**
- * Os códigos vigentes na data de referência (hoje, por omissão): só a edição da tabela oficial e os códigos cuja
- * vigência alcança a data; edição encerrada e código revogado não são oferecidos nem aceitos.
- */
-export async function lerCatalogosObrigacoes(
-  l: LeitorObrigacoes,
-  data: string = hoje(),
-): Promise<CodigosCatalogosObrigacoes> {
-  const pares = CATALOGOS_OBRIGACOES.map((k) => CODIGOS_TABELAS_OBRIGACOES[k]);
-  const rs = await l.consultar(
-    `SELECT DISTINCT t.fonte, t.codigo_oficial, c.codigo_esocial
-       FROM codigo_esocial c JOIN tabela_esocial t ON t.id = c.tabela_esocial_id
-      WHERE (t.fonte, t.codigo_oficial) IN (${pares.map(() => '(?, ?)').join(', ')})
-        AND (t.vigencia_inicio IS NULL OR t.vigencia_inicio <= ?) AND (t.vigencia_fim IS NULL OR t.vigencia_fim >= ?)
-        AND (c.vigencia_inicio IS NULL OR c.vigencia_inicio <= ?) AND (c.vigencia_fim IS NULL OR c.vigencia_fim >= ?)
-      ORDER BY c.codigo_esocial`,
-    [...pares.flatMap((x) => [x.fonte, x.tabela]), data, data, data, data],
-  );
-  const saida = Object.fromEntries(CATALOGOS_OBRIGACOES.map((k) => [k, [] as string[]])) as Record<
-    (typeof CATALOGOS_OBRIGACOES)[number],
-    string[]
-  >;
-  for (const r of rs) {
-    const k = CATALOGOS_OBRIGACOES.find(
-      (x) =>
-        CODIGOS_TABELAS_OBRIGACOES[x].fonte === texto(r['fonte']) &&
-        CODIGOS_TABELAS_OBRIGACOES[x].tabela === texto(r['codigo_oficial']),
-    );
-    if (k) saida[k].push(texto(r['codigo_esocial']));
-  }
-  const faltam = CATALOGOS_OBRIGACOES.filter((k) => saida[k].length === 0);
-  if (faltam.length > 0)
-    throw recusa(
-      'catalogo-pendente',
-      `Os catálogos oficiais das obrigações não estão carregados neste cliente: ${faltam
-        .map((k) => `${CODIGOS_TABELAS_OBRIGACOES[k].fonte}/${CODIGOS_TABELAS_OBRIGACOES[k].tabela}`)
-        .join(', ')}.`,
-    );
-  return saida;
-}
-
 // ── Gravador ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function gravadorFolhaObrigacoes(
@@ -381,28 +327,24 @@ export function gravadorFolhaObrigacoes(
   };
 
   /**
-   * O período aquisitivo do colaborador com este início neste estabelecimento (travado) ou um novo. O período tem
-   * estabelecimento, mas não vínculo, e a UNIQUE (colaborador_id, inicio) admite um só período por início: o período de
-   * outro estabelecimento nunca é reaproveitado (recusa `periodo-aquisitivo-de-outro-estabelecimento`). Decisão de
-   * modelo pendente: período por vínculo, para o colaborador com dois contratos de mesmo início.
+   * O período aquisitivo DO VÍNCULO com este início (travado) ou um novo. O período é do contrato de trabalho (CLT
+   * art. 130; migração 15_RH/98): o colaborador com dois contratos, mesmo de mesmo início, tem um período em cada, e a
+   * UNIQUE (vinculo_trabalho_id, inicio) garante um só por contrato e início. O período novo grava as faltas
+   * injustificadas e os dias de direito da escala do art. 130 que o domínio calculou (sem eles, 0 faltas e 30 dias).
    */
-  async function periodoAquisitivo(colaborador: number, inicio: string, fim: string, gozo: string) {
-    const outro = await tx.uma(
-      `SELECT COUNT(*) AS q FROM periodo_aquisitivo
-        WHERE colaborador_id = ? AND inicio = ? AND estabelecimento_id <> ?`,
-      [colaborador, inicio, est],
-    );
-    if (n(outro?.['q']) > 0)
-      throw recusa(
-        'periodo-aquisitivo-de-outro-estabelecimento',
-        'O colaborador já tem um período aquisitivo com este início em outro estabelecimento: o período de um contrato não se reaproveita em outro.',
-      );
+  async function periodoAquisitivo(
+    vinculo: number,
+    colaborador: number,
+    x: { aquisitivoInicio: string; aquisitivoFim: string; inicio: string; faltas?: number; direito?: number },
+  ) {
+    const { aquisitivoInicio: inicio, aquisitivoFim: fim } = x;
     const [pa] = await tx.consultarParaAtualizar(
-      `SELECT id, fim FROM periodo_aquisitivo
-        WHERE colaborador_id = ? AND inicio = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-      [colaborador, inicio, est],
+      `SELECT id, fim, estabelecimento_id FROM periodo_aquisitivo
+        WHERE vinculo_trabalho_id = ? AND inicio = ? AND excluido_em IS NULL`,
+      [vinculo, inicio],
     );
     if (pa) {
+      if (n(pa['estabelecimento_id']) !== est) throw foraDaSessao();
       if (dia(pa['fim']) !== fim)
         throw recusa(
           'periodo-aquisitivo-divergente',
@@ -412,13 +354,18 @@ export function gravadorFolhaObrigacoes(
     }
     if (!(fim > inicio))
       throw recusa('periodo-aquisitivo-invalido', 'O fim do período aquisitivo tem de ser depois do início.');
+    const direito = x.direito ?? 30;
     return tx.incluir('periodo_aquisitivo', {
       estabelecimento_id: est,
       colaborador_id: colaborador,
+      vinculo_trabalho_id: vinculo,
       inicio,
       fim,
       limite_concessivo: somarMeses(fim, 12),
-      situacao: fim < gozo ? 'adquirido' : 'aberto',
+      faltas_injustificadas: x.faltas ?? 0,
+      dias_direito: direito,
+      dias_saldo: direito,
+      situacao: fim < x.inicio ? 'adquirido' : 'aberto',
     });
   }
 
@@ -452,7 +399,7 @@ export function gravadorFolhaObrigacoes(
       if (!v) throw recusa('vinculo-inexistente', 'O vínculo não existe neste estabelecimento.');
       await exigirUsuario(tx, x.por);
       const colaborador = n(v['colaborador_id']);
-      const periodo = await periodoAquisitivo(colaborador, x.aquisitivoInicio, x.aquisitivoFim, x.inicio);
+      const periodo = await periodoAquisitivo(x.vinculo, colaborador, x);
       const tipo = await tx.uma(
         "SELECT id FROM tipo_ferias WHERE ativo = TRUE AND categoria = 'individual' ORDER BY id LIMIT 1",
       );
@@ -771,7 +718,11 @@ export class LeiturasObrigacoesFolhaPropria {
     return lido.conteudo.toString('utf8');
   }
 
-  catalogosObrigacoes(c: ContextoCalculoFolha): Promise<CodigosCatalogosObrigacoes> {
-    return this.ler(c, (l) => lerCatalogosObrigacoes(l));
+  /** O catálogo oficial versionado vigente na data (hoje, por omissão): não lê o banco e nunca fica pendente. */
+  async catalogosObrigacoes(
+    _c: ContextoCalculoFolha,
+    data: string = hoje(),
+  ): Promise<CatalogoObrigacoesOficiais> {
+    return catalogoObrigacoesNa(data);
   }
 }

@@ -11,7 +11,7 @@ import {
 } from '@sgh/contratos';
 import { ErroOperacao, type LinhaTrilha } from '@sgh/nucleo';
 import {
-  type CodigosCatalogosObrigacoes,
+  type CatalogoObrigacoesOficiais,
   type DependentesDoVinculo,
   type FechamentoDaFolha,
   type FeriasDoVinculo,
@@ -34,6 +34,7 @@ import {
   type VinculoDesligado,
   type VinculoDoCalculo,
 } from './tipos-folha.js';
+import { catalogoObrigacoesNa } from './catalogo-obrigacoes-oficiais.js';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha, PortaCalculoFolha } from './porta-calculo.js';
@@ -82,68 +83,6 @@ const copiar = (s: Estado): Estado => ({
   parametrosObrigacoes: s.parametrosObrigacoes.map((x) => ({ ...x })),
   obrigacoes: s.obrigacoes.map((x) => ({ ...x, totais: { ...x.totais }, fechamentos: [...x.fechamentos] })),
 });
-
-/** Os códigos dos catálogos oficiais da sessão sintética (os do banco do pc: numéricos sem zero à esquerda). */
-export const CATALOGOS_OBRIGACOES_SINTETICOS: CodigosCatalogosObrigacoes = {
-  categoriasSefip: ['0', '1', '2', '3', '4', '5', '6', '7', '11', '12', '13', '14', '15', '16', '17'],
-  movimentacoesSefip: [
-    'H',
-    'I1',
-    'I2',
-    'I3',
-    'I4',
-    'I5',
-    'J',
-    'K',
-    'L',
-    'M',
-    'N1',
-    'N2',
-    'N3',
-    'S2',
-    'S3',
-    'U1',
-  ],
-  desligamentosCaged: ['31', '32', '40', '43', '45', '50', '60', '80', '90'],
-  admissoesCaged: ['10', '20', '25', '35', '70'],
-  vinculosRais: [
-    '0',
-    '10',
-    '15',
-    '20',
-    '25',
-    '30',
-    '35',
-    '40',
-    '50',
-    '55',
-    '60',
-    '65',
-    '70',
-    '75',
-    '90',
-    '95',
-  ],
-  desligamentosRais: [
-    '10',
-    '11',
-    '12',
-    '20',
-    '21',
-    '27',
-    '30',
-    '31',
-    '40',
-    '60',
-    '62',
-    '70',
-    '72',
-    '76',
-    '80',
-    '90',
-  ],
-  admissoesRais: ['1', '2', '3', '4', '5'],
-};
 
 function obrigacaoSemConteudo(o: ObrigacaoDaFolha & { conteudo: string }): ObrigacaoDaFolha {
   const x: Partial<typeof o> = { ...o, totais: { ...o.totais }, fechamentos: [...o.fechamentos] };
@@ -931,8 +870,9 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
   async conteudoObrigacao(c: ContextoCalculoFolha, id: number): Promise<string | null> {
     return this.e(c).obrigacoes.find((x) => x.id === id)?.conteudo ?? null;
   }
-  async catalogosObrigacoes(): Promise<CodigosCatalogosObrigacoes> {
-    return structuredClone(CATALOGOS_OBRIGACOES_SINTETICOS);
+  /** O mesmo catálogo oficial versionado da porta própria (não depende do banco). */
+  async catalogosObrigacoes(_c?: ContextoCalculoFolha, data?: string): Promise<CatalogoObrigacoesOficiais> {
+    return catalogoObrigacoesNa(data ?? new Date().toISOString().slice(0, 10));
   }
 }
 

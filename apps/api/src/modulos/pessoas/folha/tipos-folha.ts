@@ -94,17 +94,8 @@ export const PAPEIS_HISTORICO_FOLHA: readonly PapelLinhaFolha[] = [
   'dsrVariaveis',
 ];
 
-/** Catálogos oficiais usados pelas obrigações (SEFIP, CAGED e RAIS). */
-export const CATALOGOS_OBRIGACOES = [
-  'categoriasSefip',
-  'movimentacoesSefip',
-  'desligamentosCaged',
-  'admissoesCaged',
-  'vinculosRais',
-  'desligamentosRais',
-  'admissoesRais',
-] as const;
-export type CodigosCatalogosObrigacoes = Record<(typeof CATALOGOS_OBRIGACOES)[number], string[]>;
+/** O catálogo oficial das obrigações acessórias (edição versionada; vigentes e encerradas na data). */
+export type { CatalogoObrigacoesOficiais } from './catalogo-obrigacoes-oficiais.js';
 
 // ── Interface com a folha externa ────────────────────────────────────────────────────────────────────────────
 
@@ -383,6 +374,9 @@ export interface FeriasDoVinculo {
   readonly empresa: number;
   readonly aquisitivoInicio: string;
   readonly aquisitivoFim: string;
+  /** Faltas injustificadas no período aquisitivo e os dias de direito pela escala da CLT art. 130 (do domínio). */
+  readonly faltas?: number;
+  readonly direito?: number;
   readonly inicio: string;
   readonly fim: string;
   readonly dias: number;
@@ -414,6 +408,9 @@ export interface NovasFerias {
   readonly empresa: number;
   readonly aquisitivoInicio: string;
   readonly aquisitivoFim: string;
+  /** Faltas injustificadas no período aquisitivo e os dias de direito pela escala da CLT art. 130 (do domínio). */
+  readonly faltas?: number;
+  readonly direito?: number;
   readonly inicio: string;
   readonly fim: string;
   readonly dias: number;

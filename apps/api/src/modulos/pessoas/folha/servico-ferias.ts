@@ -417,6 +417,8 @@ export class ServicoFeriasFolha {
         empresa: e.empresa,
         aquisitivoInicio: periodo!.inicio,
         aquisitivoFim: periodo!.fim,
+        faltas: periodo!.faltas,
+        direito: periodo!.direito,
         inicio: e.inicio,
         fim: conf.fim,
         dias: e.dias,

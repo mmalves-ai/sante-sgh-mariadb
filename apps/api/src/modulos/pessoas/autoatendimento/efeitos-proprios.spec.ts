@@ -1,6 +1,6 @@
 // Os efeitos da aprovação ligados às portas próprias (sem banco): cada efeito monta o gravador da porta do módulo sobre a
 // MESMA transação e com o contexto de quem decide, expõe só os métodos do contrato, declara as tabelas que grava, e as
-// férias sem o cálculo ligado recusam com modelo-pendente.
+// férias sem o cálculo ligado gravam pelo gravador próprio das férias (nunca modelo-pendente).
 import { ErroOperacao, type TxOperacao } from '@sgh/nucleo';
 import { describe, expect, it, vi } from 'vitest';
 import type { PortaPessoasPropria } from '../porta-propria.js';
@@ -141,10 +141,12 @@ describe('efeitos da aprovação do autoatendimento sobre as portas próprias', 
     expect((g.pessoas as unknown as Record<string, unknown>)['desligarVinculo']).toBeUndefined();
   });
 
-  it('as férias sem o cálculo ligado recusam com modelo-pendente', async () => {
-    const g = efeitosAutoatendimentoProprios(portas()).gravadores(tx, 3, ctx);
-    expect(await codigo(g.folha.feriasDoVinculoComTrava(1))).toBe('modelo-pendente');
-    expect(await codigo(g.folha.incluirFerias({} as never))).toBe('modelo-pendente');
+  it('as férias sem o cálculo ligado gravam pelo gravador próprio das férias (nunca modelo-pendente)', async () => {
+    const efeitos = efeitosAutoatendimentoProprios(portas());
+    expect(efeitos.tabelas).toEqual(expect.arrayContaining(['programacao_ferias', 'periodo_aquisitivo']));
+    const g = efeitos.gravadores(tx, 3, ctx);
+    // A empresa de outra sessão recusa pela regra do gravador próprio, antes de qualquer gravação.
+    expect(await codigo(g.folha.incluirFerias({ empresa: 999_999 } as never))).toBe('empresa-fora-da-sessao');
   });
 
   it('as férias com o cálculo: o gravador do cálculo sobre a mesma transação', async () => {

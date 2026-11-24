@@ -1,10 +1,9 @@
 // Regras puras e recusas do gravador próprio das férias e obrigações da folha (folha-porta-propria-obrigacoes.ts), sem
-// banco: prazo de entrega, período no banco, soma de meses, falha fechada sem armazenamento e catálogo pendente.
+// banco: prazo de entrega, período no banco, soma de meses, falha fechada sem armazenamento.
 import { ErroOperacao, type TxOperacao } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import {
   gravadorFolhaObrigacoes,
-  lerCatalogosObrigacoes,
   periodoNoBanco,
   prazoEntregaObrigacao,
   somarMeses,
@@ -115,11 +114,5 @@ describe('férias e obrigações da folha no banco próprio (regras puras)', () 
     expect(await codigo(g.cancelarObrigacao({ id: 1, versao: 2, motivo: 'erro', por: 'dp' }))).toBe(
       '409:desatualizado',
     );
-  });
-
-  it('catálogo oficial não carregado recusa com catalogo-pendente (nunca lista vazia)', async () => {
-    const parcial = [{ fonte: 'sefip', codigo_oficial: 'categoria', codigo_esocial: '1' }];
-    const l = { consultar: async () => parcial, uma: async () => null };
-    expect(await codigo(lerCatalogosObrigacoes(l as never))).toBe('409:catalogo-pendente');
   });
 });

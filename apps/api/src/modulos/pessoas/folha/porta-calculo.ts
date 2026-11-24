@@ -15,7 +15,7 @@ import type {
   TipoProcessoFolha,
 } from '@sgh/contratos';
 import {
-  type CodigosCatalogosObrigacoes,
+  type CatalogoObrigacoesOficiais,
   type DependentesDoVinculo,
   type FechamentoDaFolha,
   type FeriasDoVinculo,
@@ -190,12 +190,12 @@ export interface PortaCalculoFolha extends PortaGravacaoM18<GravadorCalculoFolha
   fechamento(c: ContextoCalculoFolha, id: number): Promise<FechamentoDaFolha | null>;
   itensRubricaDoProcesso(c: ContextoCalculoFolha, processo: number): Promise<ItemRubricaDoProcesso[]>;
   // M53.8 (F7): parâmetros das obrigações, obrigações geradas (sem o conteúdo), o conteúdo cifrado de uma (a rota de
-  // baixar) e os códigos dos catálogos oficiais da SEFIP, do CAGED e da RAIS.
+  // baixar) e o catálogo oficial das obrigações acessórias (edição versionada vigente na data; hoje, por omissão).
   parametrosObrigacoes(c: ContextoCalculoFolha, empresa: number | null): Promise<ParametrosObrigacoesLidos[]>;
   obrigacoes(c: ContextoCalculoFolha, f: FiltroObrigacoesDaFolha): Promise<ObrigacaoDaFolha[]>;
   obrigacao(c: ContextoCalculoFolha, id: number): Promise<ObrigacaoDaFolha | null>;
   conteudoObrigacao(c: ContextoCalculoFolha, id: number): Promise<string | null>;
-  catalogosObrigacoes(c: ContextoCalculoFolha): Promise<CodigosCatalogosObrigacoes>;
+  catalogosObrigacoes(c: ContextoCalculoFolha, data?: string): Promise<CatalogoObrigacoesOficiais>;
 }
 
 export const METODOS_PORTA_CALCULO_FOLHA: ReadonlySet<string> = new Set([

@@ -44,31 +44,19 @@ import {
 import {
   apurarFgts,
   type ArquivoObrigacao,
-  type CatalogosObrigacoes,
   competenciasDaObrigacao,
   conciliarGuiaFgts,
   conferirApuracaoFgts,
   conferirParametrosObrigacoes,
-  type EmpresaObrigacao,
   type EventoParaFgts,
   fimDaCompetenciaObrigacao,
-  montarCaged,
-  montarRais,
-  montarSefip,
   obrigacaoExigida,
   parametrosObrigacoesNa,
   pendenciaObrigacao,
-  pendenciasCaged,
-  pendenciasRais,
-  pendenciasSefip,
   periodoEncerrado,
   type ProcessoParaObrigacao,
-  type RemuneracaoObrigacao,
-  remuneracoesDoPeriodo,
   type ResumoParaObrigacao,
   semEventoAceito,
-  totaisDaObrigacao,
-  type TrabalhadorObrigacao,
   type VinculoParaObrigacao,
 } from '@sgh/dominio-pessoas';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
@@ -76,8 +64,9 @@ import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js';
 import { ApoioGravacao } from '../../exames/public-api.js';
-import { type ServicoEsocial, vigenciaNa } from '../esocial/servico-esocial.js';
-import type { GravadorCalculoFolha, PortaCalculoFolha } from '../folha/porta-calculo.js';
+import type { ServicoEsocial } from '../esocial/servico-esocial.js';
+import { exigirObrigacaoComGerador } from '../folha/catalogo-obrigacoes-oficiais.js';
+import type { GravadorCalculoFolha } from '../folha/porta-calculo.js';
 
 // Os registros da folha como a porta do cálculo os entrega (tipos de negócio do módulo da folha, sem cópia local).
 type ObrigacaoGravada = NonNullable<Awaited<ReturnType<GravadorCalculoFolha['obrigacaoComTrava']>>>;
@@ -85,7 +74,6 @@ type FechamentoDaFolha = NonNullable<
   Awaited<ReturnType<GravadorCalculoFolha['fechamentoEmVigorComTrava']>>['vigente']
 >;
 type ProcessoDaFolha = NonNullable<Awaited<ReturnType<GravadorCalculoFolha['processo']>>>;
-type VinculoDoCalculo = Awaited<ReturnType<PortaCalculoFolha['vinculos']>>[number];
 
 /** Teto da lista de obrigações de uma consulta (acima dele a resposta sai marcada como limitada). */
 export const TETO_OBRIGACOES = 300;
@@ -100,7 +88,6 @@ const E = EVENTOS_AUDITAVEIS;
 
 /** Teto de trabalhadores de uma geração (D-TETO-OBR-538). */
 export const TETO_TRABALHADORES_OBRIGACAO = 3_000;
-const LEITURAS_SIMULTANEAS = 8;
 
 const sha256 = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
 const naoEncontrado = (o: string) =>
@@ -119,13 +106,6 @@ export function competenciaAnterior(hoje: string): string {
   const a = Number(hoje.slice(0, 4));
   const m = Number(hoje.slice(5, 7));
   return m === 1 ? `${a - 1}-12` : `${a}-${p2(m - 1)}`;
-}
-
-/** Em lotes de `n` por vez (as leituras por trabalhador decifram CPF e ficha). */
-async function emLotes<T, R>(xs: readonly T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const r: R[] = [];
-  for (let i = 0; i < xs.length; i += n) r.push(...(await Promise.all(xs.slice(i, i + n).map(fn))));
-  return r;
 }
 
 /** A obrigação para a API: os valores só com `pessoas.salario.ler` (as quantidades ficam). */
@@ -364,79 +344,6 @@ export class ServicoObrigacoes {
     return { processos, resumos };
   }
 
-  /** A empresa para os leiautes: os parâmetros das obrigações + os do eSocial vigentes + o CNPJ. */
-  private async empresaObrigacao(
-    s: SessaoCadastro,
-    parametros: ParametrosObrigacoesLidos,
-    competencia: string,
-  ): Promise<EmpresaObrigacao | null> {
-    const [vs, cnpjs] = await Promise.all([
-      this.esocial.empregadores(s, parametros.empresa),
-      this.esocial.porta.cnpjs(s.porta),
-    ]);
-    const v = vigenciaNa(vs, parametros.empresa, competencia);
-    const cnpj = cnpjs.get(parametros.empresa) ?? null;
-    if (!v || !cnpj) return null;
-    return {
-      cnpj,
-      parametros: {
-        razaoSocial: parametros.razaoSocial,
-        endereco: parametros.endereco,
-        contato: parametros.contato,
-        naturezaJuridica: parametros.naturezaJuridica,
-        codigoRecolhimentoSefip: parametros.codigoRecolhimentoSefip,
-        codigoPagamentoGps: parametros.codigoPagamentoGps,
-      },
-      cnae: v.cnaePrep,
-      fpas: v.fpas,
-      codTerceiros: v.codTercs,
-      aliqRat: v.aliqRat,
-      fap: v.fap,
-    };
-  }
-
-  /** O trabalhador com CPF, nome e ficha decifrados (só para o arquivo) e a modalidade da rescisão. */
-  private async trabalhadores(
-    s: SessaoCadastro,
-    vinculos: readonly number[],
-    data: string,
-    modalidades: ReadonlyMap<number, TrabalhadorObrigacao['modalidadeRescisao']>,
-  ): Promise<TrabalhadorObrigacao[]> {
-    return emLotes(
-      [...vinculos].sort((a, b) => a - b),
-      LEITURAS_SIMULTANEAS,
-      async (id) => {
-        const vin = await this.esocial.vinculoOu404(s, id);
-        const t = await this.esocial.trabalhadorPara(s, vin, data);
-        return {
-          vinculo: t.vinculo,
-          matricula: t.matricula,
-          cpf: t.cpf,
-          nome: t.nome,
-          admissao: t.admissao,
-          desligamento: t.desligamento,
-          cargaSemanal: t.cargaSemanal,
-          salario: t.salario,
-          ficha: t.ficha,
-          modalidadeRescisao: modalidades.get(id) ?? null,
-        };
-      },
-    );
-  }
-
-  private async catalogos(s: SessaoCadastro): Promise<CatalogosObrigacoes> {
-    const c = await this.calculo.catalogosObrigacoes(s.porta);
-    return {
-      categoriasSefip: new Set(c.categoriasSefip),
-      movimentacoesSefip: new Set(c.movimentacoesSefip),
-      desligamentosCaged: new Set(c.desligamentosCaged),
-      admissoesCaged: new Set(c.admissoesCaged),
-      vinculosRais: new Set(c.vinculosRais),
-      desligamentosRais: new Set(c.desligamentosRais),
-      admissoesRais: new Set(c.admissoesRais),
-    };
-  }
-
   private async eventosFgts(
     s: SessaoCadastro,
     empresa: number,
@@ -496,6 +403,8 @@ export class ServicoObrigacoes {
       }),
     ]);
     const vigentes = vigentesTodas;
+    // O catálogo oficial da data: SEFIP, CAGED e RAIS estão encerradas (só histórico e consulta, sem gerador).
+    exigirObrigacaoComGerador(await this.calculo.catalogosObrigacoes(c, hoje), x.tipo);
     if (vigentes.some((o) => o.situacao === 'entregue'))
       pendencias.push(
         pendenciaObrigacao(
@@ -539,92 +448,8 @@ export class ServicoObrigacoes {
       avisos.push('decimo-em-aberto');
     const base = { ...vazio(fech.presentes, vigentes), parametros };
     if (pendencias.length) return base;
-    const fim = fimDaCompetenciaObrigacao(competenciaRef);
-    const inicio = `${fech.competencias[0]!}-01`;
-    if (x.tipo === 'fgts-digital') return this.montarFgts(s, x, base, processos, resumos, fech.presentes);
-    // As obrigações com arquivo de posição fixa: a empresa, os catálogos e os trabalhadores com CPF/NIS/nome.
-    const empresa = await this.empresaObrigacao(s, parametros, competenciaRef);
-    if (!empresa) {
-      pendencias.push(
-        pendenciaObrigacao(
-          'sem-empregador',
-          'A empresa sem CNPJ ou sem os parâmetros do eSocial vigentes (CNAE, FPAS, RAT, terceiros) no período.',
-        ),
-      );
-      return base;
-    }
-    const [catalogos, rescisoes, vinculosPeriodo] = await Promise.all([
-      this.catalogos(s),
-      this.calculo.rescisoes(c, { empresa: x.empresa, de: inicio, ate: fim, situacao: 'calculada' }),
-      this.calculo.vinculos(c, inicio, fim),
-    ]);
-    const modalidades = new Map(rescisoes.map((r) => [r.vinculo, r.modalidade]));
-    const remuneracoes = remuneracoesDoPeriodo(fech.competencias, processos, resumos);
-    const movimentou = (t: Pick<TrabalhadorObrigacao, 'admissao' | 'desligamento'>) => ({
-      admitido: t.admissao >= inicio && t.admissao <= fim,
-      desligado: !!t.desligamento && t.desligamento >= inicio && t.desligamento <= fim,
-    });
-    let alvo: number[];
-    if (x.tipo === 'caged') {
-      const clt = vinculosPeriodo.filter((v) => v.tipo === 'clt');
-      alvo = clt.filter((v) => movimentou(v).admitido || movimentou(v).desligado).map((v) => v.id);
-    } else alvo = [...remuneracoes.keys()];
-    if (!alvo.length && x.tipo !== 'rais') {
-      pendencias.push(
-        pendenciaObrigacao('sem-trabalhadores', 'Nenhum colaborador com valor ou movimento no período.'),
-      );
-      return base;
-    }
-    if (alvo.length > TETO_TRABALHADORES_OBRIGACAO) {
-      pendencias.push(
-        pendenciaObrigacao(
-          'geracao-grande',
-          `O período tem ${alvo.length} colaboradores; uma geração vai até ${TETO_TRABALHADORES_OBRIGACAO}.`,
-        ),
-      );
-      return base;
-    }
-    const trabalhadores = await this.trabalhadores(s, alvo, fim, modalidades);
-    let arquivo: ArquivoObrigacao | null = null;
-    if (x.tipo === 'sefip') {
-      const entrada = {
-        competencia: x.periodo,
-        empresa,
-        trabalhadores,
-        remuneracoes,
-        catalogos,
-        recolhimento: x.recolhimento,
-      };
-      pendencias.push(...pendenciasSefip(entrada));
-      if (!pendencias.length) arquivo = montarSefip(entrada);
-    } else if (x.tipo === 'caged') {
-      const primeiro = inicio;
-      const empregadosPrimeiroDia = vinculosPeriodo.filter(
-        (v: VinculoDoCalculo) =>
-          v.tipo === 'clt' &&
-          v.admissao < primeiro &&
-          (v.desligamento === null || v.desligamento >= primeiro),
-      ).length;
-      const entrada = {
-        competencia: x.periodo,
-        empresa,
-        movimentados: trabalhadores,
-        empregadosPrimeiroDia,
-        catalogos,
-      };
-      pendencias.push(...pendenciasCaged(entrada));
-      if (!pendencias.length) arquivo = montarCaged(entrada);
-    } else {
-      const entrada = { anoBase: x.periodo, empresa, trabalhadores, remuneracoes, catalogos, hoje };
-      pendencias.push(...pendenciasRais(entrada));
-      if (!pendencias.length) arquivo = montarRais(entrada);
-    }
-    const totais = totaisDaObrigacao(
-      trabalhadores,
-      remuneracoes as ReadonlyMap<number, RemuneracaoObrigacao>,
-      movimentou,
-    );
-    return { ...base, arquivo, totais, conferencia: null };
+    // Só o FGTS Digital tem gerador (o catálogo oficial barrou as encerradas acima).
+    return this.montarFgts(s, x, base, processos, resumos, fech.presentes);
   }
 
   private async montarFgts(

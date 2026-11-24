@@ -8,11 +8,11 @@
 //     vínculo (data e tipo); a primeira rescisão cria a linha de `desligamento` a partir do vínculo travado (motivo do
 //     eSocial e iniciativa do tipo de rescisão). A releitura usa as funções da leitura (folha-porta-propria-calculo.ts)
 //     com trava: o mesmo filtro e a mesma tradução de situação, e o carimbo do serviço bate;
-//   - férias (programacao_ferias): as do vínculo com trava (a leitura do cálculo) e a troca de situação para cancelada
-//     ou programada pela versão.
-// Aqui ficam recusando com `modelo-pendente` incluir férias, marcá-las calculadas e as obrigações; na porta do cálculo
-// (porta-calculo-propria.ts) essas entradas são sobrescritas pelo gravador de folha-porta-propria-obrigacoes.ts (o
-// período aquisitivo, o recibo de férias e o arquivo cifrado pela porta de armazenamento). Os parâmetros das obrigações
+//   - férias (programacao_ferias): as do vínculo com trava (a leitura do cálculo); incluir e trocar a situação (cancelar,
+//     voltar a programar, marcar calculada com o recibo) gravam pelo gravador próprio das férias
+//     (folha-porta-propria-obrigacoes.ts: o período aquisitivo por vínculo, CLT art. 130).
+// Aqui ficam recusando com `modelo-pendente` só as obrigações; na porta do cálculo (porta-calculo-propria.ts) elas são
+// sobrescritas pelo gravador de folha-porta-propria-obrigacoes.ts (o arquivo cifrado pela porta de armazenamento). Os parâmetros das obrigações
 // gravam aqui (parametro_obrigacao, início AAAA-MM no primeiro dia do mês).
 // Tipos do processamento: o contrato diz `decimo1`/`decimo2`; o banco, `decimo_terceiro_1`/`decimo_terceiro_2`.
 // Quem calculou e quem trocou a situação vêm da auditoria (criado_por e alterado_por), nunca de coluna à parte.
@@ -21,7 +21,6 @@ import {
   esquemaParametrosObrigacoes,
   type ModalidadeRescisao,
   type AvisoPrevio,
-  type SituacaoFerias,
   type SituacaoProcessoFolha,
   TIPO_DO_PAPEL,
   type TipoProcessoFolha,
@@ -32,13 +31,12 @@ import {
 import { ErroOperacao, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import {
-  exigirFeriasAlteravel,
   exigirRescisaoAlteravel,
   lerFerias,
-  lerFeriasPorId,
   lerRescisaoPorId,
   lerRescisoes,
 } from './folha-porta-propria-calculo.js';
+import { gravadorFolhaObrigacoes } from './folha-porta-propria-obrigacoes.js';
 import type { GravadorCalculoFolha } from './porta-calculo.js';
 import type { LinhaCalculoDoVinculo, ProcessoDaFolha, ResumoVinculoDoProcesso } from './tipos-folha.js';
 
@@ -260,12 +258,6 @@ const AVISO_NO_DESLIGAMENTO: Readonly<Record<AvisoPrevio, string>> = {
   dispensado: 'dispensado',
   nenhum: 'nao_se_aplica',
 };
-/** A situação das férias do contrato como o banco grava (a leitura traduz o caminho de volta). */
-const FERIAS_NO_BANCO: Readonly<Record<SituacaoFerias, string>> = {
-  programada: 'programada',
-  calculada: 'calculada',
-  cancelada: 'cancelada',
-};
 
 // ── O gravador ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -305,8 +297,6 @@ export const TABELAS_FOLHA_EXECUTOR = [
 ] as const;
 
 const FALTA = {
-  ferias:
-    'a concessão de férias no formato do cálculo (programacao_ferias exige o período aquisitivo e o tipo de férias e não liga o processamento da folha)',
   obrigacoes:
     'a obrigação gerada no formato do cálculo (o arquivo cifrado pela porta de armazenamento, as situações entregue e substituída e a numeração por período)',
 } as const;
@@ -317,6 +307,15 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
       throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
   };
   const sem = (operacao: string, falta: string) => () => Promise.reject(erroModeloPendente(operacao, falta));
+  let ferias: ReturnType<typeof gravadorFolhaObrigacoes> | null = null;
+  const feriasProprias = () =>
+    (ferias ??= gravadorFolhaObrigacoes(tx, est, {
+      // O cliente só serve ao arquivo da obrigação (sem armazenamento aqui): lido quando for usado.
+      get cliente() {
+        return tx.contexto.cliente;
+      },
+      arquivos: null,
+    }));
   const trava = leitorComTrava(tx);
   /** O desligamento da rescisão: o registrado no vínculo nesta data ou, quando o desligamento do domínio só marcou o
    * vínculo (data e tipo de rescisão em vinculo_trabalho), o desligamento criado aqui a partir do vínculo travado, com a
@@ -573,22 +572,12 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
     },
 
     feriasDoVinculoComTrava: (vinculo) => lerFerias(trava, est, { vinculo }),
-    incluirFerias: sem('Gravar as férias', FALTA.ferias),
-    async situacaoFerias(x) {
-      // Cancelar ou voltar a programar grava aqui; marcar calculada liga o recibo ao processamento (recibo_ferias), que
-      // segue com a gravação das férias.
-      if (x.para === 'calculada' || (x.processo ?? null) !== null)
-        throw erroModeloPendente('Marcar as férias como calculadas', FALTA.ferias);
-      const f = await lerFeriasPorId(trava, est, x.id);
-      if (!f || f.situacao !== x.de || f.versao !== x.versao) throw desatualizado();
-      // Férias em gozo ou gozadas não se cancelam (o throw desfaz a transação inteira).
-      await exigirFeriasAlteravel(trava, est, x.id);
-      await exigirUsuario(tx, x.por);
-      await tx.alterar('programacao_ferias', x.id, x.versao, {
-        situacao: FERIAS_NO_BANCO[x.para],
-        motivo_cancelamento: x.para === 'cancelada' ? x.motivo : null,
-      });
-    },
+    // Incluir as férias e trocar a situação delas (inclusive marcar calculada, com o recibo ligado ao processamento)
+    // gravam pelo gravador próprio das férias (folha-porta-propria-obrigacoes.ts): o período aquisitivo por vínculo
+    // (CLT art. 130), o tipo de férias e o recibo. É o mesmo gravador que a porta do cálculo usa e que o efeito do
+    // autoatendimento alcança sobre a transação da solicitação.
+    incluirFerias: (x) => feriasProprias().incluirFerias(x),
+    situacaoFerias: (x) => feriasProprias().situacaoFerias(x),
     async incluirParametrosObrigacoes(x) {
       daSessao(x.empresa);
       const repetida = await tx.consultarParaAtualizar(
