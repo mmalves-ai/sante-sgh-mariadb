@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import ReinfEventosPainel from '../componentes/ReinfEventosPainel.vue';
 import RetencoesPainel from '../componentes/RetencoesPainel.vue';
 import TabelaRegistros from '../componentes/TabelaRegistros.vue';
 import { gerarDeclaracao, listarDeclaracoes, novaChave } from '../api-financeiro.js';
@@ -104,6 +105,8 @@ async function gerar() {
     <h2>{{ t('financeiro.declaracoes.geradas') }}</h2>
     <ErroFaturamento v-if="lista.error.value" :erro="lista.error.value" />
     <TabelaRegistros v-else :registros="registros" :colunas="colunas" testid="dc-lista" />
+    <!-- F3.8, 07-FIN linha 111: eventos da competência por beneficiário, processo, envio e retorno. -->
+    <ReinfEventosPainel v-if="tipo === 'reinf'" :competencia="periodo" :pode-gerar="pode('gerarReinf')" />
     <!-- F3.8, 07-FIN linha 109: regras de retenção com vigência e recolhimento do retido da competência. -->
     <RetencoesPainel
       v-if="tipo === 'reinf'"
