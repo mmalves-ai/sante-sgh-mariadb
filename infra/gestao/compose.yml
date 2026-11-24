@@ -14,6 +14,12 @@ services:
     image: caddy:2.8.4
     container_name: sgh-gestao-caddy
     restart: unless-stopped
+    # Só o usuário e o resumo bcrypt da tela do Mailpit (nunca a senha). Subir com o .env da raiz:
+    #   docker compose --env-file ../../.env up -d --no-deps caddy
+    # Sem as variáveis, a subida falha (a tela não abre sem senha).
+    environment:
+      MAILPIT_GESTAO_USUARIO: ${MAILPIT_GESTAO_USUARIO:?defina MAILPIT_GESTAO_USUARIO no .env da raiz}
+      MAILPIT_GESTAO_HASH: ${MAILPIT_GESTAO_HASH:?defina MAILPIT_GESTAO_HASH no .env da raiz}
     ports:
       - '0.0.0.0:5320:5320'
       - '0.0.0.0:5325:5325'

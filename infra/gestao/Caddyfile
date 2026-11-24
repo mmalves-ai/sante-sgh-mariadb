@@ -8,8 +8,13 @@
 # Captura de e-mail do desenvolvimento (Mailpit, pedido do dono, 2026-11-24): o dono VÊ os e-mails do produto fora de
 # produção (recuperação de senha, código do segundo fator). Mesmo certificado da CA local; só leitura: o que muda ou
 # reenvia (apagar, marcar, liberar para fora) é recusado aqui. O Mailpit continua no loopback do host (8325).
+# A captura traz links de uso único e códigos de acesso: a tela exige senha (basic_auth, usuário e senha em
+# MAILPIT_GESTAO_USUARIO/MAILPIT_GESTAO_SENHA no .env; aqui só o resumo bcrypt, vindo do ambiente do container).
 :5325 {
 	tls /certs/servidor-vm.crt /certs/servidor-vm.key
+	basic_auth {
+		{$MAILPIT_GESTAO_USUARIO} {$MAILPIT_GESTAO_HASH}
+	}
 	@escrita not method GET HEAD OPTIONS
 	respond @escrita "Somente leitura." 403
 	reverse_proxy sgh-mailpit:8025

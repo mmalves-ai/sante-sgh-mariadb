@@ -303,6 +303,10 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
     loopback.
   - Usuário `dono_leitura`, somente leitura. A senha está em `MARIADB_GESTAO_SENHA` no `.env`.
   - Configuração em `infra/gestao/` (`docker compose up -d` na pasta).
+  - **Tela do Mailpit** (captura de e-mail do desenvolvimento, pedido do dono, 2026-11-24) em `https://<IP>:5325`,
+    no mesmo Caddy, só leitura e **com senha** (basic_auth): usuário `MAILPIT_GESTAO_USUARIO`, senha
+    `MAILPIT_GESTAO_SENHA` no `.env`; o Caddy recebe só o resumo bcrypt (`MAILPIT_GESTAO_HASH`). A captura traz links de
+    recuperação e códigos de acesso. Subir com `docker compose --env-file ../../.env up -d --no-deps caddy`.
 - **Containers comuns da VM** (Gotenberg, Mailpit e outros de outros projetos): não pare, não altere.
 
 ## Git deste projeto

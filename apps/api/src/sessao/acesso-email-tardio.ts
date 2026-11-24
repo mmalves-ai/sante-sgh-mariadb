@@ -78,9 +78,17 @@ export class FontesAcessoTardias {
   }
 }
 
+/** O segundo fator por e-mail não pode ser conferido (sem ligação ou sem o envio montado): a entrada fecha (503). */
+export class ErroSegundoFatorEmailIndisponivel extends Error {
+  constructor() {
+    super('O segundo fator por e-mail está indisponível.');
+    this.name = 'ErroSegundoFatorEmailIndisponivel';
+  }
+}
+
 /** O que o ServicoSessao usa do segundo fator por e-mail na entrada. */
 export interface GanchoSegundoFatorEmail {
-  /** O método escolhido pelo usuário do cliente ('aplicativo' sem escolha ou sem o recurso montado). */
+  /** O método escolhido pelo usuário do cliente ('aplicativo' sem escolha); recusa se 'email' não pode ser conferido. */
   metodoUsuario(rede: string, estabelecimento: string, login: string): Promise<MetodoSegundoFator>;
   emitirUsuario(rede: string, estabelecimento: string, login: string): Promise<{ validadeMinutos: number }>;
   conferirUsuario(
@@ -95,7 +103,8 @@ export interface GanchoSegundoFatorEmail {
   conferirPlataforma(id: number, codigo: string, correlacao: string): Promise<DesfechoConferenciaCodigo>;
 }
 
-/** O segundo fator por e-mail ligado depois de montados os serviços (sem ligação: ninguém usa o e-mail). */
+/** O segundo fator por e-mail ligado depois de montados os serviços (sem ligação: a entrada recusa, 503; só se
+ * passa paraSessao() ao ServicoSessao onde a ligação é montada). */
 export class SegundoFatorEmailTardio implements GanchoSegundoFatorEmail {
   private s: ServicosAcessoEmail | null = null;
 
@@ -108,13 +117,17 @@ export class SegundoFatorEmailTardio implements GanchoSegundoFatorEmail {
   }
 
   private exigir(): ServicosAcessoEmail {
-    if (!this.s) throw new Error('segundo fator por e-mail não ligado');
+    if (!this.s) throw new ErroSegundoFatorEmailIndisponivel();
     return this.s;
   }
 
+  // Falha FECHADA: a preferência gravada é lida sempre; quem escolheu o e-mail sem o envio montado (ou antes da
+  // ligação) é recusado (o ServicoSessao traduz em 503 indisponível), nunca levado ao aplicativo sem aviso.
   async metodoUsuario(rede: string, estabelecimento: string, login: string): Promise<MetodoSegundoFator> {
-    if (!this.s?.codigoUsuario) return 'aplicativo';
-    return this.s.preferencia.metodo(rede, estabelecimento, login);
+    const s = this.exigir();
+    const metodo = await s.preferencia.metodo(rede, estabelecimento, login);
+    if (metodo === 'email' && !s.codigoUsuario) throw new ErroSegundoFatorEmailIndisponivel();
+    return metodo;
   }
 
   emitirUsuario(rede: string, estabelecimento: string, login: string): Promise<{ validadeMinutos: number }> {
@@ -135,9 +148,11 @@ export class SegundoFatorEmailTardio implements GanchoSegundoFatorEmail {
   }
 
   async metodoPlataforma(id: number): Promise<MetodoSegundoFator | null> {
-    const p = this.s?.recuperacaoPlataforma;
-    if (!p) return 'aplicativo';
-    return p.metodoSegundoFator(id);
+    const p = this.exigir().recuperacaoPlataforma;
+    if (!p) throw new ErroSegundoFatorEmailIndisponivel();
+    const metodo = await p.metodoSegundoFator(id);
+    if (metodo === 'email' && !p.disponivel) throw new ErroSegundoFatorEmailIndisponivel();
+    return metodo;
   }
 
   emitirPlataforma(id: number, correlacao: string): Promise<{ validadeMinutos: number }> {

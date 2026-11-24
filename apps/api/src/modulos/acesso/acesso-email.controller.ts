@@ -37,6 +37,21 @@ export interface MetodoSegundoFatorTela {
 
 const AMBIENTES_SEM_PREFIXO = new Set(['dev', 'ci']);
 
+/**
+ * O código no e-mail NÃO cumpre a exigência do aplicativo autenticador do perfil (nem no prazo de adesão) e não
+ * substitui o aplicativo já cadastrado (nunca se troca por um fator mais fraco). A entrada aplica a mesma regra
+ * (ServicoSessao: o e-mail vale só onde a política deixa entrar sem o código do aplicativo). null: pode escolher.
+ */
+export function recusaEmailPelaPolitica(reg: Pick<Registro, 'segundoFator'>): string | null {
+  const sf = reg.segundoFator;
+  if (!sf) return null;
+  if (sf.exigencia !== 'opcional')
+    return 'O seu perfil exige o código do aplicativo autenticador; o código no e-mail não o substitui.';
+  if (sf.cadastrado)
+    return 'Você já usa o aplicativo autenticador; o código no e-mail não o substitui. Remova o aplicativo antes.';
+  return null;
+}
+
 @Controller()
 export class AcessoEmailController {
   constructor(
@@ -216,6 +231,11 @@ export class AcessoEmailController {
       const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
       if (r.data.metodo === 'email' && !this.emailDisponivel(reg))
         throw new ErroProblema('indisponivel', 503, 'Envio de e-mail indisponível');
+      const recusa = r.data.metodo === 'email' ? recusaEmailPelaPolitica(reg) : null;
+      if (recusa)
+        throw new ErroProblema('recusa-de-negocio', 409, 'Código no e-mail não permitido', recusa, {
+          codigo: 'politica-exige-aplicativo',
+        });
       const correlacao = correlacaoDaRequisicao(req, 'segundo-fator');
       if (reg.plataforma)
         await this.plataforma().escolherMetodoSegundoFator(

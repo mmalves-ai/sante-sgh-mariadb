@@ -5,7 +5,10 @@
 //     link de uso único → senha provisória → escolha do código por e-mail → entrada pede o código → código lido do
 //     Mailpit → entrada → troca obrigatória da senha → a senha nova entra (com outro código);
 //   - usuário do cliente (cliente de teste f22_o5): escolha do código por e-mail → entrada pede o código → código do
-//     Mailpit → entrada; código errado recusado.
+//     Mailpit → entrada; código errado recusado;
+//   - "Esqueci a senha" do usuário do cliente pela configuração LIGADA (FonteConfiguracaoPropria do cliente; só a chave
+//     do recurso é dada ligada, sem gravar na liberação do cliente de teste): fechada antes da ligação, pedido → e-mail
+//     capturado → link → senha provisória com troca obrigatória.
 // Contas FICTÍCIAS (e-mail .invalid com sufixo aleatório por execução, para achar só as mensagens desta execução).
 // Precisa do sgh-mailpit (SMTP 127.0.0.1:1325, API 127.0.0.1:8325). SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 // Rodar: vitest run -c apps/api/vitest.integracao.config.ts src/sessao/acesso-email-ligacao.int.spec.ts
@@ -18,6 +21,7 @@ import { NucleoProprio, ambienteEfetivo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../autorizacao/trilha.js';
 import { portaSenhaDoNucleo } from '../modulos/acesso/senha/porta-senha.js';
+import { FonteConfiguracaoPropria } from '../modulos/config/configuracao-propria.js';
 import {
   FontesAcessoTardias,
   montarLigacaoAcessoEmail,
@@ -28,6 +32,7 @@ import { ArmazemMemoria } from './armazem.js';
 import { emailAcessoDoAmbiente } from './email-acesso.js';
 import { FonteAcessoPropria } from './fonte-propria.js';
 import { FontePlataformaPropria, nucleoPlataforma } from './fonte-plataforma.js';
+import { CHAVE_RECUPERACAO_SENHA } from './recuperacao-senha.js';
 import { ErroSessao, ServicoSessao } from './servico-sessao.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -89,6 +94,7 @@ describe.skipIf(SEM_BANCO)('entrada por e-mail ligada (banco próprio e captura 
   let nucleoPlat: NucleoProprio;
   let sessao: ServicoSessao;
   let lig: LigacaoAcessoEmail;
+  let fontes: FontesAcessoTardias;
   const senhaUsu = `U${randomUUID()}7a`;
 
   beforeAll(async () => {
@@ -149,7 +155,7 @@ describe.skipIf(SEM_BANCO)('entrada por e-mail ligada (banco próprio e captura 
     await fonte.carregar();
     const armazem = new ArmazemMemoria();
     const email = emailAcessoDoAmbiente({ SMTP_URL: 'smtp://127.0.0.1:1325', AMBIENTE: 'dev' });
-    const fontes = new FontesAcessoTardias();
+    fontes = new FontesAcessoTardias();
     fontes.ligarEstabelecimento((h) => fonte.idEstabelecimento(h));
     const segundoFator = new SegundoFatorEmailTardio();
     const executor = nucleo.criarExecutor();
@@ -247,5 +253,53 @@ describe.skipIf(SEM_BANCO)('entrada por e-mail ligada (banco próprio e captura 
     );
     const r = await sessao.entrar({ ...ent, codigoSegundoFator: codigo }, REDE, null, ORIGEM);
     expect(r.sessao.usuario.login).toBe(LOGIN);
+  }, 180_000);
+
+  it('usuário do cliente: "Esqueci a senha" fechado sem a configuração e, ligada, do pedido à senha provisória', async () => {
+    const rec = lig.servicos.recuperacao;
+    // Sem a configuração ligada, a recuperação fecha (nunca abre por falta de leitura).
+    expect(fontes.configuracaoLigada).toBe(false);
+    expect((await rec.disponivel(REDE, HOSPITAL)).disponivel).toBe(false);
+    // A fonte real do cliente; a chave do recurso e o pré-requisito dados como ligados (o resto lido do banco).
+    await FonteConfiguracaoPropria.conferirModelo(nucleo, CLIENTE);
+    const real = new FonteConfiguracaoPropria(nucleo, CLIENTE);
+    const ligada = new Proxy(real, {
+      get(alvo, prop, r) {
+        if (prop === 'chaves')
+          return async (rede: string, h: string) => [
+            ...(await alvo.chaves(rede, h)).filter((c) => c.chave !== CHAVE_RECUPERACAO_SENHA),
+            { chave: CHAVE_RECUPERACAO_SENHA, tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: true },
+          ];
+        if (prop === 'prerequisitos')
+          return async () => [
+            {
+              recurso: CHAVE_RECUPERACAO_SENHA,
+              tipo: 'aprovacao',
+              situacao: 'dispensado',
+              validade: null,
+              evidencia: 'teste de integração',
+              alteradoPor: 'SINT.ADMIN',
+              alteradoEm: '2026-11-24T00:00:00.000Z',
+            },
+          ];
+        const v = Reflect.get(alvo, prop, r) as unknown;
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(alvo) : v;
+      },
+    });
+    fontes.ligarConfiguracao(() => ligada as never);
+    expect(fontes.configuracaoLigada).toBe(true);
+    // A troca rápida lê os parâmetros do cliente pela mesma fonte ligada (sem recusa de configuração).
+    await expect(fontes.configuracao().valoresParametro(REDE, HOSPITAL)).resolves.toBeInstanceOf(Array);
+    expect((await rec.disponivel(REDE, HOSPITAL)).disponivel).toBe(true);
+
+    await rec.pedir(REDE, { estabelecimento: HOSPITAL, login: LOGIN }, '127.0.0.1', ORIGEM);
+    await rec.aguardarEnvios();
+    const textos = await caixa(EMAIL_USU, 2);
+    const token = textos.map(tokenDe).find((t) => t.length === 43) ?? '';
+    expect(token).toHaveLength(43);
+    const usado = await rec.usar(REDE, token, ORIGEM);
+    expect(usado.trocaObrigatoria).toBe(true);
+    expect(usado.senhaProvisoria.length).toBeGreaterThan(7);
+    await expect(rec.usar(REDE, token, ORIGEM)).rejects.toBeTruthy();
   }, 180_000);
 });

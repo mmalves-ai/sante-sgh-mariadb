@@ -2,11 +2,17 @@
 // e-mail na entrada (usuário do cliente e administrador da plataforma), sem banco.
 import { describe, expect, it } from 'vitest';
 import { problemaDoAcessoEmail } from '../modulos/acesso/acesso-email-erros.js';
+import { recusaEmailPelaPolitica } from '../modulos/acesso/acesso-email.controller.js';
 import { ErroProblema } from '../problema.filter.js';
-import { FontesAcessoTardias, type GanchoSegundoFatorEmail } from './acesso-email-tardio.js';
+import type { ServicosAcessoEmail } from './acesso-email-proprio.js';
+import {
+  FontesAcessoTardias,
+  SegundoFatorEmailTardio,
+  type GanchoSegundoFatorEmail,
+} from './acesso-email-tardio.js';
 import { ErroCodigoEmail, type MetodoSegundoFator } from './codigo-email.js';
 import { ErroRecuperacaoPlataforma } from './recuperacao-plataforma.js';
-import { ErroSessao } from './servico-sessao.js';
+import { ErroSessao, type Desfecho2faSessao, type GanchoIdentidade } from './servico-sessao.js';
 import { REDE, entrada, montar } from './teste.spec-util.js';
 import type { AutenticacaoPlataforma, FontePlataforma } from './tipos-acesso.js';
 
@@ -151,5 +157,128 @@ describe('recusas da entrada por e-mail em Problem Details', () => {
       problemaDoAcessoEmail(new ErroRecuperacaoPlataforma('token-invalido', 400, 'x'))?.getStatus(),
     ).toBe(400);
     expect(problemaDoAcessoEmail(new Error('outro'))).toBeNull();
+  });
+});
+
+describe('segundo fator por e-mail falha fechado', () => {
+  /** Serviços ligados com a preferência gravada e, opcionalmente, sem o envio (sem SMTP). */
+  function tardio(metodo: MetodoSegundoFator, comEnvio: boolean) {
+    const emitidos: string[] = [];
+    const t = new SegundoFatorEmailTardio();
+    t.ligar({
+      preferencia: { metodo: () => Promise.resolve(metodo) },
+      codigoUsuario: comEnvio
+        ? {
+            emitir: (_r: string, _e: string, l: string) => {
+              emitidos.push(l);
+              return Promise.resolve({ validadeMinutos: 5 });
+            },
+            conferir: () => Promise.resolve('ok'),
+          }
+        : null,
+      recuperacaoPlataforma: null,
+    } as unknown as ServicosAcessoEmail);
+    return { t, emitidos };
+  }
+
+  it('quem escolheu o e-mail e o envio não existe é recusado (503), nunca levado ao aplicativo', async () => {
+    const { t } = tardio('email', false);
+    const { servico } = montar({ config: { segundoFatorEmail: t } });
+    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({ tipo: 'indisponivel' });
+  });
+
+  it('gancho passado à sessão e ainda não ligado: a entrada recusa (503)', async () => {
+    const { servico } = montar({ config: { segundoFatorEmail: new SegundoFatorEmailTardio() } });
+    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({ tipo: 'indisponivel' });
+    const plat = montar({ config: { segundoFatorEmail: new SegundoFatorEmailTardio(), plataforma, cliente: 'cliente_a' } });
+    await expect(
+      plat.servico.entrarPlataforma({ estabelecimento: 'aa', login: 'dono', senha: SENHA_ADM }, REDE),
+    ).rejects.toMatchObject({ tipo: 'indisponivel' });
+  });
+
+  it('sem envio, quem usa o aplicativo entra como antes; com envio, o e-mail escolhido pede o código', async () => {
+    const semEnvio = tardio('aplicativo', false);
+    const a = montar({ config: { segundoFatorEmail: semEnvio.t } });
+    expect((await a.servico.entrar(entrada('SINT.USUARIO'), REDE)).sessao.usuario.login).toBe('SINT.USUARIO');
+    const comEnvio = tardio('email', true);
+    const b = montar({ config: { segundoFatorEmail: comEnvio.t } });
+    await expect(b.servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({
+      codigo: 'segundo-fator-email',
+    });
+    expect(comEnvio.emitidos).toEqual(['SINT.USUARIO']);
+  });
+});
+
+describe('o código no e-mail não cumpre a exigência do aplicativo do perfil', () => {
+  function identidade(previa: Desfecho2faSessao): GanchoIdentidade {
+    return {
+      autenticar: async () => ({ tipo: 'legado' as const }),
+      regravar: async () => true,
+      segundoFatorNoLogin: async (_e, _c, _a, codigo) =>
+        codigo === '654321'
+          ? {
+              tipo: 'entrar',
+              info: { cadastrado: true, disponivel: true, exigencia: 'obrigatorio', prazoAdesaoAte: null },
+            }
+          : codigo && previa.tipo === 'codigo-necessario'
+            ? { tipo: 'codigo-invalido' }
+            : previa,
+    };
+  }
+
+  it('perfil obrigatório sem o aplicativo: recusa pelo cadastro, sem enviar e-mail', async () => {
+    const { g, emitidos } = gancho('email');
+    const { servico } = montar({
+      config: { segundoFatorEmail: g, identidade: identidade({ tipo: 'cadastro-obrigatorio' }) },
+    });
+    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({
+      codigo: 'segundo-fator-cadastro',
+    });
+    // Nem com um código do e-mail ele entra.
+    await expect(
+      servico.entrar({ ...entrada('SINT.USUARIO'), codigoSegundoFator: '123456' }, REDE),
+    ).rejects.toMatchObject({ codigo: 'segundo-fator-cadastro' });
+    expect(emitidos).toEqual([]);
+  });
+
+  it('aplicativo ativo: pede o código do aplicativo e só ele entra (o e-mail não o substitui)', async () => {
+    const { g, emitidos } = gancho('email');
+    const { servico } = montar({
+      config: { segundoFatorEmail: g, identidade: identidade({ tipo: 'codigo-necessario' }) },
+    });
+    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({
+      codigo: 'segundo-fator-codigo',
+    });
+    await expect(
+      servico.entrar({ ...entrada('SINT.USUARIO'), codigoSegundoFator: '123456' }, REDE),
+    ).rejects.toMatchObject({ codigo: 'segundo-fator-invalido' });
+    expect(emitidos).toEqual([]);
+    const r = await servico.entrar({ ...entrada('SINT.USUARIO'), codigoSegundoFator: '654321' }, REDE);
+    expect(r.sessao.usuario.login).toBe('SINT.USUARIO');
+  });
+
+  it('política opcional ou no prazo de adesão: o e-mail vale e a sessão leva a situação da política', async () => {
+    const info = { cadastrado: false, disponivel: true, exigencia: 'adesao' as const, prazoAdesaoAte: '2026-12-31' };
+    const { g, emitidos } = gancho('email');
+    const { servico } = montar({
+      config: { segundoFatorEmail: g, identidade: identidade({ tipo: 'entrar', info }) },
+    });
+    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({
+      codigo: 'segundo-fator-email',
+    });
+    expect(emitidos).toEqual(['SINT.USUARIO']);
+    const r = await servico.entrar({ ...entrada('SINT.USUARIO'), codigoSegundoFator: '123456' }, REDE);
+    expect(r.sessao.segundoFator).toMatchObject({ exigencia: 'adesao', cadastrado: false });
+  });
+
+  it('a escolha do e-mail é recusada quando o perfil exige o aplicativo ou ele já está cadastrado', () => {
+    const sf = (exigencia: 'opcional' | 'adesao' | 'obrigatorio', cadastrado: boolean) => ({
+      segundoFator: { cadastrado, disponivel: true, exigencia, prazoAdesaoAte: null },
+    });
+    expect(recusaEmailPelaPolitica({})).toBeNull();
+    expect(recusaEmailPelaPolitica(sf('opcional', false))).toBeNull();
+    expect(recusaEmailPelaPolitica(sf('adesao', false))).toMatch(/exige o código do aplicativo/);
+    expect(recusaEmailPelaPolitica(sf('obrigatorio', true))).toMatch(/exige/);
+    expect(recusaEmailPelaPolitica(sf('opcional', true))).toMatch(/já usa o aplicativo/);
   });
 });

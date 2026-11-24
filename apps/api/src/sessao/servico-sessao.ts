@@ -773,15 +773,18 @@ export class ServicoSessao {
     const trocaSenha: Sessao['trocaSenha'] =
       conta.trocaObrigatoria || provisoria ? 'senha-provisoria' : expirada ? 'senha-expirada' : null;
 
-    // Código no e-mail (método escolhido pela conta): confere aqui e dispensa o do aplicativo.
-    const porEmail = await this.conferirSegundoFatorEmail(
-      { rede, estabelecimento, login: conta.login },
-      () => this.segundoFatorEmail!.metodoUsuario(rede, estabelecimento, conta.login),
-      () => this.segundoFatorEmail!.emitirUsuario(rede, estabelecimento, conta.login),
-      (c) => this.segundoFatorEmail!.conferirUsuario(rede, estabelecimento, conta.login, c),
-      entrada.codigoSegundoFator,
-      origem,
-    );
+    // Código no e-mail (método escolhido pela conta): confere dentro da abertura, DEPOIS da política do perfil. Ele
+    // substitui o do aplicativo só quando a política deixa entrar sem o código do aplicativo (sem fator do aplicativo
+    // ativo e fora da exigência vencida); senão vale o aplicativo, como antes (o e-mail nunca rebaixa o fator).
+    const email = (): Promise<boolean> =>
+      this.conferirSegundoFatorEmail(
+        { rede, estabelecimento, login: conta.login },
+        () => this.segundoFatorEmail!.metodoUsuario(rede, estabelecimento, conta.login),
+        () => this.segundoFatorEmail!.emitirUsuario(rede, estabelecimento, conta.login),
+        (c) => this.segundoFatorEmail!.conferirUsuario(rede, estabelecimento, conta.login, c),
+        entrada.codigoSegundoFator,
+        origem,
+      );
     // M59-F2: o segundo fator confere dentro da abertura (precisa do perfil); a tentativa só é apagada depois dele.
     const r = await this.abrirSessao(
       rede,
@@ -791,7 +794,7 @@ export class ServicoSessao {
       trocaSenha,
       falhasAntes,
       origem,
-      porEmail ? undefined : { codigo: entrada.codigoSegundoFator },
+      this.segundoFatorEmail ? { codigo: entrada.codigoSegundoFator, email } : { codigo: entrada.codigoSegundoFator },
     );
     await this.armazem.apagar(chaveTent);
     // Regra 2: a senha do legado conferiu: regrava no esquema forte (falha só avisa; a próxima entrada tenta de novo).
@@ -941,7 +944,7 @@ export class ServicoSessao {
     falhasAntes: number,
     origem: OrigemPedido,
     /** M59-F2: o login por senha passa o código (ou nada); o certificado ICP-Brasil não passa (já é posse). */
-    segundoFator?: { readonly codigo: string | undefined },
+    segundoFator?: { readonly codigo: string | undefined; readonly email?: () => Promise<boolean> },
     /** W1-01 (parte 11b2): 'forte' (senha ou certificado: conta para a troca rápida) ou 'pin' (troca rápida). */
     entradaPor: 'forte' | 'pin' = 'forte',
     /** Decisão do dono (b): a sessão do administrador da plataforma (todas as permissões no cliente escolhido). */
@@ -980,8 +983,16 @@ export class ServicoSessao {
     };
     const aut = await this.autorizacaoDe(registro);
     if (segundoFator && this.identidade) {
-      const info = await this.conferirSegundoFator(registro, aut, segundoFator.codigo, origem);
-      if (info) registro.segundoFator = info;
+      // O código no e-mail cumpre a exigência só onde a política deixaria entrar sem o código do aplicativo.
+      const previa = segundoFator.email ? await this.previaSegundoFator(registro, aut) : null;
+      if (previa?.tipo === 'entrar' && (await segundoFator.email!())) registro.segundoFator = previa.info;
+      else {
+        const info = await this.conferirSegundoFator(registro, aut, segundoFator.codigo, origem);
+        if (info) registro.segundoFator = info;
+      }
+    } else if (segundoFator?.email) {
+      // Sem o serviço da identidade não há política do aplicativo: vale o método escolhido pela conta.
+      await segundoFator.email();
     }
     // W1-01 (parte 8), depois do segundo fator: limite de sessões simultâneas do perfil no estabelecimento (o próprio, senão o padrão '*').
     const limite = limiteDoPerfil(dados.config.limitesSessao, aut?.perfil?.perfil);
@@ -1015,6 +1026,27 @@ export class ServicoSessao {
       csrf: registro.csrf,
       ttlSegundos: tempo.duracaoMaximaSegundos,
     };
+  }
+
+  /** A política do segundo fator do aplicativo SEM código (só leitura): 'entrar' quando ela não pede o aplicativo. */
+  private async previaSegundoFator(
+    r: Registro,
+    aut: Autorizacao | null,
+  ): Promise<Awaited<ReturnType<GanchoIdentidade['segundoFatorNoLogin']>>> {
+    try {
+      return await this.identidade!.segundoFatorNoLogin(
+        r.estabelecimento,
+        { login: r.login, id: Number(r.idUsuario) },
+        {
+          perfil: aut?.perfil?.perfil ?? null,
+          complementares: aut?.perfil?.complementares ?? [],
+          grupo: aut?.grupo ?? null,
+        },
+        undefined,
+      );
+    } catch {
+      throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
   }
 
   /** M59-F2 (regra 3): o código, a política e a adesão; recusa com o código da extensão para a tela. */
