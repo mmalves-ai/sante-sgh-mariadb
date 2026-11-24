@@ -14,7 +14,7 @@
 // envios regulatórios, revisão de prontuários, versões anteriores e o cancelamento das não conformidades) segue falhando fechado: a leitura responde 503 `modelo-pendente` e a gravação recusa 409
 // `modelo-pendente` dentro da transação (nada é gravado pela metade). Pedidos em docs/obra/fatias/f24/saida/p-qualidade-gestao.json.
 import { type Executor, recusa, type TxOperacao } from '@sgh/nucleo';
-import { gravacaoDireta } from '../enfermagem/gravacao-direta.js';
+import { type AnotacaoGravacao, gravacaoDireta } from '../enfermagem/gravacao-direta.js';
 import type { GravacaoFeita, TrilhaDaGravacao } from '../exames/public-api.js';
 import {
   camelo,
@@ -54,6 +54,7 @@ import {
   recusaVersaoGestao,
   type RiscoNovo,
   type RiscoRegistrado,
+  type TabelaCorrigivel,
 } from './tipos.js';
 
 const RECURSO = 'A gestão da qualidade';
@@ -448,12 +449,13 @@ export class PortaGestaoPropria implements PortaGestao {
       nome: 'qualidade.gestao',
       tabelas: TABELAS_GESTAO,
       trilha,
-      gravador: (tx, est) => this.gravador(tx, est),
+      gravador: (tx, est, anotacao) => this.gravador(tx, est, anotacao),
       fn,
     });
   }
 
-  protected gravador(tx: TxOperacao, est: number): GravadorGestao {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected gravador(tx: TxOperacao, est: number, _anotacao?: AnotacaoGravacao): GravadorGestao {
     const pendente = (o: string) => () => Promise.reject(modeloPendente(o));
     return {
       publicarDocumento: pendente(PENDENTE.documentos),
@@ -1174,10 +1176,13 @@ export class PortaGestaoPropria implements PortaGestao {
   reuniao(): Promise<never> {
     return this.pendente(PENDENTE.comissoes);
   }
-  pesquisas(): Promise<never> {
+  // A assinatura do contrato (a porta completa sobrescreve com a leitura).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  pesquisas(_c: ContextoGestao, _de: string, _ate: string): ReturnType<PortaGestao['pesquisas']> {
     return this.pendente(PENDENTE.pesquisas);
   }
-  pesquisa(): Promise<never> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  pesquisa(_c: ContextoGestao, _id: number): ReturnType<PortaGestao['pesquisa']> {
     return this.pendente(PENDENTE.pesquisas);
   }
   contagem(): Promise<never> {
@@ -1193,12 +1198,19 @@ export class PortaGestaoPropria implements PortaGestao {
   envio(_c: ContextoGestao, _id: number): Promise<EnvioRegulatorioRegistrado | null> {
     return this.pendente(PENDENTE.envios);
   }
-  versoes(): Promise<never> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  versoes(_c: ContextoGestao, _tabela: TabelaCorrigivel, _id: number): ReturnType<PortaGestao['versoes']> {
     return this.pendente(PENDENTE.versoes);
   }
-  protocolosGerenciados(): Promise<never> {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  protocolosGerenciados(
+    _c: ContextoGestao,
+    _inicio: string,
+    _fim: string,
+  ): ReturnType<PortaGestao['protocolosGerenciados']> {
     return this.pendente(PENDENTE.protocolos);
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   checklistsRevisao(): Promise<never> {
     return this.pendente(PENDENTE.revisao);
   }

@@ -3,17 +3,22 @@
 // beforeAll e apagada no afterAll, com uma marcação sintética própria e um segundo estabelecimento sintético. Contrato de
 // efeito: a baixa no recebimento particular, a repetida sem novo recebimento, a recusada, o isolamento entre
 // estabelecimentos, a vencida aprovada (duplicado quando a marcação já estava paga; senão confirmada e as outras
-// pendentes da marcação vencem) e o catálogo incompleto. O caminho da confirmação (confirmado_por) é conferido na
-// coluna: o mapa da linha da porta real (pagamentoDaLinha) ainda não o lê, ligação do integrador.
+// pendentes da marcação vencem) e o catálogo incompleto. O SELECT e o mapa da linha são os da porta real
+// (SQL_PAGAMENTO e pagamentoDaLinha, que lê o confirmado_por).
 // Requer a migração 17_INTG/92_portal_pagamento_confirmado. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
-import { type ContextoOperacao, definirOperacao, type Escritor, type Linha, NucleoProprio } from '@sgh/nucleo';
+import { type ContextoOperacao, definirOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { erroDeDominio } from '../porta-propria-gravacao.js';
 import type { ConfirmacaoParaGravar } from './porta.js';
-import { CAIXA_PORTAL, confirmarPagamentoProprio, TABELAS_CONFIRMACAO_PAGAMENTO } from './porta-propria-pagamento.js';
-import type { PagamentoPortal, ResultadoConfirmacaoPortal } from './tipos.js';
+import { pagamentoDaLinha, SQL_PAGAMENTO } from './porta-propria.js';
+import {
+  CAIXA_PORTAL,
+  confirmarPagamentoProprio,
+  TABELAS_CONFIRMACAO_PAGAMENTO,
+} from './porta-propria-pagamento.js';
+import type { ResultadoConfirmacaoPortal } from './tipos.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -23,15 +28,6 @@ const PROF = 'PROFISSIONAL SINTETICO PLPAG';
 const LOGIN = 'plpag.sint';
 const PRONT = 933_201;
 const FORMA = 'PL_PIX_SINT';
-const SQL = `SELECT p.*, NULL AS natureza FROM intencao_pagamento_portal p WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL`;
-// Só o que a confirmação devolve e a porta real já mapeia; o confirmado_por é lido da coluna (por SQL) nos testes.
-const daLinha = (x: Linha) =>
-  ({
-    id: Number(x['id']),
-    situacao: String(x['situacao']),
-    pagamentoCaixa: x['recebimento_particular_id'] == null ? null : Number(x['recebimento_particular_id']),
-    versao: Number(x['versao']),
-  }) as unknown as PagamentoPortal;
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -57,7 +53,9 @@ async function limpar(e: Escritor, ests: readonly number[]): Promise<void> {
     await e.executar('DELETE FROM profissional WHERE id = ?', [x['id']]);
     await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [x['pessoa_fisica_id']]);
   }
-  const pf = await e.consultar('SELECT pessoa_fisica_id AS id FROM paciente WHERE numero_prontuario = ?', [PRONT]);
+  const pf = await e.consultar('SELECT pessoa_fisica_id AS id FROM paciente WHERE numero_prontuario = ?', [
+    PRONT,
+  ]);
   await e.executar('DELETE FROM paciente WHERE numero_prontuario = ?', [PRONT]);
   for (const x of pf) await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [x['id']]);
   await e.executar('DELETE FROM forma_recebimento WHERE codigo = ?', [FORMA]);
@@ -73,7 +71,11 @@ describe.skipIf(SEM_BANCO)(`confirmação própria do pagamento do portal (Maria
   let marcacao = 0;
   let marcacao2 = 0;
   const um = async (sql: string, p: unknown[]) =>
-    (await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-portal-pag' }, (l) => l.consultar(sql, p)))[0]!;
+    (
+      await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-portal-pag' }, (l) =>
+        l.consultar(sql, p),
+      )
+    )[0]!;
 
   async function confirmar(x: ConfirmacaoParaGravar): Promise<ResultadoConfirmacaoPortal> {
     const correlacao = `portal-pag-${randomUUID()}`.slice(0, 64);
@@ -94,8 +96,8 @@ describe.skipIf(SEM_BANCO)(`confirmação própria do pagamento do portal (Maria
       gravar: async (tx) => {
         try {
           r = await confirmarPagamentoProprio(tx, est, x, {
-            sqlPagamento: SQL,
-            daLinha,
+            sqlPagamento: SQL_PAGAMENTO,
+            daLinha: pagamentoDaLinha,
             marcar: (tabela, id) => Object.assign(escrita, { tabela, id }),
           });
         } catch (e) {
@@ -203,7 +205,10 @@ describe.skipIf(SEM_BANCO)(`confirmação própria do pagamento do portal (Maria
         "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES ('plpag', 'FONTE SINTETICA PLPAG', 'operadora', 'ativa', ?)",
       );
       const sit = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM situacao_marcacao', []);
-      const pfProf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [PROF, agora]);
+      const pfProf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+        PROF,
+        agora,
+      ]);
       const prof = await e.inserir(
         "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
         [pfProf, agora],
@@ -232,28 +237,32 @@ describe.skipIf(SEM_BANCO)(`confirmação própria do pagamento do portal (Maria
 
   afterAll(async () => {
     if (est)
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-portal-pag' }, (e) => limpar(e, [est, est2]));
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-portal-pag' }, (e) =>
+        limpar(e, [est, est2]),
+      );
     await nucleo.encerrar();
   });
 
   it('sem o caixa do portal ou sem a forma do meio: 503 catalogo-incompleto e nada gravado', async () => {
     const t = tx('cat');
     await intencao(t, 'pendente');
-    expect(await falha(confirmar({ transacao: t, resultado: 'aprovado', comprovante: 'c', por: 'retorno' }))).toBe(
-      'catalogo-incompleto',
+    expect(
+      await falha(confirmar({ transacao: t, resultado: 'aprovado', comprovante: 'c', por: 'retorno' })),
+    ).toBe('catalogo-incompleto');
+    expect(await um('SELECT situacao FROM intencao_pagamento_portal WHERE transacao = ?', [t])).toMatchObject(
+      {
+        situacao: 'pendente',
+      },
     );
-    expect(await um('SELECT situacao FROM intencao_pagamento_portal WHERE transacao = ?', [t])).toMatchObject({
-      situacao: 'pendente',
-    });
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-portal-pag' }, async (e) => {
       await e.inserir(
         "INSERT INTO caixa (estabelecimento_id, codigo, descricao, permite_recebimento, ativo, criado_em) VALUES (?, ?, 'CAIXA SINTETICO DO PORTAL', TRUE, TRUE, ?)",
         [est, CAIXA_PORTAL, new Date()],
       );
     });
-    expect(await falha(confirmar({ transacao: t, resultado: 'aprovado', comprovante: 'c', por: 'retorno' }))).toBe(
-      'catalogo-incompleto',
-    );
+    expect(
+      await falha(confirmar({ transacao: t, resultado: 'aprovado', comprovante: 'c', por: 'retorno' })),
+    ).toBe('catalogo-incompleto');
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-portal-pag' }, async (e) => {
       await e.inserir(
         "INSERT INTO forma_recebimento (codigo, descricao, meio, uso, criado_em) VALUES (?, 'PIX SINTETICO', 'pix', 'recebimento', ?)",
@@ -295,14 +304,16 @@ describe.skipIf(SEM_BANCO)(`confirmação própria do pagamento do portal (Maria
     expect(r.pagamento).toMatchObject({ situacao: 'recusado', pagamentoCaixa: null });
     expect(await coluna(t)).toMatchObject({ situacao: 'recusado', confirmado_por: 'retorno' });
     expect(
-      await falha(confirmar({ transacao: tx('nada'), resultado: 'aprovado', comprovante: '', por: 'retorno' })),
+      await falha(
+        confirmar({ transacao: tx('nada'), resultado: 'aprovado', comprovante: '', por: 'retorno' }),
+      ),
     ).toBe('nao-encontrado');
     // A intenção pendente de outro estabelecimento não é encontrada a partir deste, e fica intocada.
     const alheia = tx('outro');
     await intencao(alheia, 'pendente', null, est2);
-    expect(await falha(confirmar({ transacao: alheia, resultado: 'aprovado', comprovante: 'c', por: 'retorno' }))).toBe(
-      'nao-encontrado',
-    );
+    expect(
+      await falha(confirmar({ transacao: alheia, resultado: 'aprovado', comprovante: 'c', por: 'retorno' })),
+    ).toBe('nao-encontrado');
     expect(await coluna(alheia)).toMatchObject({ situacao: 'pendente', confirmado_por: null });
     expect(
       await um('SELECT COUNT(*) AS n FROM recebimento_particular WHERE estabelecimento_id = ?', [est2]),
@@ -330,7 +341,12 @@ describe.skipIf(SEM_BANCO)(`confirmação própria do pagamento do portal (Maria
     const irma = tx('irma');
     await intencao(tarde, 'expirado', marcacao2);
     await intencao(irma, 'pendente', marcacao2);
-    const r = await confirmar({ transacao: tarde, resultado: 'aprovado', comprovante: 'c', por: 'conferencia' });
+    const r = await confirmar({
+      transacao: tarde,
+      resultado: 'aprovado',
+      comprovante: 'c',
+      por: 'conferencia',
+    });
     expect(r.mudou).toBe(true);
     expect(r.pagamento.situacao).toBe('confirmado');
     expect(r.pagamento.pagamentoCaixa).toBeGreaterThan(0);

@@ -37,6 +37,7 @@ import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documento
 import * as Alergias from './alergias-propria.js';
 import * as Painel from './documentos-propria-painel.js';
 import { DocumentosPropriaExames, type LeitorArquivos } from './documentos-propria-exames.js';
+import { OPERACOES_PEP_RESTO, operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import type {
@@ -223,6 +224,8 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   private readonly executor: Executor;
   private readonly exames: DocumentosPropriaExames;
   private readonly pareceres: DocumentosPropriaPareceres;
+  /** Alergia, emissão de documento, exame externo e sumário de alta (documentos-propria-operacoes.ts). */
+  private readonly opsResto: Readonly<Record<string, Painel.GravacaoDocumentos>>;
 
   constructor(
     private readonly nucleo: NucleoDocumentosPep,
@@ -235,6 +238,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     this.executor = executor ?? nucleo.criarExecutor();
     this.exames = new DocumentosPropriaExames(nucleo, cliente, arquivos, this.executor);
     this.pareceres = new DocumentosPropriaPareceres(nucleo, cliente, this.executor);
+    this.opsResto = operacoesDocumentosPropria(nucleo, cliente, this.executor);
   }
 
   private clienteDe(c: ContextoDocs): string {
@@ -463,7 +467,10 @@ export class PortaDocumentosPropria implements PortaDocumentos {
    * inscrição ativa no conselho; a sem adaptador recusa com `pendente-modelo-proprio` (falha fechada).
    */
   podeGravar(...a: Parameters<PortaDocumentos['podeGravar']>) {
-    return Painel.podeGravar(this.nucleo, this.cliente, ...a);
+    return Painel.podeGravar(this.nucleo, this.cliente, ...a, [
+      ...Painel.OPERACOES_PAINEL,
+      ...OPERACOES_PEP_RESTO,
+    ]);
   }
 
   /** No banco próprio não há outro sistema de onde trazer pedidos de parecer: nada a trazer. */
@@ -1048,7 +1055,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   }
   /** Gravações pelo executor: a suspensão de receita/atestado; as demais operações ainda recusam (pendente). */
   executar(...a: Parameters<PortaDocumentos['executar']>) {
-    return Painel.executar(this.nucleo, this.cliente, this.executor, ...a);
+    return Painel.executar(this.nucleo, this.cliente, this.executor, ...a, this.opsResto);
   }
   gravarProblema(...a: Parameters<PortaDocumentos['gravarProblema']>) {
     return this.pareceres.gravarProblema(...a);

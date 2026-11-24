@@ -265,7 +265,7 @@ export interface PortaPortalPaciente {
   /** W0-10 (M2): a fila da cópia do prontuário (os não entregues primeiro, por prazo). */
   filaCopias(
     c: ContextoPortal,
-    f: { readonly pendentes: boolean; readonly idPaciente?: number },
+    f: { readonly pendentes: boolean; readonly idPaciente?: number; readonly protocolo?: string },
   ): Promise<CopiaNaFila[]>;
   /** W0-10 (M2): os atos de uma cópia, em ordem. */
   atosCopia(c: ContextoPortal, idPedido: string): Promise<AtoCopia[]>;

@@ -8,8 +8,9 @@
 //   - O tipo (consulta ou exame) da marcação sai da natureza da categoria da agenda; a data e a hora, do horário no
 //     fuso do estabelecimento; o nome da agenda e o CRM, da agenda_servico (nunca do que a tela manda).
 //   - Situações do pré-check-in: enviado = `concluido` no banco; conferido, recusado e cancelado iguais.
-//   - A confirmação do pagamento (baixa no recebimento particular do caixa) ainda RECUSA com 503 `recurso-sem-modelo`:
-//     a baixa no caixa do portal não tem escritor próprio no banco.
+//   - A confirmação do pagamento (porta-propria-pagamento.ts) dá a baixa num recebimento particular avulso no caixa
+//     de código PORTAL, na forma de recebimento ativa do meio; faltando o caixa ou a forma, recusa com 503
+//     `catalogo-incompleto` e nada é gravado.
 // Melhoria: o nome da agenda, o CRM, a data e a hora do pré-check-in são relidos da marcação (fonte única).
 // Melhoria: a reserva da conferência vence no banco (reservado_em) e o conferente é o usuário do hospital (FK).
 import { randomUUID } from 'node:crypto';
@@ -24,7 +25,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { localDe } from '../../agenda/porta-propria.js';
-import { indisponivel, type NucleoPortal, semModelo } from '../porta-propria.js';
+import { indisponivel, type NucleoPortal } from '../porta-propria.js';
 import { ErroPortal, type RegistroTrilhaPortal } from '../tipos.js';
 import {
   type ContextoAgendaOnline,
@@ -49,6 +50,7 @@ import {
   type SituacaoPreCheckin,
   type TipoAgendaOnline,
 } from './tipos.js';
+import { confirmarPagamentoProprio, TABELAS_CONFIRMACAO_PAGAMENTO } from './porta-propria-pagamento.js';
 
 /** Tabelas que a gravação da etapa 2 pode tocar (o executor recusa as outras). */
 export const TABELAS_AGENDA_ONLINE = [
@@ -61,6 +63,7 @@ export const TABELAS_AGENDA_ONLINE = [
   'intencao_pagamento_portal',
   'conciliacao_pagamento_portal',
   'resposta_pesquisa_satisfacao',
+  ...TABELAS_CONFIRMACAO_PAGAMENTO,
 ] as const;
 
 const TETO_FILA = 50;
@@ -87,7 +90,9 @@ const DOC_BANCO: Record<string, string> = {
   carteirinha: 'carteira_convenio',
   'pedido-medico': 'pedido_medico',
 };
-const DOC_PORTAL: Record<string, string> = Object.fromEntries(Object.entries(DOC_BANCO).map(([a, b]) => [b, a]));
+const DOC_PORTAL: Record<string, string> = Object.fromEntries(
+  Object.entries(DOC_BANCO).map(([a, b]) => [b, a]),
+);
 
 const num = (v: unknown): number => Number(v);
 const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
@@ -173,12 +178,12 @@ const SQL_PRE = `SELECT pc.*, ca.natureza, a.nome AS nome_agenda, ${SQL_CRM} AS 
  WHERE pc.estabelecimento_id = ? AND pc.excluido_em IS NULL AND pc.canal = 'portal'
    AND pc.conta_portal_paciente_id IS NOT NULL`;
 
-const SQL_PAGAMENTO = `SELECT p.*, ca.natureza FROM intencao_pagamento_portal p
+export const SQL_PAGAMENTO = `SELECT p.*, ca.natureza FROM intencao_pagamento_portal p
   LEFT JOIN marcacao_horario m ON m.id = p.marcacao_horario_id LEFT JOIN horario_agenda h ON h.id = m.horario_agenda_id
   LEFT JOIN agenda_servico a ON a.id = h.agenda_servico_id LEFT JOIN categoria_agenda ca ON ca.id = a.categoria_agenda_id
  WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL`;
 
-function pagamentoDaLinha(x: Linha): PagamentoPortal {
+export function pagamentoDaLinha(x: Linha): PagamentoPortal {
   return {
     id: num(x['id']),
     conta: num(x['conta_portal_paciente_id']),
@@ -194,7 +199,7 @@ function pagamentoDaLinha(x: Linha): PagamentoPortal {
     pagamentoCaixa: numOuNull(x['recebimento_particular_id']),
     criadoEm: carimbo(x['criado_em']),
     confirmadoEm: carimbo(x['confirmado_em']),
-    confirmadoPor: null,
+    confirmadoPor: texto(x['confirmado_por']),
     pixCopiaECola: texto(x['pix_copia_e_cola']),
     enderecoCartao: texto(x['endereco_cartao']),
     versao: num(x['versao']),
@@ -241,7 +246,9 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
     const g = this.estabelecimentos.get(chave);
     if (g) return g;
     const l = await this.ler(c, (x) =>
-      x.uma('SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [c.hospital]),
+      x.uma('SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+        c.hospital,
+      ]),
     );
     if (!l)
       throw new ErroOperacao(
@@ -257,7 +264,9 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
 
   private async idDoLogin(c: ContextoAgendaOnline, login: string | null | undefined): Promise<number | null> {
     if (!login) return null;
-    const l = await this.ler(c, (x) => x.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]));
+    const l = await this.ler(c, (x) =>
+      x.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]),
+    );
     return l ? num(l['id']) : null;
   }
 
@@ -336,7 +345,11 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
     return ls.map(configDaLinha);
   }
 
-  async config(c: ContextoAgendaOnline, tipo: TipoAgendaOnline, agenda: number): Promise<ConfigAgendaOnline | null> {
+  async config(
+    c: ContextoAgendaOnline,
+    tipo: TipoAgendaOnline,
+    agenda: number,
+  ): Promise<ConfigAgendaOnline | null> {
     const { id } = await this.estab(c);
     const l = await this.ler(c, (x) =>
       x.uma(`${SQL_CONFIG} AND c.tipo = ? AND c.agenda_servico_id = ?`, [id, tipo, agenda]),
@@ -346,7 +359,11 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
 
   // ---------------------------------------------------------------- pré-check-in
 
-  private async preCheckins(c: ContextoAgendaOnline, filtro: string, p: unknown[]): Promise<PreCheckinOnline[]> {
+  private async preCheckins(
+    c: ContextoAgendaOnline,
+    filtro: string,
+    p: unknown[],
+  ): Promise<PreCheckinOnline[]> {
     const { id, fuso } = await this.estab(c);
     return this.ler(c, async (l) => {
       const ls = await l.consultar(`${SQL_PRE} ${filtro}`, [id, ...p]);
@@ -376,7 +393,9 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
   }
 
   async preCheckinsDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PreCheckinOnline[]> {
-    return this.preCheckins(c, `AND pc.paciente_id = ? ORDER BY pc.id DESC LIMIT ${TETO_PACIENTE}`, [paciente]);
+    return this.preCheckins(c, `AND pc.paciente_id = ? ORDER BY pc.id DESC LIMIT ${TETO_PACIENTE}`, [
+      paciente,
+    ]);
   }
 
   async filaPreCheckin(
@@ -411,7 +430,10 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
   async pagamentosDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PagamentoPortal[]> {
     const { id } = await this.estab(c);
     const ls = await this.ler(c, (x) =>
-      x.consultar(`${SQL_PAGAMENTO} AND p.paciente_id = ? ORDER BY p.id DESC LIMIT ${TETO_PACIENTE}`, [id, paciente]),
+      x.consultar(`${SQL_PAGAMENTO} AND p.paciente_id = ? ORDER BY p.id DESC LIMIT ${TETO_PACIENTE}`, [
+        id,
+        paciente,
+      ]),
     );
     return ls.map(pagamentoDaLinha);
   }
@@ -423,13 +445,11 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
       if (ls.length === 0) return [];
       const ids = ls.map((x) => num(x['id']));
       const atos = (await l.consultar(SQL_CONCILIACOES(ids), ids)).map(conciliacaoDaLinha);
-      return ls.map(
-        (x): PagamentoTesourariaPortal => ({
-          pagamento: pagamentoDaLinha(x),
-          cobradoPor: x['recebimento_particular_id'] ? OPERADOR_CAIXA_PORTAL : null,
-          atos: atos.filter((a) => a.pagamento === num(x['id'])),
-        }),
-      );
+      return ls.map((x): PagamentoTesourariaPortal => ({
+        pagamento: pagamentoDaLinha(x),
+        cobradoPor: x['recebimento_particular_id'] ? OPERADOR_CAIXA_PORTAL : null,
+        atos: atos.filter((a) => a.pagamento === num(x['id'])),
+      }));
     });
   }
 
@@ -489,14 +509,12 @@ function preDaLinha(x: Linha, fuso: string, docs: readonly Linha[]): PreCheckinO
     dados: json<Record<string, unknown>>(x['dados_propostos'], {}),
     documentos: docs
       .filter((d) => num(d['pre_checkin_id']) === id)
-      .map(
-        (d): DocumentoPreCheckin => ({
-          tipo: DOC_PORTAL[String(d['tipo'])] ?? String(d['tipo']),
-          chave: String(d['chave_armazenamento']),
-          sha256: String(d['resumo_conteudo']),
-          mime: String(d['tipo_midia']),
-        }),
-      ),
+      .map((d): DocumentoPreCheckin => ({
+        tipo: DOC_PORTAL[String(d['tipo'])] ?? String(d['tipo']),
+        chave: String(d['chave_armazenamento']),
+        sha256: String(d['resumo_conteudo']),
+        mime: String(d['tipo_midia']),
+      })),
     carteirinha: texto(x['numero_carteira']),
     carteirinhaValidade: x['validade_carteira'] ? dataIso(x['validade_carteira']) : null,
     termos: String(x['termos_versao'] ?? ''),
@@ -599,7 +617,8 @@ function gravadorAgendaOnline(
       const convenios = [...new Set(x.convenios)];
       const servicos = [...new Set(x.servicos)];
       const coluna = x.tipo === 'exame' ? 'exame_id' : 'especialidade_medica_id';
-      const fora = (col: string, ids: number[]) => (ids.length ? ` AND ${col} NOT IN (${ids.map(() => '?').join(', ')})` : '');
+      const fora = (col: string, ids: number[]) =>
+        ids.length ? ` AND ${col} NOT IN (${ids.map(() => '?').join(', ')})` : '';
       await tx.executar(
         `DELETE FROM agenda_online_convenio WHERE agenda_online_configuracao_id = ?${fora('fonte_pagadora_id', convenios)}`,
         [id, ...convenios],
@@ -611,19 +630,29 @@ function gravadorAgendaOnline(
       );
       const temConv = new Set(
         (
-          await tx.consultar('SELECT fonte_pagadora_id FROM agenda_online_convenio WHERE agenda_online_configuracao_id = ?', [id])
+          await tx.consultar(
+            'SELECT fonte_pagadora_id FROM agenda_online_convenio WHERE agenda_online_configuracao_id = ?',
+            [id],
+          )
         ).map((l) => num(l['fonte_pagadora_id'])),
       );
       for (const f of convenios)
         if (!temConv.has(f))
-          await tx.incluir('agenda_online_convenio', { agenda_online_configuracao_id: id, fonte_pagadora_id: f });
+          await tx.incluir('agenda_online_convenio', {
+            agenda_online_configuracao_id: id,
+            fonte_pagadora_id: f,
+          });
       const temServ = new Set(
         (
-          await tx.consultar(`SELECT ${coluna} AS s FROM agenda_online_servico WHERE agenda_online_configuracao_id = ?`, [id])
+          await tx.consultar(
+            `SELECT ${coluna} AS s FROM agenda_online_servico WHERE agenda_online_configuracao_id = ?`,
+            [id],
+          )
         ).map((l) => num(l['s'])),
       );
       for (const s of servicos)
-        if (!temServ.has(s)) await tx.incluir('agenda_online_servico', { agenda_online_configuracao_id: id, [coluna]: s });
+        if (!temServ.has(s))
+          await tx.incluir('agenda_online_servico', { agenda_online_configuracao_id: id, [coluna]: s });
       // Quem configurou é o usuário do hospital do pedido (x.por), mesmo quando a operação não traz registro de trilha.
       await tx.executar(
         `UPDATE agenda_online_configuracao SET ${x.versao === null ? 'criado_por' : 'alterado_por'} = ? WHERE id = ?`,
@@ -732,7 +761,8 @@ function gravadorAgendaOnline(
 
     async decidirPreCheckin(id, versao, d) {
       const atual = await travarPre(id);
-      if (!atual || num(atual['versao']) !== versao || String(atual['situacao']) !== 'concluido') throw versaoVelha();
+      if (!atual || num(atual['versao']) !== versao || String(atual['situacao']) !== 'concluido')
+        throw versaoVelha();
       const usuario = await usuarioDoLogin(tx, d.por);
       if (reservaVale(atual) && num(atual['reservado_por_usuario_id']) !== usuario) throw versaoVelha();
       await tx.alterar('pre_checkin', id, versao, {
@@ -749,7 +779,12 @@ function gravadorAgendaOnline(
 
     async reservarConferencia(id, versao, por) {
       const atual = await travarPre(id);
-      if (!atual || num(atual['versao']) !== versao || String(atual['situacao']) !== 'concluido' || reservaVale(atual))
+      if (
+        !atual ||
+        num(atual['versao']) !== versao ||
+        String(atual['situacao']) !== 'concluido' ||
+        reservaVale(atual)
+      )
         throw versaoVelha();
       const usuario = await usuarioDoLogin(tx, por);
       const nova = await tx.alterar('pre_checkin', id, versao, {
@@ -796,10 +831,13 @@ function gravadorAgendaOnline(
         [p.marcacao, estabelecimento],
       );
       for (const x of ls) {
-        if (String(x['situacao']) === 'confirmado') throw new ErroPortal('situacao', 'Esta marcação já está paga.');
+        if (String(x['situacao']) === 'confirmado')
+          throw new ErroPortal('situacao', 'Esta marcação já está paga.');
         if (instante(x['expira_em']).getTime() > t)
           throw new ErroPortal('situacao', 'Já existe um pagamento em andamento para esta marcação.');
-        await tx.alterar('intencao_pagamento_portal', num(x['id']), num(x['versao']), { situacao: 'expirado' });
+        await tx.alterar('intencao_pagamento_portal', num(x['id']), num(x['versao']), {
+          situacao: 'expirado',
+        });
       }
       if (await tx.uma('SELECT id FROM intencao_pagamento_portal WHERE transacao = ?', [p.transacao]))
         throw new ErroPortal('situacao', 'Transação do gateway repetida.');
@@ -821,8 +859,12 @@ function gravadorAgendaOnline(
       return { id };
     },
 
-    confirmarPagamento() {
-      return Promise.reject(semModelo('agendaOnline.confirmarPagamento (baixa no recebimento particular)'));
+    confirmarPagamento(x) {
+      return confirmarPagamentoProprio(tx, estabelecimento, x, {
+        sqlPagamento: SQL_PAGAMENTO,
+        daLinha: pagamentoDaLinha,
+        marcar,
+      });
     },
 
     async registrarConciliacao(n) {
@@ -831,7 +873,9 @@ function gravadorAgendaOnline(
         [estabelecimento, n.pagamento],
       );
       if (!p) throw new ErroPortal('nao-encontrado', 'Pagamento não encontrado.');
-      const atos = (await tx.consultar(SQL_CONCILIACOES([n.pagamento]), [n.pagamento])).map(conciliacaoDaLinha);
+      const atos = (await tx.consultar(SQL_CONCILIACOES([n.pagamento]), [n.pagamento])).map(
+        conciliacaoDaLinha,
+      );
       const t: PagamentoTesourariaPortal = {
         pagamento: pagamentoDaLinha(p),
         cobradoPor: p['recebimento_particular_id'] ? OPERADOR_CAIXA_PORTAL : null,
@@ -859,7 +903,11 @@ function gravadorAgendaOnline(
     async responderPesquisa(r) {
       if (!(await marcacaoDoTipo(tx, estabelecimento, r.tipo, r.marcacao)))
         throw new ErroPortal('nao-encontrado', 'Marcação inexistente neste estabelecimento.');
-      if (await tx.uma('SELECT id FROM resposta_pesquisa_satisfacao WHERE marcacao_horario_id = ?', [r.marcacao]))
+      if (
+        await tx.uma('SELECT id FROM resposta_pesquisa_satisfacao WHERE marcacao_horario_id = ?', [
+          r.marcacao,
+        ])
+      )
         throw new ErroPortal('situacao', 'A pesquisa deste atendimento já foi respondida.');
       const modelo = await tx.uma(
         `SELECT id FROM modelo_pesquisa_satisfacao

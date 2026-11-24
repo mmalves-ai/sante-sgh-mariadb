@@ -15,10 +15,10 @@
 // e o CNES na competência. Faixa de AIH: faixa_numeracao_aih (instrumento `aih`) com o número de 13 dígitos (base e
 // dígito), o órgão emissor, a data de liberação e o motivo do cancelamento; o consumo é lido das autorizações.
 // O arquivo gerado (número, remessa e registro do núcleo) está em porta-propria-arquivos.ts.
-// Ainda por escrever nesta porta (a estrutura existe no banco, ver ddl-aplicado-v3): as linhas do BPA,
-// da APAC e da CIHA ligadas ao arquivo, o ciclo da AIH (laudo, autorização e conta) e da APAC pela tela atual e o
-// retorno por linha. Até lá,
-// essas leituras saem vazias e as gravações recusam com "modelo-pendente". A montagem a partir da conta própria
+// O ciclo da AIH pela tela (laudo, autorização, conta e apresentação no SISAIH) está em porta-propria-aih.ts; a APAC
+// pela tela e o retorno do gestor por linha, em porta-propria-apac-retorno.ts, com a ponte própria da AIH (aplicar o
+// retorno e reapresentar). Ainda por escrever nesta porta: as linhas do BPA, da APAC e da CIHA ligadas ao arquivo e a
+// montagem da produção; essas leituras saem vazias e as gravações recusam com "modelo-pendente". A montagem a partir da conta própria
 // (atendimentos, itens, internação e trajetória da competência) é do lote da conta e da internação: hoje sai vazia.
 import { randomUUID } from 'node:crypto';
 import {
@@ -45,7 +45,18 @@ import type {
   LeituraSus,
   PortaSus,
 } from './porta.js';
-import type { DadosAihLidos, SolicitanteAihLido } from './porta-aih.js';
+import type { DadosAihLidos } from './porta-aih.js';
+import {
+  GravacoesAihPropria,
+  LeiturasAihPropria,
+  PonteAihPropria,
+  TABELAS_SUS_AIH,
+} from './porta-propria-aih.js';
+import {
+  GravacaoApacRetorno,
+  LeituraApacRetorno,
+  TABELAS_APAC_RETORNO,
+} from './porta-propria-apac-retorno.js';
 import {
   gravarRemessa,
   idArquivoDoNumero,
@@ -102,6 +113,10 @@ export const TABELAS_SUS = [
   'critica_sus',
   'faixa_numeracao_aih',
   ...TABELAS_ARQUIVO_SUS,
+  ...TABELAS_APAC_RETORNO.filter((t) => !TABELAS_ARQUIVO_SUS.includes(t as never)),
+  ...TABELAS_SUS_AIH.filter(
+    (t) => !TABELAS_ARQUIVO_SUS.includes(t as never) && !TABELAS_APAC_RETORNO.includes(t as never),
+  ),
 ] as const;
 
 /** Os instrumentos do faturamento SUS que a tela usa (o modelo também tem RAAS, fora desta tela). */
@@ -707,18 +722,23 @@ export class LeituraSusPropria implements LeituraSus {
     return { competenciaAmbulatorio: null, versao: null, orgao: null };
   }
 
-  // ── APAC (pendente de modelo pela tela atual: leituras vazias) ──
+  // ── APAC e retorno do gestor (porta-propria-apac-retorno.ts) ──
 
-  async apac(): Promise<null> {
-    return null;
+  private apacRet?: LeituraApacRetorno;
+  protected apacR(): LeituraApacRetorno {
+    return (this.apacRet ??= new LeituraApacRetorno(this.l, this.est));
   }
 
-  async paginaApacs(): Promise<{ itens: never[]; total: number; porSituacao: Record<string, number> }> {
-    return { itens: [], total: 0, porSituacao: {} };
+  apac(...a: Parameters<LeituraApacRetorno['apac']>) {
+    return this.apacR().apac(...a);
   }
 
-  async apacsDaCompetencia(): Promise<never[]> {
-    return [];
+  paginaApacs(...a: Parameters<LeituraApacRetorno['paginaApacs']>) {
+    return this.apacR().paginaApacs(...a);
+  }
+
+  apacsDaCompetencia(...a: Parameters<LeituraApacRetorno['apacsDaCompetencia']>) {
+    return this.apacR().apacsDaCompetencia(...a);
   }
 
   async atendimentoLaudoApac(): Promise<null> {
@@ -786,8 +806,15 @@ export class LeituraSusPropria implements LeituraSus {
     return [];
   }
 
-  async solicitanteAih(): Promise<SolicitanteAihLido | null> {
-    return null;
+  // ── AIH pela tela (porta-propria-aih.ts) ──
+
+  private aihsL?: LeiturasAihPropria;
+  private aihs(): LeiturasAihPropria {
+    return (this.aihsL ??= new LeiturasAihPropria(this.l, this.est, this.travador));
+  }
+
+  solicitanteAih(...a: Parameters<LeiturasAihPropria['solicitanteAih']>) {
+    return this.aihs().solicitanteAih(...a);
   }
 
   async faixasAih(): Promise<FaixaAih[]> {
@@ -829,49 +856,44 @@ export class LeituraSusPropria implements LeituraSus {
     return num(x?.['usado']) === 1;
   }
 
-  async aih(): Promise<null> {
-    return null;
+  aih(...a: Parameters<LeiturasAihPropria['aih']>) {
+    return this.aihs().aih(...a);
   }
 
-  async aihPorNumero(): Promise<null> {
-    return null;
+  aihPorNumero(...a: Parameters<LeiturasAihPropria['aihPorNumero']>) {
+    return this.aihs().aihPorNumero(...a);
   }
 
-  async aihsDasInternacoes(): Promise<never[]> {
-    return [];
+  aihsDasInternacoes(...a: Parameters<LeiturasAihPropria['aihsDasInternacoes']>) {
+    return this.aihs().aihsDasInternacoes(...a);
   }
 
-  async aihsParaApresentar(): Promise<never[]> {
-    return [];
+  aihsParaApresentar(...a: Parameters<LeiturasAihPropria['aihsParaApresentar']>) {
+    return this.aihs().aihsParaApresentar(...a);
   }
 
-  async paginaAihs(): Promise<{ itens: never[]; total: number; porSituacao: Record<string, number> }> {
-    return { itens: [], total: 0, porSituacao: {} };
+  paginaAihs(...a: Parameters<LeiturasAihPropria['paginaAihs']>) {
+    return this.aihs().paginaAihs(...a);
   }
 
-  async itensAih(): Promise<never[]> {
-    return [];
+  itensAih(...a: Parameters<LeiturasAihPropria['itensAih']>) {
+    return this.aihs().itensAih(...a);
   }
 
   async linhaBpaDaCompetencia(): Promise<null> {
     return null;
   }
 
-  async paginaRetornos(): Promise<{
-    itens: never[];
-    total: number;
-    porSituacao: Record<string, number>;
-    valorGlosado: number;
-  }> {
-    return { itens: [], total: 0, porSituacao: {}, valorGlosado: 0 };
+  paginaRetornos(...a: Parameters<LeituraApacRetorno['paginaRetornos']>) {
+    return this.apacR().paginaRetornos(...a);
   }
 
-  async retornoSus(): Promise<null> {
-    return null;
+  retornoSus(...a: Parameters<LeituraApacRetorno['retornoSus']>) {
+    return this.apacR().retornoSus(...a);
   }
 
-  async ultimoRetornoDaAih(): Promise<null> {
-    return null;
+  ultimoRetornoDaAih(...a: Parameters<LeituraApacRetorno['ultimoRetornoDaAih']>) {
+    return this.apacR().ultimoRetornoDaAih(...a);
   }
 }
 
@@ -884,6 +906,17 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     est: number,
   ) {
     super(tx, est, tx);
+  }
+
+  private aihsGr?: GravacoesAihPropria;
+  private aihsG(): GravacoesAihPropria {
+    return (this.aihsGr ??= new GravacoesAihPropria(this.tx, this.est));
+  }
+
+  /** A APAC e o retorno do gestor, com a ponte da AIH (aplicar o retorno e reapresentar). */
+  private apacRetGr?: GravacaoApacRetorno;
+  private apacRetG(): GravacaoApacRetorno {
+    return (this.apacRetGr ??= new GravacaoApacRetorno(this.tx, this.est, new PonteAihPropria()));
   }
 
   /**
@@ -1101,12 +1134,12 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     return { substituidos };
   }
 
-  incluirApac(): Promise<never> {
-    return Promise.reject(modeloPendente('a APAC pela tela atual (laudo, solicitante e autorização)'));
+  incluirApac(...a: Parameters<GravacaoApacRetorno['incluirApac']>) {
+    return this.apacRetG().incluirApac(...a);
   }
 
-  mudarApac(): Promise<never> {
-    return Promise.reject(modeloPendente('a APAC pela tela atual (laudo, solicitante e autorização)'));
+  mudarApac(...a: Parameters<GravacaoApacRetorno['mudarApac']>) {
+    return this.apacRetG().mudarApac(...a);
   }
 
   async gravarArquivoApac(
@@ -1275,28 +1308,28 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     });
   }
 
-  inserirAih(): Promise<never> {
-    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  inserirAih(...a: Parameters<GravacoesAihPropria['inserirAih']>) {
+    return this.aihsG().inserirAih(...a);
   }
 
-  autorizarAih(): Promise<never> {
-    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  autorizarAih(...a: Parameters<GravacoesAihPropria['autorizarAih']>) {
+    return this.aihsG().autorizarAih(...a);
   }
 
-  negarAih(): Promise<never> {
-    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  negarAih(...a: Parameters<GravacoesAihPropria['negarAih']>) {
+    return this.aihsG().negarAih(...a);
   }
 
-  reabrirAih(): Promise<never> {
-    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  reabrirAih(...a: Parameters<GravacoesAihPropria['reabrirAih']>) {
+    return this.aihsG().reabrirAih(...a);
   }
 
-  cancelarAih(): Promise<never> {
-    return Promise.reject(modeloPendente('a AIH pela tela atual (laudo, autorização e conta)'));
+  cancelarAih(...a: Parameters<GravacoesAihPropria['cancelarAih']>) {
+    return this.aihsG().cancelarAih(...a);
   }
 
-  fecharAih(): Promise<never> {
-    return Promise.reject(modeloPendente('o fechamento da AIH com os itens'));
+  fecharAih(...a: Parameters<GravacoesAihPropria['fecharAih']>) {
+    return this.aihsG().fecharAih(...a);
   }
 
   async gravarArquivoSisaih(
@@ -1304,21 +1337,20 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     aihs: readonly { id: number; versao: number }[],
   ): Promise<{ substituidos: number }> {
     if (!this.montagemLeProducao()) producaoPendente('aih');
-    if (aihs.length > 0) linhasPendentes('as contas da AIH apresentadas (conta_aih na remessa)');
-    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'aih', { quantidade_aih: 0 });
+    const { substituidos } = await this.aihsG().gravarArquivoSisaih(a, aihs);
     return { substituidos };
   }
 
-  inserirRetornoSus(): Promise<never> {
-    return Promise.reject(modeloPendente('o retorno do gestor por linha'));
+  inserirRetornoSus(...a: Parameters<GravacaoApacRetorno['inserirRetornoSus']>) {
+    return this.apacRetG().inserirRetornoSus(...a);
   }
 
-  aplicarRetornoNaAih(): Promise<never> {
-    return Promise.reject(modeloPendente('o retorno do gestor por linha'));
+  aplicarRetornoNaAih(...a: Parameters<GravacaoApacRetorno['aplicarRetornoNaAih']>) {
+    return this.apacRetG().aplicarRetornoNaAih(...a);
   }
 
-  tratarRetornoSus(): Promise<never> {
-    return Promise.reject(modeloPendente('o tratamento do retorno do gestor'));
+  tratarRetornoSus(...a: Parameters<GravacaoApacRetorno['tratarRetornoSus']>) {
+    return this.apacRetG().tratarRetornoSus(...a);
   }
 }
 

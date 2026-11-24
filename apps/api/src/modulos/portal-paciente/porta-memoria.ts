@@ -734,7 +734,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
   }
   async filaCopias(
     c: ContextoPortal,
-    f: { readonly pendentes: boolean; readonly idPaciente?: number },
+    f: { readonly pendentes: boolean; readonly idPaciente?: number; readonly protocolo?: string },
   ): Promise<CopiaNaFila[]> {
     const s = this.e(c);
     const atos = s.atosCopia ?? [];
@@ -743,7 +743,9 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
       .filter((p) => atos.some((a) => a.idPedido === p.id && a.ato === 'solicitacao'))
       .filter(
         (p) =>
-          (!f.pendentes || pend(p.situacao)) && (f.idPaciente === undefined || p.paciente === f.idPaciente),
+          (!f.pendentes || pend(p.situacao)) &&
+          (f.idPaciente === undefined || p.paciente === f.idPaciente) &&
+          (f.protocolo === undefined || p.protocolo === f.protocolo),
       )
       .map((p) => {
         const meus = atos.filter((a) => a.idPedido === p.id);

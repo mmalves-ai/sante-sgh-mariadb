@@ -11,7 +11,7 @@
 //   armazenamento (instalação sem ARQUIVOS_RAIZ) ou sem o conteúdo, a geração recusa sem gravar nada.
 import { createHash, randomUUID } from 'node:crypto';
 import { type ArmazemArquivos, type Executor, recusa, type TxOperacao } from '@sgh/nucleo';
-import { gravacaoDireta } from '../enfermagem/gravacao-direta.js';
+import { type AnotacaoGravacao, gravacaoDireta } from '../enfermagem/gravacao-direta.js';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import {
   camelo,
@@ -30,7 +30,8 @@ import {
 } from './apoio-propria.js';
 import type { ContextoGestao, GravadorGestao } from './porta-gestao.js';
 import { PortaGestaoPropria, TABELAS_GESTAO } from './porta-gestao-propria.js';
-import { type EnvioRegulatorioRegistrado, recusaVersaoGestao } from './tipos.js';
+import { comVersoesAnteriores, LeiturasGestaoComplementoD } from './porta-propria-complemento-d.js';
+import { type EnvioRegulatorioRegistrado, recusaVersaoGestao, type TabelaCorrigivel } from './tipos.js';
 
 /** As tabelas que a gestão completa grava (as da base e as dos assuntos novos). */
 export const TABELAS_GESTAO_COMPLETA = [...TABELAS_GESTAO, 'envio_regulatorio_qualidade'] as const;
@@ -95,6 +96,8 @@ function envio(r: Linha): EnvioRegulatorioRegistrado {
 
 export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
   private readonly nucleoCompleta: NucleoQualidade;
+  /** Pesquisas da agenda, versões anteriores e protocolos gerenciados (porta-propria-complemento-d.ts). */
+  private readonly complementoD: LeiturasGestaoComplementoD;
 
   /**
    * @param armazem O armazenamento de arquivos da instalação (ADR 0004: disco local, metadado na tabela `arquivo`).
@@ -107,6 +110,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
   ) {
     super(nucleo, executorPronto);
     this.nucleoCompleta = nucleo;
+    this.complementoD = new LeiturasGestaoComplementoD(nucleo);
   }
 
   override gravarSgh<T>(
@@ -118,17 +122,43 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
       nome: 'qualidade.gestao',
       tabelas: TABELAS_GESTAO_COMPLETA,
       trilha,
-      gravador: (tx, est) => this.gravador(tx, est),
+      gravador: (tx, est, anotacao) => this.gravador(tx, est, anotacao),
       fn,
     });
   }
 
-  protected override gravador(tx: TxOperacao, est: number): GravadorGestao {
-    return {
-      ...super.gravador(tx, est),
-      gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
-      registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),
-    };
+  /** As correções da gestão gravam a versão anterior na trilha (dados.versaoAnterior), como a memória versiona. */
+  protected override gravador(
+    tx: TxOperacao,
+    est: number,
+    anotacao: AnotacaoGravacao = { motivo: null, dados: null },
+  ): GravadorGestao {
+    return comVersoesAnteriores(
+      {
+        ...super.gravador(tx, est, anotacao),
+        gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
+        registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),
+      },
+      tx,
+      est,
+      anotacao,
+    );
+  }
+
+  override pesquisas(c: ContextoGestao, de: string, ate: string) {
+    return this.complementoD.pesquisas(c, de, ate);
+  }
+
+  override pesquisa(c: ContextoGestao, id: number) {
+    return this.complementoD.pesquisa(c, id);
+  }
+
+  override versoes(c: ContextoGestao, tabela: TabelaCorrigivel, id: number) {
+    return this.complementoD.versoes(c, tabela, id);
+  }
+
+  override protocolosGerenciados(c: ContextoGestao, inicio: string, fim: string) {
+    return this.complementoD.protocolosGerenciados(c, inicio, fim);
   }
 
   // ── Envios regulatórios ───────────────────────────────────────────────────────────────────────────────────

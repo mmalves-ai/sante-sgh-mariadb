@@ -2287,7 +2287,7 @@ export class ServicoPortalPaciente {
 
   private async copiaDaFila(q: QuemInterno, protocolo: string) {
     const c = this.ctx(q.hospital);
-    const f = (await this.porta.filaCopias(c, { pendentes: false })).find((x) => x.protocolo === protocolo);
+    const f = (await this.porta.filaCopias(c, { pendentes: false, protocolo }))[0];
     if (!f) throw new ErroProblema('nao-encontrado', 404, 'Cópia não encontrada', 'Pedido não encontrado.');
     return { c, f };
   }

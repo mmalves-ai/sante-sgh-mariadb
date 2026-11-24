@@ -24,6 +24,7 @@ import {
   PonteAihPropria,
   TABELAS_SUS_AIH,
 } from './porta-propria-aih.js';
+import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { GravacaoSusPropria, TABELAS_SUS } from './porta-propria.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
 
@@ -703,7 +704,8 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
   }, 120_000);
 
   it('retorno do gestor pela ponte: aprovar, rejeitar e reapresentar (conta nova, a rejeitada fica)', async () => {
-    const ponte = new PonteAihPropria();
+    // Pelo contrato da ponte (o que a gravação do retorno chama), com o "por" da tela.
+    const ponte: PonteAihDoRetorno = new PonteAihPropria();
     const id = await gravar(ids.est, (g) => g.inserirAih(laudo()));
     // Fora de apresentada: o retorno não muda nada.
     expect(

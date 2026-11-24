@@ -6,9 +6,9 @@
 //   - O contexto do portal traz a rede (o código do cliente na plataforma) e o código do estabelecimento; a porta
 //     resolve o id do estabelecimento uma vez por código.
 //   - As 22 gravações da conta, da troca de e-mail, do vínculo, do consentimento, do pedido do titular e da cópia do
-//     prontuário vêm de porta-propria-gravacao.ts (migração 17_INTG/91). As leituras ainda sem escritor próprio aqui
-//     (conta, vínculo, consentimento, pedidos, cópias, documentos do portal, relatório de acessos) RECUSAM com 503
-//     `recurso-sem-modelo`, nomeando a operação: nada é lido vazio nem gravado pela metade.
+//     prontuário vêm de porta-propria-gravacao.ts (migração 17_INTG/91). As leituras da conta, do vínculo, do
+//     consentimento, dos pedidos, das cópias, dos documentos do portal e do relatório de acessos vêm de
+//     porta-propria-leitura.ts (LeiturasPortalProprias), com a especificação da porta de memória.
 // Melhoria: o paciente vem do cadastro único (paciente + pessoa_fisica), com óbito, unificação e responsável legal
 //   vigente (responsavel_paciente, papéis legais) sem trazer quem; só o primeiro nome sai da porta.
 // Melhoria: os feriados estaduais (UF do município do estabelecimento) entram no prazo em dias úteis.
@@ -39,6 +39,7 @@ import {
   type TrilhaDaGravacao,
 } from './porta.js';
 import { erroDeDominio, gravadorGravacaoPropria, TABELAS_GRAVACAO_PORTAL } from './porta-propria-gravacao.js';
+import { LeiturasPortalProprias } from './porta-propria-leitura.js';
 import type { ItemDominioPortal, PacientePortal, RegistroTrilhaPortal } from './tipos.js';
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
@@ -122,6 +123,11 @@ export class PortaPortalPropria implements PortaPortalPaciente {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
   private readonly estabelecimentos = new Map<string, number>();
+  /** As leituras de conta, vínculo, consentimento, documento e cópia (porta-propria-leitura.ts). */
+  private readonly leiturasProprias = new LeiturasPortalProprias({
+    ler: (c, fn) => this.ler(c, fn),
+    estabelecimento: (c) => this.estabelecimento(c),
+  });
 
   constructor(
     private readonly nucleo: NucleoPortal,
@@ -216,6 +222,8 @@ export class PortaPortalPropria implements PortaPortalPaciente {
           motivo: r.evento,
           dados: {
             evento: r.evento,
+            usuario: r.usuario,
+            idAlvo: r.idAlvo,
             recurso: r.recurso,
             operacao: r.operacao,
             resultado: r.resultado,
@@ -354,64 +362,74 @@ export class PortaPortalPropria implements PortaPortalPaciente {
     );
   }
 
-  // ---------------------------------------------------------------- sem modelo (recusa nomeada)
+  // ---------------------------------------------------------------- leituras de conta, vínculo, consentimento e cópia
+  // (porta-propria-leitura.ts; a mesma especificação da porta de memória)
 
-  conta(): Promise<never> {
-    return Promise.reject(semModelo('conta'));
+  conta(c: ContextoPortal, id: number) {
+    return this.leiturasProprias.conta(c, id);
   }
-  contaPorEmail(): Promise<never> {
-    return Promise.reject(semModelo('contaPorEmail'));
+  contaPorEmail(c: ContextoPortal, emailResumo: string) {
+    return this.leiturasProprias.contaPorEmail(c, emailResumo);
   }
-  contaPorConvite(): Promise<never> {
-    return Promise.reject(semModelo('contaPorConvite'));
+  contaPorConvite(c: ContextoPortal, conviteResumo: string) {
+    return this.leiturasProprias.contaPorConvite(c, conviteResumo);
   }
-  trocaEmailPorToken(): Promise<never> {
-    return Promise.reject(semModelo('trocaEmailPorToken'));
+  trocaEmailPorToken(c: ContextoPortal, tokenResumo: string) {
+    return this.leiturasProprias.trocaEmailPorToken(c, tokenResumo);
   }
-  trocaEmailPendente(): Promise<never> {
-    return Promise.reject(semModelo('trocaEmailPendente'));
+  trocaEmailPendente(c: ContextoPortal, conta: number) {
+    return this.leiturasProprias.trocaEmailPendente(c, conta);
   }
-  contaDoPaciente(): Promise<never> {
-    return Promise.reject(semModelo('contaDoPaciente'));
+  contaDoPaciente(c: ContextoPortal, paciente: number) {
+    return this.leiturasProprias.contaDoPaciente(c, paciente);
   }
-  contasAbertas(): Promise<never> {
-    return Promise.reject(semModelo('contasAbertas'));
+  contasAbertas(c: ContextoPortal) {
+    return this.leiturasProprias.contasAbertas(c);
   }
-  vinculosDaConta(): Promise<never> {
-    return Promise.reject(semModelo('vinculosDaConta'));
+  vinculosDaConta(c: ContextoPortal, conta: number) {
+    return this.leiturasProprias.vinculosDaConta(c, conta);
   }
-  vinculosDoTitular(): Promise<never> {
-    return Promise.reject(semModelo('vinculosDoTitular'));
+  vinculosDoTitular(c: ContextoPortal, paciente: number) {
+    return this.leiturasProprias.vinculosDoTitular(c, paciente);
   }
-  vinculo(): Promise<never> {
-    return Promise.reject(semModelo('vinculo'));
+  vinculo(c: ContextoPortal, id: number) {
+    return this.leiturasProprias.vinculo(c, id);
   }
-  filaVinculos(): Promise<never> {
-    return Promise.reject(semModelo('filaVinculos'));
+  filaVinculos(c: ContextoPortal, f: Parameters<LeiturasPortalProprias['filaVinculos']>[1]) {
+    return this.leiturasProprias.filaVinculos(c, f);
   }
-  vinculosAtivos(): Promise<never> {
-    return Promise.reject(semModelo('vinculosAtivos'));
+  vinculosAtivos(c: ContextoPortal) {
+    return this.leiturasProprias.vinculosAtivos(c);
   }
   dominiosConsentimento(): Promise<DominiosConsentimento> {
-    return Promise.reject(semModelo('dominiosConsentimento'));
+    return this.leiturasProprias.dominiosConsentimento();
   }
-  consentimentos(): Promise<never> {
-    return Promise.reject(semModelo('consentimentos'));
+  consentimentos(c: ContextoPortal, paciente: number) {
+    return this.leiturasProprias.consentimentos(c, paciente);
   }
-  pedidos(): Promise<never> {
-    return Promise.reject(semModelo('pedidos'));
+  pedidos(c: ContextoPortal, conta: number, paciente: number) {
+    return this.leiturasProprias.pedidos(c, conta, paciente);
   }
-  documentos(): Promise<never> {
-    return Promise.reject(semModelo('documentos'));
+  documentos(
+    c: ContextoPortal,
+    paciente: number,
+    tipos: readonly string[],
+    pagina: number,
+    apenas: number | null = null,
+  ) {
+    return this.leiturasProprias.documentos(c, paciente, tipos, pagina, apenas);
   }
-  leituras(): Promise<never> {
-    return Promise.reject(semModelo('leituras'));
+  leituras(c: ContextoPortal, paciente: number, eventos: readonly string[], de: string, ate: string) {
+    return this.leiturasProprias.leituras(c, paciente, eventos, de, ate);
   }
-  filaCopias(): Promise<never> {
-    return Promise.reject(semModelo('filaCopias'));
+  filaCopias(
+    c: ContextoPortal,
+    f: { readonly pendentes: boolean; readonly idPaciente?: number; readonly protocolo?: string },
+  ) {
+    return this.leiturasProprias.filaCopias(c, f);
   }
-  atosCopia(): Promise<never> {
-    return Promise.reject(semModelo('atosCopia'));
+  atosCopia(c: ContextoPortal, idPedido: string) {
+    return this.leiturasProprias.atosCopia(c, idPedido);
   }
 }
 

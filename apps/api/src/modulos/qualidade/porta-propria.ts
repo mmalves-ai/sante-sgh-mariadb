@@ -24,9 +24,9 @@
 // ocupada, a gravação inteira é desfeita e refeita (até 3 vezes) — nada fica pela metade.
 // Melhoria: o painel das análises conta pelos prazos e conclusões gravados na própria notificação.
 // Etapa 2 (a análise, o plano de ação, a queixa técnica e a sugestão resolvida): porta-propria-etapa2.ts, na mesma
-// transação da notificação. Pendente: as leituras que dependem de dado de OUTRO módulo ainda sem mapeamento (candidatos
-// à sugestão, adesão aos protocolos, histórico de riscos, protocolos gerenciados e expostos ao lote) falham
-// fechadas (503 `modelo-pendente`).
+// transação da notificação. As leituras que dependem de dado de OUTRO módulo (candidatos à
+// sugestão, adesão aos protocolos, protocolos gerenciados e expostos ao lote) vêm de porta-propria-complemento-c.ts; o
+// histórico de riscos segue fechado (503 `modelo-pendente`) até a decisão do marcador do formulário.
 import type { ContextoNotificacaoLido } from '@sgh/contratos';
 import {
   ehTravaOcupada,
@@ -48,13 +48,11 @@ import {
   instanteN,
   json,
   type L,
-  leituraPendente,
   lerNoEstabelecimento,
   type Linha,
   marcas,
   n,
   nn,
-  type NucleoQualidade,
   paraBanco,
   relogioDoEstabelecimento,
   setoresDoEstabelecimento,
@@ -64,6 +62,7 @@ import {
   verdadeiro,
 } from './apoio-propria.js';
 import type { ContextoQualidade, GravadorQualidade, PortaQualidade } from './porta.js';
+import { ComplementoQualidadeC, type NucleoComplementoC } from './porta-propria-complemento-c.js';
 import {
   gravadorEtapa2,
   lerAcoes,
@@ -103,9 +102,6 @@ const GRAVACAO_CONCORRENTE = 'gravacao-concorrente';
 function concorrencia(e: unknown): boolean {
   return (e as { errno?: unknown } | null)?.errno === ERRNO_LINHA_MUDOU || ehTravaOcupada(e);
 }
-
-const DE_OUTROS =
-  'A leitura de outro módulo (checagens, reações, checklists, protocolos gerenciados, riscos e itens da tecnovigilância)';
 
 const SQL_NOTIFICACAO = `
   SELECT n.id, n.numero, n.hash_codigo_acompanhamento, n.registrada_em, n.ocorrido_em, n.atendimento_id, n.paciente_id,
@@ -238,12 +234,14 @@ async function evento(
 export class PortaQualidadePropria implements PortaQualidade {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
+  private readonly complementoC: ComplementoQualidadeC;
 
   constructor(
-    private readonly nucleo: NucleoQualidade,
+    private readonly nucleo: NucleoComplementoC,
     executorPronto?: Executor,
   ) {
     this.executor = executorPronto ?? nucleo.criarExecutor();
+    this.complementoC = new ComplementoQualidadeC(nucleo);
   }
 
   private ler<T>(c: ContextoQualidade, fn: (l: L, est: number) => Promise<T>): Promise<T> {
@@ -543,7 +541,8 @@ export class PortaQualidadePropria implements PortaQualidade {
       ...gravadorEtapa2(tx, est, {
         travarNotificacao: (id) => this.travarLinha(tx, est, id),
         mudarNotificacao: (id, versao, valores) => this.mudar(tx, est, id, versao, valores),
-        eventoNotificacao: (id, agora, antes, depois, usuario, e) => evento(tx, id, agora, antes, depois, usuario, e),
+        eventoNotificacao: (id, agora, antes, depois, usuario, e) =>
+          evento(tx, id, agora, antes, depois, usuario, e),
       }),
     };
   }
@@ -826,7 +825,12 @@ export class PortaQualidadePropria implements PortaQualidade {
 
   queixas(
     c: ContextoQualidade,
-    f: { readonly situacao?: string; readonly area?: string; readonly pagina: number; readonly porPagina: number },
+    f: {
+      readonly situacao?: string;
+      readonly area?: string;
+      readonly pagina: number;
+      readonly porPagina: number;
+    },
   ) {
     return this.ler(c, (l, est) => lerQueixas(l, est, f));
   }
@@ -891,29 +895,25 @@ export class PortaQualidadePropria implements PortaQualidade {
     });
   }
 
-  candidatos(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(DE_OUTROS));
+  // As leituras de outro módulo (checagens, checklists, protocolos gerenciados e itens): porta-propria-complemento-c.ts.
+  candidatos(c: ContextoQualidade, login: string, desde: string) {
+    return this.complementoC.candidatos(c, login, desde);
   }
 
-  painelAdesao(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(DE_OUTROS));
+  painelAdesao(c: ContextoQualidade, de: string, fim: string, agora: string) {
+    return this.complementoC.painelAdesao(c, de, fim, agora);
   }
 
-  historicoRiscos(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(DE_OUTROS));
+  historicoRiscos(c: ContextoQualidade) {
+    return this.complementoC.historicoRiscos(c);
   }
 
-  protocolosGerenciados(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(DE_OUTROS));
+  protocolosGerenciados(c: ContextoQualidade, inicio: string, fim: string) {
+    return this.complementoC.protocolosGerenciados(c, inicio, fim);
   }
 
-  expostos(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(DE_OUTROS));
+  expostos(c: ContextoQualidade, item: number, lote: string) {
+    return this.complementoC.expostos(c, item, lote);
   }
 
   itens(c: ContextoQualidade, termo: string) {

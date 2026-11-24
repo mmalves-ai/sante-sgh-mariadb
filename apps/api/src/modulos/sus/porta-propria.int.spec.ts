@@ -546,7 +546,7 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
     expect(await porta.ler(ctxA, (l) => l.numeroAihEmUso('4126100000017'))).toBe(false);
   });
 
-  it('o retorno do gestor ainda não é tratado por esta porta: recusa e nada muda', async () => {
+  it('o retorno do gestor inexistente no estabelecimento: recusa por versão e nada muda', async () => {
     await expect(
       porta.gravar(ctxA, (g) =>
         g.tratarRetornoSus(
@@ -554,9 +554,7 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
           { decisao: 'aceita', justificativa: 'x', por: 'x', aih: null },
         ),
       ),
-    ).rejects.toMatchObject({
-      problema: { codigo: 'modelo-pendente' },
-    });
+    ).rejects.toMatchObject({ codigo: 'versao-alterada' });
   });
 
   it('o serviço da tela sobre a porta própria: abre a competência do BPA pela ServicoSus', async () => {
