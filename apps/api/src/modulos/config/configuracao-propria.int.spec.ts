@@ -11,6 +11,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { type FonteConfiguracao, fonteConfiguracaoMemoria, type TrilhaConfig } from './configuracao-fonte.js';
 import { FonteConfiguracaoPropria } from './configuracao-propria.js';
 import { falhaDaConfiguracao } from './falha-configuracao.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -128,8 +129,9 @@ async function limparValores(): Promise<void> {
     }
     if (idUsuario) {
       await e.executar('DELETE FROM idempotencia_operacao WHERE usuario_id = ?', [idUsuario]);
-      await e.executar('DELETE FROM trilha_auditoria WHERE usuario_id = ?', [idUsuario]);
     }
+    // A trilha só dos estabelecimentos sintéticos (H e OUTRO): a cadeia por hash de qualquer outro fica intacta.
+    await limparTrilhaDaMassa(e, { ids: est });
   });
 }
 

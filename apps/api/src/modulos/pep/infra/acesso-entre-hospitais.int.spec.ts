@@ -18,6 +18,7 @@ import { RegistradorTrilhaPropria } from '../../../autorizacao/trilha-propria.js
 import { PortaRedePropria } from '../../rede/porta-propria.js';
 import { AcessoProntuarioRede, type SessaoAcessoRede } from '../acesso-rede.js';
 import type { ServicoDocumentos } from '../documentos-servico.js';
+import { limparTrilhaDaMassa } from '../../../teste/limpar-trilha.spec-util.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
@@ -53,11 +54,8 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar(`DELETE FROM paciente WHERE cadastro_estabelecimento_id IN ${est}`, cods);
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`Pessoa sintética ${P}%`]);
-  // Desde a cadeia por hash (SBIS-16), a cabeça e o fecho diário apontam para as linhas da trilha: saem antes delas
-  // (só a cadeia dos dois estabelecimentos sintéticos desta massa).
-  await e.executar(`DELETE FROM trilha_auditoria_fecho WHERE estabelecimento_id IN ${est}`, cods);
-  await e.executar(`DELETE FROM trilha_cadeia WHERE estabelecimento_id IN ${est}`, cods);
-  await e.executar(`DELETE FROM trilha_auditoria WHERE estabelecimento_id IN ${est}`, cods);
+  // A trilha (fecho, cabeça da cadeia e linhas) só dos dois estabelecimentos sintéticos desta massa.
+  await limparTrilhaDaMassa(e, { codigos: cods });
   await e.executar('DELETE FROM usuario WHERE login LIKE ?', [`${P}.%`]);
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', cods);
 }

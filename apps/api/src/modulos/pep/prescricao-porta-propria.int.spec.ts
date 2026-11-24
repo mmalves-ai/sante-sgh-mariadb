@@ -9,6 +9,7 @@ import { BASE_PLANO_PROPRIO, PortaPrescricaoPropria } from './prescricao-porta-p
 import { ServicoPrescricao } from './prescricao-servico.js';
 import { dataHora } from './registro-porta-propria.js';
 import { CLIENTE_F22_O4 } from './worklist-massa.spec-util.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l2403p';
@@ -71,7 +72,7 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM prescricao_item WHERE prescricao_id IN ${dasPrescricoes}`, cods);
   await e.executar(`DELETE FROM prescricao WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, cods);
-  await e.executar(`DELETE FROM trilha_auditoria WHERE estabelecimento_id IN ${est}`, cods);
+  await limparTrilhaDaMassa(e, { codigos: cods });
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', cods);
   await e.executar(
     `DELETE up FROM usuario_profissional up JOIN usuario u ON u.id = up.usuario_id WHERE u.login = ?`,

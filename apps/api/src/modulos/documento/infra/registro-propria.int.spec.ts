@@ -14,6 +14,7 @@ import { type ContextoNucleo, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type RegistroEmissoes, RegistroEmissoesMemoria } from './registro.js';
 import { RegistroEmissoesPropria, registroEmissoesDaRequisicao } from './registro-propria.js';
+import { limparTrilhaDaMassa } from '../../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -106,7 +107,7 @@ describe.skipIf(SEM_BANCO || SEM_TABELA)('registro das emissões no banco (Maria
       await e.executar('DELETE FROM emissao_documento WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM idempotencia_operacao WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?', [est]);
-      await e.executar('DELETE FROM trilha_auditoria WHERE estabelecimento_id = ?', [est]);
+      await limparTrilhaDaMassa(e, { ids: [est] });
     }
   };
 

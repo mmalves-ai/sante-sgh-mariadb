@@ -9,6 +9,7 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { ErroProntuario } from './tipos-pep.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE_PARECERES']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -80,16 +81,8 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     (async () => {
       // O lote tem o estabelecimento principal (l98par) e o de isolamento (l98parx).
       const est = "(SELECT id FROM estabelecimento WHERE codigo LIKE CONCAT(?, '%'))";
-      // A cabeça e o fecho diário da cadeia apontam para as linhas da trilha: saem antes delas (SBIS-16).
-      await e.executar(`DELETE FROM trilha_auditoria_fecho WHERE estabelecimento_id IN ${est}`, [P]);
-      await e.executar(`DELETE FROM trilha_cadeia WHERE estabelecimento_id IN ${est}`, [P]);
-      // A idempotência do executor aponta para a linha da trilha: sai antes dela.
-      await e.executar(
-        `DELETE io FROM idempotencia_operacao io JOIN trilha_auditoria t ON t.id = io.trilha_auditoria_id
-          WHERE t.estabelecimento_id IN ${est}`,
-        [P],
-      );
-      await e.executar(`DELETE FROM trilha_auditoria WHERE estabelecimento_id IN ${est}`, [P]);
+      // A trilha (fecho, cabeça da cadeia, idempotência que aponta para ela e linhas) só do lote (SBIS-16).
+      await limparTrilhaDaMassa(e, { prefixo: P });
       await e.executar(
         `DELETE ev FROM documento_prontuario_evento ev JOIN documento_prontuario d ON d.id = ev.documento_prontuario_id
           WHERE d.estabelecimento_id IN ${est}`,

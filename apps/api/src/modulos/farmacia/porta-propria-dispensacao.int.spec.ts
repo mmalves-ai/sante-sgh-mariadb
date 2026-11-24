@@ -17,6 +17,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FUSO_PADRAO, instanteCivil } from '../exames/relogio.js';
 import { PortaFarmaciaPropria } from './porta-propria.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -58,10 +59,10 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
   const limpar = (e: Escritor) =>
     (async () => {
       const est = [ids.est];
+      await limparTrilhaDaMassa(e, { ids: est });
       for (const sql of [
         'DELETE FROM idempotencia_operacao WHERE estabelecimento_id = ?',
         'DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?',
-        'DELETE FROM trilha_auditoria WHERE estabelecimento_id = ?',
         'DELETE FROM conferencia_controlado WHERE estabelecimento_id = ?',
         'DELETE ei FROM envio_controlado_nacional_item ei JOIN envio_controlado_nacional en ON en.id = ei.envio_controlado_nacional_id WHERE en.estabelecimento_id = ?',
         'DELETE FROM envio_controlado_nacional WHERE estabelecimento_id = ?',

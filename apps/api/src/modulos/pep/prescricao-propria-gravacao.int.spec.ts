@@ -17,6 +17,7 @@ import { PortaPrescricaoPropria } from './prescricao-porta-propria.js';
 import { ServicoPrescricao } from './prescricao-servico.js';
 import { dataHora } from './registro-porta-propria.js';
 import type { GravacaoPrescricao, ItemGravacao } from './tipos-pep.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -53,6 +54,7 @@ async function limpar(e: Escritor): Promise<void> {
   const presc = `(SELECT id FROM prescricao WHERE estabelecimento_id IN ${est})`;
   const itens = `(SELECT id FROM prescricao_item WHERE prescricao_id IN ${presc})`;
   const recs = `(SELECT id FROM reconciliacao_medicamentosa WHERE estabelecimento_id IN ${est})`;
+  await limparTrilhaDaMassa(e, { codigos: [P] });
   for (const sql of [
     `DELETE FROM decisao_alerta WHERE prescricao_id IN ${presc}`,
     `DELETE FROM decisao_alerta WHERE prescricao_item_id IN ${itens}`,
@@ -69,9 +71,6 @@ async function limpar(e: Escritor): Promise<void> {
     `DELETE FROM unidade_assistencial WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM idempotencia_operacao WHERE estabelecimento_id IN ${est}`,
-    `DELETE FROM trilha_auditoria_fecho WHERE estabelecimento_id IN ${est}`,
-    `DELETE FROM trilha_cadeia WHERE estabelecimento_id IN ${est}`,
-    `DELETE FROM trilha_auditoria WHERE estabelecimento_id IN ${est}`,
     'DELETE FROM estabelecimento WHERE codigo = ?',
   ])
     await e.executar(sql, [P]);

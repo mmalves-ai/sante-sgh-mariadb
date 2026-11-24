@@ -30,6 +30,7 @@ import {
 import { FonteCatalogosMemoria } from './fonte-memoria.js';
 import { modulo } from './modulo.js';
 import { FonteCatalogosPropria } from './porta-propria.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const BANCO = `cliente_${CLIENTE}`;
@@ -224,17 +225,16 @@ async function limparBanco(): Promise<void> {
     await e.executar("DELETE FROM terminologia WHERE codigo = 'cid10' AND nome LIKE '%teste 02-02%'");
     if (idUsuario) {
       await e.executar('DELETE FROM idempotencia_operacao WHERE usuario_id = ?', [idUsuario]);
-      await e.executar('DELETE FROM trilha_auditoria WHERE usuario_id = ?', [idUsuario]);
     }
+    // A trilha só dos estabelecimentos sintéticos (H e OUTRO), a dos dois usuários inclusive: a cadeia por hash de
+    // qualquer outro estabelecimento fica intacta.
+    await limparTrilhaDaMassa(e, { ids: est });
     if (idUsuarioHttp) {
       // Só as linhas do teste (carga de catálogo): o usuário sintético pode ser usado por outro lote.
       await e.executar(
         "DELETE FROM idempotencia_operacao WHERE usuario_id = ? AND operacao LIKE 'catalogo.carga.%'",
         [idUsuarioHttp],
       );
-      await e.executar("DELETE FROM trilha_auditoria WHERE usuario_id = ? AND entidade = 'carga_catalogo'", [
-        idUsuarioHttp,
-      ]);
       if (usuarioHttpCriado)
         await e.executar('DELETE FROM usuario WHERE id = ? AND login = ?', [idUsuarioHttp, LOGIN_HTTP]);
     }

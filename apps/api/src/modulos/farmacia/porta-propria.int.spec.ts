@@ -17,6 +17,7 @@ import {
 } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaFarmaciaPropria } from './porta-propria.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -56,7 +57,7 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     (async () => {
       await e.executar('DELETE FROM idempotencia_operacao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?', [ids.est]);
-      await e.executar('DELETE FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est]);
+      await limparTrilhaDaMassa(e, { ids: [ids.est, ids.outroEst] });
       await e.executar(
         'DELETE iv FROM intervencao_farmaceutica iv JOIN avaliacao_farmaceutica a ON a.id = iv.avaliacao_farmaceutica_id WHERE a.estabelecimento_id = ?',
         [ids.est],

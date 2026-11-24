@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoSuprimentos } from '../suprimentos/porta.js';
 import { PortaSuprimentosPropria } from '../suprimentos/porta-propria.js';
 import { PortaFarmaciaPropria } from './porta-propria.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -61,7 +62,11 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
   let ctx: ContextoNucleo;
   let chave = 0;
   const op = (nome: string, entrada: unknown, extra: Partial<ContextoOperacao> = {}) =>
-    porta.executar(ctx, nome, entrada, { ...ctx, chaveIdempotencia: `f3ec-${Date.now()}-${(chave += 1)}`, ...extra });
+    porta.executar(ctx, nome, entrada, {
+      ...ctx,
+      chaveIdempotencia: `f3ec-${Date.now()}-${(chave += 1)}`,
+      ...extra,
+    });
   const opSup = (nome: string, entrada: unknown) =>
     sup.executar(ctx as ContextoSuprimentos, `suprimentos.${nome}`, entrada, {
       ...ctx,
@@ -70,6 +75,7 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
 
   const limpar = (e: Escritor) =>
     (async () => {
+      await limparTrilhaDaMassa(e, { ids: [ids.est] });
       for (const sql of [
         'UPDATE movimento_estoque SET conta_hospitalar_item_id = NULL, documento_estoque_item_id = NULL WHERE estabelecimento_id = ?',
         'DELETE m FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id WHERE c.estabelecimento_id = ?',
@@ -77,8 +83,6 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         'DELETE FROM conta_hospitalar WHERE estabelecimento_id = ?',
         'DELETE FROM idempotencia_operacao WHERE estabelecimento_id = ?',
         'DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?',
-        'DELETE FROM trilha_cadeia WHERE estabelecimento_id = ?',
-        'DELETE FROM trilha_auditoria WHERE estabelecimento_id = ?',
         'DELETE esi FROM entrega_setor_item esi JOIN entrega_setor es ON es.id = esi.entrega_setor_id WHERE es.estabelecimento_id = ?',
         'DELETE FROM entrega_setor WHERE estabelecimento_id = ?',
         'DELETE dei FROM documento_estoque_item dei JOIN documento_estoque de ON de.id = dei.documento_estoque_id WHERE de.estabelecimento_id = ?',
@@ -193,7 +197,11 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         { estabelecimento_id: ids.est, codigo: `${P}-FC` },
         { nome: 'FARMACIA SINTETICA F3EC', tipo: 'farmacia_central' },
       );
-      const um = await g('unidade_medida', { codigo: `${P}-UN` }, { descricao: 'UNIDADE F3EC', sigla: 'UNF3E' });
+      const um = await g(
+        'unidade_medida',
+        { codigo: `${P}-UN` },
+        { descricao: 'UNIDADE F3EC', sigla: 'UNF3E' },
+      );
       const grupo = await g(
         'grupo_insumo',
         { codigo: `${P}-MAT` },
@@ -223,7 +231,11 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
           { descricao: `MOVIMENTO ${codigo}`, natureza, sentido, afeta_saldo: true },
         );
       for (const codigo of ['nao-administrado', 'sobra'])
-        await g('motivo_devolucao_estoque', { codigo }, { descricao: `DEVOLUCAO ${codigo}`, origem_devolucao: 'setor' });
+        await g(
+          'motivo_devolucao_estoque',
+          { codigo },
+          { descricao: `DEVOLUCAO ${codigo}`, origem_devolucao: 'setor' },
+        );
       for (const tipo of ['dispensacao', 'documento_estoque', 'devolucao_dispensacao'])
         await e.inserir(
           'INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, incremento, ativo, criado_em) VALUES (?, ?, 1, 1, TRUE, ?)',
@@ -251,7 +263,12 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
       const fat = await g(
         'item_faturavel',
         { codigo: `${P}-FAT` },
-        { descricao: 'SORO PROPRIO F3EC', tipo_item: 'medicamento', grupo_faturamento_id: grupoFat, insumo_id: ID_PROPRIO },
+        {
+          descricao: 'SORO PROPRIO F3EC',
+          tipo_item: 'medicamento',
+          grupo_faturamento_id: grupoFat,
+          insumo_id: ID_PROPRIO,
+        },
       );
       const fonte = await g(
         'fonte_pagadora',
@@ -269,7 +286,11 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
            VALUES (?, ?, ?, ?, ?)`,
           [fonte, fat, inicio, valor, agora],
         );
-      const tiss = await g('carater_atendimento_tiss', { codigo_tiss: 'F4' }, { descricao: 'CARATER F24PF', versao_fonte: 'teste' });
+      const tiss = await g(
+        'carater_atendimento_tiss',
+        { codigo_tiss: 'F4' },
+        { descricao: 'CARATER F24PF', versao_fonte: 'teste' },
+      );
       const cat = await g(
         'categoria_atendimento',
         { codigo: `${P}-INT` },
@@ -284,14 +305,34 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
       const tabela = await g(
         'tabela_preco',
         { codigo: `${P}-TP` },
-        { descricao: 'MATMED F3EC', tipo_item: 'medicamento', referencia: 'brasindice', preco_referencia: 'pf', situacao: 'ativa' },
+        {
+          descricao: 'MATMED F3EC',
+          tipo_item: 'medicamento',
+          referencia: 'brasindice',
+          preco_referencia: 'pf',
+          situacao: 'ativa',
+        },
       );
-      const tipoConta = await g('tipo_conta', { codigo: `${P}-TC` }, { descricao: 'INTERNACAO F3EC', natureza: 'internacao' });
+      const tipoConta = await g(
+        'tipo_conta',
+        { codigo: `${P}-TC` },
+        { descricao: 'INTERNACAO F3EC', natureza: 'internacao' },
+      );
       ids.conta = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id,
            tabela_preco_id, natureza, competencia, inicio_em, calculada, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', ?, NOW(3) - INTERVAL 1 DAY, TRUE, ?)`,
-        [ids.est, `${P}-C1`, ids.atendimento, ids.paciente, fonte, tipoConta, tabela, `${agora.toISOString().slice(0, 7)}-01`, agora],
+        [
+          ids.est,
+          `${P}-C1`,
+          ids.atendimento,
+          ids.paciente,
+          fonte,
+          tipoConta,
+          tabela,
+          `${agora.toISOString().slice(0, 7)}-01`,
+          agora,
+        ],
       );
       // Um segundo atendimento, sem conta aberta.
       ids.atendimento2 = await e.inserir(
@@ -309,9 +350,17 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         ['saida_paciente', 'consumo_paciente', 'saida'],
         ['devolucao_interna', 'devolucao', 'entrada'],
       ] as const)
-        await g('tipo_movimento_estoque', { codigo }, { descricao: `MOVIMENTO ${codigo}`, natureza, sentido, afeta_saldo: true });
+        await g(
+          'tipo_movimento_estoque',
+          { codigo },
+          { descricao: `MOVIMENTO ${codigo}`, natureza, sentido, afeta_saldo: true },
+        );
       // A referência de mercado: item no frasco (fator da embalagem 10), preço de fábrica 20 e máximo ao consumidor 30.
-      const umFrasco = await g('unidade_medida', { codigo: `${P}-FR` }, { descricao: 'FRASCO F3EC', sigla: 'FRF3E' });
+      const umFrasco = await g(
+        'unidade_medida',
+        { codigo: `${P}-FR` },
+        { descricao: 'FRASCO F3EC', sigla: 'FRF3E' },
+      );
       const fonteRef = await g(
         'fonte_referencia_matmed',
         { codigo: `${P}-FR` },
@@ -325,7 +374,12 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
       const itemRef = await g(
         'item_referencia_matmed',
         { fonte_referencia: 'outra', codigo_referencia: `${P}-R1` },
-        { descricao: 'FRASCO SINTETICO F3EC', tipo_produto: 'material', fator_divisao: 10, unidade_medida_id: umFrasco },
+        {
+          descricao: 'FRASCO SINTETICO F3EC',
+          tipo_produto: 'material',
+          fator_divisao: 10,
+          unidade_medida_id: umFrasco,
+        },
       );
       await e.executar('DELETE FROM preco_referencia_matmed WHERE item_referencia_matmed_id = ?', [itemRef]);
       await e.inserir(
@@ -340,7 +394,12 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         const c = await g(
           'contrato_fonte_pagadora',
           { estabelecimento_id: ids.est, numero: `${P}-${numero}` },
-          { fonte_pagadora_id: fonte, descricao: `CONTRATO ${numero} F3EC`, vigencia_inicio: inicio, situacao },
+          {
+            fonte_pagadora_id: fonte,
+            descricao: `CONTRATO ${numero} F3EC`,
+            vigencia_inicio: inicio,
+            situacao,
+          },
         );
         if (numero === 'CV') ids.contratoVigente = c;
         else ids.contratoEncerrado = c;
@@ -384,7 +443,12 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         const f = await g(
           'item_faturavel',
           { codigo: `${P}-FAT${k}` },
-          { descricao: `MATERIAL ${k} F3EC`, tipo_item: 'medicamento', grupo_faturamento_id: grupoFat, insumo_id: id },
+          {
+            descricao: `MATERIAL ${k} F3EC`,
+            tipo_item: 'medicamento',
+            grupo_faturamento_id: grupoFat,
+            insumo_id: id,
+          },
         );
         // Duas unidades de estoque valem um frasco da referência.
         if (id === I_REF || id === I_NEG)
@@ -420,7 +484,11 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         { codigo: `${P}-PROP` },
         { descricao: 'SORO PROPRIO (SINTETICO)', tipo_item_prescricao_id: tipoItem, insumo_id: ID_PROPRIO },
       );
-      const situacao = await g('situacao_checagem', { codigo: `${P}-P` }, { descricao: 'PENDENTE F3EC', categoria: 'pendente' });
+      const situacao = await g(
+        'situacao_checagem',
+        { codigo: `${P}-P` },
+        { descricao: 'PENDENTE F3EC', categoria: 'pendente' },
+      );
       const item = await e.inserir(
         `INSERT INTO prescricao_item (prescricao_id, sequencia, tipo_item_prescricao_id, item_prescritivel_id, quantidade,
            inicio_em, lancamento_profissional_id, situacao, criado_em) VALUES (?, 1, ?, ?, 2, NOW(3) - INTERVAL 1 HOUR, ?, 'ativo', ?)`,
@@ -447,14 +515,21 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
   });
 
   const ler = (sql: string, p: unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f3ec' }, (l) => l.uma<Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f3ec' }, (l) =>
+      l.uma<Record<string, unknown>>(sql, p),
+    );
   const lerTodas = (sql: string, p: unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f3ec' }, (l) => l.consultar<Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f3ec' }, (l) =>
+      l.consultar<Record<string, unknown>>(sql, p),
+    );
   const saldo = async () =>
     Number(
-      (await ler('SELECT quantidade FROM saldo_estoque WHERE insumo_id = ? AND estabelecimento_id = ?', [ID_PROPRIO, ids.est]))?.[
-        'quantidade'
-      ],
+      (
+        await ler('SELECT quantidade FROM saldo_estoque WHERE insumo_id = ? AND estabelecimento_id = ?', [
+          ID_PROPRIO,
+          ids.est,
+        ])
+      )?.['quantidade'],
     );
   const itemDaConta = (id: number) =>
     ler(
@@ -474,9 +549,12 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
   const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>;
   const saldoDe = async (insumo: number) =>
     Number(
-      (await ler('SELECT quantidade FROM saldo_estoque WHERE insumo_id = ? AND estabelecimento_id = ?', [insumo, ids.est]))?.[
-        'quantidade'
-      ],
+      (
+        await ler('SELECT quantidade FROM saldo_estoque WHERE insumo_id = ? AND estabelecimento_id = ?', [
+          insumo,
+          ids.est,
+        ])
+      )?.['quantidade'],
     );
   /** O lançamento de saída mais recente do insumo, com o item da conta ligado a ele. */
   const saidaDo = (insumo: number) =>
@@ -491,10 +569,22 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
       [item],
     );
   const loteId = async (numero: string) =>
-    Number((await ler('SELECT id FROM lote_insumo WHERE estabelecimento_id = ? AND numero_lote = ?', [ids.est, numero]))?.['id']);
+    Number(
+      (
+        await ler('SELECT id FROM lote_insumo WHERE estabelecimento_id = ? AND numero_lote = ?', [
+          ids.est,
+          numero,
+        ])
+      )?.['id'],
+    );
   const itemDoDocumento = async (doc: number, insumo: number) =>
     Number(
-      (await ler('SELECT id FROM documento_estoque_item WHERE documento_estoque_id = ? AND insumo_id = ?', [doc, insumo]))?.['id'],
+      (
+        await ler('SELECT id FROM documento_estoque_item WHERE documento_estoque_id = ? AND insumo_id = ?', [
+          doc,
+          insumo,
+        ])
+      )?.['id'],
     );
   const lote = (numero: string, quantidade: number) => ({ lote: numero, validade: '2099-12-31', quantidade });
   const saidaPaciente = (atendimento: number, itens: unknown[]) =>
@@ -538,7 +628,9 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
     expect(m.map((x) => x['operacao'])).toEqual(['inclusao']);
     expect(json(m[0]!['dados'])).toMatchObject({ regra: 'negociado_fixo', movimento: estado.saida });
     // A conta fica para recalcular (o item novo mudou o total).
-    expect(Number((await ler('SELECT calculada FROM conta_hospitalar WHERE id = ?', [ids.conta]))?.['calculada'])).toBe(0);
+    expect(
+      Number((await ler('SELECT calculada FROM conta_hospitalar WHERE id = ?', [ids.conta]))?.['calculada']),
+    ).toBe(0);
   });
 
   it('devolver parte: o saldo volta e o item é reduzido na proporção, com a memória', async () => {
@@ -596,9 +688,10 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
     await op('suprimentos.cancelarDispensacao', { dose, motivo: 'Item suspenso (texto sintético)' });
     expect(await saldo()).toBe(20);
     expect((await itemDaConta(item))?.['situacao']).toBe('estornado');
-    const itens = await lerTodas('SELECT sequencia, situacao FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? ORDER BY sequencia', [
-      ids.conta,
-    ]);
+    const itens = await lerTodas(
+      'SELECT sequencia, situacao FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? ORDER BY sequencia',
+      [ids.conta],
+    );
     expect(itens.map((x) => [Number(x['sequencia']), x['situacao']])).toEqual([
       [1, 'estornado'],
       [2, 'estornado'],
@@ -627,19 +720,36 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
       expect(Number(i?.['solicitante_profissional_id'])).toBe(ids.medico);
       expect(Number(i?.['centro_custo_id'])).toBe(ids.centro);
       const m = await memoriaDo(Number(mov?.['conta_hospitalar_item_id']));
-      return { i: i!, id: Number(mov?.['conta_hospitalar_item_id']), dados: json(m[0]!['dados']), ops: m.map((x) => x['operacao']) };
+      return {
+        i: i!,
+        id: Number(mov?.['conta_hospitalar_item_id']),
+        dados: json(m[0]!['dados']),
+        ops: m.map((x) => x['operacao']),
+      };
     };
     // Referência: pf 20 / embalagem 10 = 2 por frasco; 4 unidades de estoque = 2 frascos (fator 2) = 4. Dois lotes: lote nulo.
     const ref = await item(I_REF);
-    expect([Number(ref.i['quantidade']), Number(ref.i['valor_unitario']), Number(ref.i['valor_total'])]).toEqual([2, 2, 4]);
+    expect([
+      Number(ref.i['quantidade']),
+      Number(ref.i['valor_unitario']),
+      Number(ref.i['valor_total']),
+    ]).toEqual([2, 2, 4]);
     expect([ref.i['lote_insumo_id'], ref.i['numero_lote']]).toEqual([null, null]);
     expect(ref.dados).toMatchObject({ regra: 'referencia', quantidadeEstoque: 4 });
     expect(ref.ops).toEqual(['inclusao']);
     // Negociado: +10% sobre a referência no frasco (2,2) para 1 frasco; o de contrato encerrado (50, mais recente) não vale.
     const neg = await item(I_NEG);
-    expect([Number(neg.i['quantidade']), Number(neg.i['valor_unitario']), Number(neg.i['valor_total'])]).toEqual([1, 2.2, 2.2]);
+    expect([
+      Number(neg.i['quantidade']),
+      Number(neg.i['valor_unitario']),
+      Number(neg.i['valor_total']),
+    ]).toEqual([1, 2.2, 2.2]);
     expect(neg.dados['regra']).toBe('negociado_percentual');
-    expect((neg.dados['passos'] as string[]).some((x) => x.includes(`contrato ${ids.contratoEncerrado} não vigente`))).toBe(true);
+    expect(
+      (neg.dados['passos'] as string[]).some((x) =>
+        x.includes(`contrato ${ids.contratoEncerrado} não vigente`),
+      ),
+    ).toBe(true);
     // Sem preço: valor zero, para a conferência (a saída não para).
     const sem = await item(I_SEM);
     expect([Number(sem.i['quantidade']), Number(sem.i['valor_total'])]).toEqual([1, 0]);
@@ -663,7 +773,11 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
     expect(await saldoDe(I_REF)).toBe(8);
     const id = Number((await saidaDo(I_REF))?.['conta_hospitalar_item_id']);
     const i = await itemDaConta(id);
-    expect([i?.['situacao'], Number(i?.['quantidade']), Number(i?.['valor_total'])]).toEqual(['lancado', 1, 2]);
+    expect([i?.['situacao'], Number(i?.['quantidade']), Number(i?.['valor_total'])]).toEqual([
+      'lancado',
+      1,
+      2,
+    ]);
     expect((await memoriaDo(id)).map((x) => x['operacao'])).toEqual(['inclusao', 'alteracao']);
     const dev = await ler(
       "SELECT conta_hospitalar_item_id FROM movimento_estoque WHERE insumo_id = ? AND estabelecimento_id = ? AND natureza = 'entrada' ORDER BY id DESC LIMIT 1",
@@ -678,13 +792,18 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
     const id = Number((await saidaDo(I_NEG))?.['conta_hospitalar_item_id']);
     const contar = async () =>
       Number(
-        (await ler("SELECT COUNT(*) AS n FROM movimento_estoque WHERE estabelecimento_id = ? AND natureza = 'entrada'", [ids.est]))?.['n'],
+        (
+          await ler(
+            "SELECT COUNT(*) AS n FROM movimento_estoque WHERE estabelecimento_id = ? AND natureza = 'entrada'",
+            [ids.est],
+          )
+        )?.['n'],
       );
     const entradasAntes = await contar();
-    await escrever("UPDATE conta_hospitalar SET situacao = 'fechada', fechada_em = NOW(3), fechada_por_usuario_id = ? WHERE id = ?", [
-      ids.farma,
-      ids.conta,
-    ]);
+    await escrever(
+      "UPDATE conta_hospitalar SET situacao = 'fechada', fechada_em = NOW(3), fechada_por_usuario_id = ? WHERE id = ?",
+      [ids.farma, ids.conta],
+    );
     try {
       expect(
         await codigoDe(
@@ -703,9 +822,10 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         ),
       ).toBe('conta-fechada');
     } finally {
-      await escrever("UPDATE conta_hospitalar SET situacao = 'aberta', fechada_em = NULL, fechada_por_usuario_id = NULL WHERE id = ?", [
-        ids.conta,
-      ]);
+      await escrever(
+        "UPDATE conta_hospitalar SET situacao = 'aberta', fechada_em = NULL, fechada_por_usuario_id = NULL WHERE id = ?",
+        [ids.conta],
+      );
     }
     expect(await saldoDe(I_NEG)).toBe(8);
     expect(await contar()).toBe(entradasAntes);
@@ -716,7 +836,13 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
 
   it('suprimentos, sem conta aberta ou sem item faturável: a saída fica faturável sem item na conta', async () => {
     const itens = async () =>
-      Number((await ler('SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [ids.conta]))?.['n']);
+      Number(
+        (
+          await ler('SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [
+            ids.conta,
+          ])
+        )?.['n'],
+      );
     const antes = await itens();
     await saidaPaciente(ids.atendimento2, [{ item: I_SEM, quantidade: 1, lotes: [lote('EC-4', 1)] }]);
     const semConta = await saidaDo(I_SEM);

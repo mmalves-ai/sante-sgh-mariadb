@@ -21,6 +21,7 @@ import { nucleoPlataforma } from '../../sessao/fonte-plataforma.js';
 import { FonteComoEstabelecimentoPropria, RepositorioPlataformaPropria } from './porta-propria-plataforma.js';
 import { ErroCorrigirIndisponivel } from './repositorio.js';
 import { ErroPlataforma, ServicoPlataforma } from './servico-plataforma.js';
+import { sqlLimparTrilha } from '../../teste/limpar-trilha.spec-util.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = resolve(import.meta.dirname, '../../../../..');
@@ -407,7 +408,10 @@ describe.skipIf(SEM_BANCO)('suporte no banco próprio contra o MariaDB (platafor
     afterAll(async () => {
       await nucleoComo?.encerrar();
       const lista = (xs: (number | undefined)[]) => xs.filter((x) => x !== undefined).join(',') || '0';
-      q(`DELETE FROM trilha_auditoria WHERE id IN (${lista(trilha)}) AND entidade = 'teste_suporte';
+      // A trilha só dos dois estabelecimentos sintéticos (fecho, cabeça da cadeia e linhas, nessa ordem).
+      q(`${sqlLimparTrilha([ids['ea'] ?? 0, ids['eb'] ?? 0])
+        .map((s) => `${s};`)
+        .join('\n')}
          DELETE FROM usuario_perfil WHERE usuario_id IN (${lista([ids['u1'], ids['u2'], ids['u3'], ids['u4']])});
          DELETE FROM usuario_estabelecimento WHERE usuario_id IN (${lista([ids['u1'], ids['u2'], ids['u3'], ids['u4']])});
          DELETE FROM usuario WHERE id IN (${lista([ids['u1'], ids['u2'], ids['u3'], ids['u4']])}) AND login LIKE '${tag}%';

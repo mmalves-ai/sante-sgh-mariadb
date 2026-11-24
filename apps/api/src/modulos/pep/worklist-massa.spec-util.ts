@@ -4,6 +4,7 @@
 // linhas com as chaves estrangeiras de catálogo desligadas SÓ na transação do preparo (a porta não lê esses catálogos);
 // os CHECKs do modelo continuam valendo. A limpeza apaga tudo pelos estabelecimentos do teste.
 import type { Escritor, NucleoProprio } from '@sgh/nucleo';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 export const CLIENTE_F22_O4 = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const HORA = 3_600_000;
@@ -49,7 +50,7 @@ export async function limparMassaWorklist(e: Escritor, p: string): Promise<void>
   await e.executar(`DELETE FROM requisicao_exame WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar(`DELETE FROM internacao WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar(`DELETE FROM prescricao WHERE estabelecimento_id IN ${est}`, cods);
-  await e.executar(`DELETE FROM trilha_auditoria WHERE estabelecimento_id IN ${est}`, cods);
+  await limparTrilhaDaMassa(e, { codigos: cods });
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', cods);
 }
 
