@@ -44,7 +44,7 @@ import {
   textoDoMotivo,
   lerIdBanco,
 } from '@sgh/contratos';
-import { feriadosMoveis, normalizarHora } from '@sgh/dominio-agenda';
+import { type Abrangencia, diasSemExpediente, normalizarHora } from '@sgh/dominio-agenda';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -191,19 +191,6 @@ const txt = (v: unknown) => (v === null || v === undefined ? null : String(v));
 const codigoNum = (v: unknown) => (v !== null && v !== undefined ? lerIdBanco(String(v)) : null);
 const instante = (v: unknown) => (v instanceof Date ? v : new Date(String(v)));
 const marcadores = (n: number) => Array.from({ length: n }, () => '?').join(', ');
-
-/** Feriados nacionais de data fixa (lei federal); os móveis vêm do domínio da agenda. */
-const FERIADOS_FIXOS = [
-  ['01-01', 'Confraternização Universal'],
-  ['04-21', 'Tiradentes'],
-  ['05-01', 'Dia do Trabalho'],
-  ['09-07', 'Independência do Brasil'],
-  ['10-12', 'Nossa Senhora Aparecida'],
-  ['11-02', 'Finados'],
-  ['11-15', 'Proclamação da República'],
-  ['11-20', 'Dia Nacional de Zumbi e da Consciência Negra'],
-  ['12-25', 'Natal'],
-] as const;
 
 const SITUACAO_DO_SIGNIFICADO: Readonly<Record<string, SituacaoMarcacao>> = {
   aguardando: 'marcada',
@@ -616,14 +603,65 @@ export class PortaAgendaPropria implements PortaAgenda {
     });
   }
 
-  async feriados(_c: ContextoAgenda, de: string, ate: string): Promise<Feriado[]> {
-    // Sem cadastro de feriados locais no modelo (pedido registrado): os nacionais fixos e os móveis.
-    const r: Feriado[] = [];
-    for (let a = Number(de.slice(0, 4)); a <= Number(ate.slice(0, 4)); a++) {
-      for (const [md, nome] of FERIADOS_FIXOS) r.push({ data: `${a}-${md}`, nome });
-      r.push(...feriadosMoveis(a));
-    }
-    return r.filter((f) => f.data >= de && f.data <= ate).sort((x, y) => x.data.localeCompare(y.data));
+  async feriados(c: ContextoAgenda, de: string, ate: string): Promise<Feriado[]> {
+    // 02-AGE linha 41: nacionais fixos e móveis, mais o cadastro de feriados (nacional, da UF, do município e do
+    // estabelecimento) e os dias não úteis do cadastro. A regra de qual vale está no domínio.
+    return this.ler(c, async (l, e) => {
+      const loc = await l.uma(
+        `SELECT s.municipio_ibge_id, m.unidade_federativa_id, u.sigla
+           FROM estabelecimento s
+           LEFT JOIN municipio_ibge m ON m.id = s.municipio_ibge_id
+           LEFT JOIN unidade_federativa u ON u.id = m.unidade_federativa_id
+          WHERE s.id = ?`,
+        [e.id],
+      );
+      const fer = await l.consultar(
+        `SELECT data, nome, abrangencia, uf, municipio_ibge_id, estabelecimento_id, ponto_facultativo
+           FROM feriado WHERE ativo AND excluido_em IS NULL AND data BETWEEN ? AND ?`,
+        [de, ate],
+      );
+      const dnu = await l.consultar(
+        `SELECT descricao, abrangencia, unidade_federativa_id, municipio_ibge_id, estabelecimento_id, recorrencia,
+                dia, mes, data, facultativo, hora_inicio
+           FROM dia_nao_util
+          WHERE ativo AND excluido_em IS NULL AND (recorrencia = 'anual' OR data BETWEEN ? AND ?)`,
+        [de, ate],
+      );
+      return diasSemExpediente(
+        {
+          estabelecimento: e.id,
+          municipio: numOuNull(loc?.['municipio_ibge_id']),
+          uf: txt(loc?.['sigla']),
+          ufId: numOuNull(loc?.['unidade_federativa_id']),
+        },
+        de,
+        ate,
+        {
+          feriados: fer.map((x) => ({
+            data: dataIso(x['data']) ?? '',
+            nome: String(x['nome']),
+            abrangencia: String(x['abrangencia']) as Abrangencia,
+            uf: txt(x['uf']),
+            municipio: numOuNull(x['municipio_ibge_id']),
+            estabelecimento: numOuNull(x['estabelecimento_id']),
+            pontoFacultativo: Boolean(Number(x['ponto_facultativo'])),
+          })),
+          diasNaoUteis: dnu.map((x) => ({
+            descricao: String(x['descricao']),
+            abrangencia: String(x['abrangencia']) as Abrangencia,
+            ufId: numOuNull(x['unidade_federativa_id']),
+            municipio: numOuNull(x['municipio_ibge_id']),
+            estabelecimento: numOuNull(x['estabelecimento_id']),
+            recorrencia: String(x['recorrencia']) as 'anual' | 'data_unica' | 'movel',
+            dia: numOuNull(x['dia']),
+            mes: numOuNull(x['mes']),
+            data: dataIso(x['data']),
+            facultativo: Boolean(Number(x['facultativo'])),
+            horaInicio: txt(x['hora_inicio']),
+          })),
+        },
+      );
+    });
   }
 
   private marcacaoDaLinha(x: Linha, fuso: string): Marcacao {

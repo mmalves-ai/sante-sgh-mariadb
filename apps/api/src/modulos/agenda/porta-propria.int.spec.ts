@@ -189,6 +189,8 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
   async function limpar(e: Escritor) {
     for (const est of [ids.est, ids.estB]) {
       if (!est) continue;
+      await e.executar('DELETE FROM feriado WHERE estabelecimento_id = ?', [est]);
+      await e.executar('DELETE FROM dia_nao_util WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM confirmacao_marcacao WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM cancelamento_marcacao WHERE estabelecimento_id = ?', [est]);
       await e.executar(
@@ -422,6 +424,42 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
     outroDia: '2030-03-13',
     c: () => ctx(),
   }));
+
+  it('02-AGE 41: a grade pula o feriado e o dia não útil do próprio estabelecimento; ponto facultativo, meio expediente e outro estabelecimento não', async () => {
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0104-feriado' }, async (e) => {
+      const agora = new Date();
+      const fer = (data: string, nome: string, est: number, facultativo = false) =>
+        e.inserir(
+          "INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, ponto_facultativo, criado_em) VALUES (?, ?, 'estabelecimento', ?, ?, ?)",
+          [data, nome, est, facultativo, agora],
+        );
+      await fer('2030-08-06', 'Feriado sintético L0104', ids.est);
+      await fer('2030-08-07', 'Facultativo sintético L0104', ids.est, true);
+      await fer('2030-08-08', 'Feriado de outro estabelecimento', ids.estB);
+      const dnu = (descricao: string, dia: number, inicio: string | null) =>
+        e.inserir(
+          "INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, dia, mes, hora_inicio, hora_fim, criado_em) VALUES (?, 'estabelecimento', ?, 'anual', ?, 8, ?, ?, ?)",
+          [descricao, ids.est, dia, inicio, inicio ? '18:00' : null, agora],
+        );
+      await dnu('Aniversário sintético L0104', 13, null);
+      await dnu('Meio expediente sintético L0104', 14, '13:00');
+    });
+    const r = await porta.feriados(ctx(), '2030-08-01', '2031-08-31');
+    const datas = r.map((f) => f.data);
+    expect(datas).toContain('2030-08-06');
+    expect(datas).toContain('2030-08-13');
+    expect(datas).toContain('2031-08-13');
+    expect(datas).not.toContain('2030-08-07');
+    expect(datas).not.toContain('2030-08-08');
+    expect(datas).not.toContain('2030-08-14');
+    expect(r.find((f) => f.data === '2030-08-06')?.nome).toBe('Feriado sintético L0104');
+    // Os nacionais continuam.
+    expect(datas).toContain('2030-09-07');
+    // O outro estabelecimento vê o seu, e não o deste.
+    const b = (await porta.feriados(ctx(EST_B), '2030-08-01', '2030-08-31')).map((f) => f.data);
+    expect(b).toContain('2030-08-08');
+    expect(b).not.toContain('2030-08-06');
+  });
 
   it('gerar a grade: horários, geração, trilha e outbox; repetir a chave não grava de novo; prévia velha é recusada', async () => {
     expect(geracao).toBeGreaterThan(0);
