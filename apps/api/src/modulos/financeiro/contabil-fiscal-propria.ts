@@ -124,9 +124,10 @@ export async function deParaDoEstabelecimento(l: Leitor, est: number) {
     [est, est],
   );
   const credores = await l.consultar(
-    `SELECT d.empresa_fornecedora_id AS id, d.codigo_externo, d.ativo FROM depara_participante_externo d
+    `SELECT d.empresa_fornecedora_id AS id, d.codigo_externo, d.ativo, f.razao_social, f.nome_fantasia
+       FROM depara_participante_externo d JOIN empresa_fornecedora f ON f.id = d.empresa_fornecedora_id
       WHERE d.estabelecimento_id = ? AND d.sistema_externo_id IS NULL AND d.tipo_participante = 'fornecedor'
-      ORDER BY d.id LIMIT 5000`,
+      ORDER BY f.razao_social, d.id LIMIT 5000`,
     [est],
   );
   const naturezas = await l.consultar(
@@ -152,7 +153,61 @@ export async function deParaDoEstabelecimento(l: Leitor, est: number) {
     })),
     credores: credores
       .filter((r) => Number(r['ativo']))
-      .map((r) => ({ id: numero(r['id']), externo: texto(r['codigo_externo']) })),
+      .map((r) => ({
+        id: numero(r['id']),
+        nome: texto(r['nome_fantasia'] ?? r['razao_social']),
+        externo: texto(r['codigo_externo']),
+      })),
+  };
+}
+
+/**
+ * Busca do fornecedor pelo nome (razão social ou fantasia), CNPJ, CPF ou código, para o código externo do credor no
+ * de-para e o órgão arrecadador do recolhimento: a tela nunca pede o código interno digitado.
+ */
+export async function buscarFornecedores(l: Leitor, termo: string) {
+  const t = termo.trim();
+  if (t.length < 2) return [];
+  const digitos = t.replace(/\D/g, '');
+  const linhas = await l.consultar(
+    `SELECT id, razao_social, nome_fantasia, cnpj, cpf FROM empresa_fornecedora
+      WHERE situacao <> 'inativo'
+        AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR id = ? OR (? <> '' AND (cnpj LIKE ? OR cpf LIKE ?)))
+      ORDER BY razao_social LIMIT 21`,
+    [`%${t}%`, `%${t}%`, Number(t) || 0, digitos, `${digitos}%`, `${digitos}%`],
+  );
+  return linhas.slice(0, 20).map((r) => ({
+    id: numero(r['id']),
+    nome: texto(r['nome_fantasia'] ?? r['razao_social']),
+    documento: r['cnpj'] ? texto(r['cnpj']) : r['cpf'] ? texto(r['cpf']) : null,
+  }));
+}
+
+/**
+ * O apoio da tela das retenções: os tributos ativos (sigla, descrição e código de receita padrão) e as naturezas
+ * financeiras ativas, para escolher pelo nome (a natureza do recolhimento vazia herda a do tributo).
+ */
+export async function apoioRetencao(l: Leitor) {
+  const tributos = await l.consultar(
+    'SELECT id, codigo, descricao, codigo_receita FROM tributo WHERE ativo = TRUE ORDER BY codigo LIMIT 200',
+    [],
+  );
+  const naturezas = await l.consultar(
+    'SELECT id, codigo, descricao FROM natureza_financeira WHERE ativo = TRUE ORDER BY codigo LIMIT 3000',
+    [],
+  );
+  return {
+    tributos: tributos.map((r) => ({
+      id: numero(r['id']),
+      sigla: texto(r['codigo']),
+      descricao: texto(r['descricao']),
+      codigoReceita: r['codigo_receita'] ? texto(r['codigo_receita']) : null,
+    })),
+    naturezas: naturezas.map((r) => ({
+      id: numero(r['id']),
+      codigo: texto(r['codigo']),
+      descricao: texto(r['descricao']),
+    })),
   };
 }
 

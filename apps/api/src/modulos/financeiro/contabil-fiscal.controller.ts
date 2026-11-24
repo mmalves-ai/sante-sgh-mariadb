@@ -2,6 +2,8 @@
 //   GET  /api/financeiro/contabil-fiscal/de-para                    eventos, regras de conta, naturezas, centros, credores
 //   GET  /api/financeiro/contabil-fiscal/sem-de-para?periodo=&regua= o que falta mapear antes de exportar o lote
 //   POST /api/financeiro/contabil-fiscal/de-para                    { tipo: conta | centro | credor, ... }
+//   GET  /api/financeiro/contabil-fiscal/fornecedores?termo=        busca do credor pelo nome, documento ou código
+//   GET  /api/financeiro/contabil-fiscal/retencao/apoio             tributos e naturezas ativos (escolha pelo nome)
 //   GET  /api/financeiro/contabil-fiscal/retencao/regras            regras com vigência (vigentes e encerradas)
 //   POST /api/financeiro/contabil-fiscal/retencao/regras            { acao: incluir | encerrar, ... }
 //   GET  /api/financeiro/contabil-fiscal/retencao/sugestao?valor=&data=&participante=&momento=&municipio=
@@ -18,6 +20,8 @@ import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
+  apoioRetencao,
+  buscarFornecedores,
   deParaDoEstabelecimento,
   esquemaDeParaContabil,
   esquemaRecolhimento,
@@ -112,6 +116,18 @@ export class ContabilFiscalController {
       corpo(esquemaDeParaContabil, b),
       'De-para contábil gravado.',
     );
+  }
+
+  @Get('fornecedores')
+  @Permissao('financeiro.tituloPagar.ler')
+  fornecedores(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.ler(req, (l) => buscarFornecedores(l, String(termo ?? '').slice(0, 100)));
+  }
+
+  @Get('retencao/apoio')
+  @Permissao('financeiro.parametro.ler')
+  apoio(@Req() req: RequisicaoAutorizada) {
+    return this.ler(req, (l) => apoioRetencao(l));
   }
 
   @Get('retencao/regras')

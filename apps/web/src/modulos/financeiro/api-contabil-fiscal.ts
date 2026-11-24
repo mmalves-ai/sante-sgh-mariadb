@@ -21,7 +21,7 @@ export interface DeParaCompleto {
   readonly regras: readonly RegraDePara[];
   readonly naturezas: readonly { id: number; codigo: string; descricao: string }[];
   readonly centros: readonly { id: number; codigo: string; nome: string; externo: string | null }[];
-  readonly credores: readonly { id: number; externo: string }[];
+  readonly credores: readonly { id: number; nome: string; externo: string }[];
 }
 export interface FaltaDePara {
   readonly evento: string;
@@ -52,6 +52,43 @@ export interface RetidoEmAberto {
   readonly valor: number;
 }
 
+export interface FornecedorEncontrado {
+  readonly id: number;
+  readonly nome: string;
+  readonly documento: string | null;
+}
+export interface ApoioRetencao {
+  readonly tributos: readonly {
+    id: number;
+    sigla: string;
+    descricao: string;
+    codigoReceita: string | null;
+  }[];
+  readonly naturezas: readonly { id: number; codigo: string; descricao: string }[];
+}
+export interface SugestaoRetencao {
+  readonly tributo: string;
+  readonly tributoId: number;
+  readonly regra: number;
+  readonly base: number;
+  readonly aliquota: number;
+  readonly valor: number;
+  readonly dispensada: boolean;
+}
+
+export const buscarFornecedores = (termo: string) =>
+  ler(`${P}/fornecedores${qs({ termo })}`, z.array(confiar<FornecedorEncontrado>()));
+export const lerApoioRetencao = () => ler(`${P}/retencao/apoio`, confiar<ApoioRetencao>());
+export const lerSugestaoRetencao = (f: {
+  valor: number;
+  data: string;
+  participante: string;
+  momento: string;
+}) =>
+  ler(
+    `${P}/retencao/sugestao${qs({ valor: String(f.valor), data: f.data, participante: f.participante, momento: f.momento })}`,
+    z.array(confiar<SugestaoRetencao>()),
+  );
 export const lerDeParaCompleto = () => ler(`${P}/de-para`, confiar<DeParaCompleto>());
 export const lerSemDePara = (periodo: string, regua: string) =>
   ler(`${P}/sem-de-para${qs({ periodo, regua })}`, z.array(confiar<FaltaDePara>()));

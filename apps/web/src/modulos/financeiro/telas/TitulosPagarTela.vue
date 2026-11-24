@@ -13,6 +13,7 @@ import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import EscolhaContrato from '../../suprimentos/componentes/EscolhaContrato.vue';
+import SugestaoRetencaoTitulo from '../componentes/SugestaoRetencaoTitulo.vue';
 import { criarTituloPagar, listarTitulosPagar, novaChave } from '../api-financeiro.js';
 import {
   data,
@@ -301,6 +302,12 @@ async function lancar() {
           data-testid="tp-novo-retencao"
         />
       </span>
+      <SugestaoRetencaoTitulo
+        :valor="valorNum"
+        :data="novo.emissao"
+        :participante="novo.tipo === 'M' ? 'pessoa_fisica' : 'pessoa_juridica'"
+        @aplicar="(s) => ((novo.retencao = String(s.tributo)), (novo.valorRetencao = s.valor.toFixed(2)))"
+      />
       <span v-if="novo.retencao" class="campo">
         <label for="tp-novo-vret">{{ t('financeiro.pagar.valorRetencao') }}</label>
         <input

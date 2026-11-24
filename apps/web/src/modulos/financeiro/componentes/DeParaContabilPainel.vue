@@ -9,7 +9,14 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import { novaChave } from '../api-financeiro.js';
-import { gravarDePara, type Lado, lerDeParaCompleto, lerSemDePara } from '../api-contabil-fiscal.js';
+import {
+  type FornecedorEncontrado,
+  gravarDePara,
+  type Lado,
+  lerDeParaCompleto,
+  lerSemDePara,
+} from '../api-contabil-fiscal.js';
+import BuscaFornecedor from './BuscaFornecedor.vue';
 
 const props = defineProps<{ periodo: string; regua: string; podeEditar: boolean }>();
 const { t } = useI18n({
@@ -33,6 +40,11 @@ const { t } = useI18n({
       faltam: 'Falta conta no período: {n} lançamento(s) ficariam fora do lote',
       nadaFalta: 'Todos os lançamentos do período têm conta nos dois lados.',
       centros: 'Código do centro de custo no escritório contábil',
+      credores: 'Código do credor no escritório contábil',
+      novoCredor: 'Fornecedor',
+      codigoCredor: 'Código no escritório',
+      adicionarCredor: 'Gravar código do credor',
+      semCredores: 'Nenhum credor com código externo: o lote leva o credor pelo código interno.',
       gravado: 'Gravado',
       lados: { debito: 'débito', credito: 'crédito', ambos: 'ambos' },
     },
@@ -140,6 +152,20 @@ async function adicionarExcecao(evento: string) {
     novaNatureza.value[evento] = null;
     novaConta.value[evento] = '';
   }
+}
+const credorNovo = ref<FornecedorEncontrado | null>(null);
+const codigoCredorNovo = ref('');
+async function adicionarCredor() {
+  const codigo = codigoCredorNovo.value.trim();
+  if (!credorNovo.value || !codigo) return;
+  await salvar({ tipo: 'credor', fornecedor: credorNovo.value.id, codigo, ativo: true });
+  if (!erro.value) codigoCredorNovo.value = '';
+}
+/** O código externo do credor: vazio desliga a regra (mandando o código que ela tem), como no centro. */
+function credorAlterado(c: { id: number; externo: string }, valor: string) {
+  const v = valor.trim();
+  if (v === c.externo) return;
+  return salvar({ tipo: 'credor', fornecedor: c.id, codigo: v || c.externo, ativo: v !== '' });
 }
 /** O código externo do centro: vazio desliga a regra atual (mandando o código que ela tem), nunca um marcador. */
 function centroAlterado(c: { id: number; externo: string | null }, valor: string) {
@@ -262,5 +288,40 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
         />
       </li>
     </ul>
+    <h3>{{ t('credores') }}</h3>
+    <p v-if="!dados.data.value?.credores.length" class="secundario">{{ t('semCredores') }}</p>
+    <ul class="lista-simples" data-testid="dp-credores">
+      <li v-for="c in dados.data.value?.credores" :key="c.id">
+        <label :for="`dp-cr-${c.id}`">{{ c.nome }}</label>
+        <input
+          :id="`dp-cr-${c.id}`"
+          :value="c.externo"
+          :disabled="!podeEditar"
+          maxlength="40"
+          :data-testid="`dp-cr-${c.id}`"
+          @change="credorAlterado(c, ($event.target as HTMLInputElement).value)"
+        />
+      </li>
+    </ul>
+    <div v-if="podeEditar" class="formulario" data-testid="dp-credor-novo">
+      <BuscaFornecedor :rotulo="t('novoCredor')" prefixo="dp-credor" @escolhido="(f) => (credorNovo = f)" />
+      <span class="campo">
+        <label for="dp-credor-codigo">{{ t('codigoCredor') }}</label>
+        <input
+          id="dp-credor-codigo"
+          v-model="codigoCredorNovo"
+          maxlength="40"
+          data-testid="dp-credor-codigo"
+        />
+      </span>
+      <button
+        type="button"
+        :disabled="!credorNovo || !codigoCredorNovo.trim()"
+        data-testid="dp-credor-gravar"
+        @click="adicionarCredor"
+      >
+        {{ t('adicionarCredor') }}
+      </button>
+    </div>
   </section>
 </template>

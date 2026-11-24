@@ -2,8 +2,9 @@
 // F3.8, 07-FIN linha 109: as regras de retenção na fonte com vigência (o lançamento do título recebe a sugestão da regra
 // vigente, não um valor digitado) e o recolhimento do retido da competência: um clique por tributo gera o título a
 // pagar da guia, com o código de receita e o vencimento no mês seguinte, e liga as retenções a ele.
+import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import { novaChave } from '../api-financeiro.js';
@@ -12,7 +13,9 @@ import {
   gravarRegraRetencao,
   lerRegrasRetencao,
   lerRetidoEmAberto,
+  lerApoioRetencao,
 } from '../api-contabil-fiscal.js';
+import BuscaFornecedor from './BuscaFornecedor.vue';
 
 const props = defineProps<{ competencia: string; podeEditar: boolean; podeRecolher: boolean }>();
 const { t } = useI18n({
@@ -29,8 +32,29 @@ const { t } = useI18n({
       encerrar: 'Encerrar vigência hoje',
       emAberto: 'Retido em aberto na competência',
       receita: 'Código de receita',
-      credor: 'Órgão arrecadador (código do credor)',
-      natureza: 'Natureza (código interno)',
+      credor: 'Órgão arrecadador (credor da guia)',
+      natureza: 'Natureza financeira',
+      naturezaDoTributo: 'A do tributo',
+      nova: 'Nova regra de retenção',
+      descricao: 'Descrição',
+      momento: 'Momento',
+      momentos: { emissao: 'Na emissão', pagamento: 'No pagamento', recebimento: 'No recebimento' },
+      participantes: {
+        pessoa_fisica: 'Pessoa física',
+        pessoa_juridica: 'Pessoa jurídica',
+        cooperativa: 'Cooperativa',
+        simples_nacional: 'Optante do Simples',
+        orgao_publico: 'Órgão público',
+        todos: 'Todos',
+      },
+      deducao: 'Dedução',
+      maximo: 'Teto (opcional)',
+      faixaInicio: 'Faixa de (opcional)',
+      faixaFim: 'Faixa até (opcional)',
+      inicio: 'Início da vigência',
+      incluir: 'Incluir regra',
+      escolha: 'Escolha',
+      invalida: 'Preencha tributo, descrição (3 letras ou mais), alíquota e início da vigência.',
       gerar: 'Gerar título do recolhimento',
       nada: 'Nenhuma retenção em aberto.',
       ate: 'até',
@@ -50,6 +74,70 @@ const credor = ref<number | null>(null);
 const natureza = ref<number | null>(null);
 const receitas = ref<Record<number, string>>({});
 const hoje = () => new Date().toISOString().slice(0, 10);
+const apoio = useQuery({ queryKey: ['financeiro', 'apoio-retencao'], queryFn: () => lerApoioRetencao() });
+const MOMENTOS = ['emissao', 'pagamento', 'recebimento'] as const;
+const PARTICIPANTES = [
+  'pessoa_juridica',
+  'pessoa_fisica',
+  'cooperativa',
+  'simples_nacional',
+  'orgao_publico',
+  'todos',
+] as const;
+const nova = reactive({
+  tributo: null as number | null,
+  descricao: '',
+  momento: 'pagamento' as (typeof MOMENTOS)[number],
+  participante: 'pessoa_juridica' as (typeof PARTICIPANTES)[number],
+  percentualBase: '100',
+  aliquota: '',
+  deducao: '0',
+  minimo: '0',
+  maximo: '',
+  faixaInicio: '',
+  faixaFim: '',
+  vigenciaInicio: hoje(),
+});
+const num = (v: string) => Number(String(v).replace(',', '.'));
+const opcional = (v: string) => (String(v).trim() === '' ? null : num(v));
+/** Validação na hora: o botão só liga com o mínimo que o servidor exige (o servidor confere o resto). */
+const novaPronta = computed(
+  () =>
+    !!nova.tributo &&
+    nova.descricao.trim().length >= 3 &&
+    num(nova.aliquota) > 0 &&
+    num(nova.aliquota) <= 100 &&
+    num(nova.percentualBase) > 0 &&
+    num(nova.percentualBase) <= 100 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(nova.vigenciaInicio),
+);
+const incluir = () =>
+  agir(async () => {
+    const r = await gravarRegraRetencao(
+      {
+        acao: 'incluir',
+        tributo: nova.tributo,
+        descricao: nova.descricao.trim(),
+        momento: nova.momento,
+        participante: nova.participante,
+        municipio: null,
+        percentualBase: num(nova.percentualBase),
+        aliquota: num(nova.aliquota),
+        faixaInicio: opcional(nova.faixaInicio),
+        faixaFim: opcional(nova.faixaFim),
+        deducao: num(nova.deducao) || 0,
+        minimo: num(nova.minimo) || 0,
+        maximo: opcional(nova.maximo),
+        codigoReceita: null,
+        vigenciaInicio: nova.vigenciaInicio,
+        vigenciaFim: null,
+      },
+      novaChave('regra'),
+    );
+    nova.descricao = '';
+    nova.aliquota = '';
+    return r;
+  });
 
 async function agir(fn: () => Promise<{ mensagem: string }>) {
   erro.value = null;
@@ -101,7 +189,7 @@ const recolher = (tributo: number, receita: string | null) =>
       <tbody>
         <tr v-for="r in regras.data.value" :key="r.id">
           <th scope="row">{{ `${r.tributo} - ${r.descricao}` }}</th>
-          <td>{{ r.participante }}</td>
+          <td>{{ t(`participantes.${r.participante}`) }}</td>
           <td>{{ r.percentualBase }}</td>
           <td>{{ r.aliquota }}</td>
           <td>{{ r.minimo.toFixed(2) }}</td>
@@ -117,16 +205,100 @@ const recolher = (tributo: number, receita: string | null) =>
         </tr>
       </tbody>
     </table>
+    <form
+      v-if="podeEditar"
+      class="formulario"
+      data-testid="rt-nova"
+      @submit.prevent="novaPronta && incluir()"
+    >
+      <h3>{{ t('nova') }}</h3>
+      <span class="campo">
+        <SanteSelecao
+          v-model="nova.tributo"
+          :rotulo="t('tributo')"
+          obrigatorio
+          :opcoes="[
+            { valor: null, rotulo: t('escolha') },
+            ...(apoio.data.value?.tributos ?? []).map((x) => ({
+              valor: x.id,
+              rotulo: `${x.sigla} - ${x.descricao}`,
+            })),
+          ]"
+          data-testid="rt-nova-tributo"
+        />
+      </span>
+      <span class="campo">
+        <label for="rt-nova-descricao">{{ t('descricao') }}</label>
+        <input
+          id="rt-nova-descricao"
+          v-model="nova.descricao"
+          maxlength="150"
+          required
+          data-testid="rt-nova-descricao"
+        />
+      </span>
+      <span class="campo">
+        <SanteSelecao
+          v-model="nova.momento"
+          :rotulo="t('momento')"
+          :opcoes="MOMENTOS.map((m) => ({ valor: m, rotulo: t(`momentos.${m}`) }))"
+          data-testid="rt-nova-momento"
+        />
+      </span>
+      <span class="campo">
+        <SanteSelecao
+          v-model="nova.participante"
+          :rotulo="t('participante')"
+          :opcoes="PARTICIPANTES.map((x) => ({ valor: x, rotulo: t(`participantes.${x}`) }))"
+          data-testid="rt-nova-participante"
+        />
+      </span>
+      <span
+        v-for="c in [
+          'percentualBase',
+          'aliquota',
+          'deducao',
+          'minimo',
+          'maximo',
+          'faixaInicio',
+          'faixaFim',
+        ] as const"
+        :key="c"
+        class="campo"
+      >
+        <label :for="`rt-nova-${c}`">{{ t(c === 'percentualBase' ? 'base' : c) }}</label>
+        <input :id="`rt-nova-${c}`" v-model="nova[c]" inputmode="decimal" :data-testid="`rt-nova-${c}`" />
+      </span>
+      <span class="campo">
+        <label for="rt-nova-inicio">{{ t('inicio') }}</label>
+        <input
+          id="rt-nova-inicio"
+          v-model="nova.vigenciaInicio"
+          type="date"
+          required
+          data-testid="rt-nova-inicio"
+        />
+      </span>
+      <small v-if="!novaPronta" class="secundario">{{ t('invalida') }}</small>
+      <button type="submit" :disabled="!novaPronta" data-testid="rt-nova-incluir">{{ t('incluir') }}</button>
+    </form>
     <h2>{{ t('emAberto') }} {{ competencia }}</h2>
     <p v-if="!aberto.data.value?.length">{{ t('nada') }}</p>
     <template v-else>
+      <BuscaFornecedor :rotulo="t('credor')" prefixo="rt-credor" @escolhido="(f) => (credor = f.id)" />
       <span class="campo">
-        <label for="rt-credor">{{ t('credor') }}</label>
-        <input id="rt-credor" v-model.number="credor" type="number" min="1" data-testid="rt-credor" />
-      </span>
-      <span class="campo">
-        <label for="rt-natureza">{{ t('natureza') }}</label>
-        <input id="rt-natureza" v-model.number="natureza" type="number" min="1" data-testid="rt-natureza" />
+        <SanteSelecao
+          v-model="natureza"
+          :rotulo="t('natureza')"
+          :opcoes="[
+            { valor: null, rotulo: t('naturezaDoTributo') },
+            ...(apoio.data.value?.naturezas ?? []).map((n) => ({
+              valor: n.id,
+              rotulo: `${n.codigo} ${n.descricao}`,
+            })),
+          ]"
+          data-testid="rt-natureza"
+        />
       </span>
       <table class="tabela" data-testid="rt-aberto">
         <tbody>
