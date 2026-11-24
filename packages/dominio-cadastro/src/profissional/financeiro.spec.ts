@@ -25,7 +25,7 @@ const fiscal = (x: Partial<DadoFiscal> = {}): DadoFiscal => ({
   tipoRecebedor: 'pessoa_fisica',
   pessoaJuridica: null,
   regime: 'autonomo',
-  pisPasep: '12056412547',
+  pisPasep: '12056412545',
   aliquotaIss: 5,
   percentualInss: 11,
   retemIss: true,
@@ -69,7 +69,7 @@ describe('dado fiscal do repasse', () => {
       ),
     ).toEqual(['dependentes-em-pj']);
     expect(errosDadoFiscal(fiscal({ regime: 'mei' }))).toContain('mei-sem-empresa');
-    expect(errosDadoFiscal(fiscal({ pisPasep: '12345678900' }))).toContain('pis-invalido');
+    expect(errosDadoFiscal(fiscal({ pisPasep: '12345678901' }))).toContain('pis-invalido');
   });
 
   it('ISS de 2% a 5% (isento sem alíquota nem retenção); regime do recebedor; PIS do contribuinte com INSS retido', () => {
@@ -91,7 +91,7 @@ describe('dado fiscal do repasse', () => {
   });
 
   it('PIS pelo dígito verificador', () => {
-    expect(pisValido('12056412547')).toBe(true);
+    expect(pisValido('12056412545')).toBe(true);
     expect(pisValido('12056412548')).toBe(false);
     expect(pisValido('11111111111')).toBe(false);
   });

@@ -73,10 +73,22 @@ describe('seções configuráveis do sumário de alta (03-PEP L124)', () => {
   it('pendências: só as obrigatórias sem conteúdo, texto livre pelo código', () => {
     const secoes = resolverSecoesSumario(
       [
-        comp({ codigo: 'diag', obrigatorio: true }),
-        comp({ codigo: 'orient', tipoConteudo: 'orientacoes', obrigatorio: true, descricao: 'Orientações' }),
-        comp({ codigo: 'dispo', tipoConteudo: 'dispositivos', obrigatorio: false }),
-        comp({ codigo: 'plano', tipoConteudo: 'plano_terapeutico', obrigatorio: true }),
+        comp({ codigo: 'diag', obrigatorio: true, ordem: 1 }),
+        comp({
+          codigo: 'orient',
+          tipoConteudo: 'orientacoes',
+          obrigatorio: true,
+          descricao: 'Orientações',
+          ordem: 2,
+        }),
+        comp({ codigo: 'dispo', tipoConteudo: 'dispositivos', obrigatorio: false, ordem: 3 }),
+        comp({
+          codigo: 'plano',
+          tipoConteudo: 'plano_terapeutico',
+          obrigatorio: true,
+          descricao: 'Plano terapêutico',
+          ordem: 4,
+        }),
       ],
       1,
       'internacao',

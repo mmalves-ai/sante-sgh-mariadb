@@ -3,7 +3,7 @@
 // setores com os ramais, numa tela só por abas. O setor é editado com os ramais no mesmo formulário (uma gravação);
 // a árvore mostra o superior; o CNPJ e a regra "lança na conta exige centro de custo" são conferidos na hora.
 // Inativar pede motivo e nunca apaga. A recusa da API aparece junto do formulário.
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -189,19 +189,19 @@ const nomeUnidade = (id: number | null) =>
             t('estruturaGestao.estabelecimento.cnpjNaoConfere')
           }}</small>
         </label>
-        <label v-for="c in ['tipo', 'porte', 'esfera'] as const" :key="c">
-          {{ t(`estruturaGestao.estabelecimento.${c}`) }}
-          <select v-model="est[c]" :name="c">
-            <option :value="null">{{ t('estruturaGestao.comum.escolha') }}</option>
-            <option
-              v-for="o in dados.opcoes[c === 'tipo' ? 'tipos' : c === 'porte' ? 'portes' : 'esferas']"
-              :key="o.id"
-              :value="o.id"
-            >
-              {{ o.nome }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-for="c in ['tipo', 'porte', 'esfera'] as const"
+          :key="c"
+          v-model="est[c] as number | null"
+          :rotulo="t(`estruturaGestao.estabelecimento.${c}`)"
+          :opcoes="[
+            { valor: null, rotulo: t('estruturaGestao.comum.escolha') },
+            ...dados.opcoes[c === 'tipo' ? 'tipos' : c === 'porte' ? 'portes' : 'esferas'].map((o) => ({
+              valor: o.id,
+              rotulo: o.nome,
+            })),
+          ]"
+        />
         <label v-for="c in ['inicioAtividade', 'fimAtividade'] as const" :key="c">
           {{ t(`estruturaGestao.estabelecimento.${c}`) }}
           <input v-model="est[c] as string" type="date" :name="c" />
@@ -210,16 +210,21 @@ const nomeUnidade = (id: number | null) =>
           ><input v-model="est['hospitalDia']" type="checkbox" />
           {{ t('estruturaGestao.estabelecimento.hospitalDia') }}</label
         >
-        <SanteBotao type="submit" :disabled="cnpjRuim" data-testid="gravar-estabelecimento">{{
-          t('estruturaGestao.comum.gravar')
-        }}</SanteBotao>
+        <SanteBotao
+          tipo="submit"
+          :rotulo="t('estruturaGestao.comum.gravar')"
+          :desabilitado="cnpjRuim"
+          data-testid="gravar-estabelecimento"
+        />
       </form>
 
       <!-- Unidades -->
       <div v-else-if="aba === 'unidades'">
-        <SanteBotao data-testid="nova-unidade" @click="unidade = novaUnidade()">{{
-          t('estruturaGestao.comum.novo')
-        }}</SanteBotao>
+        <SanteBotao
+          :rotulo="t('estruturaGestao.comum.novo')"
+          data-testid="nova-unidade"
+          @acionar="unidade = novaUnidade()"
+        />
         <table>
           <tbody>
             <tr v-for="u in dados.unidades" :key="u.id" :data-testid="`unidade-${u.codigo}`">
@@ -265,28 +270,30 @@ const nomeUnidade = (id: number | null) =>
             }}
             <input v-model="unidade[c] as string" :name="`unidade-${c}`" />
           </label>
-          <label>
-            {{ t('estruturaGestao.unidade.tipo') }}
-            <select v-model="unidade['tipo']" name="unidade-tipo">
-              <option v-for="x in tiposUnidade" :key="x" :value="x">
-                {{ t(`estruturaGestao.unidade.tipos.${x}`) }}
-              </option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-model="unidade['tipo'] as string"
+            :rotulo="t('estruturaGestao.unidade.tipo')"
+            :opcoes="tiposUnidade.map((x) => ({ valor: x, rotulo: t(`estruturaGestao.unidade.tipos.${x}`) }))"
+          />
           <label class="largo">
             {{ t('estruturaGestao.unidade.orientacaoAcesso') }}
             <textarea v-model="unidade['orientacaoAcesso'] as string" rows="2" />
           </label>
-          <SanteBotao type="submit" data-testid="gravar-unidade">{{
-            t('estruturaGestao.comum.gravar')
-          }}</SanteBotao>
+          <SanteBotao
+            tipo="submit"
+            :rotulo="t('estruturaGestao.comum.gravar')"
+            data-testid="gravar-unidade"
+          />
           <template v-if="unidade['id']">
             <label
               >{{ t('estruturaGestao.comum.motivo') }}<input v-model="motivo" name="motivo-unidade"
             /></label>
             <SanteBotao
-              :disabled="motivo.trim().length < 10"
-              @click="
+              :rotulo="
+                unidade['ativo'] ? t('estruturaGestao.comum.inativar') : t('estruturaGestao.comum.reativar')
+              "
+              :desabilitado="motivo.trim().length < 10"
+              @acionar="
                 fazer(
                   () =>
                     situacaoUnidade(unidade!['id'] as number, {
@@ -297,20 +304,18 @@ const nomeUnidade = (id: number | null) =>
                   () => ((unidade = null), (motivo = '')),
                 )
               "
-            >
-              {{
-                unidade['ativo'] ? t('estruturaGestao.comum.inativar') : t('estruturaGestao.comum.reativar')
-              }}
-            </SanteBotao>
+            />
           </template>
         </form>
       </div>
 
       <!-- Setores -->
       <div v-else>
-        <SanteBotao data-testid="novo-setor" @click="setor = novoSetor()">{{
-          t('estruturaGestao.comum.novo')
-        }}</SanteBotao>
+        <SanteBotao
+          :rotulo="t('estruturaGestao.comum.novo')"
+          data-testid="novo-setor"
+          @acionar="setor = novoSetor()"
+        />
         <ul class="arvore" data-testid="arvore-setores">
           <li
             v-for="{ s, nivel } in arvore"
@@ -340,46 +345,43 @@ const nomeUnidade = (id: number | null) =>
           <label v-for="c in ['codigo', 'nome', 'sigla'] as const" :key="c">
             {{ t(`estruturaGestao.setor.${c}`) }}<input v-model="setor[c] as string" :name="`setor-${c}`" />
           </label>
-          <label>
-            {{ t('estruturaGestao.setor.tipo') }}
-            <select v-model="setor['tipo']" name="setor-tipo">
-              <option v-for="x in tiposSetor" :key="x" :value="x">
-                {{ t(`estruturaGestao.setor.tipos.${x}`) }}
-              </option>
-            </select>
-          </label>
-          <label>
-            {{ t('estruturaGestao.setor.superior') }}
-            <select v-model="setor['superior']" name="setor-superior">
-              <option :value="null">—</option>
-              <option
-                v-for="x in dados.setores.filter((y) => y.id !== setor!['id'] && y.ativo)"
-                :key="x.id"
-                :value="x.id"
-              >
-                {{ x.nome }}
-              </option>
-            </select>
-          </label>
-          <label>
-            {{ t('estruturaGestao.setor.unidade') }}
-            <select v-model="setor['unidade']" name="setor-unidade">
-              <option :value="null">—</option>
-              <option v-for="x in dados.unidades.filter((y) => y.ativo)" :key="x.id" :value="x.id">
-                {{ x.nome }}
-              </option>
-            </select>
-          </label>
-          <label>
-            {{ t('estruturaGestao.setor.centroCusto') }}
-            <select v-model="setor['centroCusto']" name="setor-centro-custo" :aria-invalid="semCentroCusto">
-              <option :value="null">—</option>
-              <option v-for="x in dados.opcoes.centrosCusto" :key="x.id" :value="x.id">{{ x.nome }}</option>
-            </select>
+          <SanteSelecao
+            v-model="setor['tipo'] as string"
+            :rotulo="t('estruturaGestao.setor.tipo')"
+            :opcoes="tiposSetor.map((x) => ({ valor: x, rotulo: t(`estruturaGestao.setor.tipos.${x}`) }))"
+          />
+          <SanteSelecao
+            v-model="setor['superior'] as number | null"
+            :rotulo="t('estruturaGestao.setor.superior')"
+            :opcoes="[
+              { valor: null, rotulo: '—' },
+              ...dados.setores
+                .filter((y) => y.id !== setor!['id'] && y.ativo)
+                .map((x) => ({ valor: x.id, rotulo: x.nome })),
+            ]"
+          />
+          <SanteSelecao
+            v-model="setor['unidade'] as number | null"
+            :rotulo="t('estruturaGestao.setor.unidade')"
+            :opcoes="[
+              { valor: null, rotulo: '—' },
+              ...dados.unidades.filter((y) => y.ativo).map((x) => ({ valor: x.id, rotulo: x.nome })),
+            ]"
+          />
+          <span>
+            <SanteSelecao
+              v-model="setor['centroCusto'] as number | null"
+              :rotulo="t('estruturaGestao.setor.centroCusto')"
+              obrigatorio
+              :opcoes="[
+                { valor: null, rotulo: '—' },
+                ...dados.opcoes.centrosCusto.map((x) => ({ valor: x.id, rotulo: x.nome })),
+              ]"
+            />
             <small v-if="semCentroCusto" class="aviso">{{
               t('estruturaGestao.setor.precisaCentroCusto')
             }}</small>
-          </label>
+          </span>
           <label>
             {{ t('estruturaGestao.setor.responsavel') }}
             <input
@@ -388,9 +390,13 @@ const nomeUnidade = (id: number | null) =>
               name="setor-responsavel"
               list="setor-profissionais"
             />
-            <select v-if="achados.length" v-model="setor['responsavel']" name="setor-responsavel-escolha">
-              <option v-for="p in achados" :key="p.id" :value="p.id">{{ p.nome }}</option>
-            </select>
+            <SanteSelecao
+              v-if="achados.length"
+              v-model="setor['responsavel'] as number | null"
+              :rotulo="t('estruturaGestao.setor.responsavel')"
+              ocultar-rotulo
+              :opcoes="achados.map((p) => ({ valor: p.id, rotulo: p.nome }))"
+            />
           </label>
           <label v-for="c in ['responsavelInicio', 'responsavelFim'] as const" :key="c">
             {{ t(`estruturaGestao.setor.${c}`)
@@ -484,9 +490,12 @@ const nomeUnidade = (id: number | null) =>
               {{ t('estruturaGestao.setor.incluirRamal') }}
             </button>
           </fieldset>
-          <SanteBotao type="submit" :disabled="semCentroCusto" data-testid="gravar-setor">{{
-            t('estruturaGestao.comum.gravar')
-          }}</SanteBotao>
+          <SanteBotao
+            tipo="submit"
+            :rotulo="t('estruturaGestao.comum.gravar')"
+            :desabilitado="semCentroCusto"
+            data-testid="gravar-setor"
+          />
           <template v-if="setor['id']">
             <label
               >{{ t('estruturaGestao.comum.motivo') }}<input v-model="motivo" name="motivo-setor"
@@ -495,9 +504,12 @@ const nomeUnidade = (id: number | null) =>
               >{{ t('estruturaGestao.comum.data') }}<input v-model="dataSituacao" type="date"
             /></label>
             <SanteBotao
-              :disabled="motivo.trim().length < 10"
+              :rotulo="
+                setor['ativo'] ? t('estruturaGestao.comum.inativar') : t('estruturaGestao.comum.reativar')
+              "
+              :desabilitado="motivo.trim().length < 10"
               data-testid="situacao-setor"
-              @click="
+              @acionar="
                 fazer(
                   () =>
                     situacaoSetor(setor!['id'] as number, {
@@ -509,9 +521,7 @@ const nomeUnidade = (id: number | null) =>
                   () => ((setor = null), (motivo = '')),
                 )
               "
-            >
-              {{ setor['ativo'] ? t('estruturaGestao.comum.inativar') : t('estruturaGestao.comum.reativar') }}
-            </SanteBotao>
+            />
           </template>
         </form>
       </div>
@@ -554,7 +564,7 @@ const nomeUnidade = (id: number | null) =>
   align-items: center;
 }
 .aviso {
-  color: var(--sgh-cor-erro, #b00020);
+  color: var(--sgh-alerta);
 }
 .arvore {
   list-style: none;

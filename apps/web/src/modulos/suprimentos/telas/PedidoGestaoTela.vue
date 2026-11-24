@@ -12,7 +12,7 @@ import {
   SITUACOES_ACOMPANHAMENTO_PEDIDO,
   type SituacaoAcompanhamentoPedido,
 } from '@sgh/contratos';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import {
@@ -272,19 +272,19 @@ const fechado = computed(() =>
         </details>
         <div v-if="!fechado && i.pendente > 0" class="acoes">
           <SanteBotao
+            :rotulo="M.programar"
             v-if="pode('suprimentos.programarEntregasPedido')"
             variante="secundario"
             :data-testid="`pg-agenda-${i.sequencia}`"
-            @click="abrirAgenda(i)"
-            >{{ M.programar }}</SanteBotao
-          >
+            @acionar="abrirAgenda(i)"
+          />
           <SanteBotao
+            :rotulo="M.cancelarItem"
             v-if="pode('suprimentos.cancelarCompra')"
             variante="secundario"
             :data-testid="`pg-cancelar-item-${i.sequencia}`"
-            @click="abrirCancelamento(i.id)"
-            >{{ M.cancelarItem }}</SanteBotao
-          >
+            @acionar="abrirCancelamento(i.id)"
+          />
         </div>
         <form
           v-if="agendaItem === i.id"
@@ -321,23 +321,23 @@ const fechado = computed(() =>
             <li v-for="r in recusasAgenda" :key="r.codigo + r.mensagem">{{ r.mensagem }}</li>
           </ul>
           <SanteBotao
+            :rotulo="M.gravarAgenda"
             tipo="submit"
             :desabilitado="ocupado || recusasAgenda.length > 0"
             data-testid="pg-ag-gravar"
-            >{{ M.gravarAgenda }}</SanteBotao
-          >
+          />
           <button type="button" @click="agendaItem = null">{{ M.cancelar }}</button>
         </form>
       </article>
 
       <div v-if="!fechado && pode('suprimentos.cancelarCompra')" class="acoes">
         <SanteBotao
+          :rotulo="M.cancelarPedido"
           variante="destrutivo"
           :confirmacao="M.confirmarCancelamento + '?'"
           data-testid="pg-cancelar-pedido"
-          @click="abrirCancelamento(null)"
-          >{{ M.cancelarPedido }}</SanteBotao
-        >
+          @acionar="abrirCancelamento(null)"
+        />
       </div>
       <form
         v-if="canc.aberto"
@@ -345,12 +345,12 @@ const fechado = computed(() =>
         data-testid="pg-form-cancelamento"
         @submit.prevent="confirmarCancelamento"
       >
-        <label
-          >{{ M.motivo }}
-          <select v-model.number="canc.motivo" data-testid="pg-canc-motivo">
-            <option v-for="m in motivosDoAlvo" :key="m.id" :value="m.id">{{ m.descricao }}</option>
-          </select></label
-        >
+        <SanteSelecao
+          v-model="canc.motivo"
+          :rotulo="M.motivo"
+          :opcoes="[...motivosDoAlvo.map((m) => ({ valor: m.id, rotulo: m.descricao }))]"
+          data-testid="pg-canc-motivo"
+        />
         <button
           v-if="pode('suprimentos.gravarMotivoCancelamentoCompra')"
           type="button"
@@ -375,13 +375,13 @@ const fechado = computed(() =>
           <li v-for="r in conferenciaCancelamento.recusas" :key="r.codigo">{{ r.mensagem }}</li>
         </ul>
         <SanteBotao
+          :rotulo="M.confirmarCancelamento"
           tipo="submit"
           variante="destrutivo"
           :confirmacao="M.confirmarCancelamento + '?'"
           :desabilitado="ocupado || canc.motivo === null || conferenciaCancelamento.recusas.length > 0"
           data-testid="pg-canc-confirmar"
-          >{{ M.confirmarCancelamento }}</SanteBotao
-        >
+        />
         <button type="button" @click="canc.aberto = false">{{ M.cancelar }}</button>
       </form>
       <form
@@ -405,22 +405,25 @@ const fechado = computed(() =>
         <label
           ><input v-model="motivoNovo.exigeJustificativa" type="checkbox" /> {{ M.exigeJustificativa }}</label
         >
-        <SanteBotao tipo="submit" :desabilitado="ocupado" data-testid="pg-mot-gravar">{{
-          M.gravarMotivo
-        }}</SanteBotao>
+        <SanteBotao
+          :rotulo="M.gravarMotivo"
+          tipo="submit"
+          :desabilitado="ocupado"
+          data-testid="pg-mot-gravar"
+        />
       </form>
 
       <h2>{{ M.contatos }}</h2>
       <SanteBotao
+        :rotulo="M.novoContato"
         v-if="
           pode('suprimentos.acompanharPedido') &&
           !['cancelado', 'reprovado'].includes(g.data.value.pedido.situacao)
         "
         variante="secundario"
         data-testid="pg-novo-contato"
-        @click="abrirContato(g.data.value.acompanhamentos[0]?.id ?? null)"
-        >{{ M.novoContato }}</SanteBotao
-      >
+        @acionar="abrirContato(g.data.value.acompanhamentos[0]?.id ?? null)"
+      />
       <form
         v-if="contato.aberto"
         class="contato"
@@ -436,14 +439,14 @@ const fechado = computed(() =>
         <label
           >{{ M.previsao }} <input v-model="contato.previsaoEntrega" type="date" data-testid="pg-ct-previsao"
         /></label>
-        <label
-          >{{ M.situacaoContato }}
-          <select v-model="contato.situacao" data-testid="pg-ct-situacao">
-            <option v-for="s in SITUACOES_ACOMPANHAMENTO_PEDIDO" :key="s" :value="s">
-              {{ M.situacoesContato[s] }}
-            </option>
-          </select></label
-        >
+        <SanteSelecao
+          v-model="contato.situacao"
+          :rotulo="M.situacaoContato"
+          :opcoes="[
+            ...SITUACOES_ACOMPANHAMENTO_PEDIDO.map((x) => ({ valor: x, rotulo: M.situacoesContato[x] })),
+          ]"
+          data-testid="pg-ct-situacao"
+        />
         <label
           >{{ M.andamento }}
           <textarea v-model="contato.andamento" maxlength="4000" data-testid="pg-ct-andamento"></textarea>
@@ -452,11 +455,11 @@ const fechado = computed(() =>
           <li v-for="r in recusasContato" :key="r.codigo">{{ r.mensagem }}</li>
         </ul>
         <SanteBotao
+          :rotulo="M.gravarContato"
           tipo="submit"
           :desabilitado="ocupado || recusasContato.length > 0"
           data-testid="pg-ct-gravar"
-          >{{ M.gravarContato }}</SanteBotao
-        >
+        />
         <button type="button" @click="contato.aberto = false">{{ M.cancelar }}</button>
       </form>
       <p v-if="!g.data.value.acompanhamentos.length" class="secundario">{{ M.semContatos }}</p>
@@ -476,11 +479,11 @@ const fechado = computed(() =>
 
 <style scoped>
 .item {
-  border-block-end: 1px solid var(--sante-borda, #ddd);
+  border-block-end: 1px solid var(--sgh-borda);
   padding-block: 0.5rem;
 }
 .atrasada {
-  color: var(--sante-perigo, #b00020);
+  color: var(--sgh-alerta);
 }
 .acoes,
 .linha {
@@ -490,7 +493,7 @@ const fechado = computed(() =>
   align-items: end;
 }
 .recusas {
-  color: var(--sante-perigo, #b00020);
+  color: var(--sgh-alerta);
 }
 .secundario {
   opacity: 0.75;

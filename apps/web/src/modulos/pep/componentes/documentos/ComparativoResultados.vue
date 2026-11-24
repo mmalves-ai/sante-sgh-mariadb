@@ -2,7 +2,7 @@
 // Resultados lado a lado (F3.3, linha 03-PEP L128): grupo comparativo ou filtro salvo do profissional (abre com o
 // padrão), período em um clique, matriz analito × coleta com a faixa do laudo, o crítico e a tendência; salvar a
 // escolha atual como filtro sem sair da aba.
-import { SanteAlerta, SanteBotao } from '@sgh/ui';
+import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
@@ -131,6 +131,16 @@ async function excluir(): Promise<void> {
 
 const seta = (x: string | null) =>
   x === 'subindo' ? '↑' : x === 'descendo' ? '↓' : x === 'estavel' ? '→' : '';
+const opcoesGrupo = computed(() => [
+  { valor: null, rotulo: k('nenhum') },
+  ...grupos.value.flatMap((g) => (g.id === null ? [] : [{ valor: g.id, rotulo: g.nome }])),
+]);
+const opcoesFiltro = computed(() => [
+  { valor: null, rotulo: k('nenhum') },
+  ...filtros.value.flatMap((f) =>
+    f.id === null ? [] : [{ valor: f.id, rotulo: `${f.nome}${f.padrao ? ' ★' : ''}` }],
+  ),
+]);
 const celula = computed(() => {
   const m = new Map<string, Comparativo['linhas'][number]['celulas'][number]>();
   for (const l of dados.value?.linhas ?? [])
@@ -144,49 +154,44 @@ const celula = computed(() => {
     <h3 id="comparativo-titulo">{{ k('titulo') }}</h3>
     <p class="explica">{{ k('explica') }}</p>
     <MensagemErro v-if="erro" :erro="erro" />
-    <SanteAlerta v-if="mensagem" variante="info">{{ mensagem }}</SanteAlerta>
+    <SanteAlerta v-if="mensagem" variante="info" :texto="mensagem" />
     <div class="escolhas">
-      <label>
-        {{ k('grupo') }}
-        <select
-          data-testid="comparativo-grupo"
-          :value="grupo ?? ''"
-          @change="escolherGrupo(Number(($event.target as HTMLSelectElement).value) || null)"
-        >
-          <option value="">{{ k('nenhum') }}</option>
-          <option v-for="g in grupos" :key="g.id ?? 0" :value="g.id">{{ g.nome }}</option>
-        </select>
-      </label>
-      <label>
-        {{ k('filtro') }}
-        <select
-          data-testid="comparativo-filtro"
-          :value="filtro ?? ''"
-          @change="escolherFiltro(Number(($event.target as HTMLSelectElement).value) || null)"
-        >
-          <option value="">{{ k('nenhum') }}</option>
-          <option v-for="f in filtros" :key="f.id ?? 0" :value="f.id">
-            {{ f.nome }}{{ f.padrao ? ' ★' : '' }}
-          </option>
-        </select>
-      </label>
+      <SanteSelecao
+        :model-value="grupo"
+        :rotulo="k('grupo')"
+        :opcoes="opcoesGrupo"
+        data-testid="comparativo-grupo"
+        @update:model-value="escolherGrupo"
+      />
+      <SanteSelecao
+        :model-value="filtro"
+        :rotulo="k('filtro')"
+        :opcoes="opcoesFiltro"
+        data-testid="comparativo-filtro"
+        @update:model-value="escolherFiltro"
+      />
       <span class="periodos" role="group" :aria-label="k('periodo')">
         <SanteBotao
           v-for="n in PERIODOS"
           :key="n"
           :variante="dias === n ? 'primario' : 'secundario'"
           :data-testid="`comparativo-dias-${n}`"
-          @click="escolherDias(n)"
-          >{{ k('dias', { n }) }}</SanteBotao
-        >
-        <SanteBotao :variante="dias === null ? 'primario' : 'secundario'" @click="escolherDias(null)">{{
-          k('tudo')
-        }}</SanteBotao>
+          :rotulo="k('dias', { n })"
+          @acionar="escolherDias(n)"
+        />
+        <SanteBotao
+          :variante="dias === null ? 'primario' : 'secundario'"
+          :rotulo="k('tudo')"
+          @acionar="escolherDias(null)"
+        />
       </span>
-      <SanteBotao variante="secundario" data-testid="comparativo-salvar" @click="salvando = !salvando">{{
-        k('salvarFiltro')
-      }}</SanteBotao>
-      <SanteBotao v-if="filtro" variante="secundario" @click="excluir">{{ k('excluirFiltro') }}</SanteBotao>
+      <SanteBotao
+        variante="secundario"
+        :rotulo="k('salvarFiltro')"
+        data-testid="comparativo-salvar"
+        @acionar="salvando = !salvando"
+      />
+      <SanteBotao v-if="filtro" variante="secundario" :rotulo="k('excluirFiltro')" @acionar="excluir" />
     </div>
     <form v-if="salvando" class="salvar" data-testid="comparativo-form-filtro" @submit.prevent="salvar">
       <label
@@ -198,9 +203,11 @@ const celula = computed(() => {
       <label><input v-model="novo.somenteLiberados" type="checkbox" /> {{ k('somenteLiberados') }}</label>
       <label><input v-model="novo.somenteMeusPedidos" type="checkbox" /> {{ k('somenteMeus') }}</label>
       <label><input v-model="novo.incluirPendentes" type="checkbox" /> {{ k('incluirPendentes') }}</label>
-      <SanteBotao tipo="submit" data-testid="comparativo-gravar-filtro">{{
-        k('gravado').replace('.', '')
-      }}</SanteBotao>
+      <SanteBotao
+        tipo="submit"
+        :rotulo="k('gravado').replace('.', '')"
+        data-testid="comparativo-gravar-filtro"
+      />
     </form>
     <p v-if="!grupos.length && !filtros.length" role="status">{{ k('semGrupo') }}</p>
     <template v-else-if="dados">
@@ -209,9 +216,9 @@ const celula = computed(() => {
         <SanteAlerta
           v-if="dados.recorte === 'sem-atendimento'"
           variante="aviso"
+          :texto="k('recorteSemAtendimento')"
           data-testid="comparativo-recorte-sem-atendimento"
-          >{{ k('recorteSemAtendimento') }}</SanteAlerta
-        >
+        />
         <p v-else class="recorte" data-testid="comparativo-recorte" :data-recorte="dados.recorte">
           {{ dados.recorte === 'atendimento' ? k('recorteAtendimento') : k('recorteTodos') }}
         </p>
@@ -285,7 +292,7 @@ const celula = computed(() => {
   margin-block: 1rem;
 }
 .explica {
-  color: var(--sante-cor-texto-suave, #555);
+  color: var(--sgh-texto-secundario);
 }
 .escolhas,
 .salvar {
@@ -304,7 +311,7 @@ table {
 th,
 td {
   padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid var(--sante-cor-borda, #ddd);
+  border-bottom: 1px solid var(--sgh-borda);
   text-align: right;
   white-space: nowrap;
 }
@@ -315,13 +322,13 @@ th[scope='row'],
 .acima,
 .abaixo {
   font-weight: 600;
-  color: var(--sante-cor-alerta, #a15c00);
+  color: var(--sgh-aviso);
 }
 .critico {
   font-weight: 700;
-  color: var(--sante-cor-erro, #b00020);
+  color: var(--sgh-alerta);
 }
 .unidade {
-  color: var(--sante-cor-texto-suave, #555);
+  color: var(--sgh-texto-secundario);
 }
 </style>
