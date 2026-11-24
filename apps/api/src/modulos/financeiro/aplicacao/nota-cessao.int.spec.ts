@@ -140,7 +140,10 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
           "INSERT INTO cliente_financeiro (tipo_pessoa, cnpj, nome, criado_em) VALUES ('juridica', ?, 'CLIENTE SINTETICO L0207', ?)",
           [f?.cnpj, new Date()],
         ));
-      return { cliente: Number(c), pessoa: Number(f?.pessoa_juridica_id) };
+      const pj =
+        f?.pessoa_juridica_id ??
+        (await e.uma<{ id: number }>('SELECT id FROM pessoa_juridica ORDER BY id LIMIT 1', []))?.id;
+      return { cliente: Number(c), pessoa: Number(pj) };
     }));
     motivoCredito = Number(
       (await um("SELECT id FROM motivo_nota_credito_debito WHERE codigo = 'bonificacao'", []))['id'],

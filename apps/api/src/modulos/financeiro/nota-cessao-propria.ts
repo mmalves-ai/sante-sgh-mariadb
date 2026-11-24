@@ -46,6 +46,14 @@ function estabelecimentoDe(ctx: ContextoOperacao): number {
   return ctx.estabelecimento;
 }
 const hoje = () => new Date().toISOString().slice(0, 10);
+/** Uma linha travada (SELECT ... FOR UPDATE pelo escritor). */
+async function travar1(
+  tx: TxOperacao,
+  sql: string,
+  p: readonly unknown[],
+): Promise<Record<string, unknown> | null> {
+  return (await tx.consultarParaAtualizar(sql, p, { teto: 1 }))[0] ?? null;
+}
 
 // ── Parcela e título: leitura travada e ajuste ──────────────────────────────────────────────────────────────────
 
@@ -84,13 +92,13 @@ async function travarParcela(
                 NULL AS portador_titulo_id, t.id AS titulo, t.versao AS tv, t.situacao AS ts, t.estabelecimento_id,
                 t.valor_desconto AS td, t.valor_acrescimo AS ta, t.valor_liquido AS tl, 0 AS tr,
                 t.empresa_fornecedora_id, NULL AS cliente_financeiro_id, NULL AS fonte_pagadora_id, NULL AS paciente_id
-           FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id WHERE p.id = ? FOR UPDATE`
+           FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id WHERE p.id = ?`
       : `SELECT p.id, p.versao, p.saldo, p.situacao, p.valor_desconto, p.valor_acrescimo, p.valor_recebido AS quitado,
                 p.portador_titulo_id, t.id AS titulo, t.versao AS tv, t.situacao AS ts, t.estabelecimento_id,
                 t.valor_desconto AS td, t.valor_acrescimo AS ta, t.valor_liquido AS tl, t.valor_recebido AS tr,
                 NULL AS empresa_fornecedora_id, t.cliente_financeiro_id, t.fonte_pagadora_id, t.paciente_id
-           FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE p.id = ? FOR UPDATE`;
-  const r = await tx.uma(sql, [parcela]);
+           FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE p.id = ?`;
+  const r = await travar1(tx, sql, [parcela]);
   if (!r || numero(r['estabelecimento_id']) !== est)
     throw recusa('parcela-inexistente', 'A parcela não existe neste estabelecimento.', {
       campos: ['parcela'],
@@ -375,10 +383,10 @@ const aplicarNota = definirOperacao<z.infer<typeof esquemaAplicarNota>, Resultad
   entrada: esquemaAplicarNota as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    const n = await tx.uma(
-      'SELECT * FROM nota_credito_debito WHERE id = ? AND estabelecimento_id = ? FOR UPDATE',
-      [e.nota, est],
-    );
+    const n = await travar1(tx, 'SELECT * FROM nota_credito_debito WHERE id = ? AND estabelecimento_id = ?', [
+      e.nota,
+      est,
+    ]);
     if (!n) throw recusa('nota-inexistente', 'A nota não existe neste estabelecimento.');
     if (texto(n['situacao']) !== 'emitida')
       throw recusa('nota-nao-emitida', 'Só a nota emitida e ainda não aplicada vai ao título.');
@@ -397,10 +405,10 @@ const cancelarNota = definirOperacao<z.infer<typeof esquemaCancelarNota>, Result
   entrada: esquemaCancelarNota as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    const n = await tx.uma(
-      'SELECT * FROM nota_credito_debito WHERE id = ? AND estabelecimento_id = ? FOR UPDATE',
-      [e.nota, est],
-    );
+    const n = await travar1(tx, 'SELECT * FROM nota_credito_debito WHERE id = ? AND estabelecimento_id = ?', [
+      e.nota,
+      est,
+    ]);
     if (!n) throw recusa('nota-inexistente', 'A nota não existe neste estabelecimento.');
     const mc = await tx.uma(
       'SELECT id FROM motivo_cancelamento_documento_fiscal WHERE id = ? AND ativo = TRUE AND aplica_nota_credito_debito = TRUE',
@@ -495,10 +503,9 @@ const manterPortador = definirOperacao<z.infer<typeof esquemaManterPortador>, Re
     };
     let portador: number;
     if (e.id !== null) {
-      const p = await tx.uma(
-        'SELECT versao, estabelecimento_id FROM portador_titulo WHERE id = ? FOR UPDATE',
-        [e.id],
-      );
+      const p = await travar1(tx, 'SELECT versao, estabelecimento_id FROM portador_titulo WHERE id = ?', [
+        e.id,
+      ]);
       if (!p || numero(p['estabelecimento_id']) !== est)
         throw recusa('portador-inexistente', 'O portador não existe.');
       await tx.alterar('portador_titulo', e.id, numero(p['versao']), valores);
@@ -583,7 +590,7 @@ const contratarCessao = definirOperacao<z.infer<typeof esquemaContratarCessao>, 
   entrada: esquemaContratarCessao as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    const port = await tx.uma('SELECT * FROM portador_titulo WHERE id = ? FOR UPDATE', [e.portador]);
+    const port = await travar1(tx, 'SELECT * FROM portador_titulo WHERE id = ?', [e.portador]);
     if (!port || numero(port['estabelecimento_id']) !== est || !numero(port['ativo']))
       throw recusa('portador-inexistente', 'O portador não existe ou está inativo.', {
         campos: ['portador'],
@@ -719,11 +726,12 @@ const desfechoCessao = definirOperacao<z.infer<typeof esquemaDesfechoCessao>, Re
   entrada: esquemaDesfechoCessao as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    const i = await tx.uma(
+    const i = await travar1(
+      tx,
       `SELECT i.id, i.versao, i.situacao, i.parcela_receber_id, i.valor_face, o.id AS operacao, o.versao AS ov,
               o.situacao AS os, o.com_coobrigacao, o.estabelecimento_id
          FROM operacao_cessao_recebivel_item i JOIN operacao_cessao_recebivel o ON o.id = i.operacao_cessao_recebivel_id
-        WHERE i.id = ? FOR UPDATE`,
+        WHERE i.id = ?`,
       [e.item],
     );
     if (!i || numero(i['estabelecimento_id']) !== est)
@@ -787,8 +795,9 @@ const cancelarCessao = definirOperacao<z.infer<typeof esquemaCancelarCessao>, Re
   entrada: esquemaCancelarCessao as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    const o = await tx.uma(
-      'SELECT * FROM operacao_cessao_recebivel WHERE id = ? AND estabelecimento_id = ? FOR UPDATE',
+    const o = await travar1(
+      tx,
+      'SELECT * FROM operacao_cessao_recebivel WHERE id = ? AND estabelecimento_id = ?',
       [e.operacao, est],
     );
     if (!o) throw recusa('operacao-inexistente', 'A operação não existe neste estabelecimento.');
