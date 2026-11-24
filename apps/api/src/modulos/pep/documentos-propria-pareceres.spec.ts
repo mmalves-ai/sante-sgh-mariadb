@@ -214,6 +214,8 @@ describe('leituras', () => {
       usuario: '',
     });
     expect(d.sqls.at(-1)?.params).toEqual([7, 100]);
+    // O teto corta o histórico antigo, nunca a última versão de cada problema.
+    expect(d.sqls.at(-1)?.sql).toMatch(/recencia <= 500 OR x\.ultima = 1/);
   });
 
   it('sumários em ordem de versão; coassinaturas pelo login do preceptor; óbito ignora o cancelado', async () => {
@@ -555,6 +557,8 @@ describe('gravações', () => {
     });
     const a = duble({ ler: res, travar: () => [{ id: 5, versao: 2, situacao: 'aguardando_ciencia' }] });
     expect(await a.porta.registrarCiencia(G, x)).toBe(5);
+    // O resultado é conferido pelo paciente e pelo estabelecimento, não só pelo id.
+    expect(a.sqls.find((q) => /FROM resultado_exame/.test(q.sql))?.params).toEqual([77, 100, 7, 7]);
     expect(a.escritas[0]).toMatchObject({
       op: 'alterar',
       id: 5,

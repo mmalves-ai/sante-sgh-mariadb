@@ -607,17 +607,24 @@ export class DocumentosPropriaPareceres {
 
   problemas(c: ContextoDocs, paciente: number): Promise<ProblemaLido[]> {
     return this.ler(c, 'problemas', async (l, est) => {
+      // O teto corta o histórico mais antigo, nunca o estado vigente: entram as versões mais recentes (até o teto)
+      // e, sempre, a última versão de cada problema; a lista sai em ordem cronológica.
       const ls = await l.consultar(
-        `SELECT v.id, v.dados, v.situacao, v.ocorrido_em, u.login,
-                p.descricao, p.tipo, p.inicio_em, p.resolvido_em,
-                (SELECT v2.id FROM problema_paciente_versao v2
-                  WHERE v2.problema_paciente_id = v.problema_paciente_id AND v2.numero_versao < v.numero_versao
-                  ORDER BY v2.numero_versao DESC LIMIT 1) AS anterior
-           FROM problema_paciente_versao v
-           JOIN problema_paciente p ON p.id = v.problema_paciente_id
-           LEFT JOIN usuario u ON u.id = v.usuario_id
-          WHERE p.estabelecimento_id = ? AND p.paciente_id = ? AND p.excluido_em IS NULL
-          ORDER BY v.ocorrido_em, v.id LIMIT ${TETO_LISTA}`,
+        `SELECT x.* FROM (
+           SELECT v.id, v.dados, v.situacao, v.ocorrido_em, u.login,
+                  p.descricao, p.tipo, p.inicio_em, p.resolvido_em,
+                  (SELECT v2.id FROM problema_paciente_versao v2
+                    WHERE v2.problema_paciente_id = v.problema_paciente_id AND v2.numero_versao < v.numero_versao
+                    ORDER BY v2.numero_versao DESC LIMIT 1) AS anterior,
+                  ROW_NUMBER() OVER (ORDER BY v.ocorrido_em DESC, v.id DESC) AS recencia,
+                  ROW_NUMBER() OVER (PARTITION BY v.problema_paciente_id ORDER BY v.numero_versao DESC) AS ultima
+             FROM problema_paciente_versao v
+             JOIN problema_paciente p ON p.id = v.problema_paciente_id
+             LEFT JOIN usuario u ON u.id = v.usuario_id
+            WHERE p.estabelecimento_id = ? AND p.paciente_id = ? AND p.excluido_em IS NULL
+         ) x
+         WHERE x.recencia <= ${TETO_LISTA} OR x.ultima = 1
+         ORDER BY x.ocorrido_em, x.id`,
         [est.id, paciente],
       );
       return ls.map((x) => {
@@ -976,13 +983,17 @@ export class DocumentosPropriaPareceres {
 
   ciencias(c: ContextoDocs, paciente: number): Promise<CienciaLida[]> {
     return this.ler(c, 'ciencias', async (l, est) => {
+      // O teto corta as ciências mais antigas (as mais recentes ficam), e a lista sai em ordem cronológica.
       const ls = await l.consultar(
-        `SELECT cr.resultado_exame_id, cr.ciente_em, cr.conduta, cr.analito,
-                COALESCE(u.login, ${SQL_LOGIN_DO_PROFISSIONAL('cr.ciente_profissional_id', 'cr.estabelecimento_id')}) AS login
-           FROM ciencia_resultado_critico cr
-           LEFT JOIN usuario u ON u.id = cr.ciente_usuario_id
-          WHERE cr.estabelecimento_id = ? AND cr.paciente_id = ? AND cr.excluido_em IS NULL AND cr.situacao = 'ciente'
-          ORDER BY cr.ciente_em, cr.id LIMIT ${TETO_LISTA}`,
+        `SELECT x.* FROM (
+           SELECT cr.id, cr.resultado_exame_id, cr.ciente_em, cr.conduta, cr.analito,
+                  COALESCE(u.login, ${SQL_LOGIN_DO_PROFISSIONAL('cr.ciente_profissional_id', 'cr.estabelecimento_id')}) AS login
+             FROM ciencia_resultado_critico cr
+             LEFT JOIN usuario u ON u.id = cr.ciente_usuario_id
+            WHERE cr.estabelecimento_id = ? AND cr.paciente_id = ? AND cr.excluido_em IS NULL AND cr.situacao = 'ciente'
+            ORDER BY cr.ciente_em DESC, cr.id DESC LIMIT ${TETO_LISTA}
+         ) x
+         ORDER BY x.ciente_em, x.id`,
         [est.id, paciente],
       );
       return ls.map((x) => ({
@@ -1018,7 +1029,17 @@ export class DocumentosPropriaPareceres {
       'pep.resultado.ciencia',
       ['ciencia_resultado_critico'],
       async (tx, est, s, falhar) => {
-        const r = await tx.uma('SELECT id FROM resultado_exame WHERE id = ?', [x.exame]);
+        // O resultado tem de ser do paciente informado e do estabelecimento (do pedido ou do setor executante):
+        // a ciência nunca é gravada no paciente errado.
+        const r = await tx.uma(
+          `SELECT r.id FROM resultado_exame r
+             JOIN exame_item ei ON ei.id = r.exame_item_id
+             JOIN requisicao_exame rq ON rq.id = ei.requisicao_exame_id
+             JOIN setor_diagnostico sd ON sd.id = r.setor_diagnostico_id
+            WHERE r.id = ? AND r.paciente_id = ? AND r.excluido_em IS NULL
+              AND (rq.estabelecimento_id = ? OR sd.estabelecimento_id = ?)`,
+          [x.exame, x.paciente, est.id, est.id],
+        );
         if (!r) return falhar('nao-encontrado', 'Resultado não encontrado.', 404);
         const ls = await tx.consultarParaAtualizar(
           `SELECT id, versao, situacao FROM ciencia_resultado_critico
