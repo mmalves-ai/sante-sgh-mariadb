@@ -20,6 +20,8 @@ import { MarcacoesController } from './marcacoes.controller.js';
 import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
 import { PortaAgendaMemoria, type PacienteSintetico } from './porta-memoria.js';
 import { PortaAgendaPropria } from './porta-propria.js';
+import { USUARIOS_AGENDA, UsuariosAgendaController } from './usuarios-agenda.controller.js';
+import { UsuariosAgendaPropria } from './usuarios-agenda.js';
 
 /** Porta sem banco configurado: 503 em toda leitura e gravação; a liberação diz por quê. */
 export function portaAgendaIndisponivel(): PortaAgenda {
@@ -90,9 +92,16 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
       : null);
   return {
     module: class ModuloAgenda {},
-    controllers: [AgendasController, ApoioAgendaController, MarcacoesController],
+    controllers: [AgendasController, ApoioAgendaController, MarcacoesController, UsuariosAgendaController],
     providers: [
       { provide: PORTA_AGENDA, useValue: porta },
+      {
+        provide: USUARIOS_AGENDA,
+        useValue:
+          porta.destino === 'propria' && ctx.nucleo && cliente
+            ? new UsuariosAgendaPropria(ctx.nucleo, cliente)
+            : null,
+      },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
   };

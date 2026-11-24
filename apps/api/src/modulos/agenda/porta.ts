@@ -42,6 +42,10 @@ export interface ContextoAgenda {
   readonly hospital: string;
   /** Escopo da sessão (unidade e tipo de agenda); ausente = sem restrição. As portas não o usam. */
   readonly escopo?: EscopoAgenda;
+  /** Login da sessão: a lista nominal da agenda restrita (02-AGE 40) esconde dela quem não está na lista. */
+  readonly login?: string;
+  /** Gestor de agendas (manutenção da agenda): vê a agenda restrita para manter a lista, sem marcar. */
+  readonly gestorDeAgendas?: boolean;
 }
 
 /** Contexto de uma gravação: quem grava, a correlação e a chave de idempotência do pedido. */

@@ -68,6 +68,7 @@ import { z } from 'zod';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { operacaoAgenda } from './operacoes.js';
 import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
+import { agendasOcultas, exigirMarcacaoNominal } from './usuarios-agenda.js';
 import type {
   ContextoAgenda,
   ContextoGravacao,
@@ -394,17 +395,20 @@ export class PortaAgendaPropria implements PortaAgenda {
 
   async agendas(c: ContextoAgenda): Promise<Agenda[]> {
     const agora = this.agora();
-    return this.ler(c, async (l, e) =>
-      (await l.consultar(`${SELECT_AGENDA} ORDER BY a.nome`, [agora, agora, e.id])).map((x) =>
-        this.agendaDaLinha(x, e.fuso),
-      ),
-    );
+    return this.ler(c, async (l, e) => {
+      // 02-AGE 40: a agenda restrita a uma lista de usuários some para quem não está nela.
+      const ocultas = await agendasOcultas(l, e.id, c.login, c.gestorDeAgendas === true);
+      return (await l.consultar(`${SELECT_AGENDA} ORDER BY a.nome`, [agora, agora, e.id]))
+        .map((x) => this.agendaDaLinha(x, e.fuso))
+        .filter((a) => !ocultas.has(a.id));
+    });
   }
 
   async agenda(c: ContextoAgenda, id: number): Promise<Agenda | null> {
     const agora = this.agora();
     return this.ler(c, async (l, e) => {
       const x = await l.uma(`${SELECT_AGENDA} AND a.id = ?`, [agora, agora, e.id, id]);
+      if (x && (await agendasOcultas(l, e.id, c.login, c.gestorDeAgendas === true)).has(id)) return null;
       return x ? this.agendaDaLinha(x, e.fuso) : null;
     });
   }
@@ -2209,6 +2213,7 @@ export class PortaAgendaPropria implements PortaAgenda {
     const a = await this.travarAgenda(tx, ctx, p.agenda);
     if (!bool(a['ativo']))
       throw recusa('agenda-inativa', 'A agenda está inativa: não aceita marcação nem geração.');
+    await exigirMarcacaoNominal(tx, p.agenda, ctx.usuario);
     const fuso = this.fuso(ctx.estabelecimento);
     const inicio = instanteDe(fuso, p.data, p.hora);
     if (inicio.getTime() <= this.agora().getTime())

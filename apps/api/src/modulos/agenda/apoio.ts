@@ -29,6 +29,8 @@ export const ctxAgenda = (s: SessaoCadastro): ContextoAgenda => ({
   rede: s.rede,
   hospital: s.hospital,
   escopo: escopoDaRequisicao(s.req),
+  login: s.login,
+  gestorDeAgendas: s.pode('agenda.cobertura.editar'),
 });
 
 /**
