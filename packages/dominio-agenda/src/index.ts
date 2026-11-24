@@ -17,3 +17,4 @@ export * from './online/index.js';
 export * from './sessoes/index.js';
 export * from './estruturada.js';
 export * from './acesso-nominal.js';
+export * from './marcacao-sem-prontuario.js';
