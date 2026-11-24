@@ -42,6 +42,7 @@ import { PERMISSOES_M10_CODIGOS } from '@sgh/contratos';
 import { conferirUltimoGestor, mensagemUltimoGestor } from '@sgh/dominio-acesso';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
+import { NOMES_OPERACOES_USUARIO_PROPRIA, OPERACOES_USUARIO_PROPRIA } from './operacoes-usuario-propria.js';
 import { CODIGOS_PAPEL, PERFIL_GESTOR_ACESSOS } from '../acesso/gestao-tipos.js';
 import type { FonteAdministracao } from './fonte.js';
 import {
@@ -138,7 +139,9 @@ export const OPERACOES_IMPLEMENTADAS = [
   'acesso.desbloquearUsuario',
   'acesso.aceitarTermo',
   'acesso.publicarTermo',
-] as const;
+  // Cadastro da conta e escopos (01-ADM L57 e L59): operacoes-usuario-propria.ts.
+  ...NOMES_OPERACOES_USUARIO_PROPRIA,
+];
 export const MOTIVO_PENDENTE =
   'Esta operação ainda não tem implementação no banco próprio (pendência registrada da F2.2): nada foi gravado.';
 
@@ -392,6 +395,7 @@ const OPERACOES = {
   'acesso.desbloquearUsuario': operacaoBloqueio(false),
   'acesso.aceitarTermo': operacaoAceitarTermo,
   'acesso.publicarTermo': operacaoPublicarTermo,
+  ...OPERACOES_USUARIO_PROPRIA,
 } as const;
 
 /** Pedido do titular lido do modelo, na forma da tela. */

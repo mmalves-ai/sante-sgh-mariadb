@@ -62,3 +62,4 @@ export * from './usuario/tarefas-rh.js';
 export * from './usuario/troca-rapida.js';
 export * from './usuario/conselho.js';
 export * from './usuario/usuario-modelo.js';
+export * from './usuario/cadastro-usuario.js';
