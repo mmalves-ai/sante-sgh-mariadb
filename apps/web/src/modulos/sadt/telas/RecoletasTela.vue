@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Recoleta e alíquotas (F3.5, 05-SADT linha 7): pela etiqueta, o laboratório pede a recoleta com o motivo (a amostra
 // original fica rejeitada e ligada à nova) ou gera as alíquotas pelas regras do exame. A lista mostra as recoletas em
-// aberto, com coletar e cancelar.
+// aberto: coletar pede a identificação positiva do paciente (identificadores, pulseira no internado, estação), como a
+// coleta comum; cancelar pede o motivo e o destino dos exames que esperavam a recoleta.
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -29,6 +30,24 @@ const opcoes = computed(() => [
 const codigo = ref('');
 const motivo = ref('');
 const motivoCancelar = ref<Record<number, string>>({});
+const destino = ref<Record<number, '' | 'cancelar' | 'manter'>>({});
+const motivoExames = ref<Record<number, string>>({});
+const identificadores = ref<Record<number, boolean>>({});
+const pulseira = ref<Record<number, string>>({});
+const estacao = ref<Record<number, string>>({});
+const opcoesDestino = computed(() => [
+  { valor: '', rotulo: t('sadt.pedido.escolha') },
+  { valor: 'manter', rotulo: t('sadt.pedido.destinos.manter') },
+  { valor: 'cancelar', rotulo: t('sadt.pedido.destinos.cancelar') },
+]);
+const opcoesMotivoExames = computed(() => [
+  { valor: '', rotulo: t('sadt.pedido.escolha') },
+  ...(motivos.data.value?.cancelamento ?? []).map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
+]);
+const podeCancelar = (id: number) =>
+  (motivoCancelar.value[id] ?? '').trim().length >= 5 &&
+  !!destino.value[id] &&
+  (destino.value[id] !== 'cancelar' || !!motivoExames.value[id]);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const atualizar = () => cliente.invalidateQueries({ queryKey: ['sadt', 'recoletas'] });
@@ -58,13 +77,29 @@ const aliquotar = () =>
     });
   });
 const coletar = (id: number) =>
-  executar(async () =>
-    t('sadt.pedido.coletada', { codigo: (await coletarRecoleta(id, novaChave('recoleta.coletar'))).codigo }),
-  );
+  executar(async () => {
+    const r = await coletarRecoleta(
+      id,
+      {
+        identificadoresConferidos: identificadores.value[id] ?? false,
+        pulseira: pulseira.value[id]?.trim() || null,
+        estacao: estacao.value[id]?.trim() || null,
+      },
+      novaChave('recoleta.coletar'),
+    );
+    return t('sadt.pedido.coletada', { codigo: r.codigo });
+  });
 const cancelar = (id: number) =>
   executar(async () => {
-    await cancelarRecoleta(id, motivoCancelar.value[id] ?? '', novaChave('recoleta.cancelar'));
-    return t('sadt.pedido.situacoes.cancelada');
+    const d = destino.value[id] as 'cancelar' | 'manter';
+    const r = await cancelarRecoleta(
+      id,
+      motivoCancelar.value[id] ?? '',
+      d,
+      d === 'cancelar' ? Number(motivoExames.value[id]) : null,
+      novaChave('recoleta.cancelar'),
+    );
+    return t('sadt.pedido.canceladaComExames', { n: r.exames });
   });
 </script>
 
@@ -97,11 +132,57 @@ const cancelar = (id: number) =>
         {{ r.numero }} · {{ t(`sadt.pedido.situacoes.${r.situacao}`) }} · {{ r.motivo }} ·
         {{ t('sadt.pedido.original') }} {{ r.codigoOriginal }} · {{ quando(r.solicitadaEm) }}
       </p>
-      <SanteBotao @click="coletar(r.id)">{{ t('sadt.pedido.coletar') }}</SanteBotao>
-      <input v-model="motivoCancelar[r.id]" :aria-label="t('sadt.pedido.motivo')" maxlength="500" />
-      <SanteBotao :disabled="(motivoCancelar[r.id] ?? '').trim().length < 5" @click="cancelar(r.id)">
-        {{ t('sadt.pedido.cancelarRecoleta') }}
-      </SanteBotao>
+      <div class="linha">
+        <label>
+          <input
+            v-model="identificadores[r.id]"
+            type="checkbox"
+            :data-testid="`recoleta-identificadores-${r.id}`"
+          />
+          {{ t('sadt.pedido.identificadores') }}
+        </label>
+        <input
+          v-model="pulseira[r.id]"
+          :aria-label="t('sadt.pedido.pulseira')"
+          :placeholder="t('sadt.pedido.pulseira')"
+          maxlength="120"
+        />
+        <input
+          v-model="estacao[r.id]"
+          :aria-label="t('sadt.pedido.estacao')"
+          :placeholder="t('sadt.pedido.estacao')"
+          maxlength="64"
+          :data-testid="`recoleta-estacao-${r.id}`"
+        />
+        <SanteBotao
+          :disabled="!identificadores[r.id] || !(estacao[r.id] ?? '').trim()"
+          :data-testid="`recoleta-coletar-${r.id}`"
+          @click="coletar(r.id)"
+        >
+          {{ t('sadt.pedido.coletar') }}
+        </SanteBotao>
+      </div>
+      <div class="linha">
+        <input v-model="motivoCancelar[r.id]" :aria-label="t('sadt.pedido.motivo')" maxlength="500" />
+        <SanteSelecao
+          :model-value="destino[r.id] ?? ''"
+          :rotulo="t('sadt.pedido.destinoExames')"
+          :opcoes="opcoesDestino"
+          @update:model-value="
+            (v: string) => (destino = { ...destino, [r.id]: v as '' | 'cancelar' | 'manter' })
+          "
+        />
+        <SanteSelecao
+          v-if="destino[r.id] === 'cancelar'"
+          :model-value="motivoExames[r.id] ?? ''"
+          :rotulo="t('sadt.pedido.motivoExames')"
+          :opcoes="opcoesMotivoExames"
+          @update:model-value="(v: string) => (motivoExames = { ...motivoExames, [r.id]: v })"
+        />
+        <SanteBotao :disabled="!podeCancelar(r.id)" @click="cancelar(r.id)">
+          {{ t('sadt.pedido.cancelarRecoleta') }}
+        </SanteBotao>
+      </div>
     </article>
   </section>
 </template>

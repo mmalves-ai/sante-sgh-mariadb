@@ -3,7 +3,9 @@
 // requisição numerada com os itens e o evento "solicitado" (com a versão do kit), a restrição clínica decidida na
 // gravação e a exceção do item registrada com quem autorizou; o item cancelado com motivo e evento, e a requisição
 // cancelada com o último item; a versão anterior do kit encerrada e mantida; as alíquotas ligadas à primária; a
-// recoleta como fato próprio, com a original rejeitada e ligada à amostra nova. Saída só com contagens.
+// recoleta como fato próprio, com a original e as alíquotas rejeitadas, a coleta com identificação positiva e um único
+// vínculo vivo por exame; o cancelamento da recoleta com o destino dos exames; as restrições pelas colunas reais e a
+// exceção só com a permissão de autorizar. Saída só com contagens.
 import { codigoDaAmostra, codigoValido } from '@sgh/dominio-sadt';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -31,6 +33,7 @@ describe.skipIf(SEM_BANCO)(
     const kits: number[] = [];
     const reqs: number[] = [];
     let restricao = 0;
+    const restricoesExtra: number[] = [];
     let regraSub = 0;
     const um = (sql: string, p: unknown[]) =>
       nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-f352' }, (l) => l.uma(sql, p));
@@ -59,6 +62,10 @@ describe.skipIf(SEM_BANCO)(
           );
           await x('DELETE FROM excecao_restricao_exame WHERE restricao_exame_id = ?', [restricao]);
           await x('DELETE FROM restricao_exame WHERE id = ?', [restricao]);
+          for (const r of restricoesExtra) {
+            await x('DELETE FROM excecao_restricao_exame WHERE restricao_exame_id = ?', [r]);
+            await x('DELETE FROM restricao_exame WHERE id = ?', [r]);
+          }
           // As alíquotas primeiro (a primária é apagada pela limpeza da massa).
           await x(
             `DELETE ev FROM amostra_biologica_evento ev JOIN amostra_biologica a ON a.id = ev.amostra_biologica_id
@@ -141,10 +148,31 @@ describe.skipIf(SEM_BANCO)(
       expect(codigoDe(await servico.abrirPedido(c, pedido).catch((e: unknown) => e))).toBe(
         'restricao-justificativa',
       );
-      const g = await servico.abrirPedido(c, {
-        ...pedido,
-        justificativa: 'controle pós-operatório pedido pelo médico',
-      });
+      // Quem só pede (sem sadt.requisicao.autorizarExcecao) não libera a própria exceção: nada é gravado.
+      const antes = Number(
+        (await um('SELECT COUNT(*) AS n FROM requisicao_exame WHERE paciente_id = ?', [m!.base.paciente]))?.[
+          'n'
+        ],
+      );
+      expect(
+        codigoDe(
+          await servico
+            .abrirPedido(c, { ...pedido, justificativa: 'controle pós-operatório pedido pelo médico' }, false)
+            .catch((e: unknown) => e),
+        ),
+      ).toBe('restricao-autorizacao');
+      expect(
+        Number(
+          (
+            await um('SELECT COUNT(*) AS n FROM requisicao_exame WHERE paciente_id = ?', [m!.base.paciente])
+          )?.['n'],
+        ),
+      ).toBe(antes);
+      const g = await servico.abrirPedido(
+        c,
+        { ...pedido, justificativa: 'controle pós-operatório pedido pelo médico' },
+        true,
+      );
       reqs.push(g.requisicao);
       expect(g.excecoes).toBe(1);
       expect(g.numero).toMatch(/\d+/);
@@ -224,6 +252,80 @@ describe.skipIf(SEM_BANCO)(
       expect(await servico.eventosDoItem(contexto(m!, m!.base.outroEst), a!.id)).toBeNull();
     });
 
+    it('restrições lidas das colunas reais (sexo, idade, material), alerta confirmado no evento e setor de outro estabelecimento', async () => {
+      const c = contexto(m!);
+      const pac = await um(
+        `SELECT sx.sigla AS sexo, pf.data_nascimento AS nasc FROM paciente pa JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+         LEFT JOIN sexo sx ON sx.id = pf.sexo_id WHERE pa.id = ?`,
+        [m!.base.paciente],
+      );
+      const sigla = String(pac?.['sexo'] ?? '').toUpperCase();
+      const outroSexo = sigla === 'F' ? 'masculino' : 'feminino';
+      const padrao = await um(
+        'SELECT MIN(material_biologico_id) AS m FROM exame_material WHERE exame_id = ?',
+        [m!.exameImagem],
+      );
+      const outroMaterial = await um(
+        'SELECT MIN(id) AS m FROM material_biologico WHERE id <> COALESCE(?, 0)',
+        [padrao?.['m'] ?? null],
+      );
+      const inserir = (sql: string, p: unknown[]) =>
+        nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f352' }, (e) => e.inserir(sql, p));
+      const cab = `INSERT INTO restricao_exame (estabelecimento_id, exame_id, tipo_restricao, permite_excecao, mensagem,
+                   vigencia_inicio, ativo, criado_em, versao`;
+      const rSexo = await inserir(
+        `${cab}, sexo) VALUES (?, ?, 'alerta', FALSE, 'Exame de outro sexo.', '2020-01-01', TRUE, UTC_TIMESTAMP(3), 1, ?)`,
+        [m!.base.est, m!.exameImagem, outroSexo],
+      );
+      const rIdade = await inserir(
+        `${cab}, idade_maxima_dias) VALUES (?, ?, 'alerta', FALSE, 'Só recém-nascido.', '2020-01-01', TRUE, UTC_TIMESTAMP(3), 1, 1)`,
+        [m!.base.est, m!.exameImagem],
+      );
+      const rMaterial = await inserir(
+        `${cab}, material_biologico_id) VALUES (?, ?, 'alerta', FALSE, 'Material diferente.', '2020-01-01', TRUE, UTC_TIMESTAMP(3), 1, ?)`,
+        [m!.base.est, m!.exameImagem, Number(outroMaterial?.['m'])],
+      );
+      restricoesExtra.push(rSexo, rIdade, rMaterial);
+      const pedido = {
+        atendimento: m!.base.atendimento,
+        setor: m!.setorImagem,
+        exames: [{ exame: m!.exameImagem }],
+      };
+      const av = await servico.avaliarPedido(c, pedido);
+      const motivoDe = (regra: number) => av.restricoes.find((r) => r.regra === regra);
+      // Sexo: o do paciente diverge da regra, ou é desconhecido (vira alerta, nunca aprovação calada).
+      expect(motivoDe(rSexo)).toMatchObject({ motivo: 'sexo', tipo: 'alerta' });
+      if (pac?.['nasc'] !== null && pac?.['nasc'] !== undefined)
+        expect(motivoDe(rIdade)).toMatchObject({ motivo: 'idade' });
+      else expect(motivoDe(rIdade)).toBeUndefined();
+      // Material: o padrão do cadastro do exame entra na avaliação; sem padrão, vira alerta.
+      expect(motivoDe(rMaterial)).toMatchObject({ motivo: 'material' });
+      expect(av).toMatchObject({ segue: false, codigo: 'restricao-confirmar' });
+      const g = await servico.abrirPedido(c, { ...pedido, confirmado: true });
+      reqs.push(g.requisicao);
+      const ev = await um(
+        `SELECT JSON_LENGTH(ev.dados, '$.restricoes') AS n FROM item_exame_evento ev WHERE ev.exame_item_id = ? AND ev.evento = 'solicitado'`,
+        [g.itens[0]!.id],
+      );
+      expect(Number(ev?.['n'])).toBe(av.restricoes.length);
+      // O setor do item precisa ser deste estabelecimento.
+      const setorFora = await um(
+        'SELECT MIN(id) AS id FROM setor_diagnostico WHERE estabelecimento_id <> ? AND excluido_em IS NULL',
+        [m!.base.est],
+      );
+      if (setorFora?.['id'] !== null && setorFora?.['id'] !== undefined)
+        expect(
+          codigoDe(
+            await servico
+              .avaliarPedido(c, {
+                ...pedido,
+                exames: [{ exame: m!.exameImagem, setor: Number(setorFora['id']) }],
+              })
+              .catch((e: unknown) => e),
+          ),
+        ).toBe('setor-inexistente');
+    });
+
     it('sub-amostras pela regra do exame e a recoleta ligada à amostra original', async () => {
       const c = contexto(m!);
       const at = await porta.atendimentoDosExames(c, [m!.itemLab, m!.itemLab2]);
@@ -289,6 +391,21 @@ describe.skipIf(SEM_BANCO)(
 
       // Recoleta: a primária é rejeitada, os exames voltam à coleta e a pendência nasce numerada.
       const hemolise = await motivo('motivo_nova_coleta', 'HEMOLISE');
+      const fora = contexto(m!, m!.base.outroEst);
+      // Outro estabelecimento não pede recoleta nem gera alíquota da amostra; a alíquota não pede recoleta.
+      expect(
+        codigoDe(await servico.pedirRecoleta(fora, col.id, { motivo: hemolise }).catch((e: unknown) => e)),
+      ).toBe('amostra-inexistente');
+      expect(codigoDe(await servico.gerarSubamostras(fora, col.id).catch((e: unknown) => e))).toBe(
+        'amostra-inexistente',
+      );
+      expect(
+        codigoDe(
+          await servico
+            .pedirRecoleta(c, sub.subamostras[0]!.id, { motivo: hemolise })
+            .catch((e: unknown) => e),
+        ),
+      ).toBe('recoleta-pela-primaria');
       const r = await servico.pedirRecoleta(c, col.id, { motivo: hemolise, observacao: null });
       expect(
         codigoDe(await servico.pedirRecoleta(c, col.id, { motivo: hemolise }).catch((e: unknown) => e)),
@@ -303,8 +420,64 @@ describe.skipIf(SEM_BANCO)(
         refazimento: 1,
         coleta_pendente: 1,
       });
+      // A alíquota viva da primária é rejeitada junto, com evento; o vínculo antigo fica como histórico.
+      expect(
+        await um('SELECT situacao FROM amostra_biologica WHERE id = ?', [sub.subamostras[0]!.id]),
+      ).toMatchObject({
+        situacao: 'rejeitada',
+      });
+      expect(
+        Number(
+          (
+            await um(
+              "SELECT COUNT(*) AS n FROM amostra_biologica_evento WHERE amostra_biologica_id = ? AND evento = 'rejeitada'",
+              [sub.subamostras[0]!.id],
+            )
+          )?.['n'],
+        ),
+      ).toBe(1);
       expect((await servico.recoletas(c, { abertas: true })).map((x) => x.id)).toContain(r.id);
-      const nova = await servico.coletarRecoleta(c, r.id);
+      // Sem a identificação positiva, a recoleta não é coletada; outro estabelecimento não a enxerga.
+      expect(codigoDe(await servico.coletarRecoleta(c, r.id, {}).catch((e: unknown) => e))).toBe(
+        'coleta-nao-conferida',
+      );
+      const conferida = {
+        identificadoresConferidos: true,
+        pulseira: `P${m!.base.paciente}`,
+        estacao: 'posto-teste',
+      };
+      expect(codigoDe(await servico.coletarRecoleta(fora, r.id, conferida).catch((e: unknown) => e))).toBe(
+        'recoleta-inexistente',
+      );
+      const nova = await servico.coletarRecoleta(c, r.id, conferida);
+      // Cada exame fica com um único vínculo a amostra viva: a nova.
+      const vivos = await todos(
+        `SELECT abe.exame_item_id AS i, COUNT(*) AS n FROM amostra_biologica_exame abe
+           JOIN amostra_biologica am ON am.id = abe.amostra_biologica_id
+          WHERE abe.excluido_em IS NULL AND am.situacao NOT IN ('rejeitada','cancelada','descartada')
+            AND abe.exame_item_id IN (?, ?) GROUP BY abe.exame_item_id`,
+        [m!.itemLab, m!.itemLab2],
+      );
+      expect(vivos.map((v) => Number(v['n']))).toEqual(vivos.map(() => 1));
+      expect(
+        await um(
+          `SELECT JSON_UNQUOTE(JSON_EXTRACT(dados, '$.estacao')) AS estacao,
+                  JSON_EXTRACT(dados, '$.identificadoresConferidos') AS ok
+             FROM amostra_biologica_evento WHERE amostra_biologica_id = ? AND evento = 'coletada'`,
+          [nova.amostra],
+        ),
+      ).toMatchObject({ estacao: 'posto-teste' });
+      // A trilha da recoleta: pedida e coletada, cada uma com a sua linha.
+      expect(
+        Number(
+          (
+            await um(
+              "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'nova_coleta' AND entidade_id = ?",
+              [r.id],
+            )
+          )?.['n'],
+        ),
+      ).toBe(2);
       expect(codigoValido(nova.codigo)).toBe(true);
       expect(
         await um(
@@ -334,9 +507,40 @@ describe.skipIf(SEM_BANCO)(
           )?.['n'],
         ),
       ).toBeGreaterThanOrEqual(4);
-      expect(codigoDe(await servico.coletarRecoleta(c, r.id).catch((e: unknown) => e))).toBe(
+      expect(codigoDe(await servico.coletarRecoleta(c, r.id, conferida).catch((e: unknown) => e))).toBe(
         'recoleta-fechada',
       );
+
+      // Cancelar a recoleta pede o destino dos exames; "cancelar" cancela cada exame com motivo e evento.
+      const r2 = await servico.pedirRecoleta(c, nova.amostra, { motivo: hemolise });
+      expect(
+        codigoDe(
+          await servico.cancelarRecoleta(c, r2.id, { motivo: 'paciente teve alta' }).catch((e: unknown) => e),
+        ),
+      ).toBe('destino-obrigatorio');
+      const susp = await motivo('motivo_cancelamento_item_exame', 'ALTA_OU_TRANSFERENCIA');
+      const canc = await servico.cancelarRecoleta(c, r2.id, {
+        motivo: 'paciente teve alta',
+        destinoExames: 'cancelar',
+        motivoCancelamentoExame: susp,
+      });
+      expect(canc.exames).toBeGreaterThanOrEqual(1);
+      expect(await um('SELECT situacao FROM nova_coleta WHERE id = ?', [r2.id])).toMatchObject({
+        situacao: 'cancelada',
+      });
+      expect(
+        await um(
+          'SELECT situacao, coleta_pendente, motivo_cancelamento_item_exame_id AS m FROM exame_item WHERE id = ?',
+          [m!.itemLab],
+        ),
+      ).toMatchObject({ situacao: 'cancelado', coleta_pendente: 0, m: susp });
+      expect(
+        await um(
+          `SELECT usuario_id FROM item_exame_evento WHERE exame_item_id = ? AND evento = 'cancelado'
+            ORDER BY id DESC LIMIT 1`,
+          [m!.itemLab],
+        ),
+      ).toMatchObject({ usuario_id: m!.base.usuario });
     });
   },
 );

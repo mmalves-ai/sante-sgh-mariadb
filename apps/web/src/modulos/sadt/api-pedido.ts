@@ -62,11 +62,46 @@ const esquemaRecoletas = z.object({
   ),
 });
 
+const esquemaAtendimento = z.object({
+  id: n,
+  numero: txt,
+  paciente: n,
+  nome: txt,
+  prontuario: txt,
+  sexo: z.enum(['feminino', 'masculino']).nullable(),
+  nascimento: txt.nullable(),
+  idadeAnos: n.nullable(),
+});
+export type AtendimentoPedido = z.infer<typeof esquemaAtendimento>;
+const esquemaDoAtendimento = z.object({
+  atendimento: esquemaAtendimento.extend({ estabelecimento: txt }),
+  podeAutorizarExcecao: z.boolean(),
+  requisicoes: z.array(
+    z.object({
+      id: n,
+      numero: txt,
+      situacao: txt,
+      prioridade: txt,
+      solicitadaEm: txt,
+      itens: z.array(
+        z.object({ id: n, sequencia: n, exame: txt, situacao: txt, coletaPendente: z.boolean() }),
+      ),
+    }),
+  ),
+});
+export type PedidosDoAtendimento = z.infer<typeof esquemaDoAtendimento>;
+const esquemaEventos = z.object({
+  itens: z.array(
+    z.object({ evento: txt, em: txt, de: txt.nullable(), para: txt.nullable(), motivo: txt.nullable() }),
+  ),
+});
+
 export interface CorpoPedido {
   atendimento: number;
   setor: number;
   prioridade: 'rotina' | 'urgente' | 'emergencia';
-  exames: { exame: number }[];
+  /** Setor executante próprio do exame (nulo: o setor do pedido); o material nulo usa o padrão do cadastro. */
+  exames: { exame: number; setor: number | null; urgente: boolean }[];
   kits: number[];
   indicacaoClinica: string | null;
   confirmado: boolean;
@@ -77,6 +112,11 @@ export const avaliarPedido = (c: CorpoPedido, chave: string) =>
   enviar(`${S}/pedidos/avaliar`, c, esquemaAvaliacao, chave);
 export const gravarPedido = (c: CorpoPedido, chave: string) =>
   enviar(`${S}/pedidos`, c, esquemaPedido, chave);
+export const buscarAtendimentos = (busca: string) =>
+  ler(`${S}/pedidos/atendimentos${qs({ busca })}`, z.object({ itens: z.array(esquemaAtendimento) }));
+export const lerPedidosDoAtendimento = (id: number) =>
+  ler(`${S}/pedidos/atendimentos/${id}`, esquemaDoAtendimento);
+export const lerEventosDoItem = (item: number) => ler(`${S}/itens/${item}/eventos`, esquemaEventos);
 export const lerMotivosPedido = () => ler(`${S}/pedidos/motivos`, esquemaMotivos);
 export const listarKits = () => ler(`${S}/kits`, esquemaKits);
 export const cancelarItem = (item: number, motivo: number, complemento: string | null, chave: string) =>
@@ -89,10 +129,27 @@ export const cancelarItem = (item: number, motivo: number, complemento: string |
 export const listarRecoletas = () => ler(`${S}/recoletas${qs({ abertas: 'sim' })}`, esquemaRecoletas);
 export const pedirRecoleta = (amostra: number, motivo: number, chave: string) =>
   enviar(`${S}/amostras/${amostra}/recoleta`, { motivo }, z.object({ id: n, numero: txt }), chave);
-export const coletarRecoleta = (id: number, chave: string) =>
-  enviar(`${S}/recoletas/${id}/coletar`, {}, z.object({ id: n, amostra: n, codigo: txt }), chave);
-export const cancelarRecoleta = (id: number, motivo: string, chave: string) =>
-  enviar(`${S}/recoletas/${id}/cancelar`, { motivo }, z.object({ id: n }), chave);
+/** A identificação positiva do paciente na coleta da recoleta (mesma exigência da coleta comum). */
+export interface ConferenciaColeta {
+  identificadoresConferidos: boolean;
+  pulseira: string | null;
+  estacao: string | null;
+}
+export const coletarRecoleta = (id: number, conferencia: ConferenciaColeta, chave: string) =>
+  enviar(`${S}/recoletas/${id}/coletar`, conferencia, z.object({ id: n, amostra: n, codigo: txt }), chave);
+export const cancelarRecoleta = (
+  id: number,
+  motivo: string,
+  destinoExames: 'cancelar' | 'manter',
+  motivoCancelamentoExame: number | null,
+  chave: string,
+) =>
+  enviar(
+    `${S}/recoletas/${id}/cancelar`,
+    { motivo, destinoExames, motivoCancelamentoExame },
+    z.object({ id: n, exames: n }),
+    chave,
+  );
 export const gerarAliquotas = (amostra: number, chave: string) =>
   enviar(
     `${S}/amostras/${amostra}/subamostras`,
