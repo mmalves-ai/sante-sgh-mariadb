@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   type AlvoParaVinculo,
   type NotaParaVinculo,
+  notaDocumenta,
+  notaServeAoAlvo,
   saldosVinculo,
   situacaoDocumentacao,
+  validarDesligamentoNota,
   validarVinculoNota,
   valorDocumentavelFatura,
 } from './nota-vinculo.js';
@@ -20,6 +23,7 @@ const fatura: AlvoParaVinculo = {
   valorDocumentavel: 900,
   valorJaDocumentado: 100,
   fontePagadoraId: 7,
+  id: 50,
 };
 
 describe('nota fiscal que documenta a fatura ou a conta (06-FAT linha 36)', () => {
@@ -54,7 +58,6 @@ describe('nota fiscal que documenta a fatura ou a conta (06-FAT linha 36)', () =
       ...fatura,
       tipo: 'conta',
       situacao: 'em_auditoria',
-      fontePagadoraId: null,
     };
     expect(validarVinculoNota(nota, conta, { valorApropriado: 10 })['alvo']).toMatch(/conta/);
     expect(
@@ -68,5 +71,41 @@ describe('nota fiscal que documenta a fatura ou a conta (06-FAT linha 36)', () =
     expect(situacaoDocumentacao(100, 0)).toBe('sem_nota');
     expect(situacaoDocumentacao(100, 99.99)).toBe('parcial');
     expect(situacaoDocumentacao(100, 100)).toBe('documentada');
+  });
+  it('recusa a nota emitida para outra fatura ou conta e a de tomador que não é do paciente nem do responsável', () => {
+    expect(notaServeAoAlvo({ ...nota, faturaFontePagadoraId: 50 }, fatura)).toBeNull();
+    expect(notaServeAoAlvo({ ...nota, faturaFontePagadoraId: 51 }, fatura)).toMatch(/outra fatura/);
+    expect(notaServeAoAlvo({ ...nota, contaHospitalarId: 50 }, fatura)).toMatch(/outra fatura/);
+    const conta: AlvoParaVinculo = {
+      ...fatura,
+      tipo: 'conta',
+      id: 80,
+      documentosTomador: ['11122233344', '55566677788'],
+    };
+    expect(notaServeAoAlvo({ ...nota, contaHospitalarId: 81 }, conta)).toMatch(/outra conta/);
+    expect(notaServeAoAlvo({ ...nota, contaHospitalarId: 80 }, conta)).toBeNull();
+    // Particular: a nota sem fonte pagadora só serve se o tomador for o paciente ou um responsável.
+    const particular = { ...nota, fontePagadoraId: null };
+    expect(notaServeAoAlvo({ ...particular, tomadorDocumento: '111.222.333-44' }, conta)).toBeNull();
+    expect(notaServeAoAlvo({ ...particular, tomadorDocumento: '99988877766' }, conta)).toMatch(/paciente/);
+    expect(notaServeAoAlvo({ ...particular, tomadorDocumento: null }, conta)).toMatch(/paciente/);
+    expect(notaServeAoAlvo(particular, { ...fatura, documentosTomador: [] })).toMatch(/fonte pagadora/);
+    expect(
+      validarVinculoNota(
+        { ...particular, tomadorDocumento: '99988877766' },
+        { ...conta, situacao: 'fechada' },
+        {
+          valorApropriado: 10,
+        },
+      )['notaServicoId'],
+    ).toMatch(/paciente/);
+  });
+  it('desligar pede motivo; a nota cancelada não documenta mais', () => {
+    expect(validarDesligamentoNota('')).toHaveProperty('motivo');
+    expect(validarDesligamentoNota('  curto   ')).toHaveProperty('motivo');
+    expect(validarDesligamentoNota('x'.repeat(501))).toHaveProperty('motivo');
+    expect(validarDesligamentoNota('nota emitida em duplicidade')).toEqual({});
+    expect(notaDocumenta('autorizada')).toBe(true);
+    expect(notaDocumenta('cancelada')).toBe(false);
   });
 });

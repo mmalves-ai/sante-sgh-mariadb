@@ -2,7 +2,11 @@
 // Desenho próprio: o faturista vê, a partir da fatura ou da conta, quanto já está documentado por nota e quanto falta,
 // e liga uma nota com o valor já sugerido (o menor entre o saldo da nota e o saldo do alvo). Uma nota pode documentar
 // várias faturas (parte de cada) e uma fatura pode ter mais de uma nota; a soma nunca passa do valor de nenhum lado.
-// Desligar não apaga: o vínculo fica marcado como excluído, com autor e data, e volta a valer se for ligado de novo.
+// A nota só documenta o alvo para o qual serve: a emitida para outra fatura ou outra conta é recusada, a de outra fonte
+// pagadora também, e a emitida a um tomador avulso (sem fonte pagadora, o particular) só vale se o CPF ou CNPJ do
+// tomador for o do paciente, o de um responsável financeiro ou legal da conta, ou o da própria fonte pagadora.
+// Desligar não apaga e pede motivo: o vínculo fica marcado como excluído, com autor e data, e cada ligação, ajuste,
+// desligamento e religamento fica no histórico próprio do vínculo (valor anterior e novo, motivo, quem e quando).
 
 /** Situações da nota que aceitam vínculo (a cancelada, a substituída e a rejeitada não documentam nada). */
 export const SITUACOES_NOTA_VINCULAVEIS: ReadonlySet<string> = new Set([
@@ -36,6 +40,11 @@ export interface NotaParaVinculo {
   /** Soma já apropriada pela nota a outros alvos (sem o vínculo em edição). */
   readonly valorJaApropriado: number;
   readonly fontePagadoraId: number | null;
+  /** Conta e fatura para as quais a nota foi emitida (nulas quando a nota não nasceu de um alvo). */
+  readonly contaHospitalarId?: number | null;
+  readonly faturaFontePagadoraId?: number | null;
+  /** CPF ou CNPJ do tomador, como saiu na nota. */
+  readonly tomadorDocumento?: string | null;
 }
 
 export interface AlvoParaVinculo {
@@ -46,6 +55,10 @@ export interface AlvoParaVinculo {
   /** Soma já documentada por outras notas. */
   readonly valorJaDocumentado: number;
   readonly fontePagadoraId: number | null;
+  /** Id do alvo, para recusar a nota emitida para outra fatura ou conta. */
+  readonly id?: number;
+  /** Documentos aceitos como tomador da nota sem fonte pagadora (paciente, responsáveis, CNPJ da fonte). */
+  readonly documentosTomador?: readonly string[];
 }
 
 export interface PedidoVinculoNota {
@@ -79,6 +92,35 @@ export function saldosVinculo(nota: NotaParaVinculo, alvo: AlvoParaVinculo) {
   };
 }
 
+const soDigitos = (v: string | null | undefined) => (v ?? '').replace(/\D/g, '');
+
+/**
+ * Por que a nota não serve para este alvo (nulo quando serve): emitida para outra fatura ou conta, para outra fonte
+ * pagadora ou para um tomador que não é o paciente, um responsável da conta nem a fonte pagadora.
+ */
+export function notaServeAoAlvo(nota: NotaParaVinculo, alvo: AlvoParaVinculo): string | null {
+  const paraConta = nota.contaHospitalarId ?? null;
+  const paraFatura = nota.faturaFontePagadoraId ?? null;
+  if (paraConta !== null || paraFatura !== null) {
+    const doAlvo = alvo.tipo === 'fatura' ? paraFatura : paraConta;
+    if (alvo.id === undefined || doAlvo !== alvo.id)
+      return alvo.tipo === 'fatura'
+        ? 'A nota foi emitida para outra fatura ou para uma conta.'
+        : 'A nota foi emitida para outra conta ou para uma fatura.';
+  }
+  if (nota.fontePagadoraId !== null) {
+    if (nota.fontePagadoraId !== alvo.fontePagadoraId) return 'A nota foi emitida para outra fonte pagadora.';
+    return null;
+  }
+  const doc = soDigitos(nota.tomadorDocumento);
+  const aceitos = new Set((alvo.documentosTomador ?? []).map(soDigitos).filter((d) => d.length > 0));
+  if (!doc || !aceitos.has(doc))
+    return alvo.tipo === 'fatura'
+      ? 'O tomador da nota não é a fonte pagadora da fatura.'
+      : 'O tomador da nota não é o paciente, um responsável financeiro da conta nem a fonte pagadora.';
+  return null;
+}
+
 /** Confere o vínculo pedido; devolve os erros por campo (vazio quando vale). */
 export function validarVinculoNota(
   nota: NotaParaVinculo,
@@ -94,12 +136,8 @@ export function validarVinculoNota(
       alvo.tipo === 'fatura'
         ? 'Feche a fatura antes de ligar a nota.'
         : 'Feche a conta antes de ligar a nota.';
-  if (
-    nota.fontePagadoraId !== null &&
-    alvo.fontePagadoraId !== null &&
-    nota.fontePagadoraId !== alvo.fontePagadoraId
-  )
-    erros['notaServicoId'] = 'A nota foi emitida para outra fonte pagadora.';
+  const outro = notaServeAoAlvo(nota, alvo);
+  if (outro) erros['notaServicoId'] = outro;
   const valor = centavos(p.valorApropriado);
   const desconto = centavos(p.valorDesconto ?? 0);
   const acrescimo = centavos(p.valorAcrescimo ?? 0);
@@ -127,4 +165,15 @@ export function situacaoDocumentacao(
   const d = centavos(valorDocumentado);
   if (d <= 0) return 'sem_nota';
   return d >= centavos(valorDocumentavel) ? 'documentada' : 'parcial';
+}
+
+/** A nota ainda documenta o alvo? A cancelada, a substituída e a rejeitada seguem ligadas, mas não documentam mais. */
+export const notaDocumenta = (situacaoNota: string) => SITUACOES_NOTA_VINCULAVEIS.has(situacaoNota);
+
+/** Desligar a nota do alvo exige o motivo (de 10 a 500 caracteres), que fica no histórico do vínculo. */
+export function validarDesligamentoNota(motivo: string | null | undefined): Record<string, string> {
+  const m = (motivo ?? '').trim();
+  if (m.length < 10) return { motivo: 'Diga por que a nota deixa de documentar (pelo menos 10 caracteres).' };
+  if (m.length > 500) return { motivo: 'O motivo vai até 500 caracteres.' };
+  return {};
 }
