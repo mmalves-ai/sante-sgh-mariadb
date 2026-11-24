@@ -103,3 +103,6 @@ export const esquemaProcedimentoKitBusca = z.object({
   nome: z.string(),
 });
 export type ProcedimentoKitBusca = z.infer<typeof esquemaProcedimentoKitBusca>;
+
+// F3.6 (05-SUP linha 20): a gestão do pedido de compra emitido vai ao índice por aqui (o índice está em edição paralela).
+export * from './pedido-gestao.js';
