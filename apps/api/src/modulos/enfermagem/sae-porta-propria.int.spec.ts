@@ -288,7 +288,7 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
     expect(await porta.vacinas(contextoDe(m!, m!.outroEst), m!.paciente)).toEqual([]);
   });
 
-  it('a consulta, os externos do dia e o cabeçalho da receita; a receita do enfermeiro aguarda o modelo', async () => {
+  it('a consulta, os externos do dia e o cabeçalho da receita; a receita do enfermeiro sem o texto é recusada', async () => {
     expect(await porta.consulta(c(), m!.atendimento)).toMatchObject({
       tipo: 'I',
       vinculoDoAtendimento: m!.profissional,
@@ -298,8 +298,9 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
     expect((await porta.externosDoDia(c(), agora().slice(0, 10))).itens).toEqual([]);
     const cab = await porta.cabecalhoReceita(c(), { paciente: m!.paciente, vinculo: m!.profissional });
     expect(cab).toMatchObject({ paciente: `PACIENTE ${m!.marca} SINTETICO`, nascimento: '1970-05-01' });
+    // A receita do enfermeiro tem porta própria (sae-porta-propria-receita.ts): sem o texto assinado, falha fechada.
     expect(await recusada(porta.gravarSgh(c(), null, (g) => g.prescreverMedicamento({} as never)))).toBe(
-      'modelo-pendente',
+      'receita-sem-texto',
     );
   });
 });
