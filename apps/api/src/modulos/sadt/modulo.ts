@@ -38,12 +38,14 @@ import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
 import { MapaTrabalhoController, SERVICO_MAPA_TRABALHO } from './mapa-trabalho.controller.js';
+import { ResultadoBancoController, SERVICO_RESULTADO_SADT } from './resultado-banco.controller.js';
 import { OrcamentoExamesController, SERVICO_ORCAMENTO_SADT } from './orcamento-exames.controller.js';
 import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
 import { CatalogoSadtController } from './catalogo.controller.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
+import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
 
 export interface OpcoesModuloSadt {
   /** Testes: as portas já montadas. */
@@ -134,7 +136,9 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       PedidoSadtController,
       OrcamentoExamesController,
       MapaTrabalhoController,
+      ResultadoBancoController,
       LaudoRedacaoController,
+      LimitesExameController,
     ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
@@ -145,6 +149,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       { provide: AVISOS_SADT, useValue: avisos },
       // Pedido, cancelamento do item, kit com versão, recoleta e sub-amostras: só no banco do cliente (sem ele, 503).
       // Retenção do exame na bancada (mapa de trabalho): só no banco do cliente (sem ele, 503).
+      // Digitação, liberação e retificação do resultado pelo exame pedido (05-SADT linha 10): só no banco do cliente.
+      {
+        provide: SERVICO_RESULTADO_SADT,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoResultadoSadt } = await import('./aplicacao/resultado-propria.js');
+          return new ServicoResultadoSadt(ctx.nucleo);
+        },
+      },
       {
         provide: SERVICO_MAPA_TRABALHO,
         useFactory: async () => {
@@ -177,6 +190,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoLaudoRedacao } = await import('./aplicacao/laudo-redacao.js');
           return new ServicoLaudoRedacao(ctx.nucleo);
+        },
+      },
+      // Limites do pedido de exame (05-SADT linha 6): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_LIMITES_EXAME,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoLimitesExame } = await import('./aplicacao/limites-exame-propria.js');
+          return new ServicoLimitesExame(ctx.nucleo);
         },
       },
       // A central de avisos (o sino) é a comunicação do módulo acesso: sem ele, o aviso do crítico fica no painel do SADT.

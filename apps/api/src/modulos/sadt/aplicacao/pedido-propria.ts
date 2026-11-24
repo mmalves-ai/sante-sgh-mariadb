@@ -11,6 +11,8 @@ import {
   conferirFechamentoRecoleta,
   conferirRecoleta,
   decisaoDoPedido,
+  decisaoDosLimites,
+  type LimiteAcionado,
   destinoDosExamesAoCancelar,
   type ExameDaAmostra,
   idadeEmDias,
@@ -37,6 +39,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
+import { COLUNA_LIBERACAO, limitesDoPedido } from './limites-exame-propria.js';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
 
@@ -112,6 +115,8 @@ export const esquemaColetarRecoleta = z.object({
 export interface AvaliacaoDoPedido {
   readonly itens: readonly { sequencia: number; exame: number; kitVersao: number | null }[];
   readonly restricoes: readonly RestricaoAcionada[];
+  /** Cota, intervalo e último resultado (05-SADT linha 6), vistos na hora. */
+  readonly limites: readonly LimiteAcionado[];
   readonly segue: boolean;
   readonly codigo: string | null;
   readonly motivo: string | null;
@@ -185,6 +190,7 @@ export const TABELAS_PEDIDO = [
   'exame_item',
   'item_exame_evento',
   'excecao_restricao_exame',
+  'liberacao_excecao_exame',
   'kit_exame',
   'kit_exame_versao',
   'kit_exame_versao_item',
@@ -326,14 +332,17 @@ export class ServicoPedidoSadt {
       return {
         itens: a.itens.map((i) => ({ sequencia: i.sequencia, exame: i.exame, kitVersao: i.kitVersao })),
         restricoes: a.acionadas,
-        ...a.decisao,
+        limites: a.limites,
+        segue: a.decisao.segue,
+        codigo: a.decisao.codigo,
+        motivo: a.decisao.motivo,
       };
     });
   }
 
   private async avaliar(l: Leitor, est: number, p: PedidoExames, podeAutorizarExcecao: boolean) {
     const at = await l.uma(
-      `SELECT a.id, a.paciente_id, a.fonte_pagadora_id, a.profissional_id, a.unidade_assistencial_id,
+      `SELECT a.id, a.paciente_id, a.fonte_pagadora_id, a.profissional_id, a.unidade_assistencial_id, a.setor_funcional_id,
               pf.data_nascimento, sx.sigla AS sexo
          FROM atendimento a JOIN paciente pa ON pa.id = a.paciente_id
          JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id LEFT JOIN sexo sx ON sx.id = pf.sexo_id
@@ -464,7 +473,28 @@ export class ServicoPedidoSadt {
       justificativa: p.justificativa,
       podeAutorizarExcecao,
     });
-    return { at, itens, acionadas, decisao, paciente };
+    // Limites do pedido (05-SADT linha 6): cota, intervalo ou repetição no mesmo dia e último resultado.
+    const limites = await limitesDoPedido(l, est, {
+      paciente,
+      fontePagadora: nn(at['fonte_pagadora_id']),
+      unidade: nn(at['unidade_assistencial_id']),
+      setorSolicitante: nn(at['setor_funcional_id']),
+      itens: itens.map((i) => ({ exame: i.exame, setor: i.setor ?? p.setor, quantidade: i.quantidade })),
+    });
+    const decisaoLimites = decisaoDosLimites(limites, {
+      confirmado: p.confirmado,
+      justificativa: p.justificativa,
+      podeAutorizarExcecao,
+    });
+    const final = decisao.segue
+      ? {
+          ...decisao,
+          segue: decisaoLimites.segue,
+          codigo: decisaoLimites.codigo,
+          motivo: decisaoLimites.motivo,
+        }
+      : decisao;
+    return { at, itens, acionadas, decisao: final, paciente, limites, liberados: decisaoLimites.liberados };
   }
 
   /** Abre a requisição com os itens (avulsos e de kit), já com as restrições decididas e as exceções registradas. */
@@ -551,6 +581,22 @@ export class ServicoPedidoSadt {
           autorizado_em: agora,
           vigencia_inicio: agora.toISOString().slice(0, 10),
           ativo: true,
+        });
+        excecoes += 1;
+      }
+      // A liberação de cada limite do item fica registrada com quem gravou e a justificativa.
+      for (const lib of a.liberados) {
+        if (lib.exame !== i.exame) continue;
+        await tx.incluir('liberacao_excecao_exame', {
+          exame_item_id: item,
+          operacao: 'inclusao',
+          ocorrido_em: agora,
+          usuario_id: usuario,
+          tipo_bloqueio: lib.tipo,
+          [COLUNA_LIBERACAO[lib.tipo]]: lib.regra,
+          fonte_pagadora_id: nn(a.at['fonte_pagadora_id']),
+          justificativa: p.justificativa,
+          dados: JSON.stringify({ acao: lib.acao, mensagem: lib.mensagem }),
         });
         excecoes += 1;
       }
