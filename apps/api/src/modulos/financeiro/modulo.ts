@@ -16,6 +16,7 @@ import {
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import type { ContextoModulo } from '../registro.js';
 import { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemoria } from './armazem.js';
+import { CompensacaoPrevisaoController } from './compensacao-previsao.controller.js';
 import { ContabilFiscalController } from './contabil-fiscal.controller.js';
 import { FinanceiroController } from './financeiro.controller.js';
 import { GestaoFinanceiroController } from './gestao.controller.js';
@@ -67,6 +68,7 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       PeriodoFinanceiroController,
       GestaoFinanceiroController,
       ContabilFiscalController,
+      CompensacaoPrevisaoController,
     ],
     providers: [
       { provide: PORTA_FINANCEIRO, useValue: porta },
