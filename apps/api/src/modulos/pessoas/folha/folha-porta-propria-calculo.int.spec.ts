@@ -186,8 +186,8 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
         'individual',
       ]);
       const aq = await e.inserir(
-        'INSERT INTO periodo_aquisitivo (estabelecimento_id, colaborador_id, inicio, fim, limite_concessivo, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
-        [m.est, m.colaborador, '2025-09-01', '2026-08-31', '2027-07-31', agora],
+        'INSERT INTO periodo_aquisitivo (estabelecimento_id, colaborador_id, vinculo_trabalho_id, inicio, fim, limite_concessivo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [m.est, m.colaborador, m.vinculo, '2025-09-01', '2026-08-31', '2027-07-31', agora],
       );
       const prog = (parcela: number, ini: string, fim: string, dias: number, situacao: string) =>
         e.inserir(

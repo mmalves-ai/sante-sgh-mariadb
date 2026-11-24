@@ -30,6 +30,11 @@ import {
   sha256,
   type TxOperacao,
 } from '@sgh/nucleo';
+import {
+  conferirFracaoNoDireito,
+  direitoDoPeriodoGravado,
+  type RecusaGravacaoFerias,
+} from '@sgh/dominio-pessoas';
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import { exigirFeriasAlteravel, lerFeriasPorId } from './folha-porta-propria-calculo.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha } from './porta-calculo.js';
@@ -138,6 +143,18 @@ function conferirDiasFerias(x: { dias: number; abono: number; dobra: number }) {
       'As férias têm de 5 a 30 dias de gozo, até 10 de abono e até 30 em dobro (CLT arts. 134 e 143).',
     );
 }
+
+const MENSAGEM_GRAVACAO_FERIAS: Readonly<Record<RecusaGravacaoFerias, string>> = {
+  'periodo-direito-incoerente':
+    'Os dias de direito não são os da escala do art. 130 da CLT para as faltas injustificadas informadas.',
+  'periodo-aquisitivo-divergente':
+    'O período aquisitivo já gravado tem outras faltas ou outro direito: confira o período antes de programar.',
+  'ferias-acima-do-direito':
+    'As frações de férias (gozo e abono) passam dos dias de direito do período aquisitivo (CLT arts. 130 e 143).',
+  'fracao-quatorze':
+    'Uma das frações tem de ter ao menos 14 dias, e esta programação não deixa lugar para ela (CLT art. 134, § 1º).',
+};
+const recusaFerias = (c: RecusaGravacaoFerias) => recusa(c, MENSAGEM_GRAVACAO_FERIAS[c]);
 
 // ── Obrigações ───────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -331,6 +348,8 @@ export function gravadorFolhaObrigacoes(
    * art. 130; migração 15_RH/98): o colaborador com dois contratos, mesmo de mesmo início, tem um período em cada, e a
    * UNIQUE (vinculo_trabalho_id, inicio) garante um só por contrato e início. O período novo grava as faltas
    * injustificadas e os dias de direito da escala do art. 130 que o domínio calculou (sem eles, 0 faltas e 30 dias).
+   * Direito incoerente com as faltas, ou faltas e direito diferentes dos do período já gravado, recusam
+   * (direitoDoPeriodoGravado, no domínio): o período nunca muda nem se grava fora da escala em silêncio.
    */
   async function periodoAquisitivo(
     vinculo: number,
@@ -339,7 +358,7 @@ export function gravadorFolhaObrigacoes(
   ) {
     const { aquisitivoInicio: inicio, aquisitivoFim: fim } = x;
     const [pa] = await tx.consultarParaAtualizar(
-      `SELECT id, fim, estabelecimento_id FROM periodo_aquisitivo
+      `SELECT id, fim, estabelecimento_id, faltas_injustificadas, dias_direito FROM periodo_aquisitivo
         WHERE vinculo_trabalho_id = ? AND inicio = ? AND excluido_em IS NULL`,
       [vinculo, inicio],
     );
@@ -350,23 +369,31 @@ export function gravadorFolhaObrigacoes(
           'periodo-aquisitivo-divergente',
           'O período aquisitivo com este início tem outro fim: confira as datas do período.',
         );
-      return n(pa['id']);
+      const conf = direitoDoPeriodoGravado(
+        { faltas: x.faltas, direito: x.direito },
+        { faltas: n(pa['faltas_injustificadas']), direito: n(pa['dias_direito']) },
+      );
+      if (conf.recusa) throw recusaFerias(conf.recusa);
+      return { id: n(pa['id']), direito: conf.direito };
     }
     if (!(fim > inicio))
       throw recusa('periodo-aquisitivo-invalido', 'O fim do período aquisitivo tem de ser depois do início.');
-    const direito = x.direito ?? 30;
-    return tx.incluir('periodo_aquisitivo', {
+    const conf = direitoDoPeriodoGravado({ faltas: x.faltas, direito: x.direito }, null);
+    if (conf.recusa) throw recusaFerias(conf.recusa);
+    const direito = conf.direito;
+    const id = await tx.incluir('periodo_aquisitivo', {
       estabelecimento_id: est,
       colaborador_id: colaborador,
       vinculo_trabalho_id: vinculo,
       inicio,
       fim,
       limite_concessivo: somarMeses(fim, 12),
-      faltas_injustificadas: x.faltas ?? 0,
+      faltas_injustificadas: conf.faltas,
       dias_direito: direito,
       dias_saldo: direito,
       situacao: fim < x.inicio ? 'adquirido' : 'aberto',
     });
+    return { id, direito };
   }
 
   /**
@@ -399,7 +426,7 @@ export function gravadorFolhaObrigacoes(
       if (!v) throw recusa('vinculo-inexistente', 'O vínculo não existe neste estabelecimento.');
       await exigirUsuario(tx, x.por);
       const colaborador = n(v['colaborador_id']);
-      const periodo = await periodoAquisitivo(x.vinculo, colaborador, x);
+      const { id: periodo, direito } = await periodoAquisitivo(x.vinculo, colaborador, x);
       const tipo = await tx.uma(
         "SELECT id FROM tipo_ferias WHERE ativo = TRUE AND categoria = 'individual' ORDER BY id LIMIT 1",
       );
@@ -409,7 +436,7 @@ export function gravadorFolhaObrigacoes(
           'O tipo de férias individual não está cadastrado neste cliente: cadastre-o antes de programar férias.',
         );
       const fracoes = await tx.consultarParaAtualizar(
-        `SELECT id, numero_parcela, inicio_gozo FROM programacao_ferias
+        `SELECT id, numero_parcela, inicio_gozo, dias_gozo, dias_abono FROM programacao_ferias
           WHERE periodo_aquisitivo_id = ? AND excluido_em IS NULL AND situacao <> 'cancelada'`,
         [periodo],
       );
@@ -418,6 +445,12 @@ export function gravadorFolhaObrigacoes(
           'ferias-fracoes-esgotadas',
           'O período aquisitivo já tem três frações de férias (CLT art. 134, § 1º).',
         );
+      const cabe = conferirFracaoNoDireito(
+        direito,
+        fracoes.map((f) => ({ dias: n(f['dias_gozo']), abono: n(f['dias_abono']) })),
+        { dias: x.dias, abono: x.abono },
+      );
+      if (cabe) throw recusaFerias(cabe);
       // A fração seguinte livre (a cancelada com o mesmo número e o mesmo início fica, só de acréscimo).
       const usadas = await tx.consultar(
         'SELECT numero_parcela, inicio_gozo FROM programacao_ferias WHERE periodo_aquisitivo_id = ?',

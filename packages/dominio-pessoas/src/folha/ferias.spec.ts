@@ -12,6 +12,8 @@ import {
   jornadaDiariaMinutos,
   periodosAquisitivos,
   saldoDosPeriodos,
+  conferirFracaoNoDireito,
+  direitoDoPeriodoGravado,
 } from './ferias.js';
 import {
   avosDoAno,
@@ -426,5 +428,46 @@ describe('recibo de férias (D-REMUN-534)', () => {
     expect(calcularFerias(entradaFerias({ parametros: [invalida] })).pendencias[0]!.codigo).toBe(
       'rubrica-invalida',
     );
+  });
+});
+
+describe('gravação do período aquisitivo e das frações (CLT arts. 130 e 134)', () => {
+  it('direito pela escala do art. 130; incoerente ou divergente do gravado recusa', () => {
+    expect(direitoDoPeriodoGravado({}, null)).toEqual({ faltas: 0, direito: 30, recusa: null });
+    expect(direitoDoPeriodoGravado({ faltas: 7 }, null)).toEqual({ faltas: 7, direito: 24, recusa: null });
+    expect(direitoDoPeriodoGravado({ faltas: 7, direito: 24 }, null).recusa).toBeNull();
+    expect(direitoDoPeriodoGravado({ faltas: 7, direito: 30 }, null).recusa).toBe(
+      'periodo-direito-incoerente',
+    );
+    expect(direitoDoPeriodoGravado({ direito: 24 }, null).recusa).toBe('periodo-direito-incoerente');
+    expect(direitoDoPeriodoGravado({ faltas: 33, direito: 0 }, null).recusa).toBeNull();
+    const gravado = { faltas: 7, direito: 24 };
+    expect(direitoDoPeriodoGravado({}, gravado)).toEqual({ ...gravado, recusa: null });
+    expect(direitoDoPeriodoGravado({ faltas: 7, direito: 24 }, gravado).recusa).toBeNull();
+    expect(direitoDoPeriodoGravado({ faltas: 10, direito: 24 }, gravado).recusa).toBe(
+      'periodo-aquisitivo-divergente',
+    );
+    expect(direitoDoPeriodoGravado({ faltas: 0, direito: 30 }, gravado).recusa).toBe(
+      'periodo-aquisitivo-divergente',
+    );
+  });
+
+  it('as frações cabem no direito e deixam lugar para a de 14 dias', () => {
+    const f = (dias: number, abono = 0) => ({ dias, abono });
+    expect(conferirFracaoNoDireito(24, [], f(14))).toBeNull();
+    expect(conferirFracaoNoDireito(24, [f(14)], f(5))).toBeNull();
+    expect(conferirFracaoNoDireito(24, [f(14), f(5)], f(5))).toBeNull();
+    expect(conferirFracaoNoDireito(24, [f(14), f(5)], f(10))).toBe('ferias-acima-do-direito');
+    expect(conferirFracaoNoDireito(24, [f(10), f(10)], f(10))).toBe('ferias-acima-do-direito');
+    // Três de 10 em 30 dias: cabe no direito, mas nenhuma tem 14.
+    expect(conferirFracaoNoDireito(30, [f(10), f(10)], f(10))).toBe('fracao-quatorze');
+    expect(conferirFracaoNoDireito(30, [], f(10))).toBeNull();
+    expect(conferirFracaoNoDireito(30, [f(10)], f(10))).toBe('fracao-quatorze');
+    expect(conferirFracaoNoDireito(24, [f(10)], f(5))).toBe('fracao-quatorze');
+    expect(conferirFracaoNoDireito(30, [], f(10, 10))).toBe('fracao-quatorze');
+    expect(conferirFracaoNoDireito(30, [], f(20, 10))).toBeNull();
+    // Direito de gozo abaixo de 14: uma fração só, inteira.
+    expect(conferirFracaoNoDireito(12, [], f(12))).toBeNull();
+    expect(conferirFracaoNoDireito(12, [], f(6))).toBe('fracao-quatorze');
   });
 });

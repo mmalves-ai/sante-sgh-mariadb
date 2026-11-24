@@ -156,30 +156,32 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       aquisitivoFim: '2096-12-31',
       faltas: 7,
       direito: 24,
-      dias: 10,
+      dias: 5,
       abono: 0,
       dobra: 0,
       adiantarDecimo: false,
     };
     const ids = await gravar(async (g) => [
+      // CLT art. 134, § 1º: uma fração de 14 dias e as outras de 5, dentro dos 24 de direito (7 faltas, art. 130).
       await g.incluirFerias({
         ...nova,
+        dias: 14,
         inicio: '2097-02-01',
-        fim: '2097-02-10',
+        fim: '2097-02-14',
         pagamento: '2097-01-30',
         por: m.login,
       }),
       await g.incluirFerias({
         ...nova,
         inicio: '2097-05-01',
-        fim: '2097-05-10',
+        fim: '2097-05-05',
         pagamento: '2097-04-29',
         por: m.login,
       }),
       await g.incluirFerias({
         ...nova,
         inicio: '2097-08-01',
-        fim: '2097-08-10',
+        fim: '2097-08-05',
         pagamento: '2097-07-30',
         por: m.login,
       }),
@@ -194,6 +196,37 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       ),
     );
     expect(periodos.map((r) => Object.values(r).map(Number))).toEqual([[m.vinculo, 7, 24, 24]]);
+    // O gravador não aceita o que a CLT não admite: direito fora da escala do art. 130, faltas e direito diferentes
+    // dos do período gravado, frações além do direito ou sem lugar para a de 14 dias (nada é gravado).
+    const outra = { ...nova, inicio: '2097-11-01', fim: '2097-11-05', pagamento: '2097-10-30', por: m.login };
+    expect(
+      await codigo(
+        gravar((g) =>
+          g.incluirFerias({
+            ...outra,
+            aquisitivoInicio: '2095-01-01',
+            aquisitivoFim: '2095-12-31',
+            direito: 30,
+          }),
+        ),
+      ),
+    ).toBe('periodo-direito-incoerente');
+    expect(await codigo(gravar((g) => g.incluirFerias({ ...outra, faltas: 0, direito: 30 })))).toBe(
+      'periodo-aquisitivo-divergente',
+    );
+    expect(
+      await codigo(
+        gravar((g) =>
+          g.incluirFerias({
+            ...outra,
+            aquisitivoInicio: '2095-01-01',
+            aquisitivoFim: '2095-12-31',
+            dias: 12,
+            fim: '2097-11-12',
+          }),
+        ),
+      ),
+    ).toBe('fracao-quatorze');
     expect(
       await codigo(
         gravar((g) =>
@@ -214,7 +247,7 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       aquisitivoInicio: '2096-01-01',
       aquisitivoFim: '2096-12-31',
       inicio: '2097-02-01',
-      dias: 10,
+      dias: 14,
       pagamento: '2097-01-30',
       situacao: 'programada',
       processo: null,
@@ -353,19 +386,12 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       situacao: 'cancelada',
       motivo: 'pedido do colaborador',
     });
-    expect(
-      await codigo(
-        gravar((g) =>
-          g.incluirFerias({
-            ...nova,
-            inicio: '2097-10-01',
-            fim: '2097-10-10',
-            pagamento: '2097-09-29',
-            por: m.login,
-          }),
-        ),
-      ),
-    ).toBe('ok');
+    // A vaga volta, mas a fração ainda cabe no direito: 14 + 5 + 10 passa dos 24 dias; 14 + 5 + 5 cabe.
+    const vaga = { ...nova, inicio: '2097-10-01', pagamento: '2097-09-29', por: m.login };
+    expect(await codigo(gravar((g) => g.incluirFerias({ ...vaga, dias: 10, fim: '2097-10-10' })))).toBe(
+      'ferias-acima-do-direito',
+    );
+    expect(await codigo(gravar((g) => g.incluirFerias({ ...vaga, fim: '2097-10-05' })))).toBe('ok');
   });
 
   it('obrigação: grava o arquivo, relê, numera, substitui, entrega e cancela pela versão', async () => {

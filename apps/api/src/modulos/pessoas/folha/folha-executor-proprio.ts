@@ -293,6 +293,10 @@ export const TABELAS_FOLHA_EXECUTOR = [
   'rescisao',
   'desligamento',
   'programacao_ferias',
+  // As férias vão ao gravador próprio (folha-porta-propria-obrigacoes): o período aquisitivo do vínculo nasce na
+  // inclusão e o recibo nasce ao marcar calculada (e se cancela ao sair dela).
+  'periodo_aquisitivo',
+  'recibo_ferias',
   'parametro_obrigacao',
 ] as const;
 

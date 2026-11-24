@@ -4,7 +4,7 @@
 // o pedido inteiro), as férias sem o cálculo ligado (o gravador próprio das férias) e a porta do cadastro sem a chave do CPF (o erro
 // diz o que falta, em vez de derrubar o módulo).
 import { randomBytes } from 'node:crypto';
-import { ErroOperacao } from '@sgh/nucleo';
+import { ErroOperacao, recusa } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../../exames/public-api.js';
 import {
@@ -390,7 +390,8 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
   it('férias sem o cálculo ligado: o gravador próprio das férias lê na mesma transação (nunca modelo-pendente)', async () => {
     const antes = await solicitacoes();
     let lidas: unknown = null;
-    const desfazer = new Error('desfazer o pedido do teste');
+    // A recusa desfaz a transação inteira (o Error comum voltaria embrulhado como erro-interno).
+    const desfazer = recusa('teste-desfazer', 'desfazer o pedido do teste');
     const p = await porta
       .gravarSgh(eu, trilha(), async (g) => {
         await g.incluirSolicitacao({ ...pedido, vinculo: m.vinculo, por: m.login });
@@ -398,7 +399,7 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
         throw desfazer;
       })
       .catch((e: unknown) => e);
-    expect(p).toBe(desfazer);
+    expect((p as ErroOperacao).problema.codigo).toBe('teste-desfazer');
     expect(Array.isArray(lidas)).toBe(true);
     expect(await solicitacoes()).toBe(antes);
   });

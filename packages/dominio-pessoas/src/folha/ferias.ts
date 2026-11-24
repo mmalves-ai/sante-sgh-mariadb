@@ -80,6 +80,58 @@ export function diasDeDireito(faltas: number): number {
   return 0;
 }
 
+/** Recusas da gravação do período aquisitivo e das frações (a porta grava só o que a CLT admite). */
+export type RecusaGravacaoFerias =
+  | 'periodo-direito-incoerente'
+  | 'periodo-aquisitivo-divergente'
+  | 'ferias-acima-do-direito'
+  | 'fracao-quatorze';
+
+/**
+ * As faltas e os dias de direito com que o período aquisitivo é gravado (ou conferido, se já existe). O direito
+ * informado tem de ser o da escala do art. 130 para as faltas informadas; sem faltas, 0; sem direito, o da escala. O
+ * período já gravado não muda em silêncio: faltas ou direito informados diferentes dos gravados recusam (o chamador
+ * confere o período antes de programar). Sem nada informado, vale o gravado.
+ */
+export function direitoDoPeriodoGravado(
+  informado: { readonly faltas?: number | undefined; readonly direito?: number | undefined },
+  gravado: { readonly faltas: number; readonly direito: number } | null,
+): { readonly faltas: number; readonly direito: number; readonly recusa: RecusaGravacaoFerias | null } {
+  const veio = informado.faltas !== undefined || informado.direito !== undefined;
+  if (!veio && gravado) return { ...gravado, recusa: null };
+  const faltas = informado.faltas ?? 0;
+  const direito = informado.direito ?? diasDeDireito(faltas);
+  if (!Number.isInteger(faltas) || faltas < 0 || direito !== diasDeDireito(faltas))
+    return { faltas, direito, recusa: 'periodo-direito-incoerente' };
+  if (gravado && (gravado.faltas !== faltas || gravado.direito !== direito))
+    return { faltas, direito, recusa: 'periodo-aquisitivo-divergente' };
+  return { faltas, direito, recusa: null };
+}
+
+/**
+ * A fração nova cabe no direito do período junto com as frações ativas (gozo + abono, CLT arts. 130 e 143) e ainda
+ * deixa lugar para a fração principal de 14 dias (CLT art. 134, § 1º): se nenhuma fração tem 14 dias, o que sobra
+ * do direito depois desta tem de comportar uma de 14 numa fração livre. Com direito de gozo abaixo de 14 dias, a
+ * férias é uma fração só.
+ */
+export function conferirFracaoNoDireito(
+  direito: number,
+  ativas: readonly { readonly dias: number; readonly abono: number }[],
+  nova: { readonly dias: number; readonly abono: number },
+): RecusaGravacaoFerias | null {
+  const todas = [...ativas, nova];
+  const usado = todas.reduce((s, f) => s + f.dias + f.abono, 0);
+  if (usado > direito) return 'ferias-acima-do-direito';
+  const abono = todas.reduce((s, f) => s + f.abono, 0);
+  const restante = direito - usado;
+  if (direito - abono >= DIAS_FRACAO_PRINCIPAL) {
+    const temPrincipal = todas.some((f) => f.dias >= DIAS_FRACAO_PRINCIPAL);
+    const cabePrincipal = todas.length < MAXIMO_FRACOES && restante >= DIAS_FRACAO_PRINCIPAL;
+    if (!temPrincipal && !cabePrincipal) return 'fracao-quatorze';
+  } else if (ativas.length > 0 || restante > 0) return 'fracao-quatorze';
+  return null;
+}
+
 /** Jornada diária em minutos (carga semanal ÷ 6 dias). */
 export function jornadaDiariaMinutos(cargaSemanal: number): number {
   return Math.max(1, Math.round((cargaSemanal * 60) / 6));

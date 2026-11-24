@@ -93,6 +93,9 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
       await e.executar('DELETE FROM processamento_folha WHERE estabelecimento_id = ?', [m.est]);
       await e.executar('DELETE FROM fechamento_periodo_folha WHERE estabelecimento_id = ?', [m.est]);
       await e.executar('DELETE FROM parametro_obrigacao WHERE estabelecimento_id = ?', [m.est]);
+      await e.executar('DELETE FROM recibo_ferias WHERE estabelecimento_id = ?', [m.est]);
+      await e.executar('DELETE FROM programacao_ferias WHERE estabelecimento_id = ?', [m.est]);
+      await e.executar('DELETE FROM periodo_aquisitivo WHERE estabelecimento_id = ?', [m.est]);
       await e.executar(`DELETE FROM ${TABELA_FICHA_ESOCIAL} WHERE estabelecimento_id = ?`, [m.est]);
       await e.executar(
         "UPDATE vinculo_trabalho SET situacao = 'ativo', data_desligamento = NULL, tipo_rescisao_id = NULL WHERE id = ?",
@@ -544,14 +547,46 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
     ).toBe('empresa-fora-da-sessao');
   });
 
-  it('férias relidas pela leitura do cálculo; marcá-las calculadas e as obrigações seguem com modelo-pendente', async () => {
+  it('férias pelo gravador próprio: inclui no período do vínculo, relê, "calculada" sem processo recusa; obrigações seguem com modelo-pendente', async () => {
     expect(await gravar((g) => g.feriasDoVinculoComTrava(m.vinculo))).toEqual([]);
+    // A inclusão grava o período aquisitivo DO VÍNCULO (CLT art. 130, migração 15_RH/98) e a fração programada.
+    const id = await gravar((g) =>
+      g.incluirFerias({
+        vinculo: m.vinculo,
+        empresa: m.est,
+        aquisitivoInicio: '2096-03-01',
+        aquisitivoFim: '2097-02-28',
+        faltas: 0,
+        direito: 30,
+        inicio: '2097-06-02',
+        fim: '2097-07-01',
+        dias: 30,
+        abono: 0,
+        dobra: 0,
+        adiantarDecimo: false,
+        pagamento: '2097-05-31',
+        por: m.login,
+      }),
+    );
+    const periodos = await m.nucleo.lerSomente(ctx(), (l) =>
+      l.consultar(
+        `SELECT pa.vinculo_trabalho_id, pa.dias_direito, pf.vinculo_trabalho_id AS das_ferias
+           FROM programacao_ferias pf JOIN periodo_aquisitivo pa ON pa.id = pf.periodo_aquisitivo_id
+          WHERE pf.id = ?`,
+        [id],
+      ),
+    );
+    expect(periodos.map((r) => Object.values(r).map(Number))).toEqual([[m.vinculo, 30, m.vinculo]]);
+    const lidas = await gravar((g) => g.feriasDoVinculoComTrava(m.vinculo));
+    expect(lidas.map((f) => [f.id, f.situacao, f.dias])).toEqual([[id, 'programada', 30]]);
+    const versao = lidas[0]!.versao;
+    // Versão ou situação de partida erradas: desatualizado.
     expect(
       await codigo(
         gravar((g) =>
           g.situacaoFerias({
-            id: 0,
-            versao: 1,
+            id,
+            versao: versao + 1,
             de: 'programada',
             para: 'cancelada',
             motivo: 'x',
@@ -560,20 +595,14 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
         ),
       ),
     ).toBe('desatualizado');
+    // Marcar calculada exige o processamento de férias (o recibo liga as férias a ele).
     expect(
       await codigo(
         gravar((g) =>
-          g.situacaoFerias({
-            id: 0,
-            versao: 1,
-            de: 'programada',
-            para: 'calculada',
-            motivo: null,
-            por: m.login,
-          }),
+          g.situacaoFerias({ id, versao, de: 'programada', para: 'calculada', motivo: null, por: m.login }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('processo-obrigatorio');
     expect(await codigo(gravar((g) => g.obrigacaoComTrava(1)))).toBe('modelo-pendente');
   });
 
