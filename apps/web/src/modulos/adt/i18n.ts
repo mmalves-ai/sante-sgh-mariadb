@@ -1,5 +1,6 @@
 // Textos das telas da internação, do mapa de leitos, da higienização e do SAME (M21). Sem nome de sistema antigo
 // (ADR 0023): "o outro sistema" só onde a pessoa precisa saber que a ocupação veio de fora.
+import { mensagensControlesAssistenciais } from './i18n-controles-assistenciais.js';
 import { mensagensGases } from './i18n-gases.js';
 import { mensagensRegistros } from './i18n-registros.js';
 import { mensagensSameGuarda } from './i18n-same-guarda.js';
@@ -7,6 +8,8 @@ import { mensagensSameGuarda } from './i18n-same-guarda.js';
 export const mensagensAdt = {
   // F3.9, 04-HOT L126: guarda do prontuário pelo volume (i18n-same-guarda.ts).
   sameGuarda: mensagensSameGuarda,
+  // F78.04-1, 04-INT L74, L75 e L78: controles da internação (i18n-controles-assistenciais.ts).
+  controles: mensagensControlesAssistenciais,
   // F3.4, 04-INT L82: gases medicinais por paciente (i18n-gases.ts).
   gases: mensagensGases,
   // F3.4, 04-INT L67: diagnósticos e acidente da internação (i18n-registros.ts).

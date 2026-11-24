@@ -84,6 +84,30 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'convenio.contrato.ler' },
   },
   {
+    // F78.04-1, 04-INT L74: formulários numerados da declaração de óbito (lote, uso, extravio, devolução).
+    path: '/internacao/controles/formularios-obito',
+    name: 'adt.controles.obito',
+    component: () => import('./telas/ControlesAssistenciaisTela.vue'),
+    props: { aba: 'obito' },
+    meta: { permissao: 'pep.declaracaoObito.emitir' },
+  },
+  {
+    // F78.04-1, 04-INT L75: auditoria do cumprimento do isolamento e avisos à CCIH.
+    path: '/internacao/controles/isolamento',
+    name: 'adt.controles.isolamento',
+    component: () => import('./telas/ControlesAssistenciaisTela.vue'),
+    props: { aba: 'isolamento' },
+    meta: { permissao: 'qualidade.precaucao.ler' },
+  },
+  {
+    // F78.04-1, 04-INT L78: quadro clínico estruturado e evolução da solicitação à central reguladora.
+    path: '/internacao/controles/regulacao',
+    name: 'adt.controles.regulacao',
+    component: () => import('./telas/ControlesAssistenciaisTela.vue'),
+    props: { aba: 'regulacao' },
+    meta: { permissao: 'internacao.regulacao.ler' },
+  },
+  {
     path: '/internacao/documentos',
     name: 'adt.documentos',
     component: () => import('./telas/DocumentosInternacaoTela.vue'),

@@ -744,9 +744,16 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
         niveisConsciencia: await lista(
           'SELECT id, descricao FROM nivel_consciencia WHERE ativo ORDER BY ordem_gravidade, descricao',
         ),
-        suportesOxigenio: await lista(
-          'SELECT id, descricao FROM suporte_oxigenio WHERE ativo ORDER BY descricao',
-        ),
+        // A tela confere o quadro na hora com a mesma regra do domínio: precisa saber se o suporte é invasivo.
+        suportesOxigenio: (
+          await l.consultar(
+            'SELECT id, descricao, invasivo FROM suporte_oxigenio WHERE ativo ORDER BY descricao',
+          )
+        ).map((r) => ({
+          id: num(r['id']),
+          descricao: String(r['descricao']),
+          invasivo: bool(r['invasivo']),
+        })),
         faixasDiurese: await lista('SELECT id, descricao FROM faixa_diurese WHERE ativo ORDER BY descricao'),
         germes: await lista(
           'SELECT id, descricao FROM microrganismo WHERE ativo ORDER BY descricao LIMIT 500',
