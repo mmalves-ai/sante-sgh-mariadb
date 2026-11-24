@@ -183,6 +183,10 @@ test.describe('Agenda de exames e centro cirúrgico @M18 @fase2', () => {
     await form.getByLabel('Procedimento (código ou início do nome)').press('Enter');
     await form.getByRole('button', { name: /COLECISTECTOMIA/ }).click();
     await escolher(form.getByLabel('Cirurgião', { exact: true }), '5001:9001');
+    // F3.4 (04-CC linha 95): a participação do cirurgião, com entrada na sala e o percentual.
+    await expect(page.getByTestId('registro-participacao')).toBeVisible();
+    await page.getByTestId('part-cirurgiao-entrada').fill('08:00');
+    await page.getByTestId('part-cirurgiao-perc').fill('100');
     await escolher(form.getByLabel('Classificação ASA', { exact: true }), '2');
     await semViolacaoAxe(page, 'registro do ato preenchido');
     await page.getByTestId('botao-registrar').click();
