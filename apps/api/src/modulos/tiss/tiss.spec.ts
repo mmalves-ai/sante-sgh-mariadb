@@ -174,7 +174,9 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().mensagem).toContain('reaberta');
     // Histórico nunca é apagado: a reaberta continua lida, com quem, o motivo e os dois ciclos (fechar e reabrir).
-    const reaberta = (await get(s, `/tiss/competencias/resumo?convenio=92&ano=${ano}&mes=${mes}`)).json();
+    const reaberta = (
+      await get(s, `/tiss/competencias/resumo?convenio=92&competencia=${ano}-${String(mes).padStart(2, '0')}`)
+    ).json();
     expect(reaberta).toMatchObject({
       fechada: false,
       reaberta: true,
@@ -189,7 +191,12 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     ).toBe('competencia-aberta');
     expect((await post(s, '/tiss/competencias', { convenio: 92, ano, mes })).statusCode).toBe(200);
     expect(
-      (await get(s, `/tiss/competencias/resumo?convenio=92&ano=${ano}&mes=${mes}`)).json(),
+      (
+        await get(
+          s,
+          `/tiss/competencias/resumo?convenio=92&competencia=${ano}-${String(mes).padStart(2, '0')}`,
+        )
+      ).json(),
     ).toMatchObject({
       fechada: true,
       reaberta: false,
