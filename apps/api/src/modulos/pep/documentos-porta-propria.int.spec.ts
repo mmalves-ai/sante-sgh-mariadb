@@ -5,12 +5,15 @@
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaDocumentosPropria } from './documentos-porta-propria.js';
+import { TITULO_DOCUMENTO_SGH } from './documentos-servico.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE_DOCS']?.trim() || 'f22_o4';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l24doc';
 const LOGIN = `${P}.medico`;
 const OUTRO = `${P}.outro`;
+/** Segunda conta do MESMO profissional no estabelecimento. */
+const SEGUNDA = `${P}.medico2`;
 const HASH = 'd'.repeat(64);
 const CBO = '225125';
 
@@ -19,6 +22,7 @@ interface Ids {
   outroEst: number;
   usuario: number;
   outroUsuario: number;
+  segundaConta: number;
   prof: number;
   paciente: number;
   atendimento: number;
@@ -100,6 +104,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
       // CPFs sintéticos do lote (fora de qualquer faixa real usada nos clientes de teste).
       ids.usuario = await usuario(LOGIN, '24000000101');
       ids.outroUsuario = await usuario(OUTRO, '24000000102');
+      ids.segundaConta = await usuario(SEGUNDA, '24000000103');
       const pessoa = (nome: string) =>
         garantir(
           e,
@@ -164,6 +169,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
       for (const [u, prof] of [
         [ids.usuario, ids.prof],
         [ids.outroUsuario, profOutro],
+        [ids.segundaConta, ids.prof],
       ] as const)
         await garantir(
           e,
@@ -324,9 +330,11 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
       ]),
     ).toBe(0);
     const d = await porta.documentoSgh(C(), id);
+    // O tipo é o de negócio (pela origem), não o código do catálogo do cliente: o título é "Registro clínico".
+    expect(TITULO_DOCUMENTO_SGH[d!.tipo]).toBe('Registro clínico');
     expect(d).toMatchObject({
       id,
-      tipo: `${P.toUpperCase()}_EVOL`,
+      tipo: 'registro-clinico',
       origemTabela: 'registro_assistencial',
       origemId: ids.registro,
       paciente: ids.paciente,
@@ -376,6 +384,103 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
         "SELECT COUNT(*) AS n FROM documento_prontuario_evento WHERE documento_prontuario_id = ? AND acao = 'assinatura'",
         [id],
       ),
+    ).toBe(1);
+  });
+
+  it('autoria fixada no documento: outra conta do mesmo profissional não vê nem assina; vínculo vencido mantém autor e categoria', async () => {
+    const id = await porta.documentoDoRegistroClinico(G(), {
+      registro: ids.registro2,
+      paciente: ids.paciente,
+      atendimento: ids.atendimento,
+      hash: HASH,
+    });
+    const G2 = { ...G(), usuario: ids.segundaConta, usuarioLogin: SEGUNDA };
+    // Fila e prévia usam o mesmo critério: a segunda conta não recebe o documento na fila nem assina.
+    expect((await porta.pendencias(C(), SEGUNDA)).map((x) => x.id)).not.toContain(id);
+    expect((await porta.assinar(G2, [{ documento: id, hash: HASH }])).assinados).toEqual([]);
+    const vencer = (fim: string | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-vigencia` }, (e) =>
+        e.executar(
+          'UPDATE usuario_vinculo_profissional SET vigencia_fim = ? WHERE usuario_id = ? AND estabelecimento_id = ?',
+          [fim, ids.usuario, ids.est],
+        ),
+      );
+    await vencer('2026-01-01');
+    try {
+      // O autor do documento não se perde quando o vínculo vence (o sigilo da categoria não abre).
+      expect((await porta.documentoSgh(C(), id))?.usuario).toBe(LOGIN);
+      const p = await porta.profissional(C(), LOGIN);
+      expect(p?.ocupacoes).toEqual([{ cbo: p!.cbo, codigo: CBO, conselhoAtivo: false }]);
+    } finally {
+      await vencer(null);
+    }
+    expect((await porta.pendencias(C(), LOGIN)).map((x) => x.id)).toContain(id);
+  });
+
+  it('paciente, atendimentos, retratos e linha do tempo do banco do cliente', async () => {
+    const p = await porta.paciente(C(), ids.paciente);
+    expect(p).toMatchObject({
+      id: ids.paciente,
+      nome: `Pessoa sintética ${P} paciente`,
+      prontuario: 902_400_401,
+      obito: null,
+    });
+    expect(await porta.paciente(C(), 2_000_000_000)).toBeNull();
+    const ats = await porta.atendimentos(C(), ids.paciente);
+    expect(ats).toEqual([
+      {
+        id: ids.atendimento,
+        registro: 241,
+        tipo: 'externo',
+        entrada: '2026-11-20T07:00:00',
+        alta: null,
+        unidade: null,
+        leito: null,
+        convenio: 'Fonte pagadora sintética',
+        medico: `Pessoa sintética ${P} profissional`,
+      },
+    ]);
+    // Outro estabelecimento não vê os atendimentos.
+    expect(await porta.atendimentos({ ...C(), hospital: `${P}b` }, ids.paciente)).toEqual([]);
+    expect(await porta.retratos(C(), ids.atendimento, ids.paciente)).toEqual({
+      htAtendimento: ids.atendimento,
+      htPaciente: ids.paciente,
+      doPaciente: true,
+    });
+    expect((await porta.retratos(C(), ids.atendimento, ids.paciente + 1))?.doPaciente).toBe(false);
+    const evs = await porta.eventos(
+      C(),
+      ids.paciente,
+      { de: '2026-11-20', ate: '2026-11-20' },
+      new Set(['atendimento', 'registro']),
+      50,
+    );
+    expect(evs.map((e) => [e.tipo, e.quando])).toEqual([
+      ['registro', '2026-11-20T09:00:00'],
+      ['registro', '2026-11-20T08:00:00'],
+      ['atendimento', '2026-11-20T07:00:00'],
+    ]);
+    expect(evs[0]).toMatchObject({ cbo: null, documento: { tipo: 'registro', id: ids.registro2 } });
+    // Fora do período e tipo não pedido: nada.
+    expect(
+      await porta.eventos(
+        C(),
+        ids.paciente,
+        { de: '2026-11-21', ate: '2026-11-22' },
+        new Set(['registro']),
+        50,
+      ),
+    ).toEqual([]);
+    expect(
+      (
+        await porta.eventos(
+          C(),
+          ids.paciente,
+          { de: '2026-11-20', ate: '2026-11-20' },
+          new Set(['atendimento']),
+          50,
+        )
+      ).length,
     ).toBe(1);
   });
 

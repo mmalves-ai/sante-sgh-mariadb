@@ -9,6 +9,12 @@
 //     vínculo de volta em registro_assistencial.documento_prontuario_id);
 //   - assinar na sessão (situação de categoria "assinado", fechado_em e evento "assinatura" com nível e resumo);
 //   - eventos de impressão, segunda via e exportação na cadeia; a visualização vai só à trilha (consulta).
+//   - paciente, atendimentos (com internação, leito, fonte pagadora e médico), retratos (referência = id vigente) e
+//     a linha do tempo (atendimentos, registros e pareceres): a abertura de "Registros do paciente".
+// Autoria do documento: o login de quem emitiu (evento "criacao"), nunca o vínculo de hoje; a fila, a prévia e a
+// assinatura usam esse mesmo critério. O vínculo encerrado mantém a categoria do autor (o sigilo não abre).
+// Tipo de negócio do documento pela origem e pela categoria do tipo (registro-clinico, receita, tcle...), nunca o
+// código do catálogo do cliente.
 // O que ainda não tem adaptador próprio recusa com 501 `pendente-modelo-proprio` (falha fechada, nada lido nem gravado).
 // Registro clínico nunca é apagado: nenhuma exclusão física; a correção é nova versão ou cancelamento com motivo.
 // Melhoria: o resumo (SHA-256) do documento ainda sem envelope fica no conteúdo estruturado (conteudo.hash_conteudo),
@@ -29,7 +35,15 @@ import {
 import { z } from 'zod';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
-import type { ContextoGravacaoPep, DocumentoProprioLido, LiberacaoConsultada } from './tipos-pep.js';
+import type {
+  AtendimentoPepLido,
+  ContextoGravacaoPep,
+  DocumentoProprioLido,
+  EventoLido,
+  LiberacaoConsultada,
+  PacientePepLido,
+  RetratosAtuais,
+} from './tipos-pep.js';
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoDocumentosPep {
@@ -76,6 +90,12 @@ function conteudoDe(v: unknown): Record<string, unknown> {
   }
 }
 
+/** Número de negócio do atendimento (texto) como número; sem dígitos, o id. */
+function numeroDeNegocio(numero: unknown, id: unknown): number {
+  const n = Number(String(numero ?? '').replace(/\D/g, ''));
+  return Number.isSafeInteger(n) && n > 0 ? n : num(id);
+}
+
 export function recusaPendente(metodo: string): ErroOperacao {
   return new ErroOperacao(
     501,
@@ -88,13 +108,22 @@ export function recusaPendente(metodo: string): ErroOperacao {
 const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao =>
   new ErroOperacao(status, codigo, 'Operação recusada', detalhe);
 
-/** O autor do documento: a conta ligada ao profissional no estabelecimento do documento, vigente. */
+/**
+ * O autor do documento, fixado pelo próprio documento e nunca pelo vínculo de hoje: a conta que emitiu (usuário do
+ * evento "criacao", gravado na emissão, como o login gravado na porta de memória). Documento sem evento de criação
+ * (vindo de importação): a conta ligada ao profissional do documento no estabelecimento, vigente primeiro e, sem ela,
+ * a mais recente, mesmo vencida ou excluída (o autor de um documento não muda quando o vínculo acaba).
+ */
 const SQL_LOGIN_DO_AUTOR = `
-  (SELECT u.login FROM usuario_vinculo_profissional v JOIN usuario u ON u.id = v.usuario_id
-    WHERE v.profissional_id = dp.profissional_id AND v.estabelecimento_id = dp.estabelecimento_id
-      AND v.excluido_em IS NULL AND u.excluido_em IS NULL
-      AND v.vigencia_inicio <= CURRENT_DATE AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= CURRENT_DATE)
-    ORDER BY v.vigencia_inicio DESC, v.id DESC LIMIT 1)`;
+  COALESCE(
+    (SELECT u.login FROM documento_prontuario_evento ec JOIN usuario u ON u.id = ec.usuario_id
+      WHERE ec.documento_prontuario_id = dp.id AND ec.acao = 'criacao'
+      ORDER BY ec.ocorrido_em, ec.id LIMIT 1),
+    (SELECT u.login FROM usuario_vinculo_profissional v JOIN usuario u ON u.id = v.usuario_id
+      WHERE v.profissional_id = dp.profissional_id AND v.estabelecimento_id = dp.estabelecimento_id
+      ORDER BY (v.excluido_em IS NULL AND v.vigencia_inicio <= CURRENT_DATE
+                AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= CURRENT_DATE)) DESC,
+               v.vigencia_inicio DESC, v.id DESC LIMIT 1))`;
 
 /** A última assinatura na cadeia do documento (evento). */
 const SQL_ULTIMA_ASSINATURA = (coluna: string) => `
@@ -103,7 +132,7 @@ const SQL_ULTIMA_ASSINATURA = (coluna: string) => `
     ORDER BY ev.ocorrido_em DESC, ev.id DESC LIMIT 1)`;
 
 const SQL_DOCUMENTOS = `
-  SELECT dp.id, t.codigo AS tipo, dp.entidade_origem, dp.entidade_origem_id, dp.paciente_id, dp.atendimento_id,
+  SELECT dp.id, t.categoria AS categoria_tipo, dp.entidade_origem, dp.entidade_origem_id, dp.paciente_id, dp.atendimento_id,
          dp.lancado_em, dp.conteudo, s.categoria, da.hash_conteudo, da.nivel_exigido, da.concluido_em,
          ${SQL_ULTIMA_ASSINATURA('ocorrido_em')} AS assinado_em,
          ${SQL_ULTIMA_ASSINATURA('dados')} AS dados_assinatura,
@@ -120,6 +149,39 @@ interface Estabelecimento {
   readonly fuso: string;
 }
 
+/** Tipo de negócio do documento pela tabela de origem (o vocabulário que o serviço usa nos títulos e regras). */
+const TIPO_DA_ORIGEM: Readonly<Record<string, string>> = {
+  registro_assistencial: 'registro-clinico',
+  receita_medica: 'receita',
+  requisicao_exame: 'pedido-exame',
+  exame_lancado_prontuario: 'exame-externo',
+  anexo_prontuario: 'anexo',
+  alergia_paciente: 'alergia',
+};
+/** Sem origem conhecida: pela categoria do tipo de documento clínico do cliente. */
+const TIPO_DA_CATEGORIA: Readonly<Record<string, string>> = {
+  receita: 'receita',
+  atestado: 'atestado',
+  declaracao: 'declaracao',
+  sumario: 'sumario-alta',
+  termo: 'tcle',
+  prescricao: 'registro-clinico',
+  evolucao: 'registro-clinico',
+  anamnese: 'registro-clinico',
+  admissao: 'registro-clinico',
+  exame_fisico: 'registro-clinico',
+  diagnostico: 'registro-clinico',
+  laudo: 'registro-clinico',
+  registro_cirurgico: 'registro-clinico',
+  parecer: 'registro-clinico',
+  relatorio: 'registro-clinico',
+};
+
+/** Origem e categoria do tipo de documento → tipo de negócio; categoria "outro" ou desconhecida: 'documento'. */
+export function tipoDeNegocio(origem: string, categoriaTipo: string): string {
+  return TIPO_DA_ORIGEM[origem] ?? TIPO_DA_CATEGORIA[categoriaTipo] ?? 'documento';
+}
+
 /** Linha do documento → tipo de negócio (vocabulário neutro). */
 export function documentoLido(x: Record<string, unknown>, fuso: string): DocumentoProprioLido {
   const conteudo = conteudoDe(x['conteudo']);
@@ -128,7 +190,7 @@ export function documentoLido(x: Record<string, unknown>, fuso: string): Documen
   const categoria = String(x['categoria']);
   return {
     id: num(x['id']),
-    tipo: String(x['tipo']),
+    tipo: tipoDeNegocio(String(x['entidade_origem']), String(x['categoria_tipo'])),
     origemTabela: String(x['entidade_origem']),
     origemId: num(x['entidade_origem_id']),
     paciente: num(x['paciente_id']),
@@ -196,6 +258,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     est: number,
     login: string,
   ): Promise<{ usuario: number; profissional: number | null; nome: string | null } | null> {
+    if (!login) return null;
     const u = await l.uma(
       `SELECT u.id AS usuario, p.id AS profissional, pf.nome
          FROM usuario u
@@ -228,10 +291,43 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     });
   }
 
+  /**
+   * O vínculo encerrado (vencido ou excluído) mais recente do login no estabelecimento: o autor de um documento antigo
+   * continua com a sua categoria (o sigilo da categoria não abre quando o vínculo acaba).
+   */
+  private async profissionalEncerrado(
+    l: Leitor,
+    est: number,
+    login: string,
+  ): Promise<{ usuario: number; profissional: number; nome: string | null } | null> {
+    if (!login) return null;
+    const u = await l.uma(
+      `SELECT u.id AS usuario, p.id AS profissional, pf.nome
+         FROM usuario u
+         JOIN usuario_vinculo_profissional v ON v.usuario_id = u.id AND v.estabelecimento_id = ?
+         JOIN profissional p ON p.id = v.profissional_id
+         LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+        WHERE u.login = ?
+        ORDER BY v.vigencia_inicio DESC, v.id DESC LIMIT 1`,
+      [est, login],
+    );
+    return u
+      ? { usuario: num(u['usuario']), profissional: num(u['profissional']), nome: textoOuNull(u['nome']) }
+      : null;
+  }
+
   profissional(c: ContextoDocs, login: string): Promise<ProfissionalPep | null> {
     return this.ler(c, 'profissional', async (l, est) => {
-      const p = await this.profissionalDoLogin(l, est.id, login);
-      if (!p || p.profissional === null) return null;
+      const vigente = await this.profissionalDoLogin(l, est.id, login);
+      // Sem vínculo vigente, o vínculo encerrado dá a categoria (sigilo), com o conselho tido como inativo: nada é
+      // liberado para praticar por ele (falha fechada).
+      const p =
+        vigente && vigente.profissional !== null
+          ? { ...vigente, profissional: vigente.profissional, ativo: true }
+          : await this.profissionalEncerrado(l, est.id, login).then((x) =>
+              x ? { ...x, ativo: false } : null,
+            );
+      if (!p) return null;
       // A inscrição no conselho é a "ocupação do registro" (cbo = id da inscrição; codigo = CBO 2002).
       const inscricoes = await l.consultar(
         `SELECT i.id, i.situacao, o.codigo_cbo
@@ -246,7 +342,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
         .map((i) => ({
           cbo: num(i['id']),
           codigo: String(i['codigo_cbo']),
-          conselhoAtivo: ['ativa', 'provisoria'].includes(String(i['situacao'])),
+          conselhoAtivo: p.ativo && ['ativa', 'provisoria'].includes(String(i['situacao'])),
         }));
       const principal = ocupacoes.find((o) => o.conselhoAtivo) ?? ocupacoes[0];
       if (!principal) return null;
@@ -336,16 +432,16 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   }
 
   pendencias(c: ContextoDocs, login: string): Promise<DocumentoProprioLido[]> {
+    // A autoria é a mesma da prévia e da assinatura: o login fixado no documento (SQL_LOGIN_DO_AUTOR).
+    if (!login) return Promise.resolve([]);
     return this.ler(c, 'pendencias', async (l, est) => {
-      const p = await this.profissionalDoLogin(l, est.id, login);
-      if (!p || p.profissional === null) return [];
       const ls = await l.consultar(
-        `${SQL_DOCUMENTOS} AND dp.profissional_id = ? AND s.categoria IN (${marcadores(CATEGORIAS_ASSINAVEIS.length)})
+        `${SQL_DOCUMENTOS} AND ${SQL_LOGIN_DO_AUTOR} = ? AND s.categoria IN (${marcadores(CATEGORIAS_ASSINAVEIS.length)})
             AND (da.id IS NULL OR da.concluido_em IS NULL)
             AND NOT EXISTS (SELECT 1 FROM documento_prontuario_evento ev
                              WHERE ev.documento_prontuario_id = dp.id AND ev.acao = 'assinatura')
           ORDER BY dp.lancado_em, dp.id LIMIT ${TETO_DOCUMENTOS}`,
-        [est.id, p.profissional, ...CATEGORIAS_ASSINAVEIS],
+        [est.id, login, ...CATEGORIAS_ASSINAVEIS],
       );
       return ls.map((x) => documentoLido(x, est.fuso));
     });
@@ -528,7 +624,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
         for (const it of itens) {
           const [d] = await tx.consultarParaAtualizar(
             `SELECT dp.id, dp.versao, dp.profissional_id, dp.situacao_documento_prontuario_id, dp.conteudo,
-                    s.categoria, da.hash_conteudo, da.concluido_em,
+                    s.categoria, da.hash_conteudo, da.concluido_em, ${SQL_LOGIN_DO_AUTOR} AS autor,
                     (SELECT COUNT(*) FROM documento_prontuario_evento ev
                       WHERE ev.documento_prontuario_id = dp.id AND ev.acao = 'assinatura') AS assinaturas
                FROM documento_prontuario dp
@@ -537,7 +633,12 @@ export class PortaDocumentosPropria implements PortaDocumentos {
               WHERE dp.id = ? AND dp.estabelecimento_id = ? AND dp.excluido_em IS NULL`,
             [it.documento, est],
           );
-          if (!d || autor?.profissional == null || num(d['profissional_id']) !== autor.profissional) {
+          if (
+            !d ||
+            autor?.profissional == null ||
+            num(d['profissional_id']) !== autor.profissional ||
+            textoOuNull(d['autor']) !== c.usuarioLogin
+          ) {
             recusados.push({
               documento: it.documento,
               motivo: 'Documento não encontrado entre as suas pendências.',
@@ -647,6 +748,160 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     );
   }
 
+  // ── Paciente, atendimentos e linha do tempo (a abertura de "Registros do paciente") ─────────────
+
+  paciente(c: ContextoDocs, id: number): Promise<PacientePepLido | null> {
+    if (!Number.isSafeInteger(id) || id <= 0) return Promise.resolve(null);
+    return this.ler(c, 'paciente', async (l, est) => {
+      // Cadastro unificado em outro não abre: o prontuário é o do sobrevivente.
+      const x = await l.uma(
+        `SELECT p.id, pf.nome, CASE WHEN p.usa_nome_social THEN COALESCE(p.nome_social, pf.nome_social) END AS nome_social,
+                DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nascimento, sx.sigla AS sexo, p.numero_prontuario,
+                COALESCE(p.data_hora_obito, pf.data_obito) AS obito
+           FROM paciente p
+           JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+           LEFT JOIN sexo sx ON sx.id = pf.sexo_id
+          WHERE p.id = ? AND p.excluido_em IS NULL AND p.situacao <> 'unificado'`,
+        [id],
+      );
+      if (!x) return null;
+      return {
+        id: num(x['id']),
+        nome: String(x['nome']),
+        nomeSocial: textoOuNull(x['nome_social']),
+        nascimento: textoOuNull(x['nascimento']),
+        sexo: textoOuNull(x['sexo']),
+        prontuario: num(x['numero_prontuario']),
+        obito: dataHora(x['obito'], est.fuso),
+      };
+    });
+  }
+
+  atendimentos(c: ContextoDocs, paciente: number): Promise<AtendimentoPepLido[]> {
+    return this.ler(c, 'atendimentos', async (l, est) => {
+      const ls = await l.consultar(
+        `SELECT a.id, a.numero, k.tipo_base, a.entrada_em, COALESCE(a.saida_em, a.alta_medica_em) AS alta,
+                COALESCE(ui.nome, ua.nome) AS unidade, lh.codigo AS leito, fp.nome AS convenio, pfm.nome AS medico
+           FROM atendimento a
+           JOIN categoria_atendimento k ON k.id = a.categoria_atendimento_id
+           LEFT JOIN unidade_assistencial ua ON ua.id = a.unidade_assistencial_id
+           LEFT JOIN internacao i ON i.atendimento_id = a.id AND i.excluido_em IS NULL
+           LEFT JOIN unidade_assistencial ui ON ui.id = i.unidade_internacao_id
+           LEFT JOIN leito_hospitalar lh ON lh.id = i.leito_hospitalar_id
+           LEFT JOIN fonte_pagadora fp ON fp.id = a.fonte_pagadora_id
+           LEFT JOIN profissional pm ON pm.id = COALESCE(i.medico_assistente_profissional_id, a.profissional_id)
+           LEFT JOIN pessoa_fisica pfm ON pfm.id = pm.pessoa_fisica_id
+          WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL
+          ORDER BY a.entrada_em DESC, a.id DESC LIMIT ${TETO_DOCUMENTOS}`,
+        [paciente, est.id],
+      );
+      return ls.map((x) => ({
+        id: num(x['id']),
+        registro: numeroDeNegocio(x['numero'], x['id']),
+        tipo: String(x['tipo_base']) === 'internacao' ? ('internacao' as const) : ('externo' as const),
+        entrada: dataHora(x['entrada_em'], est.fuso),
+        alta: dataHora(x['alta'], est.fuso),
+        unidade: textoOuNull(x['unidade']),
+        leito: textoOuNull(x['leito']),
+        convenio: textoOuNull(x['convenio']),
+        medico: textoOuNull(x['medico']),
+      }));
+    });
+  }
+
+  /**
+   * No banco próprio não há "retrato" do paciente e do atendimento à parte: a referência é o próprio id (versão
+   * vigente). `doPaciente` diz se o atendimento é do paciente; atendimento de outro estabelecimento: null.
+   */
+  retratos(c: ContextoDocs, atendimento: number, paciente: number): Promise<RetratosAtuais | null> {
+    return this.ler(c, 'retratos', async (l, est) => {
+      const a = await l.uma(
+        'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [atendimento, est.id],
+      );
+      if (!a) return null;
+      return {
+        htAtendimento: num(a['id']),
+        htPaciente: paciente,
+        doPaciente: num(a['paciente_id']) === paciente,
+      };
+    });
+  }
+
+  /**
+   * Linha do tempo do paciente no estabelecimento: atendimentos e registros clínicos (parecer pela categoria do tipo
+   * do documento). As demais famílias (exames, alergias, anexos, termos, cirurgias) ainda não têm adaptador próprio e
+   * não entram (a lista volta sem elas, nunca com dado de outra origem).
+   */
+  eventos(
+    c: ContextoDocs,
+    paciente: number,
+    periodo: { de: string; ate: string },
+    tipos: ReadonlySet<string>,
+    limite: number,
+  ): Promise<EventoLido[]> {
+    return this.ler(c, 'eventos', async (l, est) => {
+      const r: EventoLido[] = [];
+      const ate = `${periodo.ate}T23:59:59`;
+      // Janela larga em UTC (o fuso do estabelecimento fica a menos de 1 dia); o recorte exato é no fuso, abaixo.
+      const janela = [`${periodo.de} 00:00:00`, `${periodo.ate} 23:59:59`];
+      if (tipos.has('atendimento'))
+        for (const a of await this.atendimentos(c, paciente))
+          r.push({
+            chave: `atendimento:${a.id}`,
+            tipo: 'atendimento',
+            quando: a.entrada ?? '',
+            titulo: a.tipo === 'internacao' ? `Internação ${a.registro}` : `Atendimento ${a.registro}`,
+            detalhe: a.unidade,
+            profissional: a.medico,
+            cbo: null,
+            suspenso: false,
+            situacao: a.alta ? 'Encerrado' : 'Aberto',
+            documento: null,
+          });
+      if (tipos.has('registro') || tipos.has('parecer')) {
+        const ls = await l.consultar(
+          `SELECT ra.id, ra.data_hora_clinica, ra.situacao, m.titulo, t.categoria, pf.nome AS profissional,
+                  o.codigo_cbo
+             FROM registro_assistencial ra
+             JOIN modelo_documento_clinico m ON m.id = ra.modelo_documento_clinico_id
+             LEFT JOIN tipo_documento_clinico t
+                    ON t.id = COALESCE(ra.tipo_documento_clinico_id, m.tipo_documento_clinico_id)
+             LEFT JOIN profissional p ON p.id = ra.autor_profissional_id
+             LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+             LEFT JOIN ocupacao_cbo o ON o.id = ra.ocupacao_cbo_id
+            WHERE ra.paciente_id = ? AND ra.estabelecimento_id = ? AND ra.excluido_em IS NULL
+              AND ra.data_hora_clinica >= DATE_SUB(?, INTERVAL 1 DAY)
+              AND ra.data_hora_clinica <= DATE_ADD(?, INTERVAL 1 DAY)
+            ORDER BY ra.data_hora_clinica DESC, ra.id DESC LIMIT ${TETO_DOCUMENTOS}`,
+          [paciente, est.id, ...janela],
+        );
+        for (const x of ls) {
+          const tipo = String(x['categoria']) === 'parecer' ? 'parecer' : 'registro';
+          if (!tipos.has(tipo)) continue;
+          const situacao = String(x['situacao']);
+          const suspenso = situacao === 'suspenso' || situacao === 'corrigido';
+          r.push({
+            chave: `registro:${num(x['id'])}`,
+            tipo,
+            quando: dataHora(x['data_hora_clinica'], est.fuso) ?? '',
+            titulo: String(x['titulo']),
+            detalhe: null,
+            profissional: textoOuNull(x['profissional']),
+            cbo: textoOuNull(x['codigo_cbo']),
+            suspenso,
+            situacao: suspenso ? 'Suspenso' : null,
+            documento: { tipo: 'registro', id: num(x['id']) },
+          });
+        }
+      }
+      return r
+        .filter((x) => x.quando.slice(0, 10) >= periodo.de && x.quando <= ate)
+        .sort((a, b) => b.quando.localeCompare(a.quando))
+        .slice(0, limite);
+    });
+  }
+
   // ── Pendentes (sem adaptador próprio nesta etapa): recusa 501, nada lido nem gravado ─────────────
   painel(): Promise<never> {
     return Promise.reject(recusaPendente('painel'));
@@ -659,18 +914,6 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   }
   preferenciasPainel(): Promise<never> {
     return Promise.reject(recusaPendente('preferenciasPainel'));
-  }
-  paciente(): Promise<never> {
-    return Promise.reject(recusaPendente('paciente'));
-  }
-  atendimentos(): Promise<never> {
-    return Promise.reject(recusaPendente('atendimentos'));
-  }
-  retratos(): Promise<never> {
-    return Promise.reject(recusaPendente('retratos'));
-  }
-  eventos(): Promise<never> {
-    return Promise.reject(recusaPendente('eventos'));
   }
   lerReceita(): Promise<never> {
     return Promise.reject(recusaPendente('lerReceita'));

@@ -5,7 +5,12 @@
 import { createHash } from 'node:crypto';
 import type { Executor, Leitor, Operacao, ResultadoOperacao, TxOperacao } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import { CATEGORIAS_ASSINAVEIS, documentoLido, PortaDocumentosPropria } from './documentos-porta-propria.js';
+import {
+  CATEGORIAS_ASSINAVEIS,
+  documentoLido,
+  PortaDocumentosPropria,
+  tipoDeNegocio,
+} from './documentos-porta-propria.js';
 
 type Linha = Record<string, unknown>;
 const EST = { id: 7, fuso_horario: 'America/Sao_Paulo' };
@@ -23,7 +28,7 @@ const HASH = 'a'.repeat(64);
 function linhaDoc(o: Partial<Linha> = {}): Linha {
   return {
     id: 10,
-    tipo: 'evolucao',
+    categoria_tipo: 'evolucao',
     entidade_origem: 'registro_assistencial',
     entidade_origem_id: 55,
     paciente_id: 100,
@@ -42,7 +47,13 @@ function linhaDoc(o: Partial<Linha> = {}): Linha {
 }
 
 function duble(
-  o: { docs?: Linha[]; travados?: Record<number, Linha | undefined>; autor?: number | null } = {},
+  o: {
+    docs?: Linha[];
+    travados?: Record<number, Linha | undefined>;
+    autor?: number | null;
+    encerrado?: Linha | null;
+    inscricoes?: Linha[];
+  } = {},
 ) {
   const sqls: { sql: string; params: readonly unknown[] }[] = [];
   const escritas: { op: string; tabela: string; id?: number; valores: Linha }[] = [];
@@ -53,13 +64,15 @@ function duble(
     consultar: async (sql: string, params: readonly unknown[] = []) => {
       sqls.push({ sql, params });
       if (/FROM documento_prontuario dp/.test(sql)) return o.docs ?? [];
+      if (/FROM inscricao_conselho/.test(sql)) return o.inscricoes ?? [];
       return [];
     },
     uma: async (sql: string, params: readonly unknown[] = []) => {
       sqls.push({ sql, params });
       if (/FROM estabelecimento/.test(sql)) return EST;
-      if (/FROM usuario u/.test(sql))
+      if (/LEFT JOIN usuario_vinculo_profissional/.test(sql))
         return { usuario: 3, profissional: o.autor === undefined ? 40 : o.autor, nome: 'P' };
+      if (/FROM usuario u/.test(sql)) return o.encerrado ?? null;
       if (/situacao_documento_prontuario WHERE categoria/.test(sql)) return { id: 2 };
       if (/FROM documento_prontuario dp/.test(sql)) return (o.docs ?? [])[0] ?? null;
       return null;
@@ -118,6 +131,7 @@ const travado = (o: Partial<Linha> = {}): Linha => ({
   hash_conteudo: null,
   concluido_em: null,
   assinaturas: 0,
+  autor: 'medico',
   ...o,
 });
 
@@ -126,7 +140,7 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
     const d = documentoLido(linhaDoc(), 'America/Sao_Paulo');
     expect(d).toEqual({
       id: 10,
-      tipo: 'evolucao',
+      tipo: 'registro-clinico',
       origemTabela: 'registro_assistencial',
       origemId: 55,
       paciente: 100,
@@ -165,6 +179,13 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
       expect(documentoLido(linhaDoc({ categoria }), 'UTC').suspenso).toBe(true);
     for (const categoria of CATEGORIAS_ASSINAVEIS)
       expect(documentoLido(linhaDoc({ categoria }), 'UTC').suspenso).toBe(false);
+    // Tipo de negócio pela origem e pela categoria do tipo; nunca o código do catálogo do cliente.
+    expect(tipoDeNegocio('registro_assistencial', 'outro')).toBe('registro-clinico');
+    expect(tipoDeNegocio('alergia_paciente', 'outro')).toBe('alergia');
+    expect(tipoDeNegocio('documento_emitido', 'sumario')).toBe('sumario-alta');
+    expect(tipoDeNegocio('documento_emitido', 'atestado')).toBe('atestado');
+    expect(tipoDeNegocio('outra', 'termo')).toBe('tcle');
+    expect(tipoDeNegocio('outra', 'outro')).toBe('documento');
     // Sem resumo gravado: o SHA-256 do conteúdo estruturado.
     const semHash = documentoLido(linhaDoc({ conteudo: null }), 'UTC');
     expect(semHash.hash).toBe(createHash('sha256').update('null').digest('hex'));
@@ -184,14 +205,28 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
     });
   });
 
-  it('pendências: só do profissional do login, em situação assinável, sem assinatura; sem profissional, vazio', async () => {
+  it('pendências: só do autor fixado no documento (o mesmo critério da prévia), assinável, sem assinatura', async () => {
     const d = duble({ docs: [linhaDoc()] });
     expect((await d.porta.pendencias(C, 'medico')).map((x) => x.id)).toEqual([10]);
     const sql = d.sqls.find((s) => /FROM documento_prontuario dp/.test(s.sql))!;
-    expect(sql.params).toEqual([7, 40, ...CATEGORIAS_ASSINAVEIS]);
+    expect(sql.params).toEqual([7, 'medico', ...CATEGORIAS_ASSINAVEIS]);
     expect(sql.sql).toMatch(/NOT EXISTS/);
-    const sem = duble({ docs: [linhaDoc()], autor: null });
-    expect(await sem.porta.pendencias(C, 'outro')).toEqual([]);
+    // O autor vem do evento de criação, sem filtro de vigência do vínculo de hoje.
+    expect(sql.sql).toMatch(/ec\.acao = 'criacao'/);
+    const sem = duble({ docs: [linhaDoc()] });
+    expect(await sem.porta.pendencias(C, '')).toEqual([]);
+    expect(sem.sqls).toEqual([]);
+  });
+
+  it('profissional: vínculo encerrado mantém a categoria (sigilo) com o conselho inativo; login vazio é null', async () => {
+    const inscricoes = [{ id: 5, situacao: 'ativa', codigo_cbo: '251510' }];
+    const d = duble({ autor: null, encerrado: { usuario: 3, profissional: 40, nome: 'P' }, inscricoes });
+    const p = await d.porta.profissional(C, 'psicologo-que-saiu');
+    expect(p).toMatchObject({ idProfissional: 40, cbo: 5 });
+    expect(p!.ocupacoes).toEqual([{ cbo: 5, codigo: '251510', conselhoAtivo: false }]);
+    const vigente = duble({ inscricoes });
+    expect((await vigente.porta.profissional(C, 'medico'))!.ocupacoes[0]!.conselhoAtivo).toBe(true);
+    expect(await duble({ inscricoes }).porta.profissional(C, '')).toBeNull();
   });
 
   it('assinar: recusa o de outro autor, o já assinado e o conteúdo mudado; assina o resto com evento e situação', async () => {
@@ -202,6 +237,7 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
         12: travado({ id: 12, assinaturas: 1 }),
         13: travado({ id: 13 }),
         14: travado({ id: 14, categoria: 'rascunho' }),
+        16: travado({ id: 16, autor: 'outra-conta-do-mesmo-profissional' }),
       },
     });
     const r = await d.porta.assinar(G, [
@@ -211,6 +247,7 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
       { documento: 13, hash: 'c'.repeat(64) },
       { documento: 14, hash: HASH },
       { documento: 15, hash: HASH },
+      { documento: 16, hash: HASH },
     ]);
     expect(r.assinados).toEqual([10]);
     expect(r.recusados).toEqual([
@@ -219,6 +256,7 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
       { documento: 13, motivo: 'O conteúdo mudou desde a prévia.' },
       { documento: 14, motivo: 'O documento não está em situação de assinatura.' },
       { documento: 15, motivo: 'Documento não encontrado entre as suas pendências.' },
+      { documento: 16, motivo: 'Documento não encontrado entre as suas pendências.' },
     ]);
     expect(
       d.escritas.map((e) => [
