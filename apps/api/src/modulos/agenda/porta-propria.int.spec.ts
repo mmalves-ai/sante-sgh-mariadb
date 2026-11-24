@@ -1115,8 +1115,8 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
       const agora = new Date();
       const fer = (data: string, nome: string, est: number, facultativo = false) =>
         e.inserir(
-          "INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, ponto_facultativo, criado_em) VALUES (?, ?, 'estabelecimento', ?, ?, ?)",
-          [data, nome, est, facultativo, agora],
+          "INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, facultativo, criado_em) VALUES (?, 'estabelecimento', ?, 'data_unica', ?, ?, ?)",
+          [nome, est, data, facultativo, agora],
         );
       await fer('2030-08-06', 'Feriado sintético L0104', ids.est);
       await fer('2030-08-20', 'Facultativo sintético L0104', ids.est, true);

@@ -46,8 +46,6 @@ import {
   lerIdBanco,
 } from '@sgh/contratos';
 import {
-  type Abrangencia,
-  diasSemExpediente,
   normalizarHora,
   conferirOfertaEspera,
   prioridadeGravadaNaEspera,
@@ -71,6 +69,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
+import { lerDiasSemExpediente } from './dias-sem-expediente-leitor.js';
 import { operacaoAgenda } from './operacoes.js';
 import { dataNoFuso, preCadastroDaMarcacao } from './pre-cadastro-marcacao.js';
 import { grupoLegalDaEspera, gruposVigentesDaEspera } from './prioridade-espera.js';
@@ -644,66 +643,9 @@ export class PortaAgendaPropria implements PortaAgenda {
   }
 
   async feriados(c: ContextoAgenda, de: string, ate: string): Promise<Feriado[]> {
-    // 02-AGE linha 41: nacionais fixos e a Sexta-feira Santa, mais o cadastro de feriados (nacional, da UF, do município e do
-    // estabelecimento) e os dias não úteis do cadastro. A regra de qual vale está no domínio.
-    return this.ler(c, async (l, e) => {
-      const loc = await l.uma(
-        `SELECT s.municipio_ibge_id, m.unidade_federativa_id, u.sigla
-           FROM estabelecimento s
-           LEFT JOIN municipio_ibge m ON m.id = s.municipio_ibge_id
-           LEFT JOIN unidade_federativa u ON u.id = m.unidade_federativa_id
-          WHERE s.id = ?`,
-        [e.id],
-      );
-      const fer = await l.consultar(
-        `SELECT data, nome, abrangencia, uf, municipio_ibge_id, estabelecimento_id, ponto_facultativo
-           FROM feriado WHERE ativo AND excluido_em IS NULL AND data BETWEEN ? AND ?`,
-        [de, ate],
-      );
-      const dnu = await l.consultar(
-        `SELECT descricao, abrangencia, unidade_federativa_id, municipio_ibge_id, estabelecimento_id, recorrencia,
-                dia, mes, data, facultativo, hora_inicio, hora_fim
-           FROM dia_nao_util
-          WHERE ativo AND excluido_em IS NULL AND (recorrencia = 'anual' OR data BETWEEN ? AND ?)`,
-        [de, ate],
-      );
-      return diasSemExpediente(
-        {
-          estabelecimento: e.id,
-          municipio: numOuNull(loc?.['municipio_ibge_id']),
-          uf: txt(loc?.['sigla']),
-          ufId: numOuNull(loc?.['unidade_federativa_id']),
-        },
-        de,
-        ate,
-        {
-          feriados: fer.map((x) => ({
-            data: dataIso(x['data']) ?? '',
-            nome: String(x['nome']),
-            abrangencia: String(x['abrangencia']) as Abrangencia,
-            uf: txt(x['uf']),
-            municipio: numOuNull(x['municipio_ibge_id']),
-            estabelecimento: numOuNull(x['estabelecimento_id']),
-            pontoFacultativo: Boolean(Number(x['ponto_facultativo'])),
-          })),
-          diasNaoUteis: dnu.map((x) => ({
-            descricao: String(x['descricao']),
-            abrangencia: String(x['abrangencia']) as Abrangencia,
-            ufId: numOuNull(x['unidade_federativa_id']),
-            municipio: numOuNull(x['municipio_ibge_id']),
-            estabelecimento: numOuNull(x['estabelecimento_id']),
-            recorrencia: String(x['recorrencia']) as 'anual' | 'data_unica' | 'movel',
-            dia: numOuNull(x['dia']),
-            mes: numOuNull(x['mes']),
-            data: dataIso(x['data']),
-            facultativo: Boolean(Number(x['facultativo'])),
-            // TIME do banco vem com os segundos: a faixa anda em HH:MM.
-            horaInicio: txt(x['hora_inicio'])?.slice(0, 5) ?? null,
-            horaFim: txt(x['hora_fim'])?.slice(0, 5) ?? null,
-          })),
-        },
-      );
-    });
+    // 02-AGE linha 41 e 02-CAD linha 28: nacionais calculados mais o cadastro único de dias não úteis (leitor comum
+    // com a agenda de exames). A regra de qual vale está no domínio.
+    return this.ler(c, (l, e) => lerDiasSemExpediente(l, e.id, de, ate));
   }
 
   private marcacaoDaLinha(x: Linha, fuso: string): Marcacao {

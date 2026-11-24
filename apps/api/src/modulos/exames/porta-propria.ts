@@ -21,7 +21,9 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import type { Feriado } from '@sgh/dominio-agenda';
 import { z } from 'zod';
+import { lerDiasSemExpediente } from '../agenda/dias-sem-expediente-leitor.js';
 import {
   type ContextoPortaM18,
   type LiberacaoGravacao,
@@ -302,29 +304,12 @@ export class PortaExamePropria implements PortaExame {
   }
 
   /**
-   * Feriados do período que valem no estabelecimento (calendário do cliente): os nacionais, os estaduais da UF do
-   * município do endereço, os municipais desse município e os do próprio estabelecimento, ativos e não excluídos. O
-   * ponto facultativo fica de fora (não é feriado legal; a agenda o trata como dia útil, como o restante do produto).
+   * Dias sem expediente do período no estabelecimento (02-CAD linha 28): o mesmo leitor da agenda de consultas, sobre o
+   * cadastro único de dias não úteis (nacionais calculados, UF, município e estabelecimento; anual, data única e móvel;
+   * faixa do dia). O ponto facultativo fica de fora (o hospital decide abrir).
    */
-  feriados(c: ContextoPortaM18, de: string, ate: string): Promise<{ data: string; nome: string }[] | null> {
-    return this.ler(c, async (l, est) =>
-      (
-        await l.consultar(
-          `SELECT f.data, f.nome FROM feriado f
-             JOIN estabelecimento e ON e.id = ?
-             LEFT JOIN municipio_ibge m ON m.id = e.municipio_ibge_id
-             LEFT JOIN unidade_federativa uf ON uf.id = m.unidade_federativa_id
-            WHERE f.data BETWEEN ? AND ? AND f.ativo = TRUE AND f.excluido_em IS NULL AND f.ponto_facultativo = FALSE
-              AND (f.abrangencia = 'nacional'
-                   OR (f.abrangencia = 'estadual' AND f.uf = uf.sigla)
-                   OR (f.abrangencia = 'municipal' AND f.municipio_ibge_id = e.municipio_ibge_id)
-                   OR (f.abrangencia = 'estabelecimento' AND f.estabelecimento_id = e.id))
-            ORDER BY f.data, f.id`,
-          [est, de, ate],
-          { teto: 1000 },
-        )
-      ).map((r) => ({ data: dataIso(r['data']) ?? '', nome: texto(r['nome']) })),
-    );
+  feriados(c: ContextoPortaM18, de: string, ate: string): Promise<Feriado[] | null> {
+    return this.ler(c, (l, est) => lerDiasSemExpediente(l, est, de, ate));
   }
 
   /** Inícios já usados (regular ou extra, posição 0 da chave única), sem teto; excluídos ficam de fora (reativáveis). */

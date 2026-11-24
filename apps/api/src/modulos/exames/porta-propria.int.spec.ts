@@ -61,7 +61,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
       const a = [ids.agenda];
       await e.executar('DELETE FROM agenda_servico_exame WHERE agenda_servico_id = ?', a);
       await e.executar(
-        "DELETE FROM feriado WHERE estabelecimento_id = ? AND nome LIKE 'FERIADO SINTETICO 20%'",
+        "DELETE FROM dia_nao_util WHERE estabelecimento_id = ? AND descricao LIKE 'FERIADO SINTETICO 20%'",
         [ids.est],
       );
       await e.executar(
@@ -651,10 +651,10 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     // Feriados do calendário do cliente: o do próprio estabelecimento vale; o ponto facultativo não.
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-20-feriado' }, async (e) => {
       await e.executar(
-        `INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, ponto_facultativo, criado_em)
-         VALUES (?, 'FERIADO SINTETICO 20 A', 'estabelecimento', ?, FALSE, NOW(3)),
-                (?, 'FERIADO SINTETICO 20 B', 'estabelecimento', ?, TRUE, NOW(3))`,
-        [dia3, ids.est, dia3, ids.est],
+        `INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, facultativo, criado_em)
+         VALUES ('FERIADO SINTETICO 20 A', 'estabelecimento', ?, 'data_unica', ?, FALSE, NOW(3)),
+                ('FERIADO SINTETICO 20 B', 'estabelecimento', ?, 'data_unica', ?, TRUE, NOW(3))`,
+        [ids.est, dia3, ids.est, dia3],
       );
     });
     expect(await porta.feriados(ctx, dia3, dia3)).toEqual([{ data: dia3, nome: 'FERIADO SINTETICO 20 A' }]);

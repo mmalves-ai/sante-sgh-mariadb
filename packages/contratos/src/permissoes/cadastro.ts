@@ -226,6 +226,16 @@ export const PERMISSOES_CADASTRO_M11 = [
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
   },
+  // F3.1 (02-CAD linha 28): calendário de feriados e dias não úteis por abrangência.
+  {
+    codigo: 'cadastro.calendario.editar',
+    descricao:
+      'Manter o calendário de feriados e dias não úteis (nacional, estadual, municipal e do estabelecimento), com recorrência, ponto facultativo e meio expediente',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
 ] as const satisfies readonly DeclaracaoPermissao[];
 
 export type PermissaoCadastro = (typeof PERMISSOES_CADASTRO_M11)[number]['codigo'];
