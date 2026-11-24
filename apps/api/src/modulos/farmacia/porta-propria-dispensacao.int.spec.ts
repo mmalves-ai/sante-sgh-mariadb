@@ -7,13 +7,14 @@
 // dispensação ambulatorial com o envio nacional e da avaliação pelo horário, com as recusas de cada uma.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { codigoEtiquetaDose, etiquetasAceitas, type LivroMontado } from '@sgh/contratos/regras-suprimentos';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
+  criarArmazemLocal,
   type Escritor,
   ErroOperacao,
   NucleoProprio,
@@ -940,8 +941,13 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
             : meta?.['retencao_ate'],
         ).slice(0, 10),
       ).toBe('2028-11-14');
-      const disco = await readFile(join(raiz, String(meta?.['chave_armazenamento'])));
-      expect(createHash('sha256').update(disco).digest('hex')).toBe(arq.hash);
+      // A leitura pela porta confere o hash no disco (falta ou divergência: erro); o conteúdo é o livro montado.
+      const lido = await criarArmazemLocal(nucleo, { raiz }).ler(
+        { cliente: CLIENTE, estabelecimento: ids.est, usuario: null, correlacao: 't-f36-livro' },
+        arq.arquivo,
+      );
+      expect(createHash('sha256').update(lido.conteudo).digest('hex')).toBe(arq.hash);
+      expect(JSON.parse(lido.conteudo.toString('utf8'))).toMatchObject({ titulo: 'LIVRO SINTETICO OFICIAL' });
       expect(await porta.livroFechado(ctx, 2, new Date('2026-11-08T00:00:00'))).toMatchObject({
         modo: 'oficial',
       });
