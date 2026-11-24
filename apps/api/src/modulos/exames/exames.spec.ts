@@ -279,10 +279,11 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
     const r = await post(s, '/marcacoes/sem-prontuario', pedido);
     expect(r.statusCode).toBe(201);
     expect(r.json().resultado.marcacao).toBeGreaterThan(0);
-    // A segunda marcação da mesma pessoa (nome com outro espaçamento) reaproveita o pré-cadastro pendente.
+    // A segunda marcação da mesma pessoa (nome com outro espaçamento), no horário seguinte da grade de 20 minutos,
+    // reaproveita o pré-cadastro pendente.
     const r2 = await post(s, '/marcacoes/sem-prontuario', {
       ...pedido,
-      hora: '08:50',
+      hora: '09:00',
       nome: ' paciente  sintetico novo ',
     });
     expect(r2.statusCode).toBe(201);
