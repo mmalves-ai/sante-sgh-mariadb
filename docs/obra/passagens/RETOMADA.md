@@ -536,3 +536,41 @@ autorizada; investigar a causa da parada.
 - Sessão Painel de Injeção também pausou (17h51): fatias com commit no branch conector-autor-registro, falta o
   integrador; nada aplicado no plataforma nem no cliente_prontocardio; carga parada; Firebird simulado
   sante-sgh-fb-prontocardio em 127.0.0.1:3354.
+
+## PAUSA EM 24/11 20h49 (troca da LLM, pedido do dono: "organize sem perda")
+
+**Tudo parado de propósito; nada em execução da sessão do orquestrador.** GitHub em 65a1c3c9 (verificado). Main local
+260 commits à frente (sem push: as rodadas não fecharam; push só depois de consolidação + verificar:tudo + ci-sim).
+
+**Cópia do trabalho sem commit** (a árvore ficou intacta; NÃO limpar a árvore antes de retomar):
+`sante-sgh-dados/obra/pausa-20261124-2049/` com HEAD.txt, status.txt (47 entradas), alteracoes-sem-commit.patch
+(215 KB, inclui os arquivos marcados com git add -N) e arquivos-novos.tgz (7 sem rastreamento: 3 tsconfig temporários,
+e2e f78-leitos-sus.spec.ts, migração 14_FIN/99_cessao_lancamentos, e os 2 arquivos de outros: 04-pep-1.json e
+carga-painel.md). São mudanças pela metade dos construtores parados (cirurgia/gasto de sala, financeiro/nota de cessão,
+TISS/autorização prévia e glosa, repasse/favorecidos, administração/locais de atendimento, cadastro/calendário).
+
+**Rodadas paradas e como retomar:**
+1. **f3-provas** (2ª volta da F3), run `wf_59b2eee4-596`. 48 resultados de construtor/corretor, 9 funções fechadas,
+   15 revisões; ~140 M de 184 M estimados (teto 239). Script:
+   `~/.claude/projects/-home-mmalves-workspace-redesante-sante-sgh/e03db3e2-0509-4d80-a8dc-6d080748f619/workflows/scripts/f3-provas-wf_59b2eee4-596.js`,
+   args = lista intercalada das 54 fatias de `sante-sgh-dados/obra/f3-provas/fatias.json` (está no início do relatório
+   de 17h52 e no script; ordem: F3.1-1, F3.3-1, F3.5-1, F3.7-1, F3.9-1, F3.2-1, F3.4-1, F3.6-1, F3.8-1, depois -2, -3…).
+   Mesma sessão: `resumeFromRunId`. Sessão nova: NÃO relançar igual — refazer com o desenho do item 3.
+2. **f78-construir** (F7 e F8), run `wf_2d8a1d0b-9ad`, PARADA às 20h36 por rendimento: 15 de 60 fatias
+   começadas, 1 função fechada; ~68 M de 198 M.
+3. **Diagnóstico e desenho novo (decisão do orquestrador, 20h34):** nas duas rodadas, 35 de 64 agentes bateram no teto
+   G6 antes de fechar e todos ficaram devendo E2E (exclusivo na pesado.lock, monta a árvore inteira a cada execução);
+   ~14 M por função coberta. Relançar a F7/F8 (e o resto da F3) com: **1 função por fatia**; construtor dentro do teto;
+   integração por `tools/obra/vaga-teste.sh` (3 vagas; nunca flock na frente); **E2E escrito pelo construtor e rodado em
+   lote pelo integrador do módulo** (uma montagem da árvore para vários specs); só então "Coberta". Fatias:
+   `sante-sgh-dados/obra/f78/fatiar.py` (gera 3 por fatia: trocar para 1) e `f3-provas/fatiar.py`.
+
+**Completude medida nas fichas às 20h34 (script do relatório):** F3 98 cobertas, 145 parciais, 1 falta (+9 sem
+situação); F7 29/60/20; F8 13/34/57; total 140 de ~457 cobertas (30%). Fichas F7/F8 novas em
+`docs/fases/fichas/F78-0N-*.md` (inventário f78-fichas, 19h08).
+
+**Outros estados:** carga da ProntoCardio parada e com a sessão "Painel de Injeção" (worktree
+`../sante-sgh-wt/autor-registro`); combinado: merge dela na main sem rebase só depois de eu avisar árvore limpa; push
+meu no fim; migrações do cliente_prontocardio com ela. API 3310 no ar (build 16h35, override prontocardio). Ferramentas
+novas: `tools/obra/vaga-teste.sh` (78d573eb) e e2e-vm.sh sem impasse de trava (374e629d). Relatório de 50 min: a
+corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na memória formato-relatorio-50min).
