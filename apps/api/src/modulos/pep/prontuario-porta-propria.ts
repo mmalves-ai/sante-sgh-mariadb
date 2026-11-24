@@ -152,9 +152,22 @@ export function valorDaResposta(x: Record<string, unknown>, fuso: string): strin
   }
 }
 
+/**
+ * CBO do registro: a ocupação com que o autor registrou; na falta dela (o registro importado não a traz), a ocupação
+ * do autor no cadastro: a principal (ou a ativa mais antiga) das ocupações do profissional e, por último, a da
+ * inscrição no conselho (principal, ativa, pela sequência). Sem isso o importado ficaria "sem categoria" e o sigilo por
+ * categoria (M23, regra 15) e o filtro por categoria não o alcançariam. A decisão (categoria, sigilo) fica no domínio.
+ */
+const CBO_DO_REGISTRO = `COALESCE(o.codigo_cbo,
+       (SELECT oa.codigo_cbo FROM profissional_ocupacao po JOIN ocupacao_cbo oa ON oa.id = po.ocupacao_cbo_id
+         WHERE po.profissional_id = r.autor_profissional_id AND po.ativo = TRUE AND po.excluido_em IS NULL
+         ORDER BY po.principal DESC, po.id LIMIT 1),
+       (SELECT oi.codigo_cbo FROM inscricao_conselho ic JOIN ocupacao_cbo oi ON oi.id = ic.ocupacao_cbo_id
+         WHERE ic.profissional_id = r.autor_profissional_id AND ic.excluido_em IS NULL
+         ORDER BY ic.principal DESC, (ic.situacao = 'ativa') DESC, ic.sequencia, ic.id LIMIT 1))`;
 const COLUNAS_REGISTRO = `r.id, r.paciente_id, r.atendimento_id, r.data_hora_clinica, r.data_hora_lancamento,
        r.modelo_documento_clinico_id AS modelo, m.codigo AS modelo_codigo, m.titulo AS modelo_nome,
-       r.autor_profissional_id, COALESCE(p.nome_exibicao, pf.nome) AS profissional_nome, o.codigo_cbo,
+       r.autor_profissional_id, COALESCE(p.nome_exibicao, pf.nome) AS profissional_nome, ${CBO_DO_REGISTRO} AS codigo_cbo,
        r.suspenso_em, r.justificativa_suspensao, r.corrige_registro_assistencial_id, r.justificativa_retroativo,
        (SELECT s.preceptor_profissional_id FROM registro_assistencial_supervisao s
          WHERE s.registro_assistencial_id = r.id AND s.situacao = 'coassinado' AND s.excluido_em IS NULL
@@ -272,11 +285,11 @@ export class PortaProntuarioPropria implements PortaProntuario {
         p.push(f.profissional);
       }
       if (f.cboIncluir?.length) {
-        sql += ` AND (${f.cboIncluir.map(() => 'o.codigo_cbo LIKE ?').join(' OR ')})`;
+        sql += ` AND (${f.cboIncluir.map(() => `${CBO_DO_REGISTRO} LIKE ?`).join(' OR ')})`;
         p.push(...f.cboIncluir.map((x) => `${x}%`));
       }
       if (f.cboExcluir?.length) {
-        sql += ` AND (o.codigo_cbo IS NULL OR NOT (${f.cboExcluir.map(() => 'o.codigo_cbo LIKE ?').join(' OR ')}))`;
+        sql += ` AND (${CBO_DO_REGISTRO} IS NULL OR NOT (${f.cboExcluir.map(() => `${CBO_DO_REGISTRO} LIKE ?`).join(' OR ')}))`;
         p.push(...f.cboExcluir.map((x) => `${x}%`));
       }
       sql += ` ORDER BY r.data_hora_clinica DESC, r.id DESC LIMIT ${por + 1} OFFSET ${ini}`;
@@ -499,7 +512,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
       const x = await l.uma(
         `SELECT pp.nome AS paciente_nome, pp.nome_social, pp.data_nascimento, a.numero, a.entrada_em,
                 u.nome AS unidade, fp.nome AS convenio, COALESCE(pa.nome_exibicao, pfa.nome) AS assistente,
-                COALESCE(p.nome_exibicao, pf.nome) AS profissional_nome, o.codigo_cbo
+                COALESCE(p.nome_exibicao, pf.nome) AS profissional_nome, ${CBO_DO_REGISTRO} AS codigo_cbo
            FROM registro_assistencial r
            JOIN paciente pc ON pc.id = r.paciente_id
            JOIN pessoa_fisica pp ON pp.id = pc.pessoa_fisica_id
@@ -549,7 +562,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
       const t = Math.max(0, Math.trunc(teto));
       const per = this.periodo('r.data_hora_clinica', f, est.fuso);
       const linhas = await l.consultar(
-        `SELECT r.id, r.data_hora_clinica, m.codigo AS modelo_codigo, o.codigo_cbo, r.texto_consolidado
+        `SELECT r.id, r.data_hora_clinica, m.codigo AS modelo_codigo, ${CBO_DO_REGISTRO} AS codigo_cbo, r.texto_consolidado
            FROM registro_assistencial r
            JOIN modelo_documento_clinico m ON m.id = r.modelo_documento_clinico_id
            LEFT JOIN ocupacao_cbo o ON o.id = r.ocupacao_cbo_id

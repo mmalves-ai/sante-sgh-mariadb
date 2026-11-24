@@ -113,7 +113,12 @@ describe('PortaProntuarioPropria (dublê)', () => {
       /r\.estabelecimento_id = \? AND r\.excluido_em IS NULL AND r\.confidencial = FALSE/,
     );
     expect(q.sql).toMatch(/LIMIT 3 OFFSET 2/);
-    expect(q.sql).toMatch(/o\.codigo_cbo IS NULL OR NOT/);
+    // O filtro por categoria usa o CBO do registro e, na falta dele (importado), o do autor no cadastro.
+    expect(q.sql).toMatch(
+      /COALESCE\(o\.codigo_cbo,[\s\S]*profissional_ocupacao[\s\S]*inscricao_conselho[\s\S]*\) IS NULL OR NOT/,
+    );
+    expect(q.sql).toMatch(/AS codigo_cbo/);
+    expect(q.sql).not.toMatch(/[^(]o\.codigo_cbo LIKE/);
     expect(q.parametros).toEqual([
       10,
       7,
