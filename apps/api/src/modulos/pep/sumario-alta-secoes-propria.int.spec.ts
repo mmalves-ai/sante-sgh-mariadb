@@ -84,8 +84,8 @@ describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato
           [est, `${P}-1`, paciente['id'], cat, prof['id'], agora, agora],
         );
         const clin = await e.inserir(
-          `INSERT INTO clinica_assistencial (codigo, descricao, natureza, hospital_dia, criado_em)
-           VALUES ('l124-hd', 'Hospital-dia (teste)', 'hospital_dia', TRUE, ?)`,
+          `INSERT INTO clinica_assistencial (codigo, descricao, natureza, criado_em)
+           VALUES ('l124-hd', 'Hospital-dia (teste)', 'hospital_dia', ?)`,
           [agora],
         );
         const atdHd = await e.inserir(
@@ -149,14 +149,18 @@ describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato
         .codigo,
     ).toBe('periodo-sem-dados');
 
-    // As pendências pelo atendimento (categoria de internação): a obrigatória sem texto recusa.
+    // As pendências pelo atendimento (categoria de internação): a obrigatória sem texto recusa. O diagnóstico é o
+    // piso legal: sem ele a pendência aparece antes das seções.
     const vazio = {
-      diagnosticos: [],
+      diagnosticos: [{ cid: 'I10', descricao: 'Diagnóstico sintético' }],
       procedimentos: [],
       medicamentosAlta: [],
       alergias: [],
       encaminhamentos: [],
     };
+    expect(
+      (await porta.pendencias(ctx(), m.atd, { ...vazio, diagnosticos: [] })).map((p) => p.campo),
+    ).toEqual(['diagnosticos', 'secao.l124-orient']);
     expect((await porta.pendencias(ctx(), m.atd, vazio)).map((p) => p.campo)).toEqual(['secao.l124-orient']);
     expect(
       await porta.pendencias(ctx(), m.atd, {

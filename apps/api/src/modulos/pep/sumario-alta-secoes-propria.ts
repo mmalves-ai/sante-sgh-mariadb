@@ -284,7 +284,7 @@ export class PortaSumarioSecoesPropria {
   ): Promise<SecaoDoAtendimento[]> {
     const a = await this.ler(c, 'tipo-atendimento', async (l, est) =>
       l.uma(
-        `SELECT k.tipo_base, COALESCE(ca.hospital_dia, FALSE) AS hospital_dia, a.entrada_em,
+        `SELECT k.tipo_base, COALESCE(ca.natureza = 'hospital_dia', FALSE) AS hospital_dia, a.entrada_em,
                 COALESCE(a.alta_medica_em, a.saida_em) AS alta_em
            FROM atendimento a
            JOIN categoria_atendimento k ON k.id = a.categoria_atendimento_id
@@ -321,7 +321,7 @@ export class PortaSumarioSecoesPropria {
   }
 
   /** Inclui ou altera (com a versão lida) a seção; a linha do cliente só é alterada pelo cadastro do cliente. */
-  gravarComponente(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+  async gravarComponente(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaComponente, entrada);
     const erros = validarComponenteSumario({ ...x, estabelecimento: null });
     if (erros.length) throw recusa(erros);
@@ -362,10 +362,11 @@ export class PortaSumarioSecoesPropria {
         periodo_consulta_id: x.periodoConsulta,
         ativo: x.ativo,
       };
-      const a = await tx.uma(
+      const [a] = await tx.consultarParaAtualizar(
         `SELECT id, versao FROM componente_sumario_alta
-          WHERE estabelecimento_chave = COALESCE(?, 0) AND tipo_atendimento = ? AND codigo = ? FOR UPDATE`,
+          WHERE estabelecimento_chave = COALESCE(?, 0) AND tipo_atendimento = ? AND codigo = ?`,
         [alvoEst, x.tipoAtendimento, x.codigo],
+        { teto: 1 },
       );
       if (a) {
         if (x.versao === null || x.versao !== num(a['versao']) || (x.id !== null && x.id !== num(a['id'])))
@@ -409,7 +410,7 @@ export class PortaSumarioSecoesPropria {
     );
   }
 
-  gravarPeriodo(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+  async gravarPeriodo(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaPeriodo, entrada);
     const erros = validarPeriodoConsulta(x);
     if (erros.length) throw recusa(erros);
@@ -425,9 +426,10 @@ export class PortaSumarioSecoesPropria {
           ordem: x.ordem,
           ativo: x.ativo,
         };
-        const a = await tx.uma(
-          'SELECT id, versao FROM periodo_consulta_sumario_alta WHERE codigo = ? FOR UPDATE',
+        const [a] = await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM periodo_consulta_sumario_alta WHERE codigo = ?',
           [x.codigo],
+          { teto: 1 },
         );
         if (a) {
           if (x.versao === null || x.versao !== num(a['versao'])) throw conflito();
