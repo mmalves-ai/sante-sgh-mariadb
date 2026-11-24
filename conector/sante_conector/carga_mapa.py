@@ -2379,6 +2379,7 @@ class CargaMapa(carga.Carga):
 
     def _tabela(self, p):
         t, dts = p["tabela"], p["destinos"]
+        self._tab_atual = t  # batimento com as linhas processadas da tabela (carga.Batimento)
         ents = [self._nome_ent(t, dt) for dt in dts]
         if t not in self.existente:  # de-para sob demanda (liberado depois da última onda que o usa)
             self._carregar_existente(t)

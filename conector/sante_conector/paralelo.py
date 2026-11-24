@@ -63,7 +63,7 @@ _FALTA = object()
 _CONTADORES = frozenset({"cont", "sinc_res"})
 _ATIVO = [False]  # só o gravador anota as chaves alteradas (no coordenador o dicionário é comum)
 # atributos que são do processo (conexões, fila do bloco, linha atual) ou caches por tabela: nunca voltam
-_FORA = frozenset({"lt", "cr", "progresso", "mapa_exec", "plano", "tabelas", "chaves", "_fila", "_diario", "_buf",
+_FORA = frozenset({"lt", "cr", "progresso", "_tab_atual", "mapa_exec", "plano", "tabelas", "chaves", "_fila", "_diario", "_buf",
                    "_prox_id", "_bloco", "_atualizar", "_linha", "_grp", "_grupos", "tipos", "seq", "_adiando",
                    "_esvaziando", "_adiar_linha", "_cab_varrido", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
                    "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar", "pular", "continuar_de", "memoria",
@@ -652,7 +652,10 @@ def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
     """Atende os gravadores até todos devolverem o estado: leituras da origem, próxima tarefa, reserva de ids do
     destino da tabela dividida e o resultado."""
     fluxos, vivos, sid, prox = {}, dict(filhos), itertools.count(1), {}
+    pulsar, lidas = getattr(cm.progresso, "pulsar", None), [0]  # batimento da onda (carga.Batimento), só aqui
     while vivos:
+        if pulsar is not None:
+            pulsar(lidas[0])
         for con in wait(list(vivos)):
             pid = vivos[con]
             try:
@@ -673,6 +676,7 @@ def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
             elif op == "prox":
                 g = fluxos.get(a[0])
                 lote = list(itertools.islice(g, LOTE_LINHAS)) if g is not None else []
+                lidas[0] += len(lote)
                 if not lote:
                     fluxos.pop(a[0], None)
                 con.send((rid, True, lote or None))

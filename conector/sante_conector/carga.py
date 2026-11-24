@@ -35,6 +35,7 @@ import decimal
 import hashlib
 import os
 import re
+import time
 
 import pymysql
 
@@ -390,13 +391,36 @@ def codigo_estabelecimento(chave):
     return c if len(c) >= 2 else (c + "0")
 
 
+# ---------------- batimento ----------------
+class Batimento:
+    """Progresso com batimento dentro da tabela (rodada pendencia-quadratica, 2026-11-23): a plataforma só via o
+    batimento no início de cada tabela, e a tabela longa ficava dezenas de minutos sem ele (o vigia acusava parada
+    falsa). `pulsar` repete a última etapa, com a contagem de linhas processadas da tabela, no máximo a cada
+    INTERVALO segundos: custo de uma comparação de relógio por lote e um UPDATE por minuto."""
+    INTERVALO = float(os.environ.get("CONECTOR_BATIMENTO_S", "60"))
+
+    def __init__(self, progresso):
+        self.fn, self.frac, self.etapa, self.ultimo = progresso, 0.0, None, time.monotonic()
+
+    def __call__(self, frac, etapa=None):
+        self.frac, self.etapa, self.ultimo = frac, etapa, time.monotonic()
+        return self.fn(frac, etapa)
+
+    def pulsar(self, linhas=None):
+        if self.etapa is None or time.monotonic() - self.ultimo < self.INTERVALO:
+            return False
+        self.ultimo = time.monotonic()
+        self.fn(self.frac, self.etapa if linhas is None else "%s: %d linhas processadas" % (self.etapa, linhas))
+        return True
+
+
 # ---------------- carga ----------------
 class Carga:
     reprocessar = False  # padrão (continuidade) também para a instância montada sem __init__ (testes)
 
     def __init__(self, leitor, cr, ctl, eid, imagem_id, progresso=None):
         self.lt, self.cr, self.ctl, self.eid, self.img = leitor, cr, "`%s`" % ctl, eid, imagem_id
-        self.progresso = progresso or (lambda pct, etapa: None)
+        self.progresso = Batimento(progresso or (lambda pct, etapa: None))
         self.pend = []                      # (tabela, chave, regra, gravidade): todas, para o resumo
         self._buf = []                      # pendências ainda não gravadas (vão no próximo commit)
         self._diario = []                   # registros em memória desde o último SAVEPOINT (para desfazer)
@@ -436,6 +460,14 @@ class Carga:
             self._buf = []
         self.cr.commit()
         self._diario = []
+        self._pulsar()
+
+    def _pulsar(self):
+        """Batimento dentro da tabela (a cada lote commitado, limitado pelo Batimento.INTERVALO)."""
+        pulsar = getattr(getattr(self, "progresso", None), "pulsar", None)
+        if pulsar is not None:
+            t = getattr(self, "_tab_atual", None)
+            pulsar(len(self.vistas.get(t) or ()) if t and isinstance(getattr(self, "vistas", None), dict) else None)
 
     def _um(self, sql, args=()):
         with self._c() as c:
@@ -1213,6 +1245,7 @@ class Carga:
         if "ATCABECATEND" in self.tabelas and "RICADPAC" not in self.tabelas:
             raise ErroCarga("atendimento sem a tabela de pacientes na origem")
         for i, t in enumerate(self.tabelas):
+            self._tab_atual = t
             self.progresso(i / len(self.tabelas), "carregando %s" % MAPA[t]["entidade"])
             fn[t](self._linhas(t))
         self._commit()

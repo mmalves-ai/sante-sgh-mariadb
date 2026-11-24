@@ -91,6 +91,58 @@ class PendenciaUmaVez(unittest.TestCase):
         self.assertEqual(cg._buf, [])
 
 
+class BatimentoDentroDaTabela(unittest.TestCase):
+    """(c) O batimento (plataforma.progresso grava batimento_em) é repetido dentro da tabela longa, com a contagem de
+    linhas processadas, nos dois caminhos: commit de lote (carga própria e CargaMapa linha a linha/onda de uma tabela)
+    e coordenador da onda em paralelo (paralelo._servir)."""
+
+    def _carga(self, intervalo):
+        chamadas = []
+        cg = object.__new__(carga.Carga)
+        cg.cr, cg.ctl, cg.eid = _Con(), "`ctl`", 1
+        cg.pend, cg._buf, cg._diario, cg._reemitidas = [], [], [], {}
+        cg.progresso = carga.Batimento(lambda f, e: chamadas.append((f, e)))
+        cg.progresso.INTERVALO = intervalo
+        cg.vistas, cg._tab_atual = {"ATCABECATEND": set()}, "ATCABECATEND"
+        cg.progresso(0.5, "carregando atendimento")
+        return cg, chamadas
+
+    def test_carga_pulsa_a_cada_lote_com_contagem(self):
+        cg, chamadas = self._carga(0)
+        for i in range(5):
+            cg.vistas["ATCABECATEND"].update("%d-%d" % (i, j) for j in range(1000))
+            cg._commit()
+        self.assertEqual(len(chamadas), 6)
+        self.assertEqual(chamadas[-1], (0.5, "carregando atendimento: 5000 linhas processadas"))
+
+    def test_carga_limita_pelo_intervalo(self):
+        cg, chamadas = self._carga(3600)
+        for _ in range(50):
+            cg._commit()
+        self.assertEqual(len(chamadas), 1)  # só o início da tabela: nenhum UPDATE a mais dentro do intervalo
+
+    def test_carga_mapa_herda_o_batimento(self):
+        cm = object.__new__(carga_mapa.CargaMapa)
+        carga.Carga.__init__(cm, None, _Con(), "ctl", 1, 1, lambda f, e: None)
+        self.assertIsInstance(cm.progresso, carga.Batimento)
+
+    def test_coordenador_da_onda_pulsa(self):
+        from multiprocessing import Pipe
+        from sante_conector import paralelo
+        chamadas = []
+        cm = type("CM", (), {})()
+        cm.progresso = carga.Batimento(lambda f, e: chamadas.append((f, e)))
+        cm.progresso.INTERVALO = 0
+        cm.progresso(0.3, "carregando 2 tabelas em paralelo (onda 1 de 1)")
+        pai, filho = Pipe()
+        filho.send((1, "prox", (99,)))
+        filho.send((2, "fim", (None,)))
+        with unittest.mock.patch.object(paralelo.os, "waitpid"), unittest.mock.patch.object(paralelo, "_juntar"):
+            paralelo._servir(cm, {pai: 12345}, [], lambda f: None)
+        self.assertGreaterEqual(len(chamadas), 3)
+        self.assertTrue(chamadas[-1][1].startswith("carregando 2 tabelas em paralelo (onda 1 de 1): "))
+
+
 @unittest.skipUnless(TEM_BANCO, "precisa do MariaDB da rede interna")
 class RepetirPendencias(unittest.TestCase):
     COD = "pq_repetir"
