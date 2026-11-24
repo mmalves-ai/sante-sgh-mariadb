@@ -70,6 +70,7 @@ import {
   type SessaoCadastro,
   sessaoDe,
 } from './comum.js';
+import { FICHA_COMPLEMENTAR, type FichaComplementarPropria } from './ficha-complementar-proprio.js';
 import { PORTA_CADASTRO, type PortaCadastro } from './porta.js';
 import {
   atualizarFila,
@@ -99,6 +100,8 @@ export class PacientesController {
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
+    /** F3.1: regras de campo do cadastro (só no banco do cliente; sem ele, a regra não é conferida). */
+    @Optional() @Inject(FICHA_COMPLEMENTAR) private readonly ficha: FichaComplementarPropria | null = null,
   ) {}
 
   /**
@@ -491,6 +494,9 @@ export class PacientesController {
         campos: [...new Set(e.error.issues.map((i) => i.path.join('.')))],
       });
     const ctx = contextoOperacao(s, 'cadastro-paciente');
+    await this.ficha?.conferirCampos(s.porta, e.data, 'cadastro').catch((x: unknown) => {
+      throw problemaDoCadastro(x);
+    });
     const r = await this.porta.cadastrar(s.porta, e.data, ctx).catch((x: unknown) => {
       throw problemaDoCadastro(x);
     });
@@ -523,6 +529,9 @@ export class PacientesController {
         campos: [...new Set(e.error.issues.map((i) => i.path.slice(-1).join('.') || 'alteracoes'))],
       });
     const ctx = contextoOperacao(s, 'cadastro-alteracao');
+    await this.ficha?.conferirCampos(s.porta, e.data.alteracoes, 'alteracao').catch((x: unknown) => {
+      throw problemaDoCadastro(x);
+    });
     const r = await this.porta.alterar(s.porta, e.data, ctx).catch((x: unknown) => {
       throw problemaDoCadastro(x);
     });

@@ -5,6 +5,8 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { ligarMapaEstabelecimentos } from './contexto-nucleo.js';
+import { FichaComplementarController } from './ficha-complementar.controller.js';
+import { FICHA_COMPLEMENTAR, FichaComplementarPropria } from './ficha-complementar-proprio.js';
 import { CadastroVinculosProprio } from './paciente-vinculos-proprio.js';
 import { PacienteVinculosController, VINCULOS_CADASTRO } from './paciente-vinculos.controller.js';
 import { PacientesController } from './pacientes.controller.js';
@@ -37,12 +39,20 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   // Coberturas, pré-cadastro e captação (F3.1): só sobre o banco do cliente; sem ele, 503 nas rotas.
   const cliente = ctx.configuracao.clientePadrao;
   const vinculos = ctx.nucleo && cliente ? new CadastroVinculosProprio(ctx.nucleo, cliente) : null;
+  // F3.1: ficha complementar (regras de campo, contatos e responsáveis), também só no banco do cliente.
+  const ficha = ctx.nucleo && cliente ? new FichaComplementarPropria(ctx.nucleo, cliente) : null;
   return {
     module: ModuloCadastro,
-    controllers: [PacientesController, ProfissionaisController, PacienteVinculosController],
+    controllers: [
+      PacientesController,
+      ProfissionaisController,
+      PacienteVinculosController,
+      FichaComplementarController,
+    ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: porta },
       { provide: VINCULOS_CADASTRO, useValue: vinculos },
+      { provide: FICHA_COMPLEMENTAR, useValue: ficha },
     ],
     exports: [PORTA_CADASTRO],
   };
