@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   atributosDaGuia,
   competenciaDe,
+  dependentesAtivos,
   type DefinicaoAtributoGuia,
   guiaAceitaAtributos,
   sugerirProximoPeriodo,
@@ -24,8 +25,36 @@ describe('período da conta parcial', () => {
     const s = sugerirProximoPeriodo(conta, [
       { inicio: conta.inicio, fim: '2026-01-31T23:59:59.999', tipoLancamentoId: null },
     ]);
-    expect(s?.inicio).toBe('2026-01-31T23:59:59.999');
-    expect(s?.competencia).toBe('2026-01-01');
+    expect(s).toEqual({
+      inicio: '2026-02-01T00:00:00.000',
+      fim: '2026-02-28T23:59:59.999',
+      tipoLancamentoId: null,
+      competencia: '2026-02-01',
+    });
+    // A sugestão aceita é válida (sem duração zero nem sobreposição) e a seguinte já vai para março.
+    const jan = { inicio: conta.inicio, fim: '2026-01-31T23:59:59.999', tipoLancamentoId: null };
+    expect(validarPeriodoConta(conta, [jan], s!).erros).toEqual({});
+    expect(sugerirProximoPeriodo(conta, [jan, s!])?.competencia).toBe('2026-03-01');
+    // Último período no meio do mês: o próximo começa no mesmo instante (faixas encostadas não se sobrepõem).
+    const meio = { inicio: conta.inicio, fim: '2026-01-25T10:00:00.000', tipoLancamentoId: null };
+    expect(sugerirProximoPeriodo(conta, [meio])).toMatchObject({
+      inicio: '2026-01-25T10:00:00.000',
+      fim: '2026-01-31T23:59:59.999',
+      competencia: '2026-01-01',
+    });
+    // Virada do ano.
+    expect(sugerirProximoPeriodo(conta, [{ ...jan, fim: '2026-12-31T23:59:59.999' }])?.inicio).toBe(
+      '2027-01-01T00:00:00.000',
+    );
+  });
+  it('recusa período de duração zero', () => {
+    expect(
+      validarPeriodoConta(conta, [], {
+        inicio: '2026-01-31T23:59:59.999',
+        fim: '2026-01-31T23:59:59.999',
+        tipoLancamentoId: null,
+      }).erros['fim'],
+    ).toMatch(/duração zero/);
   });
   it('para no fim da conta e não sugere nada quando ela já está coberta', () => {
     const fechada = { ...conta, fim: '2026-01-25T10:00:00.000' };
@@ -216,6 +245,22 @@ describe('campo adicional da operadora na guia', () => {
         { atributoId: 2, opcaoId: 20, texto: null },
       ]).erros,
     ).toEqual({});
+    // Pai inativado (fora dos campos que valem para a guia): a opção do filho não fica travada.
+    const semPai = atributosDaGuia(
+      defs.map((d) => (d.id === 1 ? { ...d, ativo: false } : d)),
+      'consulta',
+    );
+    expect(validarValoresAtributos(semPai, [{ atributoId: 2, opcaoId: 21, texto: null }]).erros).toEqual({});
+  });
+  it('inativar um campo com dependentes ativos aponta quais são', () => {
+    expect(dependentesAtivos(1, defs)).toEqual(['Fase']);
+    expect(
+      dependentesAtivos(
+        1,
+        defs.map((d) => (d.id === 2 ? { ...d, ativo: false } : d)),
+      ),
+    ).toEqual([]);
+    expect(dependentesAtivos(3, defs)).toEqual([]);
   });
   it('definição: código, tamanho só em texto, dependência só entre listas e sem ciclo', () => {
     const d = {

@@ -10,6 +10,7 @@ import {
   atributosDaGuia,
   contaEditavel,
   type DefinicaoAtributoGuia,
+  dependentesAtivos,
   guiaAceitaAtributos,
   type PeriodoConta,
   sugerirProximoPeriodo,
@@ -429,19 +430,40 @@ export const opGravarSegurado = definirOperacao({
     const v = validarSeguradoConta(c.situacao, c.inicio, e);
     exigirValido(v.erros);
     if (e.coberturaPacienteId !== null) {
-      const cob = await tx.uma<Linha>('SELECT paciente_id FROM cobertura_paciente WHERE id = ?', [
-        e.coberturaPacienteId,
-      ]);
+      const cob = await tx.uma<Linha>(
+        'SELECT paciente_id, fonte_pagadora_id, excluido_em FROM cobertura_paciente WHERE id = ?',
+        [e.coberturaPacienteId],
+      );
       if (!cob || n(cob['paciente_id']) !== c.pacienteId)
         throw recusa('referencia-inexistente', 'A cobertura informada não é do paciente da conta.', {
           campos: ['coberturaPacienteId'],
         });
+      if (cob['excluido_em'] !== null)
+        throw recusa('entrada-invalida', 'A cobertura informada foi excluída do cadastro do paciente.', {
+          campos: ['coberturaPacienteId'],
+        });
+      if (n(cob['fonte_pagadora_id']) !== c.fontePagadoraId)
+        throw recusa(
+          'entrada-invalida',
+          'A cobertura informada é de outra fonte pagadora que não a da conta.',
+          {
+            campos: ['coberturaPacienteId'],
+          },
+        );
     }
     if (e.titularCoberturaId !== null) {
-      const t = await tx.uma<Linha>('SELECT cobertura_paciente_id FROM titular_cobertura WHERE id = ?', [
-        e.titularCoberturaId,
-      ]);
-      if (!t || (e.coberturaPacienteId !== null && n(t['cobertura_paciente_id']) !== e.coberturaPacienteId))
+      // O titular tem de ser de uma cobertura (não excluída) do próprio paciente da conta, e da escolhida quando há.
+      const t = await tx.uma<Linha>(
+        `SELECT t.cobertura_paciente_id, c.paciente_id FROM titular_cobertura t
+           JOIN cobertura_paciente c ON c.id = t.cobertura_paciente_id AND c.excluido_em IS NULL
+          WHERE t.id = ?`,
+        [e.titularCoberturaId],
+      );
+      if (
+        !t ||
+        n(t['paciente_id']) !== c.pacienteId ||
+        (e.coberturaPacienteId !== null && n(t['cobertura_paciente_id']) !== e.coberturaPacienteId)
+      )
         throw recusa('referencia-inexistente', 'O titular informado não é da cobertura escolhida.', {
           campos: ['titularCoberturaId'],
         });
@@ -540,6 +562,12 @@ export const opGravarAtributo = definirOperacao({
       throw recusa('duplicado', 'Já existe um campo com este código na operadora.', { campos: ['codigo'] });
     if (e.tipoDado !== 'opcao' && e.opcoes.length)
       throw recusa('entrada-invalida', 'Só o campo de lista tem opções.', { campos: ['opcoes'] });
+    // Inativar um campo de que outros ativos dependem travaria a escolha neles: inative os dependentes antes.
+    const filhos = e.id !== null && !e.ativo ? dependentesAtivos(e.id, outros) : [];
+    if (filhos.length)
+      throw recusa('entrada-invalida', `Inative antes os campos que dependem deste: ${filhos.join(', ')}.`, {
+        campos: ['ativo'],
+      });
     const valores = {
       codigo: e.codigo,
       rotulo: e.rotulo,
@@ -673,9 +701,12 @@ export const opGravarValoresGuia = definirOperacao({
         gravados++;
       }
     }
+    // Só se retira o valor de campo que vale hoje para a guia e veio vazio; o valor de um campo depois inativado (ou
+    // de outro tipo de guia) fica como foi informado.
     const informados = new Set(r.normalizados.map((v) => v.atributoId));
+    const vigentes = new Set(defs.map((d) => d.id));
     for (const a of atuais)
-      if (a['excluido_em'] === null && !informados.has(n(a['atributo']))) {
+      if (a['excluido_em'] === null && vigentes.has(n(a['atributo'])) && !informados.has(n(a['atributo']))) {
         await tx.excluir('valor_atributo_guia', n(a['id']), n(a['versao']));
         retirados++;
       }

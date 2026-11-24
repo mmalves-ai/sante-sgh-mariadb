@@ -35,8 +35,18 @@ async function codigoDo(p: Promise<unknown>): Promise<string> {
 describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
   let nucleo: NucleoProprio;
   let s: ServicoComplementosConta;
-  const ids = { est: 0, pessoa: 0, paciente: 0, prof: 0, fonte: 0, categoria: 0, carater: 0, tipoConta: 0 };
-  const ids2 = { atendimento: 0, conta: 0, guia: 0, cobertura: 0 };
+  const ids = {
+    est: 0,
+    pessoa: 0,
+    paciente: 0,
+    outro: 0,
+    prof: 0,
+    fonte: 0,
+    categoria: 0,
+    carater: 0,
+    tipoConta: 0,
+  };
+  const ids2 = { atendimento: 0, conta: 0, guia: 0, cobertura: 0, coberturaExcluida: 0, titularOutro: 0 };
   const op = (): ContextoOperacao => ({
     cliente: CLIENTE,
     estabelecimento: ids.est,
@@ -83,7 +93,11 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       [ids.fonte],
     );
     await e.executar('DELETE FROM atributo_guia_fonte_pagadora WHERE fonte_pagadora_id = ?', [ids.fonte]);
-    await e.executar('DELETE FROM cobertura_paciente WHERE paciente_id = ?', [ids.paciente]);
+    await e.executar(
+      'DELETE t FROM titular_cobertura t JOIN cobertura_paciente c ON c.id = t.cobertura_paciente_id WHERE c.paciente_id IN (?, ?)',
+      [ids.paciente, ids.outro],
+    );
+    await e.executar('DELETE FROM cobertura_paciente WHERE paciente_id IN (?, ?)', [ids.paciente, ids.outro]);
     await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
   };
 
@@ -122,6 +136,14 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
         [ids.pessoa],
         'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
         [ids.pessoa, 837_301, agora],
+      );
+      const pessoaOutro = await pessoa(`OUTRO PACIENTE SINTETICO ${P}`);
+      ids.outro = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pessoaOutro],
+        'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+        [pessoaOutro, 837_302, agora],
       );
       await limpar(e);
       ids.prof = await garantir(
@@ -172,6 +194,20 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
         `INSERT INTO cobertura_paciente (paciente_id, fonte_pagadora_id, numero_carteira, validade, vigencia_inicio,
            titular, principal, criado_em) VALUES (?, ?, ?, '2026-12-31', '2025-01-01', 1, 1, ?)`,
         [ids.paciente, ids.fonte, `${P}0001`, agora],
+      );
+      ids2.coberturaExcluida = await e.inserir(
+        `INSERT INTO cobertura_paciente (paciente_id, fonte_pagadora_id, numero_carteira, validade, vigencia_inicio,
+           titular, principal, criado_em, excluido_em) VALUES (?, ?, ?, '2026-12-31', '2025-01-01', 1, 0, ?, ?)`,
+        [ids.paciente, ids.fonte, `${P}0009`, agora, agora],
+      );
+      const coberturaOutro = await e.inserir(
+        `INSERT INTO cobertura_paciente (paciente_id, fonte_pagadora_id, numero_carteira, validade, vigencia_inicio,
+           titular, principal, criado_em) VALUES (?, ?, ?, '2026-12-31', '2025-01-01', 0, 1, ?)`,
+        [ids.outro, ids.fonte, `${P}0100`, agora],
+      );
+      ids2.titularOutro = await e.inserir(
+        'INSERT INTO titular_cobertura (cobertura_paciente_id, nome, criado_em) VALUES (?, ?, ?)',
+        [coberturaOutro, `TITULAR SINTETICO ${P}`, agora],
       );
       ids2.conta = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
@@ -232,7 +268,12 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       ),
     ).toBe('entrada-invalida');
     const depois = await s.ler(ctxL(), (l, est) => periodosContaPropria(l, est, ids2.conta));
-    expect(depois.sugestao).toMatchObject({ inicio: '2026-01-31T23:59:59.999', competencia: '2026-02-01' });
+    // Janeiro coberto até o último instante: a sugestão vai para fevereiro, sem faixa vazia no mesmo mês.
+    expect(depois.sugestao).toMatchObject({
+      inicio: '2026-02-01T00:00:00.000',
+      fim: '2026-02-28T23:59:59.999',
+      competencia: '2026-02-01',
+    });
     const r2 = await s.gravar('periodo.incluir', op(), {
       contaId: ids2.conta,
       inicio: depois.sugestao!.inicio,
@@ -297,6 +338,33 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
     expect(
       await codigoDo(s.gravar('segurado', op(), { contaId: ids2.conta, versao: 1, numeroCarteira: ' ' })),
     ).toBe('entrada-invalida');
+    // Titular de cobertura de outro paciente e cobertura excluída: recusados, nada muda.
+    expect(
+      await codigoDo(
+        s.gravar('segurado', op(), {
+          contaId: ids2.conta,
+          versao: 1,
+          numeroCarteira: `${P}0003`,
+          parentescoTitular: 'filho',
+          titularCoberturaId: ids2.titularOutro,
+        }),
+      ),
+    ).toBe('referencia-inexistente');
+    expect(
+      await codigoDo(
+        s.gravar('segurado', op(), {
+          contaId: ids2.conta,
+          versao: 1,
+          coberturaPacienteId: ids2.coberturaExcluida,
+          numeroCarteira: `${P}0009`,
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    const contagem = await linhas(
+      'SELECT COUNT(*) AS n FROM conta_hospitalar_segurado WHERE conta_hospitalar_id = ?',
+      [ids2.conta],
+    );
+    expect(Number(contagem[0]?.['n'])).toBe(2);
   });
 
   it('campo adicional da operadora: cadastro com opções dependentes e valores conferidos na guia', async () => {
@@ -430,6 +498,42 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       [2, null, false],
       [3, '80', true],
     ]);
+    // Campo-pai com dependente ativo não se inativa; campo inativado conserva o valor já informado na guia.
+    expect(
+      await codigoDo(
+        s.gravar('atributo', op(), {
+          id: trat['id'],
+          versao: 1,
+          fontePagadoraId: ids.fonte,
+          codigo: 'TRAT',
+          rotulo: 'Tratamento oncológico',
+          tipoDado: 'opcao',
+          obrigatorio: true,
+          ativo: false,
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    await s.gravar('atributo', op(), {
+      id: peso['id'],
+      versao: 1,
+      fontePagadoraId: ids.fonte,
+      codigo: 'PESO',
+      rotulo: 'Peso',
+      tipoDado: 'numero',
+      tipoGuia: 'sp_sadt',
+      ordem: 2,
+      ativo: false,
+    });
+    const g4 = await s.gravar('guia.atributos', op(), {
+      guiaId: ids2.guia,
+      valores: [{ atributoId: trat['id'], opcaoId: rt }],
+    });
+    expect(g4).toMatchObject({ gravados: 0, retirados: 0, faltam: [] });
+    const [pesoInativo] = await linhas(
+      'SELECT valor_texto, excluido_em FROM valor_atributo_guia WHERE guia_tiss_id = ? AND sequencia = 3',
+      [ids2.guia],
+    );
+    expect([pesoInativo?.['valor_texto'], pesoInativo?.['excluido_em']]).toEqual(['80', null]);
     // Guia enviada: não muda mais.
     await escrever((e) => e.executar("UPDATE guia_tiss SET situacao = 'enviada' WHERE id = ?", [ids2.guia]));
     expect(await codigoDo(s.gravar('guia.atributos', op(), { guiaId: ids2.guia, valores: [] }))).toBe(

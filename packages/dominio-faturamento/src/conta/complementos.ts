@@ -49,9 +49,16 @@ const sobrepoe = (a: PeriodoConta, b: PeriodoConta) =>
   ms(a.inicio) < ms(b.fim) &&
   ms(b.inicio) < ms(a.fim);
 
+/** Primeiro instante do mês seguinte ao de uma data e hora ISO. */
+function inicioDoMesSeguinte(iso: string): string {
+  const [a, m] = [Number(iso.slice(0, 4)), Number(iso.slice(5, 7))];
+  return `${m === 12 ? a + 1 : a}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01T00:00:00.000`;
+}
+
 /**
- * Sugestão do próximo período: começa onde terminou o último (ou no início da conta) e vai até o fim do mês, ou até o
- * fim da conta quando ela termina antes. Nulo quando a conta já está coberta até o fim.
+ * Sugestão do próximo período: começa onde terminou o último (ou no início da conta); se o último acabou no último
+ * instante do mês, começa no primeiro instante do mês seguinte. Vai até o fim do mês do início, ou até o fim da conta
+ * quando ela termina antes. Nulo quando a conta já está coberta até o fim.
  */
 export function sugerirProximoPeriodo(
   conta: ContaDoPeriodo,
@@ -61,7 +68,8 @@ export function sugerirProximoPeriodo(
     (m, p) => (m === null || ms(p.fim) > ms(m) ? p.fim : m),
     null,
   );
-  const inicio = ultimoFim ?? conta.inicio;
+  let inicio = ultimoFim ?? conta.inicio;
+  if (ms(inicio) >= ms(fimDoMes(inicio))) inicio = inicioDoMesSeguinte(inicio);
   if (conta.fim !== null && ms(inicio) >= ms(conta.fim)) return null;
   const fimMes = fimDoMes(inicio);
   const fim = conta.fim !== null && ms(conta.fim) < ms(fimMes) ? conta.fim : fimMes;
@@ -82,6 +90,7 @@ export function validarPeriodoConta(
   const competencia = novo.competencia ?? (valida(novo.fim) ? competenciaDe(novo.fim) : '');
   if (Object.keys(erros).some((c) => c === 'inicio' || c === 'fim')) return { erros, competencia };
   if (ms(novo.fim) < ms(novo.inicio)) erros['fim'] = 'O fim do período não pode ser antes do início.';
+  else if (ms(novo.fim) === ms(novo.inicio)) erros['fim'] = 'O período não pode ter duração zero.';
   if (ms(novo.inicio) < ms(conta.inicio)) erros['inicio'] = 'O período começa antes da abertura da conta.';
   if (conta.fim !== null && ms(novo.fim) > ms(conta.fim))
     erros['fim'] = 'O período termina depois do fim da conta.';
@@ -224,6 +233,17 @@ export function validarDefinicaoAtributo(
   return erros;
 }
 
+/**
+ * Inativar um campo de que outros campos ativos dependem travaria a escolha nesses filhos: recusa e diz quais são.
+ * Devolve os rótulos dos dependentes ativos (vazio: pode inativar).
+ */
+export function dependentesAtivos(
+  id: number,
+  outros: readonly Pick<DefinicaoAtributoGuia, 'rotulo' | 'dependeDeId' | 'ativo'>[],
+): string[] {
+  return outros.filter((o) => o.ativo && o.dependeDeId === id).map((o) => o.rotulo);
+}
+
 /** Os campos que valem para o tipo de guia, ativos e na ordem do cadastro. */
 export function atributosDaGuia(
   defs: readonly DefinicaoAtributoGuia[],
@@ -291,9 +311,10 @@ export function validarValoresAtributos(
     if (!erros[campo]) normalizados.push({ atributoId: d.id, opcaoId: null, texto: norm });
   }
   // Dependência entre listas: a opção escolhida, quando tem pai, exige a opção-pai escolhida no campo de que depende.
+  // Pai inativo (fora de `defs`, que só traz os campos que valem para a guia) não trava a escolha do filho.
   for (const d of defs) {
     const id = escolhida.get(d.id);
-    if (id === undefined || d.dependeDeId === null) continue;
+    if (id === undefined || d.dependeDeId === null || !porId.has(d.dependeDeId)) continue;
     const pai = d.opcoes.find((o) => o.id === id)?.opcaoPaiId ?? null;
     if (pai !== null && escolhida.get(d.dependeDeId) !== pai)
       erros[`atributo.${d.id}`] = `${d.rotulo}: a opção não combina com a escolhida no campo de que depende.`;
