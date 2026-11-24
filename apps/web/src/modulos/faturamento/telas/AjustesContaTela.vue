@@ -314,7 +314,12 @@ const justDesc = ref('');
                 >
                   {{ t('aprovar') }}
                 </button>
-                <button v-if="recusando !== a.id" type="button" @click="recusando = a.id">
+                <button
+                  v-if="recusando !== a.id"
+                  type="button"
+                  data-testid="aj-abrir-recusa"
+                  @click="recusando = a.id"
+                >
                   {{ t('recusar') }}
                 </button>
                 <span v-else>
@@ -374,7 +379,12 @@ const justDesc = ref('');
             >
               {{ t('reclassificar') }}
             </button>
-            <button v-if="descaracterizando !== p.id" type="button" @click="descaracterizando = p.id">
+            <button
+              v-if="descaracterizando !== p.id"
+              type="button"
+              data-testid="aj-abrir-desc"
+              @click="descaracterizando = p.id"
+            >
               {{ t('descaracterizar') }}
             </button>
             <span v-else>
