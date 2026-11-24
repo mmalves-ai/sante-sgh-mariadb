@@ -2,12 +2,15 @@
 // de outros módulos pelo banco do cliente, antes recusadas com 503 `modelo-pendente`.
 //
 // - candidatos: as origens de sugestão de notificação registradas pelo login desde o instante: o horário marcado como
-//   não administrado (evento `nao_administrado` do horário, com o código do motivo), a reação transfusional que ele
-//   registrou, o checklist de cirurgia segura dispensado por urgência (a exceção) e a avaliação de LPP finalizada e
-//   vigente. A regra (dominio-qualidade, sugestao.ts) decide o que vira sugestão.
-// - painelAdesao: as contagens do período: checagens (com a leitura à beira do leito, que confere a pulseira), checklists
-//   de cirurgia segura (concluídos e com a pausa antes da incisão) e as reavaliações de Morse e Braden devidas e
-//   cumpridas no prazo (as dispensadas fora; a pendente só conta depois de vencido o prazo).
+//   não administrado (evento `nao_administrado` do horário, com o código do motivo e os avisos gravados em `dados`), a
+//   reação transfusional que ele registrou, o checklist de cirurgia segura dispensado por urgência (autor e instante da
+//   trilha da dispensa) e a ficha de LPP finalizada e vigente (a lesão inativada vai marcada). A regra
+//   (dominio-qualidade, sugestao.ts) decide o que vira sugestão.
+// - painelAdesao: as contagens do período: checagens (com a pulseira lida, `dados.pulseiraLida`), checklists de cirurgia
+//   segura pelo dia da cirurgia já iniciada (concluídos e com a pausa antes da incisão) e as reavaliações de Morse e
+//   Braden devidas e cumpridas no prazo (as dispensadas fora; a pendente só conta depois de vencido o prazo).
+// - Fuso: os parâmetros são a hora civil do estabelecimento (estabelecimento.fuso_horario) e o banco guarda o instante
+//   em UTC; os limites vão convertidos e as horas devolvidas saem na hora civil.
 // - protocolosGerenciados: as versões publicadas e as inclusões do período, pela leitura da classificação de risco
 //   (recepção), que é a dona dos protocolos gerenciados.
 // - expostos: os pacientes expostos ao item e ao lote pelo rastreio reverso da OPME (suprimentos): as saídas do lote no
@@ -24,15 +27,14 @@ import type { ContextoClassificacao } from '../recepcao/classificacao-porta.js';
 import { PortaClassificacaoPropria } from '../recepcao/classificacao-porta-propria.js';
 import type { NucleoRecepcao } from '../recepcao/porta-propria.js';
 import { PortaOpmePropria } from '../suprimentos/opme-porta-propria.js';
+import { civilDe, FUSO_PADRAO, instanteDe } from '../enfermagem/banco-apoio.js';
 import {
-  instante,
   type L,
   leituraPendente,
   lerNoEstabelecimento,
   n,
   nn,
   type NucleoQualidade,
-  paraBanco,
   texto,
   textoN,
   usuarioPeloLogin,
@@ -52,6 +54,36 @@ const estagioLpp = (v: unknown): EstagioLpp | null => {
   const s = textoN(v);
   return s !== null && ESTAGIOS.has(s) ? (s as EstagioLpp) : null;
 };
+
+/** O fuso do estabelecimento (o banco guarda o instante em UTC; os parâmetros e as saídas são a hora civil dele). */
+async function fusoDoEstabelecimento(l: L, est: number): Promise<string> {
+  const r = await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  return textoN(r?.['fuso_horario']) ?? FUSO_PADRAO;
+}
+
+/** O valor JSON lido (JSON_EXTRACT devolve o texto JSON; o driver pode já entregá-lo decodificado). */
+function decodificar(v: unknown): unknown {
+  if (typeof v !== 'string') return v ?? null;
+  try {
+    return JSON.parse(v) as unknown;
+  } catch {
+    return v;
+  }
+}
+
+/** O texto de um campo JSON (null, vazio ou não texto: null). */
+export function textoDoJson(v: unknown): string | null {
+  const x = decodificar(v);
+  return typeof x === 'string' && x.trim() !== '' ? x.trim() : null;
+}
+
+/** Os avisos da checagem (lista de textos da tela) num texto só; sem aviso: null. */
+export function avisosDoJson(v: unknown): string | null {
+  const x = decodificar(v);
+  const lista = Array.isArray(x) ? x : x === null || x === undefined ? [] : [x];
+  const textos = lista.filter((y): y is string => typeof y === 'string' && y.trim() !== '').map((y) => y.trim());
+  return textos.length > 0 ? textos.join('; ') : null;
+}
 
 /** A escala de risco pelo código ou pela sigla da escala clínica (só Morse e Braden entram no painel). */
 const SQL_ESCALA = `CASE WHEN LOWER(CONCAT(e.codigo, ' ', COALESCE(e.sigla, ''))) LIKE '%morse%' THEN 'morse'
@@ -73,10 +105,16 @@ export class ComplementoQualidadeC {
     return this.ler(c, async (l, est) => {
       const usuario = await usuarioPeloLogin(l, login);
       if (usuario === null) return { checagens: [], reacoes: [], checklists: [], horarios: [], lesoes: [] };
-      const d = paraBanco(desde);
+      // O banco guarda o instante (UTC); `desde` é a hora civil do estabelecimento.
+      const fuso = await fusoDoEstabelecimento(l, est);
+      const d = instanteDe(desde, fuso);
       const p = { teto: TETO_CANDIDATOS };
+      // O gravador da checagem guarda o código do motivo da lista e os avisos da tela em `dados` (o texto livre do
+      // motivo vai em `motivo`); a coluna do catálogo de motivos vale quando a carga ou a integração a preenche.
       const checagens = await l.consultar(
-        `SELECT ev.id, ev.motivo AS texto_motivo, mna.codigo AS motivo, ev.ocorrido_em, h.atendimento_id
+        `SELECT ev.id, mna.codigo AS motivo_lista, JSON_EXTRACT(ev.dados, '$.motivo') AS motivo_dados,
+                ev.motivo AS texto_motivo, JSON_EXTRACT(ev.dados, '$.avisos') AS avisos_dados,
+                ev.ocorrido_em, h.atendimento_id
            FROM horario_administracao_evento ev
            JOIN horario_administracao h ON h.id = ev.horario_administracao_id
            LEFT JOIN motivo_nao_administracao mna ON mna.id = ev.motivo_nao_administracao_id
@@ -95,49 +133,64 @@ export class ComplementoQualidadeC {
         [est, usuario, d],
         p,
       );
-      // A exceção do checklist é a dispensa por urgência; quem a registrou é o último a gravar o checklist.
+      // A exceção do checklist é a dispensa por urgência. Quem a registrou e quando vêm da trilha da operação que
+      // gravou `dispensado_urgencia` (fixos: uma alteração posterior do checklist não troca o autor nem o instante).
+      // O checklist aberto pelo agendamento ainda não tem o ato: o estabelecimento vem do agendamento (ou do ato).
       const checklists = await l.consultar(
-        `SELECT k.id, COALESCE(k.alterado_em, k.criado_em) AS excecao_em
-           FROM checklist_cirurgia_segura k
-           JOIN ato_cirurgico a ON a.id = k.ato_cirurgico_id
-          WHERE a.estabelecimento_id = ? AND k.excluido_em IS NULL AND k.dispensado_urgencia = TRUE
-            AND COALESCE(k.alterado_por, k.criado_por) = ? AND COALESCE(k.alterado_em, k.criado_em) >= ?
+        `SELECT k.id, MIN(t.ocorrido_em) AS excecao_em
+           FROM trilha_auditoria t
+           JOIN JSON_TABLE(t.dados_depois, '$.escritas[*]'
+                  COLUMNS (tabela VARCHAR(64) PATH '$.tabela', registro BIGINT UNSIGNED PATH '$.id')) w
+           JOIN checklist_cirurgia_segura k ON k.id = w.registro
+           LEFT JOIN ato_cirurgico a ON a.id = k.ato_cirurgico_id
+           LEFT JOIN agendamento_cirurgico g ON g.id = COALESCE(k.agendamento_cirurgico_id, a.agendamento_cirurgico_id)
+          WHERE t.estabelecimento_id = ? AND t.usuario_id = ? AND t.ocorrido_em >= ?
+            AND w.tabela = 'checklist_cirurgia_segura'
+            AND JSON_CONTAINS(JSON_EXTRACT(t.dados_depois, '$.escritas'),
+                  JSON_OBJECT('tabela', 'checklist_cirurgia_segura', 'id', k.id, 'colunas', JSON_ARRAY('dispensado_urgencia')))
+            AND k.excluido_em IS NULL AND k.dispensado_urgencia = TRUE
+            AND COALESCE(g.estabelecimento_id, a.estabelecimento_id) = t.estabelecimento_id
+          GROUP BY k.id
           ORDER BY excecao_em DESC, k.id DESC LIMIT ${TETO_CANDIDATOS}`,
         [est, usuario, d],
         p,
       );
-      // A LPP com a avaliação vigente finalizada pelo login; a lesão excluída conta como inativada (a regra descarta).
+      // A LPP pela ficha (a versão vigente finalizada pelo login; curativo, reavaliação e foto não são a ficha). A ficha
+      // lançada por engano (inativada) não é candidata; a lesão inativada ou excluída vai marcada (a regra descarta).
       const lesoes = await l.consultar(
         `SELECT lp.id, COALESCE(ea.codigo, el.codigo) AS estagio, lp.presente_na_admissao, lp.identificada_em,
-                lp.atendimento_id, (lp.excluido_em IS NOT NULL) AS inativada
+                lp.atendimento_id, (lp.inativada = TRUE OR lp.excluido_em IS NOT NULL) AS inativada
            FROM lesao_pele_avaliacao av
            JOIN lesao_pele_paciente lp ON lp.id = av.lesao_pele_paciente_id
            JOIN tipo_lesao_pele t ON t.id = lp.tipo_lesao_pele_id AND t.categoria = 'lesao_pressao'
            LEFT JOIN estagio_lesao_pele ea ON ea.id = av.estagio_lesao_pele_id
            LEFT JOIN estagio_lesao_pele el ON el.id = lp.estagio_lesao_pele_id
-          WHERE lp.estabelecimento_id = ? AND av.finalizada = TRUE AND av.vigente = TRUE AND av.excluido_em IS NULL
+          WHERE lp.estabelecimento_id = ? AND av.tipo_avaliacao = 'ficha' AND av.inativada = FALSE
+            AND av.finalizada = TRUE AND av.vigente = TRUE AND av.excluido_em IS NULL
             AND av.criado_por = ? AND av.criado_em >= ?
           ORDER BY av.criado_em DESC, av.id DESC LIMIT ${TETO_CANDIDATOS}`,
         [est, usuario, d],
         p,
       );
+      const civil = (v: unknown) => civilDe(v, fuso) ?? '';
       return {
         checagens: checagens.map((x) => ({
           id: n(x['id']),
           // O evento `nao_administrado` é a situação "não administrado" da checagem (a regra só olha esta).
           situacao: 'N',
-          motivo: textoN(x['motivo']),
-          avisos: null,
-          horaReal: instante(x['ocorrido_em']),
+          motivo:
+            textoN(x['motivo_lista']) ?? textoDoJson(x['motivo_dados']) ?? textoN(x['texto_motivo']),
+          avisos: avisosDoJson(x['avisos_dados']),
+          horaReal: civil(x['ocorrido_em']),
           atendimento: nn(x['atendimento_id']),
         })),
         reacoes: reacoes.map((x) => ({
           id: n(x['id']),
-          inicioEm: instante(x['inicio_em']),
+          inicioEm: civil(x['inicio_em']),
           grau: n(x['grau']),
           enviada: x['notificacao_enviada_em'] != null || x['notificacao_incidente_id'] != null,
         })),
-        checklists: checklists.map((x) => ({ id: n(x['id']), excecaoEm: instante(x['excecao_em']) })),
+        checklists: checklists.map((x) => ({ id: n(x['id']), excecaoEm: civil(x['excecao_em']) })),
         // No modelo próprio todo horário não administrado tem o registro da checagem (vai em `checagens`).
         horarios: [],
         lesoes: lesoes.map((x) => ({
@@ -145,39 +198,49 @@ export class ComplementoQualidadeC {
           estagio: estagioLpp(x['estagio']),
           presenteNaAdmissao: verdadeiro(x['presente_na_admissao']),
           inativada: verdadeiro(x['inativada']),
-          identificadaEm: instante(x['identificada_em']),
+          identificadaEm: civil(x['identificada_em']),
           atendimento: nn(x['atendimento_id']),
         })),
       };
     });
   }
 
-  /** As contagens de adesão do período [de, fimExclusivo) no estabelecimento da sessão. */
+  /** As contagens de adesão do período [de, fimExclusivo) (datas civis do estabelecimento da sessão). */
   painelAdesao(
     c: ContextoQualidade,
     de: string,
     fimExclusivo: string,
     agora: string,
   ): Promise<ContagensAdesaoLidas> {
-    const ini = `${de.slice(0, 10)} 00:00:00`;
-    const fim = `${fimExclusivo.slice(0, 10)} 00:00:00`;
-    const ag = paraBanco(agora);
     return this.ler(c, async (l, est) => {
+      const fuso = await fusoDoEstabelecimento(l, est);
+      const ini = instanteDe(`${de.slice(0, 10)}T00:00:00`, fuso);
+      const fim = instanteDe(`${fimExclusivo.slice(0, 10)}T00:00:00`, fuso);
+      const ag = instanteDe(agora, fuso);
+      // A identificação do paciente é a pulseira lida na checagem (gravada em `dados.pulseiraLida`), não o canal.
       const ch = await l.uma(
-        `SELECT COUNT(*) AS total, COALESCE(SUM(ev.canal_registro = 'beira_leito'), 0) AS pulseira
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(COALESCE(JSON_VALUE(ev.dados, '$.pulseiraLida'), '') IN ('true', '1')), 0) AS pulseira
            FROM horario_administracao_evento ev
            JOIN horario_administracao h ON h.id = ev.horario_administracao_id
           WHERE h.estabelecimento_id = ? AND ev.evento = 'checagem' AND ev.operacao <> 'exclusao'
             AND ev.ocorrido_em >= ? AND ev.ocorrido_em < ?`,
         [est, ini, fim],
       );
+      // O checklist entra pelo dia da cirurgia (o início do ato ou, antes dele, o previsto no agendamento) e só a
+      // cirurgia que já começou (a aberta com antecedência para uma cirurgia futura não conta).
       const k = await l.uma(
-        `SELECT COUNT(*) AS total, COALESCE(SUM(k.situacao = 'concluido'), 0) AS concluidos,
-                COALESCE(SUM(k.incisao_concluida_em IS NOT NULL), 0) AS pausa
-           FROM checklist_cirurgia_segura k
-           JOIN ato_cirurgico a ON a.id = k.ato_cirurgico_id
-          WHERE a.estabelecimento_id = ? AND k.excluido_em IS NULL
-            AND k.criado_em >= ? AND k.criado_em < ? AND k.criado_em < ?`,
+        `SELECT COUNT(*) AS total, COALESCE(SUM(x.situacao = 'concluido'), 0) AS concluidos,
+                COALESCE(SUM(x.incisao_concluida_em IS NOT NULL), 0) AS pausa
+           FROM (SELECT k.situacao, k.incisao_concluida_em,
+                        COALESCE(a.inicio_cirurgia_em, a.entrada_sala_em, g.inicio_previsto_em) AS cirurgia_em,
+                        COALESCE(g.estabelecimento_id, a.estabelecimento_id) AS estabelecimento_id
+                   FROM checklist_cirurgia_segura k
+                   LEFT JOIN ato_cirurgico a ON a.id = k.ato_cirurgico_id
+                   LEFT JOIN agendamento_cirurgico g
+                          ON g.id = COALESCE(k.agendamento_cirurgico_id, a.agendamento_cirurgico_id)
+                  WHERE k.excluido_em IS NULL) x
+          WHERE x.estabelecimento_id = ? AND x.cirurgia_em >= ? AND x.cirurgia_em < ? AND x.cirurgia_em < ?`,
         [est, ini, fim, ag],
       );
       const rs = await l.consultar(
