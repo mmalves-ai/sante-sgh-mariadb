@@ -152,10 +152,21 @@ def marcar(cm, tabelas, onda=None, origem="carregada"):
     cm._commit()
 
 
-def repetir_pendencias(cm, origem):
+REPETIR_LOTE = 50000
+
+
+def repetir_pendencias(cm, origem, progresso=None):
     """Pendências abertas nas tabelas puladas, da execução que as concluiu (`origem` {tabela: execução}; a cadeia de
     continuações aponta para a que de fato carregou): repetidas nesta execução (só metadados: tabela, chave, regra,
-    gravidade, detalhe). Sem isso o relatório desta execução as marcaria resolvidas por não as ver de novo."""
+    gravidade, detalhe). Sem isso o relatório desta execução as marcaria resolvidas por não as ver de novo.
+
+    Custo (rodada pendencia-quadratica, 2026-11-23): a versão anterior lia TODAS as pendências (46 milhões na execução
+    11 da ProntoCardio) e as regravava com `executemany`, que o pymysql não junta quando o VALUES tem a função de data
+    (vira um INSERT por linha: ~9.400/s), numa transação só, sem batimento: 50 min depois a carga parada desfez tudo e
+    o AUTO_INCREMENT ficou ~23 milhões acima. Agora cada pedaço de até REPETIR_LOTE pendências (por id) é copiado no
+    próprio servidor com UM `INSERT ... SELECT`, commitado, e o batimento é atualizado: cada pendência é gravada uma
+    vez. Falha no meio: a marca da tabela só vem depois (marcar), e a próxima continuação herda da execução anterior
+    (cadeia), que continua com as pendências."""
     por = {}
     for t, e in origem.items():
         por.setdefault(int(e), []).append(t)
@@ -163,17 +174,26 @@ def repetir_pendencias(cm, origem):
     for e, tabelas in sorted(por.items()):
         tabelas = sorted(tabelas)
         marcas = ",".join(["%s"] * len(tabelas))
-        with cm._c() as c:
-            c.execute("SELECT tabela_origem, chave_original, regra, gravidade, detalhe FROM %s.pendencia WHERE"
-                      " execucao_id=%%s AND situacao='aberta' AND tabela_origem IN (%s)" % (cm.ctl, marcas),
-                      [e] + tabelas)
-            linhas = c.fetchall()
-            for i in range(0, len(linhas), 5000):
-                c.executemany("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
-                              " detalhe, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%s)" % (cm.ctl, AGORA),
-                              [(cm.eid,) + tuple(x) for x in linhas[i:i + 5000]])
-        cm.pend.extend((t, k, r, g, d) for t, k, r, g, d in linhas)
-        total += len(linhas)
+        filtro = ("FROM %s.pendencia WHERE execucao_id=%%s AND situacao='aberta' AND tabela_origem IN (%s)"
+                  % (cm.ctl, marcas))
+        ultimo = 0
+        while True:
+            with cm._c() as c:
+                c.execute("SELECT id, tabela_origem, chave_original, regra, gravidade, detalhe " + filtro +
+                          " AND id>%s ORDER BY id LIMIT %s", [e] + tabelas + [ultimo, REPETIR_LOTE])
+                linhas = c.fetchall()
+                if not linhas:
+                    break
+                c.execute("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                          " detalhe, criado_em) SELECT %%s, tabela_origem, chave_original, regra, gravidade, detalhe,"
+                          " %s " % (cm.ctl, AGORA) + filtro + " AND id BETWEEN %s AND %s ORDER BY id",
+                          [cm.eid, e] + tabelas + [linhas[0][0], linhas[-1][0]])
+            cm.pend.extend(x[1:] for x in linhas)
+            total += len(linhas)
+            ultimo = linhas[-1][0]
+            cm._commit()
+            if progresso:
+                progresso(total)
     cm._commit()
     return total
 
