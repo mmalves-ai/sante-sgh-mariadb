@@ -522,3 +522,17 @@ autorizada; investigar a causa da parada.
   cadastro-estoque-porta-propria, paciente-vinculos-proprio, profissional-complemento-proprio, registros-internacao,
   usuarios-agenda, fechamento-checagem), E2E f36:76, f37-ajustes:127, f37-complementos:145, decisão de produto da
   regra item-e-grupo da farmácia (f36:22). Depois F5, F7 e F8 até 27/11.
+
+## PAUSA EM 24/11 17h54 (troca de conta da LLM, aviso do dono pela sessão Painel de Injeção)
+
+- Rodada **f3-provas** parada de propósito (run `wf_59b2eee4-596`, script em
+  `~/.claude/projects/-home-mmalves-workspace-redesante-sante-sgh/e03db3e2-0509-4d80-a8dc-6d080748f619/workflows/scripts/f3-provas-wf_59b2eee4-596.js`,
+  args = a lista intercalada de 54 rótulos de `sante-sgh-dados/obra/f3-provas/fatias.json`). 16 commits feitos
+  (d8ffcdae..HEAD); 14 construtores estavam no meio: as mudanças deles ficaram SEM commit na árvore da main (15 arquivos
+  modificados e 18 novos, entre eles a migração 02_ADM/97_pedido_acesso_dois_niveis e 3 tsconfig temporários).
+- **Retomar:** na mesma sessão, `Workflow({scriptPath, resumeFromRunId: 'wf_59b2eee4-596', args})`; em sessão nova,
+  relançar o script com os mesmos args (as fatias releem a ficha; as mudanças sem commit na árvore são o trabalho
+  parcial dos construtores: não apagar).
+- Sessão Painel de Injeção também pausou (17h51): fatias com commit no branch conector-autor-registro, falta o
+  integrador; nada aplicado no plataforma nem no cliente_prontocardio; carga parada; Firebird simulado
+  sante-sgh-fb-prontocardio em 127.0.0.1:3354.
