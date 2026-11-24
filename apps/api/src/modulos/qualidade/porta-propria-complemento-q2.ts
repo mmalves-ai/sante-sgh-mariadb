@@ -24,7 +24,18 @@
 // - checklistsRevisao e checklistRevisao seguem 503: modelo_checklist_qualidade não tem a comissão dona nem a
 //   inativação (quem, quando, motivo); pedem migração (ver relatório da família).
 import type { L, Linha, NucleoQualidade } from './apoio-propria.js';
-import { dataIso, instante, instanteN, lerNoEstabelecimento, marcas, n, nn, texto, textoN, verdadeiro } from './apoio-propria.js';
+import {
+  dataIso,
+  instante,
+  instanteN,
+  lerNoEstabelecimento,
+  marcas,
+  n,
+  nn,
+  texto,
+  textoN,
+  verdadeiro,
+} from './apoio-propria.js';
 import type { ContextoGestao } from './porta-gestao.js';
 import type {
   AnaliseIndicadorRegistrada,
@@ -211,10 +222,7 @@ export class LeiturasGestaoComplementoQ2 {
         args.push(b, b);
       }
       const onde = filtros.length ? ` AND ${filtros.join(' AND ')}` : '';
-      const total = await l.uma(
-        `SELECT COUNT(*) AS total FROM (${SQL_DOCUMENTO(false)}${onde}) x`,
-        args,
-      );
+      const total = await l.uma(`SELECT COUNT(*) AS total FROM (${SQL_DOCUMENTO(false)}${onde}) x`, args);
       const porPagina = Math.max(1, Math.trunc(f.porPagina));
       const pagina = Math.max(1, Math.trunc(f.pagina));
       const linhas = await l.consultar(
@@ -270,10 +278,10 @@ export class LeiturasGestaoComplementoQ2 {
   cientes(c: ContextoGestao, doc: number): Promise<{ usuario: string; cienteEm: string }[]> {
     return this.ler(c, async (l, est) =>
       (
-        await l.consultar(`${SQL_CIENCIA} AND c.documento_qualidade_versao_id = ? ORDER BY c.ciencia_em, c.id`, [
-          est,
-          doc,
-        ])
+        await l.consultar(
+          `${SQL_CIENCIA} AND c.documento_qualidade_versao_id = ? ORDER BY c.ciencia_em, c.id`,
+          [est, doc],
+        )
       ).map((x) => ({ usuario: texto(x['usuario']), cienteEm: instante(x['ciencia_em']) })),
     );
   }
@@ -295,7 +303,9 @@ export class LeiturasGestaoComplementoQ2 {
   /** As comissões do estabelecimento (ativas primeiro, pelo nome), com a composição vigente e as últimas reuniões. */
   comissoes(c: ContextoGestao): Promise<ComissaoRegistrada[]> {
     return this.ler(c, async (l, est) => {
-      const r = await l.consultar(`${SQL_COMISSAO} ORDER BY ch.situacao = 'ativa' DESC, ch.nome, ch.id`, [est]);
+      const r = await l.consultar(`${SQL_COMISSAO} ORDER BY ch.situacao = 'ativa' DESC, ch.nome, ch.id`, [
+        est,
+      ]);
       return this.comMembros(l, r);
     });
   }

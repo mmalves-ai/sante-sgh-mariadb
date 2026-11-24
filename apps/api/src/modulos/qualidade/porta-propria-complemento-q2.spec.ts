@@ -96,7 +96,13 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
 
   it('a lista filtra pela situação do banco, tipo e busca em maiúsculas, com a página e o total', async () => {
     const { leituras, chamadas } = falso({ 'COUNT(*) AS total': [{ total: 7 }], 'LIMIT 5 OFFSET 5': [DOC] });
-    const r = await leituras.documentos(C, { situacao: 'obsoleto', tipo: 'pop', busca: 'mãos', pagina: 2, porPagina: 5 });
+    const r = await leituras.documentos(C, {
+      situacao: 'obsoleto',
+      tipo: 'pop',
+      busca: 'mãos',
+      pagina: 2,
+      porPagina: 5,
+    });
     expect(r.total).toBe(7);
     expect(r.itens).toHaveLength(1);
     expect(chamadas[1]!.p).toEqual([3, 'obsoleta', 'pop', 'MÃOS', 'MÃOS']);
@@ -106,7 +112,9 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
     const vazio = falso({});
     expect((await vazio.leituras.ciencias(C, [], 'ana')).size).toBe(0);
     expect(vazio.chamadas).toHaveLength(0);
-    const { leituras, chamadas } = falso({ documento_qualidade_ciencia: [{ documento: 41, total: 2, sessao: 1 }] });
+    const { leituras, chamadas } = falso({
+      documento_qualidade_ciencia: [{ documento: 41, total: 2, sessao: 1 }],
+    });
     const m = await leituras.ciencias(C, [41, 41, 42], 'ana');
     expect(m.get(41)).toEqual({ total: 2, sessao: true });
     expect(m.has(42)).toBe(false);
@@ -141,7 +149,13 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
       ],
     });
     const [c] = await leituras.comissoes(C);
-    expect(c).toMatchObject({ id: 8, tipo: 'ccih', ativa: true, ultimaOrdinaria: '2026-10-01T14:00:00', ultimaReuniao: null });
+    expect(c).toMatchObject({
+      id: 8,
+      tipo: 'ccih',
+      ativa: true,
+      ultimaOrdinaria: '2026-10-01T14:00:00',
+      ultimaReuniao: null,
+    });
     expect(JSON.parse(c!.membros)).toEqual([
       { nome: 'Ana Sint', funcao: 'vice presidente', login: 'ANA' },
       { nome: 'Bia Sint', funcao: 'membro', login: null },

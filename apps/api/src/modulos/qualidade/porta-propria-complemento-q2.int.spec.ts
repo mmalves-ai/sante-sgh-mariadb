@@ -50,18 +50,45 @@ describe.skipIf(SEM_BANCO_QUA)(
              setor_funcional_id, exige_ciencia, situacao, criado_em) VALUES (?, ?, 'Documento sintético', ?, ?, ?, TRUE, 'vigente', ?)`,
           [m.est, codigo, ids.tipoDoc, m.usuario, m.setor, agora],
         );
-        const versao = (num: string, situacao: string, conteudo: string, dados: string | null, revisao: string) =>
+        const versao = (
+          num: string,
+          situacao: string,
+          conteudo: string,
+          dados: string | null,
+          revisao: string,
+        ) =>
           e.inserir(
             `INSERT INTO documento_qualidade_versao (documento_qualidade_id, operacao, dados, ocorrido_em, numero_versao, situacao,
                formato, conteudo, elaborador_usuario_id, aprovador_usuario_id, publicado_em, proxima_revisao, criado_em, alterado_em)
              VALUES (?, 'inclusao', ?, ?, ?, ?, 'texto', ?, ?, ?, ?, ?, ?, ?)`,
-            [ids.doc, dados, agora, num, situacao, conteudo, m.usuario, m.gestor, '2026-10-01 08:00:00', revisao, agora,
-              situacao === 'vigente' ? null : '2026-10-20 10:00:00'],
+            [
+              ids.doc,
+              dados,
+              agora,
+              num,
+              situacao,
+              conteudo,
+              m.usuario,
+              m.gestor,
+              '2026-10-01 08:00:00',
+              revisao,
+              agora,
+              situacao === 'vigente' ? null : '2026-10-20 10:00:00',
+            ],
           );
         ids.v1 = await versao('1', 'obsoleta', 'texto um', null, '2027-01-01');
-        ids.v2 = await versao('2', 'cancelada', 'texto dois', '{"motivoRetirada":"Retirada sintetica"}', '2027-01-01');
+        ids.v2 = await versao(
+          '2',
+          'cancelada',
+          'texto dois',
+          '{"motivoRetirada":"Retirada sintetica"}',
+          '2027-01-01',
+        );
         ids.v3 = await versao('3', 'vigente', 'texto três', null, '2020-01-01');
-        await e.executar('UPDATE documento_qualidade SET documento_qualidade_versao_id = ? WHERE id = ?', [ids.v3, ids.doc]);
+        await e.executar('UPDATE documento_qualidade SET documento_qualidade_versao_id = ? WHERE id = ?', [
+          ids.v3,
+          ids.doc,
+        ]);
         const sexo = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM sexo', []);
         ids.colab = await e.inserir(
           `INSERT INTO colaborador (nome, cpf, data_nascimento, sexo_id, grau_instrucao, usuario_id, criado_em)
@@ -103,8 +130,12 @@ describe.skipIf(SEM_BANCO_QUA)(
         await e.executar('DELETE FROM comissao_hospitalar WHERE id = ?', [ids.comissao]);
         await e.executar('DELETE FROM tipo_comissao WHERE id = ?', [ids.tipoCom]);
         await e.executar('DELETE FROM documento_qualidade_ciencia WHERE colaborador_id = ?', [ids.colab]);
-        await e.executar('UPDATE documento_qualidade SET documento_qualidade_versao_id = NULL WHERE id = ?', [ids.doc]);
-        await e.executar('DELETE FROM documento_qualidade_versao WHERE documento_qualidade_id = ?', [ids.doc]);
+        await e.executar('UPDATE documento_qualidade SET documento_qualidade_versao_id = NULL WHERE id = ?', [
+          ids.doc,
+        ]);
+        await e.executar('DELETE FROM documento_qualidade_versao WHERE documento_qualidade_id = ?', [
+          ids.doc,
+        ]);
         await e.executar('DELETE FROM documento_qualidade WHERE id = ?', [ids.doc]);
         await e.executar('DELETE FROM tipo_documento_qualidade WHERE id = ?', [ids.tipoDoc]);
         await e.executar('DELETE FROM colaborador WHERE id = ?', [ids.colab]);
@@ -119,7 +150,10 @@ describe.skipIf(SEM_BANCO_QUA)(
         [ids.v2, 2, 'retirado'],
         [ids.v1, 1, 'obsoleto'],
       ]);
-      expect(xs[1]).toMatchObject({ motivoRetirada: 'Retirada sintetica', encerradoEm: '2026-10-20T10:00:00' });
+      expect(xs[1]).toMatchObject({
+        motivoRetirada: 'Retirada sintetica',
+        encerradoEm: '2026-10-20T10:00:00',
+      });
       expect(xs[0]).toMatchObject({
         tipo: `TDQ${NUM}`,
         area: 'POSTO SINTETICO',
@@ -144,16 +178,27 @@ describe.skipIf(SEM_BANCO_QUA)(
       const todas = await leituras.documentos(c, { busca: codigo.toUpperCase(), pagina: 1, porPagina: 2 });
       expect(todas.total).toBe(3);
       expect(todas.itens.map((d) => d.revisao)).toEqual([3, 2]);
-      const vig = await leituras.documentos(c, { situacao: 'vigente', tipo: `TDQ${NUM}`, pagina: 1, porPagina: 10 });
+      const vig = await leituras.documentos(c, {
+        situacao: 'vigente',
+        tipo: `TDQ${NUM}`,
+        pagina: 1,
+        porPagina: 10,
+      });
       expect(vig.itens.map((d) => d.id)).toEqual([ids.v3]);
-      expect((await leituras.documentos(c, { situacao: 'retirado', busca: codigo, pagina: 1, porPagina: 10 })).total).toBe(1);
+      expect(
+        (await leituras.documentos(c, { situacao: 'retirado', busca: codigo, pagina: 1, porPagina: 10 }))
+          .total,
+      ).toBe(1);
     });
 
     it('ciências e cientes pelo login da conta do colaborador', async () => {
       const mapa = await leituras.ciencias(c, [ids.v3, ids.v1], m.login.toLowerCase());
       expect(mapa.get(ids.v3)).toEqual({ total: 1, sessao: true });
       expect(mapa.has(ids.v1)).toBe(false);
-      expect((await leituras.ciencias(c, [ids.v3], m.loginGestor)).get(ids.v3)).toEqual({ total: 1, sessao: false });
+      expect((await leituras.ciencias(c, [ids.v3], m.loginGestor)).get(ids.v3)).toEqual({
+        total: 1,
+        sessao: false,
+      });
       expect(await leituras.cientes(c, ids.v3)).toEqual([
         { usuario: m.login.toUpperCase(), cienteEm: '2026-10-05T10:00:00' },
       ]);
