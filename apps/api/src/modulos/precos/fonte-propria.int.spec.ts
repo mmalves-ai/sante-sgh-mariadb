@@ -533,8 +533,12 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
         )?.dias_retorno,
       ),
     ).toBe(30);
-    expect(fonte.estado('preco.reajustar')).toBeNull();
-    expect(await recusada(fonte.executar('preco.reajustar', c, {}, gravacao()))).toBe(
+    // O reajuste e o desfazer pelo lote gravam na fonte própria (contrato de efeito em reajuste-propria.int.spec.ts);
+    // operação fora da lista continua não liberada.
+    expect(fonte.estado('preco.reajustar')).toBe('liberada');
+    expect(fonte.estado('preco.desfazerReajuste')).toBe('liberada');
+    expect(fonte.estado('preco.inexistente')).toBeNull();
+    expect(await recusada(fonte.executar('preco.inexistente' as 'preco.reajustar', c, {}, gravacao()))).toBe(
       'operacao-nao-liberada',
     );
   });

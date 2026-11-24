@@ -249,7 +249,9 @@ export async function conferirDesfazer(
       [i.codigo, p.data],
     );
     if (!valor) throw recusa('vigencia-inexistente', 'A vigência do lote não existe mais.');
-    const doLote = JSON.parse(String(il['componentes_novos'])) as Componentes;
+    const bruto = il['componentes_novos'];
+    // O conector devolve a coluna JSON já interpretada (objeto) ou em texto, conforme a versão: aceita os dois.
+    const doLote = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as Componentes;
     if (!mesmosComponentes(componentesDe(valor), doLote) || !mesmosComponentes(doLote, i.valores))
       throw recusa('alterado-por-fora', `A vigência do item ${i.codigo} foi alterada depois do reajuste.`);
     const usado = await l.uma(
