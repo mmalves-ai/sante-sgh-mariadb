@@ -89,7 +89,7 @@ export type RecusaFechamento =
   | { readonly codigo: 'pendencias-sem-justificativa'; readonly mensagem: string };
 
 /** Confere se o turno pode fechar: nulo quando pode; senão, a recusa com a mensagem da tela. */
-export function conferirFechamento(
+export function conferirFechamentoChecagem(
   r: ResumoFechamento,
   justificativa: string | null,
 ): RecusaFechamento | null {

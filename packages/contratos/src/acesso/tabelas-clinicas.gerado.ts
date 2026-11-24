@@ -75,6 +75,7 @@ export const TABELAS_CLINICAS_MODELO: readonly string[] = [
   'fechamento_horario_checagem',
   'ficha_antimicrobiano',
   'gestacao_paciente',
+  'guia_internacao',
   'horario_administracao',
   'inclusao_protocolo_paciente',
   'indice_gravidade_uti',

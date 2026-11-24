@@ -933,7 +933,11 @@ export function gravadorDispensacao(
     });
     const saidaDaDose = await saidaDoItem(n(d['item_id']));
     if (saidaDaDose)
-      await conta.estornarDevolucao({ movimentoSaida: saidaDaDose, movimentoDevolucao: mov.id, quantidade: q });
+      await conta.estornarDevolucao({
+        movimentoSaida: saidaDaDose,
+        movimentoDevolucao: mov.id,
+        quantidade: q,
+      });
     const devolvida = q4(n(d['quantidade_devolvida']) + q);
     const inteira = devolvida + 1e-9 >= n(d['quantidade']);
     await tx.alterar('dispensacao_item', n(d['item_id']), n(d['item_versao']), {
@@ -989,7 +993,11 @@ export function gravadorDispensacao(
         })
       ).id;
       if (original)
-        await conta.estornarDevolucao({ movimentoSaida: original, movimentoDevolucao: estorno, quantidade: resto });
+        await conta.estornarDevolucao({
+          movimentoSaida: original,
+          movimentoDevolucao: estorno,
+          quantidade: resto,
+        });
     }
     await tx.alterar('dose_dispensada', e.dose, n(d['versao']), { situacao: 'cancelada' });
     await tx.alterar('dispensacao_item', n(d['item_id']), n(d['item_versao']), { situacao: 'cancelado' });

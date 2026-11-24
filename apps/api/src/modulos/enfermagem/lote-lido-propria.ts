@@ -88,8 +88,13 @@ export async function gravarLoteLido(
   );
   const representada = daEmbalagem ? Number(daEmbalagem.quantidade_representada) : null;
   // A quantidade da tela vale na unidade da prescrição (sem unidade aqui); a da embalagem lida vale na unidade dela.
-  const pelaEmbalagem = !(l.quantidade !== null && l.quantidade > 0) && representada !== null && representada > 0;
-  const quantidade = pelaEmbalagem ? representada : l.quantidade !== null && l.quantidade > 0 ? l.quantidade : null;
+  const pelaEmbalagem =
+    !(l.quantidade !== null && l.quantidade > 0) && representada !== null && representada > 0;
+  const quantidade = pelaEmbalagem
+    ? representada
+    : l.quantidade !== null && l.quantidade > 0
+      ? l.quantidade
+      : null;
   const id = await tx.incluir('administracao_lote_lido', {
     horario_administracao_id: l.horario,
     sequencia: Number(seq?.n ?? 1),

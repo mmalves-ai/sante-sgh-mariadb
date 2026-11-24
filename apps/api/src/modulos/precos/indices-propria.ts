@@ -46,7 +46,9 @@ const SQL_ACORDO = (comData: boolean) => `
     FROM contrato_fonte_pagadora k
     LEFT JOIN contrato_tabela_vigencia ctv ON ctv.contrato_fonte_pagadora_id = k.id
          AND ctv.tipo_item IN ('honorario_internacao', 'honorario_ambulatorial')${
-           comData ? ' AND ctv.vigencia_inicio <= ? AND (ctv.vigencia_fim IS NULL OR ctv.vigencia_fim >= ?)' : ''
+           comData
+             ? ' AND ctv.vigencia_inicio <= ? AND (ctv.vigencia_fim IS NULL OR ctv.vigencia_fim >= ?)'
+             : ''
          }
          AND EXISTS (SELECT 1 FROM tabela_preco t WHERE t.id = ctv.tabela_preco_id AND t.estabelecimento_id = k.estabelecimento_id)
    WHERE k.fonte_pagadora_id = ? AND k.estabelecimento_id = ? AND k.excluido_em IS NULL AND k.situacao <> 'rascunho'${
@@ -83,7 +85,9 @@ async function acordo(l: Leitor, conv: number, est: number, data: string | null)
   );
   const tabelas = [
     ...new Set(
-      ls.filter((r) => r['tabela_preco_id'] !== null && r['tabela_preco_id'] !== undefined).map((r) => Number(r['tabela_preco_id'])),
+      ls
+        .filter((r) => r['tabela_preco_id'] !== null && r['tabela_preco_id'] !== undefined)
+        .map((r) => Number(r['tabela_preco_id'])),
     ),
   ];
   return { existe: ls.length > 0, tabelas };
@@ -114,7 +118,11 @@ export async function indicesNaDataPropria(
   for (const r of ls) {
     const chave = CHAVE_DO_TIPO_INDICE[String(r['tipo_indice'])];
     if (chave === undefined) continue;
-    const atual = { indice: Number(r['indice']), daTabela: Number(r['da_tabela']) === 1, codigo: String(r['codigo']) };
+    const atual = {
+      indice: Number(r['indice']),
+      daTabela: Number(r['da_tabela']) === 1,
+      codigo: String(r['codigo']),
+    };
     const v = vencedor.get(chave);
     if (!v) {
       vencedor.set(chave, atual);
@@ -264,7 +272,15 @@ export async function tabelaPorteAnestesicoNaDataPropria(
         AND ctv.tipo_item IN ('honorario_internacao', 'honorario_ambulatorial')
         AND ctv.vigencia_inicio <= ? AND (ctv.vigencia_fim IS NULL OR ctv.vigencia_fim >= ?)
       ORDER BY (ctv.tipo_item = ?) DESC, ctv.vigencia_inicio DESC, ctv.id DESC LIMIT 1`,
-    [conv, est, data, data, data, data, regime === 'internacao' ? 'honorario_internacao' : 'honorario_ambulatorial'],
+    [
+      conv,
+      est,
+      data,
+      data,
+      data,
+      data,
+      regime === 'internacao' ? 'honorario_internacao' : 'honorario_ambulatorial',
+    ],
   );
   return r ? Number(r['tabela_preco_id']) : null;
 }
@@ -289,5 +305,9 @@ export async function porteAnestesicoNaDataPropria(
   );
   if (!r) return null;
   const he = r['valor_horario_especial'];
-  return { tabela, valor: Number(r['valor']), valorHorarioEspecial: he === null || he === undefined ? null : Number(he) };
+  return {
+    tabela,
+    valor: Number(r['valor']),
+    valorHorarioEspecial: he === null || he === undefined ? null : Number(he),
+  };
 }

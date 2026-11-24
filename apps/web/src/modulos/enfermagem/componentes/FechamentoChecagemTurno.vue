@@ -39,7 +39,8 @@ const { t } = useI18n({
       fecharPaciente: 'Fechar a checagem deste paciente',
       pendentes: 'Há {n} horário(s) pendente(s): eles seguem para o próximo turno, sem trava.',
       recebidos: 'Pendentes recebidos do turno anterior',
-      recebidosAviso: 'Estes horários entram no fechamento deste turno: se ainda estiverem pendentes, justifique.',
+      recebidosAviso:
+        'Estes horários entram no fechamento deste turno: se ainda estiverem pendentes, justifique.',
       justificativa: 'Justificativa do fechamento com pendências',
       curta: 'Escreva ao menos 10 caracteres.',
       reabrir: 'Reabrir',

@@ -189,7 +189,10 @@ export async function totalDosItens(
         AND situacao NOT IN ('estornado','transferido','sem_cobranca')`,
     [conta],
   );
-  const cab = await tx.uma<Linha>('SELECT valor_acrescimo, valor_desconto FROM conta_hospitalar WHERE id = ?', [conta]);
+  const cab = await tx.uma<Linha>(
+    'SELECT valor_acrescimo, valor_desconto FROM conta_hospitalar WHERE id = ?',
+    [conta],
+  );
   const itens = n(soma?.['itens']);
   return {
     valor_itens: itens,
@@ -243,9 +246,20 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
       fechada_em: new Date(),
       fechada_por_usuario_id: ctx.usuario,
     });
-    await registrarEtapa(tx, conta, 'fechada', { etapa: 'fechamento', situacao: 'registrada' }, null, total.valor_total);
+    await registrarEtapa(
+      tx,
+      conta,
+      'fechada',
+      { etapa: 'fechamento', situacao: 'registrada' },
+      null,
+      total.valor_total,
+    );
     // A produção do repasse do momento "fechamento" nasce na mesma transação (no momento "lançamento" já existe).
-    await sincronizarProducaoDaConta(tx, { conta: conta.id, evento: 'fechamento' }, { estabelecimento: est, usuario: ctx.usuario });
+    await sincronizarProducaoDaConta(
+      tx,
+      { conta: conta.id, evento: 'fechamento' },
+      { estabelecimento: est, usuario: ctx.usuario },
+    );
     return { conta: conta.id };
   },
   eventos: (_e, r) => [{ tipo: 'faturamento.conta.fechada', carga: { conta: Number(r['conta']) } }],
@@ -468,7 +482,12 @@ async function credenciamentoDoItem(
 
 export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>({
   nome: 'faturamento.lancar-item',
-  tabelas: ['conta_hospitalar_item', 'conta_hospitalar_item_memoria', 'conta_hospitalar', ...TABELAS_PRODUCAO_CONTA],
+  tabelas: [
+    'conta_hospitalar_item',
+    'conta_hospitalar_item_memoria',
+    'conta_hospitalar',
+    ...TABELAS_PRODUCAO_CONTA,
+  ],
   entrada: esquemaLancarItem,
   travar: (e) => travaConta(e.conta),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),

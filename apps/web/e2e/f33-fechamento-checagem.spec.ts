@@ -94,11 +94,20 @@ test.describe('fechamento da checagem do turno (03-PEP L113) @F33', () => {
         justificativaPendencias: String(corpo['justificativa'] ?? ''),
         anterior: false,
         travados: [9010, 9011],
-        pendentes: [{ horario: 9004, atendimento: atendimento ?? 0, previsto: '2026-11-24T06:00', anterior: true }],
+        pendentes: [
+          { horario: 9004, atendimento: atendimento ?? 0, previsto: '2026-11-24T06:00', anterior: true },
+        ],
       });
       return json(
         rota,
-        { ok: true, id: 802, travados: 2, pendentes: [9004], pendentesAnteriores: [9004], mensagem: 'Turno fechado.' },
+        {
+          ok: true,
+          id: 802,
+          travados: 2,
+          pendentes: [9004],
+          pendentesAnteriores: [9004],
+          mensagem: 'Turno fechado.',
+        },
         201,
       );
     });

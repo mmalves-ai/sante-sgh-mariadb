@@ -55,7 +55,13 @@ export const SO_INCLUSAO: readonly string[] = [
  * recusa o plano, salvo a exceção listada com o motivo (a imutabilidade clínica do M59-F3, no banco próprio).
  */
 export const PASTAS_DDL_CLINICAS: readonly string[] = ['06_PEP', '08_CC', '10_SADT'];
-export const EXCECOES_DELETE_CLINICO: readonly { readonly tabela: string; readonly motivo: string }[] = [];
+export const EXCECOES_DELETE_CLINICO: readonly { readonly tabela: string; readonly motivo: string }[] = [
+  {
+    tabela: 'filtro_resultado_usuario',
+    motivo:
+      'filtro salvo pelo próprio profissional para consultar resultados (nome, grupos, exames e período); não tem paciente, atendimento nem resultado, e excluí-lo não apaga registro clínico (03-PEP L128)',
+  },
+];
 
 /**
  * Catálogo de tabelas de módulo genérico cujo catálogo mora fora da pasta do módulo (arquivo com `tabela: 'x'`).

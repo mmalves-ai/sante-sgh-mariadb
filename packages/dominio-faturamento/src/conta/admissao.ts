@@ -30,7 +30,8 @@
 //   fonte pagadora, plano, setor, especialidade, item ou grupo); havendo "aplicar_somente", a regra só vale dentro de um
 //   deles. A tabela de preço forçada no item da regra vale antes da tabela da conta.
 
-export type NaturezaContaPaciente = 'ambulatorial' | 'pronto_atendimento' | 'externo' | 'internacao' | 'domiciliar';
+export type NaturezaContaPaciente =
+  'ambulatorial' | 'pronto_atendimento' | 'externo' | 'internacao' | 'domiciliar';
 
 /** Natureza da conta pelo tipo base da categoria de atendimento; nulo quando a entrada não gera cobrança. */
 export function naturezaDaEntrada(tipoBase: string): NaturezaContaPaciente | null {
@@ -94,7 +95,9 @@ export function competenciaDaConta(diaLocal: string): string {
 export function numeroDaConta(numeroAtendimento: string, ordem: number): string {
   const sufixo = `-${ordem}`;
   if (numeroAtendimento.length + sufixo.length > 20)
-    throw new Error(`Número do atendimento longo demais para a conta: ${numeroAtendimento.length} caracteres.`);
+    throw new Error(
+      `Número do atendimento longo demais para a conta: ${numeroAtendimento.length} caracteres.`,
+    );
   return `${numeroAtendimento}${sufixo}`;
 }
 
@@ -134,7 +137,9 @@ export interface TaxaAutomatica {
   readonly quantidade: number;
   readonly tipoValor: 'tabela' | 'percentual' | 'valor_fixo';
   readonly valor: number | null;
-  readonly aplica: Readonly<Record<'internacao' | 'ambulatorial' | 'externo' | 'urgencia' | 'domiciliar', boolean>>;
+  readonly aplica: Readonly<
+    Record<'internacao' | 'ambulatorial' | 'externo' | 'urgencia' | 'domiciliar', boolean>
+  >;
   readonly vigenciaInicio: string;
   readonly vigenciaFim: string | null;
   /** Tabela de preço forçada pelo item da regra (vale antes da tabela da conta). */
@@ -153,7 +158,9 @@ export interface ExcecaoRegraLancamento {
   readonly item: number | null;
   readonly grupo: number | null;
   readonly efeito: 'nao_aplicar' | 'aplicar_somente';
-  readonly aplica: Readonly<Record<'internacao' | 'ambulatorial' | 'externo' | 'urgencia' | 'domiciliar', boolean>>;
+  readonly aplica: Readonly<
+    Record<'internacao' | 'ambulatorial' | 'externo' | 'urgencia' | 'domiciliar', boolean>
+  >;
   readonly vigenciaInicio: string | null;
   readonly vigenciaFim: string | null;
 }
@@ -288,7 +295,8 @@ interface ContextoRegra {
   readonly idadeAnos: number | null;
 }
 
-export type EscolhaRegra = { readonly regra: RegraDiaria } | { readonly falta: 'sem-regra' | 'regra-ambigua' };
+export type EscolhaRegra =
+  { readonly regra: RegraDiaria } | { readonly falta: 'sem-regra' | 'regra-ambigua' };
 
 function melhor(candidatas: readonly RegraDiaria[]): EscolhaRegra {
   if (candidatas.length === 0) return { falta: 'sem-regra' };
@@ -311,7 +319,8 @@ export function regrasDoDia(
   readonly acompanhante: RegraDiaria | null;
 } {
   const doPaciente = regras.filter((r) => !r.acompanhante && serve(r, c));
-  const adicional = (r: RegraDiaria) => (r.idadeMinima !== null || r.idadeMaxima !== null) && !r.substituiGeral;
+  const adicional = (r: RegraDiaria) =>
+    (r.idadeMinima !== null || r.idadeMaxima !== null) && !r.substituiGeral;
   const principal = melhor(doPaciente.filter((r) => !adicional(r)));
   const adicionais = doPaciente.filter(adicional).sort((a, b) => a.id - b.id);
   let acompanhante: RegraDiaria | null = null;
@@ -335,7 +344,8 @@ const vigenteNoDia = (inicio: string | null, fim: string | null, dia: string) =>
 
 /** A exceção casa com a conta quando todo campo preenchido dela é o da conta (e vale na natureza e no dia). */
 function excecaoCasa(x: ExcecaoRegraLancamento, t: TaxaAutomatica, e: EntradaApuracao, dia: string): boolean {
-  const igual = (campo: number | null, valor: number | null | undefined) => campo === null || campo === (valor ?? null);
+  const igual = (campo: number | null, valor: number | null | undefined) =>
+    campo === null || campo === (valor ?? null);
   return (
     x.aplica[NATUREZA_APLICA[e.natureza]] &&
     vigenteNoDia(x.vigenciaInicio, x.vigenciaFim, dia) &&
@@ -371,7 +381,12 @@ function taxaServe(t: TaxaAutomatica, e: EntradaApuracao, dia: string): boolean 
   );
 }
 
-function desejoDeTaxa(t: TaxaAutomatica, dia: string, hora: string, categoria: number | null): LancamentoDesejado {
+function desejoDeTaxa(
+  t: TaxaAutomatica,
+  dia: string,
+  hora: string,
+  categoria: number | null,
+): LancamentoDesejado {
   return {
     chave: `taxa:${t.regraItem}`,
     dia,
@@ -462,7 +477,8 @@ export function lancamentosDevidos(e: EntradaApuracao): {
         virada = r.horaVirada;
         tolerancia = r.toleranciaMinutos;
       } else pendencias.push({ dia, motivo: regras.principal.falta });
-      for (const r of regras.adicionais) devidos.push(desejoDeDiaria(`diaria:${r.id}`, r, dia, hora, categoria));
+      for (const r of regras.adicionais)
+        devidos.push(desejoDeDiaria(`diaria:${r.id}`, r, dia, hora, categoria));
       if (regras.acompanhante)
         devidos.push(desejoDeDiaria('diaria-acompanhante', regras.acompanhante, dia, hora, categoria));
       for (const t of e.taxas)

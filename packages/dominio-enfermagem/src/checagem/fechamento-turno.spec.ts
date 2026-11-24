@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  conferirFechamento,
+  conferirFechamentoChecagem,
   conferirReabertura,
   justificativaDaLeitura,
   lerEtiqueta,
@@ -19,15 +19,17 @@ describe('fechamento da checagem do turno', () => {
   });
   it('com pendência exige justificativa; sem pendência fecha sem ela', () => {
     const com = resumirFechamento([h(1, 'A'), h(2, 'P')]);
-    expect(conferirFechamento(com, null)?.codigo).toBe('pendencias-sem-justificativa');
-    expect(conferirFechamento(com, 'curta')?.codigo).toBe('pendencias-sem-justificativa');
-    expect(conferirFechamento(com, 'Paciente em exame externo, dose passada ao noturno')).toBeNull();
-    expect(conferirFechamento(resumirFechamento([h(1, 'A'), h(2, 'N')]), null)).toBeNull();
+    expect(conferirFechamentoChecagem(com, null)?.codigo).toBe('pendencias-sem-justificativa');
+    expect(conferirFechamentoChecagem(com, 'curta')?.codigo).toBe('pendencias-sem-justificativa');
+    expect(conferirFechamentoChecagem(com, 'Paciente em exame externo, dose passada ao noturno')).toBeNull();
+    expect(conferirFechamentoChecagem(resumirFechamento([h(1, 'A'), h(2, 'N')]), null)).toBeNull();
   });
   it('recusa turno vazio, já fechado ou só com pendentes', () => {
-    expect(conferirFechamento(resumirFechamento([]), null)?.codigo).toBe('turno-sem-horarios');
-    expect(conferirFechamento(resumirFechamento([h(1, 'A', true)]), null)?.codigo).toBe('turno-ja-fechado');
-    expect(conferirFechamento(resumirFechamento([h(1, 'P')]), 'justificativa longa')?.codigo).toBe(
+    expect(conferirFechamentoChecagem(resumirFechamento([]), null)?.codigo).toBe('turno-sem-horarios');
+    expect(conferirFechamentoChecagem(resumirFechamento([h(1, 'A', true)]), null)?.codigo).toBe(
+      'turno-ja-fechado',
+    );
+    expect(conferirFechamentoChecagem(resumirFechamento([h(1, 'P')]), 'justificativa longa')?.codigo).toBe(
       'turno-sem-horarios',
     );
   });
@@ -81,7 +83,7 @@ describe('pendentes passados ao turno seguinte', () => {
     expect(r.pendentesAnteriores).toEqual([1]);
     expect(r.aTravar).toEqual([2, 5]);
     expect(r.total).toBe(3);
-    expect(conferirFechamento(r, null)?.codigo).toBe('pendencias-sem-justificativa');
+    expect(conferirFechamentoChecagem(r, null)?.codigo).toBe('pendencias-sem-justificativa');
   });
 });
 

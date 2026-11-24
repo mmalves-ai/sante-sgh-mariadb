@@ -14,7 +14,8 @@ export const MOMENTOS_PRODUCAO: readonly MomentoProducao[] = ['lancamento', 'fec
 /** O que disparou a sincronização: o lançamento do item, o fechamento da conta ou a mudança do item (estorno, glosa). */
 export type EventoProducao = 'lancamento' | 'fechamento' | 'mudanca-item';
 
-export type FormaPagamentoParticipante = 'via_hospital' | 'direto_fonte_pagadora' | 'paciente' | 'sem_cobranca';
+export type FormaPagamentoParticipante =
+  'via_hospital' | 'direto_fonte_pagadora' | 'paciente' | 'sem_cobranca';
 
 export interface ParticipanteItemConta {
   readonly profissional: number;
@@ -67,7 +68,11 @@ const SITUACOES_SEM_COBRANCA: ReadonlySet<string> = new Set(['estornado', 'sem_c
 /** A produção nasce agora? No lançamento só se a regra é "lancamento"; no fechamento vale para as duas (o fechamento
  * completa o que faltou). A mudança do item (equipe, executor, glosa revertida) completa o que o item passou a gerar
  * quando a regra é "lancamento" ou a conta já foi fechada; antes do fechamento, na regra "fechamento", só estorna. */
-export function geraNoEvento(momento: MomentoProducao, evento: EventoProducao, contaFechada = false): boolean {
+export function geraNoEvento(
+  momento: MomentoProducao,
+  evento: EventoProducao,
+  contaFechada = false,
+): boolean {
   if (evento === 'fechamento') return true;
   if (evento === 'mudanca-item') return momento === 'lancamento' || contaFechada;
   return momento === 'lancamento';
@@ -99,7 +104,9 @@ export function momentoDoParametro(v: string | null | undefined): MomentoProduca
 export function funcaoTitular(funcoes: readonly FuncaoCobranca[]): number | null {
   const titulares = funcoes
     .filter((f) => f.ativo && (f.tipo === 'cirurgiao' || f.tipo === 'clinico'))
-    .sort((a, b) => (a.ordem ?? Number.MAX_SAFE_INTEGER) - (b.ordem ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
+    .sort(
+      (a, b) => (a.ordem ?? Number.MAX_SAFE_INTEGER) - (b.ordem ?? Number.MAX_SAFE_INTEGER) || a.id - b.id,
+    );
   return titulares[0]?.id ?? null;
 }
 
@@ -221,13 +228,19 @@ export function estornoDaProducao(
     };
   }
   const totalItem = centavos(item.valorTotal);
-  const glosa = estornoEmGlosa && totalItem > 0 ? Math.max(0, Math.min(centavos(item.valorGlosado), totalItem)) : 0;
+  const glosa =
+    estornoEmGlosa && totalItem > 0 ? Math.max(0, Math.min(centavos(item.valorGlosado), totalItem)) : 0;
   const total = glosa > 0 && glosa >= totalItem;
   if (!p.integrada) {
     if (total) return estornada ? { acao: 'nada' } : { acao: 'estornar' };
     const base =
       glosa > 0
-        ? Number(dividirArredondando(BigInt(p.baseOriginalCentavos) * BigInt(totalItem - glosa), BigInt(totalItem)))
+        ? Number(
+            dividirArredondando(
+              BigInt(p.baseOriginalCentavos) * BigInt(totalItem - glosa),
+              BigInt(totalItem),
+            ),
+          )
         : p.baseOriginalCentavos;
     if (estornada) return { acao: 'reativar', baseCentavos: base };
     return base === p.baseCentavos ? { acao: 'nada' } : { acao: 'reduzir', baseCentavos: base };
@@ -252,13 +265,22 @@ export function estornoDaProducao(
       encerrar: total && !estornada,
     };
   if (valor < 0)
-    return { acao: 'creditar', valorCentavos: -valor, competencia: p.competenciaDebito, reabrir: estornada && !total };
+    return {
+      acao: 'creditar',
+      valorCentavos: -valor,
+      competencia: p.competenciaDebito,
+      reabrir: estornada && !total,
+    };
   return { acao: 'nada' };
 }
 
 /** Soma da apuração do período: base e repasse das produções que valem (parcelas e total, em centavos). */
 export function somarProducao(
-  linhas: readonly { readonly baseCentavos: number; readonly repasseCentavos: number; readonly situacao: string }[],
+  linhas: readonly {
+    readonly baseCentavos: number;
+    readonly repasseCentavos: number;
+    readonly situacao: string;
+  }[],
 ): { readonly itens: number; readonly baseCentavos: number; readonly repasseCentavos: number } {
   let itens = 0;
   let base = 0;

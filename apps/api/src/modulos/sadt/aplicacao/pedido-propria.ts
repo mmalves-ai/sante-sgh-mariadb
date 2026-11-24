@@ -194,7 +194,6 @@ export const TABELAS_PEDIDO = [
   'nova_coleta',
   'sequencia_negocio',
 ] as const;
-const TABELAS = TABELAS_PEDIDO;
 
 async function relogio(l: Leitor, est: number) {
   const f = await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
@@ -293,7 +292,7 @@ export class ServicoPedidoSadt {
     let saida: { valor: T } | null = null;
     const op = definirOperacao({
       nome,
-      tabelas: TABELAS,
+      tabelas: TABELAS_PEDIDO,
       entrada: z.object({ chave: z.string() }),
       async gravar(tx) {
         saida = { valor: await fn(tx, est) };

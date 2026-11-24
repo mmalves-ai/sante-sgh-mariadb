@@ -78,16 +78,40 @@ describe('produções do item', () => {
     });
   });
   it('pendências: sem executor e sem função titular', () => {
-    expect(producoesDoItem(item({ executante: null }), 11)).toEqual({ producoes: [], pendencia: 'sem-executante' });
+    expect(producoesDoItem(item({ executante: null }), 11)).toEqual({
+      producoes: [],
+      pendencia: 'sem-executante',
+    });
     expect(producoesDoItem(item(), null).pendencia).toBe('sem-funcao-titular');
   });
   it('equipe: uma por participante pago pelo hospital, com o recebedor e a base do participante', () => {
     const r = producoesDoItem(
       item({
         participantes: [
-          { profissional: 1, funcao: 11, recebedor: 900, forma: 'via_hospital', valorBaseRepasse: 300, valorAto: 350 },
-          { profissional: 2, funcao: 13, recebedor: null, forma: 'via_hospital', valorBaseRepasse: null, valorAto: 90 },
-          { profissional: 3, funcao: 14, recebedor: null, forma: 'direto_fonte_pagadora', valorBaseRepasse: null, valorAto: 60 },
+          {
+            profissional: 1,
+            funcao: 11,
+            recebedor: 900,
+            forma: 'via_hospital',
+            valorBaseRepasse: 300,
+            valorAto: 350,
+          },
+          {
+            profissional: 2,
+            funcao: 13,
+            recebedor: null,
+            forma: 'via_hospital',
+            valorBaseRepasse: null,
+            valorAto: 90,
+          },
+          {
+            profissional: 3,
+            funcao: 14,
+            recebedor: null,
+            forma: 'direto_fonte_pagadora',
+            valorBaseRepasse: null,
+            valorAto: 60,
+          },
         ],
       }),
       11,
@@ -108,11 +132,23 @@ describe('estorno da produção', () => {
   it('item estornado: antes da apuração estorna; depois, débito do restante no período seguinte', () => {
     expect(estornoDaProducao(item({ situacao: 'estornado' }), gravada(), true)).toEqual({ acao: 'estornar' });
     expect(
-      estornoDaProducao(item({ situacao: 'estornado' }), gravada({ integrada: true, jaEstornadoCentavos: 5_000 }), true),
-    ).toEqual({ acao: 'debitar', valorCentavos: 30_000, competencia: '2026-11', motivo: 'ajuste', encerrar: true });
+      estornoDaProducao(
+        item({ situacao: 'estornado' }),
+        gravada({ integrada: true, jaEstornadoCentavos: 5_000 }),
+        true,
+      ),
+    ).toEqual({
+      acao: 'debitar',
+      valorCentavos: 30_000,
+      competencia: '2026-11',
+      motivo: 'ajuste',
+      encerrar: true,
+    });
   });
   it('produção já estornada ou cancelada não muda (idempotente)', () => {
-    expect(estornoDaProducao(item({ situacao: 'estornado' }), gravada({ situacao: 'estornado' }), true)).toEqual({
+    expect(
+      estornoDaProducao(item({ situacao: 'estornado' }), gravada({ situacao: 'estornado' }), true),
+    ).toEqual({
       acao: 'nada',
     });
   });
@@ -125,7 +161,11 @@ describe('estorno da produção', () => {
       baseCentavos: 40_000,
     });
     expect(
-      estornoDaProducao(item({ situacao: 'glosado', valorGlosado: 100 }), gravada({ baseCentavos: 40_000 }), true),
+      estornoDaProducao(
+        item({ situacao: 'glosado', valorGlosado: 100 }),
+        gravada({ baseCentavos: 40_000 }),
+        true,
+      ),
     ).toEqual({ acao: 'nada' });
   });
   it('glosa depois da apuração: débito proporcional, nunca acima do repassado; desligado não estorna', () => {
@@ -134,7 +174,13 @@ describe('estorno da produção', () => {
       gravada({ integrada: true, situacao: 'apurado' }),
       true,
     );
-    expect(r).toEqual({ acao: 'debitar', valorCentavos: 7_000, competencia: '2026-11', motivo: 'glosa', encerrar: false });
+    expect(r).toEqual({
+      acao: 'debitar',
+      valorCentavos: 7_000,
+      competencia: '2026-11',
+      motivo: 'glosa',
+      encerrar: false,
+    });
     expect(
       estornoDaProducao(
         item({ situacao: 'glosado', valorGlosado: 100 }),
@@ -156,7 +202,13 @@ describe('produção que o item não gera mais', () => {
     });
     expect(
       estornoDaProducao(item(), gravada({ vigente: false, integrada: true, situacao: 'apurado' }), true),
-    ).toEqual({ acao: 'debitar', valorCentavos: 35_000, competencia: '2026-11', motivo: 'ajuste', encerrar: true });
+    ).toEqual({
+      acao: 'debitar',
+      valorCentavos: 35_000,
+      competencia: '2026-11',
+      motivo: 'ajuste',
+      encerrar: true,
+    });
     expect(
       estornoDaProducao(
         item(),
@@ -182,7 +234,9 @@ describe('glosa revertida (recurso aceito)', () => {
       baseCentavos: 25_000,
     });
     // O item estornado não volta: a produção estornada fica como está.
-    expect(estornoDaProducao(item({ situacao: 'estornado' }), gravada({ situacao: 'estornado' }), true)).toEqual({
+    expect(
+      estornoDaProducao(item({ situacao: 'estornado' }), gravada({ situacao: 'estornado' }), true),
+    ).toEqual({
       acao: 'nada',
     });
   });

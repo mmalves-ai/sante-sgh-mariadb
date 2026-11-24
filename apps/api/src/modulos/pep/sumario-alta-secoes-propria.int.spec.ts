@@ -211,14 +211,26 @@ describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato
       janela: { desde: '2026-11-01T08:00:00.000Z', ate: '2026-11-02T08:00:00.000Z', ultimo: false },
     });
     // A internação comum não recebe a seção do hospital-dia.
-    expect((await porta.vigentesDoAtendimento(ctx(), m.atd)).some((x) => x.codigo === 'l124-cli')).toBe(false);
+    expect((await porta.vigentesDoAtendimento(ctx(), m.atd)).some((x) => x.codigo === 'l124-cli')).toBe(
+      false,
+    );
     // Atendimento de outro paciente (ou de fora do estabelecimento) é recusado, nunca vira "todos".
     expect((await erro(porta.vigentesDoAtendimento(ctx(), m.atdHd, m.paciente + 1))).codigo).toBe(
       'atendimento-inexistente',
     );
-    expect((await erro(porta.pendencias(ctx(), 999_999_999, { diagnosticos: [], procedimentos: [], medicamentosAlta: [], alergias: [], encaminhamentos: [] }))).codigo).toBe(
-      'atendimento-inexistente',
-    );
+    expect(
+      (
+        await erro(
+          porta.pendencias(ctx(), 999_999_999, {
+            diagnosticos: [],
+            procedimentos: [],
+            medicamentosAlta: [],
+            alergias: [],
+            encaminhamentos: [],
+          }),
+        )
+      ).codigo,
+    ).toBe('atendimento-inexistente');
   });
 
   it('a linha do cliente é única no banco: duas inclusões simultâneas do mesmo código, uma vira conflito', async () => {
@@ -229,7 +241,10 @@ describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato
       tipoConteudo: 'orientacoes',
       tipoAtendimento: 'pronto_atendimento',
     };
-    const r = await Promise.allSettled([porta.gravarComponente(ctx(), nova), porta.gravarComponente(ctx(), nova)]);
+    const r = await Promise.allSettled([
+      porta.gravarComponente(ctx(), nova),
+      porta.gravarComponente(ctx(), nova),
+    ]);
     expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
     const recusa = r.find((x) => x.status === 'rejected') as PromiseRejectedResult;
     expect((recusa.reason as { problema?: { codigo?: string } }).problema?.codigo).toBe('conflito-versao');

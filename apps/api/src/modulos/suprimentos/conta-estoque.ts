@@ -64,7 +64,12 @@ export interface DevolucaoParaConta {
 
 /** O lançador do estoque na conta numa transação do Executor (estabelecimento e usuário da sessão). */
 export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: number) {
-  const memoria = (item: number, operacao: string, valores: Readonly<Record<string, unknown>>, dados: unknown) =>
+  const memoria = (
+    item: number,
+    operacao: string,
+    valores: Readonly<Record<string, unknown>>,
+    dados: unknown,
+  ) =>
     tx.incluir('conta_hospitalar_item_memoria', {
       conta_hospitalar_item_id: item,
       operacao,
@@ -124,7 +129,13 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
       [n(conta['fonte_pagadora_id']), n(fat['id']), data],
     );
     // Os contratos dos negociados (situação e vigência) e o fator de cada unidade de negociado para a de estoque.
-    const idsContrato = [...new Set(negociados.map((x) => idOuNulo(x['contrato_fonte_pagadora_id'])).filter((x): x is number => x !== null))];
+    const idsContrato = [
+      ...new Set(
+        negociados
+          .map((x) => idOuNulo(x['contrato_fonte_pagadora_id']))
+          .filter((x): x is number => x !== null),
+      ),
+    ];
     const contratos = idsContrato.length
       ? await tx.consultar<Linha>(
           `SELECT id, situacao, vigencia_inicio, vigencia_fim FROM contrato_fonte_pagadora
@@ -132,10 +143,16 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
           idsContrato,
         )
       : [];
-    const idsUnidade = [...new Set(negociados.map((x) => idOuNulo(x['unidade_medida_id'])).filter((x): x is number => x !== null))];
+    const idsUnidade = [
+      ...new Set(
+        negociados.map((x) => idOuNulo(x['unidade_medida_id'])).filter((x): x is number => x !== null),
+      ),
+    ];
     const fatorDaUnidade = new Map<number, number>();
     if (idsUnidade.length) {
-      const ins = await tx.uma<Linha>('SELECT estoque_unidade_medida_id FROM insumo WHERE id = ?', [s.insumo]);
+      const ins = await tx.uma<Linha>('SELECT estoque_unidade_medida_id FROM insumo WHERE id = ?', [
+        s.insumo,
+      ]);
       const unidadeRef =
         refId === null
           ? null
@@ -148,8 +165,10 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
       for (const u of idsUnidade) {
         const cadastro = doInsumo.find((x) => n(x['unidade_medida_id']) === u);
         if (u === idOuNulo(ins?.['estoque_unidade_medida_id'])) fatorDaUnidade.set(u, 1);
-        else if (cadastro && n(cadastro['fator_conversao']) > 0) fatorDaUnidade.set(u, n(cadastro['fator_conversao']));
-        else if (u === idOuNulo(unidadeRef?.['unidade_medida_id'])) fatorDaUnidade.set(u, fatorConversao ?? 1);
+        else if (cadastro && n(cadastro['fator_conversao']) > 0)
+          fatorDaUnidade.set(u, n(cadastro['fator_conversao']));
+        else if (u === idOuNulo(unidadeRef?.['unidade_medida_id']))
+          fatorDaUnidade.set(u, fatorConversao ?? 1);
       }
     }
     const referencias =
@@ -178,7 +197,9 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
         contrato: idOuNulo(x['contrato_fonte_pagadora_id']),
         unidade: idOuNulo(x['unidade_medida_id']),
         fatorUnidade:
-          idOuNulo(x['unidade_medida_id']) === null ? null : (fatorDaUnidade.get(n(x['unidade_medida_id'])) ?? null),
+          idOuNulo(x['unidade_medida_id']) === null
+            ? null
+            : (fatorDaUnidade.get(n(x['unidade_medida_id'])) ?? null),
         tipoConta: idOuNulo(x['tipo_conta_id']),
         tabelaPreco: idOuNulo(x['tabela_preco_id']),
         vigenciaInicio: dataIso(x['vigencia_inicio']),
@@ -233,7 +254,8 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
       validade_lote: lote && lote['validade'] ? dataIso(lote['validade']) : null,
       tipo_valorizacao: 'tabela',
       situacao: 'lancado',
-      observacao: preco.regra === 'sem_preco' ? 'Sem preço vigente na tabela da conta: valor a conferir.' : null,
+      observacao:
+        preco.regra === 'sem_preco' ? 'Sem preço vigente na tabela da conta: valor a conferir.' : null,
     });
     await memoria(
       item,
@@ -313,7 +335,9 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
     );
     await tx.alterar('movimento_estoque', d.movimentoDevolucao, 1, { conta_hospitalar_item_id: item });
     if (verdadeiro(i['calculada']))
-      await tx.alterar('conta_hospitalar', n(i['conta_hospitalar_id']), n(i['conta_versao']), { calculada: false });
+      await tx.alterar('conta_hospitalar', n(i['conta_hospitalar_id']), n(i['conta_versao']), {
+        calculada: false,
+      });
     return item;
   }
 

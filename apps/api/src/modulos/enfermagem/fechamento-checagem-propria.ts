@@ -1,6 +1,6 @@
 // Fechamento da checagem do turno no banco PRÓPRIO (03-PEP L113): fechar (fechamento_horario_checagem, com os horários
 // resolvidos travados por horario_administracao.fechamento_horario_checagem_id), reabrir com motivo e ler os
-// fechamentos do dia da unidade. As regras são do domínio (conferirFechamento, conferirReabertura); aqui só a leitura,
+// fechamentos do dia da unidade. As regras são do domínio (conferirFechamentoChecagem, conferirReabertura); aqui só a leitura,
 // a trava das linhas e a gravação, dentro da operação do Executor (trilha e idempotência na mesma transação, pela
 // gravação direta da porta própria). Nada é apagado: a correção é a reabertura, que fica no histórico.
 // Escopo: os horários do setor da unidade (a internação ativa na unidade ou, sem internação, o atendimento do setor,
@@ -10,7 +10,7 @@
 // pendentes) fica em fechamento_checagem_horario, que nunca se apaga; a justificativa e a quantidade de pendentes, no
 // próprio fechamento.
 import {
-  conferirFechamento,
+  conferirFechamentoChecagem,
   conferirReabertura,
   resumirFechamento,
   turnoDoDia,
@@ -142,7 +142,7 @@ export async function fecharChecagemTx(
       passouPendente: Number(h['passou_pendente']) === 1,
     })),
   );
-  const problema = conferirFechamento(r, p.justificativa);
+  const problema = conferirFechamentoChecagem(r, p.justificativa);
   if (problema) throw recusa(problema.codigo, problema.mensagem);
   const agora = new Date();
   const id = await tx.incluir('fechamento_horario_checagem', {

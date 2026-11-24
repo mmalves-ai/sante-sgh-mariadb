@@ -21,9 +21,7 @@ describe('nível do cliente nas seções do sumário de alta', () => {
   });
 
   it('aceita com a permissão do cliente; a seção do estabelecimento só pede a de editar', () => {
-    expect(() =>
-      exigirNivelDoCliente(corpo, (c) => c === PERMISSOES_SUMARIO_SECOES.cliente),
-    ).not.toThrow();
+    expect(() => exigirNivelDoCliente(corpo, (c) => c === PERMISSOES_SUMARIO_SECOES.cliente)).not.toThrow();
     expect(() => exigirNivelDoCliente({ ...corpo, doCliente: false }, () => false)).not.toThrow();
     expect(gravaNoCliente({ doCliente: 'true' })).toBe(false);
     expect(gravaNoCliente(null)).toBe(false);

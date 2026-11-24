@@ -20,7 +20,7 @@ export interface KitNoPedido {
   readonly itens: readonly Omit<ExamePedido, 'urgente'>[];
 }
 
-export interface ItemMontado extends ExamePedido {
+export interface ItemPedidoMontado extends ExamePedido {
   readonly sequencia: number;
   /** A versão do kit de onde o exame veio (nulo no exame avulso). */
   readonly kitVersao: number | null;
@@ -45,9 +45,9 @@ export function itensDoPedido(
   avulsos: readonly ExamePedido[],
   kits: readonly KitNoPedido[],
   urgente: boolean,
-): ItemMontado[] {
+): ItemPedidoMontado[] {
   const vistos = new Set<string>();
-  const saida: ItemMontado[] = [];
+  const saida: ItemPedidoMontado[] = [];
   const por = (e: ExamePedido, kitVersao: number | null) => {
     if (!Number.isSafeInteger(e.quantidade) || e.quantidade < 1)
       throw new RecusaPedido('quantidade-invalida', 'A quantidade do exame precisa ser 1 ou mais.');

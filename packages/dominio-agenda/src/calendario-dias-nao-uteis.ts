@@ -59,7 +59,7 @@ const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DIAS_DO_MES = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /** AAAA-MM-DD que existe no calendário. */
-export function dataValida(d: string | null): boolean {
+export function dataCalendarioValida(d: string | null): boolean {
   if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
   const [a, m, dd] = d.split('-').map(Number) as [number, number, number];
   const x = new Date(Date.UTC(a, m - 1, dd));
@@ -100,7 +100,7 @@ export function errosDiaNaoUtil(e: EntradaDiaNaoUtil): ErroDiaNaoUtil[] {
       erros.push('dia-mes-invalido');
     if (e.data != null) erros.push('data-com-dia-mes');
   } else if (e.recorrencia === 'data_unica' || e.recorrencia === 'movel') {
-    if (!dataValida(e.data)) erros.push('data-invalida');
+    if (!dataCalendarioValida(e.data)) erros.push('data-invalida');
     if (e.dia != null || e.mes != null) erros.push('data-com-dia-mes');
   } else erros.push('recorrencia-invalida');
   if ((e.horaInicio == null) !== (e.horaFim == null)) erros.push('hora-incompleta');
@@ -191,7 +191,7 @@ export function ocorrencias(e: EntradaDiaNaoUtil, de: string, ate: string): stri
   const r: string[] = [];
   for (let a = Number(de.slice(0, 4)); a <= Number(ate.slice(0, 4)); a++) {
     const d = `${a}-${diaMes(e)}`;
-    if (dataValida(d) && d >= de && d <= ate) r.push(d);
+    if (dataCalendarioValida(d) && d >= de && d <= ate) r.push(d);
   }
   return r;
 }

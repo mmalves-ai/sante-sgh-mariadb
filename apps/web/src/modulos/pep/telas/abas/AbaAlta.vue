@@ -57,7 +57,9 @@ const secoesQ = useQuery({
 });
 const vigentes = computed<readonly SecaoVigente[] | null>(() => secoesQ.data.value?.itens ?? null);
 function achar(tipo: string, codigo?: string): SecaoVigente | undefined {
-  return vigentes.value?.find((x) => x.tipoConteudo === tipo && (codigo === undefined || x.codigo === codigo));
+  return vigentes.value?.find(
+    (x) => x.tipoConteudo === tipo && (codigo === undefined || x.codigo === codigo),
+  );
 }
 const mostra = (tipo: string) => vigentes.value === null || achar(tipo) !== undefined;
 const mostraMotivo = computed(

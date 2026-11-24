@@ -80,11 +80,7 @@ export interface EntradaPrecoEstoque {
 }
 
 export type RegraPrecoEstoque =
-  | 'negociado_fixo'
-  | 'negociado_percentual'
-  | 'negociado_quantidade'
-  | 'referencia'
-  | 'sem_preco';
+  'negociado_fixo' | 'negociado_percentual' | 'negociado_quantidade' | 'referencia' | 'sem_preco';
 
 export interface PrecoEstoque {
   readonly regra: RegraPrecoEstoque;
@@ -118,7 +114,11 @@ export function negociadoNaoVale(
   if (n.plano !== null && n.plano !== conta.plano) return 'de outro plano';
   if (n.tipoConta !== null && n.tipoConta !== conta.tipoConta) return 'de outro tipo de conta';
   if (n.tabelaPreco !== null && n.tabelaPreco !== conta.tabelaPreco) return 'de outra tabela';
-  if (n.valorUnitario === null && n.percentualAjuste === null && !(n.quantidadeFixa !== null && n.quantidadeFixa > 0))
+  if (
+    n.valorUnitario === null &&
+    n.percentualAjuste === null &&
+    !(n.quantidadeFixa !== null && n.quantidadeFixa > 0)
+  )
     return 'sem valor, percentual nem quantidade';
   if (n.unidade !== null && !(n.fatorUnidade !== null && n.fatorUnidade > 0))
     return `unidade ${n.unidade} sem conversão para a unidade de estoque`;
@@ -170,13 +170,21 @@ export function referenciaVigente(
   for (const r of referencias) {
     if (dia(r.vigenciaInicio) > data) continue;
     if (r.precoFabrica === null && r.precoMaximoConsumidor === null) continue;
-    if (!ref || dia(r.vigenciaInicio) > dia(ref.vigenciaInicio) || (r.vigenciaInicio === ref.vigenciaInicio && r.id > ref.id))
+    if (
+      !ref ||
+      dia(r.vigenciaInicio) > dia(ref.vigenciaInicio) ||
+      (r.vigenciaInicio === ref.vigenciaInicio && r.id > ref.id)
+    )
       ref = r;
   }
   if (!ref) return null;
   const pedida: BasePrecoReferencia = base ?? 'pmc';
   const usada: BasePrecoReferencia =
-    (pedida === 'pf' ? ref.precoFabrica : ref.precoMaximoConsumidor) !== null ? pedida : pedida === 'pf' ? 'pmc' : 'pf';
+    (pedida === 'pf' ? ref.precoFabrica : ref.precoMaximoConsumidor) !== null
+      ? pedida
+      : pedida === 'pf'
+        ? 'pmc'
+        : 'pf';
   const preco = (usada === 'pf' ? ref.precoFabrica : ref.precoMaximoConsumidor) ?? 0;
   return { ref, unitario: r4(preco / fator(ref.fatorDivisao)), base: usada };
 }
@@ -232,7 +240,8 @@ export function precoDoItemDeEstoque(e: EntradaPrecoEstoque): PrecoEstoque {
     // Percentual ou só quantidade fixa: sobre a referência, na unidade do negociado (sem unidade: a da referência).
     const fRef = fator(e.fatorConversao);
     const fNeg = neg.unidade === null ? fRef : neg.fatorUnidade!;
-    const regra: RegraPrecoEstoque = neg.percentualAjuste === null ? 'negociado_quantidade' : 'negociado_percentual';
+    const regra: RegraPrecoEstoque =
+      neg.percentualAjuste === null ? 'negociado_quantidade' : 'negociado_percentual';
     if (ref) {
       const pct = neg.percentualAjuste ?? 0;
       const unitario = (ref.unitario * fNeg) / fRef;

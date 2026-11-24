@@ -205,7 +205,12 @@ export function soEnviados(
 
 const TABELAS = [
   'exame',
-  ...Object.values(TABELA_VINCULO),
+  'exame_setor_executante',
+  'exame_material',
+  'exame_orientacao_preparo',
+  'exame_lateralidade',
+  'exame_secundario',
+  'exame_analito',
   'faixa_referencia',
   'faixa_referencia_versao',
   'formula_calculo',
@@ -292,10 +297,10 @@ export class PortaCatalogoSadtPropria {
     return this.ler(c, async (l) => {
       const exame = await l.uma(`SELECT * FROM exame WHERE id = ? AND excluido_em IS NULL`, [exameId]);
       if (!exame) throw inexistente('O exame');
-      const vinc = async (tipo: TipoVinculo, extra = '') =>
+      const vinc = async (tipo: TipoVinculo, extra = '', tabelaVinculo = TABELA_VINCULO[tipo]) =>
         (
           await l.consultar(
-            `SELECT v.* ${extra ? `, ${extra}` : ''} FROM ${TABELA_VINCULO[tipo]} v
+            `SELECT v.* ${extra ? `, ${extra}` : ''} FROM ${tabelaVinculo} v
               ${tipo === 'setor' ? 'JOIN setor_diagnostico s ON s.id = v.setor_diagnostico_id' : ''}
               ${tipo === 'material' ? 'JOIN material_biologico m ON m.id = v.material_biologico_id' : ''}
               ${tipo === 'preparo' ? 'JOIN orientacao_preparo o ON o.id = v.orientacao_preparo_id' : ''}

@@ -74,8 +74,24 @@ describe('conta na entrada: natureza, tipo, competência e número', () => {
     expect(naturezaDaEntrada('ambulatorio')).toBe('ambulatorial');
     expect(naturezaDaEntrada('outra')).toBeNull();
     expect(escolherTipoConta([{ id: 3, ordem: 0 }], 'internacao')).toEqual({ tipo: 3 });
-    expect(escolherTipoConta([{ id: 3, ordem: 2 }, { id: 4, ordem: 1 }], 'internacao')).toEqual({ tipo: 4 });
-    expect(escolherTipoConta([{ id: 3, ordem: 1 }, { id: 4, ordem: 1 }], 'internacao')).toMatchObject({
+    expect(
+      escolherTipoConta(
+        [
+          { id: 3, ordem: 2 },
+          { id: 4, ordem: 1 },
+        ],
+        'internacao',
+      ),
+    ).toEqual({ tipo: 4 });
+    expect(
+      escolherTipoConta(
+        [
+          { id: 3, ordem: 1 },
+          { id: 4, ordem: 1 },
+        ],
+        'internacao',
+      ),
+    ).toMatchObject({
       recusa: 'tipo-conta-ambiguo',
     });
     expect(escolherTipoConta([], 'pronto_atendimento')).toMatchObject({ recusa: 'tipo-conta-inexistente' });
@@ -153,7 +169,11 @@ describe('diárias por dia de corte', () => {
         ],
       }),
     );
-    expect(r.lancar.map((l) => `${l.chave}:${l.item}`)).toEqual(['diaria:101', 'diaria:4:102', 'diaria-acompanhante:103']);
+    expect(r.lancar.map((l) => `${l.chave}:${l.item}`)).toEqual([
+      'diaria:101',
+      'diaria:4:102',
+      'diaria-acompanhante:103',
+    ]);
     const empate = apurarLancamentos(base({ regrasDiaria: [regra({ id: 1 }), regra({ id: 2, item: 9 })] }));
     expect(empate.lancar).toEqual([]);
     expect(empate.pendencias).toEqual([{ dia: '2026-11-20', motivo: 'regra-ambigua' }]);
@@ -170,7 +190,10 @@ describe('taxas automáticas', () => {
       taxa({ regraItem: 3, gatilho: 'diaria_internacao', umaVezPorConta: true, item: 502 }),
       taxa({ regraItem: 4, exigeConfirmacao: true }),
       taxa({ regraItem: 5, tipoValor: 'percentual', valor: null }),
-      taxa({ regraItem: 6, aplica: { internacao: false, ambulatorial: true, externo: true, urgencia: true, domiciliar: true } }),
+      taxa({
+        regraItem: 6,
+        aplica: { internacao: false, ambulatorial: true, externo: true, urgencia: true, domiciliar: true },
+      }),
     ];
     const r = apurarLancamentos(base({ taxas, limite: '2026-11-21T13:00' }));
     expect(r.lancar.filter((l) => l.chave.startsWith('taxa:')).map((l) => `${l.chave}@${l.dia}`)).toEqual([
@@ -201,7 +224,14 @@ describe('entrada excluída', () => {
     ]);
     // A mesma regra sem cancelamento e com alta: o motivo da diária que sobra é "alta", nunca "cancelamento".
     const alta = apurarLancamentos(
-      base({ taxas, vigentes: [...vigentes, { id: 3, chave: 'diaria', dia: '2026-11-21', item: 100, categoriaAcomodacao: ENF }], alta: true }),
+      base({
+        taxas,
+        vigentes: [
+          ...vigentes,
+          { id: 3, chave: 'diaria', dia: '2026-11-21', item: 100, categoriaAcomodacao: ENF },
+        ],
+        alta: true,
+      }),
     );
     expect(alta.estornar).toEqual([{ id: 3, motivo: 'alta' }]);
   });
@@ -234,7 +264,9 @@ describe('exceções da regra de lançamento e tabela forçada', () => {
     expect(chaves({ taxas: taxas([excecao({ fontePagadora: 7, setor: 40 })]) })).toEqual([]);
     expect(chaves({ taxas: taxas([excecao({ fontePagadora: 7, setor: 41 })]) })).toEqual(['taxa:1']);
     // Exceção fora da vigência ou de outra natureza não vale.
-    expect(chaves({ taxas: taxas([excecao({ estabelecimento: 3, vigenciaFim: '2026-01-01' })]) })).toEqual(['taxa:1']);
+    expect(chaves({ taxas: taxas([excecao({ estabelecimento: 3, vigenciaFim: '2026-01-01' })]) })).toEqual([
+      'taxa:1',
+    ]);
     expect(
       chaves({ taxas: taxas([excecao({ estabelecimento: 3, aplica: { ...todas, ambulatorial: false } })]) }),
     ).toEqual(['taxa:1']);

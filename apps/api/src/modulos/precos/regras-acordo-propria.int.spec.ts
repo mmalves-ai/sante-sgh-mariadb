@@ -214,7 +214,9 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
     if (!nucleo) return;
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-f37-regras' }, async (e) => {
       await limpar(e);
-      await e.executar("DELETE FROM regime_atendimento WHERE id = ? AND versao_fonte = 'TESTE-F37R'", [ids.regime]);
+      await e.executar("DELETE FROM regime_atendimento WHERE id = ? AND versao_fonte = 'TESTE-F37R'", [
+        ids.regime,
+      ]);
     });
     await nucleo.encerrar();
   });
@@ -246,7 +248,16 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
       vigente: true,
     });
     // A do convênio primeiro, a padrão de todas depois; a de outro estabelecimento não aparece.
-    expect(r.viasAcesso.map((v) => [v.descricao, v.ordem, v.percentual, v.padraoDeTodas, v.item, v.tipoLancamento])).toEqual([
+    expect(
+      r.viasAcesso.map((v) => [
+        v.descricao,
+        v.ordem,
+        v.percentual,
+        v.padraoDeTodas,
+        v.item,
+        v.tipoLancamento,
+      ]),
+    ).toEqual([
       ['SEGUNDO F37R', 2, 50, false, 'CONSULTA SINTETICA F37R', null],
       ['PADRAO F37R', 2, 70, true, null, null],
     ]);
@@ -255,14 +266,22 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
       ['CONSULTA SINTETICA F37R', 'INTERNACAO F37R', 'INCLUSO NO PACOTE F37R', true],
     ]);
     expect(
-      r.tetos.map((t) => [t.abrangencia, t.grupo, t.plano, t.valorTeto, t.acao, t.excedenteFonte, t.excedentePlano]),
+      r.tetos.map((t) => [
+        t.abrangencia,
+        t.grupo,
+        t.plano,
+        t.valorTeto,
+        t.acao,
+        t.excedenteFonte,
+        t.excedentePlano,
+      ]),
     ).toEqual([
       ['conta', null, null, 20000, 'transferir_excedente', 'OPERADORA F37R SINTETICA', null],
       ['grupo', 'MATERIAIS F37R', null, 5000, 'alertar', null, null],
     ]);
-    expect(r.altoCusto.map((a) => [a.regra, a.item, a.plano, a.valorBase, a.valorNegociado, a.vigente])).toEqual([
-      ['preco_negociado', 'CONSULTA SINTETICA F37R', null, null, 1500, true],
-    ]);
+    expect(
+      r.altoCusto.map((a) => [a.regra, a.item, a.plano, a.valorBase, a.valorNegociado, a.vigente]),
+    ).toEqual([['preco_negociado', 'CONSULTA SINTETICA F37R', null, null, 1500, true]]);
   });
 
   it('outro estabelecimento: só a regra de todos os estabelecimentos e a sua', async () => {
