@@ -138,7 +138,7 @@ const esquemaEmprestimo = z
     solicitanteProfissional: id.nullable().default(null),
     prazoDias: z.number().int().min(1).max(365).nullable().default(null),
     observacao: textoOuNull(2000),
-    versao: z.number().int().positive(),
+    versao: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -624,7 +624,7 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
           noLocal: bool(v['no_local']),
           emprestimoAberto: !!aberto,
         });
-        if (num(v['versao']) !== e.versao)
+        if (e.versao !== undefined && num(v['versao']) !== e.versao)
           problemas.push({ campo: 'versao', mensagem: 'O volume mudou desde a leitura: recarregue.' });
         if (
           !(await tx.uma('SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ?', [
@@ -694,7 +694,7 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
           situacao: 'emprestado',
           observacao: e.observacao,
         });
-        await tx.alterar('volume_prontuario', e.volume, e.versao, {
+        await tx.alterar('volume_prontuario', e.volume, num(v['versao']), {
           situacao: 'emprestado',
           no_local: false,
         });
