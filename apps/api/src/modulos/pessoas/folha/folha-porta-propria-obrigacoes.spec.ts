@@ -95,6 +95,8 @@ describe('férias e obrigações da folha no banco próprio (regras puras)', () 
     expect(await codigo(g.incluirFerias({ ...ferias, empresa: 8 }))).toBe('409:empresa-fora-da-sessao');
     expect(await codigo(g.incluirFerias(ferias))).toBe('409:ferias-dias-invalidos');
     expect(await codigo(g.incluirObrigacao({ ...obrigacao, resumo: 'x' }))).toBe('409:resumo-invalido');
+    for (const tipo of ['sefip', 'caged', 'rais'] as const)
+      expect(await codigo(g.incluirObrigacao({ ...obrigacao, tipo }))).toBe('409:obrigacao-encerrada');
     expect(await codigo(g.obrigacoesEmVigorComTrava(8, 'sefip', '2024-01'))).toBe(
       '409:empresa-fora-da-sessao',
     );

@@ -487,18 +487,31 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
         gravar((g) => g.cancelarObrigacao({ id: id2, versao: entregue.versao, motivo: 'x', por: m.login })),
       ),
     ).toBe('desatualizado');
-    // RAIS (anual): grava e cancela com motivo.
+    // RAIS (encerrada no catálogo oficial): o gravador recusa e nada é gravado; fica só o histórico das já gravadas.
+    expect(
+      await codigo(
+        gravar((g) =>
+          g.incluirObrigacao({
+            ...base,
+            tipo: 'rais',
+            periodo: '2096',
+            nomeArquivo: 'rais-2096.txt',
+            conteudoCifrado: `conteudo-cifrado-${MARCA}-rais`,
+          }),
+        ),
+      ),
+    ).toBe('obrigacao-encerrada');
+    // Outra competência: grava e cancela com motivo.
     const rais = await gravar((g) =>
       g.incluirObrigacao({
         ...base,
-        tipo: 'rais',
-        periodo: '2096',
-        nomeArquivo: 'rais-2096.txt',
-        conteudoCifrado: `conteudo-cifrado-${MARCA}-rais`,
+        periodo: '2096-06',
+        nomeArquivo: 'fgts-2096-06.txt',
+        conteudoCifrado: `conteudo-cifrado-${MARCA}-2096`,
       }),
     );
     const lidaRais = (await leituras.obrigacao(ctx(), rais))!;
-    expect(lidaRais).toMatchObject({ tipo: 'rais', periodo: '2096', numero: 1 });
+    expect(lidaRais).toMatchObject({ tipo: 'fgts-digital', periodo: '2096-06', numero: 1 });
     await gravar((g) =>
       g.cancelarObrigacao({ id: rais, versao: lidaRais.versao, motivo: 'gerada por engano', por: m.login }),
     );

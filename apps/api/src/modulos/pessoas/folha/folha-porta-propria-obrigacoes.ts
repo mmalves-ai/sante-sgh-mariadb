@@ -38,7 +38,7 @@ import {
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import { exigirFeriasAlteravel, lerFeriasPorId } from './folha-porta-propria-calculo.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha } from './porta-calculo.js';
-import { catalogoObrigacoesNa } from './catalogo-obrigacoes-oficiais.js';
+import { catalogoObrigacoesNa, exigirObrigacaoComGerador } from './catalogo-obrigacoes-oficiais.js';
 import {
   type CatalogoObrigacoesOficiais,
   type FiltroObrigacoesDaFolha,
@@ -571,6 +571,9 @@ export function gravadorFolhaObrigacoes(
 
     async incluirObrigacao(x) {
       daSessao(x.empresa);
+      // O gravador também recusa a obrigação encerrada (SEFIP, CAGED, RAIS) ou sem gerador no catálogo do dia: a trava
+      // não depende de o chamador ser o serviço (409 obrigacao-encerrada; as gravadas ficam para histórico).
+      exigirObrigacaoComGerador(catalogoObrigacoesNa(new Date().toISOString().slice(0, 10)), x.tipo);
       if (!/^[0-9a-f]{64}$/.test(x.resumo))
         throw recusa('resumo-invalido', 'O resumo do arquivo tem de ser o SHA-256 em hexadecimal.');
       const competencia = periodoNoBanco(x.tipo, x.periodo);

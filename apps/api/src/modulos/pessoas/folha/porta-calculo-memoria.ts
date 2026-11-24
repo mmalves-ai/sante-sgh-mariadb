@@ -34,7 +34,7 @@ import {
   type VinculoDesligado,
   type VinculoDoCalculo,
 } from './tipos-folha.js';
-import { catalogoObrigacoesNa } from './catalogo-obrigacoes-oficiais.js';
+import { catalogoObrigacoesNa, exigirObrigacaoComGerador } from './catalogo-obrigacoes-oficiais.js';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha, PortaCalculoFolha } from './porta-calculo.js';
@@ -468,6 +468,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
         return o ? obrigacaoSemConteudo(o) : null;
       },
       incluirObrigacao: async (x) => {
+        exigirObrigacaoComGerador(catalogoObrigacoesNa(new Date().toISOString().slice(0, 10)), x.tipo);
         if (
           s.obrigacoes.some(
             (o) =>
