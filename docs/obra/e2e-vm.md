@@ -4,7 +4,7 @@ Comando único (2026-11-24):
 
 ```bash
 tools/obra/e2e-vm.sh --grep @M00                              # um marco
-tools/obra/e2e-vm.sh prontuario.spec.ts -g "médico: Ctrl+K"   # um spec (PEP: abrir o paciente)
+tools/obra/e2e-vm.sh prontuario.spec.ts -g "médico: Ctrl.K"   # um spec (PEP: abrir o paciente)
 tools/obra/e2e-vm.sh --commit <ref> --portas 5393:3393 --grep @M20
 ```
 

@@ -3,7 +3,7 @@
 #
 #   tools/obra/e2e-vm.sh [--commit <ref>] [--portas <web>:<api>] [--remover] [--] <argumentos do playwright>
 #   ex.: tools/obra/e2e-vm.sh --grep @M00
-#        tools/obra/e2e-vm.sh prontuario.spec.ts -g "médico: Ctrl+K"
+#        tools/obra/e2e-vm.sh prontuario.spec.ts -g "médico: Ctrl.K"
 #
 # Por que assim (causa do "E2E @M00 vermelho" de 22/11, docs/obra/ci-verde.md):
 #   - a API do E2E saía com "AMBIENTE ausente" (sem .env na árvore limpa) e o Playwright esperava os 240 s do

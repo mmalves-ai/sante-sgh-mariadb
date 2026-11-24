@@ -63,6 +63,10 @@ export default defineConfig({
         // pertence a rede nenhuma (a sessão sintética fica sem estabelecimento). Valores sintéticos, só se faltarem.
         AMBIENTE: process.env['AMBIENTE'] ?? 'ci',
         REDE_PADRAO: process.env['REDE_PADRAO'] ?? 'rede-e2e',
+        // Sem ESTABELECIMENTOS a fonte sintética não tem estabelecimento disponível: a tela de entrada mostra só
+        // "Nenhum estabelecimento disponível" e todo spec que entra pelo formulário espera o campo até o timeout. Os
+        // códigos sintéticos são os do .env.example (pc e hs); o entrar.spec entra direto em 'pc'.
+        ESTABELECIMENTOS: process.env['ESTABELECIMENTOS'] ?? 'pc,hs',
         ACESSO_SINTETICO_INDISPONIVEL: ESTABELECIMENTO_FORA_E2E,
         // M06 (revisão): com a cópia em dev, a sessão sintética só com a marca explícita.
         SESSAO_SINTETICA: 'sim',
