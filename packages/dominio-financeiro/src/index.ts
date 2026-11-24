@@ -14,3 +14,4 @@ export * from './remessa.js';
 export * from './adiantamento.js';
 export * from './indicadores.js';
 export * from './orcamento.js';
+export * from './prorrogacao.js';
