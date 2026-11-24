@@ -3,7 +3,8 @@
 -- correção é suspensão, cancelamento com motivo ou nova versão.
 --   - prescricao: coassinatura (exigida, quem e quando coassinou);
 --   - prescricao_evento: eventos de coassinatura e de inclusão de item depois da liberação;
---   - decisao_alerta: a versão da regra no momento da decisão (a leitura não depende mais da versão vigente);
+--   - decisao_alerta: a versão da regra no momento da decisão (a leitura não depende mais da versão vigente) e a
+--     decisão sem item (item retirado diante do alerta), ligada à prescrição;
 --   - planejamento_prescricao: a prescrição futura programada antes de existir a prescrição (descrição e itens
 --     programados), ligada à prescrição quando efetivada;
 --   - grade_horario_classe: horários padrão de administração por unidade e classe de frequência, por vigência.
@@ -25,6 +26,16 @@ ALTER TABLE decisao_alerta
   ADD COLUMN IF NOT EXISTS versao_regra INT UNSIGNED NULL COMMENT 'Versão da regra de alerta no momento da decisão',
   DROP CONSTRAINT IF EXISTS ck_decisao_alerta_versao_regra,
   ADD CONSTRAINT ck_decisao_alerta_versao_regra CHECK (versao_regra IS NULL OR versao_regra > 0);
+
+-- A decisão diante de um alerta cujo item o prescritor retirou antes de gravar não tem item: fica ligada à prescrição,
+-- com a chave do item na tela (rastreabilidade do alerta de segurança do paciente).
+ALTER TABLE decisao_alerta
+  MODIFY COLUMN prescricao_item_id BIGINT UNSIGNED NULL COMMENT 'Item a que o alerta pertence; nulo quando o item foi retirado antes de gravar',
+  ADD COLUMN IF NOT EXISTS prescricao_id BIGINT UNSIGNED NULL COMMENT 'Prescrição em que a decisão foi tomada',
+  ADD COLUMN IF NOT EXISTS chave_item VARCHAR(40) NULL COMMENT 'Chave do item na tela quando ele foi retirado antes de gravar',
+  ADD INDEX IF NOT EXISTS ix_decisao_alerta_prescricao (prescricao_id, chave_item, sequencia),
+  DROP CONSTRAINT IF EXISTS ck_decisao_alerta_alvo,
+  ADD CONSTRAINT ck_decisao_alerta_alvo CHECK (prescricao_item_id IS NOT NULL OR (prescricao_id IS NOT NULL AND chave_item IS NOT NULL));
 
 ALTER TABLE planejamento_prescricao
   MODIFY COLUMN prescricao_id BIGINT UNSIGNED NULL COMMENT 'Prescrição planejada; nula enquanto a programação só traz os itens',

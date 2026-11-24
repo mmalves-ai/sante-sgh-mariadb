@@ -1,6 +1,8 @@
 // Prescrição eletrônica no banco PRÓPRIO do cliente (MariaDB, pelo @sgh/nucleo): a família de gravação e das leituras
 // que a acompanham (futuras, reconciliações, fichas, grades, a vencer, cabeçalho do documento). Classe auxiliar
-// construída com (nucleo, cliente); o integrador liga os métodos na PortaPrescricaoPropria.
+// construída com (nucleo, cliente); o integrador liga os métodos na PortaPrescricaoPropria, inclusive marcas, prova e
+// decisoes, que leem as colunas de coassinatura e a versão da regra da migração 95 e substituem as da porta própria.
+// O reenvio com a mesma chave de idempotência devolve o resultado inteiro do método (guardado em JSON no resultado).
 // Leituras pelo Leitor (somente leitura, filtro por estabelecimento e por exclusão lógica); gravações pelo Executor
 // (trilha, idempotência e versão na mesma transação). Registro clínico nunca é apagado (SBIS-26): nenhuma exclusão
 // física; a correção é suspensão (com o item de correção), cancelamento com motivo ou nova versão.
@@ -12,7 +14,7 @@
 // Ainda sem adaptador (501 pendente-modelo-proprio, nada gravado): itens de tipo diferente de medicamento e cuidado
 // simples, medicamento não padronizado, kit e motivos de "se necessário" no item, fichas de antimicrobiano na
 // gravação da prescrição, registrarFicha e gravarRegra.
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -21,13 +23,14 @@ import {
   type Leitor,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { PLANO_DO_TIPO } from '@sgh/contratos';
+import { categoriaPorOcupacao, exigeCoassinatura, PLANO_DO_TIPO } from '@sgh/contratos';
 import { z } from 'zod';
 import type { ContextoPrescricao } from './prescricao-porta.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import type {
   CabecalhoDocumentoLido,
   CampoDocumentoLido,
+  DecisaoLida,
   FichaAntigaLida,
   FichaNovaLida,
   FuturaGravadaLida,
@@ -39,6 +42,7 @@ import type {
   LiberacaoConsultada,
   NovaGradeClasse,
   PrescricaoAVencer,
+  ProvaPrescricaoLida,
   ReconciliacaoGravacao,
   ReconciliacaoGravadaLida,
   SuspensaoItem,
@@ -91,6 +95,14 @@ export function decisaoGravada(decisao: string, justificativa: string | null): s
   if (decisao === 'retirado') return 'cancelou_item';
   return justificativa ? 'justificou' : 'aceitou';
 }
+
+/** Decisão gravada → decisão do contrato (mesma tabela da leitura da porta própria). */
+export const DECISAO_DO_CONTRATO: Readonly<Record<string, 'mantido' | 'retirado'>> = {
+  aceitou: 'mantido',
+  ajustou: 'mantido',
+  justificou: 'mantido',
+  cancelou_item: 'retirado',
+};
 
 const FONTES_RECONCILIACAO = ['paciente', 'familiar', 'receita', 'prontuario', 'outro'] as const;
 const CONDUTAS_RECONCILIACAO = ['manter', 'suspender', 'substituir', 'ajustar'] as const;
@@ -445,7 +457,10 @@ export class GravacaoPrescricaoPropria {
         [String(cbo)],
       );
       const campos = (pares: [string, unknown][]): CampoDocumentoLido[] =>
-        pares.map(([k, v]) => [k, v === null || v === undefined ? null : typeof v === 'number' ? v : String(v)]);
+        pares.map(([k, v]) => [
+          k,
+          v === null || v === undefined ? null : typeof v === 'number' ? v : String(v),
+        ]);
       return {
         hospital: campos([
           ['id', est.id],
@@ -474,6 +489,100 @@ export class GravacaoPrescricaoPropria {
         tipoAssinatura: 'Prescrição Geral',
         situacao: 'Prescrito',
       };
+    });
+  }
+
+  /**
+   * Marcas das prescrições: feita no sistema (origem) e coassinatura pendente (exigida e ainda não coassinada). Substitui
+   * a marcas() da porta própria, que não lê as colunas de coassinatura da migração 95.
+   */
+  marcas(
+    c: ContextoPrescricao,
+    prescricoes: readonly number[],
+  ): Promise<Map<number, { feitaNoNovo: boolean; coassinaturaPendente: boolean }>> {
+    const ids = [...new Set(prescricoes)].filter((x) => Number.isSafeInteger(x) && x > 0);
+    if (ids.length === 0) return Promise.resolve(new Map());
+    return this.ler(c, 'marcas', async (l, est) => {
+      const linhas = await l.consultar(
+        `SELECT p.id, p.origem, p.coassinatura_exigida, p.coassinada_em FROM prescricao p
+          WHERE ${VISIVEL('p')} AND p.id IN (${ids.map(() => '?').join(',')})`,
+        [est.id, ...ids],
+      );
+      return new Map(
+        linhas.map((x) => [
+          num(x['id']),
+          {
+            feitaNoNovo: x['origem'] === 'sistema',
+            coassinaturaPendente: verdadeiro(x['coassinatura_exigida']) && x['coassinada_em'] === null,
+          },
+        ]),
+      );
+    });
+  }
+
+  /**
+   * Prova da prescrição: coassinatura exigida e feita, pelas colunas da migração 95, e os eventos de coassinatura (tipo
+   * "coassinado", que o serviço não usa para conferir o hash). Sem a cadeia de hash do documento no modelo próprio: a
+   * tela segue "sem prova", nunca "confere". Prescrição fora do estabelecimento: nada exigido.
+   */
+  prova(c: ContextoPrescricao, prescricao: number): Promise<ProvaPrescricaoLida> {
+    return this.ler(c, 'prova', async (l, est) => {
+      const p = await l.uma(
+        `SELECT p.coassinatura_exigida, p.coassinada_em FROM prescricao p WHERE p.id = ? AND ${VISIVEL('p')}`,
+        [prescricao, est.id],
+      );
+      if (!p) return { eventos: [], coassinaturaExigida: false, coassinada: false };
+      const eventos = await l.consultar(
+        `SELECT e.ocorrido_em, u.login FROM prescricao_evento e LEFT JOIN usuario u ON u.id = e.usuario_id
+          WHERE e.prescricao_id = ? AND e.evento = 'coassinatura' ORDER BY e.ocorrido_em, e.id LIMIT ${TETO_LISTA}`,
+        [prescricao],
+      );
+      return {
+        eventos: eventos.map((x) => ({
+          tipo: 'coassinado',
+          item: null,
+          em: dataHora(x['ocorrido_em'], est.fuso) ?? '',
+          usuario: textoOuNull(x['login']) ?? '',
+          hashAnterior: '',
+          comoSuporte: false,
+        })),
+        coassinaturaExigida: verdadeiro(p['coassinatura_exigida']),
+        coassinada: p['coassinada_em'] !== null,
+      };
+    });
+  }
+
+  /**
+   * Decisões sobre os alertas da prescrição, na forma da porta de memória: as do item (chave = id do item) e as de item
+   * retirado antes de gravar (item null, chave da tela), com a versão da regra no momento da decisão (versao_regra; nas
+   * linhas antigas, a vigente da regra; sem regra, 0).
+   */
+  decisoes(c: ContextoPrescricao, prescricao: number): Promise<DecisaoLida[]> {
+    return this.ler(c, 'decisoes', async (l, est) => {
+      const linhas = await l.consultar(
+        `SELECT d.prescricao_item_id, d.chave_item, d.processo, d.decisao, d.justificativa, d.regra_alerta_id,
+                COALESCE(d.versao_regra, r.numero_versao_vigente) AS versao_regra
+           FROM decisao_alerta d
+           LEFT JOIN prescricao_item i ON i.id = d.prescricao_item_id
+           JOIN prescricao p ON p.id = COALESCE(i.prescricao_id, d.prescricao_id)
+           LEFT JOIN regra_alerta r ON r.id = d.regra_alerta_id
+          WHERE p.id = ? AND ${VISIVEL('p')} AND d.excluido_em IS NULL AND d.decisao <> 'pendente'
+          ORDER BY d.prescricao_item_id IS NULL, d.prescricao_item_id, d.chave_item, d.sequencia, d.id
+          LIMIT ${TETO_LISTA}`,
+        [prescricao, est.id],
+      );
+      return linhas.map((x) => {
+        const item = numOuNull(x['prescricao_item_id']);
+        return {
+          item,
+          chave: item === null ? String(x['chave_item']) : String(item),
+          tipo: String(x['processo']),
+          decisao: DECISAO_DO_CONTRATO[String(x['decisao'])] ?? String(x['decisao']),
+          justificativa: textoOuNull(x['justificativa']),
+          regra: x['regra_alerta_id'] === null ? '' : String(x['regra_alerta_id']),
+          versao: x['versao_regra'] === null ? 0 : num(x['versao_regra']),
+        };
+      });
     });
   }
 
@@ -526,154 +635,268 @@ export class GravacaoPrescricaoPropria {
   ): Promise<{ prescricao: number; horarios: number }> {
     conferirItensSuportados(e.itens);
     if (e.sgh.fichas.length > 0) throw recusaPendenteGravacao('fichas de antimicrobiano');
-    return this.gravar(c, ctx, operacao, e.cbo, async (tx, est, prof) => {
-      const atd = await tx.uma(
-        'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [e.atendimento, est.id],
-      );
-      if (!atd || num(atd['paciente_id']) !== e.paciente)
-        throw recusar(404, 'registro-inexistente', 'O atendimento do paciente não foi encontrado.');
-      const inicio = instanteLocal(e.vigencia.inicio, est.fuso);
-      const fim = instanteLocal(e.vigencia.fim, est.fuso);
-      if (fim.getTime() <= inicio.getTime())
-        throw recusar(422, 'vigencia-invalida', 'O fim da vigência tem de ser depois do início.');
-      const ocupada = await umaTravada(tx, 
-        `SELECT p.id FROM prescricao p
+    return this.gravar(
+      c,
+      ctx,
+      operacao,
+      e.cbo,
+      async (tx, est, prof) => {
+        const atd = await tx.uma(
+          'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [e.atendimento, est.id],
+        );
+        if (!atd || num(atd['paciente_id']) !== e.paciente)
+          throw recusar(404, 'registro-inexistente', 'O atendimento do paciente não foi encontrado.');
+        const inicio = instanteLocal(e.vigencia.inicio, est.fuso);
+        const fim = instanteLocal(e.vigencia.fim, est.fuso);
+        if (fim.getTime() <= inicio.getTime())
+          throw recusar(422, 'vigencia-invalida', 'O fim da vigência tem de ser depois do início.');
+        const ocupada = await umaTravada(
+          tx,
+          `SELECT p.id FROM prescricao p
           WHERE ${VISIVEL('p')} AND p.atendimento_id = ? AND p.situacao IN ('vigente','futura')
             AND p.suspensa_em IS NULL AND p.vigencia_inicio_em <= ? AND p.vigencia_fim_em >= ?
           LIMIT 1`,
-        [est.id, e.atendimento, fim, inicio],
-      );
-      if (ocupada)
-        throw recusar(
-          409,
-          operacao === 'pep.renovarPrescricao' ? 'periodo-ocupado' : 'outra-ativa-no-periodo',
-          'Já existe prescrição ativa no período.',
+          [est.id, e.atendimento, fim, inicio],
         );
-      if (e.origem) {
-        const o = await travarPrescricao(tx, est.id, e.origem.prescricao);
-        if (!o || o.suspensa || o.situacao === 'cancelada' || o.atendimento !== e.atendimento)
-          throw recusar(409, 'origem-alterada', 'A prescrição de origem foi suspensa ou cancelada.');
-        const ativos = new Set(
-          (
-            await tx.consultar(
-              `SELECT id FROM prescricao_item WHERE prescricao_id = ? AND excluido_em IS NULL AND situacao = 'ativo'`,
-              [o.id],
-            )
-          ).map((x) => num(x['id'])),
+        if (ocupada)
+          throw recusar(
+            409,
+            operacao === 'pep.renovarPrescricao' ? 'periodo-ocupado' : 'outra-ativa-no-periodo',
+            'Já existe prescrição ativa no período.',
+          );
+        if (e.origem) {
+          const o = await travarPrescricao(tx, est.id, e.origem.prescricao);
+          if (!o || o.suspensa || o.situacao === 'cancelada' || o.atendimento !== e.atendimento)
+            throw recusar(409, 'origem-alterada', 'A prescrição de origem foi suspensa ou cancelada.');
+          const ativos = new Set(
+            (
+              await tx.consultar(
+                `SELECT id FROM prescricao_item WHERE prescricao_id = ? AND excluido_em IS NULL AND situacao = 'ativo'`,
+                [o.id],
+              )
+            ).map((x) => num(x['id'])),
+          );
+          if (e.origem.itens.some((x) => x.ativo && !ativos.has(x.item)))
+            throw recusar(409, 'origem-alterada', 'Item da origem suspenso.');
+        }
+        const agora = new Date();
+        const numero = await tx.proximoNumero('prescricao');
+        const prescricao = await tx.incluir('prescricao', {
+          estabelecimento_id: est.id,
+          numero: numero.valor,
+          paciente_id: e.paciente,
+          atendimento_id: e.atendimento,
+          prescritor_profissional_id: prof.profissional,
+          ocupacao_cbo_id: prof.ocupacao,
+          prioridade: e.sgh.prioridade,
+          situacao: 'vigente',
+          prescrito_em: instanteLocal(e.dataHora, est.fuso),
+          vigencia_inicio_em: inicio,
+          vigencia_fim_em: fim,
+          retroativo: e.justificativaRetroativo !== null,
+          justificativa_retroativo: e.justificativaRetroativo,
+          anterior_prescricao_id: e.origem?.prescricao ?? null,
+          modo_origem: e.origem?.modo ?? null,
+          liberada_em: agora,
+          observacao_geral: e.observacaoGeral,
+          coassinatura_exigida: e.sgh.coassinaturaExigida,
+          origem: 'sistema',
+        });
+        let horarios = 0;
+        const porChave = new Map<string, number>();
+        for (const [i, it] of e.itens.entries()) {
+          const r = await inserirItem(
+            tx,
+            est,
+            prescricao,
+            e.atendimento,
+            prof,
+            it,
+            i + 1,
+            inicio,
+            fim,
+            e.sgh,
+          );
+          porChave.set(it.chave, r.item);
+          horarios += r.horarios;
+        }
+        await gravarDecisoes(tx, prof, prescricao, porChave, e.sgh.decisoes, agora);
+        for (const futura of e.sgh.futuras)
+          await efetivarFutura(tx, est.id, e.atendimento, futura, prescricao, agora);
+        const evento =
+          operacao === 'pep.copiarPrescricao'
+            ? 'copia'
+            : operacao === 'pep.renovarPrescricao'
+              ? 'renovacao'
+              : 'criacao';
+        await evento_(tx, prescricao, null, 'inclusao', evento, null, 'vigente', null, prof, agora, {
+          itens: e.itens.length,
+          horarios,
+          protocolos: e.protocolos,
+        });
+        await evento_(
+          tx,
+          prescricao,
+          null,
+          'alteracao',
+          'assinatura',
+          'vigente',
+          'vigente',
+          null,
+          prof,
+          agora,
+          {
+            hashConteudo: e.hashConteudo,
+            comoSuporte: e.sgh.comoSuporte,
+          },
         );
-        if (e.origem.itens.some((x) => x.ativo && !ativos.has(x.item)))
-          throw recusar(409, 'origem-alterada', 'Item da origem suspenso.');
-      }
-      const agora = new Date();
-      const numero = await tx.proximoNumero('prescricao');
-      const prescricao = await tx.incluir('prescricao', {
-        estabelecimento_id: est.id,
-        numero: numero.valor,
-        paciente_id: e.paciente,
-        atendimento_id: e.atendimento,
-        prescritor_profissional_id: prof.profissional,
-        ocupacao_cbo_id: prof.ocupacao,
-        prioridade: e.sgh.prioridade,
-        situacao: 'vigente',
-        prescrito_em: instanteLocal(e.dataHora, est.fuso),
-        vigencia_inicio_em: inicio,
-        vigencia_fim_em: fim,
-        retroativo: e.justificativaRetroativo !== null,
-        justificativa_retroativo: e.justificativaRetroativo,
-        anterior_prescricao_id: e.origem?.prescricao ?? null,
-        modo_origem: e.origem?.modo ?? null,
-        liberada_em: agora,
-        observacao_geral: e.observacaoGeral,
-        coassinatura_exigida: e.sgh.coassinaturaExigida,
-        origem: 'sistema',
-      });
-      let horarios = 0;
-      const porChave = new Map<string, number>();
-      for (const [i, it] of e.itens.entries()) {
-        const r = await inserirItem(tx, est, prescricao, e.atendimento, prof, it, i + 1, inicio, fim, e.sgh);
-        porChave.set(it.chave, r.item);
-        horarios += r.horarios;
-      }
-      await gravarDecisoes(tx, prof, porChave, e.sgh.decisoes, agora);
-      for (const futura of e.sgh.futuras) await efetivarFutura(tx, est.id, e.atendimento, futura, prescricao, agora);
-      const evento =
-        operacao === 'pep.copiarPrescricao' ? 'copia' : operacao === 'pep.renovarPrescricao' ? 'renovacao' : 'criacao';
-      await evento_(tx, prescricao, null, 'inclusao', evento, null, 'vigente', null, prof, agora, {
-        itens: e.itens.length,
-        horarios,
-        protocolos: e.protocolos,
-      });
-      await evento_(tx, prescricao, null, 'alteracao', 'assinatura', 'vigente', 'vigente', null, prof, agora, {
-        hashConteudo: e.hashConteudo,
-        comoSuporte: e.sgh.comoSuporte,
-      });
-      return { prescricao, horarios };
-    }, (r) => ({ tabela: 'prescricao', id: r.prescricao }));
+        return { prescricao, horarios };
+      },
+      (r) => ({ tabela: 'prescricao', id: r.prescricao }),
+      null,
+      { operacao, e },
+    );
   }
 
   /** Item incluído depois da liberação (adendo) numa prescrição vigente. */
   incluirItem(c: ContextoPrescricao, e: InclusaoItem, ctx: ContextoOperacao): Promise<{ item: number }> {
     conferirItensSuportados([e.item]);
-    return this.gravar(c, ctx, 'pep.incluirItem', e.cbo, async (tx, est, prof) => {
-      const p = await vigenteDoPaciente(tx, est.id, e.prescricao, e.paciente);
-      const seq = await tx.uma(
-        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM prescricao_item WHERE prescricao_id = ?',
-        [p.id],
-      );
-      const agora = new Date();
-      const inicio = agora.getTime() > p.inicio.getTime() ? agora : p.inicio;
-      const r = await inserirItem(tx, est, p.id, p.atendimento, prof, e.item, num(seq?.['s']), inicio, p.fim, e.sgh);
-      await gravarDecisoes(tx, prof, new Map([[e.item.chave, r.item]]), e.sgh.decisoes, agora);
-      await tx.alterar('prescricao', p.id, p.versao, {});
-      await evento_(tx, p.id, r.item, 'inclusao', 'inclusao_item', p.situacao, p.situacao, null, prof, agora, {
-        hashConteudo: e.hashConteudo,
-        comoSuporte: e.sgh.comoSuporte,
-        horarios: r.horarios,
-      });
-      return { item: r.item };
-    }, (r) => ({ tabela: 'prescricao_item', id: r.item }));
-  }
-
-  /** Suspende o item (ou corrige: suspende e inclui o item de correção); os horários pendentes ficam suspensos. */
-  suspenderItem(c: ContextoPrescricao, e: SuspensaoItem, ctx: ContextoOperacao): Promise<{ horarios: number }> {
-    if (e.correcao) conferirItensSuportados([e.correcao]);
-    return this.gravar(c, ctx, 'pep.suspenderItem', e.cbo, async (tx, est, prof) => {
-      const p = await vigenteDoPaciente(tx, est.id, e.prescricao, e.paciente);
-      const it = await umaTravada(tx, 
-        `SELECT id, versao, situacao, sequencia FROM prescricao_item
-          WHERE id = ? AND prescricao_id = ? AND excluido_em IS NULL`,
-        [e.item, p.id],
-      );
-      const pendentes = it ? await horariosPendentes(tx, est.id, p.id, e.item) : [];
-      if (!it || it['situacao'] !== 'ativo' || pendentes.length === 0)
-        throw recusar(409, 'item-nao-ativo', 'O item já está suspenso.');
-      const agora = new Date();
-      const situacao = e.correcao ? 'suspenso_correcao' : 'suspenso';
-      await tx.alterar('prescricao_item', e.item, num(it['versao']), {
-        situacao,
-        suspenso_em: agora,
-        suspensao_profissional_id: prof.profissional,
-        motivo_suspensao: e.justificativa,
-        fim_em: agora.getTime() >= p.inicio.getTime() ? agora : p.inicio,
-      });
-      const n = await suspenderHorarios(tx, pendentes, agora);
-      let correcao: number | null = null;
-      if (e.correcao) {
+    return this.gravar(
+      c,
+      ctx,
+      'pep.incluirItem',
+      e.cbo,
+      async (tx, est, prof) => {
+        const p = await vigenteDoPaciente(tx, est.id, e.prescricao, e.paciente);
         const seq = await tx.uma(
           'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM prescricao_item WHERE prescricao_id = ?',
           [p.id],
         );
+        const agora = new Date();
         const inicio = agora.getTime() > p.inicio.getTime() ? agora : p.inicio;
-        const r = await inserirItem(tx, est, p.id, p.atendimento, prof, e.correcao, num(seq?.['s']), inicio, p.fim, e.sgh);
-        correcao = r.item;
-        if (e.sgh) await gravarDecisoes(tx, prof, new Map([[e.correcao.chave, r.item]]), e.sgh.decisoes, agora);
-      }
-      await tx.alterar('prescricao', p.id, p.versao, {});
-      await evento_(tx, p.id, e.item, 'alteracao', e.correcao ? 'suspensao_correcao' : 'suspensao', 'ativo', situacao,
-        e.justificativa, prof, agora, { hashConteudo: e.hashConteudo, comoSuporte: e.comoSuporte, horarios: n, correcao });
-      return { horarios: n };
-    }, () => ({ tabela: 'prescricao_item', id: e.item }));
+        const r = await inserirItem(
+          tx,
+          est,
+          p.id,
+          p.atendimento,
+          prof,
+          e.item,
+          num(seq?.['s']),
+          inicio,
+          p.fim,
+          e.sgh,
+        );
+        await gravarDecisoes(tx, prof, p.id, new Map([[e.item.chave, r.item]]), e.sgh.decisoes, agora);
+        await tx.alterar('prescricao', p.id, p.versao, {});
+        await evento_(
+          tx,
+          p.id,
+          r.item,
+          'inclusao',
+          'inclusao_item',
+          p.situacao,
+          p.situacao,
+          null,
+          prof,
+          agora,
+          {
+            hashConteudo: e.hashConteudo,
+            comoSuporte: e.sgh.comoSuporte,
+            horarios: r.horarios,
+          },
+        );
+        return { item: r.item };
+      },
+      (r) => ({ tabela: 'prescricao_item', id: r.item }),
+      null,
+      e,
+    );
+  }
+
+  /** Suspende o item (ou corrige: suspende e inclui o item de correção); os horários pendentes ficam suspensos. */
+  suspenderItem(
+    c: ContextoPrescricao,
+    e: SuspensaoItem,
+    ctx: ContextoOperacao,
+  ): Promise<{ horarios: number }> {
+    if (e.correcao) conferirItensSuportados([e.correcao]);
+    return this.gravar(
+      c,
+      ctx,
+      'pep.suspenderItem',
+      e.cbo,
+      async (tx, est, prof) => {
+        const p = await vigenteDoPaciente(tx, est.id, e.prescricao, e.paciente);
+        const it = await umaTravada(
+          tx,
+          `SELECT id, versao, situacao, sequencia FROM prescricao_item
+          WHERE id = ? AND prescricao_id = ? AND excluido_em IS NULL`,
+          [e.item, p.id],
+        );
+        const pendentes = it ? await horariosPendentes(tx, est.id, p.id, e.item) : [];
+        if (!it || it['situacao'] !== 'ativo' || pendentes.length === 0)
+          throw recusar(409, 'item-nao-ativo', 'O item já está suspenso.');
+        const agora = new Date();
+        const situacao = e.correcao ? 'suspenso_correcao' : 'suspenso';
+        await tx.alterar('prescricao_item', e.item, num(it['versao']), {
+          situacao,
+          suspenso_em: agora,
+          suspensao_profissional_id: prof.profissional,
+          motivo_suspensao: e.justificativa,
+          fim_em: agora.getTime() >= p.inicio.getTime() ? agora : p.inicio,
+        });
+        const n = await suspenderHorarios(tx, pendentes, agora);
+        let correcao: number | null = null;
+        if (e.correcao) {
+          const seq = await tx.uma(
+            'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM prescricao_item WHERE prescricao_id = ?',
+            [p.id],
+          );
+          const inicio = agora.getTime() > p.inicio.getTime() ? agora : p.inicio;
+          const r = await inserirItem(
+            tx,
+            est,
+            p.id,
+            p.atendimento,
+            prof,
+            e.correcao,
+            num(seq?.['s']),
+            inicio,
+            p.fim,
+            e.sgh,
+          );
+          correcao = r.item;
+          if (e.sgh)
+            await gravarDecisoes(
+              tx,
+              prof,
+              p.id,
+              new Map([[e.correcao.chave, r.item]]),
+              e.sgh.decisoes,
+              agora,
+            );
+        }
+        await tx.alterar('prescricao', p.id, p.versao, {});
+        await evento_(
+          tx,
+          p.id,
+          e.item,
+          'alteracao',
+          e.correcao ? 'suspensao_correcao' : 'suspensao',
+          'ativo',
+          situacao,
+          e.justificativa,
+          prof,
+          agora,
+          { hashConteudo: e.hashConteudo, comoSuporte: e.comoSuporte, horarios: n, correcao },
+        );
+        return { horarios: n };
+      },
+      () => ({ tabela: 'prescricao_item', id: e.item }),
+      null,
+      e,
+    );
   }
 
   /** Suspende a prescrição inteira: itens ativos e horários pendentes suspensos, com o motivo. */
@@ -682,70 +905,131 @@ export class GravacaoPrescricaoPropria {
     e: SuspensaoPrescricao,
     ctx: ContextoOperacao,
   ): Promise<{ horarios: number }> {
-    return this.gravar(c, ctx, 'pep.suspenderPrescricao', e.cbo, async (tx, est, prof) => {
-      const p = await travarPrescricao(tx, est.id, e.prescricao);
-      if (!p || p.paciente !== e.paciente)
-        throw recusar(404, 'registro-inexistente', 'A prescrição não foi encontrada para este paciente.');
-      if (p.suspensa || p.situacao === 'suspensa' || p.situacao === 'cancelada')
-        throw recusar(409, 'prescricao-nao-vigente', 'A prescrição já está suspensa.');
-      const agora = new Date();
-      const pendentes = await horariosPendentes(tx, est.id, p.id, null);
-      const n = await suspenderHorarios(tx, pendentes, agora);
-      const ativos = await tx.consultarParaAtualizar(
-        `SELECT id, versao FROM prescricao_item
+    return this.gravar(
+      c,
+      ctx,
+      'pep.suspenderPrescricao',
+      e.cbo,
+      async (tx, est, prof) => {
+        const p = await travarPrescricao(tx, est.id, e.prescricao);
+        if (!p || p.paciente !== e.paciente)
+          throw recusar(404, 'registro-inexistente', 'A prescrição não foi encontrada para este paciente.');
+        if (p.suspensa || p.situacao === 'suspensa' || p.situacao === 'cancelada')
+          throw recusar(409, 'prescricao-nao-vigente', 'A prescrição já está suspensa.');
+        const agora = new Date();
+        const pendentes = await horariosPendentes(tx, est.id, p.id, null);
+        const n = await suspenderHorarios(tx, pendentes, agora);
+        const ativos = await tx.consultarParaAtualizar(
+          `SELECT id, versao FROM prescricao_item
           WHERE prescricao_id = ? AND excluido_em IS NULL AND situacao = 'ativo'`,
-        [p.id],
-      );
-      for (const it of ativos)
-        await tx.alterar('prescricao_item', num(it['id']), num(it['versao']), {
-          situacao: 'suspenso',
-          suspenso_em: agora,
+          [p.id],
+        );
+        for (const it of ativos)
+          await tx.alterar('prescricao_item', num(it['id']), num(it['versao']), {
+            situacao: 'suspenso',
+            suspenso_em: agora,
+            suspensao_profissional_id: prof.profissional,
+            motivo_suspensao: e.justificativa,
+          });
+        await tx.alterar('prescricao', p.id, p.versao, {
+          situacao: 'suspensa',
+          suspensa_em: agora,
           suspensao_profissional_id: prof.profissional,
           motivo_suspensao: e.justificativa,
         });
-      await tx.alterar('prescricao', p.id, p.versao, {
-        situacao: 'suspensa',
-        suspensa_em: agora,
-        suspensao_profissional_id: prof.profissional,
-        motivo_suspensao: e.justificativa,
-      });
-      await evento_(tx, p.id, null, 'alteracao', 'suspensao', p.situacao, 'suspensa', e.justificativa, prof, agora, {
-        hashConteudo: e.hashConteudo,
-        comoSuporte: e.comoSuporte,
-        horarios: n,
-        itens: ativos.length,
-      });
-      return { horarios: n };
-    }, () => ({ tabela: 'prescricao', id: e.prescricao }));
+        await evento_(
+          tx,
+          p.id,
+          null,
+          'alteracao',
+          'suspensao',
+          p.situacao,
+          'suspensa',
+          e.justificativa,
+          prof,
+          agora,
+          {
+            hashConteudo: e.hashConteudo,
+            comoSuporte: e.comoSuporte,
+            horarios: n,
+            itens: ativos.length,
+          },
+        );
+        return { horarios: n };
+      },
+      () => ({ tabela: 'prescricao', id: e.prescricao }),
+      null,
+      e,
+    );
   }
 
-  /** Coassinatura do profissional da sessão (login) numa prescrição que a exige; a segunda vez não grava de novo. */
+  /**
+   * Coassinatura do profissional da sessão (login) numa prescrição que a exige; a segunda vez não grava de novo. Quem
+   * coassina não pode ser o prescritor, e a ocupação dele tem de ser de categoria que prescreve sem pedir coassinatura
+   * (o supervisor do residente). A prescrição que não pediu coassinatura é recusada (o fato histórico não é reescrito).
+   */
   async coassinar(c: ContextoPrescricao, prescricao: number, usuario: string): Promise<void> {
-    await this.gravar(c, contextoDoLogin(c, 'pep.coassinar', usuario), 'pep.coassinar', null, async (tx, est, prof) => {
-      const p = await umaTravada(tx, 
-        `SELECT id, versao, situacao, coassinatura_exigida, coassinada_em FROM prescricao p
+    await this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.coassinar', usuario),
+      'pep.coassinar',
+      null,
+      async (tx, est, prof) => {
+        const p = await umaTravada(
+          tx,
+          `SELECT id, versao, situacao, coassinatura_exigida, coassinada_em, prescritor_profissional_id FROM prescricao p
           WHERE p.id = ? AND ${VISIVEL('p')}`,
-        [prescricao, est.id],
-      );
-      if (!p) throw recusar(404, 'registro-inexistente', 'A prescrição não foi encontrada.');
-      if (p['situacao'] === 'cancelada')
-        throw recusar(409, 'prescricao-nao-vigente', 'A prescrição foi cancelada.');
-      if (p['coassinada_em'] !== null) return null;
-      const agora = new Date();
-      await tx.alterar('prescricao', prescricao, num(p['versao']), {
-        coassinatura_exigida: true,
-        coassinada_em: agora,
-        coassinatura_profissional_id: prof.profissional,
-      });
-      await evento_(tx, prescricao, null, 'alteracao', 'coassinatura', String(p['situacao']), String(p['situacao']),
-        null, prof, agora, null);
-      return null;
-    }, () => ({ tabela: 'prescricao', id: prescricao }));
+          [prescricao, est.id],
+        );
+        if (!p) throw recusar(404, 'registro-inexistente', 'A prescrição não foi encontrada.');
+        if (p['situacao'] === 'cancelada')
+          throw recusar(409, 'prescricao-nao-vigente', 'A prescrição foi cancelada.');
+        if (!verdadeiro(p['coassinatura_exigida']))
+          throw recusar(409, 'sem-coassinatura', 'A prescrição não espera coassinatura.');
+        if (numOuNull(p['prescritor_profissional_id']) === prof.profissional)
+          throw recusar(
+            409,
+            'coassinatura-pelo-prescritor',
+            'O prescritor não coassina a própria prescrição.',
+          );
+        if (p['coassinada_em'] !== null) return null;
+        if (!podeSupervisionar(await ocupacoesDoProfissional(tx, prof.profissional)))
+          throw recusar(
+            409,
+            'coassinatura-sem-supervisor',
+            'Só o profissional de categoria que prescreve sem coassinatura coassina a prescrição.',
+          );
+        const agora = new Date();
+        await tx.alterar('prescricao', prescricao, num(p['versao']), {
+          coassinada_em: agora,
+          coassinatura_profissional_id: prof.profissional,
+        });
+        await evento_(
+          tx,
+          prescricao,
+          null,
+          'alteracao',
+          'coassinatura',
+          String(p['situacao']),
+          String(p['situacao']),
+          null,
+          prof,
+          agora,
+          null,
+        );
+        return null;
+      },
+      () => ({ tabela: 'prescricao', id: prescricao }),
+    );
   }
 
   /** Programa uma prescrição futura do atendimento (gatilho por data). */
   programarFutura(c: ContextoPrescricao, usuario: string, f: FuturaProgramada): Promise<number> {
-    return this.gravar(c, contextoDoLogin(c, 'pep.programarFutura', usuario), 'pep.programarFutura', null,
+    return this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.programarFutura', usuario),
+      'pep.programarFutura',
+      null,
       async (tx, est, prof) => {
         const atd = await tx.uma(
           'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
@@ -763,7 +1047,10 @@ export class GravacaoPrescricaoPropria {
           paciente_id: f.paciente,
           atendimento_id: f.atendimento,
           gatilho: 'data',
-          liberar_em: instanteLocal(f.aPartirDe.length === 10 ? `${f.aPartirDe}T00:00` : f.aPartirDe, est.fuso),
+          liberar_em: instanteLocal(
+            f.aPartirDe.length === 10 ? `${f.aPartirDe}T00:00` : f.aPartirDe,
+            est.fuso,
+          ),
           prescritor_profissional_id: prof.profissional,
           ocupacao_cbo_id: prof.ocupacao,
           planejado_em: new Date(),
@@ -773,7 +1060,9 @@ export class GravacaoPrescricaoPropria {
           motivo_programacao: f.motivo,
           origem: 'sistema',
         });
-      }, (id) => ({ tabela: 'planejamento_prescricao', id }));
+      },
+      (id) => ({ tabela: 'planejamento_prescricao', id }),
+    );
   }
 
   /** Cancela a programação (só a do paciente da rota: 404; só enquanto programada: 409), com o motivo. */
@@ -784,15 +1073,24 @@ export class GravacaoPrescricaoPropria {
     id: number,
     motivo: string,
   ): Promise<void> {
-    await this.gravar(c, contextoDoLogin(c, 'pep.cancelarFutura', usuario), 'pep.cancelarFutura', null,
+    await this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.cancelarFutura', usuario),
+      'pep.cancelarFutura',
+      null,
       async (tx, est) => {
-        const f = await umaTravada(tx, 
+        const f = await umaTravada(
+          tx,
           `SELECT id, versao, situacao FROM planejamento_prescricao
             WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL`,
           [id, est.id, paciente],
         );
         if (!f)
-          throw recusar(404, 'registro-inexistente', 'A prescrição futura não foi encontrada para este paciente.');
+          throw recusar(
+            404,
+            'registro-inexistente',
+            'A prescrição futura não foi encontrada para este paciente.',
+          );
         if (f['situacao'] !== 'programada')
           throw recusar(409, 'futura-nao-programada', 'A prescrição futura não está programada.');
         await tx.alterar('planejamento_prescricao', id, num(f['versao']), {
@@ -801,7 +1099,10 @@ export class GravacaoPrescricaoPropria {
           motivo_cancelamento: motivo.slice(0, 500),
         });
         return null;
-      }, () => ({ tabela: 'planejamento_prescricao', id }), motivo);
+      },
+      () => ({ tabela: 'planejamento_prescricao', id }),
+      motivo,
+    );
   }
 
   /** Registra a reconciliação (um lote concluído com as linhas); devolve o lote. */
@@ -814,8 +1115,12 @@ export class GravacaoPrescricaoPropria {
       if (x.conduta !== 'manter' && !x.justificativa)
         throw recusar(422, 'justificativa-obrigatoria', 'A conduta diferente de manter pede justificativa.');
     }
-    return this.gravar(c, contextoDoLogin(c, 'pep.registrarReconciliacao', usuario), 'pep.registrarReconciliacao',
-      null, async (tx, est, prof) => {
+    return this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.registrarReconciliacao', usuario),
+      'pep.registrarReconciliacao',
+      null,
+      async (tx, est, prof) => {
         const atd = await tx.uma(
           'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [r.atendimento, est.id],
@@ -849,20 +1154,27 @@ export class GravacaoPrescricaoPropria {
             origem: 'sistema',
           });
         return lote;
-      }, (lote) => ({ tabela: 'reconciliacao_medicamentosa', id: lote }));
+      },
+      (lote) => ({ tabela: 'reconciliacao_medicamentosa', id: lote }),
+    );
   }
 
   /** Nova versão da grade de horários por classe (cadastro: só o usuário do autor, sem profissional). */
   gravarGrade(c: ContextoPrescricao, autor: string, g: NovaGradeClasse): Promise<number> {
     if (g.horarios.some((h) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h)))
       throw recusar(422, 'horario-invalido', 'Horário fora do formato HH:MM.');
-    return this.gravar(c, contextoDoLogin(c, 'pep.gravarGrade', autor), 'pep.gravarGrade', 'sem-profissional',
+    return this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.gravarGrade', autor),
+      'pep.gravarGrade',
+      'sem-profissional',
       async (tx, est, prof) => {
         const u = await tx.uma(
           'SELECT id FROM unidade_assistencial WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [g.unidade, est.id],
         );
-        if (!u) throw recusar(404, 'registro-inexistente', 'A unidade não foi encontrada no estabelecimento.');
+        if (!u)
+          throw recusar(404, 'registro-inexistente', 'A unidade não foi encontrada no estabelecimento.');
         return tx.incluir('grade_horario_classe', {
           estabelecimento_id: est.id,
           unidade_assistencial_id: g.unidade,
@@ -874,7 +1186,9 @@ export class GravacaoPrescricaoPropria {
           autor_usuario_id: prof.usuario,
           origem: 'sistema',
         });
-      }, (id) => ({ tabela: 'grade_horario_classe', id }));
+      },
+      (id) => ({ tabela: 'grade_horario_classe', id }),
+    );
   }
 
   /** Ainda sem adaptador: a ficha pede o cadastro de antimicrobiano, finalidade e sítio do modelo próprio. */
@@ -901,47 +1215,55 @@ export class GravacaoPrescricaoPropria {
     fn: (tx: TxOperacao, est: Estabelecimento, prof: ProfissionalDaGravacao) => Promise<T>,
     alvo: (r: T) => { tabela: string; id: number | null },
     motivo: string | null = null,
+    /** O pedido (para o hash da idempotência: a mesma chave com outro pedido é recusada, não devolve o anterior). */
+    pedido: unknown = null,
   ): Promise<T> {
     const cliente = this.clienteDe(c);
     const ident = await this.ler(c, 'identidade', async (l, est) => ({
       est,
       prof:
-        cbo === 'sem-profissional'
-          ? await usuarioDaSessao(l, ctx)
-          : await profissionalDaSessao(l, ctx, cbo),
+        cbo === 'sem-profissional' ? await usuarioDaSessao(l, ctx) : await profissionalDaSessao(l, ctx, cbo),
     }));
     if (!ident.prof)
       throw recusar(
         409,
         'profissional-sem-cbo',
-        cbo === 'sem-profissional' ? 'O usuário da sessão não existe neste cliente.' : 'Só o profissional da sessão prescreve.',
+        cbo === 'sem-profissional'
+          ? 'O usuário da sessão não existe neste cliente.'
+          : 'Só o profissional da sessão prescreve.',
       );
     const prof = ident.prof;
     let feito: { r: T } | null = null;
     const op = definirOperacao({
       nome: nomeOperacao(operacao),
       tabelas: TABELAS_GRAVACAO_PRESCRICAO,
-      entrada: z.object({}).strict(),
+      entrada: z.object({ pedido: z.string() }).strict(),
       gravar: async (tx: TxOperacao) => {
         const r = await fn(tx, ident.est, prof);
         feito = { r };
         const a = alvo(r);
-        return { tabela: a.tabela, id: a.id };
+        // O resultado inteiro do método vai junto (JSON): o reenvio devolve a mesma forma, não só o id.
+        return { tabela: a.tabela, id: a.id, resultado: JSON.stringify(r ?? null) };
       },
       alvo: (_e, s) => ({ tabela: String(s['tabela']), id: s['id'] === null ? null : Number(s['id']) }),
       trilha: () => ({ motivo }),
     });
-    const r = await this.executor.executar(op, cliente, {}, {
+    const r = await this.executor.executar(
+      op,
       cliente,
-      estabelecimento: ident.est.id,
-      usuario: prof.usuario,
-      correlacao: (ctx.correlacao || operacao).slice(0, 64),
-      chaveIdempotencia: ctx.chaveIdempotencia,
-      ...(ctx.reautenticadoEm !== undefined ? { reautenticadoEm: ctx.reautenticadoEm } : {}),
-    });
+      { pedido: impressaoDoPedido(pedido) },
+      {
+        cliente,
+        estabelecimento: ident.est.id,
+        usuario: prof.usuario,
+        correlacao: (ctx.correlacao || operacao).slice(0, 64),
+        chaveIdempotencia: ctx.chaveIdempotencia,
+        ...(ctx.reautenticadoEm !== undefined ? { reautenticadoEm: ctx.reautenticadoEm } : {}),
+      },
+    );
     if (!feito) {
       // Reenvio com a mesma chave: o executor devolve o resultado gravado sem gravar de novo.
-      if (r.repetida) return (r.resultado as Record<string, unknown>)['id'] as T;
+      if (r.repetida) return resultadoRepetido<T>(r.resultado);
       throw new Error(`A operação ${operacao} terminou sem resultado.`);
     }
     return (feito as { r: T }).r;
@@ -954,6 +1276,57 @@ export class GravacaoPrescricaoPropria {
 export function nomeOperacao(operacao: string): string {
   const base = operacao.replace(/^pep\./, '').replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
   return `pep.prescricao.${base}`.replace(/[^a-z0-9_.-]/g, '-').slice(0, 119);
+}
+
+/** SHA-256 do pedido (JSON com as chaves em ordem), guardado no hash da idempotência. */
+export function impressaoDoPedido(pedido: unknown): string {
+  const canonico = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(canonico)
+      : v && typeof v === 'object' && !(v instanceof Date)
+        ? Object.fromEntries(
+            Object.keys(v as object)
+              .sort()
+              .map((k) => [k, canonico((v as Record<string, unknown>)[k])]),
+          )
+        : v;
+  return createHash('sha256')
+    .update(JSON.stringify(canonico(pedido) ?? null), 'utf8')
+    .digest('hex');
+}
+
+/** O resultado do método guardado pela primeira execução (reenvio com a mesma chave): a mesma forma da primeira vez. */
+export function resultadoRepetido<T>(resultado: unknown): T {
+  const texto = (resultado as Record<string, unknown> | null)?.['resultado'];
+  if (typeof texto !== 'string')
+    throw new ErroOperacao(
+      409,
+      'idempotencia-sem-resultado',
+      'Operação recusada',
+      'A chave de idempotência já foi usada por uma gravação sem o resultado guardado; envie uma chave nova.',
+    );
+  return JSON.parse(texto) as T;
+}
+
+/** Códigos CBO das ocupações ativas do profissional (da inscrição no conselho ativa ou provisória e do cadastro). */
+async function ocupacoesDoProfissional(tx: TxOperacao, profissional: number): Promise<string[]> {
+  const linhas = await tx.consultar(
+    `SELECT o.codigo_cbo FROM inscricao_conselho ic JOIN ocupacao_cbo o ON o.id = ic.ocupacao_cbo_id
+      WHERE ic.profissional_id = ? AND ic.excluido_em IS NULL AND ic.situacao IN ('ativa','provisoria')
+     UNION
+     SELECT o.codigo_cbo FROM profissional_ocupacao po JOIN ocupacao_cbo o ON o.id = po.ocupacao_cbo_id
+      WHERE po.profissional_id = ? AND po.ativo AND po.excluido_em IS NULL`,
+    [profissional, profissional],
+  );
+  return linhas.map((x) => String(x['codigo_cbo']));
+}
+
+/** Supervisiona (coassina) quem tem ocupação de categoria que prescreve e não pede ela mesma coassinatura. */
+export function podeSupervisionar(cbos: readonly string[]): boolean {
+  return cbos.some((cbo) => {
+    const k = categoriaPorOcupacao(cbo);
+    return k !== 'outro' && !exigeCoassinatura(k);
+  });
 }
 
 /** Contexto de gravação dos métodos que recebem só o login (o reenvio não é idempotente: chave única da chamada). */
@@ -1061,7 +1434,8 @@ async function umaTravada(
 }
 
 async function travarPrescricao(tx: TxOperacao, est: number, id: number): Promise<PrescricaoTravada | null> {
-  const p = await umaTravada(tx, 
+  const p = await umaTravada(
+    tx,
     `SELECT id, versao, situacao, atendimento_id, paciente_id, vigencia_inicio_em, vigencia_fim_em, suspensa_em
        FROM prescricao p WHERE p.id = ? AND ${VISIVEL('p')}`,
     [id, est],
@@ -1149,9 +1523,7 @@ async function inserirItem(
   const categoria = CATEGORIA_DO_PLANO[it.plano];
   const tipo =
     it.plano >= BASE_PLANO_PROPRIO
-      ? await tx.uma('SELECT id FROM tipo_item_prescricao WHERE id = ?', [
-          it.plano - BASE_PLANO_PROPRIO,
-        ])
+      ? await tx.uma('SELECT id FROM tipo_item_prescricao WHERE id = ?', [it.plano - BASE_PLANO_PROPRIO])
       : categoria
         ? await tx.uma(
             `SELECT t.id FROM tipo_item_prescricao t WHERE t.categoria = ?
@@ -1161,10 +1533,9 @@ async function inserirItem(
           )
         : null;
   if (!tipo) throw recusar(422, 'tipo-item-sem-cadastro', 'O tipo do item não está no cadastro.');
-  const produto = await tx.uma(
-    'SELECT id FROM item_prescritivel WHERE id = ? AND excluido_em IS NULL',
-    [d.produto],
-  );
+  const produto = await tx.uma('SELECT id FROM item_prescritivel WHERE id = ? AND excluido_em IS NULL', [
+    d.produto,
+  ]);
   if (!produto) throw recusar(422, 'cadastro-inexistente', 'O produto não está no cadastro.');
   const calculo = sgh?.itens.find((x) => x.chave === it.chave) ?? null;
   const item = await tx.incluir('prescricao_item', {
@@ -1181,9 +1552,10 @@ async function inserirItem(
     situacao: 'ativo',
     lancamento_profissional_id: prof.profissional,
     observacao_enfermagem: it.observacao,
-    calculo_regra: calculo?.regraDose && ['por_kg', 'por_m2', 'por_clearance', 'fixa'].includes(calculo.regraDose)
-      ? calculo.regraDose
-      : null,
+    calculo_regra:
+      calculo?.regraDose && ['por_kg', 'por_m2', 'por_clearance', 'fixa'].includes(calculo.regraDose)
+        ? calculo.regraDose
+        : null,
     calculo_peso_kg: calculo?.pesoKg ?? null,
     calculo_altura_cm: calculo?.alturaCm ?? null,
     calculo_clearance: calculo?.clearance ?? null,
@@ -1207,7 +1579,12 @@ async function inserirItem(
     const s = await tx.uma(
       `SELECT id FROM situacao_checagem WHERE categoria = 'pendente' AND ativo ORDER BY (ordem IS NULL), ordem, id LIMIT 1`,
     );
-    if (!s) throw recusar(409, 'situacao-checagem-sem-cadastro', 'O cliente não tem situação de checagem pendente.');
+    if (!s)
+      throw recusar(
+        409,
+        'situacao-checagem-sem-cadastro',
+        'O cliente não tem situação de checagem pendente.',
+      );
     for (const h of it.horarios)
       await tx.incluir('horario_administracao', {
         estabelecimento_id: est.id,
@@ -1225,27 +1602,47 @@ async function inserirItem(
 
 /**
  * As decisões sobre os alertas, ligadas ao item pela chave, com a versão da regra no momento (versao_regra). A decisão
- * de um item retirado antes de gravar (sem item) vai só no evento da prescrição.
+ * de um item retirado antes de gravar (a chave não chega a item gravado) fica ligada à prescrição, sem item e com a
+ * chave da tela (rastreabilidade do alerta de segurança do paciente, como a memória guarda com item null).
  */
 async function gravarDecisoes(
   tx: TxOperacao,
   prof: ProfissionalDaGravacao,
+  prescricao: number,
   porChave: ReadonlyMap<string, number>,
   decisoes: GravacaoPrescricao['sgh']['decisoes'],
   agora: Date,
 ): Promise<void> {
   const seq = new Map<number, number>();
+  const seqSemItem = new Map<string, number>();
   for (const d of decisoes) {
-    const item = porChave.get(d.chave);
-    if (item === undefined) continue;
+    const item = porChave.get(d.chave) ?? null;
+    let s: number;
+    if (item === null) {
+      const chave = d.chave.slice(0, 40);
+      let base = seqSemItem.get(chave);
+      if (base === undefined) {
+        const x = await tx.uma(
+          `SELECT COALESCE(MAX(sequencia), 0) AS s FROM decisao_alerta
+            WHERE prescricao_id = ? AND chave_item = ? AND prescricao_item_id IS NULL`,
+          [prescricao, chave],
+        );
+        base = num(x?.['s'] ?? 0);
+      }
+      s = base + 1;
+      seqSemItem.set(chave, s);
+    } else {
+      s = (seq.get(item) ?? 0) + 1;
+      seq.set(item, s);
+    }
     const regra = await tx.uma(
       `SELECT id FROM regra_alerta WHERE codigo = ? OR (? REGEXP '^[0-9]+$' AND id = ?) ORDER BY (codigo = ?) DESC LIMIT 1`,
       [d.regra, d.regra, d.regra, d.regra],
     );
-    const s = (seq.get(item) ?? 0) + 1;
-    seq.set(item, s);
     await tx.incluir('decisao_alerta', {
       prescricao_item_id: item,
+      prescricao_id: prescricao,
+      chave_item: item === null ? d.chave.slice(0, 40) : null,
       sequencia: s,
       regra_alerta_id: regra ? num(regra['id']) : null,
       processo: d.tipo,
@@ -1271,12 +1668,14 @@ async function efetivarFutura(
   prescricao: number,
   agora: Date,
 ): Promise<void> {
-  const f = await umaTravada(tx, 
+  const f = await umaTravada(
+    tx,
     `SELECT id, versao, situacao FROM planejamento_prescricao
       WHERE id = ? AND estabelecimento_id = ? AND atendimento_id = ? AND excluido_em IS NULL`,
     [id, est, atendimento],
   );
-  if (!f) throw recusar(404, 'registro-inexistente', 'A prescrição futura não foi encontrada no atendimento.');
+  if (!f)
+    throw recusar(404, 'registro-inexistente', 'A prescrição futura não foi encontrada no atendimento.');
   if (f['situacao'] !== 'programada')
     throw recusar(409, 'futura-nao-programada', 'A prescrição futura não está programada.');
   await tx.alterar('planejamento_prescricao', id, num(f['versao']), {

@@ -6,8 +6,11 @@ import {
   conferirItensSuportados,
   decisaoGravada,
   GravacaoPrescricaoPropria,
+  impressaoDoPedido,
   instanteLocal,
   nomeOperacao,
+  podeSupervisionar,
+  resultadoRepetido,
 } from './prescricao-propria-gravacao.js';
 import type { ItemGravacao } from './tipos-pep.js';
 
@@ -25,7 +28,8 @@ function dubleNucleo(regras: [string, Record<string, unknown>[]][]) {
   const sqls: string[] = [];
   const responder = (sql: string) => {
     sqls.push(sql);
-    if (sql.includes('FROM estabelecimento WHERE codigo')) return [{ id: 7, fuso_horario: 'America/Sao_Paulo' }];
+    if (sql.includes('FROM estabelecimento WHERE codigo'))
+      return [{ id: 7, fuso_horario: 'America/Sao_Paulo' }];
     return regras.find(([t]) => sql.includes(t))?.[1] ?? [];
   };
   const l = {
@@ -70,8 +74,12 @@ const med = {
 
 describe('apoio da gravação da prescrição própria', () => {
   it('converte a hora civil do estabelecimento em instante UTC (com e sem segundos)', () => {
-    expect(instanteLocal('2026-11-23T10:30', 'America/Sao_Paulo').toISOString()).toBe('2026-11-23T13:30:00.000Z');
-    expect(instanteLocal('2026-01-05T23:59:59', 'America/Manaus').toISOString()).toBe('2026-01-06T03:59:59.000Z');
+    expect(instanteLocal('2026-11-23T10:30', 'America/Sao_Paulo').toISOString()).toBe(
+      '2026-11-23T13:30:00.000Z',
+    );
+    expect(instanteLocal('2026-01-05T23:59:59', 'America/Manaus').toISOString()).toBe(
+      '2026-01-06T03:59:59.000Z',
+    );
     expect(() => instanteLocal('23/11/2026', 'America/Sao_Paulo')).toThrow(ErroOperacao);
   });
 
@@ -98,7 +106,9 @@ describe('apoio da gravação da prescrição própria', () => {
       }
     };
     expect(codigo(() => conferirItensSuportados([item(med)]))).toBeNull();
-    expect(codigo(() => conferirItensSuportados([item({ tipo: 'dieta' })]))).toBe('501:pendente-modelo-proprio');
+    expect(codigo(() => conferirItensSuportados([item({ tipo: 'dieta' })]))).toBe(
+      '501:pendente-modelo-proprio',
+    );
     expect(codigo(() => conferirItensSuportados([item({ ...med, kit: [{ produto: 1 }] })]))).toBe(
       '501:pendente-modelo-proprio',
     );
@@ -106,7 +116,115 @@ describe('apoio da gravação da prescrição própria', () => {
   });
 });
 
+describe('reenvio, idempotência e coassinatura', () => {
+  it('o reenvio devolve o resultado inteiro do método, não só o id', () => {
+    expect(
+      resultadoRepetido({ tabela: 'prescricao', id: 9, resultado: '{"prescricao":9,"horarios":2}' }),
+    ).toEqual({
+      prescricao: 9,
+      horarios: 2,
+    });
+    expect(resultadoRepetido({ tabela: 'prescricao_item', id: 5, resultado: '{"horarios":1}' })).toEqual({
+      horarios: 1,
+    });
+    expect(resultadoRepetido({ tabela: 'prescricao', id: 9, resultado: 'null' })).toBeNull();
+    // Resultado sem o método guardado (gravação de outra versão): recusa, nunca devolve o id no lugar da forma.
+    expect(() => resultadoRepetido({ tabela: 'prescricao', id: 9 })).toThrow(ErroOperacao);
+  });
+
+  it('a impressão do pedido não depende da ordem das chaves e muda com o conteúdo', () => {
+    const a = impressaoDoPedido({ x: 1, y: { b: [1, 2], a: 'z' } });
+    expect(impressaoDoPedido({ y: { a: 'z', b: [1, 2] }, x: 1 })).toBe(a);
+    expect(impressaoDoPedido({ x: 1, y: { b: [2, 1], a: 'z' } })).not.toBe(a);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('coassina só quem prescreve sem pedir coassinatura (o residente e a ocupação sem prescrição não)', () => {
+    expect(podeSupervisionar(['225125'])).toBe(true);
+    expect(podeSupervisionar(['223115', '225125'])).toBe(true);
+    expect(podeSupervisionar(['223115'])).toBe(false);
+    expect(podeSupervisionar(['010105'])).toBe(false);
+    expect(podeSupervisionar([])).toBe(false);
+  });
+});
+
 describe('leituras da família sobre o Leitor dublê', () => {
+  it('marcas e prova: coassinatura pendente pelas colunas exigida e coassinada', async () => {
+    const { porta } = dubleNucleo([
+      [
+        'SELECT p.id, p.origem, p.coassinatura_exigida',
+        [
+          { id: 1, origem: 'sistema', coassinatura_exigida: 1, coassinada_em: null },
+          { id: 2, origem: 'migracao', coassinatura_exigida: 1, coassinada_em: new Date() },
+          { id: 3, origem: 'sistema', coassinatura_exigida: 0, coassinada_em: null },
+        ],
+      ],
+      ["e.evento = 'coassinatura'", [{ ocorrido_em: new Date('2026-11-23T13:00:00Z'), login: 'sup' }]],
+      ['SELECT p.coassinatura_exigida', [{ coassinatura_exigida: 1, coassinada_em: new Date() }]],
+    ]);
+    const m = await porta.marcas(ctx, [1, 2, 3, 0]);
+    expect([...m.entries()]).toEqual([
+      [1, { feitaNoNovo: true, coassinaturaPendente: true }],
+      [2, { feitaNoNovo: false, coassinaturaPendente: false }],
+      [3, { feitaNoNovo: true, coassinaturaPendente: false }],
+    ]);
+    expect(await porta.prova(ctx, 1)).toEqual({
+      eventos: [
+        {
+          tipo: 'coassinado',
+          item: null,
+          em: '2026-11-23T10:00:00',
+          usuario: 'sup',
+          hashAnterior: '',
+          comoSuporte: false,
+        },
+      ],
+      coassinaturaExigida: true,
+      coassinada: true,
+    });
+  });
+
+  it('decisões: do item (chave = id) e do item retirado (item null, chave da tela), versão da regra gravada', async () => {
+    const { porta, sqls } = dubleNucleo([
+      [
+        'FROM decisao_alerta d',
+        [
+          {
+            prescricao_item_id: 11,
+            chave_item: null,
+            processo: 'dose',
+            decisao: 'justificou',
+            justificativa: 'J',
+            regra_alerta_id: 5,
+            versao_regra: 3,
+          },
+          {
+            prescricao_item_id: null,
+            chave_item: 'k9',
+            processo: 'alergia',
+            decisao: 'cancelou_item',
+            justificativa: null,
+            regra_alerta_id: null,
+            versao_regra: 2,
+          },
+        ],
+      ],
+    ]);
+    expect(await porta.decisoes(ctx, 1)).toEqual([
+      { item: 11, chave: '11', tipo: 'dose', decisao: 'mantido', justificativa: 'J', regra: '5', versao: 3 },
+      {
+        item: null,
+        chave: 'k9',
+        tipo: 'alergia',
+        decisao: 'retirado',
+        justificativa: null,
+        regra: '',
+        versao: 2,
+      },
+    ]);
+    expect(sqls.find((x) => x.includes('FROM decisao_alerta d'))).toContain('COALESCE(d.versao_regra');
+  });
+
   it('futuras: hora local, prescrição só quando efetivada, filtro por estabelecimento e sem as da carga', async () => {
     const { porta, sqls } = dubleNucleo([
       [
@@ -133,8 +251,22 @@ describe('leituras da família sobre o Leitor dublê', () => {
     ]);
     const r = await porta.futuras(ctx, 5);
     expect(r).toEqual([
-      { id: 1, aPartirDe: '2026-11-24T07:00:00', descricao: 'Dipirona', situacao: 'programada', prescricao: null, itemJson: '[]' },
-      { id: 2, aPartirDe: '2026-11-25T07:00:00', descricao: 'Outra', situacao: 'efetivada', prescricao: 99, itemJson: '[]' },
+      {
+        id: 1,
+        aPartirDe: '2026-11-24T07:00:00',
+        descricao: 'Dipirona',
+        situacao: 'programada',
+        prescricao: null,
+        itemJson: '[]',
+      },
+      {
+        id: 2,
+        aPartirDe: '2026-11-25T07:00:00',
+        descricao: 'Outra',
+        situacao: 'efetivada',
+        prescricao: 99,
+        itemJson: '[]',
+      },
     ]);
     const sql = sqls.find((s) => s.includes('planejamento_prescricao')) ?? '';
     expect(sql).toContain('f.estabelecimento_id = ?');

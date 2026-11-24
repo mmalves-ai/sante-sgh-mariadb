@@ -12,6 +12,9 @@ import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo
 import { PLANO_DO_TIPO } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import type { PortaPrescricao } from './prescricao-porta.js';
+import { PortaPrescricaoPropria } from './prescricao-porta-propria.js';
+import { ServicoPrescricao } from './prescricao-servico.js';
 import { dataHora } from './registro-porta-propria.js';
 import type { GravacaoPrescricao, ItemGravacao } from './tipos-pep.js';
 
@@ -41,6 +44,8 @@ interface Massa {
   prof: number;
   cbo: number;
   produto: number;
+  /** Médico (supervisor) e residente que coassinam, cada um com usuário próprio. */
+  supervisor: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -49,6 +54,7 @@ async function limpar(e: Escritor): Promise<void> {
   const itens = `(SELECT id FROM prescricao_item WHERE prescricao_id IN ${presc})`;
   const recs = `(SELECT id FROM reconciliacao_medicamentosa WHERE estabelecimento_id IN ${est})`;
   for (const sql of [
+    `DELETE FROM decisao_alerta WHERE prescricao_id IN ${presc}`,
     `DELETE FROM decisao_alerta WHERE prescricao_item_id IN ${itens}`,
     `DELETE FROM prescricao_evento WHERE prescricao_id IN ${presc}`,
     `DELETE FROM horario_administracao WHERE estabelecimento_id IN ${est}`,
@@ -78,12 +84,19 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM inscricao_conselho WHERE profissional_id IN ${profs}`, [`${P} %`]);
   await e.executar(`DELETE FROM profissional_ocupacao WHERE profissional_id IN ${profs}`, [`${P} %`]);
   await e.executar('DELETE FROM profissional WHERE nome_exibicao LIKE ?', [`${P} %`]);
-  await e.executar('DELETE FROM paciente WHERE pessoa_fisica_id IN (SELECT id FROM pessoa_fisica WHERE nome LIKE ?)', [
-    `${P} %`,
-  ]);
+  await e.executar(
+    'DELETE FROM paciente WHERE pessoa_fisica_id IN (SELECT id FROM pessoa_fisica WHERE nome LIKE ?)',
+    [`${P} %`],
+  );
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`${P} %`]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}%`]);
-  for (const t of ['situacao_checagem', 'tipo_item_prescricao', 'unidade_prescricao', 'via_de_uso', 'categoria_atendimento'])
+  for (const t of [
+    'situacao_checagem',
+    'tipo_item_prescricao',
+    'unidade_prescricao',
+    'via_de_uso',
+    'categoria_atendimento',
+  ])
     await e.executar(`DELETE FROM ${t} WHERE codigo LIKE ?`, [`${P}%`]);
 }
 
@@ -104,7 +117,8 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
          VALUES (?, ?, 'Unidade sintética', 'internacao', ?)`,
         [est, `${P}u`],
       );
-      const pessoa = (n: string) => ins('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [`${P} ${n}`]);
+      const pessoa = (n: string) =>
+        ins('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [`${P} ${n}`]);
       const paciente = async (n: string, prontuario: number) =>
         ins('INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)', [
           await pessoa(n),
@@ -140,25 +154,54 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         `INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, 'Usuário sintético', 'servico', ?)`,
         [`${P}med`],
       );
-      await ins(`INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, 'Sem vínculo', 'servico', ?)`, [
-        `${P}sem`,
-      ]);
+      await ins(
+        `INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, 'Sem vínculo', 'servico', ?)`,
+        [`${P}sem`],
+      );
       await ins(
         `INSERT INTO usuario_profissional (usuario_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, '2026-01-01', ?)`,
         [usuario, prof],
       );
+      // Médico (CBO 225…) que supervisiona e residente (CBO 2231…), que pede ele mesmo coassinatura.
+      const outro = async (rotulo: string, padrao: string, numero: string) => {
+        const o = await e.uma<{ id: unknown }>(
+          'SELECT id FROM ocupacao_cbo WHERE codigo_cbo REGEXP ? ORDER BY id LIMIT 1',
+          [padrao],
+        );
+        const pf = await ins(
+          `INSERT INTO profissional (pessoa_fisica_id, tipo, nome_exibicao, criado_em) VALUES (?, 'corpo_clinico', ?, ?)`,
+          [await pessoa(rotulo), `${P} ${rotulo}`],
+        );
+        await ins(
+          `INSERT INTO inscricao_conselho (profissional_id, sequencia, conselho_classe_id, unidade_federativa_id,
+             numero_inscricao, ocupacao_cbo_id, principal, situacao, criado_em)
+           VALUES (?, 1, 1, 1, ?, ?, TRUE, 'ativa', ?)`,
+          [pf, numero, o?.id],
+        );
+        const u = await ins(
+          `INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)`,
+          [`${P}${rotulo}`, `Usuário ${rotulo}`],
+        );
+        await ins(
+          `INSERT INTO usuario_profissional (usuario_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, '2026-01-01', ?)`,
+          [u, pf],
+        );
+        return pf;
+      };
+      const supervisor = await outro('sup', '^2251[0-9]+$', '95002');
+      await outro('res', '^2231[0-9]+$', '95003');
       const tipo = await ins(
         `INSERT INTO tipo_item_prescricao (codigo, descricao, categoria, criado_em) VALUES (?, 'Medicamento sintético', 'medicamento', ?)`,
         [`${P}m`],
       );
-      await ins(`INSERT INTO via_de_uso (codigo, descricao, sigla, criado_em) VALUES (?, 'Endovenosa', ?, ?)`, [
-        `${P}v`,
-        'EV95',
-      ]);
-      await ins(`INSERT INTO unidade_prescricao (codigo, descricao, sigla, criado_em) VALUES (?, 'Miligrama', ?, ?)`, [
-        `${P}u`,
-        'mg95',
-      ]);
+      await ins(
+        `INSERT INTO via_de_uso (codigo, descricao, sigla, criado_em) VALUES (?, 'Endovenosa', ?, ?)`,
+        [`${P}v`, 'EV95'],
+      );
+      await ins(
+        `INSERT INTO unidade_prescricao (codigo, descricao, sigla, criado_em) VALUES (?, 'Miligrama', ?, ?)`,
+        [`${P}u`, 'mg95'],
+      );
       const produto = await ins(
         `INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, criado_em) VALUES (?, 'Produto sintético', ?, ?)`,
         [`${P}ip`, tipo],
@@ -167,10 +210,10 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         `INSERT INTO situacao_checagem (codigo, descricao, categoria, ordem, criado_em) VALUES (?, 'Pendente', 'pendente', 0, ?)`,
         [`${P}p`],
       );
-      await ins('INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, criado_em) VALUES (?, ?, 1, ?)', [
-        est,
-        'prescricao',
-      ]);
+      await ins(
+        'INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, criado_em) VALUES (?, ?, 1, ?)',
+        [est, 'prescricao'],
+      );
       return {
         est,
         unidade,
@@ -181,6 +224,7 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         prof,
         cbo: Number(String(ocup?.codigo_cbo)),
         produto,
+        supervisor,
       };
     } finally {
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -262,6 +306,16 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
         decisao: 'mantido',
         justificativa: 'Benefício clínico',
       },
+      {
+        chave: 'k9',
+        alerta: 'Alergia registrada ao princípio ativo',
+        tipo: 'alergia',
+        nivel: 'bloqueio',
+        regra: 'regra-inexistente',
+        versaoRegra: 2,
+        decisao: 'retirado',
+        justificativa: null,
+      },
     ]),
   });
   const contar = (sql: string, p: unknown[]) =>
@@ -302,9 +356,37 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
   });
 
   it('prescrever: vigente com item, medicamento, horários, decisão com a versão da regra, eventos e trilha', async () => {
-    const r = await porta.prescrever(c, 'pep.prescrever', gravacao(0, 24), ctx());
+    const chave = ctx();
+    const r = await porta.prescrever(c, 'pep.prescrever', gravacao(0, 24), chave);
     prescricao = r.prescricao;
     expect(r.horarios).toBe(2);
+    // Reenvio com a mesma chave (timeout de rede): a mesma forma devolvida, nada gravado de novo.
+    expect(await porta.prescrever(c, 'pep.prescrever', gravacao(0, 24), chave)).toEqual(r);
+    // A mesma chave com outro pedido é recusada, não devolve o resultado anterior.
+    await expect(porta.prescrever(c, 'pep.prescrever', gravacao(0, 23), chave)).rejects.toMatchObject({
+      problema: { status: 422, codigo: 'idempotencia-divergente' },
+    });
+    expect(await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est])).toBe(
+      1,
+    );
+    // A decisão do item retirado diante do alerta fica gravada, sem item, com a chave da tela e a versão da regra.
+    expect(await porta.decisoes(c, prescricao)).toEqual([
+      expect.objectContaining({
+        chave: expect.not.stringMatching(/^k/),
+        tipo: 'dose',
+        decisao: 'mantido',
+        versao: 3,
+      }),
+      {
+        item: null,
+        chave: 'k9',
+        tipo: 'alergia',
+        decisao: 'retirado',
+        justificativa: null,
+        regra: '',
+        versao: 2,
+      },
+    ]);
     const linha = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
       l.uma(
         `SELECT p.situacao, p.coassinatura_exigida, p.prescritor_profissional_id,
@@ -329,10 +411,12 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
       eventos: 'criacao,assinatura',
     });
     expect(
-      await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade_id = ?', [
-        m.est,
-        prescricao,
-      ]).catch(() => contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.est])),
+      await contar(
+        'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade_id = ?',
+        [m.est, prescricao],
+      ).catch(() =>
+        contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.est]),
+      ),
     ).toBeGreaterThan(0);
   });
 
@@ -346,15 +430,33 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
     await expect(porta.prescrever(c, 'pep.prescrever', gravacao(30, 40, 1), ctx())).rejects.toMatchObject({
       problema: { status: 409, codigo: 'profissional-sem-cbo' },
     });
-    expect(await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est])).toBe(1);
+    expect(await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est])).toBe(
+      1,
+    );
   });
 
   it('incluirItem e suspenderItem: adendo com evento; suspensão leva os horários pendentes; de novo é 409', async () => {
-    const base = { prescricao, paciente: m.pac, atendimento: m.atd, cbo: m.cbo, documento: 'd', hashConteudo: HASH };
+    const base = {
+      prescricao,
+      paciente: m.pac,
+      atendimento: m.atd,
+      cbo: m.cbo,
+      documento: 'd',
+      hashConteudo: HASH,
+    };
     const { item: novo } = await porta.incluirItem(c, { ...base, item: item('k2', [2]), sgh: sgh() }, ctx());
     expect(novo).toBeGreaterThan(0);
-    const susp = { ...base, item: novo, justificativa: 'Troca de conduta', correcao: null, comoSuporte: false };
-    expect(await porta.suspenderItem(c, susp, ctx())).toEqual({ horarios: 1 });
+    const susp = {
+      ...base,
+      item: novo,
+      justificativa: 'Troca de conduta',
+      correcao: null,
+      comoSuporte: false,
+    };
+    const chave = ctx();
+    expect(await porta.suspenderItem(c, susp, chave)).toEqual({ horarios: 1 });
+    // Reenvio com a mesma chave: a contagem de horários (não o id do item), sem gravar de novo.
+    expect(await porta.suspenderItem(c, susp, chave)).toEqual({ horarios: 1 });
     await expect(porta.suspenderItem(c, susp, ctx())).rejects.toMatchObject({
       problema: { status: 409, codigo: 'item-nao-ativo' },
     });
@@ -366,9 +468,57 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
     ).toBe(2);
   });
 
-  it('coassinar: grava quem e quando uma vez só (a segunda não grava de novo)', async () => {
-    await porta.coassinar(c, prescricao, `${P}med`);
-    await porta.coassinar(c, prescricao, `${P}med`);
+  it('coassinar pelo serviço: pendente, recusa o prescritor e o residente, o médico coassina uma vez só', async () => {
+    const propria = new PortaPrescricaoPropria(nucleo, CLIENTE);
+    const ligada = Object.assign(Object.create(propria) as PortaPrescricao, {
+      marcas: porta.marcas.bind(porta),
+      prova: porta.prova.bind(porta),
+      decisoes: porta.decisoes.bind(porta),
+      coassinar: porta.coassinar.bind(porta),
+    });
+    const servico = new ServicoPrescricao(ligada);
+    expect((await porta.marcas(c, [prescricao])).get(prescricao)).toEqual({
+      feitaNoNovo: true,
+      coassinaturaPendente: true,
+    });
+    await expect(servico.coassinar(c, m.pac, prescricao, `${P}med`)).rejects.toMatchObject({
+      problema: { status: 409, codigo: 'coassinatura-pelo-prescritor' },
+    });
+    await expect(servico.coassinar(c, m.pac, prescricao, `${P}res`)).rejects.toMatchObject({
+      problema: { status: 409, codigo: 'coassinatura-sem-supervisor' },
+    });
+    await servico.coassinar(c, m.pac, prescricao, `${P}sup`);
+    expect((await porta.marcas(c, [prescricao])).get(prescricao)?.coassinaturaPendente).toBe(false);
+    const prova = await porta.prova(c, prescricao);
+    expect(prova).toMatchObject({ coassinaturaExigida: true, coassinada: true });
+    expect(prova.eventos.map((x) => [x.tipo, x.usuario])).toEqual([['coassinado', `${P}sup`]]);
+    // Já coassinada: o serviço recusa antes de chegar à porta.
+    await expect(servico.coassinar(c, m.pac, prescricao, `${P}sup`)).rejects.toMatchObject({
+      status: 409,
+      extras: { codigo: 'sem-coassinatura' },
+    });
+    await porta.coassinar(c, prescricao, `${P}sup`);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM prescricao WHERE id = ? AND coassinatura_profissional_id = ?', [
+        prescricao,
+        m.supervisor,
+      ]),
+    ).toBe(1);
+    // A prescrição que não pediu coassinatura não passa a pedir (o fato histórico não é reescrito).
+    const sem = await porta.prescrever(
+      c,
+      'pep.prescrever',
+      { ...gravacao(30, 40), itens: [item('k1', [31])], sgh: { ...sgh(), coassinaturaExigida: false } },
+      ctx(),
+    );
+    await expect(porta.coassinar(c, sem.prescricao, `${P}sup`)).rejects.toMatchObject({
+      problema: { status: 409, codigo: 'sem-coassinatura' },
+    });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM prescricao WHERE id = ? AND NOT coassinatura_exigida', [
+        sem.prescricao,
+      ]),
+    ).toBe(1);
     expect(
       await contar(
         `SELECT COUNT(*) AS n FROM prescricao_evento WHERE prescricao_id = ? AND evento = 'coassinatura'`,
@@ -387,7 +537,12 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
       motivo: null,
     });
     const [f] = await porta.futuras(c, m.atd);
-    expect(f).toMatchObject({ id, descricao: 'Antibiótico amanhã', situacao: 'programada', prescricao: null });
+    expect(f).toMatchObject({
+      id,
+      descricao: 'Antibiótico amanhã',
+      situacao: 'programada',
+      prescricao: null,
+    });
     expect(f?.aPartirDe.slice(0, 16)).toBe(local(30 * HORA));
     await expect(porta.cancelarFutura(c, `${P}med`, m.pac2, id, 'Errada')).rejects.toMatchObject({
       problema: { status: 404 },
@@ -405,8 +560,26 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
       paciente: m.pac,
       momento: 'admissao',
       linhas: [
-        { descricao: 'Losartana', produto: null, dose: '50 mg', frequencia: '1x/dia', fonte: 'paciente', conduta: 'manter', justificativa: null, item: null },
-        { descricao: 'AAS', produto: null, dose: '100 mg', frequencia: '1x/dia', fonte: 'receita', conduta: 'suspender', justificativa: 'Cirurgia', item: null },
+        {
+          descricao: 'Losartana',
+          produto: null,
+          dose: '50 mg',
+          frequencia: '1x/dia',
+          fonte: 'paciente',
+          conduta: 'manter',
+          justificativa: null,
+          item: null,
+        },
+        {
+          descricao: 'AAS',
+          produto: null,
+          dose: '100 mg',
+          frequencia: '1x/dia',
+          fonte: 'receita',
+          conduta: 'suspender',
+          justificativa: 'Cirurgia',
+          item: null,
+        },
       ],
     });
     const [r] = await porta.reconciliacoes(c, m.atd);
@@ -471,9 +644,10 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
       ),
     ).toBe(1);
     expect(
-      await contar(`SELECT COUNT(*) AS n FROM prescricao_item WHERE prescricao_id = ? AND situacao = 'ativo'`, [
-        prescricao,
-      ]),
+      await contar(
+        `SELECT COUNT(*) AS n FROM prescricao_item WHERE prescricao_id = ? AND situacao = 'ativo'`,
+        [prescricao],
+      ),
     ).toBe(0);
   });
 });
