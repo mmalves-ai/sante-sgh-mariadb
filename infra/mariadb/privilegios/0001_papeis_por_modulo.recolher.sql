@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 062571daf326). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance 3d8717b69503). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -162,6 +162,7 @@ REVOKE SELECT ON estabelecimento FROM sgh_mod_adt;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_adt;
 REVOKE SELECT ON fonte_pagadora FROM sgh_mod_adt;
 REVOKE SELECT ON funcao_equipe_cobranca FROM sgh_mod_adt;
+REVOKE SELECT ON glosa FROM sgh_mod_adt;
 REVOKE SELECT ON glosa_item FROM sgh_mod_adt;
 REVOKE SELECT, INSERT ON idempotencia_operacao FROM sgh_mod_adt;
 REVOKE SELECT ON inscricao_conselho FROM sgh_mod_adt;
@@ -330,6 +331,7 @@ REVOKE SELECT ON estabelecimento FROM sgh_mod_atendimento;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_atendimento;
 REVOKE SELECT ON fonte_pagadora FROM sgh_mod_atendimento;
 REVOKE SELECT ON funcao_equipe_cobranca FROM sgh_mod_atendimento;
+REVOKE SELECT ON glosa FROM sgh_mod_atendimento;
 REVOKE SELECT ON glosa_item FROM sgh_mod_atendimento;
 REVOKE SELECT ON grau_parentesco_dependente FROM sgh_mod_atendimento;
 REVOKE SELECT ON grupo_prioridade_legal FROM sgh_mod_atendimento;
@@ -480,7 +482,7 @@ REVOKE SELECT, INSERT, UPDATE ON guia_fonte_pagadora FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON guia_tiss FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT ON idempotencia_operacao FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON inclusao_protocolo_paciente FROM sgh_mod_cadastro;
-REVOKE SELECT ON inscricao_conselho FROM sgh_mod_cadastro;
+REVOKE SELECT, INSERT, UPDATE ON inscricao_conselho FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON inscricao_transplante FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT ON integracao_mensagem FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON intencao_pagamento_portal FROM sgh_mod_cadastro;
@@ -567,9 +569,10 @@ REVOKE SELECT, INSERT, UPDATE ON problema_paciente FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON processo_enfermagem FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON producao_ambulatorial_sus_item FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON profilaxia_tev_avaliacao FROM sgh_mod_cadastro;
-REVOKE SELECT ON profissional FROM sgh_mod_cadastro;
-REVOKE SELECT ON profissional_especialidade FROM sgh_mod_cadastro;
-REVOKE SELECT ON profissional_ocupacao FROM sgh_mod_cadastro;
+REVOKE SELECT, INSERT, UPDATE ON profissional FROM sgh_mod_cadastro;
+REVOKE SELECT, INSERT, UPDATE ON profissional_especialidade FROM sgh_mod_cadastro;
+REVOKE SELECT, INSERT, UPDATE ON profissional_fonte_pagadora FROM sgh_mod_cadastro;
+REVOKE SELECT, INSERT, UPDATE ON profissional_ocupacao FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON profissional_provisorio_uso FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON profissional_referencia_paciente FROM sgh_mod_cadastro;
 REVOKE SELECT ON profissional_versao FROM sgh_mod_cadastro;
@@ -640,7 +643,7 @@ REVOKE SELECT, INSERT, UPDATE ON termo_consentimento_recepcao FROM sgh_mod_cadas
 REVOKE SELECT, INSERT, UPDATE ON teste_imuno_hematologico FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON teto_cobranca_excecao FROM sgh_mod_cadastro;
 REVOKE SELECT ON tipo_documento_identificacao FROM sgh_mod_cadastro;
-REVOKE SELECT ON tipo_telefone FROM sgh_mod_cadastro;
+REVOKE SELECT, UPDATE ON tipo_telefone FROM sgh_mod_cadastro;
 REVOKE SELECT ON tipo_termo_lgpd FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON titulo_receber FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON tratamento_oncologico FROM sgh_mod_cadastro;
@@ -1394,6 +1397,7 @@ REVOKE SELECT ON fechamento_competencia_fonte_pagadora FROM sgh_mod_faturamento;
 REVOKE SELECT ON fonte_pagadora FROM sgh_mod_faturamento;
 REVOKE SELECT ON forma_recebimento FROM sgh_mod_faturamento;
 REVOKE SELECT ON funcao_equipe_cobranca FROM sgh_mod_faturamento;
+REVOKE SELECT ON glosa FROM sgh_mod_faturamento;
 REVOKE SELECT ON glosa_item FROM sgh_mod_faturamento;
 REVOKE SELECT ON grupo_faturamento FROM sgh_mod_faturamento;
 REVOKE SELECT ON guia_fonte_pagadora FROM sgh_mod_faturamento;
@@ -2621,7 +2625,7 @@ REVOKE SELECT, INSERT, UPDATE ON apuracao_repasse FROM sgh_mod_repasse;
 REVOKE SELECT, INSERT, UPDATE ON apuracao_repasse_item FROM sgh_mod_repasse;
 REVOKE SELECT ON atendimento FROM sgh_mod_repasse;
 REVOKE SELECT ON conta_hospitalar FROM sgh_mod_repasse;
-REVOKE SELECT ON conta_hospitalar_item FROM sgh_mod_repasse;
+REVOKE SELECT, INSERT, UPDATE ON conta_hospitalar_item FROM sgh_mod_repasse;
 REVOKE SELECT ON conta_hospitalar_item_participante FROM sgh_mod_repasse;
 REVOKE SELECT ON estabelecimento FROM sgh_mod_repasse;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_repasse;
@@ -2629,6 +2633,7 @@ REVOKE SELECT ON evento_repasse FROM sgh_mod_repasse;
 REVOKE SELECT ON favorecido_repasse FROM sgh_mod_repasse;
 REVOKE SELECT ON fonte_pagadora FROM sgh_mod_repasse;
 REVOKE SELECT ON funcao_equipe_cobranca FROM sgh_mod_repasse;
+REVOKE SELECT ON glosa FROM sgh_mod_repasse;
 REVOKE SELECT ON glosa_item FROM sgh_mod_repasse;
 REVOKE SELECT, INSERT ON idempotencia_operacao FROM sgh_mod_repasse;
 REVOKE SELECT, INSERT ON integracao_mensagem FROM sgh_mod_repasse;
