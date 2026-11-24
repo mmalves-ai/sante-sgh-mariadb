@@ -346,7 +346,7 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
       ),
     ).toBe('telefone-invalido');
     // DDD sem área no plano de numeração (catálogo area_ddd) e número sem a forma de fixo nem de móvel: recusados.
-    const antes = Number((await um<{ n: unknown }>('SELECT COUNT(*) AS n FROM telefone_pessoa', []))?.n);
+    const telAntes = Number((await um<{ n: unknown }>('SELECT COUNT(*) AS n FROM telefone_pessoa', []))?.n);
     for (const [ddd, numero] of [
       ['20', '999990311'],
       ['31', '81234567'],
@@ -362,7 +362,7 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
         ),
       ).toBe('telefone-invalido');
     expect(Number((await um<{ n: unknown }>('SELECT COUNT(*) AS n FROM telefone_pessoa', []))?.n)).toBe(
-      antes,
+      telAntes,
     );
     const t1 = await ficha.incluirTelefone(
       c(),
