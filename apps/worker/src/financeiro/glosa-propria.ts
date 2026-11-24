@@ -68,9 +68,14 @@ export async function registrarGlosaAceitaDoEvento(
   // A produção do repasse acompanha a glosa do item, na mesma transação, em todo caminho (com ou sem título, entrega
   // repetida): o item passa a guardar a soma das glosas aceitas (glosadoAceitoDoItem, a mesma regra da decisão da
   // TISS) e a sincronização (@sgh/dominio-repasse + @sgh/persistencia) é idempotente.
+  // Só o item de conta DESTE estabelecimento: o de outro (ou de conta inexistente) não leva nada ao repasse daqui,
+  // como o título de outro estabelecimento não recebe glosa; sem isso a sincronização recusaria conta-inexistente e a
+  // entrega ficaria em erro para sempre.
   const item = await tx.uma<{ conta: unknown }>(
-    'SELECT conta_hospitalar_id AS conta FROM conta_hospitalar_item WHERE id = ?',
-    [d.item],
+    `SELECT i.conta_hospitalar_id AS conta FROM conta_hospitalar_item i
+       JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
+      WHERE i.id = ? AND ch.estabelecimento_id = ? AND ch.excluido_em IS NULL`,
+    [d.item, est],
   );
   if (!item) return r;
   // O evento do worker não traz usuário: o autor do débito do repasse é quem decidiu a glosa aceita do item (a

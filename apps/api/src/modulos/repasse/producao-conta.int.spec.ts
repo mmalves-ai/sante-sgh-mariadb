@@ -882,8 +882,9 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     const [dh] = await debitosDe(ph!['id']);
     expect(dh).toMatchObject({ situacao: 'pendente' });
     expect(comp(dh!['competencia'])).toBe(proximo);
+    // Conferida no domínio é 'em_auditoria' no banco (porta-propria do repasse, SITUACAO_BANCO).
     await escrever((e) =>
-      e.executar("UPDATE apuracao_repasse SET situacao = 'conferida' WHERE id = ?", [a11]),
+      e.executar("UPDATE apuracao_repasse SET situacao = 'em_auditoria' WHERE id = ?", [a11]),
     );
     const memoria12 = await producaoDaMemoria('2026-10-28T13:00:00Z');
     const a12 = (await apurar(seguinte(proximo), 1000, memoria12)).apuracao;

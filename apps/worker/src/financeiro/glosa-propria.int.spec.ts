@@ -10,6 +10,7 @@ import {
   escrever,
   garantirCliente,
   garantirEstabelecimento,
+  garantirUsuario,
   inserirSintetico,
   SEM_BANCO,
   sha,
@@ -29,6 +30,8 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
   let est = 0;
   let est2 = 0;
   let seqGlosa = 0;
+  // Quem decidiu a glosa: o débito do repasse que a glosa aceita gera precisa de autor (recusa sem-usuario).
+  let decisor = 0;
   const m = {
     titulo: 0,
     tituloOutro: 0,
@@ -112,6 +115,7 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
       valor_recuperado: 0,
       decisao,
       decidido_em: decisao === 'pendente' ? null : new Date(),
+      decidido_por_usuario_id: decisao === 'pendente' ? null : decisor,
       criado_em: new Date(),
       versao: 1,
     });
@@ -123,6 +127,7 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
     await escrever(nucleo, async (e) => {
       est = await garantirEstabelecimento(e, H);
       est2 = await garantirEstabelecimento(e, H2);
+      decisor = await garantirUsuario(e, 'fo513decisor');
     });
     await limpar();
     await escrever(nucleo, async (e) => {

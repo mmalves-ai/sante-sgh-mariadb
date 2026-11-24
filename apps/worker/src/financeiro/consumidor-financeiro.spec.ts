@@ -58,7 +58,16 @@ describe('consumidor do financeiro', () => {
     expect(gravacoes).toEqual(['pc', 'pc']);
     expect(opcoes[0]).toEqual({
       operacao: 'financeiro.glosa.aceita-do-evento',
-      tabelas: ['glosa_titulo_receber', 'titulo_receber'],
+      // O título e, na mesma operação, a sincronização do repasse pela glosa do item (TABELAS_PRODUCAO_CONTA).
+      tabelas: [
+        'glosa_titulo_receber',
+        'titulo_receber',
+        'conta_hospitalar_item',
+        'producao_repasse',
+        'estorno_repasse',
+        'lancamento_repasse',
+        'sequencia_negocio',
+      ],
     });
   });
 
