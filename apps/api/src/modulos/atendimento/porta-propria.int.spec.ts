@@ -691,6 +691,78 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     }
   });
 
+  it('abrir atendimento → lançar procedimento extra na conta da entrada: o item entra na MESMA conta, sem conta nova', async () => {
+    const mm = m!;
+    const c = contextoPorta(mm);
+    // Catálogo e tabela do convênio da massa (sintéticos, reaproveitados entre execuções): o código é numérico.
+    const CODIGO = 99_010_201;
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-extra' }, async (w) => {
+      const agora = new Date();
+      const id = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
+        const l = await w.uma<{ id: number }>(sel, p);
+        return l ? Number(l.id) : w.inserir(ins, pi);
+      };
+      const grupo = Number(
+        (await w.uma<{ id: number }>('SELECT MIN(id) AS id FROM grupo_faturamento', []))?.id,
+      );
+      const item = await id(
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        [String(CODIGO)],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, situacao, criado_em) VALUES (?, 'PROCEDIMENTO EXTRA SINTETICO', 'procedimento', ?, 'ativo', ?)",
+        [String(CODIGO), grupo, agora],
+      );
+      const tabela = await id(
+        'SELECT id FROM tabela_preco WHERE codigo = ?',
+        [`${MARCA}-EXTRA`.slice(0, 30)],
+        "INSERT INTO tabela_preco (estabelecimento_id, codigo, descricao, tipo_item, referencia, fonte_pagadora_id, situacao, criado_em) VALUES (?, ?, 'TABELA SINTETICA EXTRA', 'honorario', 'propria', ?, 'ativa', ?)",
+        [mm.estabelecimento, `${MARCA}-EXTRA`.slice(0, 30), mm.fonte, agora],
+      );
+      const pp = await id(
+        'SELECT id FROM preco_procedimento WHERE tabela_preco_id = ? AND item_faturavel_id = ?',
+        [tabela, item],
+        "INSERT INTO preco_procedimento (tabela_preco_id, sequencia, item_faturavel_id, modelo_valor, criado_em) VALUES (?, 1, ?, 'valor', ?)",
+        [tabela, item, agora],
+      );
+      await id(
+        'SELECT id FROM preco_procedimento_valor WHERE preco_procedimento_id = ?',
+        [pp],
+        "INSERT INTO preco_procedimento_valor (preco_procedimento_id, vigencia_inicio, valor_total, ocorrido_em, criado_em) VALUES (?, '2020-01-01', 80, ?, ?)",
+        [pp, agora, agora],
+      );
+    });
+    const a = await porta.executar(c, 'atendimento.abrirAtendimento', abertura(mm), contextoGravacao(mm));
+    const reg = Number(a.resultado['reg']);
+    expect(a.resultado['alertaConta']).toBeUndefined();
+    const contas = () =>
+      contar(
+        "SELECT COUNT(*) AS n FROM conta_hospitalar WHERE atendimento_id = ? AND situacao <> 'cancelada' AND excluido_em IS NULL",
+        [reg],
+      );
+    expect(await contas()).toBe(1);
+    const conta = Number(
+      (
+        await ler('SELECT conta_hospitalar_id AS id FROM atendimento_conta WHERE atendimento_id = ?', [reg])
+      )?.['id'],
+    );
+    expect(conta).toBeGreaterThan(0);
+    const itens = () =>
+      contar(
+        'SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND excluido_em IS NULL',
+        [conta],
+      );
+    const antes = await itens();
+    const r = await porta.executar(
+      c,
+      'atendimento.lancarProcedimentoExtra',
+      { atendimento: reg, procedimento: CODIGO, quantidade: 1 },
+      contextoGravacao(mm),
+    );
+    expect(Number(r.resultado['conta'])).toBe(conta);
+    expect(Number(r.resultado['valor'])).toBe(80);
+    expect(await itens()).toBe(antes + 1);
+    expect(await contas()).toBe(1);
+  });
+
   it('as operações ainda sem regra no banco respondem 501 (nada gravado)', async () => {
     const mm = m!;
     await expect(

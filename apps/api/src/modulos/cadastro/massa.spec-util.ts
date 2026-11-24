@@ -418,6 +418,22 @@ export async function limparMassa(nucleo: NucleoProprio, m: Massa | null): Promi
       'DELETE e FROM atendimento_etapa_pa e JOIN atendimento a ON a.id = e.atendimento_id WHERE a.estabelecimento_id IN (?, ?)',
       ests,
     );
+    // F3.0: a conta aberta na entrada do atendimento (e o que o lançamento deixa nela) antes do atendimento.
+    const contas = 'SELECT id FROM conta_hospitalar WHERE estabelecimento_id IN (?, ?)';
+    for (const t of [
+      'estorno_repasse',
+      'producao_repasse',
+      'conta_hospitalar_etapa',
+      'lancamento_automatico_conta',
+      'atendimento_conta',
+    ])
+      await e.executar(`DELETE FROM ${t} WHERE conta_hospitalar_id IN (${contas})`, ests);
+    await e.executar(
+      `DELETE m FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id WHERE i.conta_hospitalar_id IN (${contas})`,
+      ests,
+    );
+    await e.executar(`DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (${contas})`, ests);
+    await e.executar('DELETE FROM conta_hospitalar WHERE estabelecimento_id IN (?, ?)', ests);
     await e.executar('DELETE FROM atendimento WHERE estabelecimento_id IN (?, ?)', ests);
     const pessoas = `SELECT pf.id FROM pessoa_fisica pf WHERE pf.nome LIKE '%${MARCA}%' AND NOT EXISTS (SELECT 1 FROM profissional pr WHERE pr.pessoa_fisica_id = pf.id)`;
     const pacientes = `SELECT p.id FROM paciente p WHERE p.pessoa_fisica_id IN (${pessoas})`;
