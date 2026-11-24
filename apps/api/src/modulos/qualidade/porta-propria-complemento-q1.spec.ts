@@ -115,7 +115,13 @@ describe('complemento Q1 da porta própria da gestão (unidade)', () => {
     });
     const anotacao: AnotacaoGravacao = { motivo: null, dados: null };
     const g = gravacoesComplementoQ1(tx, 3, anotacao);
-    const r = await g.cancelarSorteioRevisao({ id: 8, versao: 2, motivo: 'Lançado errado', agora: '2026-11-02T09:00', usuario: 'a' });
+    const r = await g.cancelarSorteioRevisao({
+      id: 8,
+      versao: 2,
+      motivo: 'Lançado errado',
+      agora: '2026-11-02T09:00',
+      usuario: 'a',
+    });
     expect(r).toEqual({ versao: 3 });
     expect(alteracoes[0]).toEqual({
       tabela: 'sorteio_revisao_prontuario',
@@ -135,12 +141,22 @@ describe('complemento Q1 da porta própria da gestão (unidade)', () => {
       'FROM revisao_prontuario': [{ id: 1 }],
       ...USUARIO,
     });
-    expect(await codigo(gravacoesComplementoQ1(revisado.tx, 3).cancelarSorteioRevisao(m))).toBe('409:versao-desatualizada');
+    expect(await codigo(gravacoesComplementoQ1(revisado.tx, 3).cancelarSorteioRevisao(m))).toBe(
+      '409:versao-desatualizada',
+    );
     expect(revisado.alteracoes).toEqual([]);
-    const cancelado = txFalsa({ 'FROM sorteio_revisao_prontuario': [{ id: 8, versao: 2, situacao: 'cancelado' }] });
-    expect(await codigo(gravacoesComplementoQ1(cancelado.tx, 3).cancelarSorteioRevisao(m))).toBe('409:versao-desatualizada');
-    const velha = txFalsa({ 'FROM sorteio_revisao_prontuario': [{ id: 8, versao: 1, situacao: 'sorteado' }] });
-    expect(await codigo(gravacoesComplementoQ1(velha.tx, 3).cancelarSorteioRevisao(m))).toBe('409:versao-desatualizada');
+    const cancelado = txFalsa({
+      'FROM sorteio_revisao_prontuario': [{ id: 8, versao: 2, situacao: 'cancelado' }],
+    });
+    expect(await codigo(gravacoesComplementoQ1(cancelado.tx, 3).cancelarSorteioRevisao(m))).toBe(
+      '409:versao-desatualizada',
+    );
+    const velha = txFalsa({
+      'FROM sorteio_revisao_prontuario': [{ id: 8, versao: 1, situacao: 'sorteado' }],
+    });
+    expect(await codigo(gravacoesComplementoQ1(velha.tx, 3).cancelarSorteioRevisao(m))).toBe(
+      '409:versao-desatualizada',
+    );
   });
 
   it('assina a ata da reunião realizada e recusa a assinada ou a não realizada', async () => {
@@ -157,16 +173,23 @@ describe('complemento Q1 da porta própria da gestão (unidade)', () => {
     const assinada = txFalsa({
       'FROM reuniao_comissao': [{ id: 6, versao: 1, situacao: 'realizada', ata_assinada_em: new Date() }],
     });
-    expect(await codigo(gravacoesComplementoQ1(assinada.tx, 3).assinarAta(r))).toBe('409:versao-desatualizada');
+    expect(await codigo(gravacoesComplementoQ1(assinada.tx, 3).assinarAta(r))).toBe(
+      '409:versao-desatualizada',
+    );
     const cancelada = txFalsa({
       'FROM reuniao_comissao': [{ id: 6, versao: 1, situacao: 'cancelada', ata_assinada_em: null }],
     });
-    expect(await codigo(gravacoesComplementoQ1(cancelada.tx, 3).assinarAta(r))).toBe('409:versao-desatualizada');
+    expect(await codigo(gravacoesComplementoQ1(cancelada.tx, 3).assinarAta(r))).toBe(
+      '409:versao-desatualizada',
+    );
   });
 
   it('cancela a auditoria sem dependentes e recusa a que tem não conformidade', async () => {
     const a = { id: 5, versao: 3, justificativa: 'Duplicada', agora: '2026-11-02T09:00', usuario: 'a' };
-    const ok = txFalsa({ 'FROM auditoria_interna': [{ id: 5, versao: 3, situacao: 'concluida' }], ...USUARIO });
+    const ok = txFalsa({
+      'FROM auditoria_interna': [{ id: 5, versao: 3, situacao: 'concluida' }],
+      ...USUARIO,
+    });
     const anotacao: AnotacaoGravacao = { motivo: null, dados: null };
     expect(await gravacoesComplementoQ1(ok.tx, 3, anotacao).cancelarAuditoria(a)).toEqual({ versao: 4 });
     expect(ok.alteracoes[0]?.valores).toEqual({

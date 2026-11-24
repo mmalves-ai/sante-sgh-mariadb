@@ -44,7 +44,11 @@ export const METODOS_COMPLEMENTO_Q1 = [
 ] as const;
 
 /** As tabelas que as gravações deste complemento tocam (somadas às da porta completa pelo integrador). */
-export const TABELAS_COMPLEMENTO_Q1 = ['sorteio_revisao_prontuario', 'reuniao_comissao', 'auditoria_interna'] as const;
+export const TABELAS_COMPLEMENTO_Q1 = [
+  'sorteio_revisao_prontuario',
+  'reuniao_comissao',
+  'auditoria_interna',
+] as const;
 
 /** Teto das altas do período (o excedente marca `cortada`). */
 export const TETO_ALTAS_REVISAO = 5000;
@@ -118,7 +122,14 @@ function anotarVersao(
   anotacao.motivo = motivo;
   anotacao.dados = {
     ...(anotacao.dados ?? {}),
-    versaoAnterior: { tabela, id: n(antes['id']), versao: n(antes['versao']), acao, motivo, dados: retrato(antes) },
+    versaoAnterior: {
+      tabela,
+      id: n(antes['id']),
+      versao: n(antes['versao']),
+      acao,
+      motivo,
+      dados: retrato(antes),
+    },
   };
 }
 
@@ -196,7 +207,10 @@ export function gravacoesComplementoQ1(
         [est, a.id],
       );
       if (dependente)
-        throw recusa('com-dependentes', 'Há registros ativos que dependem deste: o cancelamento deixaria órfãos.');
+        throw recusa(
+          'com-dependentes',
+          'Há registros ativos que dependem deste: o cancelamento deixaria órfãos.',
+        );
       await exigirUsuario(tx, a.usuario);
       const versao = await tx.alterar('auditoria_interna', a.id, a.versao, {
         situacao: 'cancelada',
