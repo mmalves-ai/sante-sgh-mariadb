@@ -55,7 +55,7 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
           codigo: FONTE,
           nome: 'OPERADORA SINTETICA F372',
           situacao: 'ativo',
-          aceitaAtendimento: null,
+          aceitaAtendimento: { aceita: true, motivo: null },
           classificacao: null,
           registroAns: null,
           tabelas: { honorariosInternacao: null, honorariosExterna: null, diarias: null, matmed: null },
