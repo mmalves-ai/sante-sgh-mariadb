@@ -21,7 +21,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -61,6 +61,7 @@ export class GasMedicinalController {
   @Post('usos')
   @HttpCode(201)
   @Permissao(PERMISSOES_GAS_MEDICINAL.usoRegistrar)
+  @AuditadoNoHandler('uso, regra e lançamento do gás pelo executor (trilha na mesma transação)')
   iniciar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.iniciar(c, corpo));
   }
@@ -68,6 +69,7 @@ export class GasMedicinalController {
   @Post('usos/:id/encerrar')
   @HttpCode(200)
   @Permissao(PERMISSOES_GAS_MEDICINAL.usoRegistrar)
+  @AuditadoNoHandler('uso, regra e lançamento do gás pelo executor (trilha na mesma transação)')
   encerrar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.encerrar(c, id, corpo));
   }
@@ -75,6 +77,7 @@ export class GasMedicinalController {
   @Post('usos/:id/cancelar')
   @HttpCode(200)
   @Permissao(PERMISSOES_GAS_MEDICINAL.usoRegistrar)
+  @AuditadoNoHandler('uso, regra e lançamento do gás pelo executor (trilha na mesma transação)')
   cancelar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.cancelar(c, id, corpo));
   }
@@ -82,6 +85,7 @@ export class GasMedicinalController {
   @Post('atendimentos/:atd/lancar-conta')
   @HttpCode(200)
   @Permissao(PERMISSOES_GAS_MEDICINAL.lancar)
+  @AuditadoNoHandler('uso, regra e lançamento do gás pelo executor (trilha na mesma transação)')
   lancar(@Req() req: RequisicaoAutorizada, @Param('atd', ParseIntPipe) atd: number) {
     return this.com(req, (p, c) => p.lancarNaConta(c, atd));
   }
@@ -95,6 +99,7 @@ export class GasMedicinalController {
   @Post('regras')
   @HttpCode(201)
   @Permissao(PERMISSOES_GAS_MEDICINAL.regraEditar)
+  @AuditadoNoHandler('uso, regra e lançamento do gás pelo executor (trilha na mesma transação)')
   incluirRegra(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.incluirRegra(c, corpo));
   }
@@ -102,6 +107,7 @@ export class GasMedicinalController {
   @Post('regras/:id/encerrar')
   @HttpCode(200)
   @Permissao(PERMISSOES_GAS_MEDICINAL.regraEditar)
+  @AuditadoNoHandler('uso, regra e lançamento do gás pelo executor (trilha na mesma transação)')
   encerrarRegra(
     @Req() req: RequisicaoAutorizada,
     @Param('id', ParseIntPipe) id: number,

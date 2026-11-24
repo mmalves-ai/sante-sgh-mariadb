@@ -25,7 +25,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -75,6 +75,7 @@ export class GastoSalaController {
   @Post('lista')
   @HttpCode(201)
   @Permissao(PERMISSOES_GASTO_SALA.manterLista)
+  @AuditadoNoHandler('lista padrão e gasto de sala pelo executor (trilha na mesma transação)')
   incluirLinha(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.incluirLinhaLista(c, corpo));
   }
@@ -82,6 +83,7 @@ export class GastoSalaController {
   @Post('lista/:id')
   @HttpCode(200)
   @Permissao(PERMISSOES_GASTO_SALA.manterLista)
+  @AuditadoNoHandler('lista padrão e gasto de sala pelo executor (trilha na mesma transação)')
   alterarLinha(
     @Req() req: RequisicaoAutorizada,
     @Param('id', ParseIntPipe) id: number,
@@ -103,6 +105,7 @@ export class GastoSalaController {
   @Post('atos/:ato')
   @HttpCode(200)
   @Permissao(PERMISSOES_GASTO_SALA.lancar)
+  @AuditadoNoHandler('lista padrão e gasto de sala pelo executor (trilha na mesma transação)')
   gravar(@Req() req: RequisicaoAutorizada, @Param('ato', ParseIntPipe) ato: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarDoAto(c, ato, corpo));
   }
@@ -110,6 +113,7 @@ export class GastoSalaController {
   @Post('atos/:ato/conferir')
   @HttpCode(200)
   @Permissao(PERMISSOES_GASTO_SALA.conferir)
+  @AuditadoNoHandler('lista padrão e gasto de sala pelo executor (trilha na mesma transação)')
   conferir(
     @Req() req: RequisicaoAutorizada,
     @Param('ato', ParseIntPipe) ato: number,
@@ -121,6 +125,7 @@ export class GastoSalaController {
   @Post('atos/:ato/reabrir')
   @HttpCode(200)
   @Permissao(PERMISSOES_GASTO_SALA.conferir)
+  @AuditadoNoHandler('lista padrão e gasto de sala pelo executor (trilha na mesma transação)')
   reabrir(@Req() req: RequisicaoAutorizada, @Param('ato', ParseIntPipe) ato: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.mudarComMotivo(c, ato, 'reabrir', corpo, true));
   }
@@ -128,6 +133,7 @@ export class GastoSalaController {
   @Post('atos/:ato/cancelar')
   @HttpCode(200)
   @Permissao(PERMISSOES_GASTO_SALA.lancar)
+  @AuditadoNoHandler('lista padrão e gasto de sala pelo executor (trilha na mesma transação)')
   cancelar(
     @Req() req: RequisicaoAutorizada,
     @Param('ato', ParseIntPipe) ato: number,
@@ -140,6 +146,7 @@ export class GastoSalaController {
   @Post('atos/:ato/debitar')
   @HttpCode(200)
   @Permissao(PERMISSOES_GASTO_SALA.debitar)
+  @AuditadoNoHandler('lista padrão e gasto de sala pelo executor (trilha na mesma transação)')
   debitar(@Req() req: RequisicaoAutorizada, @Param('ato', ParseIntPipe) ato: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.debitar(c, ato, corpo));
   }

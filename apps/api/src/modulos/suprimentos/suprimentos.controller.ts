@@ -860,6 +860,7 @@ export class SuprimentosController {
   @Post('recalculos/previa')
   @HttpCode(200)
   @Permissao('suprimentos.recalculo.executar')
+  @AuditadoNoHandler('prévia do recálculo: só leitura, nada é gravado (POST pelo tamanho do pedido)')
   previaRecalculo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<PreviaRecalculo> {
     if (!this.porta.previaRecalculo)
       throw new ErroProblema(

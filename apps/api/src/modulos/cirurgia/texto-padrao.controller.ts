@@ -19,7 +19,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -89,12 +89,14 @@ export class TextoPadraoCirurgiaController {
   @Post()
   @HttpCode(201)
   @Permissao(PERMISSOES_TEXTO_PADRAO.editar)
+  @AuditadoNoHandler('texto padrão pelo executor (trilha na mesma transação)')
   incluir(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c, q) => p.incluir(c, corpo, q));
   }
 
   @Put(':id')
   @Permissao(PERMISSOES_TEXTO_PADRAO.editar)
+  @AuditadoNoHandler('texto padrão pelo executor (trilha na mesma transação)')
   alterar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c, q) => p.alterar(c, id, corpo, q));
   }
@@ -102,6 +104,7 @@ export class TextoPadraoCirurgiaController {
   @Post(':id/uso')
   @HttpCode(200)
   @Permissao(PERMISSOES_TEXTO_PADRAO.editar)
+  @AuditadoNoHandler('texto padrão pelo executor (trilha na mesma transação)')
   uso(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c, q) => p.definirUso(c, id, corpo, q));
   }
@@ -109,6 +112,7 @@ export class TextoPadraoCirurgiaController {
   @Post(':id/preencher')
   @HttpCode(200)
   @Permissao(PERMISSOES_TEXTO_PADRAO.ler)
+  @AuditadoNoHandler('prévia do preenchimento: só leitura, nada é gravado')
   preencher(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.preencher(c, id, corpo));
   }

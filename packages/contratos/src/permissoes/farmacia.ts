@@ -74,6 +74,8 @@ export const PERMISSOES_FARMACIA_M29: readonly DeclaracaoPermissao[] = [
   p(
     'suprimentos.integracao.configurar',
     'Configurar a integração prescrição × estoque (local que atende, momento, forma) e os horários padrão de medicação',
+    // Recurso novo, sem opção de origem: concedido ao administrador do sistema, que repassa por cargo.
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
   ),
   p(
     'suprimentos.livro.fechar',

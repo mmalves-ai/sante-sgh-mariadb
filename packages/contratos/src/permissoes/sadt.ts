@@ -70,8 +70,8 @@ export const PERMISSOES_SADT_M26: readonly DeclaracaoPermissao[] = [
   p(
     'sadt.requisicao.autorizarExcecao',
     'Autorizar a exceção a uma restrição clínica do exame (sexo, idade, material, horário, repetição) com justificativa; quem só pede não libera a própria exceção',
-
-    { criticidade: 'sensivel' },
+    // Recurso novo, sem opção de origem: concedido ao administrador do sistema, que repassa por cargo.
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
   ),
   p('sadt.lancamento.ler', 'Ver os pedidos do prontuário a receber e os exames lançados do dia por setor'),
   p(
