@@ -79,7 +79,7 @@ const SQL_PRONTUARIO = `
   SELECT r.id, r.sorteio_revisao_prontuario_id AS sorteio, r.atendimento_id, r.paciente_id, r.resultado,
          r.situacao, r.observacao, r.revisada_em, r.avalizada_em, r.versao,
          ROW_NUMBER() OVER (PARTITION BY r.sorteio_revisao_prontuario_id ORDER BY r.id) AS ordem,
-         COALESCE(i.data_hora_alta, i.data_hora_alta_medica) AS alta, em.nome AS clinica,
+         COALESCE(i.data_hora_alta, i.data_hora_alta_medica) AS alta, em.descricao AS clinica,
          i.medico_assistente_profissional_id AS medico, pfm.nome AS medico_nome,
          ur.login AS revisor, ua.login AS aval_por
     FROM revisao_prontuario r
@@ -96,7 +96,7 @@ function situacaoProntuario(r: Linha): string {
   return texto(r['resultado']) === 'nao_conforme' ? 'naoConforme' : 'conforme';
 }
 
-function prontuario(r: Linha, respostas: string | null): ProntuarioRevisaoRegistrado {
+export function prontuario(r: Linha, respostas: string | null): ProntuarioRevisaoRegistrado {
   const revisado = r['revisada_em'] !== null && r['revisada_em'] !== undefined;
   return {
     id: n(r['id']),
@@ -181,7 +181,7 @@ function situacaoPendencia(s: string): string {
   return 'cancelada';
 }
 
-function pendencia(r: Linha): PendenciaRevisaoRegistrada {
+export function pendencia(r: Linha): PendenciaRevisaoRegistrada {
   const situacao = situacaoPendencia(texto(r['situacao']));
   const resolvida = situacao === 'resolvida';
   const cancelada = situacao === 'cancelada';
