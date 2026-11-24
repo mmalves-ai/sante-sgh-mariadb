@@ -255,6 +255,12 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
     return e;
   }
 
+  private async idDoLogin(c: ContextoAgendaOnline, login: string | null | undefined): Promise<number | null> {
+    if (!login) return null;
+    const l = await this.ler(c, (x) => x.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]));
+    return l ? num(l['id']) : null;
+  }
+
   async gravar<T>(
     c: ContextoAgendaOnline,
     fn: (g: GravadorAgendaOnline) => Promise<T>,
@@ -262,10 +268,14 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
   ): Promise<T> {
     const { id: estabelecimento } = await this.estab(c);
     const correlacao = `portal-ao-${randomUUID()}`.slice(0, 64);
+    // O autor da operação é o usuário do hospital do registro da trilha (o serviço manda o login de quem age): vai no
+    // carimbo das linhas (criado_por/alterado_por) e em trilha_auditoria.usuario_id. Login que não é de usuário (conta
+    // do portal, gateway) deixa a operação sem usuário, como processo do portal.
+    const autor = trilha && typeof trilha !== 'function' ? await this.idDoLogin(c, trilha.usuario) : null;
     const contexto: ContextoOperacao = {
       cliente: c.rede,
       estabelecimento,
-      usuario: null,
+      usuario: autor,
       correlacao,
       chaveIdempotencia: correlacao,
     };
@@ -279,7 +289,7 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
       entrada: entradaGravacao,
       gravar: async (tx) => {
         try {
-          resultado = await fn(gravadorAgendaOnline(tx, estabelecimento, escrita));
+          resultado = await fn(gravadorAgendaOnline(tx, estabelecimento, escrita, autor));
         } catch (e) {
           // A recusa de domínio (versão, situação, inexistente) sai como o serviço a espera, não como erro interno.
           if (e instanceof ErroPortal) recusa = e;
@@ -303,6 +313,9 @@ export class PortaAgendaOnlinePropria implements PortaAgendaOnline {
             paciente: r.idPaciente ?? null,
             origem: r.origem ?? null,
             estacao: r.estacao,
+            usuario: r.usuario,
+            atendimento: r.atendimento ?? null,
+            correlacao: r.correlacao,
           },
         };
       },
@@ -531,6 +544,7 @@ function gravadorAgendaOnline(
   tx: TxOperacao,
   estabelecimento: number,
   escrita: { tabela: string; id: number | null },
+  autor: number | null,
 ): GravadorAgendaOnline {
   const marcar = (tabela: string, id: number) => {
     escrita.tabela = tabela;
@@ -581,11 +595,6 @@ function gravadorAgendaOnline(
         id = num(atual['id']);
         versao = await tx.alterar('agenda_online_configuracao', id, x.versao, valores);
       }
-      // Quem configurou é o usuário do hospital (a operação do portal corre sem usuário no contexto).
-      await tx.executar(
-        `UPDATE agenda_online_configuracao SET ${x.versao === null ? 'criado_por' : 'alterado_por'} = ? WHERE id = ?`,
-        [await usuarioDoLogin(tx, x.por), id],
-      );
       // As listas são a configuração vigente: o que saiu é removido, o que entrou é incluído.
       const convenios = [...new Set(x.convenios)];
       const servicos = [...new Set(x.servicos)];
@@ -615,6 +624,11 @@ function gravadorAgendaOnline(
       );
       for (const s of servicos)
         if (!temServ.has(s)) await tx.incluir('agenda_online_servico', { agenda_online_configuracao_id: id, [coluna]: s });
+      // Quem configurou é o usuário do hospital do pedido (x.por), mesmo quando a operação não traz registro de trilha.
+      await tx.executar(
+        `UPDATE agenda_online_configuracao SET ${x.versao === null ? 'criado_por' : 'alterado_por'} = ? WHERE id = ?`,
+        [await usuarioDoLogin(tx, x.por), id],
+      );
       marcar('agenda_online_configuracao', id);
       return { id, versao };
     },
@@ -657,11 +671,6 @@ function gravadorAgendaOnline(
       if (atual) {
         id = num(atual['id']);
         versao = await tx.alterar('pre_checkin', id, num(atual['versao']), valores);
-        const velhos = await tx.consultar(
-          'SELECT id, versao FROM pre_checkin_documento WHERE pre_checkin_id = ? AND excluido_em IS NULL',
-          [id],
-        );
-        for (const d of velhos) await tx.excluir('pre_checkin_documento', num(d['id']), num(d['versao']));
       } else {
         id = await tx.incluir('pre_checkin', {
           estabelecimento_id: estabelecimento,
@@ -670,6 +679,17 @@ function gravadorAgendaOnline(
         });
         versao = 1;
       }
+      // Documento do paciente nunca é apagado (SBIS-26): no reenvio, o que saiu recebe exclusão lógica e o arquivo
+      // reenviado reaproveita a sua linha (reativada quando excluída), respeitando a chave (pré-check-in, arquivo).
+      const anteriores = new Map(
+        (
+          await tx.consultarParaAtualizar(
+            'SELECT id, versao, arquivo_id, excluido_em FROM pre_checkin_documento WHERE pre_checkin_id = ?',
+            [id],
+          )
+        ).map((l) => [num(l['arquivo_id']), l] as const),
+      );
+      const enviados = new Set<number>();
       for (const d of p.documentos) {
         const ja = await tx.uma(
           'SELECT id FROM arquivo WHERE chave_armazenamento = ? AND hash_sha256 = ? AND excluido_em IS NULL',
@@ -688,14 +708,24 @@ function gravadorAgendaOnline(
               chave_armazenamento: d.chave,
               imutavel: true,
             });
-        await tx.incluir('pre_checkin_documento', {
-          pre_checkin_id: id,
-          tipo: DOC_BANCO[d.tipo] ?? 'outro',
-          arquivo_id: arquivo,
-          resumo_conteudo: d.sha256,
-          tipo_midia: d.mime,
-        });
+        if (enviados.has(arquivo)) continue;
+        enviados.add(arquivo);
+        const doc = { tipo: DOC_BANCO[d.tipo] ?? 'outro', resumo_conteudo: d.sha256, tipo_midia: d.mime };
+        const linha = anteriores.get(arquivo);
+        if (linha)
+          await tx.alterar('pre_checkin_documento', num(linha['id']), num(linha['versao']), {
+            ...doc,
+            excluido_em: null,
+            excluido_por: null,
+          });
+        else await tx.incluir('pre_checkin_documento', { pre_checkin_id: id, arquivo_id: arquivo, ...doc });
       }
+      for (const [arquivo, l] of anteriores)
+        if (!enviados.has(arquivo) && (l['excluido_em'] === null || l['excluido_em'] === undefined))
+          await tx.alterar('pre_checkin_documento', num(l['id']), num(l['versao']), {
+            excluido_em: new Date(),
+            excluido_por: autor,
+          });
       marcar('pre_checkin', id);
       return { id, versao };
     },

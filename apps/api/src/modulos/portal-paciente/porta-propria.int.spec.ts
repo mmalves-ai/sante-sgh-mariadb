@@ -297,8 +297,9 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do paciente (MariaDB, clien
     ]);
     expect(
       await ler(
-        "SELECT id FROM trilha_auditoria WHERE entidade = 'conta_portal_paciente' AND entidade_id = ?",
-        [r.id],
+        // Só a trilha deste evento: outras suítes do cliente gravam trilha de conta do portal com ids que coincidem.
+        "SELECT id FROM trilha_auditoria WHERE entidade = 'conta_portal_paciente' AND entidade_id = ? AND motivo = ?",
+        [r.id, 'portal.manifestacao.registrada'],
       ),
     ).toEqual([]);
     const lidas = await porta.manifestacoes(c, mae);

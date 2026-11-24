@@ -24,6 +24,7 @@ import type { PortaOperadora } from './porta.js';
 
 type DadosBeneficiario = NonNullable<Awaited<ReturnType<PortaOperadora['beneficiario']>>>;
 type DadosProduto = NonNullable<Awaited<ReturnType<PortaOperadora['produto']>>>;
+type DadosContrato = NonNullable<Awaited<ReturnType<PortaOperadora['contrato']>>>;
 
 /** As portas próprias irmãs de que as bases da ANS dependem. */
 export interface FontesAnsProprias {
@@ -34,49 +35,80 @@ export interface FontesAnsProprias {
 
 type LerComplemento = (c: ContextoAns, beneficiario: number) => Promise<DadosComplementoSib | null>;
 
+/** Memória de uma chamada: cada contrato, produto, beneficiário e complemento é lido uma vez só. */
+class LeiturasDaChamada {
+  private readonly contratos = new Map<number, Promise<DadosContrato | null>>();
+  private readonly produtos = new Map<number, Promise<DadosProduto | null>>();
+  private readonly beneficiarios = new Map<number, Promise<DadosBeneficiario | null>>();
+  private readonly complementos = new Map<number, Promise<DadosComplementoSib | null>>();
+
+  constructor(
+    private readonly c: ContextoAns,
+    private readonly operadora: PortaOperadora,
+    private readonly complementoDe: LerComplemento,
+  ) {}
+
+  private static uma<T>(m: Map<number, Promise<T>>, id: number, ler: () => Promise<T>): Promise<T> {
+    let p = m.get(id);
+    if (!p) {
+      p = ler();
+      m.set(id, p);
+    }
+    return p;
+  }
+
+  /** Guarda um beneficiário já lido (numa página) para não relê-lo pelo id. */
+  conhecido(b: DadosBeneficiario): void {
+    if (!this.beneficiarios.has(b.id)) this.beneficiarios.set(b.id, Promise.resolve(b));
+  }
+
+  beneficiario(id: number): Promise<DadosBeneficiario | null> {
+    return LeiturasDaChamada.uma(this.beneficiarios, id, () => this.operadora.beneficiario(this.c, id));
+  }
+
+  complemento(id: number): Promise<DadosComplementoSib | null> {
+    return LeiturasDaChamada.uma(this.complementos, id, () => this.complementoDe(this.c, id));
+  }
+
+  async contratoEProduto(
+    contrato: number,
+  ): Promise<{ contrato: DadosContrato | null; produto: DadosProduto | null }> {
+    const k = await LeiturasDaChamada.uma(this.contratos, contrato, () =>
+      this.operadora.contrato(this.c, contrato),
+    );
+    const produto = k
+      ? await LeiturasDaChamada.uma(this.produtos, k.produto, () => this.operadora.produto(this.c, k.produto))
+      : null;
+    return { contrato: k, produto };
+  }
+}
+
 export class BasesAnsProprias {
   constructor(
     private readonly f: FontesAnsProprias,
     private readonly complementoDe: LerComplemento,
   ) {}
 
-  private async todosBeneficiarios(c: ContextoAns, operadora: number): Promise<DadosBeneficiario[]> {
-    const r: DadosBeneficiario[] = [];
-    let apos: number | undefined;
+  private leituras(c: ContextoAns): LeiturasDaChamada {
+    return new LeiturasDaChamada(c, this.f.operadora, this.complementoDe);
+  }
+
+  /** Percorre os beneficiários da operadora em páginas reais do banco (pelo id, a partir de `apos`). */
+  private async *paginasBeneficiarios(
+    c: ContextoAns,
+    operadora: number,
+    apos?: number,
+  ): AsyncGenerator<readonly DadosBeneficiario[]> {
+    let cursor = apos;
     for (;;) {
       const p = await this.f.operadora.beneficiarios(c, {
         operadora,
-        ...(apos === undefined ? {} : { apos }),
+        ...(cursor === undefined ? {} : { apos: cursor }),
       });
-      r.push(...p.itens);
-      if (p.proxima === null) return r;
-      apos = p.proxima;
+      yield p.itens;
+      if (p.proxima === null) return;
+      cursor = p.proxima;
     }
-  }
-
-  private async produtosPorContrato(c: ContextoAns, contratos: readonly number[]) {
-    const m = new Map<
-      number,
-      { contrato: Awaited<ReturnType<PortaOperadora['contrato']>>; produto: DadosProduto | null }
-    >();
-    for (const id of new Set(contratos)) {
-      const contrato = await this.f.operadora.contrato(c, id);
-      m.set(id, { contrato, produto: contrato ? await this.f.operadora.produto(c, contrato.produto) : null });
-    }
-    return m;
-  }
-
-  /** O complemento de cada beneficiário, lido uma vez por chamada. */
-  private complementos(c: ContextoAns) {
-    const m = new Map<number, Promise<DadosComplementoSib | null>>();
-    return (id: number) => {
-      let p = m.get(id);
-      if (!p) {
-        p = this.complementoDe(c, id);
-        m.set(id, p);
-      }
-      return p;
-    };
   }
 
   async beneficiariosSib(
@@ -84,18 +116,20 @@ export class BasesAnsProprias {
     operadora: number,
     apos: number,
   ): Promise<{ itens: DadosBeneficiarioSib[]; proxima: number | null }> {
-    const todos = (await this.todosBeneficiarios(c, operadora)).filter((b) => b.id > apos);
-    const pagina = todos.slice(0, LIMITE_PAGINA_SIB);
-    const porId = new Map(todos.map((b) => [b.id, b]));
-    const pc = await this.produtosPorContrato(
-      c,
-      pagina.map((b) => b.contrato),
-    );
-    const comp = this.complementos(c);
+    // Só a página pedida (mais um, para saber se há próxima), lida do banco a partir de `apos`.
+    const lidos: DadosBeneficiario[] = [];
+    for await (const p of this.paginasBeneficiarios(c, operadora, apos)) {
+      lidos.push(...p);
+      if (lidos.length > LIMITE_PAGINA_SIB) break;
+    }
+    const pagina = lidos.slice(0, LIMITE_PAGINA_SIB);
+    const ler = this.leituras(c);
+    for (const b of lidos) ler.conhecido(b);
     const itens: DadosBeneficiarioSib[] = [];
     for (const b of pagina) {
-      const x = pc.get(b.contrato);
-      const t = b.titular === null ? null : (porId.get(b.titular) ?? null);
+      const x = await ler.contratoEProduto(b.contrato);
+      // O titular é lido pelo id quando não está na página (ex.: titular de id menor que `apos`).
+      const t = b.titular === null ? null : await ler.beneficiario(b.titular);
       itens.push({
         id: b.id,
         operadora: b.operadora,
@@ -110,7 +144,11 @@ export class BasesAnsProprias {
         titular:
           b.titular === null
             ? null
-            : { id: b.titular, carteirinha: t?.carteirinha ?? '', cco: (await comp(b.titular))?.cco ?? null },
+            : {
+                id: b.titular,
+                carteirinha: t?.carteirinha ?? '',
+                cco: (await ler.complemento(b.titular))?.cco ?? null,
+              },
         inclusao: b.inclusao,
         situacao: b.situacao,
         exclusao: b.exclusao,
@@ -126,12 +164,12 @@ export class BasesAnsProprias {
           tipo: x?.contrato?.tipo ?? 1,
           contratanteDoc: x?.contrato?.contratanteDocumento ?? '',
         },
-        complemento: await comp(b.id),
+        complemento: await ler.complemento(b.id),
       });
     }
     return {
       itens,
-      proxima: todos.length > LIMITE_PAGINA_SIB ? (itens[itens.length - 1]?.id ?? null) : null,
+      proxima: lidos.length > LIMITE_PAGINA_SIB ? (itens[itens.length - 1]?.id ?? null) : null,
     };
   }
 
@@ -159,20 +197,20 @@ export class BasesAnsProprias {
   ): Promise<{ itens: DadosItemSip[]; proxima: number | null }> {
     const contas = this.f.contas;
     if (!contas) return { itens: [], proxima: null };
-    const comp = this.complementos(c);
+    const ler = this.leituras(c);
     const r: DadosItemSip[] = [];
     for (const k of (await this.contasDa(c, operadora)).filter((x) => x.situacao !== 'devolvida')) {
       const guias = new Map((await contas.guias(c, k.id)).map((g) => [g.id, g]));
       for (const i of await contas.itens(c, k.id)) {
         if (i.data < inicio || i.data > fim || i.id <= apos) continue;
         const g = guias.get(i.guia);
-        const b = g?.beneficiario ? await this.f.operadora.beneficiario(c, g.beneficiario.id) : null;
-        const p = b ? (await this.produtosPorContrato(c, [b.contrato])).get(b.contrato)?.produto : null;
+        const b = g?.beneficiario ? await ler.beneficiario(g.beneficiario.id) : null;
+        const p = b ? (await ler.contratoEProduto(b.contrato)).produto : null;
         r.push({
           id: i.id,
           beneficiario: b?.id ?? null,
           segmentacao: p?.segmentacao ?? null,
-          municipio: b ? ((await comp(b.id))?.municipio ?? null) : null,
+          municipio: b ? ((await ler.complemento(b.id))?.municipio ?? null) : null,
           dataExecucao: i.data,
           tabela: i.tabela,
           codigo: i.codigo,
@@ -244,7 +282,7 @@ export class BasesAnsProprias {
   ): Promise<DadosGuiaMonitoramento[]> {
     const contas = this.f.contas;
     if (!contas) return [];
-    const comp = this.complementos(c);
+    const ler = this.leituras(c);
     const r: DadosGuiaMonitoramento[] = [];
     for (const k of await this.contasDa(c, operadora)) {
       if (k.situacao !== 'analisada' && k.situacao !== 'paga') continue;
@@ -254,8 +292,8 @@ export class BasesAnsProprias {
       const itens = await contas.itens(c, k.id);
       for (const g of await contas.guias(c, k.id)) {
         if (r.length > teto) return r;
-        const b = g.beneficiario ? await this.f.operadora.beneficiario(c, g.beneficiario.id) : null;
-        const x = b ? await comp(b.id) : null;
+        const b = g.beneficiario ? await ler.beneficiario(g.beneficiario.id) : null;
+        const x = b ? await ler.complemento(b.id) : null;
         r.push({
           id: g.id,
           protocolo: k.protocolo,
@@ -300,11 +338,27 @@ export class BasesAnsProprias {
     identificacoes: readonly string[],
   ): Promise<DadosBeneficiarioRessarcimento[]> {
     const ids = new Set(identificacoes);
+    const ler = this.leituras(c);
+    // Mesma regra da memória (a carteirinha vale antes do CNS; cada beneficiário uma vez, na ordem do id), sem
+    // percorrer a operadora inteira quando todas as identificações são carteirinhas: primeiro a busca indexada pela
+    // carteirinha; só as identificações que sobrarem (CNS) pedem a varredura, em páginas reais do banco.
+    const achados = new Map<number, { b: DadosBeneficiario; ident: string }>();
+    const sobra = new Set(ids);
+    for (const ident of ids) {
+      const p = await this.f.operadora.beneficiarios(c, { operadora, carteirinha: ident });
+      for (const b of p.itens)
+        if (b.carteirinha === ident) {
+          achados.set(b.id, { b, ident });
+          sobra.delete(ident);
+        }
+    }
+    if (sobra.size > 0)
+      for await (const p of this.paginasBeneficiarios(c, operadora))
+        for (const b of p)
+          if (!achados.has(b.id) && b.cns && sobra.has(b.cns)) achados.set(b.id, { b, ident: b.cns });
     const r: DadosBeneficiarioRessarcimento[] = [];
-    for (const b of await this.todosBeneficiarios(c, operadora)) {
-      const ident = ids.has(b.carteirinha) ? b.carteirinha : b.cns && ids.has(b.cns) ? b.cns : null;
-      if (!ident) continue;
-      const x = (await this.produtosPorContrato(c, [b.contrato])).get(b.contrato);
+    for (const { b, ident } of [...achados.values()].sort((x, y) => x.b.id - y.b.id)) {
+      const x = await ler.contratoEProduto(b.contrato);
       r.push({
         identificacao: ident,
         id: b.id,
@@ -322,7 +376,7 @@ export class BasesAnsProprias {
           carencias: JSON.stringify(x?.produto?.carencias ?? { urgencia: 0, partos: 0, demais: 0, cpt: 0 }),
           segmentacao: x?.produto?.segmentacao ?? null,
         },
-        coberturaParcial: (await this.complementoDe(c, b.id))?.coberturaParcial ?? false,
+        coberturaParcial: (await ler.complemento(b.id))?.coberturaParcial ?? false,
       });
     }
     return r;

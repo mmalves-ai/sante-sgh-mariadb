@@ -27,6 +27,7 @@ const LOGIN2 = 'pao2ao.conferente';
 const AGENDA = 'AGENDA SINTETICA PORTAL AO';
 const MODELO = 'pao2ao_portal';
 const CHAVE = 'teste-pao2ao/doc-1';
+const CHAVE2 = 'teste-pao2ao/doc-2';
 const PROF = 'PROFISSIONAL SINTETICO AO';
 
 interface Massa {
@@ -106,6 +107,7 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
   const ler = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-pao2ao' }, (l) => l.consultar(sql, p));
   const hoje = new Date().toISOString().slice(0, 10);
+  const idDe = async (login: string) => Number((await ler('SELECT id FROM usuario WHERE login = ?', [login]))[0]?.['id']);
 
   beforeAll(async () => {
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-pao2ao' }, async (e) => {
@@ -256,10 +258,18 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     expect(r2).toEqual({ id: r.id, versao: 2 });
     expect(await porta.config(c, 'consulta', m.agenda)).toMatchObject({ convenios: [], servicos: [], ativa: false });
     const tr = await ler(
-      "SELECT motivo FROM trilha_auditoria WHERE entidade = 'agenda_online_configuracao' AND entidade_id = ?",
+      "SELECT motivo, usuario_id, dados_depois FROM trilha_auditoria WHERE entidade = 'agenda_online_configuracao' AND entidade_id = ? ORDER BY id",
       [r.id],
     );
     expect(tr.map((x) => x['motivo'])).toEqual(['portal.agenda.config', 'portal.agenda.config']);
+    // O autor é o usuário do hospital: na trilha (coluna e dados do registro) e no carimbo da linha.
+    const u = await idDe(LOGIN);
+    expect(tr.map((x) => Number(x['usuario_id']))).toEqual([u, u]);
+    const bruto = tr[0]?.['dados_depois'];
+    const dados = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as { dados: Record<string, unknown> };
+    expect(dados.dados).toMatchObject({ usuario: LOGIN, correlacao: 'teste-pao2ao', atendimento: null });
+    const linha = await ler('SELECT criado_por, alterado_por FROM agenda_online_configuracao WHERE id = ?', [r.id]);
+    expect(linha.map((x) => [Number(x['criado_por']), Number(x['alterado_por'])])).toEqual([[u, u]]);
   });
 
   it('pré-check-in: envia, lê, reserva, decide, recusa o reenvio do conferido e cancela', async () => {
@@ -302,7 +312,49 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     expect((await porta.filaPreCheckin(c, { situacao: 'enviado', de: hoje, ate: hoje, depoisDe: r.id })).itens).toEqual(
       [],
     );
-    const res = await porta.gravar(c, (g) => g.reservarConferencia(r.id, r.versao, LOGIN), null);
+    // Reenvio com outro documento: o anterior recebe exclusão lógica (SBIS-26), nunca DELETE.
+    const doc2 = { tipo: 'carteirinha', chave: CHAVE2, sha256: 'b'.repeat(64), mime: 'application/pdf' };
+    const r2 = await porta.gravar(c, (g) => g.enviarPreCheckin({ ...envio, documentos: [doc2] }), null);
+    expect(r2.id).toBe(r.id);
+    expect((await porta.preCheckinPorId(c, r.id))?.documentos).toMatchObject([{ chave: CHAVE2 }]);
+    const docs = () =>
+      ler(
+        `SELECT a.chave_armazenamento AS chave, d.excluido_em IS NOT NULL AS excluido FROM pre_checkin_documento d
+           JOIN arquivo a ON a.id = d.arquivo_id WHERE d.pre_checkin_id = ? ORDER BY d.id`,
+        [r.id],
+      );
+    expect((await docs()).map((x) => [x['chave'], Number(x['excluido'])])).toEqual([
+      [CHAVE, 1],
+      [CHAVE2, 0],
+    ]);
+    // O mesmo arquivo reenviado reativa a sua linha (chave pré-check-in + arquivo), sem duplicar.
+    const r3 = await porta.gravar(c, (g) => g.enviarPreCheckin(envio), null);
+    expect((await porta.preCheckinPorId(c, r.id))?.documentos).toMatchObject([{ chave: CHAVE, tipo: 'identidade' }]);
+    expect((await docs()).map((x) => [x['chave'], Number(x['excluido'])])).toEqual([
+      [CHAVE, 0],
+      [CHAVE2, 1],
+    ]);
+    // Reserva desfeita: quem a desfez fica na linha (alterado_por) e na trilha, pelo login do registro.
+    const res0 = await porta.gravar(c, (g) => g.reservarConferencia(r.id, r3.versao, LOGIN), null);
+    await porta.gravar(
+      c,
+      (g) => g.liberarConferencia(r.id, res0.versao),
+      { ...trilha('portal.precheckin.reserva-desfeita'), usuario: LOGIN2 },
+    );
+    const u2 = await idDe(LOGIN2);
+    expect(
+      (await ler('SELECT alterado_por, reservado_por_usuario_id FROM pre_checkin WHERE id = ?', [r.id])).map((x) => [
+        Number(x['alterado_por']),
+        x['reservado_por_usuario_id'],
+      ]),
+    ).toEqual([[u2, null]]);
+    const trLib = await ler(
+      "SELECT usuario_id FROM trilha_auditoria WHERE entidade = 'pre_checkin' AND entidade_id = ? AND motivo = 'portal.precheckin.reserva-desfeita'",
+      [r.id],
+    );
+    expect(trLib.map((x) => Number(x['usuario_id']))).toEqual([u2]);
+    const versaoLivre = res0.versao + 1;
+    const res = await porta.gravar(c, (g) => g.reservarConferencia(r.id, versaoLivre, LOGIN), null);
     expect((await porta.preCheckinPorId(c, r.id))?.reservadoPor).toBe(LOGIN);
     await expect(
       porta.gravar(c, (g) => g.enviarPreCheckin(envio), null),
