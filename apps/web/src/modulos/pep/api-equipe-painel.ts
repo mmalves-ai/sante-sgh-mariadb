@@ -39,6 +39,37 @@ export const lerColunas = () => pedir<{ colunas: string[] }>(`${P}/painel/coluna
 export const gravarColunas = (colunas: readonly string[]) =>
   pedir<{ colunas: string[] }>(`${P}/painel/colunas`, 'PUT', { colunas });
 
+// F3.3 (L90): filtros salvos nomeados (vários por usuário, um padrão) com colunas e largura por filtro.
+export interface FiltroPainelSalvo {
+  id: number;
+  versao: number;
+  nome: string;
+  padrao: boolean;
+  tipoAtendimento: string;
+  unidade: number | null;
+  setor: number | null;
+  acomodacao: number | null;
+  leito: number | null;
+  especialidade: number | null;
+  situacao: string | null;
+  apenasMeusPacientes: boolean;
+}
+export type NovoFiltroPainel = Partial<Omit<FiltroPainelSalvo, 'id' | 'versao'>> & { nome: string };
+export interface ColunaDoFiltro {
+  coluna: string;
+  largura: number | null;
+}
+export const lerFiltros = () => pedir<{ filtros: FiltroPainelSalvo[] }>(`${P}/painel/filtros`);
+export const incluirFiltro = (f: NovoFiltroPainel) => pedir<{ id: number }>(`${P}/painel/filtros`, 'POST', f);
+export const alterarFiltro = (id: number, f: NovoFiltroPainel & { versao: number }) =>
+  pedir<{ id: number }>(`${P}/painel/filtros/${id}`, 'PUT', f);
+export const escolherFiltroPadrao = (id: number) =>
+  pedir<{ id: number }>(`${P}/painel/filtros/${id}/padrao`, 'POST');
+export const lerColunasDoFiltro = (id: number) =>
+  pedir<{ colunas: ColunaDoFiltro[] }>(`${P}/painel/filtros/${id}/colunas`);
+export const gravarColunasDoFiltro = (id: number, colunas: readonly ColunaDoFiltro[]) =>
+  pedir<{ colunas: ColunaDoFiltro[] }>(`${P}/painel/filtros/${id}/colunas`, 'PUT', { colunas });
+
 export const lerFiltroPadrao = () => pedir<{ unidade: number | null }>(`${P}/painel/filtro-padrao`);
 export const gravarFiltroPadrao = (unidade: number | null) =>
   pedir<{ id: number }>(`${P}/painel/filtro-padrao`, 'PUT', { unidade });

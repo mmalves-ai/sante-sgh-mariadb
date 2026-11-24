@@ -16,11 +16,17 @@ import { dataHoraBr } from '../formato.js';
 import {
   acompanhar,
   deixarDeAcompanhar,
+  escolherFiltroPadrao,
+  type FiltroPainelSalvo,
   gravarColunas,
+  gravarColunasDoFiltro,
   gravarFiltroPadrao,
+  incluirFiltro,
   lerAcompanhados,
   lerColunas,
+  lerColunasDoFiltro,
   lerFiltroPadrao,
+  lerFiltros,
 } from '../api-equipe-painel.js';
 import { chavePainel, gravarPreferenciasPainel, lerPreferenciasPainel } from '../preferencias-painel.js';
 
@@ -70,6 +76,7 @@ watch(
       );
       if (cols.length >= 2) colunas.value = cols;
       doBanco.value = true;
+      await carregarFiltros(true);
     } catch {
       doBanco.value = false;
     }
@@ -77,6 +84,72 @@ watch(
   { immediate: true },
 );
 const erroPreferencia = ref<string | null>(null);
+// F3.3 (L90): filtros salvos nomeados no banco (vários por usuário e estabelecimento, um padrão que abre o painel); o
+// filtro escolhido aplica a unidade e "apenas meus pacientes" e traz as colunas dele, quando tem colunas próprias.
+const filtros = ref<FiltroPainelSalvo[]>([]);
+const filtroAtual = ref<number | null>(null);
+const nomeNovoFiltro = ref('');
+const avisoFiltro = ref<string | null>(null);
+const opcoesFiltro = computed(() => [
+  { valor: null, rotulo: t('pep.equipe.filtros.nenhum') },
+  ...filtros.value.map((f) => ({
+    valor: f.id,
+    rotulo: f.padrao ? t('pep.equipe.filtros.padrao', { nome: f.nome }) : f.nome,
+  })),
+]);
+async function carregarFiltros(aplicarPadrao: boolean): Promise<void> {
+  filtros.value = (await lerFiltros()).filtros;
+  const padrao = filtros.value.find((f) => f.padrao);
+  if (aplicarPadrao && padrao) filtroAtual.value = padrao.id;
+}
+function falhaPreferencia(e: unknown): void {
+  erroPreferencia.value = e instanceof Error ? e.message : String(e);
+}
+watch(filtroAtual, async (id) => {
+  const f = filtros.value.find((x) => x.id === id);
+  if (!f) return;
+  unidade.value = f.unidade;
+  vinculo.value = f.apenasMeusPacientes ? 'meus' : 'todos';
+  try {
+    const c = (await lerColunasDoFiltro(f.id)).colunas
+      .map((x) => x.coluna)
+      .filter((x): x is ColunaPainel => (COLUNAS_PAINEL as readonly string[]).includes(x));
+    if (c.length >= 2) colunas.value = c;
+  } catch (e) {
+    falhaPreferencia(e);
+  }
+});
+async function salvarFiltro(): Promise<void> {
+  const nome = nomeNovoFiltro.value.trim();
+  if (!nome) return;
+  try {
+    const { id } = await incluirFiltro({
+      nome,
+      unidade: unidade.value,
+      apenasMeusPacientes: vinculo.value === 'meus',
+    });
+    await gravarColunasDoFiltro(
+      id,
+      colunas.value.map((coluna) => ({ coluna, largura: null })),
+    );
+    await carregarFiltros(false);
+    filtroAtual.value = id;
+    nomeNovoFiltro.value = '';
+    avisoFiltro.value = t('pep.equipe.filtros.salvo_ok', { nome });
+    erroPreferencia.value = null;
+  } catch (e) {
+    falhaPreferencia(e);
+  }
+}
+async function tornarPadrao(): Promise<void> {
+  if (filtroAtual.value === null) return;
+  try {
+    await escolherFiltroPadrao(filtroAtual.value);
+    await carregarFiltros(false);
+  } catch (e) {
+    falhaPreferencia(e);
+  }
+}
 const soFavoritos = ref(false);
 const vinculo = ref<VinculoPainel>('todos');
 const termo = ref('');
@@ -123,7 +196,7 @@ const opcoesVinculo = computed(() =>
 const configurar = computed(() => painel.data.value?.configurar === true);
 // O filtro salvo (unidade) vai ao banco quando o profissional troca a unidade do painel.
 watch(unidade, (u, antes) => {
-  if (!doBanco.value || !configurar.value || u === antes) return;
+  if (!doBanco.value || !configurar.value || u === antes || filtroAtual.value !== null) return;
   gravarFiltroPadrao(u).catch((e: unknown) => {
     erroPreferencia.value = e instanceof Error ? e.message : String(e);
   });
@@ -204,6 +277,35 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
         @acionar="mostrarColunas = !mostrarColunas"
       />
     </form>
+    <form v-if="doBanco" class="filtros" data-testid="painel-filtros-salvos" @submit.prevent="salvarFiltro">
+      <SanteSelecao
+        v-model="filtroAtual"
+        class="campo"
+        :rotulo="t('pep.equipe.filtros.salvo')"
+        :opcoes="opcoesFiltro"
+        data-testid="painel-filtro-salvo"
+      />
+      <SanteBotao
+        v-if="configurar && filtroAtual !== null"
+        variante="secundario"
+        :rotulo="t('pep.equipe.filtros.tornarPadrao')"
+        data-testid="painel-filtro-padrao"
+        @acionar="tornarPadrao"
+      />
+      <label v-if="configurar">
+        <span>{{ t('pep.equipe.filtros.nome') }}</span>
+        <input v-model="nomeNovoFiltro" maxlength="60" autocomplete="off" data-testid="painel-filtro-nome" />
+      </label>
+      <SanteBotao
+        v-if="configurar"
+        tipo="submit"
+        variante="secundario"
+        :desabilitado="!nomeNovoFiltro.trim()"
+        :rotulo="t('pep.equipe.filtros.salvar')"
+        data-testid="painel-filtro-salvar"
+      />
+    </form>
+    <p v-if="avisoFiltro" role="status" data-testid="painel-filtro-aviso">{{ avisoFiltro }}</p>
     <SanteAlerta v-if="erroPreferencia" :texto="erroPreferencia" data-testid="painel-erro-preferencia" />
     <fieldset v-if="mostrarColunas && configurar" class="colunas" data-testid="painel-colunas">
       <legend>{{ t('pep.doc.painel.colunas') }}</legend>

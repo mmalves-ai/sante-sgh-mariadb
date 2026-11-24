@@ -54,6 +54,8 @@ import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js
 import { PORTA_SUMARIO_SECOES, PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
 import { ResultadosGruposController } from './resultados-grupos.controller.js';
 import { PORTA_GRUPOS_RESULTADO, PortaGruposResultadoPropria } from './resultados-grupos-propria.js';
+import { PainelFiltrosController } from './painel-filtros.controller.js';
+import { PORTA_PAINEL_FILTROS, PortaPainelFiltrosPropria } from './painel-filtros-propria.js';
 import { WorklistMedicoController } from './worklist.controller.js';
 import {
   PORTA_WORKLIST,
@@ -154,6 +156,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       DocumentosPepController,
       WorklistMedicoController,
       EquipePainelController,
+      PainelFiltrosController,
       SumarioAltaSecoesController,
       ResultadosGruposController,
     ],
@@ -177,6 +180,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaEquipePainelPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.3 (L90): filtros salvos do painel (vários por usuário, padrão único, colunas com largura); sem núcleo, 503.
+      {
+        provide: PORTA_PAINEL_FILTROS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaPainelFiltrosPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.3 (L124): seções configuráveis do sumário de alta; sem núcleo, 503 no cadastro e sem trava na finalização.
