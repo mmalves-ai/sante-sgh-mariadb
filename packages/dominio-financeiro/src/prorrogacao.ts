@@ -21,8 +21,15 @@ export interface MotivoProrrogacao {
 
 /** A justificativa mínima, quando o motivo a exige: 5 letras (o histórico tem de dizer por que, não só "ok"). */
 export const JUSTIFICATIVA_PRORROGACAO_MINIMA = 5;
-/** O teto de uma prorrogação: um ano além do vencimento vigente (além disso é renegociação). */
-export const PRORROGACAO_DIAS_MAXIMO = 366;
+/**
+ * O teto de uma prorrogação: a mesma data do calendário um ano depois do vencimento vigente (além disso é
+ * renegociação). O 29 de fevereiro vai a 28 de fevereiro quando o ano seguinte não é bissexto.
+ */
+export function tetoProrrogacao(vencimento: string): string {
+  const [a, m, d] = vencimento.split('-').map(Number) as [number, number, number];
+  const ultimo = new Date(Date.UTC(a + 1, m, 0)).getUTCDate();
+  return `${a + 1}-${String(m).padStart(2, '0')}-${String(Math.min(d, ultimo)).padStart(2, '0')}`;
+}
 
 const dias = (de: string, ate: string): number =>
   Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000);
@@ -57,7 +64,7 @@ export function conferirProrrogacao(
       'O novo vencimento tem de ser depois do vencimento atual (antecipar não é prorrogar).',
       ['vencimento'],
     );
-  if (d > PRORROGACAO_DIAS_MAXIMO)
+  if (novo > tetoProrrogacao(p.vencimento))
     return recusaFin('prorrogacao-longa', 'Prorrogação de mais de um ano: faça a renegociação do título.', [
       'vencimento',
     ]);

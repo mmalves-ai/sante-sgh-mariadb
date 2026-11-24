@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { conferirAlcadaProrrogacao, conferirProrrogacao, diasProrrogados } from './prorrogacao.js';
+import {
+  conferirAlcadaProrrogacao,
+  conferirProrrogacao,
+  diasProrrogados,
+  tetoProrrogacao,
+} from './prorrogacao.js';
 
 const aberta = { situacao: 'aberta', saldo: 100, vencimento: '2026-12-10', emLotePendente: false };
 const M = { ativo: true, aplicaPagar: true, exigeJustificativa: false };
@@ -35,6 +40,8 @@ describe('prorrogação do vencimento da parcela a pagar', () => {
   it('recusa mais de um ano além do vencimento vigente', () => {
     expect(codigo(conferirProrrogacao(aberta, '2027-12-11', M, ''))).toBe('prorrogacao-longa');
     expect(conferirProrrogacao(aberta, '2027-12-10', M, '')).toBeNull();
+    expect(tetoProrrogacao('2028-02-29')).toBe('2029-02-28');
+    expect(tetoProrrogacao('2027-02-28')).toBe('2028-02-28');
   });
   it('exige motivo ativo da lista que valha para contas a pagar', () => {
     expect(codigo(conferirProrrogacao(aberta, '2026-12-20', null, 'qualquer'))).toBe('motivo-obrigatorio');

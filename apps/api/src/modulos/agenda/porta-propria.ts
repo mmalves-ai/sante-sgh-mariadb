@@ -1596,8 +1596,8 @@ export class PortaAgendaPropria implements PortaAgenda {
           );
           for (const v of vagos) await tx.excluir('horario_agenda', num(v['id']), num(v['versao']));
           const removidos = vagos.length;
-          const g = await tx.uma('SELECT versao FROM geracao_grade WHERE id = ?', [e.geracao]);
-          await tx.alterar('geracao_grade', e.geracao, num(g?.['versao']), {
+          const geracao = await tx.uma('SELECT versao FROM geracao_grade WHERE id = ?', [e.geracao]);
+          await tx.alterar('geracao_grade', e.geracao, num(geracao?.['versao']), {
             situacao: 'revertida',
             revertida_em: agora,
             reversao_usuario_id: ctx.usuario,
