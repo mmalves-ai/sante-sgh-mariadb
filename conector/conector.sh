@@ -107,6 +107,9 @@ if [ "$1" = servico ]; then
     export FB_SIM_LEITOR_SENHA
     EXTRA+=(-e FB_SIM_LEITOR_SENHA)
   fi
+  # a senha da conta restrita só pelo nome (-e VAR): nunca no argv do docker, visível na lista de processos
+  CONECTOR_MARIADB_USUARIO=$CONTA CONECTOR_MARIADB_SENHA=$CONECTOR_MOTOR_SENHA
+  export CONECTOR_MARIADB_USUARIO CONECTOR_MARIADB_SENHA
   docker rm -f "$NOME" >/dev/null 2>&1 || true
   docker create --name "$NOME" --restart unless-stopped --user "$(id -u):$(id -g)" --network "$REDE_INT" \
     --cap-drop ALL --security-opt no-new-privileges --memory "${CONECTOR_SERVICO_MEMORIA:-24g}" \
@@ -115,7 +118,7 @@ if [ "$1" = servico ]; then
     -v "$RAIZ/db/espelho:/app/db/espelho:ro" -v "$LOGS:/logs" "${EXTRA[@]}" \
     -e CONECTOR_LOG_DIR=/logs -e HOME=/tmp -e FIREBIRD_LOCK=/tmp -e CONECTOR_TRABALHO_DIR=/tmp \
     -e CONECTOR_DISCO_DIR=/logs -e CONECTOR_ORIGEM_TIPOS=firebird_servidor -e PLATAFORMA_CHAVE_MESTRA \
-    -e AMBIENTE="${AMBIENTE:-dev}" -e CONECTOR_MARIADB_USUARIO="$CONTA" -e CONECTOR_MARIADB_SENHA="$CONECTOR_MOTOR_SENHA" \
+    -e AMBIENTE="${AMBIENTE:-dev}" -e CONECTOR_MARIADB_USUARIO -e CONECTOR_MARIADB_SENHA \
     -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" \
     -e CONECTOR_MAX_PARALELO="${CONECTOR_MAX_PARALELO:-1}" -e CONECTOR_GRAVADORES="${CONECTOR_GRAVADORES:-6}" \
     -e CONECTOR_ADIAR="${CONECTOR_ADIAR:-}" -e CONECTOR_RESERVA_GB="${CONECTOR_RESERVA_GB:-100}" \
@@ -153,7 +156,7 @@ case "$1" in
   vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia|semear-espelho|medir-carga|migrar-controle|descartar-pendencias-copiadas)
     rede_interna
     REDE=(--network "$REDE_INT")
-    CONECTOR_MARIADB_SENHA=$(grep '^MARIADB_SENHA=' "$RAIZ/.env" | cut -d= -f2-)
+    CONECTOR_MARIADB_SENHA=${CONECTOR_MARIADB_SENHA:-$(grep '^MARIADB_SENHA=' "$RAIZ/.env" | cut -d= -f2-)}  # worktree sem .env: herda do ambiente
     export CONECTOR_MARIADB_SENHA
     ;;
 esac

@@ -252,6 +252,34 @@ class PlataformaModos(unittest.TestCase):
         self.assertEqual(_eventos(self.c, eid), ["fila", "abrindo", "lendo", "pausando", "pausada"])
         self.assertEqual(P.consultar(self.c, P.retomar(self.c, "painel_a"))["contadores"], {"continuar_de": eid})
 
+    def test_pausa_tardia_na_conciliacao_conclui(self):
+        """Pedido de pausa depois de `conciliando` (carga inteira): o batimento não entra em `pausando` e a
+        execução conclui; pausando -> concluida não existe e virava `falhou`."""
+        from sante_conector import motor, plataforma as P
+        eid = P.enfileirar(self.c, "painel_a", "importar", modo="completa")
+        P.mudar_estado(self.c, eid, "abrindo", etapa="abrindo")
+        P.mudar_estado(self.c, eid, "lendo", etapa="lendo")
+        pn = motor.Painel(self.c, eid, {}, registro_log.RegistroLog("painel_a", eid, raiz=""), "lendo")
+        pn.estado("gravando", etapa="gravando")
+        pn.estado("conciliando", etapa="conferindo", percentual=95, contadores={})
+        with self.c.cursor() as cur:
+            cur.execute("UPDATE conector_execucao SET pausa_solicitada_em=UTC_TIMESTAMP(3) WHERE id=%s", (eid,))
+        pn._ult_pausa = float("-inf")
+        pn.progresso(97, "conferindo o arquivo de origem")
+        self.assertFalse(pn.pausando or pn.placar.pausa_pedida)
+        self.assertEqual(P.consultar(self.c, eid)["estado"], "conciliando")
+        P.mudar_estado(self.c, eid, "concluida", etapa="concluída", percentual=100, contadores={})
+        self.assertEqual(_eventos(self.c, eid)[-2:], ["conciliando", "concluida"])
+
+    def test_motivo_do_log_sem_mensagem(self):
+        from sante_conector import motor
+        try:
+            int("VALOR_DA_LINHA")
+        except ValueError as e:
+            m = motor._motivo_log(e)
+        self.assertNotIn("VALOR_DA_LINHA", m)
+        self.assertTrue(m.startswith("ValueError (em "))
+
     def test_filtro_por_tipo_de_origem(self):
         from sante_conector import plataforma as P
         from sante_conector.trabalhador import Trabalhador
@@ -486,6 +514,7 @@ class MotorServidor(unittest.TestCase):
 
     def test_leitura_direta_log_pausa_e_retomada(self):
         from sante_conector import motor, plataforma as P
+        rep_antes = os.environ.get("CONECTOR_REPROCESSAR_RECUSADAS")  # o container a passa vazia
         eid = P.enfileirar_carga(self.c, self.cod, "completa")
         ex, abertos = self._rodar()
         self.assertEqual((ex["id"], ex["estado"]), (eid, "concluida"), ex.get("motivo_falha"))
@@ -520,7 +549,7 @@ class MotorServidor(unittest.TestCase):
         ex3, _ = self._rodar()
         self.assertEqual((ex3["id"], ex3["estado"]), (e3, "concluida"), ex3.get("motivo_falha"))
         self.assertTrue(ex3["contadores"]["reprocessar_recusadas"])
-        self.assertIsNone(os.environ.get("CONECTOR_REPROCESSAR_RECUSADAS"))  # o pedido vale só na execução
+        self.assertEqual(os.environ.get("CONECTOR_REPROCESSAR_RECUSADAS"), rep_antes)  # o pedido vale só na execução
 
 
 if __name__ == "__main__":

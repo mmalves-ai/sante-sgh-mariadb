@@ -104,6 +104,7 @@ class Painel:
         self.estado_atual, self.etapa, self.pct = estado, None, 0.0
         self._ult_pausa, self._ult_log = float("-inf"), time.monotonic()
         self.pausando = False
+        self.sem_pausa = False  # da conciliação em diante a carga está inteira: termina, não pausa
 
     def _evento(self, tipo, t):
         pl = self.placar
@@ -113,6 +114,8 @@ class Painel:
             self.log.tabela_fim(t, pl.nomes.get(t), pl.contagens.get(t, 0), pl.tabela(t))
 
     def checar_pausa(self, forcar=False):
+        if self.sem_pausa:
+            return False
         if self.pausando or self.placar.pausa_pedida:
             self._entrar_pausando()
             return True
@@ -173,6 +176,8 @@ class Painel:
             kw["contadores"] = dict(kw["contadores"], progresso=self.placar.json())
         plataforma.mudar_estado(self.conn, self.eid, novo, **kw)
         self.estado_atual = novo
+        if novo == "conciliando":  # pausando -> concluida não existe: o pedido tardio fica para a próxima execução
+            self.sem_pausa = True
         if kw.get("etapa"):
             self.etapa = kw["etapa"]
         if "percentual" in kw:
@@ -364,6 +369,18 @@ def _carregar(conn, eid, ex, ctl, usuario, senha, iid, tabelas, contagens, sha_a
         raise FalhaExecucao(motivo_conciliacao(resumo["entidades"], ruins))
 
 
+def _motivo_log(e):
+    """O que vai ao arquivo de log sobre a falha: só o tipo, o código do banco e o local; nunca str(e), que pode
+    citar o valor da linha (KeyError, ValueError de conversão, erro do driver)."""
+    m = type(e).__name__
+    if isinstance(e, pymysql.err.MySQLError) and e.args:
+        m += ": erro %s do banco de destino" % e.args[0]
+    tb = traceback.extract_tb(e.__traceback__)
+    if tb:
+        m += " (em %s:%d)" % (os.path.basename(tb[-1].filename), tb[-1].lineno)
+    return m
+
+
 def _motivo(e):
     """Motivo técnico da falha, sem valores de linha."""
     msg = str(e)
@@ -540,7 +557,7 @@ def executar(trab, eid):
         try:
             _pausar(conn, eid, cont, painel, log)
         except Exception as e:  # noqa: BLE001 - a pausa que não fecha vira falha continuável
-            log.excecao(e, _motivo(e))
+            log.excecao(e, _motivo_log(e))
             try:
                 plataforma.mudar_estado(conn, eid, "falhou", etapa="falhou ao pausar", motivo=_motivo(e),
                                         contadores=dict(cont, continuavel=True))
@@ -548,7 +565,7 @@ def executar(trab, eid):
                 pass
     except Exception as e:  # o motivo é técnico e não traz valores de linha
         motivo = _motivo(e)
-        log.excecao(e, motivo, getattr(e, "detalhe", None))
+        log.excecao(e, _motivo_log(e), getattr(e, "detalhe", None))
         if painel is not None and painel.placar.contagens:
             cont["progresso"] = painel.placar.json()
             log.recusas(painel.placar.regras)
