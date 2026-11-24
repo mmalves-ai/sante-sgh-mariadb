@@ -1,9 +1,9 @@
 {
-  "descricao": "Metadados do .env da raiz do sante-sgh. Só permissão, tamanho e data: o conteúdo nunca é lido. Se o dono trocar o .env, registre de novo (stat). Registrado de novo em 2026-11-23: o .env ganhou, por decisão do dono, as credenciais do aviso por SES, o token do GitHub e os endereços DEV da VM.",
+  "descricao": "Metadados do .env da raiz do sante-sgh. Só permissão, tamanho e data: o conteúdo nunca é lido. Se o dono trocar o .env, registre de novo (stat). Registrado de novo em 2026-11-23: o .env ganhou, por decisão do dono, as credenciais do aviso por SES, o token do GitHub e os endereços DEV da VM. Registrado de novo em 2026-11-24 04h30: o .env ganhou MAILPIT_GESTAO_USUARIO, MAILPIT_GESTAO_SENHA e MAILPIT_GESTAO_HASH (tela do Mailpit atrás do Caddy da gestão, pedido do dono) e SEMEAR_ADMIN_EMAIL foi atualizado ao e-mail novo do administrador.",
   "fonte": "stat -c '%a %s %Y' .env",
-  "registradoEm": "2026-11-23",
+  "registradoEm": "2026-11-24",
   "raiz": "/home/mmalves/workspace/redesante/sante-sgh",
   "permissao": "600",
-  "tamanho": 1199,
-  "mtime": 1795389851
+  "tamanho": 1443,
+  "mtime": 1795504741
 }

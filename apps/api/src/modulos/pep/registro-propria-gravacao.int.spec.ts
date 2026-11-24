@@ -437,7 +437,12 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
           `INSERT INTO trilha_auditoria (estabelecimento_id, ocorrido_em, acao, entidade, entidade_id, dados_depois,
              motivo, criado_em)
            VALUES (?, UTC_TIMESTAMP(3), 'inclusao', 'registro_assistencial_rascunho', ?, ?, ?, UTC_TIMESTAMP(3))`,
-          [m.estabelecimento, id, JSON.stringify(itens), 'respostas em edição do rascunho importado (sintético)'],
+          [
+            m.estabelecimento,
+            id,
+            JSON.stringify(itens),
+            'respostas em edição do rascunho importado (sintético)',
+          ],
         );
         return id;
       });
@@ -488,7 +493,11 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       ctx(),
     );
     const lido2 = await g.lerRascunho(C, r2.rascunho);
-    expect(lido2?.rascunho).toMatchObject({ doNovo: true, respostas: 3, lancadoEm: lido!.rascunho.lancadoEm });
+    expect(lido2?.rascunho).toMatchObject({
+      doNovo: true,
+      respostas: 3,
+      lancadoEm: lido!.rascunho.lancadoEm,
+    });
     expect(lido2?.linhas.map((l) => l.texto)).toContain('Quadro importado sintético');
     const situacao = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
       l.uma('SELECT situacao, excluido_em FROM registro_assistencial_rascunho WHERE id = ?', [r1]),

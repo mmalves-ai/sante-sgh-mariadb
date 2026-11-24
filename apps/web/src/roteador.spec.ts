@@ -55,6 +55,8 @@ describe('rotas e guarda de permissão', () => {
       .filter((x) => String(x.path).startsWith('/plataforma'))
       .map((x) => [x.path, x.meta?.publica]);
     expect(publicas).toEqual([
+      // Recuperação da senha do administrador da plataforma: pública (quem esqueceu a senha não tem sessão).
+      ['/plataforma/recuperar-senha', true],
       ['/plataforma/entrar', true],
       ['/plataforma', true],
       ['/plataforma/suporte', true],

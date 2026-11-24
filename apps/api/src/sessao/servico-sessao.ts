@@ -794,7 +794,9 @@ export class ServicoSessao {
       trocaSenha,
       falhasAntes,
       origem,
-      this.segundoFatorEmail ? { codigo: entrada.codigoSegundoFator, email } : { codigo: entrada.codigoSegundoFator },
+      this.segundoFatorEmail
+        ? { codigo: entrada.codigoSegundoFator, email }
+        : { codigo: entrada.codigoSegundoFator },
     );
     await this.armazem.apagar(chaveTent);
     // Regra 2: a senha do legado conferiu: regrava no esquema forte (falha só avisa; a próxima entrada tenta de novo).

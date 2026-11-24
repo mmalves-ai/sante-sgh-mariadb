@@ -107,9 +107,9 @@ describe('documentos-propria-operacoes (unidade)', () => {
     expect(await codigo(ops['pep.registrarAlergia']!(C, alergia, CTX))).toBe('entrada-invalida');
     expect(await codigo(ops['pep.inativarAlergia']!(C, { paciente: 1 }, CTX))).toBe('entrada-invalida');
     // CID sem autorização e atestado sem dias já não recusam antes da sessão: o núcleo intocável é alcançado.
-    expect(await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, diasAfastamento: 1, cid: 'A09' }, CTX))).toContain(
-      'não podia ser tocado',
-    );
+    expect(
+      await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, diasAfastamento: 1, cid: 'A09' }, CTX)),
+    ).toContain('não podia ser tocado');
     expect(
       await codigo(
         ops['pep.lancarExameExterno']!(

@@ -454,11 +454,7 @@ const opcoesAtendimento = computed(() =>
         "
         data-testid="aviso-parecer"
       />
-      <SanteAlerta
-        v-if="somenteLeitura"
-        variante="info"
-        :texto="t('pep.reg.registro.soLeitura')"
-      />
+      <SanteAlerta v-if="somenteLeitura" variante="info" :texto="t('pep.reg.registro.soLeitura')" />
       <SanteAlerta v-if="restaurado" variante="info" :texto="t('pep.reg.registro.restaurado')" />
       <SanteAlerta v-for="(a, i) in f.avisos" :key="i" variante="aviso" :texto="a" />
       <section v-if="f.rascunhos.length > 0" class="bloco" aria-labelledby="reg-rascunhos">

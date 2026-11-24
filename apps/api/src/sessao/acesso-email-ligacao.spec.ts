@@ -184,13 +184,19 @@ describe('segundo fator por e-mail falha fechado', () => {
   it('quem escolheu o e-mail e o envio não existe é recusado (503), nunca levado ao aplicativo', async () => {
     const { t } = tardio('email', false);
     const { servico } = montar({ config: { segundoFatorEmail: t } });
-    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({ tipo: 'indisponivel' });
+    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({
+      tipo: 'indisponivel',
+    });
   });
 
   it('gancho passado à sessão e ainda não ligado: a entrada recusa (503)', async () => {
     const { servico } = montar({ config: { segundoFatorEmail: new SegundoFatorEmailTardio() } });
-    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({ tipo: 'indisponivel' });
-    const plat = montar({ config: { segundoFatorEmail: new SegundoFatorEmailTardio(), plataforma, cliente: 'cliente_a' } });
+    await expect(servico.entrar(entrada('SINT.USUARIO'), REDE)).rejects.toMatchObject({
+      tipo: 'indisponivel',
+    });
+    const plat = montar({
+      config: { segundoFatorEmail: new SegundoFatorEmailTardio(), plataforma, cliente: 'cliente_a' },
+    });
     await expect(
       plat.servico.entrarPlataforma({ estabelecimento: 'aa', login: 'dono', senha: SENHA_ADM }, REDE),
     ).rejects.toMatchObject({ tipo: 'indisponivel' });
@@ -258,7 +264,12 @@ describe('o código no e-mail não cumpre a exigência do aplicativo do perfil',
   });
 
   it('política opcional ou no prazo de adesão: o e-mail vale e a sessão leva a situação da política', async () => {
-    const info = { cadastrado: false, disponivel: true, exigencia: 'adesao' as const, prazoAdesaoAte: '2026-12-31' };
+    const info = {
+      cadastrado: false,
+      disponivel: true,
+      exigencia: 'adesao' as const,
+      prazoAdesaoAte: '2026-12-31',
+    };
     const { g, emitidos } = gancho('email');
     const { servico } = montar({
       config: { segundoFatorEmail: g, identidade: identidade({ tipo: 'entrar', info }) },

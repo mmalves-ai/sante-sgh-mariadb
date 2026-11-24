@@ -189,7 +189,12 @@ export async function conferirAtendimento(
 }
 
 /** O horário clínico (local do estabelecimento) como instante; retroativo além de 5 minutos exige justificativa. */
-export function horarioClinico(s: Sessao, local: string, justificativa: string | undefined, agora: Date): Date {
+export function horarioClinico(
+  s: Sessao,
+  local: string,
+  justificativa: string | undefined,
+  agora: Date,
+): Date {
   const t = instanteLocal(local, s.fuso);
   if (t.getTime() > agora.getTime() + 5 * 60_000)
     throw recusar(422, 'horario-futuro', 'O horário clínico não pode estar no futuro.');

@@ -460,9 +460,7 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(await codigo(ops()['pep.emitirDocumento']!(C(), at, ctx('at0')))).toBe('entrada-invalida');
     expect(
       await codigo(ops()['pep.emitirDocumento']!(C(), { ...at, cid: 'A09', diasAfastamento: 2 }, ctx('at1'))),
-    ).toBe(
-      'cid-sem-autorizacao',
-    );
+    ).toBe('cid-sem-autorizacao');
     const r = await ops()['pep.emitirDocumento']!(C(), { ...at, diasAfastamento: 2 }, ctx('at'));
     const l = await uma(
       `SELECT d.dias_afastamento, d.documento_prontuario_id, d.situacao,

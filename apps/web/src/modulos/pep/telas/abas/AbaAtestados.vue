@@ -59,7 +59,8 @@ async function emitir(): Promise<void> {
   erro.value = null;
   if (atendimento.value === null || modelo.value === null) return;
   // O atestado exige os dias de afastamento (0 a 365); declaração e requerimento não levam.
-  const diasValidos = typeof dias.value === 'number' && Number.isInteger(dias.value) && dias.value >= 0 && dias.value <= 365;
+  const diasValidos =
+    typeof dias.value === 'number' && Number.isInteger(dias.value) && dias.value >= 0 && dias.value <= 365;
   if (tipo.value === 'atestado' && !diasValidos) return;
   try {
     await emitirAtestado(props.paciente, {

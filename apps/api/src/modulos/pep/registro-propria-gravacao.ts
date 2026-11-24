@@ -517,7 +517,9 @@ export function linhasDoImportado(
     if (c.tipo === 'multipla' || TIPOS_ESCOLHA.has(c.tipo)) {
       const pos = c.opcoes.findIndex((o) => o.id === ref.opcao);
       if (pos < 0)
-        throw recusaImportado('Uma opção marcada no rascunho importado não está ativa no formulário publicado.');
+        throw recusaImportado(
+          'Uma opção marcada no rascunho importado não está ativa no formulário publicado.',
+        );
       const multipla = c.tipo === 'multipla';
       l = {
         ...base,
@@ -557,7 +559,8 @@ export function linhasDoImportado(
 }
 
 /** Leitura das linhas do rascunho importado: as linhas do contrato ou a recusa (a lista mostra só a contagem). */
-export type LeituraImportado = { readonly linhas: LinhaGravacao[] } | { readonly erro: ErroOperacao; readonly n: number };
+export type LeituraImportado =
+  { readonly linhas: LinhaGravacao[] } | { readonly erro: ErroOperacao; readonly n: number };
 
 /** Importado com a coluna respostas vazia: o conteúdo está na trilha da carga. */
 const importadoSemLinhas = (x: Record<string, unknown>): boolean =>
@@ -589,7 +592,10 @@ export async function linhasDosImportados(
         v.filter((y): y is RespostaImportada => y !== null && typeof y === 'object'),
       );
   }
-  const porModelo = new Map<number, { campos: CampoOrdenado[]; opcoes: Map<string, { opcao: number; campo: number }> }>();
+  const porModelo = new Map<
+    number,
+    { campos: CampoOrdenado[]; opcoes: Map<string, { opcao: number; campo: number }> }
+  >();
   for (const x of alvo) {
     const id = num(x['id']);
     const lista = itens.get(id);
@@ -606,7 +612,8 @@ export async function linhasDosImportados(
         [modelo],
       );
       const versao = numOuNull(pub[0]?.['v']);
-      const campos = versao === null ? [] : (await camposDoModelo(l, modelo)).filter((c) => c.versao === versao);
+      const campos =
+        versao === null ? [] : (await camposDoModelo(l, modelo)).filter((c) => c.versao === versao);
       const opcoes = new Map<string, { opcao: number; campo: number }>();
       if (versao !== null)
         for (const o of await l.consultar(
