@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import DominioTela from '../../config/telas/DominioTela.vue';
 import { lerProcedimentos } from '../api-cadastro.js';
+import LigacoesEspecialidade from '../componentes/LigacoesEspecialidade.vue';
 import PaginacaoCadastro from '../componentes/PaginacaoCadastro.vue';
 
 const { t } = useI18n();
@@ -77,6 +78,8 @@ function ver(): void {
         />
       </template>
     </section>
+    <!-- F3.1 (02-CAD linha 17): procedimentos com vigência e ocupações da especialidade escolhida. -->
+    <LigacoesEspecialidade v-if="escolhida !== null" :especialidade="escolhida" />
   </div>
 </template>
 

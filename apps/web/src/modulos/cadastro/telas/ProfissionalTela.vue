@@ -36,6 +36,7 @@ import {
 import ComplementoProfissional from '../componentes/ComplementoProfissional.vue';
 import CredenciamentoConvenios from '../componentes/CredenciamentoConvenios.vue';
 import EdicaoProfissional from '../componentes/EdicaoProfissional.vue';
+import LotacoesProfissional from '../componentes/LotacoesProfissional.vue';
 import VinculoLoginProfissional from '../componentes/VinculoLoginProfissional.vue';
 import {
   ABAS_PROFISSIONAL,
@@ -547,6 +548,8 @@ const textoRegistro = (r: Registro) => [r.cbo, r.cboDescricao].filter(Boolean).j
             secao="lotacao"
             @gravado="recarregar"
           />
+          <!-- F3.1 (02-CAD linha 18): lotação por estabelecimento e unidade com CBO, carga semanal, vínculo e vigência. -->
+          <LotacoesProfissional :profissional="Number(props.id)" />
         </section>
 
         <!-- Convênios -->

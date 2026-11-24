@@ -128,6 +128,14 @@ export const rotasCadastro: RouteRecordRaw[] = [
     },
   },
   {
+    // F3.1 (02-CAD linha 20): ficha do solicitante externo (alterar, inativar, códigos por fonte, parecidos).
+    path: `/cadastros/solicitantes/:id${id}`,
+    name: 'cadastro.solicitante',
+    component: () => import('./telas/SolicitanteFichaTela.vue'),
+    props: true,
+    meta: { permissao: 'cadastro.solicitante.ler' },
+  },
+  {
     path: '/cadastros/prestadores',
     name: 'cadastro.prestadores',
     component: () => import('../config/telas/DominioTela.vue'),

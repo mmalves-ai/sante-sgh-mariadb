@@ -13,6 +13,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import { buscarSolicitantes, incluirSolicitante } from '../api-cadastro.js';
+import { lerParecidos, type Parecido } from '../api-ligacoes.js';
 
 const { t } = useI18n();
 const termo = ref('');
@@ -39,6 +40,22 @@ const gravando = ref(false);
 const erroInclusao = ref<unknown>(null);
 /** A recusa do servidor (repetido, conselho inexistente, gravação não liberada) com o motivo dele. */
 const recusaInclusao = ref<string | null>(null);
+// F3.1 (02-CAD linha 20): parecidos pela regra do domínio, na hora (antes de gravar), sem bloquear a inclusão.
+const parecidosNovo = ref<Parecido[]>([]);
+async function conferirParecidos(): Promise<void> {
+  const x = novo.value;
+  if (x.nome.trim().length < 5 && !x.numero.trim()) return void (parecidosNovo.value = []);
+  try {
+    parecidosNovo.value = await lerParecidos({
+      nome: x.nome,
+      conselho: x.conselho,
+      uf: x.uf,
+      numero: x.numero,
+    });
+  } catch {
+    parecidosNovo.value = [];
+  }
+}
 const incluido = ref<string | null>(null);
 async function incluir(): Promise<void> {
   if (gravando.value) return;
@@ -156,6 +173,7 @@ function buscarRegistro(): void {
           <input
             id="novo-solicitante-nome"
             v-model="novo.nome"
+            @blur="conferirParecidos"
             maxlength="70"
             minlength="5"
             required
@@ -192,6 +210,7 @@ function buscarRegistro(): void {
           <input
             id="novo-solicitante-numero"
             v-model="novo.numero"
+            @blur="conferirParecidos"
             class="curto"
             inputmode="numeric"
             maxlength="9"
@@ -214,6 +233,15 @@ function buscarRegistro(): void {
         anunciar
         data-testid="recusa-solicitante"
       />
+      <div v-if="parecidosNovo.length" class="aviso" role="status" data-testid="parecidos-solicitante">
+        <p>{{ t('ligacoes.solicitante.avisoParecidos') }}</p>
+        <ul>
+          <li v-for="p in parecidosNovo" :key="p.id">
+            <RouterLink :to="`/cadastros/solicitantes/${p.id}`">{{ p.nome }}</RouterLink>
+            — {{ p.registro }} ({{ t(`ligacoes.solicitante.motivos.${p.motivo}`) }})
+          </li>
+        </ul>
+      </div>
       <MensagemErro v-if="erroInclusao" :erro="erroInclusao" />
       <p v-if="incluido" role="status" data-testid="solicitante-incluido">
         {{ t('cadastro.solicitantes.incluido', { nome: incluido }) }}
@@ -240,7 +268,9 @@ function buscarRegistro(): void {
         </thead>
         <tbody>
           <tr v-for="s in r.itens" :key="s.id">
-            <td>{{ s.nome }}</td>
+            <td>
+              <RouterLink :to="`/cadastros/solicitantes/${s.id}`">{{ s.nome }}</RouterLink>
+            </td>
             <td>{{ [s.conselho, s.numero, s.uf].filter((x) => x !== null && x !== '').join(' ') }}</td>
             <td>{{ s.cbo ?? '' }}</td>
             <td>{{ s.codigosConvenio }}</td>
