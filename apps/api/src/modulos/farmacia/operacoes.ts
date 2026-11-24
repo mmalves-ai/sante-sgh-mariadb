@@ -7,6 +7,8 @@ import {
   esquemaConfirmarEntrega,
   esquemaDevolverDose,
   esquemaDispensarHorario,
+  esquemaGravarHorariosPadrao,
+  esquemaGravarRegraIntegracao,
   esquemaRegistrarPerdaControlado,
 } from '@sgh/contratos';
 import type { ZodType } from 'zod';
@@ -18,4 +20,7 @@ export const ENTRADAS_FARMACIA: Readonly<Record<string, ZodType>> = {
   'suprimentos.cancelarDispensacao': esquemaCancelarDispensacao,
   'suprimentos.registrarPerdaControlado': esquemaRegistrarPerdaControlado,
   'suprimentos.avaliarPrescricao': esquemaAvaliarPrescricao,
+  // F3.6 (05-SUP linha 7): parâmetros da integração prescrição × estoque.
+  'suprimentos.gravarRegraIntegracao': esquemaGravarRegraIntegracao,
+  'suprimentos.gravarHorariosPadrao': esquemaGravarHorariosPadrao,
 };

@@ -72,6 +72,10 @@ export const PERMISSOES_FARMACIA_M29: readonly DeclaracaoPermissao[] = [
   ),
   p('suprimentos.livro.ler', 'Consultar o livro de controlados (modo conferência)'),
   p(
+    'suprimentos.integracao.configurar',
+    'Configurar a integração prescrição × estoque (local que atende, momento, forma) e os horários padrão de medicação',
+  ),
+  p(
     'suprimentos.livro.fechar',
     'Fechar o período do livro de controlados (farmacêutico responsável)',
 

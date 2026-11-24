@@ -268,3 +268,58 @@ export interface WorklistFarmaceutico {
     'item' | 'leito' | 'descricao' | 'prioridade' | 'classe' | 'desde'
   >[];
 }
+
+// ── F3.6 (05-SUP linha 7): regras de integração e horários padrão, lidos do banco ─────────────────────────────
+
+export interface RegraIntegracaoLida {
+  readonly regra: number;
+  readonly versao: number;
+  readonly centroCusto: number | null;
+  readonly setor: number | null;
+  readonly unidade: number | null;
+  readonly tipoItem: number | null;
+  readonly grupo: number | null;
+  readonly subgrupo: number | null;
+  readonly item: number | null;
+  readonly localAtendente: number;
+  readonly localSubstituto: number | null;
+  readonly tipoIntegracao: 'requisicao_automatica' | 'dispensacao_direta' | 'sem_integracao';
+  readonly momento: 'na_prescricao' | 'na_liberacao_farmaceutica' | 'no_aprazamento' | 'antes_do_horario';
+  readonly antecedenciaMinutos: number | null;
+  readonly forma: 'dose_individualizada' | 'dose_unitaria' | 'dose_coletiva' | 'kit';
+  readonly geraManipulacao: boolean;
+  readonly prioridade: number;
+  readonly ativo: boolean;
+  /** O escopo e o local em texto, para a lista. */
+  readonly escopoNome: string;
+  readonly localNome: string;
+}
+
+export interface GradeHorarioPadrao {
+  readonly frequencia: number;
+  readonly frequenciaNome: string;
+  readonly dosesPorDia: number | null;
+  readonly setor: number | null;
+  readonly setorNome: string | null;
+  readonly horarios: readonly { hora: string; dias: readonly number[] }[];
+}
+
+export interface OpcaoParametro {
+  readonly id: number;
+  readonly nome: string;
+  readonly dosesPorDia?: number | null;
+}
+
+export interface ParametrosIntegracaoEditaveis {
+  readonly regras: readonly RegraIntegracaoLida[];
+  readonly grades: readonly GradeHorarioPadrao[];
+  readonly opcoes: {
+    readonly centros: readonly OpcaoParametro[];
+    readonly setores: readonly OpcaoParametro[];
+    readonly unidades: readonly OpcaoParametro[];
+    readonly locais: readonly OpcaoParametro[];
+    readonly tiposItem: readonly OpcaoParametro[];
+    readonly grupos: readonly OpcaoParametro[];
+    readonly frequencias: readonly OpcaoParametro[];
+  };
+}

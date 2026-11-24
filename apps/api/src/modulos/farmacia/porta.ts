@@ -13,6 +13,7 @@ import type {
   LivroMontado,
   TipoIntervencao,
 } from '@sgh/contratos/regras-suprimentos';
+import type { ParametrosIntegracaoEditaveis } from '@sgh/contratos';
 import type {
   AvaliacaoRegistrada,
   DoseDaFila,
@@ -188,6 +189,8 @@ export interface PortaFarmacia extends PortaGravacaoM18<GravadorSghFarmacia> {
     modo: string;
   } | null>;
   parametrosIntegracao(c: ContextoFarmacia): Promise<ParametrosIntegracaoLidos>;
+  /** F3.6: as regras de integração prescrição × estoque, as grades de horário padrão e as opções da tela. */
+  parametrosEditaveis(c: ContextoFarmacia): Promise<ParametrosIntegracaoEditaveis>;
   /** Os locais de estoque (a farmácia que dispensa escolhe o dela). */
   locais(c: ContextoFarmacia): Promise<{ codigo: number; nome: string }[]>;
   /** Os lotes com saldo do item no local (validade primeiro), para a dose rastreável. */
@@ -239,6 +242,7 @@ export const METODOS_PORTA_FARMACIA: ReadonlySet<string> = new Set([
   'conferencias',
   'livroFechado',
   'parametrosIntegracao',
+  'parametrosEditaveis',
   'locais',
   'lotes',
   'janelaEntregas',

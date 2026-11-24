@@ -22,6 +22,7 @@ import type {
   WorklistFarmaceutico,
 } from '@sgh/contratos';
 import type { SugestaoDevolucao } from '@sgh/contratos/regras-suprimentos';
+import type { ParametrosIntegracaoEditaveis } from '@sgh/contratos';
 import { z } from 'zod';
 import { enviar, ler, qs } from '../exames/api-exames.js';
 
@@ -131,6 +132,13 @@ export const fecharLivro = (e: unknown, chave: string) => gravar(`${F}/livro/fec
 
 export const lerParametros = (): Promise<ParametrosIntegracaoFarmacia> =>
   ler(`${F}/parametros`, objeto<ParametrosIntegracaoFarmacia>());
+// F3.6 (05-SUP linha 7): parâmetros editáveis da integração prescrição × estoque.
+export const lerParametrosEditaveis = (): Promise<ParametrosIntegracaoEditaveis> =>
+  ler(`${F}/parametros/editaveis`, objeto<ParametrosIntegracaoEditaveis>());
+export const gravarRegraIntegracao = (e: unknown, chave: string) =>
+  gravar(`${F}/parametros/regras`, e, chave);
+export const gravarHorariosPadrao = (e: unknown, chave: string) =>
+  gravar(`${F}/parametros/horarios`, e, chave);
 export const lerTipos = (): Promise<TipoEnvioAvaliacao[]> =>
   ler(`${F}/avaliacao/tipos`, lista<TipoEnvioAvaliacao>());
 export const lerAmbulatorial = () =>

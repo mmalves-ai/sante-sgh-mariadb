@@ -23,6 +23,9 @@ import type {
   ConfirmarEntregaEntrada,
   DevolverDoseEntrada,
   DispensarHorarioEntrada,
+  GravarHorariosPadraoEntrada,
+  GravarRegraIntegracaoEntrada,
+  ParametrosIntegracaoEditaveis,
   RegistrarPerdaControladoEntrada,
 } from '@sgh/contratos';
 import {
@@ -52,6 +55,7 @@ import {
   NUMERO_DA_ENTREGA,
   TABELAS_DISPENSACAO,
 } from './gravador-dispensacao.js';
+import { gravadorParametros, lerParametrosEditaveis, TABELAS_PARAMETROS } from './gravador-parametros.js';
 import { ENTRADAS_FARMACIA } from './operacoes.js';
 import {
   type ContextoFarmacia,
@@ -227,7 +231,7 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
         .replace(/^suprimentos\./, '')
         .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
         .toLowerCase()}`,
-      tabelas: [...TABELAS_DISPENSACAO, ...TABELAS_AVALIACAO],
+      tabelas: [...TABELAS_DISPENSACAO, ...TABELAS_AVALIACAO, ...TABELAS_PARAMETROS],
       entrada: esquema as ZodType<Record<string, unknown>>,
       gravar: async (tx, e): Promise<ResultadoOperacao> => {
         const g = gravadorDispensacao(tx, est, usuario, extras);
@@ -244,6 +248,12 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
             return g.registrarPerdaControlado(e as RegistrarPerdaControladoEntrada, reautenticadoEm);
           case 'suprimentos.avaliarPrescricao':
             return avaliarPeloHorario(tx, est, usuario, extras, e as AvaliarPrescricaoEntrada);
+          case 'suprimentos.gravarRegraIntegracao':
+            return gravadorParametros(tx, est, extras).gravarRegraIntegracao(
+              e as GravarRegraIntegracaoEntrada,
+            );
+          case 'suprimentos.gravarHorariosPadrao':
+            return gravadorParametros(tx, est, extras).gravarHorariosPadrao(e as GravarHorariosPadraoEntrada);
           default:
             throw new ErroOperacao(
               400,
@@ -510,6 +520,11 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
         estoque: n(r['estoque']),
       })),
     );
+  }
+
+  /** F3.6 (05-SUP linha 7): as regras de integração, as grades de horário padrão e as opções da tela. */
+  parametrosEditaveis(c: ContextoFarmacia): Promise<ParametrosIntegracaoEditaveis> {
+    return this.ler(c, (l, est) => lerParametrosEditaveis(l, est));
   }
 
   async parametrosIntegracao(): Promise<ParametrosIntegracaoLidos> {

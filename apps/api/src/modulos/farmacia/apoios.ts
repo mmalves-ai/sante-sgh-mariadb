@@ -18,6 +18,8 @@ const FUNCIONALIDADES = {
       'suprimentos.dispensarHorario': 'suprimentos.dispensacao.dispensar',
       'suprimentos.devolverDose': 'suprimentos.devolucao.registrar',
       'suprimentos.cancelarDispensacao': 'suprimentos.dispensacao.cancelar',
+      'suprimentos.gravarRegraIntegracao': 'suprimentos.integracao.configurar',
+      'suprimentos.gravarHorariosPadrao': 'suprimentos.integracao.configurar',
     },
     extras: {},
   },

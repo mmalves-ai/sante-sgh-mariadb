@@ -42,3 +42,5 @@ export * from './contrato.js';
 export * from './licitacao.js';
 // Regra 10: o termo de referência, o registro da etapa e a ata em PDF/A (conteúdo; a emissão é do M09).
 export * from './licitacao-documento.js';
+// F3.6 (05-SUP linha 7): regra de integração prescrição × estoque e horários padrão de medicação.
+export * from './farmacia-parametros.js';

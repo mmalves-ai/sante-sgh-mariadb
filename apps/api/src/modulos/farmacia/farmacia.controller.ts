@@ -34,6 +34,8 @@ import {
   esquemaDispensarHorario,
   esquemaEscriturarSngpc,
   esquemaFecharLivro,
+  esquemaGravarHorariosPadrao,
+  esquemaGravarRegraIntegracao,
   esquemaRegistrarIntervencao,
   esquemaRegistrarPerdaControlado,
   esquemaResponderIntervencao,
@@ -44,6 +46,7 @@ import {
   type JanelaEntregas,
   type LoteFarmacia,
   type ParametrosIntegracaoFarmacia,
+  type ParametrosIntegracaoEditaveis,
   type ResultadoFarmacia,
   type TipoEnvioAvaliacao,
   type UnidadeFarmacia,
@@ -664,6 +667,38 @@ export class FarmaciaController {
       horarios: p.horarios,
       validacaoFarmaceuticaLigada: p.validacaoFarmaceutica,
     };
+  }
+
+  // ── Parâmetros da integração prescrição × estoque (F3.6, 05-SUP linha 7) ───────────────────────────────
+
+  @Get('parametros/editaveis')
+  @Permissao('config.parametro.ler')
+  parametrosEditaveis(@Req() req: RequisicaoAutorizada): Promise<ParametrosIntegracaoEditaveis> {
+    return this.porta.parametrosEditaveis(sessaoDe(req).porta);
+  }
+
+  @Post('parametros/regras')
+  @HttpCode(200)
+  @Permissao('suprimentos.integracao.configurar')
+  @AuditadoNoHandler('suprimentos.gravarRegraIntegracao pelo executor (trilha na mesma transação)')
+  gravarRegraIntegracao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFarmacia> {
+    return this.servico.executar(
+      sessaoDe(req),
+      'suprimentos.gravarRegraIntegracao',
+      corpo(esquemaGravarRegraIntegracao, b),
+    );
+  }
+
+  @Post('parametros/horarios')
+  @HttpCode(200)
+  @Permissao('suprimentos.integracao.configurar')
+  @AuditadoNoHandler('suprimentos.gravarHorariosPadrao pelo executor (trilha na mesma transação)')
+  gravarHorariosPadrao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFarmacia> {
+    return this.servico.executar(
+      sessaoDe(req),
+      'suprimentos.gravarHorariosPadrao',
+      corpo(esquemaGravarHorariosPadrao, b),
+    );
   }
 
   @Get('avaliacao/tipos')

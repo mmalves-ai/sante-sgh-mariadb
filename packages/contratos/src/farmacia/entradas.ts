@@ -189,3 +189,55 @@ export type DispensarAmbulatorialEntrada = z.infer<typeof esquemaDispensarAmbula
 
 export const esquemaEscriturarSngpc = z.object({ inicio: dataIso, fim: dataIso }).strict();
 export type EscriturarSngpcEntrada = z.infer<typeof esquemaEscriturarSngpc>;
+
+// ── F3.6 (05-SUP linha 7): parâmetros da integração prescrição × estoque ───────────────────────────────────────
+
+const idOuNulo = id.nullable().default(null);
+
+/** suprimentos.gravarRegraIntegracao: inclui (sem regra) ou altera (com regra e versão) a regra de integração. */
+export const esquemaGravarRegraIntegracao = z
+  .object({
+    regra: id.optional(),
+    versao: z.number().int().positive().optional(),
+    centroCusto: idOuNulo,
+    setor: idOuNulo,
+    unidade: idOuNulo,
+    tipoItem: idOuNulo,
+    grupo: idOuNulo,
+    subgrupo: idOuNulo,
+    item: idOuNulo,
+    localAtendente: id,
+    localSubstituto: idOuNulo,
+    tipoIntegracao: z.enum(['requisicao_automatica', 'dispensacao_direta', 'sem_integracao']),
+    momento: z.enum(['na_prescricao', 'na_liberacao_farmaceutica', 'no_aprazamento', 'antes_do_horario']),
+    antecedenciaMinutos: z.number().int().positive().max(10_080).nullable().default(null),
+    forma: z.enum(['dose_individualizada', 'dose_unitaria', 'dose_coletiva', 'kit']),
+    geraManipulacao: z.boolean().default(false),
+    prioridade: z.number().int().min(1).max(999).default(100),
+    ativo: z.boolean().default(true),
+  })
+  .strict()
+  .refine((e) => (e.regra === undefined) === (e.versao === undefined), {
+    message: 'Para alterar, envie a regra e a versão lida.',
+    path: ['versao'],
+  });
+export type GravarRegraIntegracaoEntrada = z.infer<typeof esquemaGravarRegraIntegracao>;
+
+/** suprimentos.gravarHorariosPadrao: a grade inteira de uma frequência (no estabelecimento ou num setor). */
+export const esquemaGravarHorariosPadrao = z
+  .object({
+    frequencia: id,
+    setor: idOuNulo,
+    horarios: z
+      .array(
+        z
+          .object({
+            hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM.'),
+            dias: z.array(z.number().int().min(1).max(7)).max(7).default([]),
+          })
+          .strict(),
+      )
+      .max(48),
+  })
+  .strict();
+export type GravarHorariosPadraoEntrada = z.infer<typeof esquemaGravarHorariosPadrao>;

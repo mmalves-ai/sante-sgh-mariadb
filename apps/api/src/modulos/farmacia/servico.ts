@@ -64,6 +64,8 @@ const MENSAGENS: Readonly<Record<string, string>> = {
   'suprimentos.cancelarDispensacao': 'Dispensação cancelada; a dose voltou ao estoque.',
   'suprimentos.registrarPerdaControlado': 'Perda do controlado registrada.',
   'suprimentos.avaliarPrescricao': 'Avaliação registrada.',
+  'suprimentos.gravarRegraIntegracao': 'Regra de integração gravada.',
+  'suprimentos.gravarHorariosPadrao': 'Horários padrão gravados.',
 };
 
 const resultado = (

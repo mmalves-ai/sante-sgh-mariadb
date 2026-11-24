@@ -31,6 +31,17 @@ import {
 } from '@sgh/contratos/regras-suprimentos';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
+import type {
+  GravarHorariosPadraoEntrada,
+  GravarRegraIntegracaoEntrada,
+  ParametrosIntegracaoEditaveis,
+  RegraIntegracaoLida,
+} from '@sgh/contratos';
+import {
+  chaveRegraIntegracao,
+  conferirHorariosPadrao,
+  conferirRegraIntegracao,
+} from '@sgh/contratos/regras-suprimentos';
 import { ENTRADAS_FARMACIA } from './operacoes.js';
 import type { ContextoFarmacia, GravadorSghFarmacia, PortaFarmacia } from './porta.js';
 import type {
@@ -126,6 +137,12 @@ interface ControleM {
 
 interface Estado {
   seq: number;
+  /** F3.6: as regras de integração e as grades de horário padrão (chave frequência|setor). */
+  regras?: RegraIntegracaoLida[];
+  grades?: Map<
+    string,
+    { frequencia: number; setor: number | null; horarios: { hora: string; dias: number[] }[] }
+  >;
   internados: InternadoM[];
   itens: Map<number, ItemM>;
   horarios: HorarioM[];
@@ -428,6 +445,10 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private aplicar(s: Estado, op: string, e: any, ctx: ContextoOperacao): Record<string, number | string> {
     switch (op) {
+      case 'suprimentos.gravarRegraIntegracao':
+        return this.gravarRegra(s, e as GravarRegraIntegracaoEntrada);
+      case 'suprimentos.gravarHorariosPadrao':
+        return this.gravarGrade(s, e as GravarHorariosPadraoEntrada);
       case 'suprimentos.dispensarHorario':
         return this.dispensar(s, e as DispensarHorarioEntrada, autorDe(ctx));
       case 'suprimentos.confirmarEntrega':
@@ -1103,6 +1124,87 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
     const primeiro = this.e(c).controles[0];
     return { desde: primeiro ? minuto(primeiro.em) : null };
   }
+  /** F3.6: as regras e as grades gravadas nesta memória, com as opções sintéticas. */
+  async parametrosEditaveis(c: ContextoFarmacia): Promise<ParametrosIntegracaoEditaveis> {
+    const s = this.e(c);
+    return {
+      regras: s.regras ?? [],
+      grades: [...(s.grades ?? new Map()).values()].map((g) => ({
+        ...g,
+        frequenciaNome: `Frequência ${g.frequencia}`,
+        dosesPorDia: null,
+        setorNome: g.setor === null ? null : `Setor ${g.setor}`,
+      })),
+      opcoes: {
+        centros: [{ id: CENTRO_SINTETICO, nome: 'UTI SINTETICA' }],
+        setores: [],
+        unidades: [],
+        locais: [{ id: LOCAL_FARMACIA_SINTETICO, nome: 'FARMACIA SINTETICA' }],
+        tiposItem: [],
+        grupos: [],
+        frequencias: [],
+      },
+    };
+  }
+
+  private gravarRegra(s: Estado, e: GravarRegraIntegracaoEntrada): Record<string, number> {
+    const rs = conferirRegraIntegracao(e);
+    if (rs[0])
+      throw recusaOp(
+        rs[0].codigo,
+        rs.map((r) => r.mensagem).join(' '),
+        rs.flatMap((r) => r.campos ?? []),
+      );
+    const regras = (s.regras ??= []);
+    const chave = chaveRegraIntegracao(e);
+    const igual = regras.find((r) => r.ativo && r.regra !== e.regra && chaveRegraIntegracao(r) === chave);
+    if (e.ativo && igual)
+      throw recusaOp(
+        'regra-duplicada',
+        `Já existe a regra ${igual.regra} ativa com o mesmo escopo e a mesma prioridade.`,
+        ['prioridade'],
+      );
+    const atual = e.regra === undefined ? undefined : regras.find((r) => r.regra === e.regra);
+    if (e.regra !== undefined && !atual)
+      throw recusaOp('regra-inexistente', 'A regra não existe.', ['regra']);
+    if (atual && atual.versao !== e.versao)
+      throw new ErroOperacao(
+        409,
+        'versao-divergente',
+        'Registro alterado',
+        'Outro usuário alterou a regra: recarregue.',
+      );
+    const dados = { ...e };
+    delete dados.regra;
+    delete dados.versao;
+    const nova: RegraIntegracaoLida = {
+      ...dados,
+      regra: atual?.regra ?? (s.seq += 1),
+      versao: (atual?.versao ?? 0) + 1,
+      escopoNome: '',
+      localNome: '',
+    };
+    if (atual) regras.splice(regras.indexOf(atual), 1, nova);
+    else regras.push(nova);
+    return { regra: nova.regra };
+  }
+
+  private gravarGrade(s: Estado, e: GravarHorariosPadraoEntrada): Record<string, number> {
+    const rs = conferirHorariosPadrao(e.horarios, null);
+    if (rs[0])
+      throw recusaOp(
+        rs[0].codigo,
+        rs.map((r) => r.mensagem).join(' '),
+        rs.flatMap((r) => r.campos ?? []),
+      );
+    (s.grades ??= new Map()).set(`${e.frequencia}|${e.setor ?? ''}`, {
+      frequencia: e.frequencia,
+      setor: e.setor,
+      horarios: e.horarios.map((h) => ({ hora: h.hora, dias: [...h.dias] })),
+    });
+    return { frequencia: e.frequencia };
+  }
+
   async parametrosIntegracao() {
     return {
       centros: [
