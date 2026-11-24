@@ -325,7 +325,7 @@ export async function atributosGuiaPropria(l: Leitor, est: number, guia: number)
  * As guias TISS da conta com os obrigatórios da operadora que faltam em cada uma (visão por conta: o faturista vê de
  * uma vez qual guia ainda não pode ir para o lote e abre a guia num clique).
  */
-export async function guiasAtributosContaPropria(l: Leitor, est: number, conta: number) {
+export async function guiasAtributosContaPropria(l: Consulta, est: number, conta: number) {
   const c = await contaDo(l, est, conta);
   const gs = await l.consultar<Linha>(
     `SELECT id, tipo_guia, situacao, fonte_pagadora_id, numero_guia_prestador FROM guia_tiss
@@ -361,6 +361,32 @@ export async function guiasAtributosContaPropria(l: Leitor, est: number, conta: 
     });
   }
   return { contaId: c.id, fontePagadoraId: c.fontePagadoraId, guias };
+}
+
+/**
+ * As guias da conta de um tipo (as não canceladas) com os obrigatórios da operadora que faltam: o lote TISS
+ * (faturamento.gerar-lote) recusa a conta pela regra recusaObrigatoriosPendentes do domínio. Lido sob a transação.
+ */
+export async function obrigatoriosPendentesDaConta(
+  l: Consulta,
+  est: number,
+  conta: number,
+  tipoGuia: string,
+) {
+  const r = await guiasAtributosContaPropria(l, est, conta);
+  return r.guias
+    .filter((g) => g.tipoGuia === tipoGuia && g.situacao !== 'cancelada')
+    .map((g) => ({ numero: g.numero, faltam: g.faltam }));
+}
+
+/** A carteira do segurado gravada na conta (a mais recente não substituída); sem ela, null (vale a da cobertura). */
+export async function carteiraDoSeguradoDaConta(l: Consulta, conta: number): Promise<string | null> {
+  const r = await l.uma<Linha>(
+    `SELECT numero_carteira FROM conta_hospitalar_segurado WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
+      ORDER BY sequencia DESC LIMIT 1`,
+    [conta],
+  );
+  return txn(r?.['numero_carteira']);
 }
 
 // ── Gravações ──────────────────────────────────────────────────────────────────────────────────────
@@ -432,7 +458,11 @@ export const opRetirarPeriodo = definirOperacao({
       throw recusa('conta-fechada', 'A conta não está aberta: reabra-a para mudar os períodos.', {
         campos: [],
       });
-    await tx.excluir('conta_hospitalar_periodo', e.id, e.versao);
+    // Nada se apaga: o período retirado fica marcado (autor e data), com o motivo na trilha.
+    await tx.alterar('conta_hospitalar_periodo', e.id, e.versao, {
+      excluido_em: new Date(),
+      excluido_por: ctx.usuario,
+    });
     return { id: e.id };
   },
   alvo: (e) => ({ tabela: 'conta_hospitalar_periodo', id: e.id }),
@@ -539,7 +569,11 @@ export const opGravarSegurado = definirOperacao({
         const versao = await tx.alterar('conta_hospitalar_segurado', n(a['id']), e.versao, valores);
         return { id: n(a['id']), versao, substituido: null, alertas: v.alertas.join(' ') };
       }
-      await tx.excluir('conta_hospitalar_segurado', n(a['id']), e.versao);
+      // O segurado substituído fica marcado (autor e data), nunca apagado.
+      await tx.alterar('conta_hospitalar_segurado', n(a['id']), e.versao, {
+        excluido_em: new Date(),
+        excluido_por: ctx.usuario,
+      });
     }
     const seq = n(
       (
@@ -749,7 +783,10 @@ export const opGravarValoresGuia = definirOperacao({
     const vigentes = new Set(defs.map((d) => d.id));
     for (const a of atuais)
       if (a['excluido_em'] === null && vigentes.has(n(a['atributo'])) && !informados.has(n(a['atributo']))) {
-        await tx.excluir('valor_atributo_guia', n(a['id']), n(a['versao']));
+        await tx.alterar('valor_atributo_guia', n(a['id']), n(a['versao']), {
+          excluido_em: new Date(),
+          excluido_por: ctx.usuario,
+        });
         retirados++;
       }
     return { id: g.id, gravados, retirados, faltam: r.faltam.join(', ') };

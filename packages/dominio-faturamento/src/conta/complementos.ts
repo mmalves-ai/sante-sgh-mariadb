@@ -259,6 +259,29 @@ export function guiaAceitaAtributos(situacao: string): boolean {
   return ['montada', 'conferida', 'rejeitada', 'glosada'].includes(situacao);
 }
 
+/** Uma guia da conta com os campos obrigatórios da operadora ainda sem valor. */
+export interface GuiaComPendencia {
+  readonly numero: string;
+  readonly faltam: readonly string[];
+}
+
+/**
+ * A guia só vai para o lote sem pendência: um obrigatório da operadora sem valor recusa a conta inteira (nada se grava),
+ * dizendo a guia e os campos que faltam. Sem pendência, null.
+ */
+export function recusaObrigatoriosPendentes(
+  conta: string,
+  guias: readonly GuiaComPendencia[],
+): { codigo: 'guia-obrigatorio-pendente'; mensagem: string } | null {
+  const pend = guias.filter((g) => g.faltam.length > 0);
+  if (!pend.length) return null;
+  const lista = pend.map((g) => `guia ${g.numero}: ${g.faltam.join(', ')}`).join('; ');
+  return {
+    codigo: 'guia-obrigatorio-pendente',
+    mensagem: `A conta ${conta} tem campo obrigatório da operadora sem valor (${lista}): preencha na guia antes do lote.`,
+  };
+}
+
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 /**

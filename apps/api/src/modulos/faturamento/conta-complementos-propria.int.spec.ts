@@ -7,7 +7,9 @@ import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { operacoesTiss } from '../tiss/operacoes.js';
 import { ServicoComplementosConta } from './conta-complementos.controller.js';
+import { versaoTexto } from './esquemas.js';
 import {
   atributosGuiaPropria,
   guiasAtributosContaPropria,
@@ -203,8 +205,8 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       );
       const coberturaOutro = await e.inserir(
         `INSERT INTO cobertura_paciente (paciente_id, fonte_pagadora_id, numero_carteira, validade, vigencia_inicio,
-           titular, principal, criado_em) VALUES (?, ?, ?, '2026-12-31', '2025-01-01', 0, 1, ?)`,
-        [ids.outro, ids.fonte, `${P}0100`, agora],
+           titular, titular_nome, principal, criado_em) VALUES (?, ?, ?, '2026-12-31', '2025-01-01', 0, ?, 1, ?)`,
+        [ids.outro, ids.fonte, `${P}0100`, `TITULAR SINTETICO ${P}`, agora],
       );
       ids2.titularOutro = await e.inserir(
         'INSERT INTO titular_cobertura (cobertura_paciente_id, nome, criado_em) VALUES (?, ?, ?)',
@@ -286,9 +288,10 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
     );
     await s.gravar('periodo.retirar', op(), { id: r2['id'], versao: 1, motivo: 'faixa lançada errada' });
     const [ret] = await linhas('SELECT excluido_em FROM conta_hospitalar_periodo WHERE id = ?', [r2['id']]);
+    expect(ret).toBeDefined();
     expect(ret?.['excluido_em']).not.toBeNull();
     const trilha = await linhas(
-      "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND tabela = 'conta_hospitalar_periodo'",
+      "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade = 'conta_hospitalar_periodo'",
       [ids.est],
     );
     expect(Number(trilha[0]?.['n'])).toBeGreaterThanOrEqual(3);
@@ -307,7 +310,7 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       parentescoTitular: 'titular',
     });
     const r = await s.gravar('segurado', op(), { ...sug.segurado, contaId: ids2.conta, versao: null });
-    expect(r).toMatchObject({ versao: 1, substituido: null, alertas: [] });
+    expect(r).toMatchObject({ versao: 1, substituido: null, alertas: '' });
     const r2 = await s.gravar('segurado', op(), {
       ...sug.segurado,
       contaId: ids2.conta,
@@ -324,7 +327,7 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       validadeCarteira: '2026-01-10',
     });
     expect(r3['substituido']).toBe(r['id']);
-    expect((r3['alertas'] as string[])[0]).toMatch(/vencida/);
+    expect(String(r3['alertas'])).toMatch(/vencida/);
     const todas = await linhas(
       'SELECT sequencia, numero_carteira, matricula_funcional, excluido_em FROM conta_hospitalar_segurado WHERE conta_hospitalar_id = ? ORDER BY sequencia',
       [ids2.conta],
@@ -463,7 +466,7 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
         { atributoId: peso['id'], texto: '72,5' },
       ],
     });
-    expect(g1).toMatchObject({ gravados: 3, retirados: 0, faltam: [] });
+    expect(g1).toMatchObject({ gravados: 3, retirados: 0, faltam: '' });
     expect(
       (await s.ler(ctxL(), (l, est) => guiasAtributosContaPropria(l, est, ids2.conta))).guias[0]?.faltam,
     ).toEqual([]);
@@ -496,6 +499,7 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       'SELECT excluido_em FROM valor_atributo_guia WHERE guia_tiss_id = ? AND sequencia = 3',
       [ids2.guia],
     );
+    expect(pesoMarcado).toBeDefined();
     expect(pesoMarcado?.['excluido_em']).not.toBeNull();
     await s.gravar('guia.atributos', op(), {
       guiaId: ids2.guia,
@@ -543,7 +547,7 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       guiaId: ids2.guia,
       valores: [{ atributoId: trat['id'], opcaoId: rt }],
     });
-    expect(g4).toMatchObject({ gravados: 0, retirados: 0, faltam: [] });
+    expect(g4).toMatchObject({ gravados: 0, retirados: 0, faltam: '' });
     const [pesoInativo] = await linhas(
       'SELECT valor_texto, excluido_em FROM valor_atributo_guia WHERE guia_tiss_id = ? AND sequencia = 3',
       [ids2.guia],
@@ -554,5 +558,80 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
     expect(await codigoDo(s.gravar('guia.atributos', op(), { guiaId: ids2.guia, valores: [] }))).toBe(
       'guia-apresentada',
     );
+  });
+
+  it('lote TISS: guia com obrigatório da operadora sem valor recusa a conta sem gravar nada; preenchido, passa', async () => {
+    const lote = await s.gravar('atributo', op(), {
+      fontePagadoraId: ids.fonte,
+      codigo: 'LOTEOBR',
+      rotulo: 'Classificação para o lote',
+      tipoDado: 'texto',
+      tipoGuia: 'resumo_internacao',
+      obrigatorio: true,
+      ordem: 9,
+    });
+    const guiaRi = await escrever(async (e) => {
+      await e.executar(
+        `UPDATE conta_hospitalar SET situacao = 'fechada', fechada_em = NOW(3),
+                fechada_por_usuario_id = (SELECT MIN(id) FROM usuario), versao = versao + 1 WHERE id = ?`,
+        [ids2.conta],
+      );
+      return e.inserir(
+        `INSERT INTO guia_tiss (estabelecimento_id, conta_hospitalar_id, tipo_guia, fonte_pagadora_id, paciente_id,
+           numero_guia_prestador, data_emissao, criado_em) VALUES (?, ?, 'resumo_internacao', ?, ?, ?, '2026-01-21', ?)`,
+        [ids.est, ids2.conta, ids.fonte, ids.paciente, `${P}G2`, new Date()],
+      );
+    });
+    const executor = nucleo.criarExecutor({});
+    // O montador só é usado depois das conferências: aqui nunca chega a montar.
+    const gerar = operacoesTiss({} as never)['faturamento.gerarLote']!;
+    const entrada = async () => ({
+      convenio: ids.fonte,
+      tipoGuia: 3,
+      contas: [
+        {
+          id: ids2.conta,
+          versao: versaoTexto(
+            Number(
+              (await linhas('SELECT versao FROM conta_hospitalar WHERE id = ?', [ids2.conta]))[0]?.['versao'],
+            ),
+          ),
+        },
+      ],
+    });
+    const erro = async () => {
+      try {
+        await executor.executar(gerar, CLIENTE, (await entrada()) as never, op());
+      } catch (e) {
+        if (e instanceof ErroOperacao) return e;
+        throw e;
+      }
+      throw new Error('esperava recusa');
+    };
+    const e1 = await erro();
+    expect(e1.problema['codigo'] ?? e1.problema.type).toBe('guia-obrigatorio-pendente');
+    expect(String(e1.problema['detail'] ?? e1.message)).toContain(`guia ${P}G2:`);
+    expect(String(e1.problema['detail'] ?? e1.message)).toContain('Classificação para o lote');
+    expect(
+      (await linhas('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))[0]?.['q'],
+    ).toBe(0);
+    // A guia do outro tipo (SP/SADT) não entra na conferência do lote de resumo de internação.
+    expect(String(e1.problema['detail'] ?? e1.message)).not.toContain(`guia ${P}G1:`);
+    // Preenche os obrigatórios que valem para a guia: a conta passa desta conferência (segue para o cadastro TISS).
+    const campos = await s.ler(ctxL(), (l, est) => atributosGuiaPropria(l, est, guiaRi));
+    const valores = campos.campos
+      .filter((c) => c.obrigatorio)
+      .map((c) =>
+        c.tipoDado === 'opcao'
+          ? { atributoId: c.id, opcaoId: c.opcoes.find((o) => o.ativo && o.opcaoPaiId === null)?.id ?? null }
+          : { atributoId: c.id, texto: 'ONCO-1' },
+      );
+    expect(valores.map((v) => v.atributoId)).toContain(lote['id']);
+    expect(await s.gravar('guia.atributos', op(), { guiaId: guiaRi, valores })).toMatchObject({ faltam: '' });
+    const e2 = await erro();
+    expect(e2.problema['codigo'] ?? e2.problema.type).not.toBe('guia-obrigatorio-pendente');
+    expect(
+      (await linhas('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))[0]?.['q'],
+    ).toBe(0);
   });
 });

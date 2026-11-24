@@ -36,6 +36,7 @@ import {
   normalizarProtocolo,
   VERSAO_TISS_VIGENTE,
   conferirReaberturaCompetencia,
+  recusaObrigatoriosPendentes,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -49,6 +50,10 @@ import {
 } from '@sgh/nucleo';
 import { civil } from '../exames/relogio.js';
 import { versaoNumero } from '../faturamento/esquemas.js';
+import {
+  carteiraDoSeguradoDaConta,
+  obrigatoriosPendentesDaConta,
+} from '../faturamento/conta-complementos-propria.js';
 import {
   caraterTiss,
   codigosDaInternacao,
@@ -244,11 +249,15 @@ async function contaTiss(
         [ct['guia_fonte_pagadora_id']],
       )
     : null;
-  const carteira = ct['cobertura_paciente_id']
-    ? await tx.uma<Linha>('SELECT numero_carteira FROM cobertura_paciente WHERE id = ?', [
-        ct['cobertura_paciente_id'],
-      ])
-    : null;
+  // A carteira do segurado gravada na conta (06-FAT linha 12) vale sobre a da cobertura do paciente.
+  const seguradoConta = await carteiraDoSeguradoDaConta(tx, n(ct['id']));
+  const carteira = seguradoConta
+    ? { numero_carteira: seguradoConta }
+    : ct['cobertura_paciente_id']
+      ? await tx.uma<Linha>('SELECT numero_carteira FROM cobertura_paciente WHERE id = ?', [
+          ct['cobertura_paciente_id'],
+        ])
+      : null;
 
   const faltas: string[] = [];
   const executante = await executanteDaConta(
@@ -435,6 +444,12 @@ function gerarLote(montador: MontadorLoteTiss | null) {
           e,
         );
         if (r) throw recusa(r.codigo, r.mensagem);
+        // Campo obrigatório da operadora sem valor na guia (06-FAT linha 10): a conta não vai ao lote.
+        const pend = recusaObrigatoriosPendentes(
+          texto(ct['numero']) || String(it.id),
+          await obrigatoriosPendentesDaConta(tx, est, it.id, TIPO_GUIA_TISS[tipoGuia]),
+        );
+        if (pend) throw recusa(pend.codigo, pend.mensagem);
         contas.push(ct);
       }
       const cfg = await tx.uma<Linha>(
