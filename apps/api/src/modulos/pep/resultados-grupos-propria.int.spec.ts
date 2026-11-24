@@ -39,6 +39,7 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('DELETE FROM exame WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM analito WHERE codigo LIKE ?', [`${P}%`]);
   await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+  await e.executar(`DELETE FROM sequencia_negocio WHERE estabelecimento_id IN ${est}`);
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
 }
 
