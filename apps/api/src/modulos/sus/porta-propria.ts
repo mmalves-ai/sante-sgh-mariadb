@@ -48,6 +48,8 @@ import type {
 import type { DadosAihLidos, SolicitanteAihLido } from './porta-aih.js';
 import {
   gravarRemessa,
+  idArquivoDoNumero,
+  producaoPendente,
   lerArquivo,
   lerArquivos,
   linhasPendentes,
@@ -884,6 +886,15 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     super(tx, est, tx);
   }
 
+  /**
+   * A montagem própria lê a produção da competência? Hoje não (dadosCiha, dadosBpa e as montagens da APAC e da AIH
+   * saem vazias): a geração do arquivo, mesmo "sem movimento", recusa com "modelo-pendente". Passa a true quando o
+   * lote da conta e da internação escrever essa leitura.
+   */
+  protected montagemLeProducao(): boolean {
+    return false;
+  }
+
   private async competenciaPorId(id: number): Promise<CompetenciaSusRegistro> {
     await this.tx.consultarParaAtualizar(
       'SELECT id FROM competencia_sus WHERE id = ? AND estabelecimento_id = ?',
@@ -1067,6 +1078,7 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     registros: readonly RegistroCihaParaGravar[],
   ): Promise<{ substituidos: number }> {
+    if (!this.montagemLeProducao()) producaoPendente('ciha');
     if (registros.length > 0)
       linhasPendentes('os registros da CIHA (registro_ciha com paciente e fonte de remuneração)');
     const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'ciha', {
@@ -1080,6 +1092,7 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     linhas: readonly LinhaBpaParaGravar[],
   ): Promise<{ substituidos: number }> {
+    if (!this.montagemLeProducao()) producaoPendente('bpa');
     if (linhas.length > 0) linhasPendentes('as folhas do BPA (producao_ambulatorial_sus com os itens)');
     const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'bpa', {
       tipo_bpa: 'misto',
@@ -1100,6 +1113,7 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     linhas: readonly LinhaApacParaGravar[],
   ): Promise<{ substituidos: number }> {
+    if (!this.montagemLeProducao()) producaoPendente('apac');
     if (linhas.length > 0) linhasPendentes('a produção da APAC na competência (apac com apac_procedimento)');
     const { inicio } = periodoDaCompetencia(a.competencia.competencia);
     const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'apac', {
@@ -1199,6 +1213,17 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
   }
 
   async trilha(linha: LinhaTrilhaSus): Promise<void> {
+    // O id da tela do arquivo é o número da remessa, não o id do registro do núcleo: a trilha aponta para o registro
+    // real de `arquivo` (o número segue na diferença); sem registro, o alvo fica sem id (nunca outro registro).
+    if (linha.tabelaAlvo === 'arquivo' && linha.idAlvo !== null) {
+      const numero = /^\d{1,15}$/.test(linha.idAlvo) ? Number(linha.idAlvo) : 0;
+      const real = await idArquivoDoNumero(this.tx, this.est, numero);
+      linha = {
+        ...linha,
+        idAlvo: real === null ? null : String(real),
+        diferenca: `numero=${linha.idAlvo}${linha.diferenca ? `;${linha.diferenca}` : ''}`,
+      };
+    }
     this.linhas.push(linha);
   }
 
@@ -1278,6 +1303,7 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     aihs: readonly { id: number; versao: number }[],
   ): Promise<{ substituidos: number }> {
+    if (!this.montagemLeProducao()) producaoPendente('aih');
     if (aihs.length > 0) linhasPendentes('as contas da AIH apresentadas (conta_aih na remessa)');
     const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'aih', { quantidade_aih: 0 });
     return { substituidos };
@@ -1323,6 +1349,11 @@ export class PortaSusPropria implements PortaSus {
     this.executor = executorPronto ?? nucleo.criarExecutor();
   }
 
+  /** A gravação de uma execução (protegido: o teste da montagem com produção lida a estende). */
+  protected novaGravacao(tx: TxOperacao, est: number): GravacaoSusPropria {
+    return new GravacaoSusPropria(tx, est);
+  }
+
   private contexto(c: ContextoSus, est: number | null): ContextoNucleo {
     return {
       cliente: this.cliente,
@@ -1352,12 +1383,13 @@ export class PortaSusPropria implements PortaSus {
     let saida: { valor: T } | null = null;
     let linhas: readonly LinhaTrilhaSus[] = [];
     let recusada: Error | null = null;
+    const novaGravacao = (tx: TxOperacao, e: number) => this.novaGravacao(tx, e);
     const op = definirOperacao({
       nome: 'faturamento.sus.gravacao',
       tabelas: [...TABELAS_SUS],
       entrada: z.object({ chave: z.string() }),
       async gravar(tx) {
-        const g = new GravacaoSusPropria(tx, est);
+        const g = novaGravacao(tx, est);
         try {
           saida = { valor: await fn(g) };
         } catch (erro) {

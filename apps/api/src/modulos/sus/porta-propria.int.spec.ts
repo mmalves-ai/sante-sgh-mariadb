@@ -21,8 +21,10 @@ const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST_A = 'f2305a';
 const EST_B = 'f2305b';
 const CNES = '9030501';
-const SIG_A = '0211020036';
-const SIG_B = '0211020044';
+// Códigos fictícios fora da SIGTAP oficial (a forma 021102 oficial vai até 0211020109; o cliente de teste tem a
+// tabela oficial carregada e o código oficial traria o nome oficial).
+const SIG_A = '0211029903';
+const SIG_B = '0211029911';
 const ITEM = '92305001';
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
@@ -378,7 +380,7 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
   it('tabela unificada, itens do hospital, leitos de UTI e CNES', async () => {
     const x = await porta.ler(ctxA, async (l) => ({
       codigo: await l.sigtapPorCodigo(SIG_A),
-      busca: await l.buscarSigtap('0211020', 202601),
+      busca: await l.buscarSigtap('0211029', 202601),
       nomes: await l.nomesSigtap([sigA, sigB]),
       valores: await l.valoresSigtap([sigA]),
       itens: await l.buscarProcedimentosHospital('Eletrocardiograma do hospital'),

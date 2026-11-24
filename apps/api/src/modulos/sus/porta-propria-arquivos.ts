@@ -5,9 +5,13 @@
 // do núcleo (`arquivo`) guarda o hash, o tamanho, a imutabilidade e a guarda legal de 5 anos e a remessa aponta para ele.
 // A geração nova da mesma competência marca as remessas geradas ou conferidas como `substituida`, com a remessa
 // substituta (o conteúdo antigo segue guardado). Nenhuma remessa é apagada.
-// Linhas: a remessa sem movimento grava inteira. As linhas (registro da CIHA, folha do BPA, produção da APAC e contas
-// da AIH) dependem da montagem própria, que no banco do cliente ainda sai vazia; arquivo com linhas é recusado com
-// "modelo-pendente" antes de gravar qualquer coisa (nada de remessa sem as linhas que o arquivo declara).
+// Linhas: as linhas (registro da CIHA, folha do BPA, produção da APAC e contas da AIH) dependem da montagem própria,
+// que no banco do cliente ainda sai vazia; arquivo com linhas é recusado com "modelo-pendente" antes de gravar qualquer
+// coisa (nada de remessa sem as linhas que o arquivo declara). O arquivo "sem movimento" também é recusado enquanto a
+// montagem própria não ler a produção da competência: a lista vazia de hoje não prova que não houve produção, e um
+// arquivo oficial declarando "sem movimento" de uma competência com internações seria falso (perda de faturamento).
+// Trilha: o número do arquivo (o id da tela) não é o id do registro do núcleo; a trilha com alvo `arquivo` é levada
+// ao id real do registro (idArquivoDoNumero), nunca ao número.
 import { garantirSequencia, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import type { ArquivoSus, InstrumentoSusPorta, NovoArquivoSus } from './tipos.js';
 
@@ -142,6 +146,32 @@ export function linhasPendentes(oque: string): never {
   );
 }
 
+/**
+ * A recusa da geração enquanto a montagem própria não lê a produção da competência (nada é gravado): sem essa
+ * leitura, nem o arquivo com linhas nem o "sem movimento" podem ser provados.
+ */
+export function producaoPendente(instrumento: InstrumentoSusPorta): never {
+  throw recusa(
+    'modelo-pendente',
+    `O banco do cliente ainda não lê a produção da competência para o arquivo de ${instrumento}: sem essa leitura o ` +
+      'arquivo "sem movimento" não pode ser provado; a geração foi recusada e nada mudou (pedido de modelo registrado).',
+  );
+}
+
+/** O id do registro do núcleo (`arquivo`) do arquivo de número dado no estabelecimento (null se não houver). */
+export async function idArquivoDoNumero(l: Leitor, est: number, numero: number): Promise<number | null> {
+  if (!Number.isSafeInteger(numero) || numero <= 0) return null;
+  const partes = Object.values(REMESSA_DO_INSTRUMENTO).map(
+    (t) =>
+      `SELECT arquivo_id FROM ${t} WHERE estabelecimento_id = ? AND numero = ? AND arquivo_id IS NOT NULL`,
+  );
+  const x = await l.uma(
+    `${partes.join(' UNION ALL ')} LIMIT 1`,
+    partes.flatMap(() => [est, String(numero)]),
+  );
+  return x ? num(x['arquivo_id']) : null;
+}
+
 /** As colunas próprias de cada instrumento na remessa nova. */
 export interface ColunasRemessa {
   readonly [coluna: string]: unknown;
@@ -157,7 +187,7 @@ export async function gravarRemessa(
   a: NovoArquivoSus,
   instrumento: InstrumentoSusPorta,
   proprias: ColunasRemessa,
-): Promise<{ substituidos: number; remessa: number }> {
+): Promise<{ substituidos: number; remessa: number; arquivoId: number }> {
   if (a.competencia.instrumento !== instrumento)
     throw new Error(`Arquivo de ${a.competencia.instrumento} gravado como ${instrumento}.`);
   if (!/^[0-9a-f]{64}$/.test(a.hash)) throw new Error('Hash SHA-256 do arquivo ilegível.');
@@ -220,5 +250,5 @@ export async function gravarRemessa(
       situacao: 'substituida',
       [substituta]: remessa,
     });
-  return { substituidos: anteriores.length, remessa };
+  return { substituidos: anteriores.length, remessa, arquivoId };
 }
