@@ -1141,6 +1141,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
           agenda: r.agenda,
           especialidade: r.especialidade,
           prioridade: r.prioridade,
+          // A sessão em memória não tem os grupos de prioridade legal do cadastro.
+          prioridadeLegal: null,
           situacao: 'aguardando',
           observacao: r.observacao,
           desde: new Date().toISOString(),

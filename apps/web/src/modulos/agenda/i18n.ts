@@ -220,6 +220,15 @@ export const mensagensAgenda = {
     semHorarios: 'Sem horários',
   },
   marcar: {
+    semProntuario: 'Paciente ainda sem prontuário',
+    semProntuarioTexto:
+      'Nome, nascimento e telefone bastam: usa o horário, o convênio e o canal escolhidos acima. A recepção completa o cadastro na chegada e a marcação passa ao paciente.',
+    nomePessoa: 'Nome completo',
+    nascimento: 'Nascimento',
+    telefone: 'Telefone com DDD',
+    nascimentoFuturo: 'A data de nascimento está no futuro.',
+    telefoneInvalido: 'Telefone só com dígitos, com DDD (8 a 15).',
+    marcarSemProntuario: 'Marcar sem prontuário',
     titulo: 'Marcação de consulta',
     texto:
       'Procure a vaga pela agenda, especialidade ou profissional, escolha o paciente e o convênio, e marque. O encaixe e a remarcação ficam no detalhe da marcação.',
@@ -364,6 +373,11 @@ export const mensagensAgenda = {
     incluir: 'Incluir na fila',
     prioridade: 'Prioridade',
     prioridades: { normal: 'Normal', preferencial: 'Preferencial', urgente: 'Urgente' },
+    urgencia: 'Urgência clínica',
+    prioridadeLegal: 'Prioridade legal',
+    prioridadeLegalAuto: 'Pelo cadastro e pela idade',
+    prioridadeLegalTexto:
+      'A prioridade legal é a mesma da senha e da marcação: vem do cadastro do paciente e da idade; escolha um grupo só para acrescentar outro. A urgência clínica passa à frente de todos.',
     situacoes: {
       aguardando: 'Aguardando',
       ofertado: 'Vaga ofertada',

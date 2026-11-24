@@ -23,14 +23,19 @@ import {
   type ItemEspera,
   type ListaEspera,
   MOTIVOS_BLOQUEIO,
-  ordemDaFila,
   type PreviaBloqueio,
   PRIORIDADES_ESPERA,
   type ResultadoAgenda,
   SITUACOES_ESPERA,
   TETO_HORARIOS_POR_GRAVACAO,
 } from '@sgh/contratos';
-import { nomeMascarado, podeBloquear, podeDesbloquear, somarDias } from '@sgh/dominio-agenda';
+import {
+  nomeMascarado,
+  ordenarFilaEspera,
+  podeBloquear,
+  podeDesbloquear,
+  somarDias,
+} from '@sgh/dominio-agenda';
 import type { BloqueioAgenda } from './tipos.js';
 import { type AgendaVista, horaIso, horaIsoOuNull, LeituraAgenda } from './visao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
@@ -333,6 +338,7 @@ export class ApoioAgendaController {
           ? (esp.get(e.especialidade) ?? { codigo: e.especialidade, nome: String(e.especialidade) })
           : null,
       prioridade: prio(e.prioridade),
+      prioridadeLegal: e.prioridadeLegal,
       situacao: sit(e.situacao),
       desde: e.desde,
       observacao: e.observacao,
@@ -341,7 +347,10 @@ export class ApoioAgendaController {
         : null,
       posicao: null,
     }));
-    const fila = ordemDaFila(itens);
+    // 02-AGE 48: urgência clínica, grupo de prioridade legal (peso) e antiguidade, pela regra do domínio.
+    const fila = ordenarFilaEspera(
+      itens.map((x) => ({ item: x, ...x, pesoPrioridadeLegal: x.prioridadeLegal?.peso ?? null })),
+    ).map((x) => x.item);
     const pos = new Map(fila.map((x, i) => [x.id, i + 1]));
     const ordenados = [...fila, ...itens.filter((x) => !pos.has(x.id))].map((x) => ({
       ...x,
@@ -398,6 +407,7 @@ export class ApoioAgendaController {
           agenda: p.agenda ?? null,
           especialidade: p.especialidade ?? null,
           prioridade: p.prioridade,
+          prioridadeLegal: p.prioridadeLegal ?? null,
           observacao: p.observacao ?? null,
         }),
     );

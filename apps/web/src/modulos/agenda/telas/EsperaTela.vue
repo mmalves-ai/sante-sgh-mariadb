@@ -59,12 +59,20 @@ const convenios = computed(() =>
 const canais = computed(() =>
   (opcoes.data.value?.canais ?? []).map((c) => ({ valor: c.codigo, rotulo: c.rotulo })),
 );
-const prioridades = computed(() =>
-  (['normal', 'preferencial', 'urgente'] as const).map((v) => ({
+// 02-AGE 48: urgência clínica (critério próprio) e o grupo de prioridade legal da senha e da marcação.
+const urgencias = computed(() =>
+  (['normal', 'urgente'] as const).map((v) => ({
     valor: v,
     rotulo: t(`agenda.espera.prioridades.${v}`),
   })),
 );
+const gruposLegais = computed(() => [
+  { valor: '', rotulo: t('agenda.espera.prioridadeLegalAuto') },
+  ...(opcoes.data.value?.gruposPrioridadeLegal ?? []).map((g) => ({
+    valor: String(g.codigo),
+    rotulo: g.nome,
+  })),
+]);
 
 async function rodar(fn: () => Promise<{ mensagem: string }>, texto?: string): Promise<boolean> {
   erro.value = null;
@@ -91,7 +99,8 @@ const pacientes = useQuery({
 const paciente = ref<{ id: number; nome: string } | null>(null);
 const iAgenda = ref('');
 const iEspecialidade = ref('');
-const iPrioridade = ref<'normal' | 'preferencial' | 'urgente'>('normal');
+const iPrioridade = ref<'normal' | 'urgente'>('normal');
+const iGrupoLegal = ref('');
 async function incluir(): Promise<void> {
   if (!paciente.value) return;
   const ok = await rodar(
@@ -102,12 +111,16 @@ async function incluir(): Promise<void> {
           agenda: iAgenda.value ? Number(iAgenda.value) : null,
           especialidade: iEspecialidade.value ? Number(iEspecialidade.value) : null,
           prioridade: iPrioridade.value,
+          prioridadeLegal: iGrupoLegal.value ? Number(iGrupoLegal.value) : null,
         },
         novaChave('espera'),
       ),
     t('agenda.espera.incluido'),
   );
-  if (ok) paciente.value = null;
+  if (ok) {
+    paciente.value = null;
+    iGrupoLegal.value = '';
+  }
 }
 
 // ── Ofertar e marcar ──
@@ -241,7 +254,19 @@ async function remarcarDia(): Promise<void> {
           :rotulo="t('agenda.marcar.especialidade')"
           :opcoes="especialidades"
         />
-        <SanteSelecao v-model="iPrioridade" :rotulo="t('agenda.espera.prioridade')" :opcoes="prioridades" />
+        <SanteSelecao
+          v-model="iPrioridade"
+          :rotulo="t('agenda.espera.urgencia')"
+          :opcoes="urgencias"
+          data-testid="espera-urgencia"
+        />
+        <SanteSelecao
+          v-model="iGrupoLegal"
+          :rotulo="t('agenda.espera.prioridadeLegal')"
+          :opcoes="gruposLegais"
+          data-testid="espera-prioridade-legal"
+        />
+        <p>{{ t('agenda.espera.prioridadeLegalTexto') }}</p>
         <SanteBotao tipo="submit" :rotulo="t('agenda.espera.incluir')" data-testid="botao-incluir-espera" />
       </form>
     </section>
@@ -275,7 +300,10 @@ async function remarcarDia(): Promise<void> {
             <td>{{ e.posicao ?? '—' }}</td>
             <td>{{ e.paciente }}</td>
             <td>{{ e.nomeAgenda ?? e.especialidade?.nome ?? '—' }}</td>
-            <td>{{ t(`agenda.espera.prioridades.${e.prioridade}`) }}</td>
+            <td :data-testid="`espera-prioridade-${e.id}`">
+              {{ t(`agenda.espera.prioridades.${e.prioridade}`) }}
+              <template v-if="e.prioridadeLegal"> · {{ e.prioridadeLegal.descricao }}</template>
+            </td>
             <td>{{ dataBr(e.desde) }}</td>
             <td>
               {{ t(`agenda.espera.situacoes.${e.situacao}`) }}

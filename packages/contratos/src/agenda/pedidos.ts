@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { esquemaCanal, esquemaHoraAgenda, esquemaMotivoCancelamento, MODOS_REMARCACAO } from './entradas.js';
-import { MOTIVOS_BLOQUEIO, PRIORIDADES_ESPERA, RESULTADOS_CONFIRMACAO } from './vocabulario.js';
+import { MOTIVOS_BLOQUEIO, RESULTADOS_CONFIRMACAO, URGENCIAS_ESPERA } from './vocabulario.js';
 import { ID_BANCO_MAXIMO, idBanco } from '../validacao/id-banco.js';
 
 const id = idBanco;
@@ -106,7 +106,9 @@ export const esquemaPedidoEspera = z
     paciente: id,
     agenda: id.nullable().optional(),
     especialidade: z.number().int().min(0).max(99).nullable().optional(),
-    prioridade: z.enum(PRIORIDADES_ESPERA),
+    // Urgência clínica, indicada por quem pede a vaga; a prioridade legal vai no grupo (02-AGE 48).
+    prioridade: z.enum(URGENCIAS_ESPERA),
+    prioridadeLegal: id.nullable().optional(),
     observacao: textoCp1252(500)
       .overwrite((t) => t.replace(/\s+/g, ' ').trim())
       .nullable()

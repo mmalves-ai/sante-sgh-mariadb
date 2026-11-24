@@ -55,6 +55,8 @@ export interface OpcoesDaAgenda {
   readonly especialidades: readonly CodigoNome[];
   readonly locais: readonly CodigoNome[];
   readonly unidades: readonly CodigoNome[];
+  /** Grupos de prioridade legal ativos (id e descrição), na ordem do peso (02-AGE 48 e 49). */
+  readonly gruposPrioridadeLegal?: readonly CodigoNome[];
 }
 
 /** Faixa da escala semanal. */
@@ -234,6 +236,8 @@ export interface ItemListaEspera {
   readonly agenda: number | null;
   readonly especialidade: number | null;
   readonly prioridade: string;
+  /** Grupo de prioridade legal do pedido (02-AGE 48), o mesmo da senha e da marcação. */
+  readonly prioridadeLegal: { readonly id: number; readonly descricao: string; readonly peso: number } | null;
   readonly situacao: string;
   readonly observacao: string | null;
   readonly desde: string;

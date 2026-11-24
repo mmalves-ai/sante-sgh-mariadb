@@ -328,6 +328,7 @@ export class ServicoAgenda {
       especialidades: [...o.especialidades],
       locais: [...o.locais],
       unidades: [...o.unidades],
+      gruposPrioridadeLegal: [...(o.gruposPrioridadeLegal ?? [])],
       motivosCancelamento: MOTIVOS_CANCELAMENTO.map((m) => ({ ...m })),
       canais: CANAIS_MARCACAO.map((x) => ({ codigo: x.codigo, rotulo: x.rotulo, aConfirmar: x.aConfirmar })),
       motivosBloqueio: MOTIVOS_BLOQUEIO.map((m) => ({ ...m })),

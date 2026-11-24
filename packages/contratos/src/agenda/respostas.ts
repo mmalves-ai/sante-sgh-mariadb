@@ -23,6 +23,8 @@ export const esquemaOpcoesAgenda = z.object({
   /** Locais de atendimento e unidades (ligação revisada da agenda; busca de vaga por unidade e local). */
   locais: z.array(esquemaOpcaoCodigo),
   unidades: z.array(esquemaOpcaoCodigo),
+  /** Grupos de prioridade legal ativos, na ordem do peso (lista de espera e marcação; 02-AGE 48 e 49). */
+  gruposPrioridadeLegal: z.array(esquemaOpcaoCodigo).optional(),
   motivosCancelamento: z.array(z.object({ codigo: txt, texto: txt, solicitante: txt })),
   canais: z.array(z.object({ codigo: txt, rotulo: txt, aConfirmar: z.boolean() })),
   motivosBloqueio: z.array(z.object({ codigo: txt, rotulo: txt })),
@@ -350,6 +352,8 @@ export const esquemaItemEspera = z.object({
   nomeAgenda: nul(txt),
   especialidade: nul(esquemaOpcaoCodigo),
   prioridade: z.enum(['normal', 'preferencial', 'urgente']),
+  /** Grupo de prioridade legal (o mesmo da senha e da marcação), com o peso que ordena a fila. */
+  prioridadeLegal: nul(z.object({ id: n, descricao: txt, peso: n })),
   situacao: z.enum(['aguardando', 'ofertado', 'atendido', 'cancelado']),
   desde: txt,
   observacao: nul(txt),

@@ -69,27 +69,15 @@ export function canalDoCodigoTipoAgendamento(codigo: number | null | undefined):
   );
 }
 
+/** O que o pedido guarda: a urgência clínica, ou "preferencial" quando tem grupo de prioridade legal. */
 export const PRIORIDADES_ESPERA = ['normal', 'preferencial', 'urgente'] as const;
 export type PrioridadeEspera = (typeof PRIORIDADES_ESPERA)[number];
+/** O que se informa na inclusão: a urgência clínica (a prioridade legal vai pelo grupo, 02-AGE 48). */
+export const URGENCIAS_ESPERA = ['normal', 'urgente'] as const;
 export const SITUACOES_ESPERA = ['aguardando', 'ofertado', 'atendido', 'cancelado'] as const;
 export type SituacaoEspera = (typeof SITUACOES_ESPERA)[number];
 
-const PESO: Record<PrioridadeEspera, number> = { urgente: 0, preferencial: 1, normal: 2 };
-
-export interface ItemFilaEspera {
-  readonly id: number;
-  readonly prioridade: PrioridadeEspera;
-  /** AAAA-MM-DDTHH:MM (entrada na fila). */
-  readonly desde: string;
-  readonly situacao: SituacaoEspera;
-}
-
-/** Ordem da fila: prioridade e depois a antiguidade (só os aguardando). */
-export function ordemDaFila<T extends ItemFilaEspera>(itens: readonly T[]): T[] {
-  return itens
-    .filter((i) => i.situacao === 'aguardando')
-    .sort((a, b) => PESO[a.prioridade] - PESO[b.prioridade] || a.desde.localeCompare(b.desde) || a.id - b.id);
-}
+// A ordem da fila de espera é regra do domínio: `ordenarFilaEspera` (@sgh/dominio-agenda, fila-espera.ts).
 
 /** O resultado da tentativa de confirmação. */
 export const RESULTADOS_CONFIRMACAO = [

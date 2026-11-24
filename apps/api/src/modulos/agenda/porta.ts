@@ -92,7 +92,10 @@ export interface GravadorAgenda {
     paciente: number;
     agenda: number | null;
     especialidade: number | null;
+    /** Urgência clínica: normal ou urgente. */
     prioridade: string;
+    /** Grupo de prioridade legal informado (o do cadastro e o da idade a porta acha sozinha). */
+    prioridadeLegal?: number | null;
     observacao: string | null;
   }): Promise<number>;
   ofertarEspera(r: { id: number; agenda: number; data: string; hora: string }): Promise<void>;

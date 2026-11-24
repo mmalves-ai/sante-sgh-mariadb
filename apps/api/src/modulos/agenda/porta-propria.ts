@@ -27,6 +27,7 @@ import {
   MOTIVOS_CANCELAMENTO,
   RESULTADOS_CONFIRMACAO,
   esquemaAgendarConsulta,
+  esquemaAgendarSemProntuario,
   esquemaAlterarAgenda,
   esquemaBloquearHorarios,
   esquemaCancelarConsulta,
@@ -48,8 +49,11 @@ import {
   type Abrangencia,
   diasSemExpediente,
   normalizarHora,
+  PESO_PREFERENCIAL_SEM_GRUPO,
+  prioridadeGravadaNaEspera,
   prioridadeNaMarcacao,
 } from '@sgh/dominio-agenda';
+import type { PessoaSemProntuario } from '@sgh/dominio-agenda';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -67,6 +71,8 @@ import {
 import { z } from 'zod';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { operacaoAgenda } from './operacoes.js';
+import { dataNoFuso, preCadastroDaMarcacao } from './pre-cadastro-marcacao.js';
+import { grupoLegalDaEspera } from './prioridade-espera.js';
 import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
 import { agendasOcultas, exigirMarcacaoNominal } from './usuarios-agenda.js';
 import type {
@@ -485,7 +491,7 @@ export class PortaAgendaPropria implements PortaAgenda {
   async opcoes(c: ContextoAgenda): Promise<OpcoesDaAgenda> {
     return this.ler(c, async (l, e) => {
       // Fontes pagadoras e especialidades são da rede inteira (cadastro único do cliente).
-      const [conv, esp, loc, uni] = await Promise.all([
+      const [conv, esp, loc, uni, gpl] = await Promise.all([
         l.consultar(
           'SELECT codigo, nome, situacao FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome',
         ),
@@ -498,6 +504,8 @@ export class PortaAgendaPropria implements PortaAgenda {
           'SELECT id, nome FROM unidade_assistencial WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL ORDER BY nome',
           [e.id],
         ),
+        // O grupo não tem exclusão lógica (só `ativo`).
+        l.consultar('SELECT id, descricao FROM grupo_prioridade_legal WHERE ativo ORDER BY peso, descricao'),
       ]);
       return {
         convenios: conv.flatMap((x) => {
@@ -512,6 +520,7 @@ export class PortaAgendaPropria implements PortaAgenda {
         }),
         locais: loc.map((x) => ({ codigo: num(x['id']), nome: String(x['descricao']) })),
         unidades: uni.map((x) => ({ codigo: num(x['id']), nome: String(x['nome']) })),
+        gruposPrioridadeLegal: gpl.map((x) => ({ codigo: num(x['id']), nome: String(x['descricao']) })),
       };
     });
   }
@@ -1174,12 +1183,16 @@ export class PortaAgendaPropria implements PortaAgenda {
       const linhas = await l.consultar(
         `SELECT le.id, le.paciente_id, p.numero_prontuario, le.agenda_servico_id, em.codigo AS especialidade,
            le.prioridade, le.situacao, le.observacao, le.entrada_em, le.marcacao_horario_id,
+           le.grupo_prioridade_legal_id, gpl.descricao AS grupo_descricao, gpl.peso AS grupo_peso,
            (SELECT hh.dados FROM lista_espera_historico hh WHERE hh.lista_espera_id = le.id AND hh.evento = 'oferta'
              ORDER BY hh.id DESC LIMIT 1) AS oferta
          FROM lista_espera le LEFT JOIN paciente p ON p.id = le.paciente_id
          LEFT JOIN especialidade_medica em ON em.id = le.especialidade_medica_id
+         LEFT JOIN grupo_prioridade_legal gpl ON gpl.id = le.grupo_prioridade_legal_id
          WHERE le.estabelecimento_id = ? AND le.excluido_em IS NULL AND le.paciente_id IS NOT NULL ${filtros.join(' ')}
-         ORDER BY le.entrada_em, le.id LIMIT ${TETO_LEITURA}`,
+         ORDER BY le.prioridade = 'urgente' DESC,
+           COALESCE(gpl.peso, IF(le.prioridade = 'preferencial', ${PESO_PREFERENCIAL_SEM_GRUPO}, ${Number.MAX_SAFE_INTEGER})),
+           le.entrada_em, le.id LIMIT ${TETO_LEITURA}`,
         params,
         { teto: TETO_LEITURA },
       );
@@ -1199,6 +1212,14 @@ export class PortaAgendaPropria implements PortaAgenda {
           agenda: numOuNull(x['agenda_servico_id']),
           especialidade: codigoNum(x['especialidade']),
           prioridade: String(x['prioridade']),
+          prioridadeLegal:
+            x['grupo_prioridade_legal_id'] === null || x['grupo_prioridade_legal_id'] === undefined
+              ? null
+              : {
+                  id: num(x['grupo_prioridade_legal_id']),
+                  descricao: txt(x['grupo_descricao']) ?? '',
+                  peso: num(x['grupo_peso']),
+                },
           situacao: String(x['situacao']),
           observacao: txt(x['observacao']),
           desde: instante(x['entrada_em']).toISOString(),
@@ -1294,6 +1315,35 @@ export class PortaAgendaPropria implements PortaAgenda {
         },
         alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: Number(r.marcacao) }),
       });
+    // 02-AGE 42: marcação para quem ainda não tem prontuário, com o pré-cadastro na mesma transação.
+    const agendarSemProntuario = operacao({
+      nome: 'agenda.agendarSemProntuario',
+      tabelas: ['horario_agenda', 'marcacao_horario', 'sequencia_negocio', 'pre_cadastro'],
+      entrada: esquemaAgendarSemProntuario,
+      gravar: async (tx, e, ctx) => {
+        const alertas: string[] = [];
+        const m = await this.marcarNoHorario(tx, ctx, {
+          agenda: e.agenda,
+          data: e.data,
+          hora: hora(e.hora),
+          paciente: null,
+          preCadastro: { nome: e.nome, nascimento: e.nascimento, telefone: e.telefone },
+          convenio: e.convenio,
+          retorno: false,
+          canal: e.canal,
+          observacao: null,
+          encaixe: null,
+          remarcadaDe: null,
+          alertas,
+        });
+        const [r] = await tx.consultar('SELECT pre_cadastro_id FROM marcacao_horario WHERE id = ?', [m]);
+        const base = { marcacao: m, agenda: e.agenda, preCadastro: num(r?.['pre_cadastro_id']) };
+        return alertas.length
+          ? { ...base, alerta: 'profissional-nao-credenciado', alertaMotivo: alertas[0]! }
+          : base;
+      },
+      alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: Number(r.marcacao) }),
+    });
     const cancelar = (nome: 'agenda.cancelarConsulta' | 'agenda.desfazerEncaixe') =>
       operacao({
         nome,
@@ -1567,6 +1617,7 @@ export class PortaAgendaPropria implements PortaAgenda {
         alvo: (e) => ({ tabela: 'geracao_grade', id: e.geracao }),
       }),
       'agenda.agendarConsulta': agendar('agenda.agendarConsulta'),
+      'agenda.agendarSemProntuario': agendarSemProntuario,
       'agenda.encaixar': agendar('agenda.encaixar'),
       'agenda.cancelarConsulta': cancelar('agenda.cancelarConsulta'),
       'agenda.desfazerEncaixe': cancelar('agenda.desfazerEncaixe'),
@@ -1583,7 +1634,8 @@ export class PortaAgendaPropria implements PortaAgenda {
             agenda: e.destino.agenda,
             data: e.destino.data,
             hora: hora(e.destino.hora),
-            paciente: num(m['paciente_id']),
+            paciente: numOuNull(m['paciente_id']),
+            preCadastro: numOuNull(m['pre_cadastro_id']),
             convenio,
             retorno: bool(m['retorno']),
             canal: e.canal,
@@ -1930,7 +1982,9 @@ export class PortaAgendaPropria implements PortaAgenda {
             paciente: id,
             agenda: id.nullable(),
             especialidade: z.number().int().min(0).nullable(),
-            prioridade: z.enum(['normal', 'preferencial', 'urgente']),
+            // Urgência clínica (critério próprio); a prioridade legal vem do grupo (02-AGE 48, fila-espera.ts).
+            prioridade: z.enum(['normal', 'urgente']),
+            prioridadeLegal: id.nullable().default(null),
             observacao: z.string().max(600).nullable(),
           })
           .strict(),
@@ -1945,18 +1999,28 @@ export class PortaAgendaPropria implements PortaAgenda {
           if (e.especialidade !== null && !esp)
             throw recusa('especialidade-inexistente', 'A especialidade não existe.');
           const agora = this.agora();
+          const grupo = await grupoLegalDaEspera(tx, {
+            paciente: e.paciente,
+            informada: e.prioridadeLegal,
+            data: dataNoFuso(this.fuso(ctx.estabelecimento), agora),
+          });
+          const prioridade = prioridadeGravadaNaEspera(e.prioridade, grupo);
           const n = await tx.incluir('lista_espera', {
             estabelecimento_id: ctx.estabelecimento,
             paciente_id: e.paciente,
             agenda_servico_id: e.agenda,
             especialidade_medica_id: esp ? esp['id'] : null,
-            prioridade: e.prioridade,
+            prioridade,
+            grupo_prioridade_legal_id: grupo,
             situacao: 'aguardando',
             entrada_em: agora,
             observacao: e.observacao,
             responsavel_usuario_id: ctx.usuario,
           });
-          await this.historicoEspera(tx, ctx, n, 'inclusao', 'entrada', { prioridade: e.prioridade });
+          await this.historicoEspera(tx, ctx, n, 'inclusao', 'entrada', {
+            prioridade,
+            grupoPrioridadeLegal: grupo,
+          });
           return { id: n };
         },
         alvo: (_e, r) => ({ tabela: 'lista_espera', id: Number(r.id) }),
@@ -2106,7 +2170,7 @@ export class PortaAgendaPropria implements PortaAgenda {
 
   private async travarMarcacao(tx: TxOperacao, ctx: ContextoOperacao, id: number): Promise<Linha> {
     const [m] = await tx.consultarParaAtualizar(
-      `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.encaixe, m.retorno, m.observacao, m.chegada_em,
+      `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.pre_cadastro_id, m.encaixe, m.retorno, m.observacao, m.chegada_em,
          m.atendido_em, m.canal_marcacao_id, s.significado, fp.codigo AS convenio, h.inicio_em
        FROM marcacao_horario m JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
        JOIN fonte_pagadora fp ON fp.id = m.fonte_pagadora_id JOIN horario_agenda h ON h.id = m.horario_agenda_id
@@ -2196,7 +2260,10 @@ export class PortaAgendaPropria implements PortaAgenda {
       agenda: number;
       data: string;
       hora: string;
-      paciente: number;
+      /** null = marcação sem prontuário (02-AGE 42): vai `preCadastro`. */
+      paciente: number | null;
+      /** 02-AGE 42: o pré-cadastro já ligado (remarcação) ou os dados mínimos da pessoa (marcação nova). */
+      preCadastro?: number | PessoaSemProntuario | null;
       convenio: number;
       retorno: boolean;
       canal: string;
@@ -2218,23 +2285,34 @@ export class PortaAgendaPropria implements PortaAgenda {
     const inicio = instanteDe(fuso, p.data, p.hora);
     if (inicio.getTime() <= this.agora().getTime())
       throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
-    const pac = await tx.uma(
-      `SELECT p.id, p.numero_prontuario, p.situacao, pf.data_nascimento
-         FROM paciente p LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
-        WHERE p.id = ? AND p.excluido_em IS NULL`,
-      [p.paciente],
-    );
-    if (!pac)
-      throw new ErroOperacao(
-        404,
-        'registro-inexistente',
-        'Paciente não encontrado',
-        'O cadastro não existe.',
+    const pre = p.paciente === null ? (p.preCadastro ?? null) : null;
+    if (p.paciente === null && pre === null)
+      throw recusa(
+        'sem-paciente',
+        'Escolha o paciente ou informe os dados mínimos da marcação sem prontuário.',
       );
-    if (pac['situacao'] !== 'ativo' && pac['situacao'] !== 'provisorio')
-      throw recusa('paciente-inativo', 'O cadastro do paciente está inativo ou foi unificado em outro.');
-    if (pac['numero_prontuario'] === null)
-      throw recusa('sem-prontuario', 'O paciente não tem prontuário: complete o cadastro antes de marcar.');
+    const pac =
+      p.paciente === null
+        ? null
+        : await tx.uma(
+            `SELECT p.id, p.numero_prontuario, p.situacao, pf.data_nascimento
+               FROM paciente p LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+              WHERE p.id = ? AND p.excluido_em IS NULL`,
+            [p.paciente],
+          );
+    if (p.paciente !== null) {
+      if (!pac)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Paciente não encontrado',
+          'O cadastro não existe.',
+        );
+      if (pac['situacao'] !== 'ativo' && pac['situacao'] !== 'provisorio')
+        throw recusa('paciente-inativo', 'O cadastro do paciente está inativo ou foi unificado em outro.');
+      if (pac['numero_prontuario'] === null)
+        throw recusa('sem-prontuario', 'O paciente não tem prontuário: complete o cadastro antes de marcar.');
+    }
     const fp = await tx.uma(
       'SELECT id, situacao FROM fonte_pagadora WHERE codigo = ? AND excluido_em IS NULL',
       [String(p.convenio)],
@@ -2270,6 +2348,27 @@ export class PortaAgendaPropria implements PortaAgenda {
       p.alertas?.push(credenciamento.motivo ?? 'O profissional não é credenciado no convênio.');
     const canal = await tx.uma('SELECT id FROM canal_marcacao WHERE codigo = ? AND ativo', [p.canal]);
     if (!canal) throw configuracaoIncompleta(`canal de marcação "${p.canal}"`);
+    // 02-AGE 42: o pré-cadastro (reaproveitado ou novo) na mesma transação da marcação.
+    let preCadastroId: number | null = null;
+    let nascimentoPre: string | null = null;
+    if (typeof pre === 'number') {
+      const k = await tx.uma(
+        'SELECT id, data_nascimento FROM pre_cadastro WHERE id = ? AND excluido_em IS NULL',
+        [pre],
+      );
+      if (!k) throw recusa('pre-cadastro-inexistente', 'O pré-cadastro da marcação não existe.');
+      preCadastroId = num(k['id']);
+      nascimentoPre = dataIso(k['data_nascimento']);
+    } else if (pre !== null) {
+      const r = await preCadastroDaMarcacao(tx, {
+        estabelecimento: Number(ctx.estabelecimento),
+        pessoa: pre,
+        hoje: dataNoFuso(fuso, this.agora()),
+        fontePagadora: num(fp['id']),
+      });
+      preCadastroId = r.id;
+      nascimentoPre = pre.nascimento;
+    }
     const natureza = p.encaixe !== null ? 'encaixe' : p.retorno ? 'retorno' : 'primeira_vez';
     const tipo =
       (await tx.uma('SELECT id FROM tipo_marcacao WHERE natureza = ? AND ativo ORDER BY id LIMIT 1', [
@@ -2364,11 +2463,14 @@ export class PortaAgendaPropria implements PortaAgenda {
       // O grupo não tem exclusão lógica (só `ativo`, que a regra do domínio confere).
       'SELECT id, descricao, ativo, peso, idade_minima FROM grupo_prioridade_legal',
     );
-    const doPaciente = await tx.consultar(
-      `SELECT grupo_prioridade_legal_id, vigencia_inicio, vigencia_fim FROM paciente_prioridade_legal
-        WHERE paciente_id = ? AND excluido_em IS NULL`,
-      [p.paciente],
-    );
+    const doPaciente =
+      p.paciente === null
+        ? []
+        : await tx.consultar(
+            `SELECT grupo_prioridade_legal_id, vigencia_inicio, vigencia_fim FROM paciente_prioridade_legal
+              WHERE paciente_id = ? AND excluido_em IS NULL`,
+            [p.paciente],
+          );
     const prio = prioridadeNaMarcacao(
       grupos.map((g) => ({
         id: num(g['id']),
@@ -2384,7 +2486,7 @@ export class PortaAgendaPropria implements PortaAgenda {
           vigenciaInicio: dataIso(x['vigencia_inicio']) ?? '',
           vigenciaFim: dataIso(x['vigencia_fim']),
         })),
-        nascimento: dataIso(pac['data_nascimento']),
+        nascimento: pac ? dataIso(pac['data_nascimento']) : nascimentoPre,
         data: p.data,
       },
     );
@@ -2396,6 +2498,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       horario_agenda_id: horario,
       grupo_prioridade_legal_id: prio.grupo,
       paciente_id: p.paciente,
+      pre_cadastro_id: preCadastroId,
       tipo_marcacao_id: tipo['id'],
       situacao_marcacao_id: await this.situacaoMarcacao(tx, 'aguardando'),
       canal_marcacao_id: canal['id'],

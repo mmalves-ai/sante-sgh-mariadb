@@ -7,6 +7,7 @@ export * from './grade.js';
 export * from './dias-sem-expediente.js';
 export * from './prioridade-marcacao.js';
 export * from './prioridade-idade.js';
+export * from './fila-espera.js';
 export * from './encaixe.js';
 export * from './cobertura.js';
 export * from './nome-agenda.js';
