@@ -5,6 +5,10 @@
 //   POST /api/sadt/catalogo/exames/:id                           altera o exame (versão vista; desativa sem apagar)
 //   POST /api/sadt/catalogo/exames/:id/:tipo                     inclui ou altera o vínculo (setor, material,
 //                                                                preparo, lateralidade, ligado, analito)
+//   POST /api/sadt/catalogo/exames/:id/procedimentos             procedimento operacional do exame (versão, revisão,
+//                                                                aprovação pela conta da sessão; nunca apagado)
+//   GET  /api/sadt/catalogo/analitos?termo                       os analitos (campos de resultado) da rede
+//   POST /api/sadt/catalogo/analitos[/:id]                       inclui ou altera o analito (sai por inativação)
 //   GET  /api/sadt/catalogo/opcoes                               listas dos seletores (setor, material, analito...)
 //   POST /api/sadt/catalogo/analitos-exame/:id/faixas            nova versão da faixa (uma ou várias, cobertura)
 //   POST /api/sadt/catalogo/analitos-exame/:id/formulas          nova versão da fórmula de cálculo
@@ -22,6 +26,8 @@ import {
   esquemaExameCatalogo,
   esquemaFaixasCatalogo,
   esquemaParcialVinculo,
+  esquemaAnalitoCatalogo,
+  esquemaProcedimentoCatalogo,
   esquemaFormulaCatalogo,
   type PortaCatalogoSadtPropria,
   type TipoVinculo,
@@ -86,6 +92,48 @@ export class CatalogoSadtController {
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
     const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
     return this.p().salvarExame(c, idDaRota(id), b);
+  }
+
+  @Post('exames/:id/procedimentos')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler(
+    'o procedimento operacional do exame com a trilha_auditoria na mesma transação (Executor)',
+  )
+  procedimento(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const alteracao = Boolean(b && typeof b === 'object' && (b as Record<string, unknown>)['id']);
+    const e = corpo(alteracao ? esquemaProcedimentoCatalogo.partial() : esquemaProcedimentoCatalogo, b);
+    if (alteracao && !e.versao)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().salvarProcedimento(c, idDaRota(id), b);
+  }
+
+  @Get('analitos')
+  @Permissao('sadt.catalogo.ler')
+  analitos(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.p().analitos(sessaoDe(req).porta, String(termo ?? '').slice(0, 80));
+  }
+
+  @Post('analitos')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler('o analito com a trilha_auditoria na mesma transação (Executor)')
+  incluirAnalito(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().salvarAnalito(c, null, corpo(esquemaAnalitoCatalogo, b));
+  }
+
+  @Post('analitos/:id')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler('o analito com a trilha_auditoria na mesma transação (Executor)')
+  alterarAnalito(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const e = corpo(esquemaAnalitoCatalogo.partial(), b);
+    if (!e.versao)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().salvarAnalito(c, idDaRota(id), b);
   }
 
   @Post('exames/:id/:tipo')

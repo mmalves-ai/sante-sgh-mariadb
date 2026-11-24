@@ -11,6 +11,11 @@ import {
   type ExameCatalogo,
   type FalhaCatalogo,
   padroesADesmarcar,
+  planejarProcedimentoOperacional,
+  type ProcedimentoOperacional,
+  SITUACOES_PROCEDIMENTO,
+  TIPOS_RESULTADO_ANALITO,
+  validarAnalito,
   planejarNovasFaixas,
   planejarNovaVersaoFormula,
   validarExame,
@@ -203,8 +208,77 @@ export function soEnviados(
   return Object.fromEntries(Object.entries(lido).filter(([k]) => bruto[k] !== undefined));
 }
 
+/** O analito (campo de resultado) da rede: incluído e alterado aqui; sai por inativação, nunca apagado. */
+export const esquemaAnalitoCatalogo = z.object({
+  versao,
+  codigo: z.string().trim().min(1).max(30),
+  nome: z.string().trim().min(2).max(150),
+  tituloLaudo: texto(150),
+  sigla: texto(20),
+  tipoResultado: z.enum(TIPOS_RESULTADO_ANALITO).default('numerico'),
+  casasDecimais: z.number().int().min(0).max(6).nullable().default(null),
+  unidadeResultadoId: idNulo,
+  metodoAnaliticoId: idNulo,
+  codigoLoinc: z
+    .string()
+    .trim()
+    .regex(/^\d{1,7}-\d$/)
+    .nullable()
+    .default(null),
+  limiteMinimoAceito: z.number().nullable().default(null),
+  limiteMaximoAceito: z.number().nullable().default(null),
+  resultadoObrigatorio: z.boolean().default(true),
+  imprimeNoLaudo: z.boolean().default(true),
+  pulaNaDigitacao: z.boolean().default(false),
+  ativo: z.boolean().default(true),
+});
+
+/** O procedimento operacional do exame (documento da qualidade): conteúdo, situação e vigência. */
+const textoPop = texto(20000);
+export const esquemaProcedimentoCatalogo = z.object({
+  id: id.optional(),
+  versao,
+  codigoDocumento: z.string().trim().min(1).max(60),
+  titulo: z.string().trim().min(3).max(200),
+  /** Nova versão de um documento já aprovado: o número vem da regra (a seguinte à maior gravada). */
+  versaoDocumento: z.number().int().min(1).max(65535).optional(),
+  situacao: z.enum(SITUACOES_PROCEDIMENTO).default('rascunho'),
+  vigenciaInicio: dataIso.nullable().default(null),
+  vigenciaFim: dataIso.nullable().default(null),
+  proximaRevisaoEm: dataIso.nullable().default(null),
+  metodologia: textoPop,
+  principioTeste: textoPop,
+  preparoPaciente: textoPop,
+  coletaAmostra: textoPop,
+  reagentes: textoPop,
+  procedimentoTecnico: textoPop,
+  controleInterno: textoPop,
+  valorReferencia: textoPop,
+  interferentes: textoPop,
+  limitacoesMetodo: textoPop,
+  interpretacaoResultado: textoPop,
+});
+/** Os campos de conteúdo do documento (o aprovado não muda neles). */
+const CONTEUDO_POP = [
+  'codigoDocumento',
+  'titulo',
+  'metodologia',
+  'principioTeste',
+  'preparoPaciente',
+  'coletaAmostra',
+  'reagentes',
+  'procedimentoTecnico',
+  'controleInterno',
+  'valorReferencia',
+  'interferentes',
+  'limitacoesMetodo',
+  'interpretacaoResultado',
+];
+
 const TABELAS = [
   'exame',
+  'analito',
+  'procedimento_operacional_exame',
   'exame_setor_executante',
   'exame_material',
   'exame_orientacao_preparo',
@@ -347,6 +421,14 @@ export class PortaCatalogoSadtPropria {
         preparos: await vinc('preparo', 'o.descricao AS descricao_preparo'),
         lateralidades: await vinc('lateralidade'),
         ligados: await vinc('ligado', 'e2.nome AS nome_ligado, e2.sigla AS sigla_ligado'),
+        procedimentos: (
+          await l.consultar(
+            `SELECT * FROM procedimento_operacional_exame
+              WHERE exame_id = ? AND excluido_em IS NULL AND (? IS NULL OR estabelecimento_id = ?)
+              ORDER BY codigo_documento, versao_documento DESC, id DESC`,
+            [exameId, c.estabelecimento ?? null, c.estabelecimento ?? null],
+          )
+        ).map(camel),
         analitos: analitos.map((a) => ({
           ...a,
           faixas: faixas.filter((f) => Number(f['exameAnalitoId']) === Number(a['id'])),
@@ -644,6 +726,189 @@ export class PortaCatalogoSadtPropria {
     });
   }
 
+  // ── Analito (campo de resultado) ───────────────────────────────────────────────────────────────────────────────
+
+  /** Os analitos da rede (ativos e inativos), com o termo no nome, no código ou na sigla. */
+  analitos(c: ContextoCatalogo, termo: string) {
+    const t = `%${termo.trim()}%`;
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `SELECT a.*, u.simbolo AS simbolo_unidade FROM analito a
+             LEFT JOIN unidade_resultado u ON u.id = a.unidade_resultado_id
+            WHERE a.excluido_em IS NULL AND (? = '%%' OR a.nome LIKE ? OR a.codigo LIKE ? OR a.sigla LIKE ?)
+            ORDER BY a.ativo DESC, a.nome, a.id LIMIT 300`,
+          [t, t, t, t],
+        )
+      ).map(camel),
+    );
+  }
+
+  /**
+   * Inclui (sem id) ou altera (com id e a versão vista) o analito, depois da regra do domínio; na alteração grava só
+   * o enviado. O código é único na rede; sair é inativar (o resultado antigo continua apontando para ele).
+   */
+  salvarAnalito(c: ContextoCatalogo, analitoId: number | null, entrada: unknown) {
+    const enviado = analitoId
+      ? soEnviados(esquemaAnalitoCatalogo, entrada)
+      : esquemaAnalitoCatalogo.parse(entrada);
+    return this.gravar(c, analitoId ? 'analito-alterado' : 'analito-incluido', 'analito', async (tx) => {
+      const [atual] = analitoId
+        ? await tx.consultarParaAtualizar(`SELECT * FROM analito WHERE id = ? AND excluido_em IS NULL`, [
+            analitoId,
+          ])
+        : [null];
+      if (analitoId && !atual) throw inexistente('O analito');
+      const fica = { ...(atual ? camel(atual) : {}), ...enviado } as Record<string, unknown>;
+      const falhas = validarAnalito({
+        codigo: String(fica['codigo'] ?? ''),
+        nome: String(fica['nome'] ?? ''),
+        sigla: (fica['sigla'] as string | null) ?? null,
+        tipoResultado: String(fica['tipoResultado'] ?? ''),
+        casasDecimais: num(fica['casasDecimais']),
+        unidadeResultadoId: num(fica['unidadeResultadoId']),
+        limiteMinimoAceito: num(fica['limiteMinimoAceito']),
+        limiteMaximoAceito: num(fica['limiteMaximoAceito']),
+        pulaNaDigitacao: bool(fica['pulaNaDigitacao']),
+      });
+      if (falhas.length) recusar(falhas);
+      const duplicado = await tx.consultar(`SELECT id FROM analito WHERE codigo = ? AND id <> ? LIMIT 1`, [
+        fica['codigo'],
+        analitoId ?? 0,
+      ]);
+      if (duplicado.length) recusar([{ campo: 'codigo', mensagem: 'Já existe analito com este código.' }]);
+      const valores = colunas(enviado);
+      if (!analitoId) return { id: await tx.incluir('analito', valores), versao: 1 };
+      const nova = await tx.alterar('analito', analitoId, Number(enviado['versao'] ?? 0), valores);
+      return { id: analitoId, versao: nova };
+    });
+  }
+
+  // ── Procedimento operacional do exame ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Inclui a versão do documento (rascunho; a seguinte à maior do mesmo código) ou altera a existente (só o enviado,
+   * com a versão vista). Aprovar grava quem aprova (o profissional da conta da sessão, nunca escolhido) e a data, e
+   * torna obsoleta a versão aprovada anterior, com a vigência encerrada na véspera. O aprovado não muda de conteúdo.
+   */
+  salvarProcedimento(c: ContextoCatalogo, exameId: number, entrada: unknown) {
+    const bruto = (entrada && typeof entrada === 'object' ? entrada : {}) as Record<string, unknown>;
+    const pid = bruto['id'] !== undefined && bruto['id'] !== null ? Number(bruto['id']) : null;
+    const e = pid ? soEnviados(esquemaProcedimentoCatalogo, bruto) : esquemaProcedimentoCatalogo.parse(bruto);
+    const evento = pid ? 'procedimento-alterado' : 'procedimento-incluido';
+    return this.gravar(c, evento, 'procedimento_operacional_exame', async (tx, hoje) => {
+      if (!c.estabelecimento)
+        throw new ErroOperacao(
+          422,
+          'sem-estabelecimento',
+          'Procedimento operacional',
+          'Escolha o estabelecimento.',
+        );
+      if (!c.usuario)
+        throw new ErroOperacao(401, 'sem-usuario', 'Procedimento operacional', 'Falta a conta da sessão.');
+      const [ex] = await tx.consultarParaAtualizar(
+        `SELECT id FROM exame WHERE id = ? AND excluido_em IS NULL`,
+        [exameId],
+      );
+      if (!ex) throw inexistente('O exame');
+      let atual: Record<string, unknown> | null = null;
+      if (pid) {
+        const [l] = await tx.consultarParaAtualizar(
+          `SELECT * FROM procedimento_operacional_exame WHERE id = ? AND excluido_em IS NULL`,
+          [pid],
+        );
+        if (!l || Number(l['exame_id']) !== exameId || Number(l['estabelecimento_id']) !== c.estabelecimento)
+          throw inexistente('O procedimento operacional');
+        atual = camel(l);
+      }
+      const codigo = String(e['codigoDocumento'] ?? atual?.['codigoDocumento'] ?? '');
+      const outras = (
+        await tx.consultarParaAtualizar(
+          `SELECT id, exame_id, versao_documento, situacao, vigencia_inicio, vigencia_fim, versao
+             FROM procedimento_operacional_exame
+            WHERE estabelecimento_id = ? AND codigo_documento = ? AND excluido_em IS NULL AND id <> ?`,
+          [c.estabelecimento, codigo, pid ?? 0],
+        )
+      ).map(camel);
+      if (outras.some((o) => Number(o['exameId']) !== exameId))
+        recusar([{ campo: 'codigoDocumento', mensagem: 'Este código de documento é de outro exame.' }]);
+      const maior = outras.reduce((m, o) => Math.max(m, Number(o['versaoDocumento'])), 0);
+      const fica = { ...(atual ?? {}), ...e } as Record<string, unknown>;
+      if (!pid) fica['versaoDocumento'] = e['versaoDocumento'] ?? maior + 1;
+      const valores = colunas(e);
+      delete valores['versao_documento'];
+      const aprovando = fica['situacao'] === 'aprovado' && atual?.['situacao'] !== 'aprovado';
+      if (aprovando) {
+        const v = await tx.uma(
+          `SELECT v.profissional_id FROM usuario_vinculo_profissional v
+             JOIN profissional p ON p.id = v.profissional_id AND p.excluido_em IS NULL
+            WHERE v.usuario_id = ? AND v.estabelecimento_id = ? AND v.excluido_em IS NULL
+              AND v.vigencia_inicio <= CURRENT_DATE AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= CURRENT_DATE)
+            ORDER BY v.vigencia_inicio DESC, v.id DESC LIMIT 1`,
+          [c.usuario, c.estabelecimento],
+        );
+        fica['aprovadoPorProfissionalId'] = num(v?.['profissional_id']);
+        fica['aprovadoEm'] = hoje;
+        valores['aprovado_por_profissional_id'] = fica['aprovadoPorProfissionalId'];
+        valores['aprovado_em'] = new Date();
+      }
+      if (fica['situacao'] === 'obsoleto' && atual?.['situacao'] !== 'obsoleto' && !fica['vigenciaFim']) {
+        fica['vigenciaFim'] = hoje;
+        valores['vigencia_fim'] = hoje;
+      }
+      const conteudoMudou = CONTEUDO_POP.some(
+        (k) => k in e && atual !== null && ((e as Record<string, unknown>)[k] ?? null) !== (atual[k] ?? null),
+      );
+      const daLinha = (x: Record<string, unknown>): ProcedimentoOperacional => ({
+        id: num(x['id']),
+        codigoDocumento: String(x['codigoDocumento'] ?? ''),
+        titulo: String(x['titulo'] ?? ''),
+        versaoDocumento: Number(x['versaoDocumento'] ?? 1),
+        situacao: x['situacao'] as ProcedimentoOperacional['situacao'],
+        aprovadoPorProfissionalId: num(x['aprovadoPorProfissionalId']),
+        aprovadoEm: x['aprovadoEm'] ? String(x['aprovadoEm']).slice(0, 10) : null,
+        vigenciaInicio: dia(x['vigenciaInicio']),
+        vigenciaFim: dia(x['vigenciaFim']),
+        proximaRevisaoEm: dia(x['proximaRevisaoEm']),
+      });
+      const { falhas, plano } = planejarProcedimentoOperacional(
+        daLinha(fica),
+        atual ? daLinha(atual) : null,
+        outras.map((o) => ({
+          id: Number(o['id']),
+          versaoDocumento: Number(o['versaoDocumento']),
+          situacao: o['situacao'] as ProcedimentoOperacional['situacao'],
+          vigenciaInicio: dia(o['vigenciaInicio']),
+          vigenciaFim: dia(o['vigenciaFim']),
+        })),
+        conteudoMudou,
+        hoje,
+      );
+      if (falhas.length) recusar(falhas);
+      let alvo: number;
+      if (pid) {
+        await tx.alterar('procedimento_operacional_exame', pid, Number(e['versao'] ?? 0), valores);
+        alvo = pid;
+      } else
+        alvo = await tx.incluir('procedimento_operacional_exame', {
+          ...valores,
+          versao_documento: fica['versaoDocumento'],
+          tipo: 'exame',
+          exame_id: exameId,
+          estabelecimento_id: c.estabelecimento,
+          elaborado_por_usuario_id: c.usuario,
+        });
+      for (const o of plano.obsoletar) {
+        const linha = outras.find((x) => Number(x['id']) === o.id);
+        await tx.alterar('procedimento_operacional_exame', o.id, Number(linha?.['versao'] ?? 0), {
+          situacao: 'obsoleto',
+          vigencia_fim: o.vigenciaFim,
+        });
+      }
+      return { id: alvo, obsoletas: plano.obsoletar.map((o) => o.id) };
+    });
+  }
+
   /** As listas para os seletores da tela (id e nome, só os ativos), em vez de digitar o id. */
   opcoes(c: ContextoCatalogo) {
     const fontes: Record<string, string> = {
@@ -656,6 +921,9 @@ export class PortaCatalogoSadtPropria {
       sexos: `SELECT id, descricao AS nome FROM sexo WHERE ativo = TRUE ORDER BY id`,
       modalidades: `SELECT id, descricao AS nome FROM modalidade_imagem WHERE ativo = TRUE ORDER BY descricao`,
       metodos: `SELECT id, descricao AS nome FROM metodo_analitico WHERE ativo = TRUE ORDER BY descricao`,
+      especialidades: `SELECT id, descricao AS nome FROM especialidade_diagnostica WHERE ativo = TRUE ORDER BY descricao`,
+      unidades: `SELECT id, CONCAT(simbolo, ' · ', descricao) AS nome FROM unidade_resultado
+                  WHERE ativo = TRUE ORDER BY simbolo`,
       exames: `SELECT id, CONCAT(sigla, ' · ', nome) AS nome FROM exame
                 WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome LIMIT 2000`,
     };
@@ -671,6 +939,11 @@ export class PortaCatalogoSadtPropria {
 /** As colunas BOOLEAN (TINYINT 1/0 no driver) e DECIMAL (texto no driver) do catálogo, devolvidas como tipo de JS. */
 const BOOLEANOS = new Set([
   'ativo',
+  'resultado_obrigatorio',
+  'resultado_fixo',
+  'imprime_no_laudo',
+  'imprime_etiqueta_triagem',
+  'pula_na_digitacao',
   'padrao',
   'atende_feriado',
   'lanca_automaticamente',
@@ -679,7 +952,7 @@ const BOOLEANOS = new Set([
   'exige_laudo',
 ]);
 const DECIMAIS =
-  /^(volume_minimo_ml|custo_unitario|multiplicador_cobranca|(referencia|alerta|critico|absurdo)_(minima|maxima|minimo|maximo))$/;
+  /^(volume_minimo_ml|custo_unitario|multiplicador_cobranca|limite_(minimo|maximo)_aceito|(referencia|alerta|critico|absurdo)_(minima|maxima|minimo|maximo))$/;
 
 /** Linha do banco → objeto da tela (snake_case → camelCase; datas em ISO). */
 function camel(l: Linha): Record<string, unknown> {
