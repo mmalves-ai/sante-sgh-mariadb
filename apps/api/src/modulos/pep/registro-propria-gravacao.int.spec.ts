@@ -413,6 +413,37 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     expect(Number(n?.['n'])).toBe(1);
   });
 
+  it('rascunho importado (ADR 0006): do autor, ele continua, finaliza e descarta como qualquer rascunho', async () => {
+    const importar = async (id: number): Promise<void> => {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+        e.executar("UPDATE registro_assistencial_rascunho SET origem = 'migracao' WHERE id = ?", [id]),
+      );
+    };
+    const r1 = await g.salvarRascunho(C, { ...base(), linhas: linhas() }, ctx());
+    await importar(r1.rascunho);
+    const lido = await g.lerRascunho(C, r1.rascunho);
+    expect(lido?.rascunho).toMatchObject({ doNovo: false, cbo: m.profissional });
+    expect((await g.rascunhosDoPaciente(C, m.paciente, m.modelo)).map((x) => x.id)).toContain(r1.rascunho);
+    const v1 = lido!.rascunho.versao;
+    const r2 = await g.salvarRascunho(
+      C,
+      { ...base(), linhas: linhas(), rascunho: { id: r1.rascunho, versao: v1 } },
+      ctx(),
+    );
+    expect((await g.lerRascunho(C, r2.rascunho))?.rascunho.doNovo).toBe(true);
+    const { registro: id } = await g.registrar(
+      C,
+      { ...registro(), rascunho: { id: r2.rascunho, versao: r2.versao } } as never,
+      ctx(),
+    );
+    expect(id).toBeGreaterThan(0);
+    const r3 = await g.salvarRascunho(C, { ...base(), linhas: linhas() }, ctx());
+    await importar(r3.rascunho);
+    const v3 = (await g.lerRascunho(C, r3.rascunho))!.rascunho.versao;
+    await g.descartarRascunho(C, { rascunho: r3.rascunho, versao: v3, cbo: m.profissional }, ctx());
+    expect(await g.lerRascunho(C, r3.rascunho)).toMatchObject({ aberto: false, substituido: false });
+  });
+
   it('suporte técnico: gravação e suspensão em sessão de suporte voltam como marcas na prova', async () => {
     const { registro: id } = await g.registrar(C, { ...registro(), comoSuporte: true } as never, ctx());
     expect((await g.prova(C, id)).comoSuporte).toEqual(['criado']);
