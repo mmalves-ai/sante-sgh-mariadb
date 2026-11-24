@@ -565,7 +565,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
 
   it('02-AGE 42: marca sem prontuário, grava o pré-cadastro na mesma transação, reaproveita o da mesma pessoa e remarca mantendo o vínculo', async () => {
     const pessoa = {
-      nome: 'pessoa  sintetica l0104 sem pront',
+      nome: 'pessoa  sintética l0104 sem pront',
       nascimento: '1975-02-03',
       telefone: '31999910104',
     };
@@ -587,6 +587,33 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
     expect(
       await contar('SELECT COUNT(*) AS n FROM pre_cadastro WHERE estabelecimento_id = ?', [ids.est]),
     ).toBe(preAntes);
+    // Quem já é paciente (mesmo nome comparável e nascimento) não vira pré-cadastro sem a central confirmar: a recusa
+    // traz o paciente candidato e nada é gravado.
+    const ja = await linha(
+      "SELECT pf.nome, DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nasc FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?",
+      [ids.paciente],
+    );
+    expect(ja?.['nasc']).toBeTruthy();
+    await expect(
+      porta.executar(ctx(), 'agenda.agendarSemProntuario', {
+        ...pedido,
+        nome: ` ${String(ja?.['nome']).toLowerCase()} `,
+        nascimento: String(ja?.['nasc']),
+      }),
+    ).rejects.toMatchObject({
+      problema: {
+        codigo: 'paciente-possivelmente-cadastrado',
+        dependentes: [
+          expect.objectContaining({
+            rotulo: 'paciente',
+            amostra: expect.arrayContaining([String(ids.paciente)]),
+          }),
+        ],
+      },
+    });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM pre_cadastro WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBe(preAntes);
     const m = await porta.executar(ctx(), 'agenda.agendarSemProntuario', pedido);
     const id = Number(m.resultado['marcacao']);
     const pre = Number(m.resultado['preCadastro']);
@@ -601,7 +628,8 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
         [pre],
       ),
     ).toMatchObject({
-      nome: 'PESSOA SINTETICA L0104 SEM PRONT',
+      // O nome fica gravado com o acento (a comparação do reaproveitamento é que o ignora).
+      nome: 'PESSOA SINTÉTICA L0104 SEM PRONT',
       situacao: 'pendente',
       telefone: null,
       celular: '31999910104',
@@ -638,7 +666,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
     // A mesma pessoa (nome com outro espaçamento) numa segunda marcação reaproveita o pré-cadastro pendente.
     const m2 = await porta.executar(ctx(), 'agenda.agendarSemProntuario', {
       ...pedido,
-      nome: 'Pessoa Sintetica L0104  Sem Pront',
+      nome: 'Pessoa Sintetica L0104  Sem Pront', // sem o acento: a comparação ignora
     });
     expect(Number(m2.resultado['preCadastro'])).toBe(pre);
     expect(

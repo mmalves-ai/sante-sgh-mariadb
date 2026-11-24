@@ -3,13 +3,25 @@
 // na chegada, a recepção converte o pré-cadastro em paciente (as marcações passam ao paciente na mesma transação).
 // Melhoria: o mesmo pré-cadastro pendente é reaproveitado (mesmo nome, nascimento e telefone), para que duas
 // marcações da mesma pessoa não virem dois pré-cadastros a converter; o telefone vai a celular ou fixo pela regra
-// do número; a data de nascimento é conferida na hora (nem futura nem acima de 130 anos).
+// do número; a data de nascimento é conferida na hora (nem futura nem acima de 130 anos); e quem JÁ é paciente
+// (mesmo nome comparável e mesmo nascimento) não vira pré-cadastro sem que a central confirme que é outra pessoa: a
+// regra devolve os prontuários candidatos para a tela oferecer a marcação no prontuário existente (evita o cadastro
+// duplicado na chegada). O nome gravado mantém os acentos: `nomeComparavel` serve só para comparar.
 
 /** Dados mínimos da pessoa na marcação sem prontuário (vocabulário neutro: data ISO, telefone só com dígitos). */
 export interface PessoaSemProntuario {
   readonly nome: string;
   readonly nascimento: string;
   readonly telefone: string;
+  /** A central conferiu os pacientes candidatos (homônimos) e confirma que é outra pessoa. */
+  readonly cadastroConferido?: boolean;
+}
+
+/** Paciente ativo do estabelecimento com o mesmo nascimento, candidato a ser a mesma pessoa. */
+export interface PacienteCandidato {
+  readonly id: number;
+  readonly nome: string;
+  readonly prontuario: string | null;
 }
 
 /** Pré-cadastro pendente do estabelecimento, candidato ao reaproveitamento. */
@@ -22,7 +34,14 @@ export interface PreCadastroCandidato {
 }
 
 export type DecisaoPreCadastro =
-  | { readonly ok: false; readonly codigo: string; readonly motivo: string; readonly campo: string }
+  | {
+      readonly ok: false;
+      readonly codigo: string;
+      readonly motivo: string;
+      readonly campo: string;
+      /** Só em `paciente-possivelmente-cadastrado`: os pacientes candidatos, pelo id. */
+      readonly candidatos?: readonly PacienteCandidato[];
+    }
   | {
       readonly ok: true;
       readonly acao: 'reaproveitar';
@@ -41,6 +60,11 @@ const IDADE_MAXIMA_ANOS = 130;
 /** Nome normalizado para comparar: espaços simples, maiúsculas, sem acento. */
 export function nomeComparavel(nome: string): string {
   return nome.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+/** Nome para gravar: espaços simples e maiúsculas, MANTENDO os acentos. */
+export function nomeParaGravar(nome: string): string {
+  return nome.replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
 /** Celular brasileiro: 11 dígitos com o 9 depois do DDD (ou 13 com o 55 do país). */
@@ -63,6 +87,7 @@ export function decidirPreCadastroDaMarcacao(
   pessoa: PessoaSemProntuario,
   hoje: string,
   pendentes: readonly PreCadastroCandidato[],
+  pacientes: readonly PacienteCandidato[] = [],
 ): DecisaoPreCadastro {
   const nome = nomeComparavel(pessoa.nome);
   if (nome.length < 3 || !/[A-Z]/.test(nome))
@@ -101,6 +126,18 @@ export function decidirPreCadastroDaMarcacao(
       motivo: 'Informe um telefone com DDD (8 a 15 dígitos).',
       campo: 'telefone',
     };
+  const candidatos = pacientes.filter((c) => nomeComparavel(c.nome) === nome).sort((a, b) => a.id - b.id);
+  if (candidatos.length > 0 && pessoa.cadastroConferido !== true)
+    return {
+      ok: false,
+      codigo: 'paciente-possivelmente-cadastrado',
+      motivo:
+        candidatos.length === 1
+          ? `Já existe paciente com o mesmo nome e nascimento (prontuário ${candidatos[0]!.prontuario ?? 'sem número'}): marque no prontuário dele ou confirme que é outra pessoa.`
+          : `Já existem ${candidatos.length} pacientes com o mesmo nome e nascimento: marque no prontuário certo ou confirme que é outra pessoa.`,
+      campo: 'nome',
+      candidatos,
+    };
   const mesmo = pendentes
     .filter(
       (c) =>
@@ -111,5 +148,11 @@ export function decidirPreCadastroDaMarcacao(
     .sort((a, b) => a.id - b.id)[0];
   if (mesmo) return { ok: true, acao: 'reaproveitar', preCadastro: mesmo.id };
   const celular = ehCelular(fone);
-  return { ok: true, acao: 'criar', nome, telefone: celular ? null : fone, celular: celular ? fone : null };
+  return {
+    ok: true,
+    acao: 'criar',
+    nome: nomeParaGravar(pessoa.nome),
+    telefone: celular ? null : fone,
+    celular: celular ? fone : null,
+  };
 }

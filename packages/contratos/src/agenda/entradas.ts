@@ -278,6 +278,8 @@ export const esquemaAgendarSemProntuario = z
       .pipe(z.string().min(3)),
     nascimento: esquemaDataIso,
     telefone: z.string().regex(/^\d{8,15}$/, 'Telefone só com dígitos (8 a 15).'),
+    /** A central conferiu os pacientes de mesmo nome e nascimento e confirma que é outra pessoa. */
+    cadastroConferido: z.boolean().optional(),
     convenio: smallint,
     canal: esquemaCanal,
   })

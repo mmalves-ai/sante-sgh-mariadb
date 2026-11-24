@@ -272,9 +272,21 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
     };
     const semNascimento = Object.fromEntries(Object.entries(pedido).filter(([k]) => k !== 'nascimento'));
     expect((await post(s, '/marcacoes/sem-prontuario', semNascimento)).statusCode).toBe(400);
+    // A regra do domínio vale também na porta em memória: nascimento futuro recusado na hora, com o campo.
+    const futuro = await post(s, '/marcacoes/sem-prontuario', { ...pedido, nascimento: '2999-01-01' });
+    expect(futuro.statusCode).toBe(409);
+    expect(futuro.json()).toMatchObject({ codigo: 'nascimento-futuro', campos: ['nascimento'] });
     const r = await post(s, '/marcacoes/sem-prontuario', pedido);
     expect(r.statusCode).toBe(201);
     expect(r.json().resultado.marcacao).toBeGreaterThan(0);
+    // A segunda marcação da mesma pessoa (nome com outro espaçamento) reaproveita o pré-cadastro pendente.
+    const r2 = await post(s, '/marcacoes/sem-prontuario', {
+      ...pedido,
+      hora: '08:50',
+      nome: ' paciente  sintetico novo ',
+    });
+    expect(r2.statusCode).toBe(201);
+    expect(r2.json().resultado.preCadastro).toBe(r.json().resultado.preCadastro);
   });
 });
 

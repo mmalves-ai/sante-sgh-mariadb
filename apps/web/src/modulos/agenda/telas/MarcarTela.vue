@@ -13,6 +13,7 @@ import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import {
   avaliarEncaixe,
   buscarVagas,
+  candidatosDaRecusa,
   codigoDaRecusa,
   encaixar,
   lerMarcacoesPaciente,
@@ -239,6 +240,13 @@ const podeSemProntuario = pode('agenda.agendarSemProntuario');
 const spNome = ref('');
 const spNascimento = ref('');
 const spTelefone = ref('');
+// Recusa por paciente de mesmo nome e nascimento: a tela oferece buscar o existente ou confirmar que é outra pessoa.
+const spCandidatos = ref<number[]>([]);
+const spConferido = ref(false);
+function buscarExistente(): void {
+  termo.value = spNome.value.trim();
+  pedidoPaciente.value = termo.value;
+}
 const hojeIso = () => new Date().toLocaleDateString('en-CA');
 const spErroNascimento = computed(() =>
   spNascimento.value && spNascimento.value > hojeIso() ? t('agenda.marcar.nascimentoFuturo') : null,
@@ -273,6 +281,7 @@ async function marcarSemPront(): Promise<void> {
         nome: spNome.value,
         nascimento: spNascimento.value,
         telefone: spDigitos.value,
+        cadastroConferido: spConferido.value,
         convenio: Number(convenio.value),
         canal: canal.value,
       },
@@ -285,6 +294,9 @@ async function marcarSemPront(): Promise<void> {
     if (id) await roteador.push(`/agenda/consultas/marcacoes/${id}`);
   } catch (x) {
     erro.value = x;
+    spCandidatos.value =
+      codigoDaRecusa(x) === 'paciente-possivelmente-cadastrado' ? candidatosDaRecusa(x) : [];
+    spConferido.value = false;
     chave.value = novaChave('marcar');
     if (codigoDaRecusa(x) === 'horario-ocupado') await sugerirProximo(e);
   } finally {
@@ -597,6 +609,19 @@ async function fazerEncaixe(): Promise<void> {
             :aria-invalid="spErroTelefone ? 'true' : 'false'"
           />
           <small v-if="spErroTelefone" role="alert">{{ spErroTelefone }}</small>
+        </div>
+        <div v-if="spCandidatos.length" class="acoes" role="alert" data-testid="sp-homonimo">
+          <p>{{ t('agenda.marcar.homonimo', { n: spCandidatos.length }) }}</p>
+          <SanteBotao
+            variante="texto"
+            :rotulo="t('agenda.marcar.buscarExistente')"
+            data-testid="sp-buscar-existente"
+            @acionar="buscarExistente"
+          />
+          <label
+            ><input v-model="spConferido" type="checkbox" data-testid="sp-outra-pessoa" />
+            {{ t('agenda.marcar.outraPessoa') }}</label
+          >
         </div>
         <SanteBotao
           :rotulo="t('agenda.marcar.marcarSemProntuario')"

@@ -69,6 +69,8 @@ export const mensagensRecepcao = {
     'destino-nao-permitido': 'Este local não encaminha para o destino escolhido.',
     'local-inativo': 'O local de atendimento está inativo.',
     'marcacao-ja-chegou': 'A chegada deste agendamento já foi registrada.',
+    'pre-cadastro-a-converter':
+      'A marcação foi feita sem prontuário: converta o pré-cadastro em paciente (Cadastro > Pré-cadastros) antes de registrar a chegada.',
     'marcacao-de-outro-dia': 'O agendamento não é de hoje.',
     'senha-ja-ligada': 'A senha já está ligada a um agendamento.',
     'senha-de-outro-dia': 'A senha não é de hoje.',

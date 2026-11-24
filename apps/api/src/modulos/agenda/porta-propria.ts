@@ -1359,7 +1359,12 @@ export class PortaAgendaPropria implements PortaAgenda {
           data: e.data,
           hora: hora(e.hora),
           paciente: null,
-          preCadastro: { nome: e.nome, nascimento: e.nascimento, telefone: e.telefone },
+          preCadastro: {
+            nome: e.nome,
+            nascimento: e.nascimento,
+            telefone: e.telefone,
+            cadastroConferido: e.cadastroConferido === true,
+          },
           convenio: e.convenio,
           retorno: false,
           canal: e.canal,

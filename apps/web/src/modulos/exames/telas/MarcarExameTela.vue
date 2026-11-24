@@ -14,6 +14,8 @@ import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import { dataBr, horaBr, horaDoContrato } from '../../agenda/formato.js';
 import {
   buscarVagasExame,
+  candidatosDaRecusa,
+  codigoDaRecusa,
   lerExamesDoPaciente,
   lerGradeExame,
   marcarExame,
@@ -156,6 +158,13 @@ const pronto = computed(
 const spNome = ref('');
 const spNascimento = ref('');
 const spTelefone = ref('');
+// Recusa por paciente de mesmo nome e nascimento: a tela oferece buscar o existente ou confirmar que é outra pessoa.
+const spCandidatos = ref<number[]>([]);
+const spConferido = ref(false);
+function buscarExistente(): void {
+  termo.value = spNome.value.trim();
+  pedidoPaciente.value = termo.value;
+}
 const hojeIso = () => new Date().toLocaleDateString('en-CA');
 const spErroNascimento = computed(() =>
   spNascimento.value && spNascimento.value > hojeIso() ? t('exames.marcar.nascimentoFuturo') : null,
@@ -189,6 +198,7 @@ async function marcarSemProntuario(): Promise<void> {
         nome: spNome.value,
         nascimento: spNascimento.value,
         telefone: spDigitos.value,
+        cadastroConferido: spConferido.value,
         convenio: Number(convenio.value),
         exame: exame.value ? Number(exame.value) : null,
         canal: canal.value,
@@ -202,6 +212,9 @@ async function marcarSemProntuario(): Promise<void> {
     if (id) await roteador.push(`/agenda/exames/marcacoes/${id}`);
   } catch (x) {
     erro.value = x;
+    spCandidatos.value =
+      codigoDaRecusa(x) === 'paciente-possivelmente-cadastrado' ? candidatosDaRecusa(x) : [];
+    spConferido.value = false;
     chave.value = novaChave('marcar-exame');
   } finally {
     ocupado.value = false;
@@ -471,6 +484,19 @@ async function marcar(): Promise<void> {
             />
             <small v-if="spErroTelefone" role="alert">{{ spErroTelefone }}</small>
           </div>
+        </div>
+        <div v-if="spCandidatos.length" class="acoes" role="alert" data-testid="sp-homonimo">
+          <p>{{ t('exames.marcar.homonimo', { n: spCandidatos.length }) }}</p>
+          <SanteBotao
+            variante="texto"
+            :rotulo="t('exames.marcar.buscarExistente')"
+            data-testid="sp-buscar-existente"
+            @acionar="buscarExistente"
+          />
+          <label
+            ><input v-model="spConferido" type="checkbox" data-testid="sp-outra-pessoa" />
+            {{ t('exames.marcar.outraPessoa') }}</label
+          >
         </div>
         <SanteBotao
           :rotulo="t('exames.marcar.marcarSemProntuario')"

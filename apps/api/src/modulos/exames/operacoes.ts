@@ -616,7 +616,12 @@ export const agendarExameSemProntuario = definirOperacao<AgendarExameSemProntuar
         data: e.data,
         hora: e.hora,
         paciente: null,
-        preCadastro: { nome: e.nome, nascimento: e.nascimento, telefone: e.telefone },
+        preCadastro: {
+          nome: e.nome,
+          nascimento: e.nascimento,
+          telefone: e.telefone,
+          cadastroConferido: e.cadastroConferido === true,
+        },
         convenio: e.convenio,
         exame: e.exame ?? null,
         retorno: false,

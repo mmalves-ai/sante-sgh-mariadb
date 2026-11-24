@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { decidirPreCadastroDaMarcacao, ehCelular, nomeComparavel } from './marcacao-sem-prontuario.js';
+import {
+  decidirPreCadastroDaMarcacao,
+  ehCelular,
+  nomeComparavel,
+  nomeParaGravar,
+} from './marcacao-sem-prontuario.js';
 
 const HOJE = '2026-11-24';
 const pessoa = { nome: '  Maria  da Silva ', nascimento: '1980-05-10', telefone: '31999990000' };
@@ -15,6 +20,37 @@ describe('marcação sem prontuário (02-AGE 42 e 44)', () => {
     });
     const fixo = decidirPreCadastroDaMarcacao({ ...pessoa, telefone: '3133330000' }, HOJE, []);
     expect(fixo).toMatchObject({ acao: 'criar', telefone: '3133330000', celular: null });
+  });
+
+  it('grava o nome com os acentos (a comparação é que tira os acentos)', () => {
+    expect(decidirPreCadastroDaMarcacao({ ...pessoa, nome: ' José   Conceição ' }, HOJE, [])).toMatchObject({
+      ok: true,
+      acao: 'criar',
+      nome: 'JOSÉ CONCEIÇÃO',
+    });
+    expect(nomeParaGravar(' joão  ')).toBe('JOÃO');
+  });
+
+  it('avisa do paciente já cadastrado com o mesmo nome e nascimento e só cria quando a central confirma', () => {
+    const pacientes = [
+      { id: 30, nome: 'MARIA DA SÍLVA', prontuario: '1234' },
+      { id: 31, nome: 'MARIA SILVA', prontuario: '999' },
+    ];
+    const r = decidirPreCadastroDaMarcacao(pessoa, HOJE, [], pacientes);
+    expect(r).toMatchObject({
+      ok: false,
+      codigo: 'paciente-possivelmente-cadastrado',
+      campo: 'nome',
+      candidatos: [{ id: 30, prontuario: '1234' }],
+    });
+    expect(r.ok === false && r.motivo).toContain('1234');
+    expect(
+      decidirPreCadastroDaMarcacao({ ...pessoa, cadastroConferido: true }, HOJE, [], pacientes),
+    ).toMatchObject({ ok: true, acao: 'criar' });
+    expect(decidirPreCadastroDaMarcacao(pessoa, HOJE, [], [pacientes[1]!])).toMatchObject({
+      ok: true,
+      acao: 'criar',
+    });
   });
 
   it('reaproveita o pendente da mesma pessoa (nome sem acento, nascimento e número), o mais antigo', () => {

@@ -1,6 +1,7 @@
 // 02-AGE 42 e 44: o pré-cadastro da marcação sem prontuário, comum à agenda de consultas e à de exames. Lê os
 // pendentes do estabelecimento com o mesmo nascimento (a regra do domínio decide o reaproveitamento) e grava o
-// pré-cadastro novo na MESMA transação da marcação. Na chegada, `cadastro.converterPreCadastro` passa as marcações
+// pré-cadastro novo na MESMA transação da marcação. Lê também os pacientes ativos do mesmo nascimento: se um deles tem o
+// mesmo nome comparável, a marcação é recusada com os candidatos até a central confirmar que é outra pessoa. Na chegada, `cadastro.converterPreCadastro` passa as marcações
 // ao paciente; o pré-cadastro nunca é apagado.
 import { decidirPreCadastroDaMarcacao, type PessoaSemProntuario } from '@sgh/dominio-agenda';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
@@ -34,6 +35,13 @@ export async function preCadastroDaMarcacao(
     [p.estabelecimento, p.pessoa.nascimento],
     { teto: 50 },
   );
+  // Paciente é do cliente (não da unidade): o homônimo de qualquer unidade gera o cadastro duplicado na chegada.
+  const pacientes = await tx.consultar(
+    `SELECT p.id, pf.nome, p.numero_prontuario FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+      WHERE pf.data_nascimento = ? AND p.situacao IN ('ativo', 'provisorio') AND p.excluido_em IS NULL
+      ORDER BY p.id LIMIT 50`,
+    [p.pessoa.nascimento],
+  );
   const d = decidirPreCadastroDaMarcacao(
     p.pessoa,
     p.hoje,
@@ -44,8 +52,29 @@ export async function preCadastroDaMarcacao(
       telefone: textoOuNulo(x['telefone']),
       celular: textoOuNulo(x['celular']),
     })),
+    pacientes.map((x) => ({
+      id: Number(x['id']),
+      nome: String(x['nome'] ?? ''),
+      prontuario: textoOuNulo(x['numero_prontuario']),
+    })),
   );
-  if (!d.ok) throw recusa(d.codigo, d.motivo, { campos: [d.campo] });
+  if (!d.ok)
+    throw recusa(d.codigo, d.motivo, {
+      campos: [d.campo],
+      // Os candidatos vão pelo id do paciente (a tela abre o prontuário pelo id; o nome ela já mostra na busca).
+      ...(d.candidatos
+        ? {
+            dependentes: [
+              {
+                rotulo: 'paciente',
+                quantidade: d.candidatos.length,
+                amostra: d.candidatos.map((c) => String(c.id)),
+                origem: 'logica' as const,
+              },
+            ],
+          }
+        : {}),
+    });
   if (d.acao === 'reaproveitar') return { id: d.preCadastro, novo: false };
   const id = await tx.incluir('pre_cadastro', {
     estabelecimento_id: p.estabelecimento,

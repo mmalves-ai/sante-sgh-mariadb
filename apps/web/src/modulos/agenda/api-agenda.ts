@@ -103,6 +103,14 @@ export function codigoDaRecusa(e: unknown): string | null {
   return typeof c === 'string' ? c : null;
 }
 
+/** 02-AGE 42 e 44: ids dos pacientes de mesmo nome e nascimento devolvidos na recusa da marcação sem prontuário. */
+export function candidatosDaRecusa(e: unknown): number[] {
+  if (!(e instanceof ErroApi)) return [];
+  const d = (e.problema as { dependentes?: { rotulo?: unknown; amostra?: unknown }[] } | null)?.dependentes;
+  const p = Array.isArray(d) ? d.find((x) => x.rotulo === 'paciente') : undefined;
+  return Array.isArray(p?.amostra) ? p.amostra.map(Number).filter((n) => n > 0) : [];
+}
+
 // ── Leituras ────────────────────────────────────────────────────────────────────────────────────────
 export const lerOpcoes = (): Promise<OpcoesAgenda> => ler(`${P}/opcoes`, esquemaOpcoesAgenda);
 export const lerGravacao = (): Promise<GravacaoAgenda> => ler(`${P}/gravacao`, esquemaGravacaoAgenda);

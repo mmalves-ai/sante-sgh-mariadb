@@ -5,7 +5,11 @@
 // relógio é o do estabelecimento (America/Sao_Paulo). Os pacientes são os do cadastro em memória (marca
 // "SINTETICO"). Nenhum nome aqui é de pessoa real; os nomes de exame são do vocabulário clínico.
 import { type EstadoOperacao, textoCurtoDoMotivo } from '@sgh/contratos';
-import { estadoDoHorarioExame } from '@sgh/dominio-agenda';
+import {
+  decidirPreCadastroDaMarcacao,
+  estadoDoHorarioExame,
+  type PreCadastroCandidato,
+} from '@sgh/dominio-agenda';
 import { type ContextoOperacao, ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
 import { horaDeMinutos, minutosDaHora, normalizarHora, relogioDoEstabelecimento } from './relogio.js';
 import type { ContextoPortaM18, LiberacaoGravacao } from './apoio-gravacao.js';
@@ -254,6 +258,8 @@ function semear(r: RelogioEstabelecimento): Estado {
 export class PortaExameMemoria implements PortaExame {
   readonly destino = 'memoria' as const;
   private readonly porHospital = new Map<string, Estado>();
+  /** 02-AGE 44: pré-cadastros pendentes por hospital (a regra do reaproveitamento roda sobre eles). */
+  private readonly preCadastrosMemoria = new WeakMap<Estado, PreCadastroCandidato[]>();
   constructor(
     private readonly catalogo: CatalogoOperacoesExame | null = null,
     private readonly lerPacientes: (
@@ -487,11 +493,38 @@ export class PortaExameMemoria implements PortaExame {
         });
         return { marcacao: m.id, agenda: a.id };
       }
-      // 02-AGE 44: sem prontuário (na memória, a pessoa fica na marcação; o banco grava o pré-cadastro).
+      // 02-AGE 44: sem prontuário. A mesma regra do domínio do banco próprio (dados mínimos conferidos na hora e
+      // reaproveitamento do pendente da mesma pessoa); a memória não tem o cadastro de pacientes, então não há
+      // candidato homônimo aqui (essa parte é provada no `.int.spec` da porta própria).
       case 'agenda.agendarExameSemProntuario': {
+        const pendentes = this.preCadastrosMemoria.get(s) ?? [];
+        const d = decidirPreCadastroDaMarcacao(
+          {
+            nome: String(e['nome']),
+            nascimento: String(e['nascimento']),
+            telefone: String(e['telefone']),
+            cadastroConferido: e['cadastroConferido'] === true,
+          },
+          r.hoje,
+          pendentes,
+        );
+        if (!d.ok) throw recusa(d.codigo, d.motivo, { campos: [d.campo] });
         const a = this.agendaM(s, e['agenda']);
         const h = this.vaga(s, a, e['data'], normalizarHora(e['hora']), r);
         this.exigirConvenio(a, e['convenio']);
+        let preCadastro: number;
+        if (d.acao === 'reaproveitar') preCadastro = d.preCadastro;
+        else {
+          preCadastro = pendentes.length + 1;
+          pendentes.push({
+            id: preCadastro,
+            nome: d.nome,
+            nascimento: String(e['nascimento']),
+            telefone: d.telefone,
+            celular: d.celular,
+          });
+          this.preCadastrosMemoria.set(s, pendentes);
+        }
         const fone = String(e['telefone']);
         const pessoa = { id: 0, nome: String(e['nome']), prontuario: 0, telefone: fone, celular: null };
         const m = this.marcar(s, a, h, pessoa, e['convenio'], null, r, login);
@@ -505,7 +538,7 @@ export class PortaExameMemoria implements PortaExame {
           retorno: false,
           canal: e['canal'],
         });
-        return { marcacao: m.id, agenda: a.id };
+        return { marcacao: m.id, agenda: a.id, preCadastro };
       }
       case 'agenda.cancelarExame': {
         const m = this.marcacaoM(s, e['marcacao']);

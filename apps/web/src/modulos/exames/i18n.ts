@@ -143,6 +143,10 @@ export const mensagensExames = {
     nascimentoFuturo: 'A data de nascimento está no futuro.',
     telefoneInvalido: 'Telefone só com dígitos, com DDD (8 a 15).',
     marcarSemProntuario: 'Marcar sem prontuário',
+    homonimo:
+      'Já existe paciente com este nome e nascimento ({n}). Marque no prontuário existente ou, se conferiu que é outra pessoa, confirme abaixo.',
+    buscarExistente: 'Buscar o paciente existente',
+    outraPessoa: 'Conferi: é outra pessoa (criar o pré-cadastro)',
   },
   marcacao: {
     titulo: 'Marcação de exame',

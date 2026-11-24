@@ -550,7 +550,7 @@ const registrarChegada = definirOperacao({
         'A chegada do agendado é registrada numa senha de recepção, não de serviços diversos: emita a senha da recepção.',
       );
     const [m] = await tx.consultarParaAtualizar(
-      `SELECT m.id, m.versao, m.paciente_id, m.chegada_em, m.situacao_marcacao_id, sm.significado,
+      `SELECT m.id, m.versao, m.paciente_id, m.pre_cadastro_id, m.chegada_em, m.situacao_marcacao_id, sm.significado,
               h.data_referencia, t.natureza
          FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id
          JOIN tipo_marcacao t ON t.id = m.tipo_marcacao_id
@@ -565,6 +565,14 @@ const registrarChegada = definirOperacao({
       throw recusa('marcacao-de-outro-dia', 'O agendamento não é de hoje.');
     const recusada = RECUSA_DA_SITUACAO[txt(m['significado'])];
     if (recusada) throw recusa(recusada[0], recusada[1]);
+    // 02-AGE 42 e 44: a marcação feita sem prontuário só tem chegada depois da conversão do pré-cadastro em paciente
+    // (a conversão passa as marcações ao paciente na mesma transação): sem isso a senha e o atendimento ficariam
+    // sem paciente e a recepção abriria um cadastro duplicado.
+    if (m['paciente_id'] === null && m['pre_cadastro_id'] !== null)
+      throw recusa(
+        'pre-cadastro-a-converter',
+        'A marcação foi feita sem prontuário: converta o pré-cadastro em paciente antes de registrar a chegada.',
+      );
     const ligada = await tx.uma(
       'SELECT id FROM senha_emitida_marcacao WHERE marcacao_horario_id = ? AND excluido_em IS NULL',
       [e.marcacao],

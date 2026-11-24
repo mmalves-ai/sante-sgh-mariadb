@@ -229,6 +229,10 @@ export const mensagensAgenda = {
     nascimentoFuturo: 'A data de nascimento está no futuro.',
     telefoneInvalido: 'Telefone só com dígitos, com DDD (8 a 15).',
     marcarSemProntuario: 'Marcar sem prontuário',
+    homonimo:
+      'Já existe paciente com este nome e nascimento ({n}). Marque no prontuário existente ou, se conferiu que é outra pessoa, confirme abaixo.',
+    buscarExistente: 'Buscar o paciente existente',
+    outraPessoa: 'Conferi: é outra pessoa (criar o pré-cadastro)',
     titulo: 'Marcação de consulta',
     texto:
       'Procure a vaga pela agenda, especialidade ou profissional, escolha o paciente e o convênio, e marque. O encaixe e a remarcação ficam no detalhe da marcação.',
