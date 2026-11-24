@@ -61,8 +61,7 @@ test.describe('financeiro: adiantamento @F3.8', () => {
     await expect(page.getByTestId('ad-mensagem')).toContainText('compensado');
     await expect(linhaCom(page, 'ad-lista', finalidade)).toContainText('500,00');
 
-    // A devolução do saldo pede o motivo e encerra o adiantamento.
-    await linhaCom(page, 'ad-lista', finalidade).getByRole('button').click();
+    // O painel segue aberto: a devolução do saldo pede o motivo e encerra o adiantamento.
     await expect(page.getByTestId('ad-devolver')).toBeDisabled();
     await page.getByTestId('ad-dev-valor').fill('500');
     await page.getByTestId('ad-dev-motivo').fill('Sobra devolvida pelo fornecedor');
