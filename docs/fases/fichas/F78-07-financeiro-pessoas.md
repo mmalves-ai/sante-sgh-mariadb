@@ -72,4 +72,4 @@ Caminhos abreviados:
 | 07-RH linha 173 | F8 | Cargos, faixas salariais e vagas; avaliação de desempenho e de experiência | `api/pessoas/cargos/` e `avaliacao/`; `cargos/porta-propria.int.spec.ts` (cargo, faixas, dependências), `avaliacao/porta-propria.int.spec.ts` (ciclo, notas, ciência); e2e `w0-06-cargos.spec.ts`, `w0-06-avaliacao.spec.ts` | **Coberta** |
 | 07-RH linha 174 | F8 | Autosserviço do colaborador (holerite, férias, ponto, solicitações) e indicadores de pessoas | `api/pessoas/autoatendimento/` (meu espaço, meu holerite, minhas férias, solicitações, efeitos próprios) e `indicadores/`; `autoatendimento/porta-propria.int.spec.ts`, `efeitos-proprios.int.spec.ts`, `infra/autoatendimento-escopo.int.spec.ts`, `indicadores/porta-indicadores-propria.int.spec.ts`; e2e `m52-6.spec.ts`, `w0-06-solicitacoes.spec.ts`, `w0-06-indicadores.spec.ts` | **Coberta** |
 
-Contagem: F7 15 cobertas, 8 parciais, 3 faltam; F8 3 cobertas, 4 parciais, 9 faltam.
+Contagem: F7 15 cobertas, 8 parciais, 3 faltam; F8 3 cobertas, 3 parciais, 10 faltam.
