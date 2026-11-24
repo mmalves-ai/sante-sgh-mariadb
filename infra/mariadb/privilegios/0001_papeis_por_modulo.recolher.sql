@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 3d8717b69503). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance 04ceeb40eaf0). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -575,7 +575,7 @@ REVOKE SELECT, INSERT, UPDATE ON profissional_fonte_pagadora FROM sgh_mod_cadast
 REVOKE SELECT, INSERT, UPDATE ON profissional_ocupacao FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON profissional_provisorio_uso FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON profissional_referencia_paciente FROM sgh_mod_cadastro;
-REVOKE SELECT ON profissional_versao FROM sgh_mod_cadastro;
+REVOKE SELECT, INSERT, UPDATE ON profissional_versao FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON programa_cuidado_paciente FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON prontuario_estabelecimento FROM sgh_mod_cadastro;
 REVOKE SELECT, INSERT, UPDATE ON protocolo_acesso_portal FROM sgh_mod_cadastro;
