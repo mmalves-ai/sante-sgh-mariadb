@@ -36,7 +36,7 @@ function sql(banco: string | null, texto: string): string {
   });
 }
 
-const evento = (ator: string | null, nome: string) => ({ ator, evento: nome, detalhe: null, estacao: 'teste' });
+const evento = (ator: string | null, nome: string) => ({ ator, evento: nome, contaAlvo: null, detalhe: null, estacao: 'teste' });
 
 describe.skipIf(SEM_BANCO)('suporte no banco próprio contra o MariaDB (plataforma de validação)', () => {
   let nucleoPlat: NucleoProprio;
