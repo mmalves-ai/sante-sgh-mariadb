@@ -136,10 +136,12 @@ export class LeiturasGestaoComplementoD {
         { teto: TETO_VERSOES },
       );
       return r.map((x) => {
-        const va = json<{ versao?: number; acao?: AcaoVersao; motivo?: string; dados?: Record<string, unknown> }>(
-          x['va'],
-          {},
-        );
+        const va = json<{
+          versao?: number;
+          acao?: AcaoVersao;
+          motivo?: string;
+          dados?: Record<string, unknown>;
+        }>(x['va'], {});
         return {
           versao: n(va.versao),
           acao: va.acao ?? 'correcao',

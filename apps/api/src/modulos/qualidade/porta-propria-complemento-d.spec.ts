@@ -100,7 +100,9 @@ describe('complemento D da porta própria da gestão (unidade)', () => {
   it('as versões vêm da trilha (versaoAnterior), da mais nova para a mais antiga', async () => {
     const va = { versao: 2, acao: 'correcao', motivo: 'Erro de digitação', dados: { titulo: 'A' } };
     const { leituras, chamadas } = falso({
-      trilha_auditoria: [{ ocorrido_em: new Date(2026, 9, 5, 9, 0, 0), login: 'ANA', va: JSON.stringify(va) }],
+      trilha_auditoria: [
+        { ocorrido_em: new Date(2026, 9, 5, 9, 0, 0), login: 'ANA', va: JSON.stringify(va) },
+      ],
     });
     expect(await leituras.versoes(C, 'nao_conformidade_qualidade', 8)).toEqual([
       {
@@ -160,7 +162,13 @@ describe('complemento D da porta própria da gestão (unidade)', () => {
       ],
     });
     const r = await leituras.protocolosGerenciados(C, '2026-10-01T00:00:00', '2026-11-01T00:00:00');
-    expect(r.versoes[0]).toMatchObject({ id: 4, versao: 2, nome: 'Sepse SINT', notas: 'Revisão', autor: 'ANA' });
+    expect(r.versoes[0]).toMatchObject({
+      id: 4,
+      versao: 2,
+      nome: 'Sepse SINT',
+      notas: 'Revisão',
+      autor: 'ANA',
+    });
     expect(r.versoes[0]?.impressao).toMatch(/^[0-9a-f]{64}$/);
     const inclusao = chamadas.find((x) => x.sql.includes('FROM inclusao_protocolo_paciente'));
     expect(inclusao?.p).toEqual([3, '2026-10-01 00:00:00', '2026-11-01 00:00:00']);
