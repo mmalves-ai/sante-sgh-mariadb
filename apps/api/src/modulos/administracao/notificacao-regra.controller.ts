@@ -4,7 +4,8 @@
 // - GET  /api/administracao/notificacao-regras/envios[?canal=&situacao=] (config.alerta.ler): histórico de envio e a
 //   medição da resposta por canal (30 dias, com as parcelas);
 // - POST /api/administracao/notificacao-regras/regras-alerta | consolidacoes | consolidar | envios/:id/situacao
-//   (config.alerta.editar): gravações pelo executor (trilha na mesma transação);
+//   (config.alerta.editar): gravações pelo executor (trilha na mesma transação); a regra global (de todos os
+//   estabelecimentos) só muda de conteúdo e situação geral pelo administrador da plataforma;
 // - GET  /api/acesso/notificacoes/meus-envios e POST /api/acesso/notificacoes/meus-envios/:id/resposta
 //   (acesso.notificacao.responder): a resposta do destinatário, sempre da própria conta.
 import {
@@ -50,9 +51,13 @@ export class NotificacaoRegraController {
   private gravacao(req: RequisicaoAutorizada, rotulo: string) {
     const s = sessaoDe(req);
     const g = contextoGravacao(s, rotulo, false);
+    // Administrador da plataforma (direto ou na sessão "como"): altera a regra global de todos os estabelecimentos.
+    const plataforma =
+      req.sgh?.sessao.usuario.ator === 'plataforma' || req.sghComo?.atorTipo === 'plataforma';
     return {
       hospital: s.hospital,
       login: s.login,
+      ...(plataforma ? { plataforma: true } : {}),
       correlacao: g.correlacao,
       chaveIdempotencia: g.chaveIdempotencia,
       ...(g.enderecoIp ? { enderecoIp: g.enderecoIp } : {}),

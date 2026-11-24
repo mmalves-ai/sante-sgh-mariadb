@@ -4,10 +4,13 @@ import {
   camposDaChave,
   conferirEdicaoRegra,
   consolidarAvisos,
+  escopoEdicaoRegra,
   fimDaJanela,
   medirRespostas,
   situacaoInicialEnvio,
+  type SituacaoEnvio,
   TENTATIVAS_MAXIMAS,
+  tentativasApos,
   transicaoEnvio,
   validarRegraAlerta,
   validarRegraConsolidacao,
@@ -131,6 +134,38 @@ describe('envio e resposta', () => {
     expect(transicaoEnvio('falhou', 'repetir', TENTATIVAS_MAXIMAS)).toEqual({
       recusa: 'tentativas-esgotadas',
     });
+  });
+  it('a falha direto do pendente conta a tentativa e o laço falhar/repetir esbarra no teto', () => {
+    let situacao: SituacaoEnvio = 'pendente';
+    let tentativas = 0;
+    let recusa: string | null = null;
+    for (let i = 0; i < 20 && !recusa; i++) {
+      const f = transicaoEnvio(situacao, 'falhar', tentativas);
+      if ('recusa' in f) throw new Error('falhar recusado');
+      tentativas = tentativasApos(situacao, 'falhar', tentativas);
+      situacao = f.nova;
+      const r = transicaoEnvio(situacao, 'repetir', tentativas);
+      if ('recusa' in r) recusa = r.recusa;
+      else situacao = r.nova;
+    }
+    expect(recusa).toBe('tentativas-esgotadas');
+    expect(tentativas).toBe(TENTATIVAS_MAXIMAS);
+    // Falha depois de "enviado" não conta de novo; envio e captura contam.
+    expect(tentativasApos('enviado', 'falhar', 2)).toBe(2);
+    expect(tentativasApos('pendente', 'enviar', 2)).toBe(3);
+    expect(tentativasApos('pendente', 'capturar', 0)).toBe(1);
+    expect(tentativasApos('falhou', 'repetir', 3)).toBe(3);
+    expect(tentativasApos('enviado', 'entregar', 1)).toBe(1);
+  });
+  it('regra global: o estabelecimento só grava o próprio registro; a plataforma altera a regra', () => {
+    const base = { global: true, plataforma: false, editavel: true, mudouConteudo: false };
+    expect(escopoEdicaoRegra(base)).toEqual({ modo: 'estabelecimento' });
+    expect(escopoEdicaoRegra({ ...base, mudouConteudo: true })).toEqual({ recusa: 'regra-global' });
+    expect(escopoEdicaoRegra({ ...base, plataforma: true, mudouConteudo: true })).toEqual({ modo: 'regra' });
+    expect(escopoEdicaoRegra({ ...base, plataforma: true, editavel: false, mudouConteudo: true })).toEqual({
+      recusa: 'regra-do-produto',
+    });
+    expect(escopoEdicaoRegra({ ...base, global: false, mudouConteudo: true })).toEqual({ modo: 'regra' });
   });
   it('situação inicial: interno entregue, externo fora de produção capturado', () => {
     expect(situacaoInicialEnvio(false, false)).toBe('entregue');

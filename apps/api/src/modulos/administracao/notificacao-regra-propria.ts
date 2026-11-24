@@ -3,10 +3,14 @@
 //
 // - notificacao.regra_alerta: cria ou altera a regra de alerta (regra_alerta), com uma linha de versão a cada
 //   gravação (regra_alerta_versao, retrato e motivo) e os destinatários (regra_alerta_destinatario: o que sai da lista
-//   fica inativo, nunca apagado). Regra do produto (editavel = falso) só ativa ou desativa.
+//   fica inativo, nunca apagado). Regra do produto (editavel = falso) só ativa ou desativa. Regra global (sem
+//   estabelecimento): conteúdo e situação geral só pela administração da plataforma; o estabelecimento ativa ou
+//   desativa só para si (regra_alerta_estabelecimento) e escolhe os próprios destinatários (estabelecimento_id do
+//   destinatário), sem tocar nos dos outros estabelecimentos.
 // - notificacao.consolidacao: cria ou altera a regra de consolidação (regra_consolidacao_notificacao).
 // - notificacao.consolidar: junta os avisos da central (notificacao_usuario) das regras com consolidação num envio
-//   por canal e janela (envio_notificacao, com os ids reunidos em avisos_consolidados). Canal interno já entrega;
+//   por canal e janela (envio_notificacao, com os ids reunidos em avisos_consolidados e um item por aviso em
+//   envio_notificacao_aviso, único por canal: o "não reenviar" é busca por índice). Canal interno já entrega;
 //   canal externo fora de produção fica "capturado" (nada sai); em produção fica pendente para o despachante.
 // - notificacao.envio_situacao: o resultado da entrega por canal (enviado, entregue, falha, nova tentativa,
 //   cancelamento), pela transição do domínio.
@@ -16,8 +20,8 @@ import {
   type AvisoPendente,
   CAMPOS_AGRUPAMENTO,
   camposDaChave,
-  conferirEdicaoRegra,
   consolidarAvisos,
+  escopoEdicaoRegra,
   EVENTOS_ENVIO,
   type EventoEnvio,
   FORMATOS_CONSOLIDACAO,
@@ -27,6 +31,7 @@ import {
   type RecusaNotificacao,
   type SituacaoEnvio,
   situacaoInicialEnvio,
+  tentativasApos,
   transicaoEnvio,
   validarRegraAlerta,
   validarRegraConsolidacao,
@@ -144,6 +149,8 @@ export interface ContextoNotificacao {
   readonly login: string;
 }
 export type ContextoGravacaoNotificacao = ContextoNotificacao & {
+  /** Sessão do administrador da plataforma: altera a regra global (conteúdo e situação geral). */
+  readonly plataforma?: boolean;
   readonly correlacao: string;
   readonly chaveIdempotencia: string;
   readonly enderecoIp?: string;
@@ -252,9 +259,31 @@ export class NotificacaoRegraPropria {
 
   private readonly opRegra = definirOperacao<EntradaRegraAlerta, { regra: number; numeroVersao: number }>({
     nome: 'notificacao.regra_alerta',
-    tabelas: ['regra_alerta', 'regra_alerta_versao', 'regra_alerta_destinatario'],
+    tabelas: [
+      'regra_alerta',
+      'regra_alerta_versao',
+      'regra_alerta_destinatario',
+      'regra_alerta_estabelecimento',
+    ],
     entrada: esquemaRegraAlerta as unknown as z.ZodType<EntradaRegraAlerta>,
-    gravar: (tx, e, ctx) => this.gravarRegra(tx, e, ctx),
+    gravar: (tx, e, ctx) => this.gravarRegra(tx, e, ctx, false),
+    alvo: (_e, r) => ({ tabela: 'regra_alerta', id: r.regra }),
+  });
+
+  // Mesma gravação pela administração da plataforma (altera a regra global de todos os estabelecimentos).
+  private readonly opRegraPlataforma = definirOperacao<
+    EntradaRegraAlerta,
+    { regra: number; numeroVersao: number }
+  >({
+    nome: 'notificacao.regra_alerta_plataforma',
+    tabelas: [
+      'regra_alerta',
+      'regra_alerta_versao',
+      'regra_alerta_destinatario',
+      'regra_alerta_estabelecimento',
+    ],
+    entrada: esquemaRegraAlerta as unknown as z.ZodType<EntradaRegraAlerta>,
+    gravar: (tx, e, ctx) => this.gravarRegra(tx, e, ctx, true),
     alvo: (_e, r) => ({ tabela: 'regra_alerta', id: r.regra }),
   });
 
@@ -271,7 +300,7 @@ export class NotificacaoRegraPropria {
     { canal: number; envios: number; avisos: number; aguardando: number; retidos: number }
   >({
     nome: 'notificacao.consolidar',
-    tabelas: ['envio_notificacao'],
+    tabelas: ['envio_notificacao', 'envio_notificacao_aviso'],
     entrada: esquemaConsolidar,
     gravar: (tx, e, ctx) => this.consolidar(tx, e.canal, ctx),
     alvo: (_e, r) => ({ tabela: 'canal_notificacao', id: r.canal }),
@@ -348,13 +377,14 @@ export class NotificacaoRegraPropria {
   painel(c: ContextoNotificacao): Promise<PainelNotificacao> {
     return this.ler(c, async (l, est) => {
       const rs = await l.consultar(
-        `SELECT r.id, r.versao, r.codigo, r.nome, ca.codigo AS cenario, r.mensagem, r.gravidade, r.repeticao, r.ativo,
-                r.editavel, rc.codigo AS consolidacao, r.numero_versao_vigente, r.vigencia_inicio, r.vigencia_fim,
+        `SELECT r.id, r.versao, r.codigo, r.nome, ca.codigo AS cenario, r.mensagem, r.gravidade, r.repeticao,
+                (r.ativo AND COALESCE(rae.ativo, TRUE)) AS ativo, r.editavel, rc.codigo AS consolidacao, r.numero_versao_vigente, r.vigencia_inicio, r.vigencia_fim,
                 r.notifica_tela, r.notifica_email, r.notifica_sms, r.notifica_aplicativo
            FROM regra_alerta r JOIN cenario_alerta ca ON ca.id = r.cenario_alerta_id
            LEFT JOIN regra_consolidacao_notificacao rc ON rc.id = r.regra_consolidacao_notificacao_id
+           LEFT JOIN regra_alerta_estabelecimento rae ON rae.regra_alerta_id = r.id AND rae.estabelecimento_id = ?
           WHERE r.estabelecimento_id IS NULL OR r.estabelecimento_id = ? ORDER BY r.nome, r.id`,
-        [est],
+        [est, est],
         { teto: TETO },
       );
       const ds = rs.length
@@ -363,8 +393,9 @@ export class NotificacaoRegraPropria {
                FROM regra_alerta_destinatario d
                LEFT JOIN usuario u ON u.id = d.usuario_id LEFT JOIN perfil_acesso p ON p.id = d.perfil_acesso_id
               WHERE d.regra_alerta_id IN (${rs.map(() => '?').join(', ')}) AND d.ativo AND d.excluido_em IS NULL
+                AND (d.estabelecimento_id IS NULL OR d.estabelecimento_id = ?)
               ORDER BY d.regra_alerta_id, d.id`,
-            rs.map((x) => num(x['id'])),
+            [...rs.map((x) => num(x['id'])), est],
             { teto: TETO },
           )
         : [];
@@ -510,7 +541,11 @@ export class NotificacaoRegraPropria {
   }
 
   gravarRegraAlerta(c: ContextoGravacaoNotificacao, entrada: unknown) {
-    return this.exec<unknown, { regra: number; numeroVersao: number }>(this.opRegra as never, c, entrada);
+    return this.exec<unknown, { regra: number; numeroVersao: number }>(
+      (c.plataforma ? this.opRegraPlataforma : this.opRegra) as never,
+      c,
+      entrada,
+    );
   }
   gravarRegraConsolidacao(c: ContextoGravacaoNotificacao, entrada: unknown) {
     return this.exec<unknown, { consolidacao: number }>(this.opConsolidacao as never, c, entrada);
@@ -533,7 +568,12 @@ export class NotificacaoRegraPropria {
     );
   }
 
-  private async gravarRegra(tx: TxOperacao, e: EntradaRegraAlerta, ctx: ContextoOperacao) {
+  private async gravarRegra(
+    tx: TxOperacao,
+    e: EntradaRegraAlerta,
+    ctx: ContextoOperacao,
+    plataforma: boolean,
+  ) {
     const est = ctx.estabelecimento;
     const cen = await tx.uma('SELECT id FROM cenario_alerta WHERE codigo = ? AND ativo', [e.cenario]);
     if (!cen) throw recusa('cenario-inexistente', 'Cenário de alerta inexistente ou inativo.');
@@ -614,14 +654,53 @@ export class NotificacaoRegraPropria {
         if (typeof val === 'number') return numOuNull(a) !== val;
         return (a === null || a === undefined ? null : String(a)) !== val;
       });
-      const r = conferirEdicaoRegra(bool(atual['editavel']), mudou);
-      if (r) throw recusar(r);
+      const global = atual['estabelecimento_id'] === null || atual['estabelecimento_id'] === undefined;
+      const escopo = escopoEdicaoRegra({
+        global,
+        plataforma,
+        editavel: bool(atual['editavel']),
+        mudouConteudo: mudou,
+      });
+      if ('recusa' in escopo) throw recusar(escopo.recusa);
       regra = e.id;
+      if (escopo.modo === 'estabelecimento') {
+        // Regra global vista de um estabelecimento: só o registro dele (situação e destinatários).
+        numeroVersao = num(atual['numero_versao_vigente']);
+        const [proprio] = await tx.consultarParaAtualizar(
+          'SELECT id, versao, ativo FROM regra_alerta_estabelecimento WHERE regra_alerta_id = ? AND estabelecimento_id = ?',
+          [regra, est],
+          { teto: 1 },
+        );
+        if (proprio) {
+          if (bool(proprio['ativo']) !== e.ativo)
+            await tx.alterar('regra_alerta_estabelecimento', num(proprio['id']), num(proprio['versao']), {
+              ativo: e.ativo,
+            });
+        } else
+          await tx.incluir('regra_alerta_estabelecimento', {
+            regra_alerta_id: regra,
+            estabelecimento_id: est,
+            ativo: e.ativo,
+          });
+        await this.reconciliarDestinatarios(tx, regra, est, desejados);
+        return { regra, numeroVersao };
+      }
       numeroVersao = num(atual['numero_versao_vigente']) + 1;
       const valores = bool(atual['editavel'])
         ? { ...conteudo, ativo: e.ativo, numero_versao_vigente: numeroVersao }
         : { ativo: e.ativo, numero_versao_vigente: numeroVersao };
       await tx.alterar('regra_alerta', regra, e.versao, valores);
+      await this.gravarVersaoRegra(
+        tx,
+        regra,
+        numeroVersao,
+        { ...conteudo, ativo: e.ativo },
+        desejados,
+        e,
+        ctx,
+      );
+      await this.reconciliarDestinatarios(tx, regra, global ? null : est, desejados);
+      return { regra, numeroVersao };
     } else {
       const dup = await tx.uma('SELECT id FROM regra_alerta WHERE codigo = ?', [e.codigo]);
       if (dup) throw recusa('codigo-duplicado', 'Já existe regra de alerta com este código.');
@@ -634,22 +713,61 @@ export class NotificacaoRegraPropria {
         numero_versao_vigente: 1,
       });
     }
+    await this.gravarVersaoRegra(tx, regra, numeroVersao, { ...conteudo, ativo: e.ativo }, desejados, e, ctx);
+    await this.reconciliarDestinatarios(tx, regra, est, desejados);
+    return { regra, numeroVersao };
+  }
+
+  private async gravarVersaoRegra(
+    tx: TxOperacao,
+    regra: number,
+    numeroVersao: number,
+    dados: Record<string, unknown>,
+    desejados: readonly { tipo: string; destino: number }[],
+    e: EntradaRegraAlerta,
+    ctx: ContextoOperacao,
+  ) {
     const agora = this.agora();
     await tx.incluir('regra_alerta_versao', {
       regra_alerta_id: regra,
       operacao: numeroVersao === 1 ? 'inclusao' : 'alteracao',
-      dados: JSON.stringify({ ...conteudo, ativo: e.ativo, destinatarios: desejados }),
+      dados: JSON.stringify({ ...dados, destinatarios: desejados }),
       ocorrido_em: agora,
       usuario_id: ctx.usuario,
       numero_versao: numeroVersao,
       vigente_desde: agora,
       motivo_alteracao: e.motivo ?? null,
     });
-    // Destinatários: novos entram, os que saem ficam inativos (nunca apagados), os que voltam são reativados.
+  }
+
+  /**
+   * Destinatários do escopo (o estabelecimento, ou nulo = todos, pela plataforma): novos entram, os que saem ficam
+   * inativos (nunca apagados), os que voltam são reativados. Os de outro escopo não são tocados.
+   */
+  private async reconciliarDestinatarios(
+    tx: TxOperacao,
+    regra: number,
+    escopo: number | null,
+    todosDesejados: readonly { tipo: 'usuario' | 'perfil'; destino: number }[],
+  ) {
+    // No escopo do estabelecimento, quem já recebe pela escolha da plataforma (escopo nulo) não é duplicado.
+    const globais =
+      escopo === null
+        ? []
+        : await tx.consultar(
+            `SELECT tipo_destinatario, destino_id FROM regra_alerta_destinatario
+              WHERE regra_alerta_id = ? AND estabelecimento_id IS NULL AND ativo AND excluido_em IS NULL`,
+            [regra],
+            { teto: TETO },
+          );
+    const desejados = todosDesejados.filter(
+      (d) => !globais.some((g) => g['tipo_destinatario'] === d.tipo && num(g['destino_id']) === d.destino),
+    );
     const existentes = await tx.consultarParaAtualizar(
       `SELECT id, versao, tipo_destinatario, destino_id, ativo FROM regra_alerta_destinatario
-        WHERE regra_alerta_id = ? AND excluido_em IS NULL AND tipo_destinatario IN ('usuario','perfil')`,
-      [regra],
+        WHERE regra_alerta_id = ? AND estabelecimento_id <=> ? AND excluido_em IS NULL
+          AND tipo_destinatario IN ('usuario','perfil')`,
+      [regra, escopo],
       { teto: TETO },
     );
     for (const x of existentes) {
@@ -664,12 +782,12 @@ export class NotificacaoRegraPropria {
         continue;
       await tx.incluir('regra_alerta_destinatario', {
         regra_alerta_id: regra,
+        estabelecimento_id: escopo,
         tipo_destinatario: d.tipo,
         ...(d.tipo === 'usuario' ? { usuario_id: d.destino } : { perfil_acesso_id: d.destino }),
         ativo: true,
       });
     }
-    return { regra, numeroVersao };
   }
 
   private async gravarConsolidacao(tx: TxOperacao, e: EntradaConsolidacao, ctx: ContextoOperacao) {
@@ -730,10 +848,12 @@ export class NotificacaoRegraPropria {
       `SELECT r.id AS regra, rc.id AS rc, rc.janela_minutos, rc.chave_agrupamento, rc.limite_por_usuario,
               rc.periodo_limite_minutos, TIME_FORMAT(rc.horario_resumo, '%H:%i') AS horario
          FROM regra_alerta r JOIN regra_consolidacao_notificacao rc ON rc.id = r.regra_consolidacao_notificacao_id
-        WHERE r.ativo AND rc.ativo AND r.${flag} AND (r.estabelecimento_id IS NULL OR r.estabelecimento_id = ?)
+         LEFT JOIN regra_alerta_estabelecimento rae ON rae.regra_alerta_id = r.id AND rae.estabelecimento_id = ?
+        WHERE r.ativo AND COALESCE(rae.ativo, TRUE) AND rc.ativo AND r.${flag}
+          AND (r.estabelecimento_id IS NULL OR r.estabelecimento_id = ?)
           AND (rc.estabelecimento_id IS NULL OR rc.estabelecimento_id = ?)
         ORDER BY rc.id, r.id`,
-      [est, est],
+      [est, est, est],
       { teto: TETO },
     );
     const porConsolidacao = new Map<number, { linha: Linha; regras: number[] }>();
@@ -755,8 +875,8 @@ export class NotificacaoRegraPropria {
            FROM notificacao_usuario n
           WHERE n.estabelecimento_id = ? AND n.regra_alerta_id IN (${rs.map(() => '?').join(', ')})
             AND n.excluido_em IS NULL AND n.resolvida = FALSE
-            AND NOT EXISTS (SELECT 1 FROM envio_notificacao en WHERE en.canal_notificacao_id = ?
-                  AND JSON_CONTAINS(en.avisos_consolidados, CAST(n.id AS CHAR)))
+            AND NOT EXISTS (SELECT 1 FROM envio_notificacao_aviso ea
+                  WHERE ea.canal_notificacao_id = ? AND ea.notificacao_usuario_id = n.id)
           ORDER BY n.gerada_em, n.id`,
         [est, ...rs, canalId],
         { teto: TETO },
@@ -767,9 +887,10 @@ export class NotificacaoRegraPropria {
         const desde = new Date(agora.getTime() - num(linha['periodo_limite_minutos']) * 60_000);
         for (const x of await tx.consultar(
           `SELECT usuario_id, COUNT(*) AS n FROM envio_notificacao
-            WHERE canal_notificacao_id = ? AND regra_consolidacao_notificacao_id = ? AND ocorrido_em >= ?
+            WHERE estabelecimento_id = ? AND canal_notificacao_id = ? AND regra_consolidacao_notificacao_id = ?
+              AND ocorrido_em >= ?
             GROUP BY usuario_id`,
-          [canalId, rcId, desde],
+          [est, canalId, rcId, desde],
           { teto: TETO },
         ))
           recentes.set(num(x['usuario_id']), num(x['n']));
@@ -799,22 +920,27 @@ export class NotificacaoRegraPropria {
       retidos += r.retidos.length;
       for (const e of r.envios) {
         avisosEnviados += e.avisos.length;
-        ids.push(
-          await tx.incluir('envio_notificacao', {
-            estabelecimento_id: est,
-            usuario_id: e.usuario,
+        const envio = await tx.incluir('envio_notificacao', {
+          estabelecimento_id: est,
+          usuario_id: e.usuario,
+          canal_notificacao_id: canalId,
+          notificacao_usuario_id: e.avisos.length === 1 ? e.avisos[0] : null,
+          regra_consolidacao_notificacao_id: rcId,
+          quantidade_avisos: e.avisos.length,
+          avisos_consolidados: JSON.stringify(e.avisos),
+          situacao,
+          tentativas: situacao === 'pendente' ? 0 : 1,
+          enviado_em: situacao === 'pendente' ? null : agora,
+          entregue_em: situacao === 'entregue' ? agora : null,
+          ocorrido_em: agora,
+        });
+        for (const aviso of e.avisos)
+          await tx.incluir('envio_notificacao_aviso', {
+            envio_notificacao_id: envio,
+            notificacao_usuario_id: aviso,
             canal_notificacao_id: canalId,
-            notificacao_usuario_id: e.avisos.length === 1 ? e.avisos[0] : null,
-            regra_consolidacao_notificacao_id: rcId,
-            quantidade_avisos: e.avisos.length,
-            avisos_consolidados: JSON.stringify(e.avisos),
-            situacao,
-            tentativas: situacao === 'pendente' ? 0 : 1,
-            enviado_em: situacao === 'pendente' ? null : agora,
-            entregue_em: situacao === 'entregue' ? agora : null,
-            ocorrido_em: agora,
-          }),
-        );
+          });
+        ids.push(envio);
       }
     }
     return { canal: canalId, envios: ids.length, avisos: avisosEnviados, aguardando, retidos };
@@ -840,10 +966,9 @@ export class NotificacaoRegraPropria {
     if ('recusa' in t) throw recusar(t.recusa);
     const agora = this.agora();
     const valores: Record<string, unknown> = { situacao: t.nova };
-    if (e.evento === 'enviar' || e.evento === 'capturar') {
-      valores['enviado_em'] = agora;
-      valores['tentativas'] = num(x['tentativas']) + 1;
-    }
+    const tentativas = tentativasApos(String(x['situacao']) as SituacaoEnvio, e.evento, num(x['tentativas']));
+    if (tentativas !== num(x['tentativas'])) valores['tentativas'] = tentativas;
+    if (e.evento === 'enviar' || e.evento === 'capturar') valores['enviado_em'] = agora;
     if (e.evento === 'entregar') valores['entregue_em'] = agora;
     if (e.evento === 'falhar') valores['erro'] = e.erro ?? 'Falha na entrega sem detalhe.';
     await tx.alterar('envio_notificacao', e.envio, e.versao, valores);

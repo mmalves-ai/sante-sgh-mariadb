@@ -25,6 +25,7 @@ export type RecusaNotificacao =
   | 'intervalo-sem-minutos'
   | 'regra-sem-destinatario'
   | 'regra-do-produto'
+  | 'regra-global'
   | 'transicao-invalida'
   | 'tentativas-esgotadas';
 
@@ -42,6 +43,8 @@ export const MENSAGEM_NOTIFICACAO: Readonly<Record<RecusaNotificacao, string>> =
   'intervalo-sem-minutos': 'A repetição por intervalo precisa dos minutos do intervalo.',
   'regra-sem-destinatario': 'A regra ativa precisa de ao menos um destinatário.',
   'regra-do-produto': 'Regra do produto: só se ativa ou desativa, sem alterar o conteúdo.',
+  'regra-global':
+    'Esta regra vale para todos os estabelecimentos: o conteúdo só muda pela administração da plataforma; aqui se ativa, desativa ou escolhe os destinatários deste estabelecimento.',
   'transicao-invalida': 'Este envio não pode passar para a situação pedida.',
   'tentativas-esgotadas': 'O envio já passou do número máximo de tentativas.',
 };
@@ -131,6 +134,23 @@ export function validarRegraAlerta(r: RegraAlertaEntrada): RecusaNotificacao | n
  */
 export function conferirEdicaoRegra(editavel: boolean, mudouConteudo: boolean): RecusaNotificacao | null {
   return !editavel && mudouConteudo ? 'regra-do-produto' : null;
+}
+
+/**
+ * Escopo da gravação de uma regra existente. A regra global (sem estabelecimento: as regras do produto e as do
+ * cliente inteiro) só muda de conteúdo e de situação geral pela administração da plataforma; o estabelecimento grava
+ * só o próprio registro (ativa ou desativa para si e escolhe os próprios destinatários), sem afetar os demais.
+ */
+export function escopoEdicaoRegra(p: {
+  readonly global: boolean;
+  readonly plataforma: boolean;
+  readonly editavel: boolean;
+  readonly mudouConteudo: boolean;
+}): { readonly modo: 'regra' | 'estabelecimento' } | { readonly recusa: RecusaNotificacao } {
+  if (p.global && !p.plataforma)
+    return p.mudouConteudo ? { recusa: 'regra-global' } : { modo: 'estabelecimento' };
+  const r = conferirEdicaoRegra(p.editavel, p.mudouConteudo);
+  return r ? { recusa: r } : { modo: 'regra' };
 }
 
 // ── Consolidação dos avisos ────────────────────────────────────────────────────────────────────
@@ -301,6 +321,17 @@ export function transicaoEnvio(
   if (!nova) return { recusa: 'transicao-invalida' };
   if (evento === 'repetir' && tentativas >= TENTATIVAS_MAXIMAS) return { recusa: 'tentativas-esgotadas' };
   return { nova };
+}
+
+/**
+ * Tentativas depois do evento. Toda tentativa conta uma vez: no envio ou na captura, ou na falha registrada direto do
+ * pendente (a tentativa que falhou sem ter sido marcada como enviada). A falha depois de "enviado" já foi contada.
+ * Assim o laço pendente → falhou → repetir sempre avança e esbarra em TENTATIVAS_MAXIMAS.
+ */
+export function tentativasApos(atual: SituacaoEnvio, evento: EventoEnvio, tentativas: number): number {
+  if (evento === 'enviar' || evento === 'capturar') return tentativas + 1;
+  if (evento === 'falhar' && atual === 'pendente') return tentativas + 1;
+  return tentativas;
 }
 
 /** Situação inicial do envio: canal interno já entrega; externo fora de produção fica capturado (nada sai). */

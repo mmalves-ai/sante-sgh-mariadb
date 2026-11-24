@@ -6,7 +6,9 @@
 //   janela aberta aguardando, respeita o limite por usuário e não reenvia o que já foi consolidado;
 // - o canal externo fora de produção fica capturado; o resultado da entrega segue as transições do domínio;
 // - a resposta do destinatário marca o envio lido e os avisos lidos e resolvidos; outra conta é recusada;
-// - o histórico mede a resposta por canal. Massa sintética (prefixo L76N).
+// - o histórico mede a resposta por canal;
+// - a regra global (sem estabelecimento) com dois estabelecimentos: cada um ativa ou desativa só para si e escolhe só
+//   os próprios destinatários; o conteúdo só muda pela plataforma. Massa sintética (prefixo L76N).
 import { randomUUID } from 'node:crypto';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,9 +36,9 @@ describe.skipIf(SEM_BANCO)('notificação por regra no banco próprio', () => {
   let agora = min(0);
   let porta: NotificacaoRegraPropria;
   let portaProducao: NotificacaoRegraPropria;
-  const ids = { est: 0, a: 0, b: 0, cenario: 0, central: 0, email: 0 };
-  const ctx = (login = `${P}.A`) => ({
-    hospital: P,
+  const ids = { est: 0, est2: 0, a: 0, b: 0, cenario: 0, central: 0, email: 0 };
+  const ctx = (login = `${P}.A`, hospital = P) => ({
+    hospital,
     login,
     correlacao: 'teste-l76n',
     chaveIdempotencia: `tl76n-${randomUUID()}`,
@@ -49,12 +51,17 @@ describe.skipIf(SEM_BANCO)('notificação por regra no banco próprio', () => {
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-l76n' }, async (e) => {
       if (ids.est) {
+        await e.executar(
+          'DELETE ea FROM envio_notificacao_aviso ea JOIN envio_notificacao en ON en.id = ea.envio_notificacao_id WHERE en.estabelecimento_id = ?',
+          [ids.est],
+        );
         await e.executar('DELETE FROM envio_notificacao WHERE estabelecimento_id = ?', [ids.est]);
         await e.executar('DELETE FROM notificacao_usuario WHERE estabelecimento_id = ?', [ids.est]);
       }
       const regras = `SELECT id FROM regra_alerta WHERE codigo LIKE '${P}%'`;
       await e.executar(`DELETE FROM regra_alerta_destinatario WHERE regra_alerta_id IN (${regras})`, []);
       await e.executar(`DELETE FROM regra_alerta_versao WHERE regra_alerta_id IN (${regras})`, []);
+      await e.executar(`DELETE FROM regra_alerta_estabelecimento WHERE regra_alerta_id IN (${regras})`, []);
       await e.executar(`DELETE FROM regra_alerta WHERE codigo LIKE '${P}%'`, []);
       await e.executar(`DELETE FROM regra_consolidacao_notificacao WHERE codigo LIKE '${P}%'`, []);
       await limparTrilhaDaMassa(e, { codigos: [P] });
@@ -85,6 +92,12 @@ describe.skipIf(SEM_BANCO)('notificação por regra no banco próprio', () => {
         [P],
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [P, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, hoje],
+      );
+      ids.est2 = await g(
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [`${P}2`],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}2`, `ESTAB ${P}2 SINTETICO`, `ESTAB ${P}2 SINTETICO`, hoje],
       );
       for (const k of ['a', 'b'] as const) {
         ids[k] = await g(
@@ -276,6 +289,14 @@ describe.skipIf(SEM_BANCO)('notificação por regra no banco próprio', () => {
     ]);
     expect(Number(envios[1]!['notificacao_usuario_id'])).toBe(b1);
     envioA = Number(envios[0]!['id']);
+    // Um item por aviso, ligado ao envio e ao canal (o "não reenviar" é por este índice).
+    expect(
+      await um(
+        `SELECT COUNT(*) AS n FROM envio_notificacao_aviso ea JOIN envio_notificacao en ON en.id = ea.envio_notificacao_id
+          WHERE en.estabelecimento_id = ? AND ea.canal_notificacao_id = ?`,
+        [ids.est, ids.central],
+      ),
+    ).toMatchObject({ n: 4 });
 
     // Rodar de novo não reenvia; a janela de t=30 fecha em t=45 e passa a sair.
     agora = min(41);
@@ -304,7 +325,7 @@ describe.skipIf(SEM_BANCO)('notificação por regra no banco próprio', () => {
     );
     expect(pend).toMatchObject({ tentativas: 0 });
 
-    // Resultado da entrega: falha, nova tentativa, envio; "ler" não é do despachante.
+    // Resultado da entrega: falha (conta a tentativa), nova tentativa, envio (2ª tentativa); "ler" não é do despachante.
     const idP = Number(pend!['id']);
     await porta.registrarSituacao(ctx(), {
       envio: idP,
@@ -335,7 +356,7 @@ describe.skipIf(SEM_BANCO)('notificação por regra no banco próprio', () => {
       await um('SELECT situacao, tentativas, erro FROM envio_notificacao WHERE id = ?', [idP]),
     ).toMatchObject({
       situacao: 'enviado',
-      tentativas: 1,
+      tentativas: 2,
       erro: 'SINTETICO',
     });
   });
@@ -389,5 +410,98 @@ describe.skipIf(SEM_BANCO)('notificação por regra no banco próprio', () => {
       consolidacao: `${P}J`,
       numeroVersao: 5,
     });
+  });
+  it('regra global com dois estabelecimentos: cada um só o próprio registro; o conteúdo só pela plataforma', async () => {
+    const g = await porta.gravarRegraAlerta(ctx(), {
+      ...regraBase,
+      codigo: `${P}G`,
+      consolidacao: null,
+      destinatarios: [{ tipo: 'usuario' as const, codigo: `${P}.A` }],
+    });
+    const rg = g.resultado.regra;
+    // Torna global (como vêm as regras do produto e as do cliente inteiro); o destinatário de A fica no escopo de A.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l76n' }, async (e) => {
+      await e.executar('UPDATE regra_alerta SET estabelecimento_id = NULL WHERE id = ?', [rg]);
+    });
+    const ver = async () =>
+      Number((await um('SELECT versao FROM regra_alerta WHERE id = ?', [rg]))!['versao']);
+    const base = {
+      ...regraBase,
+      codigo: `${P}G`,
+      consolidacao: null,
+      id: rg,
+      destinatarios: [{ tipo: 'usuario' as const, codigo: `${P}.A` }],
+    };
+    const v0 = await ver();
+    // O estabelecimento A não muda o conteúdo da regra global.
+    expect(
+      await codigo(porta.gravarRegraAlerta(ctx(), { ...base, versao: v0, mensagem: 'MUDADA POR A' })),
+    ).toBe('regra-global');
+    // A desativa só para si: a regra continua ativa e intacta.
+    await porta.gravarRegraAlerta(ctx(), { ...base, versao: v0, ativo: false });
+    expect(await um('SELECT ativo, mensagem, versao FROM regra_alerta WHERE id = ?', [rg])).toMatchObject({
+      ativo: 1,
+      mensagem: 'MENSAGEM SINTETICA',
+      versao: v0,
+    });
+    expect(
+      await todos(
+        'SELECT estabelecimento_id, ativo FROM regra_alerta_estabelecimento WHERE regra_alerta_id = ?',
+        [rg],
+      ),
+    ).toEqual([{ estabelecimento_id: ids.est, ativo: 0 }]);
+    // B escolhe só o próprio destinatário: o de A continua ativo, no escopo de A.
+    await porta.gravarRegraAlerta(ctx(`${P}.B`, `${P}2`), {
+      ...base,
+      versao: v0,
+      destinatarios: [{ tipo: 'usuario' as const, codigo: `${P}.B` }],
+    });
+    const ds = await todos(
+      'SELECT estabelecimento_id, usuario_id, ativo FROM regra_alerta_destinatario WHERE regra_alerta_id = ? ORDER BY usuario_id',
+      [rg],
+    );
+    expect(
+      ds.map((d) => [Number(d['estabelecimento_id']), Number(d['usuario_id']), Number(d['ativo'])]),
+    ).toEqual([
+      [ids.est, ids.a, 1],
+      [ids.est2, ids.b, 1],
+    ]);
+    // Cada painel vê a própria situação e só os próprios destinatários.
+    const pa = (await porta.painel(ctx())).regras.find((x) => x.id === rg);
+    const pb = (await porta.painel(ctx(`${P}.B`, `${P}2`))).regras.find((x) => x.id === rg);
+    expect(pa).toMatchObject({ ativo: false });
+    expect(pb).toMatchObject({ ativo: true });
+    expect(JSON.stringify(pa?.destinatarios)).toContain(`${P}.A`);
+    expect(JSON.stringify(pa?.destinatarios)).not.toContain(`${P}.B`);
+    expect(JSON.stringify(pb?.destinatarios)).not.toContain(`${P}.A`);
+    // A plataforma altera o conteúdo (nova versão).
+    const r = await porta
+      .gravarRegraAlerta(
+        { ...ctx(), plataforma: true },
+        { ...base, versao: v0, mensagem: 'MUDADA PELA PLATAFORMA', destinatarios: [], ativo: true },
+      )
+      .catch((x: unknown) => x);
+    expect(r).toBeInstanceOf(ErroOperacao); // sem destinatário próprio nem global: recusa do domínio
+    const r2 = await porta.gravarRegraAlerta(
+      { ...ctx(), plataforma: true },
+      { ...base, versao: v0, mensagem: 'MUDADA PELA PLATAFORMA' },
+    );
+    expect(r2.resultado.numeroVersao).toBe(2);
+    expect(await um('SELECT mensagem FROM regra_alerta WHERE id = ?', [rg])).toMatchObject({
+      mensagem: 'MUDADA PELA PLATAFORMA',
+    });
+    // O destinatário da plataforma fica no escopo de todos; os dos estabelecimentos não mudam.
+    expect(
+      await um(
+        'SELECT COUNT(*) AS n FROM regra_alerta_destinatario WHERE regra_alerta_id = ? AND estabelecimento_id IS NULL AND ativo',
+        [rg],
+      ),
+    ).toMatchObject({ n: 1 });
+    expect(
+      await um(
+        'SELECT COUNT(*) AS n FROM regra_alerta_destinatario WHERE regra_alerta_id = ? AND estabelecimento_id IS NOT NULL AND ativo',
+        [rg],
+      ),
+    ).toMatchObject({ n: 2 });
   });
 });
