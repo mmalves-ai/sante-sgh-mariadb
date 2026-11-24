@@ -203,7 +203,8 @@ describe.skipIf(SEM_BANCO)('gestão do financeiro: reclassificação e permissõ
         WHERE entidade = 'titulo_pagar' AND entidade_id = ? AND estabelecimento_id = ? ORDER BY id DESC LIMIT 1`,
       [titulo, m.est],
     );
-    const r = JSON.parse(String(rat?.['r'])) as {
+    const bruto = rat?.['r'];
+    const r = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as {
       antes: { centroCusto: number; percentual: number; valor: number }[];
       depois: { centroCusto: number; percentual: number; valor: number }[];
       linhasSubstituidas: number[];

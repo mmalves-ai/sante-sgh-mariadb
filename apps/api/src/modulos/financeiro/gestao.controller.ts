@@ -76,7 +76,7 @@ export class GestaoFinanceiroController {
     const est = s.porta.estabelecimento;
     if (!this.nucleo) throw new ErroProblema('indisponivel', 503, 'Banco do cliente indisponível');
     if (est === null)
-      throw new ErroProblema('sem-estabelecimento', 409, 'Escolha o estabelecimento da sessão');
+      throw new ErroProblema('entrada-invalida', 409, 'Escolha o estabelecimento da sessão');
     return this.nucleo.lerSomente(
       { ...s.porta, correlacao: (s.porta.correlacao || 'financeiro').slice(0, 64) },
       (l) => fn(l, est),
