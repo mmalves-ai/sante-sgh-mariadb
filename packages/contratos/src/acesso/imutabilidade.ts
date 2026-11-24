@@ -81,6 +81,11 @@ export const EXCECOES_DELETE_CLINICO: readonly { readonly tabela: string; readon
     motivo:
       'o vínculo do ciclo de quimioterapia com a prescrição geral, desfeito só antes da validação farmacêutica (W0-05); o fato fica no evento do ciclo com quem, quando e o motivo, e a prescrição não muda',
   },
+  {
+    tabela: 'FILTRO_RESULTADO_USUARIO',
+    motivo:
+      'filtro salvo pelo próprio profissional para consultar resultados (nome, grupos, exames e período); não tem paciente, atendimento nem resultado, e excluí-lo não apaga registro clínico (03-PEP L128)',
+  },
 ];
 
 const CLINICAS_MODELO = new Set<string>(TABELAS_CLINICAS_MODELO);

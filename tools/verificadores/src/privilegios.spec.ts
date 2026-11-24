@@ -4,6 +4,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { deleteClinicoProibido, EXCECOES_DELETE_CLINICO as EXCECOES_CONTRATO } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import {
   alcanceVersionado,
@@ -12,6 +13,7 @@ import {
   caminhoAlcance,
   caminhoScript,
   entradaDoRepositorio,
+  EXCECOES_DELETE_CLINICO,
   gerarArtefatos,
   gerarScriptsPapeis,
   lerConstantes,
@@ -460,8 +462,18 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
       expect(x.objetos['trilha_auditoria'], x.modulo).toEqual(['SELECT', 'INSERT']);
       for (const [t, acoes] of Object.entries(x.objetos)) {
         if (modelo.exclusaoLogica.has(t)) expect(acoes, `${x.modulo} ${t}`).not.toContain('DELETE');
-        if (modelo.clinicas?.has(t)) expect(acoes, `${x.modulo} ${t}`).not.toContain('DELETE');
+        if (modelo.clinicas?.has(t) && deleteClinicoProibido(t))
+          expect(acoes, `${x.modulo} ${t}`).not.toContain('DELETE');
       }
+    }
+  });
+
+  it('a exceção de DELETE clínico do gerador é a mesma do contrato da imutabilidade, com o motivo', () => {
+    const doContrato = new Map(EXCECOES_CONTRATO.map((e) => [e.tabela, e.motivo]));
+    for (const e of EXCECOES_DELETE_CLINICO) {
+      expect(e.motivo.length, e.tabela).toBeGreaterThan(40);
+      expect(doContrato.get(e.tabela.toUpperCase()), e.tabela).toBe(e.motivo);
+      expect(deleteClinicoProibido(e.tabela), e.tabela).toBe(false);
     }
   });
 });
