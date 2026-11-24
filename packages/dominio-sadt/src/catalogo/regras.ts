@@ -353,6 +353,26 @@ export interface VariavelFormulaNova {
   readonly dadoPaciente: string | null;
 }
 
+/** A fonte da variável e o dado que ela exige: o analito vai só (e sempre) com a fonte analito, e o dado do paciente
+ * só (e sempre) com a fonte paciente. A tela confere com a mesma regra antes de gravar. */
+export function validarFonteVariavel(v: VariavelFormulaNova): FalhaCatalogo[] {
+  const rot = `A variável ${v.identificador}`;
+  const falhas: FalhaCatalogo[] = [];
+  if (!(FONTES_VARIAVEL as readonly string[]).includes(v.fonte))
+    falhas.push({ campo: 'variaveis', mensagem: `${rot}: fonte desconhecida.` });
+  if ((v.fonte === 'analito') !== (v.analitoId !== null))
+    falhas.push({
+      campo: 'variaveis',
+      mensagem: `${rot}: o analito vai só (e sempre) com a fonte analito.`,
+    });
+  if ((v.fonte === 'dado_paciente') !== (v.dadoPaciente !== null))
+    falhas.push({
+      campo: 'variaveis',
+      mensagem: `${rot}: o dado do paciente vai só (e sempre) com a fonte paciente.`,
+    });
+  return falhas;
+}
+
 export interface FormulaNova {
   readonly expressao: string;
   /** AAAA-MM-DD. */
@@ -402,18 +422,7 @@ export function planejarNovaVersaoFormula(nova: FormulaNova, ctx: ContextoFormul
   const usa: number[] = [];
   for (const v of nova.variaveis) {
     const rot = `A variável ${v.identificador}`;
-    if (!(FONTES_VARIAVEL as readonly string[]).includes(v.fonte))
-      falhas.push({ campo: 'variaveis', mensagem: `${rot}: fonte desconhecida.` });
-    if ((v.fonte === 'analito') !== (v.analitoId !== null))
-      falhas.push({
-        campo: 'variaveis',
-        mensagem: `${rot}: o analito vai só (e sempre) com a fonte analito.`,
-      });
-    if ((v.fonte === 'dado_paciente') !== (v.dadoPaciente !== null))
-      falhas.push({
-        campo: 'variaveis',
-        mensagem: `${rot}: o dado do paciente vai só (e sempre) com a fonte paciente.`,
-      });
+    falhas.push(...validarFonteVariavel(v));
     if (v.fonte !== 'analito' || v.analitoId === null) continue;
     if (v.analitoId === ctx.analitoAlvoId)
       falhas.push({ campo: 'variaveis', mensagem: `${rot} aponta para o próprio analito calculado.` });

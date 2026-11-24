@@ -455,7 +455,7 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
   outline: 2px solid var(--sgh-primaria);
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 .desfeito {
   text-decoration: line-through;

@@ -392,7 +392,7 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
   align-items: center;
 }
 .medida.fora input {
-  border-color: var(--sgh-alerta);
+  border-color: var(--sgh-aviso);
 }
 textarea {
   width: 100%;

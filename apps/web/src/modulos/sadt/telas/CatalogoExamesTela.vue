@@ -12,6 +12,7 @@ import {
   CONDICOES_FAIXA,
   TIPOS_SERVICO_EXAME,
   validarExame,
+  validarFonteVariavel,
   validarFormula,
   validarLimitesFaixa,
   type FalhaCatalogo,
@@ -304,12 +305,13 @@ const corpoVariaveis = computed(() =>
 /** A expressão e as variáveis conferidas na hora. */
 const falhasFormula = computed(() =>
   String(formula['expressao'] ?? '').trim()
-    ? porCampo(
-        validarFormula(
+    ? porCampo([
+        ...validarFormula(
           String(formula['expressao']),
           corpoVariaveis.value.map((v) => v.identificador),
         ),
-      )
+        ...corpoVariaveis.value.flatMap(validarFonteVariavel),
+      ])
     : {},
 );
 /** Os analitos do exame aberto (a variável da fórmula só aponta para eles, nunca para o próprio calculado). */
@@ -799,7 +801,7 @@ const filtrada = (qual: string, chave: string) => {
   font-weight: 600;
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 form {
   display: flex;

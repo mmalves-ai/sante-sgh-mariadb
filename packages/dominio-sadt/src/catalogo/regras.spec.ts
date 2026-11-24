@@ -8,6 +8,7 @@ import {
   idadesCobertas,
   validarExame,
   validarExameLigado,
+  validarFonteVariavel,
   validarFormula,
   validarLimitesFaixa,
   variaveisDaExpressao,
@@ -255,5 +256,14 @@ describe('catálogo de exames: nova versão da fórmula', () => {
     const m = campos(planejarNovaVersaoFormula(errada, ctx));
     expect(m).toContain('fonte analito');
     expect(m).toContain('fonte paciente');
+  });
+
+  it('a tela confere a fonte de cada variável pela mesma regra antes de gravar', () => {
+    const base = { identificador: 'x', analitoId: null, dadoPaciente: null };
+    expect(validarFonteVariavel({ ...base, fonte: 'analito' })).toHaveLength(1);
+    expect(validarFonteVariavel({ ...base, fonte: 'dado_paciente' })).toHaveLength(1);
+    expect(validarFonteVariavel({ ...base, fonte: 'digitado' })).toEqual([]);
+    expect(validarFonteVariavel({ ...base, fonte: 'analito', analitoId: 7 })).toEqual([]);
+    expect(validarFonteVariavel({ ...base, fonte: 'outra' })[0]?.mensagem).toContain('fonte desconhecida');
   });
 });

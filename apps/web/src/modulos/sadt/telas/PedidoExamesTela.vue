@@ -406,6 +406,6 @@ fieldset {
 }
 .avisos .bloqueio,
 .bloqueio {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 </style>
