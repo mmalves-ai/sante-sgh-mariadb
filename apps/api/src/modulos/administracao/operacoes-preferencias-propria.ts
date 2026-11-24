@@ -25,6 +25,7 @@ import { z } from 'zod';
 
 const num = (v: unknown): number => Number(v);
 const bool = (v: unknown): boolean => v === true || num(v) === 1;
+const vazio = (v: unknown): boolean => v === null || v === undefined;
 const recusar = (r: RecusaPreferencia) => recusa(r, MENSAGEM_PREFERENCIA[r]);
 const codigoTela = z
   .string()
@@ -76,7 +77,7 @@ function geralDaLinha(x: Record<string, unknown> | null): PreferenciaGeralNormal
   return {
     tema: String(x['tema']) as TemaPreferido,
     densidade: String(x['densidade']) as DensidadePreferida,
-    zoomPercentual: zoom === null || zoom === undefined ? null : num(zoom),
+    zoomPercentual: vazio(zoom) ? null : num(zoom),
     tipoAtendimentoPadrao: (x['tipo_atendimento_padrao'] ?? null) as TipoAtendimentoPreferido | null,
     alertaJanelaSuspensa: bool(x['alerta_janela_suspensa']),
   };
@@ -106,7 +107,7 @@ const operacaoGravarGeral = definirOperacao({
     const r = normalizarPreferenciaGeral(geralDaLinha(atual ?? null), e);
     if ('recusa' in r) throw recusar(r.recusa);
     let telaInicial: number | null =
-      atual?.['tela_inicial_id'] == null ? null : num(atual['tela_inicial_id']);
+      !atual || vazio(atual['tela_inicial_id']) ? null : num(atual['tela_inicial_id']);
     if (e.telaInicial !== undefined) {
       if (e.telaInicial === null) telaInicial = null;
       else {
@@ -264,7 +265,7 @@ export async function lerPreferenciasDoUsuario(
           colunas: (json(x['colunas_visiveis']) as string[] | null) ?? [],
           ordenacao: (json(x['ordenacao']) as VisaoTelaLida['ordenacao'] | null) ?? [],
           filtros: (json(x['filtros']) as Record<string, unknown> | null) ?? null,
-          itensPorPagina: x['itens_por_pagina'] == null ? null : num(x['itens_por_pagina']),
+          itensPorPagina: vazio(x['itens_por_pagina']) ? null : num(x['itens_por_pagina']),
           padrao: bool(x['padrao']),
         }));
   const visaoInicialPorTela: Record<string, string> = {};
@@ -276,7 +277,7 @@ export async function lerPreferenciasDoUsuario(
     guardadas: !!linha,
     geral: { ...geral, textoAmpliado: textoAmpliado(geral.zoomPercentual) },
     telaInicial:
-      linha && linha['tela_codigo'] != null
+      linha && !vazio(linha['tela_codigo'])
         ? {
             codigo: String(linha['tela_codigo']),
             titulo: String(linha['tela_titulo']),

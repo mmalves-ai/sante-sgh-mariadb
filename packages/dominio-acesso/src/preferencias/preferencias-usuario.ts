@@ -59,13 +59,13 @@ export const MENSAGEM_PREFERENCIA: Readonly<Record<RecusaPreferencia, string>> =
 };
 
 export interface PreferenciaGeralPedida {
-  readonly tema?: string;
-  readonly densidade?: string;
+  readonly tema?: string | undefined;
+  readonly densidade?: string | undefined;
   /** Texto ampliado: grava o zoom de texto ampliado; falso volta ao padrão (nulo). */
-  readonly textoAmpliado?: boolean;
-  readonly zoomPercentual?: number | null;
-  readonly tipoAtendimentoPadrao?: string | null;
-  readonly alertaJanelaSuspensa?: boolean;
+  readonly textoAmpliado?: boolean | undefined;
+  readonly zoomPercentual?: number | null | undefined;
+  readonly tipoAtendimentoPadrao?: string | null | undefined;
+  readonly alertaJanelaSuspensa?: boolean | undefined;
 }
 
 export interface PreferenciaGeralNormalizada {
@@ -139,11 +139,11 @@ export interface OrdenacaoColuna {
 }
 
 export interface VisaoTelaPedida {
-  readonly nome?: string;
+  readonly nome?: string | undefined;
   readonly colunas: readonly string[];
-  readonly ordenacao?: readonly OrdenacaoColuna[];
-  readonly itensPorPagina?: number | null;
-  readonly padrao?: boolean;
+  readonly ordenacao?: readonly OrdenacaoColuna[] | undefined;
+  readonly itensPorPagina?: number | null | undefined;
+  readonly padrao?: boolean | undefined;
 }
 
 export interface VisaoTelaNormalizada {
@@ -161,7 +161,7 @@ export interface VisaoTelaNormalizada {
  */
 export function conferirVisaoTela(
   v: VisaoTelaPedida,
-  f: { colunasDaTela?: readonly string[]; primeiraDaTela?: boolean } = {},
+  f: { colunasDaTela?: readonly string[] | undefined; primeiraDaTela?: boolean | undefined } = {},
 ): { recusa: RecusaPreferencia } | { visao: VisaoTelaNormalizada } {
   const nome = (v.nome ?? NOME_VISAO_PADRAO).trim();
   if (nome.length < 1 || nome.length > 100) return { recusa: 'nome-visao-invalido' };
