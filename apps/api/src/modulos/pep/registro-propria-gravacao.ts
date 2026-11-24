@@ -70,7 +70,6 @@ const textoOuNull = (v: unknown): string | null => (v === null || v === undefine
 const comMs = (v: string | null): string | null => (v === null ? null : `${v}.000`);
 
 const TIPOS_TITULO = new Set(['secao', 'grupo', 'titulo', 'rotulo']);
-const TIPOS_TEXTO_LONGO = new Set(['texto', 'texto_formatado']);
 const TIPOS_NUMERO = new Set(['decimal', 'inteiro', 'calculado']);
 const TIPOS_ESCOLHA = new Set(['escolha', 'escolha_com_texto']);
 
