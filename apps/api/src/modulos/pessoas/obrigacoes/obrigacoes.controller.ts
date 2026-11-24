@@ -1,5 +1,6 @@
 // FGTS Digital e obrigações legais, parte F7 (M53.8; ficha do M53, seção 7; `Gestão de pessoas > Obrigações legais`):
 //   GET  /api/pessoas/obrigacoes/apoio                          tipos, regimes sugeridos com as fontes, empresas
+//   GET  /api/pessoas/obrigacoes/catalogo                       catálogo oficial: vigente, encerrada e o ato da substituição
 //   GET  /api/pessoas/obrigacoes/parametros?empresa             vigências dos parâmetros das obrigações
 //   POST /api/pessoas/obrigacoes/parametros                     nova vigência (regimes, leiautes, responsável)
 //   GET  /api/pessoas/obrigacoes/fgts-digital?empresa&competencia  apuração do FGTS Digital (conferência com o eSocial)
@@ -56,6 +57,7 @@ import { corpo } from '../../exames/public-api.js';
 import type { CifraCpf } from '../cifra-cpf.js';
 import { PORTA_ESOCIAL, type PortaEsocial } from '../esocial/porta-esocial.js';
 import { ServicoEsocial } from '../esocial/servico-esocial.js';
+import type { CatalogoObrigacoesOficiais } from '../folha/catalogo-obrigacoes-oficiais.js';
 import { PORTA_CALCULO_FOLHA, type PortaCalculoFolha } from '../folha/porta-calculo.js';
 import { PORTA_FOLHA, type PortaFolha } from '../folha/porta-folha.js';
 import { CIFRA_CPF_PESSOAS } from '../pessoas.controller.js';
@@ -103,6 +105,12 @@ export class ObrigacoesController {
   @Permissao(P.ler)
   apoio(@Req() req: RequisicaoAutorizada): Promise<ApoioObrigacoes> {
     return this.servico.apoioTela(sessaoDe(req));
+  }
+
+  @Get('catalogo')
+  @Permissao(P.ler)
+  catalogo(@Req() req: RequisicaoAutorizada): Promise<CatalogoObrigacoesOficiais> {
+    return this.servico.catalogo(sessaoDe(req));
   }
 
   @Get('parametros')

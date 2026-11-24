@@ -94,6 +94,19 @@ describe.skipIf(!PESSOAS_REGISTRADO)(
         expect((await get(u, `${O}/999999`)).statusCode).toBe(404);
       }
       expect((await get(folha, O)).statusCode).toBe(403);
+      expect((await get(folha, `${O}/catalogo`)).statusCode).toBe(403);
+      // Catálogo oficial: quem só consulta vê a vigente e a encerrada com o ato da substituição.
+      const cat = await get(consulta, `${O}/catalogo`);
+      expect(cat.statusCode, cat.body).toBe(200);
+      const porCodigo = new Map(
+        (cat.json().obrigacoes as { codigo: string; situacao: string; atoEncerramento: string | null }[]).map(
+          (o) => [o.codigo, o],
+        ),
+      );
+      expect(porCodigo.get('fgts-digital')?.situacao).toBe('vigente');
+      expect(porCodigo.get('sefip')?.situacao).toBe('encerrada');
+      expect(porCodigo.get('sefip')?.atoEncerramento).toBeTruthy();
+      expect(porCodigo.get('rais')?.situacao).toBe('encerrada');
       expect((await get(folha, `${O}/apoio`)).statusCode).toBe(403);
       const apoio = (await get(dp, `${O}/apoio`)).json();
       expect(apoio.tipos).toEqual(['fgts-digital', 'sefip', 'caged', 'rais']);

@@ -10,7 +10,6 @@
 // real sobre a fonte sintética de dev; pessoas, ponto, folha, eSocial e obrigações em MEMÓRIA (nada vai à cópia); CPF,
 // NIS e CNPJ SINTÉTICOS; nenhum dado de pessoa. O Sante não transmite nada ao governo (regra 3). Roda numa execução
 // própria (`pnpm e2e -- --grep @M53.8`, memória nova), como a M53.7 (D-E2E-537).
-import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
 import { itemDoMenu, semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -141,7 +140,7 @@ test.describe('folha de pagamento, etapa F7: FGTS Digital e obrigações legais 
   test.setTimeout(600_000);
   test.use({ actionTimeout: 60_000 });
 
-  test('ligar → admitir → ponto → fechar a folha → S-1200 aceito → parâmetros → FGTS Digital gerado e entregue → SEFIP pela prévia, baixada e cancelada → histórico → consulta; axe', async ({
+  test('ligar → admitir → ponto → fechar a folha → S-1200 aceito → parâmetros → FGTS Digital gerado e entregue → catálogo com a SEFIP encerrada e a geração recusada → histórico → consulta; axe', async ({
     page,
   }) => {
     const externas = vigiarExternas(page);
@@ -512,50 +511,42 @@ test.describe('folha de pagamento, etapa F7: FGTS Digital e obrigações legais 
     await expect(page.getByTestId(`obrigacao-${idFgts}-entrega`)).toContainText('GUIA-E2E-538');
     await expect(page.getByTestId('obrigacoes-fgts-gerar')).toHaveCount(0);
 
-    // SEFIP da competência pela prévia: o arquivo com o aviso do leiaute não conferido; gerada, baixada (360 posições),
-    // sem entrega (o leiaute não foi conferido no programa oficial) e cancelada com motivo.
+    // Catálogo oficial: a SEFIP está encerrada (com o ato da substituição) e fica só para consulta; a tela não
+    // oferece a prévia nem a geração, e o servidor recusa a geração com 409 obrigacao-encerrada.
     await page.getByTestId('obrigacoes-aba-arquivos').click();
     await expect(page.getByTestId('obrigacoes-arquivos')).toBeVisible();
+    await expect(page.getByTestId('obrigacoes-catalogo-fgts-digital-situacao')).toHaveText('Vigente', {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId('obrigacoes-catalogo-sefip-situacao')).toHaveText('Encerrada');
+    await expect(page.getByTestId('obrigacoes-catalogo-sefip')).toContainText('substituída por');
+    await expect(page.getByTestId('obrigacoes-catalogo-rais-situacao')).toHaveText('Encerrada');
     await escolher(page.getByTestId('obrigacoes-arquivos-tipo'), 'sefip');
     await escolher(page.getByTestId('obrigacoes-arquivos-periodo'), comp);
-    await expect(page.getByTestId('obrigacoes-arquivos-regime')).toContainText('Não conferido', {
-      timeout: 30_000,
-    });
-    await page.getByTestId('obrigacoes-arquivos-previa').click();
-    await expect(page.getByTestId('obrigacoes-arquivos-resultado')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('obrigacoes-arquivos-previa-sem-pendencias')).toBeVisible();
-    await expect(page.getByTestId('obrigacoes-arquivos-previa-aviso-leiaute-nao-conferido')).toBeVisible();
-    await expect(page.getByTestId('obrigacoes-arquivos-previa-trabalhadores')).toHaveText('1');
-    await semViolacaoAxe(page, '/pessoas/obrigacoes (prévia da SEFIP)');
-    await page.getByTestId('obrigacoes-arquivos-gerar').click();
-    await expect(page.getByTestId('obrigacoes-arquivos-aviso')).toContainText('SEFIP', { timeout: 30_000 });
-    // Gerado, o diálogo fecha sozinho e a lista mostra o cartão.
-    await expect(page.getByTestId('obrigacoes-arquivos-resultado')).toHaveCount(0);
-    const cartaoSefip = page.locator('article[data-testid^="obrigacao-"]').first();
-    await expect(cartaoSefip).toBeVisible({ timeout: 30_000 });
-    const idSefip =
-      /^obrigacao-(\d+)$/.exec((await cartaoSefip.getAttribute('data-testid')) ?? '')?.[1] ?? '';
-    expect(idSefip).toMatch(/^\d+$/);
-    await expect(page.getByTestId(`obrigacao-${idSefip}-leiaute`)).toContainText('Não conferido');
-    await expect(page.getByTestId(`obrigacao-${idSefip}-entregar`)).toHaveCount(0);
-    const [baixa] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByTestId(`obrigacao-${idSefip}-baixar`).click(),
-    ]);
-    expect(baixa.suggestedFilename()).toMatch(/SEFIP/i);
-    const caminho = await baixa.path();
-    const linhas = (await readFile(caminho, 'latin1')).split(/\r?\n/).filter((l) => l.length > 0);
-    expect(linhas.length).toBeGreaterThan(2);
-    for (const l of linhas) expect(l.length).toBe(360);
-    await page.getByTestId(`obrigacao-${idSefip}-cancelar`).click();
-    await campo(page, 'obrigacao-cancelamento-motivo').fill('Gerada para conferência (E2E M53.8)');
-    await semViolacaoAxe(page, '/pessoas/obrigacoes (cancelar a SEFIP)');
-    await page.getByTestId('obrigacao-cancelamento-confirmar').click();
-    // Cancelada, sai da lista das vigentes do período (fica no histórico).
-    await expect(page.getByTestId('obrigacoes-arquivos-aviso')).toContainText('cancelada', {
-      timeout: 30_000,
-    });
-    await expect(page.getByTestId(`obrigacao-${idSefip}`)).toHaveCount(0);
+    await expect(page.getByTestId('obrigacoes-arquivos-encerrada')).toBeVisible();
+    await expect(page.getByTestId('obrigacoes-arquivos-previa')).toHaveCount(0);
+    await semViolacaoAxe(page, '/pessoas/obrigacoes (catálogo e SEFIP encerrada)');
+    const recusa = await page.evaluate(
+      async ({ periodo, id }) => {
+        const empresa = ((await (await fetch(`/api/pessoas/obrigacoes/${id}`)).json()) as { empresa: number })
+          .empresa;
+        const csrf = /(?:^|;\s*)sgh_csrf=([^;]+)/.exec(document.cookie)?.[1] ?? '';
+        const r = await fetch('/api/pessoas/obrigacoes', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json',
+            'x-csrf': csrf,
+            'idempotency-key': `e2e-m53-8-sefip-${Date.now()}`,
+          },
+          body: JSON.stringify({ empresa, tipo: 'sefip', periodo, simular: false, recolhimento: null }),
+        });
+        return { status: r.status, corpo: await r.text() };
+      },
+      { periodo: comp, id: idFgts },
+    );
+    expect(recusa.status, recusa.corpo).toBe(409);
+    expect(recusa.corpo).toContain('obrigacao-encerrada');
 
     // Histórico do ano: as duas gerações, com a situação.
     await page.getByTestId('obrigacoes-aba-historico').click();
@@ -564,7 +555,6 @@ test.describe('folha de pagamento, etapa F7: FGTS Digital e obrigações legais 
     await expect(page.getByTestId(`obrigacoes-historico-${idFgts}`)).toContainText('Entregue', {
       timeout: 30_000,
     });
-    await expect(page.getByTestId(`obrigacoes-historico-${idSefip}`)).toContainText('Cancelada');
     await semViolacaoAxe(page, '/pessoas/obrigacoes (histórico)');
 
     // Quem só consulta (opção 415): as obrigações sem gerar, sem baixar e sem os valores.

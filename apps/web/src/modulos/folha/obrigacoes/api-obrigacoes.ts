@@ -15,6 +15,7 @@ import type {
   ParametrosObrigacoes,
   RegistrarEntregaObrigacaoEntrada,
   ResultadoGeracaoObrigacao,
+  TipoObrigacao,
 } from '@sgh/contratos';
 import { z } from 'zod';
 import { erroDaResposta } from '../../../casca/erros/problem-details.js';
@@ -23,6 +24,26 @@ import { enviar, ler, novaChave, qs } from '../../exames/api-exames.js';
 const O = '/api/pessoas/obrigacoes';
 const confiar = <X>() => z.custom<X>((v) => v !== null && typeof v === 'object');
 
+/** Uma obrigação do catálogo oficial na data de hoje (o servidor lê a edição versionada). */
+export interface ObrigacaoDoCatalogo {
+  codigo: string;
+  nome: string;
+  orgao: string;
+  baseLegal: string;
+  vigenciaInicio: string;
+  encerradaEm: string | null;
+  atoEncerramento: string | null;
+  substituidaPor: string[];
+  tipoNaFolha: TipoObrigacao | null;
+  geradaPeloSistema: boolean;
+  situacao: 'vigente' | 'encerrada' | 'futura';
+}
+export interface CatalogoObrigacoes {
+  edicao: string;
+  data: string;
+  obrigacoes: ObrigacaoDoCatalogo[];
+}
+export const lerCatalogoObrigacoes = () => ler(`${O}/catalogo`, confiar<CatalogoObrigacoes>());
 export const lerApoioObrigacoes = () => ler(`${O}/apoio`, confiar<ApoioObrigacoes>());
 export const lerParametrosObrigacoes = (empresa: number) =>
   ler(`${O}/parametros${qs({ empresa })}`, confiar<ListaParametrosObrigacoes>());

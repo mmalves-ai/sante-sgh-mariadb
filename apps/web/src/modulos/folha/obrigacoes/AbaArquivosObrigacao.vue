@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// Aba "SEFIP, CAGED e RAIS" (M53.8, etapa F7; consulta com `pessoas.obrigacao.ler`; prévia e geração com
-// `pessoas.obrigacao.gerar`; ficha do M53, seção 7, regras 3 e 7; DP-47): a obrigação e o período (competência ou
-// ano-base), o regime em vigor nos parâmetros (exigida de/até, leiaute e se ele foi conferido), a prévia com os totais,
-// a prova da soma, as pendências e os avisos, e a geração do arquivo para o programa oficial. As obrigações em vigor
-// do período aparecem com o arquivo, a entrega e o cancelamento. O servidor confere tudo de novo.
+// Aba "Catálogo e arquivos" (M53.8, etapa F7; F3.9; consulta com `pessoas.obrigacao.ler`; prévia e geração com
+// `pessoas.obrigacao.gerar`; ficha do M53, seção 7, regras 3 e 7; DP-47): o catálogo oficial das obrigações acessórias
+// (vigente, futura ou encerrada, com o ato e a data da substituição), a obrigação e o período (competência ou
+// ano-base), o regime em vigor nos parâmetros, e a prévia e a geração SÓ para a vigente com gerador. A encerrada
+// (SEFIP, CAGED e RAIS) fica para consulta: as gravadas antes da substituição aparecem com o arquivo e a entrega, e a
+// aba Histórico guarda todas. O servidor confere tudo de novo (409 `obrigacao-encerrada`).
 import {
   type ApoioObrigacoes,
   type ObrigacaoLegal,
@@ -15,7 +16,12 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroFolha from '../telas/ErroFolha.vue';
-import { gerarObrigacao, lerObrigacoes, lerParametrosObrigacoes } from './api-obrigacoes.js';
+import {
+  gerarObrigacao,
+  lerCatalogoObrigacoes,
+  lerObrigacoes,
+  lerParametrosObrigacoes,
+} from './api-obrigacoes.js';
 import {
   anual,
   periodosDoTipo,
@@ -34,7 +40,31 @@ const cliente = useQueryClient();
 const B = 'folha.obrigacoes.recusa';
 
 const tipo = ref<TipoObrigacao>('sefip');
-const opcoesTipo = TIPOS_ARQUIVO.map((x) => ({ valor: x, rotulo: t(`folha.obrigacoes.tipos.${x}`) }));
+const catalogo = useQuery({
+  queryKey: ['folha', 'obrigacoes', 'catalogo'],
+  queryFn: () => lerCatalogoObrigacoes(),
+});
+const itensCatalogo = computed(() => catalogo.data.value?.obrigacoes ?? []);
+const doCatalogo = (x: TipoObrigacao) => itensCatalogo.value.find((o) => o.tipoNaFolha === x) ?? null;
+/** Gera só a vigente com gerador no sistema; sem o catálogo carregado, não oferece a geração. */
+const geravel = (x: TipoObrigacao) => {
+  const o = doCatalogo(x);
+  return !!o && o.situacao === 'vigente' && o.geradaPeloSistema;
+};
+const opcoesTipo = computed(() =>
+  TIPOS_ARQUIVO.map((x) => ({
+    valor: x,
+    rotulo:
+      doCatalogo(x)?.situacao === 'encerrada'
+        ? t('folha.obrigacoes.catalogo.tipoEncerrado', { tipo: t(`folha.obrigacoes.tipos.${x}`) })
+        : t(`folha.obrigacoes.tipos.${x}`),
+  })),
+);
+const encerrada = computed(() => {
+  const o = doCatalogo(tipo.value);
+  return o && !geravel(tipo.value) ? o : null;
+});
+const rotuloSituacao = (s: string) => t(`folha.obrigacoes.catalogo.situacoes.${s}`);
 const params = useQuery({
   queryKey: computed(() => ['folha', 'obrigacoes', 'parametros', props.empresa]),
   queryFn: () => lerParametrosObrigacoes(props.empresa),
@@ -156,6 +186,41 @@ async function mudou(_o: ObrigacaoLegal, texto: string): Promise<void> {
       data-testid="obrigacoes-arquivos-aviso"
     />
     <ErroFolha v-if="erro" :erro="erro" :base="B" />
+    <ErroFolha v-if="catalogo.isError.value" :erro="catalogo.error.value" :base="B" />
+    <table v-else-if="catalogo.data.value" class="tabela" data-testid="obrigacoes-catalogo">
+      <caption>
+        {{
+          t('folha.obrigacoes.catalogo.titulo', { edicao: catalogo.data.value.edicao })
+        }}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('folha.obrigacoes.catalogo.obrigacao') }}</th>
+          <th scope="col">{{ t('folha.obrigacoes.catalogo.situacao') }}</th>
+          <th scope="col">{{ t('folha.obrigacoes.catalogo.baseLegal') }}</th>
+          <th scope="col">{{ t('folha.obrigacoes.catalogo.substituicao') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="o in itensCatalogo" :key="o.codigo" :data-testid="`obrigacoes-catalogo-${o.codigo}`">
+          <th scope="row">{{ o.nome }}</th>
+          <td :data-testid="`obrigacoes-catalogo-${o.codigo}-situacao`">{{ rotuloSituacao(o.situacao) }}</td>
+          <td>{{ o.baseLegal }}</td>
+          <td>
+            <template v-if="o.encerradaEm">
+              {{
+                t('folha.obrigacoes.catalogo.encerradaEm', {
+                  data: o.encerradaEm,
+                  ato: o.atoEncerramento ?? '',
+                  por: o.substituidaPor.join(', '),
+                })
+              }}
+            </template>
+            <template v-else>{{ t('folha.obrigacoes.catalogo.desde', { data: o.vigenciaInicio }) }}</template>
+          </td>
+        </tr>
+      </tbody>
+    </table>
     <div class="campos">
       <SanteSelecao
         v-model="tipo"
@@ -203,7 +268,19 @@ async function mudou(_o: ObrigacaoLegal, texto: string): Promise<void> {
       </template>
       <template v-else>{{ t('folha.obrigacoes.arquivos.regimeSemParametros') }}</template>
     </p>
-    <div v-if="pode" class="acoes">
+    <SanteAlerta
+      v-if="encerrada"
+      :texto="
+        t('folha.obrigacoes.catalogo.soConsulta', {
+          tipo: t(`folha.obrigacoes.tipos.${tipo}`),
+          data: encerrada.encerradaEm ?? '',
+          por: encerrada.substituidaPor.join(', '),
+        })
+      "
+      variante="info"
+      data-testid="obrigacoes-arquivos-encerrada"
+    />
+    <div v-if="pode && geravel(tipo)" class="acoes">
       <SanteBotao
         :rotulo="t('folha.obrigacoes.previa')"
         :desabilitado="ocupado"

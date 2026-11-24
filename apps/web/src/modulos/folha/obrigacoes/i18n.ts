@@ -16,7 +16,7 @@ export const mensagensObrigacoes = {
     'O sistema não transmite nada ao governo: gera o arquivo (ou a apuração), você o confere e entrega no programa oficial, e registra aqui o protocolo.',
   abas: {
     fgts: 'FGTS Digital',
-    arquivos: 'SEFIP, CAGED e RAIS',
+    arquivos: 'Catálogo e arquivos',
     parametros: 'Parâmetros',
     historico: 'Histórico',
   },
@@ -150,11 +150,25 @@ export const mensagensObrigacoes = {
     abrirFolha: 'Abrir o fechamento da folha',
     abrirEsocial: 'Abrir os periódicos do eSocial',
   },
+  // Catálogo oficial das obrigações acessórias (F3.9)
+  catalogo: {
+    titulo: 'Catálogo oficial das obrigações (edição {edicao})',
+    obrigacao: 'Obrigação',
+    situacao: 'Situação',
+    baseLegal: 'Base legal',
+    substituicao: 'Vigência ou substituição',
+    desde: 'Exigida desde {data}',
+    encerradaEm: 'Encerrada em {data} ({ato}); substituída por {por}',
+    tipoEncerrado: '{tipo} (encerrada)',
+    soConsulta:
+      '{tipo} está encerrada desde {data} e foi substituída por {por}: o sistema não gera mais o arquivo. As já gravadas ficam para consulta aqui e na aba Histórico.',
+    situacoes: { vigente: 'Vigente', encerrada: 'Encerrada', futura: 'Futura' },
+  },
   // Arquivos (SEFIP, CAGED, RAIS)
   arquivos: {
     titulo: 'Arquivos para o programa oficial',
     ajuda:
-      'A SEFIP, o CAGED e a RAIS só são exigidos nos períodos anteriores à substituição pelo eSocial e pelo FGTS Digital, conforme o regime gravado nos parâmetros. Gere o arquivo do período fechado, confira-o no programa oficial e registre a entrega com o protocolo.',
+      'O catálogo oficial mostra o que é exigido hoje e o que foi substituído, com o ato. A SEFIP, o CAGED e a RAIS estão encerrados (substituídos pelo eSocial e pelo FGTS Digital): ficam só para consulta das já gravadas. A geração é oferecida só para a obrigação vigente.',
     recolhimento: 'Data do recolhimento do FGTS',
     recolhimentoAjuda: 'A data em que o FGTS da competência foi (ou será) recolhido.',
     regime: 'Exigida: {de} a {ate}',

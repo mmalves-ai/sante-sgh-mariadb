@@ -65,7 +65,11 @@ import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js';
 import { ApoioGravacao } from '../../exames/public-api.js';
 import type { ServicoEsocial } from '../esocial/servico-esocial.js';
-import { exigirObrigacaoComGerador } from '../folha/catalogo-obrigacoes-oficiais.js';
+import {
+  type CatalogoObrigacoesOficiais,
+  catalogoObrigacoesNa,
+  exigirObrigacaoComGerador,
+} from '../folha/catalogo-obrigacoes-oficiais.js';
 import type { GravadorCalculoFolha } from '../folha/porta-calculo.js';
 
 // Os registros da folha como a porta do cálculo os entrega (tipos de negócio do módulo da folha, sem cópia local).
@@ -219,6 +223,15 @@ export class ServicoObrigacoes {
   private async exigirEmpresa(s: SessaoCadastro, empresa: number): Promise<void> {
     const es = await this.folha.empresas(s.porta);
     if (!es.some((e) => e.codigo === empresa)) throw naoEncontrado('Empresa');
+  }
+
+  /**
+   * O catálogo oficial das obrigações acessórias na data de hoje do relógio da folha: cada uma vigente, futura ou
+   * encerrada (com o ato e a data da substituição). A tela gera só as vigentes com gerador e consulta as encerradas.
+   */
+  async catalogo(s: SessaoCadastro): Promise<CatalogoObrigacoesOficiais> {
+    const { hoje } = await this.folha.relogio(s.porta);
+    return catalogoObrigacoesNa(hoje);
   }
 
   async apoioTela(s: SessaoCadastro): Promise<ApoioObrigacoes> {

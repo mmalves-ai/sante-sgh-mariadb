@@ -486,11 +486,68 @@ describe('tela das obrigações: FGTS Digital', () => {
   });
 });
 
+/** Catálogo oficial de teste: a SEFIP encerrada (como na edição publicada) ou, para provar o fluxo genérico, vigente. */
+function catalogo(sefipVigente: boolean) {
+  const item = (codigo: string, tipo: string | null, vigente: boolean) => ({
+    codigo,
+    nome: codigo.toUpperCase(),
+    orgao: 'Órgão',
+    baseLegal: `Ato de ${codigo}`,
+    vigenciaInicio: '2000-01-01',
+    encerradaEm: vigente ? null : '2024-03-01',
+    atoEncerramento: vigente ? null : 'Ato da substituição',
+    substituidaPor: vigente ? [] : ['fgts-digital'],
+    tipoNaFolha: tipo,
+    geradaPeloSistema: vigente,
+    situacao: vigente ? 'vigente' : 'encerrada',
+  });
+  return {
+    edicao: '2026-11',
+    data: HOJE,
+    obrigacoes: [
+      item('fgts-digital', 'fgts-digital', true),
+      item('sefip', 'sefip', sefipVigente),
+      item('caged', 'caged', false),
+      item('rais', 'rais', false),
+    ],
+  };
+}
+
 describe('tela das obrigações: arquivos, parâmetros e histórico', () => {
-  it('SEFIP: período sugerido pelo regime, prévia com pendência, prévia limpa e geração com o aviso do leiaute', async () => {
+  it('catálogo: a SEFIP encerrada mostra o ato da substituição, fica só para consulta e não oferece a prévia', async () => {
+    const pedidos = simular((p) => {
+      if (p.url === '/api/pessoas/obrigacoes/apoio') return { corpo: APOIO };
+      if (p.url === '/api/pessoas/obrigacoes/catalogo') return { corpo: catalogo(false) };
+      if (p.url.startsWith('/api/pessoas/obrigacoes/parametros?'))
+        return { corpo: { empresa: 1, itens: [vigencia('2015-01')] } };
+      if (p.url.startsWith('/api/pessoas/obrigacoes/fgts-digital?')) return { corpo: apuracao() };
+      if (p.url.startsWith('/api/pessoas/obrigacoes?'))
+        return {
+          corpo: {
+            itens: [obrigacao(41, { tipo: 'sefip', periodo: '2024-02', leiauteConferido: false })],
+            limitado: false,
+          },
+        };
+      return null;
+    });
+    montar();
+    await flushPromises();
+    await clicar('[data-testid="obrigacoes-aba-arquivos"]');
+    await flushPromises();
+    expect(texto('[data-testid="obrigacoes-catalogo-fgts-digital-situacao"]')).toBe('Vigente');
+    expect(texto('[data-testid="obrigacoes-catalogo-sefip-situacao"]')).toBe('Encerrada');
+    expect(texto('[data-testid="obrigacoes-catalogo-sefip"]')).toContain('Ato da substituição');
+    expect(texto('[data-testid="obrigacoes-arquivos-encerrada"]')).toContain('substituída por fgts-digital');
+    expect(existe('obrigacoes-arquivos-previa')).toBe(false);
+    expect(existe('obrigacao-41')).toBe(true);
+    expect(pedidos.some((p) => p.url === '/api/pessoas/obrigacoes' && p.metodo === 'POST')).toBe(false);
+  });
+
+  it('vigente com gerador: período sugerido pelo regime, prévia com pendência, prévia limpa e geração com o aviso do leiaute', async () => {
     let pendente = true;
     const pedidos = simular((p) => {
       if (p.url === '/api/pessoas/obrigacoes/apoio') return { corpo: APOIO };
+      if (p.url === '/api/pessoas/obrigacoes/catalogo') return { corpo: catalogo(true) };
       if (p.url.startsWith('/api/pessoas/obrigacoes/parametros?'))
         return { corpo: { empresa: 1, itens: [vigencia('2015-01')] } };
       if (p.url.startsWith('/api/pessoas/obrigacoes/fgts-digital?')) return { corpo: apuracao() };
