@@ -2,15 +2,18 @@
 // exame pedido pelo id do exame_item do estabelecimento da sessão. A decisão é do domínio (dominio-sadt/resultado/ciclo):
 // a faixa de referência vigente é copiada para cada analito no momento da digitação (fica congelada), o exame retido na
 // bancada não recebe resultado nem é liberado, a liberação grava o profissional habilitado (assinatura do ato) e a
-// retificação guarda a versão anterior inteira em resultado_exame_versao com o motivo. Nada é apagado; tudo pelo
+// retificação guarda a versão anterior inteira em resultado_exame_versao com o motivo. Com responsável pelo laudo nomeado
+// no setor (responsavel_laudo_setor, 05-SADT linha 25), só ele libera e retifica. Nada é apagado; tudo pelo
 // Executor, com a trilha na mesma transação.
 import {
   avaliarValor,
   conferirDigitacao,
   conferirLiberacao,
+  conferirResponsavelSetor,
   conferirRetificacao,
   type FaixaDoAnalito,
   liberacaoPrivativaDeMedico,
+  MENSAGEM_RESPONSAVEL_SETOR,
   MENSAGEM_RESULTADO,
   type ValorDigitado,
 } from '@sgh/dominio-sadt';
@@ -139,6 +142,7 @@ export class ServicoResultadoSadt {
         habilitado: prof !== null,
       });
       if (falha) throw recusa(falha, MENSAGEM_RESULTADO[falha]);
+      await this.conferirResponsavel(tx, ctx.setor, ctx.exameId, prof);
       const id = n(ctx.resultado!['id']);
       await tx.alterar('resultado_exame', id, n(ctx.resultado!['versao']), {
         situacao: 'liberado',
@@ -180,6 +184,7 @@ export class ServicoResultadoSadt {
         mudou,
       });
       if (falha) throw recusa(falha, MENSAGEM_RESULTADO[falha]);
+      await this.conferirResponsavel(tx, ctx.setor, ctx.exameId, prof);
       const faixas = await this.faixas(tx, ctx.exameId, ctx.paciente, ctx.agora);
       const fora = conferirDigitacao({
         situacaoExame: 'em_analise',
@@ -320,6 +325,29 @@ export class ServicoResultadoSadt {
 
   private async versaoDe(tx: Tx, id: number): Promise<number> {
     return n((await tx.uma('SELECT versao FROM resultado_exame WHERE id = ?', [id]))?.['versao']);
+  }
+
+  /**
+   * O responsável pelo laudo do setor (05-SADT linha 25): as nomeações vigentes que liberam resultado no setor do exame
+   * (do setor inteiro ou do exame) decidem quem libera; sem nomeação, vale só a habilitação. Regra no domínio.
+   */
+  private async conferirResponsavel(
+    tx: Tx,
+    setor: number,
+    exame: number,
+    prof: number | null,
+  ): Promise<void> {
+    const nomeacoes = (
+      await tx.consultar(
+        `SELECT profissional_id, exame_id FROM responsavel_laudo_setor
+          WHERE setor_diagnostico_id = ? AND (exame_id IS NULL OR exame_id = ?) AND libera_resultado = TRUE
+            AND excluido_em IS NULL AND vigencia_inicio <= CURRENT_DATE
+            AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)`,
+        [setor, exame],
+      )
+    ).map((r) => ({ profissional: n(r['profissional_id']), exame: num(r['exame_id']) }));
+    const falha = conferirResponsavelSetor({ nomeacoes, exame, profissional: prof });
+    if (falha) throw recusa(falha, MENSAGEM_RESPONSAVEL_SETOR[falha]);
   }
 
   /** O profissional da sessão habilitado para liberar no setor (pelo vínculo com o conselho ativo e o CBO). */

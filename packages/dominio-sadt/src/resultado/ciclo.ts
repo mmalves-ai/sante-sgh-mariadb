@@ -139,3 +139,6 @@ export function conferirRetificacao(a: {
   if (!a.habilitado) return 'nao-habilitado';
   return a.mudou ? null : 'sem-mudanca';
 }
+
+// Responsável pelo laudo do setor (05-SADT linha 25), exportado junto com o ciclo do resultado.
+export * from './responsavel-setor.js';

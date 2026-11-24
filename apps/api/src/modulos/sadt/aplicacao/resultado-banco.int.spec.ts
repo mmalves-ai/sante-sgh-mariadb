@@ -2,7 +2,8 @@
 // digitar grava o resultado e o analito com a faixa vigente congelada (mudar a faixa depois não muda o resultado) e
 // marca o crítico; liberar só o digitado e só por profissional habilitado (conselho ativo e CBO do laboratório), que
 // fica gravado como quem liberou; o liberado não volta à digitação; retificar exige motivo e mudança, guarda a versão
-// anterior inteira em resultado_exame_versao e sobe o número da versão, sem apagar o analito. Tudo com trilha.
+// anterior inteira em resultado_exame_versao e sobe o número da versão, sem apagar o analito. Tudo com trilha. Linha 25:
+// com responsável pelo laudo nomeado no setor, outro profissional habilitado não libera; a nomeação do exame prevalece.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServicoResultadoSadt } from './resultado-propria.js';
@@ -24,6 +25,7 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
   let m: MassaSadt | null = null;
   let faixa = 0;
   let inscricao = 0;
+  const nomeacoes: number[] = [];
   const um = (sql: string, p: unknown[]) => nucleo.lerSomente(COR, (l) => l.uma(sql, p));
 
   beforeAll(async () => {
@@ -64,6 +66,8 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
         );
         if (faixa) await e.executar('DELETE FROM faixa_referencia WHERE id = ?', [faixa]);
         if (inscricao) await e.executar('DELETE FROM inscricao_conselho WHERE id = ?', [inscricao]);
+        if (nomeacoes.length)
+          await e.executar('DELETE FROM responsavel_laudo_setor WHERE id IN (?)', [nomeacoes]);
       });
     await limparMassaSadt(nucleo, m);
     await nucleo.encerrar();
@@ -145,6 +149,29 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
         ],
       );
     });
+    // 05-SADT linha 25: com responsável pelo laudo nomeado no setor, só ele libera; a nomeação do exame prevalece.
+    const setor = await um(
+      `SELECT COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id) AS s, ei.exame_id AS x FROM exame_item ei
+         JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id WHERE ei.id = ?`,
+      [item],
+    );
+    const outro = await um(
+      'SELECT id FROM profissional WHERE id <> ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
+      [m!.base.profissional],
+    );
+    const nomear = (prof: unknown, exame: unknown) =>
+      nucleo.escrever(COR, async (e) => {
+        nomeacoes.push(
+          await e.inserir(
+            `INSERT INTO responsavel_laudo_setor (setor_diagnostico_id, profissional_id, exame_id, libera_resultado,
+               responsavel_tecnico, vigencia_inicio, criado_em) VALUES (?, ?, ?, TRUE, FALSE, '2020-01-01', ?)`,
+            [setor!['s'], prof, exame, new Date()],
+          ),
+        );
+      });
+    await nomear(outro!['id'], null);
+    expect(await tenta(servico.liberar(c, item, {}))).toBe('fora-dos-responsaveis-setor');
+    await nomear(m!.base.profissional, setor!['x']);
     const lib = await servico.liberar(c, item, {});
     expect(lib).toMatchObject({ situacao: 'liberado', numeroVersao: 1 });
     const re = await um(
