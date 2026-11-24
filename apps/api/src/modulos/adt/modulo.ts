@@ -37,6 +37,8 @@ import { PortaAdtPropria } from './porta-propria.js';
 import { DocumentosInternacaoController, DOCUMENTOS_INTERNACAO } from './documentos-internacao.controller.js';
 import { PortaDocumentosInternacao } from './documentos-internacao.js';
 import { RegistrosInternacaoController } from './registros-internacao.controller.js';
+import { GasMedicinalController } from './gas-medicinal.controller.js';
+import { PORTA_GAS_MEDICINAL, PortaGasMedicinalPropria } from './gas-medicinal-propria.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { SameController } from './same.controller.js';
 import { AVISOS_ADT } from './simbolos.js';
@@ -101,10 +103,19 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       HigienizacaoController,
       SameController,
       DocumentosInternacaoController,
+      GasMedicinalController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
       { provide: PORTA_NIR, useValue: nir },
+      // F3.4 (04-INT linha 82): gases medicinais por tempo de uso no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_GAS_MEDICINAL,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaGasMedicinalPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       {
         provide: DOCUMENTOS_INTERNACAO,
         useValue: ctx.nucleo && !opcoes.adt ? new PortaDocumentosInternacao(ctx.nucleo) : null,

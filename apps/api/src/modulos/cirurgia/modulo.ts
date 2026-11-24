@@ -30,6 +30,8 @@ import { PORTA_CIRURGIA, type PortaCirurgia } from './porta.js';
 import { PortaCirurgiaMemoria } from './porta-memoria.js';
 import { portaCirurgiaIndisponivel, PortaCirurgiaPropria } from './porta-propria.js';
 import { TRAVA_INCISAO, TravaIncisao } from './trava-incisao.js';
+import { TextoPadraoCirurgiaController } from './texto-padrao.controller.js';
+import { PORTA_TEXTO_PADRAO_CIRURGIA, PortaTextoPadraoCirurgiaPropria } from './texto-padrao-propria.js';
 
 export interface OpcoesModuloCirurgia {
   /** Testes: as portas já montadas. */
@@ -98,11 +100,24 @@ export async function moduloCirurgia(
     module: ModuloCirurgia,
     // Global: o OPME e a manipulação (suprimentos) leem a PORTA_CIRURGIA.
     global: true,
-    controllers: [CirurgiaController, AnestesiaController, BlocoSeguroController],
+    controllers: [
+      CirurgiaController,
+      AnestesiaController,
+      BlocoSeguroController,
+      TextoPadraoCirurgiaController,
+    ],
     providers: [
       { provide: PORTA_CIRURGIA, useValue: cirurgia },
       { provide: PORTA_ANESTESIA, useValue: anestesia },
       { provide: PORTA_BLOCO_SEGURO, useValue: blocoSeguro },
+      // F3.4 (04-CC linha 91): texto padrão da descrição cirúrgica no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_TEXTO_PADRAO_CIRURGIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaTextoPadraoCirurgiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       { provide: AVISOS_BLOCO, useValue: new AvisosAtendimento(null, 'bloco') },
       // A trava da incisão lê a chave do hospital na fonte de configuração: no banco, a FONTE_CONFIGURACAO global (sem
       // ela, a trava ficaria aberta em silêncio com a chave ligada).
