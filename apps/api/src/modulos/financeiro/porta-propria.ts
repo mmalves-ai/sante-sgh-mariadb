@@ -71,6 +71,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
+import { deParaDoEstabelecimento, fatosContabeis } from './contabil-fiscal-propria.js';
 import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import {
   aprovacoesPorTitulo,
@@ -102,6 +103,7 @@ import {
   METODOS_PORTA_FINANCEIRO,
   type PortaFinanceiro,
   type RetencaoReinfPorta,
+  type DeParaContabilPorta,
 } from './porta.js';
 import {
   CREDOR_DO_TIPO,
@@ -1314,17 +1316,20 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
     );
   }
 
-  /** Pendência de modelo: o de-para contábil por evento (regra de contabilização); sem ele, o lote sai "sem de-para". */
-  async deParaContabil() {
-    return [] as {
-      convenio: number;
-      tipoConta: string;
-      tipoLancamento: number;
-      grupo: number;
-      subgrupo: number;
-      item: number;
-      conta: number | null;
-    }[];
+  /** F3.8, 07-FIN linha 100: o de-para mantido na tela (contabil-fiscal-propria.ts) e os fatos do período. */
+  deParaContabil(
+    c: ContextoFinanceiro,
+    periodo?: { de: string; ate: string; regua: 'competencia' | 'caixa' },
+  ): Promise<DeParaContabilPorta> {
+    return this.ler(c, async (l, est) => {
+      const d = await deParaDoEstabelecimento(l, est);
+      return {
+        regras: d.regras,
+        centros: new Map(d.centros.filter((x) => x.externo).map((x) => [x.id, String(x.externo)])),
+        credores: new Map(d.credores.map((x) => [x.id, x.externo])),
+        fatos: periodo ? await fatosContabeis(l, est, periodo.de, periodo.ate, periodo.regua) : [],
+      };
+    });
   }
 
   retencoesDaCompetencia(c: ContextoFinanceiro, ano: number, mes: number): Promise<RetencaoReinfPorta[]> {

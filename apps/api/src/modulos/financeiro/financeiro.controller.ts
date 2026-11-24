@@ -810,7 +810,8 @@ export class FinanceiroController {
   @Get('contabil/de-para')
   @Permissao('financeiro.exportacaoContabil.ler')
   dePara(@Req() req: RequisicaoAutorizada) {
-    return this.porta.deParaContabil(ctx(sessaoDe(req)));
+    // F3.8, 07-FIN linha 100: as regras de conta por evento (a tela completa usa contabil-fiscal/de-para).
+    return this.porta.deParaContabil(ctx(sessaoDe(req))).then((d) => d.regras);
   }
 
   @Post('contabil/lotes')

@@ -34,6 +34,7 @@ import type {
   ProrrogarVencimentoEntrada,
 } from '@sgh/contratos';
 import type { FaixaAlcada } from '@sgh/contratos/regras-financeiro';
+import type { FatoContabil, RegraDeParaConta } from '@sgh/dominio-financeiro';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_FINANCEIRO = Symbol('PORTA_FINANCEIRO');
@@ -85,6 +86,13 @@ export interface BasesIndicadoresPorta {
   readonly contasComTitulo: number;
   readonly titulos: number;
   readonly orfaos: number;
+}
+
+export interface DeParaContabilPorta {
+  readonly regras: readonly RegraDeParaConta[];
+  readonly centros: ReadonlyMap<number, string>;
+  readonly credores: ReadonlyMap<number, string>;
+  readonly fatos: readonly FatoContabil[];
 }
 
 export interface RetencaoReinfPorta {
@@ -314,17 +322,11 @@ export interface PortaFinanceiro extends PortaGravacaoM18<GravadorSghFinanceiro>
   ): Promise<ListaApropriacoes>;
   basesIndicadores(c: ContextoFinanceiro, de: string, ate: string): Promise<BasesIndicadoresPorta>;
   escrituracao(c: ContextoFinanceiro, ano: number, mes: number): Promise<EscrituracaoResposta[]>;
-  deParaContabil(c: ContextoFinanceiro): Promise<
-    {
-      convenio: number;
-      tipoConta: string;
-      tipoLancamento: number;
-      grupo: number;
-      subgrupo: number;
-      item: number;
-      conta: number | null;
-    }[]
-  >;
+  /** F3.8, 07-FIN linha 100: o de-para por evento (contas, centros, credores) e os fatos do período para o lote. */
+  deParaContabil(
+    c: ContextoFinanceiro,
+    periodo?: { de: string; ate: string; regua: 'competencia' | 'caixa' },
+  ): Promise<DeParaContabilPorta>;
   retencoesDaCompetencia(c: ContextoFinanceiro, ano: number, mes: number): Promise<RetencaoReinfPorta[]>;
   registrosFiscais(
     c: ContextoFinanceiro,

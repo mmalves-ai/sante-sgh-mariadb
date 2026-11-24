@@ -56,6 +56,7 @@ import {
   lerExtrato,
   montarDre,
   montarFluxo,
+  dePararFatos,
   montarLoteContabil,
   saldoMostrado,
   simularPrefeitura,
@@ -959,37 +960,11 @@ export class ServicoFinanceiro {
       -1,
     );
     const fim = Number(e.periodo.slice(5, 7)) === 12 ? `${e.periodo.slice(0, 4)}-12-31` : ate;
-    const dp = await this.porta.deParaContabil(ctx(s));
-    const pagos = (
-      await this.porta.titulosPagar(ctx(s), {
-        situacao: 'pago',
-        vencimentoDe: null,
-        vencimentoAte: null,
-        credor: null,
-        tipo: null,
-        pagina: 0,
-        hoje: fim,
-      })
-    ).itens.filter(
-      (t) =>
-        (e.regua === 'caixa' ? (t.dataPagamento ?? '') : (t.emissao ?? '')) >= de &&
-        (e.regua === 'caixa' ? (t.dataPagamento ?? '') : (t.emissao ?? '')) <= fim,
-    );
-    const depara = dp.map((d) => ({
-      evento: `${d.tipoConta}:${d.tipoLancamento}`,
-      contaDebito: String(d.conta ?? ''),
-      contaCredito: '1.1.1.01',
-    }));
-    const lote = montarLoteContabil(
-      pagos.map((t) => ({
-        data: (e.regua === 'caixa' ? t.dataPagamento : t.emissao) ?? de,
-        evento: `${t.tipo}:1`,
-        valor: e.regua === 'caixa' ? t.pago : t.valor,
-        historico: t.referente,
-        documento: String(t.documento),
-      })),
-      depara,
-    );
+    // F3.8, 07-FIN linha 100: os fatos do período com a conta de cada lado pelo de-para por evento mantido na tela
+    // (contabil-fiscal.controller.ts), mais o código externo do centro de custo e do credor.
+    const dp = await this.porta.deParaContabil(ctx(s), { de, ate: fim, regua: e.regua });
+    const { eventos, depara } = dePararFatos(dp.fatos, dp.regras, dp.centros, dp.credores);
+    const lote = montarLoteContabil(eventos, depara);
     const hash = sha256(lote.conteudo);
     const chave = `contabil/${e.periodo}-${e.regua}-${hash.slice(0, 16)}.txt`;
     const conteudoLote = bytes(lote.conteudo);

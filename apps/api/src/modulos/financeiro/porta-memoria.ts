@@ -59,6 +59,7 @@ import type {
   BasesDrePorta,
   BasesIndicadoresPorta,
   ContextoFinanceiro,
+  DeParaContabilPorta,
   FiltroPagar,
   FiltroReceber,
   GravadorSghFinanceiro,
@@ -1895,10 +1896,8 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     ];
   }
 
-  async deParaContabil() {
-    return [
-      { convenio: 91, tipoConta: 'E', tipoLancamento: 1, grupo: 100, subgrupo: 1, item: 1, conta: 311_101 },
-    ];
+  async deParaContabil(): Promise<DeParaContabilPorta> {
+    return { regras: [], centros: new Map(), credores: new Map(), fatos: [] };
   }
 
   async retencoesDaCompetencia(
