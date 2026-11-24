@@ -247,7 +247,7 @@ classe_socioeconomica	CAD	dominio	F8	Faixas de classe socioeconômica para perfi
 classificacao_raca_cor	CAD	catalogo_publico	F3	Classificação de raça e cor oficial, com códigos para TISS, cadastro nacional e e-SUS	F15; SPDATA TBCOR (6); MV RACA_COR*	02	3
 classificacao_risco_area	CAD	dominio	F8	Cor de risco atribuída a uma área do território atendido, usada para classificar o risco de adoecer das famílias	rodada2:nova	02	1
 clinica_assistencial	CAD	dominio	F3	Clínicas (médica, cirúrgica, obstétrica, pediátrica) com tipo usado na TISS e no faturamento público	F27; SPDATA TBCLINICA (7)	02	3
-cobertura_paciente	CAD	principal	F3	Fonte pagadora e plano do paciente, com carteira, validade, titularidade e situação	F9; SPDATA RICADPAC_TBCONVEN; MV CARTEIRA, PACIENTE_CARTAO	02	3
+cobertura_paciente	CAD	principal	F3	Fonte pagadora e plano do paciente, com carteira, validade, titularidade e situação	F9; SPDATA RICADPAC_TBCONVEN; MV CARTEIRA, PACIENTE_CARTAO; unicidade da carteira só enquanto viva, a encerrada libera o número (02-CAD linha 9; migração 03_CAD/94_carteira_encerrada)	02	3
 comarca_judicial	CAD	dominio	F7	Comarcas e varas usadas para registrar processos judiciais do grupo	rodada2:nova	02	1
 complexidade_estabelecimento	CAD	dominio	F3	Nível de complexidade assistencial do estabelecimento (básica, média, alta)	F26; SPDATA TBCOMPLEXIDADE_HOSPITALAR (3)	02	1
 condicao_especial	CAD	dominio	F8	Condições que pedem atenção no atendimento: mobilidade reduzida, intérprete de libras, acompanhante obrigatório	F1; MV CONDICOES_ESPECIAIS_PAC	02	1

@@ -275,8 +275,8 @@ describe.skipIf(SEM_BANCO)('vínculos do paciente no banco próprio (f22_o1)', (
           e,
           'SELECT id FROM agenda_servico WHERE nome = ?',
           [`AGENDA ${COD_AGE}`],
-          'INSERT INTO agenda_servico (estabelecimento_id, nome, categoria_agenda_id, duracao_horario_minutos, criado_em) VALUES (?, ?, ?, 30, ?)',
-          [m!.estabelecimento, `AGENDA ${COD_AGE}`, cat, agora],
+          'INSERT INTO agenda_servico (estabelecimento_id, nome, categoria_agenda_id, profissional_id, duracao_horario_minutos, criado_em) VALUES (?, ?, ?, ?, 30, ?)',
+          [m!.estabelecimento, `AGENDA ${COD_AGE}`, cat, m!.profissional, agora],
         );
         const inicio = new Date(Date.now() + 2 * 86_400_000);
         const horario = await garantir(
