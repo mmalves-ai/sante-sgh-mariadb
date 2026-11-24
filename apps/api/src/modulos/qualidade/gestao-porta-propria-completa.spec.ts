@@ -40,7 +40,7 @@ function falso() {
     lerSomente: (_c: unknown, fn: (l: typeof leitor) => Promise<unknown>) => fn(leitor),
     criarExecutor: () => ({}) as Executor,
   } as unknown as NucleoQualidade;
-  return { porta: new PortaGestaoPropriaCompleta(nucleo, {} as Executor), chamadas };
+  return { porta: new PortaGestaoPropriaCompleta(nucleo, null, {} as Executor), chamadas };
 }
 const C = { cliente: 'teste', estabelecimento: 3, usuario: 1, correlacao: 'x' } as never;
 
@@ -85,6 +85,13 @@ describe('porta própria completa da gestão (unidade)', () => {
     await expect(
       porta.envios({ ...(C as object), estabelecimento: null } as never, '2026-01'),
     ).rejects.toThrow(ErroOperacao);
+  });
+
+  it('sem o armazenamento de arquivos, o arquivo guardado do envio recusa 409 modelo-pendente (nunca gera de novo)', async () => {
+    const { porta, chamadas } = falso();
+    await expect(porta.arquivoEnvio(C, 7)).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    expect(chamadas[0]?.p).toEqual([7, 3]);
+    expect(chamadas[0]?.sql).toMatch(/JOIN arquivo a ON a\.chave_armazenamento = e\.chave_objeto/);
   });
 
   it('o que segue sem modelo continua falhando fechado (503 modelo-pendente), nunca vazio', async () => {

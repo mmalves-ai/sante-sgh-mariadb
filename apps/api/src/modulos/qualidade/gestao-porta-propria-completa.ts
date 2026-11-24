@@ -5,9 +5,12 @@
 // `modelo-pendente` na gravação).
 // - Envios regulatórios (envio_regulatorio_qualidade): a lista desde a competência, o envio, a geração com a revisão
 //   por competência (a geração anterior fica substituída; a competência transmitida recusa `ja-transmitido`) e a
-//   transmissão conferida pela versão e pelo resumo SHA-256. O arquivo é gerado na tela e não é guardado: a chave do
-//   objeto fica nula (migração 18_QUA/94_gestao).
-import { type Executor, recusa, type TxOperacao } from '@sgh/nucleo';
+//   transmissão conferida pela versão e pelo resumo SHA-256. O arquivo gerado é guardado pela porta de armazenamento
+//   de arquivos (ADR 0004: imutável, conferido pelo resumo antes de chegar ao disco) e a chave fica no envio
+//   (`chave_objeto`, NOT NULL): o arquivo transmitido se lê depois pelos bytes guardados, nunca gerado de novo. Sem o
+//   armazenamento (instalação sem ARQUIVOS_RAIZ) ou sem o conteúdo, a geração recusa sem gravar nada.
+import { createHash, randomUUID } from 'node:crypto';
+import { type ArmazemArquivos, type Executor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { gravacaoDireta } from '../enfermagem/gravacao-direta.js';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import {
@@ -18,6 +21,7 @@ import {
   instanteN,
   type Linha,
   lerNoEstabelecimento,
+  modeloPendente,
   n,
   type NucleoQualidade,
   paraBanco,
@@ -45,6 +49,30 @@ const SQL_ENVIO = `
 /** A competência do contrato (AAAA-MM) como o banco guarda (o primeiro dia do mês). */
 const competenciaBanco = (c: string): string => `${c.slice(0, 7)}-01`;
 
+/**
+ * A geração do contrato com o conteúdo do arquivo. O conteúdo é opcional no tipo só porque a interface do gravador
+ * (porta-gestao.ts) ainda não o declara; aqui ele é exigido: sem ele, a geração recusa sem gravar.
+ */
+export type GeracaoEnvioComArquivo = Parameters<GravadorGestao['gerarEnvioRegulatorio']>[0] & {
+  readonly conteudo?: string;
+};
+
+/** O arquivo do envio como foi guardado na geração (os bytes transmitidos, nunca gerados de novo). */
+export interface ArquivoEnvioGuardado {
+  readonly arquivo: string;
+  readonly conteudo: string;
+  readonly hash: string;
+}
+
+const extensao = (nome: string): string => /\.[A-Za-z0-9]{1,8}$/.exec(nome)?.[0] ?? '';
+
+const tipoMime = (nome: string): string =>
+  nome.toLowerCase().endsWith('.xml')
+    ? 'application/xml'
+    : nome.toLowerCase().endsWith('.csv')
+      ? 'text/csv'
+      : 'text/plain';
+
 function envio(r: Linha): EnvioRegulatorioRegistrado {
   return {
     id: n(r['id']),
@@ -68,7 +96,15 @@ function envio(r: Linha): EnvioRegulatorioRegistrado {
 export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
   private readonly nucleoCompleta: NucleoQualidade;
 
-  constructor(nucleo: NucleoQualidade, executorPronto?: Executor) {
+  /**
+   * @param armazem O armazenamento de arquivos da instalação (ADR 0004: disco local, metadado na tabela `arquivo`).
+   * Sem ele (sem ARQUIVOS_RAIZ), gerar o envio recusa 409 `modelo-pendente` e o arquivo guardado não se lê.
+   */
+  constructor(
+    nucleo: NucleoQualidade,
+    private readonly armazem: ArmazemArquivos | null = null,
+    executorPronto?: Executor,
+  ) {
     super(nucleo, executorPronto);
     this.nucleoCompleta = nucleo;
   }
@@ -90,7 +126,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
   protected override gravador(tx: TxOperacao, est: number): GravadorGestao {
     return {
       ...super.gravador(tx, est),
-      gerarEnvioRegulatorio: (g) => this.gerarEnvio(tx, est, g),
+      gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
       registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),
     };
   }
@@ -115,11 +151,85 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
     });
   }
 
+  /**
+   * O arquivo do envio pelos bytes guardados na geração (a rota `/arquivo`): null quando o envio não existe no
+   * estabelecimento da sessão; sem o armazenamento, 409 `modelo-pendente`.
+   */
+  async arquivoEnvio(c: ContextoGestao, id: number): Promise<ArquivoEnvioGuardado | null> {
+    const r = await lerNoEstabelecimento(this.nucleoCompleta, c, async (l, est) => {
+      const e = await l.uma(
+        `SELECT e.arquivo_nome, e.resumo_sha256, a.id AS arquivo_id
+           FROM envio_regulatorio_qualidade e
+           JOIN arquivo a ON a.chave_armazenamento = e.chave_objeto AND a.excluido_em IS NULL
+          WHERE e.id = ? AND e.estabelecimento_id = ? AND e.excluido_em IS NULL`,
+        [id, est],
+      );
+      return e ? { est, e } : null;
+    });
+    if (!r) return null;
+    if (!this.armazem)
+      throw modeloPendente('A gestão da qualidade: arquivo do envio (armazenamento de arquivos sem raiz)');
+    const a = await this.armazem.ler(
+      {
+        cliente: c.cliente,
+        estabelecimento: r.est,
+        usuario: null,
+        correlacao: c.correlacao || 'qualidade.gestao',
+      },
+      n(r.e['arquivo_id']),
+    );
+    const conteudo = a.conteudo.toString('utf8');
+    const hash = createHash('sha256').update(a.conteudo).digest('hex');
+    // O arquivo guardado diverge do resumo do envio só por corrupção no disco: recusa, nunca devolve bytes errados.
+    if (hash !== texto(r.e['resumo_sha256']))
+      throw recusa(
+        'arquivo-divergente',
+        'O arquivo guardado do envio não confere com o resumo gravado na geração.',
+      );
+    return { arquivo: texto(r.e['arquivo_nome']), conteudo, hash };
+  }
+
   private async gerarEnvio(
     tx: TxOperacao,
     est: number,
-    g: Parameters<GravadorGestao['gerarEnvioRegulatorio']>[0],
+    g: GeracaoEnvioComArquivo,
   ): Promise<{ id: number; revisao: number; arquivo: string }> {
+    // O arquivo transmitido ao órgão tem de ser guardado (ADR 0004): sem armazenamento ou sem conteúdo, nada é gravado.
+    if (!this.armazem)
+      throw modeloPendente('A gestão da qualidade: arquivo do envio (armazenamento de arquivos sem raiz)');
+    if (g.conteudo === undefined)
+      throw recusa(
+        'arquivo-ausente',
+        'O conteúdo do arquivo do envio não veio na geração: nada foi gravado.',
+      );
+    const bytes = Buffer.from(g.conteudo, 'utf8');
+    // Confere antes de guardar: o arquivo divergente do resumo nunca chega ao disco.
+    if (createHash('sha256').update(bytes).digest('hex') !== g.hash.toLowerCase())
+      throw recusa(
+        'arquivo-divergente',
+        'O conteúdo do arquivo não confere com o resumo calculado na geração.',
+      );
+    // O arquivo é guardado ANTES de qualquer leitura desta transação: o armazenamento grava a sua própria operação
+    // (metadado e trilha) e a leitura anterior fixaria o retrato da transação, recusando depois a trilha do envio
+    // (registro alterado desde a leitura). O nome guardado não leva a revisão (ela só se sabe sob a trava); o nome do
+    // envio fica em arquivo_nome. Recusa posterior (corrida com outra geração) deixa o arquivo guardado sem envio,
+    // imutável e reaproveitado pela chave do conteúdo, nunca um envio sem arquivo.
+    const tipoArq = cobra(g.tipo);
+    const guardado = await this.armazem.guardar(
+      {
+        conteudo: bytes,
+        nomeOriginal: `envio-${tipoArq}-${g.competencia.slice(0, 7)}${extensao(g.arquivoDe(1))}`,
+        tipoMime: tipoMime(g.arquivoDe(1)),
+        finalidade: 'envio_regulatorio',
+        entidade: 'envio_regulatorio_qualidade',
+        imutavel: true,
+      },
+      {
+        ...tx.contexto,
+        // A chave da operação do armazenamento (até 80 caracteres): única por geração.
+        chaveIdempotencia: `qualidade-envio:${randomUUID()}`,
+      },
+    );
     const usuario = await exigirUsuario(tx, g.usuario);
     const tipo = cobra(g.tipo);
     const competencia = competenciaBanco(g.competencia);
@@ -149,7 +259,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
       competencia,
       revisao,
       arquivo_nome: arquivo,
-      chave_objeto: null,
+      chave_objeto: guardado.chave,
       resumo_sha256: g.hash,
       linhas: g.linhas,
       resumo: g.resumo,
