@@ -27,6 +27,7 @@ import {
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { GravacaoSusPropria, TABELAS_SUS } from './porta-propria.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
+import { ErroProblema } from '../../problema.filter.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -851,6 +852,34 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
       registroAnvisa: 'ANV93',
       serie: 'S93',
       lote: 'L93',
+    });
+    // Reapresentar na competência em que a AIH já foi apresentada (202605): recusa de negócio 409, antes do UNIQUE do
+    // banco; nada muda (a conta nova segue fechada, sem competência nem remessa).
+    const arq2 = await gravar(ids.est, (_g, tx) => new GravacaoSusPropria(tx, ids.est).proximoArquivo());
+    const conteudo2 = `SISAIH sintetico reapresentacao ${arq2}`;
+    const sha2 = createHash('sha256').update(conteudo2).digest('hex');
+    const mesma = gravar(ids.est, (g) =>
+      g.gravarArquivoSisaih(
+        {
+          ...novo,
+          id: arq2,
+          nome: `AIH${arq2}.TXT`,
+          hash: sha2,
+          bytes: conteudo2.length,
+          chaveObjeto: `sus/${P}/aih/202605/${arq2}-${sha2.slice(0, 16)}.txt`,
+        },
+        [{ id, versao: 7 }],
+      ),
+    );
+    await expect(mesma).rejects.toBeInstanceOf(ErroProblema);
+    await expect(mesma).rejects.toMatchObject({
+      extras: { codigo: 'aih-reapresentada-mesma-competencia' },
+    });
+    expect((await mesma.catch((e: ErroProblema) => e)).getStatus()).toBe(409);
+    expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({
+      situacao: 'fechada',
+      competenciaApresentacao: null,
+      versao: 7,
     });
     expect((await ler(ids.est, (l) => l.aihsParaApresentar('202606'))).map((x) => x.id)).toContain(id);
     // Reapresentar de novo, sem estar rejeitada: recusa e nada muda.
