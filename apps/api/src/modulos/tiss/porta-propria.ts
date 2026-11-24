@@ -164,7 +164,10 @@ const SQL_ITENS_GLOSA = `
          gi.data_recuperacao, gi.justificativa, gi.decidido_em, gi.recurso_glosa_id, ud.login AS decidido_por,
          gi.evidencia_prontuario IS NOT NULL AS tem_evidencia,
          gl.data_glosa, gl.data_limite_recurso, mg.codigo_tuss, mg.descricao AS motivo_nome,
-         mg.permite_reapresentacao, rg.enviado_em AS recurso_em, rg.situacao AS situacao_recurso
+         mg.permite_reapresentacao, rg.enviado_em AS recurso_em, rg.situacao AS situacao_recurso,
+         ci.valor_pago AS pago_item,
+         (SELECT mr.codigo_tuss FROM recurso_glosa_item rgi JOIN motivo_glosa mr ON mr.id = rgi.motivo_retorno_glosa_id
+           WHERE rgi.glosa_item_id = gi.id AND rgi.excluido_em IS NULL ORDER BY rgi.id DESC LIMIT 1) AS motivo_retorno
     FROM conta_hospitalar_item ci
     JOIN conta_hospitalar ch ON ch.id = ci.conta_hospitalar_id
     JOIN item_faturavel f ON f.id = ci.item_faturavel_id
@@ -177,18 +180,20 @@ const SQL_ITENS_GLOSA = `
      AND ci.situacao NOT IN ('sem_cobranca','transferido','estornado')`;
 
 function itemGlosaDe(r: Linha, prazoParametro: string): ItemGlosaLido {
-  const conciliado = r['glosa_item'] !== null && r['glosa_item'] !== undefined;
+  // Conciliado: com glosa baixada, ou pago por inteiro na baixa (valor pago no item, sem glosa).
+  const temGlosa = r['glosa_item'] !== null && r['glosa_item'] !== undefined;
+  const conciliado = temGlosa || n(r['pago_item']) > 0;
   const cobrado = n(r['valor_total']);
-  const glosa = conciliado ? n(r['valor_glosado']) : 0;
+  const glosa = temGlosa ? n(r['valor_glosado']) : 0;
   const retornado = r['data_recuperacao'] !== null && r['data_recuperacao'] !== undefined;
   const estado = estadoDaGlosa({
     conciliado,
     glosado: glosa,
-    decisao: conciliado ? texto(r['decisao']) : null,
+    decisao: temGlosa ? texto(r['decisao']) : null,
     emRecurso: r['recurso_glosa_id'] !== null && r['recurso_glosa_id'] !== undefined,
     retornado,
   });
-  const dataPagamento = conciliado ? dataIso(r['data_glosa']) : null;
+  const dataPagamento = temGlosa ? dataIso(r['data_glosa']) : null;
   const convenio = n(r['fonte_pagadora_id']);
   const limite = dataIso(r['data_limite_recurso']);
   const p = limite
@@ -209,8 +214,12 @@ function itemGlosaDe(r: Linha, prazoParametro: string): ItemGlosaLido {
     quantidade: n(r['quantidade']),
     valorCobrado: cobrado,
     conciliado,
-    valorPago: conciliado ? r2(n(r['valor_apresentado']) - glosa) : 0,
-    quantidadePaga: conciliado ? n(r['quantidade_apresentada']) - n(r['quantidade_glosada']) : 0,
+    valorPago: temGlosa ? r2(n(r['valor_apresentado']) - glosa) : conciliado ? n(r['pago_item']) : 0,
+    quantidadePaga: temGlosa
+      ? n(r['quantidade_apresentada']) - n(r['quantidade_glosada'])
+      : conciliado
+        ? n(r['quantidade'])
+        : 0,
     dataPagamento,
     glosa,
     motivo: codigoMotivo(r['codigo_tuss']),
@@ -221,8 +230,8 @@ function itemGlosaDe(r: Linha, prazoParametro: string): ItemGlosaLido {
     dataRecurso: dataIso(r['recurso_em']),
     valorRetorno: n(r['valor_recuperado']),
     dataRetorno: dataIso(r['data_recuperacao']),
-    // O motivo do retorno por item aguarda a coluna no modelo (pedido do lote 03-16).
-    motivoRetorno: 0,
+    // O motivo do retorno vem do item do recurso (06-FAT linha 34; 0 = não informado).
+    motivoRetorno: r['motivo_retorno'] ? codigoMotivo(r['motivo_retorno']) : 0,
     estado,
     desfecho: desfechoDoRecurso({
       recursado: n(r['valor_recursado']),

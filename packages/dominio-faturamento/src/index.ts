@@ -30,3 +30,5 @@ export * from './tiss/configuracao.js';
 export * from './tiss/elegibilidade.js';
 // F3.7 (06-FAT linhas 21, 22 e 24): parecer do item na auditoria, protocolo entre setores e acompanhamento da guia.
 export * from './conta/auditoria-tramite.js';
+// F3.7 (06-FAT linha 34): o lote de recurso da glosa por item, o retorno da operadora e a situação da glosa.
+export * from './glosa/recurso-lote.js';

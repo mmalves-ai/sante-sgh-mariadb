@@ -1074,12 +1074,13 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     expect(a.uso).toBeNull();
   });
 
-  it('operações pendentes: a liberação diz o que falta e a gravação recusa sem gravar', async () => {
-    const l = await porta.podeGravar(c, 'faturamento.registrarGlosa');
-    expect(l).toMatchObject({ pode: false, codigo: 'operacao-pendente' });
-    expect(codigo(await erroDe(porta.executar(c, 'faturamento.registrarRecurso', {}, op())))).toBe(
-      'operacao-pendente',
-    );
+  it('baixa, recurso e retorno saíram das pendentes (contrato em glosa-recurso.int.spec.ts); a importação do demonstrativo ainda recusa sem gravar', async () => {
+    for (const o of [
+      'faturamento.registrarGlosa',
+      'faturamento.registrarRecurso',
+      'faturamento.registrarRetornoRecurso',
+    ])
+      expect((await porta.podeGravar(c, o)).codigo).not.toBe('operacao-pendente');
     expect(
       codigo(
         await erroDe(

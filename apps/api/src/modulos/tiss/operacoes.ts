@@ -14,8 +14,8 @@
 // o CNES, o código do prestador e o registro ANS são obrigatórios; a guia confere itens e total com a conta.
 // Melhoria: o fechamento da competência grava o retrato (contas e valor apresentado) em
 // fechamento_competencia_fonte_pagadora, com quem fechou e quando.
-// Pendentes (pedidos do lote 03-16): a baixa do demonstrativo por item (registrarGlosa), o recurso e o retorno do
-// recurso aguardam o modelo do pagamento por item: até lá, a liberação diz "operação pendente" e a gravação recusa.
+// F3.7 (06-FAT linha 34): a baixa do retorno por item (registrarGlosa), o lote de recurso e o retorno do recurso
+// gravam no banco pelas operações de operacoes-glosa.ts.
 import {
   esquemaFecharCompetencia,
   esquemaReabrirCompetencia,
@@ -68,6 +68,7 @@ import {
   TIPO_GUIA_NO_MODELO,
   type TipoGuiaLote,
 } from './regras-tiss.js';
+import { operacoesGlosa } from './operacoes-glosa.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -77,14 +78,7 @@ const dataIso = (v: unknown): string =>
 const horaIso = (v: unknown): string => (v instanceof Date ? v.toISOString().slice(11, 19) : '00:00:00');
 
 /** Operações do executor ainda sem gravação no banco (o modelo do pagamento por item está pedido). */
-export const OPERACOES_TISS_PENDENTES: Readonly<Record<string, string>> = {
-  'faturamento.registrarGlosa':
-    'a baixa do demonstrativo por item aguarda o modelo do pagamento por item no banco do estabelecimento',
-  'faturamento.registrarRecurso':
-    'o recurso de glosa por item depende da baixa por item, que aguarda o modelo do pagamento por item',
-  'faturamento.registrarRetornoRecurso':
-    'o retorno do recurso por item depende da baixa por item, que aguarda o modelo do pagamento por item',
-};
+export const OPERACOES_TISS_PENDENTES: Readonly<Record<string, string>> = {};
 
 function estabelecimentoDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
@@ -787,5 +781,6 @@ export function operacoesTiss(
     'faturamento.registrarProtocolo': registrarProtocolo as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.fecharCompetencia': fecharCompetencia as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.reabrirCompetencia': reabrirCompetencia as unknown as Operacao<never, ResultadoOperacao>,
+    ...(operacoesGlosa as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
   };
 }
