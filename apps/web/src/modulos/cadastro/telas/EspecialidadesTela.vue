@@ -40,7 +40,7 @@ function escolher(e: { id: number; codigo: string; descricao: string }): void {
           :rotulo="t('ligacoes.especialidade.trocar')"
           variante="secundario"
           data-testid="trocar-especialidade"
-          @click="escolhida = null"
+          @acionar="escolhida = null"
         />
       </div>
       <div v-else class="campo">
