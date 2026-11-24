@@ -7,6 +7,9 @@ import {
   planoCancelamento,
   planoResponsavel,
   podeEfetivarCancelamento,
+  podeDesistirCancelamento,
+  problemasDaAssinatura,
+  ADITIVOS_COM_EFEITO,
   problemasDaAbrangencia,
   problemasDoAditivo,
   problemasDoDepartamento,
@@ -149,12 +152,16 @@ describe('cancelamento do contrato', () => {
     avisoEntregueEm: null,
     exigeNotificacao: false,
     diasInadimplencia: 61,
+    diaLimiteNotificacao: 50,
+    tipoContratacao: 'individual_familiar' as const,
+    inicioContrato: '2025-01-01',
   };
-  it('a pedido do titular: efeito imediato, nunca retroativo', () => {
+  it('a pedido do titular no individual: efeito imediato e efetivado na hora, nunca retroativo', () => {
     expect(planoCancelamento({ ...base, solicitante: 'titular' })).toEqual({
       problemas: [],
       dataEfeito: '2026-11-24',
       situacao: 'solicitado',
+      efetivarJa: true,
     });
     expect(
       codigos(planoCancelamento({ ...base, solicitante: 'titular', dataEfeito: '2026-11-01' }).problemas),
@@ -173,16 +180,62 @@ describe('cancelamento do contrato', () => {
           avisoEntregueEm: '2026-11-20',
         }).problemas,
       ),
-    ).toEqual(['prazo-notificacao']);
+    ).toEqual(['notificacao-fora-do-prazo', 'prazo-notificacao']);
     expect(
       planoCancelamento({
         ...base,
         solicitante: 'inadimplencia',
         diasAtraso: 70,
-        avisoEntregueEm: '2026-11-20',
+        avisoEntregueEm: '2026-10-30',
         dataEfeito: '2026-12-01',
       }),
-    ).toEqual({ problemas: [], dataEfeito: '2026-12-01', situacao: 'agendado' });
+    ).toEqual({ problemas: [], dataEfeito: '2026-12-01', situacao: 'agendado', efetivarJa: false });
+  });
+  it('inadimplência: notificação até o dia limite do parâmetro (art. 13 II)', () => {
+    // 70 dias de atraso hoje, aviso há 4 dias: saiu no 66º dia, depois do 50º.
+    const tarde = { ...base, solicitante: 'inadimplencia', diasAtraso: 70, dataEfeito: '2026-12-10' };
+    expect(codigos(planoCancelamento({ ...tarde, avisoEntregueEm: '2026-11-20' }).problemas)).toEqual([
+      'notificacao-fora-do-prazo',
+    ]);
+    // Aviso há 25 dias: saiu no 45º dia, dentro do prazo.
+    expect(planoCancelamento({ ...tarde, avisoEntregueEm: '2026-10-30' }).problemas).toEqual([]);
+    // Parâmetro mais rígido (40º dia) recusa o mesmo aviso.
+    expect(
+      codigos(
+        planoCancelamento({ ...tarde, avisoEntregueEm: '2026-10-30', diaLimiteNotificacao: 40 }).problemas,
+      ),
+    ).toEqual(['notificacao-fora-do-prazo']);
+    expect(codigos(planoCancelamento({ ...tarde, avisoEntregueEm: '2026-11-30' }).problemas)).toContain(
+      'notificacao-futura',
+    );
+  });
+  it('coletivo: contratante com 60 dias de aviso e 12 meses de vigência; titular não encerra o contrato', () => {
+    const col = { ...base, tipoContratacao: 'coletivo_empresarial' as const, solicitante: 'contratante' };
+    // Sem data: o sistema propõe hoje + 60 dias; agendado, nunca efetivado na hora.
+    expect(planoCancelamento(col)).toEqual({
+      problemas: [],
+      dataEfeito: '2027-01-23',
+      situacao: 'agendado',
+      efetivarJa: false,
+    });
+    expect(codigos(planoCancelamento({ ...col, dataEfeito: '2026-12-01' }).problemas)).toEqual([
+      'aviso-previo',
+    ]);
+    // Contrato com 3 meses: a primeira data é o fim dos 12 meses.
+    expect(planoCancelamento({ ...col, inicioContrato: '2026-08-15' }).dataEfeito).toBe('2027-08-15');
+    expect(
+      codigos(
+        planoCancelamento({ ...col, inicioContrato: '2026-08-15', dataEfeito: '2027-02-01' }).problemas,
+      ),
+    ).toEqual(['vigencia-minima']);
+    expect(codigos(planoCancelamento({ ...col, solicitante: 'titular' }).problemas)).toEqual([
+      'solicitante-coletivo',
+    ]);
+  });
+  it('desistência só antes da efetivação e com motivo', () => {
+    expect(podeDesistirCancelamento('agendado', 'acordo com o contratante')).toBeNull();
+    expect(podeDesistirCancelamento('efetivado', 'x')?.codigo).toBe('situacao-invalida');
+    expect(podeDesistirCancelamento('solicitado', ' ')?.codigo).toBe('motivo-obrigatorio');
   });
   it('efetivação só com o efeito alcançado e na situação certa', () => {
     expect(podeEfetivarCancelamento('agendado', '2026-12-01', '2026-11-24')?.codigo).toBe('efeito-futuro');
@@ -265,5 +318,28 @@ describe('pedido de cartão', () => {
         problemasDoPedidoCartao({ primeiraVia: false, motivo: null, cobraTaxa: true, valorTaxa: null }),
       ),
     ).toEqual(['motivo-obrigatorio', 'taxa-invalida']);
+    // Cobrança ligada com a taxa no padrão zero: recusa, nunca cobra R$ 0 em silêncio.
+    expect(
+      codigos(problemasDoPedidoCartao({ primeiraVia: false, motivo: 1, cobraTaxa: true, valorTaxa: 0 })),
+    ).toEqual(['taxa-invalida']);
+    expect(
+      problemasDoPedidoCartao({ primeiraVia: false, motivo: 1, cobraTaxa: true, valorTaxa: 25 }),
+    ).toEqual([]);
+  });
+});
+
+describe('assinatura do aditivo', () => {
+  it('só o rascunho, com a assinatura até o efeito e nunca futura', () => {
+    expect(problemasDaAssinatura('rascunho', '2026-11-20', '2026-12-01', '2026-11-24')).toEqual([]);
+    expect(codigos(problemasDaAssinatura('vigente', '2026-11-20', '2026-12-01', '2026-11-24'))).toEqual([
+      'situacao-invalida',
+    ]);
+    expect(codigos(problemasDaAssinatura('rascunho', '2026-12-05', '2026-12-01', '2026-11-24'))).toEqual([
+      'assinatura-invalida',
+    ]);
+    expect(codigos(problemasDaAssinatura('rascunho', '2026-11-30', '2026-12-10', '2026-11-24'))).toEqual([
+      'assinatura-invalida',
+    ]);
+    expect(ADITIVOS_COM_EFEITO).toEqual(['vigencia', 'renovacao']);
   });
 });

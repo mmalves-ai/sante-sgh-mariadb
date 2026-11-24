@@ -7,7 +7,7 @@
 // Melhoria: a troca de responsável encerra o anterior na véspera sozinha (um clique) e nunca sobrescreve o período;
 // o parâmetro muda por vigência, sem apagar o valor antigo.
 
-import { somarDias } from './carteirinha.js';
+import { somarDias, somarMeses } from './carteirinha.js';
 
 export interface ProblemaCadastro {
   readonly codigo: string;
@@ -341,6 +341,30 @@ export function problemasDoAditivo(
   return r;
 }
 
+/** O aditivo em rascunho passa a vigente com a data de assinatura (nunca depois do efeito). */
+export function problemasDaAssinatura(
+  situacao: string,
+  assinatura: string,
+  efeito: string,
+  hoje: string,
+): ProblemaCadastro[] {
+  const r: ProblemaCadastro[] = [];
+  if (situacao !== 'rascunho')
+    r.push(p('situacao-invalida', 'situacao', 'Só o aditivo em rascunho é assinado.'));
+  if (!dataValida(assinatura) || assinatura > efeito || assinatura > hoje)
+    r.push(
+      p(
+        'assinatura-invalida',
+        'assinatura',
+        'A assinatura é anterior ou igual ao efeito e não pode ser futura.',
+      ),
+    );
+  return r;
+}
+
+/** Os tipos de aditivo que mudam o contrato na assinatura; os demais ficam só registrados (documento do acordo). */
+export const ADITIVOS_COM_EFEITO: readonly string[] = ['vigencia', 'renovacao'];
+
 // ---- cancelamento do contrato ----
 
 export const SOLICITANTES_CANCELAMENTO = [
@@ -353,6 +377,13 @@ export const SOLICITANTES_CANCELAMENTO = [
   'obito',
 ] as const;
 
+export const TIPOS_CONTRATACAO = ['individual_familiar', 'coletivo_empresarial', 'coletivo_adesao'] as const;
+export type TipoContratacao = (typeof TIPOS_CONTRATACAO)[number];
+
+/** Aviso prévio e vigência mínima da rescisão sem motivo do contrato coletivo (RN 557 da ANS). */
+export const AVISO_PREVIO_COLETIVO_DIAS = 60;
+export const VIGENCIA_MINIMA_COLETIVO_MESES = 12;
+
 export interface PedidoCancelamento {
   readonly solicitante: string;
   readonly hoje: string;
@@ -361,28 +392,80 @@ export interface PedidoCancelamento {
   readonly avisoEntregueEm: string | null;
   readonly exigeNotificacao: boolean;
   readonly diasInadimplencia: number;
+  /** Dia de atraso até o qual a notificação tem de sair (parâmetro dia_limite_notificacao_inadimplencia). */
+  readonly diaLimiteNotificacao: number;
+  readonly tipoContratacao: TipoContratacao;
+  readonly inicioContrato: string;
 }
 
 export interface PlanoCancelamento {
   readonly problemas: ProblemaCadastro[];
   readonly dataEfeito: string;
   readonly situacao: 'solicitado' | 'agendado';
+  /** O pedido tem efeito na própria operação (pedido do titular no contrato individual, RN 412). */
+  readonly efetivarJa: boolean;
 }
+
+const diasEntre = (de: string, ate: string): number =>
+  Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000);
 
 /**
  * Decide a data de efeito e a situação do pedido de cancelamento.
- * - A pedido do titular ou do contratante: efeito imediato (na ciência), nunca retroativo.
- * - Inadimplência: só com atraso acima do limite e notificação entregue; o efeito nunca antes de 10 dias do aviso.
+ * - Contrato individual ou familiar, a pedido do titular (que é o contratante): efeito imediato na ciência (RN 412),
+ *   nunca retroativo; a operação já efetiva o cancelamento.
+ * - Contrato coletivo, a pedido do contratante: rescisão sem motivo só depois de 12 meses de vigência e com 60 dias de
+ *   aviso (RN 557); sem data informada, o sistema propõe a primeira data possível. No coletivo, o titular pede a
+ *   própria exclusão (do beneficiário), não o fim do contrato.
+ * - Inadimplência: atraso acima do limite, notificação entregue até o dia limite do atraso (Lei 9.656/98 art. 13 II,
+ *   até o 50º dia) e efeito ao menos 10 dias depois do aviso.
  */
 export function planoCancelamento(x: PedidoCancelamento): PlanoCancelamento {
   const r: ProblemaCadastro[] = [];
   if (!(SOLICITANTES_CANCELAMENTO as readonly string[]).includes(x.solicitante))
     r.push(p('solicitante-invalido', 'solicitante', 'Solicitante fora da lista.'));
+  if (!(TIPOS_CONTRATACAO as readonly string[]).includes(x.tipoContratacao))
+    r.push(p('contratacao-invalida', 'contrato', 'Tipo de contratação do contrato desconhecido.'));
+  const coletivo = x.tipoContratacao !== 'individual_familiar';
   const pedidoDoTitular = x.solicitante === 'titular' || x.solicitante === 'contratante';
-  let efeito = x.dataEfeito ?? x.hoje;
   if (x.dataEfeito !== null && !dataValida(x.dataEfeito))
     r.push(p('data-invalida', 'dataEfeito', 'Data de efeito inválida.'));
-  if (pedidoDoTitular && x.dataEfeito === null) efeito = x.hoje;
+  let efeito = x.dataEfeito ?? x.hoje;
+  if (coletivo && x.solicitante === 'titular')
+    r.push(
+      p(
+        'solicitante-coletivo',
+        'solicitante',
+        'No contrato coletivo, o titular pede a própria exclusão; o fim do contrato é pedido pelo contratante.',
+      ),
+    );
+  if (coletivo && x.solicitante === 'contratante') {
+    const minimo = [
+      somarDias(x.hoje, AVISO_PREVIO_COLETIVO_DIAS),
+      somarMeses(x.inicioContrato, VIGENCIA_MINIMA_COLETIVO_MESES),
+    ]
+      .sort()
+      .pop()!;
+    if (x.dataEfeito === null) efeito = minimo;
+    else if (dataValida(x.dataEfeito) && x.dataEfeito < somarDias(x.hoje, AVISO_PREVIO_COLETIVO_DIAS))
+      r.push(
+        p(
+          'aviso-previo',
+          'dataEfeito',
+          `A rescisão do contrato coletivo exige ${AVISO_PREVIO_COLETIVO_DIAS} dias de aviso.`,
+        ),
+      );
+    else if (
+      dataValida(x.dataEfeito) &&
+      x.dataEfeito < somarMeses(x.inicioContrato, VIGENCIA_MINIMA_COLETIVO_MESES)
+    )
+      r.push(
+        p(
+          'vigencia-minima',
+          'dataEfeito',
+          `O contrato coletivo só é rescindido sem motivo depois de ${VIGENCIA_MINIMA_COLETIVO_MESES} meses de vigência.`,
+        ),
+      );
+  }
   if (dataValida(efeito) && efeito < x.hoje)
     r.push(p('efeito-retroativo', 'dataEfeito', 'O cancelamento não tem efeito retroativo.'));
   const inadimplencia = x.solicitante === 'inadimplencia' || x.exigeNotificacao;
@@ -399,10 +482,31 @@ export function planoCancelamento(x: PedidoCancelamento): PlanoCancelamento {
       r.push(
         p('notificacao-obrigatoria', 'avisoEntregueEm', 'Registre a entrega da notificação ao beneficiário.'),
       );
-    else if (dataValida(efeito) && efeito < somarDias(x.avisoEntregueEm, 10))
-      r.push(p('prazo-notificacao', 'dataEfeito', 'O efeito vem ao menos 10 dias depois da notificação.'));
+    else {
+      if (x.avisoEntregueEm > x.hoje)
+        r.push(p('notificacao-futura', 'avisoEntregueEm', 'A entrega da notificação não pode ser futura.'));
+      else if (x.diasAtraso !== null) {
+        const atrasoNoAviso = x.diasAtraso - diasEntre(x.avisoEntregueEm, x.hoje);
+        if (atrasoNoAviso > x.diaLimiteNotificacao)
+          r.push(
+            p(
+              'notificacao-fora-do-prazo',
+              'avisoEntregueEm',
+              `A notificação saiu no ${atrasoNoAviso}º dia de atraso; a lei pede até o ${x.diaLimiteNotificacao}º.`,
+            ),
+          );
+      }
+      if (dataValida(efeito) && efeito < somarDias(x.avisoEntregueEm, 10))
+        r.push(p('prazo-notificacao', 'dataEfeito', 'O efeito vem ao menos 10 dias depois da notificação.'));
+    }
   }
-  return { problemas: r, dataEfeito: efeito, situacao: efeito > x.hoje ? 'agendado' : 'solicitado' };
+  const efetivarJa = pedidoDoTitular && !coletivo && !inadimplencia && efeito === x.hoje;
+  return {
+    problemas: r,
+    dataEfeito: efeito,
+    situacao: efeito > x.hoje ? 'agendado' : 'solicitado',
+    efetivarJa: r.length === 0 && efetivarJa,
+  };
 }
 
 /** O pedido pode ser efetivado: solicitado ou agendado com a data de efeito alcançada. */
@@ -414,6 +518,14 @@ export function podeEfetivarCancelamento(
   if (situacao !== 'solicitado' && situacao !== 'agendado')
     return p('situacao-invalida', 'situacao', 'Só o pedido solicitado ou agendado é efetivado.');
   if (dataEfeito > hoje) return p('efeito-futuro', 'dataEfeito', 'A data de efeito ainda não chegou.');
+  return null;
+}
+
+/** A desistência do pedido: só antes da efetivação, com o motivo registrado. */
+export function podeDesistirCancelamento(situacao: string, motivo: string | null): ProblemaCadastro | null {
+  if (situacao !== 'solicitado' && situacao !== 'agendado')
+    return p('situacao-invalida', 'situacao', 'Só o pedido ainda não efetivado admite desistência.');
+  if (!motivo?.trim()) return p('motivo-obrigatorio', 'motivo', 'Registre o motivo da desistência.');
   return null;
 }
 
@@ -567,7 +679,13 @@ export function problemasDoPedidoCartao(x: {
   const r: ProblemaCadastro[] = [];
   if (!x.primeiraVia && x.motivo === null)
     r.push(p('motivo-obrigatorio', 'motivo', 'A segunda via precisa do motivo.'));
-  if (x.cobraTaxa && (x.valorTaxa === null || x.valorTaxa < 0))
-    r.push(p('taxa-invalida', 'valorTaxa', 'Informe o valor da taxa.'));
+  if (x.cobraTaxa && (x.valorTaxa === null || !(x.valorTaxa > 0)))
+    r.push(
+      p(
+        'taxa-invalida',
+        'valorTaxa',
+        'A operadora cobra a segunda via, mas a taxa está zerada: defina o valor da taxa nos parâmetros.',
+      ),
+    );
   return r;
 }
