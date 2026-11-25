@@ -189,11 +189,13 @@ export class CurvasCrescimentoPropria {
         ORDER BY id DESC LIMIT 1`,
       [paciente],
     );
-    const sexo = p ? String(p['sexo'] ?? '') : '';
+    const codigoSexo = p ? String(p['sexo'] ?? '') : '';
+    const sexo: 'masculino' | 'feminino' | null =
+      codigoSexo === 'masculino' || codigoSexo === 'feminino' ? codigoSexo : null;
     return {
       existe: Boolean(p),
       nascimento: dataDe(rn?.['nascido_em']) ?? dataDe(p?.['data_nascimento']),
-      sexo: sexo === 'masculino' || sexo === 'feminino' ? sexo : null,
+      sexo,
       igSemanas: numOuNull(rn?.['idade_gestacional_semanas']),
       igDias: numOuNull(rn?.['idade_gestacional_dias']),
       rn,

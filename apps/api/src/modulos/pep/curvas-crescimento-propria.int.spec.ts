@@ -28,21 +28,43 @@ const recusada = (codigo: string) => ({ problema: expect.objectContaining({ codi
 describe.skipIf(SEM_BANCO)('curvas de crescimento (banco próprio, MariaDB)', () => {
   let nucleo: NucleoProprio;
   let curvas: CurvasCrescimentoPropria;
-  const ids = { est: 0, autor: 0, prof: 0, paciente: 0, semNascimento: 0 };
+  const ids = {
+    est: 0,
+    autor: 0,
+    prof: 0,
+    paciente: 0,
+    semNascimento: 0,
+    prematuro: 0,
+    mae: 0,
+    atendimentoMae: 0,
+  };
+  // Prematuro sintético: 30 semanas, nascido em 01/02/2026; peso, comprimento e PC do nascimento na mediana (Z0) da
+  // curva INTERGROWTH carregada em 30 semanas de idade pós-menstrual.
+  const NASCIDO_PREMATURO = new Date('2026-02-01T12:00:00Z');
+  const z0 = { peso: 0, estatura: 0, pc: 0 };
 
   const garantir = async (e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]) => {
     const l = await e.uma<{ id: number }>(sel, p);
     return l ? Number(l.id) : e.inserir(ins, pi);
   };
   const limpar = async (e: Escritor) => {
-    for (const p of [ids.paciente, ids.semNascimento].filter(Boolean)) {
+    for (const p of [ids.paciente, ids.semNascimento, ids.prematuro].filter(Boolean)) {
+      await e.executar(
+        `DELETE v FROM afericao_valor v JOIN afericao a ON a.id = v.afericao_id
+          WHERE a.paciente_id = ? AND v.retifica_afericao_valor_id IS NOT NULL`,
+        [p],
+      );
       await e.executar(
         'DELETE v FROM afericao_valor v JOIN afericao a ON a.id = v.afericao_id WHERE a.paciente_id = ?',
         [p],
       );
       await e.executar('DELETE FROM afericao WHERE paciente_id = ?', [p]);
     }
-    if (ids.est) await limparTrilhaDaMassa(e, { codigos: [EST] });
+    if (ids.est) {
+      await e.executar('DELETE FROM registro_nascimento WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
+      await limparTrilhaDaMassa(e, { codigos: [EST] });
+    }
   };
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-c2099' }, (l) =>
@@ -128,7 +150,96 @@ describe.skipIf(SEM_BANCO)('curvas de crescimento (banco próprio, MariaDB)', ()
       };
       ids.paciente = await paciente('PESSOA SINTETICA C2099 CRIANCA', '2026-05-25', 209_909_901);
       ids.semNascimento = await paciente('PESSOA SINTETICA C2099 SEM NASCIMENTO', null, 209_909_902);
+      ids.prematuro = await paciente('PESSOA SINTETICA C2099 PREMATURO', '2026-02-01', 209_909_903);
+      const fem = Number(
+        (await e.uma<{ id: number }>("SELECT id FROM sexo WHERE codigo = 'feminino'", []))!.id,
+      );
+      const pfMae = await pessoa('PESSOA SINTETICA C2099 MAE', '1996-04-12', fem);
+      ids.mae = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pfMae],
+        'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+        [pfMae, 209_909_904, agora],
+      );
+      const categoria = await garantir(
+        e,
+        'SELECT id FROM categoria_atendimento WHERE codigo = ?',
+        ['c2099-int'],
+        "INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, 'INTERNACAO C2099', 'internacao', ?)",
+        ['c2099-int', agora],
+      );
+      const carater = await garantir(
+        e,
+        'SELECT id FROM carater_atendimento_tiss ORDER BY id LIMIT 1',
+        [],
+        "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('C9', 'CARATER C2099', 'teste', ?)",
+        [agora],
+      );
+      const fonte = await garantir(
+        e,
+        'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+        ['c2099-sus'],
+        "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES (?, 'PAGADORA C2099', 'operadora', 'ativa', ?)",
+        ['c2099-sus', agora],
+      );
+      const tipoParto = await garantir(
+        e,
+        'SELECT id FROM tipo_parto WHERE codigo = ?',
+        ['c2099-normal'],
+        "INSERT INTO tipo_parto (codigo, descricao, criado_em) VALUES (?, 'PARTO C2099', ?)",
+        ['c2099-normal', agora],
+      );
       await limpar(e);
+      ids.atendimentoMae = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ids.est,
+          'c2099-at1',
+          ids.mae,
+          categoria,
+          carater,
+          fonte,
+          ids.prof,
+          new Date('2026-01-31T20:00:00Z'),
+          agora,
+        ],
+      );
+      for (const [ind, chave] of [
+        ['peso', 'peso'],
+        ['estatura', 'estatura'],
+        ['pc', 'pc'],
+      ] as const) {
+        const l = await e.uma<{ y: string }>(
+          `SELECT p.valor_y AS y FROM curva_referencia c JOIN curva_referencia_ponto p ON p.curva_referencia_id = c.id
+            WHERE c.codigo_curva = ? AND p.codigo_faixa = 'Z0' AND p.valor_x = 30`,
+          [`intergrowth_${ind}_pma_m`],
+        );
+        expect(l, `mediana INTERGROWTH de ${ind} em 30 semanas carregada`).toBeTruthy();
+        z0[chave] = Number(l!.y);
+      }
+      await e.inserir(
+        `INSERT INTO registro_nascimento (estabelecimento_id, mae_paciente_id, mae_atendimento_id, recem_nascido_paciente_id,
+           nascido_em, tipo_parto_id, sexo_id, idade_gestacional_semanas, idade_gestacional_dias, peso_gramas,
+           comprimento_cm, perimetro_cefalico_cm, responsavel_profissional_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 30, 0, ?, ?, ?, ?, ?)`,
+        [
+          ids.est,
+          ids.mae,
+          ids.atendimentoMae,
+          ids.prematuro,
+          NASCIDO_PREMATURO,
+          tipoParto,
+          masc,
+          Math.round(z0.peso * 1000),
+          Math.round(z0.estatura * 100) / 100,
+          Math.round(z0.pc * 100) / 100,
+          ids.prof,
+          agora,
+        ],
+      );
     });
   });
 
@@ -315,5 +426,71 @@ describe.skipIf(SEM_BANCO)('curvas de crescimento (banco próprio, MariaDB)', ()
     expect(r.ok).toBe(true);
     expect(await contar(ids.paciente)).toBe(antes + 1);
     await expect(com.ctrl.doPaciente(999_999_999, com.req())).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('prematuro: o nascimento entra como ponto na curva INTERGROWTH do banco, a OMS vem corrigida e o valor retificado sai', async () => {
+    // 40 semanas de idade pós-menstrual (70 dias de vida): INTERGROWTH; o peso digitado errado é retificado.
+    const termo = await registrar({ paciente: ids.prematuro, medidoEm: '2026-04-12T12:00:00Z', pesoKg: 2.4 });
+    const original = (
+      await ler<{ id: number }>('SELECT id FROM afericao_valor WHERE afericao_id = ?', [
+        termo.resultado.afericao,
+      ])
+    )[0]!.id;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'retifica-c2099' }, (e) =>
+      e.inserir(
+        `INSERT INTO afericao_valor (afericao_id, sequencia, parametro_vital_id, valor_numerico, retifica_afericao_valor_id,
+           motivo_retificacao, criado_em, criado_por)
+         SELECT afericao_id, sequencia + 1, parametro_vital_id, 2.9, id, 'peso digitado errado', ?, ? FROM afericao_valor
+          WHERE id = ?`,
+        [new Date(), ids.autor, original],
+      ),
+    );
+    // 292 dias de vida: 72 semanas pós-menstruais, idade corrigida de 7,3 meses na OMS 2006.
+    await registrar({ paciente: ids.prematuro, medidoEm: '2026-11-20T12:00:00Z', pesoKg: 7.5 });
+
+    const d = await curvas.doPaciente({ hospital: EST, login: AUTOR }, ids.prematuro);
+    expect(d.paciente).toMatchObject({ sexo: 'masculino', igSemanas: 30, igDias: 0 });
+    expect(d.referenciaAtual).toMatchObject({ publicacao: 'oms2006', corrigida: true });
+    expect(d.medidas).toHaveLength(3);
+
+    const nasc = d.medidas.find((m) => m.origem === 'nascimento')!;
+    expect(nasc).toMatchObject({
+      afericao: null,
+      pesoKg: Math.round(z0.peso * 1000) / 1000,
+      estaturaCm: Math.round(z0.estatura * 100) / 100,
+      perimetroCefalicoCm: Math.round(z0.pc * 100) / 100,
+    });
+    expect(nasc.referencia).toMatchObject({ publicacao: 'intergrowth' });
+    expect(nasc.referencia!.x).toBeCloseTo(30, 3);
+    for (const ind of ['peso', 'estatura', 'perimetro_cefalico'] as const)
+      expect(Math.abs(nasc.avaliacoes[ind]!.z), `Z do ${ind} pela linha Z0 carregada`).toBeLessThan(0.05);
+
+    const aos40 = d.medidas.find((m) => m.afericao === termo.resultado.afericao)!;
+    expect(aos40.pesoKg).toBe(2.9);
+    expect(d.medidas.some((m) => m.pesoKg === 2.4)).toBe(false);
+    expect(aos40.referencia).toMatchObject({ publicacao: 'intergrowth' });
+    expect(aos40.referencia!.x).toBeCloseTo(40, 3);
+
+    const corrigida = d.medidas.find((m) => m.pesoKg === 7.5)!;
+    expect(corrigida.referencia).toMatchObject({ publicacao: 'oms2006', corrigida: true });
+    expect(corrigida.referencia!.x).toBeCloseTo((292 - 70) / 30.4375, 2);
+    expect(corrigida.avaliacoes.peso!.classificacao.codigo).toBe('peso_adequado');
+
+    const ig = d.graficos.find((g) => g.indicador === 'peso' && g.publicacao === 'intergrowth')!;
+    expect(ig.codigo).toBe('intergrowth_peso_pma_m');
+    expect(ig.pontos.map((p) => p.x)).toEqual([30, 40]);
+    expect(ig.linhas.length).toBeGreaterThan(10);
+    expect(ig.linhas.every((l) => l.valores.length === 5 && l.x >= 27 && l.x <= 64)).toBe(true);
+    const em30 = ig.linhas.find((l) => l.x === 30)!;
+    expect(em30.valores[2]).toBeCloseTo(z0.peso, 6);
+    expect(
+      d.graficos
+        .filter((g) => g.publicacao === 'intergrowth')
+        .map((g) => g.indicador)
+        .sort(),
+    ).toEqual(['estatura', 'perimetro_cefalico', 'peso']);
+    expect(d.graficos.find((g) => g.indicador === 'peso' && g.publicacao === 'oms2006')!.pontos).toHaveLength(
+      1,
+    );
   });
 });
