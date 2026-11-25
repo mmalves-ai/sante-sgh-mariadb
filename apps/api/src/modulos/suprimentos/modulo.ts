@@ -31,6 +31,8 @@ import { PORTA_CONTRATO } from './contrato-porta.js';
 import { PORTA_TAXA_CONSIGNACAO, portaTaxaConsignacaoIndisponivel } from './consignado-taxa.js';
 import { SlaContratoController } from './sla-contrato.controller.js';
 import { HomologacaoFornecedorController } from './homologacao-fornecedor.controller.js';
+import { CadastroFornecedorController } from './cadastro-fornecedor.controller.js';
+import { PORTA_CADASTRO_FORNECEDOR, portaCadastroFornecedorIndisponivel } from './cadastro-fornecedor.js';
 import {
   PORTA_HOMOLOGACAO_FORNECEDOR,
   portaHomologacaoFornecedorIndisponivel,
@@ -46,6 +48,8 @@ import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
 import { OpmeController } from './opme.controller.js';
 import { PORTA_OPME, type PortaOpme } from './opme-porta.js';
 import { PedidoGestaoController } from './pedido-gestao.controller.js';
+import { LicitacaoController } from './licitacao.controller.js';
+import { PORTA_LICITACAO } from './licitacao-porta.js';
 import { PortaOpmeMemoria } from './opme-porta-memoria.js';
 import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from './porta.js';
 import { type ContratosDoPedidoMemoria, PortaSuprimentosMemoria } from './porta-memoria.js';
@@ -53,6 +57,11 @@ import { SuprimentosController } from './suprimentos.controller.js';
 import { VinculoReferenciaPrecoController } from './vinculo-referencia-preco.controller.js';
 import { PORTA_VINCULO_REFERENCIA, portaVinculoReferenciaIndisponivel } from './vinculo-referencia-preco.js';
 import { EnderecamentoController } from './enderecamento.controller.js';
+import { EtiquetaIdentificacaoController } from './etiqueta-identificacao.controller.js';
+import {
+  PORTA_ETIQUETA_IDENTIFICACAO,
+  portaEtiquetaIdentificacaoIndisponivel,
+} from './etiqueta-identificacao.js';
 import { PORTA_ENDERECAMENTO, portaEnderecamentoIndisponivel } from './enderecamento.js';
 import { DevolucaoFornecedorController } from './devolucao-fornecedor.controller.js';
 import { PORTA_DEVOLUCAO_FORNECEDOR, portaDevolucaoFornecedorIndisponivel } from './devolucao-fornecedor.js';
@@ -153,6 +162,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./enderecamento.js')).PortaEnderecamentoPropria(ctx.nucleo)
       : portaEnderecamentoIndisponivel();
+  // F3.6 (05-SUP linha 14): a etiqueta de identificação e a leitura do código só no banco próprio (503 sem o núcleo).
+  const etiquetaIdentificacao =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./etiqueta-identificacao.js')).PortaEtiquetaIdentificacaoPropria(ctx.nucleo)
+      : portaEtiquetaIdentificacaoIndisponivel();
   // C2-038 (05-SUP linha 21): a conferência física do recebimento grava só no banco próprio (503 sem o núcleo).
   const conferenciaRecebimento =
     ctx.nucleo && ctx.configuracao.clientePadrao
@@ -192,6 +206,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./homologacao-fornecedor.js')).PortaHomologacaoFornecedorPropria(ctx.nucleo)
       : portaHomologacaoFornecedorIndisponivel();
+  // 05-SUP linha 23: cadastro do fornecedor, avaliação periódica e ocorrências só no banco próprio (503 sem o núcleo).
+  const cadastroFornecedor =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./cadastro-fornecedor.js')).PortaCadastroFornecedorPropria(ctx.nucleo)
+      : portaCadastroFornecedorIndisponivel();
   const taxaConsignacao =
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./consignado-taxa.js')).PortaTaxaConsignacaoPropria(ctx.nucleo)
@@ -213,6 +232,14 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./producao-interna.js')).PortaProducaoInternaPropria(ctx.nucleo)
       : portaProducaoInternaIndisponivel();
+  // C2-017 (09-AREA linha 81): o processo de contratação pública grava no banco próprio; sem o núcleo, a memória só em
+  // dev/ci com as fontes sintéticas; fora disso, 503 em tudo.
+  const licitacao =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./licitacao-porta-propria.js')).PortaLicitacaoPropria(ctx.nucleo)
+      : !ctx.nucleo && fontesSinteticas(ctx.env)
+        ? new (await import('./licitacao-porta-memoria.js')).PortaLicitacaoMemoria()
+        : (await import('./licitacao-porta-propria.js')).portaLicitacaoIndisponivel();
   // C2-030 (05-SUP linha 26): a ata de registro de preços e o empenho gravam só no banco próprio (503 sem o núcleo).
   const ataEmpenho =
     ctx.nucleo && ctx.configuracao.clientePadrao
@@ -237,6 +264,7 @@ export async function modulo(
       PedidoGestaoController,
       VinculoReferenciaPrecoController,
       EnderecamentoController,
+      EtiquetaIdentificacaoController,
       EntradaDoacaoController,
       ConferenciaRecebimentoController,
       DevolucaoFornecedorController,
@@ -245,7 +273,9 @@ export async function modulo(
       SlaContratoController,
       RomaneioEntregaController,
       HomologacaoFornecedorController,
+      CadastroFornecedorController,
       ContratoController,
+      LicitacaoController,
       AtaEmpenhoController,
       ManipulacaoController,
       ProducaoInternaController,
@@ -259,6 +289,7 @@ export async function modulo(
       { provide: PORTA_CADASTRO_ESTOQUE, useValue: cadastroEstoque },
       { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
       { provide: PORTA_ENDERECAMENTO, useValue: enderecamento },
+      { provide: PORTA_ETIQUETA_IDENTIFICACAO, useValue: etiquetaIdentificacao },
       { provide: PORTA_ENTRADA_DOACAO, useValue: entradaDoacao },
       { provide: PORTA_CONFERENCIA_RECEBIMENTO, useValue: conferenciaRecebimento },
       { provide: PORTA_DEVOLUCAO_FORNECEDOR, useValue: devolucaoFornecedor },
@@ -267,7 +298,9 @@ export async function modulo(
       { provide: PORTA_SLA_CONTRATO, useValue: slaContrato },
       { provide: PORTA_ROMANEIO_ENTREGA, useValue: romaneioEntrega },
       { provide: PORTA_HOMOLOGACAO_FORNECEDOR, useValue: homologacaoFornecedor },
+      { provide: PORTA_CADASTRO_FORNECEDOR, useValue: cadastroFornecedor },
       { provide: PORTA_CONTRATO, useValue: contrato },
+      { provide: PORTA_LICITACAO, useValue: licitacao },
       { provide: PORTA_ATA_EMPENHO, useValue: ataEmpenho },
       { provide: PORTA_PRODUCAO_INTERNA, useValue: producaoInterna },
     ],

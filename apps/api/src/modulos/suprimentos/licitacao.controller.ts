@@ -321,7 +321,7 @@ export class LicitacaoController {
       E.licitacaoCriada.codigo,
       P.conduzir,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO',
+        tabela: 'processo_licitatorio',
         id: String(y.licitacao),
         paciente: null,
         chave: e.numero,
@@ -349,7 +349,7 @@ export class LicitacaoController {
       s,
       E.licitacaoAlterada.codigo,
       P.conduzir,
-      { tabela: 'SGH_SUP_LICITACAO', id: String(n), paciente: null },
+      { tabela: 'processo_licitatorio', id: String(n), paciente: null },
       (g) => g.alterar({ id: n, entrada: e, usuario: s.login, parametros }),
     );
     return resultado(x, 'Termo de referência alterado.');
@@ -376,7 +376,7 @@ export class LicitacaoController {
       E.licitacaoPreco.codigo,
       P.conduzir,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO_PRECO',
+        tabela: 'pesquisa_preco_item',
         id: String(y.registro),
         paciente: null,
         chave: `${n}`,
@@ -409,7 +409,7 @@ export class LicitacaoController {
       E.licitacaoPrecoDescartado.codigo,
       P.conduzir,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO_PRECO_DESC',
+        tabela: 'pesquisa_preco_item',
         id: String(y.registro),
         paciente: null,
         chave: `${n}:${pr}`,
@@ -440,7 +440,7 @@ export class LicitacaoController {
       E.licitacaoProposta.codigo,
       P.conduzir,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO_PROPOSTA',
+        tabela: 'proposta_licitacao_item',
         id: String(y.registro),
         paciente: null,
         chave: `${n}:${e.fornecedor}`,
@@ -470,7 +470,7 @@ export class LicitacaoController {
       s,
       E.licitacaoProposta.codigo,
       P.conduzir,
-      { tabela: 'SGH_SUP_LICITACAO_PROPOSTA', id: String(pr), paciente: null, chave: e.situacao },
+      { tabela: 'proposta_licitacao_item', id: String(pr), paciente: null, chave: e.situacao },
       (g) => g.situacaoProposta({ licitacao: n, proposta: pr, entrada: e, usuario: s.login, parametros }),
     );
     const m = {
@@ -502,7 +502,7 @@ export class LicitacaoController {
       E.licitacaoEtapa.codigo,
       P.conduzir,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO_EVENTO',
+        tabela: 'evento_processo_licitatorio',
         id: String(y.registro),
         paciente: null,
         chave: `${n}:${e.para}`,
@@ -538,7 +538,7 @@ export class LicitacaoController {
       E.licitacaoEvento.codigo,
       decisao ? P.homologar : P.conduzir,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO_EVENTO',
+        tabela: 'evento_processo_licitatorio',
         id: String(y.registro),
         paciente: null,
         chave: `${n}:${e.tipo}`,
@@ -590,7 +590,7 @@ export class LicitacaoController {
       E.licitacaoEtapa.codigo,
       P.homologar,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO_EVENTO',
+        tabela: 'evento_processo_licitatorio',
         id: String(y.registro),
         paciente: null,
         chave: `${n}:homologado`,
@@ -621,7 +621,7 @@ export class LicitacaoController {
       E.licitacaoEtapa.codigo,
       P.homologar,
       (y: LicitacaoGravacao) => ({
-        tabela: 'SGH_SUP_LICITACAO_EVENTO',
+        tabela: 'evento_processo_licitatorio',
         id: String(y.registro),
         paciente: null,
         chave: `${n}:${e.para}`,
@@ -679,7 +679,7 @@ export class LicitacaoController {
           E.licitacaoDocumentoEmitido.codigo,
           P.ler,
           (y: LicitacaoGravacao) => ({
-            tabela: 'SGH_SUP_LICITACAO_EVENTO',
+            tabela: 'evento_processo_licitatorio',
             id: String(y.registro),
             paciente: null,
             chave: chaveNatural,
@@ -701,7 +701,7 @@ export class LicitacaoController {
         correlacao: correlacaoDaRequisicao(s.req, 'documento-licitacao').slice(0, 64),
         recurso: 'suprimentos.licitacao.documento',
         resultado: 'sucesso',
-        tabelaAlvo: 'SGH_SUP_LICITACAO',
+        tabelaAlvo: 'processo_licitatorio',
         idAlvo: String(n),
         chaveNaturalAlvo: chaveNatural,
       });
