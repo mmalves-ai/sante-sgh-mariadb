@@ -398,7 +398,7 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaNotificacao, entrada);
     return this.gravar(
       c,
-      'faturamento.sus.transplante.notificar',
+      'faturamento.sus.doador.notificar',
       [T_NOTIFICACAO, T_SEQUENCIA],
       async (tx, est, usuario) => {
         const instantes = this.conferirNotificacao(e, est.fuso);
@@ -439,35 +439,30 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
     entrada: unknown,
   ): Promise<{ id: number }> {
     const e = entradaValida(esquemaAlteracaoNotificacao, entrada);
-    return this.gravar(
-      c,
-      'faturamento.sus.transplante.notificacao.alterar',
-      [T_NOTIFICACAO],
-      async (tx, est) => {
-        const atual = await tx.uma(
-          'SELECT situacao FROM notificacao_doador WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-          [idNotificacao, est.id],
-        );
-        if (!atual) throw naoEncontrado('Notificação de doador');
-        const t = conferirTransicaoNotificacao(String(atual['situacao']) as SituacaoNotificacao, e.situacao);
-        if (t.length) throw recusaRegra('Notificação de doador recusada', t);
-        const instantes = this.conferirNotificacao(e, est.fuso);
-        await this.conferirReferencias(tx, est.id, e);
-        await tx.alterar(T_NOTIFICACAO, idNotificacao, e.versao, {
-          atendimento_id: e.atendimento,
-          tipo_doador: e.tipoDoador,
-          notificante_profissional_id: e.notificante,
-          central_reguladora_id: e.central,
-          familia_consentiu: e.familiaConsentiu,
-          orgaos_doados: e.orgaosDoados.length ? JSON.stringify(e.orgaosDoados) : null,
-          desfecho: e.desfecho,
-          situacao: e.situacao,
-          observacao: e.observacao || null,
-          ...instantes,
-        });
-        return { tabela: T_NOTIFICACAO, id: idNotificacao };
-      },
-    );
+    return this.gravar(c, 'faturamento.sus.doador.alterar', [T_NOTIFICACAO], async (tx, est) => {
+      const atual = await tx.uma(
+        'SELECT situacao FROM notificacao_doador WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [idNotificacao, est.id],
+      );
+      if (!atual) throw naoEncontrado('Notificação de doador');
+      const t = conferirTransicaoNotificacao(String(atual['situacao']) as SituacaoNotificacao, e.situacao);
+      if (t.length) throw recusaRegra('Notificação de doador recusada', t);
+      const instantes = this.conferirNotificacao(e, est.fuso);
+      await this.conferirReferencias(tx, est.id, e);
+      await tx.alterar(T_NOTIFICACAO, idNotificacao, e.versao, {
+        atendimento_id: e.atendimento,
+        tipo_doador: e.tipoDoador,
+        notificante_profissional_id: e.notificante,
+        central_reguladora_id: e.central,
+        familia_consentiu: e.familiaConsentiu,
+        orgaos_doados: e.orgaosDoados.length ? JSON.stringify(e.orgaosDoados) : null,
+        desfecho: e.desfecho,
+        situacao: e.situacao,
+        observacao: e.observacao || null,
+        ...instantes,
+      });
+      return { tabela: T_NOTIFICACAO, id: idNotificacao };
+    });
   }
 
   async registrarProtocolo(
@@ -476,24 +471,19 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
     entrada: unknown,
   ): Promise<{ id: number }> {
     const e = entradaValida(esquemaProtocolo, entrada);
-    return this.gravar(
-      c,
-      'faturamento.sus.transplante.notificacao.protocolo',
-      [T_NOTIFICACAO],
-      async (tx, est) => {
-        const atual = await tx.uma(
-          'SELECT situacao FROM notificacao_doador WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-          [idNotificacao, est.id],
-        );
-        if (!atual) throw naoEncontrado('Notificação de doador');
-        if (atual['situacao'] === 'cancelada')
-          throw recusaRegra('Notificação de doador recusada', [
-            { campo: 'situacao', mensagem: 'A notificação foi cancelada.' },
-          ]);
-        await tx.alterar(T_NOTIFICACAO, idNotificacao, e.versao, { protocolo_central: e.protocoloCentral });
-        return { tabela: T_NOTIFICACAO, id: idNotificacao };
-      },
-    );
+    return this.gravar(c, 'faturamento.sus.doador.protocolo', [T_NOTIFICACAO], async (tx, est) => {
+      const atual = await tx.uma(
+        'SELECT situacao FROM notificacao_doador WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [idNotificacao, est.id],
+      );
+      if (!atual) throw naoEncontrado('Notificação de doador');
+      if (atual['situacao'] === 'cancelada')
+        throw recusaRegra('Notificação de doador recusada', [
+          { campo: 'situacao', mensagem: 'A notificação foi cancelada.' },
+        ]);
+      await tx.alterar(T_NOTIFICACAO, idNotificacao, e.versao, { protocolo_central: e.protocoloCentral });
+      return { tabela: T_NOTIFICACAO, id: idNotificacao };
+    });
   }
 
   listarInscricoes(
@@ -609,7 +599,7 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaInscricao, entrada);
     return this.gravar(
       c,
-      'faturamento.sus.transplante.inscrever',
+      'faturamento.sus.receptor.inscrever',
       [T_INSCRICAO, T_HISTORICO],
       async (tx, est, usuario) => {
         const pac = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [
@@ -666,7 +656,7 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaAlteracaoInscricao, entrada);
     return this.gravar(
       c,
-      'faturamento.sus.transplante.inscricao.alterar',
+      'faturamento.sus.receptor.alterar',
       [T_INSCRICAO, T_HISTORICO],
       async (tx, est, usuario) => {
         const atual = await tx.uma(
@@ -731,9 +721,9 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
     entrada: unknown,
   ): Promise<{ id: number; enviados: number }> {
     const e = entradaValida(esquemaCentral, entrada);
-    return this.gravar(
+    const { id, enviados } = await this.gravar(
       c,
-      'faturamento.sus.transplante.inscricao.central',
+      'faturamento.sus.receptor.central',
       [T_INSCRICAO, T_HISTORICO],
       async (tx, est) => {
         const atual = await tx.uma(
@@ -762,5 +752,6 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
         return { tabela: T_INSCRICAO, id: idInscricao, enviados };
       },
     );
+    return { id: id as number, enviados };
   }
 }

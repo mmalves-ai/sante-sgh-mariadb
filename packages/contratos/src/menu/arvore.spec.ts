@@ -6,7 +6,7 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
+  it('450 itens: M 198, P 57, N 195, iguais ao cabeçalho do arquivo', () => {
     expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 453, M: 198, P: 57, N: 198 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
@@ -290,7 +290,6 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cirurgia/mapa', // M18
         '/cirurgia/notas-sala', // M30
         '/cirurgia/procedimentos-cirurgicos', // F3.4 (04-CC linha 91)
-        '/cirurgia/profilaxia', // C2-012 (04-CC linha 106)
         '/cirurgia/registro',
         '/cirurgia/salas',
         '/consultorio/fila',
@@ -340,6 +339,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/sus/contratualizacao', // M55 (etapa 5)
         '/faturamento/sus/sigtap', // M13
         '/faturamento/sus/solicitantes', // M51 (etapa 2)
+        '/faturamento/sus/transplantes', // C2-014 (06-SUS linha 65)
         '/financeiro/fiscal/tabelas', // M13
         '/higienizacao/cadastros', // M21
         '/higienizacao/inspecao', // M21
