@@ -83,7 +83,7 @@ export interface CurvaDoExame {
 export type MotivoRetencao =
   'critico' | 'delta' | 'interferente' | 'curva' | 'regra-reter' | 'sem-regra-atendida';
 
-export const MENSAGEM_RETENCAO: Readonly<Record<MotivoRetencao, string>> = {
+export const MENSAGEM_RETENCAO_AUTOLIBERACAO: Readonly<Record<MotivoRetencao, string>> = {
   critico: 'Valor crítico: a liberação é do responsável técnico, com o aviso ao assistente.',
   delta: 'Variação acima do limite contra o resultado anterior do paciente (delta check).',
   interferente: 'Substância interferente presente (medicamento em uso ou condição da amostra).',
