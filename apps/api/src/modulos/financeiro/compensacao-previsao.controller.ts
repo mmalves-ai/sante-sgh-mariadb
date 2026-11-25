@@ -7,7 +7,8 @@
 //   POST /api/financeiro/compensacao/encontros/cancelar        { encontro, motivo }
 //   GET  /api/financeiro/compensacao/previsoes?de=&ate=        previsto × realizado por ocorrência
 //   POST /api/financeiro/compensacao/previsoes                 a previsão (gera as ocorrências)
-//   POST /api/financeiro/compensacao/previsoes/realizar        { ocorrencia, tituloPagar }
+//   GET  /api/financeiro/compensacao/previsoes/titulos?ocorrencia=  títulos que podem realizar a ocorrência
+//   POST /api/financeiro/compensacao/previsoes/realizar        { ocorrencia, tituloPagar | tituloReceber }
 //   GET  /api/financeiro/compensacao/provisoes                 provisões do passivo
 //   POST /api/financeiro/compensacao/provisoes                 a provisão
 //   POST /api/financeiro/compensacao/provisoes/liquidar        { provisao, tituloPagar }
@@ -51,6 +52,7 @@ import {
   parcelasDoParceiro,
   previstoRealizado,
   provisoesDoEstabelecimento,
+  titulosParaRealizar,
 } from './compensacao-previsao-propria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
@@ -219,6 +221,14 @@ export class CompensacaoPrevisaoController {
     if (!de || !ate || !DATA.test(de) || !DATA.test(ate) || ate < de)
       throw new ErroProblema('entrada-invalida', 400, 'Período inválido', 'Escolha o início e o fim.');
     return this.ler(req, (l, est) => previstoRealizado(l, est, de, ate));
+  }
+
+  @Get('previsoes/titulos')
+  @Permissao('financeiro.fluxoCaixa.ler')
+  titulosParaRealizar(@Query('ocorrencia') ocorrencia: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const n = inteiroOuNulo(ocorrencia);
+    if (!n) throw new ErroProblema('entrada-invalida', 400, 'Ocorrência inválida', 'Escolha a ocorrência.');
+    return this.ler(req, (l, est) => titulosParaRealizar(l, est, n));
   }
 
   @Post('previsoes')

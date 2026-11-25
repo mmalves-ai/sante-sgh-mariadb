@@ -106,6 +106,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.conciliacao.ler' },
   },
   {
+    // F8, 07-FIN linha 68: previsão e provisão de pagamentos (previsto × realizado e as ações da ocorrência).
+    path: '/financeiro/tesouraria/previsao',
+    name: 'financeiro.tesouraria.previsao',
+    component: () => import('./telas/PrevisaoProvisaoTela.vue'),
+    meta: { permissao: 'financeiro.fluxoCaixa.ler' },
+  },
+  {
     path: '/financeiro/tesouraria/fluxo-caixa',
     name: 'financeiro.tesouraria.fluxo',
     component: () => import('./telas/FluxoCaixaTela.vue'),

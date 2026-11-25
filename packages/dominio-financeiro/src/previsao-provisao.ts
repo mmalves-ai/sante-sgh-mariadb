@@ -193,6 +193,50 @@ export function conferirTituloConciliacao(e: {
   return null;
 }
 
+/**
+ * O lado do título que realiza a ocorrência: a previsão de despesa se realiza pelo título a pagar e a de receita pelo
+ * título a receber; um título só, nunca os dois.
+ */
+export function conferirLadoRealizacao(e: {
+  readonly tipo: string;
+  readonly tituloPagar: boolean;
+  readonly tituloReceber: boolean;
+}): RecusaFinanceiro | null {
+  if (e.tituloPagar === e.tituloReceber)
+    return recusaFin('titulo-obrigatorio', 'Informe um título: a pagar na despesa, a receber na receita.', [
+      e.tipo === 'receita' ? 'tituloReceber' : 'tituloPagar',
+    ]);
+  if (e.tipo === 'receita' && e.tituloPagar)
+    return recusaFin('titulo-de-outro-lado', 'A previsão de receita se realiza pelo título a receber.', [
+      'tituloReceber',
+    ]);
+  if (e.tipo !== 'receita' && e.tituloReceber)
+    return recusaFin('titulo-de-outro-lado', 'A previsão de despesa se realiza pelo título a pagar.', [
+      'tituloPagar',
+    ]);
+  return null;
+}
+
+/**
+ * O título a receber que realiza a previsão de receita: não pode já ter realizado outra ocorrência e, quando a previsão
+ * tem fonte pagadora, o título é da MESMA fonte pagadora.
+ */
+export function conferirTituloReceberConciliacao(e: {
+  readonly jaConciliado: boolean;
+  readonly fonteEsperada: number | null;
+  readonly fonteTitulo: number | null;
+}): RecusaFinanceiro | null {
+  if (e.jaConciliado)
+    return recusaFin('titulo-ja-conciliado', 'O título a receber já realizou outra previsão.', [
+      'tituloReceber',
+    ]);
+  if (e.fonteEsperada !== null && e.fonteEsperada !== e.fonteTitulo)
+    return recusaFin('devedor-diferente', 'O título é de outra fonte pagadora que não a da previsão.', [
+      'tituloReceber',
+    ]);
+  return null;
+}
+
 /** Realizar a ocorrência pelo título: só a aberta; a diferença é realizado menos previsto. */
 export function conciliarPrevistoRealizado(e: {
   readonly situacao: string;

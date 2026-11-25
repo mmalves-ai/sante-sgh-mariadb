@@ -16,8 +16,10 @@ import {
   conferirCancelamentoOcorrencia,
   conferirEncerramentoPrevisao,
   conferirEstornoEncontro,
+  conferirLadoRealizacao,
   conferirPagamento,
   conferirTituloConciliacao,
+  conferirTituloReceberConciliacao,
   desfazerCompensacaoParcela,
   estenderPrevisao,
   gerarOcorrenciasPrevisao,
@@ -521,7 +523,10 @@ export const esquemaCriarPrevisao = z
     observacao: z.string().trim().max(500).optional(),
   })
   .strict();
-export const esquemaRealizarPrevisao = z.object({ ocorrencia: id, tituloPagar: id }).strict();
+/** A despesa se realiza pelo título a pagar; a receita, pelo título a receber (um dos dois, conferido no domínio). */
+export const esquemaRealizarPrevisao = z
+  .object({ ocorrencia: id, tituloPagar: id.optional(), tituloReceber: id.optional() })
+  .strict();
 export const esquemaEstenderPrevisao = z.object({ previsao: id }).strict();
 export const esquemaCancelarOcorrencia = z
   .object({ ocorrencia: id, motivo: z.string().trim().min(5).max(500) })
@@ -614,6 +619,57 @@ const criarPrevisao = definirOperacao<z.infer<typeof esquemaCriarPrevisao>, Resu
   alvo: (_e, r) => ({ tabela: 'previsao_financeira', id: numero(r['previsao']) || null }),
 });
 
+/** Realiza a ocorrência de receita pelo título a receber: mesma fonte pagadora, título ainda não conciliado. */
+async function realizarPorReceber(
+  tx: TxOperacao,
+  o: Record<string, unknown>,
+  ocorrencia: number,
+  titulo: number,
+  est: number,
+  usuario: number,
+) {
+  const t = await tx.uma(
+    "SELECT id, valor_liquido, fonte_pagadora_id FROM titulo_receber WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao NOT IN ('cancelado','renegociado')",
+    [titulo, est],
+  );
+  if (!t) throw recusa('titulo-inexistente', 'O título a receber não existe.', { campos: ['tituloReceber'] });
+  const { diferenca } = recusar(
+    conciliarPrevistoRealizado({
+      situacao: String(o['situacao']),
+      previsto: numero(o['valor']),
+      realizado: numero(t['valor_liquido']),
+    }),
+  );
+  const ja = await tx.uma(
+    'SELECT id FROM conciliacao_previsao_realizado WHERE titulo_receber_id = ? AND excluido_em IS NULL LIMIT 1',
+    [titulo],
+  );
+  const fonte = (v: unknown) => (v === null || v === undefined ? null : numero(v));
+  recusar(
+    conferirTituloReceberConciliacao({
+      jaConciliado: !!ja,
+      fonteEsperada: fonte(o['fonte_pagadora_id']),
+      fonteTitulo: fonte(t['fonte_pagadora_id']),
+    }) ?? {},
+  );
+  const hoje = new Date();
+  await tx.alterar('parcela_previsao_financeira', ocorrencia, numero(o['versao']), {
+    situacao: 'realizada',
+    realizada_em: hoje.toISOString().slice(0, 10),
+    titulo_receber_id: titulo,
+  });
+  const conciliacao = await tx.incluir('conciliacao_previsao_realizado', {
+    parcela_previsao_financeira_id: ocorrencia,
+    titulo_receber_id: titulo,
+    valor_previsto: numero(o['valor']),
+    valor_realizado: numero(t['valor_liquido']),
+    diferenca,
+    conciliado_em: hoje,
+    usuario_id: usuario,
+  });
+  return { ocorrencia, conciliacao, diferenca };
+}
+
 const realizarPrevisao = definirOperacao<z.infer<typeof esquemaRealizarPrevisao>, ResultadoOperacao>({
   nome: 'financeiro.realizar_previsao_financeira',
   tabelas: ['parcela_previsao_financeira', 'conciliacao_previsao_realizado'],
@@ -622,22 +678,31 @@ const realizarPrevisao = definirOperacao<z.infer<typeof esquemaRealizarPrevisao>
     const est = estabelecimentoDe(ctx);
     const usuario = usuarioDe(ctx);
     const [o] = await tx.consultarParaAtualizar(
-      `SELECT o.id, o.versao, o.situacao, o.valor, p.tipo, p.empresa_fornecedora_id FROM parcela_previsao_financeira o
+      `SELECT o.id, o.versao, o.situacao, o.valor, p.tipo, p.empresa_fornecedora_id, p.fonte_pagadora_id
+         FROM parcela_previsao_financeira o
          JOIN previsao_financeira p ON p.id = o.previsao_financeira_id
         WHERE o.id = ? AND p.estabelecimento_id = ? AND o.excluido_em IS NULL`,
       [e.ocorrencia, est],
       { teto: 1 },
     );
     if (!o) throw recusa('previsao-inexistente', 'A ocorrência prevista não existe neste estabelecimento.');
-    if (o['tipo'] !== 'despesa')
-      throw recusa('previsao-de-receita', 'A previsão de receita se realiza pelo título a receber.');
+    recusar(
+      conferirLadoRealizacao({
+        tipo: String(o['tipo']),
+        tituloPagar: e.tituloPagar !== undefined,
+        tituloReceber: e.tituloReceber !== undefined,
+      }) ?? {},
+    );
     const hojeIso = new Date().toISOString().slice(0, 10);
     await exigirPeriodoAberto(tx, est, hojeIso, 'data');
+    if (e.tituloReceber !== undefined)
+      return realizarPorReceber(tx, o, e.ocorrencia, e.tituloReceber, est, usuario);
+    const tituloPagar = e.tituloPagar as number;
     let diferenca = 0;
     const t = await tituloParaConciliar(
       tx,
       est,
-      e.tituloPagar,
+      tituloPagar,
       {
         fornecedor: o['empresa_fornecedora_id'] === null ? null : numero(o['empresa_fornecedora_id']),
         profissional: null,
@@ -656,11 +721,11 @@ const realizarPrevisao = definirOperacao<z.infer<typeof esquemaRealizarPrevisao>
     await tx.alterar('parcela_previsao_financeira', e.ocorrencia, numero(o['versao']), {
       situacao: 'realizada',
       realizada_em: hoje.toISOString().slice(0, 10),
-      titulo_pagar_id: e.tituloPagar,
+      titulo_pagar_id: tituloPagar,
     });
     const conciliacao = await tx.incluir('conciliacao_previsao_realizado', {
       parcela_previsao_financeira_id: e.ocorrencia,
-      titulo_pagar_id: e.tituloPagar,
+      titulo_pagar_id: tituloPagar,
       valor_previsto: numero(o['valor']),
       valor_realizado: numero(t['valor_liquido']),
       diferenca,
@@ -736,6 +801,7 @@ const cancelarOcorrencia = definirOperacao<z.infer<typeof esquemaCancelarOcorren
     recusar(conferirCancelamentoOcorrencia({ situacao: String(o['situacao']), motivo: e.motivo }) ?? {});
     await tx.alterar('parcela_previsao_financeira', e.ocorrencia, numero(o['versao']), {
       situacao: 'cancelada',
+      motivo_cancelamento: e.motivo,
     });
     return { ocorrencia: e.ocorrencia, situacao: 'cancelada' };
   },
@@ -771,6 +837,7 @@ const encerrarPrevisao = definirOperacao<z.infer<typeof esquemaEncerrarPrevisao>
     for (const o of abertas)
       await tx.alterar('parcela_previsao_financeira', numero(o['id']), numero(o['versao']), {
         situacao: 'cancelada',
+        motivo_cancelamento: `Encerramento da previsão em ${e.data}: ${e.motivo}`.slice(0, 500),
       });
     const obs = [p['observacao'] ? String(p['observacao']) : '', `Encerrada em ${e.data}: ${e.motivo}`]
       .filter(Boolean)
@@ -1055,11 +1122,12 @@ export async function encontrosDoEstabelecimento(l: Leitor, est: number) {
 /** Previsto × realizado por ocorrência, no período (data esperada). */
 export async function previstoRealizado(l: Leitor, est: number, de: string, ate: string) {
   const linhas = await l.consultar(
-    `SELECT o.id, p.descricao, p.tipo, o.competencia, o.data_esperada, o.valor, o.situacao,
-            c.valor_realizado, c.diferenca, t.numero AS titulo
+    `SELECT o.id, o.previsao_financeira_id, p.descricao, p.tipo, p.ativa, o.competencia, o.data_esperada, o.valor,
+            o.situacao, o.motivo_cancelamento, c.valor_realizado, c.diferenca, COALESCE(t.numero, r.numero) AS titulo
        FROM parcela_previsao_financeira o JOIN previsao_financeira p ON p.id = o.previsao_financeira_id
        LEFT JOIN conciliacao_previsao_realizado c ON c.parcela_previsao_financeira_id = o.id AND c.excluido_em IS NULL
        LEFT JOIN titulo_pagar t ON t.id = o.titulo_pagar_id
+       LEFT JOIN titulo_receber r ON r.id = o.titulo_receber_id
       WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND o.excluido_em IS NULL
         AND o.data_esperada BETWEEN ? AND ?
       ORDER BY o.data_esperada, o.id LIMIT 500`,
@@ -1067,6 +1135,8 @@ export async function previstoRealizado(l: Leitor, est: number, de: string, ate:
   );
   return linhas.map((r) => ({
     id: numero(r['id']),
+    previsao: numero(r['previsao_financeira_id']),
+    previsaoAtiva: Number(r['ativa'] ?? 0) === 1 || r['ativa'] === true,
     descricao: String(r['descricao']),
     tipo: String(r['tipo']),
     competencia: dataIso(r['competencia']) ?? '',
@@ -1076,6 +1146,48 @@ export async function previstoRealizado(l: Leitor, est: number, de: string, ate:
     realizado: r['valor_realizado'] === null ? null : numero(r['valor_realizado']),
     diferenca: r['diferenca'] === null ? null : numero(r['diferenca']),
     titulo: r['titulo'] === null ? null : String(r['titulo']),
+    motivoCancelamento: r['motivo_cancelamento'] === null ? null : String(r['motivo_cancelamento']),
+  }));
+}
+
+/**
+ * Os títulos que podem realizar a ocorrência, sem digitar número: do mesmo lado (a pagar na despesa, a receber na
+ * receita), do mesmo credor ou fonte pagadora quando a previsão tem um, vivos e ainda não conciliados; os de valor mais
+ * próximo do previsto primeiro.
+ */
+export async function titulosParaRealizar(l: Leitor, est: number, ocorrencia: number) {
+  const [o] = await l.consultar(
+    `SELECT o.valor, p.tipo, p.empresa_fornecedora_id, p.fonte_pagadora_id FROM parcela_previsao_financeira o
+       JOIN previsao_financeira p ON p.id = o.previsao_financeira_id
+      WHERE o.id = ? AND p.estabelecimento_id = ? AND o.excluido_em IS NULL`,
+    [ocorrencia, est],
+  );
+  if (!o) return [];
+  const previsto = numero(o['valor']);
+  const receita = String(o['tipo']) === 'receita';
+  const linhas = receita
+    ? await l.consultar(
+        `SELECT t.id, t.numero, t.data_emissao AS data, t.valor_liquido FROM titulo_receber t
+          WHERE t.estabelecimento_id = ? AND t.excluido_em IS NULL AND t.situacao NOT IN ('cancelado','renegociado')
+            AND (? IS NULL OR t.fonte_pagadora_id = ?)
+            AND NOT EXISTS (SELECT 1 FROM conciliacao_previsao_realizado c WHERE c.titulo_receber_id = t.id AND c.excluido_em IS NULL)
+          ORDER BY ABS(t.valor_liquido - ?), t.id DESC LIMIT 50`,
+        [est, o['fonte_pagadora_id'], o['fonte_pagadora_id'], previsto],
+      )
+    : await l.consultar(
+        `SELECT t.id, t.numero, t.data_emissao AS data, t.valor_liquido FROM titulo_pagar t
+          WHERE t.estabelecimento_id = ? AND t.excluido_em IS NULL AND t.situacao <> 'cancelado'
+            AND (? IS NULL OR t.empresa_fornecedora_id = ?)
+            AND NOT EXISTS (SELECT 1 FROM conciliacao_previsao_realizado c WHERE c.titulo_pagar_id = t.id AND c.excluido_em IS NULL)
+          ORDER BY ABS(t.valor_liquido - ?), t.id DESC LIMIT 50`,
+        [est, o['empresa_fornecedora_id'], o['empresa_fornecedora_id'], previsto],
+      );
+  return linhas.map((r) => ({
+    id: numero(r['id']),
+    lado: receita ? ('receber' as const) : ('pagar' as const),
+    numero: String(r['numero']),
+    data: dataIso(r['data']) ?? '',
+    valor: numero(r['valor_liquido']),
   }));
 }
 

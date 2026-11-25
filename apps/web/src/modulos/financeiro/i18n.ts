@@ -5,6 +5,7 @@ import { mensagensBaixaFinanceiro } from './i18n-baixa.js';
 import { mensagensCartaoFinanceiro } from './i18n-cartao.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
 import { mensagensPagamentoEletronico } from './i18n-pagamento-eletronico.js';
+import { mensagensPrevisaoFinanceiro } from './i18n-previsao.js';
 
 export const mensagensFinanceiro = {
   // F3.8, 07-FIN linha 89: cartão de débito e crédito (i18n-cartao.ts).
@@ -17,6 +18,8 @@ export const mensagensFinanceiro = {
   pagamentoEletronico: mensagensPagamentoEletronico,
   // F3.8, 07-FIN linha 63: baixa parcial, desconto e acréscimos na baixa (i18n-baixa.ts).
   baixa: mensagensBaixaFinanceiro,
+  // F8, 07-FIN linha 68: previsão e provisão de pagamentos (i18n-previsao.ts).
+  previsao: mensagensPrevisaoFinanceiro,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   todos: 'Todos',
