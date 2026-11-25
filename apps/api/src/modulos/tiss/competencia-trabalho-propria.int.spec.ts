@@ -147,9 +147,14 @@ describe.skipIf(SEM_BANCO)('competência de trabalho do faturista na fonte próp
     expect(Number(trilha[0]!.n)).toBeGreaterThanOrEqual(2);
   });
 
-  it('versão velha, competência futura e período fora do mês são recusados sem gravar', async () => {
+  it('versão velha ou ausente, competência futura e período fora do mês são recusados sem gravar', async () => {
     expect(await codigoDoErro(s.gravar(op(), { competencia: mes(-3), versao: 1 }))).toMatch(
       /conflito|versao/,
+    );
+    // Sem versão (ou com versão nula, a de quem leu antes de outra aba gravar) sobre a linha que já existe: conflito.
+    expect(await codigoDoErro(s.gravar(op(), { competencia: mes(-3) }))).toBe('conflito-versao');
+    expect(await codigoDoErro(s.gravar(op(), { competencia: mes(-3), versao: null }))).toBe(
+      'conflito-versao',
     );
     expect(await codigoDoErro(s.gravar(op(), { competencia: mes(1), versao: 2 }))).toBe('competencia-futura');
     expect(

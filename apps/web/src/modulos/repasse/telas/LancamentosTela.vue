@@ -11,6 +11,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import MinhaCompetenciaTrabalho from '../../tiss/componentes/MinhaCompetenciaTrabalho.vue';
 import BuscaPrestador from '../componentes/BuscaPrestador.vue';
 import { lancar, lerLancamentos, novaChave } from '../api-repasse.js';
 import { data, opcoes, reais, usarRepasse } from '../usar-repasse.js';
@@ -30,6 +31,17 @@ watch(
   },
   { immediate: true },
 );
+// A competência de trabalho do faturista no módulo do repasse é o padrão do filtro (sem ela, o mês corrente); o mês
+// que o usuário trocou à mão não é sobrescrito.
+const padraoTrabalho = ref('');
+function aoEscolherTrabalho(c: string) {
+  const anterior = padraoTrabalho.value || (apoio.data.value?.hoje ?? '').slice(0, 7);
+  if (!competencia.value || competencia.value === anterior) {
+    competencia.value = c;
+    consultada.value = c;
+  }
+  padraoTrabalho.value = c;
+}
 const lista = useQuery({
   queryKey: computed(() => ['repasse', 'lancamentos', consultada.value]),
   queryFn: () => lerLancamentos(consultada.value),
@@ -104,6 +116,11 @@ async function gravar() {
 <template>
   <section class="tela-agenda tela-repasse" aria-labelledby="lc-titulo" data-testid="tela-rep-lancamentos">
     <h1 id="lc-titulo">{{ t('repasse.lancamentos.titulo') }}</h1>
+    <MinhaCompetenciaTrabalho
+      modulo="repasse"
+      :hoje="apoio.data.value?.hoje ?? ''"
+      @escolhida="aoEscolherTrabalho"
+    />
     <form class="filtros" @submit.prevent="consultada = competencia">
       <span class="campo">
         <label for="lc-comp">{{ t('repasse.competencia') }}</label>

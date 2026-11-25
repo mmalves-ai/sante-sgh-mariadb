@@ -53,8 +53,10 @@ const recusa = computed(() =>
 const mudou = computed(() => {
   const d = atual.data.value;
   if (!d) return false;
+  // Sem escolha gravada, o campo abre no padrão (o mês corrente): isso não é mudança, e o botão só liga quando o
+  // faturista troca o mês ou o período.
   return (
-    competencia.value !== (d.competencia ?? '') ||
+    competencia.value !== (d.competencia ?? d.padrao) ||
     inicio.value !== (d.periodoInicio ?? '') ||
     fim.value !== (d.periodoFim ?? '')
   );
@@ -88,7 +90,10 @@ async function gravar() {
 
 <template>
   <section class="minha-competencia" aria-labelledby="ct-titulo" data-testid="ct-minha-competencia">
-    <h2 id="ct-titulo">{{ t('tiss.competencias.trabalho.titulo') }}</h2>
+    <h2 id="ct-titulo">
+      {{ t('tiss.competencias.trabalho.titulo') }} ·
+      {{ t(`competenciaTrabalho.modulos.${props.modulo}`) }}
+    </h2>
     <p>
       {{
         atual.data.value?.competencia

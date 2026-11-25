@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import MinhaCompetenciaTrabalho from '../../tiss/componentes/MinhaCompetenciaTrabalho.vue';
 import BuscaPrestador from '../componentes/BuscaPrestador.vue';
 import { emitirRpa, lerLancamentos, lerRpas, novaChave, previaRpa, urlRpaPdf } from '../api-repasse.js';
 import { data, reais, usarRepasse } from '../usar-repasse.js';
@@ -24,13 +25,20 @@ const form = reactive({ competencia: '', prestador: '', profissional: '', vencim
 watch(
   hoje,
   (h) => {
-    if (h && !form.competencia) {
-      form.competencia = h.slice(0, 7);
-      form.vencimento = h;
-    }
+    if (!h) return;
+    if (!form.competencia) form.competencia = h.slice(0, 7);
+    if (!form.vencimento) form.vencimento = h;
   },
   { immediate: true },
 );
+// A competência de trabalho do faturista no módulo RPA é o padrão do filtro (sem ela, o mês corrente); o mês que o
+// usuário trocou à mão não é sobrescrito.
+const padraoTrabalho = ref('');
+function aoEscolherTrabalho(c: string) {
+  if (!form.competencia || form.competencia === (padraoTrabalho.value || hoje.value.slice(0, 7)))
+    form.competencia = c;
+  padraoTrabalho.value = c;
+}
 const consulta = reactive({ competencia: '', prestador: 0 });
 const lancamentos = useQuery({
   queryKey: computed(() => ['repasse', 'rpa-lancamentos', consulta.competencia, consulta.prestador]),
@@ -99,6 +107,7 @@ async function emitir() {
       {{ t('repasse.rpa.tabelaAusente', { imposto: 'INSS, IRRF ou ISS' }) }}
     </p>
     <p class="secundario">{{ t('repasse.rpa.empresaRecebeDemonstrativo') }}</p>
+    <MinhaCompetenciaTrabalho modulo="rpa" :hoje="hoje" @escolhida="aoEscolherTrabalho" />
     <div class="filtros acoes">
       <span class="campo">
         <label for="rp-comp">{{ t('repasse.competencia') }}</label>

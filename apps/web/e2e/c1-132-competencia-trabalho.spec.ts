@@ -5,7 +5,8 @@
 // e a versão vão no pedido) e passa a ser o padrão do filtro da competência do convênio. A rota da competência de
 // trabalho é simulada pelo Playwright com estado SINTÉTICO (a porta em memória do TISS não a tem); o efeito no banco
 // (inclusão, alteração com versão, recusas sem gravar, uma linha por módulo, trilha) está em
-// apps/api/src/modulos/tiss/competencia-trabalho-propria.int.spec.ts.
+// apps/api/src/modulos/tiss/competencia-trabalho-propria.int.spec.ts. O segundo caso cobre os módulos do repasse: a
+// escolhida no RPA abre o filtro do RPA, e a gravada nos lançamentos (módulo "repasse") troca o filtro dos lançamentos.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 
@@ -109,5 +110,54 @@ test.describe('competência de trabalho do faturista @C1-132', () => {
     await page.goto('/faturamento/competencias');
     await expect(page.getByTestId('cp-competencia')).toHaveValue(anterior);
     await expect(page.getByTestId('ct-competencia')).toHaveValue(anterior);
+  });
+
+  test('repasse e RPA: cada tela abre na competência de trabalho do próprio módulo', async ({ page }) => {
+    const estado: Record<string, { competencia: string | null; versao: number | null }> = {
+      rpa: { competencia: mes(-1), versao: 3 },
+      repasse: { competencia: null, versao: null },
+    };
+    const pedidos: Record<string, unknown>[] = [];
+    await page.route('**/api/tiss/competencia-trabalho**', async (r) => {
+      if (r.request().method() === 'POST') {
+        const corpo = r.request().postDataJSON() as Record<string, unknown>;
+        pedidos.push(corpo);
+        const e = estado[String(corpo['modulo'])]!;
+        e.competencia = String(corpo['competencia']);
+        e.versao = (e.versao ?? 0) + 1;
+        return json(r, { id: 78, versao: e.versao, competencia: e.competencia });
+      }
+      const modulo = new URL(r.request().url()).searchParams.get('modulo') ?? 'fonte_pagadora';
+      const e = estado[modulo] ?? { competencia: null, versao: null };
+      return json(r, {
+        modulo,
+        competencia: e.competencia,
+        periodoInicio: null,
+        periodoFim: null,
+        versao: e.versao,
+        alteradaEm: e.versao ? new Date().toISOString() : null,
+        padrao: e.competencia ?? mes(0),
+      });
+    });
+
+    await entrar(page, 'SINT.REP.ANALISTA');
+    await page.goto('/repasse/rpa');
+    const painel = page.getByTestId('ct-minha-competencia');
+    await expect(painel).toContainText('RPA');
+    await expect(painel).toContainText(`competência ${mes(-1)}`);
+    await expect(page.getByTestId('rp-competencia')).toHaveValue(mes(-1));
+
+    await page.goto('/repasse/lancamentos');
+    await expect(painel).toContainText('repasse médico');
+    await expect(painel).toContainText('Sem competência de trabalho escolhida');
+    await expect(page.getByTestId('lc-competencia')).toHaveValue(mes(0));
+    await expect(page.getByTestId('ct-gravar')).toBeDisabled();
+    await page.getByTestId('ct-competencia').fill(mes(-2));
+    await page.getByTestId('ct-gravar').click();
+    await expect(page.getByTestId('ct-gravada')).toBeVisible();
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]).toMatchObject({ modulo: 'repasse', competencia: mes(-2), versao: null });
+    await expect(page.getByTestId('lc-competencia')).toHaveValue(mes(-2));
+    await semViolacaoAxe(page, '/repasse/lancamentos (competência de trabalho)');
   });
 });

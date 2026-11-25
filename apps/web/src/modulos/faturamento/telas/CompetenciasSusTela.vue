@@ -38,6 +38,8 @@ import {
 } from '../api-sus.js';
 import EquivalenciaSusDialogo from '../componentes/EquivalenciaSusDialogo.vue';
 import JustificativaSusDialogo from '../componentes/JustificativaSusDialogo.vue';
+import MinhaCompetenciaTrabalho from '../../tiss/componentes/MinhaCompetenciaTrabalho.vue';
+import { lerCompetenciaTrabalho } from '../../tiss/api-competencia-trabalho.js';
 
 const POR_PAGINA = 25;
 const { t } = useI18n();
@@ -56,6 +58,24 @@ const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
 
+// A competência de trabalho do faturista: BPA e APAC são do SUS ambulatorial; AIH e CIHA, da internação. A escolhida
+// (AAAA-MM, convertida para a AAAAMM do SUS) abre selecionada; a que o usuário selecionou à mão não é trocada. A
+// leitura usa a mesma chave do painel (uma consulta só).
+const moduloTrabalho = computed(() =>
+  instrumento.value === 'bpa' || instrumento.value === 'apac' ? 'sus_ambulatorial' : 'sus_internacao',
+);
+const trabalho = useQuery({
+  queryKey: computed(() => ['tiss', 'competencia-trabalho', moduloTrabalho.value]),
+  queryFn: () => lerCompetenciaTrabalho(moduloTrabalho.value),
+});
+const competenciaTrabalho = computed(() => trabalho.data.value?.competencia?.replace('-', '') ?? null);
+watch(
+  competenciaTrabalho,
+  (nova, velha) => {
+    if (selecionada.value === null || selecionada.value === velha) selecionada.value = nova;
+  },
+  { immediate: true },
+);
 const lista = useQuery({
   queryKey: computed(() => ['sus', 'competencias', instrumento.value]),
   queryFn: () => lerCompetenciasSus(instrumento.value),
@@ -89,7 +109,7 @@ const gravidade = ref<GravidadeCriticaSus | ''>('');
 const situacaoCritica = ref<SituacaoCriticaSus>('aberta');
 const pagina = ref(1);
 watch([regra, gravidade, situacaoCritica, selecionada, instrumento], () => (pagina.value = 1));
-watch(instrumento, () => (selecionada.value = null));
+watch(instrumento, () => (selecionada.value = competenciaTrabalho.value));
 const criticas = useQuery({
   queryKey: computed(() => [
     'sus',
@@ -301,6 +321,7 @@ function origemTexto(c: CriticaSusLida): string {
       :texto="t('faturamentoSus.competencias.escopoParcial')"
       variante="info"
     />
+    <MinhaCompetenciaTrabalho :modulo="moduloTrabalho" />
     <div class="barra">
       <SanteSelecao
         v-model="instrumento"

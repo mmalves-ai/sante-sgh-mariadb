@@ -7,7 +7,14 @@ import {
   conferirCompetenciaTrabalho,
   MODULOS_COMPETENCIA_TRABALHO,
 } from '@sgh/dominio-faturamento';
-import { type ContextoOperacao, definirOperacao, type Executor, type Leitor, recusa } from '@sgh/nucleo';
+import {
+  type ContextoOperacao,
+  definirOperacao,
+  erroConflitoVersao,
+  type Executor,
+  type Leitor,
+  recusa,
+} from '@sgh/nucleo';
 import { z } from 'zod';
 
 type Linha = Record<string, unknown>;
@@ -65,7 +72,7 @@ export const esquemaCompetenciaTrabalho = z.object({
   competencia: z.string().max(7),
   periodoInicio: z.string().max(10).nullish(),
   periodoFim: z.string().max(10).nullish(),
-  /** A versão lida; sem ela (primeira escolha), inclui. */
+  /** A versão lida; sem ela, só a primeira escolha (inclusão). Sobre a linha que já existe, a versão é exigida. */
   versao: z.number().int().positive().nullish(),
 });
 
@@ -104,8 +111,11 @@ export const opDefinirCompetenciaTrabalho = definirOperacao({
       });
       return { id, versao: 1, competencia: e.competencia };
     }
+    // A linha já existe: a versão lida é obrigatória. Sem ela (a tela leu antes de outra aba gravar, ou o pedido veio
+    // sem versão), é conflito: nunca se usa a versão do banco no lugar da que o usuário viu.
+    if (e.versao === null || e.versao === undefined) throw erroConflitoVersao(['versao']);
     const id = Number(atual['id']);
-    const versao = await tx.alterar(TABELA, id, e.versao ?? Number(atual['versao']), campos);
+    const versao = await tx.alterar(TABELA, id, e.versao, campos);
     return { id, versao, competencia: e.competencia };
   },
   alvo: (_e, r) => ({ tabela: TABELA, id: Number(r['id']) }),
