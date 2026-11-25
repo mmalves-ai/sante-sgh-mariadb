@@ -240,6 +240,9 @@ const esquemaEndereco = z
     principal: z.boolean(),
     vigenciaInicio: z.string().nullable(),
     vigenciaFim: z.string().nullable(),
+    /** Endereço manual (CEP fora do cadastro de CEPs): espécie do logradouro e município do IBGE. */
+    especie: z.number().int().positive().nullable().optional(),
+    municipio: z.number().int().positive().nullable().optional(),
   })
   .strict();
 export type EntradaEndereco = z.infer<typeof esquemaEndereco>;
@@ -261,26 +264,49 @@ const operacaoIncluirEndereco = (trilha: RegistroTrilhaTela) =>
            FROM logradouro_cep lc WHERE lc.codigo_cep = ? AND lc.ativo`,
         [e.cep],
       );
-      if (!c)
-        throw recusaCampos('cep-inexistente', 'CEP não encontrado no cadastro de CEPs. Confira o CEP.', [
-          'cep',
+      // CEP fora do cadastro de CEPs: endereço manual, com a espécie do logradouro e o município informados (a regra
+      // do domínio exige os dois e o logradouro). Sem nenhum dos dois, a recusa aponta o CEP, como antes.
+      const especieInformada = e.especie ?? null;
+      const municipioInformado = e.municipio ?? null;
+      if (!c && especieInformada === null && municipioInformado === null)
+        throw recusaCampos(
+          'cep-inexistente',
+          'CEP não encontrado no cadastro de CEPs. Confira o CEP ou informe a espécie do logradouro, o município e o logradouro.',
+          ['cep', 'especie', 'municipio'],
+        );
+      if (!c) {
+        const errosManual = errosEndereco({
+          ...e,
+          manual: { especie: especieInformada, municipio: municipioInformado, logradouro: e.logradouro },
+        });
+        if (errosManual.length)
+          throw recusaCampos('endereco-invalido', 'Confira os campos do endereço manual.', errosManual);
+        if (!(await tx.uma('SELECT id FROM municipio_ibge WHERE id = ? AND ativo', [municipioInformado])))
+          throw recusaCampos('municipio-inexistente', 'Município inexistente ou inativo.', ['municipio']);
+      }
+      if (
+        especieInformada !== null &&
+        !(await tx.uma('SELECT id FROM especie_logradouro WHERE id = ? AND ativo', [especieInformada]))
+      )
+        throw recusaCampos('especie-inexistente', 'Espécie do logradouro inexistente ou inativa.', [
+          'especie',
         ]);
-      const logradouro = e.logradouro || texto(c['logradouro']);
+      const logradouro = e.logradouro || (c ? texto(c['logradouro']) : '');
       if (!logradouro) throw recusaCampos('endereco-invalido', 'Informe o logradouro.', ['logradouro']);
       const id = await tx.incluir('endereco_pessoa', {
         pessoa_fisica_id: pessoa,
         sequencia: await proximaSequencia(tx, 'endereco_pessoa', pessoa),
         tipo_endereco_id: e.tipo,
         cep: e.cep,
-        logradouro_cep_id: Number(c['id']),
-        especie_logradouro_id: num(c['especie_logradouro_id']),
+        logradouro_cep_id: c ? Number(c['id']) : null,
+        especie_logradouro_id: especieInformada ?? (c ? num(c['especie_logradouro_id']) : null),
         logradouro,
         numero: e.semNumero ? null : e.numero,
         sem_numero: e.semNumero,
         complemento: e.complemento || null,
-        bairro_id: e.bairro ? null : num(c['bairro_id']),
+        bairro_id: e.bairro || !c ? null : num(c['bairro_id']),
         bairro_nome: e.bairro || null,
-        municipio_ibge_id: Number(c['municipio_ibge_id']),
+        municipio_ibge_id: c ? Number(c['municipio_ibge_id']) : municipioInformado,
         ponto_referencia: e.pontoReferencia || null,
         principal: false,
         vigencia_inicio: e.vigenciaInicio ?? (await hojeDe(tx)),
@@ -1210,7 +1236,9 @@ export class FichaComplementarPropria {
   /** Os tipos de endereço, de telefone e de parentesco ativos (listas da tela). */
   async tipos(
     c: ContextoPorta,
-  ): Promise<Record<'endereco' | 'telefone' | 'parentesco', { id: number; descricao: string }[]>> {
+  ): Promise<
+    Record<'endereco' | 'telefone' | 'parentesco' | 'especieLogradouro', { id: number; descricao: string }[]>
+  > {
     return this.ler(c, async (l) => {
       const lista = async (t: string, extra = '') =>
         (
@@ -1222,8 +1250,26 @@ export class FichaComplementarPropria {
         endereco: await lista('tipo_endereco'),
         telefone: await lista('tipo_telefone'),
         parentesco: await lista('tipo_parentesco', 'AND usado_em_responsavel'),
+        // Espécies do logradouro (catálogo oficial) para o endereço manual.
+        especieLogradouro: await lista('especie_logradouro'),
       };
     });
+  }
+
+  /** Municípios ativos do IBGE pelo começo do nome (endereço manual: CEP fora do cadastro de CEPs). */
+  municipios(c: ContextoPorta, termo: string): Promise<{ id: number; nome: string; uf: string }[]> {
+    const t = termo.trim().replace(/[%_]/g, '');
+    if (t.length < 2) return Promise.resolve([]);
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `SELECT m.id, m.nome, u.sigla FROM municipio_ibge m JOIN unidade_federativa u ON u.id = m.unidade_federativa_id
+            WHERE m.ativo AND m.nome LIKE ? ORDER BY m.nome, u.sigla LIMIT 20`,
+          [`${t}%`],
+          { teto: 20 },
+        )
+      ).map((x) => ({ id: Number(x['id']), nome: String(x['nome']), uf: String(x['sigla']) })),
+    );
   }
 
   incluirEndereco(c: ContextoPorta, e: EntradaEndereco, t: RegistroTrilhaTela): Promise<number> {

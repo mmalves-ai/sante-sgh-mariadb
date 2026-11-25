@@ -18,6 +18,16 @@ export interface EnderecoNovo {
   readonly semNumero: boolean;
   readonly vigenciaInicio: string | null;
   readonly vigenciaFim: string | null;
+  /**
+   * Endereço manual: o CEP não está no cadastro de CEPs, então a tela informa o que a base postal daria. A espécie
+   * do logradouro (rua, avenida…) é obrigatória porque os leiautes públicos (cartão SUS, eSocial) pedem o código do
+   * tipo de logradouro; o município, porque o endereço nacional exige o código do IBGE.
+   */
+  readonly manual?: {
+    readonly especie: number | null;
+    readonly municipio: number | null;
+    readonly logradouro: string | null;
+  } | null;
 }
 
 export interface TelefoneNovo {
@@ -49,6 +59,11 @@ export function errosEndereco(e: EnderecoNovo): string[] {
   if (e.vigenciaInicio !== null && !DATA.test(e.vigenciaInicio)) erros.push('vigenciaInicio');
   if (e.vigenciaFim !== null && !DATA.test(e.vigenciaFim)) erros.push('vigenciaFim');
   if (e.vigenciaInicio && e.vigenciaFim && e.vigenciaFim < e.vigenciaInicio) erros.push('vigenciaFim');
+  if (e.manual) {
+    if (!e.manual.especie) erros.push('especie');
+    if (!e.manual.municipio) erros.push('municipio');
+    if (!e.manual.logradouro?.trim()) erros.push('logradouro');
+  }
   return erros;
 }
 

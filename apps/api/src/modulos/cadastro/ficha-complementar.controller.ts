@@ -9,6 +9,7 @@
 //   GET  /api/cadastros/pacientes/:id/campos-pendentes                 o que falta para abrir o atendimento no escopo
 //        (?local= resolve o módulo de recepção do local; a resposta devolve o módulo aplicado)
 //   GET  /api/cadastros/ficha-complementar/tipos                       tipos de endereço, telefone e parentesco
+//   GET  /api/cadastros/ficha-complementar/municipios?termo=           municípios (endereço manual sem CEP no catálogo)
 //   GET|POST /api/cadastros/regras-campo, POST .../:rid/inativar       regras de campo do cadastro
 //   GET  /api/cadastros/modulos-recepcao, POST .../:mid/canal         canal de entrada de cada módulo de recepção
 // Acesso só pelos níveis de cada cargo: leitura da ficha (cadastro.paciente.ler), edição (cadastro.paciente.editar),
@@ -94,6 +95,13 @@ export class FichaComplementarController {
     return this.rodar(() => this.servico().tipos(s.porta));
   }
 
+  @Get('ficha-complementar/municipios')
+  @Permissao('cadastro.paciente.ler')
+  async municipios(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    return this.rodar(() => this.servico().municipios(s.porta, String(termo ?? '').slice(0, 80)));
+  }
+
   @Post('pacientes/:id/enderecos')
   @HttpCode(201)
   @Permissao('cadastro.paciente.editar')
@@ -116,6 +124,8 @@ export class FichaComplementarController {
       principal: sim(b['principal']),
       vigenciaInicio: txt(b['vigenciaInicio']),
       vigenciaFim: txt(b['vigenciaFim']),
+      especie: id(b['especie']) ?? null,
+      municipio: id(b['municipio']) ?? null,
     };
     const r = await this.rodar(() =>
       this.servico().incluirEndereco(
