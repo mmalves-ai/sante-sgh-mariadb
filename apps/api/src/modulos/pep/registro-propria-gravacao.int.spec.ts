@@ -78,6 +78,18 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       [P],
     );
     await e.executar(`DELETE FROM registro_assistencial_rascunho WHERE estabelecimento_id IN ${est}`, [P]);
+    // 03-PEP L96: parecer gravado com o registro e a versão anterior guardada na suspensão.
+    await e.executar(
+      `DELETE s FROM interconsulta_resposta s JOIN interconsulta i ON i.id = s.interconsulta_id
+        WHERE i.estabelecimento_id IN ${est}`,
+      [P],
+    );
+    await e.executar(`DELETE FROM interconsulta WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(
+      `DELETE v FROM registro_assistencial_versao v JOIN registro_assistencial r ON r.id = v.registro_assistencial_id
+        WHERE r.estabelecimento_id IN ${est}`,
+      [P],
+    );
     await e.executar(
       `DELETE s FROM registro_assistencial_supervisao s JOIN registro_assistencial r ON r.id = s.registro_assistencial_id
         WHERE r.estabelecimento_id IN ${est}`,
@@ -435,6 +447,132 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     expect(await g.ultimoRegistro(C, m.paciente, m.modelo)).toBeNull();
     const corr = await g.registrar(C, { ...registro(), corrige: id } as never, ctx());
     expect((await g.cabecalhoRegistro(C, corr.registro))?.corrige).toBe(id);
+    // 03-PEP L96: a suspensão guardou a versão anterior (fotografia, motivo e autor) e a correção ligou a ela o novo.
+    const versao = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.consultar(
+        `SELECT numero_versao, operacao, motivo, corrigido_por_registro_assistencial_id AS corrigido, usuario_id,
+                JSON_VALUE(dados, '$.situacao') AS situacao, JSON_VALUE(dados, '$.impressaoDigital') AS hash,
+                JSON_VALUE(dados, '$.respostas') AS respostas
+           FROM registro_assistencial_versao WHERE registro_assistencial_id = ?`,
+        [id],
+      ),
+    );
+    expect(versao.map((v) => ({ ...v, respostas: Number(v['respostas']) > 0 }))).toEqual([
+      {
+        numero_versao: 1,
+        operacao: 'alteracao',
+        motivo: 'Lançado no paciente errado (teste)',
+        corrigido: corr.registro,
+        usuario_id: m.medico,
+        situacao: 'finalizado',
+        hash: HASH,
+        respostas: true,
+      },
+    ]);
+  }, 60_000);
+
+  it('parecer com o registro (03-PEP L96): o pedido vai à fila; a resposta de outro profissional fecha o parecer', async () => {
+    // Pedido: o texto do registro é o motivo; destino pela categoria; prazo passado recusa sem gravar nada.
+    const antes = await contarRegistros();
+    await expect(
+      g.registrar(
+        C,
+        {
+          ...registro(),
+          fluxo: {
+            tipo: 'pedido',
+            especialidade: null,
+            categoria: 'nutricao',
+            prioridade: 'urgente',
+            prazo: '2020-01-01T00:00:00Z',
+          },
+        } as never,
+        ctx(),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'parecer-prazo-invalido' } });
+    expect(await contarRegistros()).toBe(antes);
+    const pedido = await g.registrar(
+      C,
+      {
+        ...registro(),
+        fluxo: {
+          tipo: 'pedido',
+          especialidade: null,
+          categoria: 'nutricao',
+          prioridade: 'urgente',
+          prazo: null,
+        },
+      } as never,
+      ctx(),
+    );
+    const [i] = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.consultar(
+        `SELECT id, situacao, prioridade, categoria_assistencial AS categoria, solicitante_profissional_id AS solicitante,
+                paciente_id, atendimento_id, LENGTH(motivo) > 0 AS com_motivo
+           FROM interconsulta WHERE pedido_registro_assistencial_id = ?`,
+        [pedido.registro],
+      ),
+    );
+    expect({ ...i, com_motivo: Number(i?.['com_motivo']) }).toMatchObject({
+      situacao: 'solicitado',
+      prioridade: 'urgente',
+      categoria: 'nutricao',
+      solicitante: m.profissional,
+      paciente_id: m.paciente,
+      atendimento_id: m.atendimento,
+      com_motivo: 1,
+    });
+    // Quem pediu não responde o próprio parecer (422, nada gravado).
+    await expect(
+      g.registrar(
+        C,
+        { ...registro(), fluxo: { tipo: 'resposta', parecer: Number(i?.['id']) } } as never,
+        ctx(),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'parecer-proprio' } });
+    // Parecer pedido por outro profissional (sintético) ao médico da sessão: a resposta aceita e responde.
+    const outro = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-parecer` }, async (e) => {
+      const agora = new Date();
+      const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+        `Pessoa sintética ${P} solicitante`,
+        agora,
+      ]);
+      const pr = await e.inserir(
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, observacao, criado_em) VALUES (?, 'corpo_clinico', ?, ?)",
+        [pf, `massa ${P}`, agora],
+      );
+      return e.inserir(
+        `INSERT INTO interconsulta (estabelecimento_id, atendimento_id, paciente_id, solicitante_profissional_id,
+                                    categoria_assistencial, motivo, prioridade, solicitado_em, situacao, criado_em)
+         VALUES (?, ?, ?, ?, 'clinica', 'Motivo sintético', 'rotina', ?, 'solicitado', ?)`,
+        [m.estabelecimento, m.atendimento, m.paciente, pr, agora, agora],
+      );
+    });
+    const resp = await g.registrar(
+      C,
+      { ...registro(), fluxo: { tipo: 'resposta', parecer: outro } } as never,
+      ctx(),
+    );
+    const fechado = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.uma(
+        `SELECT i.situacao, i.aceito_por_profissional_id AS aceito_por, i.aceito_em IS NOT NULL AS aceito,
+                r.sequencia, r.respondente_profissional_id AS respondente, r.registro_assistencial_id AS registro
+           FROM interconsulta i JOIN interconsulta_resposta r ON r.interconsulta_id = i.id WHERE i.id = ?`,
+        [outro],
+      ),
+    );
+    expect({ ...fechado, aceito: Number(fechado?.['aceito']) }).toEqual({
+      situacao: 'respondido',
+      aceito_por: m.profissional,
+      aceito: 1,
+      sequencia: 1,
+      respondente: m.profissional,
+      registro: resp.registro,
+    });
+    // A classificação de risco grava pela recepção: no registro, recusa fechada.
+    await expect(g.registrar(C, { ...registro(), classificacao: {} } as never, ctx())).rejects.toMatchObject({
+      problema: { codigo: 'pendente-modelo-proprio' },
+    });
   }, 60_000);
 
   it('descarte do rascunho: fica descartado (nunca apagado) e não volta às listas', async () => {
@@ -977,6 +1115,15 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       );
     }
   }, 90_000);
+
+  async function contarRegistros(): Promise<number> {
+    const r = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (x) =>
+      x.uma('SELECT COUNT(*) AS n FROM registro_assistencial WHERE estabelecimento_id = ?', [
+        m.estabelecimento,
+      ]),
+    );
+    return Number(r?.['n'] ?? 0);
+  }
 
   function registro() {
     return {

@@ -194,3 +194,6 @@ export function decidirCoassinatura(p: DecisaoPedida): DecisaoGravavel {
     devolveAoAutor: !aceite,
   };
 }
+
+// 03-PEP L96: versão anterior do registro (suspensão e correção) e o parecer gravado com o registro.
+export * from './registro-ciclo.js';

@@ -18,8 +18,14 @@
 // registro que aponta o suspenso, rascunho arquivado ou descartado (situação), nunca DELETE.
 import {
   type CoassinaturaGravavel,
+  type FotografiaRegistro,
+  ligacaoDaCorrecao,
   pedidoDeCoassinatura,
+  pedidoDeParecer,
+  RecusaCicloRegistro,
   RecusaCoassinatura,
+  respostaDeParecer,
+  versaoNaSuspensao,
   vinculoDoCadastro,
 } from '@sgh/dominio-pep';
 import { createHash, randomUUID } from 'node:crypto';
@@ -69,6 +75,10 @@ export const TABELAS_REGISTRO = [
   'documento_prontuario',
   'documento_prontuario_evento',
   'assinatura_icp',
+  // 03-PEP L96: a versão anterior guardada na suspensão e ligada à correção; o pedido e a resposta de parecer.
+  'registro_assistencial_versao',
+  'interconsulta',
+  'interconsulta_resposta',
 ] as const;
 
 /** Respostas de escolha múltipla: o id da resposta é este deslocamento + o id da opção (nunca colide com campo). */
@@ -1323,15 +1333,16 @@ export class RegistroPropriaGravacao {
     e: GravacaoEvolucao,
     ctx: ContextoOperacao,
   ): Promise<{ registro: number; trilha: string | null }> {
-    // O pedido e a resposta de parecer e a classificação de risco gravam em tabelas de outras famílias: até a ligação
-    // delas, recusa fechada (nada gravado pela metade). A coassinatura grava aqui, na mesma transação (03-PEP L96).
-    if (e.fluxo || e.classificacao)
+    // A classificação de risco grava pela recepção (protocolo, níveis e fluxograma do cadastro): no registro, recusa
+    // fechada (nada gravado pela metade). A coassinatura e o pedido ou a resposta de parecer gravam aqui, na mesma
+    // transação (03-PEP L96).
+    if (e.classificacao)
       return Promise.reject(
         recusa(
           501,
           'pendente-modelo-proprio',
           'Ainda não disponível no banco próprio',
-          'O registro com parecer ou classificação de risco ainda não grava no banco próprio.',
+          'O registro com classificação de risco grava pela tela de classificação da recepção.',
         ),
       );
     return this.gravar(c, ctx, OP_REGISTRAR, false, conteudoDoRegistro(e), async (tx, est, prof) => {
@@ -1373,6 +1384,7 @@ export class RegistroPropriaGravacao {
           .map((x) => [x.ordem as string, x] as const),
       );
       const respostas = e.linhas.filter(temValor).map((l) => respostaDaLinha(l, campos));
+      const texto = textoConsolidado(respostas, campos);
       const agora = new Date();
       // 03-PEP L91: o retroativo (com a tolerância do estabelecimento) e a assinatura exigida pela configuração do setor
       // (ou do estabelecimento).
@@ -1435,10 +1447,12 @@ export class RegistroPropriaGravacao {
         justificativa_retroativo: e.justificativaRetroativo ?? null,
         situacao: coassinatura ? coassinatura.situacaoRegistro : 'finalizado',
         impressao_digital: e.hashConteudo,
-        texto_consolidado: textoConsolidado(respostas, campos),
+        texto_consolidado: texto,
         corrige_registro_assistencial_id: e.corrige ?? null,
         origem: 'sistema',
       });
+      if (e.corrige !== undefined) await ligarCorrecao(tx, e.corrige, id, prof.usuario, agora);
+      if (e.fluxo) await gravarParecer(tx, est.id, { ...e, fluxo: e.fluxo }, id, prof, texto, agora);
       for (const [i, r] of respostas.entries())
         await tx.incluir('registro_assistencial_resposta', {
           registro_assistencial_id: id,
@@ -1651,8 +1665,9 @@ export class RegistroPropriaGravacao {
           'Só o profissional da sessão registra.',
         );
       const [r] = await tx.consultarParaAtualizar(
-        `SELECT id, paciente_id, autor_profissional_id, suspenso_em, versao FROM registro_assistencial
-          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        `SELECT id, paciente_id, autor_profissional_id, suspenso_em, versao, situacao, impressao_digital,
+                texto_consolidado, CAST(data_hora_clinica AS CHAR) AS data_hora_clinica
+           FROM registro_assistencial WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [e.registro, est.id],
       );
       if (!r) throw recusa(404, 'registro-inexistente', 'Registro não encontrado', 'O registro não existe.');
@@ -1660,6 +1675,22 @@ export class RegistroPropriaGravacao {
         throw recusa(409, 'ja-suspenso', 'Operação recusada', 'O registro já está suspenso.');
       if (num(r['autor_profissional_id']) !== e.cbo)
         throw recusa(409, 'suspensao-por-outro', 'Operação recusada', 'Só o autor suspende.');
+      // 03-PEP L96: a versão anterior fica guardada com a justificativa (a correção liga a ela o registro novo).
+      const agora = new Date();
+      const v = versaoNaSuspensao(
+        await numerosDeVersao(tx, e.registro),
+        await fotografia(tx, r),
+        e.justificativa,
+      );
+      await tx.incluir('registro_assistencial_versao', {
+        registro_assistencial_id: e.registro,
+        numero_versao: v.numeroVersao,
+        operacao: v.operacao,
+        dados: JSON.stringify(v.dados),
+        motivo: v.motivo,
+        ocorrido_em: agora,
+        usuario_id: prof.usuario,
+      });
       await tx.alterar('registro_assistencial', e.registro, num(r['versao']), {
         situacao: 'suspenso',
         suspenso_em: new Date(),
@@ -1676,6 +1707,154 @@ export class RegistroPropriaGravacao {
         },
       };
     });
+  }
+}
+
+// ── Versão anterior e parecer (03-PEP L96) ────────────────────────────────────────────────────────────
+
+type Tx = TxOperacao;
+
+async function numerosDeVersao(tx: Tx, registro: number): Promise<number[]> {
+  const ls = await tx.consultar(
+    'SELECT numero_versao FROM registro_assistencial_versao WHERE registro_assistencial_id = ?',
+    [registro],
+  );
+  return ls.map((x) => num(x['numero_versao']));
+}
+
+async function fotografia(tx: Tx, r: Record<string, unknown>): Promise<FotografiaRegistro> {
+  const n = await tx.uma(
+    'SELECT COUNT(*) AS n FROM registro_assistencial_resposta WHERE registro_assistencial_id = ?',
+    [num(r['id'])],
+  );
+  return {
+    situacao: String(r['situacao']),
+    impressaoDigital: String(r['impressao_digital']),
+    textoConsolidado: textoOuNull(r['texto_consolidado']),
+    dataHoraClinica: String(r['data_hora_clinica']),
+    respostas: num(n?.['n'] ?? 0),
+  };
+}
+
+/** A correção liga a última versão guardada do original ao registro novo (ou guarda a fotografia agora, já ligada). */
+async function ligarCorrecao(
+  tx: Tx,
+  original: number,
+  novo: number,
+  usuario: number | null,
+  agora: Date,
+): Promise<void> {
+  const vs = await tx.consultarParaAtualizar(
+    `SELECT id, numero_versao, versao, corrigido_por_registro_assistencial_id AS corrigido
+       FROM registro_assistencial_versao WHERE registro_assistencial_id = ?`,
+    [original],
+  );
+  const l = ligacaoDaCorrecao(
+    vs.map((x) => ({ numero: num(x['numero_versao']), corrigidoPor: numOuNull(x['corrigido']) })),
+  );
+  if ('ligar' in l) {
+    const v = vs.find((x) => num(x['numero_versao']) === l.ligar)!;
+    await tx.alterar('registro_assistencial_versao', num(v['id']), num(v['versao']), {
+      corrigido_por_registro_assistencial_id: novo,
+    });
+    return;
+  }
+  const [r] = await tx.consultar(
+    `SELECT id, situacao, impressao_digital, texto_consolidado, justificativa_suspensao,
+            CAST(data_hora_clinica AS CHAR) AS data_hora_clinica
+       FROM registro_assistencial WHERE id = ?`,
+    [original],
+  );
+  const v = versaoNaSuspensao(
+    vs.map((x) => num(x['numero_versao'])),
+    await fotografia(tx, r!),
+    textoOuNull(r!['justificativa_suspensao']) ?? 'Correção do registro',
+  );
+  await tx.incluir('registro_assistencial_versao', {
+    registro_assistencial_id: original,
+    numero_versao: v.numeroVersao,
+    operacao: v.operacao,
+    dados: JSON.stringify(v.dados),
+    motivo: v.motivo,
+    corrigido_por_registro_assistencial_id: novo,
+    ocorrido_em: agora,
+    usuario_id: usuario,
+  });
+}
+
+/** O pedido de parecer (vai à fila da especialidade) ou a resposta a um parecer da fila, com o registro. */
+async function gravarParecer(
+  tx: Tx,
+  estabelecimento: number,
+  e: GravacaoEvolucao & { fluxo: NonNullable<GravacaoEvolucao['fluxo']> },
+  registro: number,
+  prof: ProfissionalDaSessao,
+  texto: string | null,
+  agora: Date,
+): Promise<void> {
+  try {
+    if (e.fluxo.tipo === 'pedido') {
+      const p = pedidoDeParecer({
+        especialidade: e.fluxo.especialidade,
+        categoria: e.fluxo.categoria,
+        prioridade: e.fluxo.prioridade,
+        prazo: e.fluxo.prazo,
+        texto,
+        agora,
+      });
+      await tx.incluir('interconsulta', {
+        estabelecimento_id: estabelecimento,
+        atendimento_id: e.atendimento,
+        paciente_id: e.paciente,
+        solicitante_profissional_id: prof.profissional,
+        especialidade_medica_id: p.especialidade,
+        categoria_assistencial: p.categoria,
+        pedido_registro_assistencial_id: registro,
+        motivo: p.motivo,
+        prioridade: p.prioridade,
+        solicitado_em: agora,
+        prazo_em: p.prazo,
+        situacao: 'solicitado',
+        origem: 'sistema',
+      });
+      return;
+    }
+    const [x] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, paciente_id, situacao, solicitante_profissional_id FROM interconsulta
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [e.fluxo.parecer, estabelecimento],
+    );
+    if (!x) throw recusa(404, 'parecer-inexistente', 'Parecer não encontrado', 'O parecer não existe.');
+    const seq = await tx.consultar(
+      'SELECT sequencia FROM interconsulta_resposta WHERE interconsulta_id = ? AND excluido_em IS NULL',
+      [e.fluxo.parecer],
+    );
+    const r = respostaDeParecer({
+      situacao: String(x['situacao']),
+      solicitante: num(x['solicitante_profissional_id']),
+      respondente: prof.profissional,
+      pacienteDoParecer: num(x['paciente_id']),
+      pacienteDoRegistro: e.paciente,
+      sequencias: seq.map((s) => num(s['sequencia'])),
+      texto,
+    });
+    await tx.incluir('interconsulta_resposta', {
+      interconsulta_id: e.fluxo.parecer,
+      sequencia: r.sequencia,
+      respondente_profissional_id: prof.profissional,
+      registro_assistencial_id: registro,
+      respondido_em: agora,
+      parecer: r.parecer,
+      segue_acompanhando: false,
+      origem: 'sistema',
+    });
+    await tx.alterar('interconsulta', e.fluxo.parecer, num(x['versao']), {
+      situacao: 'respondido',
+      ...(r.aceitaAgora ? { aceito_em: agora, aceito_por_profissional_id: prof.profissional } : {}),
+    });
+  } catch (x) {
+    if (x instanceof RecusaCicloRegistro) throw recusa(422, x.codigo, 'Operação recusada', x.message);
+    throw x;
   }
 }
 
