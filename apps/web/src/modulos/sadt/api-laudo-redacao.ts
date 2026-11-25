@@ -21,7 +21,24 @@ export const esquemaLaudoEmRedacao = z.object({
     sexo: z.enum(['feminino', 'masculino']).nullable(),
     idadeDias: n.nullable(),
     dataExame: txt,
+    nome: txt.default(''),
+    prontuario: txt.default(''),
   }),
+  /** As palavras-chave vigentes do laudo e as do cadastro ativo. */
+  palavrasChave: z.array(n).default([]),
+  palavras: z.array(z.object({ id: n, codigo: txt, descricao: txt })).default([]),
+  /** Os laudos assinados anteriores do mesmo exame do paciente. */
+  anteriores: z
+    .array(
+      z.object({
+        item: n,
+        assinadoEm: txt.nullable(),
+        resultado: txt.nullable(),
+        achadoCritico: z.boolean(),
+        texto: txt,
+      }),
+    )
+    .default([]),
   laudo: z
     .object({
       id: n,
@@ -50,6 +67,7 @@ export const esquemaLaudoEmRedacao = z.object({
       descricao: txt,
       casasDecimais: n.nullable(),
       obrigatoria: z.boolean(),
+      calculada: z.boolean().default(false),
       secao: n.nullable(),
     }),
   ),
@@ -71,6 +89,26 @@ export const esquemaLaudoEmRedacao = z.object({
       vigenciaFim: txt.nullable(),
     }),
   ),
+  /** As fórmulas das medidas calculadas: a tela faz a conta na hora pela mesma regra do domínio. */
+  formulas: z
+    .array(
+      z.object({
+        grandeza: n,
+        expressao: txt,
+        casas: n.nullable(),
+        vigenciaInicio: txt,
+        vigenciaFim: txt.nullable(),
+        variaveis: z.array(
+          z.object({
+            identificador: txt,
+            fonte: z.enum(['grandeza', 'dado_paciente']),
+            grandeza: n.nullable(),
+            dadoPaciente: txt.nullable(),
+          }),
+        ),
+      }),
+    )
+    .default([]),
   valores: z.array(esquemaValor),
   modelos: z.array(
     z.object({ id: n, nome: txt, tipo: txt, atalho: txt.nullable(), texto: txt, campos: z.array(txt) }),
@@ -79,7 +117,17 @@ export const esquemaLaudoEmRedacao = z.object({
 });
 export type LaudoEmRedacao = z.infer<typeof esquemaLaudoEmRedacao>;
 
-const esquemaGravado = z.object({ id: n, situacao: txt, versaoAtual: n, valores: n, foraReferencia: n });
+const esquemaGravado = z.object({
+  id: n,
+  situacao: txt,
+  versaoAtual: n,
+  valores: n,
+  foraReferencia: n,
+  exameLiberado: z.boolean().optional(),
+  avisoCritico: z.enum(['abrir', 'cancelar', 'nada']).optional(),
+  avisados: n.optional(),
+  emissoesSuperadas: n.optional(),
+});
 export type LaudoGravado = z.infer<typeof esquemaGravado>;
 
 export interface CorpoLaudo {
@@ -92,6 +140,8 @@ export interface CorpoLaudo {
   pesoKg: number | null;
   alturaCm: number | null;
   valores: { grandeza: number; numero: number | null; texto: string | null }[];
+  /** Ids do cadastro; sem o campo, as palavras gravadas ficam como estão. */
+  palavrasChave?: number[] | null;
 }
 
 export const abrirLaudo = (item: number) => ler(`${S}/redacao/${item}`, esquemaLaudoEmRedacao);
@@ -114,3 +164,96 @@ export const previaDoModelo = (
   corpo: { modelo: number; pesoKg: number | null; alturaCm: number | null; valores: CorpoLaudo['valores'] },
   chave: string,
 ) => enviar(`${S}/redacao/${item}/previa`, corpo, z.object({ texto: txt, faltam: z.array(txt) }), chave);
+
+// ── Lista de trabalho, versões, busca de casos e manutenção dos modelos (05-SADT linha 16) ──────────────────────
+
+const esquemaFila = z.object({
+  itens: z.array(
+    z.object({
+      item: n,
+      exame: txt,
+      setor: n,
+      setorNome: txt,
+      paciente: txt,
+      prontuario: txt,
+      realizadoEm: txt.nullable(),
+      laudo: txt.nullable(),
+    }),
+  ),
+  setores: z.array(z.object({ id: n, nome: txt })),
+});
+export type FilaDeLaudos = z.infer<typeof esquemaFila>;
+export const lerFilaDeLaudos = (setor: number | null) =>
+  ler(`${S}/fila${setor ? `?setor=${setor}` : ''}`, esquemaFila);
+
+const esquemaVersao = z.object({
+  numero: n,
+  situacao: txt,
+  em: txt,
+  titulo: txt.nullable(),
+  texto: txt,
+  motivo: txt.nullable(),
+  laudista: txt,
+  resultado: txt.nullable(),
+  achadoCritico: z.boolean(),
+});
+export type VersaoDoLaudo = z.infer<typeof esquemaVersao>;
+export const lerVersaoDoLaudo = (item: number, numero: number) =>
+  ler(`${S}/redacao/${item}/versoes/${numero}`, esquemaVersao);
+
+const esquemaPalavras = z.object({ itens: z.array(z.object({ id: n, codigo: txt, descricao: txt })) });
+export const lerPalavrasChave = () => ler(`${S}/palavras-chave`, esquemaPalavras);
+const esquemaBusca = z.object({
+  itens: z.array(
+    z.object({
+      item: n,
+      exame: txt,
+      paciente: txt,
+      prontuario: txt,
+      assinadoEm: txt.nullable(),
+      resultado: txt.nullable(),
+    }),
+  ),
+});
+export type CasoAchado = z.infer<typeof esquemaBusca>['itens'][number];
+export const buscarLaudosPorPalavras = (palavras: readonly number[]) =>
+  ler(`${S}/busca?palavras=${palavras.join(',')}`, esquemaBusca);
+
+const esquemaModelos = z.object({
+  itens: z.array(
+    z.object({
+      id: n,
+      codigo: txt,
+      nome: txt,
+      tipo: txt,
+      atalho: txt.nullable(),
+      texto: txt,
+      ativo: z.boolean(),
+      exame: n.nullable(),
+      exameNome: txt.nullable(),
+      setor: n.nullable(),
+      setorNome: txt.nullable(),
+      pessoal: z.boolean(),
+    }),
+  ),
+  exames: z.array(z.object({ id: n, nome: txt })),
+  setores: z.array(z.object({ id: n, nome: txt })),
+  temProfissional: z.boolean(),
+});
+export type ModelosDeLaudo = z.infer<typeof esquemaModelos>;
+export type ModeloDeLaudo = ModelosDeLaudo['itens'][number];
+export const lerModelosDeLaudo = () => ler(`${S}/modelos`, esquemaModelos);
+export interface CorpoModelo {
+  id: number | null;
+  codigo: string;
+  nome: string;
+  exame: number | null;
+  setor: number | null;
+  pessoal: boolean;
+  tipo: 'texto' | 'normal' | 'alterado' | 'conclusao' | 'frase';
+  atalho: string | null;
+  texto: string;
+  ativo: boolean;
+}
+export const salvarModeloDeLaudo = (corpo: CorpoModelo, chave: string) =>
+  enviar(`${S}/modelos`, corpo, z.object({ id: n, campos: z.array(txt) }), chave);

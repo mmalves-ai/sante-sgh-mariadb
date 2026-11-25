@@ -1,6 +1,7 @@
 // Textos das telas do SADT, dos laudos e do portal de resultados (M26). Sem nome de sistema antigo (ADR 0023).
 import { mensagensAgencia } from './i18n-agencia.js';
 import { mensagensPedido } from './i18n-pedido.js';
+import { mensagensEscalaExecucao } from './i18n-escala-execucao.js';
 import { mensagensLimites } from './i18n-limites.js';
 import { mensagensLoteTrabalho } from './i18n-lote-trabalho.js';
 import { mensagensTransfusao } from './i18n-transfusao.js';
@@ -282,6 +283,8 @@ export const mensagensSadt = {
     nenhumaEmissao: 'Nenhuma emissão deste exame.',
     emissao: 'Laudo número {numero} · {codigo} · {em} · {por} · {vias} via(s) seguinte(s)',
     validoNumero: 'Laudo número {numero} válido: emitido em {em}, {n} exame(s).',
+    superado:
+      'Atenção: este laudo foi retificado depois desta emissão. A via impressa não é mais a atual: emita a nova via.',
     editor: 'Laudo de imagem e métodos gráficos',
     editorTexto:
       'Os exames de imagem, endoscopia e métodos gráficos recebidos a laudar. O laudo é privativo de médico; assinar libera o laudo.',
@@ -361,6 +364,7 @@ export const mensagensSadt = {
     otpauth: 'Cadastre este código no aplicativo autenticador:',
     validar: 'Validar laudo',
     valido: 'Laudo válido: emitido em {em}, {n} exame(s).',
+    superado: 'Atenção: este laudo foi retificado depois desta emissão. Peça ao hospital a via atual.',
     invalido: 'Código não encontrado.',
   },
   recusas: {
@@ -396,6 +400,8 @@ export const mensagensSadt = {
   // F3.5: pedido de exames, cancelamento do item e recoleta.
   pedido: mensagensPedido,
   limites: mensagensLimites,
+  // F3.5 (05-SADT linha 19): escala de execução e fila do setor.
+  escala: mensagensEscalaExecucao,
   // F3.5: lote de trabalho da bancada no mapa de trabalho.
   lote: mensagensLoteTrabalho,
 };

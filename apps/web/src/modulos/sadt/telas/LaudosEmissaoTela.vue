@@ -62,6 +62,7 @@ const codigo = ref('');
 const conferindo = ref(false);
 const conferido = ref<{
   valido: boolean;
+  superado?: boolean | undefined;
   numero: string | null;
   emitidoEm: string | null;
   exames: number;
@@ -142,6 +143,9 @@ async function emitir(atendimento: string, exames: readonly ExameSadt[], segunda
             })
           : t('sadt.portal.invalido')
       }}
+      <strong v-if="conferido.valido && conferido.superado" data-testid="laudos-codigo-superado">
+        {{ t('sadt.laudos.superado') }}
+      </strong>
     </p>
     <ErroSadt v-if="erroCodigo" :erro="erroCodigo" />
     <ErroSadt v-if="lista.isError.value" :erro="lista.error.value" />

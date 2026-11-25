@@ -50,6 +50,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/PostosColetaTela.vue'),
     meta: { permissao: 'sadt.amostra.ler' },
   },
+  // F3.5 (05-SADT linha 19): a escala de execução por setor (grade da semana) e a fila do setor.
+  {
+    path: '/sadt/escala-execucao',
+    name: 'sadt.escala-execucao',
+    component: () => import('./telas/EscalaExecucaoTela.vue'),
+    meta: { permissao: 'sadt.catalogo.ler' },
+  },
   {
     path: '/sadt/atendimentos',
     name: 'sadt.atendimentos',
@@ -129,6 +136,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/LaudosEmissaoTela.vue'),
     meta: { permissao: 'sadt.laudo.ler' },
   },
+  // Manutenção dos modelos de laudo (05-SADT linha 16): os do estabelecimento e os pessoais do médico.
+  {
+    path: '/sadt/laudos/modelos',
+    name: 'sadt.laudos.modelos',
+    component: () => import('./telas/LaudoModelosTela.vue'),
+    meta: { permissao: 'sadt.laudo.ler' },
+  },
   // Redação do laudo e laudo estruturado (05-SADT linhas 16 e 17): ?item=<exame_item>.
   {
     path: '/sadt/laudos/redacao',
@@ -139,7 +153,7 @@ export const rotasSadt: RouteRecordRaw[] = [
   {
     path: '/sadt/laudos',
     name: 'sadt.laudos',
-    component: () => import('./telas/LaudoEditorTela.vue'),
+    component: () => import('./telas/LaudoRedacaoTela.vue'),
     meta: { permissao: 'sadt.laudo.ler' },
   },
   {

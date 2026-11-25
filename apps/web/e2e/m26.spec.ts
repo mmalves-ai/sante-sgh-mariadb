@@ -182,32 +182,8 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
   });
 
   test('laudo de imagem privativo de médico; orçamento convertido; axe', async ({ page }) => {
-    await entrar(page, 'SINT.LAUDADOR');
-    await page.goto('/sadt/laudos');
-    await expect(page.getByTestId('tela-sadt-laudo-editor')).toBeVisible();
-    await page.locator('[data-testid^="editor-abrir-"]').first().click();
-    await expect(page.getByTestId('editor-ficha')).toBeVisible();
-    await escolher(page.getByTestId('editor-modelo'), { indice: 1 });
-    await expect(page.getByTestId('editor-texto')).toHaveValue(/sem alterações/i);
-    await page.getByTestId('editor-assinar').click();
-    await expect(page.getByTestId('editor-mensagem')).toContainText('Resultado liberado');
-    await semViolacaoAxe(page, '/sadt/laudos');
-    // Métodos gráficos: o laudo estruturado leva as variáveis do exame junto com o texto.
-    await escolher(
-      page.getByTestId('tela-sadt-laudo-editor').getByRole('combobox', { name: 'Setor' }),
-      'metodosGraficos',
-    );
-    await page.locator('[data-testid^="editor-abrir-"]').first().click();
-    await expect(page.getByTestId('editor-variaveis')).toBeVisible();
-    await page.getByTestId('editor-var-1').fill('72');
-    await page.getByTestId('editor-var-2').fill('160');
-    await page.getByTestId('editor-texto').fill('Ritmo sinusal, sem alterações (sintético).');
-    await page.getByTestId('editor-salvar').click();
-    await expect(page.getByTestId('editor-mensagem')).toBeVisible();
-    await expect(page.getByTestId('editor-var-1')).toHaveValue('72');
-    await semViolacaoAxe(page, '/sadt/laudos');
-    await sair(page);
-
+    // O laudo de imagem e de métodos gráficos passou para a redação do laudo (lista de trabalho, modelos, versões e
+    // assinatura no banco do cliente): a jornada dele está em f35-laudo-redacao.spec.ts (@F3.5-09).
     await entrar(page, 'SINT.RECEPCAO.SADT');
     await page.goto('/sadt/orcamentos');
     const orc = page.locator('[data-testid^="orcamento-situacao-"]').filter({ hasText: 'Em aberto' }).first();

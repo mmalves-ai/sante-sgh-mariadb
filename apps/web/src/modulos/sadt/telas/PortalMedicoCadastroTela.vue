@@ -96,6 +96,9 @@ async function enviar(): Promise<void> {
       <ErroSadt v-else-if="erroValidacao" :erro="erroValidacao" />
       <p v-else-if="valido?.valido" data-testid="validacao-resultado">
         {{ t('sadt.portal.valido', { em: quando(valido.emitidoEm), n: valido.exames }) }}
+        <strong v-if="valido.superado" data-testid="validacao-superado">{{
+          t('sadt.portal.superado')
+        }}</strong>
       </p>
       <p v-else-if="valido" data-testid="validacao-resultado">{{ t('sadt.portal.invalido') }}</p>
     </template>
