@@ -7,6 +7,7 @@
 // Recusa entregar pacote inativo, de parceiro inativo ou com a revisão da minimização vencida.
 import {
   ANONIMIZACOES,
+  conferirPacoteNoCatalogo,
   entregaDevida,
   FORMATOS_PACOTE,
   MEIOS_ENTREGA,
@@ -204,9 +205,14 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
   }
 
   /** Inclui ou altera (com a versão lida) o pacote e os seus campos; o campo tirado fica como excluído. */
-  gravarPacote(c: ContextoComunicacao, entrada: unknown, agora: Date = new Date()): Promise<{ id: number }> {
+  async gravarPacote(
+    c: ContextoComunicacao,
+    entrada: unknown,
+    agora: Date = new Date(),
+  ): Promise<{ id: number }> {
     const x = entradaValida(esquemaPacote, entrada);
-    const erros = validarPacote(x, x.campos);
+    // A regra do pacote e a lista branca das visões exportáveis (entidade e campo conferidos contra o catálogo).
+    const erros = [...validarPacote(x, x.campos), ...conferirPacoteNoCatalogo(x, x.campos)];
     if (erros.length) throw recusa(erros, 'Pacote recusado');
     return this.gravar(
       c,
@@ -228,10 +234,14 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
           janela_dias: x.janelaDias,
           ativo: x.ativo,
         };
-        const a = await tx.uma(
-          'SELECT id, versao FROM pacote_parceiro WHERE parceiro_dados_id = ? AND codigo = ? FOR UPDATE',
-          [num(d['id']), x.codigo],
-        );
+        const a =
+          (
+            await tx.consultarParaAtualizar(
+              'SELECT id, versao FROM pacote_parceiro WHERE parceiro_dados_id = ? AND codigo = ?',
+              [num(d['id']), x.codigo],
+              { teto: 1 },
+            )
+          )[0] ?? null;
         let id: number;
         if (a) {
           if (x.versao === null || x.versao !== num(a['versao']) || (x.id !== null && x.id !== num(a['id'])))
@@ -246,9 +256,10 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
             ...valores,
           });
         }
-        const atuais = await tx.consultar(
-          'SELECT id, entidade, campo, versao, excluido_em FROM pacote_parceiro_campo WHERE pacote_parceiro_id = ? ORDER BY id FOR UPDATE',
+        const atuais = await tx.consultarParaAtualizar(
+          'SELECT id, entidade, campo, versao, excluido_em FROM pacote_parceiro_campo WHERE pacote_parceiro_id = ? ORDER BY id',
           [id],
+          { teto: 1000 },
         );
         // Primeiro afasta as sequências (a chave única vale também para os excluídos), depois grava o que veio.
         const versoes = new Map<number, number>();
@@ -311,11 +322,15 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
       'integracao.parceiro.revisar_minimizacao',
       ['pacote_parceiro'],
       async (tx, _est, usuario) => {
-        const p = await tx.uma(
-          `SELECT p.id, p.versao FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
-            WHERE p.id = ? AND d.excluido_em IS NULL FOR UPDATE`,
-          [pacote],
-        );
+        const p =
+          (
+            await tx.consultarParaAtualizar(
+              `SELECT p.id, p.versao FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
+            WHERE p.id = ? AND d.excluido_em IS NULL`,
+              [pacote],
+              { teto: 1 },
+            )
+          )[0] ?? null;
         if (!p) throw naoEncontrado('Pacote');
         if (num(p['versao']) !== versao) throw conflito();
         const campos = await tx.consultar(
@@ -357,12 +372,16 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
       'integracao.parceiro.registrar_entrega',
       ['entrega_pacote_parceiro'],
       async (tx, est, usuario) => {
-        const p = await tx.uma(
-          `SELECT p.id, p.periodicidade, p.agenda, p.janela_dias, p.ativo, p.proxima_revisao_em, d.ativo AS parceiro_ativo
+        const p =
+          (
+            await tx.consultarParaAtualizar(
+              `SELECT p.id, p.periodicidade, p.agenda, p.janela_dias, p.ativo, p.proxima_revisao_em, d.ativo AS parceiro_ativo
              FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
-            WHERE p.id = ? AND d.excluido_em IS NULL FOR UPDATE`,
-          [pacote],
-        );
+            WHERE p.id = ? AND d.excluido_em IS NULL`,
+              [pacote],
+              { teto: 1 },
+            )
+          )[0] ?? null;
         if (!p) throw naoEncontrado('Pacote');
         const erros: { campo: string; codigo: string; mensagem: string }[] = [];
         if (!bool(p['ativo']) || !bool(p['parceiro_ativo']))
@@ -443,10 +462,14 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
   mudarEntrega(c: ContextoComunicacao, entrega: number, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaSituacaoEntrega, entrada);
     return this.gravar(c, 'integracao.parceiro.situacao_entrega', ['entrega_pacote_parceiro'], async (tx) => {
-      const e = await tx.uma(
-        'SELECT id, situacao, versao FROM entrega_pacote_parceiro WHERE id = ? FOR UPDATE',
-        [entrega],
-      );
+      const e =
+        (
+          await tx.consultarParaAtualizar(
+            'SELECT id, situacao, versao FROM entrega_pacote_parceiro WHERE id = ?',
+            [entrega],
+            { teto: 1 },
+          )
+        )[0] ?? null;
       if (!e) throw naoEncontrado('Entrega');
       const atual = String(e['situacao']) as SituacaoEntrega;
       if (!podeMudarEntrega(atual, x.situacao))
