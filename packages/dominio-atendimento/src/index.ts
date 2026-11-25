@@ -23,3 +23,5 @@ export * from './fluxo-atendimento.js';
 export * from './correcao-ficha.js';
 // F3.2 (02-REC linha 34): locais de atendimento (horário, encaminhamento, visibilidade, usuários do local).
 export * from './locais-atendimento.js';
+// F7 (02-CAD linha 13): o paciente falecido não abre atendimento, marcação nem internação.
+export * from './paciente-falecido.js';
