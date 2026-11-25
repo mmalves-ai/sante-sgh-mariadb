@@ -9,6 +9,7 @@ import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import GlosaDoTitulo from '../componentes/GlosaDoTitulo.vue';
+import PortadorDoTitulo from '../componentes/PortadorDoTitulo.vue';
 import RetencaoSofridaTitulo from '../componentes/RetencaoSofridaTitulo.vue';
 import { baixaManual, lerTituloReceber, novaChave } from '../api-financeiro.js';
 import { data, opcoesContas, reais, usarFinanceiro } from '../usar-financeiro.js';
@@ -103,6 +104,8 @@ async function baixar() {
         </li>
       </ul>
       <GlosaDoTitulo :titulo="titulo.data.value" />
+      <!-- F8, 07-FIN linha 79: com quem cada parcela está (carteira, banco ou cessionário) e a operação. -->
+      <PortadorDoTitulo :titulo="n" />
       <RouterLink :to="`/financeiro/receber/demonstrativos?titulo=${id}`" data-testid="trd-glosa">
         {{ t('financeiro.demonstrativos.registrar') }}
       </RouterLink>

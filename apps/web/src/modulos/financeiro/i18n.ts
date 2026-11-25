@@ -3,6 +3,7 @@
 import { mensagensAcordosFinanceiro } from './i18n-acordos.js';
 import { mensagensBaixaFinanceiro } from './i18n-baixa.js';
 import { mensagensCartaoFinanceiro } from './i18n-cartao.js';
+import { mensagensCessaoFinanceiro } from './i18n-cessao.js';
 import { mensagensEncontroFinanceiro } from './i18n-encontro.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
 import { mensagensNotaCreditoFinanceiro } from './i18n-nota-credito.js';
@@ -26,6 +27,8 @@ export const mensagensFinanceiro = {
   encontro: mensagensEncontroFinanceiro,
   // F8, 07-FIN linha 70: notas de crédito e de débito com tributos (i18n-nota-credito.ts).
   notaCd: mensagensNotaCreditoFinanceiro,
+  // F8, 07-FIN linha 79: portador do título, desconto e cessão de recebíveis (i18n-cessao.ts).
+  cessao: mensagensCessaoFinanceiro,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   todos: 'Todos',

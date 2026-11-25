@@ -12,11 +12,12 @@
 //   POST /api/financeiro/nota-cessao/operacoes                    contratar
 //   POST /api/financeiro/nota-cessao/operacoes/desfecho           { item, acao: liquidar | recomprar, data }
 //   POST /api/financeiro/nota-cessao/operacoes/cancelar           { operacao, motivo }
+//   GET  /api/financeiro/nota-cessao/titulos/:id                  portador e operação de cada parcela do título a receber
 // Permissões próprias (recurso novo, concedidas ao administrador do sistema e dadas pelo cargo): notaCreditoDebito.ler,
 // .emitir (emitir e aplicar) e .cancelar; cessaoRecebivel.ler, .contratar e .desfecho (liquidar, recomprar, cancelar).
 // O portador é cadastro do financeiro (financeiro.parametro.editar).
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
-import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import type { ResultadoFinanceiro } from '@sgh/contratos';
 import type { Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
@@ -25,6 +26,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import {
   apoiosNotaCessao,
+  cessaoDoTitulo,
   notasDoEstabelecimento,
   OPERACOES_NOTA_CESSAO,
   operacoesCessao,
@@ -169,6 +171,16 @@ export class NotaCessaoController {
   @Permissao('financeiro.cessaoRecebivel.ler')
   operacoes(@Req() req: RequisicaoAutorizada) {
     return this.ler(req, (l, est) => operacoesCessao(l, est));
+  }
+
+  @Get('titulos/:id')
+  @Permissao('financeiro.cessaoRecebivel.ler')
+  @PermissaoOu('financeiro.tituloReceber.ler')
+  portadorDoTitulo(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    const titulo = Number(id);
+    if (!Number.isInteger(titulo) || titulo <= 0)
+      throw new ErroProblema('entrada-invalida', 400, 'Título inválido');
+    return this.ler(req, (l, est) => cessaoDoTitulo(l, est, titulo));
   }
 
   @Post('operacoes')

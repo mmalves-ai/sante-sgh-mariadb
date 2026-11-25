@@ -14,7 +14,12 @@
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { OPERACOES_NOTA_CESSAO } from '../nota-cessao-propria.js';
+import {
+  cessaoDoTitulo,
+  OPERACOES_NOTA_CESSAO,
+  operacoesCessao,
+  portadoresDoEstabelecimento,
+} from '../nota-cessao-propria.js';
 import { PortaFinanceiroPropria } from '../porta-propria.js';
 import {
   CLIENTE,
@@ -519,6 +524,46 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
       'aberta',
       Number(desc['portador']),
     ]);
+    // C1-069: as leituras da tela. O portador mostra a condição vigente e o limite tomado; a operação traz os itens;
+    // a ficha do título mostra com quem a parcela está e a operação; outro estabelecimento não vê nada.
+    const ler = <T>(
+      fn: (l: Parameters<Parameters<MassaFinanceiro['nucleo']['lerSomente']>[1]>[0]) => Promise<T>,
+    ) => m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f8-nc-ler' }, fn) as Promise<T>;
+    const ports = await ler((l) => portadoresDoEstabelecimento(l, m.est, HOJE));
+    expect(
+      ports
+        .filter((x) => ['CESS70', 'DESC70'].includes(x.codigo))
+        .map((x) => [x.codigo, x.tipo, x.taxaDesconto, x.limiteCredito, x.utilizado]),
+    ).toEqual([
+      ['CESS70', 'cessao', 3, 5000, 0],
+      ['DESC70', 'cobranca_descontada', 2, null, 1000],
+    ]);
+    const ops = await ler((l) => operacoesCessao(l, m.est));
+    const vista = ops.find((x) => x.operacao === Number(o2['operacao']));
+    expect([vista?.tipo, vista?.situacao, vista?.valorLiquido, vista?.itens.map((i) => i.situacao)]).toEqual([
+      'desconto_duplicata',
+      'contratada',
+      982,
+      ['cedida', 'cedida'],
+    ]);
+    expect(ops.find((x) => x.operacao === Number(o1['operacao']))?.situacao).toBe('cancelada');
+    const tituloP2 = Number(
+      (await um('SELECT titulo_receber_id FROM parcela_receber WHERE id = ?', [p2]))['titulo_receber_id'],
+    );
+    const ficha = await ler((l) => cessaoDoTitulo(l, m.est, tituloP2));
+    expect(
+      ficha.map((x) => [x.parcela, x.saldo, x.portador, x.operacao?.numero, x.operacao?.situacaoItem]),
+    ).toEqual([[p2, 600, 'Banco do desconto sintético', Number(o2['numero']), 'cedida']]);
+    expect(await ler((l) => cessaoDoTitulo(l, m.outroEst, tituloP2))).toEqual([]);
+    const tituloP1 = Number(
+      (await um('SELECT titulo_receber_id FROM parcela_receber WHERE id = ?', [p1]))['titulo_receber_id'],
+    );
+    const fichaP1 = await ler((l) => cessaoDoTitulo(l, m.est, tituloP1));
+    expect([
+      fichaP1[0]?.portador,
+      fichaP1[0]?.operacao?.situacao,
+      fichaP1[0]?.operacao?.situacaoItem,
+    ]).toEqual([null, 'cancelada', 'devolvida']);
     // Nota sobre parcela que está com o portador: recusada, nada gravado.
     expect(
       await codigoDaGravacao(

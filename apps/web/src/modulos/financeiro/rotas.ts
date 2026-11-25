@@ -127,6 +127,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.notaCreditoDebito.ler' },
   },
   {
+    // F8, 07-FIN linha 79: portador do título a receber, desconto de duplicata e cessão de recebíveis.
+    path: '/financeiro/receber/cessao',
+    name: 'financeiro.receber.cessao',
+    component: () => import('./telas/CessaoRecebiveisTela.vue'),
+    meta: { permissao: 'financeiro.cessaoRecebivel.ler' },
+  },
+  {
     path: '/financeiro/tesouraria/fluxo-caixa',
     name: 'financeiro.tesouraria.fluxo',
     component: () => import('./telas/FluxoCaixaTela.vue'),

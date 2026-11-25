@@ -38,7 +38,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F3.5 (05-SADT linha 7): o item "Postos de coleta" do laboratório entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (07-FIN linha 70): o item "Notas de crédito e de débito" entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (05-SUP linha 30): o item "Consumo de gases por setor" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":436,"M":198,"P":57,"N":181};
+// F8 (07-FIN linha 79): o item "Desconto e cessão de recebíveis" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":437,"M":198,"P":57,"N":182};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -287,6 +288,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.contas-a-receber.conta-corrente-de-convenios","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Conta corrente de convênios"],"titulo":"Conta corrente de convênios","selo":"M","fase":3,"rota":"/financeiro/receber/convenios","permissao":"financeiro.creditoConvenio.ler"},
   {"id":"financeiro.contas-a-receber.renegociacao-de-titulos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Renegociação de títulos"],"titulo":"Renegociação de títulos","selo":"P","fase":3,"rota":"/financeiro/receber/renegociacoes","permissao":"financeiro.tituloReceber.ler"},
   {"id":"financeiro.contas-a-receber.baixa-por-demonstrativo-com-glosa-no-titulo","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Baixa por demonstrativo, com glosa no título"],"titulo":"Baixa por demonstrativo, com glosa no título","selo":"N","fase":3,"rota":"/financeiro/receber/demonstrativos","permissao":"financeiro.tituloReceber.ler"},
+  {"id":"financeiro.contas-a-receber.desconto-e-cessao-de-recebiveis","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Desconto e cessão de recebíveis"],"titulo":"Desconto e cessão de recebíveis","selo":"N","fase":3,"rota":"/financeiro/receber/cessao","permissao":"financeiro.cessaoRecebivel.ler"},
   {"id":"financeiro.tesouraria.movimento-bancario-e-saldos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Movimento bancário e saldos"],"titulo":"Movimento bancário e saldos","selo":"M","fase":3,"rota":"/financeiro/tesouraria/movimento","permissao":"financeiro.movimento.ler"},
   {"id":"financeiro.tesouraria.fechamento-do-periodo-financeiro","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Fechamento do período financeiro"],"titulo":"Fechamento do período financeiro","selo":"N","fase":3,"rota":"/financeiro/tesouraria/periodo","permissao":"financeiro.movimento.ler"},
   {"id":"financeiro.tesouraria.conciliacao-bancaria-extrato","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Conciliação bancária"],"titulo":"Conciliação bancária","selo":"N","fase":3,"rota":"/financeiro/tesouraria/conciliacao","permissao":"financeiro.conciliacao.ler"},

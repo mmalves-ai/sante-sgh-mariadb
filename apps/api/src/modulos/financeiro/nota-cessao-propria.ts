@@ -1222,3 +1222,42 @@ export async function operacoesCessao(l: Leitor, est: number) {
       })),
   }));
 }
+
+/**
+ * O portador de cada parcela do título a receber (07-FIN linha 79), para a ficha do título: com quem a parcela está
+ * (carteira própria quando não tem portador) e a operação de desconto ou cessão mais recente em que ela entrou, com a
+ * situação do item (cedida, liquidada, recomprada, devolvida). Título de outro estabelecimento: lista vazia.
+ */
+export async function cessaoDoTitulo(l: Leitor, est: number, titulo: number) {
+  const linhas = await l.consultar(
+    `SELECT p.id, p.sequencia, p.vencimento, p.saldo, p.situacao, pt.descricao AS portador, pt.tipo AS tipo_portador,
+            o.numero AS operacao_numero, o.tipo_operacao, o.com_coobrigacao, o.situacao AS situacao_operacao,
+            i.situacao AS situacao_item
+       FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id
+       LEFT JOIN portador_titulo pt ON pt.id = p.portador_titulo_id
+       LEFT JOIN operacao_cessao_recebivel_item i ON i.id = (SELECT MAX(i2.id) FROM operacao_cessao_recebivel_item i2
+            WHERE i2.parcela_receber_id = p.id)
+       LEFT JOIN operacao_cessao_recebivel o ON o.id = i.operacao_cessao_recebivel_id
+      WHERE t.id = ? AND t.estabelecimento_id = ? ORDER BY p.sequencia, p.id`,
+    [titulo, est],
+  );
+  return linhas.map((r) => ({
+    parcela: numero(r['id']),
+    sequencia: numero(r['sequencia']),
+    vencimento: dataIso(r['vencimento']),
+    saldo: numero(r['saldo']),
+    situacao: texto(r['situacao']),
+    portador: r['portador'] === null ? null : texto(r['portador']),
+    tipoPortador: r['tipo_portador'] === null ? null : texto(r['tipo_portador']),
+    operacao:
+      r['operacao_numero'] === null
+        ? null
+        : {
+            numero: numero(r['operacao_numero']),
+            tipo: texto(r['tipo_operacao']),
+            comCoobrigacao: Boolean(numero(r['com_coobrigacao'])),
+            situacao: texto(r['situacao_operacao']),
+            situacaoItem: texto(r['situacao_item']),
+          },
+  }));
+}
