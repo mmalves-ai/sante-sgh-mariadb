@@ -49,6 +49,8 @@ import { PortaRespostasSadtPropria, RESPOSTAS_SADT } from './catalogo-respostas-
 import { CatalogoRespostasSadtController } from './catalogo-respostas.controller.js';
 import { LaudoGrandezasController } from './laudo-grandezas.controller.js';
 import { ConsumoPadraoExameController } from './consumo-padrao.controller.js';
+import { BuscaAtivaResultadoController } from './busca-ativa.controller.js';
+import { BUSCA_ATIVA_RESULTADO, PortaBuscaAtivaPropria } from './busca-ativa-propria.js';
 import { CONSUMO_PADRAO_EXAME, PortaConsumoPadraoExamePropria } from './consumo-padrao-propria.js';
 import { GRANDEZAS_LAUDO, PortaGrandezasLaudoPropria } from './laudo-grandezas-propria.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
@@ -170,6 +172,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       MicrobiologiaController,
       MicrobiologiaCadastroController,
       ConsumoPadraoExameController,
+      BuscaAtivaResultadoController,
     ],
     providers: [
       // F8 (05-SADT linha 22): consumo padrão do exame, baixa no estoque e lançamento na conta (só no banco do cliente).
@@ -178,6 +181,14 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaConsumoPadraoExamePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (05-SADT linha 24): busca ativa de resultados liberados depois da alta (só no banco do cliente).
+      {
+        provide: BUSCA_ATIVA_RESULTADO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaBuscaAtivaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.

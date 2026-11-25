@@ -12,6 +12,7 @@ export * from './referencia/versao.js';
 export * from './referencia/data-do-exame.js';
 export * from './critico/escalonamento.js';
 export * from './critico/regra-aviso.js';
+export * from './critico/busca-ativa.js';
 export * from './indicadores/tat.js';
 export * from './orcamento/conversao.js';
 export * from './orcamento/montagem.js';
