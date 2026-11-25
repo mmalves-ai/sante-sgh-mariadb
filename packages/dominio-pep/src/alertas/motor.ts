@@ -12,6 +12,7 @@ import { alertasDose } from './dose.js';
 import { alertasDuplicidade } from './duplicidade.js';
 import { alertasInteracao } from './interacao.js';
 import { alertasRenal } from './renal.js';
+import { alertasAjusteRenalFaixa, alertasRestricaoPosologia, configuracaoDoAlerta } from './restricoes.js';
 import type { AlertaGerado, ContextoAlertas, ItemAvaliado, RegraAlerta } from './tipos.js';
 import { alertasViaForma } from './via-forma.js';
 
@@ -61,6 +62,16 @@ export const REGRAS_PADRAO: readonly RegraAlerta[] = [
     vigenteDesde: '2026-10-21',
     ativa: true,
     descricao: 'Dose acima do ajuste renal pelo clearance estimado: libera com justificativa',
+  },
+  {
+    codigo: 'restricao-posologia',
+    tipo: 'restricao-posologia',
+    nivel: 'justificar',
+    versao: 1,
+    vigenteDesde: '2026-10-21',
+    ativa: true,
+    descricao:
+      'Restrição de posologia do hospital (idade, peso, sexo, gestante, setor, via, forma ou dose): o comportamento do cadastro',
   },
   {
     codigo: 'interacao',
@@ -196,6 +207,8 @@ export function achados(e: EntradaMotor): AlertaGerado[] {
       ...alertasDuplicidade(item, e.itens, ctx),
       ...alertasDose(item),
       ...alertasRenal(item, ctx),
+      ...alertasAjusteRenalFaixa(item, ctx),
+      ...alertasRestricaoPosologia(item, ctx),
       ...alertasInteracao(item, e.itens, ctx),
       ...alertasViaForma(item),
       ...alertasAltoAlerta(item, ctx),
@@ -247,18 +260,30 @@ export function achados(e: EntradaMotor): AlertaGerado[] {
   return r;
 }
 
-/** Os alertas com o nível da regra vigente e a decisão registrada (regra desligada: o alerta não aparece). */
+/**
+ * Os alertas com o nível da regra vigente e a decisão registrada (regra desligada: o alerta não aparece). A
+ * configuração do alerta no setor (a mais específica vigente) desliga o alerta ali ou troca o comportamento; sem ela,
+ * vale o comportamento do cadastro que gerou o achado e, por fim, o da regra.
+ */
 export function avaliarAlertas(e: EntradaMotor): AlertaPrescricao[] {
   const r: AlertaPrescricao[] = [];
+  const produtosDo = new Map(e.itens.map((i) => [i.chave, i.produtos.map((p) => p.produto.produto)]));
   for (const a of achados(e)) {
     const regra = regraVigente(e.ctx.regras, a.tipo, e.ctx.hoje);
     if (!regra || !regra.ativa) continue;
+    const setor = configuracaoDoAlerta(
+      e.ctx.restricoes,
+      a.tipo,
+      produtosDo.get(a.item) ?? [...produtosDo.values()].flat(),
+      e.ctx.hoje,
+    );
+    if (setor && !setor.ligado) continue;
     const decisao = (e.decisoes.get(a.item) ?? []).find((d) => d.alerta === a.id) ?? null;
     r.push({
       id: a.id,
       item: a.item,
       tipo: a.tipo,
-      nivel: nivelDe(a, regra),
+      nivel: setor?.nivel ?? a.nivel ?? nivelDe(a, regra),
       titulo: a.titulo,
       detalhe: a.detalhe,
       regra: regra.codigo,

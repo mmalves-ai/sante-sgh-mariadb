@@ -56,6 +56,7 @@ export * from './prescricao/receita-alta.js';
 export * from './prescricao/avaliacao.js';
 export * from './alertas/tipos.js';
 export * from './alertas/motor.js';
+export * from './alertas/restricoes.js';
 export * from './alertas/controlado.js';
 export * from './alertas/alto-alerta.js';
 export * from './prescricao/documento.js';

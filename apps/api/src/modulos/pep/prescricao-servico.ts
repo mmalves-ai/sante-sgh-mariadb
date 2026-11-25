@@ -420,6 +420,16 @@ export class ServicoPrescricao {
         dietas.length > 0
           ? await this.porta.dietaDeOutro(c, a.id, vigencia.inicio, vigencia.fim, prescritor.cbo)
           : null,
+      ...(this.porta.restricoesAlertas
+        ? {
+            restricoes: await this.porta.restricoesAlertas(
+              c,
+              a.paciente,
+              a.unidade,
+              [...produtos.values()].map((p) => ({ produto: p.produto, principios: p.principiosAtivos })),
+            ),
+          }
+        : {}),
       hoje: hojeDe(agora),
     };
     return { ctx, produtos };

@@ -440,6 +440,7 @@ export const mensagensPrescricao = {
       'dieta-de-outro': 'Dieta de outro profissional',
       categoria: 'Categoria do prescritor',
       'base-nao-contratada': 'Base não contratada',
+      'restricao-posologia': 'Restrição de posologia',
     },
   },
   antimicrobianos: {

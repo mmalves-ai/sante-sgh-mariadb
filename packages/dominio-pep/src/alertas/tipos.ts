@@ -2,6 +2,7 @@
 // uma regra versionada (aviso, bloqueio com justificativa, bloqueio total) com vigência e autor; toda decisão do
 // prescritor diante de alerta fica registrada. Os alertas do novo valem para quem prescreve no novo.
 import type { NivelAlerta, TipoAlerta, TipoItemPrescricao } from '@sgh/contratos';
+import type { ContextoRestricoes } from './restricoes.js';
 
 /** O que o motor sabe de um produto do cadastro (lido do banco do estabelecimento; nenhum dado de paciente). */
 export interface ProdutoAlerta {
@@ -112,6 +113,8 @@ export interface ContextoAlertas {
   } | null;
   /** Cobertura do convênio por produto (ausente: sem informação, nenhum alerta). */
   readonly cobertura?: ReadonlyMap<number, boolean>;
+  /** Restrições próprias do hospital: ajuste renal por faixa, restrição de posologia e alerta por setor (03-PEP L108). */
+  readonly restricoes?: ContextoRestricoes;
   readonly hoje: string;
 }
 
@@ -125,4 +128,6 @@ export interface AlertaGerado {
   readonly referencia?: { readonly prescricao: number; readonly item: number };
   /** Nível sugerido pela natureza do achado (a regra vigente pode ser mais branda ou mais dura). */
   readonly gravidade?: 'leve' | 'moderada' | 'grave' | 'contraindicada';
+  /** Comportamento do cadastro que gerou o achado (restrição do hospital); a configuração do setor ainda pode mudar. */
+  readonly nivel?: NivelAlerta;
 }

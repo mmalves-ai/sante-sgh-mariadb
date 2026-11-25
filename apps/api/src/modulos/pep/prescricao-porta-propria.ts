@@ -27,6 +27,7 @@ import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
 import { BASE_PLANO_PROPRIO, GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
 import { ImpressaoPrescricaoPropria } from './prescricao-propria-impressao.js';
 import { RegrasPrescricaoPropria2 } from './prescricao-propria-regras-2.js';
+import { lerRestricoesAlertas } from './prescricao-propria-restricoes.js';
 import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import {
   type AtendimentoDaPrescricao,
@@ -564,6 +565,17 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   }
   interacoes(...a: Parameters<PortaPrescricao['interacoes']>) {
     return this.catalogo.interacoes(...a);
+  }
+  /** Ajuste renal por faixa, restrição de posologia e alerta por setor (prescricao-propria-restricoes.ts). */
+  restricoesAlertas(
+    c: ContextoPrescricao,
+    paciente: number,
+    unidade: number | null,
+    produtos: readonly { produto: number; principios: readonly number[] }[],
+  ) {
+    return this.ler(c, 'restricoes', (l, est) =>
+      lerRestricoesAlertas(l, est.id, paciente, unidade, produtos),
+    );
   }
   futuras(...a: Parameters<PortaPrescricao['futuras']>) {
     return this.gravacao.futuras(...a);

@@ -527,6 +527,7 @@ export const TIPOS_ALERTA = [
   'dieta-de-outro',
   'categoria',
   'base-nao-contratada',
+  'restricao-posologia',
 ] as const;
 export type TipoAlerta = (typeof TIPOS_ALERTA)[number];
 

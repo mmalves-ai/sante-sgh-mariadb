@@ -339,6 +339,15 @@ export const rotasPep: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/farmacia-clinica/restricoes',
+    name: 'farmacia.restricoes',
+    component: () => import('./telas/RestricoesPrescricaoTela.vue'),
+    meta: {
+      permissao: 'pep.regraAlerta.ler',
+      menu: 'Farmácia clínica > Ajuste renal e restrições da prescrição',
+    },
+  },
+  {
     path: '/farmacia-clinica/antimicrobianos',
     name: 'farmacia.antimicrobianos',
     component: () => import('./telas/AntimicrobianosTela.vue'),

@@ -6,6 +6,7 @@
 // Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { SecaoCadastroPrescricao } from '@sgh/contratos';
+import type { ContextoRestricoes } from '@sgh/dominio-pep';
 import type { ContextoOperacao } from '@sgh/nucleo';
 import type { FavoritoNovo, FavoritoPrescritorLido } from './prescricao-propria-favoritos.js';
 import type {
@@ -110,6 +111,13 @@ export interface PortaPrescricao {
   parametrosPrescricao(c: ContextoPrescricao): Promise<ParametrosPrescricao>;
   regrasAlerta(c: ContextoPrescricao): Promise<RegraAlertaLida[]>;
   interacoes(c: ContextoPrescricao, principios: readonly number[]): Promise<InteracaoLida[] | null>;
+  /** Restrições próprias do hospital para os produtos da prescrição (03-PEP L108); ausente: nenhuma. */
+  restricoesAlertas?(
+    c: ContextoPrescricao,
+    paciente: number,
+    unidade: number | null,
+    produtos: readonly { produto: number; principios: readonly number[] }[],
+  ): Promise<ContextoRestricoes>;
   prova(c: ContextoPrescricao, prescricao: number): Promise<ProvaPrescricaoLida>;
   hashAtual(c: ContextoPrescricao, prescricao: number): Promise<string>;
   marcas(
