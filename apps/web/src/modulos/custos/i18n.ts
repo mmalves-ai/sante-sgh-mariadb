@@ -1,5 +1,8 @@
 // Textos da tela "Centros de custo e critérios de rateio" (M54, etapa 4). ADR 0023: nenhum nome de outro sistema.
+import { mensagensCustoPadrao } from './i18n-custo-padrao.js';
+
 export const mensagensCustos = {
+  custoPadrao: mensagensCustoPadrao,
   titulo: 'Centros de custo e critérios de rateio',
   subtitulo:
     'Classifique cada centro de custo (produtivo, auxiliar ou administrativo), defina a ordem e o critério do rateio e colete as estatísticas do mês que repartem o custo.',

@@ -291,6 +291,7 @@ describe('rota e textos (M54.4)', () => {
       ['/custos/centros', 'custos.centro.ler'],
       ['/custos/apuracao', 'custos.apuracao.ler'],
       ['/custos/resultado', 'custos.resultado.ler'],
+      ['/custos/custo-padrao', 'custos.apuracao.ler'],
     ]);
   });
   it('nenhum texto cita o outro sistema nem nome de tabela', () => {

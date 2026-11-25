@@ -23,4 +23,11 @@ export const rotasCustos: RouteRecordRaw[] = [
     component: () => import('./ResultadoCustosTela.vue'),
     meta: { permissao: 'custos.resultado.ler' },
   },
+  {
+    // C2-115 (07-FIN L140): custo-padrão por procedimento (ficha técnica e comparação com o apurado).
+    path: '/custos/custo-padrao',
+    name: 'custos.custo-padrao',
+    component: () => import('./CustoPadraoTela.vue'),
+    meta: { permissao: 'custos.apuracao.ler' },
+  },
 ];
