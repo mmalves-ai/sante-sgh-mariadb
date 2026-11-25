@@ -53,6 +53,8 @@ export interface TituloPagarResposta {
   readonly valor: number;
   readonly valorDocumento: number;
   readonly pago: number;
+  /** Saldo em aberto da parcela (F3.8, 07-FIN linha 63: a baixa parcial deixa saldo). */
+  readonly saldo?: number;
   readonly dataPagamento: string | null;
   readonly bordero: number;
   readonly status: number | null;
@@ -75,6 +77,8 @@ export interface DetalheTituloPagarResposta extends TituloPagarResposta {
     parcela: number;
     vencimento: string | null;
     valor: number;
+    /** Saldo em aberto da parcela (a baixa parcial deixa saldo). */
+    saldo?: number;
     situacao: string;
   }[];
   readonly classificacao: {
@@ -124,9 +128,19 @@ export interface BorderoResposta {
   readonly titulos: number;
 }
 
+/** Credor achado pela busca (nome, documento ou código): fornecedor ou profissional, pelo tipo pedido. */
+export interface CredorEncontrado {
+  readonly id: number;
+  readonly nome: string;
+  /** CNPJ ou CPF do fornecedor; do profissional não sai documento pessoal (só o nome e o código). */
+  readonly documento: string | null;
+}
+
 export interface AdiantamentoResposta {
   readonly id: number;
   readonly credor: number;
+  /** Nome do credor no cadastro (vazio quando o cadastro não o tem). */
+  readonly credorNome: string;
   readonly tipoCredor: 'fornecedor' | 'profissional';
   /** Número de negócio do adiantamento (AD-...). */
   readonly numero: string;

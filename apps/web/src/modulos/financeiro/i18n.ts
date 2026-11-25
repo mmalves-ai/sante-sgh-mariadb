@@ -1,10 +1,13 @@
 // Textos das telas do financeiro e fiscal (M32): contas a pagar e a receber, tesouraria, gerencial, parâmetros, fiscal
 // e a exportação contábil. Sem nome de sistema antigo (ADR 0023) nem "outro sistema" (escopo estrito do verificador).
+import { mensagensBaixaFinanceiro } from './i18n-baixa.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
 
 export const mensagensFinanceiro = {
   // F3.8, 07-FIN linhas 98 e 99: reclassificação e permissões (i18n-gestao.ts).
   gestao: mensagensGestaoFinanceiro,
+  // F3.8, 07-FIN linha 63: baixa parcial, desconto e acréscimos na baixa (i18n-baixa.ts).
+  baixa: mensagensBaixaFinanceiro,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   todos: 'Todos',
@@ -58,6 +61,8 @@ export const mensagensFinanceiro = {
     'em-bordero': 'Em borderô',
     pago: 'Pago',
     'pago-parcial': 'Pago em parte',
+    cancelada: 'Cancelada',
+    renegociada: 'Renegociada',
   },
   situacoesReceber: {
     aberto: 'Em aberto',
@@ -81,6 +86,7 @@ export const mensagensFinanceiro = {
     lancadoPor: 'Lançado por',
     aprovacoes: 'Aprovações',
     credorNaoEncontrado: 'não encontrado no cadastro',
+    credorPeloNome: 'Achar o credor pelo nome',
     profissional: 'Profissional (médico)',
     valorDocumento: 'Valor do documento',
     referente: 'Referente a',
@@ -160,7 +166,11 @@ export const mensagensFinanceiro = {
     tipoCredor: 'Tipo de credor',
     fornecedor: 'Fornecedor',
     profissional: 'Médico',
-    credor: 'Código do credor',
+    credor: 'Credor',
+    credorDica: 'Digite parte do nome, o CNPJ, o CPF ou o código',
+    credorNenhum: 'Nenhum credor encontrado neste tipo.',
+    credorEscolhido: 'Escolhido: {nome} (código {codigo})',
+    credorSemNome: 'não encontrado no cadastro',
     referente: 'Finalidade',
     prazo: 'Prazo para compensar',
     conceder: 'Pedir adiantamento',

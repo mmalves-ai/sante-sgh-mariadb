@@ -144,7 +144,25 @@ export const esquemaBaixarTitulo = z.discriminatedUnion('cenario', [
     .object({
       cenario: z.literal('pagar'),
       titulos: z
-        .array(z.object({ titulo: id, versao: versao.nullable().default(null) }).strict())
+        .array(
+          z
+            .object({
+              titulo: id,
+              versao: versao.nullable().default(null),
+              /**
+               * F3.8 (07-FIN linha 63): quanto saiu da conta nesta baixa. Sem ele, a baixa quita o saldo. Menor que o
+               * saldo é baixa parcial: o restante fica em aberto na parcela.
+               */
+              valorPago: dinheiro.optional(),
+              /** Desconto obtido do credor (liquida saldo sem sair da conta). */
+              desconto: dinheiroOuZero.optional(),
+              /** Juros, multa e outros acréscimos cobrados pelo credor (saem da conta, não liquidam saldo). */
+              juros: dinheiroOuZero.optional(),
+              multa: dinheiroOuZero.optional(),
+              acrescimo: dinheiroOuZero.optional(),
+            })
+            .strict(),
+        )
         .min(1)
         .max(200),
       /** Id da conta bancária que paga (no escopo de contas do usuário). */

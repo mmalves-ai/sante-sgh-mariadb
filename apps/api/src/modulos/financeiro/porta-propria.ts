@@ -18,6 +18,7 @@
 // destino do lote/remessa em colunas próprias (hoje em observacao, JSON).
 import type {
   AdiantamentoResposta,
+  CredorEncontrado,
   BorderoResposta,
   ContaBancariaResposta,
   ContaSemTituloResposta,
@@ -72,7 +73,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
-import { deParaDoEstabelecimento, fatosContabeis } from './contabil-fiscal-propria.js';
+import { buscarFornecedores, deParaDoEstabelecimento, fatosContabeis } from './contabil-fiscal-propria.js';
 import { exigirPeriodoAberto } from './periodo-propria.js';
 import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import {
@@ -262,6 +263,18 @@ function jsonDe(v: unknown): Record<string, unknown> {
   }
 }
 
+/**
+ * A situação da parcela no vocabulário das telas (o mesmo do título): em aberto ou vencida pela data, paga em parte ou
+ * paga; a cancelada e a renegociada saem com o próprio nome.
+ */
+function situacaoDaParcelaPagar(situacao: string, vencimento: string | null, hoje: string): string {
+  if (situacao === 'paga') return 'pago';
+  if (situacao === 'parcial') return 'pago-parcial';
+  if (situacao === 'aberta' || situacao === 'bloqueada')
+    return vencimento && vencimento.slice(0, 10) < hoje ? 'vencido' : 'aberto';
+  return situacao;
+}
+
 function tituloPagarDe(r: Linha, hoje: string): TituloPagarResposta {
   const bordero = documentoNumerico(r['bordero_numero']);
   const t = {
@@ -289,7 +302,17 @@ function tituloPagarDe(r: Linha, hoje: string): TituloPagarResposta {
     dataPagamento: t.dataPagamento,
     bordero,
     status: statusDaParcela(r['situacao'], bordero > 0),
-    situacao: situacaoTituloPagar(t, hoje),
+    // F3.8 (07-FIN linha 63): com desconto ou juros na baixa, o desembolsado difere do valor; quem diz se quitou é a
+    // situação gravada da parcela (paga = quitada; parcial = ainda com saldo).
+    situacao: situacaoTituloPagar(
+      r['situacao'] === 'paga'
+        ? { ...t, pago: Math.max(t.pago, t.valor) }
+        : r['situacao'] === 'parcial'
+          ? { ...t, dataPagamento: null, pago: Math.min(Math.max(t.pago, 0.01), centavos(t.valor - 0.01)) }
+          : t,
+      hoje,
+    ),
+    saldo: numero(r['saldo']),
     lancadoPor: texto(r['lancado_por']),
     referente: texto(r['referente']),
     aprovacoes: numero(r['aprovacoes']),
@@ -573,7 +596,7 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       if (!r) return null;
       const titulo = numero(r['titulo_id']);
       const irmas = await l.consultar(
-        'SELECT id, sequencia, vencimento, valor, situacao FROM parcela_pagar WHERE titulo_pagar_id = ? AND excluido_em IS NULL ORDER BY sequencia',
+        'SELECT id, sequencia, vencimento, valor, saldo, situacao FROM parcela_pagar WHERE titulo_pagar_id = ? AND excluido_em IS NULL ORDER BY sequencia',
         [titulo],
       );
       const nat = await l.uma('SELECT codigo, descricao FROM natureza_financeira WHERE id = ?', [
@@ -598,7 +621,8 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
           parcela: numero(x['sequencia']),
           vencimento: dataIso(x['vencimento']),
           valor: numero(x['valor']),
-          situacao: texto(x['situacao']),
+          saldo: numero(x['saldo']),
+          situacao: situacaoDaParcelaPagar(texto(x['situacao']), dataIso(x['vencimento']), hoje),
         })),
         classificacao: k ? { ...k, nome: texto(nat?.['descricao']), valor: numero(r['valor_bruto']) } : null,
         retencoes: retencoes.map((x) => ({
@@ -681,7 +705,7 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
-          `${SQL_PARCELAS_PAGAR} AND p.situacao = 'aberta' AND p.vencimento <= ? ORDER BY p.vencimento, p.id LIMIT 500`,
+          `${SQL_PARCELAS_PAGAR} AND p.situacao IN ('aberta','parcial') AND p.vencimento <= ? ORDER BY p.vencimento, p.id LIMIT 500`,
           [est, ate],
         )
       ).map((r) => tituloPagarDe(r, hoje)),
@@ -745,12 +769,16 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       const linhas = await l.consultar(
         `SELECT a.id, a.numero, a.tipo_credor, a.empresa_fornecedora_id, a.profissional_id, a.data_emissao,
                 a.data_vencimento, a.valor, a.saldo_compensar, a.referente, a.situacao, a.conta_bancaria_id,
-                a.centro_custo_id,
+                a.centro_custo_id, COALESCE(ef.razao_social, pr.nome_exibicao, pf.nome) AS credor_nome,
                 (SELECT COUNT(DISTINCT d.aprovador_usuario_id) FROM pedido_aprovacao pa
                    JOIN decisao_aprovacao d ON d.pedido_aprovacao_id = pa.id AND d.decisao = 'aprovado'
                   WHERE pa.estabelecimento_id = a.estabelecimento_id AND pa.entidade = 'adiantamento'
                     AND pa.entidade_id = a.id AND pa.excluido_em IS NULL AND pa.situacao <> 'cancelado') AS aprovacoes
-           FROM adiantamento a WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.situacao <> 'cancelado'
+           FROM adiantamento a
+           LEFT JOIN empresa_fornecedora ef ON ef.id = a.empresa_fornecedora_id
+           LEFT JOIN profissional pr ON pr.id = a.profissional_id
+           LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+          WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.situacao <> 'cancelado'
           ORDER BY a.data_emissao DESC, a.id DESC LIMIT 500`,
         [est],
       );
@@ -758,6 +786,7 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       return linhas.map((r) => ({
         id: numero(r['id']),
         credor: numero(r['empresa_fornecedora_id'] ?? r['profissional_id']),
+        credorNome: texto(r['credor_nome']),
         tipoCredor: texto(r['tipo_credor']) === 'profissional' ? 'profissional' : 'fornecedor',
         numero: texto(r['numero']),
         documento: documentoNumerico(r['numero']),
@@ -785,6 +814,33 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
             hoje,
           )?.aprovacoes ?? 1,
       }));
+    });
+  }
+
+  /**
+   * F3.8, 07-FIN linha 67: o credor do adiantamento escolhido pelo nome, documento ou código. Fornecedor: a mesma busca
+   * do de-para e das retenções. Profissional: pelo nome (civil ou de exibição) ou pelo código; o documento pessoal não
+   * sai na resposta (a busca por CPF acha, mas a lista mostra só o nome).
+   */
+  credores(
+    c: ContextoFinanceiro,
+    tipo: 'fornecedor' | 'profissional',
+    termo: string,
+  ): Promise<CredorEncontrado[]> {
+    return this.ler(c, async (l) => {
+      if (tipo === 'fornecedor') return buscarFornecedores(l, termo);
+      const t = termo.trim();
+      if (t.length < 2 && !/^\d$/.test(t)) return [];
+      const digitos = t.replace(/\D/g, '');
+      const linhas = await l.consultar(
+        `SELECT pr.id, COALESCE(pr.nome_exibicao, pf.nome) AS nome
+           FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+          WHERE pr.excluido_em IS NULL AND pr.situacao <> 'inativo'
+            AND (pf.nome LIKE ? OR pr.nome_exibicao LIKE ? OR pr.id = ? OR (? <> '' AND pf.cpf = ?))
+          ORDER BY (pr.id = ?) DESC, pf.nome LIMIT 20`,
+        [`%${t}%`, `%${t}%`, Number(t) || 0, digitos.length === 11 ? digitos : '', digitos, Number(t) || 0],
+      );
+      return linhas.map((r) => ({ id: numero(r['id']), nome: texto(r['nome']), documento: null }));
     });
   }
 

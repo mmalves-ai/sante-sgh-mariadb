@@ -3170,6 +3170,22 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     senhaAlteradaEm: new Date(),
     concessoes: { papeis: [4], opcoesPapel: [3984, 6390, 6391, 6392] },
   },
+  /**
+   * F3.8, 07-FIN linha 63 (no fim do mapa: o ID sintético é a posição): quem gere o contas a pagar e prorroga o
+   * vencimento. A permissão de prorrogar não vem de opção de menu: é dada por perfil (administrador do sistema).
+   */
+  'SINT.FIN.GESTOR': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'FINGESTOR',
+      opcoesGrupo: opcoesFinanceiro('financeiro.tituloPagar.ler', 'financeiro.tituloPagar.criar'),
+    },
+    perfisConcedidos: ['administrador-sistema'],
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

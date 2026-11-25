@@ -2,6 +2,8 @@
 // título; na ficha, a data para trás e o motivo que exige justificativa travam o botão na hora (com o aviso); a
 // prorrogação válida muda o vencimento da parcela e entra no histórico com o motivo, a data anterior e a nova. Axe em
 // cada passo. Porta do financeiro em MEMÓRIA sobre a fonte sintética (nada vai a banco nem a banco de pagamento).
+// A permissão de prorrogar não vem de opção de menu (é dada por perfil): quem lança não vê o formulário; quem gere o
+// contas a pagar (SINT.FIN.GESTOR) prorroga.
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -25,7 +27,7 @@ function somar(br: string, dias: number): { iso: string; br: string } {
   return { iso, br: iso.split('-').reverse().join('/') };
 }
 
-test.describe('financeiro: prorrogação do vencimento @F3.8', () => {
+test.describe('financeiro: prorrogação do vencimento @F3.8 @F3.8-01', () => {
   test.setTimeout(180_000);
 
   test('data para trás e justificativa travam na hora; prorroga e o histórico guarda o anterior; axe', async ({
@@ -44,6 +46,19 @@ test.describe('financeiro: prorrogação do vencimento @F3.8', () => {
     await page.getByTestId('tp-lancar').click();
     await expect(page.getByTestId('tp-mensagem')).toContainText('lançado');
 
+    // Quem lança não tem a permissão de prorrogar: a ficha não mostra o formulário.
+    await page
+      .getByTestId('tp-lista')
+      .locator('tbody tr', { hasText: documento })
+      .getByRole('link')
+      .first()
+      .click();
+    await expect(page.getByTestId('tela-fin-titulo-pagar')).toBeVisible();
+    await expect(page.getByTestId('tpd-parcelas')).toBeVisible();
+    await expect(page.getByTestId('tpd-prorrogar')).toHaveCount(0);
+
+    await entrar(page, 'SINT.FIN.GESTOR');
+    await page.goto('/financeiro/pagar/titulos');
     await page
       .getByTestId('tp-lista')
       .locator('tbody tr', { hasText: documento })

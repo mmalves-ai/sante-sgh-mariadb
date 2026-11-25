@@ -44,7 +44,10 @@ async function mostrar() {
 // Prorrogação (F3.8, 07-FIN linha 63): na própria ficha do título, parcela por parcela, com o histórico ao lado.
 // A data e a justificativa são conferidas na hora (o servidor confere de novo: regra no domínio).
 const abertas = computed(() =>
-  (titulo.data.value?.parcelas ?? []).filter((p) => p.situacao === 'aberto' || p.situacao === 'vencido'),
+  // A parcela paga em parte ainda tem saldo em aberto: também pode ser prorrogada.
+  (titulo.data.value?.parcelas ?? []).filter((p) =>
+    ['aberto', 'vencido', 'pago-parcial'].includes(p.situacao),
+  ),
 );
 const parcelaEscolhida = ref('');
 watch(
@@ -211,6 +214,7 @@ async function excluir() {
             <th scope="col">{{ t('financeiro.parcela') }}</th>
             <th scope="col">{{ t('financeiro.vencimento') }}</th>
             <th scope="col">{{ t('financeiro.valor') }}</th>
+            <th scope="col">{{ t('financeiro.baixa.saldo') }}</th>
             <th scope="col">{{ t('financeiro.situacao') }}</th>
           </tr>
         </thead>
@@ -219,6 +223,7 @@ async function excluir() {
             <td>{{ p.parcela }}</td>
             <td>{{ data(p.vencimento) }}</td>
             <td>{{ reais(p.valor) }}</td>
+            <td>{{ p.saldo === undefined ? '—' : reais(p.saldo) }}</td>
             <td>{{ t(`financeiro.situacoesPagar.${p.situacao}`) }}</td>
           </tr>
         </tbody>

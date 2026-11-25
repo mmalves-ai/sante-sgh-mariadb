@@ -8,6 +8,7 @@
 // convênio 92, sem título (o evento da competência).
 import type {
   AdiantamentoResposta,
+  CredorEncontrado,
   ContaBancariaResposta,
   ContaSemTituloResposta,
   CreditoPendenteResposta,
@@ -46,7 +47,10 @@ import {
   regrasDoCredor,
   serieGravada,
   situacaoAprovacao,
+  calcularBaixaPagar,
   conferirAlcadaProrrogacao,
+  conferirBaixaPagar,
+  type BaixaPagarCalculada,
   conferirProrrogacao,
   situacaoTituloPagar,
   type TipoCredor,
@@ -85,6 +89,8 @@ interface TituloPagarM {
   valor: number;
   valorDocumento: number;
   pago: number;
+  /** F3.8 (07-FIN linha 63): saldo em aberto depois de uma baixa com valor informado (ausente: nunca baixado assim). */
+  saldo?: number;
   dataPagamento: string | null;
   bordero: number;
   status: number;
@@ -185,7 +191,11 @@ interface Estado {
   }[];
   creditos: CreditoPendenteResposta[];
   /** O adiantamento com quem pediu e quem aprovou (a segregação dos dois olhos antes da saída). */
-  adiantamentos: (AdiantamentoResposta & { pedidoPor: string; aprovadores: AprovacaoRegistrada[] })[];
+  /** O nome do credor não fica no estado: sai do cadastro na leitura (`adiantamentos`). */
+  adiantamentos: (Omit<AdiantamentoResposta, 'credorNome'> & {
+    pedidoPor: string;
+    aprovadores: AprovacaoRegistrada[];
+  })[];
   rateios: { documento: number; credor: number; centroCusto: number; percentual: number; valor: number }[];
   fiscais: Record<'nfse' | 'declaracao' | 'lote' | 'remessa', RegistroFiscalResposta[]>;
   pagosPeloNovo: Set<number>;
@@ -807,13 +817,26 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       };
     }
     const lidos: TituloPagarM[] = [];
+    const baixas = new Map<number, BaixaPagarCalculada>();
     for (const it of [...e.titulos].sort((a, b) => a.titulo - b.titulo)) {
       const t = s.titulos.get(it.titulo);
       if (!t) throw recusa('titulo-inexistente', 'O título não existe.');
       if (it.versao && it.versao !== versao(t.versao))
         throw recusa('titulo-ja-baixado', 'O título mudou depois da leitura: releia antes de baixar.');
-      if (t.pago > 0 || t.dataPagamento || t.bordero > 0)
+      // A parcela paga em parte (saldo em aberto) continua pagável; a quitada e a que está em borderô, não.
+      const saldo = t.saldo ?? (t.pago > 0 ? 0 : t.valor);
+      if (t.dataPagamento || t.bordero > 0 || !(saldo > 0))
         throw recusa('titulo-ja-baixado', 'O título já foi baixado por outra via: releia.');
+      const informado = {
+        saldo,
+        valorPago: it.valorPago ?? null,
+        desconto: it.desconto ?? 0,
+        juros: it.juros ?? 0,
+        multa: it.multa ?? 0,
+        acrescimo: it.acrescimo ?? 0,
+      };
+      this.recusar(conferirBaixaPagar(informado));
+      baixas.set(t.id, calcularBaixaPagar(informado));
       this.recusar(
         conferirPagamento({
           faixa: this.faixaDo(s, t),
@@ -824,7 +847,8 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       );
       lidos.push(t);
     }
-    const total = centavos(lidos.reduce((x, t) => x + t.valor, 0));
+    const baixaDe = (t: TituloPagarM): BaixaPagarCalculada => baixas.get(t.id) as BaixaPagarCalculada;
+    const total = centavos(lidos.reduce((x, t) => x + baixaDe(t).desembolso, 0));
     let bordero = 0;
     let idBordero = 0;
     if (e.porBordero) {
@@ -841,13 +865,18 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       });
     }
     for (const t of lidos) {
-      t.pago = t.valor;
-      t.dataPagamento = e.dataPagamento;
-      t.bordero = bordero;
+      const b = baixaDe(t);
+      t.pago = centavos(t.pago + b.desembolso);
+      t.saldo = b.saldo;
       t.conta = conta.id;
       t.formaPagamento = e.formaPagamento;
-      t.status = 0;
       t.versao += 1;
+      // Só a baixa que zera o saldo quita a parcela; a parcial a deixa na fila, com o saldo.
+      if (b.quita) {
+        t.dataPagamento = e.dataPagamento;
+        t.bordero = bordero;
+        t.status = 0;
+      }
       s.pagosPeloNovo.add(t.id);
     }
     return {
@@ -858,6 +887,7 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       valor: total,
       ids: lidos.map((t) => t.id).join(','),
       conta: conta.id,
+      parciais: lidos.filter((t) => !baixaDe(t).quita).length,
     };
   }
 
@@ -918,6 +948,23 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       ids: contas.map((c) => c.id).join(','),
       convenio: p.convenio,
     };
+  }
+
+  /** A saída (pagamento) e a entrada (devolução) do adiantamento no movimento da conta: avulso, sem classificação. */
+  private movimentoDoAdiantamento(
+    s: Estado,
+    m: Pick<MovimentoM, 'data' | 'valor' | 'historico' | 'contaCredito' | 'contaDebito' | 'usuario'>,
+  ): number {
+    const id = ++s.seq;
+    s.movimentos.push({
+      ...m,
+      id,
+      documento: Math.max(0, ...s.movimentos.filter((x) => x.data === m.data).map((x) => x.documento)) + 1,
+      tipo: m.contaCredito === null ? 'D' : 'C',
+      historico: m.historico.slice(0, 300),
+      classificacao: '',
+    });
+    return id;
   }
 
   private lancarMovimento(
@@ -1238,7 +1285,16 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           }),
         );
         s.adiantamentos[i] = { ...a, situacao: 'pago', saldo: a.valor };
-        return { id: a.id, movimento: ++s.seq };
+        // A saída na conta aparece no movimento, como na porta do banco próprio.
+        const movimento = this.movimentoDoAdiantamento(s, {
+          data: d.data,
+          valor: a.valor,
+          historico: `Adiantamento ${a.numero}: ${a.referente}`,
+          contaCredito: null,
+          contaDebito: a.conta,
+          usuario: d.usuario,
+        });
+        return { id: a.id, movimento };
       },
       compensarAdiantamento: async (d) => {
         const i = s.adiantamentos.findIndex((x) => x.id === d.adiantamento);
@@ -1289,7 +1345,16 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         );
         const novo = aposUso(a.valor, a.saldo, d.valor);
         s.adiantamentos[i] = { ...a, ...novo };
-        return { id: a.id, movimento: ++s.seq, saldo: novo.saldo };
+        // A entrada da devolução na conta escolhida, com o motivo no histórico.
+        const movimento = this.movimentoDoAdiantamento(s, {
+          data: d.data,
+          valor: d.valor,
+          historico: `Devolução do adiantamento ${a.numero}: ${d.motivo.trim()}`,
+          contaCredito: d.conta,
+          contaDebito: null,
+          usuario: d.usuario,
+        });
+        return { id: a.id, movimento, saldo: novo.saldo };
       },
       atribuirCredito: async (d) => {
         const cr = s.creditos.find((x) => x.id === d.credito);
@@ -1487,7 +1552,13 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       dataPagamento: t.dataPagamento,
       bordero: t.bordero,
       status: t.status,
-      situacao: situacaoTituloPagar({ ...t, dataPagamento: t.dataPagamento ?? SENTINELA }, s.hoje),
+      situacao:
+        t.saldo === undefined
+          ? situacaoTituloPagar({ ...t, dataPagamento: t.dataPagamento ?? SENTINELA }, s.hoje)
+          : t.saldo > 0
+            ? 'pago-parcial'
+            : 'pago',
+      saldo: t.saldo ?? (t.pago > 0 || t.dataPagamento ? 0 : t.valor),
       lancadoPor: t.lancadoPor,
       referente: t.referente,
       aprovacoes: s.aprovacoes.filter((a) => a.titulo === t.id).length,
@@ -1534,6 +1605,7 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           parcela: x.parcela,
           vencimento: x.vencimento,
           valor: x.valor,
+          saldo: x.saldo ?? (x.pago > 0 || x.dataPagamento ? 0 : x.valor),
           situacao: this.tituloPagarDe(s, x).situacao,
         })),
       classificacao: cl
@@ -1638,11 +1710,33 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
 
   async adiantamentos(c: ContextoFinanceiro): Promise<AdiantamentoResposta[]> {
     return [...this.e(c).adiantamentos].reverse().map((a) => {
-      const r: Record<string, unknown> = { ...a };
+      const r: Record<string, unknown> = {
+        ...a,
+        credorNome:
+          (a.tipoCredor === 'profissional' ? MEDICOS[a.credor]?.nome : FORNECEDORES[a.credor]) ?? '',
+      };
       delete r['pedidoPor'];
       delete r['aprovadores'];
       return r as unknown as AdiantamentoResposta;
     });
+  }
+
+  /** O credor do adiantamento pelo nome ou código, no cadastro sintético (a mesma regra de corte do banco próprio). */
+  async credores(
+    _c: ContextoFinanceiro,
+    tipo: 'fornecedor' | 'profissional',
+    termo: string,
+  ): Promise<CredorEncontrado[]> {
+    const t = termo.trim().toUpperCase();
+    if (t.length < 2 && !/^\d$/.test(t)) return [];
+    const cadastro: [number, string][] =
+      tipo === 'profissional'
+        ? Object.entries(MEDICOS).map(([id, m]) => [Number(id), m.nome])
+        : Object.entries(FORNECEDORES).map(([id, nome]) => [Number(id), nome]);
+    return cadastro
+      .filter(([id, nome]) => nome.toUpperCase().includes(t) || String(id) === t)
+      .slice(0, 20)
+      .map(([id, nome]) => ({ id, nome, documento: null }));
   }
 
   private receberDe(s: Estado, t: TituloReceberM): TituloReceberResposta {

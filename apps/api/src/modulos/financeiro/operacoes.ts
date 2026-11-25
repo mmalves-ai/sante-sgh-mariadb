@@ -29,7 +29,10 @@ import {
   conferirCredor,
   conferirExclusao,
   conferirMovimento,
+  calcularBaixaPagar,
+  conferirBaixaPagar,
   conferirPagamento,
+  type BaixaPagarCalculada,
   conferirParcelas,
   type FaixaAlcada,
   type RecusaFinanceiro,
@@ -717,9 +720,12 @@ async function pagar(
   const pagador = (await loginDe(tx, usuario)) ?? '';
   const faixas = await faixasLidas(tx, est);
   const lidos: Linha[] = [];
+  // F3.8 (07-FIN linha 63): a baixa de cada parcela, com o valor pago, o desconto e os acréscimos informados.
+  const baixas = new Map<number, BaixaPagarCalculada>();
   for (const it of [...e.titulos].sort((a, b) => a.titulo - b.titulo)) {
     const [p] = await tx.consultarParaAtualizar(
-      `SELECT p.id, p.versao, p.saldo, p.valor_pago, p.situacao, p.titulo_pagar_id, t.valor_bruto, t.criado_por,
+      `SELECT p.id, p.versao, p.saldo, p.valor_pago, p.valor_desconto, p.valor_juros, p.valor_multa,
+              p.valor_acrescimo, p.situacao, p.titulo_pagar_id, t.valor_bruto, t.criado_por,
               t.centro_custo_id, t.numero_documento, t.natureza_financeira_id, tc.codigo AS tipo_codigo, tc.natureza
          FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
          JOIN tipo_credor tc ON tc.id = t.tipo_credor_id
@@ -730,16 +736,19 @@ async function pagar(
     );
     if (!p) throw recusa('titulo-inexistente', 'O título não existe.');
     conferirVersao(it.versao, p['versao']);
-    const baixa = await tx.uma(
-      "SELECT id FROM baixa_titulo WHERE parcela_pagar_id = ? AND situacao = 'efetivada' AND excluido_em IS NULL LIMIT 1",
-      [it.titulo],
-    );
-    if (
-      baixa ||
-      ['paga', 'parcial', 'cancelada', 'renegociada'].includes(String(p['situacao'])) ||
-      !(numero(p['saldo']) > 0)
-    )
+    // A parcela paga em parte continua pagável pelo saldo; a quitada, a cancelada e a renegociada não.
+    if (['paga', 'cancelada', 'renegociada'].includes(String(p['situacao'])) || !(numero(p['saldo']) > 0))
       throw recusa('titulo-ja-baixado', 'O título já foi baixado por outra via: releia.');
+    const informado = {
+      saldo: numero(p['saldo']),
+      valorPago: it.valorPago ?? null,
+      desconto: it.desconto ?? 0,
+      juros: it.juros ?? 0,
+      multa: it.multa ?? 0,
+      acrescimo: it.acrescimo ?? 0,
+    };
+    recusar(conferirBaixaPagar(informado));
+    baixas.set(numero(p['id']), calcularBaixaPagar(informado));
     const titulo = numero(p['titulo_pagar_id']);
     const faixa = alcadaAplicavel(
       faixas,
@@ -755,7 +764,8 @@ async function pagar(
     recusar(conferirPagamento({ faixa, aprovacoes, pagador, lancador: await loginDe(tx, p['criado_por']) }));
     lidos.push(p);
   }
-  const total = centavos(lidos.reduce((x, p) => x + numero(p['saldo']), 0));
+  const baixaDe = (p: Linha): BaixaPagarCalculada => baixas.get(numero(p['id'])) as BaixaPagarCalculada;
+  const total = centavos(lidos.reduce((x, p) => x + baixaDe(p).desembolso, 0));
   let bordero = 0;
   let numeroBordero = '';
   if (e.porBordero) {
@@ -780,7 +790,8 @@ async function pagar(
   const tipoMov = await tipoLancamento(tx, LANCAMENTO_PAGAMENTO);
   const titulos = new Set<number>();
   for (const p of lidos) {
-    const valor = numero(p['saldo']);
+    const b = baixaDe(p);
+    const valor = b.desembolso;
     const mov = await tx.incluir('movimento_bancario', {
       estabelecimento_id: est,
       conta_bancaria_id: e.conta,
@@ -799,17 +810,26 @@ async function pagar(
       data_pagamento: e.dataPagamento,
       conta_bancaria_id: e.conta,
       forma_pagamento: forma,
-      valor_principal: valor,
+      valor_principal: b.principal,
+      valor_juros: b.juros,
+      valor_multa: b.multa,
+      valor_acrescimo: b.acrescimo,
+      valor_desconto: b.desconto,
       valor_pago: valor,
       bordero_pagamento_id: bordero || null,
       movimento_bancario_id: mov,
     });
     await tx.alterar('movimento_bancario', mov, 1, { baixa_titulo_id: baixa });
+    // A parcela acumula o que foi pago, descontado e acrescido; só a baixa que zera o saldo a quita.
     await tx.alterar('parcela_pagar', numero(p['id']), numero(p['versao']), {
       valor_pago: centavos(numero(p['valor_pago']) + valor),
-      saldo: 0,
-      situacao: 'paga',
-      quitada_em: e.dataPagamento,
+      valor_desconto: centavos(numero(p['valor_desconto']) + b.desconto),
+      valor_juros: centavos(numero(p['valor_juros']) + b.juros),
+      valor_multa: centavos(numero(p['valor_multa']) + b.multa),
+      valor_acrescimo: centavos(numero(p['valor_acrescimo']) + b.acrescimo),
+      saldo: b.saldo,
+      situacao: b.quita ? 'paga' : 'parcial',
+      ...(b.quita ? { quitada_em: e.dataPagamento } : {}),
     });
     titulos.add(numero(p['titulo_pagar_id']));
   }
@@ -834,6 +854,7 @@ async function pagar(
     valor: total,
     ids: lidos.map((p) => numero(p['id'])).join(','),
     conta: e.conta,
+    parciais: lidos.filter((p) => !baixaDe(p).quita).length,
   };
 }
 
