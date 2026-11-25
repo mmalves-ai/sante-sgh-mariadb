@@ -8,6 +8,7 @@ import {
   validarMeta,
   validarMinimoGarantido,
   validarRegraResultado,
+  validarValorFixo,
   vigenteNaCompetencia,
 } from './remuneracao-variavel.js';
 
@@ -186,5 +187,67 @@ describe('remuneração variável: cálculo', () => {
     const r = calcularRemuneracaoVariavel({ ...base, minimo: { id: 1, valorMinimo: 10_000, evento: null } });
     expect(r.pendencias).toHaveLength(1);
     expect(r.itens[0]!.referente).toBe('Complemento do mínimo garantido 2026-10 (regra 1)');
+  });
+});
+
+describe('valor fixo mensal e mínimo garantido (C2-100)', () => {
+  const fixo = { id: 7, descricao: 'COORDENACAO', valorMensal: 3000, evento: 9, lancadoNaCompetencia: false };
+
+  it('recusa valor fixo sem descrição, sem valor, dia fora de 1..31 e vigência invertida', () => {
+    const p = validarValorFixo({
+      descricao: ' ',
+      valorMensal: 0,
+      diaPagamento: 32,
+      inicio: '2026-10-01',
+      fim: '2026-09-01',
+    });
+    expect(p.map((x) => x.campo).sort()).toEqual(['descricao', 'diaPagamento', 'fim', 'valorMensal']);
+    expect(
+      validarValorFixo({
+        descricao: 'X',
+        valorMensal: 10,
+        diaPagamento: null,
+        inicio: '2026-10-01',
+        fim: null,
+      }),
+    ).toEqual([]);
+  });
+
+  it('o fixo entra uma vez por competência, qualquer que seja a produção', () => {
+    const r = calcularRemuneracaoVariavel({ ...base, producaoCentavos: 0, fixos: [fixo] });
+    expect(r.itens).toEqual([
+      expect.objectContaining({
+        tipo: 'valor_fixo',
+        valorCentavos: 300_000,
+        evento: 9,
+        referente: 'Valor fixo mensal 2026-10 (regra 7)',
+      }),
+    ]);
+    expect(r.creditoCentavos).toBe(300_000);
+    const ja = calcularRemuneracaoVariavel({ ...base, fixos: [{ ...fixo, lancadoNaCompetencia: true }] });
+    expect(ja.itens).toEqual([]);
+  });
+
+  it('o mínimo completa só a produção até o piso; o fixo não conta como produção', () => {
+    const r = calcularRemuneracaoVariavel({
+      ...base,
+      producaoCentavos: 600_000,
+      minimo: { id: 1, valorMinimo: 10_000, evento: 9 },
+      fixos: [fixo],
+    });
+    const comp = r.itens.find((i) => i.tipo === 'complemento_minimo');
+    expect(comp?.valorCentavos).toBe(400_000);
+    expect(r.creditoCentavos).toBe(700_000);
+    const acima = calcularRemuneracaoVariavel({
+      ...base,
+      producaoCentavos: 1_200_000,
+      minimo: { id: 1, valorMinimo: 10_000, evento: 9 },
+    });
+    expect(acima.itens).toEqual([]);
+  });
+
+  it('fixo sem evento fica nas pendências', () => {
+    const r = calcularRemuneracaoVariavel({ ...base, fixos: [{ ...fixo, evento: null }] });
+    expect(r.pendencias).toEqual(['O valor fixo 7 não tem evento do lançamento: defina o evento na regra.']);
   });
 });

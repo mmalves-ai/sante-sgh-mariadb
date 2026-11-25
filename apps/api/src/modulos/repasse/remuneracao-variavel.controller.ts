@@ -1,6 +1,7 @@
 // Remuneração variável do profissional (F8, 07-FIN linha 157). Rotas (porta própria; sem banco do cliente, 503):
 //   GET  /api/repasse/remuneracao-variavel?profissional=          regras do profissional (ou de todos) e listas da tela
 //   POST /api/repasse/remuneracao-variavel/minimos                 inclui o mínimo garantido mensal
+//   POST /api/repasse/remuneracao-variavel/fixos                   inclui o valor fixo mensal (C2-100)
 //   POST /api/repasse/remuneracao-variavel/resultados              inclui o percentual do resultado do centro de custo
 //   POST /api/repasse/remuneracao-variavel/metas                   inclui a meta de produtividade com as faixas
 //   POST /api/repasse/remuneracao-variavel/metas/:id/apurado       { competencia, valor } valor apurado da meta
@@ -90,6 +91,14 @@ export class RemuneracaoVariavelController {
   @Permissao(PERMISSOES_REMUNERACAO_VARIAVEL.editar)
   incluirMinimo(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.incluirMinimo(c, corpo));
+  }
+
+  @Post('fixos')
+  @AuditadoNoHandler(AUDITORIA)
+  @HttpCode(201)
+  @Permissao(PERMISSOES_REMUNERACAO_VARIAVEL.editar)
+  incluirFixo(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.incluirFixo(c, corpo));
   }
 
   @Post('resultados')

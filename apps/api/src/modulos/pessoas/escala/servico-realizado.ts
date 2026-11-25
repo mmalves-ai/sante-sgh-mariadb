@@ -2,8 +2,8 @@
 // plantões da escala publicada da competência com o realizado, a sugestão pelas marcações do ponto, o registro (chave
 // `pessoas.plantaoRealizado`), a decisão por OUTRA pessoa (quatro olhos; nunca o próprio plantão; nunca na sessão
 // "como"), as tarifas por hora, o relatório dos realizados aprovados do prestador com as contas e o lançamento no
-// repasse pela receita `repasse.lancarEvento`, origem `plantao` (chave `pessoas.repassePlantao`, desligada até a DP-33,
-// e o evento de repasse no parâmetro). As regras ficam em @sgh/dominio-pessoas.
+// repasse pela receita `repasse.lancarEvento`, origem `plantao` (sem chave de liberação desde a C2-100, ADR 0002: vale a
+// permissão do cargo e o evento de repasse no parâmetro; `pessoas.repassePlantao` fica só como nome do recurso na trilha). As regras ficam em @sgh/dominio-pessoas.
 import { type RegistroPlantaoParaRealizado, type RegistroRealizado } from './tipos.js';
 import {
   type ApoioRealizado,
@@ -121,7 +121,7 @@ const mensagemDe = (e: unknown): string => (e instanceof Error ? e.message : Str
 
 export class ServicoRealizado {
   readonly apoio: ApoioGravacao<GravadorRealizado>;
-  /** A chave do lançamento no repasse (DP-33), separada da do realizado. */
+  /** O lançamento no repasse: sem chave de liberação (ADR 0002); só a permissão e o evento do parâmetro. */
   readonly apoioRepasse: ApoioGravacao<GravadorRealizado>;
 
   constructor(
@@ -144,6 +144,7 @@ export class ServicoRealizado {
         chave: CHAVE_PESSOAS_REPASSE_PLANTAO,
         nome: 'o lançamento do plantão no repasse',
         operacoes: { 'repasse.lancarEvento': P.lancar },
+        semLiberacao: true,
       },
       porta,
       trilha,

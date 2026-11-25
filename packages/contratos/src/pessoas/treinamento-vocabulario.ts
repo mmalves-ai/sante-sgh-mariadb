@@ -7,7 +7,10 @@ export const CHAVES_LIBERACAO_TREINAMENTO = {
   treinamento: 'pessoas.treinamento',
   autoatendimento: 'pessoas.autoatendimento',
   plantaoRealizado: 'pessoas.plantaoRealizado',
-  /** O lançamento do realizado no repasse (repasse.lancarEvento, origem plantão): só com a DP-33 decidida. */
+  /**
+   * O lançamento do realizado no repasse (repasse.lancarEvento, origem plantão): sem chave de liberação desde a C2-100
+   * (ADR 0002); o nome fica como recurso na trilha.
+   */
   repassePlantao: 'pessoas.repassePlantao',
 } as const;
 export const CHAVE_PESSOAS_TREINAMENTO = CHAVES_LIBERACAO_TREINAMENTO.treinamento;

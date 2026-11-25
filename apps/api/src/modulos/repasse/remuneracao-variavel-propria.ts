@@ -1,6 +1,9 @@
 // Remuneração variável do profissional no banco do cliente (F8, 07-FIN linha 157). As regras são as puras de
 // @sgh/dominio-repasse (remuneracao-variavel); aqui ficam a leitura e a gravação. Contrato de efeito:
 //   - mínimo garantido: `regra_repasse_minimo_garantido` com o valor mensal, o evento do complemento e a vigência;
+//   - valor fixo mensal (C2-100): `regra_repasse_valor_fixo` do profissional com a descrição, o valor, o evento, o dia
+//     de pagamento e a vigência; lançado uma vez por competência (o já lançado noutra apuração da mesma competência
+//     não entra de novo); a de lançamento manual (`lancamento_automatico` falso) não entra no cálculo;
 //   - percentual do resultado: `regra_repasse_resultado` com o centro de custo (nulo: o estabelecimento) e o percentual;
 //   - meta de produtividade: `meta_produtividade_repasse` com o indicador, a forma do prêmio, o peso e o evento, e as
 //     faixas em `meta_produtividade_repasse_faixa`; o valor apurado da competência em `apuracao_meta_produtividade`
@@ -25,6 +28,7 @@ import {
   validarMeta,
   validarMinimoGarantido,
   validarRegraResultado,
+  validarValorFixo,
   vigenteNaCompetencia,
 } from '@sgh/dominio-repasse';
 import type { Leitor } from '@sgh/nucleo';
@@ -62,6 +66,19 @@ const esquemaMinimo = z
     valorMinimo: z.number().positive(),
     evento: id,
     complementoAutomatico: z.boolean().default(true),
+    inicio: data,
+    fim: data.nullable().default(null),
+  })
+  .strict();
+
+const esquemaFixo = z
+  .object({
+    profissional: id,
+    descricao: z.string().trim().min(1).max(150),
+    valorMensal: z.number().positive(),
+    evento: id,
+    diaPagamento: z.number().int().min(1).max(31).nullable().default(null),
+    lancamentoAutomatico: z.boolean().default(true),
     inicio: data,
     fim: data.nullable().default(null),
   })
@@ -106,7 +123,7 @@ const esquemaApurado = z
 
 const esquemaEncerrar = z.object({ versao, fim: data }).strict();
 
-export const TIPOS_REGRA_VARIAVEL = ['minimo', 'resultado', 'meta'] as const;
+export const TIPOS_REGRA_VARIAVEL = ['minimo', 'fixo', 'resultado', 'meta'] as const;
 export type TipoRegraVariavel = (typeof TIPOS_REGRA_VARIAVEL)[number];
 
 export interface ItemSimulado {
@@ -139,6 +156,7 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
       cliente,
       [
         'regra_repasse_minimo_garantido',
+        'regra_repasse_valor_fixo',
         'regra_repasse_resultado',
         'meta_produtividade_repasse',
         'meta_produtividade_repasse_faixa',
@@ -171,6 +189,21 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
         ...base(x),
         valorMinimo: num(x['valor_minimo']),
         complementoAutomatico: Boolean(num(x['complemento_automatico'])),
+      }));
+      const fixos = (
+        await l.consultar<Linha>(
+          `SELECT r.*, ${nome} AS profissional_nome, e.nome AS evento_nome
+             FROM regra_repasse_valor_fixo r LEFT JOIN evento_repasse e ON e.id = r.evento_repasse_id
+            WHERE ${filtro} AND r.profissional_id IS NOT NULL AND r.ativo
+            ORDER BY r.vigencia_inicio DESC, r.id DESC LIMIT 500`,
+          p,
+        )
+      ).map((x) => ({
+        ...base(x),
+        descricao: String(x['descricao']),
+        valorMensal: num(x['valor_mensal']),
+        diaPagamento: numOuNull(x['dia_pagamento']),
+        lancamentoAutomatico: Boolean(num(x['lancamento_automatico'])),
       }));
       const resultados = (
         await l.consultar<Linha>(
@@ -281,7 +314,7 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
         competencia: dataTexto(x['competencia'])!,
         situacao: String(x['situacao']),
       }));
-      return { minimos, resultados, metas, custos, eventos, indicadores, centros, apuracoes };
+      return { minimos, fixos, resultados, metas, custos, eventos, indicadores, centros, apuracoes };
     });
   }
 
@@ -382,6 +415,11 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
       `SELECT r.* FROM regra_repasse_minimo_garantido r WHERE ${vig} AND r.complemento_automatico ORDER BY r.vigencia_inicio DESC`,
       pv,
     );
+    const fixos = await l.consultar<Linha>(
+      `SELECT r.* FROM regra_repasse_valor_fixo r
+        WHERE ${vig} AND r.profissional_id IS NOT NULL AND r.ativo AND r.lancamento_automatico`,
+      pv,
+    );
     const resultados = await l.consultar<Linha>(`SELECT r.* FROM regra_repasse_resultado r WHERE ${vig}`, pv);
     const metas = await l.consultar<Linha>(
       `SELECT r.*, i.codigo AS indicador_codigo, i.indicador_id
@@ -396,7 +434,8 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
       [apuracao, ...pv],
     );
     const profs = new Set<number>();
-    for (const x of [...minimos, ...resultados, ...metas, ...custos]) profs.add(num(x['profissional_id']));
+    for (const x of [...minimos, ...fixos, ...resultados, ...metas, ...custos])
+      profs.add(num(x['profissional_id']));
     if (!profs.size) return [];
     const lista = [...profs];
     const marc = lista.map(() => '?').join(',');
@@ -426,6 +465,15 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
       [apuracao, ...lista],
     ))
       lancados.add(`${num(x['profissional_id'])}|${String(x['referente'])}`);
+    // O fixo é um por competência: o já lançado noutra apuração (não cancelado) da mesma competência não entra de novo.
+    const fixosNaCompetencia = new Set<string>();
+    for (const x of await l.consultar<Linha>(
+      `SELECT profissional_id, referente FROM lancamento_repasse
+        WHERE estabelecimento_id = ? AND competencia = ? AND apuracao_repasse_id <> ? AND excluido_em IS NULL
+          AND situacao <> 'cancelado' AND referente LIKE 'Valor fixo mensal %' AND profissional_id IN (${marc})`,
+      [est, comp, apuracao, ...lista],
+    ))
+      fixosNaCompetencia.add(`${num(x['profissional_id'])}|${String(x['referente'])}`);
     const descontados = new Set<number>();
     for (const x of await l.consultar<Linha>(
       `SELECT custo_profissional_id FROM desconto_custo_repasse
@@ -460,6 +508,15 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
               evento: numOuNull(m0['evento_repasse_id']),
             }
           : null,
+        fixos: doProf(fixos).map((f) => ({
+          id: num(f['id']),
+          descricao: String(f['descricao']),
+          valorMensal: num(f['valor_mensal']),
+          evento: numOuNull(f['evento_repasse_id']),
+          lancadoNaCompetencia: fixosNaCompetencia.has(
+            `${prof}|Valor fixo mensal ${comp.slice(0, 7)} (regra ${num(f['id'])})`,
+          ),
+        })),
         resultados: doProf(resultados).map((r) => {
           const cc = numOuNull(r['centro_custo_id']);
           const mg = margem === null ? null : cc === null ? margem.total : (margem.porCentro.get(cc) ?? null);
@@ -630,6 +687,36 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
     );
   }
 
+  /** Inclui o valor fixo mensal do profissional; outro vigente com a mesma descrição no período: 422 sem gravar. */
+  incluirFixo(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
+    const e = entradaValida(esquemaFixo, entrada);
+    return this.gravar(c, 'repasse.variavel.fixo.incluir', ['regra_repasse_valor_fixo'], async (tx, est) => {
+      await this.conferirAlvos(tx, est.id, e);
+      const existentes = await tx.consultarParaAtualizar<Linha>(
+        `SELECT vigencia_inicio, vigencia_fim FROM regra_repasse_valor_fixo
+          WHERE estabelecimento_id = ? AND profissional_id = ? AND descricao = ? AND ativo`,
+        [est.id, e.profissional, e.descricao],
+      );
+      const problemas = [
+        ...validarValorFixo(e),
+        ...conflitoDeVigencia(e, PortaRemuneracaoVariavelPropria.vigencias(existentes)),
+      ];
+      if (problemas.length) throw recusaRegra('Valor fixo recusado', problemas);
+      const novo = await tx.incluir('regra_repasse_valor_fixo', {
+        estabelecimento_id: est.id,
+        descricao: e.descricao,
+        profissional_id: e.profissional,
+        evento_repasse_id: e.evento,
+        valor_mensal: e.valorMensal,
+        dia_pagamento: e.diaPagamento,
+        lancamento_automatico: e.lancamentoAutomatico,
+        vigencia_inicio: e.inicio,
+        vigencia_fim: e.fim,
+      });
+      return { tabela: 'regra_repasse_valor_fixo', id: novo };
+    });
+  }
+
   incluirResultado(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaResultado, entrada);
     return this.gravar(
@@ -739,6 +826,22 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
           );
           await tx.alterar('regra_repasse_minimo_garantido', regra, x.versao, { vigencia_fim: x.fim });
           return { tabela: 'regra_repasse_minimo_garantido', id: regra };
+        },
+      );
+    if (tipo === 'fixo')
+      return this.gravar(
+        c,
+        'repasse.variavel.fixo.encerrar',
+        ['regra_repasse_valor_fixo'],
+        async (tx, est) => {
+          conferir(
+            await tx.uma<Linha>(
+              'SELECT vigencia_inicio, vigencia_fim FROM regra_repasse_valor_fixo WHERE id = ? AND estabelecimento_id = ?',
+              [regra, est.id],
+            ),
+          );
+          await tx.alterar('regra_repasse_valor_fixo', regra, x.versao, { vigencia_fim: x.fim });
+          return { tabela: 'regra_repasse_valor_fixo', id: regra };
         },
       );
     if (tipo === 'resultado')

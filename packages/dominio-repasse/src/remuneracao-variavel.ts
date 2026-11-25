@@ -7,7 +7,10 @@
 //   - produtividade por meta: o valor apurado do indicador na competência cai numa faixa; a faixa dá o prêmio
 //     (percentual da produção ou valor fixo), multiplicado pelo peso da meta; fora de toda faixa, nada;
 //   - custo do prestador: a regra de custo vigente (valor ou percentual da produção, só dentro da faixa de produção
-//     quando há faixa) vira desconto na apuração; a de frequência "única" só desconta uma vez.
+//     quando há faixa) vira desconto na apuração; a de frequência "única" só desconta uma vez;
+//   - valor fixo mensal (C2-100): o valor contratado do profissional entra uma vez por competência como evento próprio,
+//     qualquer que seja a produção; não conta como produção para o mínimo garantido (o mínimo completa só a produção);
+//     já lançado noutra apuração da mesma competência, não entra de novo.
 // Tudo em centavos inteiros (dinheiro.ts). Datas AAAA-MM-DD; competência é sempre o dia 1.
 import { aplicarPercentual, centavos } from './dinheiro.js';
 
@@ -78,6 +81,20 @@ export function validarMinimoGarantido(r: { valorMinimo: number } & Vigencia): P
   return p;
 }
 
+/** O valor fixo mensal: valor positivo, dia de pagamento de 1 a 31 (opcional) e vigência em ordem. */
+export function validarValorFixo(
+  r: { valorMensal: number; diaPagamento?: number | null; descricao: string } & Vigencia,
+): Problema[] {
+  const p = validarVigencia(r);
+  if (!r.descricao.trim())
+    p.push({ campo: 'descricao', mensagem: 'Descreva o valor fixo (ex.: coordenação).' });
+  if (!(r.valorMensal > 0)) p.push({ campo: 'valorMensal', mensagem: 'Informe o valor fixo mensal.' });
+  const d = r.diaPagamento ?? null;
+  if (d !== null && !(Number.isInteger(d) && d >= 1 && d <= 31))
+    p.push({ campo: 'diaPagamento', mensagem: 'O dia de pagamento fica entre 1 e 31.' });
+  return p;
+}
+
 export function validarRegraResultado(r: { percentual: number } & Vigencia): Problema[] {
   const p = validarVigencia(r);
   if (!(r.percentual > 0 && r.percentual <= 100))
@@ -142,6 +159,15 @@ export interface EntradaRemuneracaoVariavel {
     /** Valor apurado do indicador na competência; nulo: não apurado. */
     readonly valorApurado: number | null;
   }[];
+  /** Valores fixos mensais vigentes do profissional (C2-100); ausente: nenhum. */
+  readonly fixos?: readonly {
+    readonly id: number;
+    readonly descricao: string;
+    readonly valorMensal: number;
+    readonly evento: number | null;
+    /** Já lançado noutra apuração da mesma competência: não entra de novo. */
+    readonly lancadoNaCompetencia: boolean;
+  }[];
   readonly custos: readonly {
     readonly id: number;
     readonly tipoDesconto: number;
@@ -158,7 +184,7 @@ export interface EntradaRemuneracaoVariavel {
   }[];
 }
 
-export type TipoItemVariavel = 'complemento_minimo' | 'resultado' | 'produtividade' | 'custo';
+export type TipoItemVariavel = 'valor_fixo' | 'complemento_minimo' | 'resultado' | 'produtividade' | 'custo';
 
 export interface ItemVariavel {
   readonly tipo: TipoItemVariavel;
@@ -190,6 +216,24 @@ export function calcularRemuneracaoVariavel(e: EntradaRemuneracaoVariavel): Remu
   const pendencias: string[] = [];
   const prod = e.producaoCentavos;
   const comp = e.competencia.slice(0, 7);
+
+  for (const f of e.fixos ?? []) {
+    if (f.lancadoNaCompetencia) continue;
+    const v = centavos(f.valorMensal);
+    if (v <= 0) continue;
+    if (f.evento === null)
+      pendencias.push(`O valor fixo ${f.id} não tem evento do lançamento: defina o evento na regra.`);
+    itens.push({
+      tipo: 'valor_fixo',
+      regra: f.id,
+      evento: f.evento,
+      tipoDesconto: null,
+      sentido: 'credito',
+      valorCentavos: v,
+      memoria: `valor fixo mensal ${brl(v)}`,
+      referente: `Valor fixo mensal ${comp} (regra ${f.id})`,
+    });
+  }
 
   if (e.minimo) {
     const minimo = centavos(e.minimo.valorMinimo);

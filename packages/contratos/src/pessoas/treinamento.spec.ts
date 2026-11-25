@@ -168,17 +168,14 @@ describe('contratos do plantão realizado e do repasse (M52.6)', () => {
     expect(PERMISSOES_PESSOAS_M52_F6.every((p) => p.categoria === 'administrativa')).toBe(true);
   });
 
-  it('as quatro chaves desligadas por padrão (POL-3); eventos; parâmetros', () => {
+  it('as três chaves desligadas por padrão (POL-3), o repasse do plantão sem chave (ADR 0002); eventos; parâmetros', () => {
     for (const c of [
       CHAVE_PESSOAS_TREINAMENTO,
       CHAVE_PESSOAS_AUTOATENDIMENTO,
       CHAVE_PESSOAS_PLANTAO_REALIZADO,
-      CHAVE_PESSOAS_REPASSE_PLANTAO,
     ])
       expect(RECURSOS_DESLIGADOS.some((r) => r.chave === c)).toBe(true);
-    expect(RECURSOS_DESLIGADOS.find((r) => r.chave === CHAVE_PESSOAS_REPASSE_PLANTAO)?.decisao).toMatch(
-      /DP-33/,
-    );
+    expect(RECURSOS_DESLIGADOS.some((r) => r.chave === CHAVE_PESSOAS_REPASSE_PLANTAO)).toBe(false);
     expect(EVENTOS_AUDITAVEIS.pessoasPopCiencia.codigo).toBe('pessoas.pop.ciencia');
     expect(EVENTOS_AUDITAVEIS.pessoasRealizadoDecidido.codigo).toBe('pessoas.realizado.decidido');
     expect(definicaoParametro(PARAMETRO_ALERTA_TREINAMENTO)?.padrao).toBe('30');

@@ -1,6 +1,6 @@
 // Serviços da fatia F6 (M52.6) sem a HTTP, com as portas em memória: o que depende da liberação desligada (POL-3) e da
-// sessão "como" (ADR 0021): o "Meu espaço" desligado não lê nada pessoal; o lançamento no repasse sem a chave (DP-33) é
-// recusado sem gravar; a ciência do POP e o registro e a decisão do realizado não se fazem na sessão de suporte; o
+// sessão "como" (ADR 0021): o "Meu espaço" desligado não lê nada pessoal; o lançamento no repasse sem o evento de repasse do
+// plantão definido é recusado sem gravar (sem chave de liberação, ADR 0002); a ciência do POP e o registro e a decisão do realizado não se fazem na sessão de suporte; o
 // coordenador não aprova o realizado do próprio plantão.
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
@@ -79,7 +79,7 @@ describe('serviços da F6 (M52.6)', () => {
     expect(m.folha.disponivel).toBe(false);
   });
 
-  it('o lançamento no repasse sem a chave (DP-33) é recusado sem gravar', async () => {
+  it('o lançamento no repasse sem o evento do plantão definido é recusado sem gravar (sem chave, ADR 0002)', async () => {
     const { real, realizado } = montar();
     const ap = await real.apoioTela(sessao('SINT.REP.ANALISTA'));
     expect(ap.repasse.ligado).toBe(false);

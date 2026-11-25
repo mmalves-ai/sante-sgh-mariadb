@@ -1203,24 +1203,6 @@ export const RECURSOS_DESLIGADOS: readonly RecursoDesligado[] = [
       },
     ],
   },
-  // Ficha do M52, seção 5 (repasse.lancarEvento, cenário origem-plantao) e seção 14 (DP-33): o lançamento do realizado
-  // aprovado do prestador no repasse. Pronto e desligado até a DP-33 confirmar que o plantão é lançado como evento.
-  {
-    chave: 'pessoas.repassePlantao',
-    titulo: 'Lançamento do plantão realizado no repasse',
-    descricao:
-      'Lançar no repasse, por prestador e competência, os plantões realizados e aprovados (cooperado, PJ ou terceiro), com o evento de repasse configurado e o valor pela tarifa por hora.',
-    decisao: 'DP-33 (parte repasse) e POL-3; ficha do M52 (seção 5, cenário origem-plantao)',
-    marco: 'M52',
-    prerequisitos: [
-      {
-        tipo: 'aprovacao',
-        descricao:
-          'Decisão do faturamento e do repasse (DP-33): o plantão realizado do prestador é lançado como evento de repasse, com o evento e as tarifas por hora confirmados.',
-        responsavel: 'faturamento e repasse',
-      },
-    ],
-  },
   {
     chave: 'pessoas.folha',
     titulo: 'Folha de pagamento e RH',
