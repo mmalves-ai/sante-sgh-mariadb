@@ -42,6 +42,11 @@ Regra das tabelas concluídas da execução interrompida Y (tabela de controle `
 5. Cadeia: se Y é ela mesma uma continuação (`contadores.continuar_de` = X) e falhou cedo (sem imagem, ou antes de
    marcar o que herdou), as concluídas de X entram também; as pendências de cada tabela pulada são lidas da cadeia
    da execução que a concluiu.
+6. Base declarada (0094, ADR 0010): quando a origem da execução tem `continua_de_origem_id` (o administrador declarou
+   que a origem nova lê a MESMA base da anterior, como a cópia do arquivo que passou a ser servida pelo servidor
+   Firebird), as concluídas da última importação da origem anterior (e da cadeia dela) entram também, aceitando o
+   resumo da imagem dela (sha256 do arquivo) como o da mesma base. Prova que difere (ODS, página, data de criação)
+   recusa a herança; sem prova, vale a declaração, que fica no evento do cliente. Sem declaração: como sempre.
 """
 from .carga import AGORA, ORDEM
 
@@ -79,6 +84,11 @@ def duas_fases(p):
                for cs in (p.get("colunas") or {}).values() for c in cs)
 
 
+def _aceitos(sha256):
+    """Resumos da imagem aceitos como a mesma base: um sha256 ou um conjunto (base declarada, regra 6)."""
+    return {sha256} if isinstance(sha256, str) else set(sha256 or ())
+
+
 def _uma(conn, ctl, anterior, plano, contagens, sha256):
     """Concluídas pela própria execução `anterior` (marca ou dedução), sem a cadeia."""
     with conn.cursor() as c:
@@ -87,7 +97,7 @@ def _uma(conn, ctl, anterior, plano, contagens, sha256):
         if not r:
             raise SemImagem("a execução %d não gravou a imagem: não há o que continuar" % anterior)
         img, sha = r
-        if not sha or sha != sha256:
+        if not sha or sha not in _aceitos(sha256):
             raise NaoContinuavel("o arquivo mudou desde a execução %d (sha256 diferente): importe de novo" % anterior)
         c.execute("SELECT tabela_origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=%%s" % ctl, (anterior,))
         # a marca da carga própria (concluidas_propria) não entra aqui: só a da carga pelo mapa decide marca × dedução
@@ -115,7 +125,7 @@ def _uma(conn, ctl, anterior, plano, contagens, sha256):
         return saida, ("marca" if marcadas else "deducao"), img
 
 
-def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None):
+def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None, _heranca=True):
     """Tabelas do plano concluídas pela execução `anterior` (regra no cabeçalho). Devolve {"tabelas": set,
     "regra": "marca"|"deducao" (com "+cadeia" quando herdou), "imagem_anterior": id, "origem": {tabela: execução
     das pendências}, "duas_fases": tabelas refeitas por terem coluna em duas fases}. Recusa se o arquivo não é o
@@ -131,16 +141,38 @@ def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None
         tabs, regra, img = set(), "sem_imagem", None
     origem = {t: anterior for t in tabs}
     if de:  # a continuação `anterior` falhou antes de marcar o que herdou: herda da que ela continuava
-        r = concluidas(conn, ctl, int(de), plano, contagens, sha256, contadores_de)
+        r = concluidas(conn, ctl, int(de), plano, contagens, sha256, contadores_de, _heranca=False)
         for t, e in r["origem"].items():
             origem.setdefault(t, e)
         regra = "%s+cadeia(%d)" % (regra, int(de))
         img = img or r["imagem_anterior"]
+    base = base_declarada(conn, anterior) if _heranca else None
+    if base and base["aceita"]:  # regra 6: a origem anterior com a mesma base, declarada pelo administrador
+        try:
+            r = concluidas(conn, ctl, base["execucao_anterior"], plano, contagens,
+                           _aceitos(sha256) | set(base["sha256_aceitos"]), contadores_de, _heranca=False)
+            for t, e in r["origem"].items():
+                origem.setdefault(t, e)
+            regra = "%s+base_declarada(%d:%s)" % (regra, base["origem_anterior"], base["prova"])
+            img = img or r["imagem_anterior"]
+        except NaoContinuavel:
+            regra += "+base_declarada_sem_imagem_igual"
+    elif base:
+        regra += "+base_declarada_recusada(%s)" % base["prova"]
     refazer = {p["tabela"] for p in plano if p["tabela"] in origem and duas_fases(p)}
     for t in refazer:
         origem.pop(t)
-    return {"tabelas": set(origem), "regra": regra, "imagem_anterior": img, "origem": origem,
-            "duas_fases": sorted(refazer)}
+    saida = {"tabelas": set(origem), "regra": regra, "imagem_anterior": img, "origem": origem,
+             "duas_fases": sorted(refazer)}
+    if base:
+        saida["base_equivalente"] = base
+    return saida
+
+
+def base_declarada(conn, anterior):
+    """Continuidade declarada da origem da execução `anterior` (plataforma.base_equivalente) ou None."""
+    from . import plataforma
+    return plataforma.base_equivalente(conn, anterior)
 
 
 def marcar(cm, tabelas, onda=None, origem="carregada"):
@@ -177,6 +209,17 @@ def concluidas_propria(conn, ctl, anterior, presentes, contagens, sha256, contad
     grupo = [t for t in GRUPO_PROPRIA if t in presentes]
     if "ATCABECATEND" not in grupo:
         return {}
+    r = _propria(conn, ctl, anterior, grupo, contagens, sha256, contadores_de)
+    if r:
+        return r
+    base = base_declarada(conn, anterior)  # regra 6: a cadeia da origem anterior com a mesma base declarada
+    if base and base["aceita"]:
+        return _propria(conn, ctl, base["execucao_anterior"], grupo, contagens,
+                        _aceitos(sha256) | set(base["sha256_aceitos"]), contadores_de)
+    return {}
+
+
+def _propria(conn, ctl, anterior, grupo, contagens, sha256, contadores_de):
     e, vistos = int(anterior), set()
     with conn.cursor() as c:
         while e and e not in vistos:
@@ -190,7 +233,7 @@ def concluidas_propria(conn, ctl, anterior, presentes, contagens, sha256, contad
             return {}
         c.execute("SELECT sha256 FROM `%s`.imagem WHERE execucao_id=%%s" % ctl, (e,))
         r = c.fetchone()
-        if not r or not r[0] or r[0] != sha256:
+        if not r or not r[0] or r[0] not in _aceitos(sha256):
             return {}
         for t in grupo:
             c.execute("SELECT COUNT(*) FROM `%s`.conector_origem WHERE tabela_origem=%%s" % ctl, (t,))

@@ -312,3 +312,100 @@ def listar(conn, limite=50):
                     (limite,))
         return [dict(zip(("id", "cliente", "tipo", "estado", "percentual", "etapa", "solicitado_em", "concluido_em"),
                          (r[0], r[1], r[2], r[3], float(r[4]), r[5], r[6], r[7]))) for r in cur.fetchall()]
+
+
+# ----- continuidade declarada entre origens (0094, ADR 0010) -----
+EVENTO_CONTINUIDADE = "origem_continua_de"
+
+
+def declarar_continuidade(conn, codigo, origem_nova, origem_anterior, admin_id=None, motivo=None):
+    """O administrador declara que a origem `origem_nova` lê a MESMA base que `origem_anterior` (mesmo cliente): a
+    continuação de uma importação passa a aproveitar as marcas de tabela concluída da anterior (continuar.py). Vai
+    para `cliente_origem.continua_de_origem_id` e para o evento do cliente, com a prova (identidade) quando houver.
+    `origem_anterior=None` desfaz a declaração."""
+    with _Tx(conn) as cur:
+        cli = _cliente(cur, codigo)
+        ids = [int(origem_nova)] + ([int(origem_anterior)] if origem_anterior is not None else [])
+        cur.execute("SELECT id, cliente_id FROM cliente_origem WHERE id IN (%s)" % ",".join(["%s"] * len(ids)), ids)
+        donos = {int(i): int(c) for i, c in cur.fetchall()}
+        if any(donos.get(i) != cli["id"] for i in ids):
+            raise PlataformaErro("as duas origens precisam ser do mesmo cliente")
+        if origem_anterior is not None and int(origem_anterior) == int(origem_nova):
+            raise PlataformaErro("a origem não continua a si mesma")
+        cur.execute("UPDATE cliente_origem SET continua_de_origem_id=%s, alterado_em=" + AGORA + ", alterado_por=%s"
+                    " WHERE id=%s", (origem_anterior, admin_id, int(origem_nova)))
+        det = {"origem": int(origem_nova), "continua_de_origem": origem_anterior}
+        if origem_anterior is not None:
+            det["prova"] = _prova_base(cur, int(origem_nova), int(origem_anterior))
+        if motivo:
+            det["motivo"] = str(motivo)[:300]
+        _evento(cur, cli["id"], EVENTO_CONTINUIDADE, det, admin_id)
+    return det
+
+
+def _ident(v):
+    if not v:
+        return {}
+    return v if isinstance(v, dict) else json.loads(v)
+
+
+def _prova_base(cur, nova, anterior):
+    """Confronto da identidade técnica das duas origens (sem dado de pessoa): 'confere', 'difere' (com os campos) ou
+    'sem_prova' (nenhum campo comum aos dois lados). Campos: ODS e página (colunas ou identidade) e os campos comuns
+    das duas identidades."""
+    lados = {}
+    for oid in (nova, anterior):
+        cur.execute("SELECT ods_versao, pagina_bytes, identidade_base FROM cliente_origem WHERE id=%s", (oid,))
+        r = cur.fetchone()
+        if not r:
+            return {"situacao": "sem_prova", "campos": []}
+        ident = _ident(r[2])
+        d = {k: v for k, v in ident.items() if k != "ods"}
+        if ident.get("ods") is not None:
+            d["ods_maior"] = int(str(ident["ods"]).split(".")[0])
+        elif r[0] is not None:
+            d["ods_maior"] = int(r[0])
+        if d.get("pagina_bytes") is None and r[1] is not None:
+            d["pagina_bytes"] = int(r[1])
+        lados[oid] = d
+    a, b = lados[nova], lados[anterior]
+    comuns = sorted(k for k in set(a) & set(b) if a[k] is not None and b[k] is not None
+                    and k not in ("versao_servidor", "nome_base"))
+    difs = [k for k in comuns if str(a[k]) != str(b[k])]
+    return {"situacao": "difere" if difs else ("confere" if comuns else "sem_prova"), "campos": comuns,
+            "diferentes": difs}
+
+
+def base_equivalente(conn, execucao_id):
+    """Continuidade declarada (0094) da origem da execução `execucao_id`: None sem declaração (comportamento de
+    sempre); senão {"origem", "origem_anterior", "execucao_anterior" (a última importação da origem anterior),
+    "sha256_aceitos" (o resumo que a imagem da origem anterior gravou), "prova": confere|sem_prova|difere,
+    "aceita": bool}. Prova que difere recusa (aceita=False): a base não é a mesma. Tolerante: sem as tabelas da
+    plataforma na conexão (testes do controle), devolve None."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT o.id, o.cliente_id, o.continua_de_origem_id FROM conector_execucao e JOIN cliente_origem o"
+                        " ON o.id=e.cliente_origem_id WHERE e.id=%s", (int(execucao_id),))
+            r = cur.fetchone()
+            if not r or not r[2]:
+                return None
+            oid, cid, ant = int(r[0]), int(r[1]), int(r[2])
+            cur.execute("SELECT cliente_id, tipo, sha256, identidade_base FROM cliente_origem WHERE id=%s", (ant,))
+            a = cur.fetchone()
+            if not a or int(a[0]) != cid:
+                return None
+            prova = _prova_base(cur, oid, ant)
+            cur.execute("SELECT id FROM conector_execucao WHERE cliente_origem_id=%s AND tipo='importar'"
+                        " AND estado IN ('concluida','falhou','pausada') ORDER BY id DESC LIMIT 1", (ant,))
+            e = cur.fetchone()
+    except pymysql.err.MySQLError:
+        return None
+    aceitos = set()
+    if a[2]:
+        aceitos.add(a[2])
+    if a[3]:
+        import hashlib
+        aceitos.add(hashlib.sha256(json.dumps(_ident(a[3]), sort_keys=True, ensure_ascii=True).encode()).hexdigest())
+    return {"origem": oid, "origem_anterior": ant, "execucao_anterior": int(e[0]) if e else None,
+            "sha256_aceitos": sorted(aceitos), "prova": prova["situacao"], "prova_campos": prova["campos"],
+            "aceita": prova["situacao"] != "difere" and bool(e)}
