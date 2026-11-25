@@ -22,7 +22,7 @@ async function entrar(page: Page, login: string): Promise<void> {
 const json = (rota: Route, corpo: unknown, status = 200) =>
   rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
 
-test.describe('grupos comparativos de resultados (03-PEP L128) @F33', () => {
+test.describe('grupos comparativos de resultados (03-PEP L128) @F33 @C1-059', () => {
   test('cadastra o grupo pelo menu, vê lado a lado na aba de resultados com o recorte do atendimento', async ({
     page,
   }) => {
