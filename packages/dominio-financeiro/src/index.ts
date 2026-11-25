@@ -9,6 +9,7 @@ export * from './conciliacao.js';
 export * from './extrato.js';
 export * from './nfse.js';
 export * from './nfse-ciclo.js';
+export * from './nfe-saida.js';
 export * from './reinf-eventos.js';
 export * from './escrituracao-entrada.js';
 export * from './escrituracao-receitas.js';
