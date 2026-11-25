@@ -202,6 +202,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/SimuladorTela.vue'),
     meta: { permissao: 'faturamento.preco.simular' },
   },
+  // F8 (01-ADM L120): simulação de cenários de receita sobre a produção real (troca de tabela, reajuste, conversão).
+  {
+    path: '/faturamento/simulacao-receita',
+    name: 'faturamento.simulacaoReceita',
+    component: () => import('./telas/SimulacaoReceitaTela.vue'),
+    meta: { permissao: 'faturamento.preco.simular' },
+  },
   {
     path: '/faturamento/particular/orcamentos',
     name: 'faturamento.orcamentos',
