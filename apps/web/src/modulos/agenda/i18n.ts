@@ -304,6 +304,7 @@ export const mensagensAgenda = {
     faltaRegistrada: 'Falta registrada.',
     desfazer: 'Desfazer o encaixe',
     desfazerPergunta: 'Desfazer o encaixe de {paciente}? O horário extra sai da grade.',
+    itensPreparo: 'Itens e preparo',
     desfeito: 'Encaixe desfeito.',
     comSenha: 'O paciente já recebeu senha de atendimento: não dá para cancelar, remarcar ou desfazer aqui.',
   },

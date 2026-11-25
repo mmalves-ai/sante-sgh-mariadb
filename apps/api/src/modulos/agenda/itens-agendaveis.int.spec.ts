@@ -15,6 +15,7 @@ import { instanteDe } from './porta-propria.js';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'c2054';
+const EST_B = 'c2054b';
 const LOGIN = 'teste.c2054';
 const FUSO = 'America/Sao_Paulo';
 const DIA = '2030-03-12';
@@ -26,6 +27,8 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
   let itens: ItensAgendaveisPropria;
   const ids = {
     est: 0,
+    estB: 0,
+    recursoB: 0,
     usuario: 0,
     fp: 0,
     pac1: 0,
@@ -45,17 +48,17 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
     return l ? Number(l.id) : e.inserir(ins, pi);
   };
   const limpar = async (e: Escritor) => {
-    const est = [ids.est];
+    const est = [ids.est, ids.estB];
     await e.executar(
-      'DELETE x FROM marcacao_equipamento x JOIN marcacao_horario m ON m.id = x.marcacao_horario_id WHERE m.estabelecimento_id = ?',
+      'DELETE x FROM marcacao_equipamento x JOIN marcacao_horario m ON m.id = x.marcacao_horario_id WHERE m.estabelecimento_id IN (?, ?)',
       est,
     );
     await e.executar(
-      'DELETE x FROM marcacao_horario_item x JOIN marcacao_horario m ON m.id = x.marcacao_horario_id WHERE m.estabelecimento_id = ?',
+      'DELETE x FROM marcacao_horario_item x JOIN marcacao_horario m ON m.id = x.marcacao_horario_id WHERE m.estabelecimento_id IN (?, ?)',
       est,
     );
-    await e.executar('DELETE FROM marcacao_horario WHERE estabelecimento_id = ?', est);
-    await e.executar('DELETE FROM horario_agenda WHERE estabelecimento_id = ?', est);
+    await e.executar('DELETE FROM marcacao_horario WHERE estabelecimento_id IN (?, ?)', est);
+    await e.executar('DELETE FROM horario_agenda WHERE estabelecimento_id IN (?, ?)', est);
     for (const t of [
       'item_agendavel_composicao',
       'item_agendavel_conflito',
@@ -79,9 +82,10 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
     chaveIdempotencia: `c2054-${randomUUID()}`,
   });
   const leitura = { hospital: EST, login: LOGIN };
+  const leituraB = { hospital: EST_B, login: LOGIN };
   const salvar = async (x: Record<string, unknown>) => (await itens.salvar(ctx(), x)).resultado.item;
   /** Marcação viva do paciente na data e hora, gravada direto (a marcação em si é de outra função). */
-  const marcacao = (paciente: number, data: string, hora: string) =>
+  const marcacao = (paciente: number, data: string, hora: string, est = ids.est) =>
     nucleo.escrever({ cliente: CLIENTE, correlacao: 'marcacao-c2054' }, async (e) => {
       const inicio = instanteDe(FUSO, data, hora);
       const fim = new Date(inicio.getTime() + 30 * 60_000);
@@ -89,14 +93,14 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
       const h = await e.inserir(
         `INSERT INTO horario_agenda (estabelecimento_id, agenda_servico_id, data_referencia, inicio_em, fim_em, situacao, vagas_ocupadas, criado_em)
          VALUES (?, ?, ?, ?, ?, 'ocupado', 1, ?)`,
-        [ids.est, ids.agenda, data, inicio, fim, agora],
+        [est, ids.agenda, data, inicio, fim, agora],
       );
       return e.inserir(
         `INSERT INTO marcacao_horario (estabelecimento_id, numero, horario_agenda_id, tipo_marcacao_id, situacao_marcacao_id,
             canal_marcacao_id, fonte_pagadora_id, duracao_minutos, marcado_em, responsavel_usuario_id, paciente_id, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, 30, ?, ?, ?, ?)`,
         [
-          ids.est,
+          est,
           `C2054-${++seqMarc}`,
           h,
           ids.tipo,
@@ -122,6 +126,13 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
         [EST],
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [EST, `Hospital sintético ${EST}`, `Hospital sintético ${EST} (fictício)`, agora],
+      );
+      ids.estB = await garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [EST_B],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [EST_B, `Hospital sintético ${EST_B}`, `Hospital sintético ${EST_B} (fictício)`, agora],
       );
       await limpar(e);
       ids.usuario = await garantir(
@@ -211,6 +222,22 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
          VALUES (?, 'C2054-R', 'SALA DE ENDOSCOPIA SINTETICA', 'equipamento', ?, ?, 1, ?)`,
         [ids.est, setor, ids.equip, agora],
       );
+      // A outra unidade tem a sua sala (sem equipamento de saúde ligado).
+      const setorB = await garantir(
+        e,
+        'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.estB, 'C2054-ENDO-B'],
+        "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'ENDOSCOPIA SINTETICA B', 'apoio_diagnostico', ?)",
+        [ids.estB, 'C2054-ENDO-B', agora],
+      );
+      ids.recursoB = await garantir(
+        e,
+        "SELECT id FROM recurso_agendavel WHERE estabelecimento_id = ? AND codigo = 'C2054-RB'",
+        [ids.estB],
+        `INSERT INTO recurso_agendavel (estabelecimento_id, codigo, descricao, tipo, setor_funcional_id, capacidade, criado_em)
+         VALUES (?, 'C2054-RB', 'SALA DE ENDOSCOPIA SINTETICA B', 'sala', ?, 1, ?)`,
+        [ids.estB, setorB, agora],
+      );
       const dominio = async (tabela: string, codigo: string, extra: Record<string, unknown>) =>
         garantir(
           e,
@@ -251,7 +278,7 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
     if (!nucleo) return;
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-c2054' }, async (e) => {
       await limpar(e);
-      await limparTrilhaDaMassa(e, { ids: [ids.est] });
+      await limparTrilhaDaMassa(e, { ids: [ids.est, ids.estB] });
     });
     await nucleo.encerrar();
   });
@@ -436,5 +463,116 @@ describe.skipIf(SEM_BANCO)('itens agendáveis (porta própria, MariaDB)', () => 
       [m5],
     );
     expect(Number(mh!.item_agendavel_id)).toBe(item.p);
+  });
+
+  it('conflito com o item já lançado na mesma marcação, em dois pedidos, nos dois sentidos da regra', async () => {
+    // C primeiro, depois B (a regra de 48 h está no cadastro de B).
+    const m6 = await marcacao(ids.pac1, '2030-03-25', '08:00');
+    await itens.lancar(ctx(), { marcacao: m6, itens: [item.c] });
+    const c6 = await itens.criticar(leitura, m6, [item.b]);
+    expect(c6.bloqueios.map((b) => b.codigo)).toEqual(['conflito-na-marcacao']);
+    await expect(itens.lancar(ctx(), { marcacao: m6, itens: [item.b] })).rejects.toMatchObject(
+      recusada('critica-da-marcacao'),
+    );
+    // B primeiro, depois C (a regra é lida pelo sentido inverso).
+    const m7 = await marcacao(ids.pac1, '2030-03-28', '08:00');
+    await itens.lancar(ctx(), { marcacao: m7, itens: [item.b] });
+    const c7 = await itens.criticar(leitura, m7, [item.c]);
+    expect(c7.bloqueios.map((b) => b.codigo)).toEqual(['conflito-na-marcacao']);
+    await expect(itens.lancar(ctx(), { marcacao: m7, itens: [item.c] })).rejects.toMatchObject(
+      recusada('critica-da-marcacao'),
+    );
+    const n = await ler<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM marcacao_horario_item WHERE marcacao_horario_id IN (?, ?)',
+      [m6, m7],
+    );
+    expect(Number(n[0]!.n)).toBe(2);
+  });
+
+  it('pacote com quantidade maior que 1: lança a quantidade, soma o recurso e leva as regras e o preparo do pacote', async () => {
+    const p2 = await salvar(
+      base('C2054-P2', 'PACOTE DUAS SESSOES SINTETICO', {
+        tipoItem: 'composto',
+        diasPreparo: 1,
+        orientacaoPreparo: 'Jejum de 8 horas.',
+        composicao: [{ componente: item.c, quantidade: 2 }],
+        requisitos: [
+          {
+            tipo: 'documento',
+            item: null,
+            descricao: 'Termo do pacote assinado',
+            prazoMaximoDias: null,
+            bloqueia: true,
+          },
+        ],
+      }),
+    );
+    const m8 = await marcacao(ids.pac2, '2030-04-10', '08:00');
+    const c8 = await itens.criticar(leitura, m8, [p2]);
+    expect(c8.bloqueios).toEqual([]);
+    expect(c8.alertas.map((a) => a.codigo)).toContain('requisito-documento');
+    await itens.lancar(ctx(), { marcacao: m8, itens: [p2] });
+    const [mi] = await ler<{ item_agendavel_id: number; quantidade: string; orientacao_preparo: string }>(
+      'SELECT item_agendavel_id, quantidade, orientacao_preparo FROM marcacao_horario_item WHERE marcacao_horario_id = ?',
+      [m8],
+    );
+    expect([Number(mi!.item_agendavel_id), Number(mi!.quantidade)]).toEqual([item.c, 2]);
+    expect(mi!.orientacao_preparo).toBe(
+      'Começar o preparo 1 dia(s) antes: a partir de 09/04/2030.\nJejum de 8 horas.',
+    );
+    // Duas sessões do item que usa a sala de capacidade 1: não cabem no mesmo horário.
+    const p3 = await salvar(
+      base('C2054-P3', 'PACOTE DUAS BIOPSIAS SINTETICO', {
+        tipoItem: 'composto',
+        composicao: [{ componente: item.d, quantidade: 2 }],
+      }),
+    );
+    const m9 = await marcacao(ids.pac2, '2030-04-11', '08:00');
+    expect((await itens.criticar(leitura, m9, [p3])).bloqueios.map((b) => b.codigo)).toEqual([
+      'equipamento-ocupado',
+    ]);
+  });
+
+  it('dois lançamentos ao mesmo tempo no mesmo recurso de capacidade 1: só um reserva', async () => {
+    const ma = await marcacao(ids.pac1, '2030-04-15', '14:00');
+    const mb = await marcacao(ids.pac2, '2030-04-15', '14:05'); // sobrepõe (30 min)
+    const rs = await Promise.allSettled([
+      itens.lancar(ctx(), { marcacao: ma, itens: [item.d] }),
+      itens.lancar(ctx(), { marcacao: mb, itens: [item.d] }),
+    ]);
+    expect(rs.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const falha = rs.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(falha.reason).toMatchObject(recusada('critica-da-marcacao'));
+    const eq = await ler<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM marcacao_equipamento WHERE marcacao_horario_id IN (?, ?) AND excluido_em IS NULL',
+      [ma, mb],
+    );
+    expect(Number(eq[0]!.n)).toBe(1);
+  });
+
+  it('duas unidades: cada uma vê, sincroniza, critica e reserva só os seus recursos', async () => {
+    // A unidade B não vê a sala da unidade A no item; grava a sua sem retirar a de A.
+    const vistoB = await itens.lerItem(leituraB, item.d);
+    expect(vistoB.recursos).toEqual([]);
+    await itens.salvar(
+      { ...ctx(), hospital: EST_B },
+      {
+        ...base('C2054-D', 'BIOPSIA SINTETICA'),
+        id: item.d,
+        versao: vistoB.versao,
+        recursos: [{ recurso: ids.recursoB, papel: 'exigido', quantidade: 1 }],
+      },
+    );
+    expect((await itens.lerItem(leitura, item.d)).recursos.map((r) => r.recurso)).toEqual([ids.recurso]);
+    expect((await itens.lerItem(leituraB, item.d)).recursos.map((r) => r.recurso)).toEqual([ids.recursoB]);
+    // No horário em que a sala de A está ocupada (m3, 10:00 a 10:30), a marcação de B usa a sala de B e não reserva o
+    // equipamento de A.
+    const mB = await marcacao(ids.pac1, DIA, '10:05', ids.estB);
+    expect((await itens.criticar(leituraB, mB, [item.d])).bloqueios).toEqual([]);
+    const r = await itens.lancar({ ...ctx(), hospital: EST_B }, { marcacao: mB, itens: [item.d] });
+    expect(r.resultado.equipamentos).toBe(0);
+    expect(await ler('SELECT id FROM marcacao_equipamento WHERE marcacao_horario_id = ?', [mB])).toHaveLength(
+      0,
+    );
   });
 });

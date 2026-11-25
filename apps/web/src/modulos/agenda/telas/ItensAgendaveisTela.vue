@@ -97,6 +97,7 @@ const { t } = useI18n({
       fechar: 'Fechar',
       marcacao: 'Itens na marcação',
       numeroMarcacao: 'Número interno da marcação',
+      voltarMarcacao: 'Voltar à marcação',
       escolherItem: 'Item a marcar',
       conferir: 'Conferir',
       lancar: 'Lançar na marcação',
@@ -323,6 +324,12 @@ const imprimir = () => window.print();
 
     <section class="painel" aria-labelledby="itens-marcacao" data-testid="itens-marcacao">
       <h2 id="itens-marcacao">{{ t('marcacao') }}</h2>
+      <RouterLink
+        v-if="marcacaoId !== null"
+        :to="`/agenda/consultas/marcacoes/${marcacaoId}`"
+        data-testid="itens-voltar-marcacao"
+        >{{ t('voltarMarcacao') }}</RouterLink
+      >
       <div class="filtros">
         <SanteCampoTexto v-model="marcacao" :rotulo="t('numeroMarcacao')" :max-bytes="20" />
         <SanteSelecao

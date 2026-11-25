@@ -10,6 +10,20 @@ import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
+const FERIADOS = ['01-01', '04-21', '09-07', '11-02', '11-15', '12-25'];
+
+/** Próximo dia útil a partir de três dias à frente (relógio de São Paulo), fora dos feriados fixos. */
+function diaUtil(): string {
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  const d = new Date(`${hoje}T12:00:00Z`);
+  for (let i = 3; i < 20; i++) {
+    const x = new Date(d.getTime() + i * 86_400_000);
+    const iso = x.toISOString().slice(0, 10);
+    const sem = x.getUTCDay();
+    if (sem !== 0 && sem !== 6 && !FERIADOS.includes(iso.slice(5))) return iso;
+  }
+  throw new Error('sem dia útil');
+}
 
 async function entrar(page: Page, login: string): Promise<void> {
   await page.context().clearCookies();
@@ -53,6 +67,7 @@ function simular(page: Page) {
     ],
     gravado: null as Record<string, unknown> | null,
     criticas: 0,
+    criticadas: [] as string[],
     lancado: null as Record<string, unknown> | null,
   };
   void page.route('**/api/agenda/itens-agendaveis**', (r) => {
@@ -62,6 +77,7 @@ function simular(page: Page) {
     if (caminho === '/opcoes') return json(r, OPCOES);
     if (/^\/marcacao\/\d+\/critica$/.test(caminho)) {
       st.criticas += 1;
+      st.criticadas.push(/\d+/.exec(caminho)?.[0] ?? '');
       // Primeira conferência: a consulta prévia não foi feita; na segunda, já foi (outra marcação realizada).
       return json(r, {
         itens: [
@@ -200,6 +216,51 @@ test.describe('agenda: itens agendáveis @C2-054 @fase8', () => {
     await expect(page.getByTestId('itens-lancados')).toContainText('Dieta líquida sem resíduos.');
     await expect(m).toContainText('VIDEOENDOSCOPIO SINTETICO');
     await semViolacaoAxe(page, 'itens agendáveis: marcação');
+    expect(externas).toEqual([]);
+  });
+
+  test('pelo caminho real da marcação: marca a vaga e, no detalhe, "Itens e preparo" abre a crítica já com a marcação', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const dia = diaUtil();
+    await entrar(page, 'SINT.AGENDA');
+    // A marcação é real (fonte sintética); só os itens agendáveis são simulados.
+    await page.goto('/agenda/consultas/marcar');
+    await expect(page.getByTestId('tela-marcar')).toBeVisible();
+    const busca = page.getByRole('region', { name: 'Buscar vagas' });
+    await escolher(busca.getByLabel('Agenda'), '901');
+    await page.getByTestId('vagas-de').fill(dia);
+    await page.getByTestId('vagas-ate').fill(dia);
+    await busca.getByRole('button', { name: 'Buscar vagas' }).click();
+    await expect(page.getByTestId('tabela-vagas')).toBeVisible();
+    await page
+      .getByTestId(new RegExp(`^vaga-901-${dia}-\\d{4}$`))
+      .last()
+      .click();
+    await expect(page.getByTestId('vaga-escolhida')).toBeVisible();
+    await page.getByTestId('marcar-termo').fill('cinthya');
+    await page.getByTestId('marcar-termo').press('Enter');
+    await page.getByTestId('paciente-1003').click();
+    await expect(page.getByTestId('paciente-escolhido')).toBeVisible();
+    await escolher(page.getByRole('region', { name: 'Marcar consulta' }).getByLabel('Convênio'), '10');
+    await page.getByTestId('botao-marcar').click();
+    await expect(page).toHaveURL(/\/agenda\/consultas\/marcacoes\/\d+/);
+    const marcada = /\/marcacoes\/(\d+)/.exec(page.url())?.[1] ?? '';
+
+    const st = simular(page);
+    await page.getByTestId('marcacao-itens-preparo').click();
+    await expect(page).toHaveURL(new RegExp(`/agenda/consultas/itens-agendaveis\\?marcacao=${marcada}$`));
+    const m = page.getByTestId('itens-marcacao');
+    await expect(m.getByLabel('Número interno da marcação')).toHaveValue(marcada);
+    await escolher(m.getByLabel('Item a marcar'), '9602');
+    await page.getByTestId('itens-escolher-incluir').click();
+    await page.getByTestId('itens-conferir').click();
+    await expect(page.getByTestId('itens-bloqueios')).toContainText('exige CONSULTA PRE SINTETICA');
+    expect(st.criticadas).toEqual([marcada]);
+    await semViolacaoAxe(page, 'itens agendáveis: pela marcação');
+    await page.getByTestId('itens-voltar-marcacao').click();
+    await expect(page).toHaveURL(new RegExp(`/agenda/consultas/marcacoes/${marcada}$`));
     expect(externas).toEqual([]);
   });
 });

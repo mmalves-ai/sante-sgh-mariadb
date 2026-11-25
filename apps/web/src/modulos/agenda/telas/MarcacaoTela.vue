@@ -35,6 +35,7 @@ const detalhe = useQuery({
 });
 const m = computed(() => detalhe.data.value);
 const podeAbrirAtendimento = podePermissao('atendimento.atendimento.abrir');
+const podeItens = podePermissao('agenda.marcacao.agendar');
 const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
@@ -197,6 +198,12 @@ const desfazer = () => rodar(() => desfazerEncaixe(marcacaoId.value, {}, novaCha
           :to="`/recepcao/atendimento/novo?marcacao=${m.id}`"
           data-testid="marcacao-abrir-atendimento"
           >{{ t('agenda.dia.abrirAtendimento') }}</RouterLink
+        >
+        <RouterLink
+          v-if="podeItens && m.acoes.cancelar"
+          :to="`/agenda/consultas/itens-agendaveis?marcacao=${m.id}`"
+          data-testid="marcacao-itens-preparo"
+          >{{ t('agenda.marcacao.itensPreparo') }}</RouterLink
         >
         <SanteBotao
           v-if="m.acoes.confirmar && podeConfirmar"

@@ -274,6 +274,8 @@ export interface RegrasDoItem {
   readonly requisitos: readonly RequisitoItem[];
   readonly conflitos: readonly ConflitoItem[];
   readonly recursos: readonly RecursoItem[];
+  /** Quantidade lançada (o pacote com "2 sessões" lança 2): multiplica o que o item ocupa de cada recurso. Padrão 1. */
+  readonly quantidade?: number;
 }
 
 /** Item do paciente já marcado ou realizado (sem os cancelados), com o instante de início em milissegundos. */
@@ -308,6 +310,11 @@ export interface EntradaCritica {
   readonly nomes: ReadonlyMap<number, string>;
   readonly historico: readonly ItemDoHistorico[];
   readonly recursos: readonly OcupacaoRecurso[];
+  /**
+   * Itens já lançados nesta mesma marcação (num pedido anterior): contam como "da mesma marcação" para o conflito, como
+   * se tivessem vindo no mesmo pedido.
+   */
+  readonly jaLancados?: readonly number[];
 }
 
 export interface ResultadoCritica {
@@ -329,7 +336,7 @@ export function criticarItensDaMarcacao(e: EntradaCritica): ResultadoCritica {
   const alertas: AchadoCritica[] = [];
   const nome = (id: number) => e.nomes.get(id) ?? `item ${id}`;
   const outros = e.historico.filter((h) => h.marcacao !== e.marcacao);
-  const doMesmo = new Set(e.itens.map((i) => i.id));
+  const doMesmo = new Set([...e.itens.map((i) => i.id), ...(e.jaLancados ?? [])]);
   for (const it of e.itens) {
     if (!it.ativo)
       bloqueios.push({
@@ -408,7 +415,10 @@ export function criticarItensDaMarcacao(e: EntradaCritica): ResultadoCritica {
   for (const it of e.itens)
     for (const r of it.recursos) {
       const x = pedido.get(r.recurso);
-      pedido.set(r.recurso, { item: x?.item ?? it.id, quantidade: (x?.quantidade ?? 0) + r.quantidade });
+      pedido.set(r.recurso, {
+        item: x?.item ?? it.id,
+        quantidade: (x?.quantidade ?? 0) + r.quantidade * (it.quantidade ?? 1),
+      });
     }
   for (const [recurso, p] of pedido) {
     const o = e.recursos.find((x) => x.recurso === recurso);
@@ -477,12 +487,49 @@ export function montarPreparo(p: {
   };
 }
 
-/** Desdobra o pacote nos itens que o compõem (um nível: o componente não é pacote). Mantém a ordem e tira repetidos. */
+/**
+ * Preparo do componente de um pacote: o preparo do pacote (a orientação do pacote vale para todos os itens dele) vem
+ * antes do preparo do próprio componente; o início é o mais cedo dos dois e o aviso de tempo vale se um deles faltar.
+ */
+export function combinarPreparo(pacote: PreparoDoItem | null, proprio: PreparoDoItem): PreparoDoItem {
+  if (!pacote) return proprio;
+  const textos = [pacote.texto, proprio.texto].filter((x): x is string => !vazio(x));
+  const inicios = [pacote.inicioPreparo, proprio.inicioPreparo].filter((x): x is string => x !== null).sort();
+  return {
+    item: proprio.item,
+    texto: textos.length === 0 ? null : textos.join('\n'),
+    inicioPreparo: inicios[0] ?? null,
+    tempoInsuficiente: pacote.tempoInsuficiente || proprio.tempoInsuficiente,
+  };
+}
+
+export interface ItemDesdobrado {
+  readonly item: number;
+  /** Quantidade a lançar: a da composição do pacote (somada quando o mesmo item vem de mais de um pedido). */
+  readonly quantidade: number;
+  /** Pacote de onde o item veio (null: pedido direto). */
+  readonly pacote: number | null;
+}
+
+/**
+ * Desdobra o pacote nos itens que o compõem (um nível: o componente não é pacote), com a quantidade da composição.
+ * Mantém a ordem; o item repetido entre pedidos fica uma vez, com as quantidades somadas.
+ */
 export function desdobrarItens(
   pedidos: readonly number[],
-  composicao: ReadonlyMap<number, readonly number[]>,
-): number[] {
-  const saida: number[] = [];
-  for (const x of pedidos) for (const y of composicao.get(x) ?? [x]) if (!saida.includes(y)) saida.push(y);
+  composicao: ReadonlyMap<number, readonly ComponenteItem[]>,
+): ItemDesdobrado[] {
+  const saida: ItemDesdobrado[] = [];
+  for (const x of pedidos) {
+    const comp = composicao.get(x);
+    const partes = comp
+      ? comp.map((c) => ({ item: c.componente, quantidade: c.quantidade, pacote: x }))
+      : [{ item: x, quantidade: 1, pacote: null }];
+    for (const p of partes) {
+      const i = saida.findIndex((y) => y.item === p.item);
+      if (i < 0) saida.push(p);
+      else saida[i] = { ...saida[i]!, quantidade: saida[i]!.quantidade + p.quantidade };
+    }
+  }
   return saida;
 }

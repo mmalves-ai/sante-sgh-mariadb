@@ -6,6 +6,8 @@
 // leitura, as gravações pelo executor (trilha na mesma transação) e a montagem do que o domínio decide. Nada se apaga:
 // regra retirada fica com exclusão lógica (ou "ativo = falso" nas tabelas sem exclusão) e a trilha guarda o histórico.
 import {
+  combinarPreparo,
+  type ComponenteItem,
   type ConflitoItem,
   criticarItensDaMarcacao,
   desdobrarItens,
@@ -13,6 +15,7 @@ import {
   type ItemAgendavelEntrada,
   montarPreparo,
   type OcupacaoRecurso,
+  type PreparoDoItem,
   type RecursoItem,
   type RegrasDoItem,
   type RequisitoItem,
@@ -165,6 +168,9 @@ const SEL_REQUISITO =
   'SELECT id, versao, tipo_requisito, requisito_item_agendavel_id, descricao_condicao, prazo_maximo_dias, bloqueia_marcacao, ativo FROM item_agendavel_pre_requisito WHERE item_agendavel_id = ?';
 const SEL_RECURSO =
   'SELECT id, versao, recurso_agendavel_id, papel, quantidade, excluido_em FROM item_agendavel_recurso WHERE item_agendavel_id = ?';
+/** Os recursos do item na unidade: o item é da rede, o recurso é de um estabelecimento; os das outras ficam intactos. */
+const DA_UNIDADE =
+  ' AND recurso_agendavel_id IN (SELECT ra.id FROM recurso_agendavel ra WHERE ra.estabelecimento_id = ?)';
 const SEL_ORIENTACAO =
   'SELECT id, versao, fonte_pagadora_id, orientacao, ativo, excluido_em FROM item_agendavel_orientacao_fonte_pagadora WHERE item_agendavel_id = ?';
 
@@ -287,12 +293,13 @@ export class ItensAgendaveisPropria {
             (SELECT COUNT(*) FROM item_agendavel_composicao x WHERE x.item_agendavel_id = i.id AND x.excluido_em IS NULL) AS n_comp,
             (SELECT COUNT(*) FROM item_agendavel_conflito x WHERE x.item_agendavel_id = i.id AND x.ativo) AS n_conf,
             (SELECT COUNT(*) FROM item_agendavel_pre_requisito x WHERE x.item_agendavel_id = i.id AND x.ativo) AS n_req,
-            (SELECT COUNT(*) FROM item_agendavel_recurso x WHERE x.item_agendavel_id = i.id AND x.excluido_em IS NULL) AS n_rec,
+            (SELECT COUNT(*) FROM item_agendavel_recurso x JOIN recurso_agendavel ra ON ra.id = x.recurso_agendavel_id
+              WHERE x.item_agendavel_id = i.id AND x.excluido_em IS NULL AND ra.estabelecimento_id = ?) AS n_rec,
             (SELECT COUNT(*) FROM item_agendavel_orientacao_fonte_pagadora x WHERE x.item_agendavel_id = i.id AND x.excluido_em IS NULL) AS n_ori
            FROM item_agendavel i
           WHERE i.excluido_em IS NULL AND (? IS NULL OR i.codigo LIKE ? OR i.descricao LIKE ?)
           ORDER BY i.ativo DESC, i.descricao LIMIT 300`,
-        [termo, termo, termo],
+        [q.estabelecimento, termo, termo, termo],
       );
       return xs.map((x) => ({
         id: num(x['id']),
@@ -348,7 +355,10 @@ export class ItensAgendaveisPropria {
       const comp = await l.consultar(`${SEL_COMPOSICAO} AND excluido_em IS NULL ORDER BY sequencia`, [item]);
       const conf = await l.consultar(`${SEL_CONFLITO} AND ativo`, [item]);
       const req = await l.consultar(`${SEL_REQUISITO} AND ativo`, [item]);
-      const rec = await l.consultar(`${SEL_RECURSO} AND excluido_em IS NULL`, [item]);
+      const rec = await l.consultar(`${SEL_RECURSO} AND excluido_em IS NULL${DA_UNIDADE}`, [
+        item,
+        q.estabelecimento,
+      ]);
       const ori = await l.consultar(`${SEL_ORIENTACAO} AND excluido_em IS NULL`, [item]);
       const nomes: Record<string, string> = {};
       const refs = [
@@ -700,7 +710,7 @@ export class ItensAgendaveisPropria {
     n += await sincronizar(
       tx,
       'item_agendavel_recurso',
-      await tx.consultarParaAtualizar(SEL_RECURSO, [item]),
+      await tx.consultarParaAtualizar(`${SEL_RECURSO}${DA_UNIDADE}`, [item, ctx.estabelecimento]),
       (x) => String(num(x['recurso_agendavel_id'])),
       porExclusao,
       new Map(
@@ -737,7 +747,14 @@ export class ItensAgendaveisPropria {
    * ocupação dos recursos no intervalo e as orientações do convênio) e entrega ao domínio. Serve à leitura e à gravação
    * (na gravação, dentro da transação, com a marcação travada).
    */
-  private async montarCritica(l: Le, est: number, fuso: string, marcacao: number, pedidos: number[]) {
+  private async montarCritica(
+    l: Le,
+    est: number,
+    fuso: string,
+    marcacao: number,
+    pedidos: number[],
+    trava?: TxOperacao,
+  ) {
     const m = await l.uma(
       `SELECT mh.id, mh.versao, mh.paciente_id, mh.pre_cadastro_id, mh.fonte_pagadora_id, mh.item_agendavel_id,
               mh.duracao_minutos, ha.inicio_em, s.significado
@@ -759,39 +776,46 @@ export class ItensAgendaveisPropria {
     const inicio = instante(m['inicio_em']);
     const fim = new Date(inicio.getTime() + num(m['duracao_minutos']) * 60_000);
     const unicos = [...new Set(pedidos)];
-    const comp = new Map<number, number[]>();
+    const comp = new Map<number, ComponenteItem[]>();
     for (const x of await l.consultar(
-      `SELECT item_agendavel_id, componente_item_agendavel_id FROM item_agendavel_composicao
+      `SELECT item_agendavel_id, componente_item_agendavel_id, quantidade FROM item_agendavel_composicao
         WHERE excluido_em IS NULL AND item_agendavel_id IN (${marc(unicos.length)}) ORDER BY sequencia`,
       unicos,
     ))
       comp.set(num(x['item_agendavel_id']), [
         ...(comp.get(num(x['item_agendavel_id'])) ?? []),
-        num(x['componente_item_agendavel_id']),
+        { componente: num(x['componente_item_agendavel_id']), quantidade: num(x['quantidade']) },
       ]);
-    const ids = desdobrarItens(unicos, comp);
+    // O pacote vira os componentes (com a quantidade da composição); as regras e o preparo do próprio pacote também
+    // entram na crítica (o pacote não é lançado: são os componentes que se realizam e se faturam).
+    const desdobrados = desdobrarItens(unicos, comp);
+    const ids = desdobrados.map((d) => d.item);
+    const pacotes = unicos.filter((x) => comp.has(x) && !ids.includes(x));
+    const todos = [...ids, ...pacotes];
     const linhas = await l.consultar(
       `SELECT id, descricao, ativo, tipo_item, duracao_minutos, intervalo_repeticao_minutos, dias_preparo,
               orientacao_preparo, item_faturavel_id, exame_id
-         FROM item_agendavel WHERE excluido_em IS NULL AND id IN (${marc(ids.length)})`,
-      ids,
+         FROM item_agendavel WHERE excluido_em IS NULL AND id IN (${marc(todos.length)})`,
+      todos,
     );
-    if (linhas.length !== ids.length)
+    if (linhas.length !== todos.length)
       throw recusa('item-inexistente', 'Um dos itens escolhidos não existe.', { campos: ['itens'] });
     const req = await l.consultar(
       `SELECT item_agendavel_id, tipo_requisito, requisito_item_agendavel_id, descricao_condicao, prazo_maximo_dias, bloqueia_marcacao
-         FROM item_agendavel_pre_requisito WHERE ativo AND item_agendavel_id IN (${marc(ids.length)})`,
-      ids,
+         FROM item_agendavel_pre_requisito WHERE ativo AND item_agendavel_id IN (${marc(todos.length)})`,
+      todos,
     );
     const conf = await l.consultar(
       `SELECT item_agendavel_id, conflito_item_agendavel_id, intervalo_minimo_horas, direcao FROM item_agendavel_conflito
-        WHERE ativo AND (item_agendavel_id IN (${marc(ids.length)}) OR conflito_item_agendavel_id IN (${marc(ids.length)}))`,
-      [...ids, ...ids],
+        WHERE ativo AND (item_agendavel_id IN (${marc(todos.length)}) OR conflito_item_agendavel_id IN (${marc(todos.length)}))`,
+      [...todos, ...todos],
     );
+    // Só os recursos da unidade da marcação: o item é da rede, o recurso é de um estabelecimento.
     const rec = await l.consultar(
-      `SELECT item_agendavel_id, recurso_agendavel_id, papel, quantidade FROM item_agendavel_recurso
-        WHERE excluido_em IS NULL AND item_agendavel_id IN (${marc(ids.length)})`,
-      ids,
+      `SELECT x.item_agendavel_id, x.recurso_agendavel_id, x.papel, x.quantidade
+         FROM item_agendavel_recurso x JOIN recurso_agendavel ra ON ra.id = x.recurso_agendavel_id
+        WHERE x.excluido_em IS NULL AND ra.estabelecimento_id = ? AND x.item_agendavel_id IN (${marc(todos.length)})`,
+      [est, ...todos],
     );
     const inverso = { antes: 'depois', depois: 'antes', ambos: 'ambos' } as const;
     const conflitosDe = (it: number): ConflitoItem[] => {
@@ -802,15 +826,17 @@ export class ItensAgendaveisPropria {
         const h = num(x['intervalo_minimo_horas']);
         const d = x['direcao'] as ConflitoItem['direcao'];
         if (a === it) saida.push({ item: b, intervaloMinimoHoras: h, direcao: d });
-        else if (b === it && !ids.includes(a))
+        else if (b === it && !todos.includes(a))
           saida.push({ item: a, intervaloMinimoHoras: h, direcao: inverso[d] });
       }
       return saida;
     };
-    const regras: RegrasDoItem[] = ids.map((it) => {
+    const qtd = new Map(desdobrados.map((d) => [d.item, d.quantidade]));
+    const regras: RegrasDoItem[] = todos.map((it) => {
       const x = linhas.find((y) => num(y['id']) === it)!;
       return {
         id: it,
+        quantidade: qtd.get(it) ?? 1,
         descricao: String(x['descricao']),
         ativo: bool(x['ativo']),
         duracaoMinutos: num(x['duracao_minutos']),
@@ -835,9 +861,20 @@ export class ItensAgendaveisPropria {
       };
     });
     // Histórico do paciente (ou do pré-cadastro) nos itens que as regras citam: marcados e realizados, sem cancelados.
+    // Itens já lançados nesta marcação (pedido anterior): contam no conflito como da mesma marcação.
+    const jaNaMarcacao = new Set(
+      (
+        await l.consultar(
+          `SELECT item_agendavel_id FROM marcacao_horario_item
+            WHERE marcacao_horario_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado' AND item_agendavel_id IS NOT NULL`,
+          [marcacao],
+        )
+      ).map((x) => num(x['item_agendavel_id'])),
+    );
     const citados = [
       ...new Set([
-        ...ids,
+        ...todos,
+        ...jaNaMarcacao,
         ...regras.flatMap((r) => r.requisitos.filter((q) => q.item !== null).map((q) => q.item as number)),
         ...regras.flatMap((r) => r.conflitos.map((q) => q.item)),
       ]),
@@ -856,34 +893,53 @@ export class ItensAgendaveisPropria {
       [pac, pac, pre, ...citados],
       { teto: 10_000 },
     );
-    const jaNaMarcacao = new Set(
-      hist.filter((h) => num(h['marcacao_horario_id']) === marcacao).map((h) => num(h['item_agendavel_id'])),
-    );
-    // Ocupação de cada recurso no intervalo da marcação pelas outras marcações vivas.
-    const recursos = [...new Set(rec.map((r) => num(r['recurso_agendavel_id'])))];
+    // Ocupação de cada recurso no intervalo da marcação pelas outras marcações vivas. Na gravação, as linhas dos
+    // recursos são travadas antes (em ordem de id: dois lançamentos no mesmo recurso esperam um pelo outro) e a
+    // ocupação é lida com trava (leitura do que já foi gravado, não da fotografia da transação).
+    const recursos = [...new Set(rec.map((r) => num(r['recurso_agendavel_id'])))].sort((a, b) => a - b);
     const ocup =
       recursos.length === 0
         ? []
-        : await l.consultar(
-            `SELECT r.id, r.descricao, r.ativo, r.capacidade, r.equipamento_saude_id,
-                    COALESCE((SELECT SUM(x.quantidade)
-                       FROM item_agendavel_recurso x
-                       JOIN marcacao_horario_item mi ON mi.item_agendavel_id = x.item_agendavel_id
-                            AND mi.excluido_em IS NULL AND mi.situacao = 'marcado'
-                       JOIN marcacao_horario mh ON mh.id = mi.marcacao_horario_id AND mh.excluido_em IS NULL AND mh.id <> ?
-                       JOIN situacao_marcacao s ON s.id = mh.situacao_marcacao_id AND s.significado NOT IN ('cancelada', 'falta')
-                       JOIN horario_agenda ha ON ha.id = mh.horario_agenda_id
-                      WHERE x.recurso_agendavel_id = r.id AND x.excluido_em IS NULL
-                        AND ha.inicio_em < ? AND DATE_ADD(ha.inicio_em, INTERVAL mh.duracao_minutos MINUTE) > ?), 0) AS ocupado
-               FROM recurso_agendavel r WHERE r.excluido_em IS NULL AND r.id IN (${marc(recursos.length)})`,
-            [marcacao, fim, inicio, ...recursos],
-          );
+        : trava
+          ? await trava.consultarParaAtualizar(
+              `SELECT id, descricao, ativo, capacidade, equipamento_saude_id FROM recurso_agendavel
+                WHERE excluido_em IS NULL AND estabelecimento_id = ? AND id IN (${marc(recursos.length)}) ORDER BY id`,
+              [est, ...recursos],
+            )
+          : await l.consultar(
+              `SELECT id, descricao, ativo, capacidade, equipamento_saude_id FROM recurso_agendavel
+                WHERE excluido_em IS NULL AND estabelecimento_id = ? AND id IN (${marc(recursos.length)}) ORDER BY id`,
+              [est, ...recursos],
+            );
+    const SEL_OCUPACAO = `SELECT x.recurso_agendavel_id, x.quantidade AS por_item, mi.quantidade AS vezes
+         FROM item_agendavel_recurso x
+         JOIN marcacao_horario_item mi ON mi.item_agendavel_id = x.item_agendavel_id
+              AND mi.excluido_em IS NULL AND mi.situacao = 'marcado'
+         JOIN marcacao_horario mh ON mh.id = mi.marcacao_horario_id AND mh.excluido_em IS NULL AND mh.id <> ?
+              AND mh.estabelecimento_id = ?
+         JOIN situacao_marcacao s ON s.id = mh.situacao_marcacao_id AND s.significado NOT IN ('cancelada', 'falta')
+         JOIN horario_agenda ha ON ha.id = mh.horario_agenda_id
+        WHERE x.excluido_em IS NULL AND x.recurso_agendavel_id IN (${marc(Math.max(recursos.length, 1))})
+          AND ha.inicio_em < ? AND DATE_ADD(ha.inicio_em, INTERVAL mh.duracao_minutos MINUTE) > ?`;
+    // Só as marcações da mesma unidade: o item usa, em cada unidade, os recursos dela.
+    const pOcup = [marcacao, est, ...recursos, fim, inicio];
+    const usos =
+      recursos.length === 0
+        ? []
+        : trava
+          ? await trava.consultarParaAtualizar(SEL_OCUPACAO, pOcup, { teto: 10_000 })
+          : await l.consultar(SEL_OCUPACAO, pOcup, { teto: 10_000 });
+    const ocupado = new Map<number, number>();
+    for (const u of usos) {
+      const r = num(u['recurso_agendavel_id']);
+      ocupado.set(r, (ocupado.get(r) ?? 0) + num(u['por_item']) * num(u['vezes'] ?? 1));
+    }
     const ocupacao: OcupacaoRecurso[] = ocup.map((x) => ({
       recurso: num(x['id']),
       descricao: String(x['descricao']),
       ativo: bool(x['ativo']),
       capacidade: num(x['capacidade']),
-      ocupado: num(x['ocupado']),
+      ocupado: ocupado.get(num(x['id'])) ?? 0,
     }));
     const nomes = new Map<number, string>();
     for (const x of await l.consultar(
@@ -903,6 +959,7 @@ export class ItensAgendaveisPropria {
         marcacao: num(h['marcacao_horario_id']),
       })),
       recursos: ocupacao,
+      jaLancados: [...jaNaMarcacao],
     });
     const bloqueios = [...r.bloqueios];
     for (const it of ids)
@@ -916,16 +973,16 @@ export class ItensAgendaveisPropria {
     const ori = new Map<number, string>();
     for (const x of await l.consultar(
       `SELECT item_agendavel_id, orientacao FROM item_agendavel_orientacao_fonte_pagadora
-        WHERE excluido_em IS NULL AND ativo AND fonte_pagadora_id = ? AND item_agendavel_id IN (${marc(ids.length)})`,
-      [m['fonte_pagadora_id'], ...ids],
+        WHERE excluido_em IS NULL AND ativo AND fonte_pagadora_id = ? AND item_agendavel_id IN (${marc(todos.length)})`,
+      [m['fonte_pagadora_id'], ...todos],
     ))
       ori.set(num(x['item_agendavel_id']), String(x['orientacao']));
     const data = localDe(fuso, inicio).data;
     const hoje = localDe(fuso, this.agora()).data;
     const alertas = [...r.alertas];
-    const itens = ids.map((it) => {
+    const preparoDe = (it: number): PreparoDoItem => {
       const x = linhas.find((y) => num(y['id']) === it)!;
-      const preparo = montarPreparo({
+      return montarPreparo({
         item: it,
         data,
         hoje,
@@ -933,6 +990,11 @@ export class ItensAgendaveisPropria {
         orientacaoPadrao: x['orientacao_preparo'] == null ? null : String(x['orientacao_preparo']),
         orientacaoFonte: ori.get(it) ?? null,
       });
+    };
+    const itens = desdobrados.map((d) => {
+      const it = d.item;
+      const x = linhas.find((y) => num(y['id']) === it)!;
+      const preparo = combinarPreparo(d.pacote === null ? null : preparoDe(d.pacote), preparoDe(it));
       if (preparo.tempoInsuficiente)
         alertas.push({
           codigo: 'preparo-sem-tempo',
@@ -944,6 +1006,7 @@ export class ItensAgendaveisPropria {
         descricao: String(x['descricao']),
         itemFaturavel: numN(x['item_faturavel_id']),
         exame: numN(x['exame_id']),
+        quantidade: d.quantidade,
         preparo,
       };
     });
@@ -956,6 +1019,20 @@ export class ItensAgendaveisPropria {
     ctx: ContextoOperacao,
   ): Promise<{ marcacao: number; itens: number; equipamentos: number; alertas: string }> {
     const est = Number(ctx.estabelecimento);
+    // Primeiro os recursos da unidade que os itens pedidos (ou os componentes do pacote) usam, em ordem de id: dois
+    // lançamentos no mesmo recurso esperam um pelo outro antes de qualquer outra trava (sem impasse entre eles).
+    const unicos = [...new Set(e.itens)];
+    await tx.consultarParaAtualizar(
+      `SELECT ra.id FROM recurso_agendavel ra
+         JOIN item_agendavel_recurso x ON x.recurso_agendavel_id = ra.id AND x.excluido_em IS NULL
+        WHERE ra.estabelecimento_id = ? AND ra.excluido_em IS NULL
+          AND (x.item_agendavel_id IN (${marc(unicos.length)})
+               OR x.item_agendavel_id IN (SELECT c.componente_item_agendavel_id FROM item_agendavel_composicao c
+                                           WHERE c.excluido_em IS NULL AND c.item_agendavel_id IN (${marc(unicos.length)})))
+        ORDER BY ra.id`,
+      [est, ...unicos, ...unicos],
+      { teto: 1_000 },
+    );
     const [trava] = await tx.consultarParaAtualizar(
       'SELECT id, versao, item_agendavel_id FROM marcacao_horario WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [e.marcacao, est],
@@ -975,6 +1052,7 @@ export class ItensAgendaveisPropria {
       String(f?.['fuso_horario'] || 'America/Sao_Paulo'),
       e.marcacao,
       e.itens,
+      tx,
     );
     if (c.bloqueios.length > 0)
       throw recusa('critica-da-marcacao', c.bloqueios.map((b) => b.mensagem).join(' '), {
@@ -992,7 +1070,7 @@ export class ItensAgendaveisPropria {
         item_agendavel_id: it.id,
         item_faturavel_id: it.itemFaturavel,
         exame_id: it.exame,
-        quantidade: 1,
+        quantidade: it.quantidade,
         orientacao_preparo: it.preparo.texto,
         situacao: 'marcado',
       });
@@ -1004,7 +1082,8 @@ export class ItensAgendaveisPropria {
         if (!o || o['equipamento_saude_id'] == null) continue;
         const k = num(o['equipamento_saude_id']);
         const a = porEquip.get(k);
-        porEquip.set(k, { quantidade: (a?.quantidade ?? 0) + x.quantidade, item: a?.item ?? r.id });
+        const q = x.quantidade * (r.quantidade ?? 1);
+        porEquip.set(k, { quantidade: (a?.quantidade ?? 0) + q, item: a?.item ?? r.id });
       }
     for (const [equip, v] of porEquip) {
       const ja = await tx.uma(

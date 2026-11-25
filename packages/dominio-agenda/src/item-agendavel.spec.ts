@@ -4,6 +4,7 @@ import {
   desdobrarItens,
   formaCicloDeRequisito,
   type ItemAgendavelEntrada,
+  combinarPreparo,
   montarPreparo,
   type RegrasDoItem,
   validarItemAgendavel,
@@ -110,6 +111,7 @@ const critica = (
   itens: RegrasDoItem[],
   historico = [] as Parameters<typeof criticarItensDaMarcacao>[0]['historico'],
   recursos = [] as Parameters<typeof criticarItensDaMarcacao>[0]['recursos'],
+  jaLancados: number[] = [],
 ) =>
   criticarItensDaMarcacao({
     marcacao: 1,
@@ -118,6 +120,7 @@ const critica = (
     nomes: new Map([[20, 'Consulta pré']]),
     historico,
     recursos,
+    jaLancados,
   });
 
 describe('criticarItensDaMarcacao', () => {
@@ -177,6 +180,10 @@ describe('criticarItensDaMarcacao', () => {
     expect(critica([c('ambos'), regra({ id: 20, descricao: 'Consulta pré' })]).bloqueios[0]!.codigo).toBe(
       'conflito-na-marcacao',
     );
+    // Lançamento em dois passos: o item 20 já está nesta marcação (pedido anterior); o novo conflita com ele.
+    expect(
+      critica([c('ambos')], [{ ...antes, marcacao: 1 }], [], [20]).bloqueios.map((b) => b.codigo),
+    ).toEqual(['conflito-na-marcacao']);
     const rep = regra({ intervaloRepeticaoMinutos: 60 * 24 });
     expect(
       critica([rep], [{ item: 10, inicio: T0 + 2 * H, realizado: false, marcacao: 3 }]).bloqueios[0]!.codigo,
@@ -191,6 +198,10 @@ describe('criticarItensDaMarcacao', () => {
     ]);
     expect(critica([it2], [], [{ ...livre, ativo: false }]).bloqueios[0]!.codigo).toBe('recurso-inativo');
     expect(critica([regra({ ativo: false })]).bloqueios[0]!.codigo).toBe('item-inativo');
+    // Pacote com 2 sessões: o recurso é pedido 2 vezes (1 livre de capacidade 2, com 1 ocupado, não basta).
+    expect(critica([{ ...it2, quantidade: 2 }], [], [livre]).bloqueios.map((b) => b.codigo)).toEqual([
+      'equipamento-ocupado',
+    ]);
   });
 });
 
@@ -219,7 +230,31 @@ describe('montarPreparo e desdobrarItens', () => {
     });
     expect([s.texto, s.tempoInsuficiente]).toEqual([null, false]);
   });
-  it('desdobra o pacote sem repetir', () => {
-    expect(desdobrarItens([1, 3, 4], new Map([[1, [3, 5]]]))).toEqual([3, 5, 4]);
+  it('desdobra o pacote com a quantidade da composição, sem repetir (soma as quantidades)', () => {
+    const comp = new Map([
+      [
+        1,
+        [
+          { componente: 3, quantidade: 2 },
+          { componente: 5, quantidade: 1 },
+        ],
+      ],
+    ]);
+    expect(desdobrarItens([1, 3, 4], comp)).toEqual([
+      { item: 3, quantidade: 3, pacote: 1 },
+      { item: 5, quantidade: 1, pacote: 1 },
+      { item: 4, quantidade: 1, pacote: null },
+    ]);
+  });
+  it('o preparo do pacote vem antes do preparo do componente, com o início mais cedo', () => {
+    const pacote = { item: 1, texto: 'Jejum de 8 h.', inicioPreparo: '2030-03-10', tempoInsuficiente: false };
+    const proprio = { item: 3, texto: 'Levar exames.', inicioPreparo: '2030-03-11', tempoInsuficiente: true };
+    expect(combinarPreparo(pacote, proprio)).toEqual({
+      item: 3,
+      texto: 'Jejum de 8 h.\nLevar exames.',
+      inicioPreparo: '2030-03-10',
+      tempoInsuficiente: true,
+    });
+    expect(combinarPreparo(null, proprio)).toBe(proprio);
   });
 });
