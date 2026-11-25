@@ -17,6 +17,8 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
+import CadastroPendenteAbertura from '../../cadastro/componentes/CadastroPendenteAbertura.vue';
+import { consultaDeRotaDoEscopo, escopoDaAbertura } from '../../cadastro/escopo-regra-campo.js';
 import {
   buscarCid,
   buscarMedicos,
@@ -313,7 +315,14 @@ const textoLeito = (k: string) => {
         </form>
         <p v-if="!paciente" class="secundario">
           {{ t('adt.admissao.semCadastro') }}
-          <RouterLink to="/cadastros/pacientes/novo">{{ t('adt.admissao.cadastrar') }}</RouterLink>
+          <RouterLink
+            :to="{
+              path: '/cadastros/pacientes/novo',
+              query: consultaDeRotaDoEscopo(escopoDaAbertura({ tipo: 'internacao', convenio })),
+            }"
+            data-testid="admissao-cadastrar"
+            >{{ t('adt.admissao.cadastrar') }}</RouterLink
+          >
         </p>
         <ul v-if="!paciente && pacientes.data.value" class="lista-simples">
           <li v-for="p in pacientes.data.value.itens" :key="p.id">
@@ -332,6 +341,12 @@ const textoLeito = (k: string) => {
           <span>{{ t('adt.prontuario', { n: paciente.prontuario }) }}</span>
           <SanteBotao variante="texto" :rotulo="t('adt.trocar')" @acionar="paciente = null" />
         </p>
+        <CadastroPendenteAbertura
+          v-if="paciente"
+          :id-paciente="paciente.id"
+          tipo="internacao"
+          :convenio="convenio"
+        />
         <SanteAlerta v-if="pre.data.value?.pre" variante="info" :texto="t('adt.admissao.temPre')" />
         <SanteAlerta
           v-if="solicitacaoNir"

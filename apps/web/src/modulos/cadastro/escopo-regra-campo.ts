@@ -48,3 +48,37 @@ export function consultaDoEscopo(e: EscopoRegraCampo | null | undefined): string
   const s = p.toString();
   return s ? `?${s}` : '';
 }
+
+// ── Escopo da tela que abre o atendimento ──
+// A recepção ambulatorial, o pronto atendimento, os exames e a admissão da internação passam o escopo em que trabalham
+// à ficha do paciente e à conferência dos campos pendentes. O tipo da regra sai do tipo com que a tela abre, igual ao
+// domínio (tipoAtendimentoDaAbertura, @sgh/dominio-cadastro).
+const TIPO_REGRA_DA_ABERTURA: Readonly<Record<string, EscopoRegraCampo['tipoAtendimento']>> = {
+  consulta: 'ambulatorial',
+  pa: 'urgencia',
+  exame: 'externo',
+  requisicaoLab: 'externo',
+  internacao: 'internacao',
+  domiciliar: 'domiciliar',
+};
+
+/** Escopo da tela de abertura: o tipo escolhido, o convênio escolhido e o módulo de recepção (se a tela tem um). */
+export function escopoDaAbertura(a: {
+  readonly tipo?: string | null | undefined;
+  readonly convenio?: string | number | null | undefined;
+  readonly modulo?: string | number | null | undefined;
+}): EscopoRegraCampo {
+  const tipo = a.tipo ?? '';
+  return {
+    modulo: idPositivo(a.modulo),
+    tipoAtendimento: Object.prototype.hasOwnProperty.call(TIPO_REGRA_DA_ABERTURA, tipo)
+      ? (TIPO_REGRA_DA_ABERTURA[tipo] ?? null)
+      : null,
+    fontePagadora: idPositivo(a.convenio),
+  };
+}
+
+/** O escopo como consulta de rota do vue-router (`{ path, query }`): só o que está preenchido. */
+export function consultaDeRotaDoEscopo(e: EscopoRegraCampo | null | undefined): Record<string, string> {
+  return Object.fromEntries(new URLSearchParams(consultaDoEscopo(e).slice(1)));
+}
