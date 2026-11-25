@@ -39,3 +39,7 @@ export * from './ans/declaracoes.js';
 export * from './atendimento.js';
 // F7 (08-SGO linhas 93 a 95): responsáveis, setores, parâmetros, aditivo, cancelamento, abrangência, carência e cartão.
 export * from './cadastro-complementar.js';
+// F7 (08-SGO linha 106, C2-047): reembolso ao beneficiário (pedido, tabela por município, glosa por item, tetos, prazo).
+export * from './reembolso.js';
+// F7 (08-SGO linha 107, C2-061): troca TISS recebida pela operadora (pedido, cancelamento, comunicação) e demonstrativo de pagamento.
+export * from './troca-tiss.js';
