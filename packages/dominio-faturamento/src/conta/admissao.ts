@@ -34,6 +34,19 @@
 // - Exceções da regra de lançamento (regra_lancamento_excecao): "nao_aplicar" tira a regra do recorte (estabelecimento,
 //   fonte pagadora, plano, setor, especialidade, item ou grupo); havendo "aplicar_somente", a regra só vale dentro de um
 //   deles. A tabela de preço forçada no item da regra vale antes da tabela da conta.
+// - Pacote de diárias (F3.4, 04-INT linha 81; conta/pacote-diarias.ts): com pacote aplicado à conta, as diárias incluídas
+//   viram lançamento do pacote sem cobrança e as excedentes usam o item e o valor da acomodação do pacote.
+// - Diferença de acomodação (F3.4, 04-INT linha 81; conta/diferenca-acomodacao.ts): a conta particular da diferença
+//   recebe só a cobrança diária da diferença aceita, sobre as diárias principais devidas da internação.
+
+import { cobrancasDeDiferenca, type DiferencaAcomodacao } from './diferenca-acomodacao.js';
+import { aplicarPacoteNasDiarias, type PacoteDeDiarias } from './pacote-diarias.js';
+export {
+  aplicarPacoteNasDiarias,
+  type DiariaDoPacoteNaAcomodacao,
+  type PacoteDeDiarias,
+  validarDiariaDoPacote,
+} from './pacote-diarias.js';
 
 export type NaturezaContaPaciente =
   'ambulatorial' | 'pronto_atendimento' | 'externo' | 'internacao' | 'domiciliar';
@@ -223,6 +236,12 @@ export interface LancamentoDesejado {
   readonly regraItem: number | null;
   /** Tabela de preço forçada pela regra (nula: a da conta). */
   readonly tabelaPreco: number | null;
+  /** Diferença de acomodação que gera a cobrança (só na conta da diferença). */
+  readonly diferenca?: number | null;
+  /** Pacote aplicado à conta que gera o lançamento (diária incluída, complementar ou adicional). */
+  readonly contaPacote?: number | null;
+  /** Verdadeiro: o lançamento entra sem cobrança (a diária incluída no pacote). */
+  readonly semCobranca?: boolean;
 }
 
 export type MotivoEstorno = 'troca_acomodacao' | 'alta' | 'regra_alterada' | 'cancelamento';
@@ -253,13 +272,23 @@ export interface EntradaApuracao {
    * Só o devido cujo dia cai no trecho é desta conta; o de fora fica com a conta do outro trecho.
    */
   readonly periodo?: { readonly inicio: string | null; readonly fim: string | null };
+  /** F3.4 (04-INT linha 81): pacotes aplicados à conta, com as diárias incluídas por acomodação. */
+  readonly pacotes?: readonly PacoteDeDiarias[];
+  /**
+   * F3.4 (04-INT linha 81): presente, a conta é a conta particular dessas diferenças de acomodação e recebe só a cobrança
+   * diária delas (as diárias e as taxas são da conta da fonte pagadora).
+   */
+  readonly diferencas?: readonly DiferencaAcomodacao[];
 }
 
 export interface ResultadoApuracaoLancamentos {
   readonly lancar: readonly LancamentoDesejado[];
   readonly estornar: readonly { readonly id: number; readonly motivo: MotivoEstorno }[];
   /** Dias de diária sem regra que se aplique (ou com regras empatadas), para a conferência do faturista. */
-  readonly pendencias: readonly { readonly dia: string; readonly motivo: 'sem-regra' | 'regra-ambigua' }[];
+  readonly pendencias: readonly {
+    readonly dia: string;
+    readonly motivo: 'sem-regra' | 'regra-ambigua' | 'diferenca-sem-item';
+  }[];
 }
 
 /** Teto de dias apurados numa conta (dez anos), contra laço infinito por dado incoerente. */
@@ -525,7 +554,26 @@ export function lancamentosDevidos(e: EntradaApuracao): {
 
 /** A apuração idempotente: o que lançar e o que estornar para a conta ficar com o que é devido. */
 export function apurarLancamentos(e: EntradaApuracao): ResultadoApuracaoLancamentos {
-  const todos = lancamentosDevidos(e);
+  const base = lancamentosDevidos(e);
+  const todos = ((): {
+    devidos: LancamentoDesejado[];
+    pendencias: ResultadoApuracaoLancamentos['pendencias'];
+  } => {
+    if (e.diferencas) {
+      const d = cobrancasDeDiferenca(base.devidos, e.diferencas);
+      return {
+        devidos: [...d.devidos],
+        pendencias: d.pendencias.map((x) => ({
+          dia: e.diferencas!.find((y) => y.id === x.diferenca)!.inicio,
+          motivo: 'diferenca-sem-item' as const,
+        })),
+      };
+    }
+    return {
+      devidos: e.pacotes?.length ? aplicarPacoteNasDiarias(base.devidos, e.pacotes) : [...base.devidos],
+      pendencias: base.pendencias,
+    };
+  })();
   const noTrecho = (dia: string) =>
     !e.periodo ||
     ((e.periodo.inicio === null || dia >= e.periodo.inicio) &&

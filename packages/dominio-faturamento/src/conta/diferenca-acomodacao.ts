@@ -69,6 +69,7 @@ export function cobrancasDeDiferenca(
         regraLancamento: null,
         regraItem: null,
         tabelaPreco: null,
+        diferenca: d.id,
       });
   }
   return { devidos, pendencias };
