@@ -1340,11 +1340,11 @@ async function lerEnvios(
 
 // ── Movimento do estoque (o motor comum das gravações) ─────────────────────────────────────────────────────────
 
-type LoteMandado = { readonly lote: string; readonly validade: string; readonly quantidade: number };
-type LoteUsado = { readonly id: number; readonly quantidade: number };
+export type LoteMandado = { readonly lote: string; readonly validade: string; readonly quantidade: number };
+export type LoteUsado = { readonly id: number; readonly quantidade: number };
 
 /** O id do tipo de movimento pelo código do catálogo; fora do catálogo: recusa (configuração do cliente). */
-async function tipoMovimentoId(tx: TxOperacao, codigo: string): Promise<number> {
+export async function tipoMovimentoId(tx: TxOperacao, codigo: string): Promise<number> {
   const r = await tx.uma<Linha>('SELECT id FROM tipo_movimento_estoque WHERE codigo = ? AND ativo = TRUE', [
     codigo,
   ]);
@@ -1357,7 +1357,7 @@ async function tipoMovimentoId(tx: TxOperacao, codigo: string): Promise<number> 
 }
 
 /** O mês do movimento tem de estar aberto no estoque do estabelecimento. */
-async function exigirMesAberto(tx: TxOperacao, est: number, hoje: string): Promise<void> {
+export async function exigirMesAberto(tx: TxOperacao, est: number, hoje: string): Promise<void> {
   const fechados = (
     await tx.consultar<Linha>(
       "SELECT competencia FROM fechamento_estoque WHERE estabelecimento_id = ? AND situacao = 'fechado' AND excluido_em IS NULL",
@@ -1371,7 +1371,7 @@ async function exigirMesAberto(tx: TxOperacao, est: number, hoje: string): Promi
 }
 
 /** O local de estoque ativo do estabelecimento (outro estabelecimento: inexistente). */
-async function localDoEstabelecimento(
+export async function localDoEstabelecimento(
   tx: TxOperacao,
   est: number,
   local: number,
@@ -1389,7 +1389,7 @@ async function localDoEstabelecimento(
 }
 
 /** O insumo ativo do cadastro (rede inteira). */
-async function insumoAtivo(tx: TxOperacao, insumo: number): Promise<Linha> {
+export async function insumoAtivo(tx: TxOperacao, insumo: number): Promise<Linha> {
   const r = await tx.uma<Linha>(
     `SELECT id, nome, estoque_unidade_medida_id, controla_lote, controla_validade, consignado, situacao
        FROM insumo WHERE id = ? AND excluido_em IS NULL`,
@@ -1513,7 +1513,7 @@ async function moverLote(
   });
 }
 
-interface Movimento {
+export interface Movimento {
   readonly local: number;
   readonly insumo: number;
   readonly quantidade: number;
@@ -1548,7 +1548,7 @@ interface Movimento {
  * Grava o movimento: o saldo do item no local (custo médio na entrada), o saldo de cada lote, o movimento com o saldo e
  * o custo depois, e os lotes do movimento. A saída nunca deixa saldo negativo (o item consignado sai do consignado).
  */
-async function movimentar(
+export async function movimentar(
   tx: TxOperacao,
   est: number,
   m: Movimento,
@@ -1643,7 +1643,7 @@ async function movimentar(
  * Os lotes da saída: os mandados pela tela (conferidos pela regra do lote) ou, sem lote mandado no item rastreável,
  * os que vencem primeiro (nunca vencido nem bloqueado). Item sem controle de lote sai sem lote.
  */
-async function lotesDaSaida(
+export async function lotesDaSaida(
   tx: TxOperacao,
   est: number,
   local: number,
