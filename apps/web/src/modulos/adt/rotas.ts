@@ -92,6 +92,21 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    // C2-079, 04-INT L84: internação domiciliar (painel: internações, fila dos chamados, visitas, orçamentos).
+    path: '/internacao/domiciliar',
+    name: 'adt.domiciliar',
+    component: () => import('./telas/InternacaoDomiciliarTela.vue'),
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
+    // C2-079, 04-INT L84: visão do paciente na internação domiciliar (orçamento, transferência, chamados, visitas).
+    path: `/internacao/domiciliar/paciente/:pac${reg}`,
+    name: 'adt.domiciliar.paciente',
+    component: () => import('./telas/InternacaoDomiciliarTela.vue'),
+    props: true,
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
     // C2-068, 04-INT L83: fila da ambulância e maqueiros do transporte interno.
     path: '/internacao/ambulancias',
     name: 'adt.ambulancias',

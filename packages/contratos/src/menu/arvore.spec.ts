@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 484, M: 198, P: 57, N: 229 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 485, M: 198, P: 57, N: 230 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(484);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(485);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -366,6 +366,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/integracao/tiss', // M31
         '/internacao/admissao', // M21
         '/internacao/ambulancias', // C2-068 (04-INT L83)
+        '/internacao/domiciliar', // C2-079 (04-INT L84)
         '/internacao/censo', // M16
         '/internacao/controles/formularios-obito', // F78.04-1 (04-INT linha 74)
         '/internacao/obitos', // C1-112 (09-AREA linha 74)

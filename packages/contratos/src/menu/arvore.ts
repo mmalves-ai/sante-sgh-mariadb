@@ -6,6 +6,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
 // C2-068 (04-INT L83, F8): o item "Ambulância e maqueiros" dos leitos entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-079 (04-INT L84, F8): o item "Internação domiciliar" da internação entrou à mão (mesmo motivo); a contagem
+// acompanha.
 // C2-071 (05-SADT L18, F7): o item "Mamografia e anatomia patológica" do diagnóstico entrou à mão (mesmo motivo); a
 // contagem acompanha.
 // C2-070 (06-FAT L26, F7): o item "Elegibilidade e autorização prévia" da recepção ganhou à mão a rota da tela de
@@ -113,7 +115,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":484,"M":198,"P":57,"N":229};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":485,"M":198,"P":57,"N":230};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -185,6 +187,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.leitos.transferencia-de-leito","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Transferência de leito"],"titulo":"Transferência de leito","selo":"M","fase":2,"rota":"/leitos/transferencias","permissao":"leitos.transferencia.criar"},
   {"id":"internacao-e-leitos.leitos.transporte-de-pacientes","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Transporte de pacientes"],"titulo":"Transporte de pacientes","selo":"N","fase":7,"rota":"/internacao/transportes","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.leitos.ambulancia-e-maqueiros","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Ambulância e maqueiros"],"titulo":"Ambulância e maqueiros","selo":"N","fase":7,"rota":"/internacao/ambulancias","permissao":"internacao.internacao.ler"},
+  {"id":"internacao-e-leitos.internacao.internacao-domiciliar","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Internação domiciliar"],"titulo":"Internação domiciliar","selo":"N","fase":7,"rota":"/internacao/domiciliar","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.leitos.historico-de-ocupacao-periodos","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Histórico de ocupação"],"titulo":"Histórico de ocupação","selo":"M","fase":2,"rota":"/leitos/historico","permissao":"leitos.mapa.ler"},
   {"id":"internacao-e-leitos.leitos.censo-hospitalar-diario-portaria-312","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Censo hospitalar diário"],"titulo":"Censo hospitalar diário","selo":"N","fase":1,"rota":"/internacao/censo","permissao":"internacao.censo.ler"},
   {"id":"internacao-e-leitos.nir-e-regulacao.solicitacao-de-leito-e-fila-priorizada","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Solicitação de leito e fila priorizada"],"titulo":"Solicitação de leito e fila priorizada","selo":"N","fase":5,"rota":"/internacao/nir/fila","permissao":"internacao.solicitacaoLeito.ler"},
