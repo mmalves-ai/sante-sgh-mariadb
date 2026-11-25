@@ -46,9 +46,6 @@ import {
   normalizarProtocolo,
   padraoRecurso,
   prazoRecurso,
-  proximaEntrega,
-  entregasAFrente,
-  type JanelaEntrega,
   proximoNumero,
   ROTULO_SITUACAO_LOTE,
   ROTULO_TIPO_GUIA,
@@ -1126,23 +1123,8 @@ export class PortaTissMemoria implements PortaTiss {
     const s = this.e(c);
     const l = s.lotes.get(id);
     if (!l) return null;
-    const totalDaConta = (cid: number) =>
-      centavos([...s.itens.values()].filter((i) => i.conta === cid).reduce((t, i) => t + i.valor, 0));
-    // A fatura ao pagador nasce com o lote (como na porta própria): fechada; protocolada com o protocolo e a entrega.
-    const ultimo = s.protocolos.find((p) => p.lote === id && p.acao === 'registrado');
     return {
       ...this.loteLido(s, l, hoje),
-      fatura:
-        l.contas.length > 0
-          ? {
-              numero: String(l.id),
-              situacao: l.protocolo ? 'protocolada' : 'fechada',
-              contas: l.contas.length,
-              valorApresentado: centavos(l.contas.reduce((t, cid) => t + totalDaConta(cid), 0)),
-              protocolo: l.protocolo,
-              entrega: l.protocolo ? (ultimo?.data ?? hoje) : null,
-            }
-          : null,
       contasDoLote: l.contas.map((cid) => {
         const x = s.contas.get(cid)!;
         return {
@@ -1202,33 +1184,11 @@ export class PortaTissMemoria implements PortaTiss {
             o.paradoDias,
         );
         const p = prazoRecurso(o.prazoRecurso, cv, o.hoje);
-        // Calendário sintético: a janela do dia 10 ao 15 do mês corrente (competência anterior) e a do mês seguinte.
-        const mes = o.hoje.slice(0, 8);
-        const seguinte = new Date(Date.parse(`${mes}01T12:00:00Z`) + 32 * 86_400_000)
-          .toISOString()
-          .slice(0, 8);
-        const anterior = new Date(Date.parse(`${mes}01T12:00:00Z`) - 86_400_000).toISOString().slice(0, 8);
-        const cal: JanelaEntrega[] = [
-          { competencia: `${anterior}01`, entregaInicio: `${mes}10`, entregaFim: `${mes}15` },
-          { competencia: `${mes}01`, entregaInicio: `${seguinte}10`, entregaFim: `${seguinte}15` },
-        ].map((x) => ({ ...x, pagamentoPrevisto: null, prazoPagamentoDias: 30, restritivo: false }));
-        const proxima = proximaEntrega(cal, o.hoje);
         return {
           convenio: cv,
           convenioNome: CONVENIOS[cv] ?? '',
-          entregas: entregasAFrente(cal, o.hoje),
-          proximaEntrega: proxima?.janela.entregaInicio ?? null,
-          entrega: proxima
-            ? {
-                competencia: proxima.janela.competencia,
-                inicio: proxima.janela.entregaInicio,
-                fim: proxima.janela.entregaFim,
-                situacao: proxima.situacao,
-                dias: proxima.dias,
-                pagamentoPrevisto: proxima.pagamentoPrevisto,
-                restritivo: proxima.janela.restritivo,
-              }
-            : null,
+          entregas: [`${o.hoje.slice(0, 8)}10`],
+          proximaEntrega: `${o.hoje.slice(0, 8)}10` >= o.hoje ? `${o.hoje.slice(0, 8)}10` : null,
           lotesSemProtocolo: sem.length,
           lotesParados: parados.length,
           maisAntigoSemProtocolo: sem.map((l) => l.dataHora.slice(0, 10)).sort()[0] ?? null,

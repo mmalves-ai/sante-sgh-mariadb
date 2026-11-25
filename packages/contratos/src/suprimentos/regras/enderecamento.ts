@@ -31,11 +31,11 @@ export interface EnderecoSuperior {
 
 export interface EnderecoEntrada {
   readonly local: number;
-  readonly superior?: number | null;
+  readonly superior?: number | null | undefined;
   readonly tipoNivel: TipoNivelEndereco;
   readonly codigo: string;
-  readonly descricao?: string | null;
-  readonly capacidade?: number | null;
+  readonly descricao?: string | null | undefined;
+  readonly capacidade?: number | null | undefined;
 }
 
 /** O código como vai para o banco: sem espaços nas pontas e em maiúsculas (a tela aceita digitado em minúsculas). */

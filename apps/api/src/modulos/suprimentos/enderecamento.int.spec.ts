@@ -5,14 +5,16 @@
 // endereço com item; reserva o saldo livre por lote na requisição (reserva_estoque, quantidade_reservada no lote e no
 // local, reserva do endereço preferencial), a repetição não reserva de novo, a segunda requisição só pega o livre e
 // mostra a falta; a liberação devolve ao livre e cancela a reserva do endereço; a baixa no atendimento consome a reserva
-// (parcial fica ativa; o item fechado conclui a do endereço). Outro estabelecimento não lê o local.
+// (parcial fica ativa; o item fechado conclui a do endereço). Outro estabelecimento não lê o local. A reserva protege o
+// saldo: a saída avulsa e o envio só usam o livre (nem pelo lote mandado), e a saída da requisição reservada usa o lote
+// reservado e baixa a reserva.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
 import { definirOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
-import type { ContextoPortaM18 } from '../exames/public-api.js';
+import type { ContextoPortaM18, TrilhaDaGravacao } from '../exames/public-api.js';
 import { baixarReservasDoItem, PortaEnderecamentoPropria, TABELAS_BAIXA_RESERVA } from './enderecamento.js';
 import {
   CLIENTE,
@@ -24,6 +26,8 @@ import {
   montarMassa,
   SEM_BANCO,
 } from './massa-propria.spec-util.js';
+import type { ContextoSuprimentos } from './porta.js';
+import { PortaSuprimentosPropria } from './porta-propria.js';
 
 const COD = `E${Date.now().toString(36).toUpperCase()}`.slice(0, 12);
 const k = () => `t-end-${randomUUID()}`;
@@ -339,5 +343,91 @@ describe.skipIf(SEM_BANCO)('endereçamento do armazém e reserva para a separaç
     ).toEqual({
       situacao: 'concluida',
     });
+  }, 60_000);
+
+  it('a reserva protege o saldo: saída avulsa e envio só usam o livre; a saída da requisição usa o lote reservado', async () => {
+    const sup = new PortaSuprimentosPropria(nucleo);
+    const cs = c as unknown as ContextoSuprimentos;
+    const op = (nome: string, entrada: unknown) =>
+      sup.executar(cs, `suprimentos.${nome}`, entrada, { ...cs, chaveIdempotencia: k() });
+    const saldoLocal = async () =>
+      Number(
+        (
+          await um('SELECT quantidade AS q FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ?', [
+            m.localA,
+            m.insumo,
+          ])
+        )?.['q'],
+      );
+    const avulsa = (q: number, lotes: unknown[] = []) =>
+      op('registrarSaida', {
+        destino: 2,
+        local: m.localA,
+        centroCusto: m.centroCusto,
+        localConsumo: 1,
+        itens: [{ item: m.insumo, quantidade: q, lotes }],
+      });
+    expect(await saldoLocal()).toBe(10);
+    const [req3, item3] = await requisicao(6);
+    expect((await porta.reservar(c, req3, k())).reservas).toBe(1);
+    expect(await reservado()).toEqual({ lote: 6, local: 6 });
+    // O livre é 4: a saída avulsa de 5 é recusada, também pelo lote mandado e pelo envio; nada é gravado.
+    expect(await codigoDe(avulsa(5))).toBe('saldo-insuficiente');
+    expect(await codigoDe(avulsa(5, [{ lote: `${m.marca}L1`, validade: '2027-03-31', quantidade: 5 }]))).toBe(
+      'saldo-insuficiente',
+    );
+    expect(
+      await codigoDe(
+        op('transferir', {
+          origem: m.localA,
+          destino: m.localA2,
+          itens: [{ item: m.insumo, quantidade: 5, lotes: [] }],
+        }),
+      ),
+    ).toBe('saldo-insuficiente');
+    expect(
+      await codigoDe(
+        sup.gravarSgh(
+          cs,
+          {
+            estabelecimento: m.estA,
+            usuario: m.usuario,
+            acao: 'operacao',
+            entidade: 'documento_estoque',
+            entidadeId: null,
+            dadosDepois: { evento: 'suprimentos.transferencia.enviada' },
+            correlacao: null,
+          } as TrilhaDaGravacao,
+          (g) =>
+            g.enviarTransferencia({
+              origem: m.localA,
+              destino: m.localA2,
+              observacao: null,
+              itens: [{ item: m.insumo, quantidade: 5, lotes: [] }],
+              usuario: 'x',
+            }),
+        ),
+      ),
+    ).toBe('saldo-insuficiente');
+    expect(await saldoLocal()).toBe(10);
+    // O livre sai; depois disso nada mais sai fora da requisição.
+    await avulsa(4);
+    expect(await saldoLocal()).toBe(6);
+    expect(await reservado()).toEqual({ lote: 6, local: 6 });
+    expect(await codigoDe(avulsa(1))).toBe('saldo-insuficiente');
+    // A saída da requisição reservada usa o lote reservado e baixa a reserva.
+    await op('registrarSaida', {
+      destino: 2,
+      local: m.localA,
+      centroCusto: m.centroCusto,
+      localConsumo: 1,
+      requisicao: req3,
+      itens: [{ item: m.insumo, quantidade: 6, lotes: [] }],
+    });
+    expect(await saldoLocal()).toBe(0);
+    expect(await reservado()).toEqual({ lote: 0, local: 0 });
+    expect(await porta.reservas(c, req3)).toMatchObject([
+      { itemRequisicao: item3, reservada: 6, atendida: 6, situacao: 'atendida' },
+    ]);
   }, 60_000);
 });

@@ -107,26 +107,11 @@ export interface ResultadoMontagem {
   readonly versao: string;
 }
 
-export interface JanelaEntregaLida {
-  readonly competencia: string;
-  readonly inicio: string;
-  readonly fim: string;
-  /** aberta: dá para entregar hoje; futura: ainda vai abrir. */
-  readonly situacao: 'aberta' | 'futura';
-  /** Dias até o fim (aberta) ou até o início (futura). */
-  readonly dias: number;
-  readonly pagamentoPrevisto: string | null;
-  /** A fonte pagadora não recebe fora da janela: o registro do protocolo fora dela recusa. */
-  readonly restritivo: boolean;
-}
-
 export interface PrazoEnvio {
   readonly convenio: number;
   readonly convenioNome: string;
   readonly entregas: readonly string[];
   readonly proximaEntrega: string | null;
-  /** A janela de entrega aberta ou a próxima do calendário do convênio (06-FAT linha 31); nula sem calendário. */
-  readonly entrega?: JanelaEntregaLida | null;
   readonly lotesSemProtocolo: number;
   readonly lotesParados: number;
   readonly maisAntigoSemProtocolo: string | null;

@@ -77,7 +77,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { createHash, randomUUID } from 'node:crypto';
-import { baixarReservasDoItem } from './enderecamento.js';
+import { baixarReservasDoItem, reservasDoItemNoLocal } from './enderecamento.js';
 import { z } from 'zod';
 import {
   cnpjValido,
@@ -376,8 +376,9 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSuprimentos {
       let seq = 0;
       for (const it of t.itens) {
         const insumo = await insumoAtivo(tx, it.item);
+        // O reservado para a separação de uma requisição não vai no envio (F8, 05-SUP linha 4).
         const s = await tx.uma<Linha>(
-          'SELECT quantidade FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          'SELECT quantidade - quantidade_reservada AS quantidade FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [t.origem, it.item, est],
         );
         if (qtd(n(s?.['quantidade'])) < qtd(it.quantidade))
@@ -1468,7 +1469,8 @@ async function loteDoItem(
 /** Os lotes com saldo do item no local (primeiro o que vence primeiro), travados. */
 function lotesTravados(tx: TxOperacao, est: number, local: number, insumo: number): Promise<Linha[]> {
   return tx.consultarParaAtualizar<Linha>(
-    `SELECT sl.id, sl.versao, sl.quantidade, sl.lote_insumo_id, sl.bloqueado, li.numero_lote, li.validade, li.situacao
+    `SELECT sl.id, sl.versao, sl.quantidade, sl.quantidade_reservada, sl.lote_insumo_id, sl.bloqueado, li.numero_lote,
+            li.validade, li.situacao
        FROM saldo_lote sl JOIN lote_insumo li ON li.id = sl.lote_insumo_id AND li.excluido_em IS NULL
       WHERE sl.estabelecimento_id = ? AND sl.local_estoque_id = ? AND li.insumo_id = ? AND sl.excluido_em IS NULL
         AND sl.quantidade > 0
@@ -1640,8 +1642,24 @@ export async function movimentar(
 }
 
 /**
+ * O que a saída enxerga do saldo reservado para a separação (F8, 05-SUP linha 4): por padrão só o livre (quantidade
+ * menos a reservada); a saída da requisição soma de volta o que está reservado para o próprio item (`proprias`, por
+ * lote; 0 = sem lote); o acerto do inventário (`fisico`) mexe no saldo contado, reservado ou não.
+ */
+export type ReservaNaSaida = { readonly proprias: ReadonlyMap<number, number> } | 'fisico';
+const SO_LIVRE: ReservaNaSaida = { proprias: new Map() };
+
+/** A quantidade do saldo que a saída pode usar (nunca negativa). */
+function usavel(quantidade: number, reservada: number, propria: number, reserva: ReservaNaSaida): number {
+  if (reserva === 'fisico') return qtd(quantidade);
+  return qtd(Math.max(0, Math.min(quantidade, quantidade - reservada + propria)));
+}
+
+/**
  * Os lotes da saída: os mandados pela tela (conferidos pela regra do lote) ou, sem lote mandado no item rastreável,
- * os que vencem primeiro (nunca vencido nem bloqueado). Item sem controle de lote sai sem lote.
+ * primeiro os reservados para a própria requisição e depois os que vencem primeiro (nunca vencido nem bloqueado),
+ * sempre pelo saldo que a saída pode usar: o lote reservado para outra requisição não sai. Item sem controle de lote
+ * sai sem lote.
  */
 export async function lotesDaSaida(
   tx: TxOperacao,
@@ -1651,10 +1669,22 @@ export async function lotesDaSaida(
   quantidade: number,
   mandados: readonly LoteMandado[],
   hoje: string,
+  reserva: ReservaNaSaida = SO_LIVRE,
 ): Promise<LoteUsado[]> {
   if (!verdadeiro(insumo['controla_lote']) && !mandados.length) return [];
   const disponiveis = await lotesTravados(tx, est, local, n(insumo['id']));
-  const livres = disponiveis.filter((r) => !verdadeiro(r['bloqueado']) && r['situacao'] === 'liberado');
+  const propria = (r: Linha) =>
+    reserva === 'fisico' ? 0 : (reserva.proprias.get(n(r['lote_insumo_id'])) ?? 0);
+  const livres = disponiveis
+    .filter((r) => !verdadeiro(r['bloqueado']) && r['situacao'] === 'liberado')
+    .map((r): Linha => ({
+      ...r,
+      quantidade: usavel(n(r['quantidade']), n(r['quantidade_reservada']), propria(r), reserva),
+      propria: propria(r) > 0,
+    }))
+    .filter((r) => n(r['quantidade']) > 0)
+    // A ordem é estável: dentro de cada grupo segue a validade.
+    .sort((a, b) => Number(b['propria']) - Number(a['propria']));
   if (mandados.length) {
     recusar(
       conferirLotesSaida(
@@ -1696,23 +1726,32 @@ export async function lotesDaSaida(
   return usados;
 }
 
-/** O saldo do item no local cobre a saída (o consignado não confere saldo próprio). */
+/**
+ * O saldo do item no local cobre a saída (o consignado não confere saldo próprio). Por padrão conta só o livre: o
+ * reservado para a separação de outra requisição não sai (F8, 05-SUP linha 4); veja `ReservaNaSaida`.
+ */
 async function exigirSaldo(
   tx: TxOperacao,
   est: number,
   local: number,
   insumo: Linha,
   quantidade: number,
+  reserva: ReservaNaSaida = SO_LIVRE,
 ): Promise<void> {
   if (verdadeiro(insumo['consignado'])) return;
   const s = await tx.uma<Linha>(
-    'SELECT quantidade FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    'SELECT quantidade, quantidade_reservada FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
     [local, n(insumo['id']), est],
   );
-  if (qtd(n(s?.['quantidade'])) < qtd(quantidade))
+  const total = n(s?.['quantidade']);
+  const propria = reserva === 'fisico' ? 0 : [...reserva.proprias.values()].reduce((t, q) => t + q, 0);
+  const livre = usavel(total, n(s?.['quantidade_reservada']), propria, reserva);
+  if (livre < qtd(quantidade))
     throw recusa(
       'saldo-insuficiente',
-      `Saldo insuficiente no local para o item ${String(insumo['nome'])} (há ${n(s?.['quantidade'])}).`,
+      livre < qtd(total)
+        ? `Saldo livre insuficiente no local para o item ${String(insumo['nome'])} (há ${total}, ${livre} livre; o resto está reservado para a separação de outra requisição).`
+        : `Saldo insuficiente no local para o item ${String(insumo['nome'])} (há ${total}).`,
       {
         campos: ['itens'],
       },
@@ -2011,8 +2050,6 @@ export async function registrarSaida(
   const contaDoEstoque = lancadorContaEstoque(tx, est, usuarioDe(tx));
   for (const [k, it] of e.itens.entries()) {
     const insumo = await insumoAtivo(tx, it.item);
-    await exigirSaldo(tx, est, e.local, insumo, it.quantidade);
-    const lotes = await lotesDaSaida(tx, est, e.local, insumo, it.quantidade, it.lotes, hoje);
     const ri = itensRequisicao.find((r) =>
       it.seq ? n(r['sequencia']) === it.seq : n(r['insumo_id']) === it.item,
     );
@@ -2020,6 +2057,12 @@ export async function registrarSaida(
       throw recusa('item-fora-da-requisicao', `O item ${it.item} não está na requisição.`, {
         campos: ['itens'],
       });
+    // F8 (05-SUP linha 4): a saída da requisição usa o livre mais o reservado para o próprio item, lote reservado primeiro.
+    const reserva: ReservaNaSaida = {
+      proprias: ri ? await reservasDoItemNoLocal(tx, n(ri['id']), e.local, it.item) : new Map(),
+    };
+    await exigirSaldo(tx, est, e.local, insumo, it.quantidade, reserva);
+    const lotes = await lotesDaSaida(tx, est, e.local, insumo, it.quantidade, it.lotes, hoje, reserva);
     const item = await itemDoDocumento(tx, doc.id, k + 1, insumo, it.quantidade, {
       lote_insumo_id: lotes.length === 1 ? lotes[0]!.id : null,
       requisicao_material_item_id: ri ? n(ri['id']) : null,
@@ -3076,8 +3119,10 @@ async function registrarBalanco(
     for (const [k, l] of doSinal.entries()) {
       const insumo = await insumoAtivo(tx, l.item);
       const q = Math.abs(l.diferenca);
-      if (sinal === 'saida') await exigirSaldo(tx, est, local, insumo, q);
-      const lotes = sinal === 'saida' ? await lotesDaSaida(tx, est, local, insumo, q, [], hoje) : [];
+      // O acerto do inventário baixa o que falta na contagem, reservado ou não (o saldo físico manda).
+      if (sinal === 'saida') await exigirSaldo(tx, est, local, insumo, q, 'fisico');
+      const lotes =
+        sinal === 'saida' ? await lotesDaSaida(tx, est, local, insumo, q, [], hoje, 'fisico') : [];
       const item = await itemDoDocumento(tx, doc.id, k + 1, insumo, q);
       const mov = await movimentar(tx, est, {
         local,

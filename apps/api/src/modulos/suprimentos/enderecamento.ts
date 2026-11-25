@@ -28,6 +28,7 @@ import {
   type Leitor,
   type Linha,
   type NucleoProprio,
+  type ResultadoOperacao,
   recusa,
   type TxOperacao,
 } from '@sgh/nucleo';
@@ -286,6 +287,33 @@ export async function baixarReservasDoItem(
     );
 }
 
+/**
+ * O que ainda está reservado para o item da requisição no local (reserva ativa: reservado menos atendido e liberado),
+ * por lote (0 para o item sem lote). A saída da própria requisição soma isso ao livre e usa primeiro esses lotes; as
+ * outras saídas só enxergam o saldo livre (quantidade menos a reservada).
+ */
+export async function reservasDoItemNoLocal(
+  tx: TxOperacao,
+  itemRequisicao: number,
+  local: number,
+  insumo: number,
+): Promise<Map<number, number>> {
+  const rs = await tx.consultarParaAtualizar<Linha>(
+    `SELECT lote_insumo_id, quantidade_reservada - quantidade_atendida - quantidade_liberada AS resto
+       FROM reserva_estoque
+      WHERE requisicao_material_item_id = ? AND local_estoque_id = ? AND insumo_id = ? AND situacao = 'ativa'
+        AND excluido_em IS NULL`,
+    [itemRequisicao, local, insumo],
+  );
+  const m = new Map<number, number>();
+  for (const r of rs) {
+    const lote = nn(r['lote_insumo_id']) ?? 0;
+    const resto = Math.max(0, n(r['resto']));
+    if (resto > 0) m.set(lote, q4((m.get(lote) ?? 0) + resto));
+  }
+  return m;
+}
+
 export class PortaEnderecamentoPropria implements PortaEnderecamento {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
@@ -321,8 +349,10 @@ export class PortaEnderecamentoPropria implements PortaEnderecamento {
       nome: `suprimentos.enderecamento.${nome}`,
       tabelas: [...TABELAS_ENDERECAMENTO],
       entrada: z.unknown(),
-      gravar: (tx: TxOperacao) => gravar(tx, ctxN.estabelecimento),
-      alvo: (_e, r: R) => ({ tabela: alvo, id: r.id }),
+      // O resultado guardado pela idempotência é JSON (a lista de faltas da reserva volta inteira na repetição).
+      gravar: async (tx: TxOperacao) =>
+        (await gravar(tx, ctxN.estabelecimento)) as unknown as ResultadoOperacao,
+      alvo: (_e, r: ResultadoOperacao) => ({ tabela: alvo, id: n(r['id']) }),
       trilha: () => ({ dados: entrada, motivo: null }),
     });
     const ctx: ContextoOperacao = { ...ctxN, chaveIdempotencia: chave };

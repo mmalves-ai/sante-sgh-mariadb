@@ -39,13 +39,10 @@ import {
   cicloValido,
   conferirDecisaoGlosa,
   criarMontadorLote,
-  entregasAFrente,
   faixaDoValor,
   indicadoresGlosa,
-  type JanelaEntrega,
   loteCongelado,
   prazoRecurso,
-  proximaEntrega,
   ROTULO_SITUACAO_LOTE,
   ROTULO_TIPO_GUIA,
   SCHEMA_LOTE_GUIAS,
@@ -89,7 +86,10 @@ import {
   estadoDaGlosa,
   situacaoDaGlosa,
   grupoTissDoItem,
+  nomeDaSituacaoProtocolo,
+  numeroDaSituacaoProtocolo,
   SITUACAO_MENSAGEM_NO_MODELO,
+  SITUACOES_PROTOCOLO,
   situacaoContaNaCompetencia,
   tiposGuiaDaNatureza,
   tipoGuiaDoModelo,
@@ -119,7 +119,7 @@ const codigoMotivo = (v: unknown) => {
 
 /** Filtro opcional de escopo por convênio (lista branca de ids numéricos, parametrizada). */
 function escopo(
-  coluna: 'ch.fonte_pagadora_id' | 'lt.fonte_pagadora_id' | 'd.fonte_pagadora_id' | 'cal.fonte_pagadora_id',
+  coluna: 'ch.fonte_pagadora_id' | 'lt.fonte_pagadora_id' | 'd.fonte_pagadora_id',
   convenios: readonly number[] | null,
 ) {
   if (convenios === null) return { sql: '', p: [] as unknown[] };
@@ -603,10 +603,8 @@ export class PortaTissPropria implements PortaTiss {
         [id, est],
       );
       const protocolos = await l.consultar<Linha>(
-        `SELECT p.numero_protocolo, p.recibo, p.recebido_em, p.situacao, p.criado_em, u.login,
-                sp.numero_tiss AS situacao_numero, sp.nome AS situacao_nome
+        `SELECT p.numero_protocolo, p.recibo, p.recebido_em, p.situacao, p.criado_em, u.login
            FROM protocolo_recebimento p LEFT JOIN usuario u ON u.id = p.criado_por
-           LEFT JOIN situacao_protocolo_recebimento sp ON sp.codigo = p.situacao
           WHERE p.lote_tiss_id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL
           ORDER BY p.criado_em DESC, p.id DESC`,
         [id, est],
@@ -652,9 +650,8 @@ export class PortaTissPropria implements PortaTiss {
             protocolo: texto(r['numero_protocolo']),
             data: dataIso(r['recebido_em']),
             recibo: texto(r['recibo']),
-            // Número e nome da situação vêm do banco (situacao_protocolo_recebimento), como a escolha da tela.
-            situacao: nn(r['situacao_numero']),
-            situacaoNome: texto(r['situacao_nome']),
+            situacao: numeroDaSituacaoProtocolo(situacao),
+            situacaoNome: nomeDaSituacaoProtocolo(situacao),
             autor: texto(r['login']),
             em: instante(r['criado_em']) ?? '',
           };
@@ -688,16 +685,9 @@ export class PortaTissPropria implements PortaTiss {
     );
   }
 
-  /** Situações do protocolo do banco (as ativas, na ordem do cadastro); o número é o do status TISS. */
-  situacoesProtocolo(c: ContextoTiss): Promise<{ id: number; nome: string }[]> {
-    return this.ler(c, async (l) =>
-      (
-        await l.consultar<Linha>(
-          'SELECT numero_tiss, nome FROM situacao_protocolo_recebimento WHERE ativo ORDER BY ordem, numero_tiss',
-          [],
-        )
-      ).map((r) => ({ id: n(r['numero_tiss']), nome: texto(r['nome']) })),
-    );
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta; a operação aguarda o modelo
+  async situacoesProtocolo(_c: ContextoTiss): Promise<{ id: number; nome: string }[]> {
+    return SITUACOES_PROTOCOLO.map((s) => ({ id: s.id, nome: s.nome }));
   }
 
   prazos(
@@ -706,30 +696,6 @@ export class PortaTissPropria implements PortaTiss {
   ): Promise<PrazoEnvio[]> {
     return this.ler(c, async (l, est) => {
       const e = escopo('lt.fonte_pagadora_id', o.convenios);
-      const ec = escopo('cal.fonte_pagadora_id', o.convenios);
-      // O calendário de entrega por convênio (calendario_entrega_fatura): as janelas ativas que ainda não fecharam.
-      const calendario = await l.consultar<Linha>(
-        `SELECT cal.fonte_pagadora_id, fp.nome AS fonte, cal.competencia, cal.entrega_inicio, cal.entrega_fim,
-                cal.pagamento_previsto, cal.prazo_pagamento_dias, cal.restritivo
-           FROM calendario_entrega_fatura cal JOIN fonte_pagadora fp ON fp.id = cal.fonte_pagadora_id
-          WHERE cal.estabelecimento_id = ? AND cal.ativo AND cal.entrega_fim >= ?${ec.sql}
-          ORDER BY cal.entrega_inicio`,
-        [est, o.hoje, ...ec.p],
-      );
-      const janelas = new Map<number, { fonte: string; janelas: JanelaEntrega[] }>();
-      for (const r of calendario) {
-        const cv = n(r['fonte_pagadora_id']);
-        const g = janelas.get(cv) ?? { fonte: texto(r['fonte']), janelas: [] };
-        g.janelas.push({
-          competencia: dataIso(r['competencia']) ?? '',
-          entregaInicio: dataIso(r['entrega_inicio']) ?? '',
-          entregaFim: dataIso(r['entrega_fim']) ?? '',
-          pagamentoPrevisto: dataIso(r['pagamento_previsto']),
-          prazoPagamentoDias: nn(r['prazo_pagamento_dias']),
-          restritivo: Boolean(Number(r['restritivo'])),
-        });
-        janelas.set(cv, g);
-      }
       const linhas = await l.consultar<Linha>(
         `SELECT lt.fonte_pagadora_id, fp.nome AS fonte,
                 SUM(lt.numero_protocolo IS NULL) AS sem_protocolo,
@@ -745,43 +711,24 @@ export class PortaTissPropria implements PortaTiss {
           ORDER BY fp.nome`,
         [o.hoje, Math.max(0, o.paradoDias), o.hoje, o.hoje, est, ...e.p],
       );
-      // O convênio só com calendário (sem lote ainda) também aparece: a entrega dele está à frente.
-      const comLote = new Set(linhas.map((r) => n(r['fonte_pagadora_id'])));
-      const soCalendario: Linha[] = [...janelas.entries()]
-        .filter(([cv]) => !comLote.has(cv))
-        .map(([cv, g]) => ({ fonte_pagadora_id: cv, fonte: g.fonte, sem_protocolo: 0, parados: 0 }));
-      return [...linhas, ...soCalendario]
-        .sort((a, b) => texto(a['fonte']).localeCompare(texto(b['fonte'])))
-        .map((r) => {
-          const convenio = n(r['fonte_pagadora_id']);
-          const cal = janelas.get(convenio)?.janelas ?? [];
-          const proxima = proximaEntrega(cal, o.hoje);
-          const doParametro = o.prazoRecurso
-            .split(';')
-            .map((x) => x.split(':').map((y) => Number(y.trim())))
-            .find(([cv, d]) => cv === convenio && Number.isInteger(d) && (d ?? 0) > 0)?.[1];
-          return {
-            convenio,
-            convenioNome: texto(r['fonte']),
-            entregas: entregasAFrente(cal, o.hoje),
-            proximaEntrega: proxima?.janela.entregaInicio ?? null,
-            entrega: proxima
-              ? {
-                  competencia: proxima.janela.competencia,
-                  inicio: proxima.janela.entregaInicio,
-                  fim: proxima.janela.entregaFim,
-                  situacao: proxima.situacao,
-                  dias: proxima.dias,
-                  pagamentoPrevisto: proxima.pagamentoPrevisto,
-                  restritivo: proxima.janela.restritivo,
-                }
-              : null,
-            lotesSemProtocolo: n(r['sem_protocolo']),
-            lotesParados: n(r['parados']),
-            maisAntigoSemProtocolo: dataIso(r['mais_antigo']),
-            prazoRecursoDias: nn(r['prazo_dias']) ?? doParametro ?? null,
-          };
-        });
+      return linhas.map((r) => {
+        const convenio = n(r['fonte_pagadora_id']);
+        const doParametro = o.prazoRecurso
+          .split(';')
+          .map((x) => x.split(':').map((y) => Number(y.trim())))
+          .find(([cv, d]) => cv === convenio && Number.isInteger(d) && (d ?? 0) > 0)?.[1];
+        return {
+          convenio,
+          convenioNome: texto(r['fonte']),
+          // O calendário de entrega por convênio aguarda a tabela no modelo (pedido do lote 03-16).
+          entregas: [],
+          proximaEntrega: null,
+          lotesSemProtocolo: n(r['sem_protocolo']),
+          lotesParados: n(r['parados']),
+          maisAntigoSemProtocolo: dataIso(r['mais_antigo']),
+          prazoRecursoDias: nn(r['prazo_dias']) ?? doParametro ?? null,
+        };
+      });
     });
   }
 
