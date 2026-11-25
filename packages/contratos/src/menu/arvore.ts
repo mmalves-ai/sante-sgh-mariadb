@@ -3,6 +3,10 @@
 // que o usuário vê, de tools/matriz/src/rotulos-de-produto.ts.
 import type { ContagemMenu, ItemMenu } from './tipos.js';
 
+// C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
+// C2-068 (04-INT L83, F8): o item "Ambulância e maqueiros" dos leitos entrou à mão (mesmo motivo); a contagem
+// acompanha.
+
 // C2-061 (08-SGO L107): o item "Trocas TISS com os prestadores" da operadora própria entrou à mão (mesmo motivo; F7);
 // a contagem acompanha.
 // Lote 02-07 (ADR 0003, itens 5 e 9): o item "Migração gradual dos usuários" saiu à mão (o gerador e a fonte não
@@ -105,7 +109,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":481,"M":198,"P":57,"N":226};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":483,"M":198,"P":57,"N":228};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -145,6 +149,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"agenda.agenda-de-exames-sadt.cancelamentos-de-exames","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda de exames","Cancelamentos de exames"],"titulo":"Cancelamentos de exames","selo":"M","fase":2,"rota":"/agenda/exames/cancelamentos","permissao":"agenda.exame.ler"},
   {"id":"agenda.agenda-de-sessoes-e-recursos-cadeiras-salas","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda de sessões e recursos"],"titulo":"Agenda de sessões e recursos","selo":"P","fase":5,"rota":"/agenda/sessoes","permissao":"agenda.sessao.ler"},
   {"id":"agenda.reuso-de-dialisadores","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Reuso de dialisadores"],"titulo":"Reuso de dialisadores","selo":"N","fase":7,"rota":"/agenda/sessoes/dialisadores","permissao":"enfermagem.horario.ler"},
+  {"id":"agenda.grupos-e-turmas","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Grupos e turmas"],"titulo":"Grupos e turmas","selo":"N","fase":7,"rota":"/agenda/turmas","permissao":"agenda.agenda.ler"},
   {"id":"recepcao.senhas-e-filas.geradores-de-senha-e-totem-prioridades-legais","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Senhas e filas","Geradores de senha e totem"],"titulo":"Geradores de senha e totem","selo":"M","fase":2,"rota":"/recepcao/senhas/geradores","permissao":"recepcao.gerador.ler"},
   {"id":"recepcao.senhas-e-filas.emissao-e-chamada-de-senhas-por-guiche","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Senhas e filas","Emissão e chamada de senhas por guichê"],"titulo":"Emissão e chamada de senhas por guichê","selo":"M","fase":2,"rota":"/recepcao/guiche","permissao":"recepcao.senha.ler"},
   {"id":"recepcao.senhas-e-filas.paineis-de-chamada-tv-com-voz","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Senhas e filas","Painéis de chamada"],"titulo":"Painéis de chamada","selo":"M","fase":2,"rota":"/recepcao/senhas/paineis","permissao":"recepcao.painel.ler"},
@@ -175,6 +180,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.leitos.mapa-de-leitos-operacional-admitir-transferir-bloquear","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Mapa de leitos operacional"],"titulo":"Mapa de leitos operacional","selo":"M","fase":2,"rota":"/leitos/mapa","permissao":"leitos.mapa.ler"},
   {"id":"internacao-e-leitos.leitos.transferencia-de-leito","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Transferência de leito"],"titulo":"Transferência de leito","selo":"M","fase":2,"rota":"/leitos/transferencias","permissao":"leitos.transferencia.criar"},
   {"id":"internacao-e-leitos.leitos.transporte-de-pacientes","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Transporte de pacientes"],"titulo":"Transporte de pacientes","selo":"N","fase":7,"rota":"/internacao/transportes","permissao":"internacao.internacao.ler"},
+  {"id":"internacao-e-leitos.leitos.ambulancia-e-maqueiros","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Ambulância e maqueiros"],"titulo":"Ambulância e maqueiros","selo":"N","fase":7,"rota":"/internacao/ambulancias","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.leitos.historico-de-ocupacao-periodos","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Histórico de ocupação"],"titulo":"Histórico de ocupação","selo":"M","fase":2,"rota":"/leitos/historico","permissao":"leitos.mapa.ler"},
   {"id":"internacao-e-leitos.leitos.censo-hospitalar-diario-portaria-312","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Censo hospitalar diário"],"titulo":"Censo hospitalar diário","selo":"N","fase":1,"rota":"/internacao/censo","permissao":"internacao.censo.ler"},
   {"id":"internacao-e-leitos.nir-e-regulacao.solicitacao-de-leito-e-fila-priorizada","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Solicitação de leito e fila priorizada"],"titulo":"Solicitação de leito e fila priorizada","selo":"N","fase":5,"rota":"/internacao/nir/fila","permissao":"internacao.solicitacaoLeito.ler"},
