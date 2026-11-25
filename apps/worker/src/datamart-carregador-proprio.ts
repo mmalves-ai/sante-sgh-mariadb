@@ -6,8 +6,12 @@
 //     neutro e normalizada pelo motor da internação;
 //   - demografia: faixa etária e sexo (nunca a data de nascimento nem o nome) e o convênio da internação;
 //   - atendimentos, itens de conta e dispensações: só agregados por mês (nada por paciente);
-//   - o pseudônimo do paciente é por estabelecimento (HMAC com a chave DATA_MART_CHAVE): o banco próprio não guarda a
-//     pessoa da Rede (MPI), então o modo comum não se aplica aqui.
+//   - a terapia intensiva do paciente-dia é a categoria da acomodação (categoria_acomodacao.tipo = 'terapia_intensiva'
+//     ou terapia_intensiva), lida pela mesma porta do censo; nunca uma lista de códigos numéricos;
+//   - o pseudônimo do paciente (HMAC com a chave DATA_MART_CHAVE) é por estabelecimento, salvo com a liberação
+//     `rede.pseudonimoComum` (DP-42) ligada em TODOS os estabelecimentos ativos do cliente (modoDoPseudonimo): aí ele é
+//     o da pessoa da Rede, que no banco próprio é o cadastro do paciente (um banco por cliente; o MPI une os
+//     duplicados no próprio cadastro), igual em todos os estabelecimentos.
 // Antes de publicar, o arquivo passa pelo verificador do esquema (nenhuma coluna identificadora); o temporário só
 // substitui o arquivo depois disso. Log e mensagens só com contagens.
 // Melhoria: a carga roda pela rotina do worker, com registro e etapas, em vez de comando manual.
@@ -23,12 +27,15 @@ import {
   normalizarTrajetorias,
   relogioDeParede,
 } from '@sgh/dominio-internacao';
+import { CHAVE_PSEUDONIMO_COMUM_REDE } from '@sgh/contratos';
 import { type ObjetoCarregado } from '@sgh/dominio-relatorio';
 import {
   colunasIdentificadoras,
   ddlDoDataMart,
   faixaEtaria,
   impressaoDaChave,
+  type ModoPseudonimo,
+  modoDoPseudonimo,
   pseudonimo,
   pseudonimoDoPaciente,
   sexoDoDataMart,
@@ -37,7 +44,12 @@ import {
 import type { Leitor } from '@sgh/nucleo';
 import { PortaCensoPropria } from './censo-fechamento-propria.js';
 import type { CarregadorDataMart } from './datamart-carga.service.js';
-import type { AlvoEstabelecimento, NucleoWorker } from './servico-worker.js';
+import {
+  type AlvoEstabelecimento,
+  estabelecimentosAtivos,
+  type NucleoWorker,
+  recursoLigadoAqui,
+} from './servico-worker.js';
 
 const n = (v: unknown) => Number(v ?? 0);
 const textoOuNulo = (v: unknown) => (v === null || v === undefined ? null : String(v));
@@ -99,6 +111,10 @@ export interface OpcoesCarregador {
   readonly agora?: () => number;
 }
 
+/** A pasta dos arquivos do data mart (DATA_MART_DIR; a mesma do carregador e do arquivo da Rede). */
+export const pastaDoAmbiente = (env: NodeJS.ProcessEnv): string =>
+  resolve(env['DATA_MART_DIR']?.trim() || '.tmp/data-mart');
+
 /** A configuração do carregador pelo ambiente: fora de dev, sem DATA_MART_CHAVE a carga falha (registrada). */
 export function opcoesDoAmbiente(env: NodeJS.ProcessEnv): OpcoesCarregador {
   const chave = env['DATA_MART_CHAVE']?.trim() ?? '';
@@ -106,10 +122,28 @@ export function opcoesDoAmbiente(env: NodeJS.ProcessEnv): OpcoesCarregador {
   if (!chave && !dev)
     throw new Error('DATA_MART_CHAVE ausente: fora de dev, a chave do pseudônimo vem do cofre');
   return {
-    pasta: resolve(env['DATA_MART_DIR']?.trim() || '.tmp/data-mart'),
+    pasta: pastaDoAmbiente(env),
     // Em dev sem chave, uma aleatória por processo (os pseudônimos mudam a cada reinício).
     chave: chave || randomBytes(32),
   };
+}
+
+/**
+ * O modo do pseudônimo do cliente: `comum` só com a liberação `rede.pseudonimoComum` ligada (estabelecimento inteiro,
+ * pré-requisitos cumpridos) em TODOS os estabelecimentos ativos; senão, por estabelecimento. Vale para a rede inteira:
+ * todos os arquivos do ciclo saem no mesmo modo, e o arquivo da Rede recusa misturar modos.
+ */
+export function modoDoPseudonimoDoCliente(
+  nucleo: NucleoWorker,
+  cliente: string,
+  agora: Date,
+): Promise<ModoPseudonimo> {
+  return nucleo.lerSomente({ cliente, estabelecimento: null, correlacao: 'datamart-carga' }, async (l) => {
+    const liberado: boolean[] = [];
+    for (const e of await estabelecimentosAtivos(l, cliente, agora))
+      liberado.push(await recursoLigadoAqui(l, CHAVE_PSEUDONIMO_COMUM_REDE, e.id, agora));
+    return modoDoPseudonimo(liberado);
+  });
 }
 
 /** As colunas reais do arquivo que o verificador recusaria (identificadoras). */
@@ -136,7 +170,12 @@ export function carregadorProprio(nucleo: NucleoWorker, opcoes: OpcoesCarregador
     const ler = <T>(fn: (l: Leitor) => Promise<T>) =>
       nucleo.lerSomente({ cliente, estabelecimento: est.id, correlacao: 'datamart-carga' }, fn);
     const t0 = performance.now();
-    const mov = await new PortaCensoPropria(nucleo, cliente).movimento(est);
+    const agoraMs = opcoes.agora?.() ?? Date.now();
+    const censo = new PortaCensoPropria(nucleo, cliente);
+    const mov = await censo.movimento(est);
+    // A terapia intensiva pela categoria da acomodação (a mesma leitura do fechamento do censo).
+    const intensivas = new Set((await censo.configuracao(est, new Date(agoraMs))).categoriasIntensivas);
+    const modo = await modoDoPseudonimoDoCliente(nucleo, cliente, new Date(agoraMs));
     const [demografia, atendimentos, itens, dispensacoes] = await ler(async (l) => [
       await l.consultar(SQL_DEMOGRAFIA, [est.id], { teto: 2_000_000 }),
       await l.consultar(SQL_ATENDIMENTOS, [est.id], { teto: 500_000 }),
@@ -146,7 +185,6 @@ export function carregadorProprio(nucleo: NucleoWorker, opcoes: OpcoesCarregador
     const msLeitura = Math.round(performance.now() - t0);
     const demo = new Map(demografia.map((r) => [n(r['id']), r]));
     const { chave } = opcoes;
-    const agoraMs = opcoes.agora?.() ?? Date.now();
     const agora = relogioDeParede(agoraMs, est.fuso);
     const t = normalizarTrajetorias(mov, agora);
     const unidades = new Map(mov.unidades.map((u) => [`${u.bloco}\u0000${u.acomodacao}`, u.nome]));
@@ -177,7 +215,7 @@ export function carregadorProprio(nucleo: NucleoWorker, opcoes: OpcoesCarregador
       medir('fato_internacao', () => {
         for (const i of t.internacoes) {
           const d = demo.get(i.reg);
-          const pac = pseudonimoDoPaciente(chave, 'por-estabelecimento', est.codigo, i.paciente, null);
+          const pac = pseudonimoDoPaciente(chave, modo, est.codigo, i.paciente, String(i.paciente));
           const int = pseudonimo(chave, `${est.codigo}:internacao`, i.reg);
           const nascimento = textoOuNulo(d?.['nascimento']);
           const faixa = faixaEtaria(
@@ -213,7 +251,7 @@ export function carregadorProprio(nucleo: NucleoWorker, opcoes: OpcoesCarregador
                 mesDoDia(dia),
                 unidades.get(tr.unidade) ?? tr.unidade.replace('\u0000', '/'),
                 mov.tipos.get(tr.tipo) ?? String(tr.tipo),
-                [3, 7, 8, 9, 17].includes(tr.tipo) ? 1 : 0,
+                intensivas.has(tr.tipo) ? 1 : 0,
                 pac,
                 int,
                 i.clinica,
@@ -270,7 +308,7 @@ export function carregadorProprio(nucleo: NucleoWorker, opcoes: OpcoesCarregador
           new Date(agoraMs).toISOString(),
           mov.dadosAte.toISOString().slice(0, 10),
           VERSAO_ESQUEMA_DATAMART,
-          'por-estabelecimento',
+          modo,
           impressaoDaChave(chave),
         );
         return { linhas: 1 };

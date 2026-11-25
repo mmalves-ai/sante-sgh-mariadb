@@ -55,7 +55,7 @@ Função 01-ADM L115 (F8): análise ad hoc, com tabela dinâmica, cubo e filtros
 | O data mart sai sem dado de pessoa | `tools/verificadores/src/lgpd/datamart-sem-dado-pessoal.spec.ts` |
 | A carga devida uma vez por dia, as etapas e a situação | `packages/dominio-relatorio/src/datamart-registro.spec.ts` |
 | O registro em `carga_data_mart` e `carga_data_mart_etapa`, com a trilha, uma vez por dia e com a falha registrada | `apps/worker/src/datamart-carga-propria.int.spec.ts` |
-| O arquivo do estabelecimento carregado do banco próprio, só com os agregados dele e sem coluna identificadora, e a carga concluída com uma etapa por objeto | `apps/worker/src/datamart-carregador-proprio.int.spec.ts` |
+| O arquivo do estabelecimento carregado do banco próprio, só com os agregados dele e sem coluna identificadora (internação com pseudônimo, faixa etária, sexo, óbito, pacientes-dia com a terapia intensiva pela categoria, dispensação líquida), a carga concluída com uma etapa por objeto, e o arquivo da Rede remontado e registrado, com a recusa por chave diferente | `apps/worker/src/datamart-carregador-proprio.int.spec.ts` |
 
 ## O carregador do `worker`
 
@@ -63,10 +63,23 @@ O carregador (`apps/worker/src/datamart-carregador-proprio.ts`) lê o banco pró
 estabelecimento, e grava o arquivo dele:
 
 - a internação e os pacientes-dia vêm da mesma leitura do movimento que o fechamento do censo usa;
+- a terapia intensiva do paciente-dia é a categoria da acomodação (`categoria_acomodacao`, tipo `terapia_intensiva` ou
+  a marca de terapia intensiva), lida pela mesma porta do censo, e nunca uma lista de códigos;
 - a demografia sai como faixa etária e sexo, nunca como data de nascimento ou nome;
 - os atendimentos, os itens de conta e as dispensações saem só como agregados por mês;
-- o pseudônimo do paciente é por estabelecimento, com a chave `DATA_MART_CHAVE`. Fora de dev, sem a chave, cada carga
-  fica registrada como `falhou`, com o motivo.
+- o pseudônimo do paciente usa a chave `DATA_MART_CHAVE`. Fora de dev, sem a chave, cada carga fica registrada como
+  `falhou`, com o motivo. O modo segue a liberação `rede.pseudonimoComum`:
+  - ligada em **todos** os estabelecimentos ativos do cliente: modo `comum`, o mesmo pseudônimo para o paciente em
+    qualquer estabelecimento (o cadastro do paciente é do cliente inteiro);
+  - nos demais casos: modo `por-estabelecimento`.
 
-O arquivo da Rede (`rede.sqlite`) continua sendo montado pelo `pnpm datamart:carregar`, a partir dos arquivos dos
-estabelecimentos.
+Ao fim de cada volta em que alguma carga de estabelecimento concluiu, o `worker` remonta o arquivo da Rede
+(`rede.sqlite`, `apps/worker/src/datamart-rede-propria.ts`):
+
+- junta só os estabelecimentos ativos com o BI da Rede liberado (`rede.bi`); recolher é desligar a liberação;
+- confere as cargas antes de juntar: esquema atual, mesmo modo de pseudônimo, mesma chave e mesmo ciclo;
+- recusada a junção, ou sem nenhum liberado com arquivo, o arquivo da Rede anterior é apagado;
+- cada remontagem fica em `carga_data_mart` com o estabelecimento vazio e o assunto `data_mart_rede`, com uma etapa
+  por tabela juntada; a recusa fica como `falhou`, com a mensagem sem valores.
+
+O `pnpm datamart:carregar` continua disponível para a carga manual completa.

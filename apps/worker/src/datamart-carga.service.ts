@@ -6,11 +6,14 @@
 // BI ligada ao arquivo só para leitura (docs/implantacao/ligacao-bi-data-mart.md); o produto não guarda análises.
 // A cada 5 minutos (pedidos manuais da administração, 01-REL L113; a agendada uma vez por dia); ligado fora de
 // dev/ci; em dev/ci só com DATAMART_CARGA_DIARIA=ligado. Log só com contagens.
+// Ao fim do ciclo, o cliente em que alguma carga concluiu tem o arquivo da Rede remontado e registrado
+// (datamart-rede-propria: remontadorRedeProprio).
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { cargaDevida, fecharCarga, type ObjetoCarregado } from '@sgh/dominio-relatorio';
 import { NucleoProprio } from '@sgh/nucleo';
 import { type PortaDataMart, PortaDataMartPropria } from './datamart-carga-propria.js';
-import { carregadorProprio, opcoesDoAmbiente } from './datamart-carregador-proprio.js';
+import { carregadorProprio, opcoesDoAmbiente, pastaDoAmbiente } from './datamart-carregador-proprio.js';
+import { type RemontadorRede, remontadorRedeProprio } from './datamart-rede-propria.js';
 import { logger } from './logger.js';
 import {
   type AlvoEstabelecimento,
@@ -122,14 +125,21 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
   private nucleo: NucleoServico | null = null;
   private fabrica: FabricaPortaDataMart | null = null;
   private carregador: CarregadorDataMart = carregadorIndisponivel;
+  private remontador: RemontadorRede | null = null;
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
 
   /** Teste: o núcleo, a porta e o carregador sem subir o banco. */
-  usar(nucleo: NucleoServico, fabrica: FabricaPortaDataMart, carregador?: CarregadorDataMart): void {
+  usar(
+    nucleo: NucleoServico,
+    fabrica: FabricaPortaDataMart,
+    carregador?: CarregadorDataMart,
+    remontador?: RemontadorRede,
+  ): void {
     this.nucleo = nucleo;
     this.fabrica = fabrica;
     if (carregador) this.carregador = carregador;
+    if (remontador) this.remontador = remontador;
   }
 
   onApplicationBootstrap(): void {
@@ -147,7 +157,12 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
           throw new Error(motivo);
         };
       }
-      this.usar(nucleo, (cliente) => new PortaDataMartPropria(nucleo, cliente), carregador);
+      this.usar(
+        nucleo,
+        (cliente) => new PortaDataMartPropria(nucleo, cliente),
+        carregador,
+        remontadorRedeProprio(nucleo, { pasta: pastaDoAmbiente(process.env) }),
+      );
       void this.ciclo();
       // A cada 5 minutos: o pedido manual da administração começa logo; a agendada segue uma vez por dia (regra).
       this.temporizador = setInterval(() => void this.ciclo(), 300_000);
@@ -164,6 +179,11 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
     const fabrica = this.fabrica;
     if (this.rodando || !nucleo || !fabrica) return [];
     this.rodando = true;
+    // Os clientes com alguma carga concluída neste ciclo (agendada ou manual): o arquivo da Rede é remontado no fim.
+    const concluidos = new Set<string>();
+    const anotar = (cliente: string, situacao: string | null) => {
+      if (situacao === 'concluida' || situacao === 'concluida_com_rejeicao') concluidos.add(cliente);
+    };
     try {
       const voltas = await voltaPorEstabelecimento(
         nucleo,
@@ -173,12 +193,15 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
         async (porta, est) => {
           // Primeiro os pedidos da administração; depois a carga agendada do dia.
           const manuais = await pedidosDataMart(porta, est.cliente, est, this.carregador);
+          for (const m of manuais) anotar(est.cliente, m.situacao);
           for (const m of manuais)
             logger.info(
               { cliente: est.cliente, estabelecimento: est.codigo, situacao: m.situacao, linhas: m.linhas },
               'carga manual do data mart registrada',
             );
-          return cicloDataMart(porta, est.cliente, est, this.carregador, agora);
+          const r = await cicloDataMart(porta, est.cliente, est, this.carregador, agora);
+          anotar(est.cliente, r.situacao);
+          return r;
         },
         (cliente, estabelecimento, e) =>
           logger.warn(
@@ -197,6 +220,7 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
             },
             'carga do data mart registrada',
           );
+      for (const cliente of concluidos) await this.remontarRede(cliente, agora);
       return voltas.map((v) => ({
         cliente: v.cliente,
         estabelecimento: v.estabelecimento,
@@ -204,6 +228,29 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
       }));
     } finally {
       this.rodando = false;
+    }
+  }
+
+  /** Remonta o arquivo da Rede do cliente; a falha da junção fica registrada pelo remontador (o log só com contagens). */
+  private async remontarRede(cliente: string, agora: Date): Promise<void> {
+    if (!this.remontador) return;
+    try {
+      const r = await this.remontador(cliente, agora);
+      logger.info(
+        {
+          cliente,
+          situacao: r.situacao,
+          estabelecimentos: r.estabelecimentos.length,
+          foraDoBi: r.foraDoBi,
+          linhas: r.linhas,
+        },
+        'arquivo da Rede do data mart registrado',
+      );
+    } catch (e) {
+      logger.warn(
+        { cliente, erro: e instanceof Error ? e.name : 'erro' },
+        'arquivo da Rede do data mart falhou',
+      );
     }
   }
 
