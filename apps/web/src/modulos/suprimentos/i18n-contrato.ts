@@ -1,11 +1,14 @@
 // Textos da tela dos contratos com fornecedores (M55, etapa 3). Vocabulário do produto (ADR 0023: nenhum nome do sistema
 // anterior nem de tabela). Os rótulos dos tipos, índices, garantias, faixas e eventos vêm dos vocabulários de
 // @sgh/contratos (a mesma fonte da API).
+import { mensagensHomologacaoFornecedor } from './i18n-homologacao-fornecedor.js';
 import { mensagensSlaContrato } from './i18n-sla-contrato.js';
 
 export const mensagensContrato = {
   // SLA do contrato (09-AREA linha 88).
   sla: mensagensSlaContrato,
+  // Homologação do fornecedor por questionário (09-AREA linha 66).
+  homologacao: mensagensHomologacaoFornecedor,
   titulo: 'Contratos com fornecedores',
   carregando: 'Carregando…',
   emConsulta: 'Só consulta neste estabelecimento.',

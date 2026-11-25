@@ -51,6 +51,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/ContratosTela.vue'),
     meta: { permissao: 'suprimentos.contrato.ler' },
   },
+  // 09-AREA linha 66: homologação de fornecedores por questionário pontuado (avaliar, ranking, exceção, questionários).
+  {
+    path: '/suprimentos/homologacao-fornecedores',
+    name: 'suprimentos.homologacao-fornecedores',
+    component: () => import('./telas/HomologacaoFornecedoresTela.vue'),
+    meta: { permissao: 'suprimentos.contrato.ler' },
+  },
   // M55 (etapa 4): licitação e pregão (o painel por etapa, o termo, a pesquisa, a sessão, o julgamento e a homologação).
   {
     path: '/suprimentos/licitacao',
