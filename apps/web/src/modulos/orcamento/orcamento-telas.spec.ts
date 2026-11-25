@@ -399,6 +399,7 @@ describe('rota e textos (M54.7)', () => {
     expect(rotasOrcamento.map((r) => [r.path, r.meta?.['permissao']])).toEqual([
       ['/financeiro/orcamento', 'financeiro.orcamento.ler'],
       ['/financeiro/orcamento/projetos', 'financeiro.orcamento.ler'],
+      ['/financeiro/orcamento/controle', 'financeiro.orcamento.ler'],
     ]);
   });
   it('nenhum texto cita o outro sistema, nome de tabela ou caractere especial do vue-i18n', () => {

@@ -17,4 +17,11 @@ export const rotasOrcamento: RouteRecordRaw[] = [
     component: () => import('./ProjetosResultadoTela.vue'),
     meta: { permissao: 'financeiro.orcamento.ler' },
   },
+  // C2-112 (07-FIN linha 130): controle orçamentário na compra e no pagamento, aberta pelo orçamento empresarial.
+  {
+    path: '/financeiro/orcamento/controle',
+    name: 'financeiro.orcamento.controle',
+    component: () => import('./ControleOrcamentarioTela.vue'),
+    meta: { permissao: 'financeiro.orcamento.ler' },
+  },
 ];

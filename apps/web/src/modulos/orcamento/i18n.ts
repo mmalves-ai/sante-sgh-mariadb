@@ -1,5 +1,6 @@
 // Textos da tela "Orçamento empresarial" (M54, etapa 7). ADR 0023: nenhum nome de outro sistema nem de tabela.
 // vue-i18n: nada de barra vertical (plural) nem arroba (mensagem ligada) nos textos.
+import { mensagensControleOrcamentario } from './i18n-controle-orcamentario.js';
 import { mensagensEstatisticasOrcamento } from './i18n-estatisticas.js';
 import { mensagensPremissasOrcamento } from './i18n-premissas.js';
 import { mensagensProjetoResultado } from './i18n-projeto-resultado.js';
@@ -23,6 +24,8 @@ export const mensagensOrcamento = {
   estatisticas: mensagensEstatisticasOrcamento,
   // C2-107 (07-FIN linha 128): projeto como centro de resultado.
   projetos: mensagensProjetoResultado,
+  // C2-112 (07-FIN linha 130): controle orçamentário na compra e no pagamento.
+  controle: mensagensControleOrcamentario,
   versoes: {
     titulo: 'Versões do orçamento',
     ano: 'Ano',

@@ -53,6 +53,10 @@ const ouVazio = (v: number | string | null) =>
       <RouterLink :to="{ name: 'financeiro.orcamento.projetos' }" data-testid="orc-ir-projetos">{{
         t('orcamentoEmpresarial.projetos.irProjetos')
       }}</RouterLink>
+      ·
+      <RouterLink :to="{ name: 'financeiro.orcamento.controle' }" data-testid="orc-ir-controle">{{
+        t('orcamentoEmpresarial.controle.irControle')
+      }}</RouterLink>
     </p>
     <ErroOrcamento v-if="apoio.isError.value" :erro="apoio.error.value" />
     <p v-else-if="!a" role="status">{{ t('orcamentoEmpresarial.carregando') }}</p>
