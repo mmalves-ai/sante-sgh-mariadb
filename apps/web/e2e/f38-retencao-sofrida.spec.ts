@@ -83,6 +83,12 @@ function simularApi(page: Page): Enviado[] {
         valor: centavos((FATURA * g.aliquota) / 100),
         dispensada: false,
       })),
+      municipio: null,
+      tributos: [5, 6, 8].map((id) => ({
+        id,
+        sigla: sigla(id),
+        descricao: `Tributo sintético ${sigla(id)}`,
+      })),
     };
   };
 
@@ -102,8 +108,29 @@ function simularApi(page: Page): Enviado[] {
             compensado: compensado ? irrf : 0,
             aCompensar: compensado ? 0 : irrf,
             desde: compensado ? null : '2026-10',
+            creditos: compensado ? [] : [{ competencia: '2026-10', valor: irrf }],
           },
         ]);
+      }
+      if (caminho === '/compensacoes') {
+        const irrf = retencoes.find((x) => x.tributoId === 5)?.valor ?? 30;
+        return json(
+          r,
+          compensado
+            ? [
+                {
+                  id: 71,
+                  numero: 'CS-2026-10-5-1',
+                  tributoId: 5,
+                  tributo: 'IRRF',
+                  competencia: '2026-10',
+                  valor: irrf,
+                  retencoes: 1,
+                  em: '2026-11-05',
+                },
+              ]
+            : [],
+        );
       }
       return json(r, { title: 'Não encontrado' }, 404);
     }
@@ -138,6 +165,10 @@ function simularApi(page: Page): Enviado[] {
     if (caminho === '/compensar') {
       compensado = true;
       return json(r, ok('Compensação registrada; o crédito usado saiu do saldo a compensar.'));
+    }
+    if (caminho === '/cancelar-compensacao') {
+      compensado = false;
+      return json(r, ok('Compensação cancelada; o crédito voltou ao saldo a compensar.'));
     }
     return json(r, { title: 'Não encontrado' }, 404);
   });
@@ -298,13 +329,32 @@ test.describe('financeiro: retenções na fonte, no recebimento e na guia @F3.8-
     // Saldo retido pelos tomadores: compensa na competência da tela e o saldo zera.
     await expect(page.getByTestId('sc-linha-IRRF')).toContainText('30,00');
     await semViolacaoAxe(page, '/financeiro/fiscal/reinf (saldo a compensar)');
+    // O primeiro clique só pede a confirmação, com o valor que vai ser usado; nada é gravado antes dela.
+    const antesDeCompensar = enviados.length;
     await page.getByTestId('sc-compensar-IRRF').click();
+    await expect(page.getByTestId('sc-confirma-IRRF')).toContainText('30,00');
+    expect(enviados.length).toBe(antesDeCompensar);
+    await page.getByTestId('sc-confirmar').click();
     await expect(page.getByTestId('sc-ok')).toContainText('Compensação registrada');
     expect(enviados.at(-1)).toMatchObject({
       caminho: '/compensar',
       corpo: { competencia: '2026-10', tributo: 5 },
     });
     await expect(page.getByTestId('sc-compensar-IRRF')).toHaveCount(0);
+    // A compensação feita aparece e pode ser cancelada com motivo: o crédito volta ao saldo.
+    await expect(page.getByTestId('sc-feita-71')).toContainText('CS-2026-10-5-1');
+    await semViolacaoAxe(page, '/financeiro/fiscal/reinf (compensações feitas)');
+    await page.getByTestId('sc-cancelar-71').click();
+    await expect(page.getByTestId('sc-confirmar-cancelamento')).toBeDisabled();
+    await page.getByTestId('sc-motivo').fill('Competência errada no filtro');
+    await page.getByTestId('sc-confirmar-cancelamento').click();
+    await expect(page.getByTestId('sc-ok')).toContainText('Compensação cancelada');
+    expect(enviados.at(-1)).toMatchObject({
+      caminho: '/cancelar-compensacao',
+      corpo: { apuracao: 71, motivo: 'Competência errada no filtro' },
+    });
+    await expect(page.getByTestId('sc-feita-71')).toHaveCount(0);
+    await expect(page.getByTestId('sc-compensar-IRRF')).toBeVisible();
     expect(externas).toEqual([]);
   });
 });

@@ -34,6 +34,10 @@ export interface RetencaoSofridaDoTitulo {
   readonly retido: number;
   readonly retencoes: readonly RetencaoSofrida[];
   readonly sugestoes: readonly SugestaoSofrida[];
+  /** Município do serviço usado na regra do ISS (nota ligada ao título ou o estabelecimento). */
+  readonly municipio?: number | null;
+  /** Tributos ativos: o tomador pode reter fora da regra e a ficha deixa incluir. */
+  readonly tributos?: readonly { readonly id: number; readonly sigla: string; readonly descricao: string }[];
 }
 export interface SaldoACompensar {
   readonly tributo: string;
@@ -42,6 +46,18 @@ export interface SaldoACompensar {
   readonly compensado: number;
   readonly aCompensar: number;
   readonly desde: string | null;
+  /** O crédito ainda não compensado, por competência. */
+  readonly creditos: readonly { readonly competencia: string; readonly valor: number }[];
+}
+export interface CompensacaoSofrida {
+  readonly id: number;
+  readonly numero: string;
+  readonly tributoId: number;
+  readonly tributo: string;
+  readonly competencia: string;
+  readonly valor: number;
+  readonly retencoes: number;
+  readonly em: string;
 }
 export interface MunicipioEncontrado {
   readonly id: number;
@@ -58,5 +74,8 @@ export const estornarRetencaoSofrida = (corpo: unknown, chave: string) =>
 export const lerSaldoACompensar = () => ler(`${P}/saldo`, z.array(confiar<SaldoACompensar>()));
 export const compensarRetencaoSofrida = (corpo: unknown, chave: string) =>
   enviar(`${P}/compensar`, corpo, confiar<ResultadoFinanceiro>(), chave);
+export const lerCompensacoesSofridas = () => ler(`${P}/compensacoes`, z.array(confiar<CompensacaoSofrida>()));
+export const cancelarCompensacaoSofrida = (corpo: unknown, chave: string) =>
+  enviar(`${P}/cancelar-compensacao`, corpo, confiar<ResultadoFinanceiro>(), chave);
 export const buscarMunicipiosRetencao = (termo: string) =>
   ler(`${P}/municipios${qs({ termo })}`, z.array(confiar<MunicipioEncontrado>()));

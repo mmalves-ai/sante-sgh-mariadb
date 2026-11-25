@@ -1,6 +1,8 @@
 // F3.8, 07-FIN linha 109 (telas, dados sintéticos, API simulada no fetch): na ficha do título a receber, a retenção do
-// tomador vem sugerida pela regra, a soma é conferida na hora contra o saldo e um clique registra todos os tributos; o
-// estorno pede o motivo. No painel fiscal, o saldo a compensar por tributo e a compensação na competência da tela. No
+// tomador vem sugerida pela regra, a soma é conferida na hora contra o saldo e um clique registra todos os tributos;
+// base e alíquota são editáveis e o tributo fora da sugestão (sem regra, dispensado) entra pela lista dos ativos; o
+// estorno pede o motivo. No painel fiscal, o saldo a compensar por tributo, a compensação na competência da tela com a
+// confirmação do valor e o cancelamento da compensação com motivo. No
 // cadastro da regra, o ISS só entra com o município do serviço, escolhido pelo nome.
 import { criarI18n, instalarUi, resolverMarca } from '@sgh/ui';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
@@ -109,6 +111,13 @@ describe('retenção sofrida no recebimento (linha 109)', () => {
     retido: 0,
     retencoes: [],
     sugestoes: [sugestao('IRRF', 5, 1.5, 30), sugestao('COFINS', 6, 3, 60), sugestao('ISS', 8, 0.1, 2, true)],
+    municipio: null,
+    tributos: [
+      { id: 5, sigla: 'IRRF', descricao: 'Imposto de renda retido' },
+      { id: 6, sigla: 'COFINS', descricao: 'Contribuição social' },
+      { id: 8, sigla: 'ISS', descricao: 'Imposto sobre serviços' },
+      { id: 9, sigla: 'PIS', descricao: 'Programa de integração' },
+    ],
   };
   const registrado = {
     ...aberto,
@@ -198,20 +207,125 @@ describe('retenção sofrida no recebimento (linha 109)', () => {
     semPermissao.unmount();
   });
 
-  it('saldo a compensar por tributo; compensa na competência da tela; crédito futuro não oferece o botão', async () => {
+  it('tributo fora da sugestão entra pela lista dos ativos, com base, alíquota e valor conferidos na hora', async () => {
+    // Sem regra vigente: a ficha explica e deixa incluir o que o tomador reteve.
+    const semRegra = { ...aberto, sugestoes: [sugestao('ISS', 8, 0.1, 2, true)] };
+    const { enviados } = api({ '/titulo/7': semRegra });
+    const w = montar(RetencaoSofridaTitulo, { titulo: 7, data: '2026-10-10', pode: true });
+    await flushPromises();
+    expect(w.find('[data-testid="rs-registrar"]').exists()).toBe(false);
+    expect(w.get('[data-testid="rs-dispensada-ISS"]').text()).toContain('2,00');
+    // O dispensado pela regra também pode entrar (o tomador reteve mesmo assim).
+    await escolher(w, 'rs-outro-tributo', '8');
+    expect((w.get('[data-testid="rs-base-ISS"]').element as HTMLInputElement).value).toBe('2.000,00');
+    // Incompleta: o botão não liga e a linha diz o que falta.
+    expect(w.find('[data-testid="rs-erro-ISS"]').exists()).toBe(true);
+    expect(w.get('[data-testid="rs-registrar"]').attributes('disabled')).toBeDefined();
+    // A alíquota calcula o retido na hora; a base também é editável.
+    await digitar(w, 'rs-aliquota-ISS', '2');
+    expect((w.get('[data-testid="rs-valor-ISS"]').element as HTMLInputElement).value).toBe('40,00');
+    await digitar(w, 'rs-base-ISS', '1.000,00');
+    expect((w.get('[data-testid="rs-valor-ISS"]').element as HTMLInputElement).value).toBe('20,00');
+    // O valor digitado prevalece (arredondamento do tomador) e não é mais recalculado.
+    await digitar(w, 'rs-valor-ISS', '19,99');
+    await digitar(w, 'rs-aliquota-ISS', '2,0');
+    expect((w.get('[data-testid="rs-valor-ISS"]').element as HTMLInputElement).value).toBe('19,99');
+    expect(w.find('[data-testid="rs-erro-ISS"]').exists()).toBe(false);
+    // Retido acima da base: recusado na hora.
+    await digitar(w, 'rs-valor-ISS', '1.000,01');
+    expect(w.find('[data-testid="rs-erro-ISS"]').exists()).toBe(true);
+    await digitar(w, 'rs-valor-ISS', '19,99');
+    // Outro tributo incluído e retirado sai da lista e volta a ser oferecido.
+    await escolher(w, 'rs-outro-tributo', '9');
+    expect(w.find('[data-testid="rs-linha-PIS"]').exists()).toBe(true);
+    await w.get('[data-testid="rs-retirar-PIS"]').trigger('click');
+    expect(w.find('[data-testid="rs-linha-PIS"]').exists()).toBe(false);
+    expect(w.get('[data-testid="rs-total"]').text()).toContain('19,99');
+    expect(w.get('[data-testid="rs-registrar"]').attributes('disabled')).toBeUndefined();
+    await w.get('[data-testid="rs-sugestao"]').trigger('submit');
+    await flushPromises();
+    expect(enviados.at(-1)?.corpo).toEqual({
+      titulo: 7,
+      versao: 'v0000000001',
+      data: '2026-10-10',
+      itens: [{ tributo: 8, base: 1000, aliquota: 2, valor: 19.99 }],
+    });
+    w.unmount();
+  });
+
+  it('a base e a alíquota da sugestão são editáveis e recalculam o retido', async () => {
+    const { enviados } = api({ '/titulo/7': aberto });
+    const w = montar(RetencaoSofridaTitulo, { titulo: 7, data: '2026-10-10', pode: true });
+    await flushPromises();
+    await digitar(w, 'rs-base-IRRF', '1.000,00');
+    expect((w.get('[data-testid="rs-valor-IRRF"]').element as HTMLInputElement).value).toBe('15,00');
+    // A sugerida com o retido zerado fica de fora (o tomador não reteve aquele tributo).
+    await digitar(w, 'rs-valor-COFINS', '0');
+    await w.get('[data-testid="rs-sugestao"]').trigger('submit');
+    await flushPromises();
+    expect(enviados.at(-1)?.corpo).toMatchObject({
+      itens: [{ tributo: 5, base: 1000, aliquota: 1.5, valor: 15 }],
+    });
+    w.unmount();
+  });
+
+  it('saldo a compensar por tributo; compensa na competência da tela com o valor confirmado; crédito futuro não oferece o botão', async () => {
     const { enviados } = api({
       '/saldo': [
-        { tributo: 'COFINS', tributoId: 6, retido: 60, compensado: 60, aCompensar: 0, desde: null },
-        { tributo: 'IRRF', tributoId: 5, retido: 45, compensado: 15, aCompensar: 30, desde: '2026-10' },
-        { tributo: 'PIS', tributoId: 9, retido: 13, compensado: 0, aCompensar: 13, desde: '2026-11' },
+        {
+          tributo: 'COFINS',
+          tributoId: 6,
+          retido: 60,
+          compensado: 60,
+          aCompensar: 0,
+          desde: null,
+          creditos: [],
+        },
+        {
+          tributo: 'IRRF',
+          tributoId: 5,
+          retido: 60,
+          compensado: 15,
+          aCompensar: 45,
+          desde: '2026-10',
+          creditos: [
+            { competencia: '2026-10', valor: 30 },
+            { competencia: '2026-11', valor: 15 },
+          ],
+        },
+        {
+          tributo: 'PIS',
+          tributoId: 9,
+          retido: 13,
+          compensado: 0,
+          aCompensar: 13,
+          desde: '2026-11',
+          creditos: [{ competencia: '2026-11', valor: 13 }],
+        },
       ],
+      '/compensacoes': [],
     });
     const w = montar(SaldoCompensarPainel, { competencia: '2026-10', pode: true });
     await flushPromises();
-    expect(w.get('[data-testid="sc-linha-IRRF"]').text()).toContain('30,00');
+    expect(w.get('[data-testid="sc-linha-IRRF"]').text()).toContain('45,00');
     expect(w.find('[data-testid="sc-compensar-COFINS"]').exists()).toBe(false);
     expect(w.find('[data-testid="sc-compensar-PIS"]').exists()).toBe(false);
+    expect(w.find('[data-testid="sc-feitas"]').exists()).toBe(false);
+    // O primeiro clique só pede a confirmação, com o valor exato que cabe na competência (30 dos 45).
     await w.get('[data-testid="sc-compensar-IRRF"]').trigger('click');
+    expect(enviados).toEqual([]);
+    expect(w.get('[data-testid="sc-confirma-IRRF"]').text()).toContain('30,00');
+    expect(w.get('[data-testid="sc-confirma-IRRF"]').text()).toContain('2026-10');
+    // Desistir fecha sem gravar; trocar a competência da tela também fecha a confirmação.
+    await w.get('[data-testid="sc-desistir"]').trigger('click');
+    expect(w.find('[data-testid="sc-confirmar"]').exists()).toBe(false);
+    await w.get('[data-testid="sc-compensar-IRRF"]').trigger('click');
+    await w.setProps({ competencia: '2026-11' });
+    expect(w.find('[data-testid="sc-confirmar"]').exists()).toBe(false);
+    await w.setProps({ competencia: '2026-10' });
+    expect(enviados).toEqual([]);
+    await w.get('[data-testid="sc-compensar-IRRF"]').trigger('click');
+    await w.get('[data-testid="sc-confirmar"]').trigger('click');
     await flushPromises();
     expect(enviados.at(-1)).toEqual({
       url: '/api/financeiro/retencao-sofrida/compensar',
@@ -219,6 +333,56 @@ describe('retenção sofrida no recebimento (linha 109)', () => {
     });
     expect(w.get('[data-testid="sc-ok"]').text()).toBe('Gravado.');
     w.unmount();
+  });
+
+  it('a compensação feita é cancelada com motivo; sem permissão não oferece o cancelamento', async () => {
+    const rotas = {
+      '/saldo': [
+        {
+          tributo: 'IRRF',
+          tributoId: 5,
+          retido: 30,
+          compensado: 30,
+          aCompensar: 0,
+          desde: null,
+          creditos: [],
+        },
+      ],
+      '/compensacoes': [
+        {
+          id: 71,
+          numero: 'CS-2026-10-5-1',
+          tributoId: 5,
+          tributo: 'IRRF',
+          competencia: '2026-10',
+          valor: 30,
+          retencoes: 1,
+          em: '2026-11-05',
+        },
+      ],
+    };
+    const { enviados } = api(rotas);
+    const w = montar(SaldoCompensarPainel, { competencia: '2026-10', pode: true });
+    await flushPromises();
+    expect(w.get('[data-testid="sc-feita-71"]').text()).toContain('CS-2026-10-5-1');
+    expect(w.get('[data-testid="sc-feita-71"]').text()).toContain('30,00');
+    await w.get('[data-testid="sc-cancelar-71"]').trigger('click');
+    expect(w.get('[data-testid="sc-confirmar-cancelamento"]').attributes('disabled')).toBeDefined();
+    await digitar(w, 'sc-motivo', 'Competência errada no filtro');
+    await w.get('[data-testid="sc-confirmar-cancelamento"]').trigger('click');
+    await flushPromises();
+    expect(enviados.at(-1)).toEqual({
+      url: '/api/financeiro/retencao-sofrida/cancelar-compensacao',
+      corpo: { apuracao: 71, motivo: 'Competência errada no filtro' },
+    });
+    expect(w.get('[data-testid="sc-ok"]').text()).toBe('Gravado.');
+    w.unmount();
+    api(rotas);
+    const semPermissao = montar(SaldoCompensarPainel, { competencia: '2026-10', pode: false });
+    await flushPromises();
+    expect(semPermissao.find('[data-testid="sc-feita-71"]').exists()).toBe(true);
+    expect(semPermissao.find('[data-testid="sc-cancelar-71"]').exists()).toBe(false);
+    semPermissao.unmount();
   });
 
   it('regra do ISS só entra com o município do serviço, escolhido pelo nome', async () => {
