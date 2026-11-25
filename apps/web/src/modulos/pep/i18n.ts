@@ -10,6 +10,7 @@ import { mensagensFarmacovigilancia } from './i18n-farmacovigilancia.js';
 import { mensagensNotasPaciente } from './i18n-notas-paciente.js';
 import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
+import { mensagensCopiasProntuario } from './i18n-copias-prontuario.js';
 
 export const mensagensPep = {
   // M22: registros clínicos e administração do PEP.
@@ -33,6 +34,8 @@ export const mensagensPep = {
   pedidoVaga: mensagensPedidoVaga,
   // 03-PEP L147: anotação administrativa do caso.
   anotAdm: mensagensAnotacoesAdministrativas,
+  // 03-PEP L131: cópia do prontuário no balcão e cabeçalho por tipo de documento.
+  copias: mensagensCopiasProntuario,
   carregando: 'Carregando…',
   busca: {
     titulo: 'Prontuário ao vivo: consulta',
