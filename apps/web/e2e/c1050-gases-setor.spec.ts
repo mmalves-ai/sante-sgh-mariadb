@@ -25,7 +25,8 @@ test.describe('internação: consumo de gases por setor @C1-050', () => {
     page,
   }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.ADMIN');
+    // C1-074: os gases (do paciente e do setor) são registro da enfermagem (enfermagem.horario.ler), não do administrador.
+    await entrar(page, 'SINT.ENF.PLANTAO');
     await page.goto('/internacao/atendimentos/1/gases');
     await expect(page.getByTestId('tela-gases')).toBeVisible();
     await page.getByTestId('gases-ir-setores').click();

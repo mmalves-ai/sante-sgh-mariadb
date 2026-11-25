@@ -1,5 +1,6 @@
 // Gases medicinais por tempo de uso (F3.4, 04-INT linha 82). Rotas (porta própria; sem banco do cliente, 503):
 //   GET  /api/internacao/gases/atendimentos/:atd/usos          usos do paciente no atendimento (visão por paciente)
+//   GET  /api/internacao/gases/internacoes/:reg/atendimento    o atendimento da internação (atalho da internação)
 //   POST /api/internacao/gases/usos                            inicia (ou troca fluxo/local continuando o anterior)
 //   POST /api/internacao/gases/usos/:id/encerrar               { fim?, versao } fim e horas apuradas
 //   POST /api/internacao/gases/usos/:id/cancelar               { motivo, versao } lançado por engano (nada apagado)
@@ -7,7 +8,9 @@
 //   GET  /api/internacao/gases/regras?gas=                     regras de cobrança do gás (com faixas e simultâneos)
 //   POST /api/internacao/gases/regras                          inclui a regra (conferida pelo domínio)
 //   POST /api/internacao/gases/regras/:id/encerrar             { vigenciaFim, versao } encerra a vigência
-// O uso é registro da enfermagem à beira do leito; a regra é condição contratual; o lançamento é do faturamento.
+// O uso é registro da enfermagem à beira do leito (C1-074): lê quem vê a linha do tempo do turno e registra quem
+// checa o cuidado de enfermagem (enfermeiro e técnico); `enfermagem.dispositivo.*` é dos aparelhos da beira do leito,
+// não do paciente. A regra é condição contratual; o lançamento é do faturamento.
 import {
   Body,
   Controller,
@@ -28,8 +31,8 @@ import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import { PORTA_GAS_MEDICINAL, type PortaGasMedicinalPropria } from './gas-medicinal-propria.js';
 
 export const PERMISSOES_GAS_MEDICINAL = {
-  usoLer: 'enfermagem.dispositivo.ler',
-  usoRegistrar: 'enfermagem.dispositivo.editar',
+  usoLer: 'enfermagem.horario.ler',
+  usoRegistrar: 'enfermagem.cuidado.checar',
   regraLer: 'convenio.contrato.ler',
   regraEditar: 'convenio.contrato.editar',
   lancar: 'faturamento.item.lancar',
@@ -56,6 +59,12 @@ export class GasMedicinalController {
   @Permissao(PERMISSOES_GAS_MEDICINAL.usoLer)
   usos(@Req() req: RequisicaoAutorizada, @Param('atd', ParseIntPipe) atd: number) {
     return this.com(req, async (p, c) => ({ itens: await p.usos(c, atd) }));
+  }
+
+  @Get('internacoes/:reg/atendimento')
+  @Permissao(PERMISSOES_GAS_MEDICINAL.usoLer)
+  atendimentoDaInternacao(@Req() req: RequisicaoAutorizada, @Param('reg', ParseIntPipe) reg: number) {
+    return this.com(req, (p, c) => p.atendimentoDaInternacao(c, reg));
   }
 
   @Post('usos')

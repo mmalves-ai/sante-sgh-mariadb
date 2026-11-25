@@ -371,4 +371,123 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
     ]);
     expect([Number(i3!['quantidade']), Number(i3!['valor_total'])]).toEqual([1, 12.5]);
   });
+  it('conta parcial: o uso que atravessa a virada é dividido entre as contas; trecho sem conta recusa sem marcar nada', async () => {
+    // Segundo atendimento com duas contas parciais: A de 6 h atrás até 3 h atrás, B de 3 h atrás em diante.
+    // Base fixa em segundo inteiro: as horas das contas e dos usos são exatas entre si (sem resto de milissegundo).
+    const t0 = Math.floor(Date.now() / 1000) * 1000;
+    const h = (horas: number) => new Date(t0 - horas * 3_600_000);
+    const virada = h(3);
+    const { atd2, contaA, contaB } = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: `parcial-${P}` },
+      async (e) => {
+        const agora = new Date();
+        const [base] = await e.consultar<Record<string, unknown>>(
+          'SELECT paciente_id, fonte_pagadora_id, tipo_conta_id, competencia FROM conta_hospitalar WHERE id = ?',
+          [m.conta],
+        );
+        // Mesmas chaves do primeiro atendimento sintético (categoria, caráter e profissional fictícios: chaves de
+        // catálogo desligadas só neste preparo, como no beforeAll).
+        await e.executar('SET FOREIGN_KEY_CHECKS = 0');
+        const atd2 = await e
+          .inserir(
+            `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+             carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em)
+           SELECT estabelecimento_id, ?, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+                  fonte_pagadora_id, profissional_id, ?, ? FROM atendimento WHERE id = ?`,
+            [`${P}-2`, h(8), agora, m.atd],
+          )
+          .finally(() => e.executar('SET FOREIGN_KEY_CHECKS = 1'));
+        const conta = (numero: string, inicio: Date, fim: Date | null) =>
+          e.inserir(
+            `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+               tipo_conta_id, natureza, competencia, inicio_em, fim_em, calculada, tabela_preco_id, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?, TRUE, ?, ?)`,
+            [
+              m.est,
+              numero,
+              atd2,
+              base!['paciente_id'],
+              base!['fonte_pagadora_id'],
+              base!['tipo_conta_id'],
+              base!['competencia'],
+              inicio,
+              fim,
+              m.tabela,
+              agora,
+            ],
+          );
+        return {
+          atd2,
+          contaA: await conta(`${P}-C2A`, h(6), virada),
+          contaB: await conta(`${P}-C2B`, virada, null),
+        };
+      },
+    );
+    // Uso que começa antes da primeira conta: recusa (422) com o trecho descoberto; nada lançado nem marcado.
+    const fora = await porta.iniciar(ctx(), { atendimento: atd2, insumo: m.o2, inicio: h(7).toISOString() });
+    await porta.encerrar(ctx(), fora.id, { fim: h(5).toISOString(), versao: 1 });
+    await expect(porta.lancarNaConta(ctx(), atd2)).rejects.toMatchObject({ problema: { status: 422 } });
+    const [nada] = await ler(
+      `SELECT (SELECT COUNT(*) FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (?, ?)) AS itens,
+              (SELECT COUNT(*) FROM uso_gas_medicinal WHERE atendimento_id = ? AND faturado) AS faturados`,
+      [contaA, contaB, atd2],
+    );
+    expect([Number(nada!['itens']), Number(nada!['faturados'])]).toEqual([0, 0]);
+    await porta.cancelar(ctx(), fora.id, { motivo: 'Horário de início errado', versao: 2 });
+
+    // O2 de 5 h atrás a 1 h atrás (4 h): 2 h na conta A e 2 h na conta B (por hora, para cima).
+    const u = await porta.iniciar(ctx(), { atendimento: atd2, insumo: m.o2, inicio: h(5).toISOString() });
+    await porta.encerrar(ctx(), u.id, { fim: h(1).toISOString(), versao: 1 });
+    const r = await porta.lancarNaConta(ctx(), atd2);
+    expect(r.itens).toHaveLength(2);
+    const itens = await ler(
+      `SELECT i.conta_hospitalar_id, i.item_faturavel_id, i.quantidade, i.valor_total, i.realizado_em, i.realizado_fim_em
+         FROM conta_hospitalar_item i WHERE i.conta_hospitalar_id IN (?, ?) ORDER BY i.conta_hospitalar_id`,
+      [contaA, contaB],
+    );
+    expect(
+      itens.map((i) => [
+        Number(i['conta_hospitalar_id']),
+        Number(i['item_faturavel_id']),
+        Number(i['quantidade']),
+        Number(i['valor_total']),
+      ]),
+    ).toEqual([
+      [contaA, m.fatO2, 2, 25],
+      [contaB, m.fatO2, 2, 25],
+    ]);
+    // A parte da conta A termina na virada; a da conta B começa nela.
+    const seg = (d: unknown) => Math.round(new Date(d as Date).getTime() / 1000);
+    expect(seg(itens[0]!['realizado_fim_em'])).toBe(seg(virada));
+    expect(seg(itens[1]!['realizado_em'])).toBe(seg(virada));
+    const mem = await ler<{ dados: unknown }>(
+      `SELECT m.dados FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id
+        WHERE i.conta_hospitalar_id = ? AND m.operacao = 'inclusao'`,
+      [contaA],
+    );
+    const dadosA = (typeof mem[0]!.dados === 'string' ? JSON.parse(mem[0]!.dados) : mem[0]!.dados) as {
+      partes: { uso: number }[];
+      usos: number[];
+    };
+    expect([dadosA.usos, dadosA.partes.map((p) => p.uso)]).toEqual([[u.id], [u.id]]);
+    const [uu] = await ler(
+      'SELECT faturado, conta_hospitalar_id, situacao FROM uso_gas_medicinal WHERE id = ?',
+      [u.id],
+    );
+    expect([Number(uu!['faturado']), Number(uu!['conta_hospitalar_id']), uu!['situacao']]).toEqual([
+      1,
+      contaB,
+      'encerrado',
+    ]);
+    const contas = await ler('SELECT calculada FROM conta_hospitalar WHERE id IN (?, ?)', [contaA, contaB]);
+    expect(contas.map((k) => Number(k['calculada']))).toEqual([0, 0]);
+    // O cancelado continua guardado; nada mais a lançar.
+    const [uf] = await ler('SELECT situacao, faturado FROM uso_gas_medicinal WHERE id = ?', [fora.id]);
+    expect([uf!['situacao'], Number(uf!['faturado'])]).toEqual(['cancelado', 0]);
+    await expect(porta.lancarNaConta(ctx(), atd2)).rejects.toMatchObject({ problema: { status: 422 } });
+    // Atalho da internação: internação inexistente no estabelecimento é 404.
+    await expect(porta.atendimentoDaInternacao(ctx(), 2_000_000_000)).rejects.toMatchObject({
+      problema: { status: 404 },
+    });
+  });
 });

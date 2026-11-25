@@ -17,6 +17,8 @@ import { leitoTexto } from '../regras-tela.js';
 
 const { t } = useI18n();
 const rota = useRoute();
+// C1-074: atalho para os gases medicinais do paciente (registro da enfermagem).
+const podeGases = computed(() => podeNaSessao('enfermagem.horario.ler'));
 const ACOES = ['guias', 'trocas', 'procedimentos', 'alta', 'impressos'] as const;
 const acaoDaRota = computed(() => {
   const a = rota.query['acao'];
@@ -123,6 +125,13 @@ const incoerencias = useQuery({ queryKey: ['adt', 'incoerencias'], queryFn: () =
                 :aria-label="t('adt.lista.acaoDe', { acao: t(`adt.acoes.${a}`), reg: i.reg })"
                 :data-testid="`int-${a}-${i.reg}`"
                 >{{ t(`adt.acoes.${a}`) }}</RouterLink
+              >
+              <RouterLink
+                v-if="podeGases"
+                :to="`/internacao/${i.reg}/gases`"
+                :aria-label="t('adt.gases.abrirDe', { reg: i.reg })"
+                :data-testid="`int-gases-${i.reg}`"
+                >{{ t('adt.gases.abrir') }}</RouterLink
               >
             </td>
           </tr>

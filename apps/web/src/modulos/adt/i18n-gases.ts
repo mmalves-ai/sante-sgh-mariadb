@@ -29,6 +29,9 @@ export const mensagensGases = {
     outro: 'Outro',
   },
   irRegras: 'Regras de cobrança dos gases',
+  abrir: 'Gases medicinais',
+  abrirDe: 'Gases medicinais da internação {reg}',
+  buscandoAtendimento: 'Buscando o atendimento da internação…',
   regras: {
     titulo: 'Regra de cobrança dos gases medicinais',
     texto:

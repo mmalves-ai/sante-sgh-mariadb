@@ -8,6 +8,7 @@ import { SanteBotao } from '@sgh/ui';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { pode } from '../../../casca/sessao/pode.js';
 import { lerPulseira, type PacienteDaPulseira } from '../api-enfermagem.js';
 import ErroEnfermagem from '../componentes/ErroEnfermagem.vue';
 import PainelHorarios from '../componentes/PainelHorarios.vue';
@@ -19,6 +20,8 @@ const lido = ref<string | null>(null);
 const paciente = ref<PacienteDaPulseira | null>(null);
 const atendimentoDaRota = computed(() => Number(rota.query['atendimento'] ?? 0) || null);
 const atendimento = computed(() => paciente.value?.atendimento ?? atendimentoDaRota.value);
+// C1-074: atalho para os gases medicinais do paciente (uso registrado pela enfermagem à beira do leito).
+const podeGases = computed(() => pode('enfermagem.horario.ler'));
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
 
@@ -129,6 +132,11 @@ watch(atendimentoDaRota, () => {
     <ErroEnfermagem v-if="erro" :erro="erro" />
     <p v-if="paciente" role="status" data-testid="beira-paciente">
       {{ t('enfermagem.checagem.pulseiraConfere', { nome: paciente.nome }) }}
+    </p>
+    <p v-if="atendimento && podeGases">
+      <RouterLink :to="{ name: 'adt.gases', params: { atd: atendimento } }" data-testid="beira-gases">{{
+        t('adt.gases.abrir')
+      }}</RouterLink>
     </p>
     <PainelHorarios v-if="atendimento" :atendimento="atendimento" :pulseira-lida="lido" />
   </section>

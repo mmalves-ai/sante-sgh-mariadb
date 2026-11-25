@@ -69,12 +69,35 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    // C1-066, 03-PEP L125: pedido de transporte do paciente da internação (alta, transferência, entre setores).
+    path: `/internacao/:reg${reg}/transporte`,
+    name: 'adt.transporte',
+    component: () => import('./telas/TransporteTela.vue'),
+    props: true,
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
+    // C1-066, 03-PEP L125: fila do transporte de pacientes (emergência primeiro, depois a previsão).
+    path: '/internacao/transportes',
+    name: 'adt.transportes',
+    component: () => import('./telas/TransporteTela.vue'),
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
     // F3.4, 04-INT L82: gases medicinais do paciente pelo atendimento.
     path: `/internacao/atendimentos/:atd${reg}/gases`,
     name: 'adt.gases',
     component: () => import('./telas/GasesTela.vue'),
     props: true,
-    meta: { permissao: 'enfermagem.dispositivo.ler' },
+    meta: { permissao: 'enfermagem.horario.ler' },
+  },
+  {
+    // C1-074, 04-INT L82: os gases do paciente a partir da internação (resolve o atendimento da internação).
+    path: `/internacao/:reg${reg}/gases`,
+    name: 'adt.gases.internacao',
+    component: () => import('./telas/GasesInternacaoTela.vue'),
+    props: true,
+    meta: { permissao: 'enfermagem.horario.ler' },
   },
   {
     // F3.4-3, 04-INT L82: regra de cobrança dos gases (faixas e uso simultâneo).
@@ -88,7 +111,8 @@ export const rotasAdt: RouteRecordRaw[] = [
     path: '/internacao/gases/setores',
     name: 'adt.gases.setores',
     component: () => import('./telas/GasesSetorTela.vue'),
-    meta: { permissao: 'enfermagem.dispositivo.ler' },
+    // C1-074: a mesma permissão de leitura da API (PERMISSOES_GAS_MEDICINAL.usoLer), registro da enfermagem.
+    meta: { permissao: 'enfermagem.horario.ler' },
   },
   {
     // F78.04-1, 04-INT L74: formulários numerados da declaração de óbito (lote, uso, extravio, devolução).

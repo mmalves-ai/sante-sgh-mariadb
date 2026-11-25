@@ -25,6 +25,8 @@ export type UsoGas = z.infer<typeof esquemaUsoGas>;
 
 const comId = z.object({ id: z.number().nullable() }).passthrough();
 
+export const lerAtendimentoDaInternacao = (reg: number) =>
+  ler(`${G}/internacoes/${reg}/atendimento`, z.object({ atendimento: z.number().int() }));
 export const lerUsosGas = (atd: number) =>
   ler(`${G}/atendimentos/${atd}/usos`, z.object({ itens: z.array(esquemaUsoGas) }));
 export const iniciarUsoGas = (corpo: {

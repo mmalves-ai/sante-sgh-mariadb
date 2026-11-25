@@ -14,9 +14,12 @@ import {
   lerUsosGas,
   type UsoGas,
 } from '../api-gases.js';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroAdt from '../componentes/ErroAdt.vue';
 
-const props = defineProps<{ atd: string }>();
+const props = defineProps<{ atd: string | number }>();
+// O atalho da regra aparece só para quem pode ver o contrato (a enfermagem registra o uso; a regra é do convênio).
+const podeRegras = computed(() => pode('convenio.contrato.ler'));
 const { t } = useI18n();
 const atd = computed(() => Number(props.atd));
 const cliente = useQueryClient();
@@ -79,10 +82,12 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
     <h1 id="gases-titulo">{{ t('adt.gases.titulo') }}</h1>
     <p>{{ t('adt.gases.texto') }}</p>
     <p>
-      <RouterLink :to="{ name: 'adt.gases.regras' }" data-testid="gases-ir-regras">{{
-        t('adt.gases.irRegras')
-      }}</RouterLink>
-      ·
+      <template v-if="podeRegras">
+        <RouterLink :to="{ name: 'adt.gases.regras' }" data-testid="gases-ir-regras">{{
+          t('adt.gases.irRegras')
+        }}</RouterLink>
+        ·
+      </template>
       <RouterLink :to="{ name: 'adt.gases.setores' }" data-testid="gases-ir-setores">{{
         t('adt.gasesSetor.irSetores')
       }}</RouterLink>

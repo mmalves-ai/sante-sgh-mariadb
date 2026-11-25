@@ -1,6 +1,7 @@
 // F3.4-3 (04-INT linha 82 e 04-CC linha 91): as telas da regra de cobrança dos gases e do cadastro do texto padrão da
 // descrição cirúrgica. A validação roda na hora pela mesma regra do domínio que a API aplica: o botão de salvar só
-// libera quando a regra (ou o texto) está correta. A tela dos gases leva à da regra por um atalho. Axe em cada passo.
+// libera quando a regra (ou o texto) está correta. O enfermeiro chega aos gases do paciente pelo atalho da beira do
+// leito (C1-074: permissão de registro de enfermagem); a regra é de quem mantém o contrato. Axe em cada passo.
 // O E2E roda sem banco próprio (fonte sintética): o que fica no banco é provado pelos contratos de efeito
 // (gas-medicinal-propria.int.spec.ts e texto-padrao-propria.int.spec.ts).
 import { expect, type Page, test } from '@playwright/test';
@@ -18,17 +19,25 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('internação e centro cirúrgico: regra do gás e texto padrão @F34-3', () => {
+test.describe('internação e centro cirúrgico: regra do gás e texto padrão @F34-3 @C1-074', () => {
   test.setTimeout(180_000);
 
-  test('regra de cobrança do gás: validação na hora (fração, simultâneo) e atalho da tela dos gases; axe', async ({
+  test('gases pelo enfermeiro (atalho da beira do leito) e regra de cobrança: validação na hora (fração, simultâneo); axe', async ({
     page,
   }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.ADMIN');
-    await page.goto('/internacao/atendimentos/1/gases');
+    // C1-074: o uso do gás é registro da enfermagem (linha do tempo do turno e checagem do cuidado), não permissão
+    // dos aparelhos da beira do leito. O enfermeiro chega aos gases do paciente pelo atalho da beira do leito.
+    await entrar(page, 'SINT.ENF.PLANTAO');
+    await page.goto('/beira-leito/checagem?atendimento=1');
+    await page.getByTestId('beira-gases').click();
+    await expect(page).toHaveURL(/\/internacao\/atendimentos\/1\/gases/);
     await expect(page.getByTestId('tela-gases')).toBeVisible();
-    await page.getByTestId('gases-ir-regras').click();
+    await expect(page.getByText('Sem permissão')).toHaveCount(0);
+    await semViolacaoAxe(page, '/internacao/atendimentos/1/gases (enfermeiro)');
+    // A regra de cobrança é do contrato do convênio: quem a mantém entra direto na tela da regra.
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/internacao/gases/regras');
     await expect(page).toHaveURL(/\/internacao\/gases\/regras/);
     await expect(page.getByTestId('tela-regras-gas')).toBeVisible();
 
