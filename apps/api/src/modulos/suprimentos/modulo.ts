@@ -67,6 +67,8 @@ import { DevolucaoFornecedorController } from './devolucao-fornecedor.controller
 import { PORTA_DEVOLUCAO_FORNECEDOR, portaDevolucaoFornecedorIndisponivel } from './devolucao-fornecedor.js';
 import { AtaEmpenhoController } from './ata-empenho.controller.js';
 import { PORTA_ATA_EMPENHO, portaAtaEmpenhoIndisponivel } from './ata-empenho.js';
+import { LancePregaoController } from './lance-pregao.controller.js';
+import { PORTA_LANCE_PREGAO, portaLancePregaoIndisponivel } from './lance-pregao.js';
 import { EntradaDoacaoController } from './entrada-doacao.controller.js';
 import { ConferenciaRecebimentoController } from './conferencia-recebimento.controller.js';
 import {
@@ -245,6 +247,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./ata-empenho.js')).PortaAtaEmpenhoPropria(ctx.nucleo)
       : portaAtaEmpenhoIndisponivel();
+  // C2-030 (05-SUP linha 26): os lances da disputa aberta gravam só no banco próprio (503 sem o núcleo).
+  const lancePregao =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./lance-pregao.js')).PortaLancePregaoPropria(ctx.nucleo)
+      : portaLancePregaoIndisponivel();
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =
     memoria && !pedidos.includes('config')
@@ -277,6 +284,7 @@ export async function modulo(
       ContratoController,
       LicitacaoController,
       AtaEmpenhoController,
+      LancePregaoController,
       ManipulacaoController,
       ProducaoInternaController,
       ...(comCirurgia ? [OpmeController] : []),
@@ -302,6 +310,7 @@ export async function modulo(
       { provide: PORTA_CONTRATO, useValue: contrato },
       { provide: PORTA_LICITACAO, useValue: licitacao },
       { provide: PORTA_ATA_EMPENHO, useValue: ataEmpenho },
+      { provide: PORTA_LANCE_PREGAO, useValue: lancePregao },
       { provide: PORTA_PRODUCAO_INTERNA, useValue: producaoInterna },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],
