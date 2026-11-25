@@ -299,14 +299,13 @@ class RegraConcluidas(unittest.TestCase):
                     " criado_em) VALUES (%s, %s, %s, 0, %s, UTC_TIMESTAMP(3))", (eid, img, t, origem))
 
     def test_prova_da_mesma_base_sem_ler_o_conector_origem(self):
-        """Rodada retomada-rapida (a): com toda imagem do controle da mesma base (resumo aceito, também o da base
-        declarada) e a mesma contagem da tabela, a tabela marcada é pulada sem nenhuma consulta ao conector_origem
-        (o preparo da execução 24 da ProntoCardio levava 14,6 min contando 94 M chaves). Imagem de outra base ou
-        contagem diferente: conta pelo índice, como antes. Dedução: para na primeira chave de outra imagem."""
+        """Rodada retomada-rapida (a): com toda imagem do controle do MESMO resumo (arquivo idêntico) e a mesma
+        contagem da tabela, a tabela marcada é pulada sem nenhuma consulta ao conector_origem (o preparo da execução
+        24 da ProntoCardio levava 14,6 min contando 94 M chaves). Resumos diferentes, mesmo aceitos como a base
+        declarada, ou contagem diferente: conta pelo índice. Dedução: para na primeira chave de outra imagem."""
         cont = {"A": 2, "B": 2, "C": 2}
-        i7 = self._imagem(7, "a" * 64, cont)
-        i8 = self._imagem(8, "b" * 64, cont)  # a mesma base lida de outro jeito (base declarada: resumo aceito)
-        self._origem([("A", "1", i7), ("A", "2", i8), ("B", "1", i7), ("C", "1", i7), ("C", "2", i7)])
+        i8 = self._imagem(8, "b" * 64, cont)
+        self._origem([("A", "2", i8), ("A", "3", i8), ("B", "1", i8)])
         self._marcar(8, i8, ["A", "B"])
         self.root.commit()
         plano = [{"tabela": t, "destinos": ["dest_" + t.lower()]} for t in "ABC"]
@@ -315,17 +314,26 @@ class RegraConcluidas(unittest.TestCase):
                                  batimento=lambda i, n: bat.append((i, n)))
         self.assertEqual((r["tabelas"], r["regra"], cache.get("consultas", 0)), ({"A", "B"}, "marca", 0))
         self.assertEqual(bat, [(0, 3), (1, 3), (2, 3)])  # batimento a cada tabela examinada (pausa no preparo)
-        # só o resumo desta execução (a imagem 7 é de outra base para ela): conta pelo índice, e o resultado é o mesmo
+        # base declarada (imagem 7, outro resumo aceito) com a MESMA contagem e chaves diferentes: A tinha {1,2} na 7
+        # e tem {2,3} na 8; o conector_origem fica com 1→7, 2→8, 3→8 (3 chaves para n=2). A prova não vale: conta
+        # pelo índice e A roda de novo (a chave 1 sumiu do arquivo)
+        i7 = self._imagem(7, "a" * 64, cont)
+        self._origem([("A", "1", i7), ("C", "1", i7), ("C", "2", i7)])
+        self.root.commit()
+        cache = {}
+        r = continuar.concluidas(self.root, self.ctl, 8, plano, cont, {"a" * 64, "b" * 64}, _cache=cache)
+        self.assertEqual((r["tabelas"], cache["consultas"]), ({"B"}, 2))
+        # só o resumo desta execução (a imagem 7 é de outra base para ela): conta pelo índice, mesmo resultado
         cache = {}
         r = continuar.concluidas(self.root, self.ctl, 8, plano, cont, "b" * 64, _cache=cache)
-        self.assertEqual((r["tabelas"], cache["consultas"]), ({"A", "B"}, 2))
-        # chave a mais (linha que sumiu, lida de outra base): a contagem pelo índice recusa a tabela
+        self.assertEqual((r["tabelas"], cache["consultas"]), ({"B"}, 2))
+        # chave a mais em B (linha que sumiu, lida de outra base): a contagem pelo índice recusa a tabela
         i6 = self._imagem(6, "c" * 64, dict(cont, B=3))
         self._origem([("B", "velha", i6), ("B", "2", i8), ("B", "3", i8)])
         self.root.commit()
         cache = {}
         r = continuar.concluidas(self.root, self.ctl, 8, plano, cont, {"a" * 64, "b" * 64}, _cache=cache)
-        self.assertEqual((r["tabelas"], cache["consultas"]), ({"A"}, 2))
+        self.assertEqual((r["tabelas"], cache["consultas"]), (set(), 2))
         # a pausa pedida no preparo sobe do batimento (motor.Painel.batimento_preparo levanta a PausaPedida)
         from sante_conector import carga
 
@@ -376,7 +384,9 @@ class RegraConcluidas(unittest.TestCase):
             m3 = _Cm()  # sem conexão própria: conta no esperar, na conexão da carga
             h = continuar.PendenciasHerdadas(m3, origem, conectar=lambda: 1 / 0).iniciar()
             self.assertIsNone(h._linha)
-            self.assertEqual((h.esperar(), sorted(m3.pend_repetidas)), (4, esperado))
+            bat3 = []  # a reserva mantém o batimento por tabela (feitas, total)
+            self.assertEqual((h.esperar(lambda f, t: bat3.append((f, t))), sorted(m3.pend_repetidas)), (4, esperado))
+            self.assertEqual(bat3, [(1, 2), (2, 2)])
             m4 = _Cm()  # cancelada (pausa): nada fica pela metade; quem esperar recebe a contagem inteira
 
             def pausa():

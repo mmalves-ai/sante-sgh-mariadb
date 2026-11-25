@@ -125,10 +125,13 @@ def _outra_imagem(c, ctl, tabela, destinos, img, cache):
 
 def _mesma_base(c, ctl, tabela, n, aceitos, cache):
     """Prova SEM ler o conector_origem de que as chaves principais da tabela não passam de `n` (regra 3): toda imagem
-    gravada no controle é da mesma base (resumo aceito: o desta execução ou o da base declarada) e contou a tabela com
-    exatamente `n` linhas. Toda chave do conector_origem tem a imagem da execução que leu a linha (imagem nunca é
-    apagada), e cada chave principal é uma linha distinta da tabela: de uma base só, com n linhas, saem no máximo n
-    chaves. Sem a prova (alguma imagem de outra base, ou contagem diferente), conta-se pelo índice."""
+    gravada no controle tem o MESMO resumo (arquivo idêntico, logo as mesmas chaves), aceito por esta execução, e
+    contou a tabela com exatamente `n` linhas. Toda chave do conector_origem tem a imagem da execução que leu a linha
+    (imagem nunca é apagada), e cada chave principal é uma linha distinta da tabela: de um arquivo só, com n linhas,
+    saem no máximo n chaves. Resumos diferentes, mesmo os aceitos como a mesma base declarada (regra 6), NÃO provam:
+    dois arquivos com a mesma contagem podem ter chaves diferentes (a chave que sumiu entre as duas cópias continua no
+    conector_origem com a imagem velha). Sem a prova (mais de um resumo, resumo não aceito ou contagem diferente),
+    conta-se pelo índice (_total_principal)."""
     if "imagens" not in cache:
         c.execute("SELECT id, sha256 FROM `%s`.imagem" % ctl)
         imgs = {int(i): s for i, s in c.fetchall()}
@@ -138,7 +141,8 @@ def _mesma_base(c, ctl, tabela, n, aceitos, cache):
             por_t.setdefault(t, {})[int(i)] = int(r)
         cache["imagens"] = (imgs, por_t)
     imgs, por_t = cache["imagens"]
-    if not imgs or any(s not in aceitos for s in imgs.values()):
+    resumos = set(imgs.values())
+    if len(resumos) != 1 or not resumos <= aceitos:
         return False
     contadas = por_t.get(tabela, {})
     return all(contadas.get(i) == int(n) for i in imgs)
@@ -450,8 +454,15 @@ class PendenciasHerdadas:
                 if self._linha.is_alive() and progresso:
                     progresso(self.feitas, tot)
         if self._linha is None or self.erro is not None or self.cancelada:
-            self.agg = []
-            return repetir_pendencias(self.cm, self.origem, None, self.excluir)
+            # reserva (sem conexão própria, linha caída ou cancelada): conta na conexão da carga, mas com o mesmo
+            # batimento por tabela (a agregação sem batimento das 41 M da execução 24 ficou 17 min parecendo órfã)
+            self.agg, feitas = [], [0]
+
+            def _bat(_n):
+                feitas[0] += 1
+                if progresso:
+                    progresso(feitas[0], tot)
+            return repetir_pendencias(self.cm, self.origem, _bat, self.excluir)
         self.cm.pend_repetidas.extend(self.agg)
         return sum(x[4] for x in self.agg)
 
