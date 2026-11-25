@@ -378,7 +378,7 @@ hash diferente do listado não é o do pacote homologado.
 | 368 | `05_AGE/06_chaves.sql` | chaves | `b95e0330ba42c07a4275263914dbbb682d260c06a29dae5ed38d9dcc46ade6a9` | 3 |
 | 369 | `05_AGE/20_chaves.sql` | chaves | `cf68aa2cfb507743e3fa99f6f8f182593591a5885cd2675a4b893425015018ac` | 11 |
 | 370 | `05_AGE/21_chaves.sql` | chaves | `a60a9d030dca21e44adf85a903c5638c77529c392f7aba4bf9dcf257bd9a4097` | 5 |
-| 371 | `05_AGE/91_retirar_feriado_chaves.sql` | chaves | `4a38cb52f4c18f7d67f98e7392c43226f9e023ae0861d3ec9fa18af47c43b7fd` | 1 |
+| 371 | `05_AGE/91_retirar_feriado_chaves.sql` | chaves | `1a886522cbed5dc9dc2d735cf3b83bba99f33a6456515ddaf2f8437a5db8a3be` | 13 |
 | 372 | `06_PEP/01_chaves.sql` | chaves | `16d5b741d964adf27fb8cad751081672cfc997629aee30adb29364b481d5c2af` | 42 |
 | 373 | `06_PEP/02_chaves.sql` | chaves | `b245dec305753c905e05050fd77e3ad467bd50192c64315f84e88b554799ae79` | 36 |
 | 374 | `06_PEP/03_chaves.sql` | chaves | `fbef8e373981251ccd9ae19d4239743d063a451e05041e4d0d887e99ab8541f4` | 43 |

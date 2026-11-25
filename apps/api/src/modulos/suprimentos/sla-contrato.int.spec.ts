@@ -3,7 +3,10 @@
 // a trilha e a chave em idempotencia_operacao; o reenvio pela chave sem linha nova), o novo do mesmo modelo fechando o
 // anterior na véspera (versão 2, nada apagado), a medição em ocorrencia_contrato com o tempo coberto (fim de semana fora),
 // a apuração do período com a faixa, a glosa e a multa gravadas (tipo multa, valor total, parcelas), a recusa do período
-// já apurado, do contrato de outro estabelecimento e do encerramento antes da apuração. Massa SINTÉTICA, limpa no fim.
+// já apurado, do contrato de outro estabelecimento e do encerramento antes da apuração. Os dias sem expediente vêm do
+// leitor comum do Calendário (C1-078): o feriado nacional calculado (20/11) e o dia de data única do estabelecimento
+// cadastrado em dia_nao_util saem do tempo coberto; o ponto facultativo e o meio expediente não saem (o dia conta como
+// útil). Massa SINTÉTICA, limpa no fim.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -15,6 +18,7 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const SEM_DB = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CODIGOS = ['c1053a', 'c1053b'];
 const NUMERO = 'C1053-SLA';
+const DESC_DIA = 'C1078 SLA dia fictício';
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -76,6 +80,7 @@ describe.skipIf(SEM_DB)('SLA do contrato com fornecedor contra o MariaDB (client
       );
       await e.executar(`DELETE FROM sla_contrato WHERE contrato_fornecedor_id IN (${sub})`, []);
       await e.executar(`DELETE FROM contrato_fornecedor WHERE numero LIKE '${NUMERO}%'`, []);
+      await e.executar('DELETE FROM dia_nao_util WHERE descricao LIKE ?', [`${DESC_DIA}%`]);
       await limparTrilhaDaMassa(e, { codigos: CODIGOS });
     });
   }
@@ -317,5 +322,76 @@ describe.skipIf(SEM_DB)('SLA do contrato com fornecedor contra o MariaDB (client
     );
     expect(f).toMatchObject({ fim: '2026-11-24' });
     expect(Number(f!['versao'])).toBe(2);
+  });
+
+  it('desconta do tempo coberto o feriado nacional calculado e o dia do estabelecimento no Calendário; o facultativo e o meio expediente não', async () => {
+    // Contrato à parte (sem apuração), com SLA desde 01/10: as medições não mexem na apuração do caso anterior.
+    let contrato2 = 0;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'c1078-massa' }, async (e) => {
+      const agora = new Date();
+      const f = await e.uma<{ id: number }>(
+        'SELECT empresa_fornecedora_id AS id FROM contrato_fornecedor WHERE id = ?',
+        [contrato],
+      );
+      contrato2 = await e.inserir(
+        `INSERT INTO contrato_fornecedor (estabelecimento_id, numero, objeto, empresa_fornecedora_id, tipo, data_emissao,
+            vigencia_inicio, vigencia_fim, situacao, criado_em)
+         VALUES (?, ?, 'Manutenção preventiva fictícia', ?, 'manutencao', '2026-01-01', '2026-01-01', '2027-12-31', 'vigente', ?)`,
+        [estA, `${NUMERO}-C1078-${sufixo}`, Number(f!.id), agora],
+      );
+      await e.executar('DELETE FROM dia_nao_util WHERE descricao LIKE ?', [`${DESC_DIA}%`]);
+      // Quarta 14/10: dia inteiro sem expediente só deste estabelecimento; quarta 21/10: ponto facultativo; quarta
+      // 28/10: meio expediente (13h às 18h).
+      const dias: [string, string, number, string | null, string | null][] = [
+        ['inteiro', '2026-10-14', 0, null, null],
+        ['facultativo', '2026-10-21', 1, null, null],
+        ['meio expediente', '2026-10-28', 0, '13:00', '18:00'],
+      ];
+      for (const [nome, data, facultativo, hi, hf] of dias)
+        await e.inserir(
+          `INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, facultativo,
+              hora_inicio, hora_fim, ativo, origem, criado_em, criado_por)
+           VALUES (?, 'estabelecimento', ?, 'data_unica', ?, ?, ?, ?, TRUE, 'sistema', ?, ?)`,
+          [`${DESC_DIA} ${nome}`, estA, data, facultativo, hi, hf, agora, usuario],
+        );
+    });
+    const sla = await porta.gravar(
+      ctxA,
+      contrato2,
+      { ...SLA, vigenciaInicio: '2026-10-01' },
+      `c1078-sla-${sufixo}`,
+    );
+    const medir = (inicio: string, fim: string, rotulo: string) =>
+      porta.medir(
+        ctxA,
+        contrato2,
+        sla.id,
+        { inicio, fim, quantidade: null, descricao: `Chamado fictício ${rotulo}` },
+        `c1078-${rotulo}-${sufixo}`,
+      );
+    // Quinta 19/11 17h a segunda 23/11 9h: 1 h na quinta e 1 h na segunda; a sexta 20/11 (Consciência Negra, nacional
+    // calculado) e o fim de semana ficam fora. Sem o feriado seriam 12 h.
+    const nacional = await medir('2026-11-19T17:00', '2026-11-23T09:00', 'nacional');
+    expect(nacional.medido).toBe(2);
+    // Terça 13/10 17h a quinta 15/10 9h: a quarta do estabelecimento sai (2 h; seriam 12 h).
+    const doEstabelecimento = await medir('2026-10-13T17:00', '2026-10-15T09:00', 'estab');
+    expect(doEstabelecimento.medido).toBe(2);
+    // Terça 20/10 17h a quinta 22/10 9h: o ponto facultativo não sai (1 + 10 + 1 = 12 h).
+    expect((await medir('2026-10-20T17:00', '2026-10-22T09:00', 'facult')).medido).toBe(12);
+    // Terça 27/10 17h a quinta 29/10 9h: o meio expediente não é dia de feriado; o dia conta inteiro (12 h).
+    expect((await medir('2026-10-27T17:00', '2026-10-29T09:00', 'meio')).medido).toBe(12);
+    const gravadas = await ler<{ id: number; duracao_horas: unknown }>(
+      'SELECT id, duracao_horas FROM ocorrencia_contrato WHERE sla_contrato_id = ? ORDER BY ocorrido_em',
+      [sla.id],
+    );
+    expect(gravadas.map((g) => Number(g.duracao_horas))).toEqual([2, 12, 12, 2]);
+    // Inativar o dia do estabelecimento no Calendário vale na hora: a mesma medição passa a cobrir a quarta.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'c1078-inativa' }, (e) =>
+      e.executar('UPDATE dia_nao_util SET ativo = FALSE WHERE descricao = ? AND estabelecimento_id = ?', [
+        `${DESC_DIA} inteiro`,
+        estA,
+      ]),
+    );
+    expect((await medir('2026-10-13T17:00', '2026-10-15T09:00', 'estab2')).medido).toBe(12);
   });
 });
