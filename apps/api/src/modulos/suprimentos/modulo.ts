@@ -72,12 +72,14 @@ import { PORTA_ATA_EMPENHO, portaAtaEmpenhoIndisponivel } from './ata-empenho.js
 import { LancePregaoController } from './lance-pregao.controller.js';
 import { PORTA_LANCE_PREGAO, portaLancePregaoIndisponivel } from './lance-pregao.js';
 import { EntradaDoacaoController } from './entrada-doacao.controller.js';
+import { GovernancaCadastroController } from './governanca-cadastro.controller.js';
 import { ConferenciaRecebimentoController } from './conferencia-recebimento.controller.js';
 import {
   PORTA_CONFERENCIA_RECEBIMENTO,
   portaConferenciaRecebimentoIndisponivel,
 } from './conferencia-recebimento.js';
 import { PORTA_ENTRADA_DOACAO, portaEntradaDoacaoIndisponivel } from './entrada-doacao.js';
+import { PORTA_GOVERNANCA_CADASTRO, portaGovernancaCadastroIndisponivel } from './governanca-cadastro.js';
 
 export interface OpcoesModuloSuprimentos {
   /** Testes: as portas já montadas. */
@@ -181,6 +183,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./entrada-doacao.js')).PortaEntradaDoacaoPropria(ctx.nucleo)
       : portaEntradaDoacaoIndisponivel();
+  // C2-082 (05-SUP linha 2): a governança do cadastro de itens grava só no banco próprio (503 sem o núcleo).
+  const governancaCadastro =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./governanca-cadastro.js')).PortaGovernancaCadastroPropria(ctx.nucleo)
+      : portaGovernancaCadastroIndisponivel();
   // C2-015 (05-SUP linha 22): a devolução de compra ao fornecedor grava só no banco próprio (503 sem o núcleo).
   const devolucaoFornecedor =
     ctx.nucleo && ctx.configuracao.clientePadrao
@@ -280,6 +287,7 @@ export async function modulo(
       EnderecamentoController,
       EtiquetaIdentificacaoController,
       EntradaDoacaoController,
+      GovernancaCadastroController,
       ConferenciaRecebimentoController,
       DevolucaoFornecedorController,
       ConsignadoController,
@@ -307,6 +315,7 @@ export async function modulo(
       { provide: PORTA_ENDERECAMENTO, useValue: enderecamento },
       { provide: PORTA_ETIQUETA_IDENTIFICACAO, useValue: etiquetaIdentificacao },
       { provide: PORTA_ENTRADA_DOACAO, useValue: entradaDoacao },
+      { provide: PORTA_GOVERNANCA_CADASTRO, useValue: governancaCadastro },
       { provide: PORTA_CONFERENCIA_RECEBIMENTO, useValue: conferenciaRecebimento },
       { provide: PORTA_DEVOLUCAO_FORNECEDOR, useValue: devolucaoFornecedor },
       { provide: PORTA_CONSIGNADO, useValue: consignado },

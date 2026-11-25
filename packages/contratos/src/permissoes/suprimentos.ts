@@ -31,6 +31,11 @@ export const PERMISSOES_SUPRIMENTOS_M28: readonly DeclaracaoPermissao[] = [
     'suprimentos.item.editar',
     'Incluir e alterar itens de estoque, grupos, nomes comerciais e códigos de barras',
   ),
+  p(
+    'suprimentos.padronizacao.aprovar',
+    'Decidir pela comissão de padronização: aprovar ou reprovar item novo e aprovar ou executar a unificação de itens',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
   p('suprimentos.fornecedor.ler', 'Consultar fornecedores e terceiros (dados bancários mascarados)'),
   p(
     'suprimentos.fornecedor.editar',
