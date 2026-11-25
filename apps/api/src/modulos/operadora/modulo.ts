@@ -367,7 +367,7 @@ export async function moduloOperadora(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaComercialPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
-            : portaIndisponivel<PortaComercialPropria>(METODOS_COMERCIAL),
+            : portaIndisponivel<PortaComercialPropria>(new Set(METODOS_COMERCIAL)),
       },
       // 08-SGO L95 (C2-113): declaração de saúde, doença preexistente com CPT e portabilidade de carências só no banco.
       {
