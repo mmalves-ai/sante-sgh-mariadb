@@ -105,7 +105,10 @@ NODE_HEAP_MB="${NODE_HEAP_MB:-2048}"
 E=(env -i PATH="$NODE_BIN:/usr/local/bin:/usr/bin:/bin" HOME="$HOME" CI=true TERM=dumb
    NX_LOAD_DOT_ENV_FILES=false NX_NO_CLOUD=true NX_DAEMON=false SGH_NUCLEO_SEM_BANCO=1
    GOTENBERG_URL=http://127.0.0.1:3318 AMBIENTE=ci E2E_PORTAS="$PORTAS" E2E_WORKER=completo
-   NODE_OPTIONS=--max-old-space-size="$NODE_HEAP_MB")
+   NODE_OPTIONS=--max-old-space-size="$NODE_HEAP_MB"
+   SGH_TRAVAS_VM=/nonexistent/e2e-vm-ja-tem-pesado-lock)
+# Sem as vagas do limite-vm (25/11): o E2E já roda sozinho na pesado.lock com vigia de memória próprio (MIN_GB/PARAR_GB);
+# api, web e worker do webServer disputavam as 3 vagas com os construtores e o Playwright desistia em 240 s.
 LOG="$BASE/ultimo.log"
 MARCA="$BASE/memoria-baixa"
 rm -f "$MARCA"
