@@ -8,7 +8,9 @@
 // prévia da Vigilância Sanitária) e a raiz de arquivos do banco próprio; o E2E roda com a fonte sintética, por isso
 // as rotas /api/farmacia/gravacao e /api/farmacia/livro são simuladas pelo Playwright com massa SINTÉTICA. O efeito
 // no banco (livro oficial com o arquivo e o hash, os dois termos, as recusas e a leitura dos termos gravados) está em
-// apps/api/src/modulos/farmacia/porta-propria-dispensacao.int.spec.ts.
+// apps/api/src/modulos/farmacia/porta-propria-dispensacao.int.spec.ts, que prova também as mesmas rotas pela HTTP sobre
+// o MariaDB (chave do livro oficial pela configuração, permissão, recusa 409 sem CNPJ, termos gravados relidos e o
+// refechamento travado): as respostas simuladas aqui seguem as que a API real devolve ali.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 
@@ -104,12 +106,12 @@ test.describe('Livro de controlados: fechamento oficial @F3.6-05 @fase3', () => 
         fechamentos.push((req.postDataJSON() ?? {}) as Record<string, unknown>);
         if (!comCnpj)
           return rota.fulfill({
-            status: 422,
+            status: 409,
             contentType: 'application/problem+json',
             body: JSON.stringify({
               type: 'about:blank',
               title: 'Operação recusada',
-              status: 422,
+              status: 409,
               codigo: 'estabelecimento-sem-cnpj',
               detail:
                 'O livro oficial leva nos termos a razão social e o CNPJ do estabelecimento: complete o cadastro do estabelecimento.',

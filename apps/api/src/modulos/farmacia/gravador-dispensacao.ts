@@ -1186,10 +1186,12 @@ export function gravadorDispensacao(
   const fecharLivro: GravadorSghFarmacia['fecharLivro'] = async (f) => {
     const oficial = f.livro.modo === 'oficial';
     const numero = `L${f.livro.livro}-${f.livro.inicio}-${oficial ? 'O' : 'C'}`;
-    const ja = await tx.uma('SELECT id FROM livro_controlado WHERE estabelecimento_id = ? AND numero = ?', [
-      est,
-      numero,
-    ]);
+    // O período fechado como oficial trava também o de conferência (o oficial é o livro do período); o de conferência
+    // não trava o oficial, que vem depois da aprovação prévia da Vigilância Sanitária.
+    const ja = await tx.uma(
+      'SELECT id FROM livro_controlado WHERE estabelecimento_id = ? AND numero IN (?, ?)',
+      [est, numero, `L${f.livro.livro}-${f.livro.inicio}-O`],
+    );
     recusar(
       conferirFechamentoLivro({
         responsavelTecnico: f.responsavelTecnico,

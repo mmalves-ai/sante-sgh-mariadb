@@ -22,6 +22,12 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FUSO_PADRAO, instanteCivil } from '../exames/relogio.js';
 import { PortaFarmaciaPropria } from './porta-propria.js';
+import { criarApp } from '../../app.js';
+import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
+import { lerConfiguracao } from '../../configuracao.js';
+import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { fonteConfiguracaoMemoria } from '../config/public-api.js';
+import { moduloFarmacia } from './modulo.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -998,6 +1004,226 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
       await rm(raiz, { recursive: true, force: true });
     }
   });
+
+  it('rotas do livro oficial: a tela pela HTTP sobre a porta própria, a chave e a permissão, o fechamento gravado e relido', async () => {
+    // A app com o módulo da farmácia e a sessão sintética; a porta é a própria, com o contexto da massa (o
+    // estabelecimento e o usuário sintéticos da sessão não existem no banco do cliente de teste). A chave do livro
+    // oficial (aprovação prévia da Vigilância Sanitária) vem da configuração e começa desligada.
+    const raizAntes = process.env['ARQUIVOS_RAIZ'];
+    const raiz = await mkdtemp(join(tmpdir(), 'f36-livro-rota-'));
+    process.env['ARQUIVOS_RAIZ'] = raiz;
+    let oficialLigada = false;
+    const chaveCfg = (id: string, recurso: string, ligada: () => boolean) => ({
+      id,
+      tipo: 'recurso' as const,
+      chave: recurso,
+      escopo: 'hospital' as const,
+      valor: '*',
+      get ligada() {
+        return ligada();
+      },
+      ligadaAntes: null,
+      lote: null,
+      justificativa: 'Teste sintético do livro oficial',
+      alteradoPor: 'SINT.ADMIN',
+      alteradoEm: '2026-11-25T00:00:00.000Z',
+    });
+    const configuracao = fonteConfiguracaoMemoria(new RegistradorTrilhaMemoria(), {
+      chavesIniciais: () => [
+        chaveCfg('f36-rota-1', 'suprimentos.controlados', () => true),
+        chaveCfg('f36-rota-2', 'suprimentos.livroControlados', () => oficialLigada),
+      ],
+      // As aprovações prévias declaradas das duas funcionalidades (conferência dos controlados e Vigilância Sanitária).
+      prerequisitosIniciais: () =>
+        ['suprimentos.controlados', 'suprimentos.livroControlados'].map((recurso) => ({
+          recurso,
+          tipo: 'aprovacao' as const,
+          situacao: 'cumprido' as const,
+          validade: null,
+          evidencia: 'aprovação sintética do teste (sem dado real)',
+          alteradoPor: 'SINT.ADMIN',
+          alteradoEm: '2026-11-25T00:00:00.000Z',
+        })),
+    });
+    const real = porta;
+    const daMassa = new Proxy(real, {
+      get(alvo, k) {
+        const v = (alvo as unknown as Record<string | symbol, unknown>)[k];
+        return typeof v === 'function'
+          ? (_c: unknown, ...resto: unknown[]) =>
+              (v as (...a: unknown[]) => unknown).call(alvo, ctx, ...resto)
+          : v;
+      },
+    });
+    const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'farmacia' };
+    const app = await criarApp(lerConfiguracao(env), null, env, {
+      registro: {
+        farmacia: async () => ({
+          modulo: (c) => moduloFarmacia(c, { porta: daMassa, configuracao }),
+        }),
+      },
+    });
+    const cnpj = (v: string | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f36-rota' }, (e) =>
+        e.executar('UPDATE estabelecimento SET cnpj = ? WHERE id = ?', [v, ids.est]),
+      );
+    try {
+      await app.init();
+      await app.getHttpAdapter().getInstance().ready();
+      const entrar = async (login: string) => {
+        const r = await app.inject({
+          method: 'POST',
+          url: '/api/sessao',
+          payload: { estabelecimento: 'aa', login, senha: SENHA },
+        });
+        expect(r.statusCode).toBe(201);
+        const set = (r.headers['set-cookie'] as string[] | undefined) ?? [];
+        return {
+          cookie: set.map((x) => x.split(';')[0]).join('; '),
+          'x-csrf':
+            set
+              .find((x) => x.startsWith('sgh_csrf='))
+              ?.split(';')[0]
+              ?.slice(9) ?? '',
+        };
+      };
+      let n = 0;
+      const PERIODO = 'livro=1&inicio=2026-11-15&fim=2026-11-21';
+      const lerLivro = (h: Record<string, string>) =>
+        app.inject({
+          method: 'GET',
+          url: `/api/farmacia/livro?${PERIODO}`,
+          headers: { cookie: h['cookie']! },
+        });
+      const fechar = (h: Record<string, string>, oficial: boolean) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/farmacia/livro/fechar',
+          headers: { ...h, 'idempotency-key': `t-f36-rota-${Date.now()}-${++n}` },
+          payload: { livro: 1, inicio: '2026-11-15', fim: '2026-11-21', oficial },
+        });
+      const cod = (r: { json(): unknown }) => (r.json() as { codigo?: string }).codigo;
+      const oficiais = () =>
+        contar(
+          "SELECT COUNT(*) AS n FROM livro_controlado WHERE estabelecimento_id = ? AND modo_fechamento = 'oficial' AND periodo_inicio = '2026-11-15'",
+          [ids.est],
+        );
+      const arquivos = () =>
+        contar(
+          "SELECT COUNT(*) AS n FROM arquivo WHERE estabelecimento_id = ? AND finalidade = 'livro_controlado'",
+          [ids.est],
+        );
+
+      // Sem a permissão de fechar: 403, nada gravado.
+      const outro = await entrar('SINT.AGENDA');
+      expect((await fechar(outro, true)).statusCode).toBe(403);
+      const farma = await entrar('SINT.FARMACEUTICO');
+      // A tela lê o período aberto em modo conferência, sem fechamento.
+      let r = await lerLivro(farma);
+      expect(r.statusCode).toBe(200);
+      expect(r.json()).toMatchObject({
+        modo: 'conferencia',
+        fechado: null,
+        inicio: '2026-11-15',
+        fim: '2026-11-21',
+      });
+      // A tela lê a chave do oficial desligada; o fechamento oficial é recusado pela chave e nada fica no banco.
+      expect(
+        (
+          (
+            await app.inject({
+              method: 'GET',
+              url: '/api/farmacia/gravacao',
+              headers: { cookie: farma.cookie },
+            })
+          ).json() as {
+            funcionalidades: Record<string, { ligada: boolean }>;
+          }
+        ).funcionalidades['livroOficial']?.ligada,
+      ).toBe(false);
+      const antesArquivos = await arquivos();
+      r = await fechar(farma, true);
+      expect(cod(r)).toBe('livro-oficial-desligado');
+      expect(await oficiais()).toBe(0);
+      expect(await arquivos()).toBe(antesArquivos);
+      // A chave ligada pela configuração; sem CNPJ no cadastro o servidor recusa e nada fica no livro.
+      oficialLigada = true;
+      expect(
+        (
+          (
+            await app.inject({
+              method: 'GET',
+              url: '/api/farmacia/gravacao',
+              headers: { cookie: farma.cookie },
+            })
+          ).json() as {
+            funcionalidades: Record<string, { ligada: boolean }>;
+          }
+        ).funcionalidades['livroOficial']?.ligada,
+      ).toBe(true);
+      await cnpj(null);
+      r = await fechar(farma, true);
+      expect([r.statusCode, cod(r)]).toEqual([409, 'estabelecimento-sem-cnpj']);
+      expect(await oficiais()).toBe(0);
+      // Com o CNPJ: o fechamento oficial grava o livro, o arquivo do conteúdo com o hash e os dois termos.
+      await cnpj('92400000000155');
+      r = await fechar(farma, true);
+      expect(r.statusCode, JSON.stringify(r.json())).toBe(200);
+      const feito = r.json() as { mensagem: string; ids: { livro: number; hash: string } };
+      expect(feito.mensagem).toMatch(/oficial/);
+      expect(feito.ids.hash).toMatch(/^[0-9a-f]{64}$/);
+      const linha = await ler(
+        'SELECT modo_fechamento, hash_conteudo, conteudo_arquivo_id, situacao FROM livro_controlado WHERE id = ?',
+        [feito.ids.livro],
+      );
+      expect(linha).toMatchObject({
+        modo_fechamento: 'oficial',
+        hash_conteudo: feito.ids.hash,
+        situacao: 'encerrado',
+      });
+      expect(
+        await ler('SELECT hash_sha256 FROM arquivo WHERE id = ?', [Number(linha?.['conteudo_arquivo_id'])]),
+      ).toMatchObject({ hash_sha256: feito.ids.hash });
+      expect(
+        await contar(
+          'SELECT COUNT(*) AS n FROM termo_livro_controlado WHERE livro_controlado_id = ? AND cnpj = ?',
+          [feito.ids.livro, '92400000000155'],
+        ),
+      ).toBe(2);
+      // A tela relê do servidor: o período como oficial, com os termos gravados (abertura e encerramento) e o texto.
+      r = await lerLivro(farma);
+      const lido = r.json() as {
+        modo: string;
+        termoAbertura: string;
+        fechado: {
+          modo: string;
+          hash: string;
+          termos: { tipo: string; cnpj: string; conteudoGuardado: boolean; texto: string }[];
+        };
+      };
+      expect(lido.modo).toBe('oficial');
+      expect(lido.fechado).toMatchObject({ modo: 'oficial', hash: feito.ids.hash });
+      expect(lido.fechado.termos.map((t) => [t.tipo, t.cnpj, t.conteudoGuardado])).toEqual([
+        ['abertura', '92400000000155', false],
+        ['encerramento', '92400000000155', true],
+      ]);
+      expect(lido.fechado.termos[0]?.texto).toMatch(/^Termo de abertura/);
+      expect(lido.fechado.termos[1]?.texto).toMatch(/^Termo de encerramento/);
+      expect(lido.fechado.termos[1]?.texto).toContain('92.400.000/0001-55');
+      // O refechamento do mesmo período (oficial ou conferência) é recusado e nada muda.
+      r = await fechar(farma, true);
+      expect(cod(r)).toBe('livro-fechado');
+      r = await fechar(farma, false);
+      expect(cod(r), `${r.statusCode} ${r.body}`).toBe('livro-fechado');
+      expect(await oficiais()).toBe(1);
+    } finally {
+      await app.close();
+      await cnpj(null);
+      if (raizAntes === undefined) delete process.env['ARQUIVOS_RAIZ'];
+      else process.env['ARQUIVOS_RAIZ'] = raizAntes;
+      await rm(raiz, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   it('farmácia ambulatorial: receita retida, saída do lote, envio nacional e a leitura escriturada', async () => {
     const hoje = (await porta.relogio(ctx)).hoje;

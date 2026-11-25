@@ -875,7 +875,10 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
             oficial: f.livro.modo === 'oficial',
             chaveOficialLigada: f.chaveOficialLigada,
             jaFechado: s.livros.some(
-              (x) => x.livro === f.livro.livro && x.inicio === f.livro.inicio && x.modo === f.livro.modo,
+              (x) =>
+                x.livro === f.livro.livro &&
+                x.inicio === f.livro.inicio &&
+                (x.modo === f.livro.modo || x.modo === 'oficial'),
             ),
           }),
         );
