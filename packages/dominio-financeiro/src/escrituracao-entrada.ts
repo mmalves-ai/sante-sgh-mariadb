@@ -422,6 +422,10 @@ const v2 = (n: number) => centavos(n).toFixed(2).replace('.', ',');
 const v4 = (n: number | null) => (n === null ? '' : n.toFixed(4).replace('.', ','));
 const dia = (iso: string) => `${iso.slice(8, 10)}${iso.slice(5, 7)}${iso.slice(0, 4)}`;
 const limpo = (s: string | null) => (s ?? '').replace(/[|\r\n]/g, ' ').trim();
+/** Código do item da receita de serviços de saúde no A170 das notas emitidas (cadastrado no 0200). */
+const ITEM_RECEITA = 'SERVICO-SAUDE';
+/** A unidade do item no C170 e no 0200 (a que vem sem unidade fica em UN, cadastrada no 0190). */
+const unidadeDoItem = (i: ItemEfd) => limpo(i.unidade) || 'UN';
 /** Tipo do crédito (tabela 4.3.6): 101 alíquota básica; 106 presumido. */
 const tipoCredito = (cst: string) => (cst >= '60' ? '106' : '101');
 
@@ -516,6 +520,27 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
       '',
       '',
     );
+  // 0190 e 0200: toda unidade e todo item citados no A170 e no C170 (o validador recusa o código sem cadastro). O item
+  // do serviço tomado é serviço (09); o da mercadoria, material de uso e consumo (07); a receita, o serviço de saúde.
+  const itensCadastro = new Map<string, { descricao: string; unidade: string; tipo: string }>();
+  for (const d of docs)
+    if (regular(d))
+      for (const i of d.itens) {
+        const codigo = limpo(i.codigoItem);
+        if (!itensCadastro.has(codigo))
+          itensCadastro.set(codigo, {
+            descricao: limpo(i.descricao) || codigo,
+            unidade: unidadeDoItem(i),
+            tipo: d.servico ? '09' : '07',
+          });
+      }
+  const receitasAutorizadas = (p.receitas ?? []).some((x) => x.situacao === 'autorizada');
+  if (receitasAutorizadas && !itensCadastro.has(ITEM_RECEITA))
+    itensCadastro.set(ITEM_RECEITA, { descricao: 'SERVICOS DE SAUDE', unidade: 'UN', tipo: '09' });
+  for (const u of [...new Set([...itensCadastro.values()].map((x) => x.unidade))].sort())
+    r('0190', u, u === 'UN' ? 'UNIDADE' : u);
+  for (const [codigo, x] of [...itensCadastro.entries()].sort(([a], [b]) => a.localeCompare(b)))
+    r('0200', codigo, x.descricao, '', '', x.unidade, x.tipo, '', '', '', '', '');
   bloco('0', 1);
 
   // Bloco A: serviços tomados com direito a crédito e serviços prestados (a receita das notas emitidas).
@@ -602,7 +627,7 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
     r(
       'A170',
       1,
-      'SERVICO-SAUDE',
+      ITEM_RECEITA,
       'SERVICOS DE SAUDE',
       v2(x.valorServicos),
       v2(x.valorDesconto),
@@ -681,7 +706,7 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
         limpo(i.codigoItem),
         limpo(i.descricao),
         i.quantidade.toFixed(4).replace('.', ','),
-        limpo(i.unidade),
+        unidadeDoItem(i),
         v2(i.valorItem),
         v2(i.valorDesconto),
         0,

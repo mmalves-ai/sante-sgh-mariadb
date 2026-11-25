@@ -215,6 +215,24 @@ describe('arquivo da EFD-Contribuições com as receitas', () => {
     expect(ls.at(-1)).toBe(`|9999|${ls.length}|`);
   });
 
+  it('0190 e 0200: todo item do A170 e do C170 tem cadastro, com a unidade cadastrada; a receita é serviço (09)', () => {
+    const ls = linhasDe(pedido());
+    const cadastrados = new Map(reg(ls, '0200').map((l) => [l.split('|')[2], l.split('|')]));
+    const unidades = new Set(reg(ls, '0190').map((l) => l.split('|')[2]));
+    for (const l of [...reg(ls, 'A170'), ...reg(ls, 'C170')])
+      expect(cadastrados.has(l.split('|')[3])).toBe(true);
+    for (const [, c] of cadastrados) expect(unidades.has(c[6])).toBe(true);
+    expect(cadastrados.get('SERVICO-SAUDE')?.slice(6, 8)).toEqual(['UN', '09']);
+    // O 0190 e o 0200 vêm depois dos participantes e antes do fecho do bloco 0.
+    const ordem = ls.map((l) => l.split('|')[1] ?? '').filter((r) => r.startsWith('0'));
+    expect(ordem.lastIndexOf('0150')).toBeLessThan(ordem.indexOf('0190'));
+    expect(ordem.lastIndexOf('0200')).toBeLessThan(ordem.indexOf('0990'));
+    // Sem receita, o item da receita não é cadastrado.
+    expect(reg(linhasDe(pedido({ receitas: [] })), '0200').some((l) => l.includes('|SERVICO-SAUDE|'))).toBe(
+      false,
+    );
+  });
+
   it('misto: M200 cumulativo com o código 51; o crédito fica como saldo (desconto parcial); cumulativo detalhado no 0110', () => {
     const ls = linhasDe(pedido({ regime: 'misto' }));
     expect(reg(ls, 'M100')[0]).toMatch(/\|16,50\|1\|0,00\|16,50\|$/);
