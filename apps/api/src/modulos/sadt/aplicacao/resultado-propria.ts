@@ -5,7 +5,7 @@
 // retificação guarda a versão anterior inteira em resultado_exame_versao com o motivo. Com responsável pelo laudo nomeado
 // no setor (responsavel_laudo_setor, 05-SADT linha 25), só ele libera e retifica. Nada é apagado; tudo pelo
 // Executor, com a trilha na mesma transação.
-import { calcularNoResultado } from './formulas-leitura.js';
+import { type CalculadoSemConta, calcularNoResultado, lerDiaDoExame } from './formulas-leitura.js';
 import {
   avaliarValor,
   conferirDigitacao,
@@ -102,12 +102,13 @@ export class ServicoResultadoSadt {
       const calculo = await calcularNoResultado(tx, {
         exameId: ctx.exameId,
         paciente: ctx.paciente,
-        agora: ctx.agora,
+        dia: await lerDiaDoExame(tx, exame),
         resultado: ctx.resultado ? n(ctx.resultado['id']) : null,
         valores: e.valores,
         variaveis: e.variaveis ?? [],
       });
       if (calculo.falha) throw recusa('variavel-invalida', calculo.falha);
+      this.recusarSemConta(calculo.semConta);
       const falha = conferirDigitacao({
         situacaoExame: ctx.situacaoExame,
         retido: ctx.retido,
@@ -232,11 +233,12 @@ export class ServicoResultadoSadt {
       const calculo = await calcularNoResultado(tx, {
         exameId: ctx.exameId,
         paciente: ctx.paciente,
-        agora: ctx.agora,
+        dia: await lerDiaDoExame(tx, exame),
         resultado: id || null,
         valores: e.valores,
         variaveis: [],
       });
+      this.recusarSemConta(calculo.semConta);
       const fora = conferirDigitacao({
         situacaoExame: 'em_analise',
         retido: false,
@@ -335,6 +337,20 @@ export class ServicoResultadoSadt {
       });
     }
     return m;
+  }
+
+  /**
+   * O calculado que já tem número gravado e cuja conta deixou de fechar com as entradas novas (divisor que virou zero,
+   * entrada sem número): a gravação é recusada com o motivo e nada muda. O número da conta anterior nunca fica no banco
+   * ao lado de entradas que não o produzem, nem segue para a liberação e o laudo.
+   */
+  private recusarSemConta(semConta: readonly CalculadoSemConta[]): void {
+    const [s] = semConta;
+    if (s)
+      throw recusa(
+        'calculo-impossivel',
+        `Com estes valores a fórmula do analito calculado não fecha (${s.motivo}) e o valor já gravado deixaria de valer. Corrija os valores da conta.`,
+      );
   }
 
   /** Grava (ou corrige) o valor de cada analito com a faixa congelada; devolve as marcas do resultado. */

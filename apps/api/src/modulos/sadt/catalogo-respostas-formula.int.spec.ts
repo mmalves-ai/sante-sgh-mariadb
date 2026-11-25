@@ -7,6 +7,10 @@
 //   - a digitação lida com a fórmula vigente: o analito calculado sai com a conta ou com o motivo, e a variável a
 //     digitar aparece; a gravação do resultado grava o calculado pela fórmula (o digitado nele é ignorado), guarda a
 //     variável digitada em resultado_variavel_formula e recusa variável de fora do exame; a nova gravação refaz a conta;
+//   - a fórmula e a idade da gravação são as da DATA DO EXAME, como na leitura: com uma versão vigente na data do exame
+//     e outra a partir de hoje, a tela e o banco dão o mesmo valor (o da versão da data do exame);
+//   - o calculado já gravado cuja conta deixa de fechar (divisão por zero) recusa a gravação: nada muda no banco, o
+//     número antigo não fica ao lado de entradas que não o produzem; também na retificação do liberado;
 //   - a trilha de cada gravação.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -444,6 +448,127 @@ describe.skipIf(SEM_BANCO)(
           )?.['n'],
         ),
       ).toBe(1);
+    });
+
+    it('conta que deixa de fechar recusa a gravação; a fórmula gravada é a da data do exame, igual à da tela', async () => {
+      const mm = m as MassaSadt;
+      const porta = new PortaSadtPropria(nucleo);
+      const servico = new ServicoResultadoSadt(nucleo);
+      const cs = () => ({ ...contexto(mm), chaveIdempotencia: `t-crf-${mm.marca}-${++k}` });
+      const hoje = String((await um('SELECT DATE_FORMAT(CURRENT_DATE, "%Y-%m-%d") AS d', []))?.['d']);
+      const calc = analitos[analitos.length - 1] as number;
+      const ea = await vinculoDe(calc);
+      const linhaDe = async (item: number, analito: number) =>
+        um(
+          `SELECT ra.valor_numerico, ra.versao FROM resultado_analito ra JOIN resultado_exame re ON re.id = ra.resultado_exame_id
+            WHERE re.exame_item_id = ? AND ra.analito_id = ? AND ra.excluido_em IS NULL`,
+          [item, analito],
+        );
+      // Segunda versão da fórmula: CALC = K / divisor (a primeira, de 2020, é encerrada na véspera da nova).
+      await catalogo.novaFormula(c(), ea, {
+        descricao: 'Calculado de teste, versão 2',
+        expressao: 'K / divisor',
+        casasDecimais: 1,
+        vigenciaInicio: hoje,
+        variaveis: [
+          { identificador: 'K', descricao: 'Potássio', fonte: 'analito', analitoId: mm.analito },
+          { identificador: 'divisor', descricao: 'Divisor', fonte: 'digitado' },
+        ],
+      });
+      // A massa fixa a virada cinco dias atrás, para a prova não depender da hora (o dia do banco, o do fuso do
+      // estabelecimento e o do instante gravado viram em horas diferentes): versão 1 até seis dias atrás, versão 2 depois.
+      await nucleo.escrever(COR, async (e) => {
+        await e.executar(
+          `UPDATE formula_calculo SET vigencia_fim = CURRENT_DATE - INTERVAL 6 DAY
+            WHERE exame_analito_id = ? AND vigencia_inicio = '2020-01-01'`,
+          [ea],
+        );
+        await e.executar(
+          `UPDATE formula_calculo SET vigencia_inicio = CURRENT_DATE - INTERVAL 5 DAY
+            WHERE exame_analito_id = ? AND vigencia_inicio <> '2020-01-01'`,
+          [ea],
+        );
+      });
+      const idVar = async (identificador: string) =>
+        Number(
+          (
+            await um(
+              `SELECT vf.id FROM variavel_formula vf JOIN formula_calculo fc ON fc.id = vf.formula_calculo_id
+                WHERE fc.exame_analito_id = ? AND vf.identificador = ?`,
+              [ea, identificador],
+            )
+          )?.['id'],
+        );
+      const divisor = await idVar('divisor');
+      const fator = await idVar('fator');
+
+      // 1) O exame de hoje (itemLab, já com CALC = 7,5 gravado) passa à versão 2. Divisor zero: a conta não fecha, a
+      //    gravação é recusada e nada muda: nem o calculado, nem a entrada, nem a variável.
+      const antes = await linhaDe(mm.itemLab, calc);
+      expect(Number(antes?.['valor_numerico'])).toBe(7.5);
+      const kAntes = await linhaDe(mm.itemLab, mm.analito);
+      expect(
+        await falhaDe(
+          servico.registrar(cs(), mm.itemLab, {
+            valores: [{ analito: mm.analito, numero: 9 }],
+            variaveis: [{ variavel: divisor, valor: 0 }],
+          }),
+        ),
+      ).toMatch(/^calculo-impossivel .*Divisão por zero/);
+      expect(await linhaDe(mm.itemLab, calc)).toEqual(antes);
+      expect(await linhaDe(mm.itemLab, mm.analito)).toEqual(kAntes);
+      expect(
+        Number(
+          (
+            await um(
+              `SELECT COUNT(*) AS n FROM resultado_variavel_formula rv JOIN resultado_exame re ON re.id = rv.resultado_exame_id
+                WHERE re.exame_item_id = ? AND rv.variavel_formula_id = ?`,
+              [mm.itemLab, divisor],
+            )
+          )?.['n'],
+        ),
+      ).toBe(0);
+      // Com a conta possível, grava pela versão 2: 9 / 2 = 4,5 (o 7,5 da conta anterior sai).
+      await servico.registrar(cs(), mm.itemLab, {
+        valores: [{ analito: mm.analito, numero: 9 }],
+        variaveis: [{ variavel: divisor, valor: 2 }],
+      });
+      expect(Number((await linhaDe(mm.itemLab, calc))?.['valor_numerico'])).toBe(4.5);
+      expect(
+        (await porta.digitacao(contexto(mm), mm.itemLab))?.elementos.find((e) => e.codigo === calc)?.calculo,
+      ).toMatchObject({ expressao: 'K / divisor', valor: 4.5, motivo: null });
+
+      // 2) O outro exame (itemLab2) foi pedido dez dias atrás: vale a versão 1 na tela E na gravação, que é feita hoje.
+      await nucleo.escrever(COR, async (e) => {
+        await e.executar(
+          `UPDATE requisicao_exame SET solicitado_em = solicitado_em - INTERVAL 10 DAY
+            WHERE id = (SELECT requisicao_exame_id FROM exame_item WHERE id = ?)`,
+          [mm.itemLab2],
+        );
+        await e.executar("UPDATE exame_item SET situacao = 'em_analise' WHERE id = ?", [mm.itemLab2]);
+      });
+      expect(
+        (await porta.digitacao(contexto(mm), mm.itemLab2))?.elementos.find((e) => e.codigo === calc)?.calculo
+          ?.expressao,
+      ).toBe('(K * fator) / 2');
+      // A variável da versão de hoje não é deste exame (a fórmula dele é a da data do pedido).
+      expect(
+        await falhaDe(
+          servico.registrar(cs(), mm.itemLab2, {
+            valores: [{ analito: mm.analito, numero: 4 }],
+            variaveis: [{ variavel: divisor, valor: 2 }],
+          }),
+        ),
+      ).toMatch(/^variavel-invalida/);
+      await servico.registrar(cs(), mm.itemLab2, {
+        valores: [{ analito: mm.analito, numero: 4 }],
+        variaveis: [{ variavel: fator, valor: 3 }],
+      });
+      // Banco: (4 * 3) / 2 = 6 pela versão 1 (pela de hoje seria outra conta). Tela: o mesmo valor.
+      expect(Number((await linhaDe(mm.itemLab2, calc))?.['valor_numerico'])).toBe(6);
+      expect(
+        (await porta.digitacao(contexto(mm), mm.itemLab2))?.elementos.find((e) => e.codigo === calc)?.calculo,
+      ).toMatchObject({ expressao: '(K * fator) / 2', valor: 6, motivo: null });
     });
   },
 );

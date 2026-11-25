@@ -7,6 +7,7 @@
 import type { ElementoDigitacao } from '@sgh/contratos';
 import {
   calcularAnalitos,
+  dataDaReferencia,
   type FonteVariavelCalculo,
   type FormulaDoAnalito,
   idadeEmAnos,
@@ -14,6 +15,7 @@ import {
   variaveisADigitar,
 } from '@sgh/dominio-sadt';
 import type { Linha, TxOperacao } from '@sgh/nucleo';
+import { FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
 
 /** Quem lê: o leitor da consulta ou a transação da gravação. */
 interface Fonte {
@@ -23,6 +25,37 @@ interface Fonte {
 const n = (v: unknown) => Number(v ?? 0);
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const marcas = (k: number) => Array.from({ length: k }, () => '?').join(', ');
+
+/** DATETIME do banco → "AAAA-MM-DD" (como a leitura da digitação lê a coleta e a solicitação). */
+const diaDe = (v: unknown): string | null =>
+  v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null;
+
+/**
+ * A data do exame pedido (coleta da amostra em uso; sem ela, a solicitação; nunca depois de hoje no fuso do
+ * estabelecimento): a mesma regra `dataDaReferencia` que a leitura da digitação usa, para a gravação escolher a mesma
+ * versão da fórmula e contar a mesma idade que a tela mostrou.
+ */
+export async function lerDiaDoExame(l: Fonte, exameItem: number): Promise<string> {
+  const [r] = await l.consultar(
+    `SELECT r.solicitado_em, es.fuso_horario,
+            (SELECT x.coletada_em FROM amostra_biologica_exame abe
+               JOIN amostra_biologica x ON x.id = abe.amostra_biologica_id
+              WHERE abe.exame_item_id = ei.id AND abe.excluido_em IS NULL AND x.excluido_em IS NULL
+              ORDER BY x.situacao IN ('rejeitada', 'cancelada', 'descartada'), abe.amostra_biologica_id DESC
+              LIMIT 1) AS coletada_em
+       FROM exame_item ei
+       JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+       JOIN estabelecimento es ON es.id = r.estabelecimento_id
+      WHERE ei.id = ?`,
+    [exameItem],
+  );
+  const fuso = r?.['fuso_horario'] ? String(r['fuso_horario']) : FUSO_PADRAO;
+  return dataDaReferencia({
+    coletadaEm: diaDe(r?.['coletada_em']),
+    solicitadoEm: diaDe(r?.['solicitado_em']),
+    hoje: relogioNoFuso(fuso).hoje,
+  });
+}
 
 /** A fórmula vigente de cada analito calculado do exame na data (a de início mais recente; uma por analito). */
 export async function lerFormulasDoExame(
@@ -161,17 +194,27 @@ const FONTE_VALOR: Record<FonteVariavelCalculo, string> = {
   analito: 'analito',
 };
 
+/** O calculado que já tinha valor gravado e cuja conta deixou de fechar: o valor antigo não pode ficar. */
+export interface CalculadoSemConta {
+  readonly analito: number;
+  readonly motivo: string;
+}
+
 /**
  * O cálculo na gravação do resultado: junta os valores já gravados com os que vieram, calcula os analitos com fórmula
- * e devolve os valores a gravar (o do calculado é o da fórmula; sem conta possível, o calculado não é gravado). A
- * variável informada tem de ser de fórmula vigente do exame e ser das que se digitam.
+ * e devolve os valores a gravar (o do calculado é o da fórmula). A fórmula e a idade são as da DATA DO EXAME (`dia`, a
+ * mesma da leitura da digitação), nunca as de hoje: o que se grava é o que a tela mostrou. Sem conta possível, o
+ * calculado não entra nos valores; se ele já tinha número gravado, volta em `semConta` para a gravação ser recusada
+ * com o motivo (o número da conta anterior não vale para as entradas novas e a linha não pode ficar sem valor). A variável informada tem de ser de
+ * fórmula vigente do exame e ser das que se digitam.
  */
 export async function calcularNoResultado(
   tx: TxOperacao,
   a: {
     readonly exameId: number;
     readonly paciente: number;
-    readonly agora: Date;
+    /** A data do exame (AAAA-MM-DD), de `lerDiaDoExame`. */
+    readonly dia: string;
     readonly resultado: number | null;
     readonly valores: readonly ValorDigitado[];
     readonly variaveis: readonly { variavel: number; valor: number }[];
@@ -179,10 +222,11 @@ export async function calcularNoResultado(
 ): Promise<{
   falha: string | null;
   valores: ValorDigitado[];
+  semConta: CalculadoSemConta[];
   gravarVariaveis: (resultado: number) => Promise<void>;
 }> {
   const nada = async () => {};
-  const formulas = await lerFormulasDoExame(tx, a.exameId, a.agora);
+  const formulas = await lerFormulasDoExame(tx, a.exameId, a.dia);
   const digitaveis = new Map(variaveisADigitar(formulas).map((v) => [v.id, v]));
   const idades = formulas.flatMap((f) => f.variaveis).filter((v) => v.fonte === 'dado_paciente');
   for (const v of idades) digitaveis.set(v.id, v);
@@ -190,11 +234,12 @@ export async function calcularNoResultado(
     return {
       falha: 'A variável informada não é das que se digitam na fórmula vigente deste exame.',
       valores: [...a.valores],
+      semConta: [],
       gravarVariaveis: nada,
     };
   if (new Set(a.variaveis.map((v) => v.variavel)).size !== a.variaveis.length)
-    return { falha: 'Variável repetida.', valores: [...a.valores], gravarVariaveis: nada };
-  if (!formulas.length) return { falha: null, valores: [...a.valores], gravarVariaveis: nada };
+    return { falha: 'Variável repetida.', valores: [...a.valores], semConta: [], gravarVariaveis: nada };
+  if (!formulas.length) return { falha: null, valores: [...a.valores], semConta: [], gravarVariaveis: nada };
 
   const gravadas = a.resultado
     ? await tx.consultar(
@@ -209,17 +254,19 @@ export async function calcularNoResultado(
   for (const v of a.variaveis) digitadas[v.variavel] = v.valor;
 
   const valores = new Map<number, number | null>();
+  const jaGravado = new Map<number, number | null>();
   if (a.resultado)
     for (const x of await tx.consultar(
       'SELECT analito_id, valor_numerico FROM resultado_analito WHERE resultado_exame_id = ? AND excluido_em IS NULL',
       [a.resultado],
     ))
-      valores.set(n(x['analito_id']), nn(x['valor_numerico']));
+      jaGravado.set(n(x['analito_id']), nn(x['valor_numerico']));
+  for (const [analito, valor] of jaGravado) valores.set(analito, valor);
   for (const v of a.valores) valores.set(v.analito, v.numero);
   const [pac] = await tx.consultar(
     `SELECT DATEDIFF(?, pf.data_nascimento) AS dias FROM paciente p
        JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
-    [a.agora, a.paciente],
+    [a.dia, a.paciente],
   );
   const calculos = calcularAnalitos({
     formulas,
@@ -228,7 +275,10 @@ export async function calcularNoResultado(
     paciente: { idade: idadeEmAnos(nn(pac?.['dias'])) },
   });
   const saida = a.valores.filter((v) => !calculos.has(v.analito));
-  for (const [analito, c] of calculos) if (c.ok) saida.push({ analito, numero: c.valor, texto: null });
+  const semConta: CalculadoSemConta[] = [];
+  for (const [analito, c] of calculos)
+    if (c.ok) saida.push({ analito, numero: c.valor, texto: null });
+    else if ((jaGravado.get(analito) ?? null) !== null) semConta.push({ analito, motivo: c.motivo });
 
   const gravarVariaveis = async (resultado: number) => {
     let seq = gravadas.reduce((m, g) => Math.max(m, n(g['sequencia'])), 0);
@@ -252,5 +302,5 @@ export async function calcularNoResultado(
         });
     }
   };
-  return { falha: null, valores: saida, gravarVariaveis };
+  return { falha: null, valores: saida, semConta, gravarVariaveis };
 }
