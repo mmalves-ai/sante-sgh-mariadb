@@ -1451,7 +1451,18 @@ export class PortaCadastroComplementarPropria {
           });
       }
       const adesao = dataIso(b['data_adesao']) ?? '';
-      const linhas = carenciasAplicadas(adesao, [...porGrupo.values()], aproveitamentoDias);
+      // C2-113: a portabilidade recebida e aprovada aproveita todas as carências (RN 438), sem digitar o aproveitamento.
+      const port = await tx.uma(
+        `SELECT id FROM portabilidade_carencia WHERE beneficiario_plano_id = ? AND direcao = 'recebida'
+            AND situacao = 'aprovada' AND excluido_em IS NULL ORDER BY decidido_em DESC, id DESC LIMIT 1`,
+        [beneficiario],
+      );
+      const portabilidade = port ? Number(port['id']) : null;
+      const linhas = carenciasAplicadas(
+        adesao,
+        [...porGrupo.values()],
+        portabilidade === null ? aproveitamentoDias : Number.MAX_SAFE_INTEGER,
+      );
       let seq = 1;
       for (const l of linhas)
         await tx.incluir('carencia_aplicada', {
@@ -1464,10 +1475,12 @@ export class PortaCadastroComplementarPropria {
           dias_carencia: l.dias,
           dias_aproveitados: l.aproveitados,
           cumprida_em: l.cumpridaEm,
+          portabilidade_carencia_id: portabilidade,
         });
       await tx.alterar('beneficiario_plano', beneficiario, Number(b['versao']), {
         carencia_gerada: true,
-        dias_aproveitamento_carencia: aproveitamentoDias,
+        dias_aproveitamento_carencia:
+          portabilidade === null ? aproveitamentoDias : Math.max(0, ...linhas.map((l) => l.aproveitados)),
       });
       return { id: beneficiario };
     });

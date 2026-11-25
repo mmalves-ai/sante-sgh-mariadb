@@ -45,6 +45,12 @@ import {
 import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js';
 import { PortaAutorizacaoOperadoraPropria } from './autorizacao-porta-propria.js';
 import { BeneficiariosOperadoraController } from './beneficiarios.controller.js';
+import { BeneficiarioSaudeOperadoraController } from './beneficiario-saude.controller.js';
+import {
+  METODOS_BENEFICIARIO_SAUDE,
+  PORTA_BENEFICIARIO_SAUDE,
+  PortaBeneficiarioSaudePropria,
+} from './beneficiario-saude-propria.js';
 import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
 import { ComercialOperadoraController } from './comercial.controller.js';
 import { METODOS_COMERCIAL, PORTA_COMERCIAL, PortaComercialPropria } from './comercial-propria.js';
@@ -278,6 +284,7 @@ export async function moduloOperadora(
       DeclaracoesAnsController,
       ReajusteColetivoOperadoraController,
       ProgramaSaudeOperadoraController,
+      BeneficiarioSaudeOperadoraController,
       ComercialOperadoraController,
       ContaConferenciaOperadoraController,
       ReembolsoOperadoraController,
@@ -340,6 +347,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaComercialPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaComercialPropria>(METODOS_COMERCIAL),
+      },
+      // 08-SGO L95 (C2-113): declaração de saúde, doença preexistente com CPT e portabilidade de carências só no banco.
+      {
+        provide: PORTA_BENEFICIARIO_SAUDE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaBeneficiarioSaudePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaBeneficiarioSaudePropria>(METODOS_BENEFICIARIO_SAUDE),
       },
       // 08-SGO L115 (C2-102): promoção da saúde e gestão de crônicos só no banco (sem núcleo, 503).
       {

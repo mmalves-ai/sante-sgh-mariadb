@@ -11,7 +11,7 @@ import {
   planoDaCpt,
   prazoRespostaPortabilidade,
   problemasDaAprovacaoPortabilidade,
-  problemasDaDeclaracao,
+  problemasDaDeclaracaoSaude,
   problemasDaDecisaoDlp,
   problemasDaPortabilidade,
   problemasDoEncerramentoCpt,
@@ -37,17 +37,17 @@ const base: DadosDeclaracao = {
 
 describe('declaração de saúde', () => {
   it('aceita a declaração sem doença e calcula o IMC', () => {
-    expect(problemasDaDeclaracao(base)).toEqual([]);
+    expect(problemasDaDeclaracaoSaude(base)).toEqual([]);
     expect(imcDaDeclaracao(80, 1.8)).toBe(24.7);
     expect(imcDaDeclaracao(null, 1.8)).toBeNull();
   });
   it('entrevista qualificada exige médico e não combina com a orientação dispensada', () => {
-    expect(cod(problemasDaDeclaracao({ ...base, entrevistaQualificada: true }))).toEqual([
+    expect(cod(problemasDaDeclaracaoSaude({ ...base, entrevistaQualificada: true }))).toEqual([
       'medico-orientador',
       'orientacao-contraditoria',
     ]);
     expect(
-      problemasDaDeclaracao({
+      problemasDaDeclaracaoSaude({
         ...base,
         entrevistaQualificada: true,
         medicoOrientador: 9,
@@ -56,13 +56,13 @@ describe('declaração de saúde', () => {
     ).toEqual([]);
   });
   it('resposta sim pede detalhe e CID; obrigatória sem resposta é recusada', () => {
-    const r = problemasDaDeclaracao({
+    const r = problemasDaDeclaracaoSaude({
       ...base,
       respostas: [{ pergunta: 1, afirmativa: true, texto: null, complemento: ' ' }],
     });
     expect(cod(r)).toEqual(['complemento-obrigatorio', 'resposta-obrigatoria', 'doenca-nao-informada']);
     expect(
-      problemasDaDeclaracao({
+      problemasDaDeclaracaoSaude({
         ...base,
         respostas: [
           { pergunta: 1, afirmativa: true, texto: null, complemento: 'hipertensão desde 2020' },
@@ -73,7 +73,7 @@ describe('declaração de saúde', () => {
     ).toEqual([]);
   });
   it('recusa pergunta de fora, resposta repetida, data futura, doença repetida e posterior', () => {
-    const r = problemasDaDeclaracao({
+    const r = problemasDaDeclaracaoSaude({
       ...base,
       preenchidaEm: '2026-03-05',
       pesoKg: 0,

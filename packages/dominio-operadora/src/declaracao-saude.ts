@@ -95,7 +95,7 @@ export interface DadosDeclaracao {
  * plausíveis, todas as obrigatórias respondidas, resposta "sim" com o detalhe, e ao menos uma doença com CID quando
  * há resposta "sim". A doença começa antes ou no dia da declaração e não se repete.
  */
-export function problemasDaDeclaracao(x: DadosDeclaracao): ProblemaDeclaracaoSaude[] {
+export function problemasDaDeclaracaoSaude(x: DadosDeclaracao): ProblemaDeclaracaoSaude[] {
   const r: ProblemaDeclaracaoSaude[] = [];
   if (!dataValida(x.preenchidaEm)) r.push(p('data-invalida', 'preenchidaEm', 'Data da declaração inválida.'));
   else if (x.preenchidaEm > x.hoje)
