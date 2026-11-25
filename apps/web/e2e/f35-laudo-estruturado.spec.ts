@@ -332,7 +332,7 @@ test.describe('@F3.5-10 laudo estruturado: cadastro das medidas e medida calcula
 
   test('laudo novo: a medida digitada refaz a calculada e mostra a marca na hora', async ({ page }) => {
     const api = simularRedacao(page);
-    await entrar(page, 'SINT.MEDICO');
+    await entrar(page, 'SINT.LAUDADOR');
     await page.goto('/sadt/laudos/redacao?item=77');
     const tela = page.getByTestId('laudo-redacao');
     await expect(tela.getByTestId('laudo-cabecalho')).toContainText('Ecocardiograma sintético');
