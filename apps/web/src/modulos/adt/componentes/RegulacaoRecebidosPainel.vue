@@ -525,7 +525,12 @@ async function encerrar(r: RegulacaoRecebida): Promise<void> {
             :desabilitado="ocupado || problemasEncerramento(r).length > 0"
             data-testid="encerrar-confirmar"
           />
-          <SanteBotao variante="secundario" :rotulo="k('voltar')" @acionar="encerrando = null" />
+          <SanteBotao
+            variante="secundario"
+            :rotulo="k('voltar')"
+            data-testid="encerrar-voltar"
+            @acionar="encerrando = null"
+          />
         </p>
       </form>
       <form

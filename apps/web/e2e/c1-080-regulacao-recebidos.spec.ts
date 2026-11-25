@@ -5,7 +5,10 @@
 //     corpo enviado;
 //   - a fila com a emergência primeiro;
 //   - a recusa com motivo padronizado (complemento exigido em "outro") e o aceite da consulta com a especialidade da
-//     lista de espera, conferindo o corpo enviado e a orientação da devolução à central.
+//     lista de espera, conferindo o corpo enviado e a orientação da devolução à central;
+//   - o encerramento do pedido: o aceito de internação com o pedido de leito do NIR ligado, a chegada ligada à
+//     internação ativa do paciente e o cancelamento com motivo padronizado ("outro" exige o complemento; leito
+//     reservado bloqueia), conferindo os corpos enviados.
 // O que fica no banco é provado pelo contrato de efeito regulacao-entrada-propria.int.spec.ts. Axe em cada passo.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
@@ -41,7 +44,10 @@ const pedido = (id: number, numero: string, tipo: string, prioridade: string, si
   resumoClinico: null,
   observacao: null,
   mensagemCentral: null,
-  listaEspera: null,
+  listaEspera: null as number | null,
+  pedidoLeito: null as { id: number; numero: string; estado: string } | null,
+  internacao: null as number | null,
+  internacaoAtiva: null as number | null,
   eventos: [
     {
       id: id * 10,
@@ -185,6 +191,101 @@ test.describe('regulação: pedidos recebidos da central @C1-080', () => {
     expect(enviados.at(-1)).toMatchObject({
       url: expect.stringContaining(`${R}/2/resposta`),
       corpo: { decisao: 'aceitar', motivo: null, especialidade: 5, versao: 1 },
+    });
+    expect(externas).toEqual([]);
+  });
+
+  test('encerra o pedido aceito: chegada ligada à internação e cancelamento com motivo; axe', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const enviados: { url: string; corpo: unknown }[] = [];
+    const aceito = (id: number, numero: string, tipo: string) => ({
+      ...pedido(id, numero, tipo, 'urgente', 'autorizada'),
+      reguladoEm: '2026-11-25T10:30:00.000Z',
+      mensagemCentral: 'Pedido aceito',
+    });
+    await page.route(`**${R}/opcoes`, (r) =>
+      json(r, {
+        centrais: [
+          {
+            id: 1,
+            sigla: 'CENTRAL-SINT',
+            nome: 'Central sintética',
+            conexao: 'manual',
+            telefone: null,
+            email: null,
+          },
+        ],
+        especialidades: [],
+      }),
+    );
+    for (const acao of ['cancelamento', 'conclusao'])
+      await page.route(`**${R}/*/${acao}`, async (r) => {
+        enviados.push({ url: r.request().url(), corpo: r.request().postDataJSON() });
+        await json(r, { id: 1, situacao: acao === 'conclusao' ? 'concluida' : 'cancelada' });
+      });
+    await page.route(new RegExp(`${R}(\\?.*)?$`), (r) =>
+      json(r, {
+        itens: [
+          {
+            ...aceito(4, 'REG-SINT-0004', 'internacao'),
+            pedidoLeito: { id: 40, numero: 'PL-SINT-40', estado: 'solicitado' },
+            internacaoAtiva: 400,
+          },
+          {
+            ...aceito(5, 'REG-SINT-0005', 'transferencia'),
+            pedidoLeito: { id: 50, numero: 'PL-SINT-50', estado: 'reservado' },
+          },
+          { ...aceito(6, 'REG-SINT-0006', 'exame'), listaEspera: 600 },
+        ],
+      }),
+    );
+
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/internacao/nir/regulacao');
+    await page.getByTestId('aba-regulacao-recebidos').click();
+    const internacao = page.getByTestId('recebido-REG-SINT-0004');
+    await expect(internacao).toContainText('Aceito, aguardando o paciente');
+    await expect(internacao.getByTestId('recebido-leito')).toContainText('PL-SINT-40');
+    await semViolacaoAxe(page, '/internacao/nir/regulacao (aceitos à espera)');
+
+    // Chegada da internação: liga a internação ativa do paciente.
+    await page.getByTestId('chegada-REG-SINT-0004').click();
+    await expect(page.getByTestId('chegada-internacao')).toContainText('400');
+    await semViolacaoAxe(page, '/internacao/nir/regulacao (chegada)');
+    await page.getByTestId('encerrar-confirmar').click();
+    await expect(page.getByTestId('recebidos-mensagem')).toContainText('Chegada registrada');
+    expect(enviados.at(-1)).toMatchObject({
+      url: expect.stringContaining(`${R}/4/conclusao`),
+      corpo: { internacao: 400, chegadaEm: null, versao: 1 },
+    });
+
+    // Transferência sem internação ativa: a chegada fica bloqueada; com leito reservado, o cancelamento também.
+    await page.getByTestId('chegada-REG-SINT-0005').click();
+    await expect(page.getByTestId('chegada-internacao')).toContainText('ainda não tem internação ativa');
+    await expect(page.getByTestId('encerrar-confirmar')).toBeDisabled();
+    await page.getByTestId('encerrar-voltar').click();
+    await page.getByTestId('cancelar-pedido-REG-SINT-0005').click();
+    await escolher(page.getByTestId('canc-motivo'), { rotulo: 'Cancelado pela central de regulação' });
+    await expect(page.getByTestId('encerrar-problemas')).toContainText('libere a reserva no NIR');
+    await expect(page.getByTestId('encerrar-confirmar')).toBeDisabled();
+    await page.getByTestId('encerrar-voltar').click();
+
+    // Cancelamento do exame aceito: "outro" exige o complemento; o corpo leva o motivo padronizado.
+    await page.getByTestId('cancelar-pedido-REG-SINT-0006').click();
+    const confirmar = page.getByTestId('encerrar-confirmar');
+    await expect(confirmar).toBeDisabled();
+    await escolher(page.getByTestId('canc-motivo'), { rotulo: 'Outro motivo' });
+    await expect(page.getByTestId('encerrar-problemas')).toContainText('Detalhe o motivo do cancelamento');
+    await page.getByTestId('canc-complemento').fill('Central sintética reabriu como pedido novo');
+    await semViolacaoAxe(page, '/internacao/nir/regulacao (cancelamento)');
+    await expect(confirmar).toBeEnabled();
+    await confirmar.click();
+    await expect(page.getByTestId('recebidos-mensagem')).toContainText('Pedido cancelado');
+    expect(enviados.at(-1)).toMatchObject({
+      url: expect.stringContaining(`${R}/6/cancelamento`),
+      corpo: { motivo: 'outro', complemento: 'Central sintética reabriu como pedido novo', versao: 1 },
     });
     expect(externas).toEqual([]);
   });
