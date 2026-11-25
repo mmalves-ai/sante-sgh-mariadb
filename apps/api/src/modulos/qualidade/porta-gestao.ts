@@ -250,6 +250,10 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
   /** O nome do paciente do cadastro (a manifestação identificada; nunca na trilha). */
   nomesPacientes(c: C, ids: readonly number[]): Promise<Map<number, string>>;
   documentos(c: C, f: FiltroDocumentos): Promise<PaginaGestao<DocumentoQualidadeRegistrado>>;
+  /** Os setores ativos do estabelecimento, para escolher a área do documento pelo id (código e nome). */
+  setoresDaArea(
+    c: C,
+  ): Promise<{ readonly id: number; readonly codigo: string | null; readonly nome: string }[]>;
   documento(c: C, id: number): Promise<DocumentoQualidadeRegistrado | null>;
   documentosDoCodigo(c: C, codigo: string): Promise<DocumentoQualidadeRegistrado[]>;
   ciencias(

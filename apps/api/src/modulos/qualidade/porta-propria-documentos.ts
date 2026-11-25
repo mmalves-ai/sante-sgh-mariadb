@@ -88,13 +88,26 @@ const dia = (agora: string): string => agora.slice(0, 10);
 
 export function gravacoesDocumentos(tx: TxOperacao, est: number): GravacoesDocumentos {
   /** Os ids do tipo e do setor da área, ou recusa (nada é gravado com referência solta). */
-  async function referencias(tipo: string, area: string): Promise<{ tipo: number; setor: number }> {
+  async function referencias(
+    tipo: string,
+    area: string,
+    setorId?: number | null,
+  ): Promise<{ tipo: number; setor: number }> {
     const t = await tx.uma<Linha>(
       'SELECT id FROM tipo_documento_qualidade WHERE codigo = ? AND ativo = TRUE',
       [tipo],
     );
     if (!t)
       throw recusa('tipo-documento-inexistente', 'O tipo de documento informado não existe ou está inativo.');
+    if (setorId != null) {
+      // O setor escolhido na lista: tem de ser deste estabelecimento e estar ativo (nunca o de outra unidade).
+      const s = await tx.uma<Linha>(
+        'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [setorId, est],
+      );
+      if (!s) throw recusa('area-inexistente', 'A área informada não é um setor deste estabelecimento.');
+      return { tipo: n(t['id']), setor: n(s['id']) };
+    }
     // O código do setor vence o nome; nome repetido no estabelecimento recusa (nunca escolhe um setor por acaso).
     const candidatos = await tx.consultar<Linha>(
       `SELECT id, UPPER(codigo) = UPPER(?) AS pelo_codigo FROM setor_funcional
@@ -114,7 +127,7 @@ export function gravacoesDocumentos(tx: TxOperacao, est: number): GravacoesDocum
 
   return {
     publicarDocumento: async (d) => {
-      const ref = await referencias(d.tipo, d.area);
+      const ref = await referencias(d.tipo, d.area, d.setorId);
       const elaborador = await exigirUsuario(tx, d.elaboradoPor);
       const revisor = d.revisadoPor ? await exigirUsuario(tx, d.revisadoPor) : null;
       const aprovador = await exigirUsuario(tx, d.usuario);

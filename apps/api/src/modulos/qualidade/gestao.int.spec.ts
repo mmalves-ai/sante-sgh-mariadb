@@ -42,6 +42,7 @@ const CONSTRUIDAS = [
   'registrarRisco',
   'registrarNaoConformidade',
   'relogio',
+  'setoresDaArea',
   'feriados',
   'notificacaoExiste',
   'nomesPacientes',

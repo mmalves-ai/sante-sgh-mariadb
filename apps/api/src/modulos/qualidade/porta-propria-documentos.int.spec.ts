@@ -17,6 +17,7 @@ import {
   prepararMassaQualidade,
   SEM_BANCO_QUA,
 } from './massa.spec-util.js';
+import { PortaGestaoPropria } from './porta-gestao-propria.js';
 import { LeiturasGestaoComplementoQ2 } from './porta-propria-complemento-q2.js';
 import { gravacoesDocumentos, TABELAS_DOCUMENTOS } from './porta-propria-documentos.js';
 
@@ -185,6 +186,14 @@ describe.skipIf(SEM_BANCO_QUA)(
           ),
         ),
       ).toMatch(/:tipo-documento-inexistente$/);
+      // O setor escolhido pelo id tem de ser deste estabelecimento: o da outra unidade recusa, mesmo com o nome certo.
+      expect(
+        await codigoDe(
+          gravar(c, (g) =>
+            g.publicarDocumento({ ...nova(2, 'x', { id: ids.v1, versao: 1 }), setorId: m.setorOutro }),
+          ),
+        ),
+      ).toMatch(/:area-inexistente$/);
       const depois = await uma(
         'SELECT COUNT(*) AS n FROM documento_qualidade_versao WHERE documento_qualidade_id = (SELECT documento_qualidade_id FROM documento_qualidade_versao WHERE id = ?)',
         [ids.v1],
@@ -325,6 +334,27 @@ describe.skipIf(SEM_BANCO_QUA)(
           ),
         ),
       ).toBe('409:versao-desatualizada');
+    });
+
+    it('a área escolhida pelo id do setor vence o texto: a ficha grava o setor do estabelecimento', async () => {
+      const outroCodigo = `${codigo}S`.slice(0, 20);
+      const r = await gravar(c, (g) =>
+        g.publicarDocumento({
+          ...nova(1, `Passo único (${NUM}).`, null),
+          codigo: outroCodigo,
+          area: 'Rótulo livre que não é nome de setor',
+          setorId: m.setor,
+        }),
+      );
+      expect(r.id).toBeGreaterThan(0);
+      const ficha = await uma(
+        'SELECT setor_funcional_id AS setor FROM documento_qualidade WHERE codigo = ? AND estabelecimento_id = ?',
+        [outroCodigo, m.est],
+      );
+      expect(Number(ficha?.['setor'])).toBe(m.setor);
+      const lista = await new PortaGestaoPropria(m.nucleo).setoresDaArea(c);
+      expect(lista.some((x) => x.id === m.setor)).toBe(true);
+      expect(lista.some((x) => x.id === m.setorOutro)).toBe(false);
     });
   },
 );

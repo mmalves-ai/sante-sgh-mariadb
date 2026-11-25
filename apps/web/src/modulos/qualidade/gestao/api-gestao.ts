@@ -436,6 +436,14 @@ export const lerDocumentos = (f: {
 export const lerDocumento = (id: number): Promise<DocumentoCompletoTela> =>
   ler(`${Q}/documentos/${String(id)}`, esquemaDocumentoCompleto);
 export const lerCientes = (id: number) => ler(`${Q}/documentos/${String(id)}/ciencias`, esquemaCientes);
+/** Os setores do estabelecimento para escolher a área do documento pelo id. */
+export const listarSetoresDocumento = () =>
+  ler(
+    `${Q}/documentos/setores`,
+    z.object({
+      itens: z.array(z.object({ id: z.number(), codigo: z.string().nullable(), nome: z.string() })),
+    }),
+  );
 export const publicarDocumento = (e: PublicarDocumentoEntrada, chave: string) =>
   enviar(`${Q}/documentos`, e, esquemaPublicado, chave);
 export const retirarDocumento = (id: number, e: Omit<RetirarDocumentoEntrada, 'documento'>, chave: string) =>

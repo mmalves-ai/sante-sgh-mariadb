@@ -80,6 +80,12 @@ describe('documentos', () => {
     );
     expect(com.ok && com.entrada.substitui).toEqual({ id: 5, versao: 2 });
   });
+  it('a área escolhida na lista vai pelo id do setor; sem escolha, só o texto', () => {
+    const m = montarPublicacao({ ...base, area: 'Posto 2A', setorId: 42 }, null);
+    expect(m.ok && m.entrada.setorId).toBe(42);
+    const t = montarPublicacao(base, null);
+    expect(t.ok && 'setorId' in t.entrada).toBe(false);
+  });
   it('sem tipo e sem data de revisão não vai ao servidor', () => {
     const m = montarPublicacao({ ...base, tipo: '', vigenciaAte: null }, null);
     expect(m.ok).toBe(false);

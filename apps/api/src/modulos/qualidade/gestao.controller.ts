@@ -274,6 +274,13 @@ export class GestaoQualidadeController {
 
   // ── Documentos ───────────────────────────────────────────────────────────────────────────────────────────────
 
+  /** Os setores do estabelecimento para a área do documento (combo da publicação). */
+  @Get('qualidade/documentos/setores')
+  @Permissao(P.documentoPublicar)
+  async setoresDaArea(@Req() req: RequisicaoAutorizada) {
+    return { itens: await this.porta.setoresDaArea(sessaoDe(req).porta) };
+  }
+
   @Get('qualidade/documentos')
   @Permissao(P.documentoLer)
   async documentos(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada) {
@@ -380,6 +387,7 @@ export class GestaoQualidadeController {
           tipo: e.tipo,
           titulo: e.titulo.trim(),
           area: e.area.trim(),
+          setorId: e.setorId ?? null,
           conteudo: e.conteudo,
           resumoAlteracao: e.resumoAlteracao?.trim() || null,
           elaboradoPor: e.elaboradoPor,

@@ -106,6 +106,8 @@ export interface FormularioDocumento {
   readonly tipo: string;
   readonly titulo: string;
   readonly area: string;
+  /** O setor escolhido na lista (a área vai pelo id; o nome fica como rótulo). */
+  readonly setorId?: number | null;
   readonly conteudo: string;
   readonly resumoAlteracao: string;
   readonly elaboradoPor: string;
@@ -149,6 +151,7 @@ export function montarPublicacao(
       tipo: f.tipo,
       titulo: f.titulo,
       area: f.area,
+      ...(f.setorId ? { setorId: f.setorId } : {}),
       conteudo: f.conteudo,
       resumoAlteracao: ouNulo(f.resumoAlteracao),
       elaboradoPor: f.elaboradoPor,

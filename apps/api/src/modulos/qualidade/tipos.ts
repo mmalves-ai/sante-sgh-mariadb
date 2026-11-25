@@ -839,6 +839,8 @@ export interface DocumentoQualidadeNovo {
   readonly tipo: string;
   readonly titulo: string;
   readonly area: string;
+  /** O setor da área escolhido na lista (vence o texto da área; tem de ser do estabelecimento da sessão). */
+  readonly setorId?: number | null;
   readonly conteudo: string;
   readonly resumoAlteracao: string | null;
   readonly elaboradoPor: string;

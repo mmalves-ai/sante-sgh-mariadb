@@ -540,6 +540,22 @@ export class PortaGestaoPropria implements PortaGestao {
     return lerNoEstabelecimento(this.nucleo, c, fn);
   }
 
+  /** Os setores ativos do estabelecimento (a área do documento é escolhida pelo id, nunca digitada). */
+  setoresDaArea(c: ContextoGestao): ReturnType<PortaGestao['setoresDaArea']> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar<Linha>(
+        `SELECT id, codigo, nome FROM setor_funcional
+          WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome, id LIMIT 2000`,
+        [est],
+      );
+      return r.map((x) => ({
+        id: Number(x['id']),
+        codigo: x['codigo'] == null ? null : String(x['codigo']),
+        nome: String(x['nome']),
+      }));
+    });
+  }
+
   // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────
 
   /** A gestão grava direto pela tela (a liberação é a da chave de permissão); o que falta recusa na transação. */

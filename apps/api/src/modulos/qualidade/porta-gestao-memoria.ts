@@ -234,6 +234,10 @@ export class PortaGestaoMemoria implements PortaGestao {
     );
   }
 
+  setoresDaArea(): ReturnType<PortaGestao['setoresDaArea']> {
+    return Promise.resolve([]);
+  }
+
   documentos(_c: ContextoGestao, f: Parameters<PortaGestao['documentos']>[1]) {
     const b = f.busca?.toUpperCase();
     const xs = this.estado.documentos

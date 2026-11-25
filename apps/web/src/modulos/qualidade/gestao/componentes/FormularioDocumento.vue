@@ -5,9 +5,14 @@
 import { MESES_REVISAO_DOCUMENTO_PADRAO, TIPOS_DOCUMENTO_QUALIDADE } from '@sgh/contratos';
 import { SanteBotao, SanteCampoTexto, SanteData, SanteSelecao } from '@sgh/ui';
 import { somarMeses } from '@sgh/dominio-qualidade';
-import { reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { type DocumentoCompletoTela, novaChaveGestao, publicarDocumento } from '../api-gestao.js';
+import {
+  type DocumentoCompletoTela,
+  listarSetoresDocumento,
+  novaChaveGestao,
+  publicarDocumento,
+} from '../api-gestao.js';
 import { type FormularioDocumento, formularioDaRevisao, montarPublicacao } from '../regras-gestao.js';
 import ErroGestao from './ErroGestao.vue';
 import ErrosFormulario from './ErrosFormulario.vue';
@@ -21,6 +26,7 @@ const vazio: FormularioDocumento = {
   tipo: '',
   titulo: '',
   area: '',
+  setorId: null,
   conteudo: '',
   resumoAlteracao: '',
   elaboradoPor: '',
@@ -36,6 +42,30 @@ const opTipos = [
   { valor: '', rotulo: '' },
   ...TIPOS_DOCUMENTO_QUALIDADE.map((x) => ({ valor: x.codigo as string, rotulo: x.rotulo })),
 ];
+// A área é o setor do estabelecimento escolhido pelo id; sem a lista (falha de leitura), vale o texto (código ou nome).
+const setores = ref<{ id: number; codigo: string | null; nome: string }[]>([]);
+const setorEscolhido = ref('');
+const opSetores = computed(() => [
+  { valor: '', rotulo: '' },
+  ...setores.value.map((s) => ({
+    valor: String(s.id),
+    rotulo: s.codigo ? `${s.nome} (${s.codigo})` : s.nome,
+  })),
+]);
+onMounted(async () => {
+  if (props.vigente) return;
+  try {
+    setores.value = (await listarSetoresDocumento()).itens;
+  } catch {
+    setores.value = [];
+  }
+});
+function escolherSetor(v: string): void {
+  setorEscolhido.value = v;
+  const s = setores.value.find((x) => String(x.id) === v);
+  f.area = s ? s.nome : '';
+  f.setorId = s ? s.id : null;
+}
 const erros = ref<Record<string, string>>({});
 const erro = ref<unknown>(null);
 const gravando = ref(false);
@@ -92,8 +122,17 @@ async function gravar(): Promise<void> {
         obrigatorio
         data-testid="doc-tipo"
       />
+      <SanteSelecao
+        v-if="!vigente && setores.length"
+        :model-value="setorEscolhido"
+        :rotulo="t('gestaoQualidade.area')"
+        :opcoes="opSetores"
+        obrigatorio
+        data-testid="doc-setor"
+        @update:model-value="(v: string) => escolherSetor(v)"
+      />
       <SanteCampoTexto
-        v-if="!vigente"
+        v-else-if="!vigente"
         v-model="f.area"
         :rotulo="t('gestaoQualidade.area')"
         :max-bytes="80"

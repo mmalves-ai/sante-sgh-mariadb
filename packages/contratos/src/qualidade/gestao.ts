@@ -426,6 +426,8 @@ export const esquemaPublicarDocumento = z.object({
   tipo: z.enum(CODIGOS_TIPO_DOCUMENTO_QUALIDADE),
   titulo: textoMin(200, 5),
   area,
+  /** O setor da área escolhido na lista da tela; quando vem, vence o texto (que fica como rótulo). */
+  setorId: id.nullable().optional(),
   conteudo: textoMin(16000, 20),
   resumoAlteracao: textoOpcional(500),
   elaboradoPor: login,
