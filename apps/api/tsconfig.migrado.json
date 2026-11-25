@@ -228,6 +228,7 @@
     "src/modulos/exames/servico.ts",
     "src/modulos/exames/tipos.ts",
     "src/modulos/exames/porta-memoria.spec.ts",
+    "src/modulos/exames/apoio-gravacao.spec.ts",
     "src/modulos/exames/porta-propria.int.spec.ts",
     "src/modulos/internacao/configuracao.ts",
     "src/modulos/internacao/fonte-memoria.ts",

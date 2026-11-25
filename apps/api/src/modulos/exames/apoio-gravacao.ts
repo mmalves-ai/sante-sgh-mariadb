@@ -219,7 +219,8 @@ export class ApoioGravacao<G> {
     await this.exigirLiberacao(s);
     // M20: a receita crítica (a exclusão do atendimento) leva a reautenticação recente ao executor.
     // F3.4 (04-INT 65): o acesso total da sessão da plataforma segue ao executor (as regras por unidade o respeitam).
-    const acessoTotal = s.req.sgh?.sessao.usuario.ator === 'plataforma';
+    // A sessão "como" (ADR 0021) age como o usuário alvo: nunca leva o acesso total, mesmo aberta pela plataforma.
+    const acessoTotal = s.req.sgh?.sessao.usuario.ator === 'plataforma' && !s.req.sghComo;
     const ctx: ContextoOperacao = {
       ...contextoOperacao(s, op),
       ...extras,

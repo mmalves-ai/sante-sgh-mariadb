@@ -6,12 +6,18 @@
 //   - a prorrogação entra como nova linha do histórico com a validade seguinte e o autorizador; a guia inicial fica;
 //   - os operadores da unidade: com a regra, quem não está liberado não admite, não transfere para a unidade nem dá
 //     alta nela; a linha só de material não conta como regra; a lista vazia tira as ações da internação (exclusão
-//     lógica só da linha sem material) e devolve a unidade ao cargo; o acesso total da sessão da plataforma passa;
+//     lógica só da linha sem material) e devolve a unidade ao cargo; o acesso total da sessão da plataforma passa pelo
+//     ApoioGravacao (caminho das rotas), e o usuário do cliente e a sessão "como" continuam recusados;
 //   - o principal novo substitui o vigente (fica no histórico); a retirada exige motivo e não apaga;
 //   - a correção da guia não cria linha nem soma diárias; o retrato da internação guarda o total autorizado;
 //   - outro estabelecimento não lê nem grava (404 sem vazamento).
 // SGH_NUCLEO_SEM_BANCO=1 pula.
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
+import type { SessaoCadastro } from '../cadastro/comum.js';
+import { ApoioGravacao } from '../exames/apoio-gravacao.js';
 import {
   CLIENTE_ADT,
   contextoAdt,
@@ -32,6 +38,9 @@ import {
 
 const codigoDe = (e: unknown) =>
   (e as { problema?: { codigo?: string } }).problema?.codigo ?? (e as { codigo?: string }).codigo;
+// A recusa que sai do ApoioGravacao (ErroProblema): o código do domínio vai nos extras.
+const codigoApoio = (e: unknown) => (e as { extras?: { codigo?: string } }).extras?.codigo;
+const trilhaNula: RegistradorTrilha = { registrar: async () => ({ id: 1 }) as never };
 
 describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CLIENTE_ADT})`, () => {
   let m: MassaAdt | null = null;
@@ -43,15 +52,44 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
     porta
       .executar(contextoAdt(M()), op, entrada, { ...operacaoAdt(M()), reautenticadoEm: Date.now() })
       .then((r) => r.resultado as Record<string, unknown>);
-  // A sessão da plataforma (acesso total, ADR 0022): o servidor leva o indicador ao contexto da operação.
-  const executarComAcessoTotal = (op: string, entrada: unknown) =>
-    porta
-      .executar(contextoAdt(M()), op, entrada, {
-        ...operacaoAdt(M()),
-        reautenticadoEm: Date.now(),
-        acessoTotal: true,
-      })
-      .then((r) => r.resultado as Record<string, unknown>);
+  // A gravação pelo caminho do servidor (ApoioGravacao.executar, o mesmo das rotas da internação) com a sessão de cada
+  // ator: só a da plataforma (ADR 0022) leva o acesso total ao contexto; o usuário do cliente e a sessão "como"
+  // (ADR 0021, que age como o alvo) seguem sem ele.
+  const executarPeloApoio = (ator: 'plataforma' | 'cliente' | 'como', op: string, entrada: unknown) => {
+    const c = contextoAdt(M());
+    const req = {
+      headers: { 'idempotency-key': `int-0301-${randomUUID()}` },
+      ip: '127.0.0.1',
+      method: 'POST',
+      sgh: {
+        sessao: {
+          usuario: {
+            id: String(M().usuario),
+            login: 'int-0301',
+            ...(ator === 'cliente' ? {} : { ator: 'plataforma' }),
+          },
+        },
+      },
+      ...(ator === 'como'
+        ? { sghComo: { atorTipo: 'plataforma', rede: c.rede, hospital: c.hospital, alvoLogin: 'int-0301' } }
+        : {}),
+    } as unknown as RequisicaoAutorizada;
+    const s: SessaoCadastro = {
+      req,
+      hospital: c.hospital,
+      rede: c.rede,
+      login: 'int-0301',
+      porta: c,
+      pode: () => true,
+    };
+    return new ApoioGravacao<unknown>(
+      { chave: 'adt', nome: 'a internação', operacoes: {}, semLiberacao: true },
+      porta as never,
+      trilhaNula,
+      null,
+      null,
+    ).executar(s, op, entrada, 'ok', { reautenticadoEm: Date.now() });
+  };
   const internar = (paciente: number, leito: string, extra: Record<string, unknown> = {}) =>
     executar('internacao.internar', {
       paciente,
@@ -495,14 +533,26 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
         motivoTroca: M().motivoTroca,
       }),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'unidade-sem-permissao');
-    // O acesso total da sessão da plataforma passa pela regra da unidade: a transferência grava.
+    // Pelo caminho do servidor: o usuário do cliente e a sessão "como" (mesmo aberta pela plataforma) seguem presos à
+    // regra da unidade, sem gravar; a sessão da plataforma leva o acesso total e a transferência grava.
     const antes = await versaoDe(i2);
-    await executarComAcessoTotal('internacao.transferirLeito', {
+    const transferencia = () => ({
       internacao: i2,
       destino: { bloco: 'B1', acomodacao: 'Q1', leito: M().leitos[1]! },
       versao: antes,
       motivoTroca: M().motivoTroca,
     });
+    for (const ator of ['cliente', 'como'] as const)
+      await expect(executarPeloApoio(ator, 'internacao.transferirLeito', transferencia())).rejects.toSatisfy(
+        (e) => codigoApoio(e) === 'unidade-sem-permissao',
+      );
+    expect(String(await versaoDe(i2))).toBe(String(antes));
+    const pelaPlataforma = await executarPeloApoio(
+      'plataforma',
+      'internacao.transferirLeito',
+      transferencia(),
+    );
+    expect(pelaPlataforma.ok).toBe(true);
     expect(Number(await versaoDe(i2))).toBeGreaterThan(Number(antes));
     await expect(
       executar('internacao.darAlta', {
