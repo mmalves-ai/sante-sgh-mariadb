@@ -93,6 +93,9 @@ export function decifrarSegredo(envelope: string, chave: Buffer): string {
   return Buffer.concat([d.update(Buffer.from(cifrado, 'base64url')), d.final()]).toString('utf8');
 }
 
+/** Validade do convite da plataforma, em horas (a API e a ferramenta plataforma:criar-admin usam a mesma). */
+export const CONVITE_HORAS = 72;
+
 /** Token de convite (32 bytes aleatórios, base64url) e o hash que fica no banco (SHA-256 hex). */
 export function novoConvite(): { token: string; hash: string } {
   const token = randomBytes(32).toString('base64url');

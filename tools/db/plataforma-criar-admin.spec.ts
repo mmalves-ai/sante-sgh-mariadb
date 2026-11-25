@@ -1,16 +1,15 @@
 // plataforma:criar-admin sem banco nem SMTP: argumentos, travas, convite igual ao da API (resumo e validade) e
 // envio pelo caminho da API, sem link, token ou senha na saída.
-import { hashConvite } from '@sgh/dominio-acesso';
-import type { Escritor, Linha } from '@sgh/nucleo';
+import { CONVITE_HORAS, hashConvite } from '@sgh/dominio-acesso';
+import { type Escritor, type Linha, emailAcessoMemoria } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import { emailAcessoMemoria } from '../../apps/api/src/sessao/email-acesso.ts';
-import { CONVITE_HORAS } from '../../apps/api/src/modulos/suporte/servico-plataforma.ts';
 import {
   CONVITE_HORAS_INICIAL,
   EVENTO_CONVITE,
   EVENTO_CRIADA,
   analisarArgumentos,
   emailDoDono,
+  envioDoComando,
   envioPeloCanalDoDono,
   decidir,
   executar,
@@ -202,14 +201,22 @@ describe('plataforma:criar-admin', () => {
 });
 
 describe('entrega pelo canal do dono (decisão do dono, 24/11/2026)', () => {
-  it('o e-mail do dono vem de DONO_EMAIL, senão o padrão do aviso da obra', () => {
+  it('o e-mail do dono vem só de DONO_EMAIL; sem ele (ou vazio), o canal fica desligado', () => {
     expect(emailDoDono({ DONO_EMAIL: 'Dono@Exemplo.dev' })).toBe('dono@exemplo.dev');
-    expect(emailDoDono({})).toBe('mmalves@hal-ai.com');
+    expect(emailDoDono({})).toBeNull();
+    expect(emailDoDono({ DONO_EMAIL: '  ' })).toBeNull();
+  });
+  it('--entregar-ao-dono sem DONO_EMAIL recusa com mensagem clara; com ele, usa o canal do dono', () => {
+    expect(() => envioDoComando({ DONO_EMAIL: '' }, true, '/inexistente')).toThrow(
+      'recusado: --entregar-ao-dono exige DONO_EMAIL',
+    );
+    expect(envioDoComando({ DONO_EMAIL: 'dono@exemplo.dev' }, true, '/inexistente')?.destino).toBe('smtp');
+    expect(envioDoComando({ AMBIENTE: 'dev' }, false, '/inexistente')).toBeNull();
   });
   it('recusa entregar a quem não é o dono, sem chamar o canal', async () => {
     const porta = envioPeloCanalDoDono({ DONO_EMAIL: 'dono@exemplo.dev' }, '/inexistente');
-    await expect(
-      porta.enviar({ para: 'outra@exemplo.dev', assunto: 'x', texto: 'link' }),
-    ).rejects.toThrow('só entrega ao e-mail do dono');
+    await expect(porta.enviar({ para: 'outra@exemplo.dev', assunto: 'x', texto: 'link' })).rejects.toThrow(
+      'só entrega ao e-mail do dono',
+    );
   });
 });

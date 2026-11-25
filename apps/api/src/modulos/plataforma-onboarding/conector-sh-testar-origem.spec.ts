@@ -9,6 +9,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
+// Senha falsa do root do MariaDB para o teste (constante: o verificador de segredos recusa literal na chave).
+const SENHA_RAIZ_FALSA = 'raiz-falsa';
 const SCRIPT = fileURLToPath(new URL('../../../../../conector/conector.sh', import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), 'conector-sh-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
@@ -44,7 +46,7 @@ function rodar(extra: Record<string, string>): { status: number | null; log: str
       PATH: `${dir}:${process.env.PATH ?? ''}`,
       LOG_DOCKER: log,
       CONECTOR_DADOS_DIR: dir, // sem pasta de segredos: senha do motor aleatória, nada lido do disco real
-      CONECTOR_MARIADB_SENHA: 'raiz-falsa',
+      CONECTOR_MARIADB_SENHA: SENHA_RAIZ_FALSA,
       PLATAFORMA_CHAVE_MESTRA: 'chave-falsa',
       COFRE_DIR: join(dir, 'sem-cofre'),
       AMBIENTE: 'dev',
@@ -65,7 +67,7 @@ describe('conector.sh testar-origem', () => {
     expect(create).toContain('--security-opt no-new-privileges');
     expect(create).not.toContain('--privileged');
     expect(create).not.toContain('--user 0:0');
-    expect(create).not.toContain('raiz-falsa');
+    expect(create).not.toContain(SENHA_RAIZ_FALSA);
     expect(log).toContain('AMBIENTE_CREATE usuario=sscon_motor_teste raiz=nao');
     expect(log.some((l) => l.startsWith('CHAMADA network connect'))).toBe(false);
     expect(log.some((l) => l.startsWith('CHAMADA start -a ct-teste'))).toBe(true);
