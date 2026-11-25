@@ -29,6 +29,11 @@ import {
   portaPrescricaoLenteIndisponivel,
   PortaPrescricaoLentePropria,
 } from './prescricao-lente.js';
+import {
+  PORTA_ACOMPANHAMENTO_ONCOLOGICO,
+  portaAcompanhamentoOncologicoIndisponivel,
+  PortaAcompanhamentoOncologicoPropria,
+} from './acompanhamento-oncologico.js';
 import { RegistroOncologicoController } from './registro-oncologico.controller.js';
 import {
   PORTA_REGISTRO_ONCOLOGICO,
@@ -90,6 +95,11 @@ export async function moduloEspecialidades(
     porta.destino === 'banco' && ctx.nucleo
       ? new PortaRegistroOncologicoPropria(ctx.nucleo)
       : portaRegistroOncologicoIndisponivel();
+  // 03-PEP linha 111: acompanhamento do tumor e reações do tratamento, só no banco.
+  const acompOnco =
+    porta.destino === 'banco' && ctx.nucleo
+      ? new PortaAcompanhamentoOncologicoPropria(ctx.nucleo)
+      : portaAcompanhamentoOncologicoIndisponivel();
   return {
     module: ModuloEspecialidades,
     controllers: [EspecialidadesController, RegistroOncologicoController],
@@ -98,6 +108,7 @@ export async function moduloEspecialidades(
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
       { provide: PORTA_PRESCRICAO_LENTE, useValue: lentes },
       { provide: PORTA_REGISTRO_ONCOLOGICO, useValue: registroOnco },
+      { provide: PORTA_ACOMPANHAMENTO_ONCOLOGICO, useValue: acompOnco },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
   };

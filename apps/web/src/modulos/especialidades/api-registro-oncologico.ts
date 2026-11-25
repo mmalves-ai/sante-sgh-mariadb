@@ -83,7 +83,7 @@ export type RegistroOncologico = z.infer<typeof esquemaRegistro>;
 export type TumorLido = RegistroOncologico['tumores'][number];
 export type PlanoLido = RegistroOncologico['planos'][number];
 const esquemaCadastros = z.object({
-  intencoes: z.array(item),
+  intencoes: z.array(item.extend({ id: z.number().optional() })),
   regioes: z.array(item),
   aparelhos: z.array(item.extend({ modalidade: z.string() })),
   estadios: z.array(item),

@@ -28,7 +28,9 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import AbasFicha from '../../nutricao/componentes/AbasFicha.vue';
 import CartaoPerfil from '../../nutricao/componentes/CartaoPerfil.vue';
+import AcompanhamentoOncologicoPainel from '../componentes/AcompanhamentoOncologicoPainel.vue';
 import RegistroOncologicoPainel from '../componentes/RegistroOncologicoPainel.vue';
+import { lerCadastrosOncologia, lerRegistroOncologico } from '../api-registro-oncologico.js';
 import DialogoCorrecao from '../../nutricao/componentes/DialogoCorrecao.vue';
 import {
   ajustarCiclo,
@@ -82,6 +84,39 @@ const motivoReducao = ref('');
 const justificativa = ref('');
 const novoTratamento = ref(false);
 const motivoTratamento = ref('');
+// O ciclo que abre o tratamento (ciclo 1 ou tratamento novo) leva o tumor do paciente e a intenção do tratamento.
+const diagnostico = ref('');
+const intencao = ref('');
+const abreTratamento = computed(() => numeroCiclo.value === '1' || novoTratamento.value);
+const registroOnco = useQuery({
+  queryKey: computed(() => ['especialidades', 'oncologia', 'registro', reg.value]),
+  queryFn: () => lerRegistroOncologico(reg.value),
+  enabled: abreTratamento,
+});
+const cadastrosOnco = useQuery({
+  queryKey: ['especialidades', 'oncologia', 'cadastros-registro'],
+  queryFn: lerCadastrosOncologia,
+  enabled: abreTratamento,
+});
+const opcoesDiagnostico = computed(() => [
+  { valor: '', rotulo: '—' },
+  ...(registroOnco.data.value?.tumores ?? [])
+    .filter((x) => x.situacao !== 'inativado')
+    .map((x) => ({ valor: String(x.id), rotulo: `${x.cid} · ${x.topografia} ${x.topografiaDescricao}` })),
+]);
+const opcoesIntencao = computed(() => [
+  { valor: '', rotulo: '—' },
+  ...(cadastrosOnco.data.value?.intencoes ?? [])
+    .filter((x) => x.id !== undefined)
+    .map((x) => ({ valor: String(x.id), rotulo: x.descricao })),
+]);
+const faltaAbertura = computed(() => abreTratamento.value && (!diagnostico.value || !intencao.value));
+const ciclosDaFicha = computed(() =>
+  (dados.data.value?.ciclos ?? []).map((c) => ({
+    id: c.id,
+    rotulo: `${t('especialidades.oncologia.abas.ciclos')} ${c.numero} · ${c.protocolo.codigo}`,
+  })),
+);
 const dec = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
 
 const erro = ref<unknown>(null);
@@ -108,6 +143,9 @@ async function gravar(): Promise<void> {
         ...(motivoReducao.value.trim() ? { motivoReducao: motivoReducao.value.trim() } : {}),
         ...(justificativa.value.trim() ? { justificativaIntervalo: justificativa.value.trim() } : {}),
         ...(novoTratamento.value ? { novoTratamento: motivoTratamento.value.trim() } : {}),
+        ...(abreTratamento.value
+          ? { diagnostico: Number(diagnostico.value), intencao: Number(intencao.value) }
+          : {}),
       },
       novaChaveEspecialidade('ciclo'),
     );
@@ -274,6 +312,8 @@ const abas = computed(() => [
   { id: 'novo', rotulo: t('especialidades.oncologia.abas.novo') },
   // 09-AREA linha 69: o tumor (CID-O-3, TNM) e a radioterapia do mesmo paciente.
   { id: 'registro', rotulo: t('especialidades.registroOnco.aba') },
+  // 03-PEP linha 111: o acompanhamento do tumor e as reações do tratamento.
+  { id: 'acompanhamento', rotulo: t('especialidades.acompOnco.aba') },
 ]);
 const emAndamento = computed(
   () => (dados.data.value?.ciclos ?? []).filter((c) => c.andamento !== 'cancelado').length,
@@ -338,6 +378,15 @@ const emAndamento = computed(
         aria-labelledby="onco-aba-registro"
       >
         <RegistroOncologicoPainel :reg="reg" :pode="pode" />
+      </div>
+      <div
+        v-if="aba === 'acompanhamento'"
+        id="onco-painel-acompanhamento"
+        class="painel-aba"
+        role="tabpanel"
+        aria-labelledby="onco-aba-acompanhamento"
+      >
+        <AcompanhamentoOncologicoPainel :reg="reg" :pode="pode" :ciclos="ciclosDaFicha" />
       </div>
       <div
         v-show="aba === 'ciclos'"
@@ -730,12 +779,36 @@ const emAndamento = computed(
               :max-bytes="200"
               data-testid="ciclo-motivo-tratamento"
             />
+            <template v-if="abreTratamento">
+              <SanteSelecao
+                v-model="diagnostico"
+                :rotulo="t('especialidades.acompOnco.diagnostico')"
+                :opcoes="opcoesDiagnostico"
+                data-testid="ciclo-diagnostico"
+              />
+              <p
+                v-if="registroOnco.data.value && opcoesDiagnostico.length === 1"
+                data-testid="ciclo-sem-tumor"
+              >
+                {{ t('especialidades.acompOnco.precisaTumor') }}
+              </p>
+              <SanteSelecao
+                v-model="intencao"
+                :rotulo="t('especialidades.acompOnco.intencao')"
+                :opcoes="opcoesIntencao"
+                data-testid="ciclo-intencao"
+              />
+            </template>
             <ErroEspecialidade v-if="erro" :erro="erro" />
             <SanteBotao
               tipo="submit"
               :rotulo="t('especialidades.oncologia.registrarCiclo')"
               :desabilitado="
-                ocupado || protocolo === null || !dataPrevista || (novoTratamento && !motivoTratamento.trim())
+                ocupado ||
+                protocolo === null ||
+                !dataPrevista ||
+                faltaAbertura ||
+                (novoTratamento && !motivoTratamento.trim())
               "
               data-testid="ciclo-gravar"
             />

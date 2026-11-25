@@ -1,6 +1,7 @@
 // Textos das telas das especialidades sob demanda e do lactário (M45, etapa 6; DP-32). Textos de produto (ADR 0023):
 // só o que a pessoa faz aqui.
 import { mensagensLentes } from './i18n-lentes.js';
+import { mensagensAcompanhamentoOncologico } from './i18n-acompanhamento-oncologico.js';
 import { mensagensRegistroOncologico } from './i18n-registro-oncologico.js';
 
 export const mensagensEspecialidades = {
@@ -8,6 +9,7 @@ export const mensagensEspecialidades = {
   lentes: mensagensLentes,
   // 09-AREA linha 69: o registro oncológico e a radioterapia (i18n-registro-oncologico.ts).
   registroOnco: mensagensRegistroOncologico,
+  acompOnco: mensagensAcompanhamentoOncologico,
   carregando: 'Carregando…',
   nenhum: 'Nenhuma internação encontrada.',
   cortada: 'A lista passou do limite e foi cortada: refine a busca.',

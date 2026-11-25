@@ -125,7 +125,8 @@ export interface ItemCadastro {
   readonly descricao: string;
 }
 export interface CadastrosOncologia {
-  readonly intencoes: ItemCadastro[];
+  /** Com o id: o ciclo que abre o tratamento oncológico grava a intenção pelo id. */
+  readonly intencoes: (ItemCadastro & { id: number })[];
   readonly regioes: ItemCadastro[];
   readonly aparelhos: (ItemCadastro & { modalidade: string })[];
   readonly estadios: ItemCadastro[];
@@ -409,7 +410,7 @@ export class PortaRegistroOncologicoPropria implements PortaRegistroOncologico {
       const hoje = await hojeDe(l);
       const [intencoes, regioes, aparelhos, estadios, fisicos] = await Promise.all([
         l.consultar<Linha>(
-          'SELECT codigo, descricao FROM intencao_tratamento_oncologico WHERE ativo ORDER BY ordem, descricao',
+          'SELECT id, codigo, descricao FROM intencao_tratamento_oncologico WHERE ativo ORDER BY ordem, descricao',
           [],
         ),
         l.consultar<Linha>(
@@ -432,7 +433,7 @@ export class PortaRegistroOncologicoPropria implements PortaRegistroOncologico {
         ]),
       ]);
       return {
-        intencoes: intencoes.map(item),
+        intencoes: intencoes.map((r) => ({ ...item(r), id: n(r['id']) })),
         regioes: regioes.map(item),
         aparelhos: aparelhos.map((r) => ({ ...item(r), modalidade: String(r['modalidade']) })),
         estadios: estadios.map(item),

@@ -7,6 +7,7 @@
 import { type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
+import { PortaAcompanhamentoOncologicoPropria } from './acompanhamento-oncologico.js';
 import { type Autor, PortaRegistroOncologicoPropria } from './registro-oncologico.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -44,6 +45,12 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
       );
       await e.executar('DELETE FROM tratamento_radioterapia WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM aparelho_radioterapia WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM reacao_tratamento_oncologico WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        'DELETE v FROM acompanhamento_oncologico_evento v JOIN acompanhamento_oncologico a ON a.id = v.acompanhamento_oncologico_id WHERE a.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar('DELETE FROM acompanhamento_oncologico WHERE estabelecimento_id = ?', [ids.est]);
       for (const t of ['metastase_paciente', 'estadiamento_tumor'])
         await e.executar(
           `DELETE x FROM ${t} x JOIN diagnostico_oncologico d ON d.id = x.diagnostico_oncologico_id WHERE d.estabelecimento_id = ?`,
@@ -549,5 +556,146 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
     );
     expect(b.id).toBe(a.id);
     expect((await porta.cadastros(c)).aparelhos.map((x) => x.codigo)).toContain(`${P}-AL1`);
+  });
+  // C2-090 (03-PEP L111): acompanhamento do tumor (linha do tempo por evento) e reações do tratamento (CTCAE).
+  it('acompanha o tumor com evento a cada mudança e registra a reação com grau e conduta; recusas não gravam', async () => {
+    const acomp = new PortaAcompanhamentoOncologicoPropria(nucleo);
+    const tumorId = (await porta.doPaciente(c, ids.paciente)).tumores[0]!.id;
+    const base = {
+      acompanhamento: null,
+      versao: null,
+      tumor: tumorId,
+      situacaoTumor: 'presente',
+      resposta: null,
+      primeiroTratamentoEm: null,
+      recidivaEm: null,
+      obitoEm: null,
+      observacao: null,
+    };
+    const a1 = await acomp.registrarAcompanhamento(
+      c,
+      autor,
+      { ...base, classificacao: 'em_tratamento' },
+      chave(),
+    );
+    expect(a1.tipo).toBe('classificacao');
+    await expect(
+      acomp.registrarAcompanhamento(c, autor, { ...base, classificacao: 'em_tratamento' }, chave()),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'acompanhamento-existente');
+    const recidivaSemData = acomp.registrarAcompanhamento(
+      c,
+      autor,
+      { ...base, acompanhamento: a1.id, versao: 1, classificacao: 'recidiva' },
+      chave(),
+    );
+    await expect(recidivaSemData).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'acompanhamento-invalido' && JSON.stringify(camposDe(e)).includes('recidivaEm'),
+    );
+    const hoje = new Date().toISOString().slice(0, 10);
+    const a2 = await acomp.registrarAcompanhamento(
+      c,
+      autor,
+      {
+        ...base,
+        acompanhamento: a1.id,
+        versao: 1,
+        classificacao: 'recidiva',
+        situacaoTumor: 'metastase',
+        recidivaEm: hoje,
+        observacao: 'Recidiva em controle de imagem',
+      },
+      chave(),
+    );
+    expect(a2).toMatchObject({ id: a1.id, versao: 2, tipo: 'recidiva' });
+    await expect(
+      acomp.registrarAcompanhamento(
+        c,
+        autor,
+        { ...base, acompanhamento: a1.id, versao: 1, classificacao: 'paliativo' },
+        chave(),
+      ),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'conflito-versao');
+
+    const r1 = await acomp.registrarReacao(
+      c,
+      autor,
+      {
+        acompanhamento: a1.id,
+        tratamento: null,
+        ciclo: null,
+        categoria: 'hematologica',
+        descricao: 'Neutropenia febril',
+        grau: 3,
+        evolucao: 'nova',
+        avaliadoEm: `${hoje}T08:00`,
+        conduta: 'Antibiótico e fator estimulador',
+        doseAjustada: false,
+        tratamentoSuspenso: false,
+      },
+      chave(),
+    );
+    const semConduta = {
+      acompanhamento: a1.id,
+      tratamento: null,
+      ciclo: null,
+      categoria: 'gastrointestinal',
+      descricao: 'Mucosite',
+      grau: 4,
+      evolucao: 'nova',
+      avaliadoEm: `${hoje}T09:00`,
+      conduta: null,
+      doseAjustada: true,
+      tratamentoSuspenso: false,
+    };
+    await expect(acomp.registrarReacao(c, autor, semConduta, chave())).rejects.toSatisfy(
+      (e) =>
+        codigoDe(e) === 'reacao-invalida' &&
+        JSON.stringify(camposDe(e)).includes('conduta') &&
+        JSON.stringify(camposDe(e)).includes('tratamento'),
+    );
+    await expect(
+      acomp.registrarReacao(c, autor, { ...semConduta, tratamento: 999999999, conduta: 'x' }, chave()),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'registro-inexistente');
+
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'confere-c2090' }, async (e) => {
+      const a = await e.uma<Record<string, unknown>>(
+        `SELECT classificacao_paciente, situacao_tumor, DATE_FORMAT(recidiva_em, '%Y-%m-%d') AS recidiva_em, versao,
+                diagnostico_oncologico_id, responsavel_profissional_id, ativo, criado_por
+           FROM acompanhamento_oncologico WHERE id = ?`,
+        [a1.id],
+      );
+      expect(a).toMatchObject({
+        classificacao_paciente: 'recidiva',
+        situacao_tumor: 'metastase',
+        recidiva_em: hoje,
+      });
+      expect(Number(a!['versao'])).toBe(2);
+      expect(Number(a!['diagnostico_oncologico_id'])).toBe(tumorId);
+      expect(Number(a!['responsavel_profissional_id'])).toBe(ids.profissional);
+      const ev = await e.consultar<Record<string, unknown>>(
+        'SELECT operacao, tipo_evento, usuario_id, observacao, JSON_UNQUOTE(JSON_EXTRACT(dados, "$.classificacao_paciente")) AS cl FROM acompanhamento_oncologico_evento WHERE acompanhamento_oncologico_id = ? ORDER BY id',
+        [a1.id],
+      );
+      expect(ev.map((x) => [x['operacao'], x['tipo_evento'], x['cl']])).toEqual([
+        ['inclusao', 'classificacao', 'em_tratamento'],
+        ['alteracao', 'recidiva', 'recidiva'],
+      ]);
+      expect(Number(ev[1]!['usuario_id'])).toBe(ids.usuario);
+      expect(ev[1]!['observacao']).toBe('Recidiva em controle de imagem');
+      const rs = await e.consultar<Record<string, unknown>>(
+        'SELECT id, grau, categoria, evolucao, conduta, dose_ajustada, acompanhamento_oncologico_id, profissional_id FROM reacao_tratamento_oncologico WHERE paciente_id = ? AND estabelecimento_id = ?',
+        [ids.paciente, ids.est],
+      );
+      expect(rs).toHaveLength(1);
+      expect(Number(rs[0]!['id'])).toBe(r1.id);
+      expect(Number(rs[0]!['grau'])).toBe(3);
+      expect(rs[0]).toMatchObject({ categoria: 'hematologica', evolucao: 'nova' });
+      expect(Number(rs[0]!['acompanhamento_oncologico_id'])).toBe(a1.id);
+      expect(Number(rs[0]!['profissional_id'])).toBe(ids.profissional);
+    });
+    const lido = await acomp.doPaciente(c, ids.paciente);
+    expect(lido.acompanhamentos[0]).toMatchObject({ id: a1.id, classificacao: 'recidiva', versao: 2 });
+    expect(lido.acompanhamentos[0]!.eventos.map((x) => x.tipo)).toEqual(['recidiva', 'classificacao']);
+    expect(lido.reacoes.map((x) => [x.grau, x.categoria])).toEqual([[3, 'hematologica']]);
   });
 });

@@ -11,6 +11,10 @@
 //   POST /api/especialidades/oncologia/registro/planos/:id/sessoes      pep.radioterapia.sessao.registrar (médico,
 //                                                                        físico médico ou técnico/tecnólogo em radiologia)
 //   POST /api/especialidades/oncologia/registro/aparelhos               pep.radioterapia.aparelho.incluir
+//   GET  /api/especialidades/oncologia/internacoes/:reg/acompanhamento  acompanhamento do tumor e reações (auditado)
+//   POST /api/especialidades/oncologia/registro/acompanhamentos         pep.oncologia.acompanhamento.registrar (médico)
+//   POST /api/especialidades/oncologia/registro/reacoes                 pep.oncologia.reacao.registrar (médico ou
+//                                                                        enfermeiro: a toxicidade é avaliada por ambos)
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS as E, PERMISSOES_ESPECIALIDADES_CODIGOS as P } from '@sgh/contratos';
 import { categoriaDoCbo, podeRegistrarSessaoRadioterapia } from '@sgh/dominio-pep';
@@ -32,6 +36,13 @@ import { corpo } from '../exames/public-api.js';
 import { AcessoPacientePep } from '../pep/acesso-paciente.js';
 import { ESTADO_PRONTUARIO } from '../pep/prontuario.controller.js';
 import type { EstadoProntuario } from '../pep/sessao-prontuario.js';
+import {
+  esquemaAcompanhamento,
+  esquemaReacao,
+  PORTA_ACOMPANHAMENTO_ONCOLOGICO,
+  portaAcompanhamentoOncologicoIndisponivel,
+  type PortaAcompanhamentoOncologico,
+} from './acompanhamento-oncologico.js';
 import { PORTA_ESPECIALIDADES, type PortaEspecialidades } from './porta.js';
 import {
   type Autor,
@@ -78,6 +89,9 @@ export class RegistroOncologicoController {
     @Optional()
     @Inject(PORTA_REGISTRO_ONCOLOGICO)
     private readonly porta: PortaRegistroOncologico = portaRegistroOncologicoIndisponivel(),
+    @Optional()
+    @Inject(PORTA_ACOMPANHAMENTO_ONCOLOGICO)
+    private readonly acomp: PortaAcompanhamentoOncologico = portaAcompanhamentoOncologicoIndisponivel(),
   ) {
     this.acesso = new AcessoPacientePep({ estado, trilha, alerta, configuracao, vinculo, emergencia });
   }
@@ -296,5 +310,70 @@ export class RegistroOncologicoController {
     const s = sessaoDe(req);
     const r = await this.porta.incluirAparelho(s.porta, corpo(esquemaAparelho, b), chaveIdempotencia(req));
     return { ok: true, ...r, mensagem: 'Aparelho incluído.' };
+  }
+
+  /** Quem avalia a reação do tratamento: o médico ou o enfermeiro com o vínculo ativo (a trilha fica com o autor). */
+  private async autorReacao(s: SessaoCadastro, reg: number): Promise<Autor> {
+    const i = await this.daInternacao(s, reg, P.oncologiaRegistrar);
+    const vs = await this.especialidades.vinculos(s.porta, s.login).catch(() => []);
+    const v = vs.find((x) => x.ativo && ['medico', 'enfermagem'].includes(categoriaDoCbo(x.cbo) ?? ''));
+    if (!v)
+      throw new ErroProblema(
+        'sem-permissao',
+        403,
+        'Categoria profissional',
+        'A reação do tratamento é registrada pelo médico ou pelo enfermeiro: a sessão precisa do vínculo ativo.',
+        { codigo: 'categoria-nao-autorizada' },
+      );
+    return { paciente: i.paciente, internacao: i.internacao, profissional: v.vinculo };
+  }
+
+  @Get('especialidades/oncologia/internacoes/:reg/acompanhamento')
+  @Permissao(P.oncologiaLer)
+  @Auditar(E.especialidadeLida.codigo)
+  async acompanhamento(@Param('reg') reg: string, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const i = await this.daInternacao(s, idDaRota(reg), P.oncologiaLer);
+    return this.acomp.doPaciente(s.porta, i.paciente);
+  }
+
+  @Post('especialidades/oncologia/registro/acompanhamentos')
+  @HttpCode(201)
+  @Permissao(P.oncologiaRegistrar)
+  @AuditadoNoHandler('pep.oncologia.acompanhamento.registrar pelo executor (trilha na mesma transação)')
+  async registrarAcompanhamento(
+    @Query('internacao') reg: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const s = sessaoDe(req);
+    const e = corpo(esquemaAcompanhamento, b);
+    const r = await this.acomp.registrarAcompanhamento(
+      s.porta,
+      await this.autor(s, idDaRota(reg)),
+      e,
+      chaveIdempotencia(req),
+    );
+    return { ok: true, ...r, mensagem: 'Acompanhamento registrado: a mudança fica na linha do tempo.' };
+  }
+
+  @Post('especialidades/oncologia/registro/reacoes')
+  @HttpCode(201)
+  @Permissao(P.oncologiaRegistrar)
+  @AuditadoNoHandler('pep.oncologia.reacao.registrar pelo executor (trilha na mesma transação)')
+  async registrarReacao(
+    @Query('internacao') reg: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const s = sessaoDe(req);
+    const e = corpo(esquemaReacao, b);
+    const r = await this.acomp.registrarReacao(
+      s.porta,
+      await this.autorReacao(s, idDaRota(reg)),
+      e,
+      chaveIdempotencia(req),
+    );
+    return { ok: true, ...r, mensagem: 'Reação registrada.' };
   }
 }
