@@ -291,7 +291,7 @@ export class CatalogoPrescricaoPropria {
    * unidades de resposta), lista vazia.
    */
   dominios(c: ContextoPrescricao): Promise<Record<string, OpcaoDominio[]>> {
-    return this.ler(c, 'dominios', async (l) => {
+    return this.ler(c, 'dominios', async (l, est) => {
       const ops = async (sql: string): Promise<OpcaoDominio[]> =>
         (await l.consultar(sql)).map((x) => ({
           id: String(x['id']),
@@ -323,6 +323,31 @@ export class CatalogoPrescricaoPropria {
         ),
         caracteristicas: await ops(
           `SELECT id, descricao AS nome FROM caracteristica_dieta WHERE ativo ORDER BY descricao, id`,
+        ),
+        // Composição da dieta por refeição (03-PEP L112): as refeições com o horário geral do estabelecimento (sem
+        // unidade nem modalidade própria), os alimentos vigentes da tabela de composição e as medidas caseiras (grupo:
+        // o alimento da equivalência; vazio, medida genérica).
+        refeicoes: (
+          await l.consultar(
+            `SELECT hr.id, rd.descricao, hr.horario_inicio
+               FROM horario_refeicao hr JOIN refeicao_do_dia rd ON rd.id = hr.refeicao_do_dia_id AND rd.ativo
+              WHERE hr.estabelecimento_id = ? AND hr.ativo AND hr.unidade_internacao_id IS NULL
+                AND hr.modalidade_dieta_id IS NULL
+              ORDER BY rd.ordem, hr.id`,
+            [est.id],
+          )
+        ).map((x) => {
+          const h = hhmm(x['horario_inicio']);
+          return { id: String(x['id']), nome: `${String(x['descricao'])} (${h.slice(0, 2)}:${h.slice(2)})` };
+        }),
+        alimentos: await ops(
+          `SELECT id, descricao AS nome FROM alimento_referencia
+            WHERE vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)
+            ORDER BY descricao, id`,
+        ),
+        medidasCaseiras: await ops(
+          `SELECT id, descricao AS nome, alimento_referencia_id AS grupo FROM medida_caseira_alimento WHERE ativo
+            ORDER BY descricao, id`,
         ),
         tiposInfusao: await ops(
           `SELECT id, descricao AS nome FROM tipo_infusao WHERE ativo ORDER BY descricao, id`,
@@ -1005,7 +1030,8 @@ export class CatalogoPrescricaoPropria {
 
   /**
    * Regras de alerta da prescrição (regra_alerta do estabelecimento ou de todos, cujo cenário é um tipo de alerta
-   * da prescrição), ativas e inativas: o nível sai do bloqueio e da justificativa exigida, a versão é a vigente e a
+   * da prescrição), ativas e inativas (a regra de todos desativada só neste estabelecimento, em
+   * regra_alerta_estabelecimento, sai inativa aqui; 01-ADM L76): o nível sai do bloqueio e da justificativa exigida, a versão é a vigente e a
    * vigência é a da versão vigente (sem histórico, o início da vigência da regra); autor é o login de quem criou.
    */
   regrasAlerta(c: ContextoPrescricao): Promise<RegraAlertaLida[]> {
@@ -1018,14 +1044,16 @@ export class CatalogoPrescricaoPropria {
                     WHERE rv.regra_alerta_id = r.id AND rv.numero_versao = r.numero_versao_vigente
                     ORDER BY rv.id DESC LIMIT 1),
                   DATE_FORMAT(r.vigencia_inicio, '%Y-%m-%d')) AS vigente_desde,
-                r.ativo AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= CURRENT_DATE) AS ativa,
+                r.ativo AND COALESCE(rae.ativo, TRUE)
+                  AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= CURRENT_DATE) AS ativa,
                 COALESCE(r.descricao, r.mensagem) AS descricao,
                 COALESCE((SELECT u.login FROM usuario u WHERE u.id = r.criado_por), '') AS autor, r.criado_em
            FROM regra_alerta r
            JOIN cenario_alerta ca ON ca.id = r.cenario_alerta_id
+           LEFT JOIN regra_alerta_estabelecimento rae ON rae.regra_alerta_id = r.id AND rae.estabelecimento_id = ?
           WHERE (r.estabelecimento_id IS NULL OR r.estabelecimento_id = ?) AND ca.codigo IN (${lista(tipos)})
           ORDER BY r.codigo, r.id`,
-        [est.id, ...tipos],
+        [est.id, est.id, ...tipos],
       );
       return ls.map((x) => ({
         id: num(x['id']),

@@ -1484,16 +1484,22 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
   alertas: FonteAdministracao['alertas'] = (c) =>
     this.ler(c, async (l, est) => {
       const rs = await l.consultar(
-        `SELECT r.id, r.nome, r.ativo, r.idade_minima_anos, r.idade_maxima_anos, ca.descricao AS cenario,
+        // 01-ADM L76: a regra global desativada só neste estabelecimento (regra_alerta_estabelecimento) sai inativa
+        // aqui, e o destinatário escolhido por outro estabelecimento não conta.
+        `SELECT r.id, r.nome, (r.ativo AND COALESCE(rae.ativo, TRUE)) AS ativo, r.idade_minima_anos, r.idade_maxima_anos,
+            ca.descricao AS cenario,
             (SELECT COUNT(DISTINCT d.usuario_id) FROM regra_alerta_destinatario d
-              WHERE d.regra_alerta_id = r.id AND d.usuario_id IS NOT NULL AND d.ativo AND d.excluido_em IS NULL)
+              WHERE d.regra_alerta_id = r.id AND d.usuario_id IS NOT NULL AND d.ativo AND d.excluido_em IS NULL
+                AND (d.estabelecimento_id IS NULL OR d.estabelecimento_id = ?))
           + (SELECT COUNT(DISTINCT s.usuario_id) FROM assinatura_alerta s
               WHERE s.regra_alerta_id = r.id AND s.ativo AND s.excluido_em IS NULL
                 AND s.usuario_id NOT IN (SELECT d2.usuario_id FROM regra_alerta_destinatario d2 WHERE d2.regra_alerta_id = r.id
-                      AND d2.usuario_id IS NOT NULL AND d2.ativo AND d2.excluido_em IS NULL)) AS usuarios
+                      AND d2.usuario_id IS NOT NULL AND d2.ativo AND d2.excluido_em IS NULL
+                      AND (d2.estabelecimento_id IS NULL OR d2.estabelecimento_id = ?))) AS usuarios
            FROM regra_alerta r JOIN cenario_alerta ca ON ca.id = r.cenario_alerta_id
+           LEFT JOIN regra_alerta_estabelecimento rae ON rae.regra_alerta_id = r.id AND rae.estabelecimento_id = ?
           WHERE (r.estabelecimento_id IS NULL OR r.estabelecimento_id = ?) ORDER BY r.nome`,
-        [est],
+        [est, est, est, est],
         { teto: TETO },
       );
       const gs = rs.length
