@@ -1,32 +1,40 @@
-// Contrato de efeito do BI consolidado da Rede (M57, etapa 3; C1-046) sobre os bancos PRÓPRIOS no MariaDB: dois
-// estabelecimentos SINTÉTICOS, cada um no banco de um cliente de teste (f22_o1 e f22_o2), com o movimento da internação
-// lido pela porta própria de cada um (FonteInternacaoPropria com o contexto do banco dado pela PortaRedePropria) e a
-// chave `rede.bi` lida da liberação gravada no banco de cada um (FonteConfiguracaoPropria). Confere:
-//   - o consolidado: a soma dos numeradores sobre a soma dos denominadores, com a parcela de cada banco (nenhuma
-//     consulta cruza os bancos: a internação de um não aparece no outro);
-//   - o desligado: com a chave `rede.bi` desligada no banco do outro, ele fica fora do consolidado com o motivo;
-//   - o pseudônimo: comum só com `rede.pseudonimoComum` ligada nos dois bancos; senão, por estabelecimento.
+// Contrato de efeito do BI consolidado da Rede (M57, etapa 3; C1-046) sobre o banco PRÓPRIO no MariaDB, pelo caminho
+// que a API serve: um banco por cliente, e os estabelecimentos da rede moram no MESMO banco (rede/porta-propria.ts).
+// Dois estabelecimentos SINTÉTICOS no banco do cliente de teste (f22_o1); o ServicoBiRede é o que o BiRedeController
+// monta (a porta da Rede é a PortaRedePropria de `portasDaRede`: a lista e o contexto do banco vêm dela; a liberação é
+// uma LiberacaoPep só, sobre a FonteConfiguracaoPropria; a internação pela FonteInternacaoPropria; os parâmetros pela
+// ConfiguracaoM16). Confere:
+//   - o consolidado: a soma dos numeradores sobre a soma dos denominadores, com a parcela de cada estabelecimento
+//     (o movimento de cada um é lido pelo id dele no banco: a internação de um não aparece no outro);
+//   - o desligado: com a chave `rede.bi` desligada no outro, ele fica fora do consolidado com o motivo;
+//   - o pseudônimo: comum só com `rede.pseudonimoComum` ligada nos dois; senão, por estabelecimento.
+// Os outros estabelecimentos do cliente de teste entram na lista da porta (é a regra da API); as conferências exatas
+// são sobre os dois sintéticos, e o consolidado é conferido contra a soma de TODAS as parcelas incluídas.
 // Massa sintética "C1046" (nenhuma pessoa real); tudo é apagado no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { CHAVE_LIBERACAO_BI_REDE, CHAVE_PSEUDONIMO_COMUM_REDE } from '@sgh/contratos';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
+import type { ModuleRef } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FonteConfiguracaoPropria } from '../config/configuracao-propria.js';
-import { PARAMETROS_PADRAO } from '../internacao/configuracao.js';
+import { ConfiguracaoM16 } from '../internacao/configuracao.js';
 import { FonteInternacaoPropria } from '../internacao/fonte-propria.js';
 import { ServicoInternacao } from '../internacao/servico.js';
-import { LiberacaoPep } from '../pep/liberacao-pep.js';
+import { CONFIGURACAO_M16, SERVICO_INTERNACAO } from '../internacao/simbolos.js';
+import { PORTA_REDE } from '../rede/porta.js';
 import { PortaRedePropria } from '../rede/porta-propria.js';
-import { ServicoBiRede } from './aplicacao/bi-rede.js';
+import type { ServicoBiRede } from './aplicacao/bi-rede.js';
+import { BiRedeController } from './bi-rede.controller.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const REDE = 'rede-c1046';
 const P = 'C1046';
-/** Dois bancos de cliente: o estabelecimento A no primeiro, o B no segundo. */
-const BANCOS = [
-  { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1', codigo: 'bia1046', obito: true },
-  { cliente: process.env['SGH_CLIENTE_TESTE_2']?.trim() || 'f22_o2', codigo: 'bib1046', obito: false },
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
+/** Dois estabelecimentos no MESMO banco de cliente: A com um óbito, B com uma alta. */
+const ESTS = [
+  { codigo: 'bia1046', obito: true },
+  { codigo: 'bib1046', obito: false },
 ] as const;
-const [A, B] = BANCOS;
+const [A, B] = ESTS;
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -234,143 +242,176 @@ async function chave(e: Escritor, est: number, recurso: string, ligada: boolean)
   );
 }
 
-describe.skipIf(SEM_BANCO)('BI consolidado da Rede nos bancos próprios (MariaDB, dois clientes)', () => {
-  let nucleo: NucleoProprio;
-  let servico: ServicoBiRede;
-  const massas = new Map<string, Massa>();
+describe.skipIf(SEM_BANCO)(
+  'BI consolidado da Rede no banco próprio (MariaDB, como o controller monta)',
+  () => {
+    let nucleo: NucleoProprio;
+    let servico: ServicoBiRede;
+    const massas = new Map<string, Massa>();
 
-  const gravar = (cliente: string, fn: (e: Escritor) => Promise<void>) =>
-    nucleo.escrever({ cliente, correlacao: 'teste-c1-046-bi-rede' }, fn);
+    const gravar = (fn: (e: Escritor) => Promise<void>) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-c1-046-bi-rede' }, fn);
+    const nossos = new Set<string>(ESTS.map((e) => e.codigo));
 
-  beforeAll(async () => {
-    nucleo = new NucleoProprio();
-    for (const b of BANCOS)
-      await gravar(b.cliente, async (e) => {
-        const m = await semear(e, b.codigo, b.obito);
-        massas.set(b.codigo, m);
-        await chave(e, m.est, CHAVE_LIBERACAO_BI_REDE, true);
-        await chave(e, m.est, CHAVE_PSEUDONIMO_COMUM_REDE, true);
-      });
-    // Cada estabelecimento: a porta da Rede, a configuração e a internação do banco DELE.
-    const porBanco = new Map<string, { porta: PortaRedePropria; liberacao: LiberacaoPep }>(
-      BANCOS.map((b) => [
-        b.codigo,
-        {
-          porta: new PortaRedePropria(nucleo, b.cliente, REDE),
-          liberacao: new LiberacaoPep(new FonteConfiguracaoPropria(nucleo, b.cliente), null),
+    beforeAll(async () => {
+      nucleo = new NucleoProprio();
+      for (const b of ESTS)
+        await gravar(async (e) => {
+          const m = await semear(e, b.codigo, b.obito);
+          massas.set(b.codigo, m);
+          await chave(e, m.est, CHAVE_LIBERACAO_BI_REDE, true);
+          await chave(e, m.est, CHAVE_PSEUDONIMO_COMUM_REDE, true);
+        });
+      // A porta da Rede como `portasDaRede` (rede/modulo.ts) a monta: uma só, sobre o banco do cliente padrão.
+      const porta = new PortaRedePropria(nucleo, CLIENTE, REDE);
+      await porta.carregar();
+      const configuracao = new FonteConfiguracaoPropria(nucleo, CLIENTE);
+      const provedores = new Map<symbol, unknown>([
+        [PORTA_REDE, porta],
+        [SERVICO_INTERNACAO, new ServicoInternacao(new FonteInternacaoPropria(nucleo), null)],
+        [CONFIGURACAO_M16, new ConfiguracaoM16(configuracao, null)],
+      ]);
+      const modulos = {
+        get: (token: symbol) => {
+          if (!provedores.has(token)) throw new Error('provedor ausente');
+          return provedores.get(token);
         },
-      ]),
-    );
-    const de = (h: string) => {
-      const x = porBanco.get(h);
-      if (!x) throw new Error('estabelecimento fora da rede');
-      return x;
-    };
-    servico = new ServicoBiRede({
-      lista: {
-        redeConfigurada: () => REDE,
-        estabelecimentos: () =>
-          BANCOS.map((b) => ({ codigo: b.codigo, nome: `Estabelecimento ${b.codigo}` })),
-      },
-      internacao: new ServicoInternacao(new FonteInternacaoPropria(nucleo), null),
-      parametros: async () => PARAMETROS_PADRAO,
-      biLigado: (rede, h) => de(h).liberacao.ligadaNoEstabelecimento(rede, h, CHAVE_LIBERACAO_BI_REDE),
-      pseudonimoComum: (rede, h) =>
-        de(h).liberacao.ligadaNoEstabelecimento(rede, h, CHAVE_PSEUDONIMO_COMUM_REDE),
-      contextoBanco: (rede, h) => de(h).porta.contextoBanco({ rede, hospital: h }),
+      } as unknown as ModuleRef;
+      // O serviço é o que o controller monta (lista e contexto do banco da mesma porta; uma LiberacaoPep só).
+      servico = new BiRedeController(modulos, configuracao, null).servico;
     });
-  });
 
-  afterAll(async () => {
-    if (!nucleo) return;
-    for (const b of BANCOS) {
-      const m = massas.get(b.codigo);
-      if (!m) continue;
-      await gravar(b.cliente, async (e) => {
-        await limparMovimento(e, m.est);
-        await e.executar('DELETE FROM profissional WHERE id = ?', [m.profissional]);
-        await e.executar('DELETE FROM paciente WHERE id = ?', [m.paciente]);
-        for (const p of m.pessoas) await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [p]);
-        for (const [t, id] of m.catalogos) {
-          if (!/^[a-z_]+$/.test(t)) continue;
-          await e.executar(`DELETE FROM ${t} WHERE id = ?`, [id]).catch(() => undefined);
-        }
-        await e.executar('DELETE FROM estabelecimento WHERE id = ?', [m.est]).catch(() => undefined);
-      });
-    }
-    await nucleo.encerrar();
-  });
+    afterAll(async () => {
+      if (!nucleo) return;
+      for (const b of ESTS) {
+        const m = massas.get(b.codigo);
+        if (!m) continue;
+        await gravar(async (e) => {
+          await limparMovimento(e, m.est);
+          await e.executar('DELETE FROM profissional WHERE id = ?', [m.profissional]);
+          await e.executar('DELETE FROM paciente WHERE id = ?', [m.paciente]);
+          for (const p of m.pessoas) await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [p]);
+          for (const [t, id] of m.catalogos) {
+            if (!/^[a-z_]+$/.test(t)) continue;
+            await e.executar(`DELETE FROM ${t} WHERE id = ?`, [id]).catch(() => undefined);
+          }
+          await e.executar('DELETE FROM estabelecimento WHERE id = ?', [m.est]).catch(() => undefined);
+        });
+      }
+      await nucleo.encerrar();
+    });
 
-  it('consolidado: Σ numeradores ÷ Σ denominadores, com a parcela de cada banco e o pseudônimo comum', async () => {
-    const mort = await servico.serie(
-      { rede: REDE, hospital: A.codigo },
-      'taxaMortalidadeGeral',
-      '2026-01',
-      '2026-01',
-    );
-    expect(mort.estabelecimentos.map((e) => [e.codigo, e.situacao])).toEqual([
-      [A.codigo, 'incluido'],
-      [B.codigo, 'incluido'],
-    ]);
-    const jan = mort.valores.find((v) => v.periodo === '2026-01')!;
-    expect([jan.numerador, jan.denominador, jan.valor]).toEqual([1, 2, 50]);
-    expect(jan.parcelas.map((p) => [p.estabelecimento, p.numerador, p.denominador, p.valor])).toEqual([
-      [A.codigo, 1, 1, 100],
-      [B.codigo, 0, 1, 0],
-    ]);
-    expect(jan.conta).toMatch(/× 100 = /);
-    const adm = await servico.serie({ rede: REDE, hospital: A.codigo }, 'admissoes', '2026-01', '2026-01');
-    const a = adm.valores.find((v) => v.periodo === '2026-01')!;
-    expect(a.numerador).toBe(2);
-    expect(a.parcelas.map((p) => [p.estabelecimento, p.numerador])).toEqual([
-      [A.codigo, 1],
-      [B.codigo, 1],
-    ]);
-    const c = await servico.consolidado({ rede: REDE, hospital: B.codigo }, '2026-01', '2026-01');
-    expect(c.pseudonimo).toBe('comum');
-    expect(c.estabelecimentos.map((e) => e.codigo)).toEqual([B.codigo, A.codigo]);
-  });
-
-  it('desligado: rede.bi desligada no banco do outro deixa-o fora, com o motivo; o pseudônimo volta a ser por estabelecimento', async () => {
-    const mb = massas.get(B.codigo)!;
-    await gravar(B.cliente, (e) => chave(e, mb.est, CHAVE_PSEUDONIMO_COMUM_REDE, false));
-    try {
-      // Pseudônimo comum desligado em um dos bancos: os dois entram, e o pseudônimo é por estabelecimento.
-      const p = await servico.consolidado({ rede: REDE, hospital: A.codigo }, '2026-01', '2026-01');
-      expect(p.estabelecimentos.map((e) => e.situacao)).toEqual(['incluido', 'incluido']);
-      expect(p.pseudonimo).toBe('por-estabelecimento');
-      await gravar(B.cliente, (e) => chave(e, mb.est, CHAVE_LIBERACAO_BI_REDE, false));
-      const s = await servico.serie(
+    it('consolidado: Σ numeradores ÷ Σ denominadores, com a parcela de cada estabelecimento e o pseudônimo comum', async () => {
+      const mort = await servico.serie(
         { rede: REDE, hospital: A.codigo },
         'taxaMortalidadeGeral',
         '2026-01',
         '2026-01',
       );
-      expect(s.estabelecimentos.map((e) => [e.codigo, e.situacao])).toEqual([
+      // A lista vem da porta (todos os estabelecimentos do banco do cliente); o da sessão primeiro.
+      expect(mort.estabelecimentos[0]!.codigo).toBe(A.codigo);
+      expect(
+        mort.estabelecimentos.filter((e) => nossos.has(e.codigo)).map((e) => [e.codigo, e.situacao]),
+      ).toEqual([
         [A.codigo, 'incluido'],
-        [B.codigo, 'desligado'],
-      ]);
-      expect(s.estabelecimentos[1]!.motivo).toMatch(/ainda não foi liberado/);
-      const jan = s.valores.find((v) => v.periodo === '2026-01')!;
-      expect([jan.numerador, jan.denominador, jan.valor]).toEqual([1, 1, 100]);
-      expect(jan.parcelas.map((p) => p.estabelecimento)).toEqual([A.codigo]);
-      expect(s.notas.join(' ')).toMatch(/um só estabelecimento/);
-      // O da sessão entra mesmo com a chave dele desligada no outro banco (a sessão já passou pela chave dela).
-      const doB = await servico.consolidado({ rede: REDE, hospital: B.codigo }, '2026-01', '2026-01');
-      expect(doB.estabelecimentos.map((e) => [e.codigo, e.situacao])).toEqual([
         [B.codigo, 'incluido'],
-        [A.codigo, 'incluido'],
       ]);
-    } finally {
-      await gravar(B.cliente, (e) => chave(e, mb.est, CHAVE_LIBERACAO_BI_REDE, true));
-      await gravar(B.cliente, (e) => chave(e, mb.est, CHAVE_PSEUDONIMO_COMUM_REDE, true));
-    }
-  });
+      const jan = mort.valores.find((v) => v.periodo === '2026-01')!;
+      expect(
+        jan.parcelas
+          .filter((p) => nossos.has(p.estabelecimento))
+          .map((p) => [p.estabelecimento, p.numerador, p.denominador, p.valor]),
+      ).toEqual([
+        [A.codigo, 1, 1, 100],
+        [B.codigo, 0, 1, 0],
+      ]);
+      // Σ÷Σ sobre todas as parcelas incluídas (os outros estabelecimentos do cliente de teste, se liberados, somam).
+      const soma = (k: 'numerador' | 'denominador') => jan.parcelas.reduce((t, p) => t + (p[k] ?? 0), 0);
+      expect([jan.numerador, jan.denominador]).toEqual([soma('numerador'), soma('denominador')]);
+      const outros = jan.parcelas.filter((p) => !nossos.has(p.estabelecimento));
+      if (outros.length === 0) expect([jan.numerador, jan.denominador, jan.valor]).toEqual([1, 2, 50]);
+      expect(jan.conta).toMatch(/× 100 = /);
+      const adm = await servico.serie({ rede: REDE, hospital: A.codigo }, 'admissoes', '2026-01', '2026-01');
+      const a = adm.valores.find((v) => v.periodo === '2026-01')!;
+      expect(
+        a.parcelas.filter((p) => nossos.has(p.estabelecimento)).map((p) => [p.estabelecimento, p.numerador]),
+      ).toEqual([
+        [A.codigo, 1],
+        [B.codigo, 1],
+      ]);
+      expect(a.numerador).toBe(a.parcelas.reduce((t, p) => t + (p.numerador ?? 0), 0));
+      const c = await servico.consolidado({ rede: REDE, hospital: B.codigo }, '2026-01', '2026-01');
+      expect(c.estabelecimentos[0]!.codigo).toBe(B.codigo);
+      expect(c.estabelecimentos.filter((e) => nossos.has(e.codigo)).map((e) => e.situacao)).toEqual([
+        'incluido',
+        'incluido',
+      ]);
+      // Pseudônimo comum só se TODOS os incluídos o ligaram: com outros incluídos sem a chave, é por estabelecimento.
+      const outrosIncluidos = c.estabelecimentos.filter(
+        (e) => !nossos.has(e.codigo) && e.situacao === 'incluido',
+      );
+      if (outrosIncluidos.length === 0) expect(c.pseudonimo).toBe('comum');
+    });
 
-  it('nenhuma consulta cruza os bancos: o estabelecimento fora do banco do cliente fica indisponível', async () => {
-    const porta = new PortaRedePropria(nucleo, A.cliente, REDE);
-    await expect(porta.contextoBanco({ rede: REDE, hospital: B.codigo })).rejects.toThrow(/Fora da rede/);
-    const ctx = await porta.contextoBanco({ rede: REDE, hospital: A.codigo });
-    expect(ctx).toMatchObject({ cliente: A.cliente, estabelecimento: massas.get(A.codigo)!.est });
-  });
-});
+    it('desligado: rede.bi desligada no outro deixa-o fora, com o motivo; o pseudônimo volta a ser por estabelecimento', async () => {
+      const mb = massas.get(B.codigo)!;
+      await gravar((e) => chave(e, mb.est, CHAVE_PSEUDONIMO_COMUM_REDE, false));
+      try {
+        // Pseudônimo comum desligado em um dos dois: os dois entram, e o pseudônimo é por estabelecimento.
+        const p = await servico.consolidado({ rede: REDE, hospital: A.codigo }, '2026-01', '2026-01');
+        expect(p.estabelecimentos.filter((e) => nossos.has(e.codigo)).map((e) => e.situacao)).toEqual([
+          'incluido',
+          'incluido',
+        ]);
+        expect(p.pseudonimo).toBe('por-estabelecimento');
+        await gravar((e) => chave(e, mb.est, CHAVE_LIBERACAO_BI_REDE, false));
+        const s = await servico.serie(
+          { rede: REDE, hospital: A.codigo },
+          'taxaMortalidadeGeral',
+          '2026-01',
+          '2026-01',
+        );
+        const sb = s.estabelecimentos.find((e) => e.codigo === B.codigo)!;
+        expect([s.estabelecimentos[0]!.codigo, s.estabelecimentos[0]!.situacao, sb.situacao]).toEqual([
+          A.codigo,
+          'incluido',
+          'desligado',
+        ]);
+        expect(sb.motivo).toMatch(/ainda não foi liberado/);
+        const jan = s.valores.find((v) => v.periodo === '2026-01')!;
+        expect(jan.parcelas.map((x) => x.estabelecimento)).not.toContain(B.codigo);
+        expect(
+          jan.parcelas.filter((x) => x.estabelecimento === A.codigo).map((x) => [x.numerador, x.denominador]),
+        ).toEqual([[1, 1]]);
+        if (jan.parcelas.length === 1) {
+          expect([jan.numerador, jan.denominador, jan.valor]).toEqual([1, 1, 100]);
+          expect(s.notas.join(' ')).toMatch(/um só estabelecimento/);
+        }
+        // O da sessão entra mesmo com a chave dele desligada (a sessão já passou pela chave dela no controller).
+        const doB = await servico.consolidado({ rede: REDE, hospital: B.codigo }, '2026-01', '2026-01');
+        expect(
+          doB.estabelecimentos.filter((e) => nossos.has(e.codigo)).map((e) => [e.codigo, e.situacao]),
+        ).toEqual([
+          [B.codigo, 'incluido'],
+          [A.codigo, 'incluido'],
+        ]);
+      } finally {
+        await gravar((e) => chave(e, mb.est, CHAVE_LIBERACAO_BI_REDE, true));
+        await gravar((e) => chave(e, mb.est, CHAVE_PSEUDONIMO_COMUM_REDE, true));
+      }
+    });
+
+    it('fora da rede: a sessão de outra rede ou de estabelecimento fora do banco do cliente é recusada', async () => {
+      await expect(
+        servico.consolidado({ rede: 'outra-rede', hospital: A.codigo }, '2026-01', '2026-01'),
+      ).rejects.toThrow(/Fora da rede/);
+      await expect(
+        servico.consolidado({ rede: REDE, hospital: 'zzz1046' }, '2026-01', '2026-01'),
+      ).rejects.toThrow(/Fora da rede/);
+      const porta = new PortaRedePropria(nucleo, CLIENTE, REDE);
+      await expect(porta.contextoBanco({ rede: REDE, hospital: 'zzz1046' })).rejects.toThrow(/Fora da rede/);
+      const ctx = await porta.contextoBanco({ rede: REDE, hospital: B.codigo });
+      expect(ctx).toMatchObject({ cliente: CLIENTE, estabelecimento: massas.get(B.codigo)!.est });
+    });
+  },
+);
