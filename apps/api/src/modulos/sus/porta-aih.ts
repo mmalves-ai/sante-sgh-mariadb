@@ -2,6 +2,7 @@
 // da produção (a internação, a conta, a trajetória, os leitos de UTI habilitados, os lotes da saída de estoque, a
 // SIGTAP e os valores) e as do faturamento SUS (faixa, AIH, linhas e retorno), e as gravações. As interfaces entram na
 // LeituraSus e na GravacaoSus (a mesma transação da competência, da crítica, do arquivo e da trilha).
+import type { DiariaUtiCompetencia } from '@sgh/dominio-faturamento';
 import {
   type AihRegistro,
   type CompatibilidadeSigtap,
@@ -139,6 +140,8 @@ export interface GravacaoSusAih {
       diariasUti: number;
       diariasUtiAnterior: number;
       itens: readonly ItemAihParaGravar[];
+      /** As diárias de UTI por competência (guardadas com a conta; F7, 06-SUS linha 59). */
+      diariasCompetencia?: readonly DiariaUtiCompetencia[];
       por: string;
     },
   ): Promise<void>;

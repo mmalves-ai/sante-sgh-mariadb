@@ -11,6 +11,11 @@
 // gravação da AIH, mesmo só na conta, sobe a versão dela (uma versão para a tela, como na porta em memória).
 // O "registro" da tela é o id da internação; o prontuário é o número do prontuário do paciente; o solicitante é o CPF
 // do profissional da casa ou do solicitante externo (o banco guarda a chave, nunca o CPF de novo).
+import {
+  classeDaUtiSus,
+  type DiariaUtiCompetencia,
+  habilitacaoUtiDaCompetencia,
+} from '@sgh/dominio-faturamento';
 import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import type { SolicitanteAihLido } from './porta-aih.js';
@@ -32,6 +37,7 @@ export const TABELAS_SUS_AIH = [
   'conta_aih',
   'conta_aih_procedimento',
   'conta_aih_opm',
+  'diaria_uti_sus',
 ] as const;
 
 type Linha = Record<string, unknown>;
@@ -543,6 +549,8 @@ export class GravacoesAihPropria {
       diariasUti: number;
       diariasUtiAnterior: number;
       itens: readonly ItemAihParaGravar[];
+      /** As diárias de UTI por competência (F7, 06-SUS linha 59), guardadas em diaria_uti_sus com a conta. */
+      diariasCompetencia?: readonly DiariaUtiCompetencia[];
       por: string;
     },
   ): Promise<void> {
@@ -637,7 +645,81 @@ export class GravacoesAihPropria {
         origem: 'sistema',
       });
     }
+    await this.gravarDiariasUti(conta, p.diariasCompetencia ?? []);
     await this.tx.alterar('autorizacao_internacao_sus', a.id, a.versao, {});
+  }
+
+  /**
+   * As diárias de UTI da conta por competência (diaria_uti_sus): o tipo de UTI do SIH pelo domínio SUS do cliente (a
+   * classe e o nível pela descrição), a habilitação vigente do tipo na competência e o procedimento da diária. Sem
+   * corte: a quantidade lançada é a cobrada (a falta de leito habilitado já é crítica bloqueante no fechamento).
+   */
+  private async gravarDiariasUti(conta: number, diarias: readonly DiariaUtiCompetencia[]): Promise<void> {
+    let sequencia = 0;
+    const tipos = new Map<
+      number,
+      { id: number; classe: string; nivel: number | null; habilitacoes: number[] }
+    >();
+    for (const d of diarias) {
+      let t = tipos.get(d.tipo);
+      if (!t) {
+        const dom = await this.tx.uma(
+          `SELECT id, descricao FROM dominio_sus WHERE lista = 'tipo_leito_uti'
+              AND (codigo_oficial = ? OR (codigo_oficial IS NULL AND codigo = ?)) ORDER BY ativo DESC, id LIMIT 1`,
+          [String(d.tipo), String(d.tipo)],
+        );
+        if (!dom)
+          throw recusa(
+            'tipo-uti-inexistente',
+            'O tipo de UTI da diária não está no domínio do SUS do cliente.',
+          );
+        const classe = classeDaUtiSus(txt(dom['descricao']));
+        if (!classe)
+          throw recusa(
+            'tipo-uti-sem-classe',
+            'A descrição do tipo de UTI não diz se é adulto, pediátrica, neonatal, queimados, coronariana ou intermediária.',
+          );
+        t = { id: num(dom['id']), ...classe, habilitacoes: [] };
+        tipos.set(d.tipo, t);
+      }
+      const hab = await this.tx.consultar(
+        `SELECT id, tipo_uti_dominio_sus_id, unidade_internacao_id, ${dia('vigencia_inicio')} AS vigencia_inicio,
+                ${dia('vigencia_fim')} AS vigencia_fim, ativo
+           FROM leito_uti_habilitado WHERE estabelecimento_id = ? AND tipo_uti_dominio_sus_id = ?`,
+        [this.est, t.id],
+      );
+      const habilitacao = habilitacaoUtiDaCompetencia(
+        hab.map((r) => ({
+          id: num(r['id']),
+          tipo: num(r['tipo_uti_dominio_sus_id']),
+          unidade: numOuNulo(r['unidade_internacao_id']),
+          vigenciaInicio: txt(r['vigencia_inicio']),
+          vigenciaFim: txtOuNulo(r['vigencia_fim']),
+          ativo: r['ativo'] === true || r['ativo'] === 1 || r['ativo'] === '1',
+        })),
+        t.id,
+        d.competencia,
+      );
+      const sigtap = await this.sigtapId(d.procedimento);
+      if (!sigtap)
+        throw recusa('procedimento-inexistente', 'A diária de UTI não existe na tabela unificada.');
+      sequencia += 1;
+      await this.tx.incluir('diaria_uti_sus', {
+        conta_aih_id: conta,
+        sequencia,
+        procedimento_sigtap_id: sigtap,
+        leito_uti_habilitado_id: habilitacao,
+        tipo_uti: t.classe,
+        nivel: t.nivel,
+        competencia: d.competencia,
+        data_entrada: d.dataEntrada,
+        data_saida: d.dataSaida,
+        quantidade_lancada: d.diarias,
+        quantidade_cortada: 0,
+        quantidade_cobrada: d.diarias,
+        origem: 'sistema',
+      });
+    }
   }
 
   /**

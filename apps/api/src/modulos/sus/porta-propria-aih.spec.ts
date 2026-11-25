@@ -130,6 +130,8 @@ describe('AIH própria: a linha lida vira a AIH da tela', () => {
       'conta_aih',
       'conta_aih_procedimento',
       'conta_aih_opm',
+      // F7 (06-SUS linha 59): as diárias de UTI da conta por competência.
+      'diaria_uti_sus',
     ]);
   });
 });

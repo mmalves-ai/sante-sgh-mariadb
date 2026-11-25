@@ -506,6 +506,7 @@ export class ServicoSusAih {
           diariasUti: r.diariasUti.total,
           diariasUtiAnterior: r.diariasUti.mesAnterior,
           itens: fechamento.itens,
+          diariasCompetencia: fechamento.m.diariasCompetencia,
           por: s.login,
         });
         const n = (t: string) => fechamento?.itens.filter((x) => x.tipo === t).length ?? 0;

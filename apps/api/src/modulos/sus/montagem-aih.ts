@@ -11,6 +11,8 @@ import {
   competenciaDaData,
   type ContextoAih,
   type CriticaCiha,
+  type DiariaUtiCompetencia,
+  diariasUtiPorCompetencia,
   diasDePermanencia,
   type InternacaoAih,
   type LinhaSisaih,
@@ -38,6 +40,8 @@ export interface AihMontada {
   readonly resultado: ResultadoAih;
   /** A especialidade do leito do arquivo: a da internação ou, sem ela, a única que a SIGTAP aceita para o principal. */
   readonly especialidade: number | null;
+  /** As diárias de UTI da trajetória por competência (guardadas no fechamento; F7, 06-SUS linha 59). */
+  readonly diariasCompetencia: readonly DiariaUtiCompetencia[];
 }
 
 export function aihRegistrada(a: AihRegistro): AihRegistrada {
@@ -128,7 +132,7 @@ export function montarAihs(
         itensSemSigtap: 0,
         criticas: [criticaDe('permanencia-incoerente', a.conta, { motivo: 'internacao-inexistente' })],
       };
-      return { aih: a, internacao: null, resultado, especialidade: null };
+      return { aih: a, internacao: null, resultado, especialidade: null, diariasCompetencia: [] };
     }
     // Os itens de todas as contas SUS da internação (as parciais) e da conta gravada na AIH.
     const contasDaAih = new Set<number>([
@@ -174,7 +178,13 @@ export function montarAihs(
       ...c,
       detalhe: { ...c.detalhe, aih: a.id, registro: a.registro },
     }));
-    return { aih: a, internacao: i, resultado: { ...r, criticas }, especialidade };
+    return {
+      aih: a,
+      internacao: i,
+      resultado: { ...r, criticas },
+      especialidade,
+      diariasCompetencia: diariasUtiPorCompetencia(internacao.passagens, uti, internacao.alta),
+    };
   });
 }
 

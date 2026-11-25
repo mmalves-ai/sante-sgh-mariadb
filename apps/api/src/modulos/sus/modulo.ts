@@ -8,6 +8,8 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
+import { LeitosUtiSusController } from './leitos-uti.controller.js';
+import { PORTA_LEITOS_UTI, PortaLeitosUtiPropria } from './leitos-uti-propria.js';
 import { armazemSusLocal, armazemSusMemoria } from './armazem.js';
 import { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
 import { PortaSusMemoria } from './porta-memoria.js';
@@ -46,13 +48,21 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
   const armazem = opcoes.armazem ?? armazemDoSus(ctx, porta);
   return {
     module: ModuloSus,
-    controllers: [SusController, SusAihController, ServicoWebSusController],
+    controllers: [SusController, SusAihController, ServicoWebSusController, LeitosUtiSusController],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
       { provide: ARMAZEM_ARQUIVO_SUS, useValue: armazem },
       // F7 (08-INTG linha 131): serviço web do SUS; o simulador fora de produção (regra 6).
       { provide: NUCLEO_SERVICO_WEB_SUS, useValue: ctx.nucleo ?? null },
       { provide: ENVIADOR_SERVICO_WEB_SUS, useValue: enviadorServicoWebSusDoAmbiente(ctx.env) },
+      // F7 (06-SUS linha 59): leitos de UTI habilitados por tipo e vigência (só com o banco do cliente).
+      {
+        provide: PORTA_LEITOS_UTI,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaLeitosUtiPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
     ],
     exports: [PORTA_SUS, ARMAZEM_ARQUIVO_SUS],
   };

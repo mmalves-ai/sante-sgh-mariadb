@@ -38,6 +38,7 @@ const SIG_O = '0702049301';
 const CPF = '93093093000';
 const CARATER = 'T93-ELETIVO';
 const BASE = 930_093_000_000n;
+const TIPO_UTI = '9302';
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -46,7 +47,7 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 
 describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () => {
   let nucleo: NucleoProprio;
-  const ids = { est: 0, estB: 0, internacao: 0, paciente: 0, sigP: 0, sigU: 0, sigO: 0, faixa: 0 };
+  const ids = { est: 0, estB: 0, internacao: 0, paciente: 0, sigP: 0, sigU: 0, sigO: 0, faixa: 0, habUti: 0 };
   const correlacao = `t93-aih-${Date.now()}`;
 
   async function gravar<T>(
@@ -98,7 +99,7 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-limpa' }, async (e) => {
       for (const est of [ids.est, ids.estB].filter(Boolean)) {
-        for (const t of ['conta_aih_procedimento', 'conta_aih_opm'])
+        for (const t of ['conta_aih_procedimento', 'conta_aih_opm', 'diaria_uti_sus'])
           await e.executar(
             `DELETE x FROM ${t} x JOIN conta_aih c ON c.id = x.conta_aih_id WHERE c.estabelecimento_id = ?`,
             [est],
@@ -163,6 +164,21 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
         );
       ids.sigP = await proc(SIG_P);
       ids.sigU = await proc(SIG_U);
+      // F7 (06-SUS linha 59): o tipo de UTI do SIH (código improvável) e a habilitação do tipo desde janeiro.
+      const tipoUti = await garantir(
+        e,
+        "SELECT id FROM dominio_sus WHERE lista = 'tipo_leito_uti' AND codigo = ?",
+        [`${P}-UTI2`],
+        `INSERT INTO dominio_sus (lista, codigo, codigo_oficial, descricao, criado_em)
+         VALUES ('tipo_leito_uti', ?, ?, 'UTI adulto tipo II (teste)', ?)`,
+        [`${P}-UTI2`, TIPO_UTI, agora],
+      );
+      await e.executar('DELETE FROM leito_uti_habilitado WHERE estabelecimento_id = ?', [ids.est]);
+      ids.habUti = await e.inserir(
+        `INSERT INTO leito_uti_habilitado (estabelecimento_id, tipo_uti_dominio_sus_id, quantidade_leitos, vigencia_inicio, criado_em)
+         VALUES (?, ?, 5, '2026-01-01', ?)`,
+        [ids.est, tipoUti, agora],
+      );
       ids.sigO = await proc(SIG_O);
       await garantir(
         e,
@@ -319,6 +335,9 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
   afterAll(async () => {
     if (!nucleo) return;
     await limpar();
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-limpa-uti' }, (e) =>
+      e.executar('DELETE FROM leito_uti_habilitado WHERE estabelecimento_id = ?', [ids.est]),
+    );
     await nucleo.encerrar?.();
   });
 
@@ -458,7 +477,70 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     await expect(
       gravar(ids.est, (g) => g.fecharAih({ id, versao: 2, fechamento: 1 }, fechar)),
     ).rejects.toBeInstanceOf(ErroAih);
-    await gravar(ids.est, (g) => g.fecharAih({ id, versao: 2, fechamento: 0 }, fechar));
+    // As diárias de UTI por competência (F7, 06-SUS linha 59): uma passagem de janeiro a fevereiro partida em duas.
+    const diariasCompetencia = [
+      {
+        tipo: Number(TIPO_UTI),
+        procedimento: SIG_U,
+        competencia: '202601',
+        dataEntrada: '2026-01-30',
+        dataSaida: '2026-02-01',
+        diarias: 2,
+      },
+      {
+        tipo: Number(TIPO_UTI),
+        procedimento: SIG_U,
+        competencia: '202602',
+        dataEntrada: '2026-02-01',
+        dataSaida: '2026-02-02',
+        diarias: 1,
+      },
+    ];
+    await gravar(ids.est, (g) =>
+      g.fecharAih({ id, versao: 2, fechamento: 0 }, { ...fechar, diariasCompetencia }),
+    );
+    expect(
+      await nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (l) =>
+        l.consultar(
+          `SELECT d.sequencia, d.competencia, d.tipo_uti, d.nivel, d.leito_uti_habilitado_id AS hab,
+                  DATE_FORMAT(d.data_entrada, '%Y-%m-%d') AS entrada, DATE_FORMAT(d.data_saida, '%Y-%m-%d') AS saida,
+                  d.quantidade_lancada AS lancada, d.quantidade_cortada AS cortada, d.quantidade_cobrada AS cobrada,
+                  d.procedimento_sigtap_id AS sig, d.criado_por
+             FROM diaria_uti_sus d JOIN conta_aih c ON c.id = d.conta_aih_id
+            WHERE c.autorizacao_internacao_sus_id = ? ORDER BY d.sequencia`,
+          [id],
+        ),
+      ),
+    ).toEqual([
+      {
+        sequencia: 1,
+        competencia: '202601',
+        tipo_uti: 'adulto',
+        nivel: 2,
+        hab: ids.habUti,
+        entrada: '2026-01-30',
+        saida: '2026-02-01',
+        lancada: 2,
+        cortada: 0,
+        cobrada: 2,
+        sig: ids.sigU,
+        criado_por: null,
+      },
+      {
+        sequencia: 2,
+        competencia: '202602',
+        tipo_uti: 'adulto',
+        nivel: 2,
+        hab: ids.habUti,
+        entrada: '2026-02-01',
+        saida: '2026-02-02',
+        lancada: 1,
+        cortada: 0,
+        cobrada: 1,
+        sig: ids.sigU,
+        criado_por: null,
+      },
+    ]);
     a = await ler(ids.est, (l) => l.aih(id));
     expect(a).toMatchObject({
       situacao: 'fechada',
