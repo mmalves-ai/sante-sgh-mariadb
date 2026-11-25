@@ -28,3 +28,5 @@ export * from './gasto-sala/index.js';
 export * from './grade-sala.js';
 // F8 (04-CC linha 105): cartão de preferência do cirurgião (sugestão para o mapa e o gasto de sala).
 export * from './cartao-preferencia.js';
+// F3.6 (05-SUP linha 13): kit padrão sugerido no agendamento cirúrgico (lista de materiais previstos).
+export * from './kit-agendamento.js';
