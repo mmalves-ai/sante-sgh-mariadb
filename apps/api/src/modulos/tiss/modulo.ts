@@ -36,6 +36,11 @@ import { ElegibilidadeController } from './elegibilidade.controller.js';
 import { PORTA_ELEGIBILIDADE, PortaElegibilidadePropria } from './elegibilidade-propria.js';
 import { AutorizacaoPreviaController } from './autorizacao-previa.controller.js';
 import { PORTA_AUTORIZACAO_PREVIA, PortaAutorizacaoPreviaPropria } from './autorizacao-previa-propria.js';
+import {
+  CompetenciaTrabalhoController,
+  SERVICO_COMPETENCIA_TRABALHO,
+  ServicoCompetenciaTrabalho,
+} from './competencia-trabalho.controller.js';
 
 export interface OpcoesModuloTiss {
   /** Testes: a porta já montada. */
@@ -89,6 +94,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
       ElegibilidadeController,
       ApresentacaoTissController,
       AutorizacaoPreviaController,
+      CompetenciaTrabalhoController,
     ],
     providers: [
       { provide: PORTA_TISS, useValue: porta },
@@ -107,6 +113,12 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaAutorizacaoPreviaPropria(ctx.nucleo, ctx.configuracao.clientePadrao, armazem)
             : null,
+      },
+      // 06-FAT linha 32: competência de trabalho do faturista (só com o banco próprio; sem ele, 503).
+      {
+        provide: SERVICO_COMPETENCIA_TRABALHO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao ? new ServicoCompetenciaTrabalho(ctx.nucleo) : null,
       },
       { provide: ARMAZEM_XML_TISS, useValue: armazem },
       { provide: GERADOR_PDF_TISS, useValue: geradorPdf },
