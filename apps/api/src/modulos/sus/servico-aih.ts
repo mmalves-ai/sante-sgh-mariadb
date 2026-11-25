@@ -693,7 +693,11 @@ export class ServicoSusAih {
         };
       });
       const retorno = await l.ultimoRetornoDaAih(a.id);
+      // O complemento da conta gravada (06-SUS linha 58): equipe, diagnósticos secundários e incrementos.
+      const complemento =
+        gravado && l.complementoAih ? ((await l.complementoAih(a.id))?.contrato ?? null) : null;
       return {
+        complemento,
         aih: (await this.aihsLidas(l, s, [a]))[0] as AihLida,
         origem: gravado ? 'fechamento' : 'montagem',
         competencia,
@@ -797,7 +801,8 @@ export class ServicoSusAih {
         const linhas = await l.itensAih(x.aih.id, x.aih.fechamento);
         const sol = await l.solicitanteAih(x.aih.solicitante);
         const doc = sol?.cns && cnsValido(sol.cns) ? sol.cns : x.aih.solicitante.padStart(11, '0');
-        const a = aihParaArquivo(x, linhas, doc);
+        const complemento = l.complementoAih ? ((await l.complementoAih(x.aih.id))?.arquivo ?? null) : null;
+        const a = aihParaArquivo(x, linhas, doc, complemento);
         if (a) out.push(a);
       }
       return out;

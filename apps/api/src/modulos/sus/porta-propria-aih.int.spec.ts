@@ -102,7 +102,14 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-limpa' }, async (e) => {
       for (const est of [ids.est, ids.estB].filter(Boolean)) {
-        for (const t of ['conta_aih_procedimento', 'conta_aih_opm', 'diaria_uti_sus'])
+        for (const t of [
+          'conta_aih_incremento',
+          'conta_aih_profissional',
+          'conta_aih_diagnostico',
+          'conta_aih_procedimento',
+          'conta_aih_opm',
+          'diaria_uti_sus',
+        ])
           await e.executar(
             `DELETE x FROM ${t} x JOIN conta_aih c ON c.id = x.conta_aih_id WHERE c.estabelecimento_id = ?`,
             [est],
@@ -612,6 +619,17 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     ).toBe(1);
     expect(await ler(ids.est, (l) => l.itensAih(id, 2))).toHaveLength(1);
     expect(await ler(ids.est, (l) => l.itensAih(id, 1))).toHaveLength(3);
+    // O CID secundário do laudo é o primeiro diagnóstico secundário da conta (06-SUS linha 58), e o fechamento depois
+    // da reabertura leva o diagnóstico à conta nova (a reaberta fica com o dela).
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM conta_aih_diagnostico d JOIN conta_aih c ON c.id = d.conta_aih_id
+          WHERE c.autorizacao_internacao_sus_id = ? AND d.codigo_cid10 = 'I10' AND d.tipo = 'secundario'
+            AND d.sequencia = 1 AND d.excluido_em IS NULL`,
+        [id],
+      ),
+    ).toBe(2);
+    expect((await ler(ids.est, (l) => l.aih(id)))?.cidSecundario).toBe('I10');
 
     // Página: filtros e contagem por situação; o outro estabelecimento não vê nada.
     const pag = await ler(ids.est, (l) => l.paginaAihs({ pagina: 0, porPagina: 10 }));

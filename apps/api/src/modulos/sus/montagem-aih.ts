@@ -4,6 +4,7 @@
 import { type CompetenciaSus, cnsValido, GRAVIDADE_DA_REGRA_SUS, type RegraCriticaSus } from '@sgh/contratos';
 import {
   type AihParaArquivo,
+  type ComplementoSisaih,
   type AihRegistrada,
   catalogoSigtapDaCompetencia,
   chaveDaCritica,
@@ -340,6 +341,8 @@ export function aihParaArquivo(
   m: AihMontada,
   linhas: readonly ItemAih[],
   documentoSolicitante: string,
+  /** Equipe, diagnósticos secundários e incrementos da conta (06-SUS linha 58). */
+  complemento: ComplementoSisaih | null = null,
 ): AihParaArquivo | null {
   const a = m.aih;
   const i = m.internacao;
@@ -390,5 +393,6 @@ export function aihParaArquivo(
     tipoUti: uti?.tipoUti ?? null,
     permanencia: a.permanencia ?? diasDePermanencia(i.entrada, i.alta) ?? 0,
     linhas: linhasArquivo,
+    ...(complemento ? { complemento } : {}),
   };
 }

@@ -134,7 +134,7 @@ describe('AIH própria: a linha lida vira a AIH da tela', () => {
     expect(a).toMatchObject({ situacao: 'devolvida', justificativaSituacao: 'Falta o exame que confirma' });
   });
 
-  it('a gravação da AIH declara só as tabelas da autorização, da conta e do laudo', () => {
+  it('a gravação da AIH declara só as tabelas da autorização, da conta, do complemento e do laudo', () => {
     expect([...TABELAS_SUS_AIH]).toEqual([
       'autorizacao_internacao_sus',
       'conta_aih',
@@ -147,6 +147,10 @@ describe('AIH própria: a linha lida vira a AIH da tela', () => {
       'laudo_internacao_sus_especial',
       'lote_laudo_sus',
       'sequencia_negocio',
+      // F7 (06-SUS linha 58): a equipe, os diagnósticos secundários e os incrementos da conta.
+      'conta_aih_profissional',
+      'conta_aih_diagnostico',
+      'conta_aih_incremento',
     ]);
   });
 });

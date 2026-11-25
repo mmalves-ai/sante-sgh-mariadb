@@ -22,6 +22,13 @@ import type { DiariasUtiGravadas, SolicitanteAihLido } from './porta-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { gravarRemessa } from './porta-propria-arquivos.js';
 import {
+  complementoDaAih,
+  type ComplementoLido,
+  copiarComplementoDaConta,
+  diagnosticoDoLaudo,
+  TABELAS_COMPLEMENTO_AIH,
+} from './conta-aih-complemento-propria.js';
+import {
   emitirLaudoDaAutorizacao,
   sincronizarLaudo,
   TABELAS_LAUDO_SUS,
@@ -45,6 +52,8 @@ export const TABELAS_SUS_AIH = [
   'diaria_uti_sus',
   // O laudo de internação que acompanha a autorização (06-SUS linha 57).
   ...TABELAS_LAUDO_SUS,
+  // A equipe, os diagnósticos secundários e os incrementos da conta (06-SUS linha 58).
+  ...TABELAS_COMPLEMENTO_AIH,
 ] as const;
 
 type Linha = Record<string, unknown>;
@@ -76,7 +85,11 @@ const SQL_AIH = `
   SELECT a.id, ${SITUACAO_SQL} AS situacao_tela, a.situacao AS situacao_autorizacao, a.internacao_id,
          p.numero_prontuario, a.conta_hospitalar_id, a.atendimento_id,
          ps.codigo_sigtap AS procedimento_solicitado, pr.codigo_sigtap AS procedimento_realizado,
-         a.codigo_cid10_principal, a.codigo_cid10_secundario, COALESCE(d.codigo_oficial, d.codigo) AS carater,
+         a.codigo_cid10_principal,
+         CASE WHEN c.id IS NULL THEN a.codigo_cid10_secundario
+              ELSE (SELECT dg.codigo_cid10 FROM conta_aih_diagnostico dg WHERE dg.conta_aih_id = c.id
+                       AND dg.excluido_em IS NULL AND dg.tipo = 'secundario' ORDER BY dg.sequencia LIMIT 1)
+         END AS codigo_cid10_secundario, COALESCE(d.codigo_oficial, d.codigo) AS carater,
          COALESCE(pf.cpf, se.cpf) AS solicitante, ${dia('a.data_solicitacao')} AS data_laudo, a.justificativa_laudo,
          a.faixa_numeracao_aih_id, a.numero_aih, a.cns_autorizador, ${dia('a.data_autorizacao')} AS data_autorizacao,
          a.motivo_situacao AS motivo_autorizacao, c.id AS conta_aih_id, c.numero_fechamento, c.situacao AS situacao_conta,
@@ -368,6 +381,11 @@ export class LeiturasAihPropria {
       })),
     ];
     return itens.sort((a, b) => a.sequencia - b.sequencia);
+  }
+
+  /** A equipe, os diagnósticos secundários e os incrementos da última conta (06-SUS linha 58; null sem conta). */
+  complementoAih(id: number): Promise<ComplementoLido | null> {
+    return complementoDaAih(this.l, this.est, id);
   }
 
   /** O médico solicitante pelo CPF: o profissional da casa e, sem ele, o solicitante externo. */
@@ -708,6 +726,10 @@ export class GravacoesAihPropria {
       });
     }
     await this.gravarDiariasUti(conta, p.diariasCompetencia ?? []);
+    // O complemento (06-SUS linha 58): o da conta reaberta passa à nova; no primeiro fechamento, o CID secundário do
+    // laudo é o primeiro diagnóstico secundário.
+    if (anterior) await copiarComplementoDaConta(this.tx, anterior.id, conta);
+    else await diagnosticoDoLaudo(this.tx, conta, x.cidSecundario);
     await this.tx.alterar('autorizacao_internacao_sus', a.id, a.versao, {});
   }
 
@@ -930,6 +952,7 @@ export class PonteAihPropria implements PonteAihDoRetorno {
         conta_aih_procedimento_id: ligado === null ? null : (deParaProc.get(ligado) ?? null),
       });
     }
+    await copiarComplementoDaConta(tx, anterior, nova);
     await tx.alterar('autorizacao_internacao_sus', aih, x.versao, {});
   }
 

@@ -4,6 +4,7 @@
 // LeituraSus e na GravacaoSus (a mesma transação da competência, da crítica, do arquivo e da trilha).
 import type { DiariaUtiCompetencia, HabilitacaoUtiVigencia } from '@sgh/dominio-faturamento';
 import type { LinhaCapacidadeSus } from '@sgh/dominio-internacao';
+import type { ComplementoLido } from './conta-aih-complemento-propria.js';
 import {
   type AihRegistro,
   type CompatibilidadeSigtap,
@@ -105,6 +106,8 @@ export interface LeituraSusAih {
     f: FiltroAihsPorta,
   ): Promise<{ itens: AihRegistro[]; total: number; porSituacao: Record<string, number> }>;
   itensAih(id: number, fechamento: number): Promise<ItemAih[]>;
+  /** A equipe, os diagnósticos secundários e os incrementos da última conta (06-SUS linha 58; só no banco próprio). */
+  complementoAih?(id: number): Promise<ComplementoLido | null>;
   linhaBpaDaCompetencia(
     competencia: string,
     p: { tipo: 'c' | 'i'; folha: number; sequencia: number },

@@ -13,6 +13,10 @@
 //     diárias de UTI);
 //   - OPM (04): número da AIH, sequência, procedimento, quantidade, CNPJ do fornecedor, nota fiscal, registro Anvisa,
 //     série e lote.
+//   - complemento da conta (06-SUS linha 58), depois das linhas da AIH: equipe (05: procedimento, CNS e CBO do
+//     profissional, atividade e documento do credor), diagnósticos secundários (06: sequência, CID-10, papel e
+//     classificação) e incrementos da habilitação (07: habilitação, procedimento ou branco para a AIH toda e o
+//     percentual em centésimos). Também descrito pelo construtor, a conferir com o documento vigente.
 // Campo de controle: (Σ procedimentos + Σ quantidades das linhas 03 e 04) módulo 1111, mais 1111 (como o BPA-Mag).
 import type { CaraterInternacaoSih, CompetenciaSus } from '@sgh/contratos';
 import { type CampoLeiaute, FIM_DE_LINHA, type Leiaute, montarLinha } from './leiaute.js';
@@ -133,8 +137,65 @@ export const LEIAUTE_SISAIH01: Leiaute = {
         a('lote', 20),
       ],
     },
+    '05': {
+      tipo: '05',
+      campos: [
+        fixo('ident', '05'),
+        n('numero', 13, true),
+        n('procedimento', 10, true),
+        n('cnsProfissional', 15, true),
+        a('cbo', 6, true),
+        a('atividade', 2, true),
+        nb('documentoCredor', 14),
+      ],
+    },
+    '06': {
+      tipo: '06',
+      campos: [
+        fixo('ident', '06'),
+        n('numero', 13, true),
+        n('sequencia', 2, true),
+        a('cid', 4, true),
+        a('papel', 1, true),
+        a('classificacao', 1),
+      ],
+    },
+    '07': {
+      tipo: '07',
+      campos: [
+        fixo('ident', '07'),
+        n('numero', 13, true),
+        n('habilitacao', 4, true),
+        nb('procedimento', 10),
+        n('percentual', 5, true),
+      ],
+    },
   },
 };
+
+/** O complemento da conta no arquivo (06-SUS linha 58). */
+export interface ComplementoSisaih {
+  readonly equipe: readonly {
+    readonly procedimento: string;
+    readonly cns: string;
+    readonly cbo: string;
+    readonly atividade: string;
+    readonly documentoCredor: string | null;
+  }[];
+  readonly diagnosticos: readonly {
+    readonly cid: string;
+    readonly tipo: 'secundario' | 'causa_associada' | 'causa_morte';
+    readonly classificacao: 'preexistente' | 'adquirido' | null;
+  }[];
+  readonly incrementos: readonly {
+    readonly habilitacao: string;
+    readonly procedimento: string | null;
+    readonly percentual: number;
+  }[];
+}
+
+const PAPEL_DIAGNOSTICO = { secundario: 'S', causa_associada: 'A', causa_morte: 'M' } as const;
+const CLASSE_DIAGNOSTICO = { preexistente: 'P', adquirido: 'A' } as const;
 
 /** Uma linha de procedimento ou OPM da AIH no arquivo (sem dado pessoal). */
 export interface LinhaSisaih {
@@ -186,6 +247,8 @@ export interface AihParaArquivo {
   readonly tipoUti: number | null;
   readonly permanencia: number;
   readonly linhas: readonly LinhaSisaih[];
+  /** Equipe, diagnósticos secundários e incrementos gravados na conta (sem o complemento, nada sai). */
+  readonly complemento?: ComplementoSisaih;
 }
 
 export interface ArquivoSisaihGerado {
@@ -306,6 +369,40 @@ export function gerarArquivoSisaih(
         }),
       );
       todas.push(y);
+    }
+    const c = x.complemento;
+    if (c) {
+      for (const y of c.equipe)
+        corpo.push(
+          montarLinha(l, '05', {
+            numero: x.numero,
+            procedimento: y.procedimento,
+            cnsProfissional: y.cns,
+            cbo: y.cbo,
+            atividade: y.atividade.slice(0, 2),
+            documentoCredor: y.documentoCredor,
+          }),
+        );
+      c.diagnosticos.forEach((y, i) =>
+        corpo.push(
+          montarLinha(l, '06', {
+            numero: x.numero,
+            sequencia: i + 1,
+            cid: y.cid.slice(0, 4),
+            papel: PAPEL_DIAGNOSTICO[y.tipo],
+            classificacao: y.classificacao ? CLASSE_DIAGNOSTICO[y.classificacao] : null,
+          }),
+        ),
+      );
+      for (const y of c.incrementos)
+        corpo.push(
+          montarLinha(l, '07', {
+            numero: x.numero,
+            habilitacao: y.habilitacao,
+            procedimento: y.procedimento,
+            percentual: Math.round(y.percentual * 100),
+          }),
+        );
     }
   }
   const controle = controleSisaih(todas);

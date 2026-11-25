@@ -903,6 +903,10 @@ export class LeituraSusPropria implements LeituraSus {
     return this.aihs().itensAih(...a);
   }
 
+  complementoAih(...a: Parameters<LeiturasAihPropria['complementoAih']>) {
+    return this.aihs().complementoAih(...a);
+  }
+
   linhaBpaDaCompetencia(...a: Parameters<MontagensSusPropria['linhaBpaDaCompetencia']>) {
     return this.mont().linhaBpaDaCompetencia(...a);
   }

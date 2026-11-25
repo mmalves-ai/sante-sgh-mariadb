@@ -10,6 +10,11 @@ import type { ContextoModulo } from '../registro.js';
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import { LeitosUtiSusController } from './leitos-uti.controller.js';
 import { LaudoInternacaoSusController } from './laudo-internacao-sus.controller.js';
+import { ContaAihComplementoController } from './conta-aih-complemento.controller.js';
+import {
+  PORTA_CONTA_AIH_COMPLEMENTO,
+  PortaContaAihComplementoPropria,
+} from './conta-aih-complemento-propria.js';
 import {
   PORTA_LAUDO_INTERNACAO_SUS,
   PortaLaudoInternacaoSusPropria,
@@ -65,6 +70,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       ServicoWebSusController,
       LeitosUtiSusController,
       LaudoInternacaoSusController,
+      ContaAihComplementoController,
       TransplanteSusController,
       ProgramacaoSusController,
       ApacComplementosController,
@@ -81,6 +87,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaLaudoInternacaoSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (06-SUS linha 58): equipe, diagnósticos secundários e incrementos da conta da AIH.
+      {
+        provide: PORTA_CONTA_AIH_COMPLEMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaContaAihComplementoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F7 (06-SUS linha 59): leitos de UTI habilitados por tipo e vigência (só com o banco do cliente).

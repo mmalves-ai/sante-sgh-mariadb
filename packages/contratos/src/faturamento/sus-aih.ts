@@ -271,6 +271,48 @@ export const esquemaLinhaEspelhoAih = z.object({
 });
 export type LinhaEspelhoAih = z.infer<typeof esquemaLinhaEspelhoAih>;
 
+/**
+ * O complemento da conta da AIH (06-SUS linha 58): a equipe de cada procedimento, os diagnósticos secundários e os
+ * incrementos da habilitação, como a última conta gravou.
+ */
+export const esquemaComplementoContaAih = z.object({
+  conta: z.number().int(),
+  situacaoConta: z.string(),
+  editavel: z.boolean(),
+  versao: z.number().int(),
+  equipe: z.array(
+    z.object({
+      procedimento: z.number().int(),
+      codigoProcedimento: z.string(),
+      cns: z.string(),
+      nome: z.string().nullable(),
+      cbo: z.string(),
+      atividade: z.string(),
+      credor: z.string().nullable(),
+      documentoCredor: z.string().nullable(),
+    }),
+  ),
+  diagnosticos: z.array(
+    z.object({
+      cid: z.string(),
+      tipo: z.enum(['secundario', 'causa_associada', 'causa_morte']),
+      classificacao: z.enum(['preexistente', 'adquirido']).nullable(),
+    }),
+  ),
+  incrementos: z.array(
+    z.object({
+      habilitacao: z.string(),
+      descricao: z.string().nullable(),
+      procedimento: z.number().int().nullable(),
+      percentual: z.number(),
+      valorServicoHospitalar: z.number(),
+      valorServicoProfissional: z.number(),
+      valorTotal: z.number(),
+    }),
+  ),
+});
+export type ComplementoContaAih = z.infer<typeof esquemaComplementoContaAih>;
+
 /** O espelho da AIH: o que vai (ou foi) ao SISAIH01, os valores, as críticas e o retorno do gestor. */
 export const esquemaEspelhoAih = z.object({
   aih: esquemaAihLida,
@@ -306,6 +348,8 @@ export const esquemaEspelhoAih = z.object({
       tratamento: z.enum(TRATAMENTOS_RETORNO_SUS),
     })
     .nullable(),
+  /** Equipe, diagnósticos secundários e incrementos da conta gravada (null antes do fechamento). */
+  complemento: esquemaComplementoContaAih.nullable().optional(),
 });
 export type EspelhoAih = z.infer<typeof esquemaEspelhoAih>;
 
