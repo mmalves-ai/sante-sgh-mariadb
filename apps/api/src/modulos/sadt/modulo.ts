@@ -56,6 +56,7 @@ import {
   InterfaceEquipamentoController,
   SERVICO_INTERFACE_EQUIPAMENTO,
 } from './interface-equipamento.controller.js';
+import { EntregaResultadoController, SERVICO_ENTREGA_RESULTADO } from './entrega-resultado.controller.js';
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
 import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
 
@@ -155,6 +156,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       LaudoGrandezasController,
       ApoioRemessaController,
       LimitesExameController,
+      EntregaResultadoController,
       EscalaExecucaoController,
       InterfaceEquipamentoController,
       MicrobiologiaController,
@@ -251,6 +253,16 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoEscalaExecucao } = await import('./aplicacao/escala-execucao-propria.js');
           return new ServicoEscalaExecucao(ctx.nucleo);
+        },
+      },
+      // Entrega de resultados: prazo, protocolo do balcão e publicação no portal (05-SADT linha 21): só no banco do
+      // cliente (sem ele, 503 nas rotas, e o portal segue sem o filtro do perfil).
+      {
+        provide: SERVICO_ENTREGA_RESULTADO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoEntregaResultado } = await import('./aplicacao/entrega-resultado-propria.js');
+          return new ServicoEntregaResultado(ctx.nucleo);
         },
       },
       // Limites do pedido de exame (05-SADT linha 6): só no banco do cliente (sem ele, 503).
