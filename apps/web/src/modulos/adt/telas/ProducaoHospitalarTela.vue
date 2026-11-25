@@ -93,7 +93,9 @@ const opClinicas = computed(() =>
 const problemasTroca = computed(() => {
   const c = categorias.data.value;
   if (!c) return [];
-  const vigente = c.periodos[c.periodos.length - 1] ?? null;
+  // O vigente gravado: o trecho implícito (da entrada, na clínica da internação) não trava a troca.
+  const ultimo = c.periodos[c.periodos.length - 1] ?? null;
+  const vigente = ultimo && !ultimo.implicito ? ultimo : null;
   const erros = Object.values(
     validarPeriodoCategoria({
       entrada: c.atendimento.entrada,
@@ -299,12 +301,15 @@ const acao = useMutation({
           <tbody>
             <tr
               v-for="p in categorias.data.value.periodos"
-              :key="p.id"
-              :data-testid="`producao-periodo-${p.id}`"
+              :key="p.id ?? 'implicito'"
+              :data-testid="`producao-periodo-${p.id ?? 'implicito'}`"
             >
-              <td>{{ p.clinica }}</td>
+              <td>
+                {{ p.clinica ?? t('adt.producao.semCategoria') }}
+                <small v-if="p.implicito">{{ t('adt.producao.implicito') }}</small>
+              </td>
               <td>{{ p.inicio.replace('T', ' ') }}</td>
-              <td>{{ p.fim?.replace('T', ' ') ?? t('adt.producao.emAberto') }}</td>
+              <td>{{ p.emAberto ? t('adt.producao.emAberto') : (p.fim?.replace('T', ' ') ?? '') }}</td>
               <td>{{ p.diarias }}</td>
               <td>{{ moeda(p.valor) }}</td>
             </tr>

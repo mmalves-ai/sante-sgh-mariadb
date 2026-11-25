@@ -8,6 +8,7 @@
 //   dos períodos de categoria, dos leitos operacionais e das faixas; reapurada enquanto aberta, fechada não muda.
 import {
   apurarProducaoMensal,
+  faixaVigente,
   type FaixaValorCategoria,
   type IndicadoresProducao,
   type InternacaoProducao,
@@ -20,6 +21,7 @@ import {
   validarFaixaValor,
   validarPeriodoCategoria,
   valorDoPeriodo,
+  valorPorPeriodo,
 } from '@sgh/dominio-internacao';
 import {
   type ContextoOperacao,
@@ -77,7 +79,10 @@ async function agoraDoBanco(l: Leitor): Promise<{ hoje: string; agora: string }>
   return { hoje: agora.slice(0, 10), agora };
 }
 
-/** As faixas que valem para o estabelecimento: as próprias da categoria; sem próprias, as de todos. */
+/**
+ * As faixas que valem para o estabelecimento: as próprias e as de todos, com a marca de abrangência. A precedência se
+ * resolve dia a dia no domínio (faixaVigente): a própria vigente no dia prevalece; sem ela, a geral.
+ */
 async function lerFaixas(l: Leitor, est: number): Promise<(FaixaValorCategoria & FaixaLinha)[]> {
   const ls = await l.consultar<Linha>(
     `SELECT f.id, f.clinica_assistencial_id, f.estabelecimento_id, f.vigencia_inicio, f.vigencia_fim, f.valor_diaria,
@@ -99,8 +104,7 @@ async function lerFaixas(l: Leitor, est: number): Promise<(FaixaValorCategoria &
     observacao: x['observacao'] === null ? null : String(x['observacao']),
     versao: num(x['versao']),
   }));
-  const comPropria = new Set(todas.filter((f) => !f.todasUnidades).map((f) => f.clinicaId));
-  return todas.filter((f) => !f.todasUnidades || !comPropria.has(f.clinicaId));
+  return todas;
 }
 
 interface FaixaLinha {
@@ -454,16 +458,18 @@ export interface PainelProducao {
 }
 
 export interface PeriodoCategoriaVisao {
-  readonly id: number;
-  readonly clinicaId: number;
-  readonly clinica: string;
+  /** Null no trecho implícito (da entrada até a primeira classificação, na clínica da internação). */
+  readonly id: number | null;
+  readonly clinicaId: number | null;
+  readonly clinica: string | null;
+  readonly implicito: boolean;
   readonly inicio: string;
   readonly fim: string | null;
   readonly diarias: number;
   readonly valor: number;
   readonly diasSemFaixa: number;
   readonly emAberto: boolean;
-  readonly versao: number;
+  readonly versao: number | null;
 }
 
 export interface CategoriasDoAtendimento {
@@ -612,21 +618,27 @@ export class PortaProducaoHospitalarPropria {
     return this.ler(async (l) => {
       const { estabelecimento } = await this.quem(l, c);
       const { hoje } = await agoraDoBanco(l);
-      const faixas = (await lerFaixas(l, estabelecimento)).map((f) => ({
-        ...f,
-        vigente: f.inicio <= hoje && (f.fim === null || f.fim >= hoje),
-      }));
+      const todas = await lerFaixas(l, estabelecimento);
+      const faixas = todas.map((f) => ({ ...f, vigente: faixaVigente(todas, f.clinicaId, hoje) === f }));
       return { hoje, faixas, clinicas: await this.clinicas(l) };
     });
   }
 
-  /** Visão por paciente: os períodos do atendimento (pelo número) em cada categoria, com o valor de cada um. */
+  /**
+   * Visão por paciente: os períodos efetivos do atendimento (pelo número) em cada categoria, com o valor de cada um,
+   * pela mesma regra da apuração (domínio, valorPorPeriodo): o trecho da entrada até a primeira classificação entra
+   * na clínica da internação, e o período aberto termina na saída do paciente. A soma é o que a produção dos meses
+   * valoriza para ele.
+   */
   categorias(c: ContextoProducao, numero: string): Promise<CategoriasDoAtendimento> {
     return this.ler(async (l) => {
       const { estabelecimento } = await this.quem(l, c);
       const a = await l.uma<Linha>(
-        `SELECT a.id, a.numero, a.entrada_em, a.saida_em, i.data_hora_entrada, i.data_hora_alta, i.situacao
+        `SELECT a.id, a.numero, a.entrada_em, a.saida_em, i.data_hora_entrada, i.data_hora_alta, i.situacao,
+                ci.id AS clinica_id, ci.descricao AS clinica
            FROM atendimento a LEFT JOIN internacao i ON i.atendimento_id = a.id AND i.excluido_em IS NULL
+           LEFT JOIN unidade_internacao ui ON ui.id = i.unidade_internacao_id
+           LEFT JOIN clinica_assistencial ci ON ci.id = COALESCE(a.clinica_assistencial_id, ui.clinica_assistencial_id)
           WHERE a.numero = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
         [numero.trim(), estabelecimento],
       );
@@ -640,41 +652,47 @@ export class PortaProducaoHospitalarPropria {
       const { hoje } = await agoraDoBanco(l);
       const faixas = await lerFaixas(l, estabelecimento);
       const ps = await l.consultar<Linha>(
-        `SELECT p.id, p.clinica_assistencial_id, c.descricao, p.inicio_em, p.fim_em, p.valor_total, p.versao
+        `SELECT p.id, p.clinica_assistencial_id, c.descricao, p.inicio_em, p.fim_em, p.versao
            FROM atendimento_categoria_clinica p JOIN clinica_assistencial c ON c.id = p.clinica_assistencial_id
           WHERE p.atendimento_id = ? AND p.operacao <> 'exclusao' ORDER BY p.inicio_em, p.id`,
         [num(a['id'])],
       );
-      const periodos = ps.map((p) => {
-        const inicio = instanteIso(p['inicio_em']) ?? '';
-        const fim = instanteIso(p['fim_em']);
-        const unico = ps.length === 1;
-        const v = valorDoPeriodo(
-          { clinicaId: num(p['clinica_assistencial_id']), inicio, fim },
-          faixas,
-          fim ? fim.slice(0, 10) : hoje,
-          '1900-01-01',
-          unico,
-        );
-        return {
-          id: num(p['id']),
+      const entrada = instanteIso(a['data_hora_entrada'] ?? a['entrada_em']) ?? '';
+      const saida = instanteIso(a['data_hora_alta'] ?? a['saida_em']);
+      const internacao: InternacaoProducao = {
+        entrada,
+        saida,
+        tipoSaida: null,
+        previstaAlta: null,
+        clinicaId: numN(a['clinica_id']),
+        periodos: ps.map((p) => ({
           clinicaId: num(p['clinica_assistencial_id']),
-          clinica: String(p['descricao']),
-          inicio,
-          fim,
+          inicio: instanteIso(p['inicio_em']) ?? '',
+          fim: instanteIso(p['fim_em']),
+        })),
+      };
+      const periodos: PeriodoCategoriaVisao[] = valorPorPeriodo(internacao, faixas, hoje).map((v) => {
+        const g = v.gravado === null ? null : ps[v.gravado]!;
+        return {
+          id: g ? num(g['id']) : null,
+          clinicaId: v.clinicaId,
+          clinica: g ? String(g['descricao']) : a['clinica'] == null ? null : String(a['clinica']),
+          implicito: g === null,
+          inicio: v.inicio,
+          fim: v.fim,
           diarias: v.diarias,
-          valor: fim && p['valor_total'] !== null ? Number(p['valor_total']) : v.valor,
+          valor: v.valor,
           diasSemFaixa: v.diasSemFaixa,
-          emAberto: fim === null,
-          versao: num(p['versao']),
+          emAberto: v.emAberto,
+          versao: g ? num(g['versao']) : null,
         };
       });
       return {
         atendimento: {
           id: num(a['id']),
           numero: String(a['numero']),
-          entrada: instanteIso(a['data_hora_entrada'] ?? a['entrada_em']) ?? '',
-          saida: instanteIso(a['data_hora_alta'] ?? a['saida_em']),
+          entrada,
+          saida,
           internado: a['data_hora_entrada'] !== null && a['data_hora_entrada'] !== undefined,
         },
         periodos,

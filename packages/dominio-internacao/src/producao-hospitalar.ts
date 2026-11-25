@@ -19,6 +19,8 @@ export interface FaixaValorCategoria {
   readonly inicio: string;
   readonly fim: string | null;
   readonly valorDiaria: number;
+  /** Faixa de todos os estabelecimentos (geral); a própria do estabelecimento prevalece no dia em que vigora. */
+  readonly todasUnidades?: boolean;
 }
 
 export interface PeriodoCategoria {
@@ -116,17 +118,25 @@ export function diasDoPeriodo(
   return dias;
 }
 
-/** A faixa vigente da categoria no dia (a de início mais recente). */
-export function faixaVigente(
-  faixas: readonly FaixaValorCategoria[],
+/**
+ * A faixa vigente da categoria no dia. A precedência se resolve dia a dia: a própria do estabelecimento vigente no dia
+ * prevalece; sem própria vigente no dia, vale a geral (de todos os estabelecimentos). Na mesma abrangência, a de início
+ * mais recente.
+ */
+export function faixaVigente<F extends FaixaValorCategoria>(
+  faixas: readonly F[],
   clinicaId: number,
   dia: string,
-): FaixaValorCategoria | null {
-  let achada: FaixaValorCategoria | null = null;
+): F | null {
+  let propria: F | null = null;
+  let geral: F | null = null;
   for (const f of faixas)
-    if (f.clinicaId === clinicaId && f.inicio <= dia && (f.fim === null || f.fim >= dia))
-      if (!achada || f.inicio > achada.inicio) achada = f;
-  return achada;
+    if (f.clinicaId === clinicaId && f.inicio <= dia && (f.fim === null || f.fim >= dia)) {
+      if (f.todasUnidades === true) {
+        if (!geral || f.inicio > geral.inicio) geral = f;
+      } else if (!propria || f.inicio > propria.inicio) propria = f;
+    }
+  return propria ?? geral;
 }
 
 export interface ValorPeriodo {
@@ -206,20 +216,53 @@ export function validarFaixaValor(f: {
   return erros;
 }
 
-/** Os períodos efetivos da internação: os gravados ou a internação inteira na clínica dela. */
-function periodosDa(i: InternacaoProducao): PeriodoCategoria[] {
-  if (i.periodos.length === 0) return [{ clinicaId: i.clinicaId, inicio: i.entrada, fim: i.saida }];
-  const antes: PeriodoCategoria[] =
+export interface PeriodoEfetivo extends PeriodoCategoria {
+  /** Índice do período gravado em `periodos`; null no trecho implícito (na clínica da internação). */
+  readonly gravado: number | null;
+}
+
+/**
+ * Os períodos efetivos da internação: o trecho implícito da entrada até a primeira classificação (na clínica da
+ * internação) e os gravados, cada um até o início do seguinte; o último termina no fim gravado ou, aberto, na saída do
+ * paciente. Sem período gravado, a internação inteira na clínica dela. É a mesma base da apuração e da visão por
+ * paciente.
+ */
+export function periodosEfetivos(i: InternacaoProducao): PeriodoEfetivo[] {
+  if (i.periodos.length === 0)
+    return [{ clinicaId: i.clinicaId, inicio: i.entrada, fim: i.saida, gravado: null }];
+  const antes: PeriodoEfetivo[] =
     Date.parse(i.periodos[0]!.inicio) > Date.parse(i.entrada)
-      ? [{ clinicaId: i.clinicaId, inicio: i.entrada, fim: i.periodos[0]!.inicio }]
+      ? [{ clinicaId: i.clinicaId, inicio: i.entrada, fim: i.periodos[0]!.inicio, gravado: null }]
       : [];
   return antes.concat(
     i.periodos.map((p, k) => {
       const proximo = i.periodos[k + 1];
       const fim = proximo ? proximo.inicio : (p.fim ?? i.saida);
-      return { clinicaId: p.clinicaId, inicio: p.inicio, fim };
+      return { clinicaId: p.clinicaId, inicio: p.inicio, fim, gravado: k };
     }),
   );
+}
+
+export interface PeriodoValorado extends PeriodoEfetivo, ValorPeriodo {
+  /** Sem fim efetivo: o paciente segue na categoria (ainda não saiu). */
+  readonly emAberto: boolean;
+}
+
+/**
+ * O valor de cada período efetivo da internação até `ate` (o aberto conta até ele), pela mesma regra da apuração:
+ * a soma dos períodos é o que a produção dos meses valoriza para o paciente.
+ */
+export function valorPorPeriodo(
+  i: InternacaoProducao,
+  faixas: readonly FaixaValorCategoria[],
+  ate: string,
+): PeriodoValorado[] {
+  const ps = periodosEfetivos(i);
+  return ps.map((p) => ({
+    ...p,
+    ...valorDoPeriodo(p, faixas, ate, '1900-01-01', ps.length === 1),
+    emAberto: p.fim === null,
+  }));
 }
 
 interface Acumulado {
@@ -294,7 +337,7 @@ export function apurarProducaoMensal(e: {
   for (const c of e.leitos) acc(c.clinicaId);
   const noMes = (iso: string | null): boolean => iso !== null && dataDe(iso) >= de && dataDe(iso) <= ate;
   for (const i of e.internacoes) {
-    const ps = periodosDa(i);
+    const ps = periodosEfetivos(i);
     if (noMes(i.entrada)) acc(ps[0]?.clinicaId ?? null).entradas++;
     if (noMes(i.saida)) {
       const a = acc(ps[ps.length - 1]?.clinicaId ?? null);

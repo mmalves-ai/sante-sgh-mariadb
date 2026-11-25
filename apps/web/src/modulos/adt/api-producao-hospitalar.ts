@@ -83,9 +83,10 @@ export const esquemaCategorias = z.object({
   }),
   periodos: z.array(
     z.object({
-      id: z.number(),
-      clinicaId: z.number(),
-      clinica: z.string(),
+      id: z.number().nullable(),
+      clinicaId: z.number().nullable(),
+      clinica: z.string().nullable(),
+      implicito: z.boolean(),
       inicio: z.string(),
       fim: z.string().nullable(),
       diarias: z.number(),

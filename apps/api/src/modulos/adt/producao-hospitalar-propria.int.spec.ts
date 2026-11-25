@@ -23,7 +23,10 @@ interface Massa {
   login: string;
   med: number;
   cir: number;
+  ped: number;
+  alta: number;
   atdB: number;
+  atdD: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -32,6 +35,12 @@ async function limpar(e: Escritor): Promise<void> {
   try {
     await e.executar(`DELETE FROM producao_hospitalar_mensal WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM faixa_valor_categoria_clinica WHERE estabelecimento_id IN ${est}`, [P]);
+    // As faixas gerais (de todos os estabelecimentos) da massa: pelas categorias sintéticas.
+    await e.executar(
+      `DELETE f FROM faixa_valor_categoria_clinica f JOIN clinica_assistencial c ON c.id = f.clinica_assistencial_id
+        WHERE c.codigo LIKE ?`,
+      [`${P}-%`],
+    );
     await e.executar(
       `DELETE p FROM atendimento_categoria_clinica p JOIN atendimento a ON a.id = p.atendimento_id
         WHERE a.estabelecimento_id IN ${est}`,
@@ -87,6 +96,7 @@ describe.skipIf(SEM_BANCO)('PortaProducaoHospitalarPropria contra o MariaDB (con
         );
       const med = await clinica('MED', 'medica');
       const cir = await clinica('CIR', 'cirurgica');
+      const ped = await clinica('PED', 'pediatrica');
       const alta = await e.inserir(
         `INSERT INTO motivo_saida_hospitalar (codigo, descricao, tipo_saida, criado_em)
          VALUES (?, 'Alta (sintético)', 'alta', ?)`,
@@ -125,12 +135,13 @@ describe.skipIf(SEM_BANCO)('PortaProducaoHospitalarPropria contra o MariaDB (con
           saida: string | null,
           motivo: number | null,
           prevista: string | null,
+          pacienteId: unknown = paciente['id'],
         ) => {
           const atd = await e.inserir(
             `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
                carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, clinica_assistencial_id, entrada_em,
                criado_em) VALUES (?, ?, ?, 1, 1, 1, 1, ?, ?, ?)`,
-            [est, `${P}-${k}`, paciente['id'], cl, entrada, agora],
+            [est, `${P}-${k}`, pacienteId, cl, entrada, agora],
           );
           await e.inserir(
             `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada,
@@ -141,7 +152,7 @@ describe.skipIf(SEM_BANCO)('PortaProducaoHospitalarPropria contra o MariaDB (con
               est,
               `${P}-${k}`,
               atd,
-              paciente['id'],
+              pacienteId,
               entrada,
               u,
               prevista,
@@ -164,13 +175,27 @@ describe.skipIf(SEM_BANCO)('PortaProducaoHospitalarPropria contra o MariaDB (con
           '2025-03-22',
         );
         await internar('C', cir, uCir, '2025-02-20 08:00:00', null, null, null);
+        // D: entra na pediatria (categoria da internação), é classificada depois e sai com o período aberto.
+        // Outro paciente sem internação vigente (uma vigente por paciente; C segue internado).
+        const outro = await e.uma(
+          `SELECT p.id FROM paciente p WHERE p.excluido_em IS NULL AND p.id <> ? AND NOT EXISTS
+             (SELECT 1 FROM internacao i WHERE i.paciente_id = p.id AND i.paciente_internado_vigente IS NOT NULL)
+            ORDER BY p.id LIMIT 1`,
+          [paciente['id']],
+        );
+        if (!outro?.['id'])
+          throw new Error('O cliente de teste precisa de um segundo paciente sem internação vigente.');
+        const atdD = await internar('D', ped, uMed, '2024-03-01 08:00:00', null, null, null, outro['id']);
         return {
           est,
           usuario: Number(usuario['id']),
           login: String(usuario['login']),
           med,
           cir,
+          ped,
+          alta,
           atdB,
+          atdD,
         };
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -248,6 +273,61 @@ describe.skipIf(SEM_BANCO)('PortaProducaoHospitalarPropria contra o MariaDB (con
       [m.cir, 5, 1500, false],
     ]);
     expect(visao.valorTotal).toBe(1740);
+  });
+
+  it('visão por paciente: trecho da entrada, período aberto até a saída e faixa própria posterior à geral', async () => {
+    // Geral de cirúrgica desde 2024 (a própria só desde 2025); pediatria: geral desde 2024 e própria desde 01/10/2024.
+    await porta.incluirFaixa(ctx(), {
+      clinicaId: m.cir,
+      inicio: '2024-01-01',
+      valorDiaria: 200,
+      todasUnidades: true,
+    });
+    await porta.incluirFaixa(ctx(), {
+      clinicaId: m.ped,
+      inicio: '2024-01-01',
+      valorDiaria: 50,
+      todasUnidades: true,
+    });
+    await porta.incluirFaixa(ctx(), { clinicaId: m.ped, inicio: '2024-10-01', valorDiaria: 80 });
+    await porta.classificar(ctx(), { atendimentoId: m.atdD, clinicaId: m.cir, inicio: '2024-03-10T08:00' });
+    // A alta encerra a internação sem tocar no período da categoria (que fica aberto no banco).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `alta-${P}` }, async (e) => {
+      await e.executar(
+        `UPDATE internacao SET data_hora_alta = '2024-03-20 10:00:00', situacao = 'alta', motivo_saida_hospitalar_id = ?
+          WHERE atendimento_id = ?`,
+        [m.alta, m.atdD],
+      );
+      await e.executar(`UPDATE atendimento SET saida_em = '2024-03-20 10:00:00' WHERE id = ?`, [m.atdD]);
+    });
+    const aberto = await ler<{ fim: string | null }>(
+      'SELECT fim_em AS fim FROM atendimento_categoria_clinica WHERE atendimento_id = ?',
+      [m.atdD],
+    );
+    expect(aberto.map((x) => x.fim)).toEqual([null]);
+
+    const visao = await porta.categorias({ hospital: P, login: m.login }, `${P}-D`);
+    expect(
+      visao.periodos.map((p) => [p.clinicaId, p.implicito, p.inicio, p.fim, p.diarias, p.valor, p.emAberto]),
+    ).toEqual([
+      [m.ped, true, '2024-03-01T08:00:00', '2024-03-10T08:00:00', 9, 450, false],
+      [m.cir, false, '2024-03-10T08:00:00', '2024-03-20T10:00:00', 10, 2000, false],
+    ]);
+    expect(visao.periodos[0]!.id).toBeNull();
+    expect(visao.valorTotal).toBe(2450);
+
+    // O valor do paciente é o que a produção do mês valoriza para ele (único internado em 03/2024; ao vivo, sem gravar: o mês gravado do teste seguinte é só 03/2025).
+    const p24 = await porta.painel({ hospital: P, login: m.login }, '2024-03');
+    expect(p24.aoVivo.total).toMatchObject({ pacienteDia: 19, valorProduzido: 2450, diasSemFaixa: 0 });
+    expect(visao.periodos.reduce((s, p) => s + p.diarias, 0)).toBe(19);
+
+    // A precedência dia a dia na lista de faixas: hoje vale a própria; a geral segue listada, não vigente.
+    const fx = await porta.faixas({ hospital: P, login: m.login });
+    const ped = fx.faixas.filter((f) => f.clinicaId === m.ped);
+    expect(ped.map((f) => [f.todasUnidades, f.valorDiaria, f.vigente])).toEqual([
+      [true, 50, false],
+      [false, 80, true],
+    ]);
   });
 
   it('apuração do mês: por categoria e total com a Portaria 312, valor e pontualidade; reapura e fecha', async () => {

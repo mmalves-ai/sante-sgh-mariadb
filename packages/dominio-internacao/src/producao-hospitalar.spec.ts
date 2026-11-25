@@ -6,9 +6,11 @@ import {
   type FaixaValorCategoria,
   limitesDoMes,
   mesValido,
+  periodosEfetivos,
   validarFaixaValor,
   validarPeriodoCategoria,
   valorDoPeriodo,
+  valorPorPeriodo,
 } from './producao-hospitalar.js';
 
 const MED = 1;
@@ -68,6 +70,76 @@ describe('valor pela faixa vigente', () => {
       '2026-12-31',
     );
     expect(v).toMatchObject({ diarias: 3, valor: 300, diasSemFaixa: 2 });
+  });
+});
+
+describe('precedência da faixa própria sobre a geral, dia a dia', () => {
+  const PED = 3;
+  const mistas: FaixaValorCategoria[] = [
+    { clinicaId: PED, inicio: '2026-01-01', fim: null, valorDiaria: 50, todasUnidades: true },
+    { clinicaId: PED, inicio: '2026-10-01', fim: null, valorDiaria: 80 },
+  ];
+  it('a própria que começa depois não apaga a geral antes do seu início', () => {
+    expect(faixaVigente(mistas, PED, '2026-03-10')?.valorDiaria).toBe(50);
+    expect(faixaVigente(mistas, PED, '2026-09-30')?.valorDiaria).toBe(50);
+    expect(faixaVigente(mistas, PED, '2026-10-01')?.valorDiaria).toBe(80);
+    const v = valorDoPeriodo(
+      { clinicaId: PED, inicio: '2026-09-29T08:00', fim: '2026-10-02T08:00' },
+      mistas,
+      '2026-12-31',
+    );
+    expect(v).toMatchObject({ diarias: 3, valor: 50 + 50 + 80, diasSemFaixa: 0 });
+  });
+  it('a própria vigente prevalece mesmo com a geral de início mais recente', () => {
+    const f: FaixaValorCategoria[] = [
+      { clinicaId: PED, inicio: '2026-01-01', fim: null, valorDiaria: 70 },
+      { clinicaId: PED, inicio: '2026-06-01', fim: null, valorDiaria: 55, todasUnidades: true },
+    ];
+    expect(faixaVigente(f, PED, '2026-07-01')?.valorDiaria).toBe(70);
+  });
+});
+
+describe('períodos efetivos e valor do paciente (a mesma base da apuração)', () => {
+  const faixasPaciente: FaixaValorCategoria[] = [
+    { clinicaId: MED, inicio: '2026-01-01', fim: null, valorDiaria: 50, todasUnidades: true },
+    { clinicaId: CIR, inicio: '2026-01-01', fim: null, valorDiaria: 200, todasUnidades: true },
+  ];
+  const internacao = {
+    entrada: '2026-03-01T08:00:00',
+    saida: '2026-03-20T10:00:00',
+    tipoSaida: 'alta' as const,
+    previstaAlta: null,
+    clinicaId: MED,
+    periodos: [{ clinicaId: CIR, inicio: '2026-03-10T08:00:00', fim: null }],
+  };
+  it('o trecho da entrada até a primeira classificação entra, e o aberto termina na saída', () => {
+    expect(periodosEfetivos(internacao)).toEqual([
+      { clinicaId: MED, inicio: '2026-03-01T08:00:00', fim: '2026-03-10T08:00:00', gravado: null },
+      { clinicaId: CIR, inicio: '2026-03-10T08:00:00', fim: '2026-03-20T10:00:00', gravado: 0 },
+    ]);
+    const v = valorPorPeriodo(internacao, faixasPaciente, '2026-11-25');
+    expect(v.map((p) => [p.clinicaId, p.diarias, p.valor, p.emAberto])).toEqual([
+      [MED, 9, 450, false],
+      [CIR, 10, 2000, false],
+    ]);
+  });
+  it('a soma do paciente bate com a apuração do mês', () => {
+    const v = valorPorPeriodo(internacao, faixasPaciente, '2026-11-25');
+    const r = apurarProducaoMensal({
+      mes: '2026-03',
+      leitos: [],
+      internacoes: [internacao],
+      faixas: faixasPaciente,
+    });
+    expect(v.reduce((s, p) => s + p.valor, 0)).toBe(r.total.valorProduzido);
+    expect(v.reduce((s, p) => s + p.diarias, 0)).toBe(r.total.pacienteDia);
+  });
+  it('sem saída, o último fica em aberto até a data dada', () => {
+    const v = valorPorPeriodo({ ...internacao, saida: null, tipoSaida: null }, faixasPaciente, '2026-03-15');
+    expect(v.map((p) => [p.diarias, p.emAberto])).toEqual([
+      [9, false],
+      [6, true],
+    ]);
   });
 });
 

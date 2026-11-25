@@ -41,6 +41,7 @@ export const mensagensProducaoHospitalar = {
   diarias: 'Diárias',
   valor: 'Valor',
   emAberto: 'em curso',
+  implicito: '(da entrada, na categoria da internação)',
   valorTotal: 'Valor total das categorias',
   novaCategoria: 'Nova categoria clínica',
   desde: 'A partir de',
