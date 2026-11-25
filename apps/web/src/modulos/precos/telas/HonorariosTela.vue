@@ -227,7 +227,9 @@ async function desfazer(): Promise<void> {
             <th scope="col">{{ t('precos.honorarios.porte') }}</th>
             <th scope="col">{{ t('precos.comum.vigencia') }}</th>
             <th scope="col">{{ t('precos.honorarios.componentes') }}</th>
-            <th scope="col">{{ t('precos.comum.total') }}</th>
+            <th scope="col" :title="t('precos.honorarios.totalVigenciaDica')">
+              {{ t('precos.honorarios.totalVigencia') }}
+            </th>
             <th scope="col">{{ t('precos.comum.acoes') }}</th>
           </tr>
         </thead>

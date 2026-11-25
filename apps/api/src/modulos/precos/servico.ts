@@ -695,6 +695,18 @@ export class ServicoPrecos {
   ): Promise<ValorVigente | null> {
     const conv = await this.fonte.convenio(c, q.convenio);
     if (!conv) return null;
+    // O setor e o regime do lançamento só valem no escopo do estabelecimento da sessão (nunca em silêncio).
+    const alvo = { setor: q.setor ?? null, regime: q.regimeAtendimento ?? null };
+    if (alvo.setor !== null || alvo.regime !== null) {
+      const fora = this.fonte.alvoNoEscopo ? await this.fonte.alvoNoEscopo(c, alvo) : ['setor', 'regime'];
+      if (fora.length)
+        throw new ErroProblema(
+          'entrada-invalida',
+          400,
+          'Dados inválidos',
+          `Fora do estabelecimento ou inexistente: ${fora.join(', ')}.`,
+        );
+    }
     const data = q.data ?? (await this.fonte.hoje(c));
     const base = {
       convenio: { codigo: conv.codigo, nome: conv.nome, situacao: conv.situacao },

@@ -11,7 +11,7 @@ export const mensagensIndices = {
     'porte-anestesico': 'Porte anestésico',
   },
   abrangencia: 'Vale para',
-  doAcordo: 'O acordo inteiro (todas as tabelas)',
+  doAcordo: 'O acordo inteiro neste estabelecimento (todas as tabelas)',
   daTabela: 'Tabela {codigo} — {descricao} ({regime})',
   regimes: { internacao: 'internação', ambulatorial: 'ambulatorial' },
   alvo: 'Índice ou porte',

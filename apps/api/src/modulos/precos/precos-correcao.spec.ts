@@ -100,9 +100,19 @@ describe('consulta de valor vigente: o total sai do modelo do item (06-FAT linha
       estimativaPeloModelo: 6.25,
       falta: [],
     });
-    // A grade da tabela (sem convênio) segue mostrando a vigência do valor.
+    // A grade da tabela (sem convênio, coluna "Total da vigência") mostra a soma da vigência; o cobrado é o da consulta.
     const grade = (await get(s, '/api/precos/honorarios/53/itens?data=2026-06-01&busca=53001')).json();
     expect(grade.itens[0].total).toBe(109.25);
+    // O setor e o regime chegam à consulta pela API; o que não se confere no estabelecimento recusa (nunca em silêncio).
+    const foraDoEscopo = await get(
+      s,
+      '/api/precos/consulta?convenio=53&tipo=honorario&item=53001&data=2026-06-01&setor=999999&horarioEspecial=true',
+    );
+    expect(foraDoEscopo.statusCode).toBe(400);
+    expect(
+      (await get(s, '/api/precos/consulta?convenio=53&tipo=honorario&item=53001&data=2026-06-01&setor=x'))
+        .statusCode,
+    ).toBe(400);
     const porte = (
       await get(s, '/api/precos/consulta?convenio=71&tipo=honorario&item=71001&data=2026-06-01')
     ).json();

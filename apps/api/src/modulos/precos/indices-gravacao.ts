@@ -5,7 +5,8 @@
 //   preco.registrar-indice            valor_indice: CH, UCO ou filme do acordo (sem tabela) ou de uma tabela do acordo
 //   preco.registrar-porte             valor_porte_medico: porte de honorário do acordo ou de uma tabela do acordo
 //   preco.registrar-porte-anestesico  valor_porte_anestesico: porte anestésico (0 a 8) de uma tabela do acordo
-// Só para a fonte pagadora com acordo no estabelecimento da sessão; a tabela é sempre deste estabelecimento.
+// Só para a fonte pagadora com acordo no estabelecimento da sessão; a tabela é sempre deste estabelecimento, e o valor
+// do acordo (sem tabela) é gravado para o estabelecimento da sessão (estabelecimento_id): nunca muda a cobrança de outro.
 import { validarRegistroIndice } from '@sgh/dominio-preco';
 import {
   type ContextoOperacao,
@@ -99,12 +100,15 @@ export const opRegistrarIndice = definirOperacao({
       throw recusa('referencia-inexistente', 'O índice não existe ou está inativo.', {
         campos: ['indiceId'],
       });
-    // Escopo da linha: o acordo (fonte, sem tabela) ou a tabela do acordo (sem fonte), como a leitura lê.
+    // Escopo da linha: o acordo (fonte, sem tabela) neste estabelecimento ou a tabela do acordo (sem fonte), como a
+    // leitura lê.
     const fonte = e.tabelaId === null ? e.fonteId : null;
+    const estDaLinha = e.tabelaId === null ? est : null;
     const existentes = await tx.consultar<Linha>(
       `SELECT vigencia_inicio FROM valor_indice
-        WHERE indice_cobranca_id = ? AND fonte_pagadora_id <=> ? AND tabela_preco_id <=> ? AND operacao <> 'exclusao'`,
-      [e.indiceId, fonte, e.tabelaId],
+        WHERE indice_cobranca_id = ? AND fonte_pagadora_id <=> ? AND tabela_preco_id <=> ? AND estabelecimento_id <=> ?
+          AND operacao <> 'exclusao'`,
+      [e.indiceId, fonte, e.tabelaId, estDaLinha],
     );
     exigirValido(
       validarRegistroIndice({
@@ -121,6 +125,7 @@ export const opRegistrarIndice = definirOperacao({
       usuario_id: ctx.usuario,
       fonte_pagadora_id: fonte,
       tabela_preco_id: e.tabelaId,
+      estabelecimento_id: estDaLinha,
       vigencia_inicio: e.vigenciaInicio,
       valor_indice: e.valor,
     });
@@ -148,10 +153,12 @@ export const opRegistrarPorte = definirOperacao({
     if (!po)
       throw recusa('referencia-inexistente', 'O porte de honorário não existe.', { campos: ['porte'] });
     const fonte = e.tabelaId === null ? e.fonteId : null;
+    const estDaLinha = e.tabelaId === null ? est : null;
     const existentes = await tx.consultar<Linha>(
       `SELECT vigencia_inicio FROM valor_porte_medico
-        WHERE porte_procedimento_id = ? AND fonte_pagadora_id <=> ? AND tabela_preco_id <=> ? AND operacao <> 'exclusao'`,
-      [Number(po['id']), fonte, e.tabelaId],
+        WHERE porte_procedimento_id = ? AND fonte_pagadora_id <=> ? AND tabela_preco_id <=> ? AND estabelecimento_id <=> ?
+          AND operacao <> 'exclusao'`,
+      [Number(po['id']), fonte, e.tabelaId, estDaLinha],
     );
     exigirValido(
       validarRegistroIndice({
@@ -168,6 +175,7 @@ export const opRegistrarPorte = definirOperacao({
       usuario_id: ctx.usuario,
       fonte_pagadora_id: fonte,
       tabela_preco_id: e.tabelaId,
+      estabelecimento_id: estDaLinha,
       vigencia_inicio: e.vigenciaInicio,
       valor: e.valor,
     });

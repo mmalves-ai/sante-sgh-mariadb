@@ -48,6 +48,7 @@ describe.skipIf(SEM_BANCO)(
       porte: 0,
       setor: 0,
       vCh2025: 0,
+      estB: 0,
     };
     let c: CtxPrecos;
 
@@ -238,7 +239,7 @@ describe.skipIf(SEM_BANCO)(
     afterAll(async () => {
       if (!nucleo) return;
       await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-c220' }, async (e) => {
-        await limparTrilhaDaMassa(e, { ids: [ids.est] });
+        await limparTrilhaDaMassa(e, { ids: [ids.est, ...(ids.estB ? [ids.estB] : [])] });
         await limpar(e);
       });
       await nucleo.encerrar();
@@ -415,6 +416,68 @@ describe.skipIf(SEM_BANCO)(
       const item = await valor('2026-06-01', { setor: ids.setor });
       expect(item?.total).toBe(0.9 * 100 + 150);
       expect(item?.passos.join(' ')).toMatch(/do procedimento/);
+    });
+    it('valor do acordo por estabelecimento: o gravado em A nunca muda a cobrança de B; o de B vale só em B', async () => {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-c220-estb' }, async (e) => {
+        const agora = new Date();
+        ids.estB = await garantir(
+          e,
+          'SELECT id FROM estabelecimento WHERE codigo = ?',
+          [`${P}B`],
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [`${P}B`, 'ESTAB C220 B SINTETICO', 'ESTAB C220 B SINTETICO', agora],
+        );
+        await e.inserir(
+          `INSERT INTO contrato_fonte_pagadora (estabelecimento_id, fonte_pagadora_id, numero, descricao, vigencia_inicio,
+           situacao, prazo_apresentacao_dias, criado_em) VALUES (?, ?, ?, 'ACORDO C220 B', '2025-01-01', 'vigente', 60, ?)`,
+          [ids.estB, ids.fonte, `${P}-B`, agora],
+        );
+        await garantir(
+          e,
+          'SELECT id FROM fonte_pagadora_estabelecimento WHERE fonte_pagadora_id = ? AND estabelecimento_id = ?',
+          [ids.fonte, ids.estB],
+          "INSERT INTO fonte_pagadora_estabelecimento (fonte_pagadora_id, estabelecimento_id, situacao, criado_em) VALUES (?, ?, 'ativa', ?)",
+          [ids.fonte, ids.estB, agora],
+        );
+      });
+      const ctxB = (): ContextoOperacao => ({ ...ctx(), estabelecimento: ids.estB });
+      const cB = { ...c, estabelecimento: ids.estB } as CtxPrecos;
+      const fonte = new FontePrecosPropria(nucleo);
+      // Os CH 0,5 (2025) e 0,55 (2026-03) do acordo foram gravados em A: ficam só em A.
+      const [linhaA] = await ler<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM valor_indice WHERE fonte_pagadora_id = ? AND tabela_preco_id IS NULL AND estabelecimento_id = ?',
+        [ids.fonte, ids.est],
+      );
+      expect(Number(linhaA!.n)).toBe(2);
+      expect((await fonte.indicesNaData(cB, ids.fonte, '2025-06-01')).get(1)).toBeUndefined();
+      expect(await fonte.porteNaData(cB, ids.fonte, `${P}3A`, '2025-06-01')).toBeNull();
+      // B grava o próprio CH: vale em B e não muda A.
+      await gravador.gravar('indice', ctxB(), {
+        fonteId: ids.fonte,
+        indiceId: ids.ch,
+        vigenciaInicio: '2025-01-01',
+        valor: 0.8,
+      });
+      expect((await fonte.indicesNaData(cB, ids.fonte, '2025-06-01')).get(1)).toBe(0.8);
+      expect((await fonte.indicesNaData(c, ids.fonte, '2025-06-01')).get(1)).toBe(0.5);
+      expect((await valor('2025-06-01'))?.total).toBe(0.5 * 100 + 150);
+      // A linha do tempo da tela de B só mostra o valor de B.
+      const opB = await nucleo.lerSomente(
+        { cliente: CLIENTE, estabelecimento: ids.estB, usuario: null, correlacao: 't' },
+        (l) => opcoesIndicesPropria(l, ids.estB, ids.fonte),
+      );
+      expect(opB.vigencias.filter((v) => v.tipo === 'indice').map((v) => v.valor)).toEqual([0.8]);
+      // O setor de A não vale na consulta de B: recusa (nunca cai em silêncio no CH do acordo).
+      await expect(
+        servico.valorVigente(cB, {
+          convenio: ids.fonte,
+          tipo: 'honorario',
+          conta: 'internacao',
+          item: ids.ppCh,
+          data: '2025-06-01',
+          setor: ids.setor,
+        }),
+      ).rejects.toMatchObject({ tipo: 'entrada-invalida' });
     });
   },
 );

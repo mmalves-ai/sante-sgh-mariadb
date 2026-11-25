@@ -743,7 +743,10 @@ export async function precosNoDestino(
   for (const i of itens)
     precos.set(
       i.id,
-      await precoVigente(l as Leitor, tabelas, i.itemFaturavel, diaDe(i.realizadoEm) ?? diaDe(new Date())!),
+      await precoVigente(l as Leitor, tabelas, i.itemFaturavel, diaDe(i.realizadoEm) ?? diaDe(new Date())!, {
+        est: destino.estabelecimento,
+        fonte: destino.fontePagadora,
+      }),
     );
   return precos;
 }

@@ -136,6 +136,11 @@ export const mensagensPrecos = {
     texto:
       'Os itens da tabela com o valor que vale na data-base (a vigência de maior data até ela). Preço nunca é sobrescrito: o reajuste cria uma vigência nova; o desfazer remove só o que o lote criou.',
     escolha: 'Escolha a tabela',
+    // 06-FAT linha 5: a grade é da tabela (sem convênio); no modelo CH e PORTE o valor cobrado sai do índice do
+    // acordo (consulta de valor vigente e conta), não desta soma.
+    totalVigencia: 'Total da vigência',
+    totalVigenciaDica:
+      'Soma dos componentes da vigência. No modelo CH e PORTE o valor cobrado sai do índice do acordo de cada convênio.',
     modelo: 'Modelo',
     modelos: { VALOR: 'Valor datado', PORTE: 'Porte (CBHPM)', CH: 'CH (AMB)' },
     compartilhada: 'compartilhada por mais de um convênio',

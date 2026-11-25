@@ -62,18 +62,23 @@ interface Acordo {
 
 /**
  * Filtro de escopo: a linha do acordo da fonte pagadora (sem tabela, ou com uma tabela do acordo deste
- * estabelecimento) ou a linha de uma das tabelas do acordo. A linha da fonte com tabela de outro estabelecimento nunca
+ * estabelecimento; gravada para este estabelecimento ou para todos) ou a linha de uma das tabelas do acordo. A linha da fonte com tabela de outro estabelecimento nunca
  * entra. Sem acordo, o filtro não aceita nada.
  */
-function escopo(alias: string, conv: number, a: Acordo): { sql: string; p: unknown[] } {
+function escopo(alias: string, conv: number, a: Acordo, est: number): { sql: string; p: unknown[] } {
   if (!a.existe) return { sql: 'FALSE', p: [] };
+  // O valor do acordo gravado num estabelecimento só vale nele; o sem estabelecimento vale em todos com acordo.
+  const doEst = `(${alias}.estabelecimento_id IS NULL OR ${alias}.estabelecimento_id = ?)`;
   const em = a.tabelas.map(() => '?').join(', ');
   if (!a.tabelas.length)
-    return { sql: `(${alias}.fonte_pagadora_id = ? AND ${alias}.tabela_preco_id IS NULL)`, p: [conv] };
+    return {
+      sql: `(${alias}.fonte_pagadora_id = ? AND ${doEst} AND ${alias}.tabela_preco_id IS NULL)`,
+      p: [conv, est],
+    };
   return {
-    sql: `((${alias}.fonte_pagadora_id = ? AND (${alias}.tabela_preco_id IS NULL OR ${alias}.tabela_preco_id IN (${em})))
+    sql: `((${alias}.fonte_pagadora_id = ? AND ${doEst} AND (${alias}.tabela_preco_id IS NULL OR ${alias}.tabela_preco_id IN (${em})))
        OR (${alias}.fonte_pagadora_id IS NULL AND ${alias}.tabela_preco_id IN (${em})))`,
-    p: [conv, ...a.tabelas, ...a.tabelas],
+    p: [conv, est, ...a.tabelas, ...a.tabelas],
   };
 }
 
@@ -100,13 +105,13 @@ export async function indicesNaDataPropria(
   conv: number,
   data: string,
 ): Promise<Map<number, number>> {
-  const e = escopo('v', conv, await acordo(l, conv, est, data));
+  const e = escopo('v', conv, await acordo(l, conv, est, data), est);
   const ls = await l.consultar(
-    `SELECT ic.id AS indice, ic.codigo, ic.tipo_indice, (v.fonte_pagadora_id IS NULL) AS da_tabela, v.valor_indice, v.valor_honorario, v.valor_custo_operacional, v.valor_filme_m2
+    `SELECT ic.id AS indice, ic.codigo, ic.tipo_indice, (v.fonte_pagadora_id IS NULL) AS da_tabela, (v.estabelecimento_id IS NULL) AS da_rede, v.valor_indice, v.valor_honorario, v.valor_custo_operacional, v.valor_filme_m2
        FROM valor_indice v JOIN indice_cobranca ic ON ic.id = v.indice_cobranca_id
       WHERE ic.ativo = TRUE AND v.operacao <> 'exclusao' AND ${e.sql}
         AND v.vigencia_inicio <= ? AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= ?)
-      ORDER BY (v.fonte_pagadora_id IS NULL), v.vigencia_inicio DESC, v.id DESC`,
+      ORDER BY (v.fonte_pagadora_id IS NULL), (v.estabelecimento_id IS NULL), v.vigencia_inicio DESC, v.id DESC`,
     [...e.p, data, data],
     { teto: 500 },
   );
@@ -114,20 +119,22 @@ export async function indicesNaDataPropria(
   // do mesmo tipo valorados no mesmo nível (os dois no acordo, ou os dois na tabela) tornam o valor ambíguo: recusa,
   // em vez de escolher um em silêncio.
   const m = new Map<number, number>();
-  const vencedor = new Map<number, { indice: number; daTabela: boolean; codigo: string }>();
+  const vencedor = new Map<number, { indice: number; nivel: string; codigo: string }>();
   for (const r of ls) {
     const chave = CHAVE_DO_TIPO_INDICE[String(r['tipo_indice'])];
     if (chave === undefined) continue;
     const atual = {
       indice: Number(r['indice']),
-      daTabela: Number(r['da_tabela']) === 1,
+      // Nível: tabela do acordo, acordo no estabelecimento ou acordo para todos os estabelecimentos.
+      nivel:
+        Number(r['da_tabela']) === 1 ? 'tabela' : Number(r['da_rede']) === 1 ? 'rede' : 'estabelecimento',
       codigo: String(r['codigo']),
     };
     const v = vencedor.get(chave);
     if (!v) {
       vencedor.set(chave, atual);
       m.set(chave, valorDoIndice(r));
-    } else if (v.indice !== atual.indice && v.daTabela === atual.daTabela)
+    } else if (v.indice !== atual.indice && v.nivel === atual.nivel)
       throw recusa(
         'indice-ambiguo',
         `Dois índices do mesmo tipo (${v.codigo} e ${atual.codigo}) estão valorados na data no mesmo nível do acordo; encerre a vigência de um deles.`,
@@ -144,12 +151,12 @@ export async function porteNaDataPropria(
   porte: string,
   data: string,
 ): Promise<number | null> {
-  const e = escopo('v', conv, await acordo(l, conv, est, data));
+  const e = escopo('v', conv, await acordo(l, conv, est, data), est);
   const r = await l.uma(
     `SELECT v.valor FROM valor_porte_medico v JOIN porte_procedimento po ON po.id = v.porte_procedimento_id
       WHERE po.codigo = ? AND po.tipo_porte = 'honorario' AND v.operacao <> 'exclusao' AND ${e.sql}
         AND v.vigencia_inicio <= ? AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= ?)
-      ORDER BY (v.fonte_pagadora_id IS NULL), v.vigencia_inicio DESC, v.id DESC LIMIT 1`,
+      ORDER BY (v.fonte_pagadora_id IS NULL), (v.estabelecimento_id IS NULL), v.vigencia_inicio DESC, v.id DESC LIMIT 1`,
     [porte, ...e.p, data, data],
   );
   return r ? Number(r['valor']) : null;
@@ -161,13 +168,13 @@ export async function indicesConvenioPropria(
   est: number,
   conv: number,
 ): Promise<IndiceConvenio[]> {
-  const e = escopo('v', conv, await acordo(l, conv, est, null));
+  const e = escopo('v', conv, await acordo(l, conv, est, null), est);
   const indices = await l.consultar(
     `SELECT ic.tipo_indice, ic.codigo, v.vigencia_inicio, v.valor_indice, v.valor_honorario,
             v.valor_custo_operacional, v.valor_filme_m2
        FROM valor_indice v JOIN indice_cobranca ic ON ic.id = v.indice_cobranca_id
       WHERE ic.ativo = TRUE AND v.operacao <> 'exclusao' AND ${e.sql}
-      ORDER BY ic.tipo_indice, (v.fonte_pagadora_id IS NULL), v.vigencia_inicio DESC, v.id DESC`,
+      ORDER BY ic.tipo_indice, (v.fonte_pagadora_id IS NULL), (v.estabelecimento_id IS NULL), v.vigencia_inicio DESC, v.id DESC`,
     e.p,
     { teto: 2_000 },
   );
@@ -175,7 +182,7 @@ export async function indicesConvenioPropria(
     `SELECT po.codigo, v.vigencia_inicio, v.valor
        FROM valor_porte_medico v JOIN porte_procedimento po ON po.id = v.porte_procedimento_id
       WHERE po.tipo_porte = 'honorario' AND v.operacao <> 'exclusao' AND ${e.sql}
-      ORDER BY po.ordem, po.codigo, (v.fonte_pagadora_id IS NULL), v.vigencia_inicio DESC, v.id DESC`,
+      ORDER BY po.ordem, po.codigo, (v.fonte_pagadora_id IS NULL), (v.estabelecimento_id IS NULL), v.vigencia_inicio DESC, v.id DESC`,
     e.p,
     { teto: 2_000 },
   );
@@ -355,7 +362,7 @@ export async function indicesDiferenciadosNaDataPropria(
   const ac = await acordo(l, conv, est, data);
   if (!ac.existe) return { setor, item };
   if (alvo.setor !== null) {
-    const e = escopo('v', conv, ac);
+    const e = escopo('v', conv, ac, est);
     const ls = await l.consultar(
       `SELECT ic.tipo_indice, s.valor_indice AS s_indice, s.valor_honorario AS s_honorario,
               s.valor_custo_operacional AS s_custo_operacional, s.valor_filme_m2 AS s_filme_m2
@@ -369,11 +376,12 @@ export async function indicesDiferenciadosNaDataPropria(
           AND NOT EXISTS (SELECT 1 FROM valor_indice v2
                            WHERE v2.indice_cobranca_id = v.indice_cobranca_id AND v2.operacao <> 'exclusao'
                              AND v2.fonte_pagadora_id <=> v.fonte_pagadora_id AND v2.tabela_preco_id <=> v.tabela_preco_id
+                             AND v2.estabelecimento_id <=> v.estabelecimento_id
                              AND v2.vigencia_inicio > v.vigencia_inicio AND v2.vigencia_inicio <= ?)
           AND (s.regime_atendimento_id IS NULL OR s.regime_atendimento_id <=> ?)
           AND (s.grupo_faturamento_id IS NULL OR s.grupo_faturamento_id =
                (SELECT it.grupo_faturamento_id FROM item_faturavel it WHERE it.id = ?))
-        ORDER BY (v.fonte_pagadora_id IS NULL), (s.regime_atendimento_id IS NULL), (s.grupo_faturamento_id IS NULL),
+        ORDER BY (v.fonte_pagadora_id IS NULL), (v.estabelecimento_id IS NULL), (s.regime_atendimento_id IS NULL), (s.grupo_faturamento_id IS NULL),
                  v.vigencia_inicio DESC, s.id DESC`,
       [est, alvo.setor, ...e.p, data, data, data, alvo.regimeAtendimento, alvo.itemFaturavel],
       { teto: 200 },

@@ -170,6 +170,8 @@ export interface FontePrecos {
     data: string,
     alvo: AlvoIndiceDiferenciado,
   ): Promise<{ setor: Map<number, number>; item: Map<number, number> }>;
+  /** O setor funcional é do estabelecimento da sessão e está ativo; o regime existe no catálogo (só a fonte própria). */
+  alvoNoEscopo?(c: CtxPrecos, alvo: { setor: number | null; regime: number | null }): Promise<string[]>;
   /** Porte anestésico do acordo pela tabela de honorários do regime vigente na data (só a fonte própria). */
   porteAnestesicoNaData?(
     c: CtxPrecos,

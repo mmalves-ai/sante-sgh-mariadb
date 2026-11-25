@@ -368,6 +368,10 @@ export class PrecosController {
       conta: q['conta'] === 'internacao' ? 'internacao' : 'externa',
       item: inteiro(q['item'], 'item'),
       data: dataDe(q['data']),
+      // 06-FAT linha 5: o índice do setor executante e o porte anestésico em horário especial também pela API.
+      setor: inteiroOuNulo(q['setor'], 'setor'),
+      regimeAtendimento: inteiroOuNulo(q['regime'], 'regime'),
+      horarioEspecial: q['horarioEspecial'] === 'true' || q['horarioEspecial'] === '1',
     });
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Convênio não encontrado');
     return r;

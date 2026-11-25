@@ -54,7 +54,11 @@ export async function lancarLinhasDoKit(
   const itens: number[] = [];
   let semPreco = 0;
   for (const linha of linhas) {
-    const preco = await precoVigente(tx, tabelas, linha.item, data);
+    const preco = await precoVigente(tx, tabelas, linha.item, data, {
+      est,
+      fonte: c.fontePagadora,
+      conta: c.id,
+    });
     if (!preco) semPreco += 1;
     const unitario = preco?.unitario ?? 0;
     const seq = await tx.uma<Linha>(

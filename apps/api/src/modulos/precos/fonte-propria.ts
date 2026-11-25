@@ -1015,6 +1015,27 @@ export class FontePrecosPropria implements FontePrecos {
     return this.ler(c, (l, est) => indicesDiferenciadosNaDataPropria(l, est, conv, data, alvo));
   }
 
+  /** Os campos do alvo fora do escopo: setor que não é deste estabelecimento (ou inativo) e regime inexistente. */
+  alvoNoEscopo(c: CtxPrecos, alvo: { setor: number | null; regime: number | null }) {
+    return this.ler(c, async (l, est) => {
+      const fora: string[] = [];
+      if (
+        alvo.setor !== null &&
+        !(await l.uma(
+          'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND ativo = 1 AND excluido_em IS NULL',
+          [alvo.setor, est],
+        ))
+      )
+        fora.push('setor');
+      if (
+        alvo.regime !== null &&
+        !(await l.uma('SELECT id FROM regime_atendimento WHERE id = ?', [alvo.regime]))
+      )
+        fora.push('regime');
+      return fora;
+    });
+  }
+
   /** Porte anestésico do acordo pela tabela de honorários do regime vigente na data do atendimento. */
   porteAnestesicoNaData(c: CtxPrecos, conv: number, regime: RegimePorte, porte: string, data: string) {
     return this.ler(c, (l, est) => porteAnestesicoNaDataPropria(l, est, conv, regime, porte, data));

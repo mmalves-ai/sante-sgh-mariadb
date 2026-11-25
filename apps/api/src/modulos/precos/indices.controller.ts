@@ -42,13 +42,21 @@ const dataIso = (v: unknown): string =>
   v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : '';
 const numOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 
-/** Vigências do acordo (fonte, sem tabela) e das tabelas de honorários do acordo, no mesmo escopo da gravação. */
-async function vigenciasIndices(l: Leitor, conv: number, tabelas: number[]): Promise<VigenciaIndice[]> {
+/**
+ * Vigências do acordo (fonte, sem tabela) gravadas para este estabelecimento e das tabelas de honorários do acordo, no
+ * mesmo escopo da gravação (o valor do acordo de outro estabelecimento nunca aparece aqui).
+ */
+async function vigenciasIndices(
+  l: Leitor,
+  est: number,
+  conv: number,
+  tabelas: number[],
+): Promise<VigenciaIndice[]> {
   const naTabela = tabelas.length
     ? ` OR (v.fonte_pagadora_id IS NULL AND v.tabela_preco_id IN (${tabelas.map(() => '?').join(', ')}))`
     : '';
-  const escopo = `((v.fonte_pagadora_id = ? AND v.tabela_preco_id IS NULL)${naTabela})`;
-  const p = [conv, ...tabelas];
+  const escopo = `((v.fonte_pagadora_id = ? AND v.tabela_preco_id IS NULL AND v.estabelecimento_id = ?)${naTabela})`;
+  const p = [conv, est, ...tabelas];
   const indices = await l.consultar(
     `SELECT v.indice_cobranca_id AS chave, v.tabela_preco_id, v.vigencia_inicio, v.valor_indice AS valor
        FROM valor_indice v WHERE v.operacao <> 'exclusao' AND ${escopo}
@@ -117,7 +125,7 @@ export async function opcoesIndicesPropria(l: Leitor, est: number, conv: number)
   );
   const idsTabela = [...new Set(tabelas.map((r) => Number(r['id'])))];
   return {
-    vigencias: await vigenciasIndices(l, conv, idsTabela),
+    vigencias: await vigenciasIndices(l, est, conv, idsTabela),
     indices: indices.map((r) => ({
       id: Number(r['id']),
       codigo: String(r['codigo']),
