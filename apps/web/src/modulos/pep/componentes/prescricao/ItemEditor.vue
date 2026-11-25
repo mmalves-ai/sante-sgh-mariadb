@@ -92,6 +92,8 @@ const f = reactive({
   seNecessario: false,
   motivo: '',
   intervalo: '6',
+  doseMaxima: '',
+  periodoDoseMaxima: '24',
   observacao: '',
   justificativaNp: '',
   cid: '',
@@ -125,6 +127,10 @@ const f = reactive({
   fr: '',
   pInsp: '',
   pExp: '',
+  tInsp: '',
+  tExp: '',
+  pSup: '',
+  duracao: '',
   hemo: '',
   indicacaoHemo: '',
   regraDose: 'fixa' as RegraDose,
@@ -251,7 +257,16 @@ function montar(): unknown {
   };
   const sn =
     f.seNecessario && f.motivo
-      ? { seNecessario: { motivos: [Number(f.motivo)], intervaloMinimoHoras: n(f.intervalo) ?? 6 } }
+      ? {
+          seNecessario: {
+            motivos: [Number(f.motivo)],
+            intervaloMinimoHoras: n(f.intervalo) ?? 6,
+            // Dose máxima no período: só o medicamento (o domínio confere que cobre ao menos uma dose).
+            ...(tipo.value === 'medicamento' && f.doseMaxima
+              ? { doseMaxima: { dose: n(f.doseMaxima), periodoHoras: n(f.periodoDoseMaxima) ?? 24 } }
+              : {}),
+          },
+        }
       : {};
   switch (tipo.value) {
     case 'medicamento':
@@ -388,6 +403,10 @@ function montar(): unknown {
           ...(f.fr ? { frequenciaRespiratoria: n(f.fr) } : {}),
           ...(f.pInsp ? { pressaoInspiratoria: n(f.pInsp) } : {}),
           ...(f.pExp ? { pressaoExpiratoria: n(f.pExp) } : {}),
+          ...(tipo.value === 'vmi' && f.tInsp ? { tempoInspiratorio: n(f.tInsp) } : {}),
+          ...(tipo.value === 'vmi' && f.tExp ? { tempoExpiratorio: n(f.tExp) } : {}),
+          ...(tipo.value === 'vni' && f.pSup ? { pressaoSuporte: n(f.pSup) } : {}),
+          ...(tipo.value === 'vni' && f.duracao ? { duracaoMinutos: n(f.duracao) } : {}),
         },
       };
     case 'hemoterapia': {
@@ -826,6 +845,14 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
             <label :for="`${px}-fr`">{{ t('pep.presc.item.fr') }}</label>
             <input :id="`${px}-fr`" v-model="f.fr" inputmode="numeric" />
           </div>
+          <div class="campo curto">
+            <label :for="`${px}-ti`">{{ t('pep.presc.item.tempoInsp') }}</label>
+            <input :id="`${px}-ti`" v-model="f.tInsp" inputmode="decimal" data-testid="vmi-tempo-insp" />
+          </div>
+          <div class="campo curto">
+            <label :for="`${px}-te`">{{ t('pep.presc.item.tempoExp') }}</label>
+            <input :id="`${px}-te`" v-model="f.tExp" inputmode="decimal" data-testid="vmi-tempo-exp" />
+          </div>
         </template>
         <template v-else>
           <div class="campo curto">
@@ -835,6 +862,14 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
           <div class="campo curto">
             <label :for="`${px}-pe`">{{ t('pep.presc.item.pressaoExp') }}</label>
             <input :id="`${px}-pe`" v-model="f.pExp" inputmode="numeric" />
+          </div>
+          <div class="campo curto">
+            <label :for="`${px}-ps`">{{ t('pep.presc.item.pressaoSuporte') }}</label>
+            <input :id="`${px}-ps`" v-model="f.pSup" inputmode="numeric" data-testid="vni-pressao-suporte" />
+          </div>
+          <div class="campo curto">
+            <label :for="`${px}-du`">{{ t('pep.presc.item.duracaoSessao') }}</label>
+            <input :id="`${px}-du`" v-model="f.duracao" inputmode="numeric" data-testid="vni-duracao" />
           </div>
         </template>
       </div>
@@ -894,6 +929,21 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
             <label :for="`${px}-int`">{{ t('pep.presc.item.intervalo') }}</label>
             <input :id="`${px}-int`" v-model="f.intervalo" inputmode="numeric" />
           </div>
+          <template v-if="tipo === 'medicamento'">
+            <div class="campo curto">
+              <label :for="`${px}-dmx`">{{ t('pep.presc.item.doseMaxima') }}</label>
+              <input
+                :id="`${px}-dmx`"
+                v-model="f.doseMaxima"
+                inputmode="decimal"
+                data-testid="se-necessario-dose-maxima"
+              />
+            </div>
+            <div class="campo curto">
+              <label :for="`${px}-pdm`">{{ t('pep.presc.item.periodoDoseMaxima') }}</label>
+              <input :id="`${px}-pdm`" v-model="f.periodoDoseMaxima" inputmode="numeric" />
+            </div>
+          </template>
         </template>
       </div>
       <div class="campo">

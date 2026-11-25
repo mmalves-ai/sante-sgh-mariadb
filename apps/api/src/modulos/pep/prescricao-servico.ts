@@ -28,6 +28,7 @@ import {
   type Verificacao,
 } from '@sgh/contratos';
 import {
+  mlPorHoraDaSigla,
   avaliarAlertas,
   type ContextoAlertas,
   documentoPrescricao,
@@ -450,6 +451,11 @@ export class ServicoPrescricao {
       kit: (produto: number, via: string, unidade: string, dose: number) =>
         kitQueCasa(kits.get(produto) ?? [], { produto, via, unidade, dose, tipoAtendimento: a.tipo }),
       retratoCid: () => null,
+      // Conversão da unidade de velocidade de infusão em mL/h (gotas/min, microgotas/min) pela sigla do cadastro.
+      mlPorHora: (u: number) => {
+        const x = (dominios['unidadesInfusao'] ?? []).find((o) => String(o.id) === String(u));
+        return x ? mlPorHoraDaSigla(String(x.nome)) : null;
+      },
     };
     const padroes = {
       unidadeVolume: 'ML',
