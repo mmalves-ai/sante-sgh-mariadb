@@ -155,6 +155,13 @@ export const mensagensDocumentos = {
     registrar: 'Registrar',
     inativar: 'Retirar da lista ativa',
     inativarPergunta: 'Retirar {agente} da lista de alergias ativas? Fica no histórico.',
+    reativar: 'Reativar',
+    motivoReativar: 'Motivo da reativação (mín. 10 caracteres)',
+    alterar: 'Alterar',
+    motivoAlteracao: 'Motivo da alteração (opcional)',
+    gravarAlteracao: 'Gravar alteração',
+    noFormulario:
+      'A alergia informada aqui é gravada na hora no prontuário do paciente, ligada a este atendimento, e já vale para a prescrição.',
     situacao: {
       lista: 'Com alergias ativas',
       nega: 'Nega alergias',

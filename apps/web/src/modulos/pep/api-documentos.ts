@@ -30,6 +30,7 @@ import type {
   PreviaAssinatura,
   ProblemaPep,
   RegistrarAlergia,
+  AlterarAlergia,
   RelatorioTransferencia,
   ResultadoAssinatura,
   ResultadoSolicitacao,
@@ -180,6 +181,10 @@ export const lerHistoricoAlergia = (p: number, id: number, b: typeof fetch = fet
   ler<HistoricoAlergia>(`${pac(p)}/alergias/${id}/historico`, b);
 export const inativarAlergia = (p: number, id: number, motivo: string, versao: string) =>
   enviar<{ ok: true }>(`${pac(p)}/alergias/${id}/inativar`, { motivo, versao }, novaChave('alergia'));
+export const reativarAlergia = (p: number, id: number, motivo: string, versao: string) =>
+  enviar<{ ok: true }>(`${pac(p)}/alergias/${id}/reativar`, { motivo, versao }, novaChave('alergia'));
+export const alterarAlergia = (p: number, id: number, e: AlterarAlergia) =>
+  enviar<{ ok: true }>(`${pac(p)}/alergias/${id}/alterar`, e, novaChave('alergia'));
 
 export const lerProblemas = (p: number, b: typeof fetch = fetch) =>
   ler<{ problemas: ProblemaPep[]; criar: AcaoLiberada }>(`${pac(p)}/problemas`, b);

@@ -29,7 +29,7 @@ export const mensagensRegistroClinico = {
     opcao: 'opção {n}',
     complemento: 'Texto de {campo}',
     alergias:
-      'esta versão ainda não grava as alergias deste componente; por isso o modelo fica só em consulta (os registros antigos continuam mostrando o que tinham).',
+      'as alergias são informadas na aba de alergias do prontuário ou no próprio formulário, durante a edição do registro (os registros antigos continuam mostrando o que tinham).',
     naoGravado: 'este tipo de campo ainda não é registrado aqui; os registros antigos mostram o que tinham.',
     ambiguo:
       'Pergunta com a lista de escolhas a confirmar pela comissão de prontuário: não é gravada por enquanto.',

@@ -997,7 +997,19 @@ export class ServicoDocumentos {
     const ats = await this.atendimentos(c, paciente);
     const abertos = ats.filter((a) => a.aberto);
     let atendimento: number | null = null;
-    for (const a of abertos) {
+    if (e.registro === undefined) {
+      // D-ALE-2: a alergia informada no componente do formulário clínico, ligada ao atendimento aberto do paciente.
+      atendimento = abertos.some((a) => a.id === e.atendimento) ? (e.atendimento ?? null) : null;
+      if (atendimento === null)
+        throw new ErroProblema(
+          'entrada-invalida',
+          400,
+          'Atendimento inválido',
+          'A alergia do formulário é ligada a um atendimento aberto do paciente.',
+          { codigo: 'atendimento-invalido', campos: ['atendimento'] },
+        );
+    }
+    for (const a of e.registro === undefined ? [] : abertos) {
       const rs = await this.porta.registrosParaAlergia(c, a.id, prof.cbos);
       if (rs.some((r) => r.registro === e.registro)) {
         atendimento = a.id;
@@ -1032,7 +1044,8 @@ export class ServicoDocumentos {
     const cbo = prof.cbo;
     const hashConteudo = await hashDaAlergia({
       paciente,
-      registro: e.registro,
+      // 0: sem registro clínico (a alergia do componente do formulário, ligada ao atendimento).
+      registro: e.registro ?? 0,
       nega: e.nega,
       agente: e.agente ?? null,
       principios: e.principios,
@@ -1044,7 +1057,7 @@ export class ServicoDocumentos {
       paciente,
       atendimento,
       cbo,
-      registro: e.registro,
+      ...(e.registro !== undefined ? { registro: e.registro } : {}),
       nega: e.nega,
       ...(e.agente !== undefined && !e.nega ? { agente: e.agente } : {}),
       principios: e.nega ? [] : e.principios,

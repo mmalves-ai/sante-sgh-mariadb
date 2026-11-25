@@ -376,7 +376,13 @@ export interface HistoricoAlergia {
 
 export const esquemaRegistrarAlergia = z
   .object({
-    registro: id,
+    /** Registro clínico finalizado em que foi informada (aba de alergias). */
+    registro: id.optional(),
+    /**
+     * Atendimento aberto, sem registro: a alergia informada dentro do formulário clínico (componente de alergia) é
+     * gravada na hora, ligada ao atendimento, e já vale para a prescrição.
+     */
+    atendimento: id.optional(),
     nega: z.boolean().default(false),
     agente: id.optional(),
     principios: z.array(id).max(10).default([]),
@@ -393,6 +399,10 @@ export const esquemaRegistrarAlergia = z
   .refine((x) => x.nega || x.agente !== undefined, {
     message: 'Escolha o agente ou marque "nega alergias".',
     path: ['agente'],
+  })
+  .refine((x) => x.registro !== undefined || x.atendimento !== undefined, {
+    message: 'Informe o registro clínico ou o atendimento.',
+    path: ['registro'],
   });
 export type RegistrarAlergia = z.infer<typeof esquemaRegistrarAlergia>;
 
@@ -400,6 +410,27 @@ export const esquemaInativarAlergia = z
   .object({ motivo: textoCp1252(500).pipe(z.string().trim().min(10)), versao: z.string().max(200) })
   .strict();
 export type InativarAlergia = z.infer<typeof esquemaInativarAlergia>;
+
+/** Reativação da alergia retirada por engano: motivo (pelo menos 10 caracteres) e a versão da lista lida. */
+export const esquemaReativarAlergia = esquemaInativarAlergia;
+export type ReativarAlergia = InativarAlergia;
+
+/**
+ * Alteração da alergia ativa: o estado completo dos campos editáveis (nulo apaga). O agente não muda (agente
+ * diferente é outra alergia). Motivo opcional; a versão é a da lista lida.
+ */
+export const esquemaAlterarAlergia = z
+  .object({
+    gravidade: z.enum(GRAVIDADES_ALERGIA).nullable(),
+    reacao: textoCp1252(200).nullable(),
+    origem: z.enum(ORIGENS_ALERGIA).nullable(),
+    observacao: textoCp1252(255).nullable(),
+    manifestacoes: z.array(id).max(10).default([]),
+    motivo: textoCp1252(500).optional(),
+    versao: z.string().max(200),
+  })
+  .strict();
+export type AlterarAlergia = z.infer<typeof esquemaAlterarAlergia>;
 
 // ── Lista de problemas e diagnósticos ─────────────────────────────────────────────────────────────────
 

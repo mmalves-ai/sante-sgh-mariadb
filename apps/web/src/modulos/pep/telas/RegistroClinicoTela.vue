@@ -14,7 +14,7 @@ import {
 import { avaliarFormulario, pendenciasParaFinalizar, planos } from '@sgh/dominio-pep';
 import { SanteAlerta, SanteBotao, SanteDialogo, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
@@ -29,6 +29,7 @@ import {
   salvarRascunho,
 } from '../api-registro.js';
 import FormRenderer from '../componentes/formulario/FormRenderer.vue';
+import { CONTEXTO_ALERGIA_FORMULARIO } from '../componentes/formulario/contexto-alergia.js';
 import { dataHoraBr } from '../formato.js';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import { apagarLocal, chaveLocal, type DonoLocal, guardarLocal, lerLocal } from '../rascunho-local.js';
@@ -112,6 +113,14 @@ const f = computed<FormularioRegistro | undefined>(() => formulario.data.value);
 // ── Estado da digitação ───────────────────────────────────────────────────────────────────────────
 const respostas = reactive<Record<number, RespostaRegistro>>({});
 const atendimento = ref<string>('');
+// D-ALE-2: o componente de alergia do formulário grava a alergia na hora, ligada ao atendimento escolhido.
+provide(
+  CONTEXTO_ALERGIA_FORMULARIO,
+  computed(() => ({
+    paciente: idPaciente.value,
+    atendimento: atendimento.value ? Number(atendimento.value) : null,
+  })),
+);
 const agoraLocal = () => {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');

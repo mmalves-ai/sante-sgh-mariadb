@@ -8,7 +8,7 @@
 //   - correção ligada ao original suspenso; suspensão de registro de outro paciente: 404;
 //   - sessão "como": a marca do suporte técnico no registro e na suspensão;
 //   - profissional com dois CBO: suspende e continua o rascunho com o CBO do registro;
-//   - modelo fora da liberação (conferência abaixo da meta, componente de alergia): desligado com o motivo;
+//   - modelo fora da liberação (conferência abaixo da meta; o componente de alergia não desliga: D-ALE-2): desligado com o motivo;
 //   - a representação em cache separada por rede.
 import {
   type CampoRegistro,
@@ -419,7 +419,7 @@ describe('profissional com dois CBO', () => {
 });
 
 describe('liberação por modelo e cache da representação', () => {
-  it('fora da liberação: os modelos abaixo da meta e o componente de alergia ativo, com o motivo', () => {
+  it('fora da liberação: os modelos abaixo da meta, com o motivo; o componente de alergia não desliga (D-ALE-2)', () => {
     expect(modeloForaDaLiberacao('ENF091')).toMatch(/84,44%/);
     expect(modeloForaDaLiberacao('fisiuti')).toMatch(/99,49%/);
     expect(modeloForaDaLiberacao('EVAM')).toBeNull();
@@ -435,7 +435,8 @@ describe('liberação por modelo e cache da representação', () => {
     };
     const alergia = { tipo: 'alergias', itens: [] } as unknown as CampoRegistro;
     const secao = { tipo: 'secao', itens: [alergia] } as unknown as CampoRegistro;
-    expect(motivoDoFormulario(m, [secao])).toMatch(/componente de alergia/);
+    expect(motivoDoFormulario(m, [secao])).toBeNull();
+    expect(motivoDoFormulario({ ...m, codigo: 'ENF091' }, [secao])).toMatch(/84,44%/);
     expect(motivoDoFormulario(m, [])).toBeNull();
   });
 

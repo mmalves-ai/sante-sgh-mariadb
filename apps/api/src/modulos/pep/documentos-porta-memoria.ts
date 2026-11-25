@@ -4,8 +4,11 @@
 // sintéticos. As gravações conferem a entrada pelos MESMOS esquemas das receitas do executor e guardam o que o
 // adaptador gravaria, por estabelecimento; nada vai à cópia. Marca "SINTETICO".
 import {
+  alteracaoDaAlergia,
+  conferirReativacao,
   linhaDoTempoDaAlergia,
   manifestacoesDoPedido,
+  RecusaMudancaAlergia,
   statusDaRecusaObito,
   validarCancelamentoObito,
 } from '@sgh/dominio-pep';
@@ -30,7 +33,9 @@ import {
   esquemaExameExterno,
   esquemaFinalizacaoSumario,
   esquemaGravacaoAlergia,
+  esquemaAlteracaoAlergia,
   esquemaInativacaoAlergia,
+  esquemaReativacaoAlergia,
   esquemaPedidoExames,
   esquemaSuspensaoDocumento,
   type EventoLido,
@@ -1275,8 +1280,8 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             comoSuporte: x.comoSuporte === true,
           });
           await this.auditar(c, login, 'pep.alergia.registrada', {
-            tabela: 'registro_assistencial',
-            id: x.registro,
+            tabela: x.registro !== undefined ? 'registro_assistencial' : 'atendimento',
+            id: x.registro ?? x.atendimento,
             paciente: x.paciente,
           });
           return { alergia: 0, documento, trilha: null };
@@ -1299,7 +1304,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           tipo: ag.tipo,
           observacao: x.observacao ?? null,
           ativa: true,
-          registro: x.registro,
+          registro: x.registro ?? null,
           registradaEm: agora,
           profissional: `PROFISSIONAL ${M}`,
           principios: PRINCIPIOS.filter((p) => x.principios.includes(p.id)).map((p) => p.nome),
@@ -1342,6 +1347,83 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         const i = e.alergias.indexOf(a);
         e.alergias[i] = { ...a, ativa: false, inativadaEm: agora, motivoInativacao: x.motivo };
         await this.auditar(c, login, 'pep.alergia.inativada', {
+          tabela: 'alergia_paciente',
+          id: a.id,
+          paciente: x.paciente,
+        });
+        return { alergia: a.id, trilha: null };
+      }
+      case 'pep.reativarAlergia':
+      case 'pep.alterarAlergia': {
+        // A mesma regra da porta própria (dominio-pep/alergia-mudanca.ts) sobre o estado em memória.
+        const reativar = operacao === 'pep.reativarAlergia';
+        const x = reativar ? { ...parse(esquemaReativacaoAlergia) } : parse(esquemaAlteracaoAlergia);
+        const a = e.alergias.find((y) => y.id === x.alergia && y.paciente === x.paciente);
+        if (!a)
+          throw new ErroOperacao(
+            404,
+            'registro-inexistente',
+            'Alergia não encontrada',
+            'A alergia não é deste paciente.',
+          );
+        if ((await this.versaoAlergias(c, x.paciente)) !== x.versao)
+          throw new ErroOperacao(
+            409,
+            'conflito-versao',
+            'A lista mudou',
+            'A lista de alergias mudou desde a leitura.',
+          );
+        const alvo = {
+          id: a.id,
+          ativa: a.ativa,
+          agente: a.agenteId ?? null,
+          descricaoLivre: a.agenteId ? null : a.agente,
+          gravidade: a.gravidade ?? null,
+          reacao: a.reacao ?? null,
+          fonte: null,
+          observacao: a.observacao ?? null,
+          manifestacoes: a.manifestacoes ?? [],
+        };
+        const i = e.alergias.indexOf(a);
+        try {
+          if (reativar) {
+            conferirReativacao(
+              alvo,
+              e.alergias
+                .filter((y) => y.paciente === x.paciente && y.ativa)
+                .map((y) => ({
+                  id: y.id,
+                  agente: y.agenteId ?? null,
+                  descricaoLivre: y.agenteId ? null : y.agente,
+                })),
+            );
+            e.alergias[i] = { ...a, ativa: true, inativadaEm: null, motivoInativacao: null };
+          } else if ('manifestacoes' in x) {
+            const m = alteracaoDaAlergia(alvo, {
+              gravidade: x.gravidade,
+              reacao: x.reacao,
+              fonte: null,
+              observacao: x.observacao,
+              manifestacoes: x.manifestacoes,
+            });
+            e.alergias[i] = {
+              ...a,
+              gravidade: x.gravidade,
+              reacao: x.reacao?.trim() || null,
+              observacao: x.observacao?.trim() || null,
+              manifestacoes: m.manifestacoes,
+            };
+          }
+        } catch (erro) {
+          if (!(erro instanceof RecusaMudancaAlergia)) throw erro;
+          throw new ErroOperacao(
+            erro.codigo === 'sem-mudanca' ? 422 : 409,
+            erro.codigo,
+            'Operação recusada',
+            erro.message,
+          );
+        }
+        await this.auditar(c, login, reativar ? 'pep.alergia.reativada' : 'pep.alergia.alterada', {
           tabela: 'alergia_paciente',
           id: a.id,
           paciente: x.paciente,

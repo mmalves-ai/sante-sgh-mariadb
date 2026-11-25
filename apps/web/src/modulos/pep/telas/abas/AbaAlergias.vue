@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Alergias e reações adversas (regra 4): ativas e histórico; informar alergia (agente, princípio, reação,
-// gravidade e origem) ou "nega alergias", sempre ligada a um registro clínico do atendimento; retirar da lista
-// ativa com motivo (fica no histórico).
+// gravidade e origem) ou "nega alergias", ligada a um registro clínico do atendimento; retirar da lista ativa com
+// motivo (fica no histórico), reativar a retirada por engano (motivo) e alterar a ativa (03-PEP L100).
+// Dentro do formulário clínico (componente de alergia, D-ALE-2) recebe o `atendimento` do registro: a alergia é
+// gravada na hora, ligada ao atendimento, sem escolher registro.
 import {
   GRAVIDADES_ALERGIA,
   ORIGENS_ALERGIA,
@@ -13,12 +15,13 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
-import { inativarAlergia, lerAlergias, registrarAlergia } from '../../api-documentos.js';
+import { inativarAlergia, lerAlergias, reativarAlergia, registrarAlergia } from '../../api-documentos.js';
+import AlterarAlergia from './AlterarAlergia.vue';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
 import HistoricoDaAlergia from './HistoricoDaAlergia.vue';
 import { dataHoraBr } from '../../formato.js';
 
-const props = defineProps<{ paciente: number }>();
+const props = defineProps<{ paciente: number; atendimento?: number | null }>();
 const { t } = useI18n();
 const cliente = useQueryClient();
 const dados = useQuery({
@@ -67,13 +70,15 @@ async function atualizar(): Promise<void> {
 }
 async function registrar(): Promise<void> {
   erro.value = null;
-  const reg = registro.value ?? dados.data.value?.registros[0]?.registro ?? null;
-  if (reg === null) return;
+  const noFormulario = props.atendimento ?? null;
+  const reg =
+    noFormulario !== null ? null : (registro.value ?? dados.data.value?.registros[0]?.registro ?? null);
+  if (reg === null && noFormulario === null) return;
   // O agente é obrigatório quando não é "nega alergias" (o antigo required do campo).
   if (!nega.value && agente.value === null) return;
   try {
     await registrarAlergia(props.paciente, {
-      registro: reg,
+      ...(reg !== null ? { registro: reg } : { atendimento: noFormulario ?? undefined }),
       nega: nega.value,
       ...(nega.value || agente.value === null ? {} : { agente: agente.value }),
       principios: !nega.value && principio.value !== null ? [principio.value] : [],
@@ -88,6 +93,18 @@ async function registrar(): Promise<void> {
     agente.value = null;
     reacao.value = '';
     manifestacoes.value = [];
+    await atualizar();
+  } catch (e) {
+    erro.value = e;
+  }
+}
+const motivoReativar = ref('');
+async function reativar(id: number): Promise<void> {
+  erro.value = null;
+  try {
+    await reativarAlergia(props.paciente, id, motivoReativar.value, versao.value);
+    mensagem.value = t('pep.doc.gravado');
+    motivoReativar.value = '';
     await atualizar();
   } catch (e) {
     erro.value = e;
@@ -129,6 +146,13 @@ async function inativar(id: number): Promise<void> {
             {{ dataHoraBr(a.registradaEm) }}<span v-if="a.profissional"> · {{ a.profissional }}</span>
           </p>
           <HistoricoDaAlergia :paciente="paciente" :alergia="a.id" />
+          <AlterarAlergia
+            v-if="dados.data.value.criar.pode"
+            :paciente="paciente"
+            :alergia="a"
+            :versao="versao"
+            :catalogo="dados.data.value.manifestacoes"
+          />
           <div v-if="dados.data.value.inativar.pode" class="linha">
             <label class="campo">
               <span>{{ t('pep.doc.motivo') }}</span>
@@ -149,6 +173,18 @@ async function inativar(id: number): Promise<void> {
           <li v-for="a in dados.data.value.historico" :key="a.id" class="cartao">
             {{ a.agente }} · {{ dataHoraBr(a.registradaEm) }}
             <HistoricoDaAlergia :paciente="paciente" :alergia="a.id" />
+            <div v-if="dados.data.value.inativar.pode" class="linha">
+              <label class="campo">
+                <span>{{ t('pep.doc.alergias.motivoReativar') }}</span>
+                <input v-model="motivoReativar" maxlength="500" :data-testid="`motivo-reativar-${a.id}`" />
+              </label>
+              <SanteBotao
+                :rotulo="t('pep.doc.alergias.reativar')"
+                :desabilitado="motivoReativar.trim().length < 10"
+                :data-testid="`reativar-${a.id}`"
+                @acionar="reativar(a.id)"
+              />
+            </div>
           </li>
         </ul>
       </details>
@@ -161,7 +197,11 @@ async function inativar(id: number): Promise<void> {
         @submit.prevent="registrar"
       >
         <h3>{{ t('pep.doc.alergias.nova') }}</h3>
+        <p v-if="atendimento" class="nota" data-testid="alergia-no-formulario">
+          {{ t('pep.doc.alergias.noFormulario') }}
+        </p>
         <SanteSelecao
+          v-else
           v-model="registro"
           class="campo"
           :rotulo="t('pep.doc.alergias.registro')"

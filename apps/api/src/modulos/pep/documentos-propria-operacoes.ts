@@ -23,11 +23,15 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import {
+  alteracaoDaAlergia,
+  conferirReativacao,
+  type AlergiaParaMudanca,
   type EstadoAlergia,
   eventoDaAlergia,
   type EventoAlergia,
   manifestacoesDoPedido,
   RecusaHistoricoAlergia,
+  RecusaMudancaAlergia,
 } from '@sgh/dominio-pep';
 import { z } from 'zod';
 import type { ContextoDocs } from './documentos-porta.js';
@@ -39,14 +43,18 @@ import {
   esquemaEmissaoDocumento,
   esquemaExameExterno,
   esquemaFinalizacaoSumario,
+  esquemaAlteracaoAlergia,
   esquemaGravacaoAlergia,
   esquemaInativacaoAlergia,
+  esquemaReativacaoAlergia,
 } from './tipos-pep.js';
 
 /** Operações do executor de documentos que esta família grava no banco próprio. */
 export const OPERACOES_PEP_RESTO: readonly string[] = [
   'pep.registrarAlergia',
   'pep.inativarAlergia',
+  'pep.reativarAlergia',
+  'pep.alterarAlergia',
   'pep.emitirDocumento',
   'pep.lancarExameExterno',
   'pep.finalizarSumarioAlta',
@@ -309,6 +317,8 @@ function regraAlergia<T>(f: () => T): T {
     return f();
   } catch (e) {
     if (e instanceof RecusaHistoricoAlergia) throw recusar(422, e.codigo, e.message);
+    if (e instanceof RecusaMudancaAlergia)
+      throw recusar(e.codigo === 'sem-mudanca' ? 422 : 409, e.codigo, e.message);
     throw e;
   }
 }
@@ -347,6 +357,70 @@ async function versaoTravada(
     [paciente],
   );
   return { versao: linhas.map((x) => num(x['id'])).join(','), linhas };
+}
+
+/** A alergia travada para a reativação e a alteração, com as manifestações e os princípios vigentes. */
+async function alergiaTravada(
+  tx: TxOperacao,
+  paciente: number,
+  alergia: number,
+): Promise<{ linha: Record<string, unknown>; alvo: AlergiaParaMudanca; principios: number[] }> {
+  const [a] = await tx.consultarParaAtualizar(
+    `SELECT id, ativa, versao, tipo_registro, alergeno_id, descricao_livre, gravidade, reacao, certeza,
+            fonte_informacao, observacao, registro_assistencial_id
+       FROM alergia_paciente WHERE id = ? AND paciente_id = ? AND ${SQL_E_ALERGIA}`,
+    [alergia, paciente],
+  );
+  if (!a)
+    throw new ErroOperacao(
+      404,
+      'registro-inexistente',
+      'Alergia não encontrada',
+      'A alergia não é deste paciente.',
+    );
+  const filhos = await tx.consultar(
+    `SELECT 'p' AS t, principio_ativo_id AS id FROM alergia_paciente_principio
+      WHERE alergia_paciente_id = ? AND excluido_em IS NULL
+     UNION ALL
+     SELECT 'm' AS t, manifestacao_alergica_id AS id FROM alergia_paciente_manifestacao
+      WHERE alergia_paciente_id = ? AND excluido_em IS NULL`,
+    [a['id'], a['id']],
+  );
+  return {
+    linha: a,
+    alvo: {
+      id: num(a['id']),
+      ativa: Boolean(Number(a['ativa'])),
+      agente: numOuNull(a['alergeno_id']),
+      descricaoLivre: textoOuNull(a['descricao_livre']),
+      gravidade: textoOuNull(a['gravidade']),
+      reacao: textoOuNull(a['reacao']),
+      fonte: textoOuNull(a['fonte_informacao']),
+      observacao: textoOuNull(a['observacao']),
+      manifestacoes: filhos.filter((f) => f['t'] === 'm').map((f) => num(f['id'])),
+    },
+    principios: filhos.filter((f) => f['t'] === 'p' && f['id'] !== null).map((f) => num(f['id'])),
+  };
+}
+
+/** O estado da alergia depois da mudança, para o evento do histórico. */
+function estadoDepois(
+  linha: Record<string, unknown>,
+  alvo: AlergiaParaMudanca,
+  principios: number[],
+  ativa: boolean,
+): EstadoAlergia {
+  return {
+    tipoRegistro: String(linha['tipo_registro']) === 'intolerancia' ? 'intolerancia' : 'alergia',
+    alergeno: alvo.agente,
+    descricaoLivre: alvo.descricaoLivre !== null,
+    gravidade: alvo.gravidade,
+    certeza: textoOuNull(linha['certeza']),
+    fonte: alvo.fonte,
+    ativa,
+    principios,
+    manifestacoes: alvo.manifestacoes,
+  };
 }
 
 /** As gravações desta família, por nome de operação, para o `outras` do executar de documentos. */
@@ -450,10 +524,13 @@ export function operacoesDocumentosPropria(
           situacao_registro: 'confirmado',
           origem: 'sistema',
         };
-        const reg = await tx.uma(
-          'SELECT id FROM registro_assistencial WHERE id = ? AND paciente_id = ? AND excluido_em IS NULL',
-          [x.registro, x.paciente],
-        );
+        const reg =
+          x.registro === undefined
+            ? null
+            : await tx.uma(
+                'SELECT id FROM registro_assistencial WHERE id = ? AND paciente_id = ? AND excluido_em IS NULL',
+                [x.registro, x.paciente],
+              );
         comum.registro_assistencial_id = reg ? num(reg['id']) : null;
         let alergia: number;
         let id: number;
@@ -666,6 +743,144 @@ export function operacoesDocumentosPropria(
         return { tabela: 'alergia_paciente', id: num(a['id']), alergia: num(a['id']), trilha: null };
       },
       () => ({ evento: 'pep.alergia.inativada', paciente: x.paciente, motivo: x.motivo }),
+    );
+  };
+
+  /** Reativação da alergia retirada por engano: volta à lista ativa (nova versão da linha) e o evento com o motivo. */
+  const reativarAlergia: GravacaoDocumentos = async (c, entrada, ctx) => {
+    const x = entradaValida(esquemaReativacaoAlergia, entrada);
+    return gravar(
+      c,
+      ctx,
+      'pep.alergia.reativar',
+      x,
+      ['alergia_paciente', 'alergia_paciente_evento'],
+      async (tx, est) => {
+        const s = await sessao(tx, est, null, false);
+        const { linha, alvo, principios } = await alergiaTravada(tx, x.paciente, x.alergia);
+        const { versao, linhas } = await versaoTravada(tx, x.paciente);
+        if (versao !== x.versao) throw conflitoAlergias();
+        regraAlergia(() =>
+          conferirReativacao(
+            alvo,
+            linhas.map((l) => ({
+              id: num(l['id']),
+              agente: numOuNull(l['alergeno_id']),
+              descricaoLivre: textoOuNull(l['descricao_livre']),
+            })),
+          ),
+        );
+        const em = new Date();
+        await tx.alterar('alergia_paciente', alvo.id, num(linha['versao']), {
+          ativa: true,
+          inativado_em: null,
+          inativado_por_usuario_id: null,
+          inativado_profissional_id: null,
+          motivo_inativacao: null,
+        });
+        await gravarEventoAlergia(tx, s, alvo.id, 'reativacao', estadoDepois(linha, alvo, principios, true), {
+          motivo: x.motivo,
+          registro: numOuNull(linha['registro_assistencial_id']),
+          em,
+        });
+        return { tabela: 'alergia_paciente', id: alvo.id, alergia: alvo.id, trilha: null };
+      },
+      () => ({ evento: 'pep.alergia.reativada', paciente: x.paciente, motivo: x.motivo }),
+    );
+  };
+
+  /**
+   * Alteração da alergia ativa: gravidade, reação, origem, observação e manifestações (as que saem ficam com
+   * excluido_em; a que volta é restaurada). O agente não muda. Evento "alteracao" com o estado depois.
+   */
+  const alterarAlergia: GravacaoDocumentos = async (c, entrada, ctx) => {
+    const x = entradaValida(esquemaAlteracaoAlergia, entrada);
+    return gravar(
+      c,
+      ctx,
+      'pep.alergia.alterar',
+      x,
+      ['alergia_paciente', ...TABELAS_HISTORICO_ALERGIA],
+      async (tx, est) => {
+        const s = await sessao(tx, est, null, false);
+        const { linha, alvo, principios } = await alergiaTravada(tx, x.paciente, x.alergia);
+        const { versao } = await versaoTravada(tx, x.paciente);
+        if (versao !== x.versao) throw conflitoAlergias();
+        const mud = regraAlergia(() =>
+          alteracaoDaAlergia(alvo, {
+            gravidade: x.gravidade,
+            reacao: x.reacao,
+            fonte: fonteDaOrigem(x.origem ?? undefined),
+            observacao: x.observacao,
+            manifestacoes: x.manifestacoes,
+          }),
+        );
+        if (mud.incluir.length) {
+          const ok = await tx.consultar(
+            `SELECT id FROM manifestacao_alergica WHERE ativo = TRUE AND id IN (${marcadores(mud.incluir.length)})`,
+            [...mud.incluir],
+          );
+          if (ok.length !== mud.incluir.length)
+            throw new ErroOperacao(
+              400,
+              'entrada-invalida',
+              'Entrada inválida',
+              'Confira os campos indicados.',
+              {
+                campos: ['manifestacoes'],
+              },
+            );
+        }
+        const em = new Date();
+        if (Object.keys(mud.campos).length)
+          await tx.alterar('alergia_paciente', alvo.id, num(linha['versao']), { ...mud.campos });
+        const todas = await tx.consultar(
+          `SELECT id, manifestacao_alergica_id, versao, excluido_em FROM alergia_paciente_manifestacao
+            WHERE alergia_paciente_id = ?`,
+          [alvo.id],
+        );
+        for (const m of mud.retirar) {
+          const r = todas.find((t) => num(t['manifestacao_alergica_id']) === m && t['excluido_em'] === null);
+          if (r)
+            await tx.alterar('alergia_paciente_manifestacao', num(r['id']), num(r['versao']), {
+              excluido_em: em,
+              excluido_por: s.usuario,
+            });
+        }
+        for (const m of mud.incluir) {
+          const r = todas.find((t) => num(t['manifestacao_alergica_id']) === m);
+          if (r)
+            await tx.alterar('alergia_paciente_manifestacao', num(r['id']), num(r['versao']), {
+              excluido_em: null,
+              excluido_por: null,
+            });
+          else
+            await tx.incluir('alergia_paciente_manifestacao', {
+              alergia_paciente_id: alvo.id,
+              manifestacao_alergica_id: m,
+            });
+        }
+        const depois: AlergiaParaMudanca = {
+          ...alvo,
+          gravidade: 'gravidade' in mud.campos ? mud.campos.gravidade : alvo.gravidade,
+          fonte: 'fonte_informacao' in mud.campos ? mud.campos.fonte_informacao : alvo.fonte,
+          manifestacoes: mud.manifestacoes,
+        };
+        await gravarEventoAlergia(
+          tx,
+          s,
+          alvo.id,
+          'alteracao',
+          estadoDepois(linha, depois, principios, true),
+          {
+            motivo: x.motivo ?? null,
+            registro: numOuNull(linha['registro_assistencial_id']),
+            em,
+          },
+        );
+        return { tabela: 'alergia_paciente', id: alvo.id, alergia: alvo.id, trilha: null };
+      },
+      () => ({ evento: 'pep.alergia.alterada', paciente: x.paciente }),
     );
   };
 
@@ -950,6 +1165,8 @@ export function operacoesDocumentosPropria(
   return {
     'pep.registrarAlergia': registrarAlergia,
     'pep.inativarAlergia': inativarAlergia,
+    'pep.reativarAlergia': reativarAlergia,
+    'pep.alterarAlergia': alterarAlergia,
     'pep.emitirDocumento': emitirDocumento,
     'pep.lancarExameExterno': lancarExameExterno,
     'pep.finalizarSumarioAlta': finalizarSumarioAlta,

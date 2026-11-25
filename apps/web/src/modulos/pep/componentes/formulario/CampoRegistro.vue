@@ -7,11 +7,13 @@
 import { FORMATO_HORA } from '@sgh/contratos';
 import type { CampoRegistro, Paragrafo, RespostaRegistro, ValorResposta } from '@sgh/contratos';
 import { SanteBotao, SanteCampoTexto, SanteData, SanteHora, SanteOpcoes, SanteSelecao } from '@sgh/ui';
-import { computed, useId } from 'vue';
+import { computed, inject, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
 import TextoFormatado from '../TextoFormatado.vue';
 import EditorTexto from './EditorTexto.vue';
 import GradeRespostas from './GradeRespostas.vue';
+import AbaAlergias from '../../telas/abas/AbaAlergias.vue';
+import { CONTEXTO_ALERGIA_FORMULARIO } from './contexto-alergia.js';
 
 type Valor = string | number | boolean | null;
 
@@ -26,6 +28,9 @@ const props = withDefaults(
   }>(),
   { desabilitados: () => new Set<number>(), calculados: () => new Map<number, Valor>(), bloqueado: false },
 );
+/** D-ALE-2: na edição do registro, o componente de alergia grava a alergia na hora (paciente e atendimento). */
+const contextoInjetado = inject(CONTEXTO_ALERGIA_FORMULARIO, null);
+const contextoAlergia = computed(() => contextoInjetado?.value ?? null);
 const emit = defineEmits<{
   atualizar: [vinculo: number, valor: ValorResposta | null];
   confirmar: [vinculo: number];
@@ -310,6 +315,12 @@ const naoRespondida = computed(() => !v.value);
           maxlength="6"
           @change="digitarCid(($event.target as HTMLInputElement).value)"
         />
+      </div>
+      <div
+        v-else-if="c.tipo === 'alergias' && modo === 'edicao' && contextoAlergia?.atendimento"
+        data-testid="formulario-alergias"
+      >
+        <AbaAlergias :paciente="contextoAlergia.paciente" :atendimento="contextoAlergia.atendimento" />
       </div>
       <p v-else class="nota">
         <strong>{{ c.titulo }}:</strong>

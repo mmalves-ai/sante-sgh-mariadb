@@ -9,6 +9,7 @@
 //   POST /api/pep/paciente/:p/exportar                            prontuário completo (crítica, justificativa)
 //   GET|POST /api/pep/paciente/:p/alergias[/:id/inativar]         alergias (executor)
 //   GET  /api/pep/paciente/:p/alergias/:id/historico               linha do tempo e manifestações da alergia
+//   POST /api/pep/paciente/:p/alergias/:id/reativar|alterar        reativação (motivo) e alteração da alergia
 //   GET|POST /api/pep/paciente/:p/problemas[/:id/situacao]        lista de problemas (só do novo)
 //   GET|POST /api/pep/paciente/:p/exames                          pedidos de exame (executor), avisos
 //   GET  /api/pep/paciente/:p/resultados                          resultados, tendência, críticos
@@ -66,7 +67,9 @@ import {
   esquemaFiltrosPainel,
   esquemaFiltrosParecer,
   esquemaGravarProblema,
+  esquemaAlterarAlergia,
   esquemaInativarAlergia,
+  esquemaReativarAlergia,
   esquemaRegistrarAlergia,
   esquemaRelatorioTransferencia,
   esquemaSalvarSumario,
@@ -812,6 +815,68 @@ export class DocumentosPepController {
       s,
       'pep.inativarAlergia',
       { paciente, alergia: idDaRota(i), motivo: e.motivo, versao: e.versao },
+      'alergia',
+    );
+    return { ok: true };
+  }
+
+  /** Reativação da alergia retirada por engano (motivo); quem pode retirar pode reativar. */
+  @Post('paciente/:p/alergias/:id/reativar')
+  @HttpCode(200)
+  @Permissao('pep.alergia.inativar')
+  @AuditadoNoHandler(
+    'pep.reativarAlergia: trilha, alergia_paciente e alergia_paciente_evento na mesma transação (executor)',
+  )
+  async reativarAlergia(
+    @Param('p') p: string,
+    @Param('id') i: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ ok: true }> {
+    const s = sessaoDe(req);
+    await this.liberacao.exigir(s, RECURSOS_M23.alergia);
+    const e = validar(esquemaReativarAlergia, corpo);
+    const paciente = await this.paciente(s, p, 'pep.alergia.inativar', false);
+    await this.executar(
+      s,
+      'pep.reativarAlergia',
+      { paciente, alergia: idDaRota(i), motivo: e.motivo, versao: e.versao },
+      'alergia',
+    );
+    return { ok: true };
+  }
+
+  /** Alteração da alergia ativa (gravidade, reação, origem, observação, manifestações); quem registra altera. */
+  @Post('paciente/:p/alergias/:id/alterar')
+  @HttpCode(200)
+  @Permissao('pep.alergia.criar')
+  @AuditadoNoHandler(
+    'pep.alterarAlergia: trilha, alergia_paciente, manifestações e alergia_paciente_evento na mesma transação (executor)',
+  )
+  async alterarAlergia(
+    @Param('p') p: string,
+    @Param('id') i: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ ok: true }> {
+    const s = sessaoDe(req);
+    await this.liberacao.exigir(s, RECURSOS_M23.alergia);
+    const e = validar(esquemaAlterarAlergia, corpo);
+    const paciente = await this.paciente(s, p, 'pep.alergia.criar', false);
+    await this.executar(
+      s,
+      'pep.alterarAlergia',
+      {
+        paciente,
+        alergia: idDaRota(i),
+        gravidade: e.gravidade,
+        reacao: e.reacao,
+        origem: e.origem,
+        observacao: e.observacao,
+        manifestacoes: e.manifestacoes,
+        ...(e.motivo?.trim() ? { motivo: e.motivo.trim() } : {}),
+        versao: e.versao,
+      },
       'alergia',
     );
     return { ok: true };

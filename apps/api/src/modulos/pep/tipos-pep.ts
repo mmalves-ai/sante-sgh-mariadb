@@ -131,7 +131,8 @@ export const esquemaGravacaoAlergia = z
     paciente: ID,
     atendimento: ID,
     cbo: ID,
-    registro: ID,
+    /** Sem registro: a alergia do componente do formulário clínico, ligada só ao atendimento. */
+    registro: ID.optional(),
     nega: z.boolean(),
     agente: ID.optional(),
     principios: z.array(ID).max(10),
@@ -153,6 +154,24 @@ export const esquemaInativacaoAlergia = z
     paciente: ID,
     alergia: ID,
     motivo: textoCp1252(500).pipe(z.string().trim().min(10)),
+    versao: z.string().max(200),
+  })
+  .strict();
+
+/** Reativação (pep.reativarAlergia): os mesmos campos da inativação. */
+export const esquemaReativacaoAlergia = esquemaInativacaoAlergia;
+
+/** Alteração (pep.alterarAlergia): o estado completo dos campos editáveis; o agente não muda. */
+export const esquemaAlteracaoAlergia = z
+  .object({
+    paciente: ID,
+    alergia: ID,
+    gravidade: z.enum(GRAVIDADES_ALERGIA).nullable(),
+    reacao: textoCp1252(200).nullable(),
+    origem: z.enum(ORIGENS_ALERGIA).nullable(),
+    observacao: textoCp1252(255).nullable(),
+    manifestacoes: z.array(ID).max(10),
+    motivo: textoCp1252(500).optional(),
     versao: z.string().max(200),
   })
   .strict();

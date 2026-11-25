@@ -873,18 +873,14 @@ export class ServicoRegistro {
 }
 
 /**
- * O modelo fica fora da liberação? O catálogo (conferência abaixo da meta ou componente que o novo não grava) e,
- * na representação lida agora, o componente de alergia ATIVO (D-ALE-1: o novo não grava as alergias do formulário;
- * registrar o modelo aqui perderia a resposta).
+ * O modelo fica fora da liberação? Só pelo catálogo (conferência abaixo da meta ou componente que o novo não grava).
+ * O componente de alergia não desliga mais o modelo (D-ALE-2): a alergia informada nele é gravada na hora, pela
+ * operação pep.registrarAlergia, ligada ao atendimento do registro, e já vale para a prescrição.
  */
 export function motivoDoFormulario(m: ModeloDoRegistro, campos: readonly CampoRegistro[]): string | null {
-  const doCatalogo = modeloForaDaLiberacao(m.codigo);
-  if (doCatalogo) return doCatalogo;
-  const temAlergia = (cs: readonly CampoRegistro[]): boolean =>
-    cs.some((x) => x.tipo === 'alergias' || temAlergia(x.itens ?? []));
-  return temAlergia(campos)
-    ? 'Este modelo tem o componente de alergia, que esta versão ainda não grava: o modelo fica só em consulta até a gravação das alergias.'
-    : null;
+  // Os campos ficam na assinatura para a próxima regra por componente; hoje nenhum componente desliga o modelo.
+  void campos;
+  return modeloForaDaLiberacao(m.codigo);
 }
 
 /** Situação do modelo na administração: o aposentado fica descontinuado; o sem uso recente, não. */

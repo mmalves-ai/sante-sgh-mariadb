@@ -515,6 +515,159 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     hashConteudo: HASH,
   });
 
+  it('reativar (C1-104): a retirada volta à lista com motivo e evento; já ativa e motivo curto recusam', async () => {
+    const r0 = await uma(
+      `SELECT id FROM alergia_paciente WHERE paciente_id = ? AND ativa = FALSE AND alergeno_id = ? AND excluido_em IS NULL
+        ORDER BY id LIMIT 1`,
+      [ids.paciente, ids.alergeno],
+    );
+    const alvo = Number(r0?.['id']);
+    expect(alvo).toBeGreaterThan(0);
+    expect(
+      await codigo(
+        ops()['pep.reativarAlergia']!(
+          C(),
+          { paciente: ids.paciente, alergia: alvo, motivo: 'curto', versao: await versao() },
+          ctx('rcurto'),
+        ),
+      ),
+    ).toBe('entrada-invalida');
+    const r = await ops()['pep.reativarAlergia']!(
+      C(),
+      {
+        paciente: ids.paciente,
+        alergia: alvo,
+        motivo: 'Retirada por engano na admissão',
+        versao: await versao(),
+      },
+      ctx('re'),
+    );
+    expect(r['alergia']).toBe(alvo);
+    const l = await uma(
+      'SELECT ativa, inativado_em, motivo_inativacao, versao, excluido_em FROM alergia_paciente WHERE id = ?',
+      [alvo],
+    );
+    expect(Number(l?.['ativa'])).toBe(1);
+    expect([l?.['inativado_em'], l?.['motivo_inativacao'], l?.['excluido_em']]).toEqual([null, null, null]);
+    expect(Number(l?.['versao'])).toBe(3);
+    const ev = await uma(
+      `SELECT operacao, motivo, usuario_id, JSON_EXTRACT(dados, '$.ativa') AS da,
+              (SELECT COUNT(*) FROM alergia_paciente_evento x WHERE x.alergia_paciente_id = ?) AS n
+         FROM alergia_paciente_evento WHERE alergia_paciente_id = ? AND evento = 'reativacao'`,
+      [alvo, alvo],
+    );
+    expect([ev?.['operacao'], ev?.['motivo']]).toEqual(['alteracao', 'Retirada por engano na admissão']);
+    expect(Number(ev?.['usuario_id'])).toBe(ids.usuario);
+    expect(String(ev?.['da'])).toBe('true');
+    // Histórico inteiro mantido: inclusão, retirada e reativação.
+    expect(Number(ev?.['n'])).toBe(3);
+    const hist = await historicoDaAlergia(nucleo, CLIENTE, C(), ids.paciente, alvo);
+    expect(hist.passos.map((p) => p.titulo)).toEqual(['Registrada', 'Retirada da lista', 'Reativada']);
+    expect(
+      await codigo(
+        ops()['pep.reativarAlergia']!(
+          C(),
+          {
+            paciente: ids.paciente,
+            alergia: alvo,
+            motivo: 'Retirada por engano na admissão',
+            versao: await versao(),
+          },
+          ctx('re2'),
+        ),
+      ),
+    ).toBe('ja-ativa');
+  });
+
+  it('alterar (C1-104) e alergia do formulário sem registro: campos, manifestações e evento; sem mudança recusa', async () => {
+    const r = await ops()['pep.registrarAlergia']!(
+      C(),
+      {
+        paciente: ids.paciente,
+        atendimento: ids.atendimento,
+        cbo: ids.inscricao,
+        nega: false,
+        principios: [],
+        hashConteudo: HASH,
+        descricaoLivre: 'Látex sintético',
+        manifestacoes: [ids.manifestacao],
+        versao: await versao(),
+      },
+      ctx('fo'),
+    );
+    const alvo = Number(r['alergia']);
+    const l0 = await uma(
+      'SELECT registro_assistencial_id, atendimento_id FROM alergia_paciente WHERE id = ?',
+      [alvo],
+    );
+    expect(l0?.['registro_assistencial_id']).toBeNull();
+    expect(Number(l0?.['atendimento_id'])).toBe(ids.atendimento);
+    const pedido = {
+      paciente: ids.paciente,
+      alergia: alvo,
+      gravidade: 'grave',
+      reacao: 'Edema de glote',
+      origem: 'reacao-observada',
+      observacao: null,
+      manifestacoes: [] as number[],
+      motivo: 'Reação observada na enfermaria',
+    };
+    await ops()['pep.alterarAlergia']!(C(), { ...pedido, versao: await versao() }, ctx('al'));
+    const l = await uma(
+      `SELECT gravidade, reacao, fonte_informacao, ativa, versao,
+              (SELECT COUNT(*) FROM alergia_paciente_manifestacao m WHERE m.alergia_paciente_id = ?
+                 AND m.excluido_em IS NULL) AS mv,
+              (SELECT COUNT(*) FROM alergia_paciente_manifestacao m WHERE m.alergia_paciente_id = ?
+                 AND m.excluido_em IS NOT NULL) AS mx
+         FROM alergia_paciente WHERE id = ?`,
+      [alvo, alvo, alvo],
+    );
+    expect([l?.['gravidade'], l?.['reacao'], l?.['fonte_informacao']]).toEqual([
+      'grave',
+      'Edema de glote',
+      'reacao_observada',
+    ]);
+    expect([Number(l?.['ativa']), Number(l?.['versao']), Number(l?.['mv']), Number(l?.['mx'])]).toEqual([
+      1, 2, 0, 1,
+    ]);
+    const ev = await uma(
+      `SELECT operacao, motivo, JSON_EXTRACT(dados, '$.gravidade') AS g, JSON_LENGTH(dados, '$.manifestacoes') AS nm
+         FROM alergia_paciente_evento WHERE alergia_paciente_id = ? AND evento = 'alteracao'`,
+      [alvo],
+    );
+    expect([ev?.['operacao'], ev?.['motivo'], String(ev?.['g']), Number(ev?.['nm'])]).toEqual([
+      'alteracao',
+      'Reação observada na enfermaria',
+      'grave',
+      0,
+    ]);
+    // A manifestação que volta é restaurada (a mesma linha), sem segunda linha.
+    await ops()['pep.alterarAlergia']!(
+      C(),
+      { ...pedido, manifestacoes: [ids.manifestacao], motivo: undefined, versao: await versao() },
+      ctx('al2'),
+    );
+    const m = await consultar(
+      'SELECT excluido_em FROM alergia_paciente_manifestacao WHERE alergia_paciente_id = ?',
+      [alvo],
+    );
+    expect(m.map((x) => x['excluido_em'])).toEqual([null]);
+    expect(
+      await codigo(
+        ops()['pep.alterarAlergia']!(
+          C(),
+          { ...pedido, manifestacoes: [ids.manifestacao], versao: await versao() },
+          ctx('al3'),
+        ),
+      ),
+    ).toBe('sem-mudanca');
+    expect(
+      await codigo(
+        ops()['pep.alterarAlergia']!(C(), { ...pedido, gravidade: 'leve', versao: '' }, ctx('al4')),
+      ),
+    ).toBe('conflito-versao');
+  });
+
   it('receita: número da sequência, conteúdo na linha e documento do prontuário', async () => {
     const r = await ops()['pep.emitirDocumento']!(
       C(),
