@@ -18,6 +18,7 @@ export * from './liberacao/conferencias-ligar.js';
 export * from './consulta/consulta.js';
 export * from './prontidao/prontidao.js';
 export * from './prontidao/documentos.js';
+export * from './prontidao/implantacao.js';
 export * from './homologacao/homologacao.js';
 // M43: fim da coexistência por hospital (regras 1 a 5 e 7: critério, sessões no sistema anterior, sem grupo, painéis).
 export * from './fim-coexistencia/sem-sessao.js';

@@ -137,6 +137,28 @@ export const PERMISSOES_CONFIG_COEXISTENCIA = [
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
     categoria: 'tecnica',
   },
+  // C2-025 (01-ADM L98): kit de implantação do hospital novo (o que falta para operar, metas e o checklist padrão).
+  {
+    codigo: 'implantacao.kit.ler',
+    descricao: 'Ver o diagnóstico da implantação, o que falta para operar e as metas',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: COMITE,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: 'implantacao.kit.editar',
+    descricao: 'Abrir a implantação, recontar os cadastros, ajustar prazos, responsáveis, dispensas e metas',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: 'implantacao.modelo.editar',
+    descricao: 'Editar o checklist padrão de implantação (cadastros mínimos e conferências por módulo)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
 ] as const satisfies readonly DeclaracaoPermissao[];
 
 /** Códigos das permissões do M37. */

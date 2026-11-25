@@ -16,6 +16,8 @@ import {
 } from './conferencia.controller.js';
 import { FILAS_IMPLANTACAO, filasDoAmbiente, type PortaFilasImplantacao } from './filas.js';
 import { FumacaServidorController } from './fumaca.controller.js';
+import { KitImplantacaoController } from './kit-implantacao.controller.js';
+import { PORTA_KIT_IMPLANTACAO, PortaKitImplantacaoPropria } from './kit-implantacao-propria.js';
 import { PORTA_IMPLANTACAO, type PortaImplantacao, portaImplantacaoIndisponivel } from './porta.js';
 import { PortaImplantacaoMemoria } from './porta-memoria.js';
 import { PortaImplantacaoPropria } from './porta-propria.js';
@@ -48,11 +50,19 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloImplantacao = {}
   const porta = opcoes.porta ?? portaDaImplantacao(ctx, scripts);
   return {
     module: ModuloImplantacao,
-    controllers: [ConferenciaInstalacaoController, FumacaServidorController],
+    controllers: [ConferenciaInstalacaoController, FumacaServidorController, KitImplantacaoController],
     providers: [
       { provide: PORTA_IMPLANTACAO, useValue: porta },
       { provide: SCRIPTS_DO_PACOTE, useValue: scripts },
       { provide: FILAS_IMPLANTACAO, useValue: opcoes.filas ?? filasDoAmbiente(ctx.env) },
+      // C2-025 (01-ADM L98): kit de implantação do hospital novo; sem núcleo, 503.
+      {
+        provide: PORTA_KIT_IMPLANTACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaKitImplantacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       VersaoService,
     ],
     exports: [PORTA_IMPLANTACAO],
