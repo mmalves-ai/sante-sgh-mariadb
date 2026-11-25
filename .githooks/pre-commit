@@ -4,6 +4,15 @@
 set -euo pipefail
 RAIZ="$(git rev-parse --show-toplevel)"
 cd "$RAIZ"
+# Trava de apagamento (25/11): o commit eb33b405 de um corretor levou um índice velho e apagou 11 arquivos e 1.732
+# linhas de outras funções. Commit que apaga arquivo só passa com SGH_PERMITIR_APAGAR=1 (apagamento pedido de verdade).
+APAGADOS="$(git diff --cached --diff-filter=D --name-only)"
+if [[ -n "$APAGADOS" && "${SGH_PERMITIR_APAGAR:-}" != 1 ]]; then
+  echo "pre-commit: este commit APAGA arquivos (provável índice velho levando trabalho de outro agente):" >&2
+  echo "$APAGADOS" | sed 's/^/  /' >&2
+  echo "Se o apagamento é da sua função, repita com SGH_PERMITIR_APAGAR=1; senão, refaça com git commit --only <seus arquivos>." >&2
+  exit 1
+fi
 # Em worktree (.git é um arquivo que aponta para <repo>/.git/worktrees/<nome>), o diretório git comum fica
 # fora de RAIZ: monta os dois nos MESMOS caminhos, só leitura, para o git do contêiner achar o repositório.
 COMUM="$(cd "$(git rev-parse --git-common-dir)" && pwd -P)"
