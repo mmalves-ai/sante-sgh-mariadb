@@ -85,8 +85,9 @@ const opGrupos = computed(() => [
 const analitosAtivos = computed(() => props.analitos.filter((a) => a['ativo'] && !a['calculado']));
 
 async function carregar() {
-  grupos.value = (await ler(`${B}/grupos-resposta?termo=`, qualquer)) as Linha[];
-  textos.value = (await ler(`${B}/textos-padrao?exame=${props.exameId}`, qualquer)) as Linha[];
+  const lista = (x: unknown) => (Array.isArray(x) ? (x as Linha[]) : []);
+  grupos.value = lista(await ler(`${B}/grupos-resposta?termo=`, qualquer));
+  textos.value = lista(await ler(`${B}/textos-padrao?exame=${props.exameId}`, qualquer));
 }
 async function tentar(fn: () => Promise<void>, ok: string) {
   erro.value = '';
