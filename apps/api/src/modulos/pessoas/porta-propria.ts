@@ -36,7 +36,7 @@ import {
   restricaoUnicaViolada,
 } from '@sgh/nucleo';
 import { PARENTESCOS_DEPENDENTE } from '@sgh/contratos';
-import { conferirFichaAdmissao } from '@sgh/dominio-pessoas';
+import { conferirFichaAdmissao, conferirIdadeCategoria } from '@sgh/dominio-pessoas';
 import { z } from 'zod';
 import {
   type GravacaoFeita,
@@ -572,18 +572,27 @@ export class PortaPessoasPropria implements PortaPessoas {
           'sexo',
           'Sexo',
         );
+        const linhaCategoria = v.categoria
+          ? await e.uma<{ codigo_esocial: unknown }>(
+              `SELECT id, codigo_esocial FROM categoria_trabalhador WHERE id = ?
+                 AND (vigencia_inicio IS NULL OR vigencia_inicio <= ?) AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+              [v.categoria, v.admissao, v.admissao],
+            )
+          : null;
         const categoria = await doCatalogo(
-          v.categoria
-            ? await e.uma(
-                `SELECT id FROM categoria_trabalhador WHERE id = ?
-                   AND (vigencia_inicio IS NULL OR vigencia_inicio <= ?) AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
-                [v.categoria, v.admissao, v.admissao],
-              )
-            : null,
+          linhaCategoria,
           v.categoria,
           'categoria',
           'Categoria do trabalhador',
         );
+        // Abaixo de 16 anos, só aprendiz: a idade cruzada com o código eSocial da categoria escolhida.
+        const idadeCategoria = conferirIdadeCategoria(
+          v.nascimento!,
+          v.admissao,
+          linhaCategoria?.codigo_esocial == null ? null : texto(linhaCategoria.codigo_esocial),
+        );
+        if (!idadeCategoria.ok)
+          throw recusa(idadeCategoria.recusa, idadeCategoria.mensagem, { campos: [idadeCategoria.campo] });
         const tipoVinculo = await doCatalogo(
           v.tipoVinculoTrabalho
             ? await e.uma(

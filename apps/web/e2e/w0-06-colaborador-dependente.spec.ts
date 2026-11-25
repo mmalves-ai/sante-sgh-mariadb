@@ -94,6 +94,14 @@ test.describe('W0-06 (parte 3a-3): correção do colaborador e versão do depend
     await page.getByLabel('Carga semanal (horas)').fill('36');
     await escolher(page.getByTestId('admissao-centro-custo'), { indice: 0 });
     await page.getByLabel('Matrícula').fill(`W6-${sufixo}`);
+    // C1-111: a ficha do eSocial (nascimento, sexo, grau de instrução, categoria, natureza do vínculo e salário).
+    await page.getByLabel('Data de nascimento').fill('20/08/1995');
+    await page.getByLabel('Data de nascimento').press('Tab');
+    await escolher(page.getByTestId('admissao-sexo'), { rotulo: 'Feminino' });
+    await escolher(page.getByTestId('admissao-grau-instrucao'), { rotulo: /^09 - / });
+    await escolher(page.getByTestId('admissao-categoria'), { rotulo: /^101 - / });
+    await escolher(page.getByTestId('admissao-natureza'), { rotulo: /^Empregatício/ });
+    await page.getByLabel('Salário-base (R$)').fill('1024,09');
     await page.getByTestId('admissao-revisar').click();
     await page.getByTestId('admissao-gravar').click();
     await expect(page.getByTestId('admissao-concluida')).toBeVisible();
@@ -124,9 +132,18 @@ test.describe('W0-06 (parte 3a-3): correção do colaborador e versão do depend
     await page.getByTestId('abrir-dependente').click();
     const fd = page.getByTestId('form-dependente');
     await fd.getByLabel('Nome completo').fill(dependente);
+    // C1-111: filho com mais de 21 anos no tipo 03 da tabela 07: a tela sugere o 04 e o usuário confirma.
+    await fd.getByLabel('Nascimento').fill('10/05/2000');
+    await fd.getByLabel('Nascimento').press('Tab');
+    await escolher(page.getByTestId('dependente-parentesco'), { rotulo: /^Filho\(a\) ou enteado\(a\)$/ });
+    await expect(page.getByTestId('dependente-sugestao')).toContainText('tipo 04');
+    await page.getByTestId('dependente-usar-sugestao').click();
+    await expect(page.getByTestId('dependente-sugestao')).toHaveCount(0);
+    // Volta à criança de 6 anos no tipo 03 (sem sugestão).
     await fd.getByLabel('Nascimento').fill('10/05/2020');
     await fd.getByLabel('Nascimento').press('Tab');
     await escolher(page.getByTestId('dependente-parentesco'), { rotulo: /^Filho\(a\) ou enteado\(a\)$/ });
+    await expect(page.getByTestId('dependente-sugestao')).toHaveCount(0);
     await page.getByTestId('dependente-gravar').click();
     const linha = page.getByTestId('ficha-dependentes').locator('tr', { hasText: dependente });
     await expect(linha).toBeVisible();

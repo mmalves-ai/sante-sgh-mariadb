@@ -248,4 +248,9 @@ export interface ResultadoPessoas {
   readonly mensagem: string;
   /** Revisão W0-06: o efeito na fila do eSocial da correção de matrícula ou admissão (S-2200/S-2300). */
   readonly esocial?: EfeitoEsocialSesmt;
+  /**
+   * C1-111: o tipo de dependente do eSocial (tabela 07) escolhido não bate com a idade (ex.: filho com mais de 21 anos
+   * no tipo 03). Gravado como o usuário confirmou; a tela mostra o aviso com o tipo sugerido.
+   */
+  readonly avisoTipoDependente?: { readonly sugerido: string; readonly motivo: string };
 }

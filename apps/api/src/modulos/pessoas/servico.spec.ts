@@ -95,6 +95,13 @@ const admissao = (extra: Record<string, unknown> = {}) => ({
   matricula: 'SINT-S-001',
   profissional: C.comLogin.profissional as number | null,
   usuario: idUsuarioSintetico(C.comLogin.login) as number | null,
+  // C1-111: a ficha do eSocial (a porta em memória não confere; a própria, no .int.spec).
+  nascimento: '1990-05-17' as string | null,
+  sexo: null,
+  grauInstrucao: '09' as string | null,
+  categoria: null,
+  tipoVinculoTrabalho: null,
+  salario: 4200.5 as number | null,
   ...extra,
 });
 const desligamento = (vinculo: number) => ({
@@ -238,6 +245,43 @@ describe('serviço da gestão de pessoas (corretor do M52.1)', () => {
         (x: unknown) => x,
       );
     expect(outro).toMatchObject({ problema: { status: 409, codigo: 'desatualizado' } });
+  });
+
+  it('C1-111 tipo de dependente da tabela 07 fora da idade: grava o que o usuário confirmou e devolve o aviso com o sugerido', async () => {
+    const { servico, porta } = montar();
+    const h = 't-dep-tipo-idade';
+    const v = (await servico.admitir(sessao(h), admissao({ admissao: '2026-09-01' }))).id;
+    porta.hojeFixo = '2026-09-01';
+    const dep = (extra: Record<string, unknown>) => ({
+      vinculo: v,
+      nome: 'FILHO SINTETICO',
+      nascimento: '2020-05-10',
+      parentesco: '03',
+      cpf: null,
+      dependenteIr: false,
+      dependenteSalarioFamilia: false,
+      ...extra,
+    });
+    // Filho de 6 anos no tipo 03: sem aviso.
+    const ok = await servico.incluirDependente(sessao(h), dep({}));
+    expect(ok.avisoTipoDependente).toBeUndefined();
+    // Filho de 23 anos no tipo 03: grava e sugere o 04 (universitário até 24 anos).
+    const velho = await servico.incluirDependente(
+      sessao(h),
+      dep({ nome: 'FILHA SINTETICA', nascimento: '2003-01-15' }),
+    );
+    expect(velho.id).toBeGreaterThan(0);
+    expect(velho.avisoTipoDependente).toMatchObject({ sugerido: '04' });
+    // A alteração para o tipo 04 com a mesma idade não avisa mais.
+    porta.hojeFixo = '2026-10-25';
+    const alt = await servico.alterarDependente(sessao(h), {
+      vinculo: v,
+      dependente: velho.id,
+      desde: '2026-10-01',
+      parentesco: '04',
+      motivo: 'Tipo confirmado pela matrícula na faculdade',
+    });
+    expect(alt.avisoTipoDependente).toBeUndefined();
   });
 
   it('o dependente se encerra com data e motivo (sai da ficha, nunca apagado); repetir dá 404; data futura, 409', async () => {

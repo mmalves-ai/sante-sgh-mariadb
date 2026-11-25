@@ -197,6 +197,7 @@ export const mensagensPessoas = {
     novoCpf: 'Novo CPF (em branco mantém o atual)',
     retirarCpf: 'Retirar o CPF',
     alterado: 'Dependente alterado: versão nova registrada.',
+    usarTipo: 'Usar o tipo {tipo}',
   },
   correcao: {
     abrir: 'Corrigir cadastro',

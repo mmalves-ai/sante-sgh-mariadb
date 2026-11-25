@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { conferirFichaAdmissao, idadeEm, sugerirTipoDependente } from './ficha-admissao.js';
+import {
+  conferirFichaAdmissao,
+  conferirIdadeCategoria,
+  idadeEm,
+  sugerirTipoDependente,
+} from './ficha-admissao.js';
 
 const base = { nascimento: '1990-05-10', admissao: '2026-11-02', grauInstrucao: '07', salario: 3500.5 };
 
@@ -25,6 +30,33 @@ describe('ficha da admissão', () => {
       recusa: 'idade-minima',
     });
     expect(conferirFichaAdmissao({ ...base, nascimento: '2012-11-02' })).toEqual({ ok: true });
+  });
+
+  it('abaixo de 16 anos só como aprendiz (categoria 103); a partir de 16, qualquer categoria', () => {
+    const quinze = { ...base, nascimento: '2011-06-01' };
+    expect(conferirFichaAdmissao({ ...quinze, categoriaEsocial: '101' })).toMatchObject({
+      recusa: 'idade-minima-aprendiz',
+      campo: 'categoria',
+    });
+    expect(conferirFichaAdmissao({ ...quinze, categoriaEsocial: null })).toMatchObject({
+      recusa: 'idade-minima-aprendiz',
+    });
+    expect(conferirFichaAdmissao({ ...quinze, categoriaEsocial: '103' })).toEqual({ ok: true });
+    expect(conferirIdadeCategoria('2010-11-02', '2026-11-02', '101')).toEqual({ ok: true });
+    expect(conferirIdadeCategoria('2010-11-03', '2026-11-02', '101')).toMatchObject({
+      recusa: 'idade-minima-aprendiz',
+    });
+    expect(conferirFichaAdmissao({ ...base, categoriaEsocial: '101' })).toEqual({ ok: true });
+  });
+
+  it('aceita salários com centavos que o ponto flutuante não representa exato', () => {
+    for (const salario of [1024.09, 1024.1, 2345.67, 1412, 0.01, 9999.99, 1000.07])
+      expect(conferirFichaAdmissao({ ...base, salario })).toEqual({ ok: true });
+    // Varredura: todo valor com até duas casas entre 1000,00 e 1999,99 passa.
+    let recusados = 0;
+    for (let c = 100_000; c < 200_000; c++)
+      if (!conferirFichaAdmissao({ ...base, salario: Number((c / 100).toFixed(2)) }).ok) recusados++;
+    expect(recusados).toBe(0);
   });
 
   it('recusa grau de instrução fora do código oficial e salário zerado, negativo ou com centavos a mais', () => {

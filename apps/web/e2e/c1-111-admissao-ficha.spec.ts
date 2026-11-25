@@ -1,7 +1,8 @@
 // E2E @C1-111 (ficha docs/fases/fichas/F78-07-financeiro-pessoas.md, 07-RH linha 163): a admissão pela ficha rápida
 // (/pessoas/colaboradores/admitir) pede, além do CPF, do cargo e da lotação, o que o contrato de trabalho exige no
 // eSocial: nascimento, sexo, grau de instrução, categoria do trabalhador, natureza do vínculo e salário. A regra do
-// domínio (`conferirFichaAdmissao`) confere na hora: idade abaixo da mínima segura a revisão com o aviso; corrigida, o
+// domínio (`conferirFichaAdmissao`) confere na hora: idade abaixo da mínima (14; 16 fora da categoria de aprendiz)
+// segura a revisão com o aviso; salário com centavos como 1.024,09 passa; corrigida, o
 // resumo mostra a ficha e o pedido leva todos os campos. As respostas são simuladas pelo Playwright com massa
 // SINTÉTICA (CPF de dígito calculado sobre base inventada). O efeito no banco (colaborador, vínculo, histórico, reuso
 // do CPF da rede e a versão nova do dependente) está em apps/api/src/modulos/pessoas/porta-propria.int.spec.ts.
@@ -49,7 +50,10 @@ async function simular(page: Page, pedidos: Record<string, unknown>[]): Promise<
         { codigo: 1, rotulo: 'Feminino' },
         { codigo: 2, rotulo: 'Masculino' },
       ],
-      categoriasTrabalhador: [{ codigo: 101, rotulo: '101 - Empregado geral' }],
+      categoriasTrabalhador: [
+        { codigo: 101, rotulo: '101 - Empregado geral' },
+        { codigo: 103, rotulo: '103 - Aprendiz' },
+      ],
       tiposVinculoTrabalho: [{ codigo: 10101, rotulo: 'Empregatício: celetista (prazo indeterminado)' }],
       janelaAlertaDias: 30,
       gravacao: { ligada: true, motivo: null },
@@ -92,7 +96,8 @@ test.describe('admissão pela ficha rápida com a ficha do eSocial @C1-111', () 
     await escolher(page.getByTestId('admissao-grau-instrucao'), { rotulo: /^07 - / });
     await escolher(page.getByTestId('admissao-categoria'), { rotulo: /^101 - / });
     await escolher(page.getByTestId('admissao-natureza'), { rotulo: /^Empregatício/ });
-    await page.getByLabel('Salário-base (R$)').fill('3.850,75');
+    // Centavos que o ponto flutuante não representa exato (1024,09) são aceitos.
+    await page.getByLabel('Salário-base (R$)').fill('1.024,09');
 
     // Nascimento que dá menos de 14 anos na admissão: o aviso aparece e a revisão fica segurada.
     const menor = new Date();
@@ -101,6 +106,17 @@ test.describe('admissão pela ficha rápida com a ficha do eSocial @C1-111', () 
     await page.getByLabel('Data de nascimento').press('Tab');
     await expect(page.getByTestId('admissao-ficha-erro')).toContainText('ao menos 14 anos');
     await expect(page.getByTestId('admissao-revisar')).toBeDisabled();
+
+    // 15 anos: na categoria 101 recusa (abaixo de 16 só aprendiz); na 103 (aprendiz) passa.
+    const quinze = new Date();
+    quinze.setFullYear(quinze.getFullYear() - 15);
+    await page.getByLabel('Data de nascimento').fill(br(quinze));
+    await page.getByLabel('Data de nascimento').press('Tab');
+    await expect(page.getByTestId('admissao-ficha-erro')).toContainText('só vale como aprendiz');
+    await expect(page.getByTestId('admissao-revisar')).toBeDisabled();
+    await escolher(page.getByTestId('admissao-categoria'), { rotulo: /^103 - / });
+    await expect(page.getByTestId('admissao-ficha-erro')).toHaveCount(0);
+    await escolher(page.getByTestId('admissao-categoria'), { rotulo: /^101 - / });
 
     await page.getByLabel('Data de nascimento').fill('20/08/1995');
     await page.getByLabel('Data de nascimento').press('Tab');
@@ -112,7 +128,7 @@ test.describe('admissão pela ficha rápida com a ficha do eSocial @C1-111', () 
     await expect(resumo).toContainText('20/08/1995');
     await expect(resumo).toContainText('101 - Empregado geral');
     await expect(resumo).toContainText('Empregatício: celetista');
-    await expect(page.getByTestId('admissao-resumo-salario')).toContainText('3.850,75');
+    await expect(page.getByTestId('admissao-resumo-salario')).toContainText('1.024,09');
     await page.getByTestId('admissao-gravar').click();
     await expect(page.getByTestId('admissao-concluida')).toBeVisible();
 
@@ -123,7 +139,7 @@ test.describe('admissão pela ficha rápida com a ficha do eSocial @C1-111', () 
       grauInstrucao: '07',
       categoria: 101,
       tipoVinculoTrabalho: 10101,
-      salario: 3850.75,
+      salario: 1024.09,
       matricula: 'C1111-01',
       cargaSemanalHoras: 36,
     });

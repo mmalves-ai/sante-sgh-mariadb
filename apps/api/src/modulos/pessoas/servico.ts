@@ -61,6 +61,7 @@ import {
   piorSituacao,
   planejarDesligamento,
   situacaoHabilitacao,
+  sugerirTipoDependente,
   vinculoAtivo,
 } from '@sgh/dominio-pessoas';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -1024,7 +1025,13 @@ export class ServicoPessoas {
         }),
       }),
     );
-    return { id: r.id, mensagem: 'Dependente incluído.' };
+    // O tipo da tabela 07 é o que o usuário confirmou; quando não bate com a idade, volta o aviso com o sugerido.
+    const sugestao = sugerirTipoDependente(e.parentesco, e.nascimento, hoje);
+    return {
+      id: r.id,
+      mensagem: 'Dependente incluído.',
+      ...(sugestao ? { avisoTipoDependente: sugestao } : {}),
+    };
   }
 
   /** Fim do dependente (nunca apagado): a data não futura nem antes do nascimento, o motivo e quem registrou. */
@@ -1151,7 +1158,12 @@ export class ServicoPessoas {
         return { id };
       },
     );
-    return { id: r.id, mensagem: 'Dependente alterado; a versão anterior ficou guardada até a véspera.' };
+    const sugestao = sugerirTipoDependente(novo.parentesco, novo.nascimento, e.desde);
+    return {
+      id: r.id,
+      mensagem: 'Dependente alterado; a versão anterior ficou guardada até a véspera.',
+      ...(sugestao ? { avisoTipoDependente: sugestao } : {}),
+    };
   }
 
   // ── Desligamento (regra 2) ──────────────────────────────────────────────────────────────────────────────────

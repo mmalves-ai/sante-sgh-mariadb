@@ -21,6 +21,7 @@ import {
   type CorrecaoColaboradorLida,
   type TipoVinculo,
 } from '@sgh/contratos';
+import { sugerirTipoDependente } from '@sgh/dominio-pessoas';
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteData, SanteDialogo, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -145,6 +146,10 @@ const dEntrada = computed(() =>
     dependenteSalarioFamilia: dSf.value,
   }),
 );
+// C1-111: o tipo da tabela 07 do eSocial não sai só do parentesco (idade): a tela sugere e o usuário confirma.
+const sugestaoTipo = (p: ParentescoDependente | null, nasc: string | null, dia: string | null | undefined) =>
+  p && nasc && dia && nasc < dia ? sugerirTipoDependente(p, nasc, dia) : null;
+const dSugestao = computed(() => sugestaoTipo(dParentesco.value, dNascimento.value, a.value?.hoje));
 async function gravarDependente(): Promise<void> {
   if (!dEntrada.value.success) return;
   dErro.value = null;
@@ -348,6 +353,7 @@ const aEntrada = computed(() => {
     motivo: aMotivo.value.trim(),
   });
 });
+const aSugestao = computed(() => sugestaoTipo(aParentesco.value, aNascimento.value, aDesde.value));
 async function gravarAlteracao(): Promise<void> {
   const e = aEntrada.value;
   if (!e?.success || alterandoId.value === null) return;
@@ -874,6 +880,20 @@ const tipoRescisao = (c: number) => a.value?.tiposRescisao.find((x) => x.codigo 
             obrigatorio
             data-testid="alterar-dependente-parentesco"
           />
+          <SanteAlerta
+            v-if="aSugestao"
+            :texto="aSugestao.motivo"
+            variante="info"
+            anunciar
+            data-testid="alterar-dependente-sugestao"
+          />
+          <SanteBotao
+            v-if="aSugestao"
+            :rotulo="t('pessoas.dependentes.usarTipo', { tipo: aSugestao.sugerido })"
+            variante="secundario"
+            data-testid="alterar-dependente-usar-sugestao"
+            @acionar="aParentesco = aSugestao.sugerido as ParentescoDependente"
+          />
           <SanteCampoTexto
             v-if="!aRetirarCpf"
             v-model="aCpf"
@@ -981,6 +1001,20 @@ const tipoRescisao = (c: number) => a.value?.tiposRescisao.find((x) => x.codigo 
             :opcoes="opcoesParentesco"
             obrigatorio
             data-testid="dependente-parentesco"
+          />
+          <SanteAlerta
+            v-if="dSugestao"
+            :texto="dSugestao.motivo"
+            variante="info"
+            anunciar
+            data-testid="dependente-sugestao"
+          />
+          <SanteBotao
+            v-if="dSugestao"
+            :rotulo="t('pessoas.dependentes.usarTipo', { tipo: dSugestao.sugerido })"
+            variante="secundario"
+            data-testid="dependente-usar-sugestao"
+            @acionar="dParentesco = dSugestao.sugerido as ParentescoDependente"
           />
           <SanteCampoTexto
             v-model="dCpf"

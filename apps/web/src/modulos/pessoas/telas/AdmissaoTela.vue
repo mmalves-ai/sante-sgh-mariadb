@@ -91,6 +91,12 @@ const opcoesCatalogo = (xs: readonly { codigo: number; rotulo: string }[] | unde
 const opcoesSexo = computed(() => opcoesCatalogo(a.value?.sexos));
 const opcoesCategoria = computed(() => opcoesCatalogo(a.value?.categoriasTrabalhador));
 const opcoesNatureza = computed(() => opcoesCatalogo(a.value?.tiposVinculoTrabalho));
+// O código eSocial da categoria abre o rótulo do catálogo ("101 - Empregado geral"): abaixo de 16 anos, só aprendiz.
+const categoriaEsocial = computed(() =>
+  categoria.value === null
+    ? undefined
+    : (opcoesCategoria.value.find((o) => o.valor === categoria.value)?.rotulo.split(' - ')[0] ?? null),
+);
 const ficha = computed(() =>
   admissao.value
     ? conferirFichaAdmissao({
@@ -98,6 +104,7 @@ const ficha = computed(() =>
         admissao: admissao.value,
         grauInstrucao: grauInstrucao.value,
         salario: salarioNumero.value,
+        categoriaEsocial: categoriaEsocial.value,
       })
     : null,
 );

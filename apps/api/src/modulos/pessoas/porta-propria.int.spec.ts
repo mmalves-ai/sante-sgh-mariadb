@@ -144,6 +144,13 @@ async function montarMassa(nucleo: NucleoProprio): Promise<Massa> {
       { codigo_esocial: '101' },
       { descricao: 'Empregado geral (teste)', grupo: 'empregado' },
     );
+    // C1-111: o aprendiz (abaixo de 16 anos só nessa categoria).
+    await garantir(
+      e,
+      'categoria_trabalhador',
+      { codigo_esocial: '103' },
+      { descricao: 'Aprendiz (teste)', grupo: 'empregado' },
+    );
     const centro = await novo('centro_custo', {
       estabelecimento_id: est,
       codigo: `CC${SUFIXO}`,
@@ -677,6 +684,10 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
         (await l.uma<{ id: number }>("SELECT id FROM categoria_trabalhador WHERE codigo_esocial = '101'"))!
           .id,
       ),
+      aprendiz: Number(
+        (await l.uma<{ id: number }>("SELECT id FROM categoria_trabalhador WHERE codigo_esocial = '103'"))!
+          .id,
+      ),
       tipoVinculo: Number(
         (await l.uma<{ id: number }>("SELECT id FROM tipo_vinculo_trabalho WHERE codigo_cnes = '010101'"))!
           .id,
@@ -733,6 +744,23 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
     // A ficha incompleta ou fora do modelo recusa sem gravar.
     expect(await codigo(admitir(ficha(novoCpf, { nascimento: null })))).toBe('nascimento-obrigatorio');
     expect(await codigo(admitir(ficha(novoCpf, { nascimento: '2015-01-01' })))).toBe('idade-minima');
+    // 15 anos: CLT na categoria 101 (empregado geral) recusa; como aprendiz (103) passa da idade e para no cargo.
+    expect(await codigo(admitir(ficha(novoCpf, { nascimento: '2011-06-01' })))).toBe('idade-minima-aprendiz');
+    expect(
+      await codigo(
+        admitir(
+          ficha(novoCpf, {
+            nascimento: '2011-06-01',
+            categoria: ids.aprendiz,
+            cargo: 'Cargo que não existe',
+          }),
+        ),
+      ),
+    ).toBe('cargo-inexistente');
+    // Salário com centavos que o ponto flutuante não representa exato não é recusado (para no cargo).
+    expect(await codigo(admitir(ficha(novoCpf, { salario: 1024.09, cargo: 'Cargo que não existe' })))).toBe(
+      'cargo-inexistente',
+    );
     expect(await codigo(admitir(ficha(novoCpf, { salario: 0 })))).toBe('salario-invalido');
     expect(await codigo(admitir(ficha(novoCpf, { tipo: 'pj' })))).toBe('tipo-invalido');
     expect(await codigo(admitir(ficha(novoCpf, { sexo: null })))).toBe('sexo-inexistente');
