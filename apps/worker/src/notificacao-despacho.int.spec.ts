@@ -5,6 +5,8 @@
 // - o ciclo seguinte não reenvia o mesmo aviso pelo mesmo canal;
 // - sem provedor do canal, o envio fica "falhou" com o motivo e a tentativa contada;
 // - fora de produção, o envio do canal externo fica "capturado" e nada sai.
+// - o envio que falhou volta a pendente só depois da espera e é entregue de novo (falha passageira: nova tentativa
+//   contada, erro limpo na entrega); com as tentativas esgotadas, não repete mais.
 // Massa sintética (prefixo L76D), apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -160,5 +162,56 @@ describe.skipIf(SEM_BANCO)('despachante da notificação por regra sobre o banco
     expect(saiu).toBe(0);
     const [, , terceiro] = await envios();
     expect(terceiro).toMatchObject({ situacao: 'capturado', tentativas: 1, q: 2, itens: 2 });
+  });
+
+  it('falha passageira: o envio que falhou repete depois da espera e é entregue com a tentativa contada', async () => {
+    const em = (horas: number) => new Date(Date.now() + horas * 3_600_000);
+    const ok = { email: async () => undefined };
+    // Ainda dentro da espera (15 min por tentativa): não repete.
+    const cedo = await cicloDespacho(porta, est, { producao: true, agora: new Date(), entregadores: ok });
+    expect(cedo).toMatchObject({ repetidos: 0, entregues: 0, falhas: 0 });
+    expect((await envios())[1]).toMatchObject({ situacao: 'falhou', tentativas: 1 });
+    // Passada a espera, repete; o SMTP falha de novo: volta a "falhou", com a segunda tentativa contada.
+    const caiu = await cicloDespacho(porta, est, {
+      producao: true,
+      agora: em(2),
+      entregadores: {
+        email: async () => {
+          throw new Error('smtp fora do ar');
+        },
+      },
+    });
+    expect(caiu).toMatchObject({ repetidos: k, falhas: k, entregues: 0 });
+    const segundo = (await envios())[1];
+    expect(segundo).toMatchObject({ situacao: 'falhou', tentativas: 2 });
+    expect(String(segundo?.['erro'])).toContain('Falha na entrega');
+    // Mais adiante, o SMTP voltou: repete e entrega; o erro sai do envio.
+    const voltou = await cicloDespacho(porta, est, { producao: true, agora: em(4), entregadores: ok });
+    expect(voltou).toMatchObject({ repetidos: k, entregues: k, falhas: 0 });
+    expect((await envios())[1]).toMatchObject({
+      situacao: 'enviado',
+      tentativas: 3,
+      erro: null,
+      q: 1,
+      itens: 1,
+    });
+  });
+
+  it('tentativas esgotadas: o envio que falhou não repete mais', async () => {
+    await escrever(nucleo, (e) =>
+      e.executar(
+        `UPDATE envio_notificacao en JOIN canal_notificacao c ON c.id = en.canal_notificacao_id
+            SET en.situacao = 'falhou', en.tentativas = 5
+          WHERE en.estabelecimento_id = ? AND c.codigo = ? AND en.situacao = 'enviado' AND en.quantidade_avisos = 1`,
+        [ids.est, `${P}E`],
+      ),
+    );
+    const r = await cicloDespacho(porta, est, {
+      producao: true,
+      agora: new Date(Date.now() + 48 * 3_600_000),
+      entregadores: { email: async () => undefined },
+    });
+    expect(r.repetidos).toBe(0);
+    expect((await envios())[1]).toMatchObject({ situacao: 'falhou', tentativas: 5 });
   });
 });

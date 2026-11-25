@@ -9,6 +9,9 @@
 //   fora de produção fica "capturado" (nada sai); em produção fica pendente para a entrega.
 // - notificacao.despacho_entrega: o resultado da entrega do envio pendente de canal externo (enviado ou falhou, com a
 //   tentativa contada pela regra do domínio).
+// - notificacao.despacho_repetir: o envio de canal externo que falhou volta a pendente pela regra do domínio (evento
+//   "repetir", até TENTATIVAS_MAXIMAS), depois de uma espera que cresce com as tentativas; a entrega do mesmo ciclo o
+//   leva de novo. Assim a falha passageira (o SMTP fora do ar) não deixa o aviso sem nova tentativa.
 import { randomUUID } from 'node:crypto';
 import {
   type AvisoPendente,
@@ -16,6 +19,7 @@ import {
   consolidarAvisos,
   type SituacaoEnvio,
   situacaoInicialEnvio,
+  TENTATIVAS_MAXIMAS,
   tentativasApos,
   transicaoEnvio,
 } from '@sgh/dominio-acesso';
@@ -24,6 +28,8 @@ import { z } from 'zod';
 import { type AlvoEstabelecimento, estabelecimentosAtivos, type NucleoWorker } from './servico-worker.js';
 
 const TETO = 5000;
+/** Espera antes de repetir o envio que falhou, por tentativa já feita (1 tentativa: 15 min; 2: 30 min; ...). */
+export const ESPERA_REPETIR_MINUTOS = 15;
 const FLAG_CANAL: Readonly<Record<string, string>> = {
   central: 'notifica_tela',
   painel: 'notifica_tela',
@@ -64,6 +70,8 @@ export interface PortaDespachoNotificacao {
     agora: Date,
   ): Promise<ResultadoConsolidacao>;
   pendentes(est: AlvoEstabelecimento, limite: number): Promise<EnvioPendente[]>;
+  /** Volta a pendente os envios de canal externo que falharam, ainda com tentativas e já passada a espera. */
+  repetirFalhas(est: AlvoEstabelecimento, agora: Date, limite: number): Promise<number>;
   registrarEntrega(
     est: AlvoEstabelecimento,
     envio: number,
@@ -83,6 +91,11 @@ const ENTRADA_CONSOLIDAR = z.object({
   canal: z.string().min(1).max(30),
   producao: z.boolean(),
   agora: z.string().min(10),
+});
+const ENTRADA_REPETIR = z.object({
+  estabelecimento: z.number().int().positive(),
+  envio: z.number().int().positive(),
+  versao: z.number().int().positive(),
 });
 const ENTRADA_ENTREGA = z.object({
   estabelecimento: z.number().int().positive(),
@@ -124,9 +137,34 @@ export class PortaDespachoNotificacaoPropria implements PortaDespachoNotificacao
         situacao: t.nova,
         tentativas: tentativasApos(atual, evento, n(x['tentativas'])),
       };
-      if (e.erro === null) valores['enviado_em'] = new Date();
-      else valores['erro'] = e.erro;
+      if (e.erro === null) {
+        valores['enviado_em'] = new Date();
+        valores['erro'] = null;
+      } else valores['erro'] = e.erro;
       await tx.alterar('envio_notificacao', e.envio, e.versao, valores);
+      return { situacao: t.nova };
+    },
+    alvo: (e) => ({ tabela: 'envio_notificacao', id: e.envio }),
+  });
+
+  private readonly opRepetir = definirOperacao<z.infer<typeof ENTRADA_REPETIR>, { situacao: string }>({
+    nome: 'notificacao.despacho_repetir',
+    tabelas: ['envio_notificacao'],
+    entrada: ENTRADA_REPETIR,
+    gravar: async (tx, e) => {
+      const [x] = await tx.consultarParaAtualizar(
+        'SELECT id, versao, situacao, tentativas FROM envio_notificacao WHERE id = ? AND estabelecimento_id = ?',
+        [e.envio, e.estabelecimento],
+        { teto: 1 },
+      );
+      if (!x) return { situacao: 'inexistente' };
+      const atual = String(x['situacao']) as SituacaoEnvio;
+      const t = transicaoEnvio(atual, 'repetir', n(x['tentativas']));
+      if ('recusa' in t) return { situacao: atual };
+      await tx.alterar('envio_notificacao', e.envio, n(x['versao']), {
+        situacao: t.nova,
+        tentativas: tentativasApos(atual, 'repetir', n(x['tentativas'])),
+      });
       return { situacao: t.nova };
     },
     alvo: (e) => ({ tabela: 'envio_notificacao', id: e.envio }),
@@ -215,6 +253,33 @@ export class PortaDespachoNotificacaoPropria implements PortaDespachoNotificacao
         };
       }),
     );
+  }
+
+  async repetirFalhas(est: AlvoEstabelecimento, agora: Date, limite: number): Promise<number> {
+    const candidatos = await this.ler(est.id, (l) =>
+      l.consultar(
+        `SELECT en.id, en.versao FROM envio_notificacao en
+           JOIN canal_notificacao c ON c.id = en.canal_notificacao_id
+          WHERE en.estabelecimento_id = ? AND en.situacao = 'falhou' AND c.externo AND c.ativo
+            AND en.tentativas < ?
+            AND TIMESTAMPADD(MINUTE, ? * en.tentativas, COALESCE(en.alterado_em, en.ocorrido_em)) <= ?
+          ORDER BY en.ocorrido_em, en.id
+          LIMIT ${Math.max(1, Math.min(limite, 500))}`,
+        [est.id, TENTATIVAS_MAXIMAS, ESPERA_REPETIR_MINUTOS, agora],
+        { teto: 500 },
+      ),
+    );
+    let repetidos = 0;
+    for (const x of candidatos) {
+      const r = await this.executor.executar(
+        this.opRepetir,
+        this.cliente,
+        { estabelecimento: est.id, envio: n(x['id']), versao: n(x['versao']) },
+        this.ctx(est.id, `repetir.${n(x['id'])}`),
+      );
+      if (r.resultado.situacao === 'pendente') repetidos++;
+    }
+    return repetidos;
   }
 
   async registrarEntrega(est: AlvoEstabelecimento, envio: number, versao: number, erro: string | null) {

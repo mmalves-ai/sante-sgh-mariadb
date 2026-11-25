@@ -4,7 +4,9 @@
 // fora dela a consolidação já grava o envio como "capturado" e nada sai. Em produção, o e-mail sai por SMTP (SMTP_URL),
 // com só a contagem dos avisos e o convite para abrir o sistema (nunca nome de paciente nem texto clínico); o
 // destinatário sem e-mail, ou o canal sem provedor configurado (mensagem no celular e aplicativo), tem o envio
-// registrado como falha com o motivo, visível no histórico da tela. Ligado fora de dev/ci; em dev/ci só com
+// registrado como falha com o motivo, visível no histórico da tela. O envio que falhou volta a pendente nos ciclos
+// seguintes (evento "repetir" do domínio, até TENTATIVAS_MAXIMAS, com espera crescente) e é entregue de novo. O
+// remetente é o EMAIL_REMETENTE, o mesmo dos outros e-mails do worker. Ligado fora de dev/ci; em dev/ci só com
 // NOTIFICACAO_DESPACHO=ligado. Log só com contagens.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { NucleoProprio } from '@sgh/nucleo';
@@ -44,6 +46,7 @@ export interface ResultadoDespacho {
   readonly avisos: number;
   readonly aguardando: number;
   readonly retidos: number;
+  readonly repetidos: number;
   readonly entregues: number;
   readonly falhas: number;
 }
@@ -76,9 +79,11 @@ export async function cicloDespacho(
     aguardando += r.aguardando;
     retidos += r.retidos;
   }
+  let repetidos = 0;
   let entregues = 0;
   let falhas = 0;
   if (o.producao) {
+    repetidos = await porta.repetirFalhas(est, agora, LOTE_ENTREGA);
     for (const p of await porta.pendentes(est, LOTE_ENTREGA)) {
       let erro: string | null = null;
       const entregar = p.tipo === 'email' ? o.entregadores.email : undefined;
@@ -97,7 +102,7 @@ export async function cicloDespacho(
       else falhas++;
     }
   }
-  return { envios, avisos, aguardando, retidos, entregues, falhas };
+  return { envios, avisos, aguardando, retidos, repetidos, entregues, falhas };
 }
 
 export type FabricaPortaDespacho = (cliente: string) => PortaDespachoNotificacao;
@@ -123,7 +128,7 @@ export class NotificacaoDespachoService implements OnApplicationBootstrap, OnApp
       const nucleo = new NucleoProprio({ env: process.env });
       const producao = (process.env['AMBIENTE'] ?? '').trim() === 'producao';
       const smtp = process.env['SMTP_URL']?.trim();
-      const de = process.env['SMTP_REMETENTE']?.trim() || 'nao-responda@sgh.invalid';
+      const de = process.env['EMAIL_REMETENTE']?.trim() || 'nao-responda@sgh.invalid';
       const email =
         producao && smtp
           ? (para: string, assunto: string, texto: string) => enviarSmtp(smtp, { de, para, assunto, texto })
@@ -158,7 +163,7 @@ export class NotificacaoDespachoService implements OnApplicationBootstrap, OnApp
           ),
       );
       for (const v of voltas)
-        if (v.resultado.envios > 0 || v.resultado.falhas > 0)
+        if (v.resultado.envios > 0 || v.resultado.falhas > 0 || v.resultado.repetidos > 0)
           logger.info(
             { cliente: v.cliente, estabelecimento: v.estabelecimento, ...v.resultado },
             'notificação despachada',

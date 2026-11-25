@@ -31,6 +31,7 @@ describe.skipIf(SEM_BANCO)('regra de alerta global com escopo por estabeleciment
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-l76e' }, async (e) => {
       const regras = `SELECT id FROM regra_alerta WHERE codigo LIKE '${P}%'`;
       await e.executar(`DELETE FROM regra_alerta_destinatario WHERE regra_alerta_id IN (${regras})`, []);
+      await e.executar(`DELETE FROM assinatura_alerta WHERE regra_alerta_id IN (${regras})`, []);
       await e.executar(`DELETE FROM regra_alerta_versao WHERE regra_alerta_id IN (${regras})`, []);
       await e.executar(`DELETE FROM regra_alerta_estabelecimento WHERE regra_alerta_id IN (${regras})`, []);
       await e.executar(`DELETE FROM regra_alerta WHERE codigo LIKE '${P}%'`, []);
@@ -191,5 +192,18 @@ describe.skipIf(SEM_BANCO)('regra de alerta global com escopo por estabeleciment
     expect([consultaB.ativo, consultaB.usuarios]).toEqual([true, 0]);
     expect((await daPrescricao(`${P}A`)).ativa).toBe(false);
     expect((await daPrescricao(`${P}B`)).ativa).toBe(true);
+  });
+
+  it('a assinatura feita em B conta só em B: a contagem de usuários de A não muda', async () => {
+    const antesA = (await daConsulta(`${P}A`)).usuarios;
+    const antesB = (await daConsulta(`${P}B`)).usuarios;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l76e' }, (e) =>
+      e.inserir(
+        'INSERT INTO assinatura_alerta (usuario_id, regra_alerta_id, estabelecimento_id, ativo, criado_em) VALUES (?, ?, ?, TRUE, ?)',
+        [ids.usuario, ids.regra, ids.estB, new Date()],
+      ),
+    );
+    expect((await daConsulta(`${P}A`)).usuarios).toBe(antesA);
+    expect((await daConsulta(`${P}B`)).usuarios).toBe(antesB + 1);
   });
 });
