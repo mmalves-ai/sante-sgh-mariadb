@@ -2,6 +2,7 @@
 import { mensagensAgencia } from './i18n-agencia.js';
 import { mensagensPedido } from './i18n-pedido.js';
 import { mensagensLimites } from './i18n-limites.js';
+import { mensagensLoteTrabalho } from './i18n-lote-trabalho.js';
 import { mensagensTransfusao } from './i18n-transfusao.js';
 
 export const mensagensSadt = {
@@ -201,11 +202,17 @@ export const mensagensSadt = {
     faixa: 'Faixa de referência',
     intervalo: '{de} a {ate}',
     gravado: 'Resultado digitado.',
+    gravadoCritico:
+      'Resultado digitado. Valor crítico: o aviso foi aberto para a comunicação ao responsável.',
     bloqueado: 'Resultado liberado: só a retificação muda o valor.',
     dataInvalida: 'Há data antiga inválida neste resultado: confira antes de liberar.',
     fora: 'Fora da referência',
-    criticoAviso: 'Valor crítico: o aviso sai ao responsável na liberação.',
+    criticoAviso: 'Valor crítico: o aviso é aberto ao gravar, para a comunicação ao responsável.',
     variaveis: 'Variáveis de fórmula',
+    calculado: 'Calculado pela fórmula: {formula}',
+    respostaPadrao: 'Resposta padrão',
+    textoPadrao: 'Inserir texto padrão na observação',
+    escolha: 'Escolha',
     importar:
       'A importação de equipamento fica para a interface do laboratório (decisão pendente): digite os valores.',
   },
@@ -216,10 +223,13 @@ export const mensagensSadt = {
     liberar: 'Liberar',
     confirmarCritico: 'Vi o valor crítico e confirmo a liberação',
     liberado: 'Resultado liberado.',
+    liberadoCritico: 'Resultado liberado. O aviso do valor crítico segue no painel até a comunicação.',
     retificar: 'Retificar',
     retificarTitulo: 'Retificar o resultado liberado',
     retificarTexto: 'A versão anterior fica guardada com o motivo, e quem já tinha visto é avisado.',
-    retificado: 'Resultado retificado.',
+    retificado: 'Resultado retificado. Quem já tinha visto foi avisado.',
+    retificadoCritico:
+      'Resultado retificado com valor crítico: o aviso foi aberto e quem já tinha visto foi avisado.',
     versoes: 'Versões',
     versao: 'Versão {n} em {em}{motivo}',
     viramAntes: '{n} pessoa(s) tinham visto antes',
@@ -386,4 +396,6 @@ export const mensagensSadt = {
   // F3.5: pedido de exames, cancelamento do item e recoleta.
   pedido: mensagensPedido,
   limites: mensagensLimites,
+  // F3.5: lote de trabalho da bancada no mapa de trabalho.
+  lote: mensagensLoteTrabalho,
 };

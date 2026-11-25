@@ -13,6 +13,7 @@ import { reterExame, soltarExame } from '../api-mapa-trabalho.js';
 import { coletarAmostra, lerColeta, lerMapaTrabalho, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
+import LotesTrabalhoPainel from '../componentes/LotesTrabalhoPainel.vue';
 import PacienteSadt from '../componentes/PacienteSadt.vue';
 import { hojeLocal, quando, usarSadt } from '../usar-sadt.js';
 
@@ -237,6 +238,12 @@ async function coletar(indice: number): Promise<void> {
             </template>
           </li>
         </ul>
+        <LotesTrabalhoPainel
+          v-if="b.codigo !== null"
+          :bancada="b.codigo"
+          :data="data"
+          :tem-fila="b.exames.length > 0"
+        />
       </div>
     </template>
     <p v-if="mensagem" role="status" data-testid="coleta-mensagem">{{ mensagem }}</p>
