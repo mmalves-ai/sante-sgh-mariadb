@@ -3,7 +3,8 @@
 //   - endereços, telefones e e-mails: vários por tipo, um principal por espécie (escolhido com um clique), vigência do
 //     endereço, aceite de mensagem e de comunicação (LGPD) declarados no ato; "Tirar de uso" nunca apaga;
 //   - responsáveis, familiares e contatos: pessoa única pelo CPF (o nome só para CPF novo), papel, parentesco, poderes
-//     (sugeridos pelo papel), vigência e as pendências (menor sem representante, comprovante ausente).
+//     (sugeridos pelo papel), vigência e as pendências (menor sem representante, incapaz sem curador, comprovante
+//     ausente); a incapacidade do paciente e o envio do comprovante ficam no bloco RepresentacaoPaciente.
 // A validação aparece na hora (antes de gravar); o servidor confere tudo de novo pela regra do domínio.
 import { tipoDoProblema } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
@@ -13,6 +14,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
+import RepresentacaoPaciente from '../componentes/RepresentacaoPaciente.vue';
 import {
   ajustarContato,
   encerrarResponsavel,
@@ -80,6 +82,7 @@ const { t } = useI18n({
       pend: {
         'menor-sem-representante':
           'Paciente menor de idade sem responsável legal, guardião ou tutor vigente.',
+        'incapaz-sem-curador': 'Paciente com incapacidade registrada e sem curador vigente.',
         'comprovante-ausente': 'Guarda, tutela ou curatela sem o comprovante anexado.',
       },
       erro: {
@@ -584,6 +587,8 @@ async function confirmarEncerramento(): Promise<void> {
         />
       </form>
     </section>
+
+    <RepresentacaoPaciente :paciente="paciente" />
   </section>
 </template>
 
