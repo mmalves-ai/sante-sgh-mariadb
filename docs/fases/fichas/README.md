@@ -18,6 +18,23 @@ e o motivo), o E2E verde e a revisão sem achado alto aberto (ficha da fase, `do
 | [F3.9 Apoio](F3.9-apoio.md) | 67 | 44 | 23 | 0 | integrar-1 (25/11, lotes 1 e 2): 5 arquivos de E2E das funções verdes, vermelhos: f39-impressao-justificada, não rodados: c1-045-conta-senha-inicial, c1-106-cargas-datamart, f39-email-sistema; 3 funções passaram a cobertas | Sim: corrigidos só na ficha (01-ADM L57/L59, 04-HOT L126 a L128, permissões por letra, gravações da qualidade) | Não |
 | **Total** | **255** | **120** | **135** | **0** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
 
+## Fichas F7 e F8 (F78)
+
+Situação recontada por script na integrar-1, grupo C (25/11), pelas linhas de cada ficha `F78-*.md` (coluna Fase). Colunas F7 e F8: cobertas/parciais/faltam.
+
+| Ficha | Linhas | F7 (cob/par/falta) | F8 (cob/par/falta) | Cobertas | E2E |
+| --- | ---: | ---: | ---: | ---: | --- |
+| [01 Administração, segurança e BI](F78-01-administracao.md) | 10 | 0/1/1 | 2/3/3 | 2 | integrar-1 (25/11, lotes 1 e 2): 2 de 2 arquivos de E2E das funções verdes; 2 de 3 funções da construir-1 passaram a cobertas |
+| [02 Cadastro, recepção e agenda](F78-02-cadastro-recepcao-agenda.md) | 19 | 1/4/0 | 6/5/3 | 7 | integrar-1 (25/11, lotes 1 e 2): 5 de 8 arquivos de E2E das funções verdes; vermelhos: c1-080-regulacao-recebidos, f78-linhas-cuidado; não rodados: c1-107-cotas-prazos; 5 de 8 funções da construir-1 passaram a cobertas |
+| [03 Prontuário](F78-03-prontuario.md) | 23 | 3/5/0 | 5/3/7 | 8 | integrar-1 (25/11, lotes 1 e 2): 4 de 6 arquivos de E2E das funções verdes; vermelhos: c1-031-reconciliacao-lista, c1-096-reuso-dialisador; 4 de 7 funções da construir-1 passaram a cobertas |
+| [04 Internação, centro cirúrgico e hotelaria](F78-04-internacao-cc-hotelaria.md) | 33 | 7/5/5 | 8/1/7 | 15 | integrar-1 (25/11, lotes 1 e 2): 6 de 9 arquivos de E2E das funções verdes; vermelhos: c1-065-isolamento-bloqueio-quarto, c1-131-ocorrencias-entrega; não rodados: c1-108-comunicacao-operadora; 6 de 11 funções da construir-1 passaram a cobertas |
+| [05 Diagnóstico e suprimentos](F78-05-diagnostico-suprimentos.md) | 19 | 2/4/4 | 2/5/2 | 4 | integrar-1 (25/11, lotes 1 e 2): 2 de 6 arquivos de E2E das funções verdes; vermelhos: c1-032-contrato-pedido, c1-067-soroteca; não rodados: c1-083-cultura-antibiograma, c1-118-enderecamento-separacao; 2 de 9 funções da construir-1 passaram a cobertas |
+| [06 Faturamento](F78-06-faturamento.md) | 24 | 4/8/3 | 2/3/4 | 6 | integrar-1 (25/11, lotes 1 e 2): 2 de 2 arquivos de E2E das funções verdes; 3 de 4 funções da construir-1 passaram a cobertas |
+| [07 Financeiro e pessoas](F78-07-financeiro-pessoas.md) | 42 | 18/5/3 | 5/6/5 | 23 | integrar-1 (25/11, lotes 1 e 2): 6 de 11 arquivos de E2E das funções verdes; vermelhos: c1-034-encontro-contas, c1-069-cessao-recebiveis, c1-119-sesmt-dosimetria-quimio; não rodados: c1-084-conta-corrente-paciente, c1-129-orcamento-estatistico; 5 de 10 funções da construir-1 passaram a cobertas |
+| [08 Operadora e integrações](F78-08-operadora-integracoes.md) | 25 | 2/15/2 | 0/2/4 | 2 | integrar-1 (25/11, lotes 1 e 2): 0 de 3 arquivos de E2E das funções verdes; vermelhos: c1-071-operadora-cadastro-complementar; não rodados: c1-036-declaracoes-ans, c1-086-reajuste-coletivo; 0 de 6 funções da construir-1 passaram a cobertas |
+| [09 Completude](F78-09-completude.md) | 18 | 2/3/2 | 3/6/2 | 5 | integrar-1 (25/11, lotes 1 e 2): 3 de 5 arquivos de E2E das funções verdes; vermelhos: c1-017-perfil-cid; não rodados: f31-demografia-paciente; 3 de 9 funções da construir-1 passaram a cobertas |
+| **Total** | **213** | **39/50/20** | **33/34/37** | **72** | |
+
 ## Integração (24/11)
 
 - `ciclo_competencia_fonte_pagadora` (F3.7, migração 12_FAT/92) entrou no catálogo. `validar_migracoes.py`: 3.700
