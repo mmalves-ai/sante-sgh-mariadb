@@ -119,6 +119,7 @@ const SQL_SUMARIOS = `SELECT id, situacao, alta_medica_em, registrado_em FROM su
   ORDER BY registrado_em DESC, id DESC LIMIT 200`;
 
 const SQL_RESULTADOS = `SELECT r.id, r.situacao, r.liberado_em, ex.nome AS exame_nome FROM resultado_exame r
+  JOIN setor_diagnostico sd ON sd.id = r.setor_diagnostico_id AND sd.estabelecimento_id = ?
   JOIN exame_item ei ON ei.id = r.exame_item_id JOIN exame ex ON ex.id = ei.exame_id
   WHERE r.paciente_id = ? AND r.excluido_em IS NULL AND r.situacao = 'liberado'
   ORDER BY r.liberado_em DESC, r.id DESC LIMIT 200`;
@@ -244,7 +245,7 @@ export class PortaRndsEnvioPropria extends BaseComunicacaoPropria {
           acoes: acoesDo(envio, bloqueio),
         });
       }
-      for (const r of await l.consultar(SQL_RESULTADOS, [paciente], { teto: 200 })) {
+      for (const r of await l.consultar(SQL_RESULTADOS, [est, paciente], { teto: 200 })) {
         const envio = porRegistro.get(`resultado_exame:${num(r['id'])}`) ?? null;
         const bloqueio = motivoBloqueioRnds('resultado_exame', String(r['situacao']), id);
         documentos.push({
@@ -287,9 +288,13 @@ export class PortaRndsEnvioPropria extends BaseComunicacaoPropria {
               [e.registro, est],
             )
           : await tx.uma(
-              `SELECT id, paciente_id, NULL AS atendimento_id, liberado_por_profissional_id AS profissional, situacao
-                 FROM resultado_exame WHERE id = ? AND excluido_em IS NULL`,
-              [e.registro],
+              // O resultado pertence ao estabelecimento pelo setor diagnóstico que o liberou.
+              `SELECT r.id, r.paciente_id, NULL AS atendimento_id, r.liberado_por_profissional_id AS profissional,
+                  r.situacao
+                 FROM resultado_exame r
+                 JOIN setor_diagnostico sd ON sd.id = r.setor_diagnostico_id AND sd.estabelecimento_id = ?
+                WHERE r.id = ? AND r.excluido_em IS NULL`,
+              [est, e.registro],
             );
       if (!reg) throw naoEncontrado(e.tipo === 'sumario_alta' ? 'Sumário de alta' : 'Resultado de exame');
       const paciente = num(reg['paciente_id']);

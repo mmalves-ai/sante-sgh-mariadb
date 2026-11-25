@@ -16,23 +16,32 @@ import { PortaRndsEnvioPropria } from './rnds-envio-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'c2085api';
+const P2 = 'c2085ap2'; // outro estabelecimento do mesmo cliente (isolamento)
 const CPF = '52998224725'; // sintético, dígitos válidos
 
 async function limpar(e: Escritor): Promise<void> {
-  const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+  const est = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
+  const setores = `(SELECT id FROM setor_diagnostico WHERE estabelecimento_id IN ${est})`;
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
     await e.executar(
       `DELETE v FROM envio_rnds_versao v JOIN envio_rnds en ON en.id = v.envio_rnds_id WHERE en.estabelecimento_id IN ${est}`,
-      [P],
+      [P, P2],
     );
-    await e.executar(`DELETE FROM envio_rnds WHERE estabelecimento_id IN ${est}`, [P]);
-    await e.executar(`DELETE FROM integracao_mensagem WHERE estabelecimento_id IN ${est}`, [P]);
-    await e.executar(`DELETE FROM sumario_alta WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM envio_rnds WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM integracao_mensagem WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM sumario_alta WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(
+      `DELETE ei FROM exame_item ei JOIN resultado_exame r ON r.exame_item_id = ei.id
+        WHERE r.setor_diagnostico_id IN ${setores}`,
+      [P, P2],
+    );
+    await e.executar(`DELETE FROM resultado_exame WHERE setor_diagnostico_id IN ${setores}`, [P, P2]);
+    await e.executar(`DELETE FROM setor_diagnostico WHERE estabelecimento_id IN ${est}`, [P, P2]);
     await e.executar("DELETE FROM paciente WHERE observacao = 'c2085api'");
     await e.executar("DELETE FROM pessoa_fisica WHERE observacao = 'c2085api'");
-    await limparTrilhaDaMassa(e, { codigos: [P] });
-    await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+    await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+    await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
   }
@@ -49,6 +58,9 @@ describe.skipIf(SEM_BANCO)('Pedido de envio à RNDS (contrato de efeito)', () =>
     sumario: number;
     rascunho: number;
     outro: number;
+    resultado: number;
+    resultadoOutroEst: number;
+    sumarioOutroEst: number;
   };
   const ctx = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P, hospital: P });
   const ler = (sql: string, p: unknown[] = []) =>
@@ -64,6 +76,11 @@ describe.skipIf(SEM_BANCO)('Pedido de envio à RNDS (contrato de efeito)', () =>
         `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
          VALUES (?, 'Hospital Teste', 'Hospital sintético (fictício)', 'America/Sao_Paulo', ?)`,
         [P, agora],
+      );
+      const est2 = await e.inserir(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, 'Hospital Teste B', 'Hospital sintético B (fictício)', 'America/Sao_Paulo', ?)`,
+        [P2, agora],
       );
       const us = await e.uma('SELECT MIN(id) AS id FROM usuario WHERE excluido_em IS NULL');
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
@@ -88,13 +105,13 @@ describe.skipIf(SEM_BANCO)('Pedido de envio à RNDS (contrato de efeito)', () =>
         const at = await e.uma('SELECT MIN(id) AS id FROM atendimento');
         const prof = await e.uma('SELECT MIN(id) AS id FROM profissional');
         let versao = 90;
-        const sumario = async (pac: number, situacao: string) =>
+        const sumario = async (pac: number, situacao: string, estab = est) =>
           e.inserir(
             `INSERT INTO sumario_alta (estabelecimento_id, atendimento_id, paciente_id, numero_versao, situacao,
                responsavel_profissional_id, registrado_em, situacao_diagnostico, estado_resolucao, obito, finalizado_em,
                criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmado', 'melhorado', FALSE, ?, ?)`,
             [
-              est,
+              estab,
               Number(at!['id']),
               pac,
               ++versao,
@@ -105,7 +122,32 @@ describe.skipIf(SEM_BANCO)('Pedido de envio à RNDS (contrato de efeito)', () =>
               agora,
             ],
           );
+        // Resultado liberado no setor de cada estabelecimento: o de B não aparece nem pode ser pedido em A.
+        // Um item de pedido próprio por resultado (o resultado é único por item); exame real do catálogo da base.
+        const exame = await e.uma('SELECT MIN(id) AS id FROM exame');
+        let seq = 0;
+        const item = () =>
+          e.inserir(
+            `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, situacao, liberado_em, criado_em)
+             VALUES (0, ?, ?, 'liberado', ?, ?)`,
+            [++seq, Number(exame!['id']), agora, agora],
+          );
+        const setor = (estab: number, codigo: string) =>
+          e.inserir(
+            `INSERT INTO setor_diagnostico (estabelecimento_id, codigo, nome, tipo, criado_em)
+             VALUES (?, ?, 'Laboratório sintético', 'laboratorio', ?)`,
+            [estab, codigo, agora],
+          );
+        const resultado = async (setorId: number) =>
+          e.inserir(
+            `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, resultado_em, situacao,
+               liberado_em, liberado_por_profissional_id, criado_em) VALUES (?, ?, ?, ?, 'liberado', ?, ?, ?)`,
+            [await item(), paciente, setorId, agora, agora, Number(prof!['id']), agora],
+          );
         return {
+          resultado: await resultado(await setor(est, 'c2085a')),
+          resultadoOutroEst: await resultado(await setor(est2, 'c2085b')),
+          sumarioOutroEst: await sumario(paciente, 'assinado', est2),
           est,
           usuario: Number(us!['id']),
           paciente,
@@ -254,5 +296,37 @@ describe.skipIf(SEM_BANCO)('Pedido de envio à RNDS (contrato de efeito)', () =>
     await expect(
       porta.solicitar(ctx(), { tipo: 'sumario_alta', registro: m.outro, operacao: 'original' }),
     ).rejects.toThrow();
+  });
+
+  it('isolamento: resultado e sumário de outro estabelecimento não aparecem e o pedido é 404 sem gravar', async () => {
+    const v = await porta.paciente(ctx(), m.paciente);
+    const resultados = v.documentos.filter((d) => d.tipo === 'resultado_exame').map((d) => d.registro);
+    expect(resultados).toContain(m.resultado);
+    expect(resultados).not.toContain(m.resultadoOutroEst);
+    expect(v.documentos.map((d) => d.registro)).not.toContain(m.sumarioOutroEst);
+    const ests = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
+    const contar = async () => {
+      const [x] = await ler(
+        `SELECT (SELECT COUNT(*) FROM envio_rnds WHERE estabelecimento_id IN ${ests}) AS e,
+           (SELECT COUNT(*) FROM envio_rnds_versao v JOIN envio_rnds en ON en.id = v.envio_rnds_id
+             WHERE en.estabelecimento_id IN ${ests}) AS v,
+           (SELECT COUNT(*) FROM integracao_mensagem WHERE estabelecimento_id IN ${ests}) AS i`,
+        [P, P2, P, P2, P, P2],
+      );
+      return [Number(x!['e']), Number(x!['v']), Number(x!['i'])];
+    };
+    const antes = await contar();
+    for (const pedido of [
+      { tipo: 'resultado_exame' as const, registro: m.resultadoOutroEst, operacao: 'original' as const },
+      {
+        tipo: 'resultado_exame' as const,
+        registro: m.resultadoOutroEst,
+        operacao: 'cancelamento' as const,
+        motivo: 'Pedido indevido de outro hospital',
+      },
+      { tipo: 'sumario_alta' as const, registro: m.sumarioOutroEst, operacao: 'original' as const },
+    ])
+      await expect(porta.solicitar(ctx(), pedido)).rejects.toMatchObject({ problema: { status: 404 } });
+    expect(await contar()).toEqual(antes);
   });
 });
