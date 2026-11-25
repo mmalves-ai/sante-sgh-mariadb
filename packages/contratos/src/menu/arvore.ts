@@ -145,7 +145,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-123 (06-SUS L61): o item "Habilitações e serviços do estabelecimento" do faturamento SUS entrou à mão (mesmo
 // motivo; F7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":508,"M":198,"P":57,"N":253};
+// C2-124 (06-SUS L64): o item "RAAS psicossocial e domiciliar" do faturamento SUS entrou à mão (mesmo
+// motivo; F8 vai como fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":509,"M":198,"P":57,"N":254};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -410,6 +412,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.faturamento-sus.ciha-comunicacao-de-informacao-hospitalar","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","CIHA"],"titulo":"CIHA","selo":"N","fase":5,"rota":"/faturamento/sus/ciha","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.faturamento-sus.contratualizacao-sus-metas-e-incentivos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Contratualização SUS"],"titulo":"Contratualização SUS","selo":"P","fase":6,"rota":"/faturamento/sus/contratualizacao","permissao":"faturamento.contratualizacao.ler"},
   {"id":"faturamento.faturamento-sus.programacao-fisico-orcamentaria-tetos-e-cotas","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Programação, tetos e cotas"],"titulo":"Programação, tetos e cotas","selo":"N","fase":7,"rota":"/faturamento/sus/programacao","permissao":"faturamento.susProgramacao.ler"},
+  {"id":"faturamento.faturamento-sus.raas-atencao-psicossocial-e-domiciliar","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","RAAS psicossocial e domiciliar"],"titulo":"RAAS psicossocial e domiciliar","selo":"N","fase":7,"rota":"/faturamento/sus/raas","permissao":"faturamento.susRaas.ler"},
   {"id":"faturamento.faturamento-sus.historico-de-competencias-sigtap","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Histórico de competências SIGTAP"],"titulo":"Histórico de competências SIGTAP","selo":"M","fase":1,"rota":"/faturamento/sus/sigtap","permissao":"catalogo.item.ler"},
   {"id":"faturamento.faturamento-sus.medicos-solicitantes-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Médicos solicitantes SUS"],"titulo":"Médicos solicitantes SUS","selo":"P","fase":5,"rota":"/faturamento/sus/solicitantes","permissao":"faturamento.susSolicitante.ler"},
   {"id":"faturamento.faturamento-sus.transplantes-central-estadual","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Transplantes para a central estadual"],"titulo":"Transplantes para a central estadual","selo":"N","fase":7,"rota":"/faturamento/sus/transplantes","permissao":"faturamento.susTransplante.ler"},
