@@ -102,12 +102,17 @@ export function lerModelo(raiz = RAIZ): ModeloBanco {
   const tabelas = new Set<string>();
   const exclusaoLogica = new Set<string>();
   const clinicas = new Set<string>();
+  const retiradas = new Set<string>();
   const ddl = resolve(raiz, PASTA_DDL);
   for (const f of arquivos(ddl, /\.sql$/)) {
     const pasta = relative(ddl, f).split(/[\\/]/)[0] ?? '';
-    const partes = readFileSync(f, 'utf8')
-      .split(/\bCREATE TABLE\s+(?:IF NOT EXISTS\s+)?/i)
-      .slice(1);
+    const texto = readFileSync(f, 'utf8');
+    // A tabela retirada por DROP TABLE numa migração posterior sai do modelo (nenhum código pode mais usá-la).
+    for (const m of texto
+      .replace(/^\s*--.*$/gm, '')
+      .matchAll(/\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?`?([a-z][a-z0-9_]*)`?/gi))
+      if (m[1]) retiradas.add(m[1].toLowerCase());
+    const partes = texto.split(/\bCREATE TABLE\s+(?:IF NOT EXISTS\s+)?/i).slice(1);
     for (const p of partes) {
       const m = /^`?([a-z][a-z0-9_]*)`?\s*\(/.exec(p);
       if (!m?.[1]) continue;
@@ -116,6 +121,11 @@ export function lerModelo(raiz = RAIZ): ModeloBanco {
       const corpo = p.slice(0, Math.max(0, p.search(/\n\)/)));
       if (/^\s*excluido_em\s/m.test(corpo)) exclusaoLogica.add(m[1]);
     }
+  }
+  for (const t of retiradas) {
+    tabelas.delete(t);
+    exclusaoLogica.delete(t);
+    clinicas.delete(t);
   }
   return { tabelas, exclusaoLogica, clinicas };
 }

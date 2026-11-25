@@ -97,14 +97,25 @@ export function exclusaoLogicaPorAlter(sql: string): Set<string> {
   return r;
 }
 
+/** Tabelas retiradas do modelo por uma migração posterior (`DROP TABLE [IF EXISTS] <t>`). */
+export function tabelasRetiradas(sql: string): Set<string> {
+  const r = new Set<string>();
+  for (const m of semComentarios(sql).matchAll(/\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?`?([A-Za-z0-9_]+)`?/gi))
+    if (m[1]) r.add(m[1].toLowerCase());
+  return r;
+}
+
 /**
  * As tabelas do modelo a partir de TODAS as migrações (as de criação e as posteriores): a tabela criada num arquivo e
- * que ganha `excluido_em` por ALTER TABLE em outro fica com a exclusão lógica.
+ * que ganha `excluido_em` por ALTER TABLE em outro fica com a exclusão lógica; a retirada por DROP TABLE numa migração
+ * posterior sai do modelo (não recebe concessão: o GRANT numa tabela que não existe falharia na implantação).
  */
 export function tabelasDoModelo(ddls: readonly string[]): TabelaDoModelo[] {
   const porAlter = new Set(ddls.flatMap((d) => [...exclusaoLogicaPorAlter(d)]));
+  const retiradas = new Set(ddls.flatMap((d) => [...tabelasRetiradas(d)]));
   return ddls
     .flatMap(tabelasDoDdl)
+    .filter((t) => !retiradas.has(t.tabela.toLowerCase()))
     .map((t) => (porAlter.has(t.tabela.toLowerCase()) ? { ...t, exclusaoLogica: true } : t));
 }
 

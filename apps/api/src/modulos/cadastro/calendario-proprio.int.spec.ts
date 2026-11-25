@@ -5,8 +5,8 @@
 // inativar exige motivo e não apaga (a linha fica, inativa, e sai do que a agenda pula); reativar volta; as datas móveis
 // saem uma por ano e gerar de novo não duplica; e o leitor comum da agenda de consultas e de exames passa a pular o dia.
 // O dia de outro estabelecimento só se mantém na sessão dele (incluir, alterar e inativar recusados de fora; a visão não
-// o lista). A migração 05_AGE/90 (o texto do arquivo, restrito à massa) copia a linha da tabela anterior, e inativar a
-// cópia no Calendário tira o dia do que a agenda pula, com a linha antiga ainda ativa; o estadual sem UF não vem.
+// o lista). A migração 05_AGE/91 retira a tabela anterior ao cadastro único (DROP TABLE IF EXISTS: idempotente), e
+// o dia de data única do Calendário vale na agenda e sai dela quando inativado.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { readFileSync } from 'node:fs';
 import { NucleoProprio } from '@sgh/nucleo';
@@ -82,10 +82,7 @@ describe.skipIf(SEM_BANCO)('calendário de dias não úteis no banco próprio (f
 
   async function limparMinhas(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
-      e
-        .executar('DELETE FROM dia_nao_util WHERE descricao LIKE ?', [`${DESC}%`])
-        .then(() => e.executar('DELETE FROM feriado WHERE nome LIKE ?', [`${DESC}%`]))
-        .then(() => undefined),
+      e.executar('DELETE FROM dia_nao_util WHERE descricao LIKE ?', [`${DESC}%`]).then(() => undefined),
     );
   }
 
@@ -231,46 +228,24 @@ describe.skipIf(SEM_BANCO)('calendário de dias não úteis no banco próprio (f
     expect((await pulados()).some((x) => x.data === `${ANO}-06-20`)).toBe(true);
   });
 
-  it('migração 05_AGE/90: copia a linha da tabela anterior; inativar a cópia tira o dia da agenda; estadual de sigla sem UF cadastrada não vem', async () => {
-    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, async (e) => {
-      // O estadual de sigla sem UF cadastrada não tem alvo (o CHECK da tabela anterior já exige a sigla).
-      await e.executar(
-        `INSERT INTO feriado (data, nome, abrangencia, uf, estabelecimento_id, ponto_facultativo, criado_em)
-         VALUES (?, ?, 'estabelecimento', NULL, ?, FALSE, NOW(3)), (?, ?, 'estadual', 'ZZ', NULL, FALSE, NOW(3))`,
-        [`${ANO}-07-07`, `${DESC} LEGADO`, m!.estabelecimento, `${ANO}-07-08`, `${DESC} SEMUF`],
-      );
-      // O texto da migração, restrito às linhas desta massa (a cópia é idempotente: rodar de novo não duplica).
-      const sql = readFileSync(
-        new URL('../../../../../db/migracoes/05_AGE/90_dia_nao_util_unico_tabelas.sql', import.meta.url),
-        'utf8',
-      );
-      const copia = sql
-        .slice(
-          sql.indexOf('INSERT INTO dia_nao_util'),
-          sql.indexOf(';', sql.indexOf('INSERT INTO dia_nao_util')),
-        )
-        .trim();
-      await e.executar(`${copia} AND f.nome LIKE ?`, [`${DESC}%`]);
-      await e.executar(`${copia} AND f.nome LIKE ?`, [`${DESC}%`]);
-    });
-    const copias = await nucleo.lerSomente({ cliente: CLIENTE_F22, correlacao: COR }, (l) =>
-      l.consultar<{ id: unknown; descricao: unknown; versao: unknown }>(
-        "SELECT id, descricao, versao FROM dia_nao_util WHERE descricao IN (?, ?) AND recorrencia = 'data_unica'",
-        [`${DESC} LEGADO`, `${DESC} SEMUF`],
-      ),
+  it('migração 05_AGE/91: a tabela anterior saiu do banco; o Calendário é o cadastro único que a agenda lê', async () => {
+    const sql = readFileSync(
+      new URL('../../../../../db/migracoes/05_AGE/91_retirar_feriado_chaves.sql', import.meta.url),
+      'utf8',
     );
-    expect(copias.map((x) => String(x.descricao))).toEqual([`${DESC} LEGADO`]);
-    expect((await pulados()).some((x) => x.data === `${ANO}-07-07`)).toBe(true);
-    const id = Number(copias[0]!.id);
-    await s.situacao(
-      c(),
-      { id, versao: Number(copias[0]!.versao), ativo: false, motivo: 'Não vale mais' },
-      t(),
-    );
-    // A linha antiga segue ativa, e a agenda e os exames deixam de pular o dia: o Calendário é o cadastro único.
+    expect(sql).toMatch(/^DROP TABLE IF EXISTS feriado;$/m);
     expect(
-      await um<{ ativo: unknown }>('SELECT ativo FROM feriado WHERE nome = ?', [`${DESC} LEGADO`]),
-    ).toMatchObject({ ativo: 1 });
+      await um<{ n: unknown }>(
+        "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'feriado'",
+        [],
+      ),
+    ).toMatchObject({ n: 0 });
+    // Um dia de data única do Calendário vale na agenda; inativado, sai (a linha fica).
+    const id = await s.incluir(c(), entrada({ descricao: `${DESC} UNICO`, data: `${ANO}-07-07` }), t());
+    expect((await pulados()).some((x) => x.data === `${ANO}-07-07`)).toBe(true);
+    const l = await linha(id);
+    await s.situacao(c(), { id, versao: Number(l!['versao']), ativo: false, motivo: 'Não vale mais' }, t());
+    expect(await linha(id)).toMatchObject({ ativo: 0 });
     expect((await pulados()).some((x) => x.data === `${ANO}-07-07`)).toBe(false);
   });
 });

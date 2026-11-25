@@ -3514,7 +3514,6 @@ chave_busca_nome	CAD	item	F3	Palavras e chaves fonéticas dos nomes para a busca
 dispositivo_recepcao	REC	configuracao	F3	Dispositivo de painel ou totem da recepção (token por resumo)	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
 dispositivo_recepcao_gerador	REC	vinculo	F3	Serviços que o totem oferece	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
 dispositivo_recepcao_local	REC	vinculo	F3	Locais de atendimento que o painel mostra	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
-feriado	AGE	configuracao	F3	Congelada: feriados anteriores ao cadastro único, copiados para dia_nao_util; só leitura até sair	F2.2 onda 1 (pedido de lote; db/migracoes); substituída por dia_nao_util (migração 05_AGE/90_dia_nao_util_unico, F3.1-6)	02	0
 inclusao_protocolo_registro	PEP	item	F3	Metas, checklist e encerramento do protocolo gerenciado do paciente	F2.2 onda 1 (pedido de lote; db/migracoes)	03	0
 liberacao_chave	ADM	configuracao	F3	Chave de liberação de operação ou recurso por estabelecimento e escopo	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
 liberacao_lote	ADM	historico	F3	Lote reversível de mudança das chaves de liberação, com justificativa	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0

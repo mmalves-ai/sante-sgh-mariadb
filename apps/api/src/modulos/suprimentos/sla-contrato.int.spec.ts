@@ -218,14 +218,15 @@ describe.skipIf(SEM_DB)('SLA do contrato com fornecedor contra o MariaDB (client
   });
 
   it('mede os chamados pelo tempo coberto e apura o período com faixa, glosa e multa gravadas', async () => {
-    // Sexta 17h a segunda 9h30: 2,5 h cobertas (no prazo). Terça 8h às 14h: 6 h (fora do prazo de 4 h).
+    // Sexta 13/11 17h a segunda 16/11 9h30: 2,5 h cobertas (no prazo; a sexta 20/11 é feriado nacional da Consciência
+    // Negra, que o leitor comum do Calendário pula). Terça 8h às 14h: 6 h (fora do prazo de 4 h).
     const m1 = await porta.medir(
       ctxA,
       contrato,
       slaNovo,
       {
-        inicio: '2026-11-20T17:00',
-        fim: '2026-11-23T09:30',
+        inicio: '2026-11-13T17:00',
+        fim: '2026-11-16T09:30',
         quantidade: null,
         descricao: 'Bomba de infusão parada',
       },
@@ -248,7 +249,7 @@ describe.skipIf(SEM_DB)('SLA do contrato com fornecedor contra o MariaDB (client
       "SELECT tipo_ocorrencia, duracao_horas, usuario_id, DATE_FORMAT(ocorrido_em, '%Y-%m-%dT%H:%i') AS em FROM ocorrencia_contrato WHERE id = ?",
       [m1.id],
     );
-    expect(o).toMatchObject({ tipo_ocorrencia: 'atraso', em: '2026-11-20T17:00' });
+    expect(o).toMatchObject({ tipo_ocorrencia: 'atraso', em: '2026-11-13T17:00' });
     expect(Number(o!['duracao_horas'])).toBe(2.5);
     expect(Number(o!['usuario_id'])).toBe(usuario);
     // Medição no futuro: recusada.

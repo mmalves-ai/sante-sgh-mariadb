@@ -38,6 +38,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 
 export const PORTA_SLA_CONTRATO = Symbol('PORTA_SLA_CONTRATO');
@@ -291,19 +292,18 @@ async function apuracoesDe(l: Pick<Leitor, 'consultar'>, sla: number): Promise<A
   });
 }
 
+/**
+ * Os feriados do estabelecimento no período, pelo leitor comum do Calendário (cadastro único `dia_nao_util` e os
+ * nacionais calculados; nacional, da UF, do município e do estabelecimento): o que o SLA em dias úteis pula. O meio
+ * expediente e o ponto facultativo contam como dia útil.
+ */
 async function feriadosDe(
-  l: Pick<Leitor, 'consultar'>,
+  l: Pick<Leitor, 'uma' | 'consultar'>,
   est: number,
   desde: string,
   ate: string,
 ): Promise<Set<string>> {
-  const rs = await l.consultar<Linha>(
-    `SELECT DATE_FORMAT(f.data, '%Y-%m-%d') AS d FROM feriado f
-      WHERE f.ativo AND NOT f.ponto_facultativo AND f.data BETWEEN ? AND ?
-        AND (f.abrangencia = 'nacional' OR f.estabelecimento_id = ?)`,
-    [desde, ate, est],
-  );
-  return new Set(rs.map((r) => String(r['d'])));
+  return new Set((await lerFeriadosDoPeriodo(l, est, desde, ate)).map((f) => f.data));
 }
 
 const slaDe = (r: Linha) => ({
@@ -383,7 +383,9 @@ export class PortaSlaContratoPropria implements PortaSlaContrato {
     return { sla, apuracao: a };
   }
 
-  private async executar<R extends Readonly<Record<string, string | number | boolean | null>> & { id: number }>(
+  private async executar<
+    R extends Readonly<Record<string, string | number | boolean | null>> & { id: number },
+  >(
     c: ContextoPortaM18,
     nome: string,
     entrada: Record<string, unknown>,

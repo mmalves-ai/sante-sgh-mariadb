@@ -192,7 +192,6 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
       await e.executar('DELETE FROM paciente_prioridade_legal WHERE paciente_id = ?', [ids.pacienteB]);
     for (const est of [ids.est, ids.estB]) {
       if (!est) continue;
-      await e.executar('DELETE FROM feriado WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM dia_nao_util WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM confirmacao_marcacao WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM cancelamento_marcacao WHERE estabelecimento_id = ?', [est]);

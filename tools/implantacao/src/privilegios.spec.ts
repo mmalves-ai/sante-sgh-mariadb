@@ -17,6 +17,7 @@ import {
   tabelasComExclusaoFisica,
   tabelasDoDdl,
   tabelasDoModelo,
+  tabelasRetiradas,
 } from './privilegios.ts';
 
 const DDL = `-- CREATE TABLE no comentário não conta
@@ -88,6 +89,15 @@ ALTER TABLE regra_visita
     expect(item?.acoes).toEqual(['SELECT', 'INSERT', 'UPDATE']);
   });
 
+  it('tabela retirada por DROP TABLE numa migração posterior sai do modelo e não recebe concessão', () => {
+    const criacao =
+      'CREATE TABLE antiga (\n  id BIGINT UNSIGNED NOT NULL\n);\nCREATE TABLE nova (\n  id BIGINT\n);';
+    const depois = '-- DROP TABLE nova no comentário não conta\nDROP TABLE IF EXISTS antiga;';
+    expect(tabelasRetiradas(depois)).toEqual(new Set(['antiga']));
+    expect(tabelasDoModelo([criacao, depois]).map((t) => t.tabela)).toEqual(['nova']);
+    expect(privilegiosDoPapel(tabelasDoModelo([criacao, depois])).map((i) => i.tabela)).toEqual(['nova']);
+  });
+
   it('recusa nome de tabela fora do padrão de identificador', () => {
     expect(() => privilegiosDoPapel([{ tabela: 'tb"; DROP', exclusaoLogica: false }])).toThrow(
       /nome inválido/,
@@ -126,13 +136,20 @@ ALTER TABLE regra_visita
 
   it('o modelo do repositório: toda tabela das migrações tem privilégio e a trilha só de acréscimo', () => {
     const itens = privilegiosDoRepositorio(raiz).cliente;
+    const textos = lerMigracoes(raiz).map((m) =>
+      readFileSync(resolve(raiz, 'db/migracoes', m.arquivo), 'utf8'),
+    );
     const criadas = lerMigracoes(raiz)
       .filter((m) => m.etapa === 'tabelas')
       .map((m) => readFileSync(resolve(raiz, 'db/migracoes', m.arquivo), 'utf8'))
       .join('\n')
       .split('\n')
       .filter((l) => /^\s*CREATE\s+TABLE\b/i.test(l)).length;
-    expect(itens.length).toBe(criadas);
+    // A tabela retirada depois por DROP TABLE (ex.: `feriado`, 05_AGE/91) não recebe concessão.
+    const retiradas = new Set(textos.flatMap((t) => [...tabelasRetiradas(t)]));
+    expect(retiradas.has('feriado')).toBe(true);
+    expect(itens.some((i) => retiradas.has(i.tabela))).toBe(false);
+    expect(itens.length).toBe(criadas - retiradas.size);
     expect(itens.find((i) => i.tabela === 'trilha_auditoria')?.acoes).toEqual(['SELECT', 'INSERT']);
     expect(itens.find((i) => i.tabela === 'regra_visita_unidade')?.acoes).not.toContain('DELETE');
   });
