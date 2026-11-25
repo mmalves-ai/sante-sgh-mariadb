@@ -59,6 +59,7 @@ import { mensagensRubricasFolha } from '../modulos/folha/rubricas/i18n.js';
 import { mensagensCirurgia } from '../modulos/cirurgia/i18n.js';
 import { mensagensCcih } from '../modulos/qualidade/ccih/i18n-ccih.js';
 import { mensagensAgravos } from '../modulos/qualidade/vigilancia/i18n-agravo.js';
+import { mensagensPerfilCid } from '../modulos/qualidade/vigilancia/i18n-perfil-cid.js';
 import { mensagensGestaoQualidade } from '../modulos/qualidade/gestao/i18n-gestao.js';
 import { mensagensQualidade } from '../modulos/qualidade/i18n.js';
 import { mensagensFolha } from '../modulos/folha/i18n.js';
@@ -2406,6 +2407,7 @@ export const mensagensWeb = {
   qualidade: mensagensQualidade,
   ccih: mensagensCcih,
   agravos: mensagensAgravos,
+  perfilCid: mensagensPerfilCid,
   // M48 (etapa 5): gestão da qualidade (ONA) e envios regulatórios.
   gestaoQualidade: mensagensGestaoQualidade,
   // M53: folha de pagamento (F0: interface com a folha externa).

@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('428 itens: M 198, P 57, N 173, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 428, M: 198, P: 57, N: 173 });
+  it('430 itens: M 198, P 57, N 175, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 430, M: 198, P: 57, N: 175 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(428);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(430);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -476,6 +476,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/qualidade/nsp/protocolos', // M48 (etapa 2): adesão a protocolos e painel do plano de segurança
         '/qualidade/ouvidoria', // M48 (etapa 5): ouvidoria, SAC e pesquisa de satisfação
         '/qualidade/vigilancia/agravos', // M48 (etapa 4): notificação compulsória (fila, casos e ficha impressa)
+        '/qualidade/vigilancia/perfil-cid', // F7 (09-AREA linha 83)
         // M20: atendimento ambulatorial e pronto atendimento (as telas de uma ficha abrem da lista do dia).
         '/recepcao/atendimento/novo',
         '/recepcao/atendimento?acao=encerrar',
@@ -548,6 +549,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/tesouraria/fluxo-caixa', // M32
         '/financeiro/tesouraria/movimento', // M32
         '/financeiro/tesouraria/periodo', // F3.8 (07-FIN linha 85)
+        '/financeiro/tesouraria/previsao', // F8 (07-FIN linha 68)
       ].sort(),
     );
   });
