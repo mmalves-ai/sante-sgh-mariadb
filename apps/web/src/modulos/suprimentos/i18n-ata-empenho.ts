@@ -14,6 +14,7 @@ export const mensagensAtaEmpenho = {
   objeto: 'Objeto',
   vigenciaInicio: 'Início da vigência',
   vigenciaFim: 'Fim da vigência',
+  periodo: 'Vigência de {inicio} a {fim}',
   vigenciaMaxima: 'Vigência de até 1 ano: último dia possível {fim}.',
   registrarAta: 'Registrar ata',
   ataRegistrada: 'Ata {numero} registrada com {itens} itens.',

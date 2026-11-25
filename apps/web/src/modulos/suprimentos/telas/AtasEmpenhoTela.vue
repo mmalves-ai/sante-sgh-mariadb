@@ -301,7 +301,9 @@ async function confirmarAnulacao(e: EmpenhoTela): Promise<void> {
           t(`ataEmpenho.situacoes.${a.situacao}`)
         }}</span>
       </h3>
-      <p class="secundario">{{ data(a.vigenciaInicio) }} – {{ data(a.vigenciaFim) }}</p>
+      <p class="secundario">
+        {{ t('ataEmpenho.periodo', { inicio: data(a.vigenciaInicio), fim: data(a.vigenciaFim) }) }}
+      </p>
       <table class="tabela">
         <caption class="sgh-visualmente-oculto">
           {{
