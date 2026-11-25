@@ -24,6 +24,13 @@ export const rotasOperadora: RouteRecordRaw[] = [
     component: () => import('./telas/CobrancaOperadoraTela.vue'),
     meta: { permissao: 'operadora.cobranca.ler' },
   },
+  // 08-SGO L98 (C2-116): regras de coparticipação do plano e do contrato (escopo por guia, grupo, procedimento; tetos).
+  {
+    path: '/operadora/coparticipacao-regras',
+    name: 'operadora.coparticipacao-regras',
+    component: () => import('./telas/RegrasCoparticipacaoTela.vue'),
+    meta: { permissao: 'operadora.beneficiario.ler' },
+  },
   // 08-SGO L100 (C2-095): comercial (proposta de adesão, força de venda, metas, campanhas, comissão com estorno).
   {
     path: '/operadora/comercial',

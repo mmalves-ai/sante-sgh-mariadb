@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 503, M: 198, P: 57, N: 248 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 504, M: 198, P: 57, N: 249 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(503);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(504);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -414,6 +414,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/operadora/autorizacoes', // M56 (etapa 5, F4)
         '/operadora/rede', // M56 (etapa 4, F3)
         '/operadora/cobranca', // M56 (etapa 3, F2)
+        '/operadora/coparticipacao-regras', // C2-116 (08-SGO L98)
         '/operadora/beneficiarios', // M56.2 (fatia F1)
         '/operadora/portal-prestador', // M56 (etapa 8, F7)
         '/operadora/troca-tiss', // C2-061 (08-SGO L107)

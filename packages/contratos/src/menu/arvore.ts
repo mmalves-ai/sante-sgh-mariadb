@@ -23,6 +23,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-070 (06-FAT L26, F7): o item "Elegibilidade e autorização prévia" da recepção ganhou à mão a rota da tela de
 // elegibilidade do hospital (/faturamento/elegibilidade, leitura do atendimento); a contagem não muda.
 
+// C2-116 (08-SGO L98): o item "Regras de coparticipação" da operadora própria entrou à mão (mesmo motivo; F7); a
+// contagem acompanha.
 // C2-061 (08-SGO L107): o item "Trocas TISS com os prestadores" da operadora própria entrou à mão (mesmo motivo; F7);
 // a contagem acompanha.
 // C2-095 (08-SGO L100): o item "Comercial: propostas e comissões" da operadora própria entrou à mão (mesmo motivo;
@@ -135,7 +137,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C2-094 (09-AREA linha 78): o item "Entrada de serviço tomado" do fiscal entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":503,"M":198,"P":57,"N":248};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":504,"M":198,"P":57,"N":249};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -415,6 +417,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.rede-credenciada-e-prestadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Rede credenciada e prestadora"],"titulo":"Rede credenciada e prestadora","selo":"N","fase":6,"rota":"/operadora/rede","permissao":"operadora.prestador.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.atendimento-autorizacao-e-protocolos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Atendimento, autorização e protocolos"],"titulo":"Atendimento, autorização e protocolos","selo":"N","fase":6,"rota":"/operadora/autorizacoes","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.cobranca-e-mensalidades","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Cobrança e mensalidades"],"titulo":"Cobrança e mensalidades","selo":"N","fase":6,"rota":"/operadora/cobranca","permissao":"operadora.cobranca.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.regras-de-coparticipacao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Regras de coparticipação"],"titulo":"Regras de coparticipação","selo":"N","fase":7,"rota":"/operadora/coparticipacao-regras","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.envios-a-ans-sib-sip-e-exportacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Envios à ANS e exportações"],"titulo":"Envios à ANS e exportações","selo":"N","fase":6,"rota":"/operadora/ans","permissao":"operadora.ans.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Domínios da operadora e do plano próprio"],"titulo":"Domínios da operadora e do plano próprio","selo":"N","fase":6,"rota":"/consultas/item/faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.portal-do-prestador-credenciado","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Portal do prestador credenciado"],"titulo":"Portal do prestador credenciado","selo":"N","fase":6,"rota":"/operadora/portal-prestador","permissao":"operadora.dominio.ler"},
