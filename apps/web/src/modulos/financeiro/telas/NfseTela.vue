@@ -10,6 +10,7 @@ import { RouterLink } from 'vue-router';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import NotasServicoCiclo from '../componentes/NotasServicoCiclo.vue';
 import TabelaRegistros from '../componentes/TabelaRegistros.vue';
 import { emitirNfse, listarNfse, novaChave } from '../api-financeiro.js';
 import { usarFinanceiro } from '../usar-financeiro.js';
@@ -91,6 +92,9 @@ async function emitir() {
       {{ t('financeiro.simulador') }}
     </p>
     <AvisoFaturamento :motivo="motivoFuncionalidade('fiscal')" />
+    <!-- F3.8, 07-FIN linha 113: lote por faturas, cancelamento, substituição e histórico, no banco do cliente. -->
+    <NotasServicoCiclo :pode="pode('emitirNfse')" />
+    <h2>{{ t('financeiro.nfse.emitir') }}</h2>
     <form class="formulario" data-testid="nf-formulario" @submit.prevent="emitir">
       <span class="campo">
         <label for="nf-titulo-receber">{{ t('financeiro.nfse.tituloReceber') }}</label>
