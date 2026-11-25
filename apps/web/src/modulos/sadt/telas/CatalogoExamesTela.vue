@@ -25,6 +25,7 @@ import { novaChave } from '../api-sadt.js';
 import CadastroAnalitos from '../componentes/CadastroAnalitos.vue';
 import LaudoEstruturadoCadastro from '../componentes/LaudoEstruturadoCadastro.vue';
 import ProcedimentosExame from '../componentes/ProcedimentosExame.vue';
+import RegioesAnatomicasExame from '../componentes/RegioesAnatomicasExame.vue';
 import RespostasTextosExame from '../componentes/RespostasTextosExame.vue';
 
 type Linha = Record<string, unknown>;
@@ -823,6 +824,7 @@ const filtrada = (qual: string, chave: string) => {
             @gravado="abrir(Number(exame['id']))"
           />
           <LaudoEstruturadoCadastro :exame-id="Number(exame['id'])" />
+          <RegioesAnatomicasExame :exame-id="Number(exame['id'])" />
           <ProcedimentosExame
             :exame-id="Number(exame['id'])"
             :procedimentos="(ficha['procedimentos'] as Linha[] | undefined) ?? []"

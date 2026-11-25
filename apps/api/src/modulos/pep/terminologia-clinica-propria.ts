@@ -16,6 +16,7 @@ import {
   ordenarSugestoesConceito,
   type TermoCatalogo,
   TERMINOLOGIA_CONCEITO_CLINICO,
+  TERMINOLOGIA_DIAGNOSTICO,
   TIPOS_DIAGNOSTICO,
   validarRegiaoDoExame,
   validarRegistroDiagnostico,
@@ -300,6 +301,32 @@ export class TerminologiaClinicaPropria {
             equivalencia: null,
           })),
       ].slice(0, TETO_BUSCA);
+    });
+  }
+
+  /** CID-10 ativas por código (exato primeiro) ou texto, para o registro do diagnóstico. Até 30. */
+  cids(texto: string): Promise<readonly { id: number; codigo: string; descricao: string }[]> {
+    const q = texto.trim();
+    if (q.length < 2) return Promise.resolve([]);
+    return this.ler(async (l) => {
+      const codigo = q.toUpperCase().replace('.', '');
+      const linhas = await l.consultar(
+        `SELECT t.id, t.codigo_termo, t.descricao
+           FROM termo_terminologia t JOIN terminologia g ON g.id = t.terminologia_id
+          WHERE g.codigo = ? AND t.ativo = TRUE AND (t.codigo_termo LIKE ? OR t.descricao LIKE ?)
+          ORDER BY (t.codigo_termo = ?) DESC, t.codigo_termo LIMIT ${TETO_BUSCA}`,
+        [
+          TERMINOLOGIA_DIAGNOSTICO,
+          `${codigo.replace(/[%_\\]/g, '\\$&')}%`,
+          `%${q.replace(/[%_\\]/g, '\\$&')}%`,
+          codigo,
+        ],
+      );
+      return linhas.map((x) => ({
+        id: num(x['id']),
+        codigo: String(x['codigo_termo']),
+        descricao: String(x['descricao']),
+      }));
     });
   }
 

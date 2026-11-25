@@ -111,6 +111,12 @@ export class TerminologiaClinicaController {
     return this.banco().conceitos({ texto: (texto ?? '').slice(0, 100), ...(c ? { cid: c } : {}) });
   }
 
+  @Get('cids')
+  @Permissao(LER)
+  cids(@Query('texto') texto?: string) {
+    return this.banco().cids((texto ?? '').slice(0, 100));
+  }
+
   @Get('regioes')
   @Permissao(LER)
   regioes(

@@ -225,6 +225,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuarioRestrito.ler' },
   },
   {
+    // 09-AREA L84: diagnósticos do paciente com a CID-10 e o conceito clínico equivalente (registro no atendimento).
+    path: `/pep/paciente/:paciente${id}/diagnosticos`,
+    name: 'pep.diagnosticos',
+    component: () => import('./telas/DiagnosticosPacienteTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     // 03-PEP L102: notas e lembretes livres sobre o paciente (avisos em vigor, nota nova, encerrar, cancelar, validade).
     path: `/pep/paciente/:paciente${id}/notas`,
     name: 'pep.notas',

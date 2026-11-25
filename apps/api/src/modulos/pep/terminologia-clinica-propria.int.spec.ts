@@ -153,6 +153,9 @@ describe.skipIf(SEM_BANCO)(
       expect(r[0]).toMatchObject({ id: ids.fraturaB, equivalencia: 'equivalente' });
       expect(r.map((x) => x.id)).toEqual([ids.fraturaB, ids.fratura]);
       expect((await porta.conceitos({ texto: 'C2032-1' }))[0]!.id).toBe(ids.fratura);
+      // A busca da CID-10 do registro: o código exato vem primeiro.
+      expect((await porta.cids('i21.9'))[0]!.id).toBe(ids.cid);
+      expect(await porta.cids('i')).toEqual([]);
     });
 
     it('registra o diagnóstico com a CID-10 e o conceito equivalente, e o profissional da conta', async () => {

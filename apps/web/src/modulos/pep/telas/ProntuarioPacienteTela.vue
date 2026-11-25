@@ -166,6 +166,14 @@ async function exportar(): Promise<void> {
             data-testid="atalho-farmacovigilancia"
             >{{ t('pep.doc.prontuario.farmacovigilancia') }}</RouterLink
           >
+          <RouterLink
+            :to="{
+              path: `/pep/paciente/${id}/diagnosticos`,
+              query: cab.data.value.atendimentoAtual ? { atendimento: cab.data.value.atendimentoAtual } : {},
+            }"
+            data-testid="atalho-diagnosticos"
+            >{{ t('pep.terminologia.atalho') }}</RouterLink
+          >
           <RouterLink :to="`/pep/paciente/${id}/notas`" data-testid="atalho-notas">{{
             t('pep.notas.atalho')
           }}</RouterLink>
