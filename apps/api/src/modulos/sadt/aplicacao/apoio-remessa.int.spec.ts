@@ -1,11 +1,11 @@
 // Contrato de efeito do laboratório de apoio (F3.5, 05-SADT linha 14) no MariaDB real (cliente f22_o2; massa
 // SINTÉTICA). Prova o que fica no banco: o de-para de analito e de material incluído, alterado e desativado (nunca
 // apagado), com a recusa do código repetido e do fator inválido; a remessa aberta num clique com as amostras coletadas
-// do apoio (a não coletada e a de outro apoio ficam fora), numerada pela sequência; o item sem código no apoio segura o
+// do apoio (a não coletada e a de outro apoio ficam fora), numerada pela sequência que a primeira abertura cria (o estabelecimento começa sem numeração); o item sem código no apoio segura o
 // fechamento; o item retirado fica cancelado; fechar, enviar com protocolo e meio coerente com o canal; o cancelamento
 // recusado depois de enviada; as etiquetas só com identificadores; a trilha de cada gravação; outro estabelecimento
 // recusado. Só contagens.
-import { ErroOperacao, garantirSequencia, NucleoProprio } from '@sgh/nucleo';
+import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServicoApoioRemessa, TIPO_NUMERO_REMESSA } from './apoio-remessa-propria.js';
 import {
@@ -120,11 +120,11 @@ describe.skipIf(SEM_BANCO)(
         ids.a2 = await amostra('TF354A2', false, m!.itemLab2);
         ids.a3 = await amostra('TF354A3', true, ids.item3);
         ids.a4 = await amostra('TF354A4', true, ids.item4);
-        await garantirSequencia(
-          e,
-          { tipo: TIPO_NUMERO_REMESSA, estabelecimento: est, prefixo: 'RA-' },
-          { agora, usuario: null },
-        );
+        // O estabelecimento começa SEM a numeração da remessa: a primeira abertura é que a cria (caminho real).
+        await e.executar('DELETE FROM sequencia_negocio WHERE tipo = ? AND estabelecimento_id = ?', [
+          TIPO_NUMERO_REMESSA,
+          est,
+        ]);
       });
     }, 120_000);
 
@@ -238,8 +238,16 @@ describe.skipIf(SEM_BANCO)(
       const pend = await servico.pendentes(c, ids.lab);
       // A1 (coletada, do apoio) e A3 (coletada, do apoio, sem código); A2 não coletada e A4 de outro apoio ficam fora.
       expect(pend.map((p) => p.amostra).sort()).toEqual([ids.a1, ids.a3].sort());
+      const numeracao = () =>
+        conta('SELECT COUNT(*) AS n FROM sequencia_negocio WHERE tipo = ? AND estabelecimento_id = ?', [
+          TIPO_NUMERO_REMESSA,
+          m!.base.est,
+        ]);
+      // Estabelecimento sem numeração configurada: a primeira remessa cria a sequência e sai numerada.
+      expect(await numeracao()).toBe(0);
       const r = await servico.abrir(c, { laboratorio: ids.lab });
-      expect([r.itens, r.semDePara, r.numero.startsWith('RA-')]).toEqual([2, 1, true]);
+      expect([r.itens, r.semDePara, r.numero]).toEqual([2, 1, 'RA-1']);
+      expect(await numeracao()).toBe(1);
       expect(await falha(servico.abrir(c, { laboratorio: ids.lab, amostras: [ids.a2] }))).toBe(
         'amostra-nao-coletada',
       );
@@ -298,7 +306,7 @@ describe.skipIf(SEM_BANCO)(
       ).toBe(3);
       // A amostra retirada volta às pendentes; a nova remessa cancelada guarda o motivo e cancela os itens.
       const r2 = await servico.abrir(c, { laboratorio: ids.lab });
-      expect(r2.itens).toBe(1);
+      expect([r2.itens, r2.numero, await numeracao()]).toEqual([1, 'RA-2', 1]);
       expect(await falha(servico.agir(c, r2.id, { acao: 'cancelar', motivo: '' }))).toBe(
         'motivo-obrigatorio',
       );

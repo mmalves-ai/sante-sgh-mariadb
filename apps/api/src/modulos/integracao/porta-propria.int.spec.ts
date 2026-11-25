@@ -13,6 +13,7 @@ import {
 } from './infra/massa-integracao.spec-util.js';
 import type { ContextoIntegracao, DadosParceiro, TrilhaIntegracao } from './porta.js';
 import { PortaIntegracaoPropria } from './porta-propria.js';
+import { ServicoApoioRemessa, TIPO_NUMERO_REMESSA } from '../sadt/public-api.js';
 
 const PARCEIRO = 'f2241-lab';
 const PONTO_TESTE = 'integracao.teste.f2241';
@@ -50,7 +51,23 @@ async function limparApoio(e: Escritor): Promise<void> {
     await e.executar(`DELETE FROM aviso_valor_critico WHERE resultado_exame_id IN (${res})`);
     await e.executar(`DELETE FROM resultado_analito WHERE resultado_exame_id IN (${res})`);
     await e.executar(`DELETE FROM remessa_laboratorio_apoio_item WHERE exame_item_id IN (${itens})`);
-    await e.executar("DELETE FROM remessa_laboratorio_apoio WHERE numero LIKE 'f2241-ap-%'");
+    await e.executar(
+      'DELETE FROM remessa_laboratorio_apoio WHERE laboratorio_apoio_id IN (SELECT id FROM laboratorio_apoio WHERE codigo = ?)',
+      [AP],
+    );
+    await e.executar(
+      "DELETE FROM sequencia_negocio WHERE tipo = ? AND estabelecimento_id = (SELECT id FROM estabelecimento WHERE codigo = 'f2241a')",
+      [TIPO_NUMERO_REMESSA],
+    );
+    await e.executar(
+      "DELETE FROM amostra_biologica_exame WHERE amostra_biologica_id IN (SELECT id FROM amostra_biologica WHERE codigo_barras LIKE 'F2241AP%')",
+    );
+    await e.executar("DELETE FROM amostra_biologica WHERE codigo_barras LIKE 'F2241AP%'");
+    await e.executar(
+      'DELETE FROM exame_laboratorio_apoio WHERE laboratorio_apoio_id IN (SELECT id FROM laboratorio_apoio WHERE codigo = ?)',
+      [AP],
+    );
+    await e.executar('DELETE FROM material_biologico WHERE codigo = ?', [AP]);
     await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN (${itens})`);
     await e.executar(`DELETE FROM exame_item WHERE id IN (SELECT id FROM (${itens}) x)`);
     await e.executar("DELETE FROM requisicao_exame WHERE numero LIKE 'f2241-ap-%'");
@@ -91,6 +108,38 @@ interface MassaApoio {
   readonly regra: number;
   readonly item: number;
   readonly semSetor: number;
+  /** Outro pedido do mesmo exame (com código no apoio): o segundo item da remessa. */
+  readonly item2: number;
+  readonly exame: number;
+}
+
+/**
+ * As amostras coletadas dos três exames do apoio e o código do primeiro exame no catálogo do apoio, com as chaves do
+ * banco LIGADAS (material e amostras reais): é o que a remessa do produto precisa para abrir.
+ */
+async function montarAmostrasDoApoio(e: Escritor, m: MassaApoio): Promise<void> {
+  const agora = new Date();
+  const material = await e.inserir(
+    "INSERT INTO material_biologico (codigo, descricao, criado_em) VALUES (?, 'MATERIAL SINTETICO', ?)",
+    [AP, agora],
+  );
+  await e.inserir(
+    `INSERT INTO exame_laboratorio_apoio (exame_id, laboratorio_apoio_id, codigo_exame_apoio, nome_exame_apoio, criado_em)
+     VALUES (?, ?, 'AP-K', 'EXAME DO APOIO SINTETICO', ?)`,
+    [m.exame, m.lab, agora],
+  );
+  let n = 0;
+  for (const item of [m.item, m.item2, m.semSetor]) {
+    const amostra = await e.inserir(
+      `INSERT INTO amostra_biologica (estabelecimento_id, codigo_barras, requisicao_exame_id, material_biologico_id, situacao, coletada_em, criado_em)
+       SELECT ?, ?, i.requisicao_exame_id, ?, 'coletada', ?, ? FROM exame_item i WHERE i.id = ?`,
+      [m.est, `F2241AP${++n}`, material, agora, agora, item],
+    );
+    await e.inserir(
+      'INSERT INTO amostra_biologica_exame (amostra_biologica_id, exame_item_id, criado_em) VALUES (?, ?, ?)',
+      [amostra, item, agora],
+    );
+  }
 }
 
 /** Catálogo e pedido sintéticos (as chaves de catálogo que a operação não grava entram com as FKs desligadas). */
@@ -186,6 +235,8 @@ async function montarApoio(e: Escritor): Promise<MassaApoio> {
       regra,
       item: await item(1, ex1),
       semSetor: await item(2, ex2),
+      item2: await item(3, ex1),
+      exame: ex1,
     };
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -451,26 +502,38 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
 
   it('resultado do apoio pelas regras do SADT: referência, anormal, crítico com aviso, liberação e mensagem concluída juntos', async () => {
     const m = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f2241' }, (e) => montarApoio(e));
-    // A amostra do exame saiu numa remessa enviada ao apoio (05-SADT linha 14): o retorno fecha o item e a remessa.
-    const remessa = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f2241' }, async (e) => {
-      const agora = new Date();
-      const id = await e.inserir(
-        `INSERT INTO remessa_laboratorio_apoio (estabelecimento_id, numero, laboratorio_apoio_id, situacao, aberta_em, enviada_em, meio_envio, quantidade_amostras, criado_em)
-         VALUES (?, 'f2241-ap-rem1', ?, 'enviada', ?, ?, 'integracao', 1, ?)`,
-        [m.est, m.lab, agora, agora, agora],
+    // As amostras dos exames saem numa remessa enviada ao apoio (05-SADT linha 14) PELO PRODUTO: abrir com as
+    // pendentes (a primeira do estabelecimento cria a numeração), retirar o exame sem código no apoio (fica cancelado),
+    // fechar e enviar. O retorno fecha um item de cada vez: recebida depois do primeiro, concluída depois do segundo.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f2241' }, (e) =>
+      montarAmostrasDoApoio(e, m),
+    );
+    const remessas = new ServicoApoioRemessa(nucleo);
+    const cs = { cliente: CLIENTE, estabelecimento: m.est, usuario: null, correlacao: 'teste-f2241-apoio' };
+    const aberta = await remessas.abrir(cs, { laboratorio: m.lab });
+    expect([aberta.itens, aberta.semDePara, aberta.numero]).toEqual([3, 1, 'RA-1']);
+    const semCodigo = (await remessas.remessa(cs, aberta.id)).itens.find((i) => i.codigoExameApoio === null)!;
+    await remessas.retirarItem(cs, aberta.id, { item: semCodigo.id });
+    await remessas.agir(cs, aberta.id, { acao: 'fechar' });
+    await remessas.agir(cs, aberta.id, { acao: 'enviar', meio: 'portal', protocolo: 'P-F2241' });
+    const remessa = aberta.id;
+    const naRemessa = async () => {
+      const [x] = await sql(
+        `SELECT r.situacao, SUM(ri.situacao = 'resultado_recebido') AS com, SUM(ri.situacao = 'enviado') AS enviados,
+                SUM(ri.situacao = 'cancelado') AS cancelados, COUNT(*) AS itens
+           FROM remessa_laboratorio_apoio r JOIN remessa_laboratorio_apoio_item ri ON ri.remessa_laboratorio_apoio_id = r.id
+          WHERE r.id = ? GROUP BY r.id, r.situacao`,
+        [remessa],
       );
-      await e.executar('SET FOREIGN_KEY_CHECKS = 0');
-      try {
-        await e.inserir(
-          `INSERT INTO remessa_laboratorio_apoio_item (remessa_laboratorio_apoio_id, sequencia, amostra_biologica_id, exame_item_id, codigo_exame_apoio, situacao, criado_em)
-           VALUES (?, 1, 0, ?, 'AP-K', 'enviado', ?)`,
-          [id, m.item, agora],
-        );
-      } finally {
-        await e.executar('SET FOREIGN_KEY_CHECKS = 1');
-      }
-      return id;
-    });
+      return [
+        x?.['situacao'],
+        Number(x?.['com']),
+        Number(x?.['enviados']),
+        Number(x?.['cancelados']),
+        Number(x?.['itens']),
+      ];
+    };
+    expect(await naRemessa()).toEqual(['enviada', 0, 2, 1, 3]);
     const { recebida } = await porta.gravar(
       A,
       trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'),
@@ -561,20 +624,19 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
       { situacao: 'liberado', versao: 2 },
     ]);
     expect((await porta.recebida(A, recebida.id))?.situacao).toBe('processada');
-    // O item da remessa com o resultado recebido (ligado ao resultado gravado) e a remessa concluída, na mesma transação.
+    // O item da remessa com o resultado recebido (ligado ao resultado gravado), na mesma transação; falta o outro exame,
+    // então a remessa fica recebida (o item retirado não conta).
     const [ri] = await sql(
-      `SELECT ri.situacao, ri.resultado_exame_id, ri.resultado_recebido_em IS NOT NULL AS recebido, ri.versao, r.situacao AS remessa
-         FROM remessa_laboratorio_apoio_item ri JOIN remessa_laboratorio_apoio r ON r.id = ri.remessa_laboratorio_apoio_id
-        WHERE r.id = ?`,
-      [remessa],
+      `SELECT ri.situacao, ri.resultado_exame_id, ri.resultado_recebido_em IS NOT NULL AS recebido
+         FROM remessa_laboratorio_apoio_item ri WHERE ri.remessa_laboratorio_apoio_id = ? AND ri.exame_item_id = ?`,
+      [remessa, m.item],
     );
-    expect([
-      ri?.['situacao'],
-      Number(ri?.['resultado_exame_id']),
-      Number(ri?.['recebido']),
-      Number(ri?.['versao']),
-      ri?.['remessa'],
-    ]).toEqual(['resultado_recebido', r.resultado, 1, 2, 'concluida']);
+    expect([ri?.['situacao'], Number(ri?.['resultado_exame_id']), Number(ri?.['recebido'])]).toEqual([
+      'resultado_recebido',
+      r.resultado,
+      1,
+    ]);
+    expect(await naRemessa()).toEqual(['recebida', 1, 1, 1, 3]);
     const t = await sql(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'resultado_exame' AND entidade_id = ?",
       [r.resultado],
@@ -590,6 +652,27 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
       resultado: r.resultado,
       repetida: true,
     });
+    // A repetição não mexe na remessa; o resultado do segundo exame conclui a remessa (2 de 2 ativos; o retirado
+    // continua cancelado, nunca apagado).
+    expect(await naRemessa()).toEqual(['recebida', 1, 1, 1, 3]);
+    const r2 = await porta.registrarResultadoApoio(
+      A,
+      {
+        ...entrada,
+        exame: m.item2,
+        elementos: [{ elemento: m.glicose, numerico: 90, alfa: null }],
+        recebida: null,
+      },
+      octx(`${chave}-2`),
+    );
+    expect(r2.repetida).toBe(false);
+    expect(await naRemessa()).toEqual(['concluida', 2, 0, 1, 3]);
+    expect(
+      await sql(
+        'SELECT resultado_exame_id FROM remessa_laboratorio_apoio_item WHERE remessa_laboratorio_apoio_id = ? AND exame_item_id = ?',
+        [remessa, m.item2],
+      ),
+    ).toEqual([{ resultado_exame_id: r2.resultado }]);
     // Recusas: analito que não é do exame; exame sem setor executante no estabelecimento (nunca o setor 0).
     await expect(
       porta.registrarResultadoApoio(

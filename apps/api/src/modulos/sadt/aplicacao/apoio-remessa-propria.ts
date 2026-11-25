@@ -22,6 +22,7 @@ import {
   definirOperacao,
   type EventoOperacao,
   type Executor,
+  garantirSequencia,
   type Leitor,
   recusa,
   type TxOperacao,
@@ -39,6 +40,7 @@ const TABELAS = [
   'de_para_material_apoio',
 ];
 export const TIPO_NUMERO_REMESSA = 'remessa_laboratorio_apoio';
+const PREFIXO_NUMERO_REMESSA = 'RA-';
 /** O fato que o parceiro do apoio assina: um pedido por exame da remessa enviada pela integração. */
 export const EVENTO_PEDIDO_APOIO = 'fato.exame.apoio';
 
@@ -502,8 +504,14 @@ export class ServicoApoioRemessa {
       });
       if (aceitos.length === 0)
         throw recusa('remessa-vazia', 'Não há amostras pendentes para este laboratório.');
-      const numero = (await tx.proximoNumero(TIPO_NUMERO_REMESSA)).formatado;
       const agora = new Date();
+      // A primeira remessa do estabelecimento cria a numeração (ninguém precisa configurá-la antes).
+      await garantirSequencia(
+        tx,
+        { tipo: TIPO_NUMERO_REMESSA, estabelecimento: est, prefixo: PREFIXO_NUMERO_REMESSA },
+        { usuario: c.usuario ?? null, agora },
+      );
+      const numero = (await tx.proximoNumero(TIPO_NUMERO_REMESSA)).formatado;
       const remessa = await tx.incluir('remessa_laboratorio_apoio', {
         estabelecimento_id: est,
         numero,
