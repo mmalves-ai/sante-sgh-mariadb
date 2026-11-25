@@ -47,6 +47,11 @@ import { PORTA_TRANSPORTE_PACIENTE, PortaTransportePacientePropria } from './tra
 import { TransportePacienteController } from './transporte-paciente.controller.js';
 import { PORTA_CHAMADO_AMBULANCIA, PortaChamadoAmbulanciaPropria } from './chamado-ambulancia-propria.js';
 import { ChamadoAmbulanciaController } from './chamado-ambulancia.controller.js';
+import { InternacaoDomiciliarController } from './internacao-domiciliar.controller.js';
+import {
+  PORTA_INTERNACAO_DOMICILIAR,
+  PortaInternacaoDomiciliarPropria,
+} from './internacao-domiciliar-propria.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { PORTA_REGULACAO_ENTRADA, PortaRegulacaoEntradaPropria } from './regulacao-entrada-propria.js';
 import { RegulacaoEntradaController } from './regulacao-entrada.controller.js';
@@ -146,6 +151,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       GasSetorController,
       TransportePacienteController,
       ChamadoAmbulanciaController,
+      InternacaoDomiciliarController,
       GasMedicinalController,
       SameGuardaController,
       SameTramiteController,
@@ -206,6 +212,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaChamadoAmbulanciaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C2-079 (04-INT linha 84): internação domiciliar (orçamento, transferência, chamados e visitas); sem núcleo, 503.
+      {
+        provide: PORTA_INTERNACAO_DOMICILIAR,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaInternacaoDomiciliarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.9 (04-HOT L126): SAME pelo volume (guarda, local e movimentação pelo tipo da operação); sem núcleo, 503.
