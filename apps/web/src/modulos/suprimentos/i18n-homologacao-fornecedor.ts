@@ -24,6 +24,7 @@ export const mensagensHomologacaoFornecedor = {
     buscaFornecedor: 'Fornecedor (nome ou CNPJ)',
     buscar: 'Buscar',
     fornecedor: 'Fornecedor encontrado',
+    daCategoria: 'A busca traz só os fornecedores da categoria {categoria}.',
     escolha: 'Escolha…',
     peso: 'peso {peso}',
     obrigatoria: 'obrigatória',
@@ -77,6 +78,7 @@ export const mensagensHomologacaoFornecedor = {
     confirmarCancelamento: 'Confirmar cancelamento',
     fechar: 'Fechar',
     justificada: 'Exceção: {texto}',
+    motivoCancelamento: 'Cancelada: {texto}',
   },
   questionario: {
     nenhum: 'Nenhum questionário cadastrado.',

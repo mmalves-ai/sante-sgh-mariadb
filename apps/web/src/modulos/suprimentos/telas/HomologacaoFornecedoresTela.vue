@@ -91,7 +91,9 @@ const opcoesFornecedor = computed(() => [
 async function buscar(): Promise<void> {
   erro.value = null;
   try {
-    encontrados.value = (await buscarFornecedoresHomologacao(termo.value.trim())).itens;
+    encontrados.value = (
+      await buscarFornecedoresHomologacao(termo.value.trim(), questionario.value?.id ?? null)
+    ).itens;
     fornecedorId.value = encontrados.value.length === 1 ? encontrados.value[0]!.id : null;
   } catch (e) {
     erro.value = e;
@@ -99,6 +101,9 @@ async function buscar(): Promise<void> {
 }
 const respostas = reactive<Record<number, { opcao: number | null; texto: string }>>({});
 watch(questionario, (q) => {
+  // A busca filtra pela categoria do questionário: o encontrado de outro questionário não vale mais.
+  encontrados.value = [];
+  fornecedorId.value = null;
   for (const chave of Object.keys(respostas)) delete respostas[Number(chave)];
   for (const pg of q?.perguntas ?? []) respostas[pg.id] = { opcao: null, texto: '' };
 });
@@ -336,6 +341,9 @@ function gravarQuestionario(): void {
             />
           </div>
           <template v-if="questionario">
+            <p v-if="questionario.categoriaDescricao" class="secundario" :data-testid="tid('da-categoria')">
+              {{ k('avaliar.daCategoria', { categoria: questionario.categoriaDescricao }) }}
+            </p>
             <p v-if="questionario.instrucoes" class="secundario">{{ questionario.instrucoes }}</p>
             <fieldset
               v-for="pg in questionario.perguntas"
@@ -486,6 +494,9 @@ function gravarQuestionario(): void {
                   <span v-if="h.excecao" class="secundario">
                     · {{ k('lista.justificada', { texto: h.justificativa ?? '' }) }}
                   </span>
+                  <span v-if="h.motivoCancelamento" class="secundario" :data-testid="tid(`motivo-${h.id}`)">
+                    · {{ k('lista.motivoCancelamento', { texto: h.motivoCancelamento }) }}
+                  </span>
                 </td>
                 <td>{{ data(h.avaliadoEm) }} · {{ h.avaliadorLogin ?? '' }}</td>
                 <td>
@@ -563,6 +574,9 @@ function gravarQuestionario(): void {
         </form>
         <div v-if="aberta" class="cartao" :data-testid="tid('detalhe')">
           <h2>{{ k('lista.respostas', { fornecedor: aberta.fornecedorNome }) }}</h2>
+          <p v-if="aberta.motivoCancelamento" :data-testid="tid('detalhe-motivo')">
+            {{ k('lista.motivoCancelamento', { texto: aberta.motivoCancelamento }) }}
+          </p>
           <table class="grade">
             <thead>
               <tr>

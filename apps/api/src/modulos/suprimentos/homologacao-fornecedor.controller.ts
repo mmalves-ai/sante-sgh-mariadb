@@ -1,6 +1,7 @@
 // Homologação do fornecedor por questionário pontuado (09-AREA linha 66):
 //   GET  /api/suprimentos/homologacao-fornecedor                         questionários, faixas, avaliações e ranking
-//   GET  /api/suprimentos/homologacao-fornecedor/fornecedores?termo=     busca do fornecedor a avaliar
+//   GET  /api/suprimentos/homologacao-fornecedor/fornecedores?termo=&questionario=   busca do fornecedor a avaliar
+//        (com o questionário de categoria, só quem fornece a categoria)
 //   GET  /api/suprimentos/homologacao-fornecedor/:id                     a avaliação com as respostas pontuadas
 //   POST /api/suprimentos/homologacao-fornecedor/questionarios           o questionário novo com as perguntas
 //   POST /api/suprimentos/homologacao-fornecedor/questionarios/:id/encerramento   fecha a vigência (nada apagado)
@@ -130,8 +131,19 @@ export class HomologacaoFornecedorController {
 
   @Get('fornecedores')
   @Permissao(P.ler)
-  async fornecedores(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
-    return { itens: await this.porta.fornecedores(sessaoDe(req).porta, (termo ?? '').slice(0, 60)) };
+  async fornecedores(
+    @Query('termo') termo: string | undefined,
+    @Query('questionario') questionario: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const q = Number(questionario);
+    return {
+      itens: await this.porta.fornecedores(
+        sessaoDe(req).porta,
+        (termo ?? '').slice(0, 60),
+        Number.isInteger(q) && q > 0 ? q : null,
+      ),
+    };
   }
 
   @Get(':id')

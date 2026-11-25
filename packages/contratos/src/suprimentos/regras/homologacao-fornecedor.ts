@@ -507,3 +507,22 @@ export function conferirCancelamentoHomologacao(
     );
   return r;
 }
+
+/**
+ * O fornecedor só é avaliado num questionário de categoria se fornece essa categoria (a principal ou uma das
+ * vinculadas): a homologação grava a categoria do questionário, e homologar quem não a fornece distorce o ranking e a
+ * nota mínima por categoria (ISO 9001 8.4). O questionário sem categoria vale para qualquer fornecedor.
+ */
+export function conferirFornecedorDaCategoria(
+  categoriaQuestionario: number | null,
+  categoriasFornecedor: readonly number[],
+): RecusaSuprimentos[] {
+  if (categoriaQuestionario === null || categoriasFornecedor.includes(categoriaQuestionario)) return [];
+  return [
+    recusa(
+      'fornecedor-fora-categoria',
+      'O fornecedor não atende a categoria de fornecimento deste questionário: vincule a categoria ao fornecedor ou use o questionário da categoria dele.',
+      ['fornecedor'],
+    ),
+  ];
+}

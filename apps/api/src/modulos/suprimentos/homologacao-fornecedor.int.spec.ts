@@ -4,7 +4,9 @@
 // reenvio pela chave sem linha nova); a avaliação (homologacao_fornecedor com a nota, a faixa, a situação e a validade,
 // uma homologacao_fornecedor_resposta por resposta com os pontos e o peso); a eliminatória que reprova; a exceção recusada
 // a quem avaliou e aprovada por outra pessoa (versão 2, justificativa, validade); o cancelamento que fica no histórico; o
-// ranking do painel; o outro estabelecimento sem acesso; o questionário encerrado que não avalia mais. Massa SINTÉTICA,
+// ranking do painel; o motivo do cancelamento na trilha e no detalhe; o questionário de categoria que recusa o fornecedor
+// de outra categoria (e a busca filtrada); o outro estabelecimento sem acesso; o questionário encerrado que não avalia
+// mais. Massa SINTÉTICA,
 // limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import {
   classificarHomologacao,
@@ -53,6 +55,7 @@ describe.skipIf(SEM_DB)('Homologação do fornecedor contra o MariaDB (cliente f
   let perguntas: number[] = [];
   let homA = 0;
   let homB = 0;
+  let categoria = 0;
   const sufixo = String(Date.now()).slice(-8);
   const ler = <T extends Record<string, unknown>>(sql: string, p: readonly unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'c1070-conta' }, (l) => l.consultar<T>(sql, p));
@@ -69,6 +72,11 @@ describe.skipIf(SEM_DB)('Homologação do fornecedor contra o MariaDB (cliente f
       [],
     );
     await e.executar(`DELETE FROM questionario_homologacao WHERE codigo LIKE '${PREFIXO}%'`, []);
+    await e.executar(
+      `DELETE FROM empresa_fornecedora_categoria WHERE categoria_fornecimento_id IN (SELECT id FROM categoria_fornecimento WHERE codigo LIKE '${PREFIXO}%')`,
+      [],
+    );
+    await e.executar(`DELETE FROM categoria_fornecimento WHERE codigo LIKE '${PREFIXO}%'`, []);
     await e.executar(`DELETE FROM faixa_avaliacao_fornecedor WHERE codigo LIKE '${PREFIXO}%'`, []);
   }
 
@@ -109,6 +117,14 @@ describe.skipIf(SEM_DB)('Homologação do fornecedor contra o MariaDB (cliente f
         );
       fornA = await forn(CNPJS[0]!, 'DISTRIBUIDORA FICTÍCIA C1070 A LTDA');
       fornB = await forn(CNPJS[1]!, 'DISTRIBUIDORA FICTÍCIA C1070 B LTDA');
+      categoria = await e.inserir(
+        "INSERT INTO categoria_fornecimento (codigo, descricao, tipo, criado_em) VALUES (?, 'Categoria fictícia (teste)', 'outro', ?)",
+        [`${PREFIXO}CAT`, agora],
+      );
+      await e.inserir(
+        'INSERT INTO empresa_fornecedora_categoria (empresa_fornecedora_id, categoria_fornecimento_id, principal, criado_em) VALUES (?, ?, FALSE, ?)',
+        [fornB, categoria, agora],
+      );
       await e.executar(
         `INSERT INTO faixa_avaliacao_fornecedor (codigo, descricao, nota_inicial, nota_final, resultado, ordem, criado_em)
          VALUES (?, 'Ótimo (teste)', 90, 100, 'aprovado', 1, ?), (?, 'Reprovado (teste)', 0, 49.9999, 'reprovado', 3, ?)`,
@@ -343,6 +359,19 @@ describe.skipIf(SEM_DB)('Homologação do fornecedor contra o MariaDB (cliente f
     await porta.cancelar(ctxA, homA, 'Avaliação lançada no questionário errado', 1, `c1070-c-${sufixo}`);
     const [h] = await ler('SELECT situacao, versao FROM homologacao_fornecedor WHERE id = ?', [homA]);
     expect([h!['situacao'], Number(h!['versao'])]).toEqual(['cancelado', 2]);
+    const trilha = await ler(
+      `SELECT motivo, usuario_id FROM trilha_auditoria WHERE entidade = 'homologacao_fornecedor' AND entidade_id = ?
+          AND JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.operacao')) = ?`,
+      [homA, OPERACOES_HOMOLOGACAO_FORNECEDOR.cancelar],
+    );
+    expect(trilha.map((t) => [t['motivo'], Number(t['usuario_id'])])).toEqual([
+      ['Avaliação lançada no questionário errado', avaliador],
+    ]);
+    const cancelada = await porta.detalhe(ctxA, homA);
+    expect([cancelada.situacao, cancelada.motivoCancelamento]).toEqual([
+      'cancelado',
+      'Avaliação lançada no questionário errado',
+    ]);
     await expect(
       porta.cancelar(ctxA, homA, 'Avaliação lançada no questionário errado', 2, `c1070-c2-${sufixo}`),
     ).rejects.toMatchObject({ problema: { codigo: 'homologacao-cancelada' } });
@@ -354,12 +383,65 @@ describe.skipIf(SEM_DB)('Homologação do fornecedor contra o MariaDB (cliente f
     expect(p.homologacoes.filter((x) => x.questionario === questionario).map((x) => x.id)).toEqual(
       expect.arrayContaining([homA, homB]),
     );
+    expect(p.homologacoes.find((x) => x.id === homA)?.motivoCancelamento).toBe(
+      'Avaliação lançada no questionário errado',
+    );
     const d = await porta.detalhe(ctxA, homB);
     expect(d.respostas.map((x) => x.pontuacao)).toEqual([0, 10]);
+    expect(d.motivoCancelamento).toBeNull();
     await expect(porta.detalhe(ctxB, homB)).rejects.toMatchObject({ problema: { codigo: 'nao-encontrado' } });
     expect((await porta.painel(ctxB)).homologacoes.filter((x) => x.questionario === questionario)).toEqual(
       [],
     );
+  });
+
+  it('o questionário de categoria recusa o fornecedor de outra categoria (nada grava) e a busca filtra', async () => {
+    const q = await porta.gravarQuestionario(
+      ctxA,
+      {
+        ...QUESTIONARIO,
+        codigo: `${PREFIXO}${sufixo}C`,
+        descricao: 'Fornecedores da categoria fictícia (teste)',
+        categoria,
+        perguntas: [QUESTIONARIO.perguntas[0]!],
+      },
+      `c1070-qc-${sufixo}`,
+    );
+    const pergunta = (
+      await ler('SELECT id FROM questionario_homologacao_pergunta WHERE questionario_homologacao_id = ?', [
+        q.id,
+      ])
+    ).map((x) => Number(x['id']))[0]!;
+    const avaliacao = (fornecedor: number) => ({
+      fornecedor,
+      questionario: q.id,
+      insumo: null,
+      respostas: [{ pergunta, opcao: 1, texto: null }],
+    });
+    await expect(porta.avaliar(ctxA, avaliacao(fornA), `c1070-ca-${sufixo}`)).rejects.toMatchObject({
+      problema: { codigo: 'fornecedor-fora-categoria' },
+    });
+    const [nada] = await ler(
+      'SELECT COUNT(*) AS n FROM homologacao_fornecedor WHERE questionario_homologacao_id = ?',
+      [q.id],
+    );
+    expect(Number(nada?.['n'])).toBe(0);
+    const [chaves] = await ler('SELECT COUNT(*) AS n FROM idempotencia_operacao WHERE chave = ?', [
+      `c1070-ca-${sufixo}`,
+    ]);
+    expect(Number(chaves?.['n'])).toBe(0);
+    const filtrados = (await porta.fornecedores(ctxA, 'FICTÍCIA C1070', q.id)).map((f) => f.id);
+    expect(filtrados).toContain(fornB);
+    expect(filtrados).not.toContain(fornA);
+    expect((await porta.fornecedores(ctxA, 'FICTÍCIA C1070')).map((f) => f.id)).toEqual(
+      expect.arrayContaining([fornA, fornB]),
+    );
+    const r = await porta.avaliar(ctxA, avaliacao(fornB), `c1070-cb-${sufixo}`);
+    const [h] = await ler(
+      'SELECT categoria_fornecimento_id AS c, empresa_fornecedora_id AS f FROM homologacao_fornecedor WHERE id = ?',
+      [r.id],
+    );
+    expect([Number(h!['c']), Number(h!['f'])]).toEqual([categoria, fornB]);
   });
 
   it('o questionário encerrado deixa de avaliar; as avaliações continuam', async () => {

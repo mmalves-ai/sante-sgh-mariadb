@@ -48,6 +48,8 @@ export interface HomologacaoTela {
   readonly validoAte: string | null;
   readonly avaliador: number;
   readonly avaliadorLogin: string | null;
+  /** O motivo do cancelamento (da trilha), só na cancelada. */
+  readonly motivoCancelamento: string | null;
 }
 
 export interface PosicaoRankingTela {
@@ -123,9 +125,12 @@ export const lerPainelHomologacao = () => ler<PainelHomologacaoTela>(B);
 
 export const lerHomologacao = (id: number) => ler<HomologacaoDetalheTela>(`${B}/${id}`);
 
-export const buscarFornecedoresHomologacao = (termo: string) =>
+/** Com o questionário de categoria, a API devolve só os fornecedores que fornecem a categoria. */
+export const buscarFornecedoresHomologacao = (termo: string, questionario: number | null = null) =>
   ler<{ itens: { id: number; nome: string; documento: string | null; situacao: string }[] }>(
-    `${B}/fornecedores?${new URLSearchParams({ termo }).toString()}`,
+    `${B}/fornecedores?${new URLSearchParams(
+      questionario === null ? { termo } : { termo, questionario: String(questionario) },
+    ).toString()}`,
   );
 
 export const gravarQuestionarioTela = (

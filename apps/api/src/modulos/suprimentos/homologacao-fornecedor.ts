@@ -5,13 +5,17 @@
 //     perguntas com peso e as opções pontuadas (JSON); o encerramento só fecha a vigência (nada apagado);
 //   - homologacao_fornecedor + homologacao_fornecedor_resposta: a avaliação com a nota, a faixa, a situação e a
 //     validade, e uma resposta por pergunta com os pontos e o peso; a exceção marca a reprovada como homologada com a
-//     justificativa (por quem não avaliou); o cancelamento fica na situação, com o motivo na trilha.
+//     justificativa (por quem não avaliou); o cancelamento fica na situação, com o motivo na trilha (a linha da operação
+//     de cancelamento, devolvido no painel e no detalhe);
+//   - o fornecedor só é avaliado no questionário de uma categoria que ele fornece (a principal ou empresa_fornecedora_
+//     categoria), e a busca do fornecedor filtra pela categoria do questionário escolhido.
 // O faixa_avaliacao_fornecedor (cadastro das faixas) é só lido.
 import {
   calcularNotaHomologacao,
   classificarHomologacao,
   conferirCancelamentoHomologacao,
   conferirExcecaoHomologacao,
+  conferirFornecedorDaCategoria,
   conferirQuestionarioHomologacao,
   type FaixaHomologacao,
   type HomologacaoResumo,
@@ -86,6 +90,8 @@ export interface HomologacaoLinha extends HomologacaoResumo {
   readonly avaliadorLogin: string | null;
   readonly situacaoNaData: SituacaoHomologacao;
   readonly requalificar: boolean;
+  /** O motivo do cancelamento (da trilha da operação), só na cancelada. */
+  readonly motivoCancelamento: string | null;
 }
 
 export interface HomologacaoDetalhe extends HomologacaoLinha {
@@ -138,6 +144,7 @@ export interface PortaHomologacaoFornecedor {
   fornecedores(
     c: ContextoPortaM18,
     termo: string,
+    questionario?: number | null,
   ): Promise<{ id: number; nome: string; documento: string | null; situacao: string }[]>;
   gravarQuestionario(
     c: ContextoPortaM18,
@@ -288,7 +295,11 @@ const SQL_HOMOLOGACAO = `SELECT h.id, h.versao, h.empresa_fornecedora_id, COALES
     h.questionario_homologacao_id, q.descricao AS questionario_descricao, c.descricao AS categoria_descricao,
     i.nome AS insumo_nome, h.situacao, h.nota, h.excecao_aprovada, h.justificativa, fx.descricao AS faixa_descricao,
     DATE_FORMAT(h.avaliado_em, '%Y-%m-%d %H:%i:%s') AS avaliado_em, DATE_FORMAT(h.valido_ate, '%Y-%m-%d') AS valido_ate,
-    h.avaliador_usuario_id, u.login AS avaliador_login
+    h.avaliador_usuario_id, u.login AS avaliador_login,
+    CASE WHEN h.situacao = 'cancelado' THEN (SELECT t.motivo FROM trilha_auditoria t
+       WHERE t.entidade = 'homologacao_fornecedor' AND t.entidade_id = h.id
+         AND JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.operacao')) = 'suprimentos.homologacao.cancelar'
+       ORDER BY t.id DESC LIMIT 1) END AS motivo_cancelamento
    FROM homologacao_fornecedor h
    JOIN empresa_fornecedora f ON f.id = h.empresa_fornecedora_id
    JOIN questionario_homologacao q ON q.id = h.questionario_homologacao_id
@@ -319,7 +330,24 @@ function homologacaoDaLinha(r: Linha, hoje: string): HomologacaoLinha {
     avaliadorLogin: tx_(r['avaliador_login']),
   };
   const s = situacaoNaDataHomologacao(base, hoje);
-  return { ...base, situacaoNaData: s.situacao, requalificar: s.requalificar };
+  return {
+    ...base,
+    situacaoNaData: s.situacao,
+    requalificar: s.requalificar,
+    motivoCancelamento: tx_(r['motivo_cancelamento']),
+  };
+}
+
+/** As categorias que o fornecedor fornece: a principal e as vinculadas (sem as excluídas). */
+async function categoriasDoFornecedor(l: Pick<Leitor, 'consultar'>, fornecedor: number): Promise<number[]> {
+  const rs = await l.consultar<Linha>(
+    `SELECT principal_categoria_fornecimento_id AS categoria FROM empresa_fornecedora
+      WHERE id = ? AND principal_categoria_fornecimento_id IS NOT NULL
+     UNION SELECT categoria_fornecimento_id FROM empresa_fornecedora_categoria
+      WHERE empresa_fornecedora_id = ? AND excluido_em IS NULL`,
+    [fornecedor, fornecedor],
+  );
+  return rs.map((r) => n(r['categoria']));
 }
 
 async function hojeDe(l: Pick<Leitor, 'uma'>): Promise<string> {
@@ -460,25 +488,41 @@ export class PortaHomologacaoFornecedorPropria implements PortaHomologacaoFornec
     });
   }
 
-  fornecedores(c: ContextoPortaM18, termo: string) {
+  fornecedores(c: ContextoPortaM18, termo: string, questionario: number | null = null) {
     const ctx = this.contexto(c);
     const t = `%${termo.trim()}%`;
-    return this.nucleo.lerSomente(ctx, async (l) =>
-      (
+    return this.nucleo.lerSomente(ctx, async (l) => {
+      // Com o questionário escolhido e de categoria, só os fornecedores que fornecem a categoria (a mesma regra da
+      // avaliação, conferirFornecedorDaCategoria).
+      let categoria: number | null = null;
+      if (questionario !== null) {
+        const q = await l.uma<Linha>(
+          'SELECT categoria_fornecimento_id FROM questionario_homologacao WHERE id = ?',
+          [questionario],
+        );
+        categoria = nn(q?.['categoria_fornecimento_id']);
+      }
+      const filtro =
+        categoria === null
+          ? ''
+          : ` AND (f.principal_categoria_fornecimento_id = ? OR EXISTS (SELECT 1 FROM empresa_fornecedora_categoria fc
+                WHERE fc.empresa_fornecedora_id = f.id AND fc.categoria_fornecimento_id = ? AND fc.excluido_em IS NULL))`;
+      return (
         await l.consultar<Linha>(
-          `SELECT id, razao_social, nome_fantasia, COALESCE(cnpj, cpf) AS documento, situacao FROM empresa_fornecedora
-            WHERE excluido_em IS NULL AND situacao <> 'inativo'
-              AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?)
-            ORDER BY razao_social LIMIT 30`,
-          [t, t, t],
+          `SELECT f.id, f.razao_social, f.nome_fantasia, COALESCE(f.cnpj, f.cpf) AS documento, f.situacao
+             FROM empresa_fornecedora f
+            WHERE f.excluido_em IS NULL AND f.situacao <> 'inativo'
+              AND (f.razao_social LIKE ? OR f.nome_fantasia LIKE ? OR f.cnpj LIKE ?)${filtro}
+            ORDER BY f.razao_social LIMIT 30`,
+          categoria === null ? [t, t, t] : [t, t, t, categoria, categoria],
         )
       ).map((r) => ({
         id: n(r['id']),
         nome: String(r['nome_fantasia'] ?? r['razao_social']),
         documento: tx_(r['documento']),
         situacao: String(r['situacao']),
-      })),
-    );
+      }));
+    });
   }
 
   gravarQuestionario(c: ContextoPortaM18, e: QuestionarioHomologacaoEntrada, chave: string) {
@@ -600,6 +644,9 @@ export class PortaHomologacaoFornecedorPropria implements PortaHomologacaoFornec
           throw recusa('fornecedor-inexistente', 'O fornecedor não existe ou está inativo.', {
             campos: ['fornecedor'],
           });
+        recusarTodas(
+          conferirFornecedorDaCategoria(q.categoria, await categoriasDoFornecedor(tx, e.fornecedor)),
+        );
         if (e.insumo !== null) {
           const i = await tx.uma<Linha>('SELECT id FROM insumo WHERE id = ? AND excluido_em IS NULL', [
             e.insumo,

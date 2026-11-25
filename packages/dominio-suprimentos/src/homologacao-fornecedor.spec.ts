@@ -7,6 +7,7 @@ import {
   classificarHomologacao,
   conferirCancelamentoHomologacao,
   conferirExcecaoHomologacao,
+  conferirFornecedorDaCategoria,
   conferirQuestionarioHomologacao,
   type FaixaHomologacao,
   faixaDaNotaHomologacao,
@@ -329,5 +330,13 @@ describe('exceção e cancelamento', () => {
         (x) => x.codigo,
       ),
     ).toEqual(['homologacao-cancelada']);
+  });
+
+  it('o questionário de categoria só avalia quem fornece a categoria; o sem categoria vale para todos', () => {
+    expect(conferirFornecedorDaCategoria(null, [])).toEqual([]);
+    expect(conferirFornecedorDaCategoria(4, [2, 4])).toEqual([]);
+    const r = conferirFornecedorDaCategoria(4, [2]);
+    expect(r.map((x) => [x.codigo, x.campos])).toEqual([['fornecedor-fora-categoria', ['fornecedor']]]);
+    expect(conferirFornecedorDaCategoria(4, []).map((x) => x.codigo)).toEqual(['fornecedor-fora-categoria']);
   });
 });
