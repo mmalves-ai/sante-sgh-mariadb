@@ -1,10 +1,13 @@
-// E2E @F39-2 (01-ADM L82, ficha F3.9): imprimir documento do prontuário pede por quê. O médico emite um atestado,
-// abre o documento e o botão Imprimir só libera com a justificativa no tamanho mínimo (validação na hora, com as razões
-// comuns à mão); a 1ª via sai em PDF (via 1); o rótulo passa a pedir o motivo da 2ª via, que sai como via 2. O que fica
-// no banco (evento do documento e registro único em exportacao_documento) é provado no contrato de efeito
+// E2E @F39-2 @C1-079 (01-ADM L82 e L79, ficha F3.9): imprimir documento do prontuário pede por quê. O médico emite um
+// atestado, abre o documento e o botão Imprimir só libera com a justificativa no tamanho mínimo (validação na hora,
+// com as razões comuns à mão); a 1ª via sai em PDF (via 1). Daí em diante é nova via com um só caminho de motivo: o
+// combo do catálogo de reimpressão (o complemento aparece só quando o motivo pede) e a via 2; ao reabrir o documento,
+// a tela já sabe que ele foi impresso e pede o motivo de saída. O que fica no banco (registro_reimpressao, evento do
+// documento e registro único em exportacao_documento) é provado no contrato de efeito
 // documentos-porta-propria.int.spec.ts. Sessão real sobre a fonte sintética de dev; nenhum dado real.
 import { expect, test, type Page } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
+import { esperarOpcoes, escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 
@@ -16,9 +19,9 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('Impressão justificada do documento do prontuário @F39-2 @fase3', () => {
+test.describe('Impressão justificada do documento do prontuário @F39-2 @C1-079 @fase3', () => {
   test.setTimeout(180_000);
-  test('1ª via com justificativa, 2ª via com motivo; botão travado abaixo do mínimo; axe', async ({
+  test('1ª via com justificativa, nova via com motivo do catálogo; botão travado até a entrada valer; axe', async ({
     page,
   }) => {
     const externas = vigiarExternas(page);
@@ -44,8 +47,7 @@ test.describe('Impressão justificada do documento do prontuário @F39-2 @fase3'
     await expect(imprimir).toBeDisabled();
     await semViolacaoAxe(page, 'documento aberto com a justificativa');
 
-    const via = async (texto: string, n: number) => {
-      await campo.fill(texto);
+    const sair = async (n: number) => {
       await expect(imprimir).toBeEnabled();
       const [r] = await Promise.all([
         page.waitForResponse((x) => /\/documentos\/atestado\/\d+\/imprimir$/.test(x.url())),
@@ -53,13 +55,35 @@ test.describe('Impressão justificada do documento do prontuário @F39-2 @fase3'
       ]);
       expect(r.status()).toBe(200);
       expect(r.headers()['content-disposition']).toMatch(new RegExp(`via${n}\\.pdf`));
+      return r;
     };
-    await via('Entrega ao paciente ou ao responsável legal', 1);
-    // A partir daqui é nova via: o rótulo pede o motivo (mínimo menor, mas ainda exigido).
-    await expect(aberto).toContainText('Motivo da 2ª via');
-    await expect(campo).toHaveValue('');
+    await campo.fill('Entrega ao paciente ou ao responsável legal');
+    await sair(1);
+    // A partir daqui é nova via: nada de texto livre, o motivo vem do catálogo (o botão trava até escolher).
+    await expect(aberto.getByTestId('aviso-nova-via')).toBeVisible();
+    await expect(campo).toHaveCount(0);
     await expect(imprimir).toBeDisabled();
-    await via('Via extraviada pelo setor', 2);
+    const motivo = aberto.getByTestId('motivo-reimpressao');
+    await esperarOpcoes(motivo, null);
+    await semViolacaoAxe(page, 'nova via com o motivo do catálogo');
+    await escolher(motivo, { indice: 1 });
+    // Motivo que pede complemento: o campo aparece e o botão só libera com o mínimo.
+    const complemento = aberto.getByTestId('complemento-reimpressao');
+    if (await complemento.isVisible()) {
+      await complemento.fill('abc');
+      await expect(imprimir).toBeDisabled();
+      await complemento.fill('Pedido do convênio SINTETICO');
+    }
+    const r2 = await sair(2);
+    const corpo = r2.request().postDataJSON() as Record<string, unknown>;
+    expect(typeof corpo['motivoReimpressao']).toBe('number');
+    expect(corpo['motivo']).toBeUndefined();
+
+    // Reabrir o documento: a tela já sabe que ele saiu antes (rota das vias) e pede o motivo de saída.
+    await page.keyboard.press('Escape');
+    await linhas.last().getByRole('button', { name: 'Abrir' }).click();
+    await expect(page.getByTestId('documento-aberto').getByTestId('aviso-nova-via')).toBeVisible();
+    await expect(page.getByTestId('justificativa-impressao')).toHaveCount(0);
     expect(externas).toEqual([]);
   });
 });

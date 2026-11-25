@@ -1,7 +1,8 @@
 // 01-ADM L82 pela rota de documentos do prontuário (POST /api/pep/paciente/:p/documentos/:tipo/:id/imprimir): a 1ª
 // via sem justificativa é recusada (400, campo justificativa); com ela, sai o PDF da via 1 e o evento "impresso" fica
-// no documento do prontuário com o texto; a 2ª chamada é nova via, exige o motivo e grava "segunda-via" com ele; a
-// trilha registra a via e onde a justificativa ficou. O que o evento deixa no MariaDB está provado em
+// no documento do prontuário com o texto; a 2ª chamada é nova via e exige o motivo do catálogo de reimpressão (01-ADM
+// L79: um só caminho de motivo; texto livre, motivo inativo e complemento faltando são recusados antes de emitir) e
+// grava "segunda-via" com a descrição do motivo e a via no registro de reimpressões; a trilha registra a via. O que o evento deixa no MariaDB está provado em
 // documentos-porta-propria.int.spec.ts (documento_prontuario_evento com tipo, usuário, justificativa e hora). Portas
 // em memória, serviço de emissão do Compose (Gotenberg em 127.0.0.1); massa SINTÉTICA. Fora do `pnpm verificar`.
 import { createHash } from 'node:crypto';
@@ -93,16 +94,42 @@ describe('01-ADM L82: impressão justificada de documento do prontuário', () =>
     expect(um.headers['content-disposition']).toMatch(/via1\.pdf/);
     expect(await eventos()).toEqual([{ tipo: 'impresso', em: expect.any(String), justificativa: just }]);
 
-    // A 1ª via já existe (vem do registro das emissões): sem motivo, recusa pelo campo motivo.
-    const semMotivo = await imprimir({});
-    expect(semMotivo.statusCode).toBe(400);
-    expect(semMotivo.json()).toMatchObject({ codigo: 'motivo-obrigatorio', campos: ['motivo'] });
-    const dois = await imprimir({ motivo: 'Via extraviada pelo setor' });
+    // A 1ª via já existe (vem do registro das emissões): a tela sabe pela rota das vias, com os motivos ativos.
+    const vias = await app.inject({
+      method: 'GET',
+      url: `/api/pep/paciente/1001/documentos/atestado/${origem}/vias`,
+      headers: { cookie },
+    });
+    expect(vias.statusCode).toBe(200);
+    expect(vias.json()).toMatchObject({ impresso: true });
+    expect((vias.json().motivos as { id: number }[]).map((m) => m.id)).toEqual([1, 2]);
+    // Sem motivo do catálogo (nem com texto livre), inativo ou sem o complemento pedido: recusa antes de emitir.
+    for (const [payload, codigo, campo] of [
+      [{}, 'motivo-obrigatorio', 'motivoReimpressao'],
+      [{ motivo: 'Via extraviada pelo setor' }, 'motivo-obrigatorio', 'motivoReimpressao'],
+      [{ motivoReimpressao: 3 }, 'motivo-inativo', 'motivoReimpressao'],
+      [{ motivoReimpressao: 99 }, 'motivo-inexistente', 'motivoReimpressao'],
+      [{ motivoReimpressao: 2, complemento: 'abc' }, 'complemento-obrigatorio', 'complemento'],
+    ] as const) {
+      const x = await imprimir(payload);
+      expect(x.statusCode).toBe(400);
+      expect(x.json()).toMatchObject({ codigo, campos: [campo] });
+    }
+    expect(documentos.reimpressoes).toEqual([]);
+    const dois = await imprimir({ motivoReimpressao: 1 });
     expect(dois.statusCode).toBe(200);
     expect(dois.headers['content-disposition']).toMatch(/via2\.pdf/);
+    const tres = await imprimir({ motivoReimpressao: 2, complemento: 'Pedido do convênio' });
+    expect(tres.statusCode).toBe(200);
+    expect(tres.headers['content-disposition']).toMatch(/via3\.pdf/);
     expect((await eventos()).map((e) => [e.tipo, e.justificativa])).toEqual([
       ['impresso', just],
-      ['segunda-via', 'Via extraviada pelo setor'],
+      ['segunda-via', 'Perda da via anterior'],
+      ['segunda-via', 'Outro motivo: Pedido do convênio'],
+    ]);
+    expect(documentos.reimpressoes.map((r) => [r.motivo, r.via])).toEqual([
+      [1, 2],
+      [2, 3],
     ]);
 
     const alvos = trilha.eventos
@@ -110,7 +137,8 @@ describe('01-ADM L82: impressão justificada de documento do prontuário', () =>
       .filter((c) => c.startsWith('impresso:atestado'));
     expect(alvos).toEqual([
       'impresso:atestado;via:1;justificativa:emissao+evento',
-      'impresso:atestado;via:2;justificativa:emissao+evento',
+      'impresso:atestado;via:2;motivo:catalogo;registro:1',
+      'impresso:atestado;via:3;motivo:catalogo;registro:2',
     ]);
   }, 300_000);
 

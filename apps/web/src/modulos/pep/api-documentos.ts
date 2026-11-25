@@ -39,6 +39,7 @@ import type {
   TclesPaciente,
   TempoEvento,
   TipoDocumentoAberto,
+  ViasDocumentoProntuario,
   AcaoLiberada,
 } from '@sgh/contratos';
 import { tokenCsrf } from '../../api.js';
@@ -159,8 +160,12 @@ export const imprimirDocumento = (
   p: number,
   tipo: TipoDocumentoAberto,
   id: number,
-  texto: { justificativa: string } | { motivo: string },
+  texto: { justificativa: string } | { motivoReimpressao: number; complemento?: string },
 ) => enviarArquivo(`${pac(p)}/documentos/${tipo}/${id}/imprimir`, texto);
+
+/** 01-ADM L79: se a 1ª via já saiu (a próxima é nova via) e os motivos ativos do catálogo de reimpressão. */
+export const lerViasDocumento = (p: number, tipo: TipoDocumentoAberto, id: number, b: typeof fetch = fetch) =>
+  ler<ViasDocumentoProntuario>(`${pac(p)}/documentos/${tipo}/${id}/vias`, b);
 
 export const exportarProntuario = (p: number, justificativa: string, senha?: string) =>
   enviarArquivo(`${pac(p)}/exportar`, { justificativa, ...(senha ? { senha } : {}) });

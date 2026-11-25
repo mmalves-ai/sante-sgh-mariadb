@@ -71,7 +71,7 @@ import {
   esquemaRelatorioTransferencia,
   esquemaSalvarSumario,
   esquemaImprimirDocumentoProntuario,
-  esquemaSegundaVia,
+  type ViasDocumentoProntuario,
   esquemaSituacaoProblema,
   esquemaSituacaoTcle,
   esquemaSolicitarExames,
@@ -97,7 +97,14 @@ import {
 } from '@sgh/contratos';
 import { regraJustificativaImpressao } from '@sgh/dominio-pep';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
-import { camposDoDocumentoPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
+import {
+  camposDoDocumentoPep,
+  COMPLEMENTO_MINIMO_REIMPRESSAO,
+  MENSAGEM_NOVA_VIA,
+  modeloDoTipo,
+  planoNovaViaProntuario,
+  TITULOS_PEP,
+} from '@sgh/dominio-documento';
 import { type ContextoGravacaoPep, ErroProntuario } from './tipos-pep.js';
 import { AuditadoNoHandler, Auditar, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -452,6 +459,44 @@ export class DocumentosPepController {
     return r;
   }
 
+  /**
+   * As vias do documento (01-ADM L79): se a 1ª via já saiu (a próxima é nova via, com motivo do catálogo) e os
+   * motivos ativos de reimpressão, para a tela pedir o motivo certo antes de imprimir.
+   */
+  @Get('paciente/:p/documentos/:tipo/:id/vias')
+  @Permissao('pep.prontuario.ler')
+  @Auditar('pep.documento.lido')
+  async viasDocumento(
+    @Param('p') p: string,
+    @Param('tipo') t: string,
+    @Param('id') i: string,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ViasDocumentoProntuario> {
+    const s = sessaoDe(req);
+    if (!(TIPOS_DOCUMENTO_ABERTO as readonly string[]).includes(t))
+      throw new ErroProblema('nao-encontrado', 404, 'Documento não encontrado');
+    const tipo = t as TipoDocumentoAberto;
+    const id = idDaRota(i);
+    const paciente = await this.paciente(s, p, 'pep.prontuario.ler', true);
+    const modelo = modeloDoTipo(tipo === 'receita' ? 'receita' : tipo);
+    const original = this.documento
+      ? await this.documento.emissao
+          .originalDaOrigem(s.hospital, modelo, { tipo, idLegado: id })
+          .catch(() => null)
+      : null;
+    req.sghAlvo = {
+      paciente,
+      tabelaAlvo: TABELA_DO_TIPO[tipo],
+      idAlvo: String(id),
+      chaveNaturalAlvo: `vias:${tipo}`,
+    };
+    return {
+      impresso: original !== null,
+      motivos: await this.servico.porta.motivosReimpressao(this.c(s)),
+      complementoMinimo: COMPLEMENTO_MINIMO_REIMPRESSAO,
+    };
+  }
+
   @Post('paciente/:p/documentos/:tipo/:id/imprimir')
   @HttpCode(200)
   @Permissao('pep.prontuario.ler')
@@ -505,41 +550,89 @@ export class DocumentosPepController {
       .originalDaOrigem(s.hospital, modelo, { tipo, idLegado: id })
       .catch(() => null);
     const anterior = original?.id ?? null;
+    // 01-ADM L79: um só caminho de motivo. A nova via leva o motivo do catálogo de reimpressão (e o complemento
+    // quando o motivo pede), conferido pela regra do domínio antes de emitir, e entra no registro de reimpressões.
+    if (anterior) {
+      const motivo =
+        pedido.motivoReimpressao === undefined
+          ? null
+          : await this.servico.porta.motivoReimpressao(this.c(s), pedido.motivoReimpressao);
+      const plano = planoNovaViaProntuario({
+        viasAnteriores: original?.via ?? 1,
+        motivoInformado: pedido.motivoReimpressao !== undefined,
+        motivo,
+        complemento: pedido.complemento ?? null,
+      });
+      if ('recusa' in plano)
+        throw new ErroProblema(
+          'entrada-invalida',
+          400,
+          'Motivo da reimpressão',
+          MENSAGEM_NOVA_VIA[plano.recusa],
+          {
+            campos: [plano.recusa === 'complemento-obrigatorio' ? 'complemento' : 'motivoReimpressao'],
+            codigo: plano.recusa,
+          },
+        );
+      let via: { emissao: { via: number }; pdf: Uint8Array };
+      try {
+        via = await fonte.emissao.segundaVia(anterior, plano.textoEmissao, {
+          titulo: TITULOS_PEP[modelo],
+          campos,
+          autor: s.login,
+          marcaSuporte: marca,
+        });
+      } catch {
+        throw new ErroProblema(
+          'indisponivel',
+          503,
+          'Emissão indisponível',
+          'Não foi possível gerar o PDF agora. O documento continua gravado no prontuário.',
+        );
+      }
+      const proprio = await this.servico.porta.documentoSghDaOrigem(this.c(s), TABELA_DO_TIPO[tipo], id);
+      const g = await this.gravarSgh(() =>
+        this.servico.porta.registrarNovaVia(this.sgh(s, 'pep.documento.impresso'), {
+          documento: proprio?.id ?? null,
+          origem: { tabela: TABELA_DO_TIPO[tipo], id },
+          motivo: pedido.motivoReimpressao!,
+          complemento: pedido.complemento ?? null,
+          viaEmitida: via.emissao.via,
+        }),
+      );
+      req.sghAlvo = {
+        paciente,
+        tabelaAlvo: TABELA_DO_TIPO[tipo],
+        idAlvo: String(id),
+        chaveNaturalAlvo: `impresso:${tipo};via:${via.emissao.via};motivo:catalogo;registro:${g.registro}`,
+      };
+      res.header('content-disposition', `inline; filename="${tipo}-${id}-via${via.emissao.via}.pdf"`);
+      return Buffer.from(via.pdf);
+    }
     const just = regraJustificativaImpressao({
-      viaAnterior: anterior !== null,
+      viaAnterior: false,
       justificativa: pedido.justificativa ?? null,
-      motivo: pedido.motivo ?? null,
+      motivo: null,
     });
     if (!just.ok)
       throw new ErroProblema('entrada-invalida', 400, 'Justificativa obrigatória', just.mensagem, {
-        campos: [anterior ? 'motivo' : 'justificativa'],
+        campos: ['justificativa'],
         codigo: just.codigo,
       });
     try {
-      // A justificativa fica sempre na própria emissão (1ª via e nova via), haja ou não espelho no prontuário.
-      const r = anterior
-        ? await fonte.emissao.segundaVia(
-            anterior,
-            validar(esquemaSegundaVia, { motivo: just.justificativa }).motivo,
-            {
-              titulo: TITULOS_PEP[modelo],
-              campos,
-              autor: s.login,
-              marcaSuporte: marca,
-            },
-          )
-        : await fonte.emissao.emitir({
-            rede: s.rede,
-            estabelecimento: s.hospital,
-            modelo,
-            versaoModelo: '1',
-            titulo: TITULOS_PEP[modelo],
-            origem: { tipo, idLegado: id },
-            campos,
-            autor: s.login,
-            marcaSuporte: marca,
-            justificativa: just.justificativa,
-          });
+      // A justificativa da 1ª via fica na própria emissão, haja ou não espelho no prontuário.
+      const r = await fonte.emissao.emitir({
+        rede: s.rede,
+        estabelecimento: s.hospital,
+        modelo,
+        versaoModelo: '1',
+        titulo: TITULOS_PEP[modelo],
+        origem: { tipo, idLegado: id },
+        campos,
+        autor: s.login,
+        marcaSuporte: marca,
+        justificativa: just.justificativa,
+      });
       // Com espelho no prontuário, também o evento do documento (tipo, justificativa, quem, quando), nunca apagado.
       const proprio = await this.servico.porta.documentoSghDaOrigem(this.c(s), TABELA_DO_TIPO[tipo], id);
       if (proprio)

@@ -119,8 +119,11 @@ export const mensagensDocumentos = {
     prova: 'Prova do documento: {hash}',
     assinadoEm: 'Assinado em {data}',
     semAssinatura: 'Aguardando assinatura',
-    segundaVia: 'Motivo da 2ª via',
     justificativaImpressao: 'Justificativa da impressão',
+    jaImpresso: 'Este documento já foi impresso: a próxima é uma nova via, com o motivo da reimpressão.',
+    motivoReimpressao: 'Motivo da reimpressão',
+    escolhaMotivo: 'Escolha o motivo',
+    complemento: 'Complemento do motivo (mínimo de {minimo} caracteres)',
     situacao: {
       emitido: 'Emitido',
       suspenso: 'Suspenso',

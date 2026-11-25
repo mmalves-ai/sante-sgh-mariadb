@@ -37,6 +37,7 @@ import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documento
 import * as Alergias from './alergias-propria.js';
 import * as HistoricoAlergias from './alergias-historico-propria.js';
 import * as Painel from './documentos-propria-painel.js';
+import * as NovaVia from './documentos-nova-via-propria.js';
 import { DocumentosPropriaExames, type LeitorArquivos } from './documentos-propria-exames.js';
 import { OPERACOES_PEP_RESTO, operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
 import {
@@ -74,6 +75,7 @@ const TABELAS_DOCUMENTOS = [
   'documento_prontuario_evento',
   'registro_assistencial',
   'exportacao_documento',
+  'registro_reimpressao',
 ] as const;
 
 const num = (v: unknown): number => Number(v);
@@ -787,6 +789,28 @@ export class PortaDocumentosPropria implements PortaDocumentos {
         acao: ev.tipo === 'visualizado' ? 'consulta' : ev.tipo === 'exportado' ? 'exportacao' : 'impressao',
         motivo: ev.justificativa ?? null,
         dados: { evento: `documento.${ev.tipo}` },
+      }),
+    );
+  }
+
+  motivosReimpressao(c: ContextoDocs) {
+    return this.ler(c, 'motivos-reimpressao', (l) => NovaVia.lerMotivosReimpressaoAtivos(l));
+  }
+
+  motivoReimpressao(c: ContextoDocs, id: number) {
+    return this.ler(c, 'motivo-reimpressao', (l) => NovaVia.lerMotivoReimpressao(l, id));
+  }
+
+  registrarNovaVia(c: ContextoGravacaoPep, e: NovaVia.NovaViaDocumento) {
+    return this.gravar(
+      c,
+      'pep.documento.nova-via',
+      (tx, est, usuario) => NovaVia.gravarNovaVia(tx, est, usuario, e),
+      (r) => ({ tabela: 'registro_reimpressao', id: r.registro }),
+      (r) => ({
+        acao: 'impressao',
+        motivo: r.texto,
+        dados: { evento: 'documento.segunda-via', via: r.via, motivoReimpressao: e.motivo },
       }),
     );
   }

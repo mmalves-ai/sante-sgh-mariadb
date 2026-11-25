@@ -29,6 +29,9 @@ interface Ids {
   modelo: number;
   registro: number;
   registro2: number;
+  motivoPerda: number;
+  motivoOutro: number;
+  motivoInativo: number;
 }
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
@@ -61,6 +64,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
       const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
       // Massa de teste só (o registro de impressão/exportação é histórico e o produto nunca o apaga).
       await e.executar(`DELETE FROM exportacao_documento WHERE estabelecimento_id IN ${est}`, [P]);
+      await e.executar(`DELETE FROM registro_reimpressao WHERE estabelecimento_id IN ${est}`, [P]);
       await e.executar(
         `DELETE ev FROM documento_prontuario_evento ev JOIN documento_prontuario d ON d.id = ev.documento_prontuario_id
           WHERE d.estabelecimento_id IN ${est}`,
@@ -268,6 +272,18 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
             agora,
           ],
         );
+      const motivo = (codigo: string, descricao: string, ativo: boolean, exige: boolean) =>
+        garantir(
+          e,
+          'SELECT id FROM motivo_reimpressao WHERE codigo = ?',
+          [codigo],
+          `INSERT INTO motivo_reimpressao (codigo, descricao, ativo, exige_complemento, criado_em)
+           VALUES (?, ?, ?, ?, ?)`,
+          [codigo, descricao, ativo, exige, agora],
+        );
+      ids.motivoPerda = await motivo(`${P}-perda`, 'Perda da via (sintético)', true, false);
+      ids.motivoOutro = await motivo(`${P}-outro`, 'Outro motivo (sintético)', true, true);
+      ids.motivoInativo = await motivo(`${P}-inat`, 'Motivo desativado (sintético)', false, false);
       ids.registro = await registro('2026-11-20T11:00:00Z');
       ids.registro2 = await registro('2026-11-20T12:00:00Z');
     });
@@ -547,6 +563,112 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
         ids.est,
       ]);
     }
+  });
+
+  it('01-ADM L79: nova via só com motivo do catálogo; via no registro de reimpressões, no documento e no registro único', async () => {
+    const id = (await porta.documentoSghDaOrigem(C(), 'registro_assistencial', ids.registro2))!.id;
+    await porta.registrarEventoDocumento(G(), {
+      documento: id,
+      tipo: 'impresso',
+      justificativa: 'Primeira via SINT',
+    });
+    const regs = () =>
+      contar(
+        "SELECT COUNT(*) AS n FROM registro_reimpressao WHERE entidade = 'documento_prontuario' AND entidade_id = ?",
+        [id],
+      );
+    const base = {
+      documento: id,
+      origem: { tabela: 'registro_assistencial', id: ids.registro2 },
+      viaEmitida: 2,
+    };
+    // Motivo inativo, inexistente e complemento faltando: recusa sem gravar nada.
+    await expect(
+      porta.registrarNovaVia(G(), { ...base, motivo: ids.motivoInativo, complemento: null }),
+    ).rejects.toThrow(/motivo-inativo/);
+    await expect(
+      porta.registrarNovaVia(G(), { ...base, motivo: 999_999_999, complemento: null }),
+    ).rejects.toThrow(/motivo-inexistente/);
+    await expect(
+      porta.registrarNovaVia(G(), { ...base, motivo: ids.motivoOutro, complemento: 'ab' }),
+    ).rejects.toThrow(/complemento-obrigatorio/);
+    expect(await regs()).toBe(0);
+    expect(await contar('SELECT vias_impressas AS n FROM documento_prontuario WHERE id = ?', [id])).toBe(1);
+
+    const um = await porta.registrarNovaVia(G(), { ...base, motivo: ids.motivoPerda, complemento: null });
+    expect(um).toMatchObject({ via: 2, texto: 'Perda da via (sintético)' });
+    const dois = await porta.registrarNovaVia(G(), {
+      ...base,
+      viaEmitida: 3,
+      motivo: ids.motivoOutro,
+      complemento: 'Pedido do convênio SINT',
+    });
+    expect(dois).toMatchObject({ via: 3, texto: 'Outro motivo (sintético): Pedido do convênio SINT' });
+    const rr = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+      l.consultar(
+        `SELECT motivo_reimpressao_id, motivo_texto, via, destino, usuario_id, estabelecimento_id, operacao
+           FROM registro_reimpressao WHERE entidade = 'documento_prontuario' AND entidade_id = ? ORDER BY via`,
+        [id],
+      ),
+    );
+    expect(rr.map((r) => [Number(r['motivo_reimpressao_id']), r['motivo_texto'], Number(r['via'])])).toEqual([
+      [ids.motivoPerda, null, 2],
+      [ids.motivoOutro, 'Pedido do convênio SINT', 3],
+    ]);
+    for (const r of rr) {
+      expect(r).toMatchObject({ destino: 'pdf', operacao: 'inclusao' });
+      expect([Number(r['usuario_id']), Number(r['estabelecimento_id'])]).toEqual([ids.usuario, ids.est]);
+    }
+    // O documento conta as vias e a cadeia leva o evento com o motivo; o registro único, a reimpressão com o motivo.
+    expect(await contar('SELECT vias_impressas AS n FROM documento_prontuario WHERE id = ?', [id])).toBe(3);
+    const ev = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+      l.consultar(
+        `SELECT justificativa, JSON_VALUE(dados, '$.tipo') AS tipo, JSON_VALUE(dados, '$.via') AS via
+           FROM documento_prontuario_evento WHERE documento_prontuario_id = ? AND acao = 'impressao' ORDER BY id`,
+        [id],
+      ),
+    );
+    expect(ev.map((x) => [x['tipo'], String(x['via'] ?? ''), x['justificativa']])).toEqual([
+      ['impresso', '', 'Primeira via SINT'],
+      ['segunda-via', '2', 'Perda da via (sintético)'],
+      ['segunda-via', '3', 'Outro motivo (sintético): Pedido do convênio SINT'],
+    ]);
+    const ex = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+      l.consultar(
+        `SELECT tipo_operacao, motivo_reimpressao_id FROM exportacao_documento
+          WHERE documento_prontuario_id = ? ORDER BY id`,
+        [id],
+      ),
+    );
+    expect(
+      ex.map((x) => [
+        x['tipo_operacao'],
+        x['motivo_reimpressao_id'] === null ? null : Number(x['motivo_reimpressao_id']),
+      ]),
+    ).toEqual([
+      ['impressao', null],
+      ['reimpressao', ids.motivoPerda],
+      ['reimpressao', ids.motivoOutro],
+    ]);
+    // Documento só na origem (sem espelho): a via entra no registro de reimpressões pela tabela da origem.
+    const so = await porta.registrarNovaVia(G(), {
+      documento: null,
+      origem: { tabela: 'documento_emitido', id: 902_400_999 },
+      viaEmitida: 2,
+      motivo: ids.motivoPerda,
+      complemento: null,
+    });
+    expect(so.via).toBe(2);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM registro_reimpressao WHERE entidade = 'documento_emitido' AND entidade_id = ? AND estabelecimento_id = ?",
+        [902_400_999, ids.est],
+      ),
+    ).toBe(1);
+    // Os motivos ativos que a tela oferece (o inativo fica de fora).
+    const ativos = (await porta.motivosReimpressao(C())).map((m) => m.id);
+    expect(ativos).toEqual(expect.arrayContaining([ids.motivoPerda, ids.motivoOutro]));
+    expect(ativos).not.toContain(ids.motivoInativo);
   });
 
   it('01-ADM L82: a exportação do prontuário completo grava justificativa, tipo, quem, quando e o resumo', async () => {

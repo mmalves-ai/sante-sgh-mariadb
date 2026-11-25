@@ -46,6 +46,8 @@ import {
   loginDaOperacao,
 } from './tipos-pep.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
+import { planoNovaViaProntuario } from '@sgh/dominio-documento';
+import { recusaNovaVia, type NovaViaDocumento, type NovaViaGravada } from './documentos-nova-via-propria.js';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
 import { cboDe, type PortaRegistroMemoria, type RegistroOuvido } from './registro-porta-memoria.js';
 
@@ -2032,6 +2034,63 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         em: new Date().toISOString(),
         ...(ev.justificativa ? { justificativa: ev.justificativa } : {}),
       });
+  }
+
+  /** Catálogo de motivos de reimpressão da memória (massa sintética; o inativo prova a recusa). */
+  readonly motivosCatalogo: {
+    id: number;
+    codigo: string;
+    descricao: string;
+    ativo: boolean;
+    exigeComplemento: boolean;
+  }[] = [
+    { id: 1, codigo: 'perda', descricao: 'Perda da via anterior', ativo: true, exigeComplemento: false },
+    { id: 2, codigo: 'outro', descricao: 'Outro motivo', ativo: true, exigeComplemento: true },
+    { id: 3, codigo: 'antigo', descricao: 'Motivo desativado', ativo: false, exigeComplemento: false },
+  ];
+
+  /** As novas vias gravadas (como registro_reimpressao no banco; 01-ADM L79). */
+  readonly reimpressoes: {
+    hospital: string;
+    entidade: string;
+    entidadeId: number;
+    motivo: number;
+    via: number;
+  }[] = [];
+
+  async motivosReimpressao() {
+    return this.motivosCatalogo
+      .filter((m) => m.ativo)
+      .map(({ id, codigo, descricao, exigeComplemento }) => ({ id, codigo, descricao, exigeComplemento }));
+  }
+
+  async motivoReimpressao(c: ContextoDocs, id: number) {
+    void c;
+    const m = this.motivosCatalogo.find((x) => x.id === id);
+    return m ? { descricao: m.descricao, ativo: m.ativo, exigeComplemento: m.exigeComplemento } : null;
+  }
+
+  async registrarNovaVia(c: ContextoGravacaoPep, e: NovaViaDocumento): Promise<NovaViaGravada> {
+    // Como no banco: a mesma regra do domínio, a via no registro e, com espelho, o evento no documento.
+    const d =
+      e.documento === null ? undefined : this.est(c.hospital).documentos.find((x) => x.id === e.documento);
+    if (e.documento !== null && !d) throw recusaNovaVia('documento-inexistente');
+    const entidade = d ? 'documento_prontuario' : e.origem.tabela;
+    const entidadeId = d ? d.id : e.origem.id;
+    const anteriores = this.reimpressoes
+      .filter((r) => r.hospital === c.hospital && r.entidade === entidade && r.entidadeId === entidadeId)
+      .reduce((m, r) => Math.max(m, r.via), 0);
+    const p = planoNovaViaProntuario({
+      viasAnteriores: Math.max(anteriores, e.viaEmitida - 1),
+      motivoInformado: true,
+      motivo: await this.motivoReimpressao(c, e.motivo),
+      complemento: e.complemento,
+    });
+    if ('recusa' in p) throw recusaNovaVia(p.recusa);
+    if (d)
+      d.eventos.push({ tipo: 'segunda-via', em: new Date().toISOString(), justificativa: p.textoEmissao });
+    this.reimpressoes.push({ hospital: c.hospital, entidade, entidadeId, motivo: e.motivo, via: p.via });
+    return { registro: this.reimpressoes.length, via: p.via, texto: p.textoEmissao };
   }
 
   /** As exportações do prontuário gravadas (como exportacao_documento no banco; 01-ADM L82). */

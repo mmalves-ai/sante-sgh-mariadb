@@ -8,7 +8,9 @@
 import type { LinhaCausaObito } from '@sgh/dominio-pep';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ContextoOperacao } from '@sgh/nucleo';
-import type { HistoricoAlergia, ManifestacaoAlergica } from '@sgh/contratos';
+import type { HistoricoAlergia, ManifestacaoAlergica, MotivoReimpressaoAtivo } from '@sgh/contratos';
+import type { MotivoCatalogo } from '@sgh/dominio-documento';
+import type { NovaViaDocumento, NovaViaGravada } from './documentos-nova-via-propria.js';
 import type {
   AlergiaDoProntuarioLida,
   AnexoLido,
@@ -305,6 +307,16 @@ export interface PortaDocumentos {
       justificativa?: string | null;
     },
   ): Promise<void>;
+  /** Os motivos ativos do catálogo de reimpressão (01-ADM L79), como a tela oferece na nova via. */
+  motivosReimpressao(c: ContextoDocs): Promise<MotivoReimpressaoAtivo[]>;
+  /** Um motivo do catálogo pelo id, ativo ou não (a regra recusa o inativo); null se não existe. */
+  motivoReimpressao(c: ContextoDocs, id: number): Promise<MotivoCatalogo | null>;
+  /**
+   * Nova via de documento do prontuário (01-ADM L79): um só caminho de motivo. Confere o motivo do catálogo pela
+   * regra do domínio, grava a via em registro_reimpressao e, com espelho no prontuário, as vias, o evento e o
+   * registro único de impressões, na mesma transação.
+   */
+  registrarNovaVia(c: ContextoGravacaoPep, e: NovaViaDocumento): Promise<NovaViaGravada>;
   /**
    * A exportação do prontuário completo (01-ADM L82): grava em exportacao_documento quem exportou, quando, a
    * justificativa (texto e tipo padronizado ativo) e o resumo do conteúdo entregue, antes de entregar.

@@ -1,19 +1,17 @@
 <script setup lang="ts">
 // Documento aberto (leitura auditada): texto em parágrafos, situação, suspensão e a prova do documento do novo;
-// imprime o PDF/A com a justificativa (01-ADM L82: a 1ª via pede a justificativa, com as razões comuns à mão; a
-// 2ª via, o motivo). O botão só libera com o texto no tamanho mínimo.
+// imprime o PDF/A dizendo por quê (01-ADM L82): a 1ª via pede a justificativa, com as razões comuns à mão. Da 2ª via
+// em diante (01-ADM L79, um só caminho de motivo) a tela já sabe, pela rota das vias, que o documento saiu antes e
+// pede o motivo do catálogo de reimpressão, com o complemento só quando o motivo exige. O botão só libera com a
+// entrada válida (validação na hora); a nova via entra no registro de reimpressões.
 import type { TipoDocumentoAberto } from '@sgh/contratos';
-import {
-  JUSTIFICATIVA_MINIMA_IMPRESSAO,
-  MOTIVO_MINIMO_SEGUNDA_VIA,
-  RAZOES_IMPRESSAO,
-} from '@sgh/dominio-pep';
-import { SanteAlerta, SanteBotao, SanteDialogo } from '@sgh/ui';
+import { JUSTIFICATIVA_MINIMA_IMPRESSAO, RAZOES_IMPRESSAO } from '@sgh/dominio-pep';
+import { SanteAlerta, SanteBotao, SanteDialogo, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
-import { abrirArquivo, abrirDocumento, imprimirDocumento } from '../../api-documentos.js';
+import { abrirArquivo, abrirDocumento, imprimirDocumento, lerViasDocumento } from '../../api-documentos.js';
 import { dataHoraBr } from '../../formato.js';
 
 const props = defineProps<{ paciente: number; tipo: TipoDocumentoAberto; id: number }>();
@@ -24,28 +22,51 @@ const doc = useQuery({
   queryFn: () => abrirDocumento(props.paciente, props.tipo, props.id),
   enabled: computed(() => visivel.value),
 });
+const vias = useQuery({
+  queryKey: computed(() => ['pep', 'doc', 'vias', props.paciente, props.tipo, props.id]),
+  queryFn: () => lerViasDocumento(props.paciente, props.tipo, props.id),
+  enabled: computed(() => visivel.value && !!doc.data.value?.pdf),
+});
 const impressoes = ref(0);
-const motivo = ref('');
+const justificativa = ref('');
+const motivo = ref<number | null>(null);
+const complemento = ref('');
 const erro = ref<unknown>(null);
-const minimo = computed(() =>
-  impressoes.value > 0 ? MOTIVO_MINIMO_SEGUNDA_VIA : JUSTIFICATIVA_MINIMA_IMPRESSAO,
+const novaVia = computed(() => impressoes.value > 0 || !!vias.data.value?.impresso);
+const motivos = computed(() => vias.data.value?.motivos ?? []);
+const opcoesMotivo = computed(() => [
+  { valor: null, rotulo: t('pep.doc.documento.escolhaMotivo') },
+  ...motivos.value.map((m) => ({ valor: m.id, rotulo: m.descricao })),
+]);
+const minimoComplemento = computed(() => vias.data.value?.complementoMinimo ?? 1);
+const pedeComplemento = computed(
+  () => motivos.value.find((m) => m.id === motivo.value)?.exigeComplemento ?? false,
 );
-const textoValido = computed(() => motivo.value.trim().length >= minimo.value);
+const entradaValida = computed(() =>
+  novaVia.value
+    ? motivo.value !== null &&
+      (!pedeComplemento.value || complemento.value.trim().length >= minimoComplemento.value)
+    : justificativa.value.trim().length >= JUSTIFICATIVA_MINIMA_IMPRESSAO,
+);
 async function imprimir(): Promise<void> {
   erro.value = null;
-  if (!textoValido.value) return;
-  const texto = motivo.value.trim();
+  if (!entradaValida.value) return;
+  const comp = complemento.value.trim();
   try {
     abrirArquivo(
       await imprimirDocumento(
         props.paciente,
         props.tipo,
         props.id,
-        impressoes.value > 0 ? { motivo: texto } : { justificativa: texto },
+        novaVia.value && motivo.value !== null
+          ? { motivoReimpressao: motivo.value, ...(comp ? { complemento: comp } : {}) }
+          : { justificativa: justificativa.value.trim() },
       ),
     );
     impressoes.value++;
-    motivo.value = '';
+    justificativa.value = '';
+    motivo.value = null;
+    complemento.value = '';
   } catch (e) {
     erro.value = e;
   }
@@ -93,15 +114,33 @@ async function imprimir(): Promise<void> {
         }}
       </p>
       <form v-if="doc.data.value.pdf" class="imprimir" @submit.prevent="imprimir">
-        <label>
-          <span>{{
-            impressoes > 0 ? t('pep.doc.documento.segundaVia') : t('pep.doc.documento.justificativaImpressao')
-          }}</span>
-          <input
+        <template v-if="novaVia">
+          <p data-testid="aviso-nova-via">{{ t('pep.doc.documento.jaImpresso') }}</p>
+          <SanteSelecao
             v-model="motivo"
+            data-testid="motivo-reimpressao"
+            :rotulo="t('pep.doc.documento.motivoReimpressao')"
+            :opcoes="opcoesMotivo"
+            obrigatorio
+          />
+          <label v-if="pedeComplemento">
+            <span>{{ t('pep.doc.documento.complemento', { minimo: minimoComplemento }) }}</span>
+            <input
+              v-model="complemento"
+              data-testid="complemento-reimpressao"
+              maxlength="500"
+              :minlength="minimoComplemento"
+              required
+            />
+          </label>
+        </template>
+        <label v-else>
+          <span>{{ t('pep.doc.documento.justificativaImpressao') }}</span>
+          <input
+            v-model="justificativa"
             data-testid="justificativa-impressao"
             maxlength="200"
-            :minlength="minimo"
+            :minlength="JUSTIFICATIVA_MINIMA_IMPRESSAO"
             list="razoes-impressao"
             required
           />
@@ -113,7 +152,7 @@ async function imprimir(): Promise<void> {
           tipo="submit"
           variante="secundario"
           :rotulo="t('pep.doc.imprimir')"
-          :desabilitado="!textoValido"
+          :desabilitado="!entradaValida"
         />
       </form>
       <MensagemErro v-if="erro" :erro="erro" />
