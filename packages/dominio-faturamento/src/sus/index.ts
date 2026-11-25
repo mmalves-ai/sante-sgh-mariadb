@@ -23,3 +23,5 @@ export * from './meta.js';
 export * from './configuracao-sus.js';
 // F7 (08-INTG linha 131): troca por serviço web com o SUS (rastreamento de câncer, cadastro de prestador).
 export * from './servico-web.js';
+// F7 (06-SUS linha 59): leitos de UTI habilitados (cadastro por tipo e vigência) e diárias de UTI por competência.
+export * from './leito-uti-habilitado.js';
