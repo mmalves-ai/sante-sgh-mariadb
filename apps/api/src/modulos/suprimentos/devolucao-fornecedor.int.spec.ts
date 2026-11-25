@@ -25,7 +25,7 @@ import {
   montarMassa,
   SEM_BANCO,
 } from './massa-propria.spec-util.js';
-import { movimentar, tipoMovimentoId } from './porta-propria.js';
+import { insumoAtivo, lotesDaEntrada, movimentar, tipoMovimentoId } from './porta-propria.js';
 
 const k = () => `t-devf-${randomUUID()}`;
 const MARCA = `DF${Date.now().toString(36).toUpperCase()}`.slice(0, 12);
@@ -426,5 +426,119 @@ describe.skipIf(SEM_BANCO)('devolução de compra ao fornecedor (MariaDB)', () =
     expect(Number(p2?.['saldo'])).toBe(0);
     expect((await porta.nota(c, nota)).itens[0]).toMatchObject({ jaDevolvida: 10, disponivel: 0 });
     expect((await porta.notas(c, MARCA)).some((x) => x.id === nota)).toBe(false);
+  });
+
+  it('item com lote: a segunda devolução parcial sai do lote seguinte da nota, nunca do lote já devolvido', async () => {
+    // Outra compra do mesmo insumo rastreável: 10 unidades em dois lotes de 5 (L1 vence antes de L2).
+    let nota2 = 0;
+    let item2 = 0;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c2015-lote' }, async (e) => {
+      const tipo = await e.uma<L>("SELECT id FROM tipo_entrada_estoque WHERE codigo = 'compra'");
+      nota2 = await inserirMinimo(
+        e,
+        'nota_entrada',
+        {
+          estabelecimento_id: m.estA,
+          numero: 980_000 + Math.floor(Math.random() * 9_999),
+          empresa_fornecedora_id: m.fornecedor,
+          local_estoque_id: m.localA,
+          tipo_entrada_estoque_id: tipo?.['id'],
+          numero_documento: `${MARCA}NL`,
+          data_emissao: '2026-01-06',
+          data_entrada: '2026-01-06',
+          situacao: 'confirmada',
+        },
+        'c2015',
+      );
+      const u = await e.uma<L>('SELECT estoque_unidade_medida_id AS u FROM insumo WHERE id = ?', [m.insumo]);
+      item2 = await inserirMinimo(
+        e,
+        'nota_entrada_item',
+        {
+          nota_entrada_id: nota2,
+          sequencia: 1,
+          insumo_id: m.insumo,
+          unidade_medida_id: u?.['u'],
+          quantidade: 10,
+          quantidade_estoque: 10,
+          valor_unitario: 5,
+          valor_total: 50,
+          custo_unitario: 5,
+        },
+        'c2015',
+      );
+    });
+    const sufixo = randomUUID().slice(0, 6).toUpperCase();
+    const l1 = `C2015A${sufixo}`;
+    const l2 = `C2015B${sufixo}`;
+    const entrada = definirOperacao({
+      nome: 'teste.c2015.entrada_lotes',
+      tabelas: ['saldo_estoque', 'saldo_lote', 'lote_insumo', 'movimento_estoque', 'movimento_lote'],
+      entrada: z.object({}),
+      gravar: async (tx) => {
+        const ins = await insumoAtivo(tx, m.insumo);
+        const lotes = await lotesDaEntrada(
+          tx,
+          m.estA,
+          ins,
+          10,
+          [
+            { lote: l1, validade: '2027-03-31', quantidade: 5 },
+            { lote: l2, validade: '2027-09-30', quantidade: 5 },
+          ],
+          '2026-01-06',
+        );
+        await movimentar(tx, m.estA, {
+          local: m.localA,
+          insumo: m.insumo,
+          quantidade: 10,
+          natureza: 'entrada',
+          tipoMovimento: await tipoMovimentoId(tx, 'entrada_nota'),
+          valorEntrada: 50,
+          lotes,
+          hoje: '2026-01-06',
+          notaItem: item2,
+          fornecedor: m.fornecedor,
+        });
+        return { ok: 1 };
+      },
+      alvo: () => ({ tabela: 'nota_entrada', id: nota2 }),
+    });
+    await nucleo
+      .criarExecutor()
+      .executar(entrada, CLIENTE, {}, { ...contexto(m, m.estA, 't-c2015-el'), chaveIdempotencia: k() });
+    const lotesDa = async (devolucao: number) =>
+      nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-c2015-ll' }, (l) =>
+        l.consultar<L>(
+          `SELECT li.numero_lote, SUM(ml.quantidade) AS q
+             FROM devolucao_fornecedor_item dfi
+             JOIN movimento_estoque me ON me.devolucao_fornecedor_item_id = dfi.id
+             JOIN movimento_lote ml ON ml.movimento_estoque_id = me.id
+             JOIN lote_insumo li ON li.id = ml.lote_insumo_id
+            WHERE dfi.devolucao_fornecedor_id = ? GROUP BY li.numero_lote ORDER BY li.numero_lote`,
+          [devolucao],
+        ),
+      );
+    const daNota = (quantidade: number, nf: string): DevolucaoFornecedorEntrada =>
+      base({
+        nota: nota2,
+        abaterContasPagar: false,
+        numeroNotaFiscal: nf,
+        chaveAcesso: chaveSintetica(nf),
+        itens: [{ notaItem: item2, quantidade }],
+      });
+    // 1ª devolução: 5, todo o L1 (vence antes).
+    const d1 = await porta.registrar(c, daNota(5, '5501'), k());
+    expect((await lotesDa(d1.id)).map((r) => [r['numero_lote'], Number(r['q'])])).toEqual([[l1, 5]]);
+    // 2ª devolução: 3, do L2 (o L1 já voltou inteiro ao fornecedor).
+    const d2 = await porta.registrar(c, daNota(3, '5502'), k());
+    expect((await lotesDa(d2.id)).map((r) => [r['numero_lote'], Number(r['q'])])).toEqual([[l2, 3]]);
+    const sl = await um(
+      `SELECT SUM(CASE WHEN li.numero_lote = ? THEN sl.quantidade ELSE 0 END) AS a,
+              SUM(CASE WHEN li.numero_lote = ? THEN sl.quantidade ELSE 0 END) AS b
+         FROM saldo_lote sl JOIN lote_insumo li ON li.id = sl.lote_insumo_id WHERE sl.local_estoque_id = ?`,
+      [l1, l2, m.localA],
+    );
+    expect([Number(sl?.['a']), Number(sl?.['b'])]).toEqual([0, 2]);
   });
 });

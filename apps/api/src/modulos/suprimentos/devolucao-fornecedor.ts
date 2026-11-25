@@ -199,23 +199,69 @@ async function parcelasDaNota(l: Leitor, est: number, nota: number): Promise<Lin
   );
 }
 
-/** Os lotes da devolução: os que entraram pela nota (validade mais curta primeiro), até a quantidade devolvida. */
-async function lotesDaNota(tx: TxOperacao, notaItem: number, quantidade: number): Promise<LoteMandado[]> {
-  const ls = await tx.consultar<Linha>(
-    `SELECT li.numero_lote, li.validade, SUM(ml.quantidade) AS quantidade
+/**
+ * Os lotes que a devolução leva, entre os que entraram pela nota (o que vence primeiro sai primeiro). Cada lote vale o
+ * menor entre o que entrou pela nota menos o que já voltou ao fornecedor em devoluções anteriores do mesmo item da
+ * nota e o saldo livre do lote no local (sem bloqueio, liberado, fora do reservado): o lote já devolvido ou já
+ * consumido não é mandado de novo. Sem saldo bastante nos lotes da nota, manda o que há e a conferência dos lotes da
+ * saída recusa.
+ */
+async function lotesDaNota(
+  tx: TxOperacao,
+  est: number,
+  local: number,
+  notaItem: number,
+  quantidade: number,
+): Promise<LoteMandado[]> {
+  const entrou = await tx.consultar<Linha>(
+    `SELECT li.id, li.numero_lote, li.validade, SUM(ml.quantidade) AS quantidade
        FROM movimento_estoque me JOIN movimento_lote ml ON ml.movimento_estoque_id = me.id
        JOIN lote_insumo li ON li.id = ml.lote_insumo_id
       WHERE me.nota_entrada_item_id = ? AND me.natureza = 'entrada'
       GROUP BY li.id, li.numero_lote, li.validade ORDER BY li.validade, li.id`,
     [notaItem],
   );
+  if (!entrou.length) return [];
+  const voltou = await tx.consultar<Linha>(
+    `SELECT ml.lote_insumo_id, SUM(ml.quantidade) AS quantidade
+       FROM devolucao_fornecedor_item dfi
+       JOIN movimento_estoque me ON me.devolucao_fornecedor_item_id = dfi.id AND me.natureza = 'saida'
+       JOIN movimento_lote ml ON ml.movimento_estoque_id = me.id
+      WHERE dfi.nota_entrada_item_id = ?
+      GROUP BY ml.lote_insumo_id`,
+    [notaItem],
+  );
+  const saldo = await tx.consultar<Linha>(
+    `SELECT sl.lote_insumo_id, sl.quantidade, sl.quantidade_reservada, sl.bloqueado, li.situacao
+       FROM saldo_lote sl JOIN lote_insumo li ON li.id = sl.lote_insumo_id AND li.excluido_em IS NULL
+      WHERE sl.estabelecimento_id = ? AND sl.local_estoque_id = ? AND sl.excluido_em IS NULL
+        AND sl.lote_insumo_id IN (${entrou.map(() => '?').join(',')})`,
+    [est, local, ...entrou.map((l) => n(l['id']))],
+  );
+  const devolvido = new Map(voltou.map((r) => [n(r['lote_insumo_id']), n(r['quantidade'])]));
+  const livre = new Map(
+    saldo.map((r) => [
+      n(r['lote_insumo_id']),
+      n(r['bloqueado']) === 1 || r['situacao'] !== 'liberado'
+        ? 0
+        : Math.max(0, Math.min(n(r['quantidade']), n(r['quantidade']) - n(r['quantidade_reservada']))),
+    ]),
+  );
   const out: LoteMandado[] = [];
   let falta = q4(quantidade);
-  for (const l of ls) {
+  for (const l of entrou) {
     if (falta <= 0) break;
-    const q = q4(Math.min(falta, n(l['quantidade'])));
+    const id = n(l['id']);
+    const cabe = Math.min(n(l['quantidade']) - (devolvido.get(id) ?? 0), livre.get(id) ?? 0);
+    if (cabe <= 0) continue;
+    const q = q4(Math.min(falta, cabe));
     out.push({ lote: t(l['numero_lote']), validade: dia(l['validade']), quantidade: q });
     falta = q4(falta - q);
+  }
+  // Nenhum lote da nota com saldo: manda o primeiro, para a conferência dos lotes recusar com o motivo certo.
+  if (!out.length) {
+    const l = entrou[0]!;
+    out.push({ lote: t(l['numero_lote']), validade: dia(l['validade']), quantidade: q4(quantidade) });
   }
   return out;
 }
@@ -342,7 +388,7 @@ async function registrarDevolucao(
       local,
       insumo,
       quantidade,
-      await lotesDaNota(tx, i.notaItem, quantidade),
+      await lotesDaNota(tx, est, local, i.notaItem, quantidade),
       hoje,
     );
     const mov = await movimentar(tx, est, {
