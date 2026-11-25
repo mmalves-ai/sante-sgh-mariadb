@@ -143,6 +143,10 @@ export const PERMISSOES_FATURAMENTO_M30: readonly DeclaracaoPermissao[] = [
         'faturamento.autorizacao.responder',
         'Registrar a resposta da operadora ao pedido de autorização (senha, itens e valores)',
       ],
+      [
+        'faturamento.autorizacao.liberar',
+        'Liberar na alçada o pedido de OPME acima do limite do procedimento (quem pediu não libera)',
+      ],
     ] as const
   ).map(([codigo, descricao]): DeclaracaoPermissao => ({
     codigo,

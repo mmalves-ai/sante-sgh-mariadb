@@ -111,6 +111,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/ProtocolosTramiteTela.vue'),
     meta: { permissao: 'faturamento.tramite.ler' },
   },
+  // 06-FAT linha 25: liberação na alçada da OPME acima do limite do procedimento (quatro olhos).
+  {
+    path: '/faturamento/opme-liberacao',
+    name: 'faturamento.opmeLiberacao',
+    component: () => import('./telas/OpmeLiberacaoTela.vue'),
+    meta: { permissao: 'faturamento.autorizacao.ler' },
+  },
   {
     path: '/faturamento/guias-convenio',
     name: 'faturamento.guiasConvenio',

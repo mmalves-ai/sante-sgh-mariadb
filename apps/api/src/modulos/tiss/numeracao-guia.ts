@@ -16,6 +16,7 @@ import type { ContaTiss } from '@sgh/contratos';
 import { avisoFaixaNoFim, origemNumeroGuia, tipoFaixaDaGuia } from '@sgh/dominio-faturamento';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
 import { reservarNumeroGuia } from '../cadastro/tiss-configuracao-proprio.js';
+import { gravarOpmeDaGuiaTiss, TABELAS_OPME_COBRANCA } from './opme-guia-propria.js';
 
 type Linha = Record<string, unknown>;
 
@@ -24,6 +25,7 @@ export const TABELAS_NUMERACAO_GUIA = [
   'guia_tiss',
   'faixa_numeracao_guia',
   'faixa_numeracao_guia_uso',
+  ...TABELAS_OPME_COBRANCA,
 ] as const;
 
 /** Guia que nasce neste lote, com o número já consumido da faixa. */
@@ -150,7 +152,10 @@ export async function numerarGuiasDoLote(
   return { montadas: saida, emitidas, reusadas, avisos: aviso ? [aviso] : [] };
 }
 
-/** Grava as guias emitidas no lote (com o valor apresentado) e o uso de cada número na faixa. */
+/**
+ * Grava as guias emitidas no lote (com o valor apresentado) e o uso de cada número na faixa; a OPME da conta vai à guia
+ * (`guia_tiss_opme`, 06-FAT linha 25) ligada à OPME autorizada. Devolve os avisos da OPME cobrada acima do autorizado.
+ */
 export async function gravarGuiasDoLote(
   tx: TxOperacao,
   d: {
@@ -164,7 +169,8 @@ export async function gravarGuiasDoLote(
     readonly numerado: LoteNumerado;
     readonly valores: ReadonlyMap<number, number>;
   },
-): Promise<void> {
+): Promise<string[]> {
+  const avisos: string[] = [];
   for (const g of d.numerado.emitidas) {
     const ct = await tx.uma<Linha>(
       'SELECT paciente_id, guia_fonte_pagadora_id FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ?',
@@ -195,6 +201,14 @@ export async function gravarGuiasDoLote(
       utilizado_em: d.agora,
       usuario_id: d.usuario,
     });
+    avisos.push(
+      ...(await gravarOpmeDaGuiaTiss(tx, {
+        guiaTiss: guia,
+        conta: g.conta,
+        agora: d.agora,
+        usuario: d.usuario,
+      })),
+    );
   }
   // A guia que já existia vai ao lote novo com o que ele apresenta: a conta pode ter sido corrigida entre o
   // cancelamento e a nova geração, e a guia gravada não pode divergir do arquivo nem da fatura. Senha e número na
@@ -208,4 +222,14 @@ export async function gravarGuiasDoLote(
       ...(r.senha ? { senha: r.senha } : {}),
       ...(r.guiaOperadora ? { numero_guia_operadora: r.guiaOperadora } : {}),
     });
+  for (const r of d.numerado.reusadas)
+    avisos.push(
+      ...(await gravarOpmeDaGuiaTiss(tx, {
+        guiaTiss: r.id,
+        conta: r.conta,
+        agora: d.agora,
+        usuario: d.usuario,
+      })),
+    );
+  return avisos;
 }

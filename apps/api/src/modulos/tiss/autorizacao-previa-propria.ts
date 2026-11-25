@@ -19,8 +19,9 @@
 //   - cancelar: o pedido fica 'cancelado' com o motivo na observação; o que não saiu segue sem enviada_em (CHECK da
 //     migração 12_FAT/99_autorizacao_envio). Nada se apaga.
 import {
-  conferirLimiteOpme,
+  avaliarLimiteOpme,
   conferirPedidoAutorizacao,
+  conferirPedidoDeLiberacao,
   conferirProcedimentoDaOpme,
   type DadosMensagemSolicitacao,
   faltasParaMensagem,
@@ -58,12 +59,21 @@ import {
   registrarArquivoGuardado,
   retencaoAte,
 } from './armazem-xml.js';
+import {
+  abrirLiberacaoOpme,
+  gravarOpmeAutorizada,
+  liberacaoQueRetem,
+  TABELAS_LIBERACAO_OPME,
+  TABELAS_OPME_AUTORIZADA,
+} from './opme-guia-propria.js';
 import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import { diaCivil } from './elegibilidade-propria.js';
 
 export const PORTA_AUTORIZACAO_PREVIA = Symbol('PORTA_AUTORIZACAO_PREVIA');
 
 const TABELAS = [
+  ...TABELAS_LIBERACAO_OPME,
+  ...TABELAS_OPME_AUTORIZADA,
   'solicitacao_autorizacao',
   'solicitacao_autorizacao_item',
   'resposta_autorizacao',
@@ -119,6 +129,8 @@ const esquemaCriar = z
     acidente: z.enum(['trabalho', 'transito', 'outros', 'nao_acidente']).nullable().default(null),
     canal: z.enum(['webservice', 'portal', 'telefone', 'email', 'presencial']).default('webservice'),
     observacao: texto(1000),
+    /** Justificativa de quem pede a OPME acima do limite do procedimento: o pedido nasce retido até a alçada liberar. */
+    justificativaLimite: texto(1000),
     itens: z.array(esquemaItem).max(99),
   })
   .strict();
@@ -432,12 +444,20 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
     };
   }
 
-  criar(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number; numero: string }> {
+  criar(
+    c: ContextoPortaPropria,
+    entrada: unknown,
+  ): Promise<{ id: number; numero: string; liberacao: number | null }> {
     const e = entradaValida(esquemaCriar, entrada);
     return this.gravar(
       c,
       'tiss.autorizacao.criar',
-      ['solicitacao_autorizacao', 'solicitacao_autorizacao_item', 'sequencia_negocio'],
+      [
+        'solicitacao_autorizacao',
+        'solicitacao_autorizacao_item',
+        'sequencia_negocio',
+        ...TABELAS_LIBERACAO_OPME,
+      ],
       async (tx, est, usuario) => {
         const cp = await tx.uma(
           `SELECT id, paciente_id, fonte_pagadora_id, plano_fonte_pagadora_id, numero_carteira, validade
@@ -506,9 +526,12 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
             )
           ).map((x) => num(x['item_faturavel_id']));
         problemas.push(...conferirProcedimentoDaOpme(itens, faturaveis.length));
+        // Passar do limite não é recusa definitiva: com a justificativa, o pedido nasce retido até a alçada liberar.
+        let retencao: { avaliacao: ReturnType<typeof avaliarLimiteOpme>; alcada: number | null } | null =
+          null;
         if (faturaveis.length && itens.some((i) => i.opme)) {
           const limites = await tx.consultar(
-            `SELECT valor_limite, quantidade_limite FROM limite_opme_procedimento
+            `SELECT valor_limite, quantidade_limite, alcada_aprovacao_id FROM limite_opme_procedimento
               WHERE fonte_pagadora_id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
                 AND (plano_fonte_pagadora_id IS NULL OR plano_fonte_pagadora_id <=> ?)
                 AND item_faturavel_id IN (${faturaveis.map(() => '?').join(',')}) AND insumo_id IS NULL
@@ -522,15 +545,23 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
               diaCivil(agora, est.fuso),
             ],
           );
-          problemas.push(
-            ...conferirLimiteOpme(
-              itens,
-              limites.map((x) => ({
-                valorLimite: x['valor_limite'] === null ? null : Number(x['valor_limite']),
-                quantidadeLimite: x['quantidade_limite'] === null ? null : Number(x['quantidade_limite']),
-              })),
-            ),
+          const avaliacao = avaliarLimiteOpme(
+            itens,
+            limites.map((x) => ({
+              valorLimite: x['valor_limite'] === null ? null : Number(x['valor_limite']),
+              quantidadeLimite: x['quantidade_limite'] === null ? null : Number(x['quantidade_limite']),
+            })),
           );
+          const lib = conferirPedidoDeLiberacao(avaliacao, e.justificativaLimite);
+          problemas.push(...lib.problemas);
+          if (lib.retido)
+            retencao = {
+              avaliacao,
+              alcada:
+                limites
+                  .map((x) => numOuNull(x['alcada_aprovacao_id']))
+                  .find((x): x is number => x !== null) ?? null,
+            };
         }
         if (problemas.length) throw recusaRegra('Pedido recusado', problemas);
         const carater = await tx.uma(
@@ -588,8 +619,18 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
             ordem_opcao: i.opcaoFabricante,
             justificativa: i.justificativa,
           });
-        void usuario;
-        return { tabela: 'solicitacao_autorizacao', id: novo, numero };
+        const liberacao = retencao
+          ? await abrirLiberacaoOpme(tx, {
+              est: est.id,
+              usuario,
+              solicitacao: novo,
+              numero,
+              avaliacao: retencao.avaliacao,
+              justificativa: e.justificativaLimite ?? '',
+              alcadaDoLimite: retencao.alcada,
+            })
+          : null;
+        return { tabela: 'solicitacao_autorizacao', id: novo, numero, liberacao };
       },
     );
   }
@@ -733,6 +774,8 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       const para: SituacaoSolicitacaoAutorizacao = webservice ? 'pronta_envio' : 'enviada';
       if (!podeMudar(de, para))
         throw recusaRegra('Envio recusado', [{ campo: 'situacao', mensagem: `O pedido está ${de}.` }]);
+      const retido = await liberacaoQueRetem(tx, solicitacao);
+      if (retido) throw recusaRegra('Envio recusado', [{ campo: 'liberacao', mensagem: retido }]);
       const agora = new Date();
       if (!webservice) {
         await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
@@ -883,6 +926,7 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
         'consulta_situacao_autorizacao',
         'conta_hospitalar',
         'agendamento_cirurgico',
+        ...TABELAS_OPME_AUTORIZADA,
       ],
       async (tx, est, usuario) => {
         const s = await this.lerPedido(tx, est.id, solicitacao);
@@ -955,6 +999,16 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
           });
         }
         await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, { situacao: lida.solicitacao });
+        // A OPME respondida vai à guia de autorização com o valor autorizado por item (base do valor cobrado).
+        await gravarOpmeAutorizada(tx, {
+          est: est.id,
+          s,
+          situacao: lida.solicitacao,
+          senha: e.senha,
+          numeroGuiaOperadora: e.numeroGuiaOperadora,
+          agora,
+          itens: lida.itens,
+        });
         const aberta = await tx.uma(
           "SELECT id, versao FROM consulta_situacao_autorizacao WHERE solicitacao_autorizacao_id = ? AND situacao IN ('pendente','enviada') ORDER BY tentativa DESC LIMIT 1",
           [solicitacao],

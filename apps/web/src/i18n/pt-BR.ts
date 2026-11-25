@@ -39,6 +39,7 @@ import { mensagensContratualizacao } from '../modulos/faturamento/i18n-contratua
 import { mensagensAuditoriaTramite } from '../modulos/faturamento/i18n-auditoria-tramite.js';
 import { mensagensMovimentosConta } from '../modulos/faturamento/i18n-movimentos.js';
 import { mensagensTransferenciaConta } from '../modulos/faturamento/i18n-transferencia-conta.js';
+import { mensagensOpmeLiberacao } from '../modulos/faturamento/i18n-opme-liberacao.js';
 import { mensagensParticular } from '../modulos/faturamento/i18n-particular.js';
 import { mensagensSus } from '../modulos/faturamento/i18n-sus.js';
 import { mensagensTiss } from '../modulos/tiss/i18n.js';
@@ -2435,6 +2436,7 @@ export const mensagensWeb = {
   contratualizacaoSus: mensagensContratualizacao,
   movimentosConta: mensagensMovimentosConta,
   transferenciaConta: mensagensTransferenciaConta,
+  opmeLiberacao: mensagensOpmeLiberacao,
   // F3.7 (06-FAT linhas 39 e 40): conta corrente do paciente e modelos de orçamento.
   particular: mensagensParticular,
   auditoriaTramite: mensagensAuditoriaTramite,
