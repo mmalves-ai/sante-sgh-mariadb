@@ -25,7 +25,7 @@ import {
   TIPOS_FILA_ERP,
   type TipoFilaErp,
 } from '@sgh/dominio-integracao';
-import type { TxOperacao } from '@sgh/nucleo';
+import { envioExternoPermitido, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   BaseComunicacaoPropria,
@@ -269,8 +269,11 @@ export interface ResultadoRetornoGravado {
 }
 
 export class PortaFilaErpPropria extends BaseComunicacaoPropria {
-  /** Fora de produção, sempre o simulador; em produção, o adaptador configurado (sem ele, o envio é recusado). */
-  adaptador: AdaptadorErp | null = process.env['NODE_ENV'] === 'production' ? null : adaptadorErpSimulado;
+  /**
+   * Fora de produção (AMBIENTE diferente de producao, regra 6), sempre o simulador; em produção, o adaptador configurado
+   * (sem ele, o envio é recusado). NODE_ENV não decide.
+   */
+  adaptador: AdaptadorErp | null = envioExternoPermitido(process.env) ? null : adaptadorErpSimulado;
 
   sistemas(c: ContextoComunicacao): Promise<SistemaErp[]> {
     return this.ler(c, 'filaErp.sistemas', async (l) =>

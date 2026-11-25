@@ -1542,7 +1542,7 @@ esquema_mensagem	INTG	configuracao	F3	Versão de esquema ou leiaute por padrão,
 etiqueta_amostra_apoio	INTG	principal	F3	Etiqueta de amostra devolvida pelo laboratório externo por exame, para impressão na coleta	F29 (layout_etiqueta_apoio da rodada 1); SPDATA SIWSETIQUETA (72), SIWSLANCETQTA (128); DBAMV ETIQUETA_AMOSTRA_LAB_APOIO	08	3
 evento_acesso_portaria	INTG	historico	F8	Passagens registradas por crachá, com sentido, horário e permissão ou recusa	F44; depende do crachá (M50.5)	08	0
 evento_hl7	INTG	catalogo_publico	F3	Eventos e tipos de mensagem do padrão HL7 v2 por versão	F28; MVINTEGRA HL7_EVENTO, HL7_VERSAO, HL7_EVENTO_VERSAO	08	3
-exportacao_erp	INTG	principal	F8	Lote de exportação ou importação com sistema de gestão corporativo: tipo, período, situação e conciliação	F39; MVINTEGRA INTEGRA_SAIDA_CONTABIL, INTEGRA_SAIDA_FINANCEIRO, IMV_CONTABIL, IMV_FINANCEIRO; DBAMV IMVSAP_*	08	1
+exportacao_erp	INTG	principal	F8	Lote de exportação ou importação com sistema de gestão corporativo: tipo, período, situação e conciliação	F39; MVINTEGRA INTEGRA_SAIDA_CONTABIL, INTEGRA_SAIDA_FINANCEIRO, IMV_CONTABIL, IMV_FINANCEIRO; DBAMV IMVSAP_*; situação em envio reservada pelo worker (08-INTG L136; migração 17_INTG/98_fila_erp_enviando)	08	1
 exportacao_erp_item	INTG	item	F8	Registro exportado ou importado no lote, com chave externa e resultado	F39; MVINTEGRA INTEGRA_SAIDA_MOV_ESTOQUE, INTEGRA_ENT_MOV_CONTABIL, INTEGRA_PLANO_CONTAS_DE_PARA	08	5
 falha_integracao	INTG	principal	F3	Falha que exige ação humana: mensagem, causa, responsável, tratamento e reprocessamento	F26; MVINTEGRA ERRO_PROCESSO, IMV_MENSAGEM_ERRO, VERIFICACAO_ERRO	08	5
 finalidade_compartilhamento	INTG	dominio	F3	Finalidades e bases legais de compartilhamento de dados	F37	08	0

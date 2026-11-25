@@ -1,10 +1,11 @@
 // Serviço do worker da fila com o ERP corporativo (F8, 08-INTG L136): a cada 15 minutos, por cliente e estabelecimento
 // ativo, envia os lotes gerados (exportacao_erp em 'gerado') pelo adaptador do ERP e grava o retorno item a item
-// (processarFilaErp, idempotente). Fora de produção o adaptador é o simulador do domínio (nada sai para fora); em
+// (processarFilaErp, idempotente). Produção é a chave AMBIENTE=producao (envioExternoPermitido, regra 6), como no resto
+// do worker; NODE_ENV não decide. Fora de produção o adaptador é o simulador do domínio (nada sai para fora); em
 // produção, só com um adaptador configurado: sem ele o serviço não envia (os lotes ficam gerados e a tela mostra). Ligado
 // fora de dev/ci; em dev/ci só com FILA_ERP_ENVIO=ligado. Log só com contagens.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { NucleoProprio } from '@sgh/nucleo';
+import { envioExternoPermitido, NucleoProprio } from '@sgh/nucleo';
 import { logger } from '../logger.js';
 import {
   type AlvoEstabelecimento,
@@ -24,9 +25,12 @@ export function filaErpLigada(env: NodeJS.ProcessEnv): boolean {
   return servicoLigado(env, 'FILA_ERP_ENVIO');
 }
 
-/** Fora de produção, sempre o simulador; em produção, nenhum até haver adaptador do ERP configurado. */
+/**
+ * Fora de produção (AMBIENTE diferente de producao), sempre o simulador; em produção, nenhum até haver adaptador do ERP
+ * configurado: o simulador nunca marca lote real como enviado.
+ */
 export function adaptadorErpDoAmbiente(env: NodeJS.ProcessEnv): AdaptadorErpWorker | null {
-  return env['NODE_ENV'] === 'production' ? null : adaptadorErpSimuladoWorker;
+  return envioExternoPermitido(env) ? null : adaptadorErpSimuladoWorker;
 }
 
 /** Um ciclo num estabelecimento (o `hospital` da fonte é o id do estabelecimento). */
@@ -94,7 +98,7 @@ export class FilaErpService implements OnApplicationBootstrap, OnApplicationShut
           ),
       );
       for (const v of voltas)
-        if (v.resultado.enviados > 0 || v.resultado.falhas > 0)
+        if (v.resultado.enviados > 0 || v.resultado.retomados > 0 || v.resultado.falhas > 0)
           logger.info(
             { cliente: v.cliente, estabelecimento: v.estabelecimento, ...v.resultado },
             'fila do ERP enviada',

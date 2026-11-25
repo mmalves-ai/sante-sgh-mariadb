@@ -100,6 +100,12 @@ describe('fila do ERP: ciclo, retorno e conciliação', () => {
     expect(podeTransitarLoteErp('enviado', 'cancelado')).toBe(false);
     expect(podeTransitarLoteErp('conciliado', 'cancelado')).toBe(false);
     expect(podeTransitarLoteErp('processado_com_erro', 'conciliado')).toBe(true);
+    // Reserva do worker: em envio, o lote só volta a gerado (recusa do adaptador) ou vai a enviado.
+    expect(podeTransitarLoteErp('gerado', 'enviando')).toBe(true);
+    expect(podeTransitarLoteErp('enviando', 'enviado')).toBe(true);
+    expect(podeTransitarLoteErp('enviando', 'gerado')).toBe(true);
+    expect(podeTransitarLoteErp('enviando', 'cancelado')).toBe(false);
+    expect(podeTransitarLoteErp('enviando', 'processado')).toBe(false);
   });
 
   it('aplica o retorno item a item e é idempotente', () => {

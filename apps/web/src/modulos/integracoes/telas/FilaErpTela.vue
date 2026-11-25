@@ -27,7 +27,15 @@ import { mensagensFilaErp } from '../i18n-fila-erp.js';
 const { t } = useI18n({ useScope: 'local', messages: mensagensFilaErp });
 const fila = useQueryClient();
 const podeOperar = computed(() => pode('integracao.filaErp.operar'));
-const SITUACOES = ['gerado', 'enviado', 'processado', 'processado_com_erro', 'conciliado', 'cancelado'];
+const SITUACOES = [
+  'gerado',
+  'enviando',
+  'enviado',
+  'processado',
+  'processado_com_erro',
+  'conciliado',
+  'cancelado',
+];
 
 const sistemas = useQuery({ queryKey: ['fila-erp', 'sistemas'], queryFn: lerSistemasErp });
 const opcoesSistema = computed(() =>

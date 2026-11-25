@@ -49,6 +49,7 @@ export const mensagensFilaErp = {
     situacoes: {
       aberto: 'Aberto',
       gerado: 'Gerado',
+      enviando: 'Em envio',
       enviado: 'Enviado',
       processado: 'Processado',
       processado_com_erro: 'Processado com rejeições',

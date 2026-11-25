@@ -39,6 +39,8 @@ export const TETO_ITENS_LOTE_ERP = 5000;
 export const SITUACOES_LOTE_ERP = [
   'aberto',
   'gerado',
+  // Reservado pelo worker sob trava e versão antes de chamar o adaptador: a tela não envia nem cancela um lote em envio.
+  'enviando',
   'enviado',
   'processado',
   'processado_com_erro',
@@ -52,7 +54,9 @@ export type SituacaoItemErp = (typeof SITUACOES_ITEM_ERP)[number];
 
 const TRANSICOES: Readonly<Record<SituacaoLoteErp, readonly SituacaoLoteErp[]>> = {
   aberto: ['gerado', 'cancelado'],
-  gerado: ['enviado', 'cancelado'],
+  gerado: ['enviando', 'enviado', 'cancelado'],
+  // O adaptador recusou o envio (nada chegou ao ERP): volta a gerado; senão, enviado com o protocolo.
+  enviando: ['gerado', 'enviado'],
   enviado: ['enviado', 'processado', 'processado_com_erro'],
   processado: ['processado', 'conciliado'],
   // O ERP pode devolver de novo os rejeitados corrigidos (retorno idempotente) antes da conciliação.

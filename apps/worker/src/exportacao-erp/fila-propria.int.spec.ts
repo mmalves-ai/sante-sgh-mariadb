@@ -1,8 +1,11 @@
 // Contrato de efeito do job da fila com o ERP corporativo no worker (F8, 08-INTG L136) contra o MariaDB real (cliente
-// de teste f22_o3; massa SINTÉTICA com o código do teste, nenhuma pessoa real). Prova o que fica no banco: o ciclo do
-// worker envia o lote gerado pelo simulador (enviado_em, protocolo SIM-<número>), aceita os itens com valor e
+// de teste f22_o3; massa SINTÉTICA com o código do teste, nenhuma pessoa real). Prova o que fica no banco: a reserva
+// ('enviando') com versão lida recusa o lote que mudou; o adaptador que recusa devolve o lote reservado a gerado; o
+// ciclo do worker reserva e envia o lote gerado pelo simulador (enviado_em, protocolo SIM-<número>), aceita os itens com
+// valor e
 // contraparte (exportado com chave externa) e rejeita o zerado (rejeitado com a mensagem), o lote fica
-// processado_com_erro com 1 erro e a versão sobe; o lote de outro estabelecimento e o já enviado não são tocados; o
+// processado_com_erro com 1 erro e a versão sobe; o lote enviado sem retorno gravado é retomado pelo protocolo; o lote
+// de outro estabelecimento e o enviado sem protocolo não são tocados; o
 // segundo ciclo não envia nada; o retorno repetido não muda nada (idempotente) e o rejeitado aceito depois vira
 // exportado (processado). A trilha de cada gravação existe. Nada é apagado.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
@@ -38,7 +41,14 @@ async function limpar(e: Escritor): Promise<void> {
 describe.skipIf(SEM_BANCO)('Job da fila com o ERP no worker (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let fonte: FonteFilaErpPropria;
-  let m: { est: number; outro: number; lote: number; loteOutro: number; loteEnviado: number };
+  let m: {
+    est: number;
+    outro: number;
+    lote: number;
+    loteOutro: number;
+    loteEnviado: number;
+    loteSemRetorno: number;
+  };
   const ler = (sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p));
   const lote = async (id: number) =>
@@ -79,12 +89,13 @@ describe.skipIf(SEM_BANCO)('Job da fila com o ERP no worker (contrato de efeito)
         numero: string,
         situacao: string,
         valores: (number | null)[],
+        protocolo: string | null = null,
       ) => {
         const id = await e.inserir(
           `INSERT INTO exportacao_erp (estabelecimento_id, sistema_externo_id, numero, direcao, tipo, situacao,
-             quantidade_registros, gerado_em, criado_em)
-           VALUES (?, ?, ?, 'exportacao', 'estoque', ?, ?, ?, ?)`,
-          [estab, sis, numero, situacao, valores.length, agora, agora],
+             quantidade_registros, protocolo_externo, gerado_em, criado_em)
+           VALUES (?, ?, ?, 'exportacao', 'estoque', ?, ?, ?, ?, ?)`,
+          [estab, sis, numero, situacao, valores.length, protocolo, agora, agora],
         );
         let seq = 0;
         for (const v of valores)
@@ -102,6 +113,7 @@ describe.skipIf(SEM_BANCO)('Job da fila com o ERP no worker (contrato de efeito)
         lote: await novoLote(est, 'ERP-C2033-1', 'gerado', [120.5, 0, 30.25]),
         loteOutro: await novoLote(outro, 'ERP-C2033-2', 'gerado', [10]),
         loteEnviado: await novoLote(est, 'ERP-C2033-3', 'enviado', [5]),
+        loteSemRetorno: await novoLote(est, 'ERP-C2033-4', 'enviado', [8], 'SIM-ERP-C2033-4'),
       };
     });
   });
@@ -111,9 +123,26 @@ describe.skipIf(SEM_BANCO)('Job da fila com o ERP no worker (contrato de efeito)
     await nucleo.encerrar();
   });
 
-  it('o ciclo envia o lote gerado pelo simulador e grava o retorno item a item', async () => {
+  it('a reserva recusa versão velha; o adaptador que recusa devolve o lote reservado a gerado', async () => {
+    // Versão velha: o Executor recusa a operação (LoteErpMudou dentro da transação) e o lote não muda.
+    await expect(fonte.reservarEnvio(String(m.est), m.lote, 99)).rejects.toThrow();
+    expect(await lote(m.lote)).toMatchObject({ situacao: 'gerado', versao: 1 });
+    const fora = () => Promise.reject(new Error('fora do ar'));
+    const r = await cicloFilaErp(fonte, { enviar: fora, consultarRetorno: fora }, alvo());
+    // O gerado (reservado e devolvido) e o enviado sem retorno (consulta recusada): duas falhas, nada gravado de retorno.
+    expect(r).toEqual({ enviados: 0, retomados: 0, falhas: 2, itensAlterados: 0, rejeitados: 0 });
+    const l = await lote(m.lote);
+    expect(l).toMatchObject({ situacao: 'gerado', protocolo_externo: null, enviado_em: null });
+    expect(Number(l['versao'])).toBe(3);
+    expect((await lote(m.loteSemRetorno))['situacao']).toBe('enviado');
+  });
+
+  it('o ciclo reserva e envia o lote gerado pelo simulador, grava o retorno e retoma o enviado sem retorno', async () => {
     const r = await cicloFilaErp(fonte, adaptadorErpSimuladoWorker, alvo());
-    expect(r).toEqual({ enviados: 1, falhas: 0, itensAlterados: 3, rejeitados: 1 });
+    expect(r).toEqual({ enviados: 1, retomados: 1, falhas: 0, itensAlterados: 4, rejeitados: 1 });
+    const retomado = await lote(m.loteSemRetorno);
+    expect(retomado).toMatchObject({ situacao: 'processado', protocolo_externo: 'SIM-ERP-C2033-4' });
+    expect(retomado['processado_em']).not.toBeNull();
     const l = await lote(m.lote);
     expect(l).toMatchObject({
       situacao: 'processado_com_erro',
@@ -122,18 +151,18 @@ describe.skipIf(SEM_BANCO)('Job da fila com o ERP no worker (contrato de efeito)
     });
     expect(l['enviado_em']).not.toBeNull();
     expect(l['processado_em']).not.toBeNull();
-    expect(Number(l['versao'])).toBe(3);
+    expect(Number(l['versao'])).toBe(6);
     const it = await itens(m.lote);
     expect(it.map((i) => i['situacao'])).toEqual(['exportado', 'rejeitado', 'exportado']);
     expect(it[0]!['chave_externa']).toBeTruthy();
     expect(it[1]!['chave_externa']).toBeNull();
     expect(it[1]!['mensagem_retorno']).toBeTruthy();
-    // A trilha das duas gravações (envio e retorno) no estabelecimento da massa.
+    // A trilha das gravações (reserva e devolução, reserva, envio e retorno) no estabelecimento da massa.
     const [t] = await ler(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade = 'exportacao_erp' AND entidade_id = ?",
       [m.est, m.lote],
     );
-    expect(Number(t!['n'])).toBeGreaterThanOrEqual(2);
+    expect(Number(t!['n'])).toBeGreaterThanOrEqual(5);
   });
 
   it('não toca o lote de outro estabelecimento nem o já enviado; o segundo ciclo não envia nada', async () => {
@@ -141,23 +170,24 @@ describe.skipIf(SEM_BANCO)('Job da fila com o ERP no worker (contrato de efeito)
     expect((await lote(m.loteEnviado))['situacao']).toBe('enviado');
     expect(await cicloFilaErp(fonte, adaptadorErpSimuladoWorker, alvo())).toEqual({
       enviados: 0,
+      retomados: 0,
       falhas: 0,
       itensAlterados: 0,
       rejeitados: 0,
     });
-    expect(Number((await lote(m.lote))['versao'])).toBe(3);
+    expect(Number((await lote(m.lote))['versao'])).toBe(6);
   });
 
   it('o retorno repetido não muda nada e o rejeitado aceito depois fecha o lote como processado', async () => {
     const antes = await itens(m.lote);
     const chave = String(antes[0]!['chave_externa']);
-    const repetido = await importarRetornoErp(fonte, String(m.est), m.lote, 3, [
+    const repetido = await importarRetornoErp(fonte, String(m.est), m.lote, 6, [
       { sequencia: 1, aceito: true, chaveExterna: chave, mensagem: null },
     ]);
     expect(repetido.mudancas).toHaveLength(0);
     expect(repetido.repetidos).toBe(1);
-    expect(Number((await lote(m.lote))['versao'])).toBe(3);
-    const corrigido = await importarRetornoErp(fonte, String(m.est), m.lote, 3, [
+    expect(Number((await lote(m.lote))['versao'])).toBe(6);
+    const corrigido = await importarRetornoErp(fonte, String(m.est), m.lote, 6, [
       { sequencia: 2, aceito: true, chaveExterna: 'ERP-CORRIGIDO-2', mensagem: null },
     ]);
     expect(corrigido.situacaoLote).toBe('processado');
