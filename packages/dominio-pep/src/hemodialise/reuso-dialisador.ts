@@ -5,7 +5,7 @@
 //     (sorologia que o impede, por exemplo) nunca é reprocessado;
 //   - o volume interno das fibras é medido na abertura (base) e em cada reprocessamento: abaixo de 80% do inicial o
 //     dialisador é descartado na hora;
-//   - o teste do desinfetante: presente antes do enxágue (prova que a desinfecção aconteceu) e ausente depois (prova
+//   - o teste do desinfetante (dispensado quando o volume já reprovou): presente antes do enxágue (prova que a desinfecção aconteceu) e ausente depois (prova
 //     que o enxágue tirou o resíduo); qualquer um fora reprova o reprocessamento, que se refaz;
 //   - um dialisador em uso por paciente; nada é apagado: o reprocessamento lançado por engano é cancelado com motivo
 //     (só o último, com o dialisador em uso), o dialisador sai por descarte ou, aberto por engano, por desativação.
@@ -156,16 +156,18 @@ export function avaliarReprocessamento(d: DialisadorParaReuso, r: Reprocessament
       campo: 'volumeAtualMl',
       mensagem: `Meça o volume interno atual (1 a ${VOLUME_MAXIMO_DIALISADOR_ML} ml).`,
     });
-  if (r.testePreEnxague === null)
-    erros.push({ campo: 'testePreEnxague', mensagem: 'Registre o teste do desinfetante antes do enxágue.' });
-  if (r.testePosEnxague === null)
-    erros.push({ campo: 'testePosEnxague', mensagem: 'Registre o teste do desinfetante depois do enxágue.' });
   const fracaoVolume =
     d.volumeInicialMl && d.volumeInicialMl > 0 && r.volumeAtualMl && r.volumeAtualMl > 0
       ? Math.round((r.volumeAtualMl / d.volumeInicialMl) * 1000) / 1000
       : null;
-  const reprovacoes: string[] = [];
   const descartar = fracaoVolume !== null && fracaoVolume < FRACAO_MINIMA_VOLUME_DIALISADOR;
+  // O volume das fibras é medido antes de encher com o desinfetante: reprovado pelo volume, o dialisador sai de uso
+  // e os testes do desinfetante não se fazem. Eles só são exigidos quando o volume passa (o que vier é gravado).
+  if (!descartar && r.testePreEnxague === null)
+    erros.push({ campo: 'testePreEnxague', mensagem: 'Registre o teste do desinfetante antes do enxágue.' });
+  if (!descartar && r.testePosEnxague === null)
+    erros.push({ campo: 'testePosEnxague', mensagem: 'Registre o teste do desinfetante depois do enxágue.' });
+  const reprovacoes: string[] = [];
   const motivoDescarte = descartar
     ? `Volume interno em ${Math.round((fracaoVolume ?? 0) * 100)}% do inicial, abaixo do mínimo de 80%.`
     : null;

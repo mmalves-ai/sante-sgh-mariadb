@@ -216,9 +216,23 @@ describe.skipIf(SEM_BANCO)('PortaDialisadorPropria contra o MariaDB (contrato de
     // Versão velha do dialisador: conflito (409), nada gravado.
     await expect(porta.reprocessar(ctx(), id, bom(2))).rejects.toMatchObject({ problema: { status: 409 } });
     expect(await reusos(id)).toHaveLength(2);
-    // Volume a 79% do inicial: grava reprovado e descarta o dialisador na mesma transação, com o motivo.
-    const r3 = await porta.reprocessar(ctx(), id, bom(3, { volumeAtualMl: 79 }));
+    // Volume a 79% do inicial, sem os testes do desinfetante (o volume é medido antes de encher): grava o
+    // reprocessamento reprovado com os testes nulos e descarta o dialisador na mesma transação, com o motivo.
+    const r3 = await porta.reprocessar(
+      ctx(),
+      id,
+      bom(3, { volumeAtualMl: 79, testePreEnxague: null, testePosEnxague: null }),
+    );
     expect(r3).toMatchObject({ sequencia: 3, aprovado: false, descartado: true });
+    const r3lido = (await reusos(id))[2]!;
+    expect(r3lido).toMatchObject({
+      sequencia: 3,
+      volume_priming_atual_ml: 79,
+      teste_peroxido_pre_lavagem: null,
+      teste_peroxido_pos_lavagem: null,
+      situacao: 'valido',
+    });
+    expect(Boolean(r3lido['aprovado'])).toBe(false);
     const fim = await dial(id);
     expect(fim).toMatchObject({ situacao: 'descartado', fechado_por_usuario_id: m.usuario });
     expect(fim['fechado_em']).not.toBeNull();

@@ -338,11 +338,11 @@ const teste = (v: string | null) => (v ? t(`${P}.testes.${v}`) : '-');
           <small id="dial-volume-atual-erro" role="status">{{ erroReproc('volumeAtualMl') }}</small>
         </div>
         <div>
-          <SanteSelecao v-model="reproc.pre" :rotulo="t(`${P}.testePre`)" :opcoes="testes" obrigatorio />
+          <SanteSelecao v-model="reproc.pre" :rotulo="t(`${P}.testePre`)" :opcoes="testes" :obrigatorio="!avaliacao?.descartar" />
           <small role="status">{{ erroReproc('testePreEnxague') }}</small>
         </div>
         <div>
-          <SanteSelecao v-model="reproc.pos" :rotulo="t(`${P}.testePos`)" :opcoes="testes" obrigatorio />
+          <SanteSelecao v-model="reproc.pos" :rotulo="t(`${P}.testePos`)" :opcoes="testes" :obrigatorio="!avaliacao?.descartar" />
           <small role="status">{{ erroReproc('testePosEnxague') }}</small>
         </div>
         <SanteCampoTexto v-model="reproc.agente" :rotulo="t(`${P}.agente`)" :max-bytes="60" />

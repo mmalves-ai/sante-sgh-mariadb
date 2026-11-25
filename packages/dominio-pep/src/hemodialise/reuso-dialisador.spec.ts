@@ -102,6 +102,21 @@ describe('avaliação do reprocessamento', () => {
     expect(avaliarReprocessamento(d(), r({ volumeAtualMl: 80 })).aprovado).toBe(true);
   });
 
+  it('volume abaixo de 80% dispensa os testes do desinfetante e descarta; com o volume bom, os testes são exigidos', () => {
+    const a = avaliarReprocessamento(
+      d(),
+      r({ volumeAtualMl: 79, testePreEnxague: null, testePosEnxague: null }),
+    );
+    expect(a).toMatchObject({ erros: [], aprovado: false, descartar: true, reusosDepois: 0 });
+    expect(a.motivoDescarte).toMatch(/79%/);
+    const b = avaliarReprocessamento(
+      d(),
+      r({ volumeAtualMl: 80, testePreEnxague: null, testePosEnxague: null }),
+    );
+    expect(campos(b.erros)).toEqual(['testePreEnxague', 'testePosEnxague']);
+    expect(b).toMatchObject({ aprovado: false, descartar: false });
+  });
+
   it('desinfetante ausente antes ou presente depois do enxágue reprova sem descartar', () => {
     const pre = avaliarReprocessamento(d(), r({ testePreEnxague: 'negativo' }));
     expect(pre).toMatchObject({ aprovado: false, descartar: false });
