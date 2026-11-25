@@ -26,6 +26,8 @@ import { pode } from '../../../casca/sessao/pode.js';
 import PaginacaoCadastro from '../../cadastro/componentes/PaginacaoCadastro.vue';
 import { carimboBr } from '../../cadastro/formato.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
+import LaudoInternacaoSusPainel from '../componentes/LaudoInternacaoSusPainel.vue';
+import LotesLaudoSusPainel from '../componentes/LotesLaudoSusPainel.vue';
 import {
   enderecoArquivoAih,
   gerarSisaih,
@@ -935,8 +937,11 @@ const situacaoArquivo = (a: ArquivoSusLido) => t(`faturamentoSus.ciha.situacoes.
               />
             </form>
           </template>
+          <LaudoInternacaoSusPainel :aih="aih" :pode-registrar="podeRegistrar && liberado" />
         </template>
       </section>
+
+      <LotesLaudoSusPainel :pode-registrar="podeRegistrar && liberado" />
 
       <section aria-labelledby="aih-sisaih-titulo" data-testid="aih-sisaih">
         <h2 id="aih-sisaih-titulo">{{ t('faturamentoSus.aih.sisaih') }}</h2>

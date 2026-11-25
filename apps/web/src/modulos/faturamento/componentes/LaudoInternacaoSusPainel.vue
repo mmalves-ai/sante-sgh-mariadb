@@ -23,6 +23,9 @@ const { t } = useI18n();
 const cliente = useQueryClient();
 const p = (k: string, a?: Record<string, unknown>) => t(`faturamentoSus.aih.laudoSus.${k}`, a ?? {});
 
+// A versão da AIH chega como texto de 10 dígitos (contrato da AIH); as rotas do laudo comparam o número.
+const versaoAih = () => Number(props.aih.versao);
+
 const laudos = useQuery({
   queryKey: computed(() => ['sus', 'laudos-internacao', 'aih', props.aih.id, props.aih.versao]),
   queryFn: () => lerLaudosDaAih(props.aih.id),
@@ -56,9 +59,7 @@ async function imprimir(laudo: number): Promise<void> {
 // Devolução pelo gestor (AIH solicitada).
 const motivo = ref('');
 async function devolver(): Promise<void> {
-  if (
-    await executar(() => devolverLaudo(props.aih.id, props.aih.versao, motivo.value.trim()), p('devolvido'))
-  )
+  if (await executar(() => devolverLaudo(props.aih.id, versaoAih(), motivo.value.trim()), p('devolvido')))
     motivo.value = '';
 }
 
@@ -88,7 +89,7 @@ function reenviar(): Promise<boolean> {
   return executar(
     () =>
       reenviarLaudo(props.aih.id, {
-        versao: props.aih.versao,
+        versao: versaoAih(),
         justificativa: correcao.justificativa.trim(),
         procedimentoSolicitado:
           correcao.procedimento.trim() !== props.aih.procedimentoSolicitado
@@ -131,7 +132,7 @@ async function emitirEspecial(): Promise<void> {
   const ok = await executar(
     () =>
       emitirLaudoEspecial(props.aih.id, {
-        versao: props.aih.versao,
+        versao: versaoAih(),
         justificativa: especial.justificativa.trim(),
         itens: especial.itens.map((x) => ({
           tipo: x.tipo,
@@ -170,7 +171,7 @@ async function emitirEspecial(): Promise<void> {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="l in laudos.data.value" :key="l.id" :data-testid="`laudo-sus-${l.tipo}`">
+        <tr v-for="l in laudos.data.value" :key="l.id" :data-testid="`laudo-sus-linha-${l.tipo}`">
           <td>{{ l.numero }}</td>
           <td>{{ p(`tiposLaudo.${l.tipo}`) }}</td>
           <td data-testid="laudo-sus-situacao">
