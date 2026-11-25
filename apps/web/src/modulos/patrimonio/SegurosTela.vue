@@ -405,7 +405,7 @@ const ativaParaGravar = (a: ApoliceLida) => a.situacaoVista !== 'cancelada' && a
             class="bloco"
             :aria-label="t(`${K}.retirar`)"
             data-testid="retirada-form"
-            @submit.prevent="gravarRetirada"
+            @submit.prevent
           >
             <div class="campos">
               <SanteData
@@ -430,11 +430,12 @@ const ativaParaGravar = (a: ApoliceLida) => a.situacaoVista !== 'cancelada' && a
                 @acionar="retirando = null"
               />
               <SanteBotao
-                tipo="submit"
                 variante="destrutivo"
                 :rotulo="t(`${K}.retirar`)"
+                :confirmacao="t(`${K}.perguntaRetirar`)"
                 :desabilitado="ocupado || !retiradaPronta"
                 data-testid="retirada-gravar"
+                @acionar="gravarRetirada"
               />
             </div>
           </form>
@@ -449,7 +450,7 @@ const ativaParaGravar = (a: ApoliceLida) => a.situacaoVista !== 'cancelada' && a
           @acionar="abrirPainel('segurar')"
         />
         <SanteBotao
-          variante="destrutivo"
+          variante="secundario"
           :rotulo="t(`${K}.cancelar`)"
           data-testid="apolice-cancelar"
           @acionar="abrirPainel('cancelar')"
@@ -493,12 +494,7 @@ const ativaParaGravar = (a: ApoliceLida) => a.situacaoVista !== 'cancelada' && a
         </div>
       </form>
 
-      <form
-        v-if="painel === 'cancelar'"
-        class="bloco"
-        data-testid="cancelar-apolice-form"
-        @submit.prevent="gravarCancelamento(apolice)"
-      >
+      <form v-if="painel === 'cancelar'" class="bloco" data-testid="cancelar-apolice-form" @submit.prevent>
         <SanteCampoTexto
           v-model="motivo"
           :rotulo="t(`${K}.motivo`)"
@@ -513,11 +509,12 @@ const ativaParaGravar = (a: ApoliceLida) => a.situacaoVista !== 'cancelada' && a
         <div class="acoes">
           <SanteBotao variante="secundario" :rotulo="t('patrimonio.cancelar')" @acionar="painel = null" />
           <SanteBotao
-            tipo="submit"
             variante="destrutivo"
             :rotulo="t(`${K}.cancelar`)"
+            :confirmacao="t(`${K}.perguntaCancelar`)"
             :desabilitado="ocupado || motivo.trim().length < 5"
             data-testid="cancelar-apolice-gravar"
+            @acionar="gravarCancelamento(apolice)"
           />
         </div>
       </form>

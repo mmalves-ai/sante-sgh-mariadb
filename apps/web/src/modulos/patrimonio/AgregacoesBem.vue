@@ -259,7 +259,7 @@ async function retirar() {
           class="bloco"
           :aria-label="t(`${K}.agregacao.retirar`)"
           data-testid="agregacoes-retirada"
-          @submit.prevent="retirar"
+          @submit.prevent
         >
           <div class="campos">
             <SanteData
@@ -288,11 +288,12 @@ async function retirar() {
               @acionar="retirando = null"
             />
             <SanteBotao
-              tipo="submit"
               variante="destrutivo"
               :rotulo="t(`${K}.agregacao.confirmarRetirada`)"
+              :confirmacao="t(`${K}.agregacao.perguntaRetirada`)"
               :desabilitado="ocupado || !retiradaPronta"
               data-testid="agregacoes-retirada-confirmar"
+              @acionar="retirar"
             />
           </div>
         </form>

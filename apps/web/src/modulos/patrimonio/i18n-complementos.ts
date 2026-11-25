@@ -28,6 +28,8 @@ export const mensagensComplementosPatrimonio = {
     dataRetirada: 'Data da retirada',
     motivo: 'Motivo',
     confirmarRetirada: 'Confirmar retirada',
+    perguntaRetirada:
+      'Retirar esta agregação? Ela sai da base da depreciação a partir da data informada e segue visível no histórico.',
     gravada: 'Agregação registrada: entra na base da próxima competência.',
     retiradaOk: 'Retirada registrada.',
     problemas: {
@@ -89,6 +91,8 @@ export const mensagensComplementosPatrimonio = {
     ativada: 'Obra ativada: bem {plaqueta} gerado; a depreciação começa na competência seguinte.',
     bemGerado: 'Bem gerado: {plaqueta}',
     cancelar: 'Cancelar obra',
+    perguntaCancelar:
+      'Cancelar esta obra? Ela deixa de receber custos e não pode ser ativada; o histórico fica guardado.',
     motivo: 'Motivo',
     cancelada: 'Obra cancelada.',
     problemas: {
@@ -160,10 +164,13 @@ export const mensagensComplementosPatrimonio = {
     linhaBem: '{plaqueta} — {descricao}: segurado {segurado}, contábil {contabil}',
     subseguro: 'Subseguro',
     retirar: 'Retirar da apólice',
+    perguntaRetirar: 'Retirar este bem da apólice? A cobertura termina na data informada.',
     dataRetirada: 'Data da retirada',
     retiradoEm: 'Fora da cobertura desde {data}',
     retirado: 'Bem retirado da cobertura.',
     cancelar: 'Cancelar apólice',
+    perguntaCancelar:
+      'Cancelar esta apólice? Os bens deixam de constar como segurados por ela; o histórico fica guardado.',
     motivo: 'Motivo',
     cancelada: 'Apólice cancelada: os bens saíram da cobertura.',
     problemas: {

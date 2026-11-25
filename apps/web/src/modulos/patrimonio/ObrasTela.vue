@@ -442,7 +442,7 @@ function documentoDe(titulo: number | null, nota: number | null) {
           @acionar="abrirAtivacao(obra)"
         />
         <SanteBotao
-          variante="destrutivo"
+          variante="secundario"
           :rotulo="t(`${K}.obras.cancelar`)"
           data-testid="obra-cancelar"
           @acionar="abrirPainel('cancelar')"
@@ -569,12 +569,7 @@ function documentoDe(titulo: number | null, nota: number | null) {
         </div>
       </form>
 
-      <form
-        v-if="painel === 'cancelar'"
-        class="bloco"
-        data-testid="cancelamento-form"
-        @submit.prevent="gravarCancelamento(obra)"
-      >
+      <form v-if="painel === 'cancelar'" class="bloco" data-testid="cancelamento-form" @submit.prevent>
         <SanteCampoTexto
           v-model="motivo"
           :rotulo="t(`${K}.obras.motivo`)"
@@ -589,11 +584,12 @@ function documentoDe(titulo: number | null, nota: number | null) {
         <div class="acoes">
           <SanteBotao variante="secundario" :rotulo="t('patrimonio.cancelar')" @acionar="painel = null" />
           <SanteBotao
-            tipo="submit"
             variante="destrutivo"
             :rotulo="t(`${K}.obras.cancelar`)"
+            :confirmacao="t(`${K}.obras.perguntaCancelar`)"
             :desabilitado="ocupado || motivo.trim().length < 5"
             data-testid="cancelamento-gravar"
+            @acionar="gravarCancelamento(obra)"
           />
         </div>
       </form>

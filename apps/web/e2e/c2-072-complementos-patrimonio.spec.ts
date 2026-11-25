@@ -1,6 +1,7 @@
-// C2-072 (07-FIN linha 149, F8; CPC 27 / NBC TG 27): imobilizado em andamento (abrir a obra, apropriar o custo por
-// título a pagar, ativar gerando o bem) e seguro dos bens (incluir a apólice, segurar um bem com o subseguro visível e
-// retirá-lo da cobertura). Fonte sintética: as rotas da API dos complementos são simuladas com page.route (sem o banco
+// C2-072 (07-FIN linha 149, F8; CPC 27 / NBC TG 27): agregação de valor na ficha do bem (registrar o componente
+// buscado pela plaqueta com a soma ao custo, recusa da data futura, retirada com data, motivo e confirmação),
+// imobilizado em andamento (abrir a obra, apropriar o custo por título a pagar, ativar gerando o bem) e seguro dos bens
+// (incluir a apólice, segurar um bem com o subseguro visível e retirá-lo da cobertura). Fonte sintética: as rotas da API dos complementos são simuladas com page.route (sem o banco
 // do cliente a porta própria responde 503); o efeito no banco é provado no contrato complementos.int.spec.ts.
 import { expect, type Locator, type Page, type Route, test } from '@playwright/test';
 import { itemDoMenu, semViolacaoAxe } from './ajuda.js';
@@ -245,7 +246,150 @@ test.describe('@C2-072 imobilizado em andamento e seguro dos bens', () => {
     const r = page.getByTestId('retirada-form');
     await campo(r.getByTestId('retirada-motivo')).fill('Bem vendido (E2E C2-072).');
     await r.getByTestId('retirada-gravar').click();
+    await page.getByTestId('confirmacao').getByRole('button').last().click();
     await expect(page.getByTestId('seguros-mensagem')).toContainText('Bem retirado da cobertura');
     await semViolacaoAxe(page, '/patrimonio/seguros (detalhe)');
+  });
+});
+
+/** Bem sintético aberto na ficha, com as agregações em memória (registrar → retirar). */
+function simularAgregacoes(page: Page) {
+  const bem = {
+    id: 9101,
+    plaqueta: 'E2E-0101',
+    qr: 'PAT1:e2e:E2E-0101:1',
+    descricao: 'Monitor sintético E2E',
+    grupo: 'equipamentoMedico',
+    origem: { id: 601, nome: 'Compra' },
+    documento: 'termo',
+    nota: null,
+    termo: null,
+    empresa: 1,
+    dataAquisicao: '2026-01-10',
+    valorCent: 1_200_000,
+    residualCent: 0,
+    vidaUtilMeses: 120,
+    coeficiente: null,
+    inicioDepreciacao: '2026-02',
+    depreciavel: true,
+    centro: { id: 501, codigo: 1, nome: 'Centro sintético' },
+    localDetalhe: null,
+    tipoResponsavel: null,
+    responsavel: null,
+    marca: null,
+    modelo: null,
+    numeroSerie: null,
+    situacao: 'ativo',
+    baixadoEm: null,
+    acumuladaCent: 0,
+    contabilCent: 1_200_000,
+    ultimaCompetencia: null,
+    cotas: 0,
+    movimentoPendente: null,
+    versao: 3,
+    criadoPor: 'SINT.PATRIMONIO',
+    criadoEm: '2026-01-10T10:00:00Z',
+    alteradoPor: 'SINT.PATRIMONIO',
+    alteradoEm: '2026-01-10T10:00:00Z',
+  };
+  const componente = { ...bem, id: 9102, plaqueta: 'E2E-0102', descricao: 'Placa sintética E2E' };
+  const agregacoes: Record<string, unknown>[] = [];
+  let agregadoCent = 0;
+  return page.route(/\/api\/patrimonio\/(bens|agregacoes|movimentos)(\/.*)?(\?.*)?$/, async (rota) => {
+    const url = new URL(rota.request().url());
+    const metodo = rota.request().method();
+    const p = url.pathname;
+    if (p.endsWith('/movimentos')) return json(rota, []);
+    if (p.endsWith('/bens/codigo')) return json(rota, bem);
+    if (metodo === 'GET' && /\/bens$/.test(p))
+      return json(rota, {
+        bens: [bem, componente],
+        total: 2,
+        pagina: 1,
+        tamanho: 30,
+        totaisPagina: { valorCent: 0, acumuladaCent: 0, contabilCent: 0 },
+      });
+    if (/\/bens\/9101\/(ajustes|laudos)$/.test(p)) return json(rota, []);
+    if (p.endsWith('/bens/9101/agregacoes') && metodo === 'POST') {
+      const corpo = rota.request().postDataJSON() as { valorCent: number; descricao: string; data: string };
+      agregadoCent += corpo.valorCent;
+      agregacoes.push({
+        id: 71,
+        sequencia: 1,
+        tipo: 'componente',
+        bemAgregado: { id: componente.id, plaqueta: componente.plaqueta, descricao: componente.descricao },
+        numeroDocumento: null,
+        descricao: corpo.descricao,
+        data: corpo.data,
+        valorCent: corpo.valorCent,
+        agregaValor: true,
+        dataDesagregacao: null,
+        observacao: null,
+        versao: 1,
+      });
+      return json(rota, { id: 71 }, 201);
+    }
+    if (p.endsWith('/bens/9101/agregacoes'))
+      return json(rota, {
+        bem: bem.id,
+        versaoBem: bem.versao,
+        custoCent: bem.valorCent,
+        agregadoVigenteCent: agregadoCent,
+        agregacoes,
+      });
+    if (p.endsWith('/agregacoes/71/retirada')) {
+      agregacoes[0] = { ...agregacoes[0], dataDesagregacao: iso(HOJE), versao: 2 };
+      agregadoCent = 0;
+      return json(rota, { versao: 2 });
+    }
+    if (p.endsWith('/bens/9101')) return json(rota, bem);
+    return rota.continue();
+  });
+}
+
+test.describe('@C2-072 agregação de valor na ficha do bem', () => {
+  test('registra o componente buscado pela plaqueta somando ao custo, recusa a data futura e retira com motivo', async ({
+    page,
+  }) => {
+    await entrar(page, 'SINT.PATRIMONIO');
+    await simularAgregacoes(page);
+    await page.goto('/patrimonio/bens');
+    await expect(page.getByTestId('tela-bens')).toBeVisible({ timeout: 30_000 });
+    await campo(page.getByTestId('bens-codigo-campo')).fill('PAT1:e2e:E2E-0101:1');
+    await page.getByTestId('bens-codigo-abrir').click();
+    const ag = page.getByTestId('agregacoes-bem');
+    await expect(ag.getByTestId('agregacoes-nenhuma')).toBeVisible({ timeout: 30_000 });
+
+    await ag.getByTestId('agregacoes-registrar').click();
+    const f = ag.getByTestId('agregacoes-form');
+    await escolher(f.getByTestId('agregacoes-tipo'), 'componente');
+    await expect(f.getByTestId('agregacoes-problemas')).toContainText('Escolha o bem incorporado');
+    await expect(f.getByTestId('agregacoes-gravar')).toBeDisabled();
+    await campo(f.getByTestId('agregacoes-componente-busca')).fill('E2E-0102');
+    await escolher(f.getByTestId('agregacoes-componente'), '9102');
+    await campo(f.getByTestId('agregacoes-descricao')).fill('Placa de vídeo sintética (E2E C2-072)');
+    await campo(f.getByTestId('agregacoes-valor')).fill('1500,00');
+    await escolher(f.getByTestId('agregacoes-soma'), 'sim');
+    const amanha = new Date(HOJE.getFullYear(), HOJE.getMonth(), HOJE.getDate() + 1);
+    const d = campo(f.getByTestId('agregacoes-data'));
+    await d.fill(br(amanha));
+    await d.press('Tab');
+    await expect(f.getByTestId('agregacoes-data')).toContainText('não pode passar de');
+    await d.fill(br(HOJE));
+    await d.press('Tab');
+    await expect(f.getByTestId('agregacoes-problemas')).toHaveCount(0);
+    await semViolacaoAxe(page, '/patrimonio/bens (agregação)');
+    await f.getByTestId('agregacoes-gravar').click();
+    await expect(ag.getByTestId('agregacoes-mensagem')).toContainText('Agregação registrada');
+    await expect(ag.getByTestId('agregacoes-custo')).toContainText('1.500,00');
+
+    await ag.getByTestId('agregacao-retirar-71').click();
+    const r = ag.getByTestId('agregacoes-retirada');
+    await expect(r.getByTestId('agregacoes-retirada-confirmar')).toBeDisabled();
+    await campo(r.getByTestId('agregacoes-retirada-motivo')).fill('Placa devolvida (E2E C2-072).');
+    await r.getByTestId('agregacoes-retirada-confirmar').click();
+    await page.getByTestId('confirmacao').getByRole('button').last().click();
+    await expect(ag.getByTestId('agregacoes-mensagem')).toContainText('Retirada registrada');
+    await expect(ag.getByTestId('agregacao-retirada-71')).toBeVisible();
   });
 });
