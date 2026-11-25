@@ -283,6 +283,27 @@ const esquemaDietaBase = {
     .array(z.object({ caracteristica: ID, resposta: textoCp1252(100).optional() }))
     .max(20)
     .default([]),
+  /**
+   * Composição por refeição do dia (03-PEP L112): em cada refeição (horário de refeição do estabelecimento), o
+   * alimento, a quantidade, a medida caseira e o substituto (posição 1..n do titular anterior da mesma refeição). Só a
+   * dieta oral e a livre têm refeições; a coerência é do domínio (conferirRefeicoesDieta).
+   */
+  refeicoes: z
+    .array(
+      z.object({
+        refeicao: ID,
+        alimento: ID,
+        quantidade: QUANTIDADE,
+        unidade: ID.nullable().default(null),
+        medidaCaseira: ID.nullable().default(null),
+        quantidadeMedidaCaseira: QUANTIDADE.nullable().default(null),
+        substitui: z.number().int().min(1).max(60).nullable().default(null),
+        percentualDiario: z.number().min(0).max(100).nullable().default(null),
+        calorias: z.number().min(0).max(20_000).nullable().default(null),
+      }),
+    )
+    .max(60)
+    .default([]),
 };
 
 export const esquemaDieta = z.discriminatedUnion('tipo', [

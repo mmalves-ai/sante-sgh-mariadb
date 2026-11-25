@@ -85,6 +85,18 @@ export type DetalheMontado =
       velocidade: number | null;
       unidadeInfusao: number | null;
       caracteristicas: { caracteristica: number; resposta: string }[];
+      /** Composição por refeição (03-PEP L112), na ordem da tela; `substitui` é a posição do titular. */
+      refeicoes: {
+        refeicao: number;
+        alimento: number;
+        quantidade: number;
+        unidade: number | null;
+        medidaCaseira: number | null;
+        quantidadeMedidaCaseira: number | null;
+        substitui: number | null;
+        percentualDiario: number | null;
+        calorias: number | null;
+      }[];
     }
   | {
       tipo: 'solucao';
@@ -306,6 +318,7 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
             caracteristica: k.caracteristica,
             resposta: k.resposta ?? '',
           })),
+          refeicoes: d.refeicoes.map((r) => ({ ...r })),
         },
         horarios,
       };

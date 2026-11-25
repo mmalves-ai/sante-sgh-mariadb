@@ -22,6 +22,13 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { buscarProdutos, type DadosClinicosTela, type DominiosPrescricao } from '../../api-prescricao.js';
 import { dataHoraBr } from '../../formato.js';
+import ComposicaoRefeicoes from './ComposicaoRefeicoes.vue';
+import {
+  CLASSE_COM_REFEICOES,
+  type LinhaRefeicao,
+  recusaDaComposicao,
+  refeicoesDoContrato,
+} from './composicao-refeicoes.js';
 
 const props = defineProps<{
   grupo: GrupoItemPrescricao;
@@ -100,6 +107,7 @@ const f = reactive({
   dieta: '',
   quantidade: '',
   viaDieta: '',
+  refeicoes: [] as LinhaRefeicao[],
   procedimento: '',
   faixas: [] as {
     de: string;
@@ -299,8 +307,17 @@ function montar(): unknown {
         },
       };
     case 'jejum':
-    case 'dieta-livre':
       return { ...comum, detalhe: { tipo: tipo.value, dieta: id(f.dieta), frequencia: id(f.frequencia) } };
+    case 'dieta-livre':
+      return {
+        ...comum,
+        detalhe: {
+          tipo: 'dieta-livre',
+          dieta: id(f.dieta),
+          frequencia: id(f.frequencia),
+          refeicoes: refeicoesDoContrato(f.refeicoes),
+        },
+      };
     case 'dieta-oral':
       return {
         ...comum,
@@ -309,6 +326,7 @@ function montar(): unknown {
           dieta: id(f.dieta),
           frequencia: id(f.frequencia),
           quantidade: n(f.quantidade),
+          refeicoes: refeicoesDoContrato(f.refeicoes),
         },
       };
     case 'dieta-enteral':
@@ -392,7 +410,12 @@ function montar(): unknown {
   }
 }
 
+/** Classe da dieta que tem composição por refeição (oral e livre), ou nulo. */
+const classeComRefeicoes = computed(() => CLASSE_COM_REFEICOES[tipo.value] ?? null);
+
 function incluir(): void {
+  // A recusa da composição já está à vista (conferência do domínio na hora): não inclui o item.
+  if (classeComRefeicoes.value && recusaDaComposicao(classeComRefeicoes.value, f.refeicoes)) return;
   const r = esquemaItemPrescricao.safeParse(montar());
   if (!r.success) {
     faltando.value = [...new Set(r.error.issues.map((i) => String(i.path.at(-1) ?? '')))].filter(Boolean);
@@ -408,6 +431,7 @@ function incluir(): void {
   f.observacao = '';
   f.componentes = [];
   f.faixas = [];
+  f.refeicoes = [];
   f.seNecessario = false;
   f.agora = false;
   f.regraDose = 'fixa';
@@ -708,6 +732,13 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
           />
         </template>
       </div>
+      <ComposicaoRefeicoes
+        v-if="classeComRefeicoes"
+        v-model="f.refeicoes"
+        :classe="classeComRefeicoes"
+        :dominios="dominios"
+        :prefixo="px"
+      />
 
       <!-- Cuidado e glicemia -->
       <template v-if="tipo === 'procedimento' || tipo === 'glicemia'">

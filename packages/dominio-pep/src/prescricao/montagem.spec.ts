@@ -196,6 +196,43 @@ describe('montarItem (M24)', () => {
       // Jejum e dieta livre sem quantidade: nulo, nunca o sentinela 0.
       quantidade: null,
       caracteristicas: [{ resposta: '' }],
+      refeicoes: [],
+    });
+    // Composição por refeição (03-PEP L112): passa da tela ao item montado na ordem, com o substituto pela posição.
+    const livre = montarItem(
+      item({
+        tipo: 'dieta-livre',
+        dieta: 5,
+        frequencia: null,
+        refeicoes: [
+          { refeicao: 7, alimento: 31, quantidade: 50, percentualDiario: 20 },
+          {
+            refeicao: 7,
+            alimento: 32,
+            quantidade: 40,
+            medidaCaseira: 3,
+            quantidadeMedidaCaseira: 2,
+            substitui: 1,
+          },
+        ],
+      }),
+      ctx,
+      PAD,
+    );
+    expect(livre.detalhe).toMatchObject({
+      tipo: 'dieta',
+      classe: 'livre',
+      refeicoes: [
+        {
+          refeicao: 7,
+          alimento: 31,
+          quantidade: 50,
+          medidaCaseira: null,
+          substitui: null,
+          percentualDiario: 20,
+        },
+        { refeicao: 7, alimento: 32, medidaCaseira: 3, quantidadeMedidaCaseira: 2, substitui: 1 },
+      ],
     });
     const ent = montarItem(
       item({

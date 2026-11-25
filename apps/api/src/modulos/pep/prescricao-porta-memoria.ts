@@ -179,6 +179,15 @@ const DOMINIOS: Record<string, OpcaoDominio[]> = {
     { id: '1', nome: 'cmH2O' },
     { id: '2', nome: '%' },
   ],
+  refeicoes: [
+    { id: '1', nome: 'Desjejum (07:00)' },
+    { id: '2', nome: 'Almoço (12:00)' },
+  ],
+  alimentos: [
+    { id: '1', nome: 'Pão francês' },
+    { id: '2', nome: 'Torrada' },
+  ],
+  medidasCaseiras: [{ id: '1', nome: 'Unidade', grupo: '1' }],
 };
 
 const RELATIVOS = [

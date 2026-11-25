@@ -536,6 +536,17 @@ describe.skipIf(SEM_BANCO)('CatalogoPrescricaoPropria contra o MariaDB (cliente 
     const d = await cat.dominios(ctx(P));
     expect(d['vias']).toEqual(expect.arrayContaining([{ id: 'L94EV', nome: 'Endovenosa sintética' }]));
     expect(d['unidades']).toEqual(expect.arrayContaining([{ id: 'L94MG', nome: 'Miligrama sintético' }]));
+    // Composição da dieta por refeição (03-PEP L112): só os horários gerais do estabelecimento (sem unidade nem
+    // modalidade própria), na ordem do dia, com o horário de início; o do estabelecimento B fica fora.
+    expect(d['refeicoes']!.map((x) => x.nome)).toEqual([
+      'Refeição sintética 1 (07:00)',
+      'Refeição sintética 2 (12:00)',
+    ]);
+    expect((await cat.dominios(ctx(`${P}b`)))['refeicoes']!.map((x) => x.nome)).toEqual([
+      'Refeição sintética 1 (06:00)',
+    ]);
+    expect(Array.isArray(d['alimentos'])).toBe(true);
+    expect(Array.isArray(d['medidasCaseiras'])).toBe(true);
   });
 
   it('grade de unidade e de bloco não viram padrão; porUnidade pela unidade assistencial, porBloco pelo bloco', async () => {
