@@ -500,6 +500,31 @@ export function conferirConcessaoVigente(e: {
 }
 
 /**
+ * O alvo da concessão por classificação: o grupo (com o subgrupo, se houver) ou só a classificação de despesa, que
+ * atravessa grupos e cobre o item pela classificação do seu grupo. Um dos dois, nunca os dois na mesma linha (a
+ * concessão por grupo já é mais estreita); o subgrupo só com o grupo.
+ */
+export function conferirAlvoConcessaoClassificacao(e: {
+  readonly grupo?: number | null;
+  readonly subgrupo?: number | null;
+  readonly classificacaoDespesa?: number | null;
+}): RecusaCadastroEstoque | null {
+  const grupo = e.grupo != null;
+  const despesa = e.classificacaoDespesa != null;
+  if (!grupo && !despesa)
+    return r('concessao-sem-alvo', 'Escolha o grupo ou a classificação de despesa.', 'grupo');
+  if (grupo && despesa)
+    return r(
+      'concessao-dois-alvos',
+      'Conceda pelo grupo ou pela classificação de despesa, não pelos dois na mesma linha.',
+      'classificacaoDespesa',
+    );
+  if (e.subgrupo != null && !grupo)
+    return r('concessao-subgrupo-sem-grupo', 'O subgrupo pede o grupo.', 'subgrupo');
+  return null;
+}
+
+/**
  * Retirar a concessão deixa de valer na hora, com o histórico guardado:
  * - a que começou antes de hoje é encerrada (o fim vai para a véspera de hoje);
  * - a que começa hoje ou no futuro nunca valeu um dia inteiro: é cancelada (marca e motivo na trilha);

@@ -32,6 +32,8 @@ export interface ApoioCadastroEstoque {
   readonly locais: Opcao[];
   /** As guardas (condições de armazenamento) e os diluentes (soluções ativas) que a estabilidade escolhe por lista. */
   readonly guardas: Opcao[];
+  /** As classificações de despesa ativas (a concessão só por despesa e a do grupo de insumo). */
+  readonly despesas: Opcao[];
   readonly diluentes: Opcao[];
 }
 
@@ -70,10 +72,19 @@ export interface EscopoLocalUsuario {
   readonly variacaoValorPct: number | null;
   readonly padrao: boolean;
 }
+/** O alvo da concessão por classificação: o grupo (e o subgrupo) ou só a classificação de despesa (um dos dois). */
+export interface ConcessaoClassificacaoAlvo {
+  readonly grupo?: number | null;
+  readonly subgrupo?: number | null;
+  readonly classificacaoDespesa?: number | null;
+}
 export interface ConcessaoVigente {
   readonly id: number;
-  readonly alvo: number;
+  /** O grupo (ou o centro de custo); nulo na concessão só por classificação de despesa. */
+  readonly alvo: number | null;
   readonly alvo2: number | null;
+  /** A classificação de despesa da concessão (atravessa grupos); nula na concessão por grupo. */
+  readonly despesa?: number | null;
   readonly nome: string;
   readonly inicio: string;
   readonly fim: string | null;
@@ -161,7 +172,7 @@ export interface PortaCadastroEstoque {
   concederClassificacao(
     c: ContextoPortaM18,
     usuario: number,
-    e: ConcessaoEntrada & { grupo: number; subgrupo?: number | null },
+    e: ConcessaoEntrada & ConcessaoClassificacaoAlvo,
   ): Promise<{ id: number }>;
   concederCentroCusto(
     c: ContextoPortaM18,

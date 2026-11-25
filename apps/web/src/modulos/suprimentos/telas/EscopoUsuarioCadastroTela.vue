@@ -34,7 +34,21 @@ const motivoRetirada = ref('');
 const hoje = new Date().toISOString().slice(0, 10);
 const podeRetirar = (x: { fim: string | null }) => !x.fim || x.fim >= hoje;
 const novoLocal = ref('');
-const cl = ref({ grupo: '', inicio: '', fim: '', requisitar: true, movimentar: false, comprar: false });
+const cl = ref({
+  por: 'grupo' as 'grupo' | 'despesa',
+  grupo: '',
+  despesa: '',
+  inicio: '',
+  fim: '',
+  requisitar: true,
+  movimentar: false,
+  comprar: false,
+});
+/** O alvo da concessão: o grupo ou só a classificação de despesa (a que cobre todos os grupos ligados a ela). */
+const alvoClassificacao = () =>
+  cl.value.por === 'grupo'
+    ? { grupo: Number(cl.value.grupo) }
+    : { classificacaoDespesa: Number(cl.value.despesa) };
 const cc = ref({ centro: '', inicio: '', fim: '', requisitar: true, movimentar: false });
 
 async function buscar() {
@@ -161,8 +175,9 @@ const nomeLocal = (l: number) =>
       /></label>
       <h3>{{ t('cadastroEstoque.escopo.classificacoes') }}</h3>
       <ul>
-        <li v-for="x in escopo.classificacoes" :key="x.id">
-          {{ x.nome }} · {{ `${x.inicio} – ${x.fim ?? '…'}` }} · {{ x.permissoes.join(', ') }} ·
+        <li v-for="x in escopo.classificacoes" :key="x.id" :data-testid="`escopo-classificacao-${x.id}`">
+          <template v-if="x.despesa">{{ t('cadastroEstoque.escopo.despesa') }}: </template>{{ x.nome }} ·
+          {{ `${x.inicio} – ${x.fim ?? '…'}` }} · {{ x.permissoes.join(', ') }} ·
           {{ x.vigente ? t('cadastroEstoque.escopo.vigente') : t('cadastroEstoque.escopo.encerrada') }}
           <button
             v-if="podeRetirar(x)"
@@ -181,7 +196,7 @@ const nomeLocal = (l: number) =>
         @submit.prevent="
           tentar(() =>
             concederClassificacao(u(), {
-              grupo: Number(cl.grupo),
+              ...alvoClassificacao(),
               inicio: cl.inicio,
               fim: cl.fim || null,
               requisitar: cl.requisitar,
@@ -192,6 +207,17 @@ const nomeLocal = (l: number) =>
         "
       >
         <SanteSelecao
+          v-model="cl.por"
+          :rotulo="t('cadastroEstoque.escopo.concederPor')"
+          ocultar-rotulo
+          :opcoes="[
+            { valor: 'grupo', rotulo: t('cadastroEstoque.escopo.porGrupo') },
+            { valor: 'despesa', rotulo: t('cadastroEstoque.escopo.porDespesa') },
+          ]"
+          data-testid="escopo-conceder-por"
+        />
+        <SanteSelecao
+          v-if="cl.por === 'grupo'"
           v-model="cl.grupo"
           :rotulo="t('cadastroEstoque.item.grupo')"
           ocultar-rotulo
@@ -200,6 +226,21 @@ const nomeLocal = (l: number) =>
             ...(apoio.data.value?.grupos ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
           ]"
           obrigatorio
+        />
+        <SanteSelecao
+          v-else
+          v-model="cl.despesa"
+          :rotulo="t('cadastroEstoque.escopo.despesa')"
+          ocultar-rotulo
+          :opcoes="[
+            { valor: '', rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.despesas ?? []).map((o) => ({
+              valor: String(o.id),
+              rotulo: `${o.codigo} · ${o.nome}`,
+            })),
+          ]"
+          obrigatorio
+          data-testid="escopo-despesa"
         />
         <label
           >{{ t('cadastroEstoque.escopo.inicio') }} <input v-model="cl.inicio" type="date" required

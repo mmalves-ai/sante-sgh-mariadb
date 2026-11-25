@@ -6,6 +6,7 @@
 // reaproveita a linha. O escopo retirado do local fica marcado como excluído e sem nenhuma ação; a concessão por
 // classificação ou centro de custo retirada fecha a vigência (o histórico fica).
 import {
+  conferirAlvoConcessaoClassificacao,
   conferirConcessaoVigente,
   conferirEscopoLocal,
   conferirInativacaoItem,
@@ -41,6 +42,7 @@ import { z } from 'zod';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type {
   ApoioCadastroEstoque,
+  ConcessaoClassificacaoAlvo,
   ConcessaoEntrada,
   ConcessaoVigente,
   EscopoCompletoUsuario,
@@ -667,6 +669,13 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
           { teto: 2000 },
         ),
       ),
+      despesas: opcoes(
+        await l.consultar(
+          'SELECT id, codigo, descricao AS nome FROM classificacao_despesa WHERE ativo = TRUE ORDER BY descricao',
+          [],
+          { teto: 500 },
+        ),
+      ),
       guardas: opcoes(
         await l.consultar(
           'SELECT id, codigo, descricao AS nome FROM condicao_armazenamento WHERE ativo = TRUE ORDER BY descricao',
@@ -1092,8 +1101,11 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
         [usuario, est],
       );
       const cls = await l.consultar<Linha>(
-        `SELECT c.*, g.descricao AS g_nome, s.descricao AS s_nome FROM usuario_estoque_classificacao c
-           JOIN grupo_insumo g ON g.id = c.grupo_insumo_id LEFT JOIN subgrupo_insumo s ON s.id = c.subgrupo_insumo_id
+        // LEFT JOIN: a concessão só por classificação de despesa (sem grupo) também aparece e se retira.
+        `SELECT c.*, g.descricao AS g_nome, s.descricao AS s_nome, d.descricao AS d_nome
+           FROM usuario_estoque_classificacao c
+           LEFT JOIN grupo_insumo g ON g.id = c.grupo_insumo_id LEFT JOIN subgrupo_insumo s ON s.id = c.subgrupo_insumo_id
+           LEFT JOIN classificacao_despesa d ON d.id = c.classificacao_despesa_id
           WHERE c.usuario_id = ? AND c.estabelecimento_id = ? AND c.excluido_em IS NULL ORDER BY c.vigencia_inicio DESC, c.id DESC`,
         [usuario, est],
       );
@@ -1118,9 +1130,14 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
         })),
         classificacoes: cls.map((r): ConcessaoVigente => ({
           id: n(r['id']),
-          alvo: n(r['grupo_insumo_id']),
+          alvo: nn(r['grupo_insumo_id']),
           alvo2: nn(r['subgrupo_insumo_id']),
-          nome: r['s_nome'] ? `${t(r['g_nome'])} › ${t(r['s_nome'])}` : t(r['g_nome']),
+          despesa: nn(r['classificacao_despesa_id']),
+          nome: r['grupo_insumo_id']
+            ? r['s_nome']
+              ? `${t(r['g_nome'])} › ${t(r['s_nome'])}`
+              : t(r['g_nome'])
+            : t(r['d_nome']),
           inicio: dataIso(r['vigencia_inicio']),
           fim: dataIso(r['vigencia_fim']) || null,
           permissoes: [
@@ -1238,8 +1255,11 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
   async concederClassificacao(
     c: ContextoPortaM18,
     usuario: number,
-    e: ConcessaoEntrada & { grupo: number; subgrupo?: number | null },
+    e: ConcessaoEntrada & ConcessaoClassificacaoAlvo,
   ) {
+    recusarUma(conferirAlvoConcessaoClassificacao(e));
+    const grupo = e.grupo ?? null;
+    const despesa = e.classificacaoDespesa ?? null;
     const perms = [
       ...(e.requisitar ? ['requisitar'] : []),
       ...(e.movimentar ? ['movimentar'] : []),
@@ -1250,11 +1270,21 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
       c,
       'conceder-classificacao',
       'usuario_estoque_classificacao',
-      { usuario, grupo: e.grupo, subgrupo: e.subgrupo ?? null },
+      { usuario, grupo, subgrupo: e.subgrupo ?? null, classificacaoDespesa: despesa },
       async (tx, est) => {
         await this.usuarioELocal(tx, est, usuario, null);
-        if (!(await tx.uma('SELECT id FROM grupo_insumo WHERE id = ? AND ativo = TRUE', [e.grupo])))
+        if (
+          grupo !== null &&
+          !(await tx.uma('SELECT id FROM grupo_insumo WHERE id = ? AND ativo = TRUE', [grupo]))
+        )
           throw recusa('referencia-inexistente', 'Grupo inexistente ou inativo.', { campos: ['grupo'] });
+        if (
+          despesa !== null &&
+          !(await tx.uma('SELECT id FROM classificacao_despesa WHERE id = ? AND ativo = TRUE', [despesa]))
+        )
+          throw recusa('referencia-inexistente', 'Classificação de despesa inexistente ou inativa.', {
+            campos: ['classificacaoDespesa'],
+          });
         if (
           e.subgrupo &&
           !(await tx.uma('SELECT id FROM subgrupo_insumo WHERE id = ? AND grupo_insumo_id = ?', [
@@ -1266,10 +1296,11 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
             campos: ['subgrupo'],
           });
         const sobrepoe = await tx.uma(
-          `SELECT id FROM usuario_estoque_classificacao WHERE estabelecimento_id = ? AND usuario_id = ? AND grupo_insumo_id = ?
-            AND COALESCE(subgrupo_insumo_id, 0) = ? AND excluido_em IS NULL
+          `SELECT id FROM usuario_estoque_classificacao WHERE estabelecimento_id = ? AND usuario_id = ?
+            AND COALESCE(grupo_insumo_id, 0) = ? AND COALESCE(subgrupo_insumo_id, 0) = ?
+            AND COALESCE(classificacao_despesa_id, 0) = ? AND excluido_em IS NULL
             AND (vigencia_fim IS NULL OR vigencia_fim >= ?) AND (? IS NULL OR vigencia_inicio <= ?)`,
-          [est, usuario, e.grupo, e.subgrupo ?? 0, e.inicio, e.fim ?? null, e.fim ?? null],
+          [est, usuario, grupo ?? 0, e.subgrupo ?? 0, despesa ?? 0, e.inicio, e.fim ?? null, e.fim ?? null],
         );
         if (sobrepoe)
           throw recusa(
@@ -1280,14 +1311,15 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
         const id = await incluirConcessao(
           tx,
           'usuario_estoque_classificacao',
-          'estabelecimento_id = ? AND usuario_id = ? AND grupo_insumo_id = ? AND COALESCE(subgrupo_insumo_id, 0) = ?',
-          [est, usuario, e.grupo, e.subgrupo ?? 0],
+          'estabelecimento_id = ? AND usuario_id = ? AND COALESCE(grupo_insumo_id, 0) = ? AND COALESCE(subgrupo_insumo_id, 0) = ? AND COALESCE(classificacao_despesa_id, 0) = ?',
+          [est, usuario, grupo ?? 0, e.subgrupo ?? 0, despesa ?? 0],
           e.inicio,
           {
             estabelecimento_id: est,
             usuario_id: usuario,
-            grupo_insumo_id: e.grupo,
+            grupo_insumo_id: grupo,
             subgrupo_insumo_id: e.subgrupo ?? null,
+            classificacao_despesa_id: despesa,
             permite_requisitar: e.requisitar,
             permite_movimentar: e.movimentar,
             permite_comprar: e.comprar ?? false,

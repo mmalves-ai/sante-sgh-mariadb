@@ -6,6 +6,7 @@
 // de pessoa real. A prova do que fica no banco é o contrato de efeito da porta própria.
 import {
   conferirAlteracaoItem,
+  conferirAlvoConcessaoClassificacao,
   conferirConcessaoVigente,
   conferirEscopoLocal,
   conferirInativacaoItem,
@@ -24,6 +25,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type {
   ApoioCadastroEstoque,
+  ConcessaoClassificacaoAlvo,
   ConcessaoEntrada,
   ConcessaoVigente,
   EscopoCompletoUsuario,
@@ -61,6 +63,7 @@ export const APOIO_SINTETICO = {
   setores: [op(101, 'UTI', 'UTI SINTETICA'), op(102, 'CLM', 'CLINICA MEDICA SINTETICA')],
   centrosCusto: [op(101, 'CC101', 'CENTRO DE CUSTO SINTETICO 101'), op(102, 'CC102', 'CENTRO DE CUSTO 102')],
   guardas: [op(1, 'AMB', 'TEMPERATURA AMBIENTE'), op(2, 'REF', 'REFRIGERADO (2 A 8 GRAUS)')],
+  despesas: [op(1, 'MAT', 'MATERIAIS SINTETICOS'), op(2, 'MED', 'MEDICAMENTOS SINTETICOS')],
   diluentes: [op(1, 'SF', 'CLORETO DE SODIO 0,9%'), op(2, 'SG', 'GLICOSE 5%')],
 } as const;
 const PRINCIPIOS = [
@@ -100,8 +103,9 @@ interface ConcessaoM {
   id: number;
   usuario: number;
   estabelecimento: number | null;
-  alvo: number;
+  alvo: number | null;
   alvo2: number | null;
+  despesa: number | null;
   inicio: string;
   fim: string | null;
   permissoes: string[];
@@ -329,6 +333,7 @@ export class PortaCadastroEstoqueMemoria implements PortaCadastroEstoque {
         .filter((l) => l.ativo)
         .map((l) => op(l.id, l.dados.codigo, l.dados.nome)),
       guardas: [...APOIO_SINTETICO.guardas],
+      despesas: [...APOIO_SINTETICO.despesas],
       diluentes: [...APOIO_SINTETICO.diluentes],
     };
   }
@@ -596,6 +601,7 @@ export class PortaCadastroEstoqueMemoria implements PortaCadastroEstoque {
         id: x.id,
         alvo: x.alvo,
         alvo2: x.alvo2,
+        despesa: x.despesa,
         nome: nome(x),
         inicio: x.inicio,
         fim: x.fim,
@@ -631,9 +637,11 @@ export class PortaCadastroEstoqueMemoria implements PortaCadastroEstoque {
             : [];
         }),
       classificacoes: this.vigentes(s.classificacoes, c, usuario, (x) =>
-        [nomeDe(APOIO_SINTETICO.grupos, x.alvo), nomeDe(APOIO_SINTETICO.subgrupos, x.alvo2)]
-          .filter(Boolean)
-          .join(' · '),
+        x.alvo === null
+          ? nomeDe(APOIO_SINTETICO.despesas, x.despesa)
+          : [nomeDe(APOIO_SINTETICO.grupos, x.alvo), nomeDe(APOIO_SINTETICO.subgrupos, x.alvo2)]
+              .filter(Boolean)
+              .join(' · '),
       ),
       centrosCusto: this.vigentes(s.centros, c, usuario, (x) => nomeDe(APOIO_SINTETICO.centrosCusto, x.alvo)),
     };
@@ -674,9 +682,10 @@ export class PortaCadastroEstoqueMemoria implements PortaCadastroEstoque {
     c: ContextoPortaM18,
     usuario: number,
     e: ConcessaoEntrada,
-    alvo: number,
+    alvo: number | null,
     alvo2: number | null,
     oQue: string,
+    despesa: number | null = null,
   ): { id: number } {
     const permissoes = [
       ...(e.requisitar ? ['requisitar'] : []),
@@ -694,6 +703,7 @@ export class PortaCadastroEstoqueMemoria implements PortaCadastroEstoque {
         x.estabelecimento === est &&
         x.alvo === alvo &&
         (x.alvo2 ?? 0) === (alvo2 ?? 0) &&
+        x.despesa === despesa &&
         (x.fim === null || x.fim >= e.inicio) &&
         (fim === null || x.inicio <= fim),
     );
@@ -708,6 +718,7 @@ export class PortaCadastroEstoqueMemoria implements PortaCadastroEstoque {
       estabelecimento: est,
       alvo,
       alvo2,
+      despesa,
       inicio: e.inicio,
       fim,
       permissoes,
@@ -719,9 +730,27 @@ export class PortaCadastroEstoqueMemoria implements PortaCadastroEstoque {
   async concederClassificacao(
     c: ContextoPortaM18,
     usuario: number,
-    e: ConcessaoEntrada & { grupo: number; subgrupo?: number | null },
+    e: ConcessaoEntrada & ConcessaoClassificacaoAlvo,
   ) {
     const s = this.e(c);
+    recusarUma(conferirAlvoConcessaoClassificacao(e));
+    if (e.grupo == null) {
+      if (!APOIO_SINTETICO.despesas.some((x) => x.id === e.classificacaoDespesa))
+        throw recusa('referencia-inexistente', 'Classificação de despesa inexistente ou inativa.', {
+          campos: ['classificacaoDespesa'],
+        });
+      return this.conceder(
+        s.classificacoes,
+        s,
+        c,
+        usuario,
+        e,
+        null,
+        null,
+        'desta classificação',
+        e.classificacaoDespesa ?? null,
+      );
+    }
     if (!APOIO_SINTETICO.grupos.some((g) => g.id === e.grupo))
       throw recusa('referencia-inexistente', 'Grupo inexistente ou inativo.', { campos: ['grupo'] });
     if (e.subgrupo && APOIO_SINTETICO.subgrupos.find((x) => x.id === e.subgrupo)?.grupo !== e.grupo)

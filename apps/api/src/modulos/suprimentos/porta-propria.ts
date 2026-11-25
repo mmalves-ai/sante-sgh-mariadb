@@ -4651,8 +4651,10 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
       const linhas = await l.consultar<Linha>(SQL_PERMISSOES_LOCAL, [est, id]);
       const centros = await l.consultar<Linha>(SQL_CENTROS_USUARIO, [est, id]);
       const classes = await l.consultar<Linha>(
+        // Os grupos que a concessão cobre: o do grupo e os que a classificação de despesa liga (concessão só por despesa).
         `SELECT DISTINCT g.id, g.descricao FROM usuario_estoque_classificacao uc
            JOIN grupo_insumo g ON g.id = uc.grupo_insumo_id
+             OR (uc.grupo_insumo_id IS NULL AND g.classificacao_despesa_id = uc.classificacao_despesa_id)
           WHERE uc.estabelecimento_id = ? AND uc.usuario_id = ? AND uc.excluido_em IS NULL
             AND uc.vigencia_inicio <= CURRENT_DATE AND (uc.vigencia_fim IS NULL OR uc.vigencia_fim >= CURRENT_DATE)
           ORDER BY g.descricao`,

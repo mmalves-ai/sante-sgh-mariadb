@@ -16,6 +16,10 @@ import {
   montarMassa,
   SEM_BANCO,
 } from './massa-propria.spec-util.js';
+import { valoresParaBanco } from '../config/dominios-catalogo.js';
+import { FonteDominiosPropria } from '../config/dominios-fonte.js';
+import type { ContextoPortaM18 } from '../exames/public-api.js';
+import { PortaCadastroEstoquePropria } from './cadastro-estoque-porta-propria.js';
 import type { ContextoSuprimentos } from './porta.js';
 import { PortaSuprimentosPropria } from './porta-propria.js';
 
@@ -305,36 +309,114 @@ describe.skipIf(SEM_BANCO)('política do local e concessão por classificação 
     expect(await requisicoes()).toBe(antes + 1);
   });
 
-  it('concessão só por classificação de despesa: vale pela classificação do grupo do item, e o grupo sem ela fica fora', async () => {
+  it('concessão só por classificação de despesa, pelas operações do produto: o grupo ganha a classificação pelo cadastro de domínios, a concessão entra, aparece e se retira pela porta do cadastro', async () => {
     const despesa = await nucleo.escrever(acesso, (e) =>
       inserirMinimo(e, 'classificacao_despesa', { codigo: `${m.marca}CD`.slice(0, 30) }, m.marca),
     );
-    try {
-      await nucleo.escrever(acesso, (e) =>
-        inserirMinimo(
-          e,
-          'usuario_estoque_classificacao',
-          {
-            estabelecimento_id: m.estA,
-            usuario_id: m.usuario,
-            classificacao_despesa_id: despesa,
-            permite_requisitar: true,
-            permite_movimentar: true,
-            permite_comprar: false,
-            vigencia_inicio: '2026-01-01',
-          },
-          m.marca,
-        ),
+    const inativa = await nucleo.escrever(acesso, (e) =>
+      inserirMinimo(
+        e,
+        'classificacao_despesa',
+        { codigo: `${m.marca}CI`.slice(0, 30), ativo: false },
+        m.marca,
+      ),
+    );
+    const cad = new PortaCadastroEstoquePropria(nucleo);
+    const cc = contexto(m, m.estA, 't-f36-despesa') as ContextoPortaM18;
+    const dominios = new FonteDominiosPropria(nucleo, CLIENTE);
+    const dGrupo = (await dominios.catalogo()).find((d) => d.tabela === 'grupo_insumo')!;
+    const campo = dGrupo.campos.find((x) => x.coluna === 'classificacao_despesa_id')!.campo;
+    const [est] = await ler<{ codigo: string }>('SELECT codigo FROM estabelecimento WHERE id = ?', [m.estA]);
+    const [usu] = await ler<{ login: string }>('SELECT login FROM usuario WHERE id = ?', [m.usuario]);
+    /** Liga (ou desliga) a classificação de despesa do grupo pela gravação do cadastro de domínios (com trilha). */
+    const classificarGrupo = async (valor: number | null) => {
+      const [g] = await ler<{ codigo: string; versao: unknown }>(
+        'SELECT codigo, versao FROM grupo_insumo WHERE id = ?',
+        [m.grupo],
       );
+      await dominios.alterar(
+        {
+          hospital: String(est!.codigo),
+          usuarioId: String(m.usuario),
+          login: String(usu!.login),
+          correlacao: 't-f36-despesa-grupo',
+          chaveIdempotencia: `f36d-${RODADA}-${++k}`,
+        },
+        dGrupo,
+        String(g!.codigo),
+        Number(g!.versao),
+        valoresParaBanco(dGrupo, { [campo]: valor }, 'alterar'),
+      );
+    };
+    const grupoDespesa = async () =>
+      (
+        await ler<{ d: unknown }>('SELECT classificacao_despesa_id AS d FROM grupo_insumo WHERE id = ?', [
+          m.grupo,
+        ])
+      )[0]?.d ?? null;
+    const concessao = (extra: Record<string, unknown>) => ({
+      inicio: '2026-01-01',
+      requisitar: true,
+      movimentar: true,
+      comprar: false,
+      ...extra,
+    });
+    try {
+      // O alvo é o grupo ou a despesa (um dos dois), e a despesa existe e está ativa: nada fica no banco.
+      const linhas = () =>
+        conta('SELECT COUNT(*) AS q FROM usuario_estoque_classificacao WHERE usuario_id = ?', [m.usuario]);
+      expect(await codigoDe(cad.concederClassificacao(cc, m.usuario, concessao({})))).toBe(
+        'concessao-sem-alvo',
+      );
+      expect(
+        await codigoDe(
+          cad.concederClassificacao(
+            cc,
+            m.usuario,
+            concessao({ grupo: m.grupo, classificacaoDespesa: despesa }),
+          ),
+        ),
+      ).toBe('concessao-dois-alvos');
+      expect(
+        await codigoDe(
+          cad.concederClassificacao(cc, m.usuario, concessao({ classificacaoDespesa: inativa })),
+        ),
+      ).toBe('referencia-inexistente');
+      expect(await linhas()).toBe(0);
+      // A concessão só por despesa entra pela porta e aparece no escopo do usuário (sem grupo, com a despesa).
+      const { id } = await cad.concederClassificacao(
+        cc,
+        m.usuario,
+        concessao({ classificacaoDespesa: despesa }),
+      );
+      const [linha] = await ler<Record<string, unknown>>(
+        'SELECT grupo_insumo_id, classificacao_despesa_id, permite_requisitar, permite_comprar FROM usuario_estoque_classificacao WHERE id = ?',
+        [id],
+      );
+      expect([linha!['grupo_insumo_id'], Number(linha!['classificacao_despesa_id'])]).toEqual([
+        null,
+        despesa,
+      ]);
+      const visto = (await cad.escopoUsuario(cc, m.usuario))!.classificacoes.find((x) => x.id === id);
+      expect(visto).toMatchObject({ alvo: null, despesa, vigente: true });
+      expect(visto!.permissoes).toEqual(['requisitar', 'movimentar']);
+      expect(
+        await codigoDe(
+          cad.concederClassificacao(cc, m.usuario, concessao({ classificacaoDespesa: despesa })),
+        ),
+      ).toBe('concessao-sobreposta');
+
       const antes = await requisicoes();
       const saldoA = await saldo(m.localA);
       // O grupo do item ainda não tem classificação de despesa: a concessão só por despesa não o cobre.
-      await gravar('UPDATE grupo_insumo SET classificacao_despesa_id = NULL WHERE id = ?', [m.grupo]);
+      await classificarGrupo(null);
+      expect(await grupoDespesa()).toBeNull();
       expect(await codigoDe(op('requisitarMaterial', requisicao()))).toBe('item-fora-do-escopo');
       expect(await codigoDe(op('registrarSaida', saida(1)))).toBe('item-fora-do-escopo');
       expect([await requisicoes(), await saldo(m.localA)]).toEqual([antes, saldoA]);
-      // O grupo ganha a classificação: o item passa a ser requisitado e a sair pelo que a concessão marcou.
-      await gravar('UPDATE grupo_insumo SET classificacao_despesa_id = ? WHERE id = ?', [despesa, m.grupo]);
+      // O grupo ganha a classificação pelo cadastro: o item passa a ser requisitado e a sair pelo que a concessão marcou.
+      await classificarGrupo(despesa);
+      expect(Number(await grupoDespesa())).toBe(despesa);
       await op('requisitarMaterial', requisicao());
       await op('registrarSaida', saida(1));
       expect([await requisicoes(), await saldo(m.localA)]).toEqual([antes + 1, saldoA - 1]);
@@ -345,11 +427,11 @@ describe.skipIf(SEM_BANCO)('política do local e concessão por classificação 
         itens: [{ item: m.insumo, quantidade: 1 }],
       };
       expect(await codigoDe(op('criarPedido', pedido))).toBe('item-fora-do-escopo');
-      // Outra classificação no grupo: o item volta a ficar fora.
-      const outra = await nucleo.escrever(acesso, (e) =>
-        inserirMinimo(e, 'classificacao_despesa', { codigo: `${m.marca}CE`.slice(0, 30) }, m.marca),
-      );
-      await gravar('UPDATE grupo_insumo SET classificacao_despesa_id = ? WHERE id = ?', [outra, m.grupo]);
+      // Retirada pela porta: a concessão fica encerrada no histórico, e retirar a última não abre tudo.
+      const r = await cad.retirarConcessao(cc, 'classificacao', id, 'Mudou de função no estoque');
+      expect(r.cancelada).toBe(false);
+      const depois = (await cad.escopoUsuario(cc, m.usuario))!.classificacoes.find((x) => x.id === id);
+      expect(depois).toMatchObject({ despesa, vigente: false });
       expect(await codigoDe(op('requisitarMaterial', requisicao()))).toBe('item-fora-do-escopo');
       expect(await requisicoes()).toBe(antes + 1);
     } finally {

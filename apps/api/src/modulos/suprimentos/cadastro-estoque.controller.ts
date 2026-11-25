@@ -182,7 +182,14 @@ const concessao = {
   movimentar: z.boolean(),
 };
 const esquemaClassificacao = z
-  .object({ ...concessao, comprar: z.boolean().optional(), grupo: id, subgrupo: idOpc })
+  .object({
+    ...concessao,
+    comprar: z.boolean().optional(),
+    // O grupo (e o subgrupo) ou só a classificação de despesa: a regra do domínio confere que vem um dos dois.
+    grupo: idOpc,
+    subgrupo: idOpc,
+    classificacaoDespesa: idOpc,
+  })
   .strict();
 const esquemaCentro = z.object({ ...concessao, centroCusto: id }).strict();
 

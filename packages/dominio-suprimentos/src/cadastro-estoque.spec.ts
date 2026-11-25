@@ -1,6 +1,7 @@
 // Regras do cadastro do estoque (F3.6, 05-SUP linhas 1, 3 e 6): item, local, escopo do usuário e lista de separação.
 import { describe, expect, it } from 'vitest';
 import {
+  conferirAlvoConcessaoClassificacao,
   conferirConcessaoVigente,
   conferirEscopoLocal,
   conferirInativacaoItem,
@@ -262,6 +263,17 @@ describe('local de estoque e escopo do usuário', () => {
       'concessao-vazia',
     );
     expect(conferirConcessaoVigente({ inicio: '2026-11-24', permissoes: ['requisitar'] })).toBeNull();
+  });
+
+  it('concessão por classificação: o grupo ou só a classificação de despesa, um dos dois', () => {
+    const cod = (e: Parameters<typeof conferirAlvoConcessaoClassificacao>[0]) =>
+      conferirAlvoConcessaoClassificacao(e)?.codigo ?? null;
+    expect(cod({})).toBe('concessao-sem-alvo');
+    expect(cod({ grupo: null, classificacaoDespesa: null })).toBe('concessao-sem-alvo');
+    expect(cod({ grupo: 1, classificacaoDespesa: 2 })).toBe('concessao-dois-alvos');
+    expect(cod({ subgrupo: 3, classificacaoDespesa: 2 })).toBe('concessao-subgrupo-sem-grupo');
+    expect(cod({ grupo: 1, subgrupo: 3 })).toBeNull();
+    expect(cod({ classificacaoDespesa: 2 })).toBeNull();
   });
 
   it('retirar: encerra a que já valia, cancela a de hoje e a futura, recusa sem motivo e a encerrada', () => {

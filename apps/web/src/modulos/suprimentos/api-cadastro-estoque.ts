@@ -28,6 +28,8 @@ export interface ApoioCadastroEstoque {
   readonly locais: Opcao[];
   readonly guardas: Opcao[];
   readonly diluentes: Opcao[];
+  /** As classificações de despesa ativas: a concessão só por despesa cobre os grupos ligados a ela. */
+  readonly despesas?: Opcao[];
 }
 export interface FichaItemEdicao extends ItemEstoqueEntrada {
   readonly id: number;
@@ -54,6 +56,8 @@ export interface FichaLocalEdicao extends LocalEstoqueEntrada {
 }
 export interface ConcessaoVigente {
   readonly id: number;
+  /** A classificação de despesa da concessão só por despesa (nula na concessão por grupo). */
+  readonly despesa?: number | null;
   readonly nome: string;
   readonly inicio: string;
   readonly fim: string | null;
@@ -129,7 +133,8 @@ export const retirarEscopoLocal = (u: number, local: number) =>
 export const concederClassificacao = (
   u: number,
   e: {
-    grupo: number;
+    grupo?: number | null;
+    classificacaoDespesa?: number | null;
     inicio: string;
     fim?: string | null;
     requisitar: boolean;
