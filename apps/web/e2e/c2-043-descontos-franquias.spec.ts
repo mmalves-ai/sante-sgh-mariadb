@@ -183,6 +183,6 @@ test.describe('@C2-043 descontos por volume e franquias (06-FAT linha 19)', () =
     await expect(page.getByTestId('df-conta-aplicados')).toContainText('Desconto por volume');
     // A requisição de aplicação não leva o vínculo (a gravação usa o da carteira do cadastro).
     expect(Object.keys(enviados.find((e) => e['rota'] === 'aplicar') ?? {})).toEqual(['rota']);
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'descontos e franquias');
   });
 });

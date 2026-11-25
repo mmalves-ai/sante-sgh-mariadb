@@ -323,13 +323,13 @@ export function problemasDoAlertaFluxo(a: AlertaFluxo): ProblemaAlertaFluxo[] {
   return p;
 }
 
-export type NivelAlerta = 'normal' | 'atencao' | 'critico' | 'sem_medida';
+export type NivelAlertaCentral = 'normal' | 'atencao' | 'critico' | 'sem_medida';
 
 /** O nível do alerta pela medida da unidade: crítico ao atingir o crítico; atenção ao atingir a atenção. */
 export function nivelDoAlerta(
   a: Pick<AlertaFluxo, 'limiteAtencao' | 'limiteCritico'>,
   medida: number | null,
-): NivelAlerta {
+): NivelAlertaCentral {
   if (medida === null) return 'sem_medida';
   if (medida >= a.limiteCritico) return 'critico';
   if (a.limiteAtencao !== null && medida >= a.limiteAtencao) return 'atencao';
