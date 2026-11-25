@@ -171,7 +171,6 @@ export const listarAutocadastros = (): Promise<AutocadastroLido[]> =>
 
 // ── Gravações ─────────────────────────────────────────────────────────────────────────────────────
 export const receberPedidos = (corpo: unknown, chave: string) => gravar(`${S}/exames/receber`, corpo, chave);
-export const lancarExames = (corpo: unknown, chave: string) => gravar(`${S}/exames/lancar`, corpo, chave);
 export const abrirRequisicao = (corpo: unknown, chave: string) => gravar(`${S}/requisicoes`, corpo, chave);
 export const emitirProtocolo = (reg: number, chave: string) =>
   enviar(`${S}/requisicoes/${reg}/protocolo`, {}, esquemaProtocolo, chave);

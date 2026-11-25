@@ -1,6 +1,6 @@
 // M26 (SADT, laudos e portal de resultados) pela HTTP, com a sessão real sobre a fonte sintética e as portas EM MEMÓRIA
 // (nada conecta a banco), com o módulo registrado (API_MODULOS=sadt): permissões pelas opções do perfil, liberação (POL-3), pedidos do prontuário a receber,
-// lançamento no setor com o alerta de repetição, coleta com a pulseira e o código único da amostra, rastreio com a
+// a rota do lançamento direto aposentada (C2-006), coleta com a pulseira e o código único da amostra, rastreio com a
 // rejeição, digitação com a referência, liberação pelo responsável habilitado (o crítico pede a confirmação e o aviso
 // sai na gravação), retificação com o motivo e as versões, laudo de imagem privativo de médico, parâmetros sem segredo,
 // orçamento convertido e o portal (protocolo do paciente com limite de tentativas; médico externo com o segundo fator e
@@ -156,29 +156,35 @@ describe('fluxo do laboratório', () => {
       local: 41,
     });
     expect(r.statusCode).toBe(200);
-    // Lançamento no setor para o externo (a requisição aberta): o potássio crítico.
-    const l = await post(s, '/sadt/exames/lancar', {
-      atendimento: 10031,
-      ato: 15,
-      itens: [{ exame: 502, urgente: true }],
-      executante,
-      prestador,
-      local: 41,
-      confirmarAlertas: false,
-    });
-    expect(l.statusCode).toBe(200);
-    const k = l.json().ids.primeiro as number;
-    // Repetição no intervalo mínimo: pede a confirmação.
-    const rep = await post(s, '/sadt/exames/lancar', {
-      atendimento: 10031,
-      ato: 15,
-      itens: [{ exame: 502, urgente: false }],
-      executante,
-      prestador,
-      local: 41,
-      confirmarAlertas: false,
-    });
-    expect(rep.json().codigo).toBe('restricao-do-exame');
+    // O lançamento direto no setor saiu da API (C2-006: o pedido nasce em /sadt/pedido, com a restrição clínica);
+    // o potássio crítico do externo entra pela operação que a conversão do orçamento usa, direto na porta em memória.
+    const cs = {
+      cliente: 'sintetico',
+      estabelecimento: null,
+      usuario: null,
+      correlacao: 'm26',
+      hospital: 'aa',
+    };
+    const at = (await sadt.atendimento(cs, 10031))!;
+    const l = await sadt.executar(
+      cs,
+      'sadt.lancarExame',
+      {
+        atendimento: 10031,
+        ato: 15,
+        atend: at.atend,
+        itens: [{ exame: 502, urgente: true }],
+        executante,
+        prestador,
+        local: 41,
+        retratos: at.retratos,
+        confirmarAlertas: false,
+      },
+      { ...cs, chaveIdempotencia: 'm26-potassio' },
+    );
+    const k = (l.resultado as { primeiro: number }).primeiro;
+    // A rota antiga do lançamento direto não existe mais.
+    expect((await post(s, '/sadt/exames/lancar', { atendimento: 10031 })).statusCode).toBe(404);
     // Digitação com a referência do dia e a faixa crítica.
     const dig = (await get(s, `/sadt/resultados/${k}/digitacao`)).json();
     expect(dig.elementos[0].referencia.minimo).toBe(3.5);

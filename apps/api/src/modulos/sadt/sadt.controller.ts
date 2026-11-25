@@ -5,7 +5,6 @@
 //   GET  /api/sadt/exames?setor&data&situacao&urgentes&unidade&termo   exames do setor (auditado: lista com nomes)
 //   GET  /api/sadt/exames/:id                        um exame (auditado)
 //   POST /api/sadt/exames/receber                    sadt.receberSolicitacao (pedidos do prontuário)
-//   POST /api/sadt/exames/lancar                     sadt.lancarExame (lançamento direto no setor)
 //   GET  /api/sadt/atendimentos/:id                  o atendimento para o lançamento (conta do setor, retratos)
 //   GET  /api/sadt/atendimentos?numero               busca do atendimento pelo número
 //   GET  /api/sadt/requisicoes?data&termo            atendimentos externos do dia e a requisição
@@ -281,15 +280,6 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
   @AuditadoNoHandler('sadt.receberSolicitacao pelo executor (trilha na mesma transação)')
   receber(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSadt> {
     return this.servico.receber(sessaoDe(req), corpo(esquemaReceberSolicitacao, b));
-  }
-
-  @Post('exames/lancar')
-  @HttpCode(200)
-  @Permissao('sadt.lancamento.lancar')
-  @AuditadoNoHandler('sadt.lancarExame pelo executor (trilha na mesma transação)')
-  lancar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSadt> {
-    if (!b || typeof b !== 'object') throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
-    return this.servico.lancar(sessaoDe(req), b as Record<string, unknown>);
   }
 
   @Get('atendimentos/:id')

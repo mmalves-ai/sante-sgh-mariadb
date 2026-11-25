@@ -159,7 +159,11 @@ export class ServicoSadt {
     return resultado(r);
   }
 
-  /** O lançamento no setor: os retratos vigentes do atendimento e o intervalo de repetição do parâmetro. */
+  /**
+   * O lançamento no setor: os retratos vigentes do atendimento e o intervalo de repetição do parâmetro. Sem rota
+   * própria desde a C2-006 (o pedido do setor nasce em /sadt/pedido, com a restrição clínica): só a conversão do
+   * orçamento o usa.
+   */
   async lancar(s: SessaoCadastro, bruto: Record<string, unknown>): Promise<ResultadoSadt> {
     const atendimento = Number(bruto['atendimento']);
     const a = Number.isSafeInteger(atendimento) ? await this.porta.atendimento(ctx(s), atendimento) : null;
