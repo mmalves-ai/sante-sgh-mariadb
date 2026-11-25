@@ -5,6 +5,7 @@
 // retificação guarda a versão anterior inteira em resultado_exame_versao com o motivo. Com responsável pelo laudo nomeado
 // no setor (responsavel_laudo_setor, 05-SADT linha 25), só ele libera e retifica. Nada é apagado; tudo pelo
 // Executor, com a trilha na mesma transação.
+import { calcularNoResultado } from './formulas-leitura.js';
 import {
   avaliarValor,
   conferirDigitacao,
@@ -23,6 +24,11 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
+import {
+  avisarCriticosDoResultado,
+  avisarQuemViuARetificacao,
+  TABELAS_AVISOS_RESULTADO,
+} from './resultado-avisos.js';
 
 const n = (v: unknown) => Number(v);
 const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
@@ -39,6 +45,11 @@ export const esquemaRegistrarResultadoBanco = z
   .object({
     valores: z.array(esquemaValor).min(1).max(200),
     observacao: z.string().trim().max(4000).optional(),
+    /** Variáveis de fórmula digitadas (peso, altura, volume...): o analito calculado sai da fórmula vigente. */
+    variaveis: z
+      .array(z.object({ variavel: z.number().int().positive(), valor: z.number().finite() }).strict())
+      .max(50)
+      .optional(),
   })
   .strict();
 export const esquemaLiberarResultadoBanco = z.object({}).strict();
@@ -60,7 +71,9 @@ const TABELAS = [
   'resultado_analito',
   'resultado_exame_versao',
   'resultado_observacao',
+  'resultado_variavel_formula',
   'exame_item',
+  ...TABELAS_AVISOS_RESULTADO,
 ];
 
 type Tx = Parameters<Parameters<typeof definirOperacao>[0]['gravar']>[0];
@@ -85,11 +98,21 @@ export class ServicoResultadoSadt {
     const e = esquemaRegistrarResultadoBanco.parse(entrada);
     return this.gravar(c, 'sadt.resultado.registrar', exame, null, async (tx, ctx) => {
       const faixas = await this.faixas(tx, ctx.exameId, ctx.paciente, ctx.agora);
+      // O analito calculado sai da fórmula vigente (05-SADT linha 3); o valor digitado nele é ignorado.
+      const calculo = await calcularNoResultado(tx, {
+        exameId: ctx.exameId,
+        paciente: ctx.paciente,
+        agora: ctx.agora,
+        resultado: ctx.resultado ? n(ctx.resultado['id']) : null,
+        valores: e.valores,
+        variaveis: e.variaveis ?? [],
+      });
+      if (calculo.falha) throw recusa('variavel-invalida', calculo.falha);
       const falha = conferirDigitacao({
         situacaoExame: ctx.situacaoExame,
         retido: ctx.retido,
         situacaoResultado: ctx.resultado ? String(ctx.resultado['situacao']) : null,
-        valores: e.valores,
+        valores: calculo.valores,
         analitosDoExame: ctx.analitos,
         faixas,
       });
@@ -114,8 +137,18 @@ export class ServicoResultadoSadt {
           digitado_em: ctx.agora,
         });
       }
-      const marcas = await this.gravarValores(tx, id, e.valores, faixas, ctx.analitos, null);
+      await calculo.gravarVariaveis(id);
+      const marcas = await this.gravarValores(tx, id, calculo.valores, faixas, ctx.analitos, null);
       await tx.alterar('resultado_exame', id, await this.versaoDe(tx, id), marcas);
+      // O valor crítico avisa já na digitação (e a correção que tira o crítico cancela o aviso ainda pendente).
+      await avisarCriticosDoResultado(tx, {
+        estabelecimento: ctx.estabelecimento,
+        resultado: id,
+        exame: ctx.exameId,
+        paciente: ctx.paciente,
+        critico: marcas.critico,
+        agora: ctx.agora,
+      });
       if (e.observacao) {
         const s = await tx.uma(
           'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM resultado_observacao WHERE resultado_exame_id = ?',
@@ -154,6 +187,15 @@ export class ServicoResultadoSadt {
         liberado_em: ctx.agora,
         liberado_por_usuario_id: tx.contexto.usuario,
       });
+      // Rede de segurança: o crítico digitado antes desta regra (ou importado) não é liberado sem aviso.
+      await avisarCriticosDoResultado(tx, {
+        estabelecimento: ctx.estabelecimento,
+        resultado: id,
+        exame: ctx.exameId,
+        paciente: ctx.paciente,
+        critico: Boolean(n(ctx.resultado!['critico'])),
+        agora: ctx.agora,
+      });
       return id;
     });
   }
@@ -186,17 +228,26 @@ export class ServicoResultadoSadt {
       if (falha) throw recusa(falha, MENSAGEM_RESULTADO[falha]);
       await this.conferirResponsavel(tx, ctx.setor, ctx.exameId, prof);
       const faixas = await this.faixas(tx, ctx.exameId, ctx.paciente, ctx.agora);
+      // O calculado é refeito pela fórmula vigente com os valores corrigidos e as variáveis já gravadas.
+      const calculo = await calcularNoResultado(tx, {
+        exameId: ctx.exameId,
+        paciente: ctx.paciente,
+        agora: ctx.agora,
+        resultado: id || null,
+        valores: e.valores,
+        variaveis: [],
+      });
       const fora = conferirDigitacao({
         situacaoExame: 'em_analise',
         retido: false,
         situacaoResultado: null,
-        valores: e.valores,
+        valores: calculo.valores,
         analitosDoExame: ctx.analitos,
         faixas,
       });
       if (fora) throw recusa(fora, MENSAGEM_RESULTADO[fora]);
       const versaoAnterior = n(r!['numero_versao']);
-      await tx.incluir('resultado_exame_versao', {
+      const versaoGuardada = await tx.incluir('resultado_exame_versao', {
         resultado_exame_id: id,
         operacao: 'alteracao',
         numero_versao: versaoAnterior,
@@ -220,13 +271,31 @@ export class ServicoResultadoSadt {
         ocorrido_em: ctx.agora,
         usuario_id: tx.contexto.usuario,
       });
-      const marcas = await this.gravarValores(tx, id, e.valores, faixas, ctx.analitos, e.motivo);
+      const marcas = await this.gravarValores(tx, id, calculo.valores, faixas, ctx.analitos, e.motivo);
       await tx.alterar('resultado_exame', id, n(r!['versao']), {
         ...marcas,
         situacao: 'retificado',
         numero_versao: versaoAnterior + 1,
         liberado_em: ctx.agora,
         liberado_por_profissional_id: prof,
+      });
+      // O valor corrigido que passa a ser crítico avisa; o que deixa de ser cancela o aviso pendente; e quem já tinha
+      // visto o resultado é avisado da retificação.
+      await avisarCriticosDoResultado(tx, {
+        estabelecimento: ctx.estabelecimento,
+        resultado: id,
+        exame: ctx.exameId,
+        paciente: ctx.paciente,
+        critico: marcas.critico,
+        agora: ctx.agora,
+      });
+      await avisarQuemViuARetificacao(tx, {
+        estabelecimento: ctx.estabelecimento,
+        resultado: id,
+        versaoGuardada,
+        paciente: ctx.paciente,
+        motivo: e.motivo,
+        agora: ctx.agora,
       });
       return id;
     });
@@ -381,6 +450,7 @@ export class ServicoResultadoSadt {
       tx: Tx,
       ctx: {
         agora: Date;
+        estabelecimento: number;
         situacaoExame: string;
         versaoExame: number;
         exameId: number;
@@ -429,6 +499,7 @@ export class ServicoResultadoSadt {
         ).map((a) => n(a['analito_id']));
         id = await aplicar(tx, {
           agora: new Date(),
+          estabelecimento: est,
           situacaoExame: String(ei['situacao']),
           versaoExame: n(ei['versao']),
           exameId: n(ei['exame_id']),
