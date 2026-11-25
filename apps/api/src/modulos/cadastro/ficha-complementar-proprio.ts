@@ -863,7 +863,8 @@ export async function lerDadosDoCadastro(
   paciente: number,
 ): Promise<Record<string, unknown>> {
   const p = await l.uma(
-    `SELECT pf.id, pf.nome, pf.data_nascimento, pf.sexo_id, pf.cpf, pf.nome_mae, pf.naturalidade_municipio_ibge_id,
+    `SELECT pf.id, pf.nome, pf.data_nascimento, pf.sexo_id, pf.cpf, pf.nome_mae, pf.mae_desconhecida,
+            pf.naturalidade_municipio_ibge_id,
             (SELECT m.unidade_federativa_id FROM municipio_ibge m WHERE m.id = pf.naturalidade_municipio_ibge_id) AS uf_naturalidade
        FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ? AND p.excluido_em IS NULL`,
     [paciente],
@@ -893,6 +894,8 @@ export async function lerDadosDoCadastro(
     sexo: num(p['sexo_id']),
     cpf: texto(p['cpf']),
     nomeMae: texto(p['nome_mae']),
+    // A mãe declarada desconhecida atende a regra do nome da mãe (regra do domínio).
+    maeDesconhecida: bool(p['mae_desconhecida']),
     naturalidade: num(p['naturalidade_municipio_ibge_id']),
     ufNaturalidade: num(p['uf_naturalidade']),
     cep: texto(en?.['cep']),
@@ -906,6 +909,23 @@ export async function lerDadosDoCadastro(
     contatoNome: texto(recado?.['nome_contato']),
     contatoTelefone: texto(recado?.['numero']),
   };
+}
+
+/**
+ * O módulo de recepção em que o local de atendimento trabalha (nulo: sem local, local de outro estabelecimento ou
+ * local sem módulo). É de onde sai o escopo "módulo" da regra de campo quando a recepção abre o atendimento num local.
+ */
+export async function moduloRecepcaoDoLocal(
+  l: Leitor | TxOperacao,
+  estabelecimento: number,
+  local: number | null | undefined,
+): Promise<number | null> {
+  if (local === null || local === undefined) return null;
+  const x = await l.uma(
+    'SELECT modulo_recepcao_id FROM local_atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    [local, estabelecimento],
+  );
+  return num(x?.['modulo_recepcao_id']);
 }
 
 /** As regras de campo ativas do cadastro do paciente que valem no estabelecimento (as dele e as de toda a rede). */
@@ -1065,6 +1085,13 @@ export class FichaComplementarPropria {
     return this.ler(c, (l) => lerDadosDoCadastro(l, paciente));
   }
 
+  /** O módulo de recepção do local de atendimento em que a tela trabalha (nulo: nenhum). */
+  async moduloDoLocal(c: ContextoPorta, local: number | null): Promise<number | null> {
+    if (local === null) return null;
+    const est = await this.estabelecimento(c);
+    return this.ler(c, (l) => moduloRecepcaoDoLocal(l, est, local));
+  }
+
   /** Campos que faltam no cadastro do paciente para abrir o atendimento no escopo (lista vazia: pode abrir). */
   async camposPendentes(
     c: ContextoPorta,
@@ -1077,6 +1104,7 @@ export class FichaComplementarPropria {
   ): Promise<{ campo: string; rotulo: string }[]> {
     const est = await this.estabelecimento(c);
     const dados = await this.dadosDoCadastro(c, paciente);
+    // Só a obrigatoriedade impede a abertura (a mesma conferência do servidor ao gravar o atendimento).
     return camposRecusados(
       await this.regrasCampo(c),
       { estabelecimento: est, ...escopo },

@@ -120,6 +120,16 @@ export function regrasNoEscopo(regras: readonly RegraCampo[], e: EscopoRegra): M
 const vazio = (v: unknown): boolean =>
   v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 
+// Campo que o cadastro pode declarar ausente: a declaração atende a obrigatoriedade (a mãe registrada como
+// desconhecida não deixa o paciente sem saída, nem obriga a digitar um nome falso).
+const DECLARADO_AUSENTE: Readonly<Record<string, string>> = Object.freeze({ nomeMae: 'maeDesconhecida' });
+const falta = (dados: Readonly<Record<string, unknown>>, campo: string): boolean => {
+  const declaracao = Object.prototype.hasOwnProperty.call(DECLARADO_AUSENTE, campo)
+    ? DECLARADO_AUSENTE[campo]
+    : undefined;
+  return vazio(dados[campo]) && !(declaracao !== undefined && dados[declaracao] === true);
+};
+
 /**
  * Campos recusados pela regra. Cadastro: todo obrigatório vazio. Alteração: só os campos enviados (o obrigatório
  * mandado apagar; o somente leitura mandado mudar).
@@ -136,7 +146,7 @@ export function camposRecusados(
     const enviado = Object.prototype.hasOwnProperty.call(dados, campo) && dados[campo] !== undefined;
     if (
       r.exigencia === 'obrigatorio' &&
-      (modo === 'cadastro' ? vazio(dados[campo]) : enviado && vazio(dados[campo]))
+      (modo === 'cadastro' ? falta(dados, campo) : enviado && falta(dados, campo))
     )
       fora.push({ campo, rotulo, motivo: 'obrigatorio' });
     if (r.exigencia === 'somente_leitura' && modo === 'alteracao' && enviado)

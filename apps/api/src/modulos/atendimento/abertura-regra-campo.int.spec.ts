@@ -2,7 +2,8 @@
 // real (cliente de teste; f22_o1 por padrão). Prova o que fica no banco: com o cadastro do paciente incompleto no
 // escopo da recepção (tipo de atendimento, convênio, módulo de recepção), a abertura é recusada com os campos que
 // faltam e NENHUM atendimento é gravado; fora do escopo da regra, com o cadastro completado ou com o cadastro
-// provisório (não identificado), o atendimento abre. Massa SINTÉTICA; as regras são só do estabelecimento da massa e
+// provisório (não identificado), o atendimento abre. A mãe declarada desconhecida atende a regra do nome da mãe, e o
+// módulo de recepção sai do local de atendimento em que a recepção abre. Massa SINTÉTICA; as regras são só do estabelecimento da massa e
 // saem no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -128,9 +129,10 @@ describe.skipIf(SEM_BANCO)('regra de campo do cadastro na abertura do atendiment
     paciente = await cadastrar('PACIENTE DA REGRA', '990131101');
     provisorio = await cadastrar('PACIENTE PROVISORIO', '990131102');
     await escrever(async (e) => {
-      // O cadastro sintético fica sem nome da mãe e sem e-mail; o segundo vira provisório (não identificado).
+      // O cadastro sintético fica sem nome da mãe (e sem a declaração de mãe desconhecida, que atenderia a regra) e
+      // sem e-mail; o segundo vira provisório (não identificado).
       await e.executar(
-        'UPDATE pessoa_fisica pf JOIN paciente p ON p.pessoa_fisica_id = pf.id SET pf.nome_mae = NULL WHERE p.id IN (?, ?)',
+        'UPDATE pessoa_fisica pf JOIN paciente p ON p.pessoa_fisica_id = pf.id SET pf.nome_mae = NULL, pf.mae_desconhecida = FALSE WHERE p.id IN (?, ?)',
         [paciente, provisorio],
       );
       await e.executar("UPDATE paciente SET situacao = 'provisorio' WHERE id = ?", [provisorio]);
@@ -186,12 +188,33 @@ describe.skipIf(SEM_BANCO)('regra de campo do cadastro na abertura do atendiment
     expect(Number(p.resultado['reg'])).toBeGreaterThan(0);
     expect(await atendimentosDe(provisorio)).toBe(antes + 1);
 
-    await escrever(async (e) => {
-      await e.executar(
-        'UPDATE pessoa_fisica pf JOIN paciente p ON p.pessoa_fisica_id = pf.id SET pf.mae_desconhecida = FALSE, pf.nome_mae = ? WHERE p.id = ?',
-        [`MAE SINTETICA ${MARCA}`, paciente],
-      );
-    });
+    // A mãe declarada desconhecida atende a regra do nome da mãe: a urgência abre sem nome inventado, e a conferência
+    // da tela diz o mesmo.
+    const mae = (nome: string | null, desconhecida: boolean) =>
+      escrever(async (e) => {
+        await e.executar(
+          'UPDATE pessoa_fisica pf JOIN paciente p ON p.pessoa_fisica_id = pf.id SET pf.mae_desconhecida = ?, pf.nome_mae = ? WHERE p.id = ?',
+          [desconhecida, nome, paciente],
+        );
+      });
+    await mae(null, true);
+    expect(
+      await ficha.camposPendentes(contextoPorta(m), paciente, {
+        modulo: null,
+        tipoAtendimento: 'urgencia',
+        fontePagadora: m.fonte,
+      }),
+    ).toEqual([]);
+    const d = await atendimentosDe(paciente);
+    await abrir(paciente, { tipo: 'pa', carater: 'urgencia' });
+    expect(await atendimentosDe(paciente)).toBe(d + 1);
+    // Sem a declaração e sem o nome, volta a recusar; com o nome, abre.
+    await mae(null, false);
+    await expect(abrir(paciente, { tipo: 'pa', carater: 'urgencia' })).rejects.toMatchObject(
+      incompleto(['nomeMae']),
+    );
+    expect(await atendimentosDe(paciente)).toBe(d + 1);
+    await mae(`MAE SINTETICA ${MARCA}`, false);
     const n = await atendimentosDe(paciente);
     const a = await abrir(paciente, { tipo: 'pa', carater: 'urgencia' });
     expect(Number(a.resultado['reg'])).toBeGreaterThan(0);
@@ -222,5 +245,33 @@ describe.skipIf(SEM_BANCO)('regra de campo do cadastro na abertura do atendiment
     await limparRegras();
     await abrir(paciente);
     expect(await atendimentosDe(paciente)).toBe(n + 3);
+  });
+
+  it('o módulo de recepção vem do local de atendimento: a regra do módulo vale sem a tela informar o módulo', async () => {
+    await limparRegras();
+    await regra('email', { modulo });
+    const doLocal = (v: number | null) =>
+      escrever(async (e) => {
+        await e.executar('UPDATE local_atendimento SET modulo_recepcao_id = ? WHERE id = ?', [v, m.local]);
+      });
+    try {
+      // Local sem módulo: só as regras de todos os módulos valem, e o atendimento abre.
+      await doLocal(null);
+      const n = await atendimentosDe(paciente);
+      await abrir(paciente);
+      expect(await atendimentosDe(paciente)).toBe(n + 1);
+      // O local passa a trabalhar no módulo: a mesma abertura, sem `moduloRecepcao`, é recusada e nada é gravado.
+      await doLocal(modulo);
+      await expect(abrir(paciente)).rejects.toMatchObject(incompleto(['email']));
+      expect(await atendimentosDe(paciente)).toBe(n + 1);
+      // A conferência da tela resolve o mesmo módulo pelo local.
+      expect(await ficha.moduloDoLocal(contextoPorta(m), m.local)).toBe(modulo);
+      // Sem local na abertura, a regra do módulo não vale.
+      await abrir(paciente, { local: undefined });
+      expect(await atendimentosDe(paciente)).toBe(n + 2);
+    } finally {
+      await doLocal(null);
+      await limparRegras();
+    }
   });
 });

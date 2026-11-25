@@ -7,6 +7,7 @@
 //   POST /api/cadastros/pacientes/:id/responsaveis                     inclui (pessoa única pelo CPF)
 //   POST /api/cadastros/pacientes/:id/responsaveis/:rid/encerrar       encerra a vigência, com motivo
 //   GET  /api/cadastros/pacientes/:id/campos-pendentes                 o que falta para abrir o atendimento no escopo
+//        (?local= resolve o módulo de recepção do local; a resposta devolve o módulo aplicado)
 //   GET  /api/cadastros/ficha-complementar/tipos                       tipos de endereço, telefone e parentesco
 //   GET|POST /api/cadastros/regras-campo, POST .../:rid/inativar       regras de campo do cadastro
 // Acesso só pelos níveis de cada cargo: leitura da ficha (cadastro.paciente.ler), edição (cadastro.paciente.editar),
@@ -301,21 +302,25 @@ export class FichaComplementarController {
     @Query('modulo') modulo: string | undefined,
     @Query('tipoAtendimento') tipo: string | undefined,
     @Query('fontePagadora') fonte: string | undefined,
+    @Query('local') local: string | undefined,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ pendentes: { campo: string; rotulo: string }[] }> {
+  ): Promise<{ pendentes: { campo: string; rotulo: string }[]; modulo: number | null }> {
     const s = sessaoDe(req);
     const n = idDaRota(p);
     const tipoAtendimento = TIPOS_ATENDIMENTO_REGRA.includes(tipo as TipoAtendimentoRegra)
       ? (tipo as TipoAtendimentoRegra)
       : null;
-    const pendentes = await this.rodar(() =>
-      this.servico().camposPendentes(s.porta, n, {
-        modulo: id(modulo),
+    // O módulo de recepção vem do local de atendimento em que a tela trabalha (o mesmo que a abertura resolve ao
+    // gravar); o módulo informado à parte só vale quando não há local ou o local não tem módulo.
+    return this.rodar(async () => {
+      const moduloEscopo = (await this.servico().moduloDoLocal(s.porta, id(local))) ?? id(modulo);
+      const pendentes = await this.servico().camposPendentes(s.porta, n, {
+        modulo: moduloEscopo,
         tipoAtendimento,
         fontePagadora: id(fonte),
-      }),
-    );
-    return { pendentes };
+      });
+      return { pendentes, modulo: moduloEscopo };
+    });
   }
 
   @Get('regras-campo')

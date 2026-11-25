@@ -1538,6 +1538,7 @@ const OPERACAO_ABRIR = definirOperacao({
       paciente: Number(pac['id']),
       tipo: String(e['tipo']),
       fontePagadora: Number(conv['id']),
+      local: num('local'),
       modulo: num('moduloRecepcao'),
       provisorio: String(pac['situacao']) === 'provisorio',
     });

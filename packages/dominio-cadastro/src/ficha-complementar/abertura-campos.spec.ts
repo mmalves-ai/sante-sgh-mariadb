@@ -2,7 +2,12 @@
 // recepção abre, a recusa com os campos que faltam no escopo e as exceções (cadastro provisório, regra que não é de
 // obrigatoriedade). Dados sintéticos.
 import { describe, expect, it } from 'vitest';
-import { type RegraCampo, recusaAberturaPorCadastro, tipoAtendimentoDaAbertura } from './regras-campo.js';
+import {
+  camposRecusados,
+  type RegraCampo,
+  recusaAberturaPorCadastro,
+  tipoAtendimentoDaAbertura,
+} from './regras-campo.js';
 
 const regra = (r: Partial<RegraCampo> & Pick<RegraCampo, 'campo' | 'exigencia'>): RegraCampo => ({
   estabelecimento: null,
@@ -88,5 +93,21 @@ describe('regra de campo do cadastro na abertura do atendimento', () => {
     expect(
       recusaAberturaPorCadastro(regras, { estabelecimento: 1 }, COMPLETO, { provisorio: true }),
     ).toBeNull();
+  });
+
+  it('a mãe declarada desconhecida atende a regra do nome da mãe; sem a declaração, o nome continua exigido', () => {
+    const regras = [regra({ id: 1, campo: 'nomeMae', exigencia: 'obrigatorio' })];
+    const e = { estabelecimento: 1 };
+    expect(recusaAberturaPorCadastro(regras, e, { ...COMPLETO, maeDesconhecida: true })).toBeNull();
+    expect(recusaAberturaPorCadastro(regras, e, { ...COMPLETO, maeDesconhecida: false })?.campos).toEqual([
+      'nomeMae',
+    ]);
+    // A declaração só vale como verdadeiro de fato (texto ou número não contam).
+    expect(recusaAberturaPorCadastro(regras, e, { ...COMPLETO, maeDesconhecida: 'S' })?.campos).toEqual([
+      'nomeMae',
+    ]);
+    // Na alteração, mandar o nome vazio junto com a declaração não é recusado.
+    expect(camposRecusados(regras, e, { nomeMae: '', maeDesconhecida: true }, 'alteracao')).toEqual([]);
+    expect(camposRecusados(regras, e, { nomeMae: '' }, 'alteracao').map((x) => x.campo)).toEqual(['nomeMae']);
   });
 });

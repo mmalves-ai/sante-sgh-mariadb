@@ -2259,7 +2259,7 @@ gerador_senha	REC	configuracao	F3	Botões do totem e geradores de senha por rece
 grupo_atendimento	REC	dominio	F3	Grupos de atendimento usados para separar filas, relatórios e regras	F30; SPDATA TBCADGRUPOATEN (1)	02	2
 grupo_prioridade_legal	REC	dominio	F3	Grupos de prioridade legal (idoso, idoso acima de 80, gestante, pessoa com deficiência, autismo)	F33/F49; SPDATA TBGRUPOPRIORIDADE (10); MV PRIORID_PACIENTE	02	2
 guiche_recepcao	REC	principal	F3	Guichês de cada recepção	F33; SPDATA TBGUICHE (9)	02	2
-local_atendimento	REC	principal	F3	Consultório, sala ou ponto de atendimento, com painel, recepção e setor	F34; SPDATA TBLOCAL (31)	02	2
+local_atendimento	REC	principal	F3	Consultório, sala ou ponto de atendimento, com painel, recepção e setor	F34; SPDATA TBLOCAL (31); módulo de recepção do local, que dá o escopo da regra de campo do cadastro na abertura (02-CAD linha 2; migração 04_REC/98_modulo_recepcao_local)	02	2
 local_atendimento_encaminhamento	REC	vinculo	F3	Locais para onde cada local pode encaminhar o paciente	F34; SPDATA TBLOCALENCATE	02	1
 local_atendimento_horario	REC	configuracao	F3	Horário de funcionamento do local por dia da semana e em dia não útil	F34; SPDATA TBLOCALHORA (31)	02	1
 local_atendimento_visibilidade	REC	vinculo	F3	Locais cujos atendimentos cada local pode consultar	F34; SPDATA TBLOCALPESATE	02	1
