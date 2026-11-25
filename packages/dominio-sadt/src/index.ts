@@ -22,6 +22,7 @@ export * from './laudo/numero.js';
 export * from './laudo/redacao.js';
 export * from './laudo/complementos.js';
 export * from './laudo/estruturado.js';
+export * from './laudo/grandeza-calculada.js';
 export * from './apoio/remessa.js';
 export * from './portal/acesso.js';
 export * from './pacs/index.js';
