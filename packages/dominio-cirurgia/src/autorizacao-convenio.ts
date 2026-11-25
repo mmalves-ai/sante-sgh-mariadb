@@ -31,6 +31,32 @@ export interface SituacaoAutorizacaoCirurgia {
   senha: string | null;
   /** A guia ligada mais recente não cancelada (ou null). */
   guia: GuiaDaCirurgia | null;
+  /** A exceção de urgência já registrada no agendamento (justificativa para a comunicação posterior). */
+  posteriorRegistrado?: boolean;
+}
+
+/**
+ * Registrar a exceção de urgência (cirurgia sem senha, guia comunicada depois): só para caráter de urgência,
+ * emergência ou acidente, na cirurgia de convênio ainda sem senha, com justificativa de 10 a 500 letras.
+ */
+export function conferirExcecaoUrgencia(
+  s: SituacaoAutorizacaoCirurgia,
+  justificativa: string,
+): { campo: string; mensagem: string }[] {
+  const p: { campo: string; mensagem: string }[] = [];
+  if (s.tipoCobertura !== 'convenio')
+    p.push({ campo: 'agendamento', mensagem: 'Só a cirurgia de convênio pede autorização à operadora.' });
+  else if (senhaDaCirurgia(s) !== null)
+    p.push({ campo: 'agendamento', mensagem: 'A cirurgia já tem a senha da operadora.' });
+  if (!naturezaDeUrgencia(s.natureza))
+    p.push({
+      campo: 'agendamento',
+      mensagem: 'A exceção vale só para urgência, emergência ou acidente; a eletiva aguarda a senha.',
+    });
+  const j = justificativa.trim().length;
+  if (j < 10 || j > 500)
+    p.push({ campo: 'justificativa', mensagem: 'Justifique a urgência (10 a 500 letras).' });
+  return p;
 }
 
 const preenchido = (s: string | null | undefined): s is string => !!s && s.trim().length > 0;
@@ -109,6 +135,7 @@ export function conferirConfirmacaoCirurgia(
   if (s.tipoCobertura !== 'convenio' || senhaDaCirurgia(s) !== null)
     return { ok: true, comunicarDepois: false };
   if (naturezaDeUrgencia(s.natureza)) {
+    if (s.posteriorRegistrado) return { ok: true, comunicarDepois: false };
     if ((justificativa ?? '').trim().length < 10)
       return {
         ok: false,

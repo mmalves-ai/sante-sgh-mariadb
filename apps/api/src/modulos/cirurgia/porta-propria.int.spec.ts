@@ -711,11 +711,26 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
     };
     const e1 = await porta.estado(ctx(m.est), id);
     expect(e1).toMatchObject({ estado: 'confirmado', agendamento: id });
+    // Eletiva de convênio sem a senha da operadora não entra no bloco (04-CC linha 102); com a senha, entra.
+    await expect(
+      porta.gravarSgh(ctx(m.est), trilha, (g) =>
+        g.mudarEstado({
+          id,
+          estado: 'no-bloco',
+          visto: { estado: 'confirmado', versao: e1!.versao ?? null },
+          usuario: m.login,
+        }),
+      ),
+    ).rejects.toThrow(/autorizacao-pendente/);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'senha-teste-03-01' }, (e) =>
+      e.executar("UPDATE agendamento_cirurgico SET senha_autorizacao = 'SINT0301' WHERE id = ?", [id]),
+    );
+    const e1s = await porta.estado(ctx(m.est), id);
     await porta.gravarSgh(ctx(m.est), trilha, (g) =>
       g.mudarEstado({
         id,
         estado: 'no-bloco',
-        visto: { estado: 'confirmado', versao: e1!.versao ?? null },
+        visto: { estado: 'confirmado', versao: e1s!.versao ?? null },
         usuario: m.login,
       }),
     );

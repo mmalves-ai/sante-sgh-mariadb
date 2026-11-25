@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   conferirConfirmacaoCirurgia,
+  conferirExcecaoUrgencia,
   etapaAutorizacaoCirurgia,
   senhaDaCirurgia,
   type SituacaoAutorizacaoCirurgia,
@@ -85,5 +86,22 @@ describe('autorização prévia da cirurgia eletiva (04-CC linha 102)', () => {
         'Trauma com sangramento ativo',
       ).ok,
     ).toBe(true);
+  });
+
+  it('a exceção de urgência registrada libera a entrada no bloco; eletiva e cirurgia com senha não registram', () => {
+    const urg = { ...base, natureza: 'emergencia' };
+    expect(conferirConfirmacaoCirurgia({ ...urg, posteriorRegistrado: true }, 'no_bloco', null)).toEqual({
+      ok: true,
+      comunicarDepois: false,
+    });
+    expect(conferirExcecaoUrgencia(urg, 'Trauma com sangramento ativo')).toEqual([]);
+    expect(conferirExcecaoUrgencia(urg, 'curta').map((x) => x.campo)).toEqual(['justificativa']);
+    expect(conferirExcecaoUrgencia(base, 'Paciente quer adiantar').map((x) => x.campo)).toEqual([
+      'agendamento',
+    ]);
+    expect(conferirExcecaoUrgencia({ ...urg, senha: 'S1' }, 'Trauma com sangramento ativo')).toHaveLength(1);
+    expect(
+      conferirExcecaoUrgencia({ ...urg, tipoCobertura: 'sus' }, 'Trauma com sangramento ativo'),
+    ).toHaveLength(1);
   });
 });

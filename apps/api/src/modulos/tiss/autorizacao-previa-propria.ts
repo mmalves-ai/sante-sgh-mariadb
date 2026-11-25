@@ -35,6 +35,11 @@ import {
   type TipoSolicitacaoAutorizacao,
   VERSAO_TISS,
 } from '@sgh/dominio-faturamento';
+import {
+  conferirExcecaoUrgencia,
+  etapaAutorizacaoCirurgia,
+  type GuiaDaCirurgia,
+} from '@sgh/dominio-cirurgia';
 import { ErroOperacao, type Leitor, sha256, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
@@ -67,7 +72,10 @@ const TABELAS = [
   'conta_hospitalar',
   'sequencia_negocio',
   'arquivo',
+  'agendamento_cirurgico',
 ];
+/** Situações do agendamento em que a cirurgia ainda pode receber a guia (C1-117, 04-CC linha 102). */
+const CIRURGIA_EM_ABERTO = "('solicitado','em_analise','agendado','confirmado')";
 const SEQUENCIA = 'solicitacao_autorizacao';
 
 const id = z.number().int().positive();
@@ -94,6 +102,8 @@ const esquemaCriar = z
     cobertura: id,
     atendimento: id.nullable().default(null),
     conta: id.nullable().default(null),
+    /** A cirurgia agendada que a guia autoriza (04-CC linha 102): a senha da resposta vai ao agendamento. */
+    agendamentoCirurgico: id.nullable().default(null),
     principal: id.nullable().default(null),
     solicitanteProfissional: id.nullable().default(null),
     solicitanteExterno: id.nullable().default(null),
@@ -111,6 +121,9 @@ const esquemaCriar = z
     observacao: texto(1000),
     itens: z.array(esquemaItem).max(99),
   })
+  .strict();
+const esquemaUrgencia = z
+  .object({ versao: z.number().int().positive(), justificativa: z.string().trim().max(500) })
   .strict();
 const esquemaVersao = z.object({ versao: z.number().int().positive() }).strict();
 const esquemaTransmissao = z
@@ -211,8 +224,124 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       ).map((x) => num(x['id']));
       const pedidos = [];
       for (const i of ids) pedidos.push(await this.montarDetalhe(l, est.id, i));
-      return { coberturas, pedidos };
+      const cirurgias = [];
+      for (const x of await l.consultar(
+        `SELECT a.id FROM agendamento_cirurgico a
+          WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.tipo_cobertura = 'convenio'
+            AND a.situacao IN ${CIRURGIA_EM_ABERTO}
+          ORDER BY a.inicio_previsto_em IS NULL, a.inicio_previsto_em, a.id LIMIT 30`,
+        [paciente, est.id],
+      ))
+        cirurgias.push(await this.montarCirurgia(l, est.id, num(x['id'])));
+      return { coberturas, pedidos, cirurgias };
     });
+  }
+
+  /** A autorização da cirurgia agendada por etapas: a guia ligada, a senha e a exceção de urgência registrada. */
+  daCirurgia(c: ContextoPortaPropria, agendamento: number) {
+    return this.ler(c, 'cirurgia', (l, est) => this.montarCirurgia(l, est.id, agendamento));
+  }
+
+  /**
+   * A exceção de urgência (04-CC linha 102): a cirurgia de urgência de convênio ainda sem senha fica liberada para o
+   * bloco com a justificativa, o instante e o usuário gravados no agendamento; a guia é comunicada à operadora depois.
+   */
+  registrarUrgencia(
+    c: ContextoPortaPropria,
+    agendamento: number,
+    entrada: unknown,
+  ): Promise<{ id: number; etapa: string }> {
+    const e = entradaValida(esquemaUrgencia, entrada);
+    return this.gravar(
+      c,
+      'tiss.autorizacao.urgencia',
+      ['agendamento_cirurgico'],
+      async (tx, est, usuario) => {
+        const atual = await this.montarCirurgia(tx, est.id, agendamento);
+        const a = await tx.uma('SELECT tipo_cobertura, versao FROM agendamento_cirurgico WHERE id = ?', [
+          agendamento,
+        ]);
+        const vigente = atual.guias.find((g) => g.situacao !== 'cancelada') ?? null;
+        const problemas = conferirExcecaoUrgencia(
+          {
+            tipoCobertura: String(a?.['tipo_cobertura']),
+            natureza: atual.natureza,
+            senha: atual.senha,
+            guia: vigente ? { situacao: vigente.situacao, senha: vigente.senha } : null,
+          },
+          e.justificativa,
+        );
+        if (atual.autorizacaoPosterior)
+          problemas.push({ campo: 'agendamento', mensagem: 'A exceção de urgência já está registrada.' });
+        if (!['solicitado', 'em_analise', 'agendado', 'confirmado'].includes(atual.situacao))
+          problemas.push({
+            campo: 'agendamento',
+            mensagem: 'A cirurgia já foi realizada, suspensa ou cancelada.',
+          });
+        if (problemas.length) throw recusaRegra('Exceção recusada', problemas);
+        await tx.alterar('agendamento_cirurgico', agendamento, e.versao, {
+          autorizacao_posterior_justificativa: e.justificativa.trim(),
+          autorizacao_posterior_em: new Date(),
+          autorizacao_posterior_por: usuario,
+        });
+        return { tabela: 'agendamento_cirurgico', id: agendamento, etapa: atual.etapa };
+      },
+    );
+  }
+
+  private async montarCirurgia(l: Consulta, est: number, agendamento: number) {
+    const a = await l.uma(
+      `SELECT a.id, a.numero, a.situacao, a.tipo_cobertura, a.senha_autorizacao, a.inicio_previsto_em,
+              a.autorizacao_posterior_justificativa, a.autorizacao_posterior_em, a.versao, a.paciente_id, a.cirurgiao_profissional_id,
+              cc.natureza, cc.descricao AS carater
+         FROM agendamento_cirurgico a JOIN carater_cirurgia cc ON cc.id = a.carater_cirurgia_id
+        WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
+      [agendamento, est],
+    );
+    if (!a) throw naoEncontrado('Agendamento cirúrgico');
+    const guias = (
+      await l.consultar(
+        `SELECT sa.id, sa.numero, sa.situacao,
+                (SELECT ra.senha FROM resposta_autorizacao ra WHERE ra.solicitacao_autorizacao_id = sa.id AND ra.excluido_em IS NULL
+                  ORDER BY ra.recebida_em DESC, ra.id DESC LIMIT 1) AS senha
+           FROM solicitacao_autorizacao sa
+          WHERE sa.agendamento_cirurgico_id = ? AND sa.estabelecimento_id = ? AND sa.excluido_em IS NULL
+          ORDER BY sa.solicitada_em DESC, sa.id DESC`,
+        [agendamento, est],
+      )
+    ).map((x) => ({
+      id: num(x['id']),
+      numero: String(x['numero']),
+      situacao: String(x['situacao']),
+      senha: txtOuNull(x['senha']),
+    }));
+    const vigente = guias.find((g) => g.situacao !== 'cancelada') ?? null;
+    const guia: GuiaDaCirurgia | null = vigente ? { situacao: vigente.situacao, senha: vigente.senha } : null;
+    return {
+      id: num(a['id']),
+      numero: String(a['numero']),
+      situacao: String(a['situacao']),
+      carater: String(a['carater']),
+      natureza: String(a['natureza']),
+      inicioPrevisto: iso(a['inicio_previsto_em']),
+      versao: num(a['versao']),
+      paciente: num(a['paciente_id']),
+      cirurgiao: num(a['cirurgiao_profissional_id']),
+      senha: txtOuNull(a['senha_autorizacao']),
+      etapa: etapaAutorizacaoCirurgia({
+        tipoCobertura: String(a['tipo_cobertura']),
+        natureza: String(a['natureza']),
+        senha: txtOuNull(a['senha_autorizacao']),
+        guia,
+      }),
+      autorizacaoPosterior: a['autorizacao_posterior_em']
+        ? {
+            justificativa: txtOuNull(a['autorizacao_posterior_justificativa']),
+            em: iso(a['autorizacao_posterior_em']),
+          }
+        : null,
+      guias,
+    };
   }
 
   detalhe(c: ContextoPortaPropria, solicitacao: number) {
@@ -291,6 +420,7 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       carteira: String(s['numero_carteira']),
       atendimento: numOuNull(s['atendimento_id']),
       conta: numOuNull(s['conta_hospitalar_id']),
+      agendamentoCirurgico: numOuNull(s['agendamento_cirurgico_id']),
       solicitadaEm: iso(s['solicitada_em']),
       enviadaEm: iso(s['enviada_em']),
       observacao: txtOuNull(s['observacao']),
@@ -347,6 +477,14 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
             [e.conta, paciente],
             'conta',
             'A conta não é deste paciente.',
+          );
+        if (e.agendamentoCirurgico !== null)
+          await confere(
+            `SELECT id FROM agendamento_cirurgico WHERE id = ? AND paciente_id = ? AND estabelecimento_id = ?
+                AND excluido_em IS NULL AND situacao IN ${CIRURGIA_EM_ABERTO}`,
+            [e.agendamentoCirurgico, paciente, est.id],
+            'agendamentoCirurgico',
+            'A cirurgia não é deste paciente neste estabelecimento ou já foi realizada, suspensa ou cancelada.',
           );
         if (e.principal !== null)
           await confere(
@@ -411,6 +549,7 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
           paciente_id: paciente,
           atendimento_id: e.atendimento,
           conta_hospitalar_id: e.conta,
+          agendamento_cirurgico_id: e.agendamentoCirurgico,
           principal_solicitacao_autorizacao_id: e.principal,
           fonte_pagadora_id: num(cp['fonte_pagadora_id']),
           plano_fonte_pagadora_id: numOuNull(cp['plano_fonte_pagadora_id']),
@@ -743,6 +882,7 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
         'resposta_autorizacao_item',
         'consulta_situacao_autorizacao',
         'conta_hospitalar',
+        'agendamento_cirurgico',
       ],
       async (tx, est, usuario) => {
         const s = await this.lerPedido(tx, est.id, solicitacao);
@@ -835,6 +975,19 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
           ]);
           if (ch && !ch['senha_autorizacao'])
             await tx.alterar('conta_hospitalar', conta, num(ch['versao']), { senha_autorizacao: e.senha });
+        }
+        // A guia da cirurgia autorizada leva a senha ao agendamento que ainda não tem (04-CC linha 102): é ela que
+        // libera a confirmação da cirurgia eletiva de convênio.
+        const cirurgia = numOuNull(s['agendamento_cirurgico_id']);
+        if (cirurgia !== null && e.senha && lida.solicitacao.startsWith('autorizada')) {
+          const ag = await tx.uma(
+            'SELECT versao, senha_autorizacao FROM agendamento_cirurgico WHERE id = ? AND estabelecimento_id = ?',
+            [cirurgia, est.id],
+          );
+          if (ag && !ag['senha_autorizacao'])
+            await tx.alterar('agendamento_cirurgico', cirurgia, num(ag['versao']), {
+              senha_autorizacao: e.senha,
+            });
         }
         return { tabela: 'solicitacao_autorizacao', id: solicitacao, situacao: lida.solicitacao, resposta };
       },

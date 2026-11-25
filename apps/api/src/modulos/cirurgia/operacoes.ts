@@ -24,6 +24,7 @@ import {
   type RemarcarCirurgiaEntrada,
 } from '@sgh/contratos';
 import {
+  conferirConfirmacaoCirurgia,
   conferirHorarioNaSala,
   conferirParticipacao,
   conferirTempos,
@@ -31,6 +32,7 @@ import {
   TECNICAS,
   type OcupacaoSala,
   type SalaDaAgenda,
+  type SituacaoAutorizacaoCirurgia,
   situacaoDoEstado,
 } from '@sgh/dominio-cirurgia';
 import {
@@ -109,6 +111,34 @@ async function agendamentoDe(tx: TxOperacao, id: number): Promise<Linha> {
       'O agendamento não existe neste estabelecimento.',
     );
   return l;
+}
+/**
+ * A autorização da cirurgia relida sob a transação (04-CC linha 102): cobertura, natureza do caráter, senha do
+ * agendamento e a guia de solicitação ligada mais recente não cancelada, com a senha da última resposta.
+ */
+async function autorizacaoDaCirurgia(tx: TxOperacao, id: number): Promise<SituacaoAutorizacaoCirurgia> {
+  const a = await tx.uma(
+    `SELECT a.tipo_cobertura, a.senha_autorizacao, a.autorizacao_posterior_em, cc.natureza
+       FROM agendamento_cirurgico a JOIN carater_cirurgia cc ON cc.id = a.carater_cirurgia_id
+      WHERE a.id = ? AND a.estabelecimento_id = ?`,
+    [id, est(tx)],
+  );
+  const g = await tx.uma(
+    `SELECT sa.situacao,
+            (SELECT ra.senha FROM resposta_autorizacao ra WHERE ra.solicitacao_autorizacao_id = sa.id AND ra.excluido_em IS NULL
+              ORDER BY ra.recebida_em DESC, ra.id DESC LIMIT 1) AS senha
+       FROM solicitacao_autorizacao sa
+      WHERE sa.agendamento_cirurgico_id = ? AND sa.estabelecimento_id = ? AND sa.excluido_em IS NULL AND sa.situacao <> 'cancelada'
+      ORDER BY sa.solicitada_em DESC, sa.id DESC LIMIT 1`,
+    [id, est(tx)],
+  );
+  return {
+    tipoCobertura: texto(a?.['tipo_cobertura']),
+    natureza: texto(a?.['natureza']),
+    senha: (a?.['senha_autorizacao'] as string | null) ?? null,
+    guia: g ? { situacao: texto(g['situacao']), senha: (g['senha'] as string | null) ?? null } : null,
+    posteriorRegistrado: a?.['autorizacao_posterior_em'] != null,
+  };
 }
 /** O pedido do portal relido sob a transação (FOR UPDATE), conferida a conta; `exigir`: recusa se não houver. */
 async function pedidoDoPortal(
@@ -460,12 +490,25 @@ export function gravadorCirurgia(
           `O agendamento está em "${texto(a['situacao'])}" e não pode ir a "${r.estado}".`,
         );
       if (texto(a['situacao']) === nova) return;
+      // Eletiva de convênio só confirma e entra no bloco com a senha da operadora; a urgência sem senha passa com a
+      // justificativa registrada para a comunicação posterior (TISS/ANS; 04-CC linha 102).
+      const autorizacao = await autorizacaoDaCirurgia(tx, r.id);
+      const conferida = conferirConfirmacaoCirurgia(autorizacao, nova, r.complemento ?? null);
+      if (!conferida.ok) throw recusa(conferida.codigo, conferida.mensagem);
+      const posterior = conferida.comunicarDepois
+        ? {
+            autorizacao_posterior_justificativa: (r.complemento ?? '').trim().slice(0, 500),
+            autorizacao_posterior_em: new Date(),
+            autorizacao_posterior_por: usuario(tx),
+          }
+        : {};
       const cancela = nova === 'cancelado' || nova === 'suspenso';
       const motivo =
         cancela && r.motivo ? await idPorCodigo(tx, 'motivo_suspensao_cirurgia', r.motivo, 'O motivo') : null;
       await tx.alterar('agendamento_cirurgico', r.id, n(a['versao']), {
         situacao: nova,
         ...(cancela ? { cancelado_em: new Date(), motivo_suspensao_cirurgia_id: motivo } : {}),
+        ...posterior,
       });
       await historico(tx, r.id, cancela ? 'exclusao' : 'alteracao', {
         antes: a,

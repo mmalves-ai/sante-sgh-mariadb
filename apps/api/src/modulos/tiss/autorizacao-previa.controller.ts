@@ -1,5 +1,7 @@
 // Autorização prévia à operadora (F78.06-2, 06-FAT L25 e L27). Rotas (porta própria; sem banco do cliente, 503):
 //   GET  /api/tiss/autorizacoes/pacientes/:paciente   coberturas e pedidos do paciente (visão por paciente)
+//   GET  /api/tiss/autorizacoes/cirurgias/:id        a autorização da cirurgia agendada por etapas (04-CC linha 102)
+//   POST /api/tiss/autorizacoes/cirurgias/:id/urgencia { versao, justificativa } exceção de urgência sem senha
 //   GET  /api/tiss/autorizacoes/:id                   o pedido com itens, respostas e consultas de andamento
 //   GET  /api/tiss/autorizacoes/:id/xml               a mensagem SOLICITACAO_PROCEDIMENTOS guardada no envio
 //   POST /api/tiss/autorizacoes                       monta o pedido (rascunho) com os itens
@@ -61,6 +63,24 @@ export class AutorizacaoPreviaController {
   @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.ler)
   doPaciente(@Req() req: RequisicaoAutorizada, @Param('paciente', ParseIntPipe) paciente: number) {
     return this.com(req, (p, c) => p.doPaciente(c, paciente));
+  }
+
+  @Get('cirurgias/:agendamento')
+  @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.ler)
+  daCirurgia(@Req() req: RequisicaoAutorizada, @Param('agendamento', ParseIntPipe) agendamento: number) {
+    return this.com(req, (p, c) => p.daCirurgia(c, agendamento));
+  }
+
+  @Post('cirurgias/:agendamento/urgencia')
+  @AuditadoNoHandler(TRILHA)
+  @HttpCode(201)
+  @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.solicitar)
+  registrarUrgencia(
+    @Req() req: RequisicaoAutorizada,
+    @Param('agendamento', ParseIntPipe) agendamento: number,
+    @Body() b: unknown,
+  ) {
+    return this.com(req, (p, c) => p.registrarUrgencia(c, agendamento, b));
   }
 
   @Get(':id')
