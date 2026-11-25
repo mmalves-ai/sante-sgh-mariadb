@@ -91,6 +91,7 @@ import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import { gravarImpressoEmitido, lerFichasDoAtendimento } from './regras-impressao.js';
+import { lerLocaisComUso } from './uso-locais-propria.js';
 import { OPERACOES_CORRECAO_FICHA } from './porta-propria-correcao.js';
 import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
 import { diaDeslocado, lerIndicadoresProprios } from './porta-propria-indicadores.js';
@@ -772,16 +773,14 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
   locais(c: ContextoAtendimento) {
     return this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
-      return (
-        await l.consultar(
-          'SELECT id, descricao, ponto_recepcao_id FROM local_atendimento WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL ORDER BY descricao',
-          [est],
-          { teto: 1000 },
-        )
-      ).map((x) => ({
-        id: Number(x['id']),
-        descricao: texto(x['descricao']) ?? '',
-        recepcao: Number(x['ponto_recepcao_id']),
+      // Com o uso da configuração do local (02-REC 34): quem vê o local na fila e o horário de agora.
+      const agora = localNoFuso(new Date(), await this.fuso(l, est));
+      return (await lerLocaisComUso(l, est, c.usuario, agora)).map((x) => ({
+        id: x.id,
+        descricao: x.descricao,
+        recepcao: x.recepcao,
+        visivel: x.visivel,
+        horario: x.horario,
       }));
     });
   }

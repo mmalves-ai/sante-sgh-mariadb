@@ -105,8 +105,13 @@ export class ServicoAtendimento {
     o: { local: number | null; crm: number | null; profissional: { crm: number; nome: string } | null },
   ): Promise<FilaConsultorio> {
     const [{ hoje, agora }, locais] = await Promise.all([this.porta.relogio(c), this.porta.locais(c)]);
-    const lista = locais.map((l) => ({ id: l.id, descricao: l.descricao }));
-    const local = o.local ? (lista.find((l) => l.id === o.local) ?? null) : null;
+    // Só os locais que o usuário vê (vínculo e visibilidade entre locais); o local escolhido leva o horário de agora.
+    const visiveis = locais.filter((l) => l.visivel !== false);
+    const lista = visiveis.map((l) => ({ id: l.id, descricao: l.descricao }));
+    const doLocal = o.local ? visiveis.find((l) => l.id === o.local) : undefined;
+    const local = doLocal
+      ? { id: doLocal.id, descricao: doLocal.descricao, horario: doLocal.horario ?? null }
+      : null;
     if (!local)
       return {
         local: null,

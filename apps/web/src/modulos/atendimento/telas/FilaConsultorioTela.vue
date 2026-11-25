@@ -5,7 +5,7 @@
 // médico vê a fila dele no local; "todos do local" mostra a do local inteiro. O canal de eventos avisa cada mudança
 // (as gravações do novo e o vigia de 1 a 2 s das senhas: a chamada feita em outro terminal) e a lista relê; sem o
 // canal, a cada 15 s. Cada linha leva ao prontuário do paciente (a leitura do prontuário é auditada).
-import { SanteBotao, SanteSelecao } from '@sgh/ui';
+import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { pode as podePermissao } from '../../../casca/sessao/pode.js';
 import { podeChamar } from '@sgh/dominio-atendimento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -88,6 +88,27 @@ const prioridade = (p: '0' | '1' | '2') => t(`atendimento.fila.prioridades.${p}`
     <ErroAtendimento v-if="fila.isError.value" :erro="fila.error.value" />
     <p v-else-if="!fila.data.value" role="status">{{ t('atendimento.carregando') }}</p>
     <template v-else>
+      <!-- Horário do local (cadastro do local): aviso, não trava; quem decide atender fora do horário é o local. -->
+      <div
+        v-if="fila.data.value.local?.horario && !fila.data.value.local.horario.aberto"
+        data-testid="fila-local-fechado"
+      >
+        <SanteAlerta
+          variante="aviso"
+          :texto="
+            fila.data.value.local.horario.abreAs
+              ? t('atendimento.fila.fechadoAbreAs', { hora: fila.data.value.local.horario.abreAs })
+              : t('atendimento.fila.fechadoHoje')
+          "
+        />
+      </div>
+      <p
+        v-else-if="fila.data.value.local?.horario?.fechaAs"
+        class="fila-horario"
+        data-testid="fila-local-aberto"
+      >
+        {{ t('atendimento.fila.abertoAte', { hora: fila.data.value.local.horario.fechaAs }) }}
+      </p>
       <p v-if="!fila.data.value.local">{{ t('atendimento.fila.escolhaLocal') }}</p>
       <p v-else-if="fila.data.value.itens.length === 0">{{ t('atendimento.fila.vazia') }}</p>
       <table v-else class="tabela" data-testid="tabela-fila">

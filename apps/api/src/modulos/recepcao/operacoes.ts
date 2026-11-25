@@ -50,6 +50,7 @@ import {
   txt,
 } from './banco.js';
 import { grupoDaEmissao, ordemDosServicos, ordenarCandidatas } from './regra-fila.js';
+import { encaminhamentoConfiguradoPermite } from '../atendimento/uso-locais-propria.js';
 import { CODIGO_DO_GRUPO, senhaNaTela } from './codigos-senha.js';
 
 /** Evento do catálogo e recurso de cada operação (a trilha da memória usa os mesmos). */
@@ -439,24 +440,9 @@ const registrarEventoSenha = definirOperacao({
     );
     if (!d.ok) throw recusa(d.codigo, d.motivo);
     if (e.evento === 'encaminhar') {
-      const origem = await tx.uma(
-        'SELECT ponto_recepcao_id, permite_encaminhamento FROM local_atendimento WHERE id = ? AND estabelecimento_id = ?',
-        [e.local, est.id],
-      );
-      const destino = e.destino
-        ? await tx.uma(
-            'SELECT ponto_recepcao_id, ativo FROM local_atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-            [e.destino, est.id],
-          )
-        : null;
-      if (
-        !origem ||
-        !destino ||
-        !bool(origem['permite_encaminhamento']) ||
-        !bool(destino['ativo']) ||
-        num(destino['ponto_recepcao_id']) !== num(origem['ponto_recepcao_id']) ||
-        e.destino === e.local
-      )
+      // O destino tem de estar entre os que a configuração do local de origem permite (02-REC 34): a lista do
+      // cadastro, só locais ativos da mesma recepção, e a origem tem de encaminhar.
+      if (!e.destino || !(await encaminhamentoConfiguradoPermite(tx, est.id, e.local, e.destino)))
         throw recusa('destino-nao-permitido', 'Este local não encaminha para o destino escolhido.');
     }
     const ef = d.efeito;

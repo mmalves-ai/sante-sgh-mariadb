@@ -127,7 +127,17 @@ export const esquemaItemFilaConsultorio = z.object({
 export type ItemFilaConsultorio = z.infer<typeof esquemaItemFilaConsultorio>;
 
 export const esquemaFilaConsultorio = z.object({
-  local: nul(z.object({ id: n, descricao: txt })),
+  local: nul(
+    z.object({
+      id: n,
+      descricao: txt,
+      /** Horário do local agora (semana de funcionamento do cadastro); aviso na tela, não trava. */
+      horario: nul(
+        z.object({ aberto: z.boolean(), semHorario: z.boolean(), abreAs: nul(txt), fechaAs: nul(txt) }),
+      ).optional(),
+    }),
+  ),
+  /** Só os locais que o usuário vê: os dele e os que eles consultam (sem vínculo, todos). */
   locais: z.array(z.object({ id: n, descricao: txt })),
   profissional: nul(z.object({ crm: n, nome: txt })),
   itens: z.array(esquemaItemFilaConsultorio),

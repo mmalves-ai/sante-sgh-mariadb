@@ -145,7 +145,16 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     c: ContextoAtendimento,
     o: { local: number; hoje: string; crm?: number },
   ): Promise<{ itens: ItemFila[]; cortada: boolean }>;
-  locais(c: ContextoAtendimento): Promise<{ id: number; descricao: string; recepcao: number }[]>;
+  /** Locais ativos; a porta própria diz também se o usuário vê o local na fila e o horário de agora (02-REC 34). */
+  locais(c: ContextoAtendimento): Promise<
+    {
+      id: number;
+      descricao: string;
+      recepcao: number;
+      visivel?: boolean;
+      horario?: { aberto: boolean; semHorario: boolean; abreAs: string | null; fechaAs: string | null };
+    }[]
+  >;
   paAbertos(
     c: ContextoAtendimento,
     o: { hoje: string; unidade?: number },

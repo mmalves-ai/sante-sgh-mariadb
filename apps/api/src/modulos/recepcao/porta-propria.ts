@@ -54,6 +54,8 @@ import {
   txtOuNull,
 } from './banco.js';
 import { exigirPacienteQueAssina } from '../cadastro/representacao-paciente-propria.js';
+import { destinosDeEncaminhamento, type LocalConfigurado } from '@sgh/dominio-atendimento';
+import { lerEncaminhamentosConfigurados } from '../atendimento/uso-locais-propria.js';
 import { operacaoDaRecepcao } from './operacoes.js';
 import { prioridadeDaTela } from './codigos-senha.js';
 import type { GravadorRecepcao, PortaRecepcao } from './porta.js';
@@ -255,6 +257,14 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
           ORDER BY g.ordem_botao IS NULL, g.ordem_botao, g.descricao, g.id`,
         [est.id],
       );
+      // Destinos de encaminhamento configurados por local (02-REC 34); a regra que vale é a do domínio.
+      const encaminhamentos = await lerEncaminhamentosConfigurados(l, est.id);
+      const configurados: LocalConfigurado[] = locais.map((x) => ({
+        id: num(x['id']),
+        recepcao: num(x['ponto_recepcao_id']),
+        ativo: bool(x['ativo']),
+        permiteEncaminhamento: bool(x['permite_encaminhamento']),
+      }));
       const guiches = await l.consultar(
         `SELECT gr.ponto_recepcao_id, gr.numero FROM guiche_recepcao gr JOIN ponto_recepcao p ON p.id = gr.ponto_recepcao_id
           WHERE p.estabelecimento_id = ? AND gr.excluido_em IS NULL AND gr.ativo = TRUE ORDER BY gr.numero`,
@@ -263,7 +273,6 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
       return pontos.map((p): Recepcao => {
         const id = num(p['id']);
         const meus = locais.filter((x) => num(x['ponto_recepcao_id']) === id);
-        const ativos = meus.filter((x) => bool(x['ativo'])).map((x) => num(x['id']));
         return {
           id,
           descricao: txt(p['descricao']),
@@ -273,8 +282,13 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
             cod: num(x['id']),
             descricao: txt(x['descricao']),
             ativo: bool(x['ativo']),
-            // Encaminha aos outros locais ativos da recepção quando o local permite encaminhamento.
-            encaminha: bool(x['permite_encaminhamento']) ? ativos.filter((y) => y !== num(x['id'])) : [],
+            // Para onde o local encaminha: a lista do cadastro do local; sem lista, os outros locais ativos da
+            // recepção; nenhum quando o local não encaminha.
+            encaminha: destinosDeEncaminhamento(
+              num(x['id']),
+              encaminhamentos.get(num(x['id'])) ?? [],
+              configurados,
+            ),
           })),
           geradores: geradores
             .filter((g) => num(g['ponto_recepcao_id']) === id)
