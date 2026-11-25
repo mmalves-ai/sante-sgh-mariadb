@@ -16,6 +16,12 @@ import {
 import { converterHtmlEmPdfA } from '../documento/infra/gotenberg.js';
 import { ApuracaoCustosController, GERADOR_PDF_CUSTOS } from './apuracao.controller.js';
 import { CustosController } from './custos.controller.js';
+import { FichaCustoPadraoController } from './ficha-custo-padrao.controller.js';
+import {
+  PORTA_FICHA_CUSTO_PADRAO,
+  PortaFichaCustoPadraoPropria,
+  portaFichaCustoPadraoIndisponivel,
+} from './ficha-custo-padrao-propria.js';
 import { PORTA_CUSTOS, type PortaCustos } from './porta.js';
 import { PortaCustosMemoria } from './porta-memoria.js';
 import { portaCustosIndisponivel, PortaCustosPropria } from './porta-propria.js';
@@ -56,9 +62,17 @@ export function moduloCustos(ctx: ContextoModulo, opcoes: OpcoesModuloCustos = {
           (await converterHtmlEmPdfA(gotenberg, html, { metadados: { Title: titulo } })).pdf;
   return {
     module: class ModuloCustos {},
-    controllers: [CustosController, ApuracaoCustosController],
+    controllers: [CustosController, ApuracaoCustosController, FichaCustoPadraoController],
     providers: [
       { provide: PORTA_CUSTOS, useValue: porta },
+      // C2-115: custo-padrão por procedimento (só no banco do cliente; sem ele, 503).
+      {
+        provide: PORTA_FICHA_CUSTO_PADRAO,
+        useValue:
+          ctx.nucleo && cliente
+            ? new PortaFichaCustoPadraoPropria(ctx.nucleo, cliente)
+            : portaFichaCustoPadraoIndisponivel(),
+      },
       ...(pdf ? [{ provide: GERADOR_PDF_CUSTOS, useValue: pdf }] : []),
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
