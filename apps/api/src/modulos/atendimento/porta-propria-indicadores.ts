@@ -5,8 +5,8 @@
 // não excluídos e não cancelados (a exclusão é lógica: o cancelado continua no banco e fica fora da conta).
 // Tempos do PA (PA: pronto atendimento): a primeira marca de cada etapa em atendimento_etapa_pa. Observação: a
 // ocupação do leito, sem contar a troca de leito como observação nova. Internação via PA: pelo desfecho ou pela
-// internação nascida da ficha (a ocupação do leito com a internação de destino, ou a internação cujo atendimento
-// tem a ficha do PA como origem), uma vez por ficha.
+// internação nascida da ficha (a admissão informa a ficha do PA como atendimento de origem, e o atendimento da
+// internação fica filho dela), uma vez por ficha; a internação excluída não conta.
 import {
   gruposDosIndicadores,
   internacoesDoPa,
@@ -109,12 +109,9 @@ export async function lerIndicadoresProprios(l: Leitor, r: RecorteIndicadores): 
   const internacoes = await l.consultar(
     `SELECT x.pelo_desfecho, x.pelo_encaminhamento, COUNT(*) AS n
        FROM (SELECT (a.desfecho <=> 'internacao') AS pelo_desfecho,
-                    (EXISTS (SELECT 1 FROM ocupacao_leito_observacao o
-                              WHERE o.atendimento_id = a.id AND o.destino_internacao_id IS NOT NULL
-                                AND o.excluido_em IS NULL)
-                     OR EXISTS (SELECT 1 FROM atendimento f JOIN internacao i ON i.atendimento_id = f.id
-                                 WHERE f.pai_atendimento_id = a.id AND f.excluido_em IS NULL
-                                   AND i.excluido_em IS NULL)) AS pelo_encaminhamento
+                    EXISTS (SELECT 1 FROM atendimento f JOIN internacao i ON i.atendimento_id = f.id
+                             WHERE f.pai_atendimento_id = a.id AND f.excluido_em IS NULL
+                               AND i.excluido_em IS NULL) AS pelo_encaminhamento
                ${base} ${filtro} AND ca.codigo = 'pa') x
       GROUP BY x.pelo_desfecho, x.pelo_encaminhamento`,
     p(r.de),
