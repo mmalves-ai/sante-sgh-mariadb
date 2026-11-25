@@ -5,7 +5,10 @@
 //   POST /api/faturamento/adiantamentos                      faturamento.recibo.emitir (recebe no caixa aberto)
 //   POST /api/faturamento/contas/:id/adiantamentos           faturamento.recibo.emitir (aplica o saldo na conta)
 //   POST /api/faturamento/aplicacoes-adiantamento/:id/estorno faturamento.recibo.emitir (com motivo)
-//   POST /api/faturamento/adiantamentos/:id/devolucoes       faturamento.recibo.emitir (devolve o saldo)
+//   POST /api/faturamento/adiantamentos/:id/devolucoes       faturamento.recibo.emitir (pede a devolução do saldo)
+//   POST /api/faturamento/devolucoes-adiantamento/:id/aprovacao     financeiro.adiantamento.aprovar (outra pessoa
+//                                                             aprova e efetiva; quem pediu é recusado)
+//   POST /api/faturamento/devolucoes-adiantamento/:id/cancelamento  faturamento.recibo.emitir (com motivo)
 //   GET  /api/faturamento/modelos-orcamento                  faturamento.orcamento.ler
 //   GET  /api/faturamento/modelos-orcamento/:id/previa       faturamento.orcamento.ler (montagem antes de gravar;
 //                                                             ?precos=seq:valor só para a linha sem preço)
@@ -135,6 +138,25 @@ export class ParticularAdiantamentoController {
   @AuditadoNoHandler(EXECUTOR)
   devolver(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.g('adiantamento.devolver', req, { ...objeto(corpo), adiantamentoId: inteiro(id, 'id') });
+  }
+
+  @Post('faturamento/devolucoes-adiantamento/:id/aprovacao')
+  @HttpCode(200)
+  @Permissao('financeiro.adiantamento.aprovar')
+  @AuditadoNoHandler(EXECUTOR)
+  aprovarDevolucao(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.g('adiantamento.aprovarDevolucao', req, { ...objeto(corpo), devolucaoId: inteiro(id, 'id') });
+  }
+
+  @Post('faturamento/devolucoes-adiantamento/:id/cancelamento')
+  @HttpCode(200)
+  @Permissao('faturamento.recibo.emitir')
+  @AuditadoNoHandler(EXECUTOR)
+  cancelarDevolucao(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.g('adiantamento.cancelarDevolucao', req, {
+      ...objeto(corpo),
+      devolucaoId: inteiro(id, 'id'),
+    });
   }
 
   @Get('faturamento/modelos-orcamento')

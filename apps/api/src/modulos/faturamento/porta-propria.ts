@@ -1932,7 +1932,9 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
           `SELECT ch.id, ch.numero, ch.valor_total, ch.paciente_id, ch.atendimento_id, fp.tipo AS fonte_tipo,
                   COALESCE(NULLIF(pa.nome_social, ''), pf.nome) AS pagador,
                   (SELECT COALESCE(SUM(m.valor), 0) FROM movimento_caixa m WHERE m.conta_hospitalar_id = ch.id
-                      AND m.situacao = 'ativo' AND m.excluido_em IS NULL) AS pago
+                      AND m.situacao = 'ativo' AND m.excluido_em IS NULL) AS pago,
+                  (SELECT COALESCE(SUM(x.valor), 0) FROM aplicacao_adiantamento_paciente x
+                    WHERE x.conta_hospitalar_id = ch.id AND x.estornado = FALSE AND x.excluido_em IS NULL) AS aplicado
              FROM conta_hospitalar ch
              JOIN fonte_pagadora fp ON fp.id = ch.fonte_pagadora_id
              LEFT JOIN paciente pa ON pa.id = ch.paciente_id
@@ -1945,7 +1947,16 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
           throw new ErroOperacao(404, 'registro-inexistente', 'Conta inexistente', 'A conta não existe.');
         const np = conferirRecebimentoDaConta(texto(conta['fonte_tipo']) === 'particular');
         if (np) throw recusa(np.codigo, np.mensagem, { campos: ['conta'] });
-        saldo = r2(n(conta['valor_total']) - n(conta['pago']));
+        // O saldo do caixa abate o adiantamento do paciente já usado nesta conta (o estornado volta a dever).
+        saldo = r2(n(conta['valor_total']) - n(conta['pago']) - n(conta['aplicado']));
+        if (saldo <= 0)
+          throw recusa(
+            'conta-quitada',
+            'A conta não tem saldo a receber (caixa e adiantamento já cobrem o total).',
+            {
+              campos: ['conta'],
+            },
+          );
         pagador = texto(conta['pagador']);
         paciente = nn(conta['paciente_id']);
         atendimento = nn(conta['atendimento_id']);

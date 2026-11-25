@@ -7,14 +7,19 @@ import { SanteSelecao } from '@sgh/ui';
 // enquanto se digita; o servidor confere de novo e as recusas aparecem com o texto dele. Sem paciente na rota, a tela
 // abre pela busca do paciente (entrada pelo menu). O atendimento é escolhido da lista do paciente e a urgência vem do
 // caráter dele (nunca de uma marca solta). Devolver com conta aberta devendo pede a confirmação explícita.
+// F7 (07-FIN linha 92): a devolução é um pedido que reserva o saldo; outra pessoa (financeiro.adiantamento.aprovar)
+// aprova e o valor sai; quem pediu não vê o botão de aprovar e o servidor recusa se tentar.
 import { FORMAS_ADIANTAMENTO, validarAdiantamento, validarDevolucao } from '@sgh/dominio-faturamento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import { usarSessao } from '../../../casca/sessao/sessao.js';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import {
   aplicarAdiantamento,
+  aprovarDevolucao,
+  cancelarDevolucao,
   devolverAdiantamento,
   estornarAplicacao,
   lerContaCorrente,
@@ -147,7 +152,7 @@ const errosDev = computed(() =>
   escolhido.value
     ? validarDevolucao({
         ...dev,
-        saldo: escolhido.value.saldo,
+        saldo: escolhido.value.disponivel,
         situacao: escolhido.value.situacao as 'ativo',
         favorecidoCpf: null,
         chavePix: dev.chavePix || null,
@@ -158,6 +163,7 @@ const podeDevolver = computed(
   () => !Object.keys(errosDev.value).length && (devidoAberto.value <= 0 || dev.confirmarContaAberta),
 );
 function prepararDevolucao(id: number, saldo: number) {
+  // O valor sugerido é o disponível (o saldo menos os pedidos ainda em aprovação).
   Object.assign(dev, { adiantamento: id, valor: saldo, favorecidoNome: q.data.value?.paciente.nome ?? '' });
 }
 const devolver = () =>
@@ -177,6 +183,19 @@ const devolver = () =>
       ),
     t('particular.cc.devolvido'),
   ).then((ok) => ok && Object.assign(dev, { adiantamento: 0, motivo: '', confirmarContaAberta: false }));
+
+// ── Aprovação da devolução por outra pessoa ──
+const { sessao, permissoes } = usarSessao();
+const podeAprovar = computed(() => permissoes.value.has('financeiro.adiantamento.aprovar'));
+const meuPedido = (solicitante: number | null) =>
+  solicitante !== null && String(solicitante) === String(sessao.value?.usuario.id ?? '');
+const aprovar = (devolucao: number) =>
+  rodar(() => aprovarDevolucao(devolucao, chave()), t('particular.cc.aprovada'));
+const cancelarPedido = (devolucao: number) => {
+  const motivo = window.prompt(t('particular.cc.motivoCancelamento'));
+  if (motivo?.trim())
+    void rodar(() => cancelarDevolucao(devolucao, motivo, chave()), t('particular.cc.pedidoCancelado'));
+};
 </script>
 
 <template>
@@ -334,10 +353,10 @@ const devolver = () =>
             <td>{{ moeda(a.saldo) }}</td>
             <td>
               <button
-                v-if="a.saldo > 0"
+                v-if="a.disponivel > 0"
                 type="button"
                 :data-testid="`cc-devolver-${a.id}`"
-                @click="prepararDevolucao(a.id, a.saldo)"
+                @click="prepararDevolucao(a.id, a.disponivel)"
               >
                 {{ t('particular.cc.devolver') }}
               </button>
@@ -360,11 +379,46 @@ const devolver = () =>
         </li>
       </ul>
 
+      <template v-if="q.data.value.devolucoesPendentes.length">
+        <h3>{{ t('particular.cc.pendentesTitulo') }}</h3>
+        <ul data-testid="cc-pendentes">
+          <li v-for="p in q.data.value.devolucoesPendentes" :key="p.id" :data-testid="`cc-pendente-${p.id}`">
+            {{
+              t('particular.cc.pedidoDe', {
+                valor: moeda(p.valor),
+                favorecido: p.favorecido,
+                forma: rotulo(p.forma),
+                solicitante: p.solicitante,
+                data: data(p.solicitadoEm),
+                motivo: p.motivo,
+              })
+            }}
+            <span v-if="meuPedido(p.solicitanteId)" class="secundario">{{
+              t('particular.cc.seuPedido')
+            }}</span>
+            <button
+              v-else-if="podeAprovar"
+              type="button"
+              :data-testid="`cc-aprovar-${p.id}`"
+              @click="aprovar(p.id)"
+            >
+              {{ t('particular.cc.aprovar') }}
+            </button>
+            <button type="button" :data-testid="`cc-cancelar-pedido-${p.id}`" @click="cancelarPedido(p.id)">
+              {{ t('particular.cc.cancelarPedido') }}
+            </button>
+          </li>
+        </ul>
+      </template>
+
       <form v-if="dev.adiantamento" class="filtros" data-testid="cc-form-devolver" @submit.prevent="devolver">
         <h3>{{ t('particular.cc.devolucaoTitulo') }}</h3>
+        <p v-if="escolhido" class="secundario" data-testid="cc-dev-disponivel">
+          {{ t('particular.cc.disponivel', { valor: moeda(escolhido.disponivel) }) }}
+        </p>
         <label>
           {{ t('particular.cc.valor') }}
-          <input v-model.number="dev.valor" type="number" min="0" step="0.01" />
+          <input v-model.number="dev.valor" type="number" min="0" step="0.01" data-testid="cc-dev-valor" />
         </label>
         <SanteSelecao
           v-model="dev.forma"

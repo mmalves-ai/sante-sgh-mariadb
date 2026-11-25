@@ -22,6 +22,21 @@ const esquemaContaCorrente = z.object({
       forma: z.string(),
       urgencia: z.boolean(),
       voluntaria: z.boolean(),
+      disponivel: z.number(),
+    }),
+  ),
+  devolucoesPendentes: z.array(
+    z.object({
+      id: z.number(),
+      adiantamento: z.number(),
+      numero: z.string(),
+      valor: z.number(),
+      forma: z.string(),
+      favorecido: z.string(),
+      motivo: z.string(),
+      solicitadoEm: z.string(),
+      solicitanteId: z.number().nullable(),
+      solicitante: z.string(),
     }),
   ),
   aplicacoes: z.array(
@@ -82,6 +97,11 @@ export const estornarAplicacao = (aplicacao: number, motivo: string, chave: stri
   enviar(`${F}/aplicacoes-adiantamento/${aplicacao}/estorno`, { motivo }, qualquer, chave);
 export const devolverAdiantamento = (adiantamento: number, corpo: Record<string, unknown>, chave: string) =>
   enviar(`${F}/adiantamentos/${adiantamento}/devolucoes`, corpo, qualquer, chave);
+/** A aprovação do pedido de devolução por outra pessoa (quem pediu é recusado pelo servidor). */
+export const aprovarDevolucao = (devolucao: number, chave: string) =>
+  enviar(`${F}/devolucoes-adiantamento/${devolucao}/aprovacao`, {}, qualquer, chave);
+export const cancelarDevolucao = (devolucao: number, motivo: string, chave: string) =>
+  enviar(`${F}/devolucoes-adiantamento/${devolucao}/cancelamento`, { motivo }, qualquer, chave);
 
 const esquemaModelos = z.array(
   z.object({

@@ -9,8 +9,14 @@
 //   refeitos. Nada de movimento de caixa (o dinheiro já entrou). Aplicar de novo nunca reescreve a linha anterior.
 // - adiantamento.estornar: a aplicação fica marcada estornada (quem, quando e o motivo na linha; nunca apagada nem
 //   desfeita) e o valor volta ao saldo; recusado com a conta faturada, enviada, paga ou cancelada.
-// - adiantamento.devolver: devolucao_adiantamento_paciente "devolvida" (sequência, favorecido, motivo); em dinheiro,
-//   o movimento_caixa de saída na sessão aberta e o total em dinheiro dela abatido; saldo e situação refeitos.
+// - adiantamento.devolver: o PEDIDO, devolucao_adiantamento_paciente "solicitada" (sequência, favorecido, motivo; em
+//   dinheiro, a sessão aberta de quem pede), que reserva o valor (o disponível é o saldo menos os pedidos em aberto);
+//   nada de caixa nem de saldo ainda.
+// - adiantamento.aprovarDevolucao: só outra pessoa aprova (quem pediu é recusado); a linha vira "devolvida" (aprovador,
+//   aprovado_em, devolvido_em); em dinheiro, o movimento_caixa de saída na sessão de quem pediu (aberta) e o total em
+//   dinheiro dela abatido; saldo e situação do adiantamento refeitos.
+// - adiantamento.cancelarDevolucao: o pedido fica "cancelado" com o motivo na observação (nunca apagado); a reserva
+//   é liberada.
 // - modelo.cadastrar: modelo_orcamento e modelo_orcamento_item (o código é único; para mudar um modelo, cadastra-se
 //   outro e inativa-se o antigo, e o orçamento já gerado continua apontando para o antigo).
 // - modelo.inativar: ativo = falso (o orçamento já gerado continua apontando para ele).
@@ -18,13 +24,17 @@
 //   e os itens montados pelo domínio (preço do modelo ou da tabela particular vigente, honorário pela função).
 import { randomBytes } from 'node:crypto';
 import {
+  conferirDecisaoDevolucao,
+  disponivelParaDevolver,
   type EntradaAdiantamento,
   extratoContaCorrente,
+  type FormaAdiantamento,
   FORMAS_ADIANTAMENTO,
   type LancamentoCorrente,
   montarOrcamentoDoModelo,
   planejarAplicacao,
   type SituacaoAdiantamento,
+  type SituacaoDevolucao,
   situacaoPeloSaldo,
   TIPOS_ADIANTAMENTO,
   TIPOS_ITEM_MODELO,
@@ -437,9 +447,36 @@ async function devidoEmAberto(tx: Consulta, est: number, pacienteId: number): Pr
   return r2(t);
 }
 
+/** Os pedidos de devolução ainda não decididos do adiantamento (reservam o saldo), menos o que se está decidindo. */
+async function pedidosEmAberto(
+  tx: Consulta,
+  adiantamento: number,
+  exceto: number | null = null,
+): Promise<number[]> {
+  const r = await tx.consultar<Linha>(
+    `SELECT id, valor FROM devolucao_adiantamento_paciente
+      WHERE adiantamento_paciente_id = ? AND situacao = 'solicitada' AND excluido_em IS NULL`,
+    [adiantamento],
+    { teto: 200 },
+  );
+  return r.filter((x) => n(x['id']) !== exceto).map((x) => n(x['valor']));
+}
+/** O dinheiro na gaveta da sessão: fundo de troco + dinheiro + suprimento − sangria. */
+const naGaveta = (s: Linha) =>
+  r2(n(s['fundo_troco']) + n(s['total_dinheiro']) + n(s['total_suprimento']) - n(s['total_sangria']));
+const semDinheiro = (gaveta: number) =>
+  recusa(
+    'caixa-sem-dinheiro',
+    `Há ${gaveta.toFixed(2)} em dinheiro no caixa: devolva por Pix ou transferência.`,
+    {
+      campos: ['valor', 'forma'],
+    },
+  );
+
+/** O pedido de devolução: nasce "solicitada" e reserva o valor; outra pessoa aprova (aprovar-devolucao). */
 export const opDevolverAdiantamento = definirOperacao({
   nome: 'faturamento.adiantamento-paciente.devolver',
-  tabelas: ['devolucao_adiantamento_paciente', 'adiantamento_paciente', 'movimento_caixa', 'sessao_caixa'],
+  tabelas: ['devolucao_adiantamento_paciente', 'adiantamento_paciente', 'sessao_caixa'],
   entrada: esquemaDevolverAdiantamento,
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
@@ -451,8 +488,9 @@ export const opDevolverAdiantamento = definirOperacao({
     );
     if (!a)
       throw recusa('adiantamento-inexistente', 'O adiantamento não existe.', { campos: ['adiantamentoId'] });
+    const disponivel = disponivelParaDevolver(n(a['saldo']), await pedidosEmAberto(tx, e.adiantamentoId));
     exigirValido(
-      validarDevolucao({ ...e, saldo: n(a['saldo']), situacao: txt(a['situacao']) as SituacaoAdiantamento }),
+      validarDevolucao({ ...e, saldo: disponivel, situacao: txt(a['situacao']) as SituacaoAdiantamento }),
     );
     // Boa prática: o saldo abate a conta aberta antes de sair do hospital; devolver assim mesmo pede confirmação.
     const devido = await devidoEmAberto(tx, est, n(a['paciente_id']));
@@ -463,40 +501,12 @@ export const opDevolverAdiantamento = definirOperacao({
         { campos: ['confirmarContaAberta'] },
       );
     const formaId = await formaDe(tx, e.forma, ['pagamento', 'ambos', 'recebimento']);
-    const agora = new Date();
+    // Em dinheiro, o valor sai da gaveta de quem pede: o caixa dele precisa estar aberto e ter o dinheiro.
     let sessaoId: number | null = null;
-    let mov: number | null = null;
     if (e.forma === 'dinheiro') {
       const s = await sessaoAberta(tx, est, usuario);
       sessaoId = n(s['id']);
-      // A devolução em dinheiro sai da gaveta: não sai mais do que há nela (fundo + dinheiro + suprimento − sangria).
-      const gaveta = r2(
-        n(s['fundo_troco']) + n(s['total_dinheiro']) + n(s['total_suprimento']) - n(s['total_sangria']),
-      );
-      if (e.valor > gaveta)
-        throw recusa(
-          'caixa-sem-dinheiro',
-          `Há ${gaveta.toFixed(2)} em dinheiro no caixa: devolva por Pix ou transferência.`,
-          {
-            campos: ['valor', 'forma'],
-          },
-        );
-      mov = await tx.incluir('movimento_caixa', {
-        estabelecimento_id: est,
-        sessao_caixa_id: sessaoId,
-        tipo_movimento_caixa_id: await tipoMovimento(tx, TIPO_MOVIMENTO_DEVOLUCAO, 'saida'),
-        natureza: 'saida',
-        ocorrido_em: agora,
-        especie: 'dinheiro',
-        forma_recebimento_id: formaId,
-        valor: e.valor,
-        descricao: `Devolução do adiantamento ${txt(a['numero'])}`,
-        adiantamento_paciente_id: e.adiantamentoId,
-        responsavel_nome: e.favorecidoNome,
-      });
-      await tx.alterar('sessao_caixa', sessaoId, n(s['versao']), {
-        total_dinheiro: r2(n(s['total_dinheiro']) - e.valor),
-      });
+      if (e.valor > naGaveta(s)) throw semDinheiro(naGaveta(s));
     }
     const seq = await tx.uma<Linha>(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM devolucao_adiantamento_paciente WHERE adiantamento_paciente_id = ?',
@@ -509,22 +519,156 @@ export const opDevolverAdiantamento = definirOperacao({
       valor: e.valor,
       forma_recebimento_id: formaId,
       sessao_caixa_id: sessaoId,
-      movimento_caixa_id: mov,
       favorecido_nome: e.favorecidoNome,
       favorecido_cpf: e.favorecidoCpf,
       favorecido_chave_pix: e.chavePix,
       identificador_transacao: e.comprovante,
       motivo: e.motivo,
+      situacao: 'solicitada',
+    });
+    return { id: dev, situacao: 'solicitada', disponivel: r2(disponivel - e.valor) };
+  },
+  alvo: (_e, r) => ({ tabela: 'devolucao_adiantamento_paciente', id: r.id }),
+  trilha: (e) => ({ motivo: e.motivo, confirmarContaAberta: e.confirmarContaAberta }),
+});
+
+async function pedidoDeDevolucao(tx: TxOperacao, est: number, devolucao: number): Promise<Linha> {
+  const [d] = await tx.consultarParaAtualizar<Linha>(
+    `SELECT d.id, d.versao, d.situacao, d.valor, d.criado_por, d.sessao_caixa_id, d.adiantamento_paciente_id,
+            d.favorecido_nome, d.favorecido_cpf, d.favorecido_chave_pix, d.identificador_transacao, d.motivo,
+            d.forma_recebimento_id, d.observacao, f.meio, a.numero
+       FROM devolucao_adiantamento_paciente d
+       JOIN adiantamento_paciente a ON a.id = d.adiantamento_paciente_id
+       JOIN forma_recebimento f ON f.id = d.forma_recebimento_id
+      WHERE d.id = ? AND a.estabelecimento_id = ? AND d.excluido_em IS NULL`,
+    [devolucao, est],
+    { teto: 1 },
+  );
+  if (!d)
+    throw recusa('devolucao-inexistente', 'O pedido de devolução não existe.', { campos: ['devolucaoId'] });
+  return d;
+}
+function exigirDecisao(d: Linha, decisor: number, decisao: 'aprovar' | 'cancelar') {
+  const r = conferirDecisaoDevolucao({
+    situacao: txt(d['situacao']) as SituacaoDevolucao,
+    solicitante: nn(d['criado_por']),
+    decisor,
+    decisao,
+  });
+  if (r) throw recusa(r.codigo, r.mensagem, { campos: ['devolucaoId'] });
+}
+
+export const esquemaAprovarDevolucao = z.object({
+  devolucaoId: id,
+  /** Identificador da transação (Pix, transferência) informado na aprovação, quando o pedido não o trouxe. */
+  comprovante: z.string().trim().max(60).nullable().default(null),
+});
+
+/** A aprovação por outra pessoa efetiva a devolução: em dinheiro, a saída na gaveta de quem pediu. */
+export const opAprovarDevolucao = definirOperacao({
+  nome: 'faturamento.adiantamento-paciente.aprovar-devolucao',
+  tabelas: ['devolucao_adiantamento_paciente', 'adiantamento_paciente', 'movimento_caixa', 'sessao_caixa'],
+  entrada: esquemaAprovarDevolucao,
+  async gravar(tx, e, ctx) {
+    const est = estDe(ctx);
+    const usuario = usuarioDe(ctx);
+    const d = await pedidoDeDevolucao(tx, est, e.devolucaoId);
+    exigirDecisao(d, usuario, 'aprovar');
+    const adiantamento = n(d['adiantamento_paciente_id']);
+    const valor = n(d['valor']);
+    const [a] = await tx.consultarParaAtualizar<Linha>(
+      'SELECT id, saldo, situacao FROM adiantamento_paciente WHERE id = ?',
+      [adiantamento],
+      { teto: 1 },
+    );
+    // O saldo pode ter mudado desde o pedido (uso na conta): a devolução cabe no que sobra dos outros pedidos.
+    const disponivel = disponivelParaDevolver(
+      n(a!['saldo']),
+      await pedidosEmAberto(tx, adiantamento, e.devolucaoId),
+    );
+    const meio = txt(d['meio']);
+    exigirValido(
+      validarDevolucao({
+        saldo: disponivel,
+        situacao: txt(a!['situacao']) as SituacaoAdiantamento,
+        valor,
+        favorecidoNome: txt(d['favorecido_nome']),
+        favorecidoCpf: nn(d['favorecido_cpf']) === null ? null : txt(d['favorecido_cpf']),
+        forma: meio as FormaAdiantamento,
+        chavePix: d['favorecido_chave_pix'] === null ? null : txt(d['favorecido_chave_pix']),
+        motivo: txt(d['motivo']),
+      }),
+    );
+    const agora = new Date();
+    let mov: number | null = null;
+    const sessaoId = nn(d['sessao_caixa_id']);
+    if (meio === 'dinheiro' && sessaoId !== null) {
+      const [s] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, situacao, total_dinheiro, fundo_troco, total_suprimento, total_sangria
+           FROM sessao_caixa WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [sessaoId, est],
+        { teto: 1 },
+      );
+      if (!s || !['aberta', 'reaberta'].includes(txt(s['situacao'])))
+        throw recusa(
+          'caixa-fechado',
+          'O caixa de quem pediu a devolução em dinheiro foi fechado: cancele o pedido e peça de novo com o caixa aberto.',
+          { campos: ['devolucaoId'] },
+        );
+      if (valor > naGaveta(s)) throw semDinheiro(naGaveta(s));
+      mov = await tx.incluir('movimento_caixa', {
+        estabelecimento_id: est,
+        sessao_caixa_id: sessaoId,
+        tipo_movimento_caixa_id: await tipoMovimento(tx, TIPO_MOVIMENTO_DEVOLUCAO, 'saida'),
+        natureza: 'saida',
+        ocorrido_em: agora,
+        especie: 'dinheiro',
+        forma_recebimento_id: n(d['forma_recebimento_id']),
+        valor,
+        descricao: `Devolução do adiantamento ${txt(d['numero'])}`,
+        adiantamento_paciente_id: adiantamento,
+        responsavel_nome: txt(d['favorecido_nome']),
+      });
+      await tx.alterar('sessao_caixa', sessaoId, n(s['versao']), {
+        total_dinheiro: r2(n(s['total_dinheiro']) - valor),
+      });
+    }
+    await tx.alterar('devolucao_adiantamento_paciente', e.devolucaoId, n(d['versao']), {
       situacao: 'devolvida',
       aprovado_por_usuario_id: usuario,
       aprovado_em: agora,
       devolvido_em: agora,
+      movimento_caixa_id: mov,
+      identificador_transacao: e.comprovante ?? (d['identificador_transacao'] as string | null),
     });
-    const saldo = await refazerSaldo(tx, e.adiantamentoId, -e.valor, true);
-    return { id: dev, saldo, movimento: mov };
+    const saldo = await refazerSaldo(tx, adiantamento, -valor, true);
+    return { id: e.devolucaoId, saldo, movimento: mov };
   },
   alvo: (_e, r) => ({ tabela: 'devolucao_adiantamento_paciente', id: r.id }),
-  trilha: (e) => ({ motivo: e.motivo, confirmarContaAberta: e.confirmarContaAberta }),
+});
+
+export const esquemaCancelarDevolucao = z.object({
+  devolucaoId: id,
+  motivo: z.string().trim().min(1).max(500),
+});
+
+/** O cancelamento do pedido (por quem pediu ou por quem decide), com motivo: a reserva do saldo é liberada. */
+export const opCancelarDevolucao = definirOperacao({
+  nome: 'faturamento.adiantamento-paciente.cancelar-devolucao',
+  tabelas: ['devolucao_adiantamento_paciente'],
+  entrada: esquemaCancelarDevolucao,
+  async gravar(tx, e, ctx) {
+    const d = await pedidoDeDevolucao(tx, estDe(ctx), e.devolucaoId);
+    exigirDecisao(d, usuarioDe(ctx), 'cancelar');
+    const anterior = d['observacao'] === null ? '' : `${txt(d['observacao'])}\n`;
+    await tx.alterar('devolucao_adiantamento_paciente', e.devolucaoId, n(d['versao']), {
+      situacao: 'cancelada',
+      observacao: `${anterior}Cancelada: ${e.motivo}`,
+    });
+    return { id: e.devolucaoId, situacao: 'cancelada' };
+  },
+  alvo: (_e, r) => ({ tabela: 'devolucao_adiantamento_paciente', id: r.id }),
+  trilha: (e) => ({ motivo: e.motivo }),
 });
 
 /** A conta corrente do paciente: adiantamentos com saldo, aplicações por conta, devoluções e o extrato corrido. */
@@ -554,6 +698,20 @@ export async function contaCorrentePaciente(l: Consulta, est: number, pacienteId
     [pacienteId, est],
     { teto: 2000 },
   );
+  // Os pedidos de devolução ainda não decididos: reservam o saldo e esperam a aprovação de outra pessoa.
+  const pedidos = await l.consultar<Linha>(
+    `SELECT d.id, d.adiantamento_paciente_id, a.numero, d.valor, d.favorecido_nome, d.motivo, d.criado_em,
+            d.criado_por, COALESCE(u.nome, u.login) AS solicitante, f.meio
+       FROM devolucao_adiantamento_paciente d JOIN adiantamento_paciente a ON a.id = d.adiantamento_paciente_id
+       JOIN forma_recebimento f ON f.id = d.forma_recebimento_id
+       LEFT JOIN usuario u ON u.id = d.criado_por
+      WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND d.situacao = 'solicitada' AND d.excluido_em IS NULL
+      ORDER BY d.criado_em, d.id`,
+    [pacienteId, est],
+    { teto: 200 },
+  );
+  const reservado = (adiantamento: number) =>
+    pedidos.filter((d) => n(d['adiantamento_paciente_id']) === adiantamento).map((d) => n(d['valor']));
   const contas = await l.consultar<Linha>(
     `SELECT ch.id, ch.numero, ch.situacao, ch.valor_total FROM conta_hospitalar ch
       WHERE ch.paciente_id = ? AND ch.estabelecimento_id = ? AND ch.excluido_em IS NULL
@@ -628,6 +786,20 @@ export async function contaCorrentePaciente(l: Consulta, est: number, pacienteId
       forma: txt(a['meio']),
       urgencia: Boolean(n(a['atendimento_urgencia'])),
       voluntaria: Boolean(n(a['declaracao_voluntaria'])),
+      /** O que ainda pode ser pedido em devolução (saldo menos os pedidos em aberto). */
+      disponivel: disponivelParaDevolver(n(a['saldo']), reservado(n(a['id']))),
+    })),
+    devolucoesPendentes: pedidos.map((d) => ({
+      id: n(d['id']),
+      adiantamento: n(d['adiantamento_paciente_id']),
+      numero: txt(d['numero']),
+      valor: n(d['valor']),
+      forma: txt(d['meio']),
+      favorecido: txt(d['favorecido_nome']),
+      motivo: txt(d['motivo']),
+      solicitadoEm: new Date(d['criado_em'] as Date).toISOString(),
+      solicitanteId: nn(d['criado_por']),
+      solicitante: txt(d['solicitante']),
     })),
     aplicacoes: apl.map((x) => ({
       id: n(x['id']),
@@ -973,6 +1145,8 @@ export const OPERACOES_PARTICULAR = {
   'adiantamento.aplicar': opAplicarAdiantamento,
   'adiantamento.estornar': opEstornarAplicacao,
   'adiantamento.devolver': opDevolverAdiantamento,
+  'adiantamento.aprovarDevolucao': opAprovarDevolucao,
+  'adiantamento.cancelarDevolucao': opCancelarDevolucao,
   'modelo.cadastrar': opCadastrarModelo,
   'modelo.inativar': opInativarModelo,
   'modelo.gerarOrcamento': opGerarOrcamentoDoModelo,

@@ -1555,14 +1555,20 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     senhaAlteradaEm: new Date(),
     concessoes: {
       grupo: 'FINAPROVA',
-      opcoesGrupo: opcoesFinanceiro(
-        'financeiro.tituloPagar.ler',
-        'financeiro.tituloPagar.aprovar',
-        'financeiro.tituloPagar.aprovarDiretoria',
-        'financeiro.tituloPagar.prorrogar',
-        'financeiro.adiantamento.ler',
-        'financeiro.adiantamento.aprovar',
-      ),
+      // F7 (07-FIN linha 92): vê a conta corrente do paciente para aprovar a devolução do adiantamento pedida no caixa.
+      opcoesGrupo: [
+        ...new Set([
+          ...opcoesFinanceiro(
+            'financeiro.tituloPagar.ler',
+            'financeiro.tituloPagar.aprovar',
+            'financeiro.tituloPagar.aprovarDiretoria',
+            'financeiro.tituloPagar.prorrogar',
+            'financeiro.adiantamento.ler',
+            'financeiro.adiantamento.aprovar',
+          ),
+          ...opcoesFaturamento('faturamento.pagamento.ler'),
+        ]),
+      ].sort((a, b) => a - b),
     },
   },
   'SINT.FIN.PAGA': {

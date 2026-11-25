@@ -8,7 +8,11 @@
 // - estorno da aplicação marcado com o motivo (nada apagado) e o valor de volta ao saldo; aplicar de novo cria outra
 //   linha (sequência) e o estorno continua no extrato; estorno com a conta faturada recusado;
 // - devolução com conta aberta devendo só com a confirmação;
-// - devolução em dinheiro (devolucao_adiantamento_paciente "devolvida", movimento_caixa de saída, total da sessão);
+// - devolução em duas pessoas (F7, 07-FIN linha 92): o pedido fica "solicitada" e reserva o saldo (outro pedido acima do
+//   disponível é recusado; nada de caixa nem de saldo ainda); quem pediu não aprova; outra pessoa aprova e a linha vira
+//   "devolvida" com o aprovador (em dinheiro, movimento_caixa de saída na sessão de quem pediu e o total abatido); o
+//   pedido cancelado fica com o motivo (nunca apagado) e não é mais aprovado;
+// - o caixa (receberParticular) cobra da conta só o que resta depois do adiantamento aplicado (troco pelo saldo real);
 // - extrato da conta corrente com saldo corrido;
 // - modelo cadastrado com itens, prévia, orçamento gerado do modelo (preço da tabela particular, honorário pela
 //   função, linha sem preço recusada até o valor ser digitado, preço de linha com preço recusado) e modelo inativado
@@ -19,6 +23,7 @@ import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } fro
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoParticularAdiantamento } from './particular-adiantamento.controller.js';
+import { PortaFaturamentoPropria, TIPO_MOVIMENTO_RECEBIMENTO } from './porta-propria.js';
 import {
   contaCorrentePaciente,
   listarModelos,
@@ -54,10 +59,10 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
   let s: ServicoParticularAdiantamento;
   const ids: Record<string, number> = {};
   const criados: string[] = [];
-  const op = (est?: number): ContextoOperacao => ({
+  const op = (est?: number, usuario?: number): ContextoOperacao => ({
     cliente: CLIENTE,
     estabelecimento: est ?? ids['est']!,
-    usuario: ids['usuario']!,
+    usuario: usuario ?? ids['usuario']!,
     correlacao: 'teste-f3710',
     chaveIdempotencia: `f3710-${randomUUID()}`,
     reautenticadoEm: Date.now(),
@@ -83,6 +88,7 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       'DELETE d FROM devolucao_adiantamento_paciente d JOIN adiantamento_paciente a ON a.id = d.adiantamento_paciente_id WHERE a.estabelecimento_id = ?',
       [est],
     );
+    await e.executar('DELETE FROM recebimento_particular WHERE estabelecimento_id = ?', [est]);
     await e.executar('DELETE FROM movimento_caixa WHERE estabelecimento_id = ?', [est]);
     await e.executar('DELETE FROM adiantamento_paciente WHERE estabelecimento_id = ?', [est]);
     await e.executar('DELETE FROM sessao_caixa WHERE estabelecimento_id = ?', [est]);
@@ -128,6 +134,14 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
         ['f3710.teste'],
         "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
         ['f3710.teste', `USUARIO SINTETICO ${P}`, agora],
+      );
+      // Quem aprova a devolução (outra pessoa).
+      ids['aprovador'] = await garantir(
+        e,
+        'SELECT id FROM usuario WHERE login = ?',
+        ['f3710.aprovador'],
+        "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+        ['f3710.aprovador', `APROVADOR SINTETICO ${P}`, agora],
       );
       ids['fonte'] = await g(
         'fonte_pagadora',
@@ -285,6 +299,7 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       for (const [codigo, sentido] of [
         [TIPO_MOVIMENTO_ADIANTAMENTO, 'entrada'],
         [TIPO_MOVIMENTO_DEVOLUCAO, 'saida'],
+        [TIPO_MOVIMENTO_RECEBIMENTO, 'entrada'],
       ] as const) {
         const ja = await e.uma('SELECT id FROM tipo_movimento_caixa WHERE codigo = ?', [codigo]);
         if (!ja) {
@@ -468,12 +483,51 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
         motivo: 'alta',
         confirmarContaAberta: confirmar,
       });
+    const aprovar = (devolucaoId: unknown, usuario = ids['aprovador']) =>
+      s.gravar('adiantamento.aprovarDevolucao', op(undefined, usuario), { devolucaoId });
     // A conta ainda deve 300: devolver sem a confirmação é recusado.
     expect(await codigoDo(devolver(300, 'dinheiro', null, false))).toBe('conta-em-aberto');
     // Na gaveta: fundo 50 + dinheiro 400 = 450; 500 em dinheiro não sai.
     expect(await codigoDo(devolver(500, 'dinheiro'))).toBe('caixa-sem-dinheiro');
+    // O pedido: "solicitada", reserva 300 dos 500; nada de caixa nem de saldo ainda.
     const d = await devolver(300, 'dinheiro');
-    expect(d['saldo']).toBe(200);
+    expect([d['situacao'], d['disponivel']]).toEqual(['solicitada', 200]);
+    const pedido = await uma(
+      `SELECT situacao, criado_por, aprovado_por_usuario_id, devolvido_em, movimento_caixa_id, sessao_caixa_id
+         FROM devolucao_adiantamento_paciente WHERE id = ?`,
+      [d['id']],
+    );
+    expect([
+      pedido!['situacao'],
+      Number(pedido!['criado_por']),
+      pedido!['aprovado_por_usuario_id'],
+      pedido!['devolvido_em'],
+      pedido!['movimento_caixa_id'],
+      Number(pedido!['sessao_caixa_id']),
+    ]).toEqual(['solicitada', ids['usuario'], null, null, null, ids['sessao']]);
+    const intacto = await uma('SELECT saldo FROM adiantamento_paciente WHERE id = ?', [ids['a2']]);
+    expect(Number(intacto!['saldo'])).toBe(500);
+    // Outro pedido acima do disponível (500 − 300 reservados) é recusado.
+    expect(await codigoDo(devolver(250, 'pix', 'chave-sintetica'))).toBe('entrada-invalida');
+    // Quem pediu não aprova.
+    expect(await codigoDo(aprovar(d['id'], ids['usuario']))).toBe('aprovacao-pelo-solicitante');
+    // O pedido cancelado fica com o motivo e não é mais aprovado.
+    const c = await devolver(50, 'pix', 'chave-sintetica');
+    await s.gravar('adiantamento.cancelarDevolucao', op(), { devolucaoId: c['id'], motivo: 'desistiu' });
+    const cancelado = await uma(
+      'SELECT situacao, observacao, excluido_em FROM devolucao_adiantamento_paciente WHERE id = ?',
+      [c['id']],
+    );
+    expect([cancelado!['situacao'], cancelado!['observacao'], cancelado!['excluido_em']]).toEqual([
+      'cancelada',
+      'Cancelada: desistiu',
+      null,
+    ]);
+    expect(await codigoDo(aprovar(c['id']))).toBe('devolucao-decidida');
+    // Outra pessoa aprova: a devolução sai da gaveta de quem pediu e o saldo cai.
+    const ok = await aprovar(d['id']);
+    expect(ok['saldo']).toBe(200);
+    expect(await codigoDo(aprovar(d['id']))).toBe('devolucao-decidida');
     // Aplicar de novo o mesmo adiantamento na mesma conta: linha nova (sequência 2); a estornada fica como está.
     const r = await s.gravar('adiantamento.aplicar', op(), {
       contaId: ids['conta'],
@@ -492,20 +546,28 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       [2, 100, 0],
     ]);
     const pix = await devolver(100, 'pix', 'chave-sintetica');
-    expect([pix['saldo'], pix['movimento']]).toEqual([0, null]);
+    const pixOk = await aprovar(pix['id']);
+    expect([pixOk['saldo'], pixOk['movimento']]).toEqual([0, null]);
     const dev = await uma(
-      'SELECT situacao, sequencia, movimento_caixa_id, devolvido_em FROM devolucao_adiantamento_paciente WHERE id = ?',
+      `SELECT situacao, sequencia, movimento_caixa_id, devolvido_em, aprovado_por_usuario_id, aprovado_em
+         FROM devolucao_adiantamento_paciente WHERE id = ?`,
       [d['id']],
     );
-    expect([dev!['situacao'], Number(dev!['sequencia']), dev!['devolvido_em'] !== null]).toEqual([
-      'devolvida',
-      1,
-      true,
-    ]);
-    const mov = await uma('SELECT natureza, valor FROM movimento_caixa WHERE id = ?', [
+    expect([
+      dev!['situacao'],
+      Number(dev!['sequencia']),
+      dev!['devolvido_em'] !== null,
+      Number(dev!['aprovado_por_usuario_id']),
+      dev!['aprovado_em'] !== null,
+    ]).toEqual(['devolvida', 1, true, ids['aprovador'], true]);
+    const mov = await uma('SELECT natureza, valor, sessao_caixa_id FROM movimento_caixa WHERE id = ?', [
       dev!['movimento_caixa_id'],
     ]);
-    expect([mov!['natureza'], Number(mov!['valor'])]).toEqual(['saida', 300]);
+    expect([mov!['natureza'], Number(mov!['valor']), Number(mov!['sessao_caixa_id'])]).toEqual([
+      'saida',
+      300,
+      ids['sessao'],
+    ]);
     const a2 = await uma('SELECT situacao FROM adiantamento_paciente WHERE id = ?', [ids['a2']]);
     expect(a2!['situacao']).toBe('devolvido');
     const sessao = await uma('SELECT total_dinheiro FROM sessao_caixa WHERE id = ?', [ids['sessao']]);
@@ -553,6 +615,55 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
         ),
       );
     }
+  });
+
+  it('o caixa cobra da conta só o que resta depois do adiantamento aplicado', async () => {
+    // A conta de 700 tem 500 de adiantamento aplicado (400 + 100; o uso estornado não conta): restam 200.
+    const porta = new PortaFaturamentoPropria(nucleo, CLIENTE);
+    const c = {
+      cliente: CLIENTE,
+      estabelecimento: ids['est']!,
+      usuario: ids['usuario']!,
+      correlacao: 'teste-f3710',
+      rede: 'rede-teste',
+      hospital: `${P}A`,
+    };
+    const trilha = {
+      estabelecimento: ids['est']!,
+      usuario: ids['usuario']!,
+      acao: 'inclusao' as const,
+      entidade: 'movimento_caixa',
+      entidadeId: null,
+      correlacao: 'teste-f3710',
+    };
+    const r = await porta.gravarSgh(c, trilha, (g) =>
+      g.receberParticular({
+        caixa: ids['sessao']!,
+        orcamento: null,
+        conta: ids['conta']!,
+        pagamentos: [{ forma: 'dinheiro', valor: 250, comprovante: null, parcelas: 1 }],
+        usuario: 'x',
+        simulado: true,
+      }),
+    );
+    expect(r.troco).toBe(50);
+    const m = await uma('SELECT natureza, valor FROM movimento_caixa WHERE id = ?', [r.pagamentos[0]]);
+    expect([m!['natureza'], Number(m!['valor'])]).toEqual(['entrada', 200]);
+    // Quitada pelo caixa e pelo adiantamento: nada mais a receber.
+    expect(
+      await codigoDo(
+        porta.gravarSgh(c, trilha, (g) =>
+          g.receberParticular({
+            caixa: ids['sessao']!,
+            orcamento: null,
+            conta: ids['conta']!,
+            pagamentos: [{ forma: 'dinheiro', valor: 10, comprovante: null, parcelas: 1 }],
+            usuario: 'x',
+            simulado: true,
+          }),
+        ),
+      ),
+    ).toBe('conta-quitada');
   });
 
   it('cadastra o modelo, gera o orçamento pela tabela particular e inativa o modelo', async () => {

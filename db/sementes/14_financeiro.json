@@ -64,5 +64,25 @@
       "aplica_receber": true,
       "exige_justificativa": true
     }
+  ],
+  "tipo_movimento_caixa": [
+    {
+      "codigo": "recebimento_particular",
+      "descricao": "Recebimento do paciente particular no caixa",
+      "sentido": "entrada",
+      "exige_justificativa": false
+    },
+    {
+      "codigo": "adiantamento_paciente",
+      "descricao": "Adiantamento ou caução do paciente",
+      "sentido": "entrada",
+      "exige_justificativa": false
+    },
+    {
+      "codigo": "devolucao_adiantamento",
+      "descricao": "Devolução do saldo do adiantamento ao paciente",
+      "sentido": "saida",
+      "exige_justificativa": false
+    }
   ]
 }

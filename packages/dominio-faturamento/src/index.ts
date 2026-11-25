@@ -43,4 +43,5 @@ export * from './conta/auditoria-tramite.js';
 export * from './glosa/recurso-lote.js';
 // F3.7 (06-FAT linhas 39 e 40): adiantamento, caução e conta corrente do paciente; modelo de orçamento padrão.
 export * from './conta/adiantamento-paciente.js';
+export * from './conta/devolucao-adiantamento.js';
 export * from './conta/modelo-orcamento.js';
