@@ -144,6 +144,13 @@ const dias = (de: string, ate: string) =>
 const vigente = (inicio: string, fim: string | null, data: string) =>
   inicio <= data && (fim === null || data <= fim);
 
+/** O dado que a regra exige e o pedido não traz, como a tela o nomeia no alerta. */
+const INCERTO: Partial<Record<RestricaoAcionada['motivo'], string>> = {
+  sexo: 'sexo do paciente',
+  material: 'material do exame',
+  atendimento: 'tipo de atendimento',
+};
+
 /** O horário do pedido cai na janela da regra (a janela pode atravessar a meia-noite). */
 export function dentroDaJanela(hora: string, inicio: string, fim: string): boolean {
   const h = hora.slice(0, 5);
@@ -168,10 +175,12 @@ export function restricoesAcionadas(
     if (r.setor !== null && r.setor !== s.setor) continue;
     if (r.unidade !== null && r.unidade !== s.unidade) continue;
     const motivos: RestricaoAcionada['motivo'][] = [];
-    // O dado que a regra exige e o pedido não traz (sexo ou material desconhecido) vira alerta, nunca aprovação calada.
+    // O dado que a regra exige e o pedido não traz (sexo, material ou tipo de atendimento desconhecido) vira alerta,
+    // nunca aprovação calada.
     const incertos: RestricaoAcionada['motivo'][] = [];
     if (r.sexo !== null && s.sexo === null) incertos.push('sexo');
     if (r.material !== null && s.material === null) incertos.push('material');
+    if (r.tipoAtendimento !== null && s.tipoAtendimento === null) incertos.push('atendimento');
     if (r.sexo !== null && s.sexo !== null && s.sexo !== r.sexo) motivos.push('sexo');
     if (
       s.idadeDias !== null &&
@@ -200,7 +209,7 @@ export function restricoesAcionadas(
           exame: r.exame,
           tipo: 'alerta',
           motivo: incerto,
-          mensagem: `${r.mensagem} (${incerto === 'sexo' ? 'sexo do paciente' : 'material do exame'} não informado: confira antes de gravar.)`,
+          mensagem: `${r.mensagem} (${INCERTO[incerto] ?? incerto} não informado: confira antes de gravar.)`,
           permiteExcecao: r.permiteExcecao,
           excecao: excecaoDe(r.id),
         });
