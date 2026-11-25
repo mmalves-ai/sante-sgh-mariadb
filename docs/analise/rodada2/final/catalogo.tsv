@@ -356,6 +356,7 @@ regiao_geografica	CAD	dominio	F7	Região ou zona geográfica interna, em níveis
 regional_saude	CAD	dominio	F7	Regional ou diretoria de saúde que agrupa municípios, usada na divisão de vagas e cotas	rodada2:nova	02	1
 regra_campo_cadastro	CAD	configuracao	F3	Obrigatoriedade e visibilidade de cada campo do cadastro por módulo de recepção, tipo de atendimento e fonte pagadora	F2; SPDATA ATPARAMGERAL, REPARAM; MV CONFIGURACAO_PACIENTE*, CONFIGURA_PACIENTE	02	3
 remessa_cnes	CAD	principal	F7	Conferência e exportação periódica para o cadastro nacional de estabelecimentos, com competência e situação	F29; MV LOG_PROCESSA_SCNES	02	0
+incapacidade_paciente	CAD	historico	F3	Condição de incapacidade do paciente, com data de início, documento que a prova e levantamento; uma só vigente por paciente	Produto: representação do incapaz com data e documento (02-CAD linha 4; migração 03_CAD/96_incapacidade_paciente)	02	0
 responsavel_paciente	CAD	vinculo	F3	Responsável legal, familiar, dependente ou contato de emergência do paciente, com parentesco, poderes e vigência	F4; SPDATA campos de responsável em RICADPAC, TBPARENTE; MV RESPONSAVEL	02	2
 sequencia_prontuario	CAD	configuracao	F3	Regra de numeração do prontuário por estabelecimento e tipo (interno, externo): prefixo, próximo número e dígito	F1; SPDATA TBGERSEQ (8)	02	3
 servico_classificacao	CAD	catalogo_publico	F7	Serviços especializados e classificações do cadastro nacional de estabelecimentos	F29; MV MULTI_EMPRESAS_SERVICO_CLASSIF; catalogo_publico:cnes	02	2
