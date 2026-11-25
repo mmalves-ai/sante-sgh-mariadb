@@ -678,3 +678,6 @@ export function conferirHashEpilogo(xml: string): {
 }
 
 export { opcional };
+
+/** O envelope comum (cabeçalho, corpo e epílogo com hash) para as transações montadas fora deste arquivo. */
+export { montar as montarMensagemTiss, contratadoDados as contratadoDadosXml };

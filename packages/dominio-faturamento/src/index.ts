@@ -46,6 +46,8 @@ export * from './tiss/apresentacao.js';
 export * from './tiss/montagem-apresentacao.js';
 // F3.7 (06-FAT linha 31): calendário de entrega da fatura por fonte pagadora.
 export * from './tiss/calendario-entrega.js';
+// F3.7 (06-FAT linha 28): cancelamento de guia enviada e envio de documentos anexos (TISS 04.03.00).
+export * from './tiss/cancelamento-documentos.js';
 // F3.7 (06-FAT linhas 21, 22 e 24): parecer do item na auditoria, protocolo entre setores e acompanhamento da guia.
 export * from './conta/auditoria-tramite.js';
 // F3.7 (06-FAT linha 34): o lote de recurso da glosa por item, o retorno da operadora e a situação da glosa.
