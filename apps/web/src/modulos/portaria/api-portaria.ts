@@ -140,3 +140,15 @@ export const gravarTerminal = (id: number | null, corpo: unknown) =>
   enviar<ResultadoPortaria>(id === null ? `${B}/terminais` : `${B}/terminais/${id}`, corpo, 'terminal');
 export const simularCatraca = (corpo: unknown) =>
   enviar<RespostaCatraca>(`${B}/catraca/simular`, corpo, 'simulador');
+/** A regra de acesso do colaborador num terminal (inclui com `id` null; altera pela versão lida; nunca apaga). */
+export const gravarRegraAcesso = (terminal: number, id: number | null, corpo: unknown) =>
+  enviar<ResultadoPortaria>(
+    id === null
+      ? `${B}/terminais/${terminal}/regras-acesso`
+      : `${B}/terminais/${terminal}/regras-acesso/${id}`,
+    corpo,
+    'terminal',
+  );
+/** Liga (ou, com `cracha` null, retira) o crachá do colaborador à matrícula. */
+export const vincularCrachaColaborador = (corpo: { matricula: string; cracha: string | null }) =>
+  enviar<ResultadoPortaria>(`${B}/crachas-colaborador`, corpo, 'terminal');
