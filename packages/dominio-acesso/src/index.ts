@@ -68,3 +68,4 @@ export * from './usuario/vinculo-estabelecimento.js';
 export * from './preferencias/preferencias-usuario.js';
 export * from './notificacao/notificacao-regra.js';
 export * from './notificacao/email-configuracao.js';
+export * from './notificacao/email-saida.js';
