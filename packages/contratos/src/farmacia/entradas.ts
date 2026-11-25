@@ -32,6 +32,8 @@ export const esquemaDoseDispensar = z
     horario: id,
     quantidade: quantidade.optional(),
     lotes: z.array(esquemaLoteDose).max(10).default([]),
+    /** As etiquetas de identificação lidas para esta dose: consumidas na mesma transação da dispensação. */
+    etiquetas: z.array(z.string().trim().min(3).max(100)).max(20).optional(),
   })
   .strict();
 

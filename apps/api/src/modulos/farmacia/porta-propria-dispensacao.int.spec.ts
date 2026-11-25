@@ -80,6 +80,7 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
         'DELETE t FROM termo_livro_controlado t JOIN livro_controlado l ON l.id = t.livro_controlado_id WHERE l.estabelecimento_id = ?',
         'DELETE FROM livro_controlado WHERE estabelecimento_id = ?',
         "DELETE FROM arquivo WHERE estabelecimento_id = ? AND finalidade = 'livro_controlado'",
+        'DELETE FROM etiqueta_identificacao WHERE estabelecimento_id = ?',
         'DELETE esi FROM entrega_setor_item esi JOIN entrega_setor es ON es.id = esi.entrega_setor_id WHERE es.estabelecimento_id = ?',
         'DELETE FROM entrega_setor WHERE estabelecimento_id = ?',
         'UPDATE receita_controlada SET dispensacao_id = NULL WHERE estabelecimento_id = ?',
@@ -437,12 +438,26 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
       ).doses,
     ).toEqual([]);
 
+    // C2-024 (05-SUP linha 14): a etiqueta de identificação lida da dose sai consumida com o movimento da dispensação.
+    const etiqueta = `EF${P}`.toUpperCase().slice(0, 40);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'etiqueta-teste-f24pf' }, (e) =>
+      e.executar(
+        `INSERT INTO etiqueta_identificacao (estabelecimento_id, identificador, insumo_id, unidade_medida_id, quantidade, criado_em)
+         SELECT ?, ?, id, estoque_unidade_medida_id, 1, ? FROM insumo WHERE id = ?`,
+        [ids.est, etiqueta, new Date(), ids.dipirona],
+      ),
+    );
     const r = await op(ctx, 'suprimentos.dispensarHorario', {
       atendimento: ids.atendimento,
       local: ids.farmacia,
       centroCusto: ids.centro,
       doses: [
-        { horario: h1, quantidade: 2, lotes: [{ lote: 'DP-1', validade: '2099-12-31', quantidade: 2 }] },
+        {
+          horario: h1,
+          quantidade: 2,
+          lotes: [{ lote: 'DP-1', validade: '2099-12-31', quantidade: 2 }],
+          etiquetas: [etiqueta.toLowerCase()],
+        },
         { horario: h2, quantidade: 1, lotes: [{ lote: 'DP-1', validade: '2099-12-31', quantidade: 1 }] },
       ],
     });
@@ -451,6 +466,13 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
     estado.doses = String(r.resultado['idsDoses']).split(',').map(Number);
     estado.saida = Number(r.resultado['saida']);
     estado.controle = Number(r.resultado['controle']);
+    expect(
+      await ler(
+        `SELECT e.situacao, m.insumo_id AS insumo, m.atendimento_id AS atendimento FROM etiqueta_identificacao e
+           JOIN movimento_estoque m ON m.id = e.movimento_consumo_id WHERE e.estabelecimento_id = ? AND e.identificador = ?`,
+        [ids.est, etiqueta],
+      ),
+    ).toMatchObject({ situacao: 'consumida', insumo: ids.dipirona, atendimento: ids.atendimento });
     expect(await saldo(ids.dipirona)).toBe(47);
     expect(
       Number(

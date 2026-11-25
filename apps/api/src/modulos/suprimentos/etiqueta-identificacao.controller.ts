@@ -2,8 +2,10 @@
 // cargo controla.
 //   POST /api/suprimentos/etiquetas                emitir N etiquetas do item (lote, local, quantidade por etiqueta);
 //                                                  devolve o conteúdo dos códigos e o ZPL (a 1ª impressão)
-//   GET  /api/suprimentos/etiquetas/:id            a etiqueta com o ZPL de novo (a reimpressão se registra pela
-//                                                  impressão padrão, com motivo)
+//   GET  /api/suprimentos/etiquetas/:id            a ficha da etiqueta (sem o ZPL: ele só sai pela reimpressão)
+//   GET  /api/suprimentos/etiquetas/motivos-reimpressao  os motivos ativos do catálogo da impressão padrão
+//   POST /api/suprimentos/etiquetas/:id/reimpressao a reimpressão registrada (motivo, via seguinte, impressões somadas,
+//                                                  permite_reimpressao respeitado) e o ZPL dela
 //   GET  /api/suprimentos/leitura?codigo=          lê o código (padrão configurado, GS1 ou código simples) e resolve o
 //                                                  item, o lote, a validade e a quantidade, com os alertas
 //   POST /api/suprimentos/etiquetas/baixa          baixa das etiquetas lidas (consumida na saída, devolvida,
@@ -42,6 +44,9 @@ const esquemaBaixa = z
     movimento: id.nullable().default(null),
   })
   .strict();
+const esquemaReimpressao = z
+  .object({ motivo: id, complemento: z.string().trim().max(500).nullable().default(null) })
+  .strict();
 const CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;
 
 /** A Idempotency-Key do pedido (obrigatória nas gravações). */
@@ -76,6 +81,27 @@ export class EtiquetaIdentificacaoController {
   @AuditadoNoHandler('suprimentos.etiqueta.baixar pelo executor (trilha na mesma transação)')
   baixar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.porta.baixar(sessaoDe(req).porta, corpo(esquemaBaixa, b), chaveDe(req));
+  }
+
+  @Get('etiquetas/motivos-reimpressao')
+  @Permissao('suprimentos.nota.registrar')
+  motivos(@Req() req: RequisicaoAutorizada) {
+    return this.porta.motivosReimpressao(sessaoDe(req).porta);
+  }
+
+  @Post('etiquetas/:id/reimpressao')
+  @HttpCode(200)
+  @Permissao('suprimentos.nota.registrar')
+  @AuditadoNoHandler(
+    'suprimentos.etiqueta.reimprimir pelo executor (registro da reimpressão na mesma transação)',
+  )
+  reimprimir(@Param('id') v: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.porta.reimprimir(
+      sessaoDe(req).porta,
+      idDaRota(v),
+      corpo(esquemaReimpressao, b),
+      chaveDe(req),
+    );
   }
 
   @Get('etiquetas/:id')

@@ -3,12 +3,18 @@
 // `@sgh/contratos/regras-suprimentos` (identificacao-estoque) e o desenho ZPL em `@sgh/dominio-documento`
 // (zpl/estoque). Aqui ficam:
 //   - a emissão: o sequencial por estabelecimento (o identificador com dígito de conferência), o conteúdo do DataMatrix
-//     GS1 e do Code 128, a gravação em `etiqueta_identificacao` com a primeira impressão (`impressoes` = 1; a
-//     reimpressão passa pela impressão padrão, que já conhece a tabela) e o ZPL pronto para a impressora;
+//     GS1 e do Code 128, a gravação em `etiqueta_identificacao` com a primeira impressão (`impressoes` = 1) e o ZPL
+//     pronto para a impressora;
+//   - a reimpressão: o ZPL só sai de novo pela reimpressão registrada (motivo do catálogo da impressão padrão, via
+//     seguinte, `registro_reimpressao`), com `impressoes` somado na mesma transação e `permite_reimpressao` respeitado;
+//     a ficha nunca devolve o ZPL;
 //   - a leitura: os padrões ativos (`padrao_leitura_codigo`, os de fabricante antes dos gerais), a leitura GS1 de
 //     reserva e a resolução contra a etiqueta do hospital e o código de barras do item (`insumo_codigo_barras` e o GTIN
 //     principal do item), com o lote do estabelecimento e os alertas de validade;
-//   - a baixa: a etiqueta ativa vira consumida na saída (ou devolvida, descartada, cancelada); nada é apagado.
+//   - a baixa: a etiqueta ativa vira consumida na saída (ou devolvida, descartada, cancelada); nada é apagado. A saída
+//     do estoque e a dispensação consomem as etiquetas lidas dentro da própria operação (`consumirEtiquetas`, mesma
+//     transação), gravando o movimento que as consumiu em `movimento_consumo_id`.
+import { MENSAGEM_IMPRESSAO, planoReimpressao, viasAnterioresDaReimpressao } from '@sgh/dominio-documento';
 import { zplEtiquetaEstoque } from '@sgh/dominio-documento';
 import {
   type BaixaEtiqueta,
@@ -44,7 +50,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 
 export const PORTA_ETIQUETA_IDENTIFICACAO = Symbol('PORTA_ETIQUETA_IDENTIFICACAO');
-export const TABELAS_ETIQUETA_IDENTIFICACAO = ['etiqueta_identificacao'] as const;
+export const TABELAS_ETIQUETA_IDENTIFICACAO = ['etiqueta_identificacao', 'registro_reimpressao'] as const;
 
 export interface EmissaoEtiquetasEntrada {
   readonly insumo: number;
@@ -78,7 +84,23 @@ export interface FichaEtiqueta extends EtiquetaEmitida {
   readonly situacao: string;
   readonly impressoes: number;
   readonly permiteReimpressao: boolean;
+}
+export interface ReimpressaoEntrada {
+  /** O motivo do catálogo da impressão padrão (`motivo_reimpressao`). */
+  readonly motivo: number;
+  readonly complemento: string | null;
+}
+export interface ResultadoReimpressao {
+  readonly id: number;
+  readonly via: number;
+  readonly impressoes: number;
+  readonly registro: number;
   readonly zpl: string;
+}
+export interface MotivoReimpressaoEtiqueta {
+  readonly codigo: number;
+  readonly descricao: string;
+  readonly exigeComplemento: boolean;
 }
 export interface ItemLido {
   readonly codigo: number;
@@ -114,6 +136,13 @@ export interface PortaEtiquetaIdentificacao {
   readonly destino: 'banco' | 'indisponivel';
   emitir(c: ContextoPortaM18, e: EmissaoEtiquetasEntrada, chave: string): Promise<ResultadoEmissao>;
   ficha(c: ContextoPortaM18, id: number): Promise<FichaEtiqueta | null>;
+  motivosReimpressao(c: ContextoPortaM18): Promise<MotivoReimpressaoEtiqueta[]>;
+  reimprimir(
+    c: ContextoPortaM18,
+    id: number,
+    e: ReimpressaoEntrada,
+    chave: string,
+  ): Promise<ResultadoReimpressao>;
   ler(c: ContextoPortaM18, codigo: string): Promise<LeituraCodigo>;
   baixar(
     c: ContextoPortaM18,
@@ -126,7 +155,15 @@ export function portaEtiquetaIdentificacaoIndisponivel(): PortaEtiquetaIdentific
   const falha = (): never => {
     throw new ErroProblema('indisponivel', 503, 'A etiqueta de identificação exige o banco próprio.');
   };
-  return { destino: 'indisponivel', emitir: falha, ficha: falha, ler: falha, baixar: falha };
+  return {
+    destino: 'indisponivel',
+    emitir: falha,
+    ficha: falha,
+    motivosReimpressao: falha,
+    reimprimir: falha,
+    ler: falha,
+    baixar: falha,
+  };
 }
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -203,6 +240,41 @@ function padraoDe(r: Linha): PadraoLeitura {
   };
 }
 
+/**
+ * A baixa das etiquetas lidas dentro da operação que movimenta o estoque (a saída e a dispensação): mesma transação,
+ * a etiqueta tem de ser ativa, deste estabelecimento e do item movimentado; fica consumida com o movimento que a
+ * consumiu. Nada é apagado. Devolve quantas foram consumidas.
+ */
+export async function consumirEtiquetas(
+  tx: TxOperacao,
+  est: number,
+  e: { readonly insumo: number; readonly identificadores: readonly string[]; readonly movimento: number },
+): Promise<number> {
+  const ids = [...new Set(e.identificadores.map((x) => x.trim().toUpperCase()).filter(Boolean))];
+  for (const id of ids) {
+    const r = (
+      await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, situacao, insumo_id FROM etiqueta_identificacao
+          WHERE estabelecimento_id = ? AND identificador = ? AND excluido_em IS NULL`,
+        [est, id],
+      )
+    )[0];
+    if (!r)
+      throw recusa('etiqueta-desconhecida', `Etiqueta ${id} não encontrada neste estabelecimento.`, {
+        campos: ['etiquetas'],
+      });
+    if (n(r['insumo_id']) !== e.insumo)
+      throw recusa('etiqueta-de-outro-item', `A etiqueta ${id} é de outro item.`, { campos: ['etiquetas'] });
+    const p = proximaSituacaoEtiqueta(t(r['situacao']) as EtiquetaConhecida['situacao'], 'consumida');
+    if (!p.ok) throw recusa(p.recusa.codigo, `${id}: ${p.recusa.mensagem}`, { campos: ['etiquetas'] });
+    await tx.alterar('etiqueta_identificacao', n(r['id']), n(r['versao']), {
+      situacao: p.situacao,
+      movimento_consumo_id: e.movimento,
+    });
+  }
+  return ids.length;
+}
+
 export class PortaEtiquetaIdentificacaoPropria implements PortaEtiquetaIdentificacao {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
@@ -231,6 +303,7 @@ export class PortaEtiquetaIdentificacaoPropria implements PortaEtiquetaIdentific
     entrada: Record<string, unknown>,
     chave: string,
     gravar: (tx: TxOperacao, est: number) => Promise<R>,
+    motivo: string | null = null,
   ): Promise<R> {
     const ctxN = this.contexto(c);
     const op = definirOperacao({
@@ -240,7 +313,7 @@ export class PortaEtiquetaIdentificacaoPropria implements PortaEtiquetaIdentific
       gravar: async (tx: TxOperacao) =>
         (await gravar(tx, ctxN.estabelecimento)) as unknown as ResultadoOperacao,
       alvo: (_e, r: ResultadoOperacao) => ({ tabela: 'etiqueta_identificacao', id: n(r['id']) }),
-      trilha: () => ({ dados: entrada, motivo: null }),
+      trilha: () => ({ dados: entrada, motivo }),
     });
     const ctx: ContextoOperacao = { ...ctxN, chaveIdempotencia: chave };
     const { resultado } = await this.executor.executar(op, c.cliente, entrada, ctx);
@@ -357,21 +430,129 @@ export class PortaEtiquetaIdentificacaoPropria implements PortaEtiquetaIdentific
         ? montarEtiqueta({ identificador, gtin, lote, validade })
         : { datamatrix: identificador, barras: identificador, legivel: identificador };
       const em = { id, identificador, ...m };
-      const quantidade = n(r['quantidade']);
       return {
         ...em,
         insumo: n(r['insumo_id']),
         item: t(r['nome']),
         lote,
         validade,
-        quantidade,
+        quantidade: n(r['quantidade']),
         tipo: t(r['tipo']),
         situacao: t(r['situacao']),
         impressoes: n(r['impressoes']),
         permiteReimpressao: b(r['permite_reimpressao']),
-        zpl: zplDe(em, t(r['nome']), lote, validade, `${qtde(quantidade)} ${t(r['sigla'])}`.trim()),
       };
     });
+  }
+
+  motivosReimpressao(c: ContextoPortaM18): Promise<MotivoReimpressaoEtiqueta[]> {
+    return this.nucleo.lerSomente(this.contexto(c), async (l) =>
+      (
+        await l.consultar<Linha>(
+          'SELECT id, descricao, exige_complemento FROM motivo_reimpressao WHERE ativo = TRUE ORDER BY descricao',
+          [],
+        )
+      ).map((r) => ({
+        codigo: n(r['id']),
+        descricao: t(r['descricao']),
+        exigeComplemento: b(r['exige_complemento']),
+      })),
+    );
+  }
+
+  reimprimir(
+    c: ContextoPortaM18,
+    id: number,
+    e: ReimpressaoEntrada,
+    chave: string,
+  ): Promise<ResultadoReimpressao> {
+    return this.executar(
+      c,
+      'reimprimir',
+      { id, ...e },
+      chave,
+      async (tx, est) => {
+        const r = (
+          await tx.consultarParaAtualizar<Linha>(
+            `SELECT id, versao, identificador, insumo_id, quantidade, unidade_medida_id, lote_insumo_id, data_validade,
+                    situacao, impressoes, permite_reimpressao
+               FROM etiqueta_identificacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+            [id, est],
+          )
+        )[0];
+        if (!r) throw recusa('etiqueta-desconhecida', 'Etiqueta não encontrada neste estabelecimento.');
+        if (!b(r['permite_reimpressao']))
+          throw recusa('reimpressao-nao-permitida', 'Esta etiqueta não pode ser reimpressa.');
+        if (t(r['situacao']) !== 'ativa')
+          throw recusa('etiqueta-inativa', 'Só a etiqueta ativa é reimpressa (a baixada não volta ao uso).');
+        const m = await tx.uma<Linha>(
+          'SELECT ativo, exige_complemento FROM motivo_reimpressao WHERE id = ?',
+          [e.motivo],
+        );
+        const [ultima] = await tx.consultarParaAtualizar<Linha>(
+          `SELECT MAX(via) AS via FROM registro_reimpressao
+            WHERE entidade = 'etiqueta_identificacao' AND entidade_id = ? AND estabelecimento_id = ?`,
+          [id, est],
+        );
+        const impressoes = n(r['impressoes']);
+        const p = planoReimpressao({
+          viasAnteriores: viasAnterioresDaReimpressao({
+            ultimaViaRegistrada: ultima && ultima['via'] !== null ? n(ultima['via']) : null,
+            viasDoDocumento: impressoes,
+          }),
+          motivo: m ? { ativo: b(m['ativo']), exigeComplemento: b(m['exige_complemento']) } : null,
+          complemento: e.complemento,
+        });
+        if ('recusa' in p)
+          throw recusa(p.recusa, MENSAGEM_IMPRESSAO[p.recusa], { campos: ['motivo', 'complemento'] });
+        const registro = await tx.incluir('registro_reimpressao', {
+          estabelecimento_id: est,
+          documento_emitido_id: null,
+          entidade: 'etiqueta_identificacao',
+          entidade_id: id,
+          motivo_reimpressao_id: e.motivo,
+          motivo_texto: p.complemento,
+          via: p.via,
+          quantidade: 1,
+          destino: 'impressora',
+          estacao_trabalho_id: null,
+          impressora_id: null,
+          operacao: 'inclusao',
+          dados: JSON.stringify({ identificador: t(r['identificador']) }),
+          ocorrido_em: new Date(),
+          usuario_id: c.usuario,
+        });
+        await tx.alterar('etiqueta_identificacao', id, n(r['versao']), { impressoes: impressoes + 1 });
+        const item = await tx.uma<Linha>(
+          `SELECT i.nome, i.codigo_gtin, um.sigla FROM insumo i JOIN unidade_medida um ON um.id = ?
+            WHERE i.id = ?`,
+          [n(r['unidade_medida_id']), n(r['insumo_id'])],
+        );
+        const loteL = r['lote_insumo_id']
+          ? await tx.uma<Linha>('SELECT numero_lote FROM lote_insumo WHERE id = ?', [n(r['lote_insumo_id'])])
+          : null;
+        const identificador = t(r['identificador']);
+        const lote = tn(loteL?.['numero_lote']);
+        const validade = dataIso(r['data_validade']);
+        const gtin = await gtinDoItem(tx, n(r['insumo_id']), tn(item?.['codigo_gtin']));
+        const em = {
+          id,
+          identificador,
+          ...(identificadorValido(identificador)
+            ? montarEtiqueta({ identificador, gtin, lote, validade })
+            : { datamatrix: identificador, barras: identificador, legivel: identificador }),
+        };
+        const q = `${qtde(n(r['quantidade']))} ${t(item?.['sigla'])}`.trim();
+        return {
+          id,
+          via: p.via,
+          impressoes: impressoes + 1,
+          registro,
+          zpl: zplDe(em, t(item?.['nome']), lote, validade, q),
+        };
+      },
+      e.complemento,
+    );
   }
 
   ler(c: ContextoPortaM18, codigo: string): Promise<LeituraCodigo> {
@@ -495,7 +676,18 @@ export class PortaEtiquetaIdentificacaoPropria implements PortaEtiquetaIdentific
     chave: string,
   ): Promise<{ id: number; baixadas: number }> {
     return this.executar(c, 'baixar', { ...e }, chave, async (tx, est) => {
-      // O movimento (a saída gravada) fica na trilha da baixa; a coluna do movimento na etiqueta é o que a gerou.
+      // A baixa avulsa (devolução, descarte, cancelamento ou a consumida fora da saída): o movimento informado tem de ser
+      // deste estabelecimento e fica na etiqueta consumida (`movimento_consumo_id`).
+      if (e.movimento !== null) {
+        const mv = await tx.uma<Linha>(
+          'SELECT id FROM movimento_estoque WHERE id = ? AND estabelecimento_id = ?',
+          [e.movimento, est],
+        );
+        if (!mv)
+          throw recusa('movimento-inexistente', 'O movimento não é deste estabelecimento.', {
+            campos: ['movimento'],
+          });
+      }
       let primeiro = 0;
       for (const bruto of [...new Set(e.identificadores.map((x) => x.trim().toUpperCase()))]) {
         const r = (
@@ -512,7 +704,12 @@ export class PortaEtiquetaIdentificacaoPropria implements PortaEtiquetaIdentific
         const p = proximaSituacaoEtiqueta(t(r['situacao']) as EtiquetaConhecida['situacao'], e.situacao);
         if (!p.ok)
           throw recusa(p.recusa.codigo, `${bruto}: ${p.recusa.mensagem}`, { campos: ['identificadores'] });
-        await tx.alterar('etiqueta_identificacao', n(r['id']), n(r['versao']), { situacao: p.situacao });
+        await tx.alterar('etiqueta_identificacao', n(r['id']), n(r['versao']), {
+          situacao: p.situacao,
+          ...(p.situacao === 'consumida' && e.movimento !== null
+            ? { movimento_consumo_id: e.movimento }
+            : {}),
+        });
         primeiro ||= n(r['id']);
       }
       return { id: primeiro, baixadas: new Set(e.identificadores.map((x) => x.trim().toUpperCase())).size };

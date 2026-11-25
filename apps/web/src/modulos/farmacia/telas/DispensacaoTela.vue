@@ -22,6 +22,7 @@ import {
 } from '../api-farmacia.js';
 import type { LeituraCodigo as Leitura } from '../../suprimentos/api-etiqueta.js';
 import LeituraCodigo from '../../suprimentos/componentes/LeituraCodigo.vue';
+import { mensagensEtiqueta as ME } from '../../suprimentos/i18n-etiqueta.js';
 import AvisoFarmacia from '../componentes/AvisoFarmacia.vue';
 import ErroFarmacia from '../componentes/ErroFarmacia.vue';
 import { horario, numero, qtd, usarAvisosFarmacia, usarFarmacia } from '../usar-farmacia.js';
@@ -127,21 +128,30 @@ const horaFim = ref('');
 const leitura = ref('');
 const leituraMsg = ref<string | null>(null);
 const hhmm = (iso: string) => iso.slice(11, 16);
-// A leitura do código da embalagem ou da etiqueta (F3.6, 05-SUP linha 14): marca a próxima dose do item ainda não
-// marcada e escolhe o lote lido; o lote vencido ou bloqueado aparece como alerta e não é escolhido.
-const semDoseLida = ref(false);
-function lido(r: Leitura): void {
-  semDoseLida.value = false;
-  const doses = pacientes.value.flatMap((p) => p.horarios.flatMap((h) => h.doses));
-  const d = doses.find((x) => x.item === r.item.codigo && !x.bloqueio && !marcadas.value[x.horario]);
+// A leitura do código da embalagem ou da etiqueta (F3.6, 05-SUP linha 14), presa ao paciente: cada paciente tem o
+// próprio campo de leitura, e a leitura marca a próxima dose do item ainda não marcada DESTE paciente. A dose do
+// mesmo item de outro paciente nunca é marcada (a leitura é recusada com o aviso); a etiqueta lida fica guardada na
+// dose e é consumida na mesma transação da dispensação (a mesma etiqueta não serve a duas doses). O lote vencido ou
+// bloqueado aparece como alerta e não é escolhido.
+const etiquetasDose = ref<Record<number, string[]>>({});
+const leituraPaciente = ref<{ atendimento: number; texto: string } | null>(null);
+function lido(p: PacienteFila, r: Leitura): void {
+  const avisar = (texto: string) => (leituraPaciente.value = { atendimento: p.atendimento, texto });
+  const id = r.identificador?.toUpperCase() ?? null;
+  if (id && Object.values(etiquetasDose.value).some((ls) => ls.includes(id)))
+    return avisar(ME.etiquetaJaLida);
+  const livre = (x: DoseFila) => x.item === r.item.codigo && !x.bloqueio && !marcadas.value[x.horario];
+  const d = dosesDe(p).find(livre);
   if (!d) {
-    semDoseLida.value = true;
-    return;
+    const deOutro = pacientes.value.some((o) => o.atendimento !== p.atendimento && dosesDe(o).some(livre));
+    return avisar(deOutro ? ME.doseDeOutroPaciente : ME.semDoseDoItem);
   }
   marcadas.value = { ...marcadas.value, [d.horario]: true };
+  if (id) etiquetasDose.value = { ...etiquetasDose.value, [d.horario]: [id] };
   const bloqueado = r.alertas.includes('vencido') || r.alertas.includes('lote-bloqueado');
   const l = (lotesDoItem.value[d.item] ?? []).find((x) => (x as { lote?: string }).lote === r.lote);
   if (l && !bloqueado) lotes.value = { ...lotes.value, [d.horario]: String(l.id) };
+  avisar(`${ME.lido}: ${d.descricao}${id ? ` · ${id}` : ''}`);
 }
 const pacientes = computed(() => {
   const f = filtroPaciente.value.trim().toUpperCase();
@@ -167,9 +177,11 @@ function lerDose(): void {
   const lido = leitura.value.trim();
   leituraMsg.value = null;
   if (!lido) return;
+  // O código do horário é da dose (um paciente só); o código do item vai ao campo de leitura do paciente, que não
+  // marca dose de outro paciente.
   for (const p of fila.data.value?.pacientes ?? [])
     for (const d of dosesDe(p))
-      if (!d.bloqueio && (String(d.horario) === lido || String(d.item) === lido)) {
+      if (!d.bloqueio && String(d.horario) === lido) {
         marcadas.value[d.horario] = true;
         leituraMsg.value = t('farmacia.dispensacao.leituraAchou', { item: d.descricao });
         leitura.value = '';
@@ -204,19 +216,31 @@ async function dispensarDo(p: PacienteFila): Promise<void> {
         doses: doses.map((d) => {
           const q = d.quantidade ?? 1;
           const l = d.rastreavel ? loteDe(d) : undefined;
+          const etq = etiquetasDose.value[d.horario] ?? [];
+          // A etiqueta lida da dose vai na mesma operação: consumida com o movimento da dispensação.
+          const comEtiquetas = etq.length ? { etiquetas: etq } : {};
           return l
             ? {
                 horario: d.horario,
                 quantidade: q,
                 lotes: [{ lote: l.lote, validade: l.validade, quantidade: q }],
+                ...comEtiquetas,
               }
-            : { horario: d.horario, ...(d.quantidade ? { quantidade: numero(d.quantidade) } : {}) };
+            : {
+                horario: d.horario,
+                ...(d.quantidade ? { quantidade: numero(d.quantidade) } : {}),
+                ...comEtiquetas,
+              };
         }),
       },
       novaChave('dispensar'),
     );
     resultado.value = r;
-    for (const d of doses) delete marcadas.value[d.horario];
+    for (const d of doses) {
+      delete marcadas.value[d.horario];
+      delete etiquetasDose.value[d.horario];
+    }
+    leituraPaciente.value = null;
     await fila.refetch();
   } catch (x) {
     erro.value = x;
@@ -313,10 +337,6 @@ const urlEtiquetas = computed(() => {
     </div>
     <p v-if="fila.isLoading.value">{{ t('farmacia.carregando') }}</p>
     <template v-else-if="fila.data.value">
-      <LeituraCodigo testid="disp-leitura" @lido="lido" />
-      <p v-if="semDoseLida" role="alert" data-testid="disp-leitura-sem-dose">
-        {{ t('farmacia.nenhum') }}
-      </p>
       <p>
         {{
           t('farmacia.dispensacao.janela', {
@@ -339,6 +359,14 @@ const urlEtiquetas = computed(() => {
           {{ p.atendimento }}
           <span v-if="p.alergia" class="selo">{{ t('farmacia.alergia') }}</span>
         </h2>
+        <LeituraCodigo :testid="`disp-leitura-${p.atendimento}`" @lido="(r: Leitura) => lido(p, r)" />
+        <p
+          v-if="leituraPaciente?.atendimento === p.atendimento"
+          role="status"
+          :data-testid="`disp-leitura-aviso-${p.atendimento}`"
+        >
+          {{ leituraPaciente.texto }}
+        </p>
         <table class="tabela">
           <caption class="sgh-visualmente-oculto">
             {{
@@ -367,7 +395,16 @@ const urlEtiquetas = computed(() => {
                   }}</span>
                   <span v-if="d.urgente" class="selo">{{ t('farmacia.dispensacao.urgente') }}</span>
                 </td>
-                <td>{{ qtd(d.quantidade) }} {{ d.unidadeDose ?? '' }}</td>
+                <td>
+                  {{ qtd(d.quantidade) }} {{ d.unidadeDose ?? '' }}
+                  <span
+                    v-for="e in etiquetasDose[d.horario] ?? []"
+                    :key="e"
+                    class="selo"
+                    :data-testid="`disp-etiqueta-${d.horario}`"
+                    >{{ e }}</span
+                  >
+                </td>
                 <td>{{ d.via ?? '—' }}</td>
                 <td>
                   <template v-if="d.rastreavel">

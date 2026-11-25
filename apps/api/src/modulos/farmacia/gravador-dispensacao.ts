@@ -53,6 +53,7 @@ import type {
 import { ErroOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { civil, FUSO_PADRAO, instanteCivil } from '../exames/relogio.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from '../suprimentos/conta-estoque.js';
+import { consumirEtiquetas } from '../suprimentos/etiqueta-identificacao.js';
 import type { ExtrasGravacaoFarmacia } from './gravador-avaliacao.js';
 import type { GravadorSghFarmacia } from './porta.js';
 
@@ -67,6 +68,8 @@ const dataIso = (v: unknown): string | null =>
 
 /** As tabelas que as gravações da farmácia hospitalar declaram ao Executor. */
 export const TABELAS_DISPENSACAO = [
+  // C2-024: a dispensação consome as etiquetas lidas da dose (consumirEtiquetas, mesma transação).
+  'etiqueta_identificacao',
   'dispensacao',
   'dispensacao_item',
   'dose_dispensada',
@@ -681,6 +684,14 @@ export function gravadorDispensacao(
           },
         });
         valor += Math.round(p.q * mov.custo * 100) / 100;
+        // C2-024 (05-SUP linha 14): as etiquetas lidas da dose saem consumidas com o movimento, na mesma transação.
+        const lidas = p === x.partes[0] ? pedidos.get(n(x.h['id']))?.etiquetas : undefined;
+        if (lidas?.length)
+          await consumirEtiquetas(tx, est, {
+            insumo: x.insumo.id,
+            identificadores: lidas,
+            movimento: mov.id,
+          });
         await conta.lancarSaida({
           movimento: mov.id,
           atendimento: e.atendimento,
