@@ -3,3 +3,4 @@ export * from './sentinela.js';
 export * from './hierarquia.js';
 export * from './conferencia-leitos.js';
 export * from './gestao-estrutura.js';
+export * from './identidade-estabelecimento.js';
