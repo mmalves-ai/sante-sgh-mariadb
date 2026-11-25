@@ -53,6 +53,7 @@ import {
 } from '@sgh/nucleo';
 import { civil } from '../exames/relogio.js';
 import { versaoNumero } from '../faturamento/esquemas.js';
+import { abatimentoComercialDaConta } from '../faturamento/regras-comerciais-propria.js';
 import {
   carteiraDoSeguradoDaConta,
   obrigatoriosPendentesDaConta,
@@ -346,11 +347,15 @@ async function contaTiss(
       valorUnitario: unitarioDaGuia(quantidade, n(i['valor_unitario']), n(i['valor_total'])),
     };
   });
+  // 06-FAT linha 19: o desconto por volume e a franquia aplicados saem do total da conta e vão à guia pelo fator de
+  // redução dos itens; a conferência compara os itens com o total antes desse abatimento.
+  const bruto = itensGuia.reduce((t, i) => t + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100;
+  const comercial = await abatimentoComercialDaConta(tx, n(ct['id']), bruto);
   const divergente = conferirGuiaComConta({
     conta: rotulo,
     itens: itensGuia,
     esperados: n(soma?.['q']),
-    totalConta: n(ct['valor_total']),
+    totalConta: Math.round((n(ct['valor_total']) + comercial.abatimento) * 100) / 100,
   });
   if (divergente) throw recusa(divergente.codigo, divergente.mensagem);
 
@@ -414,6 +419,7 @@ async function contaTiss(
       profissionalCodigo: executante?.codigo ?? '',
       executantePadrao: false,
       ...(obs?.texto ? { observacao: obs.texto } : {}),
+      ...(comercial.fator !== null ? { reducaoAcrescimo: comercial.fator } : {}),
       itens: itensGuia,
     },
   };

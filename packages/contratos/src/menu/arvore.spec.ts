@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 462, M: 198, P: 57, N: 207 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 463, M: 198, P: 57, N: 208 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(462);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(463);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -321,6 +321,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/demonstrativos', // M31
         '/faturamento/credenciamento', // M12
         '/faturamento/de-para-exames',
+        '/faturamento/descontos-franquias', // C2-043 (06-FAT linha 19)
         '/faturamento/glosas', // M31
         '/faturamento/guias', // M31
         '/faturamento/guias-convenio', // C1-122 (06-FAT linha 24)
