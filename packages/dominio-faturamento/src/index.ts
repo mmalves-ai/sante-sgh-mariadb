@@ -57,3 +57,5 @@ export * from './conta/modelo-orcamento.js';
 export * from './parametros/parametros-faturamento.js';
 // F8 (01-ADM L120): simulação de cenários de receita sobre a produção real (troca de tabela, reajuste, conversão).
 export * from './simulacao/simulacao-receita.js';
+// F7 (09-AREA linha 76): restrição de cobertura por fonte pagadora e compatibilidade entre procedimentos.
+export * from './cobertura/restricao-cobertura.js';
