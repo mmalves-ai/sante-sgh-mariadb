@@ -200,7 +200,8 @@ describe.skipIf(SEM_BANCO)('kit padrão na porta própria (MariaDB, cliente de t
     const cad = (await porta.kitsPadraoCadastro(c)).find((x) => x.id === id);
     expect(cad?.versao).toBe(3);
     expect(cad?.itens.map((x) => x.insumo)).toEqual([m.insumo, m.insumoOpme]);
-    expect(cad?.procedimentos.map((x) => x.procedimentoCirurgico).sort()).toEqual([proc, proc2].sort());
+    // O vínculo à segunda cirurgia saiu na última gravação: fica no banco com a marca (acima) e fora do cadastro.
+    expect(cad?.procedimentos.map((x) => [x.procedimentoCirurgico, x.padrao])).toEqual([[proc, true]]);
     expect((await porta.procedimentosKit(c, 'CIRURGIA SINTETICA F36')).length).toBeGreaterThanOrEqual(2);
 
     // Inativa o kit: ele continua no cadastro (nunca é apagado).

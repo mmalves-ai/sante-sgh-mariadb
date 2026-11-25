@@ -951,6 +951,13 @@ export class SuprimentosController {
     return this.porta.procedimentosKit(ctx(sessaoDe(req)), String(termo ?? '').slice(0, 100));
   }
 
+  // O kit padrão da cirurgia ou do procedimento, com a composição, para quem monta o pedido de material.
+  @Get('kits-padrao/sugestao')
+  @Permissao('suprimentos.requisicao.criar')
+  kitsPadraoSugeridos(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.porta.kitsPadraoSugeridos(ctx(sessaoDe(req)), String(termo ?? '').slice(0, 100));
+  }
+
   @Post('kits-padrao')
   @HttpCode(200)
   @Permissao('suprimentos.kit.editar')

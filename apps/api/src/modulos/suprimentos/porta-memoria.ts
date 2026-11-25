@@ -26,6 +26,7 @@ import {
   conferirKitPadrao,
   type GravarKitPadraoEntrada,
   type KitPadraoCadastro,
+  type KitPadraoSugerido,
   type KitRastreavel,
   type ProcedimentoKitBusca,
   type LotesDoPaciente,
@@ -2300,6 +2301,32 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
     const t = termo.trim().toUpperCase();
     if (t.length < 2) return [];
     return PROCEDIMENTOS_KIT.filter((x) => x.codigo === t || x.nome.includes(t));
+  }
+  async kitsPadraoSugeridos(c: ContextoSuprimentos, termo: string): Promise<KitPadraoSugerido[]> {
+    const t = termo.trim().toUpperCase();
+    if (t.length < 2) return [];
+    return this.e(c)
+      .kitsPadrao.filter((k) => k.ativo)
+      .flatMap((k) =>
+        k.procedimentos
+          .filter((p) => p.padrao && (p.codigo === t || p.nome.toUpperCase().includes(t)))
+          .map((p) => ({
+            procedimentoCirurgico: p.procedimentoCirurgico,
+            itemFaturavel: p.itemFaturavel,
+            procedimentoCodigo: p.codigo,
+            procedimentoNome: p.nome,
+            kit: k.id,
+            codigo: k.codigo,
+            nome: k.nome,
+            quantidadeKits: p.quantidadeKits,
+            itens: k.itens.map((i) => ({
+              insumo: i.insumo,
+              nome: i.nome,
+              unidade: i.unidade,
+              quantidade: i.quantidade,
+            })),
+          })),
+      );
   }
   async kitsPadrao(c: ContextoSuprimentos) {
     const s = this.e(c);

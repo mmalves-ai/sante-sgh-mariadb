@@ -103,8 +103,9 @@ export const esquemaRequisitarMaterial = z
     /** Requisição urgente (o local que só atende urgência recusa a comum). */
     urgente: z.boolean().optional(),
     observacao: livre(60).optional(),
+    /** `kit`: o kit padrão de onde a linha veio (o item tem de fazer parte dele); fica gravado na linha. */
     itens: z
-      .array(z.object({ item: id, quantidade }).strict())
+      .array(z.object({ item: id, quantidade, kit: id.optional() }).strict())
       .min(1, 'Inclua ao menos um item.')
       .max(200),
   })

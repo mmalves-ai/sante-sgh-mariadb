@@ -144,8 +144,11 @@ import {
 } from './porta.js';
 import {
   buscarProcedimentosKit,
+  conferirKitsDoPedido,
+  GRAVACAO_CONCORRENTE,
   gravarKitPadrao,
   lerKitsPadraoCadastro,
+  lerKitsPadraoSugeridos,
   OPERACAO_KIT_PADRAO,
   TABELAS_KIT_PADRAO,
 } from './kit-padrao.js';
@@ -2277,6 +2280,8 @@ async function requisitarMaterial(
   if (paraPaciente && e.atendimento) await pacienteDoAtendimento(tx, est, e.atendimento);
   const insumos = [];
   for (const it of e.itens) insumos.push(await insumoAtivo(tx, it.item));
+  // F3.6 (05-SUP linha 13): a linha que veio do kit padrão guarda o kit (ativo, do estabelecimento, com o item).
+  await conferirKitsDoPedido(tx, est, e.itens);
   const numero = await tx.proximoNumero('requisicao_material');
   const em = new Date();
   const id = await tx.incluir('requisicao_material', {
@@ -2297,6 +2302,7 @@ async function requisitarMaterial(
       requisicao_material_id: id,
       sequencia: k + 1,
       insumo_id: it.item,
+      kit_material_id: it.kit ?? null,
       unidade_medida_id: n(insumos[k]!['estoque_unidade_medida_id']),
       quantidade_solicitada: it.quantidade,
       faturavel: paraPaciente,
@@ -3544,11 +3550,22 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
   async executar(c: ContextoSuprimentos, op: string, entrada: unknown, ctx: ContextoOperacao) {
     const est = c.estabelecimento;
     if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
-    const r = await this.executor.executar(this.definicao(op, est), c.cliente, entrada, {
-      ...contextoNucleo(c, 'suprimentos'),
-      ...(ctx.reautenticadoEm !== undefined ? { reautenticadoEm: ctx.reautenticadoEm } : {}),
-      chaveIdempotencia: ctx.chaveIdempotencia,
-    });
+    const uma = () =>
+      this.executor.executar(this.definicao(op, est), c.cliente, entrada, {
+        ...contextoNucleo(c, 'suprimentos'),
+        ...(ctx.reautenticadoEm !== undefined ? { reautenticadoEm: ctx.reautenticadoEm } : {}),
+        chaveIdempotencia: ctx.chaveIdempotencia,
+      });
+    // A gravação desfeita por outra simultânea (`gravacao-concorrente`: nada ficou no banco) é refeita com instantâneo
+    // novo, para a regra decidir sobre o que a outra confirmou; na terceira recusa seguida o código vai a quem pediu.
+    let r: Awaited<ReturnType<typeof uma>> | null = null;
+    for (let tentativa = 1; r === null; tentativa += 1)
+      try {
+        r = await uma();
+      } catch (erro) {
+        const codigo = (erro as { problema?: { codigo?: unknown } } | null)?.problema?.codigo;
+        if (codigo !== GRAVACAO_CONCORRENTE || tentativa >= 3) throw erro;
+      }
     return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
   }
 
@@ -4767,6 +4784,10 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
 
   procedimentosKit(c: ContextoSuprimentos, termo: string) {
     return this.ler(c, (l) => buscarProcedimentosKit(l, termo));
+  }
+
+  kitsPadraoSugeridos(c: ContextoSuprimentos, termo: string) {
+    return this.ler(c, (l, est) => lerKitsPadraoSugeridos(l, est, termo));
   }
 
   /** Os kits padrão (kit_material ativo do estabelecimento) com os itens e as quantidades. */

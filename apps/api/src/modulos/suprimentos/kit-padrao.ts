@@ -5,11 +5,13 @@
 // o kit montado, a lista do procedimento e o pacote esterilizado que já o citaram continuem explicáveis.
 import {
   chaveProcedimentoKit,
+  conferirKitDoPedido,
   conferirKitPadrao,
   diferencaItensKit,
   type GravarKitPadraoEntrada,
   type KitPadraoDoProcedimento,
   type KitPadraoCadastro,
+  type KitPadraoSugerido,
   type ProcedimentoKitBusca,
   type TipoKitPadrao,
 } from '@sgh/contratos';
@@ -32,8 +34,33 @@ function recusarTodas(rs: readonly RecusaSuprimentos[]): void {
     });
 }
 
+/**
+ * O banco recusa a leitura com trava de uma linha que outra transação confirmou depois do instantâneo desta
+ * (isolamento por instantâneo, erro 1020): é o que acontece com a gravação que esperou a trava do procedimento. A
+ * transação inteira é desfeita com este código e a porta a refaz (`executar`), já enxergando o que a outra gravou.
+ */
+export const GRAVACAO_CONCORRENTE = 'gravacao-concorrente';
+const ERRNO_LINHA_MUDOU = 1020;
+
 /** A gravação do kit padrão (inclui sem `kit`; altera com `kit` e `versao`). */
 export async function gravarKitPadrao(
+  tx: TxOperacao,
+  est: number,
+  e: GravarKitPadraoEntrada,
+): Promise<ResultadoOperacao> {
+  try {
+    return await gravarKitPadraoNaTransacao(tx, est, e);
+  } catch (erro) {
+    if ((erro as { errno?: unknown } | null)?.errno === ERRNO_LINHA_MUDOU)
+      throw recusa(
+        GRAVACAO_CONCORRENTE,
+        'Outra gravação mudou este cadastro ao mesmo tempo. Nada foi gravado: confira e grave de novo.',
+      );
+    throw erro;
+  }
+}
+
+async function gravarKitPadraoNaTransacao(
   tx: TxOperacao,
   est: number,
   e: GravarKitPadraoEntrada,
@@ -41,6 +68,26 @@ export async function gravarKitPadrao(
   recusarTodas(conferirKitPadrao(e));
   const agora = new Date();
   const usuario = tx.contexto.usuario ?? null;
+  // A linha de cada procedimento é travada ANTES de qualquer escrita, sempre na mesma ordem: duas gravações do padrão
+  // do mesmo procedimento passam uma de cada vez desde o começo (a segunda espera sem segurar nada e enxerga o padrão
+  // que a primeira gravou), e dois kits com os mesmos procedimentos nunca se travam em ordem cruzada.
+  const referencias = new Map<string, boolean>();
+  const emOrdem = [...e.procedimentos].sort((a, b) =>
+    chaveProcedimentoKit(a).localeCompare(chaveProcedimentoKit(b)),
+  );
+  for (const p of emOrdem) {
+    const [ref] =
+      p.procedimentoCirurgico !== null
+        ? await tx.consultarParaAtualizar<Linha>(
+            'SELECT id, ativo AS vale FROM procedimento_cirurgico WHERE id = ?',
+            [p.procedimentoCirurgico],
+          )
+        : await tx.consultarParaAtualizar<Linha>(
+            "SELECT id, situacao = 'ativo' AS vale FROM item_faturavel WHERE id = ?",
+            [p.itemFaturavel],
+          );
+    referencias.set(chaveProcedimentoKit(p), Boolean(ref && verdadeiro(ref['vale'])));
+  }
   const outro = await tx.uma<Linha>(
     'SELECT id FROM kit_material WHERE estabelecimento_id = ? AND codigo = ? AND id <> ?',
     [est, e.codigo, e.kit ?? 0],
@@ -59,6 +106,7 @@ export async function gravarKitPadrao(
     ativo: e.ativo,
   };
   let kit: number;
+  const novo = e.kit === undefined;
   if (e.kit === undefined) kit = await tx.incluir('kit_material', { estabelecimento_id: est, ...valores });
   else {
     const [atual] = await tx.consultarParaAtualizar<Linha>(
@@ -72,11 +120,15 @@ export async function gravarKitPadrao(
   }
 
   // Composição: só o que mudou é escrito; o insumo que entra precisa estar ativo, e a unidade é a do estoque dele.
-  const linhas = await tx.consultarParaAtualizar<Linha>(
-    `SELECT id, versao, sequencia, insumo_id, quantidade, obrigatorio_kit_rastreavel, permite_substituto, excluido_em
-       FROM kit_material_item WHERE kit_material_id = ?`,
-    [kit],
-  );
+  // O kit recém-incluído não tem linha a travar (e a leitura com trava de uma faixa vazia seguraria o intervalo do
+  // índice, atravessando a inclusão de outro kit novo na mesma hora).
+  const linhas = novo
+    ? []
+    : await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, sequencia, insumo_id, quantidade, obrigatorio_kit_rastreavel, permite_substituto, excluido_em
+           FROM kit_material_item WHERE kit_material_id = ?`,
+        [kit],
+      );
   const porInsumo = new Map(linhas.map((r) => [n(r['insumo_id']), r]));
   const vigentes = linhas
     .filter((r) => r['excluido_em'] === null)
@@ -138,11 +190,13 @@ export async function gravarKitPadrao(
   }
 
   // Vínculo aos procedimentos: um kit padrão por procedimento entre os kits ativos do estabelecimento.
-  const vinculos = await tx.consultarParaAtualizar<Linha>(
-    `SELECT id, versao, procedimento_cirurgico_id, item_faturavel_id, quantidade_kits, padrao, excluido_em
-       FROM kit_material_procedimento WHERE kit_material_id = ?`,
-    [kit],
-  );
+  const vinculos = novo
+    ? []
+    : await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, procedimento_cirurgico_id, item_faturavel_id, quantidade_kits, padrao, excluido_em
+           FROM kit_material_procedimento WHERE kit_material_id = ?`,
+        [kit],
+      );
   const porAlvo = new Map(
     vinculos.map((r) => [
       chaveProcedimentoKit({
@@ -157,20 +211,10 @@ export async function gravarKitPadrao(
   for (const [i, p] of e.procedimentos.entries()) {
     const chave = chaveProcedimentoKit(p);
     novos.add(chave);
-    // A linha do procedimento fica travada até o fim da transação: duas gravações do padrão do mesmo procedimento
-    // passam uma de cada vez, e a segunda enxerga o padrão que a primeira gravou (leitura com trava, abaixo).
-    const [ref] =
-      p.procedimentoCirurgico !== null
-        ? await tx.consultarParaAtualizar<Linha>(
-            'SELECT id, ativo AS vale FROM procedimento_cirurgico WHERE id = ?',
-            [p.procedimentoCirurgico],
-          )
-        : await tx.consultarParaAtualizar<Linha>(
-            "SELECT id, situacao = 'ativo' AS vale FROM item_faturavel WHERE id = ?",
-            [p.itemFaturavel],
-          );
+    // O procedimento já está travado (acima); o conflito do padrão é lido com trava, para enxergar o que a gravação
+    // anterior do mesmo procedimento confirmou.
     const antigo = porAlvo.get(chave);
-    if (!(ref && verdadeiro(ref['vale'])) && !(antigo && antigo['excluido_em'] === null))
+    if (!referencias.get(chave) && !(antigo && antigo['excluido_em'] === null))
       throw recusa('referencia-inexistente', `O procedimento da linha ${i + 1} não está ativo.`, {
         campos: [`procedimentos.${i}`],
       });
@@ -353,4 +397,101 @@ export async function lerKitsPadraoDosProcedimentos(
     kit: n(r['kit_material_id']),
     quantidadeKits: n(r['quantidade_kits']),
   }));
+}
+
+/**
+ * O kit padrão das cirurgias e dos procedimentos achados pelo termo (código exato ou parte do nome), com a
+ * composição vigente: é o que a tela do pedido de material soma de uma vez (regra `somarKitAoPedido`). Só o vínculo
+ * marcado como padrão de kit ativo do estabelecimento.
+ */
+export async function lerKitsPadraoSugeridos(
+  l: Leitor,
+  est: number,
+  termo: string,
+): Promise<KitPadraoSugerido[]> {
+  const t = termo.trim();
+  if (t.length < 2) return [];
+  const como = `%${t.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const vinculos = await l.consultar<Linha>(
+    `SELECT kp.procedimento_cirurgico_id, kp.item_faturavel_id, kp.quantidade_kits,
+            COALESCE(pc.codigo, f.codigo) AS proc_codigo, COALESCE(pc.descricao, f.descricao) AS proc_nome,
+            k.id, k.codigo, k.nome
+       FROM kit_material_procedimento kp
+       JOIN kit_material k ON k.id = kp.kit_material_id
+       LEFT JOIN procedimento_cirurgico pc ON pc.id = kp.procedimento_cirurgico_id
+       LEFT JOIN item_faturavel f ON f.id = kp.item_faturavel_id
+      WHERE k.estabelecimento_id = ? AND k.ativo AND k.excluido_em IS NULL
+        AND kp.padrao AND kp.excluido_em IS NULL
+        AND (COALESCE(pc.codigo, f.codigo) = ? OR COALESCE(pc.descricao, f.descricao) LIKE ?)
+      ORDER BY proc_nome, kp.id LIMIT 20`,
+    [est, t, como],
+  );
+  if (!vinculos.length) return [];
+  const kits = [...new Set(vinculos.map((v) => n(v['id'])))];
+  const itens = await l.consultar<Linha>(
+    `SELECT ki.kit_material_id, ki.insumo_id, i.nome, u.sigla, ki.quantidade
+       FROM kit_material_item ki
+       JOIN insumo i ON i.id = ki.insumo_id
+       JOIN unidade_medida u ON u.id = ki.unidade_medida_id
+      WHERE ki.excluido_em IS NULL AND ki.kit_material_id IN (${kits.map(() => '?').join(', ')})
+      ORDER BY ki.kit_material_id, ki.sequencia`,
+    kits,
+  );
+  return vinculos.map((v) => ({
+    procedimentoCirurgico: idOuNulo(v['procedimento_cirurgico_id']),
+    itemFaturavel: idOuNulo(v['item_faturavel_id']),
+    procedimentoCodigo: String(v['proc_codigo'] ?? ''),
+    procedimentoNome: String(v['proc_nome'] ?? ''),
+    kit: n(v['id']),
+    codigo: String(v['codigo']),
+    nome: String(v['nome']),
+    quantidadeKits: n(v['quantidade_kits']),
+    itens: itens
+      .filter((i) => n(i['kit_material_id']) === n(v['id']))
+      .map((i) => ({
+        insumo: n(i['insumo_id']),
+        nome: String(i['nome']),
+        unidade: String(i['sigla']),
+        quantidade: n(i['quantidade']),
+      })),
+  }));
+}
+
+/**
+ * As linhas do pedido de material que citam um kit (a marca fica gravada na linha): o kit é do estabelecimento, está
+ * ativo e o item faz parte da composição vigente dele. Todas as recusas voltam juntas, antes de qualquer escrita.
+ */
+export async function conferirKitsDoPedido(
+  tx: TxOperacao,
+  est: number,
+  itens: readonly { readonly item: number; readonly kit?: number | undefined }[],
+): Promise<void> {
+  const citados = [...new Set(itens.flatMap((i) => (i.kit === undefined ? [] : [i.kit])))];
+  if (!citados.length) return;
+  const marcas = citados.map(() => '?').join(', ');
+  const kits = await tx.consultar<Linha>(
+    `SELECT id, ativo FROM kit_material WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${marcas})`,
+    [est, ...citados],
+  );
+  const composicao = await tx.consultar<Linha>(
+    `SELECT kit_material_id, insumo_id FROM kit_material_item
+      WHERE excluido_em IS NULL AND kit_material_id IN (${marcas})`,
+    citados,
+  );
+  const porKit = new Map(
+    kits.map((k) => [
+      n(k['id']),
+      {
+        ativo: verdadeiro(k['ativo']),
+        insumos: composicao
+          .filter((x) => n(x['kit_material_id']) === n(k['id']))
+          .map((x) => n(x['insumo_id'])),
+      },
+    ]),
+  );
+  recusarTodas(
+    itens.flatMap((i, linha) =>
+      i.kit === undefined ? [] : conferirKitDoPedido(porKit.get(i.kit) ?? null, i.item, linha),
+    ),
+  );
 }

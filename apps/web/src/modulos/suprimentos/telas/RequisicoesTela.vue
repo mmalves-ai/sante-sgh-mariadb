@@ -3,7 +3,12 @@
 // remissão) pede o material para o centro de custo do seu escopo; o estoque vê a fila por local e atende no todo ou
 // em parte (o item não atendido sai da requisição; o atendido vira a saída consolidada, com o lote que vence primeiro).
 // A requisição não baixa estoque.
-import type { ItemBusca, RequisicaoPendente } from '@sgh/contratos';
+import {
+  type ItemBusca,
+  type KitPadraoSugerido,
+  type RequisicaoPendente,
+  somarKitAoPedido,
+} from '@sgh/contratos';
 import { sugerirLotes } from '@sgh/dominio-suprimentos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -21,6 +26,7 @@ import {
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import BuscaItem from '../componentes/BuscaItem.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
+import KitPadraoNoPedido from '../componentes/KitPadraoNoPedido.vue';
 import { chaveDoc, data, numero, qtd, usarSuprimentos } from '../usar-suprimentos.js';
 
 const { t } = useI18n();
@@ -43,7 +49,8 @@ const rLocal = ref('');
 const rCentro = ref('');
 // Urgência: o local que só atende urgente recusa a requisição comum (política do local, 05-SUP linha 3).
 const rUrgente = ref(false);
-const rItens = ref<{ item: number; nome: string; quantidade: string }[]>([]);
+// `kit`: a linha veio do kit padrão (05-SUP linha 13) e a requisição guarda de qual.
+const rItens = ref<{ item: number; nome: string; quantidade: string; kit: number | null }[]>([]);
 const opcoesCentros = computed(() => [
   { valor: '', rotulo: t('suprimentos.escolha') },
   ...centros.value.map((c) => ({ valor: String(c.codigo), rotulo: `${c.codigo} · ${c.nome}` })),
@@ -54,7 +61,16 @@ const opcoesLocaisReq = computed(() => [
 ]);
 function incluirItem(i: ItemBusca): void {
   if (!rItens.value.some((x) => x.item === i.codigo))
-    rItens.value.push({ item: i.codigo, nome: i.nome, quantidade: '' });
+    rItens.value.push({ item: i.codigo, nome: i.nome, quantidade: '', kit: null });
+}
+/** Soma o kit padrão ao pedido: o item que já está na lista soma na mesma linha (regra `somarKitAoPedido`). */
+function somarKit(s: KitPadraoSugerido, kits: number): void {
+  const r = somarKitAoPedido(
+    rItens.value.map((i) => ({ ...i, quantidade: numero(i.quantidade) || 0 })),
+    s,
+    kits,
+  );
+  if (r) rItens.value = r.map((l) => ({ ...l, quantidade: String(l.quantidade).replace('.', ',') }));
 }
 async function enviarRequisicao(): Promise<void> {
   erro.value = null;
@@ -68,7 +84,11 @@ async function enviarRequisicao(): Promise<void> {
         centroCusto: Number(rCentro.value),
         localConsumo: cc?.localConsumo ?? 1,
         ...(rUrgente.value ? { urgente: true } : {}),
-        itens: rItens.value.map((i) => ({ item: i.item, quantidade: numero(i.quantidade) })),
+        itens: rItens.value.map((i) => ({
+          item: i.item,
+          quantidade: numero(i.quantidade),
+          ...(i.kit ? { kit: i.kit } : {}),
+        })),
       },
       novaChave('requisicao'),
     );
@@ -178,9 +198,13 @@ const podeAtender = computed(() => gravacao.data.value?.operacoes['atenderRequis
         >
       </div>
       <BuscaItem testid="req-busca" @escolher="incluirItem" />
+      <KitPadraoNoPedido @somar="somarKit" />
       <ul>
-        <li v-for="i in rItens" :key="i.item" class="campo">
-          <label :for="`req-qtde-${i.item}`">{{ i.item }} · {{ i.nome }}</label>
+        <li v-for="i in rItens" :key="i.item" class="campo" :data-testid="`req-linha-${i.item}`">
+          <label :for="`req-qtde-${i.item}`"
+            >{{ i.item }} · {{ i.nome
+            }}<template v-if="i.kit"> · {{ t('suprimentos.requisicoes.doKit') }}</template></label
+          >
           <input
             :id="`req-qtde-${i.item}`"
             v-model="i.quantidade"

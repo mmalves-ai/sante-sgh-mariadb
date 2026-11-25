@@ -265,6 +265,7 @@ export const mensagensSuprimentos = {
     nova: 'Nova requisição',
     localAtende: 'Local que atende',
     urgente: 'Urgente (o local que só atende urgência recusa a requisição comum)',
+    doKit: 'do kit padrão',
     enviar: 'Enviar a requisição',
     numero: 'Requisição {n}',
     pedida: 'Pedida',
