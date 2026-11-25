@@ -20,6 +20,7 @@ import {
   aprovarPlanejamento,
   buscarGeneros,
   cancelarEscolha,
+  lerComensais,
   lerCadastrosCardapio,
   lerCardapioDoDia,
   lerPlanejamento,
@@ -443,15 +444,47 @@ const calcularProducao = () =>
   });
 
 // ───────────────────────────── Escolha do paciente
+// A copa identifica o comensal pelo nome e pelo leito (com a dieta do mapa), nunca pelo número interno; a tela também
+// abre com a internação fixada (?internacao=) a partir do leito ou do mapa de dietas.
+const internacaoDaRota = Number(rota.query['internacao']);
 const escolha = reactive({
   data: hoje as string | null,
   refeicao: null as number | null,
-  internacao: typeof rota.query['internacao'] === 'string' ? rota.query['internacao'] : '',
+  internacao:
+    Number.isInteger(internacaoDaRota) && internacaoDaRota > 0 ? internacaoDaRota : (null as number | null),
+  /** 0 é o paciente; outro valor é o acompanhante. */
+  comensal: 0 as number | null,
 });
-const internacaoNum = computed(() => {
-  const n = Number(escolha.internacao.trim());
-  return Number.isInteger(n) && n > 0 ? n : null;
+const comensais = useQuery({
+  queryKey: computed(() => ['nutricao', 'cardapio', 'comensais', escolha.data, escolha.refeicao]),
+  queryFn: () => lerComensais(escolha.data as string, escolha.refeicao as number),
+  enabled: computed(() => !!escolha.data && escolha.refeicao !== null),
 });
+const opcoesInternado = computed(() =>
+  (comensais.data.value ?? []).map((x) => ({
+    valor: x.internacao,
+    rotulo: [
+      x.leito ? t('nutricao.cardapio.leito', { leito: x.leito }) : t('nutricao.cardapio.semLeito'),
+      x.nome,
+      x.jejum ? t('nutricao.cardapio.emJejumCurto') : (x.dieta ?? ''),
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  })),
+);
+const internado = computed(
+  () => (comensais.data.value ?? []).find((x) => x.internacao === escolha.internacao) ?? null,
+);
+const opcoesComensal = computed(() => [
+  { valor: 0, rotulo: t('nutricao.cardapio.doPaciente') },
+  ...(internado.value?.acompanhantes ?? []).map((a) => ({
+    valor: a.id,
+    rotulo: t('nutricao.cardapio.acompanhanteDe', { nome: a.nome }),
+  })),
+]);
+const acompanhanteEscolhido = computed(() => (escolha.comensal ? escolha.comensal : null));
+/** Paciente em jejum não escolhe; o acompanhante dele, sim. */
+const bloqueadoPorJejum = computed(() => !!internado.value?.jejum && acompanhanteEscolhido.value === null);
 const consultaDia = ref<{ data: string; refeicao: number; internacao: number | null } | null>(null);
 const dia = useQuery({
   queryKey: computed(() => ['nutricao', 'cardapio', 'dia', consultaDia.value]),
@@ -461,7 +494,7 @@ const dia = useQuery({
 });
 function verDia(): void {
   if (!escolha.data || escolha.refeicao === null) return;
-  consultaDia.value = { data: escolha.data, refeicao: escolha.refeicao, internacao: internacaoNum.value };
+  consultaDia.value = { data: escolha.data, refeicao: escolha.refeicao, internacao: escolha.internacao };
 }
 const quantidade = ref(1);
 const escolher = (alternativa: number) =>
@@ -470,6 +503,7 @@ const escolher = (alternativa: number) =>
     const r = await registrarEscolha(
       {
         internacao: c.internacao as number,
+        acompanhante: acompanhanteEscolhido.value,
         data: c.data,
         refeicao: c.refeicao,
         alternativa,
@@ -1040,11 +1074,21 @@ const desfazer = (id: number, versao: number) =>
           obrigatorio
           data-testid="escolha-refeicao"
         />
-        <SanteCampoTexto
+        <SanteSelecao
           v-model="escolha.internacao"
           :rotulo="t('nutricao.cardapio.internacao')"
-          :max-bytes="12"
+          :opcoes="opcoesInternado"
+          :desabilitado="!escolha.data || escolha.refeicao === null"
+          busca
           data-testid="escolha-internacao"
+          @update:model-value="escolha.comensal = 0"
+        />
+        <SanteSelecao
+          v-model="escolha.comensal"
+          :rotulo="t('nutricao.cardapio.comensal')"
+          :opcoes="opcoesComensal"
+          :desabilitado="!internado"
+          data-testid="escolha-comensal"
         />
         <SanteBotao
           tipo="submit"
@@ -1054,6 +1098,26 @@ const desfazer = (id: number, versao: number) =>
           data-testid="escolha-ver"
         />
       </form>
+      <div v-if="internado" class="identificacao" data-testid="escolha-identificacao">
+        <strong>{{ internado.nome }}</strong>
+        <span>{{
+          internado.leito
+            ? t('nutricao.cardapio.leito', { leito: internado.leito })
+            : t('nutricao.cardapio.semLeito')
+        }}</span>
+        <span v-if="internado.unidade" class="secundario">{{ internado.unidade }}</span>
+        <span>{{
+          internado.dieta
+            ? t('nutricao.cardapio.dietaDoMapa', { dieta: internado.dieta })
+            : t('nutricao.cardapio.semDieta')
+        }}</span>
+      </div>
+      <SanteAlerta
+        v-if="internado && bloqueadoPorJejum"
+        variante="aviso"
+        :texto="t('nutricao.cardapio.emJejum')"
+        data-testid="escolha-jejum"
+      />
       <template v-if="dia.data.value">
         <p v-if="dia.data.value.opcoes.length === 0" role="status">
           {{ t('nutricao.cardapio.semCardapio') }}
@@ -1063,7 +1127,7 @@ const desfazer = (id: number, versao: number) =>
             <strong>{{ o.descricao }}</strong>
             <span class="secundario">{{ o.preparacoes.join(' · ') }}</span>
             <SanteBotao
-              v-if="podeEscolher && consultaDia?.internacao"
+              v-if="podeEscolher && consultaDia?.internacao && !bloqueadoPorJejum"
               variante="secundario"
               :rotulo="t('nutricao.cardapio.escolher')"
               :desabilitado="ocupado"
@@ -1083,6 +1147,17 @@ const desfazer = (id: number, versao: number) =>
                 :data-testid="`escolha-${x.id}`"
                 :class="{ cancelada: x.situacao === 'cancelada' }"
               >
+                <td>
+                  {{
+                    x.acompanhante
+                      ? t('nutricao.cardapio.acompanhanteDe', {
+                          nome:
+                            internado?.acompanhantes.find((a) => a.id === x.acompanhante)?.nome ??
+                            t('nutricao.cardapio.publicos.acompanhante'),
+                        })
+                      : t('nutricao.cardapio.doPaciente')
+                  }}
+                </td>
                 <td>{{ x.descricao }}</td>
                 <td>{{ x.quantidade }}</td>
                 <td>{{ x.situacao }}</td>
@@ -1146,6 +1221,14 @@ const desfazer = (id: number, versao: number) =>
 }
 .falta {
   color: var(--sgh-alerta);
+}
+.identificacao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+  align-items: baseline;
+  padding: var(--sgh-espaco-2) var(--sgh-espaco-3);
+  border-left: 4px solid var(--sgh-borda);
 }
 .opcoes {
   display: grid;

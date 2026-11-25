@@ -20,7 +20,9 @@ import {
   preverProducao,
   type SituacaoPlanejamento,
   transicaoPlanejamento,
+  planoParaEscolha,
   validarEscolhaCardapio,
+  type PublicoCardapio,
   validarPlanejamento,
 } from '@sgh/dominio-pep';
 import { ErroOperacao, type Leitor, type TxOperacao } from '@sgh/nucleo';
@@ -611,12 +613,13 @@ export class PortaCardapioPropria extends PortaEstabelecimentoPropria {
       const comensais =
         (publico === 'acompanhante' ? 0 : num(mapa?.['pacientes'])) +
         (publico === 'paciente' ? 0 : num(mapa?.['acompanhantes']));
+      // Só as escolhas que contam neste plano (a opção é cadastro comum a todos os planos) e do público dele.
       const escolhas = await l.consultar<Linha>(
         `SELECT alternativa_cardapio_id, SUM(quantidade) AS q FROM escolha_cardapio_paciente
-          WHERE estabelecimento_id = ? AND data_refeicao = ? AND refeicao_do_dia_id = ? AND situacao <> 'cancelada'
-            AND excluido_em IS NULL
+          WHERE estabelecimento_id = ? AND planejamento_cardapio_id = ? AND data_refeicao = ? AND refeicao_do_dia_id = ?
+            AND situacao <> 'cancelada' AND excluido_em IS NULL AND (? = 'todos' OR comensal = ?)
           GROUP BY alternativa_cardapio_id`,
-        [est.id, data, refeicao],
+        [est.id, idPlano, data, refeicao, publico, publico],
       );
       const prev = preverProducao({
         preparacoes: itens.map((i) => ({
@@ -717,6 +720,79 @@ export class PortaCardapioPropria extends PortaEstabelecimentoPropria {
     });
   }
 
+  /**
+   * Os comensais do dia e da refeição para a copa identificar à beira do leito: as internações ativas com o nome, o
+   * leito, a dieta e o jejum do mapa de dietas, e os acompanhantes presentes com direito à refeição.
+   */
+  comensais(c: ContextoPortaPropria, q: { data: string; refeicao: number }) {
+    return this.ler(c, 'comensais', async (l, est) => {
+      const linhas = await l.consultar<Linha>(
+        `SELECT i.id, i.numero, pf.nome, lh.codigo AS leito, ui.descricao AS unidade,
+                md.descricao AS dieta, it.jejum
+           FROM internacao i
+           JOIN paciente p ON p.id = i.paciente_id
+           JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+           LEFT JOIN leito_hospitalar lh ON lh.id = i.leito_hospitalar_id
+           LEFT JOIN unidade_internacao ui ON ui.id = i.unidade_internacao_id
+           LEFT JOIN mapa_dieta m ON m.estabelecimento_id = i.estabelecimento_id AND m.data_referencia = ?
+                AND m.refeicao_do_dia_id = ? AND m.excluido_em IS NULL AND m.situacao <> 'cancelado'
+           LEFT JOIN mapa_dieta_item it ON it.mapa_dieta_id = m.id AND it.atendimento_id = i.atendimento_id
+                AND it.excluido_em IS NULL AND it.situacao <> 'cancelado'
+           LEFT JOIN modalidade_dieta md ON md.id = it.modalidade_dieta_id
+          WHERE i.estabelecimento_id = ? AND i.excluido_em IS NULL AND i.situacao = 'ativa'
+          ORDER BY ui.descricao, lh.codigo, pf.nome LIMIT 1000`,
+        [q.data, q.refeicao, est.id],
+      );
+      const internacoes = new Map<
+        number,
+        {
+          internacao: number;
+          numero: string;
+          nome: string;
+          leito: string | null;
+          unidade: string | null;
+          dieta: string | null;
+          jejum: boolean;
+          acompanhantes: { id: number; nome: string }[];
+        }
+      >();
+      for (const x of linhas) {
+        const k = num(x['id']);
+        const atual = internacoes.get(k);
+        if (atual) {
+          atual.dieta ??= txtOuNull(x['dieta']);
+          atual.jejum ||= Boolean(Number(x['jejum'] ?? 0));
+          continue;
+        }
+        internacoes.set(k, {
+          internacao: k,
+          numero: String(x['numero']),
+          nome: String(x['nome']),
+          leito: txtOuNull(x['leito']),
+          unidade: txtOuNull(x['unidade']),
+          dieta: txtOuNull(x['dieta']),
+          jejum: Boolean(Number(x['jejum'] ?? 0)),
+          acompanhantes: [],
+        });
+      }
+      const ids = [...internacoes.keys()];
+      const acomp = ids.length
+        ? await l.consultar<Linha>(
+            `SELECT id, internacao_id, nome FROM acompanhante_internacao
+              WHERE excluido_em IS NULL AND fim_em IS NULL AND recebe_refeicao
+                AND internacao_id IN (${ids.map(() => '?').join(',')})
+              ORDER BY nome`,
+            ids,
+          )
+        : [];
+      for (const a of acomp)
+        internacoes
+          .get(num(a['internacao_id']))
+          ?.acompanhantes.push({ id: num(a['id']), nome: String(a['nome']) });
+      return { itens: [...internacoes.values()] };
+    });
+  }
+
   async registrarEscolha(
     c: ContextoPortaPropria,
     entrada: unknown,
@@ -724,7 +800,7 @@ export class PortaCardapioPropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaEscolha, entrada);
     return this.gravar(c, 'nutricao.cardapio.escolha.registrar', [ESCOLHA], async (tx, est, u) => {
       const int = await tx.uma(
-        `SELECT id, atendimento_id FROM internacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        `SELECT id, atendimento_id, situacao FROM internacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [e.internacao, est.id],
       );
       if (!int) throw naoEncontrado('Internação');
@@ -739,14 +815,39 @@ export class PortaCardapioPropria extends PortaEstabelecimentoPropria {
             { campo: 'acompanhante', mensagem: 'O acompanhante não está presente com direito à refeição.' },
           ]);
       }
-      const plano = await tx.uma(
-        `SELECT p.id, p.situacao FROM planejamento_cardapio p
+      // Os planos publicados que ofertam a opção no dia; a regra do domínio escolhe o que serve ao comensal.
+      const ofertas = await tx.consultar<Linha>(
+        `SELECT DISTINCT p.id, p.publico, p.modalidade_dieta_id FROM planejamento_cardapio p
            JOIN planejamento_cardapio_preparacao i ON i.planejamento_cardapio_id = p.id AND i.excluido_em IS NULL
-          WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.refeicao_do_dia_id = ?
-            AND i.data_cardapio = ? AND i.alternativa_cardapio_id = ?
-          ORDER BY p.situacao = 'publicado' DESC, p.id DESC LIMIT 1`,
+          WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.situacao = 'publicado'
+            AND p.refeicao_do_dia_id = ? AND i.data_cardapio = ? AND i.alternativa_cardapio_id = ?
+          ORDER BY p.id DESC`,
         [est.id, e.refeicao, e.data, e.alternativa],
       );
+      // A dieta do paciente no mapa de dietas do dia e da refeição (o item vigente, não cancelado).
+      const item = await tx.uma(
+        `SELECT it.modalidade_dieta_id, it.jejum FROM mapa_dieta_item it JOIN mapa_dieta m ON m.id = it.mapa_dieta_id
+          WHERE m.estabelecimento_id = ? AND m.data_referencia = ? AND m.refeicao_do_dia_id = ? AND it.atendimento_id = ?
+            AND m.excluido_em IS NULL AND m.situacao <> 'cancelado' AND it.excluido_em IS NULL
+            AND it.situacao <> 'cancelado'
+          ORDER BY it.id DESC LIMIT 1`,
+        [est.id, e.data, e.refeicao, num(int['atendimento_id'])],
+      );
+      const dieta = item
+        ? { modalidade: numOuNull(item['modalidade_dieta_id']), jejum: Boolean(Number(item['jejum'])) }
+        : null;
+      const comensal = e.acompanhante ? ('acompanhante' as const) : ('paciente' as const);
+      const daDieta =
+        comensal === 'paciente' && dieta?.modalidade
+          ? await tx.uma(
+              `SELECT p.id FROM planejamento_cardapio p
+                 JOIN planejamento_cardapio_preparacao i ON i.planejamento_cardapio_id = p.id AND i.excluido_em IS NULL
+                WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.situacao = 'publicado'
+                  AND p.refeicao_do_dia_id = ? AND i.data_cardapio = ? AND p.modalidade_dieta_id = ?
+                  AND p.publico IN ('paciente', 'todos') LIMIT 1`,
+              [est.id, e.refeicao, e.data, dieta.modalidade],
+            )
+          : null;
       const publicado = await tx.uma(
         `SELECT p.id FROM planejamento_cardapio p
           WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.refeicao_do_dia_id = ?
@@ -758,11 +859,22 @@ export class PortaCardapioPropria extends PortaEstabelecimentoPropria {
         situacaoPlano: publicado ? 'publicado' : null,
         data: e.data,
         hoje: civil(new Date(), est.fuso).data,
-        alternativaOfertada: !!plano && String(plano['situacao']) === 'publicado',
+        alternativaOfertada: ofertas.length > 0,
         quantidade,
+        internacaoAtiva: String(int['situacao']) === 'ativa',
       });
       if (problemas.length) throw recusaRegra('Escolha do cardápio inválida', problemas);
-      const comensal = e.acompanhante ? 'acompanhante' : 'paciente';
+      const escolhido = planoParaEscolha({
+        comensal,
+        dieta,
+        planos: ofertas.map((o) => ({
+          id: num(o['id']),
+          publico: String(o['publico']) as PublicoCardapio,
+          modalidade: numOuNull(o['modalidade_dieta_id']),
+        })),
+        haPlanoDaDieta: !!daDieta,
+      });
+      if (!escolhido.plano) throw recusaRegra('Escolha do cardápio inválida', escolhido.problemas);
       const anterior = await tx.uma(
         `SELECT id, versao FROM escolha_cardapio_paciente
           WHERE estabelecimento_id = ? AND atendimento_id = ? AND data_refeicao = ? AND refeicao_do_dia_id = ?
@@ -781,7 +893,7 @@ export class PortaCardapioPropria extends PortaEstabelecimentoPropria {
         data_refeicao: e.data,
         refeicao_do_dia_id: e.refeicao,
         alternativa_cardapio_id: e.alternativa,
-        planejamento_cardapio_id: plano ? num(plano['id']) : null,
+        planejamento_cardapio_id: escolhido.plano.id,
         quantidade,
         escolhido_em: new Date(),
         registrador_usuario_id: u,

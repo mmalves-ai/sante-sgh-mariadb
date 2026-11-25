@@ -3,6 +3,7 @@ import {
   calcularFichaTecnica,
   preverProducao,
   transicaoPlanejamento,
+  planoParaEscolha,
   validarEscolhaCardapio,
   validarPlanejamento,
 } from './cardapio.js';
@@ -195,17 +196,97 @@ describe('escolha do paciente', () => {
         hoje: '2026-12-01',
         alternativaOfertada: true,
         quantidade: 1,
+        internacaoAtiva: true,
       }),
     ).toEqual([]);
   });
-  it('recusa cardápio não publicado, dia passado, opção fora do dia e quantidade fora da faixa', () => {
+  it('recusa internação não ativa, cardápio não publicado, dia passado, opção fora do dia e quantidade fora da faixa', () => {
     const p = validarEscolhaCardapio({
       situacaoPlano: 'aprovado',
       data: '2026-11-30',
       hoje: '2026-12-01',
       alternativaOfertada: false,
       quantidade: 4,
+      internacaoAtiva: false,
     });
-    expect(p.map((x) => x.campo)).toEqual(['data', 'data', 'alternativa', 'quantidade']);
+    expect(p.map((x) => x.campo)).toEqual(['internacao', 'data', 'data', 'alternativa', 'quantidade']);
+  });
+});
+
+describe('plano em que a escolha conta', () => {
+  const geralPac = { id: 1, publico: 'paciente' as const, modalidade: null };
+  const branda = { id: 2, publico: 'paciente' as const, modalidade: 7 };
+  const acomp = { id: 3, publico: 'acompanhante' as const, modalidade: null };
+  const todos = { id: 4, publico: 'todos' as const, modalidade: null };
+
+  it('o paciente escolhe no plano da dieta dele, mesmo com o geral ofertando a mesma opção', () => {
+    const r = planoParaEscolha({
+      comensal: 'paciente',
+      dieta: { modalidade: 7, jejum: false },
+      planos: [geralPac, branda, acomp],
+      haPlanoDaDieta: true,
+    });
+    expect(r).toEqual({ plano: branda, problemas: [] });
+  });
+  it('o paciente só cai no geral quando não há plano da dieta dele', () => {
+    expect(
+      planoParaEscolha({
+        comensal: 'paciente',
+        dieta: { modalidade: 9, jejum: false },
+        planos: [geralPac],
+        haPlanoDaDieta: false,
+      }).plano,
+    ).toEqual(geralPac);
+    const r = planoParaEscolha({
+      comensal: 'paciente',
+      dieta: { modalidade: 7, jejum: false },
+      planos: [geralPac],
+      haPlanoDaDieta: true,
+    });
+    expect(r.plano).toBeNull();
+    expect(r.problemas[0]?.campo).toBe('alternativa');
+  });
+  it('recusa o jejum, o plano de outra dieta e o público incompatível', () => {
+    expect(
+      planoParaEscolha({
+        comensal: 'paciente',
+        dieta: { modalidade: null, jejum: true },
+        planos: [geralPac],
+        haPlanoDaDieta: false,
+      }).problemas[0]?.campo,
+    ).toBe('internacao');
+    expect(
+      planoParaEscolha({
+        comensal: 'paciente',
+        dieta: { modalidade: 9, jejum: false },
+        planos: [branda],
+        haPlanoDaDieta: false,
+      }).plano,
+    ).toBeNull();
+    expect(
+      planoParaEscolha({ comensal: 'paciente', dieta: null, planos: [acomp], haPlanoDaDieta: false }).plano,
+    ).toBeNull();
+    expect(
+      planoParaEscolha({
+        comensal: 'acompanhante',
+        dieta: null,
+        planos: [geralPac, branda],
+        haPlanoDaDieta: false,
+      }).plano,
+    ).toBeNull();
+  });
+  it('o acompanhante escolhe no plano geral do público dele ou de todos, e o jejum do paciente não o atinge', () => {
+    expect(
+      planoParaEscolha({
+        comensal: 'acompanhante',
+        dieta: { modalidade: 7, jejum: true },
+        planos: [geralPac, acomp],
+        haPlanoDaDieta: false,
+      }).plano,
+    ).toEqual(acomp);
+    expect(
+      planoParaEscolha({ comensal: 'acompanhante', dieta: null, planos: [todos], haPlanoDaDieta: false })
+        .plano,
+    ).toEqual(todos);
   });
 });

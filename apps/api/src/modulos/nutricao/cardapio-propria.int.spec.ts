@@ -36,6 +36,14 @@ interface Massa {
   oleo: number;
   internacao: number;
   atendimento: number;
+  /** Paciente 3: dieta branda no mapa, internação ativa. */
+  intBranda: number;
+  /** Paciente 11: em jejum no mapa, internação ativa. */
+  intJejum: number;
+  /** Paciente 2: internação com alta. */
+  intAlta: number;
+  acompanhante: number;
+  branda: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -60,6 +68,11 @@ async function limpar(e: Escritor): Promise<void> {
       [P],
     );
     await e.executar(`DELETE FROM mapa_dieta WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(
+      `DELETE a FROM acompanhante_internacao a JOIN internacao i ON i.id = a.internacao_id
+        WHERE i.estabelecimento_id IN ${est}`,
+      [P],
+    );
     await e.executar(`DELETE FROM internacao WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM unidade_internacao WHERE estabelecimento_id IN ${est}`, [P]);
@@ -227,6 +240,37 @@ describe.skipIf(SEM_BANCO)('PortaCardapioPropria contra o MariaDB (contrato de e
            VALUES (?, ?, ?, ?, NOW(3) - INTERVAL 2 DAY, 1, 1, ?, 1, 1, 1, 1, 1, 'ativa', ?)`,
           [est, `${P}-I1`, atendimento, pac, ui, agora],
         );
+        const internar = (k: number, situacao: string) =>
+          e.inserir(
+            `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada,
+               carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, leito_hospitalar_id, acomodacao_id,
+               especialidade_medica_id, medico_assistente_profissional_id, fonte_pagadora_id, situacao,
+               data_hora_alta, motivo_saida_hospitalar_id, criado_em)
+             VALUES (?, ?, ?, ?, NOW(3) - INTERVAL 2 DAY, 1, 1, ?, 1, 1, 1, 1, 1, ?, ?, ?, ?)`,
+            [
+              est,
+              `${P}-I${k}`,
+              atendimentos[k - 1],
+              pacientes[k - 1],
+              ui,
+              situacao,
+              situacao === 'alta' ? agora : null,
+              situacao === 'alta' ? 1 : null,
+              agora,
+            ],
+          );
+        const intAlta = await internar(2, 'alta');
+        const intBranda = await internar(3, 'ativa');
+        const intJejum = await internar(11, 'ativa');
+        const acompanhante = await e.inserir(
+          `INSERT INTO acompanhante_internacao (internacao_id, nome, inicio_em, recebe_refeicao, criado_em)
+           VALUES (?, ?, NOW(3) - INTERVAL 1 DAY, TRUE, ?)`,
+          [internacao, `SINTETICO ${P} ACOMPANHANTE`, agora],
+        );
+        const branda = await e.inserir(
+          "INSERT INTO modalidade_dieta (codigo, descricao, ativo, classe, criado_em) VALUES (?, ?, TRUE, 'oral', ?)",
+          [`${P}-MB`, `DIETA BRANDA SINTETICA ${P}`, agora],
+        );
         const mapa = await e.inserir(
           `INSERT INTO mapa_dieta (estabelecimento_id, data_referencia, refeicao_do_dia_id, setor_funcional_id,
              unidade_internacao_id, horario_corte, situacao, fechado_em, fechado_por_usuario_id, criado_em)
@@ -243,7 +287,7 @@ describe.skipIf(SEM_BANCO)('PortaCardapioPropria contra o MariaDB (contrato de e
               k,
               atendimentos[k - 1],
               pacientes[k - 1],
-              modalidade,
+              k === 3 ? branda : modalidade,
               k === 11,
               k === 1 ? 2 : 0,
               k === 12 ? 'cancelado' : 'previsto',
@@ -265,6 +309,11 @@ describe.skipIf(SEM_BANCO)('PortaCardapioPropria contra o MariaDB (contrato de e
           oleo,
           internacao,
           atendimento,
+          intBranda,
+          intJejum,
+          intAlta,
+          acompanhante,
+          branda,
         };
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -515,11 +564,104 @@ describe.skipIf(SEM_BANCO)('PortaCardapioPropria contra o MariaDB (contrato de e
     ).toHaveLength(2);
   });
 
+  let planoBranda = 0;
+  let planoAcomp = 0;
+  it('conta a escolha só no plano da dieta e do público do comensal; recusa jejum, alta e plano incompatível', async () => {
+    const publicar = async (descricao: string, extra: Record<string, unknown>, porcoes: number) => {
+      const { id } = await porta.salvarPlanejamento(ctx(m.outro), {
+        descricao,
+        periodoInicio: HOJE,
+        periodoFim: HOJE,
+        refeicao: m.refeicao,
+        ...extra,
+        itens: [{ data: HOJE, alternativa: m.altA, preparacao: prato, porcoes }],
+      });
+      let v = (await porta.planejamento(ctx(), id)).versao;
+      await porta.agir(ctx(m.outro), id, { acao: 'enviar', versao: v++ });
+      await porta.agir(ctx(), id, { acao: 'aprovar', versao: v++ });
+      await porta.agir(ctx(m.outro), id, { acao: 'publicar', versao: v });
+      return id;
+    };
+    planoBranda = await publicar('Almoço da dieta branda sintética', { modalidade: m.branda }, 5);
+    planoAcomp = await publicar('Almoço do acompanhante sintético', { publico: 'acompanhante' }, 6);
+
+    // A lista da copa: internações ativas com o leito e a dieta do mapa; a alta não aparece.
+    const lista = await porta.comensais(ctx(), { data: HOJE, refeicao: m.refeicao });
+    const por = new Map(lista.itens.map((x) => [x.internacao, x]));
+    expect(por.has(m.intAlta)).toBe(false);
+    expect(por.get(m.intBranda)).toMatchObject({ dieta: `DIETA BRANDA SINTETICA ${P}`, jejum: false });
+    expect(por.get(m.intJejum)).toMatchObject({ jejum: true });
+    expect(por.get(m.internacao)?.acompanhantes).toEqual([
+      { id: m.acompanhante, nome: `SINTETICO ${P} ACOMPANHANTE` },
+    ]);
+
+    const recusa = { problema: { status: 422 } };
+    const base = { data: HOJE, refeicao: m.refeicao };
+    // Dieta branda: a opção B só está no geral, e há cardápio da dieta dele no dia.
+    await expect(
+      porta.registrarEscolha(ctx(m.outro), { ...base, internacao: m.intBranda, alternativa: m.altB }),
+    ).rejects.toMatchObject(recusa);
+    const eb = await porta.registrarEscolha(ctx(m.outro), {
+      ...base,
+      internacao: m.intBranda,
+      alternativa: m.altA,
+    });
+    // Acompanhante: a opção B é de cardápio só de pacientes; a opção A conta no plano do acompanhante.
+    await expect(
+      porta.registrarEscolha(ctx(m.outro), {
+        ...base,
+        internacao: m.internacao,
+        acompanhante: m.acompanhante,
+        alternativa: m.altB,
+      }),
+    ).rejects.toMatchObject(recusa);
+    const ea = await porta.registrarEscolha(ctx(m.outro), {
+      ...base,
+      internacao: m.internacao,
+      acompanhante: m.acompanhante,
+      alternativa: m.altA,
+    });
+    await expect(
+      porta.registrarEscolha(ctx(m.outro), { ...base, internacao: m.intJejum, alternativa: m.altB }),
+    ).rejects.toMatchObject(recusa);
+    await expect(
+      porta.registrarEscolha(ctx(m.outro), { ...base, internacao: m.intAlta, alternativa: m.altB }),
+    ).rejects.toMatchObject(recusa);
+
+    const gravadas = await ler(
+      'SELECT id, comensal, planejamento_cardapio_id, acompanhante_internacao_id FROM escolha_cardapio_paciente WHERE id IN (?, ?) ORDER BY id',
+      [eb.id, ea.id],
+    );
+    expect(gravadas).toEqual([
+      {
+        id: eb.id,
+        comensal: 'paciente',
+        planejamento_cardapio_id: planoBranda,
+        acompanhante_internacao_id: null,
+      },
+      {
+        id: ea.id,
+        comensal: 'acompanhante',
+        planejamento_cardapio_id: planoAcomp,
+        acompanhante_internacao_id: m.acompanhante,
+      },
+    ]);
+
+    // Cada previsão conta só as suas escolhas: 1 porção da opção A em cada plano novo.
+    const pb = await porta.producao(ctx(), planoBranda, HOJE, 0);
+    expect(pb.comensaisMapa).toBe(1);
+    expect(pb.preparacoes).toEqual([expect.objectContaining({ porcoes: 1, base: 'escolha' })]);
+    const pa = await porta.producao(ctx(), planoAcomp, HOJE, 0);
+    expect(pa.comensaisMapa).toBe(2);
+    expect(pa.preparacoes).toEqual([expect.objectContaining({ porcoes: 1, base: 'escolha' })]);
+  });
+
   it('prevê a produção do dia pela escolha, pelo mapa com margem e pelo planejado, com os gêneros e o custo', async () => {
     const p = await porta.producao(ctx(), plano, HOJE, 10);
     expect(p.comensaisMapa).toBe(10);
     const por = new Map(p.preparacoes.map((x) => [`${x.preparacao}|${x.alternativa}`, x]));
-    // Guarnição sem opção: 10 do mapa + 10% = 11. Opção B: 2 escolhidas. Opção A: sem escolha ativa, 20 planejadas.
+    // Guarnição sem opção: 10 do mapa + 10% = 11. Opção B: 2 escolhidas. Opção A: as escolhas da dieta branda e do
+    // acompanhante contam nos planos deles, não aqui: 20 planejadas.
     expect(por.get(`${guarnicao}|null`)).toMatchObject({ porcoes: 11, base: 'mapa' });
     expect(por.get(`${prato}|${m.altB}`)).toMatchObject({ porcoes: 2, base: 'escolha' });
     expect(por.get(`${prato}|${m.altA}`)).toMatchObject({ porcoes: 20, base: 'planejado' });
@@ -536,8 +678,8 @@ describe.skipIf(SEM_BANCO)('PortaCardapioPropria contra o MariaDB (contrato de e
       refeicao: m.refeicao,
       internacao: m.internacao,
     });
-    const ativa = (dia.escolhas as { id: number; situacao: string; versao: number }[]).find(
-      (x) => x.situacao === 'escolhida',
+    const ativa = (dia.escolhas as { id: number; comensal: string; situacao: string; versao: number }[]).find(
+      (x) => x.situacao === 'escolhida' && x.comensal === 'paciente',
     )!;
     await porta.cancelarEscolha(ctx(m.outro), ativa.id, ativa.versao);
     expect(

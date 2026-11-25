@@ -19,7 +19,12 @@
 //     dos comensais do mapa de dietas (com a margem de segurança); senão das porções planejadas; os gêneros somam
 //     porções × per capita bruto e o custo porções × custo per capita;
 //   - escolha: só no cardápio publicado, para o dia de hoje em diante, numa opção ofertada naquele dia; de 1 a 3
-//     porções; a escolha anterior do mesmo comensal na mesma refeição e dia é substituída (cancelada, nunca apagada).
+//     porções; só para internação ativa; a escolha anterior do mesmo comensal na mesma refeição e dia é substituída
+//     (cancelada, nunca apagada);
+//   - plano da escolha: o público do plano serve ao comensal (paciente, acompanhante ou todos); o paciente em jejum no
+//     mapa de dietas não escolhe; o paciente escolhe no plano da modalidade da dieta dele e só cai no plano geral (sem
+//     modalidade) quando não há plano publicado da dieta dele no dia; plano de outra dieta nunca serve; o
+//     acompanhante escolhe no plano geral.
 
 export interface ProblemaCardapio {
   readonly campo: string;
@@ -45,11 +50,11 @@ export interface IngredienteFichaEntrada {
   readonly insumo: number;
   readonly perCapitaBruto: number;
   /** Bruto ÷ líquido; sem ele, sai do líquido informado; sem os dois, 1. */
-  readonly fatorCorrecao?: number | null;
-  readonly perCapitaLiquido?: number | null;
-  readonly fatorCoccao?: number | null;
+  readonly fatorCorrecao?: number | null | undefined;
+  readonly perCapitaLiquido?: number | null | undefined;
+  readonly fatorCoccao?: number | null | undefined;
   /** Custo de uma unidade de medida do gênero (R$). */
-  readonly custoUnidade?: number | null;
+  readonly custoUnidade?: number | null | undefined;
 }
 
 export interface IngredienteFichaCalculado {
@@ -328,8 +333,15 @@ export function validarEscolhaCardapio(e: {
   readonly hoje: string;
   readonly alternativaOfertada: boolean;
   readonly quantidade: number;
+  /** A internação está ativa (não teve alta nem foi cancelada). */
+  readonly internacaoAtiva: boolean;
 }): ProblemaCardapio[] {
   const problemas: ProblemaCardapio[] = [];
+  if (!e.internacaoAtiva)
+    problemas.push({
+      campo: 'internacao',
+      mensagem: 'A internação não está ativa (alta ou cancelada): não recebe escolha de refeição.',
+    });
   if (e.situacaoPlano !== 'publicado')
     problemas.push({ campo: 'data', mensagem: 'Não há cardápio publicado para esta refeição e dia.' });
   if (e.data < e.hoje)
@@ -345,4 +357,64 @@ export function validarEscolhaCardapio(e: {
       mensagem: `A quantidade fica entre 1 e ${PORCOES_MAXIMAS_ESCOLHA} porções.`,
     });
   return problemas;
+}
+
+export type PublicoCardapio = 'paciente' | 'acompanhante' | 'colaborador' | 'todos';
+export type Comensal = 'paciente' | 'acompanhante';
+
+/** Plano publicado que oferta a opção escolhida naquele dia e refeição. */
+export interface PlanoOfertado {
+  readonly id: number;
+  readonly publico: PublicoCardapio;
+  /** Modalidade de dieta do plano; nulo é o cardápio geral. */
+  readonly modalidade: number | null;
+}
+
+/** A dieta do paciente no mapa de dietas do dia e da refeição (nulo quando ele não está no mapa). */
+export interface DietaDoComensal {
+  readonly modalidade: number | null;
+  readonly jejum: boolean;
+}
+
+/**
+ * Escolhe o plano em que a escolha conta: o público serve ao comensal; o paciente em jejum é recusado; o paciente usa o
+ * plano da dieta dele e só cai no geral quando não há plano publicado da dieta dele no dia (`haPlanoDaDieta`); o
+ * acompanhante usa o plano geral.
+ */
+export function planoParaEscolha(e: {
+  readonly comensal: Comensal;
+  readonly dieta: DietaDoComensal | null;
+  readonly planos: readonly PlanoOfertado[];
+  readonly haPlanoDaDieta: boolean;
+}): { plano: PlanoOfertado | null; problemas: ProblemaCardapio[] } {
+  const recusa = (mensagem: string) => ({ plano: null, problemas: [{ campo: 'alternativa', mensagem }] });
+  if (e.comensal === 'paciente' && e.dieta?.jejum)
+    return {
+      plano: null,
+      problemas: [
+        {
+          campo: 'internacao',
+          mensagem: 'O paciente está em jejum no mapa de dietas: não escolhe refeição.',
+        },
+      ],
+    };
+  const doPublico = e.planos.filter((p) => p.publico === 'todos' || p.publico === e.comensal);
+  if (doPublico.length === 0)
+    return recusa(
+      e.comensal === 'acompanhante'
+        ? 'Esta opção é de um cardápio só para pacientes.'
+        : 'Esta opção é de um cardápio que não é para pacientes.',
+    );
+  const geral = doPublico.find((p) => p.modalidade === null) ?? null;
+  if (e.comensal === 'acompanhante')
+    return geral
+      ? { plano: geral, problemas: [] }
+      : recusa('Esta opção é de um cardápio de dieta específica.');
+  const modalidade = e.dieta?.modalidade ?? null;
+  const daDieta = modalidade === null ? undefined : doPublico.find((p) => p.modalidade === modalidade);
+  if (daDieta) return { plano: daDieta, problemas: [] };
+  if (e.haPlanoDaDieta)
+    return recusa('Há cardápio publicado da dieta do paciente: escolha entre as opções dele.');
+  if (geral) return { plano: geral, problemas: [] };
+  return recusa('Esta opção é de um cardápio de outra dieta, contra a prescrição do paciente.');
 }

@@ -218,8 +218,33 @@ export const lerCardapioDoDia = (
   refeicao: number,
   internacao: number | null,
 ): Promise<CardapioDoDia> => ler(`${C}/dia${qs({ data, refeicao, internacao })}`, esquemaDia);
+const esquemaComensais = z.object({
+  itens: z.array(
+    z.object({
+      internacao: ni,
+      numero: z.string(),
+      nome: z.string(),
+      leito: z.string().nullable(),
+      unidade: z.string().nullable(),
+      dieta: z.string().nullable(),
+      jejum: z.boolean(),
+      acompanhantes: z.array(z.object({ id: ni, nome: z.string() })),
+    }),
+  ),
+});
+export type ComensalInternado = z.infer<typeof esquemaComensais>['itens'][number];
+/** Internados ativos do dia e da refeição, com o leito, a dieta do mapa e os acompanhantes com refeição. */
+export const lerComensais = (data: string, refeicao: number): Promise<ComensalInternado[]> =>
+  ler(`${C}/comensais${qs({ data, refeicao })}`, esquemaComensais).then((r) => r.itens);
 export const registrarEscolha = (
-  corpo: { internacao: number; data: string; refeicao: number; alternativa: number; quantidade: number },
+  corpo: {
+    internacao: number;
+    acompanhante: number | null;
+    data: string;
+    refeicao: number;
+    alternativa: number;
+    quantidade: number;
+  },
   chave: string,
 ) => enviar(`${C}/escolhas`, corpo, z.object({ id: ni, substituida: ni.nullable() }), chave);
 export const cancelarEscolha = (id: number, versao: number, chave: string) =>

@@ -42,6 +42,7 @@ function simular(page: Page) {
     preparacoes: [] as Record<string, unknown>[],
     plano: null as null | Record<string, unknown>,
     escolhas: [] as Record<string, unknown>[],
+    corpos: [] as Record<string, unknown>[],
     gravouPreparacao: null as unknown,
     gravouPlano: null as unknown,
   };
@@ -157,13 +158,46 @@ function simular(page: Page) {
       escolhas: estado.escolhas,
     }),
   );
+  void page.route(/\/api\/nutricao\/cardapio\/comensais\?/, (r) =>
+    json(r, {
+      itens: [
+        {
+          internacao: 501,
+          numero: 'I-501',
+          nome: 'Paciente Sintético Um',
+          leito: '204-A',
+          unidade: 'Enfermaria sintética',
+          dieta: 'Dieta livre',
+          jejum: false,
+          acompanhantes: [{ id: 77, nome: 'Acompanhante Sintética' }],
+        },
+        {
+          internacao: 502,
+          numero: 'I-502',
+          nome: 'Paciente Sintético Dois',
+          leito: '205-B',
+          unidade: 'Enfermaria sintética',
+          dieta: 'Dieta branda',
+          jejum: true,
+          acompanhantes: [],
+        },
+      ],
+    }),
+  );
   void page.route(/\/api\/nutricao\/cardapio\/escolhas$/, async (r) => {
-    const corpo = r.request().postDataJSON() as { alternativa: number };
+    const corpo = r.request().postDataJSON() as {
+      alternativa: number;
+      internacao: number;
+      acompanhante: number | null;
+    };
+    estado.corpos.push(corpo);
+    const id = 90 + estado.escolhas.length;
     estado.escolhas = [
+      ...estado.escolhas,
       {
-        id: 90,
-        comensal: 'paciente',
-        acompanhante: null,
+        id,
+        comensal: corpo.acompanhante ? 'acompanhante' : 'paciente',
+        acompanhante: corpo.acompanhante,
         alternativa: corpo.alternativa,
         descricao: corpo.alternativa === 5 ? 'Opção A' : 'Opção B',
         quantidade: 1,
@@ -172,7 +206,7 @@ function simular(page: Page) {
         versao: 1,
       },
     ];
-    return json(r, { id: 90, substituida: null }, 201);
+    return json(r, { id, substituida: null }, 201);
   });
   return estado;
 }
@@ -241,12 +275,32 @@ test.describe('@C2-098 cardápio, ficha técnica, planejamento e produção', ()
 
     await page.getByTestId('aba-escolha').click();
     await escolher(page.getByTestId('escolha-refeicao'), { rotulo: 'Almoço' });
-    await page.getByTestId('escolha-internacao').locator('input').fill('501');
+    // Paciente em jejum: a tela identifica pelo leito e nome, avisa e não oferece a escolha.
+    await escolher(page.getByTestId('escolha-internacao'), { rotulo: /205-B/ });
+    await expect(page.getByTestId('escolha-identificacao')).toContainText('Paciente Sintético Dois');
+    await page.getByTestId('escolha-ver').click();
+    await expect(page.getByTestId('escolha-jejum')).toBeVisible();
+    await expect(page.getByTestId('escolher-6')).toHaveCount(0);
+
+    // Paciente identificado pelo leito, nome e dieta do mapa; escolhe a opção B.
+    await escolher(page.getByTestId('escolha-internacao'), { rotulo: /204-A/ });
+    await expect(page.getByTestId('escolha-identificacao')).toContainText('Paciente Sintético Um');
+    await expect(page.getByTestId('escolha-identificacao')).toContainText('Dieta livre');
     await page.getByTestId('escolha-ver').click();
     await expect(page.getByTestId('opcoes-do-dia')).toContainText('Opção B');
     await page.getByTestId('escolher-6').click();
     await expect(page.getByTestId('cardapio-mensagem')).toContainText('Escolha registrada');
     await expect(page.getByTestId('escolha-90')).toContainText('Opção B');
+
+    // O acompanhante com direito à refeição escolhe a opção A.
+    await escolher(page.getByTestId('escolha-comensal'), { rotulo: /Acompanhante Sintética/ });
+    await page.getByTestId('escolher-5').click();
+    await expect(page.getByTestId('escolha-91')).toContainText('Acompanhante Sintética');
+    await expect(page.getByTestId('escolha-91')).toContainText('Opção A');
+    expect(estado.corpos).toEqual([
+      expect.objectContaining({ internacao: 501, acompanhante: null, alternativa: 6 }),
+      expect.objectContaining({ internacao: 501, acompanhante: 77, alternativa: 5 }),
+    ]);
     await semViolacaoAxe(page, '/nutricao/cardapio (escolha)');
     expect(externas).toEqual([]);
   });

@@ -11,6 +11,7 @@
 //   POST /api/nutricao/cardapio/planejamentos/:id/aprovar       aprovação pela nutricionista (conselho ativo)
 //   GET  /api/nutricao/cardapio/planejamentos/:id/producao?data=&margem=   previsão da produção do dia
 //   GET  /api/nutricao/cardapio/dia?data=&refeicao=&internacao=  o cardápio publicado do dia e as escolhas
+//   GET  /api/nutricao/cardapio/comensais?data=&refeicao=      internados ativos (nome, leito, dieta, jejum, acompanhantes)
 //   POST /api/nutricao/cardapio/escolhas                        registra a escolha do paciente ou do acompanhante
 //   POST /api/nutricao/cardapio/escolhas/:id/cancelar           { versao }
 import {
@@ -175,6 +176,19 @@ export class CardapioController {
       throw new ErroProblema('entrada-invalida', 400, 'Informe a refeição (e a internação, quando houver)');
     const q = { data: data(dia, 'o dia'), refeicao: r, internacao: i };
     return this.com(req, (p, c) => p.cardapioDoDia(c, q));
+  }
+
+  @Get('comensais')
+  @Permissao(PERMISSOES_CARDAPIO.ler)
+  comensais(
+    @Req() req: RequisicaoAutorizada,
+    @Query('data') dia?: string,
+    @Query('refeicao') refeicao?: string,
+  ) {
+    const r = Number(refeicao);
+    if (!Number.isInteger(r) || r <= 0) throw new ErroProblema('entrada-invalida', 400, 'Informe a refeição');
+    const q = { data: data(dia, 'o dia'), refeicao: r };
+    return this.com(req, (p, c) => p.comensais(c, q));
   }
 
   @Post('escolhas')
