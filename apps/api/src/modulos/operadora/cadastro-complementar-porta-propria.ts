@@ -120,10 +120,18 @@ export interface Responsavel {
   tipo: string;
   natureza: string;
   pessoa: number;
+  /** Nome da pessoa física ou razão social da jurídica (a tela mostra quem é, não o número). */
+  nome: string | null;
   numeroRegistro: string | null;
   inicio: string;
   fim: string | null;
   vigente: boolean;
+}
+/** A pessoa achada pelo documento exato (CPF ou CNPJ) para ser responsável: o id, a natureza e o nome para conferir. */
+export interface PessoaResponsavel {
+  id: number;
+  natureza: 'fisica' | 'juridica';
+  nome: string;
 }
 export interface Departamento {
   id: number;
@@ -134,6 +142,7 @@ export interface Departamento {
   email: string | null;
   emailsCopia: string[];
   superior: number | null;
+  visivelPortal: boolean;
   ativo: boolean;
 }
 export interface ParametroVigente {
@@ -394,13 +403,47 @@ export class PortaCadastroComplementarPropria {
   }
 
   // ---- responsáveis ----
+  /** Só o documento exato (11 dígitos: CPF; 14: CNPJ), nunca busca por nome: nada além da pessoa procurada sai. */
+  pessoaPorDocumento(c: ContextoSessao, documento: string): Promise<PessoaResponsavel | null> {
+    const doc = documento.replace(/\D/g, '');
+    return this.ler(c, async (l) => {
+      if (doc.length === 11) {
+        const [r] = await l.consultar(
+          'SELECT id, nome FROM pessoa_fisica WHERE cpf = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
+          [doc],
+          { teto: 1 },
+        );
+        return r
+          ? { id: Number(r['id']), natureza: 'fisica' as const, nome: textoObrigatorio(r['nome']) }
+          : null;
+      }
+      if (doc.length === 14) {
+        const [r] = await l.consultar(
+          'SELECT id, razao_social FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
+          [doc],
+          { teto: 1 },
+        );
+        return r
+          ? { id: Number(r['id']), natureza: 'juridica' as const, nome: textoObrigatorio(r['razao_social']) }
+          : null;
+      }
+      throw recusa('documento-invalido', 'Informe o CPF (11 dígitos) ou o CNPJ (14 dígitos).', {
+        campos: ['documento'],
+      });
+    });
+  }
+
   responsaveis(c: ContextoSessao, op: number): Promise<Responsavel[]> {
     return this.ler(c, async (l, est) => {
       await PortaCadastroComplementarPropria.operadoraDoEst(l, est, op);
       const rs = await l.consultar(
-        `SELECT id, sequencia, tipo_responsavel, natureza_pessoa, pessoa_fisica_id, pessoa_juridica_id, numero_registro,
-                inicio_exercicio, fim_exercicio, (fim_exercicio IS NULL OR fim_exercicio >= CURRENT_DATE) AS vigente
-           FROM responsavel_operadora WHERE operadora_saude_id = ? AND excluido_em IS NULL ORDER BY tipo_responsavel, inicio_exercicio`,
+        `SELECT r.id, r.sequencia, r.tipo_responsavel, r.natureza_pessoa, r.pessoa_fisica_id, r.pessoa_juridica_id,
+                COALESCE(pf.nome, pj.razao_social) AS nome, r.numero_registro, r.inicio_exercicio, r.fim_exercicio,
+                (r.fim_exercicio IS NULL OR r.fim_exercicio >= CURRENT_DATE) AS vigente
+           FROM responsavel_operadora r
+           LEFT JOIN pessoa_fisica pf ON pf.id = r.pessoa_fisica_id
+           LEFT JOIN pessoa_juridica pj ON pj.id = r.pessoa_juridica_id
+          WHERE r.operadora_saude_id = ? AND r.excluido_em IS NULL ORDER BY r.tipo_responsavel, r.inicio_exercicio`,
         [op],
         { teto: 500 },
       );
@@ -410,6 +453,7 @@ export class PortaCadastroComplementarPropria {
         tipo: textoObrigatorio(r['tipo_responsavel']),
         natureza: textoObrigatorio(r['natureza_pessoa']),
         pessoa: Number(r['pessoa_fisica_id'] ?? r['pessoa_juridica_id']),
+        nome: texto(r['nome']),
         numeroRegistro: texto(r['numero_registro']),
         inicio: dataIso(r['inicio_exercicio']) ?? '',
         fim: dataIso(r['fim_exercicio']),
@@ -471,7 +515,8 @@ export class PortaCadastroComplementarPropria {
     return this.ler(c, async (l, est) => {
       await PortaCadastroComplementarPropria.operadoraDoEst(l, est, op);
       const rs = await l.consultar(
-        `SELECT id, versao, codigo, descricao, tipo, email, emails_copia, superior_departamento_operadora_id, ativo
+        `SELECT id, versao, codigo, descricao, tipo, email, emails_copia, superior_departamento_operadora_id,
+                visivel_portal, ativo
            FROM departamento_operadora WHERE operadora_saude_id = ? ORDER BY descricao`,
         [op],
         { teto: 500 },
@@ -485,6 +530,7 @@ export class PortaCadastroComplementarPropria {
         email: texto(r['email']),
         emailsCopia: r['emails_copia'] ? (JSON.parse(String(r['emails_copia'])) as string[]) : [],
         superior: inteiro(r['superior_departamento_operadora_id']),
+        visivelPortal: booleano(r['visivel_portal']),
         ativo: booleano(r['ativo']),
       }));
     });

@@ -154,6 +154,7 @@ export const mensagensOperadora = {
       beneficiarios: 'Beneficiários',
       elegibilidade: 'Elegibilidade',
       auditores: 'Auditores',
+      complementar: 'Responsáveis, setores e parâmetros',
     },
     operadoraAtiva: 'Operadora',
     semOperadora:

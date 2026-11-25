@@ -154,7 +154,21 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
       [1, '2026-05-31'],
       [2, null],
     ]);
-    expect((await porta!.responsaveis(c, op)).filter((r) => r.vigente).length).toBe(1);
+    const lidos = await porta!.responsaveis(c, op);
+    expect(lidos.filter((r) => r.vigente).length).toBe(1);
+    // A leitura traz o nome da pessoa (a tela mostra quem é), igual ao do cadastro.
+    const [nomePf] = await q<{ n: unknown }>('SELECT nome AS n FROM pessoa_fisica WHERE id = ?', [pessoa]);
+    expect(lidos.every((r) => r.nome === nomePf!['n'] && r.pessoa === pessoa)).toBe(true);
+    // A busca da pessoa pelo documento exato (a tela escolhe o responsável pelo CPF ou CNPJ, sem número interno).
+    const [doc] = await q<{ cpf: unknown }>('SELECT cpf FROM pessoa_fisica WHERE id = ?', [pessoa]);
+    if (doc!['cpf'])
+      expect(await porta!.pessoaPorDocumento(c, String(doc!['cpf']))).toEqual({
+        id: pessoa,
+        natureza: 'fisica',
+        nome: nomePf!['n'],
+      });
+    expect(await porta!.pessoaPorDocumento(c, '99999999999990')).toBeNull();
+    expect(await codigoDe(porta!.pessoaPorDocumento(c, '123'))).toBe('documento-invalido');
     // Escopo: o outro estabelecimento não vê a operadora.
     expect(await codigoDe(porta!.responsaveis(contexto(massa!, true), op))).toBe('nao-encontrado');
 
@@ -201,9 +215,9 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
       ),
     ).toBe('codigo-em-uso');
     const deps = await porta!.departamentos(c, op);
-    expect(deps.map((d) => [d.codigo, d.superior === a.id])).toEqual([
-      ['F7808-AUT', false],
-      ['F7808-REG', true],
+    expect(deps.map((d) => [d.codigo, d.superior === a.id, d.visivelPortal])).toEqual([
+      ['F7808-AUT', false, true],
+      ['F7808-REG', true, true],
     ]);
 
     await porta!.definirParametro(

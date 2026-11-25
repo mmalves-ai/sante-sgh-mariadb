@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Beneficiários, planos e contratos (M56.2, fatia F1; item `Faturamento > Operadora própria > Beneficiários, planos e
 // contratos`; `operadora.beneficiario.ler`): a operadora como empresa, os produtos e planos, os contratos, os
-// beneficiários (titular, dependentes, carteirinha, segunda via, exclusão) e a elegibilidade. Com a parte desligada
+// beneficiários (titular, dependentes, carteirinha, segunda via, exclusão) e a elegibilidade. C1-071 (08-SGO L93): a aba
+// "Responsáveis, setores e parâmetros" de cada operadora da instalação (o combo Operadora escolhe qual). Com a parte desligada
 // (regra 1), a tela mostra a situação e o que falta para ligar; os domínios do item seguem embutidos (CRUD genérico).
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
@@ -17,6 +18,7 @@ import EmpresaOperadora from '../componentes/f1/EmpresaOperadora.vue';
 import ProdutosOperadora from '../componentes/f1/ProdutosOperadora.vue';
 import SituacaoOperadora from '../componentes/SituacaoOperadora.vue';
 import AuditoresOperadora from '../componentes/AuditoresOperadora.vue';
+import CadastroComplementarOperadora from '../componentes/f1/CadastroComplementarOperadora.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 
 const ITEM = 'faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.beneficiarios-planos-e-contratos';
@@ -25,6 +27,7 @@ const TODAS_AS_ABAS = [
   'contratos',
   'produtos',
   'empresa',
+  'complementar',
   'elegibilidade',
   'auditores',
 ] as const;
@@ -138,6 +141,12 @@ watch(
             registroAns: o.registroAns,
           }))
         "
+        :hoje="hoje"
+      />
+      <CadastroComplementarOperadora
+        v-else-if="aba === 'complementar'"
+        :operadora="operadora"
+        :pode-editar="d.acoes.editarEmpresa"
         :hoje="hoje"
       />
       <ElegibilidadeOperadora v-else />

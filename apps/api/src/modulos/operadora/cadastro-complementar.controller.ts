@@ -1,5 +1,6 @@
 // Rotas do cadastro complementar da operadora (F7, 08-SGO linhas 93 a 95; F78.08-1). Tudo ligado, controlado só pelo
 // cargo (permissões já concedidas por perfil em permissoes/operadora.ts):
+//   GET  operadora/complementar/pessoas?documento=               operadora.empresa.editar (CPF/CNPJ exato, auditada)
 //   GET  operadora/complementar/empresas/:op/responsaveis         operadora.beneficiario.ler
 //   POST operadora/complementar/empresas/:op/responsaveis         operadora.empresa.editar
 //   GET  operadora/complementar/empresas/:op/departamentos        operadora.beneficiario.ler
@@ -22,9 +23,9 @@
 //   POST operadora/complementar/beneficiarios/:id/cartoes         operadora.beneficiario.editar
 //   POST operadora/complementar/cartoes/:id/situacao              operadora.beneficiario.editar
 // Cada gravação vai pela porta própria (Executor do núcleo), com a trilha_auditoria na mesma transação.
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import { z } from 'zod';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import {
   idDaRota,
@@ -123,6 +124,16 @@ export class CadastroComplementarOperadoraController {
     return p.catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
+  }
+
+  @Get('operadora/complementar/pessoas')
+  @Permissao(EMPRESA)
+  @Auditar('operadora.responsavel.pessoa-buscada')
+  async pessoaPorDocumento(
+    @Query('documento') documento: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return { pessoa: await this.ok(this.porta.pessoaPorDocumento(sessaoDe(req).porta, documento ?? '')) };
   }
 
   @Get('operadora/complementar/empresas/:op/responsaveis')
