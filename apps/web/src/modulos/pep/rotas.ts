@@ -15,6 +15,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuario.ler', menu: 'PEP > Prontuário ao vivo: consulta' },
   },
   {
+    // C2-028 (03-PEP L132): documentos exigidos por diagnóstico, idade ou setor (lista do profissional; a aba das
+    // regras aparece só com pep.admin.ler).
+    path: '/pep/documentos-exigidos',
+    name: 'pep.documentosExigidos',
+    component: () => import('./telas/DocumentosExigidosTela.vue'),
+    meta: { permissao: 'pep.prontuario.ler', menu: 'PEP > Documentos exigidos' },
+  },
+  {
     // Regra 9: relatório agregado das exceções (só contagens), para o arquivo médico e a comissão.
     path: '/pep/prontuario/excecoes',
     name: 'pep.prontuario.excecoes',
