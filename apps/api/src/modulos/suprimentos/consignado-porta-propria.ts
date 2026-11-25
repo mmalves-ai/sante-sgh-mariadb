@@ -21,6 +21,8 @@
 // Pendente (pedido em saida/03-13.json): esta porta não escreve saldo_consignado nem as quantidades consumida e
 //   devolvida do item da remessa; a conferência saldo do cadastro × controle fica sem efeito até o razão do estoque
 //   assumir essa escrita.
+// C1-014: o faturamento grava o valor do material (custo da nota de compra × quantidade) e as parcelas da taxa de
+//   comercialização pela faixa vigente no dia (faixa, origem, percentual, taxa bruta, teto, taxa), na mesma transação.
 // Melhoria: o número de negócio da remessa e da reposição vem da sequência do estabelecimento (sequencia_negocio).
 import {
   CLASSE_OPME,
@@ -29,6 +31,7 @@ import {
   type MovimentoConsignado,
   type NotaEntradaConsignado,
 } from '@sgh/contratos';
+import { taxaDoFaturamentoConsignado } from '@sgh/contratos/regras-suprimentos';
 import { saldoConsignado } from '@sgh/dominio-suprimentos';
 import {
   type ContextoNucleo,
@@ -53,6 +56,7 @@ import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPortaM18, TrilhaDaGravacao } from '../exames/public-api.js';
 import { portaIndisponivel } from '../exames/public-api.js';
+import { lerFaixasTaxaConsignacao } from './consignado-taxa.js';
 import {
   type GravadorConsignado,
   type LinhaMovimentoConsignado,
@@ -586,6 +590,46 @@ function gravadorSobre(tx: TxOperacao, est: number, agora: Date): GravadorConsig
     return num(n['id']);
   }
 
+  /**
+   * C1-014: a taxa de comercialização do faturamento, pela tabela vigente no dia (a do fornecedor ou a geral), sobre o
+   * custo unitário do item na nota de compra vezes a quantidade. A nota tem de trazer o item.
+   */
+  let faixasDoFornecedor: Promise<Awaited<ReturnType<typeof lerFaixasTaxaConsignacao>>> | null = null;
+  let hoje: Promise<string> | null = null;
+  async function taxaDoFaturamento(fornecedor: number, item: number, nota: number, quantidade: number) {
+    const ni = await tx.uma(
+      `SELECT custo_unitario FROM nota_entrada_item
+        WHERE nota_entrada_id = ? AND insumo_id = ? AND excluido_em IS NULL ORDER BY sequencia LIMIT 1`,
+      [nota, item],
+    );
+    if (!ni)
+      throw recusa(
+        'item-fora-da-nota',
+        'A nota da entrada do estoque não traz este item: fature com a nota de compra dele.',
+        {
+          campos: ['nfEntrada'],
+        },
+      );
+    faixasDoFornecedor ??= lerFaixasTaxaConsignacao(tx, est, fornecedor);
+    hoje ??= tx.uma('SELECT CURRENT_DATE() AS d', []).then((r) => dataIso(r?.['d']) ?? '');
+    const t = taxaDoFaturamentoConsignado(
+      await faixasDoFornecedor,
+      fornecedor,
+      num(ni['custo_unitario']),
+      quantidade,
+      await hoje,
+    );
+    return {
+      valor_material: t.valorMaterial,
+      taxa_faixa_id: t.faixa,
+      taxa_origem: t.origem,
+      taxa_percentual: t.percentual,
+      taxa_bruta: t.taxaBruta,
+      taxa_teto: t.teto,
+      taxa_valor: t.taxa,
+    };
+  }
+
   return {
     movimentosPelaChave: async (chave, pedido) => {
       const g = await lerGuardado(tx, chave, usuario, est, pedido);
@@ -615,9 +659,15 @@ function gravadorSobre(tx: TxOperacao, est: number, agora: Date): GravadorConsig
       for (const x of m.linhas) {
         if (x.tipo === 'remessa') throw new Error('A remessa não se mistura com reposições.');
         const numero = await tx.proximoNumero('reposicao_consignada');
+        const nota = x.tipo === 'faturamento' ? await notaDaEntrada(x) : null;
+        const taxa =
+          x.tipo === 'faturamento' && nota !== null
+            ? await taxaDoFaturamento(m.fornecedor, m.item, nota, x.quantidade)
+            : {};
         try {
           ids.push(
             await tx.incluir('reposicao_consignada', {
+              ...taxa,
               estabelecimento_id: est,
               numero: numero.valor,
               tipo: x.tipo,
@@ -627,7 +677,7 @@ function gravadorSobre(tx: TxOperacao, est: number, agora: Date): GravadorConsig
               quantidade: x.quantidade,
               lote: x.lote,
               numero_serie: x.serie,
-              nota_entrada_id: x.tipo === 'faturamento' ? await notaDaEntrada(x) : null,
+              nota_entrada_id: nota,
               nota_numero: x.nfNumero,
               nota_serie: x.nfSerie,
               nota_emissao: x.nfEmissao,

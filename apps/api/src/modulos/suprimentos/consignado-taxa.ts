@@ -2,7 +2,9 @@
 // do núcleo (trilha na mesma transação, versão conferida, Idempotency-Key honrada). A regra pura mora em
 // `@sgh/contratos/regras-suprimentos` (consignado-taxa); aqui ficam a leitura das tabelas, o cálculo pela tabela vigente
 // e a gravação da tabela nova. Nada é apagado: a tabela nova fecha a vigente do mesmo escopo (fornecedor ou geral) na
-// véspera do início dela, e o histórico fica na tela.
+// véspera do início dela, e o histórico fica na tela. A tabela que ainda não entrou em cobrança e começa no mesmo dia da
+// nova ou depois é substituída (fica inativa, com versão e autoria da alteração): a gravada errada se corrige no mesmo
+// dia e a agenda futura se troca.
 import {
   calcularTaxaConsignacao,
   type CalculoTaxaConsignacao,
@@ -84,6 +86,15 @@ const SQL_FAIXAS = `SELECT id, versao, empresa_fornecedora_id, valor_inicial, va
     AND (empresa_fornecedora_id IS NULL OR empresa_fornecedora_id = ?)
   ORDER BY vigencia_inicio DESC, valor_inicial, id`;
 
+/** As faixas ativas do fornecedor e as gerais do estabelecimento (o faturamento do consignado usa a mesma leitura). */
+export function lerFaixasTaxaConsignacao(
+  l: Pick<Leitor, 'consultar'>,
+  est: number,
+  fornecedor: number | null,
+): Promise<FaixaTaxaConsignacao[]> {
+  return l.consultar<Linha>(SQL_FAIXAS, [est, fornecedor ?? 0]).then((rs) => rs.map(faixaDe));
+}
+
 async function hojeDo(l: Pick<Leitor, 'uma'>): Promise<string> {
   return dataIso((await l.uma<Linha>('SELECT CURRENT_DATE() AS d', []))?.['d']);
 }
@@ -119,7 +130,7 @@ export class PortaTaxaConsignacaoPropria implements PortaTaxaConsignacao {
   }
 
   private faixas(l: Pick<Leitor, 'consultar'>, est: number, fornecedor: number | null) {
-    return l.consultar<Linha>(SQL_FAIXAS, [est, fornecedor ?? 0]).then((rs) => rs.map(faixaDe));
+    return lerFaixasTaxaConsignacao(l, est, fornecedor);
   }
 
   tabelas(c: ContextoPortaM18, fornecedor: number | null): Promise<TabelasTaxaConsignacao> {
@@ -178,18 +189,24 @@ export class PortaTaxaConsignacaoPropria implements PortaTaxaConsignacao {
         // As faixas do escopo, travadas: duas tabelas novas simultâneas do mesmo fornecedor não se cruzam.
         const doEscopo = (
           await tx.consultarParaAtualizar<Linha>(
-            `SELECT id, versao, empresa_fornecedora_id, valor_inicial, valor_final, percentual, teto_cobranca,
-                    vigencia_inicio, vigencia_fim
-               FROM faixa_taxa_consignacao
-              WHERE estabelecimento_id = ? AND ativo AND fonte_pagadora_id IS NULL AND item_faturavel_id IS NULL
-                AND empresa_fornecedora_id <=> ?`,
+            `SELECT f.id, f.versao, f.empresa_fornecedora_id, f.valor_inicial, f.valor_final, f.percentual,
+                    f.teto_cobranca, f.vigencia_inicio, f.vigencia_fim,
+                    EXISTS (SELECT 1 FROM reposicao_consignada r WHERE r.taxa_faixa_id = f.id) AS usada
+               FROM faixa_taxa_consignacao f
+              WHERE f.estabelecimento_id = ? AND f.ativo AND f.fonte_pagadora_id IS NULL AND f.item_faturavel_id IS NULL
+                AND f.empresa_fornecedora_id <=> ?`,
             [est, e.fornecedor],
           )
-        ).map((r) => ({ ...faixaDe(r), versao: n(r['versao']) }));
+        ).map((r) => ({ ...faixaDe(r), versao: n(r['versao']), usada: n(r['usada']) > 0 }));
         const plano = planejarTabelaTaxaConsignacao(e, doEscopo, await hojeDo(tx));
         recusarTodas(plano.recusas);
+        // A substituída (começa no mesmo dia da nova ou depois e não entrou em cobrança) fica inativa, nunca apagada.
+        for (const id of plano.desativar) {
+          const v = doEscopo.find((x) => x.id === id)!;
+          await tx.alterar('faixa_taxa_consignacao', id, v.versao, { ativo: false });
+        }
+        // A anterior que ainda vale (ou que fechava na véspera da substituída) fecha na véspera da nova.
         for (const id of plano.fechar) {
-          // Só fecha a que começou antes da nova (a que começaria no mesmo dia ou depois já foi recusada no plano).
           const v = doEscopo.find((x) => x.id === id)!;
           await tx.alterar('faixa_taxa_consignacao', id, v.versao, { vigencia_fim: plano.fim });
         }

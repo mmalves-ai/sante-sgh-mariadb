@@ -3,7 +3,19 @@
 // dados SINTÉTICOS), o relógio fixo em 2026-10-21 09:00. O consumo consignado nasce do fluxo do OPME (a cirurgia 704,
 // o item 950003 consignado do fornecedor 7001).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { ContextoModulo } from '../registro.js';
 import { type AppSuprimentos, montarAppSuprimentos, type Sessao } from './suprimentos-http.spec-util.js';
+import type { DynamicModule, Provider } from '@nestjs/common';
+import { ConsignadoController } from './consignado.controller.js';
+import { PORTA_CONSIGNADO, type PortaConsignado } from './consignado-porta.js';
+import { PortaConsignadoPropria } from './consignado-porta-propria.js';
+import {
+  PORTA_TAXA_CONSIGNACAO,
+  type PortaTaxaConsignacao,
+  PortaTaxaConsignacaoPropria,
+} from './consignado-taxa.js';
+import { TaxaConsignacaoController } from './consignado-taxa.controller.js';
+import { modulo } from './modulo.js';
 
 const C = '/api/suprimentos/consignados';
 const M = '/api/farmacia/manipulacao';
@@ -320,5 +332,47 @@ describe('manipulação (regra 11)', () => {
     expect((await baixar()).json().codigo).toBe('ordem-ja-baixada');
     // O item volta a aceitar uma ordem nova depois da baixa.
     expect((await a.get(farm, M)).json().itens[0].ordem).toBeNull();
+  });
+});
+
+// C1-014 (05-SUP linha 24): a ligação do consignado no modulo(). Com o núcleo e o cliente configurado, o ConsignadoController
+// e o da taxa ficam sobre as portas PRÓPRIAS (destino banco); sem o núcleo e sem as fontes sintéticas, as duas recusam.
+const nucleoDeMentira = { criarExecutor: () => ({}), lerSomente: async () => undefined };
+
+const contexto = (comNucleo: boolean): ContextoModulo =>
+  ({
+    configuracao: { clientePadrao: 'teste' },
+    nucleo: comNucleo ? nucleoDeMentira : null,
+    env: {},
+    trilha: { registrar: async () => undefined },
+  }) as unknown as ContextoModulo;
+
+function provida<T>(m: DynamicModule, simbolo: symbol): T {
+  const p = (m.providers ?? []).find(
+    (x: Provider) => typeof x === 'object' && 'provide' in x && x.provide === simbolo,
+  ) as { useValue: T } | undefined;
+  if (!p) throw new Error(`provedor ${String(simbolo)} ausente`);
+  return p.useValue;
+}
+
+describe('modulo() do suprimentos: o consignado', () => {
+  it('banco próprio: o controlador registrado e as portas próprias do consignado e da taxa (destino banco)', async () => {
+    const m = await modulo(contexto(true));
+    expect(m.controllers).toEqual(expect.arrayContaining([ConsignadoController, TaxaConsignacaoController]));
+    const consignado = provida<PortaConsignado>(m, PORTA_CONSIGNADO);
+    expect(consignado).toBeInstanceOf(PortaConsignadoPropria);
+    expect((consignado as { destino?: string }).destino).toBe('banco');
+    const taxa = provida<PortaTaxaConsignacao>(m, PORTA_TAXA_CONSIGNACAO);
+    expect(taxa).toBeInstanceOf(PortaTaxaConsignacaoPropria);
+    expect(taxa.destino).toBe('banco');
+    expect(m.exports).toContain(PORTA_CONSIGNADO);
+  });
+
+  it('sem núcleo e sem fontes sintéticas: as duas portas recusam, nenhuma própria nem em memória', async () => {
+    const m = await modulo(contexto(false));
+    const consignado = provida<PortaConsignado>(m, PORTA_CONSIGNADO);
+    expect(consignado).not.toBeInstanceOf(PortaConsignadoPropria);
+    expect((consignado as { destino?: string }).destino).not.toBe('memoria');
+    expect(provida<PortaTaxaConsignacao>(m, PORTA_TAXA_CONSIGNACAO).destino).toBe('indisponivel');
   });
 });

@@ -71,6 +71,18 @@ const recusas = computed(() =>
       )
     : [],
 );
+/** As tabelas do mesmo escopo que a nova substitui (começam no mesmo dia ou depois): ficam inativas, nunca apagadas. */
+const substituidas = computed(() =>
+  dados.value && /^\d{4}-\d{2}-\d{2}$/.test(form.inicio)
+    ? [
+        ...new Set(
+          dados.value.historico
+            .filter((f) => f.fornecedor === props.fornecedor && f.inicio >= form.inicio)
+            .map((f) => dia(f.inicio)),
+        ),
+      ]
+    : [],
+);
 const mensagem = ref('');
 const erro = ref<unknown>(null);
 const enviando = ref(false);
@@ -243,6 +255,9 @@ async function gravar(): Promise<void> {
       <ul v-if="recusas.length" class="alerta" data-testid="consig-taxa-recusas">
         <li v-for="(r, i) in recusas" :key="i">{{ r.mensagem }}</li>
       </ul>
+      <p v-if="substituidas.length" role="note" data-testid="consig-taxa-substitui">
+        {{ t('consignado.taxa.substitui', { datas: substituidas.join(', ') }) }}
+      </p>
       <ErroSuprimentos v-if="erro" :erro="erro" />
       <p v-if="mensagem" role="status" data-testid="consig-taxa-mensagem">{{ mensagem }}</p>
       <SanteBotao

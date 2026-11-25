@@ -8,6 +8,7 @@ import {
   type FaixaTaxaConsignacao,
   planejarTabelaTaxaConsignacao,
   tabelaTaxaVigente,
+  taxaDoFaturamentoConsignado,
   vesperaIso,
 } from '../index.js';
 
@@ -106,6 +107,38 @@ describe('tabelaTaxaVigente e calcularTaxaConsignacao', () => {
   });
 });
 
+describe('taxaDoFaturamentoConsignado', () => {
+  it('o valor do material é o custo unitário × quantidade, e a faixa é a da tabela do fornecedor no dia', () => {
+    expect(taxaDoFaturamentoConsignado([...GERAL, ...DO_FORNECEDOR], 7, 3000, 2, HOJE)).toEqual({
+      valorMaterial: 6000,
+      faixa: 5,
+      origem: 'fornecedor',
+      percentual: 5,
+      taxaBruta: 300,
+      teto: null,
+      taxa: 300,
+    });
+  });
+  it('sem tabela do fornecedor, a geral com o teto; sem tabela nenhuma, taxa zero', () => {
+    expect(taxaDoFaturamentoConsignado(GERAL, 9, 20000, 1, HOJE)).toMatchObject({
+      faixa: 3,
+      origem: 'geral',
+      taxaBruta: 1600,
+      taxa: 1600,
+    });
+    expect(taxaDoFaturamentoConsignado(GERAL, 9, 15000, 2, HOJE)).toMatchObject({
+      taxaBruta: 2400,
+      taxa: 2000,
+    });
+    expect(taxaDoFaturamentoConsignado([], 9, 100, 1, HOJE)).toMatchObject({
+      valorMaterial: 100,
+      faixa: null,
+      origem: 'sem-tabela',
+      taxa: 0,
+    });
+  });
+});
+
 describe('planejarTabelaTaxaConsignacao', () => {
   it('fecha a vigente do mesmo escopo na véspera e não toca na de outro fornecedor', () => {
     const p = planejarTabelaTaxaConsignacao(
@@ -117,13 +150,41 @@ describe('planejarTabelaTaxaConsignacao', () => {
     expect(p.fechar).toEqual([4, 5]);
     expect(p.fim).toBe('2026-11-30');
   });
-  it('recusa a tabela nova quando o mesmo escopo já tem uma começando nessa data ou depois', () => {
+  it('substitui a tabela do mesmo escopo que começa nessa data ou depois e não foi cobrada (fica inativa)', () => {
     const p = planejarTabelaTaxaConsignacao(
       { fornecedor: null, inicio: HOJE, faixas: [f({})] },
-      [f({ id: 11, inicio: '2026-12-10' })],
+      [f({ id: 11, inicio: '2026-12-10' }), f({ id: 12, inicio: HOJE })],
       HOJE,
     );
-    expect(p.recusas.map((r) => r.codigo)).toEqual(['tabela-futura-existente']);
+    expect(p.recusas).toEqual([]);
+    expect(p.desativar).toEqual([11, 12]);
+    expect(p.fechar).toEqual([]);
+  });
+  it('recusa substituir a tabela já usada em cobrança', () => {
+    const p = planejarTabelaTaxaConsignacao(
+      { fornecedor: null, inicio: HOJE, faixas: [f({})] },
+      [{ ...f({ id: 12, inicio: HOJE }), usada: true }],
+      HOJE,
+    );
+    expect(p.recusas.map((r) => r.codigo)).toEqual(['tabela-ja-cobrada']);
+  });
+  it('a anterior que fechava na véspera da substituída passa a fechar na véspera da nova', () => {
+    const p = planejarTabelaTaxaConsignacao(
+      { fornecedor: null, inicio: '2026-12-20', faixas: [f({})] },
+      [f({ id: 1, inicio: '2026-01-01', fim: '2026-12-09' }), f({ id: 2, inicio: '2026-12-10' })],
+      HOJE,
+    );
+    expect(p.recusas).toEqual([]);
+    expect(p.desativar).toEqual([]);
+    expect(p.fechar).toEqual([2]);
+    const q = planejarTabelaTaxaConsignacao(
+      { fornecedor: null, inicio: '2026-12-05', faixas: [f({})] },
+      [f({ id: 1, inicio: '2026-01-01', fim: '2026-12-09' }), f({ id: 2, inicio: '2026-12-10' })],
+      HOJE,
+    );
+    expect(q.desativar).toEqual([2]);
+    expect(q.fechar).toEqual([1]);
+    expect(q.fim).toBe('2026-12-04');
   });
   it('véspera atravessa mês e ano', () => {
     expect(vesperaIso('2027-01-01')).toBe('2026-12-31');

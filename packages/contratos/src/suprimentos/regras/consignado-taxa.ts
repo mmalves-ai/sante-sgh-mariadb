@@ -167,25 +167,84 @@ export function calcularTaxaConsignacao(
   };
 }
 
+/** As parcelas da taxa que o faturamento de um consumo consignado grava (a conta fecha com o que fica no banco). */
+export interface TaxaDoFaturamentoConsignado {
+  /** Custo unitário da nota de compra × quantidade consumida. */
+  readonly valorMaterial: number;
+  readonly faixa: number | null;
+  readonly origem: CalculoTaxaConsignacao['origem'];
+  readonly percentual: number;
+  readonly taxaBruta: number;
+  readonly teto: number | null;
+  readonly taxa: number;
+}
+
 /**
- * O que a gravação da tabela nova faz com a vigente do mesmo escopo: as faixas que ainda valem no início da nova são
- * fechadas na véspera; a tabela do mesmo escopo que só começaria no mesmo dia ou depois é recusada (não se sobrepõe à
- * agenda futura em silêncio).
+ * A taxa de comercialização no faturamento de um consumo consignado: o valor do material é o custo unitário do item
+ * na nota de compra vezes a quantidade consumida; a faixa é a da tabela vigente no dia (a do fornecedor ou a geral) em
+ * que esse valor cai. Sem tabela vigente, a taxa é zero e a origem fica 'sem-tabela'.
+ */
+export function taxaDoFaturamentoConsignado(
+  faixas: readonly FaixaTaxaConsignacao[],
+  fornecedor: number,
+  custoUnitario: number,
+  quantidade: number,
+  data: string,
+): TaxaDoFaturamentoConsignado {
+  const c = calcularTaxaConsignacao(faixas, fornecedor, reais(custoUnitario * quantidade), data);
+  return {
+    valorMaterial: c.valor,
+    faixa: c.faixa?.id ?? null,
+    origem: c.origem,
+    percentual: c.percentual,
+    taxaBruta: c.taxaBruta,
+    teto: c.teto,
+    taxa: c.taxa,
+  };
+}
+
+/** Uma faixa do escopo como a gravação a lê: com a marca de já ter entrado em alguma cobrança. */
+export interface FaixaTaxaConsignacaoNoEscopo extends FaixaTaxaConsignacao {
+  /** Verdadeiro quando algum faturamento de consumo já gravou a taxa por esta faixa. */
+  readonly usada?: boolean;
+}
+
+/**
+ * O que a gravação da tabela nova faz com as do mesmo escopo (fornecedor ou geral):
+ * - a que começa no mesmo dia da nova ou depois (a agenda futura, ou a de hoje gravada errada) e ainda não entrou em
+ *   cobrança é SUBSTITUÍDA: fica inativa, nunca apagada; a já usada em cobrança recusa a nova (a cobrança feita não
+ *   muda);
+ * - a anterior que ainda vale no início da nova é fechada na véspera dela; a anterior que fechava na véspera de uma
+ *   substituída passa a fechar na véspera da nova (a vigência continua sem buraco).
  */
 export function planejarTabelaTaxaConsignacao(
   nova: TabelaTaxaConsignacaoEntrada,
-  doEscopo: readonly FaixaTaxaConsignacao[],
+  doEscopo: readonly FaixaTaxaConsignacaoNoEscopo[],
   hoje: string,
-): { readonly recusas: RecusaSuprimentos[]; readonly fechar: readonly number[]; readonly fim: string } {
+): {
+  readonly recusas: RecusaSuprimentos[];
+  readonly fechar: readonly number[];
+  readonly desativar: readonly number[];
+  readonly fim: string;
+} {
   const recusas = conferirTabelaTaxaConsignacao(nova, hoje);
   const fim = vesperaIso(nova.inicio);
   const mesmo = doEscopo.filter((f) => f.fornecedor === nova.fornecedor);
-  if (mesmo.some((f) => f.inicio >= nova.inicio))
+  const posteriores = mesmo.filter((f) => f.inicio >= nova.inicio);
+  if (posteriores.some((f) => f.usada === true))
     recusas.push(
-      recusa('tabela-futura-existente', 'Já existe tabela deste fornecedor começando nesta data ou depois.', [
-        'inicio',
-      ]),
+      recusa(
+        'tabela-ja-cobrada',
+        'A tabela deste escopo que começa nesta data ou depois já entrou em cobrança: escolha um início posterior a ela.',
+        ['inicio'],
+      ),
     );
-  const fechar = mesmo.filter((f) => f.fim === null || f.fim >= nova.inicio).map((f) => f.id);
-  return { recusas, fechar, fim };
+  const desativar = posteriores.map((f) => f.id);
+  const vesperasSubstituidas = new Set(posteriores.map((f) => vesperaIso(f.inicio)));
+  const fechar = mesmo
+    .filter((f) => f.inicio < nova.inicio)
+    .filter((f) => f.fim !== fim)
+    .filter((f) => f.fim === null || f.fim >= nova.inicio || vesperasSubstituidas.has(f.fim))
+    .map((f) => f.id);
+  return { recusas, fechar, desativar, fim };
 }

@@ -1,7 +1,7 @@
 // Integração da taxa de comercialização do consignado por faixa (05-SUP linha 24) contra o MariaDB real (cliente f22_o3).
 // Contrato de efeito: a tabela geral gravada (uma linha por faixa em faixa_taxa_consignacao, versão 1, criado_em e
 // criado_por, a trilha e a chave em idempotencia_operacao), o reenvio pela chave sem linha nova, a tabela nova do mesmo
-// escopo fechando a vigente na véspera (nada apagado, versão 2), a do fornecedor valendo acima da geral no cálculo, a
+// escopo fechando a vigente na véspera (nada apagado, versão 2), a futura não cobrada substituída (inativa), a do fornecedor valendo acima da geral no cálculo, a
 // recusa da tabela com buraco e a do outro estabelecimento sem nada. Massa SINTÉTICA (estabelecimentos e fornecedor
 // fictícios), limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -186,14 +186,24 @@ describe.skipIf(SEM_DB)('taxa do consignado por faixa contra o MariaDB (cliente 
     const t = await porta.tabelas(ctxA, fornecedor);
     expect(t.origem).toBe('fornecedor');
     expect(t.historico.filter((f) => f.fornecedor === fornecedor)).toHaveLength(2);
-    // Outra tabela do mesmo fornecedor começando na mesma data da futura: recusada.
-    await expect(
-      porta.gravar(
-        ctxA,
-        { fornecedor, inicio, faixas: [{ valorInicial: 0, valorFinal: null, percentual: 1, teto: null }] },
-        `c1014-forn3-${sufixo}`,
-      ),
-    ).rejects.toThrow(/tabela-futura-existente/);
+    // Outra tabela do mesmo fornecedor na mesma data da futura (agendada errada, sem cobrança): substitui a futura,
+    // que fica inativa (versão 2, nada apagado); a de hoje continua fechada na véspera da nova.
+    const troca = await porta.gravar(
+      ctxA,
+      { fornecedor, inicio, faixas: [{ valorInicial: 0, valorFinal: null, percentual: 1, teto: null }] },
+      `c1014-forn3-${sufixo}`,
+    );
+    const depois = await ler(
+      `SELECT id, percentual, ativo, versao, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim
+         FROM faixa_taxa_consignacao WHERE estabelecimento_id = ? AND empresa_fornecedora_id = ? ORDER BY id`,
+      [estA, fornecedor],
+    );
+    expect(depois).toHaveLength(3);
+    expect(depois[0]).toMatchObject({ fim: hoje });
+    expect(Number(depois[1]!['ativo'])).toBe(0);
+    expect(Number(depois[1]!['versao'])).toBe(2);
+    expect(Number(depois[2]!['id'])).toBe(troca.ids[0]);
+    expect(await porta.calcular(ctxA, fornecedor, 100, inicio)).toMatchObject({ percentual: 1, taxa: 1 });
   });
 
   it('recusa a tabela com buraco e o fornecedor inexistente; o outro estabelecimento não vê nada', async () => {

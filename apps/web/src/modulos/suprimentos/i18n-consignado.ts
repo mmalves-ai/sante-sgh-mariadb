@@ -32,6 +32,8 @@ export const mensagensConsignado = {
     gravada: 'Tabela de taxa gravada com {n} faixa(s).',
     historico: 'Histórico das tabelas',
     historicoVazio: 'Nenhuma tabela gravada.',
+    substitui:
+      'A tabela que começa em {datas} será substituída pela nova e ficará inativa no histórico; se ela já entrou em cobrança, a gravação é recusada.',
   },
   carregando: 'Carregando…',
   emConsulta: 'Só consulta neste estabelecimento.',
