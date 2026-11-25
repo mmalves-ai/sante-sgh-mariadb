@@ -67,6 +67,10 @@ const esquemaConferencia = z
           .object({
             codigo: z.string().trim().min(1).max(20).optional(),
             itemId: z.number().int().positive().optional(),
+            /** Item da prescrição (medicamento, solução, insulina): o servidor resolve o item faturável. */
+            itemPrescritivelId: z.number().int().positive().optional(),
+            /** Cuidado ou procedimento de enfermagem prescrito: resolvido pelo item prescritível ligado. */
+            cuidadoId: z.number().int().positive().optional(),
             quantidade: z.number().positive().max(99_999).default(1),
           })
           .strict(),

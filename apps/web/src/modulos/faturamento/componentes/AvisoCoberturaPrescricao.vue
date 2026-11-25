@@ -4,11 +4,15 @@
 // Confere automaticamente quando a lista de itens muda; sem permissão ou sem banco próprio, o aviso some em silêncio.
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { conferirCoberturaPrescricao, type ConferenciaCobertura } from '../api-cobertura.js';
+import {
+  conferirCoberturaPrescricao,
+  type ConferenciaCobertura,
+  type ItemConferencia,
+} from '../api-cobertura.js';
 
 const props = defineProps<{
   atendimentoId: number | null;
-  itens: readonly { codigo?: string; itemId?: number; quantidade: number }[];
+  itens: readonly ItemConferencia[];
 }>();
 const { t } = useI18n();
 const resultado = ref<ConferenciaCobertura | null>(null);

@@ -41,6 +41,7 @@ import {
   ServicoPedidoSadt,
   TABELAS_PEDIDO,
 } from './pedido-propria.js';
+import { criticarCoberturaDoItemConta } from '../../faturamento/cobertura-item-conta.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -736,6 +737,14 @@ export class ServicoOrcamentoSadt {
       );
       const unitario = n(i['valor_unitario']);
       const total = n(i['valor_total']);
+      // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+      await criticarCoberturaDoItemConta(tx, est, {
+        conta: contaId,
+        item: itemFat,
+        realizado: agora,
+        quantidade: n(i['quantidade']),
+        valorTotal: total,
+      });
       const item = await tx.incluir('conta_hospitalar_item', {
         conta_hospitalar_id: contaId,
         sequencia: n(seq?.['s']),

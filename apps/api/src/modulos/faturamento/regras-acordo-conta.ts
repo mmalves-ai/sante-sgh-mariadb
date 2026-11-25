@@ -12,6 +12,7 @@ import {
   type ResultadoAcordo,
 } from '@sgh/dominio-preco';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
+import { criticarCoberturaDoItemConta } from './cobertura-item-conta.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -322,6 +323,15 @@ export async function lancarExcedenteNoDestino(
     'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
     [contaDestino],
   );
+  // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+  await criticarCoberturaDoItemConta(tx, est, {
+    conta: contaDestino,
+    item: lancado.itemFaturavel,
+    realizado: lancado.realizado,
+    quantidade: 1,
+    valorTotal: excedente.valor,
+    profissional: lancado.executante,
+  });
   const item = await tx.incluir('conta_hospitalar_item', {
     conta_hospitalar_id: contaDestino,
     sequencia: n(seq?.['proxima']),

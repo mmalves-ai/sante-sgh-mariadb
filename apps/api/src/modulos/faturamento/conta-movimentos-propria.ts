@@ -41,6 +41,7 @@ import { lancarItem, totalDosItens } from './operacoes.js';
 import { lancarLinhasDoKit } from './kit-lancamento.js';
 import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
 import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
+import { criticarCoberturaDoItemConta } from './cobertura-item-conta.js';
 
 type Linha = Record<string, unknown>;
 type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
@@ -917,6 +918,14 @@ export const opTransferir = definirOperacao({
         'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
         [destino.id],
       );
+      // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+      await criticarCoberturaDoItemConta(tx, destino.estabelecimento, {
+        conta: destino.id,
+        item: Number(i['item_faturavel_id']),
+        realizado: i['realizado_em'] as Date | string,
+        quantidade: qtd,
+        valorTotal: valorDestino,
+      });
       const novo = await tx.incluir('conta_hospitalar_item', {
         conta_hospitalar_id: destino.id,
         sequencia: n(seq?.['s']),

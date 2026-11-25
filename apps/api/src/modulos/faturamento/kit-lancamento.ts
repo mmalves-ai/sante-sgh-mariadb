@@ -6,6 +6,7 @@
 import { type KitCobranca, kitsDoGatilho, type LinhaDoKit } from '@sgh/dominio-faturamento';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
+import { criticarCoberturaDoItemConta } from './cobertura-item-conta.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -65,6 +66,14 @@ export async function lancarLinhasDoKit(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
       [c.id],
     );
+    // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+    await criticarCoberturaDoItemConta(tx, est, {
+      conta: c.id,
+      item: linha.item,
+      realizado: agora,
+      quantidade: linha.quantidade,
+      valorTotal: r2(unitario * linha.quantidade),
+    });
     const item = await tx.incluir('conta_hospitalar_item', {
       conta_hospitalar_id: c.id,
       sequencia: n(seq?.['s']),

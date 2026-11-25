@@ -217,7 +217,15 @@ export interface PedidoConferencia {
   hora: string;
   setorId?: number | null;
   profissionalId?: number | null;
-  itens: { codigo?: string; itemId?: number; quantidade: number }[];
+  itens: ItemConferencia[];
+}
+/** O que se confere: o item faturável (id ou código) ou o item da prescrição, resolvido no servidor. */
+export interface ItemConferencia {
+  codigo?: string;
+  itemId?: number;
+  itemPrescritivelId?: number;
+  cuidadoId?: number;
+  quantidade: number;
 }
 
 export const lerPainelCobertura = (fonte: number | null) =>

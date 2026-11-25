@@ -20,6 +20,7 @@ import {
 } from '@sgh/contratos/regras-faturamento';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
 import { vinculoReferenciaDaConta } from './vinculo-referencia-preco.js';
+import { criticarCoberturaDoItemConta } from '../faturamento/cobertura-item-conta.js';
 
 /** As tabelas que o lançamento na conta grava (somar às da operação que movimenta o estoque). */
 export const TABELAS_CONTA_ESTOQUE = [
@@ -234,6 +235,15 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
       "SELECT id FROM origem_lancamento WHERE codigo = 'estoque' AND ativo LIMIT 1",
       [],
     );
+    // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+    await criticarCoberturaDoItemConta(tx, est, {
+      conta: n(conta['id']),
+      item: n(fat['id']),
+      realizado: s.realizadoEm,
+      quantidade: preco.quantidadeCobrada,
+      valorTotal: preco.valorTotal,
+      setor: s.setor ?? null,
+    });
     const item = await tx.incluir('conta_hospitalar_item', {
       conta_hospitalar_id: n(conta['id']),
       sequencia: n(seq?.['s']),

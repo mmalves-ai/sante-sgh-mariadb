@@ -38,6 +38,7 @@ import { agoraLocal, descreverItem } from '../descricao-item.js';
 import { dataHoraBr } from '../formato.js';
 import DadosClinicos from '../componentes/prescricao/DadosClinicos.vue';
 import AvisoCoberturaPrescricao from '../../faturamento/componentes/AvisoCoberturaPrescricao.vue';
+import type { ItemConferencia } from '../../faturamento/api-cobertura.js';
 
 const props = defineProps<{ paciente: string }>();
 const { t } = useI18n();
@@ -104,12 +105,33 @@ const aba = ref<GrupoItemPrescricao>(grupoInicial);
 
 // ── Itens ─────────────────────────────────────────────────────────────────────────────────────────
 const itens = ref<ItemPrescricao[]>([]);
-// F7 (09-AREA linha 76): o aviso da cobertura da fonte pagadora vai pelos itens com código faturável (hemocomponente).
-const itensCobertura = computed(() =>
-  itens.value.flatMap((i) =>
-    i.detalhe.tipo === 'hemoterapia' ? [{ codigo: i.detalhe.hemocomponente.codigo, quantidade: 1 }] : [],
-  ),
-);
+// F7 (09-AREA linha 76): o aviso da cobertura da fonte pagadora vai por todo item que se cobra. O hemocomponente vai
+// pelo código faturável; medicamento, componente de solução e insulina da escala, pelo item prescritível (o servidor
+// resolve o item faturável dele ou do insumo ligado); procedimento e glicemia, pelo cuidado de enfermagem.
+const itensCobertura = computed<ItemConferencia[]>(() => {
+  const lista: ItemConferencia[] = [];
+  const vistos = new Set<string>();
+  const por = (chave: string, i: ItemConferencia) => {
+    if (!vistos.has(chave)) {
+      vistos.add(chave);
+      lista.push(i);
+    }
+  };
+  for (const { detalhe: d } of itens.value) {
+    if (d.tipo === 'hemoterapia')
+      por(`c${d.hemocomponente.codigo}`, { codigo: d.hemocomponente.codigo, quantidade: 1 });
+    else if (d.tipo === 'medicamento')
+      por(`p${d.item.produto}`, { itemPrescritivelId: d.item.produto, quantidade: 1 });
+    else if (d.tipo === 'solucao')
+      for (const c of d.componentes) por(`p${c.produto}`, { itemPrescritivelId: c.produto, quantidade: 1 });
+    else if (d.tipo === 'procedimento' || d.tipo === 'glicemia') {
+      por(`q${d.procedimento}`, { cuidadoId: d.procedimento, quantidade: 1 });
+      if (d.tipo === 'glicemia')
+        for (const f of d.faixas) por(`p${f.produto}`, { itemPrescritivelId: f.produto, quantidade: 1 });
+    }
+  }
+  return lista;
+});
 const produtosVistos = reactive(new Map<number, string>());
 const dominio = (lista: string, v: string | number | null | undefined) =>
   v === null || v === undefined

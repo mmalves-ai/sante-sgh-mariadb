@@ -47,6 +47,7 @@ import { sincronizarProducaoDaConta } from '../repasse/producao-conta.js';
 import { apurarConta, TABELAS_CONTA_ENTRADA } from './conta-entrada.js';
 import { buscarItensCobraveis } from './tarifador-propria.js';
 import { totalDosItens } from './operacoes.js';
+import { criticarCoberturaDoItemConta } from './cobertura-item-conta.js';
 
 type Linha = Record<string, unknown>;
 type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
@@ -1638,6 +1639,14 @@ async function aplicarPacoteNaConta(
     const cobranca = await tx.uma<Linha>('SELECT grupo_faturamento_id FROM item_faturavel WHERE id = ?', [
       n(p['cobranca_item_faturavel_id']),
     ]);
+    // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+    await criticarCoberturaDoItemConta(tx, est, {
+      conta: c.id,
+      item: n(p['cobranca_item_faturavel_id']),
+      realizado: c.inicio as Date | string,
+      quantidade: 1,
+      valorTotal: valor,
+    });
     await tx.incluir('conta_hospitalar_item', {
       conta_hospitalar_id: c.id,
       sequencia: n(seq?.['s']),

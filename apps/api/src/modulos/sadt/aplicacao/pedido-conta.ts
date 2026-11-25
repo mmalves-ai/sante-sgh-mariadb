@@ -12,6 +12,7 @@ import { cobrancaDoExame, estornoDoExameNaConta, type PendenciaCobrancaExame } f
 import type { TxOperacao } from '@sgh/nucleo';
 import { totalDosItens } from '../../faturamento/operacoes.js';
 import { precoVigente, tabelasDePreco } from '../../faturamento/public-api.js';
+import { criticarCoberturaDoItemConta } from '../../faturamento/cobertura-item-conta.js';
 
 export const TABELAS_CONTA_PEDIDO = [
   'conta_hospitalar',
@@ -144,6 +145,14 @@ export async function lancarExamesNaConta(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
       [contaId],
     );
+    // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+    await criticarCoberturaDoItemConta(tx, est, {
+      conta: contaId,
+      item: itemFat,
+      realizado: agora,
+      quantidade: c.quantidade,
+      valorTotal: c.total,
+    });
     const contaItem = await tx.incluir('conta_hospitalar_item', {
       conta_hospitalar_id: contaId,
       sequencia: n(seq?.['s']),

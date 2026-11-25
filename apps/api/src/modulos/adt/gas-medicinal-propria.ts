@@ -47,6 +47,7 @@ import {
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
 import { precoVigente, tabelasDePreco } from '../faturamento/public-api.js';
+import { criticarCoberturaDoItemConta } from '../faturamento/cobertura-item-conta.js';
 
 export const PORTA_GAS_MEDICINAL = Symbol('PORTA_GAS_MEDICINAL');
 
@@ -728,6 +729,15 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
             const total = Math.round(unitario * k.dif.quantidade * 100) / 100;
             const inicio = k.partes.map((p) => p.inicio).reduce((a, b) => (a < b ? a : b));
             const fim = k.partes.map((p) => p.fim).reduce((a, b) => (a > b ? a : b));
+            // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+            await criticarCoberturaDoItemConta(tx, est.id, {
+              conta: k.contaId,
+              item: k.itemFat,
+              realizado: inicio,
+              quantidade: k.dif.quantidade,
+              valorTotal: total,
+              setor: numOuNull(k.pend[0]!['setor_funcional_id']),
+            });
             const item = await tx.incluir('conta_hospitalar_item', {
               conta_hospitalar_id: k.contaId,
               sequencia: num(seq?.['s']),

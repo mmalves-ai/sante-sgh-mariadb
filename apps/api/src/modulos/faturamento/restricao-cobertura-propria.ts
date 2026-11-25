@@ -360,6 +360,52 @@ async function avaliar(
   return avaliarCobertura(lanc, restricoes, excecoes, pares);
 }
 
+/**
+ * O item faturável do que se confere: pelo id, pelo código, ou (na prescrição) pelo item prescritível, cujo item
+ * faturável próprio vale antes do item faturável do insumo ligado; o cuidado de enfermagem vai pelo item prescritível
+ * ligado a ele. Sem ligação, não há o que conferir (o item é livre para a cobertura).
+ */
+async function itemFaturavelDoPedido(
+  l: Consulta,
+  it: {
+    codigo?: string | undefined;
+    itemId?: number | undefined;
+    itemPrescritivelId?: number | undefined;
+    cuidadoId?: number | undefined;
+  },
+): Promise<Linha | null> {
+  if (it.itemId)
+    return l.uma<Linha>(
+      'SELECT id, codigo, descricao, grupo_faturamento_id FROM item_faturavel WHERE id = ?',
+      [it.itemId],
+    );
+  if (it.codigo)
+    return l.uma<Linha>(
+      'SELECT id, codigo, descricao, grupo_faturamento_id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL LIMIT 1',
+      [it.codigo],
+    );
+  const prescritivel = it.itemPrescritivelId
+    ? it.itemPrescritivelId
+    : it.cuidadoId
+      ? nn(
+          (
+            await l.uma<Linha>('SELECT item_prescritivel_id FROM cuidado_enfermagem WHERE id = ?', [
+              it.cuidadoId,
+            ])
+          )?.['item_prescritivel_id'],
+        )
+      : null;
+  if (!prescritivel) return null;
+  return l.uma<Linha>(
+    `SELECT f.id, f.codigo, f.descricao, f.grupo_faturamento_id
+       FROM item_prescritivel ip
+       LEFT JOIN insumo s ON s.id = ip.insumo_id
+       JOIN item_faturavel f ON f.id = COALESCE(ip.item_faturavel_id, s.item_faturavel_id) AND f.excluido_em IS NULL
+      WHERE ip.id = ?`,
+    [prescritivel],
+  );
+}
+
 /** Tabelas que a crítica lê no lançamento (o lançamento não grava nelas). */
 export const TABELAS_COBERTURA_LANCAMENTO = [
   'restricao_cobertura_fonte_pagadora',
@@ -399,20 +445,28 @@ export async function avaliarCoberturaPropria(
     hora: string;
     setorId: number | null;
     profissionalId: number | null;
-    itens: { codigo?: string | undefined; itemId?: number | undefined; quantidade: number }[];
+    itens: {
+      codigo?: string | undefined;
+      itemId?: number | undefined;
+      itemPrescritivelId?: number | undefined;
+      cuidadoId?: number | undefined;
+      quantidade: number;
+    }[];
   },
 ) {
   const ctxA = await contextoDoAtendimento(l, est, pedido.atendimentoId);
   const saida = [];
   for (const it of pedido.itens.slice(0, 50)) {
-    const item = await l.uma<Linha>(
-      it.itemId
-        ? 'SELECT id, codigo, descricao, grupo_faturamento_id FROM item_faturavel WHERE id = ?'
-        : 'SELECT id, codigo, descricao, grupo_faturamento_id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL LIMIT 1',
-      [it.itemId ?? it.codigo ?? ''],
-    );
+    const item = await itemFaturavelDoPedido(l, it);
     if (!item) {
-      saida.push({ codigo: it.codigo ?? null, itemId: it.itemId ?? null, situacao: 'livre', achados: [] });
+      saida.push({
+        codigo: it.codigo ?? null,
+        itemId: it.itemId ?? null,
+        itemPrescritivelId: it.itemPrescritivelId ?? null,
+        cuidadoId: it.cuidadoId ?? null,
+        situacao: 'livre',
+        achados: [],
+      });
       continue;
     }
     const r = await avaliar(l, est, ctxA, {
@@ -431,6 +485,8 @@ export async function avaliarCoberturaPropria(
     saida.push({
       codigo: String(item['codigo']),
       itemId: n(item['id']),
+      itemPrescritivelId: it.itemPrescritivelId ?? null,
+      cuidadoId: it.cuidadoId ?? null,
       descricao: String(item['descricao']),
       ...r,
     });

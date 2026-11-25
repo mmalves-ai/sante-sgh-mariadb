@@ -51,6 +51,7 @@ import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/p
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
 import { destinoDaContaNaEntrada, quebrarContasPorPeriodo, trechoDaConta } from './quebra-conta.js';
 import { conferirCompetenciaDaConta, contaAceitaLancamento } from './regras-conta.js';
+import { criticarCoberturaDoItemConta } from './cobertura-item-conta.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -609,6 +610,14 @@ export async function apurarConta(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
       [contaId],
     );
+    // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item (o bloqueio recusa).
+    await criticarCoberturaDoItemConta(tx, est, {
+      conta: contaId,
+      item: d.item,
+      realizado: `${d.dia} ${d.hora}`,
+      quantidade: d.quantidade,
+      valorTotal: r2(unitario * d.quantidade),
+    });
     const item = await tx.incluir('conta_hospitalar_item', {
       conta_hospitalar_id: contaId,
       sequencia: n(seq?.['proxima']),

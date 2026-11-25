@@ -11,9 +11,18 @@
 //   - na prescrição, o mesmo item restrito só gera alerta e nada é gravado.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
-import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
+import {
+  type ContextoOperacao,
+  definirOperacao,
+  type Escritor,
+  NucleoProprio,
+  type TxOperacao,
+} from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { lancadorContaEstoque } from '../suprimentos/conta-estoque.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { lancarLinhasDoKit } from './kit-lancamento.js';
 import type { ContextoFaturamento } from './porta.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
 import { ServicoCobertura } from './restricao-cobertura.controller.js';
@@ -87,6 +96,8 @@ describe.skipIf(SEM_BANCO)('restrição de cobertura e compatibilidade no lança
       ['8284%'],
     );
     await e.executar('DELETE FROM justificativa_excecao_cobertura WHERE codigo LIKE ?', [`${P}%`]);
+    await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}IP%`]);
+    await e.executar('DELETE FROM insumo WHERE codigo LIKE ?', [`${P}INS%`]);
   };
 
   beforeAll(async () => {
@@ -438,5 +449,110 @@ describe.skipIf(SEM_BANCO)('restrição de cobertura e compatibilidade no lança
         ids['conta'],
       ]),
     ).toBe(antes);
+  });
+
+  // O lançamento automático segue a mesma crítica do manual: o bloqueio recusa a operação inteira (nada gravado).
+  const naTransacao = (fn: (tx: TxOperacao) => Promise<unknown>) =>
+    nucleo.criarExecutor().executar(
+      definirOperacao({
+        nome: 'teste.c284.lancamento-automatico',
+        tabelas: ['conta_hospitalar', 'conta_hospitalar_item', 'conta_hospitalar_item_memoria'],
+        entrada: z.unknown(),
+        gravar: async (tx) => {
+          await fn(tx);
+          return { id: 0 };
+        },
+        alvo: () => ({ tabela: 'conta_hospitalar', id: ids['conta']! }),
+      }),
+      CLIENTE,
+      {},
+      op(),
+    );
+  const insumoDo = async (item: number) =>
+    escrever(async (e) => {
+      const g = await e.uma<{ id: number }>('SELECT id FROM grupo_insumo ORDER BY id LIMIT 1', []);
+      const u = await e.uma<{ id: number }>('SELECT id FROM unidade_medida ORDER BY id LIMIT 1', []);
+      return garantir(
+        e,
+        'SELECT id FROM insumo WHERE codigo = ?',
+        [`${P}INS${item}`],
+        `INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, item_faturavel_id, criado_em)
+         VALUES (?, ?, 'material', ?, ?, ?, ?)`,
+        [`${P}INS${item}`, `MATERIAL SINTETICO ${P}`, g!.id, u!.id, item, new Date()],
+      );
+    });
+
+  it('kit e baixa do estoque na conta: o item não coberto recusa a operação e nada entra na conta', async () => {
+    const antes = await itensNaConta(ids['a']!);
+    const antesE = await itensNaConta(ids['e']!);
+    await expect(
+      naTransacao((tx) =>
+        lancarLinhasDoKit(
+          tx,
+          ids['est']!,
+          { id: ids['conta']!, fontePagadora: ids['fonte']!, plano: null, tabela: ids['tabela']! },
+          {
+            id: 0,
+            ativo: true,
+            modo: 'aberto',
+            item: null,
+            fontePagadora: null,
+            plano: null,
+            componentes: [],
+            codigo: `${P}K`,
+            descricao: 'KIT SINTETICO',
+          },
+          [
+            { item: ids['a']!, quantidade: 1, papel: 'componente' },
+            { item: ids['e']!, quantidade: 1, papel: 'componente' },
+          ],
+          1,
+          '2026-01-21',
+          ids['usuario']!,
+        ),
+      ),
+    ).rejects.toThrow(/não coberto/);
+    const insumo = await insumoDo(ids['a']!);
+    await expect(
+      naTransacao((tx) =>
+        lancadorContaEstoque(tx, ids['est']!, ids['usuario']!).lancarSaida({
+          movimento: 0,
+          atendimento: ids['atendimento']!,
+          insumo,
+          quantidade: 1,
+          lote: null,
+          realizadoEm: new Date('2026-01-21T12:00:00Z'),
+          dataBase: '2026-01-21',
+        }),
+      ),
+    ).rejects.toThrow(/não coberto/);
+    expect(await itensNaConta(ids['a']!)).toBe(antes);
+    expect(await itensNaConta(ids['e']!)).toBe(antesE);
+  });
+
+  it('prescrição: o item prescritível é conferido pelo item faturável do insumo ligado', async () => {
+    const insumo = await insumoDo(ids['a']!);
+    const ip = await escrever(async (e) => {
+      const t = await e.uma<{ id: number }>('SELECT id FROM tipo_item_prescricao ORDER BY id LIMIT 1', []);
+      return garantir(
+        e,
+        'SELECT id FROM item_prescritivel WHERE codigo = ?',
+        [`${P}IP1`],
+        'INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, insumo_id, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [`${P}IP1`, `ITEM PRESCRITIVEL SINTETICO ${P}`, t!.id, insumo, new Date()],
+      );
+    });
+    const r = await s.ler(ctxL(), (l, est) =>
+      avaliarCoberturaPropria(l, est, {
+        atendimentoId: ids['atendimento']!,
+        contexto: 'prescricao',
+        data: '2026-01-21',
+        hora: '09:00',
+        setorId: null,
+        profissionalId: ids['prof']!,
+        itens: [{ itemPrescritivelId: ip, quantidade: 1 }],
+      }),
+    );
+    expect(r.itens[0]).toMatchObject({ itemId: ids['a'], itemPrescritivelId: ip, situacao: 'alerta' });
   });
 });
