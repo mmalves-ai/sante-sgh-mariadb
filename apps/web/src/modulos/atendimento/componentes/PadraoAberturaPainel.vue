@@ -27,6 +27,8 @@ const podeEstabelecimento = pode('atendimento.definirPadraoAbertura');
 const podePessoal = pode('atendimento.definirMeuPadraoAbertura');
 
 type Valores = Record<string, string>;
+/** Avisos de conflito da última releitura (campo mudado na tela e gravado diferente por outra estação). */
+const conflitos = ref<string[]>([]);
 const doEstabelecimento = ref<Valores>({});
 const pessoal = ref<Valores>({});
 const texto = (v: { id: number } | null): string => (v ? String(v.id) : '');
@@ -39,12 +41,31 @@ watch(
   () => cfg.data.value,
   (c, anterior) => {
     if (!c) return;
-    doEstabelecimento.value = recarregarRascunho(
+    const e = recarregarRascunho(
       doEstabelecimento.value,
       lidos(c, 'estabelecimento') ?? [],
       lidos(anterior, 'estabelecimento'),
     );
-    pessoal.value = recarregarRascunho(pessoal.value, lidos(c, 'pessoal') ?? [], lidos(anterior, 'pessoal'));
+    const p = recarregarRascunho(pessoal.value, lidos(c, 'pessoal') ?? [], lidos(anterior, 'pessoal'));
+    doEstabelecimento.value = e.valores;
+    pessoal.value = p.valores;
+    // Outra gravação mudou o campo que a pessoa também tinha mudado: vale o gravado, e o aviso diz campo a campo o
+    // que foi gravado e o que ela tinha escolhido (para escolher de novo, se quiser, já vendo o conflito).
+    const rotulo = (campo: string) => c.campos.find((x) => x.campo === campo)?.rotulo ?? campo;
+    const vazio = t('atendimento.padraoAbertura.semValor');
+    const novos = [
+      ...e.conflitos.map((x) => ({ ...x, escopo: t('atendimento.heranca.estabelecimento') })),
+      ...p.conflitos.map((x) => ({ ...x, escopo: t('atendimento.heranca.paraMim') })),
+    ].map((x) =>
+      t('atendimento.padraoAbertura.avisoConflito', {
+        campo: rotulo(x.campo),
+        escopo: x.escopo,
+        gravado: x.gravado ? nome(x.campo, x.gravado) : vazio,
+        escolhido: x.naTela ? nome(x.campo, x.naTela) : vazio,
+      }),
+    );
+    // Uma releitura sem conflito (a de fundo, por exemplo) não apaga o aviso: ele sai na próxima gravação.
+    if (novos.length) conflitos.value = novos;
   },
   { immediate: true },
 );
@@ -68,8 +89,9 @@ function opcoes(campo: string, vazio: string, gravado: { id: number; rotulo: str
     });
   return [{ valor: '', rotulo: vazio }, ...itens];
 }
-const nome = (campo: string, valor: string): string =>
-  opcoes(campo, '', null).find((x) => x.valor === valor)?.rotulo ?? valor;
+function nome(campo: string, valor: string): string {
+  return opcoes(campo, '', null).find((x) => x.valor === valor)?.rotulo ?? valor;
+}
 
 /** O que a ficha vai receber com o que está na tela (antes de gravar): o pessoal vence o do estabelecimento. */
 function emVigor(campo: string): string {
@@ -99,6 +121,7 @@ async function gravar(paraMim: boolean): Promise<void> {
   if (!c) return;
   erro.value = null;
   mensagem.value = null;
+  conflitos.value = [];
   ocupado.value = true;
   try {
     const atual = paraMim ? pessoal.value : doEstabelecimento.value;
@@ -140,6 +163,13 @@ const campos = computed(() =>
         variante="alerta"
         :texto="aviso"
         data-testid="padrao-fora-de-uso"
+      />
+      <SanteAlerta
+        v-for="(aviso, i) in conflitos"
+        :key="`conflito-${i}`"
+        variante="alerta"
+        :texto="aviso"
+        data-testid="padrao-conflito"
       />
       <table class="tabela" data-testid="tabela-padrao-abertura">
         <thead>

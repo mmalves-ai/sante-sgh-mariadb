@@ -14,21 +14,46 @@ export interface CampoLido {
 
 const texto = (id: number | null): string => (id === null ? '' : String(id));
 
+/** Campo em que a pessoa mudou a tela e outra gravação mudou o mesmo campo: vale o gravado, e a tela avisa. */
+export interface ConflitoRascunho {
+  readonly campo: string;
+  /** O que a pessoa tinha escolhido e não foi gravado ('' para "sem valor"). */
+  readonly naTela: string;
+  /** O que está gravado agora e passa a aparecer na tela ('' para "sem valor"). */
+  readonly gravado: string;
+}
+
+export interface RascunhoRelido {
+  readonly valores: Record<string, string>;
+  readonly conflitos: readonly ConflitoRascunho[];
+}
+
 /**
  * Os valores da tela depois da releitura de um escopo. Sem leitura anterior (a primeira carga), vale o que veio do
- * servidor. Com leitura anterior, o campo cujo valor na tela difere do lido antes é uma mudança pendente e fica.
+ * servidor. Com leitura anterior, campo a campo:
+ * - a tela igual ao lido antes: recebe o relido (inclusive o que outra estação gravou);
+ * - a tela diferente do lido antes e o relido igual ao lido antes: mudança pendente, fica;
+ * - a tela diferente do lido antes e o relido também diferente (e diferente da tela): conflito. Vale o gravado, para
+ *   que a próxima gravação não sobrescreva sem ninguém ver, e o campo volta em `conflitos` com as duas escolhas.
  */
 export function recarregarRascunho(
   naTela: ValoresNaTela,
   relido: readonly CampoLido[],
   lidoAntes: readonly CampoLido[] | undefined,
-): Record<string, string> {
+): RascunhoRelido {
   const antes = new Map((lidoAntes ?? []).map((x) => [x.campo, texto(x.id)]));
-  return Object.fromEntries(
+  const conflitos: ConflitoRascunho[] = [];
+  const valores = Object.fromEntries(
     relido.map((x) => {
+      const gravado = texto(x.id);
       const valor = naTela[x.campo];
-      const pendente = lidoAntes !== undefined && valor !== undefined && valor !== (antes.get(x.campo) ?? '');
-      return [x.campo, pendente ? valor : texto(x.id)];
+      const anterior = antes.get(x.campo) ?? '';
+      const pendente = lidoAntes !== undefined && valor !== undefined && valor !== anterior;
+      if (!pendente) return [x.campo, gravado];
+      if (gravado !== anterior && gravado !== valor)
+        conflitos.push({ campo: x.campo, naTela: valor, gravado });
+      return [x.campo, gravado !== anterior ? gravado : valor];
     }),
   );
+  return { valores, conflitos };
 }

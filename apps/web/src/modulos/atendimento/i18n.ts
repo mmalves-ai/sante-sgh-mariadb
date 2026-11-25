@@ -369,6 +369,8 @@ export const mensagensAtendimento = {
     vigorEstabelecimento: '{nome} (do estabelecimento)',
     foraDeUso: '{nome} (fora de uso)',
     avisoForaDeUso: '{campo} habitual ({nome}) não está mais em uso: escolha outro valor.',
+    avisoConflito:
+      '{campo} ({escopo}): outra estação gravou {gravado} enquanto você escolhia {escolhido}. A tela mostra o valor gravado; escolha de novo se quiser trocar.',
   },
   recusas: {
     'paciente-inativo': 'O cadastro do paciente está inativo.',
