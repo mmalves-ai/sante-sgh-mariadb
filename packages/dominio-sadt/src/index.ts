@@ -16,6 +16,7 @@ export * from './orcamento/conversao.js';
 export * from './orcamento/montagem.js';
 export * from './amostra/rastreio.js';
 export * from './amostra/recoleta.js';
+export * from './amostra/soroteca.js';
 export * from './laudo/habilitacao.js';
 export * from './laudo/autenticacao.js';
 export * from './laudo/numero.js';
