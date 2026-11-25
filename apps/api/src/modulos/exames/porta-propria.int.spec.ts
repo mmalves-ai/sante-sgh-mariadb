@@ -626,6 +626,55 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     ).toHaveLength(1);
   });
 
+  it('02-CAD 13: paciente com óbito emitido não marca exame (motivo e data; nenhuma marcação gravada, horário livre)', async () => {
+    const obito = (falecido: boolean) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'obito-teste-01-05' }, (e) =>
+        e.executar('UPDATE paciente SET falecido = ?, data_hora_obito = ? WHERE id = ?', [
+          falecido,
+          falecido ? new Date('2026-11-20T12:00:00Z') : null,
+          ids.paciente,
+        ]),
+      );
+    const contar = async () =>
+      Number(
+        (
+          await ler(
+            'SELECT COUNT(*) AS n FROM marcacao_horario WHERE paciente_id = ? AND estabelecimento_id = ?',
+            [ids.paciente, ids.est],
+          )
+        )[0]?.['n'],
+      );
+    const antes = await contar();
+    await obito(true);
+    try {
+      const erro = await porta
+        .executar(
+          ctx,
+          'agenda.agendarExame',
+          {
+            agenda: ids.agenda,
+            data: dia,
+            hora: '08:40',
+            paciente: ids.paciente,
+            convenio: ids.fonte,
+            exame: ids.exame,
+            solicitante: null,
+            retorno: false,
+            canal: 'telefone',
+          },
+          opCtx(),
+        )
+        .catch((e) => e);
+      expect(codigoDe(erro)).toBe('paciente-falecido');
+      expect(String((erro as ErroOperacao).problema['detail'])).toMatch(/20\/11\/2026/);
+      expect(await contar()).toBe(antes);
+      const vagas = await porta.vagas(ctx, { agendas: [ids.agenda], de: dia, ate: dia });
+      expect(vagas.itens.map((v) => v.hora)).toContain('08:40');
+    } finally {
+      await obito(false);
+    }
+  });
+
   it('recusa entrada inválida e agenda de outro estabelecimento', async () => {
     const invalida = await porta
       .executar(ctx, 'agenda.agendarExame', { agenda: ids.agenda, data: 'amanha' }, opCtx())

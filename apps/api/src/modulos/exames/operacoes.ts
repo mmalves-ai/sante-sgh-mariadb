@@ -24,6 +24,7 @@ import {
   type GerarGradeExameEntrada,
   type RemarcarExameEntrada,
 } from '@sgh/contratos';
+import { recusarEntradaDeFalecido } from '@sgh/dominio-atendimento';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -36,6 +37,7 @@ import {
 } from '@sgh/nucleo';
 import type { PessoaSemProntuario } from '@sgh/dominio-agenda';
 import { dataNoFuso, preCadastroDaMarcacao } from '../agenda/pre-cadastro-marcacao.js';
+import { vidaDoPaciente } from '../cadastro/vida-do-paciente.js';
 import { exigirManutencaoDeExame, exigirMarcacaoDeExame } from './papel-nominal.js';
 import { instanteCivil, minutosDaHora, normalizarHora } from './relogio.js';
 
@@ -157,10 +159,14 @@ async function marcarNoHorario(tx: TxOperacao, ctx: ContextoOperacao, e: Marcar)
   await exigirFonteAceita(tx, a.id, e.convenio);
   let preCadastro: number | null = null;
   if (e.paciente !== null) {
-    const p = await tx.uma('SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL', [
-      e.paciente,
-    ]);
+    const p = await tx.uma(
+      'SELECT id, situacao, falecido, data_hora_obito FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      [e.paciente],
+    );
     if (!p) throw naoEncontrado('Paciente não encontrado', 'O cadastro do paciente não existe.');
+    // 02-CAD linha 13: o óbito emitido fecha a marcação de exame também (antes da conferência de cadastro inativo).
+    const vivo = recusarEntradaDeFalecido(vidaDoPaciente(p), 'marcacao');
+    if (!vivo.ok) throw recusa(vivo.codigo, vivo.mensagem);
     if (!['ativo', 'provisorio'].includes(String(p['situacao'])))
       throw recusa('paciente-inativo', 'O cadastro do paciente está inativo, unificado ou em óbito.');
   } else if (typeof e.preCadastro === 'number') {
