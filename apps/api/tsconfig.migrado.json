@@ -262,6 +262,7 @@
     "src/modulos/pep/prescricao-porta-memoria.ts",
     "src/modulos/pep/prescricao-porta-propria.ts",
     "src/modulos/pep/prescricao-porta-propria.spec.ts",
+    "src/modulos/pep/prescricao-montagem-infusao.spec.ts",
     "src/modulos/pep/prescricao-porta-propria.int.spec.ts",
     "src/modulos/pep/prescricao-porta.ts",
     "src/modulos/pep/prescricao-servico.ts",
