@@ -86,5 +86,6 @@ export const mensagensPadroesPrescricao = {
     marcar: 'Favoritar o protocolo escolhido',
     desmarcar: 'Tirar dos favoritos: {rotulo}',
     aplicar: 'Aplicar {rotulo}',
+    tirar: '×',
   },
 } as const;

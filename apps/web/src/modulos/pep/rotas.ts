@@ -373,7 +373,7 @@ export const rotasPep: RouteRecordRaw[] = [
   {
     path: '/cadastros/prescricao/protocolos',
     name: 'cadastros.prescricao.protocolos',
-    component: () => import('./telas/CadastrosPrescricaoTela.vue'),
+    component: () => import('./telas/PadroesPrescricaoTela.vue'),
     props: { secao: 'protocolos' },
     meta: {
       permissao: 'pep.protocoloPrescricao.ler',
@@ -393,7 +393,7 @@ export const rotasPep: RouteRecordRaw[] = [
   {
     path: '/cadastros/prescricao/kits',
     name: 'cadastros.prescricao.kits',
-    component: () => import('./telas/CadastrosPrescricaoTela.vue'),
+    component: () => import('./telas/PadroesPrescricaoTela.vue'),
     props: { secao: 'kits' },
     meta: {
       permissao: 'pep.kitPrescricao.ler',
@@ -403,8 +403,8 @@ export const rotasPep: RouteRecordRaw[] = [
   {
     path: '/cadastros/prescricao/receitas-padrao',
     name: 'cadastros.prescricao.receitasPadrao',
-    component: () => import('./telas/CadastrosPrescricaoTela.vue'),
-    props: { secao: 'receitasPadrao' },
+    component: () => import('./telas/PadroesPrescricaoTela.vue'),
+    props: { secao: 'receitas' },
     meta: {
       permissao: 'pep.receitaPadrao.ler',
       menu: 'Cadastros > Cadastros clínicos e de prescrição > Receitas padrão',

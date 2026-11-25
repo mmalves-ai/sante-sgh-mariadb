@@ -33,6 +33,7 @@ import {
 import CabecalhoProntuario from '../componentes/CabecalhoProntuario.vue';
 import ItemEditor from '../componentes/prescricao/ItemEditor.vue';
 import PainelAlertas from '../componentes/prescricao/PainelAlertas.vue';
+import AtalhosFavoritos from '../componentes/prescricao/AtalhosFavoritos.vue';
 import { useConexao } from '../conexao.js';
 import { agoraLocal, descreverItem } from '../descricao-item.js';
 import { dataHoraBr } from '../formato.js';
@@ -227,6 +228,14 @@ async function aplicarProtocolo(): Promise<void> {
     .filter(Boolean)
     .join(' ');
 }
+/** Favorito do prescritor: aplica o protocolo em um clique (mesma regra de aplicabilidade do combo). */
+async function aplicarFavorito(id: number): Promise<void> {
+  protocolo.value = String(id);
+  await aplicarProtocolo();
+}
+const rotuloProtocolo = computed(
+  () => protocolos.data.value?.find((p) => String(p.id) === protocolo.value)?.nome ?? '',
+);
 
 // Itens programados (prescrição futura) que chegaram à data: oferecidos para confirmação.
 const futuras = useQuery({
@@ -445,6 +454,11 @@ const titulo = computed(() => {
             @acionar="aplicarProtocolo"
           />
         </div>
+        <AtalhosFavoritos
+          :escolhido="protocolo"
+          :rotulo-escolhido="rotuloProtocolo"
+          @aplicar="aplicarFavorito"
+        />
         <p v-if="avisoProtocolo" role="status" data-testid="aviso-protocolo">{{ avisoProtocolo }}</p>
       </section>
 
