@@ -5,8 +5,9 @@
 import { Body, Controller, HttpCode, Inject, Post, Req } from '@nestjs/common';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import type { ContextoSadt } from './porta.js';
 import { semBancoDoCliente } from './sem-banco-cliente.js';
-import { sessaoDe } from '../cadastro/comum.js';
+import { contextoOperacao, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
   esquemaReterExame,
@@ -14,6 +15,15 @@ import {
   type RetencaoGravada,
   type ServicoMapaTrabalho,
 } from './aplicacao/mapa-trabalho-propria.js';
+
+/**
+ * O contexto da gravação: o da sessão com a Idempotency-Key do pedido (obrigatória; sem ela, 400). O reenvio pela mesma
+ * chave devolve o mesmo resultado sem gravar de novo.
+ */
+const gravacao = (req: RequisicaoAutorizada): ContextoSadt => {
+  const s = sessaoDe(req);
+  return { ...s.porta, chaveIdempotencia: contextoOperacao(s, 'sadt.mapa').chaveIdempotencia };
+};
 
 export const SERVICO_MAPA_TRABALHO = Symbol('SERVICO_MAPA_TRABALHO');
 
@@ -31,7 +41,7 @@ export class MapaTrabalhoController {
   @Permissao('sadt.resultado.digitar')
   @AuditadoNoHandler('o item do lote retido com a trilha_auditoria na mesma transação')
   reter(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<RetencaoGravada> {
-    return this.s.reter(sessaoDe(req).porta, corpo(esquemaReterExame, b));
+    return this.s.reter(gravacao(req), corpo(esquemaReterExame, b));
   }
 
   @Post('soltar')
@@ -39,6 +49,6 @@ export class MapaTrabalhoController {
   @Permissao('sadt.resultado.digitar')
   @AuditadoNoHandler('o item do lote devolvido à fila com a trilha_auditoria na mesma transação')
   soltar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<RetencaoGravada> {
-    return this.s.soltar(sessaoDe(req).porta, corpo(esquemaSoltarExame, b));
+    return this.s.soltar(gravacao(req), corpo(esquemaSoltarExame, b));
   }
 }

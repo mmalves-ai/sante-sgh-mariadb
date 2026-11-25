@@ -8,8 +8,9 @@ import { Body, Controller, Get, HttpCode, Inject, Post, Query, Req } from '@nest
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import type { ContextoSadt } from './porta.js';
 import { semBancoDoCliente } from './sem-banco-cliente.js';
-import { sessaoDe } from '../cadastro/comum.js';
+import { contextoOperacao, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
   esquemaAbrirLote,
@@ -18,6 +19,15 @@ import {
   type LoteDeTrabalho,
   type ServicoLoteTrabalho,
 } from './aplicacao/lote-trabalho-propria.js';
+
+/**
+ * O contexto da gravação: o da sessão com a Idempotency-Key do pedido (obrigatória; sem ela, 400). O reenvio pela mesma
+ * chave devolve o mesmo resultado sem gravar de novo.
+ */
+const gravacao = (req: RequisicaoAutorizada): ContextoSadt => {
+  const s = sessaoDe(req);
+  return { ...s.porta, chaveIdempotencia: contextoOperacao(s, 'sadt.lote').chaveIdempotencia };
+};
 
 export const SERVICO_LOTE_TRABALHO = Symbol('SERVICO_LOTE_TRABALHO');
 
@@ -51,7 +61,7 @@ export class LoteTrabalhoController {
   @Permissao('sadt.resultado.digitar')
   @AuditadoNoHandler('o lote e os seus exames gravados com a trilha_auditoria na mesma transação')
   abrir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<LoteDeTrabalho> {
-    return this.s.abrir(sessaoDe(req).porta, corpo(esquemaAbrirLote, b));
+    return this.s.abrir(gravacao(req), corpo(esquemaAbrirLote, b));
   }
 
   @Post('fechar')
@@ -59,7 +69,7 @@ export class LoteTrabalhoController {
   @Permissao('sadt.resultado.digitar')
   @AuditadoNoHandler('o lote fechado e os exames processados com a trilha_auditoria na mesma transação')
   fechar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<LoteDeTrabalho> {
-    return this.s.fechar(sessaoDe(req).porta, corpo(esquemaLoteAlvo, b));
+    return this.s.fechar(gravacao(req), corpo(esquemaLoteAlvo, b));
   }
 
   @Post('imprimir')
@@ -67,6 +77,6 @@ export class LoteTrabalhoController {
   @Permissao('sadt.resultado.digitar')
   @AuditadoNoHandler('a hora da impressão do lote com a trilha_auditoria na mesma transação')
   imprimir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<LoteDeTrabalho> {
-    return this.s.imprimir(sessaoDe(req).porta, corpo(esquemaLoteAlvo, b));
+    return this.s.imprimir(gravacao(req), corpo(esquemaLoteAlvo, b));
   }
 }

@@ -281,13 +281,14 @@ export class ServicoLoteTrabalho {
       trilha: () => ({ dados: { evento: nome, ...dados }, motivo: null }),
     });
     const chave = `sadt:${c.chaveIdempotencia ?? randomUUID()}`;
-    await this.executor.executar(
+    const saida = await this.executor.executar(
       op,
       c.cliente,
       { chave },
       { ...this.ctxNucleo(c), chaveIdempotencia: chave },
     );
-    return id;
+    // A mesma chave repetida não grava de novo: o lote é o da primeira execução.
+    return id ?? (saida.repetida ? (saida.resultado as { id: number | null }).id : null);
   }
 
   /** Abre o lote da bancada com os exames em análise fora de lote, na ordem do mapa, até o limite do modelo. */

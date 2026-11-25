@@ -1,6 +1,6 @@
 // Rota do lote de trabalho da bancada (F3.5, 05-SADT linha 8): o que o controller garante antes de chegar ao serviço.
 // Cada rota exige a permissão de digitar o resultado e declara a auditoria; sem o banco do cliente responde 503; sem
-// sessão, 401; o corpo inválido é recusado com 400 sem chamar o serviço; o corpo válido chega ao serviço com o
+// sessão, 401; sem a Idempotency-Key, 400; o corpo inválido é recusado com 400 sem chamar o serviço; o corpo válido chega ao serviço com o
 // contexto da sessão; a lista devolve os lotes do dia e a fila fora de lote de cada bancada. O efeito no banco (e a
 // recusa do lote e da bancada de outro estabelecimento) está em aplicacao/lote-trabalho.int.spec.ts.
 import 'reflect-metadata';
@@ -11,9 +11,10 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoLoteTrabalho } from './aplicacao/lote-trabalho-propria.js';
 import { LoteTrabalhoController } from './lote-trabalho.controller.js';
 
-const comSessao = () =>
+const CHAVE = 'tela-lote-0001';
+const comSessao = (headers: Record<string, string> = { 'idempotency-key': CHAVE }) =>
   ({
-    headers: {},
+    headers,
     sgh: {
       sessao: { estabelecimentoAtivo: 'hsint', rede: 'rede-sint', usuario: { id: '7', login: 'SINT' } },
     },
@@ -31,12 +32,15 @@ const capturar = async (f: () => unknown) => {
 
 function servicoFalso() {
   const chamadas: { metodo: string; usuario: unknown; entrada: unknown }[] = [];
-  const registrar = (metodo: string) => (c: { usuario: unknown }, entrada: unknown) => {
-    chamadas.push({ metodo, usuario: c.usuario, entrada });
-    return Promise.resolve(
-      metodo === 'listar' ? [{ id: 1 }] : metodo === 'fila' ? [{ bancada: 3, foraDeLote: 2 }] : { id: 1 },
-    );
-  };
+  const chaves: unknown[] = [];
+  const registrar =
+    (metodo: string) => (c: { usuario: unknown; chaveIdempotencia?: unknown }, entrada: unknown) => {
+      chamadas.push({ metodo, usuario: c.usuario, entrada });
+      chaves.push(c.chaveIdempotencia);
+      return Promise.resolve(
+        metodo === 'listar' ? [{ id: 1 }] : metodo === 'fila' ? [{ bancada: 3, foraDeLote: 2 }] : { id: 1 },
+      );
+    };
   const servico = {
     listar: registrar('listar'),
     fila: registrar('fila'),
@@ -44,7 +48,7 @@ function servicoFalso() {
     fechar: registrar('fechar'),
     imprimir: registrar('imprimir'),
   } as unknown as ServicoLoteTrabalho;
-  return { servico, chamadas };
+  return { servico, chamadas, chaves };
 }
 
 describe('rota do lote de trabalho da bancada', () => {
@@ -86,8 +90,19 @@ describe('rota do lote de trabalho da bancada', () => {
     expect(chamadas).toEqual([]);
   });
 
-  it('o corpo válido chega ao serviço com o usuário da sessão; a lista traz os lotes do dia e a fila', async () => {
+  it('a gravação sem a Idempotency-Key do pedido é recusada com 400 sem chamar o serviço', async () => {
     const { servico, chamadas } = servicoFalso();
+    const c = new LoteTrabalhoController(servico);
+    for (const headers of [{}, { 'idempotency-key': 'curta' }]) {
+      expect(await capturar(() => c.abrir({ bancada: 3 }, comSessao(headers)))).toBe(400);
+      expect(await capturar(() => c.fechar({ lote: 5 }, comSessao(headers)))).toBe(400);
+      expect(await capturar(() => c.imprimir({ lote: 5 }, comSessao(headers)))).toBe(400);
+    }
+    expect(chamadas).toEqual([]);
+  });
+
+  it('o corpo válido chega ao serviço com o usuário da sessão; a lista traz os lotes do dia e a fila', async () => {
+    const { servico, chamadas, chaves } = servicoFalso();
     const c = new LoteTrabalhoController(servico);
     await c.abrir({ bancada: 3, analista: 9 }, comSessao());
     await c.fechar({ lote: 5 }, comSessao());
@@ -97,6 +112,8 @@ describe('rota do lote de trabalho da bancada', () => {
       { metodo: 'fechar', usuario: 7, entrada: { lote: 5 } },
       { metodo: 'imprimir', usuario: 7, entrada: { lote: 5 } },
     ]);
+    // A chave do pedido chega ao serviço: o reenvio pela mesma chave devolve o mesmo lote sem gravar de novo.
+    expect(chaves).toEqual([CHAVE, CHAVE, CHAVE]);
     chamadas.length = 0;
     const req = comSessao();
     expect(await c.listar({ data: '2026-03-15' }, req)).toEqual({
