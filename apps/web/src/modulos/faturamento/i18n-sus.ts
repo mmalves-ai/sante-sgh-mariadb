@@ -1,12 +1,14 @@
 // Textos das telas do faturamento SUS próprio (M51): competência SUS e críticas, CIHA e, desligados por
 // estabelecimento (DP-35), BPA, APAC e AIH. Sem nome de sistema antigo (ADR 0023). Toda regra da crítica e toda recusa
 // do domínio tem texto (o spec confere pelo tipo).
+import { mensagensSusEstabelecimento } from './i18n-estabelecimento-sus.js';
 import { mensagensSusAih, mensagensSusRetorno } from './i18n-sus-aih.js';
 
 export const mensagensSus = {
   titulo: 'Faturamento SUS',
   // Etapa 4: a AIH, os leitos de UTI e o retorno do gestor (i18n-sus-aih.ts).
   aih: mensagensSusAih,
+  estabelecimento: mensagensSusEstabelecimento,
   retorno: mensagensSusRetorno,
   carregando: 'Carregando…',
   competencias: {

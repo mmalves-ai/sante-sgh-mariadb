@@ -334,6 +334,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.susLeitoUti.ler' },
   },
   {
+    // F7 (06-SUS linha 61): habilitações, serviços e regras por tipo de prestador do estabelecimento.
+    path: '/faturamento/sus/cadastros/estabelecimento',
+    name: 'faturamento.susEstabelecimento',
+    component: () => import('./telas/EstabelecimentoSusTela.vue'),
+    meta: { permissao: 'faturamento.sus.ler' },
+  },
+  {
     // F8 (06-SUS linha 65): notificação de doador e inscrição de receptor para a central estadual de transplantes.
     path: '/faturamento/sus/transplantes',
     name: 'faturamento.susTransplantes',
