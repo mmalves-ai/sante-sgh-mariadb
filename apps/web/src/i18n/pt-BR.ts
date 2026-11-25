@@ -20,7 +20,6 @@ import { mensagensEstruturada } from '../modulos/agenda/i18n-estruturada.js';
 import { mensagensUsuariosAgenda } from '../modulos/agenda/i18n-usuarios-agenda.js';
 import { mensagensContatoAtivo } from '../modulos/agenda/i18n-contato-ativo.js';
 import { mensagensCotasPrazos } from '../modulos/agenda/i18n-cotas-prazos.js';
-import { mensagensTurmas } from '../modulos/agenda/i18n-turmas.js';
 import { mensagensPerfisMarcacao } from '../modulos/agenda/i18n-perfis-marcacao.js';
 import { mensagensExames } from '../modulos/exames/i18n.js';
 import { mensagensAtendimento } from '../modulos/atendimento/i18n.js';
@@ -2366,7 +2365,6 @@ export const mensagensWeb = {
   usuariosAgenda: mensagensUsuariosAgenda,
   perfisMarcacao: mensagensPerfisMarcacao,
   cotasPrazos: mensagensCotasPrazos,
-  turmas: mensagensTurmas,
   contatoAtivo: mensagensContatoAtivo,
   // M19: recepção, senhas, totens e painéis.
   recepcao: mensagensRecepcao,

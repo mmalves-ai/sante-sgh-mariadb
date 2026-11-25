@@ -11,13 +11,6 @@ export const rotasConfig: RouteRecordRaw[] = [
     component: () => import('./telas/KitImplantacaoTela.vue'),
     meta: { permissao: 'implantacao.kit.ler' },
   },
-  // 01-SIS L95: rotinas agendadas do sistema (última e próxima execução, atraso, histórico, acionar e suspender).
-  {
-    path: '/administracao/sistema/rotinas',
-    name: 'config.rotinas',
-    component: () => import('../administracao/telas/RotinasTela.vue'),
-    meta: { permissao: 'config.rotina.ler' },
-  },
   {
     path: '/administracao/coexistencia/schema',
     name: 'config.schema',
