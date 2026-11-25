@@ -9,9 +9,12 @@ import {
   type CadastroProvedor,
   conferirVinculoNovo,
   decidirEntradaExterna,
+  MOTIVO_PERFIL_DIRETORIO,
   padroesDoProtocolo,
+  perfisDosGrupos,
   PROTOCOLOS_COM_ENTRADA,
   type ProtocoloProvedor,
+  sincronizarPerfis,
   validarCadastroProvedor,
 } from '@sgh/dominio-acesso';
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
@@ -28,7 +31,12 @@ import {
 
 export const PORTA_PROVEDOR_IDENTIDADE = Symbol('PORTA_PROVEDOR_IDENTIDADE');
 
-const TABELAS = ['provedor_identidade', 'provedor_identidade_perfil', 'vinculo_identidade_externa'];
+const TABELAS = [
+  'provedor_identidade',
+  'provedor_identidade_perfil',
+  'vinculo_identidade_externa',
+  'usuario_perfil',
+];
 const TETO = 200;
 
 const recusa = (codigo: string, detalhe: string) =>
@@ -37,6 +45,10 @@ const invalido = (codigo: string, detalhe: string) =>
   new ErroOperacao(400, codigo, 'Dados inválidos', detalhe);
 const iso = (v: unknown): string | null =>
   v === null || v === undefined ? null : new Date(v as string | Date).toISOString();
+/** Data do dia (AAAA-MM-DD) no relógio local, o mesmo da coluna DATE lida pelo driver. */
+const diaLocal = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dataIso = (v: unknown): string => (v instanceof Date ? diaLocal(v) : String(v ?? '').slice(0, 10));
 const vazioNulo = (v: string | null | undefined): string | null => (v && v.trim() ? v.trim() : null);
 
 const textoOpc = (max: number) => z.string().max(max).nullish();
@@ -144,7 +156,14 @@ export interface ProvedorDeEntrada {
 }
 
 export type ResultadoEntradaExterna =
-  { readonly login: string; readonly vinculo: number; readonly novo: boolean } | { readonly recusa: string };
+  | {
+      readonly login: string;
+      readonly vinculo: number;
+      readonly novo: boolean;
+      /** Perfis incluídos e encerrados pela sincronização com o diretório (zero com sincroniza_perfis desligado). */
+      readonly perfis?: { readonly incluidos: number; readonly encerrados: number };
+    }
+  | { readonly recusa: string };
 
 const COLUNAS_PROVEDOR = `p.id, p.versao, p.codigo, p.nome, p.protocolo, p.url_servidor, p.dominio, p.base_pesquisa,
   p.filtro_usuario, p.emissor, p.cliente_identificador, p.referencia_cofre, p.atributo_login, p.atributo_email,
@@ -533,6 +552,7 @@ export class PortaProvedorIdentidadePropria extends PortaEstabelecimentoPropria 
       readonly sujeito: string;
       readonly email: string | null;
       readonly emailConfirmado: boolean;
+      readonly grupos?: readonly string[];
     },
   ): Promise<ResultadoEntradaExterna> {
     const contexto = { ...c, usuario: null } as ContextoPortaPropria;
@@ -593,7 +613,8 @@ export class PortaProvedorIdentidadePropria extends PortaEstabelecimentoPropria 
           return { tabela: 'vinculo_identidade_externa', id: decisao.vinculo };
         },
       );
-      return { login: decisao.login, vinculo: decisao.vinculo, novo: false };
+      const perfis = await this.sincronizarPerfisDaConta(contexto, lido.p, usuario, identidade.grupos ?? []);
+      return { login: decisao.login, vinculo: decisao.vinculo, novo: false, perfis };
     }
     const feito = await this.gravar(
       { ...contexto, usuario: decisao.usuario },
@@ -612,6 +633,109 @@ export class PortaProvedorIdentidadePropria extends PortaEstabelecimentoPropria 
         return { tabela: 'vinculo_identidade_externa', id };
       },
     );
-    return { login: decisao.login, vinculo: Number(feito.id), novo: true };
+    const perfis = await this.sincronizarPerfisDaConta(
+      contexto,
+      lido.p,
+      decisao.usuario,
+      identidade.grupos ?? [],
+    );
+    return { login: decisao.login, vinculo: Number(feito.id), novo: true, perfis };
+  }
+
+  /**
+   * Provedor com sincroniza_perfis: os grupos do diretório viram perfis da conta no estabelecimento (regra do domínio,
+   * sincronizarPerfis). Só os perfis que o diretório deu saem, e saem pela vigência (nada se apaga).
+   */
+  private async sincronizarPerfisDaConta(
+    contexto: ContextoPortaPropria,
+    p: Record<string, unknown>,
+    usuario: number,
+    grupos: readonly string[],
+  ): Promise<{ incluidos: number; encerrados: number }> {
+    if (!bool(p['sincroniza_perfis'])) return { incluidos: 0, encerrados: 0 };
+    const provedor = num(p['id']);
+    const agora = new Date();
+    const hoje = diaLocal(agora);
+    const lido = await this.ler(contexto, 'entrada.perfis', async (l, est) => {
+      const mapa = await l.consultar(
+        `SELECT g.grupo_externo, g.perfil_acesso_id, pf.codigo, g.estabelecimento_id, g.ativo
+           FROM provedor_identidade_perfil g
+           JOIN perfil_acesso pf ON pf.id = g.perfil_acesso_id
+          WHERE g.provedor_identidade_id = ? AND g.ativo = TRUE
+          LIMIT ${TETO}`,
+        [provedor],
+        { teto: TETO },
+      );
+      const atuais = await l.consultar(
+        `SELECT up.id, pf.codigo, up.vigencia_inicio, up.motivo
+           FROM usuario_perfil up
+           JOIN perfil_acesso pf ON pf.id = up.perfil_acesso_id
+          WHERE up.usuario_id = ? AND up.estabelecimento_id = ? AND up.excluido_em IS NULL
+            AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= ?)
+          LIMIT ${TETO}`,
+        [usuario, est.id, hoje],
+        { teto: TETO },
+      );
+      return { est: est.id, mapa, atuais };
+    });
+    const idDoPerfil = new Map(lido.mapa.map((m) => [String(m['codigo']), num(m['perfil_acesso_id'])]));
+    const desejados = perfisDosGrupos(
+      lido.mapa.map((m) => ({
+        grupoExterno: String(m['grupo_externo']),
+        perfil: String(m['codigo']),
+        estabelecimento: numOuNull(m['estabelecimento_id']),
+        ativo: bool(m['ativo']),
+      })),
+      grupos,
+      lido.est,
+    );
+    const plano = sincronizarPerfis({
+      desejados,
+      atuais: lido.atuais.map((a) => ({
+        id: num(a['id']),
+        perfil: String(a['codigo']),
+        vigenciaInicio: dataIso(a['vigencia_inicio']),
+        doDiretorio: String(a['motivo'] ?? '').startsWith(MOTIVO_PERFIL_DIRETORIO),
+      })),
+      hoje,
+    });
+    if (!plano.incluir.length && !plano.encerrar.length) return { incluidos: 0, encerrados: 0 };
+    const ontem = diaLocal(new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - 1));
+    await this.gravar(
+      { ...contexto, usuario },
+      'acesso.provedoridentidade.perfis',
+      ['usuario_perfil'],
+      async (tx, est) => {
+        let ultimo: number | null = null;
+        for (const codigo of plano.incluir) {
+          ultimo = await tx.incluir('usuario_perfil', {
+            usuario_id: usuario,
+            perfil_acesso_id: idDoPerfil.get(codigo)!,
+            estabelecimento_id: est.id,
+            vigencia_inicio: hoje,
+            provisorio: false,
+            motivo: `${MOTIVO_PERFIL_DIRETORIO}: ${String(p['codigo'])}`.slice(0, 500),
+          });
+        }
+        for (const e of plano.encerrar) {
+          const [atual] = await tx.consultarParaAtualizar<Record<string, unknown>>(
+            'SELECT versao FROM usuario_perfil WHERE id = ?',
+            [e.id],
+            { teto: 1 },
+          );
+          if (e.modo === 'fim')
+            await tx.alterar('usuario_perfil', e.id, num(atual?.['versao']), { vigencia_fim: ontem });
+          // Anulada (excluido_em/por): a linha fica, para o histórico de quem teve o perfil.
+          else
+            await tx.alterar('usuario_perfil', e.id, num(atual?.['versao']), {
+              excluido_em: new Date(),
+              excluido_por: usuario,
+            });
+          ultimo = e.id;
+        }
+        return { tabela: 'usuario_perfil', id: ultimo };
+      },
+    );
+    return { incluidos: plano.incluir.length, encerrados: plano.encerrar.length };
   }
 }

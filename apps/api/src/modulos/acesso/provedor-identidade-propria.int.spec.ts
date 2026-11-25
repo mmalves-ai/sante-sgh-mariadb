@@ -28,7 +28,14 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM vinculo_identidade_externa WHERE provedor_identidade_id IN ${PROVS}`);
   await e.executar(`DELETE FROM provedor_identidade_perfil WHERE provedor_identidade_id IN ${PROVS}`);
   await e.executar(`DELETE FROM provedor_identidade WHERE codigo IN (?, ?)`, PROV);
-  await e.executar(`DELETE FROM perfil_acesso WHERE codigo = ? AND estabelecimento_id IN ${EST}`, [P]);
+  await e.executar(
+    `DELETE FROM usuario_perfil WHERE usuario_id IN (SELECT id FROM usuario WHERE login IN (?, ?, ?))`,
+    LOGINS,
+  );
+  await e.executar(`DELETE FROM perfil_acesso WHERE codigo IN (?, ?) AND estabelecimento_id IN ${EST}`, [
+    P,
+    `${P}g`,
+  ]);
   await limparTrilhaDaMassa(e, { codigos: [P] });
   await e.executar(`DELETE FROM usuario WHERE login IN (?, ?, ?)`, LOGINS);
   await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
@@ -211,7 +218,12 @@ describe.skipIf(SEM_BANCO)('PortaProvedorIdentidadePropria contra o MariaDB (con
       email: null,
       emailConfirmado: false,
     });
-    expect(entrou).toEqual({ login: LOGINS[1], vinculo: v.id, novo: false });
+    expect(entrou).toEqual({
+      login: LOGINS[1],
+      vinculo: v.id,
+      novo: false,
+      perfis: { incluidos: 0, encerrados: 0 },
+    });
     const [uso] = await ler(
       'SELECT ultimo_uso_em IS NOT NULL AS usado, versao FROM vinculo_identidade_externa WHERE id = ?',
       [v.id],
@@ -346,5 +358,81 @@ describe.skipIf(SEM_BANCO)('PortaProvedorIdentidadePropria contra o MariaDB (con
     await expect(oidc.concluir(provedor, e3, 'c')).rejects.toThrow(/emissor-diferente, nonce-diferente/);
     // O estado é de uso único mesmo na falha.
     await expect(oidc.concluir(provedor, e3, 'c')).rejects.toMatchObject({ codigo: 'estado-invalido' });
+  });
+
+  it('sincroniza os perfis do diretório na entrada: inclui, mantém o do gestor e encerra sem apagar', async () => {
+    const semUsuario = { cliente: CLIENTE, hospital: P, correlacao: P };
+    const hojeLocal = new Date();
+    const ontem = new Date(hojeLocal.getFullYear(), hojeLocal.getMonth(), hojeLocal.getDate() - 1);
+    const dia = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, async (e) => {
+      await e.executar('UPDATE provedor_identidade SET sincroniza_perfis = TRUE WHERE id = ?', [m.oidc]);
+      const gestorPerfil = await e.inserir(
+        `INSERT INTO perfil_acesso (estabelecimento_id, codigo, nome, criado_em) VALUES (?, ?, 'Perfil do gestor C2010', ?)`,
+        [m.est, `${P}g`, new Date()],
+      );
+      await e.inserir(
+        `INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, motivo, criado_em)
+         VALUES (?, ?, ?, '2026-01-01', 'Dado pelo gestor', ?)`,
+        [m.b, gestorPerfil, m.est, new Date()],
+      );
+    });
+    await porta.incluirGrupo(ctx(), m.oidc, { grupoExterno: 'cn=med', perfil: P });
+    const entrar = (grupos: string[]) =>
+      porta.resolverEntrada(semUsuario, m.oidc, {
+        sujeito: 'sub-b',
+        email: EMAIL_B,
+        emailConfirmado: true,
+        grupos,
+      });
+    const perfisDaConta = () =>
+      ler(
+        `SELECT up.id, pf.codigo, up.motivo, up.vigencia_fim, up.excluido_em IS NOT NULL AS anulada, up.criado_por
+           FROM usuario_perfil up JOIN perfil_acesso pf ON pf.id = up.perfil_acesso_id
+          WHERE up.usuario_id = ? ORDER BY up.id`,
+        [m.b],
+      );
+
+    // O grupo (sem diferença de maiúsculas) dá o perfil; a segunda entrada não repete.
+    expect(await entrar(['CN=MED'])).toMatchObject({
+      login: LOGINS[2],
+      perfis: { incluidos: 1, encerrados: 0 },
+    });
+    expect(await entrar(['cn=med'])).toMatchObject({ perfis: { incluidos: 0, encerrados: 0 } });
+    let linhas = await perfisDaConta();
+    expect(linhas).toHaveLength(2);
+    const dado = linhas[1]!;
+    expect(dado['codigo']).toBe(P);
+    expect(String(dado['motivo'])).toBe('Grupo do diretório: c2010-oidc');
+    expect(Number(dado['criado_por'])).toBe(m.b);
+
+    // Saiu do grupo no mesmo dia: a atribuição é anulada (fica a linha); a do gestor não muda.
+    expect(await entrar([])).toMatchObject({ perfis: { incluidos: 0, encerrados: 1 } });
+    linhas = await perfisDaConta();
+    expect(linhas).toHaveLength(2);
+    expect(Number(linhas[1]!['anulada'])).toBe(1);
+    expect(Number(linhas[0]!['anulada'])).toBe(0);
+    expect(linhas[0]!['vigencia_fim']).toBeNull();
+
+    // Volta ao grupo (linha nova) e, numa atribuição de dias anteriores, a saída encerra a vigência ontem.
+    expect(await entrar(['cn=med'])).toMatchObject({ perfis: { incluidos: 1, encerrados: 0 } });
+    linhas = await perfisDaConta();
+    expect(linhas).toHaveLength(3);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, (e) =>
+      e.executar(`UPDATE usuario_perfil SET vigencia_inicio = '2026-01-02' WHERE id = ?`, [linhas[2]!['id']]),
+    );
+    expect(await entrar([])).toMatchObject({ perfis: { incluidos: 0, encerrados: 1 } });
+    const [fim] = await ler(
+      `SELECT DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim, excluido_em IS NULL AS viva FROM usuario_perfil WHERE id = ?`,
+      [linhas[2]!['id']],
+    );
+    expect(fim).toMatchObject({ fim: dia(ontem) });
+    expect(Number(fim!['viva'])).toBe(1);
+    const trilha = await contar(
+      `SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND operacao = 'acesso.provedoridentidade.perfis'`,
+      [m.est],
+    ).catch(() => -1);
+    expect(trilha === -1 || trilha >= 4).toBe(true);
   });
 });

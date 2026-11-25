@@ -203,6 +203,43 @@ export function perfisDosGrupos(
   ].sort();
 }
 
+/** Marca do motivo dos perfis dados pelo diretório: só esses a sincronização mexe (os do gestor ficam). */
+export const MOTIVO_PERFIL_DIRETORIO = 'Grupo do diretório';
+
+export interface PerfilAtualDaConta {
+  readonly id: number;
+  readonly perfil: string;
+  readonly vigenciaInicio: string;
+  /** Verdadeiro quando a atribuição veio da sincronização com o diretório. */
+  readonly doDiretorio: boolean;
+}
+
+export interface SincronizacaoPerfis {
+  readonly incluir: readonly string[];
+  /** Encerrar a vigência ontem (atribuição de dias anteriores) ou anular (dada hoje, a vigência não volta atrás). */
+  readonly encerrar: readonly { readonly id: number; readonly modo: 'fim' | 'anular' }[];
+}
+
+/**
+ * A sincronização dos perfis na entrada (provedor com sincroniza_perfis ligado): inclui o perfil que um grupo dá e a
+ * conta ainda não tem; tira só o perfil que o diretório deu e o grupo deixou de dar. O perfil dado pelo gestor nunca é
+ * tirado e a atribuição nunca é apagada: encerra a vigência (histórico preservado). `hoje` no formato AAAA-MM-DD.
+ */
+export function sincronizarPerfis(e: {
+  readonly desejados: readonly string[];
+  readonly atuais: readonly PerfilAtualDaConta[];
+  readonly hoje: string;
+}): SincronizacaoPerfis {
+  const desejados = new Set(e.desejados);
+  const tem = new Set(e.atuais.map((a) => a.perfil));
+  return {
+    incluir: [...desejados].filter((p) => !tem.has(p)).sort(),
+    encerrar: e.atuais
+      .filter((a) => a.doDiretorio && !desejados.has(a.perfil))
+      .map((a) => ({ id: a.id, modo: a.vigenciaInicio < e.hoje ? ('fim' as const) : ('anular' as const) })),
+  };
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Entrada pelo provedor: quem entra e o vínculo no primeiro acesso.
 

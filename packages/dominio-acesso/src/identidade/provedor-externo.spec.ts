@@ -2,6 +2,7 @@
 // entra pela identidade externa e o vínculo novo. Só dados sintéticos.
 import { describe, expect, it } from 'vitest';
 import {
+  sincronizarPerfis,
   conferirReivindicacoesOidc,
   conferirVinculoNovo,
   decidirEntradaExterna,
@@ -215,5 +216,33 @@ describe('decidirEntradaExterna', () => {
     expect(
       conferirVinculoNovo({ identificador: 's', identidadeJaLigada: false, contaJaLigada: false }),
     ).toBeNull();
+  });
+});
+
+describe('sincronizarPerfis (perfis do diretório na entrada)', () => {
+  const hoje = '2026-11-25';
+  it('inclui o que o grupo dá e a conta não tem; mantém o que já tem', () => {
+    const r = sincronizarPerfis({
+      desejados: ['ENFERMAGEM', 'RECEPCAO'],
+      atuais: [{ id: 1, perfil: 'RECEPCAO', vigenciaInicio: '2026-01-01', doDiretorio: true }],
+      hoje,
+    });
+    expect(r).toEqual({ incluir: ['ENFERMAGEM'], encerrar: [] });
+  });
+  it('tira só o perfil do diretório que o grupo deixou de dar; o do gestor fica', () => {
+    const r = sincronizarPerfis({
+      desejados: [],
+      atuais: [
+        { id: 1, perfil: 'RECEPCAO', vigenciaInicio: '2026-01-01', doDiretorio: true },
+        { id: 2, perfil: 'FATURAMENTO', vigenciaInicio: '2026-01-01', doDiretorio: false },
+        { id: 3, perfil: 'ENFERMAGEM', vigenciaInicio: hoje, doDiretorio: true },
+      ],
+      hoje,
+    });
+    expect(r.incluir).toEqual([]);
+    expect(r.encerrar).toEqual([
+      { id: 1, modo: 'fim' },
+      { id: 3, modo: 'anular' },
+    ]);
   });
 });
