@@ -70,6 +70,8 @@ describe.skipIf(SEM_BANCO)(
     let vigente = 0;
     let vencido = 0;
     let outroFornecedor = 0;
+    let contrato50 = 0;
+    let contrato70 = 0;
     const ler = <T extends Record<string, unknown>>(sql: string, p: unknown[]) =>
       nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-ctpc' }, (l) => l.consultar<T>(sql, p));
     const op = (nome: string, entrada: unknown) =>
@@ -145,6 +147,8 @@ describe.skipIf(SEM_BANCO)(
       vigente = await criar({});
       vencido = await criar({ inicio: `${ano - 2}-01-01`, fim: `${ano - 1}-06-30` });
       outroFornecedor = await criar({ fornecedor: m.fornecedor2 });
+      contrato50 = await criar({ valor: 50 });
+      contrato70 = await criar({ valor: 70 });
     }, 120_000);
 
     afterAll(async () => {
@@ -377,6 +381,123 @@ describe.skipIf(SEM_BANCO)(
       expect(v2).toMatchObject({ ativo: false, valor: 0 });
       const gestao2 = await porta.gestaoPedido(c, ano, doc);
       expect(gestao2?.pedido.contrato?.valorComprometido).toBe(0);
+    });
+
+    it('05-SUP linha 20: o pedido aprovado com cancelamentos, ligado depois, compromete o mesmo valor na lista, na conferência e no saldo', async () => {
+      // Pedido sem vencedor na cotação (valorado pelos próprios itens): A 10 x R$ 10,00 e B 5 x R$ 8,00 (preços
+      // sintéticos gravados no item). B é cancelado inteiro ANTES da aprovação: a aprovação vale só A (100). Depois, 4 de
+      // A são cancelados: compromete 100 - 40 = 60 (B não é descontado de novo; a regra antiga dava 20).
+      const r = await op('criarPedido', {
+        centroCusto: m.centroCusto,
+        fornecedores: [m.fornecedor],
+        itens: [
+          { item: m.insumo, quantidade: 10 },
+          { item: m.insumoOpme, quantidade: 5 },
+        ],
+      });
+      const ano = Number(r.resultado['ano']);
+      const doc = Number(r.resultado['doc']);
+      const pedido = { ano, doc };
+      const itens = await ler<{ id: number; sequencia: number; pedido: number }>(
+        `SELECT x.id, x.sequencia, p.id AS pedido FROM pedido_compra_item x JOIN pedido_compra p ON p.id = x.pedido_compra_id
+          WHERE p.estabelecimento_id = ? AND p.ano = ? AND p.numero = ? ORDER BY x.sequencia`,
+        [m.estA, ano, doc],
+      );
+      const [a, b] = itens.map((x) => Number(x.id));
+      const pedidoId = Number(itens[0]!.pedido);
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-ctpc-precos' }, async (e) => {
+        await e.executar(
+          'UPDATE pedido_compra_item SET valor_unitario = 10, valor_total = 100 WHERE id = ?',
+          [a],
+        );
+        await e.executar('UPDATE pedido_compra_item SET valor_unitario = 8, valor_total = 40 WHERE id = ?', [
+          b,
+        ]);
+      });
+      const [jaTem] = await ler<{ id: number }>(
+        'SELECT id FROM motivo_cancelamento_compra WHERE codigo = ?',
+        [MOTIVO],
+      );
+      const motivo = jaTem
+        ? Number(jaTem.id)
+        : Number(
+            (
+              await op('gravarMotivoCancelamentoCompra', {
+                codigo: MOTIVO,
+                descricao: 'Fornecedor sem estoque (teste)',
+                aplicaPedido: true,
+                aplicaItem: true,
+                exigeJustificativa: true,
+                ativo: true,
+              })
+            ).resultado['id'],
+          );
+      await op('cancelarCompra', {
+        pedido,
+        item: b,
+        quantidade: null,
+        motivo,
+        justificativa: 'Item retirado antes da aprovação (teste)',
+      });
+      const supervisor = { ...c, usuario: m.usuario3 } as ContextoSuprimentos;
+      const ap = await porta.gravarSgh(
+        supervisor,
+        {
+          estabelecimento: m.estA,
+          usuario: m.usuario3,
+          acao: 'operacao',
+          entidade: 'pedido_compra',
+          entidadeId: null,
+          dadosDepois: { evento: 'suprimentos.pedido.aprovado' },
+          correlacao: null,
+        },
+        (g) =>
+          g.aprovarPedido({
+            ano,
+            doc,
+            decisao: 'aprovado',
+            justificativa: '',
+            usuario: 'x',
+            nivel: 3,
+            faixas: [{ ate: Number.POSITIVE_INFINITY, nivel: 1 }],
+          }),
+      );
+      expect(ap.valor).toBe(100);
+      await op('cancelarCompra', {
+        pedido,
+        item: a,
+        quantidade: 4,
+        motivo,
+        justificativa: 'Fornecedor entrega só seis unidades',
+      });
+
+      // A lista de candidatos mostra o que o pedido vai comprometer (60), não o valor aprovado cru (100).
+      const cand = await contratos.candidatos(ctxContrato, contrato70);
+      expect(cand?.find((x) => x.tipo === 'pedido' && x.ids[0] === pedidoId)?.valor).toBe(60);
+      // A conferência compara os mesmos 60 com o saldo: o contrato de 50 recusa sem gravar; o de 70 aceita.
+      const vincular = (contrato: number, chave: string) =>
+        contratos.gravarSgh(ctxContrato, trilha, (g) =>
+          g.vincular({
+            contrato: { contrato, excecao: null, pedidoDeOrigem: null },
+            tipo: 'pedido',
+            ids: [pedidoId],
+            usuario: 'teste',
+            chave: `ctpc-${RODADA}-${chave}`,
+          }),
+        );
+      await expect(vincular(contrato50, 'v50')).rejects.toThrow(/maior que o saldo/);
+      const [semContrato] = await ler<{ contrato: number | null }>(
+        'SELECT contrato_fornecedor_id AS contrato FROM pedido_compra WHERE id = ?',
+        [pedidoId],
+      );
+      expect(semContrato!.contrato).toBeNull();
+      const v = await vincular(contrato70, 'v70');
+      expect(v).toMatchObject({ saldoAntes: 70, saldoDepois: 10 });
+      const det = await contratos.detalhar(ctxContrato, contrato70);
+      expect(det?.vinculos.find((x) => x.tipo === 'pedido' && x.id === pedidoId)?.valor).toBe(60);
+      expect(det?.saldoDetalhe.consumido).toBe(60);
+      const gestao = await porta.gestaoPedido(c, ano, doc);
+      expect(gestao?.pedido.contrato).toMatchObject({ id: contrato70, valorComprometido: 60 });
     });
   },
 );

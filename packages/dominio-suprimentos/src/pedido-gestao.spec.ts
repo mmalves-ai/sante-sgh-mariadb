@@ -188,4 +188,29 @@ describe('valorPedidoNoContrato (05-SUP linha 20: o pedido ligado ao contrato)',
     expect(valorPedidoNoContrato({ ...base, situacao: 'em_cotacao', valorAprovado: 0 })).toBe(0);
     expect(valorPedidoNoContrato({ ...base, itens: [{ cancelada: 20, valorUnitario: 10 }] })).toBe(0);
   });
+  it('o item cancelado inteiro antes da aprovação, fora do valor aprovado, não é descontado de novo', () => {
+    // Pedido sem vencedor na cotação: A 10 x 10 e B 5 x 8; B cancelado antes da aprovação (aprovado 100, só A);
+    // depois da aprovação, 4 de A cancelados. Compromete 100 - 40 = 60, não 100 - 40 - 40 = 20.
+    expect(
+      valorPedidoNoContrato({
+        situacao: 'aprovado',
+        valorAprovado: 100,
+        itens: [
+          { cancelada: 4, valorUnitario: 10 },
+          { cancelada: 5, valorUnitario: 8, foraDoValorAprovado: true },
+        ],
+      }),
+    ).toBe(60);
+    // Na cotação o valor aprovado conta o item cancelado antes (proposta vencedora inteira): ele é descontado.
+    expect(
+      valorPedidoNoContrato({
+        situacao: 'aprovado',
+        valorAprovado: 140,
+        itens: [
+          { cancelada: 0, valorUnitario: 10 },
+          { cancelada: 5, valorUnitario: 8, foraDoValorAprovado: false },
+        ],
+      }),
+    ).toBe(100);
+  });
 });

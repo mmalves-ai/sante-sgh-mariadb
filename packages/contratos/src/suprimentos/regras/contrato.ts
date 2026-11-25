@@ -256,7 +256,10 @@ export function conferirVinculoContrato(o: {
   tipo: TipoVinculoContrato;
   /** O fornecedor do título (credor) ou os convidados do pedido. */
   fornecedores: readonly number[];
-  /** O valor que abate o saldo agora (o título; o pedido nasce sem preço: 0). */
+  /**
+   * O valor que abate o saldo agora: o título; o pedido já aprovado, o que ele compromete (05-SUP linha 20); o pedido
+   * que nasce na compra, sem preço: 0.
+   */
   valor: number;
   saldo: number;
   excecao: ExcecaoParaVinculo | null;
@@ -323,10 +326,10 @@ export function conferirVinculoContrato(o: {
     return recusa('sem-saldo', 'O contrato não tem saldo: registre um aditivo antes do pedido.', [
       'contrato',
     ]);
-  if (o.tipo === 'titulo' && o.valor > o.saldo + 1e-9)
+  if (o.valor > o.saldo + 1e-9)
     return recusa(
       'saldo-insuficiente',
-      `O título (${fmt(o.valor)}) é maior que o saldo do contrato (${fmt(o.saldo)}).`,
+      `${o.tipo === 'titulo' ? 'O título' : 'O pedido'} (${fmt(o.valor)}) é maior que o saldo do contrato (${fmt(o.saldo)}).`,
       ['contrato'],
     );
   return null;

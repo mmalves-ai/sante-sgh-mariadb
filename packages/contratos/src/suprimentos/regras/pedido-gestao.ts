@@ -160,16 +160,22 @@ export function conferirCancelamentoCompra(c: CancelamentoCompraConferido): {
   return { recusas: r, cancelar: r.length ? [] : cancelar };
 }
 
-/** O item do pedido como o saldo do contrato o lê: a quantidade cancelada e o preço adjudicado. */
+/**
+ * O item do pedido como o saldo do contrato o lê: a quantidade cancelada, o preço adjudicado e se o item ficou fora do
+ * valor aprovado (cancelado inteiro antes da aprovação, no pedido valorado pelos próprios itens: a aprovação já não o
+ * contou, e descontá-lo de novo comeria o saldo de outro item).
+ */
 export interface ItemValorNoContrato {
   readonly cancelada: number;
   readonly valorUnitario: number;
+  readonly foraDoValorAprovado?: boolean;
 }
 
 /**
- * O valor que o pedido compromete do contrato do fornecedor: o valor aprovado menos o que a gestão cancelou depois
- * (quantidade cancelada vezes o preço adjudicado), nunca abaixo de zero. O pedido cancelado ou reprovado não compromete
- * nada; o que ainda não foi aprovado (valor zero) também não.
+ * O valor que o pedido compromete do contrato do fornecedor: o valor aprovado menos o que a gestão cancelou do que esse
+ * valor contou (quantidade cancelada vezes o preço adjudicado), nunca abaixo de zero. O item que a aprovação já deixou
+ * de fora não é descontado de novo. O pedido cancelado ou reprovado não compromete nada; o que ainda não foi aprovado
+ * (valor zero) também não.
  */
 export function valorPedidoNoContrato(p: {
   readonly situacao: string;
@@ -177,7 +183,9 @@ export function valorPedidoNoContrato(p: {
   readonly itens: readonly ItemValorNoContrato[];
 }): number {
   if (p.situacao === 'cancelado' || p.situacao === 'reprovado' || p.valorAprovado <= 0) return 0;
-  const cancelado = p.itens.reduce((s, i) => s + Math.max(0, i.cancelada) * Math.max(0, i.valorUnitario), 0);
+  const cancelado = p.itens
+    .filter((i) => !i.foraDoValorAprovado)
+    .reduce((s, i) => s + Math.max(0, i.cancelada) * Math.max(0, i.valorUnitario), 0);
   return Math.max(0, reais(p.valorAprovado - cancelado));
 }
 

@@ -24,10 +24,10 @@ import {
   repartirEntregas,
   type SituacaoAcompanhamentoPedido,
   situacaoAposCancelamento,
-  valorPedidoNoContrato,
 } from '@sgh/contratos';
 import type { RecusaSuprimentos } from '@sgh/contratos/regras-suprimentos';
 import { recusa, type Leitor, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
+import { valoresPedidosNoContrato } from './valor-pedido-contrato.js';
 
 type Linha = Record<string, unknown>;
 /** O item do pedido como a regra de cancelamento o lê (quantidade, recebida e cancelada). */
@@ -397,6 +397,11 @@ export async function lerGestaoPedido(
       WHERE a.pedido_compra_id = ? ORDER BY a.ocorrido_em DESC, a.id DESC`,
     [id],
   );
+  // 05-SUP linha 20: o que o pedido compromete do contrato, pela mesma leitura do detalhe do contrato.
+  const comprometido =
+    p['contrato_fornecedor_id'] === null || p['contrato_fornecedor_id'] === undefined
+      ? new Map<number, number>()
+      : await valoresPedidosNoContrato(l, est, [id]);
   const motivos = await l.consultar<Linha>(
     `SELECT id, versao, codigo, descricao, aplica_pedido, aplica_item, exige_justificativa, ativo
        FROM motivo_cancelamento_compra ORDER BY ativo DESC, descricao`,
@@ -420,14 +425,7 @@ export async function lerGestaoPedido(
           : {
               id: n(p['contrato_fornecedor_id']),
               numero: String(p['contrato_numero'] ?? ''),
-              valorComprometido: valorPedidoNoContrato({
-                situacao: String(p['situacao']),
-                valorAprovado: n(p['valor_total']),
-                itens: itens.map((x) => ({
-                  cancelada: n(x['quantidade_cancelada']),
-                  valorUnitario: n(x['valor_unitario']),
-                })),
-              }),
+              valorComprometido: comprometido.get(id) ?? 0,
             },
     },
     hoje,

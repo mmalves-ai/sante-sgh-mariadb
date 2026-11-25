@@ -30,7 +30,6 @@ import {
   type TipoContrato,
   type TipoEventoContrato,
   type VinculoContrato,
-  valorPedidoNoContrato,
 } from '@sgh/contratos';
 import {
   avaliarFornecedor,
@@ -72,6 +71,7 @@ import {
   type UsuarioContrato,
   type VinculoContratoGravado,
 } from './contrato-porta.js';
+import { valoresPedidosNoContrato } from './valor-pedido-contrato.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoContrato = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -318,22 +318,11 @@ async function lerVinculos(
     { teto: 200_000 },
   );
   // 05-SUP linha 20: o que a gestão do pedido cancelou depois da aprovação volta ao saldo do contrato.
-  const cancelados = new Map<number, { cancelada: number; valorUnitario: number }[]>();
-  if (pedidos.length) {
-    const ems = pedidos.map(() => '?').join(', ');
-    const itens = await l.consultar(
-      `SELECT x.pedido_compra_id, x.quantidade_cancelada, x.valor_unitario
-         FROM pedido_compra_item x
-        WHERE x.excluido_em IS NULL AND x.quantidade_cancelada > 0 AND x.pedido_compra_id IN (${ems})`,
-      pedidos.map((x) => num(x['id'])),
-      { teto: 200_000 },
-    );
-    for (const x of itens) {
-      const lista = cancelados.get(num(x['pedido_compra_id'])) ?? [];
-      lista.push({ cancelada: num(x['quantidade_cancelada']), valorUnitario: num(x['valor_unitario']) });
-      cancelados.set(num(x['pedido_compra_id']), lista);
-    }
-  }
+  const comprometido = await valoresPedidosNoContrato(
+    l,
+    est,
+    pedidos.map((x) => num(x['id'])),
+  );
   const titulos = await l.consultar(
     `SELECT t.id, t.contrato_fornecedor_id, t.numero_documento, t.serie_documento, t.valor_liquido, t.situacao,
             t.criado_em, u.login
@@ -361,16 +350,7 @@ async function lerVinculos(
     m.set(num(x['contrato_fornecedor_id']), lista);
   };
   for (const x of pedidos)
-    por(
-      'pedido',
-      x,
-      `${num(x['ano'])}/${num(x['numero'])}`,
-      valorPedidoNoContrato({
-        situacao: String(x['situacao']),
-        valorAprovado: num(x['valor_total']),
-        itens: cancelados.get(num(x['id'])) ?? [],
-      }),
-    );
+    por('pedido', x, `${num(x['ano'])}/${num(x['numero'])}`, comprometido.get(num(x['id'])) ?? 0);
   for (const x of titulos)
     por(
       'titulo',
@@ -908,7 +888,13 @@ function gravadorSobre(tx: TxOperacao, est: number, hoje: string, agora: Date): 
       hoje,
       tipo: v.tipo,
       fornecedores: [...new Set(alvos.map((a) => num(a['fornecedor'])))],
-      valor: v.tipo === 'titulo' && origem === null ? din(alvos.reduce((s, a) => s + num(a['valor']), 0)) : 0,
+      // 05-SUP linha 20: o pedido já aprovado ligado depois abate o que compromete (o aprovado menos o cancelado).
+      valor:
+        v.tipo === 'pedido'
+          ? din([...(await valoresPedidosNoContrato(tx, est, ids)).values()].reduce((s, x) => s + x, 0))
+          : origem === null
+            ? din(alvos.reduce((s, a) => s + num(a['valor']), 0))
+            : 0,
       saldo: saldo.saldo,
       excecao: exc
         ? { id: exc.id, contrato: c.id, aprovador: exc.usuario, criadoEm: exc.criadoEm, usada: exc.usado }
@@ -1124,13 +1110,19 @@ export class PortaContratoPropria implements PortaContrato {
         [est, f],
         { teto: TETO_CANDIDATOS },
       );
+      // 05-SUP linha 20: o candidato mostra o que o pedido vai comprometer, o mesmo valor do detalhe depois de ligado.
+      const comprometido = await valoresPedidosNoContrato(
+        l,
+        est,
+        pedidos.map((p) => num(p['id'])),
+      );
       return [
         ...pedidos.map((p): CandidatoVinculo => ({
           tipo: 'pedido',
           ids: [num(p['id'])],
           chaveNatural: `${num(p['ano'])}/${num(p['numero'])}`,
           data: dataIso(p['data_pedido']),
-          valor: din(num(p['valor_total'])),
+          valor: din(comprometido.get(num(p['id'])) ?? 0),
           descricao: `Pedido ${num(p['numero'])}/${num(p['ano'])}`,
         })),
         ...titulos.map((t): CandidatoVinculo => ({

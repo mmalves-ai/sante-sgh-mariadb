@@ -59,6 +59,12 @@ describe('vínculo de pedido ou título ao contrato', () => {
       'O título (1.000,01) é maior que o saldo do contrato (1.000,00).',
     );
   });
+  it('05-SUP linha 20: o pedido já aprovado ligado depois compromete o que vale; acima do saldo recusa', () => {
+    expect(codigo({ valor: 1000 })).toBeNull();
+    expect(conferirVinculoContrato({ ...base, valor: 1000.01 })?.mensagem).toBe(
+      'O pedido (1.000,01) é maior que o saldo do contrato (1.000,00).',
+    );
+  });
 });
 
 describe('entradas do vínculo', () => {
