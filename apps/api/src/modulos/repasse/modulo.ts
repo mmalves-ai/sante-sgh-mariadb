@@ -22,6 +22,8 @@ import { PORTA_FAVORECIDOS_REPASSE, PortaFavorecidosRepassePropria } from './fav
 import { FONTE_FISCAL_REPASSE, fonteFiscalRepasse } from './fonte-fiscal.js';
 import { RemuneracaoVariavelController } from './remuneracao-variavel.controller.js';
 import { VariavelFaixaController } from './variavel-faixa.controller.js';
+import { RateioCustoController } from './rateio-custo.controller.js';
+import { PORTA_RATEIO_CUSTO_REPASSE, PortaRateioCustoRepassePropria } from './rateio-custo-propria.js';
 import { PORTA_VARIAVEL_FAIXA, PortaVariavelFaixaPropria } from './variavel-faixa-propria.js';
 import {
   PORTA_REMUNERACAO_VARIAVEL,
@@ -77,6 +79,7 @@ export async function moduloRepasse(
       FavorecidosRepasseController,
       RemuneracaoVariavelController,
       VariavelFaixaController,
+      RateioCustoController,
     ],
     providers: [
       // Favorecidos e prestadores terceiros (06-FAT linha 46): só com o banco do cliente (sem ele, 503).
@@ -90,6 +93,11 @@ export async function moduloRepasse(
             {
               provide: PORTA_REMUNERACAO_VARIAVEL,
               useValue: new PortaRemuneracaoVariavelPropria(ctx.nucleo, ctx.configuracao.clientePadrao),
+            },
+            // Rateio do repasse por setor e custos do prestador (06-FAT linha 49).
+            {
+              provide: PORTA_RATEIO_CUSTO_REPASSE,
+              useValue: new PortaRateioCustoRepassePropria(ctx.nucleo, ctx.configuracao.clientePadrao),
             },
             // Remuneração variável por faixa e rateio da equipe (06-FAT linha 48).
             {
