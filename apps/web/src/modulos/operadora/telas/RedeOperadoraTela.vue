@@ -27,6 +27,8 @@ import {
   lerPrestadores,
   reincluirPrestador,
 } from '../api-rede.js';
+import { TIPOS_MOTIVO_DESCREDENCIAMENTO } from '../api-rede-cadastro.js';
+import CadastroRedePrestador from '../componentes/CadastroRedePrestador.vue';
 import FormPrestador from '../componentes/FormPrestador.vue';
 
 const { t } = useI18n();
@@ -142,6 +144,12 @@ const dAviso = ref<string | null>(null);
 const dEfetivo = ref<string | null>(null);
 const dSubstituto = ref<number | null>(null);
 const dAutorizacao = ref('');
+// C2-118: o tipo do motivo vai ao registro próprio do descredenciamento.
+const dTipoMotivo = ref<keyof typeof TIPOS_MOTIVO_DESCREDENCIAMENTO | null>('iniciativa_operadora');
+const opcoesTipoMotivo = Object.entries(TIPOS_MOTIVO_DESCREDENCIAMENTO).map(([valor, rotulo]) => ({
+  valor: valor as keyof typeof TIPOS_MOTIVO_DESCREDENCIAMENTO | null,
+  rotulo,
+}));
 const dBusca = ref('');
 const dBuscaAplicada = ref('');
 const recusaDialogo = ref<string | null>(null);
@@ -173,6 +181,7 @@ function abrirDescredenciar(p: PrestadorDetalhe): void {
   dEfetivo.value = somaDias(hoje, 30);
   dSubstituto.value = null;
   dAutorizacao.value = '';
+  dTipoMotivo.value = 'iniciativa_operadora';
   dBusca.value = '';
   dBuscaAplicada.value = '';
   recusaDialogo.value = null;
@@ -198,6 +207,7 @@ async function confirmarDescredenciar(): Promise<void> {
         avisoBeneficiariosEm: dAviso.value,
         substituto: dSubstituto.value,
         autorizacaoAns: dAutorizacao.value.trim() || null,
+        tipoMotivo: dTipoMotivo.value ?? 'iniciativa_operadora',
       }),
     );
   } catch (e) {
@@ -576,6 +586,7 @@ watch(ligada, (v) => {
               </tr>
             </tbody>
           </table>
+          <CadastroRedePrestador :prestador="ficha.data.value.id" :pode-editar="podeEditar" />
         </template>
       </section>
 
@@ -641,6 +652,12 @@ watch(ligada, (v) => {
     >
       <div class="formulario" data-testid="form-descredenciar">
         <p class="secundario">{{ t('operadoraRede.descredenciar.texto') }}</p>
+        <SanteSelecao
+          v-model="dTipoMotivo"
+          :rotulo="t('operadoraRede.descredenciar.tipoMotivo')"
+          :opcoes="opcoesTipoMotivo"
+          data-testid="rede-desc-tipo-motivo"
+        />
         <SanteCampoTexto
           id="rede-desc-motivo"
           v-model="dMotivo"

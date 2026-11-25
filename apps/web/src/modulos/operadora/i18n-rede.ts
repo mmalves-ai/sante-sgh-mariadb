@@ -1,5 +1,7 @@
 // Textos da tela da rede credenciada da operadora própria (M56, etapa 4, F3). Sem nome de sistema antigo (ADR 0023): os
 // domínios aparecem pelo rótulo, nunca pela tabela; a fatia nasce desligada (POL-3) e a tela diz o motivo.
+import { mensagensRedeCadastro } from './i18n-rede-cadastro.js';
+
 export const mensagensRedeOperadora = {
   titulo: 'Rede credenciada',
   texto:
@@ -136,6 +138,7 @@ export const mensagensRedeOperadora = {
     buscarSubstituto: 'Buscar o substituto pelo nome',
     semSubstituto: 'Sem substituto',
     autorizacaoAns: 'Número do processo de autorização da ANS',
+    tipoMotivo: 'Tipo do motivo',
   },
   reincluir: {
     titulo: 'Reincluir {nome}',
@@ -161,4 +164,6 @@ export const mensagensRedeOperadora = {
     12: 'dezembro',
   },
   dominios: 'Tabelas da rede credenciada',
+  // C2-118: o cadastro complementar do prestador (locais, especialidades, qualificação, suspensões).
+  cadastro: mensagensRedeCadastro,
 } as const;
