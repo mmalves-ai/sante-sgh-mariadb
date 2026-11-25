@@ -560,6 +560,29 @@ export class AcessoRestritoProprio {
   }
 
   /**
+   * Paciente de um recurso clínico (o filtro das rotas que trazem o atendimento, a internação, o agendamento ou o ato
+   * cirúrgico em vez do paciente). Recurso inexistente: null (a rota segue e responde o seu próprio 404).
+   */
+  async pacienteDoRecurso(
+    tipo: 'atendimento' | 'internacao' | 'agendamento-cirurgico' | 'ato-cirurgico',
+    id: number,
+  ): Promise<number | null> {
+    const r = await this.ler('acesso-restrito-recurso', (l) => {
+      switch (tipo) {
+        case 'atendimento':
+          return l.uma('SELECT paciente_id FROM atendimento WHERE id = ?', [id]);
+        case 'internacao':
+          return l.uma('SELECT paciente_id FROM internacao WHERE id = ?', [id]);
+        case 'agendamento-cirurgico':
+          return l.uma('SELECT paciente_id FROM agendamento_cirurgico WHERE id = ?', [id]);
+        case 'ato-cirurgico':
+          return l.uma('SELECT paciente_id FROM ato_cirurgico WHERE id = ?', [id]);
+      }
+    });
+    return r ? Number(r['paciente_id']) : null;
+  }
+
+  /**
    * A decisão do domínio para a conta (pelo login) sobre o paciente, no estabelecimento da sessão (pelo código). Sem
    * marca viva (o caso comum), uma só leitura. `plataforma`: o administrador da plataforma (pode tudo).
    */

@@ -4,9 +4,15 @@
 // recusados), a liberação nominal em `liberacao_acesso_restrito` (profissional, justificativa, autorizador; o destino
 // duplo recusado), a revogação (fim gravado, linha mantida), o encerramento da marca (situação e fim, linha mantida) e
 // a decisão de acesso que o filtro das rotas clínicas usa: sem liberação, quebra de vidro; liberado, entra; revogado,
-// volta à quebra de vidro; quebra de vidro vigente, entra; marca encerrada, livre. SGH_NUCLEO_SEM_BANCO=1 pula.
+// volta à quebra de vidro; liberação por equipe vale só com o membro em vigor; quem atende agora (atendimento aberto do
+// profissional) entra; quebra de vidro vigente, entra; marca encerrada, livre. E a rota real do prontuário
+// (GET /api/pep/paciente/:p/cabecalho, pelos metadados do controller) recusa 403 sem rodar o método. SGH_NUCLEO_SEM_BANCO=1 pula.
+import type { ExecutionContext } from '@nestjs/common';
 import { NucleoProprio } from '@sgh/nucleo';
+import { lastValueFrom, of } from 'rxjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { DocumentosController } from '../pep/documentos.controller.js';
+import { InterceptadorAcessoRestrito } from './acesso-restrito.interceptor.js';
 import { AcessoRestritoProprio, type EntradaMarcaTela } from './acesso-restrito-proprio.js';
 import {
   CEP_TESTE,
@@ -36,6 +42,8 @@ describe.skipIf(SEM_BANCO)('paciente com acesso restrito no banco próprio (f22_
   let vinculoCriado = 0;
   let emergencia = 0;
   let hospital = '';
+  let equipe = 0;
+  const NUM_ATD = `${MARCA}-AR1`;
 
   const um = <T extends Record<string, unknown>>(sql: string, p: readonly unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE_F22, correlacao: COR }, (l) => l.uma<T>(sql, p));
@@ -85,6 +93,13 @@ describe.skipIf(SEM_BANCO)('paciente com acesso restrito no banco próprio (f22_
         `${MARCA}%`,
       ]);
       if (vinculoCriado) await e.executar('DELETE FROM usuario_profissional WHERE id = ?', [vinculoCriado]);
+      await e.executar('DELETE FROM atendimento WHERE numero = ? AND paciente_id = ?', [NUM_ATD, paciente]);
+      const eq = 'SELECT id FROM equipe_profissional WHERE codigo = ?';
+      await e.executar(
+        `DELETE FROM equipe_profissional_membro WHERE equipe_profissional_id IN (SELECT id FROM (${eq}) x)`,
+        [`${MARCA}-RESTR`],
+      );
+      await e.executar('DELETE FROM equipe_profissional WHERE codigo = ?', [`${MARCA}-RESTR`]);
     });
   }
 
@@ -237,6 +252,106 @@ describe.skipIf(SEM_BANCO)('paciente com acesso restrito no banco próprio (f22_
       await codigo(s.revogar(c(), { id: liberacao, versao: v.versao + 1 }, t('liberacao_acesso_restrito'))),
     ).toBe('ja-revogada');
     // A decisão usa a hora real do banco para a quebra de vidro e a hora fixa do teste para as vigências.
+    expect(await decidir()).toBe('quebra-de-vidro');
+  });
+
+  it('rota real do prontuário (cabeçalho por :p): paciente marcado, 403 paciente-restrito e o método não roda', async () => {
+    const req = {
+      method: 'GET',
+      originalUrl: `/api/pep/paciente/${paciente}/cabecalho`,
+      url: `/api/pep/paciente/${paciente}/cabecalho`,
+      params: { p: String(paciente) },
+      query: {},
+      headers: {},
+      sgh: {
+        sessao: {
+          estabelecimentoAtivo: hospital,
+          rede: '',
+          usuario: { id: String(m!.usuario), login: m!.login, ator: 'cliente' },
+        },
+      },
+    };
+    const ctx = {
+      getType: () => 'http',
+      getClass: () => DocumentosController,
+      getHandler: () => DocumentosController.prototype.cabecalho,
+      switchToHttp: () => ({ getRequest: () => req }),
+    } as unknown as ExecutionContext;
+    let rodou = false;
+    const r = await lastValueFrom(
+      new InterceptadorAcessoRestrito(s).intercept(ctx, {
+        handle: () => {
+          rodou = true;
+          return of('cabeçalho');
+        },
+      }),
+    ).then(
+      () => 'passou',
+      (e: { getStatus?: () => number; extensoes?: { codigo?: string } }) => e.getStatus?.() ?? String(e),
+    );
+    expect(r).toBe(403);
+    expect(rodou).toBe(false);
+  });
+
+  it('liberação por equipe: vale com o membro em vigor; com o membro fora de vigência, volta à quebra de vidro', async () => {
+    equipe = await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.inserir(
+        `INSERT INTO equipe_profissional (estabelecimento_id, codigo, nome, tipo, vigencia_inicio, criado_em)
+           VALUES (?, ?, ?, 'assistencial', '2026-01-01', NOW(3))`,
+        [m!.estabelecimento, `${MARCA}-RESTR`, `Equipe assistente ${MARCA}`],
+      ),
+    );
+    const membro = await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.inserir(
+        `INSERT INTO equipe_profissional_membro (equipe_profissional_id, profissional_id, vigencia_inicio, criado_em)
+           VALUES (?, ?, '2026-01-01', NOW(3))`,
+        [equipe, profissional],
+      ),
+    );
+    expect(await decidir()).toBe('quebra-de-vidro');
+    const lib = await s.liberar(
+      c(),
+      {
+        marca,
+        profissionalId: null,
+        equipeId: equipe,
+        justificativa: 'Equipe do caso (sintético)',
+        inicio: '2026-01-01',
+        fim: null,
+      },
+      t('liberacao_acesso_restrito'),
+    );
+    expect(
+      await um(
+        'SELECT profissional_id AS p, equipe_profissional_id AS e FROM liberacao_acesso_restrito WHERE id = ?',
+        [lib],
+      ),
+    ).toMatchObject({ p: null, e: equipe });
+    expect(await decidir()).toBe('liberado');
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar("UPDATE equipe_profissional_membro SET vigencia_fim = '2026-03-01' WHERE id = ?", [membro]),
+    );
+    expect(await decidir()).toBe('quebra-de-vidro');
+    const v = (await s.visao(c(), paciente)).marcas[0]!.liberacoes.find((x) => x.id === lib)!;
+    await s.revogar(c(), { id: lib, versao: v.versao }, t('liberacao_acesso_restrito'));
+  });
+
+  it('quem atende agora (atendimento aberto do profissional) entra; sem o atendimento, quebra de vidro', async () => {
+    const cat = await um<{ id: unknown }>('SELECT id FROM categoria_atendimento ORDER BY id LIMIT 1', []);
+    const car = await um<{ id: unknown }>('SELECT id FROM carater_atendimento_tiss ORDER BY id LIMIT 1', []);
+    const atd = await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+           fonte_pagadora_id, profissional_id, entrada_em, situacao, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3), 'aberto', NOW(3))`,
+        [m!.estabelecimento, NUM_ATD, paciente, Number(cat!.id), Number(car!.id), m!.fonte, profissional],
+      ),
+    );
+    expect(await decidir()).toBe('atende');
+    expect(await s.pacienteDoRecurso('atendimento', atd)).toBe(paciente);
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar('DELETE FROM atendimento WHERE id = ?', [atd]),
+    );
     expect(await decidir()).toBe('quebra-de-vidro');
   });
 
