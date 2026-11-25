@@ -91,4 +91,13 @@ describe('abertura do atendimento pela porta em memória do módulo', () => {
     expect(p.tipo).toBe('nao-encontrado');
     expect(p.detalhe).toBe('O cadastro do paciente não existe mais.');
   });
+
+  it('a marcação do dia traz o paciente do cadastro em memória (a abertura vinda do agendamento)', async () => {
+    // Sem a ligação com o cadastro, a leitura da marcação vinha com o paciente nulo e a tela não preenchia o paciente.
+    const porta = await portaDoAtendimento(ctxModulo);
+    const m = await porta.marcacao(c as never, 880_001);
+    expect(m).toMatchObject({ id: 880_001, hoje: true, registro: 0 });
+    expect(m?.paciente?.id).toBe(1007);
+    expect(m?.paciente?.nome).toMatch(/ROCHA/);
+  });
 });
