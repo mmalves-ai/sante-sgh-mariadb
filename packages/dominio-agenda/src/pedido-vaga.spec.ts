@@ -1,6 +1,6 @@
 // 02-AGE linha 53: regra do pedido de vaga do médico ou da regulação.
 import { describe, expect, it } from 'vitest';
-import { type EntradaPedidoVaga, validarPedidoVaga } from './pedido-vaga.js';
+import { type EntradaPedidoVaga, itensNoEncerramentoDaEspera, validarPedidoVaga } from './pedido-vaga.js';
 
 const base: EntradaPedidoVaga = {
   solicitante: 10,
@@ -82,5 +82,15 @@ describe('validarPedidoVaga', () => {
     expect(campos({ prazoLimite: '2030-03-11' })).toEqual([]);
     expect(campos({ prazoLimite: '2030-03-10' })).toEqual(['prazoLimite']);
     expect(campos({ prazoLimite: '11/03/2030' })).toEqual(['prazoLimite']);
+  });
+});
+
+describe('itensNoEncerramentoDaEspera (02-AGE 53: os itens acompanham o pedido até a marcação)', () => {
+  it('marcado leva cada item à marcação; cancelado cancela; devolução e atendido sem marcação não mexem', () => {
+    expect(itensNoEncerramentoDaEspera('atendido', 77)).toEqual({ situacao: 'marcado', marcacao: 77 });
+    expect(itensNoEncerramentoDaEspera('cancelado', null)).toEqual({ situacao: 'cancelado', marcacao: null });
+    expect(itensNoEncerramentoDaEspera('cancelado', 77)).toEqual({ situacao: 'cancelado', marcacao: null });
+    expect(itensNoEncerramentoDaEspera('aguardando', null)).toBeNull();
+    expect(itensNoEncerramentoDaEspera('atendido', null)).toBeNull();
   });
 });

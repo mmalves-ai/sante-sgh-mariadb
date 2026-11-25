@@ -89,3 +89,24 @@ export function validarPedidoVaga(e: EntradaPedidoVaga): ResultadoPedidoVaga {
   }
   return problemas.length > 0 ? { ok: false, problemas } : { ok: true, itemPrincipal };
 }
+
+/** Situação de um item pedido (lista_espera_item). */
+export type SituacaoItemPedidoVaga = 'aguardando' | 'marcado' | 'cancelado';
+
+/**
+ * O que acontece com os itens ainda aguardando quando a fila encerra o pedido: marcado (o pedido virou marcação) leva
+ * cada item a 'marcado' com a marcação; cancelado leva a 'cancelado'; a devolução à fila ('aguardando') não mexe nos
+ * itens. Atendido sem marcação no sistema também não mexe: o item marcado exige a marcação, e cancelar diria o
+ * contrário do que houve. O item já marcado ou cancelado antes fica como está (histórico nunca reescrito).
+ */
+export function itensNoEncerramentoDaEspera(
+  situacaoEspera: 'atendido' | 'cancelado' | 'aguardando',
+  marcacao: number | null,
+): {
+  readonly situacao: Exclude<SituacaoItemPedidoVaga, 'aguardando'>;
+  readonly marcacao: number | null;
+} | null {
+  if (situacaoEspera === 'cancelado') return { situacao: 'cancelado', marcacao: null };
+  if (situacaoEspera === 'atendido' && marcacao !== null) return { situacao: 'marcado', marcacao };
+  return null;
+}

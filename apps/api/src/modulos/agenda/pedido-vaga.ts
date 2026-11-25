@@ -8,7 +8,8 @@
 //   - `lista_espera_item` um por procedimento pedido (sequência 1..n, item da agenda ou procedimento faturável,
 //     quantidade, situação 'aguardando');
 //   - `lista_espera_historico` evento 'entrada' com o solicitante e os itens.
-// Daí em diante o pedido é da fila da agenda (oferta, marcação, encerramento: porta-propria.ts). O pedido que vem da
+// Daí em diante o pedido é da fila da agenda (oferta, marcação, encerramento: porta-propria.ts), e os itens
+// acompanham o encerramento (pedido-vaga-itens.ts: marcado com a marcação ou cancelado, na mesma transação). O pedido que vem da
 // central de regulação nasce no aceite (regulacao-entrada-propria.ts, solicitacao_regulacao_id). Nada se apaga.
 import { MAXIMO_ITENS_PEDIDO_VAGA, prioridadeGravadaNaEspera, validarPedidoVaga } from '@sgh/dominio-agenda';
 import {
@@ -21,9 +22,12 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { complementoDosPedidos, type ItemPedidoLido } from './pedido-vaga-itens.js';
 import { dataNoFuso } from './pre-cadastro-marcacao.js';
 import { grupoLegalDaEspera } from './prioridade-espera.js';
 import type { NucleoAgenda } from './porta-propria.js';
+
+export type { ItemPedidoLido } from './pedido-vaga-itens.js';
 
 const num = (v: unknown): number => Number(v);
 const txt = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
@@ -65,12 +69,6 @@ export type EntradaPedidoVaga = z.infer<typeof esquemaPedidoVaga>;
 export interface ContextoPedidoVaga {
   readonly hospital: string;
   readonly login: string;
-}
-export interface ItemPedidoLido {
-  readonly sequencia: number;
-  readonly descricao: string;
-  readonly quantidade: number;
-  readonly situacao: string;
 }
 export interface PedidoVagaLido {
   readonly id: number;
@@ -170,20 +168,10 @@ export class PedidosVagaPropria {
             ORDER BY le.situacao IN ('aguardando', 'ofertado') DESC, le.entrada_em DESC LIMIT 100`,
           [q.estabelecimento, paciente],
         );
-        const ids = ps.map((p) => p['id']);
-        const its =
-          ids.length === 0
-            ? []
-            : await l.consultar(
-                `SELECT i.lista_espera_id, i.sequencia, i.quantidade, i.situacao,
-                    COALESCE(ia.descricao, fv.descricao) AS descricao
-                   FROM lista_espera_item i
-                   LEFT JOIN item_agendavel ia ON ia.id = i.item_agendavel_id
-                   LEFT JOIN item_faturavel fv ON fv.id = i.item_faturavel_id
-                  WHERE i.excluido_em IS NULL AND i.lista_espera_id IN (${ids.map(() => '?').join(', ')})
-                  ORDER BY i.sequencia`,
-                ids,
-              );
+        const comp = await complementoDosPedidos(
+          l,
+          ps.map((p) => num(p['id'])),
+        );
         const especialidades = await l.consultar(
           'SELECT id, descricao FROM especialidade_medica WHERE ativo ORDER BY descricao LIMIT 500',
         );
@@ -207,14 +195,7 @@ export class PedidosVagaPropria {
             solicitante: txt(p['solicitante']),
             regulacao: txt(p['regulacao']),
             observacao: txt(p['observacao']),
-            itens: its
-              .filter((i) => num(i['lista_espera_id']) === num(p['id']))
-              .map((i) => ({
-                sequencia: num(i['sequencia']),
-                descricao: String(i['descricao'] ?? ''),
-                quantidade: num(i['quantidade']),
-                situacao: String(i['situacao']),
-              })),
+            itens: comp.get(num(p['id']))?.itens ?? [],
           })),
           especialidades: especialidades.map((x) => ({ id: num(x['id']), nome: String(x['descricao']) })),
           itens: itens.map((x) => ({

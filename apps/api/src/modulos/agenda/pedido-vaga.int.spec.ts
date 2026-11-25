@@ -1,9 +1,10 @@
-// 02-AGE linha 53, contrato de efeito: o pedido de vaga nasce no prontuário pelo médico e segue até a oferta de vaga.
+// 02-AGE linha 53, contrato de efeito: o pedido de vaga nasce no prontuário pelo médico e segue até a marcação.
 // Prova no MariaDB: `lista_espera` com solicitante_profissional_id (o profissional vinculado ao usuário), a
 // especialidade, o primeiro item da agenda como alvo, o prazo limite e a prioridade; `lista_espera_item` um por
 // procedimento pedido (item da agenda ou procedimento faturável, sequência, quantidade, 'aguardando');
 // `lista_espera_historico` evento 'entrada' com o solicitante; a leitura por paciente com os itens; o pedido na fila
-// da agenda (porta.espera) e a oferta de vaga ('ofertado', evento 'oferta'). Recusas sem gravar: usuário sem vínculo
+// da agenda (porta.espera, com quem pediu e os itens) e a oferta de vaga ('ofertado', evento 'oferta'); a marcação
+// (itens 'marcado' com a marcação, evento 'marcacao' com a contagem) e o cancelamento (itens 'cancelado'). Recusas sem gravar: usuário sem vínculo
 // com profissional, prazo no passado e item inexistente. O pedido que vem da regulação (solicitacao_regulacao_id)
 // tem prova em adt/regulacao-entrada-propria.int.spec.ts. Massa SINTÉTICA própria (estabelecimento c116v, logins
 // teste.c116v.*), limpa antes e depois. SGH_NUCLEO_SEM_BANCO=1 pula.
@@ -44,6 +45,7 @@ describe.skipIf(SEM_BANCO)('02-AGE 53: pedido de vaga do médico até a oferta (
   let porta: PortaAgendaPropria;
   const ids = { est: 0, medico: 0, prof: 0, paciente: 0, esp: 0, agenda: 0, item: 0, item2: 0, fat: 0 };
   let pedido = 0;
+  let outro = 0;
 
   async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]) {
     const l = await e.uma<{ id: number }>(sel, p);
@@ -60,6 +62,8 @@ describe.skipIf(SEM_BANCO)('02-AGE 53: pedido de vaga do médico até a oferta (
       [ids.est],
     );
     await e.executar('DELETE FROM lista_espera WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM marcacao_horario WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM horario_agenda WHERE estabelecimento_id = ?', [ids.est]);
     await limparTrilhaDaMassa(e, { ids: [ids.est] });
   }
   const ler = <T>(sql: string, p: unknown[]) =>
@@ -265,6 +269,7 @@ describe.skipIf(SEM_BANCO)('02-AGE 53: pedido de vaga do médico até a oferta (
     const corpo = { paciente: ids.paciente, especialidade: ids.esp, itens: [{ itemAgendavel: ids.item2 }] };
     const p1 = await pedidos.incluir(c, corpo);
     const p2 = await pedidos.incluir(c, corpo);
+    outro = p1.resultado.id;
     expect(p2.repetida).toBe(true);
     expect(p2.resultado.id).toBe(p1.resultado.id);
     expect(await contar()).toBe(2);
@@ -293,6 +298,16 @@ describe.skipIf(SEM_BANCO)('02-AGE 53: pedido de vaga do médico até a oferta (
     expect(pedido).toBeGreaterThan(0);
     const fila = await porta.espera(ctxPorta(), { situacoes: ['aguardando'] });
     expect(fila.map((x) => x.id)).toContain(pedido);
+    // Quem marca vê o pedido inteiro: quem pediu e cada procedimento pedido, não só o item principal.
+    const naFila = fila.find((x) => x.id === pedido)!;
+    expect(naFila.solicitante).toBe('PROFISSIONAL SINTETICO C116V');
+    expect(naFila.regulacao).toBeNull();
+    expect(
+      naFila.itens!.map((x) => [x.sequencia, x.descricao, x.quantidade, x.situacao]).slice(0, 2),
+    ).toEqual([
+      [1, 'EXAME SINTETICO C116V A', 1, 'aguardando'],
+      [2, 'EXAME SINTETICO C116V B', 2, 'aguardando'],
+    ]);
     await porta.gravar(ctxPorta(), (g) =>
       g.ofertarEspera({ id: pedido, agenda: ids.agenda, data: '2030-03-20', hora: '10:00', motivo: null }),
     );
@@ -305,5 +320,79 @@ describe.skipIf(SEM_BANCO)('02-AGE 53: pedido de vaga do médico até a oferta (
     expect(hs.map((h) => h.evento)).toEqual(['entrada', 'oferta']);
     const v = await pedidos.doPaciente({ hospital: EST, login: MEDICO }, ids.paciente);
     expect(v.pedidos.find((x) => x.id === pedido)!.situacao).toBe('ofertado');
+  });
+
+  it('a marcação leva os itens a marcado com a marcação; o cancelamento cancela os itens (mesma transação, histórico)', async () => {
+    expect(pedido).toBeGreaterThan(0);
+    expect(outro).toBeGreaterThan(0);
+    // A marcação da vaga ofertada (a fila marca e encerra o pedido como atendido com a marcação).
+    const marcacao = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'marcacao-c116v' }, async (e) => {
+      const um = async (sql: string) => Number((await e.uma<{ id: number }>(sql, []))!.id);
+      const horario = await e.inserir(
+        `INSERT INTO horario_agenda (estabelecimento_id, agenda_servico_id, data_referencia, inicio_em, fim_em, situacao, criado_em)
+         VALUES (?, ?, '2030-03-20', '2030-03-20 13:00:00', '2030-03-20 13:30:00', 'ocupado', ?)`,
+        [ids.est, ids.agenda, new Date()],
+      );
+      return e.inserir(
+        `INSERT INTO marcacao_horario (estabelecimento_id, numero, horario_agenda_id, tipo_marcacao_id, situacao_marcacao_id,
+           canal_marcacao_id, fonte_pagadora_id, duracao_minutos, marcado_em, responsavel_usuario_id, paciente_id, criado_em)
+         VALUES (?, 'C116V-1', ?, ?, ?, ?, ?, 30, ?, ?, ?, ?)`,
+        [
+          ids.est,
+          horario,
+          await um('SELECT id FROM tipo_marcacao ORDER BY id LIMIT 1'),
+          await um('SELECT id FROM situacao_marcacao ORDER BY id LIMIT 1'),
+          await um('SELECT id FROM canal_marcacao ORDER BY id LIMIT 1'),
+          await um('SELECT id FROM fonte_pagadora ORDER BY id LIMIT 1'),
+          new Date(),
+          ids.medico,
+          ids.paciente,
+          new Date(),
+        ],
+      );
+    });
+    await porta.gravar(ctxPorta(), (g) => g.encerrarEspera({ id: pedido, situacao: 'atendido', marcacao }));
+    const [le] = await ler<{ situacao: string; marcacao_horario_id: number }>(
+      'SELECT situacao, marcacao_horario_id FROM lista_espera WHERE id = ?',
+      [pedido],
+    );
+    expect(le).toMatchObject({ situacao: 'atendido', marcacao_horario_id: marcacao });
+    const its = await ler<{ situacao: string; marcacao_horario_id: number | null; versao: number }>(
+      'SELECT situacao, marcacao_horario_id, versao FROM lista_espera_item WHERE lista_espera_id = ? ORDER BY sequencia',
+      [pedido],
+    );
+    expect(its.length).toBeGreaterThanOrEqual(2);
+    for (const i of its) {
+      expect(i.situacao).toBe('marcado');
+      expect(Number(i.marcacao_horario_id)).toBe(marcacao);
+      expect(Number(i.versao)).toBe(2);
+    }
+    const hs = await ler<{ evento: string; dados: unknown }>(
+      'SELECT evento, dados FROM lista_espera_historico WHERE lista_espera_id = ? ORDER BY id',
+      [pedido],
+    );
+    expect(hs.map((h) => h.evento)).toEqual(['entrada', 'oferta', 'marcacao']);
+    const d = hs[2]!.dados;
+    expect((typeof d === 'string' ? JSON.parse(d) : d) as Record<string, unknown>).toMatchObject({
+      marcacao,
+      itens: its.length,
+    });
+
+    // O outro pedido sai da fila cancelado: o item é cancelado, sem marcação; nada se apaga.
+    await porta.gravar(ctxPorta(), (g) =>
+      g.encerrarEspera({ id: outro, situacao: 'cancelado', marcacao: null }),
+    );
+    const cs = await ler<{ situacao: string; marcacao_horario_id: number | null; excluido_em: unknown }>(
+      'SELECT situacao, marcacao_horario_id, excluido_em FROM lista_espera_item WHERE lista_espera_id = ?',
+      [outro],
+    );
+    expect(cs).toEqual([{ situacao: 'cancelado', marcacao_horario_id: null, excluido_em: null }]);
+
+    // A aba do prontuário mostra cada procedimento como ficou.
+    const v = await pedidos.doPaciente({ hospital: EST, login: MEDICO }, ids.paciente);
+    const marcado = v.pedidos.find((x) => x.id === pedido)!;
+    expect(marcado.situacao).toBe('atendido');
+    expect(marcado.itens.every((x) => x.situacao === 'marcado' && x.marcacao === marcacao)).toBe(true);
+    expect(v.pedidos.find((x) => x.id === outro)!.itens.map((x) => x.situacao)).toEqual(['cancelado']);
   });
 });
