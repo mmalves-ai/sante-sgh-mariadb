@@ -121,6 +121,13 @@ export const rotasCadastro: RouteRecordRaw[] = [
     meta: { permissao: 'cadastro.profissional.ler' },
   },
   {
+    // F8 (02-CAD linha 22): equipes médicas e cooperativas do profissional (membros e cooperados com vigência).
+    path: '/cadastros/profissionais/equipes',
+    name: 'cadastro.profissionais.equipes',
+    component: () => import('./telas/EquipesCooperativasTela.vue'),
+    meta: { permissao: 'cadastro.profissional.ler' },
+  },
+  {
     path: '/cadastros/profissionais/conselhos',
     name: 'cadastro.conselhos',
     component: () => import('./telas/ConselhosTela.vue'),

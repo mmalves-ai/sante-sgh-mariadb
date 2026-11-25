@@ -33,6 +33,8 @@ import { PortaCadastroPropria } from './porta-propria.js';
 import { TISS_CONFIGURACAO, TissConfiguracaoPropria } from './tiss-configuracao-proprio.js';
 import { ProfissionaisController } from './profissionais.controller.js';
 import { ProfissionalProvisorioController } from './profissional-provisorio.controller.js';
+import { EquipesCooperativasController } from './equipes-cooperativas.controller.js';
+import { EQUIPES_COOPERATIVAS, EquipesCooperativasPropria } from './equipes-cooperativas-proprio.js';
 import { PROFISSIONAL_PROVISORIO, ProfissionalProvisorioProprio } from './profissional-provisorio-proprio.js';
 import { ProfissionalComplementoController } from './profissional-complemento.controller.js';
 import {
@@ -89,6 +91,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   const linhasCuidado = ctx.nucleo && cliente ? new LinhasCuidadoPropria(ctx.nucleo, cliente) : null;
   // F8 (02-CAD linha 21): profissional provisório e a regularização, só no banco do cliente.
   const provisorio = ctx.nucleo && cliente ? new ProfissionalProvisorioProprio(ctx.nucleo, cliente) : null;
+  // F8 (02-CAD linha 22): equipes médicas e cooperativas do profissional, só no banco do cliente.
+  const equipes = ctx.nucleo && cliente ? new EquipesCooperativasPropria(ctx.nucleo, cliente) : null;
   return {
     module: ModuloCadastro,
     controllers: [
@@ -105,6 +109,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       CalendarioController,
       LinhasCuidadoController,
       ProfissionalProvisorioController,
+      EquipesCooperativasController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: porta },
@@ -120,6 +125,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       { provide: IDENTIDADE_ESTABELECIMENTO, useValue: identidade },
       { provide: LINHAS_CUIDADO, useValue: linhasCuidado },
       { provide: PROFISSIONAL_PROVISORIO, useValue: provisorio },
+      { provide: EQUIPES_COOPERATIVAS, useValue: equipes },
     ],
     exports: [PORTA_CADASTRO],
   };

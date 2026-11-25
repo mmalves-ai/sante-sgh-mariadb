@@ -49,6 +49,7 @@ import { mensagensIdentidadeEstabelecimento } from '../modulos/cadastro/i18n-ide
 import { mensagensLigacoes } from '../modulos/cadastro/i18n-ligacoes.js';
 import { mensagensCalendario } from '../modulos/cadastro/i18n-calendario.js';
 import { mensagensProfissionalProvisorio } from '../modulos/cadastro/i18n-provisorio.js';
+import { mensagensEquipesCooperativas } from '../modulos/cadastro/i18n-equipes.js';
 import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
 import { mensagensLinhasCuidado } from '../modulos/cadastro/i18n-linhas-cuidado.js';
 import { mensagensDemografia } from '../modulos/cadastro/i18n-demografia.js';
@@ -2427,6 +2428,7 @@ export const mensagensWeb = {
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,
   profissionalProvisorio: mensagensProfissionalProvisorio,
+  equipesCooperativas: mensagensEquipesCooperativas,
   estruturaGestao: mensagensEstruturaGestao,
   identidadeEstabelecimento: mensagensIdentidadeEstabelecimento,
   complementoProfissional: mensagensComplementoProfissional,

@@ -318,6 +318,12 @@ const textoRegistro = (r: Registro) => [r.cbo, r.cboDescricao].filter(Boolean).j
             :to="`/cadastros/profissionais/${p.id}/historico`"
             >{{ T('alteracoes') }}</RouterLink
           >
+          <RouterLink
+            class="botao-link"
+            data-testid="link-equipes-profissional"
+            :to="`/cadastros/profissionais/equipes?profissional=${p.id}`"
+            >{{ t('equipesCooperativas.linkDoProfissional') }}</RouterLink
+          >
           <SanteBotao
             v-if="exclusao"
             :rotulo="T('excluir')"

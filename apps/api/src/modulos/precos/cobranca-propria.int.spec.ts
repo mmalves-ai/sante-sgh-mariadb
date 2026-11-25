@@ -8,6 +8,7 @@ import type { ContaTiss } from '@sgh/contratos';
 import { type ContextoOperacao, type Escritor, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { EquipesCooperativasPropria } from '../cadastro/equipes-cooperativas-proprio.js';
 import { ServicoCobranca } from './cobranca.controller.js';
 import { conferirCobrancaPropria } from './cobranca-propria.js';
 import { aplicarDeParaNaConta } from './de-para-guia.js';
@@ -128,14 +129,6 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
         "INSERT INTO termo_terminologia (terminologia_id, codigo_termo, descricao, criado_em) VALUES (?, ?, 'TERMO F372', ?)",
         [term, `${P}-1`, agora],
       );
-      ids.equipe = await garantir(
-        e,
-        'SELECT id FROM equipe_profissional WHERE estabelecimento_id = ? AND codigo = ?',
-        [ids.est, `${P}-EQ`],
-        `INSERT INTO equipe_profissional (estabelecimento_id, codigo, nome, tipo, vigencia_inicio, criado_em)
-           VALUES (?, ?, 'EQUIPE F372', 'cirurgica', '2025-01-01', ?)`,
-        [ids.est, `${P}-EQ`, agora],
-      );
       ids.planoSup = await garantir(
         e,
         'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ?',
@@ -214,6 +207,45 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
     } as CtxPrecos;
     s = new ServicoCobranca(nucleo);
     fonte = new FontePrecosPropria(nucleo);
+    // A equipe do credenciamento por equipe entra pela porta própria do cadastro (02-CAD linha 22), nunca por INSERT.
+    const eq = await escrever((e) =>
+      e.uma<{ id: number }>(
+        'SELECT id FROM equipe_profissional WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, `${P}-EQ`],
+      ),
+    );
+    ids.equipe = eq
+      ? Number(eq.id)
+      : await new EquipesCooperativasPropria(nucleo, CLIENTE).salvarEquipe(
+          {
+            cliente: CLIENTE,
+            estabelecimento: ids.est,
+            usuario: null,
+            correlacao: 'teste-f372',
+            rede: 'teste',
+            hospital: P,
+          },
+          {
+            id: null,
+            versao: null,
+            codigo: `${P}-EQ`,
+            nome: 'EQUIPE F372',
+            tipo: 'cirurgica',
+            setorId: null,
+            inicio: '2025-01-01',
+            fim: null,
+            ativo: true,
+          },
+          {
+            estabelecimento: ids.est,
+            usuario: null,
+            acao: 'operacao',
+            entidade: 'equipe_profissional',
+            entidadeId: null,
+            dadosDepois: null,
+            correlacao: 'teste-f372',
+          },
+        );
   });
 
   afterAll(async () => {
