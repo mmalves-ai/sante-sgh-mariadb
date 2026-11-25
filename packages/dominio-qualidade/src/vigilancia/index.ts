@@ -3,3 +3,4 @@ export * from './prazos-agravo.js';
 export * from './gatilho-agravo.js';
 export * from './ficha-agravo.js';
 export * from './casos-agravo.js';
+export * from './perfil-cid.js';

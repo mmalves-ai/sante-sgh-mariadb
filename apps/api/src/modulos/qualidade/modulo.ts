@@ -33,6 +33,8 @@ import { CENTRAL_AVISOS_QUALIDADE, type CentralAvisosQualidade } from './central
 import { AgravoController } from './agravo.controller.js';
 import { AnaliseCulturaController, PORTA_ANALISE_CULTURA } from './analise-cultura.controller.js';
 import { PortaAnaliseCulturaPropria } from './porta-analise-cultura-propria.js';
+import { PerfilCidController, PORTA_PERFIL_CID } from './perfil-cid.controller.js';
+import { PortaPerfilCidPropria } from './porta-perfil-cid-propria.js';
 import { CcihController } from './ccih.controller.js';
 import { GestaoQualidadeController } from './gestao.controller.js';
 import { NotificacaoController } from './notificacao.controller.js';
@@ -127,6 +129,7 @@ export async function modulo(
       SegurancaPacienteController,
       CcihController,
       AnaliseCulturaController,
+      PerfilCidController,
       AgravoController,
       GestaoQualidadeController,
       RevisaoProntuarioController,
@@ -139,6 +142,11 @@ export async function modulo(
         provide: PORTA_ANALISE_CULTURA,
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaAnaliseCulturaPropria(ctx.nucleo) : null,
+      },
+      // A hierarquia da CID-10 e o perfil epidemiológico (F7, 09-AREA linha 83): só a porta própria; sem banco, 503.
+      {
+        provide: PORTA_PERFIL_CID,
+        useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaPerfilCidPropria(ctx.nucleo) : null,
       },
       { provide: PORTA_AGRAVO, useValue: opcoes.agravo ?? padrao?.agravo },
       { provide: PORTA_GESTAO, useValue: opcoes.gestao ?? padrao?.gestao },

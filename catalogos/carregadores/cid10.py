@@ -142,31 +142,9 @@ def carregar(banco: str) -> dict:
         ogrp = _ler(zf, "CID-O-GRUPOS.CSV")
         ocat = _ler(zf, "CID-O-CATEGORIAS.CSV")
 
-    # ---------- capítulos ----------
-    capitulos = []  # (romano, numero, ini, fim, descricao_curta, desc_completa, abrev)
-    for c in caps:
-        m = ROMANOS.match(c[3])
-        if not m:
-            raise RuntimeError(f"cid10: capítulo sem número romano na descrição (linha {c[0]})")
-        capitulos.append((m.group(1), int(c[0]), c[1], c[2], m.group(2).strip(), c[3], c[4] or None))
-
-    # ---------- agrupamentos (aninhados: pai = faixa mais estreita que contém) ----------
-    faixas = [(g[0], g[1], g[2], g[3] or None) for g in grps]
-    pai_grp, prof = {}, {}
-    for g in faixas:
-        cont = [h for h in faixas if h is not g and h[0] <= g[0] and g[1] <= h[1]]
-        pai_grp[g[:2]] = min(cont, key=_largura)[:2] if cont else None
-        prof[g[:2]] = len(cont)
-
-    def cap_de(cod):
-        for cp in capitulos:
-            if cp[2] <= cod[:3] <= cp[3]:
-                return cp
-        raise RuntimeError(f"cid10: código {cod} fora de capítulo")
-
-    def grp_de(cod):
-        cont = [g for g in faixas if _contem(g, cod)]
-        return min(cont, key=_largura)[:2] if cont else None
+    capitulos, faixas, pai_grp, prof = hierarquia(caps, grps)
+    cap_de = lambda cod: capitulo_de(capitulos, cod)
+    grp_de = lambda cod: grupo_de(faixas, cod)
 
     cod_faixa = lambda f: f"{f[0]}-{f[1]}"
 
@@ -196,7 +174,7 @@ def carregar(banco: str) -> dict:
                  "codigo_final", "descricao", "descricao_abreviada", "vigencia_inicio", "versao_fonte",
                  "criado_em", "versao"],
                 [[cap_id[cap_de(g[0])[0]], ag_id[cod_faixa(pai_grp[g[:2]])] if pai_grp[g[:2]] else None,
-                  "subgrupo" if pai_grp[g[:2]] else "grupo", cod_faixa(g), g[0], g[1], g[2][:300],
+                  nivel_agrupamento(pai_grp, g), cod_faixa(g), g[0], g[1], g[2][:300],
                   (g[3] or "")[:150] or None, VIGENCIA, ver, AGORA, 1] for g in nivel],
                 ["capitulo_cid10_id", "pai_agrupamento_cid10_id", "nivel", "codigo_inicial", "codigo_final",  # gitleaks:allow (lista de nomes de coluna, não é segredo)
                  "descricao", "descricao_abreviada", "vigencia_inicio", "versao_fonte"])
@@ -275,3 +253,45 @@ def _largura(f):
     def n(c):
         return (ord(c[0]) - 65) * 100 + int(c[1:3])
     return n(f[1]) - n(f[0])
+
+
+def hierarquia(caps, grps):
+    """Capítulos e agrupamentos da fonte oficial, com o pai de cada agrupamento (a faixa mais estreita que o contém)
+    e a profundidade (0 = grupo; 1 ou mais = subgrupo). Puro: o teste usa uma amostra sintética.
+    Devolve (capitulos, faixas, pai_grp, prof); capitulo = (romano, numero, ini, fim, descricao, completa, abrev)."""
+    capitulos = []
+    for c in caps:
+        m = ROMANOS.match(c[3])
+        if not m:
+            raise RuntimeError(f"cid10: capítulo sem número romano na descrição (linha {c[0]})")
+        capitulos.append((m.group(1), int(c[0]), c[1], c[2], m.group(2).strip(), c[3], c[4] or None))
+    faixas = [(g[0], g[1], g[2], g[3] or None) for g in grps]
+    pai_grp, prof = {}, {}
+    for g in faixas:
+        cont = [h for h in faixas if h is not g and h[0] <= g[0] and g[1] <= h[1]]
+        pai_grp[g[:2]] = min(cont, key=_largura)[:2] if cont else None
+        prof[g[:2]] = len(cont)
+    for g in faixas:
+        cap_ini, cap_fim = capitulo_de(capitulos, g[0])[2:4], capitulo_de(capitulos, g[1])[2:4]
+        if cap_ini != cap_fim:
+            raise RuntimeError(f"cid10: agrupamento {g[0]}-{g[1]} atravessa capítulos")
+    return capitulos, faixas, pai_grp, prof
+
+
+def capitulo_de(capitulos, cod):
+    """O capítulo cuja faixa contém a categoria (3 primeiros caracteres) do código."""
+    for cp in capitulos:
+        if cp[2] <= cod[:3] <= cp[3]:
+            return cp
+    raise RuntimeError(f"cid10: código {cod} fora de capítulo")
+
+
+def grupo_de(faixas, cod):
+    """A faixa mais estreita (grupo ou subgrupo) que contém o código, ou None."""
+    cont = [g for g in faixas if _contem(g, cod)]
+    return min(cont, key=_largura)[:2] if cont else None
+
+
+def nivel_agrupamento(pai_grp, faixa):
+    """'subgrupo' quando a faixa está dentro de outra; senão 'grupo' (CHECK ck_agrupamento_cid10_nivel)."""
+    return "subgrupo" if pai_grp[faixa[:2]] else "grupo"
