@@ -88,7 +88,7 @@ export interface MontagemKitEntrada {
   readonly valorAdicional: number;
 }
 
-export interface LoteProduzidoGravado {
+export type LoteProduzidoGravado = {
   readonly id: number;
   readonly numeroLote: string;
   readonly loteEstoque: number;
@@ -98,7 +98,7 @@ export interface LoteProduzidoGravado {
   readonly valorAdicional: number;
   readonly valorTotal: number;
   readonly custoUnitario: number;
-}
+};
 
 export interface LoteProduzidoLido {
   readonly id: number;

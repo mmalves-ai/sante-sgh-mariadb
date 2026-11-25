@@ -8,6 +8,7 @@
 // - Ponto já usado numa interpretação não muda: encerra-se e cria-se outro (o histórico do laudo fica explicável).
 // - Painel: ao menos um antimicrobiano, sem repetir; a ordem da lista é a do laudo; o de liberação restrita (cascata)
 //   precisa de ao menos um de primeira linha no mesmo painel, senão nunca apareceria.
+import { vespera } from '../catalogo/regras.js';
 import { RecusaMicrobiologia } from './antibiograma.js';
 
 export const NORMAS_ANTIBIOGRAMA = ['BrCAST', 'EUCAST', 'CLSI'] as const;
@@ -87,12 +88,8 @@ export interface PontoExistente {
   readonly ativo: boolean;
 }
 
-/** A véspera da data (AAAA-MM-DD), no calendário, sem fuso. */
-export function vespera(data: string): string {
-  const d = new Date(`${data}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
+/** A véspera da data (AAAA-MM-DD): a mesma regra do catálogo, exportada também por aqui. */
+export { vespera };
 
 /**
  * Os pontos do mesmo par e norma que ainda valem no início do novo e devem ser encerrados na véspera. Recusa quando
