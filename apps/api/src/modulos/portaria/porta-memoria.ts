@@ -396,6 +396,10 @@ export class PortaPortariaMemoria implements PortaPortaria {
             return { id: ja.id, papel: ja.papel, repetida: true };
           }
         }
+        if (this.crachasMem.some((c) => c.hospital === hospital && c.cracha === v.cracha))
+          throw recusa('cracha-em-uso', 'Este código já é o crachá de um colaborador: emita outro.', {
+            campos: ['cracha'],
+          });
         const pessoa = visitanteDe(v.visitante);
         if (!pessoa) throw recusa('visitante-nao-encontrado', 'Visitante não encontrado: cadastre de novo.');
         // A visita anterior do visitante com o crachá vencido e sem a saída: encerrada como expirada.

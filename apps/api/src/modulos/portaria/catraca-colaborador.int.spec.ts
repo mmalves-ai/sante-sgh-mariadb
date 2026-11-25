@@ -312,6 +312,41 @@ describe.skipIf(SEM_BANCO_O3)('crachá do colaborador na catraca (MariaDB, clien
     );
   });
 
+  it('o código ligado à matrícula não é emitido como crachá de visitante; nada é gravado', async () => {
+    const visitas = () =>
+      ler<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM cracha_visitante WHERE estabelecimento_id = ? AND codigo_leitura = ?',
+        [m.est, CRACHA],
+      );
+    const antes = Number((await visitas())?.n ?? 0);
+    expect(
+      await recusada(
+        porta.gravarSgh(ctx, trilha('visita'), (g) =>
+          g.registrarVisita(
+            {
+              visitante: 0,
+              destino: { tipo: 'outro', local: 'PORTARIA L0218' },
+              tipoVisitado: 0,
+              identificacao: 0,
+              cracha: CRACHA,
+              entrada: agora().slice(0, 16),
+              validoAte: agora().slice(0, 16),
+              excecao: null,
+              reterAte: '2027-12-31',
+              usuario: 'x',
+              chave: null,
+            },
+            () => ({ permitida: true, papel: 'visitante' }),
+          ),
+        ),
+      ),
+    ).toBe('cracha-em-uso');
+    expect(Number((await visitas())?.n ?? 0)).toBe(antes);
+    // Na catraca, o código continua sendo do colaborador, não de uma visita.
+    const ev = await passar('l0218-nao-visita');
+    expect(ev).toMatchObject({ colaborador: m.colaborador, visita: null });
+  });
+
   it('retirado o crachá, o código volta a ser desconhecido', async () => {
     expect(await cracha(null)).toEqual({ id: m.vinculo });
     const ev = await passar('l0218-retirado');

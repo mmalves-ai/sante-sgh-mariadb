@@ -1194,6 +1194,17 @@ function gravadorSobre(
     },
 
     async registrarVisita(v, avaliar) {
+      // O código já ligado à matrícula de um colaborador não vira crachá de visitante: na catraca, a visita teria
+      // prioridade e o colaborador perderia o acesso pelas regras dele (a recíproca está em vincularCrachaColaborador).
+      if (
+        await tx.uma(
+          'SELECT id FROM vinculo_trabalho WHERE estabelecimento_id = ? AND codigo_cracha = ? AND excluido_em IS NULL',
+          [est, v.cracha],
+        )
+      )
+        throw recusa('cracha-em-uso', 'Este código já é o crachá de um colaborador: emita outro.', {
+          campos: ['cracha'],
+        });
       const pessoa = await pessoaDe(v.visitante);
       if (!pessoa) throw recusa('visitante-nao-encontrado', 'Visitante não encontrado: cadastre de novo.');
       if (pessoa['tipo_visitante_id'] === null)
