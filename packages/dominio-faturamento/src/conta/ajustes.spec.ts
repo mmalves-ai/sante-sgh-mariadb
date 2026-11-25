@@ -12,6 +12,8 @@ import {
   diasDePermanenciaPacote,
   type FaixaHorarioEspecial,
   faixaDoHorario,
+  faixasDoAto,
+  itemDeAnestesia,
   totaisDosAjustes,
   validarAjusteConta,
   validarFaixaHorario,
@@ -381,5 +383,52 @@ describe('correções da revisão (linhas 17, 18 e 20)', () => {
         proposta: { itemId: 44, quantidade: 3, valorUnitario: 150 },
       },
     ]);
+  });
+});
+
+describe('horário especial: urgência, mesmo ato e anestesia (linha 17, 3ª volta)', () => {
+  const quando = '2026-01-20T23:00'; // terça, 23h
+  it('faixa só de urgência vale no atendimento urgente e não no eletivo', () => {
+    const urg = faixa({ id: 7, codigo: 'U', exigeUrgencia: true, percentual: 30 });
+    expect(faixaDoHorario({ quando, feriado: false, fontePagadoraId: 1, urgencia: true }, [urg])?.id).toBe(7);
+    expect(faixaDoHorario({ quando, feriado: false, fontePagadoraId: 1, urgencia: false }, [urg])).toBeNull();
+    expect(faixaDoHorario({ quando, feriado: false, fontePagadoraId: 1 }, [urg])).toBeNull();
+    // A faixa sem a exigência vale nos dois; sem acúmulo, vence a de maior percentual.
+    const geral = faixa({ id: 8, codigo: 'G', percentual: 20 });
+    expect(
+      faixaDoHorario({ quando, feriado: false, fontePagadoraId: 1, urgencia: true }, [urg, geral])?.id,
+    ).toBe(7);
+    expect(faixaDoHorario({ quando, feriado: false, fontePagadoraId: 1 }, [urg, geral])?.id).toBe(8);
+  });
+  it('mesmo ato: o acoplado segue a faixa do principal só quando ela replica', () => {
+    const replica = faixa({ id: 1, aplicaProcedimentosVinculados: true });
+    const naoReplica = faixa({ id: 2, aplicaProcedimentosVinculados: false });
+    const outra = faixa({ id: 3, percentual: 50 });
+    const r = faixasDoAto([
+      { id: 10, principalId: null, faixa: replica },
+      { id: 11, principalId: 10, faixa: null },
+      { id: 12, principalId: 10, faixa: outra },
+      { id: 20, principalId: null, faixa: naoReplica },
+      { id: 21, principalId: 20, faixa: null },
+      { id: 30, principalId: null, faixa: null },
+      { id: 31, principalId: 30, faixa: outra },
+      { id: 40, principalId: 999, faixa: null },
+    ]);
+    expect(r.get(10)?.id).toBe(1);
+    expect(r.get(11)?.id).toBe(1);
+    expect(r.get(12)?.id).toBe(1);
+    expect(r.get(21)).toBeNull();
+    expect(r.get(31)?.id).toBe(3);
+    expect(r.get(40)).toBeNull();
+  });
+  it('anestesia pela função na equipe ou pelo grau TISS 06/07', () => {
+    expect(itemDeAnestesia('anestesista', null)).toBe(true);
+    expect(itemDeAnestesia('outro', '06')).toBe(true);
+    expect(itemDeAnestesia(null, '07')).toBe(true);
+    expect(itemDeAnestesia('cirurgiao', '00')).toBe(false);
+    expect(itemDeAnestesia(null, null)).toBe(false);
+    const f = faixa({ percentual: 30, percentualAnestesia: 50 });
+    expect(acrescimoDoItem(100, { honorario: 0, anestesia: itemDeAnestesia('outro', '06') }, f)).toBe(50);
+    expect(acrescimoDoItem(100, { honorario: 0, anestesia: itemDeAnestesia('cirurgiao', '00') }, f)).toBe(30);
   });
 });

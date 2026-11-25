@@ -37,6 +37,10 @@ export interface FaixaHorarioEspecial {
   readonly percentualFilme?: number | null;
   /** Percentual do item de anestesia (grupo de faturamento de anestesia); nulo: o geral. */
   readonly percentualAnestesia?: number | null;
+  /** A faixa só vale no atendimento de caráter urgência ou emergência (TISS: caráter do atendimento). */
+  readonly exigeUrgencia?: boolean;
+  /** O acréscimo do item principal vale também para os itens acoplados a ele (o mesmo ato). */
+  readonly aplicaProcedimentosVinculados?: boolean;
   readonly ativo: boolean;
 }
 
@@ -71,6 +75,8 @@ export interface HorarioDoItem {
   readonly fontePagadoraId: number;
   /** Acordo da conta; a faixa do acordo vence a da fonte, que vence a geral. */
   readonly contratoId?: number | null;
+  /** O atendimento é de caráter urgência ou emergência; nulo ou falso: eletivo. */
+  readonly urgencia?: boolean;
 }
 
 /** A faixa de horário especial que vale para o momento do item, ou nulo (horário normal). */
@@ -89,6 +95,7 @@ export function faixaDoHorario(
     if (!f.ativo || f.vigenciaInicio > data || (f.vigenciaFim !== null && f.vigenciaFim < data)) return false;
     if (f.fontePagadoraId !== null && f.fontePagadoraId !== h.fontePagadoraId) return false;
     if ((f.contratoId ?? null) !== null && f.contratoId !== (h.contratoId ?? null)) return false;
+    if (f.exigeUrgencia && !h.urgencia) return false;
     if (h.feriado && (f.aplicaFeriado || f.tipoHorario === 'feriado')) return true;
     if (f.diaSemana !== null && f.diaSemana !== dow + 1) return false;
     const naHora = f.horaInicio === null || f.horaFim === null || naFaixa(min, f.horaInicio, f.horaFim);
@@ -111,6 +118,42 @@ export function faixaDoHorario(
       b.percentual - a.percentual ||
       a.id - b.id,
   )[0]!;
+}
+
+/** Item com a faixa que valeu pelo próprio horário e o principal a que está acoplado (nulo: é principal). */
+export interface ItemComFaixa<F extends FaixaHorarioEspecial = FaixaHorarioEspecial> {
+  readonly id: number;
+  readonly principalId: number | null;
+  readonly faixa: F | null;
+}
+
+/**
+ * A faixa que vale para cada item, considerando o mesmo ato: quando a faixa do item principal replica o acréscimo nos
+ * procedimentos vinculados, o item acoplado segue a faixa do principal (o ato é um só, mesmo que o acoplado tenha sido
+ * registrado minutos depois, fora da faixa). Sem acúmulo: o acoplado nunca fica com duas faixas. O principal que não
+ * replica deixa o acoplado com a faixa do próprio horário.
+ */
+export function faixasDoAto<F extends FaixaHorarioEspecial>(
+  itens: readonly ItemComFaixa<F>[],
+): Map<number, F | null> {
+  const porId = new Map(itens.map((i) => [i.id, i]));
+  const r = new Map<number, F | null>();
+  for (const i of itens) {
+    const principal = i.principalId === null ? undefined : porId.get(i.principalId);
+    const doPrincipal = principal?.faixa ?? null;
+    r.set(i.id, doPrincipal && doPrincipal.aplicaProcedimentosVinculados ? doPrincipal : i.faixa);
+  }
+  return r;
+}
+
+/** Graus de participação TISS (tabela 35) de anestesia: 06 anestesista e 07 auxiliar de anestesista. */
+export const GRAUS_TISS_ANESTESIA: readonly string[] = ['06', '07'];
+
+/** O item é de anestesia: a função do profissional na equipe é de anestesista ou o grau TISS dela é de anestesia. */
+export function itemDeAnestesia(tipoFuncao: string | null, grauTiss: string | null): boolean {
+  return (
+    tipoFuncao === 'anestesista' || (grauTiss !== null && GRAUS_TISS_ANESTESIA.includes(grauTiss.trim()))
+  );
 }
 
 /** Componentes do valor do item (a parte que não é nenhum deles segue o percentual geral). */

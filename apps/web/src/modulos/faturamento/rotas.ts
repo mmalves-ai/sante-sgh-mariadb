@@ -49,6 +49,12 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.conta.ler' },
   },
   {
+    path: '/faturamento/horario-especial',
+    name: 'faturamento.horarioEspecial',
+    component: () => import('./telas/HorarioEspecialTela.vue'),
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
     path: '/faturamento/fontes/:fonte(\\d+)/atributos-guia',
     name: 'faturamento.atributosFonte',
     component: () => import('./telas/AtributosGuiaTela.vue'),

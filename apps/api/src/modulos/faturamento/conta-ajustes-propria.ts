@@ -18,6 +18,8 @@ import {
   diasDePermanenciaPacote,
   type FaixaHorarioEspecial,
   faixaDoHorario,
+  faixasDoAto,
+  itemDeAnestesia,
   acrescimoDoItem,
   type ItemParaPacote,
   type NivelAlcadaAjuste,
@@ -186,6 +188,8 @@ function faixaDe(r: Linha): FaixaHorarioEspecial & { descricao: string; versao: 
     percentualCustoOperacional: nn(r['percentual_custo_operacional']),
     percentualFilme: nn(r['percentual_filme']),
     percentualAnestesia: nn(r['percentual_anestesia']),
+    exigeUrgencia: b(r['exige_urgencia']),
+    aplicaProcedimentosVinculados: b(r['aplica_procedimentos_vinculados']),
     ativo: b(r['ativo']),
     versao: n(r['versao']),
   };
@@ -212,7 +216,18 @@ export async function horarioEspecialPropria(l: Consulta, est: number, tabela: n
           horaInicio: hora(r['hora_inicio'])!,
           horaFim: hora(r['hora_fim'])!,
         }));
-  return { faixas, expediente };
+  // Para o cadastro na tela: as fontes pagadoras ativas e as tabelas de preço do estabelecimento (ou da rede).
+  const fontes = (
+    await l.consultar<Linha>("SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' ORDER BY nome", [])
+  ).map((r) => ({ id: n(r['id']), nome: String(r['nome']) }));
+  const tabelas = (
+    await l.consultar<Linha>(
+      `SELECT id, codigo, descricao FROM tabela_preco
+        WHERE situacao = 'ativa' AND (estabelecimento_id IS NULL OR estabelecimento_id = ?) ORDER BY codigo`,
+      [est],
+    )
+  ).map((r) => ({ id: n(r['id']), codigo: String(r['codigo']), descricao: String(r['descricao']) }));
+  return { faixas, expediente, fontes, tabelas };
 }
 
 /** Dos dias dos itens, os que são feriado no estabelecimento, pelo calendário único (cadastros > estrutura). */
@@ -224,37 +239,66 @@ async function feriadosDe(l: Consulta, est: number, datas: string[]): Promise<Se
   return new Set(doPeriodo.map((x) => x.data).filter((x) => pedidas.has(x)));
 }
 
-/** O que a aplicação do horário especial faria em cada item cobrado da conta (sem gravar). */
+/** O caráter do atendimento da conta é de urgência ou emergência (TISS: caráter do atendimento). */
+async function contaDeUrgencia(l: Consulta, conta: number): Promise<boolean> {
+  const r = await l.uma<Linha>(
+    `SELECT ct.urgencia FROM conta_hospitalar c
+       JOIN atendimento a ON a.id = c.atendimento_id
+       LEFT JOIN carater_atendimento_tiss ct ON ct.id = a.carater_atendimento_tiss_id
+      WHERE c.id = ?`,
+    [conta],
+  );
+  return r ? b(r['urgencia']) : false;
+}
+
+/**
+ * O que a aplicação do horário especial faria em cada item cobrado da conta (sem gravar): a faixa pelo relógio do
+ * hospital e pelo caráter do atendimento; o item acoplado segue a do principal quando ela replica (o mesmo ato); o
+ * item de anestesia (função na equipe ou grau TISS de anestesia) leva o percentual de anestesia da faixa.
+ */
 async function horarioDosItens(l: Consulta, est: number, c: ContaLida) {
   const { faixas } = await horarioEspecialPropria(l, est);
   const exp = c.tabela === null ? [] : (await horarioEspecialPropria(l, est, c.tabela)).expediente;
+  const urgencia = await contaDeUrgencia(l, c.id);
   const itens = await l.consultar<Linha>(
     `SELECT i.id, i.versao, i.sequencia, i.realizado_em, i.valor_total, i.valor_acrescimo, i.valor_honorario,
-            i.valor_custo_operacional, i.valor_filme, i.valor_acrescimo_horario,
-            i.valor_desconto, i.acrescimo_horario_especial_id, f.codigo, f.descricao
+            i.valor_custo_operacional, i.valor_filme, i.valor_acrescimo_horario, i.item_pai_id,
+            i.valor_desconto, i.acrescimo_horario_especial_id, f.codigo, f.descricao,
+            fe.tipo_funcao, tg.codigo_termo AS grau_tiss
        FROM conta_hospitalar_item i JOIN item_faturavel f ON f.id = i.item_faturavel_id
+       LEFT JOIN funcao_equipe_cobranca fe ON fe.id = i.funcao_equipe_cobranca_id
+       LEFT JOIN termo_terminologia tg ON tg.id = fe.grau_participacao_termo_terminologia_id
       WHERE i.conta_hospitalar_id = ? AND i.excluido_em IS NULL AND i.situacao IN ('lancado','conferido')
         AND i.tipo_valorizacao <> 'pacote' ORDER BY i.sequencia`,
     [c.id],
   );
   const quando = itens.map((i) => noRelogio(i['realizado_em'], c.fuso));
   const feriados = await feriadosDe(l, est, [...new Set(quando.map((q) => q.slice(0, 10)))]);
+  const doAto = faixasDoAto(
+    itens.map((i, k) => ({
+      id: n(i['id']),
+      principalId: nn(i['item_pai_id']),
+      faixa: faixaDoHorario(
+        {
+          quando: quando[k]!,
+          feriado: feriados.has(quando[k]!.slice(0, 10)),
+          fontePagadoraId: c.fonte,
+          contratoId: c.contrato,
+          urgencia,
+        },
+        faixas,
+        exp,
+      ),
+    })),
+  );
   return itens.map((i, k) => {
     // O acréscimo de horário fica em coluna própria: o acréscimo manual ou importado do item (o resto de
     // valor_acrescimo) é preservado, e a base do cálculo é o valor do item sem nenhum acréscimo.
     const horarioAtual = n(i['valor_acrescimo_horario']);
     const outros = r2(n(i['valor_acrescimo']) - horarioAtual);
     const base = r2(n(i['valor_total']) - horarioAtual);
-    const f = faixaDoHorario(
-      {
-        quando: quando[k]!,
-        feriado: feriados.has(quando[k]!.slice(0, 10)),
-        fontePagadoraId: c.fonte,
-        contratoId: c.contrato,
-      },
-      faixas,
-      exp,
-    );
+    const f = doAto.get(n(i['id'])) ?? null;
+    const anestesia = itemDeAnestesia(txn(i['tipo_funcao']), txn(i['grau_tiss']));
     const acrescimo = f
       ? acrescimoDoItem(
           r2(base - outros + n(i['valor_desconto'])),
@@ -262,6 +306,7 @@ async function horarioDosItens(l: Consulta, est: number, c: ContaLida) {
             honorario: n(i['valor_honorario']),
             custoOperacional: n(i['valor_custo_operacional']),
             filme: n(i['valor_filme']),
+            anestesia,
           },
           f,
         )
@@ -274,6 +319,9 @@ async function horarioDosItens(l: Consulta, est: number, c: ContaLida) {
       descricao: String(i['descricao']),
       realizadoEm: quando[k]!,
       feriado: feriados.has(quando[k]!.slice(0, 10)),
+      urgencia,
+      anestesia,
+      principalId: nn(i['item_pai_id']),
       faixaId: f?.id ?? null,
       faixa: f ? `${f.codigo} (${f.percentual}%)` : null,
       acrescimoAtual: horarioAtual,
@@ -301,6 +349,8 @@ export const esquemaFaixa = z.object({
   percentualCustoOperacional: z.number().nullable().default(null),
   percentualFilme: z.number().nullable().default(null),
   percentualAnestesia: z.number().nullable().default(null),
+  exigeUrgencia: z.boolean().default(false),
+  aplicaProcedimentosVinculados: z.boolean().default(false),
   contratoId: idN,
   vigenciaInicio: dataZ,
   vigenciaFim: dataZ.nullable().default(null),
@@ -348,6 +398,8 @@ export const opGravarFaixa = definirOperacao({
       percentual_custo_operacional: e.percentualCustoOperacional,
       percentual_filme: e.percentualFilme,
       percentual_anestesia: e.percentualAnestesia,
+      exige_urgencia: e.exigeUrgencia,
+      aplica_procedimentos_vinculados: e.aplicaProcedimentosVinculados,
       vigencia_inicio: e.vigenciaInicio,
       vigencia_fim: e.vigenciaFim,
       ativo: e.ativo,
@@ -429,8 +481,16 @@ export const opGravarExpediente = definirOperacao({
 });
 
 /** Aplica (ou retira) o acréscimo de horário especial nos itens cobrados da conta e refaz o total. */
-export async function aplicarHorarioEspecialNaConta(tx: TxOperacao, est: number, conta: number) {
+export async function aplicarHorarioEspecialNaConta(
+  tx: TxOperacao,
+  est: number,
+  conta: number,
+  opcoes: { readonly soSeEditavel?: boolean } = {},
+) {
   const c = await contaDa(tx, est, conta);
+  // No lançamento do item a conta já foi conferida pela regra do lançamento: conta não editável fica como está.
+  if (opcoes.soSeEditavel && !contaEditavel(c.situacao))
+    return { contaId: c.id, alterados: 0, comAcrescimo: 0, total: c.valorTotal };
   exigirEditavel(c);
   const itens = await horarioDosItens(tx, est, c);
   let alterados = 0;

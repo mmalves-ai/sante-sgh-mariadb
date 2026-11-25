@@ -662,6 +662,11 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     );
     // O total da conta a partir dos itens, na mesma transação (sem gatilho).
     await tx.alterar('conta_hospitalar', conta.id, conta.versao, await totalDosItens(tx, conta.id));
+    // F3.7 (06-FAT linha 17): o acréscimo de horário especial entra ao lançar (o item e os do kit), pelo relógio do
+    // hospital e pelo caráter do atendimento, na mesma transação. Importação tardia: o módulo dos ajustes usa o total
+    // dos itens daqui.
+    const { aplicarHorarioEspecialNaConta } = await import('./conta-ajustes-propria.js');
+    const horario = await aplicarHorarioEspecialNaConta(tx, est, conta.id, { soSeEditavel: true });
     // A produção do repasse do item (momento "lançamento"), na mesma transação e pela mesma conta.
     await sincronizarProducaoDaConta(
       tx,
@@ -669,6 +674,7 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       { estabelecimento: est, usuario: ctx.usuario },
     );
     // Decisão 25: o alerta de credenciamento volta no resultado (o resultado da operação é plano).
+    const doHorario = horario.alterados ? { horarioEspecial: horario.alterados } : {};
     const doKit = kits.kits.length
       ? { kits: kits.kits.join(','), itensKit: kits.itens.length, semPrecoKit: kits.semPreco }
       : {};
@@ -680,8 +686,9 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
           alerta: 'profissional-nao-credenciado',
           alertaMotivo: alerta.motivo,
           ...doKit,
+          ...doHorario,
         }
-      : { id, conta: conta.id, valor, ...doKit };
+      : { id, conta: conta.id, valor, ...doKit, ...doHorario };
   },
   eventos: (_e, r) => [
     { tipo: 'faturamento.item.lancado', carga: { conta: Number(r['conta']), item: Number(r['id']) } },

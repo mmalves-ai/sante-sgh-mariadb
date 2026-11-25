@@ -112,3 +112,47 @@ export const descaracterizarPacote = (
   chave: string,
 ) =>
   enviar(`${F}/pacotes-conta/${id}/descaracterizacao`, { versao, motivoId, justificativa }, qualquer, chave);
+
+// ── Cadastro do horário especial (06-FAT linha 17): faixas de acréscimo e expediente da tabela de preço ──────────
+
+const faixaHorario = z.object({
+  id: z.number(),
+  versao: z.number(),
+  codigo: z.string(),
+  descricao: z.string(),
+  tipoHorario: z.string(),
+  diaSemana: z.number().nullable(),
+  aplicaFeriado: z.boolean(),
+  horaInicio: z.string().nullable(),
+  horaFim: z.string().nullable(),
+  percentual: z.number(),
+  percentualHonorario: z.number().nullable(),
+  percentualCustoOperacional: z.number().nullable().optional(),
+  percentualFilme: z.number().nullable().optional(),
+  percentualAnestesia: z.number().nullable().optional(),
+  exigeUrgencia: z.boolean().optional(),
+  aplicaProcedimentosVinculados: z.boolean().optional(),
+  vigenciaInicio: z.string(),
+  vigenciaFim: z.string().nullable(),
+  fontePagadoraId: z.number().nullable(),
+  contratoId: z.number().nullable().optional(),
+  ativo: z.boolean(),
+});
+export type FaixaHorarioTela = z.infer<typeof faixaHorario>;
+const esquemaHorarioEspecial = z.object({
+  faixas: z.array(faixaHorario),
+  expediente: z.array(z.object({ diaSemana: z.number(), horaInicio: z.string(), horaFim: z.string() })),
+  fontes: z.array(z.object({ id: z.number(), nome: z.string() })).default([]),
+  tabelas: z.array(z.object({ id: z.number(), codigo: z.string(), descricao: z.string() })).default([]),
+});
+export type HorarioEspecialCadastro = z.infer<typeof esquemaHorarioEspecial>;
+
+export const lerHorarioEspecial = (tabela: number | null) =>
+  ler(`${F}/horario-especial${tabela ? `?tabela=${tabela}` : ''}`, esquemaHorarioEspecial);
+export const gravarFaixaHorario = (f: Record<string, unknown>, chave: string) =>
+  enviar(`${F}/horario-especial`, f, qualquer, chave);
+export const gravarExpediente = (
+  tabela: number,
+  periodos: readonly { diaSemana: number; horaInicio: string; horaFim: string }[],
+  chave: string,
+) => enviar(`${F}/tabelas/${tabela}/expediente`, { faixas: periodos }, qualquer, chave);
