@@ -63,3 +63,7 @@ export * from './vinculo-referencia-preco.js';
 export * from './enderecamento.js';
 // F3.6 (05-SUP linha 14): etiqueta de identificação (DataMatrix GS1 e código linear) e leitura pelo padrão configurado.
 export * from './identificacao-estoque.js';
+// C1-120 (09-AREA linha 77): romaneio de entrega entre unidades (motorista, veículo, expedição e conferência por item).
+export * from './romaneio-entrega.js';
+// C1-124 (05-SUP linha 12): produção interna (lote produzido da manipulação e kit montado).
+export * from './producao-interna.js';
