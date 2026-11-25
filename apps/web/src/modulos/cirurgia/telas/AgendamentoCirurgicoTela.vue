@@ -24,6 +24,8 @@ import {
 } from '../api-cirurgia.js';
 import AvisoCirurgia from '../componentes/AvisoCirurgia.vue';
 import ErroCirurgia from '../componentes/ErroCirurgia.vue';
+// F3.6 (05-SUP linha 13): o kit padrão dos procedimentos sugerido na lista de materiais previstos.
+import KitPadraoAgendamento from '../componentes/KitPadraoAgendamento.vue';
 import { usarCirurgia } from '../usar-cirurgia.js';
 
 const props = defineProps<{ id: string; tipo?: 'agendamento' | 'solicitacao' }>();
@@ -395,6 +397,8 @@ async function pendencia(): Promise<void> {
           <SanteBotao variante="texto" :rotulo="t('cirurgia.voltar')" @acionar="acao = ''" />
         </div>
       </section>
+
+      <KitPadraoAgendamento v-if="!ehSolicitacao" :agendamento="numero" />
 
       <section class="painel" aria-labelledby="pendencias-titulo">
         <h2 id="pendencias-titulo">{{ t('cirurgia.agendamento.pendencias') }}</h2>
