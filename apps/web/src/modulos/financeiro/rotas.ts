@@ -148,6 +148,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.tituloPagar.ler' },
   },
   {
+    // F7, 07-FIN linha 114 (C2-059): NF-e de saída de mercadoria (devolução ao fornecedor, consignado, conserto, avulsa).
+    path: '/financeiro/fiscal/notas-mercadoria',
+    name: 'financeiro.fiscal.notasMercadoria',
+    component: () => import('./telas/NotasMercadoriaTela.vue'),
+    meta: { permissao: 'financeiro.notaMercadoria.ler' },
+  },
+  {
     // F8, 07-FIN linha 70: notas de crédito e de débito com tributos, do fornecedor e do cliente.
     path: '/financeiro/notas-credito-debito',
     name: 'financeiro.notasCreditoDebito',
