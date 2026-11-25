@@ -18,6 +18,7 @@ import {
   documentoRia,
   emMllp,
   EVENTO_ENVIO_PERFIS_TRIAGEM,
+  eventoDocumentoRnds,
   eventoRia,
   imunizacaoDoRegistro,
   lerAck,
@@ -29,6 +30,12 @@ import { itemMwlDicom } from '@sgh/dominio-sadt';
 import { destinoDaWorklistNoEstabelecimento } from './destino-worklist.js';
 import { conteudoPerfisTriagem } from './perfis-triagem.js';
 import { ehEventoPrescricaoDigital, entregarPrescricaoDigital } from './prescricao-digital.js';
+import {
+  dadosEnvioVacina,
+  enviarDocumentoRnds,
+  garantirEnvioRnds,
+  postarERegistrar,
+} from './rnds-registro.js';
 import type { Leitor, TxOperacao } from '@sgh/nucleo';
 import { ErroEntrega, type Enviador } from './entrega.js';
 import {
@@ -271,6 +278,17 @@ export async function enviarRia(
       emitidoEm: c.agora(),
     }),
   );
+  // C2-085: com a gravação configurada (o worker sempre a tem), o envio e a versão ficam em envio_rnds e
+  // envio_rnds_versao com a resposta (aceita, recusada ou a falha de transporte).
+  if (c.gravar)
+    return postarERegistrar(c, hospital, conteudo, `${hospital}-ria-${vacina}-v${versao}`, async (tx) => ({
+      envio: await garantirEnvioRnds(
+        tx,
+        dadosEnvioVacina(hospital, e.tipoEvento, versao, vacina, lido.paciente, v.vacinador),
+        c.agora(),
+      ),
+      numero: versao + 1,
+    }));
   let r: { status: number; corpo: string; location: string | null };
   if (!destino.certificado) {
     const u = new URL(destino.url);
@@ -314,6 +332,8 @@ export function criarEnviador(c: ConfiguracaoEnviadores): Enviador {
   return async (p, e, hospital) => {
     // W0-03 (M6): o RIA (aplicação, substituição e cancelamento) ao parceiro FHIR da RNDS.
     if (p.tipo === 'fhir' && eventoRia(e.tipoEvento)) return enviarRia(c, e, hospital);
+    // C2-085 (08-INTG L130): o sumário de alta e o resultado de exame (o envio posto na fila pela API).
+    if (p.tipo === 'fhir' && eventoDocumentoRnds(e.tipoEvento)) return enviarDocumentoRnds(c, e, hospital);
     // F8 (08-INTG L132): a receita à plataforma de prescrição digital (simulador fora de produção) e o retorno.
     if (p.tipo === 'api' && ehEventoPrescricaoDigital(e.tipoEvento))
       return entregarPrescricaoDigital(c, p, e, hospital);
