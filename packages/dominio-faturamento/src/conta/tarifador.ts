@@ -34,6 +34,8 @@ export interface LayoutTarifador {
 
 export const MAX_COLUNA_TARIFADOR = 60;
 export const MAX_LINHAS_TARIFADOR = 5000;
+/** Tamanho máximo do texto do arquivo por importação (o corpo da requisição tem 1 MB); maior, divida o arquivo. */
+export const MAX_CONTEUDO_TARIFADOR = 900_000;
 const COLUNAS = [
   'colunaRamal',
   'colunaDataHora',

@@ -12,6 +12,10 @@
 //   POST /api/faturamento/contas/:id/remocoes                       faturamento.item.lancar (lança a remoção)
 //   POST /api/faturamento/contas/:id/ligacoes/lancamento            faturamento.item.lancar (lança as pendentes)
 //   POST /api/faturamento/ligacoes-tarifadas                        faturamento.item.lancar (registra a ligação)
+//   GET  /api/faturamento/servicos-acessorios                       faturamento.regra.ler (layouts do tarifador, itens)
+//   GET  /api/faturamento/servicos-acessorios/itens?termo=          faturamento.regra.ler (busca de item cobrável)
+//   POST /api/faturamento/servicos-acessorios/layouts               faturamento.regra.editar (layout do tarifador)
+//   POST /api/faturamento/ligacoes-tarifadas/importacao             faturamento.item.lancar (arquivo do tarifador)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
@@ -27,6 +31,13 @@ import {
   regrasComerciaisPropria,
   simularRegraContaPropria,
 } from './regras-comerciais-propria.js';
+import {
+  abrirResultadoImportacao,
+  buscarItensCobraveis,
+  gravarTarifador,
+  type NomeOperacaoTarifador,
+  servicosAcessoriosPropria,
+} from './tarifador-propria.js';
 
 export const SERVICO_REGRAS_COMERCIAIS = Symbol('SERVICO_REGRAS_COMERCIAIS');
 const EXECUTOR = 'executor: trilha e autoria na mesma transação';
@@ -48,6 +59,9 @@ export class ServicoRegrasComerciais {
   }
   gravar(nome: NomeOperacaoRegrasComerciais, ctx: Parameters<typeof gravarRegrasComerciais>[2], e: unknown) {
     return gravarRegrasComerciais(this.executor, nome, ctx, e);
+  }
+  gravarTarifador(nome: NomeOperacaoTarifador, ctx: Parameters<typeof gravarTarifador>[2], e: unknown) {
+    return gravarTarifador(this.executor, nome, ctx, e);
   }
 }
 
@@ -188,5 +202,39 @@ export class RegrasComerciaisController {
   @AuditadoNoHandler(EXECUTOR)
   registrarLigacao(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.g('registrar-ligacao', req, objeto(corpo));
+  }
+
+  @Get('faturamento/servicos-acessorios')
+  @Permissao('faturamento.regra.ler')
+  servicosAcessorios(@Req() req: RequisicaoAutorizada) {
+    return this.rodar(() => this.s().ler(ctxDe(req, ORIGEM), (l, est) => servicosAcessoriosPropria(l, est)));
+  }
+
+  @Get('faturamento/servicos-acessorios/itens')
+  @Permissao('faturamento.regra.ler')
+  itensCobraveis(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() => this.s().ler(ctxDe(req, ORIGEM), (l) => buscarItensCobraveis(l, termo ?? '')));
+  }
+
+  @Post('faturamento/servicos-acessorios/layouts')
+  @HttpCode(200)
+  @Permissao('faturamento.regra.editar')
+  @AuditadoNoHandler(EXECUTOR)
+  salvarLayout(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().gravarTarifador('salvar-layout-tarifador', contextoOperacao(req, ORIGEM), objeto(corpo)),
+    );
+  }
+
+  @Post('faturamento/ligacoes-tarifadas/importacao')
+  @HttpCode(200)
+  @Permissao('faturamento.item.lancar')
+  @AuditadoNoHandler(EXECUTOR)
+  importarLigacoes(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(async () =>
+      abrirResultadoImportacao(
+        await this.s().gravarTarifador('importar-ligacoes', contextoOperacao(req, ORIGEM), objeto(corpo)),
+      ),
+    );
   }
 }
