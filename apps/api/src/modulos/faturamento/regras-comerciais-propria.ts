@@ -22,7 +22,6 @@ import {
   type FaixaDesconto,
   type FranquiaContrato,
   motivoFranquiaNaoVale,
-  type RegraCriacaoConta,
   tipoDaLigacao,
   validarFaixasDesconto,
   validarFranquia,
@@ -42,6 +41,7 @@ import {
 import { z } from 'zod';
 import { totalDosItens } from './operacoes.js';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
+import { regrasContaDo } from './regras-conta-leitura.js';
 
 type Linha = Record<string, unknown>;
 type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
@@ -78,53 +78,6 @@ const dataZ = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const versaoZ = z.number().int().positive().optional();
 
 // ── Linha 13: regra de criação e quebra de conta ──────────────────────────────────────────────────────
-
-const comoCriterios = (r: Linha) => ({
-  categoriaAtendimento: nn(r['categoria_atendimento_id']),
-  origemEntrada: nn(r['origem_entrada_atendimento_id']),
-  grupo: nn(r['grupo_faturamento_id']),
-  item: nn(r['item_faturavel_id']),
-});
-
-export async function regrasContaDo(
-  l: Consulta,
-  est: number,
-): Promise<(RegraCriacaoConta & { versao: number })[]> {
-  const rs = await l.consultar<Linha>(
-    `SELECT * FROM regra_criacao_conta WHERE estabelecimento_id = ? ORDER BY prioridade, id`,
-    [est],
-    { teto: 2000 },
-  );
-  const ex = rs.length
-    ? await l.consultar<Linha>(
-        `SELECT * FROM regra_criacao_conta_excecao WHERE regra_criacao_conta_id IN (${lista(rs.length)})
-            AND ativo = 1 ORDER BY id`,
-        rs.map((r) => r['id']),
-        { teto: 10000 },
-      )
-    : [];
-  return rs.map((r) => ({
-    id: n(r['id']),
-    versao: n(r['versao']),
-    acao: String(r['acao']) as RegraCriacaoConta['acao'],
-    categoriaAtendimento: nn(r['categoria_atendimento_id']),
-    origemEntrada: nn(r['origem_entrada_atendimento_id']),
-    categoriaAcomodacao: nn(r['categoria_acomodacao_id']),
-    setor: nn(r['setor_funcional_id']),
-    grupo: nn(r['grupo_faturamento_id']),
-    item: nn(r['item_faturavel_id']),
-    horarioEspecial: r['horario_especial'] === null ? null : bool(r['horario_especial']),
-    fonteOrigem: nn(r['fonte_pagadora_origem_id']),
-    planoOrigem: nn(r['plano_origem_id']),
-    fonteDestino: nn(r['fonte_pagadora_destino_id']),
-    planoDestino: nn(r['plano_destino_id']),
-    periodicidade: (txt(r['periodicidade']) as RegraCriacaoConta['periodicidade']) ?? null,
-    prioridade: n(r['prioridade']),
-    vigenciaInicio: dia(r['vigencia_inicio']) ?? '',
-    ativo: bool(r['ativo']),
-    excecoes: ex.filter((x) => n(x['regra_criacao_conta_id']) === n(r['id'])).map(comoCriterios),
-  }));
-}
 
 /** Simulação sobre um atendimento real: que regra vale (e por que as outras não) e o período da quebra. */
 export async function simularRegraContaPropria(
@@ -1161,63 +1114,77 @@ export const opLancarRemocao = definirOperacao({
   nome: 'faturamento.lancar-remocao-ambulancia',
   tabelas: TABELAS_ITEM,
   entrada: esquemaLancarRemocao,
-  async gravar(tx, e) {
-    const est = estDe(tx.contexto);
-    const c = await contaDa(tx, est, e.contaId);
-    if (!contaEditavel(String(c['situacao'])))
-      throw recusa('conta-fechada', 'A conta não está aberta: a remoção não entra nela.', { campos: [] });
-    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [c['id']]);
-    const rota = e.rotaId
-      ? await tx.uma<Linha>(
-          'SELECT id, distancia_km, ida_e_volta FROM rota_ambulancia WHERE id = ? AND estabelecimento_id = ? AND ativo = 1',
-          [e.rotaId, est],
-        )
-      : null;
-    if (e.rotaId && !rota) throw recusa('nao-encontrado', 'Trajeto não encontrado.', { campos: ['rotaId'] });
-    const regras = (
-      await tx.consultar<Linha>(
-        'SELECT * FROM regra_cobranca_ambulancia WHERE estabelecimento_id = ? AND categoria_ambulancia_id = ?',
-        [est, e.categoriaAmbulanciaId],
-        { teto: 500 },
-      )
-    ).map((r) => ({
-      id: n(r['id']),
-      fonte: nn(r['fonte_pagadora_id']),
-      categoria: n(r['categoria_ambulancia_id']),
-      forma: String(r['forma_cobranca']) as 'quilometro' | 'trajeto',
-      rota: nn(r['rota_ambulancia_id']),
-      item: n(r['item_faturavel_id']),
-      ativo: bool(r['ativo']),
-    }));
-    const cob = cobrancaRemocao(regras, {
-      fonte: n(c['fonte_pagadora_id']),
-      categoria: e.categoriaAmbulanciaId,
-      rota: rota
-        ? { id: n(rota['id']), distanciaKm: n(rota['distancia_km']), idaEVolta: bool(rota['ida_e_volta']) }
-        : null,
-      km: e.km,
-      comVolta: e.comVolta,
-    });
-    exigirValido(cob.erros);
-    const regra = cob.regra as NonNullable<typeof cob.regra>;
-    const l = await lancarItem(tx, c, est, regra.item, cob.quantidade, null, e.data ?? hoje(), {
-      origem: 'remocao_ambulancia',
-      regra: regra.id,
-      forma: regra.forma,
-      rota: e.rotaId,
-      km: e.km,
-      comVolta: e.comVolta,
-    });
-    await tx.alterar('conta_hospitalar', n(c['id']), n(c['versao']), await totalDosItens(tx, n(c['id'])));
-    return {
-      contaId: e.contaId,
-      itemId: l.id,
-      regraId: regra.id,
-      quantidade: cob.quantidade,
-    };
-  },
+  gravar: (tx, e) => lancarRemocaoNaConta(tx, estDe(tx.contexto), e),
   alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.contaId }),
 });
+
+/** Tabelas que o lançamento da remoção grava (para quem lança a remoção de outra operação, como o chamado). */
+export const TABELAS_LANCAR_REMOCAO: readonly string[] = TABELAS_ITEM;
+
+/**
+ * Lança a remoção por ambulância na conta pela regra de cobrança (trajeto ou quilômetro, da fonte da conta ou a padrão).
+ * Toda recusa (conta fechada, trajeto, regra, item ou preço) acontece antes de gravar qualquer linha.
+ */
+export async function lancarRemocaoNaConta(
+  tx: TxOperacao,
+  est: number,
+  e: Omit<z.infer<typeof esquemaLancarRemocao>, 'data'> & { data?: string | undefined },
+  dados: Record<string, unknown> = {},
+): Promise<{ contaId: number; itemId: number; regraId: number; quantidade: number }> {
+  const c = await contaDa(tx, est, e.contaId);
+  if (!contaEditavel(String(c['situacao'])))
+    throw recusa('conta-fechada', 'A conta não está aberta: a remoção não entra nela.', { campos: [] });
+  await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [c['id']]);
+  const rota = e.rotaId
+    ? await tx.uma<Linha>(
+        'SELECT id, distancia_km, ida_e_volta FROM rota_ambulancia WHERE id = ? AND estabelecimento_id = ? AND ativo = 1',
+        [e.rotaId, est],
+      )
+    : null;
+  if (e.rotaId && !rota) throw recusa('nao-encontrado', 'Trajeto não encontrado.', { campos: ['rotaId'] });
+  const regras = (
+    await tx.consultar<Linha>(
+      'SELECT * FROM regra_cobranca_ambulancia WHERE estabelecimento_id = ? AND categoria_ambulancia_id = ?',
+      [est, e.categoriaAmbulanciaId],
+      { teto: 500 },
+    )
+  ).map((r) => ({
+    id: n(r['id']),
+    fonte: nn(r['fonte_pagadora_id']),
+    categoria: n(r['categoria_ambulancia_id']),
+    forma: String(r['forma_cobranca']) as 'quilometro' | 'trajeto',
+    rota: nn(r['rota_ambulancia_id']),
+    item: n(r['item_faturavel_id']),
+    ativo: bool(r['ativo']),
+  }));
+  const cob = cobrancaRemocao(regras, {
+    fonte: n(c['fonte_pagadora_id']),
+    categoria: e.categoriaAmbulanciaId,
+    rota: rota
+      ? { id: n(rota['id']), distanciaKm: n(rota['distancia_km']), idaEVolta: bool(rota['ida_e_volta']) }
+      : null,
+    km: e.km,
+    comVolta: e.comVolta,
+  });
+  exigirValido(cob.erros);
+  const regra = cob.regra as NonNullable<typeof cob.regra>;
+  const l = await lancarItem(tx, c, est, regra.item, cob.quantidade, null, e.data ?? hoje(), {
+    origem: 'remocao_ambulancia',
+    regra: regra.id,
+    forma: regra.forma,
+    rota: e.rotaId,
+    km: e.km,
+    comVolta: e.comVolta,
+    ...dados,
+  });
+  await tx.alterar('conta_hospitalar', n(c['id']), n(c['versao']), await totalDosItens(tx, n(c['id'])));
+  return {
+    contaId: e.contaId,
+    itemId: l.id,
+    regraId: regra.id,
+    quantidade: cob.quantidade,
+  };
+}
 
 export const esquemaLancarLigacoes = z.object({ contaId: id });
 export const opLancarLigacoes = definirOperacao({
