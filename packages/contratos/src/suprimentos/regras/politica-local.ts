@@ -35,6 +35,15 @@ export interface ItemClassificado {
   readonly classificacoesDespesa?: readonly number[];
 }
 
+/**
+ * A classificação de despesa do item vem do seu grupo (o código de despesa da TISS é do grupo: medicamento, material,
+ * gás, taxa, diária). Grupo sem classificação ligada: o item não tem classificação, e a concessão só por
+ * classificação de despesa não o cobre.
+ */
+export function classificacoesDoGrupo(classificacaoDoGrupo: number | null | undefined): number[] {
+  return classificacaoDoGrupo == null ? [] : [classificacaoDoGrupo];
+}
+
 export type TipoPedidoAoLocal = 'setor' | 'paciente' | 'transferencia';
 
 const NOME_DO_TIPO: Readonly<Record<TipoPedidoAoLocal, string>> = {
@@ -180,7 +189,9 @@ export function conferirClassificacaoDoUsuario(
     .map((i) =>
       recusa(
         'item-fora-do-escopo',
-        `Seu usuário não ${VERBO[acao]} o item ${i.nome} (grupo fora da sua concessão).`,
+        `Seu usuário não ${VERBO[acao]} o item ${i.nome} (${
+          vigentes.some((c) => c.grupo == null) ? 'grupo ou classificação de despesa' : 'grupo'
+        } fora da sua concessão).`,
         [campo],
       ),
     );

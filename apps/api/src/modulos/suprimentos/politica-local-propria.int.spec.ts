@@ -304,4 +304,71 @@ describe.skipIf(SEM_BANCO)('política do local e concessão por classificação 
     expect(await codigoDe(op('requisitarMaterial', requisicao()))).toBe('item-fora-do-escopo');
     expect(await requisicoes()).toBe(antes + 1);
   });
+
+  it('concessão só por classificação de despesa: vale pela classificação do grupo do item, e o grupo sem ela fica fora', async () => {
+    const despesa = await nucleo.escrever(acesso, (e) =>
+      inserirMinimo(e, 'classificacao_despesa', { codigo: `${m.marca}CD`.slice(0, 30) }, m.marca),
+    );
+    try {
+      await nucleo.escrever(acesso, (e) =>
+        inserirMinimo(
+          e,
+          'usuario_estoque_classificacao',
+          {
+            estabelecimento_id: m.estA,
+            usuario_id: m.usuario,
+            classificacao_despesa_id: despesa,
+            permite_requisitar: true,
+            permite_movimentar: true,
+            permite_comprar: false,
+            vigencia_inicio: '2026-01-01',
+          },
+          m.marca,
+        ),
+      );
+      const antes = await requisicoes();
+      const saldoA = await saldo(m.localA);
+      // O grupo do item ainda não tem classificação de despesa: a concessão só por despesa não o cobre.
+      await gravar('UPDATE grupo_insumo SET classificacao_despesa_id = NULL WHERE id = ?', [m.grupo]);
+      expect(await codigoDe(op('requisitarMaterial', requisicao()))).toBe('item-fora-do-escopo');
+      expect(await codigoDe(op('registrarSaida', saida(1)))).toBe('item-fora-do-escopo');
+      expect([await requisicoes(), await saldo(m.localA)]).toEqual([antes, saldoA]);
+      // O grupo ganha a classificação: o item passa a ser requisitado e a sair pelo que a concessão marcou.
+      await gravar('UPDATE grupo_insumo SET classificacao_despesa_id = ? WHERE id = ?', [despesa, m.grupo]);
+      await op('requisitarMaterial', requisicao());
+      await op('registrarSaida', saida(1));
+      expect([await requisicoes(), await saldo(m.localA)]).toEqual([antes + 1, saldoA - 1]);
+      // A ação continua pesando: a concessão não marcou comprar.
+      const pedido = {
+        centroCusto: m.centroCusto,
+        fornecedores: [m.fornecedor],
+        itens: [{ item: m.insumo, quantidade: 1 }],
+      };
+      expect(await codigoDe(op('criarPedido', pedido))).toBe('item-fora-do-escopo');
+      // Outra classificação no grupo: o item volta a ficar fora.
+      const outra = await nucleo.escrever(acesso, (e) =>
+        inserirMinimo(e, 'classificacao_despesa', { codigo: `${m.marca}CE`.slice(0, 30) }, m.marca),
+      );
+      await gravar('UPDATE grupo_insumo SET classificacao_despesa_id = ? WHERE id = ?', [outra, m.grupo]);
+      expect(await codigoDe(op('requisitarMaterial', requisicao()))).toBe('item-fora-do-escopo');
+      expect(await requisicoes()).toBe(antes + 1);
+    } finally {
+      await gravar('UPDATE grupo_insumo SET classificacao_despesa_id = NULL WHERE id = ?', [m.grupo]);
+      await gravar(
+        "DELETE FROM usuario_estoque_classificacao WHERE usuario_id IN (SELECT id FROM usuario WHERE login LIKE 'F22L0314%')",
+      );
+      await gravar('DELETE FROM classificacao_despesa WHERE codigo LIKE ?', [`${m.marca}C%`]);
+    }
+  });
+
+  it('confere saldo desligado é só informativo: a saída sem saldo continua recusada e o saldo não fica negativo', async () => {
+    await gravar('UPDATE local_estoque SET verifica_saldo = FALSE WHERE id = ?', [m.localA]);
+    try {
+      const saldoA = await saldo(m.localA);
+      expect(await codigoDe(op('registrarSaida', saida(saldoA + 1)))).toBe('saldo-insuficiente');
+      expect(await saldo(m.localA)).toBe(saldoA);
+    } finally {
+      await gravar('UPDATE local_estoque SET verifica_saldo = TRUE WHERE id = ?', [m.localA]);
+    }
+  });
 });

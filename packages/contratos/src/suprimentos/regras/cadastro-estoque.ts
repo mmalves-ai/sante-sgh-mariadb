@@ -367,6 +367,11 @@ export interface LocalEstoqueEntrada {
   readonly atendePaciente: boolean;
   readonly atendeTransferencia: boolean;
   readonly atendimentoParcial: boolean;
+  /**
+   * Só informativo (divergência intencional, 05-SUP linha 3): a saída confere sempre o saldo, e o saldo nunca fica
+   * negativo (prática de mercado e rastreabilidade de lote e validade, RDC 430/2020). O campo é guardado como veio do
+   * cadastro e não libera saída sem saldo.
+   */
   readonly verificaSaldo: boolean;
   readonly usaCodigoBarras: boolean;
   readonly apenasUrgente: boolean;

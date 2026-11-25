@@ -102,6 +102,8 @@ export const mensagensCadastroEstoque = {
     atendeTransferencia: 'Atende transferência',
     atendimentoParcial: 'Permite atendimento parcial',
     verificaSaldo: 'Confere o saldo',
+    saldoSempreConferido:
+      'A saída confere sempre o saldo do local: o estoque nunca fica negativo (rastreabilidade de lote e validade).',
     usaCodigoBarras: 'Usa código de barras',
     apenasUrgente: 'Só urgente',
     tipoReposicao: 'Reposição',

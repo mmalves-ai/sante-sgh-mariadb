@@ -3,6 +3,7 @@
 // parte e o que o usuário requisita, movimenta e compra.
 import { describe, expect, it } from 'vitest';
 import {
+  classificacoesDoGrupo,
   conferirAtendimentoParcial,
   conferirClassificacaoDoUsuario,
   conferirItensDoLocal,
@@ -145,6 +146,20 @@ describe('concessão do usuário por classificação', () => {
     expect(
       conferirClassificacaoDoUsuario([c({ grupo: 10, classificacaoDespesa: 7 })], [dipirona], 'requisitar'),
     ).toHaveLength(1);
+  });
+
+  it('a classificação de despesa vem do grupo do item; grupo sem classificação não é coberto pela despesa', () => {
+    expect(classificacoesDoGrupo(7)).toEqual([7]);
+    expect(classificacoesDoGrupo(null)).toEqual([]);
+    const soDespesa = [c({ classificacaoDespesa: 7, movimentar: true })];
+    const pelaClasse = { ...seringa, classificacoesDespesa: classificacoesDoGrupo(7) };
+    const semClasse = { ...seringa, classificacoesDespesa: classificacoesDoGrupo(null) };
+    expect(conferirClassificacaoDoUsuario(soDespesa, [pelaClasse], 'movimentar')).toEqual([]);
+    const r = conferirClassificacaoDoUsuario(soDespesa, [semClasse], 'movimentar');
+    expect(r).toHaveLength(1);
+    expect(r[0]?.mensagem).toContain('classificação de despesa');
+    // A ação continua pesando na concessão só por despesa.
+    expect(conferirClassificacaoDoUsuario(soDespesa, [pelaClasse], 'comprar')).toHaveLength(1);
   });
 
   it('retirar a última concessão não abre todos os itens', () => {

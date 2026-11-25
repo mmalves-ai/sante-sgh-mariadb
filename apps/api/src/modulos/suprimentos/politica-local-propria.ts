@@ -2,6 +2,7 @@
 // no MariaDB e aplicadas às gravações do estoque (requisição, saída que atende, transferência, entrada de nota e
 // pedido de compra). A decisão é do domínio (`@sgh/contratos/regras-suprimentos`, política do local); aqui só a leitura.
 import {
+  classificacoesDoGrupo,
   conferirAtendimentoParcial,
   conferirClassificacaoDoUsuario,
   conferirItensDoLocal,
@@ -64,12 +65,17 @@ export async function politicaDoLocal(l: Leitor, est: number, local: number): Pr
   };
 }
 
-/** Os itens com grupo e subgrupo do cadastro (rede inteira), na ordem pedida e sem repetir. */
+/**
+ * Os itens com grupo, subgrupo e a classificação de despesa (que vem do grupo do item) do cadastro (rede inteira),
+ * na ordem pedida e sem repetir.
+ */
 export async function itensClassificados(l: Leitor, itens: readonly number[]): Promise<ItemClassificado[]> {
   const ids = [...new Set(itens)];
   if (ids.length === 0) return [];
   const linhas = await l.consultar<Linha>(
-    `SELECT id, nome, grupo_insumo_id, subgrupo_insumo_id FROM insumo WHERE id IN (${ids.map(() => '?').join(', ')})`,
+    `SELECT i.id, i.nome, i.grupo_insumo_id, i.subgrupo_insumo_id, g.classificacao_despesa_id
+       FROM insumo i LEFT JOIN grupo_insumo g ON g.id = i.grupo_insumo_id
+      WHERE i.id IN (${ids.map(() => '?').join(', ')})`,
     ids,
   );
   return ids.flatMap((id) => {
@@ -81,6 +87,7 @@ export async function itensClassificados(l: Leitor, itens: readonly number[]): P
             nome: String(r['nome']),
             grupo: nn(r['grupo_insumo_id']),
             subgrupo: nn(r['subgrupo_insumo_id']),
+            classificacoesDespesa: classificacoesDoGrupo(nn(r['classificacao_despesa_id'])),
           },
         ]
       : [];
@@ -88,9 +95,8 @@ export async function itensClassificados(l: Leitor, itens: readonly number[]): P
 }
 
 /**
- * As concessões do usuário por grupo e subgrupo no estabelecimento, vigentes ou não (a história conta: retirar a
- * última não abre todos os itens). A concessão só por classificação de despesa não entra: o item do estoque não
- * guarda a classificação de despesa, então ela não concede nem restringe.
+ * As concessões do usuário por grupo e subgrupo e por classificação de despesa no estabelecimento, vigentes ou não (a
+ * história conta: retirar a última não abre todos os itens). A classificação de despesa do item vem do seu grupo.
  */
 export async function concessoesDeClassificacao(
   l: Leitor,
@@ -98,17 +104,18 @@ export async function concessoesDeClassificacao(
   usuario: number,
 ): Promise<ConcessaoClassificacao[]> {
   const linhas = await l.consultar<Linha>(
-    `SELECT grupo_insumo_id, subgrupo_insumo_id, permite_requisitar, permite_movimentar, permite_comprar,
-            (excluido_em IS NULL AND vigencia_inicio <= CURRENT_DATE
+    `SELECT grupo_insumo_id, subgrupo_insumo_id, classificacao_despesa_id, permite_requisitar, permite_movimentar,
+            permite_comprar, (excluido_em IS NULL AND vigencia_inicio <= CURRENT_DATE
               AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)) AS vigente
        FROM usuario_estoque_classificacao
-      WHERE estabelecimento_id = ? AND usuario_id = ? AND grupo_insumo_id IS NOT NULL`,
+      WHERE estabelecimento_id = ? AND usuario_id = ?
+        AND (grupo_insumo_id IS NOT NULL OR classificacao_despesa_id IS NOT NULL)`,
     [est, usuario],
   );
   return linhas.map((r) => ({
     grupo: nn(r['grupo_insumo_id']),
     subgrupo: nn(r['subgrupo_insumo_id']),
-    classificacaoDespesa: null,
+    classificacaoDespesa: nn(r['classificacao_despesa_id']),
     requisitar: sim(r['permite_requisitar']),
     movimentar: sim(r['permite_movimentar']),
     comprar: sim(r['permite_comprar']),

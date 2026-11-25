@@ -56,7 +56,6 @@ const BOOLS = [
   'atendePaciente',
   'atendeTransferencia',
   'atendimentoParcial',
-  'verificaSaldo',
   'usaCodigoBarras',
   'apenasUrgente',
 ] as const;
@@ -254,6 +253,7 @@ function incluirGrupo() {
           <label v-for="k in BOOLS" :key="k"
             ><input v-model="f[k]" type="checkbox" /> {{ t(`cadastroEstoque.local.${k}`) }}</label
           >
+          <p>{{ t('cadastroEstoque.local.saldoSempreConferido') }}</p>
         </fieldset>
         <fieldset>
           <legend>{{ t('cadastroEstoque.local.setores') }}</legend>
