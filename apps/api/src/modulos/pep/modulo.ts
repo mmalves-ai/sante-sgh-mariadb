@@ -60,6 +60,11 @@ import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilan
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
+import {
+  ANOTACOES_ADMINISTRATIVAS,
+  AnotacoesAdministrativasController,
+} from './anotacoes-administrativas.controller.js';
+import { AnotacoesAdministrativasPropria } from './anotacoes-administrativas-propria.js';
 import { PORTA_SUMARIO_SECOES, PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
 import { ResultadosGruposController } from './resultados-grupos.controller.js';
 import { PORTA_GRUPOS_RESULTADO, PortaGruposResultadoPropria } from './resultados-grupos-propria.js';
@@ -188,6 +193,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       SumarioAltaSecoesController,
       FarmacovigilanciaController,
       NotasPacienteController,
+      AnotacoesAdministrativasController,
       ResultadosGruposController,
     ],
     providers: [
@@ -251,6 +257,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new NotasPacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L147: anotação administrativa do caso (registro não clínico da equipe); sem núcleo, 503.
+      {
+        provide: ANOTACOES_ADMINISTRATIVAS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new AnotacoesAdministrativasPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(opcoes.configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: opcoes.configuracao }] : []),
