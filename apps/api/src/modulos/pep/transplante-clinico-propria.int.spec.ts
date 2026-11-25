@@ -523,6 +523,8 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
     );
     expect(r).toMatchObject({ ok: true, mensagem: 'Receptor gravado.' });
     expect(await contar('receptor_transplante', 'paciente_id', ids.receptor2)).toBe(antes + 1);
-    expect((await com.ctrl.orgaos()).some((o) => o.id === ids.rim)).toBe(true);
+    const op = await com.ctrl.opcoes();
+    expect(op.orgaos.some((o) => o.id === ids.rim)).toBe(true);
+    expect(op.parentescos.some((o) => o.id === ids.par)).toBe(true);
   });
 });

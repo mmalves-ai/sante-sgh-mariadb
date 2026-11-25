@@ -265,6 +265,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuario.ler' },
   },
   {
+    // 03-PEP L145: doação e transplante de órgãos (doador, receptor, destino do órgão, acompanhamento).
+    path: `/pep/paciente/:paciente${id}/transplante`,
+    name: 'pep.transplante',
+    component: () => import('./telas/TransplanteTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     // 03-PEP L98: nota clínica em quatro partes (subjetivo, objetivo, avaliação, plano) com CID-10 e CIAP-2 opcional.
     path: `/pep/paciente/:paciente${id}/nota-soap`,
     name: 'pep.notaSoap',

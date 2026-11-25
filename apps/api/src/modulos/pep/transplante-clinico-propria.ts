@@ -362,6 +362,10 @@ export interface TransplanteDoPaciente {
   readonly doacoes: readonly DoacaoLida[];
   readonly inscricoes: readonly InscricaoLida[];
 }
+export interface OpcoesTransplante {
+  readonly orgaos: readonly { id: number; codigo: string; descricao: string; tipo: string }[];
+  readonly parentescos: readonly Ref[];
+}
 export interface ReceptorNaLista {
   readonly id: number;
   readonly paciente: number;
@@ -579,9 +583,10 @@ export class TransplanteClinicoPropria {
     });
   }
 
-  orgaos(): Promise<readonly { id: number; codigo: string; descricao: string; tipo: string }[]> {
-    return this.ler(async (l) =>
-      (
+  /** Órgãos e tecidos ativos e os parentescos (quem responde pela família; doador vivo aparentado). */
+  opcoes(): Promise<OpcoesTransplante> {
+    return this.ler(async (l) => ({
+      orgaos: (
         await l.consultar(
           'SELECT id, codigo, descricao, tipo FROM orgao_transplante WHERE ativo = TRUE ORDER BY tipo, descricao',
         )
@@ -591,7 +596,12 @@ export class TransplanteClinicoPropria {
         descricao: String(x['descricao']),
         tipo: String(x['tipo']),
       })),
-    );
+      parentescos: (
+        await l.consultar(
+          'SELECT id, descricao FROM tipo_parentesco WHERE ativo = TRUE AND proprio_paciente = FALSE ORDER BY descricao',
+        )
+      ).map((x) => ({ id: num(x['id']), descricao: String(x['descricao']) })),
+    }));
   }
 
   /** Receptores do estabelecimento na lista de um órgão (urgência primeiro, depois a antiguidade da inscrição). */

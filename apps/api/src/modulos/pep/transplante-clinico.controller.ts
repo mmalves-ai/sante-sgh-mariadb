@@ -1,5 +1,5 @@
 // Rotas da doação e do transplante de órgãos no prontuário (03-PEP L145):
-//   GET  /api/pep/transplante/orgaos                 órgãos e tecidos ativos do cadastro
+//   GET  /api/pep/transplante/opcoes                 órgãos e tecidos ativos e os parentescos
 //   GET  /api/pep/transplante/paciente/:paciente     doações (antibióticos, preservação, destinos) e inscrições como
 //                                                    receptor (destinos, acompanhamento depois do transplante)
 //   GET  /api/pep/transplante/receptores?orgao=      receptores da unidade na lista do órgão (sem nome; prontuário)
@@ -99,10 +99,10 @@ export class TransplanteClinicoController {
     }
   }
 
-  @Get('orgaos')
+  @Get('opcoes')
   @Permissao(LER)
-  orgaos() {
-    return this.banco().orgaos();
+  opcoes() {
+    return this.banco().opcoes();
   }
 
   @Get('receptores')
