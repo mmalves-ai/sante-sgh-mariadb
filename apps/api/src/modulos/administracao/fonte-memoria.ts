@@ -7,6 +7,7 @@
 import { flagAceita } from '@sgh/contratos';
 import { z } from 'zod';
 import { ErroOperacao } from '@sgh/nucleo';
+import { MENSAGEM_VINCULO_ESTABELECIMENTO, type RecusaVinculoEstabelecimento } from '@sgh/dominio-acesso';
 import { CATALOGO_COMPLETO, opcoesDasPermissoes } from '../../autorizacao/catalogo.js';
 import type { RegistradorTrilha, RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import {
@@ -816,6 +817,20 @@ export function fonteAdministracaoMemoria(
               Array.isArray(permissoesSessao) ? (permissoesSessao as string[]) : [],
             )
           : preferenciasMemoria.gravarVisaoTela(ctx.login, e);
+      }
+      // 01-ADM L59: vínculo da conta ao estabelecimento. A fonte sintética tem um estabelecimento só: toda conta
+      // dela já está vinculada, e o único vínculo não se encerra (as mesmas recusas do domínio).
+      if (nome === 'acesso.vincularEstabelecimentoUsuario' || nome === 'acesso.encerrarVinculoUsuario') {
+        const alvo = String((entrada as { login?: unknown } | null)?.login ?? '');
+        const existe = acesso().contas.has(alvo);
+        const r: RecusaVinculoEstabelecimento = !existe
+          ? 'usuario-inexistente'
+          : nome === 'acesso.vincularEstabelecimentoUsuario'
+            ? 'ja-vinculado'
+            : alvo === ctx.login
+              ? 'proprio-vinculo'
+              : 'unico-vinculo';
+        throw recusa(r, MENSAGEM_VINCULO_ESTABELECIMENTO[r]);
       }
       const escopo =
         /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.test(
