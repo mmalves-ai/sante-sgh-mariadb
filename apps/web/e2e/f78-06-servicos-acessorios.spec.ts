@@ -130,7 +130,7 @@ test.describe('@C1-015 serviços acessórios da conta (06-FAT linha 23)', () => 
   }) => {
     const enviados: Record<string, unknown>[] = [];
     await simular(page, enviados);
-    await entrar(page, 'faturista.sintetico');
+    await entrar(page, 'SINT.TISS');
 
     await page.goto(`/faturamento/servicos-acessorios?conta=${CONTA}`);
     await expect(page.getByTestId('tela-servicos-acessorios')).toBeVisible();
