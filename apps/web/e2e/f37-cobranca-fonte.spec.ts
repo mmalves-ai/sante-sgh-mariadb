@@ -34,7 +34,11 @@ const lista = (colunas: [string, string][], itens: Record<string, unknown>[]) =>
   total: itens.length,
 });
 
-async function simular(page: Page, enviados: { url: string; corpo: unknown }[]): Promise<void> {
+async function simular(
+  page: Page,
+  enviados: { url: string; corpo: unknown }[],
+  sem: readonly string[] = [],
+): Promise<void> {
   // A sessão real, com as permissões da tela somadas.
   await page.route('**/api/sessao', async (rota) => {
     if (rota.request().method() !== 'GET') return rota.continue();
@@ -46,8 +50,9 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
       'convenio.credenciamento.ler',
       'convenio.credenciamento.editar',
       'convenio.contrato.editar',
+      'preco.dePara.editar',
       'preco.tabela.ler',
-    ];
+    ].filter((p) => !sem.includes(p));
     return rota.fulfill({ response: r, json: s });
   });
   await page.route('**/api/cadastros/convenios?**', (rota) =>
@@ -251,7 +256,7 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
     });
 }
 
-test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004 @C1-022', () => {
+test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004 @C1-022 @C1-040', () => {
   test('faturista confere a guia, grava de-para, exceção e equivalência do mat/med e encerra sem apagar', async ({
     page,
   }) => {
@@ -431,5 +436,21 @@ test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004 @C1-022', () => {
     await expect(painel.getByRole('listitem').nth(1)).toContainText('2026-05-01 — 14,00 (14,00 / 10,50)');
     await expect(painel.getByRole('listitem').nth(1)).not.toContainText('vigente');
     await semViolacaoAxe(page, '/precos/matmed (referência do item)');
+  });
+
+  test('o de-para é gravado só com a permissão própria: quem edita o contrato e não o de-para só consulta', async ({
+    page,
+  }) => {
+    const enviados: { url: string; corpo: unknown }[] = [];
+    await simular(page, enviados, ['preco.dePara.editar']);
+    await entrar(page);
+    await page.goto('/faturamento/cobranca-fonte');
+    await escolher(page.getByTestId('cobranca-convenio'), { rotulo: /OPERADORA SINTETICA F372/ });
+    await page.getByTestId('cobranca-aba-dePara').click();
+    // A lista continua à vista (o histórico do de-para), sem o formulário de inclusão nem a ação de encerrar.
+    await expect(page.getByTestId('cobranca-lista')).toContainText('ANTIGO');
+    await expect(page.getByTestId('dp-gravar')).toHaveCount(0);
+    await expect(page.getByTestId('encerrar-11')).toHaveCount(0);
+    expect(enviados).toHaveLength(0);
   });
 });

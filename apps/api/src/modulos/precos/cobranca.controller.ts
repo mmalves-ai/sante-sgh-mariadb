@@ -3,8 +3,8 @@
 //   GET  /api/faturamento/conferencia-cobranca?convenio&plano&item&profissional&prestador&equipes&tipoConta&atendimento&quantidade&data
 //                                                             convenio.credenciamento.ler (código, quantidade e se pode cobrar)
 //   GET  /api/faturamento/credenciamento/excecoes?convenio    convenio.credenciamento.ler
-//   POST /api/faturamento/de-para                             convenio.contrato.editar (encerra o anterior na véspera)
-//   POST /api/faturamento/de-para/:id/encerramento            convenio.contrato.editar
+//   POST /api/faturamento/de-para                             preco.dePara.editar (encerra o anterior na véspera)
+//   POST /api/faturamento/de-para/:id/encerramento            preco.dePara.editar
 //   POST /api/faturamento/credenciamento-cobranca             convenio.credenciamento.editar
 //   POST /api/faturamento/credenciamento-cobranca/:id/encerramento   convenio.credenciamento.editar
 //   POST /api/faturamento/credenciamento/excecoes             convenio.credenciamento.editar (proibir exige motivo)
@@ -118,7 +118,7 @@ export class CobrancaController {
 
   @Post('faturamento/de-para')
   @HttpCode(201)
-  @Permissao('convenio.contrato.editar')
+  @Permissao('preco.dePara.editar')
   @AuditadoNoHandler(EXECUTOR)
   gravarDePara(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.rodar(() => this.s().gravar('equivalencia-item', contextoOperacao(req, 'de-para'), corpo));
@@ -126,7 +126,7 @@ export class CobrancaController {
 
   @Post('faturamento/de-para/:id/encerramento')
   @HttpCode(200)
-  @Permissao('convenio.contrato.editar')
+  @Permissao('preco.dePara.editar')
   @AuditadoNoHandler(EXECUTOR)
   encerrarDePara(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.rodar(() =>

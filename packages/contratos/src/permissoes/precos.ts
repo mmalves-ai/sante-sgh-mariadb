@@ -132,6 +132,17 @@ export const PERMISSOES_M12: readonly DeclaracaoPermissao[] = [
     categoria: 'financeira',
   },
   {
+    // 06-FAT linha 9: gravar e encerrar o de-para do item do hospital para o código da fonte pagadora, separado de
+    // quem edita o contrato do convênio (o faturista mantém o de-para sem mexer no contrato).
+    codigo: 'preco.dePara.editar',
+    descricao:
+      'Incluir e encerrar o de-para do item do hospital para o código, a quantidade e o percentual da fonte pagadora',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'financeira',
+  },
+  {
     codigo: 'preco.porte.ler',
     descricao: 'Consultar portes anestésicos, índices por procedimento e tabelas próprias de operadora',
 

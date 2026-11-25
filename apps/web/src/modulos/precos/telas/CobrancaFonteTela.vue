@@ -33,6 +33,7 @@ const hoje = new Date().toISOString().slice(0, 10);
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const num = (s: string): number | null => (s.trim() === '' || Number.isNaN(Number(s)) ? null : Number(s));
 const podeContrato = computed(() => pode('convenio.contrato.editar'));
+const podeDePara = computed(() => pode('preco.dePara.editar'));
 const podeCredenciar = computed(() => pode('convenio.credenciamento.editar'));
 
 const convenios = useQuery({
@@ -295,7 +296,7 @@ const ALVO: Partial<Record<Aba, AlvoEncerramento>> = {
   excecoes: 'excecao',
 };
 const podeEncerrar = computed(() =>
-  aba.value === 'dePara' ? podeContrato.value : aba.value === 'matmed' ? false : podeCredenciar.value,
+  aba.value === 'dePara' ? podeDePara.value : aba.value === 'matmed' ? false : podeCredenciar.value,
 );
 const encerrando = ref<{ id: number; versao: number } | null>(null);
 const fimEnc = reactive({ fim: hoje, motivo: '' });
@@ -436,7 +437,7 @@ const fmt = (v: unknown) =>
 
     <!-- De-para do item para o código da fonte. -->
     <form
-      v-if="aba === 'dePara' && podeContrato && fonte !== null"
+      v-if="aba === 'dePara' && podeDePara && fonte !== null"
       class="grade"
       data-testid="form-de-para"
       @submit.prevent="errosDePara.length === 0 && gravarDeParaForm()"
