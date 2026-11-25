@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { criarArmazemLocal, type NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import { cpfSintetico } from '@sgh/dominio-operadora';
 import { PortaDeclaracoesAnsPropria } from './ans-declaracoes-propria.js';
 import { PortaAnsOperadoraPropria } from './ans-porta-propria.js';
 import {
@@ -364,5 +365,162 @@ describe.skipIf(!PODE)('declarações periódicas da operadora no banco (08-SGO 
       'latin1',
     );
     expect(arqRet.split('\r\n')[0]).toBe('DMED|2026|2025|S|REC-C1036|');
+  });
+
+  it('operadora em dois estabelecimentos: a conferência e a DMED são da operadora (um CNPJ), com a trava única', async () => {
+    const op = cart!.operadora;
+    const cB = contexto(massa!, true);
+    await nucleo!.escrever({ cliente: CLIENTE, correlacao: 'preparo-c1036' }, (e) =>
+      e.inserir(
+        'INSERT INTO operadora_saude_estabelecimento (operadora_saude_id, estabelecimento_id, principal, vigencia_inicio, criado_em) VALUES (?, ?, TRUE, ?, ?)',
+        [op, massa!.outroEst, '2020-01-01', new Date()],
+      ),
+    );
+    const { servico } = servicoNoBanco(nucleo!);
+    const sB = sessao(massa!, 'todas', true);
+    const prod = await servico.gravarProduto(sB, null, {
+      operadora: op,
+      codigo: 'INT-410361-B',
+      nome: 'Plano sintético do segundo estabelecimento',
+      natureza: 'plano',
+      registroAns: '941036102',
+      tipoContratacao: 1,
+      segmentacao: 'ambulatorialHospitalar',
+      abrangencia: 'estadual',
+      acomodacao: 2,
+      coparticipacao: { tipo: 2, valor: 30 },
+      carencias: { urgencia: 1, partos: 300, demais: 180, cpt: 24 },
+      precos: [100, 120, 130, 140, 150, 170, 200, 240, 300, 400],
+      situacao: 'ativo',
+    });
+    const ctr = await servico.gravarContrato(sB, null, {
+      produto: prod.id,
+      numero: 'INT-410361-B1',
+      tipo: 1,
+      contratanteNome: 'Contratante Sintético B',
+      contratanteDocumento: cpfSintetico('910368881'),
+      formaReajuste: 1,
+      mesReajuste: 5,
+      tipoVigencia: 2,
+      inicio: '2025-01-01',
+      fim: null,
+      diaVencimento: null,
+      situacao: 'ativo',
+      motivoSituacao: null,
+    });
+    const cpfB = cpfSintetico('910368882');
+    const titB = await servico.gravarBeneficiario(sB, null, {
+      contrato: ctr.id,
+      titular: null,
+      vinculo: 1,
+      nome: 'Titular Sintetico B',
+      nomeSocial: null,
+      cpf: cpfB,
+      nascimento: '1990-01-02',
+      sexo: 'M',
+      cns: null,
+      nomeMae: 'Mae Sintetica B',
+      inclusao: '2025-01-01',
+      pacienteHospital: null,
+    });
+    await nucleo!.escrever({ cliente: CLIENTE, correlacao: 'preparo-c1036' }, async (e) => {
+      await e.executar('UPDATE beneficiario_plano SET codigo_controle_ans = ? WHERE id = ?', [
+        '000000103622',
+        titB.id,
+      ]);
+      const forma = await e.uma('SELECT id FROM forma_cobranca_plano ORDER BY id LIMIT 1');
+      const tipo = await e.uma('SELECT id FROM tipo_lancamento_fatura ORDER BY id LIMIT 1');
+      const f = await e.inserir(
+        `INSERT INTO fatura_plano (estabelecimento_id, numero, contrato_plano_id, competencia, data_emissao, data_vencimento,
+            forma_cobranca_plano_id, valor_bruto, valor_total, valor_pago, data_pagamento, situacao, criado_em)
+         VALUES (?, 'C1036-B1', ?, '2025-11-01', '2025-11-01', '2025-11-10', ?, 200, 200, 200, '2025-11-08', 'paga', NOW(3))`,
+        [massa!.outroEst, ctr.id, forma?.['id']],
+      );
+      await e.executar(
+        `INSERT INTO fatura_plano_item (fatura_plano_id, sequencia, tipo_lancamento_fatura_id, beneficiario_plano_id, descricao,
+            valor_unitario, valor, criado_em) VALUES (?, 1, ?, ?, 'Mensalidade sintética B', 200, 200, NOW(3))`,
+        [f, tipo?.['id'], titB.id],
+      );
+    });
+
+    // Conferência importada em B com a base da operadora inteira: o titular de A é localizado (sem divergência) e o
+    // registro inativo na agência que o cadastro não tem não vira item.
+    const [t] = await q(
+      `SELECT pf.cpf, pp.numero_registro_ans FROM beneficiario_plano b JOIN pessoa_fisica pf ON pf.id = b.pessoa_fisica_id
+         JOIN contrato_plano cp ON cp.id = b.contrato_plano_id JOIN produto_plano pp ON pp.id = cp.produto_plano_id WHERE b.id = ?`,
+      [cart!.titular.id],
+    );
+    const texto = [
+      'cco;nome;nascimento;cpf;cns;registro_plano;situacao',
+      `000000103611;TITULAR SINTETICA DA INTEGRACAO;10/05/1980;${String(t!['cpf'] ?? '')};;${String(t!['numero_registro_ans'] ?? '')};ATIVO`,
+      `000000103622;TITULAR SINTETICO B;02/01/1990;${cpfB};;941036102;ATIVO`,
+      '000000108888;PESSOA JA INATIVA;01/01/1970;;;;INATIVO',
+    ].join('\n');
+    const conf = await porta!.importarConferencia(
+      cB,
+      op,
+      { competencia: '2026-11', nome: 'conferencia-b.csv', base64: Buffer.from(texto).toString('base64') },
+      trilha('conferencia.importada'),
+    );
+    const [k] = await q(
+      'SELECT estabelecimento_id, total_registros, total_divergencias, situacao FROM conferencia_cadastral_ans WHERE id = ?',
+      [conf.id],
+    );
+    expect(k).toMatchObject({ total_registros: 3, total_divergencias: 0, situacao: 'conferida' });
+    expect(Number(k!['estabelecimento_id'])).toBe(massa!.outroEst);
+    expect(await porta!.divergencias(cB, conf.id)).toEqual([]);
+    // A mesma operadora vista de A e de B: as mesmas conferências.
+    const deA = (await porta!.conferencias(contexto(massa!), op)).map((x) => x.id);
+    expect((await porta!.conferencias(cB, op)).map((x) => x.id)).toEqual(deA);
+    expect(deA).toContain(conf.id);
+
+    // DMED: a retificadora aberta em A trava a geração em B (um CNPJ, uma declaração do ano).
+    const entrada = {
+      anoCalendario: 2025,
+      retifica: null,
+      responsavelCpf: '52998224725',
+      responsavelNome: 'Responsável Sintético',
+      responsavelDdd: '11',
+      responsavelTelefone: '30000000',
+      responsavelEmail: null,
+    };
+    await expect(porta!.gerarDmed(cB, op, entrada, trilha('x'))).rejects.toThrow(/declaracao-aberta/);
+    const doAno = await porta!.declaracoes(cB, op);
+    const aberta = doAno.find((d) => d.situacao === 'gerada')!;
+    const original = doAno.find((d) => !d.retificadora && d.situacao === 'transmitida')!;
+    expect(doAno.map((d) => d.id)).toEqual((await porta!.declaracoes(contexto(massa!), op)).map((d) => d.id));
+    await porta!.passoDmed(
+      cB,
+      aberta.id,
+      aberta.versao,
+      { para: 'cancelada', recibo: null },
+      trilha('dmed.cancelada'),
+    );
+    // A original já entregue: outra original do mesmo ano é recusada; só a retificadora passa.
+    await expect(porta!.gerarDmed(cB, op, entrada, trilha('x'))).rejects.toThrow(/original-entregue/);
+    const ret = await porta!.gerarDmed(
+      cB,
+      op,
+      { ...entrada, retifica: original.id },
+      trilha('dmed.retificadora'),
+    );
+    const [rd] = await q(
+      'SELECT estabelecimento_id, retificadora, retificada_declaracao_servicos_medicos_id AS origem FROM declaracao_servicos_medicos WHERE id = ?',
+      [ret.id],
+    );
+    expect(Number(rd!['estabelecimento_id'])).toBe(massa!.outroEst);
+    expect(Number(rd!['origem'])).toBe(original.id);
+    // Os pagamentos dos dois estabelecimentos numa declaração só: R$ 300 + R$ 150 (A) e R$ 200 (B) = R$ 650.
+    const itens = await porta!.itensDeclaracao(cB, ret.id);
+    expect(
+      itens.map((i) => [i.beneficiario, i.tipo, i.valor]).sort((x, y) => Number(x[0]) - Number(y[0])),
+    ).toEqual(
+      [
+        [cart!.titular.id, 'titular', 300],
+        [cart!.dependente, 'dependente', 150],
+        [titB.id, 'titular', 200],
+      ].sort((x, y) => Number(x[0]) - Number(y[0])),
+    );
+    expect(itens.reduce((a, i) => a + i.valor, 0)).toBe(650);
   });
 });

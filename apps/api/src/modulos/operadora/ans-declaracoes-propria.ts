@@ -5,7 +5,10 @@
 // arquivo gerado guardado). A regra vem do domínio (ans/declaracoes.ts); o banco só guarda. Nada é apagado: a apuração e
 // a declaração são canceladas pela situação, a divergência é concluída ou ignorada com motivo. Cada gravação é uma
 // operação do Executor (trilha na mesma transação); a guarda do arquivo e a gravação ficam numa transação só. O escopo é
-// a operadora ligada ao estabelecimento da sessão; fora dele, 404 sem dizer se existe.
+// a operadora ligada ao estabelecimento da sessão; fora dele, 404 sem dizer se existe. A conferência cadastral e a
+// declaração são da operadora inteira (a ANS devolve a base por registro e a Receita recebe uma declaração por CNPJ):
+// somam os beneficiários e os pagamentos de todos os estabelecimentos ligados a ela, e cada estabelecimento ligado vê
+// as mesmas conferências e declarações; o estabelecimento gravado é o de quem importou ou gerou.
 import {
   apurarTps,
   arquivoDmed,
@@ -402,9 +405,9 @@ export class PortaDeclaracoesAnsPropria {
                 (SELECT COUNT(*) FROM conferencia_cadastral_ans_item i WHERE i.conferencia_cadastral_ans_id = c.id
                     AND i.correcao IN ('pendente','corrigir_cadastro','retificar_ans') AND i.excluido_em IS NULL) AS pendentes
            FROM conferencia_cadastral_ans c
-          WHERE c.operadora_saude_id = ? AND c.estabelecimento_id = ? AND c.excluido_em IS NULL
+          WHERE c.operadora_saude_id = ? AND c.excluido_em IS NULL
           ORDER BY c.competencia DESC, c.id DESC`,
-        [op, est],
+        [op],
         { teto: 200 },
       );
       return rs.map((r) => ({
@@ -427,7 +430,8 @@ export class PortaDeclaracoesAnsPropria {
                 i.valor_cadastro, i.valor_ans, i.correcao, i.justificativa
            FROM conferencia_cadastral_ans_item i
            JOIN conferencia_cadastral_ans c ON c.id = i.conferencia_cadastral_ans_id
-          WHERE c.id = ? AND c.estabelecimento_id = ? AND i.excluido_em IS NULL ORDER BY i.sequencia`,
+          WHERE c.id = ? AND EXISTS (SELECT 1 FROM operadora_saude_estabelecimento oe WHERE oe.operadora_saude_id = c.operadora_saude_id AND oe.estabelecimento_id = ? AND oe.excluido_em IS NULL)
+            AND i.excluido_em IS NULL ORDER BY i.sequencia`,
         [conferencia, est],
         { teto: 100_000 },
       );
@@ -472,8 +476,8 @@ export class PortaDeclaracoesAnsPropria {
              JOIN contrato_plano cp ON cp.id = b.contrato_plano_id
              JOIN pessoa_fisica pf ON pf.id = b.pessoa_fisica_id
              LEFT JOIN produto_plano pp ON pp.id = cp.produto_plano_id
-            WHERE cp.operadora_saude_id = ? AND cp.estabelecimento_id = ? AND b.excluido_em IS NULL`,
-          [op, est],
+            WHERE cp.operadora_saude_id = ? AND b.excluido_em IS NULL`,
+          [op],
           { teto: 500_000 },
         );
         const divs = conferirCadastro(
@@ -546,7 +550,8 @@ export class PortaDeclaracoesAnsPropria {
           await tx.consultarParaAtualizar(
             `SELECT i.id, i.versao, i.correcao, i.conferencia_cadastral_ans_id, c.versao AS versao_conferencia
              FROM conferencia_cadastral_ans_item i JOIN conferencia_cadastral_ans c ON c.id = i.conferencia_cadastral_ans_id
-            WHERE i.id = ? AND c.estabelecimento_id = ? AND i.excluido_em IS NULL`,
+            WHERE i.id = ? AND EXISTS (SELECT 1 FROM operadora_saude_estabelecimento oe WHERE oe.operadora_saude_id = c.operadora_saude_id AND oe.estabelecimento_id = ? AND oe.excluido_em IS NULL)
+              AND i.excluido_em IS NULL`,
             [item, est],
             { teto: 1 },
           )
@@ -593,9 +598,9 @@ export class PortaDeclaracoesAnsPropria {
                 (SELECT COUNT(*) FROM declaracao_servicos_medicos_item i WHERE i.declaracao_servicos_medicos_id = d.id AND i.excluido_em IS NULL) AS itens,
                 (SELECT COALESCE(SUM(i.valor_ano), 0) FROM declaracao_servicos_medicos_item i WHERE i.declaracao_servicos_medicos_id = d.id AND i.excluido_em IS NULL) AS total
            FROM declaracao_servicos_medicos d
-          WHERE d.operadora_saude_id = ? AND d.estabelecimento_id = ? AND d.excluido_em IS NULL
+          WHERE d.operadora_saude_id = ? AND d.excluido_em IS NULL
           ORDER BY d.ano_calendario DESC, d.id DESC`,
-        [op, est],
+        [op],
         { teto: 200 },
       );
       return rs.map((r) => ({
@@ -621,7 +626,8 @@ export class PortaDeclaracoesAnsPropria {
       const rs = await l.consultar(
         `SELECT i.sequencia, i.beneficiario_plano_id, i.titular_beneficiario_plano_id, i.tipo_beneficiario, i.valor_ano
            FROM declaracao_servicos_medicos_item i JOIN declaracao_servicos_medicos d ON d.id = i.declaracao_servicos_medicos_id
-          WHERE d.id = ? AND d.estabelecimento_id = ? AND i.excluido_em IS NULL ORDER BY i.sequencia`,
+          WHERE d.id = ? AND EXISTS (SELECT 1 FROM operadora_saude_estabelecimento oe WHERE oe.operadora_saude_id = d.operadora_saude_id AND oe.estabelecimento_id = ? AND oe.excluido_em IS NULL)
+            AND i.excluido_em IS NULL ORDER BY i.sequencia`,
         [id, est],
         { teto: 500_000 },
       );
@@ -652,8 +658,8 @@ export class PortaDeclaracoesAnsPropria {
       const anterior = x.retifica
         ? await l.uma(
             `SELECT numero_recibo, ano_calendario FROM declaracao_servicos_medicos WHERE id = ? AND operadora_saude_id = ?
-                AND estabelecimento_id = ? AND situacao IN ('transmitida','aceita') AND excluido_em IS NULL`,
-            [x.retifica, op, est],
+                AND situacao IN ('transmitida','aceita') AND excluido_em IS NULL`,
+            [x.retifica, op],
           )
         : null;
       if (x.retifica && (!anterior || Number(anterior['ano_calendario']) !== x.anoCalendario))
@@ -668,11 +674,11 @@ export class PortaDeclaracoesAnsPropria {
            JOIN contratante_plano ct ON ct.id = cp.contratante_plano_id
            JOIN beneficiario_plano b ON b.id = COALESCE(i.beneficiario_plano_id, f.responsavel_beneficiario_plano_id)
            JOIN pessoa_fisica pf ON pf.id = b.pessoa_fisica_id
-          WHERE f.estabelecimento_id = ? AND cp.operadora_saude_id = ? AND f.excluido_em IS NULL
+          WHERE cp.operadora_saude_id = ? AND f.excluido_em IS NULL
             AND f.situacao IN ('paga','paga_parcial') AND f.data_pagamento BETWEEN ? AND ?
             AND (f.responsavel_beneficiario_plano_id IS NOT NULL OR ct.pessoa_fisica_id IS NOT NULL)
           GROUP BY b.id, b.titular_beneficiario_plano_id, pf.nome, pf.cpf, pf.data_nascimento`,
-        [est, op, `${x.anoCalendario}-01-01`, `${x.anoCalendario}-12-31`],
+        [op, `${x.anoCalendario}-01-01`, `${x.anoCalendario}-12-31`],
         { teto: 500_000 },
       );
       return { hoje: dataIso(h?.['hoje']) ?? '', opr, anterior, pags };
@@ -730,13 +736,14 @@ export class PortaDeclaracoesAnsPropria {
       'declaracao_servicos_medicos',
       trilha,
       async (tx, est, _hoje, arquivo) => {
-        const aberta = await tx.consultarParaAtualizar(
-          `SELECT id FROM declaracao_servicos_medicos WHERE operadora_saude_id = ? AND ano_calendario = ?
-              AND situacao IN ('em_preparacao','gerada') AND excluido_em IS NULL`,
+        // O declarante é a operadora (um CNPJ): a trava vale para todos os estabelecimentos ligados a ela.
+        const doAno = await tx.consultarParaAtualizar(
+          `SELECT id, situacao, retificadora FROM declaracao_servicos_medicos WHERE operadora_saude_id = ? AND ano_calendario = ?
+              AND situacao IN ('em_preparacao','gerada','transmitida','aceita') AND excluido_em IS NULL`,
           [op, x.anoCalendario],
-          { teto: 1 },
+          { teto: 1_000 },
         );
-        if (aberta.length)
+        if (doAno.some((d) => ['em_preparacao', 'gerada'].includes(String(d['situacao']))))
           throw recusa(
             'declaracao-aberta',
             'Já há declaração deste ano ainda não entregue; entregue-a ou cancele-a.',
@@ -744,6 +751,22 @@ export class PortaDeclaracoesAnsPropria {
               campos: ['anoCalendario'],
             },
           );
+        exigir(
+          problemasDaDeclaracao(
+            {
+              anoCalendario: cab.anoCalendario,
+              retificadora: cab.retificadora,
+              reciboAnterior: cab.reciboAnterior,
+              responsavelCpf: cab.responsavelCpf,
+              responsavelNome: cab.responsavelNome,
+            },
+            dados.hoje,
+            doAno.some(
+              (d) =>
+                !booleano(d['retificadora']) && ['transmitida', 'aceita'].includes(String(d['situacao'])),
+            ),
+          ),
+        );
         const id = await tx.incluir('declaracao_servicos_medicos', {
           estabelecimento_id: est,
           operadora_saude_id: op,
@@ -795,7 +818,8 @@ export class PortaDeclaracoesAnsPropria {
     return this.gravar(c, 'operadora.dmed.passo', 'declaracao_servicos_medicos', trilha, async (tx, est) => {
       const r = (
         await tx.consultarParaAtualizar(
-          'SELECT id, versao, situacao FROM declaracao_servicos_medicos WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          `SELECT d.id, d.versao, d.situacao FROM declaracao_servicos_medicos d WHERE d.id = ? AND EXISTS (SELECT 1 FROM operadora_saude_estabelecimento oe WHERE oe.operadora_saude_id = d.operadora_saude_id AND oe.estabelecimento_id = ? AND oe.excluido_em IS NULL)
+              AND d.excluido_em IS NULL`,
           [id, est],
           { teto: 1 },
         )
@@ -818,7 +842,8 @@ export class PortaDeclaracoesAnsPropria {
   ): Promise<{ nome: string; base64: string; sha256: string } | null> {
     const ref = await this.ler(c, (l, est) =>
       l.uma(
-        'SELECT arquivo_id FROM declaracao_servicos_medicos WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        `SELECT d.arquivo_id FROM declaracao_servicos_medicos d WHERE d.id = ? AND EXISTS (SELECT 1 FROM operadora_saude_estabelecimento oe WHERE oe.operadora_saude_id = d.operadora_saude_id AND oe.estabelecimento_id = ? AND oe.excluido_em IS NULL)
+            AND d.excluido_em IS NULL`,
         [id, est],
       ),
     );

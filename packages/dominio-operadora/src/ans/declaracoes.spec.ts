@@ -143,6 +143,18 @@ describe('conferência cadastral da base da ANS', () => {
       [3, 'nao_localizado_ans', null],
     ]);
   });
+  it('o registro inativo na agência que o cadastro não tem não vira divergência; o ativo vira', () => {
+    const { registros } = lerArquivoConferencia(
+      [
+        'cco;nome;nascimento;cpf;cns;registro_plano;situacao',
+        '000000000077;Fora Inativo;2000-01-01;;;478081;INATIVO',
+        '000000000088;Fora Ativo;2000-01-01;;;478081;ATIVO',
+      ].join('\n'),
+    );
+    expect(conferirCadastro([], registros).map((x) => [x.cco, x.tipo])).toEqual([
+      ['000000000088', 'nao_localizado_cadastro'],
+    ]);
+  });
   it('tratamento: ignorar exige justificativa; corrigida é final', () => {
     expect(problemasDaCorrecao('pendente', 'ignorada', ' ')[0]?.codigo).toBe('sem-justificativa');
     expect(problemasDaCorrecao('pendente', 'corrigir_cadastro', null)).toEqual([]);
@@ -209,6 +221,12 @@ describe('DMED', () => {
     expect(problemasDaDeclaracao({ ...c, anoCalendario: 2026 }, '2026-11-25')[0]?.codigo).toBe(
       'ano-invalido',
     );
+    const ok = { ...c, retificadora: false, responsavelCpf: '52998224725', responsavelNome: 'Resp' };
+    expect(problemasDaDeclaracao(ok, '2026-01-10', true).map((x) => x.codigo)).toEqual(['original-entregue']);
+    expect(problemasDaDeclaracao(ok, '2026-01-10', false)).toEqual([]);
+    expect(
+      problemasDaDeclaracao({ ...ok, retificadora: true, reciboAnterior: 'R1' }, '2026-01-10', true),
+    ).toEqual([]);
     expect(problemasDoPassoDmed('gerada', 'transmitida', null)[0]?.codigo).toBe('sem-recibo');
     expect(problemasDoPassoDmed('gerada', 'transmitida', 'R1')).toEqual([]);
     expect(problemasDoPassoDmed('aceita', 'cancelada', null)[0]?.codigo).toBe('passo-invalido');

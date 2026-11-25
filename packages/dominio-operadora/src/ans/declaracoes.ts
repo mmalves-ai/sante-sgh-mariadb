@@ -204,7 +204,7 @@ export function lerArquivoConferencia(texto: string): {
 
 /**
  * Confere o cadastro próprio contra a base da agência, pelo código de controle: o registro da agência sem
- * beneficiário no cadastro, o beneficiário ativo com código que a agência não devolveu, a situação diferente e cada
+ * beneficiário no cadastro (só o ativo na agência), o beneficiário ativo com código que a agência não devolveu, a situação diferente e cada
  * campo diferente (nome sem acento e caixa, nascimento, CPF, CNS e registro do plano). Sem código de controle, o
  * beneficiário ainda não foi aceito no SIB e fica fora (a pendência é do SIB).
  */
@@ -220,6 +220,8 @@ export function conferirCadastro(
     const cco = soDigitos(a.cco);
     naAns.add(cco);
     const b = porCco.get(cco);
+    // O registro que a agência já dá como inativo e que o cadastro não tem não pede correção nenhuma.
+    if (!b && !a.ativo) continue;
     if (!b) {
       r.push({
         beneficiario: null,
@@ -401,8 +403,18 @@ export function problemasDaDeclaracao(
     'anoCalendario' | 'retificadora' | 'reciboAnterior' | 'responsavelCpf' | 'responsavelNome'
   >,
   hoje: string,
+  /** Já há declaração original do mesmo declarante (CNPJ) e ano entregue: a nova só pode ser a retificadora. */
+  originalEntregue = false,
 ): ProblemaDeclaracao[] {
   const r: ProblemaDeclaracao[] = [];
+  if (originalEntregue && !c.retificadora)
+    r.push(
+      p(
+        'original-entregue',
+        'retificadora',
+        'A declaração deste ano já foi entregue; gere a retificadora dela.',
+      ),
+    );
   if (
     !Number.isInteger(c.anoCalendario) ||
     c.anoCalendario >= Number(hoje.slice(0, 4)) ||
