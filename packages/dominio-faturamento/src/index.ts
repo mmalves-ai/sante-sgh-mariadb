@@ -48,3 +48,5 @@ export * from './glosa/recurso-lote.js';
 export * from './conta/adiantamento-paciente.js';
 export * from './conta/devolucao-adiantamento.js';
 export * from './conta/modelo-orcamento.js';
+// F3.7 (06-FAT linha 38): parâmetros tipados, preferências do faturista e alçada do faturamento.
+export * from './parametros/parametros-faturamento.js';

@@ -28,6 +28,11 @@ import {
 } from './conta-movimentos.controller.js';
 import { FaturamentoController } from './faturamento.controller.js';
 import {
+  ParametrosFaturamentoController,
+  SERVICO_PARAMETROS_FATURAMENTO,
+  ServicoParametrosFaturamento,
+} from './parametros-faturamento.controller.js';
+import {
   NotaVinculoController,
   SERVICO_NOTA_VINCULO,
   ServicoNotaVinculo,
@@ -76,6 +81,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       ParticularAdiantamentoController,
       AuditoriaTramiteController,
       RegrasComerciaisController,
+      ParametrosFaturamentoController,
     ],
     providers: [
       { provide: PORTA_FATURAMENTO, useValue: porta },
@@ -137,6 +143,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoRegrasComerciais(ctx.nucleo)
+            : null,
+      },
+      // 06-FAT linha 38: parâmetros tipados, preferências do faturista e alçada do faturamento (banco próprio).
+      {
+        provide: SERVICO_PARAMETROS_FATURAMENTO,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoParametrosFaturamento(ctx.nucleo)
             : null,
       },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.

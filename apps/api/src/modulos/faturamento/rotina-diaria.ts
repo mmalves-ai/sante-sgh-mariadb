@@ -2,21 +2,27 @@
 // faturamento.apurar-lancamentos-do-dia (conta-entrada.ts): abre a conta da internação que ficou sem conta e lança a
 // diária do dia de corte sem depender de evento do ADT. A operação é idempotente (a chave do lançamento automático):
 // duas instâncias da API ou um reinício no mesmo dia não lançam em dobro. O ciclo roda a cada hora e dispara no
-// primeiro ciclo de cada dia civil no fuso do estabelecimento. Ligada fora de dev/ci (salvo
-// FATURAMENTO_ROTINA_DIARIA=desligado); em dev/ci só com FATURAMENTO_ROTINA_DIARIA=ligado. Log só com códigos e contagens.
+// primeiro ciclo de cada dia civil no fuso do estabelecimento, a partir da hora de início. Ligar, desligar e a hora de
+// início são parâmetros tipados do faturamento por rede ou estabelecimento (faturamento.rotinaDiaria e
+// faturamento.rotinaDiariaHora, 06-FAT linha 38), lidos a cada ciclo. A variável de ambiente ficou só como trava de
+// dev/ci (lá, só com FATURAMENTO_ROTINA_DIARIA=ligado). Log só com códigos e contagens.
 import { randomUUID } from 'node:crypto';
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { instanteParaDataHora } from '@sgh/contratos';
 import type { Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { logger } from '../../logger.js';
+import { rotinaDiariaNaHora } from '@sgh/dominio-faturamento';
 import { apurarLancamentosDoDia } from './conta-entrada.js';
+import { parametrosDoEstabelecimento } from './parametros-faturamento-propria.js';
 
 const FUSO_PADRAO = 'America/Sao_Paulo';
 
-/** A rotina roda? Fora de dev/ci, sempre (salvo desligado); em dev/ci, só com FATURAMENTO_ROTINA_DIARIA=ligado. */
+/**
+ * Trava do ambiente: fora de dev/ci o temporizador sempre sobe (quem liga e desliga é o parâmetro
+ * faturamento.rotinaDiaria de cada estabelecimento); em dev/ci, só com FATURAMENTO_ROTINA_DIARIA=ligado.
+ */
 export function rotinaDiariaLigada(env: Readonly<Record<string, string | undefined>>): boolean {
   const pedido = (env['FATURAMENTO_ROTINA_DIARIA'] ?? '').trim();
-  if (pedido === 'desligado') return false;
   const ambiente = (env['AMBIENTE'] ?? '').trim();
   return ambiente === 'dev' || ambiente === 'ci' ? pedido === 'ligado' : true;
 }
@@ -53,9 +59,15 @@ export async function cicloRotinaDiaria(
     const id = Number(e['id']);
     const codigo = String(e['codigo']);
     const fuso = typeof e['fuso_horario'] === 'string' && e['fuso_horario'] ? e['fuso_horario'] : FUSO_PADRAO;
-    const dia = instanteParaDataHora(agora.toISOString(), fuso).data;
+    const local = instanteParaDataHora(agora.toISOString(), fuso);
+    const dia = local.data;
     if (jaRodou.get(id) === dia) continue;
     try {
+      const p = await nucleo.lerSomente(
+        { cliente, estabelecimento: id, correlacao: 'faturamento-rotina-diaria' },
+        (l: Leitor) => parametrosDoEstabelecimento(l, id),
+      );
+      if (!rotinaDiariaNaHora(p, Number(local.hora.slice(0, 2)))) continue;
       const r = await executor.executar(
         apurarLancamentosDoDia,
         cliente,
