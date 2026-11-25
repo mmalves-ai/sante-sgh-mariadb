@@ -20,6 +20,8 @@ export * from './apuracao-retido.js';
 export * from './retencao-sofrida.js';
 export * from './remessa.js';
 export * from './retorno-pagamento.js';
+// F7, 07-FIN linha 78: cobrança bancária com boleto (carteira, código de barras, remessa e retorno CNAB 240).
+export * from './cobranca-boleto.js';
 export * from './chave-pix.js';
 export * from './credor-conta.js';
 export * from './pagamento-eletronico.js';
