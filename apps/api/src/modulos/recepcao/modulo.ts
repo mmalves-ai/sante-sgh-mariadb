@@ -31,6 +31,9 @@ import { PortaClassificacaoPropria } from './classificacao-porta-propria.js';
 import { ClassificacaoController, fonteAtendimentosPa, fonteRiscoPa } from './classificacao.controller.js';
 import { ServicoClassificacao } from './classificacao-servico.js';
 import { DispositivoController } from './dispositivo.controller.js';
+import { EstruturaRecepcaoController } from './estrutura.controller.js';
+import { EstruturaRecepcaoMemoria, PORTA_ESTRUTURA_RECEPCAO } from './estrutura-porta.js';
+import { EstruturaRecepcaoPropria } from './estrutura-propria.js';
 import { GestaoRecepcaoController } from './gestao.controller.js';
 import { portaClassificacaoIndisponivel, portaRecepcaoIndisponivel } from './indisponivel.js';
 import { PORTA_RECEPCAO, type PortaRecepcao } from './porta.js';
@@ -98,6 +101,7 @@ export function moduloRecepcao(ctx: ContextoModulo, opcoes: OpcoesModuloRecepcao
     controllers: [
       RecepcaoController,
       GestaoRecepcaoController,
+      EstruturaRecepcaoController,
       TermosRecepcaoController,
       DispositivoController,
       ClassificacaoController,
@@ -106,6 +110,17 @@ export function moduloRecepcao(ctx: ContextoModulo, opcoes: OpcoesModuloRecepcao
     ],
     providers: [
       { provide: PORTA_RECEPCAO, useValue: recepcao },
+      // 02-REC linha 33: o cadastro da estrutura (pontos, guichês e serviços) no banco do cliente; na sessão sintética,
+      // em memória; sem nenhum dos dois, o controlador responde 503.
+      {
+        provide: PORTA_ESTRUTURA_RECEPCAO,
+        useValue:
+          propria && nucleo && cliente
+            ? new EstruturaRecepcaoPropria(nucleo, cliente)
+            : recepcao.destino === 'memoria'
+              ? new EstruturaRecepcaoMemoria(recepcao)
+              : null,
+      },
       { provide: CENTRAL_CHAMADAS, useValue: new CentralChamadas(recepcao, rede, null) },
       { provide: REDE_RECEPCAO, useValue: rede },
       { provide: PORTA_CLASSIFICACAO, useValue: classificacao },

@@ -250,7 +250,8 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
         `SELECT g.id, g.ponto_recepcao_id, g.prefixo, g.descricao, g.tipo, g.ativo, g.gera_prioritaria, g.limite_dia,
                 g.ordem_lista, g.intercalar_prioritarias, g.tempo_alvo_espera_minutos, g.rotulo_totem, g.exibe_no_totem
            FROM gerador_senha g JOIN ponto_recepcao p ON p.id = g.ponto_recepcao_id
-          WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL ORDER BY g.descricao, g.id`,
+          WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL
+          ORDER BY g.ordem_botao IS NULL, g.ordem_botao, g.descricao, g.id`,
         [est.id],
       );
       const guiches = await l.consultar(

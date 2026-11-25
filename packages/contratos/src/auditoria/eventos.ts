@@ -1252,6 +1252,11 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Ordem de chamada, intercalação, tempo-alvo e botão do totem de um gerador alterados',
     legado: null,
   },
+  recepcaoEstruturaAlterada: {
+    codigo: 'recepcao.estrutura.alterada',
+    descricao: 'Ponto de recepção, guichê ou serviço de senha incluído, alterado, desativado ou reativado',
+    legado: null,
+  },
   recepcaoDispositivoAlterado: {
     codigo: 'recepcao.dispositivo.alterado',
     descricao: 'Totem ou painel de TV cadastrado, renovado ou revogado (o token nunca vai à trilha)',
