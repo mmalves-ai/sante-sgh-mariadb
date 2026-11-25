@@ -202,13 +202,14 @@ export const PERMISSOES_PEP_M24: readonly DeclaracaoPermissao[] = [
   },
   {
     // 03-PEP L103: a avaliação da reação adversa (causalidade) é ato da farmácia clínica, não de quem registra a
-    // evolução; a supervisão da farmácia conduz a farmacovigilância com o NSP (D-PERM-48.2).
+    // evolução; o farmacêutico clínico de plantão (grupo FARMACIA → perfil farmaceutico) avalia no dia a dia e a
+    // supervisão da farmácia conduz a farmacovigilância com o NSP (D-PERM-48.2).
     codigo: 'pep.farmacovigilancia.avaliar',
     descricao:
       'Avaliar, pela farmácia clínica, a reação adversa a medicamento registrada no paciente (causalidade e parecer)',
 
     concessaoPorPerfil: 'por-perfil',
-    perfis: ['supervisor-farmacia'],
+    perfis: ['farmaceutico', 'supervisor-farmacia'],
     categoria: 'clinica',
     criticidade: 'sensivel',
     exigeConselho: true,

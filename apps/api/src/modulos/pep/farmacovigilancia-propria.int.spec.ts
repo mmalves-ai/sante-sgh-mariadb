@@ -11,8 +11,14 @@ import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
-import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
-import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
+import { CATALOGO_DECLARADO, EVENTOS_AUDITAVEIS } from '@sgh/contratos';
+import {
+  criarAbility,
+  destinoDoGrupo,
+  indexarCatalogo,
+  regrasDeAcesso,
+  VinculoSintetico,
+} from '@sgh/dominio-acesso';
 import { achados, type ItemAvaliado, type ProdutoAlerta, REGRAS_PADRAO } from '@sgh/dominio-pep';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
@@ -713,7 +719,19 @@ describe.skipIf(SEM_BANCO)('farmacovigilância e uso contínuo (banco próprio, 
         },
       }) as unknown as RequisicaoAutorizada;
     const MEDICO = ['pep.reconciliacao.ler', 'pep.evolucao.criar'];
-    const FARMACIA = [PERMISSAO_AVALIAR_REACAO];
+    // As permissões da farmácia saem do catálogo e do mapa de grupos reais: o farmacêutico de plantão (grupo
+    // FARMACIA) e a supervisão (FARMACIA_SUPERVISAO) avaliam; nada de lista escrita à mão.
+    const indice = indexarCatalogo(CATALOGO_DECLARADO);
+    const doGrupo = (grupo: string) => {
+      const d = destinoDoGrupo(grupo);
+      if (d.tipo !== 'perfil') throw new Error(`grupo ${grupo} sem perfil`);
+      return [...(indice.porPerfil.get(d.perfil) ?? [])];
+    };
+    const FARMACIA = doGrupo('FARMACIA');
+    const SUPERVISAO = doGrupo('FARMACIA_SUPERVISAO');
+    expect(FARMACIA).toContain(PERMISSAO_AVALIAR_REACAO);
+    expect(SUPERVISAO).toContain(PERMISSAO_AVALIAR_REACAO);
+    expect(FARMACIA).not.toContain('pep.evolucao.criar');
     const negadas = (recurso: string) =>
       trilha.eventos.filter(
         (e) => e.evento === EVENTOS_AUDITAVEIS.permissaoNegada.codigo && e.recurso === recurso,
@@ -777,5 +795,28 @@ describe.skipIf(SEM_BANCO)('farmacovigilância e uso contínuo (banco próprio, 
       [id],
     );
     expect(ev.map((e) => e.etapa)).toEqual(['registro', 'avaliacao_farmacia']);
+
+    // A supervisão da farmácia também avalia (outra reação, mesma regra).
+    const outra = await ctrl.reacao(
+      {
+        acao: 'registrar',
+        paciente: ids.paciente,
+        itemPrescritivel: ids.produto,
+        descricao: 'Prurido após a dose',
+        inicio: new Date(Date.now() - 3_600_000).toISOString(),
+        gravidade: ids.leve,
+      },
+      req(MEDICO),
+    );
+    const idOutra = Number(outra.resultado.reacao);
+    await ctrl.reacao(
+      { acao: 'avaliar', reacao: idOutra, versao: await versao(idOutra), causalidade: ids.causalidade },
+      req(SUPERVISAO),
+    );
+    const [avalSup] = await ler<{ situacao: string }>(
+      'SELECT situacao FROM reacao_adversa_paciente WHERE id = ?',
+      [idOutra],
+    );
+    expect(avalSup!.situacao).toBe('avaliada');
   });
 });
