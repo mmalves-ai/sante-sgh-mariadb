@@ -8,6 +8,8 @@
 //   Trocar a carteira preserva a anterior no histórico.
 // - Guias da conta: cada guia TISS com os campos obrigatórios da operadora que faltam, o link para preenchê-los e o
 //   link para o cadastro dos campos da operadora.
+// - Faturamento por período (PeriodosFaturamentoConta): itens, valor e guias de cada faixa, fechamento parcial e
+//   reabertura com motivo.
 import { sugerirProximoPeriodo, validarPeriodoConta, validarSeguradoConta } from '@sgh/dominio-faturamento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
@@ -24,6 +26,7 @@ import {
 import { novaChave } from '../api-faturamento.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../componentes/MensagemFaturamento.vue';
+import PeriodosFaturamentoConta from '../componentes/PeriodosFaturamentoConta.vue';
 import { quando } from '../usar-faturamento.js';
 
 const props = defineProps<{ id: string }>();
@@ -293,6 +296,8 @@ const gravarSeg = () =>
         {{ t('incluir') }}
       </button>
     </fieldset>
+
+    <PeriodosFaturamentoConta :conta="conta" />
 
     <h2>{{ t('segurado') }}</h2>
     <ErroFaturamento v-if="seg.error.value" :erro="seg.error.value" />
