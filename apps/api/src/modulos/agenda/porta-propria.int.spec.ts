@@ -846,6 +846,39 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
     expect((await porta.cobertura(ctx(), [ids.agenda])).size).toBe(0);
   });
 
+  it('02-CAD linha 13: paciente com óbito registrado não recebe marcação nem encaixe, e nada é gravado', async () => {
+    const marcar = (op: 'agenda.agendarConsulta' | 'agenda.encaixar') =>
+      porta.executar(ctx(), op, {
+        agenda: ids.agenda,
+        data: DIA,
+        hora: '08:30',
+        paciente: ids.pacienteA,
+        convenio: 9141,
+        retorno: false,
+        canal: 'telefone',
+        ...(op === 'agenda.encaixar' ? { motivo: 'Encaixe sintético' } : {}),
+      });
+    const obito = (falecido: boolean) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0104-obito' }, (e) =>
+        e.executar('UPDATE paciente SET falecido = ?, data_hora_obito = ? WHERE id = ?', [
+          falecido,
+          falecido ? new Date('2026-11-20T12:00:00Z') : null,
+          ids.pacienteA,
+        ]),
+      );
+    const marcacoes = () =>
+      contar('SELECT COUNT(*) AS n FROM marcacao_horario WHERE paciente_id = ?', [ids.pacienteA]);
+    const antes = await marcacoes();
+    await obito(true);
+    try {
+      await expect(marcar('agenda.agendarConsulta')).rejects.toMatchObject(recusada('paciente-falecido'));
+      await expect(marcar('agenda.encaixar')).rejects.toMatchObject(recusada('paciente-falecido'));
+      expect(await marcacoes()).toBe(antes);
+    } finally {
+      await obito(false);
+    }
+  });
+
   it('encaixe cria o horário em ordem e desfazer o cancela; bloquear e desbloquear horários vagos', async () => {
     const e = await porta.executar(ctx(), 'agenda.encaixar', {
       agenda: ids.agenda,

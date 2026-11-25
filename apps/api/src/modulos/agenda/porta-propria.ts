@@ -69,6 +69,8 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { recusarEntradaDeFalecido } from '@sgh/dominio-atendimento';
+import { vidaDoPaciente } from '../cadastro/vida-do-paciente.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { lerDiasSemExpediente } from './dias-sem-expediente-leitor.js';
 import { operacaoAgenda } from './operacoes.js';
@@ -2388,7 +2390,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       p.paciente === null
         ? null
         : await tx.uma(
-            `SELECT p.id, p.numero_prontuario, p.situacao, pf.data_nascimento
+            `SELECT p.id, p.numero_prontuario, p.situacao, p.falecido, p.data_hora_obito, pf.data_nascimento
                FROM paciente p LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
               WHERE p.id = ? AND p.excluido_em IS NULL`,
             [p.paciente],
@@ -2401,6 +2403,9 @@ export class PortaAgendaPropria implements PortaAgenda {
           'Paciente não encontrado',
           'O cadastro não existe.',
         );
+      // 02-CAD linha 13: o paciente com óbito registrado não recebe marcação (regra do domínio).
+      const vivo = recusarEntradaDeFalecido(vidaDoPaciente(pac), 'marcacao');
+      if (!vivo.ok) throw recusa(vivo.codigo, vivo.mensagem, { campos: ['paciente'] });
       if (pac['situacao'] !== 'ativo' && pac['situacao'] !== 'provisorio')
         throw recusa('paciente-inativo', 'O cadastro do paciente está inativo ou foi unificado em outro.');
       if (pac['numero_prontuario'] === null)
