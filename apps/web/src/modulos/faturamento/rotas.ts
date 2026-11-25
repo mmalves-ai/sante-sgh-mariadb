@@ -150,6 +150,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/PacotesTela.vue'),
     meta: { permissao: 'faturamento.pacote.ler' },
   },
+  // F8 (06-FAT linha 23): ambulância, ligação tarifada, layout e importação do arquivo do tarifador, lançamento na conta.
+  {
+    path: '/faturamento/servicos-acessorios',
+    name: 'faturamento.servicosAcessorios',
+    component: () => import('./telas/ServicosAcessoriosTela.vue'),
+    meta: { permissao: 'faturamento.regra.ler' },
+  },
   {
     path: '/faturamento/regras-faturabilidade',
     name: 'faturamento.regras',

@@ -105,6 +105,7 @@ export const mensagensFaturamento = {
     auditoria: 'Auditoria',
     complementos: 'Períodos e segurado',
     ajustes: 'Horário especial, acréscimos, descontos e pacote',
+    servicosAcessorios: 'Ambulância e ligações',
     sigtap: 'Itens SUS',
     iniciarConferencia: 'Iniciar a conferência',
     concluirConferencia: 'Concluir a conferência',
