@@ -127,10 +127,9 @@ const esquemaHemo = z
 const esquemaVinculo = z.object({ requisicaoItem: id, versao: id }).strict();
 const esquemaVersao = z.object({ versao: id }).strict();
 
-const DATA = (c: string) => `DATE_FORMAT(${c}, '%Y-%m-%d %H:%i')`;
 const SQL_EQUIPAMENTOS = `
   SELECT r.id, r.versao, r.sequencia, r.equipamento_saude_id, e.codigo, e.nome, r.quantidade_solicitada,
-         ${DATA('r.reserva_inicio')} AS inicio, ${DATA('r.reserva_fim')} AS fim, r.situacao
+         DATE_FORMAT(r.reserva_inicio, '%Y-%m-%d %H:%i') AS inicio, DATE_FORMAT(r.reserva_fim, '%Y-%m-%d %H:%i') AS fim, r.situacao
     FROM reserva_equipamento_cirurgia r
     JOIN equipamento_saude e ON e.id = r.equipamento_saude_id
    WHERE r.agendamento_cirurgico_id = ? AND r.excluido_em IS NULL
@@ -203,7 +202,7 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
     agendamento: number,
     travar: boolean,
   ): Promise<AgendamentoLido> {
-    const sql = `SELECT id, numero, situacao, paciente_id, ${DATA('inicio_previsto_em')} AS inicio,
+    const sql = `SELECT id, numero, situacao, paciente_id, DATE_FORMAT(inicio_previsto_em, '%Y-%m-%d %H:%i') AS inicio,
                         duracao_prevista_minutos
                    FROM agendamento_cirurgico
                   WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`;
@@ -322,8 +321,8 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
       const ocupacoes = eq
         ? (
             await tx.consultar<Linha>(
-              `SELECT r.agendamento_cirurgico_id, a.numero, ${DATA('r.reserva_inicio')} AS inicio,
-                      ${DATA('r.reserva_fim')} AS fim, r.situacao
+              `SELECT r.agendamento_cirurgico_id, a.numero, DATE_FORMAT(r.reserva_inicio, '%Y-%m-%d %H:%i') AS inicio,
+                      DATE_FORMAT(r.reserva_fim, '%Y-%m-%d %H:%i') AS fim, r.situacao
                  FROM reserva_equipamento_cirurgia r
                  JOIN agendamento_cirurgico a ON a.id = r.agendamento_cirurgico_id
                 WHERE r.equipamento_saude_id = ? AND r.excluido_em IS NULL
