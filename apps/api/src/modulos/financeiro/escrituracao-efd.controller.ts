@@ -3,7 +3,8 @@
 //                                                                      e arquivos da competência
 //   POST /api/financeiro/fiscal/escrituracao/entradas/:id/classificacao   { versao, itens } dados fiscais dos itens
 //   POST /api/financeiro/fiscal/escrituracao/efd-contribuicoes        { periodo, regime } gera o arquivo conferido
-//   GET  /api/financeiro/fiscal/escrituracao/efd-contribuicoes/:id/arquivo   o texto do arquivo
+//   GET  /api/financeiro/fiscal/escrituracao/efd-contribuicoes/:id/arquivo   o texto do arquivo (o entregue vem da
+//                                                                      guarda, baixável depois de qualquer correção)
 //   POST /api/financeiro/fiscal/escrituracao/efd-contribuicoes/:id/entrega   { recibo } registra o recibo da entrega
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação). Sem núcleo: a fonte
 // sintética responde em memória (E2E e desenvolvimento sem banco); fora dela, 503. Nenhum envio externo: a
@@ -16,21 +17,24 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { contextoOperacao, problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
+import type { ArmazemFinanceiro } from './armazem.js';
 import { EscrituracaoMemoria } from './escrituracao-efd-memoria.js';
 import {
   esquemaClassificarEntrada,
   esquemaEntregaEfd,
   esquemaGerarEfd,
-  OPERACOES_ESCRITURACAO,
+  type OperacaoEscrituracao,
+  operacoesEscrituracao,
   painelEscrituracao,
   type PainelEscrituracao,
   textoDoArquivoEfd,
 } from './escrituracao-efd-propria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import { resultadoFin } from './servico.js';
+import { ARMAZEM_FINANCEIRO } from './simbolos.js';
 
 const PERIODO = /^\d{4}-(0[1-9]|1[0-2])$/;
-type Operacao = keyof typeof OPERACOES_ESCRITURACAO;
+type Operacao = OperacaoEscrituracao;
 
 function inteiro(v: string, nome: string): number {
   const n = Number(v);
@@ -44,10 +48,13 @@ const objeto = (b: unknown): Record<string, unknown> =>
 export class EscrituracaoEfdController {
   private readonly executor: Executor | null;
   private readonly memoria: EscrituracaoMemoria | null;
+  private readonly operacoes: ReturnType<typeof operacoesEscrituracao>;
 
   constructor(
+    @Inject(ARMAZEM_FINANCEIRO) private readonly armazem: ArmazemFinanceiro,
     @Optional() @Inject(NUCLEO_PERIODO_FINANCEIRO) private readonly nucleo: NucleoProprio | null = null,
   ) {
+    this.operacoes = operacoesEscrituracao(armazem);
     this.executor = nucleo ? nucleo.criarExecutor() : null;
     this.memoria = !nucleo && fontesSinteticas(process.env) ? new EscrituracaoMemoria() : null;
   }
@@ -77,7 +84,7 @@ export class EscrituracaoEfdController {
     if (this.executor) {
       const s = sessaoDe(req);
       const r = await this.executor
-        .executar(OPERACOES_ESCRITURACAO[op] as never, s.porta.cliente, entrada, contextoOperacao(s, op))
+        .executar(this.operacoes[op] as never, s.porta.cliente, entrada, contextoOperacao(s, op))
         .catch((e: unknown) => {
           throw problemaDoCadastro(e);
         });
@@ -102,8 +109,7 @@ export class EscrituracaoEfdController {
     if (!periodo || !PERIODO.test(periodo))
       throw new ErroProblema('entrada-invalida', 400, 'Competência inválida', 'Use AAAA-MM.');
     if (!this.nucleo && this.memoria) return this.memoria.painel(periodo);
-    const est = this.estabelecimento(req);
-    return this.ler(req, (l) => painelEscrituracao(l, est, periodo));
+    return this.ler(req, (l) => painelEscrituracao(l, this.estabelecimento(req), periodo));
   }
 
   @Post('entradas/:id/classificacao')
@@ -174,7 +180,7 @@ export class EscrituracaoEfdController {
       !this.nucleo && this.memoria
         ? this.memoria.textoDoArquivo(n)
         : await this.ler<Awaited<ReturnType<typeof textoDoArquivoEfd>>>(req, (l) =>
-            textoDoArquivoEfd(l, this.estabelecimento(req), n),
+            textoDoArquivoEfd(l, this.estabelecimento(req), n, this.armazem),
           );
     if (t === null) throw new ErroProblema('nao-encontrado', 404, 'Arquivo não encontrado');
     if (t === 'desatualizado')

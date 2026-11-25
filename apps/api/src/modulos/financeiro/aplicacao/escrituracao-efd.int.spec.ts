@@ -9,11 +9,13 @@
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { armazemFinanceiroMemoria } from '../armazem.js';
 import {
   hashDoArquivoEfd,
-  OPERACOES_ESCRITURACAO,
+  type OperacaoEscrituracao,
+  operacoesEscrituracao,
   painelEscrituracao,
-  textoDoArquivoEfd,
+  textoDoArquivoEfd as textoComGuarda,
 } from '../escrituracao-efd-propria.js';
 import { PortaFinanceiroPropria } from '../porta-propria.js';
 import {
@@ -28,6 +30,10 @@ import {
 const op = (c: ContextoNucleo) => ({ ...c, chaveIdempotencia: `t0207-efd-${randomUUID()}` });
 const PERIODO = '2026-10';
 const FONTE = 'L0207-108';
+const ARMAZEM = armazemFinanceiroMemoria();
+const OPERACOES_ESCRITURACAO = operacoesEscrituracao(ARMAZEM);
+const textoDoArquivoEfd = (l: Parameters<typeof textoComGuarda>[0], est: number, id: number) =>
+  textoComGuarda(l, est, id, ARMAZEM);
 const CNPJ = '92070000000199';
 
 describe.skipIf(SEM_BANCO)(
@@ -38,7 +44,7 @@ describe.skipIf(SEM_BANCO)(
     let docB = 0;
     const consultar = (sql: string, p: unknown[]) =>
       m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'efd-108' }, (l) => l.consultar(sql, p));
-    const executar = (nome: keyof typeof OPERACOES_ESCRITURACAO, entrada: unknown, est?: number) =>
+    const executar = (nome: OperacaoEscrituracao, entrada: unknown, est?: number) =>
       m.nucleo
         .criarExecutor()
         .executar(OPERACOES_ESCRITURACAO[nome] as never, CLIENTE, entrada, op(m.ctx(m.lanca, est)))
@@ -57,11 +63,18 @@ describe.skipIf(SEM_BANCO)(
           ests,
         );
         await e.executar(`DELETE FROM escrituracao_entrada WHERE estabelecimento_id IN (${q})`, ests);
-        // A retificadora aponta o entregue: sai primeiro (a ordem respeita a chave para o próprio arquivo).
+        // A retificadora aponta o entregue: sai primeiro (a ordem respeita a chave para o próprio arquivo). O texto
+        // guardado (registro em `arquivo`) sai depois do arquivo da EFD que aponta para ele.
+        const guardados = await e.consultar<{ arquivo_id: number | null }>(
+          `SELECT arquivo_id FROM arquivo_efd_contribuicoes WHERE estabelecimento_id IN (${q})`,
+          ests,
+        );
         await e.executar(
           `DELETE FROM arquivo_efd_contribuicoes WHERE estabelecimento_id IN (${q}) ORDER BY sequencia_envio DESC`,
           ests,
         );
+        for (const g of guardados)
+          if (g.arquivo_id) await e.executar('DELETE FROM arquivo WHERE id = ?', [g.arquivo_id]);
         await e.executar(
           `DELETE FROM entrada_servico WHERE estabelecimento_id IN (${q}) AND numero LIKE 'L0207-108-%'`,
           ests,
@@ -385,11 +398,14 @@ describe.skipIf(SEM_BANCO)(
       // PIS 4,95 + 3,30 = 8,25; COFINS 22,80 + 15,20 = 38,00.
       expect(c).toMatchObject({ situacao: 'retificada', valorPis: 8.25, valorCofins: 38 });
       expect((await painel(m.est)).arquivos[0]!.confere).toBe(false);
-      expect(
-        await m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'efd-108' }, (l) =>
-          textoDoArquivoEfd(l, m.est, original.id),
-        ),
-      ).toBe('desatualizado');
+      // O entregue continua baixável depois da correção: o texto vem da guarda, com o hash gravado na entrega.
+      const entregueTexto = await m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'efd-108' }, (l) =>
+        textoDoArquivoEfd(l, m.est, original.id),
+      );
+      if (entregueTexto === null || entregueTexto === 'desatualizado')
+        throw new Error('o entregue deixou de ser baixável');
+      expect(entregueTexto.guardado).toBe(true);
+      expect(hashDoArquivoEfd(entregueTexto.conteudo)).toBe(original.hash);
 
       const r1 = await gerar();
       expect(r1).toMatchObject({

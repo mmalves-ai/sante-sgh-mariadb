@@ -11,6 +11,7 @@ export * from './nfse.js';
 export * from './nfse-ciclo.js';
 export * from './reinf-eventos.js';
 export * from './escrituracao-entrada.js';
+export * from './escrituracao-receitas.js';
 export * from './declaracoes.js';
 export * from './lote-contabil.js';
 export * from './depara-contabil.js';

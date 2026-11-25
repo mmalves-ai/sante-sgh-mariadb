@@ -1,6 +1,12 @@
 // F3.8, 07-FIN linha 108: a escrituração fiscal das entradas e a EFD-Contribuições (escrituracao-efd.controller.ts).
 import type { ResultadoFinanceiro } from '@sgh/contratos';
-import type { ConferenciaEfd, ItemEfd, PendenciaFiscal, RegimeEfd } from '@sgh/dominio-financeiro';
+import type {
+  ApuracaoReceitas,
+  ConferenciaEfd,
+  ItemEfd,
+  PendenciaFiscal,
+  RegimeEfd,
+} from '@sgh/dominio-financeiro';
 import { z } from 'zod';
 import { enviar, ler, qs } from '../exames/api-exames.js';
 
@@ -39,11 +45,15 @@ export interface ArquivoEfd {
   readonly geradoEm: string | null;
   readonly entregueEm: string | null;
   readonly confere: boolean;
+  /** O texto gerado está guardado: o entregue continua baixável depois de uma correção. */
+  readonly guardado: boolean;
 }
 export interface PainelEscrituracao {
   readonly periodo: string;
   readonly entradas: readonly EntradaEscrituracao[];
   readonly conferencia: ConferenciaEfd;
+  /** A receita das notas de serviço da competência e a contribuição apurada, por regime. */
+  readonly receitas: { readonly cumulativo: ApuracaoReceitas; readonly naoCumulativo: ApuracaoReceitas };
   readonly arquivos: readonly ArquivoEfd[];
   readonly cfops: readonly { codigo: string; descricao: string }[];
   readonly naturezas: readonly string[];

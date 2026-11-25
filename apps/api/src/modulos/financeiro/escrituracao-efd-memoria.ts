@@ -2,6 +2,7 @@
 // E2E e o desenvolvimento sem banco). As regras são as mesmas do domínio (escrituracao-entrada.ts); a função coberta
 // grava no MariaDB pela porta própria (escrituracao-efd-propria.ts). Massa sintética: nenhum documento real.
 import {
+  apurarContribuicoes,
   conferirClassificacaoItem,
   conferirEntregaEfd,
   conferirGeracaoEfd,
@@ -29,7 +30,7 @@ import {
 } from './escrituracao-efd-propria.js';
 
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
-interface ArquivoMemoria extends Mutavel<Omit<ArquivoEfdTela, 'confere'>> {
+interface ArquivoMemoria extends Mutavel<Omit<ArquivoEfdTela, 'confere' | 'guardado'>> {
   periodo: string;
   conteudo: string;
 }
@@ -125,6 +126,7 @@ export class EscrituracaoMemoria {
   painel(periodo: string): PainelEscrituracao {
     const entradas = this.daCompetencia(periodo);
     const conferencia = conferirSomasEfd(entradas);
+    const credito = { pis: conferencia.totalCreditoPis, cofins: conferencia.totalCreditoCofins };
     return {
       periodo,
       entradas,
@@ -149,7 +151,13 @@ export class EscrituracaoMemoria {
             hashDoArquivoEfd(
               montarEfdContribuicoes(this.texto(periodo, a.regime, a.reciboAnterior).pedido).conteudo,
             ) === a.hash,
+          guardado: true,
         })),
+      // A fonte sintética não emite nota de serviço: a receita da competência sai zerada.
+      receitas: {
+        cumulativo: apurarContribuicoes('cumulativo', [], credito),
+        naoCumulativo: apurarContribuicoes('nao_cumulativo', [], credito),
+      },
       cfops: CFOPS,
       naturezas: NATUREZAS_BASE_CREDITO,
     };
@@ -293,12 +301,13 @@ export class EscrituracaoMemoria {
     return { arquivo: a.id, periodo: a.periodo, situacao: 'transmitido' };
   }
 
-  textoDoArquivo(id: number): { nome: string; conteudo: string } | null {
+  textoDoArquivo(id: number): { nome: string; conteudo: string; guardado: boolean } | null {
     const a = this.arquivos.find((x) => x.id === id);
     return a
       ? {
           nome: `efd-contribuicoes-${a.periodo}-${String(a.sequencia).padStart(2, '0')}.txt`,
           conteudo: a.conteudo,
+          guardado: true,
         }
       : null;
   }

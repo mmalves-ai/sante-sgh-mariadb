@@ -8,10 +8,15 @@
 //   arquivo_efd_contribuicoes (o arquivo da competência: original ou retificadora com o recibo do entregue, o hash do
 //   texto, o resumo da conferência e, na entrega, o recibo).
 // Nada é apagado: o arquivo gerado e trocado fica "cancelado"; o entregue continua "transmitido" e a retificadora
-// aponta para ele. A validação e a transmissão são feitas no programa da Receita, fora do sistema (nenhum envio
+// aponta para ele. O texto de cada arquivo gerado vai à guarda de arquivos do financeiro (disco da máquina, imutável,
+// guarda legal de 5 anos) e fica registrado em `arquivo` (`arquivo_efd_contribuicoes.arquivo_id`): o entregue continua
+// baixável depois de qualquer correção. O lado das receitas vem das notas de serviço autorizadas da competência
+// (nota_servico), com a contribuição apurada pelo regime (escrituracao-receitas.ts do domínio). A validação e a transmissão são feitas no programa da Receita, fora do sistema (nenhum envio
 // externo): aqui só se registra o recibo.
 import { createHash } from 'node:crypto';
 import {
+  type ApuracaoReceitas,
+  apuracaoDoPedido,
   type ClassificacaoFiscalItem,
   conferirClassificacaoItem,
   type ConferenciaEfd,
@@ -27,6 +32,7 @@ import {
   NATUREZAS_BASE_CREDITO,
   type PendenciaFiscal,
   pendenciasDoItem,
+  type ReceitaServicoEfd,
   type RecusaFinanceiro,
   REGIMES_EFD,
   type RegimeEfd,
@@ -40,6 +46,8 @@ import {
   type ResultadoOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
+import { type ArmazemFinanceiro, ErroSobrescritaArquivo } from './armazem.js';
 import { dataIso, instanteIso, numero, texto } from './vocabulario.js';
 
 const PERIODO = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -86,11 +94,15 @@ export interface ArquivoEfdTela {
   readonly resumo: string | null;
   /** O texto do arquivo ainda é o da escrituração de hoje (falso: a escrituração mudou depois dele). */
   readonly confere: boolean;
+  /** O texto gerado está guardado (baixável mesmo depois de uma correção). */
+  readonly guardado: boolean;
 }
 export interface PainelEscrituracao {
   readonly periodo: string;
   readonly entradas: readonly EntradaEscrituracaoTela[];
   readonly conferencia: ConferenciaEfd;
+  /** A receita das notas de serviço da competência e a contribuição apurada, por regime (só somas e contagens). */
+  readonly receitas: { readonly cumulativo: ApuracaoReceitas; readonly naoCumulativo: ApuracaoReceitas };
   readonly arquivos: readonly ArquivoEfdTela[];
   readonly cfops: readonly { codigo: string; descricao: string }[];
   readonly naturezas: readonly string[];
@@ -197,6 +209,44 @@ async function declaranteDe(l: Consulta, est: number): Promise<DeclaranteEfd> {
   };
 }
 
+/**
+ * As notas de serviço da competência que contam para a receita: a autorizada em produção é receita; a que ainda
+ * espera a autorização (RPS gerado ou enviada) é pendência. A cancelada, a substituída, a rejeitada e a de
+ * homologação ficam fora.
+ */
+export async function receitasDaCompetencia(
+  l: Consulta,
+  est: number,
+  periodo: string,
+): Promise<ReceitaServicoEfd[]> {
+  const rs = await l.consultar(
+    `SELECT n.id, n.numero_nota, n.numero_rps, n.serie_rps, n.chave_acesso, n.data_emissao, n.tipo_tomador,
+            n.tomador_documento, n.tomador_nome, n.situacao, n.valor_servicos, n.valor_desconto_incondicionado,
+            n.valor_iss, n.iss_retido, n.valor_pis, n.valor_cofins
+       FROM nota_servico n
+      WHERE n.estabelecimento_id = ? AND n.competencia = ? AND n.excluido_em IS NULL AND n.ambiente = 'producao'
+        AND n.situacao IN ('autorizada', 'rps_gerado', 'enviada')
+      ORDER BY n.data_emissao, n.id LIMIT 20000`,
+    [est, `${periodo}-01`],
+  );
+  return rs.map((r) => ({
+    id: numero(r['id']),
+    numero: opc(r['numero_nota']) ?? texto(r['numero_rps']),
+    serie: opc(r['serie_rps']),
+    chave: opc(r['chave_acesso']),
+    dataEmissao: dataIso(r['data_emissao']) ?? '',
+    tipoTomador: texto(r['tipo_tomador']) as ReceitaServicoEfd['tipoTomador'],
+    tomadorDocumento: texto(r['tipo_tomador']) === 'pessoa_juridica' ? opc(r['tomador_documento']) : null,
+    tomadorNome: texto(r['tomador_nome']),
+    situacao: texto(r['situacao']) === 'autorizada' ? 'autorizada' : 'aguardando',
+    valorServicos: numero(r['valor_servicos']),
+    valorDesconto: numero(r['valor_desconto_incondicionado']),
+    valorIss: numero(r['valor_iss']),
+    pisRetido: numero(r['valor_pis']),
+    cofinsRetido: numero(r['valor_cofins']),
+  }));
+}
+
 interface ArquivoGravado {
   readonly id: number;
   readonly versao: number;
@@ -210,9 +260,10 @@ interface ArquivoGravado {
   readonly geradoEm: string | null;
   readonly entregueEm: string | null;
   readonly resumo: string | null;
+  readonly arquivoId: number | null;
 }
 const COLUNAS_ARQUIVO = `id, versao, sequencia_envio, finalidade, regime, situacao, hash_sha256, recibo, recibo_anterior,
-  gerado_em, transmitido_em, mensagem_validacao`;
+  gerado_em, transmitido_em, mensagem_validacao, arquivo_id`;
 const arquivoDe = (r: Record<string, unknown>): ArquivoGravado => ({
   id: numero(r['id']),
   versao: numero(r['versao']),
@@ -226,6 +277,7 @@ const arquivoDe = (r: Record<string, unknown>): ArquivoGravado => ({
   geradoEm: instanteIso(r['gerado_em']),
   entregueEm: instanteIso(r['transmitido_em']),
   resumo: opc(r['mensagem_validacao']),
+  arquivoId: num(r['arquivo_id']),
 });
 
 /** O texto do arquivo com os dados de hoje (o regime e o recibo anterior são os do arquivo). */
@@ -237,7 +289,15 @@ async function textoDeHoje(
   reciboAnterior: string | null,
 ) {
   const documentos = await entradasDaCompetencia(l, est, periodo);
-  const pedido = { declarante: await declaranteDe(l, est), periodo, regime, reciboAnterior, documentos };
+  const receitas = await receitasDaCompetencia(l, est, periodo);
+  const pedido = {
+    declarante: await declaranteDe(l, est),
+    periodo,
+    regime,
+    reciboAnterior,
+    documentos,
+    receitas,
+  };
   return { pedido, conferencia: conferirSomasEfd(documentos), documentos };
 }
 
@@ -250,6 +310,15 @@ export async function painelEscrituracao(
   const entradas = await entradasDaCompetencia(l, est, periodo);
   const conferencia = conferirSomasEfd(entradas);
   const declarante = await declaranteDe(l, est);
+  const receitas = await receitasDaCompetencia(l, est, periodo);
+  const pedidoDe = (regime: RegimeEfd, reciboAnterior: string | null) => ({
+    declarante,
+    periodo,
+    regime,
+    reciboAnterior,
+    documentos: entradas,
+    receitas,
+  });
   const arquivos = (
     await l.consultar(
       `SELECT ${COLUNAS_ARQUIVO} FROM arquivo_efd_contribuicoes
@@ -269,15 +338,7 @@ export async function painelEscrituracao(
       const confere =
         conferencia.liberado &&
         a.hash !== null &&
-        hashDoArquivoEfd(
-          montarEfdContribuicoes({
-            declarante,
-            periodo,
-            regime: a.regime,
-            reciboAnterior: a.reciboAnterior,
-            documentos: entradas,
-          }).conteudo,
-        ) === a.hash;
+        hashDoArquivoEfd(montarEfdContribuicoes(pedidoDe(a.regime, a.reciboAnterior)).conteudo) === a.hash;
       return {
         id: a.id,
         sequencia: a.sequencia,
@@ -291,8 +352,13 @@ export async function painelEscrituracao(
         entregueEm: a.entregueEm,
         resumo: a.resumo,
         confere,
+        guardado: a.arquivoId !== null,
       };
     }),
+    receitas: {
+      cumulativo: apuracaoDoPedido(pedidoDe('cumulativo', null), conferencia),
+      naoCumulativo: apuracaoDoPedido(pedidoDe('nao_cumulativo', null), conferencia),
+    },
     cfops: cfops.map((r) => ({
       codigo: texto(r['codigo_cfop']),
       descricao: texto(r['descricao']).slice(0, 160),
@@ -301,12 +367,17 @@ export async function painelEscrituracao(
   };
 }
 
-/** O texto do arquivo, enquanto a escrituração é a mesma de quando ele foi gerado (o hash confere). */
+/**
+ * O texto do arquivo. O entregue e o trocado (cancelado) vêm da guarda, como foram gerados, conferidos pelo hash:
+ * continuam baixáveis depois de qualquer correção. O gerado e ainda não entregue só sai enquanto a escrituração é a
+ * mesma de quando ele foi gerado (o hash do texto de hoje confere): assim ninguém entrega um arquivo velho.
+ */
 export async function textoDoArquivoEfd(
   l: Leitor,
   est: number,
   id: number,
-): Promise<{ nome: string; conteudo: string } | 'desatualizado' | null> {
+  armazem: Pick<ArmazemFinanceiro, 'ler'>,
+): Promise<{ nome: string; conteudo: string; guardado: boolean } | 'desatualizado' | null> {
   const [r] = await l.consultar(
     `SELECT ${COLUNAS_ARQUIVO}, competencia FROM arquivo_efd_contribuicoes
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
@@ -315,11 +386,24 @@ export async function textoDoArquivoEfd(
   if (!r) return null;
   const a = arquivoDe(r);
   const periodo = (dataIso(r['competencia']) ?? '').slice(0, 7);
+  const nome = `efd-contribuicoes-${periodo}-${String(a.sequencia).padStart(2, '0')}.txt`;
+  if ((a.situacao === 'transmitido' || a.situacao === 'cancelado') && a.arquivoId !== null) {
+    const [g] = await l.consultar('SELECT chave_armazenamento, hash_sha256 FROM arquivo WHERE id = ?', [
+      a.arquivoId,
+    ]);
+    const bytes = g ? await armazem.ler(texto(g['chave_armazenamento'])) : null;
+    if (!bytes)
+      throw recusa('arquivo-ausente-na-guarda', 'O texto guardado do arquivo não foi achado na guarda.');
+    const conteudo = new TextDecoder().decode(bytes);
+    if (hashDoArquivoEfd(conteudo) !== a.hash)
+      throw recusa('arquivo-divergente', 'O texto guardado não confere com o hash registrado do arquivo.');
+    return { nome, conteudo, guardado: true };
+  }
   const { pedido, conferencia } = await textoDeHoje(l, est, periodo, a.regime, a.reciboAnterior);
   if (!conferencia.liberado) return 'desatualizado';
   const conteudo = montarEfdContribuicoes(pedido).conteudo;
   if (hashDoArquivoEfd(conteudo) !== a.hash) return 'desatualizado';
-  return { nome: `efd-contribuicoes-${periodo}-${String(a.sequencia).padStart(2, '0')}.txt`, conteudo };
+  return { nome, conteudo, guardado: a.arquivoId !== null };
 }
 
 // ── Classificação fiscal da entrada ────────────────────────────────────────────────────────────────────────────
@@ -483,7 +567,7 @@ export const esquemaGerarEfd = z
 export type GerarEfd = z.infer<typeof esquemaGerarEfd>;
 
 /** O resumo da conferência gravado com o arquivo: só contagens e somas. */
-const resumoDa = (c: ConferenciaEfd, linhas: number): string =>
+const resumoDa = (c: ConferenciaEfd, linhas: number, a: ApuracaoReceitas): string =>
   [
     `documentos=${c.documentos}`,
     `itens=${c.itens}`,
@@ -492,93 +576,129 @@ const resumoDa = (c: ConferenciaEfd, linhas: number): string =>
     `credito_pis=${c.totalCreditoPis.toFixed(2)}`,
     `base_cofins=${c.totalBaseCofins.toFixed(2)}`,
     `credito_cofins=${c.totalCreditoCofins.toFixed(2)}`,
+    `notas=${a.notas}`,
+    `receita=${a.pis.receitaBruta.toFixed(2)}`,
+    `pis_apurado=${a.pis.apurada.toFixed(2)}`,
+    `pis_recolher=${a.pis.aRecolher.toFixed(2)}`,
+    `cofins_apurado=${a.cofins.apurada.toFixed(2)}`,
+    `cofins_recolher=${a.cofins.aRecolher.toFixed(2)}`,
   ].join('; ');
 
-const gerarEfd = definirOperacao<GerarEfd, ResultadoOperacao>({
-  nome: 'financeiro.efd_contribuicoes_gerar',
-  tabelas: ['arquivo_efd_contribuicoes', 'escrituracao_entrada'],
-  entrada: esquemaGerarEfd as never,
-  async gravar(tx, e, ctx) {
-    const est = estabelecimentoDe(ctx);
-    const competencia = `${e.periodo}-01`;
-    const anteriores = (
-      await tx.consultarParaAtualizar(
-        `SELECT ${COLUNAS_ARQUIVO} FROM arquivo_efd_contribuicoes
+const gerarEfd = (armazem: ArmazemFinanceiro) =>
+  definirOperacao<GerarEfd, ResultadoOperacao>({
+    nome: 'financeiro.efd_contribuicoes_gerar',
+    tabelas: ['arquivo_efd_contribuicoes', 'escrituracao_entrada', 'arquivo'],
+    entrada: esquemaGerarEfd as never,
+    async gravar(tx, e, ctx) {
+      const est = estabelecimentoDe(ctx);
+      const competencia = `${e.periodo}-01`;
+      const anteriores = (
+        await tx.consultarParaAtualizar(
+          `SELECT ${COLUNAS_ARQUIVO} FROM arquivo_efd_contribuicoes
           WHERE estabelecimento_id = ? AND competencia = ? AND excluido_em IS NULL ORDER BY sequencia_envio`,
-        [est, competencia],
-      )
-    ).map(arquivoDe);
-    const entregue = [...anteriores].reverse().find((a) => a.situacao === 'transmitido') ?? null;
-    const { pedido, conferencia, documentos } = await textoDeHoje(
-      tx,
-      est,
-      e.periodo,
-      e.regime,
-      entregue?.recibo ?? null,
-    );
-    recusar(conferirGeracaoEfd(pedido, conferencia));
-    const arquivo = montarEfdContribuicoes(pedido);
-    const hash = hashDoArquivoEfd(arquivo.conteudo);
-    const base = {
-      periodo: e.periodo,
-      hash,
-      linhas: arquivo.linhas,
-      documentos: conferencia.documentos,
-      itens: conferencia.itens,
-      creditoPis: conferencia.totalCreditoPis,
-      creditoCofins: conferencia.totalCreditoCofins,
-    };
-    const aberto = anteriores.filter((a) => ['gerado', 'validado', 'com_erro'].includes(a.situacao));
-    const igual = aberto.find((a) => a.hash === hash && a.situacao !== 'com_erro');
-    if (igual)
-      return {
-        ...base,
-        arquivo: igual.id,
-        sequencia: igual.sequencia,
-        finalidade: igual.finalidade,
-        igual: true,
-      };
-    // Nada mudou desde a entrega: o texto de hoje, com o cabeçalho do entregue, é o próprio entregue.
-    if (
-      entregue &&
-      entregue.regime === e.regime &&
-      hashDoArquivoEfd(
-        montarEfdContribuicoes({ ...pedido, reciboAnterior: entregue.reciboAnterior }).conteudo,
-      ) === entregue.hash
-    )
-      throw recusa(
-        'nada-a-retificar',
-        'A escrituração é a mesma do arquivo já entregue: não há o que retificar.',
+          [est, competencia],
+        )
+      ).map(arquivoDe);
+      const entregue = [...anteriores].reverse().find((a) => a.situacao === 'transmitido') ?? null;
+      const { pedido, conferencia, documentos } = await textoDeHoje(
+        tx,
+        est,
+        e.periodo,
+        e.regime,
+        entregue?.recibo ?? null,
       );
-    // O gerado que não foi entregue é trocado: fica cancelado, nunca apagado.
-    for (const a of aberto)
-      await tx.alterar('arquivo_efd_contribuicoes', a.id, a.versao, { situacao: 'cancelado' });
-    const sequencia = anteriores.reduce((m, a) => Math.max(m, a.sequencia), 0) + 1;
-    const finalidade = entregue ? 'retificadora' : 'original';
-    const id = await tx.incluir('arquivo_efd_contribuicoes', {
-      estabelecimento_id: est,
-      competencia,
-      sequencia_envio: sequencia,
-      finalidade,
-      arquivo_retificado_id: entregue?.id ?? null,
-      recibo_anterior: entregue?.recibo ?? null,
-      regime: e.regime,
-      hash_sha256: hash,
-      situacao: 'gerado',
-      gerado_em: new Date(),
-      gerador_usuario_id: ctx.usuario ?? null,
-      mensagem_validacao: resumoDa(conferencia, arquivo.linhas),
-    });
-    // As entradas ficam ligadas ao arquivo que as levou.
-    for (const d of documentos)
-      await tx.alterar('escrituracao_entrada', d.id, d.versao, {
-        arquivo_efd_contribuicoes_id: id,
-        situacao: 'escriturada',
+      recusar(conferirGeracaoEfd(pedido, conferencia));
+      const arquivo = montarEfdContribuicoes(pedido);
+      const hash = hashDoArquivoEfd(arquivo.conteudo);
+      const base = {
+        periodo: e.periodo,
+        hash,
+        linhas: arquivo.linhas,
+        documentos: conferencia.documentos,
+        itens: conferencia.itens,
+        creditoPis: conferencia.totalCreditoPis,
+        creditoCofins: conferencia.totalCreditoCofins,
+        notas: arquivo.apuracao.notas,
+        receita: arquivo.apuracao.pis.receitaBruta,
+        pisRecolher: arquivo.apuracao.pis.aRecolher,
+        cofinsRecolher: arquivo.apuracao.cofins.aRecolher,
+      };
+      const aberto = anteriores.filter((a) => ['gerado', 'validado', 'com_erro'].includes(a.situacao));
+      const igual = aberto.find((a) => a.hash === hash && a.situacao !== 'com_erro');
+      if (igual)
+        return {
+          ...base,
+          arquivo: igual.id,
+          sequencia: igual.sequencia,
+          finalidade: igual.finalidade,
+          igual: true,
+        };
+      // Nada mudou desde a entrega: o texto de hoje, com o cabeçalho do entregue, é o próprio entregue.
+      if (
+        entregue &&
+        entregue.regime === e.regime &&
+        hashDoArquivoEfd(
+          montarEfdContribuicoes({ ...pedido, reciboAnterior: entregue.reciboAnterior }).conteudo,
+        ) === entregue.hash
+      )
+        throw recusa(
+          'nada-a-retificar',
+          'A escrituração é a mesma do arquivo já entregue: não há o que retificar.',
+        );
+      // O gerado que não foi entregue é trocado: fica cancelado, nunca apagado.
+      for (const a of aberto)
+        await tx.alterar('arquivo_efd_contribuicoes', a.id, a.versao, { situacao: 'cancelado' });
+      const sequencia = anteriores.reduce((m, a) => Math.max(m, a.sequencia), 0) + 1;
+      const finalidade = entregue ? 'retificadora' : 'original';
+      // O texto vai à guarda antes do registro (a chave leva a competência, a sequência e o hash). A mesma chave já
+      // guardada é o mesmo conteúdo (a transação anterior desfeita): segue para o registro, que confere o hash.
+      const agora = new Date();
+      const bytes = new TextEncoder().encode(arquivo.conteudo);
+      const nomeArquivo = `efd-contribuicoes-${e.periodo}-${String(sequencia).padStart(2, '0')}.txt`;
+      const chave = `efd-contribuicoes/${est}/${e.periodo}-${String(sequencia).padStart(2, '0')}-${hash.slice(0, 16)}.txt`;
+      try {
+        await armazem.guardar(chave, bytes, 'text/plain');
+      } catch (x) {
+        if (!(x instanceof ErroSobrescritaArquivo)) throw x;
+      }
+      const guardado = await registrarArquivoGuardado(tx, {
+        estabelecimento: est,
+        entidade: 'arquivo_efd_contribuicoes',
+        entidadeId: null,
+        finalidade: 'efd_contribuicoes',
+        nomeOriginal: nomeArquivo,
+        tipoMime: 'text/plain',
+        tamanhoBytes: bytes.length,
+        hash,
+        chave,
+        retencaoAte: retencaoAte(agora),
       });
-    return { ...base, arquivo: id, sequencia, finalidade, igual: false };
-  },
-  alvo: (_e, r) => ({ tabela: 'arquivo_efd_contribuicoes', id: numero(r['arquivo']) || null }),
-});
+      const id = await tx.incluir('arquivo_efd_contribuicoes', {
+        estabelecimento_id: est,
+        competencia,
+        sequencia_envio: sequencia,
+        finalidade,
+        arquivo_retificado_id: entregue?.id ?? null,
+        recibo_anterior: entregue?.recibo ?? null,
+        regime: e.regime,
+        arquivo_id: guardado.id,
+        hash_sha256: hash,
+        situacao: 'gerado',
+        gerado_em: agora,
+        gerador_usuario_id: ctx.usuario ?? null,
+        mensagem_validacao: resumoDa(conferencia, arquivo.linhas, arquivo.apuracao),
+      });
+      await ligarArquivo(tx, guardado, id);
+      // As entradas ficam ligadas ao arquivo que as levou.
+      for (const d of documentos)
+        await tx.alterar('escrituracao_entrada', d.id, d.versao, {
+          arquivo_efd_contribuicoes_id: id,
+          situacao: 'escriturada',
+        });
+      return { ...base, arquivo: id, sequencia, finalidade, igual: false };
+    },
+    alvo: (_e, r) => ({ tabela: 'arquivo_efd_contribuicoes', id: numero(r['arquivo']) || null }),
+  });
 
 export const esquemaEntregaEfd = z
   .object({ arquivo: z.number().int().positive(), recibo: z.string().trim().min(1).max(60) })
@@ -624,8 +744,11 @@ const registrarEntregaEfd = definirOperacao<EntregaEfd, ResultadoOperacao>({
   alvo: (e) => ({ tabela: 'arquivo_efd_contribuicoes', id: e.arquivo }),
 });
 
-export const OPERACOES_ESCRITURACAO = {
-  'financeiro.escrituracaoClassificarEntrada': classificarEntrada,
-  'financeiro.efdContribuicoesGerar': gerarEfd,
-  'financeiro.efdContribuicoesRegistrarEntrega': registrarEntregaEfd,
-} as const;
+/** As operações da escrituração; a geração guarda o texto do arquivo na guarda de arquivos do financeiro. */
+export const operacoesEscrituracao = (armazem: ArmazemFinanceiro) =>
+  ({
+    'financeiro.escrituracaoClassificarEntrada': classificarEntrada,
+    'financeiro.efdContribuicoesGerar': gerarEfd(armazem),
+    'financeiro.efdContribuicoesRegistrarEntrega': registrarEntregaEfd,
+  }) as const;
+export type OperacaoEscrituracao = keyof ReturnType<typeof operacoesEscrituracao>;

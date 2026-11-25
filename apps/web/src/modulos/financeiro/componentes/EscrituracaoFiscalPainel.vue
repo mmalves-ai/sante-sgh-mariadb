@@ -103,6 +103,19 @@ const { t } = useI18n({
       },
       desatualizado: 'A escrituração mudou depois deste arquivo: gere de novo.',
       baixar: 'Baixar o arquivo',
+      baixarGuardado: 'Baixar o arquivo guardado',
+      receitas: 'Receita de serviços e contribuição apurada',
+      receitasDica:
+        'Das notas de serviço autorizadas na competência. No regime misto, a receita hospitalar fica no cumulativo.',
+      notas: 'Notas autorizadas',
+      aguardando:
+        '{n} nota(s) aguardando a autorização: a geração fica bloqueada até a prefeitura responder.',
+      receitaBruta: 'Receita bruta',
+      contribuicao: 'Contribuição apurada',
+      creditoDescontado: 'Crédito descontado',
+      saldoCredito: 'Saldo de crédito',
+      retido: 'Retido na fonte',
+      aRecolher: 'A recolher',
       recibo: 'Recibo da entrega',
       entregar: 'Registrar entrega',
       semPermissao: 'Sua permissão é só de consulta.',
@@ -255,6 +268,20 @@ async function baixar(id: number) {
     erro.value = e;
   }
 }
+const receita = computed(() => {
+  const r = painel.data.value?.receitas;
+  if (!r) return null;
+  const a = regime.value === 'nao_cumulativo' ? r.naoCumulativo : r.cumulativo;
+  return {
+    ...a,
+    linhas: [
+      { tributo: 'PIS', ...a.pis },
+      { tributo: 'COFINS', ...a.cofins },
+    ],
+  };
+});
+const podeBaixar = (a: { confere: boolean; guardado: boolean; situacao: string }) =>
+  a.confere || (a.guardado && (a.situacao === 'transmitido' || a.situacao === 'cancelado'));
 const apuracao = computed(() => {
   const c = painel.data.value?.conferencia;
   return c
@@ -543,6 +570,51 @@ const apuracao = computed(() => {
             </tr>
           </tbody>
         </table>
+        <section v-if="receita" aria-labelledby="ef-rec-titulo" data-testid="ef-receitas">
+          <h4 id="ef-rec-titulo">{{ t('receitas') }}</h4>
+          <p class="secundario">{{ t('receitasDica') }}</p>
+          <p v-if="receita.aguardando > 0" role="alert" data-testid="ef-receitas-aguardando">
+            {{ t('aguardando', { n: receita.aguardando }) }}
+          </p>
+          <table class="tabela" data-testid="ef-receitas-tabela">
+            <caption>
+              {{
+                t('notas')
+              }}:
+              <span data-testid="ef-receitas-notas">{{ receita.notas }}</span>
+              ·
+              {{
+                t(`regimes.${receita.regimeReceita}`)
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ t('tributo') }}</th>
+                <th scope="col">{{ t('receitaBruta') }}</th>
+                <th scope="col">{{ t('base') }}</th>
+                <th scope="col">{{ t('aliquota') }}</th>
+                <th scope="col">{{ t('contribuicao') }}</th>
+                <th scope="col">{{ t('creditoDescontado') }}</th>
+                <th scope="col">{{ t('saldoCredito') }}</th>
+                <th scope="col">{{ t('retido') }}</th>
+                <th scope="col">{{ t('aRecolher') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="x in receita.linhas" :key="x.tributo" :data-testid="`ef-receita-${x.tributo}`">
+                <td>{{ x.tributo }}</td>
+                <td>{{ dinheiro(x.receitaBruta) }}</td>
+                <td>{{ dinheiro(x.base) }}</td>
+                <td>{{ x.aliquota }}</td>
+                <td>{{ dinheiro(x.apurada) }}</td>
+                <td>{{ dinheiro(x.creditoDescontado) }}</td>
+                <td>{{ dinheiro(x.saldoCredito) }}</td>
+                <td>{{ dinheiro(x.retencaoDescontada) }}</td>
+                <td :data-testid="`ef-recolher-${x.tributo}`">{{ dinheiro(x.aRecolher) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
         <form v-if="podeGerar" class="filtros" @submit.prevent="gerar">
           <span class="campo">
             <SanteSelecao
@@ -587,12 +659,12 @@ const apuracao = computed(() => {
               <td>{{ t(`regimes.${a.regime}`) }}</td>
               <td>
                 <button
-                  v-if="a.confere"
+                  v-if="podeBaixar(a)"
                   type="button"
                   :data-testid="`ef-baixar-${a.sequencia}`"
                   @click="baixar(a.id)"
                 >
-                  {{ t('baixar') }}
+                  {{ a.confere ? t('baixar') : t('baixarGuardado') }}
                 </button>
                 <span v-else-if="a.situacao !== 'cancelado'" class="secundario">{{
                   t('desatualizado')

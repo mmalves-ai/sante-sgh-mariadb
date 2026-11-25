@@ -11,6 +11,15 @@
 //     (contagem dos registros). A validação e a transmissão são feitas no programa da Receita, fora do sistema; aqui
 //     se registra o recibo da entrega.
 import { centavos, recusaFin, type RecusaFinanceiro } from '@sgh/contratos/regras-financeiro';
+import {
+  apurarContribuicoes,
+  baseDaReceita,
+  contribuicaoDaNota,
+  CST_RECEITA_TRIBUTADA,
+  type ApuracaoReceitas,
+  type ReceitaServicoEfd,
+  repartirCreditoDescontado,
+} from './escrituracao-receitas.js';
 
 /** CST de entrada com direito a crédito (50 a 56: operação com crédito; 60 a 67: crédito presumido). */
 export const CST_ENTRADA_COM_CREDITO = [
@@ -359,7 +368,13 @@ export interface PedidoEfd {
   /** Recibo do arquivo entregue que este retifica (nulo no original). */
   readonly reciboAnterior: string | null;
   readonly documentos: readonly DocumentoEfd[];
+  /** As notas de serviço emitidas na competência (o lado das receitas: blocos A, M200/M210 e M600/M610). */
+  readonly receitas?: readonly ReceitaServicoEfd[];
 }
+
+/** A apuração da contribuição do pedido: a receita das notas, menos o crédito conferido das entradas. */
+export const apuracaoDoPedido = (p: PedidoEfd, c: ConferenciaEfd): ApuracaoReceitas =>
+  apurarContribuicoes(p.regime, p.receitas ?? [], { pis: c.totalCreditoPis, cofins: c.totalCreditoCofins });
 
 /** O arquivo só sai da competência conferida, com o declarante identificado e o regime coerente com os créditos. */
 export function conferirGeracaoEfd(p: PedidoEfd, c: ConferenciaEfd): RecusaFinanceiro | null {
@@ -370,8 +385,19 @@ export function conferirGeracaoEfd(p: PedidoEfd, c: ConferenciaEfd): RecusaFinan
       'declarante-sem-cnpj',
       'O estabelecimento não tem CNPJ no cadastro: a EFD-Contribuições é entregue pelo CNPJ.',
     );
-  if (c.documentos === 0)
-    return recusaFin('competencia-sem-entrada', 'Não há entrada escriturada nesta competência.', ['periodo']);
+  const receitas = p.receitas ?? [];
+  if (c.documentos === 0 && !receitas.some((r) => r.situacao === 'autorizada'))
+    return recusaFin(
+      'competencia-sem-entrada',
+      'Não há entrada escriturada nem nota de serviço autorizada nesta competência.',
+      ['periodo'],
+    );
+  const aguardando = receitas.filter((r) => r.situacao !== 'autorizada').length;
+  if (aguardando > 0)
+    return recusaFin(
+      'receita-pendente',
+      `Há ${aguardando} nota(s) de serviço da competência aguardando a autorização: a receita do mês ficaria incompleta.`,
+    );
   if (c.pendencias.length > 0)
     return recusaFin(
       'escrituracao-pendente',
@@ -404,6 +430,8 @@ export interface ArquivoEfdContribuicoes {
   readonly linhas: number;
   readonly registros: Readonly<Record<string, number>>;
   readonly conferencia: ConferenciaEfd;
+  /** A contribuição apurada sobre a receita, com o crédito descontado e a retenção. */
+  readonly apuracao: ApuracaoReceitas;
 }
 
 /**
@@ -449,7 +477,8 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
     p.regime === 'nao_cumulativo' ? 1 : p.regime === 'cumulativo' ? 2 : 3,
     p.regime === 'cumulativo' ? '' : 1,
     1,
-    p.regime === 'cumulativo' ? 1 : '',
+    // Regime cumulativo escriturado documento a documento (bloco A), não consolidado.
+    p.regime === 'cumulativo' ? 9 : '',
   );
   r(
     '0140',
@@ -464,6 +493,13 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
   );
   const participantes = new Map<string, string>();
   for (const d of docs) participantes.set(so(d.participanteDocumento), d.participanteNome);
+  // O tomador pessoa jurídica é participante; a pessoa física não vai ao arquivo (o A100 dispensa o participante).
+  const receitas = [...(p.receitas ?? [])]
+    .filter((x) => x.situacao === 'autorizada')
+    .sort((a, b) => a.dataEmissao.localeCompare(b.dataEmissao) || a.id - b.id);
+  const tomador = (x: ReceitaServicoEfd) =>
+    x.tipoTomador === 'pessoa_juridica' && x.tomadorDocumento ? so(x.tomadorDocumento) : '';
+  for (const x of receitas) if (tomador(x)) participantes.set(tomador(x), x.tomadorNome);
   for (const [doc, nome] of [...participantes.entries()].sort(([a], [b]) => a.localeCompare(b)))
     r(
       '0150',
@@ -482,11 +518,12 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
     );
   bloco('0', 1);
 
-  // Bloco A: serviços tomados com direito a crédito.
+  // Bloco A: serviços tomados com direito a crédito e serviços prestados (a receita das notas emitidas).
   const servicos = docs.filter((d) => d.servico);
+  const apuracao = apuracaoDoPedido(p, conferencia);
   let inicio = linhas.length + 1;
-  r('A001', servicos.length ? 0 : 1);
-  if (servicos.length) r('A010', cnpj);
+  r('A001', servicos.length || receitas.length ? 0 : 1);
+  if (servicos.length || receitas.length) r('A010', cnpj);
   for (const d of servicos) {
     const vale = regular(d);
     const its = vale ? d.itens : [];
@@ -534,6 +571,54 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
         '',
         '',
       );
+  }
+  for (const x of receitas) {
+    const base = baseDaReceita(x);
+    const pis = contribuicaoDaNota(x, apuracao.pis.aliquota);
+    const cofins = contribuicaoDaNota(x, apuracao.cofins.aliquota);
+    r(
+      'A100',
+      1,
+      0,
+      tomador(x),
+      '00',
+      limpo(x.serie),
+      '',
+      limpo(x.numero),
+      x.chave ?? '',
+      dia(x.dataEmissao),
+      dia(x.dataEmissao),
+      v2(x.valorServicos),
+      9,
+      v2(x.valorDesconto),
+      v2(base),
+      v2(pis),
+      v2(base),
+      v2(cofins),
+      v2(x.pisRetido),
+      v2(x.cofinsRetido),
+      v2(x.valorIss),
+    );
+    r(
+      'A170',
+      1,
+      'SERVICO-SAUDE',
+      'SERVICOS DE SAUDE',
+      v2(x.valorServicos),
+      v2(x.valorDesconto),
+      '',
+      '',
+      CST_RECEITA_TRIBUTADA,
+      v2(base),
+      v4(apuracao.pis.aliquota),
+      v2(pis),
+      CST_RECEITA_TRIBUTADA,
+      v2(base),
+      v4(apuracao.cofins.aliquota),
+      v2(cofins),
+      '',
+      '',
+    );
   }
   bloco('A', inicio);
 
@@ -621,19 +706,31 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
   }
   bloco('C', inicio);
 
-  // Bloco M: apuração do crédito por tipo e alíquota (M100, M500), com a base por natureza e CST (M105, M505).
+  // Bloco M: o crédito por tipo e alíquota (M100, M500) com a base por natureza e CST (M105, M505), e a contribuição
+  // apurada sobre a receita (M200/M210, M600/M610). O crédito desconta só a contribuição não cumulativa, até ela; o que
+  // não desconta fica como saldo da linha (desconto parcial).
   inicio = linhas.length + 1;
   const haCredito = conferencia.pis.length + conferencia.cofins.length > 0;
-  r('M001', haCredito ? 0 : 1);
-  const apuracao = (reg: 'M100' | 'M500', det: 'M105' | 'M505', xs: readonly LinhaApuracaoCredito[]) => {
+  const blocoM = haCredito || receitas.length > 0;
+  r('M001', blocoM ? 0 : 1);
+  const credito = (
+    reg: 'M100' | 'M500',
+    det: 'M105' | 'M505',
+    xs: readonly LinhaApuracaoCredito[],
+    descontado: number,
+  ) => {
     const grupos = new Map<string, LinhaApuracaoCredito[]>();
     for (const x of xs) {
       const k = `${tipoCredito(x.cst)}|${x.aliquota.toFixed(4)}`;
       grupos.set(k, [...(grupos.get(k) ?? []), x]);
     }
-    for (const [k, g] of [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const ordem = [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const valores = ordem.map(([, g]) => centavos(g.reduce((s, x) => s + x.credito, 0)));
+    const uso = repartirCreditoDescontado(valores, descontado);
+    for (const [n, [k, g]] of ordem.entries()) {
       const base = centavos(g.reduce((s, x) => s + x.base, 0));
-      const credito = centavos(g.reduce((s, x) => s + x.credito, 0));
+      const valor = valores[n]!;
+      const u = uso[n]!;
       r(
         reg,
         k.split('|')[0]!,
@@ -642,20 +739,61 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
         v4(g[0]!.aliquota),
         '',
         '',
-        v2(credito),
+        v2(valor),
         v2(0),
         v2(0),
         v2(0),
-        v2(credito),
-        0,
-        v2(credito),
-        v2(0),
+        v2(valor),
+        u.saldo > 0 ? 1 : 0,
+        v2(u.descontado),
+        v2(u.saldo),
       );
       for (const x of g) r(det, x.natureza, x.cst, v2(x.base), '', v2(x.base), v2(x.base), '', '', '');
     }
   };
-  apuracao('M100', 'M105', conferencia.pis);
-  apuracao('M500', 'M505', conferencia.cofins);
+  const contribuicao = (reg: 'M200' | 'M600', det: 'M210' | 'M610', t: ApuracaoReceitas['pis']) => {
+    if (!blocoM) return;
+    const nc = apuracao.regimeReceita === 'nao_cumulativo';
+    const devidaNc = nc ? centavos(t.apurada - t.creditoDescontado) : 0;
+    r(
+      reg,
+      v2(nc ? t.apurada : 0),
+      v2(t.creditoDescontado),
+      v2(0),
+      v2(devidaNc),
+      v2(nc ? t.retencaoDescontada : 0),
+      v2(0),
+      v2(nc ? t.aRecolher : 0),
+      v2(nc ? 0 : t.apurada),
+      v2(nc ? 0 : t.retencaoDescontada),
+      v2(0),
+      v2(nc ? 0 : t.aRecolher),
+      v2(t.aRecolher),
+    );
+    if (t.base > 0)
+      r(
+        det,
+        t.codigoContribuicao,
+        v2(t.receitaBruta),
+        v2(t.base),
+        v2(0),
+        v2(0),
+        v2(t.base),
+        v4(t.aliquota),
+        '',
+        '',
+        v2(t.apurada),
+        v2(0),
+        v2(0),
+        v2(0),
+        v2(0),
+        v2(t.apurada),
+      );
+  };
+  credito('M100', 'M105', conferencia.pis, apuracao.pis.creditoDescontado);
+  contribuicao('M200', 'M210', apuracao.pis);
+  credito('M500', 'M505', conferencia.cofins, apuracao.cofins.creditoDescontado);
+  contribuicao('M600', 'M610', apuracao.cofins);
   bloco('M', inicio);
 
   // Bloco 9: a contagem de cada registro e o total de linhas do arquivo.
@@ -668,7 +806,13 @@ export function montarEfdContribuicoes(p: PedidoEfd): ArquivoEfdContribuicoes {
   linhas.push(`|9990|${linhas.length - antes + 2}|`);
   linhas.push(`|9999|${linhas.length + 1}|`);
   Object.assign(contagem, regs);
-  return { conteudo: `${linhas.join('\r\n')}\r\n`, linhas: linhas.length, registros: contagem, conferencia };
+  return {
+    conteudo: `${linhas.join('\r\n')}\r\n`,
+    linhas: linhas.length,
+    registros: contagem,
+    conferencia,
+    apuracao,
+  };
 }
 
 /** A entrega é registrada com o recibo do programa da Receita; só o arquivo gerado ou validado é entregue. */
