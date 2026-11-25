@@ -25,7 +25,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
-import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
+import { FUSO_PADRAO, horaCivil, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import type { PortaSadt } from './porta.js';
 import { nomeDaGravacao, resultadoDe, valorDe } from './porta-propria.js';
 import {
@@ -231,8 +231,16 @@ export class PortaPacsPropria implements PortaPacs {
 
   examesSemItem(c: ContextoPacs, f: { desde: string; ate: string; atos: readonly number[]; teto: number }) {
     return this.ler(c, async (l, est) => {
+      // O período é em dias civis do estabelecimento; os instantes ficam gravados em UTC: o exame pedido à noite
+      // (já no dia seguinte em UTC) é do dia civil em que foi pedido, e entra na lista nesse dia.
+      const r = await l.uma<{ fuso_horario: string | null }>(
+        'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+        [est],
+      );
+      const fuso = r?.fuso_horario || FUSO_PADRAO;
+      const seguinte = new Date(Date.parse(`${f.ate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
       const ls = await l.consultar(
-        `SELECT ei.id, DATE(r.solicitado_em) AS data, sd.tipo, m.sigla_padrao
+        `SELECT ei.id, r.solicitado_em AS pedido, sd.tipo, m.sigla_padrao
            FROM exame_item ei
            JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
            JOIN setor_diagnostico sd ON sd.id = COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id)
@@ -240,18 +248,18 @@ export class PortaPacsPropria implements PortaPacs {
            LEFT JOIN modalidade_imagem m ON m.id = e.modalidade_imagem_id
           WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND ei.excluido_em IS NULL
             AND sd.tipo = 'imagem' AND ei.situacao NOT IN ('cancelado', 'recusado')
-            AND r.solicitado_em >= ? AND r.solicitado_em < DATE_ADD(?, INTERVAL 1 DAY)
+            AND r.solicitado_em >= ? AND r.solicitado_em < ?
             AND NOT EXISTS (SELECT 1 FROM item_lista_trabalho_imagem i
                              WHERE i.exame_item_id = ei.id AND i.excluido_em IS NULL)
           ORDER BY r.solicitado_em, ei.id`,
-        [est, f.desde, f.ate],
+        [est, instanteCivil(f.desde, '00:00', fuso), instanteCivil(seguinte, '00:00', fuso)],
         { teto: 5000 },
       );
       const todos = ls
         .map((x) => ({
           exame: n(x['id']),
           ato: atoDoExame(texto(x['tipo']), x['sigla_padrao'] === null ? null : texto(x['sigla_padrao'])),
-          data: instante(x['data']).slice(0, 10),
+          data: horaCivil(new Date(`${instante(x['pedido']).slice(0, 19)}Z`), fuso).data,
         }))
         .filter((x) => f.atos.includes(x.ato));
       return { itens: todos.slice(0, f.teto), cortada: todos.length > f.teto };

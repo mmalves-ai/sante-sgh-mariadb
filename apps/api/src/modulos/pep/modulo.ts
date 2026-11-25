@@ -13,13 +13,18 @@ import { PORTA_CADASTRO, type PortaCadastro } from '../cadastro/porta.js';
 import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
 import { portasDaRede } from '../rede/modulo.js';
 import { PORTA_REDE, type PortaRede } from '../rede/porta.js';
-import type { ContextoModulo } from '../registro.js';
+import { type ContextoModulo, modulosPedidos } from '../registro.js';
 import { AcessoRedePepController } from './acesso-rede.controller.js';
 import { AcessosProntuarioController } from './acessos.controller.js';
 import { PORTA_DOCUMENTOS, type PortaDocumentos } from './documentos-porta.js';
 import { PortaDocumentosMemoria } from './documentos-porta-memoria.js';
 import { PortaDocumentosPropria } from './documentos-porta-propria.js';
-import { DocumentosPepController, SERVICO_DOCUMENTOS } from './documentos.controller.js';
+import {
+  DocumentosPepController,
+  ESTUDOS_IMAGEM_PEP,
+  type FonteEstudosImagem,
+  SERVICO_DOCUMENTOS,
+} from './documentos.controller.js';
 import { ServicoDocumentos } from './documentos-servico.js';
 import { PORTA_FORMULARIO_NOVO, type PortaFormularioNovo } from './formulario-novo-porta.js';
 import { PortaFormularioNovoMemoria } from './formulario-novo-porta-memoria.js';
@@ -141,6 +146,25 @@ export function portasDoPep(ctx: ContextoModulo, o: OpcoesModuloPep = {}): Porta
 export class ModuloPep {}
 
 export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {}): Promise<DynamicModule> {
+  // Os estudos de imagem do paciente no prontuário (05-SADT linha 20): o serviço da lista de trabalho DICOM do SADT
+  // (módulo global), quando o SADT está no processo; sem ele, a aba sai vazia. A importação é tardia: o SADT importa
+  // este módulo (ciclo na carga).
+  const comSadt = (() => {
+    try {
+      return modulosPedidos(ctx.env).includes('sadt');
+    } catch {
+      return false;
+    }
+  })();
+  const estudosImagem = comSadt
+    ? [
+        {
+          provide: ESTUDOS_IMAGEM_PEP,
+          useFactory: (pacs?: FonteEstudosImagem | null) => pacs ?? null,
+          inject: [{ token: (await import('../sadt/pacs.controller.js')).SERVICO_PACS, optional: true }],
+        },
+      ]
+    : [];
   const p = portasDoPep(ctx, opcoes);
   const cadastro = opcoes.cadastro ?? (await portaDoCadastro(ctx));
   const rede = opcoes.rede ?? (await portasDaRede(ctx)).mpi;
@@ -177,6 +201,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       { provide: PORTA_DOCUMENTOS, useValue: p.documentos },
       { provide: SERVICO_DOCUMENTOS, useValue: new ServicoDocumentos(p.documentos) },
       { provide: PORTA_WORKLIST, useValue: p.worklist },
+      ...estudosImagem,
       // F3.3 (L90, L91, L94): painel no banco, configuração por setor e equipe assistencial; sem núcleo, 503.
       {
         provide: PORTA_EQUIPE_PAINEL,
