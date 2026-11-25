@@ -9,12 +9,13 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { cifrarSenha } from '@sgh/dominio-acesso';
+import { cifrarSenha, conferirSenha } from '@sgh/dominio-acesso';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroProblema } from '../../problema.filter.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { portaSenhaDoNucleo } from '../acesso/senha/porta-senha.js';
+import { criarContaComSenhaInicial } from './criacao-com-senha.js';
 import { FonteAdministracaoPropria } from './fonte-propria.js';
 import type { ContextoGestao, Ctx } from './tipos.js';
 
@@ -485,5 +486,70 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
       'argon2id',
       1,
     ]);
+  });
+
+  it('criar com a senha inicial num passo: conta, vínculo, perfil e credencial de troca obrigatória; a falha da senha deixa a conta sem credencial', async () => {
+    const porta = portaSenhaDoNucleo(nucleo, () => nucleo.criarExecutor({ log: () => undefined }), CLIENTE);
+    const quem = () => ({
+      rede: 'rede-sint',
+      estabelecimento: P,
+      autor: `${P}.GESTOR`,
+      correlacao: 'teste-l57u',
+      chaveIdempotencia: `tl57u-${randomUUID()}`,
+      estacao: 'teste',
+      reautenticadoEm: Date.now(),
+    });
+    const login = `${P}.NSENHA`;
+    const clara = `P${randomUUID()}9`;
+    let pedidas = 0;
+    const criar = (l: string) => () =>
+      exec('acesso.criarUsuario', { login: l, nomeCompleto: 'USUARIA SINTETICA SENHA', grupo: `${P}-A` });
+    const dar = (l: string, resumo: Promise<string>) => async () => {
+      pedidas += 1;
+      await porta.gravar(P, l, await resumo, quem(), 'redefinicao');
+      return { senhaProvisoria: clara, trocaObrigatoria: true };
+    };
+    const leve = { memoria: 8_192, passes: 1, paralelismo: 1 };
+    const r = await criarContaComSenhaInicial(criar(login), dar(login, cifrarSenha(clara, leve)));
+    expect(r.senhaInicial).toEqual({
+      emitida: true,
+      senha: { senhaProvisoria: clara, trocaObrigatoria: true },
+    });
+    const retrato = async (l: string) => {
+      const u = await um<Record<string, unknown>>(
+        `SELECT u.id, u.exige_troca_senha AS exige,
+                (SELECT COUNT(*) FROM usuario_estabelecimento x WHERE x.usuario_id = u.id AND x.excluido_em IS NULL) AS vinculos,
+                (SELECT COUNT(*) FROM usuario_perfil x WHERE x.usuario_id = u.id AND x.excluido_em IS NULL) AS perfis,
+                (SELECT COUNT(*) FROM credencial_usuario x WHERE x.usuario_id = u.id AND x.excluido_em IS NULL) AS credenciais,
+                (SELECT COUNT(*) FROM historico_senha x WHERE x.usuario_id = u.id) AS historico
+           FROM usuario u WHERE u.login = ?`,
+        [l],
+      );
+      return ['exige', 'vinculos', 'perfis', 'credenciais', 'historico'].map((k) => Number(u[k]));
+    };
+    expect(await retrato(login)).toEqual([1, 1, 1, 1, 1]);
+    const cr = await um<Record<string, unknown>>(
+      `SELECT c.resumo_senha, c.troca_obrigatoria FROM credencial_usuario c JOIN usuario u ON u.id = c.usuario_id
+        WHERE u.login = ? AND c.excluido_em IS NULL`,
+      [login],
+    );
+    // A senha entregue é a que a credencial gravada confere, e a troca é obrigatória.
+    expect(Number(cr['troca_obrigatoria'])).toBe(1);
+    expect(await conferirSenha(clara, String(cr['resumo_senha']))).toBe(true);
+    expect(await conferirSenha(`${clara}x`, String(cr['resumo_senha']))).toBe(false);
+
+    // A senha falha (resumo sem cifra é recusado pela porta): a conta fica criada, sem credencial, e a resposta avisa.
+    const pend = `${P}.NPEND`;
+    const f = await criarContaComSenhaInicial(criar(pend), dar(pend, Promise.resolve('sem-cifra')));
+    expect(f.senhaInicial.emitida).toBe(false);
+    expect(await retrato(pend)).toEqual([1, 1, 1, 0, 0]);
+
+    // A criação recusada (login em uso) não chega a pedir senha.
+    const antes = pedidas;
+    expect(await codigo(criarContaComSenhaInicial(criar(login), dar(login, cifrarSenha(clara, leve))))).toBe(
+      'login-em-uso',
+    );
+    expect(pedidas).toBe(antes);
+    expect(await retrato(login)).toEqual([1, 1, 1, 1, 1]);
   });
 });

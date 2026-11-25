@@ -5,6 +5,7 @@
 // curto, escopo vazio, conta sem vínculo, alvo inexistente, decidir de novo, decidir ou fechar campanha fechada,
 // validador do domínio) não deixam linha. Nada se apaga. Só ids e códigos sintéticos; nenhum dado real.
 import { randomUUID } from 'node:crypto';
+import { alvosDaRecert, itensDaCampanhaRecert } from '@sgh/dominio-acesso';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -318,5 +319,161 @@ describe.skipIf(SEM_BANCO)('recertificação de acessos no banco próprio (Maria
         [id],
       ),
     ).toBe(3);
+  });
+
+  it('o retrato traz o grupo, os perfis e os setores de cada conta; campanha por grupo e por setor grava o alvo e só as contas dele', async () => {
+    const ontem = daqui(-1);
+    // Massa: a conta B tem vínculo de trabalho no setor UTI; a conta C tem lotação vigente no CME, uma lotação
+    // encerrada ontem (FIM) e uma lotação cuja última versão é a exclusão (EXC).
+    const setor: Record<string, number> = {};
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l57r-setor' }, async (e) => {
+      const agora = new Date();
+      const g = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
+        const l = await e.uma<{ id: number }>(sel, p);
+        return l ? Number(l.id) : e.inserir(ins, pi);
+      };
+      const primeiro = async (tabela: string, ins: string, pi: unknown[]) => {
+        const l = await e.uma<{ id: number }>(`SELECT id FROM ${tabela} ORDER BY id LIMIT 1`, []);
+        return l ? Number(l.id) : e.inserir(ins, pi);
+      };
+      for (const c of ['UTI', 'CME', 'FIM', 'EXC'])
+        setor[c] = await g(
+          'SELECT id FROM setor_funcional WHERE codigo = ? AND estabelecimento_id = ?',
+          [`L57R-${c}`, ids.est],
+          "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, 'assistencial', ?)",
+          [ids.est, `L57R-${c}`, `Setor sintético ${c}`, agora],
+        );
+      const centro = await g(
+        'SELECT id FROM centro_custo WHERE codigo = ? AND estabelecimento_id = ?',
+        ['L57R-CC', ids.est],
+        "INSERT INTO centro_custo (estabelecimento_id, codigo, nome, vigencia_inicio, criado_em) VALUES (?, ?, 'Centro sintético l57r', '2026-01-01', ?)",
+        [ids.est, 'L57R-CC', agora],
+      );
+      const cbo = await g(
+        'SELECT id FROM ocupacao_cbo WHERE codigo_cbo = ?',
+        ['990571'],
+        "INSERT INTO ocupacao_cbo (codigo_cbo, descricao, area_saude, criado_em) VALUES ('990571', 'OCUPACAO SINTETICA L57R', FALSE, ?)",
+        [agora],
+      );
+      const cargo = await g(
+        'SELECT id FROM cargo WHERE codigo = ?',
+        ['L57RC'],
+        "INSERT INTO cargo (codigo, nome, ocupacao_cbo_id, data_inicio, criado_em) VALUES (?, 'CARGO SINTETICO L57R', ?, '2020-01-01', ?)",
+        ['L57RC', cbo, agora],
+      );
+      const sexo = await e.uma<{ id: number }>('SELECT id FROM sexo ORDER BY id LIMIT 1', []);
+      if (!sexo) throw new Error('O catálogo de sexo está vazio no cliente de teste.');
+      const tipo = await primeiro(
+        'tipo_vinculo_trabalho',
+        "INSERT INTO tipo_vinculo_trabalho (codigo_cnes, nivel, codigo_vinculo, descricao, criado_em) VALUES ('L57R', 'vinculo', '97', 'Vínculo sintético', ?)",
+        [agora],
+      );
+      const categoria = await primeiro(
+        'categoria_trabalhador',
+        "INSERT INTO categoria_trabalhador (codigo_esocial, descricao, grupo, criado_em) VALUES ('Z57', 'Categoria sintética', 'empregado', ?)",
+        [agora],
+      );
+      const vinculoDe = async (login: string, cpf: string, setorDoVinculo: number | null) => {
+        const u = await e.uma<{ id: number }>('SELECT id FROM usuario WHERE login = ?', [login]);
+        const col = await g(
+          'SELECT id FROM colaborador WHERE cpf = ?',
+          [cpf],
+          "INSERT INTO colaborador (usuario_id, nome, cpf, data_nascimento, sexo_id, grau_instrucao, criado_em) VALUES (?, 'COLABORADOR SINTETICO L57R', ?, '1990-01-01', ?, '07', ?)",
+          [Number(u?.id), cpf, Number(sexo.id), agora],
+        );
+        return g(
+          'SELECT id FROM vinculo_trabalho WHERE estabelecimento_id = ? AND matricula = ?',
+          [ids.est, `L57R${cpf.slice(-2)}`],
+          'INSERT INTO vinculo_trabalho (estabelecimento_id, colaborador_id, matricula, tipo_vinculo_trabalho_id, categoria_trabalhador_id, cargo_id, setor_funcional_id, data_admissao, salario_base, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1000, ?)',
+          [ids.est, col, `L57R${cpf.slice(-2)}`, tipo, categoria, cargo, setorDoVinculo, '2026-01-01', agora],
+        );
+      };
+      await vinculoDe(CONTAS[1]!, '00057100001', setor['UTI']!);
+      const vc = await vinculoDe(CONTAS[2]!, '00057100002', null);
+      const lotar = (s: number, fim: string | null, operacao: string, ocorrido: string) =>
+        g(
+          'SELECT id FROM lotacao WHERE vinculo_trabalho_id = ? AND setor_funcional_id = ? AND operacao = ?',
+          [vc, s, operacao],
+          "INSERT INTO lotacao (vinculo_trabalho_id, setor_funcional_id, centro_custo_id, data_inicio, data_fim, operacao, ocorrido_em, criado_em) VALUES (?, ?, ?, '2026-01-01', ?, ?, ?, ?)",
+          [vc, s, centro, fim, operacao, ocorrido, agora],
+        );
+      await lotar(setor['CME']!, null, 'inclusao', '2026-01-01 08:00:00');
+      await lotar(setor['FIM']!, null, 'inclusao', '2026-01-01 08:00:00');
+      await e.executar(
+        "UPDATE lotacao SET data_fim = ? WHERE vinculo_trabalho_id = ? AND setor_funcional_id = ? AND operacao = 'inclusao'",
+        [ontem, vc, setor['FIM']],
+      );
+      await lotar(setor['EXC']!, null, 'inclusao', '2026-01-01 08:00:00');
+      await lotar(setor['EXC']!, null, 'exclusao', '2026-02-01 08:00:00');
+    });
+
+    const todas = await fonte.contasRecert('teste', EST);
+    const minhas = todas.filter((c) => [GESTOR, ...CONTAS, FORA].includes(c.login));
+    expect(minhas.map((c) => c.login).sort()).toEqual([GESTOR, ...CONTAS].sort());
+    const de = (login: string) => minhas.find((c) => c.login === login);
+    expect(de(CONTAS[0]!)).toMatchObject({ grupo: PERFIL, perfis: [PERFIL, PERFIL2], setores: [] });
+    expect(de(CONTAS[1]!)).toMatchObject({ grupo: null, perfis: [], setores: ['L57R-UTI'] });
+    expect(de(CONTAS[2]!)?.setores).toEqual(['L57R-CME']);
+    const alvos = alvosDaRecert(minhas);
+    expect(alvos.grupos).toEqual([
+      { valor: PERFIL, contas: 1 },
+      { valor: PERFIL2, contas: 1 },
+    ]);
+    expect(alvos.setores).toEqual([
+      { valor: 'L57R-CME', contas: 1 },
+      { valor: 'L57R-UTI', contas: 1 },
+    ]);
+
+    const fechar = (campanha: string) =>
+      fonte.fecharCampanhaRecert(
+        'teste',
+        EST,
+        {
+          hospital: EST,
+          campanha,
+          situacao: 'cancelada',
+          motivo: 'Campanha de conferência do teste',
+          por: GESTOR,
+        },
+        trilha(),
+      );
+    // Por grupo: quem tem o perfil, mesmo sem ser o principal.
+    const doGrupo = itensDaCampanhaRecert(minhas, 'grupo', PERFIL2);
+    expect(doGrupo.map((i) => i.login)).toEqual([CONTAS[0]]);
+    const cg = await abrir(
+      doGrupo.map((i) => i.login),
+      { escopo: 'grupo', alvo: PERFIL2 },
+    );
+    expect(cg.itens).toBe(1);
+    const [lg] = await ler(
+      `SELECT c.escopo, p.codigo AS perfil, c.setor_funcional_id FROM recertificacao_acesso c
+         LEFT JOIN perfil_acesso p ON p.id = c.perfil_acesso_id WHERE c.id = ?`,
+      [cg.id],
+    );
+    expect(lg).toMatchObject({ escopo: 'perfil', perfil: PERFIL2, setor_funcional_id: null });
+    const lidaG = await fonte.campanhaRecert('teste', EST, cg.id);
+    expect(lidaG?.campanha).toMatchObject({ escopo: 'grupo', alvo: PERFIL2 });
+    expect(lidaG?.itens.map((i) => [i.login, i.grupo, i.perfis])).toEqual([
+      [CONTAS[0], PERFIL, [PERFIL, PERFIL2]],
+    ]);
+    await fechar(cg.id);
+
+    // Por setor: quem está no setor (vínculo ou lotação vigente).
+    const doSetor = itensDaCampanhaRecert(minhas, 'setor', 'L57R-UTI');
+    expect(doSetor.map((i) => i.login)).toEqual([CONTAS[1]]);
+    const cs = await abrir(
+      doSetor.map((i) => i.login),
+      { escopo: 'setor', alvo: 'L57R-UTI' },
+    );
+    const [ls] = await ler(
+      'SELECT escopo, setor_funcional_id, perfil_acesso_id FROM recertificacao_acesso WHERE id = ?',
+      [cs.id],
+    );
+    expect(ls).toMatchObject({ escopo: 'setor', perfil_acesso_id: null });
+    expect(Number(ls?.['setor_funcional_id'])).toBe(setor['UTI']);
+    const lidaS = await fonte.campanhaRecert('teste', EST, cs.id);
+    expect(lidaS?.campanha).toMatchObject({ escopo: 'setor', alvo: 'L57R-UTI' });
+    expect(lidaS?.itens.map((i) => i.login)).toEqual([CONTAS[1]]);
+    await fechar(cs.id);
   });
 });

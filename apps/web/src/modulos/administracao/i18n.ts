@@ -49,7 +49,9 @@ export const mensagensAdministracao = {
     nunca: 'nunca',
     bloqueado: 'Bloqueado',
     novo: 'Novo usuário',
-    criado: 'Usuário criado. A primeira senha é definida pelo administrador do sistema.',
+    criado: 'Usuário criado.',
+    criadoComSenha:
+      'Usuário {login} criado. Entregue a senha inicial abaixo: ela é trocada no primeiro acesso.',
     perfilSugerido:
       'Perfil sugerido pelo cargo: {perfil}. Conceda-o na ficha depois de criar e conclua a tarefa em Tarefas do RH.',
     abrir: 'Abrir a ficha de {login}',

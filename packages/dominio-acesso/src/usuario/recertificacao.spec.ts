@@ -1,6 +1,7 @@
 // W1-01 (parte 9c): regra da recertificação de acessos (campanha, itens, decisão, relatório). Dados sintéticos.
 import { describe, expect, it } from 'vitest';
 import {
+  alvosDaRecert,
   itensDaCampanhaRecert,
   prazoRecertPadrao,
   relatorioRecert,
@@ -76,6 +77,42 @@ describe('W1-01 (parte 9c): recertificação de acessos', () => {
       'faturista',
       'recepcao',
     ]);
+  });
+
+  it('campanha por grupo alcança quem tem o perfil, mesmo sem ser o principal; os alvos vêm com a contagem', () => {
+    const contas = [
+      conta({ login: 'SINT.A', grupo: 'recepcao', perfis: ['faturista', 'recepcao'], setores: ['UTI'] }),
+      conta({ login: 'SINT.B', grupo: 'faturista', perfis: ['faturista'], setores: ['uti', 'UTI', 'CME'] }),
+      conta({ login: 'SINT.C', grupo: null, perfis: [], setores: [] }),
+      conta({
+        login: 'SINT.D',
+        grupo: 'faturista',
+        perfis: ['faturista'],
+        bloqueado: true,
+        setores: ['UTI'],
+      }),
+    ];
+    expect(itensDaCampanhaRecert(contas, 'grupo', 'faturista').map((i) => i.login)).toEqual([
+      'SINT.A',
+      'SINT.B',
+    ]);
+    expect(itensDaCampanhaRecert(contas, 'grupo', 'recepcao').map((i) => i.login)).toEqual(['SINT.A']);
+    const alvos = alvosDaRecert(contas);
+    expect(alvos.todos).toBe(3);
+    expect(alvos.grupos).toEqual([
+      { valor: 'faturista', contas: 2 },
+      { valor: 'recepcao', contas: 1 },
+    ]);
+    // A conta conta uma vez por setor, sem diferenciar maiúsculas; a bloqueada fica fora.
+    expect(alvos.setores).toEqual([
+      { valor: 'CME', contas: 1 },
+      { valor: 'UTI', contas: 2 },
+    ]);
+    // A contagem de cada alvo é a quantidade de itens da campanha daquele alvo.
+    for (const g of alvos.grupos)
+      expect(itensDaCampanhaRecert(contas, 'grupo', g.valor)).toHaveLength(g.contas);
+    for (const s of alvos.setores)
+      expect(itensDaCampanhaRecert(contas, 'setor', s.valor)).toHaveLength(s.contas);
   });
 
   it('decisão: manter e retirar (bloqueio ou revogação) aceitos; recusas de campanha fechada, já decidido, a si, ação, motivo e perfil', () => {

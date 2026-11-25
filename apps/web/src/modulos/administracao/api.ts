@@ -143,7 +143,11 @@ export const bloquearNaRede = async (
 export const criarUsuario = (
   entrada: { login: string; nomeCompleto: string; grupo: string; cpf?: string },
   senha: string,
-) => gravar<{ id?: number }>(`${A}/usuarios`, { entrada, senha });
+) =>
+  gravar<{ id?: number; senhaProvisoria?: string; trocaObrigatoria?: boolean; senhaPendente?: string }>(
+    `${A}/usuarios`,
+    { entrada, senha },
+  );
 export const alterarNome = (login: string, nomeCompleto: string, versao: string, senha: string) =>
   gravar(`${A}/usuarios/${encodeURIComponent(login)}/nome`, { entrada: { nomeCompleto, versao }, senha });
 /** W1-01: troca do CPF (justificativa obrigatória; o CPF anterior e o motivo vão à trilha). */

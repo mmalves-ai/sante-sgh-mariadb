@@ -25,7 +25,7 @@ export interface ContaRecertLida {
   readonly grupo: string | null;
   readonly ativo: boolean;
   readonly bloqueado: boolean;
-  /** Blocos do escopo de setor (SGH_ACESSO_ESCOPO_SETOR) vigentes. */
+  /** Setores vigentes da conta (códigos): o escopo de setor ou a lotação de quem usa a conta. */
   readonly setores: readonly string[];
   /** Perfis SGH_ vigentes. */
   readonly perfis: readonly string[];
@@ -117,6 +117,53 @@ export function validarNovaCampanhaRecert(p: NovaCampanhaRecert, hoje: string): 
   return null;
 }
 
+/** A conta é do grupo quando ele é o seu grupo (perfil principal) ou um dos seus perfis vigentes: onde o perfil é a
+ * unidade de concessão, a campanha por grupo revisa todo mundo que tem aquele perfil, não só quem o tem como principal. */
+function temGrupoOuPerfil(c: ContaRecertLida, alvo: string): boolean {
+  return (
+    (c.grupo ?? '').trim().toUpperCase() === alvo || c.perfis.some((p) => p.trim().toUpperCase() === alvo)
+  );
+}
+
+export interface AlvoRecert {
+  readonly valor: string;
+  /** Quantas contas ativas entram na campanha deste alvo. */
+  readonly contas: number;
+}
+
+/**
+ * Os alvos que uma campanha pode ter, cada um com a contagem das contas que entram: quem abre a campanha escolhe só
+ * entre escopos que têm o que recertificar e vê o tamanho antes de confirmar (nada de "escopo vazio" depois da senha).
+ */
+export function alvosDaRecert(contas: readonly ContaRecertLida[]): {
+  readonly todos: number;
+  readonly grupos: AlvoRecert[];
+  readonly setores: AlvoRecert[];
+} {
+  const vivas = contas.filter((c) => c.ativo && !c.bloqueado);
+  const contar = (de: (c: ContaRecertLida) => readonly (string | null)[]): AlvoRecert[] => {
+    const m = new Map<string, { valor: string; contas: number }>();
+    for (const c of vivas) {
+      const vistos = new Set<string>();
+      for (const bruto of de(c)) {
+        const valor = (bruto ?? '').trim();
+        const chave = valor.toUpperCase();
+        if (!valor || vistos.has(chave)) continue;
+        vistos.add(chave);
+        const a = m.get(chave) ?? { valor, contas: 0 };
+        a.contas += 1;
+        m.set(chave, a);
+      }
+    }
+    return [...m.values()].sort((x, y) => x.valor.localeCompare(y.valor));
+  };
+  return {
+    todos: vivas.length,
+    grupos: contar((c) => [c.grupo, ...c.perfis]),
+    setores: contar((c) => c.setores),
+  };
+}
+
 /** As contas que entram na campanha: ativas (bloqueadas ficam fora: já não acessam) do escopo, por login. */
 export function itensDaCampanhaRecert(
   contas: readonly ContaRecertLida[],
@@ -130,7 +177,7 @@ export function itensDaCampanhaRecert(
       escopo === 'todos'
         ? true
         : escopo === 'grupo'
-          ? (c.grupo ?? '').trim().toUpperCase() === a
+          ? temGrupoOuPerfil(c, a)
           : c.setores.some((s) => s.trim().toUpperCase() === a),
     )
     .map((c) => ({ login: c.login, grupo: c.grupo, perfis: [...c.perfis].sort() }))

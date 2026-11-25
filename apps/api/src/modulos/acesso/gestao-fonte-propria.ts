@@ -53,7 +53,7 @@ import {
   type UsuarioGestao,
 } from './gestao-tipos.js';
 import { PedidoAcessoProprio } from './pedido-acesso-propria.js';
-import { RecertificacaoPropria } from './recertificacao-propria.js';
+import { contasDoRetratoRecert, RecertificacaoPropria } from './recertificacao-propria.js';
 import type { ValidarResolucaoRhMemoria } from './rh-memoria.js';
 import {
   type AfastamentoRhLido,
@@ -956,30 +956,7 @@ class FonteGestaoPropria implements FonteGestao {
   }
 
   contasRecert(_rede: string, hospital: string) {
-    return this.ler(hospital, async (l, est) =>
-      (
-        await l.consultar(
-          `SELECT u.login,
-                  (SELECT GROUP_CONCAT(DISTINCT pa.codigo ORDER BY pa.codigo) FROM usuario_perfil up
-                     JOIN perfil_acesso pa ON pa.id = up.perfil_acesso_id
-                    WHERE up.usuario_id = u.id AND up.estabelecimento_id = ? AND ${PERFIL_VIGENTE}) AS perfis
-             FROM usuario u
-            WHERE u.excluido_em IS NULL AND u.situacao = 'ativo' AND ${VINCULO}
-            ORDER BY u.login`,
-          [est, est],
-          { teto: TETO * 4 },
-        )
-      ).map((x) => ({
-        login: txt(x['login']),
-        grupo: null,
-        ativo: true,
-        bloqueado: false,
-        setores: [],
-        perfis: txt(x['perfis'])
-          .split(',')
-          .filter((s) => s !== ''),
-      })),
-    );
+    return this.ler(hospital, (l, est) => contasDoRetratoRecert(l, est));
   }
 
   // ── Operações da conta (bloqueio e papéis de segurança) ─────────────────────────────────────

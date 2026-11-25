@@ -13,7 +13,6 @@ import { useI18n } from 'vue-i18n';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import SenhaConfirmacao from '../../administracao/componentes/SenhaConfirmacao.vue';
-import { buscarOpcoesUsuarios } from '../../administracao/api.js';
 import {
   abrirRecertificacao,
   buscarRecertificacao,
@@ -62,18 +61,16 @@ watch(dialogo, (v) => {
   }
 });
 
-const precisaOpcoes = computed(() => dialogo.value && acao.value === 'abrir' && escopo.value !== 'todos');
-const opcoes = useQuery({
-  queryKey: ['administracao', 'usuarios-opcoes'],
-  queryFn: () => buscarOpcoesUsuarios(),
-  enabled: precisaOpcoes,
-});
+// Os alvos vêm com a lista das campanhas, já com a contagem das contas de cada um: só aparece escopo que tem o que
+// recertificar, e quem abre vê o tamanho da campanha antes de confirmar.
+const alvos = computed(() => dados.value?.alvos ?? null);
 const opcoesAlvo = computed(() => {
-  const o = opcoes.data.value;
-  if (!o) return [];
-  return escopo.value === 'grupo'
-    ? o.grupos.filter((g) => g.ativo).map((g) => ({ valor: g.nome, rotulo: g.nome }))
-    : o.setores.map((s) => ({ valor: s.valor, rotulo: s.rotulo }));
+  const a = alvos.value;
+  if (!a) return [];
+  return (escopo.value === 'grupo' ? a.grupos : a.setores).map((x) => ({
+    valor: x.valor,
+    rotulo: `${x.valor} (${x.contas})`,
+  }));
 });
 watch(escopo, () => {
   alvo.value = null;

@@ -76,7 +76,8 @@ test.describe('Acesso, organização e auditoria @M10', () => {
     await page.getByTestId('novo-senha').fill(SENHA);
     await semViolacaoAxe(page, 'novo usuário');
     await page.getByTestId('criar-usuario').click();
-    await expect(page.getByText('Usuário criado.')).toBeVisible();
+    // A senha inicial vem na mesma tela (F3.9-01); a ficha abre em seguida.
+    await expect(page.getByTestId('senha-provisoria-valor')).toBeVisible();
     // A ficha: a resposta da API não leva senha, hash nem CPF.
     const resposta = page.waitForResponse((r) =>
       r.url().includes('/api/administracao/acesso/usuarios/SINT.E2E.NOVO'),

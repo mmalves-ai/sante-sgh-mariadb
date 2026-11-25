@@ -68,6 +68,7 @@ import {
   trilhaDe,
 } from './comum.js';
 import { PORTA_RECEPCAO, type PortaRecepcao } from '../recepcao/public-api.js';
+import { criarContaComSenhaInicial } from './criacao-com-senha.js';
 import { FONTE_ADMINISTRACAO, type FonteAdministracao } from './fonte.js';
 import { conferirLoginDePainel } from './login-painel.js';
 
@@ -302,19 +303,49 @@ export class UsuariosController {
 
   @Post('usuarios')
   @HttpCode(201)
+  // A resposta leva a senha inicial: nada de cache no navegador nem em proxy.
+  @Header('Cache-Control', 'no-store')
   @Permissao(C.usuarioCriar)
   @AuditadoNoHandler('executor: trilha de auditoria (alteração de acesso) na mesma transação da receita')
-  async criar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoUsuario> {
+  async criar(
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<
+    ResultadoUsuario & { senhaProvisoria?: string; trocaObrigatoria?: boolean; senhaPendente?: string }
+  > {
     const p = analisar(esquemaPedidoUsuario, corpo);
     this.segregacao(req, 'criar-usuario', null);
     const e = (p.entrada ?? {}) as { login?: unknown; grupo?: unknown };
     if (typeof e.grupo === 'string' && typeof e.login === 'string')
       await this.conferirLimiteAdministradores(req, e.login, e.grupo);
-    const r = await this.gravar(req, 'acesso.criarUsuario', p.entrada, p.senha);
+    // Um passo só: a conta nasce e a senha inicial (provisória, de troca obrigatória) volta nesta resposta.
+    const servico = this.servico;
+    const login = typeof e.login === 'string' ? e.login.trim() : '';
+    const s = sessaoDe(req);
+    const reaut = await reautenticado(this.servico, this.resolvedor, req, p.senha);
+    const c = contextoOperacao(req, 'acesso-usuarios', reaut);
+    const { conta: r, senhaInicial } = await criarContaComSenhaInicial(
+      () => this.fonte.executar('acesso.criarUsuario', p.entrada, c).catch((x: unknown) => problema(x)),
+      servico && servico.trocaSenhaDisponivel && login !== ''
+        ? () =>
+            servico.redefinirSenha(
+              { rede: s.rede, estabelecimento: s.hospital, login: s.login },
+              login,
+              { correlacao: c.correlacao || 'acesso-usuarios', estacao: c.estacao || '' },
+              reaut,
+            )
+        : null,
+    );
     return {
       operacao: 'acesso.criarUsuario',
       destino: this.fonte.destino,
       ...(typeof r['idUsuario'] === 'number' ? { id: r['idUsuario'] } : {}),
+      ...(senhaInicial.emitida
+        ? {
+            senhaProvisoria: senhaInicial.senha.senhaProvisoria,
+            trocaObrigatoria: senhaInicial.senha.trocaObrigatoria,
+          }
+        : { senhaPendente: senhaInicial.motivo }),
     };
   }
 

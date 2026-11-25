@@ -85,6 +85,11 @@ const listaBase = () => ({
     }),
   ],
   bloqueio: { ligada: true, motivo: null },
+  alvos: {
+    todos: 2,
+    grupos: [{ valor: 'ENFERMAGEM', contas: 2 }],
+    setores: [{ valor: 'B1', contas: 1 }],
+  },
   ...lista,
 });
 const detalheBase = () => ({
