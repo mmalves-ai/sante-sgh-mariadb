@@ -6,7 +6,7 @@ import {
   idadeNaData,
   precoVigenteDaRefeicao,
   type RegraDireitoRefeicao,
-  regraVigente,
+  regraRefeicaoVigente,
   type SituacaoDaRefeicao,
   validarRegraDireitoRefeicao,
 } from './direito-refeicao.js';
@@ -83,26 +83,28 @@ describe('regra vigente', () => {
   it('a regra de lei vale pela base legal registrada ou pela faixa de idade e ganha das demais', () => {
     const lei = regra({ id: 1, fundamento: 'lei', idadeMinima: 60 });
     const conv = regra({ id: 2, fontePagadora: 10, cobertoPelaFonte: true });
-    expect(regraVigente([lei, conv], sit({ idadePaciente: 70 }))?.id).toBe(1);
-    expect(regraVigente([lei, conv], sit({ idadePaciente: 30, direitoLegal: true }))?.id).toBe(1);
-    expect(regraVigente([lei, conv], sit({ idadePaciente: 30 }))?.id).toBe(2);
+    expect(regraRefeicaoVigente([lei, conv], sit({ idadePaciente: 70 }))?.id).toBe(1);
+    expect(regraRefeicaoVigente([lei, conv], sit({ idadePaciente: 30, direitoLegal: true }))?.id).toBe(1);
+    expect(regraRefeicaoVigente([lei, conv], sit({ idadePaciente: 30 }))?.id).toBe(2);
   });
   it('a mais específica ganha; fora da vigência, inativa, de outra fonte ou de outra refeição não vale', () => {
     const geral = regra({ id: 1, fundamento: 'politica_interna' });
     const daFonte = regra({ id: 2, fontePagadora: 10, cobertoPelaFonte: true });
     const daFonteEQuarto = regra({ id: 3, fontePagadora: 10, acomodacao: 20, exigeAutorizacao: true });
-    expect(regraVigente([geral, daFonte, daFonteEQuarto], sit())?.id).toBe(3);
-    expect(regraVigente([geral, daFonte, daFonteEQuarto], sit({ acomodacao: 21 }))?.id).toBe(2);
-    expect(regraVigente([geral, daFonte], sit({ fontePagadora: 11 }))?.id).toBe(1);
-    expect(regraVigente([regra({ id: 4, vigenciaFim: '2026-10-31' })], sit())).toBeNull();
-    expect(regraVigente([regra({ id: 5, ativo: false })], sit())).toBeNull();
-    expect(regraVigente([regra({ id: 6, refeicoes: [1, 2] })], sit())).toBeNull();
-    expect(regraVigente([regra({ id: 7, idadeMinima: 18 })], sit({ idadePaciente: null }))).toBeNull();
+    expect(regraRefeicaoVigente([geral, daFonte, daFonteEQuarto], sit())?.id).toBe(3);
+    expect(regraRefeicaoVigente([geral, daFonte, daFonteEQuarto], sit({ acomodacao: 21 }))?.id).toBe(2);
+    expect(regraRefeicaoVigente([geral, daFonte], sit({ fontePagadora: 11 }))?.id).toBe(1);
+    expect(regraRefeicaoVigente([regra({ id: 4, vigenciaFim: '2026-10-31' })], sit())).toBeNull();
+    expect(regraRefeicaoVigente([regra({ id: 5, ativo: false })], sit())).toBeNull();
+    expect(regraRefeicaoVigente([regra({ id: 6, refeicoes: [1, 2] })], sit())).toBeNull();
+    expect(
+      regraRefeicaoVigente([regra({ id: 7, idadeMinima: 18 })], sit({ idadePaciente: null })),
+    ).toBeNull();
   });
   it('empatando, a de vigência mais recente', () => {
     const velha = regra({ id: 8, fontePagadora: 10, cobertoPelaFonte: true, vigenciaInicio: '2025-01-01' });
     const nova = regra({ id: 9, fontePagadora: 10, cobertoPelaFonte: true, vigenciaInicio: '2026-06-01' });
-    expect(regraVigente([velha, nova], sit())?.id).toBe(9);
+    expect(regraRefeicaoVigente([velha, nova], sit())?.id).toBe(9);
   });
 });
 

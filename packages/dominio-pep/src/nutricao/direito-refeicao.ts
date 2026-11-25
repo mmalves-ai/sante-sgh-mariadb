@@ -141,7 +141,7 @@ const especificidade = (r: RegraDireitoRefeicao): number =>
   (r.refeicoes.length > 0 ? 1 : 0);
 
 /** A regra que vale: a de lei primeiro, depois a mais específica, depois a de vigência mais recente. */
-export function regraVigente(
+export function regraRefeicaoVigente(
   regras: readonly RegraDireitoRefeicao[],
   s: SituacaoDaRefeicao,
 ): RegraDireitoRefeicao | null {
@@ -161,7 +161,7 @@ export function decidirRefeicaoAcompanhante(
   regras: readonly RegraDireitoRefeicao[],
   s: SituacaoDaRefeicao,
 ): DecisaoRefeicao {
-  const r = regraVigente(regras, s);
+  const r = regraRefeicaoVigente(regras, s);
   if (!r) {
     if (s.direitoLegal)
       return {
