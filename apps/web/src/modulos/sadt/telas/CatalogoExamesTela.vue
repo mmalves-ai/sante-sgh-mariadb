@@ -24,6 +24,7 @@ import { enviar, ler } from '../../exames/api-exames.js';
 import { novaChave } from '../api-sadt.js';
 import CadastroAnalitos from '../componentes/CadastroAnalitos.vue';
 import ProcedimentosExame from '../componentes/ProcedimentosExame.vue';
+import RespostasTextosExame from '../componentes/RespostasTextosExame.vue';
 
 type Linha = Record<string, unknown>;
 type Opcao = { id: number; nome: string };
@@ -136,7 +137,7 @@ const novo = reactive<Record<string, Linha>>({
   preparo: { orientacaoPreparoId: '', publico: 'todos' },
   lateralidade: { lado: 'direito', multiplicadorCobranca: 1 },
   ligado: { secundarioExameId: '', tipoRelacao: 'secundario', lancaAutomaticamente: true },
-  analito: { analitoId: '', ordem: 1, obrigatorio: true, calculado: false },
+  analito: { analitoId: '', ordem: 1, obrigatorio: true, calculado: false, grupoRespostaId: '' },
 });
 const faixaVazia = (): Linha => ({
   sexoId: '',
@@ -422,6 +423,7 @@ const SECOES: { t: string; titulo: string; chave: string; campos: Campo[] }[] = 
       { k: 'ordem', r: 'Ordem', tipo: 'number' },
       { k: 'obrigatorio', r: 'Obrigatório', tipo: 'checkbox' },
       { k: 'calculado', r: 'Calculado', tipo: 'checkbox' },
+      { k: 'grupoRespostaId', r: 'Grupo de respostas', lista: 'gruposResposta' },
     ],
   },
 ];
@@ -814,6 +816,11 @@ const filtrada = (qual: string, chave: string) => {
               <SanteBotao :rotulo="T.incluir" tipo="submit" />
             </form>
           </section>
+          <RespostasTextosExame
+            :exame-id="Number(exame['id'])"
+            :analitos="(ficha['analitos'] as Linha[] | undefined) ?? []"
+            @gravado="abrir(Number(exame['id']))"
+          />
           <ProcedimentosExame
             :exame-id="Number(exame['id'])"
             :procedimentos="(ficha['procedimentos'] as Linha[] | undefined) ?? []"
