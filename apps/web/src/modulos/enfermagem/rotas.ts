@@ -226,6 +226,13 @@ export const rotasEnfermagem: RouteRecordRaw[] = [
     props: true,
     meta: { permissao: 'sadt.transfusao.ler' },
   },
+  // 09-AREA linha 86 (C1-035): auditoria das checagens de enfermagem (amostra sorteada, avaliação e conclusão).
+  {
+    path: '/enfermagem/auditoria-checagem',
+    name: 'enfermagem.auditoriaChecagem',
+    component: () => import('./telas/AuditoriaChecagemTela.vue'),
+    meta: { permissao: 'enfermagem.auditoriaChecagem.ler' },
+  },
   {
     // Os procedimentos, cuidados e kits são do CRUD genérico: o índice do subitem.
     path: '/cadastros/enfermagem/procedimentos',
