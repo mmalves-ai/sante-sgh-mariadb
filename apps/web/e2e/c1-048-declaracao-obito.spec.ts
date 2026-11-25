@@ -69,7 +69,7 @@ test.describe('@C1-048 declaração de óbito @fase7', () => {
       if (caminho === 'formularios-obito/lotes') return json(rota, { quantidade: 3, primeiro: 2 }, 201);
       return json(rota, { codigo: 'nao-simulado' }, 500);
     });
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.MEDICO');
     await page.goto('/internacao/controles/formularios-obito');
     await expect(page.getByTestId('obito-resumo')).toContainText('Disponíveis 1');
     await page.getByTestId('obito-inicial').fill('00000004');

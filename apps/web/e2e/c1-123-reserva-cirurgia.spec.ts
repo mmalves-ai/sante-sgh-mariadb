@@ -172,7 +172,7 @@ test.describe('Reserva de equipamentos e hemocomponentes da cirurgia @C1-123', (
     let aberta = true;
     const api = simular(page, () => aberta);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.BLOCO');
 
     await page.goto(`/cirurgia/agendamentos/${AG}`);
     const painel = page.getByTestId('reservas-cirurgia');

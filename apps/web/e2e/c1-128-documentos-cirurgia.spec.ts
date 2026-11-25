@@ -182,7 +182,7 @@ test.describe('Documentos obrigatórios antes da cirurgia @C1-128', () => {
     const externas = vigiarExternas(page);
     const api = simular(page);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.BLOCO');
 
     await page.goto(`/cirurgia/agendamentos/${AG}`);
     const painel = page.getByTestId('documentos-cirurgia');

@@ -171,7 +171,7 @@ test.describe('Ocorrências na entrega da refeição @C1-131', () => {
     const dialogo = page.getByTestId('dialogo-ocorrencia');
     await expect(dialogo).toBeVisible();
     await esperarSemSelectNativo(dialogo);
-    await escolher(page.getByTestId('ocorrencia-tipo'), 'Recusa do paciente');
+    await escolher(page.getByTestId('ocorrencia-tipo'), { rotulo: 'Recusa do paciente' });
     // A justificativa exigida pelo tipo, na hora.
     await expect(page.getByTestId('ocorrencia-falta-justificativa')).toBeVisible();
     await expect(page.getByTestId('ocorrencia-gravar')).toBeDisabled();
@@ -187,7 +187,7 @@ test.describe('Ocorrências na entrega da refeição @C1-131', () => {
     // O tipo que gera reposição avisa antes de gravar e depois.
     await page.getByTestId('ocorrencia-registrar').click();
     await escolher(page.getByTestId('ocorrencia-paciente'), { indice: 0 });
-    await escolher(page.getByTestId('ocorrencia-tipo'), 'Dieta errada');
+    await escolher(page.getByTestId('ocorrencia-tipo'), { rotulo: 'Dieta errada' });
     await expect(page.getByTestId('ocorrencia-aviso-reposicao')).toBeVisible();
     await page.getByTestId('ocorrencia-gravar').click();
     await expect(page.getByTestId('ocorrencias-mensagem')).toContainText('reposição');

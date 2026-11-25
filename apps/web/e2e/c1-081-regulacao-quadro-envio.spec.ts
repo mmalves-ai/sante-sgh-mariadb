@@ -188,7 +188,7 @@ test.describe('internação: solicitação à central reguladora com quadro clí
   }) => {
     const externas = vigiarExternas(page);
     const estado = await simularApi(page);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/controles/regulacao');
     await expect(page.getByTestId('tela-controles-internacao')).toBeVisible();
     await escolher(page.getByTestId('reg-solicitacao'), String(SOLICITACAO));
@@ -246,11 +246,12 @@ test.describe('internação: solicitação à central reguladora com quadro clí
     page,
   }) => {
     const externas = vigiarExternas(page);
-    // Sem sessão, a rota existe e exige login (401), nunca 404.
+    // Sem login, a rota existe e é recusada, nunca 404. Em dev/ci, sem cookie a API resolve a sessão sintética da casca
+    // (administrador do sistema e gestor de acessos, resolvedor-sessao.ts), que não tem internacao.regulacao.ler: 403.
     const anonimo = await page.request.get(`/api/internacao/controles/regulacao/${SOLICITACAO}`);
-    expect(anonimo.status()).toBe(401);
+    expect(anonimo.status()).toBe(403);
 
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.INTERNACAO');
     const apoio = page.waitForResponse((r) => r.url().includes('/api/internacao/controles/regulacao/apoio'));
     await page.goto('/internacao/controles/regulacao');
     await expect(page.getByTestId('tela-controles-internacao')).toBeVisible();

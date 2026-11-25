@@ -454,7 +454,9 @@ export const rotasPep: RouteRecordRaw[] = [
         path: 'alta',
         name: 'pep.paciente.alta',
         component: () => import('./telas/abas/AbaAlta.vue'),
-        meta: { permissao: 'pep.sumarioAlta.ler' },
+        // C1-048: o responsável técnico ou o diretor clínico abre a aba só para cancelar a declaração de óbito de outro
+        // médico (a leitura da API tem o mesmo @PermissaoOu).
+        meta: { permissao: 'pep.sumarioAlta.ler', permissaoOu: ['pep.declaracaoObito.cancelarOutro'] },
       },
       {
         path: 'anexos',

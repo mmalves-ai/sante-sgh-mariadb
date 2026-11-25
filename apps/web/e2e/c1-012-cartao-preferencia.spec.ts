@@ -83,7 +83,7 @@ test.describe('centro cirúrgico: cartão de preferência do cirurgião @C1-012'
   }) => {
     const externas = vigiarExternas(page);
     await cartaoSintetico(page);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.BLOCO');
     await page.goto('/cirurgia/cartoes-preferencia');
     const tela = page.getByTestId('tela-cartoes-preferencia');
     await expect(tela).toBeVisible();

@@ -113,7 +113,7 @@ test.describe('internação: bloqueio do quarto pela auditoria do isolamento @C1
   }) => {
     const externas = vigiarExternas(page);
     await simularApi(page);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.CCIH');
     await page.goto('/internacao/controles/isolamento');
     await expect(page.getByTestId('tela-controles-internacao')).toBeVisible();
     await expect(page.getByTestId('iso-tabela')).toContainText('Contato sintético');
