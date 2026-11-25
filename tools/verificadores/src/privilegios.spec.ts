@@ -409,7 +409,7 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
     // atendimento.lancar-procedimento-extra declara as tabelas do lançamento do faturamento, que roda a produção do
     // repasse na mesma transação: o papel do atendimento grava a produção e lê o que a sincronização lê.
     expect(ler('apps/api/src/modulos/atendimento/porta-propria.ts')).toMatch(
-      /tabelas: \[\.\.\.lancarItem\.tabelas\]/,
+      /tabelas: \[\.\.\.lancarItem\.tabelas[\],]/,
     );
     for (const m of ['atendimento', 'faturamento']) {
       for (const t of ['producao_repasse', 'estorno_repasse', 'lancamento_repasse'])
