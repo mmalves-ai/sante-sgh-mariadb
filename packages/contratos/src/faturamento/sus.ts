@@ -95,6 +95,10 @@ export const REGRAS_CRITICA_SUS = [
   'permanencia-abaixo-da-media',
   'uti-sem-tipo-sih',
   'uti-nao-habilitada',
+  // Leitos do sistema público (04-INT linha 79): as diárias de UTI da competência contra o teto da capacidade contratada
+  // (leitos × dias do mês), acima sem liberação nominal, e o tipo sem capacidade quando o cadastro é usado.
+  'diarias-uti-acima-do-teto',
+  'diarias-uti-sem-capacidade',
 ] as const;
 export type RegraCriticaSus = (typeof REGRAS_CRITICA_SUS)[number];
 
@@ -136,6 +140,8 @@ export const GRAVIDADE_DA_REGRA_SUS: Readonly<Record<RegraCriticaSus, GravidadeC
   'permanencia-abaixo-da-media': 'aviso',
   'uti-sem-tipo-sih': 'bloqueante',
   'uti-nao-habilitada': 'bloqueante',
+  'diarias-uti-acima-do-teto': 'bloqueante',
+  'diarias-uti-sem-capacidade': 'aviso',
 };
 
 /** Situação da crítica: aberta, corrigida na origem (a nova crítica não a acusa) ou justificada (só aviso). */

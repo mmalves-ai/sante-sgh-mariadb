@@ -26,6 +26,7 @@ import {
   TABELAS_SUS_AIH,
 } from './porta-propria-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
+import { type AihMontada, criticasTetoDiariasUti } from './montagem-aih.js';
 import { GravacaoSusPropria, LeituraSusPropria, TABELAS_SUS } from './porta-propria.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
 
@@ -335,9 +336,10 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
   afterAll(async () => {
     if (!nucleo) return;
     await limpar();
-    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-limpa-uti' }, (e) =>
-      e.executar('DELETE FROM leito_uti_habilitado WHERE estabelecimento_id = ?', [ids.est]),
-    );
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-limpa-uti' }, async (e) => {
+      await e.executar('DELETE FROM leito_uti_habilitado WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM capacidade_leito_sus WHERE estabelecimento_id = ?', [ids.est]);
+    });
     await nucleo.encerrar?.();
   });
 
@@ -1065,5 +1067,80 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     } finally {
       await vigencia(null);
     }
+  }, 120_000);
+
+  it('o teto das diárias de UTI pela capacidade contratada do tipo (Leitos do sistema público, 04-INT linha 79)', async () => {
+    // A especialidade de leito de terapia intensiva com o código do tipo de UTI do SIH e o histórico da capacidade de
+    // fevereiro (inclusão de 1 leito, depois alteração para 2 com a crítica liberada, depois volta a 1 sem liberação).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-capacidade' }, async (e) => {
+      const agora = new Date();
+      const esp = await garantir(
+        e,
+        "SELECT id FROM especialidade_leito WHERE codigo_cnes = ? AND versao_fonte = 'teste'",
+        [TIPO_UTI],
+        `INSERT INTO especialidade_leito (codigo_cnes, descricao, codigo_cnes_tipo_leito, terapia_intensiva, vigencia_inicio,
+                                          versao_fonte, criado_em)
+         VALUES (?, 'UTI adulto tipo II (teste)', '03', TRUE, '2008-01-01', 'teste', ?)`,
+        [TIPO_UTI, agora],
+      );
+      await e.executar('DELETE FROM capacidade_leito_sus WHERE estabelecimento_id = ?', [ids.est]);
+      for (const [n, liberada, operacao, quando] of [
+        [1, false, 'inclusao', '2026-02-01 10:00:00'],
+        [2, true, 'alteracao', '2026-02-02 10:00:00'],
+        [1, false, 'alteracao', '2026-02-03 10:00:00'],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO capacidade_leito_sus (estabelecimento_id, especialidade_leito_id, competencia, quantidade_leitos,
+                                             critica_liberada, operacao, ocorrido_em, criado_em)
+           VALUES (?, ?, '2026-02-01', ?, ?, ?, ?, ?)`,
+          [ids.est, esp, n, liberada, operacao, quando, agora],
+        );
+    });
+    const lidas = await nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: ids.est, correlacao }, (l) =>
+      new LeituraSusPropria(l, ids.est).capacidadesUti(),
+    );
+    expect(
+      lidas.map((x) => [x.especialidade, x.competencia, x.quantidadeLeitos, x.criticaLiberada, x.operacao]),
+    ).toEqual([
+      [Number(TIPO_UTI), '2026-02-01', 1, false, 'inclusao'],
+      [Number(TIPO_UTI), '2026-02-01', 2, true, 'alteracao'],
+      [Number(TIPO_UTI), '2026-02-01', 1, false, 'alteracao'],
+    ]);
+    // A montagem da AIH recebe o histórico pela mesma leitura (dadosAih) e a crítica sai do domínio: 1 leito em
+    // fevereiro de 2026 dá teto de 28 diárias; 30 diárias do tipo passam dele sem liberação (a vigente é a última).
+    const dados = await nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: ids.est, correlacao }, (l) =>
+      new LeituraSusPropria(l, ids.est).dadosAih([ids.internacao], [], [], []),
+    );
+    expect(dados.capacidadesUti).toEqual(lidas);
+    const diarias = (n: number) =>
+      [
+        {
+          diariasCompetencia: [
+            {
+              tipo: Number(TIPO_UTI),
+              procedimento: SIG_U,
+              competencia: '202602',
+              dataEntrada: '2026-02-01',
+              dataSaida: '2026-02-28',
+              diarias: n,
+              unidade: null,
+            },
+          ],
+        },
+      ] as unknown as AihMontada[];
+    expect(criticasTetoDiariasUti(diarias(30), dados.capacidadesUti ?? [])).toEqual([
+      expect.objectContaining({
+        regra: 'diarias-uti-acima-do-teto',
+        gravidade: 'bloqueante',
+        detalhe: {
+          tipoUti: Number(TIPO_UTI),
+          competenciaDiarias: '202602',
+          diarias: 30,
+          teto: 28,
+          excedente: 2,
+        },
+      }),
+    ]);
+    expect(criticasTetoDiariasUti(diarias(28), dados.capacidadesUti ?? [])).toEqual([]);
   }, 120_000);
 });

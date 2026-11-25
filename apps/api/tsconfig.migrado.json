@@ -876,6 +876,7 @@
     "src/modulos/sus/armazem.ts",
     "src/modulos/sus/modulo.ts",
     "src/modulos/sus/montagem-aih.ts",
+    "src/modulos/sus/montagem-aih-teto.spec.ts",
     "src/modulos/sus/montagem.ts",
     "src/modulos/sus/porta-aih-memoria.ts",
     "src/modulos/sus/porta-aih.ts",

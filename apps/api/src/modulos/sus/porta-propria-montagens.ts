@@ -10,6 +10,7 @@
 // - O "registro" da tela é o atendimento (CIHA, BPA e APAC) ou a internação (AIH); as contas parciais vão juntas.
 // O paciente lido aqui vai só ao arquivo do gestor: nunca à tela, à trilha nem ao log.
 import type { HabilitacaoUtiVigencia } from '@sgh/dominio-faturamento';
+import type { LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import type { Leitor } from '@sgh/nucleo';
 import type { AtendimentoBpaLido, AtendimentoLido, DadosBpaLidos, DadosCihaLidos } from './porta.js';
 import type { DadosAihLidos } from './porta-aih.js';
@@ -66,6 +67,8 @@ export interface ApoioMontagemSus {
   leitosUti(): Promise<{ tipo: number; nome: string; leitos: number }[]>;
   /** As habilitações de UTI com vigência e unidade, pelo código do tipo no SIH (a crítica por competência). */
   habilitacoesUti?(): Promise<HabilitacaoUtiVigencia[]>;
+  /** A capacidade contratada dos leitos de terapia intensiva pelo código do tipo (o teto de diárias de UTI). */
+  capacidadesUti?(): Promise<LinhaCapacidadeSus[]>;
   sigtapPorCodigo(codigo: string): Promise<{ id: number; codigo: string; nome: string } | null>;
 }
 
@@ -793,6 +796,7 @@ export class MontagensSusPropria {
       cids,
       leitosUti: await this.apoio.leitosUti(),
       ...(this.apoio.habilitacoesUti ? { habilitacoesUti: await this.apoio.habilitacoesUti() } : {}),
+      ...(this.apoio.capacidadesUti ? { capacidadesUti: await this.apoio.capacidadesUti() } : {}),
       cnesCadastrados: await this.apoio.cnesCadastrados(),
     };
   }

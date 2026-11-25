@@ -154,6 +154,10 @@ export const mensagensSus = {
       'uti-sem-tipo-sih':
         'Passagem pela UTI sem o tipo de UTI do SIH definido para a acomodação (Parâmetros: diárias de UTI)',
       'uti-nao-habilitada': 'Diárias de UTI de um tipo sem leito habilitado (Leitos de UTI habilitados)',
+      'diarias-uti-acima-do-teto':
+        'Diárias de UTI da competência acima do teto da capacidade contratada (leitos × dias do mês), sem liberação (Leitos do sistema público)',
+      'diarias-uti-sem-capacidade':
+        'Diárias de UTI de um tipo sem capacidade contratada na competência (Leitos do sistema público)',
     },
   },
   ciha: {

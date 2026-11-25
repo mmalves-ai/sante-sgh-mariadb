@@ -33,6 +33,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { numeroAih } from '@sgh/dominio-faturamento';
+import type { LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoSus, DadosBpaLidos, GravacaoSus, LeituraSus, PortaSus } from './porta.js';
@@ -641,6 +642,7 @@ export class LeituraSusPropria implements LeituraSus {
       cnesCadastrados: () => this.cnesCadastrados(),
       leitosUti: () => this.leitosUti(),
       habilitacoesUti: () => this.habilitacoesUti(),
+      capacidadesUti: () => this.capacidadesUti(),
       sigtapPorCodigo: (c) => this.sigtapPorCodigo(c),
     }));
   }
@@ -769,6 +771,34 @@ export class LeituraSusPropria implements LeituraSus {
         leitos: num(x['leitos']),
       }))
       .filter((x) => Number.isFinite(x.tipo));
+  }
+
+  /**
+   * O histórico da capacidade contratada dos leitos de terapia intensiva do estabelecimento (Leitos do sistema público,
+   * 04-INT linha 79): cada linha com a especialidade trocada pelo código do tipo de leito, que é o tipo de UTI das
+   * diárias. A vigente de cada competência e o teto saem do domínio (`conferirTetosDiarias`).
+   */
+  async capacidadesUti(): Promise<LinhaCapacidadeSus[]> {
+    const ls = await this.l.consultar(
+      `SELECT c.id, e.codigo_cnes, ${dia('c.competencia')} AS competencia, c.quantidade_leitos, c.critica_liberada,
+              c.operacao, c.ocorrido_em
+         FROM capacidade_leito_sus c JOIN especialidade_leito e ON e.id = c.especialidade_leito_id
+        WHERE c.estabelecimento_id = ? AND e.terapia_intensiva
+        ORDER BY c.competencia, c.ocorrido_em, c.id`,
+      [this.est],
+      { teto: 5000 },
+    );
+    return ls
+      .map((x) => ({
+        id: num(x['id']),
+        especialidade: Number(txt(x['codigo_cnes'])),
+        competencia: txt(x['competencia']),
+        quantidadeLeitos: num(x['quantidade_leitos']),
+        criticaLiberada: x['critica_liberada'] === true || Number(x['critica_liberada']) === 1,
+        operacao: txt(x['operacao']) as LinhaCapacidadeSus['operacao'],
+        ocorridoEm: x['ocorrido_em'] instanceof Date ? x['ocorrido_em'].toISOString() : txt(x['ocorrido_em']),
+      }))
+      .filter((x) => Number.isFinite(x.especialidade));
   }
 
   internacaoAih(...a: Parameters<MontagensSusPropria['internacaoAih']>) {

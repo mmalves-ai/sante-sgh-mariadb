@@ -6,6 +6,7 @@ import {
   conferirFimVinculo,
   conferirHabilitacaoLeitoSus,
   conferirTetoDiarias,
+  conferirTetosDiarias,
   conferirVinculoLeitoPrograma,
   type HabilitacaoLeitoSus,
   type LinhaCapacidadeSus,
@@ -188,5 +189,34 @@ describe('capacidade contratada e teto de diárias especiais', () => {
     expect(conferirTetoDiarias({ diarias: 1, vigente: null, competencia: '2025-03-01' }).situacao).toBe(
       'sem_capacidade',
     );
+  });
+  it('soma as diárias da competência por tipo e confere contra a capacidade vigente (montagem da AIH)', () => {
+    // Março tem 31 dias: 2 leitos do tipo 7 dão teto de 62; o tipo 8 está liberado; o tipo 9 não tem capacidade.
+    const capacidades = [
+      l({ id: 1, quantidadeLeitos: 3 }),
+      l({ id: 2, quantidadeLeitos: 2, operacao: 'alteracao', ocorridoEm: '2025-03-05T10:00:00.000Z' }),
+      l({ id: 3, especialidade: 8, quantidadeLeitos: 1, criticaLiberada: true }),
+    ];
+    const diarias = [
+      { tipo: 7, competencia: '202503', diarias: 40 },
+      { tipo: 7, competencia: '2025-03-20', diarias: 25 },
+      { tipo: 8, competencia: '2025-03', diarias: 40 },
+      { tipo: 9, competencia: '2025-03', diarias: 1 },
+      { tipo: 7, competencia: '2025-04', diarias: 0 },
+    ];
+    expect(conferirTetosDiarias(diarias, capacidades)).toEqual([
+      { tipo: 7, competencia: '2025-03-01', diarias: 65, teto: 62, excedente: 3, situacao: 'critica' },
+      {
+        tipo: 9,
+        competencia: '2025-03-01',
+        diarias: 1,
+        teto: null,
+        excedente: 0,
+        situacao: 'sem_capacidade',
+      },
+    ]);
+    // Dentro do teto não há o que conferir; sem nenhuma capacidade cadastrada o cadastro não é usado.
+    expect(conferirTetosDiarias([{ tipo: 7, competencia: '2025-03', diarias: 62 }], capacidades)).toEqual([]);
+    expect(conferirTetosDiarias(diarias, [])).toEqual([]);
   });
 });

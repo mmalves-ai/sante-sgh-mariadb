@@ -51,6 +51,7 @@ import {
   utiPorAcomodacaoDoParametro,
   valorNaCompetencia,
 } from '@sgh/dominio-faturamento';
+import type { LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import { ErroProblema } from '../../problema.filter.js';
 import {
   type AihMontada,
@@ -570,8 +571,12 @@ export class ServicoSusAih {
     pAih: ParametrosAih,
     aihs: readonly AihRegistro[],
     realizado: ReadonlyMap<number, string> = new Map(),
-  ): Promise<{ montadas: AihMontada[]; cnesCadastrados: readonly number[] }> {
-    if (aihs.length === 0) return { montadas: [], cnesCadastrados: [] };
+  ): Promise<{
+    montadas: AihMontada[];
+    cnesCadastrados: readonly number[];
+    capacidadesUti: readonly LinhaCapacidadeSus[];
+  }> {
+    if (aihs.length === 0) return { montadas: [], cnesCadastrados: [], capacidadesUti: [] };
     const equivalencias = await l.equivalencias();
     const uti = [...utiPorAcomodacaoDoParametro(pAih.utiPorAcomodacao).values()].map((x) => x.procedimento);
     const codigos = [
@@ -590,6 +595,7 @@ export class ServicoSusAih {
     return {
       montadas: montarAihs(dados, aihs, s.parametros, pAih, equivalencias, realizado),
       cnesCadastrados: dados.cnesCadastrados,
+      capacidadesUti: dados.capacidadesUti ?? [],
     };
   }
 
@@ -732,7 +738,7 @@ export class ServicoSusAih {
       const internacoes = await l.internacoesSus(intervalo, s.parametros.conveniosSus);
       const vivas = await l.aihsDasInternacoes(internacoes.map((x) => x.registro));
       const candidatas = await l.aihsParaApresentar(competencia);
-      const { montadas, cnesCadastrados } = await this.montar(l, s, pAih, candidatas);
+      const { montadas, cnesCadastrados, capacidadesUti } = await this.montar(l, s, pAih, candidatas);
       const apresentaveis = montadas.filter(
         (m) =>
           (m.aih.situacao === 'apresentada' && m.aih.competenciaApresentacao === competencia) ||
@@ -751,6 +757,7 @@ export class ServicoSusAih {
           s.parametros,
           pAih,
           cadastrados,
+          capacidadesUti,
         ),
         pAih,
       };

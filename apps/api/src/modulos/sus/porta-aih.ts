@@ -3,6 +3,7 @@
 // SIGTAP e os valores) e as do faturamento SUS (faixa, AIH, linhas e retorno), e as gravações. As interfaces entram na
 // LeituraSus e na GravacaoSus (a mesma transação da competência, da crítica, do arquivo e da trilha).
 import type { DiariaUtiCompetencia, HabilitacaoUtiVigencia } from '@sgh/dominio-faturamento';
+import type { LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import {
   type AihRegistro,
   type CompatibilidadeSigtap,
@@ -51,6 +52,11 @@ export interface DadosAihLidos {
   readonly leitosUti: readonly { readonly tipo: number; readonly nome: string; readonly leitos: number }[];
   /** As habilitações de UTI com a vigência e a unidade (o tipo é o código do SIH): a crítica por competência. */
   readonly habilitacoesUti?: readonly HabilitacaoUtiVigencia[];
+  /**
+   * O histórico da capacidade contratada dos leitos de terapia intensiva (Leitos do sistema público, 04-INT linha 79),
+   * com `especialidade` igual ao código do tipo de leito: o teto de diárias de UTI de cada competência.
+   */
+  readonly capacidadesUti?: readonly LinhaCapacidadeSus[];
   readonly cnesCadastrados: readonly number[];
 }
 

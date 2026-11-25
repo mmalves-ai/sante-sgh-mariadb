@@ -237,3 +237,55 @@ export function conferirTetoDiarias(entrada: {
     situacao: excedente === 0 ? 'dentro' : v.criticaLiberada ? 'liberado' : 'critica',
   };
 }
+
+/** As diárias especiais (de UTI) de um tipo de leito numa competência (AAAA-MM-01), somadas do que vai ser faturado. */
+export interface DiariasEspeciaisDaCompetencia {
+  /** O código do tipo de leito, o mesmo da especialidade de leito da capacidade (código do cadastro nacional). */
+  readonly tipo: number;
+  readonly competencia: string;
+  readonly diarias: number;
+}
+
+export interface ConferenciaTetoDiarias {
+  readonly tipo: number;
+  readonly competencia: string;
+  readonly diarias: number;
+  readonly teto: number | null;
+  readonly excedente: number;
+  readonly situacao: 'dentro' | 'liberado' | 'critica' | 'sem_capacidade';
+}
+
+/**
+ * Soma as diárias especiais por tipo e competência e confere cada soma contra o teto da capacidade vigente
+ * (`conferirTetoDiarias`). As linhas de capacidade chegam com `especialidade` igual ao código do tipo de leito. Sem
+ * nenhuma linha de capacidade no estabelecimento o cadastro não é usado e nada é conferido (lista vazia). Só devolve o
+ * que precisa de atenção: acima do teto sem liberação (`critica`) e sem capacidade para o tipo (`sem_capacidade`).
+ */
+export function conferirTetosDiarias(
+  diarias: readonly DiariasEspeciaisDaCompetencia[],
+  capacidades: readonly LinhaCapacidadeSus[],
+): ConferenciaTetoDiarias[] {
+  if (capacidades.length === 0) return [];
+  const somas = new Map<string, DiariasEspeciaisDaCompetencia>();
+  for (const d of diarias) {
+    // A competência do faturamento chega em AAAAMM; a da capacidade é AAAA-MM-01.
+    const c = d.competencia.trim();
+    const competencia = competenciaDe(/^\d{6}$/.test(c) ? `${c.slice(0, 4)}-${c.slice(4)}` : c);
+    if (competencia === null || !(d.diarias > 0)) continue;
+    const chave = `${d.tipo}|${competencia}`;
+    const atual = somas.get(chave);
+    somas.set(chave, { tipo: d.tipo, competencia, diarias: (atual?.diarias ?? 0) + d.diarias });
+  }
+  const saida: ConferenciaTetoDiarias[] = [];
+  for (const s of [...somas.values()].sort((a, b) =>
+    a.competencia === b.competencia ? a.tipo - b.tipo : a.competencia < b.competencia ? -1 : 1,
+  )) {
+    const r = conferirTetoDiarias({
+      diarias: s.diarias,
+      vigente: capacidadeVigente(capacidades, s.tipo, s.competencia),
+      competencia: s.competencia,
+    });
+    if (r.situacao === 'critica' || r.situacao === 'sem_capacidade') saida.push({ ...s, ...r });
+  }
+  return saida;
+}

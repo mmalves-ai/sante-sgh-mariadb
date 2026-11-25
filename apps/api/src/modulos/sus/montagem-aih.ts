@@ -23,6 +23,7 @@ import {
   type ResultadoAih,
   utiPorAcomodacaoDoParametro,
 } from '@sgh/dominio-faturamento';
+import { conferirTetosDiarias, type LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import { cnesDaCompetencia, type ParametrosSus } from './montagem.js';
 import type { DadosAihLidos } from './porta-aih.js';
 import { type AihRegistro, type EquivalenciaSus, type ItemAih, type NovaCriticaSus } from './tipos.js';
@@ -212,8 +213,33 @@ export interface MontagemAihCompetencia {
 }
 
 /**
+ * O teto das diárias de UTI (Leitos do sistema público, 04-INT linha 79): as diárias das AIHs a apresentar somadas por
+ * tipo de UTI e competência da diária e conferidas pelo domínio contra a capacidade contratada vigente (leitos × dias do
+ * mês). Acima do teto sem liberação é bloqueante; o tipo sem capacidade, quando o cadastro é usado, é aviso. A soma é
+ * só do que vai neste arquivo (as diárias já apresentadas em outra competência não entram): nunca critica a mais.
+ */
+export function criticasTetoDiariasUti(
+  apresentaveis: readonly AihMontada[],
+  capacidadesUti: readonly LinhaCapacidadeSus[],
+): CriticaCiha[] {
+  const diarias = apresentaveis.flatMap((m) =>
+    m.diariasCompetencia.map((d) => ({ tipo: d.tipo, competencia: d.competencia, diarias: d.diarias })),
+  );
+  return conferirTetosDiarias(diarias, capacidadesUti).map((r) =>
+    criticaDe(r.situacao === 'critica' ? 'diarias-uti-acima-do-teto' : 'diarias-uti-sem-capacidade', null, {
+      tipoUti: r.tipo,
+      competenciaDiarias: r.competencia.slice(0, 7).replace('-', ''),
+      diarias: r.diarias,
+      teto: r.teto,
+      excedente: r.excedente,
+    }),
+  );
+}
+
+/**
  * A crítica da competência AIH: a internação SUS com alta nela sem AIH (aviso), o laudo sem autorização (bloqueante), a
- * AIH autorizada ainda não fechada (aviso: vai numa competência seguinte) e a montagem de cada AIH a apresentar (regra 6).
+ * AIH autorizada ainda não fechada (aviso: vai numa competência seguinte), a montagem de cada AIH a apresentar (regra 6)
+ * e o teto das diárias de UTI pela capacidade contratada (`criticasTetoDiariasUti`).
  */
 export function criticaAihDaCompetencia(
   competencia: CompetenciaSus,
@@ -223,6 +249,7 @@ export function criticaAihDaCompetencia(
   p: ParametrosSus,
   pAih: ParametrosAih,
   cnesCadastrados: readonly number[],
+  capacidadesUti: readonly LinhaCapacidadeSus[] = [],
 ): MontagemAihCompetencia {
   const todas: CriticaCiha[] = [];
   const cnes = cnesDaCompetencia(p, cnesCadastrados);
@@ -245,6 +272,7 @@ export function criticaAihDaCompetencia(
     }
   }
   for (const m of apresentaveis) todas.push(...m.resultado.criticas);
+  todas.push(...criticasTetoDiariasUti(apresentaveis, capacidadesUti));
   const criticas: NovaCriticaSus[] = todas.map((c) => ({
     chave: chaveDaCritica(c),
     regra: c.regra,
