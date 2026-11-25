@@ -40,6 +40,14 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Registro de cirurgia` },
   },
   {
+    // F3.4, 04-CC L96: descrição cirúrgica assinada (senha ao assinar e no adendo) e intercorrências do ato.
+    path: `/cirurgia/descricao/:ato${id}?`,
+    name: 'cirurgia.descricao',
+    component: () => import('./telas/DescricaoCirurgicaTela.vue'),
+    props: (r) => ({ ato: r.params['ato'] ?? '' }),
+    meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Descrição cirúrgica` },
+  },
+  {
     // F3.4-5, 04-CC L100: gasto de sala do ato (sugestão pela lista padrão, conferência e débito na conta).
     path: `/cirurgia/gasto-sala/:ato${id}?`,
     name: 'cirurgia.gasto-sala',

@@ -231,6 +231,102 @@ async function evento(
   });
 }
 
+/**
+ * Grava a notificação de incidente na transação de quem chama (o gravador da qualidade e as operações de outros módulos,
+ * como a intercorrência cirúrgica que abre a notificação de evento adverso na mesma gravação). A tabela entra nas
+ * `TABELAS_NOTIFICACAO` da operação que chama.
+ */
+export async function gravarNotificacaoIncidente(
+  tx: TxOperacao,
+  est: number,
+  x: Parameters<GravadorQualidade['notificar']>[0],
+): Promise<{ id: number; protocolo: string; repetida: boolean }> {
+  if (x.chaveResumo) {
+    const ja = await tx.uma(
+      `SELECT n.id, n.numero FROM notificacao_incidente n
+               JOIN notificacao_incidente_evento e ON e.notificacao_incidente_id = n.id
+              WHERE n.estabelecimento_id = ? AND JSON_VALUE(e.dados, '$.tipo') = 'recebida'
+                AND JSON_VALUE(e.dados, '$.chave') = ?
+              LIMIT 1`,
+      [est, x.chaveResumo],
+    );
+    if (ja) return { id: n(ja['id']), protocolo: texto(ja['numero']), repetida: true };
+  }
+  const tipo = await idDoCadastro(tx, 'tipo_incidente', x.tipo, 'tipos de incidente');
+  const percebido = await idDoCadastro(tx, 'grau_dano', x.danoPercebido, 'graus de dano');
+  const classificacao = await idDoCadastro(
+    tx,
+    'classificacao_incidente',
+    x.classificacao,
+    'classificações de incidente',
+  );
+  if (x.unidade !== null) {
+    const s = await tx.uma(
+      'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [x.unidade, est],
+    );
+    if (!s) throw recusa('unidade-invalida', 'A unidade informada não é deste estabelecimento.');
+  }
+  if (x.atendimento !== null) {
+    const a = await tx.uma(
+      'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [x.atendimento, est],
+    );
+    if (!a) throw recusa('atendimento-inexistente', 'O atendimento não é deste estabelecimento.');
+  }
+  const notificador = x.anonima ? null : await exigirUsuario(tx, x.notificador);
+  const ano = Number(x.agora.slice(0, 4));
+  const seq = `notificacao_incidente_${ano}`;
+  // A sequência do ano nasce na primeira notificação do ano: o INSERT ... ON DUPLICATE KEY trava a chave única, e
+  // a notificação simultânea espera e segue com o número seguinte (sem SELECT-depois-INSERT, sem impasse).
+  await tx.executar(
+    `INSERT INTO sequencia_negocio (estabelecimento_id, tipo, prefixo, proximo_valor, incremento, valor_maximo, ativo,
+                                          criado_em, criado_por, versao)
+           VALUES (?, ?, NULL, 1, 1, 999999, TRUE, ?, ?, 1)
+           ON DUPLICATE KEY UPDATE id = id`,
+    [est, seq, new Date(), notificador],
+  );
+  const numero = await tx.proximoNumero(seq);
+  const protocolo = x.protocoloDe(ano, numero.valor);
+  const ocorrido = x.ocorridoEm.length === 16 ? `${x.ocorridoEm}:00` : x.ocorridoEm.slice(0, 19);
+  const id = await tx.incluir('notificacao_incidente', {
+    estabelecimento_id: est,
+    numero: protocolo,
+    hash_codigo_acompanhamento: x.codigoResumo,
+    anonima: x.anonima,
+    notificador_usuario_id: notificador,
+    registrada_em: paraBanco(x.agora),
+    ocorrido_em: paraBanco(ocorrido),
+    setor_funcional_id: x.unidade,
+    local_descricao: x.local ? x.local.slice(0, 80) : null,
+    paciente_id: x.paciente,
+    atendimento_id: x.atendimento,
+    tipo_incidente_id: tipo,
+    tipo_outro: x.tipoOutro,
+    chegou_ao_paciente: x.chegouAoPaciente,
+    percebido_grau_dano_id: percebido,
+    classificacao_incidente_id: classificacao,
+    grau_dano_id: percebido,
+    descricao: x.descricao,
+    situacao: 'recebida',
+  });
+  await evento(
+    tx,
+    id,
+    x.agora,
+    null,
+    'recebida',
+    notificador,
+    { tipo: 'recebida', por: '' },
+    {
+      chave: x.chaveResumo,
+      origemTela: x.origemTela,
+      origemSugestao: x.origemSugestao,
+    },
+  );
+  return { id, protocolo, repetida: false };
+}
+
 export class PortaQualidadePropria implements PortaQualidade {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
@@ -339,92 +435,7 @@ export class PortaQualidadePropria implements PortaQualidade {
   private gravador(tx: TxOperacao, est: number): GravadorQualidade {
     const quem = (login: string) => exigirUsuario(tx, login);
     return {
-      notificar: async (x) => {
-        if (x.chaveResumo) {
-          const ja = await tx.uma(
-            `SELECT n.id, n.numero FROM notificacao_incidente n
-               JOIN notificacao_incidente_evento e ON e.notificacao_incidente_id = n.id
-              WHERE n.estabelecimento_id = ? AND JSON_VALUE(e.dados, '$.tipo') = 'recebida'
-                AND JSON_VALUE(e.dados, '$.chave') = ?
-              LIMIT 1`,
-            [est, x.chaveResumo],
-          );
-          if (ja) return { id: n(ja['id']), protocolo: texto(ja['numero']), repetida: true };
-        }
-        const tipo = await idDoCadastro(tx, 'tipo_incidente', x.tipo, 'tipos de incidente');
-        const percebido = await idDoCadastro(tx, 'grau_dano', x.danoPercebido, 'graus de dano');
-        const classificacao = await idDoCadastro(
-          tx,
-          'classificacao_incidente',
-          x.classificacao,
-          'classificações de incidente',
-        );
-        if (x.unidade !== null) {
-          const s = await tx.uma(
-            'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-            [x.unidade, est],
-          );
-          if (!s) throw recusa('unidade-invalida', 'A unidade informada não é deste estabelecimento.');
-        }
-        if (x.atendimento !== null) {
-          const a = await tx.uma(
-            'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-            [x.atendimento, est],
-          );
-          if (!a) throw recusa('atendimento-inexistente', 'O atendimento não é deste estabelecimento.');
-        }
-        const notificador = x.anonima ? null : await quem(x.notificador);
-        const ano = Number(x.agora.slice(0, 4));
-        const seq = `notificacao_incidente_${ano}`;
-        // A sequência do ano nasce na primeira notificação do ano: o INSERT ... ON DUPLICATE KEY trava a chave única, e
-        // a notificação simultânea espera e segue com o número seguinte (sem SELECT-depois-INSERT, sem impasse).
-        await tx.executar(
-          `INSERT INTO sequencia_negocio (estabelecimento_id, tipo, prefixo, proximo_valor, incremento, valor_maximo, ativo,
-                                          criado_em, criado_por, versao)
-           VALUES (?, ?, NULL, 1, 1, 999999, TRUE, ?, ?, 1)
-           ON DUPLICATE KEY UPDATE id = id`,
-          [est, seq, new Date(), notificador],
-        );
-        const numero = await tx.proximoNumero(seq);
-        const protocolo = x.protocoloDe(ano, numero.valor);
-        const ocorrido = x.ocorridoEm.length === 16 ? `${x.ocorridoEm}:00` : x.ocorridoEm.slice(0, 19);
-        const id = await tx.incluir('notificacao_incidente', {
-          estabelecimento_id: est,
-          numero: protocolo,
-          hash_codigo_acompanhamento: x.codigoResumo,
-          anonima: x.anonima,
-          notificador_usuario_id: notificador,
-          registrada_em: paraBanco(x.agora),
-          ocorrido_em: paraBanco(ocorrido),
-          setor_funcional_id: x.unidade,
-          local_descricao: x.local ? x.local.slice(0, 80) : null,
-          paciente_id: x.paciente,
-          atendimento_id: x.atendimento,
-          tipo_incidente_id: tipo,
-          tipo_outro: x.tipoOutro,
-          chegou_ao_paciente: x.chegouAoPaciente,
-          percebido_grau_dano_id: percebido,
-          classificacao_incidente_id: classificacao,
-          grau_dano_id: percebido,
-          descricao: x.descricao,
-          situacao: 'recebida',
-        });
-        await evento(
-          tx,
-          id,
-          x.agora,
-          null,
-          'recebida',
-          notificador,
-          { tipo: 'recebida', por: '' },
-          {
-            chave: x.chaveResumo,
-            origemTela: x.origemTela,
-            origemSugestao: x.origemSugestao,
-          },
-        );
-        return { id, protocolo, repetida: false };
-      },
+      notificar: (x) => gravarNotificacaoIncidente(tx, est, x),
       travar: (id) => this.travarLinha(tx, est, id),
       triar: async (t) => {
         const tipo = await idDoCadastro(tx, 'tipo_incidente', t.tipo, 'tipos de incidente');

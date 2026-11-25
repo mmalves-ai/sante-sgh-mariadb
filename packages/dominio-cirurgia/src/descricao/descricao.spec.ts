@@ -6,6 +6,7 @@ import {
   conferirIntercorrencia,
   ErroDescricaoCirurgica,
   funcaoDescreveCirurgia,
+  notificacaoDaIntercorrencia,
   pendenciasDaDescricao,
 } from './descricao.js';
 
@@ -160,5 +161,41 @@ describe('intercorrência do ato', () => {
     expect(codigo(() => conferirIntercorrencia({ ...base, gravidade: 'obito' }, tipo, janela, agora))).toBe(
       'descricao-obrigatoria',
     );
+  });
+});
+
+describe('notificação de evento adverso pela intercorrência', () => {
+  const i = {
+    gravidade: 'grave' as const,
+    tipoNome: 'Sangramento',
+    fase: 'intraoperatorio',
+    descricao: ' Sangramento arterial ',
+    conduta: 'Ligadura',
+  };
+  it('a grave, o óbito e o tipo de evento adverso abrem a notificação com o dano pela gravidade', () => {
+    expect(notificacaoDaIntercorrencia(true, i)).toEqual({
+      tipo: 'cirurgia',
+      chegouAoPaciente: true,
+      danoPercebido: 'grave',
+      classificacao: 'eventoAdverso',
+      descricao:
+        'Intercorrência cirúrgica (Sangramento, fase intraoperatorio, gravidade grave). Sangramento arterial Conduta: Ligadura',
+    });
+    expect(notificacaoDaIntercorrencia(true, { ...i, gravidade: 'obito' })?.danoPercebido).toBe('obito');
+    expect(notificacaoDaIntercorrencia(true, { ...i, gravidade: 'moderada' })?.danoPercebido).toBe(
+      'moderado',
+    );
+    expect(
+      notificacaoDaIntercorrencia(true, {
+        ...i,
+        gravidade: 'leve',
+        descricao: null,
+        conduta: ' ',
+        fase: 'pre_inducao',
+      })?.descricao,
+    ).toBe('Intercorrência cirúrgica (Sangramento, fase pre inducao, gravidade leve).');
+  });
+  it('a que não pede notificação não abre nada', () => {
+    expect(notificacaoDaIntercorrencia(false, i)).toBeNull();
   });
 });

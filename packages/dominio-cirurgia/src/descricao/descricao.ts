@@ -214,3 +214,51 @@ export function conferirIntercorrencia(
     });
   return { pedeNotificacao: grave || tipo.eventoAdverso };
 }
+
+/** O grau de dano da notificação ao núcleo de segurança do paciente pela gravidade da intercorrência (RDC 36/2013). */
+const DANO_DA_GRAVIDADE: Readonly<Record<GravidadeIntercorrencia, 'leve' | 'moderado' | 'grave' | 'obito'>> =
+  {
+    leve: 'leve',
+    moderada: 'moderado',
+    grave: 'grave',
+    obito: 'obito',
+  };
+
+/** O que a intercorrência leva à notificação de evento adverso, aberta na mesma gravação. */
+export interface NotificacaoDaIntercorrencia {
+  readonly tipo: 'cirurgia';
+  readonly chegouAoPaciente: true;
+  readonly danoPercebido: 'leve' | 'moderado' | 'grave' | 'obito';
+  readonly classificacao: 'eventoAdverso';
+  readonly descricao: string;
+}
+
+/**
+ * A notificação de evento adverso que a intercorrência abre (a grave, o óbito e o tipo marcado como evento adverso),
+ * ou null quando não pede. Atingiu o paciente durante o ato e com dano pela gravidade: proposta "evento adverso" (o
+ * núcleo confirma ou reclassifica na triagem). A descrição é a da intercorrência, com o tipo, a fase e a conduta.
+ */
+export function notificacaoDaIntercorrencia(
+  pede: boolean,
+  i: {
+    readonly gravidade: GravidadeIntercorrencia;
+    readonly tipoNome: string;
+    readonly fase: string;
+    readonly descricao: string | null;
+    readonly conduta: string | null;
+  },
+): NotificacaoDaIntercorrencia | null {
+  if (!pede) return null;
+  const partes = [
+    `Intercorrência cirúrgica (${i.tipoNome}, fase ${i.fase.replace(/_/g, ' ')}, gravidade ${i.gravidade}).`,
+    vazio(i.descricao) ? null : i.descricao!.trim(),
+    vazio(i.conduta) ? null : `Conduta: ${i.conduta!.trim()}`,
+  ].filter((p): p is string => p !== null);
+  return {
+    tipo: 'cirurgia',
+    chegouAoPaciente: true,
+    danoPercebido: DANO_DA_GRAVIDADE[i.gravidade],
+    classificacao: 'eventoAdverso',
+    descricao: partes.join(' ').slice(0, 5000),
+  };
+}

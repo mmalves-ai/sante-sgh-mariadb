@@ -57,7 +57,17 @@ async function limpar(e: Escritor, est: number) {
   await e.executar(`DELETE FROM descricao_cirurgica_adendo WHERE descricao_cirurgica_id IN (${ds})`, [est]);
   await e.executar(`DELETE FROM descricao_cirurgica_achado WHERE descricao_cirurgica_id IN (${ds})`, [est]);
   await e.executar(`DELETE FROM descricao_cirurgica WHERE ato_cirurgico_id IN (${atos})`, [est]);
+  // A notificação de evento adverso aberta pela intercorrência (e a linha do tempo dela) sai depois da intercorrência.
+  const notas = await e.consultar<{ id: number }>(
+    `SELECT notificacao_incidente_id AS id FROM intercorrencia_cirurgica
+      WHERE ato_cirurgico_id IN (${atos}) AND notificacao_incidente_id IS NOT NULL`,
+    [est],
+  );
   await e.executar(`DELETE FROM intercorrencia_cirurgica WHERE ato_cirurgico_id IN (${atos})`, [est]);
+  for (const { id } of notas) {
+    await e.executar('DELETE FROM notificacao_incidente_evento WHERE notificacao_incidente_id = ?', [id]);
+    await e.executar('DELETE FROM notificacao_incidente WHERE id = ?', [id]);
+  }
   await e.executar(`DELETE FROM participante_cirurgia WHERE ato_cirurgico_id IN (${atos})`, [est]);
   await e.executar('DELETE FROM ato_cirurgico WHERE estabelecimento_id = ?', [est]);
 }
@@ -236,6 +246,26 @@ async function montar(e: Escritor): Promise<Massa> {
     exige_conduta: true,
     evento_adverso: false,
   });
+  // Os cadastros da notificação ao núcleo de segurança do paciente (configuração do cliente; a intercorrência grave
+  // abre a notificação de evento adverso), pelos vocabulários do contrato.
+  await g(
+    'SELECT id FROM tipo_incidente WHERE codigo = ?',
+    ['cirurgia'],
+    "INSERT INTO tipo_incidente (codigo, descricao, criado_em) VALUES ('cirurgia', 'Cirurgia ou procedimento', ?)",
+    [agora],
+  );
+  await g(
+    'SELECT id FROM classificacao_incidente WHERE codigo = ?',
+    ['evento_adverso'],
+    "INSERT INTO classificacao_incidente (codigo, descricao, ordem, criado_em) VALUES ('evento_adverso', 'Evento adverso', 3, ?)",
+    [agora],
+  );
+  await g(
+    'SELECT id FROM grau_dano WHERE codigo = ?',
+    ['grave'],
+    "INSERT INTO grau_dano (codigo, descricao, ordem, criado_em) VALUES ('grave', 'Grave', 53, ?)",
+    [agora],
+  );
   const tipoSemConduta = await cad('tipo_intercorrencia_cirurgica', `${P}-T2`, {
     exige_conduta: false,
     evento_adverso: true,
@@ -395,6 +425,53 @@ describe.skipIf(SEM_BANCO)('descrição cirúrgica e intercorrências (banco pr�
       descricao: 'Sangramento importante',
     });
     expect(r2.resultado['pedeNotificacao']).toBe(true);
+    // A grave abriu a notificação de evento adverso na mesma gravação, ligada à intercorrência, com o paciente e o
+    // atendimento do ato, o tipo "cirurgia", o dano pela gravidade e a proposta "evento adverso" (o NSP triará).
+    const nota = {
+      id: Number(r2.resultado['notificacao']),
+      protocolo: String(r2.resultado['protocoloNotificacao']),
+    };
+    expect(nota.protocolo).toMatch(/\S/);
+    const [ligada] = await ler<Record<string, unknown>>(
+      `SELECT i.notificacao_incidente_id AS nid, n.situacao, n.paciente_id, n.atendimento_id, n.anonima,
+              n.notificador_usuario_id AS quem, t.codigo AS tipo, g.codigo AS dano, c.codigo AS classe,
+              (SELECT COUNT(*) FROM notificacao_incidente_evento ev WHERE ev.notificacao_incidente_id = n.id) AS eventos
+         FROM intercorrencia_cirurgica i
+         JOIN notificacao_incidente n ON n.id = i.notificacao_incidente_id
+         JOIN tipo_incidente t ON t.id = n.tipo_incidente_id
+         JOIN grau_dano g ON g.id = n.percebido_grau_dano_id
+         JOIN classificacao_incidente c ON c.id = n.classificacao_incidente_id
+        WHERE i.id = ?`,
+      [Number(r2.resultado['intercorrencia'])],
+    );
+    expect(ligada).toBeDefined();
+    expect({
+      nid: Number(ligada!['nid']),
+      situacao: ligada!['situacao'],
+      paciente: Number(ligada!['paciente_id']),
+      anonima: Number(ligada!['anonima']),
+      quem: Number(ligada!['quem']),
+      tipo: ligada!['tipo'],
+      dano: ligada!['dano'],
+      classe: ligada!['classe'],
+      eventos: Number(ligada!['eventos']),
+    }).toEqual({
+      nid: nota.id,
+      situacao: 'recebida',
+      paciente: m.paciente,
+      anonima: 0,
+      quem: m.usuario,
+      tipo: 'cirurgia',
+      dano: 'grave',
+      classe: 'evento_adverso',
+      eventos: 1,
+    });
+    expect(r.resultado['notificacao']).toBeNull();
+    const [semNota] = await ler<Record<string, unknown>>(
+      'SELECT notificacao_incidente_id AS nid FROM intercorrencia_cirurgica WHERE id = ?',
+      [Number(r.resultado['intercorrencia'])],
+    );
+    expect(semNota!['nid']).toBeNull();
     const ints = await ler<Record<string, unknown>>(
       'SELECT sequencia, registrado_por_profissional_id AS p, gravidade FROM intercorrencia_cirurgica WHERE ato_cirurgico_id = ? ORDER BY sequencia',
       [m.ato],
@@ -417,6 +494,7 @@ describe.skipIf(SEM_BANCO)('descrição cirúrgica e intercorrências (banco pr�
     expect(t.descricoes[0]).toMatchObject({ situacao: 'retificada', achados: [{ achado: m.achados[1] }] });
     expect(t.descricoes[0]!.adendos).toHaveLength(2);
     expect(t.intercorrencias).toHaveLength(2);
+    expect(t.intercorrencias.map((i) => i.notificacao === null)).toEqual([true, false]);
     expect(await porta.tela(ctx(), 999999999)).toBeNull();
     const pac = await porta.doPaciente(ctx(), m.paciente);
     expect(pac[0]).toMatchObject({ ato: m.ato, situacao: 'retificada', adendos: 2, intercorrencias: 2 });

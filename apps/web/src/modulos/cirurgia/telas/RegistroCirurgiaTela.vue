@@ -726,6 +726,15 @@ async function registrar(): Promise<void> {
                   :data-testid="`realizada-gasto-${r.id}`"
                   >{{ t('cirurgia.registro.lancarGasto') }}</RouterLink
                 >
+                <!-- 04-CC L96: a descrição cirúrgica e as intercorrências do mesmo ato. -->
+                <RouterLink
+                  :to="{ name: 'cirurgia.descricao', params: { ato: String(r.id) } }"
+                  :aria-label="
+                    t('cirurgia.descricao.linkRegistroAria', { data: dataBr(r.data), sala: r.sala })
+                  "
+                  :data-testid="`realizada-descricao-${r.id}`"
+                  >{{ t('cirurgia.descricao.linkRegistro') }}</RouterLink
+                >
               </td>
             </tr>
           </tbody>

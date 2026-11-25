@@ -15,10 +15,15 @@ import {
   funcaoDescreveCirurgia,
   GRAVIDADES_INTERCORRENCIA,
   type MembroEquipeDescricao,
+  notificacaoDaIntercorrencia,
   type SituacaoDescricao,
 } from '@sgh/dominio-cirurgia';
 import { definirOperacao, type Operacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
+import { formatarProtocolo } from '@sgh/dominio-qualidade';
+import { relogioDoEstabelecimento } from '../qualidade/apoio-propria.js';
+import { gravarNotificacaoIncidente, TABELAS_NOTIFICACAO } from '../qualidade/porta-propria.js';
+import { codigoAcompanhamento, resumoDaChave, resumoSha256 } from '../qualidade/servico.js';
 import { FUSO_PADRAO, instante, n, nn, texto, textoOuNulo } from './banco-apoio.js';
 
 type Linha = Record<string, unknown>;
@@ -289,7 +294,9 @@ const adendo = definirOperacao<AdendoDescricaoEntrada, ResultadoOperacao>({
 
 const intercorrencia = definirOperacao<IntercorrenciaEntrada, ResultadoOperacao>({
   nome: 'cirurgia.registrar-intercorrencia',
-  tabelas: ['intercorrencia_cirurgica'],
+  // A grave, o óbito e o tipo de evento adverso abrem a notificação ao núcleo de segurança do paciente na mesma
+  // transação (RDC 36/2013): a intercorrência fica ligada a ela e nenhuma das duas fica sem a outra.
+  tabelas: ['intercorrencia_cirurgica', ...TABELAS_NOTIFICACAO],
   entrada: esquemaIntercorrencia as never,
   async gravar(tx, e) {
     const ato = await atoTravado(tx, e.ato);
@@ -297,7 +304,7 @@ const intercorrencia = definirOperacao<IntercorrenciaEntrada, ResultadoOperacao>
     if (prof === null)
       throw recusa('sem-profissional', 'A sua conta não tem vínculo de profissional neste estabelecimento.');
     const t = await tx.uma(
-      'SELECT ativo, exige_conduta, evento_adverso FROM tipo_intercorrencia_cirurgica WHERE id = ?',
+      'SELECT ativo, exige_conduta, evento_adverso, descricao FROM tipo_intercorrencia_cirurgica WHERE id = ?',
       [e.tipo],
     );
     const f = await tx.uma<{ fuso_horario: string | null }>(
@@ -334,7 +341,63 @@ const intercorrencia = definirOperacao<IntercorrenciaEntrada, ResultadoOperacao>
       conduta: e.conduta,
       registrado_por_profissional_id: prof,
     });
-    return { intercorrencia: id, pedeNotificacao: r.pedeNotificacao } as ResultadoOperacao;
+    const nota = notificacaoDaIntercorrencia(r.pedeNotificacao, {
+      gravidade: e.gravidade,
+      tipoNome: textoOuNulo(t?.['descricao']) ?? 'tipo não informado',
+      fase: e.fase,
+      descricao: e.descricao,
+      conduta: e.conduta,
+    });
+    if (!nota)
+      return {
+        intercorrencia: id,
+        pedeNotificacao: false,
+        notificacao: null,
+        protocoloNotificacao: null,
+      } as ResultadoOperacao;
+    const dados = await tx.uma(
+      `SELECT a.atendimento_id, a.paciente_id, u.login FROM ato_cirurgico a JOIN usuario u ON u.id = ?
+        WHERE a.id = ?`,
+      [n(tx.contexto.usuario), e.ato],
+    );
+    if (!dados?.['login']) throw recusa('usuario-inexistente', 'A conta da sessão não existe neste cliente.');
+    // A chave da notificação é a da intercorrência: o mesmo ato nunca abre duas notificações.
+    const chave = `intercorrencia-cirurgica:${String(id)}`;
+    const aberta = await gravarNotificacaoIncidente(tx, ato.est, {
+      agora: await relogioDoEstabelecimento(tx, ato.est),
+      protocoloDe: formatarProtocolo,
+      codigoResumo: resumoSha256(codigoAcompanhamento(String(ato.est), chave)),
+      chaveResumo: resumoDaChave(String(ato.est), chave),
+      ocorridoEm: e.ocorridoEm.replace(' ', 'T'),
+      atendimento: n(dados['atendimento_id']),
+      paciente: n(dados['paciente_id']),
+      unidade: null,
+      leito: null,
+      local: 'Centro cirúrgico',
+      tipo: nota.tipo,
+      tipoOutro: null,
+      chegouAoPaciente: nota.chegouAoPaciente,
+      danoPercebido: nota.danoPercebido,
+      classificacao: nota.classificacao,
+      descricao: nota.descricao,
+      anonima: false,
+      notificador: texto(dados['login']),
+      origemTela: 'cirurgia.intercorrencia',
+      origemSugestao: null,
+    });
+    const linha = await tx.uma<{ versao: number }>(
+      'SELECT versao FROM intercorrencia_cirurgica WHERE id = ?',
+      [id],
+    );
+    await tx.alterar('intercorrencia_cirurgica', id, n(linha?.versao), {
+      notificacao_incidente_id: aberta.id,
+    });
+    return {
+      intercorrencia: id,
+      pedeNotificacao: true,
+      notificacao: aberta.id,
+      protocoloNotificacao: aberta.protocolo,
+    } as ResultadoOperacao;
   },
   alvo: (_e, r) => ({ tabela: 'intercorrencia_cirurgica', id: n((r as Linha)['intercorrencia']) }),
   trilha: (e) => ({ dados: { ato: e.ato, gravidade: e.gravidade, fase: e.fase }, motivo: null }),

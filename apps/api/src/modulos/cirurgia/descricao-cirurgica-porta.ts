@@ -61,6 +61,8 @@ export interface TelaDescricaoCirurgica {
     descricao: string | null;
     conduta: string | null;
     registradoPor: string;
+    /** O protocolo da notificação de evento adverso aberta pela intercorrência, ou null. */
+    notificacao: string | null;
   }[];
   readonly catalogos: {
     achados: { id: number; rotulo: string; textoSugerido: string | null }[];
@@ -208,9 +210,10 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
       }
       const ints = await l.consultar(
         `SELECT i.sequencia, t.descricao AS tipo, i.ocorrido_em, i.fase, i.gravidade, i.descricao, i.conduta,
-                ${NOME_PROF} AS nome
+                ${NOME_PROF} AS nome, ni.numero AS protocolo
            FROM intercorrencia_cirurgica i
            JOIN tipo_intercorrencia_cirurgica t ON t.id = i.tipo_intercorrencia_cirurgica_id
+           LEFT JOIN notificacao_incidente ni ON ni.id = i.notificacao_incidente_id
            JOIN profissional pr ON pr.id = i.registrado_por_profissional_id
            JOIN pessoa_fisica pfp ON pfp.id = pr.pessoa_fisica_id
           WHERE i.ato_cirurgico_id = ? AND i.excluido_em IS NULL ORDER BY i.ocorrido_em, i.sequencia`,
@@ -256,6 +259,7 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
           descricao: textoOuNulo(i['descricao']),
           conduta: textoOuNulo(i['conduta']),
           registradoPor: texto(i['nome']),
+          notificacao: textoOuNulo(i['protocolo']),
         })),
         catalogos: {
           achados: achadosCat.map((x) => ({
