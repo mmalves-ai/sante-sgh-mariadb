@@ -180,6 +180,10 @@ export function planejarDecisao(p: PedidoDecisao): { readonly ok: true } | Recus
 export type CfopRemessa = '5915' | '6915';
 export type ResultadoRetorno = 'consertado' | 'sem_conserto';
 
+/** Saída sem custo, sem orçamento: o equipamento volta ao fabricante ou ao contratado. */
+export const MOTIVOS_SEM_ORCAMENTO = ['garantia', 'contrato', 'comodato'] as const;
+export type MotivoSemOrcamento = (typeof MOTIVOS_SEM_ORCAMENTO)[number];
+
 export interface PedidoRemessa {
   readonly situacaoOs: SituacaoOs;
   readonly temEquipamento: boolean;
@@ -189,6 +193,8 @@ export interface PedidoRemessa {
   readonly enviadoEm: string;
   readonly previsaoRetorno: string | null;
   readonly termo: string;
+  /** Saída sem orçamento aprovado (garantia, contrato, comodato), com justificativa; null quando há orçamento. */
+  readonly semOrcamento: { readonly motivo: MotivoSemOrcamento; readonly justificativa: string } | null;
 }
 
 export type RecusaRemessa =
@@ -197,6 +203,9 @@ export type RecusaRemessa =
   | 'remessa-aberta'
   | 'orcamento-pendente'
   | 'orcamento-reprovado'
+  | 'sem-orcamento'
+  | 'sem-orcamento-indevido'
+  | 'justificativa-sem-orcamento'
   | 'previsao-invertida'
   | 'termo-obrigatorio';
 
@@ -210,8 +219,24 @@ export function planejarRemessa(
   if (p.remessaAberta) return recusa('remessa-aberta', 'O equipamento já está fora, aguardando retorno.');
   if (p.orcamento === 'pendente')
     return recusa('orcamento-pendente', 'O orçamento ainda aguarda a aprovação.');
-  if (p.orcamento === 'reprovado')
-    return recusa('orcamento-reprovado', 'O orçamento foi reprovado; registre outro antes de enviar.');
+  if (p.orcamento === 'aprovado' && p.semOrcamento !== null)
+    return recusa('sem-orcamento-indevido', 'A OS já tem orçamento aprovado; a saída segue por ele.');
+  if (p.orcamento !== 'aprovado') {
+    // RDC 509/2021: o conserto externo pago sai só com o orçamento aprovado dentro da alçada; a saída sem custo
+    // (garantia, contrato, comodato) fica registrada com o motivo e a justificativa.
+    if (p.semOrcamento === null)
+      return p.orcamento === 'reprovado'
+        ? recusa('orcamento-reprovado', 'O orçamento foi reprovado; registre outro antes de enviar.')
+        : recusa(
+            'sem-orcamento',
+            'Registre e aprove o orçamento antes de enviar, ou informe a saída sem custo (garantia, contrato ou comodato).',
+          );
+    if (p.semOrcamento.justificativa.trim().length < JUSTIFICATIVA_MINIMA_ORCAMENTO)
+      return recusa(
+        'justificativa-sem-orcamento',
+        `Justifique a saída sem orçamento (no mínimo ${JUSTIFICATIVA_MINIMA_ORCAMENTO} caracteres).`,
+      );
+  }
   if (p.previsaoRetorno !== null && p.previsaoRetorno < p.enviadoEm.slice(0, 10))
     return recusa('previsao-invertida', 'A previsão de retorno é anterior à saída.');
   if (p.termo.trim().length < 5)

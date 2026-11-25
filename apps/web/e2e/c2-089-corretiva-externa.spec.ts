@@ -99,9 +99,20 @@ test.describe('manutenção corretiva: oficina, orçamento e conserto externo @C
     await d.getByTestId('os-acao-gravar').click();
     await expect(d.getByTestId('os-situacao')).toContainText('Em atendimento', { timeout: 30_000 });
 
-    // 3. O técnico registra o orçamento do fornecedor (valor conferido na hora).
+    // 3. Sem orçamento aprovado, a remessa pede o motivo da saída sem custo (conferido na hora).
     let c = d.getByTestId('os-corretiva');
     await expect(c).toBeVisible();
+    await c.getByTestId('os-corretiva-nova-remessa').click();
+    await expect(c.getByTestId('os-remessa-sem-orcamento-ajuda')).toBeVisible();
+    await campo(c.getByTestId('os-remessa-termo')).fill('Com cabo de força.');
+    await c.getByTestId('os-corretiva-gravar').click();
+    await expect(c.getByTestId('os-corretiva-problemas')).toContainText('sem custo');
+    await escolher(c.getByTestId('os-remessa-motivo-sem-orcamento'), 'Comodato');
+    await c.getByTestId('os-corretiva-gravar').click();
+    await expect(c.getByTestId('os-corretiva-problemas')).toContainText('pelo menos 10 caracteres');
+    await c.getByRole('button', { name: 'Cancelar' }).click();
+
+    // O técnico registra o orçamento do fornecedor (valor conferido na hora).
     await c.getByTestId('os-corretiva-novo-orcamento').click();
     let f = c.getByTestId('os-corretiva-form-orcamento');
     await campo(f.getByTestId('os-orcamento-descricao')).fill(

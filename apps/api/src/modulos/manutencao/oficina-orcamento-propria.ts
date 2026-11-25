@@ -152,6 +152,9 @@ export interface RemessaDaOs {
   readonly fornecedor: number;
   readonly fornecedorNome: string;
   readonly orcamento: number | null;
+  /** Saída sem orçamento (garantia, contrato, comodato) e a justificativa. */
+  readonly motivoSemOrcamento: 'garantia' | 'contrato' | 'comodato' | null;
+  readonly justificativaSemOrcamento: string | null;
   readonly termoSaida: string;
   readonly notaFiscalRemessa: string | null;
   readonly cfop: '5915' | '6915' | null;
@@ -325,6 +328,8 @@ async function lerCorretiva(
       fornecedor: n(x['empresa_fornecedora_id']),
       fornecedorNome: t(x['fornecedor_nome']),
       orcamento: nn(x['orcamento_ordem_servico_manutencao_id']),
+      motivoSemOrcamento: tn(x['motivo_sem_orcamento']) as RemessaDaOs['motivoSemOrcamento'],
+      justificativaSemOrcamento: tn(x['justificativa_sem_orcamento']),
       termoSaida: t(x['termo_saida']),
       notaFiscalRemessa: tn(x['nota_fiscal_remessa']),
       cfop: tn(x['cfop_remessa']) as RemessaDaOs['cfop'],
@@ -657,6 +662,7 @@ function gravador(tx: TxOperacao, est: number, c: Contexto) {
         notaFiscal: string | null;
         cfop: '5915' | '6915' | null;
         previsaoRetorno: string | null;
+        semOrcamento: { motivo: 'garantia' | 'contrato' | 'comodato'; justificativa: string } | null;
       },
       planejar: (
         o: OsRelida,
@@ -678,12 +684,17 @@ function gravador(tx: TxOperacao, est: number, c: Contexto) {
       const plano = planejar(o, Boolean(aberta), (ultimo?.situacao as SituacaoOrcamentoBanco) ?? null, ag);
       recusar(plano);
       const em = paraInstante(ag, fuso);
+      const aprovado = ultimo?.situacao === 'aprovado';
       const id = await tx.incluir(TABELA_REMESSA, {
         estabelecimento_id: est,
         ordem_servico_manutencao_id: o.id,
         equipamento_saude_id: o.equipamento,
         empresa_fornecedora_id: await fornecedorValido(x.fornecedor),
-        orcamento_ordem_servico_manutencao_id: ultimo?.situacao === 'aprovado' ? n(ultimo.id) : null,
+        orcamento_ordem_servico_manutencao_id: aprovado ? n(ultimo!.id) : null,
+        motivo_sem_orcamento: aprovado ? null : (x.semOrcamento?.motivo ?? null),
+        justificativa_sem_orcamento: aprovado
+          ? null
+          : (x.semOrcamento?.justificativa.trim().slice(0, 500) ?? null),
         termo_saida: x.termo.trim().slice(0, 1000),
         nota_fiscal_remessa: x.notaFiscal?.trim() || null,
         cfop_remessa: x.cfop,

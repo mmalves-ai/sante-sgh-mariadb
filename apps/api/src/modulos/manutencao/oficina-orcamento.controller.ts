@@ -28,6 +28,7 @@ import { EVENTOS_AUDITAVEIS, PERMISSOES_MANUTENCAO_CODIGOS as P, type SituacaoOs
 import {
   conferirMembro,
   conferirOficina,
+  MOTIVOS_SEM_ORCAMENTO,
   planejarDecisao,
   planejarOrcamento,
   planejarRemessa,
@@ -119,6 +120,9 @@ const esquemaDecisao = z.object({
   justificativa: textoN(1000),
 });
 
+/** O administrador da plataforma pode tudo (ADR 0002): decide o orçamento sem alçada, como nas rotas vizinhas. */
+const administradorDe = (req: RequisicaoAutorizada) => req.sgh?.sessao.usuario.ator === 'plataforma';
+
 const esquemaRemessa = z.object({
   versaoOs: z.number().int().positive(),
   fornecedor: id,
@@ -126,6 +130,10 @@ const esquemaRemessa = z.object({
   notaFiscal: textoN(20),
   cfop: z.enum(['5915', '6915']).nullable().default(null),
   previsaoRetorno: dataN,
+  semOrcamento: z
+    .object({ motivo: z.enum(MOTIVOS_SEM_ORCAMENTO), justificativa: z.string().max(500) })
+    .nullable()
+    .default(null),
 });
 
 const esquemaRetorno = z.object({
@@ -316,7 +324,7 @@ export class OficinaOrcamentoController {
               decisao: e.decisao,
               orcamento,
               quem,
-              administrador: false,
+              administrador: administradorDe(req),
               membros,
               justificativa: e.justificativa,
               hoje,
@@ -350,6 +358,7 @@ export class OficinaOrcamentoController {
           enviadoEm: agora,
           previsaoRetorno: e.previsaoRetorno,
           termo: e.termo,
+          semOrcamento: e.semOrcamento,
         }),
       ),
     );

@@ -17,6 +17,7 @@ import {
   registrarOrcamento,
   registrarRetorno,
   type CfopRemessa,
+  type MotivoSemOrcamento,
   type OrcamentoDaOs,
   type RemessaDaOs,
   type ResultadoRetorno,
@@ -78,6 +79,8 @@ const termo = ref('');
 const nota = ref('');
 const cfop = ref<CfopRemessa | null>(null);
 const previsao = ref<string | null>(null);
+const motivoSem = ref<MotivoSemOrcamento | null>(null);
+const justificativaSem = ref('');
 const justificativa = ref('');
 const resultado = ref<ResultadoRetorno>('consertado');
 const observacao = ref('');
@@ -91,6 +94,12 @@ const opcoesCfop = computed(() => [
   { valor: '5915' as CfopRemessa | null, rotulo: k('cfops.5915') },
   { valor: '6915' as CfopRemessa | null, rotulo: k('cfops.6915') },
 ]);
+const opcoesMotivoSem = computed(() =>
+  (['garantia', 'contrato', 'comodato'] as const).map((m) => ({
+    valor: m as MotivoSemOrcamento | null,
+    rotulo: k(`motivosSemOrcamento.${m}`),
+  })),
+);
 const opcoesResultado = computed(() =>
   (['consertado', 'sem_conserto'] as const).map((r) => ({ valor: r, rotulo: k(`resultados.${r}`) })),
 );
@@ -100,6 +109,8 @@ function abrir(a: Acao) {
   problemas.value = [];
   erro.value = null;
   fornecedor.value = a === 'remessa' ? (aprovado.value?.fornecedor ?? null) : null;
+  motivoSem.value = null;
+  justificativaSem.value = '';
 }
 
 async function gravar(fn: () => Promise<{ mensagem: string }>) {
@@ -160,7 +171,16 @@ function gravarRemessa() {
     ...(previsao.value && previsao.value < new Date().toISOString().slice(0, 10)
       ? [t('manutencao.recusas.corretiva.previsao-invertida')]
       : []),
+    // Sem orçamento aprovado, só a saída sem custo, com motivo e justificativa (a mesma regra do domínio).
+    ...(!aprovado.value && motivoSem.value === null ? [t('manutencao.recusas.corretiva.sem-orcamento')] : []),
+    ...(!aprovado.value && motivoSem.value !== null && justificativaSem.value.trim().length < 10
+      ? [t('manutencao.recusas.corretiva.justificativa-sem-orcamento')]
+      : []),
   ];
+  const sem =
+    !aprovado.value && motivoSem.value !== null
+      ? { motivo: motivoSem.value, justificativa: justificativaSem.value.trim() }
+      : null;
   void gravar(() =>
     enviarRemessa(props.os, {
       versaoOs: x.versaoOs,
@@ -169,6 +189,7 @@ function gravarRemessa() {
       notaFiscal: nota.value.trim() || null,
       cfop: cfop.value,
       previsaoRetorno: previsao.value,
+      semOrcamento: sem,
     }),
   );
 }
@@ -247,6 +268,10 @@ function gravarRetorno(r: RemessaDaOs) {
         <li v-for="r in c.remessas" :key="r.id" :data-testid="`os-remessa-${r.situacao}`">
           {{ r.fornecedorNome }} · {{ instanteBr(r.enviadoEm) }} · {{ k(`situacoesRemessa.${r.situacao}`) }}
           <template v-if="r.cfop"> · {{ k('cfopDe', { cfop: r.cfop }) }}</template>
+          <template v-if="r.motivoSemOrcamento">
+            ·
+            {{ k('semOrcamentoDe', { motivo: k(`motivosSemOrcamento.${r.motivoSemOrcamento}`) }) }}</template
+          >
           <template v-if="r.notaFiscalRemessa">
             · {{ k('campos.notaFiscal') }} {{ r.notaFiscalRemessa }}</template
           >
@@ -383,6 +408,28 @@ function gravarRetorno(r: RemessaDaOs) {
             data-testid="os-remessa-termo"
           />
           <p class="secundario">{{ k('campos.termoAjuda') }}</p>
+          <template v-if="!aprovado">
+            <p class="secundario" data-testid="os-remessa-sem-orcamento-ajuda">
+              {{ k('campos.semOrcamentoAjuda') }}
+            </p>
+            <div class="campos">
+              <SanteSelecao
+                v-model="motivoSem"
+                obrigatorio
+                :rotulo="k('campos.motivoSemOrcamento')"
+                :opcoes="opcoesMotivoSem"
+                data-testid="os-remessa-motivo-sem-orcamento"
+              />
+              <SanteCampoTexto
+                v-model="justificativaSem"
+                multilinha
+                obrigatorio
+                :rotulo="k('campos.justificativaSemOrcamento')"
+                :max-bytes="500"
+                data-testid="os-remessa-justificativa-sem-orcamento"
+              />
+            </div>
+          </template>
           <div class="campos">
             <SanteCampoTexto
               v-model="nota"

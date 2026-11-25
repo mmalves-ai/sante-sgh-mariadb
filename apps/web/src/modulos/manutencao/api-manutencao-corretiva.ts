@@ -105,12 +105,17 @@ export interface OrcamentoDaOs {
 }
 export type CfopRemessa = '5915' | '6915';
 export type ResultadoRetorno = 'consertado' | 'sem_conserto';
+/** Saída sem orçamento aprovado: só sem custo (garantia, contrato de manutenção, comodato), com justificativa. */
+export type MotivoSemOrcamento = 'garantia' | 'contrato' | 'comodato';
+
 export interface RemessaDaOs {
   readonly id: number;
   readonly versao: number;
   readonly fornecedor: number;
   readonly fornecedorNome: string;
   readonly orcamento: number | null;
+  readonly motivoSemOrcamento: MotivoSemOrcamento | null;
+  readonly justificativaSemOrcamento: string | null;
   readonly termoSaida: string;
   readonly notaFiscalRemessa: string | null;
   readonly cfop: CfopRemessa | null;
@@ -204,6 +209,7 @@ export const enviarRemessa = (
     notaFiscal: string | null;
     cfop: CfopRemessa | null;
     previsaoRetorno: string | null;
+    semOrcamento: { motivo: MotivoSemOrcamento; justificativa: string } | null;
   },
 ) => enviar(`${B}/os/${os}/remessas`, corpo, resultado, chave('remessa'));
 export const registrarRetorno = (

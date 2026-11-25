@@ -140,10 +140,11 @@ describe('remessa e retorno do conserto externo', () => {
     enviadoEm: '2026-11-25T10:00:00',
     previsaoRetorno: '2026-12-05',
     termo: 'Com cabo e sensor',
+    semOrcamento: null,
   };
   it('a saída põe a OS aguardando o fornecedor', () => {
     expect(planejarRemessa(r)).toEqual({ ok: true, para: 'aguardandoTerceiro' });
-    expect(planejarRemessa({ ...r, orcamento: null })).toMatchObject({ ok: true });
+    expect(planejarRemessa({ ...r, orcamento: null })).toMatchObject({ recusa: 'sem-orcamento' });
     expect(planejarRemessa({ ...r, situacaoOs: 'aberta' })).toMatchObject({ recusa: 'situacao-nao-permite' });
     expect(planejarRemessa({ ...r, temEquipamento: false })).toMatchObject({ recusa: 'sem-equipamento' });
     expect(planejarRemessa({ ...r, remessaAberta: true })).toMatchObject({ recusa: 'remessa-aberta' });
@@ -155,6 +156,26 @@ describe('remessa e retorno do conserto externo', () => {
       recusa: 'previsao-invertida',
     });
     expect(planejarRemessa({ ...r, termo: '' })).toMatchObject({ recusa: 'termo-obrigatorio' });
+  });
+  it('sem orçamento aprovado, só a saída sem custo justificada', () => {
+    const garantia = { motivo: 'garantia' as const, justificativa: 'Dentro da garantia do fabricante' };
+    expect(planejarRemessa({ ...r, orcamento: null, semOrcamento: garantia })).toMatchObject({ ok: true });
+    expect(planejarRemessa({ ...r, orcamento: 'reprovado', semOrcamento: garantia })).toMatchObject({
+      ok: true,
+    });
+    expect(planejarRemessa({ ...r, orcamento: 'pendente', semOrcamento: garantia })).toMatchObject({
+      recusa: 'orcamento-pendente',
+    });
+    expect(
+      planejarRemessa({
+        ...r,
+        orcamento: null,
+        semOrcamento: { motivo: 'comodato', justificativa: 'curta' },
+      }),
+    ).toMatchObject({ recusa: 'justificativa-sem-orcamento' });
+    expect(planejarRemessa({ ...r, semOrcamento: garantia })).toMatchObject({
+      recusa: 'sem-orcamento-indevido',
+    });
   });
   it('o retorno devolve a OS ao atendimento', () => {
     const t = {

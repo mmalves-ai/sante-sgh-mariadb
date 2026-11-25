@@ -231,19 +231,19 @@ describe.skipIf(SEM_BANCO_MAN)('oficina, orçamento e conserto externo (MariaDB)
        VALUES (?, 'L0303M-O-1', 'corretiva', ?, ?, ?, ?, 'Não liga', 'alta', 'em_atendimento', NOW(3), NOW(3))`,
       [M().est, M().setor, M().usuario, equipamento.id, oficina],
     );
-    const versaoOs = async () =>
+    const versaoOs = async (osId = os) =>
       Number(
-        (await um<{ v: number }>('SELECT versao AS v FROM ordem_servico_manutencao WHERE id = ?', [os])).v,
+        (await um<{ v: number }>('SELECT versao AS v FROM ordem_servico_manutencao WHERE id = ?', [osId])).v,
       );
-    const orcar = async (valor: number) =>
+    const orcar = async (valor: number, osId = os) =>
       porta.gravar(
         c(),
         (r: { id: number }) => trilhaMan(M(), 'orcamento_ordem_servico_manutencao', r.id),
         async (g) =>
           g.registrarOrcamento(
             {
-              os,
-              versaoOs: await versaoOs(),
+              os: osId,
+              versaoOs: await versaoOs(osId),
               fornecedor: M().fornecedor,
               descricao: 'Troca da fonte',
               valor,
@@ -266,6 +266,7 @@ describe.skipIf(SEM_BANCO_MAN)('oficina, orçamento e conserto externo (MariaDB)
       id: number,
       versao: number,
       decisao: 'aprovado' | 'reprovado',
+      administrador = false,
     ) =>
       porta.gravar(
         ctx,
@@ -276,29 +277,29 @@ describe.skipIf(SEM_BANCO_MAN)('oficina, orçamento e conserto externo (MariaDB)
               decisao,
               orcamento: orc,
               quem: ctx.usuario!,
-              administrador: false,
+              administrador,
               membros,
               justificativa: null,
               hoje,
             }),
           ),
       );
-    // Remessa antes de decidir o orçamento: recusada.
-    const primeiro = await orcar(1500);
-    const enviar = async () =>
+    type SemOrc = { motivo: 'garantia' | 'contrato' | 'comodato'; justificativa: string } | null;
+    const enviar = async (osId = os, semOrcamento: SemOrc = null) =>
       porta.gravar(
         c(),
         (r: { id: number }) => trilhaMan(M(), 'remessa_conserto_manutencao', r.id),
         async (g) =>
           g.enviarRemessa(
             {
-              os,
-              versaoOs: await versaoOs(),
+              os: osId,
+              versaoOs: await versaoOs(osId),
               fornecedor: M().fornecedor,
               termo: 'Com cabo de força e sensor',
               notaFiscal: '123',
               cfop: '5915',
               previsaoRetorno: '2099-01-01',
+              semOrcamento,
             },
             (o, aberta, orc, agora) =>
               planejarRemessa({
@@ -309,9 +310,14 @@ describe.skipIf(SEM_BANCO_MAN)('oficina, orçamento e conserto externo (MariaDB)
                 enviadoEm: agora,
                 previsaoRetorno: '2099-01-01',
                 termo: 'Com cabo de força e sensor',
+                semOrcamento,
               }),
           ),
       );
+    // Remessa sem orçamento nenhum: recusada (o conserto externo pago exige o orçamento aprovado).
+    await expect(enviar()).rejects.toSatisfy((e) => codigoDe(e) === 'sem-orcamento');
+    // Remessa antes de decidir o orçamento: recusada.
+    const primeiro = await orcar(1500);
     await expect(enviar()).rejects.toSatisfy((e) => codigoDe(e) === 'orcamento-pendente');
     const segundo = await orcar(800);
     const sit = async (id: number) =>
@@ -356,6 +362,9 @@ describe.skipIf(SEM_BANCO_MAN)('oficina, orçamento e conserto externo (MariaDB)
       [rem.id],
     );
     expect(r1).toMatchObject({ situacao: 'enviado', cfop: '5915', orc: segundo.id, eq: equipamento.id });
+    expect(
+      await um('SELECT motivo_sem_orcamento AS m FROM remessa_conserto_manutencao WHERE id = ?', [rem.id]),
+    ).toMatchObject({ m: null });
     expect(
       (await um<{ s: string }>('SELECT situacao AS s FROM ordem_servico_manutencao WHERE id = ?', [os])).s,
     ).toBe('aguardando_terceiro');
@@ -412,5 +421,40 @@ describe.skipIf(SEM_BANCO_MAN)('oficina, orçamento e conserto externo (MariaDB)
       atrasada: false,
     });
     expect(await porta.corretiva(contextoMan(M(), M().outro), os)).toBeNull();
+
+    // Segunda OS: a saída em garantia, sem orçamento, exige justificativa e fica gravada com o motivo.
+    const os2 = await escreverBanco(
+      M(),
+      `INSERT INTO ordem_servico_manutencao (estabelecimento_id, numero, natureza, solicitante_setor_funcional_id,
+         solicitante_usuario_id, equipamento_saude_id, oficina_manutencao_id, descricao, prioridade_sugerida, situacao,
+         solicitado_em, criado_em)
+       VALUES (?, 'L0303M-O-2', 'corretiva', ?, ?, ?, ?, 'Tela apagada', 'alta', 'em_atendimento', NOW(3), NOW(3))`,
+      [M().est, M().setor, M().usuario, equipamento.id, oficina],
+    );
+    await expect(enviar(os2, { motivo: 'garantia', justificativa: 'curta' })).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'justificativa-sem-orcamento',
+    );
+    const rem2 = await enviar(os2, { motivo: 'garantia', justificativa: 'Dentro da garantia do fabricante' });
+    expect(
+      await um(
+        'SELECT orcamento_ordem_servico_manutencao_id AS orc, motivo_sem_orcamento AS m, justificativa_sem_orcamento AS j FROM remessa_conserto_manutencao WHERE id = ?',
+        [rem2.id],
+      ),
+    ).toMatchObject({ orc: null, m: 'garantia', j: 'Dentro da garantia do fabricante' });
+    expect(await trilhas('remessa_conserto_manutencao', rem2.id)).toBe(1);
+
+    // O administrador da plataforma decide acima da alçada (5000 > 1000) e mesmo sendo o autor (ADR 0002);
+    // o aprovador comum, não.
+    const caro = await orcar(5000, os2);
+    await expect(decidir(comoAprovador(), caro.id, 1, 'aprovado')).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'acima-da-alcada',
+    );
+    await decidir(c(), caro.id, 1, 'aprovado', true);
+    expect(
+      await um(
+        'SELECT situacao, decidido_por_usuario_id AS quem FROM orcamento_ordem_servico_manutencao WHERE id = ?',
+        [caro.id],
+      ),
+    ).toMatchObject({ situacao: 'aprovado', quem: M().usuario });
   });
 });

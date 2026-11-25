@@ -45,6 +45,10 @@ export const recusasCorretiva = {
   'remessa-aberta': 'O equipamento já está com o fornecedor: registre o retorno antes de nova remessa.',
   'orcamento-pendente': 'O orçamento ainda aguarda a decisão do aprovador.',
   'orcamento-reprovado': 'O último orçamento foi reprovado: registre um novo antes de enviar.',
+  'sem-orcamento':
+    'Sem orçamento aprovado, o equipamento só sai sem custo: informe o motivo (garantia, contrato ou comodato).',
+  'sem-orcamento-indevido': 'A ordem de serviço já tem orçamento aprovado: a saída segue por ele.',
+  'justificativa-sem-orcamento': 'Justifique a saída sem orçamento com pelo menos 10 caracteres.',
   'previsao-invertida': 'A previsão de retorno é anterior à saída.',
   'termo-obrigatorio': 'Descreva o termo de saída (estado do equipamento e acessórios que seguem).',
   'remessa-retornada': 'O retorno desta remessa já foi registrado.',
@@ -158,7 +162,17 @@ export const textosCorretiva = {
     resultado: 'Resultado',
     observacao: 'Observação',
     observacaoAjuda: 'Obrigatória quando volta sem conserto: pelo menos 10 caracteres.',
+    motivoSemOrcamento: 'Saída sem orçamento',
+    justificativaSemOrcamento: 'Justificativa da saída sem orçamento',
+    semOrcamentoAjuda:
+      'Não há orçamento aprovado: o conserto pago exige a aprovação dentro da alçada. Sem custo, informe o motivo.',
   },
+  motivosSemOrcamento: {
+    garantia: 'Garantia do fabricante ou do fornecedor',
+    contrato: 'Contrato de manutenção vigente',
+    comodato: 'Comodato',
+  },
+  semOrcamentoDe: 'Sem orçamento: {motivo}',
   cfops: {
     nenhum: 'Sem nota fiscal',
     '5915': '5.915 - remessa para conserto dentro do estado',
