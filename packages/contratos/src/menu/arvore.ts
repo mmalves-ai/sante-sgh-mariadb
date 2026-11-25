@@ -18,7 +18,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F8 (05-SADT linha 6): o item "Limites do pedido de exame" entrou à mão (mesmo motivo); a contagem acompanha.
 // F3.1 (02-CAD linha 28): o item "Calendário de feriados e dias não úteis" entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":421,"M":195,"P":57,"N":169};
+// F3.8 (07-FIN linha 85): o item "Fechamento do período financeiro" entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":422,"M":195,"P":57,"N":170};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -260,6 +262,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.contas-a-receber.renegociacao-de-titulos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Renegociação de títulos"],"titulo":"Renegociação de títulos","selo":"P","fase":3,"rota":"/financeiro/receber/renegociacoes","permissao":"financeiro.tituloReceber.ler"},
   {"id":"financeiro.contas-a-receber.baixa-por-demonstrativo-com-glosa-no-titulo","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Baixa por demonstrativo, com glosa no título"],"titulo":"Baixa por demonstrativo, com glosa no título","selo":"N","fase":3,"rota":"/financeiro/receber/demonstrativos","permissao":"financeiro.tituloReceber.ler"},
   {"id":"financeiro.tesouraria.movimento-bancario-e-saldos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Movimento bancário e saldos"],"titulo":"Movimento bancário e saldos","selo":"M","fase":3,"rota":"/financeiro/tesouraria/movimento","permissao":"financeiro.movimento.ler"},
+  {"id":"financeiro.tesouraria.fechamento-do-periodo-financeiro","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Fechamento do período financeiro"],"titulo":"Fechamento do período financeiro","selo":"N","fase":3,"rota":"/financeiro/tesouraria/periodo","permissao":"financeiro.movimento.ler"},
   {"id":"financeiro.tesouraria.conciliacao-bancaria-extrato","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Conciliação bancária"],"titulo":"Conciliação bancária","selo":"N","fase":3,"rota":"/financeiro/tesouraria/conciliacao","permissao":"financeiro.conciliacao.ler"},
   {"id":"financeiro.tesouraria.fluxo-de-caixa-realizado-e-projetado","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Fluxo de caixa realizado e projetado"],"titulo":"Fluxo de caixa realizado e projetado","selo":"N","fase":3,"rota":"/financeiro/tesouraria/fluxo-caixa","permissao":"financeiro.fluxoCaixa.ler"},
   {"id":"financeiro.apropriacao-gerencial-grupo-subgrupo-item","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Apropriação gerencial"],"titulo":"Apropriação gerencial","selo":"M","fase":3,"rota":"/financeiro/gerencial","permissao":"financeiro.classificacao.ler"},
