@@ -143,6 +143,8 @@ export function problemaDoCadastro(e: unknown): ErroProblema {
     return new ErroProblema('indisponivel', p.status, p.title, p.detail, { codigo });
   // A recusa por escopo dentro da gravação (ex.: a conta bancária fora do escopo, M32 regra 15) sai como 403.
   if (p.status === 403) return new ErroProblema('sem-permissao', 403, p.title, p.detail, { codigo });
+  // O alvo que não existe (ex.: o paciente da abertura do atendimento) sai como 404 com a mensagem, nunca como 500.
+  if (p.status === 404) return new ErroProblema('nao-encontrado', 404, p.title, p.detail, { codigo });
   switch (codigo) {
     case 'conflito-versao': {
       const campos = [...new Set((p.colunas ?? []).map(campoDe))];

@@ -6,6 +6,7 @@ import { fontesSinteticas } from '../../sessao/montar.js';
 import { IMPRESSAO_IDENTIFICACAO } from '../administracao/impressao-identificacao-emissao.js';
 import { ImpressaoIdentificacaoPropria } from '../administracao/impressao-identificacao-propria.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
+import { cadastroMemoriaAtual, PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
 import type { ContextoModulo } from '../registro.js';
 import { AtendimentoController } from './atendimento.controller.js';
 import { AVISOS_ATENDIMENTO, AvisosAtendimento } from './avisos.js';
@@ -31,7 +32,15 @@ export async function portaDoAtendimento(ctx: ContextoModulo): Promise<PortaAten
     await ligarMapaEstabelecimentos(cliente, ctx.nucleo);
     return new PortaAtendimentoPropria(ctx.nucleo, cliente);
   }
-  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return new PortaAtendimentoMemoria({ estado: () => 'verde' });
+  if (!ctx.nucleo && fontesSinteticas(ctx.env)) {
+    // A abertura confere o paciente no cadastro: o mesmo cadastro em memória do processo (o que a busca da recepção lê),
+    // ou um próprio quando o módulo do cadastro não está montado.
+    const proprio = new PortaCadastroMemoria();
+    return new PortaAtendimentoMemoria(
+      { estado: () => 'verde' },
+      { lerPacientes: (c, ids) => (cadastroMemoriaAtual() ?? proprio).lerPacientes(c, ids) },
+    );
+  }
   return portaAtendimentoIndisponivel();
 }
 

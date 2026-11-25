@@ -945,7 +945,7 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
           NUMEROS,
         );
         await w.executar(
-          'UPDATE solicitante_externo SET sucessor_solicitante_externo_id = NULL WHERE numero_conselho IN (?, ?)',
+          'UPDATE solicitante_externo SET sucessor_solicitante_externo_id = NULL, unificado_em = NULL, unificado_por = NULL, ativo_antes_unificacao = NULL WHERE numero_conselho IN (?, ?)',
           NUMEROS,
         );
         await w.executar('DELETE FROM solicitante_externo WHERE numero_conselho IN (?, ?)', NUMEROS);

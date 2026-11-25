@@ -459,6 +459,10 @@ export async function limparMassa(nucleo: NucleoProprio, m: Massa | null): Promi
     for (const t of ['endereco_pessoa', 'telefone_pessoa', 'email_pessoa', 'documento_pessoa'])
       await e.executar(`DELETE FROM ${t} WHERE pessoa_fisica_id IN (${pessoas})`);
     await e.executar(`DELETE FROM pessoa_fisica WHERE id IN (SELECT id FROM (${pessoas}) x)`);
+    // O solicitante unificado em outro da massa aponta o sucessor: solta o ponteiro antes de apagar os dois.
+    await e.executar(
+      `UPDATE solicitante_externo SET sucessor_solicitante_externo_id = NULL, unificado_em = NULL, unificado_por = NULL, ativo_antes_unificacao = NULL WHERE nome LIKE '%${MARCA}%'`,
+    );
     await e.executar(`DELETE FROM solicitante_externo WHERE nome LIKE '%${MARCA}%'`);
     await e.executar("DELETE FROM idempotencia_operacao WHERE chave LIKE 'f22-0102-%'");
   });
