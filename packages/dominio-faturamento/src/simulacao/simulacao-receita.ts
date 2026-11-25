@@ -69,6 +69,25 @@ const finito = (x: unknown): x is number => typeof x === 'number' && Number.isFi
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const r4 = (x: number) => Math.round(x * 10_000) / 10_000;
 
+const primeiroDoMes = (d: string) => (DATA.test(d) ? `${d.slice(0, 8)}01` : d);
+function ultimoDoMes(d: string): string {
+  const [a, m] = [Number(d.slice(0, 4)), Number(d.slice(5, 7))];
+  return new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
+}
+
+/**
+ * O período do cenário no recorte escolhido. A competência da conta é sempre o dia 1 do mês: pela competência, o
+ * início e o fim viram o dia 1 do mês de cada um (de 15/01 a 31/03 são as competências de janeiro a março). Pela data
+ * do atendimento, o período fica como foi digitado. A tela mostra o período assim, enquanto se digita, e o servidor
+ * grava o mesmo valor.
+ */
+export function normalizarPeriodoCenario<
+  E extends Pick<CenarioReceitaEntrada, 'producaoInicio' | 'producaoFim' | 'dataReferencia'>,
+>(e: E): E {
+  if (e.dataReferencia !== 'competencia') return e;
+  return { ...e, producaoInicio: primeiroDoMes(e.producaoInicio), producaoFim: primeiroDoMes(e.producaoFim) };
+}
+
 /** A regra só muda algo se troca tabela ou convênio, reajusta ou converte procedimentos. */
 export function regraMudaAlgo(r: RegraCenarioReceita): boolean {
   return (
@@ -87,7 +106,11 @@ export function validarCenarioReceita(e: CenarioReceitaEntrada): ErrosCenario {
   if (!dataValida(e.producaoInicio)) erros['producaoInicio'] = 'Informe o início da produção (AAAA-MM-DD).';
   if (!dataValida(e.producaoFim)) erros['producaoFim'] = 'Informe o fim da produção (AAAA-MM-DD).';
   if (!erros['producaoInicio'] && !erros['producaoFim']) {
-    const dias = diasEntre(e.producaoInicio, e.producaoFim);
+    // Pela competência, o período cobre os meses inteiros: do dia 1 do mês inicial ao último dia do mês final.
+    const fimCoberto = e.dataReferencia === 'competencia' ? ultimoDoMes(e.producaoFim) : e.producaoFim;
+    const inicioCoberto =
+      e.dataReferencia === 'competencia' ? primeiroDoMes(e.producaoInicio) : e.producaoInicio;
+    const dias = diasEntre(inicioCoberto, fimCoberto);
     if (dias < 0) erros['producaoFim'] = 'O fim da produção não pode ser antes do início.';
     else if (dias > PERIODO_MAXIMO_DIAS)
       erros['producaoFim'] = `A produção base vai até ${PERIODO_MAXIMO_DIAS} dias; divida o período.`;

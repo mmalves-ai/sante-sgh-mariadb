@@ -9,6 +9,7 @@
 import {
   type CenarioReceitaEntrada,
   type DataReferenciaSimulacao,
+  normalizarPeriodoCenario,
   type TipoAtendimentoFiltro,
   validarCenarioReceita,
 } from '@sgh/dominio-faturamento';
@@ -41,6 +42,7 @@ const { t } = useI18n({
       recorte: 'Recortar a produção pela',
       competencia: 'competência da conta',
       atendimento: 'data do atendimento',
+      competencias: 'Competências de {inicio} a {fim} (a competência da conta é o mês inteiro).',
       tipoAtendimento: 'Tipo de atendimento',
       todos: 'Todos',
       ambulatorial: 'Ambulatorial',
@@ -171,10 +173,24 @@ const form = reactive({
 });
 const tocado = ref(false);
 const idOuNulo = (v: number) => (v > 0 ? v : null);
+// Pela competência, o período vai do dia 1 do mês inicial ao dia 1 do mês final (a mesma regra do servidor).
+const periodo = computed(() =>
+  normalizarPeriodoCenario({
+    producaoInicio: form.producaoInicio,
+    producaoFim: form.producaoFim,
+    dataReferencia: form.dataReferencia,
+  }),
+);
+const mesAno = (d: string) => `${d.slice(5, 7)}/${d.slice(0, 4)}`;
+const dataBr = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+const periodoDe = (c: { producaoInicio: string; producaoFim: string; dataReferencia: string }) =>
+  c.dataReferencia === 'competencia'
+    ? `${mesAno(c.producaoInicio)} — ${mesAno(c.producaoFim)}`
+    : `${dataBr(c.producaoInicio)} — ${dataBr(c.producaoFim)}`;
 const entrada = computed<CenarioReceitaEntrada>(() => ({
   nome: form.nome,
-  producaoInicio: form.producaoInicio,
-  producaoFim: form.producaoFim,
+  producaoInicio: periodo.value.producaoInicio,
+  producaoFim: periodo.value.producaoFim,
   dataReferencia: form.dataReferencia,
   tipoAtendimento: form.tipoAtendimento || null,
   regras: form.regras.map((r) => ({
@@ -252,9 +268,10 @@ function salvarESimular() {
     return x.id;
   }, t('gravado'));
 }
-const simularDeNovo = (cenario: number) =>
+// Simular de novo usa o recorte salvo no cenário, nunca o do formulário de cenário novo.
+const simularDeNovo = (cenario: { id: number; dataReferencia: string }) =>
   acao(
-    async () => (await executarSimulacaoReceita(cenario, form.dataReferencia, chave)).id,
+    async () => (await executarSimulacaoReceita(cenario.id, cenario.dataReferencia, chave)).id,
     t('reexecutado'),
   );
 </script>
@@ -298,6 +315,12 @@ const simularDeNovo = (cenario: number) =>
         ]"
         data-testid="sr-recorte"
       />
+      <small
+        v-if="form.dataReferencia === 'competencia' && !erros['producaoInicio'] && !erros['producaoFim']"
+        data-testid="sr-competencias"
+      >
+        {{ t('competencias', { inicio: mesAno(periodo.producaoInicio), fim: mesAno(periodo.producaoFim) }) }}
+      </small>
       <SanteSelecao
         v-model="form.tipoAtendimento"
         :rotulo="t('tipoAtendimento')"
@@ -504,7 +527,7 @@ const simularDeNovo = (cenario: number) =>
       <tbody>
         <tr v-for="c in painel.data.value.cenarios" :key="c.id" :data-testid="`sr-cenario-${c.id}`">
           <td>{{ c.nome }}</td>
-          <td>{{ c.producaoInicio }} — {{ c.producaoFim }}</td>
+          <td>{{ periodoDe(c) }} ({{ t(c.dataReferencia) }})</td>
           <td>{{ t(c.situacao) }}</td>
           <td>{{ c.receitaBase === null ? '—' : reais(c.receitaBase) }}</td>
           <td>{{ c.receitaSimulada === null ? '—' : reais(c.receitaSimulada) }}</td>
@@ -528,7 +551,7 @@ const simularDeNovo = (cenario: number) =>
               type="button"
               :disabled="gravando"
               :data-testid="`sr-refazer-${c.id}`"
-              @click="simularDeNovo(c.id)"
+              @click="simularDeNovo(c)"
             >
               {{ t('simularDeNovo') }}
             </button>

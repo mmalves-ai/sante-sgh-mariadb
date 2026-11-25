@@ -14,6 +14,8 @@ import {
   consolidarInconsistencias,
   consolidarResultado,
   DATAS_REFERENCIA_SIMULACAO,
+  type DataReferenciaSimulacao,
+  normalizarPeriodoCenario,
   type LinhaRecalculada,
   objetivoDoCenario,
   type OcorrenciaInconsistencia,
@@ -110,7 +112,8 @@ export const esquemaCriarCenarioReceita = z.object({
 });
 export const esquemaExecutarSimulacaoReceita = z.object({
   cenarioId: id,
-  dataReferencia: z.enum(DATAS_REFERENCIA_SIMULACAO).default('competencia'),
+  // O recorte é premissa gravada do cenário; quem manda o recorte só confirma o do cenário (divergente é recusado).
+  dataReferencia: z.enum(DATAS_REFERENCIA_SIMULACAO).nullable().default(null),
 });
 
 // ── Criar o cenário ─────────────────────────────────────────────────────────────────────────────────────
@@ -182,9 +185,11 @@ export const opCriarCenarioReceita = definirOperacao({
     'regra_conversao_procedimento',
   ],
   entrada: esquemaCriarCenarioReceita,
-  async gravar(tx, e, ctx) {
+  async gravar(tx, bruto, ctx) {
     const est = estDe(ctx);
     const dono = usuarioDe(ctx);
+    // Pela competência, o período vira o dia 1 de cada mês (a competência da conta é sempre o dia 1).
+    const e = normalizarPeriodoCenario(bruto);
     exigirValido(validarCenarioReceita(e));
     const nome = e.nome.trim();
     const mesmo = await tx.uma(
@@ -200,6 +205,7 @@ export const opCriarCenarioReceita = definirOperacao({
       descricao: e.descricao || null,
       producao_inicio: e.producaoInicio,
       producao_fim: e.producaoFim,
+      data_referencia: e.dataReferencia,
       situacao: 'rascunho',
       dono_usuario_id: dono,
     });
@@ -254,7 +260,15 @@ export const opCriarCenarioReceita = definirOperacao({
         conversoes += 1;
       }
     }
-    return { id: cenario, regras: e.regras.length, conversoes, parametros: seq };
+    return {
+      id: cenario,
+      regras: e.regras.length,
+      conversoes,
+      parametros: seq,
+      producaoInicio: e.producaoInicio,
+      producaoFim: e.producaoFim,
+      dataReferencia: e.dataReferencia,
+    };
   },
   alvo: (_e, s) => ({ tabela: 'cenario_simulacao_receita', id: s.id }),
 });
@@ -358,7 +372,7 @@ export const opExecutarSimulacaoReceita = definirOperacao({
     const est = estDe(ctx);
     const solicitante = usuarioDe(ctx);
     const c = await tx.uma<Linha>(
-      `SELECT id, nome, situacao, producao_inicio, producao_fim, versao FROM cenario_simulacao_receita
+      `SELECT id, nome, situacao, producao_inicio, producao_fim, data_referencia, versao FROM cenario_simulacao_receita
         WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
       [e.cenarioId, est],
     );
@@ -368,6 +382,13 @@ export const opExecutarSimulacaoReceita = definirOperacao({
       });
     if (txt(c['situacao']) === 'arquivado')
       throw recusa('invalido', 'O cenário está arquivado.', { campos: ['cenarioId'] });
+    const recorte = txt(c['data_referencia']) as DataReferenciaSimulacao;
+    if (e.dataReferencia !== null && e.dataReferencia !== recorte)
+      throw recusa(
+        'invalido',
+        `O cenário foi salvo com o recorte pela ${recorte === 'competencia' ? 'competência' : 'data do atendimento'}; para outro recorte, crie outro cenário.`,
+        { campos: ['dataReferencia'] },
+      );
     const regras = await regrasDoCenario(tx, e.cenarioId);
     if (!regras.length) throw recusa('invalido', 'O cenário não tem convênio.', { campos: ['cenarioId'] });
     const filtro = await tx.uma<Linha>(
@@ -385,7 +406,7 @@ export const opExecutarSimulacaoReceita = definirOperacao({
       est,
       inicio,
       fim,
-      e.dataReferencia,
+      recorte,
       [...new Set(regras.map((r) => r.fontePagadoraId))],
       tipoFiltro,
     );
@@ -483,7 +504,7 @@ export const opExecutarSimulacaoReceita = definirOperacao({
       tipo_simulacao: tipoDaSimulacao(regras),
       periodo_inicio: inicio,
       periodo_fim: fim,
-      data_referencia: e.dataReferencia,
+      data_referencia: recorte,
       solicitante_usuario_id: solicitante,
       solicitado_em: iniciada,
       iniciada_em: iniciada,
@@ -545,7 +566,7 @@ const opcao = (x: Linha) => ({ id: n(x['id']), descricao: txt(x['d']) });
 /** A tela: cenários com a última execução, o histórico de execuções e as opções dos combos. */
 export async function painelSimulacaoReceitaPropria(l: Leitor, est: number) {
   const cenarios = await l.consultar<Linha>(
-    `SELECT id, nome, objetivo, descricao, producao_inicio, producao_fim, situacao, receita_base, receita_simulada,
+    `SELECT id, nome, objetivo, descricao, producao_inicio, producao_fim, data_referencia, situacao, receita_base, receita_simulada,
             quantidade_atendimentos, processado_em
        FROM cenario_simulacao_receita WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY id DESC LIMIT 200`,
     [est],
@@ -566,6 +587,7 @@ export async function painelSimulacaoReceitaPropria(l: Leitor, est: number) {
       descricao: c['descricao'] == null ? null : txt(c['descricao']),
       producaoInicio: dia(c['producao_inicio']),
       producaoFim: dia(c['producao_fim']),
+      dataReferencia: txt(c['data_referencia']),
       situacao: txt(c['situacao']),
       receitaBase: nn(c['receita_base']),
       receitaSimulada: nn(c['receita_simulada']),

@@ -3,6 +3,7 @@ import {
   type CenarioReceitaEntrada,
   consolidarInconsistencias,
   consolidarResultado,
+  normalizarPeriodoCenario,
   type ItemProducao,
   type LinhaRecalculada,
   objetivoDoCenario,
@@ -132,6 +133,44 @@ describe('validarCenarioReceita', () => {
         }),
       ),
     ).toEqual({});
+  });
+});
+
+describe('período pela competência (a competência da conta é o dia 1 do mês)', () => {
+  it('normaliza início e fim para o dia 1 de cada mês; pela data do atendimento fica como foi digitado', () => {
+    expect(
+      normalizarPeriodoCenario(cenario({ producaoInicio: '2026-01-15', producaoFim: '2026-03-31' })),
+    ).toMatchObject({ producaoInicio: '2026-01-01', producaoFim: '2026-03-01' });
+    const atendimento = cenario({
+      producaoInicio: '2026-01-15',
+      producaoFim: '2026-03-31',
+      dataReferencia: 'atendimento',
+    });
+    expect(normalizarPeriodoCenario(atendimento)).toEqual(atendimento);
+  });
+
+  it('valida o período coberto: meses inteiros pela competência, até 12 competências', () => {
+    expect(
+      validarCenarioReceita(cenario({ producaoInicio: '2026-01-15', producaoFim: '2026-01-10' })),
+    ).toEqual({});
+    expect(
+      validarCenarioReceita(cenario({ producaoInicio: '2026-01-15', producaoFim: '2026-12-01' })),
+    ).toEqual({});
+    expect(
+      validarCenarioReceita(cenario({ producaoInicio: '2026-01-15', producaoFim: '2027-01-01' }))[
+        'producaoFim'
+      ],
+    ).toMatch(/366/);
+    expect(
+      validarCenarioReceita(cenario({ producaoInicio: '2026-02-15', producaoFim: '2026-01-31' }))[
+        'producaoFim'
+      ],
+    ).toMatch(/antes/);
+    expect(
+      validarCenarioReceita(
+        cenario({ producaoInicio: '2026-01-15', producaoFim: '2026-01-10', dataReferencia: 'atendimento' }),
+      )['producaoFim'],
+    ).toMatch(/antes/);
   });
 });
 

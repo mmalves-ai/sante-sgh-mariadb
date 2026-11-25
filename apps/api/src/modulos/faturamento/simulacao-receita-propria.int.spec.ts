@@ -320,7 +320,8 @@ describe.skipIf(SEM_BANCO)('simulação de cenários de receita sobre a produç�
     );
   const cenarioCompleto = () => ({
     nome: `${P} TABELA NOVA COM REAJUSTE`,
-    producaoInicio: '2026-01-01',
+    // Início no meio do mês pela competência: vale a competência de janeiro inteira (gravada como dia 1).
+    producaoInicio: '2026-01-15',
     producaoFim: '2026-01-31',
     dataReferencia: 'competencia',
     regras: [
@@ -338,10 +339,15 @@ describe.skipIf(SEM_BANCO)('simulação de cenários de receita sobre a produç�
     ids['cen1'] = Number(r['id']);
     expect(r).toMatchObject({ regras: 1, conversoes: 1, parametros: 1 });
     const [c] = await linhas(
-      'SELECT objetivo, situacao, dono_usuario_id, criado_por, producao_inicio FROM cenario_simulacao_receita WHERE id = ?',
+      `SELECT objetivo, situacao, dono_usuario_id, criado_por, data_referencia,
+              DATE_FORMAT(producao_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(producao_fim, '%Y-%m-%d') AS fim
+         FROM cenario_simulacao_receita WHERE id = ?`,
       [ids['cen1']],
     );
     expect(c).toMatchObject({
+      data_referencia: 'competencia',
+      inicio: '2026-01-01',
+      fim: '2026-01-01',
       objetivo: 'troca_tabela_preco',
       situacao: 'rascunho',
       dono_usuario_id: ids['usuario'],
@@ -494,14 +500,65 @@ describe.skipIf(SEM_BANCO)('simulação de cenários de receita sobre a produç�
     expect(res.map((y) => Number(y['destino_fonte_pagadora_id']))).toEqual([ids['fonteB']]);
   });
 
-  it('nova execução é outra fotografia: a anterior fica, e pela data do atendimento o recorte é o mesmo', async () => {
-    const r = await s.gravar('executar', op(), { cenarioId: ids['cen1'], dataReferencia: 'atendimento' });
+  it('nova execução é outra fotografia com o recorte salvo; recorte divergente no pedido é recusado sem gravar', async () => {
+    const execucoes = async (cen: number) =>
+      linhas(
+        'SELECT data_referencia FROM simulacao_receita WHERE cenario_simulacao_receita_id = ? ORDER BY id',
+        [cen],
+      );
+    const r = await s.gravar('executar', op(), { cenarioId: ids['cen1'] });
     expect(r).toMatchObject({ valorAtual: 390, valorSimulado: 601 });
-    const n = await linhas(
-      'SELECT COUNT(*) AS n FROM simulacao_receita WHERE cenario_simulacao_receita_id = ?',
-      [ids['cen1']],
+    await expect(
+      s.gravar('executar', op(), { cenarioId: ids['cen1'], dataReferencia: 'atendimento' }),
+    ).rejects.toMatchObject({ problema: { campos: ['dataReferencia'] } });
+    expect((await execucoes(ids['cen1']!)).map((x) => x['data_referencia'])).toEqual([
+      'competencia',
+      'competencia',
+    ]);
+  });
+
+  it('cenário pela data do atendimento: o recorte fica gravado e simular de novo usa o mesmo recorte', async () => {
+    const r = await s.gravar('criar', op(), {
+      ...cenarioCompleto(),
+      nome: `${P} PELA DATA DO ATENDIMENTO`,
+      producaoInicio: '2026-01-11',
+      producaoFim: '2026-01-31',
+      dataReferencia: 'atendimento',
+    });
+    ids['cen3'] = Number(r['id']);
+    const [c] = await linhas(
+      `SELECT data_referencia, DATE_FORMAT(producao_inicio, '%Y-%m-%d') AS inicio,
+              DATE_FORMAT(producao_fim, '%Y-%m-%d') AS fim FROM cenario_simulacao_receita WHERE id = ?`,
+      [ids['cen3']],
     );
-    expect(Number(n[0]!['n'])).toBe(2);
+    expect(c).toMatchObject({ data_referencia: 'atendimento', inicio: '2026-01-11', fim: '2026-01-31' });
+    // Do dia 11 ao 31: Y (11/01, 50), W (12/01, 40) e X ambulatorial (15/01, 100) = 190; X de 10/01 fica fora.
+    // Simulado: Z 30×2×1,1 = 66 + W sem preço 40 + X 150×1,1 = 165 → 271.
+    const x1 = await s.gravar('executar', op(), { cenarioId: ids['cen3'] });
+    expect(x1).toMatchObject({ valorAtual: 190, valorSimulado: 271, quantidadeItens: 3 });
+    const x2 = await s.gravar('executar', op(), { cenarioId: ids['cen3'], dataReferencia: 'atendimento' });
+    expect(x2).toMatchObject({ valorAtual: 190, valorSimulado: 271 });
+    await expect(
+      s.gravar('executar', op(), { cenarioId: ids['cen3'], dataReferencia: 'competencia' }),
+    ).rejects.toMatchObject({ problema: { campos: ['dataReferencia'] } });
+    const sims = await linhas(
+      `SELECT data_referencia, DATE_FORMAT(periodo_inicio, '%Y-%m-%d') AS inicio, valor_atual_total
+         FROM simulacao_receita WHERE cenario_simulacao_receita_id = ? ORDER BY id`,
+      [ids['cen3']],
+    );
+    expect(sims.map((y) => [y['data_referencia'], y['inicio'], Number(y['valor_atual_total'])])).toEqual([
+      ['atendimento', '2026-01-11', 190],
+      ['atendimento', '2026-01-11', 190],
+    ]);
+    const [cen] = await linhas(
+      'SELECT receita_base, receita_simulada FROM cenario_simulacao_receita WHERE id = ?',
+      [ids['cen3']],
+    );
+    expect([Number(cen!['receita_base']), Number(cen!['receita_simulada'])]).toEqual([190, 271]);
+    const painel = await s.ler(ctxL(), (l, est) => painelSimulacaoReceitaPropria(l, est));
+    expect(painel.cenarios.find((y) => y.id === ids['cen3'])).toMatchObject({
+      dataReferencia: 'atendimento',
+    });
   });
 
   it('recusa sem gravar: código fora do catálogo, nome repetido e plano de outro convênio', async () => {

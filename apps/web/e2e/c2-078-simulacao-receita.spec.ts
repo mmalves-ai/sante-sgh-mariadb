@@ -45,7 +45,8 @@ function painel(executado: boolean) {
             objetivo: 'troca_tabela_preco',
             descricao: null,
             producaoInicio: '2026-01-01',
-            producaoFim: '2026-01-31',
+            producaoFim: '2026-01-01',
+            dataReferencia: 'competencia',
             situacao: 'concluido',
             receitaBase: 390,
             receitaSimulada: 601,
@@ -181,8 +182,10 @@ test.describe('@C2-078 simulação de cenários de receita (01-ADM L120)', () =>
 
     // Sem o que muda: o salvar mostra o erro na hora e não envia nada.
     await page.getByTestId('sr-nome').fill('CENARIO SINTETICO');
-    await page.getByTestId('sr-inicio').fill('2026-01-01');
+    // Pela competência, o dia no meio do mês vale pelo mês inteiro: a tela mostra as competências enquanto se digita.
+    await page.getByTestId('sr-inicio').fill('2026-01-15');
     await page.getByTestId('sr-fim').fill('2026-01-31');
+    await expect(page.getByTestId('sr-competencias')).toContainText('01/2026 a 01/2026');
     await escolher(page.getByTestId('sr-regra-0-convenio'), { rotulo: 'CONVENIO SINTETICO A' });
     await page.getByTestId('sr-salvar').click();
     await expect(page.getByTestId('sr-regra-0-erro-destino')).toBeVisible();
@@ -209,7 +212,7 @@ test.describe('@C2-078 simulação de cenários de receita (01-ADM L120)', () =>
       rota: 'cenario',
       nome: 'CENARIO SINTETICO',
       producaoInicio: '2026-01-01',
-      producaoFim: '2026-01-31',
+      producaoFim: '2026-01-01',
       dataReferencia: 'competencia',
       regras: [
         {
@@ -238,8 +241,15 @@ test.describe('@C2-078 simulação de cenários de receita (01-ADM L120)', () =>
     await semViolacaoAxe(page, 'simulação de receita');
 
     // O cenário fica na lista; simular de novo pede outra execução (a anterior fica no histórico).
+    // Simular de novo usa o recorte salvo no cenário, mesmo com o formulário de cenário novo em outro recorte.
     await expect(page.getByTestId('sr-cenario-21')).toContainText('CENARIO SINTETICO');
+    await expect(page.getByTestId('sr-cenario-21')).toContainText('01/2026 — 01/2026');
+    await escolher(page.getByTestId('sr-recorte'), { rotulo: 'data do atendimento' });
+    await expect(page.getByTestId('sr-competencias')).toBeHidden();
     await page.getByTestId('sr-refazer-21').click();
     await expect.poll(() => enviados.filter((x) => x['rota'] === 'execucao').length).toBe(2);
+    expect(enviados.filter((x) => x['rota'] === 'execucao')[1]).toMatchObject({
+      dataReferencia: 'competencia',
+    });
   });
 });

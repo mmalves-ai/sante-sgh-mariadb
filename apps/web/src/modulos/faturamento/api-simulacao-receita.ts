@@ -15,6 +15,7 @@ const esquemaPainel = z.object({
       descricao: z.string().nullable(),
       producaoInicio: z.string(),
       producaoFim: z.string(),
+      dataReferencia: z.string(),
       situacao: z.string(),
       receitaBase: z.number().nullable(),
       receitaSimulada: z.number().nullable(),
