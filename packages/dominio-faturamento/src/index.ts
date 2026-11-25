@@ -55,3 +55,5 @@ export * from './conta/devolucao-adiantamento.js';
 export * from './conta/modelo-orcamento.js';
 // F3.7 (06-FAT linha 38): parâmetros tipados, preferências do faturista e alçada do faturamento.
 export * from './parametros/parametros-faturamento.js';
+// F8 (01-ADM L120): simulação de cenários de receita sobre a produção real (troca de tabela, reajuste, conversão).
+export * from './simulacao/simulacao-receita.js';
