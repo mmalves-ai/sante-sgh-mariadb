@@ -69,7 +69,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
-import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
+import { FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { OPERACOES_SADT_DIRETAS, OPERACOES_SADT_PENDENTES } from './operacoes.js';
 import {
   type AcessoPortalLido,
@@ -95,6 +95,7 @@ import {
   siglasDoAto,
   TIPOS_DO_SETOR,
 } from './vocabulario-banco.js';
+import { conferirPostoDaColeta } from './aplicacao/posto-coleta-propria.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoSadt = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -732,6 +733,17 @@ export class PortaSadtPropria implements PortaSadt {
     return this.nucleo.lerSomente(contextoDe(c), (l) => fn(l, est));
   }
 
+  /** O dia civil do estabelecimento (AAAA-MM-DD) como o intervalo de instantes [início, fim) que o banco guarda. */
+  private async diaCivil(l: Leitor, est: number, data: string): Promise<[Date, Date]> {
+    const r = await l.uma<{ fuso_horario: string | null }>(
+      'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+      [est],
+    );
+    const fuso = r?.fuso_horario || FUSO_PADRAO;
+    const seguinte = new Date(Date.parse(`${data}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    return [instanteCivil(data, '00:00', fuso), instanteCivil(seguinte, '00:00', fuso)];
+  }
+
   private async hoje(l: Leitor, est: number): Promise<{ hoje: string; agora: string }> {
     const r = await l.uma<{ fuso_horario: string | null }>(
       'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
@@ -805,8 +817,11 @@ export class PortaSadtPropria implements PortaSadt {
   examesDoSetor(c: ContextoSadt, f: Parameters<PortaSadt['examesDoSetor']>[1]) {
     return this.ler(c, async (l, est) => {
       const { hoje } = await this.hoje(l, est);
-      const p: unknown[] = [est, f.inicio, f.fim];
-      let sql = `${SQL_EXAME} AND r.solicitado_em >= ? AND r.solicitado_em < DATE_ADD(?, INTERVAL 1 DAY)`;
+      // O período pedido é em dias civis do estabelecimento; os instantes ficam gravados em UTC (ver diaCivil).
+      const [inicio] = await this.diaCivil(l, est, f.inicio);
+      const [, fim] = await this.diaCivil(l, est, f.fim);
+      const p: unknown[] = [est, inicio, fim];
+      let sql = `${SQL_EXAME} AND r.solicitado_em >= ? AND r.solicitado_em < ?`;
       if (f.setor) {
         const tipos = TIPOS_DO_SETOR[f.setor];
         sql += ` AND sd.tipo IN (${lista(tipos.length)})`;
@@ -1441,9 +1456,12 @@ export class PortaSadtPropria implements PortaSadt {
 
   amostras(c: ContextoSadt, o: { data: string; estado?: EstadoAmostra }) {
     return this.ler(c, async (l, est) => {
-      const p: unknown[] = [o.data, o.data];
+      // O dia pedido é o dia civil do estabelecimento; os instantes ficam gravados em UTC. Sem a conversão, a amostra
+      // colhida à noite (depois das 21h no fuso de Brasília) caía no dia seguinte e sumia do rastreio do dia.
+      const [inicio, fim] = await this.diaCivil(l, est, o.data);
+      const p: unknown[] = [inicio, fim];
       let f =
-        'AND COALESCE(am.coletada_em, am.criado_em) >= ? AND COALESCE(am.coletada_em, am.criado_em) < DATE_ADD(?, INTERVAL 1 DAY)';
+        'AND COALESCE(am.coletada_em, am.criado_em) >= ? AND COALESCE(am.coletada_em, am.criado_em) < ?';
       if (o.estado) {
         f += ' AND am.situacao = ?';
         p.push(SITUACAO_DA_AMOSTRA[o.estado].situacao);
@@ -1453,9 +1471,9 @@ export class PortaSadtPropria implements PortaSadt {
         `SELECT COALESCE(ev.descricao, 'Sem motivo') AS motivo, COUNT(*) AS quantidade
            FROM amostra_biologica_evento ev JOIN amostra_biologica am ON am.id = ev.amostra_biologica_id
           WHERE am.estabelecimento_id = ? AND ev.evento = 'rejeitada'
-            AND ev.ocorrido_em >= ? AND ev.ocorrido_em < DATE_ADD(?, INTERVAL 1 DAY)
+            AND ev.ocorrido_em >= ? AND ev.ocorrido_em < ?
           GROUP BY COALESCE(ev.descricao, 'Sem motivo') ORDER BY quantidade DESC`,
-        [est, o.data, o.data],
+        [est, inicio, fim],
       );
       return {
         itens: itens.slice(0, 500),
@@ -2311,6 +2329,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         material = nn(m?.['material_biologico_id']);
       }
       if (material === null) throw recusa('sem-material', 'O exame não tem material de coleta no cadastro.');
+      // O posto escolhido é do estabelecimento e está ativo; fora do horário, a coleta segue com o aviso gravado.
+      const avisosPosto = await conferirPostoDaColeta(tx, est, a.posto ?? null);
       const coletada = agora();
       const provisorio = `C${randomUUID().replace(/-/g, '').slice(0, 20).toUpperCase()}`;
       const id = await tx.incluir('amostra_biologica', {
@@ -2320,6 +2340,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         material_biologico_id: material,
         recipiente_coleta_id: a.recipiente ?? nn(primeiro['recipiente_coleta_id']),
         setor_diagnostico_id: nn(primeiro['setor']),
+        ponto_coleta_id: a.posto ?? null,
         situacao: 'coletada',
         coletada_em: coletada,
         coletada_no_setor: false,
@@ -2344,7 +2365,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         evento: 'coletada',
         ocorrido_em: coletada,
         usuario_id: usuario,
-        dados: JSON.stringify({ pulseiraConferida: a.pulseiraConferida, estacao: a.estacao }),
+        dados: JSON.stringify({
+          pulseiraConferida: a.pulseiraConferida,
+          estacao: a.estacao,
+          posto: a.posto ?? null,
+          avisosPosto,
+        }),
       });
       return { id, codigo };
     },

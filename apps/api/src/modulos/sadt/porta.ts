@@ -181,6 +181,8 @@ export interface GravadorSghSadt {
     pulseiraConferida: boolean;
     origem?: number | null;
     estacao: string | null;
+    /** Posto de coleta do cadastro (sem posto: à beira do leito). */
+    posto?: number | null;
     usuario: string;
   }): Promise<{ id: number; codigo: string }>;
   mudarEstadoAmostra(r: {

@@ -195,6 +195,8 @@ describe.skipIf(SEM_BANCO)('posto de coleta, etiquetas e cancelamento da recolet
   it('etiqueta da alíquota e da recoleta na fila, recoleta no posto e quem cancelou a recoleta', async () => {
     const c = contexto(m!);
     const at = await porta.atendimentoDosExames(c, [m!.itemLab, m!.itemLab2]);
+    // A coleta comum também registra o posto do cadastro (ativo) na amostra e na passagem dela.
+    await postos.situarPosto(c, posto, { ativo: true });
     const col = await porta.gravarSgh(
       c,
       (x: { id: number }) => linhaTela(m!, 'sadt.amostra.coletada', 'amostra_biologica', x.id),
@@ -212,9 +214,19 @@ describe.skipIf(SEM_BANCO)('posto de coleta, etiquetas e cancelamento da recolet
           ],
           pulseiraConferida: true,
           estacao: 'teste',
+          posto,
           usuario: m!.base.login,
         }),
     );
+    expect(
+      await um(
+        `SELECT am.ponto_coleta_id AS posto, JSON_VALUE(ev.dados, '$.posto') AS no_evento
+           FROM amostra_biologica am JOIN amostra_biologica_evento ev ON ev.amostra_biologica_id = am.id AND ev.evento = 'coletada'
+          WHERE am.id = ?`,
+        [col.id],
+      ),
+    ).toMatchObject({ posto, no_evento: String(posto) });
+    await postos.situarPosto(c, posto, { ativo: false });
     await porta.gravarSgh(c, linhaTela(m!, 'sadt.amostra.estado', 'amostra_biologica', col.id), (g) =>
       g.mudarEstadoAmostra({
         amostra: col.id,

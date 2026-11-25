@@ -313,6 +313,7 @@ export class ServicoSadt {
       identificadoresConferidos: true;
       recipiente?: number | undefined;
       estacao?: string | undefined;
+      posto?: number | undefined;
     },
   ): Promise<ColetaRegistrada> {
     const exames = await this.porta.examesPorId(ctx(s), e.exames);
@@ -368,6 +369,7 @@ export class ServicoSadt {
           exames: exames.map((x) => ({ id: x.id, chave: chaveTexto(x) })),
           pulseiraConferida: internado,
           estacao,
+          posto: e.posto ?? null,
           usuario: s.login,
         }),
     );
