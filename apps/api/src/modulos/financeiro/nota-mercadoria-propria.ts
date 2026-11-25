@@ -422,9 +422,9 @@ async function proximoNumeroNfe(
   est: number,
 ): Promise<{ serie: number; serieId: number; numero: number }> {
   const travar = () =>
-    tx.consultar(
+    tx.consultarParaAtualizar(
       `SELECT id, serie, proximo_numero, numero_final, versao FROM serie_documento_fiscal
-        WHERE estabelecimento_id = ? AND tipo_documento = 'nfe' AND ativo = TRUE ORDER BY serie LIMIT 1 FOR UPDATE`,
+        WHERE estabelecimento_id = ? AND tipo_documento = 'nfe' AND ativo = TRUE ORDER BY serie LIMIT 1`,
       [est],
     );
   let [s] = await travar();
@@ -503,11 +503,11 @@ interface Origem {
 async function origemDevolucao(tx: Tx, est: number, e: Entrada): Promise<Origem> {
   if (!e.devolucao)
     throw recusa('devolucao', 'Escolha a devolução ao fornecedor.', { campos: ['devolucao'] });
-  const [d] = await tx.consultar(
+  const [d] = await tx.consultarParaAtualizar(
     `SELECT d.id, d.versao, d.situacao, d.tipo, d.empresa_fornecedora_id, d.nota_entrada_id, d.local_estoque_id,
             d.chave_acesso, d.excluido_em, ne.chave_acesso AS chave_entrada
        FROM devolucao_fornecedor d LEFT JOIN nota_entrada ne ON ne.id = d.nota_entrada_id
-      WHERE d.id = ? AND d.estabelecimento_id = ? FOR UPDATE`,
+      WHERE d.id = ? AND d.estabelecimento_id = ?`,
     [e.devolucao, est],
   );
   if (!d || d['excluido_em'] !== null)
@@ -845,9 +845,9 @@ const emitirNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv
   });
 
 async function notaParaEvento(tx: Tx, est: number, nota: number) {
-  const [n] = await tx.consultar(
+  const [n] = await tx.consultarParaAtualizar(
     `SELECT id, versao, situacao, ambiente, chave_acesso, autorizada_em, devolucao_fornecedor_id
-       FROM nota_mercadoria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+       FROM nota_mercadoria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [nota, est],
   );
   if (!n) throw recusa('nota', 'Nota não encontrada.', { campos: ['nota'] });
@@ -914,8 +914,8 @@ const cancelarNotaMercadoria = definirOperacao<
     // A devolução de origem volta a aceitar nota (a cancelada fica ligada a ela, no histórico).
     const dev = n['devolucao_fornecedor_id'];
     if (dev !== null) {
-      const [d] = await tx.consultar(
-        'SELECT versao, chave_acesso FROM devolucao_fornecedor WHERE id = ? FOR UPDATE',
+      const [d] = await tx.consultarParaAtualizar(
+        'SELECT versao, chave_acesso FROM devolucao_fornecedor WHERE id = ?',
         [dev],
       );
       if (d && texto(d['chave_acesso']) === chave)
