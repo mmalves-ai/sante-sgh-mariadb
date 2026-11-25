@@ -347,6 +347,8 @@ describe.skipIf(SEM_BANCO)('rateio do repasse por setor e custo do prestador (Ma
     const painel = await porta.painel(c(), ids.profB);
     expect(painel.regras.map((x) => x.base)).toEqual(['custo']);
     expect(painel.custos).toHaveLength(1);
+    expect(painel.apuracoes.map((x) => x.situacao).sort()).toEqual(['aprovada', 'apurada']);
+    expect(painel.setores.map((x) => x.centroCusto)).toEqual([ids.centro1, ids.centro2]);
   });
 
   it('rateia a apuração por médico e setor, sem duplicar, e marca como excluída a linha que deixou de valer', async () => {

@@ -236,7 +236,19 @@ export class PortaRateioCustoRepassePropria extends PortaEstabelecimentoPropria 
           [],
         )
       ).map((x) => ({ id: num(x['id']), descricao: String(x['descricao']) }));
-      return { tipos, custos, regras, setores, centros, grupos };
+      const apuracoes = (
+        await l.consultar<Linha>(
+          `SELECT id, numero, competencia, situacao FROM apuracao_repasse
+            WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY competencia DESC, id DESC LIMIT 24`,
+          [est.id],
+        )
+      ).map((x) => ({
+        id: num(x['id']),
+        numero: String(x['numero']),
+        competencia: dataTexto(x['competencia'])!,
+        situacao: String(x['situacao']),
+      }));
+      return { tipos, custos, regras, setores, centros, grupos, apuracoes };
     });
   }
 

@@ -10,6 +10,7 @@ import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import BuscaPrestador from '../componentes/BuscaPrestador.vue';
@@ -208,6 +209,11 @@ const regraTexto = (p: VersaoRegraResposta['proposta']) =>
 <template>
   <section class="tela-agenda tela-repasse" aria-labelledby="rg-titulo" data-testid="tela-rep-regras">
     <h1 id="rg-titulo">{{ t('repasse.regras.titulo') }}</h1>
+    <p>
+      <RouterLink to="/repasse/rateio-custos" data-testid="rg-ir-rateio-custos">{{
+        t('repasse.rateioCusto.abrir')
+      }}</RouterLink>
+    </p>
     <ErroFaturamento v-if="apoio.error.value" :erro="apoio.error.value" />
     <form class="filtros" @submit.prevent="consultar">
       <span class="campo">

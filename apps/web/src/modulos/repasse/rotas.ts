@@ -47,6 +47,12 @@ export const rotasRepasse: RouteRecordRaw[] = [
     component: () => import('./telas/FavorecidosTela.vue'),
     meta: { permissao: 'repasse.cooperativa.ler' },
   },
+  {
+    path: '/repasse/rateio-custos',
+    name: 'repasse.rateio-custos',
+    component: () => import('./telas/RateioCustosTela.vue'),
+    meta: { permissao: 'repasse.regra.ler' },
+  },
   { path: '/repasse/integracao-contabil', redirect: '/cadastros/dominios/grupo/repasseIntegracao' },
   { path: '/repasse/configuracoes', redirect: '/cadastros/dominios/grupo/repasseConfiguracoes' },
   { path: '/repasse/cooperativas', redirect: '/cadastros/dominios/grupo/repasseCooperativas' },
