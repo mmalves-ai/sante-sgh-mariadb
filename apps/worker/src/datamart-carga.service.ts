@@ -10,6 +10,7 @@ import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } f
 import { cargaDevida, fecharCarga, type ObjetoCarregado } from '@sgh/dominio-relatorio';
 import { NucleoProprio } from '@sgh/nucleo';
 import { type PortaDataMart, PortaDataMartPropria } from './datamart-carga-propria.js';
+import { carregadorProprio, opcoesDoAmbiente } from './datamart-carregador-proprio.js';
 import { logger } from './logger.js';
 import {
   type AlvoEstabelecimento,
@@ -28,9 +29,8 @@ export function cargaDataMartLigada(env: NodeJS.ProcessEnv): boolean {
 export type CarregadorDataMart = (cliente: string, est: AlvoEstabelecimento) => Promise<ObjetoCarregado[]>;
 
 /**
- * O carregador do banco próprio: recusa explícita enquanto as leituras da carga no banco próprio (o movimento da
- * internação em vocabulário neutro e as leituras agregadas por estabelecimento) não existirem. A recusa fica no
- * registro da carga como falha, visível ao administrador, e não se repete no mesmo dia.
+ * Carregador que recusa (testes e configuração inválida): a recusa fica no registro da carga como falha, visível ao
+ * administrador, e não se repete no mesmo dia. O carregador real é o carregadorProprio (datamart-carregador-proprio).
  */
 export const carregadorIndisponivel: CarregadorDataMart = async () => {
   throw new Error(
@@ -136,7 +136,18 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
     if (!cargaDataMartLigada(process.env)) return;
     try {
       const nucleo = new NucleoProprio({ env: process.env });
-      this.usar(nucleo, (cliente) => new PortaDataMartPropria(nucleo, cliente));
+      // O carregador real (banco próprio → arquivo do estabelecimento); sem a chave fora de dev, cada carga falha
+      // registrada com o motivo.
+      let carregador: CarregadorDataMart;
+      try {
+        carregador = carregadorProprio(nucleo, opcoesDoAmbiente(process.env));
+      } catch (e) {
+        const motivo = e instanceof Error ? e.message : 'configuração do data mart inválida';
+        carregador = async () => {
+          throw new Error(motivo);
+        };
+      }
+      this.usar(nucleo, (cliente) => new PortaDataMartPropria(nucleo, cliente), carregador);
       void this.ciclo();
       // A cada 5 minutos: o pedido manual da administração começa logo; a agendada segue uma vez por dia (regra).
       this.temporizador = setInterval(() => void this.ciclo(), 300_000);

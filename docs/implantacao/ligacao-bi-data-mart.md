@@ -55,12 +55,18 @@ Função 01-ADM L115 (F8): análise ad hoc, com tabela dinâmica, cubo e filtros
 | O data mart sai sem dado de pessoa | `tools/verificadores/src/lgpd/datamart-sem-dado-pessoal.spec.ts` |
 | A carga devida uma vez por dia, as etapas e a situação | `packages/dominio-relatorio/src/datamart-registro.spec.ts` |
 | O registro em `carga_data_mart` e `carga_data_mart_etapa`, com a trilha, uma vez por dia e com a falha registrada | `apps/worker/src/datamart-carga-propria.int.spec.ts` |
+| O arquivo do estabelecimento carregado do banco próprio, só com os agregados dele e sem coluna identificadora, e a carga concluída com uma etapa por objeto | `apps/worker/src/datamart-carregador-proprio.int.spec.ts` |
 
-## Pendência
+## O carregador do `worker`
 
-O carregador do `worker` ainda recusa a carga, porque faltam as leituras do data mart no banco próprio:
+O carregador (`apps/worker/src/datamart-carregador-proprio.ts`) lê o banco próprio só para leitura, sempre filtrado pelo
+estabelecimento, e grava o arquivo dele:
 
-- o movimento da internação em vocabulário neutro;
-- as leituras agregadas por estabelecimento.
+- a internação e os pacientes-dia vêm da mesma leitura do movimento que o fechamento do censo usa;
+- a demografia sai como faixa etária e sexo, nunca como data de nascimento ou nome;
+- os atendimentos, os itens de conta e as dispensações saem só como agregados por mês;
+- o pseudônimo do paciente é por estabelecimento, com a chave `DATA_MART_CHAVE`. Fora de dev, sem a chave, cada carga
+  fica registrada como `falhou`, com o motivo.
 
-Até elas existirem, a rotina registra cada dia uma carga com situação `falhou` e a mensagem dessa recusa.
+O arquivo da Rede (`rede.sqlite`) continua sendo montado pelo `pnpm datamart:carregar`, a partir dos arquivos dos
+estabelecimentos.
