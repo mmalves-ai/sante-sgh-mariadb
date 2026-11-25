@@ -9,6 +9,8 @@ export * from './identificacao.js';
 export * from './indicadores.js';
 // 02-REC linha 33: cadastro da estrutura da recepção (ponto, guichês e serviços de senha).
 export * from './estrutura.js';
+// 02-REC linha 33 (C2-005): locais de atendimento e encaminhamentos entre locais.
+export * from './locais-atendimento.js';
 // A máquina de estados da senha e a ordem da fila moram em @sgh/contratos (as receitas do legado as usam: o adaptador
 // não importa os pacotes de domínio); daqui seguem para a API e a tela.
 export {

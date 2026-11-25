@@ -127,6 +127,8 @@ export * from './recepcao/estados.js';
 export * from './recepcao/fila.js';
 // 02-REC linha 33: cadastro da estrutura da recepção pela tela.
 export * from './recepcao/estrutura.js';
+// 02-REC linha 33 (C2-005): locais de atendimento e encaminhamentos entre locais.
+export * from './recepcao/locais-atendimento.js';
 export * from './permissoes/recepcao.js';
 // M44 (etapa 1): classificação de risco no pronto atendimento.
 export * from './recepcao/classificacao.js';

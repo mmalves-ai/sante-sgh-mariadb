@@ -34,6 +34,9 @@ import { DispositivoController } from './dispositivo.controller.js';
 import { EstruturaRecepcaoController } from './estrutura.controller.js';
 import { EstruturaRecepcaoMemoria, PORTA_ESTRUTURA_RECEPCAO } from './estrutura-porta.js';
 import { EstruturaRecepcaoPropria } from './estrutura-propria.js';
+import { LocaisAtendimentoController } from './locais-atendimento.controller.js';
+import { LocaisAtendimentoMemoria, PORTA_LOCAIS_ATENDIMENTO } from './locais-atendimento-porta.js';
+import { LocaisAtendimentoPropria } from './locais-atendimento-propria.js';
 import { GestaoRecepcaoController } from './gestao.controller.js';
 import { portaClassificacaoIndisponivel, portaRecepcaoIndisponivel } from './indisponivel.js';
 import { PORTA_RECEPCAO, type PortaRecepcao } from './porta.js';
@@ -102,6 +105,7 @@ export function moduloRecepcao(ctx: ContextoModulo, opcoes: OpcoesModuloRecepcao
       RecepcaoController,
       GestaoRecepcaoController,
       EstruturaRecepcaoController,
+      LocaisAtendimentoController,
       TermosRecepcaoController,
       DispositivoController,
       ClassificacaoController,
@@ -119,6 +123,16 @@ export function moduloRecepcao(ctx: ContextoModulo, opcoes: OpcoesModuloRecepcao
             ? new EstruturaRecepcaoPropria(nucleo, cliente)
             : recepcao.destino === 'memoria'
               ? new EstruturaRecepcaoMemoria(recepcao)
+              : null,
+      },
+      // C2-005: os locais de atendimento e os encaminhamentos entre locais, do mesmo jeito.
+      {
+        provide: PORTA_LOCAIS_ATENDIMENTO,
+        useValue:
+          propria && nucleo && cliente
+            ? new LocaisAtendimentoPropria(nucleo, cliente)
+            : recepcao.destino === 'memoria'
+              ? new LocaisAtendimentoMemoria(recepcao)
               : null,
       },
       { provide: CENTRAL_CHAMADAS, useValue: new CentralChamadas(recepcao, rede, null) },
