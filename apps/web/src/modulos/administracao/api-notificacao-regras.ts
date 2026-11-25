@@ -29,8 +29,19 @@ export const esquemaPainelNotificacao = z.object({
         aplicativo: z.boolean(),
       }),
       destinatarios: z.array(z.object({ tipo: z.string(), codigo: z.string() })),
+      // 01-ADM L75: a regra inteira (a tela regrava o que leu).
+      descricao: z.string().nullable().default(null),
+      bloqueante: z.boolean().default(false),
+      exigeJustificativa: z.boolean().default(false),
+      sexo: z.string().default('todos'),
+      idadeMinima: z.number().nullable().default(null),
+      idadeMaxima: z.number().nullable().default(null),
+      intervaloMinutos: z.number().nullable().default(null),
+      global: z.boolean().default(false),
+      conteudoEditavel: z.boolean().default(true),
     }),
   ),
+  perfis: z.array(z.object({ codigo: z.string(), nome: z.string() })).default([]),
   consolidacoes: z.array(
     z.object({
       id: z.number(),

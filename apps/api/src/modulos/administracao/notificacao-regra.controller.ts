@@ -68,8 +68,10 @@ export class NotificacaoRegraController {
   @Permissao(C.alertaLer)
   async painel(@Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
+    const plataforma =
+      req.sgh?.sessao.usuario.ator === 'plataforma' || req.sghComo?.atorTipo === 'plataforma';
     return this.banco()
-      .painel({ hospital: s.hospital, login: s.login })
+      .painel({ hospital: s.hospital, login: s.login, ...(plataforma ? { plataforma: true } : {}) })
       .catch((x: unknown) => problema(x));
   }
 

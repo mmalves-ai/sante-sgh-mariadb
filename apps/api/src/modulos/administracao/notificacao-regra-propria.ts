@@ -147,10 +147,10 @@ export interface NucleoNotificacao {
 export interface ContextoNotificacao {
   readonly hospital: string;
   readonly login: string;
-}
-export type ContextoGravacaoNotificacao = ContextoNotificacao & {
   /** Sessão do administrador da plataforma: altera a regra global (conteúdo e situação geral). */
   readonly plataforma?: boolean;
+}
+export type ContextoGravacaoNotificacao = ContextoNotificacao & {
   readonly correlacao: string;
   readonly chaveIdempotencia: string;
   readonly enderecoIp?: string;
@@ -173,6 +173,18 @@ export interface RegraAlertaLida {
   readonly vigenciaFim: string | null;
   readonly notifica: { tela: boolean; email: boolean; sms: boolean; aplicativo: boolean };
   readonly destinatarios: { tipo: string; codigo: string }[];
+  // 01-ADM L75: a regra inteira, para a tela regravar o que leu sem trocar por padrão o que não mostrou.
+  readonly descricao: string | null;
+  readonly bloqueante: boolean;
+  readonly exigeJustificativa: boolean;
+  readonly sexo: string;
+  readonly idadeMinima: number | null;
+  readonly idadeMaxima: number | null;
+  readonly intervaloMinutos: number | null;
+  /** Vale para todos os estabelecimentos do cliente (sem estabelecimento próprio). */
+  readonly global: boolean;
+  /** Quem lê pode mudar o conteúdo: regra editável e, se global, só a administração da plataforma. */
+  readonly conteudoEditavel: boolean;
 }
 export interface ConsolidacaoLida {
   readonly id: number;
@@ -208,6 +220,8 @@ export interface PainelNotificacao {
   readonly consolidacoes: ConsolidacaoLida[];
   readonly cenarios: { codigo: string; descricao: string }[];
   readonly canais: { codigo: string; descricao: string; tipo: string; externo: boolean }[];
+  /** Perfis de acesso que podem ser destinatários neste estabelecimento (01-ADM L75). */
+  readonly perfis: { codigo: string; nome: string }[];
 }
 export interface HistoricoEnvios {
   readonly envios: EnvioLido[];
@@ -379,7 +393,9 @@ export class NotificacaoRegraPropria {
       const rs = await l.consultar(
         `SELECT r.id, r.versao, r.codigo, r.nome, ca.codigo AS cenario, r.mensagem, r.gravidade, r.repeticao,
                 (r.ativo AND COALESCE(rae.ativo, TRUE)) AS ativo, r.editavel, rc.codigo AS consolidacao, r.numero_versao_vigente, r.vigencia_inicio, r.vigencia_fim,
-                r.notifica_tela, r.notifica_email, r.notifica_sms, r.notifica_aplicativo
+                r.notifica_tela, r.notifica_email, r.notifica_sms, r.notifica_aplicativo,
+                r.descricao, r.bloqueante, r.exige_justificativa, r.sexo_aplicavel, r.idade_minima_anos, r.idade_maxima_anos,
+                r.intervalo_repeticao_minutos, (r.estabelecimento_id IS NULL) AS global
            FROM regra_alerta r JOIN cenario_alerta ca ON ca.id = r.cenario_alerta_id
            LEFT JOIN regra_consolidacao_notificacao rc ON rc.id = r.regra_consolidacao_notificacao_id
            LEFT JOIN regra_alerta_estabelecimento rae ON rae.regra_alerta_id = r.id AND rae.estabelecimento_id = ?
@@ -416,7 +432,14 @@ export class NotificacaoRegraPropria {
         [],
         { teto: TETO },
       );
+      const per = await l.consultar(
+        `SELECT codigo, nome FROM perfil_acesso WHERE excluido_em IS NULL
+            AND (estabelecimento_id IS NULL OR estabelecimento_id = ?) ORDER BY nome, codigo`,
+        [est],
+        { teto: TETO },
+      );
       return {
+        perfis: per.map((x) => ({ codigo: String(x['codigo']), nome: String(x['nome']) })),
         regras: rs.map((x) => ({
           id: num(x['id']),
           versao: num(x['versao']),
@@ -441,6 +464,15 @@ export class NotificacaoRegraPropria {
           destinatarios: ds
             .filter((d) => num(d['regra_alerta_id']) === num(x['id']))
             .map((d) => ({ tipo: String(d['tipo_destinatario']), codigo: String(d['codigo']) })),
+          descricao: txt(x['descricao']),
+          bloqueante: bool(x['bloqueante']),
+          exigeJustificativa: bool(x['exige_justificativa']),
+          sexo: String(x['sexo_aplicavel']),
+          idadeMinima: numOuNull(x['idade_minima_anos']),
+          idadeMaxima: numOuNull(x['idade_maxima_anos']),
+          intervaloMinutos: numOuNull(x['intervalo_repeticao_minutos']),
+          global: bool(x['global']),
+          conteudoEditavel: bool(x['editavel']) && (!bool(x['global']) || c.plataforma === true),
         })),
         consolidacoes: cs.map((x) => ({
           id: num(x['id']),
