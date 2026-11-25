@@ -50,3 +50,6 @@ export * from './comercial.js';
 // F8 (08-SGO linha 115, C2-102): promoção da saúde e gestão de crônicos — elegibilidade, acompanhamento, questionário,
 // bonificação (RN ANS 264 e 265/2011) e custo do crônico antes e depois da entrada.
 export * from './programa-saude.js';
+// F7 (08-SGO linha 95, C2-113): declaração de saúde, doença preexistente com CPT ou agravo (RN 162) e portabilidade de
+// carências (RN 438).
+export * from './declaracao-saude.js';
