@@ -109,6 +109,8 @@ export * from './nutricao/correcao.js';
 export * from './especialidades/comum.js';
 export * from './especialidades/oftalmologia.js';
 export * from './especialidades/prescricao-lente.js';
+// C1-096 (03-PEP linha 146): reuso do dialisador na hemodiálise (RDC ANVISA 11/2014).
+export * from './hemodialise/reuso-dialisador.js';
 export * from './especialidades/oncologia.js';
 export * from './especialidades/obstetricia.js';
 export * from './especialidades/lactario.js';
