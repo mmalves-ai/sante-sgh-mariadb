@@ -24,6 +24,7 @@ import {
   valorNaQuantidade,
 } from '@sgh/dominio-atendimento';
 import { definirOperacao, ErroOperacao, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
+import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import { totalDosItens } from '../faturamento/operacoes.js';
 import { contaAceitaLancamento } from '../faturamento/regras-conta.js';
 import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
@@ -257,7 +258,8 @@ export const OPERACAO_ALTERAR_ATENDIMENTO = definirOperacao({
           'Solicitante não encontrado.',
           'solicitante',
         );
-      muda('solicitante_externo_id', e.solicitante);
+      // 02-CAD 20: o cadastro unificado em outro não recebe registro novo; a correção grava o cadastro que continua.
+      muda('solicitante_externo_id', await solicitanteQueRespondeHoje(tx, e.solicitante));
     }
     if (e.observacao !== undefined) muda('observacao', e.observacao || null);
     if (e.carater !== undefined) {

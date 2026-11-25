@@ -933,7 +933,7 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
       ).rejects.toMatchObject({ problema: { codigo: 'troca-de-conta' } });
   });
 
-  it('02-CAD 20: o atendimento pedido pelo solicitante unificado em outro nasce no cadastro que continua', async () => {
+  it('02-CAD 20: o atendimento pedido (ou corrigido) com o solicitante unificado em outro grava o cadastro que continua', async () => {
     const mm = m!;
     const c = contextoPorta(mm);
     const NUMEROS = ['F3110AT1', 'F3110AT2'];
@@ -994,6 +994,30 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
           [duplicado],
         ),
       ).toMatchObject({ ativo: 0, s: continua });
+      // Correção da ficha (atendimento.alterarAtendimento) com o id do duplicado: grava o cadastro que continua.
+      const outro = Number(
+        (await porta.executar(c, 'atendimento.abrirAtendimento', abertura(mm), contextoGravacao(mm)))
+          .resultado['reg'],
+      );
+      await porta.executar(
+        c,
+        'atendimento.alterarAtendimento',
+        {
+          atendimento: outro,
+          solicitante: duplicado,
+          justificativa: 'Solicitante corrigido',
+          versao: (await porta.detalhe(c, outro))!.versao,
+        },
+        contextoGravacao(mm),
+      );
+      expect(
+        Number(
+          (await ler('SELECT solicitante_externo_id AS s FROM atendimento WHERE id = ?', [outro]))?.['s'],
+        ),
+      ).toBe(continua);
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM atendimento WHERE solicitante_externo_id = ?', [duplicado]),
+      ).toBe(0);
     } finally {
       await limpar().catch(() => undefined);
     }
