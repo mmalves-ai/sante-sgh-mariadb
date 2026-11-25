@@ -29,6 +29,7 @@ const [ACAO_A, ACAO_B, ACAO_FORA] = [POR_PERFIL[0] ?? '', POR_PERFIL[1] ?? '', P
 /** Uma ação de consulta ("ver") e uma de operação, concedidas por perfil (escolhidas no banco, no preparo). */
 let acaoVer = '';
 let acaoOperar = '';
+let categoriaTeste = '';
 
 describe.skipIf(SEM_BANCO)('fonte própria contra o MariaDB (cliente teste_login)', () => {
   let nucleo: NucleoProprio;
@@ -221,6 +222,25 @@ describe.skipIf(SEM_BANCO)('fonte própria contra o MariaDB (cliente teste_login
       await recorte(await usuario('teste.login.caixa', { est: e1, perfil: pTeste }), tipoCaixa, 3, true);
       await recorte(await usuario('teste.login.consulta', { est: e1, perfil: pOpera }), tipoEscopo, 8, false);
       await usuario('teste.login.opera', { est: e1, perfil: pOpera });
+      // 01-ADM L59: tipos de agenda concedidos na ficha (com marcar e cancelar; só consultar; retirado).
+      const categoria = await garantir(
+        e,
+        "SELECT id FROM categoria_agenda WHERE codigo = 'TESTE_LOGIN_AG'",
+        [],
+        "INSERT INTO categoria_agenda (codigo, descricao, criado_em) VALUES ('TESTE_LOGIN_AG', 'Agenda de teste', ?)",
+        [agora],
+      );
+      const tipoAgenda = async (id: number, marca: boolean, retirado = false) => {
+        await e.executar('DELETE FROM usuario_tipo_agenda WHERE usuario_id = ?', [id]);
+        await e.inserir(
+          'INSERT INTO usuario_tipo_agenda (usuario_id, categoria_agenda_id, pode_consultar, pode_marcar, pode_cancelar, criado_em, excluido_em) VALUES (?, ?, TRUE, ?, ?, ?, ?)',
+          [id, categoria, marca, marca, agora, retirado ? agora : null],
+        );
+      };
+      categoriaTeste = String(categoria);
+      await tipoAgenda(await usuario('teste.login.agmarca', { est: e1, perfil: pOpera }), true);
+      await tipoAgenda(await usuario('teste.login.agconsulta', { est: e1, perfil: pOpera }), false);
+      await tipoAgenda(await usuario('teste.login.agretirado', { est: e1, perfil: pOpera }), true, true);
       const termo = await garantir(
         e,
         "SELECT id FROM termo_uso_versao WHERE numero_versao = 'teste-1' AND estabelecimento_id = ?",
@@ -363,6 +383,18 @@ describe.skipIf(SEM_BANCO)('fonte própria contra o MariaDB (cliente teste_login
     expect(consulta.escopos.locaisEstoque).toEqual(['8']);
     expect(consulta.permissoes).toContain(acaoVer);
     expect(consulta.permissoes).not.toContain(acaoOperar);
+    // 01-ADM L59: tipo de agenda concedido na ficha entra no escopo da sessão; só consultar corta a operação do
+    // módulo da agenda (aviso de recorte só de consulta); a concessão retirada não restringe.
+    const agMarca = await servico.obter('rede-teste', 'tlogin', 'teste.login.agmarca');
+    expect(agMarca.escopos.tiposAgenda).toEqual([categoriaTeste]);
+    expect(agMarca.permissoes).toEqual(expect.arrayContaining([acaoVer, acaoOperar]));
+    const antes = avisos.filter((a) => a.includes('só de consulta')).length;
+    const agConsulta = await servico.obter('rede-teste', 'tlogin', 'teste.login.agconsulta');
+    expect(agConsulta.escopos.tiposAgenda).toEqual([categoriaTeste]);
+    expect(agConsulta.permissoes).toContain(acaoVer);
+    expect(avisos.filter((a) => a.includes('só de consulta')).length).toBeGreaterThan(antes);
+    const agRetirado = await servico.obter('rede-teste', 'tlogin', 'teste.login.agretirado');
+    expect(agRetirado.escopos.tiposAgenda).toEqual([]);
     // Só contagens na saída (prova do lote).
     console.log(
       `permissões: teste ${ok.permissoes.length}, sem perfil ${sem.permissoes.length}, administrador do cliente ${adm.permissoes.length} de ${CATALOGO_COMPLETO.length}, nega ${nega.permissoes.length}, administrador com negação ${admNega.permissoes.length}, recorte sem lugar ${caixa.permissoes.length}, só consulta ${consulta.permissoes.length} (sem o recorte ${opera.permissoes.length})`,

@@ -360,7 +360,22 @@ export class FonteAcessoPropria implements FonteAcesso {
         [usuario, est.id],
         { teto: TETO_ACOES },
       );
-      const { escopos, cortes } = this.escoposDe(recortes);
+      // 01-ADM L59: os tipos de agenda concedidos na ficha (usuario_tipo_agenda, por conta, com exclusão lógica)
+      // entram como recorte de tipo de agenda, e agenda/escopo.ts restringe consultar, marcar e cancelar a eles. A
+      // concessão sem marcar ou sem cancelar é recorte só de consulta (falha fechada: a operação do módulo da agenda
+      // sai, como no recorte geral); o módulo vem do tipo de escopo ou, sem ele, do módulo da agenda.
+      const tiposAgenda = await l.consultar<LinhaRecorte>(
+        `SELECT 'tipo_agenda' AS codigo, 'categoria_agenda' AS entidade,
+                COALESCE(t.modulo_sistema_id, ms.id) AS modulo, uta.categoria_agenda_id AS entidade_id,
+                (uta.pode_marcar AND uta.pode_cancelar) AS pode_operar
+           FROM usuario_tipo_agenda uta
+           LEFT JOIN tipo_escopo_acesso t ON t.codigo = 'tipo_agenda' AND t.ativo
+           LEFT JOIN modulo_sistema ms ON ms.codigo = 'agenda' AND ms.ativo
+          WHERE uta.usuario_id = ? AND uta.excluido_em IS NULL AND uta.pode_consultar`,
+        [usuario],
+        { teto: TETO_ACOES },
+      );
+      const { escopos, cortes } = this.escoposDe([...recortes, ...tiposAgenda]);
       // Falha fechada: o recorte que a sessão não aplica retira as ações do módulo dele (todas, se o recorte vale
       // para todos os módulos ou se a ação não tem módulo); o recorte só de consulta retira as que não são "ver".
       for (const a of acoes) {
