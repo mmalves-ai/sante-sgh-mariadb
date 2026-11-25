@@ -23,6 +23,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import { type Coberturas, lerCoberturas } from '../../cadastro/api-vinculos.js';
 import CadastroPendenteAbertura from '../../cadastro/componentes/CadastroPendenteAbertura.vue';
+import RepresentacaoNaAbertura from '../../cadastro/componentes/RepresentacaoNaAbertura.vue';
 import OrigemNaAbertura from '../../cadastro/componentes/OrigemNaAbertura.vue';
 import { consultaDeRotaDoEscopo, escopoDaAbertura } from '../../cadastro/escopo-regra-campo.js';
 import { dataBr } from '../../agenda/formato.js';
@@ -582,6 +583,7 @@ async function abrir(): Promise<void> {
           :convenio="convenio"
           :modulo="moduloRecepcao"
         />
+        <RepresentacaoNaAbertura v-if="!naoIdentificado" :id-paciente="paciente.id" />
       </template>
     </section>
 

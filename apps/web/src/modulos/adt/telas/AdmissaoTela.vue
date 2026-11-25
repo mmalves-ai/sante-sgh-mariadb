@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import CadastroPendenteAbertura from '../../cadastro/componentes/CadastroPendenteAbertura.vue';
+import RepresentacaoNaAbertura from '../../cadastro/componentes/RepresentacaoNaAbertura.vue';
 import { consultaDeRotaDoEscopo, escopoDaAbertura } from '../../cadastro/escopo-regra-campo.js';
 import {
   buscarCid,
@@ -347,6 +348,7 @@ const textoLeito = (k: string) => {
           tipo="internacao"
           :convenio="convenio"
         />
+        <RepresentacaoNaAbertura v-if="paciente" :id-paciente="paciente.id" />
         <SanteAlerta v-if="pre.data.value?.pre" variante="info" :texto="t('adt.admissao.temPre')" />
         <SanteAlerta
           v-if="solicitacaoNir"
