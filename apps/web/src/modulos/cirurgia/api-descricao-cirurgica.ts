@@ -84,7 +84,7 @@ export type TelaDescricao = z.infer<typeof esquemaTelaDescricao>;
 const resultado = z
   .object({
     ok: z.literal(true),
-    resultado: z.record(z.unknown()),
+    resultado: z.record(z.string(), z.unknown()),
     repetida: z.boolean(),
     mensagem: z.string(),
   })
