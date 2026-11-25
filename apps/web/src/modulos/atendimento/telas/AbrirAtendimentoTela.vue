@@ -22,7 +22,9 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import { type Coberturas, lerCoberturas } from '../../cadastro/api-vinculos.js';
+import CadastroPendenteAbertura from '../../cadastro/componentes/CadastroPendenteAbertura.vue';
 import OrigemNaAbertura from '../../cadastro/componentes/OrigemNaAbertura.vue';
+import { consultaDeRotaDoEscopo, escopoDaAbertura } from '../../cadastro/escopo-regra-campo.js';
 import { dataBr } from '../../agenda/formato.js';
 import {
   abrirAtendimento,
@@ -35,7 +37,7 @@ import {
   marcarNaoIdentificado,
   novaChave,
 } from '../api-atendimento.js';
-import { preenchimentoDaCobertura } from '../cobertura-abertura.js';
+import { marcaDasCoberturas, motivoSemCarteira, preenchimentoDaCobertura } from '../cobertura-abertura.js';
 import { preenchimentoDaMarcacao, tipoInicialDaAbertura } from '../regras-tela.js';
 import AvisoAtendimento from '../componentes/AvisoAtendimento.vue';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
@@ -51,6 +53,8 @@ const q = (k: string) => (typeof rota.query[k] === 'string' ? Number(rota.query[
 const senha = q('senha');
 const local = q('local');
 const marcacao = q('marcacao');
+// Módulo de recepção em que a tela foi aberta (`?modulo=`): entra no escopo da regra de campo do cadastro.
+const moduloRecepcao = q('modulo');
 
 // ── Paciente ──
 const termo = ref('');
@@ -138,25 +142,34 @@ watch(
 // carteirinha e a validade, sem digitar de novo. O convênio que veio do agendamento fica, e a carteira desse convênio
 // completa. Ao trocar o convênio, a carteira dele entra; sem carteira, o que veio de outra carteira sai da tela. O
 // cadastro vence a herança do atendimento anterior nesses campos. Sem acesso às carteiras, a abertura segue à mão.
+// A leitura nunca vem de cópia guardada (a carteira muda na ficha do paciente, aberta em outra aba, e a abertura
+// continua montada): relida ao escolher o paciente, ao voltar à aba e pelo botão de reler.
 const coberturas = useQuery({
   queryKey: computed(() => ['atendimento', 'coberturas', paciente.value?.id ?? 0]),
   queryFn: (): Promise<Coberturas> => lerCoberturas(paciente.value?.id ?? 0),
   enabled: computed(() => paciente.value !== null),
   retry: false,
+  staleTime: 0,
+  gcTime: 0,
+  refetchOnWindowFocus: 'always',
 });
 const herdou = ref<string[]>([]);
 const daCarteira = ref<number | null>(null);
-const propostaVista = ref(false);
+// A marca da última resposta do cadastro já proposta, e o que a carteira pôs na tela (para não repor o mesmo).
+const respostaVista = ref<string | null>(null);
+const aplicado = ref<string | null>(null);
 const CAMPOS_DA_CARTEIRA = ['convenio', 'matricula', 'plano', 'validadeCarteira'];
+const conveniosAceitos = computed(() =>
+  (apoio.data.value?.convenios ?? []).filter((x) => x.aceita).map((x) => x.codigo),
+);
 const avisosCobertura = computed(() => (paciente.value ? (coberturas.data.value?.avisos ?? []) : []));
-const semCarteiraUtil = computed(
-  () =>
-    paciente.value !== null &&
-    coberturas.data.value !== undefined &&
-    coberturas.data.value.itens.length > 0 &&
-    coberturas.data.value.proposta === null,
+const semCarteira = computed(() =>
+  paciente.value !== null && coberturas.data.value !== undefined && apoio.data.value !== undefined
+    ? motivoSemCarteira(coberturas.data.value, conveniosAceitos.value)
+    : null,
 );
 function limparCarteira(): void {
+  aplicado.value = null;
   if (daCarteira.value === null) return;
   daCarteira.value = null;
   matricula.value = '';
@@ -169,25 +182,40 @@ watch(
     // A carteira é do paciente: ao trocar de paciente, o convênio que veio dela sai junto.
     if (daCarteira.value !== null) convenio.value = '';
     limparCarteira();
-    propostaVista.value = false;
+    respostaVista.value = null;
   },
 );
 watch(
-  () => [coberturas.data.value, convenio.value, apoio.data.value, paciente.value?.id ?? 0] as const,
-  ([c, conv, a, pac]) => {
-    if (!c || !a || !pac) return;
-    // A proposta entra uma vez por paciente (quem esvaziar o convênio depois não é contrariado) e vence o convênio
-    // herdado do atendimento anterior; o convênio do agendamento ou escolhido pela pessoa fica.
-    const primeira = !propostaVista.value;
+  () =>
+    [
+      coberturas.data.value,
+      coberturas.isFetching.value,
+      convenio.value,
+      apoio.data.value,
+      paciente.value?.id ?? 0,
+    ] as const,
+  ([c, lendo, conv, a, pac]) => {
+    // Só a resposta lida agora conta: enquanto relê, a anterior não decide nada.
+    if (!c || !a || !pac || lendo) return;
+    // A proposta entra uma vez por resposta do cadastro (quem esvaziar o convênio depois não é contrariado) e vence
+    // o convênio herdado do atendimento anterior; o convênio do agendamento ou escolhido pela pessoa fica. Resposta
+    // nova (carteira renovada, incluída ou corrigida na ficha) é proposta de novo.
+    const marca = marcaDasCoberturas(c);
+    const primeira = respostaVista.value !== marca;
     if (conv === '' && !primeira) return limparCarteira();
-    propostaVista.value = true;
-    const p = preenchimentoDaCobertura(
-      c,
-      primeira && herdou.value.includes('convenio') ? '' : conv,
-      a.convenios.filter((x) => x.aceita).map((x) => x.codigo),
-    );
+    respostaVista.value = marca;
+    const herdado = primeira && herdou.value.includes('convenio');
+    let p = preenchimentoDaCobertura(c, herdado ? '' : conv, conveniosAceitos.value, herdado ? conv : '');
+    // O convênio que estava na tela veio de uma carteira que deixou de servir: vale a proposta nova.
+    if (!p && primeira && daCarteira.value !== null) {
+      p = preenchimentoDaCobertura(c, '', conveniosAceitos.value);
+      if (!p) convenio.value = '';
+    }
     if (!p) return limparCarteira();
-    if (p.carteira === daCarteira.value) return;
+    // Mesma carteira com o mesmo conteúdo: nada a repor (o que a pessoa ajustou à mão fica).
+    const conteudo = JSON.stringify(p);
+    if (conteudo === aplicado.value) return;
+    aplicado.value = conteudo;
     daCarteira.value = p.carteira;
     convenio.value = p.convenio;
     matricula.value = p.matricula;
@@ -364,6 +392,7 @@ async function abrir(): Promise<void> {
         ...(lab.value && dataRequisicao.value ? { dataRequisicao: dataRequisicao.value } : {}),
         ...(senha ? { senha, local: local ?? undefined } : {}),
         ...(marcacao ? { marcacao } : {}),
+        ...(moduloRecepcao ? { moduloRecepcao } : {}),
         ...(comResponsavel.value
           ? {
               responsavel: {
@@ -436,7 +465,14 @@ async function abrir(): Promise<void> {
       </form>
       <p v-if="!paciente" class="secundario">
         {{ t('atendimento.abrir.semCadastro') }}
-        <RouterLink to="/cadastros/pacientes/novo">{{ t('atendimento.abrir.cadastrar') }}</RouterLink>
+        <RouterLink
+          :to="{
+            path: '/cadastros/pacientes/novo',
+            query: consultaDeRotaDoEscopo(escopoDaAbertura({ tipo, convenio, modulo: moduloRecepcao })),
+          }"
+          data-testid="abrir-atd-cadastrar"
+          >{{ t('atendimento.abrir.cadastrar') }}</RouterLink
+        >
       </p>
       <ErroAtendimento v-if="pacientes.isError.value" :erro="pacientes.error.value" />
       <ul v-else-if="pacientes.data.value && !paciente" class="lista-simples">
@@ -488,11 +524,24 @@ async function abrir(): Promise<void> {
           :texto="aviso.mensagem"
           data-testid="abrir-atd-carteira-aviso"
         />
-        <p v-if="semCarteiraUtil || avisosCobertura.length" class="secundario">
-          <span v-if="semCarteiraUtil">{{ t('atendimento.abrir.semCarteiraUtil') }} </span>
-          <RouterLink :to="`/cadastros/pacientes/${paciente.id}`" data-testid="abrir-atd-ver-carteiras">{{
-            t('atendimento.abrir.verCarteiras')
-          }}</RouterLink>
+        <p v-if="semCarteira || avisosCobertura.length" class="secundario">
+          <span v-if="semCarteira === 'sem-vigor'">{{ t('atendimento.abrir.semCarteiraUtil') }} </span>
+          <span v-if="semCarteira === 'nao-aceita'">{{ t('atendimento.abrir.semCarteiraAceita') }} </span>
+          <!-- Em outra aba: a abertura fica montada, com o que já foi preenchido, a senha e a marcação. -->
+          <RouterLink
+            :to="`/cadastros/pacientes/${paciente.id}`"
+            target="_blank"
+            rel="noopener"
+            data-testid="abrir-atd-ver-carteiras"
+            >{{ t('atendimento.abrir.verCarteiras') }}</RouterLink
+          >
+          <SanteBotao
+            variante="texto"
+            :rotulo="t('atendimento.abrir.relerCarteiras')"
+            :desabilitado="coberturas.isFetching.value"
+            data-testid="abrir-atd-reler-carteiras"
+            @acionar="coberturas.refetch()"
+          />
         </p>
         <SanteAlerta
           v-for="(aviso, i) in avisosHeranca"
@@ -526,6 +575,13 @@ async function abrir(): Promise<void> {
           </ul>
         </details>
         <OrigemNaAbertura v-if="!naoIdentificado" :id-paciente="paciente.id" />
+        <CadastroPendenteAbertura
+          v-if="!naoIdentificado"
+          :id-paciente="paciente.id"
+          :tipo="tipo"
+          :convenio="convenio"
+          :modulo="moduloRecepcao"
+        />
       </template>
     </section>
 

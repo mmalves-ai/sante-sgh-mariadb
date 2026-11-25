@@ -1,8 +1,9 @@
 // F3.1 (02-CAD linha 9): a carteira do cadastro do paciente na abertura do atendimento, pelo caminho da tela. As
 // coberturas exigem o banco próprio e o E2E roda com a fonte sintética: a rota das coberturas é simulada pelo
 // Playwright com massa SINTÉTICA. O que se prova é a tela: ao escolher o paciente, a carteira proposta preenche o
-// convênio, o plano, a carteirinha e a validade sem digitar; a carteira vencida avisa e leva à ficha do paciente; ao
-// esvaziar o convênio, o que veio da carteira sai. A escolha da proposta e o efeito no banco estão no domínio
+// convênio, o plano, a carteirinha e a validade sem digitar; a carteira vencida avisa e leva à ficha do paciente em
+// outra aba (a abertura não se desmonta); ao voltar, a carteira renovada na ficha entra sem perder o que já estava
+// preenchido; ao esvaziar o convênio, o que veio da carteira sai. A escolha da proposta e o efeito no banco estão no domínio
 // (packages/dominio-cadastro/src/cobertura) e no contrato de efeito (paciente-vinculos-proprio.int.spec.ts).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
@@ -117,5 +118,63 @@ test.describe('@F3.1 @F3.1-04 carteira do cadastro na abertura do atendimento', 
     await expect(page.getByText('O paciente não tem carteira em vigor no cadastro.')).toBeVisible();
     await expect(page.getByTestId('abrir-atd-da-carteira')).toHaveCount(0);
     await expect(page.getByTestId('abrir-atd-ver-carteiras')).toBeVisible();
+  });
+
+  test('a ficha abre em outra aba; na volta, a carteira renovada entra e o que já estava preenchido fica', async ({
+    page,
+  }) => {
+    await entrar(page, 'SINT.ATENDIMENTO');
+    // A resposta do cadastro muda entre as leituras: primeiro só a vencida; depois de renovada na ficha, a vigente.
+    let renovada = false;
+    await page.route(`**/api/cadastros/pacientes/${PACIENTE}/coberturas`, (r) =>
+      json(
+        r,
+        renovada
+          ? {
+              hoje: '2026-11-24',
+              itens: [carteira(899, 'vigente', '0055667788', '2027-12-31', true)],
+              proposta: 899,
+              avisos: [],
+            }
+          : {
+              hoje: '2026-11-24',
+              itens: [carteira(899, 'vencida', '0011223344', '2026-03-31', true)],
+              proposta: null,
+              avisos: [
+                {
+                  id: 899,
+                  codigo: 'carteira-vencida',
+                  mensagem: 'Carteira OPERADORA SINTETICA vencida em 2026-03-31: peça a carteira nova.',
+                },
+              ],
+            },
+      ),
+    );
+    await escolherPaciente(page);
+    const segurado = page.getByRole('region', { name: 'Segurado e carteirinha' });
+    await expect(page.getByTestId('abrir-atd-carteira-aviso')).toContainText('vencida em 2026-03-31');
+    await expect(page.getByTestId('abrir-atd-da-carteira')).toHaveCount(0);
+
+    // O que a pessoa já preencheu antes de ir à ficha.
+    await page.getByLabel('Observação da ficha').fill('ABERTURA SINTETICA EM CURSO');
+
+    // O atalho abre a ficha em outra aba: a abertura continua montada, com o que foi preenchido.
+    const atalho = page.getByTestId('abrir-atd-ver-carteiras');
+    await expect(atalho).toHaveAttribute('target', '_blank');
+    const [ficha] = await Promise.all([page.context().waitForEvent('page'), atalho.click()]);
+    await expect(ficha).toHaveURL(new RegExp(`/cadastros/pacientes/${PACIENTE}$`));
+    renovada = true;
+    await ficha.close();
+    await expect(page).toHaveURL(/\/recepcao\/atendimento\/novo/);
+    await expect(page.getByTestId('abrir-atd-paciente-escolhido')).toBeVisible();
+
+    // Na volta, as carteiras são relidas (ao focar a aba ou pelo botão) e a renovada preenche a abertura.
+    await page.getByTestId('abrir-atd-reler-carteiras').click();
+    await expect(page.getByTestId('abrir-atd-da-carteira')).toBeVisible();
+    await expect(segurado.getByLabel('Carteirinha', { exact: true })).toHaveValue('0055667788');
+    await expect(segurado.getByLabel('Validade da carteirinha')).toHaveValue('2027-12-31');
+    await expect(segurado.getByLabel('Plano', { exact: true })).toHaveValue('PLANO SINTETICO OURO');
+    await expect(page.getByTestId('abrir-atd-carteira-aviso')).toHaveCount(0);
+    await expect(page.getByLabel('Observação da ficha')).toHaveValue('ABERTURA SINTETICA EM CURSO');
   });
 });
