@@ -3729,3 +3729,5 @@ acesso_prontuario_restrito	PEP	historico	F8	Cada abertura do prontuário restrit
 meta_produtividade_repasse	FAT	configuracao	F8	Meta de produtividade do profissional na remuneração variável: indicador, forma do prêmio, peso e vigência	F8 (07-FIN linha 157)	06	0
 meta_produtividade_repasse_faixa	FAT	configuracao	F8	Faixas do valor apurado da meta de produtividade e o prêmio de cada uma	F8 (07-FIN linha 157)	06	0
 apuracao_meta_produtividade	FAT	historico	F8	Valor apurado da meta de produtividade na competência, com o histórico das correções	F8 (07-FIN linha 157)	06	0
+orcamento_ordem_servico_manutencao	HOT	historico	F7	Orçamento da ordem de serviço de manutenção com a aprovação ou reprovação pelo aprovador da oficina, dentro da alçada	F7 (04-HOT linha 135)	04	0
+remessa_conserto_manutencao	HOT	historico	F7	Remessa do equipamento ao fornecedor para conserto externo, com o termo de saída, a nota de remessa e o retorno	F7 (04-HOT linha 135)	04	0
