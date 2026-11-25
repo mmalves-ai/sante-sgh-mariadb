@@ -113,7 +113,9 @@ test.describe('grupos comparativos de resultados (03-PEP L128) @F33 @C1-059', ()
     expect(gravados[0]).toMatchObject({ nome: 'Função renal', itens: [{ exame: 501, exameAnalito: null }] });
     await semViolacaoAxe(page, '/pep/resultados/grupos');
 
-    // A aba de resultados do paciente mostra o grupo lado a lado e manda o atendimento em curso do cabeçalho.
+    // A aba de resultados do paciente mostra o grupo lado a lado e manda o atendimento em curso do cabeçalho. Quem lê o
+    // prontuário é o médico: o perfil de administrador do sistema não tem acesso clínico (pep.resultado.ler).
+    await entrar(page, 'SINT.MEDICO');
     const cabecalho = page.waitForResponse((r) => /\/pep\/paciente\/1001\/cabecalho/.test(r.url()));
     await page.goto('/pep/paciente/1001/resultados');
     const atual = ((await (await cabecalho).json()) as { atendimentoAtual: number | null }).atendimentoAtual;

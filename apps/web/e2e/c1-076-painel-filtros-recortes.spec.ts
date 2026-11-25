@@ -141,7 +141,7 @@ async function abrirEstacao(browser: Browser, banco: Banco): Promise<Page> {
   const page = await contexto.newPage();
   await simularApi(page, banco);
   await page.goto('/entrar');
-  await page.getByTestId('campo-login').fill('SINT.ADMIN');
+  await page.getByTestId('campo-login').fill('SINT.MEDICO');
   await page.getByTestId('campo-senha').fill(SENHA);
   await page.getByTestId('botao-entrar').click();
   await expect(page).toHaveURL(/\/inicio/);
