@@ -3,15 +3,22 @@
 // que a central mandou (número da central à mão, paciente pela busca do cadastro), a fila com a emergência primeiro e o
 // aceite ou a recusa com motivo padronizado, com a validação na hora pela regra do domínio. No aceite de consulta,
 // exame ou cirurgia, o paciente entra na lista de espera da especialidade; a resposta volta à central pela integração
-// (central por webservice) ou a tela diz por onde avisá-la.
+// (central por webservice) ou a tela diz por onde avisá-la. No aceite de internação ou transferência, o pedido de leito do
+// NIR abre ligado ao pedido da central. O pedido se encerra pela chegada do paciente (ligada à internação ativa, na
+// internação e na transferência) ou pelo cancelamento com motivo padronizado (central cancelou, não compareceu).
 import type { ResultadoBuscaPaciente } from '@sgh/contratos';
 import {
+  CODIGOS_MOTIVO_CANCELAMENTO_REGULACAO,
   CODIGOS_MOTIVO_RECUSA_REGULACAO,
+  conferirCancelamentoRegulacao,
+  conferirConclusaoRegulacao,
   conferirRecebimentoRegulacao,
   conferirRespostaRegulacao,
   PRIORIDADES_REGULACAO_ENTRADA,
   SITUACOES_A_RESPONDER,
+  SITUACOES_CANCELAVEIS,
   TIPOS_COM_LISTA_ESPERA,
+  TIPOS_COM_PEDIDO_LEITO,
   TIPOS_REGULACAO_ENTRADA,
 } from '@sgh/dominio-internacao';
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
@@ -20,6 +27,8 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import {
+  cancelarRegulacao,
+  concluirRegulacao,
   lerOpcoesRegulacaoEntrada,
   listarRegulacoesRecebidas,
   receberRegulacao,
@@ -59,6 +68,13 @@ const prioridades = computed(() =>
 );
 const motivos = computed(() =>
   CODIGOS_MOTIVO_RECUSA_REGULACAO.map((x) => ({ valor: x as string | null, rotulo: k(`motivos.${x}`) })),
+);
+
+const motivosCancelamento = computed(() =>
+  CODIGOS_MOTIVO_CANCELAMENTO_REGULACAO.map((x) => ({
+    valor: x as string | null,
+    rotulo: k(`motivosCancelamento.${x}`),
+  })),
 );
 
 const erro = ref<unknown>(null);
@@ -146,6 +162,7 @@ const complemento = ref('');
 const especialidade = ref<number | null>(null);
 
 function abrirResposta(r: RegulacaoRecebida, decisao: 'aceitar' | 'recusar'): void {
+  encerrando.value = null;
   respondendo.value = { id: r.id, decisao };
   motivo.value = null;
   complemento.value = '';
@@ -196,6 +213,76 @@ async function responder(r: RegulacaoRecebida): Promise<void> {
     });
     mensagem.value = `${k('respondido')} ${textoDevolucao(r, x.devolucao)}`;
     respondendo.value = null;
+  } catch (e) {
+    erro.value = e;
+  } finally {
+    ocupado.value = false;
+    await fila.refetch();
+  }
+}
+
+// ── Encerramento: cancelamento (motivo padronizado) ou chegada do paciente ──
+const encerrando = ref<{ id: number; acao: 'cancelar' | 'concluir' } | null>(null);
+const motivoCancelamento = ref<string | null>(null);
+const complementoCancelamento = ref('');
+const chegadaEm = ref('');
+
+function abrirEncerramento(r: RegulacaoRecebida, acao: 'cancelar' | 'concluir'): void {
+  respondendo.value = null;
+  encerrando.value = { id: r.id, acao };
+  motivoCancelamento.value = null;
+  complementoCancelamento.value = '';
+  chegadaEm.value = '';
+  erro.value = null;
+  mensagem.value = null;
+}
+const cancelavel = (r: RegulacaoRecebida) =>
+  (SITUACOES_CANCELAVEIS as readonly string[]).includes(r.situacao);
+const pedeInternacao = (r: RegulacaoRecebida) =>
+  (TIPOS_COM_PEDIDO_LEITO as readonly string[]).includes(r.tipo);
+const problemasEncerramento = (r: RegulacaoRecebida) => {
+  if (encerrando.value?.acao === 'cancelar') {
+    const c = conferirCancelamentoRegulacao({
+      situacao: r.situacao,
+      motivo: motivoCancelamento.value,
+      complemento: complementoCancelamento.value,
+      estadoPedidoLeito: r.pedidoLeito?.estado ?? null,
+    });
+    return c.ok ? [] : c.problemas;
+  }
+  const c = conferirConclusaoRegulacao({
+    situacao: r.situacao,
+    tipo: r.tipo,
+    chegadaEm: chegadaEm.value ? new Date(chegadaEm.value) : new Date(),
+    reguladoEm: r.reguladoEm ? new Date(r.reguladoEm) : null,
+    agora: new Date(),
+    internacao: pedeInternacao(r) ? r.internacaoAtiva : null,
+  });
+  return c.ok ? [] : c.problemas;
+};
+
+async function encerrar(r: RegulacaoRecebida): Promise<void> {
+  if (!encerrando.value || problemasEncerramento(r).length) return;
+  erro.value = null;
+  mensagem.value = null;
+  ocupado.value = true;
+  try {
+    if (encerrando.value.acao === 'cancelar') {
+      await cancelarRegulacao(r.id, {
+        motivo: motivoCancelamento.value ?? '',
+        complemento: complementoCancelamento.value.trim() || null,
+        versao: r.versao,
+      });
+      mensagem.value = k('cancelado');
+    } else {
+      await concluirRegulacao(r.id, {
+        chegadaEm: chegadaEm.value ? new Date(chegadaEm.value).toISOString() : null,
+        internacao: pedeInternacao(r) ? r.internacaoAtiva : null,
+        versao: r.versao,
+      });
+      mensagem.value = k('concluido');
+    }
+    encerrando.value = null;
   } catch (e) {
     erro.value = e;
   } finally {
@@ -340,6 +427,17 @@ async function responder(r: RegulacaoRecebida): Promise<void> {
       <p v-if="r.listaEspera" data-testid="recebido-lista">
         {{ t('adt.regulacaoEntrada.listaEspera', { id: r.listaEspera }) }}
       </p>
+      <p v-if="r.pedidoLeito" data-testid="recebido-leito">
+        {{
+          t('adt.regulacaoEntrada.pedidoLeito', {
+            numero: r.pedidoLeito.numero,
+            estado: k(`estadosLeito.${r.pedidoLeito.estado}`),
+          })
+        }}
+      </p>
+      <p v-if="r.internacao" data-testid="recebido-internacao">
+        {{ t('adt.regulacaoEntrada.internacaoLigada', { id: r.internacao }) }}
+      </p>
       <details>
         <summary>{{ k('historico') }}</summary>
         <ul class="lista">
@@ -355,19 +453,81 @@ async function responder(r: RegulacaoRecebida): Promise<void> {
           </li>
         </ul>
       </details>
-      <p v-if="props.podeRegistrar && aberto(r) && respondendo?.id !== r.id" class="acoes">
+      <p v-if="props.podeRegistrar && respondendo?.id !== r.id && encerrando?.id !== r.id" class="acoes">
+        <template v-if="aberto(r)">
+          <SanteBotao
+            :rotulo="k('aceitar')"
+            :data-testid="`aceitar-${r.numero}`"
+            @acionar="abrirResposta(r, 'aceitar')"
+          />
+          <SanteBotao
+            variante="secundario"
+            :rotulo="k('recusar')"
+            :data-testid="`recusar-${r.numero}`"
+            @acionar="abrirResposta(r, 'recusar')"
+          />
+        </template>
         <SanteBotao
-          :rotulo="k('aceitar')"
-          :data-testid="`aceitar-${r.numero}`"
-          @acionar="abrirResposta(r, 'aceitar')"
+          v-if="r.situacao === 'autorizada'"
+          :rotulo="k('registrarChegada')"
+          :data-testid="`chegada-${r.numero}`"
+          @acionar="abrirEncerramento(r, 'concluir')"
         />
         <SanteBotao
+          v-if="cancelavel(r)"
           variante="secundario"
-          :rotulo="k('recusar')"
-          :data-testid="`recusar-${r.numero}`"
-          @acionar="abrirResposta(r, 'recusar')"
+          :rotulo="k('cancelarPedido')"
+          :data-testid="`cancelar-pedido-${r.numero}`"
+          @acionar="abrirEncerramento(r, 'cancelar')"
         />
       </p>
+      <form
+        v-if="encerrando?.id === r.id"
+        class="painel"
+        :data-testid="`form-encerrar-${r.numero}`"
+        @submit.prevent="encerrar(r)"
+      >
+        <template v-if="encerrando.acao === 'cancelar'">
+          <SanteSelecao
+            v-model="motivoCancelamento"
+            data-testid="canc-motivo"
+            :rotulo="k('motivoCancelamento')"
+            :opcoes="motivosCancelamento"
+          />
+          <SanteCampoTexto
+            v-model="complementoCancelamento"
+            data-testid="canc-complemento"
+            :rotulo="k('complementoCancelamento')"
+            :max-bytes="600"
+            multilinha
+          />
+        </template>
+        <template v-else>
+          <p v-if="pedeInternacao(r)" data-testid="chegada-internacao">
+            {{
+              r.internacaoAtiva
+                ? t('adt.regulacaoEntrada.internacaoAtiva', { id: r.internacaoAtiva })
+                : k('semInternacao')
+            }}
+          </p>
+          <label>
+            {{ k('chegadaEm') }}
+            <input v-model="chegadaEm" type="datetime-local" data-testid="chegada-em" />
+          </label>
+        </template>
+        <ul v-if="problemasEncerramento(r).length" class="erro-campo" data-testid="encerrar-problemas">
+          <li v-for="p in problemasEncerramento(r)" :key="p.campo">{{ p.mensagem }}</li>
+        </ul>
+        <p class="acoes">
+          <SanteBotao
+            tipo="submit"
+            :rotulo="encerrando.acao === 'cancelar' ? k('confirmarCancelamento') : k('confirmarChegada')"
+            :desabilitado="ocupado || problemasEncerramento(r).length > 0"
+            data-testid="encerrar-confirmar"
+          />
+          <SanteBotao variante="secundario" :rotulo="k('voltar')" @acionar="encerrando = null" />
+        </p>
+      </form>
       <form
         v-if="respondendo?.id === r.id"
         class="painel"

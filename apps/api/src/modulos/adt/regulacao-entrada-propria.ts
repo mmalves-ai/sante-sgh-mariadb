@@ -200,7 +200,7 @@ export class PortaRegulacaoEntradaPropria extends PortaEstabelecimentoPropria {
     }));
   }
 
-  /** Os pedidos recebidos do estabelecimento: os que pedem resposta primeiro; `todos` traz os respondidos. */
+  /** Os pedidos abertos (a responder primeiro, depois os aceitos à espera da chegada); `todos` traz os encerrados. */
   recebidos(c: ContextoPortaPropria, filtro: { todos?: unknown; paciente?: unknown }) {
     const todos = filtro.todos === 'sim' || filtro.todos === true;
     const paciente = Number(filtro.paciente ?? 0);
@@ -223,7 +223,7 @@ export class PortaRegulacaoEntradaPropria extends PortaEstabelecimentoPropria {
            LEFT JOIN pedido_leito pl ON pl.id = r.pedido_leito_id
            LEFT JOIN situacao_pedido_leito sp ON sp.id = pl.situacao_pedido_leito_id
           WHERE r.estabelecimento_id = ? AND r.sentido = 'entrada' AND r.excluido_em IS NULL
-            ${todos ? '' : "AND r.situacao IN ('solicitada', 'em_analise')"}
+            ${todos ? '' : "AND r.situacao IN ('solicitada', 'em_analise', 'autorizada')"}
             ${Number.isSafeInteger(paciente) && paciente > 0 ? 'AND r.paciente_id = ?' : ''}
           ORDER BY r.solicitado_em DESC, r.id DESC LIMIT ${TETO}`,
         Number.isSafeInteger(paciente) && paciente > 0 ? [est.id, paciente] : [est.id],

@@ -333,8 +333,10 @@ describe.skipIf(SEM_BANCO)('PortaRegulacaoEntradaPropria contra o MariaDB (contr
       solicitadoEm: haMinutos(10),
       resumoClinico: 'Quadro sintético de emergência para o teste.',
     });
+    // A fila aberta: os que pedem resposta primeiro (emergência antes), depois os aceitos à espera da chegada.
     const fila = await porta.recebidos(ctx(), {});
-    expect(fila.map((x) => x.id)).toEqual([b.id, a.id]);
+    expect(fila.slice(0, 2).map((x) => x.id)).toEqual([b.id, a.id]);
+    expect(fila.slice(2).map((x) => x.situacao)).toEqual(['autorizada', 'autorizada']);
     expect(fila[0]!.eventos).toHaveLength(1);
 
     const v = Number((await linha(a.id))['versao']);
@@ -361,8 +363,10 @@ describe.skipIf(SEM_BANCO)('PortaRegulacaoEntradaPropria contra o MariaDB (contr
     const ev = (await eventos(a.id)).at(-1)!;
     expect(json(ev['dados'])).toMatchObject({ decisao: 'recusar', motivo: 'outro' });
 
-    // A fila mostra só os que pedem resposta; `todos` traz os respondidos depois, sem apagar nada.
-    expect((await porta.recebidos(ctx(), {})).map((x) => x.id)).toEqual([b.id]);
+    // A fila aberta deixa o recusado de fora; `todos` traz os respondidos depois, sem apagar nada.
+    const abertos = await porta.recebidos(ctx(), {});
+    expect(abertos.map((x) => x.id)).not.toContain(a.id);
+    expect(abertos.filter((x) => x.situacao === 'solicitada').map((x) => x.id)).toEqual([b.id]);
     const todos = await porta.recebidos(ctx(), { todos: 'sim' });
     expect(todos[0]!.id).toBe(b.id);
     expect(todos.map((x) => x.situacao)).toEqual(

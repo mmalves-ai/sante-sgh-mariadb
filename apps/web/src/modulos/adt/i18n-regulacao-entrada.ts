@@ -1,10 +1,10 @@
 // Textos da regulação de entrada (C1-080, 02-REC linha 38): os pedidos que a central de regulação manda para o
-// hospital, com o aceite e a recusa por motivo padronizado.
+// hospital, com o aceite e a recusa por motivo padronizado, o cancelamento e a chegada do paciente.
 export const mensagensRegulacaoEntrada = {
   abas: { saida: 'Pedidos à central', recebidos: 'Recebidos da central' },
   titulo: 'Pedidos recebidos da central de regulação',
   texto:
-    'Registre o pedido que a central mandou com o número dela. A fila mostra a emergência primeiro. Aceite ou recuse com o motivo: a resposta fica no histórico do pedido e volta para a central.',
+    'Registre o pedido que a central mandou com o número dela. A fila mostra a emergência primeiro e, depois, os aceitos à espera do paciente. Aceite ou recuse com o motivo: a resposta fica no histórico do pedido e volta para a central. Encerre o pedido com a chegada do paciente ou com o cancelamento.',
   carregando: 'Carregando…',
   novo: 'Registrar pedido recebido',
   central: 'Central de regulação',
@@ -37,14 +37,14 @@ export const mensagensRegulacaoEntrada = {
   registrar: 'Registrar pedido',
   cancelar: 'Cancelar',
   registrado: 'Pedido da central registrado na fila.',
-  mostrarRespondidos: 'Mostrar também os respondidos',
-  vazio: 'Nenhum pedido da central aguardando resposta.',
+  mostrarRespondidos: 'Mostrar também os encerrados',
+  vazio: 'Nenhum pedido da central aberto.',
   cartao: '{central} · pedido {numero} · {tipo}',
   espera: 'Pedido em {em}',
   situacoes: {
     solicitada: 'Aguardando resposta',
     em_analise: 'Em análise',
-    autorizada: 'Aceito',
+    autorizada: 'Aceito, aguardando o paciente',
     negada: 'Recusado',
     cancelada: 'Cancelado',
     concluida: 'Concluído',
@@ -81,4 +81,36 @@ export const mensagensRegulacaoEntrada = {
   devolucaoConector: 'A resposta segue para a central pela integração.',
   devolucaoManual: 'Informe a resposta à central {central} pelo canal dela{contato}.',
   contato: ': {contato}',
+  pedidoLeito: 'Pedido de leito {numero} no NIR ({estado}).',
+  estadosLeito: {
+    solicitado: 'aguardando leito',
+    em_analise: 'em análise',
+    reservado: 'leito reservado',
+    em_transito: 'paciente a caminho',
+    internado: 'internado',
+    cancelado: 'cancelado',
+    rejeitado: 'rejeitado',
+  },
+  internacaoLigada: 'Ligado à internação {id}.',
+  cancelarPedido: 'Cancelar pedido',
+  motivoCancelamento: 'Motivo do cancelamento',
+  motivosCancelamento: {
+    cancelado_pela_central: 'Cancelado pela central de regulação',
+    outro_destino: 'Paciente regulado para outro hospital',
+    nao_compareceu: 'Paciente não compareceu',
+    desistencia: 'Desistência do paciente ou da família',
+    obito: 'Óbito antes da chegada',
+    outro: 'Outro motivo',
+  },
+  complementoCancelamento: 'Complemento (obrigatório em "outro")',
+  confirmarCancelamento: 'Confirmar cancelamento',
+  cancelado: 'Pedido cancelado. A lista de espera e o pedido de leito ligados foram encerrados junto.',
+  registrarChegada: 'Registrar chegada',
+  chegadaEm: 'Chegada do paciente em (vazio: agora)',
+  internacaoAtiva: 'Internação ativa do paciente: {id}.',
+  semInternacao:
+    'O paciente ainda não tem internação ativa: interne pelo pedido de leito do NIR e volte aqui.',
+  confirmarChegada: 'Confirmar chegada',
+  concluido: 'Chegada registrada: pedido concluído.',
+  voltar: 'Voltar',
 };

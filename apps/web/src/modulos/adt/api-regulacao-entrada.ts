@@ -35,6 +35,9 @@ export const esquemaRegulacaoRecebida = z.object({
   observacao: z.string().nullable(),
   mensagemCentral: z.string().nullable(),
   listaEspera: z.number().nullable(),
+  pedidoLeito: z.object({ id: z.number(), numero: z.string(), estado: z.string() }).nullable(),
+  internacao: z.number().nullable(),
+  internacaoAtiva: z.number().nullable(),
   eventos: z.array(
     z.object({
       id: z.number(),
@@ -70,6 +73,18 @@ export interface RespostaRegulacaoEntrada {
   versao: number;
 }
 
+export interface CancelamentoRegulacaoEntrada {
+  motivo: string;
+  complemento: string | null;
+  versao: number;
+}
+
+export interface ConclusaoRegulacaoEntrada {
+  chegadaEm: string | null;
+  internacao: number | null;
+  versao: number;
+}
+
 const comId = z.object({ id: z.number() }).passthrough();
 const resposta = z
   .object({
@@ -87,3 +102,7 @@ export const receberRegulacao = (corpo: RecebimentoRegulacaoEntrada) =>
   enviar(R, corpo, comId, novaChave('regulacao-receber'));
 export const responderRegulacao = (id: number, corpo: RespostaRegulacaoEntrada) =>
   enviar(`${R}/${id}/resposta`, corpo, resposta, novaChave('regulacao-responder'));
+export const cancelarRegulacao = (id: number, corpo: CancelamentoRegulacaoEntrada) =>
+  enviar(`${R}/${id}/cancelamento`, corpo, comId, novaChave('regulacao-cancelar'));
+export const concluirRegulacao = (id: number, corpo: ConclusaoRegulacaoEntrada) =>
+  enviar(`${R}/${id}/conclusao`, corpo, comId, novaChave('regulacao-concluir'));
