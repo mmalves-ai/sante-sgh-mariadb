@@ -37,6 +37,8 @@ export * from './opme.js';
 export * from './consignado.js';
 // 05-SUP linha 24: a taxa de comercialização do consignado por faixa de valor, com vigência e teto.
 export * from './consignado-taxa.js';
+// SLA do contrato com fornecedor (09-AREA linha 88): modelo, faixas, cobertura por horário e dias, apuração do período.
+export * from './sla-contrato.js';
 export * from './manipulacao.js';
 // M55 (etapa 3): contrato com fornecedor (vigência e alertas, reajuste, saldo, vínculo e avaliação).
 export * from './contrato.js';
