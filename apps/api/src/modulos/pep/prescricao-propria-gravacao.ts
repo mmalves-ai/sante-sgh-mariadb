@@ -32,6 +32,7 @@ import {
   gravarDetalhe,
   produtoDoItem,
 } from './prescricao-propria-itens.js';
+import { integrarDosesDoItem } from '../farmacia/integracao-prescricao.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import {
   desmarcarFavorito,
@@ -87,6 +88,8 @@ export const TABELAS_GRAVACAO_PRESCRICAO = [
   'prescricao_item_ventilacao',
   'favorito_prescritor',
   'horario_administracao',
+  // A decisão da regra de integração com o estoque para cada dose (05-SUP linha 7, integracao-prescricao.ts).
+  'integracao_dose_estoque',
   'prescricao_evento',
   'decisao_alerta',
   'planejamento_prescricao',
@@ -1662,6 +1665,9 @@ async function inserirItem(
         situacao_checagem_id: num(s['id']),
         origem: 'sistema',
       });
+    // A regra de integração prescrição × estoque (05-SUP linha 7) decide, para cada dose do item com produto de
+    // estoque, o local que a atende e quando ela entra na fila da farmácia. O indicador não vem mais da montagem.
+    await integrarDosesDoItem(tx, { est: est.id, atendimento, item, prescritoEm: new Date() });
   }
   return { item, horarios: it.horarios.length };
 }
