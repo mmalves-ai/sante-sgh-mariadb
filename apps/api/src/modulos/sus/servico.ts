@@ -303,8 +303,24 @@ export type MontadorCriticaSus = (
   };
 }>;
 
+/**
+ * A crítica complementar de um instrumento de produção (06-SUS linha 54): a produção da competência contra o saldo da
+ * programação físico-orçamentária, dos tetos e das cotas. Devolve as críticas para gravar junto com as da montagem.
+ */
+export type ComplementoCriticaSus = (
+  s: SessaoSus,
+  instrumento: 'bpa' | 'apac' | 'aih',
+  competencia: string,
+) => Promise<readonly NovaCriticaSus[]>;
+
 export class ServicoSus {
   private readonly montadores = new Map<InstrumentoSus, MontadorCriticaSus>();
+  private complemento: ComplementoCriticaSus | null = null;
+
+  /** 06-SUS linha 54: a crítica do BPA, da APAC e da AIH passa a consultar o saldo de teto, cota e programação. */
+  registrarComplementoCritica(fn: ComplementoCriticaSus): void {
+    this.complemento = fn;
+  }
 
   /** Etapa 4: a crítica do instrumento passa a usar a montagem dada (a AIH registra a dela). */
   registrarMontagem(instrumento: InstrumentoSus, montador: MontadorCriticaSus): void {
@@ -482,12 +498,20 @@ export class ServicoSus {
             }))
           : await this.montar(s, e.instrumento, e.competencia);
     if (comp.situacao !== 'aberta') throw recusa('competencia-ja-fechada');
+    const extras =
+      this.complemento && (e.instrumento === 'bpa' || e.instrumento === 'apac' || e.instrumento === 'aih')
+        ? await this.complemento(s, e.instrumento, comp.competencia)
+        : [];
+    const criticas = extras.length ? [...m.criticas, ...extras] : m.criticas;
     const tempoMs = Date.now() - t0;
-    const r = resumoCriticas(m.resultado.criticas);
+    const r = resumoCriticas([
+      ...m.resultado.criticas,
+      ...extras.map((x) => ({ regra: x.regra as RegraCriticaSus, gravidade: x.gravidade })),
+    ]);
     return this.gravar(s, async (g) => {
       const c = await this.exigirCompetencia(g, e.instrumento, e.competencia, true);
       if (c.situacao !== 'aberta') throw recusa('competencia-ja-fechada');
-      const gravado = await g.gravarCriticas(c, m.criticas, {
+      const gravado = await g.gravarCriticas(c, criticas, {
         registros: m.resultado.registros.length,
         cnes: m.cnes,
       });

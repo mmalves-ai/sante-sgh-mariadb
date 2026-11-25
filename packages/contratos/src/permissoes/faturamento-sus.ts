@@ -108,6 +108,22 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
   ),
   // F8 (06-SUS linha 65): notificação de potencial doador e inscrição de receptor para a central estadual de
   // transplantes; recurso só do novo, concedido por perfil. Conteúdo clínico (dado sensível).
+  // F7 (06-SUS linha 54): programação físico-orçamentária, tetos e cotas; recurso só do novo, concedido por perfil.
+  p(
+    'faturamento.susProgramacao.ler',
+    'Consultar a programação físico-orçamentária, os tetos, as cotas, o saldo da competência e os remanejamentos',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p(
+    'faturamento.susProgramacao.editar',
+    'Importar e ativar a programação físico-orçamentária, incluir e inativar teto e cota e pedir remanejamento de cota',
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p(
+    'faturamento.susProgramacao.aprovar',
+    'Aprovar ou recusar o remanejamento de cota pedido por outra pessoa',
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
   p(
     'faturamento.susTransplante.ler',
     'Consultar as notificações de potencial doador, as inscrições de receptor, o histórico enviado à central e o arquivo de conferência',

@@ -32,6 +32,7 @@
 // A permissão é conferida aqui (catálogo do M06) e de novo no serviço (liberação do instrumento, escopo e versão).
 // A CIHA é gerada e mostrada sempre (regra 8: "até lá, o novo só gera e mostra"); a chave `faturamento.susCiha` diz se
 // o arquivo daqui já é a fonte do envio. BPA, APAC e AIH ficam desligados por estabelecimento (DP-35).
+import { PORTA_PROGRAMACAO_SUS, type PortaProgramacaoSusPropria } from './programacao-propria.js';
 import {
   Body,
   Controller,
@@ -170,6 +171,9 @@ export class SusController {
     @Optional() @Inject(FONTE_CONFIGURACAO) private readonly configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
     @Optional() @Inject(ARMAZEM_ARQUIVO_SUS) armazem: ArmazemArquivoSus | null = null,
+    @Optional()
+    @Inject(PORTA_PROGRAMACAO_SUS)
+    programacao: PortaProgramacaoSusPropria | null = null,
   ) {
     this.liberacao = new LiberacaoPep(configuracao, cache);
     const log = new Logger('SusController');
@@ -186,6 +190,20 @@ export class SusController {
       (m) => log.warn(m),
     );
     this.servico.registrarMontagem('aih', this.aih.montadorCritica());
+    // 06-SUS linha 54: a crítica do BPA, da APAC e da AIH consulta o saldo de teto, cota e programação.
+    if (programacao)
+      this.servico.registrarComplementoCritica((s, instrumento, competencia) =>
+        programacao.criticasDaCompetencia(
+          {
+            cliente: '',
+            hospital: s.hospital,
+            usuario: s.usuario ?? null,
+            correlacao: s.correlacao ?? 'critica-sus',
+          },
+          instrumento,
+          competencia,
+        ),
+      );
     // Com a porta em memória, a trilha das gravações vai ao registrador da API (no núcleo, vai na transação).
     if (porta instanceof PortaSusMemoria)
       porta.aoRegistrarTrilha = async (l) => {

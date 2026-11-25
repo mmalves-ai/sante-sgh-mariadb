@@ -14,6 +14,8 @@ import { armazemSusLocal, armazemSusMemoria } from './armazem.js';
 import { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
 import { PortaSusMemoria } from './porta-memoria.js';
 import { PortaSusPropria } from './porta-propria.js';
+import { ProgramacaoSusController } from './programacao.controller.js';
+import { PORTA_PROGRAMACAO_SUS, PortaProgramacaoSusPropria } from './programacao-propria.js';
 import type { ArmazemArquivoSus } from './servico.js';
 import { ENVIADOR_SERVICO_WEB_SUS, enviadorServicoWebSusDoAmbiente } from './servico-web-enviador.js';
 import { NUCLEO_SERVICO_WEB_SUS, ServicoWebSusController } from './servico-web.controller.js';
@@ -56,6 +58,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       ServicoWebSusController,
       LeitosUtiSusController,
       TransplanteSusController,
+      ProgramacaoSusController,
     ],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
@@ -77,6 +80,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaTransplantePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (06-SUS linha 54): programação físico-orçamentária, tetos e cotas (a crítica consulta o saldo).
+      {
+        provide: PORTA_PROGRAMACAO_SUS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProgramacaoSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
     ],
