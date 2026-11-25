@@ -33,6 +33,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import PaginacaoCadastro from '../../cadastro/componentes/PaginacaoCadastro.vue';
 import { carimboBr } from '../../cadastro/formato.js';
+import ApacLaudosEspecificos from '../componentes/ApacLaudosEspecificos.vue';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import {
   buscarSolicitantesApac,
@@ -124,6 +125,12 @@ async function executar(e: RegistrarApacEntrada, ok: string): Promise<ApacLida |
 
 // ── O detalhe de uma APAC ─────────────────────────────────────────────────────────────────────────
 const aberta = ref<ApacLida | null>(null);
+/** O painel do laudo complementar sobe a versão do laudo: relê a lista e a APAC aberta. */
+async function aoAlterarComplemento() {
+  const r = await apacs.refetch();
+  const nova = r.data?.itens.find((x) => x.id === aberta.value?.id);
+  if (nova) aberta.value = nova;
+}
 watch(
   () => apacs.data.value,
   (p) => {
@@ -789,6 +796,14 @@ const situacaoArquivo = (a: ArquivoSusLido) => t(`faturamentoSus.ciha.situacoes.
             />
           </div>
         </section>
+
+        <!-- Laudo complementar (oncologia, auditiva, medicamento, odontologia) e sessões da APAC aberta -->
+        <ApacLaudosEspecificos
+          v-if="aberta"
+          :laudo="aberta.id"
+          :pode-registrar="podeRegistrar"
+          @alterada="aoAlterarComplemento"
+        />
 
         <!-- A ação escolhida -->
         <section v-if="escolhida" aria-labelledby="apac-acao-titulo" data-testid="apac-acao">

@@ -403,7 +403,18 @@ export interface ComplementosApac {
   readonly validadeFim: string | null;
   readonly laudos: { readonly [K in LaudoEspecificoApac]: ComplementoApac['dados'] | null };
   readonly sessoes: readonly SessaoApacLida[];
+  /** Os valores das listas SUS que o laudo de oncologia e o de saúde auditiva usam. */
+  readonly opcoes: Readonly<Record<string, readonly { id: number; codigo: string; descricao: string }[]>>;
 }
+
+const LISTAS_DO_LAUDO = [
+  'finalidade_tratamento',
+  'local_metastase',
+  'medicamento_antineoplasico',
+  'associacao_quimioterapia',
+  'justificativa_auditiva',
+];
+const MARCAS_LISTAS = LISTAS_DO_LAUDO.map(() => '?').join(', ');
 
 function conflito(): ErroOperacao {
   return new ErroOperacao(
@@ -445,6 +456,19 @@ export class PortaApacComplementosPropria extends PortaEstabelecimentoPropria {
         versao: num(s['versao']),
       }),
     );
+    const opcoes: Record<string, { id: number; codigo: string; descricao: string }[]> = {};
+    for (const lista of LISTAS_DO_LAUDO) opcoes[lista] = [];
+    const valores = await l.consultar(
+      `SELECT id, lista, codigo, descricao FROM dominio_sus
+        WHERE lista IN (${MARCAS_LISTAS}) AND ativo = TRUE ORDER BY lista, descricao`,
+      LISTAS_DO_LAUDO,
+    );
+    for (const v of valores)
+      opcoes[String(v['lista'])]?.push({
+        id: num(v['id']),
+        codigo: String(v['codigo']),
+        descricao: String(v['descricao']),
+      });
     return {
       id: laudo,
       versao: num(a['versao']),
@@ -457,6 +481,7 @@ export class PortaApacComplementosPropria extends PortaEstabelecimentoPropria {
       validadeFim: dataIso(a['validade_fim']),
       laudos,
       sessoes,
+      opcoes,
     };
   }
 
@@ -538,32 +563,27 @@ export class PortaApacComplementosPropria extends PortaEstabelecimentoPropria {
   /** Retira o laudo complementar (marcado como excluído, nunca apagado); o laudo volta ao tipo "outro". */
   retirarLaudo(c: ContextoPortaPropria, laudo: number, tipo: LaudoEspecificoApac, entrada: unknown) {
     const e = entradaValida(esquemaVersao, entrada);
-    return this.gravar(
-      c,
-      'faturamento.sus.apac.laudo-retirar',
-      TABELAS,
-      async (tx, est, usuario) => {
-        const a = (await tx.consultarParaAtualizar(SQL_APAC, [laudo, est.id]))[0];
-        if (!a) throw naoEncontrado('APAC');
-        if (num(a['versao']) !== e.versao) throw conflito();
-        const situacao = String(a['situacao']);
-        if (situacao !== 'solicitada' && situacao !== 'autorizada')
-          throw recusaRegra('Laudo complementar recusado', [
-            { campo: 'situacao', mensagem: 'O laudo complementar só muda na APAC solicitada ou autorizada.' },
-          ]);
-        const atual = await tx.uma(SQL_ATUAL[tipo], [laudo]);
-        if (!atual) throw naoEncontrado('Laudo complementar');
-        const tabela = TABELA_DO_LAUDO[tipo];
-        await tx.alterar(tabela, num(atual['id']), num(atual['versao']), {
-          excluido_em: new Date(),
-          excluido_por: usuario,
-        });
-        const versao = await tx.alterar('laudo_apac', laudo, e.versao, {
-          tipo_laudo_apac_id: await this.tipoLaudo(tx, 'outro'),
-        });
-        return { tabela, id: num(atual['id']), laudo, versao };
-      },
-    );
+    return this.gravar(c, 'faturamento.sus.apac.laudo-retirar', TABELAS, async (tx, est, usuario) => {
+      const a = (await tx.consultarParaAtualizar(SQL_APAC, [laudo, est.id]))[0];
+      if (!a) throw naoEncontrado('APAC');
+      if (num(a['versao']) !== e.versao) throw conflito();
+      const situacao = String(a['situacao']);
+      if (situacao !== 'solicitada' && situacao !== 'autorizada')
+        throw recusaRegra('Laudo complementar recusado', [
+          { campo: 'situacao', mensagem: 'O laudo complementar só muda na APAC solicitada ou autorizada.' },
+        ]);
+      const atual = await tx.uma(SQL_ATUAL[tipo], [laudo]);
+      if (!atual) throw naoEncontrado('Laudo complementar');
+      const tabela = TABELA_DO_LAUDO[tipo];
+      await tx.alterar(tabela, num(atual['id']), num(atual['versao']), {
+        excluido_em: new Date(),
+        excluido_por: usuario,
+      });
+      const versao = await tx.alterar('laudo_apac', laudo, e.versao, {
+        tipo_laudo_apac_id: await this.tipoLaudo(tx, 'outro'),
+      });
+      return { tabela, id: num(atual['id']), laudo, versao };
+    });
   }
 
   /** A APAC aberta da competência da sessão; sem ela, nasce aberta (inicial ou continuidade da anterior). */

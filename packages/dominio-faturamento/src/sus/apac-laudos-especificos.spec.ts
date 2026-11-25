@@ -128,7 +128,7 @@ describe('conferência do laudo complementar', () => {
     );
   });
 
-  it('oncologia: radioterapia pede área e campos; metástase, datas e tratamento anterior coerentes', () => {
+  it('oncologia: radioterapia pede os campos; metástase, datas e tratamento anterior coerentes', () => {
     const p = problemasDoComplemento(
       apac('0304010090'),
       {
@@ -151,7 +151,6 @@ describe('conferência do laudo complementar', () => {
       'dataDiagnostico',
       'dataInicioTratamento',
       'metastaseLocal',
-      'areaIrradiada',
       'camposInsercao',
       'tipoTratamentoAnterior',
       'fimTratamentoAnterior',

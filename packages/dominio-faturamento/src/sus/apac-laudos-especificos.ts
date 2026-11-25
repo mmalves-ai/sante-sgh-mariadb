@@ -249,8 +249,6 @@ export function problemasDoComplemento(
       if (!o.metastase && o.metastaseLocal !== null)
         p.push({ campo: 'metastaseLocal', mensagem: 'Local da metástase só com metástase marcada.' });
       if (o.tipoTratamento === 'radioterapia') {
-        if (o.areaIrradiada === null)
-          p.push({ campo: 'areaIrradiada', mensagem: 'A radioterapia pede a área irradiada.' });
         if (o.camposInsercao === null || o.camposInsercao < 1)
           p.push({ campo: 'camposInsercao', mensagem: 'A radioterapia pede os campos ou inserções.' });
       } else if (o.esquema === null)

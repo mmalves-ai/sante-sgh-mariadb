@@ -200,6 +200,7 @@ describe.skipIf(SEM_BANCO)('PortaApacComplementosPropria contra o MariaDB (contr
     expect(x.exigido).toBe('oncologia');
     expect(x.pendente).toBe(true);
     expect(x.laudos.oncologia).toBeNull();
+    expect(x.opcoes['finalidade_tratamento']?.some((o) => o.id === dom)).toBe(true);
     expect((await porta.complementos(ctx(), laudo.nefro)).exigido).toBe('nefrologia');
   });
 
