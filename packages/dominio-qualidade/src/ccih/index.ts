@@ -12,3 +12,4 @@ export * from './mensagens.js';
 export * from './correcao.js';
 export * from './bundle.js';
 export * from './analise-cultura.js';
+export * from './notificacao-iras.js';
