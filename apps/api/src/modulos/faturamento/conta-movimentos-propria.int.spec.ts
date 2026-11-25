@@ -814,4 +814,67 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(d).toContain('kit_gatilho');
     expect(d).toContain(`"itemGatilho":${ids['item']}`);
   });
+
+  it('cobertura no destino na transferência dos itens marcados: sem preço lá, só com aceite e justificativa', async () => {
+    // O componente só tem preço na tabela da fonte A: na conta B (fonte B) não tem cobertura.
+    const semPrecoLa = await escrever((e) =>
+      e.inserir(
+        `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+           realizado_em, quantidade, valor_unitario, valor_honorario, valor_custo_operacional, valor_total, situacao, criado_em)
+         VALUES (?, 91, ?, ?, '2026-01-21 10:00:00', 1, 10, 0, 10, 10, 'lancado', ?)`,
+        [ids['contaA'], ids['comp1'], ids['grupo'], new Date()],
+      ),
+    );
+    const pedido = (x: Record<string, unknown> = {}) =>
+      s.gravar('transferir', op(), {
+        contaOrigemId: ids['contaA'],
+        contaDestinoId: ids['contaB'],
+        itens: [semPrecoLa],
+        motivo: 'troca de convenio na internacao',
+        ...x,
+      });
+    const problema = async (p: Promise<unknown>) => {
+      try {
+        await p;
+      } catch (e) {
+        if (e instanceof ErroOperacao) return JSON.stringify(e.problema);
+        throw e;
+      }
+      throw new Error('esperava recusa');
+    };
+    const transferencias = async () =>
+      Number(
+        (
+          await linhas('SELECT COUNT(*) AS n FROM transferencia_conta WHERE conta_origem_id = ?', [
+            ids['contaA'],
+          ])
+        )[0]!['n'],
+      );
+    const antes = await transferencias();
+    // Sem o aceite: recusado, e nada muda (o item fica lançado na origem).
+    expect(await problema(pedido())).toContain('cobertura');
+    // Com o aceite e sem justificativa: recusado.
+    expect(await problema(pedido({ aceitarSemCobertura: true, justificativaCobertura: '' }))).toContain(
+      'justificativaCobertura',
+    );
+    expect(await transferencias()).toBe(antes);
+    const [ainda] = await linhas('SELECT situacao FROM conta_hospitalar_item WHERE id = ?', [semPrecoLa]);
+    expect(ainda!['situacao']).toBe('lancado');
+    // Com o aceite e a justificativa: vai com o valor da origem, e a justificativa fica na transferência.
+    const r = await pedido({
+      aceitarSemCobertura: true,
+      justificativaCobertura: 'Cobrado no pacote do plano',
+    });
+    expect(r).toMatchObject({ itens: 1, semPreco: 1, valorOrigem: 10, valorDestino: 10 });
+    const [t] = await linhas('SELECT observacao FROM transferencia_conta WHERE id = ?', [r['id']]);
+    expect(String(t!['observacao'])).toContain('Sem cobertura no destino (1): Cobrado no pacote do plano');
+    const [m] = await linhas(
+      `SELECT m.dados FROM transferencia_conta_item ti
+         JOIN conta_hospitalar_item_memoria m ON m.conta_hospitalar_item_id = ti.item_destino_id
+        WHERE ti.transferencia_conta_id = ?`,
+      [r['id']],
+    );
+    const dados = typeof m!['dados'] === 'string' ? m!['dados'] : JSON.stringify(m!['dados']);
+    expect(dados).toContain('valor_origem_sem_preco_destino');
+  });
 });

@@ -157,17 +157,28 @@ async function kitGravado(codigo: string) {
 
 // ── Transferência ──
 const marcados = ref<number[]>([]);
-const transf = reactive({ destino: 0, motivo: '' });
+// Item sem preço no destino só vai com o aceite e a justificativa (o servidor confere a cobertura de cada item).
+const transf = reactive({ destino: 0, motivo: '', aceitar: false, justificativa: '' });
 const transferivel = (i: ItemConta) => i.situacao === 'lancado' || i.situacao === 'conferido';
 const podeTransferir = computed(
-  () => transf.destino > 0 && marcados.value.length > 0 && transf.motivo.trim().length >= 5,
+  () =>
+    transf.destino > 0 &&
+    marcados.value.length > 0 &&
+    transf.motivo.trim().length >= 5 &&
+    (!transf.aceitar || transf.justificativa.trim().length >= 5),
 );
 async function transferir() {
   if (!podeTransferir.value) return;
-  const corpo = { contaDestinoId: transf.destino, itens: [...marcados.value], motivo: transf.motivo.trim() };
+  const corpo = {
+    contaDestinoId: transf.destino,
+    itens: [...marcados.value],
+    motivo: transf.motivo.trim(),
+    aceitarSemCobertura: transf.aceitar,
+    justificativaCobertura: transf.aceitar ? transf.justificativa.trim() : null,
+  };
   if (await rodar(() => transferirItens(conta.value, corpo, chave()))) {
     marcados.value = [];
-    transf.motivo = '';
+    Object.assign(transf, { motivo: '', aceitar: false, justificativa: '' });
   }
 }
 </script>
@@ -385,6 +396,20 @@ async function transferir() {
           <label>
             {{ t('movimentosConta.motivo') }}
             <input v-model="transf.motivo" minlength="5" maxlength="500" required data-testid="mov-motivo" />
+          </label>
+          <label>
+            <input v-model="transf.aceitar" type="checkbox" data-testid="mov-aceitar-sem-cobertura" />
+            {{ t('transferenciaConta.aceitar') }}
+          </label>
+          <label v-if="transf.aceitar">
+            {{ t('transferenciaConta.justificativa') }}
+            <input
+              v-model="transf.justificativa"
+              minlength="5"
+              maxlength="400"
+              required
+              data-testid="mov-justificativa-cobertura"
+            />
           </label>
           <p v-if="!marcados.length" class="secundario">{{ t('movimentosConta.marcarItens') }}</p>
           <button type="submit" :disabled="!podeTransferir" data-testid="mov-transferir">

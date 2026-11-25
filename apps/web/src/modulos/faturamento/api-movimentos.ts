@@ -107,7 +107,13 @@ export const lancarKit = (conta: number, kitId: number, vezes: number, chave: st
   enviar(`${F}/contas/${conta}/kits`, { kitId, vezes }, qualquer, chave);
 export const transferirItens = (
   conta: number,
-  corpo: { contaDestinoId: number; itens: number[]; motivo: string },
+  corpo: {
+    contaDestinoId: number;
+    itens: number[];
+    motivo: string;
+    aceitarSemCobertura?: boolean;
+    justificativaCobertura?: string | null;
+  },
   chave: string,
 ) => enviar(`${F}/contas/${conta}/transferencias`, corpo, qualquer, chave);
 

@@ -7,7 +7,10 @@
 // - lote: duas contas do paciente de uma vez; uma recusada desfaz o lote inteiro (nada fica);
 // - estorno: item de destino "estornado", origem de volta a "lancado", transferência "estornada" com autor e motivo;
 //   estorno repetido recusado; nada é apagado;
-// - painel: prévia da cobertura por item no destino e as transferências com a situação.
+// - painel: prévia da cobertura por item no destino, a sugestão pela troca de convênio gravada na internação
+//   (troca_internacao) e as transferências com a situação;
+// - equipe: a do item de origem fica encerrada pela transferência e volta no estorno; a do destino fica encerrada;
+// - conta de destino de outro estabelecimento: a cobertura (prévia e gravação) usa as tabelas de lá.
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -61,9 +64,10 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
 
   const limpar = async (e: Escritor) => {
     const contas = (
-      await e.consultar<{ id: number }>('SELECT id FROM conta_hospitalar WHERE estabelecimento_id = ?', [
-        ids['est'],
-      ])
+      await e.consultar<{ id: number }>(
+        'SELECT id FROM conta_hospitalar WHERE estabelecimento_id IN (?, ?)',
+        [ids['est'], ids['estB']],
+      )
     ).map((c) => Number(c.id));
     for (const id of contas) {
       await e.executar(
@@ -93,56 +97,77 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
       await e.executar('DELETE FROM atendimento_conta WHERE conta_hospitalar_id = ?', [id]);
       await e.executar('DELETE FROM conta_hospitalar WHERE id = ?', [id]);
     }
-    await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids['est']]);
+    await e.executar(
+      'DELETE t FROM troca_internacao t JOIN internacao i ON i.id = t.internacao_id WHERE i.estabelecimento_id = ?',
+      [ids['est']],
+    );
+    await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [ids['est']]);
+    await e.executar('DELETE FROM atendimento WHERE estabelecimento_id IN (?, ?)', [ids['est'], ids['estB']]);
+    await e.executar('DELETE FROM usuario_perfil WHERE usuario_id = ?', [ids['usuario']]);
+    await e.executar('DELETE FROM usuario_estabelecimento WHERE usuario_id = ?', [ids['usuario']]);
+    await e.executar(
+      "DELETE pa FROM perfil_acao pa JOIN perfil_acesso p ON p.id = pa.perfil_acesso_id WHERE p.codigo = 'F749P'",
+      [],
+    );
+    await e.executar("DELETE FROM perfil_acesso WHERE codigo = 'F749P'", []);
   };
 
-  const novaConta = async (numero: string, itens: [number, string, string][]) =>
+  const novaConta = async (
+    numero: string,
+    itens: [number, string, string][],
+    x: { est?: number; fonte?: number; tabela?: number | null } = {},
+  ) =>
     escrever(async (e) => {
       const agora = new Date();
+      const est = x.est ?? ids['est'];
+      const fonteConta = x.fonte ?? ids['fonteA'];
       const at = await e.inserir(
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
            carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'aberto', '2026-01-20 08:00:00', ?)`,
-        [
-          ids['est'],
-          numero,
-          ids['paciente'],
-          ids['categoria'],
-          ids['carater'],
-          ids['fonteA'],
-          ids['medico'],
-          agora,
-        ],
+        [est, numero, ids['paciente'], ids['categoria'], ids['carater'], fonteConta, ids['medico'], agora],
       );
       const c = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
            tabela_preco_id, tipo_conta_id, natureza, competencia, inicio_em, situacao, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 08:00:00', 'aberta', ?)`,
-        [ids['est'], `${numero}-1`, at, ids['paciente'], ids['fonteA'], ids['tabA'], ids['tipoConta'], agora],
+        [
+          est,
+          `${numero}-1`,
+          at,
+          ids['paciente'],
+          fonteConta,
+          x.tabela === undefined ? ids['tabA'] : x.tabela,
+          ids['tipoConta'],
+          agora,
+        ],
       );
       await e.inserir(
         'INSERT INTO atendimento_conta (atendimento_id, conta_hospitalar_id, criado_em) VALUES (?, ?, ?)',
         [at, c, agora],
       );
       let sq = 0;
+      const criados: number[] = [];
       for (const [item, dia, situacao] of itens)
-        await e.inserir(
-          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+        criados.push(
+          await e.inserir(
+            `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
              realizado_em, quantidade, valor_unitario, valor_honorario, valor_custo_operacional, valor_total, situacao,
              motivo_glosa_id, criado_em)
            VALUES (?, ?, ?, ?, ?, 1, 100, 0, 100, 100, ?, ?, ?)`,
-          [
-            c,
-            ++sq,
-            item,
-            ids['grupo'],
-            `${dia} 10:00:00`,
-            situacao,
-            situacao === 'glosado' ? ids['motivoGlosa'] : null,
-            agora,
-          ],
+            [
+              c,
+              ++sq,
+              item,
+              ids['grupo'],
+              `${dia} 10:00:00`,
+              situacao,
+              situacao === 'glosado' ? ids['motivoGlosa'] : null,
+              agora,
+            ],
+          ),
         );
-      return { conta: c, atendimento: at };
+      return { conta: c, atendimento: at, itens: criados };
     });
 
   beforeAll(async () => {
@@ -157,6 +182,12 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
         P,
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [P, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, agora],
+      );
+      ids['estB'] = await g(
+        'estabelecimento',
+        `${P}B`,
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}B`, `ESTAB ${P}B SINTETICO`, `ESTAB ${P}B SINTETICO`, agora],
       );
       ids['usuario'] = await garantir(
         e,
@@ -211,6 +242,18 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
         "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
         [pfm, agora],
       );
+      ids['fCir'] = await g(
+        'funcao_equipe_cobranca',
+        `${P}CIR`,
+        'INSERT INTO funcao_equipe_cobranca (codigo, descricao, tipo_funcao, percentual_cobranca, ordem_auxiliar, ordem_apresentacao, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [`${P}CIR`, `FUNCAO SINTETICA ${P}CIR`, 'cirurgiao', 100, null, 1, agora],
+      );
+      ids['tipoTroca'] = await g(
+        'tipo_troca_internacao',
+        `${P}TC`,
+        "INSERT INTO tipo_troca_internacao (codigo, descricao, dado_trocado, criado_em) VALUES (?, ?, 'fonte_pagadora', ?)",
+        [`${P}TC`, `TROCA SINTETICA ${P}`, agora],
+      );
       ids['categoria'] = await g(
         'categoria_atendimento',
         P,
@@ -245,13 +288,19 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
         );
       ids['coberto'] = await item('87490001');
       ids['semCobertura'] = await item('87490002');
-      const tabela = async (c: string, fonteId: number, precos: [number, number][]) => {
+      const tabela = async (
+        c: string,
+        fonteId: number,
+        precos: [number, number][],
+        est: number | null = null,
+      ) => {
         const t = await g(
           'tabela_preco',
           c,
-          `INSERT INTO tabela_preco (codigo, descricao, tipo_item, referencia, situacao, fonte_pagadora_id, criado_em)
-           VALUES (?, ?, 'servico_hospitalar', 'propria', 'ativa', ?, ?)`,
-          [c, `TABELA SINTETICA ${c}`, fonteId, agora],
+          `INSERT INTO tabela_preco (codigo, descricao, tipo_item, referencia, situacao, fonte_pagadora_id,
+             estabelecimento_id, criado_em)
+           VALUES (?, ?, 'servico_hospitalar', 'propria', 'ativa', ?, ?, ?)`,
+          [c, `TABELA SINTETICA ${c}`, fonteId, est, agora],
         );
         let sq = 0;
         for (const [it, total] of precos) {
@@ -279,6 +328,8 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
         [ids['semCobertura']!, 100],
       ]);
       ids['tabB'] = await tabela(`${P}TB`, ids['fonteB']!, [[ids['coberto']!, 150]]);
+      // Tabela da fonte B só do estabelecimento B: lá o item "sem cobertura" tem preço.
+      ids['tabBEst'] = await tabela(`${P}TE`, ids['fonteB']!, [[ids['semCobertura']!, 170]], ids['estB']!);
       ids['plano'] = await garantir(
         e,
         "SELECT id FROM plano_fonte_pagadora WHERE codigo = 'F749PL'",
@@ -301,18 +352,54 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
     if (!nucleo) return;
     await escrever(async (e) => {
       await limpar(e);
-      await limparTrilhaDaMassa(e, { ids: [ids['est']!] });
+      await limparTrilhaDaMassa(e, { ids: [ids['est']!, ids['estB']!] });
     });
     await nucleo.encerrar();
   });
 
   it('conta inteira para a nova fonte: conta nova no atendimento, cobertura conferida, glosado fica; estorno desfaz', async () => {
-    const { conta, atendimento } = await novaConta(`${P}-A`, [
+    const { conta, atendimento, itens } = await novaConta(`${P}-A`, [
       [ids['coberto']!, '2026-01-21', 'lancado'],
       [ids['semCobertura']!, '2026-01-21', 'lancado'],
       [ids['coberto']!, '2026-01-21', 'glosado'],
     ]);
     const destinoNovo = { fontePagadoraId: ids['fonteB'], planoId: ids['plano'] };
+    const comEquipe = itens[0]!;
+    // O primeiro item tem equipe; a internação do atendimento registrou a troca para a fonte B (plano do F749) em 21/01.
+    await escrever(async (e) => {
+      const agora = new Date();
+      await e.inserir(
+        `INSERT INTO conta_hospitalar_item_participante (conta_hospitalar_item_id, sequencia, profissional_id,
+           funcao_equipe_cobranca_id, criado_em) VALUES (?, 1, ?, ?, ?)`,
+        [comEquipe, ids['medico'], ids['fCir'], agora],
+      );
+      const internacao = await e.inserir(
+        `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada,
+           carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, acomodacao_id, especialidade_medica_id,
+           medico_assistente_profissional_id, fonte_pagadora_id, situacao, criado_em)
+         VALUES (?, ?, ?, ?, '2026-01-20 08:00:00', (SELECT MIN(id) FROM carater_admissao),
+           (SELECT MIN(id) FROM modalidade_internacao), (SELECT MIN(id) FROM unidade_internacao),
+           (SELECT MIN(id) FROM acomodacao), (SELECT MIN(id) FROM especialidade_medica), ?, ?, 'ativa', ?)`,
+        [ids['est'], `${P}A`, atendimento, ids['paciente'], ids['medico'], ids['fonteA'], agora],
+      );
+      await e.inserir(
+        `INSERT INTO troca_internacao (internacao_id, tipo_troca_internacao_id, anterior_fonte_pagadora_id,
+           nova_fonte_pagadora_id, novo_plano_fonte_pagadora_id, motivo, ocorrido_em, usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, 'Troca sintetica', '2026-01-21 07:00:00', ?, ?)`,
+        [internacao, ids['tipoTroca'], ids['fonteA'], ids['fonteB'], ids['plano'], ids['usuario'], agora],
+      );
+    });
+    const equipeDe = async (item: number) =>
+      (
+        await linhas(
+          `SELECT excluido_em IS NULL AS ativo, transferencia_conta_id FROM conta_hospitalar_item_participante
+            WHERE conta_hospitalar_item_id = ? ORDER BY id`,
+          [item],
+        )
+      ).map((x) => [
+        Number(x['ativo']),
+        x['transferencia_conta_id'] === null ? null : Number(x['transferencia_conta_id']),
+      ]);
 
     // Prévia: o item sem preço na fonte B aparece sem cobertura, antes de gravar.
     const painel = await nucleo.lerSomente(
@@ -327,6 +414,14 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
         ),
     );
     expect(painel.transferiveis).toBe(2);
+    // A troca de convênio da internação só sugere: a fonte e o plano novos, desde o dia da troca, e os itens de lá.
+    expect(painel.sugestao).toMatchObject({
+      fontePagadora: ids['fonteB'],
+      plano: ids['plano'],
+      desde: '2026-01-21',
+      itens: [itens[0], itens[1]],
+      fonte: `OPERADORA SINTETICA ${P}FB`,
+    });
     expect(painel.previa.map((p) => [p.precoNoDestino, p.valorDestino])).toEqual([
       [true, 150],
       [false, null],
@@ -383,6 +478,14 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
     expect(Number(c!['valor_total'])).toBe(250);
     expect(await situacoes(conta)).toEqual(['transferido', 'transferido', 'glosado']);
     expect(await situacoes(nova)).toEqual(['lancado', 'lancado']);
+    // A equipe acompanha o item: a da origem fica encerrada pela transferência, a do destino nasce ativa.
+    const [ti] = await linhas(
+      'SELECT item_destino_id FROM transferencia_conta_item WHERE transferencia_conta_id = ? AND item_origem_id = ?',
+      [Number(r['id']), comEquipe],
+    );
+    const itemDestino = Number(ti!['item_destino_id']);
+    expect(await equipeDe(comEquipe)).toEqual([[0, Number(r['id'])]]);
+    expect(await equipeDe(itemDestino)).toEqual([[1, null]]);
     const [t] = await linhas('SELECT id, situacao, tipo, observacao FROM transferencia_conta WHERE id = ?', [
       Number(r['id']),
     ]);
@@ -396,6 +499,9 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
     await gravar('estorno', { transferenciaId: Number(r['id']), motivo: 'Convênio informado errado' });
     expect(await situacoes(conta)).toEqual(['lancado', 'lancado', 'glosado']);
     expect(await situacoes(nova)).toEqual(['estornado', 'estornado']);
+    // Equipe restaurada: a da origem volta ativa (sem a marca da transferência), a do destino fica encerrada por ela.
+    expect(await equipeDe(comEquipe)).toEqual([[1, null]]);
+    expect(await equipeDe(itemDestino)).toEqual([[0, Number(r['id'])]]);
     const [te] = await linhas(
       'SELECT situacao, estorno_usuario_id, motivo_estorno, estornado_em IS NOT NULL AS em FROM transferencia_conta WHERE id = ?',
       [Number(r['id'])],
@@ -483,5 +589,57 @@ describe.skipIf(SEM_BANCO)('transferência da conta inteira, por lote e estorno 
     expect(await situacoes(a.conta)).toEqual(['transferido']);
     expect(await situacoes(b.conta)).toEqual(['transferido']);
     expect(new Set(String(r['contasDestino']).split(',')).size).toBe(2);
+  });
+
+  it('conta de destino de outro estabelecimento: a cobertura da prévia e da gravação usa as tabelas de lá', async () => {
+    const { conta } = await novaConta(`${P}-E`, [[ids['semCobertura']!, '2026-01-21', 'lancado']]);
+    // Conta do mesmo paciente no estabelecimento B, na fonte B, sem tabela própria: o preço vem da tabela da fonte B
+    // do estabelecimento B (a do A não tem o item).
+    const { conta: contaEstB } = await novaConta(`${P}-EB`, [], {
+      est: ids['estB']!,
+      fonte: ids['fonteB']!,
+      tabela: null,
+    });
+    await escrever(async (e) => {
+      const agora = new Date();
+      const perfil = await e.inserir(
+        "INSERT INTO perfil_acesso (estabelecimento_id, codigo, nome, criado_em) VALUES (?, 'F749P', ?, ?)",
+        [ids['estB'], `PERFIL SINTETICO ${P}`, agora],
+      );
+      for (const codigo of ['faturamento.auditoria.ajustar', 'faturamento.conta.ler'])
+        await e.executar(
+          `INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em)
+           SELECT ?, id, ? FROM acao_sistema WHERE codigo = ?`,
+          [perfil, agora, codigo],
+        );
+      await e.executar(
+        "INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, '2020-01-01', ?)",
+        [ids['usuario'], ids['estB'], agora],
+      );
+      await e.executar(
+        "INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, '2020-01-01', ?)",
+        [ids['usuario'], perfil, ids['estB'], agora],
+      );
+    });
+    const painel = await nucleo.lerSomente(
+      { cliente: CLIENTE, estabelecimento: ids['est']!, correlacao: 'teste-f749' },
+      (l) =>
+        painelTransferenciaPropria(
+          l,
+          ids['est']!,
+          conta,
+          { usuario: ids['usuario']!, total: false },
+          { contaDestinoId: contaEstB },
+        ),
+    );
+    expect(painel.previa.map((p) => [p.precoNoDestino, p.valorDestino])).toEqual([[true, 170]]);
+    // Sem aceite: coberta lá, a gravação segue com o preço do estabelecimento B (a mesma conta da prévia).
+    const r = await gravar('conta', {
+      contaOrigemId: conta,
+      contaDestinoId: contaEstB,
+      motivo: 'Paciente seguiu no outro estabelecimento',
+    });
+    expect(r).toMatchObject({ tipo: 'estabelecimento', itens: 1, semCobertura: 0, valorDestino: 170 });
+    expect(await situacoes(contaEstB)).toEqual(['lancado']);
   });
 });

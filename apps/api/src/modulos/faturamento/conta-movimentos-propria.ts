@@ -14,6 +14,7 @@
 //   os participantes acompanham o item; o total das duas contas é refeito.
 import {
   adicionalDaEquipe,
+  avaliarCoberturaDestino,
   calcularEquipeItem,
   contaEditavel,
   FORMAS_PAGAMENTO_PARTICIPANTE,
@@ -38,7 +39,7 @@ import { z } from 'zod';
 import { esquemaLancarItem } from '@sgh/contratos';
 import { lancarItem, totalDosItens } from './operacoes.js';
 import { lancarLinhasDoKit } from './kit-lancamento.js';
-import { precoVigente, tabelasDePreco } from './preco-conta.js';
+import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
 
 type Linha = Record<string, unknown>;
 type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
@@ -76,7 +77,8 @@ interface ContaLida {
 const COLUNAS_CONTA = `id, versao, estabelecimento_id, numero, situacao, paciente_id, fonte_pagadora_id,
   plano_fonte_pagadora_id, tabela_preco_id, inicio_em, fim_em`;
 /** AAAA-MM-DD de uma data lida do banco (nulo quando não há). */
-const diaDe = (v: unknown): string | null => {
+/** O dia do item (data do lançamento): o mesmo critério no período da conta, na prévia e no preço do destino. */
+export const diaDe = (v: unknown): string | null => {
   if (v === null || v === undefined || v === '') return null;
   const d = v instanceof Date ? v : new Date(String(v).replace(' ', 'T'));
   if (Number.isNaN(d.getTime())) return String(v).slice(0, 10);
@@ -713,12 +715,48 @@ export const opCadastrarKit = definirOperacao({
 
 // ── Linha 14: transferência de itens entre contas ─────────────────────────────────────────────────
 
+/** Onde o item é precificado na transferência: o estabelecimento, a fonte, o plano e a tabela da conta de destino. */
+export interface DestinoDoPreco {
+  readonly estabelecimento: number;
+  readonly fontePagadora: number;
+  readonly plano: number | null;
+  readonly tabela: number | null;
+}
+
+/**
+ * O preço vigente de cada item nas tabelas do destino, no dia em que foi realizado. É a única busca do preço da
+ * transferência: a prévia do painel e a gravação usam esta função com os mesmos argumentos.
+ */
+export async function precosNoDestino(
+  l: Pick<Leitor, 'consultar' | 'uma'>,
+  destino: DestinoDoPreco,
+  itens: readonly { readonly id: number; readonly itemFaturavel: number; readonly realizadoEm: unknown }[],
+): Promise<Map<number, PrecoVigente | null>> {
+  const tabelas = await tabelasDePreco(
+    l as Leitor,
+    destino.estabelecimento,
+    destino.fontePagadora,
+    destino.plano,
+    destino.tabela,
+  );
+  const precos = new Map<number, PrecoVigente | null>();
+  for (const i of itens)
+    precos.set(
+      i.id,
+      await precoVigente(l as Leitor, tabelas, i.itemFaturavel, diaDe(i.realizadoEm) ?? diaDe(new Date())!),
+    );
+  return precos;
+}
+
 export const esquemaTransferir = z.object({
   contaOrigemId: id,
   contaDestinoId: id,
   itens: z.array(id).max(2000),
   motivo: z.string().trim().max(500),
   observacao: z.string().trim().max(1000).nullable().default(null),
+  /** Item sem preço no destino só vai com o aceite e a justificativa (vale para toda transferência). */
+  aceitarSemCobertura: z.boolean().default(false),
+  justificativaCobertura: z.string().trim().max(400).nullable().default(null),
 });
 
 export const opTransferir = definirOperacao({
@@ -785,15 +823,34 @@ export const opTransferir = definirOperacao({
       e.motivo,
     );
     exigirValido(v.erros);
+    // Cobertura no destino, num ponto só para toda transferência (itens marcados, conta inteira e lote).
+    const precos = await precosNoDestino(
+      tx,
+      destino,
+      itens.map((i) => ({
+        id: n(i['id']),
+        itemFaturavel: n(i['item_faturavel_id']),
+        realizadoEm: i['realizado_em'],
+      })),
+    );
+    const cob = avaliarCoberturaDestino(
+      e.itens.map((idItem) => ({ id: idItem, precoNoDestino: Boolean(precos.get(idItem)) })),
+      e.aceitarSemCobertura,
+      e.justificativaCobertura,
+    );
+    exigirValido(cob.erros);
+    const observacao =
+      [
+        e.observacao,
+        cob.semCobertura.length
+          ? `Sem cobertura no destino (${cob.semCobertura.length}): ${e.justificativaCobertura ?? ''}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+        .slice(0, 1000) || null;
     const agora = new Date();
     const numero = await tx.proximoNumero('transferencia_conta');
-    const tabelasDestino = await tabelasDePreco(
-      tx,
-      destino.estabelecimento,
-      destino.fontePagadora,
-      destino.plano,
-      destino.tabela,
-    );
     const transf = await tx.incluir('transferencia_conta', {
       estabelecimento_id: est,
       numero: numero.valor,
@@ -804,7 +861,7 @@ export const opTransferir = definirOperacao({
       fonte_pagadora_destino_id: destino.fontePagadora,
       estabelecimento_destino_id: v.tipo === 'estabelecimento' ? destino.estabelecimento : null,
       motivo: e.motivo,
-      observacao: e.observacao,
+      observacao,
       transferido_em: agora,
       usuario_id: ctx.usuario,
       situacao: 'efetivada',
@@ -817,10 +874,7 @@ export const opTransferir = definirOperacao({
     for (const idItem of e.itens) {
       const i = itens.find((x) => n(x['id']) === idItem)!;
       const qtd = n(i['quantidade']);
-      const realizado =
-        i['realizado_em'] instanceof Date ? (i['realizado_em'] as Date) : new Date(txt(i['realizado_em']));
-      const dia = Number.isNaN(realizado.getTime()) ? hoje() : realizado.toISOString().slice(0, 10);
-      const preco = await precoVigente(tx, tabelasDestino, n(i['item_faturavel_id']), dia);
+      const preco = precos.get(idItem) ?? null;
       if (!preco) semPreco += 1;
       const unitario = preco?.unitario ?? n(i['valor_unitario']);
       const honorarioDestino = preco ? r2(preco.honorario * qtd) : n(i['valor_honorario']);
@@ -959,7 +1013,7 @@ export const opTransferir = definirOperacao({
     };
   },
   alvo: (_e, r) => ({ tabela: 'transferencia_conta', id: r.id }),
-  trilha: (e) => ({ motivo: e.motivo }),
+  trilha: (e) => ({ motivo: e.motivo, justificativaCobertura: e.justificativaCobertura }),
 });
 
 // ── Linha 15: lançamento manual com a equipe no mesmo pedido ──────────────────────────────────────

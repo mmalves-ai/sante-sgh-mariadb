@@ -10,7 +10,6 @@
 // - estorno: o item de destino fica "estornado", o de origem volta a "lancado", a equipe da origem volta e a do
 //   destino é encerrada pela transferência; a transferência fica "estornada" com autor, data e motivo; nada se apaga.
 import {
-  avaliarCoberturaDestino,
   competenciaDaConta,
   contaEditavel,
   itensDaContaInteira,
@@ -22,9 +21,15 @@ import {
 } from '@sgh/dominio-faturamento';
 import { type ContextoOperacao, definirOperacao, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
-import { type AcessoLeitura, opTransferir, podeNoEstabelecimento } from './conta-movimentos-propria.js';
+import {
+  type AcessoLeitura,
+  diaDe,
+  type DestinoDoPreco,
+  opTransferir,
+  podeNoEstabelecimento,
+  precosNoDestino,
+} from './conta-movimentos-propria.js';
 import { totalDosItens } from './operacoes.js';
-import { precoVigente, tabelasDePreco } from './preco-conta.js';
 
 type Linha = Record<string, unknown>;
 type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
@@ -32,13 +37,6 @@ const n = (v: unknown) => Number(v ?? 0);
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const r2 = (x: number) => Math.round(x * 100) / 100;
-const diaDe = (v: unknown): string | null => {
-  if (v === null || v === undefined || v === '') return null;
-  const d = v instanceof Date ? v : new Date(String(v).replace(' ', 'T'));
-  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10);
-  const p = (x: number) => String(x).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-};
 
 function exigirValido(erros: Record<string, string>) {
   const campos = Object.keys(erros);
@@ -105,33 +103,27 @@ async function itensDe(l: Consulta, conta: number) {
     id: n(i['id']),
     situacao: txt(i['situacao']),
     realizado: diaDe(i['realizado_em']),
+    realizadoEm: i['realizado_em'],
     itemFaturavel: n(i['item_faturavel_id']),
     quantidade: n(i['quantidade']),
     valor: n(i['valor_total']),
   }));
 }
 
-/** Preço de cada item nas tabelas do destino (conta, plano e fonte), no dia em que foi realizado. */
+/**
+ * A prévia da cobertura: o preço de cada item no destino pela mesma busca da gravação (precosNoDestino, no
+ * estabelecimento da conta de destino e no dia do item), para que o que o painel mostra seja o que se grava.
+ */
 async function coberturaNoDestino(
   l: Consulta,
-  est: number,
-  destino: { fontePagadora: number; plano: number | null; tabela: number | null },
+  destino: DestinoDoPreco,
   itens: Awaited<ReturnType<typeof itensDe>>,
 ) {
-  const tabelas = await tabelasDePreco(
-    l as Leitor,
-    est,
-    destino.fontePagadora,
-    destino.plano,
-    destino.tabela,
-  );
-  const hoje = new Date().toISOString().slice(0, 10);
-  const r: { id: number; precoNoDestino: boolean; valorDestino: number | null }[] = [];
-  for (const i of itens) {
-    const p = await precoVigente(l as Leitor, tabelas, i.itemFaturavel, i.realizado ?? hoje);
-    r.push({ id: i.id, precoNoDestino: Boolean(p), valorDestino: p ? r2(p.unitario * i.quantidade) : null });
-  }
-  return r;
+  const precos = await precosNoDestino(l, destino, itens);
+  return itens.map((i) => {
+    const p = precos.get(i.id) ?? null;
+    return { id: i.id, precoNoDestino: Boolean(p), valorDestino: p ? r2(p.unitario * i.quantidade) : null };
+  });
 }
 
 async function lerDestinoNovo(l: Consulta, fonte: number, plano: number | null) {
@@ -245,23 +237,8 @@ async function transferirUmaConta(tx: TxOperacao, e: TransferirConta, ctx: Conte
         campos: ['contaOrigemId'],
       },
     );
-  const cobertura = await coberturaNoDestino(
-    tx,
-    est,
-    destino,
-    itens.filter((i) => levar.includes(i.id)),
-  );
-  const cob = avaliarCoberturaDestino(cobertura, e.aceitarSemCobertura, e.justificativaCobertura);
-  exigirValido(cob.erros);
-  const observacao = [
-    e.observacao,
-    cob.semCobertura.length
-      ? `Sem cobertura no destino (${cob.semCobertura.length}): ${e.justificativaCobertura ?? ''}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-    .slice(0, 1000);
+  // A cobertura no destino (preço no estabelecimento, fonte, plano e tabela da conta de destino; aceite e
+  // justificativa) é conferida dentro da transferência dos itens, o ponto único de toda transferência.
   const r = await opTransferir.gravar(
     tx,
     {
@@ -269,7 +246,9 @@ async function transferirUmaConta(tx: TxOperacao, e: TransferirConta, ctx: Conte
       contaDestinoId: destino.id,
       itens: levar,
       motivo: e.motivo,
-      observacao: observacao || null,
+      observacao: e.observacao,
+      aceitarSemCobertura: e.aceitarSemCobertura,
+      justificativaCobertura: e.justificativaCobertura,
     },
     ctx,
   );
@@ -279,7 +258,7 @@ async function transferirUmaConta(tx: TxOperacao, e: TransferirConta, ctx: Conte
     contaDestinoId: destino.id,
     contaDestinoNumero: destino.numero,
     contaAberta: aberta,
-    semCobertura: cob.semCobertura.length,
+    semCobertura: r.semPreco,
   };
 }
 
@@ -576,7 +555,7 @@ export async function painelTransferenciaPropria(
   );
   let previaItens: { id: number; precoNoDestino: boolean; valorDestino: number | null }[] = [];
   if (previa.contaDestinoId || previa.fontePagadoraId) {
-    let destino: { fontePagadora: number; plano: number | null; tabela: number | null; est: number };
+    let destino: DestinoDoPreco;
     if (previa.contaDestinoId) {
       const d = await contaDe(l, previa.contaDestinoId, null);
       if (d.paciente !== conta.paciente)
@@ -589,13 +568,23 @@ export async function painelTransferenciaPropria(
         throw recusa('sem-permissao-estabelecimento', 'Você não tem acesso ao faturamento de lá.', {
           campos: ['contaDestinoId'],
         });
-      destino = { fontePagadora: d.fontePagadora, plano: d.plano, tabela: d.tabela, est: d.estabelecimento };
+      destino = {
+        estabelecimento: d.estabelecimento,
+        fontePagadora: d.fontePagadora,
+        plano: d.plano,
+        tabela: d.tabela,
+      };
     } else
-      destino = { fontePagadora: previa.fontePagadoraId!, plano: previa.planoId ?? null, tabela: null, est };
+      // Conta nova: nasce no estabelecimento da conta de origem, sem tabela própria.
+      destino = {
+        estabelecimento: conta.estabelecimento,
+        fontePagadora: previa.fontePagadoraId!,
+        plano: previa.planoId ?? null,
+        tabela: null,
+      };
     const levar = itensDaContaInteira(itens, previa.desde ?? null);
     previaItens = await coberturaNoDestino(
       l,
-      destino.est,
       destino,
       itens.filter((i) => levar.includes(i.id)),
     );
