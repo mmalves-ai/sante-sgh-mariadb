@@ -76,7 +76,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-025 (01-ADM L98): o item "O que falta para operar" da implantação entrou à mão (mesmo motivo); a contagem
 // acompanha.
 // C2-028 (03-PEP L132): o item "Documentos exigidos" do PEP entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":470,"M":198,"P":57,"N":215};
+// C2-029 (06-FAT linha 13): o item "Criação e quebra de contas" do faturamento entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":471,"M":198,"P":57,"N":216};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -313,6 +315,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.motor-de-precos.de-para-de-exames-por-convenio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","De-para de exames por convênio"],"titulo":"De-para de exames por convênio","selo":"M","fase":1,"rota":"/faturamento/de-para-exames","permissao":"preco.dePara.ler"},
   {"id":"faturamento.motor-de-precos.portes-anestesicos-e-tabelas-proprias-de-operadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Portes anestésicos e tabelas próprias de operadora"],"titulo":"Portes anestésicos e tabelas próprias de operadora","selo":"M","fase":1,"rota":"/faturamento/portes-terceiros","permissao":"preco.porte.ler"},
   {"id":"faturamento.motor-de-precos.regras-de-faturabilidade-senha-carteira-guia","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Regras de faturabilidade"],"titulo":"Regras de faturabilidade","selo":"N","fase":3,"rota":"/faturamento/regras-faturabilidade","permissao":"faturamento.regra.ler"},
+  {"id":"faturamento.motor-de-precos.criacao-e-quebra-de-contas","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Criação e quebra de contas"],"titulo":"Criação e quebra de contas","selo":"N","fase":7,"rota":"/faturamento/regras-conta","permissao":"faturamento.regra.ler"},
   {"id":"faturamento.motor-de-precos.descontos-por-volume-e-franquias","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Descontos por volume e franquias"],"titulo":"Descontos por volume e franquias","selo":"N","fase":7,"rota":"/faturamento/descontos-franquias","permissao":"faturamento.regra.ler"},
   {"id":"faturamento.motor-de-precos.servicos-acessorios-ambulancia-e-ligacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Ambulância e ligações tarifadas"],"titulo":"Ambulância e ligações tarifadas","selo":"N","fase":7,"rota":"/faturamento/servicos-acessorios","permissao":"faturamento.regra.ler"},
   {"id":"faturamento.motor-de-precos.simulador-explicar-preco-impacto-de-reajuste","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Simulador"],"titulo":"Simulador","selo":"N","fase":3,"rota":"/faturamento/simulador","permissao":"faturamento.preco.simular"},
