@@ -54,3 +54,5 @@ export * from './programa-saude.js';
 // F7 (08-SGO linha 95, C2-113): declaração de saúde, doença preexistente com CPT ou agravo (RN 162) e portabilidade de
 // carências (RN 438).
 export * from './declaracao-saude.js';
+// 08-SGO L101 (C2-118): locais, especialidades, qualificação divulgada e suspensão do prestador da rede.
+export * from './rede-cadastro.js';
