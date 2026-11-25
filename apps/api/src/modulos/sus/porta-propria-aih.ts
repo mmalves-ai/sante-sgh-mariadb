@@ -22,6 +22,11 @@ import type { DiariasUtiGravadas, SolicitanteAihLido } from './porta-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { gravarRemessa } from './porta-propria-arquivos.js';
 import {
+  emitirLaudoDaAutorizacao,
+  sincronizarLaudo,
+  TABELAS_LAUDO_SUS,
+} from './laudo-internacao-sus-propria.js';
+import {
   type AihRegistro,
   ErroAih,
   type FiltroAihsPorta,
@@ -38,6 +43,8 @@ export const TABELAS_SUS_AIH = [
   'conta_aih_procedimento',
   'conta_aih_opm',
   'diaria_uti_sus',
+  // O laudo de internação que acompanha a autorização (06-SUS linha 57).
+  ...TABELAS_LAUDO_SUS,
 ] as const;
 
 type Linha = Record<string, unknown>;
@@ -61,8 +68,7 @@ const ULTIMA_CONTA = `c.autorizacao_internacao_sus_id = a.id AND c.excluido_em I
 
 /** A situação da tela derivada da autorização e da última conta (SQL, para filtrar e contar). */
 const SITUACAO_SQL = `CASE
-    WHEN a.situacao IN ('negada','cancelada','solicitada') THEN a.situacao
-    WHEN a.situacao = 'devolvida' THEN 'negada'
+    WHEN a.situacao IN ('negada','cancelada','solicitada','devolvida') THEN a.situacao
     WHEN c.id IS NULL OR c.situacao = 'reaberta' THEN 'autorizada'
     ELSE c.situacao END`;
 
@@ -97,6 +103,7 @@ const SITUACOES: readonly SituacaoAih[] = [
   'solicitada',
   'autorizada',
   'negada',
+  'devolvida',
   'fechada',
   'apresentada',
   'aprovada',
@@ -495,8 +502,23 @@ export class GravacoesAihPropria {
     );
     if (!carater)
       throw recusa('carater-inexistente', 'O caráter do atendimento não está no domínio do SUS do cliente.');
+    // O laudo emitido acompanha a solicitação (06-SUS linha 57): número próprio, CID-10 do catálogo oficial.
+    const laudo = await emitirLaudoDaAutorizacao(this.tx, this.est, {
+      paciente: num(i['paciente_id']),
+      atendimento: p.atendimento ?? numOuNulo(i['atendimento_id']),
+      internacao: num(i['id']),
+      dataLaudo: p.dataLaudo,
+      solicitanteProfissional: sol.profissional,
+      solicitanteExterno: sol.externo,
+      procedimento: sigtap,
+      cidPrincipal: p.cidPrincipal,
+      cidSecundario: p.cidSecundario,
+      carater: num(carater['id']),
+      justificativa: p.justificativa,
+    });
     return this.tx.incluir('autorizacao_internacao_sus', {
       estabelecimento_id: this.est,
+      laudo_internacao_sus_id: laudo,
       paciente_id: num(i['paciente_id']),
       atendimento_id: p.atendimento ?? numOuNulo(i['atendimento_id']),
       internacao_id: num(i['id']),
@@ -543,6 +565,7 @@ export class GravacoesAihPropria {
       recebida_por_usuario_id: this.tx.contexto.usuario,
       motivo_situacao: null,
     });
+    await sincronizarLaudo(this.tx, a.id, 'autorizada', { numeroAih: p.numero });
   }
 
   async negarAih(a: { id: number; versao: number }, justificativa: string): Promise<void> {
@@ -551,6 +574,7 @@ export class GravacoesAihPropria {
       situacao: 'negada',
       motivo_situacao: justificativa.slice(0, 500),
     });
+    await sincronizarLaudo(this.tx, a.id, 'negada', { motivo: justificativa });
   }
 
   async reabrirAih(a: { id: number; versao: number }, justificativa: string): Promise<void> {
@@ -576,6 +600,7 @@ export class GravacoesAihPropria {
       situacao: 'cancelada',
       motivo_situacao: motivo,
     });
+    await sincronizarLaudo(this.tx, a.id, 'cancelada', { motivo });
   }
 
   async fecharAih(

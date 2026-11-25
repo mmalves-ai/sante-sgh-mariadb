@@ -28,6 +28,8 @@ import {
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { type AihMontada, chaveDaCriticaAih, criticasTetoDiariasUti } from './montagem-aih.js';
 import { GravacaoSusPropria, LeituraSusPropria, TABELAS_SUS } from './porta-propria.js';
+import { PortaLaudoInternacaoSusPropria } from './laudo-internacao-sus-propria.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -110,6 +112,17 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
         ]);
         await e.executar('DELETE FROM conta_aih WHERE estabelecimento_id = ?', [est]);
         await e.executar('DELETE FROM autorizacao_internacao_sus WHERE estabelecimento_id = ?', [est]);
+        // O laudo que acompanha a autorização, o laudo especial e o lote (06-SUS linha 57).
+        await e.executar(
+          'DELETE x FROM laudo_internacao_sus_especial x JOIN laudo_internacao_sus l ON l.id = x.laudo_internacao_sus_id WHERE l.estabelecimento_id = ?',
+          [est],
+        );
+        await e.executar('DELETE FROM laudo_internacao_sus WHERE estabelecimento_id = ?', [est]);
+        await e.executar('DELETE FROM lote_laudo_sus WHERE estabelecimento_id = ?', [est]);
+        await e.executar(
+          "DELETE FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo IN ('laudo_internacao_sus','lote_laudo_sus')",
+          [est],
+        );
         await e.executar('DELETE FROM remessa_sisaih WHERE estabelecimento_id = ?', [est]);
         await e.executar(
           'DELETE k FROM critica_sus k JOIN competencia_sus c ON c.id = k.competencia_sus_id WHERE c.estabelecimento_id = ?',
@@ -335,6 +348,9 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
 
   afterAll(async () => {
     if (!nucleo) return;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-limpa-trilha' }, (e) =>
+      limparTrilhaDaMassa(e, { ids: [ids.est, ids.estB] }),
+    );
     await limpar();
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-limpa-uti' }, async (e) => {
       await e.executar('DELETE FROM leito_uti_habilitado WHERE estabelecimento_id = ?', [ids.est]);
@@ -1266,5 +1282,182 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     const det = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>;
     expect(det(depois[0]!['detalhe'])).toMatchObject({ diarias: 33, teto: 28, excedente: 5 });
     expect(det(depois[1]!['detalhe'])).toMatchObject({ tipoUti: 9399, diarias: 5 });
+  }, 120_000);
+  // F7 (06-SUS linha 57): o laudo gravado com a solicitação, a devolução pelo gestor, o reenvio corrigido, o laudo
+  // especial, a impressão e o lote de laudos (porta PortaLaudoInternacaoSusPropria, pelo executor e com a trilha).
+  it('o laudo de internação: emissão com a AIH, devolução, reenvio, laudo especial, impressão e lote', async () => {
+    const usuario = Number(
+      (
+        await nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (l) =>
+          l.uma<{ id: number }>('SELECT id FROM usuario ORDER BY id LIMIT 1', []),
+        )
+      )?.id,
+    );
+    const porta = new PortaLaudoInternacaoSusPropria(nucleo, CLIENTE);
+    const c = { cliente: CLIENTE, hospital: `${P}A`, usuario, correlacao };
+    const laudoDb = async (aih: number) =>
+      (await nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (l) =>
+        l.uma<Record<string, unknown>>(
+          `SELECT l.* FROM laudo_internacao_sus l JOIN autorizacao_internacao_sus a ON a.laudo_internacao_sus_id = l.id
+            WHERE a.id = ?`,
+          [aih],
+        ),
+      ))!;
+
+    // Emissão: a solicitação grava o laudo "emitido" com número próprio, CID-10 do catálogo e a justificativa.
+    const id = await gravar(ids.est, (g) => g.inserirAih(laudo()));
+    let l = await laudoDb(id);
+    expect(l).toMatchObject({ situacao: 'emitido', tipo_laudo: 'inicial', paciente_id: ids.paciente });
+    expect(String(l['numero'])).toMatch(/^LI-\d+$/);
+    expect(l['emitido_em']).not.toBeNull();
+    expect(l['sinais_sintomas']).toBe('Justificativa sintética do laudo');
+
+    // Devolução: versão velha recusada sem mudar nada; a certa deixa a AIH "devolvida" e o laudo "devolvido".
+    await expect(
+      porta.devolver(c, id, { versao: 9, motivo: 'Falta exame que comprove' }),
+    ).rejects.toMatchObject({ problema: { status: 409 } });
+    await expect(porta.devolver(c, id, { versao: 1, motivo: 'curto' })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    await porta.devolver(c, id, { versao: 1, motivo: 'Falta o eletrocardiograma que confirma o infarto' });
+    let a = await ler(ids.est, (x) => x.aih(id));
+    expect(a).toMatchObject({
+      situacao: 'devolvida',
+      justificativaSituacao: 'Falta o eletrocardiograma que confirma o infarto',
+      versao: 2,
+    });
+    l = await laudoDb(id);
+    expect(l).toMatchObject({
+      situacao: 'devolvido',
+      motivo_devolucao: 'Falta o eletrocardiograma que confirma o infarto',
+    });
+    expect(l['devolvido_em']).not.toBeNull();
+    // Autorizar a devolvida é recusado (a AIH precisa ser reenviada antes).
+    await expect(
+      gravar(ids.est, (g) =>
+        g.autorizarAih(
+          { id, versao: 2 },
+          {
+            faixa: ids.faixa,
+            numero: numeroAih(BASE + 50n),
+            autorizador: '',
+            dataAutorizacao: '2026-03-03',
+            por: 'X',
+          },
+        ),
+      ),
+    ).rejects.toBeInstanceOf(ErroAih);
+
+    // Reenvio sem correção recusado; com a justificativa refeita, a AIH volta a "solicitada" e o laudo a "emitido".
+    await expect(
+      porta.reenviar(c, id, { versao: 2, justificativa: 'Justificativa sintética do laudo' }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    const corrigida = 'Supradesnivelamento de ST em parede anterior no eletrocardiograma anexo';
+    await porta.reenviar(c, id, { versao: 2, justificativa: corrigida, cidPrincipal: 'I21.9' });
+    a = await ler(ids.est, (x) => x.aih(id));
+    expect(a).toMatchObject({
+      situacao: 'solicitada',
+      justificativa: corrigida,
+      cidPrincipal: 'I219',
+      versao: 3,
+    });
+    l = await laudoDb(id);
+    expect(l).toMatchObject({ situacao: 'emitido', sinais_sintomas: corrigida, lote_laudo_sus_id: null });
+
+    // Impressão: a primeira data fica.
+    await porta.imprimir(c, Number(l['id']));
+    const impresso = (await laudoDb(id))['impresso_em'];
+    expect(impresso).not.toBeNull();
+    await porta.imprimir(c, Number(l['id']));
+    expect((await laudoDb(id))['impresso_em']).toEqual(impresso);
+
+    // Lote: gera "fechado" com o laudo livre; o mesmo laudo em outro lote é recusado; enviar marca lote e laudo.
+    expect((await porta.listar(c, { semLote: true })).map((x) => x.id)).toContain(Number(l['id']));
+    const { id: lote } = (await porta.gerarLote(c, { laudos: [Number(l['id'])] })) as unknown as {
+      id: number;
+    };
+    await expect(porta.gerarLote(c, { laudos: [Number(l['id'])] })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    let lotes = await porta.listarLotes(c);
+    expect(lotes.find((x) => x.id === lote)).toMatchObject({
+      situacao: 'fechado',
+      quantidadeLaudos: 1,
+      versao: 1,
+    });
+    await expect(porta.retornarLote(c, lote, { versao: 1 })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    await porta.enviarLote(c, lote, { versao: 1 });
+    lotes = await porta.listarLotes(c);
+    expect(lotes.find((x) => x.id === lote)).toMatchObject({ situacao: 'enviado', versao: 2 });
+    expect(lotes.find((x) => x.id === lote)?.enviadoEm).not.toBeNull();
+    expect(await laudoDb(id)).toMatchObject({ situacao: 'enviado', lote_laudo_sus_id: lote });
+    await expect(porta.cancelarLote(c, lote, { versao: 2 })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    await porta.retornarLote(c, lote, { versao: 2, observacao: 'Lista do gestor recebida' });
+
+    // Autorizar leva o número ao laudo.
+    const numero = numeroAih(BASE + 60n);
+    await gravar(ids.est, (g) =>
+      g.autorizarAih(
+        { id, versao: 3 },
+        { faixa: ids.faixa, numero, autorizador: '', dataAutorizacao: '2026-03-03', por: 'X' },
+      ),
+    );
+    l = await laudoDb(id);
+    expect(l).toMatchObject({ situacao: 'autorizado', numero_aih: numero });
+    expect(l['autorizado_em']).not.toBeNull();
+
+    // Laudo especial da AIH autorizada: OPM do grupo 07 e diária de UTI; OPM fora do grupo recusada sem gravar.
+    const antes = await contar(
+      'SELECT COUNT(*) AS n FROM laudo_internacao_sus WHERE estabelecimento_id = ?',
+      [ids.est],
+    );
+    await expect(
+      porta.especial(c, id, {
+        versao: 4,
+        justificativa: 'Stent coronariano indicado pelo cateterismo',
+        itens: [{ tipo: 'opm', procedimento: SIG_P, quantidade: 1 }],
+      }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM laudo_internacao_sus WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBe(antes);
+    await porta.especial(c, id, {
+      versao: 4,
+      justificativa: 'Stent coronariano indicado pelo cateterismo',
+      itens: [
+        { tipo: 'opm', procedimento: SIG_O, quantidade: 1 },
+        { tipo: 'diaria_uti', procedimento: SIG_U, quantidade: 3, justificativa: 'Pós-angioplastia' },
+      ],
+    });
+    const daAih = await porta.listar(c, { autorizacao: id });
+    const esp = daAih.find((x) => x.tipo === 'especial');
+    expect(esp).toMatchObject({ situacao: 'emitido', numeroAih: numero, autorizacao: id });
+    expect(esp?.especiais).toEqual([
+      { sequencia: 1, tipo: 'opm', procedimento: SIG_O, quantidade: 1, justificativa: null },
+      {
+        sequencia: 2,
+        tipo: 'diaria_uti',
+        procedimento: SIG_U,
+        quantidade: 3,
+        justificativa: 'Pós-angioplastia',
+      },
+    ]);
+    expect(daAih.find((x) => x.tipo === 'inicial')).toMatchObject({ situacao: 'autorizado' });
+
+    // Cancelar a AIH cancela o laudo inicial, com o motivo; nada é apagado.
+    await gravar(ids.est, (g) => g.cancelarAih({ id, versao: 4 }, 'Paciente transferido (teste)'));
+    expect(await laudoDb(id)).toMatchObject({
+      situacao: 'cancelado',
+      motivo_cancelamento: 'Paciente transferido (teste)',
+    });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM laudo_internacao_sus WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBe(antes + 1);
+    // O outro estabelecimento não vê os laudos.
+    expect(await porta.listar({ ...c, hospital: `${P}B` }, { autorizacao: id })).toEqual([]);
   }, 120_000);
 });

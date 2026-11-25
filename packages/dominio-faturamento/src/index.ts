@@ -16,6 +16,8 @@ export * from './tiss/demonstrativo-conciliacao.js';
 export * from './tiss/operadora.js';
 // M51: faturamento SUS próprio (competência SUS, crítica prévia, CIHA; BPA, APAC e AIH nas etapas 2 a 4).
 export * from './sus/index.js';
+// F7 (06-SUS linha 57): laudo de internação SUS, devolução pelo gestor, laudo especial e lote de laudos.
+export * from './sus/laudo-internacao.js';
 // F3.0: a conta aberta na entrada do paciente e o lançamento automático de diárias e taxas (apuração idempotente).
 export * from './conta/admissao.js';
 export * from './conta/diferenca-acomodacao.js';

@@ -15,11 +15,12 @@ import { cnsValido } from '../validacao/cns.js';
 import { esquemaCompetenciaSus } from './sus.js';
 import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
-/** Situação da AIH (SGH_FAT_SUS_AIH.SITUACAO). */
+/** Situação da AIH. "devolvida": o gestor devolveu o laudo para correção (06-SUS linha 57). */
 export const SITUACOES_AIH = [
   'solicitada',
   'autorizada',
   'negada',
+  'devolvida',
   'fechada',
   'apresentada',
   'aprovada',

@@ -121,10 +121,20 @@ describe('AIH própria: a linha lida vira a AIH da tela', () => {
   });
 
   it('situação desconhecida no banco é erro (nunca vira outra na tela)', () => {
-    expect(() => aihDaLinha({ ...base, situacao_tela: 'devolvida' })).toThrow();
+    expect(() => aihDaLinha({ ...base, situacao_tela: 'suspensa' })).toThrow();
   });
 
-  it('a gravação da AIH declara só as tabelas da autorização e da conta', () => {
+  it('a AIH devolvida pelo gestor aparece devolvida, com o motivo (06-SUS linha 57)', () => {
+    const a = aihDaLinha({
+      ...base,
+      situacao_tela: 'devolvida',
+      situacao_autorizacao: 'devolvida',
+      motivo_autorizacao: 'Falta o exame que confirma',
+    });
+    expect(a).toMatchObject({ situacao: 'devolvida', justificativaSituacao: 'Falta o exame que confirma' });
+  });
+
+  it('a gravação da AIH declara só as tabelas da autorização, da conta e do laudo', () => {
     expect([...TABELAS_SUS_AIH]).toEqual([
       'autorizacao_internacao_sus',
       'conta_aih',
@@ -132,6 +142,11 @@ describe('AIH própria: a linha lida vira a AIH da tela', () => {
       'conta_aih_opm',
       // F7 (06-SUS linha 59): as diárias de UTI da conta por competência.
       'diaria_uti_sus',
+      // F7 (06-SUS linha 57): o laudo que acompanha a autorização, o laudo especial, o lote e a numeração do laudo.
+      'laudo_internacao_sus',
+      'laudo_internacao_sus_especial',
+      'lote_laudo_sus',
+      'sequencia_negocio',
     ]);
   });
 });

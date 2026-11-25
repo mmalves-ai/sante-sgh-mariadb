@@ -9,6 +9,11 @@ import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import { LeitosUtiSusController } from './leitos-uti.controller.js';
+import { LaudoInternacaoSusController } from './laudo-internacao-sus.controller.js';
+import {
+  PORTA_LAUDO_INTERNACAO_SUS,
+  PortaLaudoInternacaoSusPropria,
+} from './laudo-internacao-sus-propria.js';
 import { PORTA_LEITOS_UTI, PortaLeitosUtiPropria } from './leitos-uti-propria.js';
 import { armazemSusLocal, armazemSusMemoria } from './armazem.js';
 import { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
@@ -59,6 +64,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       SusAihController,
       ServicoWebSusController,
       LeitosUtiSusController,
+      LaudoInternacaoSusController,
       TransplanteSusController,
       ProgramacaoSusController,
       ApacComplementosController,
@@ -69,6 +75,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       // F7 (08-INTG linha 131): serviço web do SUS; o simulador fora de produção (regra 6).
       { provide: NUCLEO_SERVICO_WEB_SUS, useValue: ctx.nucleo ?? null },
       { provide: ENVIADOR_SERVICO_WEB_SUS, useValue: enviadorServicoWebSusDoAmbiente(ctx.env) },
+      // F7 (06-SUS linha 57): laudo de internação SUS (devolução, reenvio, laudo especial, impressão e lote).
+      {
+        provide: PORTA_LAUDO_INTERNACAO_SUS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaLaudoInternacaoSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F7 (06-SUS linha 59): leitos de UTI habilitados por tipo e vigência (só com o banco do cliente).
       {
         provide: PORTA_LEITOS_UTI,

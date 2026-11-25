@@ -458,7 +458,15 @@ export interface FaixaAih {
 }
 
 export type SituacaoAih =
-  'solicitada' | 'autorizada' | 'negada' | 'fechada' | 'apresentada' | 'aprovada' | 'rejeitada' | 'cancelada';
+  | 'solicitada'
+  | 'autorizada'
+  | 'negada'
+  | 'devolvida'
+  | 'fechada'
+  | 'apresentada'
+  | 'aprovada'
+  | 'rejeitada'
+  | 'cancelada';
 
 export interface AihRegistro {
   readonly id: number;
