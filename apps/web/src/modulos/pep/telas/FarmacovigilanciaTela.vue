@@ -159,7 +159,12 @@ const suspender = (u: UsoContinuoTela) =>
     <template v-else>
       <h2>{{ t('pep.farmaco.reacoes') }}</h2>
       <form v-if="podeRegistrar" class="farmaco__nova" data-testid="farmaco-nova" @submit.prevent="registrar">
-        <SanteSelecao v-model="nova.item" :rotulo="t('pep.farmaco.itemPrescrito')" :opcoes="opcoesItem" />
+        <SanteSelecao
+          v-model="nova.item"
+          :rotulo="t('pep.farmaco.itemPrescrito')"
+          :opcoes="opcoesItem"
+          data-testid="farmaco-item"
+        />
         <label v-if="nova.item === SEM_ITEM">
           {{ t('pep.farmaco.medicamentoNome') }}
           <input v-model="nova.nome" maxlength="200" data-testid="farmaco-nome" />
@@ -176,6 +181,7 @@ const suspender = (u: UsoContinuoTela) =>
           v-model="nova.gravidade"
           :rotulo="t('pep.farmaco.gravidade')"
           :opcoes="opcoesGravidade"
+          data-testid="farmaco-gravidade"
         />
         <SanteBotao tipo="submit" data-testid="farmaco-registrar" :rotulo="t('pep.farmaco.registrar')" />
       </form>
@@ -202,12 +208,14 @@ const suspender = (u: UsoContinuoTela) =>
             v-model="campos(r).causalidade"
             :rotulo="t('pep.farmaco.causalidade')"
             :opcoes="opcoesCausalidade"
+            :data-testid="`farmaco-causalidade-${r.id}`"
           />
           <SanteSelecao
             v-if="acoesDe(r).includes('encerrar')"
             v-model="campos(r).desfecho"
             :rotulo="t('pep.farmaco.desfecho')"
             :opcoes="opcoesDesfecho"
+            :data-testid="`farmaco-desfecho-${r.id}`"
           />
           <label>
             {{ t('pep.farmaco.justificativa') }}
