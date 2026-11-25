@@ -123,6 +123,8 @@ export const mensagensDocumentos = {
     jaImpresso: 'Este documento já foi impresso: a próxima é uma nova via, com o motivo da reimpressão.',
     motivoReimpressao: 'Motivo da reimpressão',
     escolhaMotivo: 'Escolha o motivo',
+    semMotivosReimpressao:
+      'Não há motivo de reimpressão ativo neste hospital. Peça à administração que cadastre ou reative os motivos na configuração de impressão.',
     complemento: 'Complemento do motivo (mínimo de {minimo} caracteres)',
     situacao: {
       emitido: 'Emitido',

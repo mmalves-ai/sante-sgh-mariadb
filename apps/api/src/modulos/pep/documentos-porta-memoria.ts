@@ -47,7 +47,12 @@ import {
 } from './tipos-pep.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { planoNovaViaProntuario } from '@sgh/dominio-documento';
-import { recusaNovaVia, type NovaViaDocumento, type NovaViaGravada } from './documentos-nova-via-propria.js';
+import {
+  recusaNovaVia,
+  type DesfechoNovaVia,
+  type NovaViaDocumento,
+  type NovaViaGravada,
+} from './documentos-nova-via-propria.js';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
 import { cboDe, type PortaRegistroMemoria, type RegistroOuvido } from './registro-porta-memoria.js';
 
@@ -2056,6 +2061,8 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     entidadeId: number;
     motivo: number;
     via: number;
+    /** Desfecho da emissão: pendente (registrada antes de emitir), emitida ou não emitida. */
+    emissao: 'pendente' | 'emitida' | 'nao-emitida';
   }[] = [];
 
   async motivosReimpressao() {
@@ -2081,7 +2088,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       .filter((r) => r.hospital === c.hospital && r.entidade === entidade && r.entidadeId === entidadeId)
       .reduce((m, r) => Math.max(m, r.via), 0);
     const p = planoNovaViaProntuario({
-      viasAnteriores: Math.max(anteriores, e.viaEmitida - 1),
+      viasAnteriores: Math.max(anteriores, e.viaMinima - 1),
       motivoInformado: true,
       motivo: await this.motivoReimpressao(c, e.motivo),
       complemento: e.complemento,
@@ -2089,8 +2096,23 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     if ('recusa' in p) throw recusaNovaVia(p.recusa);
     if (d)
       d.eventos.push({ tipo: 'segunda-via', em: new Date().toISOString(), justificativa: p.textoEmissao });
-    this.reimpressoes.push({ hospital: c.hospital, entidade, entidadeId, motivo: e.motivo, via: p.via });
+    this.reimpressoes.push({
+      hospital: c.hospital,
+      entidade,
+      entidadeId,
+      motivo: e.motivo,
+      via: p.via,
+      emissao: 'pendente',
+    });
     return { registro: this.reimpressoes.length, via: p.via, texto: p.textoEmissao };
+  }
+
+  async fecharNovaVia(c: ContextoGravacaoPep, registro: number, d: DesfechoNovaVia) {
+    const r = this.reimpressoes[registro - 1];
+    if (!r || r.hospital !== c.hospital) throw new Error('Reimpressão não registrada.');
+    if (d.emitida && d.viaEmitida !== null && d.viaEmitida >= 2) r.via = d.viaEmitida;
+    r.emissao = d.emitida ? 'emitida' : 'nao-emitida';
+    return { registro, via: r.via };
   }
 
   /** As exportações do prontuário gravadas (como exportacao_documento no banco; 01-ADM L82). */

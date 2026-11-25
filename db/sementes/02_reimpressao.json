@@ -1,0 +1,29 @@
+{
+  "motivo_reimpressao": [
+    {
+      "codigo": "perda_extravio",
+      "descricao": "Perda ou extravio da via anterior"
+    },
+    {
+      "codigo": "dano_ilegivel",
+      "descricao": "Via anterior danificada ou ilegível"
+    },
+    {
+      "codigo": "falha_impressao",
+      "descricao": "Falha na impressão anterior"
+    },
+    {
+      "codigo": "pedido_paciente",
+      "descricao": "Pedido do paciente ou do responsável legal"
+    },
+    {
+      "codigo": "pedido_convenio",
+      "descricao": "Pedido do convênio ou da operadora"
+    },
+    {
+      "codigo": "outro",
+      "descricao": "Outro motivo",
+      "exige_complemento": true
+    }
+  ]
+}

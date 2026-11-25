@@ -10,7 +10,7 @@ import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ContextoOperacao } from '@sgh/nucleo';
 import type { HistoricoAlergia, ManifestacaoAlergica, MotivoReimpressaoAtivo } from '@sgh/contratos';
 import type { MotivoCatalogo } from '@sgh/dominio-documento';
-import type { NovaViaDocumento, NovaViaGravada } from './documentos-nova-via-propria.js';
+import type { DesfechoNovaVia, NovaViaDocumento, NovaViaGravada } from './documentos-nova-via-propria.js';
 import type {
   AlergiaDoProntuarioLida,
   AnexoLido,
@@ -317,6 +317,15 @@ export interface PortaDocumentos {
    * registro único de impressões, na mesma transação.
    */
   registrarNovaVia(c: ContextoGravacaoPep, e: NovaViaDocumento): Promise<NovaViaGravada>;
+  /**
+   * Fecha a reimpressão registrada com o desfecho da emissão do PDF (emitida, com a via que levou, ou não emitida).
+   * A via é registrada antes de emitir; a linha nunca é apagada.
+   */
+  fecharNovaVia(
+    c: ContextoGravacaoPep,
+    registro: number,
+    d: DesfechoNovaVia,
+  ): Promise<{ registro: number; via: number }>;
   /**
    * A exportação do prontuário completo (01-ADM L82): grava em exportacao_documento quem exportou, quando, a
    * justificativa (texto e tipo padronizado ativo) e o resumo do conteúdo entregue, antes de entregar.

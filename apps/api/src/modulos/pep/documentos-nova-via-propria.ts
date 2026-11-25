@@ -17,8 +17,11 @@ export interface NovaViaDocumento {
   readonly origem: { readonly tabela: string; readonly id: number };
   readonly motivo: number;
   readonly complemento: string | null;
-  /** A via que a emissão do PDF numerou (a via do registro nunca fica abaixo dela). */
-  readonly viaEmitida: number;
+  /**
+   * A menor via que esta reimpressão pode ter (a via do registro nunca fica abaixo dela). A via é registrada ANTES
+   * de emitir o PDF: nunca existe via emitida sem a linha em registro_reimpressao.
+   */
+  readonly viaMinima: number;
 }
 
 export interface NovaViaGravada {
@@ -94,7 +97,7 @@ export async function gravarNovaVia(
   const viasAnteriores = Math.max(
     ultima && ultima['via'] !== null ? num(ultima['via']) : 0,
     doc ? num(doc['vias_impressas']) : 0,
-    e.viaEmitida - 1,
+    e.viaMinima - 1,
   );
   const p = planoNovaViaProntuario({
     viasAnteriores,
@@ -147,9 +150,49 @@ export async function gravarNovaVia(
     estacao_trabalho_id: null,
     impressora_id: null,
     operacao: 'inclusao',
-    dados: JSON.stringify({ origem: e.origem.tabela, origemId: e.origem.id, viaEmitida: e.viaEmitida }),
+    dados: JSON.stringify({ origem: e.origem.tabela, origemId: e.origem.id, emissao: 'pendente' }),
     ocorrido_em: agora,
     usuario_id: usuario,
   });
   return { registro, via: p.via, texto: p.textoEmissao };
+}
+
+/** O desfecho da emissão do PDF depois de registrada a via: emitida (com a via que o PDF levou) ou não emitida. */
+export interface DesfechoNovaVia {
+  readonly emitida: boolean;
+  /** A via que o PDF levou (só quando emitida). */
+  readonly viaEmitida: number | null;
+}
+
+/**
+ * Fecha o registro da reimpressão com o desfecho da emissão (dentro da transação da porta). Nunca apaga: a linha
+ * fica, com `dados.emissao` = 'emitida' (e a via do PDF, quando outra emissão concorrente numerou diferente) ou
+ * 'nao-emitida' (a via foi pedida e registrada, mas o PDF não saiu).
+ */
+export async function fecharNovaVia(
+  tx: TxOperacao,
+  est: number,
+  registro: number,
+  d: DesfechoNovaVia,
+): Promise<{ registro: number; via: number }> {
+  const [r] = await tx.consultarParaAtualizar(
+    'SELECT id, versao, via, dados FROM registro_reimpressao WHERE id = ? AND estabelecimento_id = ?',
+    [registro, est],
+  );
+  if (!r)
+    throw new ErroOperacao(404, 'registro-inexistente', 'Operação recusada', 'Reimpressão não registrada.');
+  const bruto = r['dados'];
+  const antes =
+    typeof bruto === 'string' ? (JSON.parse(bruto) as Record<string, unknown>) : ((bruto ?? {}) as object);
+  const via = d.emitida && d.viaEmitida !== null && d.viaEmitida >= 2 ? d.viaEmitida : num(r['via']);
+  await tx.alterar('registro_reimpressao', num(r['id']), num(r['versao']), {
+    via,
+    dados: JSON.stringify({
+      ...antes,
+      emissao: d.emitida ? 'emitida' : 'nao-emitida',
+      viaRegistrada: num(r['via']),
+      ...(d.emitida ? { viaEmitida: via } : {}),
+    }),
+  });
+  return { registro: num(r['id']), via };
 }

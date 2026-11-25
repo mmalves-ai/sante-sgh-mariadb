@@ -574,22 +574,9 @@ export class DocumentosPepController {
             codigo: plano.recusa,
           },
         );
-      let via: { emissao: { via: number }; pdf: Uint8Array };
-      try {
-        via = await fonte.emissao.segundaVia(anterior, plano.textoEmissao, {
-          titulo: TITULOS_PEP[modelo],
-          campos,
-          autor: s.login,
-          marcaSuporte: marca,
-        });
-      } catch {
-        throw new ErroProblema(
-          'indisponivel',
-          503,
-          'Emissão indisponível',
-          'Não foi possível gerar o PDF agora. O documento continua gravado no prontuário.',
-        );
-      }
+      // A via é registrada ANTES de emitir (motivo, complemento, via, evento e registro único na mesma transação):
+      // se a gravação recusar (motivo desativado no meio, documento sumido, disputa de versão, banco fora), nenhum
+      // PDF sai e nenhuma via da emissão é gasta. Nunca existe via emitida sem a linha em registro_reimpressao.
       const proprio = await this.servico.porta.documentoSghDaOrigem(this.c(s), TABELA_DO_TIPO[tipo], id);
       const g = await this.gravarSgh(() =>
         this.servico.porta.registrarNovaVia(this.sgh(s, 'pep.documento.impresso'), {
@@ -597,9 +584,39 @@ export class DocumentosPepController {
           origem: { tabela: TABELA_DO_TIPO[tipo], id },
           motivo: pedido.motivoReimpressao!,
           complemento: pedido.complemento ?? null,
-          viaEmitida: via.emissao.via,
+          viaMinima: (original?.via ?? 1) + 1,
         }),
       );
+      let via: { emissao: { via: number }; pdf: Uint8Array };
+      try {
+        via = await fonte.emissao.segundaVia(anterior, g.texto, {
+          titulo: TITULOS_PEP[modelo],
+          campos,
+          autor: s.login,
+          marcaSuporte: marca,
+        });
+      } catch {
+        // O pedido fica no registro, marcado como não emitido (nunca apagado).
+        await this.servico.porta
+          .fecharNovaVia(this.sgh(s, 'pep.documento.impresso'), g.registro, {
+            emitida: false,
+            viaEmitida: null,
+          })
+          .catch(() => undefined);
+        throw new ErroProblema(
+          'indisponivel',
+          503,
+          'Emissão indisponível',
+          'Não foi possível gerar o PDF agora. O documento continua gravado no prontuário e o pedido de reimpressão ficou registrado como não emitido.',
+        );
+      }
+      // Fecha o registro com a via que o PDF levou (o registro já existe; uma falha aqui não desfaz a via).
+      await this.servico.porta
+        .fecharNovaVia(this.sgh(s, 'pep.documento.impresso'), g.registro, {
+          emitida: true,
+          viaEmitida: via.emissao.via,
+        })
+        .catch(() => undefined);
       req.sghAlvo = {
         paciente,
         tabelaAlvo: TABELA_DO_TIPO[tipo],

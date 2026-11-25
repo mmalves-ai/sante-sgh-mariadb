@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { FONTE_DOCUMENTO, type FonteDocumento } from '../documento/fonte.js';
 import { gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { PortaDocumentosMemoria } from './documentos-porta-memoria.js';
 import { PortaRegistroMemoria } from './registro-porta-memoria.js';
@@ -139,6 +140,39 @@ describe('01-ADM L82: impressão justificada de documento do prontuário', () =>
       'impresso:atestado;via:1;justificativa:emissao+evento',
       'impresso:atestado;via:2;motivo:catalogo;registro:1',
       'impresso:atestado;via:3;motivo:catalogo;registro:2',
+    ]);
+    expect(documentos.reimpressoes.map((r) => r.emissao)).toEqual(['emitida', 'emitida']);
+
+    // A via é registrada ANTES de emitir: se a gravação falha (banco fora, motivo desativado no meio, disputa de
+    // versão), nenhum PDF sai e nenhuma via da emissão é gasta; a próxima reimpressão é a via 4.
+    const registrar = documentos.registrarNovaVia.bind(documentos);
+    documentos.registrarNovaVia = () => Promise.reject(new Error('gravação recusada (simulada)'));
+    const falhaGravar = await imprimir({ motivoReimpressao: 1 });
+    documentos.registrarNovaVia = registrar;
+    expect(falhaGravar.statusCode).toBeGreaterThanOrEqual(500);
+    expect(falhaGravar.headers['content-type'] ?? '').not.toMatch(/pdf/);
+    expect(documentos.reimpressoes).toHaveLength(2);
+    const quatro = await imprimir({ motivoReimpressao: 1 });
+    expect(quatro.statusCode).toBe(200);
+    expect(quatro.headers['content-disposition']).toMatch(/via4\.pdf/);
+
+    // Se a emissão do PDF falha depois do registro, o pedido fica no registro marcado como não emitido (nunca
+    // apagado); a via seguinte fecha com a via que o PDF levou.
+    const emissao = app.get<FonteDocumento>(FONTE_DOCUMENTO).emissao;
+    const segunda = emissao.segundaVia.bind(emissao);
+    emissao.segundaVia = () => Promise.reject(new Error('emissão fora (simulada)'));
+    const falhaEmitir = await imprimir({ motivoReimpressao: 1 });
+    emissao.segundaVia = segunda;
+    expect(falhaEmitir.statusCode).toBe(503);
+    const cinco = await imprimir({ motivoReimpressao: 1 });
+    expect(cinco.statusCode).toBe(200);
+    expect(cinco.headers['content-disposition']).toMatch(/via5\.pdf/);
+    expect(documentos.reimpressoes.map((r) => [r.via, r.emissao])).toEqual([
+      [2, 'emitida'],
+      [3, 'emitida'],
+      [4, 'emitida'],
+      [5, 'nao-emitida'],
+      [5, 'emitida'],
     ]);
   }, 300_000);
 

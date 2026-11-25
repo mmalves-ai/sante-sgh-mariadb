@@ -116,6 +116,12 @@ async function imprimir(): Promise<void> {
       <form v-if="doc.data.value.pdf" class="imprimir" @submit.prevent="imprimir">
         <template v-if="novaVia">
           <p data-testid="aviso-nova-via">{{ t('pep.doc.documento.jaImpresso') }}</p>
+          <SanteAlerta
+            v-if="vias.data.value && motivos.length === 0"
+            variante="aviso"
+            data-testid="sem-motivos-reimpressao"
+            :texto="t('pep.doc.documento.semMotivosReimpressao')"
+          />
           <SanteSelecao
             v-model="motivo"
             data-testid="motivo-reimpressao"

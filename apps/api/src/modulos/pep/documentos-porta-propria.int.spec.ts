@@ -580,7 +580,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
     const base = {
       documento: id,
       origem: { tabela: 'registro_assistencial', id: ids.registro2 },
-      viaEmitida: 2,
+      viaMinima: 2,
     };
     // Motivo inativo, inexistente e complemento faltando: recusa sem gravar nada.
     await expect(
@@ -599,7 +599,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
     expect(um).toMatchObject({ via: 2, texto: 'Perda da via (sintético)' });
     const dois = await porta.registrarNovaVia(G(), {
       ...base,
-      viaEmitida: 3,
+      viaMinima: 3,
       motivo: ids.motivoOutro,
       complemento: 'Pedido do convênio SINT',
     });
@@ -619,6 +619,29 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
       expect(r).toMatchObject({ destino: 'pdf', operacao: 'inclusao' });
       expect([Number(r['usuario_id']), Number(r['estabelecimento_id'])]).toEqual([ids.usuario, ids.est]);
     }
+    // A via é registrada antes de emitir (emissão pendente) e fechada com o desfecho, sem apagar a linha: emitida
+    // com a via que o PDF levou, ou não emitida.
+    const desfecho = () =>
+      nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+        l.consultar(
+          `SELECT via, JSON_VALUE(dados, '$.emissao') AS emissao FROM registro_reimpressao
+            WHERE entidade = 'documento_prontuario' AND entidade_id = ? ORDER BY id`,
+          [id],
+        ),
+      );
+    expect((await desfecho()).map((r) => r['emissao'])).toEqual(['pendente', 'pendente']);
+    expect(await porta.fecharNovaVia(G(), um.registro, { emitida: true, viaEmitida: 2 })).toEqual({
+      registro: um.registro,
+      via: 2,
+    });
+    expect(await porta.fecharNovaVia(G(), dois.registro, { emitida: false, viaEmitida: null })).toEqual({
+      registro: dois.registro,
+      via: 3,
+    });
+    expect((await desfecho()).map((r) => [Number(r['via']), r['emissao']])).toEqual([
+      [2, 'emitida'],
+      [3, 'nao-emitida'],
+    ]);
     // O documento conta as vias e a cadeia leva o evento com o motivo; o registro único, a reimpressão com o motivo.
     expect(await contar('SELECT vias_impressas AS n FROM documento_prontuario WHERE id = ?', [id])).toBe(3);
     const ev = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
@@ -654,7 +677,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
     const so = await porta.registrarNovaVia(G(), {
       documento: null,
       origem: { tabela: 'documento_emitido', id: 902_400_999 },
-      viaEmitida: 2,
+      viaMinima: 2,
       motivo: ids.motivoPerda,
       complemento: null,
     });

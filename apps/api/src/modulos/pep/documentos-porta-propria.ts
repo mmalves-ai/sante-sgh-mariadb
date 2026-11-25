@@ -815,6 +815,22 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     );
   }
 
+  fecharNovaVia(c: ContextoGravacaoPep, registro: number, d: NovaVia.DesfechoNovaVia) {
+    return this.gravar(
+      c,
+      'pep.documento.nova-via-desfecho',
+      (tx, est) => NovaVia.fecharNovaVia(tx, est, registro, d),
+      (r) => ({ tabela: 'registro_reimpressao', id: r.registro }),
+      (r) => ({
+        acao: 'impressao',
+        dados: {
+          evento: d.emitida ? 'documento.segunda-via.emitida' : 'documento.segunda-via.nao-emitida',
+          via: r.via,
+        },
+      }),
+    );
+  }
+
   async registrarExportacaoProntuario(
     c: ContextoGravacaoPep,
     e: {
