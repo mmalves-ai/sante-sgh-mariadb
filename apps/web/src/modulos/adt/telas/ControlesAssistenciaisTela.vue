@@ -681,6 +681,7 @@ const gravarEvento = () =>
     <template v-else>
       <p>{{ t(`${K}.regulacao.texto`) }}</p>
       <ErroAdt v-if="regulacoes.isError.value" :erro="regulacoes.error.value" />
+      <ErroAdt v-if="apoio.isError.value" :erro="apoio.error.value" />
       <SanteSelecao
         v-model="solicitacao"
         :rotulo="t(`${K}.regulacao.solicitacao`)"
@@ -688,6 +689,7 @@ const gravarEvento = () =>
         data-testid="reg-solicitacao"
       />
       <p v-if="!solicitacao">{{ t(`${K}.regulacao.escolhaSolicitacao`) }}</p>
+      <ErroAdt v-if="solicitacao && linhaTempo.isError.value" :erro="linhaTempo.error.value" />
       <template v-if="linhaTempo.data.value">
         <p data-testid="reg-situacao">
           {{

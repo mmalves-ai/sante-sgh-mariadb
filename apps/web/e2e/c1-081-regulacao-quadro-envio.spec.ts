@@ -4,10 +4,14 @@
 // mais grave que a declarada), registra o contato com a central com a data e a hora do envio pelo portal (envio no
 // futuro recusado na hora) e a resposta da central que autoriza a vaga; a linha do tempo mostra os quadros e os
 // eventos, com o envio. Axe em cada passo.
-// O E2E roda sem banco próprio (fonte sintética, que responde 503 nestes controles): as respostas da API são simuladas
-// no navegador com o formato da porta. O que fica no banco (quadro com sequência, evento com a situação anterior e a
-// nova, enviado_em só no contato com a central, envio no futuro e fora do contato recusados) é provado pelo contrato
-// de efeito apps/api/src/modulos/adt/controles-assistenciais-propria.int.spec.ts.
+// Motivo da simulação no primeiro cenário: o E2E roda sobre a fonte sintética, que não tem banco próprio de cliente, e
+// a API real responde 503 nestes controles (a porta só existe no banco do cliente). Por isso o primeiro cenário simula
+// as respostas no navegador com o formato da porta e prova só a tela e o corpo enviado; ele NÃO prova a ligação com o
+// MariaDB. O segundo cenário não simula nada: passa pela API real e prova que as rotas estão registradas, exigem
+// sessão, e que sem banco a tela mostra o erro em vez de inventar quadro, evento ou envio, e que a gravação do contato
+// com enviadoEm é recusada (503) e não aceita em silêncio. O que fica no banco (quadro com sequência, evento com a
+// situação anterior e a nova, enviado_em só no contato com a central, envio no futuro e fora do contato recusados) é
+// provado pelo contrato de efeito apps/api/src/modulos/adt/controles-assistenciais-propria.int.spec.ts (MariaDB).
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -235,6 +239,46 @@ test.describe('internação: solicitação à central reguladora com quadro clí
     const resposta = estado.corpos.find((c) => c['tipo'] === 'resposta');
     expect(resposta?.['enviadoEm'] ?? null).toBeNull();
     await semViolacaoAxe(page, '/internacao/controles/regulacao (autorizada)');
+    expect(externas).toEqual([]);
+  });
+
+  test('API real, sem simulação: rotas registradas, sem banco a tela mostra o erro e a gravação é recusada; axe', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    // Sem sessão, a rota existe e exige login (401), nunca 404.
+    const anonimo = await page.request.get(`/api/internacao/controles/regulacao/${SOLICITACAO}`);
+    expect(anonimo.status()).toBe(401);
+
+    await entrar(page, 'SINT.ADMIN');
+    const apoio = page.waitForResponse((r) => r.url().includes('/api/internacao/controles/regulacao/apoio'));
+    await page.goto('/internacao/controles/regulacao');
+    await expect(page.getByTestId('tela-controles-internacao')).toBeVisible();
+    // A fonte sintética não tem banco próprio: a API real responde 503, e a tela mostra o erro.
+    expect((await apoio).status()).toBe(503);
+    await expect(page.getByTestId('mensagem-erro').first()).toBeVisible();
+    // Nada inventado: sem linha do tempo, não há situação, formulário de quadro, evento nem envio.
+    await expect(page.getByTestId('reg-situacao')).toHaveCount(0);
+    await expect(page.getByTestId('reg-quadro-gravar')).toHaveCount(0);
+    await expect(page.getByTestId('reg-evento-enviado-em')).toHaveCount(0);
+
+    // Leitura e gravação pela API real com a sessão: o contato com a central e o envio são recusados sem banco (503),
+    // não aceitos em silêncio.
+    const linha = await page.request.get(`/api/internacao/controles/regulacao/${SOLICITACAO}`);
+    expect(linha.status()).toBe(503);
+    const csrf = (await page.context().cookies()).find((c) => c.name === 'sgh_csrf')?.value ?? '';
+    const gravar = await page.request.post(`/api/internacao/controles/regulacao/${SOLICITACAO}/eventos`, {
+      headers: { 'x-csrf': csrf },
+      data: {
+        tipo: 'contato_central',
+        situacaoNova: null,
+        observacao: 'Pedido enviado pelo portal da central',
+        enviadoEm: new Date(Date.now() - 10 * 60_000).toISOString(),
+        versao: 1,
+      },
+    });
+    expect(gravar.status()).toBe(503);
+    await semViolacaoAxe(page, '/internacao/controles/regulacao (sem banco próprio)');
     expect(externas).toEqual([]);
   });
 });
