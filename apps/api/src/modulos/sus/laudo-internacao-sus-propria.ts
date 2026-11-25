@@ -7,13 +7,15 @@
 //   - devolver: a autorização "solicitada" fica "devolvida" (devolvida_em e o motivo do gestor) e o laudo "devolvido"
 //     (devolvido_em, motivo_devolucao), sem apagar nada;
 //   - reenviar: a autorização devolvida volta a "solicitada" com a justificativa (e o procedimento ou o CID) corrigidos;
-//     o laudo volta a "emitido" com as correções e sai do lote anterior (fica livre para outro lote);
+//     o laudo volta a "emitido" com as correções e sai do lote anterior (fica livre para outro lote): o item do lote
+//     anterior em `item_lote_laudo_sus` fica, com retirado_em e o motivo "reenvio_corrigido";
 //   - laudo especial: um laudo tipo "especial" com o número da AIH autorizada e uma linha por procedimento especial em
 //     `laudo_internacao_sus_especial` (OPM, sangue, diárias de acompanhante e de UTI);
 //   - imprimir: impresso_em do laudo (a primeira impressão fica; a reimpressão não muda a data);
-//   - lote: `lote_laudo_sus` "fechado" com os laudos emitidos (lote_laudo_sus_id e a quantidade); enviar marca o lote
-//     "enviado" e os laudos "enviado" (enviado_em); retornar marca o recebimento da lista do gestor; cancelar (antes
-//     do envio) solta os laudos.
+//   - lote: `lote_laudo_sus` "fechado" com os laudos emitidos (lote_laudo_sus_id e a quantidade) e uma linha por laudo
+//     em `item_lote_laudo_sus` (o histórico do lote, nunca apagado: quantidade_laudos = itens do lote); enviar marca o
+//     lote "enviado" e os laudos e itens "enviado" (enviado_em); retornar marca o recebimento da lista do gestor;
+//     cancelar (antes do envio) solta os laudos, e os itens ficam com o motivo "lote_cancelado".
 // A trilha de cada gravação vai pelo executor (mesma transação).
 import {
   acaoLotePermitida,
@@ -51,7 +53,8 @@ export const TABELAS_LAUDO_SUS = [
   'lote_laudo_sus',
   'sequencia_negocio',
 ] as const;
-const TABELAS = [...TABELAS_LAUDO_SUS, 'autorizacao_internacao_sus'];
+// Os itens do lote só mudam pelas rotas do laudo (a gravação da AIH não os toca).
+const TABELAS = [...TABELAS_LAUDO_SUS, 'item_lote_laudo_sus', 'autorizacao_internacao_sus'];
 const SEQ_LAUDO = 'laudo_internacao_sus';
 const SEQ_LOTE = 'lote_laudo_sus';
 
@@ -134,11 +137,23 @@ export interface LaudoInternacaoSusLido {
   readonly versao: number;
 }
 
+export interface ItemLoteLaudoSusLido {
+  readonly laudo: number;
+  readonly numero: string;
+  readonly situacaoNaInclusao: string;
+  readonly incluidoEm: string;
+  readonly enviadoEm: string | null;
+  readonly retiradoEm: string | null;
+  readonly motivoRetirada: 'reenvio_corrigido' | 'lote_cancelado' | null;
+}
+
 export interface LoteLaudoSusLido {
   readonly id: number;
   readonly numero: string;
   readonly situacao: SituacaoLoteLaudoSus;
   readonly quantidadeLaudos: number;
+  /** Tudo o que o lote continha, inclusive os laudos retirados depois (reenvio corrigido ou lote cancelado). */
+  readonly laudos: readonly ItemLoteLaudoSusLido[];
   readonly geradoEm: string;
   readonly enviadoEm: string | null;
   readonly retornadoEm: string | null;
@@ -281,12 +296,48 @@ const SQL_LAUDOS = `
 const SQL_LOTES = `SELECT id, numero, situacao, quantidade_laudos, gerado_em, exportado_em, recebido_autorizacao_em,
        observacao, versao FROM lote_laudo_sus WHERE estabelecimento_id = ? AND excluido_em IS NULL`;
 
-function loteDaLinha(r: Record<string, unknown>): LoteLaudoSusLido {
+const SQL_ITENS_LOTE = `SELECT i.lote_laudo_sus_id, i.laudo_internacao_sus_id, l.numero, i.situacao_na_inclusao,
+       i.incluido_em, i.enviado_em, i.retirado_em, i.motivo_retirada
+  FROM item_lote_laudo_sus i JOIN laudo_internacao_sus l ON l.id = i.laudo_internacao_sus_id`;
+
+function itemDaLinha(r: Record<string, unknown>): ItemLoteLaudoSusLido {
+  return {
+    laudo: num(r['laudo_internacao_sus_id']),
+    numero: String(r['numero']),
+    situacaoNaInclusao: String(r['situacao_na_inclusao']),
+    incluidoEm: instante(r['incluido_em']) ?? '',
+    enviadoEm: instante(r['enviado_em']),
+    retiradoEm: instante(r['retirado_em']),
+    motivoRetirada: (txtOuNull(r['motivo_retirada']) as ItemLoteLaudoSusLido['motivoRetirada']) ?? null,
+  };
+}
+
+/** Marca a saída do laudo do lote ativo: o item fica, com a data e o motivo (o histórico do lote não se perde). */
+async function retirarDoLote(
+  tx: TxOperacao,
+  lote: number,
+  laudo: number,
+  motivo: 'reenvio_corrigido' | 'lote_cancelado',
+  quando: Date,
+): Promise<void> {
+  const [i] = await tx.consultarParaAtualizar(
+    'SELECT id, versao FROM item_lote_laudo_sus WHERE lote_laudo_sus_id = ? AND laudo_internacao_sus_id = ? AND retirado_em IS NULL',
+    [lote, laudo],
+  );
+  if (i)
+    await tx.alterar('item_lote_laudo_sus', num(i['id']), num(i['versao']), {
+      retirado_em: quando,
+      motivo_retirada: motivo,
+    });
+}
+
+function loteDaLinha(r: Record<string, unknown>, itens: Record<string, unknown>[] = []): LoteLaudoSusLido {
   return {
     id: num(r['id']),
     numero: String(r['numero']),
     situacao: String(r['situacao']) as SituacaoLoteLaudoSus,
     quantidadeLaudos: num(r['quantidade_laudos']),
+    laudos: itens.filter((i) => num(i['lote_laudo_sus_id']) === num(r['id'])).map(itemDaLinha),
     geradoEm: instante(r['gerado_em']) ?? '',
     enviadoEm: instante(r['exportado_em']),
     retornadoEm: instante(r['recebido_autorizacao_em']),
@@ -390,9 +441,17 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
   }
 
   listarLotes(c: ContextoPortaPropria): Promise<LoteLaudoSusLido[]> {
-    return this.ler(c, 'lotes', async (l, est) =>
-      (await l.consultar(`${SQL_LOTES} ORDER BY id DESC LIMIT 200`, [est.id])).map(loteDaLinha),
-    );
+    return this.ler(c, 'lotes', async (l, est) => {
+      const lotes = await l.consultar(`${SQL_LOTES} ORDER BY id DESC LIMIT 200`, [est.id]);
+      const ids = lotes.map((r) => num(r['id']));
+      const itens = ids.length
+        ? await l.consultar(
+            `${SQL_ITENS_LOTE} WHERE i.lote_laudo_sus_id IN (${ids.map(() => '?').join(',')}) ORDER BY i.id`,
+            ids,
+          )
+        : [];
+      return lotes.map((r) => loteDaLinha(r, itens));
+    });
   }
 
   /** O gestor devolve o laudo da AIH solicitada para correção. */
@@ -447,9 +506,12 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
       });
       const laudo = numOuNull(atual['laudo_internacao_sus_id']);
       if (laudo) {
-        const [l] = await tx.consultarParaAtualizar('SELECT versao FROM laudo_internacao_sus WHERE id = ?', [
-          laudo,
-        ]);
+        const [l] = await tx.consultarParaAtualizar(
+          'SELECT versao, lote_laudo_sus_id FROM laudo_internacao_sus WHERE id = ?',
+          [laudo],
+        );
+        const loteAnterior = numOuNull(l?.['lote_laudo_sus_id']);
+        if (loteAnterior) await retirarDoLote(tx, loteAnterior, laudo, 'reenvio_corrigido', new Date());
         await tx.alterar('laudo_internacao_sus', laudo, num(l?.['versao']), {
           situacao: 'emitido',
           sinais_sintomas: e.justificativa,
@@ -554,6 +616,7 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
   gerarLote(c: ContextoPortaPropria, entrada: unknown) {
     const e = entradaValida(esquemaLote, entrada);
     return this.gravar(c, 'faturamento.sus.laudo.lote.gerar', TABELAS, async (tx, est, usuario) => {
+      const agora = new Date();
       const achados = e.laudos.length
         ? await tx.consultarParaAtualizar(
             `SELECT id, situacao, lote_laudo_sus_id, versao FROM laudo_internacao_sus
@@ -574,14 +637,21 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
         estabelecimento_id: est.id,
         numero: await proximoNumeroDe(tx, est.id, SEQ_LOTE, 'LL-'),
         tipo_laudo: 'internacao',
-        gerado_em: new Date(),
+        gerado_em: agora,
         gerado_por_usuario_id: usuario,
         quantidade_laudos: achados.length,
         situacao: 'fechado',
         origem: 'sistema',
       });
-      for (const r of achados)
+      for (const r of achados) {
         await tx.alterar('laudo_internacao_sus', num(r['id']), num(r['versao']), { lote_laudo_sus_id: lote });
+        await tx.incluir('item_lote_laudo_sus', {
+          lote_laudo_sus_id: lote,
+          laudo_internacao_sus_id: num(r['id']),
+          situacao_na_inclusao: String(r['situacao']),
+          incluido_em: agora,
+        });
+      }
       return { tabela: 'lote_laudo_sus', id: lote };
     });
   }
@@ -623,6 +693,11 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
               situacao: 'enviado',
               enviado_em: agora,
             });
+        for (const i of await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM item_lote_laudo_sus WHERE lote_laudo_sus_id = ? AND retirado_em IS NULL',
+          [lote],
+        ))
+          await tx.alterar('item_lote_laudo_sus', num(i['id']), num(i['versao']), { enviado_em: agora });
       } else if (acao === 'retornar') {
         await tx.alterar('lote_laudo_sus', lote, e.versao, {
           situacao: 'retornado',
@@ -634,10 +709,12 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
           situacao: 'cancelado',
           ...(e.observacao ? { observacao: e.observacao } : {}),
         });
-        for (const x of laudos)
+        for (const x of laudos) {
           await tx.alterar('laudo_internacao_sus', num(x['id']), num(x['versao']), {
             lote_laudo_sus_id: null,
           });
+          await retirarDoLote(tx, lote, num(x['id']), 'lote_cancelado', agora);
+        }
       }
       return { tabela: 'lote_laudo_sus', id: lote };
     });

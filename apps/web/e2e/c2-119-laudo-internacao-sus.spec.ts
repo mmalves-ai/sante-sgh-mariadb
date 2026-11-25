@@ -145,6 +145,15 @@ test.describe('C2-119 laudo de internação SUS: devolução, reenvio, especial,
       numero: string;
       situacao: string;
       quantidadeLaudos: number;
+      laudos: {
+        laudo: number;
+        numero: string;
+        situacaoNaInclusao: string;
+        incluidoEm: string;
+        enviadoEm: string | null;
+        retiradoEm: string | null;
+        motivoRetirada: string | null;
+      }[];
       geradoEm: string;
       enviadoEm: string | null;
       retornadoEm: string | null;
@@ -230,6 +239,18 @@ test.describe('C2-119 laudo de internação SUS: devolução, reenvio, especial,
           numero: 'LL-000031',
           situacao: 'fechado',
           quantidadeLaudos: ids.length,
+          // O lote guarda o que continha (os itens ficam mesmo quando o laudo sai do lote).
+          laudos: laudos
+            .filter((l) => ids.includes(l.id))
+            .map((l) => ({
+              laudo: l.id,
+              numero: l.numero,
+              situacaoNaInclusao: 'emitido',
+              incluidoEm: '2026-11-05T12:00:00',
+              enviadoEm: null,
+              retiradoEm: null,
+              motivoRetirada: null,
+            })),
           geradoEm: '2026-11-05T12:00:00',
           enviadoEm: null,
           retornadoEm: null,
@@ -356,6 +377,8 @@ test.describe('C2-119 laudo de internação SUS: devolução, reenvio, especial,
       expect(corpos['/lotes']).toEqual({ laudos: [901, 902] });
       const linhaLote = lotes.getByTestId('lote-laudo-LL-000031');
       await expect(linhaLote.getByTestId('lote-laudo-situacao')).toHaveText('Fechado (pronto para enviar)');
+      await expect(linhaLote.getByTestId('lote-laudo-itens').locator('li')).toHaveCount(2);
+      await expect(linhaLote.getByTestId('lote-laudo-item-LS-000901')).toBeVisible();
       await expect(lotes.getByTestId('botao-lote-laudo-retornar-31')).toHaveCount(0);
       await lotes.getByTestId('botao-lote-laudo-enviar-31').click();
       await expect(lotes.getByTestId('lotes-laudo-mensagem')).toContainText('Lote enviado');

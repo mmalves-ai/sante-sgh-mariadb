@@ -3463,6 +3463,7 @@ laudo_internacao_sus	SUS	principal	F7	Laudo para solicitação de internação S
 laudo_internacao_sus_especial	SUS	item	F7	Procedimentos especiais pedidos no laudo (OPM, sangue, diárias de acompanhante)	R1#57; MV: LAUDO_AIH_ESPECIAL, ITEM_LAUDO_AIH_ESPECIAL	06	2
 leito_uti_habilitado	SUS	configuracao	F3	Quantidade de leitos de UTI habilitados por tipo, unidade e competência	R1#59; SP: FHLEITOUTI; MV: CAPACIDADE_UTI_SUS, ESPECIALIDADE_UTI_SUS*	06	4
 lote_laudo_sus	SUS	principal	F7	Lote de laudos enviados ao gestor para autorização	R1#57; MV: LOTE_LAUDOS_SIH, PRODUCAO_LAUDOS_SUS	06	4
+item_lote_laudo_sus	SUS	item	F7	Laudos que cada lote de laudos SUS continha, com a retirada (histórico do lote)	R1#57	06	1
 mapeamento_resultado_laudo_apac	SUS	configuracao	F7	Qual campo do resultado de exame alimenta cada campo do laudo de APAC, por tipo de atendimento e estabelecimento	rodada2:nova	06	1
 meta_contratual_sus	SUS	item	F7	Metas quantitativas e qualitativas do contrato com periodicidade e peso	R1#63	06	1
 motivo_descarte_sus	SUS	dominio	F7	Motivos para descartar uma produção SUS sem enviar	R1#53; MV: MOTIVO_DESCARTE_SUS	06	1

@@ -166,7 +166,17 @@ const agir = (l: LoteLaudoSus, a: Acao) =>
           <tr v-for="l in lotes.data.value" :key="l.id" :data-testid="`lote-laudo-${l.numero}`">
             <td>{{ l.numero }}</td>
             <td data-testid="lote-laudo-situacao">{{ p(`situacoes.${l.situacao}`) }}</td>
-            <td>{{ l.quantidadeLaudos }}</td>
+            <td>
+              {{ l.quantidadeLaudos }}
+              <ul v-if="l.laudos.length" class="itens" data-testid="lote-laudo-itens">
+                <li v-for="i in l.laudos" :key="i.laudo" :data-testid="`lote-laudo-item-${i.numero}`">
+                  {{ i.numero }}
+                  <span v-if="i.motivoRetirada">
+                    ({{ p(`retirada.${i.motivoRetirada}`, { em: carimboBr(i.retiradoEm) }) }})
+                  </span>
+                </li>
+              </ul>
+            </td>
             <td>{{ carimboBr(l.geradoEm) }}</td>
             <td>{{ carimboBr(l.enviadoEm) }}</td>
             <td>{{ carimboBr(l.retornadoEm) }}</td>
@@ -191,6 +201,10 @@ const agir = (l: LoteLaudoSus, a: Acao) =>
 </template>
 
 <style scoped>
+.itens {
+  margin: 0;
+  padding-left: var(--sgh-espaco-4);
+}
 .acoes {
   display: flex;
   flex-wrap: wrap;

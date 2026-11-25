@@ -267,6 +267,10 @@ export const mensagensSusAih = {
     acao: 'Ação no lote',
     executar: 'Executar',
     acoes: { enviar: 'Enviar ao gestor', retornar: 'Registrar retorno', cancelar: 'Cancelar lote' },
+    retirada: {
+      reenvio_corrigido: 'retirado em {em}: reenviado corrigido',
+      lote_cancelado: 'retirado em {em}: lote cancelado',
+    },
     feito: { enviar: 'Lote enviado.', retornar: 'Retorno do lote registrado.', cancelar: 'Lote cancelado.' },
     situacoes: {
       aberto: 'Aberto',

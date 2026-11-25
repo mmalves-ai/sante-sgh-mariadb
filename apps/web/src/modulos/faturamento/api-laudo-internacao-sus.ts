@@ -52,6 +52,20 @@ const esquemaLote = z.object({
   numero: z.string(),
   situacao: z.string(),
   quantidadeLaudos: z.number().int(),
+  // O que o lote continha, inclusive os laudos retirados depois (reenvio corrigido ou lote cancelado).
+  laudos: z
+    .array(
+      z.object({
+        laudo: z.number().int(),
+        numero: z.string(),
+        situacaoNaInclusao: z.string(),
+        incluidoEm: z.string(),
+        enviadoEm: z.string().nullable(),
+        retiradoEm: z.string().nullable(),
+        motivoRetirada: z.enum(['reenvio_corrigido', 'lote_cancelado']).nullable(),
+      }),
+    )
+    .default([]),
   geradoEm: z.string(),
   enviadoEm: z.string().nullable(),
   retornadoEm: z.string().nullable(),

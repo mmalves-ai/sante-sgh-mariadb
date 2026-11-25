@@ -124,6 +124,10 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
           'DELETE x FROM laudo_internacao_sus_especial x JOIN laudo_internacao_sus l ON l.id = x.laudo_internacao_sus_id WHERE l.estabelecimento_id = ?',
           [est],
         );
+        await e.executar(
+          'DELETE i FROM item_lote_laudo_sus i JOIN lote_laudo_sus t ON t.id = i.lote_laudo_sus_id WHERE t.estabelecimento_id = ?',
+          [est],
+        );
         await e.executar('DELETE FROM laudo_internacao_sus WHERE estabelecimento_id = ?', [est]);
         await e.executar('DELETE FROM lote_laudo_sus WHERE estabelecimento_id = ?', [est]);
         await e.executar(
@@ -1414,13 +1418,81 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     await expect(porta.cancelarLote(c, lote, { versao: 2 })).rejects.toMatchObject({
       problema: { status: 422 },
     });
+
+    // O gestor devolve o laudo que já estava no lote enviado; o reenvio corrigido o tira do lote, mas o lote enviado
+    // continua listando o laudo (enviado nele, retirado pelo reenvio) e a quantidade confere com os itens.
+    const idLaudo = Number(l['id']);
+    const itensDb = async (lt: number) =>
+      (await nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (x) =>
+        x.consultar(
+          'SELECT laudo_internacao_sus_id, situacao_na_inclusao, enviado_em, retirado_em, motivo_retirada FROM item_lote_laudo_sus WHERE lote_laudo_sus_id = ?',
+          [lt],
+        ),
+      )) as Record<string, unknown>[];
+    await porta.devolver(c, id, {
+      versao: 3,
+      motivo: 'Laudo do lote sem a assinatura do médico solicitante',
+    });
+    expect(await laudoDb(id)).toMatchObject({ situacao: 'devolvido', lote_laudo_sus_id: lote });
+    await porta.reenviar(c, id, { versao: 4, justificativa: `${corrigida}, laudo assinado` });
+    expect(await laudoDb(id)).toMatchObject({
+      situacao: 'emitido',
+      lote_laudo_sus_id: null,
+      enviado_em: null,
+    });
+    const enviados = await itensDb(lote);
+    expect(enviados).toHaveLength(1);
+    expect(enviados[0]).toMatchObject({
+      laudo_internacao_sus_id: idLaudo,
+      situacao_na_inclusao: 'emitido',
+      motivo_retirada: 'reenvio_corrigido',
+    });
+    expect(enviados[0]?.['enviado_em']).not.toBeNull();
+    expect(enviados[0]?.['retirado_em']).not.toBeNull();
+    lotes = await porta.listarLotes(c);
+    const loteEnviado = lotes.find((x) => x.id === lote);
+    expect(loteEnviado).toMatchObject({ situacao: 'enviado', quantidadeLaudos: 1 });
+    expect(loteEnviado?.laudos).toHaveLength(loteEnviado?.quantidadeLaudos ?? -1);
+    expect(loteEnviado?.laudos[0]).toMatchObject({
+      laudo: idLaudo,
+      numero: String(l['numero']),
+      motivoRetirada: 'reenvio_corrigido',
+    });
+    expect(loteEnviado?.laudos[0]?.enviadoEm).not.toBeNull();
+
+    // O laudo reenviado entra em outro lote; cancelar esse lote o solta, e o lote cancelado guarda a lista.
+    expect((await porta.listar(c, { semLote: true })).map((x) => x.id)).toContain(idLaudo);
+    const { id: lote2 } = (await porta.gerarLote(c, { laudos: [idLaudo] })) as unknown as { id: number };
+    expect(await laudoDb(id)).toMatchObject({ lote_laudo_sus_id: lote2 });
+    await porta.cancelarLote(c, lote2, { versao: 1, observacao: 'Gerado por engano' });
+    expect(await laudoDb(id)).toMatchObject({ situacao: 'emitido', lote_laudo_sus_id: null });
+    expect(await itensDb(lote2)).toMatchObject([
+      {
+        laudo_internacao_sus_id: idLaudo,
+        situacao_na_inclusao: 'emitido',
+        motivo_retirada: 'lote_cancelado',
+      },
+    ]);
+    lotes = await porta.listarLotes(c);
+    expect(lotes.find((x) => x.id === lote2)).toMatchObject({
+      situacao: 'cancelado',
+      quantidadeLaudos: 1,
+      laudos: [{ laudo: idLaudo, motivoRetirada: 'lote_cancelado', enviadoEm: null }],
+    });
+    // O lote enviado não mudou com o cancelamento do outro.
+    expect(await itensDb(lote)).toHaveLength(1);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM item_lote_laudo_sus WHERE laudo_internacao_sus_id = ?', [
+        idLaudo,
+      ]),
+    ).toBe(2);
     await porta.retornarLote(c, lote, { versao: 2, observacao: 'Lista do gestor recebida' });
 
     // Autorizar leva o número ao laudo.
     const numero = numeroAih(BASE + 60n);
     await gravar(ids.est, (g) =>
       g.autorizarAih(
-        { id, versao: 3 },
+        { id, versao: 5 },
         { faixa: ids.faixa, numero, autorizador: '', dataAutorizacao: '2026-03-03', por: 'X' },
       ),
     );
@@ -1435,7 +1507,7 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     );
     await expect(
       porta.especial(c, id, {
-        versao: 4,
+        versao: 6,
         justificativa: 'Stent coronariano indicado pelo cateterismo',
         itens: [{ tipo: 'opm', procedimento: SIG_P, quantidade: 1 }],
       }),
@@ -1444,7 +1516,7 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
       await contar('SELECT COUNT(*) AS n FROM laudo_internacao_sus WHERE estabelecimento_id = ?', [ids.est]),
     ).toBe(antes);
     await porta.especial(c, id, {
-      versao: 4,
+      versao: 6,
       justificativa: 'Stent coronariano indicado pelo cateterismo',
       itens: [
         { tipo: 'opm', procedimento: SIG_O, quantidade: 1 },
@@ -1467,7 +1539,7 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     expect(daAih.find((x) => x.tipo === 'inicial')).toMatchObject({ situacao: 'autorizado' });
 
     // Cancelar a AIH cancela o laudo inicial, com o motivo; nada é apagado.
-    await gravar(ids.est, (g) => g.cancelarAih({ id, versao: 4 }, 'Paciente transferido (teste)'));
+    await gravar(ids.est, (g) => g.cancelarAih({ id, versao: 6 }, 'Paciente transferido (teste)'));
     expect(await laudoDb(id)).toMatchObject({
       situacao: 'cancelado',
       motivo_cancelamento: 'Paciente transferido (teste)',
