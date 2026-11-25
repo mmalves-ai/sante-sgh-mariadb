@@ -344,6 +344,7 @@ export * from './permissoes/qualidade-ccih.js';
 // M48, etapa 4: notificação compulsória (gatilhos, caso, prazo, ficha SINAN, notificação).
 export * from './qualidade/agravo.js';
 export * from './permissoes/qualidade-agravo.js';
+export * from './permissoes/cirurgia-cme.js';
 // M48, etapa 5: gestão da qualidade (ONA) e envios regulatórios.
 export * from './qualidade/gestao.js';
 export * from './permissoes/qualidade-gestao.js';
