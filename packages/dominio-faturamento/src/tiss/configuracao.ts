@@ -202,3 +202,33 @@ export function faixaNoFim(f: {
   const sobra = f.numeroFinal - f.proximoNumero + 1;
   return sobra <= Math.max(1, Math.ceil(total * 0.1));
 }
+
+/** De onde sai o número da guia do prestador na emissão. */
+export type OrigemNumeroGuia = 'guia' | 'faixa' | 'conta';
+
+/**
+ * Número da guia na emissão (02-CAD linha 25): a guia que já tem número fica com ele (número emitido nunca muda
+ * nem é reemitido); quando a operadora fornece faixa para o tipo de guia (faixa ativa ou esgotada, mesmo fora da
+ * vigência), o número sai da faixa, e sem número disponível a emissão é recusada; sem faixa, a numeração é a do
+ * hospital (o número da conta). Faixa só encerrada não prende a numeração: o hospital a encerrou.
+ */
+export function origemNumeroGuia(d: {
+  readonly numeroDaGuia: string | null;
+  readonly situacoesDasFaixas: readonly string[];
+}): OrigemNumeroGuia {
+  if (d.numeroDaGuia !== null && d.numeroDaGuia.trim() !== '') return 'guia';
+  return d.situacoesDasFaixas.some((s) => s === 'ativa' || s === 'esgotada') ? 'faixa' : 'conta';
+}
+
+/** Aviso ao faturista quando a emissão deixa a faixa no fim ou esgotada (para pedir outra antes de faltar). */
+export function avisoFaixaNoFim(d: {
+  readonly esgotada: boolean;
+  readonly noFim: boolean;
+  readonly restantes: number;
+}): string | null {
+  if (d.esgotada)
+    return 'a faixa de números de guia da operadora esgotou neste lote: cadastre a nova faixa antes da próxima emissão';
+  if (d.noFim)
+    return `a faixa de números de guia da operadora está no fim (restam ${d.restantes}): peça nova faixa à operadora`;
+  return null;
+}

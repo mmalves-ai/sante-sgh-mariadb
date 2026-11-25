@@ -7,8 +7,8 @@
 //   no campo de 20 posições; encerrar a faixa grava a situação e o fim (nunca apaga);
 // - consumo da faixa na emissão: `reservarNumeroGuia(tx, ...)` trava a faixa vigente, devolve o número formatado,
 //   avança o próximo e marca "esgotada" no último; exportado para a emissão da guia chamar na mesma transação,
-//   antes de incluir a guia_tiss (o número nasce com a guia: nada de número provisório). Nenhuma operação insere
-//   guia_tiss ainda, por isso o consumo na emissão segue como falta da 02-CAD linha 25.
+//   antes de incluir a guia_tiss (o número nasce com a guia: nada de número provisório). Quem chama é a geração do
+//   lote (`api/tiss/numeracao-guia.ts`), que grava a guia emitida e o uso do número na faixa.
 // A regra é a do domínio (@sgh/dominio-faturamento); aqui só leitura, conferência no banco e gravação pelo executor.
 import { randomUUID } from 'node:crypto';
 import {
@@ -337,6 +337,8 @@ const opEncerrarFaixa = (t: RegistroTrilhaTela) =>
 
 export interface NumeroReservado {
   readonly numero: string;
+  /** O número consumido, sem prefixo nem zeros (a sequência dentro da faixa). */
+  readonly sequencia: number;
   readonly faixa: number;
   readonly esgotada: boolean;
   readonly restantes: number;
@@ -390,6 +392,7 @@ export async function reservarNumeroGuia(
   });
   return {
     numero: c.numero,
+    sequencia: f.proximoNumero,
     faixa: f.id,
     esgotada: c.esgotada,
     restantes: c.restantes,

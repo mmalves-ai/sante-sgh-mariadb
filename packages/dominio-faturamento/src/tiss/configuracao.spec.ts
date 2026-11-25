@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  avisoFaixaNoFim,
   consumirFaixa,
   errosConfiguracaoTiss,
   errosFaixa,
   faixaNoFim,
   faixaParaEmitir,
   formatarNumeroGuia,
+  origemNumeroGuia,
   tipoFaixaDaGuia,
   vigenciasQueCruzam,
 } from './configuracao.js';
@@ -154,5 +156,18 @@ describe('faixa de numeração de guias', () => {
     });
     expect(faixaNoFim({ numeroInicial: 1, numeroFinal: 100, proximoNumero: 91 })).toBe(true);
     expect(faixaNoFim({ numeroInicial: 1, numeroFinal: 100, proximoNumero: 50 })).toBe(false);
+  });
+  it('número da guia na emissão: o da guia fica; com faixa da operadora sai da faixa; sem faixa, o da conta', () => {
+    expect(origemNumeroGuia({ numeroDaGuia: 'G-1', situacoesDasFaixas: ['ativa'] })).toBe('guia');
+    expect(origemNumeroGuia({ numeroDaGuia: null, situacoesDasFaixas: ['encerrada', 'ativa'] })).toBe(
+      'faixa',
+    );
+    // Faixa esgotada ainda prende a numeração: a emissão recusa até a nova faixa ser cadastrada.
+    expect(origemNumeroGuia({ numeroDaGuia: ' ', situacoesDasFaixas: ['esgotada'] })).toBe('faixa');
+    expect(origemNumeroGuia({ numeroDaGuia: null, situacoesDasFaixas: ['encerrada'] })).toBe('conta');
+    expect(origemNumeroGuia({ numeroDaGuia: null, situacoesDasFaixas: [] })).toBe('conta');
+    expect(avisoFaixaNoFim({ esgotada: true, noFim: true, restantes: 0 })).toContain('esgotou');
+    expect(avisoFaixaNoFim({ esgotada: false, noFim: true, restantes: 3 })).toContain('restam 3');
+    expect(avisoFaixaNoFim({ esgotada: false, noFim: false, restantes: 50 })).toBeNull();
   });
 });

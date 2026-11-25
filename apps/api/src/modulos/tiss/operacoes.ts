@@ -77,6 +77,8 @@ import {
 import { operacoesGlosa } from './operacoes-glosa.js';
 // F3.7 (06-FAT linhas 29 a 31): regra de apresentação, valor padrão, credenciamento e fatura ao pagador no lote.
 import { apresentarLote, gravarFaturaDoLote, protocolarFaturaDoLote } from './apresentacao-propria.js';
+// F3.1 (02-CAD linha 25): o número da guia sai da faixa da operadora e a guia emitida fica gravada com o lote.
+import { gravarGuiasDoLote, numerarGuiasDoLote, TABELAS_NUMERACAO_GUIA } from './numeracao-guia.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -397,6 +399,7 @@ function gerarLote(montador: MontadorLoteTiss | null) {
       'sequencia_negocio',
       'fatura_fonte_pagadora',
       'fatura_fonte_pagadora_conta',
+      ...TABELAS_NUMERACAO_GUIA,
     ],
     entrada: esquemaGerarLote,
     async gravar(tx, e, ctx) {
@@ -490,8 +493,17 @@ function gerarLote(montador: MontadorLoteTiss | null) {
       }
       const hoje = civil(new Date(), await fusoDe(tx, est)).data;
       const ap = await apresentarLote(tx, est, e.convenio, tipoGuia, lidas, hoje);
-      montadas.push(...ap.montadas);
-      avisos.push(...ap.avisos);
+      // Só a guia que vai ao arquivo consome número da faixa da operadora (a omitida não gasta número).
+      const numerado = await numerarGuiasDoLote(
+        tx,
+        est,
+        e.convenio,
+        TIPO_GUIA_TISS[tipoGuia],
+        ap.montadas,
+        hoje,
+      );
+      montadas.push(...numerado.montadas);
+      avisos.push(...ap.avisos, ...numerado.avisos);
       const prestador = {
         registroAns: texto(ap.registroAns ?? cfg['registro_ans'] ?? cfg['registro_fonte']).replace(/\D/g, ''),
         codigoPrestador: texto(ap.codigoPrestador ?? cfg['codigo_prestador_operadora']).trim(),
@@ -566,6 +578,17 @@ function gerarLote(montador: MontadorLoteTiss | null) {
         });
         await tx.alterar('conta_hospitalar', n(ct['id']), n(ct['versao']), { situacao: 'faturada' });
       }
+      await gravarGuiasDoLote(tx, {
+        estabelecimento: est,
+        fonte: e.convenio,
+        tipoGuia: TIPO_GUIA_TISS[tipoGuia],
+        lote,
+        hoje,
+        agora: new Date(),
+        usuario: ctx.usuario ?? null,
+        numerado,
+        valores: ap.valores,
+      });
       const fatura = await gravarFaturaDoLote(tx, est, {
         fonte: e.convenio,
         lote,

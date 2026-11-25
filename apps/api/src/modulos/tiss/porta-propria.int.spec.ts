@@ -709,6 +709,176 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     }
   }, 90_000);
 
+  it('gerar o lote com faixa de números da operadora (02-CAD linha 25): a guia nasce com o número da faixa, o uso fica gravado, a faixa esgota e avisa; sem número o lote recusa sem gravar; o lote refeito reusa o número', async () => {
+    const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-f3111' }, fn);
+    const novaConta = (sufixo: string) =>
+      escrever(async (e) => {
+        const agora = new Date();
+        const id = await e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, fim_em, situacao, valor_itens, valor_total, fechada_em,
+           fechada_por_usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?, 'fechada', 100, 100, ?, ?, ?)`,
+          [
+            ids.est,
+            `${P}-${sufixo}`,
+            ids.atendimento,
+            ids.paciente,
+            ids.fonte,
+            ids.tipoConta,
+            competencia,
+            agora,
+            agora,
+            agora,
+            ids.usuario,
+            agora,
+          ],
+        );
+        await e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+           valor_unitario, valor_total, criado_em)
+         VALUES (?, 1, ?, ?, 1, 100, 100, ?)`,
+          [id, ids.item, agora, agora],
+        );
+        return id;
+      });
+    const k = { a: await novaConta('N1'), b: await novaConta('N2'), c: await novaConta('N3') };
+    const faixa = await escrever((e) =>
+      e.inserir(
+        `INSERT INTO faixa_numeracao_guia (estabelecimento_id, fonte_pagadora_id, tipo_guia, prefixo, tamanho_fixo,
+           numero_inicial, numero_final, proximo_numero, vigencia_inicio, criado_em)
+         VALUES (?, ?, 'internacao', 'F', 4, 5, 6, 5, '2026-01-01', ?)`,
+        [ids.est, ids.fonte, new Date()],
+      ),
+    );
+    const contar = async (sql: string, p: unknown[]) => Number((await lerUma(sql, p))?.['q']);
+    const entrada = async (contas: number[]) => ({
+      convenio: ids.fonte,
+      tipoGuia: 3,
+      contas: await Promise.all(contas.map(async (id) => ({ id, versao: await versaoDaConta(id) }))),
+    });
+    const xmlDe = async (lote: number) =>
+      new TextDecoder().decode(
+        (await armazem.ler((await porta.xmlDoLote(c, lote))?.chave ?? '')) ?? new Uint8Array(),
+      );
+    const lotes: number[] = [];
+    try {
+      const r = await porta.executar(c, 'faturamento.gerarLote', await entrada([k.a, k.b]), op());
+      lotes.push(Number(r.resultado['lote']));
+      // O que fica no banco: uma guia por conta, com o número da faixa, no lote; o uso de cada número; a faixa esgotada.
+      const guias = await lerTodas(
+        `SELECT conta_hospitalar_id, numero_guia_prestador, tipo_guia, situacao, lote_tiss_id, fonte_pagadora_id,
+                paciente_id, valor_total, criado_por
+           FROM guia_tiss WHERE conta_hospitalar_id IN (?, ?) ORDER BY numero_guia_prestador`,
+        [k.a, k.b],
+      );
+      expect(guias.map((g) => String(g['numero_guia_prestador']))).toEqual(['F0005', 'F0006']);
+      expect(guias.map((g) => Number(g['conta_hospitalar_id'])).sort()).toEqual([k.a, k.b].sort());
+      for (const g of guias) {
+        expect(g).toMatchObject({ tipo_guia: 'resumo_internacao', situacao: 'em_lote' });
+        expect(Number(g['lote_tiss_id'])).toBe(lotes[0]);
+        expect(Number(g['fonte_pagadora_id'])).toBe(ids.fonte);
+        expect(Number(g['paciente_id'])).toBe(ids.paciente);
+        expect(Number(g['valor_total'])).toBe(100);
+        expect(Number(g['criado_por'])).toBe(ids.usuario);
+      }
+      const usos = await lerTodas(
+        `SELECT u.numero, u.numero_guia, u.usuario_id, g.numero_guia_prestador
+           FROM faixa_numeracao_guia_uso u JOIN guia_tiss g ON g.id = u.guia_tiss_id
+          WHERE u.faixa_numeracao_guia_id = ? ORDER BY u.numero`,
+        [faixa],
+      );
+      expect(
+        usos.map((u) => [Number(u['numero']), String(u['numero_guia']), Number(u['usuario_id'])]),
+      ).toEqual([
+        [5, 'F0005', ids.usuario],
+        [6, 'F0006', ids.usuario],
+      ]);
+      expect(usos.every((u) => u['numero_guia'] === u['numero_guia_prestador'])).toBe(true);
+      expect(
+        await lerUma('SELECT situacao, proximo_numero FROM faixa_numeracao_guia WHERE id = ?', [faixa]),
+      ).toMatchObject({ situacao: 'esgotada' });
+      expect(await contar('SELECT proximo_numero AS q FROM faixa_numeracao_guia WHERE id = ?', [faixa])).toBe(
+        7,
+      );
+      // O XML leva o número da faixa (não o da conta) e o faturista é avisado de que a faixa esgotou.
+      const xml = await xmlDe(lotes[0]!);
+      expect(xml).toMatch(/numeroGuiaPrestador>F0005</);
+      expect(xml).toMatch(/numeroGuiaPrestador>F0006</);
+      expect(xml).not.toContain(`${P}-N1`);
+      expect(String(r.resultado['alertas'])).toContain('esgotou');
+
+      // Faixa esgotada: a conta seguinte recusa e nada é gravado (nem lote, nem guia; a conta segue fechada).
+      const antes = await contar('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [
+        ids.est,
+      ]);
+      expect(
+        codigo(await erroDe(porta.executar(c, 'faturamento.gerarLote', await entrada([k.c]), op()))),
+      ).toBe('sem-faixa-de-guia');
+      expect(
+        await contar('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]),
+      ).toBe(antes);
+      expect(await contar('SELECT COUNT(*) AS q FROM guia_tiss WHERE conta_hospitalar_id = ?', [k.c])).toBe(
+        0,
+      );
+      expect(await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [k.c])).toMatchObject({
+        situacao: 'fechada',
+      });
+
+      // Lote cancelado e refeito: a guia já emitida fica com o número dela (a faixa esgotada não impede) e passa
+      // a apontar para o lote novo; nenhum número é reemitido.
+      await escrever(async (e) => {
+        await e.executar("UPDATE lote_tiss SET situacao = 'cancelado' WHERE id = ?", [lotes[0]]);
+        await e.executar("UPDATE conta_hospitalar SET situacao = 'fechada' WHERE id IN (?, ?)", [k.a, k.b]);
+      });
+      const r2 = await porta.executar(c, 'faturamento.gerarLote', await entrada([k.a]), op());
+      lotes.push(Number(r2.resultado['lote']));
+      const numeroA = String(
+        (await lerUma('SELECT numero_guia_prestador FROM guia_tiss WHERE conta_hospitalar_id = ?', [k.a]))?.[
+          'numero_guia_prestador'
+        ],
+      );
+      expect(await xmlDe(lotes[1]!)).toContain(`numeroGuiaPrestador>${numeroA}<`);
+      expect(
+        await contar('SELECT COUNT(*) AS q FROM guia_tiss WHERE conta_hospitalar_id IN (?, ?)', [k.a, k.b]),
+      ).toBe(2);
+      expect(
+        await contar('SELECT lote_tiss_id AS q FROM guia_tiss WHERE conta_hospitalar_id = ?', [k.a]),
+      ).toBe(lotes[1]);
+      expect(
+        await contar('SELECT COUNT(*) AS q FROM faixa_numeracao_guia_uso WHERE faixa_numeracao_guia_id = ?', [
+          faixa,
+        ]),
+      ).toBe(2);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-f3111' }, async (e) => {
+        await e.executar('DELETE FROM faixa_numeracao_guia_uso WHERE faixa_numeracao_guia_id = ?', [faixa]);
+        await e.executar('DELETE FROM guia_tiss WHERE conta_hospitalar_id IN (?, ?, ?)', [k.a, k.b, k.c]);
+        await e.executar('DELETE FROM faixa_numeracao_guia WHERE id = ?', [faixa]);
+        for (const lote of lotes) {
+          const a = await e.uma<{ arquivo_id: number }>('SELECT arquivo_id FROM lote_tiss WHERE id = ?', [
+            lote,
+          ]);
+          await e.executar('DELETE FROM lote_tiss_conta WHERE lote_tiss_id = ?', [lote]);
+          await e.executar(
+            'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?)',
+            [lote],
+          );
+          await e.executar('DELETE FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote]);
+          await e.executar('DELETE FROM lote_tiss WHERE id = ?', [lote]);
+          await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
+        }
+        await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (?, ?, ?)', [
+          k.a,
+          k.b,
+          k.c,
+        ]);
+        await e.executar('DELETE FROM conta_hospitalar WHERE id IN (?, ?, ?)', [k.a, k.b, k.c]);
+      });
+    }
+  }, 90_000);
+
   it('gerar o lote: lote, contas do lote, arquivo, conta faturada (versão +1) e trilha com a operação', async () => {
     const versao = await versaoDaConta(ids.conta);
     const ctx = op();
