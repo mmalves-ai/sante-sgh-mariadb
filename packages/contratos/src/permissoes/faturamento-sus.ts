@@ -94,4 +94,16 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     'faturamento.susRetorno.importar',
     'Importar o espelho e o retorno do gestor (rejeições e reapresentação)',
   ),
+  // F7 (08-INTG linha 131): troca por serviço web com o SUS (rastreamento de câncer, cadastro de prestador); recurso só
+  // do novo, concedido por perfil.
+  p(
+    'faturamento.susServicoWeb.ler',
+    'Consultar os envios ao serviço web do SUS (rastreamento de câncer, cadastro de prestador) e as respostas',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p(
+    'faturamento.susServicoWeb.enviar',
+    'Registrar, enviar e cancelar envios ao serviço web do SUS (simulador fora de produção)',
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
 ];

@@ -13,6 +13,8 @@ import { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
 import { PortaSusMemoria } from './porta-memoria.js';
 import { PortaSusPropria } from './porta-propria.js';
 import type { ArmazemArquivoSus } from './servico.js';
+import { ENVIADOR_SERVICO_WEB_SUS, enviadorServicoWebSusDoAmbiente } from './servico-web-enviador.js';
+import { NUCLEO_SERVICO_WEB_SUS, ServicoWebSusController } from './servico-web.controller.js';
 import { SusAihController } from './sus-aih.controller.js';
 import { ARMAZEM_ARQUIVO_SUS, SusController } from './sus.controller.js';
 
@@ -44,10 +46,13 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
   const armazem = opcoes.armazem ?? armazemDoSus(ctx, porta);
   return {
     module: ModuloSus,
-    controllers: [SusController, SusAihController],
+    controllers: [SusController, SusAihController, ServicoWebSusController],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
       { provide: ARMAZEM_ARQUIVO_SUS, useValue: armazem },
+      // F7 (08-INTG linha 131): serviço web do SUS; o simulador fora de produção (regra 6).
+      { provide: NUCLEO_SERVICO_WEB_SUS, useValue: ctx.nucleo ?? null },
+      { provide: ENVIADOR_SERVICO_WEB_SUS, useValue: enviadorServicoWebSusDoAmbiente(ctx.env) },
     ],
     exports: [PORTA_SUS, ARMAZEM_ARQUIVO_SUS],
   };
