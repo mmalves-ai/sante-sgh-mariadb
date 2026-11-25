@@ -13,6 +13,7 @@ import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import EscolhaContrato from '../../suprimentos/componentes/EscolhaContrato.vue';
+import BuscaCredor from '../componentes/BuscaCredor.vue';
 import SugestaoRetencaoTitulo from '../componentes/SugestaoRetencaoTitulo.vue';
 import { criarTituloPagar, listarTitulosPagar, novaChave } from '../api-financeiro.js';
 import {
@@ -91,6 +92,13 @@ watch(
   },
   { immediate: true },
 );
+// F3.8, 07-FIN linha 67: o credor achado pelo nome, documento ou código (fornecedor ou médico) preenche o código do
+// campo; quem sabe o código segue digitando direto.
+const credorBuscado = ref<number | null>(null);
+function credorAchado(v: number | null) {
+  credorBuscado.value = v;
+  if (v !== null) novo.credor = String(v);
+}
 // M55 (etapa 3): o título de fornecedor pode consumir um contrato dele (o vínculo na mesma transação).
 const contrato = ref<ContratoDoVinculo | null>(null);
 const credorFornecedor = computed(() => {
@@ -215,6 +223,14 @@ async function lancar() {
           data-testid="tp-novo-credor"
         />
       </span>
+      <BuscaCredor
+        v-if="novo.tipo === 'F' || novo.tipo === 'M'"
+        :model-value="credorBuscado"
+        :tipo="novo.tipo === 'M' ? 'profissional' : 'fornecedor'"
+        :rotulo="t('financeiro.pagar.credorPeloNome')"
+        prefixo="tp-novo-credor-nome"
+        @update:model-value="credorAchado"
+      />
       <EscolhaContrato
         v-model="contrato"
         :fornecedor="credorFornecedor"

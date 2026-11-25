@@ -6,6 +6,7 @@
 // intenção de gravar); Problem Details viram ErroApi e a recusa de negócio traz o texto em português do servidor.
 import type {
   AdiantamentoResposta,
+  CredorEncontrado,
   ApoioFinanceiro,
   BorderoResposta,
   ConciliacaoResposta,
@@ -128,6 +129,9 @@ export const gerarRemessa = (
   chave: string,
 ) => gravar(`${F}/pagar/remessas`, corpo, chave);
 export const listarAdiantamentos = () => ler(`${F}/pagar/adiantamentos`, lista<AdiantamentoResposta>());
+/** O credor do adiantamento pelo nome, documento ou código (fornecedor ou profissional, pelo tipo escolhido). */
+export const buscarCredores = (tipo: 'fornecedor' | 'profissional', termo: string) =>
+  ler(`${F}/pagar/credores${qs({ tipo, termo })}`, lista<CredorEncontrado>());
 export const concederAdiantamento = (
   corpo: {
     tipoCredor: 'fornecedor' | 'profissional';

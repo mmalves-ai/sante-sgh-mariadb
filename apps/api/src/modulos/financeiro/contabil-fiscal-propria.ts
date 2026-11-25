@@ -167,14 +167,16 @@ export async function deParaDoEstabelecimento(l: Leitor, est: number) {
  */
 export async function buscarFornecedores(l: Leitor, termo: string) {
   const t = termo.trim();
-  if (t.length < 2) return [];
+  // Duas letras ou mais; o código vale com um dígito só (o fornecedor de código 7 também é achado).
+  if (t.length < 2 && !/^\d$/.test(t)) return [];
   const digitos = t.replace(/\D/g, '');
   const linhas = await l.consultar(
     `SELECT id, razao_social, nome_fantasia, cnpj, cpf FROM empresa_fornecedora
       WHERE situacao <> 'inativo'
         AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR id = ? OR (? <> '' AND (cnpj LIKE ? OR cpf LIKE ?)))
-      ORDER BY razao_social LIMIT 21`,
-    [`%${t}%`, `%${t}%`, Number(t) || 0, digitos, `${digitos}%`, `${digitos}%`],
+      ORDER BY (id = ?) DESC, razao_social LIMIT 21`,
+    // O código exato vem primeiro: os mesmos dígitos também abrem documentos, e o corte em 20 não pode escondê-lo.
+    [`%${t}%`, `%${t}%`, Number(t) || 0, digitos, `${digitos}%`, `${digitos}%`, Number(t) || 0],
   );
   return linhas.slice(0, 20).map((r) => ({
     id: numero(r['id']),
