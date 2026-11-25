@@ -5,7 +5,8 @@
 //   reaproveitada; alterar cabeçalho, rodapé e situação com versão (409); excluir é exclusão lógica, com motivo na
 //   trilha (o arquivo fica);
 // - mantenedora: a pessoa jurídica que responde pelo estabelecimento (uma por CNPJ; a pessoa jurídica do CNPJ é
-//   reaproveitada quando já existe), com os dados fiscais; gravar já liga o estabelecimento da sessão; ligar a outra
+//   reaproveitada quando já existe, sem perder o que ela já tem), com os dados fiscais; gravar liga o estabelecimento da
+//   sessão quando ele não tem mantenedora; ligar a outra
 //   já cadastrada (rede com vários hospitais) ou desligar; inativar só a que nenhum estabelecimento usa.
 // A regra é a do domínio (@sgh/dominio-organizacao); aqui só leitura, conferência no banco e gravação pelo executor
 // (trilha e idempotência na mesma transação).
@@ -333,7 +334,12 @@ const opGravarMantenedora = (t: RegistroTrilhaTela) =>
       await pessoaExiste(tx, e.contador, 'contador');
       if (await tx.uma('SELECT id FROM mantenedora WHERE codigo = ? AND id <> ?', [e.codigo, e.id ?? 0]))
         throw recusaCampo('codigo-repetido', 'Já existe mantenedora com este código.', 'codigo');
-      // A pessoa jurídica é uma só por CNPJ: a que já existe é reaproveitada (e atualizada), nunca duplicada.
+      // A pessoa jurídica é uma só por CNPJ: a que já existe é reaproveitada, nunca duplicada. Ela é cadastro
+      // compartilhado (o mesmo CNPJ pode ser fornecedor, operadora, prestador): no reaproveitamento, o que já está
+      // preenchido nela fica. Só a razão social e o nome fantasia informados a corrigem (são o nome da mesma pessoa
+      // jurídica, e a mantenedora não tem cópia deles); os dados fiscais só completam o que está em branco (a
+      // mantenedora guarda os dela nas próprias colunas). Nada informado em branco apaga valor. A escrita vai à
+      // trilha da operação com a tabela, o id e as colunas mudadas.
       const dadosPj = {
         razao_social: e.razaoSocial,
         nome_fantasia: e.nomeFantasia,
@@ -344,7 +350,9 @@ const opGravarMantenedora = (t: RegistroTrilhaTela) =>
         site: e.site,
       };
       const [pj] = await tx.consultarParaAtualizar(
-        'SELECT id, versao FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL',
+        `SELECT id, versao, razao_social, nome_fantasia, natureza_juridica_id, inscricao_estadual,
+                inscricao_municipal, cnae_principal, site
+           FROM pessoa_juridica WHERE cnpj = ? AND excluido_em IS NULL`,
         [e.cnpj],
       );
       let pessoaJuridica: number;
@@ -355,7 +363,15 @@ const opGravarMantenedora = (t: RegistroTrilhaTela) =>
           e.id ?? 0,
         ]);
         if (outra) throw recusaCampo('cnpj-repetido', 'Outra mantenedora já usa este CNPJ.', 'cnpj');
-        await tx.alterar('pessoa_juridica', pessoaJuridica, Number(pj['versao']), dadosPj);
+        const mudancas: Record<string, string | number> = {};
+        for (const [coluna, valor] of Object.entries(dadosPj)) {
+          if (valor === null) continue;
+          const atual = pj[coluna] ?? null;
+          const corrige = coluna === 'razao_social' || coluna === 'nome_fantasia';
+          if (atual === null ? true : corrige && String(atual) !== String(valor)) mudancas[coluna] = valor;
+        }
+        if (Object.keys(mudancas).length)
+          await tx.alterar('pessoa_juridica', pessoaJuridica, Number(pj['versao']), mudancas);
       } else
         pessoaJuridica = await tx.incluir('pessoa_juridica', {
           cnpj: e.cnpj,
@@ -363,6 +379,20 @@ const opGravarMantenedora = (t: RegistroTrilhaTela) =>
           situacao_cadastral: 'ativa',
           ...dadosPj,
         });
+      // Ligar na mesma gravação só o estabelecimento sem mantenedora (ou já ligado a esta): trocar a mantenedora de
+      // quem está ligado a outra é pela ligação, com motivo e a trilha no estabelecimento.
+      if (e.ligar) {
+        const est = await tx.uma('SELECT mantenedora_id FROM estabelecimento WHERE id = ?', [
+          ctx.estabelecimento,
+        ]);
+        const atual = est ? num(est['mantenedora_id']) : null;
+        if (atual !== null && atual !== e.id)
+          throw recusaCampo(
+            'estabelecimento-ja-ligado',
+            'O estabelecimento já está ligado a outra mantenedora: troque pela ligação, com o motivo.',
+            'ligar',
+          );
+      }
       const valores = {
         codigo: e.codigo,
         pessoa_juridica_id: pessoaJuridica,

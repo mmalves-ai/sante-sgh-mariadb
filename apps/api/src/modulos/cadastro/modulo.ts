@@ -41,6 +41,8 @@ import {
 export interface OpcoesModuloCadastro {
   /** Porta pronta (testes). */
   readonly porta?: PortaCadastro;
+  /** Identidade do estabelecimento pronta (teste das rotas sobre o banco do cliente de teste). */
+  readonly identidade?: IdentidadeEstabelecimentoPropria;
 }
 
 /** A porta do cadastro pela regra do módulo (sem as opções de teste). */
@@ -78,7 +80,9 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   const estrutura = ctx.nucleo && cliente ? new EstruturaGestaoPropria(ctx.nucleo, cliente) : null;
   const tiss = ctx.nucleo && cliente ? new TissConfiguracaoPropria(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linha 26): logotipos e mantenedora do estabelecimento, só no banco do cliente.
-  const identidade = ctx.nucleo && cliente ? new IdentidadeEstabelecimentoPropria(ctx.nucleo, cliente) : null;
+  const identidade =
+    opcoes.identidade ??
+    (ctx.nucleo && cliente ? new IdentidadeEstabelecimentoPropria(ctx.nucleo, cliente) : null);
   // F8 (02-CAD linha 11): programas de saúde e linhas de cuidado do paciente, só no banco do cliente.
   const linhasCuidado = ctx.nucleo && cliente ? new LinhasCuidadoPropria(ctx.nucleo, cliente) : null;
   return {

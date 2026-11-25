@@ -5,7 +5,7 @@
 //   POST /api/cadastros/estrutura-gestao/logotipos                       envia a imagem (base64) para uma ou mais finalidades
 //   PUT  /api/cadastros/estrutura-gestao/logotipos/:id                   altera finalidade, cabeçalho, rodapé e situação (versão)
 //   POST /api/cadastros/estrutura-gestao/logotipos/:id/excluir           exclusão lógica, com motivo
-//   POST /api/cadastros/estrutura-gestao/mantenedoras                    inclui a mantenedora (e liga o estabelecimento)
+//   POST /api/cadastros/estrutura-gestao/mantenedoras                    inclui a mantenedora (e liga o estabelecimento sem mantenedora)
 //   PUT  /api/cadastros/estrutura-gestao/mantenedoras/:id                altera (versão)
 //   POST /api/cadastros/estrutura-gestao/mantenedoras/:id/situacao       inativa ou reativa, com motivo (nunca apaga)
 //   POST /api/cadastros/estrutura-gestao/mantenedora-ligada              liga o estabelecimento a outra, ou desliga, com motivo
@@ -23,6 +23,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { ErroOperacao } from '@sgh/nucleo';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -75,6 +76,11 @@ export class IdentidadeEstabelecimentoController {
     try {
       return await fn();
     } catch (e) {
+      // O logotipo ou a mantenedora que não existe (ou já excluído) é 404, com o código da porta.
+      if (e instanceof ErroOperacao && e.problema.status === 404)
+        throw new ErroProblema('nao-encontrado', 404, e.problema.title, e.problema.detail, {
+          codigo: e.problema.codigo ?? 'registro-inexistente',
+        });
       throw problemaDoCadastro(e);
     }
   }
@@ -204,7 +210,8 @@ export class IdentidadeEstabelecimentoController {
       contador: id(b['contador']),
       contadorCrc: txt(b['contadorCrc']),
       site: txt(b['site']),
-      ligar: b['ligar'] !== false,
+      // Incluir liga o estabelecimento, salvo pedido em contrário; alterar só liga quando pedido.
+      ligar: rid ? b['ligar'] === true : b['ligar'] !== false,
     };
   }
 

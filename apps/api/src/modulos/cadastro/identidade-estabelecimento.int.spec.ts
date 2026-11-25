@@ -8,13 +8,21 @@
 //   excluído não volta; a imagem lida confere com a enviada;
 // - mantenedora: incluir cria a pessoa jurídica do CNPJ e liga o estabelecimento; CNPJ que não confere e código
 //   repetido recusados sem gravar; alterar reaproveita a pessoa jurídica (nenhuma duplicada); inativar em uso recusado;
-//   desligar com motivo na trilha, inativar e reativar; versão velha = 409.
+//   desligar com motivo na trilha, inativar e reativar; versão velha = 409; a pessoa jurídica que já existia no CNPJ
+//   (outro cadastro a usa) é reaproveitada sem perder o que tinha: o branco não apaga, o dado fiscal só completa, e a
+//   escrita nela fica na trilha da operação; gravar com "ligar" estando o estabelecimento ligado a outra é recusado;
+// - rotas (a app com o módulo do cadastro, sessão sintética, a porta real por baixo): a permissão, a imagem em data
+//   URL, a entrada da mantenedora montada do corpo (máscaras, versão ausente, o padrão de ligar) e o status das recusas.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { criarArmazemLocal, type NucleoArmazem, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { criarApp } from '../../app.js';
+import { lerConfiguracao } from '../../configuracao.js';
+import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import type { ArquivosDoModulo } from '../arquivos-locais.js';
 import {
   type EntradaMantenedora,
@@ -29,6 +37,8 @@ import {
   prepararMassa,
   SEM_BANCO,
 } from './massa.spec-util.js';
+import { modulo as moduloCadastro } from './modulo.js';
+import { PortaCadastroMemoria } from './porta-memoria.js';
 import type { RegistroTrilhaTela } from './tipos.js';
 
 const COR = 'f3-1-12-identidade';
@@ -55,6 +65,7 @@ describe.skipIf(SEM_BANCO)('identidade do estabelecimento no banco próprio (f22
   let m: Massa | null = null;
   let raiz = '';
   let mantenedoraOriginal: number | null = null;
+  let app: NestFastifyApplication | null = null;
 
   const um = <T extends Record<string, unknown>>(sql: string, pr: readonly unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE_F22, correlacao: COR }, (l) => l.uma<T>(sql, pr));
@@ -93,11 +104,12 @@ describe.skipIf(SEM_BANCO)('identidade do estabelecimento no banco próprio (f22
     return { status: 0, codigo: 'nao-recusou' };
   };
 
-  async function limparMinhas(): Promise<void> {
+  /** Durante o teste o estabelecimento da massa começa sem mantenedora; no fim volta à que tinha. */
+  async function limparMinhas(mantenedora: number | null = null): Promise<void> {
     if (!m) return;
     await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, async (e) => {
       await e.executar('UPDATE estabelecimento SET mantenedora_id = ? WHERE id = ?', [
-        mantenedoraOriginal,
+        mantenedora,
         m!.estabelecimento,
       ]);
       await e.executar('DELETE FROM mantenedora WHERE codigo LIKE ?', [`${COD}%`]);
@@ -157,7 +169,8 @@ describe.skipIf(SEM_BANCO)('identidade do estabelecimento no banco próprio (f22
   }, 120_000);
 
   afterAll(async () => {
-    await limparMinhas();
+    await app?.close();
+    await limparMinhas(mantenedoraOriginal);
     if (raiz) rmSync(raiz, { recursive: true, force: true });
     if (m) await limparMassa(nucleo, m);
     await nucleo.encerrar();
@@ -460,5 +473,318 @@ describe.skipIf(SEM_BANCO)('identidade do estabelecimento no banco próprio (f22
     expect(Number(await ligado())).toBe(id);
     // A pessoa pelo CPF inteiro: CPF parcial não lê nada.
     expect(await p.pessoaPorCpf(c(), '123')).toBeNull();
+
+    // A pessoa jurídica que JÁ existe no CNPJ (outro cadastro a usa, com dados preenchidos).
+    const pjAntes = {
+      razao_social: `FORNECEDOR SINTETICO ${MARCA}`,
+      nome_fantasia: `FANTASIA ${MARCA}`,
+      inscricao_estadual: 'IE-PRE-1',
+      cnae_principal: '4644301',
+      site: 'https://fornecedor.example',
+    };
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar(
+        `INSERT INTO pessoa_juridica (cnpj, razao_social, nome_fantasia, inscricao_estadual, cnae_principal, site,
+           criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [CNPJ_B, ...Object.values(pjAntes), new Date()],
+      ),
+    );
+    const pjB = () =>
+      um(
+        `SELECT id, versao, razao_social, nome_fantasia, inscricao_estadual, inscricao_municipal, cnae_principal,
+                site FROM pessoa_juridica WHERE cnpj = ?`,
+        [CNPJ_B],
+      );
+    const pj0 = (await pjB())!;
+    const outra: EntradaMantenedora = {
+      ...base,
+      codigo: `${COD}2`,
+      cnpj: CNPJ_B,
+      razaoSocial: `FORNECEDOR SINTETICO ${MARCA} SA`,
+      nomeFantasia: null,
+      inscricaoEstadual: null,
+      inscricaoMunicipal: '778899',
+      cnaePrincipal: '8610102',
+      site: null,
+    };
+    // Gravar ligando, com o estabelecimento ligado a outra: recusado (a troca é pela ligação, com motivo); nada muda.
+    expect(await recusa(() => p.gravarMantenedora(c(), outra, t('mantenedora')))).toEqual({
+      status: 409,
+      codigo: 'estabelecimento-ja-ligado',
+    });
+    expect(await conta('SELECT COUNT(*) AS n FROM mantenedora WHERE codigo = ?', [outra.codigo])).toBe(0);
+    expect(await pjB()).toEqual(pj0);
+    expect(Number(await ligado())).toBe(id);
+    // Sem ligar: a pessoa jurídica é reaproveitada (uma só). O branco não apaga (nome fantasia, inscrição estadual,
+    // site), o dado fiscal dela fica (atividade) e só completa o que não tinha (inscrição municipal); a razão social
+    // informada corrige. A mantenedora guarda os dados fiscais dela nas próprias colunas.
+    const idB = await p.gravarMantenedora(c(), { ...outra, ligar: false }, t('mantenedora'));
+    expect(await conta('SELECT COUNT(*) AS n FROM pessoa_juridica WHERE cnpj = ?', [CNPJ_B])).toBe(1);
+    const pj1 = (await pjB())!;
+    expect(pj1).toMatchObject({
+      id: pj0['id'],
+      razao_social: outra.razaoSocial,
+      nome_fantasia: pjAntes.nome_fantasia,
+      inscricao_estadual: pjAntes.inscricao_estadual,
+      inscricao_municipal: '778899',
+      cnae_principal: pjAntes.cnae_principal,
+      site: pjAntes.site,
+    });
+    const mB = await um(
+      'SELECT pessoa_juridica_id, cnae_principal, inscricao_estadual, site, versao FROM mantenedora WHERE id = ?',
+      [idB],
+    );
+    expect(mB).toMatchObject({ cnae_principal: '8610102', inscricao_estadual: null, site: null });
+    expect(mB!['pessoa_juridica_id']).toEqual(pj0['id']);
+    // A trilha da operação diz o que mudou na pessoa jurídica: tabela, id e só as colunas mudadas.
+    const linha = await um<{ dados_depois: unknown }>(
+      `SELECT dados_depois FROM trilha_auditoria WHERE entidade = 'mantenedora' AND entidade_id = ?
+        ORDER BY id DESC LIMIT 1`,
+      [idB],
+    );
+    const dd = linha!.dados_depois;
+    const escritas = (
+      (typeof dd === 'string' ? JSON.parse(dd) : dd) as {
+        escritas: { tabela: string; id: number; acao: string; colunas: string[] }[];
+      }
+    ).escritas;
+    expect(escritas.filter((x) => x.tabela === 'pessoa_juridica')).toEqual([
+      {
+        acao: 'alteracao',
+        tabela: 'pessoa_juridica',
+        id: Number(pj0['id']),
+        colunas: ['inscricao_municipal', 'razao_social'],
+      },
+    ]);
+    // Gravar de novo sem nada novo para a pessoa jurídica: ela não é tocada (mesma versão).
+    await p.gravarMantenedora(
+      c(),
+      { ...outra, ligar: false, id: idB, versao: Number(mB!['versao']), registroCivil: 'L-B 1 FL 2' },
+      t('mantenedora'),
+    );
+    expect(await pjB()).toEqual(pj1);
+    // Alterar pedindo para ligar, com o estabelecimento ligado a outra: recusado, a ligação fica.
+    expect(
+      await recusa(() =>
+        p.gravarMantenedora(
+          c(),
+          { ...outra, id: idB, versao: Number(mB!['versao']) + 1, ligar: true },
+          t('mantenedora'),
+        ),
+      ),
+    ).toEqual({ status: 409, codigo: 'estabelecimento-ja-ligado' });
+    expect(Number(await ligado())).toBe(id);
+  }, 120_000);
+
+  it('rotas: permissão, imagem em data URL, entrada da mantenedora montada do corpo e o status das recusas', async () => {
+    // A app com o módulo do cadastro e a sessão sintética; a identidade é a porta real, com o contexto da massa (o
+    // estabelecimento e o usuário sintéticos da sessão não existem no banco do cliente de teste).
+    const real = p;
+    // A linha da trilha que a rota monta leva o usuário da sessão sintética: aqui, o usuário e o estabelecimento da massa.
+    const daMassa = (x: unknown): unknown =>
+      x && typeof x === 'object' && 'entidade' in x && 'usuario' in x
+        ? { ...x, usuario: m!.usuario, estabelecimento: m!.estabelecimento }
+        : x;
+    const identidade = new Proxy(real, {
+      get(alvo, k) {
+        const v = (alvo as unknown as Record<string | symbol, unknown>)[k];
+        return typeof v === 'function'
+          ? (_c: unknown, ...resto: unknown[]) =>
+              (v as (...a: unknown[]) => unknown).call(alvo, c(), ...resto.map(daMassa))
+          : v;
+      },
+    });
+    const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'cadastro' };
+    app = await criarApp(lerConfiguracao(env), null, env, {
+      registro: {
+        cadastro: async () => ({
+          modulo: (ctx) => moduloCadastro(ctx, { porta: new PortaCadastroMemoria(), identidade }),
+        }),
+      },
+    });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const entrar = async (login: string) => {
+      const r = await app!.inject({
+        method: 'POST',
+        url: '/api/sessao',
+        payload: { estabelecimento: 'aa', login, senha: SENHA },
+      });
+      expect(r.statusCode).toBe(201);
+      const set = (r.headers['set-cookie'] as string[] | undefined) ?? [];
+      return {
+        cookie: set.map((x) => x.split(';')[0]).join('; '),
+        'x-csrf':
+          set
+            .find((x) => x.startsWith('sgh_csrf='))
+            ?.split(';')[0]
+            ?.slice(9) ?? '',
+      };
+    };
+    let n = 0;
+    const R = '/api/cadastros/estrutura-gestao';
+    const pedir = (
+      h: Record<string, string>,
+      method: 'GET' | 'POST' | 'PUT',
+      url: string,
+      payload?: object,
+    ) =>
+      app!.inject({
+        method,
+        url: `${R}${url}`,
+        headers: { ...h, 'idempotency-key': `${COR}-http-${Date.now()}-${++n}` },
+        ...(payload ? { payload } : {}),
+      });
+    const cod = (r: { json(): unknown }) => (r.json() as { codigo?: string }).codigo;
+
+    // Sem a permissão: 403 na leitura e na gravação, nada gravado.
+    const semAcesso = await entrar('SINT.RECEPCAO');
+    expect((await pedir(semAcesso, 'GET', '/identidade')).statusCode).toBe(403);
+    expect((await pedir(semAcesso, 'POST', '/mantenedora-ligada', { mantenedora: null })).statusCode).toBe(
+      403,
+    );
+    const adm = await entrar('SINT.FIN.GESTOR');
+    const tela = await pedir(adm, 'GET', '/identidade');
+    expect(tela.statusCode).toBe(200);
+    const antes = tela.json() as {
+      mantenedora: { id: number; versao: number } | null;
+      mantenedoras: { id: number; versao: number; codigo: string }[];
+    };
+    const ligada = antes.mantenedora!;
+    expect(ligada).not.toBeNull();
+
+    // Logotipo: o que não é base64 e o que passa do teto param na rota (422); o que não é imagem é recusa da regra.
+    const antesLogos = (await logos()).length;
+    let r = await pedir(adm, 'POST', '/logotipos', {
+      conteudo: 'isto não é base64 !!',
+      finalidades: ['portal'],
+    });
+    expect([r.statusCode, cod(r)]).toEqual([422, 'arquivo-nao-imagem']);
+    r = await pedir(adm, 'POST', '/logotipos', { conteudo: 'A'.repeat(800_001), finalidades: ['portal'] });
+    expect([r.statusCode, cod(r)]).toEqual([422, 'arquivo-nao-imagem']);
+    r = await pedir(adm, 'POST', '/logotipos', {
+      conteudo: Buffer.from(new Uint8Array(80).fill(65)).toString('base64'),
+      finalidades: ['portal'],
+    });
+    expect([r.statusCode, cod(r)]).toEqual([409, 'arquivo-nao-imagem']);
+    expect((await logos()).length).toBe(antesLogos);
+    // A imagem em data URL (como a tela envia): 201, o logotipo fica no banco com as dimensões e a imagem volta igual.
+    const imagem = png(300, 90, 9);
+    r = await pedir(adm, 'POST', '/logotipos', {
+      conteudo: `data:image/png;base64,${Buffer.from(imagem).toString('base64')}`,
+      nomeOriginal: 'logo-rota.png',
+      finalidades: ['etiqueta'],
+      cabecalhoRelatorio: '  Hospital Sintético  ',
+    });
+    expect(r.statusCode).toBe(201);
+    const [idLogo] = (r.json() as { ids: number[] }).ids;
+    const gravado = await um(
+      'SELECT finalidade, largura_px, altura_px, cabecalho_relatorio, imprime_em_relatorio, ativo FROM logotipo_estabelecimento WHERE id = ?',
+      [idLogo],
+    );
+    expect(gravado).toMatchObject({ finalidade: 'etiqueta', cabecalho_relatorio: 'Hospital Sintético' });
+    expect([Number(gravado!['largura_px']), Number(gravado!['altura_px'])]).toEqual([300, 90]);
+    r = await pedir(adm, 'GET', `/logotipos/${idLogo}/imagem`);
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ tipo: 'image/png', conteudo: Buffer.from(imagem).toString('base64') });
+    // Excluir sem motivo: recusa; logotipo que não existe: 404.
+    r = await pedir(adm, 'POST', `/logotipos/${idLogo}/excluir`, { versao: 1 });
+    expect([r.statusCode, cod(r)]).toEqual([409, 'motivo-curto']);
+    r = await pedir(adm, 'GET', '/logotipos/999999999/imagem');
+    expect([r.statusCode, cod(r)]).toEqual([404, 'logotipo-inexistente']);
+    r = await pedir(adm, 'PUT', '/mantenedoras/999999999', {
+      ...{ codigo: `${COD}9`, razaoSocial: 'X SINTETICA', cnpj: '11222333000181' },
+      versao: 1,
+    });
+    expect([r.statusCode, cod(r)]).toEqual([404, 'mantenedora-inexistente']);
+
+    // Mantenedora pela rota: o corpo vem com máscara (CNPJ, junta comercial, atividade) e números em texto.
+    const corpo = {
+      codigo: `${COD}1`,
+      razaoSocial: `  ASSOCIACAO SINTETICA ${MARCA} ROTA `,
+      nomeFantasia: '',
+      cnpj: '11.444.777/0001-61',
+      nire: '312.0000.001-1',
+      dataRegistroNire: '2001-05-10',
+      cnaePrincipal: '8610-1/01',
+      filantropica: true,
+      tipoDeclarante: 'prestador_saude',
+      inscricaoMunicipal: 123456,
+    };
+    // Sem a versão: entrada inválida (400); com a versão velha: conflito (409). Nada gravado.
+    r = await pedir(adm, 'PUT', `/mantenedoras/${ligada.id}`, corpo);
+    expect([r.statusCode, cod(r)]).toEqual([400, 'entrada-invalida']);
+    r = await pedir(adm, 'PUT', `/mantenedoras/${ligada.id}`, { ...corpo, versao: ligada.versao + 7 });
+    expect([r.statusCode, cod(r)]).toEqual([409, 'conflito-versao']);
+    r = await pedir(adm, 'PUT', `/mantenedoras/${ligada.id}`, { ...corpo, versao: String(ligada.versao) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ id: ligada.id });
+    const gm = await um(
+      `SELECT m.versao, m.nire, m.cnae_principal, m.inscricao_municipal, m.filantropica, m.optante_simples,
+              pj.cnpj, pj.razao_social, pj.nome_fantasia
+         FROM mantenedora m JOIN pessoa_juridica pj ON pj.id = m.pessoa_juridica_id WHERE m.id = ?`,
+      [ligada.id],
+    );
+    expect(gm).toMatchObject({
+      nire: '31200000011',
+      cnae_principal: '8610101',
+      inscricao_municipal: '123456',
+      cnpj: CNPJ_A,
+      razao_social: `ASSOCIACAO SINTETICA ${MARCA} ROTA`,
+      // O nome fantasia em branco não apaga o da pessoa jurídica.
+      nome_fantasia: `MANTENEDORA ${MARCA}`,
+    });
+    expect([Number(gm!['versao']), Number(gm!['filantropica']), Number(gm!['optante_simples'])]).toEqual([
+      ligada.versao + 1,
+      1,
+      0,
+    ]);
+    // Regra recusada pela rota: CNPJ que não confere.
+    r = await pedir(adm, 'PUT', `/mantenedoras/${ligada.id}`, {
+      ...corpo,
+      versao: ligada.versao + 1,
+      cnpj: '11.444.777/0001-60',
+    });
+    expect([r.statusCode, cod(r)]).toEqual([409, 'cnpj-invalido']);
+
+    // O padrão de ligar: alterar OUTRA mantenedora sem o campo não troca a ligação do estabelecimento; pedindo para
+    // ligar, e ao incluir (que liga por padrão), com o estabelecimento ligado a outra: recusa, a ligação fica.
+    const ligadoA = async () =>
+      Number(
+        (await um('SELECT mantenedora_id FROM estabelecimento WHERE id = ?', [m!.estabelecimento]))![
+          'mantenedora_id'
+        ],
+      );
+    const b = antes.mantenedoras.find((x) => x.codigo === `${COD}2`)!;
+    const corpoB = {
+      codigo: `${COD}2`,
+      razaoSocial: `FORNECEDOR SINTETICO ${MARCA} SA`,
+      cnpj: CNPJ_B,
+      versao: b.versao,
+    };
+    r = await pedir(adm, 'PUT', `/mantenedoras/${b.id}`, corpoB);
+    expect(r.statusCode).toBe(200);
+    expect(await ligadoA()).toBe(ligada.id);
+    r = await pedir(adm, 'PUT', `/mantenedoras/${b.id}`, { ...corpoB, versao: b.versao + 1, ligar: true });
+    expect([r.statusCode, cod(r)]).toEqual([409, 'estabelecimento-ja-ligado']);
+    r = await pedir(adm, 'POST', '/mantenedoras', {
+      codigo: `${COD}3`,
+      razaoSocial: `TERCEIRA SINTETICA ${MARCA}`,
+      cnpj: '11.222.333/0001-81',
+    });
+    expect([r.statusCode, cod(r)]).toEqual([409, 'estabelecimento-ja-ligado']);
+    expect(await conta('SELECT COUNT(*) AS n FROM mantenedora WHERE codigo = ?', [`${COD}3`])).toBe(0);
+    expect(await ligadoA()).toBe(ligada.id);
+    // Ligar a outra pela rota própria: sem motivo recusa; com motivo, liga e a trilha fica no estabelecimento.
+    r = await pedir(adm, 'POST', '/mantenedora-ligada', { mantenedora: b.id });
+    expect([r.statusCode, cod(r)]).toEqual([409, 'motivo-curto']);
+    const motivo = `Troca pela rota no teste ${Date.now()}`;
+    r = await pedir(adm, 'POST', '/mantenedora-ligada', { mantenedora: String(b.id), motivo });
+    expect(r.statusCode).toBe(200);
+    expect(await ligadoA()).toBe(b.id);
+    expect(await trilhaDe('estabelecimento', m!.estabelecimento, motivo)).toBe(1);
+    // CPF incompleto na busca da pessoa: 422.
+    r = await pedir(adm, 'GET', '/identidade/pessoa?cpf=123');
+    expect([r.statusCode, cod(r)]).toEqual([422, 'cpf-invalido']);
   }, 120_000);
 });
