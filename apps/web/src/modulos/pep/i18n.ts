@@ -8,6 +8,7 @@ import { mensagensSumarioSecoes } from './i18n-sumario-secoes.js';
 import { mensagensResultadosGrupos } from './i18n-resultados-grupos.js';
 import { mensagensFarmacovigilancia } from './i18n-farmacovigilancia.js';
 import { mensagensNotasPaciente } from './i18n-notas-paciente.js';
+import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
 
 export const mensagensPep = {
   // M22: registros clínicos e administração do PEP.
@@ -27,6 +28,8 @@ export const mensagensPep = {
   farmaco: mensagensFarmacovigilancia,
   // 03-PEP L102: notas e lembretes livres sobre o paciente.
   notas: mensagensNotasPaciente,
+  // 03-PEP L147: anotação administrativa do caso.
+  anotAdm: mensagensAnotacoesAdministrativas,
   carregando: 'Carregando…',
   busca: {
     titulo: 'Prontuário ao vivo: consulta',

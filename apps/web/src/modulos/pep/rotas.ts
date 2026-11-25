@@ -210,6 +210,27 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuario.ler' },
   },
   {
+    // 03-PEP L147: anotações administrativas do caso (registro não clínico da equipe) do paciente.
+    path: `/pep/paciente/:paciente${id}/anotacoes-administrativas`,
+    name: 'pep.anotacoesAdministrativas',
+    component: () => import('./telas/AnotacoesAdministrativasTela.vue'),
+    props: true,
+    meta: {
+      permissao: 'pep.prontuario.ler',
+      permissaoOu: ['pep.social.ler', 'internacao.solicitacaoLeito.ler'],
+    },
+  },
+  {
+    // Entrada pelo menu: a fila de leitura de quem recebeu e a busca do paciente.
+    path: '/pep/anotacoes-administrativas',
+    name: 'pep.anotacoesAdministrativas.painel',
+    component: () => import('./telas/AnotacoesAdministrativasPainelTela.vue'),
+    meta: {
+      permissao: 'pep.prontuario.ler',
+      permissaoOu: ['pep.social.ler', 'internacao.solicitacaoLeito.ler'],
+    },
+  },
+  {
     // Entrada pelo menu: a busca do paciente leva à farmacovigilância dele (a farmácia clínica avalia daqui).
     path: '/farmacia-clinica/farmacovigilancia',
     name: 'farmacia.farmacovigilancia',
