@@ -258,6 +258,37 @@ export const esquemaEventoCatraca = z
   .strict();
 export type EventoCatracaEntrada = z.infer<typeof esquemaEventoCatraca>;
 
+/** A regra de acesso do colaborador num terminal (a conferência de domínio roda antes de gravar). */
+export const esquemaRegraAcessoTerminal = z
+  .object({
+    perfil: idGrande.nullable().default(null),
+    setor: idGrande.nullable().default(null),
+    diasSemana: z.array(z.number().int().min(1).max(7)).min(1, 'Marque ao menos um dia da semana.').max(7),
+    horaInicio: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no formato HH:MM.'),
+    horaFim: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no formato HH:MM.'),
+    entrada: z.boolean(),
+    saida: z.boolean(),
+    vigenciaInicio: dataIso,
+    vigenciaFim: dataIso.nullable().default(null),
+    prioridade: z.number().int().min(0).max(999).default(0),
+    ativo: z.boolean().default(true),
+    versao: z.number().int().min(1).nullable().default(null),
+  })
+  .strict();
+export type RegraAcessoTerminalEntrada = z.infer<typeof esquemaRegraAcessoTerminal>;
+
+/** O crachá do colaborador ligado à matrícula (o código que a catraca lê; null tira o crachá). */
+export const esquemaCrachaColaborador = z
+  .object({
+    matricula: z.string().trim().min(1, 'Informe a matrícula.').max(30),
+    cracha: z
+      .string()
+      .regex(/^[A-Z0-9]{6,20}$/, 'Crachá inválido.')
+      .nullable(),
+  })
+  .strict();
+export type CrachaColaboradorEntrada = z.infer<typeof esquemaCrachaColaborador>;
+
 export const esquemaConsultaContatos = z
   .object({
     internacao: id.nullable().default(null),
@@ -444,6 +475,25 @@ export interface EventoCatracaLido {
   readonly visita: number | null;
 }
 
+/** A regra de acesso do colaborador num terminal (perfil, setor, dias, faixa horária, vigência e sentido). */
+export interface RegraAcessoTerminalLida {
+  readonly id: number;
+  readonly terminal: number;
+  readonly perfil: number | null;
+  readonly setor: number | null;
+  /** 1 (domingo) a 7 (sábado). */
+  readonly diasSemana: readonly number[];
+  readonly horaInicio: string;
+  readonly horaFim: string;
+  readonly entrada: boolean;
+  readonly saida: boolean;
+  readonly vigenciaInicio: string;
+  readonly vigenciaFim: string | null;
+  readonly prioridade: number;
+  readonly ativo: boolean;
+  readonly versao: number;
+}
+
 /** Um contato para a investigação de surto: quem esteve com o paciente ou na unidade, e quando. */
 export interface ContatoVisita {
   readonly visita: number;
@@ -498,6 +548,10 @@ export interface PainelTerminais {
   readonly dominios: DominiosPortaria;
   readonly terminais: readonly TerminalLido[];
   readonly eventos: readonly EventoCatracaLido[];
+  /** As regras de acesso do colaborador por terminal, com os perfis e setores que a tela escolhe. */
+  readonly regrasAcesso: readonly RegraAcessoTerminalLida[];
+  readonly perfisAcesso: readonly { readonly id: number; readonly nome: string }[];
+  readonly setores: readonly { readonly id: number; readonly nome: string }[];
   readonly catracaLigada: boolean;
   /** Fora de produção, o simulador da catraca (nada sai para fora). */
   readonly simulador: boolean;

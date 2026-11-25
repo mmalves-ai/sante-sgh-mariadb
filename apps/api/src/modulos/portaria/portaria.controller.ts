@@ -32,6 +32,8 @@
 //   POST /api/portaria/terminais (e /:id)                  internacao.configurarTerminal
 //   POST /api/portaria/catraca/eventos                     internacao.registrarEventoCatraca (integrador local)
 //   POST /api/portaria/catraca/simular                     o simulador da catraca (fora de produção)
+//   POST /api/portaria/terminais/:id/regras-acesso (e /:regra)   a regra de acesso do colaborador no terminal
+//   POST /api/portaria/crachas-colaborador                 o crachá do colaborador ligado à matrícula
 // Gravações numa operação do Executor, com a trilha na mesma transação e o ator real; o estabelecimento vem da sessão. A
 // portaria nasce desligada (chave `portaria`, POL-3); a catraca (`portaria.catraca`) e a biometria (`portaria.biometria`,
 // DP-45) têm chaves próprias.
@@ -48,9 +50,11 @@ import {
   esquemaAcompanhante,
   esquemaBloqueioVisita,
   esquemaConsultaContatos,
+  esquemaCrachaColaborador,
   esquemaEventoCatraca,
   esquemaMotivo,
   esquemaRegistrarVisita,
+  esquemaRegraAcessoTerminal,
   esquemaRegraVisita,
   esquemaTerminal,
   esquemaVisitante,
@@ -70,11 +74,13 @@ import {
 } from '@sgh/contratos';
 import {
   avaliarCatraca,
+  avaliarColaboradorNaCatraca,
   bloqueiosVigentes,
   codigoDoCracha,
   conferirFundamento,
   conferirNascimento,
   conferirRegra,
+  conferirRegraAcesso,
   idadeNaData,
   nomeDeBusca,
   type RegraVisita,
@@ -1188,14 +1194,17 @@ export class PortariaController {
   async terminais(@Req() req: RequisicaoAutorizada): Promise<PainelTerminais> {
     const s = sessaoDe(req);
     req.sghAlvo = { tabelaAlvo: 'terminal_acesso' };
-    const [dominios, terminais, eventos, catraca, biometria, gravacao] = await Promise.all([
-      this.porta.dominios(s.porta),
-      this.porta.terminais(s.porta),
-      this.porta.eventos(s.porta, 50),
-      this.catraca.liberacao(s),
-      this.biometriaLigada(s),
-      this.apoio.gravacao(s, EXTRAS),
-    ]);
+    const [dominios, terminais, eventos, catraca, biometria, gravacao, regrasAcesso, escolhas] =
+      await Promise.all([
+        this.porta.dominios(s.porta),
+        this.porta.terminais(s.porta),
+        this.porta.eventos(s.porta, 50),
+        this.catraca.liberacao(s),
+        this.biometriaLigada(s),
+        this.apoio.gravacao(s, EXTRAS),
+        this.porta.regrasAcesso(s.porta),
+        this.porta.perfisESetores(s.porta),
+      ]);
     const tipos = new Map(dominios.tiposTerminal.map((t) => [t.codigo, t]));
     const nomes = new Map(terminais.map((t) => [t.id, t.nome]));
     return {
@@ -1206,6 +1215,9 @@ export class PortariaController {
         fabricanteNome: tipos.get(t.tipoTerminal)?.fabricanteNome ?? '',
       })),
       eventos: eventos.map((x) => ({ ...x, terminalNome: nomes.get(x.terminal) ?? '' })),
+      regrasAcesso,
+      perfisAcesso: escolhas.perfis,
+      setores: escolhas.setores,
       catracaLigada: catraca.ligada,
       simulador: this.simulador,
       gravacao,
@@ -1274,15 +1286,107 @@ export class PortariaController {
       }),
       (g) =>
         g.registrarEventoCatraca({ ...ev, usuario: s.login }, (x) =>
-          avaliarCatraca({
-            visita: x.visita,
-            agora: ev.ocorridoEm,
-            sentido: ev.sentido,
-            terminal: x.terminal,
-          }),
+          x.colaborador
+            ? {
+                ...avaliarColaboradorNaCatraca({
+                  colaborador: x.colaborador,
+                  regras: x.regras,
+                  agora: ev.ocorridoEm.slice(0, 16),
+                  sentido: ev.sentido,
+                  terminal: x.terminal,
+                }),
+                encerra: false,
+              }
+            : avaliarCatraca({
+                visita: x.visita,
+                agora: ev.ocorridoEm,
+                sentido: ev.sentido,
+                terminal: x.terminal,
+              }),
         ),
     );
     return { resultado: r.resultado, motivo: r.motivo, evento: r.id, repetido: r.repetido };
+  }
+
+  private async regraAcesso(
+    s: SessaoCadastro,
+    terminal: number,
+    id: number | null,
+    b: unknown,
+  ): Promise<ResultadoPortaria> {
+    const e = corpo(esquemaRegraAcessoTerminal, b);
+    const erros = conferirRegraAcesso(e);
+    if (erros.length > 0)
+      throw invalida(
+        erros.map((x) => x.mensagem).join(' '),
+        erros.map((x) => x.campo),
+      );
+    if (id !== null && e.versao === null) throw invalida('Falta a versão lida da regra.', ['versao']);
+    const r = await this.apoio.sgh(
+      s,
+      E.terminalConfigurado.codigo,
+      P.terminalEditar,
+      (x: { id: number }) => ({
+        tabela: 'regra_acesso_dispositivo',
+        id: String(x.id),
+        chave: String(terminal),
+      }),
+      (g) =>
+        g.gravarRegraAcesso({
+          ...e,
+          id,
+          versao: id === null ? null : e.versao,
+          terminal,
+          usuario: s.login,
+        }),
+    );
+    return { ok: true, id: r.id, mensagem: 'Regra de acesso gravada.' };
+  }
+
+  @Post('terminais/:id/regras-acesso')
+  @HttpCode(201)
+  @Permissao(P.terminalEditar)
+  @AuditadoNoHandler('internacao.gravarRegraAcesso: regra_acesso_dispositivo com a trilha na mesma transação')
+  incluirRegraAcesso(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.regraAcesso(sessaoDe(req), idDaRota(id), null, b);
+  }
+
+  @Post('terminais/:id/regras-acesso/:regra')
+  @HttpCode(201)
+  @Permissao(P.terminalEditar)
+  @AuditadoNoHandler('internacao.gravarRegraAcesso: regra_acesso_dispositivo com a trilha na mesma transação')
+  alterarRegraAcesso(
+    @Param('id') id: string,
+    @Param('regra') regra: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.regraAcesso(sessaoDe(req), idDaRota(id), idDaRota(regra), b);
+  }
+
+  @Post('crachas-colaborador')
+  @HttpCode(201)
+  @Permissao(P.terminalEditar)
+  @AuditadoNoHandler('internacao.vincularCrachaColaborador: vinculo_trabalho com a trilha na mesma transação')
+  async crachaColaborador(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPortaria> {
+    const s = sessaoDe(req);
+    const e = corpo(esquemaCrachaColaborador, b);
+    const r = await this.apoio.sgh(
+      s,
+      E.crachaColaborador.codigo,
+      P.terminalEditar,
+      (x: { id: number }) => ({
+        tabela: 'vinculo_trabalho',
+        id: String(x.id),
+        chave: e.cracha ? 'ligado' : 'retirado',
+      }),
+      (g) => g.vincularCrachaColaborador({ matricula: e.matricula, cracha: e.cracha, usuario: s.login }),
+    );
+    return {
+      ok: true,
+      id: r.id,
+      mensagem: e.cracha ? 'Crachá ligado à matrícula.' : 'Crachá retirado da matrícula.',
+    };
   }
 
   @Post('catraca/eventos')

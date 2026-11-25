@@ -5064,6 +5064,11 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Terminal ou catraca da portaria cadastrado ou alterado',
     legado: null,
   },
+  crachaColaborador: {
+    codigo: 'hotelaria.catraca.crachaColaborador',
+    descricao: 'Crachá do colaborador ligado à matrícula (ou retirado) para a catraca da portaria',
+    legado: null,
+  },
   catracaEvento: {
     codigo: 'hotelaria.catraca.evento',
     descricao: 'Passagem do crachá na catraca (liberada ou negada, com o motivo)',

@@ -9,15 +9,18 @@ import type {
   AcompanhanteRegistrado,
   AvaliacaoDaVisita,
   BloqueioVisitaRegistrado,
+  ColaboradorDoCracha,
   DominiosDaPortaria,
   EventoCatracaRegistrado,
   InternadoPortaria,
   NovaRegraVisita,
   NovaVisita,
+  NovaRegraAcesso,
   NovoAcompanhante,
   NovoBloqueioVisita,
   NovoTerminal,
   NovoVisitante,
+  RegraAcessoRegistrada,
   RegraVisitaRegistrada,
   SituacaoDoPaciente,
   TerminalDaCatraca,
@@ -81,18 +84,35 @@ export interface GravadorPortaria {
       readonly chave: string;
       readonly usuario: string;
     },
-    avaliar: (x: { terminal: TerminalDaCatraca; visita: VisitaDoCracha | null }) => {
+    avaliar: (x: {
+      terminal: TerminalDaCatraca;
+      visita: VisitaDoCracha | null;
+      /** Sem visita no crachá, o colaborador do crachá (pela matrícula) e as regras de acesso do terminal. */
+      colaborador: ColaboradorDoCracha | null;
+      regras: readonly RegraAcessoRegistrada[];
+    }) => {
       readonly resultado: ResultadoCatraca;
       readonly motivo: string | null;
       readonly encerra: boolean;
+      /** A regra de acesso que liberou ou recusou o colaborador. */
+      readonly regra?: number | null;
     },
   ): Promise<{
     id: number;
     resultado: ResultadoCatraca;
     motivo: string | null;
     visita: number | null;
+    colaborador: number | null;
     repetido: boolean;
   }>;
+  /** A regra de acesso do colaborador num terminal, pela versão (nunca apagada: a desativação guarda o histórico). */
+  gravarRegraAcesso(r: NovaRegraAcesso): Promise<{ id: number; versao: number }>;
+  /** O crachá do colaborador ligado à matrícula do estabelecimento (null retira). */
+  vincularCrachaColaborador(x: {
+    readonly matricula: string;
+    readonly cracha: string | null;
+    readonly usuario: string;
+  }): Promise<{ id: number }>;
 }
 
 export interface PortaPortaria extends PortaGravacaoM18<GravadorPortaria> {
@@ -125,6 +145,12 @@ export interface PortaPortaria extends PortaGravacaoM18<GravadorPortaria> {
   acompanhantes(c: ContextoPortaria, unidade?: string | null): Promise<AcompanhanteRegistrado[]>;
   terminais(c: ContextoPortaria): Promise<TerminalRegistrado[]>;
   eventos(c: ContextoPortaria, teto?: number): Promise<EventoCatracaRegistrado[]>;
+  /** As regras de acesso do colaborador nos terminais do estabelecimento. */
+  regrasAcesso(c: ContextoPortaria): Promise<RegraAcessoRegistrada[]>;
+  /** Os perfis de acesso e os setores do estabelecimento (o que a regra escolhe). */
+  perfisESetores(
+    c: ContextoPortaria,
+  ): Promise<{ perfis: { id: number; nome: string }[]; setores: { id: number; nome: string }[] }>;
   foto(c: ContextoPortaria, visitante: number): Promise<string | null>;
 }
 
@@ -148,5 +174,7 @@ export const METODOS_PORTA_PORTARIA: ReadonlySet<string> = new Set([
   'acompanhantes',
   'terminais',
   'eventos',
+  'regrasAcesso',
+  'perfisESetores',
   'foto',
 ]);

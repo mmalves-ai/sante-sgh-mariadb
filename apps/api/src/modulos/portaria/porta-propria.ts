@@ -64,7 +64,9 @@ import {
   TETO_INTERNADOS_PORTARIA,
   TETO_VISITAS_ABERTAS,
   TETO_VISITAS_PERIODO,
+  type ColaboradorDoCracha,
   type EventoCatracaRegistrado,
+  type RegraAcessoRegistrada,
   type TerminalRegistrado,
   type VisitaRegistrada,
   type VisitanteRegistrado,
@@ -151,6 +153,8 @@ const TABELAS_GRAVACAO = [
   'terminal_acesso',
   'evento_acesso_portaria',
   'ponto_acesso',
+  'regra_acesso_dispositivo',
+  'vinculo_trabalho',
 ] as const;
 
 const SQL_LOCAL_INTERNACAO = `
@@ -707,6 +711,32 @@ export class PortaPortariaPropria implements PortaPortaria {
     );
   }
 
+  regrasAcesso(c: ContextoPortaria): Promise<RegraAcessoRegistrada[]> {
+    return this.ler(c, (l, est) => regrasAcessoDe(l, est, null));
+  }
+
+  perfisESetores(
+    c: ContextoPortaria,
+  ): Promise<{ perfis: { id: number; nome: string }[]; setores: { id: number; nome: string }[] }> {
+    return this.ler(c, async (l, est) => {
+      const perfis = await l.consultar(
+        `SELECT id, nome FROM perfil_acesso
+          WHERE (estabelecimento_id IS NULL OR estabelecimento_id = ?) AND ativo = TRUE AND excluido_em IS NULL
+          ORDER BY nome, id`,
+        [est],
+        { teto: 500 },
+      );
+      const setores = await l.consultar(
+        `SELECT id, nome FROM setor_funcional
+          WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome, id`,
+        [est],
+        { teto: 1_000 },
+      );
+      const par = (r: Linha) => ({ id: n(r['id']), nome: texto(r['nome']) });
+      return { perfis: perfis.map(par), setores: setores.map(par) };
+    });
+  }
+
   foto(c: ContextoPortaria, visitante: number): Promise<string | null> {
     return this.ler(c, async (l) => {
       const r = await l.uma<Linha>(
@@ -837,6 +867,93 @@ function visitaDe(r: Linha, regras: readonly RegraVisitaRegistrada[], fuso: stri
 }
 
 // ── Gravador ────────────────────────────────────────────────────────────────────────────────────────
+
+/** As regras de acesso do colaborador nos terminais do estabelecimento (ou de um terminal). */
+async function regrasAcessoDe(
+  l: Leitor,
+  est: number,
+  terminal: number | null,
+): Promise<RegraAcessoRegistrada[]> {
+  const sql = `SELECT r.id, r.terminal_acesso_id, r.perfil_acesso_id, r.setor_funcional_id, r.dias_semana, r.hora_inicio,
+                      r.hora_fim, r.permite_entrada, r.permite_saida, r.vigencia_inicio, r.vigencia_fim, r.prioridade,
+                      r.ativo, r.versao
+                 FROM regra_acesso_dispositivo r
+                 JOIN terminal_acesso t ON t.id = r.terminal_acesso_id
+                 JOIN ponto_acesso p ON p.id = t.ponto_acesso_id
+                WHERE p.estabelecimento_id = ? AND r.categoria_pessoa = 'colaborador' AND t.excluido_em IS NULL
+                  AND (? IS NULL OR r.terminal_acesso_id = ?)
+                ORDER BY r.terminal_acesso_id, r.prioridade DESC, r.id`;
+  const linhas = await l.consultar(sql, [est, terminal, terminal], { teto: 2_000 });
+  return linhas.map((r) => {
+    const bruto = r['dias_semana'];
+    const dias = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as unknown;
+    return {
+      id: n(r['id']),
+      terminal: n(r['terminal_acesso_id']),
+      perfil: nn(r['perfil_acesso_id']),
+      setor: nn(r['setor_funcional_id']),
+      diasSemana: Array.isArray(dias) ? dias.map(Number) : [],
+      horaInicio: texto(r['hora_inicio']).slice(0, 5),
+      horaFim: texto(r['hora_fim']).slice(0, 5),
+      entrada: verdadeiro(r['permite_entrada']),
+      saida: verdadeiro(r['permite_saida']),
+      vigenciaInicio: dataIso(r['vigencia_inicio']) ?? '',
+      vigenciaFim: dataIso(r['vigencia_fim']),
+      prioridade: n(r['prioridade']),
+      ativo: verdadeiro(r['ativo']),
+      versao: n(r['versao']),
+    };
+  });
+}
+
+/** O colaborador do crachá lido (vínculo de trabalho do estabelecimento), com os perfis e setores vigentes na data. */
+async function colaboradorDoCracha(
+  l: Leitor,
+  est: number,
+  cracha: string,
+  data: string,
+): Promise<ColaboradorDoCracha | null> {
+  const v = await l.uma<Linha>(
+    `SELECT vt.id, vt.colaborador_id, vt.setor_funcional_id, c.usuario_id,
+            (vt.situacao = 'ativo' AND (vt.data_desligamento IS NULL OR vt.data_desligamento >= ?)
+              AND vt.data_admissao <= ? AND c.ativo = TRUE AND c.excluido_em IS NULL) AS ativo
+       FROM vinculo_trabalho vt
+       JOIN colaborador c ON c.id = vt.colaborador_id
+      WHERE vt.estabelecimento_id = ? AND vt.codigo_cracha = ? AND vt.excluido_em IS NULL
+      LIMIT 1`,
+    [data, data, est, cracha],
+  );
+  if (!v) return null;
+  const usuario = nn(v['usuario_id']);
+  const perfis =
+    usuario === null
+      ? []
+      : (
+          await l.consultar(
+            `SELECT perfil_acesso_id FROM usuario_perfil
+              WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+                AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+            [usuario, est, data, data],
+            { teto: 200 },
+          )
+        ).map((r) => n(r['perfil_acesso_id']));
+  const lotacoes = (
+    await l.consultar(
+      `SELECT setor_funcional_id FROM lotacao
+        WHERE vinculo_trabalho_id = ? AND operacao <> 'exclusao'
+          AND data_inicio <= ? AND (data_fim IS NULL OR data_fim >= ?)`,
+      [n(v['id']), data, data],
+      { teto: 200 },
+    )
+  ).map((r) => n(r['setor_funcional_id']));
+  const setorVinculo = nn(v['setor_funcional_id']);
+  return {
+    id: n(v['colaborador_id']),
+    ativo: verdadeiro(v['ativo']),
+    perfis: [...new Set(perfis)],
+    setores: [...new Set(setorVinculo === null ? lotacoes : [setorVinculo, ...lotacoes])],
+  };
+}
 
 function gravadorSobre(
   tx: TxOperacao,
@@ -1454,7 +1571,7 @@ function gravadorSobre(
       const chave = ev.chave.slice(0, 60);
       const repetido = async () => {
         const r = await tx.uma<Linha>(
-          `SELECT id, resultado, motivo_recusa, visita_id FROM evento_acesso_portaria
+          `SELECT id, resultado, motivo_recusa, visita_id, colaborador_id FROM evento_acesso_portaria
             WHERE terminal_acesso_id = ? AND chave_evento = ?`,
           [ev.terminal, chave],
         );
@@ -1464,6 +1581,7 @@ function gravadorSobre(
               resultado: RESULTADO_CATRACA_DO_BANCO[texto(r['resultado'])] ?? 'negado',
               motivo: textoN(r['motivo_recusa']),
               visita: nn(r['visita_id']),
+              colaborador: nn(r['colaborador_id']),
               repetido: true,
             }
           : null;
@@ -1493,6 +1611,11 @@ function gravadorSobre(
         [est, ev.cracha],
       );
       const regras = v ? await regrasDe(tx, est, fuso) : [];
+      // Sem visita no crachá: o colaborador pela matrícula e as regras de acesso deste terminal.
+      const colaborador = v
+        ? null
+        : await colaboradorDoCracha(tx, est, ev.cracha, ev.ocorridoEm.slice(0, 10));
+      const regrasAcesso = colaborador ? await regrasAcessoDe(tx, est, n(t['id'])) : [];
       const a = avaliar({
         terminal: {
           id: n(t['id']),
@@ -1504,6 +1627,8 @@ function gravadorSobre(
         visita: v
           ? { id: n(v['id']), validoAte: validadeDaLinha(v, regras), saida: local(v['saida_em'], fuso) }
           : null,
+        colaborador,
+        regras: regrasAcesso,
       });
       const ocorrido = instante(ev.ocorridoEm, fuso);
       let id: number;
@@ -1516,6 +1641,8 @@ function gravadorSobre(
           pessoa_portaria_id: v ? nn(v['pessoa_portaria_id']) : null,
           visita_id: v ? n(v['id']) : null,
           cracha_visitante_id: v ? nn(v['cracha_visitante_id']) : null,
+          colaborador_id: colaborador?.id ?? null,
+          regra_acesso_dispositivo_id: colaborador ? (a.regra ?? null) : null,
           codigo_cracha: ev.cracha.slice(0, 60),
           sentido: ev.sentido,
           resultado: RESULTADO_CATRACA_PARA_BANCO[a.resultado],
@@ -1536,7 +1663,100 @@ function gravadorSobre(
         await fecharVisita(v, ocorrido < ent ? ent : ocorrido);
         extras.dados = { ...extras.dados, origemSaida: 'catraca' };
       }
-      return { id, resultado: a.resultado, motivo: a.motivo, visita: v ? n(v['id']) : null, repetido: false };
+      return {
+        id,
+        resultado: a.resultado,
+        motivo: a.motivo,
+        visita: v ? n(v['id']) : null,
+        colaborador: colaborador?.id ?? null,
+        repetido: false,
+      };
+    },
+
+    async gravarRegraAcesso(r) {
+      const [t] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT t.id FROM terminal_acesso t JOIN ponto_acesso p ON p.id = t.ponto_acesso_id
+          WHERE t.id = ? AND p.estabelecimento_id = ? AND t.excluido_em IS NULL`,
+        [r.terminal, est],
+      );
+      if (!t) throw recusa('terminal-desconhecido', 'Terminal não cadastrado neste estabelecimento.');
+      if (
+        r.perfil !== null &&
+        !(await tx.uma(
+          'SELECT id FROM perfil_acesso WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)',
+          [r.perfil, est],
+        ))
+      )
+        throw recusa('perfil-desconhecido', 'Escolha um perfil de acesso deste estabelecimento.', {
+          campos: ['perfil'],
+        });
+      if (
+        r.setor !== null &&
+        !(await tx.uma('SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ?', [
+          r.setor,
+          est,
+        ]))
+      )
+        throw recusa('setor-desconhecido', 'Escolha um setor deste estabelecimento.', { campos: ['setor'] });
+      const valores = {
+        terminal_acesso_id: r.terminal,
+        categoria_pessoa: 'colaborador',
+        perfil_acesso_id: r.perfil,
+        setor_funcional_id: r.setor,
+        dias_semana: JSON.stringify([...new Set(r.diasSemana)].sort()),
+        hora_inicio: `${r.horaInicio}:00`,
+        hora_fim: `${r.horaFim}:00`,
+        permite_entrada: r.entrada,
+        permite_saida: r.saida,
+        prioridade: r.prioridade,
+        vigencia_inicio: r.vigenciaInicio,
+        vigencia_fim: r.vigenciaFim,
+        ativo: r.ativo,
+      };
+      if (r.id === null) {
+        const id = await tx.incluir('regra_acesso_dispositivo', valores);
+        return { id, versao: 1 };
+      }
+      const [ja] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao FROM regra_acesso_dispositivo WHERE id = ? AND terminal_acesso_id = ?`,
+        [r.id, r.terminal],
+      );
+      if (!ja) throw recusa('nao-encontrado', 'Regra de acesso não encontrada neste terminal.');
+      if (r.versao === null || n(ja['versao']) !== r.versao)
+        throw recusa('regra-mudou', 'A regra de acesso mudou depois que você abriu: abra de novo.');
+      const versao = await tx.alterar('regra_acesso_dispositivo', r.id, r.versao, valores);
+      return { id: r.id, versao };
+    },
+
+    async vincularCrachaColaborador(x) {
+      const [v] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, codigo_cracha FROM vinculo_trabalho
+          WHERE estabelecimento_id = ? AND matricula = ? AND excluido_em IS NULL`,
+        [est, x.matricula],
+      );
+      if (!v)
+        throw recusa('matricula-desconhecida', 'Matrícula não encontrada neste estabelecimento.', {
+          campos: ['matricula'],
+        });
+      if (
+        x.cracha !== null &&
+        (await tx.uma('SELECT id FROM cracha_visitante WHERE estabelecimento_id = ? AND codigo_leitura = ?', [
+          est,
+          x.cracha,
+        ]))
+      )
+        throw recusa('cracha-em-uso', 'Este código já é de um crachá de visitante.', { campos: ['cracha'] });
+      try {
+        await tx.alterar('vinculo_trabalho', n(v['id']), n(v['versao']), { codigo_cracha: x.cracha });
+      } catch (e) {
+        if (restricaoViolada(e)?.tipo === 'unica')
+          throw recusa('cracha-em-uso', 'Este crachá já está ligado a outra matrícula.', {
+            campos: ['cracha'],
+          });
+        throw e;
+      }
+      extras.dados = { ...extras.dados, crachaAnterior: v['codigo_cracha'] === null ? 'nenhum' : 'trocado' };
+      return { id: n(v['id']) };
     },
   };
   return gravador;

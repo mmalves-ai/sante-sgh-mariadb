@@ -9,6 +9,7 @@ import type {
   IsolamentoRegra,
   MotivoBloqueioVisita,
   PapelVisita,
+  RegraAcessoTerminalLida,
   ResultadoCatraca,
   SentidoCatraca,
   SentidoTerminal,
@@ -302,6 +303,22 @@ export interface TerminalDaCatraca {
   readonly fabricante: number;
   readonly sentido: SentidoTerminal;
   readonly ativo: boolean;
+}
+
+/** O colaborador do crachá lido (pelo vínculo de trabalho do estabelecimento), para a regra de acesso. */
+export interface ColaboradorDoCracha {
+  readonly id: number;
+  readonly ativo: boolean;
+  readonly perfis: readonly number[];
+  readonly setores: readonly number[];
+}
+
+export type RegraAcessoRegistrada = RegraAcessoTerminalLida;
+
+export interface NovaRegraAcesso extends Omit<RegraAcessoTerminalLida, 'id' | 'versao'> {
+  readonly id: number | null;
+  readonly versao: number | null;
+  readonly usuario: string;
 }
 
 export interface VisitaDoCracha {

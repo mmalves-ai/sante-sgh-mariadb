@@ -9,6 +9,7 @@ import type {
   BloqueioVisitaRegistrado,
   DominiosDaPortaria,
   EventoCatracaRegistrado,
+  RegraAcessoRegistrada,
   InternadoPortaria,
   RegraVisitaRegistrada,
   SituacaoDoPaciente,
@@ -174,6 +175,16 @@ export const REGRAS_SINTETICAS: NonNullable<OpcoesPortariaMemoria['regras']> = [
   },
 ];
 
+/** Perfis, setores e colaboradores SINTÉTICOS da catraca (o crachá do colaborador pela matrícula). */
+export const PERFIS_SINTETICOS = [{ id: 501, nome: 'ENFERMAGEM SINTETICA' }] as const;
+export const SETORES_SINTETICOS = [
+  { id: 601, nome: 'UTI SINTETICA' },
+  { id: 602, nome: 'RECEPCAO SINTETICA' },
+] as const;
+export const COLABORADORES_SINTETICOS = [
+  { id: 701, matricula: 'SINT-0001', ativo: true, perfis: [501], setores: [601] },
+] as const;
+
 export class PortaPortariaMemoria implements PortaPortaria {
   readonly destino = 'memoria' as const;
   private seq = 7_000;
@@ -184,8 +195,15 @@ export class PortaPortariaMemoria implements PortaPortaria {
   readonly bloqueiosMem: (BloqueioVisitaRegistrado & { hospital: string; revogadoEm: string | null })[] = [];
   readonly acompanhantesMem: (AcompanhanteRegistrado & { hospital: string })[] = [];
   readonly terminaisMem: (TerminalRegistrado & { hospital: string })[] = [];
-  readonly eventosMem: (EventoCatracaRegistrado & { hospital: string; chave: string })[] = [];
+  readonly eventosMem: (EventoCatracaRegistrado & {
+    hospital: string;
+    chave: string;
+    colaborador?: number | null;
+  })[] = [];
   readonly travas: string[] = [];
+  readonly regrasAcessoMem: (RegraAcessoRegistrada & { hospital: string })[] = [];
+  /** O crachá ligado a cada matrícula sintética, por estabelecimento. */
+  readonly crachasMem: { hospital: string; matricula: string; cracha: string }[] = [];
 
   private readonly regrasIniciais: NonNullable<OpcoesPortariaMemoria['regras']>;
   private readonly semeados = new Set<string>();
@@ -568,10 +586,22 @@ export class PortaPortariaMemoria implements PortaPortaria {
         const chave = `${hospital}:${ev.terminal}:${ev.chave}`;
         const ja = this.eventosMem.find((x) => x.chave === chave);
         if (ja)
-          return { id: ja.id, resultado: ja.resultado, motivo: ja.motivo, visita: ja.visita, repetido: true };
+          return {
+            id: ja.id,
+            resultado: ja.resultado,
+            motivo: ja.motivo,
+            visita: ja.visita,
+            colaborador: ja.colaborador ?? null,
+            repetido: true,
+          };
         const t = this.terminaisMem.find((x) => x.hospital === hospital && x.id === ev.terminal);
         if (!t) throw recusa('terminal-desconhecido', 'Terminal não cadastrado neste estabelecimento.');
         const v = this.visitas.find((x) => x.hospital === hospital && x.cracha === ev.cracha) ?? null;
+        const cr = v ? null : this.crachasMem.find((x) => x.hospital === hospital && x.cracha === ev.cracha);
+        const col = cr ? COLABORADORES_SINTETICOS.find((x) => x.matricula === cr.matricula) : undefined;
+        const colaborador = col
+          ? { id: col.id, ativo: col.ativo, perfis: col.perfis, setores: col.setores }
+          : null;
         const a = avaliar({
           terminal: {
             id: t.id,
@@ -581,6 +611,10 @@ export class PortaPortariaMemoria implements PortaPortaria {
             ativo: t.ativo,
           },
           visita: v ? { id: v.id, validoAte: v.validoAte, saida: v.saida } : null,
+          colaborador,
+          regras: colaborador
+            ? this.regrasAcessoMem.filter((r) => r.hospital === hospital && r.terminal === t.id)
+            : [],
         });
         const id = ++this.seq;
         this.eventosMem.unshift({
@@ -594,10 +628,65 @@ export class PortaPortariaMemoria implements PortaPortaria {
           motivo: a.motivo,
           ocorridoEm: ev.ocorridoEm.slice(0, 16),
           visita: v?.id ?? null,
+          colaborador: colaborador?.id ?? null,
         });
         if (a.encerra && v && v.saida === null)
           await encerrar({ id: v.id, saida: ev.ocorridoEm, origem: 'catraca', usuario: ev.usuario });
-        return { id, resultado: a.resultado, motivo: a.motivo, visita: v?.id ?? null, repetido: false };
+        return {
+          id,
+          resultado: a.resultado,
+          motivo: a.motivo,
+          visita: v?.id ?? null,
+          colaborador: colaborador?.id ?? null,
+          repetido: false,
+        };
+      },
+      gravarRegraAcesso: async (r) => {
+        if (!this.terminaisMem.some((x) => x.hospital === hospital && x.id === r.terminal))
+          throw recusa('terminal-desconhecido', 'Terminal não cadastrado neste estabelecimento.');
+        const valores = {
+          terminal: r.terminal,
+          perfil: r.perfil,
+          setor: r.setor,
+          diasSemana: r.diasSemana,
+          horaInicio: r.horaInicio,
+          horaFim: r.horaFim,
+          entrada: r.entrada,
+          saida: r.saida,
+          vigenciaInicio: r.vigenciaInicio,
+          vigenciaFim: r.vigenciaFim,
+          prioridade: r.prioridade,
+          ativo: r.ativo,
+        };
+        if (r.id === null) {
+          const id = ++this.seq;
+          this.regrasAcessoMem.push({ ...valores, id, versao: 1, hospital });
+          return { id, versao: 1 };
+        }
+        const ja = this.regrasAcessoMem.find((x) => x.hospital === hospital && x.id === r.id);
+        if (!ja) throw recusa('nao-encontrado', 'Regra de acesso não encontrada neste terminal.');
+        if (ja.versao !== r.versao)
+          throw recusa('regra-mudou', 'A regra de acesso mudou depois que você abriu: abra de novo.');
+        Object.assign(ja, valores, { versao: ja.versao + 1 });
+        return { id: ja.id, versao: ja.versao };
+      },
+      vincularCrachaColaborador: async (x) => {
+        const col = COLABORADORES_SINTETICOS.find((c) => c.matricula === x.matricula);
+        if (!col)
+          throw recusa('matricula-desconhecida', 'Matrícula não encontrada neste estabelecimento.', {
+            campos: ['matricula'],
+          });
+        const outro = this.crachasMem.find(
+          (c) => c.hospital === hospital && c.cracha === x.cracha && c.matricula !== x.matricula,
+        );
+        if (x.cracha !== null && outro)
+          throw recusa('cracha-em-uso', 'Este crachá já está ligado a outra matrícula.', {
+            campos: ['cracha'],
+          });
+        const i = this.crachasMem.findIndex((c) => c.hospital === hospital && c.matricula === x.matricula);
+        if (i >= 0) this.crachasMem.splice(i, 1);
+        if (x.cracha !== null) this.crachasMem.push({ hospital, matricula: x.matricula, cracha: x.cracha });
+        return { id: col.id };
       },
     };
   }
@@ -623,6 +712,18 @@ export class PortaPortariaMemoria implements PortaPortaria {
   }
   async internado(_c: unknown, internacao: number) {
     return this.internadosLista.find((i) => i.internacao === internacao) ?? null;
+  }
+  async regrasAcesso(c: ContextoPortaria) {
+    return this.regrasAcessoMem
+      .filter((r) => r.hospital === est(c))
+      .map((r): RegraAcessoRegistrada => {
+        const copia: Partial<typeof r> = { ...r };
+        delete copia.hospital;
+        return copia as RegraAcessoRegistrada;
+      });
+  }
+  async perfisESetores() {
+    return { perfis: [...PERFIS_SINTETICOS], setores: [...SETORES_SINTETICOS] };
   }
   async regras(c: ContextoPortaria) {
     this.semear(est(c));
