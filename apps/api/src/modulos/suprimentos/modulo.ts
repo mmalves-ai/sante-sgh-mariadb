@@ -29,6 +29,8 @@ import { TaxaConsignacaoController } from './consignado-taxa.controller.js';
 import { ContratoController } from './contrato.controller.js';
 import { PORTA_CONTRATO } from './contrato-porta.js';
 import { PORTA_TAXA_CONSIGNACAO, portaTaxaConsignacaoIndisponivel } from './consignado-taxa.js';
+import { SlaContratoController } from './sla-contrato.controller.js';
+import { PORTA_SLA_CONTRATO, portaSlaContratoIndisponivel } from './sla-contrato.js';
 import { ManipulacaoController } from './manipulacao.controller.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
 import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
@@ -133,6 +135,11 @@ export async function modulo(
       : !ctx.nucleo && fontesSinteticas(ctx.env)
         ? new PortaConsignadoMemoria(opme instanceof PortaOpmeMemoria ? opme : null)
         : (await import('./consignado-porta-propria.js')).portaConsignadoIndisponivel());
+  // 09-AREA linha 88: o SLA do contrato com fornecedor grava só no banco próprio (503 sem o núcleo).
+  const slaContrato =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./sla-contrato.js')).PortaSlaContratoPropria(ctx.nucleo)
+      : portaSlaContratoIndisponivel();
   const taxaConsignacao =
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./consignado-taxa.js')).PortaTaxaConsignacaoPropria(ctx.nucleo)
@@ -169,6 +176,7 @@ export async function modulo(
       VinculoReferenciaPrecoController,
       ConsignadoController,
       TaxaConsignacaoController,
+      SlaContratoController,
       ContratoController,
       ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
     ],
@@ -181,6 +189,7 @@ export async function modulo(
       { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
       { provide: PORTA_CONSIGNADO, useValue: consignado },
       { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
+      { provide: PORTA_SLA_CONTRATO, useValue: slaContrato },
       { provide: PORTA_CONTRATO, useValue: contrato },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],
