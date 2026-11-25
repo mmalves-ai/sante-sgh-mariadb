@@ -6202,6 +6202,24 @@ export const EVENTOS_AUDITAVEIS = {
       'Queixa técnica aberta a partir da OS na vigilância de produto da qualidade (equipamento, série e alerta)',
     legado: null,
   },
+  manutencaoOficinaGravada: {
+    codigo: 'manutencao.oficina.gravada',
+    descricao:
+      'Oficina de manutenção cadastrada ou alterada, com as pessoas (função, alçada do aprovador, vigência) e os serviços',
+    legado: null,
+  },
+  manutencaoOsOrcamento: {
+    codigo: 'manutencao.os.orcamento',
+    descricao:
+      'Orçamento da OS registrado, aprovado ou reprovado pelo aprovador da oficina dentro da alçada, com a justificativa',
+    legado: null,
+  },
+  manutencaoOsRemessa: {
+    codigo: 'manutencao.os.remessa',
+    descricao:
+      'Equipamento enviado ao fornecedor para conserto externo (termo de saída, nota de remessa) ou retornado, com o resultado',
+    legado: null,
+  },
   manutencaoCursoModeloVinculado: {
     codigo: 'manutencao.cursoModelo.vinculado',
     descricao:
