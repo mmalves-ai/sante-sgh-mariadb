@@ -39,6 +39,8 @@ export * from './consignado.js';
 export * from './consignado-taxa.js';
 // SLA do contrato com fornecedor (09-AREA linha 88): modelo, faixas, cobertura por horário e dias, apuração do período.
 export * from './sla-contrato.js';
+// Homologação do fornecedor por questionário pontuado (09-AREA linha 66): nota ponderada, faixa, exceção e ranking.
+export * from './homologacao-fornecedor.js';
 export * from './manipulacao.js';
 // M55 (etapa 3): contrato com fornecedor (vigência e alertas, reajuste, saldo, vínculo e avaliação).
 export * from './contrato.js';
