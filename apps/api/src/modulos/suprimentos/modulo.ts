@@ -26,6 +26,8 @@ import { ConsignadoController } from './consignado.controller.js';
 import { PORTA_CONSIGNADO, type PortaConsignado } from './consignado-porta.js';
 import { PortaConsignadoMemoria } from './consignado-porta-memoria.js';
 import { TaxaConsignacaoController } from './consignado-taxa.controller.js';
+import { ContratoController } from './contrato.controller.js';
+import { PORTA_CONTRATO } from './contrato-porta.js';
 import { PORTA_TAXA_CONSIGNACAO, portaTaxaConsignacaoIndisponivel } from './consignado-taxa.js';
 import { ManipulacaoController } from './manipulacao.controller.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
@@ -135,6 +137,14 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./consignado-taxa.js')).PortaTaxaConsignacaoPropria(ctx.nucleo)
       : portaTaxaConsignacaoIndisponivel();
+  // 05-SUP linha 27: os contratos com fornecedores gravam no banco próprio; sem o núcleo, a memória só em dev/ci com as
+  // fontes sintéticas; fora disso, 503 em tudo.
+  const contrato =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? (await import('./contrato-porta-propria.js')).portaContratoPropria(ctx.nucleo)
+      : !ctx.nucleo && fontesSinteticas(ctx.env)
+        ? new (await import('./contrato-porta-memoria.js')).PortaContratoMemoria()
+        : (await import('./contrato-porta-propria.js')).portaContratoIndisponivel();
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =
     memoria && !pedidos.includes('config')
@@ -155,6 +165,7 @@ export async function modulo(
       VinculoReferenciaPrecoController,
       ConsignadoController,
       TaxaConsignacaoController,
+      ContratoController,
       ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
     ],
     providers: [
@@ -166,6 +177,7 @@ export async function modulo(
       { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
       { provide: PORTA_CONSIGNADO, useValue: consignado },
       { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
+      { provide: PORTA_CONTRATO, useValue: contrato },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],
   };

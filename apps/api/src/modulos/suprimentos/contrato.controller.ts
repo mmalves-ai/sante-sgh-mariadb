@@ -11,8 +11,8 @@
 //   POST /api/suprimentos/contratos/:id/eventos          ocorrência, anexo, encerramento e rescisão (editar)
 //   POST /api/suprimentos/contratos/:id/vinculos         liga ao contrato um pedido ou as parcelas de um título (editar)
 // Tudo só do novo (SGH_), com a SGH_TRILHA na mesma transação. O pedido e o título com contrato nascem pelas telas de
-// compras e de contas a pagar (o campo `contrato` das duas operações, com o vínculo na mesma transação). Nasce
-// desligado (chave `contratos`, POL-3).
+// compras e de contas a pagar (o campo `contrato` das duas operações, com o vínculo na mesma transação). Sem chave de
+// liberação: vale a permissão do cargo (ADR 0002).
 import {
   Body,
   Controller,
@@ -122,7 +122,13 @@ export class ContratoController {
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
   ) {
     this.apoio = new ApoioGravacao(
-      { chave: CHAVE_LIBERACAO_CONTRATOS, nome: 'os contratos com fornecedores', operacoes: {} },
+      {
+        chave: CHAVE_LIBERACAO_CONTRATOS,
+        nome: 'os contratos com fornecedores',
+        operacoes: {},
+        // Tudo ligado para todos (ADR 0002): vale só a permissão do cargo em cada ato.
+        semLiberacao: true,
+      },
       porta,
       trilha,
       configuracao,

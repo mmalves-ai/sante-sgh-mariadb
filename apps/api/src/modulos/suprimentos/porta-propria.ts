@@ -27,8 +27,8 @@
 // e o custo depois e os lotes); a saída nunca deixa saldo negativo e, sem lote escolhido no item rastreável, usa o que
 // vence primeiro (nunca vencido nem bloqueado); a devolução volta pelo custo e pelos lotes da saída e aponta o
 // movimento que desfaz.
-// Ainda fora (recusa com o motivo): o consumo e a devolução de OPME na saída, a baixa do insumo da manipulação e o
-// vínculo do pedido ao contrato do fornecedor.
+// Ainda fora (recusa com o motivo): o consumo e a devolução de OPME na saída e a baixa do insumo da manipulação.
+// O pedido de compra nasce ligado ao contrato do fornecedor (05-SUP linha 27), pelas regras do vínculo do contrato.
 import {
   ajusteDoInventario,
   avaliarItem,
@@ -125,6 +125,7 @@ import {
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from './conta-estoque.js';
+import { TABELAS_VINCULO_PEDIDO_CONTRATO, vincularPedidoNaCompra } from './contrato-porta-propria.js';
 import { conferirParcialDoLocal, conferirPolitica } from './politica-local-propria.js';
 import {
   chaveDaTela,
@@ -2769,10 +2770,6 @@ async function registrarEntradaNF(
  * proposta (a preencher) por fornecedor e item. O pedido nasce com o primeiro fornecedor e fica com o vencedor.
  */
 async function criarPedido(tx: TxOperacao, est: number, e: CriarPedidoEntrada, hoje: string): Promise<Ids> {
-  if (e.contrato)
-    throw modeloPendente(
-      'o vínculo do pedido de compra ao contrato do fornecedor (vinculo_contrato_fornecedor)',
-    );
   recusar(conferirItensPedido(e.itens)[0] ?? null);
   await centroDoEstabelecimento(tx, est, e.centroCusto);
   // F3.6 (05-SUP linha 3): o usuário compra só o grupo da concessão dele.
@@ -2867,7 +2864,23 @@ async function criarPedido(tx: TxOperacao, est: number, e: CriarPedidoEntrada, h
         valor_total: 0,
       });
   }
-  return { id: pedido, ano, doc: numero, itens: e.itens.length, fornecedores: e.fornecedores.length };
+  // 05-SUP linha 27: o pedido nasce ligado ao contrato do fornecedor (as regras do vínculo, na mesma transação).
+  if (e.contrato) {
+    const quem = await tx.uma<Linha>('SELECT login FROM usuario WHERE id = ?', [usuario]);
+    await vincularPedidoNaCompra(tx, est, hoje, {
+      contrato: e.contrato,
+      pedido,
+      solicitante: String(quem?.['login'] ?? ''),
+    });
+  }
+  return {
+    id: pedido,
+    ano,
+    doc: numero,
+    itens: e.itens.length,
+    fornecedores: e.fornecedores.length,
+    ...(e.contrato ? { contrato: e.contrato.contrato } : {}),
+  };
 }
 
 /** As propostas da cotação do pedido, travadas. */
@@ -2911,6 +2924,22 @@ async function definirVencedorCotacao(tx: TxOperacao, est: number, e: DefinirVen
   const propostas = (await propostasDoPedido(tx, pedido)).map(propostaCotacao);
   const plano = planejarVencedor(propostas, { item: e.item, seq: e.seq }, e.vencedoras);
   recusar(plano.recusas[0] ?? null);
+  // 05-SUP linha 27: o pedido ligado ao contrato compra só do fornecedor do contrato.
+  const doContrato = await tx.uma<Linha>(
+    'SELECT c.empresa_fornecedora_id FROM pedido_compra p JOIN contrato_fornecedor c ON c.id = p.contrato_fornecedor_id WHERE p.id = ?',
+    [n(pedido['id'])],
+  );
+  if (
+    doContrato &&
+    propostas.some(
+      (p) => e.vencedoras.includes(p.id) && p.fornecedor !== n(doContrato['empresa_fornecedora_id']),
+    )
+  )
+    throw recusa(
+      'fornecedor-diferente',
+      'O pedido está ligado ao contrato: a vencedora é a proposta do fornecedor do contrato.',
+      { campos: ['vencedoras'] },
+    );
   if (
     exigeJustificativa(propostas, e.item, e.seq, e.vencedoras) &&
     (e.justificativa ?? '').trim().length < 10
@@ -3441,6 +3470,8 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   ...TABELAS_GESTAO_PEDIDO,
   // F3.6 (05-SUP linha 16): o recálculo auditado do saldo.
   ...TABELAS_RECALCULO_SALDO,
+  // 05-SUP linha 27: o histórico do contrato com o vínculo do pedido de compra.
+  ...TABELAS_VINCULO_PEDIDO_CONTRATO,
 ] as const;
 
 /** O nome da operação no núcleo (minúsculas com sublinhado: suprimentos.registrar_saida). */

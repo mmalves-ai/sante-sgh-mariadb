@@ -18,6 +18,7 @@
 import {
   type CandidatoVinculo,
   type ContratoDetalhe,
+  type ContratoDoVinculo,
   type ContratoGravado,
   type EventoContrato,
   type FaixaVigencia,
@@ -68,6 +69,7 @@ import {
   METODOS_PORTA_CONTRATO,
   type PortaContrato,
   type UsuarioContrato,
+  type VinculoContratoGravado,
 } from './contrato-porta.js';
 
 /** O mínimo do núcleo que a porta usa. */
@@ -427,7 +429,14 @@ function montar(k: Carga, c: ContratoLido, hoje: string) {
 
 // ── O gravador (dentro da operação do executor) ─────────────────────────────────────────────────────────────────
 
-function gravadorSobre(tx: TxOperacao, est: number, hoje: string, agora: Date): GravadorContrato {
+/** O gravador da tela e o vínculo feito dentro de outra operação (a compra), sem a chave da tela. */
+type GravadorInterno = GravadorContrato & {
+  vincularNaOperacao(
+    v: Omit<Parameters<GravadorContrato['vincular']>[0], 'chave'>,
+  ): Promise<VinculoContratoGravado>;
+};
+
+function gravadorSobre(tx: TxOperacao, est: number, hoje: string, agora: Date): GravadorInterno {
   const usuario = tx.contexto.usuario ?? null;
 
   /** O ato pela chave da tela: o reenvio igual devolve o guardado; a mesma chave com outra entrada é recusada. */
@@ -807,83 +816,9 @@ function gravadorSobre(tx: TxOperacao, est: number, hoje: string, agora: Date): 
       };
     },
     vincular: async (v) => {
-      const r = await porChave(v.chave, { contrato: v.contrato, tipo: v.tipo, ids: [...v.ids] }, async () => {
-        const { k, c } = await contratoTravado(v.contrato.contrato);
-        const evs = k.historico.eventos.filter((e) => e.contrato === c.id);
-        const saldo = saldoContrato(c.valorInicial, evs, k.vinculos.get(c.id) ?? []);
-        const ids = [...new Set(v.ids)];
-        const em = ids.map(() => '?').join(', ');
-        const alvos =
-          v.tipo === 'pedido'
-            ? await tx.consultarParaAtualizar(
-                `SELECT id, empresa_fornecedora_id AS fornecedor, contrato_fornecedor_id, valor_total AS valor, versao
-                     FROM pedido_compra
-                    WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${em})`,
-                [est, ...ids],
-                { teto: ids.length },
-              )
-            : await tx.consultarParaAtualizar(
-                `SELECT id, empresa_fornecedora_id AS fornecedor, contrato_fornecedor_id, valor_liquido AS valor, versao
-                     FROM titulo_pagar
-                    WHERE estabelecimento_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado' AND id IN (${em})`,
-                [est, ...ids],
-                { teto: ids.length },
-              );
-        if (alvos.length !== ids.length)
-          throw v.tipo === 'pedido'
-            ? recusa('pedido-inexistente', 'O pedido não existe.', { campos: ['ids'] })
-            : recusa('titulo-inexistente', 'Algum título não existe ou está cancelado.', { campos: ['ids'] });
-        const exc =
-          v.contrato.excecao === null
-            ? null
-            : evs.find((e) => e.id === v.contrato.excecao && e.tipo === 'excecao');
-        if (v.contrato.excecao !== null && !exc)
-          throw recusa('excecao-inexistente', 'A exceção aprovada não existe.', { campos: ['excecao'] });
-        const origem = v.contrato.pedidoDeOrigem;
-        const r0 = conferirVinculoContrato({
-          contrato: {
-            id: c.id,
-            situacao: c.situacao,
-            inicio: c.inicio,
-            fim: fimVigente(c.fimOriginal, evs),
-            fornecedor: c.fornecedor,
-          },
-          hoje,
-          tipo: v.tipo,
-          fornecedores: [...new Set(alvos.map((a) => num(a['fornecedor'])))],
-          valor:
-            v.tipo === 'titulo' && origem === null ? din(alvos.reduce((s, a) => s + num(a['valor']), 0)) : 0,
-          saldo: saldo.saldo,
-          excecao: exc
-            ? { id: exc.id, contrato: c.id, aprovador: exc.usuario, criadoEm: exc.criadoEm, usada: exc.usado }
-            : null,
-          solicitante: v.usuario,
-          jaVinculado: alvos.some((a) => a['contrato_fornecedor_id'] !== null),
-          pedidoDeOrigemValido:
-            origem === null
-              ? null
-              : (k.vinculos.get(c.id) ?? []).some((y) => y.id === origem && y.tipo === 'pedido'),
-        });
-        if (r0) throw recusa(r0.codigo, r0.mensagem, r0.campos ? { campos: r0.campos } : {});
-        for (const a of alvos)
-          await tx.alterar(
-            v.tipo === 'pedido' ? 'pedido_compra' : 'titulo_pagar',
-            num(a['id']),
-            num(a['versao']),
-            {
-              contrato_fornecedor_id: c.id,
-            },
-          );
-        await ocorrencia(
-          c.id,
-          'vinculo',
-          v.tipo === 'pedido' ? 'Pedido de compra ligado ao contrato' : 'Título a pagar ligado ao contrato',
-          { tipo: v.tipo, ids, excecao: v.contrato.excecao, pedidoDeOrigem: origem },
-        );
-        const depois = await carregar(tx, est, { id: c.id });
-        const s2 = saldoContrato(c.valorInicial, evs, depois.vinculos.get(c.id) ?? []);
-        return { vinculos: ids, saldoAntes: saldo.saldo, saldoDepois: s2.saldo };
-      });
+      const r = await porChave(v.chave, { contrato: v.contrato, tipo: v.tipo, ids: [...v.ids] }, () =>
+        vincularAgora(v),
+      );
       return {
         contrato: v.contrato.contrato,
         vinculos: (r.valor['vinculos'] as number[]) ?? [],
@@ -892,7 +827,113 @@ function gravadorSobre(tx: TxOperacao, est: number, hoje: string, agora: Date): 
         repetido: r.repetido,
       };
     },
+    vincularNaOperacao: async (v) => {
+      const r = await vincularAgora(v);
+      return { contrato: v.contrato.contrato, ...r, repetido: false };
+    },
   };
+
+  /** O vínculo (regras 6 e 7) com o contrato travado: o pedido ou o título passa a apontar o contrato, com o histórico. */
+  async function vincularAgora(
+    v: Omit<Parameters<GravadorContrato['vincular']>[0], 'chave'>,
+  ): Promise<{ vinculos: number[]; saldoAntes: number; saldoDepois: number }> {
+    const { k, c } = await contratoTravado(v.contrato.contrato);
+    const evs = k.historico.eventos.filter((e) => e.contrato === c.id);
+    const saldo = saldoContrato(c.valorInicial, evs, k.vinculos.get(c.id) ?? []);
+    const ids = [...new Set(v.ids)];
+    const em = ids.map(() => '?').join(', ');
+    const alvos =
+      v.tipo === 'pedido'
+        ? await tx.consultarParaAtualizar(
+            `SELECT id, empresa_fornecedora_id AS fornecedor, contrato_fornecedor_id, valor_total AS valor, versao
+                     FROM pedido_compra
+                    WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${em})`,
+            [est, ...ids],
+            { teto: ids.length },
+          )
+        : await tx.consultarParaAtualizar(
+            `SELECT id, empresa_fornecedora_id AS fornecedor, contrato_fornecedor_id, valor_liquido AS valor, versao
+                     FROM titulo_pagar
+                    WHERE estabelecimento_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado' AND id IN (${em})`,
+            [est, ...ids],
+            { teto: ids.length },
+          );
+    if (alvos.length !== ids.length)
+      throw v.tipo === 'pedido'
+        ? recusa('pedido-inexistente', 'O pedido não existe.', { campos: ['ids'] })
+        : recusa('titulo-inexistente', 'Algum título não existe ou está cancelado.', { campos: ['ids'] });
+    const exc =
+      v.contrato.excecao === null
+        ? null
+        : evs.find((e) => e.id === v.contrato.excecao && e.tipo === 'excecao');
+    if (v.contrato.excecao !== null && !exc)
+      throw recusa('excecao-inexistente', 'A exceção aprovada não existe.', { campos: ['excecao'] });
+    const origem = v.contrato.pedidoDeOrigem;
+    const r0 = conferirVinculoContrato({
+      contrato: {
+        id: c.id,
+        situacao: c.situacao,
+        inicio: c.inicio,
+        fim: fimVigente(c.fimOriginal, evs),
+        fornecedor: c.fornecedor,
+      },
+      hoje,
+      tipo: v.tipo,
+      fornecedores: [...new Set(alvos.map((a) => num(a['fornecedor'])))],
+      valor: v.tipo === 'titulo' && origem === null ? din(alvos.reduce((s, a) => s + num(a['valor']), 0)) : 0,
+      saldo: saldo.saldo,
+      excecao: exc
+        ? { id: exc.id, contrato: c.id, aprovador: exc.usuario, criadoEm: exc.criadoEm, usada: exc.usado }
+        : null,
+      solicitante: v.usuario,
+      jaVinculado: alvos.some((a) => a['contrato_fornecedor_id'] !== null),
+      pedidoDeOrigemValido:
+        origem === null
+          ? null
+          : (k.vinculos.get(c.id) ?? []).some((y) => y.id === origem && y.tipo === 'pedido'),
+    });
+    if (r0) throw recusa(r0.codigo, r0.mensagem, r0.campos ? { campos: r0.campos } : {});
+    for (const a of alvos)
+      await tx.alterar(
+        v.tipo === 'pedido' ? 'pedido_compra' : 'titulo_pagar',
+        num(a['id']),
+        num(a['versao']),
+        {
+          contrato_fornecedor_id: c.id,
+        },
+      );
+    await ocorrencia(
+      c.id,
+      'vinculo',
+      v.tipo === 'pedido' ? 'Pedido de compra ligado ao contrato' : 'Título a pagar ligado ao contrato',
+      { tipo: v.tipo, ids, excecao: v.contrato.excecao, pedidoDeOrigem: origem },
+    );
+    const depois = await carregar(tx, est, { id: c.id });
+    const s2 = saldoContrato(c.valorInicial, evs, depois.vinculos.get(c.id) ?? []);
+    return { vinculos: ids, saldoAntes: saldo.saldo, saldoDepois: s2.saldo };
+  }
+}
+
+/** As tabelas que o vínculo do pedido ao contrato escreve dentro da operação de compras. */
+export const TABELAS_VINCULO_PEDIDO_CONTRATO = ['ocorrencia_contrato'] as const;
+
+/**
+ * 05-SUP linha 27: o pedido de compra nasce ligado ao contrato do fornecedor, na MESMA transação da operação de compras
+ * (o executor do estoque): as mesmas regras do vínculo da tela dos contratos (vigência ou exceção aprovada, mesmo
+ * fornecedor, contrato ativo), o pedido passa a apontar o contrato e o histórico do contrato registra o vínculo.
+ */
+export async function vincularPedidoNaCompra(
+  tx: TxOperacao,
+  est: number,
+  hoje: string,
+  m: { contrato: ContratoDoVinculo; pedido: number; solicitante: string },
+): Promise<VinculoContratoGravado> {
+  return gravadorSobre(tx, est, hoje, new Date()).vincularNaOperacao({
+    contrato: m.contrato,
+    tipo: 'pedido',
+    ids: [m.pedido],
+    usuario: m.solicitante,
+  });
 }
 
 // ── A porta ─────────────────────────────────────────────────────────────────────────────────────────────────────
