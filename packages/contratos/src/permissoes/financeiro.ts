@@ -250,6 +250,37 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     'Decidir na etapa em que é aprovador (aprova, reprova ou devolve), também pelo celular quando liberado',
     { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
   ),
+  // F7, 07-FIN linha 78: cobrança bancária com boleto; recurso novo, concedido ao administrador do sistema e dado pelo
+  // cargo. O retorno baixa o título com a permissão de baixa do contas a receber.
+  p(
+    'financeiro.cobrancaBancaria.ler',
+    'Consultar as carteiras de cobrança, os boletos, as remessas e os retornos',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      ...CONTA,
+    },
+  ),
+  p(
+    'financeiro.cobrancaBancaria.configurar',
+    'Cadastrar e desativar as carteiras de cobrança (faixa do nosso número, leiaute do banco e tarifa)',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      ...CONTA,
+    },
+  ),
+  p(
+    'financeiro.cobrancaBancaria.emitir',
+    'Emitir e cancelar boletos e gerar a remessa de cobrança ao banco',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      ...CONTA,
+    },
+  ),
   p(
     'financeiro.cessaoRecebivel.ler',
     'Consultar os portadores e as operações de desconto e cessão de recebíveis',

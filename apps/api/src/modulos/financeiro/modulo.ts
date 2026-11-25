@@ -18,6 +18,7 @@ import type { ContextoModulo } from '../registro.js';
 import { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemoria } from './armazem.js';
 import { AlteracaoTituloPagarController } from './alteracao-titulo-pagar.controller.js';
 import { CartaoController } from './cartao.controller.js';
+import { CobrancaBancariaController } from './cobranca-bancaria.controller.js';
 import { comCartaoNoFluxo } from './cartao-propria.js';
 import { CompensacaoPrevisaoController } from './compensacao-previsao.controller.js';
 import { ContabilFiscalController } from './contabil-fiscal.controller.js';
@@ -94,6 +95,8 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       AlteracaoTituloPagarController,
       // F8, 07-FIN linha 65: fluxo de aprovação configurável (título, pedido de compra e contrato; celular).
       FluxoAprovacaoController,
+      // F7, 07-FIN linha 78: cobrança bancária com boleto (carteira, emissão, remessa e retorno).
+      CobrancaBancariaController,
     ],
     providers: [
       { provide: PORTA_FINANCEIRO, useValue: porta },
