@@ -20,6 +20,7 @@ import {
   codificarCp1252,
   conteudoCanonicoAssinatura,
   FINALIDADES_CONSENTIMENTO,
+  foraDaFila,
   type ModeloTermo,
   type SignatarioTermo,
   type TipoAtendimentoTermo,
@@ -54,7 +55,7 @@ import {
 } from './banco.js';
 import { exigirPacienteQueAssina } from '../cadastro/representacao-paciente-propria.js';
 import { operacaoDaRecepcao } from './operacoes.js';
-import { letraDaSituacao, prioridadeDaTela } from './tela-senha.js';
+import { prioridadeDaTela } from './codigos-senha.js';
 import type { GravadorRecepcao, PortaRecepcao } from './porta.js';
 import type {
   AgendadoRecepcao,
@@ -516,8 +517,8 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
       let naoLocalizado = 0;
       for (const x of ls) {
         const emitida = horaCivil(x['emitida_em'] as Date, est.fuso);
-        // Indicadores no vocabulário do contrato da tela (agregados: só contagens e tempos).
-        const letra = letraDaSituacao(txt(x['situacao']), numOuNull(x['guiche']), null);
+        // Indicadores pela situação nominal (agregados: só contagens e tempos).
+        const situacao = txt(x['situacao']);
         const prio = prioridadeDaTela({
           prioritaria: bool(x['prioritaria']),
           grupo: txtOuNull(x['grupo_codigo']),
@@ -526,11 +527,11 @@ export class PortaRecepcaoPropria implements PortaRecepcao {
         const dia = dataIso(x['data_referencia']);
         const d = porDia.get(dia) ?? { emitidas: 0, liberadas: 0, suspensas: 0, atendidas: 0 };
         d.emitidas++;
-        if (letra === 'L') d.liberadas++;
-        if (letra === 'S') d.suspensas++;
+        if (situacao === 'atendida') d.liberadas++;
+        if (foraDaFila(situacao)) d.suspensas++;
         if (num(x['atendimentos']) > 0) d.atendidas++;
         porDia.set(dia, d);
-        conta(porSituacao, letra);
+        conta(porSituacao, situacao);
         conta(prioridade, prio);
         const g = num(x['gerador_senha_id']);
         const sv = porServico.get(g) ?? { servico: txt(x['servico']), senhas: 0 };

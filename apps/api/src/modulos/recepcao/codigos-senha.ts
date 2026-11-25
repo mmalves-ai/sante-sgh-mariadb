@@ -1,9 +1,8 @@
-// Tradução da senha entre o vocabulário neutro da porta (situação nominal, guichê nulo, tipo do serviço por nome,
-// grupo de prioridade por código) e o contrato da tela (SITUACOES_SENHA por letra, guichê 0 = nenhum, TIPOS_GERADOR
-// '0'/'5', PRIORIDADES_SENHA '0'/'1'/'2', GRUPOS_PRIORIDADE por número). Só os serviços que montam a resposta da tela
-// e as regras do contrato (decidirEvento, ordenarFila) usam esta tradução; a porta e o banco nunca.
-// Pedido ao integrador (saida/01-01.json): trocar o contrato da tela pelo vocabulário neutro e apagar esta tradução.
-import type { SenhaRecepcao, SituacaoSenha, TipoServico } from './tipos.js';
+// Códigos do contrato da tela que não são a situação: o grupo de prioridade legal por número (GRUPOS_PRIORIDADE) ↔ o
+// código do cadastro, a prioridade '0'/'1'/'2' (PRIORIDADES_SENHA), o tipo do gerador '0'/'5' (TIPOS_GERADOR) e o
+// guichê 0 = nenhum. A situação da senha é nominal dos dois lados (SITUACOES_SENHA = senha_emitida.situacao) e não
+// passa por tradução nenhuma.
+import type { SenhaRecepcao, TipoServico } from './tipos.js';
 
 /**
  * Grupos de prioridade do contrato (GRUPOS_PRIORIDADE) ↔ o código do grupo no cadastro (grupo_prioridade_legal
@@ -43,45 +42,6 @@ export const tipoGeradorDaTela = (t: TipoServico): string => (t === 'diverso' ? 
 /** Guichê no contrato (0 = nenhum). */
 export const guicheDaTela = (g: number | null): number => g ?? 0;
 
-/** Letra do contrato (SITUACOES_SENHA) a partir da situação nominal, do guichê e do local. */
-export function letraDaSituacao(situacao: string, guiche: number | null, local: number | null): string {
-  switch (situacao) {
-    case 'aguardando':
-      return 'G';
-    case 'chamada':
-      // Chamada pelo guichê continua "aguardando no guichê" (G com guichê); a chamada ao local é C.
-      return (guiche ?? 0) > 0 || local === null ? 'G' : 'C';
-    case 'em_atendimento':
-    case 'encaminhada':
-      return 'A';
-    case 'suspensa':
-    case 'nao_compareceu':
-      return 'S';
-    default:
-      return 'L';
-  }
-}
-
-/** Letra do contrato da senha. */
-export const letraDaSenha = (s: Pick<SenhaRecepcao, 'situacao' | 'guiche' | 'local'>): string =>
-  letraDaSituacao(s.situacao, s.guiche, s.local);
-
-/** Situação nominal a gravar pela letra do efeito de um evento do contrato (decidirEvento). */
-export function situacaoDaLetra(letra: string): SituacaoSenha {
-  switch (letra) {
-    case 'L':
-      return 'atendida';
-    case 'S':
-      return 'suspensa';
-    case 'A':
-      return 'em_atendimento';
-    case 'C':
-      return 'chamada';
-    default:
-      return 'aguardando';
-  }
-}
-
 /** A senha como as regras do contrato a veem (decidirEvento, ordenarFila e as listas da tela). */
 export interface SenhaNaTela {
   readonly situacao: string;
@@ -93,7 +53,7 @@ export interface SenhaNaTela {
 
 export function senhaNaTela(s: SenhaRecepcao): SenhaNaTela {
   return {
-    situacao: letraDaSenha(s),
+    situacao: s.situacao,
     guiche: guicheDaTela(s.guiche),
     tipoGerador: tipoGeradorDaTela(s.tipoServico),
     prioridade: prioridadeDaTela(s),

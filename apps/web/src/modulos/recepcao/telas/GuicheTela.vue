@@ -507,7 +507,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
               </span>
               <div class="acoes-linha">
                 <RouterLink
-                  v-if="podeAbrirAtendimento && ['G', 'C', 'S'].includes(s.situacao)"
+                  v-if="
+                    podeAbrirAtendimento &&
+                    ['aguardando', 'chamada', 'suspensa', 'nao_compareceu'].includes(s.situacao)
+                  "
                   :to="`/recepcao/atendimento/novo?senha=${s.id}&local=${local}`"
                   :data-testid="i === 0 ? 'abrir-atendimento-atual' : `abrir-atendimento-guiche-${s.id}`"
                   >{{ t('recepcao.guiche.abrirAtendimento') }}</RouterLink
@@ -604,6 +607,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
             <tr>
               <th scope="col">{{ t('recepcao.senha') }}</th>
               <th scope="col">{{ t('recepcao.servico') }}</th>
+              <th scope="col">{{ t('recepcao.indicadores.situacao') }}</th>
               <th scope="col">{{ t('recepcao.espera') }}</th>
               <th scope="col">
                 <span class="visualmente-oculto">{{ t('recepcao.eventos.retomar') }}</span>
@@ -616,6 +620,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
                 <strong>{{ s.texto }}</strong>
               </td>
               <td>{{ s.servico }}</td>
+              <td :data-testid="`suspensa-situacao-${s.id}`">{{ t(`recepcao.situacoes.${s.situacao}`) }}</td>
               <td>{{ t('recepcao.minutos', { n: s.esperaMinutos }) }}</td>
               <td>
                 <SanteBotao
@@ -666,7 +671,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
                   :data-testid="`encaminhar-${s.id}`"
                   @acionar="encaminhamento = s"
                 />
-                <template v-if="podeFluxo && s.situacao === 'C'">
+                <template v-if="podeFluxo && s.situacao === 'chamada'">
                   <SanteBotao
                     variante="texto"
                     :rotulo="t('recepcao.eventos.cancelarChamada')"
@@ -681,7 +686,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
                   />
                 </template>
                 <RouterLink
-                  v-if="podeAbrirAtendimento && ['G', 'C', 'S'].includes(s.situacao)"
+                  v-if="
+                    podeAbrirAtendimento &&
+                    ['aguardando', 'chamada', 'suspensa', 'nao_compareceu'].includes(s.situacao)
+                  "
                   :to="`/recepcao/atendimento/novo?senha=${s.id}&local=${local}`"
                   :data-testid="`abrir-atendimento-${s.id}`"
                   >{{ t('recepcao.guiche.abrirAtendimento') }}</RouterLink

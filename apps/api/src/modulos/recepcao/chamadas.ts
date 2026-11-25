@@ -12,7 +12,7 @@
 import { chamadasEntreRetratos, type EstadoChamadaSenha, juntarChamadas } from '@sgh/dominio-recepcao';
 import type { PortaRecepcao } from './porta.js';
 import type { SenhaRecepcao } from './tipos.js';
-import { guicheDaTela, letraDaSenha, prioridadeDaTela } from './tela-senha.js';
+import { guicheDaTela, prioridadeDaTela } from './codigos-senha.js';
 
 /** Aviso de mudança nas senhas do estabelecimento (um vigia de mudanças, ou nenhum: a releitura periódica vale). */
 export interface AvisoMudancaSenhas {
@@ -50,7 +50,7 @@ interface EstadoHospital {
 const estadoDe = (s: SenhaRecepcao): EstadoChamadaSenha => ({
   id: s.id,
   guiche: guicheDaTela(s.guiche),
-  situacao: letraDaSenha(s),
+  situacao: s.situacao,
   chamadasNoFluxo: s.chamadasNoFluxo,
 });
 

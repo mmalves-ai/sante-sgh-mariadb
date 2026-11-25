@@ -14,7 +14,7 @@ import type { PortaAgenda } from '../../agenda/public-api.js';
 import { portaIndisponivel } from '../../exames/public-api.js';
 import { estabelecimentoPorCodigo, horaCivil, num, txt } from '../banco.js';
 import type { ContextoRecepcao, PortaRecepcao } from '../porta.js';
-import { senhaNaTela } from '../tela-senha.js';
+import { senhaNaTela } from '../codigos-senha.js';
 import type { GuiaPendente } from '../tipos.js';
 
 /** A leitura própria da fila (as guias); as senhas e as chegadas vêm das portas do M19 e do M17. */

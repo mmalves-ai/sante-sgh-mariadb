@@ -50,7 +50,7 @@ import {
   txt,
 } from './banco.js';
 import { grupoDaEmissao, ordemDosServicos, ordenarCandidatas } from './regra-fila.js';
-import { CODIGO_DO_GRUPO, senhaNaTela, situacaoDaLetra } from './tela-senha.js';
+import { CODIGO_DO_GRUPO, senhaNaTela } from './codigos-senha.js';
 
 /** Evento do catálogo e recurso de cada operação (a trilha da memória usa os mesmos). */
 export interface MetaOperacao {
@@ -462,14 +462,11 @@ const registrarEventoSenha = definirOperacao({
     const ef = d.efeito;
     const valores: Record<string, unknown> = {};
     if (ef.situacao) {
-      valores['situacao'] = situacaoDaLetra(ef.situacao);
-      if (ef.situacao === 'L') valores['encerrada_em'] = new Date();
+      valores['situacao'] = ef.situacao;
+      if (ef.situacao === 'atendida') valores['encerrada_em'] = new Date();
     }
     if (ef.guiche === 'zero') valores['guiche_recepcao_id'] = null;
-    if (ef.guiche === 'meu') {
-      valores['guiche_recepcao_id'] = meuGuiche;
-      valores['situacao'] = 'chamada';
-    }
+    if (ef.guiche === 'meu') valores['guiche_recepcao_id'] = meuGuiche;
     if (ef.motivo)
       valores['motivo_complemento'] =
         ef.motivo === 'diversos'

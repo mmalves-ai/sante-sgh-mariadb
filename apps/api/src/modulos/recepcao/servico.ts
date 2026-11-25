@@ -8,6 +8,7 @@ import {
   type ApoioRecepcao,
   type ChamadaPainel,
   type FilaGuiche,
+  foraDaFila,
   GRUPOS_PRIORIDADE,
   type IndicadoresRecepcao,
   MOTIVOS_SUSPENSAO,
@@ -40,7 +41,7 @@ import type {
 } from './tipos.js';
 import type { CentralChamadas, ChamadaInterna } from './chamadas.js';
 import { ordemDosServicos, ordenarCandidatas } from './regra-fila.js';
-import { geradorParaTela, letraDaSenha, prioridadeDaTela, senhaNaTela } from './tela-senha.js';
+import { geradorParaTela, prioridadeDaTela, senhaNaTela } from './codigos-senha.js';
 import type { ContextoRecepcao, PortaRecepcao } from './porta.js';
 
 export function senhaParaTela(s: SenhaRecepcao, agora: string, comUsuario: boolean): SenhaLida {
@@ -160,13 +161,11 @@ export class ServicoRecepcao {
       // A mais recente primeiro (a última chamada pelo guichê): F7 e F8 agem nela, nunca na senha antiga que
       // ficou no guichê (a do tipo recepção só sai dele com a abertura do atendimento).
       noGuiche: ordenarNoGuiche(
-        dos.filter(
-          (s) => s.guiche === p.guiche && !s.atendida && (letraDaSenha(s) === 'G' || letraDaSenha(s) === 'S'),
-        ),
+        dos.filter((s) => s.guiche === p.guiche && !s.atendida && s.situacao === 'chamada'),
       ).map(tela),
-      suspensas: dos.filter((s) => letraDaSenha(s) === 'S' && !s.atendida && s.guiche !== p.guiche).map(tela),
+      suspensas: dos.filter((s) => foraDaFila(s.situacao) && !s.atendida && s.guiche !== p.guiche).map(tela),
       emAtendimento: todas.senhas
-        .filter((s) => s.atendida && (letraDaSenha(s) === 'A' || letraDaSenha(s) === 'C'))
+        .filter((s) => s.atendida && ['chamada', 'em_atendimento', 'encaminhada'].includes(s.situacao))
         .map(tela),
       total: dos.length,
       cortada: todas.cortada || aguardando.length > TETO_FILA,
@@ -380,8 +379,8 @@ export class ServicoRecepcao {
         emitidas: todas.senhas.length,
         aguardando: aguardando.length,
         chamadas: contar((s) => s.guiche !== null || s.chamadas > 0),
-        liberadas: contar((s) => letraDaSenha(s) === 'L'),
-        suspensas: contar((s) => letraDaSenha(s) === 'S'),
+        liberadas: contar((s) => s.situacao === 'atendida'),
+        suspensas: contar((s) => foraDaFila(s.situacao)),
         atendidas: contar((s) => s.atendida),
       },
     };

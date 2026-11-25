@@ -1,7 +1,7 @@
 // Leituras comuns da recepção sobre o banco do cliente (F2.2), usadas pela porta própria e pelas operações do
 // Executor: o estabelecimento da sessão (pelo código) e o fuso dele, a hora civil e a senha lida em vocabulário neutro
 // (situação nominal, guichê nulo quando não há, grupo de prioridade pelo código), com o que os serviços precisam
-// (chamadas, vínculos). A tradução para o contrato da tela fica em tela-senha.ts. SQL sempre parametrizado; toda leitura de tabela com
+// (chamadas, vínculos). Os códigos do contrato que não são a situação ficam em codigos-senha.ts. SQL sempre parametrizado; toda leitura de tabela com
 // estabelecimento_id filtra pelo estabelecimento da sessão.
 //
 // Melhoria: a situação da senha no banco é nominal ('aguardando', 'chamada', 'em_atendimento', 'atendida',

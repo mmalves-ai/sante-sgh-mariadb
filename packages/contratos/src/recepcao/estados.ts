@@ -1,20 +1,19 @@
-// Máquina de estados da senha sobre as letras do legado (M19; ficha, seção 5, "Regras comuns"): a situação da senha
-// (situação da senha emitida) e o que cada evento grava, medidos no perfil passivo da cópia pc (só agregados; sequências
-// de eventos por senha desde 2024):
-//   - no guichê (a senha ainda sem atendimento): a chamada põe o guichê e o usuário na senha, sem linha no fluxo
-//     (98,5% das senhas "diversos" terminam só com L; o atendimento começa com A); chamar de novo grava C no local do
-//     guichê (CL, CCL, CCS); suspender e não localizado gravam S com o motivo e devolvem o guichê a 0 (24.164 "S" com
-//     guichê 0); a senha suspensa pode ser chamada de novo (SC…, SL); "diversos" termina com L e o motivo fixo;
-//   - no local de atendimento (a senha com atendimento aberto, situação A): chamar ao local põe C (AC/C), cancelar a
-//     chamada (X) e não localizado (N) voltam a A (ACX/A, ACXN/A), encaminhar grava E com o local de destino (ACAE/A),
-//     liberar do local grava L e a senha fica A (AL/A);
-//   - F (finalizar) e I (ignorar) nunca aparecem: recusados (letra nunca vista).
-import type { EventoSenha, LetraFluxo } from './vocabulario.js';
+// Máquina de estados da senha sobre a situação nominal (SITUACOES_SENHA; ficha F3.2, seção 5, "Regras comuns"):
+//   - no guichê (a senha ainda sem atendimento): chamar põe o guichê e a situação "chamada"; chamar de novo mantém;
+//     suspender devolve o guichê e deixa "suspensa" com o motivo; o paciente que não atende à chamada fica
+//     "nao_compareceu" (o motivo padronizado e o guichê devolvido); a suspensa e a que não compareceu voltam pela
+//     retomada (chamada de novo pelo guichê); "diversos" se conclui no guichê ("atendida", com o motivo fixo);
+//   - no local de atendimento (a senha com atendimento aberto): chamar ao local deixa "chamada"; cancelar a chamada e
+//     não localizado no local voltam a "em_atendimento"; encaminhar deixa "encaminhada" (o local passa a ser o
+//     destino); liberar do local volta a "em_atendimento" (o atendimento segue aberto);
+//   - F (finalizar) e I (ignorar) nunca aparecem nas filas: recusados.
+// As letras ficam só no fluxo da senha (LETRAS_FLUXO), o histórico de eventos; a situação nunca é letra.
+import type { EventoSenha, LetraFluxo, SituacaoSenha } from './vocabulario.js';
 
 export interface EstadoSenha {
-  /** Situação da senha emitida (vazio tratado como G). */
+  /** Situação nominal da senha (SITUACOES_SENHA). */
   readonly situacao: string;
-  /** Guichê que chamou (0 = ninguém). */
+  /** Guichê que chamou (0 = nenhum). */
   readonly guiche: number;
   /** Tem atendimento aberto (vínculo senha × atendimento). */
   readonly atendida: boolean;
@@ -24,7 +23,7 @@ export interface EstadoSenha {
 
 /** O que o evento muda: a situação nova (null = não muda), o guichê novo (null = não muda) e a letra do fluxo. */
 export interface EfeitoEvento {
-  readonly situacao: string | null;
+  readonly situacao: SituacaoSenha | null;
   readonly guiche: 'meu' | 'zero' | null;
   /** Letra gravada no fluxo (null = o evento não grava linha no fluxo). */
   readonly letraFluxo: LetraFluxo | null;
@@ -40,15 +39,18 @@ export type Decisao = { readonly ok: true; readonly efeito: EfeitoEvento } | Rec
 const recusa = (codigo: string, motivo: string): Recusa => ({ ok: false, codigo, motivo });
 const efeito = (e: EfeitoEvento): Decisao => ({ ok: true, efeito: e });
 
-/** Situação normalizada (o CHAR(1) do legado pode vir vazio ou com espaço). */
+/** Situação normalizada (vazia vale "aguardando", a situação de nascimento). */
 export function situacaoDe(s: string | null | undefined): string {
-  const t = (s ?? '').trim().toUpperCase();
-  return t === '' ? 'G' : t;
+  const t = (s ?? '').trim().toLowerCase();
+  return t === '' ? 'aguardando' : t;
 }
 
-/** Pode ser chamada pela próxima do guichê? (SPSENHAATEND: situação fora de L e S, sem atendimento, guichê livre.) */
+const NO_LOCAL = ['chamada', 'em_atendimento', 'encaminhada'];
+const naoVeio = (sit: string) => sit === 'suspensa' || sit === 'nao_compareceu';
+
+/** Pode ser chamada pela próxima do guichê? (aguardando, sem guichê e sem atendimento.) */
 export function chamavel(s: EstadoSenha): boolean {
-  return situacaoDe(s.situacao) === 'G' && s.guiche === 0 && !s.atendida;
+  return situacaoDe(s.situacao) === 'aguardando' && s.guiche === 0 && !s.atendida;
 }
 
 /**
@@ -62,16 +64,17 @@ export function decidirEvento(s: EstadoSenha, evento: EventoSenha, meuGuiche: nu
   switch (evento) {
     case 'rechamar':
       if (!naoAtendida) return recusa('senha-em-atendimento', 'A senha já tem atendimento aberto.');
-      if (!doGuiche || (sit !== 'G' && sit !== 'S'))
+      if (!doGuiche || sit !== 'chamada')
         return recusa('senha-nao-esta-no-guiche', 'Só se chama de novo a senha chamada por este guichê.');
       return efeito({ situacao: null, guiche: null, letraFluxo: 'C', motivo: null, usuario: false });
     case 'retomar':
       if (!naoAtendida) return recusa('senha-em-atendimento', 'A senha já tem atendimento aberto.');
-      if (sit !== 'S') return recusa('senha-nao-suspensa', 'Só a senha suspensa é chamada por aqui.');
+      if (!naoVeio(sit))
+        return recusa('senha-nao-suspensa', 'Só a senha suspensa ou que não compareceu é chamada por aqui.');
       if (s.guiche !== 0 && !doGuiche)
         return recusa('senha-em-outro-guiche', 'A senha suspensa já foi chamada por outro guichê.');
       if (meuGuiche <= 0) return recusa('guiche-fechado', 'Abra o guichê antes de chamar.');
-      return efeito({ situacao: null, guiche: 'meu', letraFluxo: 'C', motivo: null, usuario: true });
+      return efeito({ situacao: 'chamada', guiche: 'meu', letraFluxo: 'C', motivo: null, usuario: true });
     case 'liberar':
       if (s.tipoGerador !== '5')
         return recusa(
@@ -79,17 +82,26 @@ export function decidirEvento(s: EstadoSenha, evento: EventoSenha, meuGuiche: nu
           'A senha deste serviço segue para a abertura do atendimento: ela não se conclui no guichê.',
         );
       if (!naoAtendida) return recusa('senha-em-atendimento', 'A senha já tem atendimento aberto.');
-      if (!doGuiche || (sit !== 'G' && sit !== 'S'))
+      if (!doGuiche || sit !== 'chamada')
         return recusa('senha-nao-esta-no-guiche', 'Só se conclui a senha chamada por este guichê.');
-      return efeito({ situacao: 'L', guiche: null, letraFluxo: 'L', motivo: 'diversos', usuario: true });
+      return efeito({
+        situacao: 'atendida',
+        guiche: null,
+        letraFluxo: 'L',
+        motivo: 'diversos',
+        usuario: true,
+      });
     case 'suspender':
     case 'naoLocalizado': {
       if (!naoAtendida) return recusa('senha-em-atendimento', 'A senha já tem atendimento aberto.');
-      if (sit !== 'G') return recusa('situacao-mudou', 'A senha não está aguardando nem chamada no guichê.');
+      if (sit !== 'aguardando' && sit !== 'chamada')
+        return recusa('situacao-mudou', 'A senha não está aguardando nem chamada no guichê.');
       if (s.guiche !== 0 && !doGuiche)
         return recusa('senha-em-outro-guiche', 'A senha foi chamada por outro guichê.');
+      if (evento === 'naoLocalizado' && sit !== 'chamada')
+        return recusa('senha-nao-chamada', 'Só a senha chamada pode ficar como não compareceu.');
       return efeito({
-        situacao: 'S',
+        situacao: evento === 'naoLocalizado' ? 'nao_compareceu' : 'suspensa',
         guiche: 'zero',
         letraFluxo: 'S',
         motivo: evento === 'naoLocalizado' ? 'nao-localizado' : 'entrada',
@@ -98,28 +110,47 @@ export function decidirEvento(s: EstadoSenha, evento: EventoSenha, meuGuiche: nu
     }
     case 'chamarNoLocal':
       if (naoAtendida) return recusa('senha-sem-atendimento', 'A senha ainda não tem atendimento aberto.');
-      if (sit !== 'A' && sit !== 'C') return recusa('situacao-mudou', 'A senha não está em atendimento.');
-      return efeito({ situacao: 'C', guiche: null, letraFluxo: 'C', motivo: null, usuario: true });
+      if (!NO_LOCAL.includes(sit)) return recusa('situacao-mudou', 'A senha não está em atendimento.');
+      return efeito({ situacao: 'chamada', guiche: null, letraFluxo: 'C', motivo: null, usuario: true });
     case 'cancelarChamada':
       if (naoAtendida) return recusa('senha-sem-atendimento', 'A senha ainda não tem atendimento aberto.');
-      if (sit !== 'C') return recusa('senha-nao-chamada', 'A senha não está chamada no local.');
-      return efeito({ situacao: 'A', guiche: null, letraFluxo: 'X', motivo: null, usuario: true });
+      if (sit !== 'chamada') return recusa('senha-nao-chamada', 'A senha não está chamada no local.');
+      return efeito({
+        situacao: 'em_atendimento',
+        guiche: null,
+        letraFluxo: 'X',
+        motivo: null,
+        usuario: true,
+      });
     case 'naoLocalizadoNoLocal':
       if (naoAtendida) return recusa('senha-sem-atendimento', 'A senha ainda não tem atendimento aberto.');
-      if (sit !== 'C' && sit !== 'A') return recusa('situacao-mudou', 'A senha não está em atendimento.');
-      return efeito({ situacao: 'A', guiche: null, letraFluxo: 'N', motivo: null, usuario: true });
+      if (!NO_LOCAL.includes(sit)) return recusa('situacao-mudou', 'A senha não está em atendimento.');
+      return efeito({
+        situacao: 'em_atendimento',
+        guiche: null,
+        letraFluxo: 'N',
+        motivo: null,
+        usuario: true,
+      });
     case 'encaminhar':
       if (naoAtendida)
         return recusa(
           'senha-sem-atendimento',
           'O encaminhamento entre locais é da senha com atendimento aberto.',
         );
-      if (sit !== 'A') return recusa('situacao-mudou', 'A senha não está em atendimento no local.');
-      return efeito({ situacao: null, guiche: null, letraFluxo: 'E', motivo: null, usuario: false });
+      if (sit !== 'em_atendimento' && sit !== 'encaminhada')
+        return recusa('situacao-mudou', 'A senha não está em atendimento no local.');
+      return efeito({ situacao: 'encaminhada', guiche: null, letraFluxo: 'E', motivo: null, usuario: false });
     case 'liberarDoLocal':
       if (naoAtendida) return recusa('senha-sem-atendimento', 'A senha ainda não tem atendimento aberto.');
-      if (sit !== 'A' && sit !== 'C') return recusa('situacao-mudou', 'A senha não está em atendimento.');
-      return efeito({ situacao: null, guiche: null, letraFluxo: 'L', motivo: null, usuario: true });
+      if (!NO_LOCAL.includes(sit)) return recusa('situacao-mudou', 'A senha não está em atendimento.');
+      return efeito({
+        situacao: 'em_atendimento',
+        guiche: null,
+        letraFluxo: 'L',
+        motivo: null,
+        usuario: true,
+      });
     case 'finalizar':
     case 'ignorar':
       return recusa(

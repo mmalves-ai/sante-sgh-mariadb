@@ -535,7 +535,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
           if (sen.atendida || s.fichas.some((x) => x.ativo && x.senha === e['senha']))
             throw recusa('senha-ja-atendida', 'A senha já tem atendimento aberto.', { campos: ['senha'] });
           if (!sen.hoje) throw recusa('senha-de-outro-dia', 'A senha não é de hoje.', { campos: ['senha'] });
-          if (!['G', 'C', 'S'].includes(sen.situacao))
+          if (!['aguardando', 'chamada', 'suspensa', 'nao_compareceu'].includes(sen.situacao))
             throw recusa('senha-concluida', 'A senha já foi concluída ou está em atendimento.', {
               campos: ['senha'],
             });
@@ -669,9 +669,9 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
         if (f.desfecho) throw recusa('atendimento-encerrado', 'O atendimento já foi encerrado.');
         if (f.senha) {
           const sen = this.deps.recepcao?.senhaParaAtendimento(c, f.senha);
-          if (sen && sen.situacao !== 'A' && sen.situacao !== 'C')
+          if (sen && !['chamada', 'em_atendimento', 'encaminhada'].includes(sen.situacao))
             throw recusa('situacao-mudou', 'A senha do atendimento não está em atendimento.');
-          if (e['evento'] === 'atender' && sen?.situacao !== 'C')
+          if (e['evento'] === 'atender' && sen?.situacao !== 'chamada')
             throw recusa('paciente-nao-chamado', 'Chame o paciente antes de iniciar o atendimento.');
           this.deps.recepcao?.eventoDoConsultorio(
             c,

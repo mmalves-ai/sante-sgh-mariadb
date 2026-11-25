@@ -231,6 +231,38 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
     );
     expect(susp[0]?.situacao).toBe('suspensa');
     expect(susp[0]?.motivo_complemento).toBeTruthy();
+    // Não comparecimento (situação nominal própria): a suspensa é retomada (chamada de novo pelo guichê), o paciente
+    // não atende à chamada e a senha fica "nao_compareceu", fora da fila, sem guichê e com o motivo padronizado;
+    // a retomada a devolve à chamada. Nenhuma situação é letra.
+    const id = Number(ch.resultado['senha']);
+    const evento = (ev: string) =>
+      porta.executar(
+        c,
+        'recepcao.registrarEventoSenha',
+        { senha: id, local: m.local, guiche: 1, evento: ev },
+        g(),
+      );
+    await evento('retomar');
+    expect(await porta.senha(c, id)).toMatchObject({ situacao: 'chamada', guiche: 1 });
+    await evento('naoLocalizado');
+    const nc = await ler<{ situacao: string; guiche: number | null; motivo_complemento: string | null }>(
+      'SELECT situacao, guiche_recepcao_id AS guiche, motivo_complemento FROM senha_emitida WHERE id = ?',
+      [id],
+    );
+    expect(nc[0]).toMatchObject({ situacao: 'nao_compareceu', guiche: null });
+    expect(nc[0]?.motivo_complemento).toBe('Paciente não localizado');
+    expect(await porta.senha(c, id)).toMatchObject({ situacao: 'nao_compareceu', guiche: null });
+    // Fora da fila: a próxima chamada do guichê não a pega de volta sozinha.
+    expect(await recusada(evento('naoLocalizado'))).toBe('situacao-mudou');
+    const acoes = await ler<{ codigo: string }>(
+      `SELECT a.codigo FROM evento_senha e JOIN acao_fluxo_senha a ON a.id = e.acao_fluxo_senha_id
+        WHERE e.senha_emitida_id = ? ORDER BY e.id`,
+      [id],
+    );
+    expect(acoes.map((x) => x.codigo).slice(-2)).toEqual(['chamar', 'nao_localizado']);
+    await evento('retomar');
+    expect(await porta.senha(c, id)).toMatchObject({ situacao: 'chamada', guiche: 1, chamadas: 4 });
+    await evento('naoLocalizado');
   });
 
   it('recusa a entrada inválida, a senha de outro estabelecimento e a mesma chave com outra entrada', async () => {
@@ -413,6 +445,10 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
     expect(ind.total).toBeGreaterThanOrEqual(4);
     expect(ind.tempos.some((x) => x.guiche === 1 && x.chamadaEm !== null)).toBe(true);
     expect(ind.porServico.find((x) => x.gerador === m.gerador)?.senhas).toBe(ind.total);
+    // Por situação nominal: a que não compareceu conta à parte e entra nas suspensas do dia; nenhuma chave é letra.
+    expect(ind.porSituacao.find((x) => x.situacao === 'nao_compareceu')?.senhas).toBeGreaterThanOrEqual(1);
+    expect(ind.porSituacao.every((x) => x.situacao.length > 1)).toBe(true);
+    expect(ind.porDia.find((x) => x.data === hoje)?.suspensas).toBeGreaterThanOrEqual(1);
   });
 
   const trilhaDe = (tabela: string, id: number | null = null) => ({

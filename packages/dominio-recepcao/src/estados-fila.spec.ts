@@ -5,9 +5,9 @@ import { chamavel, decidirEvento, eventosPossiveis, ordenarFila, prioritaria, te
 
 describe('domínio da recepção: estados e fila (reexportados)', () => {
   it('a senha aguardando é chamável e o guichê a conduz', () => {
-    const s = { situacao: 'G', guiche: 0, atendida: false, tipoGerador: '5' };
+    const s = { situacao: 'aguardando', guiche: 0, atendida: false, tipoGerador: '5' };
     expect(chamavel(s)).toBe(true);
-    expect(eventosPossiveis({ ...s, guiche: 3 }, 3)).toContain('liberar');
+    expect(eventosPossiveis({ ...s, situacao: 'chamada', guiche: 3 }, 3)).toContain('liberar');
     expect(decidirEvento(s, 'finalizar', 3)).toMatchObject({ ok: false, codigo: 'letra-nunca-vista' });
   });
 

@@ -1,6 +1,6 @@
 // Vocabulário da recepção: senhas, guichês, totens e painéis (M19; ficha, seções 5 e 8). As letras são as das ações do
-// fluxo da senha (domínio do legado, M14) e as das situações da senha; o novo só grava as letras já vistas no perfil
-// passivo da cópia (I e F nunca apareceram: recusadas). Perfil da cópia pc (só agregados):
+// fluxo da senha (domínio do legado, M14); a situação da senha é nominal (SITUACOES_SENHA). O novo só grava as letras
+// de fluxo já vistas no perfil passivo da cópia (I e F nunca apareceram: recusadas). Perfil da cópia pc (só agregados):
 //   - senhas emitidas (301.109; 40.120 em 2026): situação A 126.709, L 100.557, S 73.417, G 399, C 27; prioridade
 //     '2' em 97,9%; motivo vazio na emissão; guichê 0 até a chamada;
 //   - eventos do fluxo da senha (555.695): A 231.735, L 154.306, C 93.549, S 73.813, X 1.773, N 458, E 61; nenhum G;
@@ -8,15 +8,29 @@
 //     desde 2025).
 // Nenhum nome de tabela do legado sai daqui para a tela: os rótulos são de produto (ADR 0023).
 
-/** Situação da senha, com o rótulo de produto. */
+/**
+ * Situação da senha, nominal (a mesma do banco próprio, senha_emitida.situacao), com o rótulo de produto. A chamada
+ * pelo guichê e a chamada ao local são as duas "chamada" (o guichê ou o atendimento aberto dizem onde); o não
+ * comparecimento depois da chamada é situação própria (volta à fila pela retomada), separada da suspensão.
+ */
 export const SITUACOES_SENHA = [
-  { letra: 'G', rotulo: 'Aguardando chamada' },
-  { letra: 'C', rotulo: 'Chamada no local' },
-  { letra: 'A', rotulo: 'Em atendimento' },
-  { letra: 'L', rotulo: 'Liberada' },
-  { letra: 'S', rotulo: 'Suspensa' },
+  { codigo: 'aguardando', rotulo: 'Aguardando chamada' },
+  { codigo: 'chamada', rotulo: 'Chamada' },
+  { codigo: 'em_atendimento', rotulo: 'Em atendimento' },
+  { codigo: 'encaminhada', rotulo: 'Encaminhada a outro local' },
+  { codigo: 'atendida', rotulo: 'Concluída' },
+  { codigo: 'suspensa', rotulo: 'Suspensa' },
+  { codigo: 'nao_compareceu', rotulo: 'Não compareceu' },
+  { codigo: 'cancelada', rotulo: 'Cancelada' },
 ] as const;
-export type SituacaoSenha = (typeof SITUACOES_SENHA)[number]['letra'];
+export type SituacaoSenha = (typeof SITUACOES_SENHA)[number]['codigo'];
+export const CODIGOS_SITUACAO_SENHA = SITUACOES_SENHA.map((s) => s.codigo) as [
+  SituacaoSenha,
+  ...SituacaoSenha[],
+];
+
+/** A senha saiu da fila do guichê sem atendimento e pode ser chamada de novo (suspensa ou não compareceu). */
+export const foraDaFila = (s: string): boolean => s === 'suspensa' || s === 'nao_compareceu';
 
 /** Letras de evento do fluxo da senha e se o perfil da cópia as mostra (só as vistas gravam). */
 export const LETRAS_FLUXO = [

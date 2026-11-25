@@ -68,7 +68,7 @@ export interface LiberacaoConsultada {
 // ── Recepção ─────────────────────────────────────────────────────────────────────────────────────
 
 /** Serviço (gerador de senha) da recepção. */
-/** Situação da senha (nominal, a do banco; a letra da tela é derivada em tela-senha.ts). */
+/** Situação da senha (nominal: a do banco e a do contrato da tela, SITUACOES_SENHA). */
 export type SituacaoSenha =
   | 'aguardando'
   | 'chamada'
@@ -133,7 +133,7 @@ export interface GuicheEmUso {
   readonly usuario: string;
 }
 
-/** Senha emitida, em vocabulário neutro (a tradução para o contrato da tela fica em tela-senha.ts). */
+/** Senha emitida, em vocabulário neutro (os códigos do contrato que não são a situação ficam em codigos-senha.ts). */
 export interface SenhaRecepcao {
   readonly id: number;
   readonly numero: number;

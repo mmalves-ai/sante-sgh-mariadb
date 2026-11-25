@@ -9,6 +9,7 @@ import {
   CONFIG_FILA_PADRAO,
   decidirEvento,
   eventoSenha,
+  foraDaFila,
   MOTIVO_LIBERACAO_DIVERSOS,
   ordenarFila,
   prioritariasSeguidas,
@@ -30,7 +31,7 @@ import type {
   SenhaRecepcao,
   SituacaoSenha,
 } from './tipos.js';
-import { CODIGO_DO_GRUPO, situacaoDaLetra, tipoGeradorDaTela } from './tela-senha.js';
+import { CODIGO_DO_GRUPO, tipoGeradorDaTela } from './codigos-senha.js';
 import type { ContextoRecepcao, GravadorRecepcao, PortaRecepcao } from './porta.js';
 
 /** Estado das operações no catálogo do estabelecimento (dev/ci: 'verde' libera; 'bloqueada' ou null recusa). */
@@ -71,7 +72,7 @@ interface SenhaM {
   gerador: number;
   data: string;
   prioridade: string;
-  situacao: string;
+  situacao: SituacaoSenha;
   guiche: number;
   usuario: string;
   motivo: string;
@@ -109,12 +110,6 @@ interface DispositivoM extends DispositivoRecepcao {
 }
 
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
-
-/** Situação nominal a partir da letra guardada na sessão sintética (G no guichê é a chamada). */
-function situacaoDaLetraNaMemoria(letra: string, guiche: number): SituacaoSenha {
-  if (letra === 'G') return guiche > 0 ? 'chamada' : 'aguardando';
-  return situacaoDaLetra(letra);
-}
 
 /** A cópia sem o campo (o CPF do agendado e o resumo do token não saem da porta). */
 function semCampo<T extends object, K extends keyof T>(x: T, campo: K): Omit<T, K> {
@@ -277,7 +272,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     ] as const)
       this.novaSenha(s, gerador, prio, 'TOTEM.SINTETICO', minutos(atras), 'totem', null);
     const emAtendimento = this.novaSenha(s, 1, '2', 'TOTEM.SINTETICO', minutos(40), 'totem', null);
-    emAtendimento.situacao = 'A';
+    emAtendimento.situacao = 'em_atendimento';
     emAtendimento.atendida = true;
     emAtendimento.guiche = 2;
     s.fluxo.push({
@@ -310,7 +305,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
       gerador,
       data: hoje,
       prioridade,
-      situacao: 'G',
+      situacao: 'aguardando',
       guiche: 0,
       usuario,
       motivo: '',
@@ -360,9 +355,9 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
               : null,
       pesoGrupo: null,
       horarioMarcacao: null,
-      situacao: situacaoDaLetraNaMemoria(x.situacao, x.guiche),
+      situacao: x.situacao,
       guiche: x.guiche > 0 ? x.guiche : null,
-      local: x.situacao === 'C' ? x.localChamada : null,
+      local: x.atendida && x.situacao === 'chamada' ? x.localChamada : null,
       usuario: x.usuario,
       emitidaEm: x.emitidaEm,
       origem: x.origem,
@@ -476,7 +471,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
             throw recusa('gerador-de-outra-recepcao', 'Um dos serviços escolhidos não é desta recepção.');
         const livre = (x: SenhaM) =>
           x.data === r.hoje &&
-          x.situacao === 'G' &&
+          x.situacao === 'aguardando' &&
           x.guiche === 0 &&
           !x.atendida &&
           (e['geradores'] as number[]).includes(x.gerador);
@@ -505,6 +500,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
           if (!alvo) throw recusa('fila-vazia', 'Não há senha aguardando nos serviços deste guichê.');
         }
         alvo.guiche = e['guiche'];
+        alvo.situacao = 'chamada';
         alvo.usuario = login;
         alvo.chamadas++;
         alvo.chamadaEm = r.agora;
@@ -584,7 +580,8 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
         if (x.data !== r.hoje) throw recusa('senha-de-outro-dia', 'A senha não é de hoje.');
         if (x.atendida) throw recusa('senha-em-atendimento', 'A senha já tem atendimento aberto.');
         if (x.agendamento) throw recusa('senha-ja-ligada', 'A senha já está ligada a um agendamento.');
-        if (x.situacao === 'L') throw recusa('senha-concluida', 'A senha já foi concluída.');
+        if (x.situacao === 'atendida' || x.situacao === 'cancelada')
+          throw recusa('senha-concluida', 'A senha já foi concluída.');
         if (this.gerador(s, x.gerador)?.tipo !== 'atendimento')
           throw recusa(
             'senha-de-servico-diverso',
@@ -804,7 +801,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     const x = this.senhaM(s, id);
     if (x.atendida) throw recusa('senha-ja-atendida', 'A senha já tem atendimento aberto.');
     x.atendida = true;
-    x.situacao = 'A';
+    x.situacao = 'em_atendimento';
     s.fluxo.push({
       id: ++s.seq,
       senha: x.id,
@@ -825,7 +822,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
   ): void {
     const s = this.e(c);
     const x = this.senhaM(s, id);
-    if (letra !== 'L') x.situacao = letra;
+    if (letra !== 'L') x.situacao = letra === 'C' ? 'chamada' : 'em_atendimento';
     if (letra === 'C') {
       x.chamadas++;
       x.chamadaEm = this.relogioAtual().agora;
@@ -842,13 +839,13 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     });
   }
 
-  /** A exclusão do atendimento desfaz a ligação e devolve a senha a S (o gatilho do legado faz o mesmo). */
+  /** A exclusão do atendimento desfaz a ligação e devolve a senha à situação suspensa (fluxo S). */
   desfazerAtendimentoDaSenha(c: ContextoRecepcao, id: number): void {
     const s = this.e(c);
     const x = this.senhaM(s, id);
     const ultimo = [...s.fluxo].reverse().find((f) => f.senha === id);
     x.atendida = false;
-    x.situacao = 'S';
+    x.situacao = 'suspensa';
     s.fluxo.push({
       id: ++s.seq,
       senha: x.id,
@@ -914,7 +911,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
         y.id !== x.id &&
         y.gerador === x.gerador &&
         y.data === x.data &&
-        y.situacao === 'G' &&
+        y.situacao === 'aguardando' &&
         y.guiche === 0 &&
         y.emitidaEm <= x.emitidaEm,
     ).length;
@@ -1013,9 +1010,9 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
         return {
           data: d,
           emitidas: ds.length,
-          liberadas: ds.filter((x) => x.situacao === 'L').length,
-          suspensas: ds.filter((x) => x.situacao === 'S').length,
-          atendidas: ds.filter((x) => x.situacao === 'A' || x.situacao === 'C').length,
+          liberadas: ds.filter((x) => x.situacao === 'atendida').length,
+          suspensas: ds.filter((x) => foraDaFila(x.situacao)).length,
+          atendidas: ds.filter((x) => x.atendida).length,
         };
       }),
       porSituacao: [...contar((x) => x.situacao).entries()].map(([situacao, senhas]) => ({
