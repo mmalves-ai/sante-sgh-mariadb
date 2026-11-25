@@ -400,7 +400,9 @@ export function gerarCnab240Pix(
       ]),
     );
     seq += 1;
-    const documento = somenteDigitos(t.documento);
+    // Chave de CPF ou CNPJ: o documento do segmento B é a própria chave (é por ele que o banco acha o recebedor).
+    const documento =
+      chave.tipo === 'cpf' || chave.tipo === 'cnpj' ? chave.chave : somenteDigitos(t.documento);
     linhas.push(
       linha240([
         [1, b],
@@ -411,7 +413,7 @@ export function gerarCnab240Pix(
         [15, INICIACAO_PIX[chave.tipo].padEnd(3, ' ')],
         [18, documento.length === 14 ? '2' : '1'],
         [19, zeros(documento, 14)],
-        // CPF e CNPJ como chave já vão no documento do favorecido; as demais chaves, no campo da chave.
+        // As demais chaves vão no campo da chave.
         [128, chave.tipo === 'cpf' || chave.tipo === 'cnpj' ? '' : chave.chave.slice(0, 99)],
       ]),
     );

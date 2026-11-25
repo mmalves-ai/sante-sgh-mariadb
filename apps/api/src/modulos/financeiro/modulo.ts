@@ -20,6 +20,7 @@ import { CompensacaoPrevisaoController } from './compensacao-previsao.controller
 import { ContabilFiscalController } from './contabil-fiscal.controller.js';
 import { FinanceiroController } from './financeiro.controller.js';
 import { GestaoFinanceiroController } from './gestao.controller.js';
+import { PagamentoEletronicoController } from './pagamento-eletronico.controller.js';
 import { NUCLEO_PERIODO_FINANCEIRO, PeriodoFinanceiroController } from './periodo.controller.js';
 import { ReinfEventosController } from './reinf-eventos.controller.js';
 import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
@@ -70,6 +71,7 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       GestaoFinanceiroController,
       ContabilFiscalController,
       CompensacaoPrevisaoController,
+      PagamentoEletronicoController,
       ReinfEventosController,
     ],
     providers: [
