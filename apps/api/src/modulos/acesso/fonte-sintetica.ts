@@ -685,6 +685,18 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
           'suprimentos',
           'sadt',
         ),
+        // F3.6 (05-SUP linhas 1, 3 e 13): o administrador mantém o cadastro do estoque: o item e o medicamento, o local e
+        // o escopo dos usuários do estoque, o kit padrão da cirurgia e a requisição que o usa.
+        ...opcoesSuprimentos(
+          'suprimentos.item.*',
+          'suprimentos.local.*',
+          'suprimentos.kit.ler',
+          'suprimentos.kit.editar',
+          'acesso.escopo.*',
+          'suprimentos.requisicao.ler',
+          'suprimentos.requisicao.criar',
+        ),
+        ...opcoesDasPermissoes('acesso.escopo.editar'),
       ],
     },
   },

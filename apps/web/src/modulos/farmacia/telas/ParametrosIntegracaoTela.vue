@@ -91,9 +91,17 @@ function escolherSubgrupo(v: number | null): void {
 }
 const nulo = (v: unknown) => (v === '' || v === null || v === undefined ? null : Number(v));
 
+/**
+ * A regra que vai à API: com a exceção por item, o grupo e o subgrupo foram só o caminho para achar o item na tela (o
+ * item já diz a que grupo pertence) e não entram no escopo da regra, que não combina item com grupo ou subgrupo.
+ */
+function regraDoForm(f: Form): Form {
+  return f.item === null ? f : { ...f, grupo: null, subgrupo: null };
+}
+
 /** As recusas na hora, pelas mesmas regras da API. */
 const recusasRegra = computed(() => {
-  const f = form.value;
+  const f = regraDoForm(form.value);
   const rs = conferirRegraIntegracao({ ...f, localAtendente: f.localAtendente ?? 0 }).map((r) => r.mensagem);
   if (f.localAtendente === null) rs.unshift(t('farmacia.parametros.semLocal'));
   return rs;
@@ -103,6 +111,12 @@ function editar(r: RegraIntegracaoLida): void {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { escopoNome, localNome, ...resto } = r;
   form.value = { ...vazio(), ...resto };
+  // A exceção por item volta com o caminho (grupo e subgrupo do item) para a escolha do item aparecer na tela.
+  if (r.item !== null) {
+    const subgrupo = opcoes.value?.itens.find((i) => i.id === r.item)?.subgrupo ?? null;
+    form.value.subgrupo = subgrupo;
+    form.value.grupo = opcoes.value?.subgrupos.find((s) => s.id === subgrupo)?.grupo ?? null;
+  }
   mensagem.value = null;
 }
 
@@ -111,7 +125,7 @@ async function gravarRegra(): Promise<void> {
   mensagem.value = null;
   if (recusasRegra.value.length) return;
   try {
-    const r = await gravarRegraIntegracao(form.value, novaChave('regra-integracao'));
+    const r = await gravarRegraIntegracao(regraDoForm(form.value), novaChave('regra-integracao'));
     mensagem.value = r.mensagem;
     form.value = vazio();
     await p.refetch();
