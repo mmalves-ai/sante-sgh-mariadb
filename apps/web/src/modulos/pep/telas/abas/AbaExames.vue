@@ -1,13 +1,21 @@
 <script setup lang="ts">
 // Solicitação de exames (regra 11): individual ou por kit, com indicação e urgência; os avisos de duplicidade,
-// sexo e idade aparecem antes de enviar e pedem confirmação; exame inativo bloqueia.
+// sexo e idade aparecem antes de enviar e pedem confirmação; exame inativo bloqueia. A restrição clínica do exame
+// (05-SADT linha 5) é vista na hora, a cada exame escolhido: o bloqueio impede, o alerta pede a confirmação e a
+// exceção ao bloqueio pede a justificativa (e quem possa autorizá-la); a gravação confere de novo.
 import type { AvisoPedidoExame, ExameCatalogo } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
-import { lerExames, novaChave, solicitarExames } from '../../api-documentos.js';
+import {
+  type AvaliacaoRestricaoExame,
+  avaliarRestricoesExame,
+  lerExames,
+  novaChave,
+  solicitarExames,
+} from '../../api-documentos.js';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
 import SeletorAtendimento from '../../componentes/documentos/SeletorAtendimento.vue';
 import { dataHoraBr } from '../../formato.js';
@@ -34,6 +42,46 @@ const chave = ref(novaChave('exames'));
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
 
+const justificativa = ref('');
+const restricao = ref<AvaliacaoRestricaoExame | null>(null);
+/** Os exames do pedido: os escolhidos e os do kit (a restrição vale para todos). */
+const examesDoPedido = computed(() => {
+  const k = (dados.data.value?.kits ?? []).find((x) => x.id === kit.value);
+  return [...new Set([...escolhidos.value.map((x) => x.exame.id), ...(k?.exames ?? [])])];
+});
+let ultima = 0;
+async function avaliarRestricoes(): Promise<void> {
+  const vez = ++ultima;
+  if (atendimento.value === null || examesDoPedido.value.length === 0) {
+    restricao.value = null;
+    return;
+  }
+  try {
+    const r = await avaliarRestricoesExame({
+      atendimento: atendimento.value,
+      exames: examesDoPedido.value,
+      confirmado: true,
+      justificativa: null,
+    });
+    if (vez === ultima) restricao.value = r;
+  } catch {
+    // Sem a leitura na hora, a gravação confere a restrição e devolve o motivo.
+    if (vez === ultima) restricao.value = null;
+  }
+}
+watch([atendimento, examesDoPedido], () => void avaliarRestricoes());
+/** Bloqueio que não aceita exceção: o exame tem de sair do pedido. */
+const bloqueado = computed(() =>
+  (restricao.value?.restricoes ?? []).some(
+    (r) => r.tipo === 'bloqueio' && r.excecao === null && !r.permiteExcecao,
+  ),
+);
+const temAlerta = computed(() => (restricao.value?.restricoes ?? []).some((r) => r.tipo === 'alerta'));
+const nomeDoExame = (id: number): string =>
+  escolhidos.value.find((x) => x.exame.id === id)?.exame.nome ??
+  dados.data.value?.catalogo.find((x) => x.id === id)?.nome ??
+  `#${id}`;
+
 function incluir(e: ExameCatalogo): void {
   if (!escolhidos.value.some((x) => x.exame.id === e.id))
     escolhidos.value.push({ exame: e, urgente: false, indicacao: '' });
@@ -54,6 +102,9 @@ async function enviar(): Promise<void> {
         })),
         ...(kit.value !== null ? { kit: kit.value } : {}),
         confirmarAvisos: confirmar.value,
+        ...(restricao.value?.pedeJustificativa && justificativa.value.trim()
+          ? { justificativa: justificativa.value.trim() }
+          : {}),
       },
       chave.value,
     );
@@ -64,6 +115,8 @@ async function enviar(): Promise<void> {
       kit.value = null;
       confirmar.value = false;
       avisos.value = [];
+      justificativa.value = '';
+      restricao.value = null;
       chave.value = novaChave('exames');
       await cliente.invalidateQueries({ queryKey: ['pep', 'doc'] });
     }
@@ -167,7 +220,35 @@ async function enviar(): Promise<void> {
             />
           </li>
         </ul>
-        <div v-if="avisos.length" class="cartao" data-testid="avisos-pedido">
+        <div v-if="restricao?.restricoes.length" class="cartao" data-testid="restricoes-pedido">
+          <h4>{{ t('pep.doc.exames.restricoes') }}</h4>
+          <SanteAlerta
+            v-for="r in restricao.restricoes"
+            :key="`${r.exame}-${r.regra}`"
+            :variante="r.tipo === 'bloqueio' && r.excecao === null ? 'alerta' : 'aviso'"
+            :texto="`${nomeDoExame(r.exame)}: ${r.mensagem}`"
+            :data-testid="`restricao-${r.exame}-${r.tipo}`"
+          />
+          <p v-if="bloqueado" role="alert" data-testid="restricao-bloqueado">
+            {{ t('pep.doc.exames.bloqueado') }}
+          </p>
+          <template v-else-if="restricao.pedeJustificativa">
+            <label>
+              <span>{{ t('pep.doc.exames.justificativa') }}</span>
+              <textarea
+                v-model="justificativa"
+                maxlength="500"
+                rows="2"
+                data-testid="restricao-justificativa"
+                :aria-invalid="justificativa.trim().length > 0 && justificativa.trim().length < 10"
+              ></textarea>
+            </label>
+            <p v-if="!restricao.podeAutorizarExcecao" role="status" data-testid="restricao-sem-autorizacao">
+              {{ t('pep.doc.exames.semAutorizacao') }}
+            </p>
+          </template>
+        </div>
+        <div v-if="avisos.length || temAlerta" class="cartao" data-testid="avisos-pedido">
           <h4>{{ t('pep.doc.exames.avisos') }}</h4>
           <SanteAlerta
             v-for="a in avisos"
@@ -184,7 +265,12 @@ async function enviar(): Promise<void> {
         <SanteBotao
           tipo="submit"
           :rotulo="t('pep.doc.exames.enviar')"
-          :desabilitado="escolhidos.length === 0"
+          :desabilitado="
+            escolhidos.length === 0 ||
+            bloqueado ||
+            (!!restricao?.pedeJustificativa &&
+              (!restricao.podeAutorizarExcecao || justificativa.trim().length < 10))
+          "
           data-testid="enviar-pedido"
         />
       </form>

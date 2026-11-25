@@ -303,6 +303,265 @@ function atendimentoDe(a: Linha): AtendimentoDoPedido {
   };
 }
 
+/** O atendimento com o que a restrição clínica lê: paciente, sexo, nascimento, regime, setor e unidade que pedem. */
+export async function atendimentoParaRestricao(
+  l: Leitor,
+  est: number,
+  atendimento: number,
+): Promise<Linha | null> {
+  return l.uma(
+    `SELECT a.id, a.paciente_id, a.fonte_pagadora_id, a.profissional_id, a.unidade_assistencial_id, a.setor_funcional_id,
+            pf.data_nascimento, sx.sigla AS sexo, ra.codigo_tiss AS regime,
+            EXISTS (SELECT 1 FROM internacao i WHERE i.atendimento_id = a.id AND i.excluido_em IS NULL) AS internado
+       FROM atendimento a JOIN paciente pa ON pa.id = a.paciente_id
+       JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id LEFT JOIN sexo sx ON sx.id = pf.sexo_id
+       LEFT JOIN regime_atendimento ra ON ra.id = a.regime_atendimento_id
+      WHERE a.id = ? AND a.estabelecimento_id = ?`,
+    [atendimento, est],
+  );
+}
+
+/** O que a restrição clínica precisa saber de quem pede e do pedido (além do atendimento e dos itens). */
+export interface OpcoesRestricao {
+  readonly tipo: PedidoExames['tipo'];
+  readonly confirmado: boolean;
+  readonly justificativa: string | null;
+  readonly podeAutorizarExcecao: boolean;
+  readonly usuario: number | null;
+}
+
+/** Um item avaliado pela restrição: o exame, o setor executante e o material (nulo quando o exame não tem). */
+export interface ItemParaRestricao {
+  readonly exame: number;
+  readonly setor: number;
+  readonly material: number | null;
+}
+
+/**
+ * As restrições clínicas do pedido (05-SADT linha 5) lidas do cadastro do estabelecimento e decididas pela regra do
+ * domínio: as regras ativas dos exames, as exceções permanentes que valem, o tipo de atendimento, os pedidos
+ * anteriores do paciente (repetição) e a decisão (bloqueio, alerta a confirmar, exceção nova com justificativa). Usada
+ * pelo pedido do setor e pelo pedido feito na prescrição do prontuário: a mesma regra nos dois caminhos.
+ */
+export async function restricoesClinicas(
+  l: Leitor,
+  est: number,
+  at: Linha,
+  itens: readonly ItemParaRestricao[],
+  o: OpcoesRestricao,
+): Promise<{ acionadas: RestricaoAcionada[]; decisao: ReturnType<typeof decisaoDoPedido> }> {
+  if (!itens.length) return { acionadas: [], decisao: decisaoDoPedido([], o) };
+  const exames = [...new Set(itens.map((i) => i.exame))];
+  const rel = await relogio(l, est);
+  const regras = (
+    await l.consultar(
+      `SELECT * FROM restricao_exame WHERE estabelecimento_id = ? AND ativo = TRUE AND exame_id IN (${lista(exames.length)})`,
+      [est, ...exames],
+    )
+  ).map(regraDe);
+  const paciente = n(at['paciente_id']);
+  // As exceções permanentes das regras (paciente, setor que pede, perfil de quem pede e estabelecimento): a regra do
+  // domínio escolhe a que vale. A exceção pontual de um item pedido não libera outro pedido.
+  const excecoes: ExcecaoCadastrada[] = regras.length
+    ? (
+        await l.consultar(
+          `SELECT id, restricao_exame_id, abrangencia, estabelecimento_id, setor_funcional_id, perfil_acesso_id,
+                  paciente_id, vigencia_inicio, vigencia_fim, ativo
+             FROM excecao_restricao_exame
+            WHERE ativo = TRUE AND abrangencia IN ('estabelecimento','setor','perfil','paciente')
+              AND restricao_exame_id IN (${lista(regras.length)})`,
+          regras.map((r) => r.id),
+        )
+      ).map((x) => ({
+        id: n(x['id']),
+        regra: n(x['restricao_exame_id']),
+        abrangencia: texto(x['abrangencia']) as ExcecaoCadastrada['abrangencia'],
+        estabelecimento: nn(x['estabelecimento_id']),
+        setorFuncional: nn(x['setor_funcional_id']),
+        perfil: nn(x['perfil_acesso_id']),
+        paciente: nn(x['paciente_id']),
+        vigenciaInicio: dataIso(x['vigencia_inicio']) ?? '1900-01-01',
+        vigenciaFim: dataIso(x['vigencia_fim']),
+        ativo: Boolean(x['ativo']),
+      }))
+    : [];
+  // Os perfis de acesso vigentes de quem grava, neste estabelecimento (só lidos quando há exceção por perfil).
+  const perfis =
+    o.usuario !== null && excecoes.some((e) => e.abrangencia === 'perfil')
+      ? (
+          await l.consultar(
+            `SELECT perfil_acesso_id FROM usuario_perfil
+              WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+                AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+            [o.usuario, est, rel.hoje, rel.hoje],
+          )
+        ).map((x) => n(x['perfil_acesso_id']))
+      : [];
+  const excecaoDe = (regra: number) =>
+    excecaoQueLibera(excecoes, regra, {
+      estabelecimento: est,
+      paciente,
+      setorFuncional: nn(at['setor_funcional_id']),
+      perfis,
+      data: rel.hoje,
+    });
+  const tipoAtendimento = tipoAtendimentoDoPedido({
+    pedidoExterno: o.tipo === 'externo',
+    regimeCodigo: at['regime'] === null || at['regime'] === undefined ? null : texto(at['regime']),
+    temInternacao: Number(at['internado'] ?? 0) === 1,
+  });
+  const anteriores = regras.some((r) => r.intervaloMinimoDias)
+    ? await l.consultar(
+        `SELECT ei.exame_id, r.solicitado_em FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+          WHERE r.paciente_id = ? AND ei.situacao NOT IN ('cancelado','recusado') AND ei.excluido_em IS NULL
+            AND ei.exame_id IN (${lista(exames.length)})`,
+        [paciente, ...exames],
+      )
+    : [];
+  const nasc = dataIso(at['data_nascimento']);
+  const acionadas = itens.flatMap((i) =>
+    restricoesAcionadas(
+      regras,
+      {
+        exame: i.exame,
+        setor: i.setor,
+        material: i.material,
+        unidade: nn(at['unidade_assistencial_id']),
+        tipoAtendimento,
+        sexo: sexoDe(at['sexo']),
+        idadeDias: idadeEmDias(nasc, rel.hoje),
+        data: rel.hoje,
+        hora: rel.hora,
+        anteriores: anteriores
+          .filter((x) => n(x['exame_id']) === i.exame)
+          // O dia do pedido anterior no fuso do estabelecimento: o pedido da noite conta no próprio dia.
+          .map((x) => rel.diaDe(x['solicitado_em']) ?? ''),
+      },
+      excecaoDe,
+    ),
+  );
+  const decisao = decisaoDoPedido(acionadas, {
+    confirmado: o.confirmado,
+    justificativa: o.justificativa,
+    podeAutorizarExcecao: o.podeAutorizarExcecao,
+  });
+  return { acionadas, decisao };
+}
+
+/**
+ * O material padrão de cada exame (o do cadastro marcado como padrão, ou o único ativo), para o pedido que não escolhe
+ * material, como o da prescrição do prontuário. Exame sem material ativo fica sem material (a regra que exige material
+ * vira alerta).
+ */
+export async function materialPadraoDosExames(
+  l: Leitor,
+  exames: readonly number[],
+): Promise<Map<number, number | null>> {
+  const saida = new Map<number, number | null>();
+  if (!exames.length) return saida;
+  const aceitos = await l.consultar(
+    `SELECT em.exame_id, em.material_biologico_id, em.padrao FROM exame_material em
+      JOIN material_biologico mb ON mb.id = em.material_biologico_id
+     WHERE em.ativo = TRUE AND em.excluido_em IS NULL AND em.exame_id IN (${lista(exames.length)}) ORDER BY em.id`,
+    [...exames],
+  );
+  for (const e of exames) {
+    const doExame = aceitos
+      .filter((x) => n(x['exame_id']) === e)
+      .map((x) => ({ material: n(x['material_biologico_id']), padrao: Boolean(x['padrao']) }));
+    saida.set(
+      e,
+      daRegra(() => materialDoItem(null, doExame)),
+    );
+  }
+  return saida;
+}
+
+/**
+ * O setor executante padrão de cada exame neste estabelecimento (o marcado como padrão, ou o primeiro ativo), como o
+ * pedido da prescrição do prontuário agrupa as requisições. Exame sem setor ativo fica fora do mapa.
+ */
+export async function setorPadraoDosExames(
+  l: Leitor,
+  est: number,
+  exames: readonly number[],
+): Promise<Map<number, number>> {
+  const saida = new Map<number, number>();
+  if (!exames.length) return saida;
+  const setores = await l.consultar(
+    `SELECT ese.exame_id, ese.setor_diagnostico_id FROM exame_setor_executante ese
+       JOIN setor_diagnostico sd ON sd.id = ese.setor_diagnostico_id AND sd.estabelecimento_id = ?
+        AND sd.ativo = TRUE AND sd.excluido_em IS NULL
+      WHERE ese.exame_id IN (${lista(exames.length)}) AND ese.ativo = TRUE AND ese.excluido_em IS NULL
+      ORDER BY ese.padrao DESC, ese.id`,
+    [est, ...exames],
+  );
+  for (const x of setores)
+    if (!saida.has(n(x['exame_id']))) saida.set(n(x['exame_id']), n(x['setor_diagnostico_id']));
+  return saida;
+}
+
+/** O pedido de exames feito na prescrição do prontuário, como a restrição clínica o avalia. */
+export const esquemaAvaliarPedidoProntuario = z
+  .object({
+    atendimento: id,
+    exames: z.array(id).min(1).max(80),
+    confirmado: z.boolean().default(false),
+    justificativa: z.string().trim().max(500).nullable().default(null),
+  })
+  .strict();
+
+/** As restrições do pedido do prontuário, vistas na hora (nada gravado). */
+export interface AvaliacaoPedidoProntuario {
+  readonly restricoes: readonly RestricaoAcionada[];
+  readonly segue: boolean;
+  readonly codigo: string | null;
+  readonly motivo: string | null;
+  /** Há bloqueio que aceita exceção: a tela pede a justificativa (e quem grava precisa poder autorizar). */
+  readonly pedeJustificativa: boolean;
+  readonly podeAutorizarExcecao: boolean;
+}
+
+/**
+ * A restrição clínica do pedido de exames feito na prescrição do prontuário (05-SADT linha 5): cada exame no setor
+ * executante padrão do estabelecimento e no material padrão do cadastro, o atendimento do pedido como pedido do
+ * prontuário. Lida pela tela na hora e de novo na gravação, na mesma transação, com a mesma regra do pedido do setor.
+ */
+export async function restricoesDoProntuario(
+  l: Leitor,
+  est: number,
+  e: {
+    readonly atendimento: number;
+    readonly exames: readonly number[];
+    readonly confirmado: boolean;
+    readonly justificativa: string | null;
+    readonly podeAutorizarExcecao: boolean;
+    readonly usuario: number | null;
+  },
+): Promise<{
+  acionadas: RestricaoAcionada[];
+  decisao: ReturnType<typeof decisaoDoPedido>;
+  materialDoExame: Map<number, number | null>;
+}> {
+  const at = await atendimentoParaRestricao(l, est, e.atendimento);
+  if (!at) throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
+  const exames = [...new Set(e.exames)];
+  const setores = await setorPadraoDosExames(l, est, exames);
+  const materiais = await materialPadraoDosExames(l, exames);
+  const itens = exames.flatMap((x) => {
+    const setor = setores.get(x);
+    return setor === undefined ? [] : [{ exame: x, setor, material: materiais.get(x) ?? null }];
+  });
+  const r = await restricoesClinicas(l, est, at, itens, {
+    tipo: 'pedido_prontuario',
+    confirmado: e.confirmado,
+    justificativa: e.justificativa,
+    podeAutorizarExcecao: e.podeAutorizarExcecao,
+    usuario: e.usuario,
+  });
+  return { ...r, materialDoExame: materiais };
+}
+
 // ── Serviço ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 export class ServicoPedidoSadt {
@@ -392,6 +651,32 @@ export class ServicoPedidoSadt {
     });
   }
 
+  /** As restrições do pedido de exames da prescrição do prontuário, vistas na hora (nada gravado). */
+  avaliarPedidoDoProntuario(
+    c: ContextoSadt,
+    entrada: unknown,
+    podeAutorizarExcecao = false,
+  ): Promise<AvaliacaoPedidoProntuario> {
+    const p = esquemaAvaliarPedidoProntuario.parse(entrada);
+    return this.ler(c, async (l, est) => {
+      const r = await restricoesDoProntuario(l, est, {
+        ...p,
+        podeAutorizarExcecao,
+        usuario: c.usuario ?? null,
+      });
+      return {
+        restricoes: r.acionadas,
+        segue: r.decisao.segue,
+        codigo: r.decisao.codigo,
+        motivo: r.decisao.motivo,
+        pedeJustificativa: r.acionadas.some(
+          (a) => a.tipo === 'bloqueio' && a.excecao === null && a.permiteExcecao,
+        ),
+        podeAutorizarExcecao,
+      };
+    });
+  }
+
   private async avaliar(
     l: Leitor,
     est: number,
@@ -399,16 +684,7 @@ export class ServicoPedidoSadt {
     podeAutorizarExcecao: boolean,
     usuario: number | null,
   ) {
-    const at = await l.uma(
-      `SELECT a.id, a.paciente_id, a.fonte_pagadora_id, a.profissional_id, a.unidade_assistencial_id, a.setor_funcional_id,
-              pf.data_nascimento, sx.sigla AS sexo, ra.codigo_tiss AS regime,
-              EXISTS (SELECT 1 FROM internacao i WHERE i.atendimento_id = a.id AND i.excluido_em IS NULL) AS internado
-         FROM atendimento a JOIN paciente pa ON pa.id = a.paciente_id
-         JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id LEFT JOIN sexo sx ON sx.id = pf.sexo_id
-         LEFT JOIN regime_atendimento ra ON ra.id = a.regime_atendimento_id
-        WHERE a.id = ? AND a.estabelecimento_id = ?`,
-      [p.atendimento, est],
-    );
+    const at = await atendimentoParaRestricao(l, est, p.atendimento);
     if (!at) throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
     const setor = await l.uma(
       'SELECT id FROM setor_diagnostico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
@@ -499,99 +775,20 @@ export class ServicoPedidoSadt {
     );
     if (ok.length !== exames.length)
       throw recusa('exame-inexistente', 'Algum exame do pedido não existe ou está inativo.');
-    const rel = await relogio(l, est);
-    const regras = (
-      await l.consultar(
-        `SELECT * FROM restricao_exame WHERE estabelecimento_id = ? AND ativo = TRUE AND exame_id IN (${lista(exames.length)})`,
-        [est, ...exames],
-      )
-    ).map(regraDe);
-    const paciente = n(at['paciente_id']);
-    // As exceções permanentes das regras (paciente, setor que pede, perfil de quem pede e estabelecimento): a regra do
-    // domínio escolhe a que vale. A exceção pontual de um item pedido não libera outro pedido.
-    const excecoes: ExcecaoCadastrada[] = regras.length
-      ? (
-          await l.consultar(
-            `SELECT id, restricao_exame_id, abrangencia, estabelecimento_id, setor_funcional_id, perfil_acesso_id,
-                    paciente_id, vigencia_inicio, vigencia_fim, ativo
-               FROM excecao_restricao_exame
-              WHERE ativo = TRUE AND abrangencia IN ('estabelecimento','setor','perfil','paciente')
-                AND restricao_exame_id IN (${lista(regras.length)})`,
-            regras.map((r) => r.id),
-          )
-        ).map((x) => ({
-          id: n(x['id']),
-          regra: n(x['restricao_exame_id']),
-          abrangencia: texto(x['abrangencia']) as ExcecaoCadastrada['abrangencia'],
-          estabelecimento: nn(x['estabelecimento_id']),
-          setorFuncional: nn(x['setor_funcional_id']),
-          perfil: nn(x['perfil_acesso_id']),
-          paciente: nn(x['paciente_id']),
-          vigenciaInicio: dataIso(x['vigencia_inicio']) ?? '1900-01-01',
-          vigenciaFim: dataIso(x['vigencia_fim']),
-          ativo: Boolean(x['ativo']),
-        }))
-      : [];
-    // Os perfis de acesso vigentes de quem grava, neste estabelecimento (só lidos quando há exceção por perfil).
-    const perfis =
-      usuario !== null && excecoes.some((e) => e.abrangencia === 'perfil')
-        ? (
-            await l.consultar(
-              `SELECT perfil_acesso_id FROM usuario_perfil
-                WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
-                  AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
-              [usuario, est, rel.hoje, rel.hoje],
-            )
-          ).map((x) => n(x['perfil_acesso_id']))
-        : [];
-    const excecaoDe = (regra: number) =>
-      excecaoQueLibera(excecoes, regra, {
-        estabelecimento: est,
-        paciente,
-        setorFuncional: nn(at['setor_funcional_id']),
-        perfis,
-        data: rel.hoje,
-      });
-    const tipoAtendimento = tipoAtendimentoDoPedido({
-      pedidoExterno: p.tipo === 'externo',
-      regimeCodigo: at['regime'] === null || at['regime'] === undefined ? null : texto(at['regime']),
-      temInternacao: Number(at['internado'] ?? 0) === 1,
-    });
-    const anteriores = regras.some((r) => r.intervaloMinimoDias)
-      ? await l.consultar(
-          `SELECT ei.exame_id, r.solicitado_em FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
-            WHERE r.paciente_id = ? AND ei.situacao NOT IN ('cancelado','recusado') AND ei.excluido_em IS NULL
-              AND ei.exame_id IN (${lista(exames.length)})`,
-          [paciente, ...exames],
-        )
-      : [];
-    const nasc = dataIso(at['data_nascimento']);
-    const acionadas = itens.flatMap((i) =>
-      restricoesAcionadas(
-        regras,
-        {
-          exame: i.exame,
-          setor: i.setor ?? p.setor,
-          material: i.material,
-          unidade: nn(at['unidade_assistencial_id']),
-          tipoAtendimento,
-          sexo: sexoDe(at['sexo']),
-          idadeDias: idadeEmDias(nasc, rel.hoje),
-          data: rel.hoje,
-          hora: rel.hora,
-          anteriores: anteriores
-            .filter((x) => n(x['exame_id']) === i.exame)
-            // O dia do pedido anterior no fuso do estabelecimento: o pedido da noite conta no próprio dia.
-            .map((x) => rel.diaDe(x['solicitado_em']) ?? ''),
-        },
-        excecaoDe,
-      ),
+    const { acionadas, decisao } = await restricoesClinicas(
+      l,
+      est,
+      at,
+      itens.map((i) => ({ exame: i.exame, setor: i.setor ?? p.setor, material: i.material })),
+      {
+        tipo: p.tipo,
+        confirmado: p.confirmado,
+        justificativa: p.justificativa,
+        podeAutorizarExcecao,
+        usuario,
+      },
     );
-    const decisao = decisaoDoPedido(acionadas, {
-      confirmado: p.confirmado,
-      justificativa: p.justificativa,
-      podeAutorizarExcecao,
-    });
+    const paciente = n(at['paciente_id']);
     // Limites do pedido (05-SADT linha 6): cota, intervalo ou repetição no mesmo dia e último resultado.
     const limites = await limitesDoPedido(l, est, {
       paciente,

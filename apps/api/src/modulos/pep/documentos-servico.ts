@@ -301,6 +301,8 @@ function conselhoDe(p: ProfissionalPep): boolean {
 
 export interface OpcoesGravacao {
   readonly comoSuporte: boolean;
+  /** Quem grava pode autorizar a exceção à restrição clínica do exame (pedido de exames, 05-SADT linha 5). */
+  readonly autorizaExcecao?: boolean;
 }
 
 export class ServicoDocumentos {
@@ -1309,6 +1311,11 @@ export class ServicoDocumentos {
         documento,
         hashConteudo,
         ...(o.comoSuporte ? { comoSuporte: true } : {}),
+        // A restrição clínica do exame é decidida na gravação: avisos confirmados, justificativa da exceção e se quem
+        // grava pode autorizá-la (05-SADT linha 5).
+        confirmado: e.confirmarAvisos,
+        justificativa: e.justificativa ?? null,
+        autorizaExcecao: o.autorizaExcecao === true,
       },
     };
   }

@@ -76,6 +76,18 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
   const limpar = (e: Escritor) =>
     (async () => {
       const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+      // A restrição clínica do exame (05-SADT linha 5): eventos e exceções dos itens e as regras deste teste.
+      await e.executar(
+        `DELETE x FROM excecao_restricao_exame x JOIN restricao_exame re ON re.id = x.restricao_exame_id
+          WHERE re.estabelecimento_id IN ${est}`,
+        [P],
+      );
+      await e.executar(`DELETE FROM restricao_exame WHERE estabelecimento_id IN ${est}`, [P]);
+      await e.executar(
+        `DELETE ev FROM item_exame_evento ev JOIN exame_item ei ON ei.id = ev.exame_item_id
+           JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id WHERE r.estabelecimento_id IN ${est}`,
+        [P],
+      );
       await e.executar(
         `DELETE ei FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
           WHERE r.estabelecimento_id IN ${est}`,
@@ -572,5 +584,125 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
       ids.est,
     ]);
     expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
+  });
+
+  describe('pedir exames: a restrição clínica do exame (05-SADT linha 5)', () => {
+    /** Um dia da semana que não é hoje em nenhum fuso do país (nem o de UTC): a regra aciona sem depender do relógio. */
+    const diaFora = () => {
+      const hojeUtc = new Date().getUTCDay() + 1;
+      const ontemUtc = ((hojeUtc + 5) % 7) + 1;
+      return [1, 2, 3, 4, 5, 6, 7].find((d) => d !== hojeUtc && d !== ontemUtc)!;
+    };
+    const regra = (exame: number, tipo: 'alerta' | 'bloqueio', excecao: boolean, mensagem: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-regra` }, (e) =>
+        e.inserir(
+          `INSERT INTO restricao_exame (estabelecimento_id, exame_id, tipo_restricao, permite_excecao, mensagem,
+             vigencia_inicio, ativo, criado_em, versao, dia_semana)
+           VALUES (?, ?, ?, ?, ?, '2020-01-01', TRUE, UTC_TIMESTAMP(3), 1, ?)`,
+          [ids.est, exame, tipo, excecao, mensagem, diaFora()],
+        ),
+      );
+    const desligar = (id: number) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-regra` }, (e) =>
+        e.executar('UPDATE restricao_exame SET ativo = FALSE, versao = versao + 1 WHERE id = ?', [id]),
+      );
+    const contar = async () =>
+      Number(
+        (await uma('SELECT COUNT(*) AS n FROM requisicao_exame WHERE estabelecimento_id = ?', [ids.est]))?.[
+          'n'
+        ],
+      );
+    const pedir = (exame: number, extra: Record<string, unknown>, chave: string) =>
+      ops()['pep.solicitarExame']!(
+        C(),
+        { ...baseDoc(), itens: [{ exame, urgente: false }], ...extra },
+        ctx(chave),
+      );
+
+    it('o alerta pede a confirmação; confirmado, grava e o evento do item guarda a restrição vista', async () => {
+      const r = await regra(ex.exA, 'alerta', false, 'Coleta só noutro dia (sintético).');
+      try {
+        const antes = await contar();
+        expect(await codigo(pedir(ex.exA, {}, 'rx1'))).toBe('restricao-confirmar');
+        expect(await contar()).toBe(antes);
+        const g = await pedir(ex.exA, { confirmado: true }, 'rx2');
+        expect(Number(g['primeiro'])).toBeGreaterThan(0);
+        const ev = await uma(
+          "SELECT evento, usuario_id, dados FROM item_exame_evento WHERE exame_item_id = ? AND evento = 'solicitado'",
+          [g['primeiro']],
+        );
+        expect(Number(ev?.['usuario_id'])).toBe(ids.usuario);
+        const bruto = ev?.['dados'];
+        const dados = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as {
+          origem: string;
+          restricoes: { regra: number; tipo: string; motivo: string }[];
+        };
+        expect(dados.origem).toBe('prescricao');
+        expect(dados.restricoes).toEqual([{ regra: r, tipo: 'alerta', motivo: 'dia', excecao: null }]);
+        expect(
+          Number(
+            (
+              await uma('SELECT COUNT(*) AS n FROM excecao_restricao_exame WHERE exame_item_id = ?', [
+                g['primeiro'],
+              ])
+            )?.['n'],
+          ),
+        ).toBe(0);
+      } finally {
+        await desligar(r);
+      }
+    });
+
+    it('o bloqueio que aceita exceção pede justificativa e quem autorize; com os dois, a exceção fica no item', async () => {
+      const r = await regra(ex.exB, 'bloqueio', true, 'Só noutro dia, salvo exceção (sintético).');
+      try {
+        const antes = await contar();
+        expect(await codigo(pedir(ex.exB, { confirmado: true }, 'rx3'))).toBe('restricao-justificativa');
+        expect(
+          await codigo(
+            pedir(ex.exB, { confirmado: true, justificativa: 'Urgencia clinica sintetica' }, 'rx4'),
+          ),
+        ).toBe('restricao-autorizacao');
+        expect(await contar()).toBe(antes);
+        const g = await pedir(
+          ex.exB,
+          { confirmado: true, justificativa: 'Urgencia clinica sintetica', autorizaExcecao: true },
+          'rx5',
+        );
+        expect(g['excecoes']).toBe(1);
+        const x = await uma(
+          `SELECT restricao_exame_id, abrangencia, justificativa, autorizado_por_usuario_id, ativo, vigencia_inicio
+             FROM excecao_restricao_exame WHERE exame_item_id = ?`,
+          [g['primeiro']],
+        );
+        expect(Number(x?.['restricao_exame_id'])).toBe(r);
+        expect(x?.['abrangencia']).toBe('item_exame');
+        expect(x?.['justificativa']).toBe('Urgencia clinica sintetica');
+        expect(Number(x?.['autorizado_por_usuario_id'])).toBe(ids.usuario);
+        expect(Number(x?.['ativo'])).toBe(1);
+        expect(x?.['vigencia_inicio']).not.toBeNull();
+      } finally {
+        await desligar(r);
+      }
+    });
+
+    it('o bloqueio sem exceção recusa mesmo com justificativa e autorização, sem gravar nada', async () => {
+      const r = await regra(ex.exA, 'bloqueio', false, 'Exame não feito neste dia (sintético).');
+      try {
+        const antes = await contar();
+        expect(
+          await codigo(
+            pedir(
+              ex.exA,
+              { confirmado: true, justificativa: 'Urgencia clinica sintetica', autorizaExcecao: true },
+              'rx6',
+            ),
+          ),
+        ).toBe('restricao-bloqueio');
+        expect(await contar()).toBe(antes);
+      } finally {
+        await desligar(r);
+      }
+    });
   });
 });

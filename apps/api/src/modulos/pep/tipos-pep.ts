@@ -3,6 +3,7 @@
 // Melhoria: tipos e esquemas próprios do módulo (antes vinham do pacote de convivência); entrada validada por zod.
 
 import {
+  esquemaItemReceita,
   GRAVIDADES_ALERGIA,
   ORIGENS_ALERGIA,
   textoCp1252,
@@ -204,7 +205,8 @@ export const esquemaEmissaoDocumento = z.discriminatedUnion('familia', [
       familia: z.literal('receita'),
       ...base,
       tipo: z.enum(TIPOS_RECEITA),
-      tpPadrao: z.union([z.literal(1), z.literal(4)]),
+      /** Os medicamentos da receita, gravados estruturados em receita_medica_item (C2-021). */
+      itens: z.array(esquemaItemReceita).min(1).max(20),
       rtf: z.string().min(10).max(2_000_000),
     })
     .strict(),
@@ -424,6 +426,10 @@ export const esquemaPedidoExames = z
     documento: z.string().min(50).max(4_000_000),
     hashConteudo: HASH,
     comoSuporte: z.boolean().optional(),
+    /** Restrição clínica do exame (05-SADT linha 5): alertas confirmados, justificativa e quem autoriza a exceção. */
+    confirmado: z.boolean().optional(),
+    justificativa: z.string().trim().max(500).nullable().optional(),
+    autorizaExcecao: z.boolean().optional(),
   })
   .strict();
 

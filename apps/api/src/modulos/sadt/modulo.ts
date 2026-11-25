@@ -42,6 +42,7 @@ import { LoteTrabalhoController, SERVICO_LOTE_TRABALHO } from './lote-trabalho.c
 import { ResultadoBancoController, SERVICO_RESULTADO_SADT } from './resultado-banco.controller.js';
 import { OrcamentoExamesController, SERVICO_ORCAMENTO_SADT } from './orcamento-exames.controller.js';
 import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.js';
+import { PedidoProntuarioSadtController } from './pedido-prontuario.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
 import { CatalogoSadtController } from './catalogo.controller.js';
@@ -157,6 +158,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       CatalogoSadtController,
       CatalogoRespostasSadtController,
       PedidoSadtController,
+      PedidoProntuarioSadtController,
       OrcamentoExamesController,
       MapaTrabalhoController,
       LoteTrabalhoController,

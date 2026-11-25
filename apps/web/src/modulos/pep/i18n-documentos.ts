@@ -212,6 +212,11 @@ export const mensagensDocumentos = {
     tirar: 'Tirar {nome}',
     avisos: 'Confira antes de enviar',
     confirmarAvisos: 'Vi os avisos e confirmo o pedido',
+    restricoes: 'Restrições do exame neste atendimento',
+    justificativa: 'Justificativa da exceção (10 caracteres ou mais)',
+    semAutorizacao:
+      'A exceção a este bloqueio precisa ser autorizada por quem tem a permissão de autorizar exceção à restrição do exame.',
+    bloqueado: 'Há exame bloqueado neste atendimento: tire-o do pedido para enviar.',
     enviar: 'Enviar o pedido',
     enviado: 'Pedido enviado.',
     grupo: { laboratorio: 'Laboratório', imagem: 'Imagem', outros: 'Outros' },

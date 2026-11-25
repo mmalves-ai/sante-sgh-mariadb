@@ -199,6 +199,29 @@ export const lerExames = (p: number, termo: string | null, b: typeof fetch = fet
   ler<PedidosExame>(`${pac(p)}/exames${consulta({ termo })}`, b);
 export const solicitarExames = (p: number, e: SolicitarExames, chave: string) =>
   enviar<ResultadoSolicitacao>(`${pac(p)}/exames`, e, chave);
+
+/** A restrição clínica dos exames escolhidos no atendimento, vista na hora (05-SADT linha 5; nada gravado). */
+export interface AvaliacaoRestricaoExame {
+  readonly restricoes: readonly {
+    readonly regra: number;
+    readonly exame: number;
+    readonly tipo: 'bloqueio' | 'alerta';
+    readonly mensagem: string;
+    readonly permiteExcecao: boolean;
+    readonly excecao: number | null;
+  }[];
+  readonly segue: boolean;
+  readonly codigo: string | null;
+  readonly motivo: string | null;
+  readonly pedeJustificativa: boolean;
+  readonly podeAutorizarExcecao: boolean;
+}
+export const avaliarRestricoesExame = (e: {
+  atendimento: number;
+  exames: readonly number[];
+  confirmado: boolean;
+  justificativa: string | null;
+}) => enviar<AvaliacaoRestricaoExame>('/api/sadt/pedidos/avaliar-prontuario', e, null);
 export const lerResultados = (p: number, b: typeof fetch = fetch) =>
   ler<ResultadosPaciente>(`${pac(p)}/resultados`, b);
 export const darCiencia = (p: number, exame: number, e: CienciaCritico) =>

@@ -99,7 +99,7 @@ import {
   type TipoDocumentoAberto,
 } from '@sgh/contratos';
 import { regraJustificativaImpressao } from '@sgh/dominio-pep';
-import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
+import { pode, VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
 import {
   camposDoDocumentoPep,
   COMPLEMENTO_MINIMO_REIMPRESSAO,
@@ -978,6 +978,8 @@ export class DocumentosPepController {
     const prof = this.servico.exigirProfissional(await this.prof(s));
     const m = await this.servico.montarPedido(this.c(s), paciente, e, prof, {
       comoSuporte: req.sghComo !== undefined,
+      // A exceção à restrição clínica do exame só com a permissão própria (05-SADT linha 5).
+      autorizaExcecao: !!req.sgh && pode(req.sgh.ability, 'sadt.requisicao.autorizarExcecao'),
     });
     if (!m.entrada) return { gravado: false, pedido: null, avisos: m.avisos };
     const r = await this.executar(s, 'pep.solicitarExame', m.entrada, 'exames');

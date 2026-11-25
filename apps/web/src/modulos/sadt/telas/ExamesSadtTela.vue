@@ -1,23 +1,18 @@
 <script setup lang="ts">
 // Lançamento e solicitação de exames (ficha do M26, seção 7): `/sadt/exames`. Os pedidos do prontuário a receber e os
 // exames do dia por setor, com as contagens por situação; receber os selecionados (executante, prestador e local do
-// setor) e lançar exame direto no setor no atendimento buscado pelo número (a requisição do setor aberta). O alerta de
-// sexo, idade ou repetição pede confirmação; o servidor confere tudo de novo.
+// setor). O lançamento direto no setor foi aposentado: o exame lançado no setor é um pedido em `/sadt/pedido`, que grava
+// pelo serviço do pedido com a restrição clínica do exame (05-SADT linha 5), os limites e a cobrança na conta.
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import {
-  type AtendimentoSadt,
-  buscarAtendimentosSadt,
-  lancarExames,
-  listarExamesSadt,
-  novaChave,
-  receberPedidos,
-} from '../api-sadt.js';
+import { listarExamesSadt, novaChave, receberPedidos } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
 import PacienteSadt from '../componentes/PacienteSadt.vue';
+import { pode as podePermissao } from '../../../casca/sessao/pode.js';
 import { hojeLocal, quando, usarSadt } from '../usar-sadt.js';
 
 const { t } = useI18n();
@@ -63,7 +58,8 @@ const prestador = ref('');
 const local = ref('1');
 const selecionados = ref<number[]>([]);
 const podeReceber = computed(() => pode(setor.value, 'sadt.receberSolicitacao'));
-const podeLancar = computed(() => pode(setor.value, 'sadt.lancarExame'));
+/** O lançamento no setor é o pedido de exames (`/sadt/pedido`): o atalho aparece para quem abre o pedido. */
+const podeLancar = podePermissao('sadt.requisicao.criar');
 const ocupado = ref(false);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
@@ -91,56 +87,6 @@ async function receber(): Promise<void> {
     );
     mensagem.value = r.mensagem;
     selecionados.value = [];
-    await cliente.invalidateQueries({ queryKey: ['sadt'] });
-  } catch (x) {
-    erro.value = x;
-  } finally {
-    ocupado.value = false;
-  }
-}
-
-// ── Lançamento direto no setor ─────────────────────────────────────────────────────────────────────
-const numero = ref('');
-const encontrados = ref<AtendimentoSadt[]>([]);
-const atendimento = ref<AtendimentoSadt | null>(null);
-const exameLancar = ref('');
-const urgente = ref(false);
-const confirmarAlertas = ref(false);
-const examesDoSetor = computed(() => [
-  { valor: '', rotulo: t('sadt.escolha') },
-  ...(apoio.data.value?.exames ?? []).map((e) => ({ valor: String(e.id), rotulo: e.nome })),
-]);
-async function buscarAtendimento(): Promise<void> {
-  erro.value = null;
-  atendimento.value = null;
-  try {
-    encontrados.value = await buscarAtendimentosSadt(Number(numero.value));
-    atendimento.value = encontrados.value[0] ?? null;
-  } catch (x) {
-    erro.value = x;
-  }
-}
-async function lancar(): Promise<void> {
-  if (!atendimento.value) return;
-  erro.value = null;
-  mensagem.value = null;
-  ocupado.value = true;
-  try {
-    const ex = apoio.data.value?.exames.find((e) => String(e.id) === exameLancar.value);
-    const r = await lancarExames(
-      {
-        atendimento: atendimento.value.atendimento,
-        ato: ex?.ato ?? 15,
-        itens: [{ exame: Number(exameLancar.value), urgente: urgente.value }],
-        executante: Number(executante.value || gravacao.data.value?.habilitacao.vinculo || 0),
-        prestador: Number(prestador.value),
-        local: Number(local.value || 1),
-        confirmarAlertas: confirmarAlertas.value,
-      },
-      novaChave('lancar'),
-    );
-    mensagem.value = r.mensagem;
-    confirmarAlertas.value = false;
     await cliente.invalidateQueries({ queryKey: ['sadt'] });
   } catch (x) {
     erro.value = x;
@@ -270,47 +216,10 @@ async function lancar(): Promise<void> {
 
     <section v-if="podeLancar" class="painel" aria-labelledby="sadt-lancar-titulo">
       <h2 id="sadt-lancar-titulo">{{ t('sadt.exames.lancar') }}</h2>
-      <p>{{ t('sadt.exames.lancarTexto') }}</p>
-      <div class="filtros">
-        <span class="campo">
-          <label for="sadt-numero">{{ t('sadt.exames.numero') }}</label>
-          <input id="sadt-numero" v-model="numero" type="number" min="1" data-testid="sadt-numero" />
-        </span>
-        <SanteBotao
-          variante="secundario"
-          :rotulo="t('sadt.buscar')"
-          data-testid="sadt-buscar-atendimento"
-          @acionar="buscarAtendimento"
-        />
-      </div>
-      <template v-if="atendimento">
-        <p data-testid="sadt-atendimento">
-          <PacienteSadt :paciente="atendimento.paciente" /> · {{ atendimento.convenio.nome }}
-        </p>
-        <p v-if="!atendimento.conta" role="status">{{ t('sadt.exames.semConta') }}</p>
-        <div v-else class="filtros">
-          <SanteSelecao
-            v-model="exameLancar"
-            :rotulo="t('sadt.exames.exameLancar')"
-            :opcoes="examesDoSetor"
-            data-testid="sadt-exame-lancar"
-          />
-          <label
-            ><input v-model="urgente" type="checkbox" data-testid="sadt-urgente" />
-            {{ t('sadt.urgente') }}</label
-          >
-          <label>
-            <input v-model="confirmarAlertas" type="checkbox" data-testid="sadt-confirmar-alertas" />
-            {{ t('sadt.exames.confirmarAlertas') }}
-          </label>
-          <SanteBotao
-            :rotulo="t('sadt.exames.lancar')"
-            :desabilitado="ocupado || !exameLancar || !prestador"
-            data-testid="sadt-lancar"
-            @acionar="lancar"
-          />
-        </div>
-      </template>
+      <p>{{ t('sadt.exames.lancarNoPedido') }}</p>
+      <RouterLink :to="{ name: 'sadt.pedido' }" data-testid="sadt-lancar-pedido">{{
+        t('sadt.exames.abrirPedido')
+      }}</RouterLink>
     </section>
     <p v-if="mensagem" role="status" data-testid="sadt-mensagem">{{ mensagem }}</p>
     <ErroSadt v-if="erro" :erro="erro" />

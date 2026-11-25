@@ -75,6 +75,9 @@ export const mensagensSadt = {
     selecionar: 'Selecionar {exame}',
     lancar: 'Lançar exame no setor',
     lancarTexto: 'Busque o atendimento pelo número; a requisição do setor precisa estar aberta.',
+    lancarNoPedido:
+      'O exame lançado no setor é um pedido: abra o pedido de exames do paciente, que confere as restrições do exame, os limites e a conta.',
+    abrirPedido: 'Abrir o pedido de exames',
     numero: 'Número do atendimento',
     exameLancar: 'Exame a lançar',
     confirmarAlertas: 'Confirmo o lançamento apesar do alerta de sexo, idade ou repetição',

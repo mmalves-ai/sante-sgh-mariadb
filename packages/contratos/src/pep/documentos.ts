@@ -530,6 +530,11 @@ export const esquemaSolicitarExames = z
     kit: id.optional(),
     /** Avisos de duplicidade e de sexo/idade já vistos e confirmados pelo profissional. */
     confirmarAvisos: z.boolean().default(false),
+    /**
+     * Justificativa da exceção à restrição clínica do exame (bloqueio que aceita exceção, 10 caracteres ou mais),
+     * registrada no item com quem autorizou (05-SADT linha 5).
+     */
+    justificativa: z.string().trim().max(500).nullable().optional(),
   })
   .strict();
 export type SolicitarExames = z.infer<typeof esquemaSolicitarExames>;

@@ -33,6 +33,8 @@ import {
 } from './documentos-propria-operacoes.js';
 import { instanteLocal } from './prescricao-propria-gravacao.js';
 import { fusoValido } from './registro-porta-propria.js';
+import { relogioNoFuso } from '../exames/relogio.js';
+import { restricoesDoProntuario, setorPadraoDosExames } from '../sadt/aplicacao/pedido-propria.js';
 import { esquemaAnexo, esquemaPedidoExames } from './tipos-pep.js';
 
 /** Operações do executor de documentos que esta família grava no banco próprio. */
@@ -275,7 +277,7 @@ export function operacoesDocumentosPropria2(
       ctx,
       'pep.exame.solicitar',
       x,
-      ['requisicao_exame', 'exame_item', 'sequencia_negocio'],
+      ['requisicao_exame', 'exame_item', 'item_exame_evento', 'excecao_restricao_exame', 'sequencia_negocio'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
         await conferirAtendimento(tx, s, x.atendimento, x.paciente);
@@ -291,22 +293,29 @@ export function operacoesDocumentosPropria2(
         const ativos = new Set(exames.filter((e) => Number(e['ativo']) === 1).map((e) => num(e['id'])));
         if (ids.some((i) => !ativos.has(i)))
           throw new ErroOperacao(422, 'exame-inativo', 'Exame inativo', 'Há exame inativo no pedido.');
-        const setores = await tx.consultar(
-          `SELECT ese.exame_id, ese.setor_diagnostico_id FROM exame_setor_executante ese
-             JOIN setor_diagnostico sd ON sd.id = ese.setor_diagnostico_id AND sd.estabelecimento_id = ?
-              AND sd.ativo = TRUE AND sd.excluido_em IS NULL
-            WHERE ese.exame_id IN (${marcadores(ids.length)}) AND ese.ativo = TRUE AND ese.excluido_em IS NULL
-            ORDER BY ese.padrao DESC, ese.id`,
-          [s.est, ...ids],
-        );
-        const setorDoExame = new Map<number, number>();
-        for (const l of setores)
-          if (!setorDoExame.has(num(l['exame_id'])))
-            setorDoExame.set(num(l['exame_id']), num(l['setor_diagnostico_id']));
+        const setorDoExame = await setorPadraoDosExames(tx, s.est, ids);
         const grupos = agruparPorSetor(x.itens, setorDoExame);
+        // A restrição clínica do exame (05-SADT linha 5), com a mesma regra do pedido do setor: o bloqueio impede; o
+        // alerta pede a confirmação; a exceção ao bloqueio pede a justificativa e quem possa autorizá-la.
+        const usuario = tx.contexto.usuario ?? null;
+        const restricao = await restricoesDoProntuario(tx, s.est, {
+          atendimento: x.atendimento,
+          exames: ids,
+          confirmado: x.confirmado === true,
+          justificativa: x.justificativa ?? null,
+          podeAutorizarExcecao: x.autorizaExcecao === true,
+          usuario,
+        });
+        if (!restricao.decisao.segue)
+          throw recusar(
+            422,
+            restricao.decisao.codigo ?? 'restricao',
+            restricao.decisao.motivo ?? 'Pedido recusado pela restrição do exame.',
+          );
         const at = await tx.uma('SELECT fonte_pagadora_id FROM atendimento WHERE id = ?', [x.atendimento]);
         let agrupamento = 0;
         let primeiro = 0;
+        let excecoes = 0;
         const requisicoes: number[] = [];
         for (const [setor, itens] of grupos) {
           const numero = await tx.proximoNumero(SEQUENCIA_REQUISICAO_EXAME);
@@ -336,12 +345,48 @@ export function operacoesDocumentosPropria2(
               sequencia: i + 1,
               exame_id: it.exame,
               setor_diagnostico_id: setor,
+              material_biologico_id: restricao.materialDoExame.get(it.exame) ?? null,
               urgente: it.urgente,
               situacao: 'solicitado',
               observacao: it.indicacao?.trim() || null,
               origem: 'sistema',
             });
             primeiro ||= item;
+            // O evento "solicitado" do item guarda as restrições vistas (e a exceção que liberou, quando houve).
+            const doItem = restricao.acionadas.filter((r) => r.exame === it.exame);
+            await tx.incluir('item_exame_evento', {
+              exame_item_id: item,
+              operacao: 'inclusao',
+              evento: 'solicitado',
+              ocorrido_em: agora,
+              usuario_id: usuario,
+              situacao_nova: 'solicitado',
+              setor_diagnostico_id: setor,
+              dados: JSON.stringify({
+                origem: 'prescricao',
+                restricoes: doItem.map((r) => ({
+                  regra: r.regra,
+                  tipo: r.tipo,
+                  motivo: r.motivo,
+                  excecao: r.excecao,
+                })),
+              }),
+            });
+            // A exceção nova ao bloqueio fica no item, com a justificativa e quem autorizou.
+            for (const regra of restricao.decisao.excecoesNovas) {
+              if (!doItem.some((r) => r.regra === regra)) continue;
+              await tx.incluir('excecao_restricao_exame', {
+                restricao_exame_id: regra,
+                abrangencia: 'item_exame',
+                exame_item_id: item,
+                justificativa: x.justificativa ?? null,
+                autorizado_por_usuario_id: usuario,
+                autorizado_em: agora,
+                vigencia_inicio: relogioNoFuso(s.fuso, agora).hoje,
+                ativo: true,
+              });
+              excecoes += 1;
+            }
           }
         }
         const documento = await documentoProntuario(tx, s, {
@@ -362,6 +407,7 @@ export function operacoesDocumentosPropria2(
           primeiro,
           exames: x.itens.length,
           requisicoes: requisicoes.length,
+          excecoes,
           documentoTrilha: agrupamento,
           documento,
           trilha: null,
@@ -373,6 +419,7 @@ export function operacoesDocumentosPropria2(
         documento: r['documento'],
         exames: r['exames'],
         requisicoes: r['requisicoes'],
+        excecoes: r['excecoes'],
       }),
     );
   };
