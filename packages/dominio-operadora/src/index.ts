@@ -45,3 +45,5 @@ export * from './reembolso.js';
 export * from './troca-tiss.js';
 // F7 (08-SGO linha 113, C2-074): portal do prestador — pedido de cadastro e alteração, avisos e regras de arquivo.
 export * from './portal-prestador-pedidos.js';
+// F8 (08-SGO linha 100, C2-095): comercial — proposta de adesão, metas, campanhas de desconto e comissão com estorno.
+export * from './comercial.js';
