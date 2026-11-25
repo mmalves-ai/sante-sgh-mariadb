@@ -71,6 +71,7 @@ export const esquemaGradeDomiciliar = z.object({
   dias: z.array(
     z.object({
       data: z.string(),
+      feriado: z.boolean().default(false),
       turnos: z.array(esquemaEscalaDomiciliar.extend({ ocupadas: z.number(), livres: z.number() })),
     }),
   ),

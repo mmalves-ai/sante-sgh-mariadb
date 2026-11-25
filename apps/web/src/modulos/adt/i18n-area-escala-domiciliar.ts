@@ -53,6 +53,7 @@ export const mensagensAreaEscalaDomiciliar = {
   tipoChamado: 'Tipo de chamado',
   extra: 'Aceita extra',
   feriado: 'Atende feriado',
+  diaFeriado: 'feriado: só os turnos que atendem feriado',
   criarTurno: 'Criar turno',
   turnos: 'Turnos',
   vigencia: 'Vigência',

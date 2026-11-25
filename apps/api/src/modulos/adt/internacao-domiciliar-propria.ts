@@ -52,6 +52,7 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import { escalasDoProfissional } from './area-escala-domiciliar-propria.js';
 
 export const PORTA_INTERNACAO_DOMICILIAR = Symbol('PORTA_INTERNACAO_DOMICILIAR');
@@ -1045,6 +1046,14 @@ export class PortaInternacaoDomiciliarPropria extends PortaEstabelecimentoPropri
   agendarVisita(c: ContextoPortaPropria, entrada: unknown) {
     const e = entradaValida(esquemaVisita, entrada);
     return this.gravar(c, 'internacao.domiciliar.visita.agendar', TABELAS, async (tx, est) => {
+      // C2-105: trava os turnos do profissional ANTES de qualquer leitura: duas marcações simultâneas no último lugar
+      // do turno se enfileiram, e a segunda lê (a fotografia da transação começa depois da trava) a visita que a
+      // primeira confirmou; a lotação não fura.
+      await tx.consultarParaAtualizar(
+        `SELECT id FROM escala_atendimento_domiciliar
+          WHERE estabelecimento_id = ? AND profissional_id = ? AND excluido_em IS NULL AND ativo = TRUE`,
+        [est.id, e.profissional],
+      );
       const d = await exigir(
         tx,
         `SELECT id, paciente_id, situacao, data_hora_inicio FROM internacao_domiciliar
@@ -1107,6 +1116,7 @@ export class PortaInternacaoDomiciliarPropria extends PortaEstabelecimentoPropri
         profissional: e.profissional,
         tipoChamado: e.tipo,
         dataLocal,
+        feriado: (await lerFeriadosDoPeriodo(tx, est.id, dataLocal, dataLocal)).length > 0,
         horaLocal: `${parte('hour')}:${parte('minute')}`,
         ocupadas: (escala) =>
           doTurno.filter(

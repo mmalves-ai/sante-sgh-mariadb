@@ -20,6 +20,9 @@ const P = 'c2105dom';
 const NOME = `PESSOA SINTETICA ${P} UM`;
 // Data futura fixa (vigência própria do teste: não cruza a escala de outra massa).
 const DIA = '2031-03-04';
+// Mesmo dia da semana: feriado do estabelecimento (sintético) e dia da corrida pela última vaga.
+const FERIADO = '2031-03-11';
+const CORRIDA = '2031-03-18';
 
 type Massa = Record<string, number>;
 
@@ -28,6 +31,7 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
     await e.executar(`DELETE FROM visita_domiciliar WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM dia_nao_util WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM internacao_domiciliar WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM escala_atendimento_domiciliar WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(
@@ -280,6 +284,55 @@ describe.skipIf(SEM_BANCO)('PortaAreaEscalaDomiciliarPropria contra o MariaDB (c
 
     const grade = await porta.grade(ctx(), DIA, 1);
     expect(grade.dias[0]!.turnos.map((t) => [t.id, t.ocupadas, t.livres])).toEqual([[s.id, 1, 0]]);
+  });
+
+  it('feriado do estabelecimento: o turno que não atende feriado não abre na grade nem recebe a visita', async () => {
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `feriado-${P}` }, (e) =>
+      e.inserir(
+        `INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, criado_em)
+         VALUES ('FERIADO SINTETICO DA ESCALA', 'estabelecimento', ?, 'data_unica', ?, ?)`,
+        [m['est'], FERIADO, new Date()],
+      ),
+    );
+    const [linha] = await ler('SELECT atende_feriado FROM escala_atendimento_domiciliar WHERE id = ?', [
+      m['escala'],
+    ]);
+    expect(Boolean(linha!['atende_feriado'])).toBe(false);
+    const grade = await porta.grade(ctx(), FERIADO, 1);
+    expect(grade.dias[0]).toMatchObject({ data: FERIADO, feriado: true, turnos: [] });
+    const vis = await internacao.agendarVisita(ctx(), {
+      internacao: m['dom'],
+      profissional: m['prof1'],
+      tipo: m['tipo'],
+      quando: `${FERIADO}T09:00:00-03:00`,
+      duracao: 30,
+    });
+    const [v] = await ler(
+      'SELECT escala_atendimento_domiciliar_id AS e FROM visita_domiciliar WHERE id = ?',
+      [vis.id],
+    );
+    expect(v!['e']).toBeNull();
+  });
+
+  it('duas marcações simultâneas na última vaga: só uma entra no turno sem extra', async () => {
+    const pedido = (hora: string) =>
+      internacao.agendarVisita(ctx(), {
+        internacao: m['dom'],
+        profissional: m['prof1'],
+        tipo: m['tipo'],
+        quando: `${CORRIDA}T${hora}:00-03:00`,
+        duracao: 30,
+      });
+    const r = await Promise.allSettled([pedido('08:00'), pedido('10:30')]);
+    expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    const recusada = r.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+    expect(recusada.reason).toMatchObject(recusa);
+    const [n] = await ler(
+      `SELECT COUNT(*) AS n FROM visita_domiciliar
+        WHERE escala_atendimento_domiciliar_id = ? AND DATE(agendada_para) = ?`,
+      [m['escala'], CORRIDA],
+    );
+    expect(Number(n!['n'])).toBe(1);
   });
 
   it('encerra o turno e o vínculo, inativa a área; nada se apaga', async () => {

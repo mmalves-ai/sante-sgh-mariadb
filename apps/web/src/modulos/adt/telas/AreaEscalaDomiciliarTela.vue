@@ -538,6 +538,9 @@ const vigenciaTxt = (inicio: string, fim: string | null) =>
     <ul v-if="grade.data.value" data-testid="escala-grade">
       <li v-for="d in grade.data.value.dias" :key="d.data" :data-testid="`escala-grade-${d.data}`">
         <strong>{{ d.data }}</strong>
+        <span v-if="d.feriado" :data-testid="`escala-grade-feriado-${d.data}`">
+          · {{ t(`${D}.diaFeriado`) }}</span
+        >
         <span v-if="!d.turnos.length"> · {{ t(`${D}.vazio`) }}</span>
         <span v-for="tu in d.turnos" :key="tu.id">
           {{

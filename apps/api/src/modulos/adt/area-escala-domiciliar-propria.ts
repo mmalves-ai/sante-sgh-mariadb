@@ -9,7 +9,8 @@
 //   - escala: `escala_atendimento_domiciliar` (dia, turno, quantidade, extra, feriado, vigência, área e tipo de
 //     chamado opcionais); encerrar grava o fim da vigência, inativar e reativar mudam `ativo`;
 //   - grade: os turnos vigentes de cada dia com as visitas não canceladas ligadas a eles (a visita agendada pela
-//     internação domiciliar acha o turno pelo domínio e grava `escala_atendimento_domiciliar_id`).
+//     internação domiciliar acha o turno pelo domínio e grava `escala_atendimento_domiciliar_id`); no feriado do
+//     estabelecimento (calendário único, dia inteiro) só abre o turno que atende feriado.
 // Nada se apaga; cada ação confere a versão lida e grava a trilha pelo executor.
 import {
   areaDoCep,
@@ -22,6 +23,7 @@ import {
 } from '@sgh/dominio-internacao';
 import type { Leitor } from '@sgh/nucleo';
 import { z } from 'zod';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import {
   bool,
   type ContextoPortaPropria,
@@ -293,6 +295,9 @@ export class PortaAreaEscalaDomiciliarPropria extends PortaEstabelecimentoPropri
             AND agendada_para BETWEEN ? - INTERVAL 1 DAY AND ? + INTERVAL 2 DAY`,
         [est.id, primeiro, somarDias(primeiro, n)],
       );
+      const feriados = new Set(
+        (await lerFeriadosDoPeriodo(l, est.id, primeiro, somarDias(primeiro, n - 1))).map((f) => f.data),
+      );
       const ocupacao = new Map<string, number>();
       for (const v of visitas) {
         const quando = v['agendada_para'];
@@ -306,7 +311,8 @@ export class PortaAreaEscalaDomiciliarPropria extends PortaEstabelecimentoPropri
           const dia = somarDias(primeiro, i);
           return {
             data: dia,
-            turnos: gradeDoDia(escalas, dia, (e) => ocupacao.get(`${e}|${dia}`) ?? 0),
+            feriado: feriados.has(dia),
+            turnos: gradeDoDia(escalas, dia, (e) => ocupacao.get(`${e}|${dia}`) ?? 0, feriados.has(dia)),
           };
         }),
       };

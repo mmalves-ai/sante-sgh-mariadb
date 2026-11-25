@@ -12,7 +12,9 @@
 //     escala de uma área, o profissional precisa estar vinculado à área na data de início;
 //   - visita na escala: o horário da visita acha o turno do profissional (dia, hora, vigência, tipo de chamado);
 //     com o turno lotado, a visita só entra como atendimento extra quando o turno o permite; fora de qualquer turno
-//     a visita entra sem escala (o chamado urgente não espera a grade).
+//     a visita entra sem escala (o chamado urgente não espera a grade);
+//   - feriado (dia inteiro sem expediente do estabelecimento): o turno que não atende feriado não abre nesse dia, nem
+//     na grade nem no encaixe da visita (que então entra sem escala, como fora de turno).
 
 export interface ProblemaEscalaDomiciliar {
   readonly campo: string;
@@ -213,8 +215,18 @@ export interface EscalaVigente extends TurnoEscala {
   readonly tipoChamado: number | null;
   readonly quantidade: number;
   readonly permiteExtra: boolean;
+  /** O turno abre também nos feriados do estabelecimento. */
+  readonly atendeFeriado: boolean;
   readonly ativo: boolean;
 }
+
+/** O turno vale na data: ativo, no dia da semana, dentro da vigência e, no feriado, só se atende feriado. */
+const turnoAbreNoDia = (e: EscalaVigente, dataLocal: string, dia: number, feriado: boolean): boolean =>
+  e.ativo &&
+  e.diaSemana === dia &&
+  e.vigenciaInicio <= dataLocal &&
+  (e.vigenciaFim === null || e.vigenciaFim >= dataLocal) &&
+  (!feriado || e.atendeFeriado);
 
 /**
  * O turno da escala em que cai a visita do profissional (data e hora locais do estabelecimento), e se ela entra
@@ -226,6 +238,8 @@ export function escalaDaVisita(v: {
   tipoChamado: number;
   dataLocal: string;
   horaLocal: string;
+  /** A data local é feriado (dia inteiro) no estabelecimento. */
+  feriado?: boolean;
   ocupadas: (escala: number) => number;
 }): { escala: number | null; extra: boolean; problemas: ProblemaEscalaDomiciliar[] } {
   const dia = diaSemanaEscala(v.dataLocal);
@@ -233,12 +247,9 @@ export function escalaDaVisita(v: {
   const turno = v.escalas
     .filter(
       (e) =>
-        e.ativo &&
+        turnoAbreNoDia(e, v.dataLocal, dia, v.feriado ?? false) &&
         e.profissional === v.profissional &&
-        e.diaSemana === dia &&
         (e.tipoChamado === null || e.tipoChamado === v.tipoChamado) &&
-        e.vigenciaInicio <= v.dataLocal &&
-        (e.vigenciaFim === null || e.vigenciaFim >= v.dataLocal) &&
         minutos(e.horaInicio) <= m &&
         m < minutos(e.horaFim),
     )
@@ -259,21 +270,19 @@ export function escalaDaVisita(v: {
   };
 }
 
-/** Grade de um dia: os turnos vigentes na data com as vagas livres (nunca negativas). */
+/**
+ * Grade de um dia: os turnos vigentes na data com as vagas livres (nunca negativas). No feriado, só os turnos que
+ * atendem feriado.
+ */
 export function gradeDoDia<T extends EscalaVigente>(
   escalas: readonly T[],
   dataLocal: string,
   ocupadas: (escala: number) => number,
+  feriado = false,
 ): (T & { ocupadas: number; livres: number })[] {
   const dia = diaSemanaEscala(dataLocal);
   return escalas
-    .filter(
-      (e) =>
-        e.ativo &&
-        e.diaSemana === dia &&
-        e.vigenciaInicio <= dataLocal &&
-        (e.vigenciaFim === null || e.vigenciaFim >= dataLocal),
-    )
+    .filter((e) => turnoAbreNoDia(e, dataLocal, dia, feriado))
     .map((e) => {
       const o = ocupadas(e.id);
       return { ...e, ocupadas: o, livres: Math.max(0, e.quantidade - o) };

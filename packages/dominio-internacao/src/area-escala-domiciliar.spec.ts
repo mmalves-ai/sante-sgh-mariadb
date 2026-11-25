@@ -186,6 +186,7 @@ describe('escala da atenção domiciliar', () => {
       vigenciaFim: null,
       quantidade: 2,
       permiteExtra: false,
+      atendeFeriado: false,
       ativo: true,
     },
     {
@@ -199,6 +200,7 @@ describe('escala da atenção domiciliar', () => {
       vigenciaFim: null,
       quantidade: 1,
       permiteExtra: true,
+      atendeFeriado: true,
       ativo: true,
     },
   ];
@@ -242,5 +244,20 @@ describe('escala da atenção domiciliar', () => {
       [2, 0, 1],
     ]);
     expect(gradeDoDia(escalas, '2026-12-02', () => 0)).toEqual([]);
+  });
+
+  it('no feriado só abre o turno que atende feriado, na grade e no encaixe da visita', () => {
+    expect(gradeDoDia(escalas, '2026-12-01', () => 0, true).map((x) => x.id)).toEqual([2]);
+    const base = { escalas, profissional: 10, dataLocal: '2026-12-01', feriado: true, ocupadas: () => 0 };
+    // O turno geral (1) não atende feriado: a visita de outro tipo entra sem escala.
+    expect(escalaDaVisita({ ...base, tipoChamado: 7, horaLocal: '11:00' })).toEqual({
+      escala: null,
+      extra: false,
+      problemas: [],
+    });
+    // O turno do tipo 5 (2) atende feriado.
+    expect(escalaDaVisita({ ...base, tipoChamado: 5, horaLocal: '09:00' }).escala).toBe(2);
+    // Sem feriado, o turno geral abre normalmente.
+    expect(escalaDaVisita({ ...base, feriado: false, tipoChamado: 7, horaLocal: '11:00' }).escala).toBe(1);
   });
 });
