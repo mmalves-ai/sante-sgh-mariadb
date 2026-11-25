@@ -18,3 +18,6 @@ export * from './assinatura/index.js';
 export * from './impressao/estacao.js';
 export * from './impressao/identificacao.js';
 export * from './impressao/nova-via-prontuario.js';
+// 03-PEP L131: cópia do prontuário no balcão e o cabeçalho da impressão por tipo de documento.
+export * from './impressao/copia-balcao.js';
+export * from './pdf/cabecalho.js';
