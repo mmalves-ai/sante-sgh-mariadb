@@ -19,6 +19,7 @@ import { reais } from './comum-orcamento.js';
 import ComparativoOrcamento from './ComparativoOrcamento.vue';
 import ErroOrcamento from './ErroOrcamento.vue';
 import GradeOrcamento from './GradeOrcamento.vue';
+import PremissasVersaoOrcamento from './PremissasVersaoOrcamento.vue';
 
 const props = defineProps<{ id: number; apoio: ApoioOrcamento; hoje: string }>();
 const emit = defineEmits<{ voltar: [] }>();
@@ -31,8 +32,8 @@ const detalhe = useQuery({
 const d = computed(() => detalhe.data.value ?? null);
 const o = computed(() => d.value?.orcamento ?? null);
 
-type Aba = 'valores' | 'comparativo';
-const ABAS: readonly Aba[] = ['valores', 'comparativo'];
+type Aba = 'valores' | 'premissas' | 'comparativo';
+const ABAS: readonly Aba[] = ['valores', 'premissas', 'comparativo'];
 const aba = ref<Aba>('valores');
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
@@ -268,6 +269,7 @@ const porEm = (quem: string | null, quando: string | null) =>
         :apoio="apoio"
         @gravado="aoGravar"
       />
+      <PremissasVersaoOrcamento v-else-if="aba === 'premissas'" :id="o.id" />
       <ComparativoOrcamento v-else :id="o.id" :ano="o.ano" :hoje="hoje" :apoio="apoio" />
     </template>
   </section>

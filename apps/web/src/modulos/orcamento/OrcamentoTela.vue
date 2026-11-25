@@ -2,12 +2,15 @@
 // Orçamento empresarial (M54, etapa 7; item `Financeiro > Orçamento empresarial`; `financeiro.orcamento.ler` /
 // `financeiro.orcamento.editar` / `financeiro.orcamento.aprovar`): as versões do ano (criar vazia, cópia ou do
 // realizado do ano anterior com ajuste), a versão aberta com os valores por mês (grade centro × item × mês), a aprovação
-// com segregação, o descarte com motivo e o orçado × realizado; e os parâmetros do orçamento, só para consulta. As ações
+// com segregação, o descarte com motivo e o orçado × realizado; os cenários (C1-125); e os parâmetros do orçamento, só
+// para consulta. As ações
 // aparecem só com a permissão e a liberação; o servidor confere de novo.
 import { SanteAlerta, SanteBotao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import AbaCenariosOrcamento from './AbaCenariosOrcamento.vue';
+import AbaEstatisticasOrcamento from './AbaEstatisticasOrcamento.vue';
 import AbaVersoesOrcamento from './AbaVersoesOrcamento.vue';
 import { lerApoioOrcamento } from './api-orcamento.js';
 import ErroOrcamento from './ErroOrcamento.vue';
@@ -19,8 +22,8 @@ const apoio = useQuery({ queryKey: ['orcamento', 'apoio'], queryFn: lerApoioOrca
 const a = computed(() => apoio.data.value ?? null);
 const hoje = props.hoje ?? new Date().toISOString().slice(0, 10);
 
-type Aba = 'versoes' | 'parametros';
-const ABAS: readonly Aba[] = ['versoes', 'parametros'];
+type Aba = 'versoes' | 'cenarios' | 'estatisticas' | 'parametros';
+const ABAS: readonly Aba[] = ['versoes', 'cenarios', 'estatisticas', 'parametros'];
 const aba = ref<Aba>('versoes');
 const aberta = ref<number | null>(null);
 const ano = ref<number>(Number(hoje.slice(0, 4)));
@@ -70,6 +73,12 @@ const ouVazio = (v: number | string | null) =>
           :apoio="a"
           :hoje="hoje"
           @abrir="aberta = $event"
+        />
+        <AbaCenariosOrcamento v-else-if="aba === 'cenarios'" :pode-editar="a.acoes.editar" />
+        <AbaEstatisticasOrcamento
+          v-else-if="aba === 'estatisticas'"
+          :hoje="hoje"
+          :pode-editar="a.acoes.editar && a.chaveLigada"
         />
         <section v-else class="bloco" aria-labelledby="orc-param-titulo" data-testid="orc-parametros">
           <h2 id="orc-param-titulo">{{ t('orcamentoEmpresarial.parametros.titulo') }}</h2>

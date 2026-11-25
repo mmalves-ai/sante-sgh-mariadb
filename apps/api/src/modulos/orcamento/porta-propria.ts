@@ -16,8 +16,8 @@
 // (trava otimista pela `versao` da linha, cada uma nas escritas registradas da trilha), e a remoção é lógica
 // (`excluido_em`/`excluido_por`), nunca DELETE físico.
 // Melhoria: o realizado não conta o título renegociado (o valor segue no título novo da renegociação).
-// Pendente (pedido ao orquestrador): linha de consumo sem insumo (a restrição do banco exige o insumo), unicidade da
-// versão aprovada por ano e os parâmetros do orçamento.
+// A linha de consumo por centro grava sem o item de estoque (a migração 14_FIN/11 retirou ck_linha_orcamento_consumo:
+// o orçamento de consumo é o total valorizado do centro). Pendente: os parâmetros do orçamento.
 import {
   type CentroOrcamento,
   type ItemGerencialOrcamento,
@@ -247,18 +247,11 @@ const desatualizado = () =>
     'O orçamento mudou depois que você abriu (outra pessoa gravou, aprovou ou descartou). Abra de novo para ver a versão atual.',
   );
 
-/** A linha de consumo pede o insumo no modelo; o consumo total por centro ainda não tem onde ficar. */
 /** Os dados da tela para a trilha, como objeto (o que não for objeto vai em `tela`). */
 const asObjetoDados = (d: unknown): Record<string, unknown> =>
   d !== null && typeof d === 'object' && !Array.isArray(d)
     ? (d as Record<string, unknown>)
     : { tela: d ?? null };
-
-const consumoSemModelo = () =>
-  recusa(
-    'consumo-sem-insumo',
-    'O orçamento de consumo por centro (sem o item de estoque) ainda não pode ser gravado neste banco. Orce o consumo pelas despesas.',
-  );
 
 const ONDE_CHAVE = `versao_orcamento_id = ? AND natureza = ? AND centro_custo_id <=> ? AND grupo_natureza_financeira_id <=> ?
   AND subgrupo_natureza_financeira_id <=> ? AND natureza_financeira_id <=> ? AND excluido_em IS NULL`;
@@ -278,7 +271,6 @@ async function incluirLinhas(
   linhas: readonly z.infer<typeof linhaZ>[],
   desde: number,
 ): Promise<void> {
-  if (linhas.some((l) => l.natureza === 'consumo')) throw consumoSemModelo();
   const colunas = [
     'versao_orcamento_id',
     'sequencia',
@@ -420,7 +412,6 @@ const opLinhas = definirOperacao({
       });
     }
     for (const l of x.alterar) {
-      if (l.natureza === 'consumo') throw consumoSemModelo();
       const r = await linhaDaChave(l);
       await tx.alterar('linha_orcamento', r.id, r.versao, {
         ...Object.fromEntries(MESES.map((m, i) => [m, decimalDe(l.meses[i] ?? 0)])),
@@ -503,8 +494,8 @@ const opDescartar = definirOperacao({
 
 export class PortaOrcamentoPropria implements PortaOrcamento {
   readonly destino = 'banco' as const;
-  /** A restrição ck_linha_orcamento_consumo exige o insumo: o consumo por centro espera o DDL pedido. */
-  readonly gravaConsumoPorCentro = false;
+  /** O consumo por centro grava sem o insumo (a restrição saiu na migração 14_FIN/11). */
+  readonly gravaConsumoPorCentro = true;
   private readonly executor: Executor;
 
   constructor(

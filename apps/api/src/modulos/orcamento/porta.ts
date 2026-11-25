@@ -96,9 +96,9 @@ export const naturezaDoItem = (n: string): NaturezaOrcamento | null =>
 export interface PortaOrcamento {
   readonly destino: DestinoPorta | 'indisponivel';
   /**
-   * O banco guarda o orçamento de consumo por centro (o total valorizado, sem item de estoque)? Enquanto o modelo não
-   * tiver a linha de consumo sem insumo (pedido ao orquestrador), a versão gerada do realizado deixa o consumo de fora,
-   * contado nas descartadas e avisado, em vez de recusar a versão inteira.
+   * O banco guarda o orçamento de consumo por centro (o total valorizado, sem item de estoque)? A porta própria guarda
+   * (a migração 14_FIN/11 retirou a exigência do insumo); a porta que não guardar deixa o consumo da versão gerada do
+   * realizado de fora, contado nas descartadas e avisado, em vez de recusar a versão inteira.
    */
   readonly gravaConsumoPorCentro: boolean;
   apoio(c: ContextoOrcamento): Promise<ApoioOrcamentoDados>;

@@ -3,7 +3,7 @@
 // recusa de estabelecimento), dois usuários, dois centros de custo e um plano gerencial com um item de receita e um de
 // despesa. Contrato de efeito de cada gravação: as linhas em versao_orcamento e linha_orcamento, a `versao`, a trilha de
 // auditoria da operação (com as escritas registradas) e a ausência de saída no outbox; o realizado com massa de
-// títulos (com e sem rateio, renegociado, previsão) e consumo; e as recusas (versão lida velha, consumo sem insumo, segregação, outro estabelecimento).
+// títulos (com e sem rateio, renegociado, previsão) e consumo; o consumo por centro sem insumo gravado; e as recusas (versão lida velha, segregação, outro estabelecimento).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -188,7 +188,7 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
     expect((await porta.apoio(autor().porta)).empresas).toEqual([1]);
   });
 
-  it('o ciclo: criar, lançar, versão velha recusada, consumo recusado, segregação, aprovar, revisão que substitui, descarte', async () => {
+  it('o ciclo: criar, lançar, versão velha recusada, consumo sem insumo gravado, segregação, aprovar, revisão que substitui, descarte', async () => {
     // Criar (vazia): o cabeçalho, a versão 1 e a trilha da operação.
     const v1 = await servico.criar(
       autor(),
@@ -307,44 +307,63 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
         },
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'conflito-versao' } });
-    // Consumo sem insumo: recusado com a mensagem de negócio.
-    await expect(
-      porta.gravarLinhas(
+    // Consumo por centro sem o item de estoque (C1-125): grava (a restrição saiu na migração 14_FIN/11), com o insumo
+    // nulo no banco, e sai de novo pela remoção lógica.
+    const consumo = {
+      centro: ids.centro1,
+      natureza: 'consumo' as const,
+      grupo: 0,
+      subgrupo: 0,
+      item: 0,
+      meses: doze(1),
+      observacao: null,
+    };
+    const gConsumo = () => ({
+      login: 'l0211o.autor',
+      chaveIdempotencia: `t0211-${randomUUID()}`,
+      trilha: autor().trilha('x', 'alterar', 'linha_orcamento', v1.id),
+    });
+    expect(
+      await porta.gravarLinhas(
         autor().porta,
         v1.id,
         3,
-        {
-          incluir: [
-            {
-              centro: ids.centro1,
-              natureza: 'consumo',
-              grupo: 0,
-              subgrupo: 0,
-              item: 0,
-              meses: doze(1),
-              observacao: null,
-            },
-          ],
-          alterar: [],
-          remover: [],
-        },
-        {
-          login: 'l0211o.autor',
-          chaveIdempotencia: `t0211-${randomUUID()}`,
-          trilha: autor().trilha('x', 'alterar', 'linha_orcamento', v1.id),
-        },
+        { incluir: [consumo], alterar: [], remover: [] },
+        gConsumo(),
       ),
-    ).rejects.toMatchObject({ problema: { codigo: 'consumo-sem-insumo' } });
-    expect((await porta.versao(autor().porta, v1.id))?.versao).toBe(3);
+    ).toEqual({ versao: 4 });
+    const lc = await ler<{ n: number; insumo: unknown; total: string }>(
+      `SELECT COUNT(*) AS n, MAX(insumo_id) AS insumo, SUM(valor_total) AS total FROM linha_orcamento
+        WHERE versao_orcamento_id = ? AND natureza = 'consumo' AND excluido_em IS NULL`,
+      [v1.id],
+    );
+    expect([Number(lc?.n), lc?.insumo ?? null, Number(lc?.total)]).toEqual([1, null, 0.12]);
+    expect((await porta.versao(autor().porta, v1.id))?.totaisPorNatureza.consumo).toBe(12);
+    const chaveConsumo = {
+      centro: consumo.centro,
+      natureza: consumo.natureza,
+      grupo: 0,
+      subgrupo: 0,
+      item: 0,
+    };
+    await porta.gravarLinhas(
+      autor().porta,
+      v1.id,
+      4,
+      { incluir: [], alterar: [], remover: [chaveConsumo] },
+      gConsumo(),
+    );
+    expect((await porta.versao(autor().porta, v1.id))?.totaisPorNatureza.consumo).toBe(0);
+    expect((await porta.versao(autor().porta, v1.id))?.versao).toBe(5);
 
     // Segregação: quem montou não aprova; outra pessoa aprova (oficial, aprovador e observação).
     await expect(
-      servico.aprovar(autor(), v1.id, { versao: 3, observacao: null }, EVENTOS),
+      servico.aprovar(autor(), v1.id, { versao: 5, observacao: null }, EVENTOS),
     ).rejects.toMatchObject({
       status: 409,
     });
     expect(
-      await servico.aprovar(aprovador(), v1.id, { versao: 3, observacao: 'ok sintetico' }, EVENTOS),
+      await servico.aprovar(aprovador(), v1.id, { versao: 5, observacao: 'ok sintetico' }, EVENTOS),
     ).toEqual({
       substituida: null,
     });
@@ -353,7 +372,7 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
       situacao: 'aprovado',
       aprovadoPor: 'l0211o.aprova',
       observacaoAprovacao: 'ok sintetico',
-      versao: 4,
+      versao: 6,
     });
     const of = await ler<{ oficial: number; aprovador_usuario_id: number }>(
       'SELECT oficial, aprovador_usuario_id FROM versao_orcamento WHERE id = ?',
@@ -412,7 +431,7 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
     expect(cmp.avisos[0]).toContain('Ainda não há realizado');
   });
 
-  it('realizado com movimento: rateio por centro, renegociado e previsão de fora; consumo fica de fora da versão, contado', async () => {
+  it('realizado com movimento: rateio por centro, renegociado e previsão de fora; consumo entra na versão sem o insumo', async () => {
     const ANO_R = ANO - 3;
     const n = `${P}R`;
     const limparRealizado = (e: Escritor) =>
@@ -512,8 +531,9 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
           e,
           'SELECT id FROM unidade_medida WHERE codigo = ?',
           [n],
-          "INSERT INTO unidade_medida (codigo, descricao, sigla, criado_em) VALUES (?, 'UNIDADE SINTETICA', 'US', ?)",
-          [n, agora],
+          // A sigla é única no cadastro: a da massa é o próprio código (nunca uma sigla comum de outra massa).
+          "INSERT INTO unidade_medida (codigo, descricao, sigla, criado_em) VALUES (?, 'UNIDADE SINTETICA', ?, ?)",
+          [n, n, agora],
         );
         const insumo = await garantir(
           e,
@@ -549,7 +569,7 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
         ].sort(),
       );
       expect(r.ultimoMesConsumo).toBe(7);
-      // A versão do realizado sai (o consumo por centro fica de fora até o modelo guardá-lo, contado nas descartadas).
+      // A versão do realizado sai com o consumo por centro (gravado sem o insumo, C1-125).
       const v = await servico.criar(
         autor(),
         {
@@ -560,12 +580,11 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
         },
         EVENTOS,
       );
-      expect(v).toMatchObject({ linhas: 2, consumoDeFora: 1 });
-      expect(v.descartadas).toBeGreaterThanOrEqual(1);
+      expect(v).toMatchObject({ linhas: 3, consumoDeFora: 0, descartadas: 0 });
       expect((await porta.versao(autor().porta, v.id))?.totaisPorNatureza).toEqual({
         despesa: 200_00,
         receita: 0,
-        consumo: 0,
+        consumo: 250_00,
       });
     } finally {
       await nucleo.escrever(

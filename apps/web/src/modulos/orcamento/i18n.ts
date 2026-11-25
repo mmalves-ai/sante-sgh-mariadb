@@ -1,5 +1,8 @@
 // Textos da tela "Orçamento empresarial" (M54, etapa 7). ADR 0023: nenhum nome de outro sistema nem de tabela.
 // vue-i18n: nada de barra vertical (plural) nem arroba (mensagem ligada) nos textos.
+import { mensagensEstatisticasOrcamento } from './i18n-estatisticas.js';
+import { mensagensPremissasOrcamento } from './i18n-premissas.js';
+
 export const mensagensOrcamento = {
   titulo: 'Orçamento empresarial',
   subtitulo:
@@ -11,8 +14,12 @@ export const mensagensOrcamento = {
   semPermissaoGravar: 'Seu perfil consulta o orçamento; montar e aprovar exigem outra permissão.',
   abas: {
     versoes: 'Versões do orçamento',
+    cenarios: 'Cenários',
+    estatisticas: 'Estatísticas e indicadores',
     parametros: 'Parâmetros',
   },
+  premissasCenarios: mensagensPremissasOrcamento,
+  estatisticas: mensagensEstatisticasOrcamento,
   versoes: {
     titulo: 'Versões do orçamento',
     ano: 'Ano',
@@ -69,6 +76,7 @@ export const mensagensOrcamento = {
     total: 'Total orçado no ano',
     abas: {
       valores: 'Valores por mês',
+      premissas: 'Premissas e cenário',
       comparativo: 'Orçado × realizado',
     },
     aprovar: 'Aprovar a versão',
