@@ -3,6 +3,7 @@
 //                                                                    e faixas etárias
 //   POST /api/cadastros/linhas-cuidado                               inclui o programa
 //   PUT  /api/cadastros/linhas-cuidado/:id                           altera ou inativa (versão lida; nunca apaga)
+//   GET  /api/cadastros/linhas-cuidado/profissionais?termo=          busca do profissional de referência (id e nome)
 //   GET  /api/cadastros/linhas-cuidado/:id/inscritos?todos=          inscritos do programa no estabelecimento
 //   GET  /api/cadastros/pacientes/:id/linhas-cuidado                 inscrições do paciente com a linha do tempo
 //   POST /api/cadastros/pacientes/:id/linhas-cuidado                 inscreve o paciente
@@ -118,6 +119,22 @@ export class LinhasCuidadoController {
       };
     } catch (x) {
       throw problemaDoCadastro(x);
+    }
+  }
+
+  @Get('linhas-cuidado/profissionais')
+  @Permissao('cadastro.linhaCuidado.inscrever')
+  async profissionais(
+    @Query('termo') termo: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ itens: { id: number; nome: string }[] }> {
+    const s = sessaoDe(req);
+    const t = (termo ?? '').trim();
+    if (t.length < 3) return { itens: [] };
+    try {
+      return { itens: await this.servico().profissionais(s.porta, t.slice(0, 60)) };
+    } catch (e) {
+      throw problemaDoCadastro(e);
     }
   }
 

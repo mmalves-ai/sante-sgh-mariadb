@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   conferirInscricao,
   conferirMudancaEstado,
+  conferirTrocaReferencia,
   encerraAoEntrar,
+  eventoDoHistorico,
   type EntradaInscricao,
   type EstadoLinha,
   estadoDeEntrada,
@@ -178,5 +180,38 @@ describe('painel do programa', () => {
         { tipo: 'alta', encerrada: true },
       ]),
     ).toEqual({ vivas: 2, encerradas: 1, porEstado: { ativo: 2, alta: 1 } });
+  });
+});
+
+describe('troca do profissional de referência', () => {
+  const t = { inscricaoEncerrada: false, exigeReferencia: true, atual: 7, nova: 9 };
+  it('aceita a troca numa inscrição viva', () => {
+    expect(conferirTrocaReferencia(t)).toEqual([]);
+  });
+  it('recusa limpar quando o programa exige referência; aceita quando não exige', () => {
+    expect(conferirTrocaReferencia({ ...t, nova: null }).map((r) => r.codigo)).toEqual([
+      'referencia-obrigatoria',
+    ]);
+    expect(conferirTrocaReferencia({ ...t, exigeReferencia: false, nova: null })).toEqual([]);
+  });
+  it('recusa a inscrição encerrada e a troca pelo mesmo profissional', () => {
+    expect(conferirTrocaReferencia({ ...t, inscricaoEncerrada: true }).map((r) => r.codigo)).toEqual([
+      'inscricao-encerrada',
+    ]);
+    expect(conferirTrocaReferencia({ ...t, nova: 7 }).map((r) => r.codigo)).toEqual(['referencia-igual']);
+  });
+});
+
+describe('evento da linha do histórico', () => {
+  it('usa o evento gravado no retrato', () => {
+    expect(
+      eventoDoHistorico({ estado: 1, referencia: 2 }, { estado: 1, referencia: 3, evento: 'referencia' }),
+    ).toBe('referencia');
+  });
+  it('sem evento gravado, deriva pela comparação com o retrato anterior', () => {
+    expect(eventoDoHistorico(null, { estado: 1, referencia: null })).toBe('inscricao');
+    expect(eventoDoHistorico({ estado: 1, referencia: 2 }, { estado: 4, referencia: 2 })).toBe('estado');
+    expect(eventoDoHistorico({ estado: 1, referencia: 2 }, { estado: 1, referencia: 5 })).toBe('referencia');
+    expect(eventoDoHistorico({ estado: 1, referencia: 2 }, { estado: 1, referencia: 2 })).toBe('alteracao');
   });
 });

@@ -51,7 +51,16 @@ export interface Inscricao {
   encerrada: boolean;
   versao: number;
   proximos: number[];
-  historico: { ocorridoEm: string; operacao: string; estado: string; usuario: string | null }[];
+  historico: {
+    ocorridoEm: string;
+    operacao: string;
+    /** inscricao, estado (mudança de estado), referencia (troca do profissional) ou alteracao. */
+    evento: string;
+    estado: string;
+    referenciaDe: string | null;
+    referenciaPara: string | null;
+    usuario: string | null;
+  }[];
 }
 export interface Inscrito {
   inscricao: number;
@@ -115,6 +124,9 @@ export const mudarEstado = (
   id: number,
   e: { versao: number; estado: number; data: string; motivo: string | null },
 ) => pedir<{ id: number; encerrada: boolean }>(`${P(paciente)}/${id}/estado`, 'POST', e);
+/** Busca do profissional de referência (id e nome), sob a permissão de inscrever no programa. */
+export const buscarReferencias = (termo: string) =>
+  pedir<{ itens: { id: number; nome: string }[] }>(`${L}/profissionais?${new URLSearchParams({ termo })}`);
 export const trocarReferencia = (
   paciente: number,
   id: number,

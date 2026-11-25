@@ -10,8 +10,8 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
-import { buscarProfissionais } from '../api-cadastro.js';
 import {
+  buscarReferencias,
   type Inscricao,
   inscrever,
   lerInscricoes,
@@ -67,16 +67,26 @@ interface Achado {
 function usarBusca() {
   const termo = ref('');
   const achados = ref<Achado[]>([]);
+  // A falha da busca aparece (sem permissão, fora do ar); nunca vira lista vazia calada.
+  const falhou = ref('');
+  const buscou = ref(false);
   watch(termo, async (x) => {
     const q = x.trim();
-    achados.value =
-      q.length >= 3
-        ? await buscarProfissionais(q)
-            .then((l) => l.itens.map((p) => ({ id: p.id, nome: p.nome })))
-            .catch(() => [])
-        : [];
+    falhou.value = '';
+    buscou.value = false;
+    if (q.length < 3) {
+      achados.value = [];
+      return;
+    }
+    try {
+      achados.value = (await buscarReferencias(q)).itens;
+      buscou.value = true;
+    } catch (e) {
+      achados.value = [];
+      falhou.value = e instanceof Error ? e.message : String(e);
+    }
   });
-  return { termo, achados };
+  return { termo, achados, falhou, buscou };
 }
 
 // ── inscrição ──
@@ -248,6 +258,12 @@ async function gravarTroca(i: Inscricao, referencia: number | null): Promise<voi
         <label
           >{{ t('linhasCuidado.buscarProfissional') }} <input v-model="buscaTroca.termo.value" type="search"
         /></label>
+        <p v-if="buscaTroca.falhou.value" class="pendencias" role="alert">
+          {{ t('linhasCuidado.buscaFalhou', { erro: buscaTroca.falhou.value }) }}
+        </p>
+        <p v-else-if="buscaTroca.buscou.value && !buscaTroca.achados.value.length" class="dica">
+          {{ t('linhasCuidado.buscaVazia') }}
+        </p>
         <SanteSelecao
           v-if="buscaTroca.achados.value.length"
           v-model="novaRef"
@@ -280,9 +296,19 @@ async function gravarTroca(i: Inscricao, referencia: number | null): Promise<voi
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(h, k) in i.historico" :key="k">
+            <tr v-for="(h, k) in i.historico" :key="k" :data-evento="h.evento">
               <td>{{ carimboBr(h.ocorridoEm) }}</td>
-              <td>{{ operacao(h.operacao) }}</td>
+              <td>
+                {{ operacao(h.evento || h.operacao) }}
+                <template v-if="h.evento === 'referencia'">
+                  {{
+                    t('linhasCuidado.trocaDePara', {
+                      de: h.referenciaDe ?? t('linhasCuidado.semReferencia'),
+                      para: h.referenciaPara ?? t('linhasCuidado.semReferencia'),
+                    })
+                  }}
+                </template>
+              </td>
               <td>{{ h.estado }}</td>
               <td>{{ h.usuario ?? '' }}</td>
             </tr>
@@ -317,6 +343,12 @@ async function gravarTroca(i: Inscricao, referencia: number | null): Promise<voi
       <label
         >{{ t('linhasCuidado.buscarProfissional') }} <input v-model="buscaNova.termo.value" type="search"
       /></label>
+      <p v-if="buscaNova.falhou.value" class="pendencias" role="alert">
+        {{ t('linhasCuidado.buscaFalhou', { erro: buscaNova.falhou.value }) }}
+      </p>
+      <p v-else-if="buscaNova.buscou.value && !buscaNova.achados.value.length" class="dica">
+        {{ t('linhasCuidado.buscaVazia') }}
+      </p>
       <SanteSelecao
         v-if="buscaNova.achados.value.length"
         v-model="nova.referencia"

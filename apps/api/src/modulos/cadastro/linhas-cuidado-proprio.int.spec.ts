@@ -271,6 +271,28 @@ describe.skipIf(SEM_BANCO)('programas de saúde e linhas de cuidado no banco pr�
     // A troca da referência grava o histórico também.
     await s.alterarReferencia(c(), { paciente, id, versao: v, referencia: null }, t());
     v = Number((await linha(id))!['versao']);
+    // Trocar pelo mesmo (já sem referência) é recusado pela regra do domínio, sem gravar.
+    expect(await codigo(s.alterarReferencia(c(), { paciente, id, versao: v, referencia: null }, t()))).toBe(
+      'referencia-igual',
+    );
+    // A linha do tempo diz que foi troca de referência e de quem para quem; o retrato leva o evento e o anterior.
+    const trocaHist = await um<{ dados: unknown }>(
+      `SELECT dados FROM paciente_linha_cuidado_historico WHERE paciente_linha_cuidado_id = ? ORDER BY id DESC LIMIT 1`,
+      [id],
+    );
+    const dTroca = typeof trocaHist!.dados === 'string' ? JSON.parse(trocaHist!.dados) : trocaHist!.dados;
+    expect(dTroca).toMatchObject({ evento: 'referencia', referencia: null });
+    const nomeRef = await um<{ nome: unknown }>(
+      'SELECT COALESCE(p.nome_exibicao, f.nome) AS nome FROM profissional p JOIN pessoa_fisica f ON f.id = p.pessoa_fisica_id WHERE p.id = ?',
+      [m!.profissional],
+    );
+    const tl = (await s.doPaciente(c(), paciente)).find((x) => x.id === id)!.historico;
+    expect(tl.map((h) => h.evento)).toEqual(['inscricao', 'estado', 'estado', 'referencia']);
+    expect(tl[3]).toMatchObject({ referenciaDe: String(nomeRef!.nome), referenciaPara: null });
+    // A busca do profissional de referência devolve só id e nome, pelo nome.
+    const achados = await s.profissionais(c(), String(nomeRef!.nome).slice(0, 6));
+    expect(achados.some((x) => x.id === m!.profissional)).toBe(true);
+    expect(Object.keys(achados[0]!).sort()).toEqual(['id', 'nome']);
     const r = await s.mudarEstado(
       c(),
       {

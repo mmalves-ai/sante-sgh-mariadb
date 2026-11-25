@@ -13,9 +13,12 @@ import { randomUUID } from 'node:crypto';
 import {
   conferirInscricao,
   conferirMudancaEstado,
+  conferirTrocaReferencia,
   encerraAoEntrar,
   type EstadoLinha,
   estadoDeEntrada,
+  type EventoHistoricoLinha,
+  eventoDoHistorico,
   type TipoEstadoLinha,
   totaisPorEstado,
   TRANSICOES_LINHA,
@@ -105,16 +108,21 @@ async function retrato(tx: TxOperacao, id: number): Promise<Linha> {
   };
 }
 
+/**
+ * Linha do histórico com o retrato e o evento (inscrição, mudança de estado ou troca de referência); na troca, o
+ * retrato leva também o profissional anterior, para a linha do tempo dizer de quem para quem.
+ */
 async function registrarHistorico(
   tx: TxOperacao,
   id: number,
-  operacao: 'inclusao' | 'alteracao',
+  evento: Exclude<EventoHistoricoLinha, 'alteracao'>,
   estado: number,
+  extra: Linha = {},
 ): Promise<void> {
   await tx.incluir('paciente_linha_cuidado_historico', {
     paciente_linha_cuidado_id: id,
-    operacao,
-    dados: JSON.stringify(await retrato(tx, id)),
+    operacao: evento === 'inscricao' ? 'inclusao' : 'alteracao',
+    dados: JSON.stringify({ ...(await retrato(tx, id)), evento, ...extra }),
     ocorrido_em: new Date(),
     usuario_id: tx.contexto.usuario ?? null,
     estado_linha_cuidado_id: estado,
@@ -301,7 +309,7 @@ const opInscrever = (t: RegistroTrilhaTela, estabelecimento: number) =>
         vigencia_inicio: e.vigenciaInicio,
         ativo: true,
       });
-      await registrarHistorico(tx, id, 'inclusao', entrada.id);
+      await registrarHistorico(tx, id, 'inscricao', entrada.id);
       return { id };
     },
     alvo: (_e, r) => ({ tabela: 'paciente_linha_cuidado', id: Number(r.id) }),
@@ -365,7 +373,7 @@ const opMudarEstado = (t: RegistroTrilhaTela, estabelecimento: number) =>
         estado_desde: new Date(`${e.data}T00:00:00Z`),
         ...(encerra ? { vigencia_fim: e.data, ativo: false, motivo_saida: motivo } : {}),
       });
-      await registrarHistorico(tx, e.id, 'alteracao', novo.id);
+      await registrarHistorico(tx, e.id, 'estado', novo.id);
       return { id: e.id, encerrada: encerra ? 1 : 0 };
     },
     alvo: (e) => ({ tabela: 'paciente_linha_cuidado', id: e.id }),
@@ -386,20 +394,25 @@ const opReferencia = (t: RegistroTrilhaTela, estabelecimento: number) =>
     acao: 'alteracao',
     async gravar(tx, e) {
       const x = await inscricaoDoPaciente(tx, e.id, e.paciente, estabelecimento);
-      if (!bool(x['ativo']) || x['vigencia_fim'] !== null)
-        throw recusa('inscricao-encerrada', 'A inscrição está encerrada.', { campos: ['referencia'] });
       const l = await tx.uma('SELECT exige_profissional_referencia FROM linha_cuidado WHERE id = ?', [
         num(x['linha_cuidado_id']),
       ]);
-      if (bool(l?.['exige_profissional_referencia']) && !e.referencia)
-        throw recusa('referencia-obrigatoria', 'Este programa exige o profissional de referência.', {
-          campos: ['referencia'],
-        });
+      const anterior = num(x['referencia_profissional_id']);
+      recusar(
+        conferirTrocaReferencia({
+          inscricaoEncerrada: !bool(x['ativo']) || x['vigencia_fim'] !== null,
+          exigeReferencia: bool(l?.['exige_profissional_referencia']),
+          atual: anterior,
+          nova: e.referencia,
+        }),
+      );
       await conferirReferencia(tx, e.referencia);
       await tx.alterar('paciente_linha_cuidado', e.id, e.versao, {
         referencia_profissional_id: e.referencia,
       });
-      await registrarHistorico(tx, e.id, 'alteracao', Number(x['estado_linha_cuidado_id']));
+      await registrarHistorico(tx, e.id, 'referencia', Number(x['estado_linha_cuidado_id']), {
+        referenciaAnterior: anterior,
+      });
       return { id: e.id };
     },
     alvo: (e) => ({ tabela: 'paciente_linha_cuidado', id: e.id }),
@@ -441,7 +454,12 @@ export interface OpcoesLinhas {
 export interface HistoricoInscricao {
   readonly ocorridoEm: string;
   readonly operacao: string;
+  /** O que aconteceu: inscrição, mudança de estado ou troca do profissional de referência. */
+  readonly evento: EventoHistoricoLinha;
   readonly estado: string;
+  /** Na troca de referência: de quem para quem (nome; null quando sem profissional). */
+  readonly referenciaDe: string | null;
+  readonly referenciaPara: string | null;
   readonly usuario: string | null;
 }
 
@@ -597,6 +615,24 @@ export class LinhasCuidadoPropria {
     });
   }
 
+  /**
+   * Busca do profissional de referência (até 20 ativos pelo nome): só id e nome, para quem inscreve no programa sem
+   * precisar da leitura do cadastro de profissionais.
+   */
+  profissionais(c: ContextoPorta, termo: string): Promise<{ id: number; nome: string }[]> {
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `SELECT p.id, COALESCE(p.nome_exibicao, pf.nome) AS nome
+             FROM profissional p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+            WHERE p.excluido_em IS NULL AND p.situacao = 'ativo' AND (pf.nome LIKE ? OR p.nome_exibicao LIKE ?)
+            ORDER BY nome LIMIT 20`,
+          [`%${termo.replace(/[%_]/g, '')}%`, `%${termo.replace(/[%_]/g, '')}%`],
+        )
+      ).map((r) => ({ id: Number(r['id']), nome: String(r['nome']) })),
+    );
+  }
+
   /** As inscrições do paciente no estabelecimento, vivas primeiro, com a linha do tempo de cada uma. */
   async doPaciente(c: ContextoPorta, paciente: number): Promise<InscricaoDoPaciente[]> {
     const est = await this.estabelecimento(c);
@@ -623,7 +659,10 @@ export class LinhasCuidadoPropria {
       const hist = ids.length
         ? await l.consultar(
             `SELECT h.paciente_linha_cuidado_id, DATE_FORMAT(h.ocorrido_em, '%Y-%m-%dT%H:%i:%s') AS quando, h.operacao,
-                    e.descricao AS estado, u.login
+                    e.descricao AS estado, u.login, h.estado_linha_cuidado_id AS estado_id,
+                    JSON_UNQUOTE(JSON_EXTRACT(h.dados, '$.evento')) AS evento,
+                    JSON_EXTRACT(h.dados, '$.referencia') AS ref_id,
+                    JSON_EXTRACT(h.dados, '$.referenciaAnterior') AS ref_anterior
                FROM paciente_linha_cuidado_historico h
                JOIN estado_linha_cuidado e ON e.id = h.estado_linha_cuidado_id
                LEFT JOIN usuario u ON u.id = h.usuario_id
@@ -633,6 +672,25 @@ export class LinhasCuidadoPropria {
             { teto: 5000 },
           )
         : [];
+      // Nomes dos profissionais citados nas trocas de referência (o retrato guarda só o id).
+      const citados = [
+        ...new Set(
+          hist
+            .flatMap((h) => [num(h['ref_id']), num(h['ref_anterior'])])
+            .filter((v): v is number => v !== null && Number.isFinite(v)),
+        ),
+      ];
+      const nomes = new Map<number, string>();
+      if (citados.length)
+        for (const r of await l.consultar(
+          `SELECT pr.id, COALESCE(pr.nome_exibicao, rf.nome) AS nome
+             FROM profissional pr LEFT JOIN pessoa_fisica rf ON rf.id = pr.pessoa_fisica_id
+            WHERE pr.id IN (${citados.map(() => '?').join(',')})`,
+          citados,
+          { teto: 500 },
+        ))
+          nomes.set(Number(r['id']), String(r['nome'] ?? ''));
+      const nomeDe = (v: number | null) => (v === null ? null : (nomes.get(v) ?? null));
       return rs.map((x) => {
         const id = Number(x['id']);
         const tipo = String(x['tipo_estado']) as TipoEstadoLinha;
@@ -660,12 +718,27 @@ export class LinhasCuidadoPropria {
             : estados.filter((s) => s.ativo && TRANSICOES_LINHA[tipo].includes(s.tipo)).map((s) => s.id),
           historico: hist
             .filter((h) => Number(h['paciente_linha_cuidado_id']) === id)
-            .map((h) => ({
-              ocorridoEm: String(h['quando']),
-              operacao: String(h['operacao']),
-              estado: String(h['estado']),
-              usuario: txt(h['login']),
-            })),
+            .map((h, i, todas) => {
+              const ant = i > 0 ? todas[i - 1] : undefined;
+              const evento = eventoDoHistorico(
+                ant ? { estado: num(ant['estado_id']), referencia: num(ant['ref_id']) } : null,
+                { estado: num(h['estado_id']), referencia: num(h['ref_id']), evento: txt(h['evento']) },
+              );
+              const troca = evento === 'referencia';
+              return {
+                ocorridoEm: String(h['quando']),
+                operacao: String(h['operacao']),
+                evento,
+                estado: String(h['estado']),
+                referenciaDe: troca
+                  ? nomeDe(
+                      h['ref_anterior'] !== null ? num(h['ref_anterior']) : ant ? num(ant['ref_id']) : null,
+                    )
+                  : null,
+                referenciaPara: troca ? nomeDe(num(h['ref_id'])) : null,
+                usuario: txt(h['login']),
+              };
+            }),
         };
       });
     });

@@ -220,3 +220,53 @@ export function totaisPorEstado(
   }
   return { vivas, encerradas, porEstado };
 }
+
+export interface EntradaTrocaReferencia {
+  readonly inscricaoEncerrada: boolean;
+  readonly exigeReferencia: boolean;
+  readonly atual: number | null;
+  readonly nova: number | null;
+}
+
+/** Troca (ou limpeza) do profissional de referência de uma inscrição viva. */
+export function conferirTrocaReferencia(e: EntradaTrocaReferencia): RecusaLinha[] {
+  if (e.inscricaoEncerrada)
+    return [{ codigo: 'inscricao-encerrada', campo: 'referencia', mensagem: 'A inscrição está encerrada.' }];
+  const r: RecusaLinha[] = [];
+  if (e.exigeReferencia && !e.nova)
+    r.push({
+      codigo: 'referencia-obrigatoria',
+      campo: 'referencia',
+      mensagem: 'Este programa exige o profissional de referência.',
+    });
+  if ((e.atual ?? null) === (e.nova ?? null))
+    r.push({
+      codigo: 'referencia-igual',
+      campo: 'referencia',
+      mensagem: 'Este já é o profissional de referência da inscrição.',
+    });
+  return r;
+}
+
+/** O que aconteceu numa linha do histórico da inscrição. */
+export type EventoHistoricoLinha = 'inscricao' | 'estado' | 'referencia' | 'alteracao';
+
+/**
+ * O evento de uma linha do histórico: o gravado no retrato quando houver; senão, derivado da comparação com o retrato
+ * anterior (mudou o estado: mudança de estado; só a referência: troca de referência).
+ */
+export function eventoDoHistorico(
+  anterior: { readonly estado: number | null; readonly referencia: number | null } | null,
+  atual: {
+    readonly estado: number | null;
+    readonly referencia: number | null;
+    readonly evento?: string | null;
+  },
+): EventoHistoricoLinha {
+  if (atual.evento === 'inscricao' || atual.evento === 'estado' || atual.evento === 'referencia')
+    return atual.evento;
+  if (!anterior) return 'inscricao';
+  if (anterior.estado !== atual.estado) return 'estado';
+  if ((anterior.referencia ?? null) !== (atual.referencia ?? null)) return 'referencia';
+  return 'alteracao';
+}
