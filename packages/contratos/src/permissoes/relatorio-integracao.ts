@@ -19,6 +19,9 @@ export const PERMISSOES_M34_CODIGOS = {
   pedidoPublicar: 'relatorio.pedido.publicar',
   agendamentoLer: 'relatorio.agendamento.ler',
   agendamentoEditar: 'relatorio.agendamento.editar',
+  // 01-ADM L114: página inicial montada pelo hospital (modelos por perfil).
+  paginaInicialLer: 'relatorio.paginaInicial.ler',
+  paginaInicialEditar: 'relatorio.paginaInicial.editar',
   configuracaoLer: 'integracao.configuracao.ler',
   fhirLer: 'integracao.fhir.ler',
   fhirEnviar: 'integracao.fhir.enviar',
@@ -391,5 +394,22 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     perfis: [...ADMIN],
     categoria: 'administrativa',
     criticidade: 'sensivel',
+  },
+  // 01-ADM L114: página inicial montada pelo hospital; recurso só do novo, concedido por perfil.
+  {
+    codigo: C.paginaInicialLer,
+    descricao: 'Consultar os modelos de página inicial por perfil (blocos, ordem e perfis)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: C.paginaInicialEditar,
+    descricao: 'Montar, publicar e inativar os modelos de página inicial por perfil',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'normal',
   },
 ];
