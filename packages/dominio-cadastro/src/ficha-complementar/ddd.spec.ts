@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classeDoNumero, errosTelefoneNaArea, type AreaDdd } from './ddd.js';
+import { classeDoNumero, errosTelefoneNaArea, mensagemTelefoneRecusado, type AreaDdd } from './ddd.js';
 
 const AREA: AreaDdd = { ativa: true, digitosFixo: 8, digitosMovel: 9 };
 
@@ -28,5 +28,22 @@ describe('telefone pela área de DDD (02-CAD linha 14)', () => {
 
   it('fora do Brasil não confere a área', () => {
     expect(errosTelefoneNaArea({ ddi: '351', ddd: null, numero: '912345678' }, null)).toEqual([]);
+  });
+
+  it('campo que exige móvel recusa o fixo válido; sem exigência, o fixo e o móvel passam', () => {
+    expect(errosTelefoneNaArea({ ddi: '55', ddd: '31', numero: '33334444' }, AREA, 'movel')).toEqual([
+      'numero',
+    ]);
+    expect(errosTelefoneNaArea({ ddi: '55', ddd: '31', numero: '999990102' }, AREA, 'movel')).toEqual([]);
+    expect(errosTelefoneNaArea({ ddi: '55', ddd: '31', numero: '999990102' }, AREA)).toEqual([]);
+    expect(errosTelefoneNaArea({ ddi: '55', ddd: '20', numero: '999990102' }, null, 'movel')).toEqual([
+      'ddd',
+    ]);
+  });
+
+  it('a frase da recusa diz o que corrigir, pelo campo recusado', () => {
+    expect(mensagemTelefoneRecusado('ddd')).toContain('DDD');
+    expect(mensagemTelefoneRecusado('numero', 'movel')).toContain('começando por 9');
+    expect(mensagemTelefoneRecusado('numero')).toContain('fixo');
   });
 });

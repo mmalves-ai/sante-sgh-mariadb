@@ -50,6 +50,8 @@ import {
 import {
   chaveSolicitante,
   conferirRegistroDevolvido,
+  errosTelefoneNaArea,
+  mensagemTelefoneRecusado,
   planoDeDesfazer,
   RECUSA_REGISTRO_ALTERADO,
   planoDeUnificacao,
@@ -1440,14 +1442,50 @@ async function gravarEmail(tx: TxOperacao, pessoa: number, email: string): Promi
     .catch(recusaDeUnicidade);
 }
 
+/** Campo da ficha do paciente de cada telefone, e a classe que ele exige (o celular exige número móvel). */
+const CAMPO_DO_TELEFONE: Record<string, { campo: string; classe?: 'movel' }> = {
+  [CODIGOS_DOMINIO_CADASTRO.telefoneFixo]: { campo: 'telefone' },
+  [CODIGOS_DOMINIO_CADASTRO.telefoneCelular]: { campo: 'celular', classe: 'movel' },
+  [CODIGOS_DOMINIO_CADASTRO.telefoneRecado]: { campo: 'contatoTelefone' },
+};
+
+/**
+ * Telefone da ficha principal conferido pela área de DDD do plano de numeração (02-CAD linha 14; a mesma regra da
+ * ficha complementar): DDD sem área ativa e número sem a forma de fixo ou móvel da área são recusados, com o campo.
+ */
+async function conferirTelefoneNaArea(tx: TxOperacao, codigoTipo: string, ddd: string, numero: string) {
+  const a = await tx.uma<{ ativo: unknown; digitos_fixo: unknown; digitos_movel: unknown }>(
+    'SELECT ativo, digitos_fixo, digitos_movel FROM area_ddd WHERE codigo_anatel = ?',
+    [ddd],
+  );
+  const { campo, classe } = CAMPO_DO_TELEFONE[codigoTipo] ?? { campo: 'telefone' };
+  const [erro] = errosTelefoneNaArea(
+    { ddi: '55', ddd, numero },
+    a
+      ? {
+          ativa: Number(a.ativo) === 1,
+          digitosFixo: Number(a.digitos_fixo),
+          digitosMovel: Number(a.digitos_movel),
+        }
+      : null,
+    classe,
+  );
+  if (erro)
+    throw recusa('telefone-invalido', `${mensagemTelefoneRecusado(erro, classe)} Nada foi gravado.`, {
+      campos: [campo],
+    });
+}
+
 async function incluirTelefone(
   tx: TxOperacao,
   pessoa: number,
   codigoTipo: string,
   numero: string,
   contato: string | null,
+  conferir = true,
 ) {
   const { ddd, numero: n } = partesTelefone(numero);
+  if (conferir) await conferirTelefoneNaArea(tx, codigoTipo, ddd, n);
   await tx.incluir('telefone_pessoa', {
     pessoa_fisica_id: pessoa,
     sequencia: await proximaSequencia(tx, 'telefone_pessoa', pessoa),
@@ -1707,11 +1745,18 @@ export const OPERACAO_ALTERAR_PACIENTE = definirOperacao({
     ) => {
       if (valor === undefined) return;
       const tipo = await idDoDominio(tx, 'tipo_telefone', codigo);
+      // O número que já estava gravado (inclusive o que veio de outra base) não é conferido de novo: só o que muda.
+      const vigente = await tx.uma<{ n: unknown }>(
+        `SELECT CONCAT(COALESCE(ddd, ''), numero) AS n FROM telefone_pessoa
+          WHERE pessoa_fisica_id = ? AND tipo_telefone_id = ? AND excluido_em IS NULL ORDER BY principal DESC, sequencia LIMIT 1`,
+        [pessoa, tipo],
+      );
+      const mudouNumero = valor !== null && digitos(valor) !== String(vigente?.n ?? '');
       await tx.executar(
         'UPDATE telefone_pessoa SET excluido_em = ?, excluido_por = ? WHERE pessoa_fisica_id = ? AND tipo_telefone_id = ? AND excluido_em IS NULL',
         [new Date(), tx.contexto.usuario, pessoa, tipo],
       );
-      if (valor !== null) await incluirTelefone(tx, pessoa, codigo, valor, contato);
+      if (valor !== null) await incluirTelefone(tx, pessoa, codigo, valor, contato, mudouNumero);
       mudou = true;
     };
     await trocarTelefone(CODIGOS_DOMINIO_CADASTRO.telefoneFixo, a.telefone, null);
