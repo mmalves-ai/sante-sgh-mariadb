@@ -43,6 +43,22 @@ FONTES = {
     "logradouro": ("https://www.gov.br/esocial/pt-br/documentacao-tecnica/leiautes-esocial-versao-s-1-3-nt-08-2026/"
                    "tabelas.html", 5, "esocial-s-1.3-nt-08-2026"),
     # Etnias indígenas: tabelas auxiliares do SIA/SUS publicadas pelo DATASUS (CNV/etnia.cnv dentro do pacote).
+    # Curvas de crescimento (03-PEP L141): padrões da OMS 2006 (0 a 5 anos) e referência OMS 2007 (5 a 19 anos), tabelas
+    # LMS publicadas pela OMS nos pacotes oficiais anthro/anthroplus; INTERGROWTH-21st pós-natal do prematuro (27 a 64
+    # semanas de idade pós-menstrual), tabelas de escore Z publicadas pelo consórcio e reproduzidas no pacote gigs.
+    "curvas_oms2006_peso": ("https://raw.githubusercontent.com/WorldHealthOrganization/anthro/master/data-raw/growthstandards/weianthro.txt", 1, "oms-2006"),
+    "curvas_oms2006_estatura": ("https://raw.githubusercontent.com/WorldHealthOrganization/anthro/master/data-raw/growthstandards/lenanthro.txt", 1, "oms-2006"),
+    "curvas_oms2006_pc": ("https://raw.githubusercontent.com/WorldHealthOrganization/anthro/master/data-raw/growthstandards/hcanthro.txt", 1, "oms-2006"),
+    "curvas_oms2006_imc": ("https://raw.githubusercontent.com/WorldHealthOrganization/anthro/master/data-raw/growthstandards/bmianthro.txt", 1, "oms-2006"),
+    "curvas_oms2007_peso": ("https://raw.githubusercontent.com/WorldHealthOrganization/anthroplus/main/data-raw/growthstandards/wfawho2007.txt", 1, "oms-2007"),
+    "curvas_oms2007_estatura": ("https://raw.githubusercontent.com/WorldHealthOrganization/anthroplus/main/data-raw/growthstandards/hfawho2007.txt", 1, "oms-2007"),
+    "curvas_oms2007_imc": ("https://raw.githubusercontent.com/WorldHealthOrganization/anthroplus/main/data-raw/growthstandards/bfawho2007.txt", 1, "oms-2007"),
+    "curvas_ig_peso_m": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_weight_male_zscores.csv", 1, "intergrowth-2015"),
+    "curvas_ig_peso_f": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_weight_female_zscores.csv", 1, "intergrowth-2015"),
+    "curvas_ig_estatura_m": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_len_male_zscores.csv", 1, "intergrowth-2015"),
+    "curvas_ig_estatura_f": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_len_female_zscores.csv", 1, "intergrowth-2015"),
+    "curvas_ig_pc_m": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_hc_male_zscores.csv", 1, "intergrowth-2015"),
+    "curvas_ig_pc_f": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_hc_female_zscores.csv", 1, "intergrowth-2015"),
     "etnia_indigena": ("ftp://ftp.datasus.gov.br/dissemin/publicos/SIASUS/200801_/Auxiliar/TAB_SIA.zip", 150, None),
 }
 

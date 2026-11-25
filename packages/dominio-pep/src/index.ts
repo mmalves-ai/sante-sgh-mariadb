@@ -143,3 +143,4 @@ export * from './exame-fisico.js';
 export * from './nota-soap.js';
 // F8 (09-AREA L69): registro oncológico (tumor com CID-O-3, estadiamento TNM) e radioterapia (plano e sessões).
 export * from './especialidades/registro-oncologico.js';
+export * from './curvas-crescimento.js';
