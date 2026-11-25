@@ -11,3 +11,5 @@ export * from './cobertura.js';
 export * from './tecnovigilancia.js';
 // W0-08, parte 9: treinamento dos operadores por modelo, obsolescência e ciclo de vida (M3).
 export * from './ciclo-vida.js';
+// Manutenção corretiva: oficina, orçamento da OS com alçada e remessa para conserto externo (04-HOT L135).
+export * from './oficina-orcamento.js';
