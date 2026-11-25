@@ -86,6 +86,9 @@ describe('ciclo de esterilização', () => {
       'O pacote 3 pede outro método de esterilização.',
       'O pacote 4 não existe neste estabelecimento.',
     ]);
+    expect(
+      conferirCarga(9, [{ id: 5, situacao: 'aguardando_esterilizacao', metodo: 9, emCarga: true }], [5]),
+    ).toEqual([{ campo: 'pacotes', mensagem: 'O pacote 5 já está numa carga aberta.' }]);
   });
   it('indicadores conformes liberam; não conforme reprova; falta físico ou químico recusa', () => {
     expect(

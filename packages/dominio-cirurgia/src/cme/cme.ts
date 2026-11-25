@@ -127,9 +127,14 @@ export interface PacoteParaCiclo {
   readonly id: number;
   readonly situacao: string;
   readonly metodo: number | null;
+  /** O pacote já está numa carga aberta (ciclo em andamento ou aguardando o biológico). */
+  readonly emCarga?: boolean;
 }
 
-/** As recusas da montagem da carga: pacotes aguardando esterilização, sem repetição, compatíveis com o método. */
+/**
+ * As recusas da montagem da carga: pacotes aguardando esterilização, fora de outra carga aberta, sem repetição,
+ * compatíveis com o método.
+ */
 export function conferirCarga(
   metodo: number,
   pacotes: readonly PacoteParaCiclo[],
@@ -144,6 +149,7 @@ export function conferirCarga(
     if (!k) p.push({ campo: 'pacotes', mensagem: `O pacote ${id} não existe neste estabelecimento.` });
     else if (k.situacao !== 'aguardando_esterilizacao')
       p.push({ campo: 'pacotes', mensagem: `O pacote ${id} não está aguardando esterilização.` });
+    else if (k.emCarga) p.push({ campo: 'pacotes', mensagem: `O pacote ${id} já está numa carga aberta.` });
     else if (k.metodo !== null && k.metodo !== metodo)
       p.push({ campo: 'pacotes', mensagem: `O pacote ${id} pede outro método de esterilização.` });
   }

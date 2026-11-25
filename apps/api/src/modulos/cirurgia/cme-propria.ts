@@ -655,12 +655,15 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
         'sequencia_negocio',
       ],
       async (tx, est, usuario) => {
-        const cx = await tx.uma(
-          `SELECT id, ativo, controla_reprocessamentos, limite_reprocessamentos, quantidade_reprocessamentos,
+        const cx =
+          (
+            await tx.consultarParaAtualizar<Linha>(
+              `SELECT id, ativo, controla_reprocessamentos, limite_reprocessamentos, quantidade_reprocessamentos,
                   metodo_esterilizacao_id, tipo_embalagem_esteril_id
-             FROM caixa_instrumental WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
-          [e.caixa, est.id],
-        );
+             FROM caixa_instrumental WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+              [e.caixa, est.id],
+            )
+          )[0] ?? null;
         if (!cx) throw naoEncontrado('Caixa de instrumental');
         recusa(
           'Pacote recusado',
@@ -673,14 +676,17 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
         );
         let item: Linha | null = null;
         if (e.solicitacaoItem) {
-          item = await tx.uma(
-            `SELECT i.id, i.versao, i.caixa_instrumental_id, i.situacao, i.solicitacao_material_esteril_id AS sol,
+          item =
+            (
+              await tx.consultarParaAtualizar<Linha>(
+                `SELECT i.id, i.versao, i.caixa_instrumental_id, i.situacao, i.solicitacao_material_esteril_id AS sol,
                     s.versao AS sol_versao, s.situacao AS sol_situacao
                FROM solicitacao_material_esteril_item i
                JOIN solicitacao_material_esteril s ON s.id = i.solicitacao_material_esteril_id
-              WHERE i.id = ? AND s.estabelecimento_id = ? AND i.excluido_em IS NULL FOR UPDATE`,
-            [e.solicitacaoItem, est.id],
-          );
+              WHERE i.id = ? AND s.estabelecimento_id = ? AND i.excluido_em IS NULL`,
+                [e.solicitacaoItem, est.id],
+              )
+            )[0] ?? null;
           if (!item) throw naoEncontrado('Item da solicitação');
           if (num(item['caixa_instrumental_id']) !== e.caixa || String(item['situacao']) !== 'pendente')
             throw recusaRegra('Pacote recusado', [
@@ -751,10 +757,11 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
         ]);
         if (!met) throw naoEncontrado('Método de esterilização');
         const pacotes = e.pacotes.length
-          ? await tx.consultar(
-              `SELECT id, situacao, metodo_esterilizacao_id, versao FROM pacote_esteril
-                WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${e.pacotes.map(() => '?').join(', ')})
-                FOR UPDATE`,
+          ? await tx.consultarParaAtualizar<Linha>(
+              `SELECT p.id, p.situacao, p.metodo_esterilizacao_id, p.versao,
+                      (c.situacao IN ('em_andamento', 'concluido')) AS em_carga
+                 FROM pacote_esteril p LEFT JOIN ciclo_esterilizacao c ON c.id = p.ciclo_esterilizacao_id
+                WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.id IN (${e.pacotes.map(() => '?').join(', ')})`,
               [est.id, ...e.pacotes],
             )
           : [];
@@ -766,6 +773,7 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
               id: num(p['id']),
               situacao: String(p['situacao']),
               metodo: numOuNull(p['metodo_esterilizacao_id']),
+              emCarga: bool(p['em_carga']),
             })),
             e.pacotes,
           ),
@@ -879,10 +887,13 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
   }
 
   private async cicloTravado(tx: TxOperacao, est: number, ciclo: number): Promise<Linha> {
-    const ci = await tx.uma(
-      'SELECT id, situacao, versao, observacao FROM ciclo_esterilizacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE',
-      [ciclo, est],
-    );
+    const ci =
+      (
+        await tx.consultarParaAtualizar<Linha>(
+          'SELECT id, situacao, versao, observacao FROM ciclo_esterilizacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [ciclo, est],
+        )
+      )[0] ?? null;
     if (!ci) throw naoEncontrado('Ciclo de esterilização');
     return ci;
   }
@@ -896,15 +907,14 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
     agora: Date,
   ): Promise<void> {
     if (d.situacao !== 'liberado' && d.situacao !== 'reprovado') return;
-    const ps = await tx.consultar(
+    const ps = await tx.consultarParaAtualizar<Linha>(
       `SELECT p.id, p.versao, p.caixa_instrumental_id, cx.validade_esterilizacao_dias, te.validade_dias, cx.versao AS cx_versao,
               cx.quantidade_reprocessamentos
          FROM ciclo_esterilizacao_item i
          JOIN pacote_esteril p ON p.id = i.pacote_esteril_id
          LEFT JOIN caixa_instrumental cx ON cx.id = p.caixa_instrumental_id
          LEFT JOIN tipo_embalagem_esteril te ON te.id = p.tipo_embalagem_esteril_id
-        WHERE i.ciclo_esterilizacao_id = ? AND i.excluido_em IS NULL AND p.situacao = 'aguardando_esterilizacao'
-        FOR UPDATE`,
+        WHERE i.ciclo_esterilizacao_id = ? AND i.excluido_em IS NULL AND p.situacao = 'aguardando_esterilizacao'`,
       [ciclo],
     );
     const hoje = hojeNo(est.fuso);
@@ -993,10 +1003,13 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
             situacao: 'entregue',
             quantidade_atendida: 1,
           });
-          const sol = await tx.uma(
-            'SELECT id, versao FROM solicitacao_material_esteril WHERE id = ? FOR UPDATE',
-            [it['sol']],
-          );
+          const sol =
+            (
+              await tx.consultarParaAtualizar<Linha>(
+                'SELECT id, versao FROM solicitacao_material_esteril WHERE id = ?',
+                [it['sol']],
+              )
+            )[0] ?? null;
           const itens = await tx.consultar(
             'SELECT situacao FROM solicitacao_material_esteril_item WHERE solicitacao_material_esteril_id = ? AND excluido_em IS NULL',
             [it['sol']],
@@ -1020,14 +1033,17 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
       ['pacote_esteril', 'movimento_material_esteril', 'movimento_material_esteril_item'],
       async (tx, est, usuario) => {
         const p = await this.pacoteTravado(tx, est.id, pacote);
-        const mov = await tx.uma(
-          `SELECT m.id, m.versao, m.agendamento_cirurgico_id, mi.id AS item, mi.versao AS item_versao
+        const mov =
+          (
+            await tx.consultarParaAtualizar<Linha>(
+              `SELECT m.id, m.versao, m.agendamento_cirurgico_id, mi.id AS item, mi.versao AS item_versao
              FROM movimento_material_esteril_item mi
              JOIN movimento_material_esteril m ON m.id = mi.movimento_material_esteril_id
             WHERE mi.pacote_esteril_id = ? AND m.tipo = 'entrega' AND m.situacao = 'aberto' AND mi.excluido_em IS NULL
-            ORDER BY m.ocorrido_em DESC LIMIT 1 FOR UPDATE`,
-          [pacote],
-        );
+            ORDER BY m.ocorrido_em DESC LIMIT 1`,
+              [pacote],
+            )
+          )[0] ?? null;
         recusa(
           'Uso recusado',
           conferirUso(
@@ -1053,12 +1069,15 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
   }
 
   private async pacoteTravado(tx: TxOperacao, est: number, pacote: number): Promise<Linha> {
-    const p = await tx.uma(
-      `SELECT p.id, p.versao, p.situacao, p.validade, p.caixa_instrumental_id, c.situacao AS ciclo_situacao
+    const p =
+      (
+        await tx.consultarParaAtualizar<Linha>(
+          `SELECT p.id, p.versao, p.situacao, p.validade, p.caixa_instrumental_id, c.situacao AS ciclo_situacao
          FROM pacote_esteril p LEFT JOIN ciclo_esterilizacao c ON c.id = p.ciclo_esterilizacao_id
-        WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL FOR UPDATE`,
-      [pacote, est],
-    );
+        WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`,
+          [pacote, est],
+        )
+      )[0] ?? null;
     if (!p) throw naoEncontrado('Pacote');
     return p;
   }
