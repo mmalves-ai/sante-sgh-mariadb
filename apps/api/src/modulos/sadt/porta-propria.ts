@@ -67,6 +67,7 @@ import {
   type RegraCriticoCandidata,
   SEQUENCIA_NUMERO_LAUDO,
 } from '@sgh/dominio-sadt';
+import { registroDaVia } from '@sgh/dominio-pep';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
@@ -113,6 +114,8 @@ const TABELAS_GRAVACAO = [
   'visualizacao_resultado_exame',
   'emissao_laudo',
   'emissao_laudo_exame',
+  // O registro único de impressão e exportação (01-ADM L82): cada via do laudo entra nele.
+  'exportacao_documento',
   'sequencia_negocio',
   'orcamento_particular',
   'pedido_vinculo_profissional_externo',
@@ -2703,7 +2706,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       const ids = r.idsExames ?? [];
       if (ids.length === 0) throw recusa('sem-exames', 'O laudo emitido precisa dos exames.');
       const itens = await tx.consultar(
-        `SELECT ei.id, r.paciente_id, r.id AS requisicao,
+        `SELECT ei.id, r.paciente_id, r.id AS requisicao, r.atendimento_id AS atendimento,
                 (SELECT MAX(re.id) FROM resultado_exame re WHERE re.exame_item_id = ei.id AND re.situacao = 'liberado') AS resultado
            FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
           WHERE r.estabelecimento_id = ? AND ei.id IN (${lista(ids.length)})`,
@@ -2760,6 +2763,26 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         emitida_em: quando,
         emitido_por_usuario_id: usuario,
         origem: 'sistema',
+      });
+      // Cada via do laudo entra no registro único de impressão e exportação (01-ADM L82): quem, quando, o paciente,
+      // o atendimento, o resumo do PDF e, da 2ª via em diante, o motivo do cadastro. A 1ª via é a própria entrega.
+      const reg = registroDaVia({ via, texto: via > 1 ? r.motivo : null, primeiraViaPedeTexto: false });
+      if (!reg.ok) throw recusa('motivo-obrigatorio', 'Informe o motivo da segunda via.');
+      await tx.incluir('exportacao_documento', {
+        estabelecimento_id: est,
+        entidade: 'emissao_laudo',
+        entidade_id: id,
+        paciente_id: n(itens[0]!['paciente_id']),
+        atendimento_id: nn(itens[0]!['atendimento']),
+        tipo_operacao: reg.operacao,
+        formato: 'pdf',
+        destino: 'download',
+        motivo_reimpressao_id: motivo,
+        justificativa: reg.justificativa,
+        hash_sha256: r.hashPdf && /^[0-9a-f]{64}$/.test(r.hashPdf) ? r.hashPdf : null,
+        dados: JSON.stringify({ via, exames: itens.length }),
+        ocorrido_em: quando,
+        usuario_id: usuario,
       });
       let seq = 0;
       for (const i of itens)

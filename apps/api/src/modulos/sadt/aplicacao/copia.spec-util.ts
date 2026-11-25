@@ -257,6 +257,8 @@ export async function limparMassaSadt(nucleo: NucleoProprio, m: MassaSadt | null
     await e.executar(`DELETE FROM item_lista_trabalho_imagem WHERE ${emEst}`, ests);
     await e.executar(`DELETE FROM estudo_imagem WHERE ${emEst}`, ests);
     await e.executar(`DELETE FROM visualizador_imagem WHERE ${emEst}`, ests);
+    // O registro único de impressão das vias do laudo (01-ADM L82).
+    await e.executar(`DELETE FROM exportacao_documento WHERE ${emEst}`, ests);
     await e.executar(
       `DELETE ex FROM emissao_laudo_exame ex JOIN emissao_laudo el ON el.id = ex.emissao_laudo_id WHERE el.${emEst}`,
       ests,
