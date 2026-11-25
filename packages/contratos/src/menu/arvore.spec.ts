@@ -422,6 +422,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/operadora/portal-prestador', // M56 (etapa 8, F7)
         '/operadora/troca-tiss', // C2-061 (08-SGO L107)
         '/operadora/comercial', // C2-095 (08-SGO L100)
+        '/operadora/remuneracao-rede', // C2-120 (08-SGO L102)
         '/pa/classificacao', // M44
         '/pa/classificacao-externa', // M34
         '/pa/classificacao?lista=reclassificar', // M44
