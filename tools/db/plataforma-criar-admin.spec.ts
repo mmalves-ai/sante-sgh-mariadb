@@ -1,10 +1,8 @@
 // plataforma:criar-admin sem banco nem SMTP: argumentos, travas, convite igual ao da API (resumo e validade) e
 // envio pelo caminho da API, sem link, token ou senha na saída.
-import { hashConvite } from '@sgh/dominio-acesso';
-import type { Escritor, Linha } from '@sgh/nucleo';
+import { CONVITE_HORAS, hashConvite } from '@sgh/dominio-acesso';
+import { type Escritor, type Linha, emailAcessoMemoria } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import { emailAcessoMemoria } from '../../apps/api/src/sessao/email-acesso.ts';
-import { CONVITE_HORAS } from '../../apps/api/src/modulos/suporte/servico-plataforma.ts';
 import {
   CONVITE_HORAS_INICIAL,
   EVENTO_CONVITE,

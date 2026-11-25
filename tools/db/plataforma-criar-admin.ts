@@ -5,10 +5,10 @@
 // (/plataforma/convite); o segundo fator é cadastrado no primeiro login fora de dev/ci.
 //
 // - Convite igual ao da API: o mesmo token e resumo (novoConvite, SHA-256 do token) e a mesma validade (72 horas,
-//   CONVITE_HORAS do serviço da plataforma; o teste confere).
+//   CONVITE_HORAS do domínio de acesso, o mesmo que o serviço da plataforma usa).
 // - Auditoria: evento em conta_plataforma_evento com o ator nulo (inicialização, sem conta que agiu), a estação
 //   TERMINAL e o motivo no detalhe; a conta fica com criado_por nulo.
-// - Envio pelo MESMO caminho da API: emailAcessoDoAmbiente (SMTP_URL; fora de produção, só a captura local em
+// - Envio pelo MESMO caminho da API: emailAcessoDoAmbiente do @sgh/nucleo (SMTP_URL; fora de produção, só a captura local em
 //   loopback). Sem envio configurado, recusa antes de gravar.
 // Travas:
 // - recusa em produção (AMBIENTE=producao): lá a primeira conta é do procedimento de implantação;
@@ -18,18 +18,21 @@
 // Nunca imprime link, token ou senha: só "convite enviado para <e-mail>".
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { novoConvite } from '@sgh/dominio-acesso';
-import { type Ambiente, type Escritor, NucleoProprio, ambienteEfetivo } from '@sgh/nucleo';
+import { CONVITE_HORAS, novoConvite } from '@sgh/dominio-acesso';
 import {
+  type Ambiente,
   ENDERECO_EMAIL,
+  type Escritor,
+  NucleoProprio,
+  type PortaEmailAcesso,
+  ambienteEfetivo,
   emailAcessoDoAmbiente,
   emailDoDono,
   envioPeloCanalDoDono,
-  type PortaEmailAcesso,
-} from '../../apps/api/src/sessao/email-acesso.ts';
+} from '@sgh/nucleo';
 
-/** Validade do convite, em horas (a mesma do serviço da plataforma, CONVITE_HORAS). */
-export const CONVITE_HORAS_INICIAL = 72;
+/** Validade do convite, em horas: a mesma do serviço da plataforma (CONVITE_HORAS do domínio de acesso). */
+export const CONVITE_HORAS_INICIAL = CONVITE_HORAS;
 /** Evento de criação da conta (o mesmo código do catálogo de auditoria usado pela API para criar conta). */
 export const EVENTO_CRIADA = 'suporte.conta.criada';
 /** Evento do convite reemitido (o mesmo da API). */

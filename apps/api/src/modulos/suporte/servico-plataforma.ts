@@ -12,6 +12,7 @@ import {
   type EuPlataforma,
 } from '@sgh/contratos';
 import {
+  CONVITE_HORAS,
   cifrarSegredo,
   conferirSenha,
   cifrarSenha,
@@ -115,7 +116,6 @@ const TENTATIVAS_LIMITE_ORIGEM = 30;
 const TENTATIVAS_JANELA_S = 15 * 60;
 /** Último passo TOTP aceito por conta: dura mais que a janela de ±1 passo (90 s). */
 const TOTP_PASSO_TTL_S = 120;
-export const CONVITE_HORAS = 72;
 /** Auditoria das contas: e-mail de entrada alterado pela plataforma. */
 export const EVENTO_EMAIL_ALTERADO = 'plataforma.conta.email.alterado';
 
