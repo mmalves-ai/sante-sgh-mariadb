@@ -155,7 +155,7 @@ export const resolverAvisoIsolamento = (id: number, providencia: string, versao:
   enviar(
     `${C}/isolamentos/avisos/${id}/resolver`,
     { providencia, versao },
-    z.object({ leitosLiberados: n.default(0) }).passthrough(),
+    z.object({ leitosLiberados: n.default(0), leitosMantidos: n.default(0) }).passthrough(),
     novaChave('iso-aviso'),
   );
 

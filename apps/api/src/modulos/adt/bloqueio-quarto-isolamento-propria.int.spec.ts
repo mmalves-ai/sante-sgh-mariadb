@@ -7,12 +7,16 @@
 //     bloqueado e volta listado para a CCIH; o leito com estado aberto e o de outro quarto ficam como estão;
 //   - a lista de avisos da CCIH mostra os leitos bloqueados;
 //   - resolver o aviso encerra o período (fica no histórico, nunca apagado) e o leito volta a "livre";
-//   - cancelar a auditoria também libera o quarto; o critério "alertar" sozinho não bloqueia.
+//   - cancelar a auditoria também libera o quarto; o critério "alertar" sozinho não bloqueia;
+//   - com dois avisos críticos pendentes do mesmo isolamento, resolver o primeiro mantém o quarto bloqueado (o período
+//     passa à auditoria pendente) e só o último libera; encerrar a precaução pela CCIH não solta esse bloqueio.
 // A internação e o paciente são ids já existentes do cliente (só lidos); o resto é massa sintética apagada no fim.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import type { TrilhaDaGravacao } from '../exames/public-api.js';
+import { PortaCcihPropria } from '../qualidade/porta-ccih-propria.js';
 import { PortaControlesAssistenciaisPropria } from './controles-assistenciais-propria.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -312,6 +316,88 @@ describe.skipIf(SEM_BANCO)('Bloqueio do quarto pela auditoria do isolamento (con
     const pb3 = await periodos(m.leitos.B);
     expect(pb3).toHaveLength(2);
     expect(pb3.every((p) => p['data_hora_fim'] !== null)).toBe(true);
+    expect(await situacaoDo(m.leitos.B)).toBe(m.situacao.livre);
+  });
+
+  it('dois avisos críticos pendentes: o quarto só libera no último; encerrar a precaução não solta o bloqueio', async () => {
+    const cs = (await porta.criteriosAuditoria(ctx(), Number((await tipo()).id))).itens;
+    const bloq = cs.find((x) => x.acao === 'bloquear')!;
+    const respostas = cs.map((x) =>
+      x.id === bloq.id
+        ? { criterio: x.id, resposta: 'nao_conforme', naoConformidade: 'Coorte desfeita' }
+        : { criterio: x.id, resposta: 'conforme' },
+    );
+    const r3 = await porta.auditar(ctx(), { isolamento: m.isolamento, respostas });
+    const r4 = await porta.auditar(ctx(), { isolamento: m.isolamento, respostas });
+    expect(r3.leitosBloqueados).toEqual(['B']);
+    expect(r4.leitosBloqueados).toEqual([]);
+    const abertos = async () => (await periodos(m.leitos.B)).filter((p) => p['data_hora_fim'] === null);
+    // Os dois avisos pendentes mostram o quarto bloqueado.
+    const av = (await porta.avisosIsolamento(ctx())).itens;
+    expect(av.map((x) => [x.id, x.leitosBloqueados])).toEqual([
+      [r3.aviso, ['B']],
+      [r4.aviso, ['B']],
+    ]);
+
+    // Resolver o primeiro: o período dele fecha e outro abre ligado à auditoria pendente; o leito segue bloqueado.
+    const res3 = await porta.resolverAvisoIsolamento(ctx(), r3.aviso!, {
+      providencia: 'Primeira não conformidade tratada',
+      versao: 1,
+    });
+    expect(res3).toMatchObject({ leitosLiberados: 0, leitosMantidos: 1 });
+    expect(await abertos()).toEqual([
+      expect.objectContaining({ motivo: 'isolamento', auditoria: String(r4.id) }),
+    ]);
+    expect(await situacaoDo(m.leitos.B)).toBe(m.situacao.bloqueado);
+    expect((await porta.avisosIsolamento(ctx())).itens).toEqual([
+      expect.objectContaining({ id: r4.aviso, leitosBloqueados: ['B'] }),
+    ]);
+
+    // A CCIH encerra a precaução pedindo o B: o bloqueio da auditoria fica (só o aviso o resolve).
+    const ccih = new PortaCcihPropria(nucleo);
+    const cc = { cliente: CLIENTE, estabelecimento: m.est, usuario: m.usuario, correlacao: P, hospital: P };
+    const login = String((await ler('SELECT login FROM usuario WHERE id = ?', [m.usuario]))[0]!['login']);
+    // O fim da precaução vem do próprio início dela (+1 min): nunca antes do início, no fuso que o banco gravou.
+    const [iso] = await ler(
+      `SELECT versao, DATE_FORMAT(DATE_ADD(data_hora_inicio, INTERVAL 1 MINUTE), '%Y-%m-%dT%H:%i:%s') AS fim
+         FROM isolamento_paciente WHERE id = ?`,
+      [m.isolamento],
+    );
+    const versaoIso = Number(iso!['versao']);
+    expect((await ccih.precaucao(cc, m.isolamento))?.bloqueios).toEqual([]);
+    const trilha: TrilhaDaGravacao = {
+      estabelecimento: null,
+      usuario: null,
+      acao: 'operacao',
+      entidade: 'ccih',
+      entidadeId: null,
+      correlacao: P,
+    };
+    const fim = (await ccih.gravarSgh(cc, trilha, (g) =>
+      g.encerrarPrecaucao({
+        id: m.isolamento,
+        versao: versaoIso,
+        agora: String(iso!['fim']),
+        usuario: login,
+        leito: { bloco: 'CLI', acomodacao: '101', leito: 'A' },
+        tipoDoLeito: null,
+        bloqueios: [{ bloco: 'CLI', acomodacao: '101', leito: 'B' }],
+        motivo: 'reavaliacao',
+        observacao: null,
+      }),
+    )) as { liberados: number };
+    expect(fim.liberados).toBe(0);
+    expect(await abertos()).toEqual([expect.objectContaining({ auditoria: String(r4.id) })]);
+    expect(await situacaoDo(m.leitos.B)).toBe(m.situacao.bloqueado);
+
+    // Resolver o último aviso libera o quarto; todo período fica no histórico.
+    const res4 = await porta.resolverAvisoIsolamento(ctx(), r4.aviso!, {
+      providencia: 'Segunda não conformidade tratada',
+      versao: 1,
+    });
+    expect(res4).toMatchObject({ leitosLiberados: 1, leitosMantidos: 0 });
+    expect(await abertos()).toEqual([]);
+    expect(await periodos(m.leitos.B)).toHaveLength(4); // r1 e r2 do caso anterior, r3 e o mantido de r4
     expect(await situacaoDo(m.leitos.B)).toBe(m.situacao.livre);
   });
 

@@ -340,6 +340,12 @@ function retrato(r: Linha): Record<string, unknown> {
   return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v instanceof Date ? instante(v) : v]));
 }
 
+/**
+ * A marca, no retrato do período do leito, do bloqueio do quarto aberto pela auditoria do isolamento (C1-065, porta dos
+ * controles assistenciais): a precaução não encerra nem lista esse bloqueio, que é da CCIH resolver pelo aviso.
+ */
+const MARCA_BLOQUEIO_AUDITORIA = 'auditoriaIsolamento';
+
 const SITUACAO_IRAS: Record<string, string> = {
   confirmado: 'confirmada',
   descartado: 'descartada',
@@ -751,7 +757,11 @@ export class PortaCcihPropria implements PortaCcih {
       }
       return feitos;
     };
-    /** Libera os vizinhos: encerra o período aberto de bloqueio por isolamento (o de outro motivo não é tocado). */
+    /**
+     * Libera os vizinhos: encerra o período aberto de bloqueio por isolamento (o de outro motivo não é tocado). O
+     * bloqueio aberto pela auditoria do isolamento (marca no retrato) também não: ele só sai quando a CCIH resolve o
+     * aviso crítico ou a auditoria é cancelada; encerrar ou alterar a precaução não resolve o aviso (C1-065).
+     */
     const liberarVizinhos = async (leitos: readonly ChaveLeito[], agora: string) => {
       let feitos = 0;
       for (const v of leitos) {
@@ -760,7 +770,8 @@ export class PortaCcihPropria implements PortaCcih {
         const [p] = await tx.consultarParaAtualizar(
           `SELECT ps.id, ps.versao FROM periodo_situacao_leito ps
              JOIN motivo_bloqueio_leito mb ON mb.id = ps.motivo_bloqueio_leito_id AND mb.codigo = 'isolamento'
-            WHERE ps.leito_hospitalar_id = ? AND ps.data_hora_fim IS NULL`,
+            WHERE ps.leito_hospitalar_id = ? AND ps.data_hora_fim IS NULL
+              AND JSON_VALUE(ps.dados, '$.${MARCA_BLOQUEIO_AUDITORIA}') IS NULL`,
           [lh],
           { teto: 1 },
         );
@@ -2307,7 +2318,7 @@ export class PortaCcihPropria implements PortaCcih {
            JOIN motivo_bloqueio_leito mb ON mb.id = ps.motivo_bloqueio_leito_id AND mb.codigo = 'isolamento'
            JOIN leito_hospitalar lh ON lh.id = ps.leito_hospitalar_id
            ${JUNTAR_LEITO}
-          WHERE lh.estabelecimento_id = ?
+          WHERE lh.estabelecimento_id = ? AND JSON_VALUE(ps.dados, '$.${MARCA_BLOQUEIO_AUDITORIA}') IS NULL
             AND (ps.isolamento_paciente_id IN (${marcas(ids.length)})
                  ${quartos.length ? `OR (ps.data_hora_fim IS NULL AND lh.acomodacao_id IN (${marcas(quartos.length)}))` : ''})
           ORDER BY lh.codigo, ps.id`,

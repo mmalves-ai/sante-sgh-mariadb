@@ -248,6 +248,7 @@ const resolver = (id: number, versao: number) =>
   acao.mutate(async () => {
     const r = await resolverAvisoIsolamento(id, (providencias[id] ?? '').trim(), versao);
     delete providencias[id];
+    if (r.leitosMantidos) return t(`${K}.isolamento.mantidos`, { n: r.leitosMantidos });
     return r.leitosLiberados
       ? t(`${K}.isolamento.liberados`, { n: r.leitosLiberados })
       : t(`${K}.isolamento.resolvido`);

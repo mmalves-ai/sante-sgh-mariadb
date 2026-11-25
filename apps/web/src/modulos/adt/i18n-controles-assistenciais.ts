@@ -86,6 +86,8 @@ export const mensagensControlesAssistenciais = {
     resolver: 'Resolver',
     resolvido: 'Aviso resolvido.',
     liberados: 'Aviso resolvido e quarto liberado: {n} leito(s).',
+    mantidos:
+      'Aviso resolvido, mas o quarto segue bloqueado: {n} leito(s) aguardam outro aviso crítico pendente deste isolamento.',
     providenciaCurta: 'Descreva a providência (pelo menos 3 caracteres).',
     prioridades: { critica: 'Crítica', alta: 'Alta', normal: 'Normal', baixa: 'Baixa' },
   },
