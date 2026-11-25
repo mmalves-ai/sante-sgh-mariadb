@@ -84,6 +84,21 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    // C2-068, 04-INT L83: chamado de ambulância do paciente da internação (categoria, destino, cobrança).
+    path: `/internacao/:reg${reg}/ambulancia`,
+    name: 'adt.ambulancia',
+    component: () => import('./telas/AmbulanciaTela.vue'),
+    props: true,
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
+    // C2-068, 04-INT L83: fila da ambulância e maqueiros do transporte interno.
+    path: '/internacao/ambulancias',
+    name: 'adt.ambulancias',
+    component: () => import('./telas/AmbulanciaTela.vue'),
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
     // F3.4, 04-INT L82: gases medicinais do paciente pelo atendimento.
     path: `/internacao/atendimentos/:atd${reg}/gases`,
     name: 'adt.gases',

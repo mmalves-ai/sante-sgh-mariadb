@@ -45,6 +45,8 @@ import { PORTA_GAS_SETOR, PortaGasSetorPropria } from './gas-setor-propria.js';
 import { GasSetorController } from './gas-setor.controller.js';
 import { PORTA_TRANSPORTE_PACIENTE, PortaTransportePacientePropria } from './transporte-paciente-propria.js';
 import { TransportePacienteController } from './transporte-paciente.controller.js';
+import { PORTA_CHAMADO_AMBULANCIA, PortaChamadoAmbulanciaPropria } from './chamado-ambulancia-propria.js';
+import { ChamadoAmbulanciaController } from './chamado-ambulancia.controller.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { PORTA_REGULACAO_ENTRADA, PortaRegulacaoEntradaPropria } from './regulacao-entrada-propria.js';
 import { RegulacaoEntradaController } from './regulacao-entrada.controller.js';
@@ -143,6 +145,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       DocumentosInternacaoController,
       GasSetorController,
       TransportePacienteController,
+      ChamadoAmbulanciaController,
       GasMedicinalController,
       SameGuardaController,
       SameTramiteController,
@@ -195,6 +198,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaTransportePacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C2-068 (04-INT linha 83): chamado de ambulância com cobrança e maqueiro do transporte interno; sem núcleo, 503.
+      {
+        provide: PORTA_CHAMADO_AMBULANCIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaChamadoAmbulanciaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.9 (04-HOT L126): SAME pelo volume (guarda, local e movimentação pelo tipo da operação); sem núcleo, 503.

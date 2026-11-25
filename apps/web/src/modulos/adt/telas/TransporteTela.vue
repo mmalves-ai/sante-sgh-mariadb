@@ -266,6 +266,16 @@ const necessidades = (x: Transporte) =>
       <RouterLink v-if="internacaoId" :to="{ name: 'adt.transportes' }" data-testid="transporte-ir-fila">{{
         t('adt.transporte.irFila')
       }}</RouterLink>
+      <!-- C2-068, 04-INT L83: o chamado de ambulância com cobrança e a fila dos maqueiros. -->
+      <RouterLink
+        v-if="internacaoId"
+        :to="{ name: 'adt.ambulancia', params: { reg: String(internacaoId) } }"
+        data-testid="transporte-ir-ambulancia"
+        >{{ t('adt.ambulancia.irAmbulancia') }}</RouterLink
+      >
+      <RouterLink v-else :to="{ name: 'adt.ambulancias' }" data-testid="transporte-ir-ambulancias">{{
+        t('adt.ambulancia.tituloFila')
+      }}</RouterLink>
     </p>
     <ErroAdt v-if="opcoes.isError.value" :erro="opcoes.error.value" />
     <ErroAdt v-if="internacao.isError.value" :erro="internacao.error.value" />
