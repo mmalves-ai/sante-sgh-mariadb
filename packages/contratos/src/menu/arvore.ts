@@ -25,6 +25,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 
 // C2-061 (08-SGO L107): o item "Trocas TISS com os prestadores" da operadora própria entrou à mão (mesmo motivo; F7);
 // a contagem acompanha.
+// C2-095 (08-SGO L100): o item "Comercial: propostas e comissões" da operadora própria entrou à mão (mesmo motivo;
+// F7); a contagem acompanha.
 // Lote 02-07 (ADR 0003, itens 5 e 9): o item "Migração gradual dos usuários" saiu à mão (o gerador e a fonte não
 // estão neste repositório); a contagem do cabeçalho acompanha.
 // F3.3 (03-PEP L128): o item "Grupos comparativos de resultados" entrou à mão (mesmo motivo); a contagem acompanha.
@@ -133,7 +135,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C2-094 (09-AREA linha 78): o item "Entrada de serviço tomado" do fiscal entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":502,"M":198,"P":57,"N":247};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":503,"M":198,"P":57,"N":248};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -417,6 +419,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Domínios da operadora e do plano próprio"],"titulo":"Domínios da operadora e do plano próprio","selo":"N","fase":6,"rota":"/consultas/item/faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.portal-do-prestador-credenciado","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Portal do prestador credenciado"],"titulo":"Portal do prestador credenciado","selo":"N","fase":6,"rota":"/operadora/portal-prestador","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.trocas-tiss-com-os-prestadores","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Trocas TISS com os prestadores"],"titulo":"Trocas TISS com os prestadores","selo":"N","fase":7,"rota":"/operadora/troca-tiss","permissao":"operadora.conta.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.comercial-propostas-e-comissoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Comercial: propostas e comissões"],"titulo":"Comercial: propostas e comissões","selo":"N","fase":7,"rota":"/operadora/comercial","permissao":"operadora.comercial.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.remuneracao-e-pagamento-do-prestador","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Remuneração e pagamento do prestador"],"titulo":"Remuneração e pagamento do prestador","selo":"N","fase":7,"rota":"/operadora/remuneracao-rede","permissao":"operadora.prestador.ler"},
   {"id":"financeiro.contas-a-pagar.titulos-a-pagar-fornecedores-medicos-prestadores","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Títulos a pagar"],"titulo":"Títulos a pagar","selo":"M","fase":3,"rota":"/financeiro/pagar/titulos","permissao":"financeiro.tituloPagar.ler"},
   {"id":"financeiro.contas-a-pagar.borderos-de-pagamento","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Borderôs de pagamento"],"titulo":"Borderôs de pagamento","selo":"M","fase":3,"rota":"/financeiro/pagar/borderos","permissao":"financeiro.bordero.ler"},
