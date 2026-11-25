@@ -119,7 +119,8 @@ test.describe('internação e centro cirúrgico: regra do gás e texto padrão @
     page,
   }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.ADMIN');
+    // O cadastro do texto padrão pede cirurgia.registro.ler: quem tem é o SINT.BLOCO (Registro de cirurgia).
+    await entrar(page, 'SINT.BLOCO');
     await page.goto('/cirurgia/textos-padrao');
     await expect(page.getByTestId('tela-textos-padrao')).toBeVisible();
 

@@ -55,6 +55,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Textos padrão da descrição` },
   },
   {
+    // F3.4, 04-CC L91: cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter).
+    path: '/cirurgia/procedimentos-cirurgicos',
+    name: 'cirurgia.procedimentos-cirurgicos',
+    component: () => import('./telas/ProcedimentosCirurgicosTela.vue'),
+    meta: { permissao: 'cirurgia.sala.ler', menu: `${M} > Procedimentos cirúrgicos` },
+  },
+  {
     // F8, 04-CC L105: cartão de preferência do cirurgião (sugestão para o mapa e o gasto de sala).
     path: '/cirurgia/cartoes-preferencia',
     name: 'cirurgia.cartoes-preferencia',

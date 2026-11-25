@@ -45,6 +45,11 @@ import { GradeSalaController } from './grade-sala.controller.js';
 import { PORTA_GRADE_SALA, PortaGradeSalaPropria } from './grade-sala-propria.js';
 import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js';
 import { KitAgendamentoController } from './kit-agendamento.controller.js';
+import { ProcedimentoCirurgicoController } from './procedimento-cirurgico.controller.js';
+import {
+  PORTA_PROCEDIMENTO_CIRURGICO,
+  PortaProcedimentoCirurgicoPropria,
+} from './procedimento-cirurgico-propria.js';
 import { PORTA_KIT_AGENDAMENTO, PortaKitAgendamentoPropria } from './kit-agendamento-propria.js';
 
 export interface OpcoesModuloCirurgia {
@@ -124,6 +129,7 @@ export async function moduloCirurgia(
       GastoSalaController,
       GradeSalaController,
       KitAgendamentoController,
+      ProcedimentoCirurgicoController,
     ],
     providers: [
       { provide: PORTA_CIRURGIA, useValue: cirurgia },
@@ -172,6 +178,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaKitAgendamentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.4 (04-CC linha 91): cadastro do procedimento cirúrgico no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_PROCEDIMENTO_CIRURGICO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProcedimentoCirurgicoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       { provide: AVISOS_BLOCO, useValue: new AvisosAtendimento(null, 'bloco') },

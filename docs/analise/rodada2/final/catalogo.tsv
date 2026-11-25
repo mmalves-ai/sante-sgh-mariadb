@@ -464,7 +464,7 @@ permissao_setor_cme	CC	vinculo	F7	Setores e tipos de movimento que cada usuário
 porte_cirurgico	CC	dominio	F3	Porte da cirurgia (pequeno, médio, grande, especial) usado em agenda, taxa de sala e indicadores	MV PORTE_CIRURGIA; SPDATA CCLANCIR	04	1
 posicao_cirurgica	CC	dominio	F3	Posição do paciente na mesa (decúbito dorsal, ventral, lateral, litotomia) com ícone	SPDATA PRFA_CAD_POSICAO_CIR 9	04	1
 prazo_agendamento_cirurgico	CC	configuracao	F7	Antecedência mínima e máxima para agendar por caráter, convênio e especialidade	MV PRAZO_AGENDAMENTO_AVISO	04	1
-procedimento_cirurgico	CC	principal	F3	Dados cirúrgicos do procedimento: grupo, porte, duração média, natureza, anestesia sugerida e lateralidade exigida	MV CIRURGIA, ESPECIALID_CIRURGIA; SPDATA CCLANCIR (porte); depende de procedimento (CAD, catalogo_publico:tuss)	04	5
+procedimento_cirurgico	CC	principal	F3	Dados cirúrgicos do procedimento: grupo, porte, especialidade, duração média, natureza, caráter e anestesia sugeridos e lateralidade exigida	MV CIRURGIA, ESPECIALID_CIRURGIA; SPDATA CCLANCIR (porte); depende de procedimento (CAD, catalogo_publico:tuss); caráter sugerido (carater_cirurgia_id; C1-089; migração 08_CC/97_procedimento_carater)	04	5
 procedimento_cirurgico_equipamento	CC	configuracao	F3	Equipamentos exigidos por procedimento cirúrgico e a quantidade, usados na reserva do agendamento	rodada2:nova	04	2
 procedimento_cirurgico_especialidade	CC	vinculo	F3	Especialidades cirúrgicas que podem realizar cada procedimento	MV ESPECIALID_CIRURGIA; depende de especialidade (CAD)	04	1
 procedimento_cirurgico_exame	CC	vinculo	F7	Exame de imagem gerado automaticamente por procedimento e unidade (hemodinâmica)	rodada2:nova	04	1
