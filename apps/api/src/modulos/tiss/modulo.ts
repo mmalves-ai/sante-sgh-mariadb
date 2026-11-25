@@ -105,7 +105,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
         provide: PORTA_AUTORIZACAO_PREVIA,
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
-            ? new PortaAutorizacaoPreviaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            ? new PortaAutorizacaoPreviaPropria(ctx.nucleo, ctx.configuracao.clientePadrao, armazem)
             : null,
       },
       { provide: ARMAZEM_XML_TISS, useValue: armazem },

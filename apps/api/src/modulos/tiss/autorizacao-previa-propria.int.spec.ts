@@ -3,14 +3,18 @@
 // configuração da fonte pagadora com registro e código fictícios, uma conta sintética e um limite de OPME; paciente,
 // atendimento, fonte pagadora, item faturável, catálogos e usuário são ids já existentes (só lidos, nunca alterados).
 // Prova o que fica no banco: o pedido em rascunho com número, carteira e itens; o envio recusado com a lista do que
-// falta e, configurado, enviado com o sequencial (XML válido no XSD, remontável); as consultas de andamento por
-// tentativa; a resposta parcial por item (resposta e itens, quantidade autorizada no pedido, senha na conta, consulta
-// respondida); a resposta repetida recusada; o cancelamento com o motivo; o limite de OPME e o pedido complementar
-// sem guia principal recusados; o pedido pelo portal enviado sem XML.
+// falta e, configurado, 'pronta_envio' sem enviada_em, com o XML válido no XSD guardado (arquivo imutável, arquivo_id,
+// versão do padrão) e servido igual depois de mudar a configuração e o solicitante; a transmissão registrada com o
+// canal real; as consultas de andamento por tentativa; a resposta parcial por item (resposta e itens, quantidade
+// autorizada no pedido, senha na conta, consulta respondida); a resposta repetida recusada; o cancelamento com o
+// motivo, e o do rascunho pelo webservice sem enviada_em; o limite de OPME (valor passado, OPME sem valor, procedimento
+// sem item faturável), a guia só com OPME e o pedido complementar sem guia principal recusados; o pedido pelo portal
+// enviado sem XML.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { armazemXmlMemoria } from './armazem-xml.js';
 import { PortaAutorizacaoPreviaPropria } from './autorizacao-previa-propria.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -35,6 +39,10 @@ async function limpar(e: Escritor): Promise<void> {
     [P],
   );
   await e.executar(`DELETE FROM solicitacao_autorizacao WHERE estabelecimento_id IN ${est}`, [P]);
+  await e.executar(
+    `DELETE FROM arquivo WHERE entidade = 'solicitacao_autorizacao' AND estabelecimento_id IN ${est}`,
+    [P],
+  );
   await e.executar(`DELETE FROM conta_hospitalar WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM limite_opme_procedimento WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM configuracao_tiss_fonte_pagadora WHERE estabelecimento_id IN ${est}`, [P]);
@@ -124,7 +132,7 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
       );
       return { usuario, paciente, cobertura, externo, conta, faturavel, atendimento, est, fonte, motivo };
     });
-    porta = new PortaAutorizacaoPreviaPropria(nucleo, CLIENTE);
+    porta = new PortaAutorizacaoPreviaPropria(nucleo, CLIENTE, armazemXmlMemoria());
   }, 60_000);
 
   afterAll(async () => {
@@ -181,17 +189,62 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
       );
     });
     const env = await porta.enviar(ctx(), p.id, { versao: 1 });
-    expect(env.situacao).toBe('enviada');
+    // Não há transmissão ao webservice: o XML validado fica guardado e o pedido, pronto para envio, sem enviada_em.
+    expect(env.situacao).toBe('pronta_envio');
     expect(env.hash).toMatch(/^[0-9a-f]{32}$/);
-    const e2 = await um(
-      'SELECT situacao, enviada_em, sequencial_transacao, versao FROM solicitacao_autorizacao WHERE id = ?',
+    const e1 = await um(
+      `SELECT sa.situacao, sa.enviada_em, sa.sequencial_transacao, sa.versao, sa.arquivo_id, v.descricao AS padrao,
+              a.entidade, a.entidade_id, a.imutavel, a.tipo_mime, a.hash_sha256
+         FROM solicitacao_autorizacao sa JOIN arquivo a ON a.id = sa.arquivo_id
+         LEFT JOIN versao_padrao_tiss v ON v.id = sa.versao_padrao_tiss_id WHERE sa.id = ?`,
       [p.id],
     );
-    expect(e2['enviada_em']).not.toBeNull();
-    expect(e2['sequencial_transacao']).toBe(String(p.id));
+    expect(e1).toMatchObject({
+      situacao: 'pronta_envio',
+      enviada_em: null,
+      sequencial_transacao: String(p.id),
+      padrao: 'Versão sintética f7862aut',
+      entidade: 'solicitacao_autorizacao',
+      tipo_mime: 'application/xml',
+    });
+    expect(Number(e1['entidade_id'])).toBe(p.id);
+    expect(Number(e1['imutavel'])).toBe(1);
     const x = await porta.xml(ctx(), p.id);
     expect(x.xml).toContain('<ans:tipoTransacao>SOLICITACAO_PROCEDIMENTOS</ans:tipoTransacao>');
     expect(x.xml).toContain(`<ans:hash>${env.hash}</ans:hash>`);
+    expect(x.sha256).toBe(e1['hash_sha256']);
+    // A configuração da fonte pagadora e o solicitante mudam: o XML servido é o guardado, igual byte a byte.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `mudanca-${P}` }, async (w) => {
+      await w.executar(
+        "UPDATE configuracao_tiss_fonte_pagadora SET codigo_prestador_operadora = 'HSINT7862B' WHERE estabelecimento_id = ?",
+        [m.est],
+      );
+      await w.executar("UPDATE solicitante_externo SET telefone = '1130009999' WHERE id = ?", [m.externo]);
+    });
+    const x2 = await porta.xml(ctx(), p.id);
+    expect(x2).toEqual(x);
+    expect(x2.xml).toContain('HSINT7862<');
+    // Pronto para envio ainda não tem andamento; a transmissão registra o canal real e o instante.
+    await expect(porta.consultarAndamento(ctx(), p.id)).rejects.toMatchObject(recusa);
+    await expect(
+      (async () =>
+        porta.registrarTransmissao(ctx(), p.id, { versao: Number(e1['versao']), canal: 'webservice' }))(),
+    ).rejects.toMatchObject({ problema: { status: 400 } });
+    const tr = await porta.registrarTransmissao(ctx(), p.id, {
+      versao: Number(e1['versao']),
+      canal: 'portal',
+    });
+    expect(tr.situacao).toBe('enviada');
+    const e2 = await um(
+      'SELECT situacao, canal, enviada_em, sequencial_transacao, versao FROM solicitacao_autorizacao WHERE id = ?',
+      [p.id],
+    );
+    expect(e2).toMatchObject({ situacao: 'enviada', canal: 'portal' });
+    expect(e2['enviada_em']).not.toBeNull();
+    expect((await porta.xml(ctx(), p.id)).xml).toBe(x.xml);
+    await expect(
+      porta.registrarTransmissao(ctx(), p.id, { versao: Number(e2['versao']), canal: 'portal' }),
+    ).rejects.toMatchObject(recusa);
 
     const a1 = await porta.consultarAndamento(ctx(), p.id);
     const a2 = await porta.consultarAndamento(ctx(), p.id);
@@ -267,6 +320,20 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
     ]);
     expect(c).toMatchObject({ situacao: 'cancelada', excluido_em: null });
     expect(String(c['observacao'])).toContain('Cancelado: Procedimento desmarcado');
+
+    // O rascunho pelo webservice cancelado antes de sair fica sem enviada_em (nada é dado como enviado).
+    const rc = await porta.criar(ctx(), {
+      tipo: 'sp_sadt',
+      cobertura: m.cobertura,
+      solicitanteExterno: m.externo,
+      itens: [item({ quantidade: 1 })],
+    });
+    await porta.cancelar(ctx(), rc.id, { versao: 1, motivo: 'Pedido em duplicidade' });
+    expect(
+      await um('SELECT situacao, canal, enviada_em, arquivo_id FROM solicitacao_autorizacao WHERE id = ?', [
+        rc.id,
+      ]),
+    ).toMatchObject({ situacao: 'cancelada', canal: 'webservice', enviada_em: null, arquivo_id: null });
     const vis = await porta.doPaciente(ctx(), m.paciente);
     expect(vis.pedidos.find((x) => x.id === p.id)).toMatchObject({
       situacao: 'cancelada',
@@ -275,7 +342,7 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
   });
 
   it('limite de OPME, pedido complementar sem guia principal e pedido pelo portal', async () => {
-    const opme = (valorUnitario: number) => ({
+    const opme = (valorUnitario: number | null, faturavel: number | null = m.faturavel) => ({
       tipo: 'internacao',
       cobertura: m.cobertura,
       solicitanteExterno: m.externo,
@@ -284,7 +351,7 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
       dataAdmissao: '2026-11-26',
       indicacaoClinica: 'Indicação sintética',
       itens: [
-        item({ itemFaturavel: m.faturavel, quantidade: 1 }),
+        item({ itemFaturavel: faturavel, quantidade: 1 }),
         item({
           codigoTabela: '19',
           codigoProcedimento: '70000001',
@@ -296,9 +363,31 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
         }),
       ],
     });
-    await expect(porta.criar(ctx(), opme(800))).rejects.toMatchObject(recusa);
+    const msgs = async (entrada: unknown) => {
+      const r = await porta.criar(ctx(), entrada).then(
+        () => null,
+        (x: { problema?: { status?: number; erros?: unknown } }) => x,
+      );
+      expect(r).toMatchObject(recusa);
+      return JSON.stringify(r);
+    };
+    expect(await msgs(opme(800))).toMatch(/acima do limite/);
+    // A OPME sem valor não passa pelo limite de valor como zero; sem o item faturável do procedimento, não há
+    // conferência possível e o pedido é recusado; a guia só com OPME também.
+    expect(await msgs(opme(null))).toMatch(/Informe o valor da OPME/);
+    expect(await msgs(opme(400, null))).toMatch(/item faturável/);
+    expect(
+      await msgs({
+        ...opme(400),
+        tipo: 'sp_sadt',
+        regime: null,
+        diarias: null,
+        itens: opme(400).itens.slice(1),
+      }),
+    ).toMatch(/procedimento além da OPME/);
     const ok = await porta.criar(ctx(), opme(400));
     const env = await porta.enviar(ctx(), ok.id, { versao: 1 });
+    expect(env).toMatchObject({ situacao: 'pronta_envio' });
     expect(env.hash).toMatch(/^[0-9a-f]{32}$/);
     expect((await porta.xml(ctx(), ok.id)).xml).toContain('<ans:solicitacaoOPME>');
 
@@ -332,6 +421,6 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
     const n = await um('SELECT COUNT(*) AS n FROM solicitacao_autorizacao WHERE estabelecimento_id = ?', [
       m.est,
     ]);
-    expect(Number(n['n'])).toBe(3);
+    expect(Number(n['n'])).toBe(4);
   });
 });

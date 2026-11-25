@@ -1,9 +1,11 @@
 // Autorização prévia à operadora (F78.06-2, 06-FAT L25 e L27). Rotas (porta própria; sem banco do cliente, 503):
 //   GET  /api/tiss/autorizacoes/pacientes/:paciente   coberturas e pedidos do paciente (visão por paciente)
 //   GET  /api/tiss/autorizacoes/:id                   o pedido com itens, respostas e consultas de andamento
-//   GET  /api/tiss/autorizacoes/:id/xml               a mensagem SOLICITACAO_PROCEDIMENTOS enviada
+//   GET  /api/tiss/autorizacoes/:id/xml               a mensagem SOLICITACAO_PROCEDIMENTOS guardada no envio
 //   POST /api/tiss/autorizacoes                       monta o pedido (rascunho) com os itens
-//   POST /api/tiss/autorizacoes/:id/envio             { versao } envia (webservice: XML validado no XSD)
+//   POST /api/tiss/autorizacoes/:id/envio             { versao } webservice: XML validado e guardado (pronta_envio);
+//                                                     outros canais: enviada com o canal registrado
+//   POST /api/tiss/autorizacoes/:id/transmissao       { versao, canal } o XML guardado levado à operadora (enviada)
 //   POST /api/tiss/autorizacoes/:id/resposta          resposta da operadora por item
 //   POST /api/tiss/autorizacoes/:id/andamento         registra a consulta do andamento
 //   POST /api/tiss/autorizacoes/:id/cancelamento      { versao, motivo }
@@ -87,6 +89,14 @@ export class AutorizacaoPreviaController {
   @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.solicitar)
   enviar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
     return this.com(req, (p, c) => p.enviar(c, id, b));
+  }
+
+  @Post(':id/transmissao')
+  @AuditadoNoHandler(TRILHA)
+  @HttpCode(200)
+  @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.solicitar)
+  transmitir(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
+    return this.com(req, (p, c) => p.registrarTransmissao(c, id, b));
   }
 
   @Post(':id/resposta')

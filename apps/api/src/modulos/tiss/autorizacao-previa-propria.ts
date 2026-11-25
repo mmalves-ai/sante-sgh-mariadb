@@ -5,17 +5,23 @@
 //     cobertura (fonte, plano, validade), o solicitante e os itens em `solicitacao_autorizacao_item` (sequência 1..n,
 //     OPME com registro na Anvisa ou fabricante); o limite de OPME vigente do procedimento na fonte pagadora
 //     (`limite_opme_procedimento`) é conferido antes de gravar;
-//   - enviar: a mensagem SOLICITACAO_PROCEDIMENTOS é montada e validada no XSD 04.03.00 (canal webservice) e o pedido
-//     fica 'enviada' com o instante e o sequencial da transação; pelos outros canais (portal, telefone, e-mail) fica
-//     'enviada' com o canal registrado. O XML é remontado igual a qualquer momento (rota xml);
+//   - enviar: no canal webservice, a mensagem SOLICITACAO_PROCEDIMENTOS é montada, validada no XSD 04.03.00 e guardada
+//     no disco pela porta de arquivos (imutável, ADR 0004; registro em `arquivo`, ligado em arquivo_id, com a versão do
+//     padrão em versao_padrao_tiss_id e o sequencial da transação) e o pedido fica 'pronta_envio', SEM enviada_em: não
+//     há transmissão ao webservice da operadora em nenhum ambiente, e nada é dado como enviado sem ter saído. Pelos
+//     outros canais (portal, telefone, e-mail, presencial) fica 'enviada' com o canal registrado;
+//   - registrarTransmissao: o pedido 'pronta_envio' fica 'enviada' com o canal real usado para levar o XML guardado à
+//     operadora e o instante; a rota xml serve os bytes guardados (conferidos pelo SHA-256 do registro), nunca remonta;
 //   - responder: `resposta_autorizacao` + `resposta_autorizacao_item` (quantidade e valor autorizados por item, negativa
 //     com motivo); o pedido muda para a situação derivada dos itens, cada item pedido guarda a quantidade autorizada,
 //     a senha vai à conta hospitalar ligada que ainda não tem senha e a consulta de andamento aberta fica respondida;
 //   - consultarAndamento: nova linha em `consulta_situacao_autorizacao` (tentativa seguinte, próxima consulta marcada);
-//   - cancelar: o pedido fica 'cancelado' com o motivo na observação. Nada se apaga.
+//   - cancelar: o pedido fica 'cancelado' com o motivo na observação; o que não saiu segue sem enviada_em (CHECK da
+//     migração 12_FAT/99_autorizacao_envio). Nada se apaga.
 import {
   conferirLimiteOpme,
   conferirPedidoAutorizacao,
+  conferirProcedimentoDaOpme,
   type DadosMensagemSolicitacao,
   faltasParaMensagem,
   type ItemPedidoAutorizacao,
@@ -27,8 +33,9 @@ import {
   type SituacaoSolicitacaoAutorizacao,
   TIPOS_SOLICITACAO_AUTORIZACAO,
   type TipoSolicitacaoAutorizacao,
+  VERSAO_TISS,
 } from '@sgh/dominio-faturamento';
-import type { Leitor, TxOperacao } from '@sgh/nucleo';
+import { ErroOperacao, type Leitor, sha256, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   type ContextoPortaPropria,
@@ -40,6 +47,12 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import {
+  type ArmazemXmlTiss,
+  ErroSobrescritaXml,
+  registrarArquivoGuardado,
+  retencaoAte,
+} from './armazem-xml.js';
 import { diaCivil } from './elegibilidade-propria.js';
 
 export const PORTA_AUTORIZACAO_PREVIA = Symbol('PORTA_AUTORIZACAO_PREVIA');
@@ -52,6 +65,7 @@ const TABELAS = [
   'consulta_situacao_autorizacao',
   'conta_hospitalar',
   'sequencia_negocio',
+  'arquivo',
 ];
 const SEQUENCIA = 'solicitacao_autorizacao';
 
@@ -98,6 +112,13 @@ const esquemaCriar = z
   })
   .strict();
 const esquemaVersao = z.object({ versao: z.number().int().positive() }).strict();
+const esquemaTransmissao = z
+  .object({
+    versao: z.number().int().positive(),
+    /** O canal real por onde o XML guardado chegou à operadora (não há transmissão ao webservice). */
+    canal: z.enum(['portal', 'email', 'telefone', 'presencial']),
+  })
+  .strict();
 const esquemaCancelar = z
   .object({ versao: z.number().int().positive(), motivo: z.string().trim().min(3).max(300) })
   .strict();
@@ -156,7 +177,11 @@ const horaCivil = (d: Date, fuso: string) =>
 type Consulta = Pick<Leitor, 'uma' | 'consultar'>;
 
 export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
-  constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
+  constructor(
+    nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0],
+    cliente: string,
+    private readonly armazem: ArmazemXmlTiss | null = null,
+  ) {
     super(nucleo, cliente, TABELAS, 'tiss.autorizacao');
   }
 
@@ -268,6 +293,7 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       solicitadaEm: iso(s['solicitada_em']),
       enviadaEm: iso(s['enviada_em']),
       observacao: txtOuNull(s['observacao']),
+      xmlGuardado: s['arquivo_id'] !== null && s['arquivo_id'] !== undefined,
       versao: num(s['versao']),
       itens,
       respostas,
@@ -328,7 +354,19 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
             'principal',
             'A guia principal não é deste paciente.',
           );
-        const faturaveis = e.itens.map((i) => i.itemFaturavel).filter((x): x is number => x !== null);
+        // Base do limite de OPME: os procedimentos do pedido ou, no pedido só de OPME, os da guia principal.
+        let faturaveis = e.itens
+          .filter((i) => !i.opme)
+          .map((i) => i.itemFaturavel)
+          .filter((x): x is number => x !== null);
+        if (itens.some((i) => i.opme) && !itens.some((i) => !i.opme) && e.principal !== null)
+          faturaveis = (
+            await tx.consultar(
+              'SELECT item_faturavel_id FROM solicitacao_autorizacao_item WHERE solicitacao_autorizacao_id = ? AND opme = FALSE AND item_faturavel_id IS NOT NULL AND excluido_em IS NULL',
+              [e.principal],
+            )
+          ).map((x) => num(x['item_faturavel_id']));
+        problemas.push(...conferirProcedimentoDaOpme(itens, faturaveis.length));
         if (faturaveis.length && itens.some((i) => i.opme)) {
           const limites = await tx.consultar(
             `SELECT valor_limite, quantidade_limite FROM limite_opme_procedimento
@@ -546,16 +584,29 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
     entrada: unknown,
   ): Promise<{ id: number; situacao: SituacaoSolicitacaoAutorizacao; hash: string | null }> {
     const e = entradaValida(esquemaVersao, entrada);
-    return this.gravar(c, 'tiss.autorizacao.enviar', ['solicitacao_autorizacao'], async (tx, est) => {
+    const tabelas = ['solicitacao_autorizacao', 'arquivo'];
+    return this.gravar(c, 'tiss.autorizacao.enviar', tabelas, async (tx, est) => {
       const s = await this.lerPedido(tx, est.id, solicitacao);
       const de = String(s['situacao']) as SituacaoSolicitacaoAutorizacao;
-      if (!podeMudar(de, 'enviada'))
+      const webservice = s['canal'] === 'webservice';
+      const para: SituacaoSolicitacaoAutorizacao = webservice ? 'pronta_envio' : 'enviada';
+      if (!podeMudar(de, para))
         throw recusaRegra('Envio recusado', [{ campo: 'situacao', mensagem: `O pedido está ${de}.` }]);
       const agora = new Date();
-      let hash: string | null = null;
-      let sequencial: string | null = null;
-      if (s['canal'] === 'webservice') {
-        sequencial = String(num(s['id']));
+      if (!webservice) {
+        await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
+          situacao: 'enviada',
+          enviada_em: agora,
+        });
+        return {
+          tabela: 'solicitacao_autorizacao',
+          id: solicitacao,
+          situacao: 'enviada' as const,
+          hash: null,
+        };
+      }
+      {
+        const sequencial = String(num(s['id']));
         const d = await this.dadosMensagem(tx, est.id, s, sequencial, agora, est.fuso);
         const faltas = faltasParaMensagem(d);
         if (faltas.length)
@@ -571,28 +622,106 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
             'Envio recusado',
             v.erros.slice(0, 5).map((x) => ({ campo: 'mensagem', mensagem: x })),
           );
-        hash = m.hash;
+        if (!this.armazem)
+          throw new ErroOperacao(
+            503,
+            'indisponivel',
+            'Guarda indisponível',
+            'Sem a guarda de arquivos do XML.',
+          );
+        // O XML validado é guardado como saiu (imutável): é ele que a rota xml serve e que vai à operadora.
+        const digest = sha256(m.bytes);
+        const chave = `${est.id}/tiss/autorizacoes/${String(s['numero'])}-${digest.slice(0, 16)}.xml`;
+        await this.armazem.guardar(chave, m.bytes).catch((x: unknown) => {
+          if (x instanceof ErroSobrescritaXml) return;
+          throw x;
+        });
+        const arquivo = await registrarArquivoGuardado(tx, {
+          estabelecimento: est.id,
+          entidade: 'solicitacao_autorizacao',
+          entidadeId: solicitacao,
+          finalidade: 'xml_tiss_autorizacao',
+          nomeOriginal: chave.slice(chave.lastIndexOf('/') + 1),
+          tipoMime: 'application/xml',
+          tamanhoBytes: m.bytes.length,
+          hash: digest,
+          chave,
+          retencaoAte: retencaoAte(agora),
+        });
+        const versaoTiss = await tx.uma(
+          "SELECT id FROM versao_padrao_tiss WHERE codigo_tiss = ? AND componente = 'troca' ORDER BY ativo DESC, id LIMIT 1",
+          [VERSAO_TISS],
+        );
+        await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
+          situacao: 'pronta_envio',
+          sequencial_transacao: sequencial,
+          arquivo_id: arquivo.id,
+          versao_padrao_tiss_id: versaoTiss ? num(versaoTiss['id']) : null,
+        });
+        return {
+          tabela: 'solicitacao_autorizacao',
+          id: solicitacao,
+          situacao: 'pronta_envio' as const,
+          hash: m.hash,
+        };
       }
-      await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
-        situacao: 'enviada',
-        enviada_em: agora,
-        sequencial_transacao: sequencial,
-      });
-      return { tabela: 'solicitacao_autorizacao', id: solicitacao, situacao: 'enviada' as const, hash };
     });
   }
 
-  /** O XML do pedido enviado pelo webservice, remontado com o instante e o sequencial gravados no envio. */
-  xml(c: ContextoPortaPropria, solicitacao: number): Promise<{ nome: string; xml: string }> {
+  /** O XML guardado foi levado à operadora pelo canal real informado: o pedido fica 'enviada' com o instante. */
+  registrarTransmissao(
+    c: ContextoPortaPropria,
+    solicitacao: number,
+    entrada: unknown,
+  ): Promise<{ id: number; situacao: SituacaoSolicitacaoAutorizacao }> {
+    const e = entradaValida(esquemaTransmissao, entrada);
+    return this.gravar(c, 'tiss.autorizacao.transmitir', ['solicitacao_autorizacao'], async (tx, est) => {
+      const s = await this.lerPedido(tx, est.id, solicitacao);
+      const de = String(s['situacao']) as SituacaoSolicitacaoAutorizacao;
+      if (de !== 'pronta_envio' || !podeMudar(de, 'enviada'))
+        throw recusaRegra('Transmissão recusada', [
+          { campo: 'situacao', mensagem: `O pedido está ${de}; só o pronto para envio é transmitido.` },
+        ]);
+      await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
+        situacao: 'enviada',
+        enviada_em: new Date(),
+        canal: e.canal,
+      });
+      return { tabela: 'solicitacao_autorizacao', id: solicitacao, situacao: 'enviada' as const };
+    });
+  }
+
+  /** O XML guardado no envio, como foi validado (nunca remontado), conferido pelo SHA-256 do registro. */
+  xml(c: ContextoPortaPropria, solicitacao: number): Promise<{ nome: string; xml: string; sha256: string }> {
     return this.ler(c, 'xml', async (l, est) => {
       const s = await this.lerPedido(l, est.id, solicitacao);
-      if (s['canal'] !== 'webservice' || !s['enviada_em'] || !s['sequencial_transacao'])
+      const a = s['arquivo_id']
+        ? await l.uma('SELECT chave_armazenamento, hash_sha256 FROM arquivo WHERE id = ?', [s['arquivo_id']])
+        : null;
+      if (!a)
         throw recusaRegra('XML indisponível', [
-          { campo: 'situacao', mensagem: 'Só o pedido enviado pelo webservice tem XML.' },
+          { campo: 'situacao', mensagem: 'Só o pedido com a mensagem eletrônica montada tem XML.' },
         ]);
-      const quando = s['enviada_em'] instanceof Date ? s['enviada_em'] : new Date(String(s['enviada_em']));
-      const d = await this.dadosMensagem(l, est.id, s, String(s['sequencial_transacao']), quando, est.fuso);
-      return { nome: `autorizacao-${String(s['numero'])}.xml`, xml: mensagemSolicitacaoAutorizacao(d).xml };
+      if (!this.armazem)
+        throw new ErroOperacao(
+          503,
+          'indisponivel',
+          'Guarda indisponível',
+          'Sem a guarda de arquivos do XML.',
+        );
+      const bytes = await this.armazem.ler(String(a['chave_armazenamento']));
+      if (!bytes || sha256(bytes) !== String(a['hash_sha256']))
+        throw new ErroOperacao(
+          409,
+          'arquivo-divergente',
+          'XML guardado indisponível',
+          'O XML guardado não confere com o registro.',
+        );
+      return {
+        nome: `autorizacao-${String(s['numero'])}.xml`,
+        xml: Buffer.from(bytes).toString('latin1'),
+        sha256: String(a['hash_sha256']),
+      };
     });
   }
 
@@ -767,8 +896,6 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
         situacao: 'cancelada',
         observacao: obs.slice(-1000),
-        // O pedido cancelado antes de sair fica com o instante do cancelamento (CHECK do envio pelo webservice).
-        ...(s['enviada_em'] ? {} : { enviada_em: new Date() }),
       });
       return { tabela: 'solicitacao_autorizacao', id: solicitacao, situacao: 'cancelada' as const };
     });
