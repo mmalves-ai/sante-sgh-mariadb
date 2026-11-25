@@ -1,7 +1,10 @@
 // Rota POST /api/operadora/troca-tiss/mensagens (08-SGO linha 107, C2-061) chamada no controlador, com portas falsas e
 // mensagens TISS 4.03 SINTÉTICAS montadas pelo gerador do hospital (válidas no XSD oficial, com o hash do epílogo):
-//   - o pedido de autorização (SOLICITACAO_PROCEDIMENTOS) vira o pedido da operadora pelas regras do portal
-//     (conferirRegistro), é gravado pela porta da autorização com o protocolo e a troca fica processada;
+//   - o pedido de autorização (SOLICITACAO_PROCEDIMENTOS) reserva o sequencial (troca 'em_processamento') antes do
+//     pedido, vira o pedido da operadora pelas regras do portal (conferirRegistro), é gravado pela porta da autorização
+//     com o protocolo e a reserva é concluída processada; o envio simultâneo do mesmo sequencial (a reserva recusada
+//     pelo UNIQUE) é recusado como repetido sem pedido; a falha depois do pedido gravado não vira rejeição;
+//   - o cancelamento de guia (CANCELA_GUIA) vai à porta com as guias lidas e devolve o protocolo e o resultado;
 //   - sem a origem "troca eletrônica" cadastrada, a mensagem fica rejeitada com o motivo e nenhum pedido é gravado;
 //   - a carteirinha fora do padrão: rejeitada com o campo, nenhum pedido gravado;
 //   - sem a permissão de registrar pedido, 403 e nada gravado;
@@ -9,6 +12,7 @@
 //   - a comunicação de internação válida fica processada; a de evento futuro fica rejeitada com o motivo.
 // A gravação no MariaDB está provada no troca-tiss-propria.int.spec (porta) e no int.spec da autorização (pedido).
 import {
+  conferirHashEpilogo,
   type DadosMensagemSolicitacao,
   mensagemComunicacaoBeneficiario,
   mensagemSolicitacaoAutorizacao,
@@ -90,7 +94,22 @@ const comunicacao = (dataEvento: string) =>
     },
   );
 
-function montar(o: { apoio?: Partial<ApoioRecebimentoTroca>; pode?: boolean } = {}) {
+/** CANCELA_GUIA sintético: o envelope da comunicação com o corpo do cancelamento e o hash recalculado. */
+const cancelamento = () => {
+  let x = Buffer.from(comunicacao('2026-11-24').bytes)
+    .toString('latin1')
+    .replace('COMUNICACAO_BENEFICIARIO', 'CANCELA_GUIA')
+    .replace(
+      /<ans:comunicacaoInternacao>[\s\S]*<\/ans:comunicacaoInternacao>/,
+      `<ans:cancelaGuia><ans:dadosPrestador><ans:codigoPrestadorNaOperadora>${PRESTADOR}</ans:codigoPrestadorNaOperadora></ans:dadosPrestador><ans:tipoCancelamento><ans:tipoCancelamentoGuia><ans:tipoGuia>1</ans:tipoGuia><ans:numeroGuiaPrestador>SA-17</ans:numeroGuiaPrestador></ans:tipoCancelamentoGuia></ans:tipoCancelamento></ans:cancelaGuia>`,
+    );
+  x = x.replace(/<ans:hash>[^<]*<\/ans:hash>/, `<ans:hash>${conferirHashEpilogo(x).calculado}</ans:hash>`);
+  return Buffer.from(x, 'latin1');
+};
+
+function montar(
+  o: { apoio?: Partial<ApoioRecebimentoTroca>; pode?: boolean; reservaRecusada?: boolean } = {},
+) {
   const apoio: ApoioRecebimentoTroca = {
     operadora: { id: 3, registroAns: REGISTRO },
     prestador: 7,
@@ -101,9 +120,24 @@ function montar(o: { apoio?: Partial<ApoioRecebimentoTroca>; pode?: boolean } = 
     ...o.apoio,
   };
   const porta = {
-    apoioRecebimento: vi.fn(async () => apoio),
-    registrarRecebida: vi.fn(async () => ({ id: 41 })),
-    receberCancelamento: vi.fn(),
+    apoioRecebimento: vi.fn(async () =>
+      o.reservaRecusada && vi.mocked(porta.registrarRecebida).mock.calls.length
+        ? { ...apoio, sequencialRepetido: true }
+        : apoio,
+    ),
+    registrarRecebida: vi.fn(async () => {
+      if (o.reservaRecusada) throw new Error('Duplicate entry (uq_troca_tiss_operadora_sequencial)');
+      return { id: 41 };
+    }),
+    concluirRecebida: vi.fn(async () => ({ id: 41, versao: 2 })),
+    receberCancelamento: vi.fn(async () => ({
+      id: 5,
+      versao: 1,
+      troca: 43,
+      protocolo: 'CG-1',
+      situacao: 'respondido',
+      guias: [{ numeroGuiaPrestador: 'SA-17', resultado: 'cancelada', observacao: null }],
+    })),
     receberComunicacao: vi.fn(async () => ({
       troca: 42,
       situacao: 'aceita',
@@ -164,10 +198,56 @@ describe('POST /api/operadora/troca-tiss/mensagens (controlador)', () => {
     expect(registrar).toHaveBeenCalledWith(
       expect.objectContaining({ protocolo: '99999920261125000005', usuario: 'SINT.OPERADORA' }),
     );
-    const [, troca, resultado] = vi.mocked(porta.registrarRecebida).mock.calls[0]!;
+    // A reserva antes do pedido; a conclusão (processada com o protocolo) depois dele.
+    const [, troca, reserva] = vi.mocked(porta.registrarRecebida).mock.calls[0]!;
     expect(troca).toMatchObject({ canal: 'webservice', operadora: 3, prestador: 7 });
     expect(troca.cabecalho).toMatchObject({ transacao: 'SOLICITACAO_PROCEDIMENTOS', sequencial: '17' });
+    expect(reserva).toEqual({ situacao: 'em_processamento', protocolo: null, erro: null });
+    expect(vi.mocked(porta.registrarRecebida).mock.invocationCallOrder[0]!).toBeLessThan(
+      vi.mocked(autorizacoes.gravar).mock.invocationCallOrder[0]!,
+    );
+    const [, id, resultado] = vi.mocked(porta.concluirRecebida).mock.calls[0]!;
+    expect(id).toBe(41);
     expect(resultado).toEqual({ situacao: 'processada', protocolo: '99999920261125000005', erro: null });
+  }, 60_000);
+
+  it('mesmo sequencial ao mesmo tempo: a reserva recusada pelo UNIQUE vira "repetida" e nenhum pedido é gravado', async () => {
+    const { c, req, porta, autorizacoes } = montar({ reservaRecusada: true });
+    const m = mensagemSolicitacaoAutorizacao(dados());
+    expect(await erro(c.receber({ arquivo: b64(m.bytes) }, req))).toMatchObject({
+      status: 409,
+      extras: { codigo: 'transacao-repetida' },
+    });
+    expect(autorizacoes.gravar).not.toHaveBeenCalled();
+    expect(porta.concluirRecebida).not.toHaveBeenCalled();
+  }, 60_000);
+
+  it('falha ao concluir depois do pedido gravado: erro, sem rejeitar a reserva (o sequencial segue reservado)', async () => {
+    const { c, req, porta, autorizacoes } = montar();
+    vi.mocked(porta.concluirRecebida).mockRejectedValueOnce(new Error('queda da conexão'));
+    const m = mensagemSolicitacaoAutorizacao(dados());
+    expect(await erro(c.receber({ arquivo: b64(m.bytes) }, req))).not.toBeNull();
+    expect(autorizacoes.gravar).toHaveBeenCalledTimes(1);
+    expect(porta.concluirRecebida).toHaveBeenCalledTimes(1);
+  }, 60_000);
+
+  it('cancelamento de guia pela rota: as guias lidas vão à porta; protocolo e resultado guia a guia', async () => {
+    const { c, req, porta, autorizacoes } = montar();
+    const r = await c.receber({ arquivo: cancelamento().toString('base64') }, req);
+    expect(r).toMatchObject({
+      troca: 43,
+      tipo: 'cancelamento_guia',
+      situacao: 'processada',
+      protocolo: 'CG-1',
+      guias: [{ numeroGuiaPrestador: 'SA-17', resultado: 'cancelada' }],
+    });
+    const [, troca, lido] = vi.mocked(porta.receberCancelamento).mock.calls[0]!;
+    expect(troca.cabecalho).toMatchObject({ transacao: 'CANCELA_GUIA', sequencial: '18' });
+    expect(lido.guias).toEqual([
+      expect.objectContaining({ tipoGuia: 'solicitacao', numeroGuiaPrestador: 'SA-17' }),
+    ]);
+    expect(porta.registrarRecebida).not.toHaveBeenCalled();
+    expect(autorizacoes.gravar).not.toHaveBeenCalled();
   }, 60_000);
 
   it('sem a origem "troca eletrônica" cadastrada: rejeitada com o motivo, nenhum pedido gravado', async () => {
@@ -177,7 +257,9 @@ describe('POST /api/operadora/troca-tiss/mensagens (controlador)', () => {
     expect(r.situacao).toBe('rejeitada');
     expect(r.motivos.join(' ')).toContain('troca eletrônica');
     expect(autorizacoes.gravar).not.toHaveBeenCalled();
-    expect(vi.mocked(porta.registrarRecebida).mock.calls[0]![2]).toMatchObject({
+    // A reserva é concluída rejeitada com o motivo (a mesma linha, sem segunda troca).
+    expect(porta.registrarRecebida).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(porta.concluirRecebida).mock.calls[0]![2]).toMatchObject({
       situacao: 'rejeitada',
       protocolo: null,
     });
@@ -190,7 +272,7 @@ describe('POST /api/operadora/troca-tiss/mensagens (controlador)', () => {
     expect(r.situacao).toBe('rejeitada');
     expect(r.motivos).toContain('Campo: carteirinha.');
     expect(autorizacoes.gravar).not.toHaveBeenCalled();
-    expect(vi.mocked(porta.registrarRecebida).mock.calls[0]![2]).toMatchObject({ situacao: 'rejeitada' });
+    expect(vi.mocked(porta.concluirRecebida).mock.calls[0]![2]).toMatchObject({ situacao: 'rejeitada' });
   }, 60_000);
 
   it('sem a permissão de registrar pedido: 403 e nada gravado', async () => {

@@ -289,14 +289,15 @@ export class PortaTrocaTissPropria {
   }
 
   /**
-   * A transação recebida registrada como ficou: a processada com o protocolo (o pedido de autorização registrado) ou a
-   * rejeitada com o motivo. O sequencial repetido não chega aqui (a conferência recusa antes).
+   * A transação recebida registrada como ficou: a rejeitada com o motivo ou, no pedido de autorização, a reserva
+   * 'em_processamento' gravada ANTES do pedido (o UNIQUE do sequencial recusa o envio simultâneo do mesmo sequencial;
+   * a reserva é concluída por concluirRecebida). O sequencial já registrado não chega aqui (a conferência recusa antes).
    */
   registrarRecebida(
     c: ContextoPorta,
     t: TrocaRecebida,
     r: {
-      readonly situacao: 'processada' | 'rejeitada';
+      readonly situacao: 'em_processamento' | 'processada' | 'rejeitada';
       readonly protocolo: string | null;
       readonly erro: string | null;
     },
@@ -315,6 +316,42 @@ export class PortaTrocaTissPropria {
         }),
         versao: 1,
       }),
+    );
+  }
+
+  /**
+   * A reserva concluída: processada com o protocolo do pedido de autorização gravado, ou rejeitada com o motivo. Só a
+   * troca recebida ainda 'em_processamento' deste estabelecimento muda (a já concluída nunca é reescrita).
+   */
+  concluirRecebida(
+    c: ContextoPorta,
+    id: number,
+    r: {
+      readonly situacao: 'processada' | 'rejeitada';
+      readonly protocolo: string | null;
+      readonly erro: string | null;
+    },
+    trilha: Trilha,
+  ): Promise<Gravado> {
+    return this.gravar(
+      c,
+      'operadora.troca-tiss.concluir',
+      'troca_tiss_operadora',
+      trilha,
+      async (tx, est) => {
+        const x = await tx.uma(
+          "SELECT versao FROM troca_tiss_operadora WHERE id = ? AND estabelecimento_id = ? AND direcao = 'recebida' AND situacao = 'em_processamento'",
+          [id, est],
+        );
+        if (!x) throw naoEncontrado('A troca em processamento');
+        const versao = await tx.alterar('troca_tiss_operadora', id, inteiro(x['versao'])!, {
+          situacao: r.situacao,
+          numero_protocolo: r.protocolo,
+          mensagem_erro: r.erro?.slice(0, 2000) ?? null,
+          processado_em: new Date(),
+        });
+        return { id, versao };
+      },
     );
   }
 
@@ -562,14 +599,46 @@ export class PortaTrocaTissPropria {
     });
   }
 
-  /** O demonstrativo de análise entregue fica como troca enviada (o registro do demonstrativo é da conferência). */
-  registrarEnvioAnalise(
+  /** A última troca enviada deste tipo para o lote (o protocolo e o número do lote), com o valor informado. */
+  private ultimaEnviada(
+    c: ContextoPorta,
+    lote: number,
+    tipo: 'demonstrativo_pagamento' | 'demonstrativo_analise_conta',
+  ): Promise<{ id: number; versao: number; valor: number | null } | null> {
+    return this.ler(c, async (l, est) => {
+      const lt = await PortaTrocaTissPropria.loteDoEst(l, est, lote);
+      const x = await l.uma(
+        `SELECT id, versao, valor_informado FROM troca_tiss_operadora
+          WHERE estabelecimento_id = ? AND direcao = 'enviada' AND tipo_transacao = ? AND numero_protocolo = ?
+            AND numero_lote = ?
+          ORDER BY id DESC LIMIT 1`,
+        [est, tipo, lt.protocolo, lt.numeroLote.slice(0, 30)],
+      );
+      if (!x) return null;
+      const v = x['valor_informado'];
+      return {
+        id: inteiro(x['id'])!,
+        versao: inteiro(x['versao'])!,
+        valor: v === null || v === undefined ? null : Number(v),
+      };
+    });
+  }
+
+  /**
+   * O demonstrativo de análise entregue fica como troca enviada (o registro do demonstrativo é da conferência). A
+   * reabertura do mesmo demonstrativo (o mesmo lote com o mesmo valor) reaproveita a troca já registrada, sem gravar;
+   * só o conteúdo mudado vira uma troca nova.
+   */
+  async registrarEnvioAnalise(
     c: ContextoPorta,
     lote: number,
     e: { readonly hash: string; readonly informado: number },
     trilha: Trilha,
-  ): Promise<Gravado> {
-    return this.gravar(
+  ): Promise<Gravado & { readonly reaproveitada: boolean }> {
+    const ja = await this.ultimaEnviada(c, lote, 'demonstrativo_analise_conta');
+    if (ja && ja.valor === Math.round(e.informado * 100) / 100)
+      return { id: ja.id, versao: ja.versao, reaproveitada: true };
+    const r = await this.gravar(
       c,
       'operadora.troca-tiss.demonstrativo-analise.enviar',
       'troca_tiss_operadora',
@@ -589,26 +658,59 @@ export class PortaTrocaTissPropria {
         };
       },
     );
+    return { ...r, reaproveitada: false };
   }
 
   /**
-   * O demonstrativo de pagamento entregue: a troca enviada e o demonstrativo com a linha do protocolo pago (o mesmo
-   * número reemitido atualiza o registro e a linha, com a versão).
+   * O demonstrativo de pagamento entregue: a troca enviada e o demonstrativo com a linha do protocolo pago. Só existe
+   * com o pagamento (a data); o mesmo número reaberto com os mesmos valores e a mesma data devolve o registro sem gravar;
+   * com o conteúdo mudado, a reemissão atualiza o registro e a linha (versão) e registra a troca nova.
    */
-  registrarDemonstrativoPagamento(
+  async registrarDemonstrativoPagamento(
     c: ContextoPorta,
     lote: number,
     e: {
       readonly numero: string;
       readonly hash: string;
-      readonly dataPagamento: string | null;
+      readonly dataPagamento: string;
       readonly informado: number;
       readonly liberado: number;
       readonly glosa: number;
     },
     trilha: Trilha,
-  ): Promise<Gravado & { readonly troca: number }> {
-    return this.gravar(
+  ): Promise<Gravado & { readonly troca: number; readonly reaproveitado: boolean }> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.dataPagamento ?? ''))
+      throw new ErroOperacao(
+        409,
+        'sem-pagamento',
+        'Demonstrativo sem pagamento',
+        'O demonstrativo de pagamento só é registrado depois do pagamento.',
+      );
+    const v0 = valoresDoDemonstrativoPagamento(e);
+    const igual = await this.ler(c, async (l, est) => {
+      const lt = await PortaTrocaTissPropria.loteDoEst(l, est, lote);
+      const x = await l.uma(
+        `SELECT id, versao, troca_tiss_operadora_id, data_pagamento, valor_informado, valor_liberado, valor_glosa
+           FROM demonstrativo_pagamento_emitido WHERE operadora_saude_id = ? AND numero_demonstrativo = ?`,
+        [lt.operadora, e.numero.slice(0, 20)],
+      );
+      if (
+        !x ||
+        x['troca_tiss_operadora_id'] === null ||
+        dataIso(x['data_pagamento']) !== e.dataPagamento ||
+        Number(x['valor_informado']) !== v0.informado ||
+        Number(x['valor_liberado']) !== v0.liberado ||
+        Number(x['valor_glosa']) !== v0.glosa
+      )
+        return null;
+      return {
+        id: inteiro(x['id'])!,
+        versao: inteiro(x['versao'])!,
+        troca: inteiro(x['troca_tiss_operadora_id'])!,
+      };
+    });
+    if (igual) return { ...igual, reaproveitado: true };
+    const r = await this.gravar(
       c,
       'operadora.troca-tiss.demonstrativo-pagamento.registrar',
       'demonstrativo_pagamento_emitido',
@@ -697,6 +799,7 @@ export class PortaTrocaTissPropria {
         return { id, versao: 1, troca };
       },
     );
+    return { ...r, reaproveitado: false };
   }
 }
 
@@ -704,6 +807,7 @@ export const METODOS_TROCA_TISS: ReadonlySet<string> = new Set([
   'apoioRecebimento',
   'trocas',
   'registrarRecebida',
+  'concluirRecebida',
   'receberCancelamento',
   'receberComunicacao',
   'registrarEnvioAnalise',

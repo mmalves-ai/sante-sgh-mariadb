@@ -288,7 +288,8 @@ export class ContasOperadoraController {
           .catch((e: unknown) => {
             throw problemaDoCadastro(e);
           });
-        // C2-061: o envio ao prestador fica como troca TISS enviada (demonstrativo de análise).
+        // C2-061: o envio ao prestador fica como troca TISS enviada (demonstrativo de análise); a reabertura do mesmo
+        // conteúdo reaproveita a troca já registrada (a porta não grava de novo).
         if (this.trocas?.destino === 'banco')
           await this.trocas
             .registrarEnvioAnalise(s.porta, n, { hash: d.hash, informado: v.apresentado }, (r) =>
@@ -322,7 +323,8 @@ export class ContasOperadoraController {
     const s = await this.exigirFatia(req);
     req.sghAlvo = { tabelaAlvo: TABELA, idAlvo: String(n) };
     const d = await this.servico.demonstrativoPagamento(s.porta, n);
-    // C2-061: o demonstrativo de pagamento entregue fica registrado (demonstrativo_pagamento_emitido e a troca enviada).
+    // C2-061: o demonstrativo de pagamento entregue fica registrado (demonstrativo_pagamento_emitido e a troca enviada)
+    // só depois do pagamento; a reabertura com o mesmo conteúdo devolve o registro sem gravar (a porta confere).
     if (this.porta.destino === 'banco' && this.trocas?.destino === 'banco') {
       const conta = await this.porta.conta(s.porta, n);
       if (conta) {
@@ -335,30 +337,31 @@ export class ContasOperadoraController {
             .sort()
             .at(-1) ?? null;
         const glosa = Math.max(0, Math.round((v.glosado - v.acatado) * 100) / 100);
-        await this.trocas
-          .registrarDemonstrativoPagamento(
-            s.porta,
-            n,
-            {
-              numero: `P${conta.protocolo}`,
-              hash: d.hash,
-              dataPagamento: pagoEm,
-              informado: v.apresentado,
-              liberado: Math.max(0, Math.round((v.apresentado - glosa) * 100) / 100),
-              glosa,
-            },
-            (r) =>
-              linhaTrilha(
-                s,
-                E.operadoraContaDemonstrativoPagamento.codigo,
-                RECURSO,
-                'operadora.troca-tiss.demonstrativo-pagamento.registrar',
-                { tabela: 'demonstrativo_pagamento_emitido', id: String(r.id) },
-              ),
-          )
-          .catch((e: unknown) => {
-            throw problemaDoCadastro(e);
-          });
+        if (pagoEm)
+          await this.trocas
+            .registrarDemonstrativoPagamento(
+              s.porta,
+              n,
+              {
+                numero: `P${conta.protocolo}`,
+                hash: d.hash,
+                dataPagamento: pagoEm.slice(0, 10),
+                informado: v.apresentado,
+                liberado: Math.max(0, Math.round((v.apresentado - glosa) * 100) / 100),
+                glosa,
+              },
+              (r) =>
+                linhaTrilha(
+                  s,
+                  E.operadoraContaDemonstrativoPagamento.codigo,
+                  RECURSO,
+                  'operadora.troca-tiss.demonstrativo-pagamento.registrar',
+                  { tabela: 'demonstrativo_pagamento_emitido', id: String(r.id) },
+                ),
+            )
+            .catch((e: unknown) => {
+              throw problemaDoCadastro(e);
+            });
       }
     }
     return d;

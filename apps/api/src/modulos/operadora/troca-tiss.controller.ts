@@ -3,8 +3,10 @@
 //   POST /api/operadora/troca-tiss/mensagens  a mensagem TISS 4.03 recebida do prestador (XML em base64): o XSD oficial,
 //                                             a versão e o hash do epílogo; a operadora de destino, o prestador da rede
 //                                             e o sequencial novo; e, pelo tipo de transação:
-//                                               - SOLICITACAO_PROCEDIMENTOS: o pedido de autorização registrado como o do
-//                                                 portal e da central (as mesmas regras), com a origem "troca eletrônica";
+//                                               - SOLICITACAO_PROCEDIMENTOS: a troca reservada 'em_processamento' (o UNIQUE
+//                                                 do sequencial recusa o envio simultâneo do mesmo sequencial), o pedido de
+//                                                 autorização registrado como o do portal e da central (as mesmas regras),
+//                                                 com a origem "troca eletrônica", e a reserva concluída com o protocolo;
 //                                               - CANCELA_GUIA: o resultado guia a guia e o protocolo da resposta;
 //                                               - COMUNICACAO_BENEFICIARIO: a internação ou a alta comunicada.
 //                                             A mensagem que não vira pedido fica registrada como rejeitada, com o motivo.
@@ -261,22 +263,26 @@ export class TrocaTissOperadoraController {
       operadora: apoio.operadora.id,
       prestador: apoio.prestador,
     };
+    // O pedido de autorização: a permissão própria antes de qualquer gravação; depois, a reserva do sequencial.
+    const pedido = cab.transacao === 'SOLICITACAO_PROCEDIMENTOS';
+    if (pedido) await this.exigirPedido(s, req);
+    const reserva: { id: number | null; pedidoGravado: boolean } = { id: null, pedidoGravado: false };
+    if (pedido) reserva.id = await this.reservar(s, troca);
     const rejeitar = async (motivos: readonly string[]): Promise<ResultadoTrocaRecebida> => {
-      const r = await this.porta
-        .registrarRecebida(
-          s.porta,
-          troca,
-          { situacao: 'rejeitada', protocolo: null, erro: motivos.join(' ') },
-          this.linha(
-            s,
-            E.operadoraContaRecebida.codigo,
-            'operadora.troca-tiss.registrar',
-            'troca_tiss_operadora',
-          ),
-        )
-        .catch((x: unknown) => {
-          throw problemaDoCadastro(x);
-        });
+      const resultado = { situacao: 'rejeitada', protocolo: null, erro: motivos.join(' ') } as const;
+      const trilha = this.linha(
+        s,
+        E.operadoraContaRecebida.codigo,
+        'operadora.troca-tiss.registrar',
+        'troca_tiss_operadora',
+      );
+      const r = await (
+        reserva.id !== null
+          ? this.porta.concluirRecebida(s.porta, reserva.id, resultado, trilha)
+          : this.porta.registrarRecebida(s.porta, troca, resultado, trilha)
+      ).catch((x: unknown) => {
+        throw problemaDoCadastro(x);
+      });
       return { troca: r.id, tipo: cab.tipo, situacao: 'rejeitada', protocolo: null, motivos };
     };
     try {
@@ -326,8 +332,10 @@ export class TrocaTissOperadoraController {
           comunicacao: { situacao: r.situacao, beneficiarioIdentificado: r.beneficiarioIdentificado },
         };
       }
-      return await this.solicitacao(s, req, xml, troca, apoio);
+      return await this.solicitacao(s, xml, troca, apoio, reserva as { id: number; pedidoGravado: boolean });
     } catch (x) {
+      // Com o pedido já gravado, a falha ao concluir não vira rejeição: a reserva segura o sequencial (sem pedido em dobro).
+      if (reserva.pedidoGravado) throw problemaDoCadastro(x);
       if (x instanceof ErroTrocaTiss) return rejeitar(texto([x.codigo]));
       // A recusa das regras do pedido (dados ou negócio) não perde a mensagem: fica rejeitada com o motivo.
       if (x instanceof ErroProblema && [400, 409].includes(x.getStatus()))
@@ -336,14 +344,8 @@ export class TrocaTissOperadoraController {
     }
   }
 
-  /** O pedido de autorização: a guia TISS vira o pedido da operadora, com as regras do portal e da central. */
-  private async solicitacao(
-    s: SessaoCadastro,
-    req: RequisicaoAutorizada,
-    xml: string,
-    troca: TrocaRecebida,
-    apoio: ApoioRecebimentoTroca,
-  ): Promise<ResultadoTrocaRecebida> {
+  /** O pedido de autorização exige a permissão própria e a fatia da autorização ligada. */
+  private async exigirPedido(s: SessaoCadastro, req: RequisicaoAutorizada): Promise<void> {
     if (!s.pode(PERM_AUTORIZAR))
       throw new ErroProblema(
         'sem-permissao',
@@ -352,6 +354,46 @@ export class TrocaTissOperadoraController {
         'Registrar pedido de autorização exige a permissão própria.',
       );
     await this.exigir(req, CHAVE_OPERADORA_AUTORIZACAO);
+  }
+
+  /** A reserva do sequencial (troca 'em_processamento'); o envio simultâneo do mesmo sequencial é recusado. */
+  private async reservar(s: SessaoCadastro, troca: TrocaRecebida): Promise<number> {
+    try {
+      const r = await this.porta.registrarRecebida(
+        s.porta,
+        troca,
+        { situacao: 'em_processamento', protocolo: null, erro: null },
+        this.linha(
+          s,
+          E.operadoraContaRecebida.codigo,
+          'operadora.troca-tiss.registrar',
+          'troca_tiss_operadora',
+        ),
+      );
+      return r.id;
+    } catch (x) {
+      const repetido = await this.porta
+        .apoioRecebimento(s.porta, troca.cabecalho.prestador, troca.cabecalho.sequencial)
+        .then(
+          (a) => a.sequencialRepetido,
+          () => false,
+        );
+      if (repetido) throw recusa(['transacao-repetida']);
+      throw problemaDoCadastro(x);
+    }
+  }
+
+  /**
+   * O pedido de autorização: a guia TISS vira o pedido da operadora, com as regras do portal e da central; a reserva do
+   * sequencial é concluída com o protocolo depois do pedido gravado.
+   */
+  private async solicitacao(
+    s: SessaoCadastro,
+    xml: string,
+    troca: TrocaRecebida,
+    apoio: ApoioRecebimentoTroca,
+    reserva: { readonly id: number; pedidoGravado: boolean },
+  ): Promise<ResultadoTrocaRecebida> {
     const lida = lerSolicitacaoProcedimento(xml);
     const p = problemasDaSolicitacao(lida);
     if (p.length) throw new ErroTrocaTiss(p[0]!.codigo);
@@ -379,14 +421,15 @@ export class TrocaTissOperadoraController {
         return g.registrar({ ...x.registro, protocolo, usuario: s.login });
       },
     );
-    const r = await this.porta.registrarRecebida(
+    reserva.pedidoGravado = true;
+    const r = await this.porta.concluirRecebida(
       s.porta,
-      troca,
+      reserva.id,
       { situacao: 'processada', protocolo: protocolo.slice(0, 100), erro: null },
       this.linha(
         s,
         E.operadoraAutorizacaoRegistrada.codigo,
-        'operadora.troca-tiss.registrar',
+        'operadora.troca-tiss.concluir',
         'troca_tiss_operadora',
       ),
     );

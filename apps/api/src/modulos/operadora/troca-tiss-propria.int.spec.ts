@@ -375,5 +375,60 @@ describe.skipIf(SEM_BANCO)('troca TISS da operadora (MariaDB, cliente f22_o2)', 
       an.id,
     ]);
     expect(ta).toMatchObject({ tipo_transacao: 'demonstrativo_analise_conta', numero_lote: '920061' });
+    // Reabrir o mesmo demonstrativo (o mesmo conteúdo, outro hash por causa da hora) não grava outra troca.
+    const enviadas = () =>
+      ler(
+        "SELECT tipo_transacao, COUNT(*) AS n FROM troca_tiss_operadora WHERE estabelecimento_id = ? AND direcao = 'enviada' AND numero_lote = '920061' GROUP BY tipo_transacao ORDER BY tipo_transacao",
+        [m.est],
+      ).then((r) => r.map((x) => [x['tipo_transacao'], Number(x['n'])]));
+    expect(await enviadas()).toEqual([
+      ['demonstrativo_analise_conta', 1],
+      ['demonstrativo_pagamento', 2],
+    ]);
+    const an2 = await porta.registrarEnvioAnalise(
+      contexto(m),
+      lote.id,
+      { hash: 'ha2', informado: 100 },
+      T('troca_tiss_operadora', 'x'),
+    );
+    expect(an2).toMatchObject({ id: an.id, reaproveitada: true });
+    const de2 = await porta.registrarDemonstrativoPagamento(
+      contexto(m),
+      lote.id,
+      { ...e, hash: 'hp3', liberado: 90, glosa: 10 },
+      T('demonstrativo_pagamento_emitido', 'x'),
+    );
+    expect(de2).toMatchObject({ id: d.id, versao: 2, troca: de.troca, reaproveitado: true });
+    expect(await enviadas()).toEqual([
+      ['demonstrativo_analise_conta', 1],
+      ['demonstrativo_pagamento', 2],
+    ]);
+    // O conteúdo mudado (outro valor) é um envio novo.
+    const an3 = await porta.registrarEnvioAnalise(
+      contexto(m),
+      lote.id,
+      { hash: 'ha3', informado: 120 },
+      T('troca_tiss_operadora', 'x'),
+    );
+    expect(an3.reaproveitada).toBe(false);
+    expect(an3.id).not.toBe(an.id);
+    // Sem pagamento (sem a data), o demonstrativo de pagamento não é registrado.
+    const sem = await porta
+      .registrarDemonstrativoPagamento(
+        contexto(m),
+        lote.id,
+        { ...e, numero: 'PT920062', dataPagamento: '' },
+        T('demonstrativo_pagamento_emitido', 'x'),
+      )
+      .then(
+        () => null,
+        (x: unknown) => (x as { problema?: { codigo?: string } }).problema?.codigo ?? String(x),
+      );
+    expect(sem).toBe('sem-pagamento');
+    expect(
+      await ler('SELECT id FROM demonstrativo_pagamento_emitido WHERE numero_demonstrativo = ?', [
+        'PT920062',
+      ]),
+    ).toHaveLength(0);
   });
 });
