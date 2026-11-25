@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('442 itens: M 198, P 57, N 187, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 442, M: 198, P: 57, N: 187 });
+  it('443 itens: M 198, P 57, N 188, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 443, M: 198, P: 57, N: 188 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(442);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(443);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -172,6 +172,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/agenda/exames/gerar',
         '/agenda/exames/marcar',
         '/agenda/sessoes', // M50 (etapa 6)
+        '/agenda/sessoes/dialisadores', // F7 (03-PEP linha 146)
         '/beira-leito/checagem', // M25
         '/beira-leito/sinais-vitais',
         '/bloco/apa', // M46 (etapa 1)
