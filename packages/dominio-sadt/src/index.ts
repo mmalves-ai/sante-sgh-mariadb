@@ -25,6 +25,7 @@ export * from './laudo/estruturado.js';
 export * from './laudo/grandeza-calculada.js';
 export * from './apoio/remessa.js';
 export * from './portal/acesso.js';
+export * from './portal/entrega.js';
 export * from './pacs/index.js';
 export * from './transfusao/index.js';
 export * from './catalogo/regras.js';
