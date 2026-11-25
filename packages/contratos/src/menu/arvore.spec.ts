@@ -325,6 +325,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/credenciamento', // M12
         '/faturamento/de-para-exames',
         '/faturamento/descontos-franquias', // C2-043 (06-FAT linha 19)
+        '/faturamento/elegibilidade', // C2-070 (06-FAT linha 26)
         '/faturamento/glosas', // M31
         '/faturamento/guias', // M31
         '/faturamento/guias-convenio', // C1-122 (06-FAT linha 24)

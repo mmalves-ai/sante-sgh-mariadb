@@ -14,11 +14,32 @@ export interface ProblemaTransmissaoElegibilidade {
   readonly mensagem: string;
 }
 
-/** A consulta sai pelo serviço web só pendente, ainda não enviada e com o serviço web cadastrado para a fonte. */
+/**
+ * Há transporte que entrega a saída TISS neste ambiente? O transmissor do worker só responde com o transmissor ligado;
+ * fora de produção o destino é o falso (regra 6); em produção só com o transporte da operadora configurado. Sem
+ * transporte nada vai à outbox: a mensagem ficaria 'enviada' para sempre e a recepção sem retorno (C2-070).
+ */
+export function transporteTissDisponivel(a: {
+  readonly transmissorLigado: boolean;
+  readonly producao: boolean;
+  readonly transporteProducao: boolean;
+}): boolean {
+  return a.transmissorLigado && (!a.producao || a.transporteProducao);
+}
+
+/** Mensagem única para a recepção quando o serviço web está cadastrado mas o ambiente não tem transporte. */
+export const SEM_TRANSPORTE_TISS =
+  'O envio pelo serviço web da operadora não está disponível neste ambiente: registre a resposta à mão.';
+
+/**
+ * A consulta sai pelo serviço web só pendente, ainda não enviada, com o serviço web cadastrado para a fonte e com
+ * transporte disponível no ambiente.
+ */
 export function conferirTransmissaoElegibilidade(c: {
   readonly situacao: SituacaoElegibilidade;
   readonly jaEnviada: boolean;
   readonly servicoWeb: boolean;
+  readonly transporte: boolean;
 }): ProblemaTransmissaoElegibilidade[] {
   const p: ProblemaTransmissaoElegibilidade[] = [];
   if (c.situacao !== 'pendente')
@@ -30,6 +51,7 @@ export function conferirTransmissaoElegibilidade(c: {
       campo: 'canal',
       mensagem: 'A operadora não tem o serviço web de elegibilidade cadastrado: registre a resposta à mão.',
     });
+  else if (!c.transporte) p.push({ campo: 'canal', mensagem: SEM_TRANSPORTE_TISS });
   return p;
 }
 

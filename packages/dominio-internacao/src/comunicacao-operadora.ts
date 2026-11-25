@@ -109,11 +109,20 @@ export function transicaoComunicacao(entrada: {
   readonly acao: AcaoComunicacao;
   readonly protocolo: string | null;
   readonly resposta: string | null;
+  /**
+   * C2-070: o evento comunicado foi desfeito (alta cancelada ou internação excluída) e a operadora já recebeu a
+   * comunicação: o cancelamento junto à operadora é registrado pelo 'cancelar' também na enviada e na confirmada.
+   */
+  readonly retificacaoPendente?: boolean;
 }): { para: SituacaoComunicacaoOperadora | null; problemas: ProblemaComunicacao[] } {
   const t = TRANSICOES[entrada.acao];
   if (!t) return { para: null, problemas: [{ campo: 'acao', mensagem: 'Ação desconhecida.' }] };
   const p: ProblemaComunicacao[] = [];
-  if (!t.de.includes(entrada.situacao))
+  const retificacao =
+    entrada.acao === 'cancelar' &&
+    entrada.retificacaoPendente === true &&
+    (entrada.situacao === 'enviada' || entrada.situacao === 'confirmada');
+  if (!t.de.includes(entrada.situacao) && !retificacao)
     p.push({ campo: 'situacao', mensagem: `A comunicação ${entrada.situacao} não admite ${entrada.acao}.` });
   if (entrada.acao === 'confirmar' && !entrada.protocolo?.trim())
     p.push({ campo: 'protocolo', mensagem: 'Informe o protocolo da operadora.' });
@@ -229,6 +238,8 @@ export function conferirTransmissao(c: {
   readonly situacao: SituacaoComunicacaoOperadora;
   readonly tipo: TipoComunicacaoOperadora;
   readonly servicoWeb: boolean;
+  /** C2-070: há transporte que entrega a saída TISS neste ambiente (sem ele nada vai à outbox). */
+  readonly transporte?: boolean;
 }): ProblemaComunicacao[] {
   const p: ProblemaComunicacao[] = [];
   if (c.situacao !== 'pendente')
@@ -240,6 +251,12 @@ export function conferirTransmissao(c: {
       campo: 'canal',
       mensagem:
         'A operadora não tem o serviço web da comunicação de beneficiário cadastrado: envie por outro canal e marque enviada.',
+    });
+  else if (c.transporte === false)
+    p.push({
+      campo: 'canal',
+      mensagem:
+        'O envio pelo serviço web da operadora não está disponível neste ambiente: envie por outro canal e marque enviada.',
     });
   return p;
 }

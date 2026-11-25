@@ -167,16 +167,17 @@ if (pacienteTexto.value) void abrir();
             <td>{{ c.fontePagadora }} · {{ c.carteira }}</td>
             <td data-testid="eleg-situacao">{{ k(`situacoes.${c.situacao}`) }}</td>
             <td v-if="c.situacao !== 'pendente'">{{ c.codigoValidacao ?? c.motivoNegativa ?? '' }}</td>
-            <td v-else-if="c.pelaOperadora" class="linha">
-              <span data-testid="eleg-pela-operadora">{{ k('pelaOperadora') }}</span>
-              <SanteBotao
-                variante="secundario"
-                :rotulo="k('lerRetorno')"
-                data-testid="eleg-ler-retorno"
-                @acionar="lerRetorno(c.id)"
-              />
-            </td>
             <td v-else-if="resposta[c.id]" class="linha">
+              <template v-if="c.pelaOperadora">
+                <span data-testid="eleg-pela-operadora">{{ k('pelaOperadora') }}</span>
+                <SanteBotao
+                  variante="secundario"
+                  :rotulo="k('lerRetorno')"
+                  data-testid="eleg-ler-retorno"
+                  @acionar="lerRetorno(c.id)"
+                />
+                <span data-testid="eleg-sem-retorno">{{ k('semRetornoAMao') }}</span>
+              </template>
               <SanteSelecao
                 v-model="resposta[c.id]!.situacao"
                 :rotulo="k('respostaDa')"

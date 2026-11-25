@@ -8,6 +8,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-071 (05-SADT L18, F7): o item "Mamografia e anatomia patológica" do diagnóstico entrou à mão (mesmo motivo); a
 // contagem acompanha.
+// C2-070 (06-FAT L26, F7): o item "Elegibilidade e autorização prévia" da recepção ganhou à mão a rota da tela de
+// elegibilidade do hospital (/faturamento/elegibilidade, leitura do atendimento); a contagem não muda.
 
 // C2-061 (08-SGO L107): o item "Trocas TISS com os prestadores" da operadora própria entrou à mão (mesmo motivo; F7);
 // a contagem acompanha.
@@ -158,7 +160,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"recepcao.senhas-e-filas.recepcoes-e-setores-de-senha","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Senhas e filas","Recepções e setores de senha"],"titulo":"Recepções e setores de senha","selo":"M","fase":2,"rota":"/recepcao/recepcoes","permissao":"recepcao.recepcao.ler"},
   {"id":"recepcao.atendimento.abertura-de-atendimento-ambulatorio-pa-sadt","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Abertura de atendimento"],"titulo":"Abertura de atendimento","selo":"M","fase":2,"rota":"/recepcao/atendimento/novo","permissao":"atendimento.atendimento.ler"},
   {"id":"recepcao.atendimento.dados-do-segurado-titular-e-carteirinha","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Dados do segurado/titular e carteirinha"],"titulo":"Dados do segurado/titular e carteirinha","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=segurado","permissao":"atendimento.atendimento.ler"},
-  {"id":"recepcao.atendimento.elegibilidade-e-autorizacao-previa-tiss","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Elegibilidade e autorização prévia"],"titulo":"Elegibilidade e autorização prévia","selo":"N","fase":3,"rota":null,"permissao":null},
+  {"id":"recepcao.atendimento.elegibilidade-e-autorizacao-previa-tiss","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Elegibilidade e autorização prévia"],"titulo":"Elegibilidade e autorização prévia","selo":"N","fase":3,"rota":"/faturamento/elegibilidade","permissao":"atendimento.atendimento.ler"},
   {"id":"recepcao.atendimento.procedimentos-extras-do-atendimento-externo","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Procedimentos extras do atendimento externo"],"titulo":"Procedimentos extras do atendimento externo","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=procedimentos","permissao":"atendimento.atendimento.ler"},
   {"id":"recepcao.atendimento.fluxo-do-paciente-por-local-fila-de-consultorio","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Fluxo do paciente por local"],"titulo":"Fluxo do paciente por local","selo":"M","fase":2,"rota":"/consultorio/fila","permissao":"atendimento.fila.ler"},
   {"id":"recepcao.atendimento.alta-saida-e-cancelamento-do-atendimento","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Alta, saída e cancelamento do atendimento"],"titulo":"Alta, saída e cancelamento do atendimento","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=encerrar","permissao":"atendimento.atendimento.ler"},

@@ -18,12 +18,20 @@
 //     motivo da operadora, erro ou descarte falha com o código; ainda na fila, nada muda;
 //   - disparar (C2-070): ao internar e ao registrar a saída, as comunicações devidas (domínio `comunicacoesDevidas`)
 //     nascem pendentes sozinhas, origem 'sistema'; com o serviço web cadastrado para a fonte, já saem para a outbox na
-//     mesma transação (enviadas, com a mensagem ligada). Nada nasce de novo quando o tipo já existe (nem o cancelado).
+//     mesma transação (enviadas, com a mensagem ligada). Nada nasce de novo quando o tipo já existe (nem o cancelado);
+//     a desfeita não conta. Sem transporte TISS no ambiente (produção sem o transporte da operadora), nada vai à
+//     outbox: nasce pendente para o envio por outro canal;
+//   - desfazer (C2-070): alta cancelada ou internação excluída. Pelo domínio `comunicacoesAoDesfazer`, cada comunicação
+//     atingida recebe desfeita_em e o motivo; a pendente ou com erro é cancelada (resposta = motivo); a enviada ou
+//     confirmada fica com retificacao_pendente até a equipe registrar o cancelamento junto à operadora ('cancelar',
+//     que então limpa a marca). Nada é apagado.
 import { ErroLoteTiss, mensagemComunicacaoBeneficiario } from '@sgh/dominio-faturamento';
 import {
   type AcaoComunicacao,
+  comunicacoesAoDesfazer,
   comunicacoesDevidas,
   conferirMensagemComunicacao,
+  type EventoDesfeito,
   conferirNovaComunicacao,
   conferirTransmissao,
   PONTO_COMUNICACAO_OPERADORA,
@@ -47,6 +55,7 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import { transporteTissDoAmbiente } from '../tiss/transporte-tiss.js';
 
 export const PORTA_COMUNICACAO_OPERADORA = Symbol('PORTA_COMUNICACAO_OPERADORA');
 
@@ -78,6 +87,11 @@ export interface ComunicacaoLida {
   readonly pelaIntegracao: boolean;
   /** Situação da mensagem de integração (pendente, enviada, processada, erro, descartada), se houver. */
   readonly situacaoEnvio: string | null;
+  /** C2-070: o evento comunicado foi desfeito (alta cancelada ou internação excluída). */
+  readonly desfeitaEm: string | null;
+  readonly motivoDesfeita: string | null;
+  /** A operadora recebeu a comunicação desfeita: cancelar junto a ela e registrar ('cancelar'). */
+  readonly retificacaoPendente: boolean;
 }
 
 const iso = (v: unknown): string | null =>
@@ -158,6 +172,9 @@ const comunicacaoLida = (r: Record<string, unknown>): ComunicacaoLida => ({
   versao: num(r['versao']),
   pelaIntegracao: r['integracao_mensagem_id'] !== null && r['integracao_mensagem_id'] !== undefined,
   situacaoEnvio: txtOuNull(r['situacao_envio']),
+  desfeitaEm: iso(r['desfeita_em']),
+  motivoDesfeita: txtOuNull(r['motivo_desfeita']),
+  retificacaoPendente: num(r['retificacao_pendente']) === 1,
 });
 
 /** O serviço web da comunicação de beneficiário cadastrado e ativo para a fonte, no estabelecimento. */
@@ -208,7 +225,7 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
         const vivas = (
           await tx.consultar(
             `SELECT DISTINCT tipo FROM comunicacao_internacao_operadora
-              WHERE internacao_id = ? AND excluido_em IS NULL AND situacao IN (${SITUACOES_COMUNICACAO_VIVAS.map(() => '?').join(', ')})`,
+              WHERE internacao_id = ? AND excluido_em IS NULL AND desfeita_em IS NULL AND situacao IN (${SITUACOES_COMUNICACAO_VIVAS.map(() => '?').join(', ')})`,
             [internacao, ...SITUACOES_COMUNICACAO_VIVAS],
           )
         ).map((r) => String(r['tipo']) as TipoComunicacaoOperadora);
@@ -319,7 +336,8 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
       async (tx, est) => {
         const r = (
           await tx.consultarParaAtualizar<Record<string, unknown>>(
-            `SELECT co.situacao, co.protocolo, co.enviado_em FROM comunicacao_internacao_operadora co
+            `SELECT co.situacao, co.protocolo, co.enviado_em, co.retificacao_pendente
+               FROM comunicacao_internacao_operadora co
                JOIN internacao i ON i.id = co.internacao_id
               WHERE co.id = ? AND i.estabelecimento_id = ? AND co.excluido_em IS NULL`,
             [id, est.id],
@@ -331,6 +349,7 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
           acao: e.acao as AcaoComunicacao,
           protocolo: e.protocolo ?? txtOuNull(r['protocolo']),
           resposta: e.resposta,
+          retificacaoPendente: num(r['retificacao_pendente']) === 1,
         });
         if (!t.para) throw recusaRegra('Transição recusada', t.problemas);
         const agora = new Date();
@@ -341,6 +360,7 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
         if (e.acao === 'confirmar' || e.acao === 'rejeitar') valores['respondido_em'] = agora;
         if (e.protocolo) valores['protocolo'] = e.protocolo;
         if (e.resposta) valores['resposta'] = e.resposta;
+        if (e.acao === 'cancelar') valores['retificacao_pendente'] = false;
         await tx.alterar('comunicacao_internacao_operadora', id, e.versao, valores);
         return { tabela: 'comunicacao_internacao_operadora', id, situacao: t.para };
       },
@@ -380,6 +400,7 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
           situacao: String(r['situacao']) as SituacaoComunicacaoOperadora,
           tipo,
           servicoWeb: servico !== null,
+          transporte: transporteTissDoAmbiente(),
         });
         if (p.length) throw recusaRegra('Envio recusado', p);
         const m = await this.montar(tx, id, est.id);
@@ -460,13 +481,14 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
         const d = await lerInternacao(tx, internacao, est.id);
         const existentes = (
           await tx.consultar(
-            `SELECT tipo, situacao FROM comunicacao_internacao_operadora
+            `SELECT tipo, situacao, desfeita_em FROM comunicacao_internacao_operadora
               WHERE internacao_id = ? AND excluido_em IS NULL`,
             [internacao],
           )
         ).map((r) => ({
           tipo: String(r['tipo']) as TipoComunicacaoOperadora,
           situacao: String(r['situacao']) as SituacaoComunicacaoOperadora,
+          desfeita: r['desfeita_em'] !== null && r['desfeita_em'] !== undefined,
         }));
         const devidas = comunicacoesDevidas({
           tipoFonte: d.tipoFonte,
@@ -476,7 +498,8 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
           altaPorObito: d.altaPorObito,
           existentes,
         });
-        const servico = devidas.length ? await servicoWebDaFonte(tx, est.id, d.fonte) : null;
+        const servico =
+          devidas.length && transporteTissDoAmbiente() ? await servicoWebDaFonte(tx, est.id, d.fonte) : null;
         const geradas: { id: number; tipo: string; situacao: string }[] = [];
         for (const tipo of devidas) {
           const id = await tx.incluir('comunicacao_internacao_operadora', {
@@ -508,6 +531,66 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
           geradas.push({ id, tipo, situacao });
         }
         return { tabela: 'comunicacao_internacao_operadora', id: geradas[0]?.id ?? null, geradas };
+      },
+    );
+  }
+
+  /**
+   * C2-070: a saída (alta cancelada) ou a internação (excluída) foi desfeita. As comunicações atingidas recebem a marca
+   * com o motivo; a que a operadora não recebeu é cancelada, a recebida fica com a retificação pendente. Só age quando
+   * o evento está de fato desfeito no banco (sem alta confirmada; internação excluída); idempotente.
+   */
+  async desfazer(
+    c: ContextoPortaPropria,
+    internacao: number,
+    evento: EventoDesfeito,
+  ): Promise<{ atingidas: { id: number; acao: string }[] }> {
+    return this.gravar(
+      c,
+      'internacao.comunicacaooperadora.desfazer',
+      ['comunicacao_internacao_operadora'],
+      async (tx, est) => {
+        const i = (
+          await tx.consultarParaAtualizar<Record<string, unknown>>(
+            'SELECT id, excluido_em FROM internacao WHERE id = ? AND estabelecimento_id = ?',
+            [internacao, est.id],
+          )
+        )[0];
+        if (!i) throw naoEncontrado('Internação');
+        const desfeito =
+          evento === 'internacao'
+            ? i['excluido_em'] !== null && i['excluido_em'] !== undefined
+            : (await lerInternacao(tx, internacao, est.id)).altaEm === null;
+        const atingidas: { id: number; acao: string }[] = [];
+        if (desfeito) {
+          const linhas = await tx.consultar(
+            `SELECT id, tipo, situacao, desfeita_em, versao FROM comunicacao_internacao_operadora
+              WHERE internacao_id = ? AND excluido_em IS NULL ORDER BY id`,
+            [internacao],
+          );
+          const versoes = new Map(linhas.map((r) => [num(r['id']), num(r['versao'])]));
+          const decisoes = comunicacoesAoDesfazer(
+            evento,
+            linhas.map((r) => ({
+              id: num(r['id']),
+              tipo: String(r['tipo']) as TipoComunicacaoOperadora,
+              situacao: String(r['situacao']) as SituacaoComunicacaoOperadora,
+              desfeita: r['desfeita_em'] !== null && r['desfeita_em'] !== undefined,
+            })),
+          );
+          const agora = new Date();
+          for (const d of decisoes) {
+            const valores: Record<string, unknown> = { desfeita_em: agora, motivo_desfeita: d.motivo };
+            if (d.acao === 'cancelar') {
+              valores['situacao'] = 'cancelada';
+              valores['resposta'] = d.motivo;
+            }
+            if (d.acao === 'retificar') valores['retificacao_pendente'] = true;
+            await tx.alterar('comunicacao_internacao_operadora', d.id, versoes.get(d.id)!, valores);
+            atingidas.push({ id: d.id, acao: d.acao });
+          }
+        }
+        return { tabela: 'comunicacao_internacao_operadora', id: atingidas[0]?.id ?? null, atingidas };
       },
     );
   }

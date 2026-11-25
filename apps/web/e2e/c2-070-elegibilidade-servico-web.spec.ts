@@ -1,6 +1,7 @@
-// E2E @C2-070 (06-FAT linha 26): elegibilidade pelo serviço web da operadora. A recepção abre o paciente pelo endereço,
-// consulta em um clique e a consulta já sai pelo serviço web cadastrado (o aviso diz que foi enviada); a linha pendente
-// mostra "Ler o retorno" em vez do formulário à mão; na primeira leitura a operadora ainda não respondeu (nada muda);
+// E2E @C2-070 (06-FAT linha 26): elegibilidade pelo serviço web da operadora. A recepção chega pelo menu (Recepção >
+// Atendimento > Elegibilidade e autorização prévia), abre o paciente, consulta em um clique e a consulta já sai pelo
+// serviço web cadastrado (o aviso diz que foi enviada); a linha pendente mostra "Ler o retorno" e, ao lado, o formulário
+// à mão para quando a operadora não responde; na primeira leitura a operadora ainda não respondeu (nada muda);
 // na segunda, o recibo vira a resposta elegível e a cobertura passa a mostrar a última elegibilidade. As rotas
 // /api/tiss/elegibilidade exigem o banco próprio e o E2E roda com a fonte sintética (sem núcleo): as respostas da API
 // são simuladas pelo Playwright com massa SINTÉTICA. O efeito no banco está em
@@ -83,8 +84,14 @@ test.describe('Elegibilidade pelo serviço web da operadora @C2-070 @fase7', () 
     });
 
     await entrar(page, 'SINT.GUICHE');
-    await page.goto(`/faturamento/elegibilidade?paciente=${PACIENTE}`);
+    const menu = page.getByRole('navigation', { name: 'Menu principal' });
+    await menu.locator('#menu-buscar').fill('Elegibilidade e autorização prévia');
+    await menu.getByRole('link', { name: 'Elegibilidade e autorização prévia' }).click();
+    await expect(page).toHaveURL(/\/faturamento\/elegibilidade/);
     await expect(page.getByTestId('elegibilidade')).toBeVisible();
+    await page.getByTestId('eleg-paciente').locator('input').fill(String(PACIENTE));
+    await page.getByTestId('eleg-abrir').click();
+    await expect(page).toHaveURL(new RegExp(`paciente=${PACIENTE}`));
     const cobertura = page.getByTestId('eleg-cobertura-32');
     await expect(cobertura.getByTestId('eleg-ultima')).toHaveText('Nunca consultada');
 
@@ -94,7 +101,9 @@ test.describe('Elegibilidade pelo serviço web da operadora @C2-070 @fase7', () 
 
     const consulta = page.getByTestId('eleg-consulta-82');
     await expect(consulta.getByTestId('eleg-pela-operadora')).toBeVisible();
-    await expect(consulta.getByTestId('eleg-resposta')).toHaveCount(0);
+    // Sem retorno da operadora, a recepção não fica presa: o formulário à mão segue ao lado de "Ler o retorno".
+    await expect(consulta.getByTestId('eleg-sem-retorno')).toBeVisible();
+    await expect(consulta.getByTestId('eleg-resposta')).toBeVisible();
     await semViolacaoAxe(page, '/faturamento/elegibilidade (enviada pelo serviço web)');
 
     await consulta.getByTestId('eleg-ler-retorno').click();

@@ -7,7 +7,8 @@
 // no ponto tiss.elegibilidade, só IDs e códigos, nunca a carteira) e fica pendente ligada à mensagem; na fila, o
 // retorno não muda nada; o recibo elegível grava a situação, o código de validação e a última elegibilidade da
 // cobertura; o negado grava o motivo; a falha de envio fica 'erro'; sem serviço web nada vai à outbox e o retorno é
-// recusado; a consulta respondida não lê retorno de novo; a trilha da operação.
+// recusado; a consulta respondida não lê retorno de novo; a trilha da operação. A enviada sem retorno aceita a resposta
+// à mão (a recepção nunca fica presa no 'aguardando'); em produção sem transporte TISS nada vai à outbox.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -217,5 +218,37 @@ describe.skipIf(SEM_BANCO)('Elegibilidade pelo serviço web da operadora (contra
       [m.est, m.usuario],
     );
     expect(Number(trilha[0]!['n'])).toBeGreaterThanOrEqual(6);
+  });
+
+  it('a enviada que não teve retorno aceita a resposta à mão (a recepção não fica presa)', async () => {
+    const c = await porta.consultar(ctx(), { cobertura: m.cobWeb });
+    expect(c).toMatchObject({ enviada: true });
+    expect(await porta.retorno(ctx(), c.id)).toMatchObject({ aguardando: true });
+    await porta.responder(ctx(), c.id, { situacao: 'elegivel', codigoValidacao: 'MAO1', versao: 2 });
+    expect(await consulta(c.id)).toMatchObject({ situacao: 'elegivel', codigo_validacao: 'MAO1' });
+    await tirarDoDia(c.id);
+  });
+
+  it('produção sem transporte: a consulta não vai à outbox e a resposta fica à mão', async () => {
+    const antes = process.env['AMBIENTE'];
+    process.env['AMBIENTE'] = 'producao';
+    const criadas: number[] = [];
+    try {
+      const c = await porta.consultar(ctx(), { cobertura: m.cobWeb });
+      expect(c).toMatchObject({ situacao: 'pendente', enviada: false });
+      criadas.push(c.id);
+    } finally {
+      if (antes === undefined) delete process.env['AMBIENTE'];
+      else process.env['AMBIENTE'] = antes;
+    }
+    const id = criadas[0]!;
+    expect(await consulta(id)).toMatchObject({ integracao_mensagem_id: null, versao: 1 });
+    const msgs = await ler(
+      `SELECT COUNT(*) AS n FROM integracao_mensagem WHERE entidade = 'consulta_elegibilidade' AND entidade_id = ?`,
+      [id],
+    );
+    expect(Number(msgs[0]!['n'])).toBe(0);
+    await porta.responder(ctx(), id, { situacao: 'inelegivel', motivoNegativa: 'Carência', versao: 1 });
+    expect(await consulta(id)).toMatchObject({ situacao: 'inelegivel', motivo_negativa: 'Carência' });
   });
 });

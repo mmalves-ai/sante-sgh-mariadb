@@ -6,7 +6,9 @@
 // Prova o que fica no banco: ao internar, a comunicação da internação nasce sozinha (origem 'sistema'); com o serviço
 // web cadastrado já sai para a outbox (enviada, mensagem ligada, só IDs, códigos e o hash); sem ele fica pendente;
 // com a alta, nasce a da alta; o segundo disparo não duplica; a cancelada pela equipe não renasce; a fonte que não é
-// operadora não gera nada; a trilha da operação.
+// operadora não gera nada; a trilha da operação. Desfeita a saída (alta cancelada) a alta recebida fica com a
+// retificação pendente e a nova alta é comunicada de novo; excluída a internação, a pendente é cancelada com o motivo.
+// Produção sem transporte TISS: nada vai à outbox (pendente, para o envio por outro canal) e o envio é recusado.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -58,13 +60,15 @@ describe.skipIf(SEM_BANCO)('Disparo da comunicação à operadora (contrato de e
     intWeb: number;
     intSem: number;
     intPart: number;
+    intProd: number;
   };
   const ctx = () => ({ cliente: CLIENTE, hospital: P, usuario: m.usuario, correlacao: P });
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p)) as Promise<T[]>;
   const comunicacoes = (internacao: number) =>
     ler(
-      `SELECT id, tipo, situacao, origem, enviado_em, integracao_mensagem_id, versao
+      `SELECT id, tipo, situacao, origem, enviado_em, integracao_mensagem_id, versao, desfeita_em, motivo_desfeita,
+              retificacao_pendente, resposta
          FROM comunicacao_internacao_operadora WHERE internacao_id = ? ORDER BY id`,
       [internacao],
     );
@@ -148,6 +152,7 @@ describe.skipIf(SEM_BANCO)('Disparo da comunicação à operadora (contrato de e
           intWeb: await internar(opWeb, 1),
           intSem: await internar(opSem, 2),
           intPart: await internar(part, 3),
+          intProd: await internar(opWeb, 4),
         };
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -210,5 +215,85 @@ describe.skipIf(SEM_BANCO)('Disparo da comunicação à operadora (contrato de e
   it('fonte que não é operadora: nada é gerado', async () => {
     expect((await porta.disparar(ctx(), m.intPart)).geradas).toEqual([]);
     expect(await comunicacoes(m.intPart)).toHaveLength(0);
+  });
+
+  it('cancelada a alta: a recebida fica para retificar, a internação fica, e a nova alta é comunicada de novo', async () => {
+    // O cancelamento da alta (executor do supervisor) deixa a internação sem alta confirmada.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `cancela-${P}` }, (e) =>
+      e.executar('UPDATE alta_hospitalar SET excluido_em = ? WHERE internacao_id = ?', [
+        new Date(),
+        m.intWeb,
+      ]),
+    );
+    const d = await porta.desfazer(ctx(), m.intWeb, 'alta');
+    expect(d.atingidas).toEqual([expect.objectContaining({ acao: 'retificar' })]);
+    const [int, alta] = await comunicacoes(m.intWeb);
+    expect(int).toMatchObject({
+      tipo: 'internacao',
+      situacao: 'enviada',
+      desfeita_em: null,
+      retificacao_pendente: 0,
+    });
+    expect(alta).toMatchObject({ tipo: 'alta', situacao: 'enviada', retificacao_pendente: 1 });
+    expect(String(alta!['motivo_desfeita'])).toMatch(/Alta cancelada/);
+    expect((await porta.desfazer(ctx(), m.intWeb, 'alta')).atingidas).toEqual([]);
+    // Sem retificação pendente, a enviada não se cancela; com ela, o cancelamento junto à operadora é registrado.
+    await porta.transicao(ctx(), Number(alta!['id']), {
+      acao: 'cancelar',
+      versao: Number(alta!['versao']),
+      resposta: 'Cancelada junto à operadora',
+    });
+    const [, altaCancelada] = await comunicacoes(m.intWeb);
+    expect(altaCancelada).toMatchObject({ situacao: 'cancelada', retificacao_pendente: 0 });
+    expect(altaCancelada!['desfeita_em']).not.toBeNull();
+    await expect(
+      porta.transicao(ctx(), Number(int!['id']), {
+        acao: 'cancelar',
+        versao: Number(int!['versao']),
+        resposta: 'x',
+      }),
+    ).rejects.toThrow();
+    // Nova alta: a desfeita não conta, a alta com a data corrigida nasce e sai de novo.
+    await darAlta(m.intWeb);
+    expect((await porta.disparar(ctx(), m.intWeb)).geradas).toEqual([
+      expect.objectContaining({ tipo: 'alta', situacao: 'enviada' }),
+    ]);
+    expect((await comunicacoes(m.intWeb)).map((x) => [x['tipo'], x['situacao']])).toEqual([
+      ['internacao', 'enviada'],
+      ['alta', 'cancelada'],
+      ['alta', 'enviada'],
+    ]);
+  });
+
+  it('produção sem transporte: nada vai à outbox e o envio é recusado; excluída a internação, a pendente é cancelada', async () => {
+    const antes = process.env['AMBIENTE'];
+    process.env['AMBIENTE'] = 'producao';
+    try {
+      const r = await porta.disparar(ctx(), m.intProd);
+      expect(r.geradas).toEqual([expect.objectContaining({ tipo: 'internacao', situacao: 'pendente' })]);
+      const [c] = await comunicacoes(m.intProd);
+      expect(c).toMatchObject({ situacao: 'pendente', integracao_mensagem_id: null });
+      await expect(porta.transmitir(ctx(), Number(c!['id']), { versao: 1 })).rejects.toThrow();
+      const msgs = await ler<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM integracao_mensagem WHERE entidade = 'comunicacao_internacao_operadora' AND entidade_id = ?`,
+        [c!['id']],
+      );
+      expect(Number(msgs[0]!.n)).toBe(0);
+    } finally {
+      if (antes === undefined) delete process.env['AMBIENTE'];
+      else process.env['AMBIENTE'] = antes;
+    }
+    // A internação ainda existe: desfazer não faz nada.
+    expect((await porta.desfazer(ctx(), m.intProd, 'internacao')).atingidas).toEqual([]);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `exclui-${P}` }, (e) =>
+      e.executar('UPDATE internacao SET excluido_em = ? WHERE id = ?', [new Date(), m.intProd]),
+    );
+    expect((await porta.desfazer(ctx(), m.intProd, 'internacao')).atingidas).toEqual([
+      expect.objectContaining({ acao: 'cancelar' }),
+    ]);
+    const [c] = await comunicacoes(m.intProd);
+    expect(c).toMatchObject({ situacao: 'cancelada', retificacao_pendente: 0 });
+    expect(String(c!['resposta'])).toMatch(/Internação excluída/);
+    expect(c!['desfeita_em']).not.toBeNull();
   });
 });

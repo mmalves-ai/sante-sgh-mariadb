@@ -5,28 +5,76 @@ import {
   conferirTransmissaoElegibilidade,
   PONTO_ELEGIBILIDADE,
   respostaElegibilidadeDoRetorno,
+  SEM_TRANSPORTE_TISS,
+  transporteTissDisponivel,
 } from './elegibilidade-transmissao.js';
 
 describe('conferirTransmissaoElegibilidade', () => {
   it('a pendente não enviada sai com o serviço web cadastrado', () => {
     expect(
-      conferirTransmissaoElegibilidade({ situacao: 'pendente', jaEnviada: false, servicoWeb: true }),
+      conferirTransmissaoElegibilidade({
+        situacao: 'pendente',
+        jaEnviada: false,
+        servicoWeb: true,
+        transporte: true,
+      }),
     ).toEqual([]);
     expect(PONTO_ELEGIBILIDADE).toMatch(/^[a-z][a-z0-9_.]{0,79}$/);
   });
   it('recusa a respondida, a já enviada e sem serviço web', () => {
     expect(
-      conferirTransmissaoElegibilidade({ situacao: 'elegivel', jaEnviada: false, servicoWeb: true })[0]
-        ?.campo,
+      conferirTransmissaoElegibilidade({
+        situacao: 'elegivel',
+        jaEnviada: false,
+        servicoWeb: true,
+        transporte: true,
+      })[0]?.campo,
     ).toBe('consulta');
     expect(
-      conferirTransmissaoElegibilidade({ situacao: 'pendente', jaEnviada: true, servicoWeb: true })[0]
-        ?.mensagem,
+      conferirTransmissaoElegibilidade({
+        situacao: 'pendente',
+        jaEnviada: true,
+        servicoWeb: true,
+        transporte: true,
+      })[0]?.mensagem,
     ).toMatch(/retorno/);
     expect(
-      conferirTransmissaoElegibilidade({ situacao: 'pendente', jaEnviada: false, servicoWeb: false })[0]
-        ?.campo,
+      conferirTransmissaoElegibilidade({
+        situacao: 'pendente',
+        jaEnviada: false,
+        servicoWeb: false,
+        transporte: true,
+      })[0]?.campo,
     ).toBe('canal');
+  });
+  it('sem transporte no ambiente nada sai: a recepção registra a resposta à mão', () => {
+    expect(
+      conferirTransmissaoElegibilidade({
+        situacao: 'pendente',
+        jaEnviada: false,
+        servicoWeb: true,
+        transporte: false,
+      }),
+    ).toEqual([{ campo: 'canal', mensagem: SEM_TRANSPORTE_TISS }]);
+  });
+});
+
+describe('transporteTissDisponivel', () => {
+  it('fora de produção só com o transmissor ligado (destino falso)', () => {
+    expect(
+      transporteTissDisponivel({ transmissorLigado: true, producao: false, transporteProducao: false }),
+    ).toBe(true);
+    expect(
+      transporteTissDisponivel({ transmissorLigado: false, producao: false, transporteProducao: false }),
+    ).toBe(false);
+  });
+  it('em produção só com o transporte da operadora configurado', () => {
+    expect(
+      transporteTissDisponivel({ transmissorLigado: true, producao: true, transporteProducao: false }),
+    ).toBe(false);
+    expect(
+      transporteTissDisponivel({ transmissorLigado: true, producao: true, transporteProducao: true }),
+    ).toBe(true);
   });
 });
 

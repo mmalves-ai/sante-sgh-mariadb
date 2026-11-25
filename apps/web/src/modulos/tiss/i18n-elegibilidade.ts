@@ -26,6 +26,7 @@ export const mensagensElegibilidade = {
   enviada: 'Consulta enviada à operadora pelo serviço web: leia o retorno em instantes.',
   aguardando: 'A operadora ainda não respondeu: leia o retorno de novo em instantes.',
   lerRetorno: 'Ler o retorno',
+  semRetornoAMao: 'Sem retorno da operadora? Registre abaixo a resposta à mão.',
   pelaOperadora: 'Enviada pelo serviço web da operadora',
   historico: 'Histórico das consultas',
   nenhumaConsulta: 'Nenhuma consulta.',

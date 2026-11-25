@@ -174,6 +174,27 @@ export class InternacaoController {
     }
   }
 
+  /**
+   * C2-070: depois de cancelar a alta ou excluir a internação, marca as comunicações à operadora que deixaram de valer
+   * (a não recebida é cancelada; a recebida fica para retificar junto à operadora), numa operação própria. A falha não
+   * desfaz o cancelamento: vai para o log só com o código, e a tela mostra a comunicação como estava.
+   */
+  private async desfazerComunicacao(
+    s: SessaoCadastro,
+    internacao: number,
+    evento: 'alta' | 'internacao',
+  ): Promise<void> {
+    if (!this.comunicacao || !Number.isInteger(internacao) || internacao <= 0) return;
+    try {
+      await this.comunicacao.desfazer(s.porta, internacao, evento);
+    } catch (e) {
+      logger.warn(
+        { internacao, evento, erro: e instanceof Error ? e.name : 'erro' },
+        'comunicação à operadora não marcada como desfeita',
+      );
+    }
+  }
+
   @Get('gravacao')
   @Permissao('internacao.internacao.ler')
   gravacao(@Req() req: RequisicaoAutorizada) {
@@ -545,7 +566,7 @@ export class InternacaoController {
     const e = corpo(esquemaCancelarAltaBanco, { ...resto, internacao: idDaRota(reg) });
     await exigir(s, 'internacao.alta.cancelar', this.trilha);
     const reautenticadoEm = await this.reautenticar(req, senha);
-    return this.avisar(
+    const r = await this.avisar(
       s,
       this.apoios.supervisor.executar(
         s,
@@ -557,6 +578,8 @@ export class InternacaoController {
         },
       ) as Promise<ResultadoInternacao>,
     );
+    await this.desfazerComunicacao(s, idDaRota(reg), 'alta');
+    return r;
   }
 
   @Post(':reg/excluir')
@@ -569,7 +592,7 @@ export class InternacaoController {
     const e = corpo(esquemaExcluirInternacao, { ...resto, internacao: idDaRota(reg) });
     await exigir(s, 'internacao.internacao.excluir', this.trilha);
     const reautenticadoEm = await this.reautenticar(req, senha);
-    return this.avisar(
+    const r = await this.avisar(
       s,
       this.apoios.supervisor.executar(
         s,
@@ -581,6 +604,8 @@ export class InternacaoController {
         },
       ) as Promise<ResultadoInternacao>,
     );
+    await this.desfazerComunicacao(s, idDaRota(reg), 'internacao');
+    return r;
   }
 
   private async reautenticar(req: RequisicaoAutorizada, senha: unknown): Promise<number> {
