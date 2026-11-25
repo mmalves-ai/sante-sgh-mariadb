@@ -39,6 +39,7 @@ import {
 import { ComunicacaoController } from './comunicacao.controller.js';
 import { PORTA_MENSAGENS_PACIENTE, PortaMensagensPacientePropria } from './mensagens-paciente-propria.js';
 import { PORTA_PACOTES_PARCEIRO, PortaPacotesParceiroPropria } from './pacotes-parceiro-propria.js';
+import { ARMAZEM_PACOTES_PARCEIRO, PacotesVisoesController } from './pacotes-visoes.controller.js';
 import { portaIntegracaoIndisponivel, PortaIntegracaoPropria } from './porta-propria.js';
 import { PrescricaoDigitalController } from './prescricao-digital.controller.js';
 import { FilaErpController } from './fila-erp.controller.js';
@@ -100,6 +101,7 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       IntegracaoController,
       FachadaController,
       ComunicacaoController,
+      PacotesVisoesController,
       PrescricaoDigitalController,
       FilaErpController,
     ],
@@ -116,6 +118,21 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       {
         provide: PORTA_PACOTES_PARCEIRO,
         useValue: nucleo && cliente ? new PortaPacotesParceiroPropria(nucleo, cliente) : null,
+      },
+      {
+        provide: ARMAZEM_PACOTES_PARCEIRO,
+        useValue:
+          nucleo && cliente
+            ? {
+                armazem: armazemArquivosDoAmbiente({
+                  nucleo,
+                  cliente,
+                  sintetico: false,
+                  env: ctx.env as NodeJS.ProcessEnv,
+                }),
+                cliente,
+              }
+            : null,
       },
       {
         provide: PORTA_CLASSIFICACAO_EXTERNA,

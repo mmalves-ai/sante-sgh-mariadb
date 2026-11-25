@@ -139,7 +139,34 @@ export interface EntregaPacote {
   readonly situacao: string;
   readonly protocolo: string | null;
   readonly mensagem: string | null;
+  /** O arquivo guardado da entrega (null: registrada sem arquivo). */
+  readonly arquivoId?: number | null;
 }
+/** A lista branca do que um pacote pode levar (o servidor confere o pacote contra ela ao gravar). */
+export interface CampoVisao {
+  readonly nome: string;
+  readonly rotulo: string;
+  readonly tipo: string;
+  readonly sensivel: boolean;
+  readonly identificador: boolean;
+}
+export interface VisaoExportavel {
+  readonly entidade: string;
+  readonly rotulo: string;
+  readonly recorte: string;
+  readonly campos: readonly CampoVisao[];
+}
+export interface ErroPacote {
+  readonly campo: string;
+  readonly codigo: string;
+  readonly mensagem: string;
+}
+export const lerVisoes = () => ler(`${I}/pacotes/visoes`, itens<VisaoExportavel>());
+/** As regras da gravação conferidas na hora, sem gravar. */
+export const conferirPacote = (c: Record<string, unknown>) =>
+  enviar(`${I}/pacotes/conferencia`, c, confiar<{ erros: ErroPacote[] }>(), novaChave('conferencia'));
+/** O endereço do arquivo da entrega (o operador baixa e envia pelo meio sem envio automático). */
+export const urlArquivoEntrega = (e: number) => `${I}/pacotes/entregas/${e}/arquivo`;
 export const lerPacotes = () => ler(`${I}/pacotes`, itens<PacoteParceiro>());
 export const gravarPacote = (c: Record<string, unknown>) => substituir<{ id: number }>(`${I}/pacotes`, c);
 /** O ato explícito de revisão da minimização (gravar o pacote não revisa). */

@@ -501,7 +501,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
       (
         await l.consultar(
           `SELECT id, periodo_inicio, periodo_fim, quantidade_registros, tamanho_bytes, situacao, enviado_em,
-                  confirmado_em, protocolo_confirmacao, mensagem_retorno, ocorrido_em
+                  confirmado_em, protocolo_confirmacao, mensagem_retorno, ocorrido_em, arquivo_id
              FROM entrega_pacote_parceiro WHERE pacote_parceiro_id = ? ORDER BY id DESC LIMIT 200`,
           [pacote],
         )
@@ -517,7 +517,25 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
         protocolo: txtOuNull(x['protocolo_confirmacao']),
         mensagem: txtOuNull(x['mensagem_retorno']),
         ocorridoEm: dataOuNull(x['ocorrido_em']),
+        arquivoId: numOuNull(x['arquivo_id']),
       })),
     );
+  }
+
+  /** O arquivo guardado da entrega (para o operador baixar e enviar pelo meio sem envio automático). */
+  arquivoDaEntrega(c: ContextoComunicacao, entrega: number): Promise<{ arquivoId: number }> {
+    return this.ler(c, 'pacotes.entrega.arquivo', async (l) => {
+      const e = await l.uma('SELECT id, arquivo_id FROM entrega_pacote_parceiro WHERE id = ?', [entrega]);
+      if (!e) throw naoEncontrado('Entrega');
+      const arquivoId = numOuNull(e['arquivo_id']);
+      if (arquivoId === null)
+        throw new ErroOperacao(
+          404,
+          'entrega-sem-arquivo',
+          'Entrega sem arquivo',
+          'A entrega foi registrada sem arquivo guardado.',
+        );
+      return { arquivoId };
+    });
   }
 }

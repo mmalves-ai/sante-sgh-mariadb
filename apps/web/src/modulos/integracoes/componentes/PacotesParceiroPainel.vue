@@ -4,9 +4,19 @@
 // situação (enviada, confirmada com protocolo, rejeitada ou falhou com o motivo).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { gravarPacote, lerEntregas, lerPacotes, mudarEntrega, revisarPacote } from '../api-comunicacao.js';
+import {
+  conferirPacote,
+  type ErroPacote,
+  gravarPacote,
+  lerEntregas,
+  lerPacotes,
+  lerVisoes,
+  mudarEntrega,
+  revisarPacote,
+  urlArquivoEntrega,
+} from '../api-comunicacao.js';
 
 const props = defineProps<{ podeEditar: boolean }>();
 const { t } = useI18n({
@@ -24,7 +34,13 @@ const { t } = useI18n({
       agenda: 'Agenda (HH:MM; "seg HH:MM"; "DD HH:MM")',
       anonimizacao: 'Anonimização',
       campos: 'Campos',
-      campo: 'Entidade.campo',
+      visao: 'Visão',
+      campo: 'Campo',
+      sensivelCatalogo: 'Dado sensível pelo catálogo',
+      identificador: 'Identifica a pessoa',
+      conferindo: 'Conferindo…',
+      conferido: 'Pacote conforme a regra e o catálogo',
+      baixar: 'Baixar arquivo',
       rotulo: 'Rótulo',
       tratamento: 'Tratamento',
       sensivel: 'Sensível',
@@ -71,7 +87,59 @@ const p = reactive({
   anonimizacao: 'pseudonimizada',
   campos: [novo()],
 });
-const maisCampo = () => p.campos.push({ ...novo(), sequencia: p.campos.length + 1 });
+const maisCampo = () =>
+  p.campos.push({ ...novo(), entidade: p.campos[0]?.entidade ?? '', sequencia: p.campos.length + 1 });
+
+// O catálogo das visões exportáveis: a visão e o campo só entre os da lista branca; o sensível vem do catálogo.
+const visoes = useQuery({ queryKey: ['integracoes', 'pacotes', 'visoes'], queryFn: lerVisoes });
+const opcoesVisao = computed(() =>
+  (visoes.data.value?.itens ?? []).map((v) => ({ valor: v.entidade, rotulo: v.rotulo })),
+);
+const camposDa = (entidade: string) =>
+  visoes.data.value?.itens.find((v) => v.entidade === entidade)?.campos ?? [];
+const opcoesCampo = (entidade: string) =>
+  camposDa(entidade).map((k) => ({
+    valor: k.nome,
+    rotulo: `${k.rotulo}${k.sensivel ? ' · sensível' : ''}${k.identificador ? ' · identifica' : ''}`,
+  }));
+const doCatalogo = (entidade: string, campo: string) => camposDa(entidade).find((k) => k.nome === campo);
+watch(
+  () => p.campos.map((c) => `${c.entidade}.${c.campo}`),
+  () => {
+    for (const c of p.campos) {
+      const k = doCatalogo(c.entidade, c.campo);
+      if (!k) continue;
+      c.dadoSensivel = k.sensivel;
+      if (!c.rotuloSaida.trim()) c.rotuloSaida = k.nome;
+    }
+  },
+);
+
+// A conferência na hora (as regras da gravação, sem gravar), meio segundo depois da última mudança.
+const recusas = ref<ErroPacote[]>([]);
+const conferindo = ref(false);
+let espera: ReturnType<typeof setTimeout> | undefined;
+watch(
+  p,
+  () => {
+    clearTimeout(espera);
+    espera = setTimeout(async () => {
+      conferindo.value = true;
+      try {
+        recusas.value = (
+          await conferirPacote({ ...p, agenda: p.periodicidade === 'sob_demanda' ? null : p.agenda })
+        ).erros;
+      } catch {
+        recusas.value = [];
+      } finally {
+        conferindo.value = false;
+      }
+    }, 500);
+  },
+  { deep: true },
+);
+const recusasDoCampo = (i: number) => recusas.value.filter((e) => e.campo.startsWith(`campos.${i}.`));
+const recusasGerais = computed(() => recusas.value.filter((e) => !/^campos\.\d+\./.test(e.campo)));
 const semJustificativa = computed(() => p.campos.some((c) => c.justificativa.trim().length < 10));
 
 async function executar(fn: () => Promise<unknown>) {
@@ -144,6 +212,9 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
           <td>{{ e.quantidadeRegistros }}</td>
           <td>{{ e.situacao }} {{ e.protocolo ?? e.mensagem ?? '' }}</td>
           <td v-if="props.podeEditar">
+            <a v-if="e.arquivoId" :href="urlArquivoEntrega(e.id)" download data-testid="entrega-baixar">{{
+              t('baixar')
+            }}</a>
             <button v-if="e.situacao === 'gerada'" type="button" @click="mudar(e.id, 'enviada')">
               {{ t('enviada') }}
             </button>
@@ -192,8 +263,18 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
         <legend>{{ t('campos') }}</legend>
         <div v-for="(c, i) in p.campos" :key="i">
           <input v-model.number="c.sequencia" type="number" min="1" style="width: 4em" />
-          <input v-model="c.entidade" :placeholder="t('campo')" maxlength="64" />
-          <input v-model="c.campo" maxlength="64" />
+          <SanteSelecao
+            v-model="c.entidade"
+            :rotulo="t('visao')"
+            :opcoes="opcoesVisao"
+            :data-testid="`pacote-campo-visao-${i}`"
+          />
+          <SanteSelecao
+            v-model="c.campo"
+            :rotulo="t('campo')"
+            :opcoes="opcoesCampo(c.entidade)"
+            :data-testid="`pacote-campo-nome-${i}`"
+          />
           <input v-model="c.rotuloSaida" :placeholder="t('rotulo')" maxlength="100" />
           <SanteSelecao
             v-model="c.tratamento"
@@ -201,12 +282,40 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
             :opcoes="lista(['original', 'pseudonimizado', 'mascarado', 'generalizado', 'agregado'])"
             ocultar-rotulo
           />
-          <label><input v-model="c.dadoSensivel" type="checkbox" /> {{ t('sensivel') }}</label>
+          <label
+            ><input
+              v-model="c.dadoSensivel"
+              type="checkbox"
+              :disabled="!!doCatalogo(c.entidade, c.campo)"
+              :title="doCatalogo(c.entidade, c.campo) ? t('sensivelCatalogo') : ''"
+            />
+            {{ t('sensivel') }}</label
+          >
+          <span v-if="doCatalogo(c.entidade, c.campo)?.identificador">{{ t('identificador') }}</span>
           <input v-model="c.justificativa" :placeholder="t('justificativa')" maxlength="500" />
+          <p
+            v-for="e in recusasDoCampo(i)"
+            :key="e.campo + e.codigo"
+            role="alert"
+            data-testid="pacote-recusa"
+          >
+            {{ e.mensagem }}
+          </p>
         </div>
         <button type="button" @click="maisCampo">{{ t('maisCampo') }}</button>
       </fieldset>
-      <button type="submit" :disabled="semJustificativa">{{ t('gravar') }}</button>
+      <p v-for="e in recusasGerais" :key="e.campo + e.codigo" role="alert" data-testid="pacote-recusa">
+        {{ e.mensagem }}
+      </p>
+      <p v-if="conferindo" role="status">{{ t('conferindo') }}</p>
+      <p
+        v-else-if="!recusas.length && p.campos.some((c) => c.campo)"
+        role="status"
+        data-testid="pacote-conforme"
+      >
+        {{ t('conferido') }}
+      </p>
+      <button type="submit" :disabled="semJustificativa || recusas.length > 0">{{ t('gravar') }}</button>
     </form>
   </section>
 </template>

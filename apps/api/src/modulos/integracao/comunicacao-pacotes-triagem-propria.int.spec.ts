@@ -564,6 +564,12 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
     expect(lido.ultimaEntrega).toMatchObject({ id: e1.id, situacao: 'confirmada' });
     expect(lido.proximaDevida).toBeNull();
     expect(lido.revisaoVencida).toBe(false);
+    // A entrega registrada à mão não tem arquivo guardado: a lista diz, e o download recusa com o motivo.
+    const hist = await pac.entregas(ctx(), id);
+    expect(hist.find((x) => x.id === e1.id)).toMatchObject({ arquivoId: null, situacao: 'confirmada' });
+    const semArq = await erro(pac.arquivoDaEntrega(ctx(), e1.id));
+    expect(semArq).toMatchObject({ status: 404, codigo: 'entrega-sem-arquivo' });
+    expect((await erro(pac.arquivoDaEntrega(ctx(), 2_000_000_000))).status).toBe(404);
   }, 120_000);
 
   it('L140: perfis enviados, recebida idempotente, rejeitada com motivo e substituição pela mais nova', async () => {

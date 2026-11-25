@@ -285,7 +285,7 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
       },
       ctx('arquivo'),
     );
-    const op = definirOperacao<z.infer<typeof ENTRADA_REGISTRO>, { entrega: number } | null>({
+    const op = definirOperacao<z.infer<typeof ENTRADA_REGISTRO>, { entrega: number | null }>({
       nome: 'integracao.parceiro.entrega_agendada',
       tabelas: ['entrega_pacote_parceiro'],
       entrada: ENTRADA_REGISTRO,
@@ -298,17 +298,18 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
           [e.pacote],
           { teto: 1 },
         );
-        if (!x || !Number(x['ativo']) || !Number(x['parceiro_ativo'])) return null;
+        if (!x || !Number(x['ativo']) || !Number(x['parceiro_ativo'])) return { entrega: null };
         const prox = x['proxima_revisao_em'];
         const proxima = prox instanceof Date ? dia(prox) : prox ? String(prox).slice(0, 10) : null;
-        if (!revisaoEmDia(proxima, dia(agora))) return null;
+        if (!revisaoEmDia(proxima, dia(agora))) return { entrega: null };
         const [u] = await tx.consultar(
           `SELECT MAX(periodo_fim) AS fim FROM entrega_pacote_parceiro
             WHERE pacote_parceiro_id = ? AND situacao NOT IN ('rejeitada','falhou')`,
           [e.pacote],
           { teto: 1 },
         );
-        if (u?.['fim'] && new Date(u['fim'] as string).getTime() >= new Date(e.fim).getTime()) return null;
+        if (u?.['fim'] && new Date(u['fim'] as string).getTime() >= new Date(e.fim).getTime())
+          return { entrega: null };
         const entrega = await tx.incluir('entrega_pacote_parceiro', {
           pacote_parceiro_id: e.pacote,
           operacao: 'inclusao',
@@ -343,7 +344,8 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
       },
       ctx('entrega'),
     );
-    return r.resultado ? { entrega: r.resultado.entrega, arquivo: arq.id } : null;
+    const entrega = r.resultado?.entrega ?? null;
+    return entrega === null ? null : { entrega, arquivo: arq.id };
   }
 
   async situacao(
