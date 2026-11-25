@@ -133,9 +133,15 @@ export function tipoProntuarioDoAtendimento(tipoBase: string | null | undefined)
  */
 export function conferirRegistroPelaConfiguracao(
   c: ConfiguracaoProntuario,
-  x: { readonly ocorridoEm: Date; readonly agora: Date; readonly certificadoIcpVigente: boolean },
+  x: {
+    readonly ocorridoEm: Date;
+    readonly agora: Date;
+    readonly certificadoIcpVigente: boolean;
+    /** A tolerância do estabelecimento (`pep.evolucao.toleranciaRetroativoMinutos`), a mesma do horário do serviço. */
+    readonly toleranciaMinutos: number;
+  },
 ): ErroRegraPainel | null {
-  const r = avaliarRetroativo(c, x.ocorridoEm, x.agora);
+  const r = avaliarRetroativo(c, x.ocorridoEm, x.agora, x.toleranciaMinutos);
   if (!r.permitido)
     return {
       campo: 'dataHoraClinica',
@@ -150,6 +156,16 @@ export function conferirRegistroPelaConfiguracao(
         'Este setor exige assinatura digital ICP-Brasil: cadastre um certificado vigente antes de finalizar o registro.',
     };
   return null;
+}
+
+/**
+ * O que a gravação deixa de assinatura, pela configuração que vale: com a digital ICP-Brasil exigida, o registro não se
+ * dá por assinado na sessão; nasce com o documento do prontuário aguardando a assinatura ICP do autor (pendência na fila
+ * de assinatura, CFM 1.821/2007 e SBIS NGS2). A eletrônica é a da sessão autenticada; "nenhuma" não pede nada.
+ */
+export function assinaturaNaGravacao(c: ConfiguracaoProntuario): 'pendente-icp' | 'sessao' | 'dispensada' {
+  if (c.assinaturaExigida === 'digital_icp') return 'pendente-icp';
+  return c.assinaturaExigida === 'eletronica' ? 'sessao' : 'dispensada';
 }
 
 /** Padrão do código quando o setor não tem configuração: sem retroativo e assinatura eletrônica. */
@@ -209,14 +225,21 @@ export function resolverConfiguracaoProntuario(
   return { configuracao: padrao, origem: 'padrao' };
 }
 
-/** O registro com data clínica anterior a agora cabe na regra do setor? (horas cheias de atraso contra a tolerância) */
+/**
+ * O registro com data clínica anterior a agora cabe na regra do setor? Até a tolerância em minutos do estabelecimento
+ * (`pep.evolucao.toleranciaRetroativoMinutos`, 0 a 1440) o registro não é retroativo, com a mesma conta do horário do
+ * serviço (minutos arredondados, retroativo acima da tolerância); acima dela, vale a regra do setor (permitido e o
+ * limite em horas).
+ */
 export function avaliarRetroativo(
   c: ConfiguracaoProntuario,
   ocorridoEm: Date,
   agora: Date,
+  toleranciaMinutos: number,
 ): { readonly permitido: boolean; readonly motivo: string | null } {
   const atrasoMs = agora.getTime() - ocorridoEm.getTime();
-  if (atrasoMs <= 15 * 60_000) return { permitido: true, motivo: null };
+  const tolerancia = Number.isFinite(toleranciaMinutos) ? Math.min(1440, Math.max(0, toleranciaMinutos)) : 0;
+  if (Math.round(atrasoMs / 60_000) <= tolerancia) return { permitido: true, motivo: null };
   if (!c.permiteRetroativo) return { permitido: false, motivo: 'Este setor não aceita registro retroativo.' };
   if (c.toleranciaRetroativoHoras !== null && atrasoMs > c.toleranciaRetroativoHoras * 3_600_000)
     return {

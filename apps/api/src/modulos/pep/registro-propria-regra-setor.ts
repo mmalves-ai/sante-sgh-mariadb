@@ -1,10 +1,13 @@
 // Regra do prontuário na gravação do registro clínico (F3.3, 03-PEP L91): a configuração que vale para o setor e o tipo
 // do atendimento (configuracao_setor_prontuario: setor e tipo, senão setor para "todos", senão o padrão do
 // estabelecimento) decide se o horário clínico retroativo cabe e que assinatura é exigida. A digital ICP-Brasil só com
-// certificado vigente do autor (certificado_usuario ativo, não revogado, dentro da validade). Lida na mesma transação
-// da gravação; a recusa é 422 e nada fica gravado. Regra institucional: nunca preferência do usuário.
+// certificado vigente do autor (certificado_usuario ativo, não revogado, dentro da validade), e o registro nasce com a
+// assinatura ICP pendente (o certificado vai para a pendência da gravação). O limite do "não retroativo" é a tolerância
+// em minutos do estabelecimento, a mesma do horário do serviço. Lida na mesma transação da gravação; a recusa é 422 e
+// nada fica gravado. Regra institucional: nunca preferência do usuário.
 import {
   type AssinaturaExigida,
+  assinaturaNaGravacao,
   type ConfiguracaoProntuario,
   type ConfiguracaoSetor,
   configuracaoPadraoDoEstabelecimento,
@@ -69,7 +72,16 @@ export async function configuracaoDoAtendimento(
   return { ...r, setor };
 }
 
-/** Confere o registro pela regra que vale; recusa 422 (retroativo-fora-da-regra ou assinatura-icp-exigida). */
+/** O certificado ICP vigente do autor que a pendência de assinatura usa. */
+export interface CertificadoVigente {
+  readonly id: number;
+  readonly midia: 'nuvem' | 'a1' | 'a3';
+}
+
+/**
+ * Confere o registro pela regra que vale; recusa 422 (retroativo-fora-da-regra ou assinatura-icp-exigida). Devolve o
+ * que a gravação deixa de assinatura: com a ICP exigida, a pendência com o certificado vigente do autor.
+ */
 export async function conferirRegraDoSetor(
   l: Consultor,
   x: {
@@ -79,29 +91,39 @@ export async function conferirRegraDoSetor(
     readonly ocorridoEm: Date;
     readonly agora: Date;
     readonly assinaturaEstabelecimento: AssinaturaExigida | null | undefined;
+    /** `pep.evolucao.toleranciaRetroativoMinutos` do estabelecimento (o mesmo da conferência do horário). */
+    readonly toleranciaMinutos: number;
   },
-): Promise<void> {
+): Promise<
+  | { readonly assinatura: 'pendente-icp'; readonly certificado: CertificadoVigente }
+  | { readonly assinatura: 'sessao' | 'dispensada'; readonly certificado: null }
+> {
   const { configuracao } = await configuracaoDoAtendimento(
     l,
     x.estabelecimento,
     x.atendimento,
     x.assinaturaEstabelecimento,
   );
-  let certificado = false;
-  if (configuracao.assinaturaExigida === 'digital_icp') {
+  const assinatura = assinaturaNaGravacao(configuracao);
+  let certificado: CertificadoVigente | null = null;
+  if (assinatura === 'pendente-icp') {
     const c = await l.uma(
-      `SELECT 1 AS ok FROM certificado_usuario
+      `SELECT id, midia FROM certificado_usuario
         WHERE usuario_id = ? AND situacao = 'ativo' AND excluido_em IS NULL AND revogado_em IS NULL
           AND valido_de <= UTC_TIMESTAMP(3) AND valido_ate > UTC_TIMESTAMP(3)
+        ORDER BY valido_ate DESC, id DESC
         LIMIT 1`,
       [x.usuario],
     );
-    certificado = c !== null && c !== undefined;
+    if (c) certificado = { id: Number(c['id']), midia: String(c['midia']) as CertificadoVigente['midia'] };
   }
   const erro = conferirRegistroPelaConfiguracao(configuracao, {
     ocorridoEm: x.ocorridoEm,
     agora: x.agora,
-    certificadoIcpVigente: certificado,
+    certificadoIcpVigente: certificado !== null,
+    toleranciaMinutos: x.toleranciaMinutos,
   });
   if (erro) throw new ErroOperacao(422, erro.codigo, 'Operação recusada', erro.mensagem);
+  if (assinatura === 'pendente-icp' && certificado) return { assinatura, certificado };
+  return { assinatura: assinatura === 'pendente-icp' ? 'sessao' : assinatura, certificado: null };
 }

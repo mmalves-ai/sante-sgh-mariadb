@@ -64,6 +64,11 @@ export const TABELAS_REGISTRO = [
   'registro_assistencial_rascunho',
   // O pedido de coassinatura do preceptor nasce com o registro do residente (03-PEP L96).
   'registro_assistencial_supervisao',
+  // 03-PEP L91: com a assinatura digital ICP-Brasil exigida, o documento do registro nasce aguardando a assinatura e a
+  // tentativa ICP pendente entra na fila do módulo de assinatura.
+  'documento_prontuario',
+  'documento_prontuario_evento',
+  'assinatura_icp',
 ] as const;
 
 /** Respostas de escolha múltipla: o id da resposta é este deslocamento + o id da opção (nunca colide com campo). */
@@ -430,6 +435,34 @@ export function linhasDasRespostas(
 // ── Datas ────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Hora civil local (AAAA-MM-DDTHH:MM[:SS]) no fuso do estabelecimento → instante UTC; independe do TZ da máquina. */
+/**
+ * 03-PEP L91: a situação do documento que aguarda a assinatura ICP (categoria aguardando_assinatura; sem ela, a de
+ * lançado, também assinável) e a situação pendente da assinatura, se o cliente a cadastrou. Sem situação de documento
+ * assinável cadastrada, recusa (falha fechada: o registro não se grava como se estivesse assinado).
+ */
+async function situacaoAguardandoAssinatura(
+  tx: Pick<TxOperacao, 'uma'>,
+): Promise<{ documento: number; assinatura: number | null }> {
+  const d = await tx.uma(
+    `SELECT id FROM situacao_documento_prontuario
+      WHERE categoria IN ('aguardando_assinatura', 'lancado') AND ativo = TRUE
+      ORDER BY (categoria = 'aguardando_assinatura') DESC, (ordem IS NULL), ordem, id LIMIT 1`,
+    [],
+  );
+  if (!d)
+    throw recusa(
+      409,
+      'situacao-documento-sem-cadastro',
+      'Operação recusada',
+      'O cliente não tem situação de documento que aguarde a assinatura ICP-Brasil.',
+    );
+  const a = await tx.uma(
+    `SELECT id FROM situacao_assinatura_documento WHERE categoria = 'pendente' AND ativo = TRUE ORDER BY id LIMIT 1`,
+    [],
+  );
+  return { documento: num(d['id']), assinatura: a ? num(a['id']) : null };
+}
+
 export function localParaUtc(local: string, fuso: string): Date {
   const alvo = Date.parse(`${local.length === 16 ? `${local}:00` : local.slice(0, 19)}Z`);
   if (Number.isNaN(alvo))
@@ -1341,15 +1374,19 @@ export class RegistroPropriaGravacao {
       );
       const respostas = e.linhas.filter(temValor).map((l) => respostaDaLinha(l, campos));
       const agora = new Date();
-      // 03-PEP L91: o retroativo e a assinatura exigida pela configuração do setor (ou do estabelecimento).
-      await conferirRegraDoSetor(tx, {
+      // 03-PEP L91: o retroativo (com a tolerância do estabelecimento) e a assinatura exigida pela configuração do setor
+      // (ou do estabelecimento).
+      const regra = await conferirRegraDoSetor(tx, {
         estabelecimento: est.id,
         atendimento: e.atendimento,
         usuario: prof.usuario,
         ocorridoEm: localParaUtc(e.dataHoraClinica, est.fuso),
         agora,
         assinaturaEstabelecimento: e.assinaturaEstabelecimento,
+        toleranciaMinutos: e.toleranciaMin,
       });
+      const situacaoPendente =
+        regra.assinatura === 'pendente-icp' ? await situacaoAguardandoAssinatura(tx) : null;
       let coassinatura: CoassinaturaGravavel | null = null;
       if (e.supervisao) {
         const preceptor = e.supervisao.idProfissional;
@@ -1419,6 +1456,56 @@ export class RegistroPropriaGravacao {
           solicitado_em: agora,
           origem: 'sistema',
         });
+      if (regra.assinatura === 'pendente-icp' && situacaoPendente !== null) {
+        // A assinatura ICP-Brasil não acontece na sessão: o documento do registro nasce aberto (sem fechado_em), na
+        // situação que aguarda a assinatura, com a tentativa ICP pendente do certificado vigente do autor sobre o
+        // resumo do conteúdo exibido. O registro aponta o documento e a situação da assinatura (pendente).
+        const documento = await tx.incluir('documento_prontuario', {
+          estabelecimento_id: est.id,
+          paciente_id: e.paciente,
+          atendimento_id: e.atendimento,
+          tipo_documento_clinico_id: modelo.tipo,
+          modelo_documento_clinico_id: e.modelo,
+          situacao_documento_prontuario_id: situacaoPendente.documento,
+          entidade_origem: 'registro_assistencial',
+          entidade_origem_id: id,
+          titulo: 'Registro clínico',
+          profissional_id: prof.profissional,
+          referencia_em: localParaUtc(e.dataHoraClinica, est.fuso),
+          lancado_em: agora,
+          justificativa_retroativo: e.justificativaRetroativo ?? null,
+          numero_versao: 1,
+          confidencial: false,
+          conteudo: JSON.stringify({ hash_conteudo: e.hashConteudo, como_suporte: !!e.comoSuporte }),
+          origem: 'sistema',
+        });
+        await tx.incluir('documento_prontuario_evento', {
+          documento_prontuario_id: documento,
+          operacao: 'inclusao',
+          acao: 'criacao',
+          situacao_documento_prontuario_id: situacaoPendente.documento,
+          profissional_id: prof.profissional,
+          evento_em: agora,
+          dados: JSON.stringify({ hash: e.hashConteudo, assinatura: 'icp-pendente' }),
+          ocorrido_em: agora,
+          usuario_id: prof.usuario,
+        });
+        await tx.incluir('assinatura_icp', {
+          estabelecimento_id: est.id,
+          origem_assinatura: 'documento',
+          documento_prontuario_id: documento,
+          usuario_id: prof.usuario,
+          certificado_usuario_id: regra.certificado.id,
+          midia: regra.certificado.midia,
+          politica_icp: 'AD-RB',
+          hash_assinado: e.hashConteudo,
+          situacao: 'pendente',
+        });
+        await tx.alterar('registro_assistencial', id, 1, {
+          documento_prontuario_id: documento,
+          situacao_assinatura_documento_id: situacaoPendente.assinatura,
+        });
+      }
       const selo = await seloDoConteudo(tx, id);
       if (rascunho)
         await tx.alterar('registro_assistencial_rascunho', rascunho.id, rascunho.versao, {

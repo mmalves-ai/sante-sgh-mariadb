@@ -87,6 +87,20 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       `UPDATE registro_assistencial SET corrige_registro_assistencial_id = NULL WHERE estabelecimento_id IN ${est}`,
       [P],
     );
+    // 03-PEP L91: a pendência ICP do registro (tentativa, eventos e documento) e a situação sintética que aguarda.
+    await e.executar(`DELETE FROM assinatura_icp WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(
+      `DELETE ev FROM documento_prontuario_evento ev JOIN documento_prontuario d ON d.id = ev.documento_prontuario_id
+        WHERE d.estabelecimento_id IN ${est}`,
+      [P],
+    );
+    await e.executar(
+      `UPDATE registro_assistencial SET documento_prontuario_id = NULL, situacao_assinatura_documento_id = NULL
+        WHERE estabelecimento_id IN ${est}`,
+      [P],
+    );
+    await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar('DELETE FROM situacao_documento_prontuario WHERE codigo = ?', [`${P}-aguarda`]);
     await e.executar(`DELETE FROM registro_assistencial WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM configuracao_setor_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
@@ -796,8 +810,81 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       ],
     );
     expect(cert).toBeGreaterThan(0);
-    await g.registrar(C, { ...registro(), assinaturaEstabelecimento: 'digital_icp' } as never, ctx());
+    // Sem situação de documento assinável no cliente, a ICP exigida recusa (falha fechada) e nada fica gravado.
+    const assinaveis = Number(
+      (
+        await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+          l.uma(
+            `SELECT COUNT(*) AS n FROM situacao_documento_prontuario
+              WHERE categoria IN ('aguardando_assinatura', 'lancado') AND ativo = TRUE`,
+            [],
+          ),
+        )
+      )?.['n'],
+    );
+    if (assinaveis === 0) {
+      await expect(
+        g.registrar(C, { ...registro(), assinaturaEstabelecimento: 'digital_icp' } as never, ctx()),
+      ).rejects.toMatchObject({ problema: { codigo: 'situacao-documento-sem-cadastro' } });
+      expect(await contar()).toBe(n0);
+    }
+    const aguarda = await escrever(
+      `INSERT INTO situacao_documento_prontuario (codigo, descricao, categoria, ordem, criado_em)
+       VALUES (?, 'Aguardando assinatura (sintética)', 'aguardando_assinatura', 0, ?)`,
+      [`${P}-aguarda`, agora],
+    );
+    // Com o certificado vigente, o registro grava, mas a assinatura ICP-Brasil não se dá por feita na sessão: o
+    // documento do registro nasce aberto, aguardando a assinatura, com a tentativa ICP pendente do certificado do autor
+    // sobre o resumo do conteúdo, e o registro aponta o documento.
+    const icp = await g.registrar(
+      C,
+      { ...registro(), assinaturaEstabelecimento: 'digital_icp' } as never,
+      ctx(),
+    );
     expect(await contar()).toBe(n0 + 1);
+    const pend = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.uma(
+        `SELECT r.documento_prontuario_id AS doc, d.situacao_documento_prontuario_id AS sit, d.fechado_em,
+                d.entidade_origem, d.entidade_origem_id, d.documento_assinado_id,
+                a.situacao AS icp, a.origem_assinatura, a.certificado_usuario_id AS cert, a.hash_assinado, a.midia,
+                (SELECT COUNT(*) FROM documento_prontuario_evento ev
+                  WHERE ev.documento_prontuario_id = d.id AND ev.acao = 'assinatura') AS assinaturas
+           FROM registro_assistencial r
+           JOIN documento_prontuario d ON d.id = r.documento_prontuario_id
+           JOIN assinatura_icp a ON a.documento_prontuario_id = d.id
+          WHERE r.id = ?`,
+        [icp.registro],
+      ),
+    );
+    expect(pend).toMatchObject({
+      sit: aguarda,
+      fechado_em: null,
+      entidade_origem: 'registro_assistencial',
+      entidade_origem_id: icp.registro,
+      documento_assinado_id: null,
+      icp: 'pendente',
+      origem_assinatura: 'documento',
+      cert,
+      hash_assinado: HASH,
+      midia: 'a1',
+      assinaturas: 0,
+    });
+    // O registro com assinatura eletrônica (a da sessão) não abre pendência ICP.
+    const eletronica = await g.registrar(
+      C,
+      { ...registro(), assinaturaEstabelecimento: 'eletronica' } as never,
+      ctx(),
+    );
+    expect(
+      (
+        await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+          l.uma('SELECT documento_prontuario_id AS doc FROM registro_assistencial WHERE id = ?', [
+            eletronica.registro,
+          ]),
+        )
+      )?.['doc'],
+    ).toBeNull();
+    expect(await contar()).toBe(n0 + 2);
     // Certificado revogado não vale.
     await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
       e.executar("UPDATE certificado_usuario SET situacao = 'revogado', revogado_em = ? WHERE id = ?", [
@@ -869,6 +956,21 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
         g.registrar(C, { ...registro(), dataHoraClinica: anteontem } as never, ctx()),
       ).rejects.toMatchObject({ problema: { codigo: 'retroativo-fora-da-regra' } });
       expect(await contar()).toBe(n1 + 2);
+
+      // 4) O limite do "não retroativo" é a tolerância do estabelecimento (pep.evolucao.toleranciaRetroativoMinutos),
+      //    a mesma do horário do serviço, e não 15 min fixos: no setor sem retroativo, 30 min de atraso gravam com
+      //    tolerância de 60 min; 10 min de atraso são recusados com tolerância de 5 min.
+      const haMin = (n: number) =>
+        new Date(Date.now() - n * 60_000)
+          .toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' })
+          .slice(0, 16)
+          .replace(' ', 'T');
+      await g.registrar(C, { ...registro(), toleranciaMin: 60, dataHoraClinica: haMin(30) } as never, ctx());
+      expect(await contar()).toBe(n1 + 3);
+      await expect(
+        g.registrar(C, { ...registro(), toleranciaMin: 5, dataHoraClinica: haMin(10) } as never, ctx()),
+      ).rejects.toMatchObject({ problema: { codigo: 'retroativo-fora-da-regra', status: 422 } });
+      expect(await contar()).toBe(n1 + 3);
     } finally {
       await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
         e.executar('UPDATE atendimento SET setor_funcional_id = NULL WHERE id = ?', [m.atendimento]),

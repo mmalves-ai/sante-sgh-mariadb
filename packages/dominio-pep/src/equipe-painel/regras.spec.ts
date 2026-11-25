@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   atendimentoAberto,
+  assinaturaNaGravacao,
   avaliarRetroativo,
   categoriaCombinaComFuncao,
   configuracaoPadraoDoEstabelecimento,
@@ -75,16 +76,27 @@ describe('gravação do registro pela configuração que vale', () => {
   };
   it('retroativo: dentro da tolerância passa; fora dela ou no setor sem retroativo, recusa', () => {
     expect(
-      conferirRegistroPelaConfiguracao(setor, { ocorridoEm: h(5), agora, certificadoIcpVigente: false }),
+      conferirRegistroPelaConfiguracao(setor, {
+        ocorridoEm: h(5),
+        agora,
+        certificadoIcpVigente: false,
+        toleranciaMinutos: 15,
+      }),
     ).toBeNull();
     expect(
-      conferirRegistroPelaConfiguracao(setor, { ocorridoEm: h(7), agora, certificadoIcpVigente: false }),
+      conferirRegistroPelaConfiguracao(setor, {
+        ocorridoEm: h(7),
+        agora,
+        certificadoIcpVigente: false,
+        toleranciaMinutos: 15,
+      }),
     ).toMatchObject({ codigo: 'retroativo-fora-da-regra', campo: 'dataHoraClinica' });
     expect(
       conferirRegistroPelaConfiguracao(CONFIGURACAO_PRONTUARIO_PADRAO, {
         ocorridoEm: h(1),
         agora,
         certificadoIcpVigente: true,
+        toleranciaMinutos: 15,
       })?.codigo,
     ).toBe('retroativo-fora-da-regra');
     expect(
@@ -92,16 +104,42 @@ describe('gravação do registro pela configuração que vale', () => {
         ocorridoEm: h(200),
         agora,
         certificadoIcpVigente: false,
+        toleranciaMinutos: 15,
       }),
     ).toBeNull();
   });
   it('assinatura: ICP exige certificado vigente; eletrônica e nenhuma não pedem', () => {
     const icp = { ...setor, assinaturaExigida: 'digital_icp' as const };
-    const x = { ocorridoEm: agora, agora, certificadoIcpVigente: false };
+    const x = { ocorridoEm: agora, agora, certificadoIcpVigente: false, toleranciaMinutos: 15 };
     expect(conferirRegistroPelaConfiguracao(icp, x)?.codigo).toBe('assinatura-icp-exigida');
     expect(conferirRegistroPelaConfiguracao(icp, { ...x, certificadoIcpVigente: true })).toBeNull();
     expect(conferirRegistroPelaConfiguracao(setor, x)).toBeNull();
     expect(conferirRegistroPelaConfiguracao({ ...setor, assinaturaExigida: 'nenhuma' }, x)).toBeNull();
+  });
+  it('a tolerância em minutos do estabelecimento é a mesma do horário do serviço (não 15 fixos)', () => {
+    const semRetro = configuracaoPadraoDoEstabelecimento(null);
+    const sem = { ...semRetro, permiteRetroativo: false };
+    const min = (n: number) => new Date(agora.getTime() - n * 60_000);
+    // Tolerância de 60 min: 30 min de atraso não é retroativo, nem no setor que não aceita retroativo.
+    const y = { agora, certificadoIcpVigente: false, toleranciaMinutos: 60 };
+    expect(conferirRegistroPelaConfiguracao(sem, { ...y, ocorridoEm: min(30) })).toBeNull();
+    expect(conferirRegistroPelaConfiguracao(sem, { ...y, ocorridoEm: min(61) })?.codigo).toBe(
+      'retroativo-fora-da-regra',
+    );
+    // Tolerância de 5 min: 10 min já é retroativo e o setor sem retroativo recusa.
+    expect(
+      conferirRegistroPelaConfiguracao(sem, { ...y, toleranciaMinutos: 5, ocorridoEm: min(10) })?.codigo,
+    ).toBe('retroativo-fora-da-regra');
+    expect(
+      conferirRegistroPelaConfiguracao(sem, { ...y, toleranciaMinutos: 5, ocorridoEm: min(5) }),
+    ).toBeNull();
+    // Tolerância zero: qualquer minuto de atraso é retroativo.
+    expect(avaliarRetroativo(sem, min(1), agora, 0).permitido).toBe(false);
+  });
+  it('assinatura na gravação: ICP fica pendente; eletrônica é a da sessão; nenhuma dispensa', () => {
+    expect(assinaturaNaGravacao({ ...setor, assinaturaExigida: 'digital_icp' })).toBe('pendente-icp');
+    expect(assinaturaNaGravacao(setor)).toBe('sessao');
+    expect(assinaturaNaGravacao({ ...setor, assinaturaExigida: 'nenhuma' })).toBe('dispensada');
   });
 });
 
@@ -138,17 +176,17 @@ describe('configuração do prontuário por setor', () => {
     expect(resolverConfiguracaoProntuario(linhas, 11, 'ambulatorio').origem).toBe('padrao');
     expect(resolverConfiguracaoProntuario(linhas, null, 'todos').origem).toBe('padrao');
   });
-  it('retroativo: até 15 min sempre; depois, só com a regra do setor e dentro da tolerância', () => {
+  it('retroativo: até a tolerância do estabelecimento sempre; depois, só com a regra do setor e dentro da tolerância', () => {
     const agora = new Date('2026-11-24T12:00:00Z');
     const h = (n: number) => new Date(agora.getTime() - n * 3_600_000);
     expect(
-      avaliarRetroativo(CONFIGURACAO_PRONTUARIO_PADRAO, new Date(agora.getTime() - 10 * 60_000), agora),
+      avaliarRetroativo(CONFIGURACAO_PRONTUARIO_PADRAO, new Date(agora.getTime() - 10 * 60_000), agora, 15),
     ).toEqual({ permitido: true, motivo: null });
-    expect(avaliarRetroativo(CONFIGURACAO_PRONTUARIO_PADRAO, h(2), agora).permitido).toBe(false);
+    expect(avaliarRetroativo(CONFIGURACAO_PRONTUARIO_PADRAO, h(2), agora, 15).permitido).toBe(false);
     const ret = { ...base, permiteRetroativo: true, toleranciaRetroativoHoras: 6 };
-    expect(avaliarRetroativo(ret, h(5), agora).permitido).toBe(true);
-    expect(avaliarRetroativo(ret, h(7), agora).motivo).toMatch(/6 h/);
-    expect(avaliarRetroativo({ ...ret, toleranciaRetroativoHoras: null }, h(100), agora).permitido).toBe(
+    expect(avaliarRetroativo(ret, h(5), agora, 15).permitido).toBe(true);
+    expect(avaliarRetroativo(ret, h(7), agora, 15).motivo).toMatch(/6 h/);
+    expect(avaliarRetroativo({ ...ret, toleranciaRetroativoHoras: null }, h(100), agora, 15).permitido).toBe(
       true,
     );
   });
