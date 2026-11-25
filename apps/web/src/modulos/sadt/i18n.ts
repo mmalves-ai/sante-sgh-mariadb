@@ -118,7 +118,7 @@ export const mensagensSadt = {
     informado: 'informado no balcão',
     bruto: 'Bruto',
     desconto: 'Desconto',
-    validadeDias: 'Validade (dias)',
+    validadeDias: 'Validade em dias (vazio: padrão do estabelecimento)',
     validoAte: 'Válido até {data}',
     remover: 'Remover',
     gravadoNumero: 'Orçamento {numero} gravado: total {total}.',

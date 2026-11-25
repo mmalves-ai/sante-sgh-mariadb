@@ -6,6 +6,8 @@
 // de outro estabelecimento, exame sem preço e exame sem setor executante são recusados sem gravar nada. Correção F3.5-6:
 // a conversão lança na conta do atendimento o valor aprovado (unitário e desconto); fonte não particular, atendimento de
 // outra fonte, orçamento vencido, CPF diferente e vínculo sem confirmação são recusados; a chave repetida não duplica.
+// F3.5-14: sem valor digitado, o preço sai da tabela da fonte particular (o vigente no dia; o de vigência futura não
+// vale) e é ele que fica no item do orçamento e na conta; o atendimento cancelado é recusado sem gravar nada.
 import { ErroOperacao, garantirSequencia, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServicoOrcamentoSadt } from './orcamento-propria.js';
@@ -47,6 +49,7 @@ describe.skipIf(SEM_BANCO)('orçamento de exames e conversão em atendimento (Ma
   let outraFonte = 0;
   let operadora = 0;
   let itemFat = 0;
+  let tabela = 0;
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-s35orc' }, (l) => l.uma(sql, p));
 
@@ -144,6 +147,15 @@ describe.skipIf(SEM_BANCO)('orçamento de exames e conversão em atendimento (Ma
         );
         await e.executar('DELETE FROM orcamento_particular WHERE estabelecimento_id IN (?, ?)', ests);
         await e.executar('DELETE FROM fonte_pagadora WHERE id IN (?, ?)', [outraFonte, operadora]);
+        if (tabela) {
+          await e.executar(
+            `DELETE pv FROM preco_procedimento_valor pv JOIN preco_procedimento pp ON pp.id = pv.preco_procedimento_id
+              WHERE pp.tabela_preco_id = ?`,
+            [tabela],
+          );
+          await e.executar('DELETE FROM preco_procedimento WHERE tabela_preco_id = ?', [tabela]);
+          await e.executar('DELETE FROM tabela_preco WHERE id = ?', [tabela]);
+        }
         await e.executar('DELETE FROM item_faturavel WHERE id = ?', [itemFat]);
         await e.executar(
           "DELETE FROM sequencia_negocio WHERE tipo IN ('orcamento_particular', 'requisicao_exame') AND estabelecimento_id IN (?, ?)",
@@ -375,6 +387,125 @@ describe.skipIf(SEM_BANCO)('orçamento de exames e conversão em atendimento (Ma
       'orcamento-convertido',
     );
     expect((await servico.atendimentos(c, o.id)).map((a) => a.id)).toContain(m!.base.atendimento);
+  });
+
+  it('preço da tabela da fonte particular vai ao orçamento e à conta; atendimento cancelado é recusado sem gravar', async () => {
+    const c = contexto(m!);
+    // A tabela de preço da fonte particular com o exame: 40,00 vigente e 99,00 só a partir do ano que vem.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s35orc' }, async (e) => {
+      const agora = new Date();
+      tabela = await e.inserir(
+        `INSERT INTO tabela_preco (estabelecimento_id, codigo, descricao, tipo_item, referencia, moeda_calculo, situacao,
+           fonte_pagadora_id, criado_em)
+         VALUES (?, ?, 'PARTICULAR SINTETICA', 'servico_hospitalar', 'propria', 'real', 'ativa', ?, ?)`,
+        [m!.base.est, `${m!.marca}TP`, fonte, agora],
+      );
+      const preco = await e.inserir(
+        `INSERT INTO preco_procedimento (tabela_preco_id, sequencia, item_faturavel_id, modelo_valor, criado_em)
+         VALUES (?, 1, ?, 'valor', ?)`,
+        [tabela, itemFat, agora],
+      );
+      const futuro = `${agora.getUTCFullYear() + 1}-12-31`;
+      for (const [vig, valor] of [
+        ['2020-01-01', 40],
+        [futuro, 99],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO preco_procedimento_valor (preco_procedimento_id, ocorrido_em, vigencia_inicio, valor_total, criado_em)
+           VALUES (?, ?, ?, ?, ?)`,
+          [preco, agora, vig, valor, agora],
+        );
+    });
+    // Sem valor digitado: o preço vigente da tabela (o futuro não vale hoje), com as parcelas.
+    const p = await servico.previa(c, entrada([{ exame: m!.exameLab, quantidade: 3 }]));
+    expect(p).toMatchObject({ bruto: 120, desconto: 0, total: 120 });
+    expect(p.itens[0]).toMatchObject({
+      quantidade: 3,
+      unitario: 40,
+      total: 120,
+      origemPreco: 'tabela',
+      precoTabela: 40,
+    });
+    // O valor do balcão prevalece e a tabela continua à vista.
+    const inf = await servico.previa(c, entrada([{ exame: m!.exameLab, quantidade: 3, valor: 35 }]));
+    expect(inf.itens[0]).toMatchObject({
+      unitario: 35,
+      total: 105,
+      origemPreco: 'informado',
+      precoTabela: 40,
+    });
+    // A outra fonte particular não tem tabela: o exame segue sem preço.
+    expect(
+      await recusaDe(servico.previa(c, entrada([{ exame: m!.exameLab }], { fontePagadora: outraFonte }))),
+    ).toBe('exame-sem-preco');
+
+    const o = await servico.criar(
+      c,
+      entrada([{ exame: m!.exameLab, quantidade: 3 }], { paciente: m!.base.paciente, nome: null }),
+    );
+    expect(o.total).toBe(120);
+    const it1 = await um(
+      'SELECT quantidade, valor_unitario, valor_total FROM orcamento_particular_item WHERE orcamento_particular_id = ?',
+      [o.id],
+    );
+    expect([Number(it1!['quantidade']), Number(it1!['valor_unitario']), Number(it1!['valor_total'])]).toEqual(
+      [3, 40, 120],
+    );
+
+    // Atendimento cancelado: fora da lista da conversão, recusado na avaliação e na gravação, nada gravado.
+    const fotografia = async () => ({
+      requisicoes: Number(
+        (await um('SELECT COUNT(*) AS n FROM requisicao_exame WHERE orcamento_particular_id = ?', [o.id]))?.[
+          'n'
+        ],
+      ),
+      itensConta: Number(
+        (
+          await um(
+            `SELECT COUNT(*) AS n FROM conta_hospitalar_item i JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id
+              WHERE c.atendimento_id = ?`,
+            [m!.base.atendimento],
+          )
+        )?.['n'],
+      ),
+      situacao: String(
+        (await um('SELECT situacao FROM orcamento_particular WHERE id = ?', [o.id]))?.['situacao'],
+      ),
+    });
+    const antes = await fotografia();
+    const situacaoAntes = String(
+      (await um('SELECT situacao FROM atendimento WHERE id = ?', [m!.base.atendimento]))?.['situacao'],
+    );
+    const situar = (s: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s35orc' }, (e) =>
+        e.executar('UPDATE atendimento SET situacao = ? WHERE id = ?', [s, m!.base.atendimento]),
+      );
+    await situar('cancelado');
+    try {
+      expect((await servico.atendimentos(c, o.id)).map((a) => a.id)).not.toContain(m!.base.atendimento);
+      expect(await recusaDe(servico.avaliarConversao(c, o.id, { atendimento: m!.base.atendimento }))).toBe(
+        'atendimento-cancelado',
+      );
+      expect(await recusaDe(servico.converter(c, o.id, { atendimento: m!.base.atendimento }))).toBe(
+        'atendimento-cancelado',
+      );
+      expect(await fotografia()).toEqual({ ...antes, situacao: 'emitido' });
+    } finally {
+      await situar(situacaoAntes);
+    }
+
+    // Com o atendimento ativo de novo, a conversão lança na conta o preço da tabela que o orçamento aprovou.
+    const r = await servico.converter(c, o.id, { atendimento: m!.base.atendimento });
+    const ci = await um(
+      `SELECT i.quantidade, i.valor_unitario, i.valor_total
+         FROM conta_hospitalar_item i JOIN conta_hospitalar_item_memoria mm ON mm.conta_hospitalar_item_id = i.id
+        WHERE i.conta_hospitalar_id = ? AND JSON_VALUE(mm.dados, '$.orcamento') = ?`,
+      [r.conta, o.id],
+    );
+    expect([Number(ci!['quantidade']), Number(ci!['valor_unitario']), Number(ci!['valor_total'])]).toEqual([
+      3, 40, 120,
+    ]);
+    expect((await fotografia()).situacao).toBe('realizado');
   });
 
   it('exame sem setor executante: a conversão recusa e nada fica (nem requisição, nem orçamento realizado)', async () => {

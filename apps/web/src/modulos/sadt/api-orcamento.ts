@@ -76,7 +76,8 @@ export interface CorpoOrcamento {
   fontePagadora: number;
   exames: { exame: number; quantidade: number; valor: number | null }[];
   desconto: number;
-  validadeDias: number;
+  /** Sem o campo, vale a validade padrão do estabelecimento (parâmetro). */
+  validadeDias?: number;
 }
 
 export const previaOrcamento = (c: CorpoOrcamento, chave: string) =>
