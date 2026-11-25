@@ -23,6 +23,8 @@ import {
   registrarRegulacao,
 } from '../api-nir.js';
 import ErroAdt from '../componentes/ErroAdt.vue';
+import RegulacaoRecebidosPainel from '../componentes/RegulacaoRecebidosPainel.vue';
+import { pode } from '../../../casca/sessao/pode.js';
 import { horaCurta } from '../regras-nir.js';
 import { usarAvisosAtendimento } from '../../atendimento/vigia.js';
 
@@ -33,6 +35,8 @@ const tela = useQuery({
   queryFn: () => lerRegulacao(),
   refetchInterval: computed(() => avisos.intervalo()),
 });
+// C1-080 (02-REC linha 38): a aba dos pedidos recebidos da central (entrada) ao lado dos pedidos à central.
+const aba = ref<'saida' | 'recebidos'>('saida');
 const verConfiguracao = ref(false);
 const configuracao = useQuery({
   queryKey: ['nir', 'regulacao', 'configuracao'],
@@ -125,7 +129,25 @@ const rotuloBotao = (s: RegulacaoDaSolicitacao) =>
     <p class="acoes">
       <RouterLink to="/internacao/nir/fila">{{ t('regulacao.atalhos.fila') }}</RouterLink>
     </p>
-    <ErroAdt v-if="tela.isError.value" :erro="tela.error.value" />
+    <nav class="acoes" :aria-label="t('adt.regulacaoEntrada.titulo')">
+      <SanteBotao
+        :variante="aba === 'saida' ? 'primario' : 'secundario'"
+        :rotulo="t('adt.regulacaoEntrada.abas.saida')"
+        data-testid="aba-regulacao-saida"
+        @acionar="aba = 'saida'"
+      />
+      <SanteBotao
+        :variante="aba === 'recebidos' ? 'primario' : 'secundario'"
+        :rotulo="t('adt.regulacaoEntrada.abas.recebidos')"
+        data-testid="aba-regulacao-recebidos"
+        @acionar="aba = 'recebidos'"
+      />
+    </nav>
+    <RegulacaoRecebidosPainel
+      v-if="aba === 'recebidos'"
+      :pode-registrar="pode('internacao.regulacao.registrar')"
+    />
+    <ErroAdt v-else-if="tela.isError.value" :erro="tela.error.value" />
     <p v-else-if="!d" role="status">{{ t('regulacao.carregando') }}</p>
     <template v-else>
       <SanteAlerta

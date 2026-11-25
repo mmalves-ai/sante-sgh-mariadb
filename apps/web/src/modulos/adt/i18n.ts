@@ -4,6 +4,7 @@ import { mensagensControlesAssistenciais } from './i18n-controles-assistenciais.
 import { mensagensGases } from './i18n-gases.js';
 import { mensagensGasesSetor } from './i18n-gases-setor.js';
 import { mensagensTransporte } from './i18n-transporte.js';
+import { mensagensRegulacaoEntrada } from './i18n-regulacao-entrada.js';
 import { mensagensLeitosSus } from './i18n-leitos-sus.js';
 import { mensagensRegistros } from './i18n-registros.js';
 import { mensagensSameGuarda } from './i18n-same-guarda.js';
@@ -19,6 +20,8 @@ export const mensagensAdt = {
   gasesSetor: mensagensGasesSetor,
   // C1-066, 03-PEP L125: pedido de transporte do paciente (i18n-transporte.ts).
   transporte: mensagensTransporte,
+  // C1-080, 02-REC L38: pedidos recebidos da central de regulação (i18n-regulacao-entrada.ts).
+  regulacaoEntrada: mensagensRegulacaoEntrada,
   // F78.04-2, 04-INT L79 e L80: leitos do sistema público e comunicação à operadora (i18n-leitos-sus.ts).
   leitosSus: mensagensLeitosSus,
   // F3.4, 04-INT L67: diagnósticos e acidente da internação (i18n-registros.ts).
