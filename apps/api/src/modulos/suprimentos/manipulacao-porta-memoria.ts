@@ -12,6 +12,7 @@ import {
 } from '@sgh/contratos';
 import { conferirBaixaManipulacao } from '@sgh/dominio-suprimentos';
 import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
+import { relogioNoFuso } from '../exames/relogio.js';
 import { chaveMemoria } from './operacoes.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { AvaliacaoDoItem, GravadorManipulacao, PortaManipulacao } from './manipulacao-porta.js';
@@ -282,6 +283,11 @@ export class PortaManipulacaoMemoria implements PortaManipulacao {
   async ordem(c: ContextoPortaM18, id: number) {
     const o = this.e(c).ordens.find((x) => x.id === id);
     return o ? publica(o) : null;
+  }
+
+  async relogio() {
+    const r = relogioNoFuso();
+    return { hoje: r.hoje, hhmm: r.hora.replace(':', '') };
   }
 
   async capelas() {

@@ -39,13 +39,13 @@ import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { idDaRota, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
-import { PORTA_CIRURGIA, type PortaCirurgia } from '../cirurgia/porta.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
+import { PORTA_CIRURGIA, type PortaCirurgia } from '../cirurgia/porta.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
 import { type GravadorManipulacao, PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
 import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from './porta.js';
@@ -86,10 +86,11 @@ export class ManipulacaoController {
   constructor(
     @Inject(PORTA_MANIPULACAO) private readonly porta: PortaManipulacao,
     @Inject(PORTA_SUPRIMENTOS) private readonly suprimentos: PortaSuprimentos,
-    @Inject(PORTA_CIRURGIA) private readonly cirurgia: PortaCirurgia,
     @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
+    // Opcional (C1-124): com o centro cirúrgico no ar, o relógio é o mesmo dele; sem ele, o do estabelecimento.
+    @Optional() @Inject(PORTA_CIRURGIA) private readonly cirurgia: PortaCirurgia | null = null,
   ) {
     this.apoio = new ApoioGravacao(
       {
@@ -125,7 +126,7 @@ export class ManipulacaoController {
 
   /** O relógio do banco (AAAA-MM-DDTHH:mm). */
   private async agora(s: SessaoCadastro): Promise<string> {
-    const r = await this.cirurgia.relogio(s.porta);
+    const r = await (this.cirurgia ?? this.porta).relogio(s.porta);
     return `${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2, 4)}`;
   }
 

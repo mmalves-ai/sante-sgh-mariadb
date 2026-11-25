@@ -47,6 +47,7 @@ import {
   type NovaOrdemManipulacao,
   type PortaManipulacao,
 } from './manipulacao-porta.js';
+import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { contextoNucleo } from './operacoes.js';
 import { PortaSuprimentosPropria } from './porta-propria.js';
 
@@ -462,6 +463,18 @@ export class PortaManipulacaoPropria implements PortaManipulacao {
     );
     if (!saida) throw new Error('Gravação da manipulação sem resultado.');
     return (saida as { valor: T }).valor;
+  }
+
+  /** Hoje e a hora no fuso do estabelecimento (estabelecimento.fuso_horario). */
+  relogio(c: ContextoNucleo): Promise<{ hoje: string; hhmm: string }> {
+    return this.ler(c, async (l, est) => {
+      const f = await l.uma<{ fuso_horario: string | null }>(
+        'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+        [est],
+      );
+      const r = relogioNoFuso(f?.fuso_horario || FUSO_PADRAO);
+      return { hoje: r.hoje, hhmm: r.hora.replace(':', '') };
+    });
   }
 
   capelas(c: ContextoNucleo): Promise<CapelaManipulacao[]> {

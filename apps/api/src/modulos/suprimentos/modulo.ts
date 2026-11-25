@@ -1,9 +1,9 @@
 // Módulo do estoque, do almoxarifado e das compras (M28), com o OPME e a manipulação (M46), na API migrada (F2.2):
 // as portas próprias (MariaDB pelo @sgh/nucleo) quando o núcleo existe; as de memória só em dev/ci com as fontes
 // sintéticas; fora disso, as indisponíveis (503 em tudo, falha fechada) — a mesma regra do F2-L.
-// O OPME e a manipulação leem o agendamento, a sala e o estado da porta do centro cirúrgico (PORTA_CIRURGIA): os
-// controllers deles entram só com o módulo cirurgia pedido em API_MODULOS (sem ele, a rota não existe, nada em
-// silêncio: o motivo fica no log de subida).
+// O OPME lê o agendamento, a sala e o estado da porta do centro cirúrgico (PORTA_CIRURGIA): o controller dele entra
+// só com o módulo cirurgia pedido em API_MODULOS (sem ele, a rota não existe, nada em silêncio: o motivo fica no log
+// de subida). A manipulação e a produção interna não dependem do centro cirúrgico e sobem sempre (ADR 0002, C1-124).
 // A liberação por chave e os parâmetros vêm da FONTE_CONFIGURACAO global do módulo de configuração (na memória, a
 // funcionalidade vale ligada, como na sessão sintética).
 import { type DynamicModule, Logger, Module } from '@nestjs/common';
@@ -39,6 +39,8 @@ import { PORTA_SLA_CONTRATO, portaSlaContratoIndisponivel } from './sla-contrato
 import { RomaneioEntregaController } from './romaneio-entrega.controller.js';
 import { PORTA_ROMANEIO_ENTREGA, portaRomaneioEntregaIndisponivel } from './romaneio-entrega.js';
 import { ManipulacaoController } from './manipulacao.controller.js';
+import { ProducaoInternaController } from './producao-interna.controller.js';
+import { PORTA_PRODUCAO_INTERNA, portaProducaoInternaIndisponivel } from './producao-interna.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
 import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
 import { OpmeController } from './opme.controller.js';
@@ -52,6 +54,8 @@ import { VinculoReferenciaPrecoController } from './vinculo-referencia-preco.con
 import { PORTA_VINCULO_REFERENCIA, portaVinculoReferenciaIndisponivel } from './vinculo-referencia-preco.js';
 import { EnderecamentoController } from './enderecamento.controller.js';
 import { PORTA_ENDERECAMENTO, portaEnderecamentoIndisponivel } from './enderecamento.js';
+import { EntradaDoacaoController } from './entrada-doacao.controller.js';
+import { PORTA_ENTRADA_DOACAO, portaEntradaDoacaoIndisponivel } from './entrada-doacao.js';
 
 export interface OpcoesModuloSuprimentos {
   /** Testes: as portas já montadas. */
@@ -119,7 +123,7 @@ export async function modulo(
   const comCirurgia = pedidos.includes('cirurgia');
   if (!comCirurgia)
     new Logger('suprimentos').warn(
-      'OPME e manipulação fora do ar: dependem do módulo cirurgia em API_MODULOS (a porta do centro cirúrgico).',
+      'OPME fora do ar: depende do módulo cirurgia em API_MODULOS (a porta do centro cirúrgico).',
     );
   // O cadastro do estoque (F3.6) grava no banco próprio; sem o núcleo, a memória só em dev/ci com as fontes
   // sintéticas (a mesma regra do F2-L); fora disso, 503 em tudo.
@@ -140,6 +144,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./enderecamento.js')).PortaEnderecamentoPropria(ctx.nucleo)
       : portaEnderecamentoIndisponivel();
+  // C1-126 (09-AREA linha 79): a entrada por doação grava só no banco próprio (503 sem o núcleo).
+  const entradaDoacao =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./entrada-doacao.js')).PortaEntradaDoacaoPropria(ctx.nucleo)
+      : portaEntradaDoacaoIndisponivel();
   // 05-SUP linha 24: o consignado grava no banco próprio; sem o núcleo, a memória só em dev/ci com as fontes sintéticas;
   // fora disso, 503 em tudo. A taxa por faixa de valor grava só no banco próprio.
   const consignado =
@@ -180,6 +189,11 @@ export async function modulo(
       : !ctx.nucleo && fontesSinteticas(ctx.env)
         ? ligarContratosMemoria(new (await import('./contrato-porta-memoria.js')).PortaContratoMemoria())
         : (await import('./contrato-porta-propria.js')).portaContratoIndisponivel();
+  // C1-124 (05-SUP linha 12): a produção interna (lote produzido da ordem e kit montado) grava só no banco próprio.
+  const producaoInterna =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./producao-interna.js')).PortaProducaoInternaPropria(ctx.nucleo)
+      : portaProducaoInternaIndisponivel();
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =
     memoria && !pedidos.includes('config')
@@ -199,13 +213,16 @@ export async function modulo(
       PedidoGestaoController,
       VinculoReferenciaPrecoController,
       EnderecamentoController,
+      EntradaDoacaoController,
       ConsignadoController,
       TaxaConsignacaoController,
       SlaContratoController,
       RomaneioEntregaController,
       HomologacaoFornecedorController,
       ContratoController,
-      ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
+      ManipulacaoController,
+      ProducaoInternaController,
+      ...(comCirurgia ? [OpmeController] : []),
     ],
     providers: [
       ...(configuracaoMemoria ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracaoMemoria }] : []),
@@ -215,12 +232,14 @@ export async function modulo(
       { provide: PORTA_CADASTRO_ESTOQUE, useValue: cadastroEstoque },
       { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
       { provide: PORTA_ENDERECAMENTO, useValue: enderecamento },
+      { provide: PORTA_ENTRADA_DOACAO, useValue: entradaDoacao },
       { provide: PORTA_CONSIGNADO, useValue: consignado },
       { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
       { provide: PORTA_SLA_CONTRATO, useValue: slaContrato },
       { provide: PORTA_ROMANEIO_ENTREGA, useValue: romaneioEntrega },
       { provide: PORTA_HOMOLOGACAO_FORNECEDOR, useValue: homologacaoFornecedor },
       { provide: PORTA_CONTRATO, useValue: contrato },
+      { provide: PORTA_PRODUCAO_INTERNA, useValue: producaoInterna },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],
   };

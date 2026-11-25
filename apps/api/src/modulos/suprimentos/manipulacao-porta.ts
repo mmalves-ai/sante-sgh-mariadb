@@ -76,6 +76,8 @@ export interface PortaManipulacao extends PortaGravacaoM18<GravadorManipulacao> 
   ): Promise<{ itens: OrdemManipulacao[]; cortada: boolean }>;
   ordem(c: ContextoPortaM18, id: number): Promise<OrdemManipulacao | null>;
   capelas(c: ContextoPortaM18): Promise<CapelaManipulacao[]>;
+  /** Hoje e a hora (HHMM) no fuso do estabelecimento: a manipulação não depende do centro cirúrgico (ADR 0002). */
+  relogio(c: ContextoPortaM18): Promise<{ hoje: string; hhmm: string }>;
   /** Os vínculos profissionais do login (o CBO): a dupla conferência é do farmacêutico (revisão do M46.4). */
   vinculos(c: ContextoPortaM18, login: string): Promise<{ vinculo: number; cbo: string; ativo: boolean }[]>;
 }
@@ -89,5 +91,6 @@ export const METODOS_PORTA_MANIPULACAO: ReadonlySet<string> = new Set([
   'ordens',
   'ordem',
   'capelas',
+  'relogio',
   'vinculos',
 ]);
