@@ -323,6 +323,8 @@ export const OPERACOES_USUARIOS = {
   'acesso.concederTipoProntuarioUsuario': 'Conceder tipo de prontuário',
   'acesso.retirarTipoProntuarioUsuario': 'Retirar tipo de prontuário',
   'acesso.trocarGrupoUsuario': 'Trocar o grupo do usuário',
+  'acesso.vincularEstabelecimentoUsuario': 'Dar acesso a este estabelecimento a uma conta existente',
+  'acesso.encerrarVinculoUsuario': 'Encerrar o acesso da conta a este estabelecimento',
   'acesso.alterarFlagsUsuario': 'Alterar permissões complementares',
   'acesso.redefinirSenha': 'Redefinir a senha (senha provisória)',
 } as const;

@@ -19,6 +19,7 @@ import { fonteAdministracaoMemoria } from './fonte-memoria.js';
 import { PermissoesController } from './permissoes.controller.js';
 import { RedeCpfController } from './rede-cpf.controller.js';
 import { UsuariosController } from './usuarios.controller.js';
+import { UsuariosVinculoController } from './usuarios-vinculo.controller.js';
 import { VersaoService } from '../../versao.service.js';
 import type { ContextoModulo } from '../registro.js';
 import type { FontesMedidas } from './sbis/medidas.js';
@@ -97,6 +98,7 @@ export async function modulo(
     module: ModuloAdministracao,
     controllers: [
       UsuariosController,
+      UsuariosVinculoController,
       RedeCpfController,
       PermissoesController,
       EstruturaController,

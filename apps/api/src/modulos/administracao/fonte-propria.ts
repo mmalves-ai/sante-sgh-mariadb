@@ -44,6 +44,10 @@ import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import { NOMES_OPERACOES_USUARIO_PROPRIA, OPERACOES_USUARIO_PROPRIA } from './operacoes-usuario-propria.js';
 import {
+  NOMES_OPERACOES_VINCULO_USUARIO_PROPRIA,
+  OPERACOES_VINCULO_USUARIO_PROPRIA,
+} from './operacoes-vinculo-usuario-propria.js';
+import {
   NOMES_OPERACOES_IMPRESSAO_PROPRIA,
   OPERACOES_IMPRESSAO_PROPRIA,
 } from './operacoes-impressao-propria.js';
@@ -150,6 +154,8 @@ export const OPERACOES_IMPLEMENTADAS = [
   'acesso.publicarTermo',
   // Cadastro da conta e escopos (01-ADM L57 e L59): operacoes-usuario-propria.ts.
   ...NOMES_OPERACOES_USUARIO_PROPRIA,
+  // Vínculo da conta ao estabelecimento (01-ADM L59): operacoes-vinculo-usuario-propria.ts.
+  ...NOMES_OPERACOES_VINCULO_USUARIO_PROPRIA,
   // Impressora por estação e reimpressão (01-ADM L79): operacoes-impressao-propria.ts.
   ...NOMES_OPERACOES_IMPRESSAO_PROPRIA,
   // Preferências da própria conta (01-ADM L84): operacoes-preferencias-propria.ts.
@@ -409,6 +415,7 @@ const OPERACOES = {
   'acesso.aceitarTermo': operacaoAceitarTermo,
   'acesso.publicarTermo': operacaoPublicarTermo,
   ...OPERACOES_USUARIO_PROPRIA,
+  ...OPERACOES_VINCULO_USUARIO_PROPRIA,
   ...OPERACOES_IMPRESSAO_PROPRIA,
   ...OPERACOES_PREFERENCIAS_PROPRIA,
 } as const;
@@ -885,6 +892,11 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
             WHERE x.usuario_id = ? AND x.excluido_em IS NULL ORDER BY fp.nome`,
           [id],
         ),
+        tipoAgenda: await escopo(
+          `SELECT ca.id AS valor, ca.descricao AS rotulo FROM usuario_tipo_agenda x JOIN categoria_agenda ca ON ca.id = x.categoria_agenda_id
+            WHERE x.usuario_id = ? AND x.excluido_em IS NULL ORDER BY ca.descricao`,
+          [id],
+        ),
         tipoProntuario: await escopo(
           `SELECT t.id AS valor, t.descricao AS rotulo FROM usuario_tipo_prontuario x JOIN tipo_documento_clinico t ON t.id = x.tipo_documento_clinico_id
             WHERE x.usuario_id = ? AND x.excluido_em IS NULL ORDER BY t.descricao`,
@@ -972,6 +984,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         // Fonte pagadora é cadastro da rede inteira (sem estabelecimento_id).
         convenio: await q(
           "SELECT id AS valor, nome AS rotulo FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome",
+          [],
+        ),
+        tipoAgenda: await q(
+          'SELECT id AS valor, descricao AS rotulo FROM categoria_agenda WHERE ativo ORDER BY descricao',
           [],
         ),
         tipoProntuario: await q(
