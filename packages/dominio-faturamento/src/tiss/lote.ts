@@ -60,6 +60,8 @@ export interface GuiaConsulta {
   readonly tipoConsulta: '1' | '2' | '3' | '4';
   readonly procedimento: Omit<Procedimento, 'descricao'>;
   readonly valor: number;
+  /** Campos adicionais da operadora (st_texto500). */
+  readonly observacao?: string;
 }
 
 export interface GuiaSpSadt {
@@ -75,6 +77,8 @@ export interface GuiaSpSadt {
   readonly despesas?: readonly Despesa[];
   /** M56.6: a autorização da operadora (a senha que a operadora deu), quando o atendimento foi autorizado. */
   readonly autorizacao?: { readonly data: string; readonly senha: string };
+  /** Campos adicionais da operadora (st_texto500). */
+  readonly observacao?: string;
 }
 
 export interface GuiaResumoInternacao {
@@ -96,6 +100,8 @@ export interface GuiaResumoInternacao {
   readonly indicadorAcidente?: '0' | '1' | '2' | '9';
   readonly itens: readonly ItemExecutado[];
   readonly despesas?: readonly Despesa[];
+  /** Campos adicionais da operadora (st_texto500). */
+  readonly observacao?: string;
 }
 
 /** Outras despesas (mat/med, diárias e taxas) da SP/SADT e do resumo de internação (ct_outrasDespesas). */
@@ -135,6 +141,8 @@ export interface GuiaHonorario {
   readonly dataEmissao: string;
   /** M56.6: a senha da internação autorizada pela operadora (opcional no XSD). */
   readonly senha?: string;
+  /** Campos adicionais da operadora (st_texto500). */
+  readonly observacao?: string;
 }
 
 export type Guia = GuiaConsulta | GuiaSpSadt | GuiaResumoInternacao | GuiaHonorario;
@@ -292,6 +300,7 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
             el('valorProcedimento', dinheiro(g.valor)),
           ),
         ),
+        opcional('observacao', g.observacao),
       );
     case 'sp-sadt':
       return el(
@@ -327,6 +336,7 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
           ? el('procedimentosExecutados', ...g.itens.map((i) => itemExecutado(i, 'procedimentoExecutado')))
           : null,
         despesasXml(g.despesas),
+        opcional('observacao', g.observacao),
         valorTotal(g.itens, g.despesas),
       );
     case 'resumo-internacao':
@@ -362,6 +372,7 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
           : null,
         valorTotal(g.itens, g.despesas),
         despesasXml(g.despesas),
+        opcional('observacao', g.observacao),
       );
     case 'honorario':
       return el(
@@ -422,6 +433,7 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
             ),
           ),
         ),
+        opcional('observacao', g.observacao),
         el('valorTotalHonorarios', dinheiro(soma(g.itens))),
         el('dataEmissaoGuia', g.dataEmissao),
       );

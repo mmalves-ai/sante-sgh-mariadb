@@ -175,3 +175,29 @@ describe('montagem-lote', () => {
     expect(faltasDoPrestador({})).toHaveLength(3);
   });
 });
+
+describe('campos adicionais da operadora na guia (06-FAT linha 10)', () => {
+  it.each([1, 2, 3, 4] as const)(
+    'guia do tipo %i: a observação leva os campos e o lote passa no XSD 04.03.00',
+    async (tipo) => {
+      const observacao = 'TRAT: QT-01; DIAG: 2026-10-01; MET: sim';
+      const g = montarGuia({ ...conta(tipo), observacao }, prestador);
+      expect(g.observacao).toBe(observacao);
+      const m = montarLote(
+        prestador,
+        '000000000130',
+        '000000000090',
+        [{ ...conta(tipo, 1), observacao }, conta(tipo, 2)],
+        new Date('2026-10-23T13:14:15Z'),
+      );
+      expect(m.xml.match(/<ans:observacao>/g)).toHaveLength(1);
+      expect(m.xml).toContain(`<ans:observacao>${observacao}</ans:observacao>`);
+      expect((await conferirLote(m, esquemas)).erros).toEqual([]);
+    },
+  );
+
+  it('sem campos, a guia não leva observação', () => {
+    const g = montarGuia(conta(2), prestador);
+    expect('observacao' in g).toBe(false);
+  });
+});

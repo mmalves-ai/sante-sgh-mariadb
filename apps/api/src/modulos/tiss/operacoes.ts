@@ -37,6 +37,7 @@ import {
   VERSAO_TISS_VIGENTE,
   conferirReaberturaCompetencia,
   recusaObrigatoriosPendentes,
+  recusaObservacaoLonga,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -53,6 +54,7 @@ import { versaoNumero } from '../faturamento/esquemas.js';
 import {
   carteiraDoSeguradoDaConta,
   obrigatoriosPendentesDaConta,
+  observacaoDaGuiaPropria,
 } from '../faturamento/conta-complementos-propria.js';
 import {
   caraterTiss,
@@ -224,6 +226,7 @@ async function contaTiss(
   tx: TxOperacao,
   ct: Linha,
   tipoGuia: TipoGuiaLote,
+  est: number,
 ): Promise<{ conta: ContaTiss; avisos: string[]; informados: Set<CampoPadraoTiss> }> {
   const rotulo = texto(ct['numero']) || String(n(ct['id']));
   const itens = await tx.consultar<Linha>(
@@ -263,6 +266,12 @@ async function contaTiss(
         [ct['guia_fonte_pagadora_id']],
       )
     : null;
+  // Os campos adicionais da operadora informados na guia vão à observação da guia TISS (06-FAT linha 10).
+  const obs = guia?.['id'] ? await observacaoDaGuiaPropria(tx, est, n(guia['id'])) : null;
+  if (obs?.excede && obs.texto) {
+    const r = recusaObservacaoLonga(rotulo, obs.numero, obs.texto.length);
+    throw recusa(r.codigo, r.mensagem);
+  }
   // A carteira do segurado gravada na conta (06-FAT linha 12) vale sobre a da cobertura do paciente.
   const seguradoConta = await carteiraDoSeguradoDaConta(tx, n(ct['id']));
   const carteira = seguradoConta
@@ -399,6 +408,7 @@ async function contaTiss(
       profissionalNome: executante?.nome ?? '',
       profissionalCodigo: executante?.codigo ?? '',
       executantePadrao: false,
+      ...(obs?.texto ? { observacao: obs.texto } : {}),
       itens: itensGuia,
     },
   };
@@ -504,7 +514,7 @@ function gerarLote(montador: MontadorLoteTiss | null) {
       const avisos: string[] = [];
       const lidas = [];
       for (const ct of contas) {
-        const g = await contaTiss(tx, ct, tipoGuia);
+        const g = await contaTiss(tx, ct, tipoGuia, est);
         lidas.push({ linha: ct, conta: g.conta, informados: g.informados });
         avisos.push(...g.avisos);
       }

@@ -13,6 +13,7 @@ import { versaoTexto } from './esquemas.js';
 import {
   atributosGuiaPropria,
   guiasAtributosContaPropria,
+  observacaoDaGuiaPropria,
   periodosContaPropria,
   seguradoContaPropria,
 } from './conta-complementos-propria.js';
@@ -630,6 +631,77 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
     expect(await s.gravar('guia.atributos', op(), { guiaId: guiaRi, valores })).toMatchObject({ faltam: '' });
     const e2 = await erro();
     expect(e2.problema['codigo'] ?? e2.problema.type).not.toBe('guia-obrigatorio-pendente');
+    expect(
+      (await linhas('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))[0]?.['q'],
+    ).toBe(0);
+  });
+
+  it('lote TISS: os campos da operadora vão à observação da guia com o código de envio; acima de 500, recusa sem gravar', async () => {
+    const guiaRi = Number(
+      (
+        await linhas(
+          'SELECT id FROM guia_tiss WHERE conta_hospitalar_id = ? AND tipo_guia = ? ORDER BY id DESC',
+          [ids2.conta, 'resumo_internacao'],
+        )
+      )[0]?.['id'],
+    );
+    const est = await s.gravar('atributo', op(), {
+      fontePagadoraId: ids.fonte,
+      codigo: 'ESTADIO',
+      rotulo: 'Estadiamento',
+      tipoDado: 'opcao',
+      tipoGuia: 'resumo_internacao',
+      ordem: 10,
+      opcoes: [
+        { codigo: 'E1', descricao: 'Estádio I', valorEnvio: 'ONC-E1' },
+        { codigo: 'E2', descricao: 'Estádio II', ordem: 1 },
+      ],
+    });
+    const [e1] = (
+      await linhas(
+        'SELECT id FROM atributo_guia_opcao WHERE atributo_guia_fonte_pagadora_id = ? ORDER BY ordem',
+        [est['id']],
+      )
+    ).map((o) => Number(o['id']));
+    const atuais = await s.ler(ctxL(), (l, e) => atributosGuiaPropria(l, e, guiaRi));
+    const outros = atuais.valores.filter((v) => v.atributoId !== Number(est['id']));
+    await s.gravar('guia.atributos', op(), {
+      guiaId: guiaRi,
+      valores: [...outros, { atributoId: Number(est['id']), opcaoId: e1 }],
+    });
+    // O que fica no banco é o valor da guia; o texto da observação é lido dele com o código de envio da opção.
+    const obs = await s.ler(ctxL(), (l, e) => observacaoDaGuiaPropria(l, e, guiaRi));
+    expect(obs.numero).toBe(`${P}G2`);
+    expect(obs.excede).toBe(false);
+    expect(obs.texto).toContain('ESTADIO: ONC-E1');
+    expect(obs.texto).toContain('LOTEOBR: ONCO-1');
+    expect(obs.texto).not.toContain('Estádio');
+    // Texto da operadora acima do limite do padrão: o lote recusa a conta e nada se grava.
+    const lote = atuais.campos.find((c) => c.codigo === 'LOTEOBR')!;
+    await s.gravar('guia.atributos', op(), {
+      guiaId: guiaRi,
+      valores: [
+        ...outros.filter((v) => v.atributoId !== lote.id),
+        { atributoId: lote.id, texto: 'x'.repeat(495) },
+        { atributoId: Number(est['id']), opcaoId: e1 },
+      ],
+    });
+    expect((await s.ler(ctxL(), (l, e) => observacaoDaGuiaPropria(l, e, guiaRi))).excede).toBe(true);
+    const executor = nucleo.criarExecutor({});
+    const gerar = operacoesTiss({} as never)['faturamento.gerarLote']!;
+    const versao = versaoTexto(
+      Number((await linhas('SELECT versao FROM conta_hospitalar WHERE id = ?', [ids2.conta]))[0]?.['versao']),
+    );
+    expect(
+      await codigoDo(
+        executor.executar(
+          gerar,
+          CLIENTE,
+          { convenio: ids.fonte, tipoGuia: 3, contas: [{ id: ids2.conta, versao }] } as never,
+          op(),
+        ),
+      ),
+    ).toBe('guia-campos-operadora-excede');
     expect(
       (await linhas('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))[0]?.['q'],
     ).toBe(0);

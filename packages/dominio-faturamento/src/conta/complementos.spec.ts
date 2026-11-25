@@ -5,7 +5,9 @@ import {
   dependentesAtivos,
   type DefinicaoAtributoGuia,
   guiaAceitaAtributos,
+  observacaoDosAtributos,
   recusaObrigatoriosPendentes,
+  recusaObservacaoLonga,
   sugerirProximoPeriodo,
   validarDefinicaoAtributo,
   validarPeriodoConta,
@@ -253,6 +255,49 @@ describe('campo adicional da operadora na guia', () => {
     );
     expect(validarValoresAtributos(semPai, [{ atributoId: 2, opcaoId: 21, texto: null }]).erros).toEqual({});
   });
+  it('observação da guia TISS: código e valor de envio, na ordem, só os campos que valem e os valores válidos', () => {
+    const comEnvio = defs.map((d) =>
+      d.id === 1 ? { ...d, opcoes: d.opcoes.map((o) => (o.id === 10 ? { ...o, valorEnvio: 'Q01' } : o)) } : d,
+    );
+    const campos = atributosDaGuia(comEnvio, 'consulta');
+    const r = observacaoDosAtributos(campos, [
+      { atributoId: 5, opcaoId: null, texto: 'S' },
+      { atributoId: 1, opcaoId: 10, texto: null },
+      { atributoId: 2, opcaoId: 20, texto: null },
+      { atributoId: 4, opcaoId: null, texto: 'data ruim' },
+      { atributoId: 3, opcaoId: null, texto: '80' },
+      { atributoId: 7, opcaoId: null, texto: 'guardado' },
+    ]);
+    // Opção com envio vai pelo envio; sem envio, pelo código. Data inválida, campo de outro tipo de guia e campo
+    // inativo não vão à operadora.
+    expect(r).toEqual({ texto: 'TRAT: Q01; FASE: QT1; MET: sim', excede: false });
+    expect(observacaoDosAtributos(campos, [])).toEqual({ texto: null, excede: false });
+    expect(observacaoDosAtributos([], [{ atributoId: 1, opcaoId: 10, texto: null }])).toEqual({
+      texto: null,
+      excede: false,
+    });
+  });
+
+  it('observação acima do limite do padrão é marcada e o lote recusa (nunca se corta)', () => {
+    const longo: DefinicaoAtributoGuia = {
+      ...base,
+      id: 9,
+      codigo: 'LONGO',
+      rotulo: 'Longo',
+      tipoDado: 'texto',
+    };
+    const r = observacaoDosAtributos([longo], [{ atributoId: 9, opcaoId: null, texto: 'x'.repeat(494) }]);
+    expect(r.texto).toHaveLength(501);
+    expect(r.excede).toBe(true);
+    expect(
+      observacaoDosAtributos([longo], [{ atributoId: 9, opcaoId: null, texto: 'x'.repeat(493) }]).excede,
+    ).toBe(false);
+    const recusa = recusaObservacaoLonga('C1', 'G1', 501);
+    expect(recusa.codigo).toBe('guia-campos-operadora-excede');
+    expect(recusa.mensagem).toContain('guia G1 somam 501 caracteres');
+    expect(recusa.mensagem).toContain('aceita 500');
+  });
+
   it('inativar um campo com dependentes ativos aponta quais são', () => {
     expect(dependentesAtivos(1, defs)).toEqual(['Fase']);
     expect(

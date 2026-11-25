@@ -165,6 +165,8 @@ export interface OpcaoAtributo {
   readonly descricao: string;
   readonly ativo: boolean;
   readonly opcaoPaiId: number | null;
+  /** O código que a operadora espera no arquivo (sem ele, vai o código da opção). */
+  readonly valorEnvio?: string | null;
 }
 
 export interface DefinicaoAtributoGuia {
@@ -345,4 +347,46 @@ export function validarValoresAtributos(
   const preenchidos = new Set(normalizados.map((v) => v.atributoId));
   const faltam = defs.filter((d) => d.obrigatorio && !preenchidos.has(d.id)).map((d) => d.rotulo);
   return { erros, normalizados, faltam };
+}
+
+/** Tamanho da observação da guia no padrão TISS 04.03.00 (st_texto500). */
+export const LIMITE_OBSERVACAO_GUIA = 500;
+
+/**
+ * Os campos adicionais da operadora informados na guia, no texto que vai à observação da guia TISS: `CODIGO: valor`, na
+ * ordem do cadastro, separados por "; ". Só os campos que valem para a guia (ativos e do tipo dela) e os valores
+ * válidos; a opção vai pelo código de envio da operadora (ou pelo seu código). Sem nada a enviar, texto null. Passar do
+ * limite do padrão marca `excede` (o lote recusa: nunca se corta o que a operadora pediu).
+ */
+export function observacaoDosAtributos(
+  defs: readonly DefinicaoAtributoGuia[],
+  valores: readonly ValorAtributo[],
+  limite = LIMITE_OBSERVACAO_GUIA,
+): { texto: string | null; excede: boolean } {
+  const { normalizados } = validarValoresAtributos(defs, valores);
+  const porCampo = new Map(normalizados.map((v) => [v.atributoId, v]));
+  const partes: string[] = [];
+  for (const d of defs) {
+    const v = porCampo.get(d.id);
+    if (!v) continue;
+    const o = v.opcaoId === null ? null : d.opcoes.find((x) => x.id === v.opcaoId);
+    const valor = o ? o.valorEnvio?.trim() || o.codigo : (v.texto ?? '');
+    if (valor) partes.push(`${d.codigo}: ${valor}`);
+  }
+  const texto = partes.join('; ').replace(/\s+/g, ' ').trim();
+  if (!texto) return { texto: null, excede: false };
+  return { texto, excede: texto.length > limite };
+}
+
+/** A recusa do lote quando os campos da operadora não cabem na observação da guia. */
+export function recusaObservacaoLonga(
+  conta: string,
+  guia: string,
+  tamanho: number,
+  limite = LIMITE_OBSERVACAO_GUIA,
+): { codigo: 'guia-campos-operadora-excede'; mensagem: string } {
+  return {
+    codigo: 'guia-campos-operadora-excede',
+    mensagem: `A conta ${conta}: os campos da operadora na guia ${guia} somam ${tamanho} caracteres e a observação da guia TISS aceita ${limite}. Encurte os textos ou use os códigos de envio das opções.`,
+  };
 }

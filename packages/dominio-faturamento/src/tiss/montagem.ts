@@ -92,6 +92,8 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
   const procs = c.itens.filter(ehProcedimento);
   const despesas = c.itens.filter((i) => !ehProcedimento(i)).map((i, k) => despesa(i, k + 1));
   const beneficiario = { numeroCarteira: texto(c.carteira, 20), atendimentoRN: c.atendimentoRN };
+  // Os campos adicionais da operadora vão na observação da guia (06-FAT linha 10), em todo tipo de guia.
+  const obs = c.observacao ? { observacao: c.observacao } : {};
   switch (c.tipoGuia) {
     case 1: {
       const proc = procs[0] ?? c.itens[0];
@@ -105,6 +107,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         tipoConsulta: c.tipoConsulta,
         procedimento: { codigoTabela: proc?.codigoTabela ?? '22', codigo: (proc?.codigo ?? '').slice(0, 10) },
         valor: c.itens.reduce((s, i) => s + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100,
+        ...obs,
       };
     }
     case 2:
@@ -119,6 +122,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         tipoAtendimento: c.tipoAtendimento,
         itens: procs.map(executado),
         despesas,
+        ...obs,
       };
     case 3:
       return {
@@ -139,6 +143,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         indicadorAcidente: c.indicadorAcidente ?? '9',
         itens: procs.map(executado),
         despesas,
+        ...obs,
       };
     case 4:
       return {
@@ -152,6 +157,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         fim: c.fim.data,
         caraterAtendimento: c.caraterAtendimento,
         dataEmissao: c.fim.data,
+        ...obs,
         itens: c.itens
           .filter((i) => i.tipo === 2)
           .map((i) => ({

@@ -55,6 +55,8 @@ export interface ContaTiss {
   readonly profissionalCodigo: string;
   /** true: a conta não tem executante com conselho, número, UF e CBO no cadastro, e a guia leva o padrão (D-XML-31). */
   readonly executantePadrao?: boolean;
+  /** Os campos adicionais da operadora informados na guia (06-FAT linha 10), já no texto da observação (até 500). */
+  readonly observacao?: string;
   readonly itens: readonly ItemContaTiss[];
 }
 

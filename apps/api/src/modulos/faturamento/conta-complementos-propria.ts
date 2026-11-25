@@ -12,6 +12,7 @@ import {
   type DefinicaoAtributoGuia,
   dependentesAtivos,
   guiaAceitaAtributos,
+  observacaoDosAtributos,
   type PeriodoConta,
   sugerirProximoPeriodo,
   type TipoDadoAtributo,
@@ -255,7 +256,8 @@ export async function atributosFontePropria(l: Consulta, fonte: number): Promise
   const ids = ds.map((d) => n(d['id']));
   const os = ids.length
     ? await l.consultar<Linha>(
-        `SELECT id, atributo_guia_fonte_pagadora_id AS atributo, codigo, descricao, ativo, opcao_pai_id, versao
+        `SELECT id, atributo_guia_fonte_pagadora_id AS atributo, codigo, descricao, ativo, opcao_pai_id, valor_envio,
+                versao
            FROM atributo_guia_opcao WHERE atributo_guia_fonte_pagadora_id IN (${ids.map(() => '?').join(', ')})
           ORDER BY ordem, id`,
         ids,
@@ -281,6 +283,7 @@ export async function atributosFontePropria(l: Consulta, fonte: number): Promise
         descricao: String(o['descricao']),
         ativo: n(o['ativo']) === 1,
         opcaoPaiId: nn(o['opcao_pai_id']),
+        valorEnvio: txn(o['valor_envio']),
         versao: n(o['versao']),
       })),
   }));
@@ -377,6 +380,28 @@ export async function obrigatoriosPendentesDaConta(
   return r.guias
     .filter((g) => g.tipoGuia === tipoGuia && g.situacao !== 'cancelada')
     .map((g) => ({ numero: g.numero, faltam: g.faltam }));
+}
+
+/**
+ * O texto que os campos adicionais da operadora informados na guia levam à observação da guia TISS (06-FAT linha 10):
+ * só os campos que valem para a guia, com o código de envio da opção (regra observacaoDosAtributos do domínio). O valor
+ * de campo inativado fica guardado, mas não vai à operadora. Lido sob a transação do lote.
+ */
+export async function observacaoDaGuiaPropria(l: Consulta, est: number, guia: number) {
+  const g = await guiaDa(l, est, guia);
+  const defs = atributosDaGuia(await atributosFontePropria(l, g.fontePagadoraId), g.tipoGuia);
+  if (!defs.length) return { numero: g.numero, texto: null, excede: false };
+  const vs = await l.consultar<Linha>(
+    `SELECT atributo_guia_fonte_pagadora_id AS atributo, atributo_guia_opcao_id AS opcao, valor_texto
+       FROM valor_atributo_guia WHERE guia_tiss_id = ? AND excluido_em IS NULL`,
+    [guia],
+  );
+  const valores = vs.map((v) => ({
+    atributoId: n(v['atributo']),
+    opcaoId: nn(v['opcao']),
+    texto: txn(v['valor_texto']),
+  }));
+  return { numero: g.numero, ...observacaoDosAtributos(defs, valores) };
 }
 
 /** A carteira do segurado gravada na conta (a mais recente não substituída); sem ela, null (vale a da cobertura). */
