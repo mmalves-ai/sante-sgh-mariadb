@@ -18,7 +18,7 @@ def _mod():
 
 
 def _cnv(linhas, declarado=None):
-    corpo = "".join(f"   {s:04d}  {d:<48} {c}\r\n" for s, (c, d) in enumerate(linhas, 1))
+    corpo = "".join(f"   {s:04d}  {d:<50} {c}\r\n" for s, (c, d) in enumerate(linhas, 1))
     return f"{len(linhas) if declarado is None else declarado} 4\r\n" + corpo
 
 
@@ -39,6 +39,30 @@ class LeituraDoCnv(unittest.TestCase):
         self.assertEqual(d["0901"], "POVO A (NOME B, NOMEC)")
         self.assertEqual(d["0902"], "POVO D'E")
         self.assertEqual(d["0903"], "N" * 48 + "XY")  # nome na largura toda da coluna, um só espaço antes do código
+
+    def test_nome_cortado_na_largura_da_coluna_fica_com_os_alternativos_completos_e_avisa(self):
+        # o arquivo oficial corta em 50 caracteres no meio da lista de nomes alternativos (ex.: 0055, 0060, 0161)
+        cortados = [
+            ("0901", "POVO GAVIAO SINTETICO (PUKOBIE, PYKOPJE, GAVIAO DO"),  # corte no meio de um nome
+            ("0902", "POVO NAMBI SINTETIC (NEGAROTE ,MAMAIN\xadDE, LATUNDE,"),  # corte logo após a vírgula
+            ("0903", "POVO SEM ALTERNATIVO COMPLETO (ABCDEFGHIJKLMNOPQRS"),  # nenhum alternativo inteiro
+            ("0904", "POVO COMPLET (CURIPACO, CURRIPACO, CORIPACO, WAKU)"),  # enche a coluna, mas fechado
+            ("0905", "POVO CURTO (WAYAMPI, OYAMPI, )"),  # item vazio, sem corte
+            ("0906", "POVO HIFEN (ALFA, BE\xadTA,"),  # cortado com o hífen invisível: sobra espaço antes do código
+        ]
+        self.assertEqual([len(d) for _, d in cortados[:4]], [50, 50, 50, 50])
+        self.m.AVISOS = []
+        d = dict(self.m.ler_cnv(_cnv(_linhas(self.m.MINIMO) + cortados)))
+        self.assertEqual(d["0901"], "POVO GAVIAO SINTETICO (PUKOBIE, PYKOPJE)")
+        self.assertEqual(d["0902"], "POVO NAMBI SINTETIC (NEGAROTE, MAMAINDE, LATUNDE)")
+        self.assertEqual(d["0903"], "POVO SEM ALTERNATIVO COMPLETO")
+        self.assertEqual(d["0904"], "POVO COMPLET (CURIPACO, CURRIPACO, CORIPACO, WAKU)")
+        self.assertEqual(d["0905"], "POVO CURTO (WAYAMPI, OYAMPI)")
+        self.assertEqual(d["0906"], "POVO HIFEN (ALFA, BETA)")
+        for nome in d.values():
+            self.assertEqual(nome.count("("), nome.count(")"), nome)
+        avisos = [a for a in self.m.AVISOS if "cortado" in a]
+        self.assertEqual(sorted(a.split(":")[0] for a in avisos), ["etnia 0901", "etnia 0902", "etnia 0903", "etnia 0906"])
 
     def test_recusa_cabeçalho_ausente_ou_quantidade_divergente(self):
         with self.assertRaisesRegex(RuntimeError, "cabeçalho"):

@@ -30,6 +30,31 @@ _LINHA = re.compile(r"^\s*(\d{1,4})\s+(\S.*?)\s+(\S+)\s*$")
 _CODIGO = re.compile(r"^\d{4}$")
 
 
+def _fechar_cortado(codigo: str, nome: str, encheu_coluna: bool) -> str:
+    """O arquivo de conversão corta o nome na largura da coluna (50), às vezes no meio da lista de nomes alternativos
+    entre parênteses. Nunca grava o nome cortado no meio: mantém o nome principal e os nomes alternativos completos
+    (até a última vírgula ou barra antes do corte) e fecha o parêntese; sem nenhum alternativo completo, fica só o
+    nome principal. Cada correção vira AVISO, com o código (dado público), para a conferência da carga. Também limpa a
+    lista com item vazio (", )") e o espaço em volta da vírgula."""
+    nome = re.sub(r"\s*,\s*", ", ", nome)
+    nome = re.sub(r"\s*[,/]\s*\)", ")", nome)
+    abre = nome.rfind("(")
+    if abre < 0 or ")" in nome[abre:]:
+        # parêntese fechado (ou nenhum): o nome está inteiro; só sem parêntese e enchendo a coluna não há como saber
+        if abre < 0 and encheu_coluna:
+            AVISOS.append(f"etnia {codigo}: nome na largura toda da coluna, sem parêntese; mantido como veio")
+        return nome
+    # parêntese aberto e não fechado: o nome foi cortado (o hífen invisível conta na largura, então o corte pode vir
+    # com mais de um espaço antes do código)
+    principal, lista = nome[:abre].rstrip(), nome[abre + 1:]
+    corte = max(lista.rfind(","), lista.rfind("/"))
+    completos = lista[:corte].strip(" ,/") if corte >= 0 else ""
+    fechado = f"{principal} ({completos})" if completos else principal
+    AVISOS.append(f"etnia {codigo}: nome cortado pelo arquivo oficial na largura da coluna; gravados o nome principal"
+                  " e os nomes alternativos completos")
+    return fechado
+
+
 def ler_cnv(texto: str):
     """[(código, nome)] da tabela de etnias, em ordem de código. Recusa cabeçalho ausente, quantidade divergente do
     cabeçalho, linha fora da forma, código que não seja de 4 dígitos, código repetido ou menos linhas que o mínimo."""
@@ -46,6 +71,8 @@ def ler_cnv(texto: str):
         nome = " ".join(m.group(2).replace("\xad", "").split())
         if not nome:
             raise RuntimeError(f"etnia: linha {n} sem nome")
+        # um só espaço entre o nome e o código: o nome encheu a coluna e pode ter sido cortado pelo arquivo oficial
+        nome = _fechar_cortado(codigo, nome, m.start(3) - m.end(2) == 1)
         if codigo in saida:
             raise RuntimeError(f"etnia: código repetido na linha {n}")
         saida[codigo] = nome[:150]
