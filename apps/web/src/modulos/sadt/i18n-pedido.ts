@@ -1,6 +1,10 @@
 // Textos do pedido de exames e da recoleta (F3.5, 05-SADT linhas 4, 5 e 7). As mensagens de recusa vêm da regra do
 // domínio pela API; aqui ficam os rótulos.
+import { mensagensPostoColeta } from './i18n-posto-coleta.js';
+
 export const mensagensPedido = {
+  // Posto de coleta e etiqueta da recoleta e da alíquota (05-SADT linha 7).
+  postos: mensagensPostoColeta,
   titulo: 'Pedido de exames',
   atendimento: 'Atendimento',
   buscarPaciente: 'Paciente: nome, prontuário ou número do atendimento',

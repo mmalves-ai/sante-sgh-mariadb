@@ -43,6 +43,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/RecoletasTela.vue'),
     meta: { permissao: 'sadt.amostra.ler' },
   },
+  // F3.5 (05-SADT linha 7): o cadastro próprio do posto de coleta, aberto pela tela de recoletas.
+  {
+    path: '/sadt/postos-coleta',
+    name: 'sadt.postos-coleta',
+    component: () => import('./telas/PostosColetaTela.vue'),
+    meta: { permissao: 'sadt.amostra.ler' },
+  },
   {
     path: '/sadt/atendimentos',
     name: 'sadt.atendimentos',

@@ -187,9 +187,16 @@ export interface ConferenciaColeta {
   identificadoresConferidos: boolean;
   pulseira: string | null;
   estacao: string | null;
+  /** O posto de coleta do cadastro (null: à beira do leito). */
+  posto?: number | null;
 }
 export const coletarRecoleta = (id: number, conferencia: ConferenciaColeta, chave: string) =>
-  enviar(`${S}/recoletas/${id}/coletar`, conferencia, z.object({ id: n, amostra: n, codigo: txt }), chave);
+  enviar(
+    `${S}/recoletas/${id}/coletar`,
+    conferencia,
+    z.object({ id: n, amostra: n, codigo: txt, etiquetaNaFila: z.boolean().optional() }),
+    chave,
+  );
 export const cancelarRecoleta = (
   id: number,
   motivo: string,
@@ -207,6 +214,10 @@ export const gerarAliquotas = (amostra: number, chave: string) =>
   enviar(
     `${S}/amostras/${amostra}/subamostras`,
     {},
-    z.object({ id: n, subamostras: z.array(z.object({ id: n, codigo: txt, exames: n })) }),
+    z.object({
+      id: n,
+      subamostras: z.array(z.object({ id: n, codigo: txt, exames: n })),
+      etiquetasNaFila: n.optional(),
+    }),
     chave,
   );
