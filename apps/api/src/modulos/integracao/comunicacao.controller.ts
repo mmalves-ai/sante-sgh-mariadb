@@ -9,6 +9,11 @@
 //   POST /api/integracoes/mensagens/pedidos/:id/enviado  a Hal-AI aceitou (identificador dela)
 //   POST /api/integracoes/mensagens/pedidos/:id/retornos entrega, leitura, resposta, falha, descadastro
 //   GET  /api/integracoes/mensagens/paciente/:p          visão por paciente: pedidos com retornos
+//   POST /api/integracoes/mensagens/disparo              gera agora os pedidos dos eventos (marcação, véspera, resultado, alta)
+//   Pela credencial da Hal-AI (cliente da API de mensageria, escopo mensagem.paciente, usuário técnico na trilha):
+//   POST /api/integracoes/mensagens/hal-ai/:hospital/pendentes            dispara os eventos e devolve os pendentes devidos
+//   POST /api/integracoes/mensagens/hal-ai/:hospital/pedidos/:id/enviado  a Hal-AI aceitou (identificador dela)
+//   POST /api/integracoes/mensagens/hal-ai/:hospital/pedidos/:id/retornos entrega, leitura, resposta, falha, descadastro
 // Pacotes de parceiros e entregas agendadas (L134):
 //   GET  /api/integracoes/pacotes                        pacotes com campos, última entrega e a próxima devida
 //   PUT  /api/integracoes/pacotes                        inclui ou altera o pacote e os campos (com a versão lida)
@@ -152,6 +157,68 @@ export class ComunicacaoController {
   @Permissao(P.mensagemEnviar)
   retorno(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return com(this.mensagens, req, (p, c) => p.registrarRetorno(c, id, corpo));
+  }
+
+  @Post('mensagens/disparo')
+  @AuditadoNoHandler('executor: trilha na mesma transação de cada pedido gerado')
+  @HttpCode(200)
+  @Permissao(P.mensagemEnviar)
+  disparo(@Req() req: RequisicaoAutorizada) {
+    return com(this.mensagens, req, (p, c) => p.dispararEventos(c));
+  }
+
+  /** A Hal-AI pela credencial: o contexto (usuário técnico) sai da credencial conferida na porta. */
+  private halai<T>(
+    hospital: string,
+    req: RequisicaoAutorizada,
+    fn: (p: PortaMensagensPacientePropria, c: ContextoComunicacao) => Promise<T>,
+  ): Promise<T> {
+    const porta = this.mensagens;
+    if (!porta) throw new ErroProblema('indisponivel', 503, 'Recurso sem banco próprio neste ambiente');
+    if (!/^[A-Za-z0-9_-]{1,20}$/.test(hospital))
+      throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento não encontrado');
+    return porta
+      .contextoDaCredencial(hospital, req.headers['authorization'])
+      .then((c) => fn(porta, c))
+      .catch((e: unknown) => {
+        throw problemaDoCadastro(e);
+      });
+  }
+
+  @Post('mensagens/hal-ai/:hospital/pendentes')
+  @HttpCode(200)
+  @Publica(
+    'Hal-AI: a credencial do cliente da API de mensageria é conferida na porta (resumo, sistema e escopo); a trilha dos pedidos gerados é do usuário técnico',
+  )
+  pendentesHalai(@Param('hospital') hospital: string, @Req() req: RequisicaoAutorizada) {
+    return this.halai(hospital, req, async (p, c) => {
+      const disparo = await p.dispararEventos(c);
+      return { disparo, itens: await p.pendentes(c) };
+    });
+  }
+
+  @Post('mensagens/hal-ai/:hospital/pedidos/:id/enviado')
+  @HttpCode(200)
+  @Publica('Hal-AI: credencial do cliente da API de mensageria conferida na porta; trilha do usuário técnico')
+  enviadoHalai(
+    @Param('hospital') hospital: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.halai(hospital, req, (p, c) => p.marcarEnviado(c, id, texto(corpo, 'identificadorExterno')));
+  }
+
+  @Post('mensagens/hal-ai/:hospital/pedidos/:id/retornos')
+  @HttpCode(201)
+  @Publica('Hal-AI: credencial do cliente da API de mensageria conferida na porta; trilha do usuário técnico')
+  retornoHalai(
+    @Param('hospital') hospital: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.halai(hospital, req, (p, c) => p.registrarRetorno(c, id, corpo));
   }
 
   @Get('mensagens/paciente/:p')

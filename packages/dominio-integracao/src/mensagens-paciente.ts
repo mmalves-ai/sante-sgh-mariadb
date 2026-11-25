@@ -494,3 +494,6 @@ export function interpretarResposta(
 export function podeCancelarPedido(situacao: SituacaoPedido): boolean {
   return situacao === 'pendente';
 }
+
+// Os eventos que disparam o pedido, o efeito da resposta na marcação e a credencial da Hal-AI.
+export * from './mensagens-paciente-eventos.js';

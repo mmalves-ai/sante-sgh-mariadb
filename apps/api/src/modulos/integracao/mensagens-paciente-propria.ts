@@ -11,6 +11,16 @@
 import {
   CANAIS_MENSAGEM,
   type CanalMensagem,
+  conferirCredencialMensageria,
+  efeitoDaResposta,
+  type EfeitoResposta,
+  ENTIDADE_DO_EVENTO,
+  EVENTO_DO_GATILHO,
+  type EventoMensagem,
+  HORIZONTE_VESPERA_MIN,
+  PRAZO_AVISO_EVENTO_MIN,
+  pedidosDosEventos,
+  type RespostaInterpretada,
   type ContatoPaciente,
   escolherDestino,
   FINALIDADES_MODELO,
@@ -29,7 +39,7 @@ import {
   validarModeloMensagem,
   validarRegraEnvio,
 } from '@sgh/dominio-integracao';
-import { ErroOperacao } from '@sgh/nucleo';
+import { ErroOperacao, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   BaseComunicacaoPropria,
@@ -45,6 +55,7 @@ import {
   recusa,
   txtOuNull,
 } from './comunicacao-base-propria.js';
+import { lerAutorizacaoBasica, segredoConfere } from './aplicacao/credencial.js';
 
 export const PORTA_MENSAGENS_PACIENTE = Symbol('PORTA_MENSAGENS_PACIENTE');
 
@@ -207,7 +218,11 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
    * Grava o modelo. O modelo do cliente inteiro (`doCliente`) muda o texto de todos os estabelecimentos: só pela rota
    * de alcance do cliente (`alcanceCliente`, permissão integracao.mensagem.configurarCliente).
    */
-  gravarModelo(c: ContextoComunicacao, entrada: unknown, alcanceCliente = false): Promise<{ id: number }> {
+  async gravarModelo(
+    c: ContextoComunicacao,
+    entrada: unknown,
+    alcanceCliente = false,
+  ): Promise<{ id: number }> {
     const x = entradaValida(esquemaModeloMensagem, entrada);
     if (x.doCliente && !alcanceCliente)
       throw new ErroOperacao(
@@ -238,9 +253,9 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
           vigencia_fim: x.vigenciaFim,
           ativo: x.ativo,
         };
-        const a = await tx.uma(
+        const [a] = await tx.consultarParaAtualizar(
           `SELECT id, versao FROM modelo_mensagem_paciente
-          WHERE codigo = ? AND canal = ? AND estabelecimento_id <=> ? FOR UPDATE`,
+          WHERE codigo = ? AND canal = ? AND estabelecimento_id <=> ?`,
           [x.codigo, x.canal, alvo],
         );
         if (a) {
@@ -293,7 +308,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
     );
   }
 
-  gravarRegra(c: ContextoComunicacao, entrada: unknown): Promise<{ id: number }> {
+  async gravarRegra(c: ContextoComunicacao, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaRegraEnvio, entrada);
     return this.gravar(
       c,
@@ -324,8 +339,8 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
           exige_consentimento: x.exigeConsentimento,
           ativo: x.ativo,
         };
-        const a = await tx.uma(
-          'SELECT id, versao FROM regra_envio_mensagem_paciente WHERE estabelecimento_id = ? AND codigo = ? FOR UPDATE',
+        const [a] = await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM regra_envio_mensagem_paciente WHERE estabelecimento_id = ? AND codigo = ?',
           [est, x.codigo],
         );
         if (a) {
@@ -346,7 +361,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
   }
 
   /** Registra o pedido de envio pela regra (a Hal-AI envia no momento decidido); recusa o que não confere. */
-  pedir(
+  async pedir(
     c: ContextoComunicacao,
     entrada: unknown,
     agora: Date = new Date(),
@@ -470,15 +485,11 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
     );
   }
 
-  private async pedidoDoEstabelecimento(
-    tx: { uma: (s: string, p: unknown[]) => Promise<Record<string, unknown> | null> },
-    id: number,
-    est: number,
-  ) {
-    const p = await tx.uma(
-      `SELECT q.id, q.situacao, q.versao, m.resposta_confirmacao, m.resposta_recusa
+  private async pedidoDoEstabelecimento(tx: TxOperacao, id: number, est: number) {
+    const [p] = await tx.consultarParaAtualizar(
+      `SELECT q.id, q.situacao, q.versao, q.entidade, q.entidade_id, q.canal, m.resposta_confirmacao, m.resposta_recusa
          FROM pedido_mensagem_paciente q LEFT JOIN modelo_mensagem_paciente m ON m.id = q.modelo_mensagem_paciente_id
-        WHERE q.id = ? AND q.estabelecimento_id = ? AND q.excluido_em IS NULL FOR UPDATE`,
+        WHERE q.id = ? AND q.estabelecimento_id = ? AND q.excluido_em IS NULL`,
       [id, est],
     );
     if (!p) throw naoEncontrado('Pedido de mensagem');
@@ -486,7 +497,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
   }
 
   /** Cancela o pedido ainda não enviado (fica registrado, com o motivo). */
-  cancelar(c: ContextoComunicacao, id: number, motivo: string): Promise<{ id: number }> {
+  async cancelar(c: ContextoComunicacao, id: number, motivo: string): Promise<{ id: number }> {
     if (!motivo?.trim())
       throw recusa([{ campo: 'motivo', codigo: 'motivo-obrigatorio', mensagem: 'Informe o motivo.' }]);
     return this.gravar(
@@ -538,17 +549,27 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
   }
 
   /** Retorno da Hal-AI: grava o retorno em sequência e avança a situação pela regra do domínio. */
-  registrarRetorno(
+  async registrarRetorno(
     c: ContextoComunicacao,
     id: number,
     entrada: unknown,
-  ): Promise<{ id: number; situacao: SituacaoPedido; respostaInterpretada: string | null }> {
+  ): Promise<{
+    id: number;
+    situacao: SituacaoPedido;
+    respostaInterpretada: string | null;
+    efeito: EfeitoResposta['acao'] | null;
+  }> {
     const x = entradaValida(esquemaRetornoMensagem, entrada);
     return this.gravar(
       c,
       'integracao.mensagem.registrar_retorno',
-      ['pedido_mensagem_paciente_retorno', 'pedido_mensagem_paciente'],
-      async (tx, est) => {
+      [
+        'pedido_mensagem_paciente_retorno',
+        'pedido_mensagem_paciente',
+        'marcacao_horario',
+        'confirmacao_marcacao',
+      ],
+      async (tx, est, usuario) => {
         const p = await this.pedidoDoEstabelecimento(tx, id, est);
         const atual = String(p['situacao']) as SituacaoPedido;
         const { situacao } = situacaoAposRetorno(atual, x.tipo);
@@ -565,6 +586,10 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
           [id],
         );
         const agora = new Date();
+        const efeito =
+          x.tipo === 'resposta'
+            ? await this.aplicarEfeitoNaMarcacao(tx, est, usuario, p, respostaInterpretada, agora)
+            : null;
         const retorno = await tx.incluir('pedido_mensagem_paciente_retorno', {
           pedido_mensagem_paciente_id: id,
           sequencia: num(seq?.['s']),
@@ -574,6 +599,8 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
           descricao: x.descricao,
           resposta_texto: x.respostaTexto,
           resposta_interpretada: respostaInterpretada,
+          efeito_resposta: efeito?.acao ?? null,
+          confirmacao_marcacao_id: efeito?.confirmacao ?? null,
           origem: 'integracao',
         });
         if (situacao !== atual) {
@@ -582,7 +609,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
           if (situacao === 'lido') extra['lido_em'] = agora;
           await tx.alterar('pedido_mensagem_paciente', id, num(p['versao']), extra);
         }
-        return { id: retorno, situacao, respostaInterpretada };
+        return { id: retorno, situacao, respostaInterpretada, efeito: efeito?.acao ?? null };
       },
     );
   }
@@ -631,4 +658,351 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
       }));
     });
   }
+
+  /**
+   * O efeito da resposta interpretada na marcação ligada ao pedido (regra do domínio): confirma a presença da marcação
+   * aguardando, ou abre o pedido de cancelamento ou de reagendamento (confirmação recusada, com a observação, para a
+   * equipe da agenda); nunca cancela nem remarca sozinha. Na mesma transação do retorno.
+   */
+  private async aplicarEfeitoNaMarcacao(
+    tx: TxOperacao,
+    est: number,
+    usuario: number,
+    pedido: Record<string, unknown>,
+    interpretada: RespostaInterpretada | null,
+    agora: Date,
+  ): Promise<{ acao: EfeitoResposta['acao']; confirmacao: number | null }> {
+    const entidade = txtOuNull(pedido['entidade']);
+    const marcacaoId = numOuNull(pedido['entidade_id']);
+    const [m] =
+      entidade === ENTIDADE_DO_EVENTO.marcacao && marcacaoId !== null
+        ? await tx.consultarParaAtualizar(
+            `SELECT m.id, m.versao, m.canal_marcacao_id, s.significado, h.inicio_em
+               FROM marcacao_horario m
+               JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
+               JOIN horario_agenda h ON h.id = m.horario_agenda_id
+              WHERE m.id = ? AND m.estabelecimento_id = ? AND m.excluido_em IS NULL`,
+            [marcacaoId, est],
+          )
+        : [];
+    const efeito = efeitoDaResposta({
+      entidade,
+      interpretada,
+      significadoMarcacao: m ? String(m['significado']) : null,
+      consultaJaPassou: m ? new Date(m['inicio_em'] as string).getTime() <= agora.getTime() : false,
+    });
+    if (efeito.acao === 'nenhum' || !m) return { acao: efeito.acao, confirmacao: null };
+    const significado = efeito.acao === 'confirmar_presenca' ? 'confirmada' : 'recusada';
+    const sc = await tx.uma(
+      'SELECT id FROM situacao_confirmacao WHERE significado = ? AND ativo ORDER BY ordem, id LIMIT 1',
+      [significado],
+    );
+    if (!sc)
+      throw new ErroOperacao(
+        422,
+        'configuracao-incompleta',
+        'Configuração incompleta',
+        `Falta a situação de confirmação "${significado}" no cadastro da agenda.`,
+      );
+    // O canal da confirmação é o da mensagem quando a agenda o tem cadastrado; senão, o canal da marcação.
+    const canal = await tx.uma('SELECT id FROM canal_marcacao WHERE codigo = ? AND ativo', [
+      String(pedido['canal']),
+    ]);
+    if (efeito.acao === 'confirmar_presenca') {
+      const sm = await tx.uma(
+        "SELECT id FROM situacao_marcacao WHERE significado = 'confirmada' AND ativo ORDER BY ordem, id LIMIT 1",
+        [],
+      );
+      if (!sm)
+        throw new ErroOperacao(
+          422,
+          'configuracao-incompleta',
+          'Configuração incompleta',
+          'Falta a situação de marcação "confirmada" no cadastro da agenda.',
+        );
+      await tx.alterar('marcacao_horario', num(m['id']), num(m['versao']), {
+        situacao_marcacao_id: num(sm['id']),
+      });
+    }
+    const t = await tx.uma(
+      'SELECT COALESCE(MAX(tentativa), 0) + 1 AS n FROM confirmacao_marcacao WHERE marcacao_horario_id = ?',
+      [m['id']],
+    );
+    const confirmacao = await tx.incluir('confirmacao_marcacao', {
+      estabelecimento_id: est,
+      marcacao_horario_id: m['id'],
+      tentativa: num(t?.['n'] ?? 1),
+      canal_marcacao_id: canal ? canal['id'] : m['canal_marcacao_id'],
+      situacao_confirmacao_id: num(sc['id']),
+      automatica: true,
+      solicitada_em: agora,
+      respondida_em: agora,
+      responsavel_usuario_id: usuario,
+      observacao:
+        efeito.acao === 'confirmar_presenca' ? 'Confirmada pelo paciente na mensagem.' : efeito.observacao,
+    });
+    return { acao: efeito.acao, confirmacao };
+  }
+
+  /**
+   * O disparo automático pelos eventos (marcação criada, véspera da marcação, resultado liberado, alta): lê as regras
+   * ativas de gatilho automático, os eventos do estabelecimento ainda no prazo e os pedidos já feitos, e registra cada
+   * pedido novo por `pedir` (cada um na sua transação, com as conferências de destino, consentimento, descadastro e
+   * limite). A recusa de um pedido (sem contato, sem consentimento, descadastro) não para os outros: volta contada.
+   */
+  async dispararEventos(
+    c: ContextoComunicacao,
+    agora: Date = new Date(),
+  ): Promise<{ pedidos: number; recusados: Record<string, number> }> {
+    const automaticos = Object.keys(EVENTO_DO_GATILHO);
+    const lido = await this.ler(c, 'mensagens.eventos', async (l, est) => {
+      const regras = (
+        await l.consultar(
+          `SELECT r.id, r.gatilho, r.antecedencia_minutos
+             FROM regra_envio_mensagem_paciente r
+             JOIN modelo_mensagem_paciente m ON m.id = r.modelo_mensagem_paciente_id AND m.ativo
+            WHERE r.estabelecimento_id = ? AND r.ativo
+              AND r.gatilho IN (${automaticos.map(() => '?').join(',')})`,
+          [est, ...automaticos],
+        )
+      ).map((x) => ({
+        id: num(x['id']),
+        gatilho: String(x['gatilho']) as GatilhoEnvio,
+        antecedenciaMinutos: numOuNull(x['antecedencia_minutos']),
+      }));
+      if (regras.length === 0) return { regras, eventos: [] as EventoMensagem[], ja: new Set<string>() };
+      const tipos = new Set(regras.map((r) => EVENTO_DO_GATILHO[r.gatilho]));
+      const desde = new Date(agora.getTime() - PRAZO_AVISO_EVENTO_MIN * 60_000);
+      const maxAnt = Math.max(0, ...regras.map((r) => r.antecedenciaMinutos ?? 0));
+      const ate = new Date(agora.getTime() + (HORIZONTE_VESPERA_MIN + maxAnt) * 60_000);
+      const fuso = await fusoDoEstabelecimento(l, est, agora);
+      const local = (d: Date) => new Date(d.getTime() + fuso * 60_000).toISOString();
+      const dataHora = (d: Date) => {
+        const iso = local(d);
+        return { data: iso.slice(0, 10).split('-').reverse().join('/'), hora: iso.slice(11, 16) };
+      };
+      const eventos: EventoMensagem[] = [];
+      if (tipos.has('marcacao'))
+        for (const x of await l.consultar(
+          `SELECT m.id, m.paciente_id, m.criado_em, h.inicio_em, a.nome AS servico, pf.nome AS paciente_nome
+             FROM marcacao_horario m
+             JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
+             JOIN horario_agenda h ON h.id = m.horario_agenda_id
+             JOIN agenda_servico a ON a.id = h.agenda_servico_id
+             JOIN paciente p ON p.id = m.paciente_id
+             JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+            WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL AND m.paciente_id IS NOT NULL
+              AND s.significado IN ('aguardando', 'confirmada') AND h.inicio_em > ?
+              AND (m.criado_em >= ? OR h.inicio_em <= ?)
+            ORDER BY h.inicio_em LIMIT 2000`,
+          [est, agora, desde, ate],
+        )) {
+          const inicio = new Date(x['inicio_em'] as string);
+          eventos.push({
+            tipo: 'marcacao',
+            entidadeId: num(x['id']),
+            pacienteId: num(x['paciente_id']),
+            ocorridoEm: new Date(x['criado_em'] as string),
+            referenciaEm: inicio,
+            valores: {
+              ...dataHora(inicio),
+              servico: String(x['servico']),
+              paciente_nome: String(x['paciente_nome']),
+            },
+          });
+        }
+      if (tipos.has('resultado'))
+        for (const x of await l.consultar(
+          `SELECT r.id, r.paciente_id, r.liberado_em, x.nome AS servico, pf.nome AS paciente_nome
+             FROM resultado_exame r
+             JOIN exame_item i ON i.id = r.exame_item_id
+             JOIN requisicao_exame q ON q.id = i.requisicao_exame_id
+             JOIN exame x ON x.id = i.exame_id
+             JOIN paciente p ON p.id = r.paciente_id
+             JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+            WHERE q.estabelecimento_id = ? AND r.situacao = 'liberado' AND r.excluido_em IS NULL
+              AND r.liberado_em >= ? AND r.liberado_em <= ?
+            ORDER BY r.liberado_em LIMIT 2000`,
+          [est, desde, agora],
+        )) {
+          const em = new Date(x['liberado_em'] as string);
+          eventos.push({
+            tipo: 'resultado',
+            entidadeId: num(x['id']),
+            pacienteId: num(x['paciente_id']),
+            ocorridoEm: em,
+            referenciaEm: null,
+            valores: {
+              ...dataHora(em),
+              servico: String(x['servico']),
+              paciente_nome: String(x['paciente_nome']),
+            },
+          });
+        }
+      if (tipos.has('alta'))
+        for (const x of await l.consultar(
+          `SELECT a.id, n.paciente_id, a.alta_em, pf.nome AS paciente_nome
+             FROM alta_hospitalar a
+             JOIN internacao n ON n.id = a.internacao_id
+             JOIN paciente p ON p.id = n.paciente_id
+             JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+            WHERE n.estabelecimento_id = ? AND a.situacao = 'confirmada' AND a.excluido_em IS NULL
+              AND a.alta_em >= ? AND a.alta_em <= ?
+            ORDER BY a.alta_em LIMIT 2000`,
+          [est, desde, agora],
+        )) {
+          const em = new Date(x['alta_em'] as string);
+          eventos.push({
+            tipo: 'alta',
+            entidadeId: num(x['id']),
+            pacienteId: num(x['paciente_id']),
+            ocorridoEm: em,
+            referenciaEm: null,
+            valores: { ...dataHora(em), paciente_nome: String(x['paciente_nome']) },
+          });
+        }
+      const ids = regras.map((r) => r.id);
+      const ja = new Set(
+        (
+          await l.consultar(
+            `SELECT regra_envio_mensagem_paciente_id AS r, entidade, entidade_id
+               FROM pedido_mensagem_paciente
+              WHERE regra_envio_mensagem_paciente_id IN (${ids.map(() => '?').join(',')})
+                AND entidade IS NOT NULL AND criado_em >= ?`,
+            [...ids, new Date(desde.getTime() - 30 * 86_400_000)],
+          )
+        ).map((x) => `${num(x['r'])}:${String(x['entidade'])}:${num(x['entidade_id'])}`),
+      );
+      return { regras, eventos, ja };
+    });
+    let pedidos = 0;
+    const recusados: Record<string, number> = {};
+    for (const q of pedidosDosEventos(lido.regras, lido.eventos, lido.ja, agora)) {
+      try {
+        await this.pedir(
+          c,
+          {
+            regraId: q.regraId,
+            pacienteId: q.pacienteId,
+            referenciaEm: q.referenciaEm?.toISOString() ?? null,
+            valores: q.valores,
+            entidade: q.entidade,
+            entidadeId: q.entidadeId,
+          },
+          agora,
+        );
+        pedidos++;
+      } catch (e) {
+        const p = (e as { problema?: { status?: number; codigo?: string } }).problema;
+        if (!p || (p.status !== 422 && p.status !== 404)) throw e;
+        const codigo = p.codigo ?? 'recusado';
+        recusados[codigo] = (recusados[codigo] ?? 0) + 1;
+      }
+    }
+    return { pedidos, recusados };
+  }
+
+  /**
+   * O contexto da Hal-AI pela credencial (Basic cliente:segredo do cliente da API): conferida em tempo constante pelo
+   * resumo da chave ativa; tem de ser de um sistema de mensageria ativo, no estabelecimento, com o usuário técnico (autor
+   * da trilha) e o escopo das mensagens ao paciente.
+   */
+  async contextoDaCredencial(hospital: string, autorizacao: unknown): Promise<ContextoComunicacao> {
+    const negar = () =>
+      new ErroOperacao(401, 'nao-autenticado', 'Credencial inválida', 'Confira o cliente e o segredo.');
+    const cred = lerAutorizacaoBasica(autorizacao);
+    if (!cred) throw negar();
+    const base: ContextoComunicacao = {
+      cliente: this.cliente,
+      hospital,
+      usuario: null,
+      correlacao: 'integracao.mensagens.halai',
+    };
+    const x = await this.ler(base, 'mensagens.credencial', async (l, est) => {
+      const r = await l.uma(
+        `SELECT ca.situacao, ca.estabelecimento_id, ca.usuario_id, s.codigo AS sistema, s.categoria,
+                s.ativo AS sistema_ativo, k.hash_chave,
+                (SELECT JSON_ARRAYAGG(ea.codigo) FROM escopo_cliente_api ec
+                   JOIN escopo_api ea ON ea.id = ec.escopo_api_id AND ea.ativo
+                  WHERE ec.cliente_api_id = ca.id AND ec.excluido_em IS NULL AND ec.vigencia_inicio <= CURRENT_DATE()
+                    AND (ec.vigencia_fim IS NULL OR ec.vigencia_fim >= CURRENT_DATE())) AS escopos
+           FROM cliente_api ca
+           JOIN chave_api k ON k.cliente_api_id = ca.id AND k.situacao = 'ativa' AND k.excluido_em IS NULL
+                AND k.valida_desde <= CURRENT_TIMESTAMP(3) AND (k.valida_ate IS NULL OR k.valida_ate > CURRENT_TIMESTAMP(3))
+           LEFT JOIN sistema_externo s ON s.id = ca.sistema_externo_id AND s.excluido_em IS NULL
+          WHERE ca.identificador_cliente = ? AND ca.excluido_em IS NULL
+          ORDER BY k.sequencia DESC LIMIT 1`,
+        [cred.clienteId],
+      );
+      return r ? { r, est } : null;
+    });
+    if (!x || !segredoConfere(cred.segredo, String(x.r['hash_chave']))) throw negar();
+    const erros = conferirCredencialMensageria({
+      categoriaSistema: txtOuNull(x.r['categoria']),
+      sistemaAtivo: bool(x.r['sistema_ativo']),
+      situacaoCliente: String(x.r['situacao']),
+      restritoA: numOuNull(x.r['estabelecimento_id']),
+      estabelecimento: x.est,
+      usuarioTecnico: numOuNull(x.r['usuario_id']),
+      escopos: listaEscopos(x.r['escopos']),
+    });
+    if (erros.length > 0)
+      throw new ErroOperacao(
+        403,
+        erros[0]!.codigo,
+        'Credencial recusada',
+        erros.map((e) => e.mensagem).join(' '),
+      );
+    return {
+      ...base,
+      usuario: num(x.r['usuario_id']),
+      correlacao: `halai.${String(x.r['sistema'])}`.slice(0, 64),
+    };
+  }
+
+  /** Os pedidos pendentes que já chegaram ao momento do envio (a Hal-AI lê, envia e devolve o "enviado"). */
+  pendentes(c: ContextoComunicacao, agora: Date = new Date()): Promise<PedidoPendente[]> {
+    return this.ler(c, 'mensagens.pendentes', async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT id, canal, destino, assunto, conteudo, agendado_para, motivo_envio
+             FROM pedido_mensagem_paciente
+            WHERE estabelecimento_id = ? AND situacao = 'pendente' AND excluido_em IS NULL AND agendado_para <= ?
+            ORDER BY agendado_para, id LIMIT 500`,
+          [est, agora],
+        )
+      ).map((x) => ({
+        id: num(x['id']),
+        motivo: String(x['motivo_envio']),
+        canal: String(x['canal']) as CanalMensagem,
+        destino: String(x['destino']),
+        assunto: txtOuNull(x['assunto']),
+        conteudo: String(x['conteudo']),
+        agendadoPara: dataOuNull(x['agendado_para'])!,
+      })),
+    );
+  }
+}
+
+export interface PedidoPendente {
+  readonly id: number;
+  readonly motivo: string;
+  readonly canal: CanalMensagem;
+  readonly destino: string;
+  readonly assunto: string | null;
+  readonly conteudo: string;
+  readonly agendadoPara: string;
+}
+
+/** A lista de escopos gravada em JSON (o driver devolve texto ou já a lista). */
+function listaEscopos(v: unknown): string[] {
+  let x: unknown = v;
+  if (typeof v === 'string') {
+    try {
+      x = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(x) ? x.map(String) : [];
 }
