@@ -4,8 +4,9 @@
 // versão; publicar sem apagar). O que fica no banco está no contrato de efeito
 // apps/api/src/modulos/relatorio/pagina-inicial-propria.int.spec.ts. Aqui se prova o fluxo: criar o modelo; incluir
 // lista de trabalho, indicador com gráfico, atalho e texto; o atalho com endereço inválido é recusado na hora e trava
-// o salvar; ligar o perfil; salvar e publicar. Depois, a página inicial da pessoa sai montada pelo modelo do perfil.
-// Axe nas duas telas. Massa SINTÉTICA.
+// o salvar; ligar o perfil; salvar e publicar. Depois, a página inicial da pessoa sai montada pelo modelo do perfil:
+// a pessoa acumula dois perfis (médico e recepção; /api/acesso/inicio simulada) e o modelo traz as filas dos dois, que
+// aparecem juntas, na ordem e na largura do modelo, sem o seletor de perfil. Axe nas duas telas. Massa SINTÉTICA.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -42,6 +43,13 @@ const CATALOGO = {
       detalhamento: null,
     },
     {
+      codigo: 'recepcao',
+      descricao: 'Recepção: senhas',
+      categoria: 'lista_trabalho',
+      componente: 'lista_trabalho',
+      detalhamento: null,
+    },
+    {
       codigo: 'indicador',
       descricao: 'Indicador',
       categoria: 'indicador',
@@ -50,8 +58,46 @@ const CATALOGO = {
     },
   ],
   indicadores: [{ id: 7, codigo: 'IND-FIC-7', nome: 'OCUPACAO FICTICIA', unidade: 'percentual' }],
-  perfis: [{ id: 3, codigo: 'perfil-ficticio', nome: 'PERFIL FICTICIO DA RECEPCAO' }],
+  perfis: [
+    {
+      id: 3,
+      codigo: 'perfil-ficticio',
+      nome: 'PERFIL FICTICIO DA RECEPCAO',
+      estabelecimentoId: 1,
+      estabelecimento: 'HOSPITAL FICTICIO',
+    },
+  ],
+  estabelecimento: 1,
+  podeRede: false,
 };
+
+// A página fixa da pessoa (/api/acesso/inicio): dois perfis de trabalho e as filas que o servidor liberou.
+const PAGINA_FIXA = {
+  perfis: [
+    { id: 'medico', titulo: 'Médico' },
+    { id: 'recepcao', titulo: 'Recepção' },
+  ],
+  componentes: [
+    { id: 'mensagens', titulo: 'Mensagens', rota: '/mensagens', pendentes: null, prioridade: 0, prazo: null },
+    {
+      id: 'medico',
+      titulo: 'Meus pacientes',
+      rota: '/inicio/medico',
+      pendentes: null,
+      prioridade: 0,
+      prazo: null,
+    },
+    {
+      id: 'recepcao',
+      titulo: 'Senhas',
+      rota: '/inicio/recepcao',
+      pendentes: null,
+      prioridade: 0,
+      prazo: null,
+    },
+  ],
+};
+const LIBERADAS = new Set(PAGINA_FIXA.componentes.map((c) => c.id));
 
 interface Modelo {
   id: number;
@@ -79,6 +125,8 @@ function simular(page: Page) {
   });
   const detalhe = (m: Modelo) => ({
     ...m,
+    podeAlterar: true,
+    perfisOutros: 0,
     blocos: m.blocos.map((b) => ({
       ...b,
       indicadorNome: b['indicadorId'] ? CATALOGO.indicadores[0]!.nome : null,
@@ -89,6 +137,7 @@ function simular(page: Page) {
     modelos,
     async ligar() {
       await page.route(`**${B}/catalogo`, (rota) => json(rota, CATALOGO));
+      await page.route('**/api/acesso/inicio', (rota) => json(rota, PAGINA_FIXA));
       await page.route(`**${B}/modelos`, async (rota) => {
         if (rota.request().method() === 'GET') return json(rota, { itens: modelos.map(resumo) });
         const c = rota.request().postDataJSON() as { nome: string; descricao: string | null; rede: boolean };
@@ -142,30 +191,33 @@ function simular(page: Page) {
         m.versao += 1;
         return json(rota, { id: m.id, versao: m.versao });
       });
-      // A página da pessoa: o modelo publicado do perfil, com a série do indicador apurada.
+      // A página da pessoa: o modelo publicado do perfil, só com as listas liberadas para ela (como a porta), e a série
+      // do indicador apurada (competência AAAA-MM-DD, como a porta devolve).
       await page.route(`**${B}/minha`, (rota) => {
         const m = modelos.find((x) => x.situacao === 'publicado');
         if (!m) return json(rota, { modelo: null, blocos: [] });
         return json(rota, {
           modelo: { id: m.id, nome: m.nome },
-          blocos: m.blocos.map((b) => ({
-            ...b,
-            indicador:
-              b['tipo'] === 'indicador'
-                ? {
-                    id: 7,
-                    codigo: 'IND-FIC-7',
-                    nome: 'OCUPACAO FICTICIA',
-                    unidade: 'percentual',
-                    simbolo: '%',
-                    serie: [
-                      { competencia: '2030-01', valor: 71.5, meta: 85 },
-                      { competencia: '2030-02', valor: 78, meta: 85 },
-                      { competencia: '2030-03', valor: 82.25, meta: 85 },
-                    ],
-                  }
-                : null,
-          })),
+          blocos: m.blocos
+            .filter((b) => b['tipo'] !== 'lista_trabalho' || LIBERADAS.has(String(b['catalogo'])))
+            .map((b) => ({
+              ...b,
+              indicador:
+                b['tipo'] === 'indicador'
+                  ? {
+                      id: 7,
+                      codigo: 'IND-FIC-7',
+                      nome: 'OCUPACAO FICTICIA',
+                      unidade: 'percentual',
+                      simbolo: '%',
+                      serie: [
+                        { competencia: '2030-01-01', valor: 71.5, meta: 85 },
+                        { competencia: '2030-02-01', valor: 78, meta: 85 },
+                        { competencia: '2030-03-01', valor: 82.25, meta: 85 },
+                      ],
+                    }
+                  : null,
+            })),
         });
       });
     },
@@ -197,6 +249,7 @@ test.describe('@C2-039 página inicial montada pelo hospital por perfil', () => 
     await escolher(page.getByTestId('pi-novo-tipo'), 'lista_trabalho');
     await page.getByTestId('pi-incluir').click();
     await escolher(page.getByTestId('pi-bloco-0-lista'), 'mensagens');
+    await escolher(page.getByTestId('pi-bloco-0-largura'), '2');
     // Indicador com gráfico.
     await escolher(page.getByTestId('pi-novo-tipo'), 'indicador');
     await page.getByTestId('pi-incluir').click();
@@ -216,6 +269,13 @@ test.describe('@C2-039 página inicial montada pelo hospital por perfil', () => 
     await escolher(page.getByTestId('pi-novo-tipo'), 'texto');
     await page.getByTestId('pi-incluir').click();
     await page.getByTestId('pi-bloco-3-texto').fill('AVISO FICTICIO DA GESTAO');
+    // As filas dos dois perfis de trabalho (médico e recepção) no mesmo modelo.
+    await escolher(page.getByTestId('pi-novo-tipo'), 'lista_trabalho');
+    await page.getByTestId('pi-incluir').click();
+    await escolher(page.getByTestId('pi-bloco-4-lista'), 'medico');
+    await escolher(page.getByTestId('pi-novo-tipo'), 'lista_trabalho');
+    await page.getByTestId('pi-incluir').click();
+    await escolher(page.getByTestId('pi-bloco-5-lista'), 'recepcao');
     await expect(page.locator('[data-testid$="-erro"]')).toHaveCount(0);
 
     // Ligar o perfil.
@@ -240,7 +300,7 @@ test.describe('@C2-039 página inicial montada pelo hospital por perfil', () => 
           titulo: null,
           endereco: null,
           texto: null,
-          largura: 1,
+          largura: 2,
         },
         {
           tipo: 'indicador',
@@ -269,6 +329,15 @@ test.describe('@C2-039 página inicial montada pelo hospital por perfil', () => 
           texto: 'AVISO FICTICIO DA GESTAO',
           largura: 3,
         },
+        ...['medico', 'recepcao'].map((catalogo) => ({
+          tipo: 'lista_trabalho',
+          catalogo,
+          indicadorId: null,
+          titulo: null,
+          endereco: null,
+          texto: null,
+          largura: 1,
+        })),
       ],
       perfis: [{ perfilId: 3, prioridade: 1 }],
     });
@@ -284,6 +353,25 @@ test.describe('@C2-039 página inicial montada pelo hospital por perfil', () => 
     // A página inicial da pessoa sai montada pelo modelo do perfil.
     await page.goto('/inicio');
     await expect(page.getByTestId('inicio-modelo')).toContainText('PAGINA FICTICIA DA RECEPCAO');
+    // O modelo manda na página: sem o seletor de perfil, as filas dos dois perfis aparecem, na ordem do modelo (a lista
+    // de mensagens antes do indicador) e com a largura dele.
+    await expect(page.getByTestId('inicio-perfil')).toHaveCount(0);
+    const grade = page.getByTestId('inicio-cartoes');
+    await expect(grade.getByTestId('cartao-mensagens')).toHaveClass(/largura-2/);
+    await expect(grade.locator(':scope > [data-testid]')).toHaveCount(6);
+    expect(
+      await grade
+        .locator(':scope > [data-testid]')
+        .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid'))),
+    ).toEqual([
+      'cartao-mensagens',
+      'bloco-indicador',
+      'bloco-link',
+      'bloco-texto',
+      'cartao-medico',
+      'cartao-recepcao',
+    ]);
+    await expect(grade.getByTestId('bloco-texto')).toHaveClass(/largura-3/);
     const indicador = page.getByTestId('bloco-indicador');
     await expect(indicador).toBeVisible();
     await expect(indicador.getByTestId('bloco-indicador-ultimo')).toBeVisible();

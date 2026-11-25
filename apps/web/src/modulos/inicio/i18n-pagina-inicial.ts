@@ -5,6 +5,10 @@ export const mensagensPaginaInicial = {
     explicacao:
       'Monte a página inicial de cada perfil com listas de trabalho, indicadores com gráfico, atalhos e textos. A pessoa recebe o modelo publicado do perfil de menor prioridade; sem modelo, vale a página inicial padrão. A lista de trabalho só aparece para quem já pode abri-la.',
     soConsulta: 'Somente consulta: você não tem permissão para montar a página inicial.',
+    soConsultaRede:
+      'Modelo da rede: vale para todos os estabelecimentos e só muda com a permissão de editar os modelos da rede.',
+    perfisOutros: 'Mais {n} perfil(is) de outros estabelecimentos ligado(s) a este modelo da rede.',
+    perfilDe: '{nome} ({estabelecimento})',
     modelos: 'Modelos',
     semModelos: 'Nenhum modelo ainda.',
     novo: 'Novo modelo',

@@ -6,6 +6,8 @@
 //   PUT  /api/relatorios/pagina-inicial/modelos/:id            salva a página inteira (nome, blocos e perfis)
 //   POST /api/relatorios/pagina-inicial/modelos/:id/situacao   publica, volta a rascunho ou inativa (nada é apagado)
 //   GET  /api/relatorios/pagina-inicial/minha                  a página da pessoa (nula: a página fixa do perfil)
+// O modelo da rede (vale para todos os estabelecimentos) só é criado, salvo ou muda de situação com o escopo de rede
+// (relatorio.paginaInicial.editarRede); a porta recusa (403) sem ele e confere os perfis pelo escopo do modelo.
 // A minha página só traz as listas de trabalho que a pessoa já veria na página fixa (permissão do módulo de origem).
 import {
   Body,
@@ -35,6 +37,9 @@ import { PORTA_PAGINA_INICIAL, type PortaPaginaInicialPropria } from './pagina-i
 const TRILHA =
   'criação, gravação e mudança de situação do modelo de página inicial pelo executor (trilha na mesma transação)';
 
+/** O escopo de rede da sessão (editar os modelos que valem para todos os estabelecimentos). */
+const rede = (req: RequisicaoAutorizada): boolean => sessaoDe(req).pode(P.paginaInicialEditarRede);
+
 @Controller('relatorios/pagina-inicial')
 export class PaginaInicialController {
   constructor(
@@ -57,7 +62,7 @@ export class PaginaInicialController {
   @Get('catalogo')
   @Permissao(P.paginaInicialLer)
   catalogo(@Req() req: RequisicaoAutorizada) {
-    return this.com(req, (p, c) => p.catalogo(c));
+    return this.com(req, (p, c) => p.catalogo(c, rede(req)));
   }
 
   @Get('modelos')
@@ -69,7 +74,7 @@ export class PaginaInicialController {
   @Get('modelos/:id')
   @Permissao(P.paginaInicialLer)
   modelo(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
-    return this.com(req, (p, c) => p.detalhe(c, id));
+    return this.com(req, (p, c) => p.detalhe(c, id, rede(req)));
   }
 
   @Post('modelos')
@@ -77,7 +82,7 @@ export class PaginaInicialController {
   @Permissao(P.paginaInicialEditar)
   @AuditadoNoHandler(TRILHA)
   criar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.criar(c, corpo));
+    return this.com(req, (p, c) => p.criar(c, corpo, rede(req)));
   }
 
   @Put('modelos/:id')
@@ -85,7 +90,7 @@ export class PaginaInicialController {
   @Permissao(P.paginaInicialEditar)
   @AuditadoNoHandler(TRILHA)
   salvar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.salvar(c, id, corpo));
+    return this.com(req, (p, c) => p.salvar(c, id, corpo, rede(req)));
   }
 
   @Post('modelos/:id/situacao')
@@ -93,7 +98,7 @@ export class PaginaInicialController {
   @Permissao(P.paginaInicialEditar)
   @AuditadoNoHandler(TRILHA)
   situacao(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.mudarSituacao(c, id, corpo));
+    return this.com(req, (p, c) => p.mudarSituacao(c, id, corpo, rede(req)));
   }
 
   @Get('minha')

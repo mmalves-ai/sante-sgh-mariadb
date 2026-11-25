@@ -30,7 +30,7 @@ import { mensagensPaginaInicial } from '../i18n-pagina-inicial.js';
 
 const { t } = useI18n({ useScope: 'local', messages: mensagensPaginaInicial });
 const fila = useQueryClient();
-const podeEditar = computed(() => pode('relatorio.paginaInicial.editar'));
+const podeCriar = computed(() => pode('relatorio.paginaInicial.editar'));
 
 const catalogo = useQuery({ queryKey: ['pagina-inicial', 'catalogo'], queryFn: lerCatalogoPagina });
 const modelos = useQuery({ queryKey: ['pagina-inicial', 'modelos'], queryFn: lerModelosPagina });
@@ -40,6 +40,10 @@ const detalhe = useQuery({
   queryFn: () => lerModeloPagina(aberto.value),
   enabled: computed(() => aberto.value > 0),
 });
+// O modelo da rede vale para todos os estabelecimentos: sem o escopo de rede, só consulta (o servidor confere também).
+const podeRede = computed(() => catalogo.data.value?.podeRede ?? false);
+const podeEditar = computed(() => podeCriar.value && (detalhe.data.value?.podeAlterar ?? true));
+const soConsultaRede = computed(() => podeCriar.value && detalhe.data.value?.podeAlterar === false);
 
 const opcoesLista = computed(() =>
   (catalogo.data.value?.tipos ?? [])
@@ -89,15 +93,31 @@ function mover(i: number, d: -1 | 1): void {
 const tirar = (i: number) => blocos.value.splice(i, 1);
 
 const perfilNovo = ref<number | null>(null);
+// Os perfis pelo escopo do modelo: o da rede aceita os de qualquer estabelecimento; o daqui, só os daqui e os da rede.
+const perfisDoEscopo = computed(() => {
+  const c = catalogo.data.value;
+  if (!c) return [];
+  return detalhe.data.value?.rede
+    ? c.perfis
+    : c.perfis.filter((p) => p.estabelecimentoId === null || p.estabelecimentoId === c.estabelecimento);
+});
+const rotuloPerfil = (p: {
+  nome: string;
+  estabelecimento: string | null;
+  estabelecimentoId: number | null;
+}) =>
+  p.estabelecimentoId !== null && p.estabelecimentoId !== catalogo.data.value?.estabelecimento
+    ? t('perfilDe', { nome: p.nome, estabelecimento: p.estabelecimento ?? '' })
+    : p.nome;
 const opcoesPerfil = computed(() =>
-  (catalogo.data.value?.perfis ?? [])
+  perfisDoEscopo.value
     .filter((p) => !perfis.value.some((x) => x.perfilId === p.id))
-    .map((p) => ({ valor: p.id, rotulo: p.nome })),
+    .map((p) => ({ valor: p.id, rotulo: rotuloPerfil(p) })),
 );
 function ligar(): void {
-  const p = catalogo.data.value?.perfis.find((x) => x.id === perfilNovo.value);
+  const p = perfisDoEscopo.value.find((x) => x.id === perfilNovo.value);
   if (!p) return;
-  perfis.value.push({ perfilId: p.id, nome: p.nome, prioridade: perfis.value.length + 1 });
+  perfis.value.push({ perfilId: p.id, nome: rotuloPerfil(p), prioridade: perfis.value.length + 1 });
   perfilNovo.value = null;
 }
 const desligar = (i: number) => perfis.value.splice(i, 1);
@@ -146,7 +166,7 @@ const ok = async (texto: string) => {
 const nomeNovo = ref('');
 const daRede = ref(false);
 const criacao = useMutation({
-  mutationFn: () => criarModeloPagina(nomeNovo.value.trim(), daRede.value),
+  mutationFn: () => criarModeloPagina(nomeNovo.value.trim(), daRede.value && podeRede.value),
   onSuccess: async (r) => {
     nomeNovo.value = '';
     aberto.value = r.id;
@@ -187,7 +207,7 @@ const situacao = useMutation({
   <section class="tela-agenda" aria-labelledby="pagina-inicial-titulo" data-testid="tela-pagina-inicial">
     <h1 id="pagina-inicial-titulo">{{ t('titulo') }}</h1>
     <p>{{ t('explicacao') }}</p>
-    <p v-if="!podeEditar" role="note" data-testid="pi-so-consulta">{{ t('soConsulta') }}</p>
+    <p v-if="!podeCriar" role="note" data-testid="pi-so-consulta">{{ t('soConsulta') }}</p>
     <p v-if="aviso" role="status" data-testid="pi-aviso">{{ aviso }}</p>
     <MensagemErro v-if="erro" :erro="erro" />
 
@@ -213,13 +233,13 @@ const situacao = useMutation({
             </button>
           </li>
         </ul>
-        <form v-if="podeEditar" data-testid="pi-novo" @submit.prevent="criacao.mutate()">
+        <form v-if="podeCriar" data-testid="pi-novo" @submit.prevent="criacao.mutate()">
           <h3>{{ t('novo') }}</h3>
           <label>
             {{ t('nome') }}
             <input v-model="nomeNovo" maxlength="150" required data-testid="pi-novo-nome" />
           </label>
-          <label class="pi-marca">
+          <label v-if="podeRede" class="pi-marca">
             <input v-model="daRede" type="checkbox" data-testid="pi-novo-rede" />
             {{ t('rede') }}
           </label>
@@ -247,6 +267,7 @@ const situacao = useMutation({
         <p class="secundario" data-testid="pi-situacao">
           {{ t(`situacoes.${detalhe.data.value.situacao}`) }}
         </p>
+        <p v-if="soConsultaRede" role="note" data-testid="pi-so-consulta-rede">{{ t('soConsultaRede') }}</p>
 
         <h2>{{ t('blocos') }}</h2>
         <p v-if="blocos.length === 0">{{ t('semBlocos') }}</p>
@@ -332,6 +353,13 @@ const situacao = useMutation({
 
         <h2>{{ t('perfis') }}</h2>
         <p v-if="perfis.length === 0">{{ t('semPerfis') }}</p>
+        <p
+          v-if="(detalhe.data.value?.perfisOutros ?? 0) > 0"
+          class="secundario"
+          data-testid="pi-perfis-outros"
+        >
+          {{ t('perfisOutros', { n: detalhe.data.value!.perfisOutros }) }}
+        </p>
         <ul class="pi-lista">
           <li
             v-for="(p, i) in perfis"

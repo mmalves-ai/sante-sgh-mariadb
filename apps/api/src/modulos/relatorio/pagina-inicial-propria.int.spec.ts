@@ -4,7 +4,10 @@
 // (lista de trabalho ligada ao catálogo tipo_bloco_pagina, indicador, atalho e texto) e o perfil com a prioridade; a
 // lista fora do catálogo e a versão velha são recusadas sem mudar nada; tirar blocos marca-os como excluídos (nada é
 // apagado) e o perfil que sai também; publicado, a página da pessoa traz o modelo dos perfis dela com a série do
-// indicador e sem a lista que ela não veria; inativado, volta a página fixa (nulo).
+// indicador e sem a lista que ela não veria; inativado, volta a página fixa (nulo). O modelo da REDE, com dois
+// estabelecimentos: sem o escopo de rede, nenhum dos dois cria, salva nem muda a situação dele (nada gravado); com o
+// escopo, os perfis são conferidos pelo escopo do modelo (o perfil do outro estabelecimento vale) e o editor do outro
+// estabelecimento salva sem perder o perfil daqui; sem o escopo, o detalhe esconde o perfil alheio e só o conta.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -14,23 +17,28 @@ import { PortaPaginaInicialPropria } from './pagina-inicial-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'c2039pi';
+const P2 = 'c2039pj';
+const REDE = 'C2039 rede';
 
 async function limpar(e: Escritor): Promise<void> {
-  const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
-  const mod = `(SELECT x.id FROM (SELECT id FROM modelo_pagina_inicial WHERE estabelecimento_id IN ${est}) x)`;
+  const est = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
+  const mod = `(SELECT x.id FROM (SELECT id FROM modelo_pagina_inicial WHERE estabelecimento_id IN ${est}
+     OR (estabelecimento_id IS NULL AND nome LIKE ?)) x)`;
+  const pm = [P, P2, `${REDE}%`];
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
-    await e.executar(`DELETE FROM modelo_pagina_inicial_bloco WHERE modelo_pagina_inicial_id IN ${mod}`, [P]);
-    await e.executar(`DELETE FROM modelo_pagina_inicial_perfil WHERE modelo_pagina_inicial_id IN ${mod}`, [
-      P,
-    ]);
-    await e.executar(`DELETE FROM modelo_pagina_inicial WHERE estabelecimento_id IN ${est}`, [P]);
-    await e.executar(`DELETE FROM apuracao_indicador WHERE estabelecimento_id IN ${est}`, [P]);
-    await e.executar(`DELETE FROM usuario_perfil WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM modelo_pagina_inicial_bloco WHERE modelo_pagina_inicial_id IN ${mod}`, pm);
+    await e.executar(`DELETE FROM modelo_pagina_inicial_perfil WHERE modelo_pagina_inicial_id IN ${mod}`, pm);
+    await e.executar(
+      `DELETE FROM modelo_pagina_inicial WHERE estabelecimento_id IN ${est} OR (estabelecimento_id IS NULL AND nome LIKE ?)`,
+      pm,
+    );
+    await e.executar(`DELETE FROM apuracao_indicador WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM usuario_perfil WHERE estabelecimento_id IN ${est}`, [P, P2]);
     await e.executar(`DELETE FROM perfil_acesso WHERE codigo LIKE 'c2039-%'`);
     await e.executar(`DELETE FROM indicador WHERE codigo LIKE 'C2039%'`);
-    await limparTrilhaDaMassa(e, { codigos: [P] });
-    await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+    await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+    await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
   }
@@ -39,9 +47,17 @@ async function limpar(e: Escritor): Promise<void> {
 describe.skipIf(SEM_BANCO)('Página inicial montada pelo hospital (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaPaginaInicialPropria;
-  let m: { est: number; usuario: number; perfil: number; perfil2: number; indicador: number };
+  let m: {
+    est: number;
+    usuario: number;
+    perfil: number;
+    perfil2: number;
+    perfilOutro: number;
+    indicador: number;
+  };
   let modelo = 0;
   const ctx = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P, hospital: P });
+  const ctxOutro = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P2, hospital: P2 });
   const ler = (sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p));
   const linhaModelo = async () =>
@@ -127,6 +143,15 @@ describe.skipIf(SEM_BANCO)('Página inicial montada pelo hospital (contrato de e
         "INSERT INTO perfil_acesso (estabelecimento_id, codigo, nome, criado_em) VALUES (?, 'c2039-b', 'Perfil teste B', ?)",
         [est, agora],
       );
+      const est2 = await e.inserir(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, 'Hospital Teste B', 'Hospital sintético B (fictício)', 'America/Sao_Paulo', ?)`,
+        [P2, agora],
+      );
+      const perfilOutro = await e.inserir(
+        "INSERT INTO perfil_acesso (estabelecimento_id, codigo, nome, criado_em) VALUES (?, 'c2039-c', 'Perfil teste C', ?)",
+        [est2, agora],
+      );
       await e.executar(
         'INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
         [us!['id'], perfil, est, '2026-01-01', agora],
@@ -151,7 +176,7 @@ describe.skipIf(SEM_BANCO)('Página inicial montada pelo hospital (contrato de e
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
       }
-      return { est, usuario: Number(us!['id']), perfil, perfil2, indicador: indicador! };
+      return { est, usuario: Number(us!['id']), perfil, perfil2, perfilOutro, indicador: indicador! };
     });
   });
 
@@ -174,7 +199,7 @@ describe.skipIf(SEM_BANCO)('Página inicial montada pelo hospital (contrato de e
   });
 
   it('salva blocos em ordem e perfis; lista fora do catálogo e versão velha são recusadas', async () => {
-    const ruim = quatroBlocos();
+    const ruim: Record<string, unknown>[] = quatroBlocos();
     ruim[0] = { ...ruim[0]!, catalogo: 'inexistente' };
     const e = await erro(
       porta.salvar(ctx(), modelo, {
@@ -258,5 +283,73 @@ describe.skipIf(SEM_BANCO)('Página inicial montada pelo hospital (contrato de e
     expect((await porta.minha(ctx(), new Set(['medico']))).modelo).toBeNull();
     expect(await linhaModelo()).toMatchObject({ situacao: 'inativo' });
     expect((await porta.modelos(ctx())).find((x) => x.id === modelo)).toMatchObject({ blocos: 2, perfis: 1 });
+  });
+
+  it('modelo da rede: só com o escopo de rede; perfis pelo escopo do modelo, não do estabelecimento da sessão', async () => {
+    const pagina = (v: number, perfisIds: number[]) => ({
+      versao: v,
+      nome: `${REDE} geral`,
+      descricao: null,
+      blocos: quatroBlocos().slice(2),
+      perfis: perfisIds.map((perfilId, i) => ({ perfilId, prioridade: i + 1 })),
+    });
+    const daRede = () =>
+      ler(
+        'SELECT id, versao, situacao FROM modelo_pagina_inicial WHERE estabelecimento_id IS NULL AND nome LIKE ?',
+        [`${REDE}%`],
+      );
+    // Sem o escopo de rede: nada é criado.
+    const sem = await erro(porta.criar(ctx(), { nome: `${REDE} geral`, descricao: null, rede: true }));
+    expect(sem.status).toBe(403);
+    expect(sem.texto).toContain('sem-escopo-rede');
+    expect(await daRede()).toHaveLength(0);
+
+    // Com o escopo, de A: cria e liga o perfil de A e o de B (o modelo vale para a rede inteira).
+    const r = await porta.criar(ctx(), { nome: `${REDE} geral`, descricao: null, rede: true }, true);
+    const v2 = await porta.salvar(ctx(), r.id, pagina(1, [m.perfil, m.perfilOutro]), true);
+    expect(v2.versao).toBe(2);
+    // O modelo de um estabelecimento continua só com os perfis dele: o de B é recusado no modelo de A.
+    expect(
+      (
+        await erro(
+          porta.salvar(ctx(), modelo, {
+            ...pagina(Number((await linhaModelo())['versao']), [m.perfilOutro]),
+            nome: 'Plantão clínico',
+          }),
+        )
+      ).texto,
+    ).toContain('perfil-inexistente');
+
+    // De B, sem o escopo: não salva, não publica, não inativa (403, versão intacta); o detalhe esconde o perfil de A.
+    expect((await erro(porta.salvar(ctxOutro(), r.id, pagina(2, [m.perfilOutro])))).status).toBe(403);
+    expect(
+      (await erro(porta.mudarSituacao(ctxOutro(), r.id, { versao: 2, situacao: 'publicado' }))).status,
+    ).toBe(403);
+    expect(
+      (await erro(porta.mudarSituacao(ctxOutro(), r.id, { versao: 2, situacao: 'inativo' }))).status,
+    ).toBe(403);
+    expect((await daRede()).map((x) => [Number(x['versao']), x['situacao']])).toEqual([[2, 'rascunho']]);
+    const visto = await porta.detalhe(ctxOutro(), r.id);
+    expect(visto).toMatchObject({ rede: true, podeAlterar: false, perfisOutros: 1 });
+    expect(visto.perfis.map((p) => p.perfilId)).toEqual([m.perfilOutro]);
+    const cat = await porta.catalogo(ctxOutro());
+    expect(cat.podeRede).toBe(false);
+    expect(cat.perfis.some((p) => p.id === m.perfil)).toBe(false);
+
+    // De B, com o escopo: vê os dois perfis, salva mantendo o de A (sem 'perfil-inexistente') e publica.
+    const comEscopo = await porta.detalhe(ctxOutro(), r.id, true);
+    expect(comEscopo).toMatchObject({ podeAlterar: true, perfisOutros: 0 });
+    expect(comEscopo.perfis.map((p) => p.perfilId).sort()).toEqual([m.perfil, m.perfilOutro].sort());
+    expect((await porta.catalogo(ctxOutro(), true)).perfis.some((p) => p.id === m.perfil)).toBe(true);
+    const v3 = await porta.salvar(ctxOutro(), r.id, pagina(2, [m.perfil, m.perfilOutro]), true);
+    await porta.mudarSituacao(ctxOutro(), r.id, { versao: v3.versao, situacao: 'publicado' }, true);
+    expect((await daRede()).map((x) => [Number(x['versao']), x['situacao']])).toEqual([[4, 'publicado']]);
+    const ligados = await ler(
+      'SELECT perfil_acesso_id FROM modelo_pagina_inicial_perfil WHERE modelo_pagina_inicial_id = ? AND excluido_em IS NULL ORDER BY perfil_acesso_id',
+      [r.id],
+    );
+    expect(ligados.map((x) => Number(x['perfil_acesso_id']))).toEqual(
+      [m.perfil, m.perfilOutro].sort((a, b) => a - b),
+    );
   });
 });

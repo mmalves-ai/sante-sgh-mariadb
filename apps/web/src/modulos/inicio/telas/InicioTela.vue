@@ -78,9 +78,22 @@ const perfilDaTela = computed<ComponenteInicio>({
 const perfis = computed(() =>
   (pagina.data.value?.perfis ?? []).map((p) => ({ valor: p.id, rotulo: p.titulo })),
 );
-const visiveis = computed(() =>
-  pagina.data.value ? componentesDoPerfil(pagina.data.value, escolhido.value) : [],
-);
+// 01-ADM L114: a página montada pelo hospital para os perfis da pessoa (sem modelo publicado, ou sem o banco do
+// cliente, a página fixa acima vale). As listas de trabalho do modelo são os cartões já liberados, na ordem do modelo;
+// os demais blocos (indicador com gráfico, atalho, texto) entram na mesma grade. Com modelo publicado, o modelo manda
+// na página: as filas visíveis são todas as que o servidor liberou (não só as do perfil ativo), as consultas das filas
+// citadas no modelo rodam e o seletor de perfil sai (a fila de cada perfil fica onde o modelo a pôs).
+const minha = useQuery({
+  queryKey: computed(() => ['inicio', 'pagina-montada', dono.value]),
+  queryFn: () => lerMinhaPagina(),
+  retry: false,
+});
+const modeloDaPagina = computed(() => (minha.isSuccess.value ? (minha.data.value?.modelo ?? null) : null));
+const visiveis = computed(() => {
+  if (!pagina.data.value) return [];
+  if (modeloDaPagina.value) return pagina.data.value.componentes;
+  return componentesDoPerfil(pagina.data.value, escolhido.value);
+});
 const tem = (id: ComponenteInicio) => computed(() => visiveis.value.some((c) => c.id === id));
 
 // Os resumos de cada fila (só as visíveis; a recepção relê a cada 30 s, a do médico a cada minuto).
@@ -180,15 +193,6 @@ const cartoes = computed(() => {
   if (agravos.data.value) resumos.agravos = resumoAgravos(agravos.data.value);
   return montarCartoes(visiveis.value, resumos);
 });
-// 01-ADM L114: a página montada pelo hospital para os perfis da pessoa (sem modelo publicado, ou sem o banco do
-// cliente, a página fixa acima vale). As listas de trabalho do modelo são os cartões já liberados, na ordem do modelo;
-// os demais blocos (indicador com gráfico, atalho, texto) entram na mesma grade.
-const minha = useQuery({
-  queryKey: computed(() => ['inicio', 'pagina-montada', dono.value]),
-  queryFn: () => lerMinhaPagina(),
-  retry: false,
-});
-const modeloDaPagina = computed(() => (minha.isSuccess.value ? (minha.data.value?.modelo ?? null) : null));
 type ItemPagina =
   | { chave: string; largura: number; cartao: (typeof cartoes.value)[number]; bloco?: undefined }
   | {
@@ -241,7 +245,7 @@ const prazoTexto = (p: string) => `${p.slice(8, 10)}/${p.slice(5, 7)} ${p.slice(
     <ErroTrabalho v-if="pagina.isError.value" :erro="pagina.error.value" />
     <p v-else-if="!pagina.data.value" role="status">{{ t('trabalho.carregando') }}</p>
     <template v-else>
-      <div v-if="perfis.length > 1" class="painel" data-testid="inicio-perfil">
+      <div v-if="perfis.length > 1 && !modeloDaPagina" class="painel" data-testid="inicio-perfil">
         <p class="secundario">{{ t('trabalho.inicio.perfilTexto') }}</p>
         <SanteOpcoes
           v-model="perfilDaTela"

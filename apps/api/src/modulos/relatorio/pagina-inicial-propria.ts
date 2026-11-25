@@ -7,6 +7,10 @@
 //   - CRIAR (rascunho), SALVAR a página inteira de uma vez (nome, blocos em ordem e perfis; trava pela versão lida) e
 //     MUDAR A SITUAÇÃO (publicar exige bloco e perfil; inativar tira de uso). Nada é apagado: o bloco ou o perfil que
 //     sai fica marcado como excluído e volta se for posto de novo na mesma posição;
+//   - o ESCOPO: o modelo da rede (estabelecimento nulo) vale para todos os estabelecimentos; criá-lo, salvá-lo e mudar a
+//     situação dele exige o escopo de rede (relatorio.paginaInicial.editarRede), conferido pelo controller e passado à
+//     porta. Os perfis de um modelo da rede são conferidos e mostrados pelo escopo do próprio modelo (qualquer perfil da
+//     rede), não pelo estabelecimento da sessão; sem o escopo, o detalhe mostra só os perfis daqui e conta os outros;
 //   - a MINHA PÁGINA: o modelo publicado dos perfis vigentes da pessoa no estabelecimento, com os blocos que ela pode
 //     ver e a série das últimas competências de cada indicador (só agregados). Sem modelo, nulo: a página fixa vale.
 import {
@@ -25,7 +29,7 @@ import {
   TIPOS_BLOCO_INICIO,
   type TipoBlocoInicio,
 } from '@sgh/dominio-relatorio';
-import type { Leitor, TxOperacao } from '@sgh/nucleo';
+import { ErroOperacao, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   BaseComunicacaoPropria,
@@ -96,16 +100,22 @@ const SQL_BLOCOS = `SELECT b.id, b.sequencia, b.tipo_bloco, t.codigo AS catalogo
     LEFT JOIN tipo_bloco_pagina t ON t.id = b.tipo_bloco_pagina_id
     LEFT JOIN indicador i ON i.id = b.indicador_id
   WHERE b.modelo_pagina_inicial_id = ? AND b.excluido_em IS NULL ORDER BY b.sequencia`;
-const SQL_PERFIS = `SELECT p.perfil_acesso_id, a.nome, p.prioridade FROM modelo_pagina_inicial_perfil p
+const SQL_PERFIS = `SELECT p.perfil_acesso_id, a.nome, a.estabelecimento_id, p.prioridade FROM modelo_pagina_inicial_perfil p
     JOIN perfil_acesso a ON a.id = p.perfil_acesso_id
   WHERE p.modelo_pagina_inicial_id = ? AND p.excluido_em IS NULL ORDER BY p.prioridade, a.nome`;
 const SQL_TIPOS = `SELECT id, codigo, descricao, categoria, componente, detalhamento FROM tipo_bloco_pagina
   WHERE ativo = TRUE ORDER BY categoria = 'lista_trabalho' DESC, descricao LIMIT 200`;
 const SQL_INDICADORES = `SELECT id, codigo, nome, unidade, simbolo FROM indicador
   WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome LIMIT 2000`;
-const SQL_PERFIS_ACESSO = `SELECT id, codigo, nome FROM perfil_acesso
-  WHERE ativo = TRUE AND excluido_em IS NULL AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
-  ORDER BY nome LIMIT 2000`;
+const SQL_PERFIS_ACESSO = `SELECT a.id, a.codigo, a.nome, a.estabelecimento_id, e.nome_fantasia AS estabelecimento
+  FROM perfil_acesso a LEFT JOIN estabelecimento e ON e.id = a.estabelecimento_id
+  WHERE a.ativo = TRUE AND a.excluido_em IS NULL AND (a.estabelecimento_id = ? OR a.estabelecimento_id IS NULL)
+  ORDER BY a.nome LIMIT 2000`;
+/** Com o escopo de rede: os perfis de todos os estabelecimentos (para ligar ao modelo da rede). */
+const SQL_PERFIS_ACESSO_REDE = `SELECT a.id, a.codigo, a.nome, a.estabelecimento_id, e.nome_fantasia AS estabelecimento
+  FROM perfil_acesso a LEFT JOIN estabelecimento e ON e.id = a.estabelecimento_id
+  WHERE a.ativo = TRUE AND a.excluido_em IS NULL
+  ORDER BY a.estabelecimento_id IS NOT NULL, e.nome_fantasia, a.nome LIMIT 2000`;
 const SQL_CANDIDATOS = `SELECT DISTINCT m.id AS modelo_id, m.situacao, m.estabelecimento_id, mp.prioridade
   FROM usuario_perfil up
     JOIN modelo_pagina_inicial_perfil mp ON mp.perfil_acesso_id = up.perfil_acesso_id AND mp.excluido_em IS NULL
@@ -128,6 +138,15 @@ export interface BlocoModeloInicio {
   readonly largura: number;
 }
 
+/** O modelo da rede só muda com o escopo de rede (quem cuida de um estabelecimento não mexe na página dos outros). */
+const semEscopoRede = () =>
+  new ErroOperacao(
+    403,
+    'sem-escopo-rede',
+    'Modelo da rede',
+    'O modelo da rede vale para todos os estabelecimentos: criá-lo, alterá-lo ou mudar a situação dele exige a permissão de editar os modelos da rede.',
+  );
+
 const dia = (v: unknown): string =>
   v instanceof Date
     ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
@@ -147,8 +166,10 @@ function bloco(r: Record<string, unknown>): BlocoModeloInicio {
 }
 
 export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
-  async catalogo(c: ContextoComunicacao) {
+  async catalogo(c: ContextoComunicacao, escopoRede = false) {
     return this.ler(c, 'pagina_inicial.catalogo', async (l, est) => ({
+      estabelecimento: est,
+      podeRede: escopoRede,
       tipos: (await l.consultar(SQL_TIPOS, [])).map((r) => ({
         codigo: String(r['codigo']),
         descricao: String(r['descricao']),
@@ -162,10 +183,15 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
         nome: String(r['nome']),
         unidade: String(r['unidade']),
       })),
-      perfis: (await l.consultar(SQL_PERFIS_ACESSO, [est])).map((r) => ({
+      perfis: (escopoRede
+        ? await l.consultar(SQL_PERFIS_ACESSO_REDE, [])
+        : await l.consultar(SQL_PERFIS_ACESSO, [est])
+      ).map((r) => ({
         id: num(r['id']),
         codigo: String(r['codigo']),
         nome: String(r['nome']),
+        estabelecimentoId: numOuNull(r['estabelecimento_id']),
+        estabelecimento: txtOuNull(r['estabelecimento']),
       })),
     }));
   }
@@ -185,31 +211,44 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
     );
   }
 
-  async detalhe(c: ContextoComunicacao, id: number) {
-    return this.ler(c, 'pagina_inicial.detalhe', (l, est) => this.lerDetalhe(l, est, id));
+  async detalhe(c: ContextoComunicacao, id: number, escopoRede = false) {
+    return this.ler(c, 'pagina_inicial.detalhe', (l, est) => this.lerDetalhe(l, est, id, escopoRede));
   }
 
-  private async lerDetalhe(l: Leitor, est: number, id: number) {
+  private async lerDetalhe(l: Leitor, est: number, id: number, escopoRede: boolean) {
     const m = await l.uma(SQL_MODELO, [id, est]);
     if (!m) throw naoEncontrado('Modelo de página inicial');
+    const rede = m['estabelecimento_id'] === null;
+    // Modelo da rede visto sem o escopo de rede: só os perfis deste estabelecimento (ou da rede); os outros, contados.
+    const todos = await l.consultar(SQL_PERFIS, [id]);
+    const visiveis = todos.filter(
+      (r) => !rede || escopoRede || r['estabelecimento_id'] === null || num(r['estabelecimento_id']) === est,
+    );
     return {
       id,
       nome: String(m['nome']),
       descricao: txtOuNull(m['descricao']),
       situacao: String(m['situacao']) as SituacaoModeloInicio,
-      rede: m['estabelecimento_id'] === null,
+      rede,
       versao: num(m['versao']),
+      podeAlterar: !rede || escopoRede,
       blocos: (await l.consultar(SQL_BLOCOS, [id])).map(bloco),
-      perfis: (await l.consultar(SQL_PERFIS, [id])).map((r) => ({
+      perfis: visiveis.map((r) => ({
         perfilId: num(r['perfil_acesso_id']),
         nome: String(r['nome']),
         prioridade: num(r['prioridade']),
       })),
+      perfisOutros: todos.length - visiveis.length,
     };
   }
 
-  async criar(c: ContextoComunicacao, entrada: unknown): Promise<{ id: number; versao: number }> {
+  async criar(
+    c: ContextoComunicacao,
+    entrada: unknown,
+    escopoRede = false,
+  ): Promise<{ id: number; versao: number }> {
     const e = entradaValida(esquemaCriarModeloInicio, entrada);
+    if (e.rede && !escopoRede) throw semEscopoRede();
     return this.gravar(c, OPERACOES_PAGINA_INICIAL.criar, TABELAS_PAGINA_INICIAL, async (tx, est) => {
       await this.conferirNomeLivre(tx, est, e.rede, e.nome, null);
       const id = await tx.incluir(T_MODELO, {
@@ -226,6 +265,7 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
     c: ContextoComunicacao,
     id: number,
     entrada: unknown,
+    escopoRede = false,
   ): Promise<{ id: number; versao: number }> {
     const e = entradaValida(esquemaSalvarModeloInicio, entrada);
     return this.gravar(
@@ -234,8 +274,9 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
       TABELAS_PAGINA_INICIAL,
       async (tx, est, usuario) => {
         const m = await this.travar(tx, est, id);
-        if (num(m['versao']) !== e.versao) throw conflito();
         const rede = m['estabelecimento_id'] === null;
+        if (rede && !escopoRede) throw semEscopoRede();
+        if (num(m['versao']) !== e.versao) throw conflito();
         await this.conferirNomeLivre(tx, est, rede, e.nome, id);
         const tipos = new Map(
           (
@@ -256,7 +297,7 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
         ];
         if (String(m['situacao']) === 'publicado')
           erros.push(...conferirPublicacaoInicio(blocos.length, e.perfis.length));
-        await this.conferirAlvos(tx, est, blocos, e.perfis, erros);
+        await this.conferirAlvos(tx, rede ? null : est, blocos, e.perfis, erros);
         if (erros.length > 0) throw recusa(erros, 'Página inicial recusada');
 
         const agora = new Date();
@@ -346,10 +387,12 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
     c: ContextoComunicacao,
     id: number,
     entrada: unknown,
+    escopoRede = false,
   ): Promise<{ id: number; situacao: SituacaoModeloInicio; versao: number }> {
     const e = entradaValida(esquemaSituacaoModeloInicio, entrada);
     return this.gravar(c, OPERACOES_PAGINA_INICIAL.situacao, TABELAS_PAGINA_INICIAL, async (tx, est) => {
       const m = await this.travar(tx, est, id);
+      if (m['estabelecimento_id'] === null && !escopoRede) throw semEscopoRede();
       if (num(m['versao']) !== e.versao) throw conflito();
       const de = String(m['situacao']) as SituacaoModeloInicio;
       if (!podeTransitarModeloInicio(de, e.situacao))
@@ -391,7 +434,7 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
       }));
       const id = escolherModeloInicio(candidatos, est);
       if (id === null) return { modelo: null, blocos: [] };
-      const d = await this.lerDetalhe(l, est, id);
+      const d = await this.lerDetalhe(l, est, id, true);
       const visiveis = blocosVisiveisInicio(d.blocos, listas);
       const blocos = [];
       for (const b of visiveis) {
@@ -452,10 +495,10 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
       );
   }
 
-  /** O indicador e o perfil escolhidos existem e valem aqui. */
+  /** O indicador e o perfil escolhidos existem e valem no escopo do modelo (est nulo: a rede, qualquer perfil dela). */
   private async conferirAlvos(
     tx: TxOperacao,
-    est: number,
+    est: number | null,
     blocos: readonly BlocoInicioEntrada[],
     perfis: readonly { perfilId: number }[],
     erros: { campo: string; codigo: string; mensagem: string }[],
@@ -475,11 +518,20 @@ export class PortaPaginaInicialPropria extends BaseComunicacaoPropria {
           });
       }
     for (const [i, p] of perfis.entries()) {
-      const [r] = await tx.consultar(
-        'SELECT id FROM perfil_acesso WHERE id = ? AND excluido_em IS NULL AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
-        [p.perfilId, est],
-        { teto: 1 },
-      );
+      const [r] =
+        est === null
+          ? await tx.consultar(
+              'SELECT id FROM perfil_acesso WHERE id = ? AND excluido_em IS NULL',
+              [p.perfilId],
+              {
+                teto: 1,
+              },
+            )
+          : await tx.consultar(
+              'SELECT id FROM perfil_acesso WHERE id = ? AND excluido_em IS NULL AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
+              [p.perfilId, est],
+              { teto: 1 },
+            );
       if (!r)
         erros.push({
           campo: `perfis[${i}]`,

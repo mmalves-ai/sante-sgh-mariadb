@@ -35,7 +35,18 @@ export const esquemaCatalogo = z.object({
   indicadores: z.array(
     z.object({ id: z.number(), codigo: z.string(), nome: z.string(), unidade: z.string() }),
   ),
-  perfis: z.array(z.object({ id: z.number(), codigo: z.string(), nome: z.string() })),
+  // Os perfis daqui e da rede; com o escopo de rede (podeRede), os de todos os estabelecimentos.
+  perfis: z.array(
+    z.object({
+      id: z.number(),
+      codigo: z.string(),
+      nome: z.string(),
+      estabelecimentoId: z.number().nullable(),
+      estabelecimento: z.string().nullable(),
+    }),
+  ),
+  estabelecimento: z.number(),
+  podeRede: z.boolean(),
 });
 export type CatalogoPagina = z.infer<typeof esquemaCatalogo>;
 
@@ -58,8 +69,12 @@ export const esquemaModelo = z.object({
   situacao: z.enum(SITUACOES_MODELO),
   rede: z.boolean(),
   versao: z.number(),
+  /** Falso no modelo da rede visto sem o escopo de rede (só consulta). */
+  podeAlterar: z.boolean(),
   blocos: z.array(esquemaBloco),
   perfis: z.array(z.object({ perfilId: z.number(), nome: z.string(), prioridade: z.number() })),
+  /** Perfis de outros estabelecimentos ligados ao modelo da rede (contados, não mostrados, sem o escopo de rede). */
+  perfisOutros: z.number(),
 });
 export type ModeloPagina = z.infer<typeof esquemaModelo>;
 

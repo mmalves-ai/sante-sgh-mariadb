@@ -22,6 +22,7 @@ export const PERMISSOES_M34_CODIGOS = {
   // 01-ADM L114: página inicial montada pelo hospital (modelos por perfil).
   paginaInicialLer: 'relatorio.paginaInicial.ler',
   paginaInicialEditar: 'relatorio.paginaInicial.editar',
+  paginaInicialEditarRede: 'relatorio.paginaInicial.editarRede',
   configuracaoLer: 'integracao.configuracao.ler',
   fhirLer: 'integracao.fhir.ler',
   fhirEnviar: 'integracao.fhir.enviar',
@@ -411,5 +412,15 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     perfis: [...ADMIN],
     categoria: 'administrativa',
     criticidade: 'normal',
+  },
+  {
+    // O modelo da rede vale para todos os estabelecimentos: só quem tem este escopo o cria, altera ou tira do ar.
+    codigo: C.paginaInicialEditarRede,
+    descricao:
+      'Montar, publicar e inativar os modelos de página inicial da rede (valem para todos os estabelecimentos)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'sensivel',
   },
 ];
