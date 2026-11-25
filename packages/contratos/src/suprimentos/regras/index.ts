@@ -78,3 +78,5 @@ export * from './lance-pregao.js';
 // C2-038 (05-SUP linha 21): impostos por item e custo de entrada; conferência física do recebimento.
 export * from './custo-entrada-nf.js';
 export * from './conferencia-recebimento.js';
+// C2-082 (05-SUP linha 2): governança do cadastro (solicitação pela comissão, unificação e substituição de itens).
+export * from './governanca-cadastro.js';
