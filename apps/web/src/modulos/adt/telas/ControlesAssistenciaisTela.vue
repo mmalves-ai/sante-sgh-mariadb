@@ -210,10 +210,20 @@ const gravarAuditoria = () =>
       respostas: respostasDadas.value,
     });
     escolhido.value = null;
-    return t(`${K}.isolamento.gravada`, {
-      geral: t(`${K}.isolamento.geral.${r.geral}`),
-      p: r.percentual === null ? '—' : r.percentual.toFixed(1),
-    });
+    return [
+      t(`${K}.isolamento.gravada`, {
+        geral: t(`${K}.isolamento.geral.${r.geral}`),
+        p: r.percentual === null ? '—' : r.percentual.toFixed(1),
+      }),
+      r.leitosBloqueados.length
+        ? t(`${K}.isolamento.quartoBloqueado`, { leitos: r.leitosBloqueados.join(', ') })
+        : '',
+      r.leitosOcupadosNoQuarto.length
+        ? t(`${K}.isolamento.quartoOcupado`, { leitos: r.leitosOcupadosNoQuarto.join(', ') })
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
   });
 const criterio = reactive({ descricao: '', acao: 'registrar', validadeDias: null as number | null });
 const opAcaoCriterio = computed(() =>
@@ -236,9 +246,11 @@ const incluirCriterio = () =>
 const providencias = reactive<Record<number, string>>({});
 const resolver = (id: number, versao: number) =>
   acao.mutate(async () => {
-    await resolverAvisoIsolamento(id, (providencias[id] ?? '').trim(), versao);
+    const r = await resolverAvisoIsolamento(id, (providencias[id] ?? '').trim(), versao);
     delete providencias[id];
-    return t(`${K}.isolamento.resolvido`);
+    return r.leitosLiberados
+      ? t(`${K}.isolamento.liberados`, { n: r.leitosLiberados })
+      : t(`${K}.isolamento.resolvido`);
   });
 
 // ── Regulação ──
@@ -516,6 +528,9 @@ const gravarEvento = () =>
           <strong>{{ t(`${K}.isolamento.prioridades.${a.prioridade}`) }}</strong> · {{ a.titulo }} ·
           {{ t('adt.paciente') }} {{ a.paciente }} · {{ quando(a.geradoEm) }}
           <pre>{{ a.mensagem }}</pre>
+          <p v-if="a.leitosBloqueados.length" role="alert" :data-testid="`iso-aviso-bloqueio-${a.id}`">
+            {{ t(`${K}.isolamento.leitosBloqueados`, { leitos: a.leitosBloqueados.join(', ') }) }}
+          </p>
           <label
             >{{ t(`${K}.isolamento.providencia`) }}
             <input v-model="providencias[a.id]" maxlength="2000" :data-testid="`iso-providencia-${a.id}`"
@@ -601,6 +616,13 @@ const gravarEvento = () =>
             </p>
             <p v-if="avaliacao.alertas.length" role="alert">
               {{ t(`${K}.isolamento.alertas`, { n: avaliacao.alertas.length }) }}
+            </p>
+            <p
+              v-if="avaliacao.alertas.some((x) => x.acao === 'bloquear')"
+              role="alert"
+              data-testid="iso-previa-bloqueio"
+            >
+              {{ t(`${K}.isolamento.previaBloqueio`) }}
             </p>
           </template>
         </template>

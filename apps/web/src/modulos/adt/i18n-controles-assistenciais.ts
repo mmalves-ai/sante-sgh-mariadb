@@ -70,6 +70,11 @@ export const mensagensControlesAssistenciais = {
     alertas: '{n} critério(s) vão gerar aviso para a CCIH.',
     gravar: 'Gravar auditoria',
     gravada: 'Auditoria gravada: {geral} ({p}%).',
+    previaBloqueio:
+      'Critério de bloqueio não conforme: ao gravar, os leitos livres do quarto ficam bloqueados até a CCIH resolver o aviso (o leito do paciente isolado segue em uso).',
+    quartoBloqueado: 'Quarto bloqueado até a CCIH resolver o aviso: leito(s) {leitos}.',
+    quartoOcupado: 'Leito(s) do quarto ocupado(s) por outro paciente, para a CCIH remanejar: {leitos}.',
+    leitosBloqueados: 'Quarto bloqueado até a resolução (o leito do paciente isolado segue em uso): {leitos}',
     geral: {
       conforme: 'conforme',
       parcialmente_conforme: 'parcialmente conforme',
@@ -80,6 +85,7 @@ export const mensagensControlesAssistenciais = {
     providencia: 'Providência tomada',
     resolver: 'Resolver',
     resolvido: 'Aviso resolvido.',
+    liberados: 'Aviso resolvido e quarto liberado: {n} leito(s).',
     providenciaCurta: 'Descreva a providência (pelo menos 3 caracteres).',
     prioridades: { critica: 'Crítica', alta: 'Alta', normal: 'Normal', baixa: 'Baixa' },
   },

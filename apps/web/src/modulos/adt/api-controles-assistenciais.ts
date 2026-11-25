@@ -105,6 +105,7 @@ export const esquemaAvisoIsolamento = z.object({
   geradoEm: txt.nullable(),
   resolvidoEm: txt.nullable(),
   versao: n,
+  leitosBloqueados: z.array(txt).default([]),
 });
 export type AvisoIsolamento = z.infer<typeof esquemaAvisoIsolamento>;
 
@@ -137,7 +138,15 @@ export const registrarAuditoriaIsolamento = (corpo: {
   enviar(
     `${C}/isolamentos/auditorias`,
     corpo,
-    z.object({ geral: txt, percentual: n.nullable(), aviso: n.nullable() }).passthrough(),
+    z
+      .object({
+        geral: txt,
+        percentual: n.nullable(),
+        aviso: n.nullable(),
+        leitosBloqueados: z.array(txt).default([]),
+        leitosOcupadosNoQuarto: z.array(txt).default([]),
+      })
+      .passthrough(),
     novaChave('iso-auditoria'),
   );
 export const lerAvisosIsolamento = () =>
@@ -146,7 +155,7 @@ export const resolverAvisoIsolamento = (id: number, providencia: string, versao:
   enviar(
     `${C}/isolamentos/avisos/${id}/resolver`,
     { providencia, versao },
-    z.object({}).passthrough(),
+    z.object({ leitosLiberados: n.default(0) }).passthrough(),
     novaChave('iso-aviso'),
   );
 

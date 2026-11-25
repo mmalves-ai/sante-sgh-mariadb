@@ -18,6 +18,7 @@ import {
   type AcaoFormularioObito,
   type AcaoNaoConformidade,
   avaliarAuditoriaIsolamento,
+  bloqueioDoQuartoPelaAuditoria,
   conferirQuadroClinico,
   type CriterioAuditoria,
   decidirAcaoFormularioObito,
@@ -43,6 +44,7 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import { apoio, situacaoDoLeitoPorBase, situarLeito } from './operacoes.js';
 
 export const PORTA_CONTROLES_ASSISTENCIAIS = Symbol('PORTA_CONTROLES_ASSISTENCIAIS');
 
@@ -56,7 +58,12 @@ const TABELAS = [
   'evento_regulacao',
   'solicitacao_regulacao',
   'aviso_clinico',
+  'periodo_situacao_leito',
+  'leito_hospitalar',
 ];
+
+/** Marca, no retrato do período do leito (dados), da auditoria do isolamento que bloqueou o quarto. */
+const MARCA_AUDITORIA = 'auditoriaIsolamento';
 
 /** Origem dos avisos que a auditoria do isolamento gera para a CCIH (comissão de controle de infecção hospitalar). */
 const ORIGEM_AVISO_ISOLAMENTO = { modulo: 'qualidade.ccih', entidade: 'auditoria_isolamento' } as const;
@@ -496,12 +503,116 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
     });
   }
 
+  /**
+   * C1-065: o critério "bloquear" não conforme bloqueia o quarto (os outros leitos da mesma acomodação, livres e sem
+   * estado aberto) pelo mesmo período do leito que o mapa e o NIR (núcleo interno de regulação) já respeitam: situação
+   * "bloqueado", motivo "isolamento", ligado à precaução e, no retrato, à auditoria. O leito do isolado nunca é
+   * bloqueado; o ocupado por outro paciente fica para a CCIH remanejar. Devolve os leitos bloqueados e os ocupados.
+   */
+  private async bloquearQuarto(
+    tx: TxOperacao,
+    est: number,
+    usuario: number,
+    isolamento: number,
+    leitoIsolado: number | null,
+    auditoria: number,
+    aviso: number,
+    alertas: readonly { acao: AcaoNaoConformidade }[],
+  ): Promise<{ bloqueados: string[]; ocupadosPorOutro: string[] }> {
+    if (leitoIsolado === null || !alertas.some((a) => a.acao === 'bloquear'))
+      return { bloqueados: [], ocupadosPorOutro: [] };
+    const leitos = await tx.consultarParaAtualizar(
+      `SELECT lh.id, lh.codigo,
+              EXISTS(SELECT 1 FROM periodo_situacao_leito ps WHERE ps.leito_hospitalar_id = lh.id AND ps.data_hora_fim IS NULL) AS aberto,
+              EXISTS(SELECT 1 FROM ocupacao_leito o WHERE o.leito_hospitalar_id = lh.id AND o.situacao = 'ativa'
+                        AND o.data_hora_fim IS NULL AND o.excluido_em IS NULL) AS ocupado
+         FROM leito_hospitalar lh
+        WHERE lh.estabelecimento_id = ? AND lh.excluido_em IS NULL AND lh.ativo = TRUE AND lh.virtual = FALSE
+          AND lh.acomodacao_id = (SELECT acomodacao_id FROM leito_hospitalar WHERE id = ?)
+        ORDER BY lh.codigo, lh.id`,
+      [est, leitoIsolado],
+    );
+    const codigo = new Map(leitos.map((l) => [num(l['id']), String(l['codigo'])]));
+    const d = bloqueioDoQuartoPelaAuditoria(
+      alertas,
+      leitos.map((l) => ({
+        id: num(l['id']),
+        doIsolado: num(l['id']) === leitoIsolado,
+        comEstadoAberto: bool(l['aberto']),
+        ocupado: bool(l['ocupado']),
+      })),
+    );
+    if (d.bloquear.length) {
+      const situacao = await situacaoDoLeitoPorBase(tx, 'bloqueado');
+      const motivo = await apoio(
+        tx,
+        "SELECT id FROM motivo_bloqueio_leito WHERE codigo = 'isolamento' AND ativo = TRUE",
+        [],
+        'o motivo de bloqueio "isolamento"',
+      );
+      const agora = new Date();
+      for (const lh of d.bloquear) {
+        await tx.incluir('periodo_situacao_leito', {
+          leito_hospitalar_id: lh,
+          situacao_leito_id: situacao,
+          motivo_bloqueio_leito_id: motivo,
+          isolamento_paciente_id: isolamento,
+          data_hora_inicio: agora,
+          observacao:
+            'Bloqueio do quarto por não conformidade crítica na auditoria do isolamento, até a CCIH liberar',
+          operacao: 'inclusao',
+          dados: JSON.stringify({
+            estado: 'bloqueio',
+            motivo: 'isolamento',
+            [MARCA_AUDITORIA]: auditoria,
+            aviso,
+          }),
+          ocorrido_em: agora,
+          usuario_id: usuario,
+        });
+        await situarLeito(tx, lh);
+      }
+    }
+    return {
+      bloqueados: d.bloquear.map((x) => codigo.get(x)!),
+      ocupadosPorOutro: d.ocupadosPorOutro.map((x) => codigo.get(x)!),
+    };
+  }
+
+  /** Libera o quarto: encerra os períodos de bloqueio abertos pela auditoria (o de outro motivo ou origem fica). */
+  private async liberarQuarto(tx: TxOperacao, est: number, usuario: number, auditoria: number) {
+    const ps = await tx.consultarParaAtualizar(
+      `SELECT ps.id, ps.versao, ps.leito_hospitalar_id FROM periodo_situacao_leito ps
+         JOIN leito_hospitalar lh ON lh.id = ps.leito_hospitalar_id
+        WHERE lh.estabelecimento_id = ? AND ps.data_hora_fim IS NULL
+          AND JSON_VALUE(ps.dados, '$.${MARCA_AUDITORIA}') = ?`,
+      [est, String(auditoria)],
+    );
+    const agora = new Date();
+    for (const p of ps) {
+      await tx.alterar('periodo_situacao_leito', num(p['id']), num(p['versao']), {
+        data_hora_fim: agora,
+        operacao: 'alteracao',
+        ocorrido_em: agora,
+        usuario_id: usuario,
+      });
+      await situarLeito(tx, num(p['leito_hospitalar_id']));
+    }
+    return ps.length;
+  }
+
   auditar(c: ContextoPortaPropria, entrada: unknown) {
     const e = entradaValida(esquemaAuditoria, entrada);
     return this.gravar(
       c,
       'internacao.isolamento.auditar',
-      ['auditoria_isolamento', 'auditoria_isolamento_item', 'aviso_clinico'],
+      [
+        'auditoria_isolamento',
+        'auditoria_isolamento_item',
+        'aviso_clinico',
+        'periodo_situacao_leito',
+        'leito_hospitalar',
+      ],
       async (tx, est, usuario) => {
         const i = await tx.uma(
           `SELECT id, paciente_id, internacao_id, leito_hospitalar_id, tipo_precaucao_id, situacao FROM isolamento_paciente
@@ -571,10 +682,25 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
             entidade_origem_chave: auditoria,
           });
         }
+        const quarto =
+          aviso === null
+            ? { bloqueados: [], ocupadosPorOutro: [] }
+            : await this.bloquearQuarto(
+                tx,
+                est.id,
+                usuario,
+                num(i['id']),
+                numOuNull(i['leito_hospitalar_id']),
+                auditoria,
+                aviso,
+                v.alertas,
+              );
         return {
           tabela: 'auditoria_isolamento',
           id: auditoria,
           aviso,
+          leitosBloqueados: quarto.bloqueados,
+          leitosOcupadosNoQuarto: quarto.ocupadosPorOutro,
           geral: v.geral,
           percentual: v.percentual,
           alertas: v.alertas,
@@ -588,8 +714,8 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
     return this.gravar(
       c,
       'internacao.isolamento.cancelar-auditoria',
-      ['auditoria_isolamento', 'aviso_clinico'],
-      async (tx, est) => {
+      ['auditoria_isolamento', 'aviso_clinico', 'periodo_situacao_leito', 'leito_hospitalar'],
+      async (tx, est, usuario) => {
         const a = await tx.uma(
           `SELECT a.id, a.situacao, a.observacao FROM auditoria_isolamento a
            JOIN isolamento_paciente i ON i.id = a.isolamento_paciente_id
@@ -617,7 +743,9 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
         );
         for (const x of avisos)
           await tx.alterar('aviso_clinico', num(x['id']), num(x['versao']), { situacao: 'cancelado' });
-        return { tabela: 'auditoria_isolamento', id: auditoria };
+        // O bloqueio do quarto que ela abriu também deixa de valer (o período fica encerrado, no histórico).
+        const liberados = await this.liberarQuarto(tx, est.id, usuario, auditoria);
+        return { tabela: 'auditoria_isolamento', id: auditoria, leitosLiberados: liberados };
       },
     );
   }
@@ -627,7 +755,11 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
     return this.ler(c, 'avisos-isolamento', async (l, est) => {
       const rs = await l.consultar(
         `SELECT v.id, v.paciente_id, v.titulo, v.mensagem, v.prioridade, v.situacao, v.gerado_em, v.resolvido_em,
-                v.entidade_origem_chave AS auditoria, v.versao, a.isolamento_paciente_id, a.leito_hospitalar_id
+                v.entidade_origem_chave AS auditoria, v.versao, a.isolamento_paciente_id, a.leito_hospitalar_id,
+                (SELECT GROUP_CONCAT(lh.codigo ORDER BY lh.codigo SEPARATOR ',') FROM periodo_situacao_leito ps
+                   JOIN leito_hospitalar lh ON lh.id = ps.leito_hospitalar_id
+                  WHERE ps.data_hora_fim IS NULL AND lh.estabelecimento_id = v.estabelecimento_id
+                    AND JSON_VALUE(ps.dados, '$.${MARCA_AUDITORIA}') = CAST(v.entidade_origem_chave AS CHAR)) AS bloqueados
            FROM aviso_clinico v JOIN auditoria_isolamento a ON a.id = v.entidade_origem_chave
           WHERE v.estabelecimento_id = ? AND v.modulo_origem = ? AND v.entidade_origem = ? AND v.excluido_em IS NULL
             ${todos ? '' : "AND v.situacao IN ('pendente','enviado','lido')"}
@@ -647,6 +779,7 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
           geradoEm: iso(r['gerado_em']),
           resolvidoEm: iso(r['resolvido_em']),
           versao: num(r['versao']),
+          leitosBloqueados: txtOuNull(r['bloqueados'])?.split(',') ?? [],
         })),
       };
     });
@@ -658,11 +791,11 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
     return this.gravar(
       c,
       'internacao.isolamento.resolver-aviso',
-      ['aviso_clinico'],
+      ['aviso_clinico', 'periodo_situacao_leito', 'leito_hospitalar'],
       async (tx, est, usuario) => {
         const v = await travada(
           tx,
-          `SELECT id, situacao, detalhes FROM aviso_clinico WHERE id = ? AND estabelecimento_id = ?
+          `SELECT id, situacao, detalhes, entidade_origem_chave FROM aviso_clinico WHERE id = ? AND estabelecimento_id = ?
             AND modulo_origem = ? AND entidade_origem = ? AND excluido_em IS NULL`,
           [aviso, est.id, ORIGEM_AVISO_ISOLAMENTO.modulo, ORIGEM_AVISO_ISOLAMENTO.entidade],
         );
@@ -680,7 +813,9 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
           resolvido_usuario_id: usuario,
           detalhes,
         });
-        return { tabela: 'aviso_clinico', id: aviso };
+        // A CCIH resolveu: o quarto bloqueado pela auditoria é liberado (período encerrado, nunca apagado).
+        const liberados = await this.liberarQuarto(tx, est.id, usuario, num(v['entidade_origem_chave']));
+        return { tabela: 'aviso_clinico', id: aviso, leitosLiberados: liberados };
       },
     );
   }
