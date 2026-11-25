@@ -94,6 +94,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // (mesmo motivo); a contagem acompanha.
 // C2-015 (05-SUP linha 22): o item "Devolução ao fornecedor" de compras entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-082 (05-SUP linha 2): o item "Padronização e unificação de itens" do estoque entrou à mão (mesmo motivo); a
+// contagem acompanha.
 // C2-013 (03-PEP L110): o item "Auditoria de antimicrobianos" da CCIH entrou à mão (mesmo motivo); a contagem
 // acompanha.
 // C2-014 (06-SUS linha 65): o item "Transplantes para a central estadual" do faturamento SUS entrou à mão (mesmo
@@ -127,7 +129,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // fase 7); a contagem acompanha.
 // C2-083 (07-FIN L157): o item "Remuneração variável" do repasse médico entrou à mão (mesmo motivo; F8 vai como
 // fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":495,"M":198,"P":57,"N":240};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":496,"M":198,"P":57,"N":241};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -337,6 +339,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"suprimentos.estoque-e-almoxarifado.movimento-direto-paciente-centro-de-custo","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Movimento direto paciente/centro de custo"],"titulo":"Movimento direto paciente/centro de custo","selo":"M","fase":3,"rota":"/suprimentos/movimento-direto","permissao":"suprimentos.saida.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.transferencias-entre-locais","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Transferências entre locais"],"titulo":"Transferências entre locais","selo":"M","fase":3,"rota":"/suprimentos/transferencias","permissao":"suprimentos.transferencia.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.devolucoes","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Devoluções"],"titulo":"Devoluções","selo":"M","fase":3,"rota":"/suprimentos/devolucoes","permissao":"suprimentos.devolucao.ler"},
+  {"id":"suprimentos.estoque-e-almoxarifado.padronizacao-e-unificacao-de-itens","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Padronização e unificação de itens"],"titulo":"Padronização e unificação de itens","selo":"N","fase":7,"rota":"/suprimentos/governanca-cadastro","permissao":"suprimentos.item.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.saldos-lotes-validades-e-rastreabilidade","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Saldos, lotes, validades e rastreabilidade"],"titulo":"Saldos, lotes, validades e rastreabilidade","selo":"M","fase":3,"rota":"/suprimentos/saldos","permissao":"suprimentos.saldo.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.consignados","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Consignados"],"titulo":"Consignados","selo":"P","fase":5,"rota":"/suprimentos/consignados","permissao":"suprimentos.consignado.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.kits-e-carrinhos-de-parada-rastreaveis","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Kits e carrinhos de parada rastreáveis"],"titulo":"Kits e carrinhos de parada rastreáveis","selo":"M","fase":3,"rota":"/suprimentos/kits","permissao":"suprimentos.kit.ler"},

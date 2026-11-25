@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 495, M: 198, P: 57, N: 240 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 496, M: 198, P: 57, N: 241 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(495);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(496);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -263,6 +263,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/suprimentos/contratos', // M55 (etapa 3: contratos com fornecedores)
         '/suprimentos/homologacao-fornecedores', // F8 (09-AREA linha 66)
         '/suprimentos/devolucoes-fornecedor', // C2-015 (05-SUP linha 22)
+        '/suprimentos/governanca-cadastro', // C2-082 (05-SUP linha 2)
         '/suprimentos/licitacao', // M55 (etapa 4: licitação e pregão)
         '/suprimentos/atas-registro-preco', // C2-030 (05-SUP linha 26)
         '/farmacia/manipulacao', // M46 (etapa 4)

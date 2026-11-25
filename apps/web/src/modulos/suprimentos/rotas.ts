@@ -240,6 +240,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     meta: { permissao: 'suprimentos.devolucao.ler' },
   },
   {
+    // C2-082 (05-SUP linha 2): pedido de item novo à comissão de padronização, unificação e substituição.
+    path: '/suprimentos/governanca-cadastro',
+    name: 'suprimentos.governanca-cadastro',
+    component: () => import('./telas/GovernancaCadastroTela.vue'),
+    meta: { permissao: 'suprimentos.item.ler' },
+  },
+  {
     path: '/suprimentos/saldos',
     name: 'suprimentos.saldos',
     component: () => import('./telas/SaldosTela.vue'),
