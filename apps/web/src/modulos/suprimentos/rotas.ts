@@ -44,6 +44,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/ManipulacaoTela.vue'),
     meta: { permissao: 'suprimentos.manipulacao.ler' },
   },
+  // C2-092 (05-SUP linha 11): fracionamento e unitarização de dose, com o rastreio dose → lote de origem.
+  {
+    path: '/farmacia/unitarizacao',
+    name: 'farmacia.unitarizacao',
+    component: () => import('./telas/UnitarizacaoDoseTela.vue'),
+    meta: { permissao: 'suprimentos.manipulacao.ler' },
+  },
   // M55 (etapa 3): contratos com fornecedores (o painel, a lista, o cadastro, os eventos, a avaliação e os vínculos).
   {
     path: '/suprimentos/contratos',

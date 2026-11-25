@@ -129,7 +129,11 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // fase 7); a contagem acompanha.
 // C2-083 (07-FIN L157): o item "Remuneração variável" do repasse médico entrou à mão (mesmo motivo; F8 vai como
 // fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":499,"M":198,"P":57,"N":244};
+// C2-092 (05-SUP linha 11): o item "Fracionamento e unitarização de dose" da farmácia hospitalar entrou à mão (mesmo
+// motivo; F7 vai como fase 7); a contagem acompanha.
+// C2-094 (09-AREA linha 78): o item "Entrada de serviço tomado" do fiscal entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":501,"M":198,"P":57,"N":246};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -352,6 +356,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"suprimentos.farmacia-hospitalar.controle-de-entrega-ao-setor","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Farmácia hospitalar","Controle de entrega ao setor"],"titulo":"Controle de entrega ao setor","selo":"M","fase":3,"rota":"/farmacia/entregas","permissao":"suprimentos.entrega.ler"},
   {"id":"suprimentos.farmacia-hospitalar.medicamentos-controlados-portaria-344","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Farmácia hospitalar","Medicamentos controlados"],"titulo":"Medicamentos controlados","selo":"P","fase":3,"rota":"/farmacia/controlados","permissao":"suprimentos.controlado.ler"},
   {"id":"suprimentos.farmacia-hospitalar.manipulacao-e-capelas","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Farmácia hospitalar","Manipulação e capelas"],"titulo":"Manipulação e capelas","selo":"P","fase":5,"rota":"/farmacia/manipulacao","permissao":"suprimentos.manipulacao.ler"},
+  {"id":"suprimentos.farmacia-hospitalar.fracionamento-e-unitarizacao-de-dose","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Farmácia hospitalar","Fracionamento e unitarização de dose"],"titulo":"Fracionamento e unitarização de dose","selo":"N","fase":7,"rota":"/farmacia/unitarizacao","permissao":"suprimentos.manipulacao.ler"},
   {"id":"suprimentos.opme.solicitacao-vinculada-a-agenda-cirurgica","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","OPME","Solicitação vinculada à agenda cirúrgica"],"titulo":"Solicitação vinculada à agenda cirúrgica","selo":"N","fase":5,"rota":"/suprimentos/opme","permissao":"suprimentos.opme.ler"},
   {"id":"suprimentos.opme.autorizacao-da-operadora-e-consignacao","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","OPME","Autorização da operadora e consignação"],"titulo":"Autorização da operadora e consignação","selo":"N","fase":5,"rota":"/suprimentos/opme?aba=autorizacao","permissao":"suprimentos.opme.ler"},
   {"id":"suprimentos.opme.consumo-em-sala-com-rastreio-por-lote-serie","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","OPME","Consumo em sala com rastreio por lote/série"],"titulo":"Consumo em sala com rastreio por lote/série","selo":"N","fase":5,"rota":"/bloco/opme","permissao":"suprimentos.opme.ler"},
@@ -444,6 +449,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.fiscal.naturezas-de-operacao-e-orgaos-arrecadadores","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","Naturezas de operação e órgãos arrecadadores"],"titulo":"Naturezas de operação e órgãos arrecadadores","selo":"M","fase":3,"rota":"/cadastros/dominios/grupo/financeiroNaturezas","permissao":"config.dominio.ler"},
   {"id":"financeiro.fiscal.nfs-e-nota-fiscal-de-servico","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","NFS-e"],"titulo":"NFS-e","selo":"P","fase":3,"rota":"/financeiro/fiscal/nfse","permissao":"financeiro.nfse.ler"},
   {"id":"financeiro.fiscal.nf-e-de-saida-de-mercadoria","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","NF-e de saída de mercadoria"],"titulo":"NF-e de saída de mercadoria","selo":"N","fase":7,"rota":"/financeiro/fiscal/notas-mercadoria","permissao":"financeiro.notaMercadoria.ler"},
+  {"id":"financeiro.fiscal.entrada-de-servico-tomado","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","Entrada de serviço tomado"],"titulo":"Entrada de serviço tomado","selo":"N","fase":7,"rota":"/financeiro/fiscal/entradas-servico","permissao":"financeiro.entradaServico.ler"},
   {"id":"financeiro.fiscal.dmed-declaracao-anual-de-servicos-medicos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","DMED"],"titulo":"DMED","selo":"N","fase":3,"rota":"/financeiro/fiscal/dmed","permissao":"financeiro.dmed.ler"},
   {"id":"financeiro.fiscal.efd-reinf-retencoes-series-r-2000-e-r-4000","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","EFD-REINF"],"titulo":"EFD-REINF","selo":"N","fase":3,"rota":"/financeiro/fiscal/reinf","permissao":"financeiro.reinf.ler"},
   {"id":"hotelaria-e-apoio.higienizacao.painel-de-execucao-em-tempo-real-com-prazo","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Higienização","Painel de execução em tempo real"],"titulo":"Painel de execução em tempo real","selo":"P","fase":2,"rota":"/higienizacao/painel","permissao":"hotelaria.limpeza.ler"},

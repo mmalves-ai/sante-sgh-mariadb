@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 499, M: 198, P: 57, N: 244 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 501, M: 198, P: 57, N: 246 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(499);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(501);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -267,6 +267,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/suprimentos/licitacao', // M55 (etapa 4: licitação e pregão)
         '/suprimentos/atas-registro-preco', // C2-030 (05-SUP linha 26)
         '/farmacia/manipulacao', // M46 (etapa 4)
+        '/farmacia/unitarizacao', // C2-092 (05-SUP linha 11)
         '/farmacia/dispensacao', // M29
         '/farmacia/entregas', // M29
         '/farmacia/controlados', // M29
@@ -582,6 +583,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/custos/custo-padrao', // C2-115 (07-FIN L140)
         '/financeiro/fiscal/dmed', // M32
         '/financeiro/fiscal/entradas', // M32
+        '/financeiro/fiscal/entradas-servico', // C2-094 (09-AREA linha 78)
         '/financeiro/fiscal/nfse', // M32
         '/financeiro/fiscal/notas-mercadoria', // C2-059 (07-FIN linha 114)
         '/financeiro/fiscal/reinf', // M32
