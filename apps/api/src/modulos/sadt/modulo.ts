@@ -48,6 +48,8 @@ import { CatalogoSadtController } from './catalogo.controller.js';
 import { PortaRespostasSadtPropria, RESPOSTAS_SADT } from './catalogo-respostas-propria.js';
 import { CatalogoRespostasSadtController } from './catalogo-respostas.controller.js';
 import { LaudoGrandezasController } from './laudo-grandezas.controller.js';
+import { ConsumoPadraoExameController } from './consumo-padrao.controller.js';
+import { CONSUMO_PADRAO_EXAME, PortaConsumoPadraoExamePropria } from './consumo-padrao-propria.js';
 import { GRANDEZAS_LAUDO, PortaGrandezasLaudoPropria } from './laudo-grandezas-propria.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
@@ -167,8 +169,17 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       InterfaceEquipamentoController,
       MicrobiologiaController,
       MicrobiologiaCadastroController,
+      ConsumoPadraoExameController,
     ],
     providers: [
+      // F8 (05-SADT linha 22): consumo padrão do exame, baixa no estoque e lançamento na conta (só no banco do cliente).
+      {
+        provide: CONSUMO_PADRAO_EXAME,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaConsumoPadraoExamePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
       { provide: CATALOGO_SADT, useValue: ctx.nucleo ? new PortaCatalogoSadtPropria(ctx.nucleo) : null },
       { provide: RESPOSTAS_SADT, useValue: ctx.nucleo ? new PortaRespostasSadtPropria(ctx.nucleo) : null },

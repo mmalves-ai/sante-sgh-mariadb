@@ -119,7 +119,7 @@ export interface AjusteRealizacao {
   readonly insumo: number;
   readonly quantidade: number;
   /** false: o executante tira o item da cobrança (o estoque baixa assim mesmo). */
-  readonly cobrar?: boolean;
+  readonly cobrar?: boolean | undefined;
 }
 
 export interface BaixaDaRealizacao {
