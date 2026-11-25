@@ -59,6 +59,11 @@ import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js
 import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
 import { PrescricaoCadastroController } from './prescricao-cadastro.controller.js';
+import { PrescricaoPadroesController } from './prescricao-padroes.controller.js';
+import {
+  CADASTRO_PROTOCOLOS_PRESCRICAO,
+  CadastroProtocolosPrescricaoPropria,
+} from './prescricao-propria-protocolos.js';
 import {
   CADASTRO_CATALOGO_PRESCRICAO,
   CadastroCatalogoPrescricaoPropria,
@@ -227,6 +232,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       SumarioAltaSecoesController,
       FarmacovigilanciaController,
       PrescricaoCadastroController,
+      PrescricaoPadroesController,
       NotasPacienteController,
       CurvasCrescimentoController,
       ExameFisicoController,
@@ -294,6 +300,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new CadastroCatalogoPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L107 (C2-097): protocolos, kits e receitas padrão editáveis; sem núcleo, 503.
+      {
+        provide: CADASTRO_PROTOCOLOS_PRESCRICAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new CadastroProtocolosPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F78.03-1 (03-PEP L103 e L104): reação adversa no paciente e lista de uso contínuo; sem núcleo, 503.
