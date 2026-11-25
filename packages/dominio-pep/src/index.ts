@@ -137,3 +137,6 @@ export * from './aviso-clinico-regra.js';
 export * from './prontuario-restrito.js';
 // F8 (03-PEP L97): exame físico estruturado por sistema e região do corpo (achados, lado, público, resumo).
 export * from './exame-fisico.js';
+export * from './nota-soap.js';
+// F8 (09-AREA L69): registro oncológico (tumor com CID-O-3, estadiamento TNM) e radioterapia (plano e sessões).
+export * from './especialidades/registro-oncologico.js';
