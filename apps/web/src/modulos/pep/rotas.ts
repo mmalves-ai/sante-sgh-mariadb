@@ -202,6 +202,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.reconciliacao.ler', permissaoOu: ['pep.farmacovigilancia.avaliar'] },
   },
   {
+    // 03-PEP L102: notas e lembretes livres sobre o paciente (avisos em vigor, nota nova, encerrar, cancelar, validade).
+    path: `/pep/paciente/:paciente${id}/notas`,
+    name: 'pep.notas',
+    component: () => import('./telas/NotasPacienteTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     // Entrada pelo menu: a busca do paciente leva à farmacovigilância dele (a farmácia clínica avalia daqui).
     path: '/farmacia-clinica/farmacovigilancia',
     name: 'farmacia.farmacovigilancia',
