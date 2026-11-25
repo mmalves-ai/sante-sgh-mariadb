@@ -4,7 +4,10 @@
 // - percentual por componente: o custo operacional sai a 80% e a memória guarda a regra aplicada;
 // - isento: o item fica na conta com valor zero e o motivo na memória;
 // - alto custo: o preço negociado substitui o da tabela e a autorização exigida volta como alerta;
-// - teto que transfere: a conta fica com o limite e o excedente vai, na memória, para a outra fonte;
+// - teto que transfere: a conta fica com o limite e o excedente é lançado na conta da outra fonte do mesmo atendimento
+//   (cada fonte cobra o seu), com a memória ligando os dois lados;
+// - via de acesso: na cirurgia múltipla, o 2º procedimento da mesma via sai a 50% no honorário;
+// - acordo: o desconto e o alto custo de um acordo encerrado antes da data do item não valem;
 // - teto que bloqueia: o lançamento é recusado e nada fica gravado;
 // - item sem regra: o valor da tabela, sem marca de acordo.
 // No fim, a massa é apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
@@ -19,7 +22,14 @@ import { PortaFaturamentoPropria } from './porta-propria.js';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'F3AC';
-const COD = { a: 83_780_001, b: 83_780_002, c: 83_780_003, d: 83_780_004, e: 83_780_005 } as const;
+const COD = {
+  a: 83_780_001,
+  b: 83_780_002,
+  c: 83_780_003,
+  d: 83_780_004,
+  e: 83_780_005,
+  f: 83_780_006,
+} as const;
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -61,7 +71,12 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
     }
     await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids['est']]);
     if (ids['fonte']) {
-      for (const t of ['regra_percentual_cobranca', 'item_isento_cobranca', 'teto_cobranca'])
+      for (const t of [
+        'regra_percentual_cobranca',
+        'item_isento_cobranca',
+        'teto_cobranca',
+        'regra_via_acesso',
+      ])
         await e.executar(`DELETE FROM ${t} WHERE fonte_pagadora_id = ?`, [ids['fonte']]);
       await e.executar(
         'DELETE r FROM item_alto_custo_contrato r JOIN contrato_fonte_pagadora k ON k.id = r.contrato_fonte_pagadora_id WHERE k.fonte_pagadora_id = ?',
@@ -173,8 +188,9 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
           [pp2],
           `INSERT INTO preco_procedimento_valor (preco_procedimento_id, operacao, ocorrido_em, vigencia_inicio,
              valor_honorario, valor_custo_operacional, valor_filme, valor_total, criado_em)
-           VALUES (?, 'inclusao', ?, '2020-01-01', 0, 100, 0, 100, ?)`,
-          [pp2, agora, agora],
+           VALUES (?, 'inclusao', ?, '2020-01-01', ?, ?, 0, 100, ?)`,
+          // O procedimento f é de honorário (a via de acesso reduz o honorário).
+          [pp2, agora, k === 'f' ? 100 : 0, k === 'f' ? 0 : 100, agora],
         );
       }
       ids['contrato'] = await e.inserir(
@@ -189,6 +205,12 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
         "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, urgencia, criado_em) VALUES (?, ?, 'teste', FALSE, ?)",
         ['FAE', 'CARATER SINTETICO FAE', agora],
       );
+      ids['via'] = await g(
+        'via_acesso_cirurgico',
+        `${P}V`,
+        'INSERT INTO via_acesso_cirurgico (codigo, descricao, criado_em) VALUES (?, ?, ?)',
+        [`${P}V`, `VIA SINTETICA ${P}`, agora],
+      );
       const at = await e.inserir(
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
            carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
@@ -200,6 +222,25 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
            tipo_conta_id, tabela_preco_id, natureza, competencia, inicio_em, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 11:00:00', ?)`,
         [ids['est'], `${P}-C`, at, ids['paciente'], ids['fonte'], ids['tipoConta'], ids['tabela'], agora],
+      );
+      // A conta da outra fonte no mesmo atendimento: recebe o excedente do teto que transfere.
+      ids['contaOutra'] = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 11:00:00', ?)`,
+        [ids['est'], `${P}-CX`, at, ids['paciente'], ids['outraFonte'], ids['tipoConta'], agora],
+      );
+      // Um acordo antigo, encerrado antes da data dos itens, com alto custo do item e: não pode valer.
+      const velho = await e.inserir(
+        `INSERT INTO contrato_fonte_pagadora (estabelecimento_id, fonte_pagadora_id, numero, descricao, vigencia_inicio,
+           vigencia_fim, situacao, prazo_apresentacao_dias, criado_em)
+         VALUES (?, ?, ?, 'ACORDO F3AC VELHO', '2020-01-01', '2024-12-31', 'encerrado', 60, ?)`,
+        [ids['est'], ids['fonte'], `${P}-0`, agora],
+      );
+      await e.inserir(
+        `INSERT INTO item_alto_custo_contrato (contrato_fonte_pagadora_id, item_faturavel_id, regra, valor_negociado,
+           vigencia_inicio, criado_em) VALUES (?, ?, 'preco_negociado', 999, '2020-01-01', ?)`,
+        [velho, ids['e'], agora],
       );
     });
     porta = new PortaFaturamentoPropria(nucleo, CLIENTE);
@@ -244,6 +285,17 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
       valorTeto: 50,
       acao: 'bloquear_lancamento',
     });
+    for (const [ordem, percentual] of [
+      [1, 100],
+      [2, 50],
+    ] as const)
+      await gravador.gravar('via', op(), {
+        ...base,
+        descricao: `MESMA VIA ${P} ${ordem}`,
+        viaId: ids['via'],
+        ordem,
+        percentual,
+      });
   });
 
   afterAll(async () => {
@@ -255,7 +307,7 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
     await nucleo.encerrar();
   });
 
-  const lancar = (codigo: number, quantidade = 1) =>
+  const lancar = (codigo: number, quantidade = 1, via: { acesso: number; ordem: number } | null = null) =>
     porta.executar(
       c,
       'faturamento.lancarItem',
@@ -268,6 +320,7 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
         hora: '10:00',
         local: 0,
         ato: 0,
+        ...(via ? { via } : {}),
       },
       op(),
     );
@@ -298,7 +351,32 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
     expect(r2.resultado).toMatchObject({ valor: 40 });
     const i2 = await doItem(Number(r2.resultado['id']));
     expect(i2.total).toBe(40);
-    expect(i2.acordo?.['excedente']).toEqual({ valor: 40, fonte: ids['outraFonte'], plano: null });
+    // O excedente (40) foi lançado na conta da outra fonte do mesmo atendimento, com a memória dos dois lados.
+    const destino = await linhas(
+      `SELECT i.id, i.item_faturavel_id, i.valor_total, i.valor_custo_operacional, m.dados
+         FROM conta_hospitalar_item i JOIN conta_hospitalar_item_memoria m ON m.conta_hospitalar_item_id = i.id
+        WHERE i.conta_hospitalar_id = ?`,
+      [ids['contaOutra']],
+    );
+    expect(destino.map((d) => [Number(d['item_faturavel_id']), Number(d['valor_total'])])).toEqual([
+      [ids['a'], 40],
+    ]);
+    expect(Number(destino[0]!['valor_custo_operacional'])).toBe(40);
+    expect(i2.acordo?.['excedente']).toEqual({
+      valor: 40,
+      fonte: ids['outraFonte'],
+      plano: null,
+      conta: ids['contaOutra'],
+      item: Number(destino[0]!['id']),
+    });
+    const dd = destino[0]!['dados'];
+    expect((typeof dd === 'string' ? JSON.parse(dd) : dd).origem).toMatchObject({
+      conta: ids['conta'],
+      item: Number(r2.resultado['id']),
+    });
+    // O total cobrado de cada fonte: 160 + 40 na conta do acordo e 40 na da outra fonte.
+    const outra = await linhas('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [ids['contaOutra']]);
+    expect(Number(outra[0]!['valor_total'])).toBe(40);
   });
 
   it('isento: fica na conta com valor zero e o motivo na memória', async () => {
@@ -329,5 +407,20 @@ describe.skipIf(SEM_BANCO)('regras do acordo aplicadas ao lançar o item na cont
     expect([i.total, i.acordo]).toEqual([100, null]);
     const conta = await linhas('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [ids['conta']]);
     expect(Number(conta[0]!['valor_total'])).toBe(160 + 40 + 0 + 1500 + 100);
+  });
+
+  it('via de acesso: o 2º procedimento da mesma via sai a 50% no honorário; sem via, segue a tabela', async () => {
+    const p1 = await lancar(COD.f, 1, { acesso: ids['via']!, ordem: 1 });
+    const p2 = await lancar(COD.f, 1, { acesso: ids['via']!, ordem: 2 });
+    const i1 = await doItem(Number(p1.resultado['id']));
+    const i2 = await doItem(Number(p2.resultado['id']));
+    expect([i1.total, i2.total]).toEqual([100, 50]);
+    expect(JSON.stringify(i2.acordo?.['aplicadas'])).toContain('50%');
+    const [h] = await linhas('SELECT valor_honorario FROM conta_hospitalar_item WHERE id = ?', [
+      Number(p2.resultado['id']),
+    ]);
+    expect(Number(h!['valor_honorario'])).toBe(50);
+    const sem = await lancar(COD.f, 1);
+    expect((await doItem(Number(sem.resultado['id']))).total).toBe(100);
   });
 });

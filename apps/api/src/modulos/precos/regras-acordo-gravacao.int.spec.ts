@@ -164,25 +164,32 @@ describe.skipIf(SEM_BANCO)('gravação das regras do acordo (MariaDB, contrato d
     const b = await gravador.gravar('percentual', ctx(), {
       ...base,
       percentual: 130,
-      vigenciaInicio: '2025-07-01',
+      vigenciaInicio: hoje,
     });
     expect(b['encerradas']).toBe(1);
+    const vespera = new Date(Date.parse(`${hoje}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
     const ls = await ler(
       `SELECT id, percentual, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim, versao, criado_por, estabelecimento_id,
               contrato_fonte_pagadora_id FROM regra_percentual_cobranca WHERE fonte_pagadora_id = ? ORDER BY id`,
       [ids.fonte],
     );
     expect(ls.map((r) => [Number(r['id']), Number(r['percentual']), r['fim'], Number(r['versao'])])).toEqual([
-      [a['id'], 120, '2025-06-30', 2],
+      [a['id'], 120, vespera, 2],
       [b['id'], 130, null, 1],
     ]);
     expect(ls.every((r) => Number(r['criado_por']) === ids.usuario)).toBe(true);
     expect(ls.every((r) => Number(r['estabelecimento_id']) === ids.est)).toBe(true);
     expect(Number(ls[0]?.['contrato_fonte_pagadora_id'])).toBe(ids.contrato);
     // Mesmo início: recusa, sem escrita.
+    expect(await recusa(gravador.gravar('percentual', ctx(), { ...base, vigenciaInicio: hoje }))).toBe(
+      'vigencia-conflitante',
+    );
+    // Início retroativo que encerraria a regra vigente no passado (contas já lançadas a usaram): recusa, sem escrita.
     expect(
-      await recusa(gravador.gravar('percentual', ctx(), { ...base, vigenciaInicio: '2025-07-01' })),
-    ).toBe('vigencia-conflitante');
+      await recusa(
+        gravador.gravar('percentual', ctx(), { ...base, percentual: 140, vigenciaInicio: '2025-07-01' }),
+      ),
+    ).toBe('vigencia-retroativa');
     // Tabela de outro estabelecimento: não existe para a sessão.
     expect(await recusa(gravador.gravar('percentual', ctx(ids.outroEst), base))).toBe(
       'referencia-inexistente',

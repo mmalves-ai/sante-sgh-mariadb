@@ -12,6 +12,7 @@ import {
   validarAltoCusto,
   validarDescontoGrupo,
   validarEncerramentoRegra,
+  validarInicioQueEncerra,
   validarIsento,
   validarPercentualCobranca,
   validarTeto,
@@ -120,6 +121,13 @@ async function encerrarAnteriores(
       WHERE ${cols.map(nulo).join(' AND ')} AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
     [...cols.map((c) => chave[c] ?? null), inicio],
   );
+  // A regra anterior ainda vigente só se encerra a partir de hoje: o início retroativo reescreveria o fim de uma regra
+  // que já valorizou contas lançadas (a mesma trava da rota de encerrar).
+  if (ls.length > 0) {
+    const erro = validarInicioQueEncerra(inicio, await hojeDoBanco(tx));
+    if (erro['vigenciaInicio'])
+      throw recusa('vigencia-retroativa', erro['vigenciaInicio'], { campos: ['vigenciaInicio'] });
+  }
   let n = 0;
   for (const r of ls) {
     if ((dataIso(r['vigencia_inicio']) ?? '') >= inicio)

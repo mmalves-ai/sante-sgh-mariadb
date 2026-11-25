@@ -345,7 +345,7 @@ export function aplicarRegrasAcordo(i: ItemParaAcordo, regras: RegrasVigentesCal
       filT = r2(permitido - honT - coT);
       total = permitido;
       excedente = {
-        valor: r2((excedente?.valor ?? 0) + sobra),
+        valor: r2(((excedente as ResultadoAcordo['excedente'])?.valor ?? 0) + sobra),
         fonte: teto.excedenteFonte,
         plano: teto.excedentePlano,
       };
@@ -378,15 +378,32 @@ function ordemMaxima(vias: readonly RegraViaCalc[], via: number): number {
   return vias.filter((v) => v.via === via).reduce((m, v) => Math.max(m, v.ordem), 1);
 }
 
-/** O regime das regras a partir da descrição do regime do padrão de troca e do caráter de urgência do atendimento. */
-export function regimesDoAtendimento(descricaoRegime: string | null, urgencia: boolean): RegimeRegra[] {
-  const d = (descricaoRegime ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+/**
+ * O regime das regras a partir do código oficial do regime do atendimento (terminologia TISS de regime de atendimento:
+ * 01 ambulatorial, 02 domiciliar, 03 internação, 04 pronto-socorro) e do caráter de urgência. A descrição livre não
+ * decide nada (cada cliente escreve a sua). Sem regime no atendimento, o paciente é externo; com um código fora da
+ * terminologia, nenhum regime casa e volta o alerta 'regime-sem-mapeamento' (nunca se presume 'externo').
+ */
+export const REGIME_POR_CODIGO_TISS: Readonly<Record<string, RegimeRegra>> = {
+  '01': 'ambulatorial',
+  '02': 'domiciliar',
+  '03': 'internacao',
+  '04': 'urgencia',
+};
+
+export function regimesDoAtendimento(
+  codigoTiss: string | null,
+  urgencia: boolean,
+): { regimes: RegimeRegra[]; alerta: string | null } {
   const out: RegimeRegra[] = [];
-  if (d.includes('intern') || d.includes('hospital')) out.push('internacao');
-  else if (d.includes('domic')) out.push('domiciliar');
-  else if (d.includes('urg') || d.includes('emerg') || d.includes('pronto')) out.push('urgencia');
-  else if (d.includes('ambul')) out.push('ambulatorial');
-  else out.push('externo');
+  let alerta: string | null = null;
+  const cod = codigoTiss?.trim() ?? '';
+  if (cod === '') out.push('externo');
+  else {
+    const r = REGIME_POR_CODIGO_TISS[cod.padStart(2, '0')];
+    if (r) out.push(r);
+    else alerta = 'regime-sem-mapeamento';
+  }
   if (urgencia && !out.includes('urgencia')) out.push('urgencia');
-  return out;
+  return { regimes: out, alerta };
 }

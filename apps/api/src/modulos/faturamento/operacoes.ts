@@ -49,7 +49,7 @@ import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
 import { versaoNumero } from './esquemas.js';
 import { dispararKitsDoItem } from './kit-lancamento.js';
 import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
-import { aplicarAcordoNoItem } from './regras-acordo-conta.js';
+import { aplicarAcordoNoItem, lancarExcedenteNoDestino } from './regras-acordo-conta.js';
 import {
   conferirCompetenciaDaConta,
   conferirConferenciaItens,
@@ -610,14 +610,12 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
               custoOperacional: r2(preco.unitario - preco.honorario - preco.filme),
               filme: preco.filme,
               data: e.data,
+              via: e.via ?? null,
             },
           )
         : null;
-    if (acordo?.recusa)
-      throw recusa(acordo.recusa.codigo, acordo.recusa.mensagem, {
-        campos: ['codigo'],
-      });
-    const comAcordo = acordo && acordo.aplicadas.length > 0 ? acordo : null;
+    if (acordo?.recusa) throw recusa(acordo.recusa.codigo, acordo.recusa.mensagem, { campos: ['codigo'] });
+    const comAcordo = acordo && (acordo.aplicadas.length > 0 || acordo.alertas.length > 0) ? acordo : null;
     if (comAcordo) unitario = comAcordo.unitario;
     const fuso = await tx.uma<Linha>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
     const realizado = new Date(
@@ -663,6 +661,34 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       situacao: 'lancado',
       observacao: e.precoManual ? `Preço manual: ${e.precoManual.justificativa}`.slice(0, 2000) : null,
     });
+    // 06-FAT linha 1: o excedente do teto que transfere entra na conta da fonte de destino, na mesma transação.
+    const excedente =
+      comAcordo?.excedente && comAcordo.excedente.valor > 0
+        ? await lancarExcedenteNoDestino(
+            tx,
+            est,
+            { conta: conta.id, fonte: conta.fonte, item: id },
+            comAcordo.excedente,
+            {
+              itemFaturavel: n(item['id']),
+              grupo: item['grupo_faturamento_id'] == null ? null : n(item['grupo_faturamento_id']),
+              realizado,
+              honorario: comAcordo.honorario,
+              custoOperacional: comAcordo.custoOperacional,
+              filme: comAcordo.filme,
+              executante: e.executante,
+              funcao: e.funcao,
+            },
+            ctx.usuario,
+          )
+        : null;
+    if (excedente)
+      await tx.alterar(
+        'conta_hospitalar',
+        excedente.conta,
+        excedente.versao,
+        await totalDosItens(tx, excedente.conta),
+      );
     // A memória do cálculo: de onde veio o preço e, no manual, quem aprovou e por quê.
     await tx.incluir('conta_hospitalar_item_memoria', {
       conta_hospitalar_item_id: id,
@@ -706,7 +732,9 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
               isento: comAcordo.isento,
               cobrancaAParte: comAcordo.cobrancaAParte,
               exigeAutorizacao: comAcordo.exigeAutorizacao,
-              excedente: comAcordo.excedente,
+              excedente: comAcordo.excedente
+                ? { ...comAcordo.excedente, conta: excedente?.conta ?? null, item: excedente?.item ?? null }
+                : null,
               alertas: comAcordo.alertas,
             }
           : null,

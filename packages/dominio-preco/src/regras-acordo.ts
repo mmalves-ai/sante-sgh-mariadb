@@ -242,3 +242,17 @@ export function validarEncerramentoRegra(
     };
   return {};
 }
+
+/**
+ * A regra nova que encerra outra ainda vigente (incluir encerra a anterior na véspera do início) não pode começar antes
+ * de hoje: o fim da anterior iria para o passado e reescreveria a regra que já valorizou contas lançadas, o mesmo que
+ * validarEncerramentoRegra proíbe na rota de encerrar. Sem regra anterior vigente, o início retroativo é livre.
+ */
+export function validarInicioQueEncerra(novoInicio: string, hoje: string): ErrosRegra {
+  if (novoInicio < hoje)
+    return {
+      vigenciaInicio:
+        'Já existe regra igual vigente: a nova não pode começar antes de hoje, porque contas já lançadas usaram a anterior. Grave a partir de hoje.',
+    };
+  return {};
+}

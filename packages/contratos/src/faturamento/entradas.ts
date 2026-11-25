@@ -51,6 +51,12 @@ export const esquemaLancarItem = z
     executante: z.number().int().positive().nullable().default(null),
     /** Função do executor na equipe (funcao_equipe_cobranca); sem ela, a produção do repasse usa a função titular. */
     funcao: z.number().int().positive().nullable().default(null),
+    /** Cirurgia múltipla: via de acesso cirúrgico e ordem do procedimento no ato (1 = principal), para a regra do acordo. */
+    via: z
+      .object({ acesso: z.number().int().positive(), ordem: z.number().int().min(1).max(99) })
+      .strict()
+      .nullable()
+      .optional(),
     /** Preço manual (só com faturamento.preco.manual e dentro da faixa, ou com aprovação; regra 12). */
     precoManual: z
       .object({

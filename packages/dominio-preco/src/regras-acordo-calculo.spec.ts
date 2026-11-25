@@ -175,9 +175,13 @@ describe('aplicarRegrasAcordo', () => {
     expect(r.excedente).toEqual({ valor: 120, fonte: 77, plano: null });
   });
 
-  it('regime das regras pela descrição do regime e pela urgência do caráter', () => {
-    expect(regimesDoAtendimento('Internação', false)).toEqual(['internacao']);
-    expect(regimesDoAtendimento('Ambulatorial', true)).toEqual(['ambulatorial', 'urgencia']);
-    expect(regimesDoAtendimento(null, false)).toEqual(['externo']);
+  it('regime das regras pelo código oficial do regime e pela urgência do caráter, nunca pela descrição', () => {
+    expect(regimesDoAtendimento('03', false)).toEqual({ regimes: ['internacao'], alerta: null });
+    expect(regimesDoAtendimento('01', true)).toEqual({ regimes: ['ambulatorial', 'urgencia'], alerta: null });
+    expect(regimesDoAtendimento('2', false)).toEqual({ regimes: ['domiciliar'], alerta: null });
+    expect(regimesDoAtendimento('04', true)).toEqual({ regimes: ['urgencia'], alerta: null });
+    expect(regimesDoAtendimento(null, false)).toEqual({ regimes: ['externo'], alerta: null });
+    // Código fora da terminologia: nenhum regime casa e o cálculo avisa, sem presumir paciente externo.
+    expect(regimesDoAtendimento('HD', false)).toEqual({ regimes: [], alerta: 'regime-sem-mapeamento' });
   });
 });

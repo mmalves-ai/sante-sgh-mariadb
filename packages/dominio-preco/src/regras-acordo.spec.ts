@@ -3,6 +3,7 @@ import {
   validarAltoCusto,
   validarDescontoGrupo,
   validarEncerramentoRegra,
+  validarInicioQueEncerra,
   validarIsento,
   validarPercentualCobranca,
   validarTeto,
@@ -179,5 +180,14 @@ describe('encerramento da regra', () => {
       'id',
     );
     expect(validarEncerramentoRegra('2026-01-01', null, '', '2026-11-25')).toHaveProperty('vigenciaFim');
+  });
+});
+
+describe('regra nova que encerra a anterior', () => {
+  it('não começa antes de hoje (o fim da anterior iria para o passado)', () => {
+    expect(validarInicioQueEncerra('2026-11-25', '2026-11-25')).toEqual({});
+    expect(validarInicioQueEncerra('2026-12-01', '2026-11-25')).toEqual({});
+    expect(validarInicioQueEncerra('2026-11-24', '2026-11-25')).toHaveProperty('vigenciaInicio');
+    expect(validarInicioQueEncerra('2025-01-01', '2026-11-25')).toHaveProperty('vigenciaInicio');
   });
 });
