@@ -33,6 +33,7 @@ import { METODOS_PORTA_ENFERMAGEM, PORTA_ENFERMAGEM, type PortaEnfermagem } from
 import { PortaEnfermagemMemoria } from './porta-memoria.js';
 import { PortaEnfermagemPropria } from './porta-propria.js';
 import { PrescricaoEnfermeiroController } from './prescricao-enfermeiro.controller.js';
+import { CentralComandoController } from './central-comando.controller.js';
 import { ProtocoloCriteriosController } from './protocolo-criterios.controller.js';
 import { ProtocoloInternadoController } from './protocolo-internado.controller.js';
 import { SaeController } from './sae.controller.js';
@@ -182,6 +183,7 @@ export async function modulo(
       AuditoriaChecagemController,
       SinaisDetalheController,
       ProtocoloCriteriosController,
+      CentralComandoController,
     ],
     providers: [
       { provide: PORTA_ENFERMAGEM, useValue: p.enfermagem },
