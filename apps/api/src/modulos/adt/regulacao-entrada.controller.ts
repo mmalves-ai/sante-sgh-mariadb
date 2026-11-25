@@ -4,6 +4,8 @@
 //   GET  /api/nir/regulacao/recebidos?todos=sim&paciente=   a fila dos recebidos (os que pedem resposta primeiro)
 //   POST /api/nir/regulacao/recebidos                registra o pedido recebido (número da central à mão)
 //   POST /api/nir/regulacao/recebidos/:id/resposta   { decisao, motivo?, complemento?, especialidade?, versao }
+//   POST /api/nir/regulacao/recebidos/:id/cancelamento   { motivo, complemento?, versao } (central cancelou, não veio)
+//   POST /api/nir/regulacao/recebidos/:id/conclusao      { chegadaEm?, internacao?, versao } (o paciente chegou)
 // Ler: quem consulta a regulação; registrar e responder: quem registra a regulação (o NIR).
 import {
   Body,
@@ -72,5 +74,21 @@ export class RegulacaoEntradaController {
   @AuditadoNoHandler(TRILHA)
   responder(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.responder(c, id, corpo));
+  }
+
+  @Post(':id/cancelamento')
+  @HttpCode(200)
+  @Permissao(P.regulacaoRegistrar)
+  @AuditadoNoHandler(TRILHA)
+  cancelar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.cancelar(c, id, corpo));
+  }
+
+  @Post(':id/conclusao')
+  @HttpCode(200)
+  @Permissao(P.regulacaoRegistrar)
+  @AuditadoNoHandler(TRILHA)
+  concluir(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.concluir(c, id, corpo));
   }
 }

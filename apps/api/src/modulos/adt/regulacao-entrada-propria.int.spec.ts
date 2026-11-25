@@ -7,7 +7,12 @@
 // motivo padronizado (negada, encerrado_em) com o evento 'resposta'; no aceite de consulta, a entrada em `lista_espera`
 // ligada ao pedido; com a central por webservice, a devolução na outbox (`integracao_mensagem`, só IDs e códigos); as
 // recusas (número repetido, urgência sem resumo, versão velha, pedido já respondido, recusa sem motivo, consulta sem
-// especialidade) sem gravar nada; a fila dos recebidos e a trilha das operações.
+// especialidade) sem gravar nada; a fila dos recebidos e a trilha das operações. Correção (revisão): o aceite de
+// internação abre o pedido de leito do NIR ligado nos dois sentidos; o cancelamento pela central encerra o pedido,
+// cancela o pedido de leito sem reserva e a lista de espera ligada; a conclusão na chegada liga a internação. Para isso
+// a massa ganha o vínculo profissional do usuário no estabelecimento sintético, a numeração do pedido de leito, as
+// situações de pedido de leito (se o cliente não tiver) e uma internação sintética do paciente (FK desligada só no
+// preparo; nada fora do estabelecimento do teste é alterado).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -19,6 +24,7 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'c1080re';
 const SIGLA_MANUAL = 'C1080-MAN';
 const SIGLA_WS = 'C1080-WS';
+const SITUACOES_LEITO = ['C1080-SOLICITADO', 'C1080-CANCELADO'];
 
 interface Massa {
   est: number;
@@ -27,6 +33,7 @@ interface Massa {
   especialidade: number;
   manual: number;
   ws: number;
+  internacao: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -35,6 +42,11 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
     await e.executar(`DELETE FROM lista_espera WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM pedido_leito WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM internacao WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM usuario_vinculo_profissional WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM sequencia_negocio WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar('DELETE FROM situacao_pedido_leito WHERE codigo IN (?, ?)', SITUACOES_LEITO);
     await e.executar(`DELETE FROM evento_regulacao WHERE solicitacao_regulacao_id IN ${sol}`, [P]);
     await e.executar(
       `DELETE FROM integracao_mensagem WHERE estabelecimento_id IN ${est} AND entidade = 'solicitacao_regulacao'`,
@@ -98,8 +110,48 @@ describe.skipIf(SEM_BANCO)('PortaRegulacaoEntradaPropria contra o MariaDB (contr
            VALUES (?, ?, 'estadual', ?, ?, '0000-0000', ?)`,
           [sigla, `Central sintética ${sigla}`, conexao, ponto, agora],
         );
+      const profissional = await e.uma('SELECT MIN(id) AS id FROM profissional WHERE excluido_em IS NULL');
+      if (!profissional?.['id']) throw new Error('O cliente de teste precisa de um profissional.');
+      await e.inserir(
+        `INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio, criado_em)
+         VALUES (?, ?, ?, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), ?)`,
+        [usuario['id'], est, profissional['id'], agora],
+      );
+      await e.inserir(
+        "INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, criado_em) VALUES (?, 'pedido_leito', 1, ?)",
+        [est, agora],
+      );
+      for (const [codigo, estado] of [
+        [SITUACOES_LEITO[0], 'solicitado'],
+        [SITUACOES_LEITO[1], 'cancelado'],
+      ] as const) {
+        const ha = await e.uma(
+          'SELECT id FROM situacao_pedido_leito WHERE estado = ? AND ativo = TRUE LIMIT 1',
+          [estado],
+        );
+        if (!ha)
+          await e.inserir(
+            'INSERT INTO situacao_pedido_leito (codigo, descricao, estado, final, criado_em) VALUES (?, ?, ?, ?, ?)',
+            [codigo, `${estado} ${P}`, estado, estado === 'cancelado', agora],
+          );
+      }
+      // Internação sintética do paciente no estabelecimento do teste (cadastros de apoio fictícios, FK desligada).
+      await e.executar('SET FOREIGN_KEY_CHECKS = 0');
+      let internacao: number;
+      try {
+        internacao = await e.inserir(
+          `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada,
+             carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, acomodacao_id,
+             especialidade_medica_id, medico_assistente_profissional_id, fonte_pagadora_id, criado_em)
+           VALUES (?, 'C1080-INT-1', 999999991, ?, ?, 999999991, 999999991, 999999991, 999999991, ?, ?, 999999991, ?)`,
+          [est, paciente['id'], agora, especialidade['id'], profissional['id'], agora],
+        );
+      } finally {
+        await e.executar('SET FOREIGN_KEY_CHECKS = 1');
+      }
       return {
         est,
+        internacao,
         usuario: Number(usuario['id']),
         paciente: Number(paciente['id']),
         especialidade: Number(especialidade['id']),
@@ -329,5 +381,187 @@ describe.skipIf(SEM_BANCO)('PortaRegulacaoEntradaPropria contra o MariaDB (contr
     );
     // 4 recebimentos + 3 respostas.
     expect(Number(tr!['n'])).toBeGreaterThanOrEqual(7);
+  });
+
+  it('aceite de internação abre o pedido de leito ligado; a central cancela e o pedido de leito cancela junto', async () => {
+    const r = await porta.receber(ctx(), {
+      central: m.manual,
+      numero: 'REG-C1080-030',
+      tipo: 'internacao',
+      prioridade: 'urgente',
+      paciente: m.paciente,
+      solicitadoEm: haMinutos(40),
+      resumoClinico: 'Quadro sintético de urgência para o teste de leito.',
+    });
+    const ok = await porta.responder(ctx(), r.id, {
+      decisao: 'aceitar',
+      versao: Number((await linha(r.id))['versao']),
+    });
+    expect(ok.pedidoLeito).toEqual(expect.any(Number));
+    const s = await linha(r.id);
+    expect(Number(s['pedido_leito_id'])).toBe(ok.pedidoLeito);
+    const [pl] = await ler('SELECT * FROM pedido_leito WHERE id = ?', [ok.pedidoLeito]);
+    expect(pl).toMatchObject({
+      estabelecimento_id: m.est,
+      paciente_id: m.paciente,
+      setor_origem: 'regulacao',
+      prioridade: 'alta',
+      estado_situacao: 'solicitado',
+      solicitacao_regulacao_id: r.id,
+      data_hora_cancelamento: null,
+    });
+    expect(json((await eventos(r.id)).at(-1)!['dados'])).toMatchObject({ pedidoLeito: ok.pedidoLeito });
+    const fila = await porta.recebidos(ctx(), { todos: 'sim' });
+    expect(fila.find((x) => x.id === r.id)!.pedidoLeito).toMatchObject({
+      id: ok.pedidoLeito,
+      estado: 'solicitado',
+    });
+
+    // Cancelamento: sem motivo e "outro" sem detalhe recusados sem gravar; com o motivo, encerra e cancela o leito.
+    const v = Number(s['versao']);
+    expect(() => porta.cancelar(ctx(), r.id, { versao: v })).toThrow(
+      expect.objectContaining({ problema: expect.objectContaining({ status: 400 }) }),
+    );
+    await expect(
+      porta.cancelar(ctx(), r.id, { motivo: 'outro', complemento: 'curto', versao: v }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    expect((await linha(r.id))['situacao']).toBe('autorizada');
+    const c = await porta.cancelar(ctx(), r.id, { motivo: 'cancelado_pela_central', versao: v });
+    expect(c).toMatchObject({ situacao: 'cancelada', pedidoLeito: ok.pedidoLeito, listasEspera: 0 });
+    const depois = await linha(r.id);
+    expect(depois).toMatchObject({
+      situacao: 'cancelada',
+      mensagem_central: 'Cancelado pela central de regulação',
+    });
+    expect(depois['encerrado_em']).not.toBeNull();
+    const [plc] = await ler('SELECT * FROM pedido_leito WHERE id = ?', [ok.pedidoLeito]);
+    expect(plc).toMatchObject({ estado_situacao: 'cancelado', cancelado_por_usuario_id: m.usuario });
+    expect(String(plc!['motivo_cancelamento'])).toContain('Cancelado pela central');
+    expect(plc!['data_hora_cancelamento']).not.toBeNull();
+    const ev = (await eventos(r.id)).at(-1)!;
+    expect(ev).toMatchObject({
+      tipo_evento: 'cancelamento',
+      situacao_anterior: 'autorizada',
+      situacao_nova: 'cancelada',
+    });
+    expect(json(ev['dados'])).toMatchObject({
+      motivo: 'cancelado_pela_central',
+      pedidoLeito: ok.pedidoLeito,
+    });
+    // Já cancelado: novo cancelamento e conclusão recusados.
+    const v2 = Number(depois['versao']);
+    await expect(porta.cancelar(ctx(), r.id, { motivo: 'obito', versao: v2 })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    await expect(porta.concluir(ctx(), r.id, { versao: v2, internacao: m.internacao })).rejects.toMatchObject(
+      {
+        problema: { status: 422 },
+      },
+    );
+  });
+
+  it('paciente que não comparece: o cancelamento encerra a lista de espera ligada; a fila deixa de mostrá-lo', async () => {
+    const r = await porta.receber(ctx(), {
+      central: m.manual,
+      numero: 'REG-C1080-040',
+      tipo: 'exame',
+      prioridade: 'eletivo',
+      paciente: m.paciente,
+    });
+    await porta.cancelar(ctx(), r.id, {
+      motivo: 'outro_destino',
+      versao: Number((await linha(r.id))['versao']),
+    });
+    expect((await linha(r.id))['situacao']).toBe('cancelada');
+    expect((await porta.recebidos(ctx(), {})).map((x) => x.id)).not.toContain(r.id);
+
+    const a = await porta.receber(ctx(), {
+      central: m.manual,
+      numero: 'REG-C1080-041',
+      tipo: 'consulta',
+      prioridade: 'eletivo',
+      paciente: m.paciente,
+    });
+    const ok = await porta.responder(ctx(), a.id, {
+      decisao: 'aceitar',
+      especialidade: m.especialidade,
+      versao: Number((await linha(a.id))['versao']),
+    });
+    const c = await porta.cancelar(ctx(), a.id, {
+      motivo: 'nao_compareceu',
+      versao: Number((await linha(a.id))['versao']),
+    });
+    expect(c).toMatchObject({ situacao: 'cancelada', listasEspera: 1, pedidoLeito: null });
+    const [le] = await ler('SELECT * FROM lista_espera WHERE id = ?', [ok.listaEspera]);
+    expect(le).toMatchObject({ situacao: 'cancelado' });
+    expect(le!['encerrada_em']).not.toBeNull();
+    expect(String(le!['motivo_encerramento'])).toContain('Paciente não compareceu');
+  });
+
+  it('conclui o pedido aceito na chegada: consulta direto, transferência ligada à internação do paciente', async () => {
+    const a = await porta.receber(ctx(), {
+      central: m.manual,
+      numero: 'REG-C1080-050',
+      tipo: 'consulta',
+      prioridade: 'eletivo',
+      paciente: m.paciente,
+    });
+    // Ainda não aceito: a conclusão é recusada.
+    await expect(
+      porta.concluir(ctx(), a.id, { versao: Number((await linha(a.id))['versao']) }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    await porta.responder(ctx(), a.id, {
+      decisao: 'aceitar',
+      especialidade: m.especialidade,
+      versao: Number((await linha(a.id))['versao']),
+    });
+    const ca = await porta.concluir(ctx(), a.id, { versao: Number((await linha(a.id))['versao']) });
+    expect(ca).toMatchObject({ situacao: 'concluida', internacao: null });
+    const sa = await linha(a.id);
+    expect(sa['situacao']).toBe('concluida');
+    expect(sa['encerrado_em']).not.toBeNull();
+    expect((await eventos(a.id)).at(-1)).toMatchObject({
+      tipo_evento: 'mudanca_situacao',
+      situacao_anterior: 'autorizada',
+      situacao_nova: 'concluida',
+    });
+
+    const b = await porta.receber(ctx(), {
+      central: m.ws,
+      numero: 'WS-C1080-051',
+      tipo: 'transferencia',
+      prioridade: 'prioritario',
+      paciente: m.paciente,
+    });
+    const okb = await porta.responder(ctx(), b.id, {
+      decisao: 'aceitar',
+      versao: Number((await linha(b.id))['versao']),
+    });
+    expect(okb.pedidoLeito).toEqual(expect.any(Number));
+    const vb = Number((await linha(b.id))['versao']);
+    // Sem internação, ou com internação inexistente: recusado sem gravar.
+    await expect(porta.concluir(ctx(), b.id, { versao: vb })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    await expect(porta.concluir(ctx(), b.id, { versao: vb, internacao: 999_999_999 })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    expect((await linha(b.id))['situacao']).toBe('autorizada');
+    const item = (await porta.recebidos(ctx(), { todos: 'sim' })).find((x) => x.id === b.id)!;
+    expect(item.internacaoAtiva).toBe(m.internacao);
+    const cb = await porta.concluir(ctx(), b.id, {
+      versao: vb,
+      internacao: item.internacaoAtiva,
+      chegadaEm: new Date().toISOString(),
+    });
+    expect(cb).toMatchObject({ situacao: 'concluida', internacao: m.internacao });
+    const sb = await linha(b.id);
+    expect(sb).toMatchObject({ situacao: 'concluida' });
+    expect(Number(sb['internacao_id'])).toBe(m.internacao);
+    expect(json((await eventos(b.id)).at(-1)!['dados'])).toMatchObject({
+      acao: 'conclusao',
+      internacao: m.internacao,
+      pedidoLeito: okb.pedidoLeito,
+    });
   });
 });
