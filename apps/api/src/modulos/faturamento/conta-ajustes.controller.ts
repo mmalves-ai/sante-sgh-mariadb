@@ -11,6 +11,7 @@
 //   GET  /api/faturamento/contas/:id/pacotes                    faturamento.conta.ler
 //   POST /api/faturamento/contas/:id/pacotes                    faturamento.item.lancar (aplica ou reclassifica)
 //   POST /api/faturamento/contas/:id/pacotes/reclassificacao    faturamento.item.lancar (reconhece e reclassifica)
+//   GET  /api/faturamento/composicao-pacote/itens?termo=        faturamento.pacote.ler (busca de item da composição)
 //   POST /api/faturamento/pacotes-conta/:cp/descaracterizacao   faturamento.auditoria.ajustar (motivo e justificativa)
 //   GET  /api/faturamento/pacotes/:pacote/composicao            faturamento.pacote.ler
 //   POST /api/faturamento/pacotes/:pacote/versoes               faturamento.pacote.editar
@@ -26,6 +27,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, ctxDe, inteiro, problemaDoPreco } from '../precos/base.js';
 import {
   ajustesContaPropria,
+  buscarItensDaComposicao,
   gravarAjustes,
   horarioEspecialPropria,
   type NomeOperacaoAjustes,
@@ -211,7 +213,16 @@ export class AjustesContaController {
   composicao(@Param('pacote') pacote: string, @Req() req: RequisicaoAutorizada) {
     const p = inteiro(pacote, 'pacote');
     return this.rodar(() =>
-      this.s().ler(ctxDe(req, 'pacote-composicao'), (l) => pacoteComposicaoPropria(l, p)),
+      this.s().ler(ctxDe(req, 'pacote-composicao'), (l, est) => pacoteComposicaoPropria(l, p, est)),
+    );
+  }
+
+  /** A busca de item faturável da composição do pacote, por código ou descrição (nada de id digitado). */
+  @Get('faturamento/composicao-pacote/itens')
+  @Permissao('faturamento.pacote.ler')
+  itensDaComposicao(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().ler(ctxDe(req, 'pacote-composicao'), (l) => buscarItensDaComposicao(l, termo ?? '')),
     );
   }
 

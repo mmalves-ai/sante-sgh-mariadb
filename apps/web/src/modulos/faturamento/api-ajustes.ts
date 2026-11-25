@@ -114,6 +114,7 @@ const alvoPacote = {
   grupoId: z.number().nullable(),
   setorId: z.number().nullable(),
 };
+const esquemaOpcaoCadastro = z.object({ id: z.number(), codigo: z.string(), descricao: z.string() });
 const esquemaComposicaoPacote = z.object({
   id: z.number(),
   codigo: z.string(),
@@ -121,6 +122,7 @@ const esquemaComposicaoPacote = z.object({
   valor: z.number().nullable(),
   quantidadeDiarias: z.number().nullable(),
   situacao: z.string(),
+  lancamentoAutomatico: z.boolean(),
   versoes: z.array(
     z.object({
       id: z.number(),
@@ -156,7 +158,14 @@ const esquemaComposicaoPacote = z.object({
       valorDiariaAdicional: z.number().nullable(),
     }),
   ),
+  opcoes: z.object({
+    grupos: z.array(esquemaOpcaoCadastro),
+    setores: z.array(esquemaOpcaoCadastro),
+    acomodacoes: z.array(esquemaOpcaoCadastro),
+    itens: z.array(esquemaOpcaoCadastro),
+  }),
 });
+export type OpcaoCadastro = z.infer<typeof esquemaOpcaoCadastro>;
 export type ComposicaoDoPacote = z.infer<typeof esquemaComposicaoPacote>;
 export const lerComposicaoPacote = (pacote: number) =>
   ler(`${F}/pacotes/${pacote}/composicao`, esquemaComposicaoPacote);
@@ -167,9 +176,12 @@ export const versionarPacote = (
 ) => enviar(`${F}/pacotes/${pacote}/versoes`, v, qualquer, chave);
 export const gravarComposicaoPacote = (
   pacote: number,
-  c: Pick<ComposicaoDoPacote, 'excecoes' | 'tetos' | 'diarias'>,
+  c: Pick<ComposicaoDoPacote, 'excecoes' | 'tetos' | 'diarias' | 'lancamentoAutomatico'>,
   chave: string,
 ) => enviar(`${F}/pacotes/${pacote}/composicao`, c, qualquer, chave);
+/** Item faturável da composição pelo código ou pela descrição (ao menos 2 letras). */
+export const buscarItensComposicao = (termo: string) =>
+  ler(`${F}/composicao-pacote/itens?termo=${encodeURIComponent(termo)}`, z.array(esquemaOpcaoCadastro));
 
 export const descaracterizarPacote = (
   id: number,

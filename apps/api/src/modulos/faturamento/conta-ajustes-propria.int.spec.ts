@@ -10,13 +10,22 @@
 // - correções da revisão: acréscimo manual do item e desconto do cabeçalho sem linha de ajuste preservados ao aplicar
 //   o horário; alçada por valor (pedido de aprovação gravado, decisor sem alçada suficiente recusado, decisão gravada);
 //   conta de data antiga segue o retrato da versão encerrada do pacote; outro estabelecimento é recusado sem gravar.
+// - linha 20, correções da revisão: o lançamento automático é ligado pela rota da composição (não por INSERT); a partilha
+//   do limite leva a produção do repasse junto (a parte inclusa sai, a cobrada nova entra com o honorário dela); com a
+//   internação na acomodação, aplicar o pacote lança as diárias incluídas sem cobrança e as adicionais à parte, e
+//   descaracterizar estorna as sem cobrança e relança todas pela regra de sempre.
 // No fim, a massa é apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoAjustesConta } from './conta-ajustes.controller.js';
-import { ajustesContaPropria, pacotesContaPropria } from './conta-ajustes-propria.js';
+import {
+  ajustesContaPropria,
+  pacoteComposicaoPropria,
+  pacotesContaPropria,
+} from './conta-ajustes-propria.js';
+import { sincronizarProducaoConta } from '../repasse/producao-conta.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -101,6 +110,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       "DELETE FROM pedido_aprovacao WHERE estabelecimento_id = ? AND entidade = 'ajuste_conta'",
       [ids.est],
     );
+    await e.executar('DELETE FROM producao_repasse WHERE estabelecimento_id = ?', [ids.est]);
     for (const { id } of contas) {
       await e.executar('DELETE FROM ajuste_conta WHERE conta_hospitalar_id = ?', [id]);
       await e.executar(
@@ -141,6 +151,15 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       ])
         await e.executar(`DELETE FROM ${t} WHERE pacote_id = ?`, [id]);
     await e.executar('DELETE FROM pacote WHERE codigo LIKE ?', [`${P}%`]);
+    await e.executar(
+      'DELETE i FROM regra_repasse_item i JOIN regra_repasse r ON r.id = i.regra_repasse_id WHERE r.estabelecimento_id = ?',
+      [ids.est],
+    );
+    await e.executar('DELETE FROM regra_repasse WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM evento_repasse WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM ocupacao_leito WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM regra_diaria WHERE estabelecimento_id = ?', [ids.est]);
     await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
   };
 
@@ -895,7 +914,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     const { pacote, conta } = await escrever(async (e) => {
       const pacote = await e.inserir(
         `INSERT INTO pacote (codigo, descricao, tipo_pacote, item_faturavel_id, cobranca_item_faturavel_id, valor,
-           lancamento_automatico, vigencia_inicio, criado_em) VALUES (?, ?, 'cirurgico', ?, ?, 500, 1, '2025-01-01', ?)`,
+           vigencia_inicio, criado_em) VALUES (?, ?, 'cirurgico', ?, ?, 500, '2025-01-01', ?)`,
         [`${P}PA`, `PACOTE AUTOMATICO ${P}`, m.itemB, m.itemPac, agora],
       );
       await e.inserir(
@@ -910,11 +929,60 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       );
       await e.inserir(
         `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
-           realizado_em, quantidade, valor_unitario, valor_honorario, valor_total, criado_em)
-         VALUES (?, 1, ?, ?, '2026-01-20 15:00:00', 3, 100, 60, 300, ?), (?, 2, ?, ?, '2026-01-20 16:00:00', 1, 50, 0, 50, ?)`,
-        [conta, m.itemA, m.grupo, agora, conta, m.itemB, m.grupo2, agora],
+           realizado_em, quantidade, valor_unitario, valor_honorario, valor_total, executante_profissional_id, criado_em)
+         VALUES (?, 1, ?, ?, '2026-01-20 15:00:00', 3, 100, 60, 300, ?, ?), (?, 2, ?, ?, '2026-01-20 16:00:00', 1, 50, 0, 50, NULL, ?)`,
+        [conta, m.itemA, m.grupo, ids.prof, agora, conta, m.itemB, m.grupo2, agora],
+      );
+      // Repasse da fonte pagadora (50% do cobrado) e a função titular: o item A vira produção do executor.
+      const evento = await e.inserir(
+        "INSERT INTO evento_repasse (estabelecimento_id, codigo, nome, natureza, tipo_lancamento, vigencia_inicio, criado_em) VALUES (?, ?, 'HONORARIOS F375', 'rendimento', 'credito', '2026-01-01', ?)",
+        [ids.est, `${P}-HON`, agora],
+      );
+      const regra = await e.inserir(
+        `INSERT INTO regra_repasse (estabelecimento_id, codigo, descricao, evento_repasse_id, base_calculo, vigencia_inicio, criado_em)
+         VALUES (?, ?, 'Regra F375', ?, 'cobrado', '2026-01-01', ?)`,
+        [ids.est, `${P}-R1`, evento, agora],
+      );
+      await e.inserir(
+        'INSERT INTO regra_repasse_item (regra_repasse_id, sequencia, fonte_pagadora_id, percentual, criado_em) VALUES (?, 1, ?, 50, ?)',
+        [regra, ids.fonte, agora],
+      );
+      await garantir(
+        e,
+        "SELECT id FROM funcao_equipe_cobranca WHERE tipo_funcao = 'clinico' ORDER BY ordem_apresentacao LIMIT 1",
+        [],
+        "INSERT INTO funcao_equipe_cobranca (codigo, descricao, tipo_funcao, ordem_apresentacao, criado_em) VALUES (?, 'CLINICO F375', 'clinico', 0, ?)",
+        [`${P}-CLI`, agora],
       );
       return { pacote, conta };
+    });
+    // A produção do momento "lançamento" do item A, antes do pacote.
+    const exec = nucleo.criarExecutor({});
+    await exec.executar(sincronizarProducaoConta, CLIENTE, { conta, evento: 'lancamento' }, op());
+    const producao = () =>
+      linhas(
+        `SELECT i.quantidade, p.situacao, p.valor_base FROM producao_repasse p
+           JOIN conta_hospitalar_item i ON i.id = p.conta_hospitalar_item_id
+          WHERE i.conta_hospitalar_id = ? AND i.item_faturavel_id = ? ORDER BY p.id`,
+        [conta, m.itemA],
+      ).then((x) => x.map((r) => [Number(r['quantidade']), r['situacao'], Number(r['valor_base'])]));
+    const antes = await producao();
+    expect(antes.length).toBe(1);
+    // O lançamento automático é ligado pela rota do cadastro da composição (nada de flag gravada à mão).
+    await s.gravar('pacote.composicao', op(), {
+      pacoteId: pacote,
+      lancamentoAutomatico: true,
+      excecoes: [],
+      tetos: [],
+      diarias: [],
+    });
+    const [flag] = await linhas(
+      'SELECT lancamento_automatico, lanca_no_fechamento FROM pacote WHERE id = ?',
+      [pacote],
+    );
+    expect([Number(flag!['lancamento_automatico']), Number(flag!['lanca_no_fechamento'])]).toEqual([1, 0]);
+    expect(await s.ler(ctxL(), (l, est) => pacoteComposicaoPropria(l, pacote, est))).toMatchObject({
+      lancamentoAutomatico: true,
     });
     // O procedimento do pacote automático está lançado: o pacote entra sozinho e o item A (3) passa do limite (2).
     const r = (await s.gravar('pacote.reclassificar', op(), { contaId: conta })) as Record<string, number>;
@@ -947,6 +1015,13 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     expect(Number(cp!['valor_cobrado'])).toBe(500);
     const [tot] = await linhas('SELECT valor_itens, valor_total FROM conta_hospitalar WHERE id = ?', [conta]);
     expect(Number(tot!['valor_total'])).toBe(650);
+    // A produção do repasse acompanha a partilha: a parte inclusa no pacote (sem cobrança) sai da produção, a parte
+    // cobrada nova entra com o honorário dela.
+    expect(antes).toEqual([[3, 'pendente', 60]]);
+    expect(await producao()).toEqual([
+      [2, 'estornado', 60],
+      [1, 'pendente', 20],
+    ]);
     // Item lançado depois da aplicação: o limite já está cheio, vai à parte; nada é reaplicado (idempotente).
     await escrever((e) =>
       e.inserir(
@@ -973,7 +1048,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
   it('pacote ao lançar: o procedimento lançado aplica o pacote automático e o item lançado depois já entra (linha 20)', async () => {
     const agora = new Date();
     const CODIGO_PROC = 83_750_751;
-    const { conta } = await escrever(async (e) => {
+    const { conta, pacote } = await escrever(async (e) => {
       const proc = await garantir(
         e,
         'SELECT id FROM item_faturavel WHERE codigo = ?',
@@ -1007,7 +1082,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       );
       const pacote = await e.inserir(
         `INSERT INTO pacote (codigo, descricao, tipo_pacote, item_faturavel_id, cobranca_item_faturavel_id, valor,
-           lancamento_automatico, vigencia_inicio, criado_em) VALUES (?, ?, 'cirurgico', ?, ?, 700, 1, '2025-01-01', ?)`,
+           vigencia_inicio, criado_em) VALUES (?, ?, 'cirurgico', ?, ?, 700, '2025-01-01', ?)`,
         [`${P}PL`, `PACOTE AO LANCAR ${P}`, proc, m.itemPac, agora],
       );
       await e.inserir(
@@ -1028,7 +1103,15 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
          VALUES (?, 1, ?, ?, '2026-01-20 12:00:00', 3, 10, 30, ?)`,
         [conta, m.itemA, m.grupo, agora],
       );
-      return { conta };
+      return { conta, pacote };
+    });
+    // O faturista liga o lançamento automático na composição do pacote (a rota do cadastro).
+    await s.gravar('pacote.composicao', op(), {
+      pacoteId: pacote,
+      lancamentoAutomatico: true,
+      excecoes: [],
+      tetos: [],
+      diarias: [],
     });
     const porta = new PortaFaturamentoPropria(nucleo, CLIENTE);
     const c = { ...ctxL(), usuario: ids.u1, rede: 'rede-teste', hospital: `${P}A` };
@@ -1079,5 +1162,195 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     expect((await itens()).at(-1)).toEqual([proc, 2, 'sem_cobranca', 1]);
     const [tot] = await linhas('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [conta]);
     expect(Number(tot!['valor_total'])).toBe(710);
+  });
+
+  it('pacote com diárias: a incluída sem cobrança, a adicional lançada à parte; descaracterizar devolve todas à cobrança (linha 20)', async () => {
+    const agora = new Date();
+    const base = await escrever(async (e) => {
+      const porEst = (tabela: string, codigo: string, cols: string, vals: unknown[]) =>
+        garantir(
+          e,
+          `SELECT id FROM ${tabela} WHERE estabelecimento_id = ? AND codigo = ?`,
+          [ids.est, codigo],
+          `INSERT INTO ${tabela} (estabelecimento_id, codigo, ${cols}, criado_em) VALUES (?, ?, ${vals.map(() => '?').join(', ')}, ?)`,
+          [ids.est, codigo, ...vals, agora],
+        );
+      const cat = (tabela: string, codigo: string, extraCol = '', extraVal: unknown[] = []) =>
+        garantir(
+          e,
+          `SELECT id FROM ${tabela} WHERE codigo = ?`,
+          [codigo],
+          `INSERT INTO ${tabela} (codigo, descricao${extraCol}, criado_em) VALUES (?, ?${extraVal.map(() => ', ?').join('')}, ?)`,
+          [codigo, `SINTETICO ${codigo}`, ...extraVal, agora],
+        );
+      const categoria = await cat('categoria_acomodacao', `${P}ENF`, ', tipo', ['enfermaria']);
+      const ua = await porEst('unidade_assistencial', `${P}UA`, 'nome, tipo_unidade', [
+        'UNIDADE SINTETICA',
+        'internacao',
+      ]);
+      const setor = await porEst('setor_funcional', `${P}SET`, 'nome, tipo', [
+        'SETOR SINTETICO',
+        'assistencial',
+      ]);
+      const ui = await porEst(
+        'unidade_internacao',
+        `${P}UI`,
+        'unidade_assistencial_id, descricao, tipo, intensiva, setor_funcional_id',
+        [ua, 'UNIDADE INTERNACAO SINTETICA', 'enfermaria', false, setor],
+      );
+      const bloco = await porEst('bloco_internacao', `${P}B`, 'nome', ['BLOCO SINTETICO']);
+      const quarto = await porEst(
+        'acomodacao',
+        `${P}Q1`,
+        'bloco_internacao_id, unidade_internacao_id, categoria_acomodacao_id, nome',
+        [bloco, ui, categoria, 'QUARTO SINTETICO'],
+      );
+      const situacaoLeito = await garantir(
+        e,
+        "SELECT id FROM situacao_leito WHERE situacao_base = 'ocupado' ORDER BY id LIMIT 1",
+        [],
+        "INSERT INTO situacao_leito (codigo, descricao, situacao_base, criado_em) VALUES (?, 'OCUPADO', 'ocupado', ?)",
+        [`${P}OCUP`, agora],
+      );
+      const leito = await porEst(
+        'leito_hospitalar',
+        `${P}L1`,
+        'unidade_internacao_id, acomodacao_id, bloco_internacao_id, situacao_leito_id',
+        [ui, quarto, bloco, situacaoLeito],
+      );
+      // Um atendimento só desta conta (a internação não pode alcançar as contas dos outros casos).
+      const atendimento = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'aberto', '2026-01-20 11:00:00', ?)`,
+        [ids.est, `${P}-D`, ids.paciente, ids.categoria, ids.carater, ids.fonte, ids.prof, agora],
+      );
+      const internacao = await e.inserir(
+        `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada, carater_admissao_id,
+           modalidade_internacao_id, unidade_internacao_id, leito_hospitalar_id, acomodacao_id, especialidade_medica_id,
+           medico_assistente_profissional_id, fonte_pagadora_id, situacao, criado_em)
+         VALUES (?, ?, ?, ?, '2026-01-20 11:00:00', ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)`,
+        [
+          ids.est,
+          `${P}-IND`,
+          atendimento,
+          ids.paciente,
+          await cat('carater_admissao', `${P}CA`, ', urgencia', [false]),
+          await cat('modalidade_internacao', `${P}MI`),
+          ui,
+          leito,
+          quarto,
+          await cat('especialidade_medica', `${P}EM`),
+          ids.prof,
+          ids.fonte,
+          agora,
+        ],
+      );
+      await e.inserir(
+        `INSERT INTO ocupacao_leito (estabelecimento_id, internacao_id, leito_hospitalar_id, unidade_internacao_id,
+           acomodacao_id, categoria_acomodacao_id, data_hora_inicio, situacao, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, '2026-01-20 11:00:00', 'ativa', ?)`,
+        [ids.est, internacao, leito, ui, quarto, categoria, agora],
+      );
+      const diaria = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        [`${P}DIA`],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, situacao, criado_em) VALUES (?, ?, 'diaria', ?, 'ativo', ?)",
+        [`${P}DIA`, `DIARIA SINTETICA ${P}`, m.grupo, agora],
+      );
+      const adicional = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        [`${P}DAD`],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, situacao, criado_em) VALUES (?, ?, 'diaria', ?, 'ativo', ?)",
+        [`${P}DAD`, `DIARIA ADICIONAL SINTETICA ${P}`, m.grupo, agora],
+      );
+      await e.inserir(
+        `INSERT INTO regra_diaria (estabelecimento_id, categoria_acomodacao_id, item_faturavel_id, quantidade, hora_virada,
+           vigencia_inicio, ativo, criado_em) VALUES (?, ?, ?, 1, '12:00:00', '2020-01-01', TRUE, ?)`,
+        [ids.est, categoria, diaria, agora],
+      );
+      const pacote = await e.inserir(
+        `INSERT INTO pacote (codigo, descricao, tipo_pacote, item_faturavel_id, cobranca_item_faturavel_id, valor,
+           vigencia_inicio, criado_em) VALUES (?, ?, 'clinico', ?, ?, 400, '2025-01-01', ?)`,
+        [`${P}PD`, `PACOTE COM DIARIAS ${P}`, m.itemB, m.itemPac, agora],
+      );
+      // Conta de 4 dias (20 a 24/01) na categoria da massa.
+      const conta = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, categoria_acomodacao_id, natureza, competencia, inicio_em, fim_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 11:00:00', '2026-01-24 11:00:00', ?)`,
+        [ids.est, `${P}-C7`, atendimento, ids.paciente, ids.fonte, ids.tipoConta, categoria, agora],
+      );
+      return { categoria, diaria, adicional, pacote, conta };
+    });
+    // Duas diárias incluídas na acomodação e a adicional a 60, gravadas pela rota da composição.
+    await s.gravar('pacote.composicao', op(), {
+      pacoteId: base.pacote,
+      excecoes: [],
+      tetos: [],
+      diarias: [
+        {
+          categoriaAcomodacaoId: base.categoria,
+          quantidadeDiarias: 2,
+          diariaItemId: base.adicional,
+          valorDiariaAdicional: 60,
+        },
+      ],
+    });
+    const diarias = (conta: number) =>
+      linhas(
+        `SELECT l.chave, l.situacao AS controle, i.situacao, i.item_faturavel_id AS item, i.valor_total
+           FROM lancamento_automatico_conta l JOIN conta_hospitalar_item i ON i.id = l.conta_hospitalar_item_id
+          WHERE l.conta_hospitalar_id = ? ORDER BY l.id`,
+        [conta],
+      );
+    const conta = (await s.gravar('pacote.aplicar', op(), {
+      contaId: base.conta,
+      pacoteId: base.pacote,
+    })) as {
+      id: number;
+    };
+    const [cp] = await linhas('SELECT id FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ?', [
+      base.conta,
+    ]);
+    const chaveCp = `pacote-diaria:${Number(cp!['id'])}`;
+    const vigentes = (await diarias(base.conta)).filter((d) => d['controle'] === 'lancado');
+    const incluidas = vigentes.filter((d) => d['chave'] === chaveCp);
+    const aParte = vigentes.filter((d) => d['chave'] === 'diaria');
+    expect(conta.id).toBe(Number(cp!['id']));
+    expect(incluidas.length).toBe(2);
+    expect(incluidas.every((d) => d['situacao'] === 'sem_cobranca' && Number(d['valor_total']) === 0)).toBe(
+      true,
+    );
+    expect(aParte.length).toBeGreaterThan(0);
+    expect(aParte.every((d) => Number(d['item']) === base.adicional && Number(d['valor_total']) === 60)).toBe(
+      true,
+    );
+    const total = incluidas.length + aParte.length;
+    // Descaracterizar: a incluída sem cobrança é estornada e todas as diárias voltam pela regra de sempre, cobradas.
+    const motivo = (await s.gravar('pacote.motivo', op(), {
+      codigo: `${P}MD`,
+      descricao: 'Permanência acima do pacote',
+      tipo: 'permanencia',
+    })) as { id: number };
+    const [v] = await linhas('SELECT versao FROM conta_hospitalar_pacote WHERE id = ?', [cp!['id']]);
+    await s.gravar('pacote.descaracterizar', op(), {
+      id: Number(cp!['id']),
+      versao: Number(v!['versao']),
+      motivoId: motivo.id,
+      justificativa: 'Paciente ficou além das diárias do pacote.',
+    });
+    const depois = await diarias(base.conta);
+    expect(depois.filter((d) => d['chave'] === chaveCp && d['controle'] === 'lancado')).toHaveLength(0);
+    expect(depois.filter((d) => d['chave'] === chaveCp).every((d) => d['situacao'] === 'estornado')).toBe(
+      true,
+    );
+    const cobradas = depois.filter((d) => d['chave'] === 'diaria' && d['controle'] === 'lancado');
+    expect(cobradas).toHaveLength(total);
+    expect(cobradas.every((d) => Number(d['item']) === base.diaria && d['situacao'] !== 'sem_cobranca')).toBe(
+      true,
+    );
   });
 });

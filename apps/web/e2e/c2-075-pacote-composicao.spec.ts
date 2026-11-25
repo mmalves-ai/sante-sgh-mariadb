@@ -1,7 +1,8 @@
 // C2-075 (06-FAT linha 20, F3.7): pacote na conta, 3ª volta, pelo caminho da tela.
 // - Cadastro: na tela de pacotes, "Composição e versões" abre na mesma tela as versões (a nova é conferida na hora pela
 //   mesma regra do servidor: começa depois da última) e a composição (exceções, tetos e diárias por acomodação, com a
-//   linha incompleta recusada na hora), gravada num envio só.
+//   linha incompleta recusada na hora), gravada num envio só; item, grupo e acomodação escolhidos pelo nome (o item pela
+//   busca de código ou descrição), e o lançamento automático do pacote ligado no mesmo envio.
 // - Conta: "Reclassificar itens" vai à rota que reconhece o pacote de lançamento automático e reclassifica os itens; a
 //   diária além das incluídas já lançada pela apuração aparece no alerta.
 // As rotas exigem o banco próprio; o E2E roda com a fonte sintética, e as respostas destas rotas são simuladas com massa
@@ -62,6 +63,7 @@ async function simular(page: Page, enviados: Record<string, unknown>[]): Promise
       valor: 900,
       quantidadeDiarias: 2,
       situacao: 'ativo',
+      lancamentoAutomatico: false,
       versoes: [
         {
           id: 1,
@@ -76,8 +78,20 @@ async function simular(page: Page, enviados: Record<string, unknown>[]): Promise
       excecoes: [],
       tetos: [],
       diarias: [],
+      opcoes: {
+        grupos: [{ id: 31, codigo: 'G31', descricao: 'GRUPO SINTETICO' }],
+        setores: [],
+        acomodacoes: [
+          { id: 4, codigo: 'ENF', descricao: 'ENFERMARIA SINTETICA' },
+          { id: 5, codigo: 'APT', descricao: 'APARTAMENTO SINTETICO' },
+        ],
+        itens: [{ id: 1001, codigo: '1001', descricao: 'ITEM SINTETICO INCLUSO' }],
+      },
     });
   });
+  await page.route('**/api/faturamento/composicao-pacote/itens?**', (rota) =>
+    json(rota, [{ id: 1002, codigo: '1002', descricao: 'ITEM SINTETICO EXCECAO' }]),
+  );
   await page.route(`**/api/faturamento/pacotes/${PACOTE}/versoes`, (rota) => {
     enviados.push({ versao: rota.request().postDataJSON() });
     return json(rota, { id: 2 }, 201);
@@ -170,15 +184,20 @@ test.describe('pacote: composição, versões e reclassificação @C2-075', () =
     await page.getByTestId('pc-mais-teto').click();
     await expect(page.getByTestId('pc-erro-teto-0')).toContainText('ao menos um teto');
     await expect(page.getByTestId('pc-gravar')).toBeDisabled();
-    await page.getByTestId('pc-ex-item-0').fill('1002');
+    await page.getByTestId('pc-busca-item').fill('1002');
+    await expect(page.getByTestId('pc-achados')).toBeVisible();
+    await escolher(page.getByTestId('pc-ex-item-0'), '1002');
     await escolher(page.getByTestId('pc-ex-efeito-0'), 'descaracteriza');
     await page.getByTestId('pc-te-dias-0').fill('7');
     await page.getByTestId('pc-mais-diaria').click();
-    await page.getByTestId('pc-di-acom-0').fill('4');
+    await expect(page.getByTestId('pc-erro-diaria-0')).toContainText('Escolha a acomodação');
+    await escolher(page.getByTestId('pc-di-acom-0'), '4');
     await page.getByTestId('pc-di-qtd-0').fill('2');
+    await page.getByTestId('pc-lancamento-automatico').check();
     await page.getByTestId('pc-gravar').click();
     await expect.poll(() => enviados.find((e) => 'composicao' in e)).toBeTruthy();
     expect(enviados.find((e) => 'composicao' in e)?.['composicao']).toMatchObject({
+      lancamentoAutomatico: true,
       excecoes: [{ itemId: 1002, efeito: 'descaracteriza' }],
       tetos: [{ diasTeto: 7, descaracteriza: true }],
       diarias: [{ categoriaAcomodacaoId: 4, quantidadeDiarias: 2 }],

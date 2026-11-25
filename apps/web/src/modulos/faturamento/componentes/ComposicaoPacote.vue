@@ -4,17 +4,21 @@
 //   a fecha na véspera (a data é conferida enquanto se digita, pela mesma regra do servidor);
 // - exceções (cobrar à parte ou descaracterizar, por item, grupo, setor e acomodação), tetos (dias, quantidade, valor)
 //   e diárias por acomodação (incluídas, item e valor da diária adicional): tudo num envio só; o que sai da lista fica
-//   marcado no servidor, nada se apaga.
+//   marcado no servidor, nada se apaga;
+// - item, grupo, setor e acomodação escolhidos pelo nome (o item pela busca de código ou descrição), nunca por id
+//   digitado; o lançamento automático do pacote ao lançar o procedimento é ligado aqui.
 import { validarNovaVersao } from '@sgh/dominio-faturamento';
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
+  buscarItensComposicao,
   gravarComposicaoPacote,
   lerComposicaoPacote,
   versionarPacote,
   type ComposicaoDoPacote,
+  type OpcaoCadastro,
 } from '../api-ajustes.js';
 import { novaChave } from '../api-faturamento.js';
 import ErroFaturamento from './ErroFaturamento.vue';
@@ -40,17 +44,17 @@ const { t } = useI18n({
       excecoes: 'Exceções',
       tetos: 'Tetos',
       diariasAcomodacao: 'Diárias por acomodação',
-      item: 'Item (id)',
-      grupo: 'Grupo (id)',
-      setor: 'Setor (id)',
-      acomodacao: 'Acomodação (id)',
+      item: 'Item',
+      grupo: 'Grupo',
+      setor: 'Setor',
+      acomodacao: 'Acomodação',
       efeito: 'Efeito',
       cobrarAParte: 'Cobra à parte',
       descaracteriza: 'Descaracteriza',
       dias: 'Dias',
       quantidade: 'Quantidade',
       descaracterizaTeto: 'Passar descaracteriza',
-      itemAdicional: 'Item da diária adicional (id)',
+      itemAdicional: 'Item da diária adicional',
       valorAdicional: 'Valor da diária adicional',
       acrescentar: 'Acrescentar',
       retirar: 'Retirar',
@@ -61,6 +65,12 @@ const { t } = useI18n({
       negativo: 'Não pode ser negativo.',
       acomodacaoRepetida: 'Acomodação repetida.',
       vazio: 'Nada cadastrado.',
+      nenhum: '(qualquer)',
+      buscarItem: 'Buscar item (código ou descrição)',
+      buscaCurta: 'Digite ao menos 2 letras.',
+      achados: '{n} item(ns) achado(s): escolha na lista do item.',
+      lancamentoAutomatico: 'Lançar o pacote na conta ao lançar o procedimento do pacote',
+      acomodacaoObrigatoria: 'Escolha a acomodação.',
     },
   },
 });
@@ -69,8 +79,8 @@ const q = useQuery({
   queryKey: computed(() => ['faturamento', 'pacote-composicao', props.pacote]),
   queryFn: () => lerComposicaoPacote(props.pacote),
 });
-type Edicao = Pick<ComposicaoDoPacote, 'excecoes' | 'tetos' | 'diarias'>;
-const ed = reactive<Edicao>({ excecoes: [], tetos: [], diarias: [] });
+type Edicao = Pick<ComposicaoDoPacote, 'excecoes' | 'tetos' | 'diarias' | 'lancamentoAutomatico'>;
+const ed = reactive<Edicao>({ excecoes: [], tetos: [], diarias: [], lancamentoAutomatico: false });
 watch(
   () => q.data.value,
   (d) => {
@@ -78,6 +88,7 @@ watch(
     ed.excecoes = d.excecoes.map((x) => ({ ...x }));
     ed.tetos = d.tetos.map((x) => ({ ...x }));
     ed.diarias = d.diarias.map((x) => ({ ...x }));
+    ed.lancamentoAutomatico = d.lancamentoAutomatico;
   },
   { immediate: true },
 );
@@ -135,9 +146,11 @@ const errosDiaria = computed(() =>
   ed.diarias.map((x, i) =>
     neg(x.quantidadeDiarias) || neg(x.valorDiariaAdicional)
       ? t('negativo')
-      : ed.diarias.findIndex((y) => y.categoriaAcomodacaoId === x.categoriaAcomodacaoId) !== i
-        ? t('acomodacaoRepetida')
-        : null,
+      : !(x.categoriaAcomodacaoId > 0)
+        ? t('acomodacaoObrigatoria')
+        : ed.diarias.findIndex((y) => y.categoriaAcomodacaoId === x.categoriaAcomodacaoId) !== i
+          ? t('acomodacaoRepetida')
+          : null,
   ),
 );
 const composicaoValida = computed(
@@ -148,6 +161,38 @@ const composicaoValida = computed(
     ed.diarias.every((d) => d.categoriaAcomodacaoId > 0),
 );
 const numOuNulo = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')));
+
+// Escolhas pelo nome: o vazio (0) é "qualquer"; o item vem dos já usados e da busca por código ou descrição.
+const rotuloDe = (o: OpcaoCadastro) => `${o.codigo} - ${o.descricao}`;
+const lista = (xs: readonly OpcaoCadastro[], vazio: string) => [
+  { valor: 0, rotulo: vazio },
+  ...xs.map((o) => ({ valor: o.id, rotulo: rotuloDe(o) })),
+];
+const termo = ref('');
+const achados = ref<OpcaoCadastro[]>([]);
+let pedido = 0;
+watch(termo, async (v) => {
+  const meu = ++pedido;
+  if (v.trim().length < 2) {
+    achados.value = [];
+    return;
+  }
+  try {
+    const r = await buscarItensComposicao(v.trim());
+    if (meu === pedido) achados.value = r;
+  } catch (e) {
+    if (meu === pedido) erro.value = e;
+  }
+});
+const opGrupos = computed(() => lista(q.data.value?.opcoes.grupos ?? [], t('nenhum')));
+const opSetores = computed(() => lista(q.data.value?.opcoes.setores ?? [], t('nenhum')));
+const opAcomodacoes = computed(() => lista(q.data.value?.opcoes.acomodacoes ?? [], t('nenhum')));
+const opItens = computed(() => {
+  const vistos = new Map<number, OpcaoCadastro>();
+  for (const i of [...(q.data.value?.opcoes.itens ?? []), ...achados.value]) vistos.set(i.id, i);
+  return lista([...vistos.values()], t('nenhum'));
+});
+const idOuNulo = (v: unknown) => (typeof v === 'number' && v > 0 ? v : null);
 const efeitos = computed(() => [
   { valor: 'cobrar_a_parte', rotulo: t('cobrarAParte') },
   { valor: 'descaracteriza', rotulo: t('descaracteriza') },
@@ -156,7 +201,12 @@ function gravar() {
   return acao(() =>
     gravarComposicaoPacote(
       props.pacote,
-      { excecoes: ed.excecoes, tetos: ed.tetos, diarias: ed.diarias },
+      {
+        excecoes: ed.excecoes,
+        tetos: ed.tetos,
+        diarias: ed.diarias,
+        lancamentoAutomatico: ed.lancamentoAutomatico,
+      },
       novaChave('pacote-composicao'),
     ),
   );
@@ -233,43 +283,60 @@ function gravar() {
       </form>
 
       <form data-testid="pc-composicao" @submit.prevent="gravar">
+        <label class="campo">
+          <input v-model="ed.lancamentoAutomatico" type="checkbox" data-testid="pc-lancamento-automatico" />
+          {{ t('lancamentoAutomatico') }}
+        </label>
+        <span class="campo">
+          <label for="pc-busca-item">{{ t('buscarItem') }}</label>
+          <input
+            id="pc-busca-item"
+            v-model="termo"
+            type="search"
+            autocomplete="off"
+            data-testid="pc-busca-item"
+          />
+          <small v-if="termo.trim().length === 1">{{ t('buscaCurta') }}</small>
+          <small v-else-if="achados.length" data-testid="pc-achados">{{
+            t('achados', { n: achados.length })
+          }}</small>
+        </span>
         <h4>{{ t('excecoes') }}</h4>
         <div v-for="(x, i) in ed.excecoes" :key="`e${i}`" class="filtros" :data-testid="`pc-excecao-${i}`">
           <span class="campo">
-            <label :for="`pc-ex-item-${i}`">{{ t('item') }}</label>
-            <input
-              :id="`pc-ex-item-${i}`"
-              :value="x.itemId ?? ''"
-              inputmode="numeric"
+            <SanteSelecao
+              :model-value="x.itemId ?? 0"
+              @update:model-value="x.itemId = idOuNulo($event)"
+              :rotulo="t('item')"
+              :opcoes="opItens"
               :data-testid="`pc-ex-item-${i}`"
-              @input="x.itemId = numOuNulo(($event.target as HTMLInputElement).value)"
             />
           </span>
           <span class="campo">
-            <label :for="`pc-ex-grupo-${i}`">{{ t('grupo') }}</label>
-            <input
-              :id="`pc-ex-grupo-${i}`"
-              :value="x.grupoId ?? ''"
-              inputmode="numeric"
-              @input="x.grupoId = numOuNulo(($event.target as HTMLInputElement).value)"
+            <SanteSelecao
+              :model-value="x.grupoId ?? 0"
+              @update:model-value="x.grupoId = idOuNulo($event)"
+              :rotulo="t('grupo')"
+              :opcoes="opGrupos"
+              :data-testid="`pc-ex-grupo-${i}`"
             />
           </span>
           <span class="campo">
-            <label :for="`pc-ex-setor-${i}`">{{ t('setor') }}</label>
-            <input
-              :id="`pc-ex-setor-${i}`"
-              :value="x.setorId ?? ''"
-              inputmode="numeric"
-              @input="x.setorId = numOuNulo(($event.target as HTMLInputElement).value)"
+            <SanteSelecao
+              :model-value="x.setorId ?? 0"
+              @update:model-value="x.setorId = idOuNulo($event)"
+              :rotulo="t('setor')"
+              :opcoes="opSetores"
+              :data-testid="`pc-ex-setor-${i}`"
             />
           </span>
           <span class="campo">
-            <label :for="`pc-ex-acom-${i}`">{{ t('acomodacao') }}</label>
-            <input
-              :id="`pc-ex-acom-${i}`"
-              :value="x.categoriaAcomodacaoId ?? ''"
-              inputmode="numeric"
-              @input="x.categoriaAcomodacaoId = numOuNulo(($event.target as HTMLInputElement).value)"
+            <SanteSelecao
+              :model-value="x.categoriaAcomodacaoId ?? 0"
+              @update:model-value="x.categoriaAcomodacaoId = idOuNulo($event)"
+              :rotulo="t('acomodacao')"
+              :opcoes="opAcomodacoes"
+              :data-testid="`pc-ex-acom-${i}`"
             />
           </span>
           <span class="campo">
@@ -304,12 +371,12 @@ function gravar() {
         <h4>{{ t('tetos') }}</h4>
         <div v-for="(x, i) in ed.tetos" :key="`t${i}`" class="filtros" :data-testid="`pc-teto-${i}`">
           <span class="campo">
-            <label :for="`pc-te-grupo-${i}`">{{ t('grupo') }}</label>
-            <input
-              :id="`pc-te-grupo-${i}`"
-              :value="x.grupoId ?? ''"
-              inputmode="numeric"
-              @input="x.grupoId = numOuNulo(($event.target as HTMLInputElement).value)"
+            <SanteSelecao
+              :model-value="x.grupoId ?? 0"
+              @update:model-value="x.grupoId = idOuNulo($event)"
+              :rotulo="t('grupo')"
+              :opcoes="opGrupos"
+              :data-testid="`pc-te-grupo-${i}`"
             />
           </span>
           <span class="campo">
@@ -367,13 +434,12 @@ function gravar() {
         <h4>{{ t('diariasAcomodacao') }}</h4>
         <div v-for="(x, i) in ed.diarias" :key="`d${i}`" class="filtros" :data-testid="`pc-diaria-${i}`">
           <span class="campo">
-            <label :for="`pc-di-acom-${i}`">{{ t('acomodacao') }}</label>
-            <input
-              :id="`pc-di-acom-${i}`"
-              :value="x.categoriaAcomodacaoId || ''"
-              inputmode="numeric"
+            <SanteSelecao
+              :model-value="x.categoriaAcomodacaoId"
+              @update:model-value="x.categoriaAcomodacaoId = idOuNulo($event) ?? 0"
+              :rotulo="t('acomodacao')"
+              :opcoes="opAcomodacoes"
               :data-testid="`pc-di-acom-${i}`"
-              @input="x.categoriaAcomodacaoId = numOuNulo(($event.target as HTMLInputElement).value) ?? 0"
             />
           </span>
           <span class="campo">
@@ -387,12 +453,12 @@ function gravar() {
             />
           </span>
           <span class="campo">
-            <label :for="`pc-di-item-${i}`">{{ t('itemAdicional') }}</label>
-            <input
-              :id="`pc-di-item-${i}`"
-              :value="x.diariaItemId ?? ''"
-              inputmode="numeric"
-              @input="x.diariaItemId = numOuNulo(($event.target as HTMLInputElement).value)"
+            <SanteSelecao
+              :model-value="x.diariaItemId ?? 0"
+              @update:model-value="x.diariaItemId = idOuNulo($event)"
+              :rotulo="t('itemAdicional')"
+              :opcoes="opItens"
+              :data-testid="`pc-di-item-${i}`"
             />
           </span>
           <span class="campo">

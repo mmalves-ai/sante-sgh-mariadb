@@ -43,7 +43,9 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
+import { sincronizarProducaoDaConta } from '../repasse/producao-conta.js';
 import { apurarConta, TABELAS_CONTA_ENTRADA } from './conta-entrada.js';
+import { buscarItensCobraveis } from './tarifador-propria.js';
 import { totalDosItens } from './operacoes.js';
 
 type Linha = Record<string, unknown>;
@@ -988,12 +990,14 @@ async function composicaoDo(l: Consulta, pacote: number) {
 }
 
 /** Versões e composição do pacote (cadastro). */
-export async function pacoteComposicaoPropria(l: Leitor, pacote: number) {
+export async function pacoteComposicaoPropria(l: Leitor, pacote: number, est: number | null = null) {
   const p = await l.uma<Linha>(
-    'SELECT id, codigo, descricao, valor, quantidade_diarias, situacao, versao FROM pacote WHERE id = ? AND excluido_em IS NULL',
+    `SELECT id, codigo, descricao, valor, quantidade_diarias, situacao, versao, lancamento_automatico, lanca_no_fechamento
+       FROM pacote WHERE id = ? AND excluido_em IS NULL`,
     [pacote],
   );
   if (!p) throw recusa('nao-encontrado', 'O pacote não existe.', { campos: ['pacoteId'] });
+  const comp = await composicaoDo(l, pacote);
   return {
     id: n(p['id']),
     codigo: String(p['codigo']),
@@ -1001,10 +1005,69 @@ export async function pacoteComposicaoPropria(l: Leitor, pacote: number) {
     valor: nn(p['valor']),
     quantidadeDiarias: nn(p['quantidade_diarias']),
     situacao: String(p['situacao']),
+    lancamentoAutomatico: b(p['lancamento_automatico']) && !b(p['lanca_no_fechamento']),
     versoes: await versoesDo(l, pacote),
-    ...(await composicaoDo(l, pacote)),
+    ...comp,
+    opcoes: await opcoesDaComposicao(l, comp, est),
   };
 }
+
+/**
+ * As escolhas da tela de composição, pelo nome (nunca pelo id digitado): grupos, setores do estabelecimento e
+ * categorias de acomodação ativos, e os itens faturáveis já usados na composição com o código e a descrição (os demais
+ * vêm da busca por código ou descrição).
+ */
+async function opcoesDaComposicao(
+  l: Consulta,
+  comp: Awaited<ReturnType<typeof composicaoDo>>,
+  est: number | null,
+) {
+  const opcao = (r: Linha) => ({ id: n(r['id']), codigo: String(r['codigo']), descricao: String(r['d']) });
+  const usados = [
+    ...new Set(
+      [
+        ...comp.inclusoes.map((x) => x.itemId),
+        ...comp.excecoes.map((x) => x.itemId),
+        ...comp.diarias.map((x) => x.diariaItemId),
+      ].filter((x): x is number => x !== null),
+    ),
+  ];
+  return {
+    grupos: (
+      await l.consultar<Linha>(
+        'SELECT id, codigo, descricao AS d FROM grupo_faturamento WHERE ativo = 1 ORDER BY descricao',
+        [],
+        { teto: 500 },
+      )
+    ).map(opcao),
+    setores: (
+      await l.consultar<Linha>(
+        `SELECT id, codigo, nome AS d FROM setor_funcional
+          WHERE ativo = 1 AND excluido_em IS NULL AND (? IS NULL OR estabelecimento_id = ?) ORDER BY nome`,
+        [est, est],
+        { teto: 1000 },
+      )
+    ).map(opcao),
+    acomodacoes: (
+      await l.consultar<Linha>(
+        'SELECT id, codigo, descricao AS d FROM categoria_acomodacao WHERE ativo = TRUE ORDER BY descricao',
+        [],
+        { teto: 200 },
+      )
+    ).map(opcao),
+    itens: usados.length
+      ? (
+          await l.consultar<Linha>(
+            `SELECT id, codigo, descricao AS d FROM item_faturavel WHERE id IN (${usados.map(() => '?').join(',')})`,
+            usados,
+          )
+        ).map(opcao)
+      : [],
+  };
+}
+
+/** A busca de item faturável da composição (código ou descrição). */
+export const buscarItensDaComposicao = (l: Consulta, termo: string) => buscarItensCobraveis(l, termo);
 
 export const esquemaVersaoPacote = z.object({
   pacoteId: id,
@@ -1062,6 +1125,8 @@ export const opVersionarPacote = definirOperacao({
 const alvoZ = { itemId: idN, grupoId: idN, setorId: idN };
 export const esquemaComposicao = z.object({
   pacoteId: id,
+  /** Lança o pacote sozinho na conta quando o procedimento do pacote é lançado (ausente: fica como está). */
+  lancamentoAutomatico: z.boolean().optional(),
   excecoes: z
     .array(
       z.object({
@@ -1097,11 +1162,24 @@ export const esquemaComposicao = z.object({
 /** Exceções, tetos e diárias por acomodação num pedido só. O que sai do pedido fica marcado (não se apaga). */
 export const opGravarComposicao = definirOperacao({
   nome: 'faturamento.gravar-composicao-pacote',
-  tabelas: ['pacote_excecao', 'pacote_teto', 'pacote_diaria_acomodacao'],
+  tabelas: ['pacote_excecao', 'pacote_teto', 'pacote_diaria_acomodacao', 'pacote'],
   entrada: esquemaComposicao,
   async gravar(tx, e) {
-    if (!(await tx.uma('SELECT id FROM pacote WHERE id = ? AND excluido_em IS NULL', [e.pacoteId])))
-      throw recusa('nao-encontrado', 'O pacote não existe.', { campos: ['pacoteId'] });
+    const [pac] = await tx.consultarParaAtualizar<Linha>(
+      'SELECT id, versao, lancamento_automatico, lanca_no_fechamento FROM pacote WHERE id = ? AND excluido_em IS NULL',
+      [e.pacoteId],
+      { teto: 1 },
+    );
+    if (!pac) throw recusa('nao-encontrado', 'O pacote não existe.', { campos: ['pacoteId'] });
+    // Lançamento automático ao reconhecer o procedimento: liga ou desliga só quando o pedido traz a escolha.
+    if (
+      e.lancamentoAutomatico !== undefined &&
+      (b(pac['lancamento_automatico']) !== e.lancamentoAutomatico || b(pac['lanca_no_fechamento']))
+    )
+      await tx.alterar('pacote', e.pacoteId, n(pac['versao']), {
+        lancamento_automatico: e.lancamentoAutomatico,
+        lanca_no_fechamento: false,
+      });
     for (const [i, x] of e.excecoes.entries())
       if (x.itemId === null && x.grupoId === null)
         throw recusa('entrada-invalida', 'A exceção precisa do item ou do grupo.', {
@@ -1371,9 +1449,14 @@ const SEM_COPIA = new Set([
  * proporcional de cada valor), sem cobrança e ligado ao pacote; o resto vira um lançamento novo, cobrado, com os mesmos
  * dados. Nada se apaga: a soma das duas partes é o lançamento original.
  */
-async function partirLancamento(tx: TxOperacao, id: number, inclusa: number, cpId: number) {
+async function partirLancamento(
+  tx: TxOperacao,
+  id: number,
+  inclusa: number,
+  cpId: number,
+): Promise<number | null> {
   const o = await tx.uma<Linha>('SELECT * FROM conta_hospitalar_item WHERE id = ?', [id]);
-  if (!o) return;
+  if (!o) return null;
   const q = n(o['quantidade']);
   const f = inclusa / q;
   const fica: Linha = {};
@@ -1398,7 +1481,7 @@ async function partirLancamento(tx: TxOperacao, id: number, inclusa: number, cpI
     conta_hospitalar_pacote_id: cpId,
     situacao: 'sem_cobranca',
   });
-  await tx.incluir('conta_hospitalar_item', {
+  return tx.incluir('conta_hospitalar_item', {
     ...resto,
     sequencia: n(seq?.['s']),
     quantidade: Math.round((q - inclusa) * 10_000) / 10_000,
@@ -1415,8 +1498,15 @@ type ComposicaoLida = Awaited<ReturnType<typeof composicaoDo>>;
  * Classifica os itens da conta frente ao pacote aplicado: o incluso fica sem cobrança e ligado ao pacote, o que passa do
  * limite é partido (a parte inclusa fica, o resto é cobrado), o que deixou de caber volta à cobrança.
  */
-async function classificarNoPacote(tx: TxOperacao, c: ContaLida, cpId: number, comp: ComposicaoLida) {
+async function classificarNoPacote(
+  tx: TxOperacao,
+  est: number,
+  c: ContaLida,
+  cpId: number,
+  comp: ComposicaoLida,
+) {
   const itens = await itensParaPacote(tx, c.id, cpId);
+  const mudados: number[] = [];
   const partilha = partilharItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao);
   let inclusos = 0;
   let partidos = 0;
@@ -1425,7 +1515,8 @@ async function classificarNoPacote(tx: TxOperacao, c: ContaLida, cpId: number, c
     const p = partilha.get(i.id);
     const inc = p?.classe === 'incluso';
     if (inc && p.quantidadeInclusa < i.quantidade) {
-      await partirLancamento(tx, i.id, p.quantidadeInclusa, cpId);
+      const novo = await partirLancamento(tx, i.id, p.quantidadeInclusa, cpId);
+      mudados.push(i.id, ...(novo === null ? [] : [novo]));
       partidos++;
       inclusos++;
     } else if (inc && i.situacao !== 'sem_cobranca') {
@@ -1434,6 +1525,7 @@ async function classificarNoPacote(tx: TxOperacao, c: ContaLida, cpId: number, c
         conta_hospitalar_pacote_id: cpId,
         situacao: 'sem_cobranca',
       });
+      mudados.push(i.id);
       inclusos++;
     } else if (!inc && i.situacao === 'sem_cobranca') {
       await tx.alterar('conta_hospitalar_item', i.id, i.versao, {
@@ -1441,9 +1533,17 @@ async function classificarNoPacote(tx: TxOperacao, c: ContaLida, cpId: number, c
         conta_hospitalar_pacote_id: null,
         situacao: 'lancado',
       });
+      mudados.push(i.id);
       reabertos++;
     }
   }
+  // A produção do repasse acompanha a mudança dos itens (o partido, a parte cobrada nova, o incluso e o reaberto).
+  if (mudados.length)
+    await sincronizarProducaoDaConta(
+      tx,
+      { conta: c.id, itens: mudados, evento: 'mudanca-item' },
+      { estabelecimento: est, usuario: tx.contexto.usuario },
+    );
   const depois = partidos ? await itensParaPacote(tx, c.id, cpId) : itens;
   return {
     inclusos,
@@ -1557,7 +1657,7 @@ async function aplicarPacoteNaConta(
     });
   } else cpId = n(cp['id']);
   const comp = await composicaoParaConta(tx, pacoteId, versao);
-  const cl = await classificarNoPacote(tx, c, cpId, comp);
+  const cl = await classificarNoPacote(tx, est, c, cpId, comp);
   // As diárias do pacote: a incluída sem cobrança, a além das incluídas lançada à parte (apuração idempotente).
   await apurarConta(tx, est, c.id);
   const tot = await refazerTotal(tx, c.id);
@@ -1645,6 +1745,7 @@ export async function pacotesDaContaAoLancar(tx: TxOperacao, est: number, contaI
         : (await versoesDo(tx, n(a['pacote_id']))).find((v) => v.id === n(a['pacote_versao_id']));
     const cl = await classificarNoPacote(
       tx,
+      est,
       c,
       n(a['id']),
       await composicaoParaConta(tx, n(a['pacote_id']), versao),
@@ -1749,6 +1850,7 @@ export const opDescaracterizar = definirOperacao({
       [e.id],
     );
     let reabertos = 0;
+    const mudados: number[] = [];
     for (const i of itens)
       if (i['tipo_valorizacao'] === 'pacote')
         await tx.alterar('conta_hospitalar_item', n(i['id']), n(i['versao']), {
@@ -1763,8 +1865,15 @@ export const opDescaracterizar = definirOperacao({
           conta_hospitalar_pacote_id: null,
           situacao: 'lancado',
         });
+        mudados.push(n(i['id']));
         reabertos++;
       }
+    if (mudados.length)
+      await sincronizarProducaoDaConta(
+        tx,
+        { conta: c.id, itens: mudados, evento: 'mudanca-item' },
+        { estabelecimento: est, usuario: ctx.usuario },
+      );
     // As diárias que o pacote incluía voltam à regra de sempre pela apuração (estorna a sem cobrança e relança).
     await apurarConta(tx, est, c.id);
     const tot = await refazerTotal(tx, c.id);
