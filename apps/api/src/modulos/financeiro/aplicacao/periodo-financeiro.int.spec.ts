@@ -205,7 +205,8 @@ describe.skipIf(SEM_BANCO)('período financeiro: fechar em ordem, travar e reabr
       await codigoDaGravacao(
         executar('financeiro.baixarTitulo', {
           cenario: 'pagar',
-          titulos: [{ titulo: 999_999_999, versao: 1 }],
+          // A versão é o carimbo de concorrência (texto) ou nula; a entrada tem de ser válida para chegar à trava.
+          titulos: [{ titulo: 999_999_999, versao: null }],
           conta: m.contaA,
           dataPagamento: D0,
           formaPagamento: 1,
