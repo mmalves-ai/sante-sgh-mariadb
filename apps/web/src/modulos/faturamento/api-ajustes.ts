@@ -104,6 +104,73 @@ export const cancelarAjuste = (id: number, versao: number, chave: string) =>
 export const lerPacotes = (conta: number) => ler(`${F}/contas/${conta}/pacotes`, esquemaPacotes);
 export const aplicarPacote = (conta: number, pacoteId: number, chave: string) =>
   enviar(`${F}/contas/${conta}/pacotes`, { pacoteId }, qualquer, chave);
+/** Reconhece o pacote de lançamento automático pelo procedimento lançado e reclassifica os itens dos aplicados. */
+export const reclassificarPacotes = (conta: number, chave: string) =>
+  enviar(`${F}/contas/${conta}/pacotes/reclassificacao`, {}, qualquer, chave);
+
+// ── Cadastro do pacote (06-FAT linha 20): versões, exceções, tetos e diárias por acomodação ─────────────────────
+const alvoPacote = {
+  itemId: z.number().nullable(),
+  grupoId: z.number().nullable(),
+  setorId: z.number().nullable(),
+};
+const esquemaComposicaoPacote = z.object({
+  id: z.number(),
+  codigo: z.string(),
+  descricao: z.string(),
+  valor: z.number().nullable(),
+  quantidadeDiarias: z.number().nullable(),
+  situacao: z.string(),
+  versoes: z.array(
+    z.object({
+      id: z.number(),
+      numero: z.number(),
+      vigenciaInicio: z.string(),
+      vigenciaFim: z.string().nullable(),
+      valor: z.number().nullable(),
+      quantidadeDiarias: z.number().nullable(),
+    }),
+  ),
+  inclusoes: z.array(z.object({ ...alvoPacote, quantidadeLimite: z.number().nullable() })),
+  excecoes: z.array(
+    z.object({
+      ...alvoPacote,
+      categoriaAcomodacaoId: z.number().nullable(),
+      efeito: z.enum(['cobrar_a_parte', 'descaracteriza']),
+    }),
+  ),
+  tetos: z.array(
+    z.object({
+      grupoId: z.number().nullable(),
+      diasTeto: z.number().nullable(),
+      quantidadeTeto: z.number().nullable(),
+      valorTeto: z.number().nullable(),
+      descaracteriza: z.boolean(),
+    }),
+  ),
+  diarias: z.array(
+    z.object({
+      categoriaAcomodacaoId: z.number(),
+      quantidadeDiarias: z.number(),
+      diariaItemId: z.number().nullable(),
+      valorDiariaAdicional: z.number().nullable(),
+    }),
+  ),
+});
+export type ComposicaoDoPacote = z.infer<typeof esquemaComposicaoPacote>;
+export const lerComposicaoPacote = (pacote: number) =>
+  ler(`${F}/pacotes/${pacote}/composicao`, esquemaComposicaoPacote);
+export const versionarPacote = (
+  pacote: number,
+  v: { vigenciaInicio: string; valor: number | null; quantidadeDiarias: number | null },
+  chave: string,
+) => enviar(`${F}/pacotes/${pacote}/versoes`, v, qualquer, chave);
+export const gravarComposicaoPacote = (
+  pacote: number,
+  c: Pick<ComposicaoDoPacote, 'excecoes' | 'tetos' | 'diarias'>,
+  chave: string,
+) => enviar(`${F}/pacotes/${pacote}/composicao`, c, qualquer, chave);
+
 export const descaracterizarPacote = (
   id: number,
   versao: number,

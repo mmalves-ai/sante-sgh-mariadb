@@ -599,6 +599,66 @@ export function classificarItens(
   return r;
 }
 
+/** A parte de cada item que fica no pacote: a classe e a quantidade inclusa (menor que a lançada quando passa do limite). */
+export interface PartilhaItem {
+  readonly classe: Classe;
+  readonly quantidadeInclusa: number;
+}
+
+/**
+ * Como `classificarItens`, mas o item que passa do limite de inclusão é partido: a quantidade que ainda cabe no limite
+ * fica inclusa (classe "incluso" com `quantidadeInclusa` menor que a lançada) e só o resto vai à parte. O item que não
+ * cabe em nada vai inteiro à parte. Ordem: a do lançamento (id), para a partilha ser estável entre as aplicações.
+ */
+export function partilharItens(
+  itens: readonly ItemParaPacote[],
+  inclusoes: readonly RegraInclusao[],
+  excecoes: readonly RegraExcecao[],
+  categoriaAcomodacaoId: number | null,
+): Map<number, PartilhaItem> {
+  const usado = new Map<RegraInclusao, number>();
+  const r = new Map<number, PartilhaItem>();
+  for (const i of [...itens].sort((a, b) => a.id - b.id)) {
+    const ex = excecoes.find(
+      (x) =>
+        casa(x, i) && (x.categoriaAcomodacaoId === null || x.categoriaAcomodacaoId === categoriaAcomodacaoId),
+    );
+    if (ex) {
+      r.set(i.id, {
+        classe: ex.efeito === 'descaracteriza' ? 'descaracteriza' : 'a_parte',
+        quantidadeInclusa: 0,
+      });
+      continue;
+    }
+    if (!inclusoes.length) {
+      r.set(i.id, { classe: 'incluso', quantidadeInclusa: i.quantidade });
+      continue;
+    }
+    const inc = inclusoes.find((x) => casa(x, i));
+    if (!inc) {
+      r.set(i.id, { classe: 'a_parte', quantidadeInclusa: 0 });
+      continue;
+    }
+    const ja = usado.get(inc) ?? 0;
+    const cabe =
+      inc.quantidadeLimite === null
+        ? i.quantidade
+        : Math.max(0, Math.min(i.quantidade, r4(inc.quantidadeLimite - ja)));
+    if (cabe <= 0) {
+      r.set(i.id, { classe: 'a_parte', quantidadeInclusa: 0 });
+      continue;
+    }
+    usado.set(inc, r4(ja + cabe));
+    r.set(i.id, { classe: 'incluso', quantidadeInclusa: cabe });
+  }
+  return r;
+}
+const r4 = (v: number) => Math.round(v * 10_000) / 10_000;
+
+/** As classes de uma partilha (o item partido conta como incluso: a parte cobrada vira outro lançamento). */
+export const classesDaPartilha = (p: ReadonlyMap<number, PartilhaItem>): Map<number, Classe> =>
+  new Map([...p].map(([k, v]) => [k, v.classe]));
+
 export interface TetoPacote {
   readonly id: number;
   readonly grupoId: number | null;
@@ -627,6 +687,8 @@ export function alertasDoPacote(
   dias: number,
   diariasIncluidas: number | null,
   adicional: DiariaAdicional | null = null,
+  /** Diárias além das incluídas que a apuração da conta já lançou à parte. */
+  diariasLancadas = 0,
 ): AlertaPacote[] {
   const a: AlertaPacote[] = [];
   const inclusos = itens.filter((i) => classes.get(i.id) === 'incluso');
@@ -661,23 +723,23 @@ export function alertasDoPacote(
       descaracteriza: true,
       mensagem: `${d} item(ns) lançado(s) descaracterizam o pacote pela exceção cadastrada.`,
     });
-  if (diariasIncluidas !== null && dias > diariasIncluidas)
+  if (diariasIncluidas !== null && dias > diariasIncluidas) {
+    const alem = dias - diariasIncluidas;
+    const falta = Math.max(0, alem - diariasLancadas);
+    const cada = adicional?.valor != null ? ` a ${adicional.valor.toFixed(2)} cada` : '';
     a.push({
       tipo: 'diarias',
       descaracteriza: false,
       mensagem:
-        `${dias - diariasIncluidas} diária(s) além das ${diariasIncluidas} incluídas: cobradas à parte` +
-        (adicional?.valor != null ? ` a ${adicional.valor.toFixed(2)} cada.` : '.'),
-      ...(adicional
-        ? {
-            proposta: {
-              itemId: adicional.itemId,
-              quantidade: dias - diariasIncluidas,
-              valorUnitario: adicional.valor,
-            },
-          }
+        falta === 0
+          ? `${alem} diária(s) além das ${diariasIncluidas} incluídas: já lançada(s) à parte${cada}.`
+          : `${diariasLancadas ? `${diariasLancadas} de ` : ''}${alem} diária(s) além das ${diariasIncluidas} incluídas: ` +
+            `cobradas à parte${cada}.`,
+      ...(adicional && falta > 0
+        ? { proposta: { itemId: adicional.itemId, quantidade: falta, valorUnitario: adicional.valor } }
         : {}),
     });
+  }
   return a;
 }
 

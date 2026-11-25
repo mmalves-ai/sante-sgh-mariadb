@@ -10,6 +10,7 @@
 //   POST /api/faturamento/ajustes-conta/:aid/cancelamento       faturamento.item.lancar (só quem pediu)
 //   GET  /api/faturamento/contas/:id/pacotes                    faturamento.conta.ler
 //   POST /api/faturamento/contas/:id/pacotes                    faturamento.item.lancar (aplica ou reclassifica)
+//   POST /api/faturamento/contas/:id/pacotes/reclassificacao    faturamento.item.lancar (reconhece e reclassifica)
 //   POST /api/faturamento/pacotes-conta/:cp/descaracterizacao   faturamento.auditoria.ajustar (motivo e justificativa)
 //   GET  /api/faturamento/pacotes/:pacote/composicao            faturamento.pacote.ler
 //   POST /api/faturamento/pacotes/:pacote/versoes               faturamento.pacote.editar
@@ -187,6 +188,14 @@ export class AjustesContaController {
   @AuditadoNoHandler(EXECUTOR)
   aplicarPacote(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.gravar('pacote.aplicar', req, 'conta-pacotes', corpo, { contaId: inteiro(id, 'id') });
+  }
+
+  @Post('faturamento/contas/:id/pacotes/reclassificacao')
+  @HttpCode(200)
+  @Permissao('faturamento.item.lancar')
+  @AuditadoNoHandler(EXECUTOR)
+  reclassificarPacotes(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.gravar('pacote.reclassificar', req, 'conta-pacotes', corpo, { contaId: inteiro(id, 'id') });
   }
 
   @Post('faturamento/pacotes-conta/:cp/descaracterizacao')

@@ -21,6 +21,7 @@ import {
   lerAjustes,
   lerPacotes,
   pedirAjuste,
+  reclassificarPacotes,
 } from '../api-ajustes.js';
 import { novaChave } from '../api-faturamento.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
@@ -381,7 +382,8 @@ const justDesc = ref('');
             <button
               type="button"
               :disabled="gravando"
-              @click="acao(() => aplicarPacote(conta, p.pacoteId, chave))"
+              data-testid="aj-reclassificar"
+              @click="acao(() => reclassificarPacotes(conta, chave))"
             >
               {{ t('reclassificar') }}
             </button>

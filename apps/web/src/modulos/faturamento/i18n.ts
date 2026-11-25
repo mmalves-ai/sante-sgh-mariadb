@@ -220,6 +220,7 @@ export const mensagensFaturamento = {
     ativo: 'Ativo',
     salvar: 'Salvar o pacote {id}',
     semItens: 'Acrescente ao menos um item ao pacote.',
+    composicao: 'Composição e versões',
     padrao: 'Orçamentos-padrão',
     padraoTexto: 'Os orçamentos-padrão cadastrados (só consulta).',
   },

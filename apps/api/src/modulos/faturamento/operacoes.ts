@@ -44,7 +44,12 @@ import {
   opcoesCredenciamentoConvenio,
 } from '@sgh/persistencia';
 import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
-import { apurarLancamentosAutomaticos, apurarLancamentosDoDia } from './conta-entrada.js';
+import {
+  apurarLancamentosAutomaticos,
+  apurarLancamentosDoDia,
+  TABELAS_CONTA_ENTRADA,
+} from './conta-entrada.js';
+
 import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
 import { versaoNumero } from './esquemas.js';
 import { dispararKitsDoItem } from './kit-lancamento.js';
@@ -59,6 +64,20 @@ import {
   tiposDoGrupo,
   valorDoItem,
 } from './regras-conta.js';
+
+/** Tabelas do pacote na conta tocadas ao lançar (06-FAT linha 20; a função mora nos ajustes, importada tarde). */
+const TABELAS_PACOTE_AO_LANCAR = [
+  'conta_hospitalar_pacote',
+  'pacote',
+  'pacote_versao',
+  'pacote_contrato',
+  'pacote_item_incluso',
+  'pacote_excecao',
+  'pacote_teto',
+  'pacote_diaria_acomodacao',
+  'lancamento_automatico_conta',
+  ...TABELAS_CONTA_ENTRADA,
+];
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -296,12 +315,7 @@ export const reabrirConta = definirOperacao<ReabrirContaEntrada, ResultadoOperac
     await registrarEtapa(tx, conta, 'aberta', { etapa: 'reabertura', situacao: 'registrada' }, e.motivo);
     return { conta: conta.id };
   },
-  eventos: (_e, r) => [
-    {
-      tipo: 'faturamento.conta.reaberta',
-      carga: { conta: Number(r['conta']) },
-    },
-  ],
+  eventos: (_e, r) => [{ tipo: 'faturamento.conta.reaberta', carga: { conta: Number(r['conta']) } }],
   alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.conta }),
   trilha: (e) => ({ motivo: e.motivo }),
 });
@@ -345,11 +359,7 @@ export const conferirItem = definirOperacao<ConferirItemEntrada, ResultadoOperac
       tx,
       conta,
       conta.situacao,
-      {
-        etapa: 'conferencia-item',
-        situacao: 'registrada',
-        itens: e.itens.length,
-      },
+      { etapa: 'conferencia-item', situacao: 'registrada', itens: e.itens.length },
       `${e.itens.length} item(ns)`,
     );
     return { conta: conta.id, itens: e.itens.length };
@@ -469,12 +479,7 @@ async function credenciamentoDoItem(
     ]);
     planoSuperiorId = pl?.['plano_superior_id'] == null ? null : n(pl['plano_superior_id']);
   }
-  const q = {
-    profissionalId: quem.profissional,
-    fontePagadoraId: conta.fonte,
-    estabelecimentoId: est,
-    data,
-  };
+  const q = { profissionalId: quem.profissional, fontePagadoraId: conta.fonte, estabelecimentoId: est, data };
   const credenciamentos = await credenciamentosVigentes(tx, q);
   const opcoes = await opcoesCredenciamentoConvenio(tx, conta.fonte);
   const v = verificarCredenciamento({
@@ -504,6 +509,8 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     'conta_hospitalar_item_memoria',
     'conta_hospitalar',
     ...TABELAS_PRODUCAO_CONTA,
+    // F3.7 (06-FAT linha 20): o pacote reconhecido pelo procedimento entra e os aplicados reclassificam ao lançar.
+    ...TABELAS_PACOTE_AO_LANCAR,
   ],
   entrada: esquemaLancarItem,
   travar: (e) => travaConta(e.conta),
@@ -545,7 +552,16 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       throw recusa('item-fora-da-tabela', 'O item não está na tabela de preço da fonte pagadora da conta.', {
         campos: ['codigo'],
       });
-    const doTabela = regra ? null : await precoVigente(tx, tabelas, n(item['id']), e.data);
+    // 06-FAT linha 5: o item CH ou PORTE sai do índice do acordo da conta, com o setor do lançamento e o regime da conta
+    // (o horário especial da conta entra pela faixa de acréscimo do item, nunca duas vezes).
+    const doTabela = regra
+      ? null
+      : await precoVigente(tx, tabelas, n(item['id']), e.data, {
+          est,
+          fonte: conta.fonte,
+          conta: conta.id,
+          setor: e.local > 0 ? e.local : null,
+        });
     const preco: PrecoVigente | null = regra
       ? {
           modelo: 'regra_particular',
@@ -746,12 +762,7 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     const kits = await dispararKitsDoItem(
       tx,
       est,
-      {
-        id: conta.id,
-        fontePagadora: conta.fonte,
-        plano: conta.plano,
-        tabela: conta.tabela,
-      },
+      { id: conta.id, fontePagadora: conta.fonte, plano: conta.plano, tabela: conta.tabela },
       n(item['id']),
       e.quantidade,
       e.data,
@@ -763,9 +774,11 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     // hospital e pelo caráter do atendimento, na mesma transação. Importação tardia: o módulo dos ajustes usa o total
     // dos itens daqui.
     const { aplicarHorarioEspecialNaConta } = await import('./conta-ajustes-propria.js');
-    const horario = await aplicarHorarioEspecialNaConta(tx, est, conta.id, {
-      soSeEditavel: true,
-    });
+    const horario = await aplicarHorarioEspecialNaConta(tx, est, conta.id, { soSeEditavel: true });
+    // F3.7 (06-FAT linha 20): o pacote de lançamento automático cujo procedimento acaba de ser lançado entra na conta, e
+    // o item lançado depois da aplicação já entra no pacote (ou vai à parte), sem o botão de reclassificar.
+    const { pacotesDaContaAoLancar } = await import('./conta-ajustes-propria.js');
+    const pacotes = await pacotesDaContaAoLancar(tx, est, conta.id);
     // A produção do repasse do item (momento "lançamento"), na mesma transação e pela mesma conta.
     await sincronizarProducaoDaConta(
       tx,
@@ -773,14 +786,14 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       { estabelecimento: est, usuario: ctx.usuario },
     );
     // Decisão 25: o alerta de credenciamento volta no resultado (o resultado da operação é plano).
-    const doHorario = horario.alterados ? { horarioEspecial: horario.alterados } : {};
-    const doAcordo = comAcordo?.alertas.length ? { alertasAcordo: comAcordo.alertas.join(',') } : {};
+    const doHorario = {
+      ...(horario.alterados ? { horarioEspecial: horario.alterados } : {}),
+      ...(pacotes.aplicados ? { pacotesAplicados: pacotes.aplicados } : {}),
+      ...(pacotes.reclassificados ? { pacoteReclassificados: pacotes.reclassificados } : {}),
+      ...(comAcordo?.alertas.length ? { alertasAcordo: comAcordo.alertas.join(',') } : {}),
+    };
     const doKit = kits.kits.length
-      ? {
-          kits: kits.kits.join(','),
-          itensKit: kits.itens.length,
-          semPrecoKit: kits.semPreco,
-        }
+      ? { kits: kits.kits.join(','), itensKit: kits.itens.length, semPrecoKit: kits.semPreco }
       : {};
     return alerta
       ? {
@@ -791,15 +804,11 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
           alertaMotivo: alerta.motivo,
           ...doKit,
           ...doHorario,
-          ...doAcordo,
         }
-      : { id, conta: conta.id, valor, ...doKit, ...doHorario, ...doAcordo };
+      : { id, conta: conta.id, valor, ...doKit, ...doHorario };
   },
   eventos: (_e, r) => [
-    {
-      tipo: 'faturamento.item.lancado',
-      carga: { conta: Number(r['conta']), item: Number(r['id']) },
-    },
+    { tipo: 'faturamento.item.lancado', carga: { conta: Number(r['conta']), item: Number(r['id']) } },
   ],
   alvo: (_e, r) => ({ tabela: 'conta_hospitalar_item', id: Number(r['id']) }),
 });

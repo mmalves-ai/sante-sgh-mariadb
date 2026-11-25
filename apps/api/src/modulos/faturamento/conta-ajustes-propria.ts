@@ -9,7 +9,8 @@
 //   cobrança, alertas de teto) e descaracterização com motivo, que devolve a conta à cobrança aberta.
 import {
   alertasDoPacote,
-  classificarItens,
+  classesDaPartilha,
+  partilharItens,
   composicaoDaVersao,
   conferirAlcadaDoValor,
   etapaDaAlcada,
@@ -42,6 +43,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
+import { apurarConta, TABELAS_CONTA_ENTRADA } from './conta-entrada.js';
 import { totalDosItens } from './operacoes.js';
 
 type Linha = Record<string, unknown>;
@@ -1208,8 +1210,10 @@ async function itensParaPacote(l: Consulta, conta: number, cp: number | null) {
   const r = await l.consultar<Linha>(
     `SELECT id, versao, item_faturavel_id, grupo_faturamento_id, setor_funcional_id, quantidade, valor_total, situacao,
             conta_hospitalar_pacote_id
-       FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND excluido_em IS NULL AND tipo_valorizacao <> 'pacote'
+       FROM conta_hospitalar_item ci WHERE conta_hospitalar_id = ? AND excluido_em IS NULL AND tipo_valorizacao <> 'pacote'
         AND (situacao IN ('lancado','conferido') OR (situacao = 'sem_cobranca' AND conta_hospitalar_pacote_id = ?))
+        AND NOT EXISTS (SELECT 1 FROM lancamento_automatico_conta la WHERE la.conta_hospitalar_item_id = ci.id
+                         AND (la.chave LIKE 'diaria%' OR la.conta_hospitalar_pacote_id IS NOT NULL))
       ORDER BY id`,
     [conta, cp ?? 0],
   );
@@ -1271,7 +1275,7 @@ export async function pacotesContaPropria(l: Leitor, est: number, conta: number)
         : (await versoesDo(l, n(a['pacote_id']))).find((v) => v.id === n(a['pacote_versao_id']));
     const comp = await composicaoParaConta(l, n(a['pacote_id']), versao);
     const itens = ativo ? await itensParaPacote(l, c.id, n(a['id'])) : [];
-    const classes = classificarItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao);
+    const classes = classesDaPartilha(partilharItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao));
     const daAcomodacao = comp.diarias.find((d) => d.categoriaAcomodacaoId === c.acomodacao);
     const diarias = daAcomodacao?.quantidadeDiarias ?? versao?.quantidadeDiarias ?? null;
     lidos.push({
@@ -1299,6 +1303,7 @@ export async function pacotesContaPropria(l: Leitor, est: number, conta: number)
             dias,
             diarias,
             adicionalDe(daAcomodacao),
+            await diariasLancadasDa(l, c.id),
           )
         : [],
     });
@@ -1336,126 +1341,333 @@ export async function pacotesContaPropria(l: Leitor, est: number, conta: number)
   };
 }
 
+/** Diárias além das incluídas que a apuração da conta já lançou à parte (as da regra de sempre, fora do pacote). */
+async function diariasLancadasDa(l: Consulta, conta: number): Promise<number> {
+  const r = await l.uma<Linha>(
+    `SELECT COUNT(*) AS q FROM lancamento_automatico_conta la
+       JOIN conta_hospitalar_item ci ON ci.id = la.conta_hospitalar_item_id
+      WHERE la.conta_hospitalar_id = ? AND la.chave IN ('diaria','diaria-parcial') AND la.situacao = 'lancado'
+        AND ci.excluido_em IS NULL AND ci.situacao IN ('lancado','conferido')`,
+    [conta],
+  );
+  return n(r?.['q']);
+}
+
+/** Colunas que o lançamento novo da partilha não copia (identidade, ordem e auditoria). */
+const SEM_COPIA = new Set([
+  'id',
+  'sequencia',
+  'criado_em',
+  'criado_por',
+  'alterado_em',
+  'alterado_por',
+  'versao',
+  'excluido_em',
+  'excluido_por',
+]);
+
+/**
+ * Parte o lançamento que passa do limite de inclusão do pacote: ele fica com a quantidade inclusa (e a parte
+ * proporcional de cada valor), sem cobrança e ligado ao pacote; o resto vira um lançamento novo, cobrado, com os mesmos
+ * dados. Nada se apaga: a soma das duas partes é o lançamento original.
+ */
+async function partirLancamento(tx: TxOperacao, id: number, inclusa: number, cpId: number) {
+  const o = await tx.uma<Linha>('SELECT * FROM conta_hospitalar_item WHERE id = ?', [id]);
+  if (!o) return;
+  const q = n(o['quantidade']);
+  const f = inclusa / q;
+  const fica: Linha = {};
+  const resto: Linha = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (SEM_COPIA.has(k)) continue;
+    resto[k] = v;
+    if (k.startsWith('valor_') && !k.includes('unitario') && v !== null && v !== undefined) {
+      const parte = r2(n(v) * f);
+      fica[k] = parte;
+      resto[k] = r2(n(v) - parte);
+    }
+  }
+  const seq = await tx.uma<Linha>(
+    'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+    [n(o['conta_hospitalar_id'])],
+  );
+  await tx.alterar('conta_hospitalar_item', id, n(o['versao']), {
+    ...fica,
+    quantidade: inclusa,
+    pertence_pacote: true,
+    conta_hospitalar_pacote_id: cpId,
+    situacao: 'sem_cobranca',
+  });
+  await tx.incluir('conta_hospitalar_item', {
+    ...resto,
+    sequencia: n(seq?.['s']),
+    quantidade: Math.round((q - inclusa) * 10_000) / 10_000,
+    pertence_pacote: false,
+    conta_hospitalar_pacote_id: null,
+    situacao: 'lancado',
+    observacao: `Parte além do limite do pacote (lançamento ${String(o['sequencia'])}: ${inclusa} inclusa(s) de ${q}).`,
+  });
+}
+
+type ComposicaoLida = Awaited<ReturnType<typeof composicaoDo>>;
+
+/**
+ * Classifica os itens da conta frente ao pacote aplicado: o incluso fica sem cobrança e ligado ao pacote, o que passa do
+ * limite é partido (a parte inclusa fica, o resto é cobrado), o que deixou de caber volta à cobrança.
+ */
+async function classificarNoPacote(tx: TxOperacao, c: ContaLida, cpId: number, comp: ComposicaoLida) {
+  const itens = await itensParaPacote(tx, c.id, cpId);
+  const partilha = partilharItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao);
+  let inclusos = 0;
+  let partidos = 0;
+  let reabertos = 0;
+  for (const i of itens) {
+    const p = partilha.get(i.id);
+    const inc = p?.classe === 'incluso';
+    if (inc && p.quantidadeInclusa < i.quantidade) {
+      await partirLancamento(tx, i.id, p.quantidadeInclusa, cpId);
+      partidos++;
+      inclusos++;
+    } else if (inc && i.situacao !== 'sem_cobranca') {
+      await tx.alterar('conta_hospitalar_item', i.id, i.versao, {
+        pertence_pacote: true,
+        conta_hospitalar_pacote_id: cpId,
+        situacao: 'sem_cobranca',
+      });
+      inclusos++;
+    } else if (!inc && i.situacao === 'sem_cobranca') {
+      await tx.alterar('conta_hospitalar_item', i.id, i.versao, {
+        pertence_pacote: false,
+        conta_hospitalar_pacote_id: null,
+        situacao: 'lancado',
+      });
+      reabertos++;
+    }
+  }
+  const depois = partidos ? await itensParaPacote(tx, c.id, cpId) : itens;
+  return {
+    inclusos,
+    partidos,
+    reabertos,
+    itens: depois,
+    classes: classesDaPartilha(partilharItens(depois, comp.inclusoes, comp.excecoes, c.acomodacao)),
+  };
+}
+
+/** Tabelas da aplicação do pacote na conta (com a apuração das diárias que o pacote inclui ou cobra à parte). */
+const TABELAS_PACOTE_CONTA = [
+  'conta_hospitalar_pacote',
+  'conta_hospitalar_item',
+  'conta_hospitalar',
+  'pacote',
+  'pacote_versao',
+  'pacote_contrato',
+  'pacote_item_incluso',
+  'pacote_excecao',
+  'pacote_teto',
+  'pacote_diaria_acomodacao',
+  'lancamento_automatico_conta',
+  ...TABELAS_CONTA_ENTRADA,
+];
+
+/**
+ * Aplica o pacote à conta (ou reclassifica, se já aplicado): lança o item do pacote pelo preço do acordo, da versão ou o
+ * padrão; classifica os itens; refaz as diárias pela apuração. No lançamento automático, o pacote fora de vigência, sem
+ * preço ou já descaracterizado é só ignorado (o faturista vê o candidato na tela); no pedido do faturista, é recusado.
+ */
+async function aplicarPacoteNaConta(
+  tx: TxOperacao,
+  est: number,
+  c: ContaLida,
+  p: Linha,
+  automatico: boolean,
+) {
+  const data = dataIso(c.inicio)!;
+  const pacoteId = n(p['id']);
+  if (
+    p['situacao'] !== 'ativo' ||
+    dataIso(p['vigencia_inicio'])! > data ||
+    (p['vigencia_fim'] !== null && dataIso(p['vigencia_fim'])! < data)
+  ) {
+    if (automatico) return null;
+    throw recusa('pacote-fora-de-vigencia', 'O pacote não está ativo na data de início da conta.', {
+      campos: ['pacoteId'],
+    });
+  }
+  const cp = await tx.uma<Linha>(
+    'SELECT id, descaracterizacao_pacote_id FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ? AND pacote_id = ? AND recem_nascido = 0 AND excluido_em IS NULL',
+    [c.id, pacoteId],
+  );
+  if (cp && cp['descaracterizacao_pacote_id'] !== null) {
+    if (automatico) return null;
+    throw recusa(
+      'pacote-descaracterizado',
+      'O pacote já foi descaracterizado nesta conta: a cobrança segue aberta.',
+      { campos: ['pacoteId'] },
+    );
+  }
+  const versoes = await versoesDo(tx, pacoteId);
+  const vigente = versaoVigente(versoes, data);
+  const versao = vigente ? (versoes.find((v) => v.id === vigente.id) ?? null) : null;
+  let cpId: number;
+  let valor = 0;
+  if (!cp) {
+    const preco = await precoDoPacote(tx, p, c, data, versao);
+    if (!preco) {
+      if (automatico) return null;
+      throw recusa('pacote-sem-preco', 'O pacote não tem preço para esta fonte pagadora nem preço padrão.', {
+        campos: ['pacoteId'],
+      });
+    }
+    valor = preco.valor;
+    cpId = await tx.incluir('conta_hospitalar_pacote', {
+      conta_hospitalar_id: c.id,
+      pacote_id: pacoteId,
+      pacote_versao_id: versao?.id ?? null,
+      principal: !(await tx.uma(
+        'SELECT id FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ? AND excluido_em IS NULL',
+        [c.id],
+      )),
+      valor_cobrado: valor,
+      aplicado_em: new Date(),
+    });
+    const seq = await tx.uma<Linha>(
+      'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+      [c.id],
+    );
+    const cobranca = await tx.uma<Linha>('SELECT grupo_faturamento_id FROM item_faturavel WHERE id = ?', [
+      n(p['cobranca_item_faturavel_id']),
+    ]);
+    await tx.incluir('conta_hospitalar_item', {
+      conta_hospitalar_id: c.id,
+      sequencia: n(seq?.['s']),
+      item_faturavel_id: n(p['cobranca_item_faturavel_id']),
+      grupo_faturamento_id: cobranca?.['grupo_faturamento_id'] ?? null,
+      realizado_em: c.inicio,
+      quantidade: 1,
+      valor_unitario: valor,
+      valor_total: valor,
+      tipo_valorizacao: 'pacote',
+      pertence_pacote: true,
+      conta_hospitalar_pacote_id: cpId,
+      situacao: 'lancado',
+      observacao:
+        `Pacote ${String(p['codigo'])}${versao ? ` versão ${versao.numero}` : ''} (preço do ${preco.origem})` +
+        `${automatico ? ', lançado ao reconhecer o procedimento' : ''}.`,
+    });
+  } else cpId = n(cp['id']);
+  const comp = await composicaoParaConta(tx, pacoteId, versao);
+  const cl = await classificarNoPacote(tx, c, cpId, comp);
+  // As diárias do pacote: a incluída sem cobrança, a além das incluídas lançada à parte (apuração idempotente).
+  await apurarConta(tx, est, c.id);
+  const tot = await refazerTotal(tx, c.id);
+  const dias = diasDePermanenciaPacote(data, dataIso(c.fim) ?? new Date().toISOString().slice(0, 10));
+  const daAcomodacao = comp.diarias.find((d) => d.categoriaAcomodacaoId === c.acomodacao);
+  const diarias = daAcomodacao?.quantidadeDiarias ?? versao?.quantidadeDiarias ?? nn(p['quantidade_diarias']);
+  const alertas = alertasDoPacote(
+    cl.itens,
+    cl.classes,
+    comp.tetos,
+    dias,
+    diarias,
+    adicionalDe(daAcomodacao),
+    await diariasLancadasDa(tx, c.id),
+  );
+  return {
+    id: cpId,
+    valor: valor || null,
+    inclusos: cl.inclusos,
+    partidos: cl.partidos,
+    total: tot.valor_total,
+    alertas: alertas.length,
+    descaracterizaPorAlerta: alertas.some((a) => a.descaracteriza),
+    avisos: alertas.map((a) => a.mensagem).join(' '),
+  };
+}
+
 export const opAplicarPacote = definirOperacao({
   nome: 'faturamento.aplicar-pacote-conta',
-  tabelas: ['conta_hospitalar_pacote', 'conta_hospitalar_item', 'conta_hospitalar'],
+  tabelas: TABELAS_PACOTE_CONTA,
   entrada: z.object({ contaId: id, pacoteId: id }),
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
     await travarConta(tx, est, e.contaId);
     const c = await contaDa(tx, est, e.contaId);
     exigirEditavel(c);
-    const data = dataIso(c.inicio)!;
     const p = await tx.uma<Linha>(
       `SELECT * FROM pacote WHERE id = ? AND excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
       [e.pacoteId, est],
     );
     if (!p) throw recusa('nao-encontrado', 'O pacote não existe.', { campos: ['pacoteId'] });
-    if (
-      p['situacao'] !== 'ativo' ||
-      dataIso(p['vigencia_inicio'])! > data ||
-      (p['vigencia_fim'] !== null && dataIso(p['vigencia_fim'])! < data)
-    )
-      throw recusa('pacote-fora-de-vigencia', 'O pacote não está ativo na data de início da conta.', {
-        campos: ['pacoteId'],
-      });
-    const cp = await tx.uma<Linha>(
-      'SELECT id, descaracterizacao_pacote_id FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ? AND pacote_id = ? AND recem_nascido = 0 AND excluido_em IS NULL',
-      [c.id, e.pacoteId],
-    );
-    if (cp && cp['descaracterizacao_pacote_id'] !== null)
-      throw recusa(
-        'pacote-descaracterizado',
-        'O pacote já foi descaracterizado nesta conta: a cobrança segue aberta.',
-        { campos: ['pacoteId'] },
-      );
-    const versoes = await versoesDo(tx, e.pacoteId);
-    const vigente = versaoVigente(versoes, data);
-    const versao = vigente ? (versoes.find((v) => v.id === vigente.id) ?? null) : null;
-    let cpId: number;
-    let valor = 0;
-    if (!cp) {
-      const preco = await precoDoPacote(tx, p, c, data, versao);
-      if (!preco)
-        throw recusa(
-          'pacote-sem-preco',
-          'O pacote não tem preço para esta fonte pagadora nem preço padrão.',
-          { campos: ['pacoteId'] },
-        );
-      valor = preco.valor;
-      cpId = await tx.incluir('conta_hospitalar_pacote', {
-        conta_hospitalar_id: c.id,
-        pacote_id: e.pacoteId,
-        pacote_versao_id: versao?.id ?? null,
-        principal: !(await tx.uma(
-          'SELECT id FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ? AND excluido_em IS NULL',
-          [c.id],
-        )),
-        valor_cobrado: valor,
-        aplicado_em: new Date(),
-      });
-      const seq = await tx.uma<Linha>(
-        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
-        [c.id],
-      );
-      const cobranca = await tx.uma<Linha>('SELECT grupo_faturamento_id FROM item_faturavel WHERE id = ?', [
-        n(p['cobranca_item_faturavel_id']),
-      ]);
-      await tx.incluir('conta_hospitalar_item', {
-        conta_hospitalar_id: c.id,
-        sequencia: n(seq?.['s']),
-        item_faturavel_id: n(p['cobranca_item_faturavel_id']),
-        grupo_faturamento_id: cobranca?.['grupo_faturamento_id'] ?? null,
-        realizado_em: c.inicio,
-        quantidade: 1,
-        valor_unitario: valor,
-        valor_total: valor,
-        tipo_valorizacao: 'pacote',
-        pertence_pacote: true,
-        conta_hospitalar_pacote_id: cpId,
-        situacao: 'lancado',
-        observacao: `Pacote ${String(p['codigo'])}${versao ? ` versão ${versao.numero}` : ''} (preço do ${preco.origem}).`,
-      });
-    } else cpId = n(cp['id']);
-    // Classifica os itens já lançados: o incluso fica na conta sem cobrança, ligado ao pacote; o resto segue cobrado.
-    const comp = await composicaoParaConta(tx, e.pacoteId, versao);
-    const itens = await itensParaPacote(tx, c.id, cpId);
-    const classes = classificarItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao);
-    let inclusos = 0;
-    for (const i of itens) {
-      const inc = classes.get(i.id) === 'incluso';
-      if (inc && i.situacao !== 'sem_cobranca') {
-        await tx.alterar('conta_hospitalar_item', i.id, i.versao, {
-          pertence_pacote: true,
-          conta_hospitalar_pacote_id: cpId,
-          situacao: 'sem_cobranca',
-        });
-        inclusos++;
-      } else if (!inc && i.situacao === 'sem_cobranca')
-        await tx.alterar('conta_hospitalar_item', i.id, i.versao, {
-          pertence_pacote: false,
-          conta_hospitalar_pacote_id: null,
-          situacao: 'lancado',
-        });
-    }
-    const tot = await refazerTotal(tx, c.id);
-    const dias = diasDePermanenciaPacote(data, dataIso(c.fim) ?? new Date().toISOString().slice(0, 10));
-    const daAcomodacao = comp.diarias.find((d) => d.categoriaAcomodacaoId === c.acomodacao);
-    const diarias =
-      daAcomodacao?.quantidadeDiarias ?? versao?.quantidadeDiarias ?? nn(p['quantidade_diarias']);
     // O resultado da operação é plano (vai à trilha): os alertas seguem como texto; a tela lê o detalhe pela leitura.
-    const alertas = alertasDoPacote(itens, classes, comp.tetos, dias, diarias, adicionalDe(daAcomodacao));
-    return {
-      id: cpId,
-      valor: valor || null,
-      inclusos,
-      total: tot.valor_total,
-      alertas: alertas.length,
-      descaracterizaPorAlerta: alertas.some((a) => a.descaracteriza),
-      avisos: alertas.map((a) => a.mensagem).join(' '),
-    };
+    return (await aplicarPacoteNaConta(tx, est, c, p, false))!;
   },
   alvo: (_e, s) => ({ tabela: 'conta_hospitalar_pacote', id: s.id }),
+});
+
+/**
+ * Os pacotes da conta depois de um lançamento (na transação de quem lança): o pacote de lançamento automático cujo
+ * procedimento está lançado na conta entra sozinho (vigente, da fonte da conta ou sem acordo, com preço); os pacotes
+ * aplicados reclassificam os itens (o lançado depois da aplicação entra no pacote ou vai à parte na hora).
+ */
+export async function pacotesDaContaAoLancar(tx: TxOperacao, est: number, contaId: number) {
+  const c = await contaDa(tx, est, contaId);
+  if (!contaEditavel(c.situacao)) return { aplicados: 0, reclassificados: 0, partidos: 0 };
+  const data = dataIso(c.inicio)!;
+  const reconhecidos = await tx.consultar<Linha>(
+    `SELECT p.* FROM pacote p
+      WHERE p.lancamento_automatico = 1 AND p.lanca_no_fechamento = 0 AND p.excluido_em IS NULL AND p.situacao = 'ativo'
+        AND (p.estabelecimento_id IS NULL OR p.estabelecimento_id = ?)
+        AND p.vigencia_inicio <= ? AND (p.vigencia_fim IS NULL OR p.vigencia_fim >= ?)
+        AND EXISTS (SELECT 1 FROM conta_hospitalar_item ci WHERE ci.conta_hospitalar_id = ? AND ci.excluido_em IS NULL
+                     AND ci.item_faturavel_id = p.item_faturavel_id AND ci.situacao IN ('lancado','conferido','sem_cobranca'))
+        AND (EXISTS (SELECT 1 FROM pacote_contrato pc WHERE pc.pacote_id = p.id AND pc.excluido_em IS NULL
+                      AND pc.fonte_pagadora_id = ?)
+             OR NOT EXISTS (SELECT 1 FROM pacote_contrato x WHERE x.pacote_id = p.id AND x.excluido_em IS NULL))
+        AND NOT EXISTS (SELECT 1 FROM conta_hospitalar_pacote cp WHERE cp.conta_hospitalar_id = ? AND cp.pacote_id = p.id
+                         AND cp.excluido_em IS NULL)
+      ORDER BY p.id`,
+    [est, data, data, c.id, c.fonte, c.id],
+  );
+  let aplicados = 0;
+  for (const p of reconhecidos) if (await aplicarPacoteNaConta(tx, est, c, p, true)) aplicados++;
+  const ativos = await tx.consultar<Linha>(
+    `SELECT id, pacote_id, pacote_versao_id FROM conta_hospitalar_pacote
+      WHERE conta_hospitalar_id = ? AND excluido_em IS NULL AND descaracterizacao_pacote_id IS NULL ORDER BY id`,
+    [c.id],
+  );
+  let reclassificados = 0;
+  let partidos = 0;
+  for (const a of ativos) {
+    const versao =
+      a['pacote_versao_id'] === null
+        ? null
+        : (await versoesDo(tx, n(a['pacote_id']))).find((v) => v.id === n(a['pacote_versao_id']));
+    const cl = await classificarNoPacote(
+      tx,
+      c,
+      n(a['id']),
+      await composicaoParaConta(tx, n(a['pacote_id']), versao),
+    );
+    reclassificados += cl.inclusos + cl.reabertos;
+    partidos += cl.partidos;
+  }
+  if (reclassificados) await refazerTotal(tx, c.id);
+  return { aplicados, reclassificados, partidos };
+}
+
+/** Pedido do faturista: reconhece os pacotes de lançamento automático e reclassifica os itens dos aplicados. */
+export const opReclassificarPacotes = definirOperacao({
+  nome: 'faturamento.reclassificar-pacotes-conta',
+  tabelas: TABELAS_PACOTE_CONTA,
+  entrada: z.object({ contaId: id }),
+  async gravar(tx, e, ctx) {
+    const est = estDe(ctx);
+    await travarConta(tx, est, e.contaId);
+    exigirEditavel(await contaDa(tx, est, e.contaId));
+    return { id: e.contaId, ...(await pacotesDaContaAoLancar(tx, est, e.contaId)) };
+  },
+  alvo: (_e, s) => ({ tabela: 'conta_hospitalar', id: s.id }),
 });
 
 export const esquemaMotivoDescaracterizacao = z.object({
@@ -1496,6 +1708,7 @@ export const opDescaracterizar = definirOperacao({
     'conta_hospitalar_pacote',
     'conta_hospitalar_item',
     'conta_hospitalar',
+    ...TABELAS_CONTA_ENTRADA,
   ],
   entrada: esquemaDescaracterizar,
   async gravar(tx, e, ctx) {
@@ -1552,6 +1765,8 @@ export const opDescaracterizar = definirOperacao({
         });
         reabertos++;
       }
+    // As diárias que o pacote incluía voltam à regra de sempre pela apuração (estorna a sem cobrança e relança).
+    await apurarConta(tx, est, c.id);
     const tot = await refazerTotal(tx, c.id);
     return { id: d, reabertos, total: tot.valor_total };
   },
@@ -1569,6 +1784,7 @@ export const OPERACOES_AJUSTES = {
   'pacote.versao': opVersionarPacote,
   'pacote.composicao': opGravarComposicao,
   'pacote.aplicar': opAplicarPacote,
+  'pacote.reclassificar': opReclassificarPacotes,
   'pacote.motivo': opGravarMotivoDescaracterizacao,
   'pacote.descaracterizar': opDescaracterizar,
 } as const;

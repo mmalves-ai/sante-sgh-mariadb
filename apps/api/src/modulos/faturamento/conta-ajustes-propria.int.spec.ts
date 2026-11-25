@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoAjustesConta } from './conta-ajustes.controller.js';
 import { ajustesContaPropria, pacotesContaPropria } from './conta-ajustes-propria.js';
+import { PortaFaturamentoPropria } from './porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -107,7 +108,16 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
         [id],
       );
       await e.executar('DELETE FROM descaracterizacao_pacote WHERE conta_hospitalar_id = ?', [id]);
+      await e.executar(
+        'DELETE m FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id WHERE i.conta_hospitalar_id = ?',
+        [id],
+      );
+      await e.executar('DELETE FROM lancamento_automatico_conta WHERE conta_hospitalar_id = ?', [id]);
+      await e.executar('UPDATE conta_hospitalar_item SET item_pai_id = NULL WHERE conta_hospitalar_id = ?', [
+        id,
+      ]);
       await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [id]);
+      await e.executar('DELETE FROM conta_hospitalar_etapa WHERE conta_hospitalar_id = ?', [id]);
       await e.executar('DELETE FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ?', [id]);
       await e.executar('DELETE FROM conta_hospitalar WHERE id = ?', [id]);
     }
@@ -878,5 +888,196 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       ids.estB,
     ]);
     expect(Number(n!['n'])).toBe(0);
+  });
+
+  it('pacote: lançamento automático pelo procedimento, limite partido e item lançado depois (linha 20, 3ª volta)', async () => {
+    const agora = new Date();
+    const { pacote, conta } = await escrever(async (e) => {
+      const pacote = await e.inserir(
+        `INSERT INTO pacote (codigo, descricao, tipo_pacote, item_faturavel_id, cobranca_item_faturavel_id, valor,
+           lancamento_automatico, vigencia_inicio, criado_em) VALUES (?, ?, 'cirurgico', ?, ?, 500, 1, '2025-01-01', ?)`,
+        [`${P}PA`, `PACOTE AUTOMATICO ${P}`, m.itemB, m.itemPac, agora],
+      );
+      await e.inserir(
+        'INSERT INTO pacote_item_incluso (pacote_id, sequencia, item_faturavel_id, quantidade_limite, criado_em) VALUES (?, 1, ?, 2, ?)',
+        [pacote, m.itemA, agora],
+      );
+      const conta = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, fim_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 11:00:00', '2026-01-24 11:00:00', ?)`,
+        [ids.est, `${P}-C5`, m.atendimento, ids.paciente, ids.fonte, ids.tipoConta, agora],
+      );
+      await e.inserir(
+        `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+           realizado_em, quantidade, valor_unitario, valor_honorario, valor_total, criado_em)
+         VALUES (?, 1, ?, ?, '2026-01-20 15:00:00', 3, 100, 60, 300, ?), (?, 2, ?, ?, '2026-01-20 16:00:00', 1, 50, 0, 50, ?)`,
+        [conta, m.itemA, m.grupo, agora, conta, m.itemB, m.grupo2, agora],
+      );
+      return { pacote, conta };
+    });
+    // O procedimento do pacote automático está lançado: o pacote entra sozinho e o item A (3) passa do limite (2).
+    const r = (await s.gravar('pacote.reclassificar', op(), { contaId: conta })) as Record<string, number>;
+    expect(r).toMatchObject({ id: conta, aplicados: 1 });
+    const itens = () =>
+      linhas(
+        `SELECT item_faturavel_id AS item, quantidade, situacao, pertence_pacote, valor_total, valor_honorario,
+                tipo_valorizacao FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? ORDER BY sequencia`,
+        [conta],
+      ).then((x) =>
+        x.map((i) => [
+          Number(i['item']),
+          Number(i['quantidade']),
+          i['situacao'],
+          Number(i['pertence_pacote']),
+          Number(i['valor_total']),
+          Number(i['valor_honorario']),
+        ]),
+      );
+    expect(await itens()).toEqual([
+      [m.itemA, 2, 'sem_cobranca', 1, 200, 40],
+      [m.itemB, 1, 'lancado', 0, 50, 0],
+      [m.itemPac, 1, 'lancado', 1, 500, 0],
+      [m.itemA, 1, 'lancado', 0, 100, 20],
+    ]);
+    const [cp] = await linhas(
+      'SELECT id, valor_cobrado FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ? AND pacote_id = ?',
+      [conta, pacote],
+    );
+    expect(Number(cp!['valor_cobrado'])).toBe(500);
+    const [tot] = await linhas('SELECT valor_itens, valor_total FROM conta_hospitalar WHERE id = ?', [conta]);
+    expect(Number(tot!['valor_total'])).toBe(650);
+    // Item lançado depois da aplicação: o limite já está cheio, vai à parte; nada é reaplicado (idempotente).
+    await escrever((e) =>
+      e.inserir(
+        `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+           realizado_em, quantidade, valor_unitario, valor_total, criado_em) VALUES (?, 9, ?, ?, '2026-01-21 15:00:00', 1, 100, 100, ?)`,
+        [conta, m.itemA, m.grupo, agora],
+      ),
+    );
+    expect(await s.gravar('pacote.reclassificar', op(), { contaId: conta })).toMatchObject({
+      aplicados: 0,
+      partidos: 0,
+    });
+    expect((await itens()).length).toBe(5);
+    const tela = await s.ler(ctxL(), (l, est) => pacotesContaPropria(l, est, conta));
+    expect(tela.aplicados).toHaveLength(1);
+    expect(tela.aplicados[0]).toMatchObject({ pacoteId: pacote, inclusos: 1, aParte: 3, ativo: true });
+    const [n] = await linhas(
+      'SELECT COUNT(*) AS n FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ? AND excluido_em IS NULL',
+      [conta],
+    );
+    expect(Number(n!['n'])).toBe(1);
+  });
+
+  it('pacote ao lançar: o procedimento lançado aplica o pacote automático e o item lançado depois já entra (linha 20)', async () => {
+    const agora = new Date();
+    const CODIGO_PROC = 83_750_751;
+    const { conta } = await escrever(async (e) => {
+      const proc = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        [String(CODIGO_PROC)],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'procedimento', ?, ?)",
+        [String(CODIGO_PROC), `PROCEDIMENTO SINTETICO ${P}`, m.grupo, agora],
+      );
+      const tabela = await garantir(
+        e,
+        'SELECT id FROM tabela_preco WHERE codigo = ?',
+        [`${P}T`],
+        `INSERT INTO tabela_preco (codigo, descricao, tipo_item, referencia, situacao, fonte_pagadora_id, criado_em)
+         VALUES (?, ?, 'servico_hospitalar', 'propria', 'ativa', ?, ?)`,
+        [`${P}T`, `TABELA SINTETICA ${P}`, ids.fonte, agora],
+      );
+      const pp = await garantir(
+        e,
+        'SELECT id FROM preco_procedimento WHERE tabela_preco_id = ? AND item_faturavel_id = ?',
+        [tabela, proc],
+        'INSERT INTO preco_procedimento (tabela_preco_id, sequencia, item_faturavel_id, criado_em) VALUES (?, 1, ?, ?)',
+        [tabela, proc, agora],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM preco_procedimento_valor WHERE preco_procedimento_id = ?',
+        [pp],
+        `INSERT INTO preco_procedimento_valor (preco_procedimento_id, operacao, ocorrido_em, vigencia_inicio,
+           valor_honorario, valor_custo_operacional, valor_filme, valor_total, criado_em)
+         VALUES (?, 'inclusao', ?, '2020-01-01', 0, 100, 0, 100, ?)`,
+        [pp, agora, agora],
+      );
+      const pacote = await e.inserir(
+        `INSERT INTO pacote (codigo, descricao, tipo_pacote, item_faturavel_id, cobranca_item_faturavel_id, valor,
+           lancamento_automatico, vigencia_inicio, criado_em) VALUES (?, ?, 'cirurgico', ?, ?, 700, 1, '2025-01-01', ?)`,
+        [`${P}PL`, `PACOTE AO LANCAR ${P}`, proc, m.itemPac, agora],
+      );
+      await e.inserir(
+        `INSERT INTO pacote_item_incluso (pacote_id, sequencia, item_faturavel_id, quantidade_limite, criado_em)
+         VALUES (?, 1, ?, NULL, ?), (?, 2, ?, 2, ?)`,
+        [pacote, proc, agora, pacote, m.itemA, agora],
+      );
+      const conta = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, tabela_preco_id, natureza, competencia, inicio_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 11:00:00', ?)`,
+        [ids.est, `${P}-C6`, m.atendimento, ids.paciente, ids.fonte, ids.tipoConta, tabela, agora],
+      );
+      // Antes do procedimento: o item A (3) já lançado, cobrado.
+      await e.inserir(
+        `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+           realizado_em, quantidade, valor_unitario, valor_total, criado_em)
+         VALUES (?, 1, ?, ?, '2026-01-20 12:00:00', 3, 10, 30, ?)`,
+        [conta, m.itemA, m.grupo, agora],
+      );
+      return { conta };
+    });
+    const porta = new PortaFaturamentoPropria(nucleo, CLIENTE);
+    const c = { ...ctxL(), usuario: ids.u1, rede: 'rede-teste', hospital: `${P}A` };
+    const lancar = (quantidade: number) =>
+      porta.executar(
+        c,
+        'faturamento.lancarItem',
+        {
+          conta,
+          tipo: 3,
+          codigo: CODIGO_PROC,
+          quantidade,
+          data: '2026-01-20',
+          hora: '14:00',
+          local: 0,
+          ato: 0,
+        },
+        op(),
+      );
+    expect(await lancar(1)).toMatchObject({ resultado: { pacotesAplicados: 1 } });
+    const itens = () =>
+      linhas(
+        `SELECT item_faturavel_id AS item, quantidade, situacao, pertence_pacote, valor_total
+           FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND excluido_em IS NULL ORDER BY id`,
+        [conta],
+      ).then((x) =>
+        x.map((i) => [
+          Number(i['item']),
+          Number(i['quantidade']),
+          i['situacao'],
+          Number(i['pertence_pacote']),
+        ]),
+      );
+    const proc = Number(
+      (await linhas('SELECT id FROM item_faturavel WHERE codigo = ?', [String(CODIGO_PROC)]))[0]!['id'],
+    );
+    // O procedimento entra no pacote, o pacote é cobrado a 700 e o item A é partido no limite de 2.
+    expect(await itens()).toEqual([
+      [m.itemA, 2, 'sem_cobranca', 1],
+      [proc, 1, 'sem_cobranca', 1],
+      [m.itemPac, 1, 'lancado', 1],
+      [m.itemA, 1, 'lancado', 0],
+    ]);
+    // Lançado depois da aplicação: entra no pacote na hora, sem reclassificar; o pacote não é lançado de novo.
+    const r2 = ((await lancar(2)) as { resultado: Record<string, unknown> }).resultado;
+    expect(r2['pacotesAplicados']).toBeUndefined();
+    expect(r2['pacoteReclassificados']).toBe(1);
+    expect((await itens()).at(-1)).toEqual([proc, 2, 'sem_cobranca', 1]);
+    const [tot] = await linhas('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [conta]);
+    expect(Number(tot!['valor_total'])).toBe(710);
   });
 });

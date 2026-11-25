@@ -1038,6 +1038,7 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
         : [];
       return r.map((x) => ({
         id: n(x['contrato_id']),
+        pacoteId: n(x['id']),
         convenio: n(x['fonte_pagadora_id']),
         codigo: codigoNumerico(x['codigo'], n(x['id'])),
         nome: texto(x['descricao']),

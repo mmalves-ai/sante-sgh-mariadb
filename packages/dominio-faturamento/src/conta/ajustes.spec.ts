@@ -5,6 +5,8 @@ import {
   acrescimoDoItem,
   alertasDoPacote,
   classificarItens,
+  classesDaPartilha,
+  partilharItens,
   composicaoDaVersao,
   conferirAlcadaDoValor,
   conferirDecisaoAjuste,
@@ -383,6 +385,71 @@ describe('correções da revisão (linhas 17, 18 e 20)', () => {
         proposta: { itemId: 44, quantidade: 3, valorUnitario: 150 },
       },
     ]);
+  });
+});
+
+describe('pacote na conta: partilha do limite e diárias lançadas (linha 20, 3ª volta)', () => {
+  const item = (id: number, itemId: number, quantidade: number) => ({
+    id,
+    itemId,
+    grupoId: 1,
+    setorId: null,
+    quantidade,
+    valor: quantidade * 10,
+  });
+  const limite3 = [{ itemId: 11, grupoId: null, setorId: null, quantidadeLimite: 3 }];
+  it('o item que passa do limite é partido: o que cabe fica incluso e só o resto vai à parte', () => {
+    const p = partilharItens([item(1, 11, 2), item(2, 11, 2), item(3, 11, 1)], limite3, [], null);
+    expect(p.get(1)).toEqual({ classe: 'incluso', quantidadeInclusa: 2 });
+    expect(p.get(2)).toEqual({ classe: 'incluso', quantidadeInclusa: 1 });
+    expect(p.get(3)).toEqual({ classe: 'a_parte', quantidadeInclusa: 0 });
+    // Depois de partido (2 inclusa + 1 à parte em outro lançamento), a nova partilha é estável.
+    const depois = partilharItens(
+      [item(1, 11, 2), item(2, 11, 1), item(3, 11, 1), item(4, 11, 1)],
+      limite3,
+      [],
+      null,
+    );
+    expect([...depois.values()].map((x) => x.quantidadeInclusa)).toEqual([2, 1, 0, 0]);
+    expect(classesDaPartilha(depois).get(4)).toBe('a_parte');
+  });
+  it('exceção vence o limite; sem limite cobre tudo; pacote fechado inclui o que não é exceção', () => {
+    const ex = [
+      {
+        itemId: 11,
+        grupoId: null,
+        setorId: null,
+        categoriaAcomodacaoId: 7,
+        efeito: 'descaracteriza' as const,
+      },
+    ];
+    expect(partilharItens([item(1, 11, 5)], limite3, ex, 7).get(1)).toEqual({
+      classe: 'descaracteriza',
+      quantidadeInclusa: 0,
+    });
+    expect(partilharItens([item(1, 11, 5)], limite3, ex, 8).get(1)!.quantidadeInclusa).toBe(3);
+    expect(partilharItens([item(1, 12, 5)], [], [], null).get(1)).toEqual({
+      classe: 'incluso',
+      quantidadeInclusa: 5,
+    });
+    expect(
+      partilharItens([item(1, 11, 0.5)], [{ ...limite3[0]!, quantidadeLimite: null }], [], null).get(1)!
+        .quantidadeInclusa,
+    ).toBe(0.5);
+  });
+  it('diárias já lançadas pela apuração reduzem a proposta; todas lançadas: sem proposta', () => {
+    const ad = { itemId: 44, valor: 150 };
+    expect(alertasDoPacote([], new Map(), [], 5, 2, ad, 1)[0]).toEqual({
+      tipo: 'diarias',
+      descaracteriza: false,
+      mensagem: '1 de 3 diária(s) além das 2 incluídas: cobradas à parte a 150.00 cada.',
+      proposta: { itemId: 44, quantidade: 2, valorUnitario: 150 },
+    });
+    expect(alertasDoPacote([], new Map(), [], 5, 2, ad, 3)[0]).toEqual({
+      tipo: 'diarias',
+      descaracteriza: false,
+      mensagem: '3 diária(s) além das 2 incluídas: já lançada(s) à parte a 150.00 cada.',
+    });
   });
 });
 

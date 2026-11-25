@@ -10,6 +10,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { editarPacote, lerPacotes, novaChave } from '../api-faturamento.js';
 import AvisoFaturamento from '../componentes/AvisoFaturamento.vue';
+import ComposicaoPacote from '../componentes/ComposicaoPacote.vue';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../componentes/MensagemFaturamento.vue';
 import { data, numero, reais, usarFaturamento } from '../usar-faturamento.js';
@@ -29,6 +30,8 @@ const vazio = () => ({
   itens: [{ codigo: '', quantidade: '1' }] as { codigo: string; quantidade: string }[],
 });
 const novo = ref(vazio());
+// 06-FAT linha 20: composição (exceções, tetos, diárias por acomodação) e versões do pacote, abertas na mesma tela.
+const composicaoAberta = ref<number | null>(null);
 const opcoesConvenio = computed(() => [
   { valor: '0', rotulo: t('faturamento.regras.convenioTodos') },
   ...(apoio.data.value?.convenios ?? []).map((c) => ({
@@ -141,10 +144,24 @@ function desativar(p: PacoteLido) {
               <button type="button" :data-testid="`pac-desativar-${p.id}`" @click="desativar(p)">
                 {{ t('faturamento.desativar') }}
               </button>
+              <button
+                v-if="p.pacoteId"
+                type="button"
+                :data-testid="`pac-composicao-${p.id}`"
+                @click="composicaoAberta = p.pacoteId ?? null"
+              >
+                {{ t('faturamento.pacotes.composicao') }}
+              </button>
             </td>
           </tr>
         </tbody>
       </table>
+      <ComposicaoPacote
+        v-if="composicaoAberta && pode('editarPacote')"
+        :key="composicaoAberta"
+        :pacote="composicaoAberta"
+        @fechar="composicaoAberta = null"
+      />
       <form v-if="pode('editarPacote')" class="filtros" @submit.prevent="gravar">
         <span class="campo">
           <SanteSelecao
