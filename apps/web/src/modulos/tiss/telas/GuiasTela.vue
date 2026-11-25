@@ -8,6 +8,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
+import CancelamentoDocumentosGuia from '../componentes/CancelamentoDocumentosGuia.vue';
 import { listarGuias, urlImpressaoGuia } from '../api-tiss.js';
 import { data, opcoesConvenio, reais, usarTiss } from '../usar-tiss.js';
 
@@ -20,6 +21,8 @@ const g = useQuery({
   queryKey: computed(() => ['tiss', 'guias', filtro.value]),
   queryFn: () => listarGuias(filtro.value),
 });
+/** A conta aberta no painel de cancelamento e documentos anexos (06-FAT linha 28). */
+const contaAberta = ref<number | null>(null);
 const convenios = computed(() => opcoesConvenio(apoio.data.value?.convenios, t('tiss.todos')));
 </script>
 
@@ -86,10 +89,20 @@ const convenios = computed(() => opcoesConvenio(apoio.data.value?.convenios, t('
             >
               {{ t('tiss.guias.imprimir') }}
             </a>
+            ·
+            <button type="button" :data-testid="`gu-cancelamento-${x.conta}`" @click="contaAberta = x.conta">
+              {{ t('cancelamentoDocumentos.acao') }}
+            </button>
           </td>
         </tr>
       </tbody>
     </table>
+    <CancelamentoDocumentosGuia
+      v-if="contaAberta !== null"
+      :key="contaAberta"
+      :conta="contaAberta"
+      @fechar="contaAberta = null"
+    />
   </section>
 </template>
 
