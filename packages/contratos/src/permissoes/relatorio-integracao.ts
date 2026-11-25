@@ -26,6 +26,9 @@ export const PERMISSOES_M34_CODIGOS = {
   // 01-REL L112: painéis gerenciais montados pelo hospital (quadros de indicadores e quem abre).
   painelGerencialLer: 'relatorio.painelGerencial.ler',
   painelGerencialEditar: 'relatorio.painelGerencial.editar',
+  // 01-REL L116: painéis de TV operacionais (terapia intensiva, farmácia, mapa cirúrgico, laboratório).
+  painelTvExibir: 'relatorio.painelTv.exibir',
+  painelTvEditar: 'relatorio.painelTv.editar',
   indicadorApurar: 'relatorio.indicador.apurar',
   configuracaoLer: 'integracao.configuracao.ler',
   fhirLer: 'integracao.fhir.ler',
@@ -443,6 +446,25 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     descricao: 'Montar os painéis gerenciais (quadros, ordem e quem abre), pôr em uso e tirar de uso',
     concessaoPorPerfil: 'por-perfil',
     perfis: [...ADMIN, 'gestao-qualidade'],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  // 01-REL L116: painéis de TV operacionais; recurso só do novo, concedido por perfil. A TV mostra só iniciais,
+  // números de pedido e tempos (LGPD).
+  {
+    codigo: C.painelTvExibir,
+    descricao:
+      'Exibir os painéis de TV operacionais no televisor (terapia intensiva, farmácia, mapa cirúrgico, laboratório)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN, 'diretoria-clinica', 'gestor-setor'],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: C.painelTvEditar,
+    descricao: 'Cadastrar os painéis de TV (blocos, tempos e situação) e ligar e parear os televisores',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN, 'gestor-setor'],
     categoria: 'administrativa',
     criticidade: 'normal',
   },

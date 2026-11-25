@@ -25,6 +25,8 @@ import { PaginaInicialController } from './pagina-inicial.controller.js';
 import { PainelGerencialController } from './painel-gerencial.controller.js';
 import { PORTA_PAINEL_GERENCIAL, PortaPainelGerencialPropria } from './painel-gerencial-propria.js';
 import { PORTA_PAGINA_INICIAL, PortaPaginaInicialPropria } from './pagina-inicial-propria.js';
+import { PainelTvController } from './painel-tv.controller.js';
+import { PORTA_PAINEL_TV, PortaPainelTvPropria } from './painel-tv-propria.js';
 import { PORTA_RELATORIO, type PortaRelatorio } from './porta.js';
 import { PortaRelatorioMemoria } from './porta-memoria.js';
 import { portaRelatorioIndisponivel, PortaRelatorioPropria } from './porta-propria.js';
@@ -86,6 +88,7 @@ export async function moduloRelatorio(
       CargasDataMartController,
       PaginaInicialController,
       PainelGerencialController,
+      PainelTvController,
     ],
     providers: [
       { provide: PORTA_RELATORIO, useValue: porta },
@@ -111,6 +114,14 @@ export async function moduloRelatorio(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaPainelGerencialPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 01-REL L116: painéis de TV operacionais (só com o banco do cliente; sem ele, 503).
+      {
+        provide: PORTA_PAINEL_TV,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaPainelTvPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       { provide: FILA_ENVIO_RELATORIO, useValue: fila },
