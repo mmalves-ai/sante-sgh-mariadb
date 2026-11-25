@@ -129,7 +129,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // fase 7); a contagem acompanha.
 // C2-083 (07-FIN L157): o item "Remuneração variável" do repasse médico entrou à mão (mesmo motivo; F8 vai como
 // fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":498,"M":198,"P":57,"N":243};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":499,"M":198,"P":57,"N":244};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -463,6 +463,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.terminais-e-catracas","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Terminais e catracas"],"titulo":"Terminais e catracas","selo":"N","fase":5,"rota":"/portaria/terminais","permissao":"hotelaria.terminal.ler"},
   {"id":"hotelaria-e-apoio.rouparia-e-lavanderia","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Rouparia e lavanderia"],"titulo":"Rouparia e lavanderia","selo":"N","fase":6,"rota":"/hotelaria/rouparia","permissao":"hotelaria.rouparia.ler"},
   {"id":"hotelaria-e-apoio.manutencao-predial-e-engenharia-clinica-os-preventiva","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Manutenção predial e engenharia clínica"],"titulo":"Manutenção predial e engenharia clínica","selo":"N","fase":6,"rota":"/manutencao/os","permissao":"manutencao.os.abrir"},
+  {"id":"hotelaria-e-apoio.manutencao-predial-e-engenharia-clinica.oficinas-e-conserto-externo","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Manutenção predial e engenharia clínica","Oficinas e conserto externo"],"titulo":"Oficinas e conserto externo","selo":"N","fase":7,"rota":"/manutencao/oficinas","permissao":"manutencao.equipamento.ler"},
   {"id":"qualidade-e-seguranca.seguranca-do-paciente-nsp.notificacao-de-incidentes-e-eventos-adversos","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","Segurança do paciente","Notificação de incidentes e eventos adversos"],"titulo":"Notificação de incidentes e eventos adversos","selo":"N","fase":5,"rota":"/qualidade/nsp/notificacoes","permissao":"qualidade.notificacao.ler"},
   {"id":"qualidade-e-seguranca.seguranca-do-paciente-nsp.analise-causa-raiz-e-plano-de-acao-5w2h","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","Segurança do paciente","Análise e plano de ação 5W2H"],"titulo":"Análise e plano de ação 5W2H","selo":"N","fase":5,"rota":"/qualidade/nsp/analises","permissao":"qualidade.analise.ler"},
   {"id":"qualidade-e-seguranca.seguranca-do-paciente-nsp.prazos-regulatorios-e-exportacao-notivisa","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","Segurança do paciente","Prazos regulatórios e exportação NOTIVISA"],"titulo":"Prazos regulatórios e exportação NOTIVISA","selo":"N","fase":5,"rota":"/qualidade/nsp/prazos","permissao":"qualidade.notivisa.exportar"},
