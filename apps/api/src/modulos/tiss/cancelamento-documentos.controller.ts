@@ -1,6 +1,7 @@
 // Cancelamento de guia enviada e envio de documentos anexos pelo TISS 04.03.00 (06-FAT linha 28). Rotas (porta
 // própria; sem banco do cliente, 503):
 //   GET  /api/tiss/cancelamento-documentos/guias/:guia                 pedidos de cancelamento e envios da guia
+//   GET  /api/tiss/cancelamento-documentos/contas/:conta               a mesma visão para cada guia da conta
 //   POST /api/tiss/cancelamento-documentos/cancelamentos               { guias, motivo } pedido em rascunho
 //   GET  /api/tiss/cancelamento-documentos/cancelamentos/:id/mensagem  prévia da CANCELA_GUIA
 //   POST /api/tiss/cancelamento-documentos/cancelamentos/:id/envio     { versao } envia e devolve o XML
@@ -84,6 +85,12 @@ export class CancelamentoDocumentosTissController implements OnModuleInit {
   @Permissao(PERMISSOES_CANCELAMENTO_DOCUMENTOS.ler)
   daGuia(@Req() req: RequisicaoAutorizada, @Param('guia', ParseIntPipe) guia: number) {
     return this.com(req, (p, c) => p.daGuia(c, guia));
+  }
+
+  @Get('contas/:conta')
+  @Permissao(PERMISSOES_CANCELAMENTO_DOCUMENTOS.ler)
+  daConta(@Req() req: RequisicaoAutorizada, @Param('conta', ParseIntPipe) conta: number) {
+    return this.com(req, (p, c) => p.daConta(c, conta));
   }
 
   @Post('cancelamentos')

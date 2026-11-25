@@ -260,6 +260,21 @@ export class PortaCancelamentoDocumentosTissPropria extends PortaEstabelecimento
     });
   }
 
+  /** A visão das guias de uma conta (a lista de guias mostra a conta): cada guia com os pedidos e os envios dela. */
+  async daConta(c: ContextoPortaPropria, conta: number) {
+    const guias = await this.ler(c, 'guia', (l, est) =>
+      l.consultar(
+        `SELECT id FROM guia_tiss WHERE conta_hospitalar_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+          ORDER BY id`,
+        [conta, est.id],
+      ),
+    );
+    if (guias.length === 0) throw naoEncontrado('Guia da conta');
+    const visoes = [];
+    for (const g of guias) visoes.push(await this.daGuia(c, num(g['id'])));
+    return { conta, guias: visoes };
+  }
+
   // ------------------------------------------------------------------ cancelamento
 
   solicitarCancelamento(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number; guias: number }> {

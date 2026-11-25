@@ -42,7 +42,7 @@ describe.skipIf(SEM_BANCO)(
   () => {
     let nucleo: NucleoProprio;
     let porta: PortaCancelamentoDocumentosTissPropria;
-    let m: { usuario: number; est: number; guias: number[]; naoEnviada: number };
+    let m: { usuario: number; est: number; conta: number; guias: number[]; naoEnviada: number };
     const conteudos = new Map<number, Buffer>();
     const ctx = () => ({ cliente: CLIENTE, hospital: P, usuario: m.usuario, correlacao: P });
     const um = async (sql: string, p: unknown[] = []) =>
@@ -86,6 +86,7 @@ describe.skipIf(SEM_BANCO)(
         return {
           usuario: Number(usuario['id']),
           est,
+          conta: Number(conta['id']),
           guias: [await guia('1', 'enviada'), await guia('2', 'aceita')],
           naoEnviada: await guia('3', 'em_lote'),
         };
@@ -219,6 +220,11 @@ describe.skipIf(SEM_BANCO)(
 
       const visao = await porta.daGuia(ctx(), m.guias[1]!);
       expect(visao.cancelamentos.map((x) => x.situacao)).toEqual(['descartado', 'processado']);
+
+      // A visão pela conta (a lista de guias mostra a conta): as três guias do estabelecimento, cada uma com os pedidos.
+      const daConta = await porta.daConta(ctx(), m.conta);
+      expect(daConta.guias.map((x) => x.guia.id)).toEqual([...m.guias, m.naoEnviada]);
+      expect(daConta.guias[1]!.cancelamentos.map((x) => x.situacao)).toEqual(['descartado', 'processado']);
     });
 
     it('envio de documentos: registro, ENVIO_DOCUMENTO, recibo com protocolo e recusa', async () => {
