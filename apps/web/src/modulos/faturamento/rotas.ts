@@ -163,6 +163,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/ServicosAcessoriosTela.vue'),
     meta: { permissao: 'faturamento.regra.ler' },
   },
+  // F8 (06-FAT linha 13): regras de criação e quebra automática de contas, com a simulação sobre o atendimento.
+  {
+    path: '/faturamento/regras-conta',
+    name: 'faturamento.regrasConta',
+    component: () => import('./telas/RegrasContaTela.vue'),
+    meta: { permissao: 'faturamento.regra.ler' },
+  },
   {
     path: '/faturamento/regras-faturabilidade',
     name: 'faturamento.regras',

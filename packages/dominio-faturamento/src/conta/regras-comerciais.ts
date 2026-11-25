@@ -155,6 +155,58 @@ export function periodoDaQuebra(p: PeriodicidadeConta, data: string): { inicio: 
   return { inicio: iso(new Date(Date.UTC(a, m - 1, 1))), fim: iso(new Date(Date.UTC(a, m - 1, ultimo))) };
 }
 
+/** A fonte pagadora (e o plano) da conta aberta na entrada: a regra de criação que vale troca o destino; sem ela, a
+ * conta fica na fonte e no plano do atendimento. `regraId` diz qual regra decidiu (nulo: nenhuma). */
+export interface DestinoConta {
+  readonly fonte: Id;
+  readonly plano: Id | null;
+  readonly regraId: Id | null;
+}
+export function destinoDaConta(
+  regras: readonly RegraCriacaoConta[],
+  s: SituacaoRegraConta & { readonly fonteOrigem: Id; readonly planoOrigem?: Id | null },
+): DestinoConta {
+  const { regra } = escolherRegraConta(regras, s, 'criar_conta');
+  const origem = { fonte: s.fonteOrigem, plano: s.planoOrigem ?? null, regraId: null };
+  if (!regra || vazio(regra.fonteDestino)) return origem;
+  const fonte = regra.fonteDestino as Id;
+  // Mesma fonte sem plano de destino: o plano do atendimento continua; outra fonte: só o plano da regra.
+  const plano = !vazio(regra.planoDestino)
+    ? (regra.planoDestino as Id)
+    : fonte === s.fonteOrigem
+      ? origem.plano
+      : null;
+  return { fonte, plano, regraId: regra.id };
+}
+
+const somarDias = (dia: string, k: number) => {
+  const [a, m, d] = dia.slice(0, 10).split('-').map(Number) as [number, number, number];
+  return iso(new Date(Date.UTC(a, m - 1, d + k)));
+};
+
+/**
+ * Os trechos da conta pela quebra periódica, do dia de início da conta até o período que contém `ate` (hoje ou o dia
+ * da alta). O primeiro começa no início da conta; os seguintes, no dia depois do fim do anterior. Um trecho só:
+ * nada a quebrar. Teto contra dado incoerente (dez anos de quebra diária).
+ */
+export function trechosDaQuebra(
+  p: PeriodicidadeConta,
+  inicio: string,
+  ate: string,
+  teto = 3660,
+): { inicio: string; fim: string }[] {
+  const trechos: { inicio: string; fim: string }[] = [];
+  let ini = inicio.slice(0, 10);
+  const limite = ate.slice(0, 10);
+  while (trechos.length < teto) {
+    const fim = periodoDaQuebra(p, ini).fim;
+    trechos.push({ inicio: ini, fim });
+    if (fim >= limite) break;
+    ini = somarDias(fim, 1);
+  }
+  return trechos;
+}
+
 // ── Linha 19: desconto por volume e franquia ──────────────────────────────────────────────────────────
 
 export const BASES_VOLUME = ['valor_fatura', 'valor_competencia', 'quantidade_contas'] as const;

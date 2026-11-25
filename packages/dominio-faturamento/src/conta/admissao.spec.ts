@@ -112,6 +112,26 @@ describe('diárias por dia de corte', () => {
     expect(dias(apurarLancamentos(base({ limite: '2026-11-22T12:00' })))).toHaveLength(3);
   });
 
+  it('conta quebrada por período (06-FAT linha 13): só o devido do trecho; o de fora é estornado desta conta', () => {
+    const limite = '2026-11-23T13:00';
+    expect(dias(apurarLancamentos(base({ limite, periodo: { inicio: null, fim: '2026-11-21' } })))).toEqual([
+      '2026-11-20:100',
+      '2026-11-21:100',
+    ]);
+    expect(dias(apurarLancamentos(base({ limite, periodo: { inicio: '2026-11-22', fim: null } })))).toEqual([
+      '2026-11-22:100',
+      '2026-11-23:100',
+    ]);
+    const r = apurarLancamentos(
+      base({
+        limite,
+        periodo: { inicio: null, fim: '2026-11-21' },
+        vigentes: [{ id: 5, chave: 'diaria', dia: '2026-11-22', item: 100, categoriaAcomodacao: ENF }],
+      }),
+    );
+    expect(r.estornar).toEqual([{ id: 5, motivo: 'regra_alterada' }]);
+  });
+
   it('tolerância depois da virada não gera nova diária', () => {
     const r = base({ regrasDiaria: [regra({ id: 1, toleranciaMinutos: 60 })], limite: '2026-11-21T12:59' });
     expect(dias(apurarLancamentos(r))).toEqual(['2026-11-20:100']);

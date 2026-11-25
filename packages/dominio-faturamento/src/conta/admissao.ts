@@ -248,6 +248,11 @@ export interface EntradaApuracao {
   readonly cancelada?: boolean;
   /** Recorte das exceções da regra de lançamento (sem ele, só as exceções sem estabelecimento, setor e especialidade). */
   readonly recorte?: RecorteConta;
+  /**
+   * F8 (06-FAT linha 13): o trecho da conta quebrada por período (dias locais AAAA-MM-DD, inclusive; nulo é aberto).
+   * Só o devido cujo dia cai no trecho é desta conta; o de fora fica com a conta do outro trecho.
+   */
+  readonly periodo?: { readonly inicio: string | null; readonly fim: string | null };
 }
 
 export interface ResultadoApuracaoLancamentos {
@@ -520,7 +525,13 @@ export function lancamentosDevidos(e: EntradaApuracao): {
 
 /** A apuração idempotente: o que lançar e o que estornar para a conta ficar com o que é devido. */
 export function apurarLancamentos(e: EntradaApuracao): ResultadoApuracaoLancamentos {
-  const { devidos, pendencias } = lancamentosDevidos(e);
+  const todos = lancamentosDevidos(e);
+  const noTrecho = (dia: string) =>
+    !e.periodo ||
+    ((e.periodo.inicio === null || dia >= e.periodo.inicio) &&
+      (e.periodo.fim === null || dia <= e.periodo.fim));
+  const devidos = todos.devidos.filter((d) => noTrecho(d.dia));
+  const pendencias = todos.pendencias.filter((d) => noTrecho(d.dia));
   const chaveDe = (x: { chave: string; dia: string }) => `${x.chave}|${x.dia}`;
   const desejo = new Map(devidos.map((d) => [chaveDe(d), d]));
   const lancar: LancamentoDesejado[] = [];

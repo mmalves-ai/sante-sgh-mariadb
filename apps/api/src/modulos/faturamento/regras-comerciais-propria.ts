@@ -84,7 +84,10 @@ const comoCriterios = (r: Linha) => ({
   item: nn(r['item_faturavel_id']),
 });
 
-async function regrasContaDo(l: Consulta, est: number): Promise<(RegraCriacaoConta & { versao: number })[]> {
+export async function regrasContaDo(
+  l: Consulta,
+  est: number,
+): Promise<(RegraCriacaoConta & { versao: number })[]> {
   const rs = await l.consultar<Linha>(
     `SELECT * FROM regra_criacao_conta WHERE estabelecimento_id = ? ORDER BY prioridade, id`,
     [est],

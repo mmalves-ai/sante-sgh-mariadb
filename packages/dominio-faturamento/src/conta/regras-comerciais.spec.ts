@@ -4,12 +4,14 @@ import {
   calcularFranquia,
   cobrancaLigacao,
   cobrancaRemocao,
+  destinoDaConta,
   escolherRegraConta,
   type FranquiaContrato,
   motivoFranquiaNaoVale,
   periodoDaQuebra,
   type RegraCriacaoConta,
   tipoDaLigacao,
+  trechosDaQuebra,
   validarFaixasDesconto,
   validarFranquia,
   validarRegraConta,
@@ -69,6 +71,63 @@ describe('06-FAT linha 13: criação e quebra de contas por regra', () => {
       'quebrar_conta',
     );
     expect(e.periodo).toEqual({ inicio: '2026-05-01', fim: '2026-05-15' });
+  });
+});
+
+describe('06-FAT linha 13: a regra ligada à entrada e à rotina de quebra', () => {
+  it('a criação troca a fonte e o plano da conta da entrada; sem regra que valha, fica a do atendimento', () => {
+    const regras = [
+      regra({ id: 1, origemEntrada: 5, fonteDestino: 20, planoDestino: 21 }),
+      regra({ id: 2, setor: 7, fonteDestino: 30, excecoes: [{ origemEntrada: 6 }] }),
+      regra({ id: 3, fonteOrigem: 8, fonteDestino: 8 }),
+    ];
+    const s = { data: '2026-03-01', fonteOrigem: 8, planoOrigem: 81 };
+    expect(destinoDaConta(regras, { ...s, origemEntrada: 5 })).toEqual({ fonte: 20, plano: 21, regraId: 1 });
+    // Outra fonte sem plano de destino: o plano do atendimento não vai junto.
+    expect(destinoDaConta(regras, { ...s, setor: 7, fonteOrigem: 9 })).toEqual({
+      fonte: 30,
+      plano: null,
+      regraId: 2,
+    });
+    // A exceção afasta a regra 2; a 3 (mesma fonte) mantém o plano do atendimento.
+    expect(destinoDaConta(regras, { ...s, setor: 7, origemEntrada: 6 })).toEqual({
+      fonte: 8,
+      plano: 81,
+      regraId: 3,
+    });
+    expect(destinoDaConta(regras, { ...s, fonteOrigem: 4 })).toEqual({ fonte: 4, plano: 81, regraId: null });
+    // A regra de quebra nunca decide a criação; vigência futura também não.
+    expect(
+      destinoDaConta(
+        [
+          regra({ id: 4, acao: 'quebrar_conta', periodicidade: 'mensal' }),
+          regra({ id: 5, vigenciaInicio: '2026-04-01' }),
+        ],
+        s,
+      ),
+    ).toEqual({ fonte: 8, plano: 81, regraId: null });
+  });
+
+  it('trechos da quebra: do início da conta até o período de hoje; um trecho só é nada a quebrar', () => {
+    expect(trechosDaQuebra('semanal', '2026-11-11', '2026-11-12')).toEqual([
+      { inicio: '2026-11-11', fim: '2026-11-15' },
+    ]);
+    expect(trechosDaQuebra('semanal', '2026-11-11', '2026-11-25')).toEqual([
+      { inicio: '2026-11-11', fim: '2026-11-15' },
+      { inicio: '2026-11-16', fim: '2026-11-22' },
+      { inicio: '2026-11-23', fim: '2026-11-29' },
+    ]);
+    expect(trechosDaQuebra('quinzenal', '2026-01-20', '2026-03-02')).toEqual([
+      { inicio: '2026-01-20', fim: '2026-01-31' },
+      { inicio: '2026-02-01', fim: '2026-02-15' },
+      { inicio: '2026-02-16', fim: '2026-02-28' },
+      { inicio: '2026-03-01', fim: '2026-03-15' },
+    ]);
+    expect(trechosDaQuebra('diaria', '2026-12-31', '2027-01-01')).toHaveLength(2);
+    expect(trechosDaQuebra('mensal', '2026-05-10', '2026-04-01')).toEqual([
+      { inicio: '2026-05-10', fim: '2026-05-31' },
+    ]);
+    expect(trechosDaQuebra('diaria', '2000-01-01', '2026-01-01', 5)).toHaveLength(5);
   });
 });
 

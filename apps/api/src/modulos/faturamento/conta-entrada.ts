@@ -41,6 +41,7 @@ import { definirOperacao, recusa, type ResultadoOperacao, type TxOperacao } from
 import { z } from 'zod';
 import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
+import { destinoDaContaNaEntrada, quebrarContasPorPeriodo, trechoDaConta } from './quebra-conta.js';
 import { conferirCompetenciaDaConta, contaAceitaLancamento } from './regras-conta.js';
 
 type Linha = Record<string, unknown>;
@@ -97,7 +98,8 @@ export async function abrirContaDaEntrada(
   o: { readonly categoriaAcomodacao?: number | null } = {},
 ): Promise<AberturaConta> {
   const at = await tx.uma<Linha>(
-    `SELECT a.id, a.numero, a.paciente_id, a.fonte_pagadora_id, a.entrada_em, ca.tipo_base
+    `SELECT a.id, a.numero, a.paciente_id, a.fonte_pagadora_id, a.entrada_em, ca.tipo_base, a.categoria_atendimento_id,
+            a.origem_entrada_atendimento_id, a.setor_funcional_id, a.horario_especial
        FROM atendimento a JOIN categoria_atendimento ca ON ca.id = a.categoria_atendimento_id
       WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
     [atendimento, est],
@@ -105,7 +107,28 @@ export async function abrirContaDaEntrada(
   if (!at) throw recusa('registro-inexistente', 'O atendimento da conta não existe neste estabelecimento.');
   const natureza = naturezaDaEntrada(texto(at['tipo_base']));
   if (natureza === null || at['fonte_pagadora_id'] === null) return { conta: null, pendencia: null };
-  const fonte = n(at['fonte_pagadora_id']);
+  const fonteOrigem = n(at['fonte_pagadora_id']);
+  // A cobertura principal do atendimento na fonte de origem dá o plano que se compara às regras de criação.
+  const cobOrigem = await tx.uma<Linha>(
+    `SELECT plano_fonte_pagadora_id, cobertura_paciente_id, senha_autorizacao FROM cobertura_atendimento
+      WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL ORDER BY ordem LIMIT 1`,
+    [atendimento, fonteOrigem],
+  );
+  // Sem cobertura no atendimento (a internação grava o plano nela mesma), o plano da internação.
+  const daInternacao = cobOrigem
+    ? null
+    : await tx.uma<Linha>(
+        'SELECT plano_fonte_pagadora_id FROM internacao WHERE atendimento_id = ? AND excluido_em IS NULL',
+        [atendimento],
+      );
+  const planoOrigem = nn(cobOrigem?.['plano_fonte_pagadora_id'] ?? daInternacao?.['plano_fonte_pagadora_id']);
+  // F8 (06-FAT linha 13): a regra de criação que vale decide a fonte e o plano da conta (sem regra, os de origem).
+  const destino = await destinoDaContaNaEntrada(tx, est, at, {
+    fonteOrigem,
+    planoOrigem,
+    categoriaAcomodacao: o.categoriaAcomodacao ?? null,
+  });
+  const fonte = destino.fonte;
   const ja = await tx.uma<Linha>(
     `SELECT id FROM conta_hospitalar WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND situacao <> 'cancelada'
         AND excluido_em IS NULL ORDER BY id LIMIT 1`,
@@ -125,19 +148,17 @@ export async function abrirContaDaEntrada(
   );
   // A falta de cadastro do faturamento não barra a entrada do paciente: a conta fica pendente para o faturista.
   if ('recusa' in tipo) return { conta: null, pendencia: { codigo: tipo.recusa, mensagem: tipo.mensagem } };
-  const cob = await tx.uma<Linha>(
-    `SELECT plano_fonte_pagadora_id, cobertura_paciente_id, senha_autorizacao FROM cobertura_atendimento
-      WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL ORDER BY ordem LIMIT 1`,
-    [atendimento, fonte],
-  );
-  // Sem cobertura no atendimento (a internação grava o plano nela mesma), o plano da internação.
-  const daInternacao = cob
-    ? null
-    : await tx.uma<Linha>(
-        'SELECT plano_fonte_pagadora_id FROM internacao WHERE atendimento_id = ? AND excluido_em IS NULL',
-        [atendimento],
-      );
-  const plano = nn(cob?.['plano_fonte_pagadora_id'] ?? daInternacao?.['plano_fonte_pagadora_id']);
+  // Na fonte de origem, a cobertura dela; em outra fonte (pela regra), a cobertura do atendimento nessa fonte, se houver.
+  const cob =
+    fonte === fonteOrigem
+      ? cobOrigem
+      : await tx.uma<Linha>(
+          `SELECT plano_fonte_pagadora_id, cobertura_paciente_id, senha_autorizacao FROM cobertura_atendimento
+            WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL ORDER BY ordem LIMIT 1`,
+          [atendimento, fonte],
+        );
+  const plano =
+    destino.regraId === null ? planoOrigem : (destino.plano ?? nn(cob?.['plano_fonte_pagadora_id']));
   const [tabela] = await tabelasDePreco(tx, est, fonte, plano);
   const fuso = await fusoDoEstabelecimento(tx, est);
   const inicio = new Date(at['entrada_em'] as Date);
@@ -208,7 +229,7 @@ export async function apurarConta(
 ): Promise<ResultadoApuracaoConta> {
   const [c] = await tx.consultarParaAtualizar(
     `SELECT id, versao, situacao, atendimento_id, natureza, fonte_pagadora_id, plano_fonte_pagadora_id, tabela_preco_id,
-            paciente_id, inicio_em, valor_acrescimo, valor_desconto, competencia,
+            paciente_id, inicio_em, fim_em, conta_pai_id, tipo_cobranca, valor_acrescimo, valor_desconto, competencia,
             DATE_FORMAT(competencia, '%Y-%m') AS competencia_mes
        FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [contaId, est],
@@ -289,6 +310,7 @@ export async function apurarConta(
     }
   }
   if (limite < entrada) limite = entrada;
+  const periodo = natureza === 'internacao' ? await trechoDaConta(tx, c, fuso) : null;
   const nasc = await tx.uma<Linha>(
     `SELECT TIMESTAMPDIFF(YEAR, pf.data_nascimento, ?) AS idade
        FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
@@ -433,6 +455,8 @@ export async function apurarConta(
       categoriaAcomodacao: nn(v['categoria_acomodacao_id']),
     })),
     cancelada,
+    // F8 (06-FAT linha 13): conta quebrada por período só recebe o devido do seu trecho.
+    ...(periodo ? { periodo } : {}),
     recorte: {
       estabelecimento: est,
       setor: nn(at?.['setor_funcional_id']),
@@ -682,6 +706,8 @@ export const apurarLancamentosDoDia = definirOperacao<z.infer<typeof esquemaApur
       if (a.conta !== null) abertas += 1;
       if (a.pendencia !== null) pendentes += 1;
     }
+    // F8 (06-FAT linha 13): a quebra por período da regra comercial, antes da apuração (cada trecho recebe o seu).
+    const quebra = await quebrarContasPorPeriodo(tx, est);
     const contas = (
       await tx.consultar<Linha>(
         `SELECT id, situacao FROM conta_hospitalar WHERE estabelecimento_id = ? AND natureza = 'internacao'
@@ -704,6 +730,8 @@ export const apurarLancamentosDoDia = definirOperacao<z.infer<typeof esquemaApur
       contas: contas.length,
       abertas,
       pendentes,
+      quebradas: quebra.quebradas,
+      abertasPelaQuebra: quebra.abertas,
       lancados,
       estornados,
       pendencias,
