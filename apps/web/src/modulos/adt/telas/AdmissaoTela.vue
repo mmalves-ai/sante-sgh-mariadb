@@ -11,6 +11,7 @@ import {
   NIVEIS_CUIDADO,
   ORIGENS_INTERNACAO,
 } from '@sgh/contratos';
+import { conferirAcidente, ehAcidenteDeTrabalho, TIPOS_ACIDENTE } from '@sgh/dominio-internacao';
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -99,6 +100,42 @@ const nivel = ref('');
 const unidade = ref('');
 const centroCusto = ref('');
 const isolamento = ref(false);
+// F3.4 (04-INT 67): o acidente que motivou a internação, conferido na hora pela regra do domínio (o servidor confere de
+// novo e grava na mesma transação da admissão, com o indicador de acidente da guia TISS).
+const acidente = ref({
+  tipo: '',
+  ocorridoEm: '',
+  local: '',
+  empregadorCnpj: '',
+  empregadorNome: '',
+  numeroComunicacao: '',
+});
+const acidenteDeTrabalho = computed(() => ehAcidenteDeTrabalho(acidente.value.tipo));
+const corpoAcidente = computed(() => {
+  const a = acidente.value;
+  if (!a.tipo) return undefined;
+  const trabalho = acidenteDeTrabalho.value;
+  return {
+    tipo: a.tipo as (typeof TIPOS_ACIDENTE)[number],
+    ...(a.ocorridoEm ? { ocorridoEm: a.ocorridoEm.slice(0, 16) } : {}),
+    ...(a.local.trim() ? { local: a.local.trim() } : {}),
+    ...(trabalho && a.empregadorCnpj.trim() ? { empregadorCnpj: a.empregadorCnpj.trim() } : {}),
+    ...(trabalho && a.empregadorNome.trim() ? { empregadorNome: a.empregadorNome.trim() } : {}),
+    ...(trabalho && a.numeroComunicacao.trim() ? { numeroComunicacao: a.numeroComunicacao.trim() } : {}),
+  };
+});
+const agoraLocal = () => {
+  const d = new Date();
+  const z = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
+};
+/** A mesma regra do servidor, na hora; a entrada da internação é agora. */
+const conferenciaAcidente = computed(() => {
+  const c = corpoAcidente.value;
+  if (!c) return null;
+  const r = conferirAcidente(c, agoraLocal());
+  return r.ok ? null : r.motivo;
+});
 watch(
   () => pre.data.value?.pre,
   (p) => {
@@ -184,6 +221,10 @@ const opcoes = computed(() => {
       valor: p as string,
       rotulo: p.charAt(0) + p.slice(1).toLowerCase(),
     })),
+    acidentes: [
+      { valor: '', rotulo: t('adt.admissao.semAcidente') },
+      ...TIPOS_ACIDENTE.map((v) => ({ valor: v as string, rotulo: t(`adt.registros.tiposAcidente.${v}`) })),
+    ],
     carateres: CARATERES_INTERNACAO.map((c) => ({ valor: c.codigo as string, rotulo: c.rotulo })),
     clinicas: CLINICAS_INTERNACAO.map((c) => ({ valor: c.codigo as string, rotulo: c.rotulo })),
     origens: ORIGENS_INTERNACAO.map((c) => ({ valor: c.codigo as string, rotulo: c.rotulo })),
@@ -196,6 +237,7 @@ const leitoEscolhido = computed(() => leitoDaChaveTexto(leito.value));
 const completo = computed(
   () =>
     (!guia.value.trim() || Number(diariasGuia.value) >= 1) &&
+    conferenciaAcidente.value === null &&
     paciente.value !== null &&
     leitoEscolhido.value !== null &&
     !!convenio.value &&
@@ -249,6 +291,7 @@ async function gravar(): Promise<void> {
         ...(origem.value === 'cirurgia' ? { cirurgia: Number(cirurgia.value) } : {}),
         ...(nivel.value ? { nivelCuidado: nivel.value } : {}),
         ...(solicitacaoNir ? { solicitacaoNir } : {}),
+        ...(corpoAcidente.value ? { acidente: corpoAcidente.value } : {}),
       },
       novaChave('internar'),
     );
@@ -506,6 +549,55 @@ const textoLeito = (k: string) => {
           />
           <label><input v-model="isolamento" type="checkbox" /> {{ t('adt.isolamento') }}</label>
         </div>
+        <fieldset class="filtros" data-testid="admissao-acidente">
+          <legend>{{ t('adt.admissao.acidente') }}</legend>
+          <SanteSelecao
+            v-model="acidente.tipo"
+            :rotulo="t('adt.registros.tipoAcidente')"
+            :opcoes="opcoes.acidentes"
+            data-testid="admissao-acidente-tipo"
+          />
+          <template v-if="acidente.tipo">
+            <div class="campo">
+              <label for="admissao-acidente-ocorrido">{{ t('adt.registros.ocorridoEm') }}</label>
+              <input
+                id="admissao-acidente-ocorrido"
+                v-model="acidente.ocorridoEm"
+                type="datetime-local"
+                data-testid="admissao-acidente-ocorrido"
+              />
+            </div>
+            <SanteCampoTexto v-model="acidente.local" :rotulo="t('adt.registros.local')" :max-bytes="255" />
+            <template v-if="acidenteDeTrabalho">
+              <SanteCampoTexto
+                v-model="acidente.empregadorCnpj"
+                :rotulo="t('adt.registros.empregadorCnpj')"
+                :max-bytes="18"
+                data-testid="admissao-acidente-cnpj"
+              />
+              <SanteCampoTexto
+                v-model="acidente.empregadorNome"
+                :rotulo="t('adt.registros.empregadorNome')"
+                :max-bytes="150"
+                data-testid="admissao-acidente-empregador"
+              />
+              <SanteCampoTexto
+                v-model="acidente.numeroComunicacao"
+                :rotulo="t('adt.registros.numeroComunicacao')"
+                :max-bytes="30"
+              />
+            </template>
+          </template>
+          <p class="secundario">{{ t('adt.admissao.acidenteAjuda') }}</p>
+          <p
+            v-if="conferenciaAcidente"
+            class="secundario"
+            role="alert"
+            data-testid="admissao-acidente-conferencia"
+          >
+            {{ conferenciaAcidente }}
+          </p>
+        </fieldset>
         <SanteBotao
           :rotulo="t('adt.admissao.gravar')"
           :desabilitado="!podeInternar || !completo || ocupado"

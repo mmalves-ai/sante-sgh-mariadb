@@ -234,6 +234,17 @@ export function conferirAcidente(a: AcidenteInformado, entradaEm: string): Resul
   return { ok: true, valor: null };
 }
 
+/**
+ * O indicador de acidente da guia TISS (terminologia 36: 0 trabalho, 1 trânsito, 2 outros, 9 não acidente) que a
+ * internação leva ao atendimento: o acidente de trabalho e o de trajeto são "trabalho"; sem acidente, "não acidente".
+ */
+export type IndicadorAcidenteTiss = '0' | '1' | '2' | '9';
+export function indicadorAcidenteTiss(tipo: string | null | undefined): IndicadorAcidenteTiss {
+  if (!tipo) return '9';
+  if (ehAcidenteDeTrabalho(tipo)) return '0';
+  return tipo === 'transito' ? '1' : '2';
+}
+
 // ── Autorização da operadora (guia inicial e prorrogações) ───────────────────────────────────────
 
 export interface GuiaAutorizada {

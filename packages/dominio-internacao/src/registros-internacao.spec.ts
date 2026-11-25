@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cnpjValido,
   conferirAcidente,
+  indicadorAcidenteTiss,
   conferirDiagnostico,
   conferirMotivo,
   corrigirGuia,
@@ -112,6 +113,13 @@ describe('diagnósticos da internação', () => {
 });
 
 describe('acidente', () => {
+  it('indicador de acidente da guia TISS: trabalho e trajeto 0, trânsito 1, os demais 2, sem acidente 9', () => {
+    expect(
+      [undefined, null, 'trabalho', 'trabalho_trajeto', 'transito', 'violencia', 'queda', 'outro'].map(
+        indicadorAcidenteTiss,
+      ),
+    ).toEqual(['9', '9', '0', '0', '1', '2', '2', '2']);
+  });
   it('CNPJ pelos dígitos', () => {
     expect(cnpjValido('11.222.333/0001-81')).toBe(true);
     expect(cnpjValido('11222333000180')).toBe(false);

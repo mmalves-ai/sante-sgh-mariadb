@@ -237,6 +237,38 @@ export const esquemaResponsavelInternacao = z
   .strict();
 export type ResponsavelInternacao = z.infer<typeof esquemaResponsavelInternacao>;
 
+/** Tipos do acidente que motivou a internação (o de trabalho e o de trajeto pedem a data e o empregador). */
+export const TIPOS_ACIDENTE_INTERNACAO = [
+  'trabalho',
+  'trabalho_trajeto',
+  'transito',
+  'violencia',
+  'queda',
+  'outro',
+] as const;
+
+/** F3.4 (04-INT 67): o acidente informado na admissão, gravado na mesma transação; o domínio confere na hora. */
+export const esquemaAcidenteAdmissao = z
+  .object({
+    tipo: z.enum(TIPOS_ACIDENTE_INTERNACAO),
+    /** Data e hora do acidente (AAAA-MM-DDTHH:MM, hora local do estabelecimento). */
+    ocorridoEm: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, 'Use a data e a hora.')
+      .optional(),
+    empregadorCnpj: z
+      .string()
+      .transform((t) => t.replace(/\D/g, ''))
+      .optional()
+      .transform((t) => (t ? t : undefined)),
+    empregadorNome: livre(150).optional(),
+    numeroComunicacao: livre(30).optional(),
+    comunicacaoEmitidaEm: esquemaDataIso.optional(),
+    local: livre(255).optional(),
+  })
+  .strict();
+export type AcidenteAdmissao = z.infer<typeof esquemaAcidenteAdmissao>;
+
 export const esquemaInternar = z
   .object({
     paciente: id,
@@ -275,6 +307,8 @@ export const esquemaInternar = z
     observacao: livre(400).optional(),
     /** M44: a solicitação de leito do NIR atendida por esta admissão (o leito reservado para ela; mesma gravação). */
     solicitacaoNir: id.optional(),
+    /** O acidente que motivou a internação (vira o indicador de acidente da guia TISS). */
+    acidente: esquemaAcidenteAdmissao.optional(),
   })
   .strict()
   .superRefine((e, ctx) => {

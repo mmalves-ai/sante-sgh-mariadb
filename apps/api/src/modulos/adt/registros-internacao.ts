@@ -15,6 +15,7 @@ import {
   decidirPermissaoUnidade,
   diagnosticosDaAdmissao,
   diariasAutorizadasTotal,
+  indicadorAcidenteTiss,
   type AcaoUnidade,
   type GuiaAutorizada,
   proximaGuia,
@@ -77,7 +78,7 @@ const civil = (f: string, d: Date) => {
 /** A internação do estabelecimento, travada (serializa a sequência dos registros). Cancelada é recusa. */
 async function internacaoDoEstabelecimento(tx: TxOperacao, est: number, id: number): Promise<Linha> {
   const [i] = await tx.consultarParaAtualizar(
-    `SELECT id, situacao, data_hora_entrada, unidade_internacao_id, versao
+    `SELECT id, situacao, data_hora_entrada, unidade_internacao_id, atendimento_id, versao
        FROM internacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [id, est],
   );
@@ -449,9 +450,86 @@ export const esquemaRegistrarAcidente = z
   .strict();
 type RegistrarAcidenteEntrada = z.infer<typeof esquemaRegistrarAcidente>;
 
+type AcidenteParaGravar = Omit<RegistrarAcidenteEntrada, 'internacao'>;
+
+/** A linha do acidente com a próxima sequência da internação (a internação já está travada pelo chamador). */
+async function gravarLinhaAcidente(
+  tx: TxOperacao,
+  internacao: number,
+  e: AcidenteParaGravar,
+  f: string,
+): Promise<{ id: number; sequencia: number }> {
+  const seq = await tx.uma<{ s: number }>(
+    'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM acidente_internacao WHERE internacao_id = ?',
+    [internacao],
+  );
+  const sequencia = num(seq?.s ?? 1);
+  const id = await tx.incluir('acidente_internacao', {
+    internacao_id: internacao,
+    sequencia,
+    tipo_acidente: e.tipo,
+    ocorrido_em: e.ocorridoEm
+      ? instanteCivil(e.ocorridoEm.slice(0, 10), e.ocorridoEm.slice(11, 16), f)
+      : null,
+    local_ocorrencia: e.local ?? null,
+    municipio_ibge_id: e.municipio ?? null,
+    empregador_cnpj: e.empregadorCnpj ?? null,
+    empregador_nome: e.empregadorNome ?? null,
+    vinculo_previdenciario: e.vinculo ?? null,
+    ocupacao_cbo_id: e.ocupacao ?? null,
+    numero_comunicacao_acidente: e.numeroComunicacao ?? null,
+    comunicacao_emitida_em: e.comunicacaoEmitidaEm ?? null,
+    boletim_ocorrencia: e.boletimOcorrencia ?? null,
+    descricao: e.descricao ?? null,
+  });
+  return { id, sequencia };
+}
+
+/**
+ * O indicador de acidente da guia TISS (terminologia tiss_36) no atendimento da internação, pela regra do domínio.
+ * Sem o catálogo carregado, o atendimento fica como está (o faturamento confere na guia).
+ */
+export async function marcarIndicadorAcidente(
+  tx: TxOperacao,
+  atendimento: number,
+  tipo: string | null | undefined,
+): Promise<void> {
+  const termo = await tx.uma<{ id: number }>(
+    `SELECT t.id FROM termo_terminologia t JOIN terminologia tt ON tt.id = t.terminologia_id
+      WHERE tt.codigo = 'tiss_36' AND t.codigo_termo = ? AND t.ativo = TRUE LIMIT 1`,
+    [indicadorAcidenteTiss(tipo)],
+  );
+  if (!termo) return;
+  const a = await tx.uma<{ versao: number; ind: number | null }>(
+    'SELECT versao, indicador_acidente_termo_terminologia_id AS ind FROM atendimento WHERE id = ?',
+    [atendimento],
+  );
+  if (!a || numOuNulo(a.ind) === num(termo.id)) return;
+  await tx.alterar('atendimento', atendimento, num(a.versao), {
+    indicador_acidente_termo_terminologia_id: num(termo.id),
+  });
+}
+
+/**
+ * F3.4 (04-INT 67): o acidente informado na admissão, conferido pela mesma regra da tela da internação e gravado na
+ * transação da admissão; recusado, nada da admissão fica no banco.
+ */
+export async function gravarAcidenteDaAdmissao(
+  tx: TxOperacao,
+  est: number,
+  internacao: number,
+  entradaEm: Date,
+  a: AcidenteParaGravar,
+): Promise<void> {
+  const f = await fuso(tx, est);
+  const r = conferirAcidente(a, civil(f, entradaEm));
+  if (!r.ok) throw recusaCampo('acidente-invalido', r.motivo, `acidente.${r.campo}`);
+  await gravarLinhaAcidente(tx, internacao, a, f);
+}
+
 const registrarAcidente = definirOperacao<RegistrarAcidenteEntrada, ResultadoOperacao>({
   nome: 'internacao.registrar-acidente',
-  tabelas: ['acidente_internacao'],
+  tabelas: ['acidente_internacao', 'atendimento'],
   entrada: esquemaRegistrarAcidente,
   acao: 'inclusao',
   async gravar(tx, e, ctx) {
@@ -464,29 +542,8 @@ const registrarAcidente = definirOperacao<RegistrarAcidenteEntrada, ResultadoOpe
       throw recusaCampo('municipio-inexistente', 'Escolha o município na busca.', 'municipio');
     if (e.ocupacao && !(await tx.uma('SELECT id FROM ocupacao_cbo WHERE id = ?', [e.ocupacao])))
       throw recusaCampo('ocupacao-inexistente', 'Escolha a ocupação na busca.', 'ocupacao');
-    const seq = await tx.uma<{ s: number }>(
-      'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM acidente_internacao WHERE internacao_id = ?',
-      [e.internacao],
-    );
-    const sequencia = num(seq?.s ?? 1);
-    const id = await tx.incluir('acidente_internacao', {
-      internacao_id: e.internacao,
-      sequencia,
-      tipo_acidente: e.tipo,
-      ocorrido_em: e.ocorridoEm
-        ? instanteCivil(e.ocorridoEm.slice(0, 10), e.ocorridoEm.slice(11, 16), f)
-        : null,
-      local_ocorrencia: e.local ?? null,
-      municipio_ibge_id: e.municipio ?? null,
-      empregador_cnpj: e.empregadorCnpj ?? null,
-      empregador_nome: e.empregadorNome ?? null,
-      vinculo_previdenciario: e.vinculo ?? null,
-      ocupacao_cbo_id: e.ocupacao ?? null,
-      numero_comunicacao_acidente: e.numeroComunicacao ?? null,
-      comunicacao_emitida_em: e.comunicacaoEmitidaEm ?? null,
-      boletim_ocorrencia: e.boletimOcorrencia ?? null,
-      descricao: e.descricao ?? null,
-    });
+    const { id, sequencia } = await gravarLinhaAcidente(tx, e.internacao, e, f);
+    await marcarIndicadorAcidente(tx, num(i['atendimento_id']), e.tipo);
     return { internacao: e.internacao, acidente: id, sequencia };
   },
   alvo: (e) => ({ tabela: 'internacao', id: e.internacao }),

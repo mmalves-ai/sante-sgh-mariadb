@@ -120,6 +120,10 @@ export const mensagensAdt = {
   admissao: {
     incompativeis: '{n} leito(s) livre(s) não aceitam este paciente (sexo ou faixa de idade)',
     titulo: 'Admissão (nova internação)',
+    acidente: 'Acidente que motivou a internação',
+    semAcidente: 'Não é acidente',
+    acidenteAjuda:
+      'O acidente vai para a guia TISS (indicador de acidente) e fica na lista da internação; o de trabalho pede quando ocorreu e o empregador.',
     texto:
       'Escolha o paciente e o leito livre no mapa; os dados da pré-internação vêm preenchidos. Ao gravar, a conta, a guia e o período de leito nascem com a internação.',
     pacienteBusca: 'Nome, prontuário ou CPF do paciente',

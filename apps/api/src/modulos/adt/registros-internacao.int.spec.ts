@@ -2,7 +2,8 @@
 // teste (massa SINTÉTICA, marca R de massa-adt.spec-util.ts):
 //   - a admissão grava o diagnóstico de entrada e a guia inicial; a tela soma o secundário e a causa externa; nada é
 //     apagado e as recusas (repetido, causa externa fora do capítulo XX) não gravam;
-//   - o acidente de trabalho conferido na hora (sem empregador, recusa) e gravado com a sequência;
+//   - o acidente de trabalho conferido na hora (sem empregador, recusa) e gravado com a sequência; o acidente informado
+//     na admissão, na mesma transação (recusado, nada fica), e o indicador de acidente da guia TISS no atendimento;
 //   - a prorrogação entra como nova linha do histórico com a validade seguinte e o autorizador; a guia inicial fica;
 //   - os operadores da unidade: com a regra, quem não está liberado não admite, não transfere para a unidade nem dá
 //     alta nela; a linha só de material não conta como regra; a lista vazia tira as ações da internação (exclusão
@@ -113,6 +114,15 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
       modalidade: M().modalidade,
       ...extra,
     });
+  const indicadorAcidente = async (internacao: number) =>
+    (
+      await lerAdt<{ c: string | null }>(
+        M(),
+        `SELECT t.codigo_termo AS c FROM internacao i JOIN atendimento a ON a.id = i.atendimento_id
+           LEFT JOIN termo_terminologia t ON t.id = a.indicador_acidente_termo_terminologia_id WHERE i.id = ?`,
+        [internacao],
+      )
+    )?.c ?? null;
   const unidadeDaMassa = async () =>
     Number(
       (
@@ -223,6 +233,8 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
       diarias_autorizadas: 3,
       dias: 2,
     });
+    // Sem acidente na admissão: o indicador da guia TISS no atendimento é "não acidente" (tiss_36, 9).
+    expect(await indicadorAcidente(internacao)).toBe('9');
   });
 
   it('diagnósticos: secundário e causa externa pelas regras; repetido e causa externa fora do capítulo XX recusados', async () => {
@@ -306,6 +318,59 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
       numero_comunicacao_acidente: 'CAT-1',
       tem_data: 1,
     });
+    // O acidente de trabalho registrado depois leva o indicador da guia TISS a "trabalho" (0).
+    expect(await indicadorAcidente(internacao)).toBe('0');
+  });
+
+  it('admissão com acidente: conferido na hora (recusa sem gravar nada) e gravado na mesma transação com o indicador TISS', async () => {
+    const paciente = M().pacientes[2]!;
+    const leito = M().leitos[1]!;
+    const hoje = new Date().toISOString().slice(0, 10);
+    const internacoesDo = () =>
+      conta('SELECT COUNT(*) AS n FROM internacao WHERE paciente_id = ? AND excluido_em IS NULL', [paciente]);
+    const antes = await internacoesDo();
+    // Acidente de trabalho sem empregador: recusa no campo do acidente, nada da admissão fica no banco.
+    await expect(
+      internar(paciente, leito, { acidente: { tipo: 'trabalho', ocorridoEm: `${hoje}T00:01` } }),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'acidente-invalido');
+    expect(await internacoesDo()).toBe(antes);
+    // CNPJ que não confere: mesma recusa.
+    await expect(
+      internar(paciente, leito, {
+        acidente: { tipo: 'trabalho', ocorridoEm: `${hoje}T00:01`, empregadorCnpj: '11.222.333/0001-82' },
+      }),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'acidente-invalido');
+    expect(await internacoesDo()).toBe(antes);
+    const r = await internar(paciente, leito, {
+      acidente: { tipo: 'transito', ocorridoEm: `${hoje}T00:01`, local: 'VIA PUBLICA' },
+    });
+    const id = Number(r['internacao']);
+    expect(
+      await lerAdt(
+        M(),
+        `SELECT tipo_acidente, sequencia, local_ocorrencia, ocorrido_em IS NOT NULL AS tem_data, excluido_em IS NULL AS vivo
+           FROM acidente_internacao WHERE internacao_id = ?`,
+        [id],
+      ),
+    ).toMatchObject({
+      tipo_acidente: 'transito',
+      sequencia: 1,
+      local_ocorrencia: 'VIA PUBLICA',
+      tem_data: 1,
+      vivo: 1,
+    });
+    expect(await indicadorAcidente(id)).toBe('1');
+    // Libera o leito para os casos seguintes (exclusão lógica; o acidente continua no histórico).
+    await executar('internacao.excluirInternacao', {
+      internacao: id,
+      motivo: M().motivoExclusao,
+      justificativa: 'Internação aberta por engano',
+      confirmaApagarConta: true,
+      confirmaApagarPeriodos: true,
+    });
+    expect(await conta('SELECT COUNT(*) AS n FROM acidente_internacao WHERE internacao_id = ?', [id])).toBe(
+      1,
+    );
   });
 
   it('prorrogação: nova linha com a validade seguinte e o autorizador; a guia inicial continua; buraco recusado', async () => {

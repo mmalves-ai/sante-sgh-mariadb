@@ -71,7 +71,9 @@ import { limpezaDaAlta } from './limpeza-da-alta.js';
 import {
   acessoTotalDe,
   exigirOperadorDaUnidade,
+  gravarAcidenteDaAdmissao,
   gravarDiagnosticosDaAdmissao,
+  marcarIndicadorAcidente,
   gravarGuiaNoHistorico,
   OPERACOES_REGISTROS_INTERNACAO,
 } from './registros-internacao.js';
@@ -363,8 +365,9 @@ async function incluirInternacao(tx: TxOperacao, linha: Record<string, unknown>)
 const TABELAS_INTERNAR = [
   'atendimento',
   'internacao',
-  // F3.4 (04-INT 67 e 68): o diagnóstico de entrada e a guia inicial nascem com a admissão.
+  // F3.4 (04-INT 67 e 68): o diagnóstico de entrada, o acidente e a guia inicial nascem com a admissão.
   'diagnostico_internacao',
+  'acidente_internacao',
   'guia_internacao',
   'ocupacao_leito',
   'reserva_leito',
@@ -520,6 +523,10 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
     });
     // F3.4 (04-INT 67): o CID da admissão vira o diagnóstico de entrada (e o secundário), na lista da internação.
     await gravarDiagnosticosDaAdmissao(tx, id, e.cidPrincipal, e.cidSecundario, agora, e.medicoAssistente);
+    // F3.4 (04-INT 67): o acidente informado na admissão (mesma transação) e o indicador de acidente da guia TISS no
+    // atendimento (sem acidente, "não acidente").
+    if (e.acidente) await gravarAcidenteDaAdmissao(tx, est, id, agora, e.acidente);
+    await marcarIndicadorAcidente(tx, atendimento, e.acidente?.tipo);
     if (reserva !== null) {
       const r = await tx.uma('SELECT versao FROM reserva_leito WHERE id = ?', [reserva]);
       await tx.alterar('reserva_leito', reserva, n(r?.['versao']), {
