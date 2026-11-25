@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  decidirCoassinatura,
   novaRodadaDeCoassinatura,
   pedidoDeCoassinatura,
   RecusaCoassinatura,
+  RecusaDecisaoCoassinatura,
   RecusaNovaRodada,
   vinculoDoCadastro,
 } from './coassinatura-pedido.js';
@@ -88,6 +90,62 @@ describe('pedidoDeCoassinatura', () => {
     );
     expect(codigo(() => novaRodadaDeCoassinatura(recusado, { ...p, preceptorVigente: false }))).toBe(
       'preceptor-indisponivel',
+    );
+  });
+});
+
+describe('decidirCoassinatura', () => {
+  const base = { situacaoRodada: 'pendente', preceptor: 2, decisor: 2, outrasPendentes: 0 } as const;
+  const cod = (f: () => unknown): string => {
+    try {
+      f();
+      return 'sem-erro';
+    } catch (e) {
+      return e instanceof RecusaDecisaoCoassinatura ? e.codigo : String(e);
+    }
+  };
+  it('o aceite do último pedido finaliza o registro e gera a assinatura do preceptor; o motivo é ignorado', () => {
+    expect(decidirCoassinatura({ ...base, decisao: 'coassinado', motivo: 'qualquer coisa' })).toEqual({
+      situacao: 'coassinado',
+      motivo: null,
+      finalizaRegistro: true,
+      assinaturaDoPreceptor: true,
+      devolveAoAutor: false,
+    });
+    expect(decidirCoassinatura({ ...base, decisao: 'coassinado', outrasPendentes: 1 }).finalizaRegistro).toBe(
+      false,
+    );
+  });
+  it('ajuste e recusa devolvem ao autor com o motivo aparado, sem assinar nem finalizar', () => {
+    expect(
+      decidirCoassinatura({ ...base, decisao: 'ajuste_solicitado', motivo: '  Descrever a ausculta  ' }),
+    ).toEqual({
+      situacao: 'ajuste_solicitado',
+      motivo: 'Descrever a ausculta',
+      finalizaRegistro: false,
+      assinaturaDoPreceptor: false,
+      devolveAoAutor: true,
+    });
+    expect(
+      decidirCoassinatura({ ...base, decisao: 'recusado', motivo: 'Conduta a revisar' }).devolveAoAutor,
+    ).toBe(true);
+  });
+  it('recusas: outro profissional, rodada já decidida, motivo ausente ou curto', () => {
+    expect(cod(() => decidirCoassinatura({ ...base, decisor: 3, decisao: 'coassinado' }))).toBe(
+      'sem-permissao',
+    );
+    for (const situacaoRodada of ['coassinado', 'ajuste_solicitado', 'recusado', 'cancelado'] as const)
+      expect(cod(() => decidirCoassinatura({ ...base, situacaoRodada, decisao: 'coassinado' }))).toBe(
+        'coassinatura-encerrada',
+      );
+    expect(cod(() => decidirCoassinatura({ ...base, decisao: 'recusado', motivo: ' ' }))).toBe(
+      'motivo-obrigatorio',
+    );
+    expect(cod(() => decidirCoassinatura({ ...base, decisao: 'ajuste_solicitado', motivo: 'curto' }))).toBe(
+      'motivo-obrigatorio',
+    );
+    expect(cod(() => decidirCoassinatura({ ...base, decisao: 'ajuste_solicitado' }))).toBe(
+      'motivo-obrigatorio',
     );
   });
 });

@@ -1015,15 +1015,32 @@ export interface PendenciasAssinatura {
 
 export const esquemaCoassinar = z
   .object({
-    decisao: z.enum(['coassinado', 'recusado']),
+    decisao: z.enum(['coassinado', 'recusado', 'ajuste_solicitado']),
     motivo: textoCp1252(500).pipe(z.string().trim().min(10)).optional(),
   })
   .strict()
   .refine((x) => x.decisao === 'coassinado' || x.motivo !== undefined, {
     path: ['motivo'],
-    message: 'Informe o motivo da recusa.',
+    message: 'Informe o motivo da recusa ou do ajuste.',
   });
 export type Coassinar = z.infer<typeof esquemaCoassinar>;
+
+/** Nova rodada de coassinatura pedida pelo autor depois da recusa ou do ajuste: o preceptor (o mesmo ou outro). */
+export const esquemaNovaRodadaCoassinatura = z.object({ preceptor: z.number().int().positive() }).strict();
+export type NovaRodadaCoassinatura = z.infer<typeof esquemaNovaRodadaCoassinatura>;
+
+/** Registro do autor devolvido pelo preceptor, à espera da nova rodada. */
+export interface RegistroDevolvidoCoassinatura {
+  readonly supervisao: number;
+  readonly registro: number;
+  readonly sequencia: number;
+  readonly decisao: 'recusado' | 'ajuste_solicitado';
+  readonly motivo: string;
+  readonly decididoEm: string;
+  readonly preceptor: number;
+  readonly paciente: number;
+  readonly atendimento: number | null;
+}
 
 export interface PreviaAssinatura {
   readonly documento: number;

@@ -42,6 +42,7 @@ import type {
   TipoDocumentoAberto,
   ViasDocumentoProntuario,
   AcaoLiberada,
+  RegistroDevolvidoCoassinatura,
 } from '@sgh/contratos';
 import { tokenCsrf } from '../../api.js';
 import { erroDaResposta } from '../../casca/erros/problem-details.js';
@@ -300,8 +301,20 @@ export const lerPrevia = (id: number, b: typeof fetch = fetch) =>
   ler<PreviaAssinatura>(`${P}/assinaturas/${id}/previa`, b);
 export const assinarLote = (e: AssinarLote) => enviar<ResultadoAssinatura>(`${P}/assinaturas`, e, null);
 /** Regra 3: o preceptor coassina (ou recusa com o motivo) o registro do residente. */
-export const coassinar = (id: number, e: { decisao: 'coassinado' | 'recusado'; motivo?: string }) =>
-  enviar<{ ok: true }>(`${P}/supervisao/${id}/coassinar`, e, null);
+export const coassinar = (
+  id: number,
+  e: { decisao: 'coassinado' | 'recusado' | 'ajuste_solicitado'; motivo?: string },
+) => enviar<{ ok: true }>(`${P}/supervisao/${id}/coassinar`, e, null);
+/** 03-PEP L96: os registros do autor devolvidos pelo preceptor (recusa ou ajuste), à espera da nova rodada. */
+export const lerDevolvidos = () =>
+  ler<{ itens: readonly RegistroDevolvidoCoassinatura[] }>(`${P}/supervisao/devolvidos`);
+/** 03-PEP L96: nova rodada de coassinatura (o mesmo ou outro preceptor, pelo profissional). */
+export const pedirNovaRodada = (registro: number, preceptor: number) =>
+  enviar<{ supervisao: number; sequencia: number }>(
+    `${P}/supervisao/registro/${registro}/nova-rodada`,
+    { preceptor },
+    null,
+  );
 
 /** Validação pública do documento pelo QR (sem conteúdo clínico). */
 export async function validarDocumento(qr: string, buscar: typeof fetch = fetch): Promise<unknown> {

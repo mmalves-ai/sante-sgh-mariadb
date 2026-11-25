@@ -55,6 +55,7 @@ import {
   esquemaAssinarLote,
   esquemaCancelarParecer,
   esquemaCoassinar,
+  esquemaNovaRodadaCoassinatura,
   esquemaCienciaCritico,
   esquemaCancelamentoObito,
   esquemaDeclaracaoObito,
@@ -97,6 +98,7 @@ import {
   type TempoEvento,
   TIPOS_DOCUMENTO_ABERTO,
   type TipoDocumentoAberto,
+  type RegistroDevolvidoCoassinatura,
 } from '@sgh/contratos';
 import { regraJustificativaImpressao } from '@sgh/dominio-pep';
 import { pode, VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
@@ -1695,12 +1697,54 @@ export class DocumentosPepController {
     await this.gravarSgh(() =>
       this.servico.porta.coassinarNoNovo(
         this.sgh(s, 'coassinatura'),
-        e.decisao === 'recusado'
-          ? { id, decisao: 'recusado', motivo: e.motivo ?? null }
-          : { id, decisao: 'coassinado' },
+        e.decisao === 'coassinado'
+          ? { id, decisao: 'coassinado' }
+          : { id, decisao: e.decisao, motivo: e.motivo ?? null },
       ),
     );
     return { ok: true };
+  }
+
+  /** Os registros do autor da sessão devolvidos pelo preceptor (recusa ou ajuste), à espera da nova rodada. */
+  @Get('supervisao/devolvidos')
+  @Permissao('pep.evolucao.criar')
+  async devolvidos(
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ itens: readonly RegistroDevolvidoCoassinatura[] }> {
+    const s = sessaoDe(req);
+    const porta = this.servico.porta;
+    if (!porta.registrosDevolvidos) return { itens: [] };
+    return { itens: await porta.registrosDevolvidos(this.c(s), s.login) };
+  }
+
+  /**
+   * Nova rodada de coassinatura (03-PEP L96): o autor pede de novo, ao mesmo ou a outro preceptor, depois da recusa ou do
+   * pedido de ajuste. A rodada nova nasce pendente na sequência seguinte; as anteriores ficam como histórico.
+   */
+  @Post('supervisao/registro/:registro/nova-rodada')
+  @HttpCode(201)
+  @Permissao('pep.evolucao.criar')
+  @AuditadoNoHandler('registro_assistencial_supervisao e a trilha na mesma transação')
+  async novaRodada(
+    @Param('registro') r: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ supervisao: number; sequencia: number }> {
+    const s = sessaoDe(req);
+    const e = validar(esquemaNovaRodadaCoassinatura, corpo);
+    const porta = this.servico.porta;
+    if (!porta.novaRodadaCoassinatura)
+      throw new ErroProblema(
+        'indisponivel',
+        503,
+        'Banco do estabelecimento indisponível',
+        'A nova rodada de coassinatura grava só no banco do estabelecimento.',
+      );
+    const pedir = porta.novaRodadaCoassinatura.bind(porta);
+    const feito = await this.gravarSgh(() =>
+      pedir(this.sgh(s, 'coassinatura'), { registro: idDaRota(r), preceptor: e.preceptor }),
+    );
+    return { supervisao: feito.supervisao, sequencia: feito.sequencia };
   }
 
   /** A trilha da gravação só do novo já sai na transação; o registrador fica para as negações. */

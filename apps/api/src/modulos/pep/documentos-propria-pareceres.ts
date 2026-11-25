@@ -11,7 +11,21 @@
 // Tabelas novas ou colunas: migração 06_PEP/98_pareceres (relatorio_transferencia; rascunho do sumário; número da
 // declaração de óbito opcional só no rascunho; conta que deu a ciência) e 06_PEP/99_obito_rascunho (rascunho cancelado
 // sem data de emissão).
-import { statusDaRecusaObito, validarCancelamentoObito, type LinhaCausaObito } from '@sgh/dominio-pep';
+import {
+  type CoassinaturaGravavel,
+  type DecisaoCoassinatura,
+  type DecisaoGravavel,
+  decidirCoassinatura,
+  type LinhaCausaObito,
+  novaRodadaDeCoassinatura,
+  RecusaCoassinatura,
+  RecusaDecisaoCoassinatura,
+  RecusaNovaRodada,
+  type RodadaCoassinatura,
+  statusDaRecusaObito,
+  validarCancelamentoObito,
+  vinculoDoCadastro,
+} from '@sgh/dominio-pep';
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -23,7 +37,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import type { ContextoDocs } from './documentos-porta.js';
+import type { ContextoDocs, RegistroDevolvido } from './documentos-porta.js';
 import type { NucleoDocumentosPep } from './documentos-porta-propria.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import {
@@ -522,55 +536,283 @@ export class DocumentosPropriaPareceres {
 
   async coassinarNoNovo(
     c: ContextoGravacaoPep,
-    x: { id: number; decisao: 'coassinado' | 'recusado'; motivo?: string | null },
+    x: { id: number; decisao: DecisaoCoassinatura; motivo?: string | null },
   ): Promise<{ registro: number; paciente: number }> {
-    const motivo = textoOuNull(x.motivo)?.trim() || null;
     return this.gravar(
       c,
       'pep.evolucao.coassinar',
-      ['registro_assistencial_supervisao', 'registro_assistencial'],
+      [
+        'registro_assistencial_supervisao',
+        'registro_assistencial',
+        'documento_prontuario',
+        'documento_prontuario_evento',
+      ],
       async (tx, est, s, falhar) => {
         const [sup] = await tx.consultarParaAtualizar(
-          `SELECT s.id, s.versao, s.situacao, s.preceptor_profissional_id, ra.id AS registro, ra.versao AS versao_registro,
-                  ra.paciente_id, ra.situacao AS situacao_registro
+          `SELECT s.id, s.versao, s.situacao, s.sequencia, s.preceptor_profissional_id, ra.id AS registro,
+                  ra.versao AS versao_registro, ra.paciente_id, ra.atendimento_id, ra.situacao AS situacao_registro,
+                  ra.documento_prontuario_id, ra.impressao_digital, ra.autor_profissional_id, ra.data_hora_clinica,
+                  ra.justificativa_retroativo, ra.confidencial, ra.modelo_documento_clinico_id,
+                  COALESCE(ra.tipo_documento_clinico_id, m.tipo_documento_clinico_id) AS tipo, m.titulo
              FROM registro_assistencial_supervisao s
              JOIN registro_assistencial ra ON ra.id = s.registro_assistencial_id AND ra.excluido_em IS NULL
+             JOIN modelo_documento_clinico m ON m.id = ra.modelo_documento_clinico_id
             WHERE s.id = ? AND ra.estabelecimento_id = ? AND s.excluido_em IS NULL`,
           [x.id, est.id],
         );
         if (!sup) return falhar('nao-encontrado', 'Pedido de coassinatura não encontrado.', 404);
-        if (num(sup['preceptor_profissional_id']) !== s.profissional)
-          falhar('sem-permissao', 'Só o preceptor indicado coassina este registro.', 403);
-        if (sup['situacao'] !== 'pendente')
-          falhar('coassinatura-encerrada', 'O registro já foi coassinado ou recusado.');
-        if (x.decisao === 'recusado' && !motivo)
-          falhar('motivo-obrigatorio', 'A recusa da coassinatura exige o motivo.', 422);
-        await tx.alterar('registro_assistencial_supervisao', x.id, num(sup['versao']), {
-          situacao: x.decisao,
-          decidido_em: new Date(),
-          motivo: motivo?.slice(0, 500) ?? null,
-        });
         const registro = num(sup['registro']);
-        // Coassinado o último pedido pendente, o registro deixa de aguardar coassinatura.
-        if (x.decisao === 'coassinado' && sup['situacao_registro'] === 'aguardando_coassinatura') {
-          const resta = await tx.uma(
-            `SELECT COUNT(*) AS n FROM registro_assistencial_supervisao
-              WHERE registro_assistencial_id = ? AND situacao = 'pendente' AND excluido_em IS NULL`,
-            [registro],
-          );
-          if (num(resta?.['n'] ?? 0) === 0)
+        const outras = await tx.uma(
+          `SELECT COUNT(*) AS n FROM registro_assistencial_supervisao
+            WHERE registro_assistencial_id = ? AND situacao = 'pendente' AND excluido_em IS NULL AND id <> ?`,
+          [registro, x.id],
+        );
+        let d: DecisaoGravavel;
+        try {
+          d = decidirCoassinatura({
+            situacaoRodada: String(sup['situacao']) as RodadaCoassinatura['situacao'],
+            preceptor: num(sup['preceptor_profissional_id']),
+            decisor: s.profissional,
+            decisao: x.decisao,
+            motivo: textoOuNull(x.motivo ?? null),
+            outrasPendentes: num(outras?.['n'] ?? 0),
+          });
+        } catch (e) {
+          if (!(e instanceof RecusaDecisaoCoassinatura)) throw e;
+          const status = e.codigo === 'sem-permissao' ? 403 : e.codigo === 'motivo-obrigatorio' ? 422 : 409;
+          return falhar(e.codigo, e.message, status);
+        }
+        const agora = new Date();
+        let assinatura: number | null = null;
+        if (d.assinaturaDoPreceptor) {
+          // A coassinatura é a assinatura do preceptor no documento do prontuário do registro (CFM, supervisão da
+          // residência; SBIS NGS2): evento "assinatura" com o profissional do preceptor e o resumo do conteúdo. Sem o
+          // documento ainda, ele nasce aqui (lançado), com o evento de criação. A assinatura do autor segue à parte.
+          let documento = numOuNull(sup['documento_prontuario_id']);
+          let situacaoDoc: number;
+          if (documento === null) {
+            const sit = await tx.uma(
+              `SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo = TRUE
+                ORDER BY (ordem IS NULL), ordem, id LIMIT 1`,
+            );
+            if (!sit)
+              return falhar(
+                'situacao-documento-sem-cadastro',
+                'O cliente não tem situação de documento ativa na categoria "lancado".',
+              );
+            situacaoDoc = num(sit['id']);
+            documento = await tx.incluir('documento_prontuario', {
+              estabelecimento_id: est.id,
+              paciente_id: num(sup['paciente_id']),
+              atendimento_id: numOuNull(sup['atendimento_id']),
+              tipo_documento_clinico_id: numOuNull(sup['tipo']),
+              modelo_documento_clinico_id: num(sup['modelo_documento_clinico_id']),
+              situacao_documento_prontuario_id: situacaoDoc,
+              entidade_origem: 'registro_assistencial',
+              entidade_origem_id: registro,
+              titulo: (textoOuNull(sup['titulo']) ?? 'Registro clínico').slice(0, 150),
+              profissional_id: num(sup['autor_profissional_id']),
+              referencia_em: sup['data_hora_clinica'],
+              lancado_em: agora,
+              justificativa_retroativo: textoOuNull(sup['justificativa_retroativo']),
+              numero_versao: 1,
+              confidencial: Boolean(Number(sup['confidencial'])),
+              conteudo: JSON.stringify({
+                hash_conteudo: String(sup['impressao_digital']),
+                como_suporte: false,
+              }),
+              origem: 'sistema',
+            });
+            await tx.incluir('documento_prontuario_evento', {
+              documento_prontuario_id: documento,
+              operacao: 'inclusao',
+              acao: 'criacao',
+              situacao_documento_prontuario_id: situacaoDoc,
+              profissional_id: num(sup['autor_profissional_id']),
+              evento_em: agora,
+              dados: JSON.stringify({ hash: String(sup['impressao_digital']), origem: 'coassinatura' }),
+              ocorrido_em: agora,
+              usuario_id: s.usuario,
+            });
+          } else {
+            const doc = await tx.uma(
+              'SELECT situacao_documento_prontuario_id FROM documento_prontuario WHERE id = ?',
+              [documento],
+            );
+            situacaoDoc = num(doc?.['situacao_documento_prontuario_id']);
+          }
+          assinatura = await tx.incluir('documento_prontuario_evento', {
+            documento_prontuario_id: documento,
+            operacao: 'alteracao',
+            acao: 'assinatura',
+            situacao_documento_prontuario_id: situacaoDoc,
+            profissional_id: s.profissional,
+            evento_em: agora,
+            dados: JSON.stringify({
+              papel: 'preceptor',
+              nivel: 'avancada-sessao',
+              hash: String(sup['impressao_digital']),
+              supervisao: x.id,
+              sequencia: num(sup['sequencia']),
+            }),
+            ocorrido_em: agora,
+            usuario_id: s.usuario,
+          });
+          if (documento !== numOuNull(sup['documento_prontuario_id']))
+            await tx.alterar('registro_assistencial', registro, num(sup['versao_registro']), {
+              documento_prontuario_id: documento,
+              ...(d.finalizaRegistro && sup['situacao_registro'] === 'aguardando_coassinatura'
+                ? { situacao: 'finalizado' }
+                : {}),
+            });
+          else if (d.finalizaRegistro && sup['situacao_registro'] === 'aguardando_coassinatura')
             await tx.alterar('registro_assistencial', registro, num(sup['versao_registro']), {
               situacao: 'finalizado',
             });
         }
-        return { registro, paciente: num(sup['paciente_id']) };
+        await tx.alterar('registro_assistencial_supervisao', x.id, num(sup['versao']), {
+          situacao: d.situacao,
+          decidido_em: agora,
+          motivo: d.motivo,
+        });
+        return { registro, paciente: num(sup['paciente_id']), assinatura };
       },
       () => ({ tabela: 'registro_assistencial_supervisao', id: x.id }),
       (r) => ({
+        motivo: textoOuNull(x.motivo ?? null),
         dados: {
           evento:
-            x.decisao === 'coassinado' ? 'pep.evolucao.coassinada' : 'pep.evolucao.coassinaturaRecusada',
+            x.decisao === 'coassinado'
+              ? 'pep.evolucao.coassinada'
+              : x.decisao === 'ajuste_solicitado'
+                ? 'pep.evolucao.ajusteSolicitado'
+                : 'pep.evolucao.coassinaturaRecusada',
           registro: r.registro,
+          assinatura: r.assinatura,
+        },
+      }),
+    ).then((r) => ({ registro: r.registro, paciente: r.paciente }));
+  }
+
+  /**
+   * Os registros do autor (login) devolvidos pelo preceptor (recusa ou pedido de ajuste na última rodada), ainda
+   * aguardando a coassinatura: a fila de onde o autor pede a nova rodada.
+   */
+  registrosDevolvidos(c: ContextoDocs, autor: string): Promise<RegistroDevolvido[]> {
+    return this.ler(c, 'registros-devolvidos', async (l, est) => {
+      const ls = await l.consultar(
+        `SELECT s.id, s.registro_assistencial_id, s.sequencia, s.situacao, s.motivo, s.decidido_em,
+                s.preceptor_profissional_id, ra.paciente_id, ra.atendimento_id
+           FROM registro_assistencial_supervisao s
+           JOIN registro_assistencial ra ON ra.id = s.registro_assistencial_id AND ra.excluido_em IS NULL
+           JOIN usuario u ON u.id = ra.autor_usuario_id
+          WHERE ra.estabelecimento_id = ? AND u.login = ? AND s.excluido_em IS NULL
+            AND ra.situacao = 'aguardando_coassinatura' AND s.situacao IN ('recusado','ajuste_solicitado')
+            AND s.sequencia = (SELECT MAX(s2.sequencia) FROM registro_assistencial_supervisao s2
+                                WHERE s2.registro_assistencial_id = s.registro_assistencial_id AND s2.excluido_em IS NULL)
+          ORDER BY s.decidido_em, s.id LIMIT ${TETO_LISTA}`,
+        [est.id, autor],
+      );
+      return ls.map((x) => ({
+        supervisao: num(x['id']),
+        registro: num(x['registro_assistencial_id']),
+        sequencia: num(x['sequencia']),
+        decisao: x['situacao'] === 'ajuste_solicitado' ? 'ajuste_solicitado' : 'recusado',
+        motivo: textoOuNull(x['motivo']) ?? '',
+        decididoEm: dataHora(x['decidido_em'], est.fuso),
+        preceptor: num(x['preceptor_profissional_id']),
+        paciente: num(x['paciente_id']),
+        atendimento: numOuNull(x['atendimento_id']),
+      }));
+    });
+  }
+
+  /**
+   * Nova rodada de coassinatura depois da recusa ou do pedido de ajuste: só o autor do registro pede, ao mesmo ou a
+   * outro preceptor com vínculo vigente neste estabelecimento; o pedido seguinte nasce pendente na sequência seguinte e
+   * as rodadas anteriores ficam como histórico (nunca apagadas). O registro segue aguardando a coassinatura.
+   */
+  async novaRodadaCoassinatura(
+    c: ContextoGravacaoPep,
+    x: { registro: number; preceptor: number },
+  ): Promise<{ supervisao: number; sequencia: number; paciente: number }> {
+    return this.gravar(
+      c,
+      'pep.evolucao.nova-rodada-coassinatura',
+      ['registro_assistencial_supervisao', 'registro_assistencial'],
+      async (tx, est, s, falhar) => {
+        const [ra] = await tx.consultarParaAtualizar(
+          `SELECT id, paciente_id, autor_profissional_id, situacao FROM registro_assistencial
+            WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+          [x.registro, est.id],
+        );
+        if (!ra) return falhar('nao-encontrado', 'Registro clínico não encontrado.', 404);
+        if (num(ra['autor_profissional_id']) !== s.profissional)
+          falhar('sem-permissao', 'Só o autor do registro pede a nova coassinatura.', 403);
+        const rodadas = (
+          await tx.consultar(
+            `SELECT sequencia, situacao FROM registro_assistencial_supervisao
+              WHERE registro_assistencial_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+            [x.registro],
+          )
+        ).map((r) => ({
+          sequencia: num(r['sequencia']),
+          situacao: String(r['situacao']) as RodadaCoassinatura['situacao'],
+        }));
+        const vig = await tx.uma(
+          `SELECT 1 AS ok FROM profissional p
+            WHERE p.id = ? AND p.excluido_em IS NULL
+              AND EXISTS (SELECT 1 FROM usuario_vinculo_profissional v
+                           WHERE v.profissional_id = p.id AND v.estabelecimento_id = ? AND v.excluido_em IS NULL
+                             AND v.vigencia_inicio <= UTC_DATE() AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= UTC_DATE()))`,
+          [x.preceptor, est.id],
+        );
+        const cad = await tx.uma(
+          `SELECT tipo_vinculo FROM vinculo_supervisao_profissional
+            WHERE estabelecimento_id = ? AND supervisor_profissional_id = ? AND supervisionado_profissional_id = ?
+              AND ativo = TRUE AND excluido_em IS NULL
+              AND vigencia_inicio <= UTC_DATE() AND (vigencia_fim IS NULL OR vigencia_fim >= UTC_DATE())
+            ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
+          [est.id, x.preceptor, s.profissional],
+        );
+        let p: CoassinaturaGravavel;
+        try {
+          if (rodadas.length === 0 || ra['situacao'] !== 'aguardando_coassinatura')
+            throw new RecusaNovaRodada(
+              rodadas.some((r) => r.situacao === 'coassinado')
+                ? 'registro-coassinado'
+                : 'sem-decisao-anterior',
+              'O registro não aguarda coassinatura devolvida pelo preceptor.',
+            );
+          p = novaRodadaDeCoassinatura(rodadas, {
+            autor: s.profissional,
+            preceptor: x.preceptor,
+            preceptorVigente: vig !== null && vig !== undefined,
+            vinculo: vinculoDoCadastro(cad ? String(cad['tipo_vinculo']) : null),
+          });
+        } catch (e) {
+          if (e instanceof RecusaCoassinatura) return falhar(e.codigo, e.message, 422);
+          if (e instanceof RecusaNovaRodada) return falhar(e.codigo, e.message, 409);
+          throw e;
+        }
+        const supervisao = await tx.incluir('registro_assistencial_supervisao', {
+          registro_assistencial_id: x.registro,
+          sequencia: p.sequencia,
+          supervisionado_profissional_id: p.supervisionado,
+          preceptor_profissional_id: p.preceptor,
+          tipo_vinculo: p.tipoVinculo,
+          situacao: p.situacao,
+          solicitado_em: new Date(),
+          origem: 'sistema',
+        });
+        return { supervisao, sequencia: p.sequencia, paciente: num(ra['paciente_id']) };
+      },
+      (r) => ({ tabela: 'registro_assistencial_supervisao', id: r.supervisao }),
+      (r) => ({
+        dados: {
+          evento: 'pep.evolucao.novaRodadaCoassinatura',
+          registro: x.registro,
+          sequencia: r.sequencia,
         },
       }),
     );
@@ -588,7 +830,9 @@ export class DocumentosPropriaPareceres {
           WHERE ra.estabelecimento_id = ? AND u.login = ? AND ra.excluido_em IS NULL
             AND ra.situacao IN ('finalizado','aguardando_coassinatura')
             AND NOT EXISTS (SELECT 1 FROM documento_prontuario_evento ev
-                             WHERE ev.documento_prontuario_id = ra.documento_prontuario_id AND ev.acao = 'assinatura')
+                             WHERE ev.documento_prontuario_id = ra.documento_prontuario_id AND ev.acao = 'assinatura'
+                               -- A coassinatura do preceptor não é a assinatura do autor.
+                               AND (ev.profissional_id IS NULL OR ev.profissional_id = ra.autor_profissional_id))
             AND NOT EXISTS (SELECT 1 FROM documento_prontuario dp
                               JOIN documento_assinado da ON da.id = dp.documento_assinado_id AND da.excluido_em IS NULL
                              WHERE dp.id = ra.documento_prontuario_id AND da.concluido_em IS NOT NULL)

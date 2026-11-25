@@ -53,6 +53,19 @@ export interface ProfissionalPep extends ProfissionalDoRegistro {
   readonly ocupacoes: readonly { cbo: number; codigo: string; conselhoAtivo: boolean }[];
 }
 
+/** Registro do autor devolvido pelo preceptor (recusa ou pedido de ajuste), à espera da nova rodada. */
+export interface RegistroDevolvido {
+  readonly supervisao: number;
+  readonly registro: number;
+  readonly sequencia: number;
+  readonly decisao: 'recusado' | 'ajuste_solicitado';
+  readonly motivo: string;
+  readonly decididoEm: string;
+  readonly preceptor: number;
+  readonly paciente: number;
+  readonly atendimento: number | null;
+}
+
 export interface PortaDocumentos {
   readonly destino: 'proprio' | 'memoria';
   // ── Leituras ───────────────────────────────────────────────────────────────────────────────────────
@@ -168,11 +181,18 @@ export interface PortaDocumentos {
   /** Regra 3: os registros de residentes que aguardam a coassinatura deste preceptor. */
   coassinaturas(c: ContextoDocs, preceptor: string): Promise<SupervisaoLida[]>;
   supervisao(c: ContextoDocs, id: number): Promise<SupervisaoLida | null>;
-  /** A coassinatura (ou a recusa) com a trilha. */
+  /** A coassinatura (ou a recusa, ou o pedido de ajuste) com a trilha. */
   coassinarNoNovo(
     c: ContextoGravacaoPep,
-    x: { id: number; decisao: 'coassinado' | 'recusado'; motivo?: string | null },
+    x: { id: number; decisao: 'coassinado' | 'recusado' | 'ajuste_solicitado'; motivo?: string | null },
   ): Promise<{ registro: number; paciente: number }>;
+  /** Os registros do autor devolvidos pelo preceptor (só no banco próprio). */
+  registrosDevolvidos?(c: ContextoDocs, autor: string): Promise<RegistroDevolvido[]>;
+  /** Nova rodada de coassinatura depois da recusa ou do ajuste (só no banco próprio). */
+  novaRodadaCoassinatura?(
+    c: ContextoGravacaoPep,
+    x: { registro: number; preceptor: number },
+  ): Promise<{ supervisao: number; sequencia: number; paciente: number }>;
   registrosSemAssinatura(
     c: ContextoDocs,
     login: string,

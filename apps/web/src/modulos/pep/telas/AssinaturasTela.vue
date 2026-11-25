@@ -2,14 +2,22 @@
 // Pendências de assinatura (ficha do M23, regra 9): `/inicio/assinaturas`. Os documentos do profissional
 // aguardando assinatura, a prévia exata de cada um (o hash mostrado é o que se assina) e a assinatura em lote; o
 // aviso ao sair da sessão vem da mesma lista. Regra 3: os registros de residentes que aguardam a coassinatura deste
-// preceptor (coassinar ou recusar com o motivo).
+// preceptor (coassinar, pedir ajuste ou recusar com o motivo) e, ao autor, os seus registros devolvidos, com a nova
+// rodada ao mesmo preceptor num clique (03-PEP L96).
 import { SanteAlerta, SanteBotao, SanteDialogo } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
-import { assinarLote, coassinar, lerPendencias, lerPrevia } from '../api-documentos.js';
+import {
+  assinarLote,
+  coassinar,
+  lerDevolvidos,
+  lerPendencias,
+  lerPrevia,
+  pedirNovaRodada,
+} from '../api-documentos.js';
 import AvisoConsulta from '../componentes/documentos/AvisoConsulta.vue';
 import { dataHoraBr } from '../formato.js';
 
@@ -42,15 +50,33 @@ function todos(): void {
 }
 const motivoRecusa = ref('');
 const coassinado = ref<{ id: number; aviso: string | null } | null>(null);
-async function decidir(id: number, decisao: 'coassinado' | 'recusado'): Promise<void> {
+async function decidir(id: number, decisao: 'coassinado' | 'recusado' | 'ajuste_solicitado'): Promise<void> {
   erro.value = null;
   try {
     await coassinar(
       id,
-      decisao === 'recusado' ? { decisao, motivo: motivoRecusa.value.trim() } : { decisao },
+      decisao === 'coassinado' ? { decisao } : { decisao, motivo: motivoRecusa.value.trim() },
     );
     coassinado.value = { id, aviso: null };
     motivoRecusa.value = '';
+    await cliente.invalidateQueries({ queryKey: ['pep', 'doc'] });
+  } catch (e) {
+    erro.value = e;
+  }
+}
+// 03-PEP L96: os registros devolvidos ao autor e a nova rodada de coassinatura.
+const devolvidos = useQuery({
+  queryKey: ['pep', 'doc', 'devolvidos'],
+  queryFn: () => lerDevolvidos(),
+  enabled: computed(() => pode('pep.evolucao.criar')),
+  staleTime: 0,
+});
+const novaRodada = ref<number | null>(null);
+async function pedirDeNovo(registro: number, preceptor: number): Promise<void> {
+  erro.value = null;
+  try {
+    await pedirNovaRodada(registro, preceptor);
+    novaRodada.value = registro;
     await cliente.invalidateQueries({ queryKey: ['pep', 'doc'] });
   } catch (e) {
     erro.value = e;
@@ -168,13 +194,62 @@ async function assinar(): Promise<void> {
             /></label>
             <SanteBotao
               variante="secundario"
+              :rotulo="t('pep.doc.assinaturas.pedirAjuste')"
+              :desabilitado="motivoRecusa.trim().length < 10"
+              :data-testid="`ajuste-${c.id}`"
+              @acionar="decidir(c.id, 'ajuste_solicitado')"
+            />
+            <SanteBotao
+              variante="secundario"
               :rotulo="t('pep.doc.assinaturas.recusar')"
               :desabilitado="motivoRecusa.trim().length < 10"
+              :data-testid="`recusar-${c.id}`"
               @acionar="decidir(c.id, 'recusado')"
             />
           </li>
         </ul>
       </section>
+      <section
+        v-if="(devolvidos.data.value?.itens.length ?? 0) > 0"
+        class="bloco"
+        aria-labelledby="devolvidos-titulo"
+        data-testid="lista-devolvidos"
+      >
+        <h2 id="devolvidos-titulo">{{ t('pep.doc.assinaturas.devolvidos') }}</h2>
+        <ul class="lista">
+          <li
+            v-for="d in devolvidos.data.value?.itens ?? []"
+            :key="d.supervisao"
+            class="cartao linha"
+            :data-testid="`devolvido-${d.registro}`"
+          >
+            <span
+              >{{
+                t(
+                  d.decisao === 'ajuste_solicitado'
+                    ? 'pep.doc.assinaturas.ajustePedido'
+                    : 'pep.doc.assinaturas.foiRecusado',
+                  {
+                    motivo: d.motivo,
+                  },
+                )
+              }}
+              · {{ dataHoraBr(d.decididoEm) }}</span
+            >
+            <RouterLink :to="`/pep/${d.paciente}/registro/${d.registro}`">{{
+              t('pep.doc.assinaturas.verRegistro')
+            }}</RouterLink>
+            <SanteBotao
+              :rotulo="t('pep.doc.assinaturas.pedirDeNovo')"
+              :data-testid="`nova-rodada-${d.registro}`"
+              @acionar="pedirDeNovo(d.registro, d.preceptor)"
+            />
+          </li>
+        </ul>
+      </section>
+      <p v-if="novaRodada !== null" role="status" data-testid="nova-rodada-feita">
+        {{ t('pep.doc.assinaturas.novaRodadaFeita') }}
+      </p>
       <template v-if="coassinado">
         <p role="status" data-testid="coassinatura-feita">{{ t('pep.doc.assinaturas.coassinaturaFeita') }}</p>
         <SanteAlerta v-if="coassinado.aviso" variante="info" :texto="coassinado.aviso" />

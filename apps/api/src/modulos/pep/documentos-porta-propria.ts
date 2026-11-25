@@ -462,7 +462,8 @@ export class PortaDocumentosPropria implements PortaDocumentos {
         `${SQL_DOCUMENTOS} AND ${SQL_LOGIN_DO_AUTOR} = ? AND s.categoria IN (${marcadores(CATEGORIAS_ASSINAVEIS.length)})
             AND (da.id IS NULL OR da.concluido_em IS NULL)
             AND NOT EXISTS (SELECT 1 FROM documento_prontuario_evento ev
-                             WHERE ev.documento_prontuario_id = dp.id AND ev.acao = 'assinatura')
+                             WHERE ev.documento_prontuario_id = dp.id AND ev.acao = 'assinatura'
+                               AND (ev.profissional_id IS NULL OR ev.profissional_id = dp.profissional_id))
           ORDER BY dp.lancado_em, dp.id LIMIT ${TETO_DOCUMENTOS}`,
         [est.id, login, ...CATEGORIAS_ASSINAVEIS],
       );
@@ -656,7 +657,8 @@ export class PortaDocumentosPropria implements PortaDocumentos {
             `SELECT dp.id, dp.versao, dp.profissional_id, dp.situacao_documento_prontuario_id, dp.conteudo,
                     s.categoria, da.hash_conteudo, da.concluido_em, ${SQL_LOGIN_DO_AUTOR} AS autor,
                     (SELECT COUNT(*) FROM documento_prontuario_evento ev
-                      WHERE ev.documento_prontuario_id = dp.id AND ev.acao = 'assinatura') AS assinaturas
+                      WHERE ev.documento_prontuario_id = dp.id AND ev.acao = 'assinatura'
+                        AND (ev.profissional_id IS NULL OR ev.profissional_id = dp.profissional_id)) AS assinaturas
                FROM documento_prontuario dp
                JOIN situacao_documento_prontuario s ON s.id = dp.situacao_documento_prontuario_id
                LEFT JOIN documento_assinado da ON da.id = dp.documento_assinado_id AND da.excluido_em IS NULL
@@ -1143,6 +1145,12 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   }
   coassinarNoNovo(...a: Parameters<PortaDocumentos['coassinarNoNovo']>) {
     return this.pareceres.coassinarNoNovo(...a);
+  }
+  registrosDevolvidos(...a: Parameters<NonNullable<PortaDocumentos['registrosDevolvidos']>>) {
+    return this.pareceres.registrosDevolvidos(...a);
+  }
+  novaRodadaCoassinatura(...a: Parameters<NonNullable<PortaDocumentos['novaRodadaCoassinatura']>>) {
+    return this.pareceres.novaRodadaCoassinatura(...a);
   }
   registrosSemAssinatura(...a: Parameters<PortaDocumentos['registrosSemAssinatura']>) {
     return this.pareceres.registrosSemAssinatura(...a);

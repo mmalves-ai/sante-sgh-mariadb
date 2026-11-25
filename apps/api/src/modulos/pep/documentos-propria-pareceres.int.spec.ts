@@ -618,6 +618,115 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     expect(await porta.coassinaturas(C(), LOGIN)).toEqual([]);
   });
 
+  it('coassinatura (03-PEP L96): o aceite assina o documento como preceptor; ajuste devolve ao autor, que pede nova rodada', async () => {
+    // (a) O aceite da 1ª rodada (teste anterior) gerou o documento do registro e a assinatura do preceptor: evento
+    // "assinatura" com o profissional do preceptor e o resumo do conteúdo, sem contar como a assinatura do autor.
+    const assinaturaPreceptor = await contar(
+      `SELECT COUNT(*) AS n FROM registro_assistencial ra
+         JOIN documento_prontuario dp ON dp.id = ra.documento_prontuario_id AND dp.entidade_origem = 'registro_assistencial'
+         JOIN documento_prontuario_evento ev ON ev.documento_prontuario_id = dp.id AND ev.acao = 'assinatura'
+        WHERE ra.id = ? AND ev.profissional_id = ? AND dp.profissional_id = ?
+          AND JSON_VALUE(ev.dados, '$.papel') = 'preceptor' AND JSON_VALUE(ev.dados, '$.hash') = ?`,
+      [ids.registro, ids.prof, ids.profResidente, HASH],
+    );
+    expect(assinaturaPreceptor).toBe(1);
+    expect(await porta.registrosSemAssinatura(C(), RESIDENTE)).toContainEqual(
+      expect.objectContaining({ registro: ids.registro }),
+    );
+    // A recusa não assina nada.
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM registro_assistencial_supervisao s
+           JOIN registro_assistencial ra ON ra.id = s.registro_assistencial_id
+          WHERE s.id = ? AND ra.documento_prontuario_id IS NULL`,
+        [ids.supervisao2],
+      ),
+    ).toBe(1);
+    const registro2 = Number(
+      (
+        await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (l) =>
+          l.uma('SELECT registro_assistencial_id AS r FROM registro_assistencial_supervisao WHERE id = ?', [
+            ids.supervisao2,
+          ]),
+        )
+      )?.['r'],
+    );
+    // (b) Recusado na 1ª rodada, o registro aparece ao autor como devolvido e só ele pede a nova rodada.
+    expect(await porta.registrosDevolvidos(C(), RESIDENTE)).toEqual([
+      expect.objectContaining({
+        supervisao: ids.supervisao2,
+        registro: registro2,
+        sequencia: 1,
+        decisao: 'recusado',
+      }),
+    ]);
+    expect(
+      await recusa(porta.novaRodadaCoassinatura(G(OUTRO), { registro: registro2, preceptor: ids.prof })),
+    ).toEqual({
+      codigo: 'sem-permissao',
+      status: 403,
+    });
+    expect(
+      await recusa(
+        porta.novaRodadaCoassinatura(G(RESIDENTE), { registro: registro2, preceptor: ids.profResidente }),
+      ),
+    ).toEqual({ codigo: 'preceptor-e-autor', status: 422 });
+    expect(
+      await recusa(
+        porta.novaRodadaCoassinatura(G(RESIDENTE), { registro: ids.registro, preceptor: ids.prof }),
+      ),
+    ).toEqual({
+      codigo: 'registro-coassinado',
+      status: 409,
+    });
+    const r2 = await porta.novaRodadaCoassinatura(G(RESIDENTE), { registro: registro2, preceptor: ids.prof });
+    expect(r2).toMatchObject({ sequencia: 2, paciente: ids.paciente });
+    expect(
+      await recusa(porta.novaRodadaCoassinatura(G(RESIDENTE), { registro: registro2, preceptor: ids.prof })),
+    ).toEqual({
+      codigo: 'rodada-pendente',
+      status: 409,
+    });
+    expect(await porta.registrosDevolvidos(C(), RESIDENTE)).toEqual([]);
+    // (c) O preceptor pede ajuste: motivo curto recusa (422) sem gravar; com o motivo, a rodada fica devolvida.
+    expect(
+      await recusa(
+        porta.coassinarNoNovo(G(), { id: r2.supervisao, decisao: 'ajuste_solicitado', motivo: 'curto' }),
+      ),
+    ).toEqual({ codigo: 'motivo-obrigatorio', status: 422 });
+    await porta.coassinarNoNovo(G(), {
+      id: r2.supervisao,
+      decisao: 'ajuste_solicitado',
+      motivo: 'Descrever a ausculta pulmonar',
+    });
+    expect(await porta.registrosDevolvidos(C(), RESIDENTE)).toEqual([
+      expect.objectContaining({ supervisao: r2.supervisao, sequencia: 2, decisao: 'ajuste_solicitado' }),
+    ]);
+    // 3ª rodada, aceita: o registro finaliza e as rodadas anteriores ficam como histórico (nada apagado).
+    const r3 = await porta.novaRodadaCoassinatura(G(RESIDENTE), { registro: registro2, preceptor: ids.prof });
+    expect(r3.sequencia).toBe(3);
+    await porta.coassinarNoNovo(G(), { id: r3.supervisao, decisao: 'coassinado' });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM registro_assistencial_supervisao s
+           JOIN registro_assistencial ra ON ra.id = s.registro_assistencial_id
+          WHERE ra.id = ? AND ra.situacao = 'finalizado' AND ra.documento_prontuario_id IS NOT NULL
+            AND s.excluido_em IS NULL
+            AND ((s.sequencia = 1 AND s.situacao = 'recusado') OR (s.sequencia = 2 AND s.situacao = 'ajuste_solicitado'
+                 AND s.motivo = 'Descrever a ausculta pulmonar') OR (s.sequencia = 3 AND s.situacao = 'coassinado'))`,
+        [registro2],
+      ),
+    ).toBe(3);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM documento_prontuario_evento ev
+           JOIN registro_assistencial ra ON ra.documento_prontuario_id = ev.documento_prontuario_id
+          WHERE ra.id = ? AND ev.acao = 'assinatura' AND JSON_VALUE(ev.dados, '$.sequencia') = 3`,
+        [registro2],
+      ),
+    ).toBe(1);
+  });
+
   it('problemas: inclusão, mudança por nova versão, conflito de versão e descarte com justificativa', async () => {
     const base = {
       paciente: ids.paciente,

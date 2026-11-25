@@ -126,3 +126,71 @@ export function novaRodadaDeCoassinatura(
   const pedido = pedidoDeCoassinatura(p);
   return { ...pedido, sequencia: Math.max(...rodadas.map((r) => r.sequencia)) + 1 };
 }
+
+/** A decisão do preceptor sobre a rodada pendente (03-PEP L96; CFM, supervisão da residência; SBIS NGS2). */
+export const DECISOES_COASSINATURA = ['coassinado', 'ajuste_solicitado', 'recusado'] as const;
+export type DecisaoCoassinatura = (typeof DECISOES_COASSINATURA)[number];
+/** O motivo da recusa ou do pedido de ajuste tem de dizer o que rever: no mínimo 10 caracteres úteis. */
+export const MOTIVO_DECISAO_MINIMO = 10;
+
+export class RecusaDecisaoCoassinatura extends Error {
+  constructor(
+    readonly codigo: 'sem-permissao' | 'coassinatura-encerrada' | 'motivo-obrigatorio',
+    mensagem: string,
+  ) {
+    super(mensagem);
+  }
+}
+
+export interface DecisaoPedida {
+  /** Situação atual da rodada. */
+  readonly situacaoRodada: RodadaCoassinatura['situacao'];
+  /** Preceptor indicado na rodada e o profissional da sessão que decide. */
+  readonly preceptor: number;
+  readonly decisor: number;
+  readonly decisao: DecisaoCoassinatura;
+  readonly motivo?: string | null | undefined;
+  /** Outras rodadas ainda pendentes do mesmo registro (sem contar esta). */
+  readonly outrasPendentes: number;
+}
+
+export interface DecisaoGravavel {
+  readonly situacao: DecisaoCoassinatura;
+  readonly motivo: string | null;
+  /** Coassinado o último pedido pendente: o registro sai de "aguardando coassinatura" e fica finalizado. */
+  readonly finalizaRegistro: boolean;
+  /** Só o aceite gera a assinatura do preceptor no documento do prontuário; recusa e ajuste não assinam nada. */
+  readonly assinaturaDoPreceptor: boolean;
+  /** Recusa e ajuste devolvem o registro ao autor, que pede nova rodada (o mesmo ou outro preceptor). */
+  readonly devolveAoAutor: boolean;
+}
+
+/**
+ * A decisão do preceptor. Recusa: quem decide não é o preceptor indicado; a rodada já foi decidida; recusa ou pedido de
+ * ajuste sem o motivo (no mínimo 10 caracteres). O motivo do aceite, se vier, é ignorado.
+ */
+export function decidirCoassinatura(p: DecisaoPedida): DecisaoGravavel {
+  if (p.decisor !== p.preceptor)
+    throw new RecusaDecisaoCoassinatura('sem-permissao', 'Só o preceptor indicado coassina este registro.');
+  if (p.situacaoRodada !== 'pendente')
+    throw new RecusaDecisaoCoassinatura(
+      'coassinatura-encerrada',
+      'O registro já foi coassinado, devolvido para ajuste ou recusado.',
+    );
+  const motivo = p.motivo?.trim() || null;
+  if (p.decisao !== 'coassinado' && (motivo === null || motivo.length < MOTIVO_DECISAO_MINIMO))
+    throw new RecusaDecisaoCoassinatura(
+      'motivo-obrigatorio',
+      p.decisao === 'recusado'
+        ? 'A recusa da coassinatura exige o motivo.'
+        : 'O pedido de ajuste exige dizer o que ajustar.',
+    );
+  const aceite = p.decisao === 'coassinado';
+  return {
+    situacao: p.decisao,
+    motivo: aceite ? null : motivo!.slice(0, 500),
+    finalizaRegistro: aceite && p.outrasPendentes === 0,
+    assinaturaDoPreceptor: aceite,
+    devolveAoAutor: !aceite,
+  };
+}
