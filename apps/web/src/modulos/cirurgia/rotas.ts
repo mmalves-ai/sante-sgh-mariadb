@@ -54,6 +54,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     component: () => import('./telas/TextosPadraoTela.vue'),
     meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Textos padrão da descrição` },
   },
+  {
+    // F8, 04-CC L105: cartão de preferência do cirurgião (sugestão para o mapa e o gasto de sala).
+    path: '/cirurgia/cartoes-preferencia',
+    name: 'cirurgia.cartoes-preferencia',
+    component: () => import('./telas/CartoesPreferenciaTela.vue'),
+    meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Cartões de preferência do cirurgião` },
+  },
   // M46 (etapa 1): APA, ficha anestésica e SRPA (a escrita sob a chave bloco.ficha; a leitura pela permissão).
   {
     path: `/bloco/apa/:agenda${id}?`,

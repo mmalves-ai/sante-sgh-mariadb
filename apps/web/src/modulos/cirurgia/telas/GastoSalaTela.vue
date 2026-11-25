@@ -27,6 +27,7 @@ import {
   type LoteGasto,
   reabrirGasto,
 } from '../api-gasto-sala.js';
+import { lerCartaoAplicavel } from '../api-cartao-preferencia.js';
 import ErroCirurgia from '../componentes/ErroCirurgia.vue';
 
 const props = defineProps<{ ato: string }>();
@@ -105,6 +106,33 @@ function usarSugestao(): void {
         nome: s.insumoNome,
         controlaLote: false,
       });
+}
+
+// F8, 04-CC L105: os produtos do cartão de preferência do cirurgião (o do procedimento ou o geral), num clique.
+const avisoCartao = ref('');
+async function usarCartao(): Promise<void> {
+  const d = dados.value;
+  if (!d?.cirurgiaoLista) return;
+  try {
+    const r = await lerCartaoAplicavel(d.cirurgiaoLista, d.ato.procedimentos[0]?.id ?? null);
+    avisoCartao.value = r.gasto.length ? '' : t('cirurgia.cartaoPreferencia.cartaoVazio');
+    const ja = new Set(itens.value.map((i) => i.insumo));
+    for (const g of r.gasto)
+      if (!ja.has(g.insumo)) {
+        nomes.value.set(g.insumo, g.insumoNome);
+        itens.value.push({
+          insumo: g.insumo,
+          quantidade: g.quantidade,
+          lote: null,
+          implantePermanente: false,
+          faturar: true,
+          nome: g.insumoNome,
+          controlaLote: false,
+        });
+      }
+  } catch (e) {
+    erro.value = e;
+  }
 }
 
 // ── Apoio: locais, busca de produto e lotes ──
@@ -311,6 +339,14 @@ const incluirNaLista = (p: { id: number; nome: string }) =>
           data-testid="gasto-usar-sugestao"
           @acionar="usarSugestao"
         />
+        <SanteBotao
+          v-if="editavel && dados.cirurgiaoLista"
+          variante="secundario"
+          :rotulo="t('cirurgia.cartaoPreferencia.usarCartao')"
+          data-testid="gasto-usar-cartao"
+          @acionar="usarCartao"
+        />
+        <p v-if="avisoCartao" role="status" data-testid="gasto-aviso-cartao">{{ avisoCartao }}</p>
         <p v-if="!itens.length">{{ t('cirurgia.gastoSala.nenhumItem') }}</p>
         <table v-else class="tabela" data-testid="gasto-tabela">
           <thead>
