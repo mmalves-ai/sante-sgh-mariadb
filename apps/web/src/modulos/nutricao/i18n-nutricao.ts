@@ -1,9 +1,11 @@
 // Textos das telas da nutrição clínica, do serviço de nutrição e dietética e do serviço social (M45, etapa 5). Textos de
 // produto (ADR 0023): só o que a pessoa faz aqui.
+import { mensagensCardapio } from './i18n-cardapio.js';
 import { mensagensOcorrenciaRefeicao } from './i18n-ocorrencia-refeicao.js';
 
 export const mensagensNutricao = {
   ocorrencias: mensagensOcorrenciaRefeicao,
+  cardapio: mensagensCardapio,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   cortada: 'A lista passou do limite e foi cortada; filtre por unidade.',

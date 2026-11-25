@@ -3,6 +3,8 @@
 // que o usuário vê, de tools/matriz/src/rotulos-de-produto.ts.
 import type { ContagemMenu, ItemMenu } from './tipos.js';
 
+// C2-098 (04-HOT L141, F8): o item "Cardápio, ficha técnica e produção" do serviço de nutrição entrou à mão (mesmo
+// motivo); a contagem acompanha.
 // C2-086 (06-FAT L30, F3): o item "Apresentação TISS por fonte pagadora" dos convênios entrou à mão (mesmo motivo); a
 // contagem acompanha.
 // C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
@@ -121,7 +123,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":491,"M":198,"P":57,"N":236};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":492,"M":198,"P":57,"N":237};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -444,6 +446,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"hotelaria-e-apoio.same-e-arquivo.digitalizacao-certificada-lei-13-787-2018","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","SAME e arquivo","Digitalização certificada"],"titulo":"Digitalização certificada","selo":"N","fase":5,"rota":"/same/digitalizacao","permissao":"hotelaria.digitalizacao.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.dietas-e-tipos-de-dieta","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Dietas e tipos de dieta"],"titulo":"Dietas e tipos de dieta","selo":"M","fase":2,"rota":"/hotelaria/nutricao/dietas","permissao":"internacao.dieta.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.mapa-de-dietas-por-unidade-e-refeicao","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Mapa de dietas por unidade e refeição"],"titulo":"Mapa de dietas por unidade e refeição","selo":"N","fase":5,"rota":"/nutricao/mapa","permissao":"hotelaria.mapaDieta.ler"},
+  {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.cardapio-ficha-tecnica-e-producao","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Cardápio, ficha técnica e produção"],"titulo":"Cardápio, ficha técnica e produção","selo":"N","fase":7,"rota":"/nutricao/cardapio","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.etiqueta-de-bandeja-e-dieta-do-acompanhante","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Etiqueta de bandeja e dieta do acompanhante"],"titulo":"Etiqueta de bandeja e dieta do acompanhante","selo":"N","fase":5,"rota":"/nutricao/mapa?aba=etiquetas","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.cadastro-de-visitantes-e-cracha","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Cadastro de visitantes e crachá"],"titulo":"Cadastro de visitantes e crachá","selo":"N","fase":5,"rota":"/portaria","permissao":"hotelaria.visita.ler"},
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.regras-e-bloqueio-de-visita-por-paciente","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Regras e bloqueio de visita por paciente"],"titulo":"Regras e bloqueio de visita por paciente","selo":"N","fase":5,"rota":"/portaria/regras","permissao":"hotelaria.visita.regrar"},
