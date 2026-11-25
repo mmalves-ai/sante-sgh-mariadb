@@ -65,6 +65,9 @@ test.describe('Reconciliação pela lista de uso contínuo @C1-031 @fase7', () =
     const just = cartaoSusp.locator('[data-testid^="recon-uso-justificativa-"]');
     await expect(just).toHaveAttribute('aria-invalid', 'true');
     await expect(lista.getByTestId('recon-lista-registrar')).toBeDisabled();
+    // O aviso da justificativa em falta tem de ser legível (contraste) enquanto está na tela.
+    await expect(cartaoSusp.locator('[id^="recon-uso-just-msg-"]')).toBeVisible();
+    await semViolacaoAxe(page, 'reconciliação com justificativa em falta');
     await just.fill('Mialgia SINTETICA na admissão.');
     await expect(just).toHaveAttribute('aria-invalid', 'false');
     await expect(lista.getByTestId('recon-lista-registrar')).toBeEnabled();

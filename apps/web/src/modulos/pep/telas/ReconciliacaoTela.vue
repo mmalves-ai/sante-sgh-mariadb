@@ -421,7 +421,7 @@ input {
   flex-basis: 100%;
 }
 .falta {
-  color: var(--sgh-alerta-texto);
+  color: var(--sgh-alerta);
 }
 .registro h3 {
   font-size: var(--sgh-fonte-base);
