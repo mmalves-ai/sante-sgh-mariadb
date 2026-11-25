@@ -99,5 +99,10 @@ export const mensagensCopiasProntuario = {
     inativa: 'Inativa',
     previa: 'Prévia',
     semRegra: 'Sem regra: usa os dados do estabelecimento.',
+    cancelar: 'Cancelar a alteração',
+    alterar: 'Alterar',
+    alcance: 'Vale para',
+    deste: 'Este estabelecimento',
+    semMarcacao: 'Sem marcação (< >) nem endereço da internet',
   },
 };

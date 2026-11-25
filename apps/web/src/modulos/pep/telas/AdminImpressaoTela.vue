@@ -14,6 +14,11 @@ const q = useQuery({ queryKey: ['pep', 'admin', 'impressao'], queryFn: () => lis
   <section class="tela" aria-labelledby="adm-impressao-titulo" data-testid="tela-admin-impressao">
     <h1 id="adm-impressao-titulo">{{ t('pep.reg.admin.impressao.titulo') }}</h1>
     <p>{{ t('pep.reg.admin.impressao.texto') }}</p>
+    <p>
+      <RouterLink :to="{ name: 'pep.admin.impressao.cabecalhos' }" data-testid="link-cabecalhos-impressao">{{
+        t('pep.copias.cab.titulo')
+      }}</RouterLink>
+    </p>
     <MensagemErro v-if="q.isError.value" :erro="q.error.value" />
     <p v-else-if="!q.data.value" role="status">{{ t('pep.reg.carregando') }}</p>
     <template v-else>

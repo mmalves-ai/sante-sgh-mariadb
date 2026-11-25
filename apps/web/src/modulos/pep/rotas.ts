@@ -97,6 +97,28 @@ export const rotasPep: RouteRecordRaw[] = [
     },
   },
   {
+    // 03-PEP L131: cabeçalho e rodapé da impressão por tipo de documento (regra mais específica, prévia, sem apagar).
+    path: '/pep/admin/impressao/cabecalhos',
+    name: 'pep.admin.impressao.cabecalhos',
+    component: () => import('./telas/CabecalhosImpressaoTela.vue'),
+    meta: { permissao: 'pep.admin.ler' },
+  },
+  {
+    // 03-PEP L131: cópia do prontuário no balcão (fila dos pedidos em aberto, com atraso em destaque).
+    path: '/pep/copias-prontuario',
+    name: 'pep.copiasProntuario',
+    component: () => import('./telas/CopiasProntuarioTela.vue'),
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
+    // 03-PEP L131: visão por paciente dos pedidos de cópia (pedido novo, próximo passo, entrega com quem recebeu).
+    path: `/pep/paciente/:paciente${id}/copias-prontuario`,
+    name: 'pep.copiasProntuario.paciente',
+    component: () => import('./telas/CopiasProntuarioTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     path: '/pep/admin/tipos',
     name: 'pep.admin.tipos',
     component: () => import('./telas/AdminTiposTela.vue'),

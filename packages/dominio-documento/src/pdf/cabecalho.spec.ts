@@ -6,6 +6,7 @@ import {
   resolverCabecalho,
   validarRegraCabecalho,
 } from './cabecalho.js';
+import { htmlDocumento } from './modelo.js';
 
 const r = (p: Partial<RegraCabecalho>): RegraCabecalho => ({
   id: 1,
@@ -86,5 +87,42 @@ describe('regra de cabeçalho', () => {
     expect(montarCabecalho(r({ fonte: 'mantenedora' }), est, { ...est, nome: 'Mantenedora' }).linhas[0]).toBe(
       'Mantenedora',
     );
+  });
+
+  it('o documento imprime as linhas da regra no cabeçalho e o rodapé antes da validação, escapados', () => {
+    const m = montarCabecalho(
+      r({ fonte: 'personalizado', cabecalho: 'Ala <B>\nServiço de arquivo', rodape: 'Cópia fiel' }),
+      est,
+      null,
+    );
+    const html = htmlDocumento({
+      titulo: 'Cópia',
+      produto: 'SGH',
+      estabelecimento: 'Hospital Sintético',
+      emitidoEm: '25/11/2026',
+      via: null,
+      campos: [],
+      qrSvg: '<svg></svg>',
+      identificadorQr: 'X',
+      fontesCss: '',
+      cabecalhoLinhas: m.linhas,
+      rodapeLinhas: m.rodape,
+    });
+    expect(html).toContain('Ala &lt;B&gt;<br>Serviço de arquivo');
+    expect(html).not.toContain('<div>Hospital Sintético</div>');
+    expect(html.indexOf('<p class="rodape">Cópia fiel</p>')).toBeLessThan(html.indexOf('<footer>'));
+    const padrao = htmlDocumento({
+      titulo: 'T',
+      produto: 'SGH',
+      estabelecimento: 'Hospital Sintético',
+      emitidoEm: '25/11/2026',
+      via: null,
+      campos: [],
+      qrSvg: '',
+      identificadorQr: 'X',
+      fontesCss: '',
+    });
+    expect(padrao).toContain('<div>Hospital Sintético</div>');
+    expect(padrao).not.toContain('class="rodape"');
   });
 });

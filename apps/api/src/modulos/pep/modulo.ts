@@ -68,6 +68,13 @@ import { NotasPacientePropria } from './notas-paciente-propria.js';
 import { TERMINOLOGIA_CLINICA, TerminologiaClinicaController } from './terminologia-clinica.controller.js';
 import { TerminologiaClinicaPropria } from './terminologia-clinica-propria.js';
 import { ObrigatoriedadeDocumentoController } from './obrigatoriedade-documento.controller.js';
+import { CopiaProntuarioBalcaoController } from './copia-prontuario-balcao.controller.js';
+import {
+  PORTA_COPIA_PRONTUARIO_BALCAO,
+  PortaCopiaProntuarioBalcaoPropria,
+} from './copia-prontuario-balcao-propria.js';
+import { CabecalhoImpressaoController } from './cabecalho-impressao.controller.js';
+import { PORTA_CABECALHO_IMPRESSAO, PortaCabecalhoImpressaoPropria } from './cabecalho-impressao-propria.js';
 import {
   PORTA_OBRIGATORIEDADE_DOCUMENTO,
   PortaObrigatoriedadeDocumentoPropria,
@@ -208,6 +215,8 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       NotasPacienteController,
       TerminologiaClinicaController,
       ObrigatoriedadeDocumentoController,
+      CopiaProntuarioBalcaoController,
+      CabecalhoImpressaoController,
       AnotacoesAdministrativasController,
       ResultadosGruposController,
     ],
@@ -288,6 +297,21 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new NotasPacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L131: cópia do prontuário no balcão e cabeçalho da impressão por tipo de documento; sem núcleo, 503.
+      {
+        provide: PORTA_COPIA_PRONTUARIO_BALCAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCopiaProntuarioBalcaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      {
+        provide: PORTA_CABECALHO_IMPRESSAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCabecalhoImpressaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L132: documentos exigidos por diagnóstico, idade ou setor (regras e lista do profissional); sem núcleo, 503.

@@ -41,6 +41,12 @@ export interface DadosDocumento {
    * sem o campo, ou com 1, sai uma só, sem a marca.
    */
   readonly copias?: number;
+  /**
+   * 03-PEP L131: as linhas do cabeçalho e do rodapé pela regra do tipo de documento (montarCabecalho). Com elas, o
+   * cabeçalho imprime essas linhas no lugar do nome do estabelecimento, e o rodapé as traz antes da validação.
+   */
+  readonly cabecalhoLinhas?: readonly string[];
+  readonly rodapeLinhas?: readonly string[];
 }
 
 /** Texto com marcação restrita em HTML: escapa tudo e só então troca `**x**` por negrito e as quebras de linha. */
@@ -84,14 +90,19 @@ export function htmlDocumento(d: DadosDocumento): string {
     )
     .join('');
   const n = copiasDoDocumento(d.copias);
+  const cabecalho = d.cabecalhoLinhas?.length
+    ? d.cabecalhoLinhas.map((l, i) => (i === 0 ? escaparHtml(l) : `<br>${escaparHtml(l)}`)).join('')
+    : escaparHtml(d.estabelecimento);
+  const rodape = (d.rodapeLinhas ?? []).map((l) => `<p class="rodape">${escaparHtml(l)}</p>`).join('');
   const corpo = (k: number) =>
     [
       `<section class="copia">`,
-      `<header><div>${d.logoSvg ?? ''}<div>${escaparHtml(d.estabelecimento)}</div></div>`,
+      `<header><div>${d.logoSvg ?? ''}<div>${cabecalho}</div></div>`,
       `${d.via ? `<div class="via">${escaparHtml(d.via)}</div>` : ''}${n > 1 ? `<div class="via">Cópia ${k} de ${n}</div>` : ''}</header>`,
       `<h1>${escaparHtml(d.titulo)}</h1>`,
       d.marcaSuporte ? `<p class="suporte">${escaparHtml(d.marcaSuporte)}</p>` : '',
       `<table>${campos}</table>`,
+      rodape,
       `<footer>${d.qrSvg}<div>Emitido em ${escaparHtml(d.emitidoEm)} por ${escaparHtml(d.produto)}.`,
       ` Valide pelo QR (código ${escaparHtml(d.identificadorQr)}).`,
       d.certificadoSbis ? ` ${escaparHtml(rodapeCertificacaoSbis(d.certificadoSbis))}` : '',
@@ -110,7 +121,7 @@ export function htmlDocumento(d: DadosDocumento): string {
     'table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid #ccc;padding:4px 6px;vertical-align:top}',
     'th{width:35%;font-weight:600}footer{margin-top:18px;display:flex;gap:12px;align-items:center;font-size:9pt}',
     '.suporte{margin:10px 0;border:2px solid #000;padding:4px 8px;font-weight:700}',
-    'td p{margin:0 0 6px}.copia+.copia{break-before:page}header .via+.via{margin-left:6px}',
+    '.rodape{margin:8px 0 0;font-size:9pt}td p{margin:0 0 6px}.copia+.copia{break-before:page}header .via+.via{margin-left:6px}',
     '</style></head><body>',
     Array.from({ length: n }, (_, i) => corpo(i + 1)).join(''),
     '</body></html>',
