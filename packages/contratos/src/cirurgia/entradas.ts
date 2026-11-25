@@ -180,6 +180,29 @@ export const esquemaParticipacaoPorFuncao = z
   )
   .strict();
 
+/**
+ * Membro da equipe do ato (F3.4, 04-CC linha 95): a função, o profissional, o procedimento (posição no registro; null =
+ * o ato inteiro), a entrada e a saída na sala ("HH:MM"; nulas = o tempo inteiro do paciente na sala) e o percentual
+ * (nulo = o padrão da função). A mesma função pode ter mais de um membro, um depois do outro (troca no meio do ato).
+ */
+export const esquemaMembroEquipe = z
+  .object({
+    funcao: z.enum(
+      Object.keys(funcoesRegistro) as [keyof typeof funcoesRegistro, ...(keyof typeof funcoesRegistro)[]],
+    ),
+    profissional: esquemaProfissional,
+    procedimento: z.number().int().min(0).max(9).nullable(),
+    entrada: esquemaHora.nullable(),
+    saida: esquemaHora.nullable(),
+    percentual: z
+      .number()
+      .min(0, 'O percentual vai de 0 a 100.')
+      .max(100, 'O percentual vai de 0 a 100.')
+      .nullable(),
+  })
+  .strict();
+export type MembroEquipeEntrada = z.infer<typeof esquemaMembroEquipe>;
+
 export const esquemaProcedimentoRealizado = z
   .object({
     procedimento: inteiro.refine((v) => v > 0, 'Informe o procedimento.'),
@@ -236,6 +259,11 @@ export const esquemaRegistrarCirurgia = z
     procedimentos: z.array(esquemaProcedimentoRealizado).min(1).max(10),
     /** Entrada, saída e percentual de cada função da equipe (vale para o membro em todos os procedimentos). */
     participacao: esquemaParticipacaoPorFuncao.optional(),
+    /**
+     * Equipe como lista de membros (troca no meio do ato e tempos por procedimento). Quando vem, substitui a equipe de
+     * cada procedimento e a participação por função.
+     */
+    membros: z.array(esquemaMembroEquipe).min(1).max(60).optional(),
     /**
      * M46 (etapa 2, regra 2): com a trava da incisão ligada, o ato sem agendamento com a hora da incisão é a exceção
      * do supervisor, só em urgência e com o motivo (10 a 100 caracteres; vai à trilha da exceção). Ignorado nos demais.

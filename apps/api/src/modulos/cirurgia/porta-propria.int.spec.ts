@@ -995,6 +995,82 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
         op(m.est),
       ),
     ).rejects.toThrow(/tempos-invalidos/);
+    // Equipe como lista de membros (F3.4, 04-CC linha 95, C2-001): troca de cirurgião no meio do ato, cada um com a
+    // sua entrada e saída; o principal é o que entrou primeiro; a sobreposição na mesma função é recusada sem escrita.
+    const comMembros = {
+      ...entrada,
+      agendamento: null,
+      participacao: undefined,
+      membros: [
+        {
+          funcao: 'cirurgiao',
+          profissional: { id: m.cirurgiao, cod: m.cirurgiao },
+          procedimento: null,
+          entrada: null,
+          saida: '16:40',
+          percentual: null,
+        },
+        {
+          funcao: 'cirurgiao',
+          profissional: { id: m.anestesista, cod: m.anestesista },
+          procedimento: 0,
+          entrada: '16:40',
+          saida: null,
+          percentual: 80,
+        },
+      ],
+    };
+    const atos = async () =>
+      Number(
+        (
+          await ler<Record<string, unknown>>(
+            'SELECT COUNT(*) AS n FROM ato_cirurgico WHERE estabelecimento_id = ?',
+            [m.est],
+          )
+        )[0]?.['n'],
+      );
+    const antes = await atos();
+    await expect(
+      porta.executar(
+        ctx(m.est),
+        'cirurgia.registrarCirurgia',
+        { ...comMembros, membros: comMembros.membros.map((x) => ({ ...x, entrada: x.entrada && '16:30' })) },
+        op(m.est),
+      ),
+    ).rejects.toThrow(/participacao-invalida/);
+    expect(await atos()).toBe(antes);
+    const r2 = await porta.executar(ctx(m.est), 'cirurgia.registrarCirurgia', comMembros, op(m.est));
+    expect(
+      await ler(
+        `SELECT p.profissional_id AS prof, f.codigo AS funcao, p.principal,
+                TIMESTAMPDIFF(MINUTE, t.entrada_sala_em, p.entrada_em) AS entrada,
+                TIMESTAMPDIFF(MINUTE, t.entrada_sala_em, p.saida_em) AS saida, p.percentual_participacao AS perc,
+                p.ato_cirurgico_procedimento_id IS NOT NULL AS com_proc
+           FROM participante_cirurgia p JOIN funcao_equipe_cirurgica f ON f.id = p.funcao_equipe_cirurgica_id
+           JOIN ato_cirurgico t ON t.id = p.ato_cirurgico_id
+          WHERE p.ato_cirurgico_id = ? ORDER BY p.sequencia`,
+        [Number(r2.resultado['cirurgia'])],
+      ),
+    ).toEqual([
+      {
+        prof: m.cirurgiao,
+        funcao: 'cirurgiao',
+        principal: 1,
+        entrada: null,
+        saida: 45,
+        perc: '100.0000',
+        com_proc: 1,
+      },
+      {
+        prof: m.anestesista,
+        funcao: 'cirurgiao',
+        principal: 0,
+        entrada: 45,
+        saida: null,
+        perc: '80.0000',
+        com_proc: 1,
+      },
+    ]);
   });
 
   it('leituras de catálogo: opções, profissionais, procedimentos e paciente', async () => {

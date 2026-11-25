@@ -27,7 +27,10 @@ import {
   conferirConfirmacaoCirurgia,
   conferirDocumentosCirurgia,
   conferirHorarioNaSala,
+  conferirMembrosEquipe,
   conferirParticipacao,
+  membrosDoProcedimento,
+  principalDoAto,
   conferirTempos,
   conferirTransicao,
   TECNICAS,
@@ -951,6 +954,18 @@ const registrar = definirOperacao<RegistrarCirurgiaEntrada, ResultadoOperacao>({
       string,
       { entrada: Date | null; saida: Date | null; percentual: number | null }
     >();
+    // Equipe como lista de membros (troca no meio do ato e tempos por procedimento): conferida antes de gravar.
+    const membros = e.membros
+      ? conferirMembrosEquipe(
+          e.membros.map((x) => ({ ...x, profissional: x.profissional.id })),
+          { entrada: salaEntrada, saida: salaSaida },
+          e.procedimentos.length,
+        )
+      : null;
+    if (membros && !membros.ok)
+      throw recusa('participacao-invalida', membros.problema.texto, {
+        campos: [`membros.${membros.problema.indice}.${membros.problema.campo}`],
+      });
     for (const f of FUNCOES_REGISTRO) {
       const informado = e.participacao?.[f] ?? { entrada: null, saida: null, percentual: null };
       const r = conferirParticipacao(f, informado, { entrada: salaEntrada, saida: salaSaida });
@@ -973,6 +988,29 @@ const registrar = definirOperacao<RegistrarCirurgiaEntrada, ResultadoOperacao>({
         principal: i === 0,
         tecnica: TECNICAS.find((x) => x.codigo === p.tecnica)?.rotulo ?? null,
       });
+      if (membros?.ok) {
+        const principal = principalDoAto(membros.membros);
+        for (const mb of membrosDoProcedimento(membros.membros, i)) {
+          if (!funcoes.has(mb.funcao))
+            funcoes.set(
+              mb.funcao,
+              await idPorCodigo(tx, 'funcao_equipe_cirurgica', mb.funcao, 'A função da equipe'),
+            );
+          const emData = (m: number) => new Date(inicioSala.getTime() + m * 60_000);
+          await tx.incluir('participante_cirurgia', {
+            ato_cirurgico_id: id,
+            sequencia: ++participante,
+            profissional_id: mb.profissional,
+            funcao_equipe_cirurgica_id: funcoes.get(mb.funcao),
+            ato_cirurgico_procedimento_id: proc,
+            principal: i === 0 && mb === principal,
+            entrada_em: mb.entradaInformada ? emData(mb.entradaMin) : null,
+            saida_em: mb.saidaInformada ? emData(mb.saidaMin) : null,
+            percentual_participacao: mb.percentual,
+          });
+        }
+        continue;
+      }
       for (const f of FUNCOES_REGISTRO) {
         const pr = p.equipe[f];
         if (!pr) continue;

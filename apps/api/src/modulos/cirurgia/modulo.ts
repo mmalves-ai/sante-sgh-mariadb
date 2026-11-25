@@ -47,6 +47,11 @@ import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js
 import { KitAgendamentoController } from './kit-agendamento.controller.js';
 import { ReservaCirurgiaController } from './reserva-cirurgia.controller.js';
 import { DocumentosCirurgiaController } from './documentos-cirurgia.controller.js';
+import { ProfilaxiaCirurgicaController } from './profilaxia-cirurgica.controller.js';
+import {
+  PORTA_PROFILAXIA_CIRURGICA,
+  PortaProfilaxiaCirurgicaPropria,
+} from './profilaxia-cirurgica-propria.js';
 import { PORTA_DOCUMENTOS_CIRURGIA, PortaDocumentosCirurgiaPropria } from './documentos-cirurgia-propria.js';
 import { ProcedimentoCirurgicoController } from './procedimento-cirurgico.controller.js';
 import {
@@ -54,6 +59,8 @@ import {
   PortaProcedimentoCirurgicoPropria,
 } from './procedimento-cirurgico-propria.js';
 import { PORTA_KIT_AGENDAMENTO, PortaKitAgendamentoPropria } from './kit-agendamento-propria.js';
+import { EquipeRealizadaController } from './equipe-realizada.controller.js';
+import { PORTA_EQUIPE_REALIZADA, PortaEquipeRealizadaPropria } from './equipe-realizada-propria.js';
 import { PORTA_RESERVA_CIRURGIA, PortaReservaCirurgiaPropria } from './reserva-cirurgia-propria.js';
 
 export interface OpcoesModuloCirurgia {
@@ -133,8 +140,10 @@ export async function moduloCirurgia(
       GastoSalaController,
       GradeSalaController,
       KitAgendamentoController,
+      EquipeRealizadaController,
       ReservaCirurgiaController,
       DocumentosCirurgiaController,
+      ProfilaxiaCirurgicaController,
       ProcedimentoCirurgicoController,
     ],
     providers: [
@@ -178,6 +187,14 @@ export async function moduloCirurgia(
         provide: PORTA_GRADE_SALA,
         useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaGradeSalaPropria(ctx.nucleo) : null,
       },
+      // F3.4 (04-CC linha 95): equipe realizada do ato e a ponte com o item da conta; sem núcleo, 503.
+      {
+        provide: PORTA_EQUIPE_REALIZADA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaEquipeRealizadaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F3.6 (05-SUP linha 13): kit padrão sugerido e aplicado no agendamento cirúrgico; sem núcleo, 503.
       {
         provide: PORTA_KIT_AGENDAMENTO,
@@ -200,6 +217,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaDocumentosCirurgiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-CC linha 106): protocolo e auditoria da profilaxia antimicrobiana cirúrgica; sem núcleo, 503.
+      {
+        provide: PORTA_PROFILAXIA_CIRURGICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProfilaxiaCirurgicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.4 (04-CC linha 91): cadastro do procedimento cirúrgico no banco do cliente; sem núcleo, 503.

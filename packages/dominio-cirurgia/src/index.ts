@@ -5,6 +5,7 @@ export * from './tempo.js';
 export * from './sobreposicao.js';
 export * from './equipe.js';
 export * from './participacao.js';
+export * from './membros-equipe.js';
 export * from './estados.js';
 export * from './agenda-modelo.js';
 export * from './ligacao.js';
@@ -37,3 +38,4 @@ export * from './procedimento-cirurgico.js';
 export * from './autorizacao-convenio.js';
 // F8 (04-CC linha 104): documentos obrigatórios antes da cirurgia, com bloqueio do início.
 export * from './documentos-pre-operatorio.js';
+export * from './profilaxia-cirurgica.js';

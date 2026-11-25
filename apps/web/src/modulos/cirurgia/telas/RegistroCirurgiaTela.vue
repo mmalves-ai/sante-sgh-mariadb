@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { conferirTempos, porteSugerido } from '@sgh/dominio-cirurgia';
+import { conferirMembrosEquipe, conferirTempos, porteSugerido } from '@sgh/dominio-cirurgia';
 import { dataBr, horaDoContrato } from '../../agenda/formato.js';
 import { PERCENTUAL_PADRAO_FUNCAO } from '@sgh/dominio-cirurgia';
 import {
@@ -99,17 +99,60 @@ const CAMPOS_HORA = [
   'incisao',
   'saidaSala',
 ] as const;
-/** Participação por função (F3.4): entrada e saída na sala e percentual; em branco = o ato inteiro e o padrão. */
-const FUNCOES_PARTICIPACAO = ['cirurgiao', 'anestesista', 'auxiliar1'] as const;
-const participacao = reactive<
-  Record<(typeof FUNCOES_PARTICIPACAO)[number], { entrada: string; saida: string; percentual: string }>
->({
-  cirurgiao: { entrada: '', saida: '', percentual: '' },
-  anestesista: { entrada: '', saida: '', percentual: '' },
-  auxiliar1: { entrada: '', saida: '', percentual: '' },
+/**
+ * Equipe como lista de membros (F3.4, 04-CC linha 95): cada linha é um membro com a função, o profissional, a entrada,
+ * a saída e o percentual; em branco = o ato inteiro e o padrão da função. A troca no meio do ato é outra linha da mesma
+ * função (a saída de um é a entrada do outro). As escolhas de cirurgião, anestesista e 1º auxiliar abrem a linha.
+ */
+const FUNCOES_MEMBRO_TELA = [
+  'cirurgiao',
+  'auxiliar1',
+  'auxiliar2',
+  'auxiliar3',
+  'instrumentador',
+  'anestesista',
+  'pediatra',
+  'circulante',
+] as const;
+type FuncaoTela = (typeof FUNCOES_MEMBRO_TELA)[number];
+interface LinhaMembro {
+  chave: number;
+  funcao: FuncaoTela;
+  profissional: string;
+  entrada: string;
+  saida: string;
+  percentual: string;
+}
+let proximaChave = 0;
+const membros = ref<LinhaMembro[]>([]);
+const novaLinha = (funcao: FuncaoTela, profissional = '', entrada = ''): LinhaMembro => ({
+  chave: ++proximaChave,
+  funcao,
+  profissional,
+  entrada,
+  saida: '',
+  percentual: '',
 });
-const escolhaDaFuncao = (f: (typeof FUNCOES_PARTICIPACAO)[number]) =>
-  f === 'cirurgiao' ? fCirurgiao.value : f === 'anestesista' ? fAnestesista.value : fAuxiliar.value;
+const escolhasFuncao = computed(() =>
+  FUNCOES_MEMBRO_TELA.map((f) => ({ valor: f, rotulo: t(`cirurgia.funcoes.${f}`) })),
+);
+/** Identificador de teste: a primeira linha da função mantém o nome curto (part-cirurgiao-entrada). */
+const idLinha = (l: LinhaMembro) => {
+  const mesmas = membros.value.filter((x) => x.funcao === l.funcao);
+  const i = mesmas.indexOf(l);
+  return i <= 0 ? `part-${l.funcao}` : `part-${l.funcao}-${i + 1}`;
+};
+function adicionarMembro() {
+  membros.value.push(novaLinha('auxiliar2'));
+}
+/** Troca no meio do ato: nova linha da mesma função, entrando na hora em que o anterior saiu. */
+function trocarMembro(l: LinhaMembro) {
+  const i = membros.value.indexOf(l);
+  membros.value.splice(i + 1, 0, novaLinha(l.funcao, '', l.saida));
+}
+function retirarMembro(l: LinhaMembro) {
+  membros.value = membros.value.filter((x) => x !== l);
+}
 const fCid = ref('');
 const fPressao = ref('');
 const fPulso = ref('');
@@ -127,6 +170,20 @@ const fTecnica = ref('0');
 const fCirurgiao = ref('');
 const fAnestesista = ref('');
 const fAuxiliar = ref('');
+// As escolhas principais abrem (ou atualizam) a primeira linha da função na equipe.
+watch([fCirurgiao, fAnestesista, fAuxiliar], ([cir, an, aux]) => {
+  for (const [f, v] of [
+    ['cirurgiao', cir],
+    ['anestesista', an],
+    ['auxiliar1', aux],
+  ] as const) {
+    const linha = membros.value.find((x) => x.funcao === f);
+    if (linha) {
+      if (v) linha.profissional = v;
+      else if (!linha.entrada && !linha.saida && !linha.percentual) retirarMembro(linha);
+    } else if (v) membros.value.push(novaLinha(f, v));
+  }
+});
 const fAsa = ref('');
 const fObservacao = ref('');
 /** Motivo da exceção da trava da incisão (ato sem agendamento com a hora da incisão; o supervisor, em urgência). */
@@ -208,6 +265,38 @@ const asas = computed(() =>
     t('cirurgia.naoInformada'),
   ),
 );
+/** Os membros com profissional, na forma do contrato (o ato inteiro; horas e percentual em branco = nulos). */
+function membrosDaTela() {
+  return membros.value.flatMap((l) => {
+    const p = profissionalDaEscolha(l.profissional);
+    if (!p) return [];
+    return [
+      {
+        funcao: l.funcao,
+        profissional: p,
+        procedimento: null,
+        entrada: horaDoContrato(l.entrada),
+        saida: horaDoContrato(l.saida),
+        percentual: l.percentual.trim() ? Number(l.percentual.replace(',', '.')) : null,
+      },
+    ];
+  });
+}
+/** Validação na hora da equipe (a mesma regra do domínio): troca sem sobreposição, horas dentro da sala. */
+const problemaEquipe = computed(() => {
+  const entrada = horaDoContrato(horas.entradaSala) ?? horaDoContrato(horas.inicio);
+  const saida = horaDoContrato(horas.saidaSala) ?? horaDoContrato(horas.fim);
+  const lista = membrosDaTela();
+  if (!entrada || !saida || lista.length === 0) return null;
+  const r = conferirMembrosEquipe(
+    lista.map((m) => ({ ...m, profissional: m.profissional.id })),
+    { entrada, saida },
+    1,
+  );
+  return r.ok
+    ? null
+    : `${t(`cirurgia.funcoes.${lista[r.problema.indice]?.funcao ?? 'cirurgiao'}`)}: ${r.problema.texto}`;
+});
 const chave = ref(novaChave('registrar'));
 const pronto = computed(
   () =>
@@ -218,7 +307,8 @@ const pronto = computed(
     procedimento.value !== null &&
     !!profissionalDaEscolha(fCirurgiao.value) &&
     !!tempos.value &&
-    tempos.value.problemas.length === 0,
+    tempos.value.problemas.length === 0 &&
+    problemaEquipe.value === null,
 );
 
 async function registrar(): Promise<void> {
@@ -236,22 +326,7 @@ async function registrar(): Promise<void> {
     const p = profissionalDaEscolha(v);
     if (p) equipe[f] = p;
   }
-  const participacaoInformada = Object.fromEntries(
-    FUNCOES_PARTICIPACAO.filter((f) => equipe[f]).flatMap((f) => {
-      const x = participacao[f];
-      if (!x.entrada.trim() && !x.saida.trim() && !x.percentual.trim()) return [];
-      return [
-        [
-          f,
-          {
-            entrada: h(x.entrada),
-            saida: h(x.saida),
-            percentual: x.percentual.trim() ? Number(x.percentual.replace(',', '.')) : null,
-          },
-        ],
-      ];
-    }),
-  );
+  const membrosInformados = membrosDaTela();
   try {
     const r = await registrarCirurgia(
       {
@@ -292,7 +367,7 @@ async function registrar(): Promise<void> {
             equipe,
           },
         ],
-        ...(Object.keys(participacaoInformada).length ? { participacao: participacaoInformada } : {}),
+        ...(membrosInformados.length ? { membros: membrosInformados } : {}),
         extensao: {
           entradaSala: h(horas.entradaSala),
           incisao: h(horas.incisao),
@@ -425,49 +500,85 @@ async function registrar(): Promise<void> {
       <fieldset class="filtros" data-testid="registro-participacao">
         <legend>{{ t('cirurgia.registro.participacao') }}</legend>
         <p class="secundario">{{ t('cirurgia.registro.participacaoAjuda') }}</p>
-        <template v-for="f in FUNCOES_PARTICIPACAO" :key="f">
-          <div v-if="escolhaDaFuncao(f)" class="filtros">
-            <div class="campo">
-              <label :for="`part-${f}-entrada`">{{
-                t('cirurgia.registro.participacaoEntrada', { funcao: t(`cirurgia.funcoes.${f}`) })
-              }}</label>
-              <input
-                :id="`part-${f}-entrada`"
-                v-model="participacao[f].entrada"
-                maxlength="5"
-                :placeholder="t('cirurgia.registro.horaFormato')"
-                :data-testid="`part-${f}-entrada`"
-              />
-            </div>
-            <div class="campo">
-              <label :for="`part-${f}-saida`">{{
-                t('cirurgia.registro.participacaoSaida', { funcao: t(`cirurgia.funcoes.${f}`) })
-              }}</label>
-              <input
-                :id="`part-${f}-saida`"
-                v-model="participacao[f].saida"
-                maxlength="5"
-                :placeholder="t('cirurgia.registro.horaFormato')"
-                :data-testid="`part-${f}-saida`"
-              />
-            </div>
-            <div class="campo">
-              <label :for="`part-${f}-perc`">{{
-                t('cirurgia.registro.participacaoPercentual', { funcao: t(`cirurgia.funcoes.${f}`) })
-              }}</label>
-              <input
-                :id="`part-${f}-perc`"
-                v-model="participacao[f].percentual"
-                inputmode="decimal"
-                maxlength="6"
-                :placeholder="
-                  PERCENTUAL_PADRAO_FUNCAO[f] === undefined ? '' : String(PERCENTUAL_PADRAO_FUNCAO[f])
-                "
-                :data-testid="`part-${f}-perc`"
-              />
-            </div>
+        <div v-for="l in membros" :key="l.chave" class="filtros" :data-testid="`${idLinha(l)}-linha`">
+          <SanteSelecao
+            v-model="l.funcao"
+            :rotulo="t('cirurgia.registro.membroFuncao')"
+            :opcoes="escolhasFuncao"
+            :data-testid="`${idLinha(l)}-funcao`"
+          />
+          <SanteSelecao
+            v-model="l.profissional"
+            :rotulo="t('cirurgia.registro.membroProfissional')"
+            :opcoes="comVazio(profissionais)"
+            :data-testid="`${idLinha(l)}-profissional`"
+          />
+          <div class="campo">
+            <label :for="`${idLinha(l)}-entrada`">{{
+              t('cirurgia.registro.participacaoEntrada', { funcao: t(`cirurgia.funcoes.${l.funcao}`) })
+            }}</label>
+            <input
+              :id="`${idLinha(l)}-entrada`"
+              v-model="l.entrada"
+              maxlength="5"
+              :placeholder="t('cirurgia.registro.horaFormato')"
+              :data-testid="`${idLinha(l)}-entrada`"
+            />
           </div>
-        </template>
+          <div class="campo">
+            <label :for="`${idLinha(l)}-saida`">{{
+              t('cirurgia.registro.participacaoSaida', { funcao: t(`cirurgia.funcoes.${l.funcao}`) })
+            }}</label>
+            <input
+              :id="`${idLinha(l)}-saida`"
+              v-model="l.saida"
+              maxlength="5"
+              :placeholder="t('cirurgia.registro.horaFormato')"
+              :data-testid="`${idLinha(l)}-saida`"
+            />
+          </div>
+          <div class="campo">
+            <label :for="`${idLinha(l)}-perc`">{{
+              t('cirurgia.registro.participacaoPercentual', { funcao: t(`cirurgia.funcoes.${l.funcao}`) })
+            }}</label>
+            <input
+              :id="`${idLinha(l)}-perc`"
+              v-model="l.percentual"
+              inputmode="decimal"
+              maxlength="6"
+              :placeholder="
+                PERCENTUAL_PADRAO_FUNCAO[l.funcao] === undefined
+                  ? ''
+                  : String(PERCENTUAL_PADRAO_FUNCAO[l.funcao])
+              "
+              :data-testid="`${idLinha(l)}-perc`"
+            />
+          </div>
+          <SanteBotao
+            variante="texto"
+            :rotulo="t('cirurgia.registro.trocarMembro')"
+            :data-testid="`${idLinha(l)}-trocar`"
+            @acionar="trocarMembro(l)"
+          />
+          <SanteBotao
+            variante="texto"
+            :rotulo="t('cirurgia.registro.retirarMembro')"
+            :data-testid="`${idLinha(l)}-retirar`"
+            @acionar="retirarMembro(l)"
+          />
+        </div>
+        <SanteBotao
+          variante="secundario"
+          :rotulo="t('cirurgia.registro.adicionarMembro')"
+          data-testid="registro-membro-adicionar"
+          @acionar="adicionarMembro"
+        />
+        <SanteAlerta
+          v-if="problemaEquipe"
+          variante="alerta"
+          :texto="problemaEquipe"
+          data-testid="registro-membros-problema"
+        />
       </fieldset>
       <p class="secundario">{{ t('cirurgia.registro.tecnicaAConfirmar') }}</p>
       <fieldset class="filtros">
