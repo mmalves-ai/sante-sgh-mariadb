@@ -39,7 +39,21 @@ export const mensagensProfissionalProvisorio = {
   fechar: 'Fechar',
   ligar: 'Ligar registro',
   tipoRegistro: 'Tipo do registro',
-  registroId: 'Número interno do registro',
+  buscarRegistro: 'Buscar pelo número, pelo prontuário ou pelo nome do paciente',
+  registro: 'Registro',
+  semResultado: 'Nenhum registro encontrado com esta busca.',
+  emNomeDe: 'em nome de {nome}',
+  prontuario: 'prontuário {n}',
+  antes: 'antes em nome de {nome}',
+  confirmadoNaTransferencia: 'transferência confirmada',
+  pendencias: {
+    'registro-fechado': 'registro já fechado',
+    'registro-faturado': 'conta já faturada',
+    'profissional-alterado': 'hoje em nome de outro profissional',
+    'substituto-desconhecido': 'sem o profissional de quando foi ligado',
+  },
+  aConfirmar: '{n} registro(s) pedem conferência antes de transferir: {lista}.',
+  confirmarTransferencia: 'Conferi e confirmo a transferência destes registros ao cadastro definitivo',
   ligado: 'Registro ligado ao provisório.',
   tipos: {
     atendimento: 'Atendimento',
@@ -83,6 +97,8 @@ export const mensagensProfissionalProvisorio = {
     'prazo-antes-do-inicio': 'O prazo vem depois do início.',
     'prazo-longo': 'O prazo é de no máximo 90 dias a partir do início.',
     'prazo-nao-prorroga': 'O novo prazo vem depois do prazo atual.',
+    'transferencia-a-confirmar':
+      'Há registro fechado, faturado ou em nome de outro profissional: confira e confirme a transferência.',
   },
   linkProvisorios: 'Profissionais provisórios',
 };

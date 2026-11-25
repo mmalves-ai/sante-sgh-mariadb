@@ -3,9 +3,11 @@
 // mínimo em `profissional_provisorio` (número da inscrição normalizado, prazo sugerido de 15 dias) com a trilha; o
 // segundo aberto com a mesma inscrição e o sem UF recusados; o registro ligado em `profissional_provisorio_uso` (o
 // repetido e o inexistente recusados); cancelar com registro pendente recusado; a prorrogação só para frente; a
-// regularização para quem não tem a mesma inscrição recusada e, para o definitivo certo, o atendimento passa a ser dele,
-// o registro ligado fica marcado como transferido e o provisório fica regularizado (nada apagado); depois disso, nada
-// mais se liga a ele. O vencido aparece no filtro de vencidos e ainda aceita registro (alerta, sem trava); o cancelado
+// regularização para quem não tem a mesma inscrição recusada; o atendimento encerrado só passa com confirmação explícita
+// (sem ela nada muda); confirmada, os atendimentos passam ao definitivo e cada registro ligado guarda o substituto
+// declarado ao ligar, o profissional anterior, a situação do registro e a confirmação (a autoria não se perde), e a
+// trilha leva a lista antes/depois; o provisório fica regularizado (nada apagado) e nada mais se liga a ele. A busca
+// acha o registro pelo número e mostra em nome de quem ele está. O vencido aparece no filtro de vencidos e ainda aceita registro (alerta, sem trava); o cancelado
 // fica, com o motivo. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -42,6 +44,7 @@ describe.skipIf(SEM_BANCO)('profissional provisório no banco próprio (f22_o1)'
   let s: ProfissionalProvisorioProprio;
   let m: Massa | null = null;
   let atendimento = 0;
+  let encerrado = 0;
   let paciente = 0;
   let prov = 0;
 
@@ -113,6 +116,15 @@ describe.skipIf(SEM_BANCO)('profissional provisório no banco próprio (f22_o1)'
                 NOW(3), NOW(3) FROM atendimento ORDER BY id LIMIT 1`,
         [m!.estabelecimento, `${NUM_ATEND}-1`, m!.enfermeira],
       );
+      // Outro atendimento do provisório, já encerrado (alta): a transferência dele pede confirmação.
+      encerrado = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, saida_em, situacao, desfecho,
+           criado_em)
+         SELECT ?, ?, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id, fonte_pagadora_id, ?,
+                NOW(3) - INTERVAL 1 HOUR, NOW(3), 'encerrado', 'alta', NOW(3) FROM atendimento ORDER BY id LIMIT 1`,
+        [m!.estabelecimento, `${NUM_ATEND}-2`, m!.enfermeira],
+      );
     });
     paciente = Number(
       (await um<{ p: unknown }>('SELECT paciente_id AS p FROM atendimento WHERE id = ?', [atendimento]))!.p,
@@ -154,9 +166,19 @@ describe.skipIf(SEM_BANCO)('profissional provisório no banco próprio (f22_o1)'
     );
   });
 
+  it('acha o atendimento pelo número, com o paciente e em nome de quem ele está', async () => {
+    const r = await s.buscarRegistros(c(), 'atendimento', `${NUM_ATEND}-1`);
+    const x = r.find((k) => k.id === atendimento);
+    expect(x).toMatchObject({ numero: `${NUM_ATEND}-1` });
+    expect(x!.paciente.length).toBeGreaterThan(0);
+    expect(x!.profissional).not.toBeNull();
+    expect(await s.buscarRegistros(c(), 'atendimento', 'ab')).toEqual([]);
+  });
+
   it('liga o atendimento e o paciente; o repetido e o inexistente são recusados', async () => {
     await s.ligar(c(), { id: prov, tipo: 'atendimento', registroId: atendimento }, t());
     await s.ligar(c(), { id: prov, tipo: 'paciente', registroId: paciente }, t());
+    await s.ligar(c(), { id: prov, tipo: 'atendimento', registroId: encerrado }, t());
     expect(await codigo(s.ligar(c(), { id: prov, tipo: 'atendimento', registroId: atendimento }, t()))).toBe(
       'uso-ja-ligado',
     );
@@ -164,10 +186,18 @@ describe.skipIf(SEM_BANCO)('profissional provisório no banco próprio (f22_o1)'
       'registro-inexistente',
     );
     const d = await s.detalhe(c(), prov);
-    expect(d.usos.map((u) => [u.sequencia, u.tipo, u.regularizado])).toEqual([
-      [1, 'atendimento', false],
-      [2, 'paciente', false],
+    expect(d.usos.map((u) => [u.sequencia, u.tipo, u.regularizado, u.numero, u.pendencias])).toEqual([
+      [1, 'atendimento', false, `${NUM_ATEND}-1`, []],
+      [2, 'paciente', false, null, []],
+      [3, 'atendimento', false, `${NUM_ATEND}-2`, ['registro-fechado']],
     ]);
+    // O substituto declarado (em cujo nome o registro foi feito) fica guardado ao ligar.
+    const sub = await um<{ n: unknown; s: unknown }>(
+      `SELECT COUNT(*) AS n, SUM(substituto_profissional_id = ?) AS s FROM profissional_provisorio_uso
+        WHERE profissional_provisorio_id = ? AND tipo = 'atendimento'`,
+      [m!.enfermeira, prov],
+    );
+    expect([Number(sub!.n), Number(sub!.s)]).toEqual([2, 2]);
     // O definitivo da mesma inscrição aparece como candidato.
     expect(d.candidatos.map((k) => k.id)).toContain(m!.profissional);
   });
@@ -194,24 +224,57 @@ describe.skipIf(SEM_BANCO)('profissional provisório no banco próprio (f22_o1)'
     expect(Number((await linha(prov))!['versao'])).toBe(v + 1);
   });
 
-  it('regulariza só para o definitivo da mesma inscrição e transfere o atendimento', async () => {
+  it('regulariza só para o definitivo da mesma inscrição; o encerrado pede confirmação; a autoria anterior fica', async () => {
     const v = Number((await linha(prov))!['versao']);
-    expect(await codigo(s.regularizar(c(), { id: prov, versao: v, profissional: m!.enfermeira }, t()))).toBe(
-      'inscricao-diferente',
-    );
-    const r = await s.regularizar(c(), { id: prov, versao: v, profissional: m!.profissional }, t());
-    expect(r).toEqual({ id: prov, usos: 2, transferidos: 1 });
+    const reg = (profissional: number, confirmar: boolean) =>
+      s.regularizar(c(), { id: prov, versao: v, profissional, confirmar }, t());
+    expect(await codigo(reg(m!.enfermeira, true))).toBe('inscricao-diferente');
+    // Sem confirmação, o atendimento encerrado barra a transferência: nada muda.
+    expect(await codigo(reg(m!.profissional, false))).toBe('transferencia-a-confirmar');
+    const profDe = async (id: number) =>
+      Number(
+        (await um<{ p: unknown }>('SELECT profissional_id AS p FROM atendimento WHERE id = ?', [id]))!.p,
+      );
+    expect([await profDe(atendimento), await profDe(encerrado)]).toEqual([m!.enfermeira, m!.enfermeira]);
+    expect(await linha(prov)).toMatchObject({ situacao: 'provisorio', versao: v });
+
+    const r = await reg(m!.profissional, true);
+    expect(r).toEqual({ id: prov, usos: 3, transferidos: 2 });
     expect(await linha(prov)).toMatchObject({ situacao: 'regularizado', profissional_id: m!.profissional });
     expect((await linha(prov))!['regularizado_em']).not.toBeNull();
-    const a = await um<{ p: unknown }>('SELECT profissional_id AS p FROM atendimento WHERE id = ?', [
-      atendimento,
+    expect([await profDe(atendimento), await profDe(encerrado)]).toEqual([m!.profissional, m!.profissional]);
+    // Cada registro transferido guarda quem estava antes, a situação e se a transferência foi confirmada.
+    const usos = await nucleo.lerSomente({ cliente: CLIENTE_F22, correlacao: COR }, (l) =>
+      l.consultar(
+        `SELECT sequencia, regularizado, anterior_profissional_id AS ant, situacao_registro_transferencia AS sit,
+                transferencia_confirmada AS conf, transferido_em IS NOT NULL AS tr
+           FROM profissional_provisorio_uso WHERE profissional_provisorio_id = ? ORDER BY sequencia`,
+        [prov],
+      ),
+    );
+    expect(
+      usos.map((u) => [
+        Number(u['sequencia']),
+        Number(u['regularizado']),
+        u['ant'] === null ? null : Number(u['ant']),
+        u['sit'],
+        Number(u['conf']),
+        Number(u['tr']),
+      ]),
+    ).toEqual([
+      [1, 1, m!.enfermeira, 'aberto', 0, 1],
+      [2, 1, null, null, 0, 0],
+      [3, 1, m!.enfermeira, 'encerrado', 1, 1],
     ]);
-    expect(Number(a!.p)).toBe(m!.profissional);
-    const u = await um<{ n: unknown; r: unknown }>(
-      'SELECT COUNT(*) AS n, SUM(regularizado) AS r FROM profissional_provisorio_uso WHERE profissional_provisorio_id = ?',
+    const tr = await um<{ d: unknown }>(
+      `SELECT dados_depois AS d FROM trilha_auditoria WHERE entidade = 'profissional_provisorio' AND entidade_id = ?
+        ORDER BY id DESC LIMIT 1`,
       [prov],
     );
-    expect([Number(u!.n), Number(u!.r)]).toEqual([2, 2]);
+    const dados = typeof tr!.d === 'string' ? JSON.parse(tr!.d) : tr!.d;
+    expect(JSON.stringify(dados)).toContain(`"antes":${m!.enfermeira}`);
+    const d = await s.detalhe(c(), prov);
+    expect(d.usos.filter((u) => u.anterior !== null).length).toBe(2);
     expect(await codigo(s.ligar(c(), { id: prov, tipo: 'paciente', registroId: paciente }, t()))).toBe(
       'provisorio-encerrado',
     );

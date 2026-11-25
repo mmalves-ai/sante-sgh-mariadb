@@ -50,8 +50,39 @@ export interface VisaoProvisorios {
   conselhos: { id: number; sigla: string; porUf: boolean }[];
   ufs: { id: number; sigla: string }[];
 }
+export type PendenciaTransferencia =
+  'registro-fechado' | 'registro-faturado' | 'profissional-alterado' | 'substituto-desconhecido';
+
+export interface UsoProvisorio {
+  id: number;
+  sequencia: number;
+  tipo: TipoUso;
+  registroId: number;
+  regularizado: boolean;
+  numero: string | null;
+  prontuario: number | null;
+  paciente: string | null;
+  quando: string | null;
+  situacaoRegistro: string | null;
+  profissionalAtual: string | null;
+  substituto: string | null;
+  anterior: string | null;
+  transferenciaConfirmada: boolean;
+  pendencias: PendenciaTransferencia[];
+}
+
+/** Registro do estabelecimento que pode ser ligado, achado pelo número, pelo prontuário ou pelo nome do paciente. */
+export interface RegistroCandidato {
+  id: number;
+  numero: string | null;
+  prontuario: number | null;
+  paciente: string;
+  quando: string | null;
+  profissional: string | null;
+}
+
 export interface DetalheProvisorio {
-  usos: { id: number; sequencia: number; tipo: TipoUso; registroId: number; regularizado: boolean }[];
+  usos: UsoProvisorio[];
   candidatos: { id: number; nome: string; por: 'inscricao' | 'cpf' }[];
 }
 
@@ -94,10 +125,13 @@ export const ligarRegistro = (id: number, tipo: TipoUso, registroId: number) =>
   pedir<Gravado>(`${C}/${id}/usos`, 'POST', { tipo, registroId });
 export const prorrogarProvisorio = (id: number, versao: number, prazo: string, motivo: string) =>
   pedir<Gravado>(`${C}/${id}/prazo`, 'POST', { versao, prazo, motivo });
-export const regularizarProvisorio = (id: number, versao: number, profissional: number) =>
+export const buscarRegistros = (id: number, tipo: TipoUso, busca: string) =>
+  pedir<RegistroCandidato[]>(`${C}/${id}/registros?${new URLSearchParams({ tipo, busca })}`);
+export const regularizarProvisorio = (id: number, versao: number, profissional: number, confirmar: boolean) =>
   pedir<{ id: number; usos: number; transferidos: number }>(`${C}/${id}/regularizar`, 'POST', {
     versao,
     profissional,
+    confirmar,
   });
 export const cancelarProvisorio = (id: number, versao: number, motivo: string) =>
   pedir<Gravado>(`${C}/${id}/cancelar`, 'POST', { versao, motivo });

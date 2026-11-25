@@ -2,8 +2,9 @@
 // O cadastro exige o banco próprio, e o E2E roda com a fonte sintética (sem núcleo). Por isso as respostas da API
 // destas rotas são simuladas pelo Playwright com massa SINTÉTICA; o que se prova é a tela: o link da lista de
 // profissionais leva à rota, o cadastro mínimo valida na hora (conselho, número, UF e motivo) antes de gravar, o vencido
-// aparece com o alerta (sem trava), o registro é ligado e a regularização para o candidato da mesma inscrição sai num
-// clique. O efeito no banco (número normalizado, prazo, registro ligado, transferência do atendimento, cancelamento com
+// aparece com o alerta (sem trava), o registro é achado pelo número (nunca pelo id interno) e ligado, mostrando número,
+// paciente e em nome de quem está; o registro já fechado aparece marcado e a regularização para o candidato da mesma
+// inscrição só sai depois da confirmação explícita, que vai ao servidor. O efeito no banco (número normalizado, prazo, registro ligado, transferência do atendimento, cancelamento com
 // motivo, prorrogação) está no contrato de efeito (apps/api/src/modulos/cadastro/profissional-provisorio.int.spec.ts).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
@@ -27,7 +28,9 @@ const json = (rota: Route, corpo: unknown, status = 200) =>
 type Item = Record<string, unknown> & { id: number; versao: number };
 
 test.describe('F8 profissional provisório @C1-047', () => {
-  test('cadastra com validação na hora, liga o atendimento e regulariza', async ({ page }) => {
+  test('cadastra com validação na hora, acha e liga o atendimento e regulariza com confirmação', async ({
+    page,
+  }) => {
     const pedidos: { caminho: string; corpo: Record<string, unknown> }[] = [];
     const itens: Item[] = [
       {
@@ -52,10 +55,24 @@ test.describe('F8 profissional provisório @C1-047', () => {
       },
     ];
     const usos: Record<string, unknown>[] = [];
+    const buscas: string[] = [];
+    const ATENDIMENTO = {
+      id: 5001,
+      numero: 'AT-5001',
+      prontuario: 77,
+      paciente: 'PACIENTE SINTETICO',
+      quando: '2041-03-09',
+      profissional: 'SUBSTITUTO SINTETICO',
+    };
     await page.route('**/api/cadastros/profissionais-provisorios**', (r) => {
       const req = r.request();
       const url = new URL(req.url());
       if (req.method() === 'GET') {
+        if (url.pathname.endsWith('/registros')) {
+          const busca = url.searchParams.get('busca') ?? '';
+          buscas.push(busca);
+          return json(r, busca === '' || 'AT-5001'.includes(busca) ? [ATENDIMENTO] : []);
+        }
         if (/\/\d+$/.test(url.pathname))
           return json(r, {
             usos,
@@ -73,19 +90,36 @@ test.describe('F8 profissional provisório @C1-047', () => {
       const corpo = req.postDataJSON() as Record<string, unknown>;
       pedidos.push({ caminho: url.pathname, corpo });
       if (url.pathname.endsWith('/usos')) {
+        // O atendimento já teve alta: a regularização pede confirmação.
         usos.push({
           id: 1,
           sequencia: 1,
           tipo: corpo['tipo'],
           registroId: corpo['registroId'],
           regularizado: false,
+          numero: ATENDIMENTO.numero,
+          prontuario: ATENDIMENTO.prontuario,
+          paciente: ATENDIMENTO.paciente,
+          quando: ATENDIMENTO.quando,
+          situacaoRegistro: 'encerrado',
+          profissionalAtual: ATENDIMENTO.profissional,
+          substituto: ATENDIMENTO.profissional,
+          anterior: null,
+          transferenciaConfirmada: false,
+          pendencias: ['registro-fechado'],
         });
         itens[0]!['usos'] = 1;
         itens[0]!['usosPendentes'] = 1;
         return json(r, { id: 1 }, 201);
       }
       if (url.pathname.endsWith('/regularizar')) {
-        usos[0]!['regularizado'] = true;
+        Object.assign(usos[0]!, {
+          regularizado: true,
+          anterior: ATENDIMENTO.profissional,
+          profissionalAtual: 'PROFISSIONAL DEFINITIVO SINTETICO',
+          transferenciaConfirmada: true,
+          pendencias: [],
+        });
         Object.assign(itens[0]!, {
           situacao: 'regularizado',
           estadoPrazo: 'encerrado',
@@ -138,18 +172,34 @@ test.describe('F8 profissional provisório @C1-047', () => {
       },
     });
 
-    // Liga o atendimento ao vencido e regulariza para o candidato da mesma inscrição.
+    // Acha o atendimento pelo número (busca na hora) e liga ao vencido.
     await page.getByTestId('prov-abrir-41').click();
     await escolher(page.getByTestId('prov-uso-tipo'), 'atendimento');
-    await page.getByTestId('prov-uso-registro').fill('5001');
+    await page.getByTestId('prov-uso-busca').fill('XX-0000');
+    await expect(page.getByTestId('prov-uso-vazio')).toBeVisible();
+    await page.getByTestId('prov-uso-busca').fill('AT-5001');
+    await expect.poll(() => buscas.at(-1)).toBe('AT-5001');
+    await escolher(page.getByTestId('prov-uso-registro'), '5001');
     await page.getByTestId('prov-uso-ligar').click();
-    await expect(page.getByTestId('prov-usos')).toContainText('Atendimento 5001');
+    expect(pedidos.at(-1)).toMatchObject({
+      caminho: '/api/cadastros/profissionais-provisorios/41/usos',
+      corpo: { tipo: 'atendimento', registroId: 5001 },
+    });
+    await expect(page.getByTestId('prov-uso-1')).toContainText('Atendimento AT-5001 · PACIENTE SINTETICO');
+    await expect(page.getByTestId('prov-uso-1')).toContainText('em nome de SUBSTITUTO SINTETICO');
+    await expect(page.getByTestId('prov-uso-1')).toContainText('registro já fechado');
+
+    // O registro fechado só passa com a confirmação explícita.
+    await expect(page.getByTestId('prov-a-confirmar')).toContainText('AT-5001');
+    await expect(page.getByTestId('prov-regularizar')).toBeDisabled();
+    await page.getByTestId('prov-confirmar').check();
     await page.getByTestId('prov-regularizar').click();
     await expect(page.getByTestId('prov-aviso')).toContainText('1 registro(s) transferido(s)');
     expect(pedidos.at(-1)).toMatchObject({
       caminho: '/api/cadastros/profissionais-provisorios/41/regularizar',
-      corpo: { versao: 1, profissional: 901 },
+      corpo: { versao: 1, profissional: 901, confirmar: true },
     });
+    await expect(page.getByTestId('prov-uso-1')).toContainText('antes em nome de SUBSTITUTO SINTETICO');
     await semViolacaoAxe(page, 'profissionais provisórios');
   });
 });

@@ -5,10 +5,13 @@ import {
   errosPrazo,
   errosProvisorio,
   errosRegularizacao,
+  errosTransferencia,
   errosUso,
   estadoDoPrazo,
   normalizarNumeroConselho,
+  pendenciasTransferencia,
   prazoSugerido,
+  type RegistroParaTransferir,
 } from './provisorio.js';
 
 const HOJE = '2041-03-10';
@@ -108,5 +111,36 @@ describe('profissional provisório (02-CAD linha 21)', () => {
     expect(errosCancelamento('provisorio', 0, 'Cadastrado por engano')).toEqual([]);
     expect(errosCancelamento('provisorio', 2, 'curto')).toEqual(['usos-pendentes', 'motivo-curto']);
     expect(errosCancelamento('regularizado', 0, 'Cadastrado por engano')).toEqual(['provisorio-encerrado']);
+  });
+
+  it('transfere sem pergunta só o registro aberto, sem conta faturada e ainda no nome do substituto declarado', () => {
+    const r = (p: Partial<RegistroParaTransferir> = {}): RegistroParaTransferir => ({
+      tipo: 'atendimento',
+      situacao: 'aberto',
+      faturado: false,
+      profissionalAtualId: 7,
+      substitutoId: 7,
+      ...p,
+    });
+    expect(pendenciasTransferencia(r())).toEqual([]);
+    expect(pendenciasTransferencia(r({ situacao: 'encerrado', faturado: true }))).toEqual([
+      'registro-fechado',
+      'registro-faturado',
+    ]);
+    expect(pendenciasTransferencia(r({ profissionalAtualId: 8 }))).toEqual(['profissional-alterado']);
+    expect(pendenciasTransferencia(r({ substitutoId: null }))).toEqual(['substituto-desconhecido']);
+    expect(pendenciasTransferencia(r({ tipo: 'agendamento_cirurgico', situacao: 'realizado' }))).toEqual([
+      'registro-fechado',
+    ]);
+    expect(pendenciasTransferencia(r({ tipo: 'agendamento_internacao', situacao: 'autorizado' }))).toEqual(
+      [],
+    );
+    // O vínculo com o paciente não troca profissional: nunca pede confirmação.
+    expect(pendenciasTransferencia(r({ tipo: 'paciente', situacao: null, substitutoId: null }))).toEqual([]);
+    expect(errosTransferencia([r(), r({ situacao: 'encerrado' })], false)).toEqual([
+      'transferencia-a-confirmar',
+    ]);
+    expect(errosTransferencia([r(), r({ situacao: 'encerrado' })], true)).toEqual([]);
+    expect(errosTransferencia([r()], false)).toEqual([]);
   });
 });

@@ -2,7 +2,10 @@
 // regulariza depois. Cadastro mínimo em `profissional_provisorio` (conselho, número e UF da inscrição, motivo e prazo
 // curto), registros ligados em `profissional_provisorio_uso` (atendimento, paciente, agenda cirúrgica e de internação) e
 // a regularização, que liga o provisório ao cadastro definitivo e transfere o profissional dos registros ligados (o
-// atendimento passa a ser do definitivo, com a trilha na mesma transação). O prazo vencido é só alerta (ADR 0002): a
+// atendimento passa a ser do definitivo, com a trilha na mesma transação). A autoria não se perde: ao ligar, o registro
+// guarda o substituto declarado (em cujo nome ele foi feito); ao transferir, guarda o profissional anterior, a situação
+// do registro e se a transferência foi confirmada; registro fechado, faturado ou com outro profissional só passa com
+// confirmação explícita (pendenciasTransferencia). O prazo vencido é só alerta (ADR 0002): a
 // lista mostra os vencidos e os que vencem logo, sem trava. Nada é apagado: regularizado e cancelado ficam.
 // A regra é a do domínio (@sgh/dominio-cadastro, profissional/provisorio); aqui só leitura, conferência no banco e
 // gravação pelo executor (trilha e idempotência na mesma transação).
@@ -13,11 +16,15 @@ import {
   errosPrazo,
   errosProvisorio,
   errosRegularizacao,
+  errosTransferencia,
   errosUso,
   estadoDoPrazo,
   type EstadoPrazo,
   normalizarNumeroConselho,
+  type PendenciaTransferencia,
+  pendenciasTransferencia,
   prazoSugerido,
+  SITUACOES_CONTA_FATURADA,
   type SituacaoProvisorio,
   somenteDigitos,
   type TipoUsoProvisorio,
@@ -73,6 +80,10 @@ const MENSAGENS: Record<string, [string, string]> = {
   'inscricao-diferente': [
     'O cadastro definitivo não tem a mesma inscrição ativa no conselho (conselho, número e UF).',
     'profissional',
+  ],
+  'transferencia-a-confirmar': [
+    'Há registro fechado, faturado ou hoje em nome de outro profissional que não o substituto declarado: confira e confirme a transferência.',
+    'confirmar',
   ],
   'usos-pendentes': [
     'Há registros ligados ao provisório: regularize-o para o cadastro definitivo em vez de cancelar.',
@@ -207,27 +218,74 @@ const esquemaUso = z
   .strict();
 export type EntradaUso = z.infer<typeof esquemaUso>;
 
-/** Confere que o registro existe e é do estabelecimento (o paciente é da rede: só existir). */
-async function conferirRegistro(tx: TxOperacao, tipo: TipoUsoProvisorio, id: number, est: number) {
+/**
+ * Confere que o registro existe e é do estabelecimento (o paciente é da rede: só existir) e devolve o profissional em
+ * cujo nome ele está (o substituto declarado, que a regularização confere antes de transferir).
+ */
+async function conferirRegistro(
+  tx: TxOperacao,
+  tipo: TipoUsoProvisorio,
+  id: number,
+  est: number,
+): Promise<number | null> {
   let achou: Record<string, unknown> | null;
   if (tipo === 'atendimento')
-    achou = await tx.uma('SELECT id FROM atendimento WHERE id = ? AND estabelecimento_id = ?', [id, est]);
-  else if (tipo === 'paciente') achou = await tx.uma('SELECT id FROM paciente WHERE id = ?', [id]);
+    achou = await tx.uma(
+      'SELECT id, profissional_id AS atual FROM atendimento WHERE id = ? AND estabelecimento_id = ?',
+      [id, est],
+    );
+  else if (tipo === 'paciente')
+    achou = await tx.uma('SELECT id, NULL AS atual FROM paciente WHERE id = ?', [id]);
   else if (tipo === 'agendamento_cirurgico')
-    achou = await tx.uma('SELECT id FROM agendamento_cirurgico WHERE id = ? AND estabelecimento_id = ?', [
-      id,
-      est,
-    ]);
+    achou = await tx.uma(
+      `SELECT id, cirurgiao_profissional_id AS atual FROM agendamento_cirurgico
+        WHERE id = ? AND estabelecimento_id = ?`,
+      [id, est],
+    );
   else
-    achou = await tx.uma('SELECT id FROM agendamento_internacao WHERE id = ? AND estabelecimento_id = ?', [
-      id,
-      est,
-    ]);
+    achou = await tx.uma(
+      `SELECT id, medico_profissional_id AS atual FROM agendamento_internacao
+        WHERE id = ? AND estabelecimento_id = ?`,
+      [id, est],
+    );
   if (!achou)
     throw recusa('registro-inexistente', 'Registro não encontrado neste estabelecimento.', {
       campos: ['registroId'],
     });
+  return num(achou['atual']);
 }
+
+/** Os registros ligados ao provisório, com o número, o paciente, a situação e o profissional atual de cada um. */
+const SQL_USOS = `SELECT u.id, u.sequencia, u.tipo, u.atendimento_id, u.paciente_id, u.agendamento_cirurgico_id,
+        u.agendamento_internacao_id, u.regularizado, u.versao, u.substituto_profissional_id,
+        u.anterior_profissional_id, u.situacao_registro_transferencia, u.transferencia_confirmada, u.transferido_em,
+        COALESCE(a.numero, ac.numero, ai.numero) AS numero,
+        COALESCE(a.situacao, ac.situacao, ai.situacao) AS situacao,
+        COALESCE(a.profissional_id, ac.cirurgiao_profissional_id, ai.medico_profissional_id) AS atual,
+        COALESCE(a.versao, ac.versao, ai.versao) AS registro_versao,
+        COALESCE(a.entrada_em, ac.inicio_previsto_em, ai.previsto_para, u.vigencia_inicio) AS quando,
+        pa.numero_prontuario,
+        IF(pa.usa_nome_social AND pa.nome_social IS NOT NULL, pa.nome_social, ppf.nome) AS paciente_nome,
+        (SELECT COUNT(*) FROM conta_hospitalar ch
+          WHERE ch.atendimento_id = u.atendimento_id AND ch.excluido_em IS NULL
+            AND ch.situacao IN (?, ?, ?, ?)) AS faturadas
+   FROM profissional_provisorio_uso u
+   LEFT JOIN atendimento a ON a.id = u.atendimento_id
+   LEFT JOIN agendamento_cirurgico ac ON ac.id = u.agendamento_cirurgico_id
+   LEFT JOIN agendamento_internacao ai ON ai.id = u.agendamento_internacao_id
+   LEFT JOIN paciente pa ON pa.id = COALESCE(u.paciente_id, a.paciente_id, ac.paciente_id, ai.paciente_id)
+   LEFT JOIN pessoa_fisica ppf ON ppf.id = pa.pessoa_fisica_id
+  WHERE u.profissional_provisorio_id = ? AND u.excluido_em IS NULL`;
+const paramsUsos = (provisorio: number): unknown[] => [...SITUACOES_CONTA_FATURADA.slice(0, 4), provisorio];
+
+/** Uma linha de SQL_USOS na forma da regra do domínio. */
+const registroDoUso = (u: Record<string, unknown>) => ({
+  tipo: String(u['tipo']) as TipoUsoProvisorio,
+  situacao: txt(u['situacao']),
+  faturado: Number(u['faturadas'] ?? 0) > 0,
+  profissionalAtualId: num(u['atual']),
+  substitutoId: num(u['substituto_profissional_id']),
+});
 
 const COLUNA_USO: Record<TipoUsoProvisorio, string> = {
   atendimento: 'atendimento_id',
@@ -245,7 +303,7 @@ const opUso = (t: RegistroTrilhaTela, est: number) =>
     async gravar(tx, e) {
       const p = await lerProvisorio(tx, e.id, est);
       recusarErros(errosUso(String(p['situacao']) as SituacaoProvisorio, e.tipo));
-      await conferirRegistro(tx, e.tipo, e.registroId, est);
+      const substituto = await conferirRegistro(tx, e.tipo, e.registroId, est);
       const usos = await tx.consultar(
         `SELECT sequencia, tipo, atendimento_id, paciente_id, agendamento_cirurgico_id, agendamento_internacao_id
            FROM profissional_provisorio_uso WHERE profissional_provisorio_id = ? AND excluido_em IS NULL`,
@@ -265,6 +323,7 @@ const opUso = (t: RegistroTrilhaTela, est: number) =>
         paciente_id: e.tipo === 'paciente' ? e.registroId : null,
         agendamento_cirurgico_id: e.tipo === 'agendamento_cirurgico' ? e.registroId : null,
         agendamento_internacao_id: e.tipo === 'agendamento_internacao' ? e.registroId : null,
+        substituto_profissional_id: substituto,
         vigencia_inicio: e.tipo === 'paciente' ? new Date() : null,
         regularizado: false,
         origem: 'sistema',
@@ -300,7 +359,9 @@ const opProrrogar = (t: RegistroTrilhaTela, est: number) =>
     trilha: (e) => ({ dados: { ...(t.dadosDepois ?? {}), prazo: e.prazo }, motivo: e.motivo.trim() }),
   });
 
-const esquemaRegularizar = z.object({ id: idPos, versao: idPos, profissional: idPos }).strict();
+const esquemaRegularizar = z
+  .object({ id: idPos, versao: idPos, profissional: idPos, confirmar: z.boolean() })
+  .strict();
 
 /** Lê o definitivo para a regra: situação, CPF e inscrições no conselho. */
 async function lerDefinitivo(l: Pick<Leitor, 'uma' | 'consultar'>, id: number) {
@@ -358,66 +419,62 @@ const opRegularizar = (t: RegistroTrilhaTela, est: number) =>
           d,
         ),
       );
-      // Transfere o profissional de cada registro ligado pendente (com versão: a alteração vai à trilha do registro).
+      // Os registros ligados pendentes, travados, com a situação, a conta e o profissional atual de cada um.
       const usos = await tx.consultarParaAtualizar(
-        `SELECT id, tipo, atendimento_id, agendamento_cirurgico_id, agendamento_internacao_id, versao
-           FROM profissional_provisorio_uso
-          WHERE profissional_provisorio_id = ? AND NOT regularizado AND excluido_em IS NULL ORDER BY sequencia`,
-        [e.id],
+        `${SQL_USOS} AND NOT u.regularizado ORDER BY u.sequencia`,
+        [...paramsUsos(e.id)],
       );
-      let transferidos = 0;
+      recusarErros(errosTransferencia(usos.map(registroDoUso), e.confirmar));
+      // Cada registro guarda, no próprio uso, quem estava nele antes, a situação e se a transferência foi confirmada;
+      // a trilha da operação leva a lista (registro, antes e depois).
+      const agora = new Date();
+      const transferencias: Record<string, unknown>[] = [];
       for (const u of usos) {
         const tipo = String(u['tipo']) as TipoUsoProvisorio;
+        const anterior = num(u['atual']);
+        const versaoRegistro = Number(u['registro_versao']);
+        let registro: number | null = null;
         if (tipo === 'atendimento') {
-          const a = await tx.uma('SELECT versao FROM atendimento WHERE id = ?', [num(u['atendimento_id'])]);
-          if (a) {
-            await tx.alterar('atendimento', Number(u['atendimento_id']), Number(a['versao']), {
-              profissional_id: e.profissional,
-            });
-            transferidos++;
-          }
+          registro = Number(u['atendimento_id']);
+          await tx.alterar('atendimento', registro, versaoRegistro, { profissional_id: e.profissional });
         } else if (tipo === 'agendamento_cirurgico') {
-          const a = await tx.uma('SELECT versao FROM agendamento_cirurgico WHERE id = ?', [
-            num(u['agendamento_cirurgico_id']),
-          ]);
-          if (a) {
-            await tx.alterar(
-              'agendamento_cirurgico',
-              Number(u['agendamento_cirurgico_id']),
-              Number(a['versao']),
-              {
-                cirurgiao_profissional_id: e.profissional,
-              },
-            );
-            transferidos++;
-          }
+          registro = Number(u['agendamento_cirurgico_id']);
+          await tx.alterar('agendamento_cirurgico', registro, versaoRegistro, {
+            cirurgiao_profissional_id: e.profissional,
+          });
         } else if (tipo === 'agendamento_internacao') {
-          const a = await tx.uma('SELECT versao FROM agendamento_internacao WHERE id = ?', [
-            num(u['agendamento_internacao_id']),
-          ]);
-          if (a) {
-            await tx.alterar(
-              'agendamento_internacao',
-              Number(u['agendamento_internacao_id']),
-              Number(a['versao']),
-              {
-                medico_profissional_id: e.profissional,
-              },
-            );
-            transferidos++;
-          }
+          registro = Number(u['agendamento_internacao_id']);
+          await tx.alterar('agendamento_internacao', registro, versaoRegistro, {
+            medico_profissional_id: e.profissional,
+          });
         }
+        const pend = pendenciasTransferencia(registroDoUso(u));
         await tx.alterar('profissional_provisorio_uso', Number(u['id']), Number(u['versao']), {
           regularizado: true,
-          ...(tipo === 'paciente' ? { vigencia_fim: new Date() } : {}),
+          ...(registro !== null
+            ? {
+                anterior_profissional_id: anterior,
+                situacao_registro_transferencia: txt(u['situacao']),
+                transferencia_confirmada: pend.length > 0,
+                transferido_em: agora,
+              }
+            : { vigencia_fim: agora }),
         });
+        if (registro !== null)
+          transferencias.push({ tipo, registro, antes: anterior, depois: e.profissional, pendencias: pend });
       }
       await tx.alterar('profissional_provisorio', e.id, e.versao, {
         situacao: 'regularizado',
         profissional_id: e.profissional,
         regularizado_em: new Date(),
       });
-      return { id: e.id, usos: usos.length, transferidos };
+      return {
+        id: e.id,
+        usos: usos.length,
+        transferidos: transferencias.length,
+        // O resultado do executor é plano: a lista vai serializada e volta inteira na trilha.
+        transferencias: JSON.stringify(transferencias),
+      };
     },
     alvo: (e) => ({ tabela: 'profissional_provisorio', id: e.id }),
     trilha: (e, r) => ({
@@ -426,6 +483,8 @@ const opRegularizar = (t: RegistroTrilhaTela, est: number) =>
         profissional: e.profissional,
         usos: r.usos,
         transferidos: r.transferidos,
+        confirmado: e.confirmar,
+        transferencias: JSON.parse(String(r.transferencias)) as unknown,
       },
       motivo: null,
     }),
@@ -462,6 +521,30 @@ export interface UsoProvisorio {
   readonly tipo: TipoUsoProvisorio;
   readonly registroId: number;
   readonly regularizado: boolean;
+  /** Número de negócio do atendimento ou do agendamento (nulo no vínculo com o paciente). */
+  readonly numero: string | null;
+  readonly prontuario: number | null;
+  readonly paciente: string | null;
+  /** Data do atendimento, da cirurgia prevista, da internação prevista ou do início do vínculo. */
+  readonly quando: string | null;
+  readonly situacaoRegistro: string | null;
+  readonly profissionalAtual: string | null;
+  readonly substituto: string | null;
+  /** Depois da transferência: quem estava no registro antes, e se ela foi confirmada. */
+  readonly anterior: string | null;
+  readonly transferenciaConfirmada: boolean;
+  /** O que a regularização pede para confirmar neste registro (vazio: transfere sem pergunta). */
+  readonly pendencias: readonly PendenciaTransferencia[];
+}
+
+/** Um registro do estabelecimento que pode ser ligado ao provisório, achado pelo número ou pelo paciente. */
+export interface RegistroCandidato {
+  readonly id: number;
+  readonly numero: string | null;
+  readonly prontuario: number | null;
+  readonly paciente: string;
+  readonly quando: string | null;
+  readonly profissional: string | null;
 }
 
 export interface CandidatoDefinitivo {
@@ -499,6 +582,24 @@ export interface VisaoProvisorios {
   readonly resumo: { abertos: number; vencidos: number; venceLogo: number };
   readonly conselhos: readonly { id: number; sigla: string; porUf: boolean }[];
   readonly ufs: readonly { id: number; sigla: string }[];
+}
+
+/** O nome de exibição de cada profissional citado (atual, substituto, anterior). */
+async function nomesProfissionais(
+  l: Pick<Leitor, 'consultar'>,
+  ids: unknown[],
+): Promise<Map<number, string>> {
+  const unicos = [...new Set(ids.map(num).filter((v): v is number => v !== null))];
+  const m = new Map<number, string>();
+  if (!unicos.length) return m;
+  const linhas = await l.consultar(
+    `SELECT pr.id, COALESCE(pr.nome_exibicao, pf.nome) AS nome FROM profissional pr
+       JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id WHERE pr.id IN (${unicos.map(() => '?').join(', ')})`,
+    unicos,
+    { teto: 3000 },
+  );
+  for (const x of linhas) m.set(Number(x['id']), String(x['nome']));
+  return m;
 }
 
 export class ProfissionalProvisorioProprio {
@@ -643,23 +744,33 @@ export class ProfissionalProvisorioProprio {
         [id, est],
       );
       if (!p) throw naoAchado();
-      const usos = (
-        await l.consultar(
-          `SELECT id, sequencia, tipo, atendimento_id, paciente_id, agendamento_cirurgico_id, agendamento_internacao_id,
-                  regularizado
-             FROM profissional_provisorio_uso WHERE profissional_provisorio_id = ? AND excluido_em IS NULL
-            ORDER BY sequencia`,
-          [id],
-          { teto: 2000 },
-        )
-      ).map((u) => {
+      const linhas = await l.consultar(`${SQL_USOS} ORDER BY u.sequencia`, paramsUsos(id), { teto: 2000 });
+      const nomes = await nomesProfissionais(
+        l,
+        linhas.flatMap((u) => [u['atual'], u['substituto_profissional_id'], u['anterior_profissional_id']]),
+      );
+      const nome = (v: unknown) => (num(v) === null ? null : (nomes.get(Number(v)) ?? null));
+      const usos: UsoProvisorio[] = linhas.map((u) => {
         const tipo = String(u['tipo']) as TipoUsoProvisorio;
+        const regularizado = bool(u['regularizado']);
         return {
           id: Number(u['id']),
           sequencia: Number(u['sequencia']),
           tipo,
           registroId: Number(u[COLUNA_USO[tipo]]),
-          regularizado: bool(u['regularizado']),
+          regularizado,
+          numero: txt(u['numero']),
+          prontuario: num(u['numero_prontuario']),
+          paciente: txt(u['paciente_nome']),
+          quando: u['quando'] ? data(u['quando']) : null,
+          situacaoRegistro: txt(
+            regularizado ? (u['situacao_registro_transferencia'] ?? u['situacao']) : u['situacao'],
+          ),
+          profissionalAtual: nome(u['atual']),
+          substituto: nome(u['substituto_profissional_id']),
+          anterior: nome(u['anterior_profissional_id']),
+          transferenciaConfirmada: bool(u['transferencia_confirmada']),
+          pendencias: regularizado ? [] : pendenciasTransferencia(registroDoUso(u)),
         };
       });
       const numero = normalizarNumeroConselho(txt(p['numero_conselho']));
@@ -694,6 +805,78 @@ export class ProfissionalProvisorioProprio {
     });
   }
 
+  /**
+   * Os registros do estabelecimento que podem ser ligados ao provisório, pelo número do atendimento ou do agendamento,
+   * pelo prontuário ou pelo começo do nome do paciente (sem busca: os mais recentes). No máximo 30.
+   */
+  async buscarRegistros(
+    c: ContextoPorta,
+    tipo: TipoUsoProvisorio,
+    busca: string,
+  ): Promise<RegistroCandidato[]> {
+    const est = await this.estabelecimento(c);
+    const termo = busca.trim().slice(0, 80);
+    const digitos = /^\d{1,20}$/.test(termo) ? termo : null;
+    const nomePrefixo = digitos === null && termo.length >= 3 ? `${termo.replace(/[%_\\]/g, '')}%` : null;
+    const semBusca = termo === '' ? 1 : 0;
+    // O mesmo filtro em todos os tipos: sem busca, número/prontuário exato ou começo do nome.
+    const filtro = `(? = 1 OR x.numero = ? OR pa.numero_prontuario = ? OR pf.nome LIKE ? OR pa.nome_social LIKE ?)`;
+    const p = [semBusca, digitos ?? termo, digitos ?? -1, nomePrefixo ?? '', nomePrefixo ?? ''];
+    if (!semBusca && digitos === null && nomePrefixo === null) return [];
+    return this.ler(c, async (l) => {
+      let linhas: Record<string, unknown>[];
+      if (tipo === 'atendimento')
+        linhas = await l.consultar(
+          `SELECT x.id, x.numero, x.entrada_em AS quando, x.profissional_id AS atual, pa.numero_prontuario,
+                  IF(pa.usa_nome_social AND pa.nome_social IS NOT NULL, pa.nome_social, pf.nome) AS paciente
+             FROM atendimento x JOIN paciente pa ON pa.id = x.paciente_id
+             JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+            WHERE x.estabelecimento_id = ? AND ${filtro} ORDER BY x.id DESC LIMIT 30`,
+          [est, ...p],
+        );
+      else if (tipo === 'agendamento_cirurgico')
+        linhas = await l.consultar(
+          `SELECT x.id, x.numero, x.inicio_previsto_em AS quando, x.cirurgiao_profissional_id AS atual,
+                  pa.numero_prontuario,
+                  IF(pa.usa_nome_social AND pa.nome_social IS NOT NULL, pa.nome_social, pf.nome) AS paciente
+             FROM agendamento_cirurgico x JOIN paciente pa ON pa.id = x.paciente_id
+             JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+            WHERE x.estabelecimento_id = ? AND ${filtro} ORDER BY x.id DESC LIMIT 30`,
+          [est, ...p],
+        );
+      else if (tipo === 'agendamento_internacao')
+        linhas = await l.consultar(
+          `SELECT x.id, x.numero, x.previsto_para AS quando, x.medico_profissional_id AS atual, pa.numero_prontuario,
+                  IF(pa.usa_nome_social AND pa.nome_social IS NOT NULL, pa.nome_social, pf.nome) AS paciente
+             FROM agendamento_internacao x JOIN paciente pa ON pa.id = x.paciente_id
+             JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+            WHERE x.estabelecimento_id = ? AND ${filtro} ORDER BY x.id DESC LIMIT 30`,
+          [est, ...p],
+        );
+      else
+        linhas = await l.consultar(
+          `SELECT pa.id, NULL AS quando, NULL AS atual, pa.numero_prontuario,
+                  IF(pa.usa_nome_social AND pa.nome_social IS NOT NULL, pa.nome_social, pf.nome) AS paciente
+             FROM paciente pa JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+            WHERE (? = 1 OR pa.numero_prontuario = ? OR pf.nome LIKE ? OR pa.nome_social LIKE ?)
+            ORDER BY pa.id DESC LIMIT 30`,
+          [semBusca, digitos ?? -1, nomePrefixo ?? '', nomePrefixo ?? ''],
+        );
+      const nomes = await nomesProfissionais(
+        l,
+        linhas.map((x) => x['atual']),
+      );
+      return linhas.map((x) => ({
+        id: Number(x['id']),
+        numero: txt(x['numero']),
+        prontuario: num(x['numero_prontuario']),
+        paciente: String(x['paciente'] ?? ''),
+        quando: x['quando'] ? data(x['quando']) : null,
+        profissional: num(x['atual']) === null ? null : (nomes.get(Number(x['atual'])) ?? null),
+      }));
+    });
+  }
+
   async criar(c: ContextoPorta, e: EntradaProvisorioTela, t: RegistroTrilhaTela): Promise<number> {
     const est = await this.estabelecimento(c);
     return Number((await this.executar(c, opCriar(t, est, this.hoje()), e, t, est))['id']);
@@ -712,7 +895,7 @@ export class ProfissionalProvisorioProprio {
   }
   async regularizar(
     c: ContextoPorta,
-    e: { id: number; versao: number; profissional: number },
+    e: { id: number; versao: number; profissional: number; confirmar: boolean },
     t: RegistroTrilhaTela,
   ): Promise<{ id: number; usos: number; transferidos: number }> {
     const est = await this.estabelecimento(c);

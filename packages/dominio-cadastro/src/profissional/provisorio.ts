@@ -199,3 +199,55 @@ export const COLUNA_TRANSFERIDA: Readonly<Record<TipoUsoProvisorio, string | nul
   agendamento_cirurgico: 'cirurgiao_profissional_id',
   agendamento_internacao: 'medico_profissional_id',
 };
+
+/** Situações em que o registro já está fechado: a transferência do profissional pede confirmação explícita. */
+export const SITUACOES_REGISTRO_FECHADO: Readonly<Record<TipoUsoProvisorio, readonly string[]>> = {
+  atendimento: ['encerrado', 'cancelado'],
+  paciente: [],
+  agendamento_cirurgico: ['realizado', 'reprovado', 'suspenso', 'cancelado'],
+  agendamento_internacao: ['internado', 'cancelado', 'nao_compareceu'],
+};
+
+/** Situações da conta em que o atendimento já está faturado (o profissional já foi informado ao pagador). */
+export const SITUACOES_CONTA_FATURADA: readonly string[] = ['fechada', 'faturada', 'enviada', 'paga'];
+
+/** O registro ligado como está no momento da regularização. */
+export interface RegistroParaTransferir {
+  readonly tipo: TipoUsoProvisorio;
+  /** Situação atual do registro (nula no vínculo com o paciente). */
+  readonly situacao: string | null;
+  /** Há conta do atendimento fechada, faturada, enviada ou paga. */
+  readonly faturado: boolean;
+  /** O profissional que está no registro agora. */
+  readonly profissionalAtualId: number | null;
+  /** O profissional em cujo nome o registro estava quando foi ligado ao provisório (nulo: não guardado). */
+  readonly substitutoId: number | null;
+}
+
+export type PendenciaTransferencia =
+  'registro-fechado' | 'registro-faturado' | 'profissional-alterado' | 'substituto-desconhecido';
+
+/**
+ * O que impede a transferência silenciosa do profissional de um registro ligado: registro já fechado, atendimento já
+ * faturado, ou o profissional do registro não é mais o substituto declarado ao ligar (ou não foi guardado). Cada
+ * pendência pede confirmação explícita de quem regulariza; o vínculo com o paciente não troca profissional.
+ */
+export function pendenciasTransferencia(r: RegistroParaTransferir): PendenciaTransferencia[] {
+  if (COLUNA_TRANSFERIDA[r.tipo] === null) return [];
+  const p: PendenciaTransferencia[] = [];
+  if (r.situacao !== null && SITUACOES_REGISTRO_FECHADO[r.tipo].includes(r.situacao))
+    p.push('registro-fechado');
+  if (r.faturado) p.push('registro-faturado');
+  if (r.substitutoId === null) p.push('substituto-desconhecido');
+  else if (r.profissionalAtualId !== r.substitutoId) p.push('profissional-alterado');
+  return p;
+}
+
+/** Erros da transferência: com pendência, só com a confirmação explícita. */
+export function errosTransferencia(
+  registros: readonly RegistroParaTransferir[],
+  confirmado: boolean,
+): string[] {
+  if (confirmado) return [];
+  return registros.some((r) => pendenciasTransferencia(r).length > 0) ? ['transferencia-a-confirmar'] : [];
+}

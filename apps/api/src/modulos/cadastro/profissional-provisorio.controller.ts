@@ -1,10 +1,12 @@
 // Profissional provisório (F8, 02-CAD linha 21), sobre ProfissionalProvisorioProprio:
 //   GET  /api/cadastros/profissionais-provisorios?filtro=abertos|vencidos|todos   lista com o alerta do prazo
 //   GET  /api/cadastros/profissionais-provisorios/:id                             registros ligados e candidatos
+//   GET  /api/cadastros/profissionais-provisorios/:id/registros?tipo=&busca=      registros a ligar (número/paciente)
 //   POST /api/cadastros/profissionais-provisorios                                 cadastro mínimo (conselho+UF, motivo)
 //   POST /api/cadastros/profissionais-provisorios/:id/usos                        liga um registro ao provisório
 //   POST /api/cadastros/profissionais-provisorios/:id/prazo                       prorroga o prazo (com motivo)
 //   POST /api/cadastros/profissionais-provisorios/:id/regularizar                 liga ao definitivo e transfere
+//        (registro fechado, faturado ou com outro profissional só com { confirmar: true })
 //   POST /api/cadastros/profissionais-provisorios/:id/cancelar                    cancela (sem registro pendente)
 // Consulta com cadastro.profissional.ler; cadastro mínimo, registro ligado e prazo com cadastro.profissional.criar;
 // regularizar e cancelar com cadastro.profissional.editar. Gravações pelo executor, com a trilha na mesma transação.
@@ -23,6 +25,8 @@ import {
 export const PERMISSAO_PROVISORIO_LER = 'cadastro.profissional.ler';
 export const PERMISSAO_PROVISORIO_CRIAR = 'cadastro.profissional.criar';
 export const PERMISSAO_PROVISORIO_EDITAR = 'cadastro.profissional.editar';
+
+const TIPOS_USO = ['atendimento', 'paciente', 'agendamento_cirurgico', 'agendamento_internacao'] as const;
 
 type Corpo = Record<string, unknown>;
 const corpoDe = (c: unknown): Corpo => (c && typeof c === 'object' && !Array.isArray(c) ? (c as Corpo) : {});
@@ -100,6 +104,22 @@ export class ProfissionalProvisorioController {
     return this.rodar(() => this.servico().detalhe(s.porta, n));
   }
 
+  @Get(':id/registros')
+  @Permissao(PERMISSAO_PROVISORIO_LER)
+  registros(
+    @Param('id') p: string,
+    @Query('tipo') tipo: string | undefined,
+    @Query('busca') busca: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const s = sessaoDe(req);
+    idDaRota(p);
+    const tp = TIPOS_USO.find((x) => x === tipo) ?? 'atendimento';
+    return this.rodar(() =>
+      this.servico().buscarRegistros(s.porta, tp, typeof busca === 'string' ? busca : ''),
+    );
+  }
+
   @Post()
   @HttpCode(201)
   @Permissao(PERMISSAO_PROVISORIO_CRIAR)
@@ -153,7 +173,12 @@ export class ProfissionalProvisorioController {
     const s = sessaoDe(req);
     const n = idDaRota(p);
     const b = corpoDe(corpo);
-    const e = { id: n, versao: id(b['versao']) ?? 0, profissional: id(b['profissional']) ?? 0 };
+    const e = {
+      id: n,
+      versao: id(b['versao']) ?? 0,
+      profissional: id(b['profissional']) ?? 0,
+      confirmar: b['confirmar'] === true,
+    };
     const t = this.trilha(s, 'regularizar', n);
     return this.rodar(() => this.servico().regularizar(s.porta, e, t));
   }

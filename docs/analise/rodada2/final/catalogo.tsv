@@ -345,7 +345,7 @@ profissional_formacao	CAD	item	F7	Formação do profissional: grau de instruçã
 profissional_habilidade	CAD	vinculo	F8	Habilidades atribuídas a cada profissional, usadas em escala e agendamento	rodada2:nova	02	1
 profissional_instituicao_externa	CAD	vinculo	F8	Instituições externas em que o profissional atua ou é referência, com período	rodada2:nova	02	2
 profissional_provisorio	CAD	principal	F8	Cadastro mínimo de quem atende antes do cadastro completo, com prazo e situação da regularização	F21; MV PRESTADOR_VINCULO	02	1
-profissional_provisorio_uso	CAD	item	F8	Atendimentos e pacientes ligados ao cadastro provisório, para regularizar depois	F21; MV PRESTADOR_VINCULO_ATENDIME, PRESTADOR_VINCULO_PACIENTE	02	5
+profissional_provisorio_uso	CAD	item	F8	Atendimentos e pacientes ligados ao cadastro provisório, para regularizar depois	F21; MV PRESTADOR_VINCULO_ATENDIME, PRESTADOR_VINCULO_PACIENTE; transferência ao definitivo guarda o substituto declarado, o profissional anterior, a situação do registro e a confirmação (02-CAD linha 21; migração 03_CAD/99_provisorio_uso_transferencia)	02	5
 profissional_rqe	CAD	item	F3	Registros de qualificação de especialista do profissional, por conselho, UF e especialidade	F16; MV RQE_PRESTADOR	02	1
 profissional_unidade_atuacao	CAD	vinculo	F7	Unidades de internação em que o profissional atua, para listas de pacientes e passagem de plantão	rodada2:nova	02	1
 profissional_versao	CAD	historico	F3	Retrato imutável do cadastro do profissional, com registros e contatos, no momento do ato clínico	F8/F16; SPDATA HTPROFIS, HTPROFISTEL; MV LOG_PRESTADOR*	02	3

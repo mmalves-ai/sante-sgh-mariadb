@@ -2,17 +2,21 @@
 // Profissional provisório (F8, 02-CAD linha 21): `/cadastros/profissionais/provisorios`. Uma tela só: a lista com o
 // alerta do prazo (vencidos e os que vencem em até 3 dias no topo; nunca trava), o cadastro mínimo com a inscrição no
 // conselho (conselho, número e UF, como pede o conselho profissional) e o prazo sugerido de 15 dias, e, ao abrir um
-// provisório, os registros ligados, os candidatos a cadastro definitivo (mesma inscrição ou mesmo CPF: um clique para
-// regularizar e transferir os registros), a prorrogação e o cancelamento com motivo. Validação na hora pelos mesmos
+// provisório, os registros ligados (com número, paciente, data e em nome de quem estão), a busca do registro a ligar
+// pelo número, pelo prontuário ou pelo nome do paciente (nunca pelo id interno), os candidatos a cadastro definitivo
+// (mesma inscrição ou mesmo CPF: um clique para regularizar e transferir os registros; registro fechado, faturado ou em
+// nome de outro profissional aparece marcado e só passa com a confirmação explícita), a prorrogação e o cancelamento
+// com motivo. Validação na hora pelos mesmos
 // códigos do servidor (regra em @sgh/dominio-cadastro, profissional/provisorio), que confere de novo.
 import { cpfValido, somenteDigitos } from '@sgh/contratos';
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import {
+  buscarRegistros,
   cancelarProvisorio,
   criarProvisorio,
   type DetalheProvisorio,
@@ -22,8 +26,10 @@ import {
   lerProvisorios,
   ligarRegistro,
   prorrogarProvisorio,
+  type RegistroCandidato,
   regularizarProvisorio,
   type TipoUso,
+  type UsoProvisorio,
 } from '../api-provisorio.js';
 
 const { t } = useI18n();
@@ -136,7 +142,10 @@ async function gravar(): Promise<void> {
 // O provisório aberto: registros, candidatos e as ações.
 const aberto = ref<ItemProvisorio | null>(null);
 const detalhe = ref<DetalheProvisorio | null>(null);
-const uso = reactive({ tipo: 'atendimento' as TipoUso, registroId: '' });
+const uso = reactive({ tipo: 'atendimento' as TipoUso, busca: '', registroId: null as number | null });
+const candidatosRegistro = ref<RegistroCandidato[]>([]);
+const buscou = ref(false);
+const confirmar = ref(false);
 const definitivo = ref<number | null>(null);
 const prazoNovo = ref('');
 const motivoPrazo = ref('');
@@ -146,6 +155,7 @@ async function abrir(x: ItemProvisorio): Promise<void> {
   aberto.value = x;
   detalhe.value = null;
   definitivo.value = null;
+  confirmar.value = false;
   prazoNovo.value = '';
   motivoPrazo.value = '';
   motivoCancelar.value = '';
@@ -156,7 +166,58 @@ async function abrir(x: ItemProvisorio): Promise<void> {
   } catch (e) {
     erro.value = e;
   }
+  void buscar();
 }
+
+// A busca do registro a ligar: pelo número, pelo prontuário ou pelo começo do nome do paciente (sem busca: os recentes).
+let espera: ReturnType<typeof setTimeout> | undefined;
+async function buscar(): Promise<void> {
+  const x = aberto.value;
+  if (!x || !ehAberto(x) || !podeCriar.value) return;
+  try {
+    candidatosRegistro.value = await buscarRegistros(x.id, uso.tipo, uso.busca);
+    buscou.value = true;
+    if (!candidatosRegistro.value.some((k) => k.id === uso.registroId))
+      uso.registroId = candidatosRegistro.value.length === 1 ? candidatosRegistro.value[0]!.id : null;
+  } catch (e) {
+    erro.value = e;
+  }
+}
+watch(
+  () => [uso.tipo, uso.busca],
+  () => {
+    clearTimeout(espera);
+    espera = setTimeout(() => void buscar(), 300);
+  },
+);
+
+const quandoTexto = (d: string | null) => (d ? d.split('-').reverse().join('/') : '');
+function rotuloCandidato(k: RegistroCandidato): string {
+  const partes = [
+    k.numero,
+    k.paciente,
+    k.prontuario !== null ? t('profissionalProvisorio.prontuario', { n: k.prontuario }) : null,
+    quandoTexto(k.quando),
+  ];
+  if (k.profissional) partes.push(t('profissionalProvisorio.emNomeDe', { nome: k.profissional }));
+  return partes.filter(Boolean).join(' · ');
+}
+function rotuloUso(u: UsoProvisorio): string {
+  const partes = [
+    `${u.sequencia}. ${t(`profissionalProvisorio.tipos.${u.tipo}`)} ${u.numero ?? ''}`.trim(),
+    u.paciente,
+    u.prontuario !== null ? t('profissionalProvisorio.prontuario', { n: u.prontuario }) : null,
+    quandoTexto(u.quando),
+  ];
+  if (u.regularizado && u.anterior) partes.push(t('profissionalProvisorio.antes', { nome: u.anterior }));
+  else if (u.profissionalAtual)
+    partes.push(t('profissionalProvisorio.emNomeDe', { nome: u.profissionalAtual }));
+  return partes.filter(Boolean).join(' · ');
+}
+/** Os registros pendentes que a regularização só transfere com a confirmação explícita. */
+const aConfirmar = computed(() =>
+  (detalhe.value?.usos ?? []).filter((u) => !u.regularizado && u.pendencias.length),
+);
 async function recarregarAberto(): Promise<void> {
   if (!aberto.value) return;
   await visao.refetch();
@@ -167,19 +228,22 @@ async function recarregarAberto(): Promise<void> {
 
 async function ligar(): Promise<void> {
   const x = aberto.value;
-  const n = Number(uso.registroId);
-  if (!x || !Number.isInteger(n) || n <= 0) return;
+  const n = uso.registroId;
+  if (!x || n === null) return;
   if (await rodar(() => ligarRegistro(x.id, uso.tipo, n), t('profissionalProvisorio.ligado'))) {
-    uso.registroId = '';
+    uso.registroId = null;
+    uso.busca = '';
     await recarregarAberto();
   }
 }
 async function regularizar(): Promise<void> {
   const x = aberto.value;
   if (!x || definitivo.value === null) return;
+  if (aConfirmar.value.length && !confirmar.value) return;
   let transferidos = 0;
   const ok = await rodar(async () => {
-    transferidos = (await regularizarProvisorio(x.id, x.versao, definitivo.value!)).transferidos;
+    transferidos = (await regularizarProvisorio(x.id, x.versao, definitivo.value!, confirmar.value))
+      .transferidos;
   }, '');
   if (ok) {
     aviso.value = t('profissionalProvisorio.regularizado', { transferidos });
@@ -270,13 +334,19 @@ const estadoTexto = (x: ItemProvisorio) =>
             <h3>{{ t('profissionalProvisorio.ligar') }}</h3>
             <p v-if="detalhe && !detalhe.usos.length">{{ t('profissionalProvisorio.semRegistro') }}</p>
             <ul v-if="detalhe" data-testid="prov-usos">
-              <li v-for="u in detalhe.usos" :key="u.id">
-                {{ u.sequencia }}. {{ t(`profissionalProvisorio.tipos.${u.tipo}`) }} {{ u.registroId }} ·
+              <li v-for="u in detalhe.usos" :key="u.id" :data-testid="`prov-uso-${u.sequencia}`">
+                {{ rotuloUso(u) }} ·
                 {{
                   u.regularizado
                     ? t('profissionalProvisorio.transferido')
                     : t('profissionalProvisorio.pendente')
                 }}
+                <template v-if="u.regularizado && u.transferenciaConfirmada">
+                  · {{ t('profissionalProvisorio.confirmadoNaTransferencia') }}</template
+                >
+                <span v-for="pd in u.pendencias" :key="pd" class="selo selo--vencido">
+                  {{ t(`profissionalProvisorio.pendencias.${pd}`) }}</span
+                >
               </li>
             </ul>
             <div v-if="ehAberto(aberto) && podeCriar" class="linha">
@@ -287,10 +357,25 @@ const estadoTexto = (x: ItemProvisorio) =>
                 data-testid="prov-uso-tipo"
               />
               <label
-                >{{ t('profissionalProvisorio.registroId') }}
-                <input v-model="uso.registroId" inputmode="numeric" data-testid="prov-uso-registro"
+                >{{ t('profissionalProvisorio.buscarRegistro') }}
+                <input v-model="uso.busca" type="search" maxlength="80" data-testid="prov-uso-busca"
               /></label>
-              <button type="button" data-testid="prov-uso-ligar" :disabled="!uso.registroId" @click="ligar">
+              <SanteSelecao
+                v-model="uso.registroId"
+                :rotulo="t('profissionalProvisorio.registro')"
+                :opcoes="candidatosRegistro.map((k) => ({ valor: k.id, rotulo: rotuloCandidato(k) }))"
+                :busca="true"
+                data-testid="prov-uso-registro"
+              />
+              <p v-if="buscou && !candidatosRegistro.length" data-testid="prov-uso-vazio">
+                {{ t('profissionalProvisorio.semResultado') }}
+              </p>
+              <button
+                type="button"
+                data-testid="prov-uso-ligar"
+                :disabled="uso.registroId === null"
+                @click="ligar"
+              >
                 {{ t('profissionalProvisorio.ligar') }}
               </button>
             </div>
@@ -310,7 +395,24 @@ const estadoTexto = (x: ItemProvisorio) =>
                   "
                   data-testid="prov-definitivo"
                 />
-                <button type="button" data-testid="prov-regularizar" @click="regularizar">
+                <div v-if="aConfirmar.length" class="problemas" role="alert" data-testid="prov-a-confirmar">
+                  {{
+                    t('profissionalProvisorio.aConfirmar', {
+                      n: aConfirmar.length,
+                      lista: aConfirmar.map((u) => u.numero ?? u.sequencia).join(', '),
+                    })
+                  }}
+                  <label
+                    ><input v-model="confirmar" type="checkbox" data-testid="prov-confirmar" />
+                    {{ t('profissionalProvisorio.confirmarTransferencia') }}</label
+                  >
+                </div>
+                <button
+                  type="button"
+                  data-testid="prov-regularizar"
+                  :disabled="aConfirmar.length > 0 && !confirmar"
+                  @click="regularizar"
+                >
                   {{ t('profissionalProvisorio.regularizar') }}
                 </button>
               </div>
