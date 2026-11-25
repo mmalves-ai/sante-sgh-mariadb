@@ -59,6 +59,7 @@ import {
 import type { EstadoOperacao } from '@sgh/contratos';
 import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { DeParaContabilMemoria, fatosDosTitulosMemoria } from './contabil-fiscal-memoria.js';
 import { ESQUEMAS_OPERACAO_FINANCEIRO } from './esquemas.js';
 import type {
   BasesDrePorta,
@@ -2069,8 +2070,56 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     ];
   }
 
-  async deParaContabil(): Promise<DeParaContabilPorta> {
-    return { regras: [], centros: new Map(), credores: new Map(), fatos: [] };
+  // F3.8, 07-FIN linha 100: o de-para contábil da sessão sintética (contabil-fiscal-memoria.ts), por estabelecimento;
+  // o controller do contábil-fiscal grava nele quando não há núcleo, e o lote do período sai dos títulos sintéticos.
+  private readonly deParas = new Map<string, DeParaContabilMemoria>();
+
+  deParaContabilMemoria(c: ContextoFinanceiro): DeParaContabilMemoria {
+    let d = this.deParas.get(chaveDe(c));
+    if (!d) {
+      d = new DeParaContabilMemoria({
+        naturezas: CLASSIFICACOES.map((x, i) => ({
+          id: i + 1,
+          codigo: `${x.grupo}.${x.subgrupo}.${x.item}`,
+          descricao: x.nome,
+        })),
+        centros: [],
+        fornecedores: FORNECEDORES,
+        profissionais: Object.fromEntries(Object.values(MEDICOS).map((m) => [m.profissional, m.nome])),
+      });
+      this.deParas.set(chaveDe(c), d);
+    }
+    return d;
+  }
+
+  async deParaContabil(
+    c: ContextoFinanceiro,
+    periodo?: { de: string; ate: string; regua: 'competencia' | 'caixa' },
+  ): Promise<DeParaContabilPorta> {
+    const dp = this.deParaContabilMemoria(c).paraLote();
+    if (!periodo) return { ...dp, fatos: [] };
+    const titulos = [...this.e(c).titulos.values()].map((t) => {
+      const natureza = t.classificacao
+        ? CLASSIFICACOES.findIndex(
+            (x) =>
+              x.grupo === t.classificacao?.grupo &&
+              x.subgrupo === t.classificacao.subgrupo &&
+              x.item === t.classificacao.item,
+          ) + 1
+        : 0;
+      return {
+        emissao: t.emissao,
+        valor: t.valor,
+        pago: t.pago,
+        dataPagamento: t.dataPagamento,
+        documento: t.documento,
+        parcela: t.parcela,
+        natureza: natureza || null,
+        fornecedor: t.tipo === 'M' ? null : t.credor,
+        profissional: t.tipo === 'M' ? (t.profissional ?? MEDICOS[t.credor]?.profissional ?? null) : null,
+      };
+    });
+    return { ...dp, fatos: fatosDosTitulosMemoria(titulos, periodo) };
   }
 
   async retencoesDaCompetencia(
