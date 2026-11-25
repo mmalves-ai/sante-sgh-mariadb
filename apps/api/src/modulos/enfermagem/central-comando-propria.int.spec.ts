@@ -4,13 +4,17 @@
 // sistema a que deixou de ocorrer (fora da janela), nunca apagando; a ocorrência é reconhecida e resolvida com a
 // conduta (curta: recusa); o alerta de fluxo é medido no quadro e inativado sem apagar; as metas das 24 horas são
 // incluídas, cumpridas e não cumpridas só com justificativa; o quadro e a visão por paciente leem tudo; trilha na
-// mesma transação.
+// mesma transação. Correção da revisão: o encerramento pela apuração é do sistema (sem profissional); o limite de
+// fluxo geral é do estabelecimento dono (não vaza ao outro); a regra da rede só com a permissão da rede e sem código
+// repetido; a regra desligada ou fora da vigência tem as ocorrências encerradas pelo sistema.
 import { randomUUID } from 'node:crypto';
 import { type ContextoNucleo, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sqlLimparTrilha } from '../../teste/limpar-trilha.spec-util.js';
 import {
+  alertasFluxo,
   apurarRiscosTx,
+  ativarRegraTx,
   centralDoAtendimento,
   encerrarMetaTx,
   incluirAlertaFluxoTx,
@@ -23,6 +27,7 @@ import {
   quadroDaUnidade,
   type ResultadoApuracao,
   TABELAS_ALERTA_FLUXO,
+  TABELAS_ATIVAR_REGRA,
   TABELAS_META_24H,
   TABELAS_OCORRENCIA_RISCO,
   TABELAS_REGRA_RISCO,
@@ -75,17 +80,25 @@ describe.skipIf(SEM_BANCO)(
       tabelas: readonly string[],
       ent: string,
       fn: Parameters<PortaEnfermagemPropria['gravarNaTransacao']>[4],
-    ) => enf.gravarNaTransacao(op(), nome, tabelas, trilha(ent, null), fn) as Promise<T>;
+      estabelecimento?: number,
+    ) =>
+      enf.gravarNaTransacao(
+        { ...op(), ...(estabelecimento ? { estabelecimento } : {}) },
+        nome,
+        tabelas,
+        trilha(ent, null),
+        fn,
+      ) as Promise<T>;
     const apurar = (quando: Date) =>
       gravar<ResultadoApuracao>(
         'enfermagem.apurar-riscos',
         TABELAS_OCORRENCIA_RISCO,
         'ocorrencia_risco_clinico',
-        (tx, est, an) => apurarRiscosTx(tx, est, an, m!.usuario, quando),
+        (tx, est, an) => apurarRiscosTx(tx, est, an, quando),
       );
     const ocorrencias = (regra: number) =>
       ler(
-        'SELECT id, situacao, gravidade, evidencia, resolucao, reconhecido_por_usuario_id, versao FROM ocorrencia_risco_clinico WHERE regra_risco_clinico_id = ? AND atendimento_id = ? ORDER BY id',
+        'SELECT id, situacao, gravidade, evidencia, resolucao, reconhecido_por_usuario_id, resolvido_por_usuario_id, encerrado_pelo_sistema, versao FROM ocorrencia_risco_clinico WHERE regra_risco_clinico_id = ? AND atendimento_id = ? ORDER BY id',
         [regra, m!.atendimento],
       );
     const regra = (x: Partial<PedidoRegra>): PedidoRegra => ({
@@ -292,7 +305,13 @@ describe.skipIf(SEM_BANCO)(
       // Sete horas depois a aferição sai da janela de 6 horas: a B (ainda aberta) é encerrada pelo sistema.
       await apurar(new Date(agora.getTime() + 7 * 3_600_000));
       const [b2] = await ocorrencias(regraB);
-      expect(b2).toMatchObject({ situacao: 'resolvida', reconhecido_por_usuario_id: m!.usuario });
+      // Encerrada pelo sistema: nenhum profissional fica como quem reconheceu ou resolveu.
+      expect(b2).toMatchObject({
+        situacao: 'resolvida',
+        reconhecido_por_usuario_id: null,
+        resolvido_por_usuario_id: null,
+      });
+      expect(Number(b2!['encerrado_pelo_sistema'])).toBe(1);
       expect(String(b2!['resolucao'])).toContain('deixaram de ocorrer');
     });
 
@@ -448,6 +467,160 @@ describe.skipIf(SEM_BANCO)(
           [m!.est],
         ),
       ).toBeGreaterThanOrEqual(3);
+    });
+
+    it('o limite geral de fluxo é do estabelecimento dono: não aparece, não é inativado nem bloqueia o outro', async () => {
+      const incluirGeral = (estabelecimento: number) =>
+        gravar<{ id: number }>(
+          'enfermagem.incluir-alerta-fluxo',
+          TABELAS_ALERTA_FLUXO,
+          'alerta_fluxo_unidade',
+          (tx, est, an) =>
+            incluirAlertaFluxoTx(tx, est, an, {
+              unidade: null,
+              tipo: 'leito_higienizacao',
+              unidadeLimite: 'quantidade',
+              limiteAtencao: null,
+              limiteCritico: 5,
+              indicador: null,
+            }),
+          estabelecimento,
+        );
+      const doA = await incluirGeral(m!.est);
+      expect(
+        await contar(
+          'SELECT COUNT(*) AS n FROM alerta_fluxo_unidade WHERE id = ? AND estabelecimento_id = ?',
+          [doA.id, m!.est],
+        ),
+      ).toBe(1);
+      const lidosB = await enf.lerNoBanco({ ...ctx(), estabelecimento: m!.outroEst }, (l, est) =>
+        alertasFluxo(l, est),
+      );
+      expect(lidosB.some((a) => a.id === doA.id)).toBe(false);
+      await expect(
+        gravar(
+          'enfermagem.inativar-alerta-fluxo',
+          TABELAS_ALERTA_FLUXO,
+          'alerta_fluxo_unidade',
+          (tx, est, an) =>
+            inativarAlertaFluxoTx(tx, est, an, doA.id, 1, 'Tentativa do outro estabelecimento'),
+          m!.outroEst,
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'alerta-inexistente' } });
+      // O outro estabelecimento cria o próprio limite geral do mesmo tipo sem receber "repetido".
+      const doB = await incluirGeral(m!.outroEst);
+      expect(doB.id).not.toBe(doA.id);
+      await expect(incluirGeral(m!.est)).rejects.toMatchObject({ problema: { codigo: 'alerta-repetido' } });
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM alerta_fluxo_unidade WHERE id IN (?, ?) AND ativo', [
+          doA.id,
+          doB.id,
+        ]),
+      ).toBe(2);
+    });
+
+    it('a regra da rede só com a permissão da rede e sem código repetido entre a rede e o estabelecimento', async () => {
+      const nunca = {
+        tipo: 'sinal_vital' as const,
+        exame: null,
+        item: null,
+        cid: null,
+        parametroVital: fc,
+        valorMinimo: 999_999,
+        valorMaximo: null,
+        permanenciaMinimaHoras: null,
+        negado: false,
+      };
+      const incluir = (x: Partial<PedidoRegra>, podeRede: boolean) =>
+        gravar<{ id: number }>(
+          'enfermagem.incluir-regra-risco',
+          TABELAS_REGRA_RISCO,
+          'regra_risco_clinico',
+          (tx, est, an) => incluirRegraTx(tx, est, an, regra({ criterios: [nunca], ...x }), podeRede),
+        );
+      await expect(incluir({ codigo: `${MARCA}-REDE`, paraTodaRede: true }, false)).rejects.toMatchObject({
+        problema: { codigo: 'regra-da-rede' },
+      });
+      const rede = await incluir({ codigo: `${MARCA}-REDE`, paraTodaRede: true }, true);
+      expect(
+        await contar(
+          'SELECT COUNT(*) AS n FROM regra_risco_clinico WHERE id = ? AND estabelecimento_id IS NULL',
+          [rede.id],
+        ),
+      ).toBe(1);
+      // O mesmo código no estabelecimento (com ou sem a permissão) é recusado: abririam duas ocorrências.
+      await expect(incluir({ codigo: `${MARCA}-REDE` }, true)).rejects.toMatchObject({
+        problema: { codigo: 'regra-repetida' },
+      });
+      // A regra da rede com o código de uma do estabelecimento também é recusada.
+      await expect(incluir({ codigo: `${MARCA}-A`, paraTodaRede: true }, true)).rejects.toMatchObject({
+        problema: { codigo: 'regra-repetida' },
+      });
+      const desligar = (id: number, versao: number, podeRede: boolean) =>
+        gravar<{ versao: number; encerradas: number }>(
+          'enfermagem.ativar-regra-risco',
+          TABELAS_ATIVAR_REGRA,
+          'regra_risco_clinico',
+          (tx, est, an) =>
+            ativarRegraTx(
+              tx,
+              est,
+              an,
+              id,
+              versao,
+              false,
+              'Regra revista pela diretoria',
+              podeRede,
+              new Date(),
+            ),
+        );
+      await expect(desligar(rede.id, 1, false)).rejects.toMatchObject({
+        problema: { codigo: 'regra-da-rede' },
+      });
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM regra_risco_clinico WHERE id = ? AND ativo', [rede.id]),
+      ).toBe(1);
+      await desligar(rede.id, 1, true);
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM regra_risco_clinico WHERE id = ? AND NOT ativo', [rede.id]),
+      ).toBe(1);
+    });
+
+    it('a regra desligada ou fora da vigência tem as ocorrências encerradas pelo sistema', async () => {
+      // Reacende A e B agora (a taquicardia está na janela e a profilaxia continua ausente).
+      await apurar(new Date());
+      const acesa = (regraId: number) =>
+        ocorrencias(regraId).then((os) => os.filter((o) => o['situacao'] === 'aberta'));
+      expect(await acesa(regraA)).toHaveLength(1);
+      expect(await acesa(regraB)).toHaveLength(1);
+      // Desligar a A encerra a dela na hora, pelo sistema.
+      const va = Number(
+        (await ler('SELECT versao FROM regra_risco_clinico WHERE id = ?', [regraA]))[0]!['versao'],
+      );
+      const r = await gravar<{ encerradas: number }>(
+        'enfermagem.ativar-regra-risco',
+        TABELAS_ATIVAR_REGRA,
+        'regra_risco_clinico',
+        (tx, est, an) =>
+          ativarRegraTx(tx, est, an, regraA, va, false, 'Regra suspensa pela comissão', false, new Date()),
+      );
+      expect(r.encerradas).toBe(1);
+      // A B sai da vigência (fim ontem): a apuração encerra a dela pelo sistema, com o motivo.
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-vigencia` }, (e) =>
+        e.executar('UPDATE regra_risco_clinico SET vigencia_fim = ? WHERE id = ?', [
+          new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
+          regraB,
+        ]),
+      );
+      await apurar(new Date());
+      for (const id of [regraA, regraB]) {
+        const os = await ocorrencias(id);
+        expect(os.filter((o) => ['aberta', 'reconhecida'].includes(String(o['situacao'])))).toHaveLength(0);
+        const ultima = os[os.length - 1]!;
+        expect(ultima).toMatchObject({ situacao: 'resolvida', resolvido_por_usuario_id: null });
+        expect(Number(ultima['encerrado_pelo_sistema'])).toBe(1);
+        expect(String(ultima['resolucao'])).toContain('desligada ou saiu da vigência');
+      }
     });
   },
 );

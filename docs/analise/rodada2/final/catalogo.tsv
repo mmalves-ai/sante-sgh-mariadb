@@ -2300,7 +2300,7 @@ agendamento_relatorio	REL	configuracao	F3	Envio agendado de relatório: periodic
 agendamento_relatorio_destinatario	REL	item	F3	Destinatários de cada agendamento (usuário, lista de distribuição ou endereço)	SPDATA TBEDITREL_AGENDA (destinatários)	01	1
 agrupamento_relatorio	REL	principal	F3	Conjunto nomeado de relatórios executados juntos (conferência de envio trabalhista e fiscal)	SPDATA TBAGRUPRELAT (29)	01	1
 agrupamento_relatorio_item	REL	item	F3	Relatórios de cada agrupamento, com ordem e versão de leiaute	SPDATA TBAGRUPRELAT_TBEDITREL (61)	01	1
-alerta_fluxo_unidade	REL	configuracao	F8	Limites de fluxo da unidade que geram alerta (espera, ocupação, altas pendentes, leitos bloqueados)	DBAMV GF_ALERTAS, GF_DADOS_INTERNACAO	01	1
+alerta_fluxo_unidade	REL	configuracao	F8	Limites de fluxo da unidade que geram alerta (espera, ocupação, altas pendentes, leitos bloqueados); estabelecimento dono, o limite sem unidade vale só para ele	DBAMV GF_ALERTAS, GF_DADOS_INTERNACAO; construir-2 C2-053, migração 19_REL/97_central_comando_dono	01	1
 analise_critica_indicador	REL	item	F7	Análise do resultado fora da meta: causa, comentário, responsável e ação proposta	DBAPORTAL INDICADOR_ANALISE_CRITICA, INDICADOR_REUNIAO | Área 3 (gestão da qualidade); DBAPORTAL.INDICADOR_ANALISE_CRITICA, ANALISE_CRITICA; o indicador e a apuração são do 01 (indicador, apuracao_indicador); new-sgh dominio-qualidade/gestao/ficha-indicador.ts	01	7
 analise_objetivo_estrategico	REL	item	F8	Análise periódica de desempenho de um objetivo estratégico: tendência, recomendação e responsável	rodada2:nova	01	1
 analise_salva	REL	principal	F8	Análise ad hoc salva sobre o data mart: assunto, filtros, linhas, colunas e medidas, sem dado identificável	DBACP PLAN_PLANILHA_DINAMICA, PLAN_FILTROS_PLANILHA, PLAN_PROMPT, PLAN_DATAMART	01	16
@@ -2339,7 +2339,7 @@ modelo_pauta_analise_critica_item	REL	item	F8	Bloco do modelo de pauta (gráfico
 objetivo_estrategico	REL	principal	F8	Objetivo do mapa, com perspectiva, tema, dono e descrição	DBAPORTAL OBJETIVO, OBJETIVO_CONTRIBUICAO	01	2
 objetivo_estrategico_indicador	REL	vinculo	F8	Indicadores que medem cada objetivo, com peso	DBAPORTAL ESTRATEGIA_OBJETIVO_INDICADOR	01	2
 objetivo_estrategico_relacao	REL	vinculo	F8	Relação de causa e efeito entre objetivos do mapa	DBAPORTAL OBJETIVO_CAUSA_EFEITO	01	3
-ocorrencia_risco_clinico	REL	principal	F8	Risco acendido para um paciente na unidade: regra, momento, gravidade, quem reconheceu e resolução	DBAMV GF_ALERTAS, GF_USUARIO_ALERTA; depende de atendimento (grupo 02) e PEP (grupo 03)	01	0
+ocorrencia_risco_clinico	REL	principal	F8	Risco acendido para um paciente na unidade: regra, momento, gravidade, quem reconheceu e resolução; encerramento pelo sistema marcado, sem profissional	DBAMV GF_ALERTAS, GF_USUARIO_ALERTA; depende de atendimento (grupo 02) e PEP (grupo 03); construir-2 C2-053, migração 19_REL/97_central_comando_dono	01	0
 painel_gerencial	REL	principal	F3	Painel gerencial nomeado, com público, estabelecimento e período padrão	DBACP CONFIG_GRAFICO_*; DBAPORTAL PREFERENCIA_GRAFICO, PREFERENCIA_IND_VISUALIZACAO	01	3
 painel_gerencial_item	REL	item	F3	Indicadores e gráficos de cada painel gerencial, com posição e forma de exibição	DBACP CONFIG_GRAFICO_*; DBAPORTAL IVM_LINK	01	9
 painel_gerencial_permissao	REL	vinculo	F3	Perfis ou usuários que podem abrir cada painel gerencial	rodada2:nova	verif-01	0

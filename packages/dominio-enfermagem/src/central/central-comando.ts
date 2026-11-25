@@ -206,9 +206,40 @@ function achado(
 export const horasAntes = (agora: string, horas: number): string =>
   new Date(Date.parse(agora) - horas * 3_600_000).toISOString();
 
+/** A regra está na vigência no dia (`hoje`: data ou instante ISO; o dia do fim ainda vale)? */
+export function regraVigente(r: Pick<RegraRisco, 'vigenciaInicio' | 'vigenciaFim'>, hoje: string): boolean {
+  const dia = hoje.slice(0, 10);
+  return dia >= r.vigenciaInicio && (r.vigenciaFim === null || dia <= r.vigenciaFim);
+}
+
+/**
+ * Quem pode criar, ligar ou desligar a regra: a regra da rede inteira (sem estabelecimento dono) vale para todos os
+ * hospitais do cliente e só a altera quem tem a permissão da rede (ou o administrador); a do estabelecimento, quem
+ * configura as regras nele.
+ */
+export function problemaDoDonoDaRegra(daRede: boolean, podeRede: boolean): 'regra-da-rede' | null {
+  return daRede && !podeRede ? 'regra-da-rede' : null;
+}
+export const MENSAGEM_REGRA_DA_REDE =
+  'A regra vale para toda a rede: só quem tem a permissão da rede (ou o administrador) a cria, liga ou desliga.';
+
+/** Os motivos do encerramento feito pelo sistema (sem profissional: o usuário da apuração fica só na trilha). */
+export const MOTIVOS_ENCERRAMENTO_SISTEMA = {
+  criterios: 'Encerrada pela apuração: os critérios da regra deixaram de ocorrer.',
+  regraFora: 'Encerrada pelo sistema: a regra foi desligada ou saiu da vigência.',
+} as const;
+
+/** As ocorrências abertas ou reconhecidas cuja regra não está mais entre as vigentes (a encerrar pelo sistema). */
+export function ocorrenciasDeRegraFora(
+  abertas: readonly { readonly id: number; readonly regra: number }[],
+  vigentes: ReadonlySet<number>,
+): number[] {
+  return abertas.filter((o) => !vigentes.has(o.regra)).map((o) => o.id);
+}
+
 /** A regra vale para o paciente hoje (vigência, sexo e idade)? */
 export function regraAplicavel(r: RegraRisco, f: FatosRisco, hoje: string): boolean {
-  if (hoje < r.vigenciaInicio || (r.vigenciaFim !== null && hoje > r.vigenciaFim)) return false;
+  if (!regraVigente(r, hoje)) return false;
   if (r.sexo !== 'ambos' && f.sexo !== r.sexo) return false;
   if (r.idadeMinimaDias !== null && (f.idadeDias === null || f.idadeDias < r.idadeMinimaDias)) return false;
   if (r.idadeMaximaDias !== null && (f.idadeDias === null || f.idadeDias > r.idadeMaximaDias)) return false;

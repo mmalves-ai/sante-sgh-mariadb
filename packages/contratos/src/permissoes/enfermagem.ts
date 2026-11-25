@@ -37,6 +37,8 @@ export const PERMISSOES_ENFERMAGEM = {
   auditoriaChecagemAuditar: 'enfermagem.auditoriaChecagem.auditar',
   // 03-PEP linha 115 (C2-003): limites de alerta dos sinais vitais e regra do parâmetro no setor.
   limiteSinalEditar: 'enfermagem.limiteSinal.editar',
+  // 01-ADM L117 (C2-053): criar, ligar e desligar a regra de risco clínico que vale para toda a rede.
+  regraRiscoRedePublicar: 'enfermagem.regraRiscoRede.publicar',
 } as const;
 const P = PERMISSOES_ENFERMAGEM;
 
@@ -125,5 +127,12 @@ export const PERMISSOES_ENFERMAGEM_M25: readonly DeclaracaoPermissao[] = [
       perfis: ['assistencial-com-conselho', 'gestao-qualidade', 'administrador-sistema'],
       criticidade: 'normal',
     },
+  ),
+  // Recurso só do novo (01-ADM L117): a regra de risco da rede vale para todos os hospitais do cliente; concedida
+  // por perfil à diretoria da rede e ao administrador.
+  p(
+    P.regraRiscoRedePublicar,
+    'Criar, ligar e desligar as regras de risco clínico da central de comando que valem para toda a rede',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['diretoria-rede', 'administrador-sistema'] },
   ),
 ];

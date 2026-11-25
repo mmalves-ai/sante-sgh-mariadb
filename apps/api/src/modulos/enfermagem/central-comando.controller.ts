@@ -36,6 +36,7 @@ import {
   apoioCentral,
   apurarRiscosTx,
   ativarRegraTx,
+  TABELAS_ATIVAR_REGRA,
   centralDoAtendimento,
   encerrarMetaTx,
   inativarAlertaFluxoTx,
@@ -58,6 +59,8 @@ import { PortaEnfermagemPropria } from './porta-propria.js';
 
 const CONFIG_LER = 'recepcao.protocolo.ler';
 const CONFIG_PUBLICAR = 'recepcao.protocolo.publicar';
+/** A regra da rede inteira (sem estabelecimento dono) só com a permissão da rede. */
+const REGRA_REDE = 'enfermagem.regraRiscoRede.publicar';
 const LIDO = EVENTOS_AUDITAVEIS.enfermagemProtocoloInternadoLido.codigo;
 const id = z.number().int().positive();
 const versao = z.number().int().positive();
@@ -208,14 +211,14 @@ export class CentralComandoController {
   @Permissao(P.escoreRegistrar)
   @AuditadoNoHandler('as ocorrências em ocorrencia_risco_clinico com a trilha_auditoria na mesma transação')
   async apurar(@Req() req: RequisicaoAutorizada) {
-    const usuario = this.usuario(req);
+    // Quem apurou fica só na trilha da operação: o encerramento automático é do sistema, sem profissional.
     const s = sessaoComAto(sessaoDe(req), { apuracao: true }, null, ':apuracao-risco');
     const r = await this.propria().gravarNaTransacao(
       s.porta,
       'enfermagem.apurar-riscos',
       TABELAS_OCORRENCIA_RISCO,
       trilha('inclusao', 'ocorrencia_risco_clinico', null),
-      (tx, est, an) => apurarRiscosTx(tx, est, an, usuario, new Date()),
+      (tx, est, an) => apurarRiscosTx(tx, est, an, new Date()),
     );
     return { ok: true, ...r, mensagem: 'Riscos apurados.' };
   }
@@ -312,13 +315,14 @@ export class CentralComandoController {
   )
   async incluirRegra(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const e = corpo(esquemaRegra, b);
+    const podeRede = sessaoDe(req).pode(REGRA_REDE);
     const s = sessaoComAto(sessaoDe(req), e, null, ':regra-risco');
     const r = await this.propria().gravarNaTransacao<{ id: number }>(
       s.porta,
       'enfermagem.incluir-regra-risco',
       TABELAS_REGRA_RISCO,
       (f) => trilha('inclusao', 'regra_risco_clinico', f.id),
-      (tx, est, an) => incluirRegraTx(tx, est, an, e),
+      (tx, est, an) => incluirRegraTx(tx, est, an, e, podeRede),
     );
     return { ok: true, ...r, mensagem: 'Regra incluída: entra na próxima apuração.' };
   }
@@ -330,13 +334,14 @@ export class CentralComandoController {
   async ativarRegra(@Param('id') idRota: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(idRota);
     const e = corpo(esquemaAtivacao, b);
+    const podeRede = sessaoDe(req).pode(REGRA_REDE);
     const s = sessaoComAto(sessaoDe(req), { regra: n, ...e }, null, ':ativar-regra-risco');
     const r = await this.propria().gravarNaTransacao(
       s.porta,
       'enfermagem.ativar-regra-risco',
-      TABELAS_REGRA_RISCO,
+      TABELAS_ATIVAR_REGRA,
       trilha('alteracao', 'regra_risco_clinico', n),
-      (tx, est, an) => ativarRegraTx(tx, est, an, n, e.versao, e.ativo, e.motivo),
+      (tx, est, an) => ativarRegraTx(tx, est, an, n, e.versao, e.ativo, e.motivo, podeRede),
     );
     return { ok: true, ...r, mensagem: e.ativo ? 'Regra ligada.' : 'Regra desligada.' };
   }

@@ -8,14 +8,17 @@ import {
   gravidadeDaOcorrencia,
   metaAtrasada,
   nivelDoAlerta,
+  ocorrenciasDeRegraFora,
   ordemDoQuadro,
   percentualOcupacao,
   problemaDaNovaMeta,
   problemaDaPassagem,
+  problemaDoDonoDaRegra,
   problemaDoEncerramentoMeta,
   problemasDaRegraRisco,
   problemasDoAlertaFluxo,
   type RegraRisco,
+  regraVigente,
 } from './central-comando.js';
 
 const AGORA = '2026-11-25T12:00:00.000Z';
@@ -189,6 +192,38 @@ describe('apuração do risco por paciente', () => {
     expect(problemaDaPassagem('aberta', 'resolver', 'curto')).toBe('resolucao-curta');
     expect(problemaDaPassagem('reconhecida', 'descartar', 'falso positivo do exame')).toBeNull();
     expect(problemaDaPassagem('resolvida', 'resolver', 'qualquer coisa longa')).toBe('ja-encerrada');
+  });
+});
+
+describe('dono da regra e encerramento pelo sistema', () => {
+  it('vigência por dia, com o dia do fim ainda valendo', () => {
+    const r = { vigenciaInicio: '2026-11-01', vigenciaFim: '2026-11-25' };
+    expect(regraVigente(r, AGORA)).toBe(true);
+    expect(regraVigente(r, '2026-11-26T00:10:00.000Z')).toBe(false);
+    expect(regraVigente(r, '2026-10-31')).toBe(false);
+    expect(regraVigente({ vigenciaInicio: '2026-01-01', vigenciaFim: null }, AGORA)).toBe(true);
+    // O último dia da vigência ainda acende (antes comparava o instante com a data e perdia o dia do fim).
+    const ultima = regra({
+      vigenciaFim: '2026-11-25',
+      criterios: [crit({ tipo: 'diagnostico', cid: 'I10' })],
+    });
+    expect(avaliarRegraRisco(ultima, fatos({ cids: ['I10'] }), AGORA).acende).toBe(true);
+  });
+
+  it('a regra da rede só com a permissão da rede', () => {
+    expect(problemaDoDonoDaRegra(true, false)).toBe('regra-da-rede');
+    expect(problemaDoDonoDaRegra(true, true)).toBeNull();
+    expect(problemaDoDonoDaRegra(false, false)).toBeNull();
+  });
+
+  it('encerra só as ocorrências cuja regra saiu das vigentes', () => {
+    const abertas = [
+      { id: 1, regra: 10 },
+      { id: 2, regra: 11 },
+      { id: 3, regra: 10 },
+    ];
+    expect(ocorrenciasDeRegraFora(abertas, new Set([10]))).toEqual([2]);
+    expect(ocorrenciasDeRegraFora(abertas, new Set())).toEqual([1, 2, 3]);
   });
 });
 

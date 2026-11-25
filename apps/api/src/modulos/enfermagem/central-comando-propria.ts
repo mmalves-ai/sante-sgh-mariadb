@@ -24,21 +24,26 @@ import {
   gravidadeDaOcorrencia,
   type GravidadeRegraRisco,
   horasAntes,
+  MENSAGEM_REGRA_DA_REDE,
   MENSAGENS_ALERTA_FLUXO,
   MENSAGENS_META_24H,
   MENSAGENS_OCORRENCIA,
   MENSAGENS_REGRA_RISCO,
   metaAtrasada,
+  MOTIVOS_ENCERRAMENTO_SISTEMA,
   nivelDoAlerta,
+  ocorrenciasDeRegraFora,
   ordemDoQuadro,
   PESO_GRAVIDADE,
   percentualOcupacao,
   problemaDaNovaMeta,
   problemaDaPassagem,
+  problemaDoDonoDaRegra,
   problemaDoEncerramentoMeta,
   problemasDaRegraRisco,
   problemasDoAlertaFluxo,
   type RegraRisco,
+  regraVigente,
   type SituacaoMeta24h,
   type SituacaoOcorrenciaRisco,
   type TipoAlertaFluxo,
@@ -54,6 +59,8 @@ export const TABELAS_REGRA_RISCO = [
   'regra_risco_clinico',
   'regra_risco_clinico_criterio',
 ] as const;
+/** Ligar ou desligar a regra: desligada, encerra pelo sistema as ocorrências acesas dela. */
+export const TABELAS_ATIVAR_REGRA = [...TABELAS_REGRA_RISCO, 'ocorrencia_risco_clinico'] as const;
 export const TABELAS_ALERTA_FLUXO = ['alerta_fluxo_unidade'] as const;
 export const TABELAS_OCORRENCIA_RISCO = ['ocorrencia_risco_clinico'] as const;
 export const TABELAS_META_24H = ['meta_cuidado_24h'] as const;
@@ -238,17 +245,26 @@ export async function incluirRegraTx(
   est: number,
   an: AnotacaoGravacao,
   e: PedidoRegra,
+  podeRede = false,
 ): Promise<{ id: number }> {
   const p = problemasDaRegraRisco(e)[0];
   if (p) throw recusa(p, MENSAGENS_REGRA_RISCO[p]);
+  const pd = problemaDoDonoDaRegra(e.paraTodaRede, podeRede);
+  if (pd) throw recusa(pd, MENSAGEM_REGRA_DA_REDE);
   const tema = await tx.uma(`SELECT id FROM ${T_TEMA} WHERE id = ? AND ativo`, [e.tema]);
   if (!tema) throw recusa('tema-inexistente', 'O tema clínico escolhido não existe ou está inativo.');
   const dono = e.paraTodaRede ? null : est;
-  const ja = await tx.uma(`SELECT id FROM ${T_REGRA} WHERE codigo = ? AND (estabelecimento_id <=> ?)`, [
-    e.codigo,
-    dono,
-  ]);
-  if (ja) throw recusa('regra-repetida', 'Já existe uma regra com este código.');
+  // O código é único entre a regra da rede e a de cada estabelecimento: as duas abririam ocorrências para o mesmo
+  // paciente. A regra da rede não repete o código de nenhum estabelecimento; a do estabelecimento, nem o da rede.
+  const ja = await tx.uma(
+    `SELECT id FROM ${T_REGRA} WHERE codigo = ? AND (? IS NULL OR estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+    [e.codigo, dono, dono],
+  );
+  if (ja)
+    throw recusa(
+      'regra-repetida',
+      'Já existe uma regra com este código, neste estabelecimento ou na rede: ajuste a existente.',
+    );
   for (const c of e.criterios) {
     const alvo =
       c.tipo === 'exame'
@@ -306,16 +322,55 @@ export async function ativarRegraTx(
   versao: number,
   ativo: boolean,
   motivo: string,
-): Promise<{ id: number; versao: number }> {
+  podeRede = false,
+  agora: Date = new Date(),
+): Promise<{ id: number; versao: number; encerradas: number }> {
   const r = await tx.uma(
-    `SELECT id FROM ${T_REGRA} WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+    `SELECT id, estabelecimento_id FROM ${T_REGRA} WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
     [id, est],
   );
   if (!r) throw recusa('regra-inexistente', 'A regra de risco não existe neste estabelecimento.');
+  const pd = problemaDoDonoDaRegra(r['estabelecimento_id'] == null, podeRede);
+  if (pd) throw recusa(pd, MENSAGEM_REGRA_DA_REDE);
   const nova = await tx.alterar(T_REGRA, id, versao, { ativo });
+  // Desligada, as ocorrências abertas da regra (em todo estabelecimento a que ela vale) são encerradas pelo sistema.
+  const encerradas = ativo
+    ? 0
+    : await encerrarPeloSistema(
+        tx,
+        (
+          await tx.consultarParaAtualizar(
+            `SELECT id, versao FROM ${T_OCORRENCIA}
+              WHERE regra_risco_clinico_id = ? AND situacao IN ('aberta','reconhecida') AND excluido_em IS NULL`,
+            [id],
+          )
+        ).map((o) => ({ id: num(o['id']), versao: num(o['versao']) })),
+        MOTIVOS_ENCERRAMENTO_SISTEMA.regraFora,
+        agora,
+      );
   an.motivo = motivo;
-  an.dados = { ativo };
-  return { id, versao: nova };
+  an.dados = { ativo, encerradas };
+  return { id, versao: nova, encerradas };
+}
+
+/**
+ * Encerra pelo sistema (resolvida, com o motivo; nunca apagada): sem profissional no reconhecimento nem na resolução,
+ * que ele não fez; quem disparou a apuração fica só na trilha da operação.
+ */
+async function encerrarPeloSistema(
+  tx: TxOperacao,
+  os: readonly { readonly id: number; readonly versao: number }[],
+  motivo: string,
+  agora: Date,
+): Promise<number> {
+  for (const o of os)
+    await tx.alterar(T_OCORRENCIA, o.id, o.versao, {
+      situacao: 'resolvida',
+      resolvido_em: agora,
+      resolucao: motivo,
+      encerrado_pelo_sistema: true,
+    });
+  return os.length;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -336,7 +391,7 @@ export async function alertasFluxo(l: Leitor, est: number, soAtivos = false): Pr
       `SELECT a.id, a.unidade_assistencial_id, u.nome, a.indicador_id, a.tipo_alerta, a.unidade_limite,
               a.limite_atencao, a.limite_critico, a.alertar_painel, a.ativo, a.versao
          FROM ${T_ALERTA} a LEFT JOIN unidade_assistencial u ON u.id = a.unidade_assistencial_id
-        WHERE (a.unidade_assistencial_id IS NULL OR u.estabelecimento_id = ?) ${soAtivos ? 'AND a.ativo' : ''}
+        WHERE a.estabelecimento_id = ? ${soAtivos ? 'AND a.ativo' : ''}
         ORDER BY a.ativo DESC, u.nome, a.tipo_alerta`,
       [est],
     )
@@ -375,8 +430,9 @@ export async function incluirAlertaFluxoTx(
     if (!u) throw recusa('unidade-inexistente', 'A unidade não é deste estabelecimento.');
   }
   const ja = await tx.uma(
-    `SELECT id FROM ${T_ALERTA} WHERE ativo AND tipo_alerta = ? AND (unidade_assistencial_id <=> ?) AND (indicador_id <=> ?)`,
-    [e.tipo, e.unidade, e.indicador],
+    `SELECT id FROM ${T_ALERTA} WHERE estabelecimento_id = ? AND ativo AND tipo_alerta = ?
+        AND (unidade_assistencial_id <=> ?) AND (indicador_id <=> ?)`,
+    [est, e.tipo, e.unidade, e.indicador],
   );
   if (ja)
     throw recusa(
@@ -384,6 +440,7 @@ export async function incluirAlertaFluxoTx(
       'Já existe um alerta ativo deste tipo para a unidade: ajuste ou inative-o.',
     );
   const id = await tx.incluir(T_ALERTA, {
+    estabelecimento_id: est,
     unidade_assistencial_id: e.unidade,
     indicador_id: e.indicador,
     tipo_alerta: e.tipo,
@@ -631,10 +688,12 @@ export async function apurarRiscosTx(
   tx: TxOperacao,
   est: number,
   an: AnotacaoGravacao,
-  usuario: number,
   agora: Date,
 ): Promise<ResultadoApuracao> {
-  const regras = (await regrasRisco(tx, est, true)).filter((r) => r.criterios.length > 0);
+  const agoraIso = agora.toISOString();
+  const regras = (await regrasRisco(tx, est, true)).filter(
+    (r) => r.criterios.length > 0 && regraVigente(r, agoraIso),
+  );
   const ps = await pacientesEmAcompanhamento(tx, est, agora);
   const janela = Math.max(24, ...regras.map((r) => r.janelaHoras ?? 24));
   const fatos = await fatosDosPacientes(tx, ps, agora, janela);
@@ -651,7 +710,6 @@ export async function apurarRiscosTx(
   const porChave = new Map(
     abertas.map((o) => [chave(num(o['regra_risco_clinico_id']), num(o['atendimento_id'])), o]),
   );
-  const agoraIso = agora.toISOString();
   let n = { abertas: 0, mantidas: 0, encerradas: 0 };
   for (const p of ps)
     for (const r of regras) {
@@ -676,17 +734,41 @@ export async function apurarRiscosTx(
         n = { ...n, abertas: n.abertas + 1 };
       } else if (acao === 'manter') n = { ...n, mantidas: n.mantidas + 1 };
       else if (acao === 'encerrar' && o) {
-        const reconhecida = texto(o['situacao']) === 'reconhecida';
-        await tx.alterar(T_OCORRENCIA, num(o['id']), num(o['versao']), {
-          situacao: 'resolvida',
-          ...(reconhecida ? {} : { reconhecido_em: agora, reconhecido_por_usuario_id: usuario }),
-          resolvido_em: agora,
-          resolvido_por_usuario_id: usuario,
-          resolucao: 'Encerrada pela apuração: os critérios da regra deixaram de ocorrer.',
-        });
+        await encerrarPeloSistema(
+          tx,
+          [{ id: num(o['id']), versao: num(o['versao']) }],
+          MOTIVOS_ENCERRAMENTO_SISTEMA.criterios,
+          agora,
+        );
         n = { ...n, encerradas: n.encerradas + 1 };
       }
     }
+  // As ocorrências acesas por regra desligada, de tema inativo ou fora da vigência (de qualquer paciente) são
+  // encerradas pelo sistema: não ficam acesas no quadro para sempre.
+  const acesas = await tx.consultarParaAtualizar(
+    `SELECT id, regra_risco_clinico_id, versao FROM ${T_OCORRENCIA}
+      WHERE estabelecimento_id = ? AND situacao IN ('aberta','reconhecida') AND excluido_em IS NULL`,
+    [est],
+  );
+  const fora = new Set(
+    ocorrenciasDeRegraFora(
+      acesas.map((o) => ({ id: num(o['id']), regra: num(o['regra_risco_clinico_id']) })),
+      new Set(regras.map((r) => r.id)),
+    ),
+  );
+  n = {
+    ...n,
+    encerradas:
+      n.encerradas +
+      (await encerrarPeloSistema(
+        tx,
+        acesas
+          .filter((o) => fora.has(num(o['id'])))
+          .map((o) => ({ id: num(o['id']), versao: num(o['versao']) })),
+        MOTIVOS_ENCERRAMENTO_SISTEMA.regraFora,
+        agora,
+      )),
+  };
   const r = { avaliados: ps.length, regras: regras.length, ...n };
   an.dados = { ...r };
   return r;
