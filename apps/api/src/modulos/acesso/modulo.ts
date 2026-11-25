@@ -15,6 +15,8 @@ import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/configuracao-fonte.js';
 import type { ContextoModulo } from '../registro.js';
+import { AvisosClinicosController } from './avisos-clinicos.controller.js';
+import { PORTA_AVISOS_CLINICOS, PortaAvisosClinicosPropria } from './avisos-clinicos-propria.js';
 import { parteComunicacaoDoAcesso } from './comunicacao-modulo.js';
 import { ConsultaAcessoController } from './consulta.controller.js';
 import { ContasBancoController } from './contas-banco/contas-banco.controller.js';
@@ -105,7 +107,13 @@ export async function moduloAcesso(
         ? fonteGestaoMemoria(ctx.trilha)
         : null);
   const comunicacao = parteComunicacaoDoAcesso(ctx, gestao);
-  const controllers: Type[] = [SaneamentoController, ...comunicacao.controllers, ContasBancoController];
+  const controllers: Type[] = [
+    SaneamentoController,
+    ...comunicacao.controllers,
+    ContasBancoController,
+    // F3.5 (05-SADT linha 10): os avisos clínicos do destinatário na central de avisos (só com o banco do cliente).
+    AvisosClinicosController,
+  ];
   if (gestao)
     controllers.push(
       RhAcessoController,
@@ -128,6 +136,10 @@ export async function moduloAcesso(
       servico,
       ...comunicacao.providers,
       { provide: PORTA_CONTAS_BANCO, useValue: contasBancoDoModulo(ctx) },
+      {
+        provide: PORTA_AVISOS_CLINICOS,
+        useValue: ctx.nucleo && cliente ? new PortaAvisosClinicosPropria(ctx.nucleo, cliente) : null,
+      },
       ...(identidade ? [{ provide: SERVICO_IDENTIDADE, useValue: identidade }] : []),
       ...(gestao
         ? [
