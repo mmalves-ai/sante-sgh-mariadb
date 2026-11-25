@@ -21,6 +21,8 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
+import { type Coberturas, lerCoberturas } from '../../cadastro/api-vinculos.js';
+import OrigemNaAbertura from '../../cadastro/componentes/OrigemNaAbertura.vue';
 import { dataBr } from '../../agenda/formato.js';
 import {
   abrirAtendimento,
@@ -33,6 +35,7 @@ import {
   marcarNaoIdentificado,
   novaChave,
 } from '../api-atendimento.js';
+import { preenchimentoDaCobertura } from '../cobertura-abertura.js';
 import { preenchimentoDaMarcacao, tipoInicialDaAbertura } from '../regras-tela.js';
 import AvisoAtendimento from '../componentes/AvisoAtendimento.vue';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
@@ -131,6 +134,64 @@ watch(
   { immediate: true },
 );
 
+// A carteira do cadastro do paciente (cobertura permanente): a proposta do servidor preenche o convênio, o plano, a
+// carteirinha e a validade, sem digitar de novo. O convênio que veio do agendamento fica, e a carteira desse convênio
+// completa. Ao trocar o convênio, a carteira dele entra; sem carteira, o que veio de outra carteira sai da tela. O
+// cadastro vence a herança do atendimento anterior nesses campos. Sem acesso às carteiras, a abertura segue à mão.
+const coberturas = useQuery({
+  queryKey: computed(() => ['atendimento', 'coberturas', paciente.value?.id ?? 0]),
+  queryFn: (): Promise<Coberturas> => lerCoberturas(paciente.value?.id ?? 0),
+  enabled: computed(() => paciente.value !== null),
+  retry: false,
+});
+const daCarteira = ref<number | null>(null);
+const propostaVista = ref(false);
+const CAMPOS_DA_CARTEIRA = ['convenio', 'matricula', 'plano', 'validadeCarteira'];
+const avisosCobertura = computed(() => (paciente.value ? (coberturas.data.value?.avisos ?? []) : []));
+const semCarteiraUtil = computed(
+  () =>
+    paciente.value !== null &&
+    coberturas.data.value !== undefined &&
+    coberturas.data.value.itens.length > 0 &&
+    coberturas.data.value.proposta === null,
+);
+function limparCarteira(): void {
+  if (daCarteira.value === null) return;
+  daCarteira.value = null;
+  matricula.value = '';
+  plano.value = '';
+  validadeCarteira.value = '';
+}
+watch(
+  () => paciente.value?.id ?? 0,
+  () => {
+    limparCarteira();
+    propostaVista.value = false;
+  },
+);
+watch(
+  () => [coberturas.data.value, convenio.value, apoio.data.value, paciente.value?.id ?? 0] as const,
+  ([c, conv, a, pac]) => {
+    if (!c || !a || !pac || coberturas.isFetching.value) return;
+    // Convênio vazio: a proposta entra uma vez por paciente (quem esvaziar o campo depois não é contrariado).
+    if (conv === '' && propostaVista.value) return limparCarteira();
+    propostaVista.value = true;
+    const p = preenchimentoDaCobertura(
+      c,
+      conv,
+      a.convenios.filter((x) => x.aceita).map((x) => x.codigo),
+    );
+    if (!p) return limparCarteira();
+    if (p.carteira === daCarteira.value) return;
+    daCarteira.value = p.carteira;
+    convenio.value = p.convenio;
+    matricula.value = p.matricula;
+    plano.value = p.plano;
+    validadeCarteira.value = p.validadeCarteira;
+    herdou.value = herdou.value.filter((x) => !CAMPOS_DA_CARTEIRA.includes(x));
+  },
+);
+
 // A herança: o servidor aplica as marcas em vigor e as regras da cobertura (plano e carteirinha só com o convênio,
 // validade vencida vira aviso); a tela preenche todos os campos herdados e a pessoa confere.
 const herdou = ref<string[]>([]);
@@ -156,6 +217,8 @@ watch(
     for (const [campo, x] of Object.entries(v)) {
       const alvo = alvos[campo];
       if (!alvo || (doAgendamento && alvo.value !== '')) continue;
+      // O que a carteira do cadastro preencheu não é trocado pelo atendimento anterior.
+      if (daCarteira.value !== null && CAMPOS_DA_CARTEIRA.includes(campo)) continue;
       alvo.value = String(x);
       usados.push(campo);
     }
@@ -409,6 +472,25 @@ async function abrir(): Promise<void> {
           data-testid="abrir-atd-herdado"
         />
         <SanteAlerta
+          v-if="daCarteira !== null"
+          variante="info"
+          :texto="t('atendimento.abrir.daCarteira')"
+          data-testid="abrir-atd-da-carteira"
+        />
+        <SanteAlerta
+          v-for="aviso in avisosCobertura"
+          :key="`carteira-aviso-${aviso.id}`"
+          variante="alerta"
+          :texto="aviso.mensagem"
+          data-testid="abrir-atd-carteira-aviso"
+        />
+        <p v-if="semCarteiraUtil || avisosCobertura.length" class="secundario">
+          <span v-if="semCarteiraUtil">{{ t('atendimento.abrir.semCarteiraUtil') }} </span>
+          <RouterLink :to="`/cadastros/pacientes/${paciente.id}`" data-testid="abrir-atd-ver-carteiras">{{
+            t('atendimento.abrir.verCarteiras')
+          }}</RouterLink>
+        </p>
+        <SanteAlerta
           v-for="(aviso, i) in avisosHeranca"
           :key="`heranca-aviso-${i}`"
           variante="alerta"
@@ -439,6 +521,7 @@ async function abrir(): Promise<void> {
             </li>
           </ul>
         </details>
+        <OrigemNaAbertura v-if="!naoIdentificado" :id-paciente="paciente.id" />
       </template>
     </section>
 
