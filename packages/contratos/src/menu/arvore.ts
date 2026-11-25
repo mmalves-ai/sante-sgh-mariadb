@@ -56,7 +56,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C1-109 (03-PEP L147): o item "Anotações administrativas do caso" do NIR entrou à mão (mesmo motivo); a contagem
 // acompanha. Pede a leitura do NIR (internacao.solicitacaoLeito.ler); o serviço social e o prontuário chegam pelos
 // atalhos das telas do paciente.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":447,"M":198,"P":57,"N":192};
+// C1-122 (06-FAT linha 24): o item "Guias do convênio" dos convênios entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":448,"M":198,"P":57,"N":193};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -271,6 +272,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.particular.pagamento-por-pix-e-cartao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Pagamento por Pix e cartão"],"titulo":"Pagamento por Pix e cartão","selo":"N","fase":3,"rota":"/faturamento/particular/pagamentos","permissao":"faturamento.pagamento.ler"},
   {"id":"faturamento.particular.conta-corrente-do-paciente","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Conta corrente do paciente"],"titulo":"Conta corrente do paciente","selo":"N","fase":7,"rota":"/faturamento/conta-corrente","permissao":"faturamento.pagamento.ler"},
   {"id":"faturamento.convenios-tiss.guias-tiss-emissao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Guias TISS"],"titulo":"Guias TISS","selo":"M","fase":3,"rota":"/faturamento/guias","permissao":"faturamento.guia.ler"},
+  {"id":"faturamento.convenios-tiss.guias-do-convenio-no-hospital","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Guias do convênio"],"titulo":"Guias do convênio","selo":"N","fase":3,"rota":"/faturamento/guias-convenio","permissao":"faturamento.guia.ler"},
   {"id":"faturamento.convenios-tiss.remessa-e-lotes-tiss-xml-envio-protocolo","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Remessa e lotes TISS"],"titulo":"Remessa e lotes TISS","selo":"M","fase":3,"rota":"/faturamento/lotes","permissao":"faturamento.lote.ler"},
   {"id":"faturamento.convenios-tiss.webservices-tiss-por-operadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Webservices TISS por operadora"],"titulo":"Webservices TISS por operadora","selo":"P","fase":3,"rota":"/integracao/tiss","permissao":"integracao.tiss.ler"},
   {"id":"faturamento.convenios-tiss.fechamento-de-competencia-por-convenio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Fechamento de competência por convênio"],"titulo":"Fechamento de competência por convênio","selo":"M","fase":3,"rota":"/faturamento/competencias","permissao":"faturamento.competencia.ler"},
