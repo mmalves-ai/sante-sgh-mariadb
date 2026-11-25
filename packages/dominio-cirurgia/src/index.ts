@@ -26,3 +26,5 @@ export * from './descricao/index.js';
 export * from './gasto-sala/index.js';
 // F3.4 (04-CC linha 92): grade de funcionamento da sala (faixas por dia, vigência, feriado e reserva).
 export * from './grade-sala.js';
+// F8 (04-CC linha 105): cartão de preferência do cirurgião (sugestão para o mapa e o gasto de sala).
+export * from './cartao-preferencia.js';
