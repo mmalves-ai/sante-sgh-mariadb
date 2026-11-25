@@ -28,6 +28,8 @@ import { ItensAgendaveisPropria } from './itens-agendaveis.js';
 import { PERFIS_MARCACAO, PerfisMarcacaoController } from './perfil-marcacao.controller.js';
 import { PerfisMarcacaoPropria } from './perfil-marcacao.js';
 import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
+import { TURMAS_ATIVIDADE, TurmasAtividadeController } from './turma-atividade.controller.js';
+import { TurmasAtividadePropria } from './turma-atividade.js';
 import { PortaAgendaMemoria, type PacienteSintetico } from './porta-memoria.js';
 import { PortaAgendaPropria } from './porta-propria.js';
 import { USUARIOS_AGENDA, UsuariosAgendaController } from './usuarios-agenda.controller.js';
@@ -112,6 +114,7 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
       PedidosVagaController,
       CotasPrazosController,
       ContatoAtivoController,
+      TurmasAtividadeController,
     ],
     providers: [
       { provide: PORTA_AGENDA, useValue: porta },
@@ -148,6 +151,13 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
         useValue:
           porta.destino === 'propria' && ctx.nucleo && cliente
             ? new ContatoAtivoPropria(ctx.nucleo, cliente)
+            : null,
+      },
+      {
+        provide: TURMAS_ATIVIDADE,
+        useValue:
+          porta.destino === 'propria' && ctx.nucleo && cliente
+            ? new TurmasAtividadePropria(ctx.nucleo, cliente)
             : null,
       },
       {
