@@ -65,6 +65,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/LicitacoesTela.vue'),
     meta: { permissao: 'suprimentos.licitacao.ler' },
   },
+  // C2-030 (05-SUP linha 26): ata de registro de preços e empenho sobre o saldo dela.
+  {
+    path: '/suprimentos/atas-registro-preco',
+    name: 'suprimentos.atas-registro-preco',
+    component: () => import('./telas/AtasEmpenhoTela.vue'),
+    meta: { permissao: 'suprimentos.licitacao.ler' },
+  },
   {
     path: '/suprimentos/itens',
     name: 'suprimentos.itens',

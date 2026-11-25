@@ -54,6 +54,8 @@ import { VinculoReferenciaPrecoController } from './vinculo-referencia-preco.con
 import { PORTA_VINCULO_REFERENCIA, portaVinculoReferenciaIndisponivel } from './vinculo-referencia-preco.js';
 import { EnderecamentoController } from './enderecamento.controller.js';
 import { PORTA_ENDERECAMENTO, portaEnderecamentoIndisponivel } from './enderecamento.js';
+import { AtaEmpenhoController } from './ata-empenho.controller.js';
+import { PORTA_ATA_EMPENHO, portaAtaEmpenhoIndisponivel } from './ata-empenho.js';
 import { EntradaDoacaoController } from './entrada-doacao.controller.js';
 import { PORTA_ENTRADA_DOACAO, portaEntradaDoacaoIndisponivel } from './entrada-doacao.js';
 
@@ -194,6 +196,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./producao-interna.js')).PortaProducaoInternaPropria(ctx.nucleo)
       : portaProducaoInternaIndisponivel();
+  // C2-030 (05-SUP linha 26): a ata de registro de preços e o empenho gravam só no banco próprio (503 sem o núcleo).
+  const ataEmpenho =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./ata-empenho.js')).PortaAtaEmpenhoPropria(ctx.nucleo)
+      : portaAtaEmpenhoIndisponivel();
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =
     memoria && !pedidos.includes('config')
@@ -220,6 +227,7 @@ export async function modulo(
       RomaneioEntregaController,
       HomologacaoFornecedorController,
       ContratoController,
+      AtaEmpenhoController,
       ManipulacaoController,
       ProducaoInternaController,
       ...(comCirurgia ? [OpmeController] : []),
@@ -239,6 +247,7 @@ export async function modulo(
       { provide: PORTA_ROMANEIO_ENTREGA, useValue: romaneioEntrega },
       { provide: PORTA_HOMOLOGACAO_FORNECEDOR, useValue: homologacaoFornecedor },
       { provide: PORTA_CONTRATO, useValue: contrato },
+      { provide: PORTA_ATA_EMPENHO, useValue: ataEmpenho },
       { provide: PORTA_PRODUCAO_INTERNA, useValue: producaoInterna },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],

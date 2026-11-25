@@ -110,6 +110,7 @@ import { mensagensOpme } from '../modulos/suprimentos/i18n-opme.js';
 import { mensagensConsignado, mensagensManipulacao } from '../modulos/suprimentos/i18n-consignado.js';
 import { mensagensContrato } from '../modulos/suprimentos/i18n-contrato.js';
 import { mensagensLicitacao } from '../modulos/suprimentos/i18n-licitacao.js';
+import { mensagensAtaEmpenho } from '../modulos/suprimentos/i18n-ata-empenho.js';
 
 export const mensagensWeb = {
   casca: {
@@ -2405,6 +2406,8 @@ export const mensagensWeb = {
   contratoFornecedor: mensagensContrato,
   // M55 (etapa 4): licitação e pregão.
   licitacao: mensagensLicitacao,
+  // C2-030 (05-SUP linha 26): ata de registro de preços e empenho.
+  ataEmpenho: mensagensAtaEmpenho,
   // M26: SADT, laudos e portal de resultados.
   sadt: mensagensSadt,
   // M47 (etapa 3): lista de trabalho DICOM e PACS.

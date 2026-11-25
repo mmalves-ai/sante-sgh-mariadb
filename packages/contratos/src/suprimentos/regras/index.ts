@@ -71,3 +71,4 @@ export * from './producao-interna.js';
 export * from './entrada-doacao.js';
 // C2-015 (05-SUP linha 22): devolução de compra ao fornecedor (quantidade, chave da NF-e e abatimento no contas a pagar).
 export * from './devolucao-fornecedor.js';
+export * from './ata-empenho.js';
