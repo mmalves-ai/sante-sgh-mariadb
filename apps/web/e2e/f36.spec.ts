@@ -16,7 +16,7 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('Farmácia e suprimentos @F3.6', () => {
+test.describe('Farmácia e suprimentos @F3.6 @C2-009', () => {
   test.setTimeout(180_000);
 
   test('parâmetros da integração: regra com validação na hora e grade de horários pelo número de doses; axe', async ({
@@ -26,6 +26,55 @@ test.describe('Farmácia e suprimentos @F3.6', () => {
     await entrar(page, 'SINT.ADMIN');
     await page.goto('/farmacia/parametros');
     await expect(page.getByTestId('tela-farmacia-parametros')).toBeVisible();
+    await semViolacaoAxe(page, '/farmacia/parametros');
+
+    // Regra: sem escopo nem local, a tela já diz o que falta e não deixa gravar.
+    const recusas = page.getByTestId('par-recusas-regra');
+    await expect(recusas).toContainText('centro de custo, setor ou unidade');
+    await escolher(page.getByTestId('par-centro'), { indice: 1 });
+    // A exceção por item: o subgrupo filtra pelo grupo e o item pelo subgrupo.
+    await escolher(page.getByTestId('par-grupo'), { indice: 1 });
+    await escolher(page.getByTestId('par-subgrupo'), { indice: 1 });
+    await escolher(page.getByTestId('par-item'), { indice: 1 });
+    await escolher(page.getByTestId('par-local'), { indice: 1 });
+    await escolher(page.getByTestId('par-momento'), 'antes_do_horario');
+    await expect(recusas).toContainText('antecedência');
+    await page.getByTestId('par-antecedencia').fill('90');
+    await expect(recusas).toHaveCount(0);
+    await page.getByTestId('par-gravar-regra').click();
+    await expect(page.getByTestId('par-mensagem')).toContainText('Regra de integração gravada');
+    await expect(page.locator('[data-testid^="par-regra-"]')).toHaveCount(1);
+
+    // Grade de horários: a frequência de 3 doses por dia recusa 2 horários; com 3, grava.
+    await escolher(page.getByTestId('par-frequencia'), { indice: 1 });
+    await page.getByTestId('par-horarios').fill('06:00, 14:00');
+    await expect(page.getByTestId('par-recusas-grade')).toContainText('3 dose(s) por dia');
+    await page.getByTestId('par-horarios').fill('06:00, 14:00, 22:00');
+    await expect(page.getByTestId('par-recusas-grade')).toHaveCount(0);
+    await page.getByTestId('par-gravar-grade').click();
+    await expect(page.getByTestId('par-mensagem')).toContainText('Horários padrão gravados');
+    await expect(page.getByTestId('par-grades')).toContainText('06:00, 14:00, 22:00');
+
+    // Grade unificada (@C2-009): a lista mostra o escopo (todo o estabelecimento) e o número de doses; reabrir traz a
+    // frequência e os horários; mudar um horário regrava a mesma grade de 3 doses (a que o aprazamento lê).
+    await expect(page.getByTestId('par-doses-grade')).toContainText('3 dose(s)');
+    const linha = page.getByTestId('par-grade-0-3');
+    await expect(linha).toContainText('Todo o estabelecimento');
+    await expect(linha).toContainText('06:00, 14:00, 22:00');
+    await page.getByTestId('par-horarios').fill('');
+    await page.getByTestId('par-editar-grade-0-3').click();
+    await expect(page.getByTestId('par-horarios')).toHaveValue('06:00, 14:00, 22:00');
+    await page.getByTestId('par-horarios').fill('06:00, 14:00, 21:00');
+    await expect(page.getByTestId('par-recusas-grade')).toHaveCount(0);
+    await page.getByTestId('par-gravar-grade').click();
+    await expect(page.getByTestId('par-mensagem')).toContainText('Horários padrão gravados');
+    await expect(page.getByTestId('par-grade-0-3')).toContainText('06:00, 14:00, 21:00');
+    await expect(page.locator('[data-testid^="par-grade-0-"]')).toHaveCount(1);
+    // A frequência sem número de doses não tem grade padrão: a recusa aparece na hora.
+    await escolher(page.getByTestId('par-frequencia'), { indice: 2 });
+    await expect(page.getByTestId('par-recusas-grade')).toContainText('número de doses ao dia');
+    await expect(page.getByTestId('par-gravar-grade')).toBeDisabled();
+
     await semViolacaoAxe(page, '/farmacia/parametros');
 
     // Regra: sem escopo nem local, a tela já diz o que falta e não deixa gravar.

@@ -223,20 +223,16 @@ export const esquemaGravarRegraIntegracao = z
   });
 export type GravarRegraIntegracaoEntrada = z.infer<typeof esquemaGravarRegraIntegracao>;
 
-/** suprimentos.gravarHorariosPadrao: a grade inteira de uma frequência (no estabelecimento ou num setor). */
+/**
+ * suprimentos.gravarHorariosPadrao: a grade padrão inteira do número de doses ao dia que a frequência dá, no
+ * estabelecimento todo (grade nula) ou numa grade de horário de unidade. É a mesma grade que o aprazamento lê.
+ */
 export const esquemaGravarHorariosPadrao = z
   .object({
     frequencia: id,
-    setor: idOuNulo,
+    grade: idOuNulo,
     horarios: z
-      .array(
-        z
-          .object({
-            hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM.'),
-            dias: z.array(z.number().int().min(1).max(7)).max(7).default([]),
-          })
-          .strict(),
-      )
+      .array(z.object({ hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM.') }).strict())
       .max(48),
   })
   .strict();

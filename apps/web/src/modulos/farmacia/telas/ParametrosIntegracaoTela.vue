@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // Parâmetros da integração prescrição × estoque (F3.6, 05-SUP linha 7): `/farmacia/parametros`. Numa tela só, a
 // regra que diz qual local atende a prescrição de cada escopo (centro de custo, setor ou unidade), em que momento e de
-// que forma, e a grade de horários padrão de cada frequência. A validação roda na hora (as mesmas regras da API) e a
+// que forma, e a grade de horários padrão unificada (a do aprazamento). A validação roda na hora (as mesmas regras da API) e a
 // gravação vai ao Executor. Nada se apaga: a regra se inativa; o horário que sai da grade fica inativo.
 import type { RegraIntegracaoLida } from '@sgh/contratos';
 import {
-  conferirHorariosPadrao,
+  conferirGradePadrao,
   conferirRegraIntegracao,
   FORMAS_DISPENSACAO,
   MOMENTOS_INTEGRACAO,
@@ -134,14 +134,13 @@ async function gravarRegra(): Promise<void> {
   }
 }
 
-// ── Grade de horários padrão ────────────────────────────────────────────────────────────────────────────
+// ── Grade de horários padrão (a unificada: a mesma que o aprazamento da enfermagem lê) ──────────────────────
+// Por grade de horário da unidade (sem escolha = o estabelecimento todo) e pelo número de doses ao dia que a
+// frequência dá. A grade padrão é diária: o padrão por dia da semana é da frequência, não da grade.
 const frequencia = ref<number | null>(null);
-const setorGrade = ref<number | null>(null);
+const gradeHorario = ref<number | null>(null);
 /** Os horários digitados de uma vez: "06:00, 14:00, 22:00". */
 const horariosTexto = ref('');
-/** Os dias de cada horário (1 = domingo … 7 = sábado; vazio = todos os dias), preservados ao reabrir a grade. */
-const diasPorHora = ref<Record<string, number[]>>({});
-const DIAS = [1, 2, 3, 4, 5, 6, 7] as const;
 const horas = computed(() =>
   horariosTexto.value
     .split(/[,;\s]+/)
@@ -149,35 +148,24 @@ const horas = computed(() =>
     .filter(Boolean)
     .map((x) => (/^\d:\d\d$/.test(x) ? `0${x}` : x)),
 );
-const horarios = computed(() =>
-  horas.value.map((hora) => ({ hora, dias: [...(diasPorHora.value[hora] ?? [])].sort((a, b) => a - b) })),
-);
-function alternarDia(hora: string, dia: number, marcado: boolean): void {
-  const atuais = new Set(diasPorHora.value[hora] ?? []);
-  if (marcado) atuais.add(dia);
-  else atuais.delete(dia);
-  diasPorHora.value = { ...diasPorHora.value, [hora]: [...atuais] };
-}
-const nomeDias = (dias: readonly number[]) =>
-  dias.length === 0 ? '' : ` (${dias.map((d) => t(`farmacia.parametros.dias.${d}`)).join(', ')})`;
+const horarios = computed(() => horas.value.map((hora) => ({ hora })));
 const dosesPorDia = computed(
   () => opcoes.value?.frequencias.find((f) => f.id === frequencia.value)?.dosesPorDia ?? null,
 );
 const recusasGrade = computed(() =>
   frequencia.value === null
     ? [t('farmacia.parametros.semFrequencia')]
-    : conferirHorariosPadrao(horarios.value, dosesPorDia.value).map((r) => r.mensagem),
+    : conferirGradePadrao(horarios.value, dosesPorDia.value).map((r) => r.mensagem),
 );
 
 function editarGrade(g: {
-  frequencia: number;
-  setor: number | null;
-  horarios: readonly { hora: string; dias: readonly number[] }[];
+  frequencia: number | null;
+  grade: number | null;
+  horarios: readonly { hora: string }[];
 }): void {
   frequencia.value = g.frequencia;
-  setorGrade.value = g.setor;
+  gradeHorario.value = g.grade;
   horariosTexto.value = g.horarios.map((h) => h.hora).join(', ');
-  diasPorHora.value = Object.fromEntries(g.horarios.map((h) => [h.hora, [...h.dias]]));
 }
 
 async function gravarGrade(): Promise<void> {
@@ -186,7 +174,7 @@ async function gravarGrade(): Promise<void> {
   if (recusasGrade.value.length) return;
   try {
     const r = await gravarHorariosPadrao(
-      { frequencia: frequencia.value, setor: setorGrade.value, horarios: horarios.value },
+      { frequencia: frequencia.value, grade: gradeHorario.value, horarios: horarios.value },
       novaChave('horarios-padrao'),
     );
     mensagem.value = r.mensagem;
@@ -436,22 +424,29 @@ async function gravarGrade(): Promise<void> {
         </caption>
         <thead>
           <tr>
+            <th scope="col">{{ t('farmacia.parametros.gradeHorario') }}</th>
+            <th scope="col">{{ t('farmacia.parametros.dosesPorDia') }}</th>
             <th scope="col">{{ t('farmacia.parametros.frequencia') }}</th>
-            <th scope="col">{{ t('farmacia.parametros.setor') }}</th>
             <th scope="col">{{ t('farmacia.parametros.valor') }}</th>
             <th scope="col">{{ t('farmacia.acoes') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="g in p.data.value.grades" :key="`${g.frequencia}-${g.setor}`">
+          <tr
+            v-for="g in p.data.value.grades"
+            :key="`${g.grade ?? 0}-${g.dosesPorDia}`"
+            :data-testid="`par-grade-${g.grade ?? 0}-${g.dosesPorDia}`"
+          >
+            <td>{{ g.gradeNome ?? t('farmacia.parametros.todoEstabelecimento') }}</td>
+            <td>{{ g.dosesPorDia }}</td>
             <td>{{ g.frequenciaNome }}</td>
-            <td>{{ g.setorNome ?? t('farmacia.parametros.todoEstabelecimento') }}</td>
-            <td>{{ g.horarios.map((h) => `${h.hora}${nomeDias(h.dias)}`).join(', ') }}</td>
+            <td>{{ g.horarios.map((h) => h.hora).join(', ') }}</td>
             <td>
               <SanteBotao
+                v-if="g.frequencia !== null"
                 variante="secundario"
                 :rotulo="t('farmacia.parametros.editar')"
-                :data-testid="`par-editar-grade-${g.frequencia}`"
+                :data-testid="`par-editar-grade-${g.grade ?? 0}-${g.dosesPorDia}`"
                 @acionar="editarGrade(g)"
               />
             </td>
@@ -472,13 +467,17 @@ async function gravarGrade(): Promise<void> {
         </span>
         <span class="campo">
           <SanteSelecao
-            v-model="setorGrade"
-            :rotulo="t('farmacia.parametros.setor')"
+            v-model="gradeHorario"
+            :rotulo="t('farmacia.parametros.gradeHorario')"
             :opcoes="[
               { valor: null, rotulo: t('farmacia.parametros.todoEstabelecimento') },
-              ...opcoes.setores.map((o) => ({ valor: o.id, rotulo: o.nome })),
+              ...opcoes.gradesHorario.map((o) => ({ valor: o.id, rotulo: o.nome })),
             ]"
+            data-testid="par-grade-horario"
           />
+        </span>
+        <span v-if="dosesPorDia !== null" class="campo" data-testid="par-doses-grade">
+          {{ t('farmacia.parametros.dosesDaGrade', { n: dosesPorDia }) }}
         </span>
         <span class="campo">
           <label for="par-horarios">{{ t('farmacia.parametros.horariosTexto') }}</label>
@@ -489,21 +488,6 @@ async function gravarGrade(): Promise<void> {
             data-testid="par-horarios"
           />
         </span>
-        <fieldset v-for="h in horas" :key="h" class="filtros" :data-testid="`par-dias-${h.replace(':', '')}`">
-          <legend>{{ t('farmacia.parametros.diasDe', { hora: h }) }}</legend>
-          <span v-for="d in DIAS" :key="d" class="campo">
-            <input
-              :id="`par-dia-${h.replace(':', '')}-${d}`"
-              type="checkbox"
-              :checked="(diasPorHora[h] ?? []).includes(d)"
-              :data-testid="`par-dia-${h.replace(':', '')}-${d}`"
-              @change="alternarDia(h, d, ($event.target as HTMLInputElement).checked)"
-            />
-            <label :for="`par-dia-${h.replace(':', '')}-${d}`">{{
-              t(`farmacia.parametros.dias.${d}`)
-            }}</label>
-          </span>
-        </fieldset>
         <div v-if="recusasGrade.length" role="alert" data-testid="par-recusas-grade">
           <ul>
             <li v-for="m in recusasGrade" :key="m">{{ m }}</li>

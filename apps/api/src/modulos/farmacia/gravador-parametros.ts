@@ -1,14 +1,16 @@
 // Parâmetros da integração prescrição × estoque (F3.6, 05-SUP linha 7), gravados numa operação do Executor (trilha,
 // outbox, idempotência e trava de versão na mesma transação): a regra de integração (qual local atende a prescrição de
-// cada escopo, em que momento e de que forma) e a grade de horários padrão de cada frequência. As regras puras moram em
+// cada escopo, em que momento e de que forma) e a grade de horários padrão. A grade é a UNIFICADA, a mesma que o
+// aprazamento lê (horario_padrao_dose: por grade de horário da unidade, nula = o estabelecimento, e por número de doses
+// ao dia; a frequência escolhida dá o número de doses); horario_padrao_medicacao ficou só como histórico (migração
+// 11_SUP/97_grade_padrao_unificada). As regras puras moram em
 // `regras/farmacia-parametros.ts`; aqui ficam só a conferência das referências no banco e a escrita. Nada é apagado: a
 // regra se inativa e o horário que sai da grade fica inativo (o histórico das doses geradas continua explicável).
 import {
   chaveRegraIntegracao,
-  conferirHorariosPadrao,
+  conferirGradePadrao,
   conferirRegraIntegracao,
-  diasDoTexto,
-  diasParaTexto,
+  dosesDaFrequencia,
   type RecusaSuprimentos,
 } from '@sgh/contratos/regras-suprimentos';
 import type {
@@ -27,7 +29,7 @@ const idOuNulo = (v: unknown) => (v === null || v === undefined ? null : Number(
 const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 
-export const TABELAS_PARAMETROS = ['regra_integracao_prescricao', 'horario_padrao_medicacao'] as const;
+export const TABELAS_PARAMETROS = ['regra_integracao_prescricao', 'horario_padrao_dose'] as const;
 
 function recusarTodas(rs: readonly RecusaSuprimentos[]): void {
   const [r] = rs;
@@ -163,19 +165,32 @@ export function gravadorParametros(tx: TxOperacao, est: number, extras: ExtrasGr
 
   async function gravarHorariosPadrao(e: GravarHorariosPadraoEntrada): Promise<ResultadoOperacao> {
     const f = await tx.uma<Linha>(
-      'SELECT id, doses_por_dia FROM frequencia_administracao WHERE id = ? AND ativo',
+      'SELECT id, doses_por_dia, intervalo_minutos FROM frequencia_administracao WHERE id = ? AND ativo',
       [e.frequencia],
     );
     if (!f)
       throw recusa('referencia-inexistente', 'Escolha uma frequência ativa.', { campos: ['frequencia'] });
-    await conferirDoEstabelecimento(tx, est, 'setor_funcional', e.setor, 'setor');
-    recusarTodas(conferirHorariosPadrao(e.horarios, idOuNulo(f['doses_por_dia'])));
+    if (e.grade !== null) {
+      const g = await tx.uma<Linha>(
+        'SELECT id FROM grade_horario_unidade WHERE id = ? AND estabelecimento_id = ? AND ativo',
+        [e.grade, est],
+      );
+      if (!g)
+        throw recusa('referencia-inexistente', 'Escolha uma grade de horário ativa deste estabelecimento.', {
+          campos: ['grade'],
+        });
+    }
+    const doses = dosesDaFrequencia({
+      dosesPorDia: idOuNulo(f['doses_por_dia']),
+      intervaloMinutos: idOuNulo(f['intervalo_minutos']),
+    });
+    recusarTodas(conferirGradePadrao(e.horarios, doses));
     const atuais = await tx.consultarParaAtualizar<Linha>(
-      `SELECT id, versao, ordem_dose, TIME_FORMAT(horario, '%H:%i') AS hora, dias_semana, ativo
-         FROM horario_padrao_medicacao
-        WHERE estabelecimento_id = ? AND frequencia_administracao_id = ? AND setor_funcional_id <=> ?
+      `SELECT id, versao, ordem_dose, TIME_FORMAT(horario, '%H:%i') AS hora, ativo
+         FROM horario_padrao_dose
+        WHERE estabelecimento_id = ? AND grade_horario_unidade_id <=> ? AND doses_por_dia = ?
         ORDER BY ordem_dose`,
-      [est, e.frequencia, e.setor],
+      [est, e.grade, doses],
     );
     const porOrdem = new Map(atuais.map((r) => [n(r['ordem_dose']), r]));
     let incluidos = 0;
@@ -183,43 +198,38 @@ export function gravadorParametros(tx: TxOperacao, est: number, extras: ExtrasGr
     let inativados = 0;
     for (const [i, h] of e.horarios.entries()) {
       const ordem = i + 1;
-      const dias = diasParaTexto(h.dias);
       const r = porOrdem.get(ordem);
       if (!r) {
-        await tx.incluir('horario_padrao_medicacao', {
+        await tx.incluir('horario_padrao_dose', {
           estabelecimento_id: est,
-          frequencia_administracao_id: e.frequencia,
-          setor_funcional_id: e.setor,
+          grade_horario_unidade_id: e.grade,
+          doses_por_dia: doses,
           ordem_dose: ordem,
           horario: `${h.hora}:00`,
-          dias_semana: dias,
           ativo: true,
         });
         incluidos += 1;
-      } else if (
-        texto(r['hora']) !== h.hora ||
-        diasParaTexto(diasDoTexto(r['dias_semana'] === null ? null : texto(r['dias_semana']))) !== dias ||
-        !verdadeiro(r['ativo'])
-      ) {
-        await tx.alterar('horario_padrao_medicacao', n(r['id']), n(r['versao']), {
+      } else if (texto(r['hora']) !== h.hora || !verdadeiro(r['ativo'])) {
+        await tx.alterar('horario_padrao_dose', n(r['id']), n(r['versao']), {
           horario: `${h.hora}:00`,
-          dias_semana: dias,
           ativo: true,
         });
         alterados += 1;
       }
     }
+    // A grade tem sempre o número de doses (o CHECK da ordem e a regra garantem); a posição que sobrar de uma carga
+    // antiga fica inativa, nunca apagada.
     for (const r of atuais)
       if (n(r['ordem_dose']) > e.horarios.length && verdadeiro(r['ativo'])) {
-        await tx.alterar('horario_padrao_medicacao', n(r['id']), n(r['versao']), { ativo: false });
+        await tx.alterar('horario_padrao_dose', n(r['id']), n(r['versao']), { ativo: false });
         inativados += 1;
       }
-    extras.alvo = { tabela: 'horario_padrao_medicacao', id: null };
+    extras.alvo = { tabela: 'horario_padrao_dose', id: null };
     extras.eventos.push({
       tipo: 'farmacia.horarios_padrao.gravados',
-      carga: { frequencia: e.frequencia, setor: e.setor, horarios: e.horarios.length },
+      carga: { frequencia: e.frequencia, grade: e.grade, doses, horarios: e.horarios.length },
     });
-    return { frequencia: e.frequencia, incluidos, alterados, inativados };
+    return { frequencia: e.frequencia, doses: doses ?? 0, incluidos, alterados, inativados };
   }
 
   return { gravarRegraIntegracao, gravarHorariosPadrao };
@@ -242,35 +252,59 @@ export async function lerParametrosEditaveis(l: Leitor, est: number): Promise<Pa
       WHERE r.estabelecimento_id = ? ORDER BY r.ativo DESC, r.prioridade, r.id LIMIT 500`,
     [est],
   );
+  // A grade unificada (a do aprazamento): por grade de horário (nula = o estabelecimento) e número de doses.
   const horarios = await l.consultar<Linha>(
-    `SELECT h.frequencia_administracao_id, h.setor_funcional_id, TIME_FORMAT(h.horario, '%H:%i') AS hora,
-            h.dias_semana, f.descricao AS frequencia_nome, f.doses_por_dia, sf.nome AS setor_nome
-       FROM horario_padrao_medicacao h
-       JOIN frequencia_administracao f ON f.id = h.frequencia_administracao_id
-       LEFT JOIN setor_funcional sf ON sf.id = h.setor_funcional_id
+    `SELECT h.grade_horario_unidade_id, h.doses_por_dia, TIME_FORMAT(h.horario, '%H:%i') AS hora
+       FROM horario_padrao_dose h
       WHERE h.estabelecimento_id = ? AND h.ativo
-      ORDER BY f.descricao, sf.nome, h.ordem_dose LIMIT 2000`,
+      ORDER BY h.grade_horario_unidade_id, h.doses_por_dia, h.ordem_dose LIMIT 2000`,
     [est],
   );
-  const grades = new Map<string, GradeHorarioPadrao & { horarios: { hora: string; dias: number[] }[] }>();
+  const gradesHorario = (
+    await l.consultar<Linha>(
+      `SELECT g.id, CONCAT_WS(' · ', ui.descricao, bi.nome, sf.nome, g.tipo_atendimento) AS nome
+         FROM grade_horario_unidade g
+         LEFT JOIN unidade_internacao ui ON ui.id = g.unidade_internacao_id
+         LEFT JOIN bloco_internacao bi ON bi.id = g.bloco_internacao_id
+         LEFT JOIN setor_funcional sf ON sf.id = g.setor_funcional_id
+        WHERE g.estabelecimento_id = ? AND g.ativo
+        ORDER BY nome LIMIT 1000`,
+      [est],
+    )
+  ).map((r) => ({ id: n(r['id']), nome: texto(r['nome']) }));
+  const frequencias = (
+    await l.consultar<Linha>(
+      `SELECT id, descricao AS nome, doses_por_dia, intervalo_minutos FROM frequencia_administracao
+        WHERE ativo ORDER BY descricao LIMIT 1000`,
+    )
+  ).map((r) => ({
+    id: n(r['id']),
+    nome: texto(r['nome']),
+    dosesPorDia: dosesDaFrequencia({
+      dosesPorDia: idOuNulo(r['doses_por_dia']),
+      intervaloMinutos: idOuNulo(r['intervalo_minutos']),
+    }),
+  }));
+  const grades = new Map<string, GradeHorarioPadrao & { horarios: { hora: string }[] }>();
   for (const h of horarios) {
-    const k = `${n(h['frequencia_administracao_id'])}|${texto(h['setor_funcional_id'])}`;
+    const grade = idOuNulo(h['grade_horario_unidade_id']);
+    const doses = n(h['doses_por_dia']);
+    const k = `${grade ?? ''}|${doses}`;
     let g = grades.get(k);
     if (!g) {
+      const usam = frequencias.filter((f) => f.dosesPorDia === doses);
       g = {
-        frequencia: n(h['frequencia_administracao_id']),
-        frequenciaNome: texto(h['frequencia_nome']),
-        dosesPorDia: idOuNulo(h['doses_por_dia']),
-        setor: idOuNulo(h['setor_funcional_id']),
-        setorNome: h['setor_nome'] === null || h['setor_nome'] === undefined ? null : texto(h['setor_nome']),
+        grade,
+        gradeNome:
+          grade === null ? null : (gradesHorario.find((x) => x.id === grade)?.nome ?? `Grade ${grade}`),
+        dosesPorDia: doses,
+        frequencia: usam[0]?.id ?? null,
+        frequenciaNome: usam.length ? usam.map((f) => f.nome).join(', ') : `${doses} dose(s) ao dia`,
         horarios: [],
       };
       grades.set(k, g);
     }
-    g.horarios.push({
-      hora: texto(h['hora']),
-      dias: diasDoTexto(h['dias_semana'] === null ? null : texto(h['dias_semana'])),
-    });
+    g.horarios.push({ hora: texto(h['hora']) });
   }
   const opcoes = async (sql: string, p: unknown[] = []) =>
     (await l.consultar<Linha>(`${sql} LIMIT 1000`, p)).map((r) => ({
@@ -328,9 +362,8 @@ export async function lerParametrosEditaveis(l: Leitor, est: number): Promise<Pa
             ORDER BY nome LIMIT 20000`,
         )
       ).map((r) => ({ id: n(r['id']), nome: texto(r['nome']), subgrupo: idOuNulo(r['subgrupo_insumo_id']) })),
-      frequencias: await opcoes(
-        'SELECT id, descricao AS nome, doses_por_dia AS doses FROM frequencia_administracao WHERE ativo ORDER BY descricao',
-      ),
+      frequencias,
+      gradesHorario,
     },
   };
 }

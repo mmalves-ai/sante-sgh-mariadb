@@ -2,9 +2,13 @@
 // (cliente f22_o2). Massa SINTÉTICA com o código "F36PAR" (nenhuma pessoa real): dois estabelecimentos, uma unidade
 // de internação, dois locais de estoque (e um de outro estabelecimento) e duas frequências (3 vezes ao dia e de 8 em 8
 // horas sem número de doses). Confere a regra de integração (inclusão, alteração com trava de versão, idempotência,
-// trilha, outbox e as recusas antes de gravar) e a grade de horários padrão (inclusão, alteração, inativação do horário
-// que sai da grade sem apagar nada e a recusa pelo número de doses da frequência).
+// trilha, outbox e as recusas antes de gravar) e a grade de horários padrão UNIFICADA (horario_padrao_dose, a mesma
+// que o aprazamento lê: inclusão, alteração com versão sem apagar, recusa pelo número de doses, frequência sem doses,
+// grade de outro estabelecimento, escopo da grade da unidade e a migração 11_SUP/97 que copia a grade antiga).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -13,6 +17,7 @@ import { PortaFarmaciaPropria } from './porta-propria.js';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'F36PAR';
+const RAIZ = resolve(__dirname, '../../../../..');
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -34,6 +39,9 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
     alheio: 0,
     f3x: 0,
     f8h: 0,
+    fsn: 0,
+    gradeUnidade: 0,
+    gradeAlheia: 0,
   };
   let chave = 0;
 
@@ -42,7 +50,9 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
       'idempotencia_operacao',
       'integracao_mensagem',
       'regra_integracao_prescricao',
+      'horario_padrao_dose',
       'horario_padrao_medicacao',
+      'grade_horario_unidade',
     ])
       await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id IN (?, ?)`, [ids.est, ids.outroEst]);
     await limparTrilhaDaMassa(e, { ids: [ids.est, ids.outroEst] });
@@ -106,6 +116,16 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
         );
       ids.f3x = await freq(`${P}-3X`, 'vezes_ao_dia', null, 3);
       ids.f8h = await freq(`${P}-8H`, 'intervalo', 480, null);
+      // De 7 em 7 horas: o intervalo não fecha o dia, a frequência não dá número de doses.
+      ids.fsn = await freq(`${P}-7H`, 'intervalo', 420, null);
+      const gradeDe = (estab: number, unidade: number | null) =>
+        e.inserir(
+          `INSERT INTO grade_horario_unidade (estabelecimento_id, tipo_atendimento, unidade_internacao_id, hora_inicio_dia,
+                  criado_em) VALUES (?, 'internacao', ?, '07:00:00', ?)`,
+          [estab, unidade, agora],
+        );
+      ids.gradeUnidade = await gradeDe(ids.est, ids.unidade);
+      ids.gradeAlheia = await gradeDe(ids.outroEst, null);
     });
     ctx = { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: 'teste-f36-par' };
     porta = new PortaFarmaciaPropria(nucleo);
@@ -229,61 +249,129 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
     expect(await regras()).toBe(depois);
   });
 
-  it('horários padrão: inclusão, alteração, inativação sem apagar e recusa pelo número de doses', async () => {
-    const grade = (frequencia: number, ...horas: string[]) => ({
+  it('grade padrão unificada: grava em horario_padrao_dose pelo número de doses, sem apagar, e recusa antes de gravar', async () => {
+    const grade = (frequencia: number, g: number | null, ...horas: string[]) => ({
       frequencia,
-      setor: null,
-      horarios: horas.map((hora) => ({ hora, dias: [] })),
+      grade: g,
+      horarios: horas.map((hora) => ({ hora })),
     });
-    const linhas = (f: number) =>
+    const doses = (g: number | null, nDoses: number, soAtivas = false) =>
       contar(
-        'SELECT COUNT(*) AS n FROM horario_padrao_medicacao WHERE estabelecimento_id = ? AND frequencia_administracao_id = ?',
-        [ids.est, f],
-      );
-    const ativas = (f: number) =>
-      contar(
-        'SELECT COUNT(*) AS n FROM horario_padrao_medicacao WHERE estabelecimento_id = ? AND frequencia_administracao_id = ? AND ativo',
-        [ids.est, f],
+        `SELECT COUNT(*) AS n FROM horario_padrao_dose WHERE estabelecimento_id = ? AND grade_horario_unidade_id <=> ?
+            AND doses_por_dia = ?${soAtivas ? ' AND ativo' : ''}`,
+        [ids.est, g, nDoses],
       );
     expect(
-      (await op('suprimentos.gravarHorariosPadrao', grade(ids.f3x, '06:00', '14:00', '22:00'))).resultado,
-    ).toMatchObject({
-      incluidos: 3,
-    });
+      (await op('suprimentos.gravarHorariosPadrao', grade(ids.f3x, null, '06:00', '14:00', '22:00')))
+        .resultado,
+    ).toMatchObject({ doses: 3, incluidos: 3 });
     expect(
       await ler(
-        "SELECT TIME_FORMAT(horario, '%H:%i') AS h FROM horario_padrao_medicacao WHERE estabelecimento_id = ? AND frequencia_administracao_id = ? AND ordem_dose = 3",
-        [ids.est, ids.f3x],
+        `SELECT TIME_FORMAT(horario, '%H:%i') AS h, criado_por FROM horario_padrao_dose
+          WHERE estabelecimento_id = ? AND grade_horario_unidade_id IS NULL AND doses_por_dia = 3 AND ordem_dose = 3`,
+        [ids.est],
       ),
-    ).toMatchObject({ h: '22:00' });
+    ).toMatchObject({ h: '22:00', criado_por: ids.usuario });
     expect(await outbox('farmacia.horarios_padrao.gravados')).toBe(1);
-    // A frequência de 3 doses por dia recusa a grade de 2 horários.
+    // A grade antiga não é mais gravada.
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM horario_padrao_medicacao WHERE estabelecimento_id = ?', [
+        ids.est,
+      ]),
+    ).toBe(0);
+    // A frequência de 3 doses por dia recusa a grade de 2 horários, sem escrita.
     expect(
       codigoDe(
-        await op('suprimentos.gravarHorariosPadrao', grade(ids.f3x, '08:00', '20:00')).catch(
+        await op('suprimentos.gravarHorariosPadrao', grade(ids.f3x, null, '08:00', '20:00')).catch(
           (e: unknown) => e,
         ),
       ),
     ).toBe('doses-da-frequencia');
-    // Mudar um horário altera só a linha dele.
+    // De 8 em 8 horas (sem doses declaradas) dá 3 doses pelo intervalo: é a MESMA grade, alterada só no horário que
+    // mudou (versão 2), nada apagado.
     expect(
-      (await op('suprimentos.gravarHorariosPadrao', grade(ids.f3x, '06:00', '14:00', '21:00'))).resultado,
-    ).toMatchObject({
-      incluidos: 0,
-      alterados: 1,
-      inativados: 0,
-    });
-    // Sem número de doses: a grade encolhe, o horário que sai fica inativo e nada é apagado.
-    await op('suprimentos.gravarHorariosPadrao', grade(ids.f8h, '08:00', '16:00', '00:00'));
+      (await op('suprimentos.gravarHorariosPadrao', grade(ids.f8h, null, '06:00', '14:00', '21:00')))
+        .resultado,
+    ).toMatchObject({ doses: 3, incluidos: 0, alterados: 1, inativados: 0 });
+    expect(await doses(null, 3)).toBe(3);
     expect(
-      (await op('suprimentos.gravarHorariosPadrao', grade(ids.f8h, '08:00', '20:00'))).resultado,
-    ).toMatchObject({
-      alterados: 1,
-      inativados: 1,
+      await ler(
+        `SELECT versao FROM horario_padrao_dose
+          WHERE estabelecimento_id = ? AND grade_horario_unidade_id IS NULL AND doses_por_dia = 3 AND ordem_dose = 3`,
+        [ids.est],
+      ),
+    ).toMatchObject({ versao: 2 });
+    // A frequência sem número de doses não tem grade padrão; a grade de outro estabelecimento é recusada.
+    expect(
+      codigoDe(
+        await op('suprimentos.gravarHorariosPadrao', grade(ids.fsn, null, '08:00')).catch((e: unknown) => e),
+      ),
+    ).toBe('frequencia-sem-doses');
+    expect(
+      codigoDe(
+        await op(
+          'suprimentos.gravarHorariosPadrao',
+          grade(ids.f3x, ids.gradeAlheia, '06:00', '14:00', '22:00'),
+        ).catch((e: unknown) => e),
+      ),
+    ).toBe('referencia-inexistente');
+    // Escopo da grade da unidade: a própria grade, ao lado da do estabelecimento.
+    await op('suprimentos.gravarHorariosPadrao', grade(ids.f3x, ids.gradeUnidade, '08:00', '16:00', '00:00'));
+    expect(await doses(ids.gradeUnidade, 3, true)).toBe(3);
+    const lidas = (await porta.parametrosEditaveis(ctx)).grades;
+    expect(lidas.find((g) => g.grade === null && g.dosesPorDia === 3)?.horarios.map((h) => h.hora)).toEqual([
+      '06:00',
+      '14:00',
+      '21:00',
+    ]);
+    const daUnidade = lidas.find((g) => g.grade === ids.gradeUnidade);
+    expect(daUnidade?.horarios.map((h) => h.hora)).toEqual(['08:00', '16:00', '00:00']);
+    expect(daUnidade?.frequencia).not.toBeNull();
+    expect((await porta.parametrosEditaveis(ctx)).opcoes.gradesHorario.map((g) => g.id)).toContain(
+      ids.gradeUnidade,
+    );
+  });
+
+  it('migração 11_SUP/97: copia a grade antiga completa para a unificada, uma vez, sem apagar a antiga', async () => {
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f36-par-migra' }, async (e) => {
+      await e.executar('DELETE FROM horario_padrao_dose WHERE estabelecimento_id = ?', [ids.outroEst]);
+      await e.executar('DELETE FROM horario_padrao_medicacao WHERE estabelecimento_id = ?', [ids.outroEst]);
+      for (const [ordem, hora] of [
+        [1, '07:00:00'],
+        [2, '15:00:00'],
+        [3, '23:00:00'],
+      ] as const)
+        await e.executar(
+          `INSERT INTO horario_padrao_medicacao (estabelecimento_id, frequencia_administracao_id, setor_funcional_id,
+                  ordem_dose, horario, ativo, criado_em) VALUES (?, ?, NULL, ?, ?, TRUE, NOW(3))`,
+          [ids.outroEst, ids.f8h, ordem, hora],
+        );
+      // Incompleta (1 de 3 doses): não é copiada.
+      await e.executar(
+        `INSERT INTO horario_padrao_medicacao (estabelecimento_id, frequencia_administracao_id, setor_funcional_id,
+                ordem_dose, horario, ativo, criado_em) VALUES (?, ?, ?, 1, '09:00:00', TRUE, NOW(3))`,
+        [ids.outroEst, ids.f3x, null],
+      );
     });
-    expect(await linhas(ids.f8h)).toBe(3);
-    expect(await ativas(ids.f8h)).toBe(2);
-    const g = (await porta.parametrosEditaveis(ctx)).grades.find((x) => x.frequencia === ids.f8h);
-    expect(g?.horarios.map((h) => h.hora)).toEqual(['08:00', '20:00']);
+    const migrar = () =>
+      execFileSync(resolve(RAIZ, 'tools/db/sql.sh'), [`cliente_${CLIENTE}`], {
+        input: readFileSync(resolve(RAIZ, 'db/migracoes/11_SUP/97_grade_padrao_unificada_tabelas.sql')),
+      });
+    migrar();
+    migrar();
+    const copia = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f36-par-migra' }, (l) =>
+      l.consultar<{ h: string }>(
+        `SELECT TIME_FORMAT(horario, '%H:%i') AS h FROM horario_padrao_dose
+          WHERE estabelecimento_id = ? AND grade_horario_unidade_id IS NULL AND doses_por_dia = 3 AND ativo
+          ORDER BY ordem_dose`,
+        [ids.outroEst],
+      ),
+    );
+    expect(copia.map((r) => r.h)).toEqual(['07:00', '15:00', '23:00']);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM horario_padrao_medicacao WHERE estabelecimento_id = ?', [
+        ids.outroEst,
+      ]),
+    ).toBe(4);
   });
 });

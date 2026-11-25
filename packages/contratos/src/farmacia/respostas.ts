@@ -317,13 +317,16 @@ export interface RegraIntegracaoLida {
   readonly localNome: string;
 }
 
+/** A grade padrão unificada: por grade de horário da unidade (nula = o estabelecimento) e número de doses ao dia. */
 export interface GradeHorarioPadrao {
-  readonly frequencia: number;
+  readonly grade: number | null;
+  readonly gradeNome: string | null;
+  readonly dosesPorDia: number;
+  /** A primeira frequência ativa que dá esse número de doses (para reabrir a grade); nula se nenhuma der. */
+  readonly frequencia: number | null;
+  /** As frequências que usam a grade, em texto. */
   readonly frequenciaNome: string;
-  readonly dosesPorDia: number | null;
-  readonly setor: number | null;
-  readonly setorNome: string | null;
-  readonly horarios: readonly { hora: string; dias: readonly number[] }[];
+  readonly horarios: readonly { hora: string }[];
 }
 
 export interface OpcaoParametro {
@@ -341,6 +344,8 @@ export interface ParametrosIntegracaoEditaveis {
   readonly opcoes: {
     readonly centros: readonly OpcaoParametro[];
     readonly setores: readonly OpcaoParametro[];
+    /** As grades de horário das unidades (escopo da grade padrão; sem escolha = o estabelecimento todo). */
+    readonly gradesHorario: readonly OpcaoParametro[];
     readonly unidades: readonly OpcaoParametro[];
     readonly locais: readonly OpcaoParametro[];
     readonly tiposItem: readonly OpcaoParametro[];

@@ -87,8 +87,8 @@ export const chaveRegraIntegracao = (
 export interface HorarioPadraoConferido {
   /** HH:MM */
   readonly hora: string;
-  /** Dias da semana de 1 (domingo) a 7; vazio = todos. */
-  readonly dias: readonly number[];
+  /** Dias da semana de 1 (domingo) a 7; vazio ou ausente = todos (a grade padrão unificada é diária: sem dias). */
+  readonly dias?: readonly number[];
 }
 
 const minutos = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
@@ -110,7 +110,8 @@ export function conferirHorariosPadrao(
       out.push(
         recusa('hora-invalida', `Horário ${i + 1}: use HH:MM, de 00:00 a 23:59.`, [`horarios.${i}.hora`]),
       );
-    if (h.dias.some((d) => !Number.isInteger(d) || d < 1 || d > 7) || new Set(h.dias).size !== h.dias.length)
+    const dias = h.dias ?? [];
+    if (dias.some((d) => !Number.isInteger(d) || d < 1 || d > 7) || new Set(dias).size !== dias.length)
       out.push(
         recusa('dia-invalido', `Horário ${i + 1}: dias de 1 (domingo) a 7, sem repetir.`, [
           `horarios.${i}.dias`,
@@ -135,6 +136,43 @@ export function conferirHorariosPadrao(
       ),
     );
   return out;
+}
+
+// ── A grade padrão unificada (05-SUP linha 7) ─────────────────────────────────────────────────────────────────────────
+// A grade de horários padrão é uma só para a farmácia e para o aprazamento da enfermagem: por grade de horário da
+// unidade (nula = o estabelecimento todo) e por NÚMERO DE DOSES AO DIA. A frequência entra como escopo pelo número de
+// doses que ela dá ao dia (o declarado, ou o que o intervalo divide o dia sem sobra); a frequência que não dá número
+// de doses (se necessário, a critério, intervalo que não fecha o dia) não tem grade padrão.
+
+/** O número de doses ao dia que a frequência dá à grade padrão, ou null quando ela não tem grade. */
+export function dosesDaFrequencia(f: {
+  readonly dosesPorDia: number | null;
+  readonly intervaloMinutos: number | null;
+}): number | null {
+  const valido = (n: number) => Number.isInteger(n) && n >= 1 && n <= 48;
+  if (f.dosesPorDia !== null && f.dosesPorDia > 0) return valido(f.dosesPorDia) ? f.dosesPorDia : null;
+  const i = f.intervaloMinutos;
+  if (i === null || i <= 0 || 1_440 % i !== 0) return null;
+  return valido(1_440 / i) ? 1_440 / i : null;
+}
+
+/**
+ * A grade padrão de uma frequência: a frequência precisa dar o número de doses ao dia (é a chave da grade que o
+ * aprazamento lê) e a grade tem exatamente esse número de horários, sem repetir.
+ */
+export function conferirGradePadrao(
+  horarios: readonly HorarioPadraoConferido[],
+  doses: number | null,
+): RecusaSuprimentos[] {
+  if (doses === null)
+    return [
+      recusa(
+        'frequencia-sem-doses',
+        'A grade padrão é por número de doses ao dia: escolha uma frequência que diga quantas doses dá por dia.',
+        ['frequencia'],
+      ),
+    ];
+  return conferirHorariosPadrao(horarios, doses);
 }
 
 /** O texto gravado dos dias (nulo = todos os dias). */

@@ -14,6 +14,7 @@ import { type ContextoNucleo, type ContextoOperacao, type Escritor, NucleoPropri
 import { PLANO_DO_TIPO } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { CatalogoPrescricaoPropria } from '../pep/prescricao-propria-catalogo.js';
 import { GravacaoPrescricaoPropria } from '../pep/prescricao-propria-gravacao.js';
 import { dataHora } from '../pep/registro-porta-propria.js';
 import type { GravacaoPrescricao, ItemGravacao } from '../pep/tipos-pep.js';
@@ -46,6 +47,8 @@ async function limpar(e: Escritor): Promise<void> {
     `DELETE FROM prescricao WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM regra_integracao_prescricao WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM horario_padrao_medicacao WHERE estabelecimento_id IN ${est}`,
+    `DELETE FROM horario_padrao_dose WHERE estabelecimento_id IN ${est}`,
+    `DELETE FROM grade_horario_unidade WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM saldo_estoque WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM local_estoque WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM internacao WHERE estabelecimento_id IN ${est}`,
@@ -309,8 +312,8 @@ describe.skipIf(SEM_BANCO)(
       });
       await op('suprimentos.gravarHorariosPadrao', {
         frequencia: ids.f3x,
-        setor: null,
-        horarios: GRADE.map((hora) => ({ hora, dias: [] })),
+        grade: null,
+        horarios: GRADE.map((hora) => ({ hora })),
       });
       const lidos = await farmacia.parametrosEditaveis(ctx);
       expect(
@@ -319,14 +322,35 @@ describe.skipIf(SEM_BANCO)(
           .map((r) => r.regra)
           .sort(),
       ).toEqual([regra.geral, regra.semIntegracao, regra.liberacao].sort());
-      expect(lidos.grades.find((g) => g.frequencia === ids.f3x)?.horarios.map((h) => h.hora)).toEqual(GRADE);
+      expect(
+        lidos.grades.find((g) => g.grade === null && g.dosesPorDia === 3)?.horarios.map((h) => h.hora),
+      ).toEqual(GRADE);
+      // A grade gravada pela farmácia é a que o aprazamento lê (grade unificada, 05-SUP linha 7): a regra de horário
+      // do estabelecimento traz, para 3 doses ao dia, os horários gravados.
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-grade` }, (e) =>
+        e.inserir(
+          `INSERT INTO grade_horario_unidade (estabelecimento_id, tipo_atendimento, hora_inicio_dia, padrao, criado_em)
+           VALUES (?, 'internacao', '07:00:00', TRUE, NOW(3))`,
+          [ids.est],
+        ),
+      );
+      const aprazamento = await new CatalogoPrescricaoPropria(nucleo, CLIENTE).regras({
+        cliente: CLIENTE,
+        estabelecimento: null,
+        usuario: null,
+        correlacao: P,
+        rede: 'rede-teste',
+        hospital: P,
+      } as never);
+      expect(aprazamento.regras).toHaveLength(1);
+      expect(aprazamento.regras[0]?.grade.get(3)).toEqual(GRADE);
     });
 
     it('prescrever aplica a regra a cada dose: local, substituto, liberação e horários da grade gravada', async () => {
       // Os horários de cada item são os da grade gravada (lida de volta), na próxima ocorrência dentro da vigência.
       const grade =
         (await farmacia.parametrosEditaveis(ctx)).grades
-          .find((g) => g.frequencia === ids.f3x)
+          .find((g) => g.grade === null && g.dosesPorDia === 3)
           ?.horarios.map((h) => h.hora) ?? [];
       const agora = local(0);
       const hoje = agora.slice(0, 10);
@@ -343,6 +367,7 @@ describe.skipIf(SEM_BANCO)(
           frequencia: ids.f3x,
           via: 'EV36',
           observacao: null,
+          // O cliente diz "sem integração": o servidor ignora e decide pela regra vigente (as doses abaixo integram).
           integracaoEstoque: false,
           detalhe: {
             tipo: 'medicamento',

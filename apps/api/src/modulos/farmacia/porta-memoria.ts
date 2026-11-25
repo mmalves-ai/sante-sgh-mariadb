@@ -40,7 +40,7 @@ import type {
 } from '@sgh/contratos';
 import {
   chaveRegraIntegracao,
-  conferirHorariosPadrao,
+  conferirGradePadrao,
   conferirRegraIntegracao,
 } from '@sgh/contratos/regras-suprimentos';
 import { ENTRADAS_FARMACIA } from './operacoes.js';
@@ -138,12 +138,9 @@ interface ControleM {
 
 interface Estado {
   seq: number;
-  /** F3.6: as regras de integração e as grades de horário padrão (chave frequência|setor). */
+  /** F3.6: as regras de integração e a grade padrão unificada (chave grade|número de doses). */
   regras?: RegraIntegracaoLida[];
-  grades?: Map<
-    string,
-    { frequencia: number; setor: number | null; horarios: { hora: string; dias: number[] }[] }
-  >;
+  grades?: Map<string, { grade: number | null; dosesPorDia: number; horarios: { hora: string }[] }>;
   internados: InternadoM[];
   itens: Map<number, ItemM>;
   horarios: HorarioM[];
@@ -1156,17 +1153,19 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
     const s = this.e(c);
     return {
       regras: s.regras ?? [],
-      grades: [...(s.grades ?? new Map()).values()].map((g) => ({
-        ...g,
-        frequenciaNome:
-          PortaFarmaciaMemoria.FREQUENCIAS.find((f) => f.id === g.frequencia)?.nome ??
-          `Frequência ${g.frequencia}`,
-        dosesPorDia: PortaFarmaciaMemoria.FREQUENCIAS.find((f) => f.id === g.frequencia)?.dosesPorDia ?? null,
-        setorNome: g.setor === null ? null : `Setor ${g.setor}`,
-      })),
+      grades: [...(s.grades ?? new Map()).values()].map((g) => {
+        const usam = PortaFarmaciaMemoria.FREQUENCIAS.filter((f) => f.dosesPorDia === g.dosesPorDia);
+        return {
+          ...g,
+          gradeNome: g.grade === null ? null : `Grade ${g.grade}`,
+          frequencia: usam[0]?.id ?? null,
+          frequenciaNome: usam.map((f) => f.nome).join(', ') || `${g.dosesPorDia} dose(s) ao dia`,
+        };
+      }),
       opcoes: {
         centros: [{ id: CENTRO_SINTETICO, nome: 'UTI SINTETICA' }],
         setores: [],
+        gradesHorario: [],
         unidades: [],
         locais: [{ id: LOCAL_FARMACIA_SINTETICO, nome: 'FARMACIA SINTETICA' }],
         tiposItem: [],
@@ -1223,19 +1222,23 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   private gravarGrade(s: Estado, e: GravarHorariosPadraoEntrada): Record<string, number> {
     const freq = PortaFarmaciaMemoria.FREQUENCIAS.find((f) => f.id === e.frequencia);
     if (!freq) throw recusaOp('referencia-inexistente', 'Escolha uma frequência ativa.', ['frequencia']);
-    const rs = conferirHorariosPadrao(e.horarios, freq.dosesPorDia);
-    if (rs[0])
+    if (e.grade !== null)
+      throw recusaOp('referencia-inexistente', 'Escolha uma grade de horário ativa deste estabelecimento.', [
+        'grade',
+      ]);
+    const rs = conferirGradePadrao(e.horarios, freq.dosesPorDia);
+    if (rs[0] || freq.dosesPorDia === null)
       throw recusaOp(
-        rs[0].codigo,
+        rs[0]?.codigo ?? 'frequencia-sem-doses',
         rs.map((r) => r.mensagem).join(' '),
         rs.flatMap((r) => r.campos ?? []),
       );
-    (s.grades ??= new Map()).set(`${e.frequencia}|${e.setor ?? ''}`, {
-      frequencia: e.frequencia,
-      setor: e.setor,
-      horarios: e.horarios.map((h) => ({ hora: h.hora, dias: [...h.dias] })),
+    (s.grades ??= new Map()).set(`|${freq.dosesPorDia}`, {
+      grade: null,
+      dosesPorDia: freq.dosesPorDia,
+      horarios: e.horarios.map((h) => ({ hora: h.hora })),
     });
-    return { frequencia: e.frequencia };
+    return { frequencia: e.frequencia, doses: freq.dosesPorDia };
   }
 
   async parametrosIntegracao() {

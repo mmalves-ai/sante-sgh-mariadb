@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   chaveRegraIntegracao,
   type ContextoIntegracao,
+  conferirGradePadrao,
   conferirHorariosPadrao,
   decidirIntegracao,
   type RegraCandidata,
   regraVigente,
   conferirRegraIntegracao,
   diasDoTexto,
+  dosesDaFrequencia,
   diasParaTexto,
   type RegraIntegracaoConferida,
 } from '@sgh/contratos/regras-suprimentos';
@@ -179,5 +181,27 @@ describe('regra vigente e decisão da integração', () => {
         horarioDose: null,
       }).integraEstoque,
     ).toBe(false);
+  });
+});
+
+describe('grade padrão unificada (a mesma do aprazamento)', () => {
+  it('a frequência dá o número de doses: o declarado ou o intervalo que fecha o dia', () => {
+    expect(dosesDaFrequencia({ dosesPorDia: 3, intervaloMinutos: null })).toBe(3);
+    expect(dosesDaFrequencia({ dosesPorDia: null, intervaloMinutos: 480 })).toBe(3);
+    expect(dosesDaFrequencia({ dosesPorDia: null, intervaloMinutos: 30 })).toBe(48);
+    expect(dosesDaFrequencia({ dosesPorDia: 2, intervaloMinutos: 480 })).toBe(2);
+  });
+  it('sem número de doses não há grade: intervalo que não fecha o dia, curto demais, a critério', () => {
+    expect(dosesDaFrequencia({ dosesPorDia: null, intervaloMinutos: 420 })).toBeNull();
+    expect(dosesDaFrequencia({ dosesPorDia: null, intervaloMinutos: 20 })).toBeNull();
+    expect(dosesDaFrequencia({ dosesPorDia: null, intervaloMinutos: null })).toBeNull();
+    expect(dosesDaFrequencia({ dosesPorDia: 60, intervaloMinutos: null })).toBeNull();
+  });
+  it('recusa a frequência sem doses e exige o número exato de horários', () => {
+    const h = (...hs: string[]) => hs.map((hora) => ({ hora }));
+    expect(conferirGradePadrao(h('08:00'), null).map((r) => r.codigo)).toEqual(['frequencia-sem-doses']);
+    expect(conferirGradePadrao(h('06:00', '14:00', '22:00'), 3)).toEqual([]);
+    expect(conferirGradePadrao(h('06:00', '18:00'), 3).map((r) => r.codigo)).toEqual(['doses-da-frequencia']);
+    expect(conferirGradePadrao(h('06:00', '06:00'), 2).map((r) => r.codigo)).toEqual(['horario-repetido']);
   });
 });
