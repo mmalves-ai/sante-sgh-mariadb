@@ -20,7 +20,7 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('@F35-2 pedido de exames e recoletas pelo menu do SADT', () => {
+test.describe('@F35-2 @F3.5-03 pedido de exames e recoletas pelo menu do SADT', () => {
   test('a biomédica do laboratório abre o pedido e as recoletas pelo menu; sem banco a tela avisa; axe', async ({
     page,
   }) => {

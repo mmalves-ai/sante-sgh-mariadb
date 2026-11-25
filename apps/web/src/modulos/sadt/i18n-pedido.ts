@@ -15,7 +15,10 @@ export const mensagensPedido = {
   pacienteConfirmado: 'Conferi o nome e a data de nascimento: é este o paciente',
   setorDoExame: 'Setor do exame',
   setorDoPedido: 'O setor do pedido',
-  materialPadrao: 'O material é o padrão do cadastro do exame.',
+  materialPadrao:
+    'O material é o padrão do cadastro do exame; quando o exame aceita mais de um, escolha o material ao lado do exame.',
+  materialDoExame: 'Material',
+  materialPadraoOpcao: '{nome} (padrão)',
   urgenteExame: 'Urgente',
   semPermissaoExcecao:
     'A exceção precisa de quem tem a permissão de autorizar: peça a quem autoriza para gravar.',
@@ -47,6 +50,20 @@ export const mensagensPedido = {
   motivo: 'Motivo',
   complemento: 'Explicação',
   cancelado: 'Exame cancelado.',
+  canceladoConta: {
+    estornado: 'Exame cancelado e cobrança estornada da conta.',
+    mantido: 'Exame cancelado; a cobrança ficou na conta (o motivo mantém a cobrança).',
+    sem_lancamento: 'Exame cancelado.',
+  },
+  cobranca: {
+    na_conta: 'Na conta',
+    do_orcamento: 'Cobrado pelo orçamento',
+    pendente: 'Cobrança pendente',
+    nao_se_aplica: '',
+  },
+  cobrancaPendente: '{n} exame(s) sem cobrança na conta: {motivos}',
+  lancarPendentes: 'Lançar pendentes na conta',
+  lancados: '{n} exame(s) lançado(s) na conta; {p} seguem pendente(s).',
   escolha: 'Escolha…',
   recoletas: 'Recoletas',
   abertas: 'Recoletas em aberto',

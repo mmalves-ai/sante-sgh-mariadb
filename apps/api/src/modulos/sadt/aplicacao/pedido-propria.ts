@@ -12,6 +12,11 @@ import {
   conferirRecoleta,
   decisaoDoPedido,
   decisaoDosLimites,
+  type ExcecaoCadastrada,
+  excecaoQueLibera,
+  materialDoItem,
+  type TipoAtendimento,
+  tipoAtendimentoDoPedido,
   type LimiteAcionado,
   destinoDosExamesAoCancelar,
   type ExameDaAmostra,
@@ -40,6 +45,12 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
 import { COLUNA_LIBERACAO, limitesDoPedido } from './limites-exame-propria.js';
+import {
+  type CobrancaDoPedido,
+  estornarExameDaConta,
+  lancarExamesNaConta,
+  TABELAS_CONTA_PEDIDO,
+} from './pedido-conta.js';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
 
@@ -117,9 +128,18 @@ export interface AvaliacaoDoPedido {
   readonly restricoes: readonly RestricaoAcionada[];
   /** Cota, intervalo e último resultado (05-SADT linha 6), vistos na hora. */
   readonly limites: readonly LimiteAcionado[];
+  /** Os materiais que cada exame avulso aceita e o que vale no item (a tela troca o material por exame). */
+  readonly materiais: readonly MateriaisDoExame[];
   readonly segue: boolean;
   readonly codigo: string | null;
   readonly motivo: string | null;
+}
+
+export interface MateriaisDoExame {
+  readonly exame: number;
+  /** O material do item: o escolhido na tela ou o padrão do cadastro do exame. */
+  readonly escolhido: number | null;
+  readonly opcoes: readonly { id: number; descricao: string; padrao: boolean }[];
 }
 
 export interface PedidoGravado {
@@ -127,6 +147,8 @@ export interface PedidoGravado {
   readonly numero: string;
   readonly itens: readonly { id: number; exame: number; sequencia: number }[];
   readonly excecoes: number;
+  /** O que entrou na conta e o que ficou pendente de cobrança (ausente na conversão do orçamento). */
+  readonly cobranca?: CobrancaDoPedido;
 }
 
 export interface KitVigente {
@@ -175,6 +197,16 @@ const dataIso = (v: unknown): string | null => {
 };
 const hora = (v: unknown) => (v === null || v === undefined ? null : String(v).slice(0, 5));
 
+/** O mesmo para a regra conferida no meio de uma leitura da transação. */
+async function daRegraAsync<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof RecusaPedido || e instanceof RecusaAmostra) throw recusa(e.codigo, e.message);
+    throw e;
+  }
+}
+
 /** As recusas da regra viram o problema da API (422 com o código). */
 function daRegra<T>(fn: () => T): T {
   try {
@@ -201,9 +233,21 @@ export const TABELAS_PEDIDO = [
   'sequencia_negocio',
 ] as const;
 
+/** As tabelas do pedido com as da conta (o pedido lança o exame na conta e o cancelamento estorna). */
+const TABELAS_PEDIDO_COM_CONTA = [...TABELAS_PEDIDO, ...TABELAS_CONTA_PEDIDO] as const;
+
 async function relogio(l: Leitor, est: number) {
   const f = await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
-  return relogioNoFuso(texto(f?.['fuso_horario']) || FUSO_PADRAO);
+  const fuso = texto(f?.['fuso_horario']) || FUSO_PADRAO;
+  return {
+    ...relogioNoFuso(fuso),
+    /** O dia civil (AAAA-MM-DD) de um instante gravado, no fuso do estabelecimento (nunca o dia de UTC). */
+    diaDe(instante: unknown): string | null {
+      if (instante === null || instante === undefined) return null;
+      const d = instante instanceof Date ? instante : new Date(`${String(instante).replace(' ', 'T')}Z`);
+      return Number.isNaN(d.getTime()) ? null : relogioNoFuso(fuso, d).hoje;
+    },
+  };
 }
 
 const sexoDe = (sigla: unknown): Sexo | null => {
@@ -222,7 +266,8 @@ function regraDe(r: Linha): RegraRestricao {
     sexo: r['sexo'] === null ? null : (texto(r['sexo']) as Sexo),
     idadeMinimaDias: nn(r['idade_minima_dias']),
     idadeMaximaDias: nn(r['idade_maxima_dias']),
-    tipoAtendimento: null,
+    tipoAtendimento:
+      r['tipo_atendimento'] === null ? null : (texto(r['tipo_atendimento']) as TipoAtendimento),
     diaSemana: nn(r['dia_semana']),
     horaInicio: hora(r['hora_inicio']),
     horaFim: hora(r['hora_fim']),
@@ -298,7 +343,7 @@ export class ServicoPedidoSadt {
     let saida: { valor: T } | null = null;
     const op = definirOperacao({
       nome,
-      tabelas: TABELAS_PEDIDO,
+      tabelas: TABELAS_PEDIDO_COM_CONTA,
       entrada: z.object({ chave: z.string() }),
       async gravar(tx) {
         saida = { valor: await fn(tx, est) };
@@ -328,10 +373,11 @@ export class ServicoPedidoSadt {
   avaliarPedido(c: ContextoSadt, entrada: unknown, podeAutorizarExcecao = false): Promise<AvaliacaoDoPedido> {
     const p = esquemaPedidoExames.parse(entrada);
     return this.ler(c, async (l, est) => {
-      const a = await this.avaliar(l, est, p, podeAutorizarExcecao);
+      const a = await this.avaliar(l, est, p, podeAutorizarExcecao, c.usuario ?? null);
       return {
         itens: a.itens.map((i) => ({ sequencia: i.sequencia, exame: i.exame, kitVersao: i.kitVersao })),
         restricoes: a.acionadas,
+        materiais: a.materiais,
         limites: a.limites,
         segue: a.decisao.segue,
         codigo: a.decisao.codigo,
@@ -340,12 +386,20 @@ export class ServicoPedidoSadt {
     });
   }
 
-  private async avaliar(l: Leitor, est: number, p: PedidoExames, podeAutorizarExcecao: boolean) {
+  private async avaliar(
+    l: Leitor,
+    est: number,
+    p: PedidoExames,
+    podeAutorizarExcecao: boolean,
+    usuario: number | null,
+  ) {
     const at = await l.uma(
       `SELECT a.id, a.paciente_id, a.fonte_pagadora_id, a.profissional_id, a.unidade_assistencial_id, a.setor_funcional_id,
-              pf.data_nascimento, sx.sigla AS sexo
+              pf.data_nascimento, sx.sigla AS sexo, ra.codigo_tiss AS regime,
+              EXISTS (SELECT 1 FROM internacao i WHERE i.atendimento_id = a.id AND i.excluido_em IS NULL) AS internado
          FROM atendimento a JOIN paciente pa ON pa.id = a.paciente_id
          JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id LEFT JOIN sexo sx ON sx.id = pf.sexo_id
+         LEFT JOIN regime_atendimento ra ON ra.id = a.regime_atendimento_id
         WHERE a.id = ? AND a.estabelecimento_id = ?`,
       [p.atendimento, est],
     );
@@ -403,15 +457,36 @@ export class ServicoPedidoSadt {
         );
     }
     const exames = [...new Set(montados.map((i) => i.exame))];
-    // Sem material escolhido, vale o material padrão do cadastro do exame (a restrição por material é avaliada nele).
-    const padroes = await l.consultar(
-      `SELECT exame_id, MIN(material_biologico_id) AS material FROM exame_material
-        WHERE exame_id IN (${lista(exames.length)}) GROUP BY exame_id`,
+    // O material do item é o escolhido na tela, se o exame o aceita, ou o padrão do cadastro do exame (a restrição por
+    // material é avaliada nele). Material fora do cadastro do exame é recusado pela regra do domínio.
+    const aceitos = await l.consultar(
+      `SELECT em.exame_id, em.material_biologico_id, em.padrao, mb.descricao
+         FROM exame_material em JOIN material_biologico mb ON mb.id = em.material_biologico_id
+        WHERE em.ativo = TRUE AND em.excluido_em IS NULL AND em.exame_id IN (${lista(exames.length)}) ORDER BY mb.descricao, em.id`,
       exames,
     );
-    const padraoDe = (exame: number) =>
-      nn(padroes.find((x) => n(x['exame_id']) === exame)?.['material'] ?? null);
-    const itens = montados.map((i) => ({ ...i, material: i.material ?? padraoDe(i.exame) }));
+    const aceitosDe = (exame: number) => {
+      const vistos = new Set<number>();
+      return aceitos
+        .filter((x) => n(x['exame_id']) === exame)
+        .map((x) => ({
+          material: n(x['material_biologico_id']),
+          padrao: Boolean(x['padrao']),
+          descricao: texto(x['descricao']),
+        }))
+        .filter((x) => !vistos.has(x.material) && vistos.add(x.material));
+    };
+    const itens = montados.map((i) => ({
+      ...i,
+      material: daRegra(() => materialDoItem(i.material, aceitosDe(i.exame))),
+    }));
+    const materiais: MateriaisDoExame[] = itens
+      .filter((i) => i.kitVersao === null)
+      .map((i) => ({
+        exame: i.exame,
+        escolhido: i.material,
+        opcoes: aceitosDe(i.exame).map((x) => ({ id: x.material, descricao: x.descricao, padrao: x.padrao })),
+      }));
     const ok = await l.consultar(
       `SELECT id FROM exame WHERE ativo = TRUE AND excluido_em IS NULL AND id IN (${lista(exames.length)})`,
       exames,
@@ -426,19 +501,56 @@ export class ServicoPedidoSadt {
       )
     ).map(regraDe);
     const paciente = n(at['paciente_id']);
-    const excecoes = regras.length
-      ? await l.consultar(
-          `SELECT id, restricao_exame_id FROM excecao_restricao_exame
-            WHERE ativo = TRUE AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
-              AND restricao_exame_id IN (${lista(regras.length)})
-              AND ((abrangencia = 'estabelecimento' AND estabelecimento_id = ?) OR (abrangencia = 'paciente' AND paciente_id = ?))`,
-          [rel.hoje, rel.hoje, ...regras.map((r) => r.id), est, paciente],
-        )
+    // As exceções permanentes das regras (paciente, setor que pede, perfil de quem pede e estabelecimento): a regra do
+    // domínio escolhe a que vale. A exceção pontual de um item pedido não libera outro pedido.
+    const excecoes: ExcecaoCadastrada[] = regras.length
+      ? (
+          await l.consultar(
+            `SELECT id, restricao_exame_id, abrangencia, estabelecimento_id, setor_funcional_id, perfil_acesso_id,
+                    paciente_id, vigencia_inicio, vigencia_fim, ativo
+               FROM excecao_restricao_exame
+              WHERE ativo = TRUE AND abrangencia IN ('estabelecimento','setor','perfil','paciente')
+                AND restricao_exame_id IN (${lista(regras.length)})`,
+            regras.map((r) => r.id),
+          )
+        ).map((x) => ({
+          id: n(x['id']),
+          regra: n(x['restricao_exame_id']),
+          abrangencia: texto(x['abrangencia']) as ExcecaoCadastrada['abrangencia'],
+          estabelecimento: nn(x['estabelecimento_id']),
+          setorFuncional: nn(x['setor_funcional_id']),
+          perfil: nn(x['perfil_acesso_id']),
+          paciente: nn(x['paciente_id']),
+          vigenciaInicio: dataIso(x['vigencia_inicio']) ?? '1900-01-01',
+          vigenciaFim: dataIso(x['vigencia_fim']),
+          ativo: Boolean(x['ativo']),
+        }))
       : [];
-    const excecaoDe = (regra: number) => {
-      const e = excecoes.find((x) => n(x['restricao_exame_id']) === regra);
-      return e ? n(e['id']) : null;
-    };
+    // Os perfis de acesso vigentes de quem grava, neste estabelecimento (só lidos quando há exceção por perfil).
+    const perfis =
+      usuario !== null && excecoes.some((e) => e.abrangencia === 'perfil')
+        ? (
+            await l.consultar(
+              `SELECT perfil_acesso_id FROM usuario_perfil
+                WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+                  AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+              [usuario, est, rel.hoje, rel.hoje],
+            )
+          ).map((x) => n(x['perfil_acesso_id']))
+        : [];
+    const excecaoDe = (regra: number) =>
+      excecaoQueLibera(excecoes, regra, {
+        estabelecimento: est,
+        paciente,
+        setorFuncional: nn(at['setor_funcional_id']),
+        perfis,
+        data: rel.hoje,
+      });
+    const tipoAtendimento = tipoAtendimentoDoPedido({
+      pedidoExterno: p.tipo === 'externo',
+      regimeCodigo: at['regime'] === null || at['regime'] === undefined ? null : texto(at['regime']),
+      temInternacao: Number(at['internado'] ?? 0) === 1,
+    });
     const anteriores = regras.some((r) => r.intervaloMinimoDias)
       ? await l.consultar(
           `SELECT ei.exame_id, r.solicitado_em FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
@@ -456,14 +568,15 @@ export class ServicoPedidoSadt {
           setor: i.setor ?? p.setor,
           material: i.material,
           unidade: nn(at['unidade_assistencial_id']),
-          tipoAtendimento: null,
+          tipoAtendimento,
           sexo: sexoDe(at['sexo']),
           idadeDias: idadeEmDias(nasc, rel.hoje),
           data: rel.hoje,
           hora: rel.hora,
           anteriores: anteriores
             .filter((x) => n(x['exame_id']) === i.exame)
-            .map((x) => dataIso(x['solicitado_em']) ?? ''),
+            // O dia do pedido anterior no fuso do estabelecimento: o pedido da noite conta no próprio dia.
+            .map((x) => rel.diaDe(x['solicitado_em']) ?? ''),
         },
         excecaoDe,
       ),
@@ -494,15 +607,43 @@ export class ServicoPedidoSadt {
           motivo: decisaoLimites.motivo,
         }
       : decisao;
-    return { at, itens, acionadas, decisao: final, paciente, limites, liberados: decisaoLimites.liberados };
+    return {
+      at,
+      itens,
+      acionadas,
+      decisao: final,
+      paciente,
+      limites,
+      liberados: decisaoLimites.liberados,
+      materiais,
+    };
   }
 
   /** Abre a requisição com os itens (avulsos e de kit), já com as restrições decididas e as exceções registradas. */
   abrirPedido(c: ContextoSadt, entrada: unknown, podeAutorizarExcecao = false): Promise<PedidoGravado> {
     const p = esquemaPedidoExames.parse(entrada);
-    return this.gravar(c, 'sadt.pedido.aberto', 'requisicao_exame', (tx, est) =>
-      this.abrirNaTransacao(tx, est, p, podeAutorizarExcecao),
-    );
+    return this.gravar(c, 'sadt.pedido.aberto', 'requisicao_exame', async (tx, est) => {
+      const r = await this.abrirNaTransacao(tx, est, p, podeAutorizarExcecao);
+      // O exame pedido entra na conta aberta do atendimento; o que não puder ser cobrado agora fica pendente.
+      const cobranca = await lancarExamesNaConta(
+        tx,
+        est,
+        { requisicao: r.requisicao },
+        (await relogio(tx, est)).hoje,
+      );
+      return { ...r, cobranca };
+    });
+  }
+
+  /**
+   * Lança na conta os exames do atendimento que ficaram pendentes de cobrança (conta aberta depois, item cobrável ou
+   * preço cadastrado depois), sem redigitar o pedido. Os exames de orçamento aprovado não entram (já foram cobrados).
+   */
+  lancarPendentesNaConta(c: ContextoSadt, atendimento: number): Promise<CobrancaDoPedido & { id?: number }> {
+    return this.gravar(c, 'sadt.pedido.conta_lancada', 'conta_hospitalar', async (tx, est) => {
+      const r = await lancarExamesNaConta(tx, est, { atendimento }, (await relogio(tx, est)).hoje);
+      return { ...r, ...(r.conta === null ? {} : { id: r.conta }) };
+    });
   }
 
   /**
@@ -515,7 +656,7 @@ export class ServicoPedidoSadt {
     p: PedidoExames,
     podeAutorizarExcecao = false,
   ): Promise<PedidoGravado> {
-    const a = await this.avaliar(tx, est, p, podeAutorizarExcecao);
+    const a = await this.avaliar(tx, est, p, podeAutorizarExcecao, tx.contexto.usuario ?? null);
     if (!a.decisao.segue)
       throw recusa(a.decisao.codigo ?? 'restricao', a.decisao.motivo ?? 'Pedido recusado.');
     const usuario = tx.contexto.usuario;
@@ -610,7 +751,11 @@ export class ServicoPedidoSadt {
     c: ContextoSadt,
     item: number,
     entrada: unknown,
-  ): Promise<{ id: number; requisicaoCancelada: boolean }> {
+  ): Promise<{
+    id: number;
+    requisicaoCancelada: boolean;
+    conta: 'estornado' | 'mantido' | 'sem_lancamento';
+  }> {
     const p = esquemaCancelarItem.parse(entrada);
     return this.gravar(c, 'sadt.item.cancelado', 'exame_item', async (tx, est) => {
       const [it] = await tx.consultarParaAtualizar(
@@ -622,7 +767,7 @@ export class ServicoPedidoSadt {
       );
       if (!it) throw recusa('exame-inexistente', 'O exame não existe neste estabelecimento.');
       const m = await tx.uma(
-        'SELECT ativo, aplica_a, exige_complemento FROM motivo_cancelamento_item_exame WHERE id = ?',
+        'SELECT ativo, aplica_a, exige_complemento, remove_da_conta FROM motivo_cancelamento_item_exame WHERE id = ?',
         [p.motivo],
       );
       daRegra(() =>
@@ -640,7 +785,15 @@ export class ServicoPedidoSadt {
       );
       const agora = new Date();
       const usuario = tx.contexto.usuario;
+      // A cobrança do exame cancelado: estornada quando o motivo tira da conta (conta fechada recusa o cancelamento).
+      const conta = await daRegraAsync(() =>
+        estornarExameDaConta(tx, est, item, {
+          id: p.motivo,
+          removeDaConta: Boolean(m?.['remove_da_conta']),
+        }),
+      );
       await tx.alterar('exame_item', item, n(it['versao']), {
+        ...(conta.destino === 'estornado' ? { faturado: false } : {}),
         situacao: 'cancelado',
         cancelado_em: agora,
         cancelado_por_usuario_id: usuario,
@@ -658,6 +811,7 @@ export class ServicoPedidoSadt {
         motivo: p.complemento,
         setor_diagnostico_id: nn(it['setor_diagnostico_id']),
         notificar_solicitante: p.notificarSolicitante,
+        dados: JSON.stringify({ conta }),
       });
       const req = n(it['requisicao_exame_id']);
       const vivos = await tx.uma(
@@ -681,7 +835,7 @@ export class ServicoPedidoSadt {
         });
         requisicaoCancelada = true;
       }
-      return { id: item, requisicaoCancelada };
+      return { id: item, requisicaoCancelada, conta: conta.destino };
     });
   }
 
@@ -782,14 +936,16 @@ export class ServicoPedidoSadt {
       );
       const itens = reqs.length
         ? await l.consultar(
-            `SELECT ei.id, ei.requisicao_exame_id, ei.sequencia, ei.situacao, ei.coleta_pendente, e.nome
+            `SELECT ei.id, ei.requisicao_exame_id, ei.sequencia, ei.situacao, ei.coleta_pendente, e.nome,
+                    ei.faturado, r.orcamento_particular_id
                FROM exame_item ei JOIN exame e ON e.id = ei.exame_id
+               JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
               WHERE ei.excluido_em IS NULL AND ei.requisicao_exame_id IN (${lista(reqs.length)})
               ORDER BY ei.requisicao_exame_id, ei.sequencia`,
             reqs.map((r) => n(r['id'])),
           )
         : [];
-      const est_ = await l.uma('SELECT nome FROM estabelecimento WHERE id = ?', [est]);
+      const est_ = await l.uma('SELECT nome_fantasia AS nome FROM estabelecimento WHERE id = ?', [est]);
       return {
         atendimento: { ...atendimentoDe(a), estabelecimento: texto(est_?.['nome']) },
         requisicoes: reqs.map((r) => ({
@@ -807,6 +963,15 @@ export class ServicoPedidoSadt {
               exame: texto(i['nome']),
               situacao: texto(i['situacao']),
               coletaPendente: Number(i['coleta_pendente'] ?? 0) === 1 || i['coleta_pendente'] === true,
+              // A cobrança do exame: na conta, do orçamento aprovado (já cobrado por ele) ou pendente de lançamento.
+              cobranca:
+                texto(i['situacao']) === 'cancelado' || texto(i['situacao']) === 'recusado'
+                  ? ('nao_se_aplica' as const)
+                  : Number(i['faturado'] ?? 0) === 1 || i['faturado'] === true
+                    ? ('na_conta' as const)
+                    : i['orcamento_particular_id'] !== null && i['orcamento_particular_id'] !== undefined
+                      ? ('do_orcamento' as const)
+                      : ('pendente' as const),
             })),
         })),
       };
