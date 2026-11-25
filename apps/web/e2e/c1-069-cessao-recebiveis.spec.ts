@@ -161,11 +161,18 @@ test.describe('financeiro: portador do título, desconto e cessão de recebívei
         if (caminho === '/apoios') return json(rota, apoios);
         if (caminho === '/portadores') return json(rota, portadores);
         if (caminho === '/operacoes') return json(rota, operacoes);
-        if (caminho === '/parcelas')
+        if (caminho === '/parcelas') {
+          // A busca filtra pelo devedor ou pelo número/sequência (só para o teste trocar a busca entre as marcações).
+          const busca = (url.searchParams.get('busca') ?? '').toUpperCase();
           return json(
             rota,
-            parcelas.filter((p) => p.situacao === 'aberta'),
+            parcelas.filter(
+              (p) =>
+                p.situacao === 'aberta' &&
+                (!busca || `${p.contraparte ?? ''} ${p.numero}/${p.sequencia}`.toUpperCase().includes(busca)),
+            ),
           );
+        }
         if (caminho === '/titulos/201')
           return json(
             rota,
@@ -406,7 +413,12 @@ test.describe('financeiro: portador do título, desconto e cessão de recebívei
     await expect(page.getByTestId('ces-coobrigacao')).toBeChecked();
     await expect(page.getByTestId('ces-coobrigacao')).toBeDisabled();
     await escolher(page.getByTestId('ces-portador'), { rotulo: /DESC1/ });
+    // Marcar numa busca, trocar a busca e marcar de novo: a prévia, o contador e o corpo enviado usam as duas.
+    await page.getByTestId('ces-busca').fill('TR-SINT-201/1');
+    await expect(page.getByTestId('ces-marcar-22')).toHaveCount(0);
     await page.getByTestId('ces-marcar-21').check();
+    await page.getByTestId('ces-busca').fill('TR-SINT-201/2');
+    await expect(page.getByTestId('ces-marcar-21')).toHaveCount(0);
     await page.getByTestId('ces-marcar-22').check();
     await page.getByTestId('ces-tarifas').fill('10');
     await expect(page.getByTestId('ces-marcadas')).toContainText('2 parcela(s)');

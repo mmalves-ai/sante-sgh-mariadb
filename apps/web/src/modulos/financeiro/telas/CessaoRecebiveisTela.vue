@@ -25,6 +25,7 @@ import {
   lerParcelasCessao,
   lerPortadores,
   type OperacaoCessao,
+  type ParcelaReceberCessao,
   type Portador,
   PORTADOR_DA_OPERACAO,
   TIPOS_COM_CONTA,
@@ -230,9 +231,22 @@ const parcelas = useQuery({
   queryKey: computed(() => ['financeiro', 'cessao', 'parcelas', buscaAplicada.value]),
   queryFn: () => lerParcelasCessao(buscaAplicada.value),
 });
+// As parcelas marcadas sobrevivem à troca da busca: cada parcela vista fica guardada (a leitura mais recente vale),
+// e a prévia, o contador e o corpo enviado saem todos da mesma lista `escolhidas`.
 const marcadas = ref<number[]>([]);
+const vistas = reactive(new Map<number, ParcelaReceberCessao>());
+watch(
+  () => parcelas.data.value,
+  (lista) => {
+    for (const p of lista ?? []) vistas.set(p.parcela, p);
+  },
+  { immediate: true },
+);
 const escolhidas = computed(() =>
-  (parcelas.data.value ?? []).filter((p) => marcadas.value.includes(p.parcela)),
+  marcadas.value
+    .map((id) => vistas.get(id))
+    .filter((p): p is ParcelaReceberCessao => !!p && p.portador === null)
+    .sort((a, b) => a.parcela - b.parcela),
 );
 
 // A prévia: a mesma regra do domínio que o servidor aplica na gravação.
@@ -276,7 +290,7 @@ async function contratar() {
         valorTarifas: num(valorTarifas.value),
         valorIof: num(valorIof.value),
         ...(nc ? { numeroContrato: nc } : {}),
-        parcelas: [...marcadas.value].sort((a, b) => a - b),
+        parcelas: escolhidas.value.map((x) => x.parcela),
         ...(obs ? { observacao: obs } : {}),
       },
       c,
@@ -600,7 +614,7 @@ async function confirmarCancelamento() {
           </tr>
         </tbody>
       </table>
-      <p data-testid="ces-marcadas">{{ t('financeiro.cessao.marcadas', { n: marcadas.length }) }}</p>
+      <p data-testid="ces-marcadas">{{ t('financeiro.cessao.marcadas', { n: escolhidas.length }) }}</p>
 
       <p class="resumo" aria-live="polite" data-testid="ces-previa">
         <span v-if="recusaPrevia" role="alert" data-testid="ces-recusa-previa">{{
