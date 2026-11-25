@@ -43,6 +43,8 @@ import { GasMedicinalController } from './gas-medicinal.controller.js';
 import { PORTA_GAS_MEDICINAL, PortaGasMedicinalPropria } from './gas-medicinal-propria.js';
 import { PORTA_GAS_SETOR, PortaGasSetorPropria } from './gas-setor-propria.js';
 import { GasSetorController } from './gas-setor.controller.js';
+import { PORTA_TRANSPORTE_PACIENTE, PortaTransportePacientePropria } from './transporte-paciente-propria.js';
+import { TransportePacienteController } from './transporte-paciente.controller.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { SameController } from './same.controller.js';
 import { SameGuardaController } from './same-guarda.controller.js';
@@ -125,6 +127,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       SameController,
       DocumentosInternacaoController,
       GasSetorController,
+      TransportePacienteController,
       GasMedicinalController,
       SameGuardaController,
       SameTramiteController,
@@ -157,6 +160,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaGasSetorPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C1-066 (03-PEP linha 125): pedido de transporte do paciente na alta e na transferência; sem núcleo, 503.
+      {
+        provide: PORTA_TRANSPORTE_PACIENTE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaTransportePacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.9 (04-HOT L126): SAME pelo volume (guarda, local e movimentação pelo tipo da operação); sem núcleo, 503.
