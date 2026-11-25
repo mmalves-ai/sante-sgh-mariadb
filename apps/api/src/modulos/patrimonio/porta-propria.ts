@@ -1940,7 +1940,12 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     return this.ler(c, async (l, est) => {
       const dia = primeiroDia(competencia);
       const ls = await l.consultar(
-        `SELECT b.id, b.plaqueta, b.descricao, g.codigo AS grupo, b.centro_custo_id, b.valor_aquisicao, b.valor_residual,
+        `SELECT b.id, b.plaqueta, b.descricao, g.codigo AS grupo, b.centro_custo_id, b.valor_residual,
+                -- F8 (07-FIN L149, CPC 27): a agregação que soma ao custo entra na base da competência seguinte à dela
+                -- e sai na retirada do componente (prospectivo: as cotas passadas ficam).
+                b.valor_aquisicao + (SELECT COALESCE(SUM(a.valor), 0) FROM agregacao_bem a WHERE a.bem_patrimonial_id = b.id
+                   AND a.agrega_valor = TRUE AND a.excluido_em IS NULL AND a.data_agregacao < ?
+                   AND (a.data_desagregacao IS NULL OR a.data_desagregacao >= ?)) AS valor_aquisicao,
                 b.vida_util_meses, k.coeficiente, b.inicio_depreciacao, b.depreciavel, b.situacao, b.data_baixa,
                 (SELECT COALESCE(SUM(d.valor_cota), 0) FROM cota_depreciacao d WHERE d.bem_patrimonial_id = b.id
                    AND d.base = '${BASE_COTA}' AND d.excluido_em IS NULL AND d.competencia < ?) AS ac,
@@ -1950,7 +1955,7 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
            LEFT JOIN coeficiente_turno k ON k.id = b.coeficiente_turno_id
           WHERE b.estabelecimento_id = ? AND b.excluido_em IS NULL AND (b.situacao <> 'baixado' OR b.data_baixa >= ?)
           ORDER BY b.plaqueta LIMIT ${TETO_BENS_LEITURA + 1}`,
-        [dia, dia, est, dia],
+        [dia, dia, dia, dia, est, dia],
         { teto: TETO_BENS_LEITURA + 1 },
       );
       const marcos = await marcosDaCompetencia(l, est, dia);

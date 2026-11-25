@@ -6,3 +6,4 @@ export * from './movimento.js';
 export * from './inventario.js';
 export * from './estorno.js';
 export * from './ajuste.js';
+export * from './complementos.js';

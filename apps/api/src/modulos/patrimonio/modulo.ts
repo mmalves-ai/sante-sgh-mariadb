@@ -15,6 +15,8 @@ import {
   ArmazemLaudoMemoria,
 } from './armazem-laudo.js';
 import { GERADOR_PDF_PATRIMONIO, PatrimonioController } from './patrimonio.controller.js';
+import { ComplementosPatrimonioController } from './complementos.controller.js';
+import { PORTA_COMPLEMENTOS_PATRIMONIO, PortaComplementosPatrimonio } from './complementos-propria.js';
 import { PORTA_PATRIMONIO, type PortaPatrimonio, portaPatrimonioIndisponivel } from './porta.js';
 import { PortaPatrimonioMemoria } from './porta-memoria.js';
 import { PortaPatrimonioPropria } from './porta-propria.js';
@@ -61,8 +63,16 @@ export async function modulo(
           (await converterHtmlEmPdfA(gotenberg, html, { metadados: { Title: titulo } })).pdf;
   return {
     module: ModuloPatrimonio,
-    controllers: [PatrimonioController],
+    controllers: [PatrimonioController, ComplementosPatrimonioController],
     providers: [
+      // F8 (07-FIN L149): agregação, obras em andamento e seguro, só com o banco do cliente (sem ele, 503).
+      {
+        provide: PORTA_COMPLEMENTOS_PATRIMONIO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao && porta.destino === 'banco'
+            ? new PortaComplementosPatrimonio(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       { provide: PORTA_PATRIMONIO, useValue: porta },
       { provide: ARMAZEM_LAUDO_PATRIMONIO, useValue: armazemLaudo },
       { provide: GERADOR_PDF_PATRIMONIO, useValue: geradorPdf },
