@@ -3,6 +3,7 @@ import { CensoFechamentoService } from './censo-fechamento.service.js';
 import { ClassificacaoEstouroService } from './classificacao-estouro.service.js';
 import { ContratosVencimentoService } from './contratos-vencimento.service.js';
 import { DataMartCargaService } from './datamart-carga.service.js';
+import { PacotesParceiroEntregaService } from './pacotes-parceiro-entrega.service.js';
 import { NotificacaoDespachoService } from './notificacao-despacho.service.js';
 import { NirReservaService } from './nir-reserva.service.js';
 import { LeituraFatosContabeisService } from './contabil/leitura-fatos.service.js';
@@ -52,6 +53,8 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   'contratos-vencimento': ContratosVencimentoService,
   // 01-ADM L115: a carga diária do data mart pseudonimizado com o registro (carga_data_mart e etapas).
   'datamart-carga': DataMartCargaService,
+  // 08-INTG L134: o agendador das entregas aos parceiros (arquivo tratado na porta de arquivos, envio simulado fora de produção).
+  'pacotes-parceiro-entrega': PacotesParceiroEntregaService,
   // 01-ADM L76: o despachante da notificação por regra (consolida e, em produção, entrega o canal externo).
   'notificacao-despacho': NotificacaoDespachoService,
   // M47 (etapa 3): a geração automática da lista de trabalho DICOM (os exames de imagem lançados sem item).
@@ -100,6 +103,7 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     ContratosVencimentoService,
     // 01-ADM L115: carga diária do data mart (DATAMART_CARGA_DIARIA=ligado em dev/ci).
     DataMartCargaService,
+    PacotesParceiroEntregaService,
     // 01-ADM L76: despachante da notificação por regra (NOTIFICACAO_DESPACHO=ligado em dev/ci).
     NotificacaoDespachoService,
     // M47 (etapa 3): lista de trabalho DICOM (PACS_WORKLIST=ligado em dev/ci).
