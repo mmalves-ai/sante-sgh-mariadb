@@ -3726,3 +3726,6 @@ faixa_valor_categoria_clinica	INT	configuracao	F8	Valor da diária de cada categ
 producao_hospitalar_mensal	INT	historico	F8	Produção hospitalar do mês por categoria clínica e do hospital: movimento, paciente-dia, ocupação, permanência, giro, pontualidade da alta e valor (Portaria MS 312/2002)	F8 (09-AREA linha 87)	04	1
 senha_prontuario_paciente	PEP	historico	F8	Senha do paciente para autorizar o acesso ao prontuário restrito, só em resumo com sal (LGPD art. 46), com bloqueio por erros seguidos	F8 (03-PEP L93)	06	1
 acesso_prontuario_restrito	PEP	historico	F8	Cada abertura do prontuário restrito por uma autorização, numerada para contar contra o limite de aberturas	F8 (03-PEP L93)	06	1
+meta_produtividade_repasse	FAT	configuracao	F8	Meta de produtividade do profissional na remuneração variável: indicador, forma do prêmio, peso e vigência	F8 (07-FIN linha 157)	06	0
+meta_produtividade_repasse_faixa	FAT	configuracao	F8	Faixas do valor apurado da meta de produtividade e o prêmio de cada uma	F8 (07-FIN linha 157)	06	0
+apuracao_meta_produtividade	FAT	historico	F8	Valor apurado da meta de produtividade na competência, com o histórico das correções	F8 (07-FIN linha 157)	06	0
