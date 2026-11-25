@@ -1093,7 +1093,7 @@ periodo_escrituracao	FIN	configuracao	F3	Período de escrituração contábil co
 periodo_financeiro	FIN	principal	F3	Competência financeira por estabelecimento, com abertura, fechamento e reabertura autorizada	MV MES_ANO_FECH_FINANC, ANO_FECH_FINANC	07	3
 permissao_adiantamento_usuario	FIN	vinculo	F7	O que cada usuário pode fazer nos adiantamentos (abrir, aprovar, fechar) por estabelecimento, setor e vigência	rodada2:nova	07	1
 permissao_conta_bancaria	FIN	vinculo	F3	Contas bancárias que cada usuário pode ver e movimentar, por estabelecimento	SPDATA MFCTAUSU; MV FINA_PERMISSAO, FINAN_PERMISSAO	07	2
-permissao_tipo_lancamento	FIN	vinculo	F3	Tipos de credor ou lançamento que cada perfil pode usar em cada operação	SPDATA MFTIPOLANC_TBOPCOES; MV FUNCIONALIDADE_FNFI_USU	07	2
+permissao_tipo_lancamento	FIN	vinculo	F3	Tipos de credor, de lançamento ou de documento a receber que cada perfil pode usar em cada operação	SPDATA MFTIPOLANC_TBOPCOES; MV FUNCIONALIDADE_FNFI_USU	07	2
 plano_contas	FIN	principal	F7	Plano de contas versionado por grupo de estabelecimentos, com vigência e máscara	MV PLANO_CONTAS, PLANO_CONTABIL, CONFIG_FCCT	07	9
 plano_orcamentario	FIN	principal	F7	Plano de contas próprio do orçamento, com máscara, tipo e vigência, separado do plano contábil	rodada2:nova	07	2
 plano_orcamentario_estabelecimento	FIN	vinculo	F7	Estabelecimentos que usam cada plano orçamentário, com situação	rodada2:nova	07	2
