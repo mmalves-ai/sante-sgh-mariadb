@@ -1329,6 +1329,20 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
   }, 180_000);
 
   it('gerar o lote: lote, contas do lote, arquivo, conta faturada (versão +1) e trilha com a operação', async () => {
+    // 04-INT linha 67: a internação por acidente de trânsito (indicador TISS 36 = 1 no atendimento, gravado pela
+    // admissão) vai ao resumo de internação com esse indicador, nunca o 9 fixo.
+    const transito = await lerUma(
+      `SELECT t.id FROM termo_terminologia t JOIN terminologia tt ON tt.id = t.terminologia_id
+        WHERE tt.codigo = 'tiss_36' AND t.codigo_termo = '1' AND t.ativo = TRUE LIMIT 1`,
+      [],
+    );
+    expect(transito?.['id']).toBeTruthy();
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-03-16' }, (e) =>
+      e.executar('UPDATE atendimento SET indicador_acidente_termo_terminologia_id = ? WHERE id = ?', [
+        transito?.['id'],
+        ids.atendimento,
+      ]),
+    );
     const versao = await versaoDaConta(ids.conta);
     const ctx = op();
     const entrada = { convenio: ids.fonte, tipoGuia: 3, contas: [{ id: ids.conta, versao }] };
@@ -1377,6 +1391,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     expect(xml).toContain('PRESTSINT01');
     expect(xml).toMatch(/valorTotalGeral>300\.00</);
     expect(xml).not.toContain('9999999');
+    expect(xml).toContain('<ans:indicadorAcidente>1</ans:indicadorAcidente>');
     expect(Number(r.resultado['valor'])).toBe(300);
     // Repetida pela mesma chave: nada novo.
     const rep = await porta.executar(c, 'faturamento.gerarLote', entrada, ctx);

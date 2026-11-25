@@ -41,6 +41,12 @@ const codigoDe = (e: unknown) =>
   (e as { problema?: { codigo?: string } }).problema?.codigo ?? (e as { codigo?: string }).codigo;
 // A recusa que sai do ApoioGravacao (ErroProblema): o código do domínio vai nos extras.
 const codigoApoio = (e: unknown) => (e as { extras?: { codigo?: string } }).extras?.codigo;
+// A recusa do acidente com o campo que a regra aponta (prova a regra que diz provar, não outra recusa do mesmo código).
+const recusaNoCampo = (codigo: string, campo: string) => (e: unknown) =>
+  codigoDe(e) === codigo &&
+  ((e as { problema?: { campos?: string[] } }).problema?.campos ?? []).includes(campo);
+// Instante fixo no passado (hora civil do estabelecimento): nunca depois da entrada, a qualquer hora do relógio.
+const OCORRIDO = '2020-01-02T08:30';
 const trilhaNula: RegistradorTrilha = { registrar: async () => ({ id: 1 }) as never };
 
 describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CLIENTE_ADT})`, () => {
@@ -292,14 +298,13 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
   });
 
   it('acidente de trabalho: sem empregador recusa; com empregador grava a linha com a sequência', async () => {
-    const hoje = new Date().toISOString().slice(0, 10);
     await expect(
-      executar('internacao.registrarAcidente', { internacao, tipo: 'trabalho', ocorridoEm: `${hoje}T00:01` }),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'acidente-invalido');
+      executar('internacao.registrarAcidente', { internacao, tipo: 'trabalho', ocorridoEm: OCORRIDO }),
+    ).rejects.toSatisfy(recusaNoCampo('acidente-invalido', 'empregadorNome'));
     const r = await executar('internacao.registrarAcidente', {
       internacao,
       tipo: 'trabalho',
-      ocorridoEm: `${hoje}T00:01`,
+      ocorridoEm: OCORRIDO,
       empregadorCnpj: '11.222.333/0001-81',
       vinculo: 'empregado',
       numeroComunicacao: 'CAT-1',
@@ -325,24 +330,23 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
   it('admissão com acidente: conferido na hora (recusa sem gravar nada) e gravado na mesma transação com o indicador TISS', async () => {
     const paciente = M().pacientes[2]!;
     const leito = M().leitos[1]!;
-    const hoje = new Date().toISOString().slice(0, 10);
     const internacoesDo = () =>
       conta('SELECT COUNT(*) AS n FROM internacao WHERE paciente_id = ? AND excluido_em IS NULL', [paciente]);
     const antes = await internacoesDo();
     // Acidente de trabalho sem empregador: recusa no campo do acidente, nada da admissão fica no banco.
     await expect(
-      internar(paciente, leito, { acidente: { tipo: 'trabalho', ocorridoEm: `${hoje}T00:01` } }),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'acidente-invalido');
+      internar(paciente, leito, { acidente: { tipo: 'trabalho', ocorridoEm: OCORRIDO } }),
+    ).rejects.toSatisfy(recusaNoCampo('acidente-invalido', 'acidente.empregadorNome'));
     expect(await internacoesDo()).toBe(antes);
     // CNPJ que não confere: mesma recusa.
     await expect(
       internar(paciente, leito, {
-        acidente: { tipo: 'trabalho', ocorridoEm: `${hoje}T00:01`, empregadorCnpj: '11.222.333/0001-82' },
+        acidente: { tipo: 'trabalho', ocorridoEm: OCORRIDO, empregadorCnpj: '11.222.333/0001-82' },
       }),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'acidente-invalido');
+    ).rejects.toSatisfy(recusaNoCampo('acidente-invalido', 'acidente.empregadorCnpj'));
     expect(await internacoesDo()).toBe(antes);
     const r = await internar(paciente, leito, {
-      acidente: { tipo: 'transito', ocorridoEm: `${hoje}T00:01`, local: 'VIA PUBLICA' },
+      acidente: { tipo: 'transito', ocorridoEm: OCORRIDO, local: 'VIA PUBLICA' },
     });
     const id = Number(r['internacao']);
     expect(

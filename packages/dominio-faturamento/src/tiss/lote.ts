@@ -92,6 +92,8 @@ export interface GuiaResumoInternacao {
   readonly tipoInternacao: '1' | '2' | '3' | '4' | '5';
   readonly regimeInternacao: '1' | '2' | '3';
   readonly motivoEncerramento: string;
+  /** Indicador de acidente (terminologia TISS 36); sem ele, 9 (não acidente). */
+  readonly indicadorAcidente?: '0' | '1' | '2' | '9';
   readonly itens: readonly ItemExecutado[];
   readonly despesas?: readonly Despesa[];
 }
@@ -352,7 +354,7 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
         ),
         el(
           'dadosSaidaInternacao',
-          el('indicadorAcidente', '9'),
+          el('indicadorAcidente', g.indicadorAcidente ?? '9'),
           el('motivoEncerramento', g.motivoEncerramento),
         ),
         g.itens.length

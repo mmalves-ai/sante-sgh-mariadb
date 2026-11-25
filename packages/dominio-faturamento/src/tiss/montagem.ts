@@ -136,6 +136,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         tipoInternacao: c.tipoInternacao,
         regimeInternacao: c.regimeInternacao,
         motivoEncerramento: c.motivoEncerramento,
+        indicadorAcidente: c.indicadorAcidente ?? '9',
         itens: procs.map(executado),
         despesas,
       };

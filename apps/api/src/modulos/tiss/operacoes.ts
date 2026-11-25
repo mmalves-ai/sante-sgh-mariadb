@@ -57,6 +57,7 @@ import {
 import {
   caraterTiss,
   codigosDaInternacao,
+  indicadorAcidenteGuia,
   conferirContaParaLoteModelo,
   conferirGuiaComConta,
   diaDaCompetencia,
@@ -137,7 +138,8 @@ const SQL_GUIA_DA_CONTA = `
   SELECT g.id, g.numero_guia_prestador, g.numero_guia_operadora, g.atendimento_recem_nascido, g.senha,
          g.data_autorizacao, g.executante_profissional_id, g.solicitante_profissional_id, g.tipo_faturamento,
          ca.codigo_tiss AS carater, ti.codigo_termo AS tipo_internacao, ri.codigo_termo AS regime,
-         me.codigo_termo AS motivo_saida, tc.codigo_termo AS tipo_consulta, ta.codigo_termo AS tipo_atendimento
+         me.codigo_termo AS motivo_saida, tc.codigo_termo AS tipo_consulta, ta.codigo_termo AS tipo_atendimento,
+         ia.codigo_termo AS indicador_acidente
     FROM guia_tiss g
     LEFT JOIN carater_atendimento_tiss ca ON ca.id = g.carater_atendimento_tiss_id
     LEFT JOIN termo_terminologia ti ON ti.id = g.tipo_internacao_termo_terminologia_id
@@ -145,6 +147,7 @@ const SQL_GUIA_DA_CONTA = `
     LEFT JOIN termo_terminologia me ON me.id = g.motivo_encerramento_termo_terminologia_id
     LEFT JOIN termo_terminologia tc ON tc.id = g.tipo_consulta_termo_terminologia_id
     LEFT JOIN termo_terminologia ta ON ta.id = g.tipo_atendimento_termo_terminologia_id
+    LEFT JOIN termo_terminologia ia ON ia.id = g.indicador_acidente_termo_terminologia_id
    WHERE g.conta_hospitalar_id = ? AND g.tipo_guia = ? AND g.fonte_pagadora_id = ? AND g.excluido_em IS NULL
      AND g.situacao <> 'cancelada'
    ORDER BY g.id DESC LIMIT 1`;
@@ -239,12 +242,13 @@ async function contaTiss(
   const at = await tx.uma<Linha>(
     `SELECT a.recem_nascido, a.retorno, a.profissional_id, a.solicitante_profissional_id, a.ocupacao_cbo_id,
             ca.codigo_tiss AS carater, ra.codigo_tiss AS regime, me.codigo_tiss AS motivo_saida,
-            cl.codigo_tiss_tipo_internacao AS tipo_internacao
+            cl.codigo_tiss_tipo_internacao AS tipo_internacao, ia.codigo_termo AS indicador_acidente
        FROM atendimento a
        JOIN carater_atendimento_tiss ca ON ca.id = a.carater_atendimento_tiss_id
        LEFT JOIN regime_atendimento ra ON ra.id = a.regime_atendimento_id
        LEFT JOIN motivo_encerramento_atendimento me ON me.id = a.motivo_encerramento_atendimento_id
        LEFT JOIN clinica_assistencial cl ON cl.id = a.clinica_assistencial_id
+       LEFT JOIN termo_terminologia ia ON ia.id = a.indicador_acidente_termo_terminologia_id
       WHERE a.id = ? AND a.excluido_em IS NULL`,
     [ct['atendimento_id']],
   );
@@ -385,6 +389,11 @@ async function contaTiss(
       tipoInternacao: internacao.ok ? internacao.tipoInternacao : '1',
       regimeInternacao: internacao.ok ? internacao.regimeInternacao : '1',
       motivoEncerramento: internacao.ok ? internacao.motivoEncerramento : '',
+      // 04-INT linha 67: o acidente da admissão (ou registrado depois) vai ao resumo de internação.
+      indicadorAcidente: indicadorAcidenteGuia(
+        texto(guia?.['indicador_acidente']),
+        texto(at?.['indicador_acidente']),
+      ),
       // Sem executante só no resumo de internação, que não o leva ao XML: vazio, nunca um profissional padrão.
       profissional: executante?.profissional ?? { conselho: '', numeroConselho: '', uf: '', cbos: '' },
       profissionalNome: executante?.nome ?? '',

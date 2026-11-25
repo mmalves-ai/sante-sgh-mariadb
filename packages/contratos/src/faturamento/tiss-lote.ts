@@ -45,6 +45,11 @@ export interface ContaTiss {
   readonly tipoInternacao: '1' | '2' | '3' | '4' | '5';
   readonly regimeInternacao: '1' | '2' | '3';
   readonly motivoEncerramento: string;
+  /**
+   * Indicador de acidente (terminologia TISS 36: 0 trabalho, 1 trânsito, 2 outros, 9 não acidente), o da guia montada
+   * ou o do atendimento; sem ele, 9. Só o resumo de internação o leva ao XML.
+   */
+  readonly indicadorAcidente?: '0' | '1' | '2' | '9';
   readonly profissional: ProfissionalTiss;
   readonly profissionalNome: string;
   readonly profissionalCodigo: string;

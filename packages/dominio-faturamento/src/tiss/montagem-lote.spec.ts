@@ -117,6 +117,31 @@ describe('montagem-lote', () => {
     expect(c.erros).toEqual([]);
   });
 
+  it('resumo de internação: o indicador de acidente da conta vai ao XML; sem ele, 9 (não acidente)', async () => {
+    const acidente = montarLote(
+      prestador,
+      '000000000124',
+      '000000000078',
+      [
+        { ...conta(3, 1), indicadorAcidente: '0' },
+        { ...conta(3, 2), indicadorAcidente: '1' },
+      ],
+      new Date('2026-10-23T13:14:15Z'),
+    );
+    expect(acidente.xml).toContain('<ans:indicadorAcidente>0</ans:indicadorAcidente>');
+    expect(acidente.xml).toContain('<ans:indicadorAcidente>1</ans:indicadorAcidente>');
+    expect(acidente.xml).not.toContain('<ans:indicadorAcidente>9</ans:indicadorAcidente>');
+    expect((await conferirLote(acidente, esquemas)).erros).toEqual([]);
+    const sem = montarLote(
+      prestador,
+      '000000000125',
+      '000000000079',
+      [conta(3, 1)],
+      new Date('2026-10-23T13:14:15Z'),
+    );
+    expect(sem.xml).toContain('<ans:indicadorAcidente>9</ans:indicadorAcidente>');
+  });
+
   it('recurso de glosa montado com o cabeçalho do prestador', async () => {
     const m = montarRecurso(
       prestador,

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   caraterTiss,
   codigosDaInternacao,
+  indicadorAcidenteGuia,
   conferirGuiaComConta,
   executanteDaGuia,
   reusoDoProtocolo,
@@ -146,6 +147,13 @@ describe('montagem da guia: só o que está no cadastro', () => {
     const r = codigosDaInternacao({ tipo: null, regime: '9', motivo: '' });
     expect(r.ok).toBe(false);
     expect(r.ok ? [] : r.faltas).toHaveLength(3);
+  });
+  it('indicador de acidente: o da guia montada, senão o do atendimento, senão 9', () => {
+    expect(indicadorAcidenteGuia('1', '0')).toBe('1');
+    expect(indicadorAcidenteGuia(null, '0')).toBe('0');
+    expect(indicadorAcidenteGuia('', ' 2 ')).toBe('2');
+    expect(indicadorAcidenteGuia('7', null)).toBe('9');
+    expect(indicadorAcidenteGuia(undefined, undefined)).toBe('9');
   });
   it('guia confere com a conta: itens e total; divergência recusa', () => {
     expect(unitarioDaGuia(3, 100, 300)).toBe(100);

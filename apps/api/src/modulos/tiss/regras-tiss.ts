@@ -244,6 +244,18 @@ export function tipoFaturamentoTiss(v: string | null | undefined): '1' | '2' | '
   return ({ parcial: '1', final: '2', complementar: '3', total: '4' } as const)[limpo(v) as 'total'] ?? null;
 }
 
+/**
+ * Indicador de acidente da guia (terminologia TISS 36: 0 trabalho, 1 trânsito, 2 outros, 9 não acidente): o da guia
+ * montada; sem ele, o do atendimento (gravado pela admissão ou pelo registro do acidente); sem nenhum válido, 9.
+ */
+export function indicadorAcidenteGuia(
+  daGuia: string | null | undefined,
+  doAtendimento: string | null | undefined,
+): '0' | '1' | '2' | '9' {
+  for (const v of [limpo(daGuia), limpo(doAtendimento)]) if (/^[0129]$/.test(v)) return v as '0';
+  return '9';
+}
+
 /** Tipo de consulta: o da guia montada; sem ele, retorno → 2 (seguimento), senão 1 (primeira consulta). */
 export function tipoConsultaTiss(daGuia: string | null | undefined, retorno: boolean): '1' | '2' | '3' | '4' {
   const g = limpo(daGuia);
