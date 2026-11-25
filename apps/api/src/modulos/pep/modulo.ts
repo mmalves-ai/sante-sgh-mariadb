@@ -58,6 +58,8 @@ import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-p
 import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
 import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
+import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
+import { NotasPacientePropria } from './notas-paciente-propria.js';
 import { PORTA_SUMARIO_SECOES, PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
 import { ResultadosGruposController } from './resultados-grupos.controller.js';
 import { PORTA_GRUPOS_RESULTADO, PortaGruposResultadoPropria } from './resultados-grupos-propria.js';
@@ -185,6 +187,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       PainelFiltrosController,
       SumarioAltaSecoesController,
       FarmacovigilanciaController,
+      NotasPacienteController,
       ResultadosGruposController,
     ],
     providers: [
@@ -240,6 +243,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new FarmacovigilanciaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L102: notas e lembretes livres sobre o paciente; sem núcleo, 503.
+      {
+        provide: NOTAS_PACIENTE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new NotasPacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(opcoes.configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: opcoes.configuracao }] : []),
