@@ -37,6 +37,8 @@ import { PortaCirurgiaMemoria } from './porta-memoria.js';
 import { portaCirurgiaIndisponivel, PortaCirurgiaPropria } from './porta-propria.js';
 import { TRAVA_INCISAO, TravaIncisao } from './trava-incisao.js';
 import { TextoPadraoCirurgiaController } from './texto-padrao.controller.js';
+import { CartaoPreferenciaController } from './cartao-preferencia.controller.js';
+import { PORTA_CARTAO_PREFERENCIA, PortaCartaoPreferenciaPropria } from './cartao-preferencia-propria.js';
 import { PORTA_TEXTO_PADRAO_CIRURGIA, PortaTextoPadraoCirurgiaPropria } from './texto-padrao-propria.js';
 import { GastoSalaController } from './gasto-sala.controller.js';
 import { GradeSalaController } from './grade-sala.controller.js';
@@ -115,6 +117,7 @@ export async function moduloCirurgia(
       AnestesiaController,
       BlocoSeguroController,
       TextoPadraoCirurgiaController,
+      CartaoPreferenciaController,
       DescricaoCirurgicaController,
       GastoSalaController,
       GradeSalaController,
@@ -137,6 +140,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaTextoPadraoCirurgiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-CC linha 105): cartão de preferência do cirurgião no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_CARTAO_PREFERENCIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCartaoPreferenciaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.4 (04-CC linha 100): gasto de sala do ato no banco do cliente; sem núcleo, 503.
