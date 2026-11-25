@@ -42,6 +42,7 @@ import {
 } from './contrato-tela.js';
 import ErroSuprimentos from './ErroSuprimentos.vue';
 import SlaContratoPainel from './SlaContratoPainel.vue';
+import EnviarParaAprovacao from '../../financeiro/componentes/EnviarParaAprovacao.vue';
 
 const props = defineProps<{ id: number; hoje: string }>();
 const emit = defineEmits<{ fechar: []; mudou: [] }>();
@@ -315,6 +316,8 @@ const tid = (s: string) => `ctr-det-${s}`;
     <template v-else>
       <div class="barra">
         <h2 id="ctr-det-titulo">{{ c.numero }} · {{ c.fornecedorNome }}</h2>
+        <!-- F8, 07-FIN linha 65: envia o contrato ao fluxo de aprovação configurável. -->
+        <EnviarParaAprovacao tipo="contrato_fornecedor" :documento="props.id" />
         <SanteBotao
           variante="secundario"
           :rotulo="k('fechar')"

@@ -25,6 +25,20 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.tituloPagar.ler' },
   },
   {
+    // F8, 07-FIN linha 65: fluxo de aprovação configurável (título a pagar, pedido de compra e contrato).
+    path: '/financeiro/aprovacao/fluxos',
+    name: 'financeiro.aprovacao.fluxos',
+    component: () => import('./telas/FluxosAprovacaoTela.vue'),
+    meta: { permissao: 'financeiro.fluxoAprovacao.configurar' },
+  },
+  {
+    // F8, 07-FIN linha 65: a fila do aprovador, responsiva para o celular.
+    path: '/financeiro/aprovacoes',
+    name: 'financeiro.aprovacoes',
+    component: () => import('./telas/AprovacoesCelularTela.vue'),
+    meta: { permissao: 'financeiro.fluxoAprovacao.decidir' },
+  },
+  {
     path: '/financeiro/pagar/borderos',
     name: 'financeiro.pagar.borderos',
     component: () => import('./telas/BorderosTela.vue'),

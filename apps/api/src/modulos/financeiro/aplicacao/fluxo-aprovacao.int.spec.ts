@@ -54,7 +54,8 @@ describe.skipIf(SEM_BANCO)('fluxo de aprovação configurável (MariaDB)', () =>
       ...c,
       chaveIdempotencia: `t2016-${randomUUID()}`,
     });
-    return Number(t.resultado['titulo']);
+    // 'titulo' é a parcela; o título a pagar (documento do fluxo) vem em 'tituloPagar'.
+    return Number(t.resultado['tituloPagar']);
   };
   const aprovador = (usuario: number, extra: Record<string, unknown> = {}) => ({
     usuario,

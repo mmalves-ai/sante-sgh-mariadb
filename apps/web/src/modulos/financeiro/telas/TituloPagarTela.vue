@@ -19,6 +19,7 @@ import {
   prorrogarParcela,
 } from '../api-financeiro.js';
 import { data, quando, reais, usarFinanceiro } from '../usar-financeiro.js';
+import EnviarParaAprovacao from '../componentes/EnviarParaAprovacao.vue';
 
 const props = defineProps<{ id: string }>();
 const { t } = useI18n();
@@ -191,6 +192,8 @@ async function excluir() {
           <template v-else>{{ t('financeiro.pagar.semFaixa') }}</template>
         </dd>
       </dl>
+      <!-- F8, 07-FIN linha 65: envia o título ao fluxo de aprovação configurável. -->
+      <EnviarParaAprovacao tipo="titulo_pagar" :documento="n" />
 
       <form v-if="tem('financeiro.dado.mostrar')" class="filtros" @submit.prevent="mostrar">
         <span class="campo">

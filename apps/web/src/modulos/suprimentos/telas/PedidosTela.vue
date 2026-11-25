@@ -15,6 +15,7 @@ import BuscaItem from '../componentes/BuscaItem.vue';
 import EscolhaContrato from '../componentes/EscolhaContrato.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 import { data, numero, reais, usarSuprimentos } from '../usar-suprimentos.js';
+import EnviarParaAprovacao from '../../financeiro/componentes/EnviarParaAprovacao.vue';
 
 const props = withDefaults(defineProps<{ modo?: 'pedidos' | 'cotacao' }>(), { modo: 'pedidos' });
 const { t } = useI18n();
@@ -145,6 +146,8 @@ async function criar(): Promise<void> {
               :data-testid="`ped-acompanhar-${p.ano}-${p.doc}`"
               >{{ M.acompanhar }}</RouterLink
             >
+            <!-- F8, 07-FIN linha 65: envia o pedido ao fluxo de aprovação configurável. -->
+            <EnviarParaAprovacao tipo="pedido_compra" :documento="p.id" />
           </td>
         </tr>
       </tbody>
