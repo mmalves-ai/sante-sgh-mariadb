@@ -35,7 +35,14 @@ async function limpar(e: Escritor): Promise<void> {
     [P],
   );
   await e.executar(`DELETE FROM cartao_preferencia_cirurgiao WHERE estabelecimento_id = (${est})`, [P]);
-  await e.executar('DELETE FROM procedimento_cirurgico WHERE codigo = ?', [`${P}-PC`]);
+  await e.executar(
+    `DELETE ki FROM kit_material_item ki JOIN kit_material k ON k.id = ki.kit_material_id
+      WHERE k.estabelecimento_id = (${est})`,
+    [P],
+  );
+  await e.executar(`DELETE FROM kit_material WHERE estabelecimento_id = (${est})`, [P]);
+  await e.executar('DELETE FROM procedimento_cirurgico WHERE codigo IN (?, ?)', [`${P}-PC`, `${P}-PC2`]);
+  await e.executar('DELETE FROM grupo_procedimento_cirurgico WHERE codigo = ?', [`${P}-GR`]);
   await limparTrilhaDaMassa(e, { codigos: [P] });
   await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
 }
@@ -250,5 +257,109 @@ describe.skipIf(SEM_BANCO)('PortaCartaoPreferenciaPropria contra o MariaDB (cont
       const [lm] = await ler('SELECT ativo FROM cartao_preferencia_cirurgiao WHERE id = ?', [meu.id]);
       expect(Number(lm!['ativo'])).toBe(0);
     }
+  });
+
+  it('grupo, vigência e kit padrão: gravados no banco; aplicável pela data do ato (procedimento, grupo, geral)', async () => {
+    const x = await nucleo.escrever({ cliente: CLIENTE, correlacao: `massa2-${P}` }, async (e) => {
+      const agora = new Date();
+      const grupo = await e.inserir(
+        'INSERT INTO grupo_procedimento_cirurgico (codigo, descricao, criado_em) VALUES (?, ?, ?)',
+        [`${P}-GR`, 'GRUPO SINTETICO C1012', agora],
+      );
+      const proc2 = await e.inserir(
+        'INSERT INTO procedimento_cirurgico (codigo, descricao, grupo_procedimento_cirurgico_id, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}-PC2`, 'PROCEDIMENTO SINTETICO C1012 B', grupo, agora],
+      );
+      const kit = await e.inserir(
+        `INSERT INTO kit_material (estabelecimento_id, codigo, nome, tipo, criado_em)
+         VALUES ((SELECT id FROM estabelecimento WHERE codigo = ?), ?, 'KIT SINTETICO C1012', 'cirurgia', ?)`,
+        [P, `${P}-KT`, agora],
+      );
+      const un = await e.uma('SELECT MIN(id) AS id FROM unidade_medida');
+      await e.inserir(
+        `INSERT INTO kit_material_item (kit_material_id, sequencia, insumo_id, unidade_medida_id, quantidade, criado_em)
+         VALUES (?, 1, ?, ?, 2, ?)`,
+        [kit, m.insumo2, un!['id'], agora],
+      );
+      return { grupo, proc2, kit };
+    });
+    // Regra do domínio antes do banco: procedimento e grupo juntos, vigência invertida.
+    await expect(
+      porta.incluir(ctx(), cartao({ procedimento: x.proc2, grupo: x.grupo }), gestor),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    await expect(
+      porta.incluir(
+        ctx(),
+        cartao({ procedimento: x.proc2, vigenciaInicio: '2026-02-01', vigenciaFim: '2026-01-01' }),
+        gestor,
+      ),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+
+    const doGrupo = await porta.incluir(
+      ctx(),
+      cartao({
+        procedimento: null,
+        grupo: x.grupo,
+        tempoMinutos: 45,
+        itens: [{ natureza: 'kit', kit: x.kit, quantidade: 3 }],
+      }),
+      gestor,
+    );
+    const doProc2 = await porta.incluir(
+      ctx(),
+      cartao({
+        procedimento: x.proc2,
+        tempoMinutos: 150,
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: '2026-01-31',
+      }),
+      gestor,
+    );
+    const [g] = await ler(
+      `SELECT procedimento_cirurgico_id, grupo_procedimento_cirurgico_id, vigencia_inicio, vigencia_fim
+         FROM cartao_preferencia_cirurgiao WHERE id = ?`,
+      [doGrupo.id],
+    );
+    expect([
+      g!['procedimento_cirurgico_id'],
+      Number(g!['grupo_procedimento_cirurgico_id']),
+      g!['vigencia_inicio'],
+    ]).toEqual([null, x.grupo, null]);
+    const [it] = await ler(
+      'SELECT natureza, kit_material_id, quantidade FROM cartao_preferencia_cirurgiao_item WHERE cartao_preferencia_cirurgiao_id = ?',
+      [doGrupo.id],
+    );
+    expect([it!['natureza'], Number(it!['kit_material_id']), Number(it!['quantidade'])]).toEqual([
+      'kit',
+      x.kit,
+      3,
+    ]);
+    const [v] = await ler(
+      "SELECT DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS i, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS f FROM cartao_preferencia_cirurgiao WHERE id = ?",
+      [doProc2.id],
+    );
+    expect([v!['i'], v!['f']]).toEqual(['2026-01-01', '2026-01-31']);
+
+    // Na vigência vale o do procedimento; fora dela, o do grupo (com o kit aberto nos produtos).
+    const dentro = await porta.aplicavel(ctx(), m.outro, x.proc2, '2026-01-15');
+    expect([dentro.cartao?.id, dentro.mapa?.tempoMinutos]).toEqual([doProc2.id, 150]);
+    const fora = await porta.aplicavel(ctx(), m.outro, x.proc2, '2026-03-01');
+    expect([fora.cartao?.id, fora.mapa?.tempoMinutos]).toEqual([doGrupo.id, 45]);
+    expect(fora.gasto.map((q) => [q.insumo, q.quantidade])).toEqual([[m.insumo2, 6]]);
+    expect(fora.cartao?.itens[0]?.nome).toBe('KIT SINTETICO C1012');
+    // Grupo repetido para o mesmo cirurgião: 409, sem linha nova.
+    await expect(
+      porta.incluir(ctx(), cartao({ procedimento: null, grupo: x.grupo }), gestor),
+    ).rejects.toMatchObject({ problema: { status: 409 } });
+    const [n] = await ler(
+      'SELECT COUNT(*) AS n FROM cartao_preferencia_cirurgiao WHERE grupo_procedimento_cirurgico_id = ?',
+      [x.grupo],
+    );
+    expect(Number(n!['n'])).toBe(1);
+    // Apoio por nome e busca de produto.
+    const ap = await porta.apoio(ctx());
+    expect(ap.kits.map((k) => k.id)).toContain(x.kit);
+    expect(ap.grupos.map((k) => k.id)).toContain(x.grupo);
+    expect((await porta.produtos(ctx(), 'ab')).itens).toEqual([]);
   });
 });

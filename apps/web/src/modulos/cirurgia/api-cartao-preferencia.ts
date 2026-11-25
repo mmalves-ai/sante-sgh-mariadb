@@ -1,5 +1,5 @@
 // Cliente do cartão de preferência do cirurgião (F8, 04-CC linha 105): /api/cirurgia/cartoes-preferencia.
-// Lista, apoio (posições e salas), cartão aplicável (sugestão do mapa e produtos do gasto de sala), inclusão,
+// Lista, apoio (as escolhas por nome), busca de produto, cartão aplicável na data do ato (sugestão do mapa e produtos do gasto de sala), inclusão,
 // alteração com versão, tirar de uso e voltar (nada se apaga).
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
@@ -7,7 +7,7 @@ import { erroDaResposta } from '../../casca/erros/problem-details.js';
 import { enviar, ler, novaChave } from '../exames/api-exames.js';
 
 const C = '/api/cirurgia/cartoes-preferencia';
-const naturezas = ['material', 'medicamento', 'fio', 'instrumental', 'equipamento', 'outro'] as const;
+const naturezas = ['material', 'medicamento', 'fio', 'instrumental', 'equipamento', 'kit', 'outro'] as const;
 
 const esquemaItem = z.object({
   id: z.number(),
@@ -16,6 +16,7 @@ const esquemaItem = z.object({
   insumo: z.number().nullable(),
   caixaInstrumental: z.number().nullable(),
   equipamento: z.number().nullable(),
+  kit: z.number().nullable(),
   descricao: z.string().nullable(),
   quantidade: z.number(),
   observacao: z.string().nullable(),
@@ -25,6 +26,10 @@ export const esquemaCartao = z.object({
   id: z.number(),
   cirurgiao: z.number(),
   procedimento: z.number().nullable(),
+  grupo: z.number().nullable(),
+  vigenciaInicio: z.string().nullable(),
+  vigenciaFim: z.string().nullable(),
+  grupoDescricao: z.string().nullable(),
   posicao: z.number().nullable(),
   sala: z.number().nullable(),
   tempoMinutos: z.number().nullable(),
@@ -49,6 +54,7 @@ export interface EntradaItemCartao {
   insumo: number | null;
   caixaInstrumental: number | null;
   equipamento: number | null;
+  kit: number | null;
   descricao: string | null;
   quantidade: number;
   observacao: string | null;
@@ -56,6 +62,9 @@ export interface EntradaItemCartao {
 export interface EntradaCartao {
   cirurgiao: number;
   procedimento: number | null;
+  grupo: number | null;
+  vigenciaInicio: string | null;
+  vigenciaFim: string | null;
   posicao: number | null;
   sala: number | null;
   tempoMinutos: number | null;
@@ -83,11 +92,29 @@ export type CartaoAplicavel = z.infer<typeof esquemaAplicavel>;
 
 export const lerCartoesPreferencia = (cirurgiao: number | null) =>
   ler(cirurgiao ? `${C}?cirurgiao=${cirurgiao}` : C, z.object({ itens: z.array(esquemaCartao) }));
+export type OpcaoCartao = z.infer<typeof opcao>;
 export const lerApoioCartao = () =>
-  ler(`${C}/apoio`, z.object({ posicoes: z.array(opcao), salas: z.array(opcao) }));
-export const lerCartaoAplicavel = (cirurgiao: number, procedimento: number | null) => {
+  ler(
+    `${C}/apoio`,
+    z.object({
+      cirurgioes: z.array(opcao),
+      procedimentos: z.array(opcao),
+      grupos: z.array(opcao),
+      posicoes: z.array(opcao),
+      salas: z.array(opcao),
+      caixas: z.array(opcao),
+      equipamentos: z.array(opcao),
+      kits: z.array(opcao),
+    }),
+  );
+/** Produtos do estoque por nome ou código (a partir de 3 letras). */
+export const lerProdutosCartao = (busca: string) =>
+  ler(`${C}/produtos?${new URLSearchParams({ busca }).toString()}`, z.object({ itens: z.array(opcao) }));
+/** O cartão que vale para o cirurgião e o procedimento na data do ato (AAAA-MM-DD; sem data, hoje). */
+export const lerCartaoAplicavel = (cirurgiao: number, procedimento: number | null, data?: string | null) => {
   const q = new URLSearchParams({ cirurgiao: String(cirurgiao) });
   if (procedimento) q.set('procedimento', String(procedimento));
+  if (data) q.set('data', data);
   return ler(`${C}/aplicavel?${q.toString()}`, esquemaAplicavel);
 };
 export const incluirCartao = (corpo: EntradaCartao) => enviar(C, corpo, comId, novaChave('cartao-pref'));

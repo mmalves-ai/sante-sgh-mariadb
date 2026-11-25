@@ -1,12 +1,16 @@
 // Cartão de preferência do cirurgião (F8, 04-CC linha 105), no banco do cliente (`cartao_preferencia_cirurgiao` e
 // `cartao_preferencia_cirurgiao_item`). Contrato de efeito:
-//   - incluir: o cartão do estabelecimento da sessão, por cirurgião e procedimento (nulo = geral), com os itens em
+//   - incluir: o cartão do estabelecimento da sessão, por cirurgião e procedimento (nulo = do grupo de procedimentos
+//     ou, sem grupo, geral), com a vigência opcional (início e fim), com os itens (o kit padrão é item) em
 //     sequência 1..n; cartão repetido para o mesmo cirurgião e procedimento (mesmo fora de uso) é recusado (409);
 //   - alterar: o cartão com a versão lida (+1); item que continua é atualizado no lugar, item novo entra no fim da
 //     sequência e item retirado é marcado excluído (excluido_em/excluido_por), nunca apagado; tudo na trilha;
 //   - tirar de uso / voltar ao uso: `ativo` com a versão; nada é apagado;
-//   - aplicável: o cartão que vale para o cirurgião e o procedimento (regra do domínio), a sugestão para o mapa
-//     (sala, tempo, posição) e os produtos para o gasto de sala, somados; só leitura;
+//   - aplicável: o cartão que vale para o cirurgião e o procedimento na data do ato (procedimento, grupo do
+//     procedimento, geral; só os vigentes), a sugestão para o mapa (sala, tempo, posição) e os produtos para o gasto
+//     de sala, somados, com o kit padrão aberto nos produtos dele; só leitura;
+//   - apoio e produtos: as escolhas da tela por nome (cirurgiões, procedimentos, grupos, posições, salas, caixas,
+//     equipamentos, kits) e a busca de produto do estoque;
 //   - dono: o cartão é mantido pelo próprio cirurgião (usuário ligado ao profissional) ou por quem administra o bloco.
 import {
   type CartaoPreferencia,
@@ -51,6 +55,10 @@ export interface ItemCartaoLido extends ItemCartaoPreferencia {
 export interface CartaoLido extends CartaoPreferencia {
   readonly cirurgiao: number;
   readonly procedimento: number | null;
+  readonly grupo: number | null;
+  readonly vigenciaInicio: string | null;
+  readonly vigenciaFim: string | null;
+  readonly grupoDescricao: string | null;
   readonly cirurgiaoNome: string | null;
   readonly procedimentoDescricao: string | null;
   readonly posicaoDescricao: string | null;
@@ -66,6 +74,7 @@ const esquemaItem = z
     insumo: id.nullable().optional(),
     caixaInstrumental: id.nullable().optional(),
     equipamento: id.nullable().optional(),
+    kit: id.nullable().optional(),
     descricao: z.string().max(150).nullable().optional(),
     quantidade: z.number().positive().max(99999),
     observacao: z.string().max(300).nullable().optional(),
@@ -75,6 +84,9 @@ const esquemaCartao = z
   .object({
     cirurgiao: id,
     procedimento: id.nullable(),
+    grupo: id.nullable().optional(),
+    vigenciaInicio: z.string().max(10).nullable().optional(),
+    vigenciaFim: z.string().max(10).nullable().optional(),
     posicao: id.nullable().optional(),
     sala: id.nullable().optional(),
     tempoMinutos: z.number().int().nullable().optional(),
@@ -89,6 +101,8 @@ type Entrada = z.infer<typeof esquemaCartao>;
 
 const SQL = `
   SELECT c.id, c.cirurgiao_profissional_id, c.procedimento_cirurgico_id, c.posicao_cirurgica_id, c.sala_cirurgica_id,
+         c.grupo_procedimento_cirurgico_id, DATE_FORMAT(c.vigencia_inicio, '%Y-%m-%d') AS vigencia_inicio,
+         DATE_FORMAT(c.vigencia_fim, '%Y-%m-%d') AS vigencia_fim, g.descricao AS grupo_descricao,
          c.tempo_realizacao_minutos, c.tamanho_luva, c.preparo_pele, c.fios_sutura, c.observacao, c.ativo, c.versao,
          pf.nome AS cirurgiao_nome, pc.descricao AS procedimento_descricao, po.descricao AS posicao_descricao,
          sc.descricao AS sala_descricao
@@ -96,17 +110,19 @@ const SQL = `
     LEFT JOIN profissional p ON p.id = c.cirurgiao_profissional_id
     LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
     LEFT JOIN procedimento_cirurgico pc ON pc.id = c.procedimento_cirurgico_id
+    LEFT JOIN grupo_procedimento_cirurgico g ON g.id = c.grupo_procedimento_cirurgico_id
     LEFT JOIN posicao_cirurgica po ON po.id = c.posicao_cirurgica_id
     LEFT JOIN sala_cirurgica sc ON sc.id = c.sala_cirurgica_id`;
 
 const SQL_ITENS = `
   SELECT i.id, i.cartao_preferencia_cirurgiao_id, i.sequencia, i.natureza, i.insumo_id, i.caixa_instrumental_id,
-         i.equipamento_saude_id, i.descricao, i.quantidade, i.observacao, i.versao,
-         COALESCE(ins.nome, cx.descricao, eq.nome, i.descricao) AS nome
+         i.equipamento_saude_id, i.kit_material_id, i.descricao, i.quantidade, i.observacao, i.versao,
+         COALESCE(ins.nome, cx.descricao, eq.nome, km.nome, i.descricao) AS nome
     FROM cartao_preferencia_cirurgiao_item i
     LEFT JOIN insumo ins ON ins.id = i.insumo_id
     LEFT JOIN caixa_instrumental cx ON cx.id = i.caixa_instrumental_id
-    LEFT JOIN equipamento_saude eq ON eq.id = i.equipamento_saude_id`;
+    LEFT JOIN equipamento_saude eq ON eq.id = i.equipamento_saude_id
+    LEFT JOIN kit_material km ON km.id = i.kit_material_id`;
 
 type Linha = Record<string, unknown>;
 
@@ -118,6 +134,7 @@ function itemLido(x: Linha): ItemCartaoLido & { versao: number } {
     insumo: numOuNull(x['insumo_id']),
     caixaInstrumental: numOuNull(x['caixa_instrumental_id']),
     equipamento: numOuNull(x['equipamento_saude_id']),
+    kit: numOuNull(x['kit_material_id']),
     descricao: txtOuNull(x['descricao']),
     quantidade: num(x['quantidade']),
     observacao: txtOuNull(x['observacao']),
@@ -131,6 +148,10 @@ function cartaoLido(x: Linha, itens: ItemCartaoLido[]): CartaoLido {
     id: num(x['id']),
     cirurgiao: num(x['cirurgiao_profissional_id']),
     procedimento: numOuNull(x['procedimento_cirurgico_id']),
+    grupo: numOuNull(x['grupo_procedimento_cirurgico_id']),
+    vigenciaInicio: txtOuNull(x['vigencia_inicio']),
+    vigenciaFim: txtOuNull(x['vigencia_fim']),
+    grupoDescricao: txtOuNull(x['grupo_descricao']),
     posicao: numOuNull(x['posicao_cirurgica_id']),
     sala: numOuNull(x['sala_cirurgica_id']),
     tempoMinutos: numOuNull(x['tempo_realizacao_minutos']),
@@ -193,32 +214,116 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
     return this.ler(c, 'listar', (l, est) => this.carregar(l, est.id, filtro));
   }
 
-  /** Apoio da tela: posições cirúrgicas ativas e salas do estabelecimento. */
+  /** Apoio da tela, tudo por nome: cirurgiões, procedimentos, grupos, posições, salas, caixas, equipamentos e kits. */
   apoio(c: ContextoPortaPropria) {
     return this.ler(c, 'apoio', async (l, est) => {
-      const posicoes = await l.consultar<Linha>(
-        'SELECT id, descricao FROM posicao_cirurgica WHERE ativo ORDER BY descricao LIMIT 500',
-      );
-      const salas = await l.consultar<Linha>(
-        `SELECT id, descricao FROM sala_cirurgica WHERE estabelecimento_id = ? AND excluido_em IS NULL
-          ORDER BY descricao LIMIT 500`,
-        [est.id],
-      );
       const op = (x: Linha) => ({ id: num(x['id']), descricao: String(x['descricao'] ?? '') });
-      return { posicoes: posicoes.map(op), salas: salas.map(op) };
+      const lista = async (sql: string, args: unknown[] = []) =>
+        (await l.consultar<Linha>(sql, args)).map(op);
+      return {
+        cirurgioes: await lista(
+          `SELECT p.id, pf.nome AS descricao FROM profissional p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+            WHERE p.excluido_em IS NULL AND p.situacao = 'ativo' ORDER BY pf.nome LIMIT 5000`,
+        ),
+        procedimentos: await lista(
+          `SELECT id, CONCAT(descricao, ' (', codigo, ')') AS descricao FROM procedimento_cirurgico
+            WHERE ativo AND excluido_em IS NULL ORDER BY descricao LIMIT 5000`,
+        ),
+        grupos: await lista(
+          'SELECT id, descricao FROM grupo_procedimento_cirurgico WHERE ativo ORDER BY descricao LIMIT 1000',
+        ),
+        posicoes: await lista(
+          'SELECT id, descricao FROM posicao_cirurgica WHERE ativo ORDER BY descricao LIMIT 500',
+        ),
+        salas: await lista(
+          `SELECT id, descricao FROM sala_cirurgica WHERE estabelecimento_id = ? AND excluido_em IS NULL
+            ORDER BY descricao LIMIT 500`,
+          [est.id],
+        ),
+        caixas: await lista(
+          `SELECT id, descricao FROM caixa_instrumental WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL
+            ORDER BY descricao LIMIT 2000`,
+          [est.id],
+        ),
+        equipamentos: await lista(
+          `SELECT id, nome AS descricao FROM equipamento_saude WHERE estabelecimento_id = ? AND excluido_em IS NULL
+            ORDER BY nome LIMIT 2000`,
+          [est.id],
+        ),
+        kits: await lista(
+          `SELECT id, nome AS descricao FROM kit_material WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL
+            ORDER BY nome LIMIT 2000`,
+          [est.id],
+        ),
+      };
+    });
+  }
+
+  /** Busca de produto do estoque por nome ou código (a partir de 3 letras), até 50. */
+  produtos(c: ContextoPortaPropria, busca: string) {
+    const termo = busca.trim();
+    if (termo.length < 3) return Promise.resolve({ itens: [] as { id: number; descricao: string }[] });
+    return this.ler(c, 'produtos', async (l) => {
+      const ls = await l.consultar<Linha>(
+        `SELECT id, CONCAT(nome, ' (', codigo, ')') AS descricao FROM insumo
+          WHERE excluido_em IS NULL AND situacao = 'ativo' AND (nome LIKE ? OR codigo = ?) ORDER BY nome LIMIT 50`,
+        [`%${termo.replace(/[%_\\]/g, (x) => `\\${x}`)}%`, termo],
+      );
+      return { itens: ls.map((x) => ({ id: num(x['id']), descricao: String(x['descricao'] ?? '') })) };
     });
   }
 
   /** O cartão que vale para o cirurgião e o procedimento, com a sugestão para o mapa e os produtos do gasto. */
-  aplicavel(c: ContextoPortaPropria, cirurgiao: number, procedimento: number | null) {
+  aplicavel(
+    c: ContextoPortaPropria,
+    cirurgiao: number,
+    procedimento: number | null,
+    data: string | null = null,
+  ) {
     return this.ler(c, 'aplicavel', async (l, est) => {
-      const cartao = cartaoAplicavel(await this.carregar(l, est.id, { cirurgiao }), cirurgiao, procedimento);
+      const grupo = procedimento
+        ? numOuNull(
+            (
+              await l.uma<Linha>(
+                'SELECT grupo_procedimento_cirurgico_id FROM procedimento_cirurgico WHERE id = ?',
+                [procedimento],
+              )
+            )?.['grupo_procedimento_cirurgico_id'],
+          )
+        : null;
+      const hoje = data ?? new Date().toISOString().slice(0, 10);
+      const cartao = cartaoAplicavel(await this.carregar(l, est.id, { cirurgiao }), cirurgiao, procedimento, {
+        grupo,
+        data: hoje,
+      });
       if (!cartao) return { cartao: null, mapa: null, gasto: [] };
       const nome = new Map(cartao.itens.map((i) => [i.insumo ?? 0, i.nome ?? '']));
+      const idsKit = cartao.itens.filter((i) => i.kit).map((i) => i.kit as number);
+      const kits = new Map<number, { insumo: number; quantidade: number }[]>();
+      if (idsKit.length) {
+        const ks = await l.consultar<Linha>(
+          `SELECT ki.kit_material_id, ki.insumo_id, ki.quantidade, ins.nome
+             FROM kit_material_item ki JOIN insumo ins ON ins.id = ki.insumo_id
+            WHERE ki.kit_material_id IN (${idsKit.map(() => '?').join(', ')}) AND ki.excluido_em IS NULL
+            ORDER BY ki.kit_material_id, ki.sequencia`,
+          idsKit,
+        );
+        for (const k of ks) {
+          const kit = num(k['kit_material_id']);
+          kits.set(kit, [
+            ...(kits.get(kit) ?? []),
+            { insumo: num(k['insumo_id']), quantidade: num(k['quantidade']) },
+          ]);
+          if (!nome.has(num(k['insumo_id']))) nome.set(num(k['insumo_id']), String(k['nome'] ?? ''));
+        }
+      }
       return {
         cartao,
         mapa: sugestaoParaMapa(cartao),
-        gasto: itensParaGasto(cartao.itens).map((g) => ({ ...g, insumoNome: nome.get(g.insumo) ?? '' })),
+        gasto: itensParaGasto(cartao.itens, kits).map((g) => ({
+          ...g,
+          insumoNome: nome.get(g.insumo) ?? '',
+        })),
       };
     });
   }
@@ -252,6 +357,12 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
     );
     if (e.procedimento)
       await existe('SELECT id FROM procedimento_cirurgico WHERE id = ?', [e.procedimento], 'Procedimento');
+    if (e.grupo)
+      await existe(
+        'SELECT id FROM grupo_procedimento_cirurgico WHERE id = ? AND ativo',
+        [e.grupo],
+        'Grupo de procedimentos',
+      );
     if (e.posicao)
       await existe(
         'SELECT id FROM posicao_cirurgica WHERE id = ? AND ativo',
@@ -283,12 +394,18 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
           [i.equipamento, est],
           `Equipamento do item ${k + 1}`,
         );
+      if (i.kit)
+        await existe(
+          'SELECT id FROM kit_material WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [i.kit, est],
+          `Kit padrão do item ${k + 1}`,
+        );
     }
     const dup = await tx.uma<Linha>(
       `SELECT id, ativo FROM cartao_preferencia_cirurgiao
-        WHERE estabelecimento_id = ? AND cirurgiao_profissional_id = ? AND procedimento_cirurgico_id <=> ? AND id <> ?
-          AND excluido_em IS NULL`,
-      [est, e.cirurgiao, e.procedimento, idAtual ?? 0],
+        WHERE estabelecimento_id = ? AND cirurgiao_profissional_id = ? AND procedimento_cirurgico_id <=> ?
+          AND grupo_procedimento_cirurgico_id <=> ? AND id <> ? AND excluido_em IS NULL`,
+      [est, e.cirurgiao, e.procedimento, e.procedimento ? null : (e.grupo ?? null), idAtual ?? 0],
     );
     if (dup)
       throw new ErroOperacao(
@@ -296,8 +413,8 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
         'cartao-repetido',
         'Cartão repetido',
         bool(dup['ativo'])
-          ? 'Este cirurgião já tem cartão para este procedimento: altere o existente.'
-          : 'Este cirurgião já tem cartão para este procedimento, fora de uso: volte-o ao uso e altere.',
+          ? 'Este cirurgião já tem cartão para este procedimento (ou grupo): altere o existente.'
+          : 'Este cirurgião já tem cartão para este procedimento (ou grupo), fora de uso: volte-o ao uso e altere.',
       );
   }
 
@@ -305,6 +422,9 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
     return {
       cirurgiao_profissional_id: e.cirurgiao,
       procedimento_cirurgico_id: e.procedimento,
+      grupo_procedimento_cirurgico_id: e.procedimento ? null : (e.grupo ?? null),
+      vigencia_inicio: textoOuNulo(e.vigenciaInicio),
+      vigencia_fim: textoOuNulo(e.vigenciaFim),
       posicao_cirurgica_id: e.posicao ?? null,
       sala_cirurgica_id: e.sala ?? null,
       tempo_realizacao_minutos: e.tempoMinutos ?? null,
@@ -321,6 +441,7 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
       insumo_id: i.insumo ?? null,
       caixa_instrumental_id: i.caixaInstrumental ?? null,
       equipamento_saude_id: i.equipamento ?? null,
+      kit_material_id: i.kit ?? null,
       descricao: textoOuNulo(i.descricao),
       quantidade: i.quantidade,
       observacao: textoOuNulo(i.observacao),
@@ -375,7 +496,7 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
         await tx.alterar(CARTAO, idCartao, versao, this.colunas(e));
         // Itens: o que continua (mesma chave) é atualizado no lugar; o retirado é marcado excluído; o novo vai ao fim.
         const todos = await tx.consultar<Linha>(
-          'SELECT id, sequencia, natureza, insumo_id, caixa_instrumental_id, equipamento_saude_id, descricao, quantidade, observacao, versao, excluido_em FROM cartao_preferencia_cirurgiao_item WHERE cartao_preferencia_cirurgiao_id = ?',
+          'SELECT id, sequencia, natureza, insumo_id, caixa_instrumental_id, equipamento_saude_id, kit_material_id, descricao, quantidade, observacao, versao, excluido_em FROM cartao_preferencia_cirurgiao_item WHERE cartao_preferencia_cirurgiao_id = ?',
           [idCartao],
         );
         let proxima = todos.reduce((m, x) => Math.max(m, num(x['sequencia'])), 0) + 1;
@@ -388,7 +509,7 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
             }),
         );
         for (const i of e.itens) {
-          const v = vivos.get(chaveItemCartao(i));
+          const v = vivos.get(chaveItemCartao(semIndefinidos(i)));
           const cols = this.colunasItem(i);
           if (!v) {
             await tx.incluir(ITEM, {
@@ -398,7 +519,7 @@ export class PortaCartaoPreferenciaPropria extends PortaEstabelecimentoPropria {
             });
             continue;
           }
-          vivos.delete(chaveItemCartao(i));
+          vivos.delete(chaveItemCartao(semIndefinidos(i)));
           if (
             v.natureza !== cols.natureza ||
             v.quantidade !== cols.quantidade ||

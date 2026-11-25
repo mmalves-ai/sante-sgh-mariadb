@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cartaoAplicavel,
+  cartaoVigente,
   chaveItemCartao,
   itensParaGasto,
   sugestaoParaMapa,
@@ -106,6 +107,79 @@ describe('sugestões do cartão', () => {
     ).toEqual([
       { insumo: 11, quantidade: 2 },
       { insumo: 12, quantidade: 1 },
+    ]);
+  });
+});
+
+describe('grupo, vigência e kit padrão', () => {
+  const base = { cirurgiao: 7, itens: [], tempoMinutos: 60 };
+  it('recusa procedimento e grupo juntos e a vigência invertida ou inválida', () => {
+    const campos = (e: Parameters<typeof validarCartaoPreferencia>[0]) =>
+      validarCartaoPreferencia(e).map((p) => p.campo);
+    expect(campos({ ...base, procedimento: 3, grupo: 2 })).toEqual(['grupo']);
+    expect(campos({ ...base, grupo: 2, vigenciaInicio: '2026-12-01', vigenciaFim: '2026-11-30' })).toEqual([
+      'vigenciaFim',
+    ]);
+    expect(campos({ ...base, vigenciaInicio: '2026-02-30' })).toEqual(['vigenciaInicio']);
+    expect(campos({ ...base, vigenciaInicio: '2026-11-01', vigenciaFim: '2026-11-01' })).toEqual([]);
+  });
+
+  it('o kit aceita só o cadastro de kit e entra repetido uma vez só', () => {
+    const item = { natureza: 'kit' as const, kit: 4, quantidade: 1 };
+    expect(validarCartaoPreferencia({ ...base, itens: [item] })).toEqual([]);
+    expect(
+      validarCartaoPreferencia({ ...base, itens: [{ natureza: 'kit', insumo: 4, quantidade: 1 }] }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      validarCartaoPreferencia({ ...base, itens: [item, item] }).some((p) => p.mensagem.includes('repetido')),
+    ).toBe(true);
+  });
+
+  it('aplicável: procedimento, depois grupo, depois geral, só na vigência da data do ato', () => {
+    const c = (id: number, x: object) => ({
+      id,
+      cirurgiao: 7,
+      procedimento: null,
+      grupo: null,
+      ativo: true,
+      vigenciaInicio: null,
+      vigenciaFim: null,
+      ...x,
+    });
+    const cartoes = [
+      c(1, {}),
+      c(2, { grupo: 5 }),
+      c(3, { procedimento: 30, vigenciaInicio: '2026-11-10', vigenciaFim: '2026-11-20' }),
+    ];
+    expect(cartaoAplicavel(cartoes, 7, 30, { grupo: 5, data: '2026-11-15' })?.id).toBe(3);
+    expect(cartaoAplicavel(cartoes, 7, 30, { grupo: 5, data: '2026-11-21' })?.id).toBe(2);
+    expect(cartaoAplicavel(cartoes, 7, 30, { grupo: 6, data: '2026-11-21' })?.id).toBe(1);
+    expect(cartaoAplicavel(cartoes, 7, 31, {})?.id).toBe(1);
+    expect(cartaoVigente({ vigenciaInicio: '2026-11-10', vigenciaFim: null }, '2026-11-09')).toBe(false);
+    expect(cartaoVigente({ vigenciaInicio: '2026-11-10', vigenciaFim: null }, null)).toBe(true);
+  });
+
+  it('gasto de sala: o kit abre nos produtos dele, vezes a quantidade, somando com o avulso', () => {
+    const kits = new Map([
+      [
+        4,
+        [
+          { insumo: 10, quantidade: 2 },
+          { insumo: 11, quantidade: 0.5 },
+        ],
+      ],
+    ]);
+    expect(
+      itensParaGasto(
+        [
+          { natureza: 'material', insumo: 10, quantidade: 1 },
+          { natureza: 'kit', kit: 4, quantidade: 3 },
+        ],
+        kits,
+      ),
+    ).toEqual([
+      { insumo: 10, quantidade: 7 },
+      { insumo: 11, quantidade: 1.5 },
     ]);
   });
 });

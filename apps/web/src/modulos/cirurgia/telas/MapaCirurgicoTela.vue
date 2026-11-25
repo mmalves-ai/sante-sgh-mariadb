@@ -23,6 +23,7 @@ import {
   novaChave,
   solicitarCirurgia,
 } from '../api-cirurgia.js';
+import { lerCartaoAplicavel } from '../api-cartao-preferencia.js';
 import AvisoCirurgia from '../componentes/AvisoCirurgia.vue';
 import ErroCirurgia from '../componentes/ErroCirurgia.vue';
 import { profissionalDaEscolha, usarCirurgia } from '../usar-cirurgia.js';
@@ -151,6 +152,39 @@ const pronto = computed(
     !!fConvenio.value &&
     (!fExcecao.value || fMotivoExcecao.value.trim().length >= 10),
 );
+
+// C1-012 (F8, 04-CC L105): com o cirurgião e o procedimento escolhidos, o cartão de preferência que vale na data do
+// pedido sugere sala, tempo e posição; um clique preenche sala e duração (editáveis), nada é imposto.
+const cartaoDoPedido = useQuery({
+  queryKey: computed(() => [
+    'cirurgia',
+    'cartao-aplicavel',
+    fCirurgiao.value,
+    procedimento.value?.codigo ?? null,
+    fData.value,
+  ]),
+  queryFn: () =>
+    lerCartaoAplicavel(
+      profissionalDaEscolha(fCirurgiao.value)?.id ?? 0,
+      procedimento.value?.codigo ?? null,
+      fData.value || null,
+    ),
+  enabled: computed(() => !!profissionalDaEscolha(fCirurgiao.value) && procedimento.value !== null),
+  retry: false,
+});
+const sugestaoCartao = computed(() =>
+  cartaoDoPedido.data.value?.cartao && cartaoDoPedido.data.value.mapa ? cartaoDoPedido.data.value : null,
+);
+const salaDoCartaoPermitida = computed(() => {
+  const s = sugestaoCartao.value?.mapa?.sala;
+  return s !== null && s !== undefined && salasPermitidas.value.some((x) => x.valor === String(s));
+});
+function usarCartao(): void {
+  const m = sugestaoCartao.value?.mapa;
+  if (!m) return;
+  if (m.sala !== null && salaDoCartaoPermitida.value) fSala.value = String(m.sala);
+  if (m.tempoMinutos) fDuracao.value = String(m.tempoMinutos);
+}
 
 function equipe() {
   const e: Record<string, { id: number; cod: number }> = {};
@@ -551,6 +585,24 @@ async function descartarSolicitacao(s: AgendamentoCirurgico): Promise<void> {
           :opcoes="comVazio(profissionais, t('cirurgia.semProfissional'))"
         />
       </div>
+      <p v-if="sugestaoCartao" class="acoes" role="status" data-testid="pedido-cartao">
+        {{
+          t('cirurgia.cartaoPreferencia.doPedido', {
+            sala: sugestaoCartao.cartao?.salaDescricao ?? '—',
+            tempo: sugestaoCartao.mapa?.tempoMinutos ?? '—',
+            posicao: sugestaoCartao.cartao?.posicaoDescricao ?? '—',
+          })
+        }}
+        <SanteBotao
+          variante="secundario"
+          :rotulo="t('cirurgia.cartaoPreferencia.usarNoPedido')"
+          data-testid="pedido-usar-cartao"
+          @acionar="usarCartao"
+        />
+        <span v-if="sugestaoCartao.mapa?.sala && !salaDoCartaoPermitida" class="secundario">
+          {{ t('cirurgia.cartaoPreferencia.salaNaoPermitida') }}
+        </span>
+      </p>
       <fieldset class="filtros">
         <legend>{{ t('cirurgia.mapa.recursos') }}</legend>
         <label v-for="r in opcoes.data.value?.recursos ?? []" :key="r.campo">
