@@ -4,6 +4,7 @@ import { mensagensPedido } from './i18n-pedido.js';
 import { mensagensEntrega, recusasEntrega } from './i18n-entrega.js';
 import { mensagensEscalaExecucao } from './i18n-escala-execucao.js';
 import { mensagensLimites } from './i18n-limites.js';
+import { mensagensAutoliberacao } from './i18n-autoliberacao.js';
 import { mensagensSoroteca } from './i18n-soroteca.js';
 import { mensagensMicrobiologia } from './i18n-microbiologia.js';
 import { mensagensLoteTrabalho } from './i18n-lote-trabalho.js';
@@ -410,6 +411,8 @@ export const mensagensSadt = {
   // F3.5: pedido de exames, cancelamento do item e recoleta.
   pedido: mensagensPedido,
   limites: mensagensLimites,
+  // F8 (05-SADT linha 11): autoliberação, delta check e conferência do retido.
+  autoliberacao: mensagensAutoliberacao,
   // F7 (05-SADT linha 12): cultura e antibiograma na digitação; painéis e pontos de corte.
   microbiologia: mensagensMicrobiologia,
   // F8 (05-SADT linha 9): soroteca, a aba de guarda e expurgo da tela de amostras.
