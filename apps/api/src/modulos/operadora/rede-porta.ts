@@ -8,6 +8,7 @@
 // Os tipos são de negócio: os códigos numéricos são os do vocabulário do contrato (@sgh/contratos, operadora/rede.ts e
 // vocabulario.ts); datas AAAA-MM-DD; nenhuma sentinela.
 import type { TipoMotivoDescredenciamento } from '@sgh/contratos';
+import type { PeriodoSuspensao } from '@sgh/dominio-operadora';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { portaIndisponivel } from '../exames/public-api.js';
@@ -91,6 +92,8 @@ export interface Prestador extends CamposPrestador {
   readonly substituto: number | null;
   readonly avisoBeneficiariosEm: string | null;
   readonly autorizacaoAns: string | null;
+  /** C2-118: as suspensões não canceladas do prestador inteiro (a porta em memória não as tem). */
+  readonly suspensoes?: readonly PeriodoSuspensao[];
   readonly versao: number;
   readonly criadoEm: string;
   readonly criadoPor: string;

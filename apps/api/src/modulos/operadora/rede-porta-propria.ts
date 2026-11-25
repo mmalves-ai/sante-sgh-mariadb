@@ -32,6 +32,7 @@ import {
   recusa,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { type PeriodoSuspensao, problemasDoSubstituto } from '@sgh/dominio-operadora';
 import { z } from 'zod';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import {
@@ -150,7 +151,11 @@ const SELECT_PRESTADOR = `
          c.forma_reajuste AS contrato_forma_reajuste, c.mes_reajuste AS contrato_mes_reajuste,
          h.motivo AS motivo_situacao, JSON_VALUE(h.dados, '$.substituto') AS substituto,
          JSON_VALUE(h.dados, '$.avisoBeneficiariosEm') AS aviso_beneficiarios_em,
-         JSON_VALUE(h.dados, '$.autorizacaoAns') AS autorizacao_ans
+         JSON_VALUE(h.dados, '$.autorizacaoAns') AS autorizacao_ans,
+         (SELECT JSON_ARRAYAGG(JSON_OBJECT('desde', sp.suspenso_desde, 'reativadoEm', sp.reativado_em))
+            FROM suspensao_prestador_rede sp
+           WHERE sp.prestador_rede_id = p.id AND sp.excluido_em IS NULL AND sp.local_atendimento_rede_id IS NULL
+             AND sp.situacao <> 'cancelada') AS suspensoes
     FROM prestador_rede p
     JOIN unidade_federativa uf ON uf.id = p.unidade_federativa_id
     JOIN municipio_ibge mi ON mi.id = p.municipio_ibge_id
@@ -174,6 +179,30 @@ const numeroDoCodigo = (v: unknown): number | null => {
   const t = texto(v);
   return t && /^\d{1,5}$/.test(t) ? Number(t) : null;
 };
+
+/**
+ * C2-118: as suspensões do prestador inteiro (JSON da leitura). A situação antiga 'suspenso' no cadastro (carga) conta
+ * como suspensão aberta desde a data da situação, para valer a mesma regra das suspensões registradas.
+ */
+function suspensoesDaLinha(v: unknown, suspensoDesde: string | null): PeriodoSuspensao[] {
+  let lista: unknown = v;
+  if (typeof v === 'string') {
+    try {
+      lista = JSON.parse(v);
+    } catch {
+      lista = [];
+    }
+  }
+  const r: PeriodoSuspensao[] = Array.isArray(lista)
+    ? lista.flatMap((o: { desde?: unknown; reativadoEm?: unknown }) => {
+        const desde = dataIso(o?.desde);
+        return desde ? [{ local: null, desde, reativadoEm: dataIso(o?.reativadoEm) }] : [];
+      })
+    : [];
+  if (suspensoDesde && !r.some((s) => s.reativadoEm === null))
+    r.push({ local: null, desde: suspensoDesde, reativadoEm: null });
+  return r;
+}
 
 export function prestadorDaLinha(x: Linha): Prestador {
   const pessoa = PESSOA.codigo(x['pessoa']) ?? 'J';
@@ -221,6 +250,7 @@ export function prestadorDaLinha(x: Linha): Prestador {
     substituto: inteiro(x['substituto']),
     avisoBeneficiariosEm: dataIso(x['aviso_beneficiarios_em']),
     autorizacaoAns: texto(x['autorizacao_ans']),
+    suspensoes: suspensoesDaLinha(x['suspensoes'], gravada === 'suspenso' ? situacaoEm : null),
     versao: Number(x['versao']),
     criadoEm: instanteIso(x['criado_em']) ?? '',
     criadoPor: texto(x['criado_por']) ?? 'sistema',
@@ -797,23 +827,62 @@ class GravadorRedeBanco implements GravadorRede {
     return { id: x.id, versao, movimento };
   }
 
+  /** As especialidades ativas e os municípios dos locais ativos (sem local cadastrado, o do cadastro). */
+  private async perfilAtendimento(
+    id: number,
+  ): Promise<{ especialidades: Set<number>; municipios: Set<number>; semLocalAtivo: boolean }> {
+    const esp = await this.tx.consultar(
+      `SELECT DISTINCT ea.especialidade_medica_id AS e FROM especialidade_atendida_rede ea
+        WHERE ea.prestador_rede_id = ? AND ea.excluido_em IS NULL AND ea.situacao = 'ativa'`,
+      [id],
+    );
+    const locais = await this.tx.consultar(
+      `SELECT la.municipio_ibge_id AS m, la.ativo FROM local_atendimento_rede la
+        WHERE la.prestador_rede_id = ? AND la.excluido_em IS NULL`,
+      [id],
+    );
+    const ativos = locais.filter((l) => booleano(l['ativo']));
+    let municipios = new Set(ativos.map((l) => Number(l['m'])));
+    if (locais.length === 0) {
+      const p = await this.tx.uma('SELECT municipio_ibge_id AS m FROM prestador_rede WHERE id = ?', [id]);
+      municipios = new Set(p ? [Number(p['m'])] : []);
+    }
+    return {
+      especialidades: new Set(esp.map((e) => Number(e['e']))),
+      municipios,
+      semLocalAtivo: locais.length > 0 && ativos.length === 0,
+    };
+  }
+
   async descredenciar(x: Parameters<GravadorRede['descredenciar']>[0]) {
     const atual = await this.travar(x.id, x.versao);
     if (textoObrigatorio(atual['situacao']) === 'descredenciado') throw desatualizado();
     if (x.substituto !== null) {
-      const s = await this.tx.uma(
-        `SELECT id FROM prestador_rede p WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL
-            AND p.situacao IN ('credenciado','suspenso')
-            AND NOT EXISTS (SELECT 1 FROM suspensao_prestador_rede s
-                             WHERE s.prestador_rede_id = p.id AND s.excluido_em IS NULL
-                               AND s.local_atendimento_rede_id IS NULL AND s.situacao IN ('programada','ativa')
-                               AND (s.reativado_em IS NULL OR s.reativado_em > CURRENT_DATE))`,
+      // C2-118: o substituto equivalente (Lei 9.656 art. 17 §1; RN 365): credenciado e sem suspensão, com local
+      // ativo, as especialidades e os municípios onde o prestador que sai atende.
+      const sub = await this.tx.uma(
+        `SELECT p.id, p.situacao,
+                EXISTS (SELECT 1 FROM suspensao_prestador_rede s
+                         WHERE s.prestador_rede_id = p.id AND s.excluido_em IS NULL
+                           AND s.local_atendimento_rede_id IS NULL AND s.situacao IN ('programada','ativa')
+                           AND s.suspenso_desde <= CURRENT_DATE
+                           AND (s.reativado_em IS NULL OR s.reativado_em > CURRENT_DATE)) AS suspenso
+           FROM prestador_rede p WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`,
         [x.substituto, this.est],
       );
-      if (!s)
-        throw recusa('substituto-nao-credenciado', 'O substituto não está credenciado na rede.', {
-          campos: ['substituto'],
-        });
+      const credenciado =
+        !!sub && Number(sub['id']) !== x.id && textoObrigatorio(sub['situacao']) === 'credenciado';
+      const perfilSub = credenciado ? await this.perfilAtendimento(x.substituto) : null;
+      const problemas = problemasDoSubstituto(await this.perfilAtendimento(x.id), {
+        credenciado,
+        suspenso: !!sub && Number(sub['suspenso']) === 1,
+        semLocalAtivo: perfilSub?.semLocalAtivo ?? false,
+        especialidades: perfilSub?.especialidades ?? new Set(),
+        municipios: perfilSub?.municipios ?? new Set(),
+      });
+      const [primeiro] = problemas;
+      if (primeiro)
+        throw recusa(primeiro.codigo, problemas.map((q) => q.detalhe).join(' '), { campos: ['substituto'] });
     }
     const hoje = await this.hoje();
     const versao = await this.tx.alterar('prestador_rede', x.id, x.versao, {

@@ -171,6 +171,10 @@ describe('o lote e o prestador', () => {
     const p = { contratoInicio: '2026-02-01', situacao: 'credenciado', situacaoEm: '2026-02-01' };
     expect(prestadorNaRedeNaData(p, '2026-01-31')).toBe('prestador-antes-do-contrato');
     expect(prestadorNaRedeNaData(p, '2026-02-01')).toBeNull();
+    // C2-118: o dia em que o prestador inteiro estava suspenso.
+    const sp = { ...p, suspensoes: [{ local: null, desde: '2026-03-01', reativadoEm: '2026-03-10' }] };
+    expect(prestadorNaRedeNaData(sp, '2026-03-05')).toBe('prestador-suspenso-na-data');
+    expect(prestadorNaRedeNaData(sp, '2026-03-10')).toBeNull();
     const saiu = { ...p, situacao: 'descredenciado', situacaoEm: '2026-09-01' };
     expect(prestadorNaRedeNaData(saiu, '2026-08-31')).toBeNull();
     expect(prestadorNaRedeNaData(saiu, '2026-09-01')).toBe('prestador-fora-da-rede-na-data');

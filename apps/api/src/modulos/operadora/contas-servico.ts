@@ -321,6 +321,8 @@ export class ServicoContasOperadora {
           ? 'descredenciado'
           : 'credenciado',
       situacaoEm: prestador.saidaEm ?? prestador.situacaoEm,
+      // C2-118: a guia de dia em que o prestador inteiro estava suspenso é criticada.
+      suspensoes: prestador.suspensoes ?? [],
     };
     let glosadoAutomatico = 0;
     let itensGlosados = 0;

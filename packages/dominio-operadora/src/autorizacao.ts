@@ -311,6 +311,13 @@ export function regimeServe(
   return regime === 1 || regime === 3;
 }
 
+/** O prestador na crítica: a situação na rede, o regime e se há suspensão do prestador inteiro na data (C2-118). */
+export interface PrestadorNaCritica {
+  readonly situacao: string;
+  readonly regime: number;
+  readonly suspenso?: boolean;
+}
+
 export interface ContextoCriticas {
   readonly elegibilidade: ResultadoElegibilidade;
   readonly produto: { readonly natureza: 'plano' | 'cartaoDesconto'; readonly segmentacao: string | null };
@@ -321,8 +328,8 @@ export interface ContextoCriticas {
     readonly comGuiaPrincipal: boolean;
   };
   /** O prestador que pede e o que executa (null: não está na rede); o executante só quando é outro. */
-  readonly prestador: { readonly situacao: string; readonly regime: number } | null;
-  readonly executante?: { readonly situacao: string; readonly regime: number } | null;
+  readonly prestador: PrestadorNaCritica | null;
+  readonly executante?: PrestadorNaCritica | null;
   /** Há executante informado (mesmo que não esteja na rede)? */
   readonly temExecutante?: boolean;
 }
@@ -358,6 +365,7 @@ export function criticasAutomaticas(x: ContextoCriticas): CriticaAutomatica[] {
   const naRede = (q: { readonly situacao: string } | null | undefined) => q?.situacao === 'credenciado';
   const executa = x.temExecutante ? x.executante : x.prestador;
   if (!naRede(x.prestador) || !naRede(executa)) r.push(critica('prestador-fora-da-rede', true, null));
+  else if (x.prestador?.suspenso || executa?.suspenso) r.push(critica('prestador-suspenso', true, null));
   else if (executa && !regimeServe(executa.regime, x.pedido))
     r.push(critica('prestador-sem-regime', true, null));
   return r;

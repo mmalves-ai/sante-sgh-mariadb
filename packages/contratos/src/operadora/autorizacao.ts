@@ -660,6 +660,7 @@ export const MENSAGENS_AUTORIZACAO: Readonly<Record<string, string>> = {
   'cpt-vigente':
     'O beneficiário está na cobertura parcial temporária: confira se o CID é de doença ou lesão preexistente declarada.',
   'prestador-fora-da-rede': 'O prestador não está credenciado na rede da operadora.',
+  'prestador-suspenso': 'O prestador está suspenso na rede da operadora.',
   'prestador-sem-regime':
     'O contrato do prestador não tem o regime deste atendimento (ambulatorial ou hospitalar).',
   'prazo-vencido': 'O prazo de resposta ao prestador está vencido.',

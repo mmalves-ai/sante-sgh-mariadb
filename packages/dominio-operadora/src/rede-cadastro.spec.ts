@@ -12,6 +12,8 @@ import {
   qualificacaoVigente,
   situacaoDaSuspensao,
   situacaoDoDescredenciamento,
+  problemasDoSubstituto,
+  suspensaoNaData,
 } from './rede-cadastro.js';
 
 const cods = (r: { codigo: string }[]) => r.map((x) => x.codigo);
@@ -233,5 +235,52 @@ describe('suspensão', () => {
   it('descredenciamento agendado ou efetivado pela data', () => {
     expect(situacaoDoDescredenciamento('2026-12-30', '2026-11-25')).toBe('agendado');
     expect(situacaoDoDescredenciamento('2026-11-25', '2026-11-25')).toBe('efetivado');
+  });
+
+  it('suspensão na data: a do prestador inteiro e a do local; a reativada vale até a véspera', () => {
+    const s = [
+      { local: null, desde: '2026-11-25', reativadoEm: '2026-12-01' },
+      { local: 7, desde: '2026-12-10', reativadoEm: null },
+    ];
+    expect(suspensaoNaData(s, '2026-11-24')).toBeNull();
+    expect(suspensaoNaData(s, '2026-11-25')).toEqual(s[0]);
+    expect(suspensaoNaData(s, '2026-11-30')).toEqual(s[0]);
+    expect(suspensaoNaData(s, '2026-12-01')).toBeNull();
+    expect(suspensaoNaData(s, '2026-12-10')).toBeNull();
+    expect(suspensaoNaData(s, '2026-12-10', 7)).toEqual(s[1]);
+    expect(suspensaoNaData(s, '2026-12-10', 8)).toBeNull();
+  });
+
+  it('substituto equivalente: especialidades, municípios, local ativo, suspensão e credenciamento', () => {
+    const saido = { especialidades: new Set([1, 2]), municipios: new Set([3550308]) };
+    const ok = {
+      credenciado: true,
+      suspenso: false,
+      semLocalAtivo: false,
+      especialidades: new Set([1, 2, 5]),
+      municipios: new Set([3550308, 3304557]),
+    };
+    expect(problemasDoSubstituto(saido, ok)).toEqual([]);
+    expect(problemasDoSubstituto(saido, { ...ok, credenciado: false }).map((p) => p.codigo)).toEqual([
+      'substituto-nao-credenciado',
+    ]);
+    expect(
+      problemasDoSubstituto(saido, {
+        ...ok,
+        suspenso: true,
+        semLocalAtivo: true,
+        especialidades: new Set([1]),
+        municipios: new Set([3304557]),
+      }).map((p) => p.codigo),
+    ).toEqual([
+      'substituto-suspenso',
+      'substituto-sem-local-ativo',
+      'substituto-sem-especialidade',
+      'substituto-fora-do-municipio',
+    ]);
+    // O prestador que sai sem especialidade cadastrada: basta o município.
+    expect(problemasDoSubstituto({ especialidades: new Set(), municipios: new Set([3550308]) }, ok)).toEqual(
+      [],
+    );
   });
 });

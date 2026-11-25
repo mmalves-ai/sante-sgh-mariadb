@@ -27,6 +27,7 @@ import type { Problema } from './autorizacao.js';
 import { somarDias } from './carteirinha.js';
 import { avaliarElegibilidade, type DadosElegibilidade } from './elegibilidade.js';
 import { normalizarDocumento } from './rede.js';
+import { type PeriodoSuspensao, suspensaoNaData } from './rede-cadastro.js';
 
 /** Parâmetros das contas (a diretoria da operadora confirma contra os contratos da rede; D-PRAZO-PAGAMENTO-56). */
 export const PARAMETROS_CONTA = {
@@ -77,11 +78,18 @@ export function documentoDaOrigem(p: LoteTissRecebido['prestador']): string {
 
 /** O prestador estava credenciado no dia? (o contrato já valia e a saída, se houver, é de depois). */
 export function prestadorNaRedeNaData(
-  p: { readonly contratoInicio: string; readonly situacao: string; readonly situacaoEm: string },
+  p: {
+    readonly contratoInicio: string;
+    readonly situacao: string;
+    readonly situacaoEm: string;
+    /** C2-118: as suspensões do prestador (local null: o prestador inteiro). */
+    readonly suspensoes?: readonly PeriodoSuspensao[];
+  },
   dia: string,
 ): CriticaConta | null {
   if (dia < p.contratoInicio) return 'prestador-antes-do-contrato';
   if (p.situacao === 'descredenciado' && p.situacaoEm <= dia) return 'prestador-fora-da-rede-na-data';
+  if (suspensaoNaData(p.suspensoes ?? [], dia)) return 'prestador-suspenso-na-data';
   return null;
 }
 
@@ -134,6 +142,7 @@ export interface ContextoGuia {
     readonly contratoInicio: string;
     readonly situacao: string;
     readonly situacaoEm: string;
+    readonly suspensoes?: readonly PeriodoSuspensao[];
   };
   /** O beneficiário da carteirinha na operadora do lote (null: não há). */
   readonly beneficiario: { readonly id: number; readonly dados: DadosElegibilidade } | null;

@@ -319,3 +319,76 @@ export function problemasDaReativacaoPrestador(
 export function situacaoDoDescredenciamento(efetivoEm: string, hoje: string): 'agendado' | 'efetivado' {
   return efetivoEm > hoje ? 'agendado' : 'efetivado';
 }
+
+// ---- suspensão vigente (vale na autorização e na conta) ----
+/** Um período de suspensão do prestador (local null: o prestador inteiro); reativadoEm é o primeiro dia de volta. */
+export interface PeriodoSuspensao {
+  readonly local: number | null;
+  readonly desde: string;
+  readonly reativadoEm: string | null;
+}
+/**
+ * A suspensão que alcança o prestador no dia: a do prestador inteiro e, com o local informado, a desse local. A
+ * cancelada não entra (quem lê já a deixa de fora); a reativada vale até a véspera da reativação.
+ */
+export function suspensaoNaData(
+  suspensoes: readonly PeriodoSuspensao[],
+  dia: string,
+  local: number | null = null,
+): PeriodoSuspensao | null {
+  return (
+    suspensoes.find(
+      (s) =>
+        (s.local === null || (local !== null && s.local === local)) &&
+        s.desde <= dia &&
+        (s.reativadoEm === null || s.reativadoEm > dia),
+    ) ?? null
+  );
+}
+
+// ---- equivalência do substituto no descredenciamento (Lei 9.656 art. 17 §1; RN 365) ----
+/** O que o prestador oferece aos beneficiários: as especialidades atendidas e os municípios onde atende. */
+export interface PerfilAtendimentoRede {
+  readonly especialidades: ReadonlySet<number>;
+  /** Os municípios dos locais ativos; sem local cadastrado, o município do cadastro do prestador. */
+  readonly municipios: ReadonlySet<number>;
+}
+export interface SubstitutoParaConferir extends PerfilAtendimentoRede {
+  readonly credenciado: boolean;
+  readonly suspenso: boolean;
+  /** Tem locais cadastrados, mas nenhum ativo. */
+  readonly semLocalAtivo: boolean;
+}
+/** O substituto equivalente: credenciado, sem suspensão, com local ativo, as especialidades e os municípios do saído. */
+export function problemasDoSubstituto(
+  saido: PerfilAtendimentoRede,
+  s: SubstitutoParaConferir,
+): ProblemaCadastroRede[] {
+  if (!s.credenciado)
+    return [prob('substituto-nao-credenciado', 'substituto', 'O substituto não está credenciado na rede.')];
+  const r: ProblemaCadastroRede[] = [];
+  if (s.suspenso) r.push(prob('substituto-suspenso', 'substituto', 'O substituto está suspenso na rede.'));
+  if (s.semLocalAtivo)
+    r.push(
+      prob('substituto-sem-local-ativo', 'substituto', 'O substituto não tem local de atendimento ativo.'),
+    );
+  const faltam = [...saido.especialidades].filter((e) => !s.especialidades.has(e));
+  if (faltam.length)
+    r.push(
+      prob(
+        'substituto-sem-especialidade',
+        'substituto',
+        `O substituto não atende ${faltam.length} especialidade(s) do prestador que sai.`,
+      ),
+    );
+  const fora = [...saido.municipios].filter((m) => !s.municipios.has(m));
+  if (fora.length)
+    r.push(
+      prob(
+        'substituto-fora-do-municipio',
+        'substituto',
+        `O substituto não atende em ${fora.length} município(s) onde o prestador que sai atende.`,
+      ),
+    );
+  return r;
+}

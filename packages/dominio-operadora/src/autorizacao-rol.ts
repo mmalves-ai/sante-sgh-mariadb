@@ -47,6 +47,7 @@ export const CRITICAS_AUTOMATICAS_CATALOGO: Readonly<Record<string, { classe: st
     'cpt-vigente': { classe: 'preexistencia', descricao: 'Cobertura parcial temporária vigente' },
     'prestador-fora-da-rede': { classe: 'rede', descricao: 'Prestador fora da rede credenciada' },
     'prestador-sem-regime': { classe: 'rede', descricao: 'Prestador sem o regime do atendimento' },
+    'prestador-suspenso': { classe: 'rede', descricao: 'Prestador suspenso na rede' },
     'rol-sexo-nao-permitido': { classe: 'cobertura', descricao: 'Procedimento não indicado para o sexo' },
     'rol-idade-fora-da-faixa': { classe: 'cobertura', descricao: 'Idade fora da faixa da regra do rol' },
     'rol-quantidade-acima': { classe: 'limite', descricao: 'Quantidade acima do máximo por solicitação' },

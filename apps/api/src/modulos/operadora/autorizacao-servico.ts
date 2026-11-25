@@ -32,6 +32,8 @@ import {
   conferirDecisao,
   conselhoDoAuditor,
   criticasAutomaticas,
+  type PeriodoSuspensao,
+  suspensaoNaData,
   criticasDaRegraRol,
   designacaoVigente,
   negativaParaRegistro,
@@ -58,6 +60,12 @@ import {
   type NegativaDaDecisao,
 } from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
+
+type PrestadorDaCritica = {
+  situacao: string;
+  regime: number;
+  suspensoes?: readonly PeriodoSuspensao[] | undefined;
+};
 import type { ContextoAutorizacao, PortaAutorizacaoOperadora } from './autorizacao-porta.js';
 
 /** Rótulos do vocabulário dos domínios fixos (o banco tem alguns abreviados, como "Liberação de guias" com a sigla). */
@@ -288,7 +296,7 @@ export class ServicoAutorizacaoOperadora {
             itens: p.rol.itens,
           })
         : [];
-    return [...this.criticasDoPlano(p, el, avaliada, prestador, executante), ...doRol];
+    return [...this.criticasDoPlano(p, el, avaliada, prestador, executante, hoje), ...doRol];
   }
 
   private criticasDoPlano(
@@ -301,9 +309,16 @@ export class ServicoAutorizacaoOperadora {
     },
     el: Awaited<ReturnType<ServicoAutorizacaoOperadora['elegibilidadeNaData']>>['el'],
     avaliada: Awaited<ReturnType<ServicoAutorizacaoOperadora['elegibilidadeNaData']>>['avaliada'],
-    prestador: { situacao: string; regime: number } | null,
-    executante: { situacao: string; regime: number } | null,
+    prestador: PrestadorDaCritica | null,
+    executante: PrestadorDaCritica | null,
+    hoje: string,
   ): CriticaAutomatica[] {
+    // C2-118: a suspensão do prestador inteiro vigente na data bloqueia (a do local não: o pedido não traz o local).
+    const naCritica = (q: PrestadorDaCritica) => ({
+      situacao: q.situacao,
+      regime: q.regime,
+      suspenso: suspensaoNaData(q.suspensoes ?? [], hoje) !== null,
+    });
     return criticasAutomaticas({
       elegibilidade: avaliada,
       produto: el
@@ -315,9 +330,9 @@ export class ServicoAutorizacaoOperadora {
         internacaoTipo: p.internacaoTipo,
         comGuiaPrincipal: p.comGuiaPrincipal,
       },
-      prestador: prestador ? { situacao: prestador.situacao, regime: prestador.regime } : null,
+      prestador: prestador ? naCritica(prestador) : null,
       temExecutante: p.executante !== null,
-      executante: executante ? { situacao: executante.situacao, regime: executante.regime } : null,
+      executante: executante ? naCritica(executante) : null,
     });
   }
 

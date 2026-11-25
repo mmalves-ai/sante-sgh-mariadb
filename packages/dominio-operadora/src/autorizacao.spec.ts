@@ -383,7 +383,19 @@ describe('críticas automáticas', () => {
     ).toEqual(['prestador-sem-regime']);
     expect(codigos(criticasAutomaticas(base({ prestador: { situacao: 'credenciado', regime: 2 } })))).toEqual(
       ['prestador-sem-regime'],
-    );
+    ); // C2-118: o prestador (ou o executante) suspenso na data bloqueia a autorização.
+    expect(
+      codigos(
+        criticasAutomaticas(base({ prestador: { situacao: 'credenciado', regime: 3, suspenso: true } })),
+      ),
+    ).toEqual(['prestador-suspenso']);
+    expect(
+      codigos(
+        criticasAutomaticas(
+          base({ temExecutante: true, executante: { situacao: 'credenciado', regime: 3, suspenso: true } }),
+        ),
+      ),
+    ).toEqual(['prestador-suspenso']);
   });
 });
 

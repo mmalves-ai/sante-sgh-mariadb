@@ -7,7 +7,7 @@
 // suspensão (recusa da sobreposta; a programada cancelada; a ativa reativada); o registro do descredenciamento com o
 // aviso e o substituto (o substituto suspenso é recusado) e a reinclusão que o marca como cancelado; o escopo do
 // estabelecimento (404 no outro). SGH_NUCLEO_SEM_BANCO=1 pula o banco.
-import { cnpjSintetico, cpfSintetico } from '@sgh/dominio-operadora';
+import { cnpjSintetico, cpfSintetico, criticasAutomaticas, suspensaoNaData } from '@sgh/dominio-operadora';
 import type { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
@@ -355,12 +355,29 @@ describe.skipIf(!PODE)('cadastro complementar do prestador da rede (banco)', () 
         usuario: 'x',
       }),
     );
-    await p.suspender(
+    const s3 = await p.suspender(
       c,
       sub.id,
       { motivo: 'auditoria', local: null, desde: daqui(0), reativacaoPrevista: null, observacao: null },
       trilha('s3'),
     );
+    // A suspensão vale na autorização: a leitura do prestador (a mesma que a autorização usa) traz a suspensão do
+    // prestador inteiro, e a crítica do pedido bloqueia; a do local (s1, já encerrada) não entra.
+    const criticaDe = async (id: number) => {
+      const lido = (await rede!.prestador(c, id))!;
+      return criticasAutomaticas({
+        elegibilidade: { elegivel: true, motivos: [], carencias: [] } as never,
+        produto: { natureza: 'plano', segmentacao: null },
+        pedido: { carater: 'E', tipoGuia: 2, internacaoTipo: null, comGuiaPrincipal: false },
+        prestador: {
+          situacao: lido.situacao,
+          regime: 3,
+          suspenso: suspensaoNaData(lido.suspensoes ?? [], daqui(0)) !== null,
+        },
+      }).map((x) => x.codigo);
+    };
+    expect((await rede!.prestador(c, hosp.id))!.suspensoes).toEqual([]);
+    expect(await criticaDe(sub.id)).toContain('prestador-suspenso');
     const pedido = {
       id: hosp.id,
       versao: 1,
@@ -372,7 +389,10 @@ describe.skipIf(!PODE)('cadastro complementar do prestador da rede (banco)', () 
       tipoMotivo: 'pedido_prestador' as const,
       usuario: 'x',
     };
-    expect(await codigoDe(gravarRede((g) => g.descredenciar(pedido)))).toBe('substituto-nao-credenciado');
+    expect(await codigoDe(gravarRede((g) => g.descredenciar(pedido)))).toBe('substituto-suspenso');
+    // Reativado hoje: a autorização volta a aceitar o prestador.
+    expect((await p.reativar(c, s3.id, 1, daqui(0), trilha('s3-fim'))).situacao).toBe('encerrada');
+    expect(await criticaDe(sub.id)).not.toContain('prestador-suspenso');
     const sub2 = await gravarRede((g) =>
       g.credenciar({
         ...campos('HOSPITAL C2118 S2'),
@@ -381,6 +401,23 @@ describe.skipIf(!PODE)('cadastro complementar do prestador da rede (banco)', () 
         usuario: 'x',
       }),
     );
+    // Equivalência: sem as especialidades do hospital que sai, recusa; com elas (e no mesmo município), aceita.
+    expect(await codigoDe(gravarRede((g) => g.descredenciar({ ...pedido, substituto: sub2.id })))).toBe(
+      'substituto-sem-especialidade',
+    );
+    await p.incluirEspecialidade(c, sub2.id, especialidade(especialidades[0]!, null), trilha('e-s2a'));
+    await p.incluirEspecialidade(c, sub2.id, especialidade(especialidades[1]!, null), trilha('e-s2b'));
+    const lSub = await p.incluirLocal(
+      c,
+      sub2.id,
+      local({ municipioIbge: 3304557, cep: '20040002' }),
+      trilha('l-s2'),
+    );
+    expect(await codigoDe(gravarRede((g) => g.descredenciar({ ...pedido, substituto: sub2.id })))).toBe(
+      'substituto-fora-do-municipio',
+    );
+    await p.incluirLocal(c, sub2.id, local({ nome: 'Unidade Paulista', principal: false }), trilha('l-s2b'));
+    expect(lSub.id).toBeGreaterThan(0);
     const d = await gravarRede((g) => g.descredenciar({ ...pedido, substituto: sub2.id }));
     ficha = await p.ficha(c, hosp.id);
     expect(ficha.descredenciamentos).toHaveLength(1);
