@@ -36,7 +36,8 @@ LAYOUTS = {
                             "quantidade_filme_m2", "incidencia", "valor_procedimento"]},
     "cep": {"obrigatorias": ["cep", "codigo_ibge_municipio", "uf"],
             "opcionais": ["tipo_cep", "logradouro", "logradouro_abreviado", "complemento", "numero_inicial",
-                          "numero_final", "lado", "nome_unidade", "codigo_bairro", "bairro", "cep_anterior"]},
+                          "numero_final", "lado", "nome_unidade", "codigo_bairro", "bairro", "cep_anterior",
+                          "tipo_logradouro"]},
 }
 FONTES = {"brasindice": ("matmed", "Brasíndice"), "simpro": ("matmed", "Simpro"), "cbhpm": ("cbhpm", "CBHPM"),
           "cep": ("cep", "Base de CEP")}
@@ -205,7 +206,7 @@ def norm_cep(r):
             "complemento": texto(r.get("complemento"), 200, "complemento"), "numero_inicial": ini, "numero_final": fim,
             "lado": lado, "nome_unidade": texto(r.get("nome_unidade"), 150, "nome_unidade"),
             "codigo_bairro": texto(r.get("codigo_bairro"), 12, "codigo_bairro"), "bairro": texto(r.get("bairro"), 100, "bairro"),
-            "cep_anterior": ant}
+            "cep_anterior": ant, "tipo_logradouro": texto(r.get("tipo_logradouro"), 150, "tipo_logradouro")}
 
 
 NORMALIZAR = {"matmed": norm_matmed, "cbhpm": norm_cbhpm, "cep": norm_cep}
@@ -306,11 +307,16 @@ ON DUPLICATE KEY UPDATE descricao = VALUES(descricao), porte_codigo = VALUES(por
 def sql_cep(fonte, nome, edicao, vig, pub, linhas, completa):
     agora = "UTC_TIMESTAMP(3)"
     cols = ["cep", "codigo_ibge", "uf", "tipo_cep", "logradouro", "logradouro_abreviado", "complemento",
-            "numero_inicial", "numero_final", "lado", "nome_unidade", "codigo_bairro", "bairro", "cep_anterior"]
+            "numero_inicial", "numero_final", "lado", "nome_unidade", "codigo_bairro", "bairro", "cep_anterior",
+            "tipo_logradouro"]
+    # A espécie (rua, avenida…) vem da coluna tipo_logradouro, pela sigla ou pela descrição do catálogo oficial de
+    # espécies; o logradouro vem então sem o tipo. Tipo ausente ou fora do catálogo: o CEP entra sem espécie.
+    especie = ("(SELECT MIN(e.id) FROM especie_logradouro e WHERE e.ativo AND t.tipo_logradouro IS NOT NULL "
+               "AND (e.sigla = t.tipo_logradouro OR e.descricao = t.tipo_logradouro))")
     p = ["""CREATE TEMPORARY TABLE tmp_cep_licenciado (cep CHAR(8) NOT NULL PRIMARY KEY, codigo_ibge CHAR(7), uf CHAR(2),
   tipo_cep VARCHAR(20), logradouro VARCHAR(200), logradouro_abreviado VARCHAR(100), complemento VARCHAR(200),
   numero_inicial INT UNSIGNED, numero_final INT UNSIGNED, lado VARCHAR(10), nome_unidade VARCHAR(150),
-  codigo_bairro VARCHAR(12), bairro VARCHAR(100), cep_anterior CHAR(8));"""]
+  codigo_bairro VARCHAR(12), bairro VARCHAR(100), cep_anterior CHAR(8), tipo_logradouro VARCHAR(150));"""]
     p += [f"INSERT INTO tmp_cep_licenciado ({', '.join(cols)}) VALUES\n{v};" for v in _valores(linhas, cols)]
     p.append(f"""INSERT INTO bairro (codigo_dne, descricao, municipio_ibge_id, ativo, vigencia_inicio, versao_fonte, criado_em)
 SELECT t.codigo_bairro, MIN(t.bairro), MIN(m.id), TRUE, {q(vig)}, {q(edicao)}, {agora}
@@ -320,9 +326,9 @@ ON DUPLICATE KEY UPDATE bairro.descricao = VALUES(descricao), bairro.municipio_i
   bairro.versao_fonte = VALUES(versao_fonte), bairro.alterado_em = {agora}, bairro.versao = bairro.versao + 1;
 INSERT INTO logradouro_cep (codigo_cep, tipo_cep, logradouro, logradouro_abreviado, complemento, numero_inicial,
   numero_final, lado, nome_unidade, bairro_id, municipio_ibge_id, unidade_federativa_id, cep_anterior, ativo,
-  vigencia_inicio, versao_fonte, criado_em)
+  vigencia_inicio, versao_fonte, criado_em, especie_logradouro_id)
 SELECT t.cep, t.tipo_cep, t.logradouro, t.logradouro_abreviado, t.complemento, t.numero_inicial, t.numero_final, t.lado,
-  t.nome_unidade, b.id, m.id, u.id, t.cep_anterior, TRUE, {q(vig)}, {q(edicao)}, {agora}
+  t.nome_unidade, b.id, m.id, u.id, t.cep_anterior, TRUE, {q(vig)}, {q(edicao)}, {agora}, {especie}
 FROM tmp_cep_licenciado t JOIN municipio_ibge m ON m.codigo_ibge = t.codigo_ibge
 JOIN unidade_federativa u ON u.sigla = t.uf LEFT JOIN bairro b ON b.codigo_dne = t.codigo_bairro
 ON DUPLICATE KEY UPDATE logradouro_cep.tipo_cep = VALUES(tipo_cep), logradouro_cep.logradouro = VALUES(logradouro),
@@ -330,6 +336,7 @@ ON DUPLICATE KEY UPDATE logradouro_cep.tipo_cep = VALUES(tipo_cep), logradouro_c
   logradouro_cep.numero_inicial = VALUES(numero_inicial), logradouro_cep.numero_final = VALUES(numero_final), logradouro_cep.lado = VALUES(lado),
   logradouro_cep.nome_unidade = VALUES(nome_unidade), logradouro_cep.bairro_id = VALUES(bairro_id), logradouro_cep.municipio_ibge_id = VALUES(municipio_ibge_id),
   logradouro_cep.unidade_federativa_id = VALUES(unidade_federativa_id), logradouro_cep.cep_anterior = VALUES(cep_anterior), logradouro_cep.ativo = TRUE,
+  logradouro_cep.especie_logradouro_id = VALUES(especie_logradouro_id),
   logradouro_cep.versao_fonte = VALUES(versao_fonte), logradouro_cep.alterado_em = {agora}, logradouro_cep.versao = logradouro_cep.versao + 1;""")
     if completa:
         p.append(f"UPDATE logradouro_cep l SET ativo = FALSE, vigencia_fim = DATE_SUB({q(vig)}, INTERVAL 1 DAY), "

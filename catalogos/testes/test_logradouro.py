@@ -66,5 +66,42 @@ class LeituraDaTabela(unittest.TestCase):
         self.assertEqual(self.m._txt("a\\b"), "'a\\\\b'")
 
 
+class FonteAusenteOuBancoSemChave(unittest.TestCase):
+    """A carga não termina em silêncio: banco sem a chave única ou sem espécies e sem a fonte baixada é erro."""
+
+    def _com(self, chave, ativas, arquivo_existe=False):
+        m = _mod()
+        m.ARQUIVO = Path(__file__).resolve().parent / ("test_logradouro.py" if arquivo_existe else "nao-existe.html")
+        m.AVISOS = []
+        chamadas = []
+
+        def falso_sql(banco, entrada):
+            chamadas.append(entrada)
+            return f"{chave}\t{ativas}\n"
+
+        m._sql = falso_sql
+        return m, chamadas
+
+    def test_banco_sem_a_chave_unica_e_erro_antes_de_qualquer_gravacao(self):
+        m, chamadas = self._com(0, 0, arquivo_existe=True)
+        with self.assertRaisesRegex(RuntimeError, "migração 03_CAD/97"):
+            m.carregar("cliente_sintetico")
+        self.assertEqual(len(chamadas), 1)
+        self.assertNotIn("INSERT", chamadas[0])
+
+    def test_fonte_ausente_em_banco_sem_especies_e_erro(self):
+        m, chamadas = self._com(1, 0)
+        with self.assertRaisesRegex(RuntimeError, "não baixada"):
+            m.carregar("cliente_sintetico")
+        self.assertEqual(len(chamadas), 1)
+
+    def test_fonte_ausente_em_banco_ja_carregado_mantem_e_avisa(self):
+        m, chamadas = self._com(1, 182)
+        self.assertEqual(m.carregar("cliente_sintetico"), {"especie_logradouro": 182})
+        self.assertEqual(len(m.AVISOS), 1)
+        self.assertIn("mantidas as 182", m.AVISOS[0])
+        self.assertEqual(len(chamadas), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

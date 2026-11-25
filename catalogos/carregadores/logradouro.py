@@ -119,11 +119,34 @@ def _sql(banco, entrada):
     return r.stdout
 
 
+CHAVE = "uq_especie_logradouro_codigo_esocial"
+
+
+def estado(banco: str):
+    """(o banco tem a chave única do código oficial?, espécies ativas com código oficial)."""
+    saida = _sql(banco, f"""SELECT (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE()
+  AND table_name = 'especie_logradouro' AND index_name = '{CHAVE}' AND non_unique = 0),
+ (SELECT COUNT(*) FROM especie_logradouro WHERE ativo AND codigo_esocial IS NOT NULL);
+""")
+    chave, ativas = saida.strip().splitlines()[-1].split()
+    return int(chave) > 0, int(ativas)
+
+
 def carregar(banco: str) -> dict:
+    tem_chave, ativas = estado(banco)
+    if not tem_chave:
+        # sem a chave única o INSERT ... ON DUPLICATE KEY não casa pelo código e a carga duplicaria os tipos
+        raise RuntimeError(f"logradouro: o banco {banco} está sem a chave única do código oficial da espécie de "
+                           "logradouro: aplique a migração 03_CAD/97_especie_logradouro_fonte antes de carregar")
     if not ARQUIVO.exists():
-        # sem a tabela oficial baixada, nada é carregado (nunca de outra fonte): o aviso fica no evento da carga
-        AVISOS.append(f"fonte {FONTE} não baixada: rode `python3 -I catalogos/baixar.py {FONTE}` e carregue de novo")
-        return {"especie_logradouro": 0}
+        falta = f"fonte {FONTE} não baixada: rode `python3 -I catalogos/baixar.py {FONTE}` e carregue de novo"
+        if ativas == 0:
+            # banco sem nenhuma espécie e sem a tabela oficial: a carga falha (um cliente não nasce sem espécies em
+            # silêncio). Nunca se carrega de outra fonte.
+            raise RuntimeError(f"logradouro: {falta} (o banco {banco} está sem espécies de logradouro)")
+        # o banco já tem as espécies (do espelho padrão ou de carga anterior): ficam como estão, com o aviso no evento
+        AVISOS.append(f"{falta}; mantidas as {ativas} espécies já carregadas")
+        return {"especie_logradouro": ativas}
     ls = ler(ARQUIVO.read_text(encoding="utf-8"))
     v = _txt(versao())
     vals = ",\n".join(f"({_txt(c)}, {_txt(d)})" for c, d in ls)

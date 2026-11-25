@@ -78,6 +78,7 @@ Destino: `logradouro_cep` e `bairro`. Exige os catálogos oficiais de município
 | nome_unidade | não | até 150 |
 | codigo_bairro, bairro | os dois ou nenhum | código do bairro na base postal (até 12) e nome (até 100) |
 | cep_anterior | não | 8 dígitos |
+| tipo_logradouro | não | espécie do logradouro (rua, avenida…), pela sigla ou pela descrição do catálogo oficial de espécies (`catalogos/carregar.py --espelho BANCO logradouro`); com ela, `logradouro` vem sem o tipo. Ausente ou fora do catálogo: o CEP entra sem espécie |
 
 `--completa`: CEP ausente do arquivo fica inativo, com a vigência fechada.
 

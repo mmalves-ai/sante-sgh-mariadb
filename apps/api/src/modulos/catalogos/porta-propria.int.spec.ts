@@ -735,6 +735,27 @@ describe.skipIf(SEM_BANCO)(
           competencia: '202609',
         });
         expect(proc?.itens.map((x) => x['codigo'])).toEqual(['9999990001']);
+        // espécies de logradouro (rua, avenida…): consulta pelo código oficial e por trecho da descrição
+        const limparEspecie = "DELETE FROM especie_logradouro WHERE codigo_dne = 'ZQ9C';";
+        sql(
+          `${limparEspecie} INSERT INTO especie_logradouro (codigo_dne, codigo_esocial, descricao, sigla, ativo, versao_fonte, criado_em, versao)
+           VALUES ('ZQ9C', 'ZQ9', 'Tipo sintético de consulta', 'ZQ9', TRUE, 'sintetica', UTC_TIMESTAMP(3), 1);`,
+        );
+        try {
+          const tipo = await f.consultar(ctx(), 'tipoLogradouro', { busca: 'zq9', pagina: 0, porPagina: 10 });
+          expect(tipo?.titulo).toBe('Tipos de logradouro');
+          expect(tipo?.itens).toEqual([
+            { codigo: 'ZQ9', nome: 'Tipo sintético de consulta', ativo: 1, versao: 'sintetica' },
+          ]);
+          const porNome = await f.consultar(ctx(), 'tipoLogradouro', {
+            busca: 'sintético de consul',
+            pagina: 0,
+            porPagina: 10,
+          });
+          expect(porNome?.itens.map((x) => x['codigo'])).toContain('ZQ9');
+        } finally {
+          sql(limparEspecie);
+        }
         expect(await f.consultar(ctx(), 'motivoGlosa', { busca: null, pagina: 0, porPagina: 10 })).toBeNull();
         expect(await f.consultar(ctx(), 'constructor', { busca: null, pagina: 0, porPagina: 10 })).toBeNull();
         const leiaute = await f.consultar(ctx(), 'leiautePosicao', {

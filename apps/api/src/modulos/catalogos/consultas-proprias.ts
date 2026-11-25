@@ -130,6 +130,20 @@ export const CONSULTAS: Readonly<Record<string, ConsultaPropria>> = Object.freez
     ordem: 'o.codigo_cbo',
     soDigitos: true,
   },
+  // Espécies de logradouro (rua, avenida, travessa…) da lista pública oficial, carregadas por catalogos/carregar.py.
+  tipoLogradouro: {
+    titulo: 'Tipos de logradouro',
+    de: 'especie_logradouro e',
+    colunas: [
+      c('codigo', 'Código', 'e.codigo_esocial'),
+      c('nome', 'Tipo de logradouro', 'e.descricao'),
+      c('ativo', 'Ativo', 'e.ativo'),
+      c('versao', 'Versão da fonte', 'e.versao_fonte'),
+    ],
+    codigo: 'e.codigo_esocial',
+    descricao: 'e.descricao',
+    ordem: 'e.descricao, e.id',
+  },
 });
 
 /** Entidades com consulta própria (as demais do contrato respondem 404). */
