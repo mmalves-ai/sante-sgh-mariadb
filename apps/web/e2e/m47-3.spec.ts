@@ -84,9 +84,12 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
     await page.goto('/sadt/imagem/worklist');
     await expect(page.getByRole('heading', { level: 1, name: 'Lista de trabalho DICOM' })).toBeVisible();
     await expect(page.getByTestId('worklist-motivo')).toContainText('pacs.parceiroWorklist');
+    // A linha do pedido deste paciente (JOSÉ DA SILVA, 1001): a fonte sintética já traz outro raio X a enviar, de outro
+    // paciente (1003), que não aparece no prontuário do 1001.
     const linhaRx = page
       .locator('[data-testid^="worklist-exame-"]')
       .filter({ hasText: 'RAIO X DE TÓRAX' })
+      .filter({ hasText: 'JOSÉ DA SILVA' })
       .filter({ hasText: 'A enviar' })
       .first();
     await expect(linhaRx).toBeVisible();

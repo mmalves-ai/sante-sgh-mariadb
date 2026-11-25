@@ -145,10 +145,14 @@ describe('lista de trabalho DICOM (M47.3)', { timeout: 60_000 }, () => {
     const t = await get(tec, '/sadt/imagem/worklist');
     expect(t.statusCode, t.body).toBe(200);
     const tela = t.json();
-    const rx = (tela.itens as Linha[]).find((x) => x.ato === 16 && x.situacao === 'a-enviar');
+    // O exame do pedido feito agora (paciente 1001): a fonte sintética já traz outro raio X a enviar, do paciente 1003.
+    const rx = (tela.itens as Linha[]).find(
+      (x) => x.ato === 16 && x.situacao === 'a-enviar' && x.paciente.id === 1001,
+    );
     expect(rx, JSON.stringify(tela.itens.map((x: Linha) => [x.ato, x.situacao]))).toBeDefined();
     exameRx = rx!.exame;
     paciente = rx!.paciente.id;
+    expect(paciente).toBe(1001);
     expect(rx!.modalidade).toEqual({ id: 6, sigla: 'CR' });
     // Sem destino no estabelecimento: a lista lê, o envio fica parado com o motivo (o parâmetro a informar).
     expect(tela.liberacao).toBeUndefined();
