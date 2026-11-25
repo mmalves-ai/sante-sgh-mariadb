@@ -1,0 +1,42 @@
+// Textos do pedido de vaga do médico no prontuário (02-AGE linha 53).
+export const mensagensPedidoVaga = {
+  aba: 'Pedidos de vaga',
+  titulo: 'Pedidos de vaga na agenda',
+  explicacao:
+    'Peça a consulta, o exame ou o procedimento que ainda não tem vaga: o pedido entra na lista de espera da agenda, e a marcação oferece a vaga ao paciente.',
+  nenhum: 'Nenhum pedido de vaga para este paciente.',
+  carregando: 'Carregando…',
+  novo: 'Novo pedido de vaga',
+  especialidade: 'Especialidade',
+  semEspecialidade: 'Sem especialidade (só os procedimentos)',
+  prioridade: 'Prioridade clínica',
+  prioridades: { normal: 'Normal', urgente: 'Urgente', preferencial: 'Preferencial' },
+  prazo: 'Atender até (opcional)',
+  observacao: 'Indicação clínica (opcional)',
+  procedimento: 'Procedimento',
+  escolher: 'Escolha o procedimento',
+  quantidade: 'Quantidade',
+  itemQuantidade: '{descricao} × {quantidade}',
+  incluirItem: 'Incluir procedimento',
+  retirarItem: 'Retirar',
+  pedir: 'Pedir vaga',
+  pedido: 'Pedido de vaga na lista de espera.',
+  semProfissional:
+    'Sua conta não está ligada a um profissional neste estabelecimento: você vê os pedidos, mas não pede vaga.',
+  situacoes: {
+    aguardando: 'Aguardando vaga',
+    ofertado: 'Vaga ofertada',
+    atendido: 'Marcado',
+    cancelado: 'Encerrado',
+    marcado: 'Marcado',
+  },
+  solicitante: 'Pedido por {nome}',
+  regulacao: 'Regulação {numero}',
+  ate: 'até {data}',
+  erros: {
+    alvo: 'Informe a especialidade ou ao menos um procedimento.',
+    repetido: 'O mesmo procedimento aparece duas vezes.',
+    quantidade: 'A quantidade é um número inteiro de 1 a 99.',
+    prazo: 'O prazo não pode ficar no passado.',
+  },
+} as const;

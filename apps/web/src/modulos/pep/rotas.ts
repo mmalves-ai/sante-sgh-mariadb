@@ -429,6 +429,13 @@ export const rotasPep: RouteRecordRaw[] = [
         meta: { permissao: 'pep.tcle.ler' },
       },
       {
+        // 02-AGE linha 53: o médico pede vaga na agenda (lista de espera com os procedimentos pedidos).
+        path: 'pedidos-vaga',
+        name: 'pep.paciente.pedidos-vaga',
+        component: () => import('./telas/abas/AbaPedidosVaga.vue'),
+        meta: { permissao: 'pep.pedidoVaga.ler' },
+      },
+      {
         path: 'alta',
         name: 'pep.paciente.alta',
         component: () => import('./telas/abas/AbaAlta.vue'),

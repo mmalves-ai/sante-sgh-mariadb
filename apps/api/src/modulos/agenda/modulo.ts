@@ -17,6 +17,10 @@ import {
 import { AgendasController } from './agendas.controller.js';
 import { ApoioAgendaController } from './apoio.controller.js';
 import { MarcacoesController } from './marcacoes.controller.js';
+import { COTAS_PRAZOS, CotasPrazosController } from './cota-prazo.controller.js';
+import { CotasPrazosPropria } from './cota-prazo.js';
+import { PEDIDOS_VAGA, PedidosVagaController } from './pedido-vaga.controller.js';
+import { PedidosVagaPropria } from './pedido-vaga.js';
 import { PERFIS_MARCACAO, PerfisMarcacaoController } from './perfil-marcacao.controller.js';
 import { PerfisMarcacaoPropria } from './perfil-marcacao.js';
 import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
@@ -100,6 +104,8 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
       MarcacoesController,
       UsuariosAgendaController,
       PerfisMarcacaoController,
+      PedidosVagaController,
+      CotasPrazosController,
     ],
     providers: [
       { provide: PORTA_AGENDA, useValue: porta },
@@ -115,6 +121,20 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
         useValue:
           porta.destino === 'propria' && ctx.nucleo && cliente
             ? new PerfisMarcacaoPropria(ctx.nucleo, cliente)
+            : null,
+      },
+      {
+        provide: COTAS_PRAZOS,
+        useValue:
+          porta.destino === 'propria' && ctx.nucleo && cliente
+            ? new CotasPrazosPropria(ctx.nucleo, cliente)
+            : null,
+      },
+      {
+        provide: PEDIDOS_VAGA,
+        useValue:
+          porta.destino === 'propria' && ctx.nucleo && cliente
+            ? new PedidosVagaPropria(ctx.nucleo, cliente)
             : null,
       },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),

@@ -57,6 +57,8 @@ const ABAS = [
   'receitas',
   'atestados',
   'tcle',
+  // 02-AGE linha 53: pedidos de vaga na agenda, para quem tem a permissão da aba.
+  'pedidos-vaga',
   'alta',
   'anexos',
   'tempos',
@@ -64,7 +66,11 @@ const ABAS = [
   'dispositivos',
 ] as const;
 const abasVisiveis = computed(() =>
-  ABAS.filter((a) => a !== 'dispositivos' || pode('qualidade.dispositivoInvasivo.ler')),
+  ABAS.filter(
+    (a) =>
+      (a !== 'dispositivos' || pode('qualidade.dispositivoInvasivo.ler')) &&
+      (a !== 'pedidos-vaga' || pode('pep.pedidoVaga.ler')),
+  ),
 );
 
 // ── Pedir parecer (regra 10): categoria ou especialidade, prioridade e prazo ──────────────────────────
@@ -174,7 +180,7 @@ async function exportar(): Promise<void> {
           :key="a"
           :to="`/pep/paciente/${id}/${a}`"
           :data-testid="`aba-${a}`"
-          >{{ t(`pep.doc.prontuario.aba.${a}`) }}</RouterLink
+          >{{ a === 'pedidos-vaga' ? t('pep.pedidoVaga.aba') : t(`pep.doc.prontuario.aba.${a}`) }}</RouterLink
         >
       </nav>
       <RouterView v-slot="{ Component }">

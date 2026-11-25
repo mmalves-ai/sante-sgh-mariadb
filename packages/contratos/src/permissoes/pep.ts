@@ -338,6 +338,17 @@ export const PERMISSOES_PEP_M23: readonly DeclaracaoPermissao[] = [
   clinica('pep.alergia.inativar', 'Retirar uma alergia da lista ativa (fica no histórico), com motivo'),
   recursoNovo('pep.problema.ler', 'Ver a lista de problemas e diagnósticos do paciente', 'normal'),
   recursoNovo('pep.problema.criar', 'Incluir, resolver ou descartar problemas e diagnósticos do paciente'),
+  // 02-AGE linha 53: o médico pede, no prontuário, a vaga de consulta, exame ou procedimento que vai para a lista de
+  // espera da agenda, com os itens pedidos.
+  recursoNovo(
+    'pep.pedidoVaga.ler',
+    'Ver os pedidos de vaga do paciente na lista de espera, com os itens',
+    'normal',
+  ),
+  recursoNovo(
+    'pep.pedidoVaga.criar',
+    'Pedir vaga na agenda para o paciente (lista de espera com os procedimentos)',
+  ),
   clinica('pep.pedidoExame.ler', 'Ver os pedidos de exame do paciente'),
   clinica(
     'pep.pedidoExame.criar',
