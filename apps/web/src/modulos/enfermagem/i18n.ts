@@ -7,6 +7,7 @@ import { mensagensContencao } from './i18n-contencao.js';
 import { mensagensTrr } from './i18n-trr.js';
 import { mensagensAuditoriaChecagem } from './i18n-auditoria-checagem.js';
 import { mensagensProtocoloCriterios } from './i18n-protocolo-criterios.js';
+import { mensagensCentralComando } from './i18n-central-comando.js';
 import { mensagensSinaisDetalhe } from './i18n-sinais-detalhe.js';
 import { mensagensProtocoloInternado } from './i18n-protocolo-internado.js';
 import { mensagensLesao } from './i18n-lesao.js';
@@ -29,6 +30,8 @@ export const mensagensEnfermagem = {
   protocoloInternado: mensagensProtocoloInternado,
   // C2-042 (03-PEP L134): critérios de entrada, alerta de elegível e etapas com meta.
   protocoloCriterios: mensagensProtocoloCriterios,
+  // C2-053 (01-ADM L117): central de comando assistencial.
+  centralComando: mensagensCentralComando,
   // W0-03, mercado M4: feridas e lesão por pressão.
   lesao: mensagensLesao,
   // M45 (etapa 3): o balanço hídrico.

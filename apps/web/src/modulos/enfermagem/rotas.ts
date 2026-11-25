@@ -136,6 +136,13 @@ export const rotasEnfermagem: RouteRecordRaw[] = [
       menu: 'Enfermagem > Protocolos: critérios e metas',
     },
   },
+  // C2-053 (01-ADM L117): central de comando assistencial (quadro de risco da unidade, alertas de fluxo, metas 24 h).
+  {
+    path: '/enfermagem/central-comando',
+    name: 'enfermagem.centralComando',
+    component: () => import('./telas/CentralComandoTela.vue'),
+    meta: { permissao: 'enfermagem.escore.ler', menu: 'Enfermagem > Central de comando assistencial' },
+  },
   // W0-03, mercado M4: as feridas e a lesão por pressão (ficha, curativo, foto, encerramento, inativação e a incidência
   // de LPP). A entrada no menu é do W4-01.
   {
