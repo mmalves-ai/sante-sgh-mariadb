@@ -11,6 +11,7 @@ export * from './fhir/mapeadores.js';
 export * from './fhir/validador.js';
 export * from './rnds.js';
 export * from './ria.js';
+export * from './rnds-envio.js';
 export * from './apoio.js';
 // F2.2 lote 05-14: o estado da liberação para o parceiro, o pedido ao apoio e a reserva do envio.
 export * from './entrega-fatos.js';
