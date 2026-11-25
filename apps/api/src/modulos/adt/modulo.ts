@@ -46,6 +46,8 @@ import { GasSetorController } from './gas-setor.controller.js';
 import { PORTA_TRANSPORTE_PACIENTE, PortaTransportePacientePropria } from './transporte-paciente-propria.js';
 import { TransportePacienteController } from './transporte-paciente.controller.js';
 import { RegulacaoController } from './regulacao.controller.js';
+import { PORTA_REGULACAO_ENTRADA, PortaRegulacaoEntradaPropria } from './regulacao-entrada-propria.js';
+import { RegulacaoEntradaController } from './regulacao-entrada.controller.js';
 import { SameController } from './same.controller.js';
 import { SameGuardaController } from './same-guarda.controller.js';
 import { PORTA_SAME_GUARDA, PortaSameGuardaPropria } from './same-guarda-propria.js';
@@ -123,6 +125,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       MapaLeitosController,
       NirController,
       RegulacaoController,
+      RegulacaoEntradaController,
       HigienizacaoController,
       SameController,
       DocumentosInternacaoController,
@@ -160,6 +163,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaGasSetorPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C1-080 (02-REC linha 38): pedidos recebidos da central de regulação (aceite e recusa); sem núcleo, 503.
+      {
+        provide: PORTA_REGULACAO_ENTRADA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRegulacaoEntradaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // C1-066 (03-PEP linha 125): pedido de transporte do paciente na alta e na transferência; sem núcleo, 503.
