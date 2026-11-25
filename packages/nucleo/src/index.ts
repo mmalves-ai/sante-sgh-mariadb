@@ -7,6 +7,7 @@ export * from './arquivos-teste.js';
 export * from './configuracao.js';
 export * from './como.js';
 export * from './contexto.js';
+export * from './email-acesso.js';
 export * from './erros.js';
 export * from './executor.js';
 export * from './gravacao.js';

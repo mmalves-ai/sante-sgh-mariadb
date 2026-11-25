@@ -94,6 +94,9 @@ export function decifrarSegredo(envelope: string, chave: Buffer): string {
 }
 
 /** Token de convite (32 bytes aleatórios, base64url) e o hash que fica no banco (SHA-256 hex). */
+/** Validade do convite da plataforma, em horas (a API e a ferramenta plataforma:criar-admin). */
+export const CONVITE_HORAS = 72;
+
 export function novoConvite(): { token: string; hash: string } {
   const token = randomBytes(32).toString('base64url');
   return { token, hash: hashConvite(token) };
