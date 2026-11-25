@@ -43,3 +43,5 @@ export * from './profilaxia-cirurgica.js';
 export * from './mutirao.js';
 // F7 (05-SUP linha 29): central de material esterilizado (caixas, ciclo com indicadores, etiqueta, rastreio).
 export * from './cme/cme.js';
+// F7 (04-CME linha 115): cadastro da CME (produto reprocessável, caixa e kit com composição, fases e foto).
+export * from './cme/cadastro.js';
