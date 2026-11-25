@@ -126,12 +126,14 @@ const lancarComEquipe = async () => {
     }),
   };
 };
+// A validade da equipe só conta quando ela vai no pedido: fora dos grupos 2 e 3 o componente sai da tela e o
+// `equipeValida` guarda o último valor dele, que não pode travar o lançamento sem equipe.
 const lancar = () =>
-  !equipeValida.value
-    ? undefined
-    : aceitaEquipe.value && equipe.value.length
+  aceitaEquipe.value && equipe.value.length
+    ? equipeValida.value
       ? agir(lancarComEquipe)
-      : agir(() => lancarItem(id.value, pedidoLancamento(), novaChave('lancar')));
+      : undefined
+    : agir(() => lancarItem(id.value, pedidoLancamento(), novaChave('lancar')));
 </script>
 
 <template>

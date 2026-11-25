@@ -163,4 +163,38 @@ test.describe('lançamento manual com a equipe do ato @C1-075 @F3.7', () => {
     expect(enviados.find((x) => 'semEquipe' in x)?.['semEquipe']).not.toHaveProperty('equipe');
     expect(enviados.filter((x) => 'comEquipe' in x)).toHaveLength(1);
   });
+  test('equipe inválida e troca para um grupo sem equipe: o lançamento segue sem a equipe; de volta, a trava volta', async ({
+    page,
+  }) => {
+    const enviados: Record<string, unknown>[] = [];
+    await entrar(page, 'SINT.CONTAS');
+    await simular(page, enviados);
+    await page.goto(`/faturamento/contas/${CONTA}/lancamentos`);
+    await expect(page.getByTestId('tela-faturamento-lancamentos')).toBeVisible();
+
+    await escolher(page.getByTestId('lan-n-tipo'), { rotulo: 'Exames e terapias (SADT)' });
+    const eq = page.getByTestId('lan-equipe');
+    await page.getByTestId('lan-n-codigo').fill('83750003');
+    await eq.getByTestId('lan-eq-incluir').click();
+    await expect(eq.getByTestId('lan-eq-erro-0')).toBeVisible();
+    await expect(page.getByTestId('lan-n-gravar')).toBeDisabled();
+
+    // Materiais e medicamentos não levam equipe: o botão libera e o clique lança pelo caminho de sempre.
+    await escolher(page.getByTestId('lan-n-tipo'), { rotulo: 'Materiais e medicamentos' });
+    await expect(page.getByTestId('lan-equipe')).toHaveCount(0);
+    await expect(page.getByTestId('lan-n-gravar')).toBeEnabled();
+    await page.getByTestId('lan-n-gravar').click();
+    await expect.poll(() => enviados.find((x) => 'semEquipe' in x)).toBeTruthy();
+    expect(enviados.find((x) => 'semEquipe' in x)?.['semEquipe']).toMatchObject({
+      tipo: 4,
+      codigo: 83750003,
+    });
+    expect(enviados.find((x) => 'semEquipe' in x)?.['semEquipe']).not.toHaveProperty('equipe');
+    expect(enviados.filter((x) => 'comEquipe' in x)).toHaveLength(0);
+
+    // De volta ao grupo com equipe, o participante incompleto continua lá e trava de novo.
+    await escolher(page.getByTestId('lan-n-tipo'), { rotulo: 'Exames e terapias (SADT)' });
+    await expect(page.getByTestId('lan-equipe').getByTestId('lan-eq-erro-0')).toBeVisible();
+    await expect(page.getByTestId('lan-n-gravar')).toBeDisabled();
+  });
 });
