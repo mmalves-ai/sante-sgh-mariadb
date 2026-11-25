@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  preCadastroAConverter,
   decidirPreCadastroDaMarcacao,
   ehCelular,
   nomeComparavel,
@@ -95,5 +96,19 @@ describe('marcação sem prontuário (02-AGE 42 e 44)', () => {
     expect(ehCelular('5531999990000')).toBe(true);
     expect(ehCelular('3133330000')).toBe(false);
     expect(nomeComparavel(' José  Conceição ')).toBe('JOSE CONCEICAO');
+  });
+});
+
+describe('preCadastroAConverter (02-AGE 42: conversão no painel do dia e na chegada)', () => {
+  const base = { paciente: null, preCadastro: 7, situacaoPreCadastro: 'pendente', encerrada: false };
+  it('a marcação aberta, sem paciente e com o pré-cadastro pendente pede a conversão', () => {
+    expect(preCadastroAConverter(base)).toBe(7);
+  });
+  it('já convertida (com paciente), sem pré-cadastro, pré-cadastro fechado ou marcação encerrada: nada a converter', () => {
+    expect(preCadastroAConverter({ ...base, paciente: 3 })).toBeNull();
+    expect(preCadastroAConverter({ ...base, preCadastro: null, situacaoPreCadastro: null })).toBeNull();
+    expect(preCadastroAConverter({ ...base, situacaoPreCadastro: 'convertido' })).toBeNull();
+    expect(preCadastroAConverter({ ...base, situacaoPreCadastro: 'cancelado' })).toBeNull();
+    expect(preCadastroAConverter({ ...base, encerrada: true })).toBeNull();
   });
 });

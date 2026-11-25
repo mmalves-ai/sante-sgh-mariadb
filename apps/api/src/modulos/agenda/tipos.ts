@@ -141,6 +141,9 @@ export interface Marcacao {
   readonly prioridadeLegal?: string | null;
   /** Peso do grupo de prioridade legal (menor chama antes): a ordem dos encaixes no painel. */
   readonly pesoPrioridadeLegal?: number | null;
+  /** 02-AGE 42: pré-cadastro da marcação feita sem prontuário e a situação dele (pendente, convertido, cancelado). */
+  readonly preCadastro?: number | null;
+  readonly situacaoPreCadastro?: string | null;
 }
 
 /** O que a marcação tem além da grade (canal, encaixe, remarcação). */

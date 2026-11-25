@@ -156,3 +156,24 @@ export function decidirPreCadastroDaMarcacao(
     celular: celular ? fone : null,
   };
 }
+
+/** Situação da marcação sem prontuário vista pelo painel do dia e pela chegada (vocabulário neutro). */
+export interface MarcacaoComPreCadastro {
+  /** Paciente da marcação; null enquanto o pré-cadastro não foi convertido. */
+  readonly paciente: number | null;
+  readonly preCadastro: number | null;
+  /** Situação do pré-cadastro: pendente, convertido ou cancelado (null sem pré-cadastro). */
+  readonly situacaoPreCadastro: string | null;
+  /** A marcação já terminou (realizada, falta, cancelada ou transferida): não há chegada a destravar. */
+  readonly encerrada: boolean;
+}
+
+/**
+ * 02-AGE 42: o pré-cadastro a converter ali mesmo (painel do dia, chegada), ou null. Só a marcação ainda aberta, sem
+ * paciente e com o pré-cadastro pendente pede a conversão: a chegada recusa essa marcação (`pre-cadastro-a-converter`)
+ * e a tela oferece converter sem mandar a recepção a outra tela. O pré-cadastro cancelado fica como histórico.
+ */
+export function preCadastroAConverter(m: MarcacaoComPreCadastro): number | null {
+  if (m.paciente !== null || m.preCadastro === null || m.encerrada) return null;
+  return m.situacaoPreCadastro === 'pendente' ? m.preCadastro : null;
+}

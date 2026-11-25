@@ -4,7 +4,7 @@
 // serviço: a porta e o banco não conhecem estes sinais. Sai quando o domínio da agenda trocar os sinais de texto
 // pela situação neutra (pedido registrado na saída do lote 01-04).
 import { canalMarcacao, CANAIS_MARCACAO, type CanalMarcacao } from '@sgh/contratos';
-import { duracaoEmHoras, normalizarHora } from '@sgh/dominio-agenda';
+import { duracaoEmHoras, normalizarHora, preCadastroAConverter } from '@sgh/dominio-agenda';
 import type { ContextoAgenda, PortaAgenda } from './porta.js';
 import type { Agenda, FaixaEscala, Horario, Marcacao, Relogio, SituacaoMarcacao, Vaga } from './tipos.js';
 
@@ -97,6 +97,8 @@ export interface MarcacaoVista {
   /** 02-AGE 49: grupo de prioridade legal da marcação. */
   readonly prioridadeLegal?: string | null;
   readonly pesoPrioridadeLegal?: number | null;
+  /** 02-AGE 42: o pré-cadastro pendente a converter (marcação aberta sem paciente), ou null. */
+  readonly preCadastroAConverter?: number | null;
 }
 
 export interface VagaVista {
@@ -165,6 +167,12 @@ export const marcacaoVista = (m: Marcacao): MarcacaoVista => ({
   pesoPrioridadeLegal: m.pesoPrioridadeLegal ?? null,
   usuario: m.marcadaPor,
   temSenha: m.situacao === 'chegou' || m.situacao === 'em_atendimento',
+  preCadastroAConverter: preCadastroAConverter({
+    paciente: m.idPaciente,
+    preCadastro: m.preCadastro ?? null,
+    situacaoPreCadastro: m.situacaoPreCadastro ?? null,
+    encerrada: m.situacao !== 'marcada' && m.situacao !== 'confirmada',
+  }),
 });
 
 export const vagaVista = (v: Vaga): VagaVista => ({ ...v, hora: horaIso(v.hora) });

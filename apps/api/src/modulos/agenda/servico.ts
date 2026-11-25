@@ -686,6 +686,7 @@ export class ServicoAgenda {
       canalAConfirmar: canal.aConfirmar,
       marcadaEm: m.dataMarcacao,
       prioridadeLegal: m.prioridadeLegal ?? null,
+      preCadastroAConverter: m.preCadastroAConverter ?? null,
       risco: riscoDeFalta(faixaAntecedencia(m.dataMarcacao, m.data)),
       acoes: {
         ...acoes,

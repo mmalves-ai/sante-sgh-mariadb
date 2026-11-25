@@ -11,6 +11,7 @@ import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { moduloAgenda, pacientesSinteticos } from './modulo.js';
 import { GRUPOS_PRIORIDADE_SINTETICOS, PortaAgendaMemoria } from './porta-memoria.js';
+import { marcacaoVista } from './visao.js';
 
 const HOJE = '2026-10-21'; // quarta-feira
 const AMANHA = '2026-10-22';
@@ -513,5 +514,75 @@ describe('prioridade legal na marcação (porta em memória)', () => {
     expect((await p.horarios(ctxP('x'), 901, AMANHA, AMANHA)).itens.some((h) => h.hora === '08:09')).toBe(
       false,
     );
+  });
+});
+
+// 02-AGE 42 na porta da agenda em MEMÓRIA (dev/ci): a marcação sem prontuário segue a mesma regra do domínio da porta
+// própria (validação na hora, nada gravado na recusa; reaproveita o pré-cadastro pendente da mesma pessoa), a leitura
+// devolve o pré-cadastro a converter que o painel do dia e a chegada usam e a remarcação leva o pré-cadastro.
+const ctxSp = (k: string) => ({
+  rede: 'sintetica',
+  hospital: '1',
+  login: 'SINT.AGENDA',
+  correlacao: `c-${k}`,
+  chaveIdempotencia: `k-sp-${k}`,
+});
+const novaSp = () =>
+  new PortaAgendaMemoria(
+    null,
+    async (_c, ids) => pacientesSinteticos(ids),
+    () => ({ hoje: HOJE, hora: '07:00' }),
+  );
+const pedidoSp = {
+  agenda: 901,
+  data: AMANHA,
+  hora: '08:00',
+  convenio: 10,
+  canal: 'telefone',
+  nome: 'Pessoa Sintética Sem Prontuário',
+  nascimento: '1979-06-15',
+  telefone: '31988887777',
+};
+
+describe('agenda.agendarSemProntuario (porta em memória)', () => {
+  it('recusa o nascimento futuro sem gravar; marca com pré-cadastro e a leitura pede a conversão', async () => {
+    const p = novaSp();
+    await expect(
+      p.executar(ctxSp('1'), 'agenda.agendarSemProntuario', { ...pedidoSp, nascimento: '2031-01-01' }),
+    ).rejects.toMatchObject({ problema: expect.objectContaining({ codigo: 'nascimento-futuro' }) });
+    expect((await p.marcacoesDoDia(ctxSp('x'), AMANHA)).itens).toHaveLength(0);
+
+    const m = await p.executar(ctxSp('2'), 'agenda.agendarSemProntuario', pedidoSp);
+    const id = Number(m.resultado['marcacao']);
+    const pre = Number(m.resultado['preCadastro']);
+    expect(pre).toBeGreaterThan(0);
+    const lida = (await p.marcacao(ctxSp('x'), id))!.marcacao;
+    expect(lida).toMatchObject({
+      idPaciente: null,
+      prontuario: null,
+      paciente: 'PESSOA SINTÉTICA SEM PRONTUÁRIO',
+      preCadastro: pre,
+      situacaoPreCadastro: 'pendente',
+    });
+    expect(marcacaoVista(lida).preCadastroAConverter).toBe(pre);
+
+    // A mesma pessoa numa segunda marcação reaproveita o pré-cadastro pendente.
+    const m2 = await p.executar(ctxSp('3'), 'agenda.agendarSemProntuario', {
+      ...pedidoSp,
+      hora: '08:15',
+      nome: 'pessoa sintetica  sem prontuario',
+    });
+    expect(Number(m2.resultado['preCadastro'])).toBe(pre);
+
+    // A remarcação leva o pré-cadastro para a marcação nova.
+    const r = await p.executar(ctxSp('4'), 'agenda.remarcarConsulta', {
+      marcacao: id,
+      destino: { agenda: 901, data: AMANHA, hora: '09:00' },
+      modo: 'liberar',
+      canal: 'telefone',
+      motivo: 'PAC-OUTRA-DATA',
+    });
+    const nova2 = (await p.marcacao(ctxSp('x'), Number(r.resultado['marcacao'])))!.marcacao;
+    expect(nova2).toMatchObject({ idPaciente: null, preCadastro: pre });
   });
 });

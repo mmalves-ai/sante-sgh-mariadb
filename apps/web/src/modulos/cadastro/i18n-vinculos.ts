@@ -124,6 +124,9 @@ export const mensagensVinculos = {
     cancelados: 'Cancelados',
     confirmarOutraPessoa: 'É outra pessoa (homônimo): gravar mesmo assim',
     convertido: 'Convertido no paciente {paciente} ({marcacoes} marcação(ões) transferida(s)).',
+    converterAqui: 'Converter o pré-cadastro em paciente',
+    carregandoPrevia: 'Conferindo o cadastro…',
+    fecharConversao: 'Fechar a conversão',
     falta: 'Falta: {item}',
     faltas: {
       nome: 'nome e sobrenome',

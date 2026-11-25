@@ -37,6 +37,7 @@ import {
   registrarEvento,
 } from '../api-recepcao.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import ChegadaSemProntuario from '../componentes/ChegadaSemProntuario.vue';
 import TermosPaciente from '../componentes/TermosPaciente.vue';
 import { horaDe } from '../formato.js';
 
@@ -58,6 +59,10 @@ const podeFluxo = computed(() => podePermissao('recepcao.fluxo.registrar'));
 // M20: a senha chamada abre o atendimento (a ficha liga a senha e a põe em atendimento).
 const podeAbrirAtendimento = computed(() => podePermissao('atendimento.atendimento.abrir'));
 const podeSupervisor = computed(() => podePermissao('recepcao.supervisor.ler'));
+// 02-AGE 42: converter na chegada o pré-cadastro de quem marcou sem prontuário (lê os marcados do dia na agenda).
+const podeConverterPreCadastro = computed(
+  () => podePermissao('cadastro.paciente.criar') && podePermissao('agenda.marcacao.ler'),
+);
 const podeTermos = computed(() => podePermissao('recepcao.termo.editar'));
 
 const recepcao = ref('');
@@ -789,6 +794,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
       </template>
       <template v-else>
         <p>{{ t('recepcao.guiche.checkinTexto') }}</p>
+        <ChegadaSemProntuario v-if="podeConverterPreCadastro" @convertido="agendados.refetch()" />
         <form class="filtros" data-testid="busca-agendados" @submit.prevent="buscarAgendados">
           <SanteCampoTexto
             v-model="buscaCpf"

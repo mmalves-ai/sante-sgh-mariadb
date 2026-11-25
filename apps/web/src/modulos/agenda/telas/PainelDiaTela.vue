@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
 import { pode as podePermissao } from '../../../casca/sessao/pode.js';
 import { codigoDaRecusa, lerPainelDia, novaChave, registrarFalta } from '../api-agenda.js';
 import { ofereceAbertura } from '../../atendimento/regras-tela.js';
+import ConverterPreCadastro from '../../cadastro/componentes/ConverterPreCadastro.vue';
 import ErroAgenda from '../componentes/ErroAgenda.vue';
 import { dataBr, horaBr } from '../formato.js';
 import { usarAgenda } from '../usar-agenda.js';
@@ -31,6 +32,16 @@ const painel = useQuery({
 });
 const escolhas = computed(() => [{ valor: '', rotulo: t('agenda.todas') }, ...opcoesAgenda.value]);
 const candidatos = computed(() => new Set(painel.data.value?.candidatosAFalta ?? []));
+
+// ── 02-AGE 42: converter ali mesmo o pré-cadastro de quem marcou sem prontuário (a chegada o exige) ──
+const podeConverter = computed(() => podePermissao('cadastro.paciente.criar'));
+const convertendo = ref<{ marcacao: number; preCadastro: number } | null>(null);
+const resultadoConversao = ref<string | null>(null);
+async function convertido(r: { marcacoes: number }): Promise<void> {
+  convertendo.value = null;
+  resultadoConversao.value = t('agenda.dia.convertido', { marcacoes: r.marcacoes });
+  await cliente.invalidateQueries({ queryKey: ['agenda'] });
+}
 
 // ── Fechamento do dia: revisão dos candidatos a falta ──
 // Todo candidato entra marcado; o coordenador desmarca quem chegou ou foi atendido por outro caminho.
@@ -156,6 +167,19 @@ async function registrarFaltas(): Promise<void> {
               >
                 {{ t('agenda.dia.prioridadeLegal') }}: {{ m.prioridadeLegal }}
               </span>
+              <template v-if="m.preCadastroAConverter">
+                <span class="sem-prontuario" :data-testid="`dia-sem-prontuario-${m.id}`">{{
+                  t('agenda.dia.semProntuario')
+                }}</span>
+                <SanteBotao
+                  v-if="podeConverter"
+                  variante="texto"
+                  :rotulo="t('agenda.dia.converter')"
+                  :aria-label="t('agenda.dia.converterDe', { paciente: m.paciente })"
+                  :data-testid="`dia-converter-${m.id}`"
+                  @acionar="convertendo = { marcacao: m.id, preCadastro: m.preCadastroAConverter }"
+                />
+              </template>
               <template v-if="podeAbrirAtendimento && ofereceAbertura(m, hoje)">
                 ·
                 <RouterLink
@@ -174,6 +198,16 @@ async function registrarFaltas(): Promise<void> {
           </tr>
         </tbody>
       </table>
+      <ConverterPreCadastro
+        v-if="convertendo"
+        :key="convertendo.preCadastro"
+        :pre-cadastro="convertendo.preCadastro"
+        @convertido="convertido"
+        @fechar="convertendo = null"
+      />
+      <p v-if="resultadoConversao" role="status" data-testid="dia-resultado-conversao">
+        {{ resultadoConversao }}
+      </p>
       <p v-if="painel.data.value.marcacoes.some((m) => m.canalAConfirmar)" class="secundario">
         {{ t('agenda.canalAConfirmar') }}
       </p>
@@ -224,6 +258,14 @@ async function registrarFaltas(): Promise<void> {
   font-size: 0.85em;
   background: var(--sgh-aviso-suave);
   color: var(--sgh-aviso);
+}
+.sem-prontuario {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  border: 1px solid var(--sgh-borda-forte);
 }
 .candidato td {
   font-weight: 600;

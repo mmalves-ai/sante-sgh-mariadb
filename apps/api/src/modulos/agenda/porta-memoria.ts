@@ -5,7 +5,11 @@
 // real. O estado interno é privado e sintético; tudo o que sai pela porta está nos tipos neutros (tipos.ts).
 import { existsSync, readFileSync } from 'node:fs';
 import { type EstadoOperacao, textoDoMotivo } from '@sgh/contratos';
-import { type GrupoPrioridadeCadastro, prioridadeNaMarcacao } from '@sgh/dominio-agenda';
+import {
+  decidirPreCadastroDaMarcacao,
+  type GrupoPrioridadeCadastro,
+  prioridadeNaMarcacao,
+} from '@sgh/dominio-agenda';
 import { ErroOperacao, recusa } from '@sgh/nucleo';
 import { OPERACOES_AGENDA as OPERACOES_CONHECIDAS, operacaoAgenda } from './operacoes.js';
 import type { ContextoAgenda, ContextoGravacao, GravadorAgenda, PortaAgenda } from './porta.js';
@@ -146,8 +150,10 @@ interface MarcacaoM {
   agenda: number;
   data: string;
   hora: string;
-  idPaciente: number;
-  pront: number;
+  /** null na marcação sem prontuário (02-AGE 42) até a conversão do pré-cadastro. */
+  idPaciente: number | null;
+  pront: number | null;
+  preCadastro?: number | null;
   paciente: string;
   conv: number;
   retorno: string;
@@ -228,6 +234,16 @@ interface Estado {
   idem: Map<string, { hash: string; resultado: ResultadoOperacao }>;
   /** M39: os pedidos "por fora" já aplicados (E2E). */
   porFora: Set<string>;
+  /** 02-AGE 42: pré-cadastros da marcação sem prontuário (só a memória; a porta própria grava em pre_cadastro). */
+  preCadastros?: PreCadastroM[];
+}
+interface PreCadastroM {
+  id: number;
+  nome: string;
+  nascimento: string;
+  telefone: string | null;
+  celular: string | null;
+  situacao: 'pendente' | 'convertido' | 'cancelado';
 }
 
 /**
@@ -588,7 +604,13 @@ export class PortaAgendaMemoria implements PortaAgenda {
     s: Estado,
     a: AgendaM,
     h: { data: string; hora: string },
-    p: { id: number; nome: string; prontuario: number; telefone: string | null; celular: string | null },
+    p: {
+      id: number | null;
+      nome: string;
+      prontuario: number | null;
+      telefone: string | null;
+      celular: string | null;
+    },
     e: { convenio: number; retorno: boolean; canal: string; observacao?: string | null | undefined },
     login: string,
   ): MarcacaoM {
@@ -852,6 +874,62 @@ export class PortaAgendaMemoria implements PortaAgenda {
         });
         return { marcacao: m.id, agenda: a.id };
       }
+      case 'agenda.agendarSemProntuario': {
+        // 02-AGE 42: a mesma regra do domínio da porta própria (validação na hora, reaproveita o pendente da mesma
+        // pessoa). Os pacientes sintéticos da memória não têm nascimento: não há homônimo candidato.
+        const a = this.agendaM(s, e['agenda']);
+        if (a.ativa !== 'S')
+          throw recusa('agenda-inativa', 'A agenda está inativa: não aceita marcação nem geração.');
+        if (passou(e as { data: string; hora: string }, r))
+          throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
+        const h = this.vaga(s, a, e['data'], e['hora']);
+        this.exigirCoberturaM(a, e['convenio']);
+        const pres = (s.preCadastros ??= []);
+        const d = decidirPreCadastroDaMarcacao(
+          {
+            nome: e['nome'],
+            nascimento: e['nascimento'],
+            telefone: e['telefone'],
+            cadastroConferido: e['cadastroConferido'] === true,
+          },
+          r.hoje,
+          pres.filter((x) => x.situacao === 'pendente'),
+        );
+        if (!d.ok) throw recusa(d.codigo, d.motivo, { campos: [d.campo] });
+        let pre: PreCadastroM;
+        if (d.acao === 'reaproveitar') pre = pres.find((x) => x.id === d.preCadastro)!;
+        else {
+          pre = {
+            id: ++s.seq,
+            nome: d.nome,
+            nascimento: e['nascimento'],
+            telefone: d.telefone,
+            celular: d.celular,
+            situacao: 'pendente',
+          };
+          pres.push(pre);
+        }
+        Object.assign(h, { paciente: pre.nome, conv: e['convenio'], retorno: 'N' });
+        const m = this.novaMarcacao(
+          s,
+          a,
+          h,
+          { id: null, nome: pre.nome, prontuario: null, telefone: pre.telefone, celular: pre.celular },
+          { convenio: e['convenio'], retorno: false, canal: e['canal'] },
+          login,
+        );
+        m.preCadastro = pre.id;
+        s.ext.set(m.id, {
+          marcacao: m.id,
+          canal: e['canal'],
+          encaixe: false,
+          motivoEncaixe: null,
+          remarcadaDe: null,
+          modoRemarcacao: null,
+          criadoPor: login,
+        });
+        return { marcacao: m.id, agenda: a.id, preCadastro: pre.id };
+      }
       case 'agenda.cancelarConsulta':
       case 'agenda.desfazerEncaixe': {
         const m = this.marcacaoM(s, e['marcacao']);
@@ -882,7 +960,17 @@ export class PortaAgendaMemoria implements PortaAgenda {
         const h = this.vaga(s, a, d.data, d.hora);
         const convenio = e['convenio'] ?? m.conv;
         this.exigirCoberturaM(a, convenio);
-        const p = await this.pacienteM(c, m.idPaciente);
+        // 02-AGE 42: a marcação sem prontuário leva o pré-cadastro para a nova (sem paciente ainda).
+        const p =
+          m.idPaciente === null
+            ? {
+                id: null,
+                nome: m.paciente,
+                prontuario: null,
+                telefone: m.fone || null,
+                celular: m.celular || null,
+              }
+            : await this.pacienteM(c, m.idPaciente);
         let protocolo = 0;
         if (e['modo'] === 'transferir') {
           const velho = s.horarios.find(
@@ -899,6 +987,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
           { convenio, retorno: m.retorno === 'S', canal: e['canal'], observacao: e['observacao'] ?? m.obs },
           login,
         );
+        nova.preCadastro = m.preCadastro ?? null;
         // 02-AGE 49: o grupo da marcação remarcada segue para a nova pela mesma regra do domínio da porta própria.
         const prio = prioridadeNaMarcacao(GRUPOS_PRIORIDADE_SINTETICOS, {
           anterior: m.prioridadeLegal ?? null,
@@ -1392,6 +1481,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
       marcadaPor: m.usuario,
       prioridadeLegal: grupo?.descricao ?? null,
       pesoPrioridadeLegal: grupo?.peso ?? null,
+      preCadastro: m.preCadastro ?? null,
+      situacaoPreCadastro: s.preCadastros?.find((x) => x.id === m.preCadastro)?.situacao ?? null,
     };
   }
   async marcacoesDaJanela(c: ContextoAgenda, agenda: number, de: string, ate: string) {

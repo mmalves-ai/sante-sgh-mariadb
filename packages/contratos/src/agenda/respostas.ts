@@ -241,6 +241,8 @@ export const esquemaMarcacaoResumo = z.object({
   marcadaEm: nul(txt),
   /** 02-AGE 49: grupo de prioridade legal da marcação. */
   prioridadeLegal: nul(txt).optional(),
+  /** 02-AGE 42: pré-cadastro pendente da marcação sem prontuário (a tela converte ali mesmo); null sem nada a converter. */
+  preCadastroAConverter: nul(n).optional(),
   risco: z.object({ percentual: nul(z.number()), nivel: z.enum(['baixo', 'medio', 'alto', 'desconhecido']) }),
   acoes: z.object({
     cancelar: z.boolean(),
