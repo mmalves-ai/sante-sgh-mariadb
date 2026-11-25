@@ -10,6 +10,7 @@
 import {
   apurarConsumoGasPorSetor,
   conferirConsumoGasSetor,
+  conferirVinculoConsumoGasSetor,
   litrosPeloFluxo,
   type RegistroConsumoGas,
 } from '@sgh/dominio-internacao';
@@ -191,15 +192,40 @@ export class PortaGasSetorPropria extends PortaEstabelecimentoPropria {
         [e.insumo],
         'Gás medicinal',
       );
-      if (e.leito !== null)
-        await exigir(
-          tx,
-          'SELECT id FROM leito_hospitalar WHERE id = ? AND estabelecimento_id = ?',
-          [e.leito, est.id],
-          'Leito',
-        );
-      if (e.ponto !== null)
-        await exigir(tx, 'SELECT id FROM ponto_consumo_gas WHERE id = ?', [e.ponto], 'Ponto de consumo');
+      // Ponto e leito: só do mesmo estabelecimento (outro estabelecimento é 404, sem revelar que existe); o vínculo
+      // com o setor do consumo é regra do domínio (422).
+      const ponto =
+        e.ponto === null
+          ? null
+          : await exigir(
+              tx,
+              `SELECT setor_funcional_id, leito_hospitalar_id, ativo FROM ponto_consumo_gas
+                WHERE id = ? AND estabelecimento_id = ?`,
+              [e.ponto, est.id],
+              'Ponto de consumo',
+            );
+      const leito =
+        e.leito === null
+          ? null
+          : await exigir(
+              tx,
+              `SELECT u.setor_funcional_id FROM leito_hospitalar h
+                 JOIN unidade_internacao u ON u.id = h.unidade_internacao_id
+                WHERE h.id = ? AND h.estabelecimento_id = ?`,
+              [e.leito, est.id],
+              'Leito',
+            );
+      const v = conferirVinculoConsumoGasSetor({
+        setor: e.setor,
+        ponto: ponto && {
+          setor: num(ponto['setor_funcional_id']),
+          leito: numOuNull(ponto['leito_hospitalar_id']),
+          ativo: Boolean(Number(ponto['ativo'])),
+        },
+        leito: e.leito,
+        setorDoLeito: leito && numOuNull(leito['setor_funcional_id']),
+      });
+      if (v.problemas.length) throw recusaRegra('Consumo do setor recusado', v.problemas);
       const quantidade =
         e.quantidadeLitros ??
         (e.fim !== null && e.fluxoLitrosMinuto !== null
@@ -210,7 +236,7 @@ export class PortaGasSetorPropria extends PortaEstabelecimentoPropria {
         insumo_id: e.insumo,
         atendimento_id: null,
         setor_funcional_id: e.setor,
-        leito_hospitalar_id: e.leito,
+        leito_hospitalar_id: v.leito,
         ponto_consumo_gas_id: e.ponto,
         fluxo_litros_minuto: e.fluxoLitrosMinuto,
         inicio_em: inicio,

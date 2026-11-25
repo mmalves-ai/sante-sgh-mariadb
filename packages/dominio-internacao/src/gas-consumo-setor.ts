@@ -47,6 +47,44 @@ export function conferirConsumoGasSetor(e: {
   return p;
 }
 
+/** Ponto de consumo (régua, cilindro, leito) já lido do banco do mesmo estabelecimento. */
+export interface PontoConsumoGasLido {
+  readonly setor: number;
+  readonly leito: number | null;
+  readonly ativo: boolean;
+}
+
+/**
+ * Confere o vínculo do consumo do setor com o ponto de consumo e o leito (ambos já lidos no mesmo estabelecimento):
+ * o ponto tem de ser do setor do consumo e estar ativo; o leito tem de ser de uma unidade de internação ligada ao setor
+ * (sem setor no cadastro da unidade, não há como provar o vínculo); ponto de leito e leito informados têm de coincidir.
+ * Devolve também o leito efetivo (o informado ou, na falta dele, o do ponto de leito).
+ */
+export function conferirVinculoConsumoGasSetor(e: {
+  readonly setor: number;
+  readonly ponto: PontoConsumoGasLido | null;
+  readonly leito: number | null;
+  readonly setorDoLeito: number | null;
+}): { problemas: ProblemaGas[]; leito: number | null } {
+  const p: ProblemaGas[] = [];
+  if (e.ponto) {
+    if (e.ponto.setor !== e.setor)
+      p.push({ campo: 'ponto', mensagem: 'O ponto de consumo é de outro setor.' });
+    if (!e.ponto.ativo) p.push({ campo: 'ponto', mensagem: 'O ponto de consumo está inativo.' });
+    if (e.leito !== null && e.ponto.leito !== null && e.ponto.leito !== e.leito)
+      p.push({ campo: 'leito', mensagem: 'O leito não é o do ponto de consumo.' });
+  }
+  if (e.leito !== null) {
+    if (e.setorDoLeito === null)
+      p.push({
+        campo: 'leito',
+        mensagem: 'A unidade do leito não tem setor no cadastro; não há como ligar ao setor.',
+      });
+    else if (e.setorDoLeito !== e.setor) p.push({ campo: 'leito', mensagem: 'O leito é de outro setor.' });
+  }
+  return { problemas: p, leito: e.leito ?? e.ponto?.leito ?? null };
+}
+
 /** Um registro de uso ou consumo de gás, já lido do banco (cancelados ficam de fora da leitura). */
 export interface RegistroConsumoGas {
   readonly origem: 'paciente' | 'setor';

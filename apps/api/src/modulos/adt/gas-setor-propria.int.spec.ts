@@ -17,6 +17,7 @@ import { PortaGasSetorPropria } from './gas-setor-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'c1050gas';
+const P2 = 'c1050gasx';
 
 interface Massa {
   est: number;
@@ -25,22 +26,33 @@ interface Massa {
   o2: number;
   setorA: number;
   setorB: number;
+  /** Ponto de leito do setor A (leitoA), ponto do setor B e ponto de outro estabelecimento. */
+  pontoA: number;
+  pontoB: number;
+  pontoOutroEst: number;
+  /** Leito de unidade ligada ao setor A, leito de unidade sem setor e leito de outro estabelecimento. */
+  leitoA: number;
+  leitoSemSetor: number;
+  leitoOutroEst: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
-  const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+  const est = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
-    await e.executar(`DELETE FROM consumo_gas_medicinal WHERE estabelecimento_id IN ${est}`, [P]);
-    await e.executar(`DELETE FROM uso_gas_medicinal WHERE estabelecimento_id IN ${est}`, [P]);
-    await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
-    await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar('DELETE FROM ponto_consumo_gas WHERE codigo LIKE ?', [`${P}-%`]);
+    await e.executar(`DELETE FROM leito_hospitalar WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM unidade_internacao WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM consumo_gas_medicinal WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM uso_gas_medicinal WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P, P2]);
+    await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN ${est}`, [P, P2]);
     await e.executar('DELETE FROM insumo WHERE codigo LIKE ?', [`${P}-%`]);
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
   }
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
 }
 
 // Dia civil de 3 dias atrás no fuso do estabelecimento (America/Sao_Paulo, UTC-3 sem horário de verão).
@@ -72,19 +84,23 @@ describe.skipIf(SEM_BANCO)('PortaGasSetorPropria contra o MariaDB (contrato de e
       const fonte = await e.uma('SELECT MIN(id) AS id FROM fonte_pagadora');
       if (!usuario?.['id'] || !paciente?.['id'] || !fonte?.['id'])
         throw new Error('O cliente de teste precisa de usuário, paciente e fonte pagadora.');
-      const est = await e.inserir(
-        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
-         VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
-        [P, `Hospital sintético ${P}`, `Hospital sintético ${P} (fictício)`, agora],
-      );
-      const setor = (cod: string, nome: string) =>
+      const estab = (cod: string) =>
+        e.inserir(
+          `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+           VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
+          [cod, `Hospital sintético ${cod}`, `Hospital sintético ${cod} (fictício)`, agora],
+        );
+      const est = await estab(P);
+      const est2 = await estab(P2);
+      const setor = (onde: number, cod: string, nome: string) =>
         e.inserir(
           `INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em)
            VALUES (?, ?, ?, 'assistencial', ?)`,
-          [est, `${P}-${cod}`, nome, agora],
+          [onde, `${P}-${cod}`, nome, agora],
         );
-      const setorA = await setor('A', 'Setor sintético A');
-      const setorB = await setor('B', 'Setor sintético B');
+      const setorA = await setor(est, 'A', 'Setor sintético A');
+      const setorB = await setor(est, 'B', 'Setor sintético B');
+      const setorX = await setor(est2, 'X', 'Setor sintético X');
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       try {
         const o2 = await e.inserir(
@@ -98,7 +114,57 @@ describe.skipIf(SEM_BANCO)('PortaGasSetorPropria contra o MariaDB (contrato de e
            VALUES (?, ?, ?, 1, 1, ?, 1, NOW(3) - INTERVAL 5 DAY, ?)`,
           [est, `${P}-1`, paciente['id'], fonte['id'], agora],
         );
-        return { est, usuario: Number(usuario['id']), atd, o2, setorA, setorB };
+        // Unidades de internação e leitos sintéticos (referências de cadastro fictícias, chaves desligadas só aqui).
+        const unidade = (onde: number, cod: string, setorDaUnidade: number | null, ua: number) =>
+          e.inserir(
+            `INSERT INTO unidade_internacao (estabelecimento_id, unidade_assistencial_id, codigo, descricao, tipo,
+               setor_funcional_id, criado_em) VALUES (?, ?, ?, ?, 'enfermaria', ?, ?)`,
+            [onde, ua, `${P}-${cod}`, `Unidade sintética ${cod}`, setorDaUnidade, agora],
+          );
+        const base = 4_000_000_000 + est * 10;
+        const uA = await unidade(est, 'UA', setorA, base + 1);
+        const uSem = await unidade(est, 'US', null, base + 2);
+        const uX = await unidade(est2, 'UX', setorX, base + 3);
+        const leito = (onde: number, u: number, cod: string) =>
+          e.inserir(
+            `INSERT INTO leito_hospitalar (estabelecimento_id, unidade_internacao_id, acomodacao_id, codigo,
+               situacao_leito_id, criado_em) VALUES (?, ?, 1, ?, 1, ?)`,
+            [onde, u, `${cod}`, agora],
+          );
+        const leitoA = await leito(est, uA, 'LA');
+        const leitoSemSetor = await leito(est, uSem, 'LS');
+        const leitoOutroEst = await leito(est2, uX, 'LX');
+        const ponto = (onde: number, cod: string, setorDoPonto: number, leitoDoPonto: number | null) =>
+          e.inserir(
+            `INSERT INTO ponto_consumo_gas (estabelecimento_id, codigo, descricao, setor_funcional_id,
+               leito_hospitalar_id, tipo, tipo_gas, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'oxigenio', ?)`,
+            [
+              onde,
+              `${P}-${cod}`,
+              `Ponto sintético ${cod}`,
+              setorDoPonto,
+              leitoDoPonto,
+              leitoDoPonto ? 'leito' : 'regua',
+              agora,
+            ],
+          );
+        const pontoA = await ponto(est, 'PA', setorA, leitoA);
+        const pontoB = await ponto(est, 'PB', setorB, null);
+        const pontoOutroEst = await ponto(est2, 'PX', setorX, null);
+        return {
+          est,
+          usuario: Number(usuario['id']),
+          atd,
+          o2,
+          setorA,
+          setorB,
+          pontoA,
+          pontoB,
+          pontoOutroEst,
+          leitoA,
+          leitoSemSetor,
+          leitoOutroEst,
+        };
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
       }
@@ -255,5 +321,54 @@ describe.skipIf(SEM_BANCO)('PortaGasSetorPropria contra o MariaDB (contrato de e
     await expect(porta.apurar(ctx(), { de: DIA, ate: antes })).rejects.toMatchObject({
       problema: { status: 400 },
     });
+  });
+
+  it('recusa ponto ou leito de outro estabelecimento ou de outro setor sem gravar, e herda o leito do ponto', async () => {
+    const antes = await contar();
+    const base = {
+      setor: m.setorA,
+      insumo: m.o2,
+      fluxoLitrosMinuto: 2,
+      inicio: as('06:00'),
+      fim: as('06:30'),
+    };
+    // Outro estabelecimento: 404 (não revela que existe).
+    await expect(porta.registrar(ctx(), { ...base, ponto: m.pontoOutroEst })).rejects.toMatchObject({
+      problema: { status: 404 },
+    });
+    await expect(porta.registrar(ctx(), { ...base, leito: m.leitoOutroEst })).rejects.toMatchObject({
+      problema: { status: 404 },
+    });
+    // Mesmo estabelecimento, outro setor; leito sem setor no cadastro da unidade; leito diferente do ponto: 422.
+    await expect(porta.registrar(ctx(), { ...base, ponto: m.pontoB })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    await expect(porta.registrar(ctx(), { ...base, setor: m.setorB, leito: m.leitoA })).rejects.toMatchObject(
+      {
+        problema: { status: 422 },
+      },
+    );
+    await expect(porta.registrar(ctx(), { ...base, leito: m.leitoSemSetor })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    await expect(
+      porta.registrar(ctx(), { ...base, ponto: m.pontoA, leito: m.leitoSemSetor }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    expect(await contar()).toBe(antes);
+
+    // Ponto de leito do setor: aceito, e o leito do ponto fica no registro.
+    const ok = await porta.registrar(ctx(), { ...base, ponto: m.pontoA });
+    const [g] = await ler(
+      'SELECT setor_funcional_id, ponto_consumo_gas_id, leito_hospitalar_id FROM consumo_gas_medicinal WHERE id = ?',
+      [ok.id],
+    );
+    expect([
+      Number(g!['setor_funcional_id']),
+      Number(g!['ponto_consumo_gas_id']),
+      Number(g!['leito_hospitalar_id']),
+    ]).toEqual([m.setorA, m.pontoA, m.leitoA]);
+    const ok2 = await porta.registrar(ctx(), { ...base, leito: m.leitoA });
+    expect(ok2.quantidadeLitros).toBe(60);
+    expect(await contar()).toBe(antes + 2);
   });
 });

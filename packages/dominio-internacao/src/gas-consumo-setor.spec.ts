@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   apurarConsumoGasPorSetor,
   conferirConsumoGasSetor,
+  conferirVinculoConsumoGasSetor,
   litrosPeloFluxo,
   type RegistroConsumoGas,
 } from './gas-consumo-setor.js';
@@ -135,5 +136,27 @@ describe('apuração por setor e período', () => {
       [1, 'Ar comprimido'],
       [null, 'Oxigênio'],
     ]);
+  });
+});
+
+describe('vínculo do consumo do setor com o ponto e o leito', () => {
+  const ponto = { setor: 5, leito: 40, ativo: true };
+  const vinculo = (x: Partial<Parameters<typeof conferirVinculoConsumoGasSetor>[0]>) =>
+    conferirVinculoConsumoGasSetor({ setor: 5, ponto: null, leito: null, setorDoLeito: null, ...x });
+
+  it('aceita ponto e leito do setor e herda o leito do ponto de leito', () => {
+    expect(vinculo({})).toEqual({ problemas: [], leito: null });
+    expect(vinculo({ ponto })).toEqual({ problemas: [], leito: 40 });
+    expect(vinculo({ ponto, leito: 40, setorDoLeito: 5 })).toEqual({ problemas: [], leito: 40 });
+    expect(vinculo({ leito: 41, setorDoLeito: 5 })).toEqual({ problemas: [], leito: 41 });
+  });
+
+  it('recusa ponto de outro setor ou inativo, leito de outro setor, sem setor ou diferente do ponto', () => {
+    const campos = (x: Parameters<typeof vinculo>[0]) => vinculo(x).problemas.map((q) => q.campo);
+    expect(campos({ ponto: { ...ponto, setor: 6 } })).toEqual(['ponto']);
+    expect(campos({ ponto: { ...ponto, ativo: false } })).toEqual(['ponto']);
+    expect(campos({ leito: 41, setorDoLeito: 6 })).toEqual(['leito']);
+    expect(campos({ leito: 41, setorDoLeito: null })).toEqual(['leito']);
+    expect(campos({ ponto, leito: 41, setorDoLeito: 5 })).toEqual(['leito']);
   });
 });
