@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conferirAlteracaoCenarioEmUso,
   premissaEditavel,
   projetarCenarioOrcamento,
   validarCenarioOrcamento,
@@ -115,5 +116,23 @@ describe('cenário do orçamento', () => {
     );
     const n = projetarCenarioOrcamento({ receita: 333, despesa: 0, consumo: 0 }, -1_000);
     expect(n.receitaProjetada).toBe(300); // 299,7 → 300
+  });
+});
+
+describe('cenário usado por versão fechada', () => {
+  const otim = { tendencia: 'otimista' as const, ajusteCentesimos: 500 };
+  it('sem versão fechada, o ajuste muda livre', () => {
+    expect(conferirAlteracaoCenarioEmUso(otim, { ...otim, ajusteCentesimos: 1000 }, 0)).toEqual([]);
+  });
+  it('com versão fechada, ajuste ou tendência diferente é recusado', () => {
+    expect(campos(conferirAlteracaoCenarioEmUso(otim, { ...otim, ajusteCentesimos: 1000 }, 1))).toEqual([
+      'ajuste',
+    ]);
+    expect(
+      campos(conferirAlteracaoCenarioEmUso(otim, { tendencia: 'personalizado', ajusteCentesimos: 500 }, 2)),
+    ).toEqual(['ajuste']);
+  });
+  it('com versão fechada, manter ajuste e tendência passa (descrição e ativo livres)', () => {
+    expect(conferirAlteracaoCenarioEmUso(otim, { ...otim }, 3)).toEqual([]);
   });
 });

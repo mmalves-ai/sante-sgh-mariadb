@@ -147,6 +147,27 @@ export function validarCenarioOrcamento(c: CenarioOrcamentoEntrada): FalhaCampoO
   return f;
 }
 
+/**
+ * O cenário escolhido por versão fechada (aprovada, substituída ou descartada) mantém a tendência e o ajuste: a projeção
+ * dessa versão foi decidida com eles e não pode mudar depois. Descrição e ativo seguem livres; para outro ajuste,
+ * cadastre um cenário novo. `versoesFechadas` é quantas versões fechadas usam o cenário (lidas com trava).
+ */
+export function conferirAlteracaoCenarioEmUso(
+  atual: Pick<CenarioOrcamentoEntrada, 'tendencia' | 'ajusteCentesimos'>,
+  nova: Pick<CenarioOrcamentoEntrada, 'tendencia' | 'ajusteCentesimos'>,
+  versoesFechadas: number,
+): FalhaCampoOrcamento[] {
+  if (versoesFechadas <= 0) return [];
+  if (atual.tendencia === nova.tendencia && atual.ajusteCentesimos === nova.ajusteCentesimos) return [];
+  return [
+    {
+      campo: 'ajuste',
+      mensagem:
+        'Este cenário já foi usado por versão aprovada, substituída ou descartada: o ajuste e a tendência ficam como foram decididos. Cadastre um cenário novo para outro ajuste.',
+    },
+  ];
+}
+
 /** Só a versão em elaboração recebe premissas e cenário; a aprovada ou descartada fica como foi decidida. */
 export const premissaEditavel = (situacao: string): boolean => situacao === 'rascunho';
 

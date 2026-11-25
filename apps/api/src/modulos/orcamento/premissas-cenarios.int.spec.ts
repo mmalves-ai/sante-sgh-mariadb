@@ -349,6 +349,48 @@ describe.skipIf(SEM_BANCO)('premissas e cenários do orçamento (MariaDB)', () =
       ),
     ).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/fechada/i) });
     expect((await servico.daVersao(autor(), v.id)).editavel).toBe(false);
+    // O cenário da versão aprovada fica como foi decidido: outro ajuste (ou tendência) é recusado no banco, a
+    // descrição muda, e a projeção da aprovada não se mexe.
+    const projAprovada = (await servico.daVersao(autor(), v.id)).projecao;
+    const cenAtual = (await servico.cenarios(autor())).find((x) => x.id === cen.id)!;
+    const base = {
+      codigo: cenAtual.codigo,
+      tendencia: cenAtual.tendencia,
+      ajusteCentesimos: cenAtual.ajusteCentesimos,
+    };
+    await expect(
+      servico.alterarCenario(
+        aprovador(),
+        cen.id,
+        { ...base, versao: cenAtual.versao, descricao: cenAtual.descricao, ajusteCentesimos: 2000 },
+        EV,
+      ),
+    ).rejects.toMatchObject({ status: 409, detalhe: expect.stringMatching(/cenário novo/i) });
+    await expect(
+      servico.alterarCenario(
+        aprovador(),
+        cen.id,
+        { ...base, versao: cenAtual.versao, descricao: cenAtual.descricao, tendencia: 'personalizado' },
+        EV,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    const ajusteNoBanco = await ler<{ p: string; versao: number }>(
+      'SELECT percentual_ajuste AS p, versao FROM cenario_orcamento WHERE id = ?',
+      [cen.id],
+    );
+    expect([Number(ajusteNoBanco?.p) * 100, Number(ajusteNoBanco?.versao)]).toEqual([
+      cenAtual.ajusteCentesimos,
+      cenAtual.versao,
+    ]);
+    expect(
+      await servico.alterarCenario(
+        aprovador(),
+        cen.id,
+        { ...base, versao: cenAtual.versao, descricao: 'Otimista da rede' },
+        EV,
+      ),
+    ).toEqual({ versao: cenAtual.versao + 1 });
+    expect((await servico.daVersao(autor(), v.id)).projecao).toEqual(projAprovada);
     // Nada apagado: as duas premissas seguem no banco (uma retirada).
     const n = await ler<{ n: number }>(
       'SELECT COUNT(*) AS n FROM premissa_orcamento WHERE versao_orcamento_id = ?',

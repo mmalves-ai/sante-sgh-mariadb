@@ -3,7 +3,7 @@
 // escolha da versão). Toda gravação vai pelo Executor, com a trilha, o outbox e a idempotência na mesma transação; a
 // premissa só muda com a versão em elaboração (relida e travada na transação) e a retirada é lógica
 // (excluido_em/excluido_por), nunca DELETE. A leitura da premissa filtra o estabelecimento da sessão.
-import type { PremissaOrcamentoEntrada } from '@sgh/dominio-financeiro';
+import { conferirAlteracaoCenarioEmUso, type PremissaOrcamentoEntrada } from '@sgh/dominio-financeiro';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -214,6 +214,29 @@ const opAlterarCenario = definirOperacao({
     dados: z.unknown(),
   }),
   async gravar(tx, x) {
+    // O cenário e as versões fechadas que o usam são lidos com trava: a aprovação concorrente espera esta gravação.
+    const [atual] = await tx.consultarParaAtualizar<{ tendencia: unknown; percentual_ajuste: unknown }>(
+      'SELECT tendencia, percentual_ajuste FROM cenario_orcamento WHERE id = ?',
+      [x.id],
+    );
+    if (atual) {
+      const fechadas = await tx.consultarParaAtualizar<{ id: unknown }>(
+        "SELECT id FROM versao_orcamento WHERE cenario_orcamento_id = ? AND situacao <> 'rascunho'",
+        [x.id],
+      );
+      const [falha] = conferirAlteracaoCenarioEmUso(
+        {
+          tendencia: String(atual.tendencia) as CenarioOrcamentoVisao['tendencia'],
+          ajusteCentesimos: centesimos(atual.percentual_ajuste) ?? 0,
+        },
+        {
+          tendencia: x.cenario.tendencia as CenarioOrcamentoVisao['tendencia'],
+          ajusteCentesimos: x.cenario.ajusteCentesimos,
+        },
+        fechadas.length,
+      );
+      if (falha) throw recusa('cenario-em-uso', falha.mensagem);
+    }
     try {
       const versao = await tx.alterar('cenario_orcamento', x.id, x.versao, colunasCenario(x.cenario));
       return { versao };
