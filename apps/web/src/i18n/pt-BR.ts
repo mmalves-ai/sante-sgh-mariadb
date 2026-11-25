@@ -47,6 +47,7 @@ import { mensagensEstruturaGestao } from '../modulos/cadastro/i18n-estrutura.js'
 import { mensagensLigacoes } from '../modulos/cadastro/i18n-ligacoes.js';
 import { mensagensCalendario } from '../modulos/cadastro/i18n-calendario.js';
 import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
+import { mensagensDemografia } from '../modulos/cadastro/i18n-demografia.js';
 import { mensagensComplementoProfissional } from '../modulos/cadastro/i18n-complemento-profissional.js';
 import { mensagensSesmt } from '../modulos/pessoas/sesmt/i18n.js';
 import { mensagensPonto } from '../modulos/pessoas/ponto/i18n.js';
@@ -2405,6 +2406,7 @@ export const mensagensWeb = {
   orcamentoEmpresarial: mensagensOrcamento,
   pessoas: mensagensPessoas,
   vinculos: mensagensVinculos,
+  demografia: mensagensDemografia,
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,
   estruturaGestao: mensagensEstruturaGestao,

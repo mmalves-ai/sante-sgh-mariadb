@@ -42,6 +42,7 @@ import {
 } from '../api-cadastro.js';
 import { converterPreCadastro, previaConversao } from '../api-vinculos.js';
 import ConsentimentosPaciente from '../componentes/ConsentimentosPaciente.vue';
+import DemografiaPaciente from '../componentes/DemografiaPaciente.vue';
 import VinculosPaciente from '../componentes/VinculosPaciente.vue';
 import ContaPortalPaciente from '../../portal/componentes/ContaPortalPaciente.vue';
 import { carimboBr, dataBr, diferencas, somenteDigitos } from '../formato.js';
@@ -634,6 +635,7 @@ const sim = (b: boolean) => (b ? t('cadastro.sim') : t('cadastro.nao'));
           :id-paciente="f.id"
           :pode-registrar="f.permissoes.registrarConsentimento"
         />
+        <DemografiaPaciente :id-paciente="f.id" :pode-editar="pode('cadastro.paciente.editar')" />
         <VinculosPaciente :id-paciente="f.id" :pode-editar="pode('cadastro.paciente.editar')" />
         <ContaPortalPaciente v-if="pode('portal.conta.ler')" :id-paciente="f.id" />
       </div>
