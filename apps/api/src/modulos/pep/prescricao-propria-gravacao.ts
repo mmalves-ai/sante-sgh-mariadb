@@ -11,9 +11,8 @@
 // Tabelas: prescricao, prescricao_item, prescricao_item_medicamento, horario_administracao, prescricao_evento,
 // decisao_alerta, planejamento_prescricao, reconciliacao_medicamentosa, reconciliacao_item, ficha_antimicrobiano,
 // grade_horario_classe (migração 06_PEP/95_prescricao_gravacao).
-// Ainda sem adaptador (501 pendente-modelo-proprio, nada gravado): itens de tipo diferente de medicamento e cuidado
-// simples, medicamento não padronizado, kit e motivos de "se necessário" no item, fichas de antimicrobiano na
-// gravação da prescrição, registrarFicha e gravarRegra.
+// Todos os tipos de item têm adaptador (prescricao-propria-itens.ts). registrarFicha e gravarRegra desta classe seguem
+// 501: a porta própria os liga a prescricao-propria-regras-2.ts.
 import { createHash, randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -87,6 +86,12 @@ export const TABELAS_GRAVACAO_PRESCRICAO = [
   'prescricao_item_solucao_etapa',
   'prescricao_item_solucao_componente',
   'prescricao_item_ventilacao',
+  // Cuidado, procedimento com a escala por glicemia, hemocomponente e o kit do medicamento (03-PEP L105).
+  'prescricao_item_cuidado',
+  'prescricao_item_procedimento',
+  'prescricao_item_glicemia',
+  'prescricao_item_hemocomponente',
+  'prescricao_item_material',
   'favorito_prescritor',
   'horario_administracao',
   // A decisão da regra de integração com o estoque para cada dose (05-SUP linha 7, integracao-prescricao.ts).
@@ -1649,7 +1654,10 @@ async function inserirItem(
     quantidade: d.tipo === 'dieta' ? d.quantidade : null,
     prioridade: 'agora' in d && d.agora ? 'agora' : 'rotina',
     nao_ajustar_horario: 'naoAjustar' in d && d.naoAjustar,
-    se_necessario: d.tipo === 'medicamento' && d.seNecessario.length > 0,
+    se_necessario: (d.tipo === 'medicamento' || d.tipo === 'procedimento') && d.seNecessario.length > 0,
+    item_nao_padronizado_id: d.tipo === 'medicamento' ? (d.naoPadronizado?.htcid ?? null) : null,
+    justificativa_nao_padronizado:
+      d.tipo === 'medicamento' ? (d.naoPadronizado?.justificativa ?? null) : null,
     situacao: 'ativo',
     lancamento_profissional_id: prof.profissional,
     observacao_enfermagem: it.observacao,
@@ -1673,6 +1681,7 @@ async function inserirItem(
     agora: new Date(),
     instante: (civil) => instanteLocal(civil, est.fuso),
     unidade: (sigla) => idPorSigla(tx, 'unidade_prescricao', sigla),
+    via: (sigla) => idPorSigla(tx, 'via_de_uso', sigla),
   });
   if (it.horarios.length > 0) {
     const s = await tx.uma(

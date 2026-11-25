@@ -26,6 +26,19 @@ export type DetalheGravavel =
       readonly intervaloMinimoMinutos?: number | null;
       /** Dose máxima no período (horas) do "se necessário". */
       readonly doseMaxima?: { readonly dose: number; readonly periodoHoras: number } | null;
+      /** Kit do medicamento (materiais que acompanham a dose: seringa, equipo, diluente). */
+      readonly kit?: readonly { readonly produto: number; readonly quantidade: number }[];
+    }
+  | {
+      readonly tipo: 'procedimento';
+      readonly seNecessario: readonly number[];
+      /** Escala por faixa de glicemia (mg/dL): de/até com a dose do produto. */
+      readonly faixas: readonly { readonly de: number; readonly ate: number; readonly dose: number }[];
+    }
+  | {
+      readonly tipo: 'hemoterapia';
+      readonly dose: number;
+      readonly indicacao: string | null;
     }
   | {
       readonly tipo: 'dieta';
@@ -107,7 +120,12 @@ export type RecusaItemGravavel =
   | 'ventilacao-sem-pressao'
   | 'ventilacao-ipap-menor-epap'
   | 'ventilacao-via-incoerente'
-  | 'tipo-item-incoerente';
+  | 'tipo-item-incoerente'
+  | 'kit-quantidade-invalida'
+  | 'kit-item-repetido'
+  | 'glicemia-faixa-invalida'
+  | 'glicemia-faixa-sobreposta'
+  | 'hemoterapia-sem-indicacao';
 
 export const MENSAGENS_ITEM_GRAVAVEL: Readonly<Record<RecusaItemGravavel, string>> = {
   'dose-invalida': 'A dose do medicamento tem de ser maior que zero.',
@@ -151,6 +169,12 @@ export const MENSAGENS_ITEM_GRAVAVEL: Readonly<Record<RecusaItemGravavel, string
     'A via aérea não combina com a modalidade (invasiva pede tubo ou traqueostomia; não invasiva, máscara).',
   'tipo-item-incoerente':
     'O tipo do item não combina com o que foi prescrito (ex.: dieta em tipo de medicamento).',
+  'kit-quantidade-invalida': 'A quantidade de cada item do kit tem de ser maior que zero.',
+  'kit-item-repetido': 'O mesmo produto aparece duas vezes no kit do medicamento.',
+  'glicemia-faixa-invalida': 'Cada faixa de glicemia precisa do início menor ou igual ao fim.',
+  'glicemia-faixa-sobreposta': 'As faixas de glicemia não podem se sobrepor nem repetir o início.',
+  'hemoterapia-sem-indicacao':
+    'A transfusão precisa da indicação clínica (ao menos 10 caracteres) e da quantidade maior que zero.',
 };
 
 const repetido = (xs: readonly number[]) => new Set(xs).size !== xs.length;
@@ -259,6 +283,9 @@ export function conferirItemGravavel(
       const m = d as Extract<DetalheGravavel, { tipo: 'medicamento' }>;
       if (!(m.dose > 0)) return 'dose-invalida';
       if (repetido(m.seNecessario)) return 'se-necessario-repetido';
+      const kit = m.kit ?? [];
+      if (kit.some((k) => !(k.quantidade > 0))) return 'kit-quantidade-invalida';
+      if (repetido(kit.map((k) => k.produto))) return 'kit-item-repetido';
       const intervalo = m.intervaloMinimoMinutos ?? null;
       const maxima = m.doseMaxima ?? null;
       if (m.seNecessario.length === 0)
@@ -314,6 +341,21 @@ export function conferirItemGravavel(
         !(v.pressaoInspiratoria > v.pressaoExpiratoria)
       )
         return 'ventilacao-ipap-menor-epap';
+      return null;
+    }
+    case 'procedimento': {
+      const p = d as Extract<DetalheGravavel, { tipo: 'procedimento' }>;
+      if (repetido(p.seNecessario)) return 'se-necessario-repetido';
+      if (p.seNecessario.length > 0 && (c.horarios ?? 0) > 0) return 'se-necessario-com-horario';
+      if (p.faixas.some((f) => !(f.de <= f.ate) || !(f.dose >= 0))) return 'glicemia-faixa-invalida';
+      const ordem = [...p.faixas].sort((a, b) => a.de - b.de);
+      for (let i = 1; i < ordem.length; i++)
+        if (!(ordem[i]!.de > ordem[i - 1]!.ate)) return 'glicemia-faixa-sobreposta';
+      return null;
+    }
+    case 'hemoterapia': {
+      const h = d as Extract<DetalheGravavel, { tipo: 'hemoterapia' }>;
+      if (!(h.dose > 0) || (h.indicacao ?? '').trim().length < 10) return 'hemoterapia-sem-indicacao';
       return null;
     }
     default:

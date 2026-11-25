@@ -330,6 +330,65 @@ describe('conferência do item antes de gravar (03-PEP L105)', () => {
     expect(conferirCategoriaDoDetalhe('dieta', 'desconhecido')).toBe('tipo-item-incoerente');
   });
 
+  it('kit do medicamento: quantidade maior que zero e produto sem repetir', () => {
+    const med = { tipo: 'medicamento', dose: 1, seNecessario: [] } as const;
+    expect(conferirItemGravavel({ ...med, kit: [{ produto: 1, quantidade: 2 }] })).toBeNull();
+    expect(conferirItemGravavel({ ...med, kit: [{ produto: 1, quantidade: 0 }] })).toBe(
+      'kit-quantidade-invalida',
+    );
+    expect(
+      conferirItemGravavel({
+        ...med,
+        kit: [
+          { produto: 1, quantidade: 1 },
+          { produto: 1, quantidade: 3 },
+        ],
+      }),
+    ).toBe('kit-item-repetido');
+  });
+
+  it('procedimento: "se necessário" sem horário fixo e faixas de glicemia sem sobreposição', () => {
+    const proc = { tipo: 'procedimento', seNecessario: [], faixas: [] } as const;
+    expect(conferirItemGravavel(proc, { horarios: 3 })).toBeNull();
+    expect(conferirItemGravavel({ ...proc, seNecessario: [4] }, { horarios: 0 })).toBeNull();
+    expect(conferirItemGravavel({ ...proc, seNecessario: [4] }, { horarios: 2 })).toBe(
+      'se-necessario-com-horario',
+    );
+    expect(conferirItemGravavel({ ...proc, seNecessario: [4, 4] })).toBe('se-necessario-repetido');
+    const faixas = [
+      { de: 0, ate: 150, dose: 0 },
+      { de: 151, ate: 200, dose: 2 },
+      { de: 201, ate: 999, dose: 4 },
+    ];
+    expect(conferirItemGravavel({ ...proc, faixas })).toBeNull();
+    expect(conferirItemGravavel({ ...proc, faixas: [{ de: 200, ate: 150, dose: 2 }] })).toBe(
+      'glicemia-faixa-invalida',
+    );
+    expect(
+      conferirItemGravavel({
+        ...proc,
+        faixas: [
+          { de: 151, ate: 200, dose: 2 },
+          { de: 0, ate: 151, dose: 0 },
+        ],
+      }),
+    ).toBe('glicemia-faixa-sobreposta');
+  });
+
+  it('hemoterapia: indicação clínica e quantidade obrigatórias', () => {
+    const hem = { tipo: 'hemoterapia', dose: 1, indicacao: 'Hb 6,5 g/dL com sintomas' } as const;
+    expect(conferirItemGravavel(hem)).toBeNull();
+    expect(conferirItemGravavel({ ...hem, indicacao: null })).toBe('hemoterapia-sem-indicacao');
+    expect(conferirItemGravavel({ ...hem, indicacao: 'anemia   ' })).toBe('hemoterapia-sem-indicacao');
+    expect(conferirItemGravavel({ ...hem, dose: 0 })).toBe('hemoterapia-sem-indicacao');
+  });
+
+  it('procedimento e cuidado aceitam o tipo de procedimento e o de cuidado; hemoterapia o de hemocomponente', () => {
+    expect(conferirCategoriaDoDetalhe('cuidado', 'procedimento')).toBeNull();
+    expect(conferirCategoriaDoDetalhe('hemocomponente', 'hemoterapia')).toBeNull();
+    expect(conferirCategoriaDoDetalhe('medicamento', 'hemoterapia')).toBe('tipo-item-incoerente');
+  });
+
   it('toda recusa tem mensagem', () => {
     for (const m of Object.values(MENSAGENS_ITEM_GRAVAVEL)) expect(m.length).toBeGreaterThan(10);
   });

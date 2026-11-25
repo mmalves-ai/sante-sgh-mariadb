@@ -4,6 +4,11 @@
 // cadastro); aqui fica a leitura dos cadastros e a tradução para as tabelas. Tudo na transação da prescrição; nada é
 // apagado. Parâmetro não prescrito fica NULL. As etapas da solução vão a prescricao_item_solucao_etapa;
 // prescricao_item_velocidade fica só para as mudanças de velocidade posteriores (titulação, enfermagem).
+// Também: medicamento não padronizado (o pedido em item_nao_padronizado, com a justificativa) e o kit do medicamento
+// (prescricao_item_material marcado item_de_kit); cuidado de enfermagem (prescricao_item_cuidado), procedimento ou
+// exame (prescricao_item_procedimento), "se necessário" do procedimento e a escala por glicemia
+// (prescricao_item_glicemia); hemocomponente (prescricao_item_hemocomponente, que a agência transfusional usa para
+// abrir a requisição).
 import { ErroOperacao, type TxOperacao } from '@sgh/nucleo';
 import {
   conferirCategoriaDoDetalhe,
@@ -30,18 +35,9 @@ export function conferirCategoriaDoItem(categoria: string, d: Detalhe): void {
   recusaDoDominio(conferirCategoriaDoDetalhe(categoria, d.tipo));
 }
 
-function pendente(oque: string): ErroOperacao {
-  return new ErroOperacao(
-    501,
-    'pendente-modelo-proprio',
-    'Ainda não disponível no banco próprio',
-    `A gravação de ${oque} na prescrição ainda não tem adaptador no banco próprio.`,
-  );
-}
-
 /**
- * Tipos com adaptador: medicamento padronizado (com ou sem "se necessário"), dieta, solução, VMI e VNI. A vigência
- * (civil), quando vem, limita as etapas da solução.
+ * Coerência clínica de todos os tipos (domínio) antes de gravar. A vigência (civil), quando vem, limita as etapas da
+ * solução.
  */
 export function conferirItensGravaveis(
   itens: readonly ItemGravacao[],
@@ -49,11 +45,6 @@ export function conferirItensGravaveis(
 ): void {
   for (const it of itens) {
     const d = it.detalhe;
-    if (d.tipo === 'procedimento' || d.tipo === 'hemoterapia') throw pendente(`item do tipo ${d.tipo}`);
-    if (d.tipo === 'medicamento') {
-      if (d.naoPadronizado) throw pendente('medicamento não padronizado');
-      if (d.kit.length > 0) throw pendente('kit do medicamento');
-    }
     if (d.tipo === 'dieta' && d.caracteristicas.some((c) => c.resposta.length > 50))
       throw recusar(
         422,
@@ -71,9 +62,13 @@ export function categoriaDoDetalhe(d: Detalhe): string {
   return d.tipo;
 }
 
-/** O item prescritível que identifica o item: o produto do medicamento ou o componente principal da solução. */
+/**
+ * O item prescritível que identifica o item: o produto do medicamento padronizado, o procedimento ou cuidado, ou o
+ * componente principal da solução. O não padronizado fica no pedido (item_nao_padronizado), sem item prescritível.
+ */
 export function produtoDoItem(d: Detalhe): number | null {
-  if (d.tipo === 'medicamento') return d.produto;
+  if (d.tipo === 'medicamento') return d.naoPadronizado ? null : d.produto;
+  if (d.tipo === 'procedimento') return d.procedimento;
   if (d.tipo === 'solucao') return d.componentes.find((c) => c.principal)?.produto ?? null;
   return null;
 }
@@ -144,15 +139,65 @@ export interface ContextoDetalhe {
   /** Data e hora civil (AAAA-MM-DDTHH:MM) do estabelecimento → instante. */
   readonly instante: (civil: string) => Date;
   readonly unidade: (sigla: string) => Promise<number>;
+  /** Via de uso pela sigla (escala por glicemia). */
+  readonly via: (sigla: string) => Promise<number>;
+}
+
+/** O pedido de item não padronizado do estabelecimento, ainda utilizável (solicitado, aprovado ou padronizado). */
+export async function conferirNaoPadronizado(
+  tx: TxOperacao,
+  estabelecimento: number,
+  id: number,
+): Promise<void> {
+  const x = await tx.uma(
+    `SELECT id FROM item_nao_padronizado
+      WHERE id = ? AND estabelecimento_id = ? AND situacao IN ('solicitado','aprovado','padronizado')`,
+    [id, estabelecimento],
+  );
+  if (!x)
+    throw recusar(
+      422,
+      'nao-padronizado-indisponivel',
+      'O pedido de item não padronizado não é deste estabelecimento, foi recusado ou está inativo.',
+    );
+}
+
+async function condicoesSeNecessario(
+  tx: TxOperacao,
+  item: number,
+  condicoes: readonly number[],
+  extra: {
+    readonly intervalo: number | null;
+    readonly dose: number | null;
+    readonly periodo: number | null;
+    readonly unidade: number | null;
+  },
+): Promise<void> {
+  for (const cond of condicoes) {
+    const x = await tx.uma('SELECT id FROM condicao_se_necessario WHERE id = ? AND ativo', [cond]);
+    if (!x)
+      throw recusar(422, 'motivo-desconhecido', 'Condição de "se necessário" fora do cadastro ou inativa.');
+    await tx.incluir('prescricao_item_se_necessario', {
+      prescricao_item_id: item,
+      condicao_se_necessario_id: cond,
+      intervalo_minimo_minutos: extra.intervalo,
+      dose_maxima_periodo: extra.dose,
+      periodo_horas: extra.periodo,
+      unidade_prescricao_id: extra.unidade,
+    });
+  }
 }
 
 /** Grava o detalhe do item conforme o tipo. O item (prescricao_item) já existe. */
 export async function gravarDetalhe(tx: TxOperacao, d: Detalhe, c: ContextoDetalhe): Promise<void> {
   switch (d.tipo) {
     case 'medicamento': {
+      if (d.naoPadronizado) await conferirNaoPadronizado(tx, c.estabelecimento, d.naoPadronizado.htcid);
       await tx.incluir('prescricao_item_medicamento', {
         prescricao_item_id: c.item,
-        item_prescritivel_id: d.produto,
+        item_prescritivel_id: d.naoPadronizado ? null : d.produto,
+        item_nao_padronizado_id: d.naoPadronizado?.htcid ?? null,
+        justificativa_nao_padronizado: d.naoPadronizado?.justificativa ?? null,
         dose: d.dose,
         unidade_prescricao_id: await c.unidade(d.unidade),
         tempo_infusao_minutos: d.tempoInfusaoMinutos,
@@ -161,23 +206,105 @@ export async function gravarDetalhe(tx: TxOperacao, d: Detalhe, c: ContextoDetal
         justificativa_alergia: d.justificativaAlergia,
         origem: 'sistema',
       });
-      for (const cond of d.seNecessario) {
-        const x = await tx.uma('SELECT id FROM condicao_se_necessario WHERE id = ? AND ativo', [cond]);
-        if (!x)
-          throw recusar(
-            422,
-            'motivo-desconhecido',
-            'Condição de "se necessário" fora do cadastro ou inativa.',
-          );
-        await tx.incluir('prescricao_item_se_necessario', {
+      await condicoesSeNecessario(tx, c.item, d.seNecessario, {
+        intervalo: d.intervaloMinimoMinutos,
+        dose: d.doseMaxima?.dose ?? null,
+        periodo: d.doseMaxima?.periodoHoras ?? null,
+        unidade: d.doseMaxima && d.seNecessario.length > 0 ? await c.unidade(d.unidade) : null,
+      });
+      // Kit do medicamento: os materiais que acompanham a dose, cada um com a sua quantidade (item_de_kit).
+      let seqKit = 0;
+      for (const k of d.kit) {
+        await existe(tx, 'item_prescritivel', k.produto, 'O item do kit');
+        await tx.incluir('prescricao_item_material', {
           prescricao_item_id: c.item,
-          condicao_se_necessario_id: cond,
-          intervalo_minimo_minutos: d.intervaloMinimoMinutos,
-          dose_maxima_periodo: d.doseMaxima?.dose ?? null,
-          periodo_horas: d.doseMaxima?.periodoHoras ?? null,
-          unidade_prescricao_id: d.doseMaxima ? await c.unidade(d.unidade) : null,
+          sequencia: ++seqKit,
+          item_prescritivel_id: k.produto,
+          quantidade: k.quantidade,
+          unidade_prescricao_id: await c.unidade(k.unidade),
+          item_de_kit: true,
+          origem: 'sistema',
         });
       }
+      return;
+    }
+    case 'procedimento': {
+      // O item prescritível diz o que é: cuidado de enfermagem (prescricao_item_cuidado) ou procedimento/exame.
+      const ip = await tx.uma(
+        `SELECT ip.cuidado_enfermagem_id, ip.exame_id, t.categoria FROM item_prescritivel ip
+           JOIN tipo_item_prescricao t ON t.id = ip.tipo_item_prescricao_id
+          WHERE ip.id = ? AND ip.excluido_em IS NULL`,
+        [d.procedimento],
+      );
+      if (!ip) throw recusar(422, 'cadastro-inexistente', 'O procedimento não está no cadastro.');
+      const cuidado = ip['cuidado_enfermagem_id'] === null ? null : Number(ip['cuidado_enfermagem_id']);
+      if (String(ip['categoria']) === 'cuidado') {
+        if (cuidado === null)
+          throw recusar(
+            422,
+            'cuidado-sem-cadastro',
+            'O item de cuidado não está ligado a um cuidado de enfermagem do cadastro.',
+          );
+        await tx.incluir('prescricao_item_cuidado', {
+          prescricao_item_id: c.item,
+          cuidado_enfermagem_id: cuidado,
+          origem: 'sistema',
+        });
+      } else
+        await tx.incluir('prescricao_item_procedimento', {
+          prescricao_item_id: c.item,
+          item_prescritivel_id: d.procedimento,
+          exame_id: ip['exame_id'] === null ? null : Number(ip['exame_id']),
+          cuidado_enfermagem_id: cuidado,
+          local_execucao: 'interno',
+          situacao: 'solicitado',
+          iniciar_agora: d.agora,
+          nao_ajustar_horario: d.naoAjustar,
+          origem: 'sistema',
+        });
+      await condicoesSeNecessario(tx, c.item, d.seNecessario, {
+        intervalo: null,
+        dose: null,
+        periodo: null,
+        unidade: null,
+      });
+      // Escala por glicemia (mg/dL): cada faixa com o produto, a dose, a unidade e a via (dose 0 = não aplicar).
+      let seqFaixa = 0;
+      for (const f of [...d.faixas].sort((a, b) => a.de - b.de)) {
+        await existe(tx, 'item_prescritivel', f.produto, 'O produto da faixa de glicemia');
+        await tx.incluir('prescricao_item_glicemia', {
+          prescricao_item_id: c.item,
+          sequencia: ++seqFaixa,
+          glicemia_minima: f.de,
+          glicemia_maxima: f.ate,
+          item_prescritivel_id: f.produto,
+          dose: f.dose,
+          unidade_prescricao_id: await c.unidade(f.unidade),
+          via_de_uso_id: await c.via(f.via),
+          origem: 'sistema',
+        });
+      }
+      return;
+    }
+    case 'hemoterapia': {
+      const h = await tx.uma(
+        `SELECT id FROM hemocomponente WHERE (UPPER(codigo) = UPPER(?) OR UPPER(sigla) = UPPER(?)) AND ativo
+          ORDER BY (UPPER(codigo) = UPPER(?)) DESC, id LIMIT 1`,
+        [d.codigo, d.codigo, d.codigo],
+      );
+      if (!h)
+        throw recusar(422, 'cadastro-inexistente', 'O hemocomponente não está no cadastro ou está inativo.');
+      await tx.incluir('prescricao_item_hemocomponente', {
+        prescricao_item_id: c.item,
+        hemocomponente_id: Number(h['id']),
+        quantidade: d.dose,
+        unidade_prescricao_id: await c.unidade(d.unidade),
+        tipo_infusao_id: await existe(tx, 'tipo_infusao', d.tipoInfusao, 'O tipo de infusão'),
+        indicacao_clinica: (d.indicacao ?? '').trim(),
+        urgencia: d.agora ? 'urgente' : 'rotina',
+        iniciar_agora: d.agora,
+        origem: 'sistema',
+      });
       return;
     }
     case 'dieta': {
@@ -335,7 +462,9 @@ export async function gravarDetalhe(tx: TxOperacao, d: Detalhe, c: ContextoDetal
       });
       return;
     }
-    default:
-      throw pendente(`item do tipo ${d.tipo}`);
+    default: {
+      const nunca: never = d;
+      throw recusar(422, 'tipo-item-incoerente', `Tipo de item desconhecido: ${String(nunca)}.`);
+    }
   }
 }

@@ -99,7 +99,7 @@ describe('apoio da gravação da prescrição própria', () => {
     expect(decisaoGravada('exibido', null)).toBe('aceitou');
   });
 
-  it('recusa com 501 o que ainda não tem adaptador e com 422 a incoerência clínica (dose zero, dieta, ventilação)', () => {
+  it('todos os tipos têm adaptador; a incoerência clínica vira 422 (dose zero, dieta, ventilação, kit, glicemia, transfusão)', () => {
     const codigo = (f: () => void) => {
       try {
         f();
@@ -109,11 +109,25 @@ describe('apoio da gravação da prescrição própria', () => {
       }
     };
     expect(codigo(() => conferirItensSuportados([item(med)]))).toBeNull();
-    expect(codigo(() => conferirItensSuportados([item({ tipo: 'procedimento' })]))).toBe(
-      '501:pendente-modelo-proprio',
-    );
-    expect(codigo(() => conferirItensSuportados([item({ tipo: 'hemoterapia' })]))).toBe(
-      '501:pendente-modelo-proprio',
+    const proc = { tipo: 'procedimento', procedimento: 3, seNecessario: [], faixas: [] };
+    expect(codigo(() => conferirItensSuportados([item(proc)]))).toBeNull();
+    expect(
+      codigo(() =>
+        conferirItensSuportados([
+          item({
+            ...proc,
+            faixas: [
+              { de: 0, ate: 200, dose: 2 },
+              { de: 180, ate: 300, dose: 4 },
+            ],
+          }),
+        ]),
+      ),
+    ).toBe('422:glicemia-faixa-sobreposta');
+    const hem = { tipo: 'hemoterapia', dose: 1, indicacao: 'Hb 6,5 g/dL sintomática' };
+    expect(codigo(() => conferirItensSuportados([item(hem)]))).toBeNull();
+    expect(codigo(() => conferirItensSuportados([item({ ...hem, indicacao: null })]))).toBe(
+      '422:hemoterapia-sem-indicacao',
     );
     // Dieta, solução, ventilação e "se necessário" gravam; a coerência clínica do domínio vira 422.
     const dieta = {
@@ -134,9 +148,12 @@ describe('apoio da gravação da prescrição própria', () => {
     expect(codigo(() => conferirItensSuportados([item({ tipo: 'vni', fio2: 10 })]))).toBe(
       '422:ventilacao-fio2-fora-da-faixa',
     );
-    expect(codigo(() => conferirItensSuportados([item({ ...med, kit: [{ produto: 1 }] })]))).toBe(
-      '501:pendente-modelo-proprio',
-    );
+    expect(
+      codigo(() => conferirItensSuportados([item({ ...med, kit: [{ produto: 1, quantidade: 2 }] })])),
+    ).toBeNull();
+    expect(
+      codigo(() => conferirItensSuportados([item({ ...med, kit: [{ produto: 1, quantidade: 0 }] })])),
+    ).toBe('422:kit-quantidade-invalida');
     expect(codigo(() => conferirItensSuportados([item({ ...med, dose: 0 })]))).toBe('422:dose-invalida');
     // Jejum e dieta livre gravam sem quantidade (antes vinham com o sentinela 0 e voltavam 422).
     const jejum = { ...dieta, classe: 'jejum', quantidade: null, velocidade: null };

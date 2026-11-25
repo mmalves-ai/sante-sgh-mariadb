@@ -2,15 +2,16 @@
 // teste f22_o5): medicamento "se necessário" (intervalo mínimo e dose máxima, sem horário fixo), dieta enteral com
 // característica, jejum e dieta livre sem quantidade, solução em duas etapas (prescricao_item_solucao_etapa, volume =
 // velocidade × tempo), VMI a volume e a pressão (sem parâmetro inventado: o não prescrito fica NULL) e VNI com IPAP e
-// EPAP, numa prescrição só; a incoerência clínica e de cadastro recusa sem gravar nada; procedimento e hemoterapia
-// seguem 501. Massa SINTÉTICA (prefixo l105it), montada no beforeAll e apagada
+// EPAP, numa prescrição só; cuidado com "se necessário", procedimento com a escala por glicemia, hemocomponente (o que a
+// agência transfusional usa para requisitar), medicamento não padronizado e o kit do medicamento, noutra; a
+// incoerência clínica e de cadastro recusa sem gravar nada. Massa SINTÉTICA (prefixo l105it), montada no beforeAll e apagada
 // no início e no fim (a trilha pelo utilitário comum). Nenhum registro clínico é apagado pela porta: a limpeza é do
 // teste. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { PLANO_DO_TIPO } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaNutricaoPropria } from '../nutricao/porta-propria.js';
-import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import { BASE_PLANO_PROPRIO, GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
 import { PortaPrescricaoPropria } from './prescricao-porta-propria.js';
 import { dataHora } from './registro-porta-propria.js';
 import type { GravacaoPrescricao, ItemGravacao } from './tipos-pep.js';
@@ -65,6 +66,12 @@ async function limpar(e: Escritor): Promise<void> {
   const die = `(SELECT id FROM prescricao_item_dieta WHERE prescricao_item_id IN ${itens})`;
   await limparTrilhaDaMassa(e, { codigos: [P] });
   for (const sql of [
+    `DELETE FROM prescricao_item_cuidado WHERE prescricao_item_id IN ${itens}`,
+    `DELETE FROM prescricao_item_procedimento WHERE prescricao_item_id IN ${itens}`,
+    `DELETE FROM prescricao_item_glicemia WHERE prescricao_item_id IN ${itens}`,
+    `DELETE FROM prescricao_item_hemocomponente WHERE prescricao_item_id IN ${itens}`,
+    `DELETE FROM prescricao_item_material WHERE prescricao_item_id IN ${itens}`,
+    `DELETE FROM item_nao_padronizado WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM decisao_alerta WHERE prescricao_id IN ${presc}`,
     `DELETE FROM prescricao_evento WHERE prescricao_id IN ${presc}`,
     `DELETE FROM horario_administracao WHERE estabelecimento_id IN ${est}`,
@@ -105,6 +112,8 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`${P} %`]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}%`]);
   for (const t of CATALOGOS) await e.executar(`DELETE FROM ${t} WHERE codigo LIKE ?`, [`${P}%`]);
+  await e.executar('DELETE FROM cuidado_enfermagem WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM hemocomponente WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM alimento_referencia WHERE codigo_tbca LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM refeicao_do_dia WHERE codigo LIKE ?', [`${P}%`]);
 }
@@ -165,7 +174,15 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         [usuario, prof],
       );
       const cat: Record<string, number> = {};
-      for (const categoria of ['medicamento', 'dieta', 'solucao', 'ventilacao'])
+      for (const categoria of [
+        'medicamento',
+        'dieta',
+        'solucao',
+        'ventilacao',
+        'procedimento',
+        'cuidado',
+        'hemocomponente',
+      ])
         cat[`tipo_${categoria}`] = await ins(
           `INSERT INTO tipo_item_prescricao (codigo, descricao, categoria, criado_em) VALUES (?, ?, ?, ?)`,
           [`${P}${categoria.slice(0, 3)}`, `Tipo sintético ${categoria}`, categoria],
@@ -265,6 +282,38 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
       cat['febre'] = await ins(
         `INSERT INTO condicao_se_necessario (codigo, descricao, criado_em) VALUES (?, 'Febre sintética', ?)`,
         [`${P}sn`],
+      );
+      // Cuidado de enfermagem e procedimento prescritíveis, hemocomponente e os pedidos de não padronizado.
+      const cuidado = await ins(
+        `INSERT INTO cuidado_enfermagem (codigo, descricao, criado_em) VALUES (?, 'Cuidado sintético', ?)`,
+        [`${P}ce`],
+      );
+      cat['itemCuidado'] = await ins(
+        `INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, cuidado_enfermagem_id, criado_em)
+         VALUES (?, 'Cuidado sintético', ?, ?, ?)`,
+        [`${P}ic`, cat['tipo_cuidado'], cuidado],
+      );
+      cat['cuidado'] = cuidado;
+      cat['itemProc'] = await ins(
+        `INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, criado_em)
+         VALUES (?, 'Glicemia capilar sintética', ?, ?)`,
+        [`${P}pg`, cat['tipo_procedimento']],
+      );
+      cat['hemo'] = await ins(
+        `INSERT INTO hemocomponente (codigo, descricao, sigla, validade_dias, faturavel, criado_em)
+         VALUES (?, 'Concentrado sintético', 'XS', 35, FALSE, ?)`,
+        [`${P}ch`],
+      );
+      cat['np'] = await ins(
+        `INSERT INTO item_nao_padronizado (estabelecimento_id, nome, tipo_item_prescricao_id, unidade_prescricao_id,
+           justificativa, situacao, criado_em) VALUES (?, 'Não padronizado sintético', ?, ?, 'Sem similar', 'solicitado', ?)`,
+        [est, cat['tipo_medicamento'], cat['mg']],
+      );
+      cat['npRecusado'] = await ins(
+        `INSERT INTO item_nao_padronizado (estabelecimento_id, nome, tipo_item_prescricao_id, unidade_prescricao_id,
+           justificativa, situacao, analisado_em, motivo_recusa, criado_em)
+         VALUES (?, 'Recusado sintético', ?, ?, 'Sem similar', 'recusado', NOW(3), 'Há similar', ?)`,
+        [est, cat['tipo_medicamento'], cat['mg']],
       );
       await ins(
         'INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, criado_em) VALUES (?, ?, 1, ?)',
@@ -466,7 +515,7 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
     }
   });
 
-  it('incoerência clínica (solução sem componente principal) e tipo sem adaptador recusam sem gravar nada', async () => {
+  it('incoerência clínica (solução sem componente principal, transfusão sem indicação) recusa sem gravar nada', async () => {
     await expect(
       Promise.resolve().then(() =>
         porta.prescrever(c, 'pep.prescrever', gravacao([medicamento(), solucao(false)]), ctx()),
@@ -492,7 +541,7 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
           ctx(),
         ),
       ),
-    ).rejects.toMatchObject({ problema: { status: 501 } });
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'hemoterapia-sem-indicacao' } });
     const recusa = async (itens: ItemGravacao[], codigo: string) =>
       expect(
         Promise.resolve().then(() => porta.prescrever(c, 'pep.prescrever', gravacao(itens), ctx())),
@@ -860,5 +909,189 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
       [m.cat['refeicaoDoDia'], 2, 'Alimento sintético a2', 150, 1],
     ]);
     expect(Number(daLivre[0]!.composicao?.[0]?.percentualDiario)).toBe(25);
+  });
+  it('cuidado "se necessário", escala por glicemia, hemocomponente, não padronizado e kit, cada um no seu detalhe', async () => {
+    const medNp = (htcid: number) =>
+      base('mnp', PLANO_DO_TIPO.medicamento, {
+        ...(medicamento().detalhe as object),
+        seNecessario: [],
+        intervaloMinimoMinutos: null,
+        doseMaxima: null,
+        naoPadronizado: { justificativa: 'Sem similar na padronização do hospital', htcid },
+      });
+    const hem = (indicacao: string | null) =>
+      base('hem', PLANO_DO_TIPO.hemoterapia, {
+        tipo: 'hemoterapia',
+        ato: 0,
+        codigo: `${P}ch`,
+        dose: 1,
+        unidade: 'ml105',
+        tipoInfusao: m.cat['tipoInfusao'],
+        indicacao,
+        agora: true,
+      });
+    // Período livre (as prescrições dos outros casos ocupam as primeiras 72 h).
+    const adiante = (g: GravacaoPrescricao): GravacaoPrescricao => ({
+      ...g,
+      vigencia: { inicio: local(96 * HORA), fim: local(120 * HORA) },
+    });
+    const antes = await contarPrescricoes();
+    // Pedido de não padronizado recusado e transfusão sem indicação: 422 sem gravar nada.
+    await expect(
+      Promise.resolve().then(() =>
+        porta.prescrever(c, 'pep.prescrever', adiante(gravacao([medNp(m.cat['npRecusado']!)])), ctx()),
+      ),
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'nao-padronizado-indisponivel' } });
+    await expect(
+      Promise.resolve().then(() =>
+        porta.prescrever(c, 'pep.prescrever', adiante(gravacao([hem('curta')])), ctx()),
+      ),
+    ).rejects.toMatchObject({
+      problema: { status: 422, codigo: 'hemoterapia-sem-indicacao' },
+    });
+    expect(await contarPrescricoes()).toBe(antes);
+
+    const r = await porta.prescrever(
+      c,
+      'pep.prescrever',
+      adiante(
+        gravacao([
+          base('cui', BASE_PLANO_PROPRIO + m.cat['tipo_cuidado']!, {
+            tipo: 'procedimento',
+            procedimento: m.cat['itemCuidado'],
+            agora: false,
+            naoAjustar: false,
+            seNecessario: [m.cat['febre']],
+            faixas: [],
+          }),
+          base('gli', PLANO_DO_TIPO.glicemia, {
+            tipo: 'procedimento',
+            procedimento: m.cat['itemProc'],
+            agora: false,
+            naoAjustar: false,
+            seNecessario: [],
+            faixas: [
+              { de: 181, ate: 300, produto: m.produto, dose: 2, unidade: 'mg105', via: 'EV105' },
+              { de: 0, ate: 180, produto: m.produto, dose: 0, unidade: 'mg105', via: 'EV105' },
+            ],
+          }),
+          hem('Hb 6,5 g/dL com taquicardia e dispneia'),
+          medNp(m.cat['np']!),
+          {
+            ...medicamento(),
+            chave: 'kit',
+            detalhe: {
+              ...(medicamento().detalhe as object),
+              seNecessario: [],
+              intervaloMinimoMinutos: null,
+              doseMaxima: null,
+              kit: [{ produto: m.soro, quantidade: 1, unidade: 'ml105' }],
+            },
+          } as unknown as ItemGravacao,
+        ]),
+      ),
+      ctx(),
+    );
+    expect(await contarPrescricoes()).toBe(antes + 1);
+    const itens = await ler(
+      `SELECT pi.id, t.categoria, pi.item_prescritivel_id AS produto, pi.item_nao_padronizado_id AS np,
+              pi.justificativa_nao_padronizado AS jnp, pi.se_necessario, pi.prioridade
+         FROM prescricao_item pi JOIN tipo_item_prescricao t ON t.id = pi.tipo_item_prescricao_id
+        WHERE pi.prescricao_id = ? ORDER BY pi.sequencia`,
+      [r.prescricao],
+    );
+    expect(itens.map((x) => x['categoria'])).toEqual([
+      'cuidado',
+      'procedimento',
+      'hemocomponente',
+      'medicamento',
+      'medicamento',
+    ]);
+    const [cui, gli, hm, np, kit] = itens.map((x) => Number(x['id']));
+    // Cuidado "se necessário": o cuidado do cadastro e a condição, sem horário fixo.
+    expect(Number(itens[0]!['se_necessario'])).toBe(1);
+    expect(
+      await ler(
+        'SELECT cuidado_enfermagem_id AS c FROM prescricao_item_cuidado WHERE prescricao_item_id = ?',
+        [cui],
+      ),
+    ).toEqual([{ c: m.cat['cuidado'] }]);
+    expect(
+      (
+        await ler(
+          'SELECT condicao_se_necessario_id AS c FROM prescricao_item_se_necessario WHERE prescricao_item_id = ?',
+          [cui],
+        )
+      ).map((x) => Number(x['c'])),
+    ).toEqual([m.cat['febre']]);
+    expect(
+      Number(
+        (
+          await ler('SELECT COUNT(*) AS n FROM horario_administracao WHERE prescricao_item_id = ?', [cui])
+        )[0]?.['n'],
+      ),
+    ).toBe(0);
+    // Procedimento com a escala por glicemia, faixas em ordem, dose 0 = não aplicar.
+    const proc = await ler(
+      `SELECT item_prescritivel_id AS ip, situacao, local_execucao FROM prescricao_item_procedimento
+        WHERE prescricao_item_id = ?`,
+      [gli],
+    );
+    expect(proc.map((x) => [Number(x['ip']), x['situacao'], x['local_execucao']])).toEqual([
+      [m.cat['itemProc'], 'solicitado', 'interno'],
+    ]);
+    const faixas = await ler(
+      `SELECT g.sequencia, g.glicemia_minima AS de, g.glicemia_maxima AS ate, g.dose, v.sigla
+         FROM prescricao_item_glicemia g JOIN via_de_uso v ON v.id = g.via_de_uso_id
+        WHERE g.prescricao_item_id = ? ORDER BY g.sequencia`,
+      [gli],
+    );
+    expect(
+      faixas.map((x) => [
+        Number(x['sequencia']),
+        Number(x['de']),
+        Number(x['ate']),
+        Number(x['dose']),
+        x['sigla'],
+      ]),
+    ).toEqual([
+      [1, 0, 180, 0, 'EV105'],
+      [2, 181, 300, 2, 'EV105'],
+    ]);
+    // Hemocomponente com a indicação clínica, à espera da requisição da agência transfusional.
+    const h = await ler(
+      `SELECT hemocomponente_id AS hc, quantidade, indicacao_clinica AS ind, urgencia, requisicao_transfusao_id AS req
+         FROM prescricao_item_hemocomponente WHERE prescricao_item_id = ?`,
+      [hm],
+    );
+    expect(
+      h.map((x) => [Number(x['hc']), Number(x['quantidade']), x['ind'], x['urgencia'], x['req']]),
+    ).toEqual([[m.cat['hemo'], 1, 'Hb 6,5 g/dL com taquicardia e dispneia', 'urgente', null]]);
+    expect(itens[2]!['prioridade']).toBe('agora');
+    // Não padronizado: o pedido e a justificativa no item e no detalhe, sem item prescritível.
+    expect([itens[3]!['produto'], Number(itens[3]!['np']), itens[3]!['jnp']]).toEqual([
+      null,
+      m.cat['np'],
+      'Sem similar na padronização do hospital',
+    ]);
+    expect(
+      (
+        await ler(
+          `SELECT item_prescritivel_id AS ip, item_nao_padronizado_id AS np, justificativa_nao_padronizado AS j
+             FROM prescricao_item_medicamento WHERE prescricao_item_id = ?`,
+          [np],
+        )
+      ).map((x) => [x['ip'], Number(x['np']), x['j']]),
+    ).toEqual([[null, m.cat['np'], 'Sem similar na padronização do hospital']]);
+    // Kit do medicamento: o material com a quantidade, marcado como item de kit.
+    expect(
+      (
+        await ler(
+          `SELECT item_prescritivel_id AS ip, quantidade, item_de_kit AS k FROM prescricao_item_material
+            WHERE prescricao_item_id = ?`,
+          [kit],
+        )
+      ).map((x) => [Number(x['ip']), Number(x['quantidade']), Number(x['k'])]),
+    ).toEqual([[m.soro, 1, 1]]);
   });
 });
