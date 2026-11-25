@@ -48,6 +48,11 @@ import { TransportePacienteController } from './transporte-paciente.controller.j
 import { PORTA_CHAMADO_AMBULANCIA, PortaChamadoAmbulanciaPropria } from './chamado-ambulancia-propria.js';
 import { ChamadoAmbulanciaController } from './chamado-ambulancia.controller.js';
 import { InternacaoDomiciliarController } from './internacao-domiciliar.controller.js';
+import { AreaEscalaDomiciliarController } from './area-escala-domiciliar.controller.js';
+import {
+  PORTA_AREA_ESCALA_DOMICILIAR,
+  PortaAreaEscalaDomiciliarPropria,
+} from './area-escala-domiciliar-propria.js';
 import {
   PORTA_INTERNACAO_DOMICILIAR,
   PortaInternacaoDomiciliarPropria,
@@ -152,6 +157,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       TransportePacienteController,
       ChamadoAmbulanciaController,
       InternacaoDomiciliarController,
+      AreaEscalaDomiciliarController,
       GasMedicinalController,
       SameGuardaController,
       SameTramiteController,
@@ -220,6 +226,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaInternacaoDomiciliarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C2-105 (03-PEP linha 143): áreas e escala da atenção domiciliar; sem núcleo, 503.
+      {
+        provide: PORTA_AREA_ESCALA_DOMICILIAR,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaAreaEscalaDomiciliarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.9 (04-HOT L126): SAME pelo volume (guarda, local e movimentação pelo tipo da operação); sem núcleo, 503.

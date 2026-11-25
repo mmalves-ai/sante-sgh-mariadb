@@ -26,6 +26,7 @@ import {
   conferirTransferenciaDomicilio,
   conferirVisitaDomiciliar,
   DESFECHOS_CHAMADO_DOMICILIAR,
+  escalaDaVisita,
   MODALIDADES_ATENCAO_DOMICILIAR,
   ordenarFilaChamadosDomiciliares,
   PRIORIDADES_CHAMADO_DOMICILIAR,
@@ -51,6 +52,7 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import { escalasDoProfissional } from './area-escala-domiciliar-propria.js';
 
 export const PORTA_INTERNACAO_DOMICILIAR = Symbol('PORTA_INTERNACAO_DOMICILIAR');
 
@@ -1081,15 +1083,49 @@ export class PortaInternacaoDomiciliarPropria extends PortaEstabelecimentoPropri
           })),
         }),
       );
+      // C2-105: a visita acha o turno da escala do profissional (dia e hora locais); turno lotado só aceita extra.
+      const local = new Intl.DateTimeFormat('en-CA', {
+        timeZone: est.fuso,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).formatToParts(e.quando);
+      const parte = (t: string) => local.find((x) => x.type === t)?.value ?? '00';
+      const dataLocal = `${parte('year')}-${parte('month')}-${parte('day')}`;
+      const doTurno = await tx.consultar(
+        `SELECT escala_atendimento_domiciliar_id AS escala, agendada_para FROM visita_domiciliar
+          WHERE estabelecimento_id = ? AND profissional_id = ? AND excluido_em IS NULL
+            AND escala_atendimento_domiciliar_id IS NOT NULL AND situacao NOT IN ('cancelada', 'nao_realizada')
+            AND agendada_para BETWEEN ? - INTERVAL 1 DAY AND ? + INTERVAL 1 DAY`,
+        [est.id, e.profissional, e.quando, e.quando],
+      );
+      const turno = escalaDaVisita({
+        escalas: await escalasDoProfissional(tx, est.id, e.profissional),
+        profissional: e.profissional,
+        tipoChamado: e.tipo,
+        dataLocal,
+        horaLocal: `${parte('hour')}:${parte('minute')}`,
+        ocupadas: (escala) =>
+          doTurno.filter(
+            (o) =>
+              num(o['escala']) === escala &&
+              diaNoFuso(new Date(String(iso(o['agendada_para']))), est.fuso) === dataLocal,
+          ).length,
+      });
+      recusa('Visita recusada', turno.problemas);
       const novo = await tx.incluir(T_VISITA, {
         estabelecimento_id: est.id,
         paciente_id: d['paciente_id'],
         internacao_domiciliar_id: e.internacao,
+        escala_atendimento_domiciliar_id: turno.escala,
         profissional_id: e.profissional,
         tipo_chamado_domiciliar_id: e.tipo,
         agendada_para: e.quando,
         duracao_prevista_minutos: e.duracao,
-        extra: false,
+        extra: turno.extra,
         situacao: 'agendada',
         observacao: e.observacao,
       });
