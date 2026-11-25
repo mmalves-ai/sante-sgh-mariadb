@@ -25,3 +25,4 @@ export * from './especialidade/ligacoes.js';
 export * from './solicitante/manutencao.js';
 export * from './solicitante/unificacao.js';
 export * from './linha-cuidado/linha-cuidado.js';
+export * from './profissional/provisorio.js';

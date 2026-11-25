@@ -93,6 +93,12 @@ const registro = (x: ProfissionalResumo['registros'][number]) =>
       </p>
       <div v-if="!historico" class="cabecalho__acoes">
         <RouterLink
+          class="link-discreto"
+          data-testid="link-provisorios"
+          to="/cadastros/profissionais/provisorios"
+          >{{ t('profissionalProvisorio.linkProvisorios') }}</RouterLink
+        >
+        <RouterLink
           v-if="pode('cadastro.conselho.ler')"
           class="link-discreto"
           to="/cadastros/profissionais/conselhos"

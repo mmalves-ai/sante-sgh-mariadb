@@ -114,6 +114,13 @@ export const rotasCadastro: RouteRecordRaw[] = [
     },
   },
   {
+    // F8 (02-CAD linha 21): profissional provisório (atende antes do cadastro completo) e a regularização.
+    path: '/cadastros/profissionais/provisorios',
+    name: 'cadastro.profissionais.provisorios',
+    component: () => import('./telas/ProfissionaisProvisoriosTela.vue'),
+    meta: { permissao: 'cadastro.profissional.ler' },
+  },
+  {
     path: '/cadastros/profissionais/conselhos',
     name: 'cadastro.conselhos',
     component: () => import('./telas/ConselhosTela.vue'),

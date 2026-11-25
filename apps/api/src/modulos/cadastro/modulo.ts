@@ -32,6 +32,8 @@ import { lembrarCadastroMemoria, PortaCadastroMemoria } from './porta-memoria.js
 import { PortaCadastroPropria } from './porta-propria.js';
 import { TISS_CONFIGURACAO, TissConfiguracaoPropria } from './tiss-configuracao-proprio.js';
 import { ProfissionaisController } from './profissionais.controller.js';
+import { ProfissionalProvisorioController } from './profissional-provisorio.controller.js';
+import { PROFISSIONAL_PROVISORIO, ProfissionalProvisorioProprio } from './profissional-provisorio-proprio.js';
 import { ProfissionalComplementoController } from './profissional-complemento.controller.js';
 import {
   COMPLEMENTO_PROFISSIONAL,
@@ -85,6 +87,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
     (ctx.nucleo && cliente ? new IdentidadeEstabelecimentoPropria(ctx.nucleo, cliente) : null);
   // F8 (02-CAD linha 11): programas de saúde e linhas de cuidado do paciente, só no banco do cliente.
   const linhasCuidado = ctx.nucleo && cliente ? new LinhasCuidadoPropria(ctx.nucleo, cliente) : null;
+  // F8 (02-CAD linha 21): profissional provisório e a regularização, só no banco do cliente.
+  const provisorio = ctx.nucleo && cliente ? new ProfissionalProvisorioProprio(ctx.nucleo, cliente) : null;
   return {
     module: ModuloCadastro,
     controllers: [
@@ -100,6 +104,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       IdentidadeEstabelecimentoController,
       CalendarioController,
       LinhasCuidadoController,
+      ProfissionalProvisorioController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: porta },
@@ -114,6 +119,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       { provide: TISS_CONFIGURACAO, useValue: tiss },
       { provide: IDENTIDADE_ESTABELECIMENTO, useValue: identidade },
       { provide: LINHAS_CUIDADO, useValue: linhasCuidado },
+      { provide: PROFISSIONAL_PROVISORIO, useValue: provisorio },
     ],
     exports: [PORTA_CADASTRO],
   };
