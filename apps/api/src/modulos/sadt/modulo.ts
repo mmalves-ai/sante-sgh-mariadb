@@ -50,6 +50,10 @@ import { CatalogoRespostasSadtController } from './catalogo-respostas.controller
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
 import { EscalaExecucaoController, SERVICO_ESCALA_EXECUCAO } from './escala-execucao.controller.js';
+import {
+  InterfaceEquipamentoController,
+  SERVICO_INTERFACE_EQUIPAMENTO,
+} from './interface-equipamento.controller.js';
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
 import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
 
@@ -149,6 +153,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       ApoioRemessaController,
       LimitesExameController,
       EscalaExecucaoController,
+      InterfaceEquipamentoController,
       MicrobiologiaController,
     ],
     providers: [
@@ -220,6 +225,16 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoLaudoRedacao } = await import('./aplicacao/laudo-redacao.js');
           return new ServicoLaudoRedacao(ctx.nucleo);
+        },
+      },
+      // Interface com os equipamentos do laboratório (05-SADT linha 13): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_INTERFACE_EQUIPAMENTO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoInterfaceEquipamento } =
+            await import('./aplicacao/interface-equipamento-propria.js');
+          return new ServicoInterfaceEquipamento(ctx.nucleo);
         },
       },
       // Escala de execução (05-SADT linha 19): só no banco do cliente (sem ele, 503).
