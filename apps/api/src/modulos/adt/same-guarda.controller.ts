@@ -10,6 +10,8 @@
 //   POST /api/same/guarda/volumes/:id/descarte           elimina o volume: prazo de guarda cumprido e deliberação
 //   POST /api/same/guarda/volumes/:id/desfazer           desfaz o último movimento (exclusão lógica com motivo)
 //   POST /api/same/guarda/volumes/:id/extravio           registra o extravio com o motivo
+//   POST /api/same/guarda/volumes/:id/guarda-externa     envia o volume do arquivo à empresa de guarda externa (caixa)
+//   POST /api/same/guarda/volumes/:id/guarda-externa/retorno   o retorno da guarda externa ao local de guarda
 // Níveis de acesso: os do SAME (same.movimento.ler/criar/excluir), para todo cargo que os tiver. A eliminação do volume
 // (irreversível) fica no nível de excluir, não no de movimentar.
 import {
@@ -155,5 +157,29 @@ export class SameGuardaController {
   @Permissao(PERMISSOES_SAME_GUARDA.movimentar)
   extravio(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.registrarExtravio(c, id, corpo));
+  }
+
+  @Post('volumes/:id/guarda-externa')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_SAME_GUARDA.movimentar)
+  enviarGuardaExterna(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.guardaExterna(c, id, 'envio', corpo));
+  }
+
+  @Post('volumes/:id/guarda-externa/retorno')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_SAME_GUARDA.movimentar)
+  retornarGuardaExterna(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.guardaExterna(c, id, 'retorno', corpo));
   }
 }

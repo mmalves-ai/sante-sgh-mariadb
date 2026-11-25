@@ -59,6 +59,7 @@ const esquemaVolume = z.object({
   previsaoRetorno: z.string().nullable(),
   retornoAtrasado: z.boolean(),
   extraviadoEm: z.string().nullable(),
+  guardaExterna: z.object({ desde: z.string(), caixa: z.string().nullable() }).nullable().default(null),
   guardaDesde: z.string().nullable(),
   prazoGuardaAnos: z.number().nullable(),
   versao: z.number(),
@@ -92,5 +93,14 @@ export const descartarVolume = (volume: number, corpo: unknown) =>
   enviar(`${G}/volumes/${volume}/descarte`, corpo, qualquer, novaChave('same-descarte'));
 export const desfazerUltimo = (volume: number, corpo: unknown) =>
   enviar(`${G}/volumes/${volume}/desfazer`, corpo, qualquer, novaChave('same-desfazer'));
+export const enviarGuardaExterna = (volume: number, corpo: unknown) =>
+  enviar(`${G}/volumes/${volume}/guarda-externa`, corpo, qualquer, novaChave('same-guarda-externa'));
+export const retornarGuardaExterna = (volume: number, corpo: unknown) =>
+  enviar(
+    `${G}/volumes/${volume}/guarda-externa/retorno`,
+    corpo,
+    qualquer,
+    novaChave('same-guarda-externa-retorno'),
+  );
 export const registrarExtravio = (volume: number, corpo: unknown) =>
   enviar(`${G}/volumes/${volume}/extravio`, corpo, qualquer, novaChave('same-extravio'));

@@ -5,7 +5,7 @@
 // e pelas exigências da operação do cadastro, e a regra do domínio confere na hora (o botão diz o que falta). A
 // abertura do volume já o registra no local; o último movimento se desfaz com o motivo; o extravio fica registrado. O
 // descarte vai pela rota própria, com a deliberação da comissão escolhida e o prazo de guarda conferido na hora.
-import { conferirMovimentoGuarda, type VolumeGuarda } from '@sgh/dominio-hotelaria';
+import { conferirGuardaExterna, conferirMovimentoGuarda, type VolumeGuarda } from '@sgh/dominio-hotelaria';
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
@@ -20,8 +20,10 @@ import {
   lerDeliberacoesDescarte,
   lerOperacoesGuarda,
   lerVolumes,
+  enviarGuardaExterna,
   movimentarVolume,
   registrarExtravio,
+  retornarGuardaExterna,
   type VolumeTela,
 } from '../api-same-guarda.js';
 
@@ -145,6 +147,8 @@ interface FormMovimento {
   deliberacao: string;
   observacao: string;
   motivo: string;
+  empresa: string;
+  caixa: string;
 }
 const mov = reactive<Record<number, FormMovimento>>({});
 const doVolume = (v: VolumeTela) =>
@@ -157,6 +161,8 @@ const doVolume = (v: VolumeTela) =>
     deliberacao: '',
     observacao: '',
     motivo: '',
+    empresa: '',
+    caixa: '',
   });
 const operacaoDe = (v: VolumeTela) =>
   operacoes.data.value?.find((o) => o.codigo === doVolume(v).operacao) ?? null;
@@ -239,6 +245,34 @@ const extraviar = (v: VolumeTela) =>
     () => registrarExtravio(v.id, { motivo: doVolume(v)['motivo'], versao: v.versao }),
     () => delete mov[v.id],
   );
+// Guarda externa: a mesma regra do servidor, conferida na hora (empresa, caixa e só o volume que está no arquivo).
+const problemasExterna = (v: VolumeTela) =>
+  conferirGuardaExterna(
+    {
+      situacao: v.situacao as VolumeGuarda['situacao'],
+      noLocal: v.noLocal,
+      localArquivo: v.local?.id ?? null,
+      naGuardaExterna: v.guardaExterna !== null,
+    },
+    {
+      sentido: v.guardaExterna ? 'retorno' : 'envio',
+      empresa: doVolume(v).empresa,
+      caixa: doVolume(v).caixa,
+    },
+  ).map((p) => p.mensagem);
+const guardaExterna = (v: VolumeTela) =>
+  tentar(
+    () =>
+      v.guardaExterna
+        ? retornarGuardaExterna(v.id, { observacao: doVolume(v).observacao || null, versao: v.versao })
+        : enviarGuardaExterna(v.id, {
+            empresa: doVolume(v).empresa,
+            caixa: doVolume(v).caixa,
+            observacao: doVolume(v).observacao || null,
+            versao: v.versao,
+          }),
+    () => delete mov[v.id],
+  );
 const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : '');
 </script>
 
@@ -246,6 +280,9 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
   <section class="same-guarda" data-testid="same-guarda">
     <h1>{{ k('titulo') }}</h1>
     <p>{{ k('texto') }}</p>
+    <p>
+      <RouterLink to="/same/tramite" data-testid="same-ir-tramite">{{ t('sameTramite.titulo') }}</RouterLink>
+    </p>
     <form class="linha" @submit.prevent="buscar">
       <SanteCampoTexto
         v-model="busca.prontuario"
@@ -360,6 +397,39 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
             @click="extraviar(v)"
           />
         </div>
+
+        <fieldset
+          v-if="!['eliminado', 'extraviado'].includes(v.situacao) && (v.noLocal || v.guardaExterna)"
+          class="linha"
+          data-testid="guarda-externa"
+        >
+          <legend>{{ k('guardaExternaTitulo') }}</legend>
+          <template v-if="v.guardaExterna">
+            <span data-testid="guarda-externa-desde">
+              {{ k('guardaExternaDesde') }} {{ quando(v.guardaExterna.desde) }}
+            </span>
+          </template>
+          <template v-else>
+            <SanteCampoTexto
+              v-model="doVolume(v).empresa"
+              :rotulo="k('guardaExternaEmpresa')"
+              :max-bytes="60"
+              data-testid="guarda-externa-empresa"
+            />
+            <SanteCampoTexto
+              v-model="doVolume(v).caixa"
+              :rotulo="k('guardaExternaCaixa')"
+              :max-bytes="30"
+              data-testid="guarda-externa-caixa"
+            />
+          </template>
+          <SanteBotao
+            :rotulo="v.guardaExterna ? k('guardaExternaRetornar') : k('guardaExternaEnviar')"
+            :desabilitado="problemasExterna(v).length > 0"
+            data-testid="guarda-externa-gravar"
+            @click="guardaExterna(v)"
+          />
+        </fieldset>
 
         <details>
           <summary>{{ k('linhaDoTempo') }}</summary>

@@ -223,10 +223,12 @@ export const rotasAdt: RouteRecordRaw[] = [
     component: () => import('./telas/SameGuardaTela.vue'),
     meta: { permissao: 'same.movimento.ler' },
   },
+  // A movimentação pela conta e pelo código numérico da operação foi aposentada (04-HOT L126): o endereço antigo do menu
+  // leva à guarda pelo volume, que decide pelo tipo e pelo sentido da operação do cadastro.
   {
     path: '/same/movimentos',
     name: 'adt.same',
-    component: () => import('./telas/SameTela.vue'),
+    redirect: '/same/guarda',
     meta: { permissao: 'same.movimento.ler' },
   },
   // M44 (etapa 2): o NIR.

@@ -135,7 +135,7 @@ test.describe('Protocolo e empréstimo do arquivo @F39-5 @fase3', () => {
     });
 
     await entrar(page, 'SINT.ARQUIVO');
-    await page.goto('/same/movimentos');
+    await page.goto('/same/guarda');
     await page.getByTestId('same-ir-tramite').click();
     await expect(page).toHaveURL(/\/same\/tramite$/);
     const tela = page.getByTestId('same-tramite');

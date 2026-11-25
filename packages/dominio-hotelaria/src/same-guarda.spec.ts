@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   conferirExtravio,
+  conferirGuardaExterna,
   conferirMovimentoGuarda,
   type DadosDescarte,
   efeitoNoVolume,
@@ -219,5 +220,31 @@ describe('SAME pelo volume', () => {
     expect(lerMatriculaVolume('abc')).toBeNull();
     expect(retornoAtrasado(fora, new Date(agora.getTime() - 1), agora)).toBe(true);
     expect(retornoAtrasado(noArquivo, new Date(agora.getTime() - 1), agora)).toBe(false);
+  });
+
+  it('a guarda externa: só sai o que está no arquivo, com a empresa e a caixa; fora, nada se movimenta até o retorno', () => {
+    const envio = { sentido: 'envio' as const, empresa: 'Guarda Sintética', caixa: 'CX-01' };
+    expect(conferirGuardaExterna(noArquivo, envio)).toEqual([]);
+    expect(
+      conferirGuardaExterna(noArquivo, { sentido: 'envio', empresa: ' a ', caixa: ' ' }).map((e) => e.campo),
+    ).toEqual(['empresa', 'caixa']);
+    expect(conferirGuardaExterna(fora, envio).map((e) => e.mensagem)).toEqual([
+      'Só o volume que está no arquivo vai para a guarda externa: um lugar por vez.',
+    ]);
+    expect(conferirGuardaExterna({ ...noArquivo, situacao: 'eliminado' }, envio)[0]?.campo).toBe('volume');
+    expect(conferirGuardaExterna({ ...noArquivo, situacao: 'extraviado' }, envio)[0]?.campo).toBe('volume');
+    const externo: VolumeGuarda = { ...noArquivo, noLocal: false, naGuardaExterna: true };
+    expect(conferirGuardaExterna(externo, envio).map((e) => e.mensagem)).toEqual([
+      'O volume já está na guarda externa.',
+    ]);
+    // Na guarda externa nenhuma operação do cadastro vale: nem saída, nem devolução, nem descarte.
+    for (const tipo of ['saida', 'devolucao', 'transferencia', 'descarte'])
+      expect(campos(externo, pedido(tipo, { setorDestino: 3, previsaoRetorno: amanha }))).toEqual(['volume']);
+    const retorno = { sentido: 'retorno' as const, empresa: null, caixa: null };
+    expect(conferirGuardaExterna(externo, retorno)).toEqual([]);
+    expect(conferirGuardaExterna(noArquivo, retorno).map((e) => e.mensagem)).toEqual([
+      'O volume não está na guarda externa.',
+    ]);
+    expect(conferirGuardaExterna({ ...externo, localArquivo: null }, retorno)[0]?.campo).toBe('localDestino');
   });
 });

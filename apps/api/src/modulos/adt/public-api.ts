@@ -9,7 +9,6 @@ export { PORTA_ADT, type PortaAdt, portaAdtIndisponivel } from './porta.js';
 export { PortaAdtPropria } from './porta-propria.js';
 export { indicadoresGiroLeito, totaisGiro } from './indicadores-giro.js';
 export { PortaAdtMemoria } from './porta-memoria.js';
-export { SameController } from './same.controller.js';
 export { ServicoAdt } from './servico.js';
 export { AVISOS_ADT } from './simbolos.js';
 // M44 (etapa 2): o NIR (solicitação de leito, fila, reserva, alta prevista, barreiras, permanência e calibragem).

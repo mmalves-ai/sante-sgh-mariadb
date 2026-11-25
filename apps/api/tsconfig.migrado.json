@@ -795,7 +795,6 @@
     "src/modulos/adt/public-api.ts",
     "src/modulos/adt/regulacao.controller.ts",
     "src/modulos/adt/regulacao.spec.ts",
-    "src/modulos/adt/same.controller.ts",
     "src/modulos/adt/servico.ts",
     "src/modulos/adt/simbolos.ts",
     "src/modulos/adt/tipos.ts",

@@ -14,8 +14,13 @@
 //     volume é refeito pelos movimentos que restam; desfeita a entrada, a saída que ela fechou volta a aberta
 //     (devolvido_em nulo) e, se o volume estava extraviado antes dela, o extravio volta com o instante e quem registrou;
 //   - extravio: `volume_prontuario` 'extraviado' com o instante e quem registrou, e a ocorrência 'extravio' com o motivo.
+//   - guarda externa: o envio (só do volume no arquivo) grava `enviado_guarda_externa_em`, a caixa da empresa em
+//     `identificador_envelope` e o volume fora do local (a vaga no local de guarda fica reservada), com a ocorrência
+//     'guarda_externa' (empresa no protocolo); o retorno volta o volume ao local e limpa o envio, com outra ocorrência.
+//     Na guarda externa nenhuma operação do cadastro nem o desfazer valem até o retorno.
 import {
   conferirExtravio,
+  conferirGuardaExterna,
   conferirMovimentoGuarda,
   type DadosDescarte,
   efeitoNoVolume,
@@ -98,6 +103,14 @@ const esquemaMovimentar = z
   })
   .strict();
 
+const esquemaGuardaExterna = z
+  .object({
+    empresa: z.string().trim().max(60).nullable().default(null),
+    caixa: z.string().trim().max(30).nullable().default(null),
+    observacao: z.string().trim().max(500).nullable().default(null),
+    versao: z.number().int().positive(),
+  })
+  .strict();
 const esquemaMotivo = z
   .object({ motivo: z.string().trim().max(500), versao: z.number().int().positive() })
   .strict();
@@ -129,6 +142,8 @@ export interface VolumeLido {
   readonly previsaoRetorno: string | null;
   readonly retornoAtrasado: boolean;
   readonly extraviadoEm: string | null;
+  /** Na guarda externa: desde quando e em que caixa ou envelope da empresa (null: não está lá). */
+  readonly guardaExterna: { desde: string; caixa: string | null } | null;
   /** Desde quando corre o prazo de guarda (último documento ou abertura) e o prazo do tipo, em anos (null: permanente). */
   readonly guardaDesde: string | null;
   readonly prazoGuardaAnos: number | null;
@@ -171,6 +186,7 @@ async function estadoDoVolume(l: Pick<Leitor, 'uma'>, v: Record<string, unknown>
     setorAtual: u ? numOuNull(u['destino_setor_funcional_id'] ?? u['saida_setor_funcional_id']) : null,
     temMovimento: !!u,
     ultimoTipo: u ? (String(u['tipo']) as TipoOperacaoGuarda) : null,
+    naGuardaExterna: v['enviado_guarda_externa_em'] !== null && v['enviado_guarda_externa_em'] !== undefined,
   };
 }
 
@@ -366,9 +382,11 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
               ? 'Eliminado'
               : situacao === 'extraviado'
                 ? 'Extraviado'
-                : noLocal
-                  ? (caminho ?? 'No arquivo')
-                  : String(ultimo?.['sd_nome'] ?? ultimo?.['so_nome'] ?? 'Fora do arquivo'),
+                : v['enviado_guarda_externa_em']
+                  ? `Guarda externa${v['identificador_envelope'] ? ` (${String(v['identificador_envelope'])})` : ''}`
+                  : noLocal
+                    ? (caminho ?? 'No arquivo')
+                    : String(ultimo?.['sd_nome'] ?? ultimo?.['so_nome'] ?? 'Fora do arquivo'),
           previsaoRetorno: iso(previsao),
           retornoAtrasado: retornoAtrasado(
             { noLocal, situacao: situacao as SituacaoVolume },
@@ -376,6 +394,9 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
             agora,
           ),
           extraviadoEm: iso(v['extraviado_em']),
+          guardaExterna: v['enviado_guarda_externa_em']
+            ? { desde: iso(v['enviado_guarda_externa_em'])!, caixa: txtOuNull(v['identificador_envelope']) }
+            : null,
           guardaDesde: iso(v['periodo_fim'] ?? v['aberto_em']),
           prazoGuardaAnos: numOuNull(v['prazo_guarda_anos']),
           versao: num(v['versao']),
@@ -657,6 +678,10 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
           throw recusaRegra('Desfazer recusado', [
             { campo: 'volume', mensagem: 'O volume eliminado ou extraviado não se desfaz.' },
           ]);
+        if (v['enviado_guarda_externa_em'])
+          throw recusaRegra('Desfazer recusado', [
+            { campo: 'volume', mensagem: 'O volume está na guarda externa: registre o retorno antes.' },
+          ]);
         const movs = await tx.consultarParaAtualizar<Record<string, unknown>>(
           `SELECT m.id, m.versao, m.movimentado_em, m.destino_local_arquivo_id, m.destino_setor_funcional_id, m.saida_setor_funcional_id,
                   op.codigo, op.descricao, op.tipo, op.sentido, op.exige_destino, op.exige_previsao_retorno, op.encerra_guarda
@@ -782,6 +807,64 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
           extraviado_em: agora,
           extravio_usuario_id: usuario,
         });
+        return { tabela: 'ocorrencia_arquivo_prontuario', id: oc };
+      },
+    );
+  }
+
+  /** O envio do volume à empresa de guarda externa ou o retorno dele ao arquivo, com a ocorrência (nada apagado). */
+  guardaExterna(
+    c: ContextoPortaPropria,
+    volume: number,
+    sentido: 'envio' | 'retorno',
+    entrada: unknown,
+  ): Promise<{ id: number }> {
+    const e = entradaValida(esquemaGuardaExterna, entrada);
+    return this.gravar(
+      c,
+      `same.guarda.externa-${sentido}`,
+      ['volume_prontuario', 'ocorrencia_arquivo_prontuario'],
+      async (tx, est, usuario) => {
+        const v = await this.volumeTravado(tx, est.id, volume);
+        const p = conferirGuardaExterna(
+          {
+            situacao: String(v['situacao']) as SituacaoVolume,
+            noLocal: bool(v['no_local']),
+            localArquivo: numOuNull(v['local_arquivo_id']),
+            naGuardaExterna: v['enviado_guarda_externa_em'] !== null,
+          },
+          { sentido, empresa: e.empresa, caixa: e.caixa },
+        );
+        if (num(v['versao']) !== e.versao)
+          p.push({ campo: 'versao', mensagem: 'O volume mudou desde a leitura: recarregue.' });
+        if (p.length) throw recusaRegra(sentido === 'envio' ? 'Envio recusado' : 'Retorno recusado', p);
+        const agora = new Date();
+        const oc = await tx.incluir('ocorrencia_arquivo_prontuario', {
+          estabelecimento_id: est.id,
+          atendimento_id: numOuNull(v['atendimento_id']),
+          volume_prontuario_id: volume,
+          tipo: 'guarda_externa',
+          motivo: [
+            sentido === 'envio'
+              ? `Envio à guarda externa, caixa ${e.caixa}`
+              : `Retorno da guarda externa${v['identificador_envelope'] ? `, caixa ${String(v['identificador_envelope'])}` : ''}`,
+            e.observacao,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+            .slice(0, 500),
+          protocolo: sentido === 'envio' ? e.empresa : null,
+          registrado_em: agora,
+          usuario_id: usuario,
+        });
+        await tx.alterar(
+          'volume_prontuario',
+          volume,
+          num(v['versao']),
+          sentido === 'envio'
+            ? { no_local: false, enviado_guarda_externa_em: agora, identificador_envelope: e.caixa }
+            : { no_local: true, enviado_guarda_externa_em: null, identificador_envelope: null },
+        );
         return { tabela: 'ocorrencia_arquivo_prontuario', id: oc };
       },
     );

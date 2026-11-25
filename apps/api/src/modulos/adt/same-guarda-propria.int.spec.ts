@@ -444,4 +444,88 @@ describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de
     expect(lidos.map((l) => l.situacao).sort()).toEqual(['arquivado', 'eliminado', 'extraviado']);
     expect(lidos.find((l) => l.id === v2.id)?.ondeEsta).toBe('Sala 1 > Armário 3');
   });
+
+  it('a guarda externa: envio do volume no arquivo com a caixa, nada se movimenta lá e o retorno volta ao local', async () => {
+    const v = await porta.abrirVolume(ctx(), {
+      paciente: m.paciente,
+      tipoDocumento: m.tipo,
+      localArquivo: m.arquivo,
+    });
+    let y = await volume(v.id);
+    // Sem empresa nem caixa recusa, sem escrita.
+    expect(
+      await falha(porta.guardaExterna(ctx(), v.id, 'envio', { empresa: '', versao: Number(y['versao']) })),
+    ).toMatch(/empresa de guarda externa/);
+    expect(await volume(v.id)).toMatchObject({ enviado_guarda_externa_em: null, versao: y['versao'] });
+    await porta.guardaExterna(ctx(), v.id, 'envio', {
+      empresa: 'Guarda sintética',
+      caixa: 'CX-77',
+      versao: Number(y['versao']),
+    });
+    y = await volume(v.id);
+    expect(y).toMatchObject({
+      situacao: 'arquivado',
+      no_local: 0,
+      local_arquivo_id: m.arquivo,
+      identificador_envelope: 'CX-77',
+      versao: 2,
+    });
+    expect(y['enviado_guarda_externa_em']).not.toBeNull();
+    // Lá fora: nenhuma operação do cadastro, nem o desfazer, nem outro envio.
+    expect(
+      await falha(
+        porta.movimentar(ctx(), v.id, {
+          operacao: 'saida',
+          setorDestino: m.setorUti,
+          previsaoRetorno: amanha,
+          responsavel: 'ENF',
+          versao: Number(y['versao']),
+        }),
+      ),
+    ).toMatch(/guarda externa/);
+    expect(
+      await falha(porta.desfazerUltimo(ctx(), v.id, { motivo: 'tentativa de desfazer', versao: 2 })),
+    ).toMatch(/guarda externa/);
+    expect(
+      await falha(
+        porta.guardaExterna(ctx(), v.id, 'envio', { empresa: 'Guarda sintética', caixa: 'CX-78', versao: 2 }),
+      ),
+    ).toMatch(/já está na guarda externa/);
+    const lido = (await porta.volumesDoPaciente(ctx(), m.paciente)).find((l) => l.id === v.id)!;
+    expect(lido.ondeEsta).toBe('Guarda externa (CX-77)');
+    expect(lido.guardaExterna?.caixa).toBe('CX-77');
+    await porta.guardaExterna(ctx(), v.id, 'retorno', { observacao: 'conferido', versao: 2 });
+    expect(await volume(v.id)).toMatchObject({
+      situacao: 'arquivado',
+      no_local: 1,
+      local_arquivo_id: m.arquivo,
+      enviado_guarda_externa_em: null,
+      identificador_envelope: null,
+      versao: 3,
+    });
+    expect(await falha(porta.guardaExterna(ctx(), v.id, 'retorno', { versao: 3 }))).toMatch(
+      /não está na guarda externa/,
+    );
+    const oc = await ler(
+      "SELECT motivo, protocolo, usuario_id FROM ocorrencia_arquivo_prontuario WHERE volume_prontuario_id = ? AND tipo = 'guarda_externa' ORDER BY id",
+      [v.id],
+    );
+    expect(oc).toEqual([
+      { motivo: 'Envio à guarda externa, caixa CX-77', protocolo: 'Guarda sintética', usuario_id: m.usuario },
+      {
+        motivo: 'Retorno da guarda externa, caixa CX-77 · conferido',
+        protocolo: null,
+        usuario_id: m.usuario,
+      },
+    ]);
+    // De volta ao arquivo, o volume volta a se movimentar.
+    await porta.movimentar(ctx(), v.id, {
+      operacao: 'saida',
+      setorDestino: m.setorUti,
+      previsaoRetorno: amanha,
+      responsavel: 'ENF',
+      versao: 3,
+    });
+    expect(await volume(v.id)).toMatchObject({ situacao: 'emprestado', no_local: 0 });
+  });
 });

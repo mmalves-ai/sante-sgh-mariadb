@@ -48,7 +48,6 @@ import { TransportePacienteController } from './transporte-paciente.controller.j
 import { RegulacaoController } from './regulacao.controller.js';
 import { PORTA_REGULACAO_ENTRADA, PortaRegulacaoEntradaPropria } from './regulacao-entrada-propria.js';
 import { RegulacaoEntradaController } from './regulacao-entrada.controller.js';
-import { SameController } from './same.controller.js';
 import { SameGuardaController } from './same-guarda.controller.js';
 import { PORTA_SAME_GUARDA, PortaSameGuardaPropria } from './same-guarda-propria.js';
 import { SameTramiteController } from './same-tramite.controller.js';
@@ -129,7 +128,6 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       RegulacaoController,
       RegulacaoEntradaController,
       HigienizacaoController,
-      SameController,
       DocumentosInternacaoController,
       GasSetorController,
       TransportePacienteController,

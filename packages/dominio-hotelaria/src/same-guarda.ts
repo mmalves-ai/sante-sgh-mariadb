@@ -71,6 +71,8 @@ export interface VolumeGuarda {
   readonly temMovimento: boolean;
   /** O tipo do último movimento válido. */
   readonly ultimoTipo: TipoOperacaoGuarda | null;
+  /** O volume foi enviado à empresa de guarda externa e ainda não voltou (fora do arquivo, sem setor). */
+  readonly naGuardaExterna?: boolean;
 }
 
 export interface PedidoGuarda {
@@ -129,6 +131,13 @@ export function conferirMovimentoGuarda(v: VolumeGuarda, p: PedidoGuarda): Probl
       {
         campo: 'volume',
         mensagem: 'O volume está extraviado: só a devolução ao arquivo (reencontrado) é aceita.',
+      },
+    ];
+  if (v.naGuardaExterna)
+    return [
+      {
+        campo: 'volume',
+        mensagem: 'O volume está na guarda externa: registre o retorno ao arquivo antes de movimentá-lo.',
       },
     ];
   // Fora do arquivo o volume está sempre num setor: a saída e o empréstimo pedem o setor (o local de destino só vale
@@ -273,4 +282,41 @@ export function retornoAtrasado(
   return (
     !v.noLocal && v.situacao === 'emprestado' && previsao !== null && previsao.getTime() < agora.getTime()
   );
+}
+
+/** A guarda externa: o envio do volume à empresa de guarda (caixa ou envelope dela) e o retorno ao arquivo. */
+export interface PedidoGuardaExterna {
+  readonly sentido: 'envio' | 'retorno';
+  /** A empresa de guarda (ou o contrato), no envio. */
+  readonly empresa: string | null;
+  /** A caixa ou o envelope da empresa onde o volume vai, no envio. */
+  readonly caixa: string | null;
+}
+
+/** Confere o envio à guarda externa ou o retorno dela; devolve os problemas (vazio: pode gravar). Só o volume que está
+ * no arquivo sai para a guarda externa (um lugar por vez); só o que está lá volta, ao seu local de guarda. */
+export function conferirGuardaExterna(
+  v: Pick<VolumeGuarda, 'situacao' | 'noLocal' | 'localArquivo' | 'naGuardaExterna'>,
+  p: PedidoGuardaExterna,
+): ProblemaGuarda[] {
+  if (v.situacao === 'eliminado') return [{ campo: 'volume', mensagem: 'O volume foi eliminado.' }];
+  if (v.situacao === 'extraviado') return [{ campo: 'volume', mensagem: 'O volume está extraviado.' }];
+  const erros: ProblemaGuarda[] = [];
+  if (p.sentido === 'retorno') {
+    if (!v.naGuardaExterna) erros.push({ campo: 'volume', mensagem: 'O volume não está na guarda externa.' });
+    else if (v.localArquivo === null)
+      erros.push({ campo: 'localDestino', mensagem: 'O volume não tem local de guarda no arquivo.' });
+    return erros;
+  }
+  if (v.naGuardaExterna) erros.push({ campo: 'volume', mensagem: 'O volume já está na guarda externa.' });
+  else if (!v.noLocal || v.situacao !== 'arquivado')
+    erros.push({
+      campo: 'volume',
+      mensagem: 'Só o volume que está no arquivo vai para a guarda externa: um lugar por vez.',
+    });
+  if (!p.empresa || p.empresa.trim().length < 3)
+    erros.push({ campo: 'empresa', mensagem: 'Informe a empresa de guarda externa.' });
+  if (!p.caixa?.trim())
+    erros.push({ campo: 'caixa', mensagem: 'Informe a caixa ou o envelope da guarda externa.' });
+  return erros;
 }

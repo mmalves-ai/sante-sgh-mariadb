@@ -192,32 +192,12 @@ test.describe('Internação, leitos, higienização e SAME @M21 @fase2', () => {
     await expect(page.getByTestId(`leito-${destino}`)).toHaveAttribute('data-situacao', 'livre');
     await sair(page);
 
-    // SAME: a etiqueta da conta (o leitor manda o número e o Enter); a saída para o faturamento e o recebimento.
+    // SAME: a movimentação pela conta foi aposentada (04-HOT L126); o endereço do menu leva à guarda pelo volume, cujo
+    // caminho de tela é o E2E f39-same-guarda.spec.ts.
     await entrar(page, 'SINT.ARQUIVO');
     await page.goto('/same/movimentos');
-    await expect(page.getByTestId('tela-same')).toBeVisible();
-    await page.getByTestId('same-codigo').fill(`${reg}`);
-    await page.getByTestId('same-codigo').press('Enter');
-    await expect(page.getByTestId('same-local')).toBeVisible();
-    await semViolacaoAxe(page, '/same/movimentos');
-    await escolher(page.getByTestId('same-operacao'), '2');
-    await escolher(page.getByTestId('same-destino'), '5');
-    await escolher(page.getByTestId('same-motivo'), '1');
-    await page.getByTestId('same-responsavel').locator('input').fill('RESPONSAVEL SINTETICO');
-    await page.getByTestId('same-gravar').click();
-    await expect(page.getByTestId('same-mensagem')).toContainText('Movimento registrado');
-    await expect(page.getByTestId('same-local')).toContainText('FATURAMENTO');
-    // O recebimento na auditoria, que não recebeu o envio: recusado; vira a ocorrência registrada.
-    await escolher(page.getByTestId('same-operacao'), '6');
-    await escolher(page.getByTestId('same-destino'), '9');
-    await page.getByTestId('same-gravar').click();
-    await expect(page.getByTestId('recusa-adt')).toContainText('não foi enviado');
-    await page.getByTestId('same-ocorrencia-texto').locator('input').fill('Chegou sem o envio registrado');
-    await page.getByTestId('same-ocorrencia-gravar').click();
-    await expect(page.getByTestId('same-mensagem')).toContainText('Ocorrência registrada');
-    await expect(page.getByTestId('same-ocorrencias')).toContainText('sem o envio');
-    await expect(page.getByTestId('same-atrasadas')).toBeVisible();
-    await semViolacaoAxe(page, '/same/movimentos (ocorrência)');
+    await expect(page).toHaveURL(/\/same\/guarda$/);
+    await expect(page.getByTestId('same-guarda')).toBeVisible();
     expect(externas).toEqual([]);
   });
 

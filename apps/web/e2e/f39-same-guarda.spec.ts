@@ -142,8 +142,8 @@ test.describe('Guarda do prontuário pelo volume @F39-4 @fase3', () => {
     });
 
     await entrar(page, 'SINT.ARQUIVO');
+    // O endereço antigo do menu (a movimentação pela conta, aposentada) leva à guarda pelo volume.
     await page.goto('/same/movimentos');
-    await page.getByTestId('same-ir-guarda').click();
     await expect(page).toHaveURL(/\/same\/guarda$/);
     await expect(page.getByTestId('same-guarda')).toBeVisible();
 
