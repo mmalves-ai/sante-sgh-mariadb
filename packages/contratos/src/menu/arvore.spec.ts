@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('443 itens: M 198, P 57, N 188, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 443, M: 198, P: 57, N: 188 });
+  it('446 itens: M 198, P 57, N 191, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 446, M: 198, P: 57, N: 191 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(443);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(446);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -319,6 +319,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/lancamentos',
         '/faturamento/lotes', // M31
         '/faturamento/pacotes',
+        '/faturamento/protocolos', // C1-114 (06-FAT linha 22)
         '/faturamento/particular/caixa',
         '/faturamento/particular/orcamentos',
         '/faturamento/particular/pagamentos',
@@ -349,6 +350,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/internacao/admissao', // M21
         '/internacao/censo', // M16
         '/internacao/controles/formularios-obito', // F78.04-1 (04-INT linha 74)
+        '/internacao/obitos', // C1-112 (09-AREA linha 74)
         '/internacao/gases/setores', // C1-050 (05-SUP linha 30)
         '/internacao/transportes', // C1-066 (03-PEP linha 125)
         '/internacao/leitos-sus', // F78.04-2 (04-INT linha 79)
@@ -499,6 +501,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/relatorios', // M34
         '/relatorios/agendamentos', // M34
         '/relatorios/bi/rede', // M57 (etapa 3): BI consolidado da Rede
+        '/relatorios/datamart/cargas', // C1-106 (01-REL L113)
         '/relatorios/envios-regulatorios', // M48 (etapa 5): PM-QUALISS, IRAS e Notivisa
         '/relatorios/glosas', // M31
         '/relatorios/indicadores', // M16

@@ -7,12 +7,18 @@
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaDataMartPropria } from './datamart-carga-propria.js';
-import { carregadorIndisponivel, cicloDataMart, type CarregadorDataMart } from './datamart-carga.service.js';
+import {
+  carregadorIndisponivel,
+  cicloDataMart,
+  type CarregadorDataMart,
+  pedidosDataMart,
+} from './datamart-carga.service.js';
 import {
   CLIENTE,
   escrever,
   garantirCliente,
   garantirEstabelecimento,
+  garantirUsuario,
   SEM_BANCO,
 } from './importadores/integracao.spec-util.js';
 import type { AlvoEstabelecimento } from './servico-worker.js';
@@ -163,5 +169,46 @@ describe.skipIf(SEM_BANCO)('carga do data mart registrada pelo worker (f22_o5)',
     expect(
       (await cicloDataMart(porta, CLIENTE, est, sintetico, new Date(DIA2.getTime() + 3_600_000))).devida,
     ).toBe(false);
+  });
+
+  it('o pedido manual da administração (01-REL L113) é assumido uma vez, carregado e fechado com o usuário', async () => {
+    const porta = new PortaDataMartPropria(nucleo, CLIENTE);
+    const usuario = await escrever(nucleo, (e) => garantirUsuario(e, 'f528.datamart'));
+    const pedido = new Date('2026-11-26T15:00:00.000Z');
+    const id = await escrever(nucleo, (e) =>
+      e.inserir(
+        `INSERT INTO carga_data_mart (estabelecimento_id, assunto, tipo_carga, disparo, ocorrido_em, situacao, usuario_id,
+                dados, criado_em)
+         VALUES (?, 'data_mart', 'completa', 'manual', ?, 'em_execucao', ?, '{"pedido":"aguardando"}', ?)`,
+        [est.id, pedido, usuario, pedido],
+      ),
+    );
+    expect(await porta.pedidosAguardando(outro)).toEqual([]);
+    expect(await porta.pedidosAguardando(est)).toEqual([id]);
+    const fim = new Date(pedido.getTime() + 70);
+    const feitos = await pedidosDataMart(porta, CLIENTE, est, sintetico, () => fim);
+    expect(feitos).toEqual([{ devida: true, carga: id, situacao: 'concluida_com_rejeicao', linhas: 43 }]);
+    const [c] = await ler(
+      `SELECT disparo, situacao, usuario_id, linhas_gravadas, versao, concluido_em >= ocorrido_em AS ordem,
+              JSON_UNQUOTE(JSON_EXTRACT(dados, '$.pedido')) AS pedido, JSON_EXTRACT(dados, '$.etapas') AS etapas
+         FROM carga_data_mart WHERE id = ?`,
+      [id],
+    );
+    expect(c).toMatchObject({ disparo: 'manual', situacao: 'concluida_com_rejeicao', pedido: 'iniciado' });
+    expect(
+      [c!['usuario_id'], c!['linhas_gravadas'], c!['versao'], c!['ordem'], c!['etapas']].map(Number),
+    ).toEqual([usuario, 43, 3, 1, 3]);
+    expect(await ler('SELECT id FROM carga_data_mart_etapa WHERE carga_data_mart_id = ?', [id])).toHaveLength(
+      3,
+    );
+    // Já assumido: nem a lista nem uma segunda tentativa o pegam de novo.
+    expect(await porta.pedidosAguardando(est)).toEqual([]);
+    expect(await porta.assumir(est, id)).toBe(false);
+    expect(await pedidosDataMart(porta, CLIENTE, est, sintetico)).toEqual([]);
+    const [t] = await ler(
+      "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'carga_data_mart' AND entidade_id = ?",
+      [id],
+    );
+    expect(Number(t!['n'])).toBeGreaterThanOrEqual(2);
   });
 });

@@ -4,7 +4,8 @@
 // dimensão e fato (carga_data_mart_etapa), a situação e as linhas; a falha fica registrada com a mensagem sem valores
 // de dados e não se repete no mesmo dia. A análise ad hoc (tabela dinâmica, cubo, filtros salvos) é da ferramenta de
 // BI ligada ao arquivo só para leitura (docs/implantacao/ligacao-bi-data-mart.md); o produto não guarda análises.
-// A cada hora; ligado fora de dev/ci; em dev/ci só com DATAMART_CARGA_DIARIA=ligado. Log só com contagens.
+// A cada 5 minutos (pedidos manuais da administração, 01-REL L113; a agendada uma vez por dia); ligado fora de
+// dev/ci; em dev/ci só com DATAMART_CARGA_DIARIA=ligado. Log só com contagens.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { cargaDevida, fecharCarga, type ObjetoCarregado } from '@sgh/dominio-relatorio';
 import { NucleoProprio } from '@sgh/nucleo';
@@ -63,6 +64,38 @@ export async function cicloDataMart(
   if (!devida) return { devida: false, carga: null, situacao: null, linhas: 0 };
   const carga = await porta.abrir(est, agora, instanteLocal(local.data, 0, est.fuso));
   if (carga === null) return { devida: true, carga: null, situacao: null, linhas: 0 };
+  return executarCarga(porta, cliente, est, carga, carregador, agora, relogio);
+}
+
+/**
+ * Os pedidos manuais da administração (01-REL L113): cada um que aguarda é assumido (o segundo consumidor desiste),
+ * carregado e fechado como a carga agendada, com as etapas e a situação; a falha fica registrada.
+ */
+export async function pedidosDataMart(
+  porta: PortaDataMart,
+  cliente: string,
+  est: AlvoEstabelecimento,
+  carregador: CarregadorDataMart,
+  relogio: () => Date = () => new Date(),
+): Promise<ResultadoCargaDataMart[]> {
+  const feitos: ResultadoCargaDataMart[] = [];
+  for (const carga of await porta.pedidosAguardando(est)) {
+    if (!(await porta.assumir(est, carga))) continue;
+    feitos.push(await executarCarga(porta, cliente, est, carga, carregador, relogio(), relogio));
+  }
+  return feitos;
+}
+
+/** Roda o carregador da carga aberta e a fecha (a falha do carregador vira o registro da falha). */
+async function executarCarga(
+  porta: PortaDataMart,
+  cliente: string,
+  est: AlvoEstabelecimento,
+  carga: number,
+  carregador: CarregadorDataMart,
+  agora: Date,
+  relogio: () => Date,
+): Promise<ResultadoCargaDataMart> {
   let objetos: ObjetoCarregado[] = [];
   let erro: unknown = null;
   try {
@@ -105,7 +138,8 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
       const nucleo = new NucleoProprio({ env: process.env });
       this.usar(nucleo, (cliente) => new PortaDataMartPropria(nucleo, cliente));
       void this.ciclo();
-      this.temporizador = setInterval(() => void this.ciclo(), 3_600_000);
+      // A cada 5 minutos: o pedido manual da administração começa logo; a agendada segue uma vez por dia (regra).
+      this.temporizador = setInterval(() => void this.ciclo(), 300_000);
       this.temporizador.unref();
     } catch (e) {
       logger.error({ erro: e instanceof Error ? e.message : 'erro' }, 'carga do data mart não subiu');
@@ -125,7 +159,16 @@ export class DataMartCargaService implements OnApplicationBootstrap, OnApplicati
         process.env,
         'datamart-carga',
         fabrica,
-        (porta, est) => cicloDataMart(porta, est.cliente, est, this.carregador, agora),
+        async (porta, est) => {
+          // Primeiro os pedidos da administração; depois a carga agendada do dia.
+          const manuais = await pedidosDataMart(porta, est.cliente, est, this.carregador);
+          for (const m of manuais)
+            logger.info(
+              { cliente: est.cliente, estabelecimento: est.codigo, situacao: m.situacao, linhas: m.linhas },
+              'carga manual do data mart registrada',
+            );
+          return cicloDataMart(porta, est.cliente, est, this.carregador, agora);
+        },
         (cliente, estabelecimento, e) =>
           logger.warn(
             { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },

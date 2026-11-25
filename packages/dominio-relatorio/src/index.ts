@@ -13,3 +13,4 @@ export * from './agendamento.js';
 export * from './indicador/consolidacao.js';
 // 01-ADM L115: registro da carga do data mart pela rotina do worker (regra pura, sem node:crypto).
 export * from './datamart-registro.js';
+export * from './datamart-pedido.js';

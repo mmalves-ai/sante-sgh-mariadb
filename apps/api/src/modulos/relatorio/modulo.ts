@@ -18,6 +18,8 @@ import { converterHtmlEmPdfA } from '../documento/infra/gotenberg.js';
 import type { ContextoModulo } from '../registro.js';
 import type { FilaEnvioRelatorio } from './aplicacao/gestao.js';
 import { BiRedeController } from './bi-rede.controller.js';
+import { CARGAS_DATAMART, PortaCargasDataMartPropria } from './datamart-cargas-propria.js';
+import { CargasDataMartController } from './datamart-cargas.controller.js';
 import { FilaEnvioPorValkey } from './infra/fila-envio.js';
 import { PORTA_RELATORIO, type PortaRelatorio } from './porta.js';
 import { PortaRelatorioMemoria } from './porta-memoria.js';
@@ -74,9 +76,17 @@ export async function moduloRelatorio(
           (await converterHtmlEmPdfA(gotenberg, html, { metadados: { Title: titulo } })).pdf;
   return {
     module: class ModuloRelatorio {},
-    controllers: [CatalogoRelatoriosController, BiRedeController],
+    controllers: [CatalogoRelatoriosController, BiRedeController, CargasDataMartController],
     providers: [
       { provide: PORTA_RELATORIO, useValue: porta },
+      // 01-REL L113: cargas do data mart na administração (só com o banco do cliente; sem ele, 503).
+      {
+        provide: CARGAS_DATAMART,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCargasDataMartPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       { provide: FILA_ENVIO_RELATORIO, useValue: fila },
       { provide: GERADOR_PDF_RELATORIO, useValue: geradorPdf },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),

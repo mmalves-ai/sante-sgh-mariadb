@@ -5,7 +5,12 @@
 // etapas por dimensão e fato (carga_data_mart_etapa: linhas e tempo) e a situação, as linhas e a mensagem sem valores.
 // Melhoria: o registro guarda só contagens, tempos e a mensagem limpa; nenhum dado de pessoa vai ao registro.
 import { randomUUID } from 'node:crypto';
-import { ASSUNTO_CARGA_DATAMART, type FechamentoDaCarga } from '@sgh/dominio-relatorio';
+import {
+  ASSUNTO_CARGA_DATAMART,
+  type FechamentoDaCarga,
+  PEDIDO_AGUARDANDO,
+  PEDIDO_INICIADO,
+} from '@sgh/dominio-relatorio';
 import { definirOperacao, type Executor, type Leitor } from '@sgh/nucleo';
 import { z } from 'zod';
 import { type AlvoEstabelecimento, estabelecimentosAtivos, type NucleoWorker } from './servico-worker.js';
@@ -16,6 +21,10 @@ export interface PortaDataMart {
   ultimaIniciada(est: AlvoEstabelecimento): Promise<Date | null>;
   /** Abre a carga em execução; null se outra já começou depois de `desde` (o início do dia local). */
   abrir(est: AlvoEstabelecimento, inicio: Date, desde: Date): Promise<number | null>;
+  /** As cargas manuais pedidas na administração (01-REL L113) que aguardam o worker, da mais antiga. */
+  pedidosAguardando(est: AlvoEstabelecimento): Promise<number[]>;
+  /** Assume o pedido (aguardando → iniciado), sob a trava da carga; false se outro consumidor já assumiu. */
+  assumir(est: AlvoEstabelecimento, carga: number): Promise<boolean>;
   /** Fecha a carga com as etapas, a situação e as linhas. */
   concluir(est: AlvoEstabelecimento, carga: number, f: FechamentoDaCarga, fim: Date): Promise<void>;
 }
@@ -78,13 +87,46 @@ const operacaoAbrir = definirOperacao<z.infer<typeof ABRIR>, { carga: number | n
   alvo: (e) => ({ tabela: 'estabelecimento', id: e.estabelecimento }),
 });
 
+const ASSUMIR = z.object({
+  estabelecimento: z.number().int().positive(),
+  carga: z.number().int().positive(),
+});
+
+const operacaoAssumir = definirOperacao<z.infer<typeof ASSUMIR>, { assumida: boolean }>({
+  nome: 'relatorio.datamart.carga_assumir',
+  tabelas: ['carga_data_mart'],
+  entrada: ASSUMIR,
+  gravar: async (tx, e) => {
+    const c = await tx.consultarParaAtualizar<{ versao: unknown; situacao: unknown; pedido: unknown }>(
+      `SELECT versao, situacao, JSON_UNQUOTE(JSON_EXTRACT(dados, '$.pedido')) AS pedido
+         FROM carga_data_mart WHERE id = ? AND estabelecimento_id = ? AND disparo = 'manual'`,
+      [e.carga, e.estabelecimento],
+      { teto: 1 },
+    );
+    const linha = c[0];
+    if (!linha || String(linha.situacao) !== 'em_execucao' || String(linha.pedido) !== PEDIDO_AGUARDANDO)
+      return { assumida: false };
+    await tx.alterar('carga_data_mart', e.carga, Number(linha.versao), {
+      dados: JSON.stringify({ pedido: PEDIDO_INICIADO }),
+    });
+    return { assumida: true };
+  },
+  alvo: (e) => ({ tabela: 'carga_data_mart', id: e.carga }),
+});
+
 const operacaoConcluir = definirOperacao<z.infer<typeof CONCLUIR>, { etapas: number }>({
   nome: 'relatorio.datamart.carga_concluir',
   tabelas: ['carga_data_mart', 'carga_data_mart_etapa'],
   entrada: CONCLUIR,
   gravar: async (tx, e) => {
-    const c = await tx.consultarParaAtualizar<{ versao: unknown; ocorrido_em: unknown; situacao: unknown }>(
-      'SELECT versao, ocorrido_em, situacao FROM carga_data_mart WHERE id = ? AND estabelecimento_id = ?',
+    const c = await tx.consultarParaAtualizar<{
+      versao: unknown;
+      ocorrido_em: unknown;
+      situacao: unknown;
+      pedido: unknown;
+    }>(
+      `SELECT versao, ocorrido_em, situacao, JSON_UNQUOTE(JSON_EXTRACT(dados, '$.pedido')) AS pedido
+         FROM carga_data_mart WHERE id = ? AND estabelecimento_id = ?`,
       [e.carga, e.estabelecimento],
       { teto: 1 },
     );
@@ -119,6 +161,7 @@ const operacaoConcluir = definirOperacao<z.infer<typeof CONCLUIR>, { etapas: num
       linhas_rejeitadas: e.linhasRejeitadas,
       mensagem_erro: e.mensagemErro,
       dados: JSON.stringify({
+        ...(linha.pedido ? { pedido: String(linha.pedido) } : {}),
         etapas: e.etapas.length,
         fatos: e.etapas.filter((x) => x.tipoObjeto === 'fato').length,
       }),
@@ -179,6 +222,30 @@ export class PortaDataMartPropria implements PortaDataMart {
       this.contexto(est),
     );
     return r.resultado.carga;
+  }
+
+  pedidosAguardando(est: AlvoEstabelecimento): Promise<number[]> {
+    return this.ler(est.id, async (l) =>
+      (
+        await l.consultar<{ id: unknown }>(
+          `SELECT id FROM carga_data_mart
+            WHERE estabelecimento_id = ? AND assunto = ? AND disparo = 'manual' AND situacao = 'em_execucao'
+              AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.pedido')) = ?
+            ORDER BY ocorrido_em, id LIMIT 10`,
+          [est.id, ASSUNTO_CARGA_DATAMART, PEDIDO_AGUARDANDO],
+        )
+      ).map((x) => Number(x.id)),
+    );
+  }
+
+  async assumir(est: AlvoEstabelecimento, carga: number): Promise<boolean> {
+    const r = await this.executor.executar(
+      operacaoAssumir,
+      this.cliente,
+      { estabelecimento: est.id, carga },
+      this.contexto(est),
+    );
+    return r.resultado.assumida;
   }
 
   async concluir(est: AlvoEstabelecimento, carga: number, f: FechamentoDaCarga, fim: Date): Promise<void> {

@@ -39,6 +39,8 @@ export const PERMISSOES_M34_CODIGOS = {
   apoioRemessa: 'sadt.apoio.remessa',
   apoioDePara: 'sadt.apoio.configurar',
   prescricaoDigitalLer: 'pep.prescricaoDigital.ler',
+  datamartLer: 'relatorio.datamart.ler',
+  datamartAcionar: 'relatorio.datamart.acionar',
 } as const;
 
 const C = PERMISSOES_M34_CODIGOS;
@@ -77,6 +79,27 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     criticidade: 'normal',
   },
   ...relatorios(),
+  // 01-REL L113: o controle da carga do data mart na administração (só contagens e tempos; nenhum dado de pessoa).
+  {
+    codigo: C.datamartLer,
+    descricao:
+      'Ver as cargas do data mart do estabelecimento (situação, linhas, tempo e etapas; sem dado de pessoa)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: C.datamartAcionar,
+    descricao:
+      'Pedir a carga manual do data mart do estabelecimento (o worker a executa e registra as etapas)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
   {
     codigo: C.dadoPessoalVer,
     descricao:

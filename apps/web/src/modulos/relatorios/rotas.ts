@@ -28,4 +28,11 @@ export const rotasRelatorios: RouteRecordRaw[] = [
     component: () => import('./telas/AgendamentosRelatorioTela.vue'),
     meta: { permissao: 'relatorio.agendamento.ler' },
   },
+  {
+    // 01-REL L113: o controle da carga do data mart na administração.
+    path: '/relatorios/datamart/cargas',
+    name: 'relatorios.datamart.cargas',
+    component: () => import('./telas/CargasDataMartTela.vue'),
+    meta: { permissao: 'relatorio.datamart.ler' },
+  },
 ];
