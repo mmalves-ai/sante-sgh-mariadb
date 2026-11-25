@@ -77,6 +77,7 @@ import { operacaoAgenda } from './operacoes.js';
 import { dataNoFuso, preCadastroDaMarcacao } from './pre-cadastro-marcacao.js';
 import { grupoLegalDaEspera, gruposVigentesDaEspera } from './prioridade-espera.js';
 import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
+import { exigirPerfilMarcacao } from './perfil-marcacao.js';
 import { agendasOcultas, exigirGravacaoNominal, type PapelNominal } from './usuarios-agenda.js';
 import type {
   ContextoAgenda,
@@ -2430,6 +2431,16 @@ export class PortaAgendaPropria implements PortaAgenda {
         'A agenda não atende este convênio: escolha outra agenda do mesmo procedimento ou outro convênio.',
         { campos: ['convenio'] },
       );
+    // 02-AGE 46: o perfil de marcação do usuário (convênio, especialidade, setor, agenda, profissional, unidade).
+    await exigirPerfilMarcacao(tx, {
+      usuario: ctx.usuario,
+      estabelecimento: Number(ctx.estabelecimento),
+      agenda: p.agenda,
+      fontePagadora: num(fp['id']),
+      encaixe: p.encaixe !== null,
+      hoje: dataNoFuso(fuso, this.agora()),
+      administrador: this.papel.getStore()?.administrador === true,
+    });
     // ADR 0009, decisão 25: o médico da agenda sem credenciamento no convênio alerta ou, se o convênio pede, bloqueia.
     const credenciamento = await conferirCredenciamentoNoFluxo(tx, {
       profissionalId: a['profissional_id'] == null ? null : num(a['profissional_id']),

@@ -17,6 +17,8 @@ import {
 import { AgendasController } from './agendas.controller.js';
 import { ApoioAgendaController } from './apoio.controller.js';
 import { MarcacoesController } from './marcacoes.controller.js';
+import { PERFIS_MARCACAO, PerfisMarcacaoController } from './perfil-marcacao.controller.js';
+import { PerfisMarcacaoPropria } from './perfil-marcacao.js';
 import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
 import { PortaAgendaMemoria, type PacienteSintetico } from './porta-memoria.js';
 import { PortaAgendaPropria } from './porta-propria.js';
@@ -92,7 +94,13 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
       : null);
   return {
     module: class ModuloAgenda {},
-    controllers: [AgendasController, ApoioAgendaController, MarcacoesController, UsuariosAgendaController],
+    controllers: [
+      AgendasController,
+      ApoioAgendaController,
+      MarcacoesController,
+      UsuariosAgendaController,
+      PerfisMarcacaoController,
+    ],
     providers: [
       { provide: PORTA_AGENDA, useValue: porta },
       {
@@ -100,6 +108,13 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
         useValue:
           porta.destino === 'propria' && ctx.nucleo && cliente
             ? new UsuariosAgendaPropria(ctx.nucleo, cliente)
+            : null,
+      },
+      {
+        provide: PERFIS_MARCACAO,
+        useValue:
+          porta.destino === 'propria' && ctx.nucleo && cliente
+            ? new PerfisMarcacaoPropria(ctx.nucleo, cliente)
             : null,
       },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
