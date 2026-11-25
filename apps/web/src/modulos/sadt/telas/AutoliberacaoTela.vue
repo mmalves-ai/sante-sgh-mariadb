@@ -33,7 +33,11 @@ const cadastro = useQuery({
   queryFn: lerCadastroAutoliberacao,
   enabled: computed(() => aba.value !== 'fila'),
 });
-const hoje = () => new Date().toISOString().slice(0, 10);
+// Dia local do posto (nunca o UTC: à noite o UTC já é o dia seguinte e a regra nasceria fora de vigência).
+const hoje = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const mensagem = ref('');
 const erro = ref<unknown>(null);
