@@ -1154,7 +1154,7 @@ responsavel_bem	FIN	historico	F3	Responsável pela guarda do bem por período	SP
 responsavel_orcamento	FIN	vinculo	F7	Usuário responsável por preencher e revisar cada centro de custo da versão	MV ORCA_PERFIL_USUA_SETOR, ORCA_PERFIL_USUA_CONTA	07	14
 resposta_padrao_aprovacao	FIN	dominio	F8	Respostas fixas do aprovador (aprovo, reprovo, devolvo para ajuste) com exigência de justificativa	MV ALCA_PONTO_RESP	07	2
 retencao_entrada_servico	FIN	item	F7	Tributo retido na entrada do serviço tomado, base da EFD-REINF R-2010 e R-4020	MV ITENT_SERV_IMPOSTO; areas-sem-dono 16	07	3
-retencao_titulo	FIN	item	F3	Tributo retido em parcela a pagar ou a receber, com base, alíquota, valor e código de receita	SPDATA MFDESACR; MV ITRETENCAO_TRIBUTO	07	8
+retencao_titulo	FIN	item	F3	Tributo retido em parcela a pagar ou a receber, com base, alíquota, valor e código de receita	SPDATA MFDESACR; MV ITRETENCAO_TRIBUTO; motivo do estorno da retenção sofrida (07-FIN linha 109; migração 14_FIN/91_retencao_sofrida_estorno)	07	8
 retorno_bancario	FIN	principal	F3	Arquivo de retorno de pagamentos lido do banco, com data de processamento e resumo	MV RETORNO_PAGCON_PAG	07	1
 retorno_bancario_item	FIN	item	F3	Linha do retorno de pagamento ligada ao item do borderô, com ocorrência, valor efetivado e data	MV RETORNO_PAGCON_PAG; SPDATA TBTPOCORBANCOPGTO	07	4
 retorno_cobranca	FIN	principal	F7	Arquivo de retorno da cobrança lido do banco, com resumo de liquidações e rejeições	MV RETORNO_COBRANCA, SEGMENTO_RETORNO_COBRANCA	07	2

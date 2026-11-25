@@ -94,6 +94,14 @@ export async function limparMassa(nucleo: NucleoProprio, ests: readonly number[]
       `DELETE g FROM glosa_titulo_receber g JOIN titulo_receber t ON t.id = g.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
     );
     await x(`DELETE FROM arquivo_fiscal_gerado WHERE estabelecimento_id IN (${q})`);
+    // F3.8 (07-FIN linha 109): a retenção sofrida no recebimento e a compensação dela (apuração por tomadores).
+    await x(
+      `DELETE i FROM apuracao_retencao_item i JOIN apuracao_retencao a ON a.id = i.apuracao_retencao_id WHERE a.estabelecimento_id IN (${q})`,
+    );
+    await x(`DELETE FROM apuracao_retencao WHERE estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE r FROM retencao_titulo r JOIN parcela_receber p ON p.id = r.parcela_receber_id JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
+    );
     await x(
       `DELETE p FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
     );
