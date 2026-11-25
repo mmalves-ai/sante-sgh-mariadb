@@ -156,6 +156,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     meta: { permissao: 'suprimentos.local.editar' },
   },
   {
+    // F3.6 (05-SUP linha 14): etiquetas de identificação do estoque (DataMatrix e código de barras).
+    path: '/suprimentos/etiquetas',
+    name: 'suprimentos.etiquetas',
+    component: () => import('./telas/EtiquetasTela.vue'),
+    meta: { permissao: 'suprimentos.nota.registrar' },
+  },
+  {
     // F8 (05-SUP linha 4): endereçamento do armazém (endereços em níveis e o endereço de cada item).
     path: '/suprimentos/enderecamento',
     name: 'suprimentos.enderecamento',

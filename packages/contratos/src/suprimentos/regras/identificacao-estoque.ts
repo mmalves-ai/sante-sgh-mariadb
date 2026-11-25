@@ -342,3 +342,81 @@ export function resolverLeitura(
     origem: 'codigo-item',
   };
 }
+
+// ── Emissão das etiquetas e baixa na movimentação ─────────────────────────────────────────────────────────────────
+
+/** O número sequencial que o identificador carrega (nulo se não é uma etiqueta do próprio hospital). */
+export function sequencialDoIdentificador(identificador: string | null | undefined): number | null {
+  if (!identificador || !identificadorValido(identificador)) return null;
+  const corpo = identificador.trim().toUpperCase().slice(1, -1);
+  const n = parseInt(corpo, 36);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+export const MAXIMO_ETIQUETAS_POR_EMISSAO = 200;
+export const TIPOS_ETIQUETA_ESTOQUE = ['unidade', 'embalagem', 'dose', 'caixa'] as const;
+export type TipoEtiquetaEstoque = (typeof TIPOS_ETIQUETA_ESTOQUE)[number];
+
+export interface EmissaoEtiquetas {
+  /** O item controla lote (rastreável): a etiqueta leva o lote e a validade. */
+  readonly controlaLote: boolean;
+  readonly itemAtivo: boolean;
+  /** O lote escolhido (nulo: sem lote). */
+  readonly lote: { readonly validade: string; readonly situacao: string } | null;
+  readonly quantidadePorEtiqueta: number;
+  readonly etiquetas: number;
+  /** AAAA-MM-DD. */
+  readonly hoje: string;
+}
+
+/**
+ * Confere a emissão: item ativo; item rastreável só com o lote; lote vencido ou bloqueado não ganha etiqueta nova;
+ * quantidade positiva e de 1 a 200 etiquetas por vez.
+ */
+export function conferirEmissaoEtiquetas(e: EmissaoEtiquetas): RecusaSuprimentos[] {
+  const r: RecusaSuprimentos[] = [];
+  if (!e.itemAtivo) r.push(recusa('item-inativo', 'O item está inativo.', ['insumo']));
+  if (e.controlaLote && !e.lote)
+    r.push(recusa('lote-obrigatorio', 'O item é rastreável: escolha o lote da etiqueta.', ['lote']));
+  if (e.lote && e.lote.validade < e.hoje)
+    r.push(recusa('lote-vencido', 'O lote está vencido: não ganha etiqueta nova.', ['lote']));
+  if (e.lote && e.lote.situacao !== 'liberado')
+    r.push(recusa('lote-bloqueado', 'O lote não está liberado para uso.', ['lote']));
+  if (!(e.quantidadePorEtiqueta > 0) || e.quantidadePorEtiqueta > 999_999)
+    r.push(
+      recusa('quantidade-invalida', 'Informe a quantidade que cada etiqueta representa.', ['quantidade']),
+    );
+  if (!Number.isInteger(e.etiquetas) || e.etiquetas < 1 || e.etiquetas > MAXIMO_ETIQUETAS_POR_EMISSAO)
+    r.push(
+      recusa('etiquetas-invalidas', `Emita de 1 a ${MAXIMO_ETIQUETAS_POR_EMISSAO} etiquetas por vez.`, [
+        'etiquetas',
+      ]),
+    );
+  return r;
+}
+
+export const BAIXAS_ETIQUETA = ['consumida', 'devolvida', 'descartada', 'cancelada'] as const;
+export type BaixaEtiqueta = (typeof BAIXAS_ETIQUETA)[number];
+
+/**
+ * A baixa da etiqueta na movimentação: só a ativa sai (consumida na saída, devolvida ao fornecedor, descartada na
+ * perda, cancelada no erro de emissão). A devolvida ao estoque pela devolução interna volta a ativa.
+ */
+export function proximaSituacaoEtiqueta(
+  atual: EtiquetaConhecida['situacao'],
+  pedido: BaixaEtiqueta | 'reativar',
+): { ok: true; situacao: EtiquetaConhecida['situacao'] } | { ok: false; recusa: RecusaSuprimentos } {
+  if (pedido === 'reativar')
+    return atual === 'devolvida'
+      ? { ok: true, situacao: 'ativa' }
+      : {
+          ok: false,
+          recusa: recusa('etiqueta-nao-devolvida', 'Só a etiqueta devolvida volta a ativa.', ['codigo']),
+        };
+  if (atual !== 'ativa')
+    return {
+      ok: false,
+      recusa: recusa('etiqueta-inativa', `Etiqueta ${atual}: não pode ser movimentada de novo.`, ['codigo']),
+    };
+  return { ok: true, situacao: pedido };
+}

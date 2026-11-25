@@ -20,6 +20,8 @@ import {
   lerUnidades,
   novaChave,
 } from '../api-farmacia.js';
+import type { LeituraCodigo as Leitura } from '../../suprimentos/api-etiqueta.js';
+import LeituraCodigo from '../../suprimentos/componentes/LeituraCodigo.vue';
 import AvisoFarmacia from '../componentes/AvisoFarmacia.vue';
 import ErroFarmacia from '../componentes/ErroFarmacia.vue';
 import { horario, numero, qtd, usarAvisosFarmacia, usarFarmacia } from '../usar-farmacia.js';
@@ -125,6 +127,22 @@ const horaFim = ref('');
 const leitura = ref('');
 const leituraMsg = ref<string | null>(null);
 const hhmm = (iso: string) => iso.slice(11, 16);
+// A leitura do código da embalagem ou da etiqueta (F3.6, 05-SUP linha 14): marca a próxima dose do item ainda não
+// marcada e escolhe o lote lido; o lote vencido ou bloqueado aparece como alerta e não é escolhido.
+const semDoseLida = ref(false);
+function lido(r: Leitura): void {
+  semDoseLida.value = false;
+  const doses = pacientes.value.flatMap((p) => p.horarios.flatMap((h) => h.doses));
+  const d = doses.find((x) => x.item === r.item.codigo && !x.bloqueio && !marcadas.value[x.horario]);
+  if (!d) {
+    semDoseLida.value = true;
+    return;
+  }
+  marcadas.value = { ...marcadas.value, [d.horario]: true };
+  const bloqueado = r.alertas.includes('vencido') || r.alertas.includes('lote-bloqueado');
+  const l = (lotesDoItem.value[d.item] ?? []).find((x) => (x as { lote?: string }).lote === r.lote);
+  if (l && !bloqueado) lotes.value = { ...lotes.value, [d.horario]: String(l.id) };
+}
 const pacientes = computed(() => {
   const f = filtroPaciente.value.trim().toUpperCase();
   return (fila.data.value?.pacientes ?? [])
@@ -295,6 +313,10 @@ const urlEtiquetas = computed(() => {
     </div>
     <p v-if="fila.isLoading.value">{{ t('farmacia.carregando') }}</p>
     <template v-else-if="fila.data.value">
+      <LeituraCodigo testid="disp-leitura" @lido="lido" />
+      <p v-if="semDoseLida" role="alert" data-testid="disp-leitura-sem-dose">
+        {{ t('farmacia.nenhum') }}
+      </p>
       <p>
         {{
           t('farmacia.dispensacao.janela', {

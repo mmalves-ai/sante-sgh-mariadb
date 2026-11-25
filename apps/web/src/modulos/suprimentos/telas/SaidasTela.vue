@@ -8,12 +8,14 @@ import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { baixarEtiquetas } from '../api-etiqueta.js';
 import { novaChave, registrarSaida } from '../api-suprimentos.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 import FiltroDocumentos from '../componentes/FiltroDocumentos.vue';
 import { usarListaDocumentos } from '../componentes/usar-lista-documentos.js';
 import LinhasItens from '../componentes/LinhasItens.vue';
+import { mensagensEtiqueta as M } from '../i18n-etiqueta.js';
 import { itensDaEntrada, type LinhaItem } from '../componentes/linhas.js';
 import { chaveDoc, data, numero, reais, usarSuprimentos } from '../usar-suprimentos.js';
 
@@ -77,6 +79,12 @@ async function gravar(): Promise<void> {
     );
     mensagem.value = r.mensagem;
     avisos.value = r.avisos;
+    // As etiquetas lidas saem como consumidas (a leitura seguinte da mesma etiqueta é recusada).
+    const lidas = linhas.value.flatMap((l) => l.etiquetas ?? []);
+    if (lidas.length) {
+      const b = await baixarEtiquetas({ identificadores: lidas, situacao: 'consumida' });
+      avisos.value = [...avisos.value, `${M.baixadas} ${b.baixadas}`];
+    }
     linhas.value = [];
     await cliente.invalidateQueries({ queryKey: ['suprimentos'] });
   } catch (x) {

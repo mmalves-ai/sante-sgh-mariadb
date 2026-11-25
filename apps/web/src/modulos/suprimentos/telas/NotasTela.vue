@@ -10,7 +10,9 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { lerXmlNota, novaChave, registrarNota } from '../api-suprimentos.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
+import type { LeituraCodigo as Leitura } from '../api-etiqueta.js';
 import BuscaItem from '../componentes/BuscaItem.vue';
+import LeituraCodigo from '../componentes/LeituraCodigo.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 import FiltroDocumentos from '../componentes/FiltroDocumentos.vue';
 import { usarListaDocumentos } from '../componentes/usar-lista-documentos.js';
@@ -63,6 +65,22 @@ function incluir(i: { codigo: number; nome: string; rastreavel: boolean }): void
     marca: '',
     lotes: i.rastreavel ? [{ lote: '', validade: '', quantidade: '' }] : [],
   });
+}
+/** A leitura do código da embalagem: inclui o item e preenche o lote e a validade lidos (soma a quantidade). */
+function lido(r: Leitura): void {
+  incluir(r.item);
+  const l = linhas.value.find((x) => x.item === r.item.codigo);
+  if (!l) return;
+  l.quantidade = String((numero(l.quantidade || '0') || 0) + r.quantidade);
+  if (!r.lote || !l.rastreavel) return;
+  const mesmo = l.lotes.find((x) => x.lote === r.lote);
+  const vazio = l.lotes.find((x) => !x.lote);
+  const alvo = mesmo ?? vazio;
+  if (alvo) {
+    alvo.lote = r.lote;
+    alvo.validade = r.validade ?? alvo.validade;
+    alvo.quantidade = String((numero(alvo.quantidade || '0') || 0) + r.quantidade);
+  } else l.lotes.push({ lote: r.lote, validade: r.validade ?? '', quantidade: String(r.quantidade) });
 }
 async function carregarXml(ev: Event): Promise<void> {
   const arquivo = (ev.target as HTMLInputElement).files?.[0];
@@ -176,6 +194,7 @@ const { filtro, pagina, lista, haSeguinte } = usarListaDocumentos('nota');
           <input id="nf-frete" v-model="frete" inputmode="decimal" />
         </span>
       </div>
+      <LeituraCodigo testid="nf-leitura" @lido="lido" />
       <BuscaItem testid="nf-busca" @escolher="incluir" />
       <table v-if="linhas.length" class="tabela" data-testid="nf-itens">
         <caption>

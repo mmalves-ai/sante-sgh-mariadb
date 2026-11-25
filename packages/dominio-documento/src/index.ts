@@ -7,6 +7,7 @@ export * from './zpl/fila.js';
 export * from './zpl/lactario.js';
 // M46 (etapa 3): a etiqueta do consumo de OPME em três vias.
 export * from './zpl/opme.js';
+export * from './zpl/estoque.js';
 export * from './pdf/qr.js';
 export * from './pdf/emissao.js';
 export * from './pdf/modelo.js';

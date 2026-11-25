@@ -8,7 +8,9 @@ import { SanteBotao } from '@sgh/ui';
 import { useI18n } from 'vue-i18n';
 import { lotesDoLocal } from '../api-suprimentos.js';
 import { data, numero } from '../usar-suprimentos.js';
+import type { LeituraCodigo as Leitura } from '../api-etiqueta.js';
 import BuscaItem from './BuscaItem.vue';
+import LeituraCodigo from './LeituraCodigo.vue';
 import type { LinhaItem } from './linhas.js';
 
 const props = defineProps<{ local: number | null; controlado?: boolean; testid?: string }>();
@@ -33,6 +35,19 @@ async function incluir(i: ItemBusca): Promise<void> {
     },
   ];
 }
+/** A leitura do código: inclui o item, soma a quantidade lida e, com lote, a põe no lote; guarda a etiqueta lida. */
+async function lido(r: Leitura): Promise<void> {
+  await incluir({ ...r.item } as ItemBusca);
+  const l = linhas.value.find((x) => x.item === r.item.codigo);
+  if (!l) return;
+  if (r.identificador) {
+    if (l.etiquetas?.includes(r.identificador)) return;
+    l.etiquetas = [...(l.etiquetas ?? []), r.identificador];
+  }
+  l.quantidade = String((numero(l.quantidade) || 0) + r.quantidade);
+  const d = l.disponiveis.find((x) => x.lote === r.lote && (!r.validade || x.validade === r.validade));
+  if (d) l.lotes = { ...l.lotes, [d.id]: String((numero(l.lotes[d.id] ?? '') || 0) + r.quantidade) };
+}
 function retirar(item: number): void {
   linhas.value = linhas.value.filter((l) => l.item !== item);
 }
@@ -53,6 +68,7 @@ function sugerir(l: LinhaItem): void {
 </script>
 
 <template>
+  <LeituraCodigo :testid="tid('leitura')" @lido="lido" />
   <BuscaItem :testid="tid('busca')" @escolher="incluir" />
   <table v-if="linhas.length" class="tabela" :data-testid="tid('tabela')">
     <caption>

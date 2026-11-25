@@ -12,6 +12,8 @@ export interface LinhaItem {
   disponiveis: LoteSaldo[];
   lotes: Record<number, string>;
   prescritor: string;
+  /** Os identificadores das etiquetas lidas (baixadas como consumidas depois da saída gravada). */
+  etiquetas?: string[];
 }
 
 /** As linhas na forma da entrada da operação (itens com os lotes escolhidos e o prescritor do controlado). */
