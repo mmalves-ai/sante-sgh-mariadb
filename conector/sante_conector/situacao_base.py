@@ -13,18 +13,22 @@ que ainda não tem resumo, das fontes já gravadas pelas execuções anteriores 
    As recusadas começam pela fonte barata: as recusas por tabela da execução que concluiu a tabela
    (`contadores.progresso.recusas_por_tabela`, quando o nome de destino é só dela). Essas tabelas ficam em
    `tabelas_recusas_desconhecidas` (a tela avisa que o "Já na base" é aproximado) até a CONTAGEM EM SEGUNDO PLANO
-   (uma linha de execução com conexão própria, por tabela, pelo índice da chave (tabela_origem, ...), no máximo
-   CONSULTA_S por consulta e TOTAL_S no todo) contar as recusadas abertas dela; o `contadores.progresso.base` do
-   batimento seguinte já traz o valor exato. Se a contagem estourar, a tabela continua aproximada;
+   (uma linha de execução com conexão própria, por ENTIDADE DE DESTINO, pelo índice (entidade_destino, id_destino):
+   só o trecho id_destino nulo é lido; no máximo CONSULTA_S por consulta e TOTAL_S no todo) contar as recusadas
+   abertas dela; o `contadores.progresso.base` do batimento seguinte já traz o valor exato. Se a contagem estourar,
+   a tabela continua aproximada;
 4. sem situação: conta como faltante (`tabelas_sem_situacao`).
 
 Ao longo da execução, `linhas_na_base` sobe com as gravadas da tabela (limitado à contagem da origem); no fim de
 cada tabela lida inteira nesta fotografia, a tabela passa a valer contagem - recusadas, e o resumo é regravado (com o
-tempo a base fica exata). Só contagens e nomes de tabela de destino (regra 5); a falha aqui nunca derruba a carga."""
+tempo a base fica exata). O resumo só é gravado com recusadas EXATAS: sem o reprocessamento, a tabela que ainda está
+aproximada não grava o resumo no fim e continua aproximada; se a contagem em segundo plano a confirmar depois, o
+resumo é gravado então (pela conexão da contagem). Só contagens e nomes de tabela de destino (regra 5); a falha aqui nunca derruba a carga."""
 import datetime
 import threading
 import time
 
+from . import carga
 from .controle import DDL_RESUMO_TABELA
 
 DDL = DDL_RESUMO_TABELA.replace("{b}", "`{ctl}`")
@@ -64,6 +68,7 @@ class SituacaoBase:
         self.fontes = {"resumo": 0, "conciliacao": 0, "concluida": 0, "sem_situacao": 0}
         self.recusas_desconhecidas = set()  # tabelas `concluida` sem a contagem exata das recusadas
         self._concluidas = {}               # tabela -> contagem da imagem (fonte `concluida`)
+        self._fim_aprox = {}                # tabela lida inteira ainda aproximada -> recusadas desta execução
         self.contagem = {"estado": "sem_tabelas", "contadas": 0, "estouradas": 0, "ms": None}
         self._trava = threading.Lock()
         self._linha = None
@@ -169,36 +174,60 @@ class SituacaoBase:
             self._linha.join(timeout)
 
     def _contar(self):
-        """Recusadas abertas por tabela (id_destino nulo com regra de recusa, a mesma definição do reprocessamento),
-        pelo índice da chave (tabela_origem, chave_original): as menores primeiro, cada consulta com
-        max_statement_time; ao passar do total, as que faltam ficam aproximadas."""
+        """Recusadas abertas (id_destino nulo com regra de recusa, a mesma definição do reprocessamento) por tabela, uma
+        consulta por entidade de destino pelo índice (entidade_destino, id_destino): só o trecho id_destino nulo é
+        lido, e cada linha recusada uma vez só no todo. Cada consulta com max_statement_time; ao passar do total, as
+        entidades que faltam contam como estouradas. A tabela que pode ter linhas numa entidade estourada (o nome de
+        destino dela bate com a entidade, ou ela não bate com nenhuma) fica aproximada; as demais ficam exatas."""
         t0 = time.monotonic()
         fim = t0 + self.total_s
         contadas = estouradas = 0
         cn = None
         try:
             cn = self.conectar()
-            for t in sorted(self._concluidas, key=lambda x: (self._concluidas[x], x)):
+            lim = max(1.0, min(self.consulta_s, fim - time.monotonic()))
+            with cn.cursor() as c:  # varredura solta do índice: só os valores distintos do prefixo
+                c.execute("SET STATEMENT max_statement_time=%.1f FOR SELECT DISTINCT entidade_destino FROM `%s`."
+                          "conector_origem FORCE INDEX (ix_conector_origem_destino)" % (lim, self.ctl))
+                ents = sorted(e for (e,) in c.fetchall() if e is not None)
+            achadas, falhas = {}, []
+            for k, e in enumerate(ents):
                 resta = fim - time.monotonic()
                 if resta <= 0.5:
+                    falhas.extend(ents[k:])
                     break
                 lim = max(1.0, min(self.consulta_s, resta))
                 try:
                     with cn.cursor() as c:
-                        c.execute("SET STATEMENT max_statement_time=%.1f FOR SELECT COUNT(*) FROM `%s`.conector_origem"
-                                  " FORCE INDEX (uq_conector_origem_chave) WHERE tabela_origem=%%s"
-                                  " AND id_destino IS NULL AND regra_recusa IS NOT NULL" % (lim, self.ctl), (t,))
+                        c.execute("SET STATEMENT max_statement_time=%.1f FOR SELECT tabela_origem, COUNT(*) FROM `%s`."
+                                  "conector_origem FORCE INDEX (ix_conector_origem_destino) WHERE entidade_destino=%%s"
+                                  " AND id_destino IS NULL AND regra_recusa IS NOT NULL GROUP BY tabela_origem"
+                                  % (lim, self.ctl), (e,))
                         r = c.fetchall()
-                    n = int((r[0][0] if r else 0) or 0)
-                except Exception:  # noqa: BLE001 - estourou o limite (ou falhou): a tabela fica aproximada
-                    estouradas += 1
+                except Exception:  # noqa: BLE001 - estourou o limite (ou falhou): as tabelas dela ficam aproximadas
+                    falhas.append(e)
                     continue
-                contadas += 1
-                with self._trava:
-                    cont = self._concluidas[t]
-                    rec = _cap(n, cont)
-                    self.base[t] = [cont - rec, rec]
+                for tab, n in r:
+                    achadas[tab] = achadas.get(tab, 0) + int(n or 0)
+            estouradas = len(falhas)
+            duvida = self._duvidosas(falhas, ents)
+            gravar = []
+            with self._trava:
+                for t, cont in self._concluidas.items():
+                    if t in duvida or t not in self.recusas_desconhecidas:
+                        continue
+                    n = achadas.get(t, 0)
+                    if t in self._fim_aprox:  # já lida inteira nesta execução: agora é exata, e o resumo é gravado
+                        rec = _cap(max(self._fim_aprox.pop(t), n), cont)
+                        self.atual[t] = [cont - rec, rec]
+                        gravar.append((t, cont, rec))
+                    else:
+                        rec = _cap(n, cont)
+                        self.base[t] = [cont - rec, rec]
                     self.recusas_desconhecidas.discard(t)
+                    contadas += 1
+            for t, cont, rec in gravar:
+                self._gravar_resumo(cn, t, cont, rec)
         except Exception:  # noqa: BLE001 - sem conexão própria, tudo fica aproximado
             pass
         finally:
@@ -209,10 +238,24 @@ class SituacaoBase:
                 pass
             ms = int(1000 * (time.monotonic() - t0))
             with self._trava:
-                falta = sum(1 for t in self._concluidas if t in self.recusas_desconhecidas and t not in self.atual)
+                falta = sum(1 for t in self._concluidas if t in self.recusas_desconhecidas)
                 self.contagem = {"estado": "concluida" if not falta else "estourou", "contadas": contadas,
                                  "estouradas": estouradas, "ms": ms}
                 self.recusas_ms = ms
+
+    def _duvidosas(self, falhas, ents):
+        """Tabelas `concluida` que podem ter recusadas numa entidade não contada (a entidade guarda o destino, às vezes
+        com um sufixo depois de '#')."""
+        if not falhas:
+            return set()
+        base_f = {e.split("#", 1)[0] for e in falhas}
+        base_t = {e.split("#", 1)[0] for e in ents}
+        out = set()
+        for t in self._concluidas:
+            nomes = {x for x in (self.placar.nomes.get(t), (carga.MAPA.get(t) or {}).get("entidade")) if x}
+            if nomes & base_f or not nomes & base_t:
+                out.add(t)
+        return out
 
     # ----- fim de tabela -----
     def fim(self, t):
@@ -227,17 +270,26 @@ class SituacaoBase:
         rec = _cap(rec_exec if self.reprocessar else max(rec_exec, rec0), cont)
         with self._trava:
             self.atual[t] = [cont - rec, rec]
+            if not self.reprocessar and t in self.recusas_desconhecidas:
+                # rec0 é só estimativa: a tabela continua aproximada e o resumo não é gravado como exato; a contagem
+                # em segundo plano, se confirmar a tabela, grava o resumo
+                self._fim_aprox[t] = rec_exec
+                return
             self.recusas_desconhecidas.discard(t)
+            self._fim_aprox.pop(t, None)
+        self._gravar_resumo(self.conn, t, cont, rec)
+
+    def _gravar_resumo(self, conn, t, cont, rec):
         try:
-            with self._cur() as c:
+            with conn.cursor() as c:
                 c.execute("INSERT INTO `%s`.conector_resumo_tabela (tabela_origem, registros_origem, na_base,"
                           " recusadas, execucao_id, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,UTC_TIMESTAMP(3))"
                           " ON DUPLICATE KEY UPDATE registros_origem=VALUES(registros_origem),"
                           " na_base=VALUES(na_base), recusadas=VALUES(recusadas), execucao_id=VALUES(execucao_id),"
                           " alterado_em=UTC_TIMESTAMP(3), versao=versao+1" % self.ctl,
                           (t, cont, cont - rec, rec, self.eid))
-            if not getattr(self.conn, "autocommit_mode", True):
-                self.conn.commit()
+            if not getattr(conn, "autocommit_mode", True):
+                conn.commit()
         except Exception:  # noqa: BLE001 - o resumo do painel nunca derruba a carga
             pass
 
