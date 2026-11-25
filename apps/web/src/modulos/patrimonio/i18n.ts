@@ -11,10 +11,12 @@ import {
   ROTULOS_SITUACAO_MOVIMENTO,
   ROTULOS_TIPO_AJUSTE_BEM,
 } from '@sgh/contratos';
+import { mensagensComplementosPatrimonio } from './i18n-complementos.js';
 
 const rotulosGrupo = Object.fromEntries(Object.entries(GRUPOS_BEM).map(([k, v]) => [k, v.rotulo]));
 
 export const mensagensPatrimonio = {
+  complementos: mensagensComplementosPatrimonio,
   carregando: 'Carregando…',
   desligado:
     'O patrimônio ainda não foi liberado neste estabelecimento: a consulta funciona, as gravações ficam para depois da liberação pelo administrador.',

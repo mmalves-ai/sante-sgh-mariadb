@@ -3,6 +3,8 @@
 // que o usuário vê, de tools/matriz/src/rotulos-de-produto.ts.
 import type { ContagemMenu, ItemMenu } from './tipos.js';
 
+// C2-072 (07-FIN L149, F8): os itens "Imobilizado em andamento" e "Seguro dos bens" do patrimônio entraram à mão
+// (mesmo motivo); a contagem acompanha.
 // C2-098 (04-HOT L141, F8): o item "Cardápio, ficha técnica e produção" do serviço de nutrição entrou à mão (mesmo
 // motivo); a contagem acompanha.
 // C2-086 (06-FAT L30, F3): o item "Apresentação TISS por fonte pagadora" dos convênios entrou à mão (mesmo motivo); a
@@ -123,7 +125,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":492,"M":198,"P":57,"N":237};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":494,"M":198,"P":57,"N":239};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -500,6 +502,8 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"controladoria.patrimonio.depreciacao","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Depreciação"],"titulo":"Depreciação","selo":"N","fase":6,"rota":"/patrimonio/depreciacao","permissao":"patrimonio.depreciacao.ler"},
   {"id":"controladoria.patrimonio.transferencia-baixa-e-inventario-de-bens","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Transferência, baixa e inventário de bens"],"titulo":"Transferência, baixa e inventário de bens","selo":"N","fase":6,"rota":"/patrimonio/movimentos","permissao":"patrimonio.movimento.ler"},
   {"id":"controladoria.patrimonio.parametros-do-patrimonio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Parâmetros do patrimônio"],"titulo":"Parâmetros do patrimônio","selo":"N","fase":6,"rota":"/patrimonio/parametros","permissao":"patrimonio.parametroPatrimonio.ler"},
+  {"id":"controladoria.patrimonio.imobilizado-em-andamento","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Imobilizado em andamento"],"titulo":"Imobilizado em andamento","selo":"N","fase":7,"rota":"/patrimonio/obras","permissao":"patrimonio.bem.ler"},
+  {"id":"controladoria.patrimonio.seguro-dos-bens","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Seguro dos bens"],"titulo":"Seguro dos bens","selo":"N","fase":7,"rota":"/patrimonio/seguros","permissao":"patrimonio.bem.ler"},
   {"id":"relatorios-e-bi.catalogo-de-relatorios-parametrizados","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Catálogo de relatórios parametrizados"],"titulo":"Catálogo de relatórios parametrizados","selo":"M","fase":3,"rota":"/relatorios","permissao":"relatorio.catalogo.ler"},
   {"id":"relatorios-e-bi.envio-agendado-por-e-mail","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Envio agendado por e-mail"],"titulo":"Envio agendado por e-mail","selo":"P","fase":3,"rota":"/relatorios/agendamentos","permissao":"relatorio.agendamento.ler"},
   {"id":"relatorios-e-bi.paineis-gerenciais-assistencial-operacional-financeiro","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis gerenciais"],"titulo":"Painéis gerenciais","selo":"N","fase":1,"rota":"/relatorios/paineis/assistencial","permissao":"relatorio.paineis.ler"},
