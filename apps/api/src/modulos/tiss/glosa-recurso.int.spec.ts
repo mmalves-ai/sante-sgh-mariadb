@@ -30,6 +30,7 @@ async function erroDe(p: Promise<unknown>): Promise<ErroOperacao> {
   throw new Error('esperava recusa');
 }
 const codigo = (e: ErroOperacao) => String(e.problema['codigo'] ?? '');
+const armazem = armazemXmlMemoria();
 
 describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (MariaDB)', () => {
   let nucleo: NucleoProprio;
@@ -58,6 +59,19 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
     );
     await e.executar('DELETE FROM recurso_glosa WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM glosa WHERE estabelecimento_id = ?', est);
+    // A guia de recurso TISS (lote_tiss "recurso_glosa" com o arquivo) e o lote de origem sintético.
+    await e.executar('DELETE FROM guia_tiss WHERE estabelecimento_id = ?', est);
+    await e.executar(
+      'DELETE FROM lote_tiss_conta WHERE lote_tiss_id IN (SELECT id FROM lote_tiss WHERE estabelecimento_id = ?)',
+      est,
+    );
+    await e.executar(
+      "DELETE FROM lote_tiss WHERE estabelecimento_id = ? AND tipo_envio = 'recurso_glosa'",
+      est,
+    );
+    await e.executar('DELETE FROM lote_tiss WHERE estabelecimento_id = ?', est);
+    await e.executar("DELETE FROM arquivo WHERE estabelecimento_id = ? AND entidade = 'lote_tiss'", est);
+    await e.executar('DELETE FROM configuracao_tiss_fonte_pagadora WHERE estabelecimento_id = ?', est);
     await e.executar(
       `DELETE FROM producao_repasse WHERE conta_hospitalar_item_id IN (SELECT ci.id FROM conta_hospitalar_item ci
          JOIN conta_hospitalar ch ON ch.id = ci.conta_hospitalar_id WHERE ch.estabelecimento_id = ?)`,
@@ -197,6 +211,7 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
       for (const [cod, reapresenta] of [
         ['9734', true],
         ['9735', false],
+        ['1001', true],
       ] as const)
         await garantir(
           e,
@@ -272,7 +287,7 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
           );
         return itens;
       });
-    porta = new PortaTissPropria(nucleo, CLIENTE, armazemXmlMemoria());
+    porta = new PortaTissPropria(nucleo, CLIENTE, armazem);
     c = {
       cliente: CLIENTE,
       estabelecimento: ids.est,
@@ -820,5 +835,154 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
         [x],
       ),
     ).toMatchObject({ q: 3 });
+  }, 120_000);
+
+  it('guia de recurso TISS: o recurso da conta apresentada em lote protocolado vira o XML 04.03.00 por item, validado, guardado e num lote de recurso ligado ao de origem; sem lote de origem, o recurso fica gravado com o alerta', async () => {
+    const [fa] = massa.fontes as [number, number];
+    const [t1, t2] = (await novaConta(`${P}-C7`, fa, 2)) as [number, number];
+    const [u1] = (await novaConta(`${P}-C8`, fa, 1)) as [number];
+    const origem = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-0734c' },
+      async (e) => {
+        const agora = new Date();
+        const versaoTiss = await garantir(
+          e,
+          "SELECT id FROM versao_padrao_tiss WHERE codigo_tiss = '04.03.00' AND ativo = TRUE ORDER BY id LIMIT 1",
+          [],
+          `INSERT INTO versao_padrao_tiss (codigo_tiss, componente, descricao, vigencia_inicio, versao_fonte, criado_em)
+         VALUES ('04.03.00', 'troca', 'VERSAO SINTETICA L0734', '2020-01-01', 'teste', ?)`,
+          [agora],
+        );
+        await e.inserir(
+          `INSERT INTO configuracao_tiss_fonte_pagadora (estabelecimento_id, fonte_pagadora_id, versao_padrao_tiss_id,
+           vigencia_inicio, registro_ans, codigo_prestador_operadora, criado_em)
+         VALUES (?, ?, ?, '2020-01-01', '999998', 'PRESTSINT34', ?)`,
+          [ids.est, fa, versaoTiss, agora],
+        );
+        const conta = Number(
+          (await e.uma<{ id: number }>(
+            'SELECT conta_hospitalar_id AS id FROM conta_hospitalar_item WHERE id = ?',
+            [t1],
+          ))!.id,
+        );
+        const lote = await e.inserir(
+          `INSERT INTO lote_tiss (estabelecimento_id, fonte_pagadora_id, numero_lote, sequencial, tipo_guia,
+           versao_padrao_tiss_id, gerado_em, quantidade_guias, valor_total, numero_protocolo, situacao, protocolado_em,
+           criado_em)
+         VALUES (?, ?, '000000073401', '000000073401', 'resumo_internacao', ?, ?, 1, 600, '734001', 'protocolado', ?, ?)`,
+          [ids.est, fa, versaoTiss, agora, agora, agora],
+        );
+        await e.inserir(
+          'INSERT INTO lote_tiss_conta (lote_tiss_id, conta_hospitalar_id, valor, criado_em) VALUES (?, ?, 600, ?)',
+          [lote, conta, agora],
+        );
+        await e.inserir(
+          `INSERT INTO guia_tiss (estabelecimento_id, conta_hospitalar_id, tipo_guia, lote_tiss_id, fonte_pagadora_id,
+           paciente_id, numero_guia_prestador, numero_guia_operadora, data_emissao, situacao, criado_em)
+         VALUES (?, ?, 'resumo_internacao', ?, ?, ?, 'GS734001', 'OP734001', CURRENT_DATE, 'enviada', ?)`,
+          [ids.est, conta, lote, fa, massa.paciente, agora],
+        );
+        return lote;
+      },
+    );
+    await executar('faturamento.registrarGlosa', {
+      itens: await Promise.all(
+        [t1, t2, u1].map(async (i) => ({
+          item: i,
+          versao: await versao(i),
+          valorPago: 0,
+          quantidadePaga: 0,
+          motivo: 1001,
+        })),
+      ),
+      dataPagamento: '2026-11-10',
+      prazoParametro: `${fa}:30`,
+    });
+    for (const item of [t1, t2, u1])
+      await porta.gravarSgh(
+        c,
+        (y: { id: number }) => ({
+          estabelecimento: null,
+          usuario: null,
+          correlacao: null,
+          acao: 'alteracao' as const,
+          entidade: 'glosa_item',
+          entidadeId: y.id,
+          motivo: 'decisão da glosa (teste)',
+        }),
+        (g) =>
+          g.decidirGlosa({
+            item,
+            decisao: 'recorrer',
+            texto: 'Procedimento autorizado pela senha da guia',
+            evidencia: '',
+            usuario: 'x',
+            prazo: null,
+          }),
+      );
+    const guardados = armazem.objetos.size;
+    const rec = await executar('faturamento.registrarRecurso', {
+      itens: await Promise.all(
+        [{ item: t1, valor: 300 }, { item: u1 }, { item: t2, valor: 120.5 }].map(async (i) => ({
+          ...i,
+          versao: await versao(i.item),
+        })),
+      ),
+      dataProtocolo: '2026-11-20',
+      prazoParametro: '',
+    });
+    // Dois recursos: o da conta apresentada no lote protocolado (dois itens) e o da conta fora de lote (um item).
+    const [rt, ru] = String(rec.resultado['recursos']).split(',').map(Number) as [number, number];
+    const loteRecurso = Number(rec.resultado['lotesTiss']);
+    expect(String(rec.resultado['lotesTiss']).split(',')).toHaveLength(1);
+    expect(String(rec.resultado['alertas'])).toContain(
+      'não foi gerada: falta o lote TISS em que a conta foi apresentada',
+    );
+    expect(
+      await lerUma(
+        `SELECT r.lote_tiss_id AS lote, r.valor_recursado, (SELECT COUNT(*) FROM recurso_glosa_item WHERE recurso_glosa_id = r.id) AS itens
+           FROM recurso_glosa r WHERE r.id = ?`,
+        [rt],
+      ),
+    ).toMatchObject({ lote: loteRecurso, valor_recursado: '420.50', itens: 2 });
+    expect(await lerUma('SELECT lote_tiss_id AS lote FROM recurso_glosa WHERE id = ?', [ru])).toMatchObject({
+      lote: null,
+    });
+    // O lote de recurso: tipo recurso_glosa, ligado ao de origem, enviado na data do protocolo, com o arquivo guardado.
+    const l = await lerUma(
+      `SELECT lt.tipo_envio, lt.tipo_guia, lt.original_lote_tiss_id AS origem, lt.situacao, lt.quantidade_guias AS guias,
+              lt.valor_total, DATE_FORMAT(lt.enviado_em, '%Y-%m-%d') AS enviado, lt.hash_arquivo, lt.tamanho_bytes,
+              a.chave_armazenamento AS chave, a.hash_sha256, a.tamanho_bytes AS bytes_arquivo, a.imutavel,
+              a.entidade_id
+         FROM lote_tiss lt JOIN arquivo a ON a.id = lt.arquivo_id WHERE lt.id = ?`,
+      [loteRecurso],
+    );
+    expect(l).toMatchObject({
+      tipo_envio: 'recurso_glosa',
+      tipo_guia: 'recurso_glosa',
+      origem,
+      situacao: 'enviado',
+      guias: 1,
+      valor_total: '420.50',
+      enviado: '2026-11-20',
+      imutavel: 1,
+      entidade_id: loteRecurso,
+    });
+    expect(l?.['hash_sha256']).toBe(l?.['hash_arquivo']);
+    expect(Number(l?.['bytes_arquivo'])).toBe(Number(l?.['tamanho_bytes']));
+    expect(armazem.objetos.size).toBe(guardados + 1);
+    const xml = new TextDecoder('latin1').decode(armazem.objetos.get(String(l?.['chave']))!);
+    expect(xml).toContain('<ans:tipoTransacao>RECURSO_GLOSA</ans:tipoTransacao>');
+    expect(xml).toContain('<ans:numeroLote>73401</ans:numeroLote>');
+    expect(xml).toContain('<ans:numeroProtocolo>734001</ans:numeroProtocolo>');
+    expect(xml).toContain('<ans:numeroGuiaOrigem>GS734001</ans:numeroGuiaOrigem>');
+    expect(xml).toContain('<ans:numeroGuiaOperadora>OP734001</ans:numeroGuiaOperadora>');
+    expect(xml.match(/<ans:itensGuia>/g)).toHaveLength(2);
+    expect(xml).toContain('<ans:codGlosaItem>1001</ans:codGlosaItem>');
+    expect(xml).toContain('<ans:valorTotalRecursado>420.50</ans:valorTotalRecursado>');
+    // O lote de origem segue como estava (nada apagado nem alterado).
+    expect(
+      await lerUma('SELECT situacao, numero_protocolo FROM lote_tiss WHERE id = ?', [origem]),
+    ).toMatchObject({ situacao: 'protocolado', numero_protocolo: '734001' });
   }, 120_000);
 });
