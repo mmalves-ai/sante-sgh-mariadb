@@ -115,12 +115,6 @@ export const buscarProdutosCme = (busca: string) =>
     z.object({ itens: z.array(z.object({ id: z.number(), descricao: z.string() })) }),
   );
 
-export const criarCaixaCme = (corpo: {
-  codigo: string;
-  descricao: string;
-  validadeDias: number | null;
-  itens: { insumo: number; quantidade: number; pecaMestre: boolean }[];
-}) => enviar(`${C}/caixas`, corpo, qualquer, novaChave('cme.caixa'));
 export const criarEquipamentoCme = (corpo: {
   codigo: string;
   descricao: string;

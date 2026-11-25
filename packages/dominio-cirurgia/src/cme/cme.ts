@@ -12,7 +12,7 @@
 
 export type ResultadoIndicador = 'conforme' | 'nao_conforme' | 'pendente';
 
-export interface Problema {
+export interface ProblemaCme {
   readonly campo: string;
   readonly mensagem: string;
 }
@@ -36,8 +36,8 @@ export interface CaixaEntrada {
 }
 
 /** As recusas do cadastro da caixa (vazio: pode gravar). */
-export function conferirCaixa(c: CaixaEntrada): Problema[] {
-  const p: Problema[] = [];
+export function conferirCaixa(c: CaixaEntrada): ProblemaCme[] {
+  const p: ProblemaCme[] = [];
   if (!c.codigo.trim()) p.push({ campo: 'codigo', mensagem: 'Informe o código da caixa.' });
   if (!c.descricao.trim()) p.push({ campo: 'descricao', mensagem: 'Informe a descrição da caixa.' });
   if (c.itens.length === 0) p.push({ campo: 'itens', mensagem: 'A caixa precisa de ao menos uma peça.' });
@@ -68,7 +68,7 @@ export function caixaReprocessavel(c: {
   readonly controla: boolean;
   readonly limite: number | null;
   readonly feitos: number;
-}): Problema[] {
+}): ProblemaCme[] {
   if (!c.ativo) return [{ campo: 'caixa', mensagem: 'A caixa está inativa.' }];
   if (c.controla && c.limite !== null && c.feitos >= c.limite)
     return [
@@ -134,8 +134,8 @@ export function conferirCarga(
   metodo: number,
   pacotes: readonly PacoteParaCiclo[],
   pedidos: readonly number[],
-): Problema[] {
-  const p: Problema[] = [];
+): ProblemaCme[] {
+  const p: ProblemaCme[] = [];
   if (pedidos.length === 0) p.push({ campo: 'pacotes', mensagem: 'A carga precisa de ao menos um pacote.' });
   if (new Set(pedidos).size !== pedidos.length)
     p.push({ campo: 'pacotes', mensagem: 'O mesmo pacote apareceu duas vezes na carga.' });
@@ -158,7 +158,7 @@ export interface Indicadores {
 
 export type DesfechoCiclo =
   | { readonly situacao: 'liberado' | 'reprovado' | 'concluido'; readonly motivo: string }
-  | { readonly situacao: 'recusa'; readonly problemas: Problema[] };
+  | { readonly situacao: 'recusa'; readonly problemas: ProblemaCme[] };
 
 /**
  * O desfecho do ciclo ao registrar os indicadores. Indicador não conforme reprova a carga inteira (os pacotes são
@@ -166,7 +166,7 @@ export type DesfechoCiclo =
  * libera com o biológico conforme; sem a leitura, fica concluída e aguardando.
  */
 export function desfechoDoCiclo(i: Indicadores, cargaComImplante: boolean): DesfechoCiclo {
-  const faltas: Problema[] = [];
+  const faltas: ProblemaCme[] = [];
   if (i.fisico === 'pendente')
     faltas.push({ campo: 'fisico', mensagem: 'Registre o indicador físico do ciclo.' });
   if (i.quimico === 'pendente')
@@ -207,20 +207,20 @@ export interface PacoteParaUso {
 }
 
 /** Recusas da entrega do pacote para a cirurgia (pacote estéril, ciclo liberado, dentro da validade). */
-export function conferirEntrega(p: PacoteParaUso, hoje: string): Problema[] {
+export function conferirEntrega(p: PacoteParaUso, hoje: string): ProblemaCme[] {
   if (p.situacao !== 'esteril')
     return [{ campo: 'pacote', mensagem: 'Só o pacote estéril, guardado no arsenal, sai para a cirurgia.' }];
   return conferirEsterilidade(p, hoje);
 }
 
 /** Recusas do uso do pacote no paciente: entregue a esta cirurgia, ciclo liberado e dentro da validade. */
-export function conferirUso(p: PacoteParaUso, agendamento: number, hoje: string): Problema[] {
+export function conferirUso(p: PacoteParaUso, agendamento: number, hoje: string): ProblemaCme[] {
   if (p.situacao !== 'distribuido' || p.agendamentoEntregue !== agendamento)
     return [{ campo: 'pacote', mensagem: 'O pacote não foi entregue para esta cirurgia.' }];
   return conferirEsterilidade(p, hoje);
 }
 
-function conferirEsterilidade(p: PacoteParaUso, hoje: string): Problema[] {
+function conferirEsterilidade(p: PacoteParaUso, hoje: string): ProblemaCme[] {
   if (p.cicloSituacao !== 'liberado')
     return [{ campo: 'pacote', mensagem: 'O ciclo de esterilização do pacote não foi liberado.' }];
   if (!p.validade || p.validade < hoje.slice(0, 10))

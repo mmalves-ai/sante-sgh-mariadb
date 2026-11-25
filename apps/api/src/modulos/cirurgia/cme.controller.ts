@@ -5,7 +5,7 @@
 //   GET  /api/cirurgia/cme/produtos?busca=                 produtos do estoque para as peças da caixa (3 letras)
 //   GET  /api/cirurgia/cme/rastreio?etiqueta=               do pacote ao ciclo, à cirurgia e ao paciente
 //   GET  /api/cirurgia/cme/cirurgias/:agendamento           os pacotes entregues e usados na cirurgia
-//   POST /api/cirurgia/cme/caixas                           cadastra a caixa de instrumental com as peças
+//   (a caixa se cadastra só em POST /api/cirurgia/cme/cadastro/caixas, com composição, fases e foto)
 //   POST /api/cirurgia/cme/equipamentos                     cadastra o equipamento de esterilização
 //   POST /api/cirurgia/cme/solicitacoes                     o setor ou a cirurgia pede material estéril
 //   POST /api/cirurgia/cme/pacotes                          prepara o pacote da caixa (etiqueta)
@@ -77,13 +77,8 @@ export class CmeController {
     return this.com(req, (p, c) => p.pacotesDaCirurgia(c, agendamento));
   }
 
-  @Post('caixas')
-  @HttpCode(201)
-  @Permissao(PERMISSOES_CME.operar)
-  @AuditadoNoHandler('caixa de instrumental pelo executor (trilha na mesma transação)')
-  caixa(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.criarCaixa(c, corpo));
-  }
+  // A caixa (com a composição, as fases e a foto) se inclui só pelo cadastro da CME, com as regras de cme/cadastro:
+  // POST /api/cirurgia/cme/cadastro/caixas (CmeCadastroController). Não há segundo caminho de cadastro de caixa.
 
   @Post('equipamentos')
   @HttpCode(201)

@@ -13,7 +13,9 @@
 //     inclui outra, sem apagar nada; inativar a caixa a mantém;
 //   - foto: a imagem liga o arquivo (finalidade foto_cme, dono a caixa) e volta igual; o texto disfarçado dá 422 sem
 //     arquivo novo;
-//   - outro estabelecimento (que existe) não enxerga a caixa nem o produto: 404, sem escrita.
+//   - outro estabelecimento (que existe) não enxerga a caixa nem o produto: 404, sem escrita;
+//   - referências: o setor de guarda do produto, o setor da caixa e o bem patrimonial da peça de outro
+//     estabelecimento dão 422 no campo, sem escrita; o setor do próprio estabelecimento grava.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,6 +38,9 @@ interface Massa {
   recepcao: number;
   limpeza: number;
   esterilizacao: number;
+  setorDentro: number;
+  setorFora: number;
+  bemFora: number | null;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -57,6 +62,7 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar(`DELETE FROM caixa_instrumental WHERE estabelecimento_id IN (${est})`, [P, P2]);
   await e.executar(`DELETE FROM produto_reprocessavel WHERE estabelecimento_id IN (${est})`, [P, P2]);
+  await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN (${est})`, [P, P2]);
   await e.executar(`DELETE FROM arquivo WHERE estabelecimento_id IN (${est})`, [P, P2]);
   await e.executar('DELETE FROM fase_reprocessamento WHERE codigo LIKE ?', [`${P}-%`]);
   await limparTrilhaDaMassa(e, { codigos: [P, P2] });
@@ -111,7 +117,17 @@ describe.skipIf(SEM_BANCO)('PortaCmeCadastroPropria contra o MariaDB (contrato d
           [codigo, `Hospital sintético ${codigo}`, `Hospital sintético ${codigo} (fictício)`, agora],
         );
       const est = await ins(P);
-      await ins(P2);
+      const est2 = await ins(P2);
+      const setor = (estabelecimento: number) =>
+        e.inserir(
+          `INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em)
+           VALUES (?, ?, 'SETOR SINTETICO CME', 'apoio_tecnico', ?)`,
+          [estabelecimento, `${P}-CME`, agora],
+        );
+      // Um bem patrimonial de qualquer outro estabelecimento do cliente de teste (só o id é lido).
+      const bem = await e.uma('SELECT MIN(id) AS id FROM bem_patrimonial WHERE estabelecimento_id <> ?', [
+        est,
+      ]);
       const usadas = new Set(
         (await e.consultar('SELECT ordem FROM fase_reprocessamento')).map((r) => Number(r['ordem'])),
       );
@@ -129,6 +145,9 @@ describe.skipIf(SEM_BANCO)('PortaCmeCadastroPropria contra o MariaDB (contrato d
         recepcao: await fase('REC', livres[0]!, false),
         limpeza: await fase('LIM', livres[1]!, false),
         esterilizacao: await fase('EST', livres[2]!, true),
+        setorDentro: await setor(est),
+        setorFora: await setor(est2),
+        bemFora: bem?.['id'] ? Number(bem['id']) : null,
       };
     });
     raiz = mkdtempSync(join(tmpdir(), 'c2055-foto-'));
@@ -376,6 +395,68 @@ describe.skipIf(SEM_BANCO)('PortaCmeCadastroPropria contra o MariaDB (contrato d
     expect(Boolean(cab!['ativo'])).toBe(false);
     expect(cab!['excluido_em']).toBeNull();
     expect(Number(cab!['versao'])).toBe(inat.versao);
+  });
+
+  it('referências de outro estabelecimento: setor e bem recusados no campo (422) sem escrita', async () => {
+    const campos = async (pr: Promise<unknown>) => {
+      try {
+        await pr;
+        return 'ok';
+      } catch (e) {
+        const x = e as { status?: number; problema?: { status?: number; campos?: string[] } };
+        return `${x.status ?? x.problema?.status}:${(x.problema?.campos ?? []).join(',')}`;
+      }
+    };
+    const produtos = () =>
+      contar('SELECT COUNT(*) AS n FROM produto_reprocessavel WHERE estabelecimento_id = ?', [m.est]);
+    const caixas = () =>
+      contar('SELECT COUNT(*) AS n FROM caixa_instrumental WHERE estabelecimento_id = ?', [m.est]);
+    const p0 = await produtos();
+    expect(
+      await campos(
+        porta.gravarProduto(ctx(), null, {
+          ...produtoBase(),
+          codigoBarras: 'SINT-0101',
+          guarda: m.setorFora,
+        }),
+      ),
+    ).toBe('422:guarda');
+    expect(await produtos()).toBe(p0);
+    const ok = await porta.gravarProduto(ctx(), null, {
+      ...produtoBase(),
+      codigoBarras: 'SINT-0102',
+      guarda: m.setorDentro,
+    });
+    const [g] = await ler('SELECT guarda_setor_funcional_id AS g FROM produto_reprocessavel WHERE id = ?', [
+      ok.produto,
+    ]);
+    expect(Number(g?.['g'])).toBe(m.setorDentro);
+
+    const caixa = {
+      codigo: `${P}-REF1`,
+      descricao: 'CAIXA SINTETICA REF',
+      natureza: 'caixa',
+      validadeDias: 30,
+      fases: [
+        { fase: m.limpeza, obrigatoria: true },
+        { fase: m.esterilizacao, obrigatoria: true },
+      ],
+      pecas: [{ produto: ok.produto, quantidade: 1, pecaMestre: true }],
+    };
+    const c0 = await caixas();
+    expect(await campos(porta.gravarCaixa(ctx(), null, { ...caixa, setor: m.setorFora }))).toBe('422:setor');
+    if (m.bemFora !== null)
+      expect(
+        await campos(
+          porta.gravarCaixa(ctx(), null, {
+            ...caixa,
+            pecas: [...caixa.pecas, { bem: m.bemFora, quantidade: 1 }],
+          }),
+        ),
+      ).toBe('422:pecas.1.bem');
+    expect(await caixas()).toBe(c0);
+    const cx = await porta.gravarCaixa(ctx(), null, { ...caixa, setor: m.setorDentro });
+    expect((await porta.caixa(ctx(), cx.caixa)).setor).toBe(m.setorDentro);
   });
 
   it('foto: liga o arquivo à caixa e volta igual; o que não é imagem é recusado sem arquivo novo', async () => {

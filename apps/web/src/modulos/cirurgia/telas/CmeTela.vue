@@ -4,17 +4,14 @@
 // e "entregar à cirurgia" na própria linha, a carga (marcar os pacotes aguardando e abrir o ciclo), os ciclos com os
 // indicadores (conclusão e liberação do lote na linha) e o cadastro das caixas e dos equipamentos. Validação na hora
 // pela regra do domínio; tudo se escolhe pelo nome.
-import { conferirCaixa } from '@sgh/dominio-cirurgia';
 import { SanteSelecao } from '@sgh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   abrirCicloCme,
-  buscarProdutosCme,
   type CicloCme,
   concluirCicloCme,
-  criarCaixaCme,
   criarEquipamentoCme,
   entregarPacoteCme,
   type Indicador,
@@ -193,43 +190,8 @@ const liberar = (c: CicloCme) =>
   });
 
 // ── Cadastros ──────────────────────────────────────────────────────────────────────────────────────────────────
-const cx = reactive({
-  codigo: '',
-  descricao: '',
-  validadeDias: '30',
-  pecas: [] as { insumo: number; nome: string; quantidade: number; pecaMestre: boolean }[],
-});
-const busca = ref('');
-const achados = ref<{ id: number; descricao: string }[]>([]);
-const buscar = async () => {
-  achados.value = busca.value.trim().length >= 3 ? (await buscarProdutosCme(busca.value)).itens : [];
-};
-const problemasCaixa = computed(() =>
-  conferirCaixa({
-    codigo: cx.codigo,
-    descricao: cx.descricao,
-    validadeDias: cx.validadeDias ? Number(cx.validadeDias) : null,
-    controlaReprocessamentos: false,
-    limiteReprocessamentos: null,
-    itens: cx.pecas.map((x) => ({
-      insumo: x.insumo,
-      produto: null,
-      quantidade: x.quantidade,
-      pecaMestre: x.pecaMestre,
-    })),
-  }),
-);
-const salvarCaixa = () =>
-  fazer(async () => {
-    await criarCaixaCme({
-      codigo: cx.codigo,
-      descricao: cx.descricao,
-      validadeDias: cx.validadeDias ? Number(cx.validadeDias) : null,
-      itens: cx.pecas.map((x) => ({ insumo: x.insumo, quantidade: x.quantidade, pecaMestre: x.pecaMestre })),
-    });
-    Object.assign(cx, { codigo: '', descricao: '', pecas: [] });
-    return t('cirurgia.cme.gravado');
-  });
+// A caixa, o kit e o pacote avulso se cadastram só no cadastro da CME (/cirurgia/cme/cadastro: composição, fases e
+// foto, com as regras de cme/cadastro); aqui fica só o equipamento.
 const eq = reactive({ codigo: '', descricao: '', natureza: 'autoclave', metodo: '' });
 const salvarEquipamento = () =>
   fazer(async () => {
@@ -537,61 +499,11 @@ const salvarEquipamento = () =>
       </table>
 
       <h2>{{ t('cirurgia.cme.caixas') }}</h2>
-      <form class="filtros" data-testid="cme-caixa-form" @submit.prevent="salvarCaixa">
-        <label
-          >{{ t('cirurgia.cme.codigo') }}
-          <input v-model="cx.codigo" maxlength="30" data-testid="cme-caixa-codigo"
-        /></label>
-        <label
-          >{{ t('cirurgia.cme.descricao') }}
-          <input v-model="cx.descricao" maxlength="150" data-testid="cme-caixa-descricao"
-        /></label>
-        <label
-          >{{ t('cirurgia.cme.validadeDias') }}
-          <input v-model="cx.validadeDias" type="number" min="1" max="3650" data-testid="cme-caixa-validade"
-        /></label>
-        <label
-          >{{ t('cirurgia.cme.buscarProduto') }}
-          <input v-model="busca" data-testid="cme-caixa-busca" @input="buscar"
-        /></label>
-        <button
-          v-for="a in achados"
-          :key="a.id"
-          type="button"
-          :data-testid="`cme-caixa-incluir-${a.id}`"
-          @click="
-            cx.pecas.push({
-              insumo: a.id,
-              nome: a.descricao,
-              quantidade: 1,
-              pecaMestre: cx.pecas.length === 0,
-            })
-          "
-        >
-          {{ t('cirurgia.cme.incluirPeca', { nome: a.descricao }) }}
-        </button>
-        <ul>
-          <li v-for="(x, n) in cx.pecas" :key="n">
-            {{ x.nome }}
-            <input
-              v-model.number="x.quantidade"
-              type="number"
-              min="1"
-              :aria-label="t('cirurgia.cme.quantidade')"
-            />
-            <label><input v-model="x.pecaMestre" type="checkbox" /> {{ t('cirurgia.cme.pecaMestre') }}</label>
-            <button type="button" @click="cx.pecas.splice(n, 1)">{{ t('cirurgia.cme.tirar') }}</button>
-          </li>
-        </ul>
-        <p v-for="pr in problemasCaixa" :key="pr.campo + pr.mensagem" class="dica">{{ pr.mensagem }}</p>
-        <button
-          type="submit"
-          :disabled="problemasCaixa.length > 0 || acao.isPending.value"
-          data-testid="cme-caixa-salvar"
-        >
-          {{ t('cirurgia.cme.salvarCaixa') }}
-        </button>
-      </form>
+      <p>
+        <RouterLink to="/cirurgia/cme/cadastro" data-testid="cme-caixa-cadastro">{{
+          t('cirurgia.cmeCadastro.titulo')
+        }}</RouterLink>
+      </p>
       <table class="tabela" data-testid="cme-caixas">
         <thead>
           <tr>

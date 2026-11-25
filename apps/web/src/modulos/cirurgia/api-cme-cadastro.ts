@@ -1,8 +1,10 @@
 // Cliente do cadastro da central de material esterilizado (CME; F7, 04-CME linha 115): produtos reprocessáveis,
 // caixas, kits e pacotes avulsos com a composição em ordem de montagem, as fases do reprocessamento e a foto de
 // conferência. Toda gravação leva a chave de idempotência; a alteração leva a versão lida (409 se outro gravou antes).
+import { TIPO_CORPO_ANEXOS_PORTAL } from '@sgh/contratos';
 import { z } from 'zod';
-import { enviar, ler, novaChave } from '../exames/api-exames.js';
+import { tokenCsrf } from '../../api.js';
+import { enviar, ler, lerJson, novaChave } from '../exames/api-exames.js';
 
 const C = '/api/cirurgia/cme/cadastro';
 
@@ -182,10 +184,24 @@ export const gravarCaixaCadastro = (id: number | null, corpo: CaixaEnvio) =>
 export const situacaoCaixaCadastro = (id: number, versao: number, ativo: boolean) =>
   enviar(`${C}/caixas/${id}/situacao`, { versao, ativo }, qualquer, novaChave('cme.caixa.situacao'));
 
-export const enviarFotoCme = (
+export const enviarFotoCme = async (
   alvo: 'caixas' | 'pecas',
   id: number,
   corpo: { versao: number; conteudo: string; nomeOriginal: string },
-) => enviar(`${C}/${alvo}/${id}/foto`, corpo, qualquer, novaChave('cme.foto'));
+) =>
+  // A foto vai em base64 com o tipo do corpo com anexos (o JSON padrão aceita 1 MB; a foto tem até 2 MB).
+  lerJson(
+    await fetch(`${C}/${alvo}/${id}/foto`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': TIPO_CORPO_ANEXOS_PORTAL,
+        'x-csrf': tokenCsrf(),
+        'idempotency-key': novaChave('cme.foto'),
+      },
+      body: JSON.stringify(corpo),
+    }),
+    qualquer,
+  );
 export const lerFotoCme = (alvo: 'caixas' | 'pecas', id: number) =>
   ler(`${C}/${alvo}/${id}/foto`, z.object({ tipo: z.string(), conteudo: z.string() }));

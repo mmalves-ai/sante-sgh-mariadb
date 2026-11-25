@@ -8,7 +8,8 @@
 //   POST /api/cirurgia/cme/cadastro/caixas                       inclui a caixa, o kit ou o pacote avulso
 //   POST /api/cirurgia/cme/cadastro/caixas/:id                   altera a caixa com a composição inteira (versão)
 //   POST /api/cirurgia/cme/cadastro/caixas/:id/situacao          ativa ou inativa
-//   POST /api/cirurgia/cme/cadastro/:alvo/:id/foto               { versao, conteudo (base64) } foto da caixa ou peça
+//   POST /api/cirurgia/cme/cadastro/:alvo/:id/foto               { versao, conteudo (base64) } foto da caixa ou peça,
+//        no tipo do corpo com anexos (a foto de até 2 MB passa de 1 MB em base64, o teto do JSON padrão)
 //   GET  /api/cirurgia/cme/cadastro/:alvo/:id/foto               a foto (base64)
 // Permissões da CME (concessão por perfil, packages/contratos/src/permissoes/cirurgia-cme.ts): consultar e operar.
 import {
@@ -17,12 +18,15 @@ import {
   Get,
   HttpCode,
   Inject,
+  type OnModuleInit,
   Optional,
   Param,
   ParseIntPipe,
   Post,
   Req,
 } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
+import { LIMITE_CORPO_ANEXOS_PORTAL, TIPO_CORPO_ANEXOS_PORTAL } from '@sgh/contratos';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -44,13 +48,37 @@ const alvoDe = (v: string): AlvoFotoCme => {
   throw new ErroProblema('nao-encontrado', 404, 'Rota inexistente', 'A foto é da caixa ou da peça.');
 };
 
+/** O pedaço do Fastify usado para o tipo do corpo com anexos (o JSON padrão, com teto próprio). */
+interface InstanciaComParser {
+  hasContentTypeParser(tipo: string): boolean;
+  addContentTypeParser(tipo: string, opcoes: { parseAs: 'string'; bodyLimit: number }, parser: unknown): void;
+  getDefaultJsonParser(proto: 'error', construtor: 'error'): unknown;
+}
+
 @Controller('cirurgia/cme/cadastro')
-export class CmeCadastroController {
+export class CmeCadastroController implements OnModuleInit {
   constructor(
     @Optional()
     @Inject(PORTA_CME_CADASTRO)
     private readonly porta: PortaCmeCadastroPropria | null = null,
+    @Optional() @Inject(HttpAdapterHost) private readonly adaptador: HttpAdapterHost | null = null,
   ) {}
+
+  /**
+   * A foto (até 2 MB, que em base64 passa de 2,6 MB) não cabe no teto padrão do JSON (1 MB): ela vem com o tipo do
+   * corpo com anexos, com o mesmo parser JSON seguro do Fastify e teto próprio. O registro é único na instância (o
+   * portal do prestador e a auditoria registram o mesmo tipo; quem chegar primeiro registra). O tamanho da foto
+   * continua conferido pela porta e pelo domínio.
+   */
+  onModuleInit(): void {
+    const f = this.adaptador?.httpAdapter?.getInstance?.() as InstanciaComParser | undefined;
+    if (!f?.hasContentTypeParser || f.hasContentTypeParser(TIPO_CORPO_ANEXOS_PORTAL)) return;
+    f.addContentTypeParser(
+      TIPO_CORPO_ANEXOS_PORTAL,
+      { parseAs: 'string', bodyLimit: LIMITE_CORPO_ANEXOS_PORTAL },
+      f.getDefaultJsonParser('error', 'error'),
+    );
+  }
 
   private async com<T>(
     req: RequisicaoAutorizada,

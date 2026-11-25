@@ -11,6 +11,8 @@
 //   - situação da caixa: ativa ou inativa (nada apagado);
 //   - foto: a imagem (PNG, JPEG ou WebP, conferida pelo conteúdo) entra pela porta de arquivos (disco local, ADR 0004)
 //     com a caixa ou a peça como dono e o id fica em foto_arquivo_id; a leitura devolve a imagem conferida pelo hash.
+//   - referências: o bem patrimonial da peça, o setor da caixa e o arsenal de guarda do produto têm de ser do
+//     estabelecimento da sessão (422 por campo, sem escrita); a leitura da caixa só junta o que é do estabelecimento.
 // Recusa da regra: 422, sem escrita. Versão velha: 409. Outro estabelecimento: 404.
 import {
   conferirCadastroCaixa,
@@ -133,6 +135,11 @@ const esquemaFoto = z
   .strict();
 
 export type AlvoFotoCme = 'caixa' | 'peca';
+
+interface Referencia {
+  campo: string;
+  id: number | null;
+}
 
 const recusa = (titulo: string, p: readonly ProblemaCme[]) => {
   if (p.length) throw recusaRegra(titulo, p);
@@ -430,12 +437,12 @@ export class PortaCmeCadastroPropria extends PortaEstabelecimentoPropria {
                 i.peca_mestre, i.codigo_barras, i.suspenso, i.foto_arquivo_id, i.versao,
                 COALESCE(p.descricao, s.nome, b.descricao, '') AS descricao
            FROM caixa_instrumental_item i
-           LEFT JOIN produto_reprocessavel p ON p.id = i.produto_reprocessavel_id
+           LEFT JOIN produto_reprocessavel p ON p.id = i.produto_reprocessavel_id AND p.estabelecimento_id = ?
            LEFT JOIN insumo s ON s.id = i.insumo_id
-           LEFT JOIN bem_patrimonial b ON b.id = i.bem_patrimonial_id
+           LEFT JOIN bem_patrimonial b ON b.id = i.bem_patrimonial_id AND b.estabelecimento_id = ?
           WHERE i.caixa_instrumental_id = ? AND i.excluido_em IS NULL
           ORDER BY i.sequencia`,
-        [caixa],
+        [est.id, est.id, caixa],
       );
       const fases = await this.fasesDe(l, 'caixa_instrumental_id', [caixa]);
       return {
@@ -526,6 +533,45 @@ export class PortaCmeCadastroPropria extends PortaEstabelecimentoPropria {
         });
   }
 
+  /**
+   * O bem patrimonial e o setor (responsável ou de guarda) citados têm de ser do estabelecimento da sessão: a chave
+   * estrangeira só exige que a linha exista, e as duas tabelas são por estabelecimento. Devolve um problema por campo.
+   */
+  private async conferirReferencias(
+    l: Pick<Leitor, 'consultar'>,
+    estabelecimento: number,
+    bens: readonly Referencia[],
+    setores: readonly Referencia[],
+  ): Promise<ProblemaCme[]> {
+    const ids = (refs: readonly Referencia[]) => [
+      ...new Set(refs.map((r) => r.id).filter((v): v is number => v !== null)),
+    ];
+    const fora = (refs: readonly Referencia[], achados: readonly Linha[], mensagem: string) => {
+      const ok = new Set(achados.map((r) => num(r['id'])));
+      return refs.filter((r) => r.id !== null && !ok.has(r.id)).map((r) => ({ campo: r.campo, mensagem }));
+    };
+    const idsBens = ids(bens);
+    const idsSetores = ids(setores);
+    const marcasBens = idsBens.map(() => '?').join(', ');
+    const marcasSetores = idsSetores.map(() => '?').join(', ');
+    const achadosBens = idsBens.length
+      ? await l.consultar(
+          `SELECT id FROM bem_patrimonial WHERE estabelecimento_id = ? AND id IN (${marcasBens})`,
+          [estabelecimento, ...idsBens],
+        )
+      : [];
+    const achadosSetores = idsSetores.length
+      ? await l.consultar(
+          `SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND id IN (${marcasSetores})`,
+          [estabelecimento, ...idsSetores],
+        )
+      : [];
+    return [
+      ...fora(bens, achadosBens, 'O bem patrimonial não é deste estabelecimento.'),
+      ...fora(setores, achadosSetores, 'O setor não é deste estabelecimento.'),
+    ];
+  }
+
   private async conferirFasesNoBanco(
     c: ContextoPortaPropria,
     fases: readonly { fase: number; obrigatoria: boolean }[],
@@ -556,9 +602,11 @@ export class PortaCmeCadastroPropria extends PortaEstabelecimentoPropria {
             ),
           );
     if (produto !== null && !atual) throw naoEncontrado('Produto reprocessável');
-    recusa(
-      'Produto reprocessável recusado',
-      conferirProdutoReprocessavel({
+    const referencias = await this.ler(c, 'referencias', (l, est) =>
+      this.conferirReferencias(l, est.id, [{ campo: 'bem', id: e.bem }], [{ campo: 'guarda', id: e.guarda }]),
+    );
+    recusa('Produto reprocessável recusado', [
+      ...conferirProdutoReprocessavel({
         descricao: e.descricao,
         tipo: e.tipo,
         codigoBarras: e.codigoBarras || null,
@@ -568,7 +616,8 @@ export class PortaCmeCadastroPropria extends PortaEstabelecimentoPropria {
         tempoMinutos: e.tempoMinutos,
         temperaturaCelsius: e.temperaturaCelsius,
       }),
-    );
+      ...referencias,
+    ]);
     const catalogo = await this.conferirFasesNoBanco(c, e.fases);
     return this.gravar(c, 'cirurgia.cme.produto_gravar', TABELAS_CME_CADASTRO, async (tx, est, usuario) => {
       const codigo = e.codigoBarras || null;
@@ -645,7 +694,7 @@ export class PortaCmeCadastroPropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaCaixa, corpo);
     if (caixa !== null && e.versao === undefined)
       throw recusaRegra('Versão ausente', [{ campo: 'versao', mensagem: 'Informe a versão lida da caixa.' }]);
-    const { produtos, reprocessamentos } = await this.ler(c, 'composicao', async (l, est) => {
+    const { produtos, reprocessamentos, referencias } = await this.ler(c, 'composicao', async (l, est) => {
       const ids = [...new Set(e.pecas.map((p) => p.produto).filter((v): v is number => v !== null))];
       const rs = ids.length
         ? await l.consultar(
@@ -670,12 +719,17 @@ export class PortaCmeCadastroPropria extends PortaEstabelecimentoPropria {
           ]),
         ),
         reprocessamentos: cx ? num(cx['quantidade_reprocessamentos']) : 0,
+        referencias: await this.conferirReferencias(
+          l,
+          est.id,
+          e.pecas.map((p, n) => ({ campo: `pecas.${n}.bem`, id: p.bem })),
+          [{ campo: 'setor', id: e.setor }],
+        ),
       };
     });
     const pecas = e.pecas.map((p) => ({ ...p, codigoBarras: p.codigoBarras || null }));
-    recusa(
-      'Caixa recusada',
-      conferirCadastroCaixa(
+    recusa('Caixa recusada', [
+      ...conferirCadastroCaixa(
         {
           codigo: e.codigo,
           descricao: e.descricao,
@@ -688,7 +742,8 @@ export class PortaCmeCadastroPropria extends PortaEstabelecimentoPropria {
         },
         produtos,
       ),
-    );
+      ...referencias,
+    ]);
     const catalogo = await this.conferirFasesNoBanco(c, e.fases);
     return this.gravar(c, 'cirurgia.cme.caixa_gravar', TABELAS_CME_CADASTRO, async (tx, est, usuario) => {
       const dup = await tx.uma(
