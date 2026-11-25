@@ -45,6 +45,7 @@ import {
 } from '@sgh/persistencia';
 import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 import { apurarLancamentosAutomaticos, apurarLancamentosDoDia } from './conta-entrada.js';
+import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
 import { versaoNumero } from './esquemas.js';
 import { dispararKitsDoItem } from './kit-lancamento.js';
 import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
@@ -580,6 +581,9 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     const realizado = new Date(
       dataHoraParaInstante(e.data, e.hora, texto(fuso?.['fuso_horario']) || undefined),
     );
+    // 06-FAT linha 12: a data que cai num período fechado da conta parcial é recusada (o item sem tipo de lançamento
+    // só esbarra no período geral).
+    await conferirLancamentoNoPeriodo(tx, conta.id, realizado, null);
     const seq = await tx.uma<Linha>(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
       [conta.id],

@@ -2,6 +2,9 @@
 //   GET  /api/faturamento/contas/:id/periodos                 faturamento.conta.ler (com a sugestão do próximo)
 //   POST /api/faturamento/contas/:id/periodos                 faturamento.item.lancar
 //   POST /api/faturamento/periodos-conta/:pid/retirada       faturamento.item.lancar (motivo; fica marcado, não some)
+//   GET  /api/faturamento/contas/:id/faturamento-por-periodo  faturamento.conta.ler (itens, valor e guias por período)
+//   POST /api/faturamento/periodos-conta/:pid/fechamento     faturamento.conta.fechar (fechamento parcial da faixa)
+//   POST /api/faturamento/periodos-conta/:pid/reabertura     faturamento.conta.reabrir (motivo; do último ao primeiro)
 //   GET  /api/faturamento/contas/:id/segurado                 faturamento.conta.ler (gravado ou sugerido da cobertura)
 //   POST /api/faturamento/contas/:id/segurado                 faturamento.item.lancar
 //   GET  /api/faturamento/fontes/:fonte/atributos-guia        faturamento.conta.ler
@@ -26,6 +29,11 @@ import {
   periodosContaPropria,
   seguradoContaPropria,
 } from './conta-complementos-propria.js';
+import {
+  faturamentoPorPeriodoPropria,
+  gravarPeriodos,
+  type NomeOperacaoPeriodos,
+} from './conta-periodos-propria.js';
 
 export const SERVICO_COMPLEMENTOS_CONTA = Symbol('SERVICO_COMPLEMENTOS_CONTA');
 const EXECUTOR = 'executor: trilha e autoria na mesma transação';
@@ -46,6 +54,9 @@ export class ServicoComplementosConta {
   }
   gravar(nome: NomeOperacaoComplementos, ctx: Parameters<typeof gravarComplementos>[2], e: unknown) {
     return gravarComplementos(this.executor, nome, ctx, e);
+  }
+  gravarPeriodo(nome: NomeOperacaoPeriodos, ctx: Parameters<typeof gravarPeriodos>[2], e: unknown) {
+    return gravarPeriodos(this.executor, nome, ctx, e);
   }
 }
 
@@ -105,6 +116,41 @@ export class ComplementosContaController {
   retirarPeriodo(@Param('pid') pid: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.rodar(() =>
       this.s().gravar('periodo.retirar', contextoOperacao(req, 'conta-periodos'), {
+        ...objeto(corpo),
+        id: inteiro(pid, 'pid'),
+      }),
+    );
+  }
+
+  @Get('faturamento/contas/:id/faturamento-por-periodo')
+  @Permissao('faturamento.conta.ler')
+  faturamentoPorPeriodo(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    const c = inteiro(id, 'id');
+    return this.rodar(() =>
+      this.s().ler(ctxDe(req, 'conta-periodos'), (l, est) => faturamentoPorPeriodoPropria(l, est, c)),
+    );
+  }
+
+  @Post('faturamento/periodos-conta/:pid/fechamento')
+  @HttpCode(200)
+  @Permissao('faturamento.conta.fechar')
+  @AuditadoNoHandler(EXECUTOR)
+  fecharPeriodo(@Param('pid') pid: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().gravarPeriodo('periodo.fechar', contextoOperacao(req, 'conta-periodos'), {
+        ...objeto(corpo),
+        id: inteiro(pid, 'pid'),
+      }),
+    );
+  }
+
+  @Post('faturamento/periodos-conta/:pid/reabertura')
+  @HttpCode(200)
+  @Permissao('faturamento.conta.reabrir')
+  @AuditadoNoHandler(EXECUTOR)
+  reabrirPeriodo(@Param('pid') pid: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().gravarPeriodo('periodo.reabrir', contextoOperacao(req, 'conta-periodos'), {
         ...objeto(corpo),
         id: inteiro(pid, 'pid'),
       }),

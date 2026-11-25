@@ -19,6 +19,7 @@ import {
   validarDefinicaoAtributo,
   validarOpcoesAtributo,
   validarPeriodoConta,
+  validarRetiradaPeriodo,
   validarSeguradoConta,
   validarValoresAtributos,
 } from '@sgh/dominio-faturamento';
@@ -475,11 +476,15 @@ export const opRetirarPeriodo = definirOperacao({
   entrada: esquemaRetirarPeriodo,
   async gravar(tx, e, ctx) {
     const p = await tx.uma<Linha>(
-      'SELECT conta_hospitalar_id FROM conta_hospitalar_periodo WHERE id = ? AND excluido_em IS NULL',
+      'SELECT conta_hospitalar_id, fechado_em FROM conta_hospitalar_periodo WHERE id = ? AND excluido_em IS NULL',
       [e.id],
     );
     if (!p) throw recusa('nao-encontrado', 'O período não existe.', { campos: ['id'] });
     const c = await contaDo(tx, estDe(ctx), n(p['conta_hospitalar_id']));
+    // O período fechado (faturado em separado) não sai: reabra-o antes.
+    exigirValido(
+      validarRetiradaPeriodo({ fechado: p['fechado_em'] !== null && p['fechado_em'] !== undefined }),
+    );
     if (!contaEditavel(c.situacao))
       throw recusa('conta-fechada', 'A conta não está aberta: reabra-a para mudar os períodos.', {
         campos: [],

@@ -23,6 +23,7 @@ export * from './competencia/reabertura.js';
 export * from './competencia/trabalho.js';
 // F3.7 (06-FAT linhas 10 e 12): período da conta parcial, segurado na conta e campo adicional da operadora na guia.
 export * from './conta/complementos.js';
+export * from './conta/periodos-conta.js';
 // F3.7 (06-FAT linha 36): a nota fiscal de serviço que documenta a fatura do convênio ou a conta do particular.
 export * from './conta/nota-vinculo.js';
 export * from './conta/regras-comerciais.js';
