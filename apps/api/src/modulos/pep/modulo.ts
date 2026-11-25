@@ -58,6 +58,11 @@ import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-p
 import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
 import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
+import { PrescricaoCadastroController } from './prescricao-cadastro.controller.js';
+import {
+  CADASTRO_CATALOGO_PRESCRICAO,
+  CadastroCatalogoPrescricaoPropria,
+} from './prescricao-propria-cadastro.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
 import {
@@ -192,6 +197,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       PainelFiltrosController,
       SumarioAltaSecoesController,
       FarmacovigilanciaController,
+      PrescricaoCadastroController,
       NotasPacienteController,
       AnotacoesAdministrativasController,
       ResultadosGruposController,
@@ -241,6 +247,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaGruposResultadoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L106 (C1-115): cadastro editável do catálogo da prescrição; sem núcleo, 503.
+      {
+        provide: CADASTRO_CATALOGO_PRESCRICAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new CadastroCatalogoPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F78.03-1 (03-PEP L103 e L104): reação adversa no paciente e lista de uso contínuo; sem núcleo, 503.
