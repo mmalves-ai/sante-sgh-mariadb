@@ -121,6 +121,14 @@ test.describe('C1-119: dosimetria e exposição a quimioterápico no prontuário
     await page.getByLabel('Carga semanal (horas)').fill('24');
     await escolher(page.getByTestId('admissao-centro-custo'), { rotulo: /Enfermagem da clínica médica/ });
     await page.getByLabel('Matrícula').fill(`E2E-C119-${sufixo}`);
+    // A ficha da admissão (C1-111): sem ela a revisão não abre.
+    await page.getByLabel('Data de nascimento').fill('14/03/1990');
+    await page.getByLabel('Data de nascimento').press('Tab');
+    await escolher(page.getByTestId('admissao-sexo'), { rotulo: 'Feminino' });
+    await escolher(page.getByTestId('admissao-grau-instrucao'), { rotulo: /^09 - / });
+    await escolher(page.getByTestId('admissao-categoria'), { rotulo: /^101 - / });
+    await escolher(page.getByTestId('admissao-natureza'), { rotulo: /^Empregatício/ });
+    await page.getByLabel('Salário-base (R$)').fill('3800,00');
     await page.getByTestId('admissao-revisar').click();
     await page.getByTestId('admissao-gravar').click();
     await expect(page.getByTestId('admissao-concluida')).toBeVisible();
@@ -184,6 +192,8 @@ test.describe('C1-119: dosimetria e exposição a quimioterápico no prontuário
     await entrar(page, 'SINT.ADMIN');
     await page.goto('/administracao/liberacao');
     await chave(page, 'pessoas.sesmt', false, 'Recolher o E2E C1-119 do SESMT');
+    // O cadastro de colaboradores também volta a desligado: o m52-1 começa conferindo a chave desligada.
+    await chave(page, 'pessoas.colaborador', false, 'Recolher o E2E C1-119 dos colaboradores');
     expect(externas).toEqual([]);
   });
 });

@@ -104,11 +104,17 @@ test.describe('financeiro: encontro de contas @C1-034', () => {
         },
       ],
     };
+    // A leitura pode ser cortada por uma navegação (entrar, goto) com a resposta ainda a caminho: aí a resposta é
+    // descartada e não há o que cumprir.
     await page.route('**/api/financeiro/gravacao', async (rota) => {
-      const r = await rota.fetch();
-      const corpo = (await r.json()) as { operacoes: Record<string, unknown> };
+      let corpo: { operacoes: Record<string, unknown> };
+      try {
+        corpo = (await (await rota.fetch()).json()) as { operacoes: Record<string, unknown> };
+      } catch {
+        return rota.abort().catch(() => undefined);
+      }
       for (const op of OPERACOES) corpo.operacoes[op] = { ligada: true, motivo: null };
-      return json(rota, corpo);
+      return json(rota, corpo).catch(() => undefined);
     });
     await page.route('**/api/financeiro/compensacao/**', async (rota) => {
       const req = rota.request();
@@ -239,9 +245,10 @@ test.describe('financeiro: encontro de contas @C1-034', () => {
     await expect(page.getByTestId('ec-situacao-2')).toContainText('parceiro pediu pagamento à parte');
     await expect(page.getByTestId('ec-cancelar-2')).toHaveCount(0);
 
-    // Quem propôs não efetiva: a recusa do servidor aparece.
-    await page.getByTestId('ec-efetivar-1').click();
-    await expect(page.getByTestId('recusa-faturamento')).toContainText('Quem propôs');
+    // Quem propôs não efetiva: o SINT.FIN.PAGA baixa, mas não tem financeiro.tituloPagar.aprovar, então o botão de
+    // efetivar fica desligado para ele (a recusa do servidor a quem tem as duas permissões e propôs, o
+    // 'aprovador-igual-proponente', é provada no contrato de efeito).
+    await expect(page.getByTestId('ec-efetivar-1')).toBeDisabled();
 
     // Outra pessoa aprova e efetiva; depois estorna com o motivo.
     quem = 'SINT.FIN.APROVA';

@@ -92,11 +92,17 @@ test.describe('financeiro: previsão e provisão @C1-016', () => {
       { id: 602, lado: 'pagar', numero: 'TP-SINT-602', data: '', valor: 900 },
     ];
 
+    // A leitura pode ser cortada por uma navegação (entrar, goto) com a resposta ainda a caminho: aí a resposta é
+    // descartada e não há o que cumprir.
     await page.route('**/api/financeiro/gravacao', async (rota) => {
-      const r = await rota.fetch();
-      const corpo = (await r.json()) as { operacoes: Record<string, unknown> };
+      let corpo: { operacoes: Record<string, unknown> };
+      try {
+        corpo = (await (await rota.fetch()).json()) as { operacoes: Record<string, unknown> };
+      } catch {
+        return rota.abort().catch(() => undefined);
+      }
       for (const op of OPERACOES) corpo.operacoes[op] = { ligada: true, motivo: null };
-      return json(rota, corpo);
+      return json(rota, corpo).catch(() => undefined);
     });
     await page.route('**/api/financeiro/compensacao/**', async (rota) => {
       const req = rota.request();

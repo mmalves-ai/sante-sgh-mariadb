@@ -88,7 +88,8 @@ test.describe('orçamento empresarial: premissas e cenários @C1-125', () => {
       timeout: 30_000,
     });
     await expect(page.getByTestId('orc-prem-projecao')).toBeVisible();
-    await expect(page.getByTestId('orc-prem-resultado-projetado')).toContainText('R$');
+    // O orçamento imprime os valores sem o símbolo da moeda (comum-orcamento.reais: "1.234,56").
+    await expect(page.getByTestId('orc-prem-resultado-projetado')).toHaveText(/^-?\d{1,3}(\.\d{3})*,\d{2}$/);
     await expect(page.getByTestId('orc-prem-conta')).toContainText('+5.00%');
     await semViolacaoAxe(page, '/financeiro/orcamento (cenário aplicado)');
 
