@@ -711,11 +711,19 @@ describe.skipIf(SEM_BANCO)('documentos-propria-painel contra o MariaDB (cliente 
   });
 
   it('episódio da internação: CID principal, só a cirurgia realizada e só o exame liberado', async () => {
-    expect(await F.episodio(nucleo, CLIENTE, C(), ids.atendInt)).toEqual({
+    const ep = await F.episodio(nucleo, CLIENTE, C(), ids.atendInt);
+    expect(ep).toMatchObject({
       motivoInternacao: `I20 - Angina sintética ${P}`,
       procedimentos: [`Herniorrafia sintética ${P} (K40)`],
       exames: [`HEMOGRAMA SINTETICO ${P}`],
     });
+    // F3.3 (L124): os mesmos itens com o momento clínico (início da cirurgia, momento do resultado), para a janela.
+    expect(ep.datados?.procedimentos.map((x) => [x.texto, x.em instanceof Date])).toEqual([
+      [`Herniorrafia sintética ${P} (K40)`, true],
+    ]);
+    expect(ep.datados?.exames.map((x) => [x.texto, x.em instanceof Date])).toEqual([
+      [`HEMOGRAMA SINTETICO ${P}`, true],
+    ]);
     // O atendimento de outro estabelecimento não é lido no da sessão.
     expect(await F.episodio(nucleo, CLIENTE, C(), ids.atendB)).toEqual({
       motivoInternacao: null,

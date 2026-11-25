@@ -10,7 +10,14 @@ import type { ContextoDocs } from './documentos-porta.js';
 import { PortaDocumentosMemoria } from './documentos-porta-memoria.js';
 import { ServicoDocumentos } from './documentos-servico.js';
 
-const c: ContextoDocs = { cliente: 'demo', correlacao: 'l124-fin', rede: 'REDE', hospital: 'HOSP' };
+const c: ContextoDocs = {
+  cliente: 'demo',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'l124-fin',
+  rede: 'REDE',
+  hospital: 'HOSP',
+};
 const secao = (
   x: Partial<SecaoVigente> & Pick<SecaoVigente, 'codigo' | 'tipoConteudo' | 'ordem'>,
 ): SecaoVigente => ({
@@ -107,6 +114,42 @@ describe('finalização do sumário de alta pelas seções do atendimento (servi
     expect(e.documento.indexOf('Hipóteses diagnósticas')).toBeLessThan(
       e.documento.indexOf('Orientações ao paciente'),
     );
+    // As linhas por seção que a operação grava em sumario_alta_secao: ordem e título do cadastro, CID sem ponto.
+    expect(e.linhas.map((l) => [l.sequencia, l.grupo, l.secao, l.titulo, l.texto, l.cid10])).toEqual([
+      [1, 'diagnosticos', 'diagnosticos', 'Hipóteses diagnósticas', 'Angina', 'I20'],
+      [2, 'orientacoes', 'l124-orient', 'Orientações ao paciente', 'Repouso relativo', null],
+    ]);
+  });
+
+  it('a montagem do sumário traz procedimentos e exames só da janela de cada seção', async () => {
+    const porta = new PortaDocumentosMemoria();
+    const servico = new ServicoDocumentos(porta);
+    porta.episodio = async () => ({
+      motivoInternacao: null,
+      procedimentos: ['Cateterismo', 'Angioplastia'],
+      exames: ['Hemograma', 'Troponina'],
+      datados: {
+        procedimentos: [
+          { texto: 'Cateterismo', em: '2026-11-01T12:00:00Z' },
+          { texto: 'Angioplastia', em: '2026-11-03T12:00:00Z' },
+        ],
+        exames: [
+          { texto: 'Hemograma', em: '2026-11-01T10:00:00Z' },
+          { texto: 'Troponina', em: '2026-11-03T18:00:00Z' },
+        ],
+      },
+    });
+    const janela = { desde: '2026-11-02T20:00:00.000Z', ate: '2026-11-03T20:00:00.000Z', ultimo: false };
+    const pedidos: number[] = [];
+    const liberada = { pode: true, motivo: null } as never;
+    const r = await servico.alta(c, 1003, 10031, { finalizar: liberada, obito: liberada }, async (atd) => {
+      pedidos.push(atd);
+      return [{ tipoConteudo: 'procedimentos', janela }];
+    });
+    expect(pedidos).toEqual([10031]);
+    expect(r.sumario.procedimentos).toEqual(['Angioplastia']);
+    // Sem seção de exames, o episódio inteiro (no texto da evolução, como antes).
+    expect(r.sumario.evolucao).toBe('Exames do episódio: Hemograma; Troponina.');
   });
 
   it('o atendimento de outro paciente é recusado antes de ler as seções', async () => {

@@ -869,7 +869,7 @@ export function operacoesDocumentosPropria(
       ctx,
       'pep.sumario.finalizar',
       x,
-      ['sumario_alta'],
+      ['sumario_alta', 'sumario_alta_secao'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
         conferirMedico(s);
@@ -928,6 +928,19 @@ export function operacoesDocumentosPropria(
           comoSuporte: x.comoSuporte === true,
         });
         await tx.alterar('sumario_alta', origem, 1, { documento_prontuario_id: documento });
+        // F3.3 (L124): o sumário por seção vigente, linha a linha (grupo, título do cadastro, texto, CID-10); o código
+        // da seção configurada vai no conteúdo da linha.
+        for (const l of x.linhas ?? [])
+          await tx.incluir('sumario_alta_secao', {
+            sumario_alta_id: origem,
+            sequencia: l.sequencia,
+            secao: l.grupo,
+            titulo: l.titulo,
+            texto: l.texto,
+            codigo_cid10: l.cid10,
+            conteudo: JSON.stringify({ secao: l.secao }),
+            origem: 'sistema',
+          });
         return { tabela: 'sumario_alta', id: origem, origem, documento, trilha: null };
       },
       (r) => ({ evento: 'pep.sumarioAlta.finalizado', paciente: x.paciente, documento: r['documento'] }),

@@ -67,6 +67,8 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     (dataHora(new Date(Date.now() + minutos * 60_000), fuso) ?? '').slice(0, 16);
   const uma = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (l) => l.uma(sql, p));
+  const consultar = (sql: string, p: unknown[]) =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (l) => l.consultar(sql, p));
   const versao = async () => {
     const r = await uma(
       `SELECT COALESCE(GROUP_CONCAT(id ORDER BY id), '') AS v FROM alergia_paciente
@@ -102,6 +104,11 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       await e.executar(
         `DELETE pp FROM alergia_paciente_principio pp JOIN alergia_paciente a ON a.id = pp.alergia_paciente_id
           WHERE a.estabelecimento_id IN ${est}`,
+        [P],
+      );
+      await e.executar(
+        `DELETE x FROM sumario_alta_secao x JOIN sumario_alta s ON s.id = x.sumario_alta_id
+          WHERE s.estabelecimento_id IN ${est}`,
         [P],
       );
       await e.executar(
@@ -620,7 +627,7 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     ).toBe('horario-futuro');
   });
 
-  it('sumário de alta: finaliza a versão seguinte; de novo é "sumario-finalizado"', async () => {
+  it('sumário de alta: finaliza a versão seguinte com as linhas por seção; de novo é "sumario-finalizado"', async () => {
     const s = {
       ...baseDoc(),
       modeloNome: 'Sumário de alta',
@@ -629,7 +636,43 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       sumario: '{"motivo":"sintetico"}',
       fhir: '{"resourceType":"Bundle"}',
       perfilFhir: 'sumario-alta',
+      // F3.3 (L124): linhas na ordem das seções vigentes, com o título do cadastro (regra linhasDoSumario).
+      linhas: [
+        {
+          sequencia: 1,
+          grupo: 'condicao_alta',
+          secao: 'cond',
+          titulo: 'Como sai',
+          texto: 'Estável',
+          cid10: null,
+        },
+        {
+          sequencia: 2,
+          grupo: 'diagnosticos',
+          secao: 'dx',
+          titulo: 'Hipóteses',
+          texto: 'Sintético',
+          cid10: 'I210',
+        },
+        {
+          sequencia: 3,
+          grupo: 'outros',
+          secao: 'orient',
+          titulo: 'Orientações',
+          texto: 'Repouso',
+          cid10: null,
+        },
+      ],
     };
+    expect(
+      await codigo(
+        ops()['pep.finalizarSumarioAlta']!(
+          C(),
+          { ...s, linhas: [{ ...s.linhas[0]!, grupo: 'inexistente' }] },
+          ctx('sa-grupo'),
+        ),
+      ),
+    ).toBe('entrada-invalida');
     expect(await codigo(ops()['pep.finalizarSumarioAlta']!(C(), { ...s, versao: 2 }, ctx('sa0')))).toBe(
       'conflito-versao',
     );
@@ -641,6 +684,29 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(l?.['situacao']).toBe('finalizado');
     expect(Number(l?.['f'])).toBe(1);
     expect(Number(l?.['documento_prontuario_id'])).toBe(Number(r['documento']));
+    const linhas = await consultar(
+      `SELECT sequencia, secao, titulo, texto, codigo_cid10, JSON_VALUE(conteudo, '$.secao') AS cod, origem,
+              criado_em IS NOT NULL AS c, versao
+         FROM sumario_alta_secao WHERE sumario_alta_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+      [r['origem']],
+    );
+    expect(
+      linhas.map((x) => [
+        Number(x['sequencia']),
+        x['secao'],
+        x['titulo'],
+        x['texto'],
+        x['codigo_cid10'],
+        x['cod'],
+        x['origem'],
+        Number(x['c']),
+        Number(x['versao']),
+      ]),
+    ).toEqual([
+      [1, 'condicao_alta', 'Como sai', 'Estável', null, 'cond', 'sistema', 1, 1],
+      [2, 'diagnosticos', 'Hipóteses', 'Sintético', 'I210', 'dx', 'sistema', 1, 1],
+      [3, 'outros', 'Orientações', 'Repouso', null, 'orient', 'sistema', 1, 1],
+    ]);
     expect(await codigo(ops()['pep.finalizarSumarioAlta']!(C(), { ...s, versao: 2 }, ctx('sa2')))).toBe(
       'sumario-finalizado',
     );

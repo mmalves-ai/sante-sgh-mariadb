@@ -88,6 +88,9 @@ import {
   linhasDaReceita,
   mudancaValida,
   montarSumario,
+  episodioNasJanelas,
+  linhasDoSumario,
+  type SecaoComJanela,
   numeroDoTexto,
   ordenarFila,
   podeVerConteudo,
@@ -1802,6 +1805,8 @@ export class ServicoDocumentos {
     paciente: number,
     atendimentoPedido: number | null,
     acoes: { finalizar: AcaoLiberada; obito: AcaoLiberada },
+    /** F3.3 (L124): as seções do atendimento com a janela de cada uma; nulo (sem banco próprio): o episódio inteiro. */
+    secoesComJanela: ((atendimento: number) => Promise<readonly SecaoComJanela[]>) | null = null,
   ): Promise<AltaPaciente> {
     const ats = await this.atendimentos(c, paciente);
     const at =
@@ -1830,7 +1835,7 @@ export class ServicoDocumentos {
         obitoAcao: { pode: false, motivo: 'O paciente não tem atendimento.' },
         cancelarObitoAcao: { pode: false, motivo: 'O paciente não tem atendimento.' },
       };
-    const [sumarios, transf, obito, problemas, alergias, episodio] = await Promise.all([
+    const [sumarios, transf, obito, problemas, alergias, episodio0, janelas] = await Promise.all([
       this.porta.sumarios(c, at.id),
       this.porta.transferencias(c, at.id),
       this.porta.obito(c, paciente),
@@ -1839,7 +1844,13 @@ export class ServicoDocumentos {
       this.porta
         .episodio(c, at.id)
         .catch(() => ({ motivoInternacao: null, procedimentos: [], exames: [] }) as EpisodioLido),
+      secoesComJanela ? secoesComJanela(at.id) : Promise.resolve(null),
     ]);
+    // A janela de cada seção (atendimento inteiro, últimas horas, último registro) recorta o episódio (regra do domínio).
+    const episodio =
+      janelas && episodio0.datados
+        ? { ...episodio0, ...episodioNasJanelas(episodio0.datados, janelas) }
+        : episodio0;
     const ultima = sumarios[sumarios.length - 1];
     let sumario: SumarioAltaEstruturado | null = null;
     if (ultima?.conteudo) {
@@ -2003,6 +2014,8 @@ export class ServicoDocumentos {
       hashConteudo: await hashCanonico({ atendimento: s.atendimento, versao, sumario }),
       versao,
       sumario: JSON.stringify(sumario),
+      // F3.3 (L124): o sumário por seção, na ordem e com o título do cadastro, gravado linha a linha.
+      linhas: linhasDoSumario(sumario, secoes),
       fhir: fhirDoSumario({
         id: `${c.hospital}-${s.atendimento}-${versao}`,
         paciente,

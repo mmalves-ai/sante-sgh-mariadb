@@ -1134,6 +1134,7 @@ export class DocumentosPepController {
     ]);
     const catSum = this.servico.decidir(prof, 'sumario-alta');
     const catObito = this.servico.decidir(prof, 'declaracao-obito');
+    const portaSecoes = this.secoesSumario;
     const r = await this.servico.alta(
       this.c(s),
       paciente,
@@ -1142,6 +1143,8 @@ export class DocumentosPepController {
         finalizar: finalizar0.pode && !catSum.pode ? catSum : finalizar0,
         obito: obito0.pode && !catObito.pode ? catObito : obito0,
       },
+      // F3.3 (L124): a janela de cada seção configurada recorta o episódio que monta o sumário.
+      portaSecoes ? (atd: number) => portaSecoes.vigentesDoAtendimento(this.c(s), atd, paciente) : null,
     );
     req.sghAlvo = {
       paciente,

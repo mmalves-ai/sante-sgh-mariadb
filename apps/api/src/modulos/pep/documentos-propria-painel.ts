@@ -263,7 +263,8 @@ export function episodio(
     // Cirurgias do atendimento: atos realizados (nunca o cancelado nem o em andamento), os procedimentos não excluídos,
     // na ordem do ato e da sequência; o CID do procedimento ou, sem ele, o pós-operatório do ato.
     const cirurgias = await l.consultar(
-      `SELECT pc.descricao, COALESCE(ap.codigo_cid10, ac.codigo_cid10_pos_operatorio) AS cid
+      `SELECT pc.descricao, COALESCE(ap.codigo_cid10, ac.codigo_cid10_pos_operatorio) AS cid,
+              COALESCE(ac.inicio_cirurgia_em, ac.entrada_sala_em, ac.criado_em) AS em
          FROM ato_cirurgico ac
          JOIN ato_cirurgico_procedimento ap ON ap.ato_cirurgico_id = ac.id AND ap.excluido_em IS NULL
          JOIN procedimento_cirurgico pc ON pc.id = ap.procedimento_cirurgico_id
@@ -275,8 +276,8 @@ export function episodio(
     // Exames do atendimento: os resultados liberados (laboratório e imagem do próprio hospital, sem exclusão lógica)
     // e os exames externos lançados no prontuário (ativos).
     const exames = await l.consultar(
-      `SELECT nome FROM (
-         SELECT ex.nome AS nome
+      `SELECT nome, em FROM (
+         SELECT ex.nome AS nome, re.resultado_em AS em
            FROM resultado_exame re
            JOIN exame_item it ON it.id = re.exame_item_id
            JOIN requisicao_exame rq ON rq.id = it.requisicao_exame_id
@@ -284,23 +285,25 @@ export function episodio(
           WHERE rq.atendimento_id = ? AND rq.estabelecimento_id = ? AND re.situacao = 'liberado'
             AND re.excluido_em IS NULL AND it.excluido_em IS NULL AND rq.excluido_em IS NULL
          UNION
-         SELECT COALESCE(e.nome_exame, 'Exame externo') AS nome FROM exame_lancado_prontuario e
+         SELECT COALESCE(e.nome_exame, 'Exame externo') AS nome, e.realizado_em AS em FROM exame_lancado_prontuario e
           WHERE e.atendimento_id = ? AND e.estabelecimento_id = ? AND e.excluido_em IS NULL AND e.situacao = 'ativo'
-       ) x ORDER BY nome LIMIT 50`,
+       ) x ORDER BY nome, em LIMIT 50`,
       [atendimento, est.id, atendimento, est.id],
     );
-    const procedimentos = [
-      ...new Set(
-        cirurgias.map((x) => {
-          const cid = textoOuNull(x['cid']);
-          return cid ? `${String(x['descricao'])} (${cid})` : String(x['descricao']);
-        }),
-      ),
-    ];
+    const quando = (v: unknown): Date | null =>
+      v === null || v === undefined ? null : new Date(v as string | Date);
+    const procDatados = cirurgias.map((x) => {
+      const cid = textoOuNull(x['cid']);
+      const texto = cid ? `${String(x['descricao'])} (${cid})` : String(x['descricao']);
+      return { texto, em: quando(x['em']) };
+    });
+    const exDatados = exames.map((e) => ({ texto: String(e['nome']), em: quando(e['em']) }));
     return {
       motivoInternacao: codigo ? `${codigo} - ${String(i['descricao'] ?? '')}`.trim() : null,
-      procedimentos,
-      exames: exames.map((e) => String(e['nome'])),
+      procedimentos: [...new Set(procDatados.map((p) => p.texto))],
+      exames: [...new Set(exDatados.map((e) => e.texto))],
+      // F3.3 (L124): com o momento clínico, para a janela de cada seção do sumário.
+      datados: { procedimentos: procDatados, exames: exDatados },
     };
   });
 }

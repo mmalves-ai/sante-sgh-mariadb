@@ -8,6 +8,7 @@ import {
   textoCp1252,
   type LinhaCadastroPrescricao,
 } from '@sgh/contratos';
+import { GRUPOS_LINHA_SUMARIO, type ItemDatado } from '@sgh/dominio-pep';
 import { inflateSync } from 'node:zlib';
 import { z } from 'zod';
 import type { ContextoPorta } from '../cadastro/porta.js';
@@ -238,6 +239,26 @@ export const esquemaFinalizacaoSumario = z
     fhir: z.string().min(2).max(2_000_000),
     perfilFhir: z.string().min(2).max(30),
     comoSuporte: z.boolean().optional(),
+    // F3.3 (L124): as linhas do sumário por seção vigente (regra linhasDoSumario do domínio), gravadas uma a uma.
+    linhas: z
+      .array(
+        z
+          .object({
+            sequencia: z.number().int().min(1).max(9999),
+            grupo: z.enum(GRUPOS_LINHA_SUMARIO),
+            secao: z.string().min(1).max(30),
+            titulo: z.string().trim().min(1).max(150),
+            texto: z.string().max(4000).nullable(),
+            cid10: z
+              .string()
+              .regex(/^[A-Z][0-9]{2}[0-9A-Z]{0,3}$/)
+              .nullable(),
+          })
+          .strict()
+          .refine((l) => l.texto !== null || l.cid10 !== null, { message: 'Linha sem conteúdo.' }),
+      )
+      .max(300)
+      .optional(),
   })
   .strict();
 
@@ -1264,6 +1285,11 @@ export interface EpisodioLido {
   readonly motivoInternacao: string | null;
   readonly procedimentos: readonly string[];
   readonly exames: readonly string[];
+  /** F3.3 (L124): os mesmos itens com o momento clínico, para a janela de cada seção (banco próprio). */
+  readonly datados?: {
+    readonly procedimentos: readonly ItemDatado[];
+    readonly exames: readonly ItemDatado[];
+  };
 }
 
 export interface CienciaLida {
