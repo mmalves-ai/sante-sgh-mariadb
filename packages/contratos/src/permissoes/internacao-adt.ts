@@ -42,6 +42,7 @@ export const PERMISSOES_M21_CODIGOS = {
   sameLer: 'same.movimento.ler',
   sameCriar: 'same.movimento.criar',
   sameExcluir: 'same.movimento.excluir',
+  sameAutorizarSolicitacao: 'same.solicitacao.autorizar',
 } as const;
 
 const p = (
@@ -130,5 +131,10 @@ export const PERMISSOES_INTERNACAO_M21: readonly DeclaracaoPermissao[] = [
     'Desfazer (exclusão lógica) o último movimento lançado por engano, com o motivo',
 
     { criticidade: 'sensivel' },
+  ),
+  p(
+    'same.solicitacao.autorizar',
+    'Autorizar ou negar o pedido de prontuário cujo motivo exige autorização (pesquisa, processo judicial)',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['diretoria-clinica'], criticidade: 'sensivel' },
   ),
 ];

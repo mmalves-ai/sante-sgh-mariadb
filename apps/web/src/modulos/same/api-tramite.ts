@@ -51,7 +51,14 @@ export const esquemaEmprestimo = z.object({
 export type EmprestimoTela = z.infer<typeof esquemaEmprestimo>;
 const esquemaApoio = z.object({
   setoresTramite: z.array(z.object({ id: z.number(), descricao: z.string(), tipo: z.string() })),
-  motivos: z.array(z.object({ id: z.number(), descricao: z.string(), prazoDias: z.number().nullable() })),
+  motivos: z.array(
+    z.object({
+      id: z.number(),
+      descricao: z.string(),
+      prazoDias: z.number().nullable(),
+      exigeAutorizacao: z.boolean().default(false),
+    }),
+  ),
   setores: z.array(z.object({ id: z.number(), nome: z.string() })),
   arquivos: z.array(z.object({ id: z.number(), caminho: z.string() })),
   prazoPadraoDias: z.number(),
@@ -98,3 +105,34 @@ export const naoLocalizado = (id: number, item: number, motivo: string, versao: 
   );
 export const cobrarSaidaGuarda = (movimento: number) =>
   enviar(`${T}/saidas-guarda/${movimento}/cobrar`, {}, qualquer, chave('cobrarSaidaGuarda'));
+
+export const esquemaSolicitacao = z.object({
+  id: z.number(),
+  numero: z.number(),
+  situacao: z.string(),
+  /** Nula quando o motivo não exige autorização. */
+  autorizacao: z.enum(['aguardando', 'autorizada', 'negada']).nullable(),
+  solicitante: z.number(),
+  motivo: z.string(),
+  urgente: z.boolean(),
+  destino: z.string().nullable(),
+  solicitadaEm: z.string().nullable(),
+  desejadaPara: z.string().nullable(),
+  itens: z.number(),
+  versao: z.number(),
+});
+export type SolicitacaoTela = z.infer<typeof esquemaSolicitacao>;
+export const lerSolicitacoes = () =>
+  ler(`${T}/solicitacoes`, z.object({ itens: z.array(esquemaSolicitacao) }));
+export const decidirAutorizacao = (
+  id: number,
+  decisao: 'autorizar' | 'negar',
+  justificativa: string | null,
+  versao: number,
+) =>
+  enviar(
+    `${T}/solicitacoes/${id}/autorizar`,
+    { decisao, justificativa, versao },
+    qualquer,
+    chave('autorizar'),
+  );

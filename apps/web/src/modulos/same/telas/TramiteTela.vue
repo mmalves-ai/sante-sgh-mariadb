@@ -2,14 +2,22 @@
 // SAME: protocolo em lote entre setores e empréstimo de prontuário (F3.9, 04-HOT L127 e L128): `/same/tramite`.
 // Três abas numa tela só: receber (a fila do setor, item a item: marca o que chegou e recusa com motivo), enviar (monta
 // o lote por volume, atendimento, conta ou documento avulso, emite e envia num clique; os enviados ainda não conferidos
-// podem ser cancelados com motivo) e empréstimos (empresta com o prazo do motivo já mostrado, vê os atrasados com os
+// podem ser cancelados com motivo), solicitações (pede volumes ao arquivo; a fila trata item a item: entrega por
+// empréstimo, não localizado com onde se procurou, cancelamento com motivo; o motivo que exige autorização deixa o pedido
+// aguardando o responsável, que autoriza ou nega com a justificativa) e empréstimos (empresta com o prazo do motivo já mostrado, vê os atrasados com os
 // dias, cobra e devolve). A montagem do lote e a conferência são validadas na hora pelas regras do domínio; as recusas
 // do servidor (custódia do volume, versão) aparecem como vieram.
 import {
+  conferirAutorizacaoDaEntrega,
+  conferirCancelamentoSolicitacao,
+  conferirDecisaoAutorizacao,
+  conferirNaoLocalizado,
   conferirProtocolo,
   conferirRecebimento,
   prazoDoEmprestimo,
+  type SituacaoItemSolicitacao,
   type SituacaoProtocolo,
+  type SituacaoSolicitacao,
   TIPOS_ITEM_PROTOCOLO,
   type TipoItemProtocolo,
 } from '@sgh/dominio-hotelaria';
@@ -19,24 +27,31 @@ import { useI18n } from 'vue-i18n';
 import {
   type ApoioTramite,
   cancelarProtocolo,
+  cancelarSolicitacao,
   cobrar,
   cobrarSaidaGuarda,
+  decidirAutorizacao,
   devolver,
   type EmprestimoTela,
   emitirProtocolo,
   emprestar,
   lerApoioTramite,
   lerEmprestimos,
+  lerItensSolicitacao,
   lerProtocolos,
+  lerSolicitacoes,
+  naoLocalizado,
   type ProtocoloTela,
   receberProtocolo,
+  solicitar,
+  type SolicitacaoTela,
 } from '../api-tramite.js';
 
 const { t } = useI18n();
 const k = (c: string, p: Record<string, unknown> = {}) => t(`sameTramite.${c}`, p);
 
-type Aba = 'receber' | 'enviar' | 'emprestimos';
-const abas: Aba[] = ['receber', 'enviar', 'emprestimos'];
+type Aba = 'receber' | 'enviar' | 'solicitacoes' | 'emprestimos';
+const abas: Aba[] = ['receber', 'enviar', 'solicitacoes', 'emprestimos'];
 const aba = ref<Aba>('receber');
 const apoio = ref<ApoioTramite | null>(null);
 const erro = ref<string | null>(null);
@@ -145,6 +160,137 @@ const cancelar = (p: ProtocoloTela) =>
     return k('cancelado', { numero: p.numero });
   });
 
+// ---- Solicitações --------------------------------------------------------------------------------------------------
+const opArquivos = computed(() => [
+  { valor: null as number | null, rotulo: k('escolha') },
+  ...(apoio.value?.arquivos ?? []).map((a) => ({ valor: a.id as number | null, rotulo: a.caminho })),
+]);
+const exigeAutorizacao = (motivo: number | null) =>
+  apoio.value?.motivos.find((m) => m.id === motivo)?.exigeAutorizacao ?? false;
+const pedido = reactive({
+  localArquivo: null as number | null,
+  destino: null as number | null,
+  motivo: null as number | null,
+});
+const novaLinha = () => ({ paciente: '', volume: '' });
+const linhasPedido = ref([novaLinha()]);
+const numero = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : null);
+const itensSolicitados = computed(() =>
+  linhasPedido.value
+    .filter((l) => l.paciente.trim() || l.volume.trim())
+    .map((l) => ({ paciente: numero(l.paciente), volume: l.volume.trim() ? numero(l.volume) : null })),
+);
+const faltaPedido = computed(() => {
+  const r: string[] = [];
+  if (!itensSolicitados.value.length) r.push(k('faltaPaciente'));
+  if (itensSolicitados.value.some((i) => i.paciente === null)) r.push(k('pacienteNumero'));
+  const vistos = new Set<string>();
+  for (const [n, l] of linhasPedido.value.entries()) {
+    if (l.volume.trim() && numero(l.volume) === null) r.push(k('volumeNumero', { n: n + 1 }));
+    const c = `${l.paciente.trim()}:${l.volume.trim()}`;
+    if (l.paciente.trim() && vistos.has(c)) r.push(k('linhaRepetida', { n: n + 1 }));
+    vistos.add(c);
+  }
+  return r;
+});
+const podeSolicitar = computed(
+  () =>
+    pedido.localArquivo !== null &&
+    pedido.destino !== null &&
+    pedido.motivo !== null &&
+    faltaPedido.value.length === 0,
+);
+const solicitacoes = ref<SolicitacaoTela[]>([]);
+type ItemSol = Awaited<ReturnType<typeof lerItensSolicitacao>>['itens'][number];
+const itensSol = reactive<Record<number, ItemSol[]>>({});
+const acaoSol = reactive<
+  Record<
+    number,
+    { motivo: string; justificativa: string; setor: number | null; ondeProcurou: Record<number, string> }
+  >
+>({});
+function guardarItens(id: number, itens: ItemSol[]): void {
+  itensSol[id] = itens;
+  for (const i of itens) acaoSol[id]!.ondeProcurou[i.id] ??= '';
+}
+async function carregarSolicitacoes(): Promise<void> {
+  solicitacoes.value = (await lerSolicitacoes()).itens;
+  for (const s of solicitacoes.value) {
+    acaoSol[s.id] ??= { motivo: '', justificativa: '', setor: null, ondeProcurou: {} };
+    if (itensSol[s.id]) guardarItens(s.id, (await lerItensSolicitacao(s.id)).itens);
+  }
+}
+const enviarPedido = () =>
+  tentar(async () => {
+    const r = await solicitar({
+      localArquivo: pedido.localArquivo,
+      destino: pedido.destino,
+      motivo: pedido.motivo,
+      itens: itensSolicitados.value,
+    });
+    linhasPedido.value = [novaLinha()];
+    await carregarSolicitacoes();
+    return k('solicitado', { numero: String(r['numero'] ?? r['id'] ?? '') });
+  });
+const verItens = (s: SolicitacaoTela) =>
+  tentar(async () => {
+    if (itensSol[s.id]) delete itensSol[s.id];
+    else guardarItens(s.id, (await lerItensSolicitacao(s.id)).itens);
+    return null;
+  });
+const faltaDecisao = (s: SolicitacaoTela, decisao: 'autorizar' | 'negar') =>
+  conferirDecisaoAutorizacao({
+    situacao: s.situacao as SituacaoSolicitacao,
+    autorizacao: s.autorizacao,
+    decisao,
+    justificativa: acaoSol[s.id]?.justificativa ?? null,
+    solicitante: s.solicitante,
+    // Quem pediu não decide: o servidor confere pelo usuário da sessão.
+    responsavel: -1,
+  }).map((x) => x.mensagem);
+const decidir = (s: SolicitacaoTela, decisao: 'autorizar' | 'negar') =>
+  tentar(async () => {
+    await decidirAutorizacao(s.id, decisao, acaoSol[s.id]!.justificativa.trim() || null, s.versao);
+    acaoSol[s.id]!.justificativa = '';
+    await carregarSolicitacoes();
+    return k(decisao === 'autorizar' ? 'autorizada' : 'negada', { numero: s.numero });
+  });
+const faltaCancelarSol = (s: SolicitacaoTela) =>
+  conferirCancelamentoSolicitacao(s.situacao as SituacaoSolicitacao, acaoSol[s.id]?.motivo ?? null).map(
+    (x) => x.mensagem,
+  );
+const cancelarSol = (s: SolicitacaoTela) =>
+  tentar(async () => {
+    await cancelarSolicitacao(s.id, acaoSol[s.id]!.motivo.trim(), s.versao);
+    delete itensSol[s.id];
+    await carregarSolicitacoes();
+    return k('solicitacaoCancelada', { numero: s.numero });
+  });
+const faltaNaoLocalizado = (s: SolicitacaoTela, i: ItemSol) =>
+  conferirNaoLocalizado(
+    s.situacao as SituacaoSolicitacao,
+    i.situacao as SituacaoItemSolicitacao,
+    acaoSol[s.id]?.ondeProcurou[i.id] ?? null,
+  ).map((x) => x.mensagem);
+const marcarNaoLocalizado = (s: SolicitacaoTela, i: ItemSol) =>
+  tentar(async () => {
+    await naoLocalizado(s.id, i.id, acaoSol[s.id]!.ondeProcurou[i.id]!.trim(), s.versao);
+    await carregarSolicitacoes();
+    return k('naoLocalizadoGravado');
+  });
+const faltaEntrega = (s: SolicitacaoTela) =>
+  conferirAutorizacaoDaEntrega({
+    exigeAutorizacao: false,
+    autorizacao: s.autorizacao,
+    comSolicitacao: true,
+  }).map((x) => x.mensagem);
+const entregar = (s: SolicitacaoTela, i: ItemSol) =>
+  tentar(async () => {
+    await emprestar({ volume: i.volume, destinoSetor: acaoSol[s.id]!.setor, solicitacao: s.id });
+    await Promise.all([carregarSolicitacoes(), carregarEmprestimos()]);
+    return k('emprestado');
+  });
+
 // ---- Empréstimos ---------------------------------------------------------------------------------------------------
 const emprestimos = ref<EmprestimoTela[]>([]);
 const soAtrasados = ref(false);
@@ -174,8 +320,16 @@ const devolverAte = computed(() =>
       }).toISOString()
     : null,
 );
+const faltaAutorizacaoEmp = computed(() =>
+  conferirAutorizacaoDaEntrega({
+    exigeAutorizacao: exigeAutorizacao(novoEmp.motivo),
+    autorizacao: null,
+    comSolicitacao: false,
+  }).map((x) => x.mensagem),
+);
 const podeEmprestar = computed(
   () =>
+    faltaAutorizacaoEmp.value.length === 0 &&
     /^\d+$/.test(novoEmp.volume.trim()) &&
     novoEmp.destinoSetor !== null &&
     novoEmp.motivo !== null &&
@@ -213,7 +367,7 @@ const devolverEmp = (e: EmprestimoTela) =>
 onMounted(() =>
   tentar(async () => {
     apoio.value = await lerApoioTramite();
-    await Promise.all([carregarFila(), carregarEmprestimos()]);
+    await Promise.all([carregarFila(), carregarSolicitacoes(), carregarEmprestimos()]);
     return null;
   }),
 );
@@ -396,6 +550,173 @@ onMounted(() =>
       </template>
     </div>
 
+    <div v-else-if="aba === 'solicitacoes'" role="tabpanel" class="painel">
+      <fieldset class="caixa">
+        <legend>{{ k('pedirTitulo') }}</legend>
+        <div class="linha">
+          <SanteSelecao
+            v-model="pedido.localArquivo"
+            :rotulo="k('arquivo')"
+            :opcoes="opArquivos"
+            data-testid="sol-arquivo"
+          />
+          <SanteSelecao
+            v-model="pedido.destino"
+            :rotulo="k('para')"
+            :opcoes="[{ valor: null, rotulo: k('escolha') }, ...opSetoresTramite]"
+            data-testid="sol-destino"
+          />
+          <SanteSelecao
+            v-model="pedido.motivo"
+            :rotulo="k('motivo')"
+            :opcoes="opMotivos"
+            data-testid="sol-motivo"
+          />
+        </div>
+        <p v-if="exigeAutorizacao(pedido.motivo)" role="note" data-testid="sol-exige-autorizacao">
+          {{ k('exigeAutorizacao') }}
+        </p>
+        <div v-for="(l, n) in linhasPedido" :key="n" class="linha" :data-testid="`sol-linha-${n + 1}`">
+          <SanteCampoTexto
+            v-model="l.paciente"
+            :rotulo="k('paciente')"
+            :max-bytes="12"
+            data-testid="paciente"
+          />
+          <SanteCampoTexto
+            v-model="l.volume"
+            :rotulo="k('volumeOpcional')"
+            :max-bytes="12"
+            data-testid="volume"
+          />
+          <SanteBotao
+            v-if="linhasPedido.length > 1"
+            variante="texto"
+            :rotulo="k('tirarItem', { n: n + 1 })"
+            @acionar="linhasPedido.splice(n, 1)"
+          />
+        </div>
+        <div class="linha">
+          <SanteBotao
+            variante="secundario"
+            :rotulo="k('maisItem')"
+            data-testid="sol-mais"
+            @acionar="linhasPedido.push(novaLinha())"
+          />
+          <SanteBotao
+            :rotulo="k('solicitar')"
+            :desabilitado="!podeSolicitar"
+            data-testid="sol-solicitar"
+            @acionar="enviarPedido"
+          />
+        </div>
+        <ul v-if="itensSolicitados.length && faltaPedido.length" class="erro" data-testid="sol-falta">
+          <li v-for="m in faltaPedido" :key="m">{{ m }}</li>
+        </ul>
+      </fieldset>
+      <h2>{{ k('filaSolicitacoes') }}</h2>
+      <p v-if="!solicitacoes.length" data-testid="sol-fila-vazia">{{ k('nenhumaSolicitacao') }}</p>
+      <article v-for="s in solicitacoes" :key="s.id" class="caixa" :data-testid="`sol-${s.numero}`">
+        <h3>
+          {{ k('solicitacao', { numero: s.numero, motivo: s.motivo, destino: s.destino ?? '' }) }}
+          · <span data-testid="sol-situacao">{{ k(`situacoesSolicitacao.${s.situacao}`) }}</span>
+          <span v-if="s.urgente" class="urgente"> · {{ k('urgente') }}</span>
+          <span v-if="s.autorizacao" data-testid="sol-autorizacao">
+            · {{ k(`autorizacoes.${s.autorizacao}`) }}</span
+          >
+        </h3>
+        <div v-if="s.autorizacao === 'aguardando'" class="linha" data-testid="sol-decisao">
+          <SanteCampoTexto
+            v-model="acaoSol[s.id]!.justificativa"
+            :rotulo="k('justificativa')"
+            :max-bytes="500"
+            data-testid="sol-justificativa"
+          />
+          <SanteBotao
+            :rotulo="k('autorizar')"
+            :desabilitado="faltaDecisao(s, 'autorizar').length > 0"
+            data-testid="sol-autorizar"
+            @acionar="decidir(s, 'autorizar')"
+          />
+          <SanteBotao
+            variante="secundario"
+            :rotulo="k('negar')"
+            :desabilitado="faltaDecisao(s, 'negar').length > 0"
+            data-testid="sol-negar"
+            @acionar="decidir(s, 'negar')"
+          />
+        </div>
+        <SanteBotao
+          variante="texto"
+          :rotulo="k(itensSol[s.id] ? 'esconderItens' : 'verItens', { n: s.itens })"
+          data-testid="sol-ver-itens"
+          @acionar="verItens(s)"
+        />
+        <template v-if="itensSol[s.id]">
+          <p v-if="faltaEntrega(s).length" data-testid="sol-falta-entrega">{{ faltaEntrega(s)[0] }}</p>
+          <SanteSelecao
+            v-else
+            v-model="acaoSol[s.id]!.setor"
+            :rotulo="k('destino')"
+            :opcoes="opSetores"
+            data-testid="sol-setor-entrega"
+          />
+          <ul class="itens">
+            <li v-for="i in itensSol[s.id]" :key="i.id" :data-testid="`sol-item-${i.sequencia}`">
+              <span>
+                {{ i.sequencia }}.
+                {{
+                  k('itemSolicitado', {
+                    paciente: i.paciente,
+                    volume: i.matricula ?? i.volume ?? k('todosVolumes'),
+                  })
+                }}
+                · {{ k(`situacoesItem.${i.situacao}`) }}
+                <template v-if="i.observacao"> · {{ i.observacao }}</template>
+              </span>
+              <template v-if="i.situacao === 'pendente'">
+                <SanteBotao
+                  v-if="i.volume !== null"
+                  :rotulo="k('entregar')"
+                  :desabilitado="faltaEntrega(s).length > 0 || acaoSol[s.id]!.setor === null"
+                  data-testid="sol-entregar"
+                  @acionar="entregar(s, i)"
+                />
+                <SanteCampoTexto
+                  v-model="acaoSol[s.id]!.ondeProcurou[i.id]!"
+                  :rotulo="k('ondeProcurou')"
+                  :max-bytes="500"
+                  data-testid="sol-onde-procurou"
+                />
+                <SanteBotao
+                  variante="secundario"
+                  :rotulo="k('naoLocalizado')"
+                  :desabilitado="faltaNaoLocalizado(s, i).length > 0"
+                  data-testid="sol-nao-localizado"
+                  @acionar="marcarNaoLocalizado(s, i)"
+                />
+              </template>
+            </li>
+          </ul>
+        </template>
+        <div class="linha">
+          <SanteCampoTexto
+            v-model="acaoSol[s.id]!.motivo"
+            :rotulo="k('motivoCancelamento')"
+            :max-bytes="500"
+            data-testid="sol-motivo-cancelar"
+          />
+          <SanteBotao
+            variante="secundario"
+            :rotulo="k('cancelarSolicitacao')"
+            :desabilitado="faltaCancelarSol(s).length > 0"
+            data-testid="sol-cancelar"
+            @acionar="cancelarSol(s)"
+          />
+        </div>
+      </article>
+    </div>
+
     <div v-else role="tabpanel" class="painel">
       <fieldset class="caixa">
         <legend>{{ k('emprestarTitulo') }}</legend>
@@ -431,7 +752,10 @@ onMounted(() =>
             @acionar="novoEmprestimo"
           />
         </div>
-        <p v-if="devolverAte && novoEmp.motivo" data-testid="emp-devolver-ate">
+        <p v-if="faltaAutorizacaoEmp.length" class="erro" data-testid="emp-exige-autorizacao">
+          {{ faltaAutorizacaoEmp[0] }}
+        </p>
+        <p v-else-if="devolverAte && novoEmp.motivo" data-testid="emp-devolver-ate">
           {{ k('prazoPrevisto', { data: quando(devolverAte) }) }}
         </p>
       </fieldset>

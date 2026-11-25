@@ -9,6 +9,8 @@
 //   POST /api/same/tramite/protocolos/:id/cancelar       { motivo, versao } antes da conferência (nada apagado)
 //   GET  /api/same/tramite/solicitacoes                  a fila do arquivo (urgentes e mais antigas primeiro)
 //   POST /api/same/tramite/solicitacoes                  pede volumes de pacientes com o motivo
+//   POST /api/same/tramite/solicitacoes/:id/autorizar    { decisao, justificativa, versao } o responsável do arquivo
+//                                                        decide a solicitação cujo motivo exige autorização
 //   GET  /api/same/tramite/emprestimos?paciente=&atrasados=  os do paciente, ou os em aberto (atrasados)
 //   POST /api/same/tramite/emprestimos                   empresta o volume (prazo pelo motivo), atende a solicitação
 //   POST /api/same/tramite/emprestimos/:id/devolver      { versao } devolve; o volume volta ao arquivo
@@ -33,7 +35,12 @@ import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import { PORTA_SAME_TRAMITE, type PortaSameTramitePropria } from './same-tramite-propria.js';
 
-export const PERMISSOES_SAME_TRAMITE = { ler: 'same.movimento.ler', gravar: 'same.movimento.criar' } as const;
+export const PERMISSOES_SAME_TRAMITE = {
+  ler: 'same.movimento.ler',
+  gravar: 'same.movimento.criar',
+  /** A decisão sobre a solicitação cujo motivo exige autorização (responsável do arquivo; concessão por perfil). */
+  autorizar: 'same.solicitacao.autorizar',
+} as const;
 
 const inteiroOuNull = (v: string | undefined): number | null => {
   const n = Number(v);
@@ -147,6 +154,18 @@ export class SameTramiteController {
     @Body() b: unknown,
   ) {
     return this.com(req, (p, c) => p.cancelarSolicitacao(c, id, b));
+  }
+
+  @Post('solicitacoes/:id/autorizar')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_SAME_TRAMITE.autorizar)
+  autorizarSolicitacao(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() b: unknown,
+  ) {
+    return this.com(req, (p, c) => p.autorizarSolicitacao(c, id, b));
   }
 
   @Post('solicitacoes/:id/nao-localizado')

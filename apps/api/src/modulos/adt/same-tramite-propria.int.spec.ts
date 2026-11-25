@@ -9,7 +9,8 @@
 // ganha o movimento da guarda e a nova posse; o volume em trânsito ou emprestado não entra em outro lote nem sai por
 // empréstimo; o empréstimo e a devolução aparecem no histórico da guarda; a devolução pela guarda fecha o empréstimo; a
 // saída por empréstimo feita na guarda entra nos atrasados e é cobrada; a devolução restaura a situação 'aberto'; a
-// solicitação sai da fila por item não localizado e por cancelamento com motivo.
+// solicitação sai da fila por item não localizado e por cancelamento com motivo; o motivo que exige autorização deixa a
+// solicitação aguardando, barra a entrega até a decisão de outro usuário e grava quem e quando (migração 97).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -33,6 +34,7 @@ interface Massa {
   v1: number;
   v2: number;
   v3: number;
+  v4: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -137,6 +139,7 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
         v1: await volume(1),
         v2: await volume(2),
         v3: await volume(3, 'aberto'),
+        v4: await volume(4),
       };
     });
     porta = new PortaSameTramitePropria(nucleo, CLIENTE);
@@ -487,5 +490,120 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
     expect(fim.map((x) => x['situacao'])).toEqual(['nao_localizado', 'cancelado']);
     expect(fim[0]!['observacao']).toBe('Procurado na estante e no setor B');
     expect((await porta.solicitacoesAbertas(ctx())).map((x) => x.id)).not.toContain(s.id);
+  });
+
+  it('autorização pelo motivo: aguarda, recusa a entrega e a decisão do solicitante, autoriza e nega com quem e quando', async () => {
+    const motivo = Number(
+      (await um("SELECT id FROM motivo_solicitacao_prontuario WHERE codigo = 'pesquisa'"))['id'],
+    );
+    const outro = await um(
+      'SELECT id FROM usuario WHERE excluido_em IS NULL AND id <> ? ORDER BY id LIMIT 1',
+      [m.usuario],
+    );
+    expect(outro?.['id']).toBeTruthy();
+    const responsavel = () => ({ ...ctx(), usuario: Number(outro['id']) });
+    // O motivo exige autorização: sem solicitação, o empréstimo direto é recusado.
+    await expect(
+      porta.emprestar(ctx(), { volume: m.v4, destinoSetor: m.setorB, motivo }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    const s = await porta.solicitar(ctx(), {
+      localArquivo: m.arquivo,
+      destino: m.trB,
+      motivo,
+      itens: [{ paciente: m.paciente, volume: m.v4 }],
+    });
+    expect(
+      await um('SELECT autorizacao, situacao FROM solicitacao_prontuario WHERE id = ?', [s.id]),
+    ).toMatchObject({
+      autorizacao: 'aguardando',
+      situacao: 'pendente',
+    });
+    expect((await porta.solicitacoesAbertas(ctx())).find((x) => x.id === s.id)?.autorizacao).toBe(
+      'aguardando',
+    );
+    // Aguardando: nada sai; quem pediu não decide; a decisão de outro usuário fica com quem e quando.
+    await expect(
+      porta.emprestar(ctx(), { volume: m.v4, destinoSetor: m.setorB, solicitacao: s.id }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    await expect(
+      porta.autorizarSolicitacao(ctx(), s.id, { decisao: 'autorizar', versao: 1 }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    const a = await porta.autorizarSolicitacao(responsavel(), s.id, {
+      decisao: 'autorizar',
+      justificativa: 'Projeto aprovado pelo comitê de ética',
+      versao: 1,
+    });
+    expect(a).toMatchObject({ autorizacao: 'autorizada', situacao: 'pendente' });
+    expect(
+      await um(
+        `SELECT autorizacao, autorizacao_usuario_id, autorizacao_decidida_em IS NOT NULL AS decidida,
+                autorizacao_justificativa, versao FROM solicitacao_prontuario WHERE id = ?`,
+        [s.id],
+      ),
+    ).toMatchObject({
+      autorizacao: 'autorizada',
+      autorizacao_usuario_id: Number(outro['id']),
+      decidida: 1,
+      autorizacao_justificativa: 'Projeto aprovado pelo comitê de ética',
+      versao: 2,
+    });
+    await expect(
+      porta.autorizarSolicitacao(responsavel(), s.id, { decisao: 'negar', justificativa: 'x', versao: 2 }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    // Autorizada: o volume sai pela solicitação e ela fica atendida.
+    const e = await porta.emprestar(ctx(), {
+      volume: m.v4,
+      destinoSetor: m.setorB,
+      solicitacao: s.id,
+      versao: await versaoVolume(m.v4),
+    });
+    expect(e.solicitacao).toBe('atendida');
+    await porta.devolver(ctx(), e.id, {
+      versao: Number((await um('SELECT versao FROM emprestimo_prontuario WHERE id = ?', [e.id]))['versao']),
+    });
+
+    // Negada: a justificativa é obrigatória; a solicitação fica cancelada com quem e quando, o item cancelado; nada se apaga.
+    const n = await porta.solicitar(ctx(), {
+      localArquivo: m.arquivo,
+      destino: m.trB,
+      motivo,
+      itens: [{ paciente: m.paciente, volume: m.v2 }],
+    });
+    await expect(
+      porta.autorizarSolicitacao(responsavel(), n.id, { decisao: 'negar', justificativa: ' ', versao: 1 }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    const r = await porta.autorizarSolicitacao(responsavel(), n.id, {
+      decisao: 'negar',
+      justificativa: 'Sem parecer do comitê de ética',
+      versao: 1,
+    });
+    expect(r).toMatchObject({ autorizacao: 'negada', situacao: 'cancelada' });
+    expect(
+      await um(
+        `SELECT situacao, autorizacao, autorizacao_usuario_id, autorizacao_justificativa, justificativa_finalizacao,
+                finalizada_em IS NOT NULL AS fechada, excluido_em FROM solicitacao_prontuario WHERE id = ?`,
+        [n.id],
+      ),
+    ).toMatchObject({
+      situacao: 'cancelada',
+      autorizacao: 'negada',
+      autorizacao_usuario_id: Number(outro['id']),
+      autorizacao_justificativa: 'Sem parecer do comitê de ética',
+      justificativa_finalizacao: 'Autorização negada: Sem parecer do comitê de ética',
+      fechada: 1,
+      excluido_em: null,
+    });
+    expect(
+      await um(
+        'SELECT situacao, observacao FROM solicitacao_prontuario_item WHERE solicitacao_prontuario_id = ?',
+        [n.id],
+      ),
+    ).toMatchObject({
+      situacao: 'cancelado',
+      observacao: 'Autorização negada: Sem parecer do comitê de ética',
+    });
+    await expect(
+      porta.emprestar(ctx(), { volume: m.v2, destinoSetor: m.setorB, solicitacao: n.id }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
   });
 });

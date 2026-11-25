@@ -20,12 +20,18 @@
 //   - receber volume no protocolo: o movimento da guarda (tipo 'recebimento', com o protocolo) e a nova posse do
 //     volume (no arquivo do destinatário ou com o setor dele);
 //   - cancelar solicitação: 'cancelada' com o motivo e quem; os itens pendentes 'cancelado'; não localizado: o item
-//     'nao_localizado' com onde se procurou, a solicitação recalculada. Nada se apaga.
+//     'nao_localizado' com onde se procurou, a solicitação recalculada. Nada se apaga;
+//   - autorização pelo motivo (`exige_autorizacao`): a solicitação nasce 'aguardando' e nada sai por empréstimo até a
+//     decisão; autorizar grava 'autorizada' com quem decidiu, o instante e a justificativa; negar grava 'negada' com a
+//     justificativa e cancela a solicitação (os itens pendentes 'cancelado'). Quem pediu não decide o próprio pedido.
 // A posse do volume tem uma fonte só, a trilha da guarda (F3.9-4): o que o trâmite move aparece no histórico da guarda,
 // e o que a guarda devolve fecha o empréstimo (lido pelo movimento de saída).
 import {
+  autorizacaoAoSolicitar,
+  conferirAutorizacaoDaEntrega,
   conferirCancelamentoProtocolo,
   conferirCancelamentoSolicitacao,
+  conferirDecisaoAutorizacao,
   conferirEmprestimo,
   conferirNaoLocalizado,
   conferirProtocolo,
@@ -38,6 +44,7 @@ import {
   type PosseVolume,
   posseAoReceber,
   prazoDoEmprestimo,
+  type SituacaoAutorizacao,
   type SituacaoItemSolicitacao,
   type SituacaoProtocolo,
   type SituacaoSolicitacao,
@@ -163,6 +170,14 @@ const esquemaEmprestimo = z
 
 const esquemaNaoLocalizado = z
   .object({ item: id, motivo: z.string().trim().max(500), versao: z.number().int().positive() })
+  .strict();
+
+const esquemaAutorizacao = z
+  .object({
+    decisao: z.enum(['autorizar', 'negar']),
+    justificativa: textoOuNull(500),
+    versao: z.number().int().positive(),
+  })
   .strict();
 
 const esquemaDevolucao = z
@@ -337,13 +352,14 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
       })),
       motivos: (
         await l.consultar(
-          'SELECT id, codigo, descricao, finalidade, urgente, prazo_devolucao_dias FROM motivo_solicitacao_prontuario WHERE ativo ORDER BY descricao',
+          'SELECT id, codigo, descricao, finalidade, urgente, exige_autorizacao, prazo_devolucao_dias FROM motivo_solicitacao_prontuario WHERE ativo ORDER BY descricao',
         )
       ).map((x) => ({
         id: num(x['id']),
         descricao: String(x['descricao']),
         finalidade: String(x['finalidade']),
         urgente: bool(x['urgente']),
+        exigeAutorizacao: bool(x['exige_autorizacao']),
         prazoDias: numOuNull(x['prazo_devolucao_dias']),
       })),
       portadores: (
@@ -694,10 +710,11 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
           problemas.push({ campo: 'localArquivo', mensagem: 'Arquivo inexistente neste estabelecimento.' });
         if (!(await tx.uma('SELECT id FROM setor_tramite WHERE id = ? AND ativo', [e.destino])))
           problemas.push({ campo: 'destino', mensagem: 'Setor de destino inexistente ou inativo.' });
-        if (
-          !(await tx.uma('SELECT id FROM motivo_solicitacao_prontuario WHERE id = ? AND ativo', [e.motivo]))
-        )
-          problemas.push({ campo: 'motivo', mensagem: 'Motivo inexistente ou inativo.' });
+        const motivo = await tx.uma(
+          'SELECT id, exige_autorizacao FROM motivo_solicitacao_prontuario WHERE id = ? AND ativo',
+          [e.motivo],
+        );
+        if (!motivo) problemas.push({ campo: 'motivo', mensagem: 'Motivo inexistente ou inativo.' });
         const vistos = new Set<string>();
         for (const [n, i] of e.itens.entries()) {
           const chave = `${i.paciente}:${i.volume}`;
@@ -729,6 +746,7 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
           desejada_para: e.desejadaPara ? new Date(e.desejadaPara) : null,
           descricao: e.descricao,
           situacao: 'pendente',
+          autorizacao: autorizacaoAoSolicitar(bool(motivo?.['exige_autorizacao'])),
           observacao: e.observacao,
         });
         for (const [n, i] of e.itens.entries())
@@ -750,7 +768,7 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
     return this.ler(c, 'solicitacoes', async (l, est) =>
       (
         await l.consultar(
-          `SELECT s.id, s.numero, s.situacao, s.solicitada_em, s.desejada_para, s.versao, m.descricao AS motivo, m.urgente,
+          `SELECT s.id, s.numero, s.situacao, s.autorizacao, s.solicitante_usuario_id, s.solicitada_em, s.desejada_para, s.versao, m.descricao AS motivo, m.urgente,
                   d.descricao AS destino, (SELECT COUNT(*) FROM solicitacao_prontuario_item i WHERE i.solicitacao_prontuario_id = s.id) AS itens
              FROM solicitacao_prontuario s JOIN motivo_solicitacao_prontuario m ON m.id = s.motivo_solicitacao_prontuario_id
              LEFT JOIN setor_tramite d ON d.id = s.destino_setor_tramite_id
@@ -762,6 +780,8 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
         id: num(x['id']),
         numero: num(x['numero']),
         situacao: String(x['situacao']),
+        autorizacao: txtOuNull(x['autorizacao']) as SituacaoAutorizacao | null,
+        solicitante: num(x['solicitante_usuario_id']),
         motivo: String(x['motivo']),
         urgente: bool(x['urgente']),
         destino: txtOuNull(x['destino']),
@@ -856,7 +876,7 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
         let solicitacao: Record<string, unknown> | null = null;
         if (e.solicitacao !== null) {
           [solicitacao = null] = await tx.consultarParaAtualizar<Record<string, unknown>>(
-            'SELECT id, situacao, versao, motivo_solicitacao_prontuario_id FROM solicitacao_prontuario WHERE id = ? AND estabelecimento_id = ?',
+            'SELECT id, situacao, autorizacao, versao, motivo_solicitacao_prontuario_id FROM solicitacao_prontuario WHERE id = ? AND estabelecimento_id = ?',
             [e.solicitacao, est.id],
           );
           if (!solicitacao) throw naoEncontrado('Solicitação');
@@ -881,11 +901,19 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
           motivo === null
             ? null
             : await tx.uma(
-                'SELECT prazo_devolucao_dias FROM motivo_solicitacao_prontuario WHERE id = ? AND ativo',
+                'SELECT prazo_devolucao_dias, exige_autorizacao FROM motivo_solicitacao_prontuario WHERE id = ? AND ativo',
                 [motivo],
               );
         if (motivo !== null && !m)
           problemas.push({ campo: 'motivo', mensagem: 'Motivo inexistente ou inativo.' });
+        // O motivo que exige autorização (o do empréstimo ou o da solicitação) só deixa sair o volume autorizado.
+        problemas.push(
+          ...conferirAutorizacaoDaEntrega({
+            exigeAutorizacao: bool(m?.['exige_autorizacao']),
+            autorizacao: (txtOuNull(solicitacao?.['autorizacao']) as SituacaoAutorizacao | null) ?? null,
+            comSolicitacao: solicitacao !== null,
+          }),
+        );
         if (problemas.length) throw recusaRegra('Empréstimo recusado', problemas);
         const agora = new Date();
         const prazo = prazoDoEmprestimo(agora, {
@@ -1269,6 +1297,74 @@ export class PortaSameTramitePropria extends PortaEstabelecimentoPropria {
           justificativa_finalizacao: e.motivo.slice(0, 200),
         });
         return { tabela: 'solicitacao_prontuario', id: solicitacao, situacao };
+      },
+    );
+  }
+
+  /** A decisão do responsável do arquivo sobre a solicitação cujo motivo exige autorização: autorizar libera a
+   * entrega; negar cancela a solicitação com a justificativa (os itens pendentes ficam cancelados; nada se apaga). */
+  autorizarSolicitacao(
+    c: ContextoPortaPropria,
+    solicitacao: number,
+    entrada: unknown,
+  ): Promise<{ id: number; autorizacao: SituacaoAutorizacao; situacao: SituacaoSolicitacao }> {
+    const e = entradaValida(esquemaAutorizacao, entrada);
+    return this.gravar(
+      c,
+      'same.tramite.autorizar_solicitacao',
+      ['solicitacao_prontuario', 'solicitacao_prontuario_item'],
+      async (tx, est, usuario) => {
+        const [s] = await tx.consultarParaAtualizar<Record<string, unknown>>(
+          'SELECT id, situacao, autorizacao, solicitante_usuario_id, versao FROM solicitacao_prontuario WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [solicitacao, est.id],
+        );
+        if (!s) throw naoEncontrado('Solicitação');
+        const problemas = conferirDecisaoAutorizacao({
+          situacao: String(s['situacao']) as SituacaoSolicitacao,
+          autorizacao: txtOuNull(s['autorizacao']) as SituacaoAutorizacao | null,
+          decisao: e.decisao,
+          justificativa: e.justificativa,
+          solicitante: num(s['solicitante_usuario_id']),
+          responsavel: usuario,
+        });
+        if (num(s['versao']) !== e.versao)
+          problemas.push({ campo: 'versao', mensagem: 'A solicitação mudou desde a leitura: recarregue.' });
+        if (problemas.length) throw recusaRegra('Decisão recusada', problemas);
+        const agora = new Date();
+        const decisao = {
+          autorizacao: e.decisao === 'autorizar' ? 'autorizada' : 'negada',
+          autorizacao_decidida_em: agora,
+          autorizacao_usuario_id: usuario,
+          autorizacao_justificativa: e.justificativa,
+        } as const;
+        if (e.decisao === 'autorizar') {
+          await tx.alterar('solicitacao_prontuario', solicitacao, e.versao, decisao);
+          return {
+            tabela: 'solicitacao_prontuario',
+            id: solicitacao,
+            autorizacao: 'autorizada' as const,
+            situacao: String(s['situacao']) as SituacaoSolicitacao,
+          };
+        }
+        const pendentes = await tx.consultarParaAtualizar<Record<string, unknown>>(
+          "SELECT id, versao FROM solicitacao_prontuario_item WHERE solicitacao_prontuario_id = ? AND situacao = 'pendente' AND excluido_em IS NULL",
+          [solicitacao],
+        );
+        for (const i of pendentes)
+          await tx.alterar('solicitacao_prontuario_item', num(i['id']), num(i['versao']), {
+            situacao: 'cancelado',
+            observacao: `Autorização negada: ${e.justificativa ?? ''}`.slice(0, 500),
+          });
+        const situacao = await recalcularSolicitacao(tx, s, usuario, agora, {
+          ...decisao,
+          justificativa_finalizacao: `Autorização negada: ${e.justificativa ?? ''}`.slice(0, 200),
+        });
+        return {
+          tabela: 'solicitacao_prontuario',
+          id: solicitacao,
+          autorizacao: 'negada' as const,
+          situacao,
+        };
       },
     );
   }

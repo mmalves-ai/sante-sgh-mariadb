@@ -281,3 +281,61 @@ export function conferirNaoLocalizado(
   if (!motivo?.trim()) r.push({ campo: 'motivo', mensagem: 'Diga onde o volume foi procurado.' });
   return r;
 }
+
+// ------------------------------------------------------------------- autorização da solicitação pelo motivo (L128)
+// O motivo que exige autorização (pesquisa, processo judicial) deixa a solicitação aguardando a decisão do responsável
+// do arquivo; o volume só sai depois de autorizada. Quem decide fica gravado com o instante e a justificativa
+// (obrigatória na negativa), e quem pediu não autoriza o próprio pedido (CFM 1.638/2002; LGPD, art. 11).
+
+export type SituacaoAutorizacao = 'aguardando' | 'autorizada' | 'negada';
+export type DecisaoAutorizacao = 'autorizar' | 'negar';
+
+/** A autorização com que a solicitação nasce: aguardando, se o motivo exige; nula, se não. */
+export function autorizacaoAoSolicitar(exigeAutorizacao: boolean): SituacaoAutorizacao | null {
+  return exigeAutorizacao ? 'aguardando' : null;
+}
+
+/** A decisão do responsável: solicitação aberta e aguardando, outro usuário que não o solicitante, negativa com motivo. */
+export function conferirDecisaoAutorizacao(p: {
+  readonly situacao: SituacaoSolicitacao;
+  readonly autorizacao: SituacaoAutorizacao | null;
+  readonly decisao: DecisaoAutorizacao;
+  readonly justificativa: string | null;
+  readonly solicitante: number;
+  readonly responsavel: number;
+}): ProblemaTramite[] {
+  const r = conferirSolicitacaoAberta(p.situacao);
+  if (p.autorizacao === null)
+    r.push({ campo: 'solicitacao', mensagem: 'O motivo desta solicitação não exige autorização.' });
+  else if (p.autorizacao !== 'aguardando')
+    r.push({ campo: 'solicitacao', mensagem: 'A autorização desta solicitação já foi decidida.' });
+  if (p.solicitante === p.responsavel)
+    r.push({ campo: 'responsavel', mensagem: 'Quem pediu o prontuário não autoriza o próprio pedido.' });
+  if (p.decisao === 'negar' && !p.justificativa?.trim())
+    r.push({ campo: 'justificativa', mensagem: 'A negativa exige a justificativa.' });
+  return r;
+}
+
+/** A entrega (empréstimo) diante da autorização: nada sai aguardando ou negado; motivo que exige, só autorizado. */
+export function conferirAutorizacaoDaEntrega(p: {
+  readonly exigeAutorizacao: boolean;
+  readonly autorizacao: SituacaoAutorizacao | null;
+  readonly comSolicitacao: boolean;
+}): ProblemaTramite[] {
+  if (p.autorizacao === 'aguardando')
+    return [
+      { campo: 'solicitacao', mensagem: 'A solicitação aguarda a autorização do responsável do arquivo.' },
+    ];
+  if (p.autorizacao === 'negada')
+    return [{ campo: 'solicitacao', mensagem: 'A autorização desta solicitação foi negada.' }];
+  if (p.exigeAutorizacao && p.autorizacao !== 'autorizada')
+    return [
+      {
+        campo: 'motivo',
+        mensagem: p.comSolicitacao
+          ? 'A solicitação não tem a autorização que o motivo exige.'
+          : 'O motivo exige autorização: registre a solicitação e aguarde a decisão do responsável.',
+      },
+    ];
+  return [];
+}
