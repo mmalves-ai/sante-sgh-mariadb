@@ -2,6 +2,7 @@ import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { CensoFechamentoService } from './censo-fechamento.service.js';
 import { ClassificacaoEstouroService } from './classificacao-estouro.service.js';
 import { ContratosVencimentoService } from './contratos-vencimento.service.js';
+import { DataMartCargaService } from './datamart-carga.service.js';
 import { NotificacaoDespachoService } from './notificacao-despacho.service.js';
 import { NirReservaService } from './nir-reserva.service.js';
 import { LeituraFatosContabeisService } from './contabil/leitura-fatos.service.js';
@@ -49,6 +50,8 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   'pessoas-conselho': PessoasConselhoService,
   // M55 (etapa 3): o alerta diário de vencimento dos contratos com fornecedores (90, 60, 30 dias e vencido).
   'contratos-vencimento': ContratosVencimentoService,
+  // 01-ADM L115: a carga diária do data mart pseudonimizado com o registro (carga_data_mart e etapas).
+  'datamart-carga': DataMartCargaService,
   // 01-ADM L76: o despachante da notificação por regra (consolida e, em produção, entrega o canal externo).
   'notificacao-despacho': NotificacaoDespachoService,
   // M47 (etapa 3): a geração automática da lista de trabalho DICOM (os exames de imagem lançados sem item).
@@ -95,6 +98,8 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     PessoasConselhoService,
     // M55 (etapa 3): alerta de vencimento dos contratos (CONTRATOS_ALERTA_DIARIO=ligado em dev/ci).
     ContratosVencimentoService,
+    // 01-ADM L115: carga diária do data mart (DATAMART_CARGA_DIARIA=ligado em dev/ci).
+    DataMartCargaService,
     // 01-ADM L76: despachante da notificação por regra (NOTIFICACAO_DESPACHO=ligado em dev/ci).
     NotificacaoDespachoService,
     // M47 (etapa 3): lista de trabalho DICOM (PACS_WORKLIST=ligado em dev/ci).
