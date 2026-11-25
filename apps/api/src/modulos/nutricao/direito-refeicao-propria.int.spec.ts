@@ -16,6 +16,8 @@ import { PortaDireitoRefeicaoPropria } from './direito-refeicao-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const P = 'c1030dr';
+// O lançamento na conta identifica o item pelo código numérico do grupo: código sintético fora das faixas oficiais.
+const CODIGO_REF = '990103001';
 const HOJE = new Date().toISOString().slice(0, 10);
 
 interface Massa {
@@ -69,7 +71,10 @@ async function limpar(e: Escritor): Promise<void> {
       [`${P}-TP`],
     );
     await e.executar('DELETE FROM tabela_preco WHERE codigo = ?', [`${P}-TP`]);
-    await e.executar('DELETE FROM item_faturavel WHERE codigo = ?', [`${P}-REF`]);
+    await e.executar(
+      "DELETE FROM item_faturavel WHERE codigo = ? AND descricao = 'REFEICAO DE ACOMPANHANTE SINTETICA'",
+      [CODIGO_REF],
+    );
     await e.executar('DELETE FROM grupo_faturamento WHERE codigo = ?', [`${P}-GF`]);
     await e.executar(
       `DELETE p FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE pf.nome LIKE ?`,
@@ -187,7 +192,7 @@ describe.skipIf(SEM_BANCO)('PortaDireitoRefeicaoPropria contra o MariaDB (contra
         const item = await e.inserir(
           `INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em)
            VALUES (?, 'REFEICAO DE ACOMPANHANTE SINTETICA', 'taxa', ?, ?)`,
-          [`${P}-REF`, gf, agora],
+          [CODIGO_REF, gf, agora],
         );
         const tabela = await e.inserir(
           `INSERT INTO tabela_preco (estabelecimento_id, codigo, descricao, tipo_item, referencia, fonte_pagadora_id,

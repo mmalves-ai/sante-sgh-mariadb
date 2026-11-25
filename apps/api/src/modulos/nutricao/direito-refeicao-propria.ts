@@ -478,12 +478,22 @@ export class PortaDireitoRefeicaoPropria extends PortaEstabelecimentoPropria {
       preco.itemFaturavel,
     ]);
     if (!item) throw naoEncontrado('Item faturável do preço da refeição');
+    // O lançamento na conta identifica o item pelo código numérico do grupo (esquemaLancarItem).
+    const codigo = Number(item['codigo']);
+    if (!Number.isSafeInteger(codigo) || codigo <= 0)
+      throw recusa(
+        422,
+        'item-sem-codigo-de-conta',
+        'Item sem código de lançamento',
+        'O item faturável do preço da refeição não tem código numérico para a conta: corrija o preço da refeição.',
+        ['refeicao'],
+      );
     const r = await lancarItem.gravar(
       tx,
       esquemaLancarItem.parse({
         conta,
         tipo: grupoDoItem(String(item['tipo_item'])),
-        codigo: String(item['codigo']),
+        codigo,
         quantidade,
         data: dia,
         hora: horaNoFuso(est.fuso),
