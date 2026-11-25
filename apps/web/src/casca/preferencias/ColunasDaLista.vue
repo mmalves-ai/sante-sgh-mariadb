@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Escolha das colunas de uma lista (01-ADM L84): mostrar/esconder e mudar a ordem na hora, sem abrir outra tela;
-// "guardar" grava a visão na conta da pessoa (vale em qualquer computador) e "voltar às de fábrica" desfaz. A última
-// coluna visível não sai (a lista nunca fica sem coluna). Quem usa passa a visão (`usarVisaoLista`) e os rótulos.
-import { SanteAlerta, SanteBotao } from '@sgh/ui';
+// as linhas por página também ficam na visão (a ordenação é pelo cabeçalho da própria lista). "Guardar" grava a visão
+// na conta da pessoa (vale em qualquer computador) e "voltar às de fábrica" desfaz. A última coluna visível não sai (a
+// lista nunca fica sem coluna). Quem usa passa a visão (`usarVisaoLista`) e os rótulos.
+import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { usarVisaoLista } from './visao-lista.js';
@@ -21,6 +22,15 @@ const linhas = computed(() => [
   ...v.visiveis.value.map((c) => ({ coluna: c, visivel: true })),
   ...v.oferecidas.filter((c) => !v.visiveis.value.includes(c)).map((c) => ({ coluna: c, visivel: false })),
 ]);
+/** Linhas por página: o bloco inteiro que o servidor manda (nenhum) ou uma parte dele. */
+const opcoesItens = computed(() => [
+  { valor: null, rotulo: t('preferencias.lista.blocoInteiro') },
+  ...[25, 50, 100, 200].map((n) => ({ valor: n, rotulo: String(n) })),
+]);
+const itens = computed<number | null>({
+  get: () => v.itensPorPagina.value,
+  set: (n) => v.definirItensPorPagina(n),
+});
 const aviso = computed(() =>
   v.situacao.value === 'guardada'
     ? t('preferencias.lista.guardada')
@@ -70,6 +80,15 @@ const aviso = computed(() =>
         </span>
       </li>
     </ul>
+    <div class="itens">
+      <SanteSelecao
+        :id="`${prefixo}-itens-pagina`"
+        v-model="itens"
+        :rotulo="t('preferencias.lista.itensPorPagina')"
+        :opcoes="opcoesItens"
+        :data-testid="`${prefixo}-itens-pagina`"
+      />
+    </div>
     <p class="acoes">
       <SanteBotao
         :rotulo="t('preferencias.lista.guardar')"
@@ -121,6 +140,9 @@ li {
   border: 1px solid var(--sgh-borda);
   background: var(--sgh-fundo);
   color: var(--sgh-texto);
+}
+.itens {
+  max-width: 16rem;
 }
 .acoes {
   display: flex;

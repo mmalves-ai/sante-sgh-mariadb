@@ -91,6 +91,7 @@ describe('visão de lista por usuário', () => {
       colunas: ['dataHora', 'usuario', 'origem', 'acao', 'opcao', 'alvo', 'paciente'],
       ordenacao: [],
       itensPorPagina: null,
+      padrao: true,
     });
     expect(v.situacao.value).toBe('guardada');
   });
@@ -128,5 +129,79 @@ describe('visão de lista por usuário', () => {
     await v.carregar();
     expect(await v.guardar()).toBe(false);
     expect(buscar).not.toHaveBeenCalled();
+  });
+
+  it('carrega a Enxuta, muda e guarda: o PUT regrava a Enxuta como padrão sem perder ordenação, filtros e itens', async () => {
+    // A conta como o servidor a guarda: a visão pelo nome, que a próxima leitura devolve.
+    let guardada: PreferenciasDaConta['visoes'][number] = {
+      tela: 'TRILHA',
+      nome: 'Enxuta',
+      colunas: ['usuario', 'dataHora', 'acao'],
+      ordenacao: [{ coluna: 'usuario', direcao: 'desc' }],
+      filtros: { origem: 'produto' },
+      itensPorPagina: 50,
+      padrao: true,
+    };
+    const corpos: Record<string, unknown>[] = [];
+    const buscar = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const c = JSON.parse(String(init.body)) as Record<string, unknown>;
+        corpos.push(c);
+        guardada = { ...guardada, ...(c as object), tela: 'TRILHA', nome: String(c['nome'] ?? 'padrao') };
+        return resposta(null, 204);
+      }
+      return resposta(conta([guardada], { TRILHA: guardada.nome }));
+    });
+    const v = usarVisaoLista(ROTA_TRILHA_AUDITORIA, buscar as unknown as typeof fetch);
+    await v.carregar();
+    expect(v.ordenacao.value).toEqual([{ coluna: 'usuario', direcao: 'desc' }]);
+    expect(v.itensPorPagina.value).toBe(50);
+    v.alternar('origem');
+    expect(await v.guardar()).toBe(true);
+    expect(corpos[0]).toEqual({
+      nome: 'Enxuta',
+      colunas: ['origem', 'usuario', 'dataHora', 'acao'],
+      ordenacao: [{ coluna: 'usuario', direcao: 'desc' }],
+      itensPorPagina: 50,
+      filtros: { origem: 'produto' },
+      padrao: true,
+    });
+    const outra = usarVisaoLista(ROTA_TRILHA_AUDITORIA, buscar as unknown as typeof fetch);
+    await outra.carregar();
+    expect(outra.visiveis.value).toEqual(['origem', 'usuario', 'dataHora', 'acao']);
+    expect(outra.situacao.value).toBe('guardada');
+  });
+
+  it('ordenar pelo cabeçalho e itens por página entram na visão; esconder a coluna ordenada tira a ordenação', async () => {
+    const corpos: Record<string, unknown>[] = [];
+    const buscar = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') corpos.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return init?.method === 'PUT' ? resposta(null, 204) : resposta(conta([], {}));
+    });
+    const v = usarVisaoLista(ROTA_TRILHA_AUDITORIA, buscar as unknown as typeof fetch);
+    await v.carregar();
+    v.ordenarPor('usuario');
+    expect(v.ordenacao.value).toEqual([{ coluna: 'usuario', direcao: 'asc' }]);
+    expect(v.situacao.value).toBe('mudada');
+    v.ordenarPor('usuario');
+    expect(v.ordenacao.value).toEqual([{ coluna: 'usuario', direcao: 'desc' }]);
+    v.alternar('usuario');
+    expect(v.ordenacao.value).toEqual([]);
+    v.ordenarPor('acao');
+    v.definirItensPorPagina(25);
+    v.definirItensPorPagina(3); // fora da faixa: volta ao bloco inteiro
+    expect(v.itensPorPagina.value).toBeNull();
+    v.definirItensPorPagina(25);
+    expect(await v.guardar()).toBe(true);
+    expect(corpos[0]).toMatchObject({
+      ordenacao: [{ coluna: 'acao', direcao: 'asc' }],
+      itensPorPagina: 25,
+      padrao: true,
+    });
+    expect(corpos[0]).not.toHaveProperty('nome');
+    expect(v.situacao.value).toBe('guardada');
+    await v.voltarAFabrica();
+    expect(corpos[1]).toEqual({ colunas: FABRICA, ordenacao: [], itensPorPagina: null, padrao: true });
+    expect(v.ordenacao.value).toEqual([]);
   });
 });

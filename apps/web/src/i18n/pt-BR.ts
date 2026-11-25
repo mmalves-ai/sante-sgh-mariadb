@@ -705,8 +705,16 @@ export const mensagensWeb = {
       fabrica: 'Voltar às colunas de fábrica',
       guardada: 'Visão guardada na sua conta: a lista abre assim em qualquer computador.',
       emFabrica: 'Lista com as colunas de fábrica.',
-      naoGuardada: 'Colunas mudadas e ainda não guardadas.',
+      naoGuardada: 'Colunas, ordenação ou linhas por página mudadas e ainda não guardadas.',
       erro: 'Não foi possível guardar a visão agora: {motivo}',
+      itensPorPagina: 'Linhas por página',
+      blocoInteiro: 'Todas as do bloco',
+      ordenar: 'Ordenar por {coluna}',
+      ordemAsc: '▲',
+      ordemDesc: '▼',
+      notaOrdem:
+        'Clique no título da coluna para ordenar (crescente, decrescente, sem). A ordenação vale para as linhas do bloco carregado; a consulta traz do mais recente ao mais antigo.',
+      parte: 'parte {parte} de {total}',
     },
   },
   sobre: {

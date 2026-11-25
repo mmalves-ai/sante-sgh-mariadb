@@ -297,3 +297,75 @@ export function moverColuna(visiveis: readonly string[], coluna: string, passo: 
   [r[i], r[j]] = [r[j]!, r[i]!];
   return r;
 }
+
+/**
+ * Ordena por uma coluna com um clique no cabeçalho: a primeira vez crescente, a segunda decrescente, a terceira tira a
+ * ordenação (a lista volta à ordem que o servidor dá). Uma coluna por vez; só coluna visível (a mesma regra de
+ * `conferirVisaoTela`): coluna escondida devolve a ordenação sem mudança.
+ */
+export function alternarOrdenacao(
+  visiveis: readonly string[],
+  ordenacao: readonly OrdenacaoColuna[],
+  coluna: string,
+): OrdenacaoColuna[] {
+  if (!visiveis.includes(coluna)) return [...ordenacao];
+  const atual = ordenacao[0]?.coluna === coluna ? ordenacao[0].direcao : null;
+  if (atual === null) return [{ coluna, direcao: 'asc' }];
+  return atual === 'asc' ? [{ coluna, direcao: 'desc' }] : [];
+}
+
+/** A ordenação que continua valendo para as colunas visíveis (a que era por coluna escondida sai, sem erro). */
+export function ordenacaoDasVisiveis(
+  visiveis: readonly string[],
+  ordenacao: readonly OrdenacaoColuna[] | null | undefined,
+): OrdenacaoColuna[] {
+  const vistas = new Set<string>();
+  return (ordenacao ?? []).filter((o) => {
+    if (!visiveis.includes(o.coluna) || vistas.has(o.coluna)) return false;
+    vistas.add(o.coluna);
+    return o.direcao === 'asc' || o.direcao === 'desc';
+  });
+}
+
+/** Itens por página guardados que valem (na faixa do domínio); fora dela, nenhum (a lista mostra o bloco inteiro). */
+export function itensPorPaginaValido(n: number | null | undefined): number | null {
+  return typeof n === 'number' &&
+    Number.isInteger(n) &&
+    n >= ITENS_POR_PAGINA_MINIMO &&
+    n <= ITENS_POR_PAGINA_MAXIMO
+    ? n
+    : null;
+}
+
+/**
+ * Ordena as linhas pela ordenação da visão, sem mudar a lista recebida. Vazio e nulo vão para o fim em qualquer
+ * direção; número com número compara como número; o resto, como texto em português (sem diferença de caixa). Empate
+ * mantém a ordem recebida.
+ */
+export function ordenarLinhas<T>(
+  linhas: readonly T[],
+  ordenacao: readonly OrdenacaoColuna[],
+  valor: (linha: T, coluna: string) => unknown,
+): T[] {
+  if (ordenacao.length === 0) return [...linhas];
+  const vazio = (v: unknown) => v === null || v === undefined || v === '';
+  return linhas
+    .map((l, i) => ({ l, i }))
+    .sort((a, b) => {
+      for (const o of ordenacao) {
+        const va = valor(a.l, o.coluna);
+        const vb = valor(b.l, o.coluna);
+        if (vazio(va) || vazio(vb)) {
+          if (vazio(va) && vazio(vb)) continue;
+          return vazio(va) ? 1 : -1;
+        }
+        const c =
+          typeof va === 'number' && typeof vb === 'number'
+            ? va - vb
+            : String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base', numeric: true });
+        if (c !== 0) return o.direcao === 'asc' ? c : -c;
+      }
+      return a.i - b.i;
+    })
+    .map((x) => x.l);
+}

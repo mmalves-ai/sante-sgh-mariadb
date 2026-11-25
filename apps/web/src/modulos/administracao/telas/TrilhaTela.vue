@@ -6,7 +6,7 @@
 // filtro quando o período tem mais; abaixo, as quantidades de exclusões (cada uma abre as linhas) e as conexões
 // por módulo no período. Só quem tem o papel de auditor chega aqui (a rota exige a permissão); toda consulta e
 // exportação fica registrada.
-import { conferirPeriodo, mensagemPeriodo } from '@sgh/dominio-acesso/autorizacao';
+import { conferirPeriodo, mensagemPeriodo, ordenarLinhas } from '@sgh/dominio-acesso/autorizacao';
 import {
   DIAS_MAXIMOS_PROVA_CADEIA,
   ORIGENS_TRILHA,
@@ -16,7 +16,7 @@ import {
 } from '@sgh/contratos';
 import { useQuery } from '@tanstack/vue-query';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
@@ -39,6 +39,8 @@ const evento = ref('');
 const paciente = ref('');
 const pagina = ref(1);
 const filtro = ref<FiltroTrilhaTela | null>(null);
+/** A parte do bloco (página do servidor) que a tela mostra, pelas linhas por página da visão. */
+const parte = ref(0);
 const recusa = ref('');
 
 function consultar(): void {
@@ -49,6 +51,7 @@ function consultar(): void {
   }
   recusa.value = '';
   pagina.value = 1;
+  parte.value = 0;
   filtro.value = montar();
 }
 function montar(): FiltroTrilhaTela {
@@ -68,6 +71,22 @@ function irPara(p: number): void {
   if (!filtro.value) return;
   pagina.value = p;
   filtro.value = { ...filtro.value, pagina: p };
+}
+/** Anterior: a parte anterior do bloco; na primeira parte, a última parte do bloco anterior. */
+function anterior(): void {
+  if (parteAtual.value > 0) parte.value = parteAtual.value - 1;
+  else if (pagina.value > 1) {
+    parte.value = Number.MAX_SAFE_INTEGER;
+    irPara(pagina.value - 1);
+  }
+}
+/** Próxima: a parte seguinte do bloco; na última parte, o bloco seguinte do servidor. */
+function proxima(): void {
+  if (parteAtual.value < ultimaParte.value) parte.value = parteAtual.value + 1;
+  else if (trilha.data.value?.temMais) {
+    parte.value = 0;
+    irPara(pagina.value + 1);
+  }
 }
 const trilha = useQuery({
   queryKey: computed(() => ['adm', 'trilha', filtro.value]),
@@ -105,6 +124,34 @@ const rotulosColunas = computed<Record<string, string>>(() =>
   Object.fromEntries(visao.oferecidas.map((c) => [c, t(`adm.trilha.${c}`)])),
 );
 type LinhaTrilha = NonNullable<typeof trilha.data.value>['itens'][number];
+/** Valor para ordenar: o número do paciente como número; data e hora em ISO (ordena como texto); vazio vai ao fim. */
+function valorOrdenacao(l: LinhaTrilha, coluna: string): unknown {
+  if (coluna === 'paciente') return l.paciente;
+  const c = celula(l, coluna);
+  return c === '—' ? null : c;
+}
+// 01-ADM L84: a ordenação (clique no cabeçalho) e as linhas por página seguem a visão guardada na conta.
+const linhasOrdenadas = computed(() =>
+  ordenarLinhas(trilha.data.value?.itens ?? [], visao.ordenacao.value, valorOrdenacao),
+);
+const tamanhoParte = computed(() => visao.itensPorPagina.value ?? Math.max(1, linhasOrdenadas.value.length));
+const ultimaParte = computed(() =>
+  Math.max(0, Math.ceil(linhasOrdenadas.value.length / tamanhoParte.value) - 1),
+);
+const parteAtual = computed(() => Math.min(parte.value, ultimaParte.value));
+const linhasDaTela = computed(() =>
+  linhasOrdenadas.value.slice(
+    parteAtual.value * tamanhoParte.value,
+    (parteAtual.value + 1) * tamanhoParte.value,
+  ),
+);
+watch([() => visao.itensPorPagina.value, () => visao.ordenacao.value], () => {
+  parte.value = 0;
+});
+function ordemDa(coluna: string): 'ascending' | 'descending' | 'none' {
+  const o = visao.ordenacao.value.find((x) => x.coluna === coluna);
+  return o ? (o.direcao === 'asc' ? 'ascending' : 'descending') : 'none';
+}
 function celula(l: LinhaTrilha, coluna: string): string {
   switch (coluna) {
     case 'origem':
@@ -209,6 +256,7 @@ function celula(l: LinhaTrilha, coluna: string): string {
         </p>
       </section>
       <ColunasDaLista :visao="visao" :rotulos="rotulosColunas" prefixo="trilha" />
+      <p class="nota">{{ t('preferencias.lista.notaOrdem') }}</p>
       <div class="rolagem" tabindex="0" role="region" :aria-label="t('adm.comum.rolagem')">
         <table data-testid="tabela-trilha">
           <caption>
@@ -218,8 +266,29 @@ function celula(l: LinhaTrilha, coluna: string): string {
           </caption>
           <thead>
             <tr>
-              <th v-for="c in visao.visiveis.value" :key="c" scope="col" :data-testid="`trilha-cab-${c}`">
-                {{ rotulosColunas[c] }}
+              <th
+                v-for="c in visao.visiveis.value"
+                :key="c"
+                scope="col"
+                :aria-sort="ordemDa(c)"
+                :data-testid="`trilha-cab-${c}`"
+              >
+                <button
+                  type="button"
+                  class="ordenar"
+                  :aria-label="t('preferencias.lista.ordenar', { coluna: rotulosColunas[c] })"
+                  :data-testid="`trilha-ordenar-${c}`"
+                  @click="visao.ordenarPor(c)"
+                >
+                  {{ rotulosColunas[c] }}
+                  <span v-if="ordemDa(c) !== 'none'" aria-hidden="true">
+                    {{
+                      ordemDa(c) === 'ascending'
+                        ? t('preferencias.lista.ordemAsc')
+                        : t('preferencias.lista.ordemDesc')
+                    }}
+                  </span>
+                </button>
               </th>
             </tr>
           </thead>
@@ -227,7 +296,7 @@ function celula(l: LinhaTrilha, coluna: string): string {
             <tr v-if="trilha.data.value.itens.length === 0">
               <td :colspan="visao.visiveis.value.length">{{ t('adm.comum.nenhum') }}</td>
             </tr>
-            <tr v-for="l in trilha.data.value.itens" :key="`${l.origem}-${l.id}`">
+            <tr v-for="l in linhasDaTela" :key="`${l.origem}-${l.id}`">
               <template v-for="(c, i) in visao.visiveis.value" :key="c">
                 <th v-if="i === 0" scope="row">{{ celula(l, c) }}</th>
                 <td v-else>{{ celula(l, c) }}</td>
@@ -247,15 +316,22 @@ function celula(l: LinhaTrilha, coluna: string): string {
         <SanteBotao
           :rotulo="t('adm.comum.anterior')"
           variante="texto"
-          :desabilitado="pagina <= 1"
-          @acionar="irPara(pagina - 1)"
+          :desabilitado="pagina <= 1 && parteAtual === 0"
+          data-testid="trilha-anterior"
+          @acionar="anterior()"
         />
-        <span>{{ t('adm.comum.pagina', { n: pagina }) }}</span>
+        <span data-testid="trilha-pagina">
+          {{ t('adm.comum.pagina', { n: pagina }) }}
+          <template v-if="ultimaParte > 0">
+            · {{ t('preferencias.lista.parte', { parte: parteAtual + 1, total: ultimaParte + 1 }) }}
+          </template>
+        </span>
         <SanteBotao
           :rotulo="t('adm.comum.proxima')"
           variante="texto"
-          :desabilitado="!trilha.data.value.temMais"
-          @acionar="irPara(pagina + 1)"
+          :desabilitado="parteAtual >= ultimaParte && !trilha.data.value.temMais"
+          data-testid="trilha-proxima"
+          @acionar="proxima()"
         />
       </div>
     </template>
@@ -325,6 +401,19 @@ td {
   text-align: left;
   padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
   border-bottom: 1px solid var(--sgh-borda);
+}
+.ordenar {
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--sgh-texto);
+  cursor: pointer;
+  text-align: left;
+}
+.nota {
+  color: var(--sgh-texto-secundario);
 }
 input {
   font: inherit;

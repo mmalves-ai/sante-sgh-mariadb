@@ -20,8 +20,15 @@ export { senhaServidorEmailValida } from './notificacao/email-saida.js';
 // servidor usa ao gravar; sem node:crypto.
 export {
   alternarColuna,
+  alternarOrdenacao,
   codigoTelaDoMenu,
   colunasDaVisao,
+  ITENS_POR_PAGINA_MAXIMO,
+  ITENS_POR_PAGINA_MINIMO,
+  itensPorPaginaValido,
   moverColuna,
+  type OrdenacaoColuna,
+  ordenacaoDasVisiveis,
+  ordenarLinhas,
   visaoDeFabrica,
 } from './preferencias/preferencias-usuario.js';

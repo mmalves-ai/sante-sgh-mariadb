@@ -282,6 +282,41 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
     );
     expect(depois).toHaveLength(2);
     expect(doBanco(depois[1]!['colunas_visiveis'])).toEqual(['usuario']);
+    // C1-093: o que a lista manda ao guardar (o nome da visão que abriu, padrão, ordenação, itens e os filtros que
+    // ela tinha) regrava a mesma linha; a próxima abertura lê essa visão com tudo preservado.
+    await exec('preferencias.gravarVisaoTela', {
+      tela: codigoLista,
+      nome: 'Plantão noturno',
+      colunas: ['acao', 'usuario'],
+      ordenacao: [{ coluna: 'acao', direcao: 'asc' }],
+      itensPorPagina: 25,
+      filtros: { origem: 'produto' },
+      padrao: true,
+    });
+    const regravada = await todos(
+      'SELECT nome, padrao, colunas_visiveis, ordenacao, filtros, itens_por_pagina FROM preferencia_tela_usuario WHERE usuario_id = ? ORDER BY nome',
+      [ids.pessoa],
+    );
+    expect(regravada.map((x) => [x['nome'], Number(x['padrao'])])).toEqual([
+      ['padrao', 0],
+      ['Plantão noturno', 1],
+    ]);
+    expect(doBanco(regravada[1]!['colunas_visiveis'])).toEqual(['acao', 'usuario']);
+    expect(doBanco(regravada[1]!['ordenacao'])).toEqual([{ coluna: 'acao', direcao: 'asc' }]);
+    expect(doBanco(regravada[1]!['filtros'])).toEqual({ origem: 'produto' });
+    expect(Number(regravada[1]!['itens_por_pagina'])).toBe(25);
+    const reaberta = await fonte.lerPreferencias(
+      { rede: 'rede-sint', hospital: P, traceId: 't' },
+      ids.pessoa,
+      codigoLista,
+      new Set(['auditoria.trilha.ler']),
+    );
+    expect(reaberta.visaoInicialPorTela[codigoLista]).toBe('Plantão noturno');
+    expect(reaberta.visoes.find((x) => x.nome === 'Plantão noturno')).toMatchObject({
+      colunas: ['acao', 'usuario'],
+      itensPorPagina: 25,
+      filtros: { origem: 'produto' },
+    });
     const trilha = await um(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao = 'teste-l84i' AND usuario_id = ?",
       [ids.pessoa],
