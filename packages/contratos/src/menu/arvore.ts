@@ -40,7 +40,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F8 (05-SUP linha 30): o item "Consumo de gases por setor" entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (07-FIN linha 79): o item "Desconto e cessão de recebíveis" entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (03-PEP linha 125): o item "Transporte de pacientes" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":438,"M":198,"P":57,"N":183};
+// F8 (09-AREA linha 66): o item "Homologação de fornecedores" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":439,"M":198,"P":57,"N":184};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -216,6 +217,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"suprimentos.compras.aprovacao-de-pedidos-por-alcada","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Aprovação de pedidos por alçada"],"titulo":"Aprovação de pedidos por alçada","selo":"P","fase":3,"rota":"/suprimentos/aprovacoes","permissao":"suprimentos.pedido.ler"},
   {"id":"suprimentos.compras.historico-de-compras-por-item","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Histórico de compras por item"],"titulo":"Histórico de compras por item","selo":"M","fase":3,"rota":"/suprimentos/historico-compras","permissao":"suprimentos.compra.ler"},
   {"id":"suprimentos.compras.contratos-com-fornecedores","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Contratos com fornecedores"],"titulo":"Contratos com fornecedores","selo":"N","fase":6,"rota":"/suprimentos/contratos","permissao":"suprimentos.contrato.ler"},
+  {"id":"suprimentos.compras.homologacao-de-fornecedores","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Homologação de fornecedores"],"titulo":"Homologação de fornecedores","selo":"N","fase":7,"rota":"/suprimentos/homologacao-fornecedores","permissao":"suprimentos.contrato.ler"},
   {"id":"suprimentos.compras.licitacao-e-pregao","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Licitação e pregão"],"titulo":"Licitação e pregão","selo":"N","fase":6,"rota":"/suprimentos/licitacao","permissao":"suprimentos.licitacao.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.entrada-por-nota-fiscal-nf-e","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Entrada por nota fiscal"],"titulo":"Entrada por nota fiscal","selo":"M","fase":3,"rota":"/suprimentos/notas-fiscais","permissao":"suprimentos.nota.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.requisicoes-e-saidas-setor-e-paciente","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Requisições e saídas"],"titulo":"Requisições e saídas","selo":"M","fase":3,"rota":"/suprimentos/requisicoes","permissao":"suprimentos.requisicao.ler"},

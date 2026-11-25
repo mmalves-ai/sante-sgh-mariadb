@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('438 itens: M 198, P 57, N 183, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 438, M: 198, P: 57, N: 183 });
+  it('439 itens: M 198, P 57, N 184, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 439, M: 198, P: 57, N: 184 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(438);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(439);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -254,6 +254,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/suprimentos/opme/conciliacao',
         '/suprimentos/consignados', // M46 (etapa 4)
         '/suprimentos/contratos', // M55 (etapa 3: contratos com fornecedores)
+        '/suprimentos/homologacao-fornecedores', // F8 (09-AREA linha 66)
         '/suprimentos/licitacao', // M55 (etapa 4: licitação e pregão)
         '/farmacia/manipulacao', // M46 (etapa 4)
         '/farmacia/dispensacao', // M29
