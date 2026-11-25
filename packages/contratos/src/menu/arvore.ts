@@ -27,6 +27,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C2-102 (08-SGO L115): o item "Promoção da saúde e crônicos" da operadora própria entrou à mão (mesmo motivo; F7);
 // a contagem acompanha.
+// C2-108 (08-SGO L94): o item "Aditivos e cancelamento de contratos" da operadora própria entrou à mão (mesmo
+// motivo; F7); a contagem acompanha.
 // C2-116 (08-SGO L98): o item "Regras de coparticipação" da operadora própria entrou à mão (mesmo motivo; F7); a
 // contagem acompanha.
 // C2-061 (08-SGO L107): o item "Trocas TISS com os prestadores" da operadora própria entrou à mão (mesmo motivo; F7);
@@ -141,7 +143,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C2-094 (09-AREA linha 78): o item "Entrada de serviço tomado" do fiscal entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":506,"M":198,"P":57,"N":251};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":507,"M":198,"P":57,"N":252};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -424,6 +426,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.cobranca-e-mensalidades","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Cobrança e mensalidades"],"titulo":"Cobrança e mensalidades","selo":"N","fase":6,"rota":"/operadora/cobranca","permissao":"operadora.cobranca.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.regras-de-coparticipacao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Regras de coparticipação"],"titulo":"Regras de coparticipação","selo":"N","fase":7,"rota":"/operadora/coparticipacao-regras","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.promocao-da-saude-e-cronicos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Promoção da saúde e crônicos"],"titulo":"Promoção da saúde e crônicos","selo":"N","fase":7,"rota":"/operadora/programas-saude","permissao":"operadora.promocao.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.aditivos-e-cancelamento-de-contratos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Aditivos e cancelamento de contratos"],"titulo":"Aditivos e cancelamento de contratos","selo":"N","fase":7,"rota":"/operadora/contratos","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.envios-a-ans-sib-sip-e-exportacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Envios à ANS e exportações"],"titulo":"Envios à ANS e exportações","selo":"N","fase":6,"rota":"/operadora/ans","permissao":"operadora.ans.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Domínios da operadora e do plano próprio"],"titulo":"Domínios da operadora e do plano próprio","selo":"N","fase":6,"rota":"/consultas/item/faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.portal-do-prestador-credenciado","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Portal do prestador credenciado"],"titulo":"Portal do prestador credenciado","selo":"N","fase":6,"rota":"/operadora/portal-prestador","permissao":"operadora.dominio.ler"},
