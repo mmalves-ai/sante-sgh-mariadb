@@ -74,7 +74,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-028 (03-PEP L132): o item "Documentos exigidos" do PEP entrou à mão (mesmo motivo); a contagem acompanha.
 // C2-029 (06-FAT linha 13): o item "Criação e quebra de contas" do faturamento entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":458,"M":198,"P":57,"N":203};
+// C2-039 (01-ADM L114): o item "Página inicial por perfil" da administração entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":459,"M":198,"P":57,"N":204};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -505,6 +507,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"administracao.acesso.simulador-de-permissoes","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Acesso","Simulador de permissões"],"titulo":"Simulador de permissões","selo":"N","fase":1,"rota":"/administracao/acesso/simulador","permissao":"acesso.simulador.ler"},
   {"id":"administracao.acesso.revisao-de-acessos-por-quebra-de-vidro","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Acesso","Revisão de acessos por quebra de vidro"],"titulo":"Revisão de acessos por quebra de vidro","selo":"N","fase":1,"rota":"/administracao/acesso/quebras-de-vidro","permissao":"acesso.quebraVidro.ler"},
   {"id":"administracao.acesso.termo-de-aceite-de-uso-do-pep","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Acesso","Termo de aceite de uso do PEP"],"titulo":"Termo de aceite de uso do PEP","selo":"M","fase":1,"rota":"/administracao/acesso/termo","permissao":"acesso.termo.ler"},
+  {"id":"administracao.acesso.pagina-inicial-por-perfil","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Acesso","Página inicial por perfil"],"titulo":"Página inicial por perfil","selo":"N","fase":7,"rota":"/admin/pagina-inicial","permissao":"relatorio.paginaInicial.ler"},
   {"id":"administracao.organizacao-e-parametros.parametros-hierarquicos-por-modulo","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Organização e parâmetros","Parâmetros por módulo"],"titulo":"Parâmetros por módulo","selo":"M","fase":1,"rota":"/administracao/parametros","permissao":"config.parametro.ler"},
   {"id":"administracao.organizacao-e-parametros.alertas-e-gatilhos-do-sistema","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Organização e parâmetros","Alertas e gatilhos do sistema"],"titulo":"Alertas e gatilhos do sistema","selo":"M","fase":1,"rota":"/administracao/alertas","permissao":"config.alerta.ler"},
   {"id":"administracao.organizacao-e-parametros.servidor-de-e-mail-e-notificacoes","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Organização e parâmetros","Servidor de e-mail e notificações"],"titulo":"Servidor de e-mail e notificações","selo":"M","fase":1,"rota":"/administracao/notificacoes","permissao":"config.email.ler"},
