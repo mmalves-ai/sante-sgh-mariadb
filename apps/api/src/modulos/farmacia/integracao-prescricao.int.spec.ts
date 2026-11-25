@@ -343,7 +343,8 @@ describe.skipIf(SEM_BANCO)(
         hospital: P,
       } as never);
       expect(aprazamento.regras).toHaveLength(1);
-      expect(aprazamento.regras[0]?.grade.get(3)).toEqual(GRADE);
+      // (o aprazamento usa a hora em HHMM)
+      expect(aprazamento.regras[0]?.grade.get(3)).toEqual(GRADE.map((h) => h.replace(':', '')));
     });
 
     it('prescrever aplica a regra a cada dose: local, substituto, liberação e horários da grade gravada', async () => {
