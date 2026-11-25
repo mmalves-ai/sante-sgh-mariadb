@@ -4,7 +4,11 @@
 //     emergência e na urgência, o resumo clínico que a central mandou (a equipe decide sobre ele);
 //   - a resposta: só sobre o pedido ainda não respondido (recebido ou em análise); aceitar autoriza e, no pedido de
 //     consulta, exame ou cirurgia, põe o paciente na lista de espera da especialidade; recusar exige o motivo
-//     padronizado (e o complemento quando o motivo é "outro"), e a recusa encerra o pedido;
+//     padronizado (e o complemento quando o motivo é "outro"), e a recusa encerra o pedido; aceitar internação ou
+//     transferência abre o pedido de leito do NIR ligado ao pedido da central;
+//   - o encerramento: o cancelamento (pela central, outro destino, não comparecimento) com motivo padronizado, que
+//     cancela junto a lista de espera e o pedido de leito ainda sem reserva; a conclusão do aceito na chegada do
+//     paciente (na internação e na transferência, ligada à internação);
 //   - a fila dos recebidos: emergência primeiro, depois urgência, prioridade e eletivo; dentro da prioridade, o mais
 //     antigo primeiro;
 //   - a devolução à central leva só IDs e códigos (nunca nome, documento ou texto clínico).
@@ -23,8 +27,10 @@ export const TIPOS_REGULACAO_ENTRADA = [
 ] as const;
 export type TipoRegulacaoEntrada = (typeof TIPOS_REGULACAO_ENTRADA)[number];
 
-/** Pedidos que, aceitos, entram na lista de espera da especialidade (o leito segue pelo NIR). */
+/** Pedidos que, aceitos, entram na lista de espera da especialidade. */
 export const TIPOS_COM_LISTA_ESPERA: readonly TipoRegulacaoEntrada[] = ['consulta', 'exame', 'cirurgia'];
+/** Pedidos que, aceitos, abrem o pedido de leito no NIR ligado ao pedido da central (a vaga segue pela fila de leitos). */
+export const TIPOS_COM_PEDIDO_LEITO: readonly TipoRegulacaoEntrada[] = ['internacao', 'transferencia'];
 
 export const MOTIVOS_RECUSA_REGULACAO = [
   { codigo: 'sem_leito_compativel', rotulo: 'Sem leito compatível disponível', exigeComplemento: false },
@@ -107,6 +113,7 @@ export type ResultadoRespostaRegulacao =
       readonly ok: true;
       readonly situacao: 'autorizada' | 'negada';
       readonly listaEspera: boolean;
+      readonly pedidoLeito: boolean;
       readonly encerra: boolean;
       readonly texto: string;
     }
@@ -138,6 +145,7 @@ export function conferirRespostaRegulacao(r: RespostaRegulacao): ResultadoRespos
       ok: true,
       situacao: 'negada',
       listaEspera: false,
+      pedidoLeito: false,
       encerra: true,
       texto: complemento ? `${m!.rotulo}: ${complemento}` : m!.rotulo,
     };
@@ -154,6 +162,7 @@ export function conferirRespostaRegulacao(r: RespostaRegulacao): ResultadoRespos
     ok: true,
     situacao: 'autorizada',
     listaEspera: lista,
+    pedidoLeito: (TIPOS_COM_PEDIDO_LEITO as readonly string[]).includes(r.tipo),
     encerra: false,
     texto: complemento ? `Pedido aceito: ${complemento}` : 'Pedido aceito',
   };
@@ -197,5 +206,134 @@ export function cargaDevolucaoRegulacao(x: {
     numero: x.numero,
     resposta: x.situacao === 'autorizada' ? 'aceito' : 'recusado',
     motivo: x.motivo,
+  };
+}
+
+// ---- Encerramento do pedido recebido (C1-080, correção): cancelamento pela central e conclusão na chegada. ----
+
+/** A prioridade do pedido de leito do NIR que corresponde à prioridade dada pela central. */
+export function prioridadePedidoLeitoDe(p: string | null): 'emergencia' | 'alta' | 'media' | 'baixa' {
+  if (p === 'emergencia') return 'emergencia';
+  if (p === 'urgente') return 'alta';
+  if (p === 'prioritario') return 'media';
+  return 'baixa';
+}
+
+export const MOTIVOS_CANCELAMENTO_REGULACAO = [
+  {
+    codigo: 'cancelado_pela_central',
+    rotulo: 'Cancelado pela central de regulação',
+    exigeComplemento: false,
+  },
+  { codigo: 'outro_destino', rotulo: 'Paciente regulado para outro hospital', exigeComplemento: false },
+  { codigo: 'nao_compareceu', rotulo: 'Paciente não compareceu', exigeComplemento: false },
+  { codigo: 'desistencia', rotulo: 'Desistência do paciente ou da família', exigeComplemento: false },
+  { codigo: 'obito', rotulo: 'Óbito antes da chegada', exigeComplemento: false },
+  { codigo: 'outro', rotulo: 'Outro motivo', exigeComplemento: true },
+] as const;
+export type MotivoCancelamentoRegulacao = (typeof MOTIVOS_CANCELAMENTO_REGULACAO)[number]['codigo'];
+export const CODIGOS_MOTIVO_CANCELAMENTO_REGULACAO = MOTIVOS_CANCELAMENTO_REGULACAO.map((m) => m.codigo) as [
+  MotivoCancelamentoRegulacao,
+  ...MotivoCancelamentoRegulacao[],
+];
+
+/** Situações do pedido recebido que ainda podem ser canceladas (antes de responder ou aceito sem chegada). */
+export const SITUACOES_CANCELAVEIS = ['solicitada', 'em_analise', 'autorizada'] as const;
+/** Estados do pedido de leito ligado que o cancelamento encerra junto (sem reserva nem leito). */
+export const ESTADOS_PEDIDO_LEITO_CANCELAVEIS = ['solicitado', 'em_analise'] as const;
+
+export interface CancelamentoRegulacao {
+  readonly situacao: string;
+  readonly motivo: string | null;
+  readonly complemento: string | null;
+  /** Estado do pedido de leito ligado (null: não há). */
+  readonly estadoPedidoLeito: string | null;
+}
+
+export type ResultadoCancelamentoRegulacao =
+  | { readonly ok: true; readonly cancelaPedidoLeito: boolean; readonly texto: string }
+  | { readonly ok: false; readonly problemas: readonly ProblemaRegulacaoEntrada[] };
+
+/**
+ * O cancelamento do pedido recebido: a central cancelou, o paciente foi para outro destino ou não veio. Encerra o pedido
+ * (nada se apaga) e cancela junto a lista de espera aberta e o pedido de leito que ainda não tem reserva; com leito
+ * reservado ou paciente a caminho, o NIR libera a reserva primeiro; com o paciente internado, o pedido se conclui.
+ */
+export function conferirCancelamentoRegulacao(c: CancelamentoRegulacao): ResultadoCancelamentoRegulacao {
+  if (!(SITUACOES_CANCELAVEIS as readonly string[]).includes(c.situacao))
+    return {
+      ok: false,
+      problemas: [{ campo: 'situacao', mensagem: 'Este pedido já foi recusado, cancelado ou concluído.' }],
+    };
+  const p: ProblemaRegulacaoEntrada[] = [];
+  const m = MOTIVOS_CANCELAMENTO_REGULACAO.find((x) => x.codigo === c.motivo) ?? null;
+  const complemento = (c.complemento ?? '').trim();
+  if (!m) p.push({ campo: 'motivo', mensagem: 'Escolha o motivo do cancelamento.' });
+  else if (m.exigeComplemento && complemento.length < COMPLEMENTO_MINIMO)
+    p.push({
+      campo: 'complemento',
+      mensagem: `Detalhe o motivo do cancelamento (mínimo de ${COMPLEMENTO_MINIMO} caracteres).`,
+    });
+  const estado = c.estadoPedidoLeito;
+  const leitoAberto =
+    estado !== null && (ESTADOS_PEDIDO_LEITO_CANCELAVEIS as readonly string[]).includes(estado);
+  if (estado === 'internado')
+    p.push({
+      campo: 'pedidoLeito',
+      mensagem:
+        'O paciente já foi internado pelo pedido de leito: registre a chegada (conclusão), não o cancelamento.',
+    });
+  else if (estado === 'reservado' || estado === 'em_transito')
+    p.push({
+      campo: 'pedidoLeito',
+      mensagem: 'O pedido de leito ligado tem leito reservado: libere a reserva no NIR antes de cancelar.',
+    });
+  if (p.length) return { ok: false, problemas: p };
+  return {
+    ok: true,
+    cancelaPedidoLeito: leitoAberto,
+    texto: complemento ? `${m!.rotulo}: ${complemento}` : m!.rotulo,
+  };
+}
+
+export interface ConclusaoRegulacao {
+  readonly situacao: string;
+  readonly tipo: string;
+  readonly chegadaEm: Date;
+  readonly reguladoEm: Date | null;
+  readonly agora: Date;
+  /** A internação em que o paciente entrou (exigida na internação e na transferência). */
+  readonly internacao: number | null;
+}
+
+export type ResultadoConclusaoRegulacao =
+  | { readonly ok: true; readonly texto: string }
+  | { readonly ok: false; readonly problemas: readonly ProblemaRegulacaoEntrada[] };
+
+/** A conclusão do pedido aceito: o paciente chegou (na internação e na transferência, ligada à internação). */
+export function conferirConclusaoRegulacao(c: ConclusaoRegulacao): ResultadoConclusaoRegulacao {
+  if (c.situacao !== 'autorizada')
+    return {
+      ok: false,
+      problemas: [
+        { campo: 'situacao', mensagem: 'Só o pedido aceito, ainda aberto, se conclui com a chegada.' },
+      ],
+    };
+  const p: ProblemaRegulacaoEntrada[] = [];
+  if (Number.isNaN(c.chegadaEm.getTime()))
+    p.push({ campo: 'chegadaEm', mensagem: 'Informe quando o paciente chegou.' });
+  else if (c.chegadaEm.getTime() > c.agora.getTime() + TOLERANCIA_FUTURO_MS)
+    p.push({ campo: 'chegadaEm', mensagem: 'A chegada não pode estar no futuro.' });
+  else if (c.reguladoEm && c.chegadaEm.getTime() < c.reguladoEm.getTime() - TOLERANCIA_FUTURO_MS)
+    p.push({ campo: 'chegadaEm', mensagem: 'A chegada não pode ser anterior ao aceite do pedido.' });
+  if ((TIPOS_COM_PEDIDO_LEITO as readonly string[]).includes(c.tipo) && c.internacao === null)
+    p.push({
+      campo: 'internacao',
+      mensagem: 'Na internação e na transferência, a chegada se liga à internação do paciente.',
+    });
+  if (p.length) return { ok: false, problemas: p };
+  return {
+    ok: true,
+    texto: c.internacao !== null ? 'Paciente chegou e foi internado' : 'Paciente chegou ao hospital',
   };
 }

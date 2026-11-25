@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   cargaDevolucaoRegulacao,
+  conferirCancelamentoRegulacao,
+  conferirConclusaoRegulacao,
   conferirRecebimentoRegulacao,
   conferirRespostaRegulacao,
   ordenarRecebidosRegulacao,
   prioridadeListaEsperaDe,
+  prioridadePedidoLeitoDe,
 } from './regulacao-entrada.js';
 
 const agora = new Date('2026-11-25T12:00:00Z');
@@ -60,6 +63,7 @@ describe('resposta ao pedido recebido', () => {
       ok: true,
       situacao: 'autorizada',
       listaEspera: false,
+      pedidoLeito: true,
       encerra: false,
       texto: 'Pedido aceito',
     });
@@ -84,6 +88,7 @@ describe('resposta ao pedido recebido', () => {
       ok: true,
       situacao: 'negada',
       listaEspera: false,
+      pedidoLeito: false,
       encerra: true,
       texto: 'Sem leito compatível disponível',
     });
@@ -122,5 +127,112 @@ describe('fila, lista de espera e devolução', () => {
     expect(
       cargaDevolucaoRegulacao({ solicitacao: 9, numero: 'REG-1', situacao: 'negada', motivo: 'sem_recurso' }),
     ).toEqual({ solicitacao: 9, numero: 'REG-1', resposta: 'recusado', motivo: 'sem_recurso' });
+  });
+});
+
+describe('aceite que abre o pedido de leito do NIR', () => {
+  const resp = { situacao: 'solicitada', motivo: null, complemento: null, especialidade: null } as const;
+  it('internação e transferência abrem o pedido de leito; consulta vai à lista de espera; recusa não abre', () => {
+    expect(conferirRespostaRegulacao({ ...resp, tipo: 'internacao', decisao: 'aceitar' })).toMatchObject({
+      ok: true,
+      pedidoLeito: true,
+      listaEspera: false,
+    });
+    expect(conferirRespostaRegulacao({ ...resp, tipo: 'transferencia', decisao: 'aceitar' })).toMatchObject({
+      pedidoLeito: true,
+    });
+    expect(
+      conferirRespostaRegulacao({ ...resp, tipo: 'consulta', decisao: 'aceitar', especialidade: 3 }),
+    ).toMatchObject({ pedidoLeito: false, listaEspera: true });
+    expect(
+      conferirRespostaRegulacao({ ...resp, tipo: 'internacao', decisao: 'recusar', motivo: 'sem_recurso' }),
+    ).toMatchObject({ pedidoLeito: false });
+  });
+  it('mapeia a prioridade da central para a do pedido de leito', () => {
+    expect(['emergencia', 'urgente', 'prioritario', 'eletivo', null].map(prioridadePedidoLeitoDe)).toEqual([
+      'emergencia',
+      'alta',
+      'media',
+      'baixa',
+      'baixa',
+    ]);
+  });
+});
+
+describe('cancelamento do pedido recebido', () => {
+  const c = {
+    situacao: 'solicitada',
+    motivo: 'cancelado_pela_central',
+    complemento: null,
+    estadoPedidoLeito: null,
+  };
+  it('cancela o pedido aberto ou aceito, com o motivo padronizado no texto', () => {
+    expect(conferirCancelamentoRegulacao(c)).toEqual({
+      ok: true,
+      cancelaPedidoLeito: false,
+      texto: 'Cancelado pela central de regulação',
+    });
+    expect(
+      conferirCancelamentoRegulacao({ ...c, situacao: 'autorizada', estadoPedidoLeito: 'solicitado' }),
+    ).toMatchObject({ ok: true, cancelaPedidoLeito: true });
+  });
+  it('recusa o já encerrado, o motivo ausente e o "outro" sem detalhe', () => {
+    for (const situacao of ['negada', 'cancelada', 'concluida'])
+      expect(conferirCancelamentoRegulacao({ ...c, situacao })).toMatchObject({
+        ok: false,
+        problemas: [{ campo: 'situacao' }],
+      });
+    const r = conferirCancelamentoRegulacao({ ...c, motivo: null });
+    expect(r.ok ? [] : r.problemas.map((x) => x.campo)).toEqual(['motivo']);
+    const o = conferirCancelamentoRegulacao({ ...c, motivo: 'outro', complemento: 'curto' });
+    expect(o.ok ? [] : o.problemas.map((x) => x.campo)).toEqual(['complemento']);
+    expect(
+      conferirCancelamentoRegulacao({
+        ...c,
+        motivo: 'outro',
+        complemento: 'Central reabriu como novo pedido',
+      }),
+    ).toMatchObject({ ok: true, texto: 'Outro motivo: Central reabriu como novo pedido' });
+  });
+  it('não cancela com leito reservado nem com o paciente já internado pelo pedido de leito', () => {
+    for (const estadoPedidoLeito of ['reservado', 'em_transito', 'internado']) {
+      const r = conferirCancelamentoRegulacao({ ...c, situacao: 'autorizada', estadoPedidoLeito });
+      expect(r.ok ? [] : r.problemas.map((x) => x.campo)).toEqual(['pedidoLeito']);
+    }
+  });
+});
+
+describe('conclusão do pedido aceito na chegada', () => {
+  const base = {
+    situacao: 'autorizada',
+    tipo: 'consulta',
+    chegadaEm: new Date('2026-11-25T11:00:00Z'),
+    reguladoEm: new Date('2026-11-25T10:30:00Z'),
+    agora,
+    internacao: null,
+  };
+  it('conclui a consulta na chegada e a internação ligada à internação', () => {
+    expect(conferirConclusaoRegulacao(base)).toEqual({ ok: true, texto: 'Paciente chegou ao hospital' });
+    expect(conferirConclusaoRegulacao({ ...base, tipo: 'internacao', internacao: 9 })).toEqual({
+      ok: true,
+      texto: 'Paciente chegou e foi internado',
+    });
+  });
+  it('exige a internação na internação e na transferência', () => {
+    for (const tipo of ['internacao', 'transferencia']) {
+      const r = conferirConclusaoRegulacao({ ...base, tipo });
+      expect(r.ok ? [] : r.problemas.map((x) => x.campo)).toEqual(['internacao']);
+    }
+  });
+  it('recusa o pedido não aceito, a chegada futura e a anterior ao aceite', () => {
+    for (const situacao of ['solicitada', 'negada', 'cancelada', 'concluida'])
+      expect(conferirConclusaoRegulacao({ ...base, situacao })).toMatchObject({
+        ok: false,
+        problemas: [{ campo: 'situacao' }],
+      });
+    const f = conferirConclusaoRegulacao({ ...base, chegadaEm: new Date('2026-11-25T13:00:00Z') });
+    expect(f.ok ? [] : f.problemas.map((x) => x.campo)).toEqual(['chegadaEm']);
+    const a = conferirConclusaoRegulacao({ ...base, chegadaEm: new Date('2026-11-25T09:00:00Z') });
+    expect(a.ok ? [] : a.problemas.map((x) => x.campo)).toEqual(['chegadaEm']);
   });
 });
