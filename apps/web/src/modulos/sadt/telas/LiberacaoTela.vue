@@ -11,10 +11,10 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import { pode as podePermissao } from '../../../casca/sessao/pode.js';
+import { liberarResultadoDoExame, retificarResultadoDoExame } from '../api-resultado.js';
 import {
   lerConferencia,
   lerDigitacao,
-  liberarResultado,
   listarExamesSadt,
   listarLiberacao,
   novaChave,
@@ -73,12 +73,13 @@ async function liberar(id: number, versao: string | null): Promise<void> {
   mensagem.value = null;
   ocupado.value = true;
   try {
-    const r = await liberarResultado(
-      id,
-      { versao, confirmarCritico: confirmados.value[id] === true },
+    const r = await liberarResultadoDoExame(
+      { id, versao },
+      confirmados.value[id] === true,
       novaChave('liberar'),
     );
-    mensagem.value = r.mensagem;
+    mensagem.value =
+      r.mensagem ?? t(r.gravado?.critico ? 'sadt.liberacao.liberadoCritico' : 'sadt.liberacao.liberado');
     await cliente.invalidateQueries({ queryKey: ['sadt'] });
   } catch (x) {
     erro.value = x;
@@ -109,6 +110,8 @@ function abrirRetificacao(id: number) {
   novos.value = {};
   retificando.value = true;
 }
+/** Validação na hora: a retificação de valores só grava com ao menos um valor novo digitado. */
+const temMudanca = computed(() => Object.values(novos.value).some((v) => (v ?? '').trim() !== ''));
 async function retificar(): Promise<void> {
   const f = ficha.data.value;
   if (!f) return;
@@ -124,20 +127,33 @@ async function retificar(): Promise<void> {
           elemento: Number(k),
           numerico: Number.isFinite(n) ? n : null,
           alfa: Number.isFinite(n) ? null : v.trim(),
-          absoluta: null,
         };
       });
-    const r = await retificarResultado(
-      f.exame.id,
-      {
-        versao: f.exame.versao,
-        motivo: motivo.value,
-        elementos,
-        ...(f.laudo && elementos.length === 0 ? { laudo: { texto: f.laudo.texto, html: f.laudo.html } } : {}),
-      },
-      novaChave('retificar'),
-    );
-    mensagem.value = r.mensagem;
+    // Sem valor mudado e com laudo, é a retificação do laudo (texto), que segue pela operação do laudo.
+    const r =
+      f.laudo && elementos.length === 0
+        ? {
+            gravado: null,
+            mensagem: (
+              await retificarResultado(
+                f.exame.id,
+                {
+                  versao: f.exame.versao,
+                  motivo: motivo.value,
+                  elementos: [],
+                  laudo: { texto: f.laudo.texto, html: f.laudo.html },
+                },
+                novaChave('retificar'),
+              )
+            ).mensagem,
+          }
+        : await retificarResultadoDoExame(
+            f.exame,
+            { elementos, motivo: motivo.value },
+            novaChave('retificar'),
+          );
+    mensagem.value =
+      r.mensagem ?? t(r.gravado?.critico ? 'sadt.liberacao.retificadoCritico' : 'sadt.liberacao.retificado');
     retificando.value = false;
     await cliente.invalidateQueries({ queryKey: ['sadt'] });
   } catch (x) {
@@ -329,7 +345,7 @@ async function retificar(): Promise<void> {
         <SanteBotao variante="texto" :rotulo="t('sadt.cancelar')" @acionar="retificando = false" />
         <SanteBotao
           :rotulo="t('sadt.liberacao.retificar')"
-          :desabilitado="ocupado || motivo.trim().length < 5"
+          :desabilitado="ocupado || motivo.trim().length < 5 || (!temMudanca && !ficha.data.value?.laudo)"
           data-testid="retificar-gravar"
           @acionar="retificar"
         />

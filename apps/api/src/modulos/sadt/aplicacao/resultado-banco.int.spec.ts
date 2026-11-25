@@ -4,6 +4,9 @@
 // fica gravado como quem liberou; o liberado não volta à digitação; retificar exige motivo e mudança, guarda a versão
 // anterior inteira em resultado_exame_versao e sobe o número da versão, sem apagar o analito. Tudo com trilha. Linha 25:
 // com responsável pelo laudo nomeado no setor, outro profissional habilitado não libera; a nomeação do exame prevalece.
+// Avisos na mesma transação: o valor crítico digitado gera o aviso pendente com prazo (sem repetir ao regravar nem ao
+// liberar), a correção que tira o crítico cancela o aviso pendente (o registro fica) e o crítico que volta ganha aviso
+// novo; a retificação avisa quem já tinha aberto o resultado (aviso clínico com destinatário), menos quem retifica.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServicoResultadoSadt } from './resultado-propria.js';
@@ -52,6 +55,23 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
     if (m)
       await nucleo.escrever(COR, async (e) => {
         const itens = [m!.itemLab];
+        await e.executar(
+          `DELETE d FROM aviso_clinico_destinatario d JOIN aviso_clinico a ON a.id = d.aviso_clinico_id
+             JOIN resultado_exame r ON r.id = a.resultado_exame_id WHERE r.exame_item_id IN (?)`,
+          itens,
+        );
+        await e.executar(
+          'DELETE a FROM aviso_clinico a JOIN resultado_exame r ON r.id = a.resultado_exame_id WHERE r.exame_item_id IN (?)',
+          itens,
+        );
+        await e.executar(
+          'DELETE v FROM visualizacao_resultado_exame v JOIN resultado_exame r ON r.id = v.resultado_exame_id WHERE r.exame_item_id IN (?)',
+          itens,
+        );
+        await e.executar(
+          'DELETE a FROM aviso_valor_critico a JOIN resultado_exame r ON r.id = a.resultado_exame_id WHERE r.exame_item_id IN (?)',
+          itens,
+        );
         await e.executar(
           'DELETE v FROM resultado_exame_versao v JOIN resultado_exame r ON r.id = v.resultado_exame_id WHERE r.exame_item_id IN (?)',
           itens,
@@ -115,6 +135,38 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
         ]))!['q'],
       ),
     ).toBe(1);
+
+    // O valor crítico avisa já na digitação: um aviso pendente do analito, com prazo depois da geração.
+    const avisos = async () =>
+      (
+        await nucleo.lerSomente(COR, (l) =>
+          l.consultar(
+            `SELECT situacao, resultado_analito_id, estabelecimento_id, paciente_id, prazo_em > gerado_em AS prazo
+               FROM aviso_valor_critico WHERE resultado_exame_id = ? ORDER BY id`,
+            [r.resultado],
+          ),
+        )
+      ).map((a): Record<string, unknown> & { situacao: string } => ({
+        ...a,
+        situacao: String(a['situacao']),
+      }));
+    const a1 = await avisos();
+    expect(a1.map((a) => a.situacao)).toEqual(['pendente']);
+    expect(Number(a1[0]!['resultado_analito_id'])).toBe(Number((await ra())!['id']));
+    expect(Number(a1[0]!['estabelecimento_id'])).toBe(m!.base.est);
+    expect(Number(a1[0]!['prazo'])).toBe(1);
+    // Regravar o mesmo crítico não repete; corrigir para dentro da faixa cancela o pendente (o registro fica); o crítico
+    // que volta ganha aviso novo.
+    await servico.registrar(c, item, { valores: [{ analito: an, numero: 4 }] });
+    expect((await avisos()).map((a) => a.situacao)).toEqual(['pendente']);
+    expect(await servico.registrar(c, item, { valores: [{ analito: an, numero: 15 }] })).toMatchObject({
+      critico: false,
+    });
+    expect((await avisos()).map((a) => a.situacao)).toEqual(['cancelado']);
+    expect(await servico.registrar(c, item, { valores: [{ analito: an, numero: 4 }] })).toMatchObject({
+      critico: true,
+    });
+    expect((await avisos()).map((a) => a.situacao)).toEqual(['cancelado', 'pendente']);
 
     // A faixa muda depois: o resultado guarda a faixa do momento da digitação.
     await nucleo.escrever(COR, (e) =>
@@ -184,6 +236,18 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
       situacao: 'liberado',
     });
 
+    // A liberação não repete o aviso do crítico já avisado.
+    expect((await avisos()).map((a) => a.situacao)).toEqual(['cancelado', 'pendente']);
+    // Dois usuários abriram o resultado liberado: o outro e quem vai retificar.
+    await nucleo.escrever(COR, async (e) => {
+      for (const u of [m!.base.usuario2, m!.base.usuario])
+        await e.inserir(
+          `INSERT INTO visualizacao_resultado_exame (estabelecimento_id, resultado_exame_id, paciente_id, usuario_id,
+             visualizado_em, criado_em) VALUES (?, ?, (SELECT paciente_id FROM resultado_exame WHERE id = ?), ?, ?, ?)`,
+          [m!.base.est, r.resultado, r.resultado, u, new Date(Date.now() - 60_000), new Date()],
+        );
+    });
+
     // O liberado não volta à digitação; a retificação exige mudança.
     expect(await tenta(servico.registrar(c, item, { valores: [{ analito: an, numero: 15 }] }))).toBe(
       'ja-liberado',
@@ -212,6 +276,29 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
     expect(v!['liberado_em_original']).not.toBeNull();
     const dados = typeof v!['dados'] === 'string' ? JSON.parse(v!['dados'] as string) : v!['dados'];
     expect(dados.analitos[0]).toMatchObject({ analito: an, numero: 4, interpretacao: 'critico_baixo' });
+    // O valor retificado deixou de ser crítico: o aviso ainda pendente é cancelado, sem apagar.
+    expect((await avisos()).map((a) => a.situacao)).toEqual(['cancelado', 'cancelado']);
+    // Quem já tinha visto (menos quem retificou) recebe o aviso da retificação, ligado à versão guardada.
+    const ac = await nucleo.lerSomente(COR, (l) =>
+      l.consultar(
+        `SELECT a.prioridade, a.situacao, a.entidade_origem, a.entidade_origem_chave, a.paciente_id, a.atendimento_id,
+                d.usuario_id, d.situacao AS situacao_destinatario,
+                (SELECT id FROM resultado_exame_versao WHERE resultado_exame_id = a.resultado_exame_id) AS versao_guardada
+           FROM aviso_clinico a JOIN aviso_clinico_destinatario d ON d.aviso_clinico_id = a.id
+          WHERE a.resultado_exame_id = ?`,
+        [r.resultado],
+      ),
+    );
+    expect(ac).toHaveLength(1);
+    expect(ac[0]).toMatchObject({
+      prioridade: 'alta',
+      situacao: 'pendente',
+      entidade_origem: 'resultado_exame_versao',
+      situacao_destinatario: 'pendente',
+    });
+    expect(Number(ac[0]!['usuario_id'])).toBe(m!.base.usuario2);
+    expect(Number(ac[0]!['entidade_origem_chave'])).toBe(Number(ac[0]!['versao_guardada']));
+    expect(ac[0]!['atendimento_id']).not.toBeNull();
     const depois = await ra();
     expect(Number(depois!['q'])).toBe(1);
     expect(Number(depois!['valor_numerico'])).toBe(15);

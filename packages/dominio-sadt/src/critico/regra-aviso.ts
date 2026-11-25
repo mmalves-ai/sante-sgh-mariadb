@@ -78,3 +78,50 @@ export function avisoDoAlvo(
     prazoEm: new Date(geradoEm.getTime() + prazoMinutos * 60_000),
   };
 }
+
+/** Um aviso de valor crítico já gravado do resultado (o que a porta leu). */
+export interface AvisoCriticoGravado {
+  readonly id: number;
+  /** null: aviso do exame, sem analito. */
+  readonly resultadoAnalito: number | null;
+  readonly situacao: string;
+}
+
+/**
+ * Os alvos que já têm aviso valendo (para não repetir): o aviso cancelado não conta, de modo que o valor que volta a
+ * ser crítico depois de uma correção ganha aviso novo.
+ */
+export function alvosJaAvisados(avisos: readonly AvisoCriticoGravado[]): Set<number | null> {
+  return new Set(avisos.filter((a) => a.situacao !== 'cancelado').map((a) => a.resultadoAnalito));
+}
+
+/**
+ * Os avisos que a correção do valor superou: o analito deixou de ser crítico (ou o exame, no aviso sem analito) e
+ * ninguém começou o contato. Só o aviso ainda pendente é cancelado (fica gravado, com a situação); o que já está em
+ * contato, comunicado ou escalonado segue o curso dele, porque alguém já foi acionado pelo valor anterior.
+ */
+export function avisosSuperados(
+  avisos: readonly AvisoCriticoGravado[],
+  criticosAgora: ReadonlySet<number>,
+  exameCritico: boolean,
+): number[] {
+  return avisos
+    .filter((a) => a.situacao === 'pendente')
+    .filter((a) => (a.resultadoAnalito === null ? !exameCritico : !criticosAgora.has(a.resultadoAnalito)))
+    .map((a) => a.id);
+}
+
+/**
+ * Quem é avisado da retificação de um resultado liberado: cada usuário que abriu o resultado antes da retificação, uma
+ * vez só, menos quem retifica (ele já sabe). Sem leitura anterior, ninguém é avisado.
+ */
+export function destinatariosDaRetificacao(
+  leituras: readonly { readonly usuario: number; readonly vistoEm: Date }[],
+  retificadoPor: number | null,
+  retificadoEm: Date,
+): number[] {
+  const vistos = new Set<number>();
+  for (const l of leituras)
+    if (l.usuario !== retificadoPor && l.vistoEm.getTime() <= retificadoEm.getTime()) vistos.add(l.usuario);
+  return [...vistos].sort((a, b) => a - b);
+}

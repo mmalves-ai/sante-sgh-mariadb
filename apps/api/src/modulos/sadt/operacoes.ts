@@ -42,17 +42,28 @@ const CONTRATO =
 export const OPERACOES_SADT_PENDENTES: Readonly<Record<string, string>> = {
   'sadt.receberSolicitacao': `o recebimento do pedido no setor ${CONTRATO}`,
   'sadt.lancarExame': `o lançamento de exame no setor ${CONTRATO}`,
-  'sadt.registrarResultado': `a digitação do resultado ${CONTRATO}`,
   'sadt.registrarLaudo': `o registro do laudo ${CONTRATO}`,
-  'sadt.liberarExame': `a liberação do exame ${CONTRATO}`,
-  'sadt.retificarResultado': `a retificação do resultado ${CONTRATO}`,
   'sadt.criarOrcamento': `o orçamento do diagnóstico ${CONTRATO}`,
   'sadt.registrarVisualizacaoPortal': `a visualização no portal ${CONTRATO}`,
   'sadt.abrirRequisicao': `a abertura da requisição ${CONTRATO}`,
 };
 
 /**
+ * Operações que o banco do cliente já grava pelo contrato novo (o exame pedido pelo id), cada uma com a rota que a tela
+ * usa: digitar, liberar e retificar o resultado (F3.5, 05-SADT linha 10; aplicacao/resultado-propria.ts).
+ */
+export const OPERACOES_SADT_NO_CONTRATO_NOVO: Readonly<Record<string, string>> = {
+  'sadt.registrarResultado': 'POST /api/sadt/exames-pedidos/:exame/resultado',
+  'sadt.liberarExame': 'POST /api/sadt/exames-pedidos/:exame/resultado/liberar',
+  'sadt.retificarResultado': 'POST /api/sadt/exames-pedidos/:exame/resultado/retificar',
+};
+
+/**
  * Operações que gravam direto pela porta (gravarSgh, com a trilha na mesma transação), sem esperar o contrato novo: a
  * emissão do laudo (F3.5, linha 16) grava a emissão com o número do laudo, o código de autenticação, o hash e os exames.
+ * As do contrato novo também estão ligadas para a tela (podeGravar), que grava pela rota do contrato novo.
  */
-export const OPERACOES_SADT_DIRETAS: ReadonlySet<string> = new Set(['sadt.emitirLaudo']);
+export const OPERACOES_SADT_DIRETAS: ReadonlySet<string> = new Set([
+  'sadt.emitirLaudo',
+  ...Object.keys(OPERACOES_SADT_NO_CONTRATO_NOVO),
+]);

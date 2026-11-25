@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   alvosDoAviso,
+  alvosJaAvisados,
+  avisosSuperados,
+  destinatariosDaRetificacao,
   avisoDoAlvo,
   escolherRegraCritico,
   PRAZO_PADRAO_AVISO_CRITICO_MINUTOS,
@@ -69,5 +72,52 @@ describe('regra do aviso de valor crítico', () => {
     expect(alvosDoAviso([], true, new Set())).toEqual([{ analito: null, resultadoAnalito: null }]);
     expect(alvosDoAviso([], true, new Set([null]))).toEqual([]);
     expect(alvosDoAviso([], false, new Set())).toEqual([]);
+  });
+});
+
+describe('aviso de valor crítico na digitação e aviso da retificação', () => {
+  const avisos = [
+    { id: 1, resultadoAnalito: 10, situacao: 'pendente' },
+    { id: 2, resultadoAnalito: 11, situacao: 'comunicado' },
+    { id: 3, resultadoAnalito: 12, situacao: 'cancelado' },
+    { id: 4, resultadoAnalito: null, situacao: 'pendente' },
+  ];
+
+  it('o aviso cancelado não impede o aviso novo do mesmo analito', () => {
+    const ja = alvosJaAvisados(avisos);
+    expect(ja.has(10)).toBe(true);
+    expect(ja.has(11)).toBe(true);
+    expect(ja.has(12)).toBe(false);
+    expect(alvosDoAviso([{ analito: 5, resultadoAnalito: 12 }], true, ja)).toEqual([
+      { analito: 5, resultadoAnalito: 12 },
+    ]);
+  });
+
+  it('a correção que tira o crítico cancela só o aviso ainda pendente', () => {
+    // 10 e 11 deixaram de ser críticos: o pendente (1) é superado; o já comunicado (2) segue.
+    expect(avisosSuperados(avisos, new Set([12]), true)).toEqual([1]);
+    // O analito continua crítico: nada é cancelado; o aviso do exame cai quando o exame deixa de ser crítico.
+    expect(avisosSuperados(avisos, new Set([10, 11]), false)).toEqual([4]);
+    expect(avisosSuperados(avisos, new Set([10, 11]), true)).toEqual([]);
+  });
+
+  it('a retificação avisa quem já tinha visto, uma vez, menos quem retifica', () => {
+    const t = new Date('2026-01-10T12:00:00Z');
+    const antes = new Date('2026-01-10T11:00:00Z');
+    const depois = new Date('2026-01-10T13:00:00Z');
+    expect(
+      destinatariosDaRetificacao(
+        [
+          { usuario: 9, vistoEm: antes },
+          { usuario: 7, vistoEm: antes },
+          { usuario: 9, vistoEm: antes },
+          { usuario: 3, vistoEm: antes },
+          { usuario: 8, vistoEm: depois },
+        ],
+        3,
+        t,
+      ),
+    ).toEqual([7, 9]);
+    expect(destinatariosDaRetificacao([], 3, t)).toEqual([]);
   });
 });
