@@ -6,3 +6,4 @@ export * from './reserva.js';
 export * from './permanencia.js';
 export * from './indicadores.js';
 export * from './regulacao.js';
+export * from './regulacao-entrada.js';
