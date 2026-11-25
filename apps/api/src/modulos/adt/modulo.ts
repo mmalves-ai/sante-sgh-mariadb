@@ -55,6 +55,11 @@ import { PORTA_SAME_TRAMITE, PortaSameTramitePropria } from './same-tramite-prop
 import { AVISOS_ADT } from './simbolos.js';
 import { ControlesAssistenciaisController } from './controles-assistenciais.controller.js';
 import { DestinoCorpoController } from './destino-corpo.controller.js';
+import { PreInternacaoPlanoController } from './pre-internacao-plano.controller.js';
+import {
+  PORTA_PRE_INTERNACAO_PLANO,
+  PortaPreInternacaoPlanoPropria,
+} from './pre-internacao-plano-propria.js';
 import { PORTA_DESTINO_CORPO, PortaDestinoCorpoPropria } from './destino-corpo-propria.js';
 import {
   PORTA_CONTROLES_ASSISTENCIAIS,
@@ -64,6 +69,8 @@ import {
 import { LeitosSusController } from './leitos-sus.controller.js';
 import { PORTA_LEITOS_SUS, PortaLeitosSusPropria } from './leitos-sus-propria.js';
 import { ComunicacaoOperadoraController } from './comunicacao-operadora.controller.js';
+import { ProducaoHospitalarController } from './producao-hospitalar.controller.js';
+import { PORTA_PRODUCAO_HOSPITALAR, PortaProducaoHospitalarPropria } from './producao-hospitalar-propria.js';
 import {
   PORTA_COMUNICACAO_OPERADORA,
   PortaComunicacaoOperadoraPropria,
@@ -136,8 +143,10 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       SameTramiteController,
       ControlesAssistenciaisController,
       DestinoCorpoController,
+      PreInternacaoPlanoController,
       LeitosSusController,
       ComunicacaoOperadoraController,
+      ProducaoHospitalarController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
@@ -214,6 +223,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
             ? new PortaDestinoCorpoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
+      // C2-048 (04-INT L70): plano previsto da pré-internação e fila de espera eletiva; sem núcleo, 503.
+      {
+        provide: PORTA_PRE_INTERNACAO_PLANO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaPreInternacaoPlanoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F78.04-2 (04-INT L79 e L80): leitos do sistema público e comunicação à operadora; sem núcleo, 503.
       {
         provide: PORTA_LEITOS_SUS,
@@ -227,6 +244,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaComunicacaoOperadoraPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (09-AREA linha 87): produção hospitalar mensal e categoria clínica do atendimento; sem núcleo, 503.
+      {
+        provide: PORTA_PRODUCAO_HOSPITALAR,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProducaoHospitalarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       {
