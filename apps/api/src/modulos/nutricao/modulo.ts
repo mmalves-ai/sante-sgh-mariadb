@@ -21,6 +21,8 @@ import type { ContextoModulo } from '../registro.js';
 import { DireitoRefeicaoController } from './direito-refeicao.controller.js';
 import { PORTA_DIREITO_REFEICAO, PortaDireitoRefeicaoPropria } from './direito-refeicao-propria.js';
 import { NutricaoController } from './nutricao.controller.js';
+import { OcorrenciaRefeicaoController } from './ocorrencia-refeicao.controller.js';
+import { PORTA_OCORRENCIA_REFEICAO, PortaOcorrenciaRefeicaoPropria } from './ocorrencia-refeicao-propria.js';
 import { PORTA_NUTRICAO, type PortaNutricao } from './porta.js';
 import { PortaNutricaoMemoria } from './porta-memoria.js';
 import { portaNutricaoIndisponivel, PortaNutricaoPropria } from './porta-propria.js';
@@ -62,7 +64,7 @@ export async function moduloNutricao(
       : null);
   return {
     module: class ModuloNutricao {},
-    controllers: [NutricaoController, DireitoRefeicaoController],
+    controllers: [NutricaoController, DireitoRefeicaoController, OcorrenciaRefeicaoController],
     providers: [
       { provide: PORTA_NUTRICAO, useValue: porta },
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
@@ -72,6 +74,14 @@ export async function moduloNutricao(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaDireitoRefeicaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-HOT linha 143): ocorrências na entrega da refeição sobre o mapa fechado; sem núcleo, 503.
+      {
+        provide: PORTA_OCORRENCIA_REFEICAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaOcorrenciaRefeicaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(portaria ? [{ provide: PORTA_PORTARIA, useValue: portaria }] : []),

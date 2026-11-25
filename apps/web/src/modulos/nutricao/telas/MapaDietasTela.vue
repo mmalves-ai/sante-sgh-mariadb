@@ -33,6 +33,7 @@ import {
 } from '../api-nutricao.js';
 import AvisoNutricao from '../componentes/AvisoNutricao.vue';
 import ErroNutricao from '../componentes/ErroNutricao.vue';
+import OcorrenciasEntrega from '../componentes/OcorrenciasEntrega.vue';
 import { combinaBusca, dataLonga, instanteCurto, leitoTexto, urlDoTexto } from '../regras-nutricao.js';
 
 const { t } = useI18n();
@@ -110,6 +111,14 @@ const linhas = computed(() =>
       `${l.leito.acomodacao}${l.leito.leito}`,
     ]),
   ),
+);
+// F8 (04-HOT linha 143): ocorrências na entrega da bandeja; da linha do mapa, o registro abre com o paciente escolhido.
+const ocorrencias = ref<InstanceType<typeof OcorrenciasEntrega> | null>(null);
+const pacientesDoMapa = computed(() =>
+  (m.value?.linhas ?? []).map((l) => ({
+    internacao: l.internacao,
+    rotulo: `${l.leito.acomodacao} ${l.leito.leito} · ${l.nome}`.trim(),
+  })),
 );
 const foraDaJanela = computed(() => (m.value ? m.value.lidoEm > m.value.fechamentoAte : false));
 const botaoEtiquetas = ref<HTMLElement | null>(null);
@@ -499,10 +508,26 @@ const restricoes = (l: LinhaMapa) =>
                 :data-testid="`acompanhante-${l.internacao}`"
                 @acionar="abrirAcompanhante(l)"
               />
+              <SanteBotao
+                v-if="m.retrato && pode('imprimir')"
+                variante="texto"
+                :rotulo="t('nutricao.ocorrencias.ocorrencia')"
+                :data-testid="`ocorrencia-linha-${l.internacao}`"
+                @acionar="ocorrencias?.abrir(l.internacao)"
+              />
             </td>
           </tr>
         </tbody>
       </table>
+      <OcorrenciasEntrega
+        v-if="consulta"
+        ref="ocorrencias"
+        :consulta="consulta"
+        :pacientes="pacientesDoMapa"
+        :fechado="!!m.retrato"
+        :pode-registrar="pode('imprimir')"
+        :pode-resolver="pode('fecharMapa')"
+      />
     </template>
     <SanteDialogo
       v-model:visivel="dialogoAcomp"
