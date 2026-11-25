@@ -41,13 +41,14 @@ import {
   rotuloVinculo,
 } from './contrato-tela.js';
 import ErroSuprimentos from './ErroSuprimentos.vue';
+import SlaContratoPainel from './SlaContratoPainel.vue';
 
 const props = defineProps<{ id: number; hoje: string }>();
 const emit = defineEmits<{ fechar: []; mudou: [] }>();
 const { t } = useI18n();
 const k = (s: string, p?: Record<string, unknown>) => t(`contratoFornecedor.${s}`, p ?? {});
-type Aba = 'resumo' | 'eventos' | 'registrar' | 'avaliacao' | 'vinculos' | 'cadastro';
-const abas: Aba[] = ['resumo', 'eventos', 'registrar', 'avaliacao', 'vinculos', 'cadastro'];
+type Aba = 'resumo' | 'eventos' | 'registrar' | 'avaliacao' | 'vinculos' | 'sla' | 'cadastro';
+const abas: Aba[] = ['resumo', 'eventos', 'registrar', 'avaliacao', 'vinculos', 'sla', 'cadastro'];
 const aba = ref<Aba>('resumo');
 const consulta = useQuery({
   queryKey: computed(() => ['contratos', 'detalhe', props.id]),
@@ -754,6 +755,14 @@ const tid = (s: string) => `ctr-det-${s}`;
           </div>
         </template>
       </template>
+
+      <!-- SLA (09-AREA linha 88) -->
+      <SlaContratoPainel
+        v-else-if="aba === 'sla'"
+        :contrato="c.id"
+        :pode-editar="podeEditar"
+        :pode-avaliar="podeAvaliar"
+      />
 
       <!-- Cadastro -->
       <ContratoFormulario

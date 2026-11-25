@@ -1,7 +1,11 @@
 // Textos da tela dos contratos com fornecedores (M55, etapa 3). Vocabulário do produto (ADR 0023: nenhum nome do sistema
 // anterior nem de tabela). Os rótulos dos tipos, índices, garantias, faixas e eventos vêm dos vocabulários de
 // @sgh/contratos (a mesma fonte da API).
+import { mensagensSlaContrato } from './i18n-sla-contrato.js';
+
 export const mensagensContrato = {
+  // SLA do contrato (09-AREA linha 88).
+  sla: mensagensSlaContrato,
   titulo: 'Contratos com fornecedores',
   carregando: 'Carregando…',
   emConsulta: 'Só consulta neste estabelecimento.',
@@ -93,6 +97,7 @@ export const mensagensContrato = {
       registrar: 'Registrar evento',
       avaliacao: 'Avaliar o fornecedor',
       vinculos: 'Pedidos e títulos',
+      sla: 'SLA',
       cadastro: 'Cadastro',
     },
     dados: 'Dados do contrato',
