@@ -33,6 +33,7 @@ export * from './conta/tarifador.js';
 export * from './conta/receita-contabil.js';
 // F3.7 (06-FAT linhas 14, 15 e 16): equipe do item, kit de cobrança e transferência de itens entre contas.
 export * from './conta/movimentos.js';
+export * from './conta/transferencia.js';
 // F3.7 (06-FAT linhas 17, 18 e 20): horário especial, ajuste da conta com alçada e pacote na conta.
 export * from './conta/ajustes.js';
 // F3.1 (02-CAD linha 25): configuração TISS por fonte pagadora e faixa de numeração de guias.

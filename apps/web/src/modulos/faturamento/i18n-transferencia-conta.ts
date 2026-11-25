@@ -1,0 +1,33 @@
+// Textos do painel de transferência da conta inteira, por lote e do estorno (F3.7, 06-FAT linha 14). As recusas vêm do
+// texto que o servidor devolve.
+export const mensagensTransferenciaConta = {
+  titulo: 'Transferir a conta para outra fonte pagadora',
+  sugestao:
+    'A internação trocou de convênio para {fonte} em {desde}: {n} item(ns) desta conta são de depois da troca.',
+  usarSugestao: 'Preencher com a troca',
+  fonte: 'Nova fonte pagadora',
+  escolhaFonte: 'Escolha a fonte pagadora',
+  plano: 'Plano',
+  semPlano: 'Sem plano',
+  desde: 'Só os itens realizados desde',
+  motivo: 'Motivo',
+  lote: 'Levar também as outras contas abertas do paciente nesta fonte',
+  contaLote: 'Conta {numero} ({n} item(ns))',
+  previa: 'Cobertura no destino',
+  coberto: 'com preço: {valor}',
+  semCobertura: 'sem preço na fonte ou no plano de destino',
+  resumoPrevia: '{n} item(ns) vão; {s} sem cobertura.',
+  aceitar: 'Transferir também os itens sem cobertura',
+  justificativa: 'Justificativa dos itens sem cobertura',
+  transferir: 'Transferir a conta ({n} item(ns))',
+  transferirLote: 'Transferir {c} contas',
+  nadaATransferir: 'A conta não tem item lançado ou conferido para transferir.',
+  historico: 'Transferências desta conta',
+  linha: '{numero} · {em} · {origem} → {destino} · {motivo}',
+  estornada: 'estornada: {motivo}',
+  estornar: 'Estornar',
+  motivoEstorno: 'Motivo do estorno da {numero}',
+  confirmarEstorno: 'Confirmar o estorno',
+  feito: 'Transferência gravada: conta {numero}.',
+  estornoFeito: 'Transferência {numero} estornada.',
+};

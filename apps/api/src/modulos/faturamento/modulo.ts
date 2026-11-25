@@ -26,6 +26,11 @@ import {
   SERVICO_MOVIMENTOS_CONTA,
   ServicoMovimentosConta,
 } from './conta-movimentos.controller.js';
+import {
+  SERVICO_TRANSFERENCIA_CONTA,
+  ServicoTransferenciaConta,
+  TransferenciaContaController,
+} from './conta-transferencia.controller.js';
 import { FaturamentoController } from './faturamento.controller.js';
 import {
   ParametrosFaturamentoController,
@@ -76,6 +81,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       FaturamentoController,
       ComplementosContaController,
       MovimentosContaController,
+      TransferenciaContaController,
       AjustesContaController,
       NotaVinculoController,
       ParticularAdiantamentoController,
@@ -99,6 +105,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoMovimentosConta(ctx.nucleo)
+            : null,
+      },
+      // 06-FAT linha 14: conta inteira, lote, estorno, cobertura no destino e sugestão pela troca de convênio.
+      {
+        provide: SERVICO_TRANSFERENCIA_CONTA,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoTransferenciaConta(ctx.nucleo)
             : null,
       },
       // 06-FAT linhas 17, 18 e 20: horário especial, acréscimo e desconto com alçada e pacote na conta (banco próprio).

@@ -20,6 +20,7 @@ import {
 import { pode } from '../../../casca/sessao/pode.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import KitCadastro from '../componentes/KitCadastro.vue';
+import TransferenciaContaPainel from '../componentes/TransferenciaContaPainel.vue';
 
 const props = defineProps<{ id: string }>();
 const { t } = useI18n();
@@ -391,6 +392,8 @@ async function transferir() {
           </button>
         </form>
       </template>
+
+      <TransferenciaContaPainel :conta-id="conta" />
 
       <template v-if="q.data.value.transferencias.length">
         <h2>{{ t('movimentosConta.historico') }}</h2>
