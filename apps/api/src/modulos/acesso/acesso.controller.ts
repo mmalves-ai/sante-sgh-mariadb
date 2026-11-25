@@ -120,26 +120,27 @@ interface Res {
   header(nome: string, valor: string | string[]): unknown;
 }
 
-const TIPO_ERRO: Record<ErroSessao['tipo'], [import('@sgh/contratos').TipoProblema, number, string]> = {
-  'credencial-invalida': ['nao-autenticado', 401, 'Usuário ou senha inválidos'],
-  'muitas-tentativas': ['muitas-tentativas', 429, 'Muitas tentativas'],
-  'segundo-fator-necessario': ['nao-autenticado', 401, 'Segundo fator necessário'],
-  'reautenticacao-necessaria': ['reautenticacao-necessaria', 401, 'Confirme a senha'],
-  'sessao-bloqueada': ['sessao-bloqueada', 423, 'Sessão bloqueada'],
-  'sessao-encerrada': ['nao-autenticado', 401, 'Sessão encerrada'],
-  indisponivel: ['indisponivel', 503, 'Serviço indisponível'],
-  'estabelecimento-invalido': ['entrada-invalida', 400, 'Estabelecimento inválido'],
-  'primeiro-acesso': ['primeiro-acesso', 403, 'Senha ainda não definida'],
-  'rede-desconhecida': ['rede-desconhecida', 404, 'Endereço sem rede configurada'],
-  'trilha-indisponivel': ['trilha-indisponivel', 503, 'Trilha de auditoria indisponível'],
-  'senha-recusada': ['entrada-invalida', 422, 'Senha nova recusada'],
-  'troca-indisponivel': ['operacao-bloqueada', 409, 'Troca de senha indisponível'],
-  'limite-sessoes': ['recusa-de-negocio', 409, 'Limite de sessões simultâneas'],
-  'sessao-nao-encontrada': ['nao-encontrado', 404, 'Sessão não encontrada'],
-  'pin-recusado': ['entrada-invalida', 422, 'PIN recusado'],
-  'troca-rapida-recusada': ['nao-autenticado', 401, 'Usuário ou PIN não conferem'],
-  'troca-rapida-desligada': ['operacao-bloqueada', 409, 'Troca rápida desligada'],
-};
+export const TIPO_ERRO: Record<ErroSessao['tipo'], [import('@sgh/contratos').TipoProblema, number, string]> =
+  {
+    'credencial-invalida': ['nao-autenticado', 401, 'Usuário ou senha inválidos'],
+    'muitas-tentativas': ['muitas-tentativas', 429, 'Muitas tentativas'],
+    'segundo-fator-necessario': ['nao-autenticado', 401, 'Segundo fator necessário'],
+    'reautenticacao-necessaria': ['reautenticacao-necessaria', 401, 'Confirme a senha'],
+    'sessao-bloqueada': ['sessao-bloqueada', 423, 'Sessão bloqueada'],
+    'sessao-encerrada': ['nao-autenticado', 401, 'Sessão encerrada'],
+    indisponivel: ['indisponivel', 503, 'Serviço indisponível'],
+    'estabelecimento-invalido': ['entrada-invalida', 400, 'Estabelecimento inválido'],
+    'primeiro-acesso': ['primeiro-acesso', 403, 'Senha ainda não definida'],
+    'rede-desconhecida': ['rede-desconhecida', 404, 'Endereço sem rede configurada'],
+    'trilha-indisponivel': ['trilha-indisponivel', 503, 'Trilha de auditoria indisponível'],
+    'senha-recusada': ['entrada-invalida', 422, 'Senha nova recusada'],
+    'troca-indisponivel': ['operacao-bloqueada', 409, 'Troca de senha indisponível'],
+    'limite-sessoes': ['recusa-de-negocio', 409, 'Limite de sessões simultâneas'],
+    'sessao-nao-encontrada': ['nao-encontrado', 404, 'Sessão não encontrada'],
+    'pin-recusado': ['entrada-invalida', 422, 'PIN recusado'],
+    'troca-rapida-recusada': ['nao-autenticado', 401, 'Usuário ou PIN não conferem'],
+    'troca-rapida-desligada': ['operacao-bloqueada', 409, 'Troca rápida desligada'],
+  };
 
 const AMBIENTES_SEM_PREFIXO = new Set(['dev', 'ci']);
 

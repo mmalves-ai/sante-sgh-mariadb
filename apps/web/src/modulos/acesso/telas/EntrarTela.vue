@@ -31,6 +31,7 @@ import { CHAVE_SESSAO } from '../../../casca/sessao/sessao.js';
 import { entrarPlataforma } from '../../suporte/api-suporte.js';
 import { ErroApi, mensagemDoErro } from '../../../casca/erros/problem-details.js';
 import { codigoDoErro } from '../api-identidade.js';
+import BotoesProvedorEntrada from '../componentes/BotoesProvedorEntrada.vue';
 import { codigoLimpo, destinoDepoisDoLogin, textoRecusaSegundoFator } from '../identidade-tela.js';
 
 const { t } = useI18n();
@@ -349,6 +350,7 @@ async function confirmarUnidade(): Promise<void> {
           />
           <small>{{ t('entrar.certificado.ajuda') }}</small>
         </template>
+        <BotoesProvedorEntrada :estabelecimento="escolhido || null" :desabilitado="entrando" />
         <RouterLink
           v-if="recuperacao && escolhido"
           :to="{

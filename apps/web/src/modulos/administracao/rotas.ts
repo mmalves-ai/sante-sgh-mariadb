@@ -33,6 +33,13 @@ export const rotasAdministracao: RouteRecordRaw[] = [
     meta: { permissao: C.usuarioLer },
   },
   {
+    // 01-ADM L61: login único corporativo (provedor de identidade, perfil por grupo e contas ligadas).
+    path: '/administracao/acesso/provedores-identidade',
+    name: 'adm.provedoresIdentidade',
+    component: () => import('./telas/ProvedoresIdentidadeTela.vue'),
+    meta: { permissao: 'acesso.perfil.gerir' },
+  },
+  {
     path: '/administracao/acesso/usuarios/:login',
     name: 'adm.usuario',
     component: () => import('./telas/FichaUsuarioTela.vue'),

@@ -45,6 +45,8 @@ export * from './contas/alcance.js';
 export * from './contas/painel.js';
 // M59-F2: credencial forte, retirada da senha antiga e política do segundo fator.
 export * from './identidade/credencial-forte.js';
+// 01-ADM L61: login único corporativo (provedor de identidade do hospital).
+export * from './identidade/provedor-externo.js';
 export * from './politica-2fa.js';
 // M59-F4: saneamento dos grupos de acesso amplo (simulador, sugestão, decisões e dissolução).
 export * from './saneamento.js';

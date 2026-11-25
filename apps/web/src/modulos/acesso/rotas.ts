@@ -9,6 +9,13 @@ export const rotasAcesso: RouteRecordRaw[] = [
     component: () => import('./telas/EntrarTela.vue'),
     meta: { publica: true },
   },
+  // 01-ADM L61: volta do provedor de identidade do hospital (login único corporativo).
+  {
+    path: '/entrar/provedor',
+    name: 'entrar.provedor',
+    component: () => import('./telas/EntrarProvedorTela.vue'),
+    meta: { publica: true },
+  },
   // W1-01 (parte 7): "Esqueci a senha" (pedido e o link do e-mail com o token de uso único).
   {
     path: '/recuperar-senha',

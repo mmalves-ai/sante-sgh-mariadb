@@ -16,6 +16,10 @@ import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/configuracao-fonte.js';
 import type { ContextoModulo } from '../registro.js';
 import { AvisosClinicosController } from './avisos-clinicos.controller.js';
+import { EntradaOidc } from './entrada-oidc.js';
+import { ENTRADA_OIDC, ProvedorIdentidadeController } from './provedor-identidade.controller.js';
+import { PORTA_PROVEDOR_IDENTIDADE, PortaProvedorIdentidadePropria } from './provedor-identidade-propria.js';
+import { senhaDoCofreDoAmbiente } from '../administracao/email-teste-conexao.js';
 import { PORTA_AVISOS_CLINICOS, PortaAvisosClinicosPropria } from './avisos-clinicos-propria.js';
 import { parteComunicacaoDoAcesso } from './comunicacao-modulo.js';
 import { ConsultaAcessoController } from './consulta.controller.js';
@@ -76,6 +80,15 @@ export async function saneamentoDoModulo(
   return { porta: null, executor: null };
 }
 
+/** O leitor do cofre para o segredo do cliente OpenID (sem cofre configurado: só clientes públicos com PKCE). */
+function cofreDaEntrada(env: ContextoModulo['env']) {
+  try {
+    return senhaDoCofreDoAmbiente(env);
+  } catch {
+    return null;
+  }
+}
+
 export async function moduloAcesso(
   ctx: ContextoModulo,
   opcoes: OpcoesModuloAcesso = {},
@@ -113,6 +126,8 @@ export async function moduloAcesso(
     ContasBancoController,
     // F3.5 (05-SADT linha 10): os avisos clínicos do destinatário na central de avisos (só com o banco do cliente).
     AvisosClinicosController,
+    // 01-ADM L61: login único corporativo (cadastro do provedor, vínculos e entrada pelo OpenID).
+    ProvedorIdentidadeController,
   ];
   if (gestao)
     controllers.push(
@@ -139,6 +154,14 @@ export async function moduloAcesso(
       {
         provide: PORTA_AVISOS_CLINICOS,
         useValue: ctx.nucleo && cliente ? new PortaAvisosClinicosPropria(ctx.nucleo, cliente) : null,
+      },
+      {
+        provide: PORTA_PROVEDOR_IDENTIDADE,
+        useValue: ctx.nucleo && cliente ? new PortaProvedorIdentidadePropria(ctx.nucleo, cliente) : null,
+      },
+      {
+        provide: ENTRADA_OIDC,
+        useValue: ctx.nucleo && cliente ? new EntradaOidc(undefined, cofreDaEntrada(ctx.env)) : null,
       },
       ...(identidade ? [{ provide: SERVICO_IDENTIDADE, useValue: identidade }] : []),
       ...(gestao

@@ -937,6 +937,36 @@ export class ServicoSessao {
     return this.abrirSessao(rede, entrada.estabelecimento, conta, dados, null, 0, origem);
   }
 
+  /**
+   * 01-ADM L61: entrada pelo provedor de identidade do hospital (login único). O provedor conferiu só a identidade; a
+   * conta local segue as regras dela (EXIGENCIAS_ENTRADA_EXTERNA do domínio): conta bloqueada, inativa ou fora de grupo
+   * não entra, a tentativa é contada (o bloqueio por excesso vale) e o segundo fator da política é pedido como na senha.
+   */
+  async entrarPorProvedorExterno(
+    entrada: { estabelecimento: string; login: string; codigoSegundoFator?: string | undefined },
+    redeDoEndereco: string | null,
+    idAnterior: string | null = null,
+    origem: OrigemPedido = ORIGEM_SERVIDOR,
+  ): Promise<ResultadoLogin> {
+    const rede = this.conferirRede(redeDoEndereco);
+    if (idAnterior) await this.descartarAnterior(rede, idAnterior);
+    const config = await this.politica(rede, entrada.estabelecimento);
+    const chaveTent = this.chaveTentativas(rede, entrada.login);
+    const falhasAntes = await this.contarTentativa(chaveTent, limiteTentativas(config.limiteTentativas));
+    const conta = await this.conferirAlvoComo(entrada.estabelecimento, entrada.login, redeDoEndereco);
+    let dados: DadosSessao;
+    try {
+      dados = await this.fonte.dadosDeSessao(entrada.estabelecimento, conta.login, config);
+    } catch {
+      throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
+    const r = await this.abrirSessao(rede, entrada.estabelecimento, conta, dados, null, falhasAntes, origem, {
+      codigo: entrada.codigoSegundoFator,
+    });
+    await this.armazem.apagar(chaveTent);
+    return r;
+  }
+
   private async abrirSessao(
     rede: string,
     estabelecimento: string,
