@@ -232,6 +232,12 @@ export const PERFIS_COMPLEMENTARES = [
    */
   'cadastro-credor',
   /**
+   * C2-059 (07-FIN linha 114): emissor da NF-e de saída de mercadoria (devolução ao fornecedor, consignado, remessa para
+   * conserto e avulsa): emite, cancela e corrige a nota, separado de quem registra a devolução. Só por concessão nominal
+   * ou pelo mapa aprovado.
+   */
+  'emissor-nota-fiscal',
+  /**
    * C1-040 (06-FAT linha 9): de-para do faturamento: inclui e encerra o de-para do item do hospital para o código da
    * fonte pagadora, sem editar o contrato do convênio (segregação de funções). Só por concessão nominal ou pelo mapa
    * aprovado.

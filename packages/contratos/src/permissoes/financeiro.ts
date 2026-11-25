@@ -198,6 +198,27 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
 
     { criticidade: 'sensivel' },
   ),
+  // C2-059 (07-FIN linha 114): NF-e de saída de mercadoria. Recurso novo, sem opção correspondente no menu de origem:
+  // concedido pelo perfil do emissor de nota fiscal (e ao administrador do sistema).
+  p(
+    'financeiro.notaMercadoria.ler',
+    'Consultar as NF-e de saída de mercadoria, o histórico de eventos e o DANFE',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
+      escopos: [],
+    },
+  ),
+  p(
+    'financeiro.notaMercadoria.emitir',
+    'Emitir, cancelar e corrigir (carta de correção) a NF-e de saída de mercadoria',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
+      escopos: [],
+    },
+  ),
   p('financeiro.dmed.ler', 'Consultar as DMED geradas'),
   p('financeiro.dmed.gerar', 'Gerar a DMED (arquivo, não enviado até a DP-38)', {
     criticidade: 'sensivel',

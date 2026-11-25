@@ -30,6 +30,7 @@ import { FluxoAprovacaoController } from './fluxo-aprovacao.controller.js';
 import { GestaoFinanceiroController } from './gestao.controller.js';
 import { PagamentoEletronicoController } from './pagamento-eletronico.controller.js';
 import { NotaCessaoController } from './nota-cessao.controller.js';
+import { NotaMercadoriaController } from './nota-mercadoria.controller.js';
 import { NotaServicoController } from './nota-servico.controller.js';
 import { NUCLEO_PERIODO_FINANCEIRO, PeriodoFinanceiroController } from './periodo.controller.js';
 import { ReceberAcordosController } from './receber-acordos.controller.js';
@@ -91,6 +92,7 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       NotaCessaoController,
       // F3.8, 07-FIN linha 113: o ciclo da nota de serviço (lote, cancelamento, substituição, histórico).
       NotaServicoController,
+      NotaMercadoriaController,
       CartaoController,
       // F3.8, 07-FIN linha 63: alterar o título a pagar não pago.
       AlteracaoTituloPagarController,
