@@ -1,5 +1,5 @@
 // E2E @C1-112 (F8, 09-AREA linha 74): o destino do corpo após o óbito pelo caminho da tela (`/internacao/obitos`).
-// O painel mostra o óbito com o que falta; quem tem as permissões (SINT.ADMIN) escolhe a funerária e o cartório da
+// O painel mostra o óbito com o que falta; quem tem as permissões (SINT.OBITO) escolhe a funerária e o cartório da
 // declaração de óbito num formulário só, registra a guarda no necrotério e libera o corpo à família ou à funerária,
 // com a validação na hora pela regra do domínio (sem a entrega da declaração e com CPF inválido o botão trava); depois
 // inclui uma funerária com o telefone do plantão. Os combos são SanteSelecao (nenhum <select> nativo). O destino só
@@ -132,7 +132,7 @@ test.describe('internação: destino do corpo após o óbito @C1-112 @F8', () =>
   }) => {
     const externas = vigiarExternas(page);
     const st = simular(page);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.OBITO');
     await page.goto('/internacao/obitos');
     const tela = page.getByTestId('tela-destino-corpo');
     await expect(tela).toBeVisible();

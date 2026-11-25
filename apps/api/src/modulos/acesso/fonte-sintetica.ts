@@ -3327,6 +3327,57 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       ].sort((x, y) => x - y),
     },
   },
+  /**
+   * C2-001 (F3.4, 04-CC linha 95; no fim da lista para não mudar o ID sintético das outras contas): o usuário do bloco
+   * (as mesmas opções do SINT.BLOCO, registro de cirurgia) que também lança na conta (faturamento.item.lancar), para o
+   * E2E que leva a equipe realizada do ato ao item da conta.
+   */
+  'SINT.BLOCO.CONTA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'BLOCO_CONTA',
+      opcoesGrupo: [
+        ...new Set([
+          3254,
+          6027,
+          2227,
+          2229,
+          2230,
+          2233,
+          4506,
+          2236,
+          2237,
+          2238,
+          2263,
+          2264,
+          2265,
+          2266,
+          2283,
+          2285,
+          2293,
+          ...opcoesDasPermissoes('faturamento.item.lancar'),
+        ]),
+      ].sort((x, y) => x - y),
+    },
+  },
+  /**
+   * C1-112 (F8, 09-AREA linha 74; no fim da lista para não mudar o ID sintético das outras contas): o médico da
+   * internação (com conselho) que acompanha o destino do corpo após o óbito: consulta a internação (2342, 6059), dá a
+   * saída (6070, internacao.alta.registrar: guarda e liberação do corpo) e registra a declaração de óbito (6764,
+   * pep.declaracaoObito.emitir: funerária e cartório da declaração). Nenhuma conta tinha as três juntas.
+   */
+  'SINT.OBITO': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: { grupo: 'MEDICOS_INTERNACAO', opcoesGrupo: [2342, 6059, 6070, 6764], conselho: true },
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

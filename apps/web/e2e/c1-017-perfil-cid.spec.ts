@@ -6,7 +6,7 @@
 // o E2E roda com a fonte sintética (sem núcleo): as respostas são simuladas pelo Playwright com massa SINTÉTICA (só
 // contagens). O que o banco devolve está no contrato apps/api/src/modulos/qualidade/perfil-cid.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
-import { semViolacaoAxe } from './ajuda.js';
+import { itemDoMenu, semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
@@ -97,7 +97,8 @@ test.describe('Perfil epidemiológico pela CID-10: capítulo, grupo e subgrupo @
     });
 
     await entrar(page, 'SINT.VIGILANCIA');
-    await page.getByRole('link', { name: 'Perfil epidemiológico pela CID-10' }).first().click();
+    // As áreas do menu começam recolhidas: a busca do menu abre Qualidade e segurança > Vigilância epidemiológica.
+    await (await itemDoMenu(page, 'Perfil epidemiológico pela CID-10')).click();
     await expect(page.getByTestId('tela-perfil-cid')).toBeVisible();
     await expect(page.getByTestId('perfil-total')).toHaveText('3');
     await expect(page.getByTestId('perfil-capitulo-IX')).toContainText('Doenças do aparelho circulatório');

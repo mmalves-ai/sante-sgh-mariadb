@@ -53,7 +53,10 @@ test.describe('@C1-070 Homologação de fornecedores por questionário pontuado'
     await expect(tela.getByTestId('homol-aba-avaliar')).toBeVisible();
     await expect(tela.getByTestId('homol-aba-ranking')).toBeVisible();
     if (status === 503) {
-      await expect(tela.getByTestId('recusa-suprimentos').first()).toBeVisible();
+      // 503 (sem o banco do cliente) não é recusa de negócio: o ErroSuprimentos mostra a mensagem geral com a
+      // correlação (MensagemErro), não o aviso de recusa (que é só de 400/403/409/422 com o texto do servidor).
+      await expect(tela.getByTestId('mensagem-erro').first()).toBeVisible();
+      await expect(tela.getByTestId('recusa-suprimentos')).toHaveCount(0);
       await expect(tela.getByTestId('homol-registrar')).toHaveCount(0);
       await expect(tela.getByTestId('homol-q-gravar')).toHaveCount(0);
       await expect(tela.getByTestId('homol-ranking-tabela')).toHaveCount(0);
