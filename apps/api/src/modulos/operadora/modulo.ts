@@ -45,6 +45,12 @@ import {
 import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js';
 import { PortaAutorizacaoOperadoraPropria } from './autorizacao-porta-propria.js';
 import { BeneficiariosOperadoraController } from './beneficiarios.controller.js';
+import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
+import {
+  METODOS_DECLARACOES_ANS,
+  PORTA_DECLARACOES_ANS,
+  PortaDeclaracoesAnsPropria,
+} from './ans-declaracoes-propria.js';
 import { CadastroComplementarOperadoraController } from './cadastro-complementar.controller.js';
 import {
   METODOS_CADASTRO_COMPLEMENTAR,
@@ -239,6 +245,7 @@ export async function moduloOperadora(
       AtendimentoOperadoraController,
       PortalPrestadorController,
       CadastroComplementarOperadoraController,
+      DeclaracoesAnsController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -256,6 +263,19 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaCadastroComplementarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaCadastroComplementarPropria>(METODOS_CADASTRO_COMPLEMENTAR),
+      },
+      // 08-SGO L110: TPS apurada, conferência cadastral e DMED só no banco do cliente (sem núcleo, 503).
+      {
+        provide: PORTA_DECLARACOES_ANS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDeclaracoesAnsPropria(
+                ctx.nucleo,
+                ctx.configuracao.clientePadrao,
+                p.ans,
+                lerRaizArquivos(ctx.env) ? criarArmazemLocal(ctx.nucleo, { env: ctx.env }) : null,
+              )
+            : portaIndisponivel<PortaDeclaracoesAnsPropria>(METODOS_DECLARACOES_ANS),
       },
       {
         provide: SERVICO_PORTAL_PRESTADOR,
