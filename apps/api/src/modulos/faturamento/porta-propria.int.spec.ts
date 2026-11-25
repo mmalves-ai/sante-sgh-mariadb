@@ -144,6 +144,15 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
         await e.executar(`DELETE FROM auditoria_conta_versao WHERE conta_hospitalar_id IN (${q})`, contas);
         await e.executar(`DELETE FROM auditoria_conta WHERE conta_hospitalar_id IN (${q})`, contas);
         await e.executar(`DELETE FROM conta_hospitalar_etapa WHERE conta_hospitalar_id IN (${q})`, contas);
+        await e.executar(
+          `DELETE FROM fato_contabil WHERE entidade_origem = 'conta_hospitalar' AND entidade_origem_id IN (${q})
+              AND estornado_fato_contabil_id IS NOT NULL`,
+          contas,
+        );
+        await e.executar(
+          `DELETE FROM fato_contabil WHERE entidade_origem = 'conta_hospitalar' AND entidade_origem_id IN (${q})`,
+          contas,
+        );
         await e.executar(`DELETE FROM pendencia_conta WHERE conta_hospitalar_id IN (${q})`, contas);
         await e.executar(`DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (${q})`, contas);
         await e.executar(`DELETE FROM conta_hospitalar WHERE id IN (${q})`, contas);
@@ -616,6 +625,24 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       ),
     );
     expect(Number(fora?.n)).toBeGreaterThan(0);
+    // C2-093 (ADR 0003): o fechamento publica o fato da receita da conta, pendente para a regra, pelo total fechado.
+    const fatosDaConta = () =>
+      nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-c2-093' }, (l) =>
+        l.consultar<Record<string, unknown>>(
+          `SELECT f.id, ev.codigo, f.valor, f.estorno, f.estornado_fato_contabil_id AS estornado, f.situacao,
+                  c.valor_total
+             FROM fato_contabil f JOIN evento_contabil ev ON ev.id = f.evento_contabil_id
+             JOIN conta_hospitalar c ON c.id = f.entidade_origem_id
+            WHERE f.entidade_origem = 'conta_hospitalar' AND f.entidade_origem_id = ? AND f.estabelecimento_id = ?
+            ORDER BY f.id`,
+          [ids.conta, ids.est],
+        ),
+      );
+    const receita = await fatosDaConta();
+    expect(receita).toHaveLength(1);
+    expect(receita[0]).toMatchObject({ codigo: 'receitaConta', situacao: 'pendente' });
+    expect(Number(receita[0]!['estorno'])).toBe(0);
+    expect(Number(receita[0]!['valor'])).toBe(Number(receita[0]!['valor_total']));
     const d = await porta.conta(c, ids.conta, hoje);
     expect(d).toMatchObject({ situacao: 'fechada', fechada: 'S', usuarioFechamento: 'l0208.teste' });
     expect(d?.etapas.map((e) => e.etapa)).toContain('fechamento');
@@ -645,6 +672,12 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       op(),
     );
     expect((await contaLida())?.['situacao']).toBe('aberta');
+    // A reabertura estorna a receita: o fato original fica e o estorno aponta para ele.
+    const depois = await fatosDaConta();
+    expect(depois).toHaveLength(2);
+    expect(Number(depois[1]!['estorno'])).toBe(1);
+    expect(Number(depois[1]!['estornado'])).toBe(Number(receita[0]!['id']));
+    expect(Number(depois[1]!['valor'])).toBe(Number(receita[0]!['valor']));
   });
 
   it('etapas: iniciar e concluir a conferência; iniciar duas vezes é recusado', async () => {

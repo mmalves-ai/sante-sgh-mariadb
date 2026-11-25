@@ -69,13 +69,27 @@ export async function publicarFatos(
       evento = await eventoDoTipo(tx, l.tipo);
       eventos.set(l.tipo, evento);
     }
-    const impressao = resumo(l.conteudo);
-    const ja = await tx.uma(
-      `SELECT id FROM fato_contabil WHERE entidade_origem = ? AND entidade_origem_id = ? AND evento_contabil_id = ?
-          AND impressao = ?`,
-      [l.entidade, l.entidadeId, evento, impressao],
-    );
-    if (ja) {
+    // O mesmo efeito já publicado e vivo é repetição; publicado e estornado (conta reaberta e fechada de novo com o
+    // mesmo total) é reemissão: a impressão ganha o número da reemissão (a chave única não deixa repetir a anterior).
+    let impressao = resumo(l.conteudo);
+    let repetido = false;
+    for (let k = 1; ; k++) {
+      const ja = await tx.uma(
+        `SELECT f.id,
+                (SELECT COUNT(*) FROM fato_contabil e WHERE e.estornado_fato_contabil_id = f.id AND e.excluido_em IS NULL)
+                  AS estornos
+           FROM fato_contabil f
+          WHERE f.entidade_origem = ? AND f.entidade_origem_id = ? AND f.evento_contabil_id = ? AND f.impressao = ?`,
+        [l.entidade, l.entidadeId, evento, impressao],
+      );
+      if (!ja) break;
+      if (Number(ja['estornos']) === 0) {
+        repetido = true;
+        break;
+      }
+      impressao = resumo(`${l.conteudo}|reemissao:${k}`);
+    }
+    if (repetido) {
       repetidos += 1;
       continue;
     }

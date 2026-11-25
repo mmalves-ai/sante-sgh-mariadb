@@ -43,6 +43,11 @@ import {
   credenciamentosVigentes,
   opcoesCredenciamentoConvenio,
 } from '@sgh/persistencia';
+import {
+  estornarFatosDaOrigem,
+  publicarFatos,
+  TABELAS_PUBLICACAO_FATO,
+} from '../contabil/publicacao-fato.js';
 import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 import {
   apurarLancamentosAutomaticos,
@@ -224,11 +229,21 @@ export async function totalDosItens(
   };
 }
 
+/** Data de hoje no fuso do hospital (a data contábil do fechamento e da reabertura). */
+function hojeNoHospital(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
 // ── Operações ───────────────────────────────────────────────────────────────────────────────────────────
 
 export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao>({
   nome: 'faturamento.fechar-conta',
-  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa', ...TABELAS_PRODUCAO_CONTA],
+  tabelas: [
+    'conta_hospitalar',
+    'conta_hospitalar_etapa',
+    ...TABELAS_PRODUCAO_CONTA,
+    ...TABELAS_PUBLICACAO_FATO,
+  ],
   entrada: esquemaFecharConta,
   travar: (e) => travaConta(e.conta, versaoDaTela(e.versao)),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
@@ -283,6 +298,20 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
       { conta: conta.id, evento: 'fechamento' },
       { estabelecimento: est, usuario: ctx.usuario },
     );
+    // ADR 0003: a receita da conta fechada vira fato contábil na mesma transação (a regra publicada do tipo
+    // receitaConta escolhe as contas pela fonte pagadora e pelo plano).
+    await publicarFatos(tx, est, [
+      {
+        tipo: 'receitaConta',
+        entidade: 'conta_hospitalar',
+        entidadeId: conta.id,
+        data: hojeNoHospital(),
+        valorCentavos: Math.round(total.valor_total * 100),
+        centroCusto: null,
+        documento: `conta ${conta.id}`,
+        campos: { fontePagadora: conta.fonte, plano: conta.plano, tabelaPreco: conta.tabela },
+      },
+    ]);
     return { conta: conta.id };
   },
   eventos: (_e, r) => [{ tipo: 'faturamento.conta.fechada', carga: { conta: Number(r['conta']) } }],
@@ -291,7 +320,7 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
 
 export const reabrirConta = definirOperacao<ReabrirContaEntrada, ResultadoOperacao>({
   nome: 'faturamento.reabrir-conta',
-  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa'],
+  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa', ...TABELAS_PUBLICACAO_FATO],
   entrada: esquemaReabrirConta,
   travar: (e) => travaConta(e.conta, versaoDaTela(e.versao)),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
@@ -314,6 +343,15 @@ export const reabrirConta = definirOperacao<ReabrirContaEntrada, ResultadoOperac
       fechada_por_usuario_id: null,
     });
     await registrarEtapa(tx, conta, 'aberta', { etapa: 'reabertura', situacao: 'registrada' }, e.motivo);
+    // A receita reconhecida no fechamento é estornada (o fato original fica; ITG 2000, item 32).
+    await estornarFatosDaOrigem(
+      tx,
+      estabelecimentoDe(ctx),
+      'conta_hospitalar',
+      [conta.id],
+      hojeNoHospital(),
+      e.motivo,
+    );
     return { conta: conta.id };
   },
   eventos: (_e, r) => [{ tipo: 'faturamento.conta.reaberta', carga: { conta: Number(r['conta']) } }],
