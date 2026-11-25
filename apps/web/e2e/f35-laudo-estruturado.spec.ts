@@ -11,7 +11,7 @@
 // contrato de efeito laudo-grandezas.int.spec.ts. Dados SINTÉTICOS.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
-import { escolher } from './combos.js';
+import { escolher, esperarSemSelectNativo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 type Corpo = Record<string, unknown>;
@@ -228,7 +228,7 @@ test.describe('@F3.5-10 laudo estruturado: cadastro das medidas e medida calcula
     await page.getByRole('button', { name: /Ecocardiograma sintético/ }).click();
     const bloco = page.getByTestId('laudo-estruturado');
     await expect(bloco).toBeVisible();
-    await expect(bloco.locator('select')).toHaveCount(0);
+    await esperarSemSelectNativo(bloco);
 
     // Seção: o botão só libera com o nome.
     await bloco.getByTestId('le-secao-codigo').fill('VE');

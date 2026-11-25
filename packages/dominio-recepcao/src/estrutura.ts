@@ -128,7 +128,7 @@ export interface ServicoProposto {
   readonly ordemBotao: number | null;
 }
 
-export interface ServicoExistente {
+export interface ServicoJaCadastrado {
   readonly id: number;
   readonly prefixo: string;
   readonly descricao: string;
@@ -137,7 +137,7 @@ export interface ServicoExistente {
 /** Recusas do serviço de senha. `gruposAtivos`: códigos dos grupos de prioridade legal ativos. */
 export function recusasDoServico(
   s: ServicoProposto,
-  existentes: readonly ServicoExistente[],
+  existentes: readonly ServicoJaCadastrado[],
   gruposAtivos: readonly string[],
   id: number | null = null,
 ): RecusaEstrutura[] {

@@ -203,8 +203,8 @@ describe('decisão dos limites', () => {
 
 describe('cadastro', () => {
   it('confere cota, intervalo e bloqueio por resultado', () => {
-    const c: Omit<CotaExame, 'id'> = { ...cota };
-    delete (c as Partial<CotaExame>).id;
+    const c: Omit<CotaExame, 'id'> & { id?: number } = { ...cota };
+    delete c.id;
     expect(() => conferirCota(c)).not.toThrow();
     expect(() => conferirCota({ ...c, exame: null })).toThrow(RecusaLimite);
     expect(() => conferirCota({ ...c, quantidadeMaxima: null })).toThrow('quantidade máxima');

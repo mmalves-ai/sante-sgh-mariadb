@@ -10,7 +10,7 @@
 // guardada, trilha) é provado no contrato de efeito catalogo-respostas-formula.int.spec.ts. Dados SINTÉTICOS.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
-import { escolher } from './combos.js';
+import { escolher, esperarSemSelectNativo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 type Corpo = Record<string, unknown>;
@@ -234,7 +234,7 @@ test.describe('@F3.5-01 respostas, textos padrão e fórmula do exame', () => {
     await page.getByRole('button', { name: /Sorologia sintética/ }).click();
     const bloco = page.getByTestId('respostas-textos');
     await expect(bloco).toBeVisible();
-    await expect(bloco.locator('select')).toHaveCount(0);
+    await esperarSemSelectNativo(bloco);
 
     // Grupo novo: a regra do domínio segura a gravação enquanto a resposta crítica não é anormal.
     await bloco.getByTestId('novo-grupo').click();

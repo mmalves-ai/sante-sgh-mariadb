@@ -11,7 +11,7 @@
 // ordem da regra) está em apps/api/src/modulos/sadt/aplicacao/escala-execucao.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { itemDoMenu, semViolacaoAxe } from './ajuda.js';
-import { escolher } from './combos.js';
+import { escolher, esperarSemSelectNativo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 // Terça-feira; a semana da grade vai de domingo 22/11 a sábado 28/11.
@@ -168,7 +168,7 @@ test.describe('@F3.5-11 escala de execução do diagnóstico', () => {
     await expect(page).toHaveURL(/\/sadt\/escala-execucao$/);
     const tela = page.getByTestId('escala-execucao');
     await expect(tela).toBeVisible();
-    await expect(tela.locator('select')).toHaveCount(0);
+    await esperarSemSelectNativo(tela);
 
     // O setor abre a grade na semana do dia do estabelecimento.
     await escolher(page.getByTestId('escala-setor'), { rotulo: 'LABORATORIO SINTETICO' });

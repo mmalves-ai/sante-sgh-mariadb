@@ -1,5 +1,5 @@
 // Textos da tela "Cobrança por fonte pagadora" (F3.7, 06-FAT linhas 6, 8 e 9), na chave `cobrancaFonte` das
-// mensagens da aplicação. Vocabulário de produto: nenhum nome de sistema antigo.
+// mensagens da aplicação. Vocabulário de produto: nenhum nome do sistema de origem.
 export const mensagensCobrancaFonte = {
   titulo: 'Cobrança por fonte pagadora',
   texto:

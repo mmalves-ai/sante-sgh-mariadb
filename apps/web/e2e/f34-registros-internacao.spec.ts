@@ -9,7 +9,7 @@
 // MEMÓRIA (dados SINTÉTICOS; nada vai à cópia).
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
-import { escolher } from './combos.js';
+import { escolher, esperarSemSelectNativo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 
@@ -74,7 +74,7 @@ test.describe('@F34-1 registros da internação, guias e operadores da unidade',
     await expect(page).toHaveURL(new RegExp(`/internacao/${reg}/registros$`));
     const tela = page.getByTestId('tela-registros-internacao');
     await expect(tela).toBeVisible();
-    await expect(tela.locator('select')).toHaveCount(0);
+    await esperarSemSelectNativo(tela);
     // Sem banco do cliente, a tela avisa (o efeito é provado no contrato de efeito).
     await expect(tela).toContainText('banco do cliente');
 
@@ -104,7 +104,7 @@ test.describe('@F34-1 registros da internação, guias e operadores da unidade',
     await page.goto('/internacao/unidades/operadores');
     const tela = page.getByTestId('tela-operadores-unidade');
     await expect(tela).toBeVisible();
-    await expect(tela.locator('select')).toHaveCount(0);
+    await esperarSemSelectNativo(tela);
     await escolher(page.getByTestId('operadores-unidade'), '4');
     await expect(tela).toContainText('banco do cliente');
     await semViolacaoAxe(page, '/internacao/unidades/operadores');

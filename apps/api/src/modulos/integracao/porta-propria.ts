@@ -23,7 +23,9 @@
 import { randomUUID } from 'node:crypto';
 import { aplicarTratamento } from '@sgh/dominio-integracao';
 import { idadeEmDias, interpretarValorApoio } from './aplicacao/interpretacao-apoio.js';
-import { marcarRetornoNaRemessa, TABELAS_RETORNO_REMESSA } from '../sadt/public-api.js';
+// Direto do arquivo (folha: só depende do domínio), não da public-api do sadt: ela reexporta o pacs.controller,
+// que importa a public-api da integração, e o ciclo deixava TABELAS_RETORNO_REMESSA indefinida na carga.
+import { marcarRetornoNaRemessa, TABELAS_RETORNO_REMESSA } from '../sadt/aplicacao/apoio-retorno-remessa.js';
 import {
   type ContextoOperacao,
   definirOperacao,
