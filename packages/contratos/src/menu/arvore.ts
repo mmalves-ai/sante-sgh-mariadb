@@ -75,7 +75,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-025 (01-ADM L98): o item "O que falta para operar" da implantação entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":469,"M":198,"P":57,"N":214};
+// C2-028 (03-PEP L132): o item "Documentos exigidos" do PEP entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":470,"M":198,"P":57,"N":215};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -177,6 +178,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.linha-do-tempo-e-documentos-do-prontuario","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Linha do tempo e documentos do prontuário"],"titulo":"Linha do tempo e documentos do prontuário","selo":"M","fase":2,"rota":"/pep/pacientes?aba=linha-do-tempo","permissao":"pep.prontuario.ler"},
   {"id":"pep.pedidos-de-acesso-a-prontuario-restrito","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Pedidos de acesso a prontuário restrito"],"titulo":"Pedidos de acesso a prontuário restrito","selo":"N","fase":8,"rota":"/pep/prontuario-restrito","permissao":"pep.prontuarioRestrito.ler"},
   {"id":"pep.registros-clinicos-anamnese-evolucao-escalas-rascunhos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Registros clínicos"],"titulo":"Registros clínicos","selo":"M","fase":2,"rota":"/pep/rascunhos","permissao":"pep.evolucao.criar"},
+  {"id":"pep.documentos-exigidos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Documentos exigidos"],"titulo":"Documentos exigidos","selo":"N","fase":7,"rota":"/pep/documentos-exigidos","permissao":"pep.prontuario.ler"},
   {"id":"pep.parecer-e-interconsulta","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Parecer e interconsulta"],"titulo":"Parecer e interconsulta","selo":"M","fase":2,"rota":"/pep/interconsultas","permissao":"pep.interconsulta.ler"},
   {"id":"pep.alergias-e-reacoes-adversas","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Alergias e reações adversas"],"titulo":"Alergias e reações adversas","selo":"M","fase":2,"rota":"/pep/pacientes?aba=alergias","permissao":"pep.alergia.ler"},
   {"id":"pep.lista-de-problemas-e-diagnosticos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Lista de problemas e diagnósticos"],"titulo":"Lista de problemas e diagnósticos","selo":"N","fase":2,"rota":"/pep/pacientes?aba=problemas","permissao":"pep.problema.ler"},

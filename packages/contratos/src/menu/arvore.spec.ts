@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 469, M: 198, P: 57, N: 214 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 470, M: 198, P: 57, N: 215 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(469);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(470);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -416,6 +416,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/pep/uti/indices', // M45 (etapa 2)
         '/pep/anotacoes-administrativas', // C1-109 (03-PEP L147)
         '/pep/cadastros/nutricao', // M23: Nutrição clínica (CRUD genérico das dietas)
+        '/pep/documentos-exigidos', // C2-028 (03-PEP L132)
         '/pep/especialidades/obstetricia', // M45 (etapa 6)
         '/pep/especialidades/oftalmologia', // M45 (etapa 6)
         '/pep/especialidades/oncologia', // M45 (etapa 6)
