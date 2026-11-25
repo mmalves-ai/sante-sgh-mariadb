@@ -8,6 +8,8 @@ export * from './fila-consultorio.js';
 export * from './heranca.js';
 export * from './impressos.js';
 export * from './indicadores.js';
+// F3.2 (02-REC linha 30): o que os grupos lidos do banco do cliente valem para o cálculo dos indicadores.
+export * from './indicadores-leitura.js';
 export * from './observacao.js';
 export * from './quadro.js';
 // M50, etapa 4: telemedicina (sala de espera, início, alerta do crônico, marca dos documentos, teleinterconsulta).
