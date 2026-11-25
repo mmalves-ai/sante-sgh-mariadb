@@ -34,6 +34,7 @@ import {
   lerRegrasAcordo,
   type RegrasAcordo,
 } from '../api-regras-acordo.js';
+import { mensagensRegrasAcordo } from '../i18n-regras-acordo.js';
 
 const props = defineProps<{ codigo: number; podeEditar: boolean }>();
 // Textos próprios da seção (escopo local), sem mexer nas mensagens comuns da aplicação.
