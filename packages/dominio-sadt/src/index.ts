@@ -7,6 +7,7 @@ export * from './exame/pedido.js';
 export * from './exame/restricao-contexto.js';
 export * from './exame/limites.js';
 export * from './exame/conta.js';
+export * from './exame/consumo-padrao.js';
 export * from './referencia/versao.js';
 export * from './referencia/data-do-exame.js';
 export * from './critico/escalonamento.js';
