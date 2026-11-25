@@ -36,9 +36,8 @@ describe('assinatura da NF-e', () => {
     const raiz = criarRaizSintetica(agora);
     const outro = emitirSintetico(raiz, { cpf: null, nome: 'OUTRA EMPRESA SINTETICA:99888777000161' }, agora);
     const dir = mkdtempSync(join(tmpdir(), 'nfe-a1-'));
-    const cert = `-----BEGIN CERTIFICATE-----\n${Buffer.from(outro.certificado)
-      .toString('base64')
-      .replace(/(.{64})/g, '$1\n')}\n-----END CERTIFICATE-----\n`;
+    const b64 = Buffer.from(outro.certificado).toString('base64');
+    const cert = `-----BEGIN CERTIFICATE-----\n${(b64.match(/.{1,64}/g) ?? []).join('\n')}\n-----END CERTIFICATE-----\n`;
     writeFileSync(join(dir, 'c.pem'), cert);
     writeFileSync(join(dir, 'k.pem'), outro.chave.export({ type: 'pkcs8', format: 'pem' }).toString());
     const env = { NFE_CERTIFICADO_ARQUIVO: join(dir, 'c.pem'), NFE_CHAVE_ARQUIVO: join(dir, 'k.pem') };

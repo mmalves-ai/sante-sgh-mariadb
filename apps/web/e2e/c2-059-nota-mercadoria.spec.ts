@@ -134,6 +134,12 @@ test.describe('financeiro: NF-e de saída de mercadoria @C2-059', () => {
           dev ? 900 : null,
         );
         notas.unshift(n);
+        // A remessa para conserto sai pela Sefaz sem resposta: fica assinada, para transmitir depois.
+        if (!dev) {
+          n.situacao = 'assinada';
+          n.protocolo = '';
+          return json(rota, { mensagem: `NF-e ${n.numero} assinada; a Sefaz não respondeu.` });
+        }
         eventos.push({
           tipo: 'autorizacao',
           sequencia: 1,
@@ -149,6 +155,11 @@ test.describe('financeiro: NF-e de saída de mercadoria @C2-059', () => {
         });
       }
       const alvo = notas.find((x) => caminho.includes(`/${String(x['nota'])}/`));
+      if (alvo && caminho.endsWith('/transmitir')) {
+        alvo['situacao'] = 'autorizada';
+        alvo['protocolo'] = '135260000000002';
+        return json(rota, { mensagem: `NF-e ${String(alvo['numero'])} autorizada pela Sefaz.` });
+      }
       if (alvo && caminho.endsWith('/corrigir')) {
         alvo['cartasCorrecao'] = Number(alvo['cartasCorrecao']) + 1;
         eventos.push({
@@ -202,6 +213,15 @@ test.describe('financeiro: NF-e de saída de mercadoria @C2-059', () => {
       fornecedor: 41,
       itens: [{ insumo: 501, quantidade: 2, valorUnitario: 150 }],
     });
+
+    // Sem resposta da Sefaz a nota fica assinada; a transmissão a leva a autorizada, sem emitir outra.
+    await expect(tela.getByTestId('nfe-situacao-2')).toContainText('Assinada');
+    await expect(tela.getByTestId('nfe-corrigir-2')).toHaveCount(0);
+    await tela.getByTestId('nfe-transmitir-2').click();
+    await expect(tela.getByText(/NF-e 2 autorizada pela Sefaz/)).toBeVisible();
+    expect(corpos[2]?.caminho).toBe(`${API}/2/transmitir`);
+    await expect(tela.getByTestId('nfe-situacao-2')).toContainText('Autorizada');
+    await expect(tela.getByTestId('nfe-transmitir-2')).toHaveCount(0);
 
     // Carta de correção: o texto curto é recusado na hora, antes de gravar.
     await tela.getByTestId('nfe-corrigir-1').click();

@@ -4,6 +4,7 @@
 //   GET  /api/financeiro/fiscal/notas-mercadoria/:id/historico      itens, referências e eventos da Sefaz
 //   GET  /api/financeiro/fiscal/notas-mercadoria/:id/danfe          o DANFE simplificado (HTML escapado)
 //   POST /api/financeiro/fiscal/notas-mercadoria                    emitir (da devolução, do conserto ou avulsa)
+//   POST /api/financeiro/fiscal/notas-mercadoria/:id/transmitir     a nota assinada à Sefaz (sem resposta antes)
 //   POST /api/financeiro/fiscal/notas-mercadoria/:id/cancelar       { motivo, justificativa }
 //   POST /api/financeiro/fiscal/notas-mercadoria/:id/corrigir       { texto }: carta de correção
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503. O destino
@@ -23,6 +24,7 @@ import {
   esquemaCancelarNotaMercadoria,
   esquemaCorrigirNotaMercadoria,
   esquemaEmitirNotaMercadoria,
+  esquemaTransmitirNotaMercadoria,
   historicoNotaMercadoria,
   notasMercadoria,
   type OperacaoNotaMercadoria,
@@ -33,7 +35,7 @@ import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import { resultadoFin } from './servico.js';
 import { ARMAZEM_FINANCEIRO } from './simbolos.js';
 
-/** A Sefaz só em produção com o certificado A1 no cofre e a transmissão ligada (ainda não há): fora disso, o simulador. */
+/** A Sefaz só em produção com o certificado A1 no cofre e a transmissão ligada (nfe-transmissao.ts): fora disso, o simulador. */
 export function destinoNfe(ambiente: string): 'simulador' | 'sefaz' {
   return ambiente === 'producao' && process.env['NFE_SEFAZ_LIGADA'] === '1' ? 'sefaz' : 'simulador';
 }
@@ -138,6 +140,22 @@ export class NotaMercadoriaController {
           : r['situacao'] === 'assinada'
             ? `NF-e ${String(r['numero'])} assinada, à espera da transmissão à Sefaz.`
             : `NF-e ${String(r['numero'])} rejeitada: ${String(r['retorno'])}`,
+    );
+  }
+
+  @Post(':id/transmitir')
+  @HttpCode(200)
+  @Permissao('financeiro.notaMercadoria.emitir')
+  @AuditadoNoHandler('financeiro.transmitir_nota_mercadoria pelo executor (trilha na mesma transação)')
+  transmitir(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.transmitir_nota_mercadoria',
+      corpo(esquemaTransmitirNotaMercadoria, { nota: idDaNota(id), destino: this.destino }),
+      (r) =>
+        r['situacao'] === 'autorizada'
+          ? `NF-e ${String(r['numero'])} autorizada pela Sefaz.`
+          : `NF-e ${String(r['numero'])} ${String(r['situacao'])}: ${String(r['retorno'])}`,
     );
   }
 

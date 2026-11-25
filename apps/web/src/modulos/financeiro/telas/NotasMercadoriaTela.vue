@@ -23,6 +23,7 @@ import { novaChave } from '../api-financeiro.js';
 import {
   cancelarNotaMercadoria,
   corrigirNotaMercadoria,
+  transmitirNotaMercadoria,
   emitirNotaMercadoria,
   lerApoioNotaMercadoria,
   lerDanfeNotaMercadoria,
@@ -299,6 +300,9 @@ async function confirmarCorrecao() {
   if (!n || !conferenciaCorrecao.value?.ok) return;
   if (await acao((c) => corrigirNotaMercadoria(n.nota, textoCorrecao.value.trim(), c))) fechar();
 }
+async function transmitir(n: NotaMercadoriaTela) {
+  await acao((c) => transmitirNotaMercadoria(n.nota, c));
+}
 async function abrirDanfe(n: NotaMercadoriaTela) {
   erro.value = null;
   mensagem.value = null;
@@ -568,6 +572,15 @@ async function abrirDanfe(n: NotaMercadoriaTela) {
             </button>
             <button type="button" :data-testid="`nfe-danfe-${n.nota}`" @click="abrirDanfe(n)">
               {{ t('financeiro.notaMercadoria.danfe') }}
+            </button>
+            <button
+              v-if="n.situacao === 'assinada' && podeGravar"
+              type="button"
+              :disabled="gravando"
+              :data-testid="`nfe-transmitir-${n.nota}`"
+              @click="transmitir(n)"
+            >
+              {{ t('financeiro.notaMercadoria.transmitirNota') }}
             </button>
             <template v-if="n.situacao === 'autorizada' && podeGravar">
               <button

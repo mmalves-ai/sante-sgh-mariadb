@@ -532,6 +532,23 @@ export interface RetornoSefaz {
   readonly protocolo: string | null;
 }
 
+/** Códigos de denegação de uso do Manual de Orientação do Contribuinte (irregularidade do emitente ou do destinatário). */
+const DENEGACAO_NFE = new Set(['110', '301', '302', '303']);
+
+/**
+ * O que o retorno da autorização faz com a nota: 100 (autorizado) e 150 (autorizado fora de prazo) autorizam; os de
+ * denegação denegam (a numeração fica usada e a nota não pode ser cancelada); qualquer outro rejeita (a nota não
+ * existe para a Sefaz e o documento de origem volta a aceitar nota). O evento leva o mesmo nome.
+ */
+export function situacaoDoRetornoNfe(codigo: string): {
+  readonly situacao: 'autorizada' | 'denegada' | 'rejeitada';
+  readonly evento: 'autorizacao' | 'denegacao' | 'rejeicao';
+} {
+  if (codigo === '100' || codigo === '150') return { situacao: 'autorizada', evento: 'autorizacao' };
+  if (DENEGACAO_NFE.has(codigo)) return { situacao: 'denegada', evento: 'denegacao' };
+  return { situacao: 'rejeitada', evento: 'rejeicao' };
+}
+
 /** Protocolo do simulador: 15 dígitos estáveis pela chave e pelo tipo do pedido. */
 function protocoloSimulado(chave: string, tipo: number): string {
   let h = tipo;

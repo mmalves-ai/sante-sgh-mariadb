@@ -1,5 +1,5 @@
 // F7, 07-FIN linha 114 (C2-059): a NF-e de saída de mercadoria tem permissão própria. Ler (lista, apoio, histórico e
-// DANFE) pede financeiro.notaMercadoria.ler; emitir, cancelar e corrigir pedem financeiro.notaMercadoria.emitir, que é
+// DANFE) pede financeiro.notaMercadoria.ler; emitir, transmitir, cancelar e corrigir pedem financeiro.notaMercadoria.emitir, que é
 // sensível, concedida pelo perfil do emissor de nota fiscal e com a trilha gravada pelo executor no handler.
 import 'reflect-metadata';
 import { PERFIS_COMPLEMENTARES, PERMISSOES_FINANCEIRO_M32 } from '@sgh/contratos';
@@ -22,6 +22,7 @@ describe('NF-e de saída de mercadoria: permissão própria (C2-059)', () => {
       expect(meta(CHAVE_PERMISSAO, m)).toBe('financeiro.notaMercadoria.ler');
     for (const [m, op] of [
       ['emitir', 'financeiro.emitir_nota_mercadoria'],
+      ['transmitir', 'financeiro.transmitir_nota_mercadoria'],
       ['cancelar', 'financeiro.cancelar_nota_mercadoria'],
       ['corrigir', 'financeiro.corrigir_nota_mercadoria'],
     ] as const) {

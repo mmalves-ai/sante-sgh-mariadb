@@ -11,6 +11,9 @@
 //   - o XML 4.00 assinado (A1 do cofre; no simulador, o sintético) vai ao armazém de arquivos (ADR 0004) e a
 //     `arquivo`, ligado por nota_mercadoria.xml_arquivo_id;
 //   - autorizada a nota da devolução, a devolução recebe o número, a série, a chave e o CFOP da nota.
+// A conversa com a Sefaz é pela porta de transmissão (nfe-transmissao.ts: simulador fora de produção; Sefaz em
+// produção). Sem resposta da Sefaz a nota fica assinada e a transmissão (financeiro.transmitir_nota_mercadoria) a leva
+// depois a autorizada, denegada ou rejeitada; a rejeitada libera a devolução para outra nota.
 // Cancelamento (24 h, motivo do catálogo e justificativa) e carta de correção (sequência, até 20) são eventos; nada é
 // apagado: a nota cancelada fica no banco e a devolução volta a aceitar nota.
 import { createHash, randomInt } from 'node:crypto';
@@ -28,7 +31,7 @@ import {
   type ParteNfe,
   type PedidoNfeSaida,
   type RecusaFinanceiro,
-  simularSefaz,
+  situacaoDoRetornoNfe,
   xmlNfeSaida,
 } from '@sgh/dominio-financeiro';
 import {
@@ -42,7 +45,8 @@ import {
 import { z } from 'zod';
 import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import { type ArmazemFinanceiro, ErroSobrescritaArquivo } from './armazem.js';
-import { assinarNfe, certificadoNfe, conferirAssinaturaNfe } from './nfe-assinatura.js';
+import { assinarNfe, certificadoNfe } from './nfe-assinatura.js';
+import { type TransmissorNfe, type TransmissoresNfe, transmissoresNfe } from './nfe-transmissao.js';
 import { instanteIso, numero, texto } from './vocabulario.js';
 
 type Tx = TxOperacao;
@@ -119,6 +123,7 @@ export const esquemaCancelarNotaMercadoria = z
 export const esquemaCorrigirNotaMercadoria = z
   .object({ destino, nota: id, texto: z.string().trim().max(1000) })
   .strict();
+export const esquemaTransmitirNotaMercadoria = z.object({ destino, nota: id }).strict();
 
 // ---------------------------------------------------------------- leituras
 
@@ -208,11 +213,9 @@ export async function apoioNotaMercadoria(l: Leitor, est: number) {
   };
 }
 
-export async function notasMercadoria(l: Leitor, est: number, situacao: string | null = null) {
-  const linhas = await l.consultar(
-    `SELECT n.id, n.numero, s.serie, n.situacao, n.ambiente, n.chave_acesso, n.protocolo_autorizacao, n.data_emissao,
-            n.valor_total, n.devolucao_fornecedor_id, n.finalidade_emissao, n.autorizada_em, n.mensagem_retorno,
-            o.codigo AS natureza, o.descricao AS natureza_descricao, c.codigo_cfop,
+const SQL_NOTAS = `SELECT n.id, n.numero, s.serie, n.situacao, n.ambiente, n.chave_acesso, n.protocolo_autorizacao,
+            n.data_emissao, n.valor_total, n.devolucao_fornecedor_id, n.finalidade_emissao, n.autorizada_em,
+            n.mensagem_retorno, o.codigo AS natureza, o.descricao AS natureza_descricao, c.codigo_cfop,
             COALESCE(f.razao_social, cl.nome) AS destinatario,
             (SELECT COUNT(*) FROM evento_nota_mercadoria e WHERE e.nota_mercadoria_id = n.id AND e.tipo_evento = 'carta_correcao') AS cartas
        FROM nota_mercadoria n
@@ -221,11 +224,10 @@ export async function notasMercadoria(l: Leitor, est: number, situacao: string |
        JOIN cfop c ON c.id = n.cfop_id
        LEFT JOIN empresa_fornecedora f ON f.id = n.empresa_fornecedora_id
        LEFT JOIN cliente_financeiro cl ON cl.id = n.cliente_financeiro_id
-      WHERE n.estabelecimento_id = ? AND n.excluido_em IS NULL AND (? IS NULL OR n.situacao = ?)
-      ORDER BY n.id DESC LIMIT 300`,
-    [est, situacao, situacao],
-  );
-  return linhas.map((n) => ({
+      WHERE n.estabelecimento_id = ? AND n.excluido_em IS NULL`;
+
+function notaDaLinha(n: Record<string, unknown>) {
+  return {
     nota: numero(n['id']),
     numero: numero(n['numero']),
     serie: texto(n['serie']),
@@ -243,11 +245,25 @@ export async function notasMercadoria(l: Leitor, est: number, situacao: string |
     destinatario: texto(n['destinatario']),
     cartasCorrecao: numero(n['cartas']),
     retorno: n['mensagem_retorno'] ? texto(n['mensagem_retorno']) : null,
-  }));
+  };
+}
+
+export async function notasMercadoria(l: Leitor, est: number, situacao: string | null = null) {
+  const linhas = await l.consultar(
+    `${SQL_NOTAS} AND (? IS NULL OR n.situacao = ?) ORDER BY n.id DESC LIMIT 300`,
+    [est, situacao, situacao],
+  );
+  return linhas.map(notaDaLinha);
+}
+
+/** Uma nota do estabelecimento pelo id, com o mesmo desenho da lista (sem a janela das 300 mais recentes). */
+export async function notaMercadoriaPorId(l: Leitor, est: number, nota: number) {
+  const [n] = await l.consultar(`${SQL_NOTAS} AND n.id = ?`, [est, nota]);
+  return n ? notaDaLinha(n) : null;
 }
 
 export async function historicoNotaMercadoria(l: Leitor, est: number, nota: number) {
-  const [n] = (await notasMercadoriaPorId(l, est, nota)) ?? [];
+  const n = await notaMercadoriaPorId(l, est, nota);
   if (!n) return null;
   const itens = await l.consultar(
     `SELECT i.sequencia, i.codigo_produto, i.descricao, i.codigo_ncm, c.codigo_cfop, i.unidade_comercial, i.quantidade,
@@ -300,15 +316,6 @@ export async function historicoNotaMercadoria(l: Leitor, est: number, nota: numb
       chave: texto(r['chave_acesso']),
     })),
   };
-}
-
-async function notasMercadoriaPorId(l: Leitor, est: number, nota: number) {
-  const todas = await l.consultar(
-    'SELECT id FROM nota_mercadoria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-    [nota, est],
-  );
-  if (!todas.length) return null;
-  return (await notasMercadoria(l, est)).filter((n) => n.nota === nota);
 }
 
 /** O DANFE simplificado (HTML escapado) da nota do estabelecimento. */
@@ -567,7 +574,7 @@ async function origemDevolucao(tx: Tx, est: number, e: Entrada): Promise<Origem>
 }
 
 /** Conserto e saída avulsa: destinatário, itens e referências do pedido (o insumo completa código, nome e NCM). */
-async function origemPedido(tx: Tx, e: Entrada): Promise<Origem> {
+async function origemPedido(tx: Tx, est: number, e: Entrada): Promise<Origem> {
   const natureza = e.origem === 'conserto' ? NATUREZA_DA_ORIGEM.conserto : e.natureza;
   if (!natureza) throw recusa('natureza', 'Escolha a natureza da operação.', { campos: ['natureza'] });
   if ((e.fornecedor === null) === (e.cliente === null))
@@ -583,8 +590,14 @@ async function origemPedido(tx: Tx, e: Entrada): Promise<Origem> {
     : [];
   let chaveEntrada: string | null = null;
   if (e.notaEntrada) {
-    const [ne] = await tx.consultar('SELECT chave_acesso FROM nota_entrada WHERE id = ?', [e.notaEntrada]);
-    if (!ne) throw recusa('nota-entrada', 'Nota de entrada não encontrada.', { campos: ['notaEntrada'] });
+    const [ne] = await tx.consultar(
+      'SELECT chave_acesso FROM nota_entrada WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [e.notaEntrada, est],
+    );
+    if (!ne)
+      throw recusa('nota-entrada', 'Nota de entrada não encontrada neste estabelecimento.', {
+        campos: ['notaEntrada'],
+      });
     chaveEntrada = ne['chave_acesso'] ? texto(ne['chave_acesso']) : null;
   }
   return {
@@ -618,7 +631,32 @@ async function origemPedido(tx: Tx, e: Entrada): Promise<Origem> {
   };
 }
 
-const emitirNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv) =>
+/** Autorizada a nota da devolução, a devolução recebe o número, a série, a chave e o CFOP da nota. */
+async function registrarNotaNaDevolucao(
+  tx: Tx,
+  devolucao: number,
+  nota: { numero: number; serie: number | string; chave: string; cfopId: number; em: Date },
+): Promise<void> {
+  const [d] = await tx.consultarParaAtualizar(
+    'SELECT versao, situacao FROM devolucao_fornecedor WHERE id = ?',
+    [devolucao],
+  );
+  if (!d) return;
+  await tx.alterar('devolucao_fornecedor', devolucao, numero(d['versao']), {
+    numero_nota_fiscal: String(nota.numero),
+    serie_nota_fiscal: String(nota.serie),
+    chave_acesso: nota.chave,
+    data_emissao: nota.em.toISOString().slice(0, 10),
+    cfop_id: nota.cfopId,
+    ...(texto(d['situacao']) === 'rascunho' ? { situacao: 'emitida' } : {}),
+  });
+}
+
+const emitirNotaMercadoria = (
+  armazem: ArmazemFinanceiro,
+  env: NodeJS.ProcessEnv,
+  transmissores: TransmissoresNfe,
+) =>
   definirOperacao<Entrada, ResultadoOperacao>({
     nome: 'financeiro.emitir_nota_mercadoria',
     tabelas: [
@@ -637,7 +675,9 @@ const emitirNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv
       const est = estabelecimentoDe(ctx);
       const agora = new Date();
       const o =
-        e.origem === 'devolucao_fornecedor' ? await origemDevolucao(tx, est, e) : await origemPedido(tx, e);
+        e.origem === 'devolucao_fornecedor'
+          ? await origemDevolucao(tx, est, e)
+          : await origemPedido(tx, est, e);
       const nat = await naturezaDe(tx, o.natureza);
       const emitente = await parte(tx, SQL_EMITENTE, est, 'estabelecimento');
       const destinatario =
@@ -681,10 +721,13 @@ const emitirNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv
         }),
         cert.cert,
       );
-      const retorno = homologacao
-        ? simularSefaz({ tipo: 'autorizacao', xml, chave, assinaturaOk: conferirAssinaturaNfe(xml).ok })
-        : null;
-      const situacao = !retorno ? 'assinada' : retorno.codigo === '100' ? 'autorizada' : 'rejeitada';
+      // Sem resposta da Sefaz (null), a nota fica assinada e a transmissão a leva adiante depois.
+      const retorno = await (homologacao ? transmissores.simulador : transmissores.sefaz).autorizar({
+        xml,
+        chave,
+      });
+      const efeito = retorno ? situacaoDoRetornoNfe(retorno.codigo) : null;
+      const situacao = efeito?.situacao ?? 'assinada';
       // O XML vai ao disco antes do registro (a chave leva a chave de acesso e o hash; o guardado é imutável).
       const bytes = new TextEncoder().encode(xml);
       const hash = createHash('sha256').update(bytes).digest('hex');
@@ -802,11 +845,11 @@ const emitirNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv
           numero_nota: String(Number(r.slice(25, 34))),
           emitente_cnpj: r.slice(6, 20),
         });
-      if (retorno)
+      if (retorno && efeito)
         await tx.incluir('evento_nota_mercadoria', {
           nota_mercadoria_id: notaId,
           operacao: 'inclusao',
-          tipo_evento: autorizada ? 'autorizacao' : 'rejeicao',
+          tipo_evento: efeito.evento,
           protocolo: retorno.protocolo,
           codigo_status: retorno.codigo,
           mensagem_retorno: retorno.mensagem,
@@ -821,13 +864,12 @@ const emitirNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv
           usuario_id: ctx.usuario,
         });
       if (autorizada && o.devolucao)
-        await tx.alterar('devolucao_fornecedor', o.devolucao.id, o.devolucao.versao, {
-          numero_nota_fiscal: String(serie.numero),
-          serie_nota_fiscal: String(serie.serie),
-          chave_acesso: chave,
-          data_emissao: agora.toISOString().slice(0, 10),
-          cfop_id: cfopId,
-          ...(o.devolucao.situacao === 'rascunho' ? { situacao: 'emitida' } : {}),
+        await registrarNotaNaDevolucao(tx, o.devolucao.id, {
+          numero: serie.numero,
+          serie: serie.serie,
+          chave,
+          cfopId,
+          em: agora,
         });
       return {
         nota: notaId,
@@ -846,7 +888,8 @@ const emitirNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv
 
 async function notaParaEvento(tx: Tx, est: number, nota: number) {
   const [n] = await tx.consultarParaAtualizar(
-    `SELECT id, versao, situacao, ambiente, chave_acesso, autorizada_em, devolucao_fornecedor_id
+    `SELECT id, versao, situacao, ambiente, chave_acesso, protocolo_autorizacao, autorizada_em, devolucao_fornecedor_id,
+            numero, serie_documento_fiscal_id, cfop_id, xml_arquivo_id
        FROM nota_mercadoria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [nota, est],
   );
@@ -854,132 +897,242 @@ async function notaParaEvento(tx: Tx, est: number, nota: number) {
   return n;
 }
 
-function destinoDoEvento(n: Record<string, unknown>, destino: 'simulador' | 'sefaz'): void {
-  if (texto(n['ambiente']) === 'producao' || destino !== 'simulador')
+/**
+ * A porta da nota: a de produção vai sempre à Sefaz (nunca ao simulador); a de homologação, ao simulador.
+ * Uma nota de produção num ambiente sem a Sefaz ligada é recusada, e segue como está.
+ */
+function transmissorDaNota(
+  n: Record<string, unknown>,
+  destino: 'simulador' | 'sefaz',
+  transmissores: TransmissoresNfe,
+): TransmissorNfe {
+  if (texto(n['ambiente']) !== 'producao') return transmissores.simulador;
+  if (destino !== 'sefaz')
     throw recusa(
       'sefaz-indisponivel',
-      'A transmissão do evento à Sefaz ainda não está ligada neste ambiente; a nota segue como está.',
+      'A transmissão à Sefaz não está ligada neste ambiente; a nota de produção segue como está.',
     );
+  return transmissores.sefaz;
 }
 
-const cancelarNotaMercadoria = definirOperacao<
-  z.infer<typeof esquemaCancelarNotaMercadoria>,
-  ResultadoOperacao
->({
-  nome: 'financeiro.cancelar_nota_mercadoria',
-  tabelas: ['nota_mercadoria', 'evento_nota_mercadoria', 'devolucao_fornecedor'],
-  entrada: esquemaCancelarNotaMercadoria as never,
-  async gravar(tx, e, ctx) {
-    const est = estabelecimentoDe(ctx);
-    const agora = new Date();
-    const n = await notaParaEvento(tx, est, e.nota);
-    recusar(
-      conferirCancelamentoNfe({
-        situacao: texto(n['situacao']),
-        autorizadaEm: n['autorizada_em'] ? new Date(n['autorizada_em'] as string | Date) : null,
-        agora,
-        justificativa: e.justificativa,
-      }),
+function respostaDaSefaz<T>(r: T | null): T {
+  if (r === null)
+    throw recusa(
+      'sefaz-indisponivel',
+      'A Sefaz não respondeu; nada mudou na nota. Tente de novo em alguns minutos.',
     );
-    const [m] = await tx.consultar(
-      'SELECT id FROM motivo_cancelamento_documento_fiscal WHERE id = ? AND ativo = TRUE AND aplica_nota_mercadoria = TRUE',
-      [e.motivo],
-    );
-    if (!m)
-      throw recusa('motivo', 'Escolha um motivo de cancelamento ativo para a NF-e.', { campos: ['motivo'] });
-    destinoDoEvento(n, e.destino);
-    const chave = texto(n['chave_acesso']);
-    const ret = simularSefaz({ tipo: 'cancelamento', chave, sequencia: 1 });
-    await tx.alterar('nota_mercadoria', e.nota, numero(n['versao']), {
-      situacao: 'cancelada',
-      cancelada_em: agora,
-      motivo_cancelamento_documento_fiscal_id: e.motivo,
-      justificativa_cancelamento: e.justificativa,
-      codigo_retorno: ret.codigo,
-      mensagem_retorno: ret.mensagem,
-    });
-    await tx.incluir('evento_nota_mercadoria', {
-      nota_mercadoria_id: e.nota,
-      operacao: 'inclusao',
-      tipo_evento: 'cancelamento',
-      sequencia_evento: 1,
-      protocolo: ret.protocolo,
-      codigo_status: ret.codigo,
-      mensagem_retorno: ret.mensagem,
-      motivo_cancelamento_documento_fiscal_id: e.motivo,
-      justificativa: e.justificativa,
-      ocorrido_em: agora,
-      usuario_id: ctx.usuario,
-    });
-    // A devolução de origem volta a aceitar nota (a cancelada fica ligada a ela, no histórico).
-    const dev = n['devolucao_fornecedor_id'];
-    if (dev !== null) {
-      const [d] = await tx.consultarParaAtualizar(
-        'SELECT versao, chave_acesso FROM devolucao_fornecedor WHERE id = ?',
-        [dev],
-      );
-      if (d && texto(d['chave_acesso']) === chave)
-        await tx.alterar('devolucao_fornecedor', numero(dev), numero(d['versao']), {
-          numero_nota_fiscal: null,
-          serie_nota_fiscal: null,
-          chave_acesso: null,
-          data_emissao: null,
-          cfop_id: null,
+  return r;
+}
+
+/** Evento aceito pela Sefaz: 135 (registrado e vinculado), 136 (vinculação do evento) ou 155 (cancelamento fora de prazo). */
+function eventoAceito(r: { codigo: string; mensagem: string }): void {
+  if (!['135', '136', '155'].includes(r.codigo))
+    throw recusa('sefaz-rejeitou', `A Sefaz não registrou o evento: ${r.codigo} - ${r.mensagem}`);
+}
+
+const transmitirNotaMercadoria = (armazem: ArmazemFinanceiro, transmissores: TransmissoresNfe) =>
+  definirOperacao<z.infer<typeof esquemaTransmitirNotaMercadoria>, ResultadoOperacao>({
+    nome: 'financeiro.transmitir_nota_mercadoria',
+    tabelas: ['nota_mercadoria', 'evento_nota_mercadoria', 'devolucao_fornecedor'],
+    entrada: esquemaTransmitirNotaMercadoria as never,
+    async gravar(tx, e, ctx) {
+      const est = estabelecimentoDe(ctx);
+      const agora = new Date();
+      const n = await notaParaEvento(tx, est, e.nota);
+      if (!['assinada', 'enviada'].includes(texto(n['situacao'])))
+        throw recusa(
+          'transmitir-situacao',
+          'Só a nota assinada, à espera da Sefaz, é transmitida; esta já tem resposta.',
+          { campos: ['nota'] },
+        );
+      const t = transmissorDaNota(n, e.destino, transmissores);
+      const chave = texto(n['chave_acesso']);
+      // Primeiro a consulta: se a resposta da autorização anterior se perdeu, a nota já está autorizada lá.
+      const consulta = await t.consultar({ chave });
+      let retorno =
+        consulta && situacaoDoRetornoNfe(consulta.codigo).situacao !== 'rejeitada' ? consulta : null;
+      if (!retorno) {
+        const [a] = await tx.consultar(
+          'SELECT chave_armazenamento FROM arquivo WHERE id = ? AND estabelecimento_id = ?',
+          [n['xml_arquivo_id'], est],
+        );
+        const bytes = a ? await armazem.ler(texto(a['chave_armazenamento'])) : null;
+        if (!bytes) throw recusa('xml-ausente', 'O XML assinado da nota não está no armazém de arquivos.');
+        retorno = respostaDaSefaz(await t.autorizar({ xml: new TextDecoder().decode(bytes), chave }));
+      }
+      const efeito = situacaoDoRetornoNfe(retorno.codigo);
+      const autorizada = efeito.situacao === 'autorizada';
+      await tx.alterar('nota_mercadoria', e.nota, numero(n['versao']), {
+        situacao: efeito.situacao,
+        protocolo_autorizacao: retorno.protocolo,
+        autorizada_em: autorizada ? agora : null,
+        codigo_retorno: retorno.codigo,
+        mensagem_retorno: retorno.mensagem,
+      });
+      await tx.incluir('evento_nota_mercadoria', {
+        nota_mercadoria_id: e.nota,
+        operacao: 'inclusao',
+        tipo_evento: efeito.evento,
+        protocolo: retorno.protocolo,
+        codigo_status: retorno.codigo,
+        mensagem_retorno: retorno.mensagem,
+        arquivo_id: n['xml_arquivo_id'],
+        dados: JSON.stringify({ destino: e.destino, transmissao: true, consulta: retorno === consulta }),
+        ocorrido_em: agora,
+        usuario_id: ctx.usuario,
+      });
+      if (autorizada && n['devolucao_fornecedor_id'] !== null) {
+        const [s] = await tx.consultar('SELECT serie FROM serie_documento_fiscal WHERE id = ?', [
+          n['serie_documento_fiscal_id'],
+        ]);
+        await registrarNotaNaDevolucao(tx, numero(n['devolucao_fornecedor_id']), {
+          numero: numero(n['numero']),
+          serie: texto(s?.['serie']),
+          chave,
+          cfopId: numero(n['cfop_id']),
+          em: agora,
         });
-    }
-    return { nota: e.nota, situacao: 'cancelada', protocolo: ret.protocolo };
-  },
-  alvo: (e) => ({ tabela: 'nota_mercadoria', id: e.nota }),
-});
+      }
+      return {
+        nota: e.nota,
+        numero: numero(n['numero']),
+        situacao: efeito.situacao,
+        protocolo: retorno.protocolo,
+        retorno: retorno.mensagem,
+      };
+    },
+    alvo: (e) => ({ tabela: 'nota_mercadoria', id: e.nota }),
+  });
 
-const corrigirNotaMercadoria = definirOperacao<
-  z.infer<typeof esquemaCorrigirNotaMercadoria>,
-  ResultadoOperacao
->({
-  nome: 'financeiro.corrigir_nota_mercadoria',
-  tabelas: ['nota_mercadoria', 'evento_nota_mercadoria'],
-  entrada: esquemaCorrigirNotaMercadoria as never,
-  async gravar(tx, e, ctx) {
-    const est = estabelecimentoDe(ctx);
-    const n = await notaParaEvento(tx, est, e.nota);
-    const [c] = await tx.consultar(
-      "SELECT COUNT(*) AS q FROM evento_nota_mercadoria WHERE nota_mercadoria_id = ? AND tipo_evento = 'carta_correcao'",
-      [e.nota],
-    );
-    const r = conferirCartaCorrecao({
-      situacao: texto(n['situacao']),
-      texto: e.texto,
-      cartasAnteriores: numero(c?.['q']),
-    });
-    if (!r.ok) return recusar(r.recusa) as never;
-    destinoDoEvento(n, e.destino);
-    const ret = simularSefaz({
-      tipo: 'carta_correcao',
-      chave: texto(n['chave_acesso']),
-      sequencia: r.sequencia,
-    });
-    await tx.incluir('evento_nota_mercadoria', {
-      nota_mercadoria_id: e.nota,
-      operacao: 'inclusao',
-      tipo_evento: 'carta_correcao',
-      sequencia_evento: r.sequencia,
-      protocolo: ret.protocolo,
-      codigo_status: ret.codigo,
-      mensagem_retorno: ret.mensagem,
-      texto_correcao: e.texto,
-      dados: JSON.stringify({ condicaoUso: CONDICAO_USO_CCE }),
-      ocorrido_em: new Date(),
-      usuario_id: ctx.usuario,
-    });
-    return { nota: e.nota, sequencia: r.sequencia, protocolo: ret.protocolo };
-  },
-  alvo: (e) => ({ tabela: 'nota_mercadoria', id: e.nota }),
-});
+const cancelarNotaMercadoria = (transmissores: TransmissoresNfe) =>
+  definirOperacao<z.infer<typeof esquemaCancelarNotaMercadoria>, ResultadoOperacao>({
+    nome: 'financeiro.cancelar_nota_mercadoria',
+    tabelas: ['nota_mercadoria', 'evento_nota_mercadoria', 'devolucao_fornecedor'],
+    entrada: esquemaCancelarNotaMercadoria as never,
+    async gravar(tx, e, ctx) {
+      const est = estabelecimentoDe(ctx);
+      const agora = new Date();
+      const n = await notaParaEvento(tx, est, e.nota);
+      recusar(
+        conferirCancelamentoNfe({
+          situacao: texto(n['situacao']),
+          autorizadaEm: n['autorizada_em'] ? new Date(n['autorizada_em'] as string | Date) : null,
+          agora,
+          justificativa: e.justificativa,
+        }),
+      );
+      const [m] = await tx.consultar(
+        'SELECT id FROM motivo_cancelamento_documento_fiscal WHERE id = ? AND ativo = TRUE AND aplica_nota_mercadoria = TRUE',
+        [e.motivo],
+      );
+      if (!m)
+        throw recusa('motivo', 'Escolha um motivo de cancelamento ativo para a NF-e.', {
+          campos: ['motivo'],
+        });
+      const chave = texto(n['chave_acesso']);
+      const ret = respostaDaSefaz(
+        await transmissorDaNota(n, e.destino, transmissores).cancelar({
+          chave,
+          protocolo: n['protocolo_autorizacao'] ? texto(n['protocolo_autorizacao']) : null,
+          justificativa: e.justificativa,
+        }),
+      );
+      eventoAceito(ret);
+      await tx.alterar('nota_mercadoria', e.nota, numero(n['versao']), {
+        situacao: 'cancelada',
+        cancelada_em: agora,
+        motivo_cancelamento_documento_fiscal_id: e.motivo,
+        justificativa_cancelamento: e.justificativa,
+        codigo_retorno: ret.codigo,
+        mensagem_retorno: ret.mensagem,
+      });
+      await tx.incluir('evento_nota_mercadoria', {
+        nota_mercadoria_id: e.nota,
+        operacao: 'inclusao',
+        tipo_evento: 'cancelamento',
+        sequencia_evento: 1,
+        protocolo: ret.protocolo,
+        codigo_status: ret.codigo,
+        mensagem_retorno: ret.mensagem,
+        motivo_cancelamento_documento_fiscal_id: e.motivo,
+        justificativa: e.justificativa,
+        ocorrido_em: agora,
+        usuario_id: ctx.usuario,
+      });
+      // A devolução de origem volta a aceitar nota (a cancelada fica ligada a ela, no histórico).
+      const dev = n['devolucao_fornecedor_id'];
+      if (dev !== null) {
+        const [d] = await tx.consultarParaAtualizar(
+          'SELECT versao, chave_acesso FROM devolucao_fornecedor WHERE id = ?',
+          [dev],
+        );
+        if (d && texto(d['chave_acesso']) === chave)
+          await tx.alterar('devolucao_fornecedor', numero(dev), numero(d['versao']), {
+            numero_nota_fiscal: null,
+            serie_nota_fiscal: null,
+            chave_acesso: null,
+            data_emissao: null,
+            cfop_id: null,
+          });
+      }
+      return { nota: e.nota, situacao: 'cancelada', protocolo: ret.protocolo };
+    },
+    alvo: (e) => ({ tabela: 'nota_mercadoria', id: e.nota }),
+  });
 
-export const operacoesNotaMercadoria = (armazem: ArmazemFinanceiro, env: NodeJS.ProcessEnv = process.env) =>
+const corrigirNotaMercadoria = (transmissores: TransmissoresNfe) =>
+  definirOperacao<z.infer<typeof esquemaCorrigirNotaMercadoria>, ResultadoOperacao>({
+    nome: 'financeiro.corrigir_nota_mercadoria',
+    tabelas: ['nota_mercadoria', 'evento_nota_mercadoria'],
+    entrada: esquemaCorrigirNotaMercadoria as never,
+    async gravar(tx, e, ctx) {
+      const est = estabelecimentoDe(ctx);
+      const n = await notaParaEvento(tx, est, e.nota);
+      const [c] = await tx.consultar(
+        "SELECT COUNT(*) AS q FROM evento_nota_mercadoria WHERE nota_mercadoria_id = ? AND tipo_evento = 'carta_correcao'",
+        [e.nota],
+      );
+      const r = conferirCartaCorrecao({
+        situacao: texto(n['situacao']),
+        texto: e.texto,
+        cartasAnteriores: numero(c?.['q']),
+      });
+      if (!r.ok) return recusar(r.recusa) as never;
+      const ret = respostaDaSefaz(
+        await transmissorDaNota(n, e.destino, transmissores).cartaCorrecao({
+          chave: texto(n['chave_acesso']),
+          sequencia: r.sequencia,
+          texto: e.texto,
+        }),
+      );
+      eventoAceito(ret);
+      await tx.incluir('evento_nota_mercadoria', {
+        nota_mercadoria_id: e.nota,
+        operacao: 'inclusao',
+        tipo_evento: 'carta_correcao',
+        sequencia_evento: r.sequencia,
+        protocolo: ret.protocolo,
+        codigo_status: ret.codigo,
+        mensagem_retorno: ret.mensagem,
+        texto_correcao: e.texto,
+        dados: JSON.stringify({ condicaoUso: CONDICAO_USO_CCE }),
+        ocorrido_em: new Date(),
+        usuario_id: ctx.usuario,
+      });
+      return { nota: e.nota, sequencia: r.sequencia, protocolo: ret.protocolo };
+    },
+    alvo: (e) => ({ tabela: 'nota_mercadoria', id: e.nota }),
+  });
+
+export const operacoesNotaMercadoria = (
+  armazem: ArmazemFinanceiro,
+  env: NodeJS.ProcessEnv = process.env,
+  transmissores: TransmissoresNfe = transmissoresNfe(),
+) =>
   ({
-    'financeiro.emitir_nota_mercadoria': emitirNotaMercadoria(armazem, env),
-    'financeiro.cancelar_nota_mercadoria': cancelarNotaMercadoria,
-    'financeiro.corrigir_nota_mercadoria': corrigirNotaMercadoria,
+    'financeiro.emitir_nota_mercadoria': emitirNotaMercadoria(armazem, env, transmissores),
+    'financeiro.transmitir_nota_mercadoria': transmitirNotaMercadoria(armazem, transmissores),
+    'financeiro.cancelar_nota_mercadoria': cancelarNotaMercadoria(transmissores),
+    'financeiro.corrigir_nota_mercadoria': corrigirNotaMercadoria(transmissores),
   }) as const;
 export type OperacaoNotaMercadoria = keyof ReturnType<typeof operacoesNotaMercadoria>;

@@ -72,6 +72,7 @@ export const mensagensNotaMercadoria = {
   historico: 'Histórico',
   danfe: 'DANFE',
   cancelarNota: 'Cancelar',
+  transmitirNota: 'Transmitir à Sefaz',
   corrigirNota: 'Carta de correção',
   historicoDe: 'NF-e {numero} · série {serie} · {destinatario}',
   referencias: 'Notas referenciadas',

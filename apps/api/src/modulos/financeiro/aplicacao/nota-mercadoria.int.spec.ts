@@ -6,21 +6,30 @@
 // `arquivo`; a devolução recebe número, série, chave e CFOP. A segunda nota da mesma devolução é recusada; repetir a
 // chave de idempotência não emite de novo. Remessa para conserto a fornecedor de outra UF sai com CFOP 6915. Carta de
 // correção é evento com sequência; cancelamento exige motivo e justificativa, mantém a nota (cancelada) e libera a
-// devolução para outra nota.
+// devolução para outra nota. Pela porta da Sefaz (falsa, controlada pelo teste, com A1 sintético no "cofre"): sem
+// resposta a nota fica assinada; a transmissão recusa enquanto a Sefaz não responde e depois a leva a autorizada (ou a
+// rejeitada); a nota de produção cancela pela Sefaz. O histórico e o DANFE leem a nota fora da janela da lista, e a
+// nota de entrada de outro estabelecimento não entra na NF-e.
 import 'reflect-metadata';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { criarRaizSintetica, emitirSintetico } from '@sgh/dominio-documento';
 import { chaveAcessoNfe, chaveNfeValida } from '@sgh/dominio-financeiro';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../../teste/limpar-trilha.spec-util.js';
 import { armazemFinanceiroMemoria } from '../armazem.js';
 import { conferirAssinaturaNfe } from '../nfe-assinatura.js';
+import { type TransmissorNfe, transmissorSimulador } from '../nfe-transmissao.js';
 import { NotaMercadoriaController } from '../nota-mercadoria.controller.js';
 import {
   apoioNotaMercadoria,
   danfeNotaMercadoria,
   historicoNotaMercadoria,
+  notaMercadoriaPorId,
   notasMercadoria,
   type OperacaoNotaMercadoria,
   operacoesNotaMercadoria,
@@ -36,6 +45,55 @@ import {
 
 const ARMAZEM = armazemFinanceiroMemoria();
 const OPERACOES = operacoesNotaMercadoria(ARMAZEM, {});
+
+/** A Sefaz falsa do teste: fora do ar, autorizando ou rejeitando, conforme o teste manda. */
+const SEFAZ = { modo: 'fora' as 'fora' | 'autoriza' | 'rejeita', chamadas: [] as string[] };
+const simulador = transmissorSimulador();
+const SEFAZ_FALSA: TransmissorNfe = {
+  async autorizar(p) {
+    SEFAZ.chamadas.push('autorizar');
+    if (SEFAZ.modo === 'fora') return null;
+    if (SEFAZ.modo === 'rejeita')
+      return {
+        codigo: '539',
+        mensagem: 'Rejeição: duplicidade de NF-e com diferença na chave',
+        protocolo: null,
+      };
+    return { codigo: '100', mensagem: 'Autorizado o uso da NF-e', protocolo: `1359${p.chave.slice(-11)}` };
+  },
+  async consultar(p) {
+    SEFAZ.chamadas.push('consultar');
+    return SEFAZ.modo === 'fora' ? null : simulador.consultar(p);
+  },
+  async cancelar(p) {
+    SEFAZ.chamadas.push('cancelar');
+    return SEFAZ.modo === 'fora' ? null : simulador.cancelar(p);
+  },
+  async cartaCorrecao(p) {
+    SEFAZ.chamadas.push('carta');
+    return SEFAZ.modo === 'fora' ? null : simulador.cartaCorrecao(p);
+  },
+};
+
+/** O A1 sintético do emitente (raiz do CNPJ do estabelecimento do teste) em arquivos temporários, como no cofre. */
+function cofreSintetico(cnpjEmitente: string): NodeJS.ProcessEnv {
+  const agora = new Date();
+  const a1 = emitirSintetico(
+    criarRaizSintetica(agora),
+    { cpf: null, nome: `HOSPITAL SINTETICO NM:${cnpjEmitente}` },
+    agora,
+  );
+  const dir = mkdtempSync(join(tmpdir(), 'nfe-a1-nm-'));
+  // Linhas de 64, sem linha vazia antes do rodapé (o DER de 768 bytes dá base64 múltiplo de 64).
+  const pem = (
+    Buffer.from(a1.certificado)
+      .toString('base64')
+      .match(/.{1,64}/g) ?? []
+  ).join('\n');
+  writeFileSync(join(dir, 'c.pem'), `-----BEGIN CERTIFICATE-----\n${pem}\n-----END CERTIFICATE-----\n`);
+  writeFileSync(join(dir, 'k.pem'), a1.chave.export({ type: 'pkcs8', format: 'pem' }).toString());
+  return { NFE_CERTIFICADO_ARQUIVO: join(dir, 'c.pem'), NFE_CHAVE_ARQUIVO: join(dir, 'k.pem') };
+}
 const JUSTIFICATIVA = 'Devolução registrada em duplicidade pelo almoxarifado.';
 
 /** CNPJ sintético válido a partir de 12 dígitos. */
@@ -69,7 +127,7 @@ function rotasDe(classe: { prototype: object }): string[] {
 }
 
 describe('rotas da NF-e de saída', () => {
-  it('declara listar, apoio, histórico, DANFE, emitir, cancelar e corrigir', () => {
+  it('declara listar, apoio, histórico, DANFE, emitir, transmitir, cancelar e corrigir', () => {
     expect(rotasDe(NotaMercadoriaController).sort()).toEqual(
       [
         'GET financeiro/fiscal/notas-mercadoria',
@@ -77,6 +135,7 @@ describe('rotas da NF-e de saída', () => {
         'GET financeiro/fiscal/notas-mercadoria/:id/historico',
         'GET financeiro/fiscal/notas-mercadoria/:id/danfe',
         'POST financeiro/fiscal/notas-mercadoria',
+        'POST financeiro/fiscal/notas-mercadoria/:id/transmitir',
         'POST financeiro/fiscal/notas-mercadoria/:id/cancelar',
         'POST financeiro/fiscal/notas-mercadoria/:id/corrigir',
       ].sort(),
@@ -122,6 +181,7 @@ describe.skipIf(SEM_BANCO)(
           'DELETE i FROM devolucao_fornecedor_item i JOIN devolucao_fornecedor d ON d.id = i.devolucao_fornecedor_id WHERE d.estabelecimento_id = ?',
         );
         await x('DELETE FROM devolucao_fornecedor WHERE estabelecimento_id = ?');
+        await e.executar('DELETE FROM nota_entrada WHERE numero_documento = ?', [`${P}NMX`]);
         await limparTrilhaDaMassa(e, { ids: [ids.est] });
       });
 
@@ -444,6 +504,177 @@ describe.skipIf(SEM_BANCO)(
         [ids.devolucao],
       );
       expect([Number(q!['q']), Number(q!['c'])]).toEqual([2, 1]);
+    });
+
+    it('a nota de entrada de outro estabelecimento não entra na NF-e (nem a chave dela)', async () => {
+      const outra = await m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-nm-114' }, async (e) => {
+        const um = async (sql: string, p: unknown[] = []) =>
+          Number((await e.uma<{ id: number }>(sql, p))?.id ?? 0);
+        const est = await um('SELECT id FROM estabelecimento WHERE id <> ? ORDER BY id LIMIT 1', [ids.est]);
+        const agora = new Date();
+        return e.inserir(
+          `INSERT INTO nota_entrada (estabelecimento_id, numero, empresa_fornecedora_id, local_estoque_id,
+             tipo_entrada_estoque_id, numero_documento, data_emissao, data_entrada, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            est,
+            900_000_000 + Math.floor(Math.random() * 99_999_999),
+            ids.fornSp,
+            await um('SELECT id FROM local_estoque ORDER BY id LIMIT 1'),
+            await um('SELECT id FROM tipo_entrada_estoque ORDER BY id LIMIT 1'),
+            `${P}NMX`,
+            agora,
+            agora,
+            agora,
+          ],
+        );
+      });
+      expect(
+        await codigoDaGravacao(
+          executar('financeiro.emitir_nota_mercadoria', {
+            origem: 'conserto',
+            fornecedor: ids.fornSp,
+            notaEntrada: outra,
+            itens: [
+              {
+                codigo: 'BEM-X',
+                descricao: 'MONITOR SINTETICO',
+                ncm: '90181980',
+                quantidade: 1,
+                valorUnitario: 10,
+              },
+            ],
+            tributos: { cstIcms: '41', aliquotaIcms: 0, aliquotaIpi: 0 },
+          }),
+        ),
+      ).toBe('nota-entrada');
+    });
+
+    it('o histórico e o DANFE leem a nota pelo id, sem a janela das 300 mais recentes da lista', async () => {
+      const sqls: string[] = [];
+      const h = await m.nucleo.lerSomente(corr, (l) =>
+        historicoNotaMercadoria(
+          new Proxy(l, {
+            get: (alvo, k) =>
+              k === 'consultar'
+                ? (sql: string, p?: readonly unknown[]) => {
+                    sqls.push(sql);
+                    return alvo.consultar(sql, p);
+                  }
+                : Reflect.get(alvo, k),
+          }),
+          ids.est,
+          primeira,
+        ),
+      );
+      expect(h?.nota).toMatchObject({ nota: primeira, situacao: 'cancelada' });
+      // A nota vem de uma leitura só, pelo id e pelo estabelecimento, sem LIMIT; a lista não é lida.
+      expect(sqls[0]).toMatch(/n\.id = \?$/);
+      expect(sqls.some((q) => /LIMIT 300/.test(q))).toBe(false);
+      const ler = <T>(fn: Parameters<typeof m.nucleo.lerSomente<T>>[1]) => m.nucleo.lerSomente(corr, fn);
+      expect(await ler((l) => notaMercadoriaPorId(l, ids.est + 1_000_000, primeira))).toBeNull();
+      expect(await ler((l) => danfeNotaMercadoria(l, ids.est, primeira))).toContain('SEM VALOR FISCAL');
+    });
+
+    it('pela Sefaz: sem resposta a nota fica assinada; a transmissão recusa e depois autoriza ou rejeita', async () => {
+      const [est] = await consultar('SELECT cnpj FROM estabelecimento WHERE id = ?', [ids.est]);
+      const ops = operacoesNotaMercadoria(ARMAZEM, cofreSintetico(String(est!['cnpj'])), {
+        simulador,
+        sefaz: SEFAZ_FALSA,
+      });
+      const pela = (nome: OperacaoNotaMercadoria, entrada: Record<string, unknown>) =>
+        m.nucleo
+          .criarExecutor()
+          .executar(ops[nome] as never, CLIENTE, { ...entrada, destino: 'sefaz' }, ctx());
+      const conserto = {
+        origem: 'conserto',
+        fornecedor: ids.fornSp,
+        itens: [
+          {
+            codigo: 'BEM-2',
+            descricao: 'BOMBA SINTETICA',
+            ncm: '90189099',
+            quantidade: 1,
+            valorUnitario: 100,
+          },
+        ],
+        tributos: { cstIcms: '41', aliquotaIcms: 0, aliquotaIpi: 0 },
+      };
+      SEFAZ.modo = 'fora';
+      const a = await pela('financeiro.emitir_nota_mercadoria', conserto);
+      expect(a.resultado).toMatchObject({ situacao: 'assinada', destino: 'sefaz' });
+      const nota = Number(a.resultado['nota']);
+      const [n0] = await consultar(
+        'SELECT situacao, ambiente, protocolo_autorizacao, (SELECT COUNT(*) FROM evento_nota_mercadoria e WHERE e.nota_mercadoria_id = n.id) AS eventos FROM nota_mercadoria n WHERE id = ?',
+        [nota],
+      );
+      expect(n0).toMatchObject({ situacao: 'assinada', ambiente: 'producao', protocolo_autorizacao: null });
+      expect(Number(n0!['eventos'])).toBe(0);
+      // A Sefaz segue fora: nada muda; a nota de produção não vai ao simulador.
+      expect(await codigoDaGravacao(pela('financeiro.transmitir_nota_mercadoria', { nota }))).toBe(
+        'sefaz-indisponivel',
+      );
+      expect(
+        await codigoDaGravacao(
+          m.nucleo
+            .criarExecutor()
+            .executar(
+              ops['financeiro.transmitir_nota_mercadoria'] as never,
+              CLIENTE,
+              { nota, destino: 'simulador' },
+              ctx(),
+            ),
+        ),
+      ).toBe('sefaz-indisponivel');
+      SEFAZ.modo = 'autoriza';
+      SEFAZ.chamadas = [];
+      const t = await pela('financeiro.transmitir_nota_mercadoria', { nota });
+      expect(t.resultado).toMatchObject({ situacao: 'autorizada' });
+      expect(SEFAZ.chamadas).toEqual(['consultar', 'autorizar']);
+      const [n1] = await consultar(
+        'SELECT situacao, protocolo_autorizacao, autorizada_em IS NOT NULL AS em, codigo_retorno FROM nota_mercadoria WHERE id = ?',
+        [nota],
+      );
+      expect(n1).toMatchObject({ situacao: 'autorizada', codigo_retorno: '100' });
+      expect(String(n1!['protocolo_autorizacao'])).toMatch(/^1359/);
+      expect(Number(n1!['em'])).toBe(1);
+      const ev = await consultar(
+        'SELECT tipo_evento, codigo_status, arquivo_id IS NOT NULL AS xml FROM evento_nota_mercadoria WHERE nota_mercadoria_id = ?',
+        [nota],
+      );
+      expect(ev).toEqual([{ tipo_evento: 'autorizacao', codigo_status: '100', xml: 1 }]);
+      expect(await codigoDaGravacao(pela('financeiro.transmitir_nota_mercadoria', { nota }))).toBe(
+        'transmitir-situacao',
+      );
+      // O cancelamento da nota de produção vai à Sefaz; sem resposta, nada muda.
+      SEFAZ.modo = 'fora';
+      expect(
+        await codigoDaGravacao(
+          pela('financeiro.cancelar_nota_mercadoria', {
+            nota,
+            motivo: ids.motivo,
+            justificativa: JUSTIFICATIVA,
+          }),
+        ),
+      ).toBe('sefaz-indisponivel');
+      SEFAZ.modo = 'autoriza';
+      const c = await pela('financeiro.cancelar_nota_mercadoria', {
+        nota,
+        motivo: ids.motivo,
+        justificativa: JUSTIFICATIVA,
+      });
+      expect(c.resultado['situacao']).toBe('cancelada');
+      // A segunda nota, rejeitada na transmissão: fica rejeitada, com o evento, e não é ativa.
+      SEFAZ.modo = 'fora';
+      const b = Number((await pela('financeiro.emitir_nota_mercadoria', conserto)).resultado['nota']);
+      SEFAZ.modo = 'rejeita';
+      const r = await pela('financeiro.transmitir_nota_mercadoria', { nota: b });
+      expect(r.resultado).toMatchObject({ situacao: 'rejeitada' });
+      const evb = await consultar(
+        'SELECT tipo_evento, codigo_status FROM evento_nota_mercadoria WHERE nota_mercadoria_id = ?',
+        [b],
+      );
+      expect(evb).toEqual([{ tipo_evento: 'rejeicao', codigo_status: '539' }]);
     });
   },
 );

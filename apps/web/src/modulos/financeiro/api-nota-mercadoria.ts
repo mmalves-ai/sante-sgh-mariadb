@@ -127,6 +127,9 @@ export const lerDanfeNotaMercadoria = (nota: number): Promise<{ html: string }> 
 /** Emite a NF-e (da devolução ao fornecedor com um clique, ou o conserto e a saída avulsa montados na tela). */
 export const emitirNotaMercadoria = (e: EmissaoNfe, chave: string): Promise<ResultadoFinanceiro> =>
   enviar(P, e, resultado, chave);
+/** Transmite à Sefaz a nota assinada que ficou sem resposta (vai a autorizada, denegada ou rejeitada). */
+export const transmitirNotaMercadoria = (nota: number, chave: string): Promise<ResultadoFinanceiro> =>
+  enviar(`${P}/${nota}/transmitir`, {}, resultado, chave);
 /** Cancela a nota autorizada (motivo do cadastro e justificativa); ela fica no histórico. */
 export const cancelarNotaMercadoria = (
   nota: number,

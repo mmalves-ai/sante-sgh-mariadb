@@ -1687,6 +1687,7 @@
     "src/modulos/financeiro/periodo.controller.ts",
     "src/modulos/financeiro/periodo-permissao.spec.ts",
     "src/modulos/financeiro/conta-credor-permissao.spec.ts",
+    "src/modulos/financeiro/nfe-transmissao.ts",
     "src/modulos/financeiro/nfe-assinatura.ts",
     "src/modulos/financeiro/nfe-assinatura.spec.ts",
     "src/modulos/financeiro/nota-mercadoria-permissao.spec.ts",

@@ -15,6 +15,7 @@ import {
   NATUREZAS_NFE_PADRAO,
   type PedidoNfeSaida,
   simularSefaz,
+  situacaoDoRetornoNfe,
   xmlNfeSaida,
 } from './nfe-saida.js';
 
@@ -231,5 +232,16 @@ describe('NF-e de saída: simulador, cancelamento e carta de correção', () => 
     });
     expect(h).toContain('&lt;script&gt;');
     expect(h).toContain('SEM VALOR FISCAL');
+  });
+});
+
+describe('situação da nota pelo retorno da autorização', () => {
+  it('100 e 150 autorizam, 110/301/302/303 denegam, o resto rejeita', () => {
+    expect(situacaoDoRetornoNfe('100')).toEqual({ situacao: 'autorizada', evento: 'autorizacao' });
+    expect(situacaoDoRetornoNfe('150').situacao).toBe('autorizada');
+    for (const c of ['110', '301', '302', '303'])
+      expect(situacaoDoRetornoNfe(c)).toEqual({ situacao: 'denegada', evento: 'denegacao' });
+    expect(situacaoDoRetornoNfe('297')).toEqual({ situacao: 'rejeitada', evento: 'rejeicao' });
+    expect(situacaoDoRetornoNfe('204').situacao).toBe('rejeitada');
   });
 });
