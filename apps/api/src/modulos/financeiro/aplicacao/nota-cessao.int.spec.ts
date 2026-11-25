@@ -8,6 +8,9 @@
 // Cessão: portador com condição por vigência; cessão sem coobrigação tira a parcela da carteira no ato (recebida, com
 // o portador); desconto com coobrigação deixa a parcela em aberto sob o portador até o sacado pagar (quita e encerra a
 // operação) ou o hospital recomprar (volta à carteira); cancelar a operação sem desfecho devolve as parcelas.
+// Dinheiro: a conta recebe a face e paga deságio, tarifas e IOF (tipos próprios); a baixa da parcela pela cessão é um
+// recebimento de meio "cessao"; a recompra debita a conta; o cancelamento estorna os lançamentos e o recebimento.
+// Nota sobre parcela cedida é recusada; período fechado recusa nota e cessão sem gravar.
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -54,6 +57,11 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
   const limparProprio = () =>
     escrever(async (e) => {
       const q = [m.est, m.outroEst];
+      await e.executar('DELETE FROM periodo_financeiro WHERE estabelecimento_id IN (?, ?)', q);
+      await e.executar(
+        'UPDATE movimento_bancario SET estornado_movimento_bancario_id = NULL WHERE estabelecimento_id IN (?, ?)',
+        q,
+      );
       await e.executar(
         'DELETE t FROM tributo_nota_credito_debito t JOIN nota_credito_debito n ON n.id = t.nota_credito_debito_id WHERE n.estabelecimento_id IN (?, ?)',
         q,
@@ -415,7 +423,39 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
           parcelas: [p1],
         }),
       ),
-    ).toBe('parcela-fechada');
+    ).toBe('parcela-ja-cedida');
+    // Dinheiro da cessão: face em crédito, deságio e tarifas em débito (soma = líquido); a baixa é da cessão.
+    const doc1 = `CES-${String(o1['numero'])}`;
+    const movsDe = (doc: string) =>
+      consultar(
+        `SELECT m.natureza, m.valor, m.situacao, m.tipo_origem, t.codigo FROM movimento_bancario m
+           JOIN tipo_lancamento_bancario t ON t.id = m.tipo_lancamento_bancario_id
+          WHERE m.estabelecimento_id = ? AND m.numero_documento = ? ORDER BY m.id`,
+        [m.est, doc],
+      ).then((r) =>
+        r.map((x) => [x['codigo'], x['natureza'], Number(x['valor']), x['situacao'], x['tipo_origem']]),
+      );
+    expect(await movsDe(doc1)).toEqual([
+      ['cessao_face', 'credito', 1000, 'ativo', 'cessao_recebivel'],
+      ['cessao_desagio', 'debito', 30, 'ativo', 'cessao_recebivel'],
+      ['cessao_tarifas', 'debito', 10, 'ativo', 'cessao_recebivel'],
+    ]);
+    const opMov = await um(
+      `SELECT o.movimento_bancario_id AS mov, m.valor FROM operacao_cessao_recebivel o
+         JOIN movimento_bancario m ON m.id = o.movimento_bancario_id WHERE o.id = ?`,
+      [o1['operacao']],
+    );
+    expect(Number(opMov['valor'])).toBe(1000);
+    const rec1 = await um(
+      'SELECT meio_baixa, valor_recebido, situacao, movimento_bancario_id FROM recebimento WHERE parcela_receber_id = ?',
+      [p1],
+    );
+    expect([
+      rec1['meio_baixa'],
+      Number(rec1['valor_recebido']),
+      rec1['situacao'],
+      Number(rec1['movimento_bancario_id']),
+    ]).toEqual(['cessao', 1000, 'efetivado', Number(opMov['mov'])]);
     const grande = await parcelaReceber('70004', 4500, daqui(20));
     expect(
       await codigoDaGravacao(
@@ -447,6 +487,17 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
       [o1['operacao']],
     );
     expect(it1['situacao']).toBe('devolvida');
+    // O cancelamento estorna os três lançamentos (o original fica, marcado) e o recebimento da cessão.
+    const mc = await movsDe(doc1);
+    expect(mc.filter((x) => x[3] === 'estornado').length).toBe(3);
+    expect(mc.filter((x) => x[4] === 'estorno').map((x) => [x[0], x[1], x[2]])).toEqual([
+      ['cessao_face', 'debito', 1000],
+      ['cessao_desagio', 'credito', 30],
+      ['cessao_tarifas', 'credito', 10],
+    ]);
+    expect(
+      (await um('SELECT situacao FROM recebimento WHERE parcela_receber_id = ?', [p1]))['situacao'],
+    ).toBe('estornado');
 
     // Desconto com coobrigação: a parcela fica em aberto sob o portador; o sacado paga uma, o hospital recompra a outra.
     const p2 = await parcelaReceber('70005', 600, daqui(15));
@@ -468,6 +519,28 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
       'aberta',
       Number(desc['portador']),
     ]);
+    // Nota sobre parcela que está com o portador: recusada, nada gravado.
+    expect(
+      await codigoDaGravacao(
+        executar('emitirNota', {
+          lado: 'receber',
+          parcela: p2,
+          direcao: 'emitida',
+          natureza: 'credito',
+          motivo: motivoCredito,
+          dataEmissao: HOJE,
+          valorItens: 50,
+        }),
+      ),
+    ).toBe('parcela-cedida');
+    expect(
+      (await consultar('SELECT id FROM nota_credito_debito WHERE parcela_receber_id = ?', [p2])).length,
+    ).toBe(0);
+    const doc2 = `CES-${String(o2['numero'])}`;
+    expect((await movsDe(doc2)).map((x) => [x[0], x[1], x[2]])).toEqual([
+      ['cessao_face', 'credito', 1000],
+      ['cessao_desagio', 'debito', 18],
+    ]);
     const itens = await consultar(
       'SELECT id, parcela_receber_id FROM operacao_cessao_recebivel_item WHERE operacao_cessao_recebivel_id = ? ORDER BY parcela_receber_id',
       [o2['operacao']],
@@ -476,6 +549,16 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
     await executar('desfechoCessao', { item: item(p2), acao: 'liquidar', data: HOJE });
     const pr2b = await um('SELECT saldo, situacao FROM parcela_receber WHERE id = ?', [p2]);
     expect([Number(pr2b['saldo']), pr2b['situacao']]).toEqual([0, 'recebida']);
+    // O sacado pagou ao portador: baixa da cessão, sem movimento na conta (liquida o adiantamento do portador).
+    const rec2 = await um(
+      'SELECT meio_baixa, valor_recebido, movimento_bancario_id FROM recebimento WHERE parcela_receber_id = ?',
+      [p2],
+    );
+    expect([rec2['meio_baixa'], Number(rec2['valor_recebido']), rec2['movimento_bancario_id']]).toEqual([
+      'cessao',
+      600,
+      null,
+    ]);
     const fim = await executar('desfechoCessao', {
       item: item(p3),
       acao: 'recomprar',
@@ -494,8 +577,72 @@ describe.skipIf(SEM_BANCO)('nota de crédito e débito, portador e cessão (Mari
       [item(p3)],
     );
     expect([it3['situacao'], Number(it3['valor_recompra'])]).toEqual(['recomprada', 400]);
+    // A recompra é paga ao portador: débito na conta.
+    expect((await movsDe(doc2)).map((x) => [x[0], x[1], x[2]])).toEqual([
+      ['cessao_face', 'credito', 1000],
+      ['cessao_desagio', 'debito', 18],
+      ['cessao_recompra', 'debito', 400],
+    ]);
     expect(
       await codigoDaGravacao(executar('desfechoCessao', { item: item(p3), acao: 'liquidar', data: HOJE })),
     ).toBe('operacao-nao-contratada');
+  });
+
+  it('período fechado recusa a nota e a cessão, sem gravar', async () => {
+    const parcela = await parcelaPagar(70009, 500);
+    const pr = await parcelaReceber('70010', 300, daqui(20));
+    const port = await executar('manterPortador', {
+      codigo: 'CESS79',
+      descricao: 'Cessionário do período',
+      tipo: 'cessao',
+      pessoaJuridica: pessoa,
+      contaBancaria: m.contaA,
+      taxaDesconto: 1,
+      vigenciaInicio: '2026-01-01',
+    });
+    const mesPassado = new Date();
+    mesPassado.setUTCDate(1);
+    mesPassado.setUTCMonth(mesPassado.getUTCMonth() - 1);
+    const competencia = mesPassado.toISOString().slice(0, 10);
+    await escrever(async (e) => {
+      await e.executar(
+        "INSERT INTO periodo_financeiro (estabelecimento_id, competencia, situacao, fechado_em, criado_em) VALUES (?, ?, 'fechado', ?, ?)",
+        [m.est, competencia, new Date(), new Date()],
+      );
+    });
+    expect(
+      await codigoDaGravacao(
+        executar('emitirNota', {
+          lado: 'pagar',
+          parcela,
+          direcao: 'recebida',
+          natureza: 'credito',
+          motivo: motivoCredito,
+          dataEmissao: competencia,
+          valorItens: 10,
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    expect(
+      await codigoDaGravacao(
+        executar('contratarCessao', {
+          portador: port['portador'],
+          tipo: 'cessao',
+          comCoobrigacao: false,
+          dataOperacao: competencia,
+          parcelas: [pr],
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    expect(
+      (await consultar('SELECT id FROM nota_credito_debito WHERE parcela_pagar_id = ?', [parcela])).length,
+    ).toBe(0);
+    expect(
+      (await consultar('SELECT id FROM operacao_cessao_recebivel_item WHERE parcela_receber_id = ?', [pr]))
+        .length,
+    ).toBe(0);
+    await escrever(async (e) => {
+      await e.executar('DELETE FROM periodo_financeiro WHERE estabelecimento_id = ?', [m.est]);
+    });
   });
 });

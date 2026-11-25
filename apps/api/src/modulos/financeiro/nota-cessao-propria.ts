@@ -12,7 +12,9 @@ import { centavos } from '@sgh/contratos/regras-financeiro';
 import {
   conferirCancelamentoNota,
   conferirDesfechoItem,
+  conferirParcelaLivreDeCessao,
   type EfeitoNota,
+  lancamentosCessao,
   planejarCessao,
   planejarNota,
   type RecusaFinanceiro,
@@ -27,6 +29,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { exigirPeriodoAberto } from './periodo-propria.js';
 import { dataIso, numero, texto } from './vocabulario.js';
 
 const id = z.number().int().positive();
@@ -190,14 +193,69 @@ async function ajustarPelaNota(
   );
 }
 
-/** Abate a parcela a receber pela cessão (sem coobrigação) ou pelo pagamento do sacado ao portador; sinal -1 desfaz. */
+/** Onde a baixa pela cessão fica: a conta da operação, o crédito da face (quando houve) e o documento da operação. */
+interface BaixaCessao {
+  readonly conta: number;
+  readonly movimento: number | null;
+  readonly documento: string;
+}
+
+/**
+ * Abate a parcela a receber pela cessão (sem coobrigação) ou pelo pagamento do sacado ao portador, com um recebimento
+ * de meio de baixa próprio ("cessao"), que não se confunde com o pagamento do sacado ao hospital; sinal -1 desfaz e
+ * estorna o recebimento.
+ */
 async function quitarPelaCessao(
   tx: TxOperacao,
+  est: number,
+  usuario: number | null,
   p: ParcelaTravada,
   valor: number,
   sinal: 1 | -1,
   data: string,
+  baixa: BaixaCessao,
 ) {
+  if (sinal === 1) {
+    const forma = await tx.uma(
+      "SELECT id FROM forma_recebimento WHERE codigo = 'cessao_recebivel' AND ativo = TRUE",
+      [],
+    );
+    if (!forma)
+      throw recusa(
+        'forma-cessao-ausente',
+        'Falta a forma de baixa da cessão (cessao_recebivel) no cadastro.',
+      );
+    await garantirSequencia(
+      tx,
+      { tipo: 'recebimento', estabelecimento: est, prefixo: 'RC-' },
+      { usuario, agora: new Date() },
+    );
+    const num = await tx.proximoNumero('recebimento');
+    await tx.incluir('recebimento', {
+      estabelecimento_id: est,
+      numero: num.formatado,
+      parcela_receber_id: p.parcela,
+      data_recebimento: data,
+      forma_recebimento_id: numero(forma['id']),
+      conta_bancaria_id: baixa.conta,
+      valor_recebido: centavos(valor),
+      meio_baixa: 'cessao',
+      movimento_bancario_id: baixa.movimento,
+      observacao: `Baixa pela operação ${baixa.documento}`,
+    });
+  } else {
+    const rec = await tx.consultarParaAtualizar(
+      `SELECT id, versao FROM recebimento WHERE parcela_receber_id = ? AND meio_baixa = 'cessao'
+          AND situacao = 'efetivado' AND excluido_em IS NULL ORDER BY id DESC LIMIT 1`,
+      [p.parcela],
+      { teto: 1 },
+    );
+    if (rec[0])
+      await tx.alterar('recebimento', numero(rec[0]['id']), numero(rec[0]['versao']), {
+        situacao: 'estornado',
+        estornado_em: new Date(),
+      });
+  }
   const v = centavos(valor * sinal);
   const saldo = centavos(p.saldo - v);
   const recebido = centavos(p.quitado + v);
@@ -209,6 +267,56 @@ async function quitarPelaCessao(
     quitada_em: saldo === 0 ? data : null,
   });
   await acertarSituacaoTitulo(tx, p, p.tituloVersao, { valor_recebido: centavos(p.tituloRecebido + v) });
+}
+
+// ── Lançamentos da operação na conta ──────────────────────────────────────────────────────────────────────────
+
+const TIPO_LANCAMENTO_CESSAO = {
+  face: 'cessao_face',
+  desagio: 'cessao_desagio',
+  tarifas: 'cessao_tarifas',
+  iof: 'cessao_iof',
+  recompra: 'cessao_recompra',
+} as const;
+const HISTORICO_CESSAO = {
+  face: 'Face',
+  desagio: 'Deságio',
+  tarifas: 'Tarifas',
+  iof: 'IOF',
+  recompra: 'Recompra do recebível',
+} as const;
+
+const documentoCessao = (num: number) => `CES-${num}`;
+
+async function lancarNaConta(
+  tx: TxOperacao,
+  est: number,
+  conta: number,
+  data: string,
+  documento: string,
+  papel: keyof typeof TIPO_LANCAMENTO_CESSAO,
+  natureza: 'credito' | 'debito',
+  valor: number,
+) {
+  const t = await tx.uma('SELECT id FROM tipo_lancamento_bancario WHERE codigo = ? AND ativo = TRUE', [
+    TIPO_LANCAMENTO_CESSAO[papel],
+  ]);
+  if (!t)
+    throw recusa(
+      'tipo-lancamento-ausente',
+      `Falta o tipo de lançamento bancário "${TIPO_LANCAMENTO_CESSAO[papel]}" no cadastro.`,
+    );
+  return tx.incluir('movimento_bancario', {
+    estabelecimento_id: est,
+    conta_bancaria_id: conta,
+    tipo_lancamento_bancario_id: numero(t['id']),
+    natureza,
+    tipo_origem: 'cessao_recebivel',
+    data_movimento: data,
+    numero_documento: documento,
+    historico: `${HISTORICO_CESSAO[papel]} da operação ${documento}`,
+    valor: centavos(valor),
+  });
 }
 
 // ── Nota de crédito e de débito ─────────────────────────────────────────────────────────────────────────────
@@ -247,6 +355,7 @@ async function aplicarNotaGravada(tx: TxOperacao, est: number, nota: Record<stri
   );
   if (p.situacao !== 'aberta' && p.situacao !== 'parcial')
     throw recusa('parcela-fechada', 'A parcela da nota não está em aberto.', { campos: ['parcela'] });
+  recusar(conferirParcelaLivreDeCessao(p.portador !== null));
   const efeito = texto(nota['efeito']) as EfeitoNota;
   const valor = numero(nota['valor_ajuste']);
   if (efeito === 'abate' && valor > centavos(p.saldo))
@@ -269,10 +378,12 @@ const emitirNota = definirOperacao<EmitirNotaEntrada, ResultadoOperacao>({
     'parcela_receber',
     'titulo_pagar',
     'titulo_receber',
+    'sequencia_negocio',
   ],
   entrada: esquemaEmitirNota as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    await exigirPeriodoAberto(tx, est, e.dataEmissao, 'dataEmissao');
     const p = await travarParcela(tx, est, e.lado, e.parcela);
     if (p.lado === 'receber' && p.paciente !== null)
       throw recusa(
@@ -313,6 +424,7 @@ const emitirNota = definirOperacao<EmitirNotaEntrada, ResultadoOperacao>({
       dataVencimento: e.dataVencimento ?? null,
       situacaoTitulo: p.tituloSituacao,
       saldoTitulo: p.saldo,
+      parcelaCedida: p.portador !== null,
     });
     recusar(plano);
     if (!('efeito' in plano)) throw recusa('nota-invalida', 'Nota inválida.');
@@ -383,6 +495,7 @@ const aplicarNota = definirOperacao<z.infer<typeof esquemaAplicarNota>, Resultad
   entrada: esquemaAplicarNota as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    await exigirPeriodoAberto(tx, est, hoje());
     const n = await travar1(tx, 'SELECT * FROM nota_credito_debito WHERE id = ? AND estabelecimento_id = ?', [
       e.nota,
       est,
@@ -405,6 +518,7 @@ const cancelarNota = definirOperacao<z.infer<typeof esquemaCancelarNota>, Result
   entrada: esquemaCancelarNota as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    await exigirPeriodoAberto(tx, est, hoje());
     const n = await travar1(tx, 'SELECT * FROM nota_credito_debito WHERE id = ? AND estabelecimento_id = ?', [
       e.nota,
       est,
@@ -428,6 +542,7 @@ const cancelarNota = definirOperacao<z.infer<typeof esquemaCancelarNota>, Result
         efeito,
         valorAjuste: valor,
         saldoTitulo: p.saldo,
+        parcelaCedida: p.portador !== null,
       }),
     );
     if (texto(n['situacao']) === 'aplicada') await ajustarPelaNota(tx, p, efeito, valor, -1, hoje());
@@ -586,10 +701,14 @@ const contratarCessao = definirOperacao<z.infer<typeof esquemaContratarCessao>, 
     'operacao_cessao_recebivel_item',
     'parcela_receber',
     'titulo_receber',
+    'sequencia_negocio',
+    'movimento_bancario',
+    'recebimento',
   ],
   entrada: esquemaContratarCessao as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    await exigirPeriodoAberto(tx, est, e.dataOperacao, 'dataOperacao');
     const port = await travar1(tx, 'SELECT * FROM portador_titulo WHERE id = ?', [e.portador]);
     if (!port || numero(port['estabelecimento_id']) !== est || !numero(port['ativo']))
       throw recusa('portador-inexistente', 'O portador não existe ou está inativo.', {
@@ -680,6 +799,28 @@ const contratarCessao = definirOperacao<z.infer<typeof esquemaContratarCessao>, 
       situacao: 'contratada',
       observacao: e.observacao || null,
     });
+    // A conta recebe a face e paga o deságio, as tarifas e o IOF, cada um no seu tipo (despesa financeira separada).
+    const documento = documentoCessao(num.valor);
+    let credito = 0;
+    for (const l of lancamentosCessao({
+      valorFace: plano.valorFace,
+      valorDesagio: plano.valorDesagio,
+      valorTarifas: e.valorTarifas,
+      valorIof: e.valorIof,
+    })) {
+      const mov = await lancarNaConta(
+        tx,
+        est,
+        numero(conta),
+        e.dataCredito ?? e.dataOperacao,
+        documento,
+        l.papel,
+        l.natureza,
+        l.valor,
+      );
+      if (l.papel === 'face') credito = mov;
+    }
+    await tx.alterar('operacao_cessao_recebivel', operacao, 1, { movimento_bancario_id: credito });
     for (const it of plano.itens) {
       await tx.incluir('operacao_cessao_recebivel_item', {
         operacao_cessao_recebivel_id: operacao,
@@ -694,7 +835,12 @@ const contratarCessao = definirOperacao<z.infer<typeof esquemaContratarCessao>, 
       const versao = await tx.alterar('parcela_receber', p.parcela, p.versao, {
         portador_titulo_id: e.portador,
       });
-      if (!e.comCoobrigacao) await quitarPelaCessao(tx, { ...p, versao }, it.valorFace, 1, e.dataOperacao);
+      if (!e.comCoobrigacao)
+        await quitarPelaCessao(tx, est, ctx.usuario, { ...p, versao }, it.valorFace, 1, e.dataOperacao, {
+          conta: numero(conta),
+          movimento: credito,
+          documento,
+        });
     }
     return {
       operacao,
@@ -722,14 +868,18 @@ const desfechoCessao = definirOperacao<z.infer<typeof esquemaDesfechoCessao>, Re
     'operacao_cessao_recebivel_item',
     'parcela_receber',
     'titulo_receber',
+    'sequencia_negocio',
+    'movimento_bancario',
+    'recebimento',
   ],
   entrada: esquemaDesfechoCessao as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    await exigirPeriodoAberto(tx, est, e.data);
     const i = await travar1(
       tx,
       `SELECT i.id, i.versao, i.situacao, i.parcela_receber_id, i.valor_face, o.id AS operacao, o.versao AS ov,
-              o.situacao AS os, o.com_coobrigacao, o.estabelecimento_id
+              o.situacao AS os, o.com_coobrigacao, o.estabelecimento_id, o.conta_bancaria_id, o.numero
          FROM operacao_cessao_recebivel_item i JOIN operacao_cessao_recebivel o ON o.id = i.operacao_cessao_recebivel_id
         WHERE i.id = ?`,
       [e.item],
@@ -753,14 +903,31 @@ const desfechoCessao = definirOperacao<z.infer<typeof esquemaDesfechoCessao>, Re
         liquidada_em: e.data,
       });
       // Com coobrigação a parcela ainda estava na carteira: o pagamento ao portador a quita.
-      if (coob) await quitarPelaCessao(tx, p, numero(i['valor_face']), 1, e.data);
+      // O dinheiro foi ao portador e liquida o adiantamento dele: a baixa é da cessão, sem movimento na conta.
+      if (coob)
+        await quitarPelaCessao(tx, est, ctx.usuario, p, numero(i['valor_face']), 1, e.data, {
+          conta: numero(i['conta_bancaria_id']),
+          movimento: null,
+          documento: documentoCessao(numero(i['numero'])),
+        });
     } else {
       await tx.alterar('operacao_cessao_recebivel_item', e.item, numero(i['versao']), {
         situacao: 'recomprada',
         recomprada_em: e.data,
         valor_recompra: e.valorRecompra,
       });
-      // A parcela volta à carteira própria, em aberto, para o hospital cobrar.
+      // O hospital paga a recompra ao portador (débito na conta da operação); a parcela volta à carteira, em aberto.
+      if ((e.valorRecompra ?? 0) > 0)
+        await lancarNaConta(
+          tx,
+          est,
+          numero(i['conta_bancaria_id']),
+          e.data,
+          documentoCessao(numero(i['numero'])),
+          'recompra',
+          'debito',
+          e.valorRecompra ?? 0,
+        );
       await tx.alterar('parcela_receber', p.parcela, p.versao, { portador_titulo_id: null });
     }
     const vivos = await tx.uma(
@@ -791,10 +958,13 @@ const cancelarCessao = definirOperacao<z.infer<typeof esquemaCancelarCessao>, Re
     'operacao_cessao_recebivel_item',
     'parcela_receber',
     'titulo_receber',
+    'movimento_bancario',
+    'recebimento',
   ],
   entrada: esquemaCancelarCessao as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    await exigirPeriodoAberto(tx, est, hoje());
     const o = await travar1(
       tx,
       'SELECT * FROM operacao_cessao_recebivel WHERE id = ? AND estabelecimento_id = ?',
@@ -813,10 +983,41 @@ const cancelarCessao = definirOperacao<z.infer<typeof esquemaCancelarCessao>, Re
         'Há recebível já liquidado ou recomprado: a operação não se cancela.',
       );
     const coob = Boolean(numero(o['com_coobrigacao']));
+    const documento = documentoCessao(numero(o['numero']));
+    // Os lançamentos da operação na conta são estornados (nada é apagado: o original fica, marcado estornado).
+    const movs = await tx.consultarParaAtualizar(
+      `SELECT id, versao, conta_bancaria_id, tipo_lancamento_bancario_id, natureza, valor FROM movimento_bancario
+        WHERE estabelecimento_id = ? AND tipo_origem = 'cessao_recebivel' AND numero_documento = ? AND situacao = 'ativo'`,
+      [est, documento],
+      { teto: 10 },
+    );
+    for (const m of movs) {
+      await tx.incluir('movimento_bancario', {
+        estabelecimento_id: est,
+        conta_bancaria_id: numero(m['conta_bancaria_id']),
+        tipo_lancamento_bancario_id: numero(m['tipo_lancamento_bancario_id']),
+        natureza: texto(m['natureza']) === 'credito' ? 'debito' : 'credito',
+        tipo_origem: 'estorno',
+        data_movimento: hoje(),
+        numero_documento: documento,
+        historico: `Estorno pelo cancelamento da operação ${documento}`,
+        valor: numero(m['valor']),
+        estornado_movimento_bancario_id: numero(m['id']),
+      });
+      await tx.alterar('movimento_bancario', numero(m['id']), numero(m['versao']), {
+        situacao: 'estornado',
+        estornado_em: new Date(),
+      });
+    }
     for (const i of itens) {
       const p = await travarParcela(tx, est, 'receber', numero(i['parcela_receber_id']));
       const versao = await tx.alterar('parcela_receber', p.parcela, p.versao, { portador_titulo_id: null });
-      if (!coob) await quitarPelaCessao(tx, { ...p, versao }, numero(i['valor_face']), -1, hoje());
+      if (!coob)
+        await quitarPelaCessao(tx, est, ctx.usuario, { ...p, versao }, numero(i['valor_face']), -1, hoje(), {
+          conta: numero(o['conta_bancaria_id']),
+          movimento: null,
+          documento,
+        });
       await tx.alterar('operacao_cessao_recebivel_item', numero(i['id']), numero(i['versao']), {
         situacao: 'devolvida',
       });

@@ -12,11 +12,14 @@
 //   POST /api/financeiro/nota-cessao/operacoes                    contratar
 //   POST /api/financeiro/nota-cessao/operacoes/desfecho           { item, acao: liquidar | recomprar, data }
 //   POST /api/financeiro/nota-cessao/operacoes/cancelar           { operacao, motivo }
+// Permissões próprias (recurso novo, concedidas ao administrador do sistema e dadas pelo cargo): notaCreditoDebito.ler,
+// .emitir (emitir e aplicar) e .cancelar; cessaoRecebivel.ler, .contratar e .desfecho (liquidar, recomprar, cancelar).
+// O portador é cadastro do financeiro (financeiro.parametro.editar).
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
 import type { ResultadoFinanceiro } from '@sgh/contratos';
 import type { Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -75,13 +78,15 @@ export class NotaCessaoController {
   }
 
   @Get('apoios')
-  @Permissao('financeiro.tituloReceber.ler')
+  @Permissao('financeiro.notaCreditoDebito.ler')
+  @PermissaoOu('financeiro.cessaoRecebivel.ler')
   apoios(@Req() req: RequisicaoAutorizada) {
     return this.ler(req, (l, est) => apoiosNotaCessao(l, est));
   }
 
   @Get('parcelas')
-  @Permissao('financeiro.tituloReceber.ler')
+  @Permissao('financeiro.notaCreditoDebito.ler')
+  @PermissaoOu('financeiro.cessaoRecebivel.ler')
   parcelas(
     @Query('lado') lado: string | undefined,
     @Query('busca') busca: string | undefined,
@@ -94,7 +99,7 @@ export class NotaCessaoController {
   }
 
   @Get('notas')
-  @Permissao('financeiro.tituloReceber.ler')
+  @Permissao('financeiro.notaCreditoDebito.ler')
   notas(@Req() req: RequisicaoAutorizada) {
     return this.ler(req, (l, est) => notasDoEstabelecimento(l, est));
   }
@@ -109,7 +114,7 @@ export class NotaCessaoController {
 
   @Post('notas/pagar')
   @HttpCode(200)
-  @Permissao('financeiro.tituloPagar.criar')
+  @Permissao('financeiro.notaCreditoDebito.emitir')
   @AuditadoNoHandler(
     'nota de crédito ou débito do fornecedor gravada pelo executor, com a trilha na mesma transação',
   )
@@ -119,7 +124,7 @@ export class NotaCessaoController {
 
   @Post('notas/receber')
   @HttpCode(200)
-  @Permissao('financeiro.tituloReceber.criar')
+  @Permissao('financeiro.notaCreditoDebito.emitir')
   @AuditadoNoHandler(
     'nota de crédito ou débito do cliente gravada pelo executor, com a trilha na mesma transação',
   )
@@ -129,7 +134,7 @@ export class NotaCessaoController {
 
   @Post('notas/aplicar')
   @HttpCode(200)
-  @Permissao('financeiro.tituloReceber.baixar')
+  @Permissao('financeiro.notaCreditoDebito.emitir')
   @AuditadoNoHandler('aplicação da nota ao título pelo executor, com a trilha na mesma transação')
   aplicar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.gravar(req, 'aplicarNota', b, () => 'Nota aplicada ao título.');
@@ -137,7 +142,7 @@ export class NotaCessaoController {
 
   @Post('notas/cancelar')
   @HttpCode(200)
-  @Permissao('financeiro.tituloReceber.baixar')
+  @Permissao('financeiro.notaCreditoDebito.cancelar')
   @AuditadoNoHandler('cancelamento da nota com motivo pelo executor, com a trilha na mesma transação')
   cancelar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.gravar(req, 'cancelarNota', b, (r) =>
@@ -146,7 +151,7 @@ export class NotaCessaoController {
   }
 
   @Get('portadores')
-  @Permissao('financeiro.tituloReceber.ler')
+  @Permissao('financeiro.cessaoRecebivel.ler')
   portadores(@Query('data') data: string | undefined, @Req() req: RequisicaoAutorizada) {
     const d = data && DATA.test(data) ? data : new Date().toISOString().slice(0, 10);
     return this.ler(req, (l, est) => portadoresDoEstabelecimento(l, est, d));
@@ -161,14 +166,14 @@ export class NotaCessaoController {
   }
 
   @Get('operacoes')
-  @Permissao('financeiro.tituloReceber.ler')
+  @Permissao('financeiro.cessaoRecebivel.ler')
   operacoes(@Req() req: RequisicaoAutorizada) {
     return this.ler(req, (l, est) => operacoesCessao(l, est));
   }
 
   @Post('operacoes')
   @HttpCode(200)
-  @Permissao('financeiro.tituloReceber.baixar')
+  @Permissao('financeiro.cessaoRecebivel.contratar')
   @AuditadoNoHandler('operação de desconto ou cessão gravada pelo executor, com a trilha na mesma transação')
   contratar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.gravar(
@@ -181,7 +186,7 @@ export class NotaCessaoController {
 
   @Post('operacoes/desfecho')
   @HttpCode(200)
-  @Permissao('financeiro.tituloReceber.baixar')
+  @Permissao('financeiro.cessaoRecebivel.desfecho')
   @AuditadoNoHandler('desfecho do recebível cedido pelo executor, com a trilha na mesma transação')
   desfecho(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.gravar(req, 'desfechoCessao', b, (r) =>
@@ -193,7 +198,7 @@ export class NotaCessaoController {
 
   @Post('operacoes/cancelar')
   @HttpCode(200)
-  @Permissao('financeiro.tituloReceber.baixar')
+  @Permissao('financeiro.cessaoRecebivel.desfecho')
   @AuditadoNoHandler('cancelamento da operação com motivo pelo executor, com a trilha na mesma transação')
   cancelarOperacao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.gravar(
