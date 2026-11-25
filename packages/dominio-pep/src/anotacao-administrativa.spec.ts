@@ -64,6 +64,14 @@ describe('anotação administrativa do caso', () => {
     ).toEqual(['destinatarios-demais']);
   });
 
+  it('a reserva de leito do NIR, quando informada, existe e é do paciente', () => {
+    expect(validarNovaAnotacao({ ...base, reserva: { doPaciente: true } })).toEqual([]);
+    expect(codigos(validarNovaAnotacao({ ...base, reserva: null }))).toEqual(['reserva-inexistente']);
+    expect(codigos(validarNovaAnotacao({ ...base, reserva: { doPaciente: false } }))).toEqual([
+      'reserva-de-outro-paciente',
+    ]);
+  });
+
   it('normaliza os destinatários sem repetição e sem o autor', () => {
     expect(normalizarDestinatarios([3, 2, 3, 9], 9)).toEqual([3, 2]);
     expect(normalizarDestinatarios([4], null)).toEqual([4]);

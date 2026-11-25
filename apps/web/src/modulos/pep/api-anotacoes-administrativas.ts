@@ -2,8 +2,12 @@
 // GET  /api/pep/anotacoes-administrativas/paciente/:paciente  as anotações que quem lê pode ver, atendimentos e categorias
 // GET  /api/pep/anotacoes-administrativas/pendentes           a fila de leitura de quem recebeu
 // GET  /api/pep/anotacoes-administrativas/usuarios?termo=     contas para escolher como destinatário
-// POST /api/pep/anotacoes-administrativas                     registrar, marcar como lida, cancelar (só o autor, com motivo)
+// GET  /api/pep/anotacoes-administrativas/pacientes?termo=    busca do paciente (aberta a quem lê as anotações)
+// GET  /api/pep/anotacoes-administrativas/reserva/:reserva    o paciente da reserva de leito do NIR
+// POST /api/pep/anotacoes-administrativas                     registrar, cancelar (só o autor, com motivo)
+// POST /api/pep/anotacoes-administrativas/:id/lida            leitura confirmada pelo destinatário (basta ler)
 // Toda gravação leva a chave de idempotência e o x-csrf (como as demais do prontuário).
+import { esquemaResultadoBuscaPaciente, type ResultadoBuscaPaciente } from '@sgh/contratos';
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
 import { erroDaResposta } from '../../casca/erros/problem-details.js';
@@ -21,6 +25,7 @@ const esquemaAnotacao = z.object({
   acesso: z.string(),
   finalizaAcao: z.boolean(),
   automatica: z.boolean(),
+  reserva: z.number().nullable(),
   registradaEm: z.string().nullable(),
   autor: z.string().nullable(),
   doAutor: z.boolean(),
@@ -71,8 +76,23 @@ export const buscarDestinatarios = (termo: string, buscar: typeof fetch = fetch)
     buscar,
   );
 
-export async function gravarAnotacao(corpo: Record<string, unknown>, buscar: typeof fetch = fetch) {
-  const r = await buscar(P, {
+export const buscarPacientesAnotacoes = (
+  termo: string,
+  buscar: typeof fetch = fetch,
+): Promise<ResultadoBuscaPaciente> =>
+  ler(`${P}/pacientes?termo=${encodeURIComponent(termo)}&tipo=auto`, esquemaResultadoBuscaPaciente, buscar);
+
+export const lerPacienteDaReserva = (reserva: number, buscar: typeof fetch = fetch) =>
+  ler(`${P}/reserva/${reserva}`, z.object({ reserva: z.number(), paciente: z.number() }), buscar);
+
+export const marcarAnotacaoLida = (anotacao: number, buscar: typeof fetch = fetch) =>
+  enviar(`${P}/${anotacao}/lida`, {}, buscar);
+
+export const gravarAnotacao = (corpo: Record<string, unknown>, buscar: typeof fetch = fetch) =>
+  enviar(P, corpo, buscar);
+
+async function enviar(url: string, corpo: Record<string, unknown>, buscar: typeof fetch) {
+  const r = await buscar(url, {
     method: 'POST',
     headers: {
       ...JSON_ACEITO,

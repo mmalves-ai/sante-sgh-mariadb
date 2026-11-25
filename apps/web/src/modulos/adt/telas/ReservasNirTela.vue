@@ -24,6 +24,7 @@ import {
 import AvisoAdt from '../componentes/AvisoAdt.vue';
 import DialogoAlteracaoNir from '../componentes/DialogoAlteracaoNir.vue';
 import ErroAdt from '../componentes/ErroAdt.vue';
+import AtalhoAnotacoesAdministrativas from '../../pep/componentes/AtalhoAnotacoesAdministrativas.vue';
 import { horaCurta } from '../regras-nir.js';
 import { leitoTexto } from '../regras-tela.js';
 
@@ -143,6 +144,8 @@ function excluir(d: { motivo: string }): void {
               · {{ t('nir.reservas.conflito', { internacao: r.conflito.internacao }) }}</strong
             >
             <span class="acoes">
+              <!-- 03-PEP L147: anotação administrativa do caso ligada à reserva. -->
+              <AtalhoAnotacoesAdministrativas :reserva="r.id" />
               <SanteBotao
                 v-if="pode('alterarReserva')"
                 variante="texto"

@@ -4,7 +4,8 @@
 // com o atendimento, a categoria, o autor, o alcance e os destinatários (sem repetição e sem o autor); quem vê o quê
 // (equipe do estabelecimento, só destinatários, toda a rede); a fila de leitura de quem recebeu; marcar como lida
 // (uma vez, só o destinatário); cancelar só pelo autor com motivo (nada apagado, texto intacto); as recusas sem
-// gravar nada; e as rotas com o vínculo assistencial. SGH_NUCLEO_SEM_BANCO=1 pula.
+// gravar nada (conta bloqueada ou vencida não é destinatária nem aparece na busca); a reserva de leito do NIR como
+// contexto (só do paciente); e as rotas com o vínculo assistencial, inclusive o destinatário que só lê dando baixa. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
@@ -25,12 +26,27 @@ const AUTOR = 'teste.c1109.a';
 const DEST = 'teste.c1109.b';
 const EQUIPE = 'teste.c1109.c';
 const SEM_CONTA = 'teste.c1109.inexistente';
+const BLOQUEADA = 'teste.c1109.d';
+const VENCIDA = 'teste.c1109.e';
 const recusada = (codigo: string) => ({ problema: expect.objectContaining({ codigo }) });
 
 describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, MariaDB)', () => {
   let nucleo: NucleoProprio;
   let anot: AnotacoesAdministrativasPropria;
-  const ids = { est: 0, est2: 0, autor: 0, dest: 0, equipe: 0, paciente: 0, atend: 0, atendFora: 0 };
+  const ids = {
+    est: 0,
+    est2: 0,
+    autor: 0,
+    dest: 0,
+    equipe: 0,
+    bloqueada: 0,
+    vencida: 0,
+    paciente: 0,
+    atend: 0,
+    atendFora: 0,
+    reserva: 0,
+    reservaOutro: 0,
+  };
   const cat = { ativa: 0, inativa: 0 };
 
   const garantir = async (e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]) => {
@@ -49,6 +65,7 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
       'DELETE FROM anotacao_administrativa_caso WHERE estabelecimento_id IN (?, ?) OR paciente_id = ?',
       [ids.est, ids.est2, ids.paciente],
     );
+    await e.executar('DELETE FROM reserva_leito WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.est2]);
     await limparTrilhaDaMassa(e, { codigos: [EST, EST2] });
   };
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[]) =>
@@ -120,6 +137,16 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
       ids.autor = await usuario(AUTOR, '11091090001');
       ids.dest = await usuario(DEST, '11091090002');
       ids.equipe = await usuario(EQUIPE, '11091090003');
+      ids.bloqueada = await usuario(BLOQUEADA, '11091090004');
+      ids.vencida = await usuario(VENCIDA, '11091090005');
+      await e.executar("UPDATE usuario SET situacao = 'bloqueado', bloqueado_em = ? WHERE id = ?", [
+        agora,
+        ids.bloqueada,
+      ]);
+      await e.executar('UPDATE usuario SET expira_em = ? WHERE id = ?', [
+        new Date(agora.getTime() - 86_400_000),
+        ids.vencida,
+      ]);
       const pf = await garantir(
         e,
         'SELECT id FROM pessoa_fisica WHERE nome = ?',
@@ -159,6 +186,19 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
       cat.ativa = await categoria('c1109adm', true);
       cat.inativa = await categoria('c1109inat', false);
       await limpar(e);
+      // Reservas de leito sintéticas, já expiradas (não ocupam leito): uma do paciente, outra de outro paciente.
+      const reserva = (paciente: number) =>
+        e.inserir(
+          `INSERT INTO reserva_leito (estabelecimento_id, leito_hospitalar_id, paciente_id, reservado_em, valida_ate,
+             situacao, encerrada_em, criado_em)
+           SELECT ?, id, ?, ?, ?, 'expirada', ?, ? FROM leito_hospitalar ORDER BY id LIMIT 1`,
+          [ids.est, paciente, agora, new Date(agora.getTime() + 3_600_000), agora, agora],
+        );
+      ids.reserva = await reserva(ids.paciente);
+      const outro = await e.uma<{ id: number }>('SELECT id FROM paciente WHERE id <> ? ORDER BY id LIMIT 1', [
+        ids.paciente,
+      ]);
+      ids.reservaOutro = await reserva(Number(outro!.id));
     });
   });
 
@@ -301,6 +341,16 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
     await expect(gravar({ ...base(), destinatarios: [999_999_999] })).rejects.toMatchObject(
       recusada('destinatario-inexistente'),
     );
+    for (const conta of [ids.bloqueada, ids.vencida])
+      await expect(gravar({ ...base(), destinatarios: [conta] })).rejects.toMatchObject(
+        recusada('destinatario-inexistente'),
+      );
+    await expect(gravar({ ...base(), reserva: ids.reservaOutro })).rejects.toMatchObject(
+      recusada('reserva-de-outro-paciente'),
+    );
+    await expect(gravar({ ...base(), reserva: 999_999_999 })).rejects.toMatchObject(
+      recusada('reserva-inexistente'),
+    );
     await expect(gravar({ ...base(), texto: '   ' })).rejects.toMatchObject(recusada('texto-obrigatorio'));
     await expect(gravar(base(), SEM_CONTA)).rejects.toMatchObject(recusada('usuario-sem-conta'));
     await expect(gravar({ ...base(), acesso: 'publica' })).rejects.toMatchObject(
@@ -313,9 +363,20 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
     );
   });
 
+  it('a reserva de leito do NIR fica ligada à anotação e aparece na leitura', async () => {
+    const r = await gravar({ ...base(), reserva: ids.reserva, texto: 'Reserva aguarda a família' });
+    expect(await linha(r.resultado.anotacao)).toMatchObject({ reserva_leito_id: ids.reserva });
+    const vista = (await anot.doPaciente(ctx(), ids.paciente)).anotacoes.find(
+      (a) => a.id === r.resultado.anotacao,
+    );
+    expect(vista?.reserva).toBe(ids.reserva);
+    expect(await anot.pacienteDaReserva(ids.reserva)).toBe(ids.paciente);
+    expect(await anot.pacienteDaReserva(999_999_999)).toBeNull();
+  });
+
   it('as rotas exigem o vínculo assistencial com o paciente e a leitura vai à trilha', async () => {
     const PERMS = ['pep.social.ler', 'pep.social.registrar'];
-    const montar = (vinculo: boolean) => {
+    const montar = (vinculo: boolean, login = AUTOR, usuario = ids.autor, perms = PERMS) => {
       const trilha = new RegistradorTrilhaMemoria();
       const ctrl = new AnotacoesAdministrativasController(
         new EstadoProntuario(),
@@ -324,7 +385,7 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
         null,
         null,
         new VinculoSintetico(
-          vinculo ? [{ login: AUTOR, idPaciente: ids.paciente, forma: 'atendimento-em-curso' }] : [],
+          vinculo ? [{ login, idPaciente: ids.paciente, forma: 'atendimento-em-curso' }] : [],
         ),
         null,
       );
@@ -334,14 +395,14 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
           ip: '127.0.0.1',
           sgh: {
             real: false,
-            ability: criarAbility(regrasDeAcesso([...PERMS], null)),
+            ability: criarAbility(regrasDeAcesso([...perms], null)),
             sessao: {
-              usuario: { id: String(ids.autor), nome: 'Conta sintética', login: AUTOR },
+              usuario: { id: String(usuario), nome: 'Conta sintética', login },
               rede: 'rede-c1109',
               estabelecimentos: [],
               estabelecimentoAtivo: EST,
               unidadeAtiva: null,
-              permissoes: [...PERMS],
+              permissoes: [...perms],
               restricaoVinculo: true,
               sintetica: true,
               bloqueioInatividadeSegundos: 0,
@@ -380,5 +441,29 @@ describe.skipIf(SEM_BANCO)('anotação administrativa do caso (banco próprio, M
     expect(await linha(r.resultado.anotacao)).toMatchObject({ texto: 'Pela rota', acesso: 'todos' });
     expect(Array.isArray(await com.ctrl.pendentes(com.req()))).toBe(true);
     await expect(com.ctrl.doPaciente(999_999_999, com.req())).rejects.toMatchObject({ status: 404 });
+    expect(await com.ctrl.daReserva(ids.reserva, com.req())).toEqual({
+      reserva: ids.reserva,
+      paciente: ids.paciente,
+    });
+    await expect(sem.ctrl.daReserva(ids.reserva, sem.req())).rejects.toMatchObject({ status: 403 });
+
+    // O destinatário que só LÊ (sem permissão de escrita) dá baixa pela rota da leitura confirmada.
+    const restrita = await com.ctrl.gravar(
+      { ...base(), texto: 'Para quem só lê', acesso: 'destinatarios', destinatarios: [ids.dest] },
+      com.req(),
+    );
+    const leitor = montar(true, DEST, ids.dest, ['internacao.solicitacaoLeito.ler']);
+    const vista = await leitor.ctrl.doPaciente(ids.paciente, leitor.req());
+    expect(vista.anotacoes.find((a) => a.id === restrita.resultado.anotacao)?.pendenteParaMim).toBe(true);
+    const baixa = await leitor.ctrl.marcarLida(restrita.resultado.anotacao, leitor.req());
+    expect(baixa).toMatchObject({ ok: true, resultado: { situacao: 'ativa' } });
+    expect((await destinos(restrita.resultado.anotacao))[0]!.lida_em).not.toBeNull();
+    expect(
+      (await leitor.ctrl.pendentes(leitor.req())).some((p) => p.anotacao === restrita.resultado.anotacao),
+    ).toBe(false);
+    // Quem não é destinatário não dá baixa (recusa do domínio, nada gravado).
+    await expect(com.ctrl.marcarLida(restrita.resultado.anotacao, com.req())).rejects.toMatchObject(
+      recusada('nao-destinatario'),
+    );
   });
 });

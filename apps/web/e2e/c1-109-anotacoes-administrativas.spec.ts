@@ -14,6 +14,7 @@ import { escolher, esperarSemSelectNativo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const PACIENTE = 1001;
+const RESERVA = 77;
 
 async function entrar(page: Page, login: string): Promise<void> {
   await page.context().clearCookies();
@@ -36,6 +37,7 @@ interface Anotacao {
   acesso: string;
   finalizaAcao: boolean;
   automatica: boolean;
+  reserva: number | null;
   registradaEm: string;
   autor: string;
   doAutor: boolean;
@@ -68,6 +70,7 @@ function simular(page: Page) {
         acesso: 'destinatarios',
         finalizaAcao: false,
         automatica: false,
+        reserva: null,
         registradaEm: '2026-11-25T08:00:00.000Z',
         autor: 'Conta sintética do serviço social',
         doAutor: false,
@@ -111,6 +114,18 @@ function simular(page: Page) {
       podeEscrever: true,
     }),
   );
+  // Leitura confirmada pelo destinatário: rota própria, aberta a quem só lê.
+  void page.route(/\/api\/pep\/anotacoes-administrativas\/\d+\/lida$/, (r) => {
+    const id = Number(/\/(\d+)\/lida$/.exec(r.request().url())![1]);
+    st.corpos.push({ lida: id });
+    const a = st.anotacoes.find((x) => x.id === id)!;
+    a.pendenteParaMim = false;
+    a.destinatarios[0]!.lidaEm = '2026-11-25T10:00:00.000Z';
+    return json(r, { ok: true, resultado: { anotacao: a.id, situacao: 'ativa' }, repetida: false });
+  });
+  void page.route(/\/api\/pep\/anotacoes-administrativas\/reserva\/\d+$/, (r) =>
+    json(r, { reserva: RESERVA, paciente: PACIENTE }),
+  );
   void page.route(/\/api\/pep\/anotacoes-administrativas$/, async (r) => {
     const corpo = r.request().postDataJSON() as Record<string, unknown>;
     st.corpos.push(corpo);
@@ -140,6 +155,7 @@ function simular(page: Page) {
       acesso: String(corpo['acesso']),
       finalizaAcao: Boolean(corpo['finalizaAcao']),
       automatica: false,
+      reserva: typeof corpo['reserva'] === 'number' ? corpo['reserva'] : null,
       registradaEm: '2026-11-25T10:02:00.000Z',
       autor: 'Médico sintético',
       doAutor: true,
@@ -183,7 +199,7 @@ test.describe('Anotações administrativas do caso @C1-109 @fase8', () => {
     await page.getByTestId('anotacao-lida-9001').click();
     await expect(page.getByTestId('anotacoes-adm-ok')).toBeVisible();
     await expect(page.getByTestId('anotacoes-adm-pendentes')).toHaveCount(0);
-    expect(st.corpos.at(-1)).toEqual({ acao: 'marcar_lida', anotacao: 9001 });
+    expect(st.corpos.at(-1)).toEqual({ lida: 9001 });
 
     // Anotação nova: o atendimento mais recente já vem escolhido; a restrita segura o botão até avisar alguém.
     const registrar = page.getByTestId('anotacoes-adm-registrar');
@@ -226,6 +242,27 @@ test.describe('Anotações administrativas do caso @C1-109 @fase8', () => {
     });
 
     await semViolacaoAxe(page, '/pep/paciente/:id/anotacoes-administrativas');
+    expect(externas).toEqual([]);
+  });
+
+  test('vinda da reserva de leito do NIR: abre o paciente da reserva e a anotação nova sai ligada a ela', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const st = simular(page);
+    await entrar(page, 'SINT.MEDICO');
+
+    await page.goto(`/pep/anotacoes-administrativas?reserva=${RESERVA}`);
+    await expect(page).toHaveURL(
+      new RegExp(`/pep/paciente/${PACIENTE}/anotacoes-administrativas\\?reserva=${RESERVA}$`),
+    );
+    await expect(page.getByTestId('anotacoes-adm-reserva')).toBeVisible();
+    await escolher(page.getByTestId('anotacoes-adm-categoria'), { rotulo: 'Gestão de leito' });
+    await page.getByTestId('anotacoes-adm-texto').fill('Família confirma a chegada amanhã');
+    await page.getByTestId('anotacoes-adm-registrar').click();
+    await expect(page.getByTestId('anotacao-reserva-9100')).toBeVisible();
+    expect(st.corpos.at(-1)).toMatchObject({ acao: 'registrar', reserva: RESERVA });
+    await semViolacaoAxe(page, '/pep/paciente/:id/anotacoes-administrativas?reserva');
     expect(externas).toEqual([]);
   });
 });

@@ -34,6 +34,11 @@ export interface NovaAnotacao {
   readonly destinatariosValidos: number;
   /** null quando o atendimento não existe. */
   readonly atendimento: { readonly doPaciente: boolean; readonly doEstabelecimento: boolean } | null;
+  /**
+   * A reserva de leito do NIR que deu origem à anotação (contexto opcional): ausente quando não informada, null quando
+   * informada e inexistente.
+   */
+  readonly reserva?: { readonly doPaciente: boolean } | null;
 }
 
 export function validarNovaAnotacao(n: NovaAnotacao): FalhaRegra[] {
@@ -51,6 +56,9 @@ export function validarNovaAnotacao(n: NovaAnotacao): FalhaRegra[] {
     f.push(
       falha('atendimento-de-outro-estabelecimento', 'O atendimento é de outro estabelecimento da rede.'),
     );
+  if (n.reserva === null) f.push(falha('reserva-inexistente', 'A reserva de leito informada não existe.'));
+  else if (n.reserva && !n.reserva.doPaciente)
+    f.push(falha('reserva-de-outro-paciente', 'A reserva de leito informada não é deste paciente.'));
   if (n.acesso === 'destinatarios' && n.destinatarios.length === 0)
     f.push(falha('destinatario-obrigatorio', 'Escolha ao menos um destinatário para a anotação restrita.'));
   if (n.destinatarios.length > DESTINATARIOS_ANOTACAO_MAXIMO)

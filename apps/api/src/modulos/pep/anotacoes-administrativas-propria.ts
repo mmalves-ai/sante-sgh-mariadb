@@ -32,6 +32,9 @@ const txt = (v: unknown): string | null => (v === null || v === undefined ? null
 const bool = (v: unknown): boolean => Boolean(Number(v));
 const iso = (v: unknown): string | null => (v instanceof Date ? v.toISOString() : v ? String(v) : null);
 const id = z.number().int().positive();
+/** Conta que pode receber anotação: ativa, sem bloqueio e dentro da validade (02_ADM, usuario). */
+const CONTA_ATIVA = `excluido_em IS NULL AND situacao = 'ativo' AND bloqueado_em IS NULL
+  AND (expira_em IS NULL OR expira_em > ?)`;
 
 export const esquemaAnotacao = z.discriminatedUnion('acao', [
   z
@@ -44,6 +47,8 @@ export const esquemaAnotacao = z.discriminatedUnion('acao', [
       acesso: z.enum(ACESSOS_ANOTACAO).default('equipe'),
       destinatarios: z.array(id).max(50).default([]),
       finalizaAcao: z.boolean().default(false),
+      /** A reserva de leito do NIR de onde a anotação partiu (contexto opcional). */
+      reserva: id.optional(),
     })
     .strict(),
   z.object({ acao: z.literal('marcar_lida'), anotacao: id }).strict(),
@@ -94,6 +99,8 @@ export interface AnotacaoLida {
   readonly acesso: string;
   readonly finalizaAcao: boolean;
   readonly automatica: boolean;
+  /** A reserva de leito do NIR de onde a anotação partiu, quando houver. */
+  readonly reserva: number | null;
   readonly registradaEm: string | null;
   readonly autor: string | null;
   readonly doAutor: boolean;
@@ -120,6 +127,12 @@ export interface PendenteDeLeitura {
   readonly registradaEm: string | null;
   readonly autor: string | null;
 }
+
+// A reserva guarda o paciente; na do pré-cadastro, vale o paciente da solicitação de leito que ela atende.
+const SQL_PACIENTE_DA_RESERVA = `SELECT COALESCE(r.paciente_id, p.paciente_id) AS paciente
+    FROM reserva_leito r
+    LEFT JOIN pedido_leito p ON p.id = r.pedido_leito_id
+   WHERE r.id = ? AND r.excluido_em IS NULL`;
 
 const recusar = (f: readonly FalhaRegra[]): never => {
   throw recusa(f[0]!.codigo, f.map((x) => x.mensagem).join(' '));
@@ -187,6 +200,14 @@ export class AnotacoesAdministrativasPropria {
   }
 
   /** O paciente dono da anotação (o vínculo assistencial é conferido antes de gravar); null quando não existe. */
+  /** O paciente da reserva de leito do NIR (null quando a reserva não existe ou ainda não tem paciente). */
+  pacienteDaReserva(reserva: number): Promise<number | null> {
+    return this.ler(async (l) => {
+      const r = await l.uma(SQL_PACIENTE_DA_RESERVA, [reserva]);
+      return r && r['paciente'] !== null && r['paciente'] !== undefined ? num(r['paciente']) : null;
+    });
+  }
+
   pacienteDaAnotacao(anotacao: number): Promise<number | null> {
     return this.ler(async (l) => {
       const x = await l.uma(
@@ -224,7 +245,7 @@ export class AnotacoesAdministrativasPropria {
     return this.ler(async (l) => {
       const linhas = await l.consultar(
         `SELECT a.id, a.versao, a.atendimento_id, at.numero AS atendimento_numero, a.categoria_anotacao_administrativa_id,
-                c.descricao AS categoria, a.texto, a.acesso, a.finaliza_acao, a.automatica, a.registrado_em,
+                c.descricao AS categoria, a.texto, a.acesso, a.finaliza_acao, a.automatica, a.reserva_leito_id, a.registrado_em,
                 a.registrado_por_usuario_id, u.nome AS autor, a.estabelecimento_id, a.cancelada_em,
                 a.motivo_cancelamento
            FROM anotacao_administrativa_caso a
@@ -269,6 +290,7 @@ export class AnotacoesAdministrativasPropria {
             acesso: String(x['acesso']),
             finalizaAcao: bool(x['finaliza_acao']),
             automatica: bool(x['automatica']),
+            reserva: x['reserva_leito_id'] === null ? null : num(x['reserva_leito_id']),
             registradaEm: iso(x['registrado_em']),
             autor: txt(x['autor']),
             doAutor: q.usuario !== null && q.usuario === num(x['registrado_por_usuario_id']),
@@ -344,9 +366,9 @@ export class AnotacoesAdministrativasPropria {
       (
         await l.consultar(
           `SELECT id, nome FROM usuario
-            WHERE excluido_em IS NULL AND (nome LIKE ? OR login LIKE ?)
+            WHERE ${CONTA_ATIVA} AND (nome LIKE ? OR login LIKE ?)
             ORDER BY nome, id LIMIT 20`,
-          [padrao, padrao],
+          [this.agora(), padrao, padrao],
         )
       ).map((x) => ({ id: num(x['id']), nome: String(x['nome']) })),
     );
@@ -394,13 +416,18 @@ export class AnotacoesAdministrativasPropria {
             (
               await tx.uma(
                 `SELECT COUNT(*) AS n FROM usuario
-                  WHERE id IN (${destinatarios.map(() => '?').join(',')}) AND excluido_em IS NULL`,
-                destinatarios,
+                  WHERE id IN (${destinatarios.map(() => '?').join(',')}) AND ${CONTA_ATIVA}`,
+                [...destinatarios, agora],
               )
             )?.['n'],
           )
         : 0;
+      const reserva =
+        e.reserva === undefined ? undefined : await tx.uma(SQL_PACIENTE_DA_RESERVA, [e.reserva]);
       const falhas = validarNovaAnotacao({
+        ...(reserva === undefined
+          ? {}
+          : { reserva: reserva ? { doPaciente: num(reserva['paciente']) === e.paciente } : null }),
         texto: e.texto,
         categoriaAtiva: cat ? bool(cat['ativo']) : null,
         acesso: e.acesso,
@@ -418,6 +445,7 @@ export class AnotacoesAdministrativasPropria {
         estabelecimento_id: estabelecimento,
         atendimento_id: e.atendimento,
         paciente_id: e.paciente,
+        reserva_leito_id: e.reserva ?? null,
         categoria_anotacao_administrativa_id: e.categoria,
         registrado_em: agora,
         registrado_por_usuario_id: usuario,

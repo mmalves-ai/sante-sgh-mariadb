@@ -17,6 +17,7 @@ import { definirContextoClinico, rotuloDoPaciente } from '../../../casca/notific
 import PrecaucaoNoCabecalho from '../../qualidade/ccih/componentes/PrecaucaoNoCabecalho.vue';
 import AvisoRedePaciente from '../../rede/componentes/AvisoRedePaciente.vue';
 import NotasAlertaPaciente from '../componentes/NotasAlertaPaciente.vue';
+import AtalhoAnotacoesAdministrativas from '../componentes/AtalhoAnotacoesAdministrativas.vue';
 import { abrirArquivo, exportarProntuario, lerCabecalho, lerFila } from '../api-documentos.js';
 
 const props = defineProps<{ paciente: string }>();
@@ -167,6 +168,7 @@ async function exportar(): Promise<void> {
           <RouterLink :to="`/pep/paciente/${id}/notas`" data-testid="atalho-notas">{{
             t('pep.notas.atalho')
           }}</RouterLink>
+          <AtalhoAnotacoesAdministrativas :paciente="id" />
           <SanteBotao
             variante="secundario"
             :rotulo="t('pep.doc.prontuario.exportar')"

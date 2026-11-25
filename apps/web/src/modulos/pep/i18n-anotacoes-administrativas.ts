@@ -53,5 +53,12 @@ export const mensagensAnotacoesAdministrativas = {
     buscar: 'Buscar',
     nenhumPaciente: 'Nenhum paciente encontrado.',
     abrirPaciente: 'Abrir as anotações de {nome}',
+    reservaAbrindo: 'Abrindo as anotações do paciente da reserva…',
   },
+  reserva: 'Reserva de leito {reserva}',
+  ligadaReserva: 'A anotação nova fica ligada à reserva de leito {reserva}.',
+  semReserva: 'Desligar da reserva',
+  atalho: 'Anotações administrativas',
+  atalhoPendentes: 'Anotações administrativas ({n} para você)',
+  atalhoReserva: 'Anotar na reserva {reserva}',
 };

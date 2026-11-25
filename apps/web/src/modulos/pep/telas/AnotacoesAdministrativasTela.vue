@@ -4,11 +4,13 @@
 // decisões: atendimento (o mais recente já vem escolhido), categoria, quem lê e quem avisar (busca da conta pelo nome,
 // sem lista enorme). Validação na hora: o botão só libera com atendimento, categoria, texto e, na anotação restrita,
 // ao menos um destinatário; o contador mostra o que resta. Abaixo, as anotações que esta pessoa pode ver, com as
-// endereçadas a ela marcadas e o "marcar como lida" num clique. Nada é apagado: o autor cancela com motivo.
+// endereçadas a ela marcadas e o "marcar como lida" num clique (para todo destinatário, mesmo quem só lê). Vinda da
+// reserva de leito do NIR (?reserva=), a anotação nova sai ligada à reserva. Nada é apagado: o autor cancela com motivo.
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import {
@@ -16,6 +18,7 @@ import {
   buscarDestinatarios,
   gravarAnotacao,
   lerAnotacoesPaciente,
+  marcarAnotacaoLida,
 } from '../api-anotacoes-administrativas.js';
 import { dataHoraBr } from '../formato.js';
 
@@ -29,6 +32,16 @@ const d = computed(() => dados.data.value);
 const erro = ref<unknown>(null);
 const ok = ref('');
 const MAXIMO = 2000;
+const rota = useRoute();
+const reserva = ref<number | null>(null);
+watch(
+  () => rota.query['reserva'],
+  (r) => {
+    const n = Number(r);
+    reserva.value = Number.isInteger(n) && n > 0 ? n : null;
+  },
+  { immediate: true },
+);
 
 const podeGravar = computed(
   () =>
@@ -117,11 +130,15 @@ const visiveis = computed(() =>
   ),
 );
 
-async function gravar(corpo: Record<string, unknown>, depois?: () => void): Promise<void> {
+async function gravar(
+  corpo: Record<string, unknown>,
+  depois?: () => void,
+  enviar: () => Promise<unknown> = () => gravarAnotacao(corpo),
+): Promise<void> {
   erro.value = null;
   ok.value = '';
   try {
-    await gravarAnotacao(corpo);
+    await enviar();
     ok.value = t('pep.anotAdm.gravada');
     depois?.();
     await cliente.invalidateQueries({ queryKey: chave.value });
@@ -141,13 +158,14 @@ const registrar = () =>
       acesso: nova.acesso,
       destinatarios: nova.destinatarios.map((x) => x.id),
       finalizaAcao: nova.finalizaAcao,
+      ...(reserva.value ? { reserva: reserva.value } : {}),
     },
     () => Object.assign(nova, { texto: '', finalizaAcao: false, destinatarios: [] }),
   );
 
 const motivos = reactive<Record<number, string>>({});
 const motivoOk = (a: AnotacaoTela) => (motivos[a.id] ?? '').trim().length >= 5;
-const marcarLida = (a: AnotacaoTela) => gravar({ acao: 'marcar_lida', anotacao: a.id });
+const marcarLida = (a: AnotacaoTela) => gravar({}, undefined, () => marcarAnotacaoLida(a.id));
 const cancelar = (a: AnotacaoTela) =>
   gravar({ acao: 'cancelar', anotacao: a.id, versao: a.versao, motivo: (motivos[a.id] ?? '').trim() });
 </script>
@@ -182,6 +200,10 @@ const cancelar = (a: AnotacaoTela) =>
         data-testid="anotacoes-adm-nova"
         @submit.prevent="registrar"
       >
+        <p v-if="reserva" class="anot__meta" data-testid="anotacoes-adm-reserva">
+          {{ t('pep.anotAdm.ligadaReserva', { reserva }) }}
+          <SanteBotao variante="texto" :rotulo="t('pep.anotAdm.semReserva')" @acionar="reserva = null" />
+        </p>
         <SanteSelecao
           v-model="nova.atendimento"
           :rotulo="t('pep.anotAdm.atendimento')"
@@ -298,6 +320,9 @@ const cancelar = (a: AnotacaoTela) =>
           {{ t('pep.anotAdm.por', { autor: a.autor ?? '', quando: dataHoraBr(a.registradaEm) }) }}
           · {{ t(`pep.anotAdm.acessos.${a.acesso}`) }}
           <span v-if="a.finalizaAcao"> · {{ t('pep.anotAdm.encerra') }}</span>
+          <span v-if="a.reserva" :data-testid="`anotacao-reserva-${a.id}`">
+            · {{ t('pep.anotAdm.reserva', { reserva: a.reserva }) }}</span
+          >
         </p>
         <p v-if="a.destinatarios.length" class="anot__meta">
           <span v-for="x in a.destinatarios" :key="x.usuario">
@@ -314,14 +339,17 @@ const cancelar = (a: AnotacaoTela) =>
             })
           }}
         </p>
-        <div v-if="podeGravar && a.situacao === 'ativa'" class="anot__acoes">
+        <div
+          v-if="a.situacao === 'ativa' && (a.pendenteParaMim || (podeGravar && a.doAutor))"
+          class="anot__acoes"
+        >
           <SanteBotao
             v-if="a.pendenteParaMim"
             :rotulo="t('pep.anotAdm.marcarLida')"
             :data-testid="`anotacao-lida-${a.id}`"
             @click="marcarLida(a)"
           />
-          <template v-if="a.doAutor">
+          <template v-if="podeGravar && a.doAutor">
             <label>
               {{ t('pep.anotAdm.motivo') }}
               <input v-model="motivos[a.id]" maxlength="300" :data-testid="`anotacao-motivo-${a.id}`" />

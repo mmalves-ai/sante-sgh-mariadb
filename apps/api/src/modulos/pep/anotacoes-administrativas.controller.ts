@@ -1,8 +1,11 @@
 // Rotas da anotação administrativa do caso (03-PEP L147): o registro não clínico da equipe sobre o atendimento.
 // Ler: quem lê o prontuário (pep.prontuario.ler), o serviço social (pep.social.ler) ou o NIR
 // (internacao.solicitacaoLeito.ler), e só o que pode ver (autor, destinatários, equipe do estabelecimento ou toda a
-// rede). Escrever, marcar como lida e cancelar: quem registra no prontuário (pep.evolucao.criar), o serviço social
-// (pep.social.registrar) ou o NIR (internacao.solicitacaoLeito.priorizar). Sem banco próprio, 503.
+// rede). Marcar como lida (POST :anotacao/lida) é da mesma leitura: todo destinatário dá baixa na própria pendência,
+// mesmo sem permissão de escrita. Escrever e cancelar: quem registra no prontuário (pep.evolucao.criar), o serviço
+// social (pep.social.registrar) ou o NIR (internacao.solicitacaoLeito.priorizar). A busca do paciente e a reserva de
+// leito de origem são servidas aqui, com a mesma leitura, para o NIR e o serviço social sem leitura do prontuário.
+// Sem banco próprio, 503.
 // Como as vizinhas do prontuário: toda rota do paciente confere o vínculo assistencial (AcessoPacientePep, 403
 // `sem-vinculo` com a tentativa na trilha); a leitura vai à trilha. A fila de leitura de quem recebeu não traz o
 // nome do paciente: o caso abre pela visão do paciente.
@@ -19,8 +22,9 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { esquemaConsultaBuscaPaciente, type ResultadoBuscaPaciente } from '@sgh/contratos';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
-import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
+import { Auditar, AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -33,12 +37,15 @@ import {
 } from '../acesso/emergencia.controller.js';
 import { contextoGravacao } from '../agenda/apoio.js';
 import { corpo } from '../agenda/agendas.controller.js';
-import { sessaoDe, type SessaoCadastro } from '../cadastro/comum.js';
+import { problemaDoCadastro, sessaoDe, type SessaoCadastro } from '../cadastro/comum.js';
+import { PORTA_CADASTRO, type PortaCadastro } from '../cadastro/porta.js';
+import { buscarPacientes } from '../cadastro/servico.js';
 import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
 import { AcessoPacientePep, chaveSessaoPep } from './acesso-paciente.js';
 import {
   type AnotacoesAdministrativasPropria,
   type AnotacoesDoPaciente,
+  type EntradaAnotacao,
   esquemaAnotacao,
   type PendenteDeLeitura,
 } from './anotacoes-administrativas-propria.js';
@@ -65,6 +72,7 @@ export class AnotacoesAdministrativasController {
     @Optional() @Inject(ALERTA_AUDITOR) alerta: AlertaAuditor | null = null,
     @Optional() @Inject(VINCULO_ASSISTENCIAL) vinculo: VinculoAssistencialPort = new VinculoSintetico(),
     @Optional() @Inject(REGISTRO_EMERGENCIA) emergencia: RegistroEmergencia | null = null,
+    @Optional() @Inject(PORTA_CADASTRO) private readonly cadastro: PortaCadastro | null = null,
   ) {
     this.acesso = new AcessoPacientePep({ estado, trilha, alerta, configuracao, vinculo, emergencia });
   }
@@ -109,6 +117,56 @@ export class AnotacoesAdministrativasController {
     return this.banco().pendentes({ hospital: s.hospital, login: s.login });
   }
 
+  /** Busca do paciente do painel (a mesma do prontuário), aberta a quem lê as anotações; na trilha, só tipo e total. */
+  @Get('pacientes')
+  @Permissao(LER)
+  @PermissaoOu(...LER_OU)
+  @Auditar('cadastro.paciente.buscado')
+  async pacientes(
+    @Query() q: Record<string, string>,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoBuscaPaciente> {
+    if (!this.cadastro)
+      throw new ErroProblema(
+        'indisponivel',
+        503,
+        'Cadastro indisponível',
+        'A busca de paciente não está configurada.',
+      );
+    const c = esquemaConsultaBuscaPaciente.safeParse(q);
+    if (!c.success)
+      throw new ErroProblema('entrada-invalida', 400, 'Consulta inválida', 'Informe o termo da busca.');
+    const r = await buscarPacientes(this.cadastro, sessaoDe(req).porta, c.data).catch((e: unknown) => {
+      throw problemaDoCadastro(e);
+    });
+    req.sghAlvo = {
+      tabelaAlvo: 'paciente',
+      chaveNaturalAlvo: `busca:${r.tipo};n:${r.itens.length};anotacoes`,
+    };
+    return r;
+  }
+
+  /** O paciente da reserva de leito do NIR, para abrir as anotações do caso a partir da reserva. */
+  @Get('reserva/:reserva')
+  @Permissao(LER)
+  @PermissaoOu(...LER_OU)
+  async daReserva(
+    @Param('reserva', ParseIntPipe) reserva: number,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ reserva: number; paciente: number }> {
+    const s = sessaoDe(req);
+    const paciente = await this.banco().pacienteDaReserva(reserva);
+    if (paciente === null)
+      throw new ErroProblema(
+        'nao-encontrado',
+        404,
+        'Reserva sem paciente',
+        'A reserva não existe ou ainda não tem paciente cadastrado.',
+      );
+    await this.paciente(s, paciente, this.permissaoDe(req, [LER, ...LER_OU]), false);
+    return { reserva, paciente };
+  }
+
   @Get('usuarios')
   @Permissao(ESCREVER)
   @PermissaoOu(...ESCREVER_OU)
@@ -128,17 +186,30 @@ export class AnotacoesAdministrativasController {
     return this.banco().doPaciente({ hospital: s.hospital, login: s.login }, paciente);
   }
 
+  /** Leitura confirmada pelo destinatário: basta a leitura (quem recebe nem sempre escreve). */
+  @Post(':anotacao/lida')
+  @HttpCode(200)
+  @Permissao(LER)
+  @PermissaoOu(...LER_OU)
+  @AuditadoNoHandler('pep.anotacao_administrativa pelo executor (trilha na mesma transação)')
+  marcarLida(@Param('anotacao', ParseIntPipe) anotacao: number, @Req() req: RequisicaoAutorizada) {
+    return this.executar({ acao: 'marcar_lida', anotacao }, req, [LER, ...LER_OU]);
+  }
+
   @Post()
   @HttpCode(200)
   @Permissao(ESCREVER)
   @PermissaoOu(...ESCREVER_OU)
   @AuditadoNoHandler('pep.anotacao_administrativa pelo executor (trilha na mesma transação)')
-  async gravar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    const e = corpo(esquemaAnotacao, b);
+  gravar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.executar(corpo(esquemaAnotacao, b), req, [ESCREVER, ...ESCREVER_OU]);
+  }
+
+  private async executar(e: EntradaAnotacao, req: RequisicaoAutorizada, opcoes: readonly string[]) {
     const s = sessaoDe(req);
     const paciente = e.acao === 'registrar' ? e.paciente : await this.banco().pacienteDaAnotacao(e.anotacao);
     if (paciente === null) throw new ErroProblema('nao-encontrado', 404, 'Anotação não encontrada');
-    await this.paciente(s, paciente, this.permissaoDe(req, [ESCREVER, ...ESCREVER_OU]), false);
+    await this.paciente(s, paciente, this.permissaoDe(req, opcoes), false);
     const g = contextoGravacao(s, 'pep.anotacaoAdministrativa', true);
     const r = await this.banco().gravarAnotacao(
       {

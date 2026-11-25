@@ -38,6 +38,7 @@ import {
 import AvisoNutricao from '../componentes/AvisoNutricao.vue';
 import DialogoCorrecao from '../componentes/DialogoCorrecao.vue';
 import ErroNutricao from '../componentes/ErroNutricao.vue';
+import AtalhoAnotacoesAdministrativas from '../../pep/componentes/AtalhoAnotacoesAdministrativas.vue';
 import { dataLonga, instanteCurto, leitoTexto } from '../regras-nutricao.js';
 
 const { t } = useI18n();
@@ -177,6 +178,8 @@ const nomeEncaminhamento = (c: string) => ENCAMINHAMENTOS_SOCIAIS.find((v) => v.
       <p class="acoes">
         <RouterLink to="/servico-social">{{ t('nutricao.atalhos.social') }}</RouterLink>
         <RouterLink to="/internacao/nir/altas-previstas">{{ t('nutricao.atalhos.nir') }}</RouterLink>
+        <!-- 03-PEP L147: anotações administrativas do caso, com o que aguarda a leitura de quem está na tela. -->
+        <AtalhoAnotacoesAdministrativas :paciente="dados.data.value.paciente" />
       </p>
       <AvisoNutricao :motivo="aviso" />
       <SanteAlerta v-if="mensagem" variante="info" :texto="mensagem" anunciar data-testid="social-mensagem" />
