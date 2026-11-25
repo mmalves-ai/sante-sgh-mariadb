@@ -118,6 +118,17 @@ export const rotasEnfermagem: RouteRecordRaw[] = [
     component: () => import('./telas/ProtocolosInternadoTela.vue'),
     meta: { permissao: 'enfermagem.horario.ler' },
   },
+  // C2-042 (03-PEP L134): os critérios de entrada avaliados pelo sistema, o alerta de elegível e as etapas com meta.
+  {
+    path: '/enfermagem/protocolos-criterios',
+    name: 'enfermagem.protocolosCriterios',
+    component: () => import('./telas/ProtocoloCriteriosTela.vue'),
+    meta: {
+      permissao: 'recepcao.protocoloPaciente.ler',
+      permissaoOu: ['recepcao.protocolo.ler'],
+      menu: 'Enfermagem > Protocolos: critérios e metas',
+    },
+  },
   // W0-03, mercado M4: as feridas e a lesão por pressão (ficha, curativo, foto, encerramento, inativação e a incidência
   // de LPP). A entrada no menu é do W4-01.
   {
