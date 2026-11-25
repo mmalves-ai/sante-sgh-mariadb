@@ -4,6 +4,7 @@ import {
   calcularEquipeItem,
   type FuncaoEquipe,
   type KitCobranca,
+  kitsDoGatilho,
   lancamentoDoKit,
   validarDefinicaoKit,
   validarEquipeItem,
@@ -129,6 +130,40 @@ describe('kit de cobrança (06-FAT linha 16)', () => {
     expect(lancamentoDoKit(kit({ fontePagadora: 8 }), conta, 1).erros['kit']).toMatch(/fonte pagadora/);
     expect(lancamentoDoKit(kit({ fontePagadora: 7, plano: 71 }), conta, 1).erros['kit']).toMatch(/plano/);
     expect(lancamentoDoKit(kit(), conta, 0).erros).toHaveProperty('vezes');
+  });
+  it('gatilho: o item lançado dispara só os kits dele, ativos e da fonte e do plano da conta, vezes a quantidade', () => {
+    const kits = [
+      kit({ id: 1, gatilho: 40 }),
+      kit({ id: 2, gatilho: 40, modo: 'fechado', item: 50, fontePagadora: 7 }),
+      kit({ id: 3, gatilho: 40, fontePagadora: 8 }),
+      kit({ id: 4, gatilho: 40, ativo: false }),
+      kit({ id: 5, gatilho: 41 }),
+      kit({ id: 6 }),
+    ];
+    const r = kitsDoGatilho(kits, 40, conta, 2);
+    expect(r.map((x) => x.kit.id)).toEqual([1, 2]);
+    expect(r[0]?.linhas).toEqual([
+      { item: 5, quantidade: 4, papel: 'componente' },
+      { item: 6, quantidade: 1, papel: 'componente' },
+    ]);
+    expect(r[0]?.avisos).toEqual(['equipamento-sem-item']);
+    expect(r[1]?.linhas).toEqual([{ item: 50, quantidade: 2, papel: 'kit' }]);
+    expect(kitsDoGatilho(kits, 99, conta, 1)).toEqual([]);
+  });
+  it('cadastro: o gatilho não pode ser cobrado pelo próprio kit', () => {
+    const base = {
+      codigo: 'K9',
+      descricao: 'Kit sala',
+      componentes: [{ item: 5, equipamento: null, quantidade: 1 }],
+    };
+    expect(validarDefinicaoKit({ ...base, modo: 'aberto', item: null, gatilho: 5 })).toHaveProperty(
+      'gatilho',
+    );
+    expect(validarDefinicaoKit({ ...base, modo: 'fechado', item: 50, gatilho: 50 })).toHaveProperty(
+      'gatilho',
+    );
+    expect(validarDefinicaoKit({ ...base, modo: 'fechado', item: 50, gatilho: 40 })).toEqual({});
+    expect(validarDefinicaoKit({ ...base, modo: 'aberto', item: null, gatilho: null })).toEqual({});
   });
   it('cadastro: fechado exige item, componentes válidos e sem repetição', () => {
     expect(

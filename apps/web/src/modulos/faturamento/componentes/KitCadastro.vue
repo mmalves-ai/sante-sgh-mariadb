@@ -17,6 +17,7 @@ const kit = reactive({
   descricao: '',
   modo: 'aberto' as 'aberto' | 'fechado',
   itemId: 0,
+  gatilhoId: 0,
   daFonte: true,
 });
 const componentes = ref<{ itemId: number; quantidade: number }[]>([]);
@@ -43,6 +44,7 @@ const erros = computed(() =>
     descricao: kit.descricao,
     modo: kit.modo,
     item: kit.modo === 'fechado' && kit.itemId > 0 ? kit.itemId : null,
+    gatilho: kit.gatilhoId > 0 ? kit.gatilhoId : null,
     componentes: componentes.value.map((c) => ({
       item: c.itemId > 0 ? c.itemId : null,
       equipamento: null,
@@ -63,6 +65,7 @@ async function salvar() {
         tipoKit: 'procedimento',
         modo: kit.modo,
         itemId: kit.modo === 'fechado' ? kit.itemId : null,
+        gatilhoItemId: kit.gatilhoId > 0 ? kit.gatilhoId : null,
         fontePagadoraId: kit.daFonte ? props.fontePagadoraId : null,
         planoId: null,
         todosEstabelecimentos: false,
@@ -71,7 +74,7 @@ async function salvar() {
       crypto.randomUUID(),
     );
     emit('gravado', kit.codigo.trim());
-    Object.assign(kit, { codigo: '', descricao: '', modo: 'aberto', itemId: 0, daFonte: true });
+    Object.assign(kit, { codigo: '', descricao: '', modo: 'aberto', itemId: 0, gatilhoId: 0, daFonte: true });
     componentes.value = [];
   } catch (e) {
     emit('erro', e);
@@ -136,6 +139,13 @@ async function salvar() {
       />
       <span v-if="erros['item']" role="alert" data-testid="kit-erro-item">{{ erros['item'] }}</span>
     </template>
+    <SanteSelecao
+      v-model="kit.gatilhoId"
+      :rotulo="t('movimentosConta.kitGatilho')"
+      :opcoes="[{ valor: 0, rotulo: t('movimentosConta.kitSemGatilho') }, ...opcoesItem]"
+      data-testid="kit-gatilho"
+    />
+    <span v-if="erros['gatilho']" role="alert" data-testid="kit-erro-gatilho">{{ erros['gatilho'] }}</span>
     <fieldset v-for="(c, k) in componentes" :key="k" :data-testid="`kit-componente-${k}`">
       <SanteSelecao
         v-model="c.itemId"

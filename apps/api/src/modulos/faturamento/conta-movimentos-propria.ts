@@ -37,6 +37,7 @@ import {
 import { z } from 'zod';
 import { esquemaLancarItem } from '@sgh/contratos';
 import { lancarItem, totalDosItens } from './operacoes.js';
+import { lancarLinhasDoKit } from './kit-lancamento.js';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
 
 type Linha = Record<string, unknown>;
@@ -623,70 +624,16 @@ export const opLancarKit = definirOperacao({
     const kit = await kitDo(tx, est, e.kitId);
     const r = lancamentoDoKit(kit, { fontePagadora: c.fontePagadora, plano: c.plano }, e.vezes);
     exigirValido(r.erros);
-    const ids = [...new Set(r.linhas.map((x) => x.item))];
-    const ativos = new Map(
-      (
-        await tx.consultar<Linha>(
-          `SELECT id, grupo_faturamento_id FROM item_faturavel WHERE id IN (${lista(ids.length)}) AND situacao = 'ativo' AND excluido_em IS NULL`,
-          ids,
-          { teto: ids.length },
-        )
-      ).map((x) => [n(x['id']), nn(x['grupo_faturamento_id'])] as const),
+    const { itens: lancados, semPreco } = await lancarLinhasDoKit(
+      tx,
+      est,
+      { id: c.id, fontePagadora: c.fontePagadora, plano: c.plano, tabela: c.tabela },
+      kit,
+      r.linhas,
+      e.vezes,
+      e.data ?? hoje(),
+      ctx.usuario,
     );
-    if (ativos.size !== ids.length)
-      throw recusa('item-inativo', 'O kit tem item inativo ou fora do catálogo: ajuste o kit.', {
-        campos: ['kitId'],
-      });
-    const data = e.data ?? hoje();
-    const tabelas = await tabelasDePreco(tx, est, c.fontePagadora, c.plano, c.tabela);
-    const agora = new Date();
-    const lancados: number[] = [];
-    let semPreco = 0;
-    for (const linha of r.linhas) {
-      const preco = await precoVigente(tx, tabelas, linha.item, data);
-      if (!preco) semPreco += 1;
-      const unitario = preco?.unitario ?? 0;
-      const seq = await tx.uma<Linha>(
-        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
-        [c.id],
-      );
-      const item = await tx.incluir('conta_hospitalar_item', {
-        conta_hospitalar_id: c.id,
-        sequencia: n(seq?.['s']),
-        item_faturavel_id: linha.item,
-        grupo_faturamento_id: ativos.get(linha.item) ?? null,
-        kit_cobranca_id: kit.id,
-        realizado_em: agora,
-        quantidade: linha.quantidade,
-        valor_unitario: unitario,
-        valor_honorario: preco ? r2(preco.honorario * linha.quantidade) : 0,
-        valor_custo_operacional: preco ? r2(preco.custoOperacional * linha.quantidade) : 0,
-        valor_filme: preco ? r2(preco.filme * linha.quantidade) : 0,
-        valor_total: r2(unitario * linha.quantidade),
-        tipo_valorizacao: preco ? 'tabela' : 'manual',
-        situacao: 'lancado',
-      });
-      await tx.incluir('conta_hospitalar_item_memoria', {
-        conta_hospitalar_item_id: item,
-        tabela_preco_id: preco?.tabela ?? null,
-        valor_unitario_calculado: unitario,
-        valor_total_calculado: r2(unitario * linha.quantidade),
-        preco_manual: 0,
-        operacao: 'inclusao',
-        dados: JSON.stringify({
-          origem: 'kit',
-          kit: kit.codigo,
-          modo: kit.modo,
-          papel: linha.papel,
-          vezes: e.vezes,
-          origemPreco: preco ? 'tabela' : 'sem_preco_vigente',
-          vigencia: preco?.vigencia ?? null,
-        }),
-        ocorrido_em: agora,
-        usuario_id: ctx.usuario,
-      });
-      lancados.push(item);
-    }
     await tx.alterar('conta_hospitalar', c.id, c.versao, await totalDosItens(tx, c.id));
     return { contaId: c.id, itens: lancados.length, semPreco, avisos: r.avisos.join(',') };
   },
@@ -699,6 +646,7 @@ export const esquemaCadastrarKit = z.object({
   tipoKit: z.enum(['procedimento', 'sala', 'cota', 'outro']).default('procedimento'),
   modo: z.enum(['aberto', 'fechado']).default('aberto'),
   itemId: id.nullable().default(null),
+  gatilhoItemId: id.nullable().default(null),
   fontePagadoraId: id.nullable().default(null),
   planoId: id.nullable().default(null),
   todosEstabelecimentos: z.boolean().default(false),
@@ -726,6 +674,7 @@ export const opCadastrarKit = definirOperacao({
         descricao: e.descricao,
         modo: e.modo,
         item: e.itemId,
+        gatilho: e.gatilhoItemId,
         componentes: e.componentes.map((c) => ({
           item: c.itemId,
           equipamento: c.equipamentoId,
@@ -741,6 +690,7 @@ export const opCadastrarKit = definirOperacao({
       descricao: e.descricao,
       tipo_kit: e.tipoKit,
       item_faturavel_id: e.itemId,
+      item_gatilho_id: e.gatilhoItemId,
       fonte_pagadora_id: e.fontePagadoraId,
       plano_fonte_pagadora_id: e.planoId,
       modo_cobranca: e.modo,

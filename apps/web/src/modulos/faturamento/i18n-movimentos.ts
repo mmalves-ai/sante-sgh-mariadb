@@ -66,6 +66,8 @@ export const mensagensMovimentosConta = {
   kitDaFonte: 'Só para {fonte}',
   kitBuscarItem: 'Buscar item por código ou descrição',
   kitItemCobrado: 'Item que cobra o kit',
+  kitGatilho: 'Item que lança o kit junto (opcional)',
+  kitSemGatilho: 'Nenhum: o kit entra só por aqui',
   kitEscolhaItem: 'Escolha o item',
   kitComponente: 'Componente',
   kitIncluirComponente: 'Incluir componente',

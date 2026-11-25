@@ -121,6 +121,7 @@ export interface KitPedido {
   tipoKit: 'procedimento' | 'sala' | 'cota' | 'outro';
   modo: 'aberto' | 'fechado';
   itemId: number | null;
+  gatilhoItemId?: number | null;
   fontePagadoraId: number | null;
   planoId: number | null;
   todosEstabelecimentos: boolean;

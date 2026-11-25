@@ -180,6 +180,8 @@ export interface KitCobranca {
   readonly fontePagadora: number | null;
   readonly plano: number | null;
   readonly componentes: readonly ComponenteKit[];
+  /** Item cujo lançamento na conta lança o kit junto (nulo: o kit só entra pela tela). */
+  readonly gatilho?: number | null;
 }
 
 export interface LinhaDoKit {
@@ -227,6 +229,8 @@ export interface DefinicaoKit {
   readonly modo: 'aberto' | 'fechado';
   readonly item: number | null;
   readonly componentes: readonly ComponenteKit[];
+  /** Item que dispara o kit ao ser lançado (opcional). */
+  readonly gatilho?: number | null;
 }
 
 /** Confere o cadastro do kit: código, descrição, o item do fechado e os componentes (sem repetição). */
@@ -246,7 +250,31 @@ export function validarDefinicaoKit(d: DefinicaoKit): Record<string, string> {
     if (vistos.has(k)) erros[`componentes.${i}.item`] = 'Componente repetido.';
     vistos.add(k);
   });
+  // O gatilho não pode ser o próprio kit nem um componente dele: o item lançado pelo kit dispararia o kit de novo.
+  const g = d.gatilho ?? null;
+  if (g !== null && ((d.modo === 'fechado' && d.item === g) || d.componentes.some((c) => c.item === g)))
+    erros['gatilho'] = 'O item que dispara o kit não pode ser cobrado pelo próprio kit.';
   return erros;
+}
+
+/**
+ * Os kits que o lançamento do item dispara na conta: ativos, com o item como gatilho e válidos para a fonte pagadora e o
+ * plano da conta (o kit de outra fonte não entra e não impede o lançamento do item). Cada kit entra tantas vezes
+ * quanto a quantidade do item lançado.
+ */
+export function kitsDoGatilho<K extends KitCobranca>(
+  kits: readonly K[],
+  item: number,
+  conta: { readonly fontePagadora: number; readonly plano: number | null },
+  quantidade: number,
+): { kit: K; linhas: LinhaDoKit[]; avisos: string[] }[] {
+  const saida: { kit: K; linhas: LinhaDoKit[]; avisos: string[] }[] = [];
+  for (const k of kits) {
+    if ((k.gatilho ?? null) !== item) continue;
+    const r = lancamentoDoKit(k, conta, quantidade);
+    if (Object.keys(r.erros).length === 0) saida.push({ kit: k, linhas: r.linhas, avisos: r.avisos });
+  }
+  return saida;
 }
 
 // ── Linha 14: transferência de itens entre contas ─────────────────────────────────────────────────

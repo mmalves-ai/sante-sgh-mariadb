@@ -46,6 +46,7 @@ import {
 import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 import { apurarLancamentosAutomaticos, apurarLancamentosDoDia } from './conta-entrada.js';
 import { versaoNumero } from './esquemas.js';
+import { dispararKitsDoItem } from './kit-lancamento.js';
 import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
 import {
   conferirCompetenciaDaConta,
@@ -645,6 +646,16 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       ocorrido_em: new Date(),
       usuario_id: ctx.usuario,
     });
+    // F3.7 (06-FAT linha 16): o item que é gatilho de kit lança o kit junto, na mesma transação.
+    const kits = await dispararKitsDoItem(
+      tx,
+      est,
+      { id: conta.id, fontePagadora: conta.fonte, plano: conta.plano, tabela: conta.tabela },
+      n(item['id']),
+      e.quantidade,
+      e.data,
+      ctx.usuario,
+    );
     // O total da conta a partir dos itens, na mesma transação (sem gatilho).
     await tx.alterar('conta_hospitalar', conta.id, conta.versao, await totalDosItens(tx, conta.id));
     // A produção do repasse do item (momento "lançamento"), na mesma transação e pela mesma conta.
@@ -654,9 +665,19 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       { estabelecimento: est, usuario: ctx.usuario },
     );
     // Decisão 25: o alerta de credenciamento volta no resultado (o resultado da operação é plano).
+    const doKit = kits.kits.length
+      ? { kits: kits.kits.join(','), itensKit: kits.itens.length, semPrecoKit: kits.semPreco }
+      : {};
     return alerta
-      ? { id, conta: conta.id, valor, alerta: 'profissional-nao-credenciado', alertaMotivo: alerta.motivo }
-      : { id, conta: conta.id, valor };
+      ? {
+          id,
+          conta: conta.id,
+          valor,
+          alerta: 'profissional-nao-credenciado',
+          alertaMotivo: alerta.motivo,
+          ...doKit,
+        }
+      : { id, conta: conta.id, valor, ...doKit };
   },
   eventos: (_e, r) => [
     { tipo: 'faturamento.item.lancado', carga: { conta: Number(r['conta']), item: Number(r['id']) } },

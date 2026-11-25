@@ -769,4 +769,49 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     const [ce] = await linhas('SELECT valor_itens FROM conta_hospitalar WHERE id = ?', [ids['contaEstB']]);
     expect(Number(ce!['valor_itens'])).toBe(100);
   });
+  it('kit disparado pelo item: o lançamento do item gatilho lança o kit junto, vezes a quantidade', async () => {
+    expect(
+      await codigoDo(
+        s.gravar('kit.cadastrar', op(), {
+          codigo: `${P}KG0`,
+          descricao: 'KIT SINTETICO GATILHO COBRADO',
+          gatilhoItemId: ids['comp1'],
+          componentes: [{ itemId: ids['comp1'], quantidade: 1 }],
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    const kit = await s.gravar('kit.cadastrar', op(), {
+      codigo: `${P}KG`,
+      descricao: 'KIT SINTETICO DO GATILHO',
+      gatilhoItemId: ids['item'],
+      componentes: [{ itemId: ids['comp1'], quantidade: 2 }],
+    });
+    const [k] = await linhas('SELECT item_gatilho_id FROM kit_cobranca WHERE id = ?', [kit['id']]);
+    expect(Number(k!['item_gatilho_id'])).toBe(ids['item']);
+    const r = await s.gravar('lancar.equipe', op(), {
+      tipo: 3,
+      codigo: 83740001,
+      quantidade: 2,
+      data: new Date().toISOString().slice(0, 10),
+      hora: '11:00',
+      local: 0,
+      ato: 0,
+      conta: ids['contaL'],
+      equipe: [{ profissionalId: ids['cirurgiao'], funcaoId: ids['fCir'] }],
+    });
+    expect(r).toMatchObject({ kits: `${P}KG`, itensKit: 1 });
+    const doKit = await linhas(
+      `SELECT i.item_faturavel_id, i.quantidade, i.valor_total, m.dados
+         FROM conta_hospitalar_item i JOIN conta_hospitalar_item_memoria m ON m.conta_hospitalar_item_id = i.id
+        WHERE i.conta_hospitalar_id = ? AND i.kit_cobranca_id = ?`,
+      [ids['contaL'], kit['id']],
+    );
+    expect(doKit.map((x) => [Number(x['item_faturavel_id']), Number(x['quantidade'])])).toEqual([
+      [ids['comp1'], 4],
+    ]);
+    const dados = doKit[0]!['dados'];
+    const d = typeof dados === 'string' ? dados : JSON.stringify(dados);
+    expect(d).toContain('kit_gatilho');
+    expect(d).toContain(`"itemGatilho":${ids['item']}`);
+  });
 });
