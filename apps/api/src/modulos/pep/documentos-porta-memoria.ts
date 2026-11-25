@@ -363,6 +363,17 @@ function semear(): Estado {
   return e;
 }
 
+/** A porta do prontuário em memória de cada sessão sintética (a trilha é a mesma em todos os módulos do processo). */
+const PORTA_POR_TRILHA = new WeakMap<object, PortaDocumentosMemoria>();
+
+/**
+ * A porta do prontuário em memória ligada a esta trilha (null: o módulo do prontuário não subiu em memória). Os módulos
+ * agora sobem separados; o SADT em memória lê por aqui os pedidos do prontuário (M26: os mesmos IDs).
+ */
+export function documentosMemoriaDaTrilha(trilha: object | null): PortaDocumentosMemoria | null {
+  return trilha ? (PORTA_POR_TRILHA.get(trilha) ?? null) : null;
+}
+
 export class PortaDocumentosMemoria implements PortaDocumentos {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
@@ -375,6 +386,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   ) {
     // O pedido e a resposta do parecer viajam com o registro clínico (M22): a fila recebe aqui.
     if (registros) registros.ouvinte = (h, r) => this.aoRegistrar(h, r);
+    if (trilha) PORTA_POR_TRILHA.set(trilha, this);
   }
 
   // ── M49, etapa 2: a ponte com a assinatura ICP em memória (os mesmos documentos da sessão sintética) ──────────
@@ -948,6 +960,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         atendimento: d.atendimento,
         suspenso: d.suspensoEm !== null,
         corrige: d.corrige,
+        tipo: familia === 'receita' ? d.tipo : null,
         tpPadrao: d.tpPadrao,
       }))
       .reverse();

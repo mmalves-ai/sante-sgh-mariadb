@@ -354,8 +354,16 @@ export class PortaSadtMemoria implements PortaSadt {
 
   constructor(
     private readonly catalogo: FonteEstadoOperacao | null,
-    private readonly prontuario: PortaDocumentosMemoria | null = null,
-  ) {}
+    prontuario: PortaDocumentosMemoria | (() => PortaDocumentosMemoria | null) | null = null,
+  ) {
+    this.prontuarioDe = typeof prontuario === 'function' ? prontuario : () => prontuario;
+  }
+
+  /** O prontuário em memória: direto (testes) ou lido na hora (o módulo do prontuário pode subir depois do SADT). */
+  private readonly prontuarioDe: () => PortaDocumentosMemoria | null;
+  private get prontuario(): PortaDocumentosMemoria | null {
+    return this.prontuarioDe();
+  }
 
   // ── Estado ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -703,10 +711,11 @@ export class PortaSadtMemoria implements PortaSadt {
   }
 
   private publicarNoProntuario(c: ContextoSadt, s: Estado, e: ExameM): void {
-    if (!this.prontuario) return;
-    this.prontuario.marcarPedidoSadt(hospitalDe(c), e.id, { pendSadt: e.pendSadt, liberado: e.liberado });
+    const prontuario = this.prontuario;
+    if (!prontuario) return;
+    prontuario.marcarPedidoSadt(hospitalDe(c), e.id, { pendSadt: e.pendSadt, liberado: e.liberado });
     if (!e.liberado) return;
-    this.prontuario.publicarResultadoSadt(hospitalDe(c), {
+    prontuario.publicarResultadoSadt(hospitalDe(c), {
       paciente: e.paciente,
       exame: e.id,
       nome: e.catalogo.nome,
