@@ -1896,7 +1896,7 @@ nota_soap_codigo	PEP	item	F8	Motivo de consulta, problema ou procedimento codifi
 notificacao_agravo	PEP	principal	F3	Notificação de agravo do paciente, com data, prazo, situação e envio à vigilância	MV: (não identificado); SPDATA: PRAGRAVOTPARQUETIPO	03	0
 notificacao_agravo_resposta	PEP	item	F3	Resposta de cada pergunta da ficha de notificação	SPDATA: PRAGRAVOPERGUNTA	03	0
 opcao_periodo	PEP	dominio	F3	Períodos de referência para horários e doses (manhã, tarde, noite, dia todo)	SPDATA: PROPCAOPERIODO (4)	03	0
-orgao_transplante	PEP	dominio	F8	Órgãos e tecidos para doação e transplante	MV: PW_ORGAO_CORPO_HUMANO	03	2
+orgao_transplante	PEP	dominio	F8	Órgãos e tecidos para doação e transplante, com a quantidade por doador	MV: PW_ORGAO_CORPO_HUMANO; quantidade por doador (03-PEP linha 145; migração 06_PEP/99_orgao_transplante_quantidade)	03	2
 orientacao_saude	PEP	dominio	F8	Orientações de saúde enviadas aos inscritos de um programa	MV: PW_DICAS_SAUDE_ATP, PW_PROGRAMA_SAUDE_DICAS_ATP	03	3
 origem_informacao_alergia	PEP	dominio	F3	Quem informou a alergia (paciente, familiar, profissional, documento externo), para dar grau de confiança ao registro	rodada2:nova	03	1
 paciente_acompanhado	PEP	principal	F3	Paciente marcado pelo profissional para acompanhar na lista de trabalho, com início, fim e motivo	MV: PW_FAVORITO_PACIENTE*, PW_LISTA_EM_ATENDIMENTO; depende: paciente (02), atendimento (02), usuario (01)	03	2

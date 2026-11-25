@@ -1,7 +1,9 @@
 // Cliente da API da doação e do transplante de órgãos no prontuário (03-PEP L145):
 // GET  /api/pep/transplante/opcoes                 órgãos e tecidos ativos e os parentescos
 // GET  /api/pep/transplante/paciente/:paciente     doações e inscrições do paciente nesta unidade
-// GET  /api/pep/transplante/receptores?orgao=      receptores da unidade na lista do órgão (sem nome)
+// GET  /api/pep/transplante/receptores?orgao=&doador=
+//                                                  receptores da unidade na lista do órgão (sem nome), a partir de
+//                                                  uma doação (vínculo com o doador; a consulta vai à trilha)
 // POST /api/pep/transplante/<doador|antibiotico|preservacao|receptor|destino|acompanhamento>
 // Toda gravação leva a chave de idempotência e o x-csrf (como as demais do prontuário).
 import { z } from 'zod';
@@ -17,7 +19,15 @@ const n = z.number().nullable();
 const falha = z.object({ codigo: z.string(), mensagem: z.string() });
 
 export const esquemaOpcoesTransplante = z.object({
-  orgaos: z.array(z.object({ id: z.number(), codigo: z.string(), descricao: z.string(), tipo: z.string() })),
+  orgaos: z.array(
+    z.object({
+      id: z.number(),
+      codigo: z.string(),
+      descricao: z.string(),
+      tipo: z.string(),
+      quantidadePorDoador: z.number(),
+    }),
+  ),
   parentescos: z.array(ref),
 });
 export type OpcoesTransplanteTela = z.infer<typeof esquemaOpcoesTransplante>;
@@ -173,9 +183,10 @@ export async function lerTransplantePaciente(
 
 export async function lerReceptoresDoOrgao(
   orgao: number,
+  doador: number,
   buscar: typeof fetch = fetch,
 ): Promise<ReceptorListaTela[]> {
-  const r = await buscar(`${P}/receptores?orgao=${orgao}`, { headers: JSON_ACEITO });
+  const r = await buscar(`${P}/receptores?orgao=${orgao}&doador=${doador}`, { headers: JSON_ACEITO });
   if (!r.ok) throw await erroDaResposta(r);
   return esquemaReceptoresLista.parse(await r.json());
 }

@@ -11,6 +11,7 @@ import {
   conferirTransicaoDoador,
   conferirTransicaoReceptor,
   type DadosDoadorOrgao,
+  destinoOcupaOrgao,
   diasDoTransplante,
   pendenciasDoador,
 } from './transplante.js';
@@ -249,18 +250,54 @@ describe('receptor e destino do órgão', () => {
   });
 
   it('transição do destino: transplante só do aceito, com o doador captado e o receptor na lista', () => {
-    const ok = { situacaoDoador: 'captado' as const, situacaoReceptor: 'ativo' as const };
+    const ok = {
+      situacaoDoador: 'captado' as const,
+      situacaoReceptor: 'ativo' as const,
+      outrosDestinosOcupados: 0,
+      quantidadePorDoador: 1,
+    };
     expect(conferirTransicaoDestino('aceito', 'transplantado', ok)).toEqual([]);
     expect(codigos(conferirTransicaoDestino('ofertado', 'transplantado', ok))).toEqual(['transicao-destino']);
     expect(
       codigos(
         conferirTransicaoDestino('aceito', 'transplantado', {
+          ...ok,
           situacaoDoador: 'apto',
           situacaoReceptor: 'removido',
         }),
       ),
     ).toEqual(['transplante-sem-captacao', 'receptor-fora-da-lista']);
     expect(codigos(conferirTransicaoDestino('recusado', 'aceito', ok))).toEqual(['transicao-destino']);
+  });
+
+  it('o mesmo órgão do doador não é aceito nem transplantado em mais receptores que a quantidade do catálogo', () => {
+    const ctx = (outros: number, quantidade: number) => ({
+      situacaoDoador: 'captado' as const,
+      situacaoReceptor: 'ativo' as const,
+      outrosDestinosOcupados: outros,
+      quantidadePorDoador: quantidade,
+    });
+    // Órgão único (coração, fígado): um só destino ocupa o órgão.
+    expect(codigos(conferirTransicaoDestino('ofertado', 'aceito', ctx(1, 1)))).toEqual([
+      'orgao-ja-destinado',
+    ]);
+    expect(codigos(conferirTransicaoDestino('aceito', 'transplantado', ctx(1, 1)))).toEqual([
+      'orgao-ja-destinado',
+    ]);
+    expect(conferirTransicaoDestino('ofertado', 'aceito', ctx(0, 1))).toEqual([]);
+    // Órgão par (rim): dois receptores, o terceiro não.
+    expect(conferirTransicaoDestino('ofertado', 'aceito', ctx(1, 2))).toEqual([]);
+    expect(codigos(conferirTransicaoDestino('ofertado', 'aceito', ctx(2, 2)))).toEqual([
+      'orgao-ja-destinado',
+    ]);
+    // Quantidade inválida no catálogo vale 1; recusar ou descartar nunca ocupa o órgão.
+    expect(codigos(conferirTransicaoDestino('ofertado', 'aceito', ctx(1, 0)))).toEqual([
+      'orgao-ja-destinado',
+    ]);
+    expect(conferirTransicaoDestino('ofertado', 'recusado', ctx(5, 1))).toEqual([]);
+    expect(conferirTransicaoDestino('aceito', 'descartado', ctx(5, 1))).toEqual([]);
+    expect(destinoOcupaOrgao('aceito') && destinoOcupaOrgao('transplantado')).toBe(true);
+    expect(destinoOcupaOrgao('ofertado')).toBe(false);
   });
 });
 

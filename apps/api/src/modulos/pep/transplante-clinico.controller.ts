@@ -2,11 +2,14 @@
 //   GET  /api/pep/transplante/opcoes                 órgãos e tecidos ativos e os parentescos
 //   GET  /api/pep/transplante/paciente/:paciente     doações (antibióticos, preservação, destinos) e inscrições como
 //                                                    receptor (destinos, acompanhamento depois do transplante)
-//   GET  /api/pep/transplante/receptores?orgao=      receptores da unidade na lista do órgão (sem nome; prontuário)
+//   GET  /api/pep/transplante/receptores?orgao=&doador=
+//                                                    receptores da unidade na lista do órgão (sem nome; prontuário),
+//                                                    só no contexto de uma doação: vínculo com o doador e trilha
 //   POST /api/pep/transplante/doador | antibiotico | preservacao | receptor | destino | acompanhamento
 // Ler: quem lê o prontuário (pep.prontuario.ler); gravar: quem registra no prontuário (pep.evolucao.criar). A visão
-// por paciente e cada gravação conferem o vínculo assistencial com o paciente (o doador, no destino do órgão), como as
-// vizinhas do prontuário; a leitura vai à trilha. Gravação pelo executor (trilha na mesma transação, Idempotency-Key).
+// por paciente e cada gravação conferem o vínculo assistencial com o paciente (no destino do órgão, com o doador e com
+// o receptor, cuja inscrição muda no transplante), como as vizinhas do prontuário; a leitura vai à trilha. A lista de
+// receptores (dado de saúde, LGPD art. 11) só se lê a partir de uma doação com vínculo, e a consulta vai à trilha. Gravação pelo executor (trilha na mesma transação, Idempotency-Key).
 // Sem banco próprio, 503.
 import {
   Body,
@@ -107,11 +110,15 @@ export class TransplanteClinicoController {
 
   @Get('receptores')
   @Permissao(LER)
-  receptores(
+  async receptores(
     @Query('orgao', ParseIntPipe) orgao: number,
+    @Query('doador', ParseIntPipe) doador: number,
     @Req() req: RequisicaoAutorizada,
   ): Promise<readonly ReceptorNaLista[]> {
     const s = sessaoDe(req);
+    const paciente = await this.banco().pacienteDoDoador(doador);
+    if (paciente === null) throw new ErroProblema('nao-encontrado', 404, 'Doação não encontrada');
+    await this.paciente(s, paciente, LER, true);
     return this.banco().receptoresDoOrgao({ hospital: s.hospital, login: s.login }, orgao);
   }
 
@@ -129,10 +136,10 @@ export class TransplanteClinicoController {
   private async gravarTipo(tipo: GravacaoTransplante, b: unknown, req: RequisicaoAutorizada) {
     const e = corpo(ESQUEMAS_TRANSPLANTE[tipo] as never, b) as Record<string, unknown>;
     const s = sessaoDe(req);
-    const paciente = await this.banco().pacienteDaGravacao(tipo, e);
-    if (paciente === null)
+    const pacientes = await this.banco().pacientesDaGravacao(tipo, e);
+    if (pacientes === null)
       throw new ErroProblema('nao-encontrado', 404, 'Registro de transplante não encontrado');
-    await this.paciente(s, paciente, ESCREVER, false);
+    for (const paciente of new Set(pacientes)) await this.paciente(s, paciente, ESCREVER, false);
     const g = contextoGravacao(s, `pep.transplante.${tipo}`, true);
     const r = await this.banco().gravar(
       tipo,

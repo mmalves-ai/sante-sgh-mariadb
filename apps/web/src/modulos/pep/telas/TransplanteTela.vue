@@ -13,6 +13,7 @@ import {
   conferirPreservacao,
   conferirReceptor,
   conferirTransicaoDestino,
+  destinoOcupaOrgao,
   conferirTransicaoDoador,
   conferirTransicaoReceptor,
   type ConsentimentoDoacao,
@@ -215,11 +216,17 @@ const ab = reactive({ descricao: '', inicio: hoje() });
 const falhasAntibiotico = computed(() =>
   conferirAntibioticoDoador({ descricao: ab.descricao, inicio: ab.inicio, fim: null }, hoje()),
 );
-const of = reactive({ orgao: '', receptor: '', parente: false, parentesco: '' });
+const of = reactive({ doador: 0, orgao: '', receptor: '', parente: false, parentesco: '' });
+/** A lista de receptores só se lê a partir da doação em que o órgão foi escolhido (vínculo e trilha no servidor). */
+function escolherOrgaoOferta(x: DoacaoTela, orgao: string) {
+  of.doador = x.id;
+  of.orgao = orgao;
+  of.receptor = '';
+}
 const receptores = useQuery({
-  queryKey: computed(() => ['pep', 'transplante', 'receptores', of.orgao]),
-  queryFn: () => lerReceptoresDoOrgao(Number(of.orgao)),
-  enabled: computed(() => Boolean(of.orgao)),
+  queryKey: computed(() => ['pep', 'transplante', 'receptores', of.doador, of.orgao]),
+  queryFn: () => lerReceptoresDoOrgao(Number(of.orgao), of.doador),
+  enabled: computed(() => Boolean(of.orgao && of.doador)),
 });
 const opcoesReceptor = computed(() =>
   (receptores.data.value ?? [])
@@ -273,18 +280,24 @@ function falhasPreservacao(x: DoacaoTela) {
   );
 }
 const dataTransplante = ref(hoje());
-/** Próximos passos do destino que a regra aceita agora (o servidor confere de novo). */
-function passosDestino(
-  y: DestinoTela,
-  situacaoDoador: string,
-  situacaoReceptor: string,
-): SituacaoDestinoOrgao[] {
+/**
+ * Próximos passos do destino que a regra aceita agora (o servidor confere de novo): o órgão já aceito ou
+ * transplantado em outro receptor, além da quantidade dele por doador, some dos passos.
+ */
+function passosDestino(y: DestinoTela, x: DoacaoTela, situacaoReceptor: string): SituacaoDestinoOrgao[] {
+  const outrosDestinosOcupados = x.destinos.filter(
+    (z) => z.id !== y.id && z.orgao.id === y.orgao.id && destinoOcupaOrgao(z.situacao),
+  ).length;
+  const quantidadePorDoador =
+    op.data.value?.orgaos.find((o) => o.id === y.orgao.id)?.quantidadePorDoador ?? 1;
   return SITUACOES_DESTINO_ORGAO.filter(
     (s) =>
       s !== y.situacao &&
       conferirTransicaoDestino(y.situacao as SituacaoDestinoOrgao, s, {
-        situacaoDoador: situacaoDoador as SituacaoDoadorOrgao,
+        situacaoDoador: x.situacao as SituacaoDoadorOrgao,
         situacaoReceptor: situacaoReceptor as SituacaoReceptor,
+        outrosDestinosOcupados,
+        quantidadePorDoador,
       }).length === 0,
   );
 }
@@ -614,7 +627,7 @@ const falhasAcompanhamento = (x: InscricaoTela) =>
               {{ t(`pep.transplante.situacoesDestino.${y.situacao}`) }}
               <template v-if="podeGravar">
                 <SanteBotao
-                  v-for="s in passosDestino(y, x.situacao, 'ativo')"
+                  v-for="s in passosDestino(y, x, 'ativo')"
                   :key="s"
                   variante="secundario"
                   :data-testid="`transplante-destino-${y.id}-${s}`"
@@ -654,19 +667,20 @@ const falhasAcompanhamento = (x: InscricaoTela) =>
             "
           >
             <SanteSelecao
-              v-model="of.orgao"
+              :model-value="of.doador === x.id ? of.orgao : ''"
               :rotulo="t('pep.transplante.orgao')"
               :opcoes="opcoesOrgao"
               data-testid="transplante-oferta-orgao"
+              @update:model-value="(v: string) => escolherOrgaoOferta(x, v)"
             />
             <SanteSelecao
-              v-if="of.orgao"
+              v-if="of.orgao && of.doador === x.id"
               v-model="of.receptor"
               :rotulo="t('pep.transplante.receptoresDoOrgao')"
               :opcoes="opcoesReceptor"
               data-testid="transplante-oferta-receptor"
             />
-            <p v-if="of.orgao && receptores.data.value && !opcoesReceptor.length">
+            <p v-if="of.orgao && of.doador === x.id && receptores.data.value && !opcoesReceptor.length">
               {{ t('pep.transplante.semReceptores') }}
             </p>
             <template v-if="x.tipo === 'vivo'">
@@ -684,7 +698,7 @@ const falhasAcompanhamento = (x: InscricaoTela) =>
             </template>
             <SanteBotao
               tipo="submit"
-              :desabilitado="!of.receptor || (of.parente && !of.parentesco)"
+              :desabilitado="of.doador !== x.id || !of.receptor || (of.parente && !of.parentesco)"
               data-testid="transplante-ofertar"
               :rotulo="t('pep.transplante.ofertar')"
             />

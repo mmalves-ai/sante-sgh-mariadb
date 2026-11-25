@@ -312,16 +312,40 @@ const PASSOS_DESTINO: Readonly<Record<SituacaoDestinoOrgao, readonly SituacaoDes
   descartado: [],
 };
 
-/** O transplante exige o órgão aceito, o doador captado e o receptor ainda na lista. */
+/** O destino aceito ou transplantado ocupa o órgão do doador; o ofertado, o recusado e o descartado não. */
+export const destinoOcupaOrgao = (s: SituacaoDestinoOrgao | string) =>
+  s === 'aceito' || s === 'transplantado';
+
+/**
+ * O transplante exige o órgão aceito, o doador captado e o receptor ainda na lista. Aceitar ou transplantar ocupa o
+ * órgão: os outros destinos do mesmo órgão do mesmo doador que já o ocupam (sem contar este) não podem chegar à
+ * quantidade do órgão por doador (1; 2 nos pares, pelo catálogo).
+ */
 export function conferirTransicaoDestino(
   de: SituacaoDestinoOrgao,
   para: SituacaoDestinoOrgao,
-  contexto: { readonly situacaoDoador: SituacaoDoadorOrgao; readonly situacaoReceptor: SituacaoReceptor },
+  contexto: {
+    readonly situacaoDoador: SituacaoDoadorOrgao;
+    readonly situacaoReceptor: SituacaoReceptor;
+    /** Outros destinos (aceito ou transplantado) do mesmo órgão do mesmo doador, sem contar este. */
+    readonly outrosDestinosOcupados: number;
+    /** Quantos receptores podem receber este órgão de um mesmo doador (catálogo; 1 por padrão). */
+    readonly quantidadePorDoador: number;
+  },
 ): FalhaTransplante[] {
   if (de === para) return [];
   if (!PASSOS_DESTINO[de].includes(para))
     return [f('transicao-destino', `O órgão ${de} não pode passar a ${para}.`)];
   const r: FalhaTransplante[] = [];
+  if (destinoOcupaOrgao(para) && contexto.outrosDestinosOcupados >= Math.max(1, contexto.quantidadePorDoador))
+    r.push(
+      f(
+        'orgao-ja-destinado',
+        contexto.quantidadePorDoador > 1
+          ? `Este órgão do doador já foi aceito ou transplantado em ${contexto.outrosDestinosOcupados} receptores (máximo ${contexto.quantidadePorDoador}).`
+          : 'Este órgão do doador já foi aceito ou transplantado em outro receptor.',
+      ),
+    );
   if (para === 'transplantado') {
     if (contexto.situacaoDoador !== 'captado')
       r.push(f('transplante-sem-captacao', 'O transplante exige a captação registrada no doador.'));

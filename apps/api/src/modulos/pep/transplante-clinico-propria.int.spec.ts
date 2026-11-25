@@ -45,7 +45,17 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
     figado: 0,
     par: 0,
   };
-  const st = { doador: 0, doadorV: 0, receptor: 0, receptorV: 0, receptor2: 0, destino: 0, destinoV: 0 };
+  const st = {
+    doador: 0,
+    doadorV: 0,
+    receptor: 0,
+    receptorV: 0,
+    receptor2: 0,
+    destino: 0,
+    destinoV: 0,
+    destino2: 0,
+    destino2V: 0,
+  };
 
   const limpar = async (e: Escritor) => {
     const pac = `(SELECT id FROM paciente WHERE numero_prontuario IN (${PRONT.join(',')}))`;
@@ -427,6 +437,31 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
     expect(Number(ap!['registrado_profissional_id'])).toBe(ids.medico);
   });
 
+  it('o mesmo órgão do doador não é aceito em mais receptores que a quantidade do catálogo', async () => {
+    // O rim do doador já foi transplantado no primeiro receptor; ofertar ao segundo é possível, aceitar não (1 por padrão).
+    const o = await porta.gravar('destino', ctx(), {
+      doador: st.doador,
+      receptor: st.receptor2,
+      orgao: ids.rim,
+    });
+    st.destino2 = Number(o.resultado.id);
+    await expect(
+      porta.gravar('destino', ctx(), { id: st.destino2, versao: 1, situacao: 'aceito' }),
+    ).rejects.toMatchObject(recusada('orgao-ja-destinado'));
+    const [antes] = await ler('SELECT situacao, versao FROM doador_receptor WHERE id = ?', [st.destino2]);
+    expect(antes).toMatchObject({ situacao: 'ofertado' });
+    expect(Number(antes!['versao'])).toBe(1);
+    // Rim é par: com a quantidade 2 no catálogo, o segundo receptor aceita.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `ajuste-${P}` }, (e) =>
+      e.executar('UPDATE orgao_transplante SET quantidade_por_doador = 2 WHERE id = ?', [ids.rim]),
+    );
+    expect((await porta.opcoes()).orgaos.find((x) => x.id === ids.rim)?.quantidadePorDoador).toBe(2);
+    const ac = await porta.gravar('destino', ctx(), { id: st.destino2, versao: 1, situacao: 'aceito' });
+    st.destino2V = Number(ac.resultado.versao);
+    const [depois] = await ler('SELECT situacao FROM doador_receptor WHERE id = ?', [st.destino2]);
+    expect(depois).toMatchObject({ situacao: 'aceito' });
+  });
+
   it('visão por paciente: doação completa e inscrição com o acompanhamento', async () => {
     const doador = await porta.doPaciente(ctx(), ids.doador);
     expect(doador.inscricoes).toHaveLength(0);
@@ -459,7 +494,7 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
 
   it('as rotas exigem o vínculo assistencial com o paciente e a leitura vai à trilha', async () => {
     const PERMS = ['pep.prontuario.ler', 'pep.evolucao.criar'];
-    const montar = (vinculo: boolean) => {
+    const montar = (pacientes: readonly number[]) => {
       const trilha = new RegistradorTrilhaMemoria();
       const ctrl = new TransplanteClinicoController(
         new EstadoProntuario(),
@@ -468,7 +503,11 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
         null,
         null,
         new VinculoSintetico(
-          vinculo ? [{ login: AUTOR, idPaciente: ids.receptor2, forma: 'atendimento-em-curso' }] : [],
+          pacientes.map((idPaciente) => ({
+            login: AUTOR,
+            idPaciente,
+            forma: 'atendimento-em-curso' as const,
+          })),
         ),
         null,
       );
@@ -496,7 +535,7 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
       return { trilha, ctrl, req };
     };
     const antes = await contar('receptor_transplante', 'paciente_id', ids.receptor2);
-    const sem = montar(false);
+    const sem = montar([]);
     await expect(sem.ctrl.doPaciente(ids.receptor2, sem.req())).rejects.toMatchObject({ status: 403 });
     expect(
       sem.trilha.eventos.some(
@@ -513,7 +552,7 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
       sem.ctrl.acompanhamento({ receptor: 999_999_999, observadoEm: hoje(), descricao: 'x' }, sem.req()),
     ).rejects.toMatchObject({ status: 404 });
     expect(await contar('receptor_transplante', 'paciente_id', ids.receptor2)).toBe(antes);
-    const com = montar(true);
+    const com = montar([ids.receptor2]);
     const tela = await com.ctrl.doPaciente(ids.receptor2, com.req());
     expect(tela.inscricoes).toHaveLength(1);
     expect(com.trilha.eventos.some((e) => e.paciente === ids.receptor2)).toBe(true);
@@ -526,5 +565,45 @@ describe.skipIf(SEM_BANCO)('doação e transplante de órgãos (banco próprio, 
     const op = await com.ctrl.opcoes();
     expect(op.orgaos.some((o) => o.id === ids.rim)).toBe(true);
     expect(op.parentescos.some((o) => o.id === ids.par)).toBe(true);
+
+    // Destino: o vínculo só com o doador não muda o destino nem a inscrição do receptor (403, nada grava).
+    const soDoador = montar([ids.doador]);
+    const destinosAntes = await contar('doador_receptor', 'doador_orgao_id', st.doador);
+    await expect(
+      soDoador.ctrl.destino({ id: st.destino2, versao: st.destino2V, situacao: 'recusado' }, soDoador.req()),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      soDoador.ctrl.destino({ doador: st.doador, receptor: st.receptor2, orgao: ids.figado }, soDoador.req()),
+    ).rejects.toMatchObject({ status: 403 });
+    const [dr2] = await ler('SELECT situacao, versao FROM doador_receptor WHERE id = ?', [st.destino2]);
+    expect(dr2).toMatchObject({ situacao: 'aceito' });
+    expect(Number(dr2!['versao'])).toBe(st.destino2V);
+    expect(await contar('doador_receptor', 'doador_orgao_id', st.doador)).toBe(destinosAntes);
+    expect(
+      soDoador.trilha.eventos.some(
+        (e) => e.evento === EVENTOS_AUDITAVEIS.permissaoNegada.codigo && e.paciente === ids.receptor2,
+      ),
+    ).toBe(true);
+    // Com vínculo com os dois, o destino grava.
+    const ambos = montar([ids.doador, ids.receptor2]);
+    const rec = await ambos.ctrl.destino(
+      { id: st.destino2, versao: st.destino2V, situacao: 'recusado' },
+      ambos.req(),
+    );
+    expect(rec).toMatchObject({ ok: true, mensagem: 'Destino do órgão gravado.' });
+    const [dr3] = await ler('SELECT situacao FROM doador_receptor WHERE id = ?', [st.destino2]);
+    expect(dr3).toMatchObject({ situacao: 'recusado' });
+
+    // Lista de receptores do órgão: só a partir de uma doação com vínculo com o doador; a consulta vai à trilha.
+    await expect(sem.ctrl.receptores(ids.rim, st.doador, sem.req())).rejects.toMatchObject({ status: 403 });
+    await expect(soDoador.ctrl.receptores(ids.rim, 999_999_999, soDoador.req())).rejects.toMatchObject({
+      status: 404,
+    });
+    const leiturasAntes = soDoador.trilha.eventos.filter((e) => e.paciente === ids.doador).length;
+    const lista = await soDoador.ctrl.receptores(ids.rim, st.doador, soDoador.req());
+    expect(lista.map((x) => x.id)).toEqual([st.receptor2]);
+    expect(soDoador.trilha.eventos.filter((e) => e.paciente === ids.doador).length).toBeGreaterThan(
+      leiturasAntes,
+    );
   });
 });

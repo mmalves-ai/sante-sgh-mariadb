@@ -363,7 +363,13 @@ export interface TransplanteDoPaciente {
   readonly inscricoes: readonly InscricaoLida[];
 }
 export interface OpcoesTransplante {
-  readonly orgaos: readonly { id: number; codigo: string; descricao: string; tipo: string }[];
+  readonly orgaos: readonly {
+    id: number;
+    codigo: string;
+    descricao: string;
+    tipo: string;
+    quantidadePorDoador: number;
+  }[];
   readonly parentescos: readonly Ref[];
 }
 export interface ReceptorNaLista {
@@ -555,9 +561,17 @@ export class TransplanteClinicoPropria {
     );
   }
 
-  /** O paciente a que a gravação se refere (o vínculo assistencial é conferido com ele); null quando não existe. */
-  pacienteDaGravacao(tipo: GravacaoTransplante, e: Record<string, unknown>): Promise<number | null> {
+  /**
+   * Os pacientes a que a gravação se refere (o vínculo assistencial é conferido com cada um); null quando o registro
+   * não existe. O destino do órgão altera o doador e o receptor (no transplante, a inscrição do receptor muda junto),
+   * por isso traz os dois.
+   */
+  pacientesDaGravacao(
+    tipo: GravacaoTransplante,
+    e: Record<string, unknown>,
+  ): Promise<readonly number[] | null> {
     return this.ler(async (l) => {
+      const um = (p: number | null) => (p === null ? null : [p]);
       const doDoador = async (d: unknown) =>
         numOuNull((await l.uma('SELECT paciente_id FROM doador_orgao WHERE id = ?', [d]))?.['paciente_id']);
       const doReceptor = async (r: unknown) =>
@@ -566,21 +580,40 @@ export class TransplanteClinicoPropria {
         );
       switch (tipo) {
         case 'doador':
-          return e['id'] ? doDoador(e['id']) : num(e['paciente']);
+          return um(e['id'] ? await doDoador(e['id']) : num(e['paciente']));
         case 'receptor':
-          return e['id'] ? doReceptor(e['id']) : num(e['paciente']);
+          return um(e['id'] ? await doReceptor(e['id']) : num(e['paciente']));
         case 'antibiotico':
         case 'preservacao':
-          return doDoador(e['doador']);
+          return um(await doDoador(e['doador']));
         case 'acompanhamento':
-          return doReceptor(e['receptor']);
+          return um(await doReceptor(e['receptor']));
         case 'destino': {
-          if (e['doador']) return doDoador(e['doador']);
-          const d = await l.uma('SELECT doador_orgao_id FROM doador_receptor WHERE id = ?', [e['id']]);
-          return d ? doDoador(d['doador_orgao_id']) : null;
+          const par = e['doador']
+            ? { doador: e['doador'], receptor: e['receptor'] }
+            : await l
+                .uma('SELECT doador_orgao_id, receptor_transplante_id FROM doador_receptor WHERE id = ?', [
+                  e['id'],
+                ])
+                .then((d) =>
+                  d ? { doador: d['doador_orgao_id'], receptor: d['receptor_transplante_id'] } : null,
+                );
+          if (!par) return null;
+          const pd = await doDoador(par.doador);
+          const pr = await doReceptor(par.receptor);
+          return pd === null || pr === null ? null : [pd, pr];
         }
       }
     });
+  }
+
+  /** O paciente doador de uma doação; null quando a doação não existe. */
+  pacienteDoDoador(doador: number): Promise<number | null> {
+    return this.ler(async (l) =>
+      numOuNull(
+        (await l.uma('SELECT paciente_id FROM doador_orgao WHERE id = ?', [doador]))?.['paciente_id'],
+      ),
+    );
   }
 
   /** Órgãos e tecidos ativos e os parentescos (quem responde pela família; doador vivo aparentado). */
@@ -588,13 +621,15 @@ export class TransplanteClinicoPropria {
     return this.ler(async (l) => ({
       orgaos: (
         await l.consultar(
-          'SELECT id, codigo, descricao, tipo FROM orgao_transplante WHERE ativo = TRUE ORDER BY tipo, descricao',
+          `SELECT id, codigo, descricao, tipo, quantidade_por_doador FROM orgao_transplante WHERE ativo = TRUE
+            ORDER BY tipo, descricao`,
         )
       ).map((x) => ({
         id: num(x['id']),
         codigo: String(x['codigo']),
         descricao: String(x['descricao']),
         tipo: String(x['tipo']),
+        quantidadePorDoador: num(x['quantidade_por_doador']),
       })),
       parentescos: (
         await l.consultar(
@@ -1159,17 +1194,30 @@ export class TransplanteClinicoPropria {
       return { id: novo, versao: 1, situacao: 'ofertado' };
     }
     const [dr] = await tx.consultarParaAtualizar(
-      'SELECT id, doador_orgao_id, receptor_transplante_id, situacao, observacao FROM doador_receptor WHERE id = ? AND excluido_em IS NULL',
+      `SELECT id, doador_orgao_id, receptor_transplante_id, orgao_transplante_id, situacao, observacao
+         FROM doador_receptor WHERE id = ? AND excluido_em IS NULL`,
       [e.id],
     );
     if (!dr) throw naoEncontrado('destino');
+    // O doador travado serializa os destinos dele: a contagem do órgão ocupado não corre contra outra gravação.
     const d = await this.doadorTravado(tx, num(dr['doador_orgao_id']), ctx);
     const r = await this.receptorTravado(tx, num(dr['receptor_transplante_id']), ctx);
     const situacaoReceptor = String(r['situacao']) as SituacaoReceptor;
+    const ocupados = await tx.uma(
+      `SELECT COUNT(*) AS n FROM doador_receptor
+        WHERE doador_orgao_id = ? AND orgao_transplante_id = ? AND id <> ? AND excluido_em IS NULL
+          AND situacao IN ('aceito','transplantado')`,
+      [dr['doador_orgao_id'], dr['orgao_transplante_id'], e.id],
+    );
+    const orgao = await tx.uma('SELECT quantidade_por_doador FROM orgao_transplante WHERE id = ?', [
+      dr['orgao_transplante_id'],
+    ]);
     recusar(
       conferirTransicaoDestino(String(dr['situacao']) as SituacaoDestinoOrgao, e.situacao, {
         situacaoDoador: String(d['situacao']) as SituacaoDoadorOrgao,
         situacaoReceptor,
+        outrosDestinosOcupados: num(ocupados?.['n'] ?? 0),
+        quantidadePorDoador: num(orgao?.['quantidade_por_doador'] ?? 1),
       }),
     );
     const v = await tx.alterar('doador_receptor', e.id, e.versao, {

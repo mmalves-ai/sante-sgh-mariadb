@@ -40,8 +40,8 @@ const enviadoDe = (rota: string, r: Request): Enviado => ({
 const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const OPCOES = {
   orgaos: [
-    { id: 1, codigo: 'rim', descricao: 'Rim', tipo: 'orgao' },
-    { id: 2, codigo: 'figado', descricao: 'Fígado', tipo: 'orgao' },
+    { id: 1, codigo: 'rim', descricao: 'Rim', tipo: 'orgao', quantidadePorDoador: 2 },
+    { id: 2, codigo: 'figado', descricao: 'Fígado', tipo: 'orgao', quantidadePorDoador: 1 },
   ],
   parentescos: [{ id: 5, descricao: 'Cônjuge' }],
 };
@@ -143,7 +143,7 @@ const INSCRICAO = {
   destinos: [],
 };
 
-async function simular(page: Page, enviados: Enviado[]): Promise<void> {
+async function simular(page: Page, enviados: Enviado[], doacao: typeof DOACAO = DOACAO): Promise<void> {
   await page.route(
     (u) => u.pathname.startsWith('/api/pep/transplante'),
     (rota) => {
@@ -153,8 +153,9 @@ async function simular(page: Page, enviados: Enviado[]): Promise<void> {
       if (r.method() === 'GET') {
         if (caminho === '/opcoes') return json(rota, OPCOES);
         if (caminho === `/paciente/${PACIENTE}`)
-          return json(rota, { doacoes: [DOACAO], inscricoes: [INSCRICAO] });
-        if (caminho === '/receptores')
+          return json(rota, { doacoes: [doacao], inscricoes: [INSCRICAO] });
+        // A lista de receptores só vem a partir da doação (o doador vai na consulta).
+        if (caminho === '/receptores' && u.searchParams.get('doador') === String(doacao.id))
           return json(rota, [
             {
               id: 80,
@@ -277,5 +278,27 @@ test.describe('Doação e transplante de órgãos @C2-110 @fase8', () => {
       descricao: 'Febre baixa sintética',
     });
     await semViolacaoAxe(page, '/pep/paciente/:id/transplante (API simulada)');
+  });
+
+  test('o fígado do doador já aceito em outro receptor não pode ser aceito de novo (API simulada)', async ({
+    page,
+  }) => {
+    const enviados: Enviado[] = [];
+    const outro = {
+      ...DOACAO.destinos[0]!,
+      id: 71,
+      receptor: 82,
+      prontuarioReceptor: '900004',
+      situacao: 'aceito',
+    };
+    await entrar(page, 'SINT.MEDICO');
+    await simular(page, enviados, { ...DOACAO, destinos: [...DOACAO.destinos, outro] });
+    await page.goto(`/pep/paciente/${PACIENTE}/transplante`);
+    const tela = page.getByTestId('transplante-tela');
+    await expect(tela.getByTestId('transplante-destino-70')).toBeVisible();
+    // Fígado: quantidade 1 por doador; o ofertado só pode ser recusado ou descartado.
+    await expect(tela.getByTestId('transplante-destino-70-aceito')).toHaveCount(0);
+    await expect(tela.getByTestId('transplante-destino-70-recusado')).toBeVisible();
+    expect(enviados).toEqual([]);
   });
 });
