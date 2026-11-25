@@ -42,9 +42,12 @@ const equipamentos = computed(() => [
     .filter((e) => e.ativo)
     .map((e) => ({ valor: String(e.id), rotulo: `${e.codigo} · ${e.descricao}` })),
 ]);
+// Retirar não é descartar: o motivo de prazo vencido ou descarte só aparece no expurgo (a API recusa do mesmo jeito).
 const motivos = computed(() => [
   escolha(),
-  ...(painel.data.value?.motivos ?? []).map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
+  ...(painel.data.value?.motivos ?? [])
+    .filter((m) => m.finalidade !== 'prazo_vencido' && m.finalidade !== 'descarte')
+    .map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
 ]);
 const motivosExpurgo = computed(() => [
   escolha(),

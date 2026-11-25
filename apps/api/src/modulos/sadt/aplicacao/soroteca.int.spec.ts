@@ -23,7 +23,7 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
   let nucleo: NucleoProprio;
   let s: ServicoSoroteca;
   let m: MassaSadt | null = null;
-  const ids = { amostra1: 0, amostra2: 0, reteste: 0, vencido: 0, codigo1: '', codigo2: '' };
+  const ids = { amostra1: 0, amostra2: 0, reteste: 0, vencido: 0, transf: 0, codigo1: '', codigo2: '' };
   const ctx = () => ({ cliente: CLIENTE, correlacao: 't-c1067' });
   const um = (sql: string, p: unknown[]) => nucleo.lerSomente(ctx(), (l) => l.uma(sql, p));
   const contar = async (sql: string, p: unknown[]) => Number((await um(sql, p))?.['n'] ?? 0);
@@ -64,6 +64,7 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
         );
       ids.reteste = await motivo('R', 'reteste', false);
       ids.vencido = await motivo('V', 'prazo_vencido', true);
+      ids.transf = await motivo('T', 'transferencia', true);
     });
   }, 60_000);
 
@@ -80,7 +81,16 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
         await x('DELETE FROM suporte_guarda_amostra WHERE estabelecimento_id = ?', [est]);
         await x('DELETE FROM equipamento_guarda_amostra WHERE estabelecimento_id = ?', [est]);
         await x('DELETE FROM regra_descarte_amostra WHERE estabelecimento_id = ?', [est]);
-        await x('DELETE FROM motivo_retirada_amostra WHERE id IN (?, ?)', [ids.reteste, ids.vencido]);
+        // Os eventos da amostra (guarda e descarte) citam o motivo: saem antes dele (a massa apaga o resto).
+        await x(
+          'DELETE ev FROM amostra_biologica_evento ev JOIN amostra_biologica a ON a.id = ev.amostra_biologica_id WHERE a.estabelecimento_id = ?',
+          [est],
+        );
+        await x('DELETE FROM motivo_retirada_amostra WHERE id IN (?, ?, ?)', [
+          ids.reteste,
+          ids.vencido,
+          ids.transf,
+        ]);
       });
     }
     await limparMassaSadt(nucleo, m);
@@ -166,6 +176,16 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
       ),
     ).toBe(1);
     expect(painel.suportes.find((x) => x.id === rack)?.sugerida).toEqual({ linha: 1, coluna: 2 });
+    // A amostra passa a armazenada no rastreio, com o evento, na mesma transação da guarda.
+    expect(await um('SELECT situacao FROM amostra_biologica WHERE id = ?', [ids.amostra1])).toMatchObject({
+      situacao: 'armazenada',
+    });
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM amostra_biologica_evento WHERE amostra_biologica_id = ? AND evento = 'armazenada'",
+        [ids.amostra1],
+      ),
+    ).toBe(1);
 
     // Recusas sem gravar: a mesma amostra de novo e a posição ocupada.
     expect(
@@ -188,6 +208,47 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
     const g2 = (await s.guardar(chave(), { codigo: ids.codigo2, equipamento: equip, suporte: rack })).id;
     const linha2 = await um('SELECT linha, coluna FROM guarda_amostra WHERE id = ?', [g2]);
     expect([Number(linha2?.['linha']), Number(linha2?.['coluna'])]).toEqual([1, 2]);
+
+    // Regra pelo resultado: o resultado digitado depois da guarda muda o prazo vigente (sem regravar a guarda).
+    await s.incluirRegra(chave(), {
+      descricao: 'RESULTADO ALTO',
+      abrangencia: 'resultado',
+      exame: m!.exameLab,
+      comparador: 'maior',
+      valorTexto: '100',
+      diasGuarda: 365,
+      prioridade: 9,
+    });
+    const antes = (await s.painel(contexto(m!))).guardas.find((g) => g.id === g2);
+    expect(antes?.descartePrevistoEm).toBe(linha1?.['d']);
+    await nucleo.escrever(ctx(), async (e) => {
+      const agora = new Date();
+      const re = await e.inserir(
+        `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, resultado_em, situacao, criado_em)
+         VALUES (?, ?, ?, ?, 'digitado', ?)`,
+        [m!.itemLab2, m!.base.paciente, m!.setorLab, agora, agora],
+      );
+      await e.inserir(
+        'INSERT INTO resultado_analito (resultado_exame_id, sequencia, analito_id, valor_numerico, criado_em) VALUES (?, 1, ?, 150, ?)',
+        [re, m!.analito, agora],
+      );
+    });
+    const depois = (await s.painel(contexto(m!))).guardas.find((g) => g.id === g2);
+    const ano = new Date(`${painel.hoje}T00:00:00Z`);
+    ano.setUTCDate(ano.getUTCDate() + 365);
+    expect(depois?.descartePrevistoEm).toBe(ano.toISOString().slice(0, 10));
+    expect(depois?.descarteGravadoEm).toBe(linha1?.['d']);
+    expect((await s.amostra(contexto(m!), ids.codigo2)).guardas[0]?.descartePrevistoEm).toBe(
+      ano.toISOString().slice(0, 10),
+    );
+
+    // Motivo de descarte não serve para retirar: só o expurgo descarta.
+    expect(codigoDe(await s.retirar(chave(), g1, { motivo: ids.vencido }).catch((x: unknown) => x))).toBe(
+      'retirada-para-descarte',
+    );
+    expect(await um('SELECT situacao FROM guarda_amostra WHERE id = ?', [g1])).toMatchObject({
+      situacao: 'guardada',
+    });
 
     // Retirada provisória (reteste) e devolução à mesma posição.
     await s.retirar(chave(), g1, { motivo: ids.reteste, observacao: 'RETESTE' });
@@ -217,11 +278,12 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
         [est],
       ),
     ).toBe(2);
-    // O prazo de g1 vence ontem (massa); a lista de vencidas e o expurgo só levam ela.
+    // g1 foi guardada há 31 dias (massa): o prazo vigente da regra do exame (30 dias) venceu ontem; a lista de
+    // vencidas e o expurgo só levam ela (g2 tem o prazo de 365 dias da regra pelo resultado).
     await nucleo.escrever(ctx(), (e) =>
       e.executar(
-        'UPDATE guarda_amostra SET descarte_previsto_em = DATE_SUB(?, INTERVAL 1 DAY) WHERE id = ?',
-        [painel.hoje, g1],
+        'UPDATE guarda_amostra SET guardado_em = DATE_SUB(guardado_em, INTERVAL 31 DAY) WHERE id = ?',
+        [g1],
       ),
     );
     expect((await s.painel(contexto(m!))).vencidas.map((v) => v.id)).toEqual([g1]);
@@ -234,6 +296,26 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
     expect(desc).toMatchObject({ situacao: 'descartada' });
     expect(Number(desc?.['marcado'])).toBe(1);
     expect(Number(desc?.['m'])).toBe(ids.vencido);
+    // A amostra sai do rastreio como descartada, com o evento, e não volta à soroteca com prazo novo.
+    expect(await um('SELECT situacao FROM amostra_biologica WHERE id = ?', [ids.amostra1])).toMatchObject({
+      situacao: 'descartada',
+    });
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM amostra_biologica_evento WHERE amostra_biologica_id = ? AND evento = 'descartada' AND motivo_retirada_amostra_id = ?",
+        [ids.amostra1, ids.vencido],
+      ),
+    ).toBe(1);
+    expect(
+      codigoDe(
+        await s
+          .guardar(chave(), { codigo: ids.codigo1, equipamento: equip, suporte: rack })
+          .catch((x: unknown) => x),
+      ),
+    ).toBe('amostra-descartada');
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM guarda_amostra WHERE amostra_biologica_id = ?', [ids.amostra1]),
+    ).toBe(1);
     expect(
       await contar('SELECT COUNT(*) AS n FROM movimento_guarda_amostra WHERE guarda_amostra_id = ?', [g1]),
     ).toBe(4);
@@ -248,6 +330,19 @@ describe.skipIf(SEM_BANCO)('soroteca (MariaDB, cliente f22_o2)', () => {
     expect(hist.guardas.map((g) => g.situacao)).toEqual(['descartada']);
     expect(hist.movimentos.map((x) => x.tipo)).toHaveLength(4);
     expect(hist.doPaciente.map((g) => g.id)).toEqual([g2]);
+
+    // Retirada definitiva (transferência): encerra a guarda (sai das ativas, fica no histórico) e a amostra pode
+    // voltar à soroteca numa guarda nova.
+    await s.retirar(chave(), g2, { motivo: ids.transf });
+    const semG2 = await s.painel(contexto(m!));
+    expect(semG2.guardas.map((g) => g.id)).not.toContain(g2);
+    expect((await s.amostra(contexto(m!), ids.codigo2)).guardas.map((g) => [g.id, g.situacao])).toEqual([
+      [g2, 'retirada'],
+    ]);
+    expect(codigoDe(await s.devolver(chave(), g2, {}).catch((x: unknown) => x))).toBe('retirada-definitiva');
+    const g3 = (await s.guardar(chave(), { codigo: ids.codigo2, equipamento: equip, suporte: rack })).id;
+    expect(g3).not.toBe(g2);
+    expect((await s.painel(contexto(m!))).guardas.map((g) => g.id)).toContain(g3);
 
     // Trilha de cada gravação na mesma transação.
     expect(

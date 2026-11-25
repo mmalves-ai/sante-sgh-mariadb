@@ -6,6 +6,8 @@ import {
   conferirEquipamento,
   conferirExpurgo,
   conferirGuarda,
+  guardaAtiva,
+  prazoDescarteVigente,
   conferirMotivoExpurgo,
   conferirPosicao,
   conferirRegraDescarte,
@@ -166,16 +168,78 @@ describe('soroteca: guarda, retirada, devolução e expurgo', () => {
   const reteste = { ativo: true, definitiva: false, finalidade: 'reteste' as const };
   const vencido = { ativo: true, definitiva: true, finalidade: 'prazo_vencido' as const };
   it('guarda só amostra viva e ainda não guardada', () => {
-    expect(codigo(() => conferirGuarda('recebida', false))).toBe('ok');
-    expect(codigo(() => conferirGuarda('rejeitada', false))).toBe('amostra-nao-guardavel');
-    expect(codigo(() => conferirGuarda('aguardando_coleta', false))).toBe('amostra-nao-guardavel');
-    expect(codigo(() => conferirGuarda('recebida', true))).toBe('amostra-ja-guardada');
+    const g = (situacao: 'guardada' | 'retirada' | 'descartada', retiradaDefinitiva = false) => ({
+      situacao,
+      retiradaDefinitiva,
+    });
+    expect(codigo(() => conferirGuarda('recebida', []))).toBe('ok');
+    expect(codigo(() => conferirGuarda('rejeitada', []))).toBe('amostra-nao-guardavel');
+    expect(codigo(() => conferirGuarda('aguardando_coleta', []))).toBe('amostra-nao-guardavel');
+    expect(codigo(() => conferirGuarda('recebida', [g('guardada')]))).toBe('amostra-ja-guardada');
+    // A retirada provisória ainda ocupa a soroteca; a definitiva encerra e a amostra pode ser guardada de novo.
+    expect(codigo(() => conferirGuarda('armazenada', [g('retirada')]))).toBe('amostra-ja-guardada');
+    expect(codigo(() => conferirGuarda('armazenada', [g('retirada', true)]))).toBe('ok');
+    // A descartada nunca volta, nem pela situação da amostra nem por uma guarda descartada.
+    expect(codigo(() => conferirGuarda('descartada', []))).toBe('amostra-descartada');
+    expect(codigo(() => conferirGuarda('analisada', [g('descartada')]))).toBe('amostra-descartada');
+    expect(guardaAtiva(g('guardada'))).toBe(true);
+    expect(guardaAtiva(g('retirada'))).toBe(true);
+    expect(guardaAtiva(g('retirada', true))).toBe(false);
+    expect(guardaAtiva(g('descartada'))).toBe(false);
+  });
+  it('prazo vigente: a regra pelo resultado digitado depois da guarda passa a valer; sem regra, fica o gravado', () => {
+    const regras = [
+      {
+        id: 1,
+        abrangencia: 'geral' as const,
+        exame: null,
+        comparador: null,
+        valorTexto: null,
+        fontePagadora: null,
+        diasGuarda: 7,
+        prioridade: 0,
+        ativo: true,
+      },
+      {
+        id: 2,
+        abrangencia: 'resultado' as const,
+        exame: 10,
+        comparador: 'maior' as const,
+        valorTexto: '100',
+        fontePagadora: null,
+        diasGuarda: 90,
+        prioridade: 5,
+        ativo: true,
+      },
+    ];
+    const semResultado = { exames: [10], fontePagadora: null, resultados: [] };
+    const comResultado = { ...semResultado, resultados: [{ exame: 10, valor: '150' }] };
+    expect(prazoDescarteVigente('2026-11-01', regras, semResultado, '2026-11-08').descartePrevistoEm).toBe(
+      '2026-11-08',
+    );
+    const v = prazoDescarteVigente('2026-11-01', regras, comResultado, '2026-11-08');
+    expect(v.regra?.id).toBe(2);
+    expect(v.descartePrevistoEm).toBe('2027-01-30');
+    expect(prazoDescarteVigente('2026-11-01', [], comResultado, '2026-11-08').descartePrevistoEm).toBe(
+      '2026-11-08',
+    );
+    expect(prazoDescarteVigente('2026-11-01', [], comResultado, null).descartePrevistoEm).toBeNull();
   });
   it('retirada com motivo ativo; devolução só da provisória', () => {
     expect(codigo(() => conferirRetirada('guardada', reteste))).toBe('ok');
     expect(codigo(() => conferirRetirada('guardada', null))).toBe('motivo-invalido');
     expect(codigo(() => conferirRetirada('guardada', { ...reteste, ativo: false }))).toBe('motivo-invalido');
     expect(codigo(() => conferirRetirada('descartada', reteste))).toBe('nao-guardada');
+    // Motivo de descarte só pelo expurgo (que confere o prazo e pede outra permissão).
+    expect(codigo(() => conferirRetirada('guardada', vencido))).toBe('retirada-para-descarte');
+    expect(
+      codigo(() => conferirRetirada('guardada', { ativo: true, definitiva: true, finalidade: 'descarte' })),
+    ).toBe('retirada-para-descarte');
+    expect(
+      codigo(() =>
+        conferirRetirada('guardada', { ativo: true, definitiva: true, finalidade: 'transferencia' }),
+      ),
+    ).toBe('ok');
     expect(codigo(() => conferirDevolucao('retirada', reteste))).toBe('ok');
     expect(codigo(() => conferirDevolucao('retirada', vencido))).toBe('retirada-definitiva');
     expect(codigo(() => conferirDevolucao('guardada', reteste))).toBe('nao-retirada');

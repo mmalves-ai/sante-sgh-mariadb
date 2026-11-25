@@ -200,6 +200,21 @@ export function descartePrevisto(diaDaGuarda: string, regra: RegraDescarte | nul
   return regra === null ? null : somarDiasDaGuarda(diaDaGuarda, regra.diasGuarda);
 }
 
+/**
+ * Prazo vigente da guarda, calculado de novo a cada leitura e no expurgo: a regra que vale hoje (resultado digitado
+ * depois da guarda, regra incluída ou desativada) sobre o dia da guarda. Sem regra que se aplique, fica o prazo gravado
+ * na guarda (o importado ou o da regra que valia), para a amostra não perder o prazo por falta de cadastro.
+ */
+export function prazoDescarteVigente(
+  diaDaGuarda: string,
+  regras: readonly RegraDescarte[],
+  c: ContextoDescarte,
+  gravado: string | null,
+): { readonly regra: RegraDescarte | null; readonly descartePrevistoEm: string | null } {
+  const regra = regraDescarteAplicavel(regras, c);
+  return { regra, descartePrevistoEm: regra === null ? gravado : descartePrevisto(diaDaGuarda, regra) };
+}
+
 // ── Posição no suporte ────────────────────────────────────────────────────────────────────────────────────────
 
 export interface Posicao {
@@ -238,13 +253,37 @@ export function primeiraPosicaoLivre(s: Suporte, ocupadas: readonly Posicao[]): 
 
 // ── Guarda, retirada, devolução e expurgo ─────────────────────────────────────────────────────────────────────
 
-export function conferirGuarda(situacaoAmostra: string, jaGuardada: boolean): void {
+/** Uma guarda anterior da amostra: a situação e se a retirada (quando houve) foi definitiva. */
+export interface GuardaAnterior {
+  readonly situacao: SituacaoGuarda;
+  readonly retiradaDefinitiva: boolean;
+}
+
+/**
+ * A guarda ainda ocupa a soroteca: guardada, ou retirada provisória (reteste, pesquisa) que pode voltar. A retirada
+ * definitiva (transferência, outro) encerra a guarda: sai da lista de ativas, mas o registro e os movimentos ficam.
+ */
+export function guardaAtiva(g: GuardaAnterior): boolean {
+  return g.situacao === 'guardada' || (g.situacao === 'retirada' && !g.retiradaDefinitiva);
+}
+
+/**
+ * Entra na soroteca só a amostra viva, sem guarda ativa e nunca descartada: a descartada pelo expurgo não volta com
+ * prazo novo (o descarte é físico; o registro fica).
+ */
+export function conferirGuarda(situacaoAmostra: string, anteriores: readonly GuardaAnterior[]): void {
+  if (situacaoAmostra === 'descartada' || anteriores.some((g) => g.situacao === 'descartada'))
+    throw new RecusaSoroteca(
+      'amostra-descartada',
+      'A amostra já foi descartada pela soroteca e não pode ser guardada de novo.',
+    );
   if (!GUARDAVEIS.has(situacaoAmostra))
     throw new RecusaSoroteca(
       'amostra-nao-guardavel',
       'Só a amostra coletada e ainda em uso entra na soroteca (rejeitada, cancelada ou descartada não).',
     );
-  if (jaGuardada) throw new RecusaSoroteca('amostra-ja-guardada', 'A amostra já está guardada na soroteca.');
+  if (anteriores.some(guardaAtiva))
+    throw new RecusaSoroteca('amostra-ja-guardada', 'A amostra já está guardada na soroteca.');
 }
 
 export interface MotivoRetirada {
@@ -253,12 +292,25 @@ export interface MotivoRetirada {
   readonly finalidade: FinalidadeRetirada;
 }
 
-/** Retirada com motivo do cadastro: a definitiva encerra a guarda; a provisória (reteste, pesquisa) permite devolver. */
+/** O motivo é de descarte (prazo vencido ou descarte): só vale pelo expurgo, nunca pela retirada. */
+export function motivoDeDescarte(motivo: MotivoRetirada): boolean {
+  return motivo.finalidade === 'prazo_vencido' || motivo.finalidade === 'descarte';
+}
+
+/**
+ * Retirada com motivo do cadastro: a definitiva (transferência, outro) encerra a guarda; a provisória (reteste,
+ * pesquisa) permite devolver. Descartar não é retirar: o motivo de descarte só passa pelo expurgo, que confere o prazo.
+ */
 export function conferirRetirada(situacao: SituacaoGuarda, motivo: MotivoRetirada | null): void {
   if (situacao !== 'guardada')
     throw new RecusaSoroteca('nao-guardada', 'Só a amostra guardada pode ser retirada.');
   if (!motivo || !motivo.ativo)
     throw new RecusaSoroteca('motivo-invalido', 'Escolha um motivo de retirada ativo.');
+  if (motivoDeDescarte(motivo))
+    throw new RecusaSoroteca(
+      'retirada-para-descarte',
+      'Descarte não é retirada: a amostra vencida sai pelo expurgo, que confere o prazo.',
+    );
 }
 
 /** Devolução: só a retirada provisória volta (o motivo da última retirada não pode ser definitivo). */
@@ -274,7 +326,7 @@ export function conferirDevolucao(situacao: SituacaoGuarda, motivoDaRetirada: Mo
 
 /** O expurgo pede motivo do tipo prazo vencido ou descarte. */
 export function conferirMotivoExpurgo(motivo: MotivoRetirada | null): void {
-  if (!motivo || !motivo.ativo || (motivo.finalidade !== 'prazo_vencido' && motivo.finalidade !== 'descarte'))
+  if (!motivo || !motivo.ativo || !motivoDeDescarte(motivo))
     throw new RecusaSoroteca(
       'motivo-expurgo',
       'O expurgo pede um motivo ativo de prazo vencido ou de descarte.',

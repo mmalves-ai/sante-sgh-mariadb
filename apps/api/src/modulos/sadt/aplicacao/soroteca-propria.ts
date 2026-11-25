@@ -16,8 +16,11 @@ import {
   conferirSuporte,
   descartePrevisto,
   type FinalidadeRetirada,
+  type GuardaAnterior,
+  guardaAtiva,
   type MotivoRetirada,
   type Posicao,
+  prazoDescarteVigente,
   primeiraPosicaoLivre,
   type RegraDescarte,
   regraDescarteAplicavel,
@@ -35,7 +38,7 @@ import {
 } from '@sgh/nucleo';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
+import { civil, FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
 
@@ -140,6 +143,8 @@ export const TABELAS_SOROTECA = [
   'regra_descarte_amostra',
   'guarda_amostra',
   'movimento_guarda_amostra',
+  'amostra_biologica',
+  'amostra_biologica_evento',
 ] as const;
 
 // ── Leitura ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -169,12 +174,16 @@ const motivoDe = (r: Linha | undefined | null): MotivoRetirada | null =>
 const SQL_GUARDA = `SELECT g.id, g.amostra_biologica_id, g.equipamento_guarda_amostra_id, g.suporte_guarda_amostra_id,
        g.tipo_material, g.prateleira, g.linha, g.coluna, g.guardado_em, g.descarte_previsto_em, g.situacao,
        g.retirado_em, g.descartado_em, g.motivo_retirada_amostra_id, a.codigo_barras, eq.descricao AS equipamento,
-       s.codigo AS suporte, r.paciente_id
+       s.codigo AS suporte, r.paciente_id, mr.definitiva AS retirada_definitiva
   FROM guarda_amostra g
   JOIN amostra_biologica a ON a.id = g.amostra_biologica_id
   JOIN equipamento_guarda_amostra eq ON eq.id = g.equipamento_guarda_amostra_id
   LEFT JOIN suporte_guarda_amostra s ON s.id = g.suporte_guarda_amostra_id
-  LEFT JOIN requisicao_exame r ON r.id = a.requisicao_exame_id`;
+  LEFT JOIN requisicao_exame r ON r.id = a.requisicao_exame_id
+  LEFT JOIN motivo_retirada_amostra mr ON mr.id = g.motivo_retirada_amostra_id`;
+
+/** Guarda ativa no SQL (o mesmo que guardaAtiva do domínio): guardada, ou retirada provisória que pode voltar. */
+const GUARDA_ATIVA = `(g.situacao = 'guardada' OR (g.situacao = 'retirada' AND COALESCE(mr.definitiva, FALSE) = FALSE))`;
 
 const guardaDe = (r: Linha) => ({
   id: n(r['id']),
@@ -190,8 +199,12 @@ const guardaDe = (r: Linha) => ({
   linha: nn(r['linha']),
   coluna: nn(r['coluna']),
   guardadoEm: instanteIso(r['guardado_em']) ?? '',
+  /** O prazo vigente (recalculado na leitura pela regra que vale hoje); o gravado na guarda fica em descarteGravadoEm. */
   descartePrevistoEm: dataIso(r['descarte_previsto_em']),
+  descarteGravadoEm: dataIso(r['descarte_previsto_em']),
+  regraVigente: null as number | null,
   situacao: texto(r['situacao']) as SituacaoGuarda,
+  retiradaDefinitiva: sim(r['retirada_definitiva']),
   retiradoEm: instanteIso(r['retirado_em']),
   descartadoEm: instanteIso(r['descartado_em']),
 });
@@ -243,9 +256,40 @@ function daRegra<T>(fn: () => T): T {
   }
 }
 
-async function hojeDo(l: Leitor, est: number): Promise<string> {
+async function fusoDo(l: Leitor, est: number): Promise<string> {
   const f = await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
-  return relogioNoFuso(texto(f?.['fuso_horario']) || FUSO_PADRAO).hoje;
+  return texto(f?.['fuso_horario']) || FUSO_PADRAO;
+}
+
+async function hojeDo(l: Leitor, est: number): Promise<string> {
+  return relogioNoFuso(await fusoDo(l, est)).hoje;
+}
+
+/**
+ * O prazo vigente de cada guarda, pela regra que vale agora (resultado digitado depois da guarda, regra incluída ou
+ * desativada), sobre o dia da guarda no fuso do estabelecimento. Sem gatilho e sem rotina: a leitura do painel, do
+ * histórico e o expurgo usam sempre este cálculo; o expurgo grava o prazo que usou.
+ */
+async function comPrazoVigente<
+  T extends { amostra: number; guardadoEm: string; descarteGravadoEm: string | null },
+>(
+  l: Leitor,
+  est: number,
+  guardas: readonly T[],
+): Promise<(T & { descartePrevistoEm: string | null; regraVigente: number | null })[]> {
+  if (guardas.length === 0) return [];
+  const fuso = await fusoDo(l, est);
+  const regras = await regrasAtivas(l, est);
+  const contextos = await contextosDescarte(l, [...new Set(guardas.map((g) => g.amostra))]);
+  return guardas.map((g) => {
+    const v = prazoDescarteVigente(
+      civil(new Date(g.guardadoEm), fuso).data,
+      regras,
+      contextos.get(g.amostra) ?? SEM_CONTEXTO,
+      g.descarteGravadoEm,
+    );
+    return { ...g, descartePrevistoEm: v.descartePrevistoEm, regraVigente: v.regra?.id ?? null };
+  });
 }
 
 async function regrasAtivas(l: Leitor, est: number): Promise<(RegraDescarte & { descricao: string })[]> {
@@ -386,12 +430,25 @@ export class ServicoSoroteca {
         definitiva: sim(r['definitiva']),
       }));
       const guardas = (
-        await l.consultar(
-          `${SQL_GUARDA} WHERE g.estabelecimento_id = ? AND g.situacao IN ('guardada','retirada') AND g.excluido_em IS NULL
-            ORDER BY g.descarte_previsto_em IS NULL, g.descarte_previsto_em, g.id LIMIT 1000`,
-          [est],
+        await comPrazoVigente(
+          l,
+          est,
+          (
+            await l.consultar(
+              `${SQL_GUARDA} WHERE g.estabelecimento_id = ? AND ${GUARDA_ATIVA} AND g.excluido_em IS NULL
+                ORDER BY g.id LIMIT 1000`,
+              [est],
+            )
+          )
+            .map(guardaDe)
+            .filter(guardaAtiva),
         )
-      ).map(guardaDe);
+      ).sort(
+        (a, b) =>
+          Number(a.descartePrevistoEm === null) - Number(b.descartePrevistoEm === null) ||
+          (a.descartePrevistoEm ?? '').localeCompare(b.descartePrevistoEm ?? '') ||
+          a.id - b.id,
+      );
       return {
         hoje,
         equipamentos,
@@ -415,9 +472,13 @@ export class ServicoSoroteca {
         [est, codigo.trim()],
       );
       if (!a) throw recusa('nao-encontrado', 'Nenhuma amostra com esse código neste estabelecimento.');
-      const guardas = (
-        await l.consultar(`${SQL_GUARDA} WHERE g.amostra_biologica_id = ? ORDER BY g.id DESC`, [n(a['id'])])
-      ).map(guardaDe);
+      const guardas = await comPrazoVigente(
+        l,
+        est,
+        (
+          await l.consultar(`${SQL_GUARDA} WHERE g.amostra_biologica_id = ? ORDER BY g.id DESC`, [n(a['id'])])
+        ).map(guardaDe),
+      );
       const movimentos = guardas.length
         ? (
             await l.consultar(
@@ -447,14 +508,16 @@ export class ServicoSoroteca {
           ? []
           : (
               await l.consultar(
-                `${SQL_GUARDA} WHERE g.estabelecimento_id = ? AND r.paciente_id = ? AND g.situacao IN ('guardada','retirada')
+                `${SQL_GUARDA} WHERE g.estabelecimento_id = ? AND r.paciente_id = ? AND ${GUARDA_ATIVA}
                    AND g.amostra_biologica_id <> ? ORDER BY g.id DESC LIMIT 100`,
                 [est, paciente, n(a['id'])],
               )
             ).map(guardaDe);
       const hoje = await hojeDo(l, est);
-      const ctxDescarte = await contextoDescarte(l, n(a['id']));
-      const regra = regraDescarteAplicavel(await regrasAtivas(l, est), ctxDescarte);
+      const regra = regraDescarteAplicavel(
+        await regrasAtivas(l, est),
+        (await contextosDescarte(l, [n(a['id'])])).get(n(a['id'])) ?? SEM_CONTEXTO,
+      );
       return {
         id: n(a['id']),
         codigo: texto(a['codigo_barras']),
@@ -584,21 +647,28 @@ export class ServicoSoroteca {
     const e = esquemaGuardar.parse(entrada);
     return this.gravar(c, 'sadt.soroteca.guardar', 'guarda_amostra', async (tx, est, usuario) => {
       const [a] = await tx.consultarParaAtualizar(
-        `SELECT id, situacao FROM amostra_biologica WHERE estabelecimento_id = ? AND codigo_barras = ? AND excluido_em IS NULL`,
+        `SELECT id, versao, situacao FROM amostra_biologica WHERE estabelecimento_id = ? AND codigo_barras = ? AND excluido_em IS NULL`,
         [est, e.codigo],
       );
       if (!a) throw recusa('nao-encontrado', 'Nenhuma amostra com esse código neste estabelecimento.');
-      const ja = await tx.uma(
-        `SELECT id FROM guarda_amostra WHERE amostra_biologica_id = ? AND situacao IN ('guardada','retirada')`,
-        [n(a['id'])],
-      );
-      daRegra(() => conferirGuarda(texto(a['situacao']), Boolean(ja)));
+      const anteriores: GuardaAnterior[] = (
+        await tx.consultar(
+          `SELECT g.situacao, mr.definitiva FROM guarda_amostra g
+             LEFT JOIN motivo_retirada_amostra mr ON mr.id = g.motivo_retirada_amostra_id
+            WHERE g.amostra_biologica_id = ? AND g.excluido_em IS NULL`,
+          [n(a['id'])],
+        )
+      ).map((g) => ({
+        situacao: texto(g['situacao']) as SituacaoGuarda,
+        retiradaDefinitiva: sim(g['definitiva']),
+      }));
+      daRegra(() => conferirGuarda(texto(a['situacao']), anteriores));
       await equipamentoAtivo(tx, est, e.equipamento);
       const pos = await this.posicao(tx, est, e.equipamento, e.suporte, e.linha, e.coluna);
       const hoje = await hojeDo(tx, est);
       const regra = regraDescarteAplicavel(
         await regrasAtivas(tx, est),
-        await contextoDescarte(tx, n(a['id'])),
+        (await contextosDescarte(tx, [n(a['id'])])).get(n(a['id'])) ?? SEM_CONTEXTO,
       );
       const prazo = descartePrevisto(hoje, regra);
       const agora = new Date();
@@ -629,6 +699,19 @@ export class ServicoSoroteca {
         ocorrido_em: agora,
         usuario_id: usuario,
       });
+      // A amostra passa a armazenada no rastreio (na mesma transação, com versão e o evento do rastreio).
+      if (texto(a['situacao']) !== 'armazenada') {
+        await tx.alterar('amostra_biologica', n(a['id']), n(a['versao']), { situacao: 'armazenada' });
+        await tx.incluir('amostra_biologica_evento', {
+          amostra_biologica_id: n(a['id']),
+          operacao: 'alteracao',
+          evento: 'armazenada',
+          ocorrido_em: agora,
+          usuario_id: usuario,
+          descricao: 'Guardada na soroteca',
+          dados: JSON.stringify({ guarda, de: texto(a['situacao']) }),
+        });
+      }
       return guarda;
     });
   }
@@ -643,6 +726,7 @@ export class ServicoSoroteca {
         [e.motivo],
       );
       daRegra(() => conferirRetirada(texto(g['situacao']) as SituacaoGuarda, motivoDe(m)));
+      const definitiva = sim(m?.['definitiva']);
       const agora = new Date();
       await tx.alterar('guarda_amostra', guardaId, n(g['versao']), {
         situacao: 'retirada',
@@ -657,6 +741,8 @@ export class ServicoSoroteca {
         prateleira: nn(g['prateleira']),
         linha: nn(g['linha']),
         coluna: nn(g['coluna']),
+        // A definitiva encerra a guarda (sai das ativas e libera a amostra para outra guarda); fica dito no movimento.
+        dados: JSON.stringify({ definitiva, encerraGuarda: definitiva }),
         observacao: e.observacao,
         ocorrido_em: agora,
         usuario_id: usuario,
@@ -729,28 +815,55 @@ export class ServicoSoroteca {
       );
       daRegra(() => conferirMotivoExpurgo(motivoDe(m)));
       const linhas = await tx.consultarParaAtualizar(
-        `SELECT id, versao, situacao, descarte_previsto_em, suporte_guarda_amostra_id, prateleira, linha, coluna
+        `SELECT id, versao, situacao, amostra_biologica_id, guardado_em, descarte_previsto_em,
+                suporte_guarda_amostra_id, prateleira, linha, coluna
            FROM guarda_amostra WHERE estabelecimento_id = ? AND id IN (${escolhidas.map(() => '?').join(', ')})`,
         [est, ...escolhidas],
       );
       const hoje = await hojeDo(tx, est);
-      const vencidas = vencidasParaExpurgo(
+      // O prazo vigente (a regra que vale hoje, com o resultado já digitado), não só o gravado na guarda.
+      const vigentes = await comPrazoVigente(
+        tx,
+        est,
         linhas.map((g) => ({
           id: n(g['id']),
+          amostra: n(g['amostra_biologica_id']),
+          guardadoEm: instanteIso(g['guardado_em']) ?? '',
+          descarteGravadoEm: dataIso(g['descarte_previsto_em']),
           situacao: texto(g['situacao']) as SituacaoGuarda,
-          descartePrevistoEm: dataIso(g['descarte_previsto_em']),
         })),
-        hoje,
       );
+      const vencidas = vencidasParaExpurgo(vigentes, hoje);
       daRegra(() => conferirExpurgo(escolhidas, vencidas));
+      const prazoDe = new Map(vigentes.map((v) => [v.id, v.descartePrevistoEm]));
       const agora = new Date();
       for (const g of linhas) {
         const gid = n(g['id']);
+        const amostra = n(g['amostra_biologica_id']);
         await tx.alterar('guarda_amostra', gid, n(g['versao']), {
           situacao: 'descartada',
           descartado_em: agora,
+          descarte_previsto_em: prazoDe.get(gid) ?? null,
           motivo_retirada_amostra_id: e.motivo,
         });
+        // A amostra sai do rastreio como descartada (com versão e o evento), e nunca volta à soroteca.
+        const [am] = await tx.consultarParaAtualizar(
+          'SELECT id, versao, situacao FROM amostra_biologica WHERE id = ? AND estabelecimento_id = ?',
+          [amostra, est],
+        );
+        if (am && texto(am['situacao']) !== 'descartada') {
+          await tx.alterar('amostra_biologica', amostra, n(am['versao']), { situacao: 'descartada' });
+          await tx.incluir('amostra_biologica_evento', {
+            amostra_biologica_id: amostra,
+            operacao: 'alteracao',
+            evento: 'descartada',
+            motivo_retirada_amostra_id: e.motivo,
+            ocorrido_em: agora,
+            usuario_id: usuario,
+            descricao: e.observacao ?? 'Expurgo da soroteca',
+            dados: JSON.stringify({ guarda: gid, de: texto(am['situacao']) }),
+          });
+        }
         await tx.incluir('movimento_guarda_amostra', {
           guarda_amostra_id: gid,
           tipo_movimento: 'descarte',
@@ -759,7 +872,7 @@ export class ServicoSoroteca {
           prateleira: nn(g['prateleira']),
           linha: nn(g['linha']),
           coluna: nn(g['coluna']),
-          descarte_previsto_em: dataIso(g['descarte_previsto_em']),
+          descarte_previsto_em: prazoDe.get(gid) ?? null,
           observacao: e.observacao,
           ocorrido_em: agora,
           usuario_id: usuario,
@@ -857,37 +970,55 @@ async function guardaTravada(tx: TxOperacao, est: number, guarda: number): Promi
   return g;
 }
 
-/** Exames, fonte pagadora e resultados já digitados da amostra (o que a regra de descarte compara). */
-async function contextoDescarte(l: Leitor, amostra: number) {
+interface ContextoDaAmostra {
+  readonly exames: number[];
+  readonly fontePagadora: number | null;
+  readonly resultados: { exame: number; valor: string }[];
+}
+const SEM_CONTEXTO: ContextoDaAmostra = { exames: [], fontePagadora: null, resultados: [] };
+
+/** Exames, fonte pagadora e resultados já digitados de cada amostra (o que a regra de descarte compara), em lote. */
+async function contextosDescarte(
+  l: Leitor,
+  amostras: readonly number[],
+): Promise<Map<number, ContextoDaAmostra>> {
+  const mapa = new Map<number, ContextoDaAmostra>();
+  if (amostras.length === 0) return mapa;
   const itens = await l.consultar(
-    `SELECT ei.id AS item, ei.exame_id, r.fonte_pagadora_id
+    `SELECT x.amostra_biologica_id AS amostra, ei.id AS item, ei.exame_id, r.fonte_pagadora_id
        FROM amostra_biologica_exame x
        JOIN exame_item ei ON ei.id = x.exame_item_id
        JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
-      WHERE x.amostra_biologica_id = ?`,
-    [amostra],
+      WHERE x.amostra_biologica_id IN (${amostras.map(() => '?').join(', ')})
+      ORDER BY x.amostra_biologica_id, ei.id`,
+    [...amostras],
   );
   const resultados = itens.length
-    ? (
-        await l.consultar(
-          `SELECT ei.exame_id, ra.valor_numerico, ra.valor_texto
-             FROM resultado_exame re
-             JOIN exame_item ei ON ei.id = re.exame_item_id
-             JOIN resultado_analito ra ON ra.resultado_exame_id = re.id
-            WHERE re.exame_item_id IN (${itens.map(() => '?').join(', ')})`,
-          itens.map((i) => n(i['item'])),
-        )
-      ).map((x) => ({
-        exame: n(x['exame_id']),
-        valor:
-          x['valor_texto'] !== null && x['valor_texto'] !== undefined
-            ? texto(x['valor_texto'])
-            : texto(x['valor_numerico']),
-      }))
+    ? await l.consultar(
+        `SELECT re.exame_item_id AS item, ei.exame_id, ra.valor_numerico, ra.valor_texto
+           FROM resultado_exame re
+           JOIN exame_item ei ON ei.id = re.exame_item_id
+           JOIN resultado_analito ra ON ra.resultado_exame_id = re.id
+          WHERE re.situacao <> 'cancelado' AND re.exame_item_id IN (${itens.map(() => '?').join(', ')})`,
+        itens.map((i) => n(i['item'])),
+      )
     : [];
-  return {
-    exames: [...new Set(itens.map((i) => n(i['exame_id'])))],
-    fontePagadora: itens.length ? nn(itens[0]?.['fonte_pagadora_id']) : null,
-    resultados,
-  };
+  for (const a of amostras) {
+    const meus = itens.filter((i) => n(i['amostra']) === a);
+    const doItem = new Set(meus.map((i) => n(i['item'])));
+    mapa.set(a, {
+      exames: [...new Set(meus.map((i) => n(i['exame_id'])))],
+      fontePagadora: meus.length ? nn(meus[0]?.['fonte_pagadora_id']) : null,
+      resultados: resultados
+        .filter((x) => doItem.has(n(x['item'])))
+        .map((x) => ({
+          exame: n(x['exame_id']),
+          valor:
+            x['valor_texto'] !== null && x['valor_texto'] !== undefined
+              ? texto(x['valor_texto'])
+              : texto(x['valor_numerico']),
+        })),
+    });
+  }
+  return mapa;
 }

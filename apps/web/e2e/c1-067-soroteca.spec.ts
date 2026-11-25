@@ -6,7 +6,7 @@
 // movimentos, expurgo que não apaga, trilha) está em apps/api/src/modulos/sadt/aplicacao/soroteca.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
-import { escolher } from './combos.js';
+import { escolher, rotulosDoCombo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const HOJE = '2026-03-15';
@@ -199,9 +199,12 @@ test.describe('Soroteca @C1-067 @fase8', () => {
     await expect(page.getByTestId('soroteca-guarda-atual')).toContainText('RACK-S1');
     await expect(page.getByTestId('soroteca-historico')).toContainText('USUARIO SINTETICO');
 
-    // Retirada: só com o motivo.
+    // Retirada: só com o motivo; o motivo de prazo vencido não é oferecido (descarte só pelo expurgo).
     const retirar = page.getByTestId('soroteca-retirar');
     await expect(retirar).toBeDisabled();
+    const motivosRetirada = await rotulosDoCombo(page.getByTestId('soroteca-motivo-retirada'));
+    expect(motivosRetirada).toContain('RETESTE SINTETICO');
+    expect(motivosRetirada).not.toContain('PRAZO VENCIDO SINTETICO');
     await escolher(page.getByTestId('soroteca-motivo-retirada'), { rotulo: 'RETESTE SINTETICO' });
     await retirar.click();
     await expect.poll(() => pedidos.map((p) => p.caminho)).toContain('guardas/81/retirar');
