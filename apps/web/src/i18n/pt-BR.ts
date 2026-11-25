@@ -68,6 +68,8 @@ import { mensagensIdentidade } from '../modulos/acesso/i18n-identidade.js';
 import { mensagensSaneamento } from '../modulos/acesso/i18n-saneamento.js';
 import { mensagensSegredos } from '../modulos/acesso/i18n-segredos.js';
 import { mensagensSbis } from '../modulos/administracao/i18n-sbis.js';
+import { mensagensRegrasAlerta } from '../modulos/administracao/i18n-alertas.js';
+import { mensagensLocaisAtendimento } from '../modulos/administracao/i18n-locais-atendimento.js';
 import { mensagensNutricao } from '../modulos/nutricao/i18n-nutricao.js';
 import { mensagensEspecialidades } from '../modulos/especialidades/i18n-especialidades.js';
 import { mensagensRouparia } from '../modulos/rouparia/i18n-rouparia.js';
@@ -2451,6 +2453,10 @@ export const mensagensWeb = {
   segredos: mensagensSegredos,
   // M59 (etapa 5, F5): certificação SBIS, backup verificado e concessões da coexistência.
   sbis: mensagensSbis,
+  // 01-ADM L75: manutenção das regras de alerta.
+  regrasAlerta: mensagensRegrasAlerta,
+  // 02-REC linha 34: manutenção dos locais de atendimento (consultórios e salas).
+  locaisAtendimento: mensagensLocaisAtendimento,
   // Entrada por e-mail: recuperação da conta da plataforma e o código do segundo fator no e-mail.
   acessoEmail: mensagensAcessoEmail,
 } as const;
