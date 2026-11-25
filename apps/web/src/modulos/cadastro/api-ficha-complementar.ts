@@ -147,3 +147,23 @@ export const encerrarResponsavel = (id: number, vinculo: number, corpo: object) 
 export const gravarRegraCampo = (corpo: object) => gravar('/api/cadastros/regras-campo', corpo);
 export const inativarRegraCampo = (id: number, versao: number) =>
   gravar(`/api/cadastros/regras-campo/${id}/inativar`, { versao });
+
+// Canal de entrada dos módulos de recepção (02-CAD linha 2): sem local, a abertura tira o módulo do canal.
+export const CANAIS_ENTRADA = ['agenda', 'urgencia', 'internacao', 'exames', 'demanda'] as const;
+const esquemaModulosRecepcao = z.object({
+  itens: z.array(
+    z.object({
+      id: z.number(),
+      codigo: z.string(),
+      descricao: z.string(),
+      ativo: z.boolean(),
+      canal: z.enum(CANAIS_ENTRADA).nullable(),
+      versao: z.number(),
+    }),
+  ),
+});
+export type ModulosRecepcao = z.infer<typeof esquemaModulosRecepcao>;
+export const lerModulosRecepcao = (b?: typeof fetch) =>
+  ler('/api/cadastros/modulos-recepcao', esquemaModulosRecepcao, b);
+export const gravarCanalModulo = (modulo: number, versao: number, canal: string | null) =>
+  gravar(`/api/cadastros/modulos-recepcao/${modulo}/canal`, { versao, canal });

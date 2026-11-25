@@ -2264,7 +2264,7 @@ local_atendimento_encaminhamento	REC	vinculo	F3	Locais para onde cada local pode
 local_atendimento_horario	REC	configuracao	F3	Horário de funcionamento do local por dia da semana e em dia não útil	F34; SPDATA TBLOCALHORA (31)	02	1
 local_atendimento_visibilidade	REC	vinculo	F3	Locais cujos atendimentos cada local pode consultar	F34; SPDATA TBLOCALPESATE	02	1
 modelo_ficha_impressa	REC	configuracao	F3	Modelos de ficha, guia e comprovante impressos na recepção, com título e conteúdo	F35; SPDATA REMODFIC, RETITFIC; MV CONFIGURACAO_COMPROVANTE_SETOR	02	2
-modulo_recepcao	REC	dominio	F3	Contextos de recepção (interna, externa, diagnóstico) que separam regras de cadastro, cancelamento e impressão	F2/F32; SPDATA TBMODULO_RECEPCAO, TBMOTCANCMOD	02	3
+modulo_recepcao	REC	dominio	F3	Contextos de recepção (interna, externa, diagnóstico) que separam regras de cadastro, cancelamento e impressão	F2/F32; SPDATA TBMODULO_RECEPCAO, TBMOTCANCMOD; canal de entrada do módulo (agenda, urgência, internação, exames, demanda; um módulo por canal), que dá o módulo da abertura sem local de atendimento (02-CAD linha 2; migração 04_REC/93_canal_modulo_recepcao)	02	3
 motivo_cancelamento_operacao	REC	dominio	F3	Motivos de cancelamento de atendimento e de marcação	F32/F43; SPDATA TBMOTEXC (10); MV MOT_CANC*, MOT_CANCEL*	02	7
 motivo_cancelamento_operacao_escopo	REC	vinculo	F3	Em que módulo de recepção e tipo de operação (atendimento, marcação) cada motivo vale	F32; SPDATA TBMOTCANCMOD, TBMOTCANCTP, TBREFCANCMODTP	02	4
 motivo_encerramento_atendimento	REC	dominio	F3	Motivos de encerramento do atendimento externo, com o código do padrão de troca	F32; MV MOT_ALT*, TISS_VERSAO_MOT_ALT*; internação reusa (04)	02	3

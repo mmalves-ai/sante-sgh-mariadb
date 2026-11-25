@@ -129,6 +129,7 @@ const BASE_PRONTUARIO: Readonly<Record<string, number>> = {
   R: 930_600,
   D: 930_700,
   G: 930_800,
+  K: 931_100,
 };
 const BASE_ORDEM: Readonly<Record<string, number>> = {
   A: 3010,
@@ -139,6 +140,7 @@ const BASE_ORDEM: Readonly<Record<string, number>> = {
   R: 3060,
   D: 3070,
   G: 3080,
+  K: 3110,
 };
 
 export async function prepararMassaAdt(marca: string): Promise<MassaAdt> {

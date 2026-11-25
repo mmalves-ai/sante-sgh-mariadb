@@ -14,7 +14,7 @@
 // também a senha chamada, de onde o servidor tira o módulo quando não há local).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
-import { escolher } from './combos.js';
+import { escolher, esperarSemSelectNativo, esperarValor } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const PACIENTE = 1001;
@@ -191,5 +191,67 @@ test.describe('@F3.1 @F3.1-01 @C1-007 regra de campo do cadastro na abertura do 
     );
     await expect(completar).toHaveAttribute('target', '_blank');
     await semViolacaoAxe(page, '/recepcao/atendimento/novo (recusa por cadastro incompleto)');
+  });
+  test('canal de entrada dos módulos: combo por módulo, aviso na hora do canal de outro módulo e gravação; axe', async ({
+    page,
+  }) => {
+    const pedidos: { caminho: string; corpo: Record<string, unknown> }[] = [];
+    const itens = [
+      {
+        id: 71,
+        codigo: 'URG',
+        descricao: 'RECEPCAO DA URGENCIA SINTETICA',
+        ativo: true,
+        canal: 'urgencia',
+        versao: 1,
+      },
+      {
+        id: 72,
+        codigo: 'INT',
+        descricao: 'RECEPCAO DA INTERNACAO SINTETICA',
+        ativo: true,
+        canal: null,
+        versao: 3,
+      },
+    ] as {
+      id: number;
+      codigo: string;
+      descricao: string;
+      ativo: boolean;
+      canal: string | null;
+      versao: number;
+    }[];
+    await entrar(page, 'SINT.ADMIN');
+    await page.route('**/api/cadastros/regras-campo**', (rota) => json(rota, { itens: [] }));
+    await page.route('**/api/cadastros/modulos-recepcao**', (rota) => {
+      const req = rota.request();
+      if (req.method() === 'GET') return json(rota, { itens });
+      const caminho = new URL(req.url()).pathname;
+      const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
+      pedidos.push({ caminho, corpo });
+      const alvo = itens.find((i) => caminho.endsWith(`/${i.id}/canal`))!;
+      alvo.canal = (corpo['canal'] as string | null) ?? null;
+      alvo.versao += 1;
+      return json(rota, { id: alvo.id });
+    });
+    await page.goto('/cadastros/regras-campo');
+    const painel = page.getByTestId('painel-canal-modulo');
+    await expect(painel.getByTestId('canal-modulo-URG')).toContainText('RECEPCAO DA URGENCIA SINTETICA');
+    await esperarSemSelectNativo(painel);
+
+    // O canal da urgência já é de outro módulo: a tela avisa na hora e não grava.
+    await escolher(painel.getByTestId('canal-modulo-selecao-INT'), { rotulo: /Urgência/ });
+    await expect(painel.getByTestId('recusa-canal')).toContainText('URG');
+    expect(pedidos).toHaveLength(0);
+
+    // O canal da internação: um clique grava, com a versão do módulo.
+    await escolher(painel.getByTestId('canal-modulo-selecao-INT'), { rotulo: /Internação/ });
+    await expect(painel.getByTestId('aviso-canal')).toContainText('gravado');
+    expect(pedidos[0]).toEqual({
+      caminho: '/api/cadastros/modulos-recepcao/72/canal',
+      corpo: { versao: 3, canal: 'internacao' },
+    });
+    await esperarValor(painel.getByTestId('canal-modulo-selecao-INT'), 'internacao');
+    await semViolacaoAxe(page, '/cadastros/regras-campo (canal de entrada dos módulos)');
   });
 });

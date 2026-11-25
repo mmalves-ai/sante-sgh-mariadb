@@ -4,7 +4,7 @@
 // sob pedido) e o formulário de inclusão; gravar no mesmo escopo atualiza a regra existente, e inativar nunca apaga.
 // A validação aparece na hora (campo sempre exigido pelo cadastro não vira opcional nem oculto); o servidor confere
 // tudo de novo pela regra do domínio. Acesso pelo nível do cargo: ler (config.parametro.ler), gravar e inativar
-// (config.parametro.editar).
+// (config.parametro.editar). Na mesma tela, o canal de entrada de cada módulo de recepção (CanalModuloRecepcaoPainel).
 import { tipoDoProblema } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -14,6 +14,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import { gravarRegraCampo, inativarRegraCampo, lerRegrasCampo } from '../api-ficha-complementar.js';
+import CanalModuloRecepcaoPainel from '../componentes/CanalModuloRecepcaoPainel.vue';
 
 // Os mesmos campos e exigências do domínio (dominio-cadastro, regras-campo.ts).
 const CAMPOS: Readonly<Record<string, string>> = {
@@ -259,6 +260,7 @@ const escopo = (r: {
         </tr>
       </tbody>
     </table>
+    <CanalModuloRecepcaoPainel />
   </section>
 </template>
 

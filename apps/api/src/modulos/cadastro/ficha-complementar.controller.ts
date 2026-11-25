@@ -10,6 +10,7 @@
 //        (?local= resolve o módulo de recepção do local; a resposta devolve o módulo aplicado)
 //   GET  /api/cadastros/ficha-complementar/tipos                       tipos de endereço, telefone e parentesco
 //   GET|POST /api/cadastros/regras-campo, POST .../:rid/inativar       regras de campo do cadastro
+//   GET  /api/cadastros/modulos-recepcao, POST .../:mid/canal         canal de entrada de cada módulo de recepção
 // Acesso só pelos níveis de cada cargo: leitura da ficha (cadastro.paciente.ler), edição (cadastro.paciente.editar),
 // parâmetros (config.parametro.ler/editar). Gravações pelo executor, com a trilha na mesma transação.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
@@ -19,6 +20,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { moduloRecepcaoDaAbertura } from './campos-abertura.js';
 import { idDaRota, linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from './comum.js';
+import type { ModuloRecepcaoComCanal } from './canal-modulo-recepcao.js';
 import {
   type ContatosPessoa,
   ACOES_CONTATO,
@@ -371,6 +373,34 @@ export class FichaComplementarController {
         s.porta,
         e,
         this.trilha(s, 'cadastro.gravarRegraCampo', 'regra_campo_cadastro', null),
+      ),
+    );
+    return { id: r };
+  }
+
+  @Get('modulos-recepcao')
+  @Permissao('config.parametro.ler')
+  async modulosRecepcao(@Req() req: RequisicaoAutorizada): Promise<{ itens: ModuloRecepcaoComCanal[] }> {
+    const s = sessaoDe(req);
+    return { itens: await this.rodar(() => this.servico().modulosRecepcao(s.porta)) };
+  }
+
+  @Post('modulos-recepcao/:mid/canal')
+  @HttpCode(200)
+  @Permissao('config.parametro.editar')
+  @AuditadoNoHandler('executor: trilha na mesma transação')
+  async gravarCanalModulo(
+    @Param('mid') mid: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const s = sessaoDe(req);
+    const b = corpoDe(corpo);
+    const r = await this.rodar(() =>
+      this.servico().gravarCanalModulo(
+        s.porta,
+        { modulo: idDaRota(mid), versao: id(b['versao']) ?? 0, canal: txt(b['canal']) },
+        this.trilha(s, 'cadastro.gravarCanalModuloRecepcao', 'modulo_recepcao', null),
       ),
     );
     return { id: r };

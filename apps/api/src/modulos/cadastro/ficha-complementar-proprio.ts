@@ -41,6 +41,12 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import {
+  type EntradaCanalModulo,
+  lerModulosComCanal,
+  type ModuloRecepcaoComCanal,
+  operacaoGravarCanalModulo,
+} from './canal-modulo-recepcao.js';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
 import { TIPO_TERMO_BALCAO } from './porta-propria-consentimento.js';
@@ -1050,6 +1056,15 @@ export class FichaComplementarPropria {
     trilha: RegistroTrilhaTela,
   ): Promise<number> {
     return this.executar(c, operacaoInativarRegra(trilha) as never, { id, versao }, trilha);
+  }
+
+  // Canal de entrada dos módulos de recepção (o módulo da abertura sem local sai do canal)
+  modulosRecepcao(c: ContextoPorta): Promise<ModuloRecepcaoComCanal[]> {
+    return this.ler(c, lerModulosComCanal);
+  }
+
+  gravarCanalModulo(c: ContextoPorta, e: EntradaCanalModulo, trilha: RegistroTrilhaTela): Promise<number> {
+    return this.executar(c, operacaoGravarCanalModulo(trilha) as never, e, trilha);
   }
 
   /** Recusa (422, com os campos) quando a gravação do cadastro fere a regra de campo do escopo. */
