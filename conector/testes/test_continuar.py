@@ -278,10 +278,11 @@ class RegraConcluidas(unittest.TestCase):
         self.assertEqual((r["tabelas"], r["duas_fases"]), (set(), ["B"]))
 
 
-    def _imagem(self, eid, sha, contagens):
+    def _imagem(self, eid, sha, contagens, arquivo="x.fdb", tamanho=1):
         img = self._x("INSERT INTO {b}.imagem (execucao_id, arquivo, tamanho_bytes, sha256, corte_em, ods_versao,"
                       " pagina_bytes, tabelas, registros_total, generators, somente_leitura, criado_em) VALUES"
-                      " (%s, 'x.fdb', 1, %s, UTC_TIMESTAMP(), 12, 8192, 5, 10, 0, 1, UTC_TIMESTAMP(3))", (eid, sha))
+                      " (%s, %s, %s, %s, UTC_TIMESTAMP(), 12, 8192, 5, 10, 0, 1, UTC_TIMESTAMP(3))",
+                      (eid, arquivo, tamanho, sha))
         for t, n in contagens.items():
             self._x("INSERT INTO {b}.imagem_tabela (imagem_id, tabela_origem, registros, criado_em)"
                     " VALUES (%s, %s, %s, UTC_TIMESTAMP(3))", (img, t, n))
@@ -346,6 +347,23 @@ class RegraConcluidas(unittest.TestCase):
         cache = {}
         r = continuar.concluidas(self.root, self.ctl, 7, plano, cont, {"a" * 64, "b" * 64}, _cache=cache)
         self.assertEqual((r["tabelas"], r["regra"]), ({"C"}, "deducao"))
+
+    def test_servidor_mesmo_resumo_nao_prova_a_mesma_base(self):
+        """Leitura direta do servidor: o sha256 da imagem é a identidade da base (não o conteúdo) e fica igual numa base
+        viva. E0 leu A com {1,2}; no hospital a 1 foi apagada e a 3 incluída (A continua com 2 linhas); E1 releu A,
+        gravou {2,3} e marcou A. Mesmo resumo e mesma contagem nas duas imagens: a prova da mesma base NÃO vale, conta
+        pelo índice (3 chaves > 2) e A roda de novo (a chave 1 entraria nas vistas refeitas, regra 3)."""
+        cont = {"A": 2}
+        x = "d" * 64
+        i0 = self._imagem(10, x, cont, arquivo="servidor:base", tamanho=0)
+        i1 = self._imagem(11, x, cont, arquivo="servidor:base", tamanho=0)
+        self._origem([("A", "1", i0), ("A", "2", i1), ("A", "3", i1)])
+        self._marcar(11, i1, ["A"])
+        self.root.commit()
+        plano = [{"tabela": "A", "destinos": ["dest_a"]}]
+        cache = {}
+        r = continuar.concluidas(self.root, self.ctl, 11, plano, cont, x, _cache=cache)
+        self.assertEqual((r["tabelas"], r["regra"], cache["consultas"]), (set(), "marca", 1))
 
     def test_pendencias_herdadas_por_tabela_e_em_segundo_plano(self):
         """Rodada retomada-rapida (b): as pendências herdadas não são copiadas (ficam na execução que as gerou e todo

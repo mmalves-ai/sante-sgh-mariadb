@@ -131,16 +131,24 @@ def _mesma_base(c, ctl, tabela, n, aceitos, cache):
     saem no máximo n chaves. Resumos diferentes, mesmo os aceitos como a mesma base declarada (regra 6), NÃO provam:
     dois arquivos com a mesma contagem podem ter chaves diferentes (a chave que sumiu entre as duas cópias continua no
     conector_origem com a imagem velha). Sem a prova (mais de um resumo, resumo não aceito ou contagem diferente),
-    conta-se pelo índice (_total_principal)."""
+    conta-se pelo índice (_total_principal).
+    Só vale para imagem de ARQUIVO, onde o sha256 é do conteúdo. Na leitura direta do servidor (`arquivo` começa por
+    "servidor:", `tamanho_bytes`=0) o resumo é a identidade da base (ods, página, criação, nome, versão), que fica igual
+    numa base viva enquanto as linhas mudam: a prova é recusada se houver qualquer imagem de servidor no controle."""
     if "imagens" not in cache:
-        c.execute("SELECT id, sha256 FROM `%s`.imagem" % ctl)
-        imgs = {int(i): s for i, s in c.fetchall()}
+        c.execute("SELECT id, sha256, arquivo, tamanho_bytes FROM `%s`.imagem" % ctl)
+        linhas = c.fetchall()
+        imgs = {int(i): s for i, s, _a, _t in linhas}
+        cache["imagem_servidor"] = any(str(a or "").startswith("servidor:") or not int(tb or 0)
+                                       for _i, _s, a, tb in linhas)
         c.execute("SELECT imagem_id, tabela_origem, registros FROM `%s`.imagem_tabela" % ctl)
         por_t = {}
         for i, t, r in c.fetchall():
             por_t.setdefault(t, {})[int(i)] = int(r)
         cache["imagens"] = (imgs, por_t)
     imgs, por_t = cache["imagens"]
+    if cache.get("imagem_servidor"):
+        return False
     resumos = set(imgs.values())
     if len(resumos) != 1 or not resumos <= aceitos:
         return False
