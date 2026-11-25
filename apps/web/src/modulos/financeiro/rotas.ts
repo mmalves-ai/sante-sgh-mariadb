@@ -155,6 +155,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.notaMercadoria.ler' },
   },
   {
+    // F7, 09-AREA linha 78 (C2-094): entrada de serviço tomado (nota contra o pedido, retenções e câmbio, EFD-REINF).
+    path: '/financeiro/fiscal/entradas-servico',
+    name: 'financeiro.fiscal.entradasServico',
+    component: () => import('./telas/EntradasServicoTela.vue'),
+    meta: { permissao: 'financeiro.entradaServico.ler' },
+  },
+  {
     // F8, 07-FIN linha 70: notas de crédito e de débito com tributos, do fornecedor e do cliente.
     path: '/financeiro/notas-credito-debito',
     name: 'financeiro.notasCreditoDebito',

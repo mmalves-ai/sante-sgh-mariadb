@@ -9,6 +9,7 @@ import { mensagensEncontroFinanceiro } from './i18n-encontro.js';
 import { mensagensFluxoAprovacao } from './i18n-fluxo-aprovacao.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
 import { mensagensNotaCreditoFinanceiro } from './i18n-nota-credito.js';
+import { mensagensEntradaServico } from './i18n-entrada-servico.js';
 import { mensagensNotaMercadoria } from './i18n-nota-mercadoria.js';
 import { mensagensPagamentoEletronico } from './i18n-pagamento-eletronico.js';
 import { mensagensPixFinanceiro } from './i18n-pix.js';
@@ -33,6 +34,8 @@ export const mensagensFinanceiro = {
   notaCd: mensagensNotaCreditoFinanceiro,
   // F7, 07-FIN linha 114 (C2-059): NF-e de saída de mercadoria (i18n-nota-mercadoria.ts).
   notaMercadoria: mensagensNotaMercadoria,
+  // F7, 09-AREA linha 78 (C2-094): entrada de serviço tomado (i18n-entrada-servico.ts).
+  entradaServico: mensagensEntradaServico,
   // F8, 07-FIN linha 65: fluxo de aprovação configurável e fila do aprovador (i18n-fluxo-aprovacao.ts).
   fluxoAprovacao: mensagensFluxoAprovacao,
   // F8, 07-FIN linha 79: portador do título, desconto e cessão de recebíveis (i18n-cessao.ts).

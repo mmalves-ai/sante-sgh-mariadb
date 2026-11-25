@@ -1692,6 +1692,7 @@
     "src/modulos/financeiro/nfe-assinatura.ts",
     "src/modulos/financeiro/nfe-assinatura.spec.ts",
     "src/modulos/financeiro/nota-mercadoria-permissao.spec.ts",
+    "src/modulos/financeiro/entrada-servico-permissao.spec.ts",
     "src/modulos/financeiro/aplicacao/periodo-financeiro.int.spec.ts",
     "src/modulos/financeiro/api/periodo-rotas.int.spec.ts"
   ]

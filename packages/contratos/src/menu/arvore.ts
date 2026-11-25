@@ -133,7 +133,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C2-094 (09-AREA linha 78): o item "Entrada de serviço tomado" do fiscal entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":501,"M":198,"P":57,"N":246};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":502,"M":198,"P":57,"N":247};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -417,6 +417,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Domínios da operadora e do plano próprio"],"titulo":"Domínios da operadora e do plano próprio","selo":"N","fase":6,"rota":"/consultas/item/faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.portal-do-prestador-credenciado","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Portal do prestador credenciado"],"titulo":"Portal do prestador credenciado","selo":"N","fase":6,"rota":"/operadora/portal-prestador","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.trocas-tiss-com-os-prestadores","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Trocas TISS com os prestadores"],"titulo":"Trocas TISS com os prestadores","selo":"N","fase":7,"rota":"/operadora/troca-tiss","permissao":"operadora.conta.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.remuneracao-e-pagamento-do-prestador","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Remuneração e pagamento do prestador"],"titulo":"Remuneração e pagamento do prestador","selo":"N","fase":7,"rota":"/operadora/remuneracao-rede","permissao":"operadora.prestador.ler"},
   {"id":"financeiro.contas-a-pagar.titulos-a-pagar-fornecedores-medicos-prestadores","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Títulos a pagar"],"titulo":"Títulos a pagar","selo":"M","fase":3,"rota":"/financeiro/pagar/titulos","permissao":"financeiro.tituloPagar.ler"},
   {"id":"financeiro.contas-a-pagar.borderos-de-pagamento","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Borderôs de pagamento"],"titulo":"Borderôs de pagamento","selo":"M","fase":3,"rota":"/financeiro/pagar/borderos","permissao":"financeiro.bordero.ler"},
   {"id":"financeiro.contas-a-pagar.adiantamentos-a-fornecedores-e-medicos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Adiantamentos a fornecedores e médicos"],"titulo":"Adiantamentos a fornecedores e médicos","selo":"M","fase":3,"rota":"/financeiro/pagar/adiantamentos","permissao":"financeiro.adiantamento.ler"},
