@@ -20,3 +20,4 @@ export * from './sisaih-leiaute.js';
 export * from './retorno.js';
 // M55 (etapa 5): contratualização SUS (contrato com o gestor, metas, apuração, painel produção × meta e repasse).
 export * from './meta.js';
+export * from './configuracao-sus.js';
