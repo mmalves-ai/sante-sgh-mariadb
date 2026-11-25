@@ -11,6 +11,11 @@ import { CalendarioController } from './calendario.controller.js';
 import { CALENDARIO_CADASTRO, CalendarioProprio } from './calendario-proprio.js';
 import { EstruturaGestaoController } from './estrutura-gestao.controller.js';
 import { ESTRUTURA_GESTAO, EstruturaGestaoPropria } from './estrutura-gestao-proprio.js';
+import { IdentidadeEstabelecimentoController } from './identidade-estabelecimento.controller.js';
+import {
+  IDENTIDADE_ESTABELECIMENTO,
+  IdentidadeEstabelecimentoPropria,
+} from './identidade-estabelecimento-propria.js';
 import { LinhasCuidadoController } from './linhas-cuidado.controller.js';
 import { LINHAS_CUIDADO, LinhasCuidadoPropria } from './linhas-cuidado-proprio.js';
 import { FichaComplementarController } from './ficha-complementar.controller.js';
@@ -72,6 +77,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   // F3.1 (02-CAD linhas 25, 26 e 27): estrutura (estabelecimento, unidades, setores e ramais) e configuração TISS.
   const estrutura = ctx.nucleo && cliente ? new EstruturaGestaoPropria(ctx.nucleo, cliente) : null;
   const tiss = ctx.nucleo && cliente ? new TissConfiguracaoPropria(ctx.nucleo, cliente) : null;
+  // F3.1 (02-CAD linha 26): logotipos e mantenedora do estabelecimento, só no banco do cliente.
+  const identidade = ctx.nucleo && cliente ? new IdentidadeEstabelecimentoPropria(ctx.nucleo, cliente) : null;
   // F8 (02-CAD linha 11): programas de saúde e linhas de cuidado do paciente, só no banco do cliente.
   const linhasCuidado = ctx.nucleo && cliente ? new LinhasCuidadoPropria(ctx.nucleo, cliente) : null;
   return {
@@ -86,6 +93,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       ProfissionalComplementoController,
       CadastroLigacoesController,
       EstruturaGestaoController,
+      IdentidadeEstabelecimentoController,
       CalendarioController,
       LinhasCuidadoController,
     ],
@@ -100,6 +108,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       { provide: CALENDARIO_CADASTRO, useValue: calendario },
       { provide: ESTRUTURA_GESTAO, useValue: estrutura },
       { provide: TISS_CONFIGURACAO, useValue: tiss },
+      { provide: IDENTIDADE_ESTABELECIMENTO, useValue: identidade },
       { provide: LINHAS_CUIDADO, useValue: linhasCuidado },
     ],
     exports: [PORTA_CADASTRO],
