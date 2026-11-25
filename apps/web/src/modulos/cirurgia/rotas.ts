@@ -62,6 +62,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.sala.ler', menu: `${M} > Documentos exigidos` },
   },
   {
+    // F8, 04-CC L106: auditoria da profilaxia antimicrobiana cirúrgica (painel da CCIH e protocolo).
+    path: '/cirurgia/profilaxia',
+    name: 'cirurgia.profilaxia',
+    component: () => import('./telas/ProfilaxiaCirurgicaTela.vue'),
+    meta: { permissao: 'qualidade.ccih.ler', menu: `${M} > Profilaxia antimicrobiana` },
+  },
+  {
     // F3.4, 04-CC L91: cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter).
     path: '/cirurgia/procedimentos-cirurgicos',
     name: 'cirurgia.procedimentos-cirurgicos',
