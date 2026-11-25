@@ -5,6 +5,9 @@
 // trilha; a mesma sequência dá o mesmo na porta de memória), a referência vale nas competências
 // seguintes; outro estabelecimento não vê nada; as fontes agregadas; a coleta (substitui só a coletada anterior) e a
 // apuração (linhas por centro, substituição pela versão lida e aprovação) gravadas e relidas.
+// Resultado por fonte pagadora (receita contra custo): contas de duas fontes gravadas na apuração; a receita bruta, a
+// glosa, o recurso, a receita líquida, o custo e a margem por fonte somam as contas de cada uma; outro estabelecimento
+// não vê nem grava as contas.
 // Massa SINTÉTICA (centros e domínios fictícios), limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { ESTATISTICAS_CUSTO, TIPOS_DADO_ESTATISTICA } from '@sgh/contratos';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -61,6 +64,19 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-limpa' }, async (e) => {
       for (const est of [estA, estB].filter(Boolean)) {
+        // O custo por conta das apurações de teste e as contas sintéticas das duas fontes pagadoras.
+        await e.executar(
+          `DELETE k FROM custo_conta_paciente k JOIN apuracao_custo a ON a.id = k.apuracao_custo_id
+            WHERE a.estabelecimento_id = ? AND a.competencia IN ('2026-04-01', '2026-05-01')`,
+          [est],
+        );
+        await e.executar(
+          "DELETE FROM conta_hospitalar WHERE estabelecimento_id = ? AND numero LIKE 'F2203-CH%'",
+          [est],
+        );
+        await e.executar("DELETE FROM atendimento WHERE estabelecimento_id = ? AND numero LIKE 'F2203-AT%'", [
+          est,
+        ]);
         await e.executar(
           `DELETE s FROM estatistica_centro_mes s JOIN centro_custo c ON c.id = s.centro_custo_id
             WHERE c.estabelecimento_id = ? AND c.codigo LIKE 'F2203%'`,
@@ -635,5 +651,211 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
     expect(await porta.apuracoes(ctxB, '2026-04')).toEqual([]);
     const nomes = await porta.nomesConvenios(ctxA, [999_999_999]);
     expect(nomes.size).toBe(0);
+  });
+
+  it('resultado por fonte pagadora: contas de duas fontes; receita, glosa, custo e margem por fonte', async () => {
+    const fontes = { a: 0, b: 0 };
+    const contas: number[] = [];
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-massa' }, async (e) => {
+      const agora = new Date();
+      const fonte = (codigo: string, nome: string) =>
+        garantir(
+          e,
+          'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+          [codigo],
+          "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES (?, ?, 'operadora', 'ativa', ?)",
+          [codigo, nome, agora],
+        );
+      fontes.a = await fonte('F2203-OPA', 'OPERADORA A F2203');
+      fontes.b = await fonte('F2203-OPB', 'OPERADORA B F2203');
+      const porCodigo = (tabela: string, codigo: string, colunas: Record<string, unknown>) =>
+        garantir(
+          e,
+          `SELECT id FROM ${tabela} WHERE codigo = ?`,
+          [codigo],
+          `INSERT INTO ${tabela} (codigo, ${Object.keys(colunas).join(', ')}, criado_em) VALUES (?, ${Object.keys(
+            colunas,
+          )
+            .map(() => '?')
+            .join(', ')}, ?)`,
+          [codigo, ...Object.values(colunas), agora],
+        );
+      const pessoa = (nome: string) =>
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+          [nome, agora],
+        );
+      const pp = await pessoa('PACIENTE SINTETICO F2203');
+      const paciente = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pp],
+        "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
+        [pp, 922_030_001, agora],
+      );
+      const pm = await pessoa('MEDICO SINTETICO F2203');
+      const profissional = await garantir(
+        e,
+        'SELECT id FROM profissional WHERE pessoa_fisica_id = ?',
+        [pm],
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pm, agora],
+      );
+      const tiss = await garantir(
+        e,
+        'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
+        ['E9'],
+        "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('E9', 'CARATER F2203', 'teste', ?)",
+        [agora],
+      );
+      const categoria = await porCodigo('categoria_atendimento', 'F2203-AMB', {
+        descricao: 'AMBULATORIO F2203',
+        tipo_base: 'externo',
+      });
+      const tipoConta = await porCodigo('tipo_conta', 'F2203-EXT', {
+        descricao: 'EXTERNA F2203',
+        natureza: 'externa',
+      });
+      // Duas contas na fonte A e uma na fonte B, todas da competência de maio.
+      for (const [i, f] of [fontes.a, fontes.a, fontes.b].entries()) {
+        const atendimento = await e.inserir(
+          `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+             fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, '2026-05-10 08:00:00', ?)`,
+          [estA, `F2203-AT${i + 1}`, paciente, categoria, tiss, f, profissional, agora],
+        );
+        contas.push(
+          await e.inserir(
+            `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id,
+               natureza, competencia, inicio_em, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, 'ambulatorial', '2026-05-01', '2026-05-10 08:00:00', ?)`,
+            [estA, `F2203-CH${i + 1}`, atendimento, paciente, f, tipoConta, agora],
+          ),
+        );
+      }
+    });
+    // Centavos. Fonte A: 10.000 com glosa de 1.500 e recurso acatado de 500 (líquida 9.000) contra custo 7.000; 5.000 sem
+    // glosa contra custo 6.500 (margem negativa). Fonte B: 8.000 com glosa de 2.000 (líquida 6.000) contra custo 4.000.
+    const conta = (
+      i: number,
+      convenio: number,
+      receitaBruta: number,
+      glosa: number,
+      recurso: number,
+      custo: number,
+    ) => {
+      const receitaLiquida = receitaBruta - glosa + recurso;
+      return {
+        conta: contas[i]!,
+        numero: i + 1,
+        tipoConta: 'F2203-EXT',
+        convenio,
+        procedimento: null,
+        receitaBruta,
+        glosa,
+        recurso,
+        receitaLiquida,
+        custo,
+        margem: receitaLiquida - custo,
+        parcelas: [[centroUti, custo, 100]] as const,
+      };
+    };
+    const lista = [
+      conta(0, fontes.a, 10_000, 1_500, 500, 7_000),
+      conta(1, fontes.a, 5_000, 0, 0, 6_500),
+      conta(2, fontes.b, 8_000, 2_000, 0, 4_000),
+    ];
+    const entrada = {
+      competencia: '2026-05',
+      substitui: null,
+      rotuloParcial: null,
+      limiteLinha: 1_000_000,
+      custoProdutivos: 17_500,
+      totais: '{"direto":17500}',
+      completude: '{"ok":true}',
+      pendencias: '[]',
+      impressao: 'b'.repeat(64),
+      justificativa: null,
+      duracaoMs: 12,
+      linhas: [],
+      contas: lista,
+    };
+    // A conta de um estabelecimento não entra na apuração de outro.
+    await expect(
+      porta.gravarApuracao(ctxB, entrada, 'teste', trilha('apuracao_custo', null)),
+    ).rejects.toMatchObject({ problema: { codigo: 'conta-inexistente' } });
+    const { apuracao } = await porta.gravarApuracao(ctxA, entrada, 'teste', trilha('apuracao_custo', null));
+    // O que ficou no banco: uma linha por conta, com a fonte pagadora, o atendimento e a margem percentual.
+    const gravado = await ler<{
+      n: unknown;
+      fontes: unknown;
+      receita: unknown;
+      glosa: unknown;
+      custo: unknown;
+    }>(
+      `SELECT COUNT(*) AS n, COUNT(DISTINCT fonte_pagadora_id) AS fontes, SUM(valor_receita) AS receita,
+              SUM(valor_glosa) AS glosa, SUM(custo_total) AS custo
+         FROM custo_conta_paciente WHERE apuracao_custo_id = ? AND excluido_em IS NULL`,
+      [apuracao.id],
+    );
+    expect(Number(gravado?.n)).toBe(3);
+    expect(Number(gravado?.fontes)).toBe(2);
+    expect(Number(gravado?.receita)).toBeCloseTo(230, 2);
+    expect(Number(gravado?.glosa)).toBeCloseTo(35, 2);
+    expect(Number(gravado?.custo)).toBeCloseTo(175, 2);
+    const negativa = await ler<{ margem_percentual: unknown; data_atendimento: unknown }>(
+      'SELECT margem_percentual, data_atendimento FROM custo_conta_paciente WHERE apuracao_custo_id = ? AND conta_hospitalar_id = ?',
+      [apuracao.id, contas[1]],
+    );
+    expect(Number(negativa?.margem_percentual)).toBeCloseTo(-30, 4);
+
+    const grupos = await porta.resultadoAgrupado(ctxA, apuracao.id, 'convenio');
+    const porFonte = new Map(grupos.map((g) => [g.chave, g]));
+    expect(grupos).toHaveLength(2);
+    expect(porFonte.get(String(fontes.a))).toEqual({
+      chave: String(fontes.a),
+      contas: 2,
+      receitaBruta: 15_000,
+      glosa: 1_500,
+      recurso: 500,
+      receitaLiquida: 14_000,
+      custo: 13_500,
+      margem: 500,
+    });
+    expect(porFonte.get(String(fontes.b))).toEqual({
+      chave: String(fontes.b),
+      contas: 1,
+      receitaBruta: 8_000,
+      glosa: 2_000,
+      recurso: 0,
+      receitaLiquida: 6_000,
+      custo: 4_000,
+      margem: 2_000,
+    });
+    // As contas da fonte B e as de margem negativa; os nomes das fontes; outro estabelecimento não vê.
+    const daB = await porta.contasApuracao(ctxA, apuracao.id, {
+      convenio: fontes.b,
+      negativas: false,
+      pagina: 1,
+    });
+    expect(daB.total).toBe(1);
+    expect(daB.contas[0]).toMatchObject({
+      conta: contas[2],
+      convenio: fontes.b,
+      tipoConta: 'F2203-EXT',
+      receitaLiquida: 6_000,
+      custo: 4_000,
+      margem: 2_000,
+      prontuario: 922_030_001,
+    });
+    const negativas = await porta.contasApuracao(ctxA, apuracao.id, { negativas: true, pagina: 1 });
+    expect(negativas.contas.map((k) => [k.conta, k.convenio, k.margem])).toEqual([
+      [contas[1], fontes.a, -1_500],
+    ]);
+    const nomes = await porta.nomesConvenios(ctxA, [fontes.a, fontes.b]);
+    expect([nomes.get(fontes.a), nomes.get(fontes.b)]).toEqual(['OPERADORA A F2203', 'OPERADORA B F2203']);
+    expect(await porta.resultadoAgrupado(ctxB, apuracao.id, 'convenio')).toEqual([]);
   });
 });
