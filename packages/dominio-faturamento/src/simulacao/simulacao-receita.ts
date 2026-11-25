@@ -149,7 +149,11 @@ export function objetivoDoCenario(regras: readonly RegraCenarioReceita[]): Objet
 }
 
 /** O tipo da simulação: uma só natureza de mudança dá o tipo dela; mais de uma, o cenário completo. */
-export function tipoDaSimulacao(regras: readonly RegraCenarioReceita[]): TipoSimulacaoReceita {
+export function tipoDaSimulacao(
+  regras: readonly (Pick<RegraCenarioReceita, 'tabelaDestinoId' | 'fonteDestinoId' | 'percentualAjuste'> & {
+    readonly conversoes: readonly unknown[];
+  })[],
+): TipoSimulacaoReceita {
   const tabela = regras.some((r) => r.tabelaDestinoId !== null || r.fonteDestinoId !== null);
   const reajuste = regras.some((r) => r.percentualAjuste !== null && r.percentualAjuste !== 0);
   const conversao = regras.some((r) => r.conversoes.length > 0);
