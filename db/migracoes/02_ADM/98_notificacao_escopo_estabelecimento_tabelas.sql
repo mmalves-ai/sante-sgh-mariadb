@@ -38,11 +38,17 @@ CREATE TABLE IF NOT EXISTS envio_notificacao_aviso (
   canal_notificacao_id   BIGINT UNSIGNED NOT NULL COMMENT 'Canal do envio (repetido para a unicidade por canal)',
   criado_em              DATETIME(3) NOT NULL,
   criado_por             BIGINT UNSIGNED NULL,
+  alterado_em            DATETIME(3) NULL,
+  alterado_por           BIGINT UNSIGNED NULL,
   versao                 INT UNSIGNED NOT NULL DEFAULT 1,
   UNIQUE KEY uq_envio_notificacao_aviso_canal_aviso (canal_notificacao_id, notificacao_usuario_id),
   KEY ix_envio_notificacao_aviso_envio (envio_notificacao_id),
   KEY ix_envio_notificacao_aviso_aviso (notificacao_usuario_id)
 ) COMMENT='Cada aviso reunido num envio de notificação, único por canal (o aviso não sai duas vezes pelo mesmo canal)';
+-- Colunas de auditoria (convenção do DDL, ADR 0002 parte 2), também para o banco que já tinha a tabela.
+ALTER TABLE envio_notificacao_aviso
+  ADD COLUMN IF NOT EXISTS alterado_em DATETIME(3) NULL AFTER criado_por,
+  ADD COLUMN IF NOT EXISTS alterado_por BIGINT UNSIGNED NULL AFTER alterado_em;
 
 INSERT IGNORE INTO envio_notificacao_aviso (envio_notificacao_id, notificacao_usuario_id, canal_notificacao_id, criado_em)
 SELECT en.id, j.aviso, en.canal_notificacao_id, en.criado_em

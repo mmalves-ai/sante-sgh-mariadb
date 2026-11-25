@@ -665,7 +665,8 @@ export async function exigirTipoLancamentoLiberado(
 ): Promise<void> {
   const perfis = await perfisNoTipoLancamento(l, est, usuario, operacao);
   if (conferirTipoLancamento(perfis, tipo, '', operacao) === null) return;
-  const d = await l.uma(`SELECT descricao FROM ${alvoDe(operacao).tabela} WHERE id = ?`, [tipo]);
+  const alvo = alvoDe(operacao);
+  const d = await l.uma(`SELECT descricao FROM ${alvo.tabela} WHERE id = ?`, [tipo]);
   recusar(conferirTipoLancamento(perfis, tipo, String(d?.['descricao'] ?? tipo), operacao));
 }
 
