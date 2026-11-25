@@ -19,6 +19,7 @@ import {
   fimDoAcesso,
   pedidoExpirado,
   podeDecidirPedido,
+  podeRevogarAutorizacao,
   senhaBloqueada,
   validarConfiguracaoRestrito,
   validarDecisaoPedido,
@@ -34,6 +35,7 @@ import {
   type Linha,
   type Operacao,
   recusa,
+  type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -47,6 +49,8 @@ const T_AUTORIZACAO = 'autorizacao_acesso_prontuario_restrito';
 const T_SENHA = 'senha_prontuario_paciente';
 const T_ACESSO = 'acesso_prontuario_restrito';
 const T_LEITURA = 'leitura_prontuario';
+/** O perfil da diretoria clínica (o mesmo das concessões por perfil em @sgh/contratos). */
+const PERFIL_DIRETORIA_CLINICA = 'diretoria-clinica';
 
 const num = (v: unknown): number => Number(v);
 const numN = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
@@ -162,10 +166,11 @@ export type EntradaCancelarPedido = z.infer<typeof esquemaCancelarPedido>;
 export const esquemaAbrir = z.object({ paciente: z.number().int().positive() });
 export type EntradaAbrir = z.infer<typeof esquemaAbrir>;
 
-interface Gravado {
+// Alias de tipo (não interface): o resultado da operação do executor é um registro de valores simples.
+type Gravado = {
   readonly id: number;
   readonly versao: number;
-}
+};
 
 // ---- leituras comuns ----
 async function configuracaoDe(
@@ -238,11 +243,28 @@ async function temPapel(l: Leitor, usuario: number, papel: number | null): Promi
   return Boolean(r);
 }
 
-/** A autorização vigente do usuário para o paciente, com as aberturas já feitas. */
+/** Os perfis vigentes de quem decide na unidade: a diretoria clínica e o administrador (pode tudo, ADR 0002). */
+async function perfisDe(l: Leitor, est: number, usuario: number) {
+  const ls = await l.consultar<Linha>(
+    `SELECT DISTINCT p.codigo, p.administrador FROM usuario_perfil up
+       JOIN perfil_acesso p ON p.id = up.perfil_acesso_id AND p.ativo AND p.excluido_em IS NULL
+        AND (p.estabelecimento_id IS NULL OR p.estabelecimento_id = ?)
+      WHERE up.usuario_id = ? AND up.estabelecimento_id = ? AND up.excluido_em IS NULL
+        AND up.vigencia_inicio <= UTC_DATE() AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= UTC_DATE())`,
+    [est, usuario, est],
+  );
+  return {
+    ehDiretoriaClinica: ls.some((x) => x['codigo'] === PERFIL_DIRETORIA_CLINICA),
+    administrador: ls.some((x) => Boolean(num(x['administrador']))),
+  };
+}
+
+/** A autorização vigente do usuário para o paciente, com as aberturas já feitas e a última. */
 async function autorizacaoDoUsuario(l: Leitor, est: number, paciente: number, usuario: number) {
   const ls = await l.consultar<Linha>(
-    `SELECT a.id, a.vigencia_inicio, a.vigencia_fim, a.revogada_em, a.versao,
-            (SELECT COUNT(*) FROM acesso_prontuario_restrito x WHERE x.autorizacao_acesso_prontuario_restrito_id = a.id) AS acessos
+    `SELECT a.id, a.vigencia_inicio, a.vigencia_fim, a.revogada_em, a.versao, a.limite_acessos,
+            (SELECT COUNT(*) FROM acesso_prontuario_restrito x WHERE x.autorizacao_acesso_prontuario_restrito_id = a.id) AS acessos,
+            (SELECT MAX(x.acessado_em) FROM acesso_prontuario_restrito x WHERE x.autorizacao_acesso_prontuario_restrito_id = a.id) AS ultima
        FROM autorizacao_acesso_prontuario_restrito a
       WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND a.autorizado_usuario_id = ? AND a.excluido_em IS NULL
         AND a.revogada_em IS NULL AND a.vigencia_inicio <= NOW(3) AND (a.vigencia_fim IS NULL OR a.vigencia_fim > NOW(3))
@@ -381,7 +403,7 @@ async function pedir(tx: TxOperacao, e: EntradaPedido, ctx: ContextoOperacao): P
         vigenciaFim: instante(aut['vigencia_fim']),
         revogadaEm: null,
         acessosRealizados: num(aut['acessos']),
-        limiteAcessos: c.limiteAcessos,
+        limiteAcessos: numN(aut['limite_acessos']),
       },
       await agoraDoBanco(tx),
     ).permitido;
@@ -471,12 +493,13 @@ async function decidir(tx: TxOperacao, e: EntradaDecisao, ctx: ContextoOperacao)
         solicitanteUsuarioId: num(p['solicitante_usuario_id']),
         ehMedicoResponsavel: await ehMedicoResponsavel(tx, est, paciente, prof),
         temPapel: await temPapel(tx, usuario, c.papelId),
-        administrador: false,
+        ...(await perfisDe(tx, est, usuario)),
       },
       c,
+      e.aprovar ? 'aprovar' : 'negar',
     );
     if (!quem.ok) throw new ErroOperacao(403, 'sem-alcada', 'Sem alçada', quem.motivo);
-    concedidaPor = quem.concedidaPor === 'paciente' ? 'paciente' : 'equipe_responsavel';
+    concedidaPor = quem.concedidaPor === 'administrador' ? 'administrador' : 'equipe_responsavel';
   }
   if (usuario === num(p['solicitante_usuario_id']))
     throw new ErroOperacao(
@@ -542,19 +565,43 @@ async function decidir(tx: TxOperacao, e: EntradaDecisao, ctx: ContextoOperacao)
     tipo_autorizacao: e.tipoAutorizacao,
     vigencia_inicio: paraBanco(agora),
     vigencia_fim: paraBanco(fim),
+    // O limite concedido fica na autorização: mudar a configuração depois não o altera.
+    limite_acessos: c.limiteAcessos,
   });
   return { id: e.pedido, versao, situacao: 'aprovado', autorizacao };
 }
 
 async function revogar(tx: TxOperacao, e: EntradaRevogar, ctx: ContextoOperacao): Promise<Gravado> {
+  const est = ctx.estabelecimento as number;
+  const usuario = ctx.usuario as number;
   const a = await tx.uma<Linha>(
-    `SELECT id, revogada_em, pedido_acesso_prontuario_restrito_id AS pedido FROM autorizacao_acesso_prontuario_restrito
+    `SELECT id, paciente_id, revogada_em, concedente_usuario_id, autorizado_usuario_id,
+            pedido_acesso_prontuario_restrito_id AS pedido
+       FROM autorizacao_acesso_prontuario_restrito
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-    [e.autorizacao, ctx.estabelecimento],
+    [e.autorizacao, est],
   );
   if (!a)
     throw new ErroOperacao(404, 'nao-encontrado', 'Autorização', 'A autorização não existe nesta unidade.');
   if (a['revogada_em'] !== null) throw recusa('ja-revogada', 'A autorização já foi revogada.');
+  const c = await configuracaoDe(tx, est);
+  const alcada = podeRevogarAutorizacao(
+    {
+      usuarioId: usuario,
+      concedenteUsuarioId: numN(a['concedente_usuario_id']),
+      autorizadoUsuarioId: numN(a['autorizado_usuario_id']),
+      ehMedicoResponsavel: await ehMedicoResponsavel(
+        tx,
+        est,
+        num(a['paciente_id']),
+        await profissionalDe(tx, usuario),
+      ),
+      temPapel: await temPapel(tx, usuario, c.papelId),
+      ...(await perfisDe(tx, est, usuario)),
+    },
+    c,
+  );
+  if (!alcada.ok) throw new ErroOperacao(403, 'sem-alcada', 'Sem alçada', alcada.motivo);
   const agora = paraBanco(await agoraDoBanco(tx));
   const versao = await tx.alterar(T_AUTORIZACAO, e.autorizacao, e.versao, {
     revogada_em: agora,
@@ -617,7 +664,7 @@ async function abrir(tx: TxOperacao, e: EntradaAbrir, ctx: ContextoOperacao): Pr
           vigenciaFim: instante(aut['vigencia_fim']),
           revogadaEm: instante(aut['revogada_em']),
           acessosRealizados: num(aut['acessos']),
-          limiteAcessos: c.limiteAcessos,
+          limiteAcessos: numN(aut['limite_acessos']),
         }
       : null,
     agora,
@@ -888,7 +935,7 @@ export class PortaProntuarioRestritoPropria {
       ).map((x) => pedidoVisao(x, q.usuario, agora, cfg));
       const autorizacoes = (
         await l.consultar<Linha>(
-          `SELECT a.id, a.versao, u.login AS autorizado, a.concedida_por, a.senha_conferida, a.tipo_autorizacao,
+          `SELECT a.id, a.versao, u.login AS autorizado, a.concedida_por, a.senha_conferida, a.tipo_autorizacao, a.limite_acessos,
                   a.vigencia_inicio, a.vigencia_fim, a.revogada_em, a.motivo_revogacao,
                   (SELECT COUNT(*) FROM acesso_prontuario_restrito x WHERE x.autorizacao_acesso_prontuario_restrito_id = a.id) AS acessos
              FROM autorizacao_acesso_prontuario_restrito a LEFT JOIN usuario u ON u.id = a.autorizado_usuario_id
@@ -913,7 +960,7 @@ export class PortaProntuarioRestritoPropria {
           revogadaEm,
           motivoRevogacao: txt(x['motivo_revogacao']),
           acessos: num(x['acessos']),
-          limite: cfg.limiteAcessos,
+          limite: numN(x['limite_acessos']),
           vigente: revogadaEm === null && (inicio ?? '') <= agora && (fim === null || fim > agora),
         };
       });
@@ -928,7 +975,7 @@ export class PortaProntuarioRestritoPropria {
                 vigenciaFim: instante(a['vigencia_fim']),
                 revogadaEm: null,
                 acessosRealizados: num(a['acessos']),
-                limiteAcessos: cfg.limiteAcessos,
+                limiteAcessos: numN(a['limite_acessos']),
               }
             : null,
           agora,
@@ -943,7 +990,7 @@ export class PortaProntuarioRestritoPropria {
             solicitanteUsuarioId: -1,
             ehMedicoResponsavel: await ehMedicoResponsavel(l, est, paciente, prof),
             temPapel: await temPapel(l, q.usuario, cfg.papelId),
-            administrador: false,
+            ...(await perfisDe(l, est, q.usuario)),
           },
           cfg,
         ).ok;
@@ -1004,9 +1051,7 @@ export class PortaProntuarioRestritoPropria {
   }
 
   /** A fila da unidade: pedidos pendentes (os vencidos aparecem como expirados) e a configuração vigente. */
-  fila(
-    c: ContextoRestrito,
-  ): Promise<{
+  fila(c: ContextoRestrito): Promise<{
     pedidos: PedidoVisao[];
     configuracao: ConfiguracaoProntuarioRestrito & { daUnidade: boolean; versao: number };
     papeis: { id: number; rotulo: string }[];
@@ -1031,7 +1076,7 @@ export class PortaProntuarioRestritoPropria {
     });
   }
 
-  private async executar<E, S>(
+  private async executar<E, S extends ResultadoOperacao>(
     op: Operacao<E, S>,
     c: ContextoGravacaoRestrito,
     entrada: unknown,

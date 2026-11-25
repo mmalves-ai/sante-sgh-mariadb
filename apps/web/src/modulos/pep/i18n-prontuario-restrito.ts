@@ -27,6 +27,7 @@ export const mensagensProntuarioRestrito = {
   semLimite: 'Sem limite de aberturas',
   abrir: 'Abrir o prontuário',
   aberto: 'Abertura {n} registrada.',
+  lerProntuario: 'Ler o prontuário agora (a abertura vale por 60 minutos)',
   pedir: 'Pedir acesso',
   motivo: 'Motivo do pedido',
   semMotivos: 'Nenhum motivo de pedido cadastrado: cadastre os motivos na configuração do prontuário.',

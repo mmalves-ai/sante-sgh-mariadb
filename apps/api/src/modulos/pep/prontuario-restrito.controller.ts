@@ -157,12 +157,13 @@ export class ProntuarioRestritoController {
     // A senha errada fica contada no banco (a operação grava), mas a resposta é 403.
     if (sit === 'senha-recusada' || sit === 'senha-bloqueada')
       throw new ErroProblema(
-        sit,
+        'sem-permissao',
         403,
         'Senha do paciente',
         sit === 'senha-recusada'
           ? 'A senha do paciente não confere.'
           : 'A senha do paciente está bloqueada por erros seguidos: tente mais tarde.',
+        { codigo: sit },
       );
     return { ok: true, ...r, mensagem: MENSAGEM_DECISAO[sit] ?? '' };
   }

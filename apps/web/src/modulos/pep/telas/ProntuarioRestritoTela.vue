@@ -43,6 +43,8 @@ const f = computed(() => fila.data.value);
 const erro = ref<unknown>(null);
 const ok = ref('');
 const JUSTIFICATIVA_MINIMA = 15;
+/** O paciente cujo prontuário restrito acabou de ser aberto pela autorização (leva direto à leitura). */
+const abertoPaciente = ref<number | null>(null);
 
 async function gravar(acao: AcaoRestrito, corpo: Record<string, unknown>, depois?: () => void) {
   erro.value = null;
@@ -50,6 +52,8 @@ async function gravar(acao: AcaoRestrito, corpo: Record<string, unknown>, depois
   try {
     const r = await gravarRestrito(acao, corpo);
     ok.value = r.mensagem ?? '';
+    // A abertura contada libera a leitura normal do prontuário (com os registros confidenciais) por uma janela.
+    abertoPaciente.value = acao === 'abrir' ? Number(corpo['paciente']) : null;
     if (acao === 'abrir')
       ok.value = t('pep.restrito.aberto', {
         n: Number(r['resultado'] && (r['resultado'] as { numero: number }).numero),
@@ -330,6 +334,11 @@ const gravarCfg = () =>
         />
 
         <!-- Minha situação: abrir pela autorização ou pedir -->
+        <p v-if="abertoPaciente === p.paciente">
+          <RouterLink :to="`/pep/prontuario/${p.paciente}`" data-testid="restrito-ler-prontuario">{{
+            t('pep.restrito.lerProntuario')
+          }}</RouterLink>
+        </p>
         <div v-if="p.minha.permitido" class="restrito__minha" data-testid="restrito-minha">
           <p>
             {{ t('pep.restrito.minhaLiberada') }}

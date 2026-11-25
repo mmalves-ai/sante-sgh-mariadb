@@ -8,8 +8,9 @@
 // atendimento, unidade_assistencial, fonte_pagadora, usuario, estabelecimento e trilha_auditoria (acessos).
 //
 // - Toda leitura filtra pelo estabelecimento da sessão e pela exclusão lógica (sem prontuário cruzado).
-// - Registro confidencial (visível só a quem tem acesso ao prontuário restrito) fica fora de toda leitura desta porta
-//   (falha fechada): a liberação do prontuário restrito por registro ainda não chega à porta.
+// - Registro confidencial fica fora de toda leitura desta porta (falha fechada), menos para quem abriu o prontuário
+//   restrito pela autorização vigente (F8, 03-PEP L93). Prontuário restrito sem autorização vigente e sem abertura
+//   contada na janela: 403 com a orientação de pedir o acesso (regra liberacaoDaLeitura do @sgh/dominio-pep).
 // - Datas e horas no fuso do estabelecimento (o banco guarda instantes em UTC); os filtros de data (dia civil local)
 //   viram limites em UTC.
 // - O texto do registro (texto_consolidado) volta como texto formatado: o importado já vem nesse formato; o texto
@@ -19,7 +20,8 @@
 // - As respostas viram linhas no formato do leitor do domínio (valor já em texto), com a definição montada de
 //   modelo_campo; a ordem é a sequência do campo seguida do id, sempre com tamanho ímpar (cada campo é raiz).
 // Regra de negócio (marcas, sigilo, categoria pelo CBO, busca da palavra) fica no serviço e no domínio.
-import { ErroOperacao, type Leitor } from '@sgh/nucleo';
+import { liberacaoDaLeitura } from '@sgh/dominio-pep';
+import { ErroOperacao, type Leitor, type Linha } from '@sgh/nucleo';
 import type { ContextoProntuario, PortaProntuario, ResumoProntuarioLido } from './porta.js';
 import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-porta-propria.js';
 import {
@@ -180,6 +182,8 @@ const DE_REGISTRO = `FROM registro_assistencial r
   LEFT JOIN ocupacao_cbo o ON o.id = r.ocupacao_cbo_id`;
 /** Registro visível nesta porta: do estabelecimento, não excluído e não confidencial. */
 const VISIVEL = 'r.estabelecimento_id = ? AND r.excluido_em IS NULL AND r.confidencial = FALSE';
+/** Registro visível a quem abriu o prontuário restrito pela autorização: inclui os confidenciais. */
+const VISIVEL_LIBERADO = 'r.estabelecimento_id = ? AND r.excluido_em IS NULL';
 
 export class PortaProntuarioPropria implements PortaProntuario {
   readonly destino = 'proprio' as const;
@@ -214,6 +218,76 @@ export class PortaProntuarioPropria implements PortaProntuario {
         'O estabelecimento da sessão não existe neste cliente.',
       );
     return { id: num(e.id), fuso: fusoValido(e.fuso_horario) };
+  }
+
+  /**
+   * Prontuário restrito (F8, 03-PEP L93): a restrição vigente do paciente na unidade e a autorização vigente de quem lê,
+   * com a última abertura contada. Recusa com 403 e a orientação; liberado, devolve o filtro com os confidenciais.
+   */
+  private async visibilidade(l: Leitor, c: ContextoProntuario, est: Estabelecimento, paciente: number) {
+    const x = await l.uma<Linha>(
+      `SELECT DATE_FORMAT(NOW(3), '%Y-%m-%dT%H:%i:%s') AS agora,
+              (SELECT COUNT(*) FROM restricao_prontuario rp
+                WHERE rp.paciente_id = ? AND rp.ativo AND rp.excluido_em IS NULL
+                  AND (rp.estabelecimento_id = ? OR rp.estabelecimento_id IS NULL)
+                  AND rp.vigencia_inicio <= NOW(3) AND (rp.vigencia_fim IS NULL OR rp.vigencia_fim > NOW(3))) AS restrito,
+              (SELECT COUNT(*) FROM restricao_prontuario rp
+                WHERE rp.paciente_id = ? AND rp.ativo AND rp.excluido_em IS NULL AND rp.responsavel_usuario_id = ?
+                  AND (rp.estabelecimento_id = ? OR rp.estabelecimento_id IS NULL)
+                  AND rp.vigencia_inicio <= NOW(3) AND (rp.vigencia_fim IS NULL OR rp.vigencia_fim > NOW(3))) AS responsavel`,
+      [paciente, est.id, paciente, c.usuario ?? 0, est.id],
+    );
+    const restrito = Number(x?.['restrito'] ?? 0) > 0;
+    const agora = String(x?.['agora']);
+    if (!restrito) return VISIVEL;
+    const a =
+      c.usuario === null
+        ? null
+        : await l.uma<Linha>(
+            `SELECT DATE_FORMAT(a.vigencia_inicio, '%Y-%m-%dT%H:%i:%s') AS inicio, DATE_FORMAT(a.vigencia_fim, '%Y-%m-%dT%H:%i:%s') AS fim,
+                    DATE_FORMAT(a.revogada_em, '%Y-%m-%dT%H:%i:%s') AS revogada, a.limite_acessos,
+                    (SELECT COUNT(*) FROM acesso_prontuario_restrito x WHERE x.autorizacao_acesso_prontuario_restrito_id = a.id) AS acessos,
+                    (SELECT DATE_FORMAT(MAX(x.acessado_em), '%Y-%m-%dT%H:%i:%s') FROM acesso_prontuario_restrito x
+                      WHERE x.autorizacao_acesso_prontuario_restrito_id = a.id AND x.usuario_id = a.autorizado_usuario_id) AS ultima
+               FROM autorizacao_acesso_prontuario_restrito a
+              WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND a.autorizado_usuario_id = ? AND a.excluido_em IS NULL
+                AND a.revogada_em IS NULL AND a.vigencia_inicio <= NOW(3) AND (a.vigencia_fim IS NULL OR a.vigencia_fim > NOW(3))
+              ORDER BY a.vigencia_fim IS NULL DESC, a.vigencia_fim DESC, a.id DESC LIMIT 1`,
+            [paciente, est.id, c.usuario],
+          );
+    const r = liberacaoDaLeitura(
+      {
+        restrito,
+        responsavel: Number(x?.['responsavel'] ?? 0) > 0,
+        autorizacao: a
+          ? {
+              vigenciaInicio: String(a['inicio']),
+              vigenciaFim: textoOuNull(a['fim']),
+              revogadaEm: textoOuNull(a['revogada']),
+              acessosRealizados: num(a['acessos']),
+              limiteAcessos: numOuNull(a['limite_acessos']),
+            }
+          : null,
+        ultimaAberturaEm: a ? textoOuNull(a['ultima']) : null,
+      },
+      agora,
+    );
+    if (!r.liberado) throw new ErroOperacao(403, r.motivo, 'Prontuário restrito', r.mensagem);
+    return r.confidenciais ? VISIVEL_LIBERADO : VISIVEL;
+  }
+
+  /** A visibilidade pelo paciente do registro (o registro de outra unidade ou inexistente segue o filtro comum). */
+  private async visibilidadeDoRegistro(
+    l: Leitor,
+    c: ContextoProntuario,
+    est: Estabelecimento,
+    registro: number,
+  ) {
+    const r = await l.uma<Linha>(
+      'SELECT paciente_id FROM registro_assistencial WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [registro, est.id],
+    );
+    return r ? this.visibilidade(l, c, est, num(r['paciente_id'])) : VISIVEL;
   }
 
   /** Condições de data (dia civil local) sobre uma coluna de instante em UTC. */
@@ -271,10 +345,11 @@ export class PortaProntuarioPropria implements PortaProntuario {
 
   listar(c: ContextoProntuario, paciente: number, f: FiltroRegistros, pagina: number, porPagina: number) {
     return this.ler(c, 'listar', async (l, est) => {
+      const vis = await this.visibilidade(l, c, est, paciente);
       const por = Math.max(1, Math.trunc(porPagina));
       const ini = (Math.max(1, Math.trunc(pagina)) - 1) * por;
       const per = this.periodo('r.data_hora_clinica', f, est.fuso);
-      let sql = `SELECT ${COLUNAS_REGISTRO} ${DE_REGISTRO} WHERE r.paciente_id = ? AND ${VISIVEL}${per.sql}`;
+      let sql = `SELECT ${COLUNAS_REGISTRO} ${DE_REGISTRO} WHERE r.paciente_id = ? AND ${vis}${per.sql}`;
       const p: unknown[] = [paciente, est.id, ...per.p];
       if (f.modelo) {
         sql += ' AND r.modelo_documento_clinico_id = ?';
@@ -305,22 +380,23 @@ export class PortaProntuarioPropria implements PortaProntuario {
 
   resumo(c: ContextoProntuario, paciente: number): Promise<ResumoProntuarioLido> {
     return this.ler(c, 'resumo', async (l, est) => {
+      const vis = await this.visibilidade(l, c, est, paciente);
       const modelos = await l.consultar(
         `SELECT DISTINCT m.id, m.codigo, m.titulo FROM registro_assistencial r
            JOIN modelo_documento_clinico m ON m.id = r.modelo_documento_clinico_id
-          WHERE r.paciente_id = ? AND ${VISIVEL} ORDER BY m.titulo, m.id`,
+          WHERE r.paciente_id = ? AND ${vis} ORDER BY m.titulo, m.id`,
         [paciente, est.id],
       );
       const profissionais = await l.consultar(
         `SELECT DISTINCT p.id, COALESCE(p.nome_exibicao, pf.nome) AS nome FROM registro_assistencial r
            JOIN profissional p ON p.id = r.autor_profissional_id
            LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
-          WHERE r.paciente_id = ? AND ${VISIVEL} ORDER BY nome, p.id`,
+          WHERE r.paciente_id = ? AND ${vis} ORDER BY nome, p.id`,
         [paciente, est.id],
       );
       const sem = await l.uma(
         `SELECT COUNT(*) AS n FROM registro_assistencial r
-          WHERE r.paciente_id = ? AND ${VISIVEL} AND (r.texto_consolidado IS NULL OR r.texto_consolidado = '')`,
+          WHERE r.paciente_id = ? AND ${vis} AND (r.texto_consolidado IS NULL OR r.texto_consolidado = '')`,
         [paciente, est.id],
       );
       return {
@@ -370,8 +446,9 @@ export class PortaProntuarioPropria implements PortaProntuario {
 
   registro(c: ContextoProntuario, paciente: number, registro: number) {
     return this.ler(c, 'registro', async (l, est) => {
+      const vis = await this.visibilidade(l, c, est, paciente);
       const x = await l.uma(
-        `SELECT ${COLUNAS_REGISTRO} ${DE_REGISTRO} WHERE r.id = ? AND r.paciente_id = ? AND ${VISIVEL}`,
+        `SELECT ${COLUNAS_REGISTRO} ${DE_REGISTRO} WHERE r.id = ? AND r.paciente_id = ? AND ${vis}`,
         [registro, paciente, est.id],
       );
       return x ? { registro: this.registroLido(x, est.fuso), fontes: this.fontes(x) } : null;
@@ -384,8 +461,9 @@ export class PortaProntuarioPropria implements PortaProntuario {
     partes: { rtf: boolean; xml: boolean },
   ): Promise<ConteudoLido | null> {
     return this.ler(c, 'conteudo', async (l, est) => {
+      const vis = await this.visibilidadeDoRegistro(l, c, est, registro);
       const x = await l.uma(
-        `SELECT r.texto_consolidado FROM registro_assistencial r WHERE r.id = ? AND ${VISIVEL}`,
+        `SELECT r.texto_consolidado FROM registro_assistencial r WHERE r.id = ? AND ${vis}`,
         [registro, est.id],
       );
       const texto = textoOuNull(x?.['texto_consolidado']);
@@ -406,6 +484,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
 
   respostas(c: ContextoProntuario, registro: number): Promise<RespostaLida[]> {
     return this.ler(c, 'respostas', async (l, est) => {
+      const vis = await this.visibilidadeDoRegistro(l, c, est, registro);
       const linhas = await l.consultar(
         `SELECT x.sequencia, x.tipo_valor, x.valor_texto, x.valor_numero, x.valor_data, x.valor_data_hora,
                 x.valor_hora, x.valor_booleano, x.valor_estruturado, x.codigo_cid10, x.unidade, x.observacao,
@@ -414,7 +493,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
            JOIN registro_assistencial r ON r.id = x.registro_assistencial_id
            JOIN modelo_campo c ON c.id = x.modelo_campo_id
            LEFT JOIN modelo_campo_opcao op ON op.id = x.modelo_campo_opcao_id
-          WHERE x.registro_assistencial_id = ? AND ${VISIVEL} AND x.excluido_em IS NULL
+          WHERE x.registro_assistencial_id = ? AND ${vis} AND x.excluido_em IS NULL
           ORDER BY x.sequencia`,
         [registro, est.id],
       );
@@ -509,6 +588,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
 
   contexto(c: ContextoProntuario, registro: number): Promise<ContextoLido | null> {
     return this.ler(c, 'contexto', async (l, est) => {
+      const vis = await this.visibilidadeDoRegistro(l, c, est, registro);
       const x = await l.uma(
         `SELECT pp.nome AS paciente_nome, pp.nome_social, pp.data_nascimento, a.numero, a.entrada_em,
                 u.nome AS unidade, fp.nome AS convenio, COALESCE(pa.nome_exibicao, pfa.nome) AS assistente,
@@ -524,7 +604,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
            LEFT JOIN profissional p ON p.id = r.autor_profissional_id
            LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
            LEFT JOIN ocupacao_cbo o ON o.id = r.ocupacao_cbo_id
-          WHERE r.id = ? AND ${VISIVEL}`,
+          WHERE r.id = ? AND ${vis}`,
         [registro, est.id],
       );
       if (!x) return null;
@@ -559,6 +639,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
 
   textos(c: ContextoProntuario, paciente: number, f: Pick<FiltroRegistros, 'de' | 'ate'>, teto: number) {
     return this.ler(c, 'textos', async (l, est) => {
+      const vis = await this.visibilidade(l, c, est, paciente);
       const t = Math.max(0, Math.trunc(teto));
       const per = this.periodo('r.data_hora_clinica', f, est.fuso);
       const linhas = await l.consultar(
@@ -566,7 +647,7 @@ export class PortaProntuarioPropria implements PortaProntuario {
            FROM registro_assistencial r
            JOIN modelo_documento_clinico m ON m.id = r.modelo_documento_clinico_id
            LEFT JOIN ocupacao_cbo o ON o.id = r.ocupacao_cbo_id
-          WHERE r.paciente_id = ? AND ${VISIVEL}${per.sql}
+          WHERE r.paciente_id = ? AND ${vis}${per.sql}
           ORDER BY r.data_hora_clinica DESC, r.id DESC LIMIT ${t + 1}`,
         [paciente, est.id, ...per.p],
       );

@@ -91,14 +91,23 @@ export interface QuemDecide {
   readonly ehMedicoResponsavel: boolean;
   /** Quem decide tem o papel configurado (vigente). */
   readonly temPapel: boolean;
+  /** Quem decide tem o perfil vigente da diretoria clínica na unidade. */
+  readonly ehDiretoriaClinica: boolean;
   /** Administrador da plataforma (pode tudo, ADR 0002). */
   readonly administrador: boolean;
 }
 
-/** Quem pode decidir o pedido, pela configuração. Nunca o próprio solicitante. */
+export type AcaoDecisao = 'aprovar' | 'negar';
+
+/**
+ * Quem pode decidir o pedido, pela configuração. Nunca o próprio solicitante. Quando o paciente autoriza (com a
+ * senha), a equipe não aprova por ele, mas a negativa (o pedido indevido) cabe ao médico responsável e à diretoria
+ * clínica, para o pedido não ficar pendente até expirar.
+ */
 export function podeDecidirPedido(
   q: QuemDecide,
   c: ConfiguracaoProntuarioRestrito,
+  acao: AcaoDecisao = 'aprovar',
 ): { ok: true; concedidaPor: ConcedidaPor } | { ok: false; motivo: string } {
   if (q.usuarioId === q.solicitanteUsuarioId)
     return { ok: false, motivo: 'Quem pediu o acesso não decide o próprio pedido.' };
@@ -113,10 +122,51 @@ export function podeDecidirPedido(
         ? { ok: true, concedidaPor: 'equipe_responsavel' }
         : { ok: false, motivo: 'Só quem tem o papel autorizador configurado decide este pedido.' };
     case 'diretoria_clinica':
-      return { ok: true, concedidaPor: 'equipe_responsavel' };
+      return q.ehDiretoriaClinica
+        ? { ok: true, concedidaPor: 'equipe_responsavel' }
+        : { ok: false, motivo: 'Só a diretoria clínica autoriza este acesso.' };
     case 'paciente':
-      return { ok: false, motivo: 'Neste estabelecimento quem autoriza é o paciente, com a senha dele.' };
+      if (acao === 'negar' && (q.ehDiretoriaClinica || q.ehMedicoResponsavel))
+        return { ok: true, concedidaPor: 'equipe_responsavel' };
+      return acao === 'negar'
+        ? { ok: false, motivo: 'Só o médico responsável ou a diretoria clínica nega este pedido.' }
+        : { ok: false, motivo: 'Neste estabelecimento quem autoriza é o paciente, com a senha dele.' };
   }
+}
+
+export interface QuemRevoga {
+  readonly usuarioId: number;
+  /** Quem concedeu a autorização (o profissional que aprovou ou o atendente que recebeu a senha do paciente). */
+  readonly concedenteUsuarioId: number | null;
+  /** Quem recebeu a autorização: pode abrir mão dela. */
+  readonly autorizadoUsuarioId: number | null;
+  readonly ehMedicoResponsavel: boolean;
+  readonly temPapel: boolean;
+  readonly ehDiretoriaClinica: boolean;
+  readonly administrador: boolean;
+}
+
+/**
+ * Quem revoga uma autorização: quem a concedeu, o próprio autorizado (abre mão), a diretoria clínica, o administrador
+ * e, fora do modo "paciente", quem tem a alçada de decidir pela configuração. A concedida pelo paciente com a senha só
+ * a diretoria, o administrador, quem a registrou ou o autorizado revogam.
+ */
+export function podeRevogarAutorizacao(
+  q: QuemRevoga,
+  c: ConfiguracaoProntuarioRestrito,
+): { ok: true } | { ok: false; motivo: string } {
+  if (q.administrador || q.ehDiretoriaClinica) return { ok: true };
+  if (q.concedenteUsuarioId !== null && q.usuarioId === q.concedenteUsuarioId) return { ok: true };
+  if (q.autorizadoUsuarioId !== null && q.usuarioId === q.autorizadoUsuarioId) return { ok: true };
+  const alcada =
+    (c.autorizador === 'medico_responsavel' && q.ehMedicoResponsavel) ||
+    (c.autorizador === 'papel' && q.temPapel);
+  return alcada
+    ? { ok: true }
+    : {
+        ok: false,
+        motivo: 'Só quem concedeu, a diretoria clínica ou quem tem a alçada revoga esta autorização.',
+      };
 }
 
 export interface DecisaoPedido {
@@ -206,9 +256,9 @@ export type ResultadoAcesso =
       readonly mensagem: string;
     };
 
-/** A abertura do prontuário restrito pela autorização: vigente, não revogada e dentro do limite de aberturas. */
-export function avaliarAbertura(a: AutorizacaoVigente | null, agora: string): ResultadoAcesso {
-  const t = agora.slice(0, 19);
+type Recusa = Extract<ResultadoAcesso, { permitido: false }>;
+
+function recusaDaAutorizacao(a: AutorizacaoVigente | null, t: string): Recusa | null {
   if (!a)
     return {
       permitido: false,
@@ -219,6 +269,17 @@ export function avaliarAbertura(a: AutorizacaoVigente | null, agora: string): Re
     return { permitido: false, motivo: 'revogada', mensagem: 'A autorização foi revogada.' };
   if (a.vigenciaInicio.slice(0, 19) > t || (a.vigenciaFim !== null && a.vigenciaFim.slice(0, 19) <= t))
     return { permitido: false, motivo: 'fora-da-vigencia', mensagem: 'A autorização não está vigente.' };
+  return null;
+}
+
+/**
+ * A abertura do prontuário restrito pela autorização: vigente, não revogada e dentro do limite de aberturas. O limite
+ * é o gravado na autorização no momento da concessão (a configuração mudada depois não o altera).
+ */
+export function avaliarAbertura(a: AutorizacaoVigente | null, agora: string): ResultadoAcesso {
+  const t = agora.slice(0, 19);
+  const r = recusaDaAutorizacao(a, t);
+  if (r || !a) return r!;
   if (a.limiteAcessos !== null && a.acessosRealizados >= a.limiteAcessos)
     return {
       permitido: false,
@@ -231,4 +292,52 @@ export function avaliarAbertura(a: AutorizacaoVigente | null, agora: string): Re
     numero,
     restantes: a.limiteAcessos === null ? null : a.limiteAcessos - numero,
   };
+}
+
+/** Cada abertura contada libera a leitura do prontuário restrito por esta janela; depois, abre-se de novo. */
+export const JANELA_ABERTURA_MINUTOS = 60;
+
+export interface EstadoLeituraRestrita {
+  /** Há restrição vigente do prontuário do paciente na unidade. */
+  readonly restrito: boolean;
+  /** Quem lê é o responsável pela restrição (quem a registrou): lê sem pedir acesso. */
+  readonly responsavel: boolean;
+  /** A autorização vigente de quem lê (null sem autorização). */
+  readonly autorizacao: AutorizacaoVigente | null;
+  /** A última abertura contada por essa autorização (instante local AAAA-MM-DDTHH:MM:SS). */
+  readonly ultimaAberturaEm: string | null;
+}
+
+export type LiberacaoLeitura =
+  | { readonly liberado: true; readonly confidenciais: boolean }
+  | {
+      readonly liberado: false;
+      readonly motivo: Recusa['motivo'] | 'abrir-pela-autorizacao';
+      readonly mensagem: string;
+    };
+
+/**
+ * A leitura normal do prontuário (lista, registro, texto, busca). Sem restrição, segue a regra de sempre (os registros
+ * confidenciais ficam fechados). Com restrição, o responsável por ela lê; os demais: sem autorização vigente, recusa com a orientação de pedir acesso; com
+ * autorização, exige a abertura contada (avaliarAbertura) dentro da janela, e então libera inclusive os confidenciais.
+ */
+export function liberacaoDaLeitura(e: EstadoLeituraRestrita, agora: string): LiberacaoLeitura {
+  if (!e.restrito) return { liberado: true, confidenciais: false };
+  if (e.responsavel) return { liberado: true, confidenciais: true };
+  const t = agora.slice(0, 19);
+  const r = recusaDaAutorizacao(e.autorizacao, t);
+  if (r) return { liberado: false, motivo: r.motivo, mensagem: r.mensagem };
+  const ultima = e.ultimaAberturaEm?.slice(0, 19) ?? null;
+  const fimJanela =
+    ultima === null
+      ? null
+      : new Date(Date.parse(`${ultima}Z`) + JANELA_ABERTURA_MINUTOS * 60_000).toISOString().slice(0, 19);
+  if (fimJanela === null || fimJanela <= t)
+    return {
+      liberado: false,
+      motivo: 'abrir-pela-autorizacao',
+      mensagem:
+        'Prontuário restrito: abra pela sua autorização em Pedidos de acesso a prontuário restrito (a abertura é contada).',
+    };
+  return { liberado: true, confidenciais: true };
 }

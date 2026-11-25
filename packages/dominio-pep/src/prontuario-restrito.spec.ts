@@ -4,8 +4,10 @@ import {
   avaliarAbertura,
   CONFIGURACAO_RESTRITO_PADRAO as PADRAO,
   fimDoAcesso,
+  liberacaoDaLeitura,
   pedidoExpirado,
   podeDecidirPedido,
+  podeRevogarAutorizacao,
   senhaBloqueada,
   validarConfiguracaoRestrito,
   validarDecisaoPedido,
@@ -27,6 +29,7 @@ const quem = {
   solicitanteUsuarioId: 1,
   ehMedicoResponsavel: false,
   temPapel: false,
+  ehDiretoriaClinica: false,
   administrador: false,
 };
 
@@ -82,7 +85,10 @@ describe('quem decide', () => {
     const papel = { ...PADRAO, autorizador: 'papel' as const, papelId: 9 };
     expect(podeDecidirPedido(quem, papel).ok).toBe(false);
     expect(podeDecidirPedido({ ...quem, temPapel: true }, papel).ok).toBe(true);
-    expect(podeDecidirPedido(quem, { ...PADRAO, autorizador: 'diretoria_clinica' }).ok).toBe(true);
+    const diretoria = { ...PADRAO, autorizador: 'diretoria_clinica' as const };
+    expect(podeDecidirPedido(quem, diretoria).ok).toBe(false);
+    expect(podeDecidirPedido({ ...quem, ehMedicoResponsavel: true }, diretoria).ok).toBe(false);
+    expect(podeDecidirPedido({ ...quem, ehDiretoriaClinica: true }, diretoria).ok).toBe(true);
     expect(podeDecidirPedido(quem, { ...PADRAO, autorizador: 'paciente' }).ok).toBe(false);
     expect(podeDecidirPedido({ ...quem, administrador: true }, PADRAO)).toEqual({
       ok: true,
@@ -155,4 +161,124 @@ describe('abertura e contagem de acessos', () => {
       numero: 41,
       restantes: null,
     }));
+});
+
+describe('negativa quando o paciente autoriza', () => {
+  const pac = { ...PADRAO, autorizador: 'paciente' as const, exigeSenhaPaciente: true };
+  it('a equipe não aprova pelo paciente, mas o médico responsável e a diretoria negam', () => {
+    expect(podeDecidirPedido({ ...quem, ehMedicoResponsavel: true }, pac, 'aprovar').ok).toBe(false);
+    expect(podeDecidirPedido({ ...quem, ehMedicoResponsavel: true }, pac, 'negar').ok).toBe(true);
+    expect(podeDecidirPedido({ ...quem, ehDiretoriaClinica: true }, pac, 'negar').ok).toBe(true);
+    expect(podeDecidirPedido(quem, pac, 'negar').ok).toBe(false);
+    expect(podeDecidirPedido({ ...quem, usuarioId: 1, ehDiretoriaClinica: true }, pac, 'negar').ok).toBe(
+      false,
+    );
+  });
+});
+
+describe('quem revoga', () => {
+  const r = {
+    usuarioId: 5,
+    concedenteUsuarioId: 3,
+    autorizadoUsuarioId: 1,
+    ehMedicoResponsavel: false,
+    temPapel: false,
+    ehDiretoriaClinica: false,
+    administrador: false,
+  };
+  it('sem alçada recusa; quem concedeu, o autorizado, a diretoria e o administrador revogam', () => {
+    expect(podeRevogarAutorizacao(r, PADRAO).ok).toBe(false);
+    expect(podeRevogarAutorizacao({ ...r, usuarioId: 3 }, PADRAO).ok).toBe(true);
+    expect(podeRevogarAutorizacao({ ...r, usuarioId: 1 }, PADRAO).ok).toBe(true);
+    expect(podeRevogarAutorizacao({ ...r, ehDiretoriaClinica: true }, PADRAO).ok).toBe(true);
+    expect(podeRevogarAutorizacao({ ...r, administrador: true }, PADRAO).ok).toBe(true);
+  });
+  it('a alçada da configuração vale, menos na concedida pelo paciente', () => {
+    expect(podeRevogarAutorizacao({ ...r, ehMedicoResponsavel: true }, PADRAO).ok).toBe(true);
+    const pac = { ...PADRAO, autorizador: 'paciente' as const, exigeSenhaPaciente: true };
+    expect(podeRevogarAutorizacao({ ...r, ehMedicoResponsavel: true }, pac).ok).toBe(false);
+  });
+});
+
+describe('leitura normal do prontuário restrito', () => {
+  const a = {
+    vigenciaInicio: '2026-11-25T08:00:00',
+    vigenciaFim: '2026-11-26T08:00:00',
+    revogadaEm: null,
+    acessosRealizados: 1,
+    limiteAcessos: 2,
+  };
+  const agora = '2026-11-25T09:00:00';
+  const m = (x: ReturnType<typeof liberacaoDaLeitura>) => (x.liberado ? x.confidenciais : x.motivo);
+  it('sem restrição: lê sem os confidenciais', () =>
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: false, responsavel: false, autorizacao: null, ultimaAberturaEm: null },
+          agora,
+        ),
+      ),
+    ).toBe(false));
+  it('restrito sem autorização, revogada ou fora da vigência: recusa', () => {
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: true, responsavel: false, autorizacao: null, ultimaAberturaEm: null },
+          agora,
+        ),
+      ),
+    ).toBe('sem-autorizacao');
+    const rev = { ...a, revogadaEm: '2026-11-25T08:30:00' };
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: true, responsavel: false, autorizacao: rev, ultimaAberturaEm: agora },
+          agora,
+        ),
+      ),
+    ).toBe('revogada');
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: true, responsavel: false, autorizacao: a, ultimaAberturaEm: agora },
+          '2026-11-26T08:00:00',
+        ),
+      ),
+    ).toBe('fora-da-vigencia');
+  });
+  it('autorizado: exige a abertura contada dentro da janela e libera os confidenciais', () => {
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: true, responsavel: false, autorizacao: a, ultimaAberturaEm: null },
+          agora,
+        ),
+      ),
+    ).toBe('abrir-pela-autorizacao');
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: true, responsavel: false, autorizacao: a, ultimaAberturaEm: '2026-11-25T07:59:00' },
+          agora,
+        ),
+      ),
+    ).toBe('abrir-pela-autorizacao');
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: true, responsavel: false, autorizacao: a, ultimaAberturaEm: '2026-11-25T08:30:00' },
+          agora,
+        ),
+      ),
+    ).toBe(true);
+  });
+  it('o responsável pela restrição lê sem pedir, com os confidenciais', () =>
+    expect(
+      m(
+        liberacaoDaLeitura(
+          { restrito: true, responsavel: true, autorizacao: null, ultimaAberturaEm: null },
+          agora,
+        ),
+      ),
+    ).toBe(true));
 });

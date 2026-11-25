@@ -8,16 +8,22 @@
 // médico responsável cria a autorização com prazo; cada abertura numerada na contagem e na leitura do prontuário, e a
 // que passa do limite recusada com 403 sem gravar; a revogação com motivo fecha o acesso; a senha do paciente só em
 // resumo com sal, a troca substitui; a senha errada conta e não aprova, a certa aprova pelo paciente; o cancelamento
-// pelo solicitante.
+// pelo solicitante. A leitura normal do prontuário (PortaProntuarioPropria) recusa o restrito sem autorização (403),
+// libera o responsável pela restrição e, depois da abertura contada, o autorizado (com o registro confidencial); a
+// revogação fecha de novo. A diretoria clínica configurada recusa o médico sem o perfil; a revogação sem alçada é 403;
+// o limite fica gravado na autorização (mudar a configuração depois não o altera).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { PortaProntuarioPropria } from './prontuario-porta-propria.js';
 import { PortaProntuarioRestritoPropria } from './prontuario-restrito-propria.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const P = 'c2056rest';
+/** Código do modelo sintético (o código de modelo é só maiúsculas, números e _). */
+const MODELO = 'C2056REST_EVOL';
 
 interface Massa {
   est: number;
@@ -46,8 +52,10 @@ async function limpar(e: Escritor, paciente?: number, senhaBase?: number): Promi
     await e.executar(`DELETE FROM pedido_acesso_prontuario_restrito WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM restricao_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM configuracao_prontuario_restrito WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM registro_assistencial WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar('DELETE FROM motivo_acesso_prontuario_restrito WHERE codigo LIKE ?', [`${P}-%`]);
+    await e.executar('DELETE FROM modelo_documento_clinico WHERE codigo = ?', [MODELO]);
     if (paciente !== undefined && senhaBase !== undefined)
       await e.executar('DELETE FROM senha_prontuario_paciente WHERE paciente_id = ? AND id > ?', [
         paciente,
@@ -63,6 +71,7 @@ async function limpar(e: Escritor, paciente?: number, senhaBase?: number): Promi
 describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaProntuarioRestritoPropria;
+  let prontuario: PortaProntuarioPropria;
   let m: Massa;
   let n = 0;
   const ctx = (login: string) => ({
@@ -71,6 +80,27 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
     correlacao: P,
     chaveIdempotencia: `${P}-${Date.now()}-${++n}`,
   });
+  const leitor = (u: { id: number }) => ({
+    rede: CLIENTE,
+    hospital: P,
+    cliente: CLIENTE,
+    estabelecimento: null,
+    usuario: u.id,
+    correlacao: P,
+  });
+  const lerProntuario = (u: { id: number }) => prontuario.listar(leitor(u), m.paciente, {}, 1, 50);
+  const configuracao = (x: {
+    autorizador?: 'medico_responsavel' | 'diretoria_clinica';
+    limiteAcessos?: number | null;
+  }) =>
+    porta.configurar(ctx(m.b.login), {
+      autorizador: x.autorizador ?? 'medico_responsavel',
+      validadeHoras: 24,
+      exigeSenhaPaciente: false,
+      limiteAcessos: x.limiteAcessos === undefined ? 2 : x.limiteAcessos,
+      exigeMotivo: true,
+      avisaResponsavel: true,
+    });
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p)) as Promise<T[]>;
   const status = async (p: Promise<unknown>): Promise<string> => {
@@ -94,6 +124,7 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
   beforeAll(async () => {
     nucleo = new NucleoProprio();
     porta = new PortaProntuarioRestritoPropria(nucleo, CLIENTE);
+    prontuario = new PortaProntuarioPropria(nucleo, CLIENTE);
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, async (e) => {
       await limpar(e);
       const agora = new Date();
@@ -125,12 +156,41 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       try {
         // O médico responsável (usuário B) atende o paciente nesta unidade.
-        await e.inserir(
+        const atendimento = await e.inserir(
           `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
              carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em)
            VALUES (?, ?, ?, 999999991, 999999991, 999999991, ?, ?, ?)`,
           [est, `${P}-1`, Number(paciente['id']), Number(comProf[1]!['prof']), agora, agora],
         );
+        // Dois registros sintéticos do paciente nesta unidade: um comum e um confidencial.
+        const tipo = await e.uma('SELECT MIN(id) AS id FROM tipo_documento_clinico');
+        const modelo = await e.inserir(
+          `INSERT INTO modelo_documento_clinico (codigo, titulo, tipo_documento_clinico_id, tipo_registro, criado_em)
+           VALUES (?, 'Evolução sintética', ?, 'evolucao', ?)`,
+          [MODELO, Number(tipo?.['id'] ?? 999999991), agora],
+        );
+        for (const confidencial of [false, true])
+          await e.inserir(
+            `INSERT INTO registro_assistencial (estabelecimento_id, paciente_id, atendimento_id, modelo_documento_clinico_id,
+               tipo_documento_clinico_id, autor_profissional_id, autor_usuario_id, data_hora_clinica, data_hora_lancamento,
+               impressao_digital, texto_consolidado, confidencial, origem, situacao, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sistema', 'finalizado', ?)`,
+            [
+              est,
+              Number(paciente['id']),
+              atendimento,
+              modelo,
+              Number(tipo?.['id'] ?? 999999991),
+              Number(comProf[1]!['prof']),
+              Number(comProf[1]!['id']),
+              agora,
+              agora,
+              '0'.repeat(64),
+              `Evolução sintética ${P}`,
+              confidencial,
+              agora,
+            ],
+          );
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
       }
@@ -201,6 +261,10 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
       [m.est],
     );
     expect(rs).toEqual([{ ativo: 1, responsavel_usuario_id: m.b.id }]);
+    // A leitura normal recusa quem não tem autorização; o responsável pela restrição lê, com o confidencial.
+    expect(await status(lerProntuario(m.a))).toBe('403:sem-autorizacao');
+    expect(await status(prontuario.resumo(leitor(m.c), m.paciente))).toBe('403:sem-autorizacao');
+    expect((await lerProntuario(m.b)).registros).toHaveLength(2);
   });
 
   it('pedido pendente; duplicado recusa; sem autorização a abertura é 403; sem alçada é 403; o médico responsável aprova', async () => {
@@ -220,8 +284,16 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
     expect(
       await status(porta.decidir(ctx(m.a.login), { pedido: p.id, versao: p.versao, aprovar: true })),
     ).toBe('403:sem-alcada');
+    // Configurada a diretoria clínica, o médico responsável sem o perfil não aprova.
+    await configuracao({ autorizador: 'diretoria_clinica' });
+    expect(
+      await status(porta.decidir(ctx(m.b.login), { pedido: p.id, versao: p.versao, aprovar: true })),
+    ).toBe('403:sem-alcada');
+    await configuracao({});
     const r = await porta.decidir(ctx(m.b.login), { pedido: p.id, versao: p.versao, aprovar: true });
     expect(r.resultado.situacao).toBe('aprovado');
+    // Autorizado, mas ainda sem a abertura contada: a leitura normal orienta a abrir pela autorização.
+    expect(await status(lerProntuario(m.a))).toBe('403:abrir-pela-autorizacao');
     const [ped] = await ler(
       `SELECT situacao, decisor_usuario_id, TIMESTAMPDIFF(HOUR, acesso_inicio_em, acesso_fim_em) AS horas
          FROM pedido_acesso_prontuario_restrito WHERE id = ?`,
@@ -229,8 +301,8 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
     );
     expect(ped).toEqual({ situacao: 'aprovado', decisor_usuario_id: m.b.id, horas: 24 });
     const [aut] = await ler(
-      `SELECT autorizado_usuario_id, concedida_por, concedente_usuario_id, senha_conferida, pedido_acesso_prontuario_restrito_id AS pedido
-         FROM autorizacao_acesso_prontuario_restrito WHERE id = ?`,
+      `SELECT autorizado_usuario_id, concedida_por, concedente_usuario_id, senha_conferida, limite_acessos,
+              pedido_acesso_prontuario_restrito_id AS pedido FROM autorizacao_acesso_prontuario_restrito WHERE id = ?`,
       [r.resultado.autorizacao],
     );
     expect(aut).toEqual({
@@ -238,12 +310,15 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
       concedida_por: 'equipe_responsavel',
       concedente_usuario_id: m.b.id,
       senha_conferida: 0,
+      limite_acessos: 2,
       pedido: p.id,
     });
   });
 
   it('conta as aberturas contra o limite; acima dele 403 sem gravar; revogada fecha o acesso', async () => {
     const r1 = await porta.abrir(ctx(m.a.login), { paciente: m.paciente });
+    // Aberto pela autorização: a leitura normal libera, com o registro confidencial.
+    expect((await lerProntuario(m.a)).registros).toHaveLength(2);
     const r2 = await porta.abrir(ctx(m.a.login), { paciente: m.paciente });
     expect([
       r1.resultado.numero,
@@ -252,6 +327,10 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
       r2.resultado.restantes,
     ]).toEqual([1, 1, 2, 0]);
     expect(await status(porta.abrir(ctx(m.a.login), { paciente: m.paciente }))).toBe('403:limite-atingido');
+    // O limite é o gravado na autorização: a unidade passar a "sem limite" não reabre esta autorização.
+    await configuracao({ limiteAcessos: null });
+    expect(await status(porta.abrir(ctx(m.a.login), { paciente: m.paciente }))).toBe('403:limite-atingido');
+    await configuracao({});
     const acessos = await ler<{ numero_acesso: number; usuario_id: number; tipo_acesso: string }>(
       `SELECT x.numero_acesso, x.usuario_id, l.tipo_acesso FROM acesso_prontuario_restrito x
          JOIN leitura_prontuario l ON l.id = x.leitura_prontuario_id WHERE x.paciente_id = ? AND l.estabelecimento_id = ?
@@ -266,6 +345,12 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
     expect(painel.minha.permitido).toBe(false);
     expect(painel.autorizacoes[0]).toMatchObject({ acessos: 2, limite: 2, vigente: true });
     const a = painel.autorizacoes[0]!;
+    // Sem alçada (nem quem concedeu, nem o autorizado, nem a diretoria, nem o médico responsável): 403.
+    expect(
+      await status(
+        porta.revogar(ctx(m.c.login), { autorizacao: a.id, versao: a.versao, motivo: 'sem alçada' }),
+      ),
+    ).toBe('403:sem-alcada');
     expect(
       await status(porta.revogar(ctx(m.b.login), { autorizacao: a.id, versao: a.versao, motivo: 'curto' })),
     ).toBe('ok');
@@ -276,6 +361,7 @@ describe.skipIf(SEM_BANCO)('PortaProntuarioRestritoPropria contra o MariaDB (con
     );
     expect(rev).toEqual({ revogada_por_usuario_id: m.b.id, motivo_revogacao: 'curto', situacao: 'revogado' });
     expect(await status(porta.abrir(ctx(m.a.login), { paciente: m.paciente }))).toBe('403:sem-autorizacao');
+    expect(await status(lerProntuario(m.a))).toBe('403:sem-autorizacao');
   });
 
   it('senha do paciente só em resumo com sal; a errada conta e não aprova; a certa aprova pelo paciente', async () => {

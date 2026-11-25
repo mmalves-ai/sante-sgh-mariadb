@@ -184,6 +184,11 @@ test.describe('Prontuário de acesso restrito @C2-056 @fase8', () => {
     await page.getByTestId('restrito-abrir').click();
     await expect(page.getByTestId('restrito-autorizacao-81')).toContainText('1 de 1');
     await expect(page.getByTestId('restrito-abrir')).toHaveCount(0);
+    // A abertura contada leva direto à leitura do prontuário (liberada pela janela da abertura).
+    await expect(page.getByTestId('restrito-ler-prontuario')).toHaveAttribute(
+      'href',
+      `/pep/prontuario/${PACIENTE}`,
+    );
 
     expect(posts.map((x) => new URL(x.url).pathname.replace('/api/pep/prontuario-restrito/', ''))).toEqual([
       'pedidos',
