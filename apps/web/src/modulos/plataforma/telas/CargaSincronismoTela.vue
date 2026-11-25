@@ -90,11 +90,19 @@ watch(progresso, (p) => {
   else amostraAnterior.value = amostraAtual.value;
   amostraAtual.value = a;
 });
-const velocidade = computed(() =>
-  ativa.value
-    ? velocidadeConferencia(amostraAnterior.value, amostraAtual.value, progresso.value?.linhasTotal ?? 0)
-    : null,
-);
+// velocidade: a do motor (média de 1 min e previsão do fim) quando vem no progresso; senão, entre dois batimentos
+const velocidade = computed(() => {
+  if (!ativa.value) return null;
+  const p = progresso.value;
+  if (p?.linhasPorSegundo !== null && p?.linhasPorSegundo !== undefined) {
+    const fim = p.previsaoFim ? Date.parse(p.previsaoFim) : Number.NaN;
+    return {
+      linhasPorSegundo: Math.round(p.linhasPorSegundo),
+      segundosRestantes: Number.isFinite(fim) ? Math.max(0, Math.round((fim - Date.now()) / 1000)) : null,
+    };
+  }
+  return velocidadeConferencia(amostraAnterior.value, amostraAtual.value, p?.linhasTotal ?? 0);
+});
 const percentualConferencia = computed(() => {
   const p = progresso.value;
   return p && p.linhasTotal > 0 ? Math.floor(Math.min(100, (100 * p.linhasProcessadas) / p.linhasTotal)) : 0;

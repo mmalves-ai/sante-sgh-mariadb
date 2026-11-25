@@ -85,6 +85,34 @@ class PlacarTeste(unittest.TestCase):
         c._commit()  # o commit seguinte (marca) não levanta de novo
 
 
+class VelocidadeTeste(unittest.TestCase):
+    def test_media_movel_e_previsao(self):
+        """Rodada retomada-rapida (c): `linhas_por_segundo` é a média de 1 min das linhas processadas por ESTA
+        execução (as puladas pela continuação não inflam) e `previsao_fim` usa o que falta de linhas_total."""
+        import datetime
+        from sante_conector import motor
+        pn = motor.Painel(None, 1, {}, None)
+        pn.placar.planejar({"A": 1000, "B": 100000}, {"A": "a", "B": "b"})
+        relogio = [100.0]
+        with mock.patch.object(motor.time, "monotonic", lambda: relogio[0]):
+            j = pn.progresso_json()
+            self.assertNotIn("linhas_por_segundo", j)  # uma amostra só
+            pn.placar.fim("A", evento=False)  # tabela pulada pela continuação: 1000 linhas de uma vez, sem commit
+            for k in range(1, 13):  # 100 linhas/s por 2 min, amostras a cada 10 s
+                relogio[0] = 100.0 + 10 * k
+                pn.placar.somar({"t": {"B": [1000, 1000, 0, 0, 0]}})
+                j = pn.progresso_json()
+            self.assertEqual(j["linhas_por_segundo"], 100.0)
+            self.assertEqual(j["linhas_processadas"], 13000)
+            fim = datetime.datetime.fromisoformat(j["previsao_fim"])  # faltam 88.000 linhas a 100/s: 880 s
+            agora = datetime.datetime.now(datetime.timezone.utc)
+            self.assertLess(abs((fim - agora).total_seconds() - 880), 5)
+            relogio[0] += 10  # parada: a média cai, a previsão some com velocidade zero
+            pn.placar.por_tabela.clear()
+            j = pn.progresso_json()
+            self.assertNotIn("linhas_por_segundo", j)  # recomeço da contagem: a janela recomeça
+
+
 class RegistroLogTeste(unittest.TestCase):
     def test_arquivo_linhas_e_sem_mensagem(self):
         with tempfile.TemporaryDirectory() as d:
@@ -251,6 +279,29 @@ class PlataformaModos(unittest.TestCase):
         self.assertEqual((ex["estado"], ex["contadores"]["continuavel"]), ("pausada", True))
         self.assertEqual(_eventos(self.c, eid), ["fila", "abrindo", "lendo", "pausando", "pausada"])
         self.assertEqual(P.consultar(self.c, P.retomar(self.c, "painel_a"))["contadores"], {"continuar_de": eid})
+
+    def test_pausa_no_preparo_termina_pausada(self):
+        """Rodada retomada-rapida (d): a pausa pedida durante o preparo da continuação (tabelas concluídas) é lida pelo
+        batimento do preparo e a execução termina `pausada` (antes, sem batimento, a execução ficava em `gravando`
+        e, com o trabalhador derrubado, terminava `falhou`)."""
+        from sante_conector import motor, plataforma as P
+        eid = P.enfileirar(self.c, "painel_a", "importar", modo="completa")
+        for est in ("abrindo", "lendo", "gravando"):
+            P.mudar_estado(self.c, eid, est, etapa=est)
+        cont = {}
+        log = registro_log.RegistroLog("painel_a", eid, raiz="")
+        pn = motor.Painel(self.c, eid, cont, log, "gravando")
+        pn.placar.planejar({"T": 10}, {"T": "destino_t"})
+        fn = pn.batimento_preparo("continuação")
+        fn(0, 3)  # batimento sem pausa: segue
+        self.assertIn("continuação (0 de 3 tabelas)", P.consultar(self.c, eid)["etapa"])
+        with self.c.cursor() as cur:
+            cur.execute("UPDATE conector_execucao SET pausa_solicitada_em=UTC_TIMESTAMP(3) WHERE id=%s", (eid,))
+        pn._ult_pausa = pn._ult_preparo = float("-inf")
+        self.assertRaises(carga.PausaPedida, fn, 1, 3)
+        motor._pausar(self.c, eid, cont, pn, log)
+        ex = P.consultar(self.c, eid)
+        self.assertEqual((ex["estado"], ex["contadores"]["continuavel"]), ("pausada", True))
 
     def test_pausa_tardia_na_conciliacao_conclui(self):
         """Pedido de pausa depois de `conciliando` (carga inteira): o batimento não entra em `pausando` e a

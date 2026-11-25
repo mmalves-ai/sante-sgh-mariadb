@@ -20,6 +20,7 @@ pausa no próximo ponto seguro (`pausando` -> `pausada`, continuável), log da e
 `contadores.conciliacao_carga` (recusadas; `conferido=false` quando há recusa). A conciliação da leitura (gstat ou
 transação) chama-se `conciliacao_leitura`.
 """
+import collections
 import contextlib
 import datetime
 import json
@@ -98,6 +99,8 @@ class Painel:
     no log a cada LOG_S. Toda mudança de estado do motor passa por `estado`, que para na pausa pedida (ponto seguro)."""
     LEITURA_PAUSA_S = 5.0
     LOG_S = 60.0
+    JANELA_VELOCIDADE_S = 60.0  # média móvel da velocidade (linhas por segundo) e previsão do fim
+    PREPARO_S = 2.0  # batimento do preparo (continuação): no máximo a cada PREPARO_S
 
     def __init__(self, conn, eid, cont, log, estado=None):
         self.conn, self.eid, self.cont, self.log = conn, eid, cont, log
@@ -107,6 +110,8 @@ class Painel:
         self.pausando = False
         self.sem_pausa = False  # da conciliação em diante a carga está inteira: termina, não pausa
         self.base = None  # situacao_base.SituacaoBase: "Já na base" (calculada uma vez, depois do plano)
+        self._amostras = collections.deque()  # (relógio, linhas processadas POR ESTA execução)
+        self._ult_preparo = float("-inf")
 
     def _evento(self, tipo, t):
         pl = self.placar
@@ -120,12 +125,48 @@ class Painel:
     def progresso_json(self):
         """`contadores.progresso`: o Placar (conferência desta execução) e, com a situação calculada, `base`."""
         j = self.placar.json()
+        self._velocidade(j)
         if self.base is not None:
             try:
                 j["base"] = self.base.json()
             except Exception:  # noqa: BLE001 - o painel nunca derruba a carga
                 pass
         return j
+
+    def _velocidade(self, j):
+        """`linhas_por_segundo` (média móvel de JANELA_VELOCIDADE_S) e `previsao_fim` (ISO, UTC) no progresso. A
+        velocidade é a das linhas processadas por ESTA execução (commits da carga): as tabelas puladas pela
+        continuação, que entram de uma vez em `linhas_processadas`, não inflam a média. A previsão usa o que falta
+        de `linhas_total`. Sem amostra de pelo menos 5 s, os campos ficam fora."""
+        agora = time.monotonic()
+        proc = sum(int(v[0]) for v in self.placar.por_tabela.values())
+        am = self._amostras
+        if am and proc < am[-1][1]:
+            am.clear()
+        am.append((agora, proc))
+        while len(am) > 2 and am[1][0] <= agora - self.JANELA_VELOCIDADE_S:
+            am.popleft()
+        dt = agora - am[0][0]
+        if dt < 5.0:
+            return
+        v = (proc - am[0][1]) / dt
+        j["linhas_por_segundo"] = round(v, 1)
+        faltam = max(0, int(j.get("linhas_total") or 0) - int(j.get("linhas_processadas") or 0))
+        j["previsao_fim"] = ((datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=faltam / v))
+                             .isoformat(timespec="seconds") if v > 0 else None)
+
+    def batimento_preparo(self, etapa):
+        """Batimento do preparo (continuação: tabelas concluídas; dezenas de minutos na base real antes desta rodada):
+        progresso e leitura da pausa no máximo a cada PREPARO_S; com a pausa pedida, levanta PausaPedida (nada da
+        carga foi gravado ainda: a execução termina `pausada`, não `falhou`). Devolve fn(i, n)."""
+        def fn(i, n):
+            if time.monotonic() - self._ult_preparo < self.PREPARO_S:
+                return
+            self._ult_preparo = time.monotonic()
+            self.progresso(None, "%s (%d de %d tabelas)" % (etapa, i, n))
+            if self.pausando:
+                raise carga.PausaPedida()
+        return fn
 
     def checar_pausa(self, forcar=False):
         if self.sem_pausa:
@@ -306,8 +347,12 @@ def _carregar(conn, eid, ex, ctl, usuario, senha, iid, tabelas, contagens, sha_a
     pular, de = frozenset(), (ex["contadores"] or {}).get("continuar_de")
     if de:
         try:
+            t0 = time.monotonic()
             cc0 = continuar.concluidas(conn, ctl, int(de), plano, contagens, sha_antes,
-                                       lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"))
+                                       lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"),
+                                       batimento=painel.batimento_preparo(
+                                           "continuação: conferindo as tabelas já concluídas"))
+            painel.log.linha("continuação: tabelas concluídas decididas em %.1f s" % (time.monotonic() - t0))
         except continuar.SemImagem:  # pausada (ou caída) antes da imagem: nada concluído, roda tudo (hash pula)
             cc0 = {"origem": {}, "regra": "sem_imagem", "duas_fases": []}
         pular = dict(cc0["origem"])  # {tabela: execução que a concluiu (pendências repetidas dela)}

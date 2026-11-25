@@ -77,6 +77,10 @@ export const esquemaProgressoCarga = z.object({
   tabelasContadas: contagem.nullish(),
   /** Situação da base; ausente nas execuções antigas (a tela cai no andamento da execução). */
   base: esquemaBaseCarga.nullish(),
+  /** Velocidade do motor: média móvel de 1 min das linhas processadas por esta execução. Ausente sem amostra. */
+  linhasPorSegundo: z.number().nonnegative().nullish(),
+  /** Previsão do fim (ISO, UTC) pela velocidade e pelo que falta de linhasTotal; nula com velocidade zero. */
+  previsaoFim: z.string().nullish(),
 });
 export type ProgressoCarga = z.infer<typeof esquemaProgressoCarga>;
 

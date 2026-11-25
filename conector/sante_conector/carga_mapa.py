@@ -2872,13 +2872,13 @@ class CargaMapa(carga.Carga):
         self._garantir("historico_mescla_migracao", continuidade.DDL_MESCLA)
         self._garantir("segredo_cofre", continuidade.DDL_COFRE)
         self.cr.commit()
-        if self.pular:  # continuação: as concluídas pela interrompida ficam marcadas também nesta, com as pendências
+        self._herdadas = None
+        if self.pular:  # continuação: as concluídas pela interrompida ficam marcadas também nesta
             pul = [t for t in self.tabelas if t in self.pular]
-            # pendências antes da marca: com a marca gravada e as pendências não, a próxima continuação herdaria a
-            # tabela desta execução sem as pendências; sem a marca, herda da anterior (cadeia, continuar.py)
-            self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(
-                self, {t: self.pular_de[t] for t in pul},
-                lambda n: self.progresso(0, "pendências herdadas das tabelas já concluídas (%d)" % n))
+            # pendências herdadas: nada é copiado (ficam na execução em que nasceram e todo leitor segue a cadeia;
+            # a marca `continuada` não as leva); só a CONTAGEM para o resumo, em segundo plano até a conciliação
+            # (rodada retomada-rapida: a agregação das 41 M herdadas da execução 24 segurava a carga 17 min)
+            self._herdadas = continuar.PendenciasHerdadas(self, {t: self.pular_de[t] for t in pul}).iniciar()
             continuar.marcar(self, pul, None, "continuada")
             # de-para oficial usado pelas puladas: carregado como na leitura delas (a pendência global de catálogo
             # ausente, tabela '-', sai uma vez por execução, também quando só uma tabela pulada o usa)
@@ -2888,12 +2888,17 @@ class CargaMapa(carga.Carga):
                         for c in cs:
                             if c.get("depara") and depara.conhecido(c["depara"]):
                                 self._depara(c["depara"])
-        paralelo.carregar(self, contagens)  # um leitor e N gravadores (CONECTOR_GRAVADORES; 1 = ordem do plano)
-        self._fase2()
-        if self.sinc:
-            sincronizar_mod.excluir_apagadas(self)
-        sincronizar_mod.sequencias(self)
-        res = self.conciliar(contagens)
+        try:
+            paralelo.carregar(self, contagens)  # um leitor e N gravadores (CONECTOR_GRAVADORES; 1 = ordem do plano)
+            self._fase2()
+            if self.sinc:
+                sincronizar_mod.excluir_apagadas(self)
+            sincronizar_mod.sequencias(self)
+            res = self.conciliar(contagens)
+        except BaseException:  # pausa ou falha: a contagem em segundo plano para (nada dela foi gravado)
+            if self._herdadas is not None:
+                self._herdadas.cancelar()
+            raise
         res["carga"]["memoria"] = self.memoria
         res["sincronizar"] = sincronizar_mod.resumo(self)
         res["filho_pai"] = self._conferir_filho_pai()
@@ -3022,6 +3027,10 @@ class CargaMapa(carga.Carga):
             self._fechar_estado(p)
         carga.aplicar_limite_recusa(res)
         principal = {p["tabela"]: self._nome_ent(p["tabela"], p["destinos"][0]) for p in self.plano}
+        h, self._herdadas = getattr(self, "_herdadas", None), None
+        if h is not None:  # contagem das pendências herdadas (segundo plano desde o início da carga)
+            self.cont["pendencias_repetidas"] = h.esperar(lambda f, n: self.progresso(
+                1.0, "conciliação: pendências herdadas das tabelas já concluídas (%d de %d tabelas)" % (f, n)))
         pend = carga.resumo_pendencias(self.pend, self.pend_repetidas, lambda t: principal.get(t, "outra"))
         with self._c() as c:
             for ent, r in res.items():
