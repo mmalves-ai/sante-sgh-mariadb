@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 464, M: 198, P: 57, N: 209 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 465, M: 198, P: 57, N: 210 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(464);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(465);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -368,6 +368,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/internacao/gases/setores', // C1-050 (05-SUP linha 30)
         '/internacao/transportes', // C1-066 (03-PEP linha 125)
         '/internacao/leitos-sus', // F78.04-2 (04-INT linha 79)
+        '/internacao/producao-hospitalar', // C2-046 (09-AREA L87)
         '/internacao/controles/isolamento', // F78.04-1 (04-INT linha 75)
         '/internacao/controles/regulacao', // F78.04-1 (04-INT linha 78)
         '/internacao/leitos/painel', // M16

@@ -85,7 +85,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-041 (04-CC linha 108): o item "Mutirões cirúrgicos do SUS" do centro cirúrgico entrou à mão (mesmo motivo;
 // F8 vai como fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":464,"M":198,"P":57,"N":209};
+// C2-046 (09-AREA L87): o item "Produção hospitalar mensal" dos leitos entrou à mão (mesmo motivo; F8 vai como
+// fase 7, o teto da escala do menu); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":465,"M":198,"P":57,"N":210};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -168,6 +170,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.controles-da-internacao.formularios-da-declaracao-de-obito","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Formulários da declaração de óbito"],"titulo":"Formulários da declaração de óbito","selo":"N","fase":7,"rota":"/internacao/controles/formularios-obito","permissao":"pep.declaracaoObito.emitir"},
   {"id":"internacao-e-leitos.controles-da-internacao.consumo-de-gases-por-setor","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Consumo de gases por setor"],"titulo":"Consumo de gases por setor","selo":"N","fase":7,"rota":"/internacao/gases/setores","permissao":"enfermagem.horario.ler"},
   {"id":"internacao-e-leitos.leitos.leitos-do-sistema-publico-habilitacao-e-capacidade","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Leitos do sistema público"],"titulo":"Leitos do sistema público","selo":"N","fase":7,"rota":"/internacao/leitos-sus","permissao":"faturamento.susLeitoUti.ler"},
+  {"id":"internacao-e-leitos.leitos.producao-hospitalar-mensal-portaria-312","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Produção hospitalar mensal"],"titulo":"Produção hospitalar mensal","selo":"N","fase":7,"rota":"/internacao/producao-hospitalar","permissao":"internacao.censo.ler"},
   {"id":"centro-cirurgico.agenda-cirurgica-mapa-de-salas","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Agenda cirúrgica"],"titulo":"Agenda cirúrgica","selo":"M","fase":2,"rota":"/cirurgia/mapa","permissao":"cirurgia.agenda.ler"},
   {"id":"centro-cirurgico.registro-de-cirurgia-procedimentos-equipe-tempos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Registro de cirurgia"],"titulo":"Registro de cirurgia","selo":"M","fase":2,"rota":"/cirurgia/registro","permissao":"cirurgia.registro.ler"},
   {"id":"centro-cirurgico.salas-cirurgicas-e-usuarios-permitidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Salas cirúrgicas e usuários permitidos"],"titulo":"Salas cirúrgicas e usuários permitidos","selo":"M","fase":2,"rota":"/cirurgia/salas","permissao":"cirurgia.sala.ler"},
