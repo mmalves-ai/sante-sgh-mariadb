@@ -299,4 +299,21 @@ describe.skipIf(SEM_BANCO)('PortaTransplantePropria contra o MariaDB (contrato d
     );
     expect(Number(t!.n)).toBeGreaterThanOrEqual(9);
   });
+  it('duas inclusões do mesmo paciente e órgão ao mesmo tempo gravam uma só inscrição', async () => {
+    const entrada = { paciente: m.paciente, orgao: m.rim, dataInscricao: '2026-11-10' };
+    const r = await Promise.allSettled([
+      porta.inscrever(ctx(P2), entrada),
+      porta.inscrever(ctx(P2), entrada),
+    ]);
+    expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    const recusa = r.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+    expect(recusa.reason).toMatchObject({ problema: { status: 422 } });
+    const [n] = await ler<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM inscricao_transplante
+        WHERE estabelecimento_id = (SELECT id FROM estabelecimento WHERE codigo = ?)
+          AND paciente_id = ? AND orgao_transplante_id = ? AND excluido_em IS NULL`,
+      [P2, m.paciente, m.rim],
+    );
+    expect(Number(n!.n)).toBe(1);
+  });
 });

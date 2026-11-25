@@ -602,9 +602,13 @@ export class PortaTransplantePropria extends PortaEstabelecimentoPropria {
       'faturamento.sus.receptor.inscrever',
       [T_INSCRICAO, T_HISTORICO],
       async (tx, est, usuario) => {
-        const pac = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [
-          e.paciente,
-        ]);
+        // Trava a linha do paciente antes de ler as inscrições: sem inscrição anterior do órgão, o
+        // FOR UPDATE nas inscrições não acha linha e não serializa nada; duas inclusões ao mesmo tempo
+        // (duplo clique, duas estações) passariam pela regra de uma inscrição por paciente e órgão.
+        const [pac] = await tx.consultarParaAtualizar<Record<string, unknown>>(
+          'SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL',
+          [e.paciente],
+        );
         if (!pac) throw naoEncontrado('Paciente');
         const org = await tx.uma('SELECT id FROM orgao_transplante WHERE id = ? AND ativo', [e.orgao]);
         if (!org) throw naoEncontrado('Órgão');
