@@ -44,3 +44,4 @@ export * from './alteracao-titulo-pagar.js';
 export * from './fluxo-aprovacao.js';
 export * from './cobranca-pix.js';
 export * from './entrada-servico.js';
+export * from './projeto-resultado.js';
