@@ -350,12 +350,25 @@ export class DocumentosPepController {
             .filter((n) => Number.isInteger(n) && n > 0)
         : null;
     const vinculo = f.vinculo ?? 'todos';
+    // Recortes do filtro salvo (F3.3, L90): só entram os informados.
+    const recortes =
+      (f.setor ?? f.acomodacao ?? f.leito ?? f.especialidade ?? f.tipo ?? f.situacao)
+        ? {
+            setor: f.setor ?? null,
+            acomodacao: f.acomodacao ?? null,
+            leito: f.leito ?? null,
+            especialidade: f.especialidade ?? null,
+            tipoAtendimento: f.tipo ?? null,
+            situacao: f.situacao ?? null,
+          }
+        : null;
     const r = await this.servico.painel(this.c(s), s.login, {
       unidade: f.unidade ?? null,
       busca: f.busca?.trim() || null,
       favoritos: f.favoritos === 'sim' ? (favs ?? []) : null,
       vinculo,
       profissional: vinculo === 'todos' ? null : await this.prof(s),
+      ...(recortes ? { filtro: recortes } : {}),
     });
     req.sghAlvo = {
       tabelaAlvo: 'atendimento',

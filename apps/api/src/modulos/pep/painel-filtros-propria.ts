@@ -46,6 +46,18 @@ export interface ColunaDoFiltroLida {
   readonly largura: number | null;
 }
 
+export interface OpcaoRecorte {
+  readonly id: number;
+  readonly rotulo: string;
+}
+
+export interface OpcoesFiltroPainel {
+  readonly setores: readonly OpcaoRecorte[];
+  readonly acomodacoes: readonly OpcaoRecorte[];
+  readonly leitos: readonly (OpcaoRecorte & { readonly unidade: number | null })[];
+  readonly especialidades: readonly OpcaoRecorte[];
+}
+
 const TABELAS = ['painel_filtro_usuario', 'painel_coluna_usuario'] as const;
 
 type Existente = FiltroExistente & { readonly versao: number };
@@ -231,6 +243,43 @@ export class PortaPainelFiltrosPropria {
     await this.executor.executar(op, this.banco(c), {}, contexto);
     if (!feito) throw new Error(`A operação ${nome} terminou sem resultado.`);
     return feito;
+  }
+
+  /**
+   * As opções dos recortes para a tela editar o filtro (as mesmas que a gravação confere): setores, acomodações e
+   * leitos ativos do estabelecimento da sessão (o leito com a unidade assistencial, para a tela recortar pela unidade
+   * escolhida) e as especialidades ativas.
+   */
+  opcoes(c: ContextoDocs): Promise<OpcoesFiltroPainel> {
+    return this.ler(c, 'filtros.opcoes', async (l, est) => {
+      const ativo = 'estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL';
+      const [setores, acomodacoes, leitos, especialidades] = await Promise.all([
+        l.consultar(
+          `SELECT id, nome AS rotulo FROM setor_funcional WHERE ${ativo} ORDER BY nome, id LIMIT 2000`,
+          [est],
+        ),
+        l.consultar(`SELECT id, nome AS rotulo FROM acomodacao WHERE ${ativo} ORDER BY nome, id LIMIT 2000`, [
+          est,
+        ]),
+        l.consultar(
+          `SELECT lh.id, lh.codigo AS rotulo, ui.unidade_assistencial_id AS unidade
+             FROM leito_hospitalar lh JOIN unidade_internacao ui ON ui.id = lh.unidade_internacao_id
+            WHERE lh.estabelecimento_id = ? AND lh.ativo = TRUE AND lh.excluido_em IS NULL
+            ORDER BY lh.codigo, lh.id LIMIT 2000`,
+          [est],
+        ),
+        l.consultar(
+          'SELECT id, descricao AS rotulo FROM especialidade_medica WHERE ativo = TRUE ORDER BY descricao, id LIMIT 2000',
+        ),
+      ]);
+      const opcao = (x: Record<string, unknown>) => ({ id: num(x['id']), rotulo: String(x['rotulo']) });
+      return {
+        setores: setores.map(opcao),
+        acomodacoes: acomodacoes.map(opcao),
+        leitos: leitos.map((x) => ({ ...opcao(x), unidade: numOuNull(x['unidade']) })),
+        especialidades: especialidades.map(opcao),
+      };
+    });
   }
 
   /** Os filtros do usuário no estabelecimento da sessão, o padrão primeiro e depois por nome. */

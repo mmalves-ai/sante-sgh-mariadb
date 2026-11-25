@@ -40,6 +40,8 @@ interface Ids {
   atestadoOutroEst: number;
   ficha: number;
   unidadeAssist: number;
+  unidadeIntEsp: number;
+  acomodacao: number;
 }
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
@@ -369,6 +371,8 @@ describe.skipIf(SEM_BANCO)('documentos-propria-painel contra o MariaDB (cliente 
          VALUES (?, ?, ?, ?, 'Quarto sintético', ?)`,
         [ids.est, unidadeIntEsp, catAcomodacao, `${P}Q1`, agora],
       );
+      ids.unidadeIntEsp = unidadeIntEsp;
+      ids.acomodacao = acomodacao;
       const caraterAdm = await garantir(
         e,
         'SELECT id FROM carater_admissao WHERE codigo = ?',
@@ -746,6 +750,82 @@ describe.skipIf(SEM_BANCO)('documentos-propria-painel contra o MariaDB (cliente 
     expect(porUnidade.linhas.map((x) => [x.atendimento, x.idUnidade, x.unidade])).toEqual([
       [ids.atendInt, ids.unidadeAssist, 'Unidade sintética de internação'],
     ]);
+  });
+
+  it('recortes do filtro salvo: setor, acomodação, leito, especialidade, tipo e situação (F3.3, L90)', async () => {
+    // Massa do recorte: o atendimento ambulatorial ganha um setor e a internação ganha um leito (idempotente).
+    const { setor, leito } = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: `${P}-recortes` },
+      async (e) => {
+        const agora = new Date();
+        const setor = await garantir(
+          e,
+          'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+          [ids.est, `${P}SF`],
+          `INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em)
+         VALUES (?, ?, 'Setor sintético', 'assistencial', ?)`,
+          [ids.est, `${P}SF`, agora],
+        );
+        const leito = await garantir(
+          e,
+          'SELECT id FROM leito_hospitalar WHERE estabelecimento_id = ? AND codigo = ?',
+          [ids.est, `${P}L1`],
+          `INSERT INTO leito_hospitalar (estabelecimento_id, unidade_internacao_id, acomodacao_id, codigo,
+           situacao_leito_id, criado_em)
+         VALUES (?, ?, ?, ?, (SELECT MIN(id) FROM situacao_leito), ?)`,
+          [ids.est, ids.unidadeIntEsp, ids.acomodacao, `${P}L1`, agora],
+        );
+        await e.executar('UPDATE atendimento SET setor_funcional_id = ? WHERE id = ?', [
+          setor,
+          ids.atendimento,
+        ]);
+        await e.executar('UPDATE internacao SET leito_hospitalar_id = ? WHERE atendimento_id = ?', [
+          leito,
+          ids.atendInt,
+        ]);
+        return { setor, leito };
+      },
+    );
+    const vazio = {
+      setor: null,
+      acomodacao: null,
+      leito: null,
+      especialidade: null,
+      tipoAtendimento: null,
+      situacao: null,
+    } as const;
+    const nossos = new Set([ids.atendimento, ids.atendInt]);
+    const com = async (filtro: Partial<typeof vazio> | Record<string, unknown>) =>
+      (
+        await F.painel(nucleo, CLIENTE, C(), { unidade: null, busca: null, filtro: { ...vazio, ...filtro } })
+      ).linhas
+        .map((x) => x.atendimento)
+        .filter((a) => nossos.has(a))
+        .sort((a, b) => a - b);
+    const ambos = [ids.atendimento, ids.atendInt].sort((a, b) => a - b);
+    expect(await com({})).toEqual(ambos);
+    expect(await com({ setor })).toEqual([ids.atendimento]);
+    expect(await com({ acomodacao: ids.acomodacao })).toEqual([ids.atendInt]);
+    expect(await com({ leito })).toEqual([ids.atendInt]);
+    expect(await com({ especialidade: ids.espInt })).toEqual([ids.atendInt]);
+    expect(await com({ especialidade: ids.espAtend })).toEqual([ids.atendimento]);
+    expect(await com({ tipoAtendimento: 'internacao' })).toEqual([ids.atendInt]);
+    expect(await com({ tipoAtendimento: 'ambulatorio' })).toEqual([ids.atendimento]);
+    expect(await com({ tipoAtendimento: 'urgencia' })).toEqual([]);
+    expect(await com({ tipoAtendimento: 'domiciliar' })).toEqual([]);
+    expect(await com({ tipoAtendimento: 'todos', situacao: 'todos' })).toEqual(ambos);
+    // Situação: o ambulatorial aberto aguarda; o internado sem alta prevista está em atendimento.
+    expect(await com({ situacao: 'aguardando' })).toEqual([ids.atendimento]);
+    expect(await com({ situacao: 'em_atendimento' })).toEqual([ids.atendInt]);
+    expect(await com({ situacao: 'alta' })).toEqual([]);
+    expect(await com({ situacao: 'alta_prevista' })).toEqual([]);
+    // Recortes somados: cada um precisa bater.
+    expect(await com({ setor, tipoAtendimento: 'internacao' })).toEqual([]);
+    // A linha do internado mostra o leito escolhido.
+    const linha = (await F.painel(nucleo, CLIENTE, C(), { unidade: null, busca: null })).linhas.find(
+      (x) => x.atendimento === ids.atendInt,
+    );
+    expect(linha?.leito).toBe(`${P}L1`);
   });
 
   it('completude do internado: "nega alergias" e ciência do crítico; nada do outro estabelecimento', async () => {

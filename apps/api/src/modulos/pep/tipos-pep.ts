@@ -1034,6 +1034,18 @@ export interface LinhaPainelLida {
 export interface RecortePainel {
   readonly meus?: { readonly cbos: readonly number[]; readonly login: string; readonly hospital: string };
   readonly equipe?: { readonly especialidades: readonly number[] };
+  /** Recortes do filtro salvo (F3.3, L90): cada um preenchido precisa bater; nulo não recorta. */
+  readonly filtro?: RecortesFiltroPainel;
+}
+
+export interface RecortesFiltroPainel {
+  readonly setor: number | null;
+  readonly acomodacao: number | null;
+  readonly leito: number | null;
+  readonly especialidade: number | null;
+  readonly tipoAtendimento:
+    'todos' | 'internacao' | 'ambulatorio' | 'urgencia' | 'externo' | 'domiciliar' | null;
+  readonly situacao: 'em_atendimento' | 'aguardando' | 'alta_prevista' | 'alta' | 'todos' | null;
 }
 
 export interface CompletudePainelLida {

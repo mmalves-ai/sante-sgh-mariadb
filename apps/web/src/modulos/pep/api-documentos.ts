@@ -101,15 +101,27 @@ const pac = (p: number) => `${P}/paciente/${p}`;
 
 // ── Painel, cabeçalho, linha do tempo e documentos ─────────────────────────────────────────────────
 
+export interface RecortesPainel {
+  setor: number | null;
+  acomodacao: number | null;
+  leito: number | null;
+  especialidade: number | null;
+  tipo: string | null;
+  situacao: string | null;
+}
+
 export function lerPainel(
   f: {
     unidade?: number | null;
     busca?: string;
     vinculo?: 'todos' | 'meus' | 'equipe';
     favoritos?: readonly number[] | null;
+    /** Recortes do filtro salvo (F3.3, L90): só vão os preenchidos. */
+    recortes?: RecortesPainel | null;
   },
   buscar: typeof fetch = fetch,
 ): Promise<PainelPacientes> {
+  const r = f.recortes;
   return ler(
     `${P}/painel${consulta({
       unidade: f.unidade ?? undefined,
@@ -117,6 +129,12 @@ export function lerPainel(
       vinculo: f.vinculo && f.vinculo !== 'todos' ? f.vinculo : undefined,
       favoritos: f.favoritos ? 'sim' : undefined,
       ids: f.favoritos?.join(','),
+      setor: r?.setor ?? undefined,
+      acomodacao: r?.acomodacao ?? undefined,
+      leito: r?.leito ?? undefined,
+      especialidade: r?.especialidade ?? undefined,
+      tipo: r?.tipo && r.tipo !== 'todos' ? r.tipo : undefined,
+      situacao: r?.situacao && r.situacao !== 'todos' ? r.situacao : undefined,
     })}`,
     buscar,
   );

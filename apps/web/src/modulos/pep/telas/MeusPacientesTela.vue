@@ -4,6 +4,15 @@
 // colunas ficam neste navegador, por rede, estabelecimento e login (D-PAINEL-1), e só quem tem pep.painel.configurar
 // os muda. Abre o prontuário na aba pedida pelo menu (`?aba=`).
 import { COLUNAS_PAINEL, type ColunaPainel, VINCULOS_PAINEL, type VinculoPainel } from '@sgh/contratos';
+import {
+  type FiltroPainel,
+  SITUACOES_PACIENTE_FILTRO,
+  type SituacaoPacienteFiltro,
+  TIPOS_ATENDIMENTO_FILTRO,
+  type TipoAtendimentoFiltro,
+  validarColunasDoFiltro,
+  validarFiltroPainel,
+} from '@sgh/dominio-pep';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -11,10 +20,11 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
-import { lerPainel } from '../api-documentos.js';
+import { lerPainel, type RecortesPainel } from '../api-documentos.js';
 import { dataHoraBr } from '../formato.js';
 import {
   acompanhar,
+  alterarFiltro,
   deixarDeAcompanhar,
   escolherFiltroPadrao,
   type FiltroPainelSalvo,
@@ -27,6 +37,8 @@ import {
   lerColunasDoFiltro,
   lerFiltroPadrao,
   lerFiltros,
+  lerOpcoesFiltro,
+  type OpcoesFiltroPainel,
 } from '../api-equipe-painel.js';
 import { chavePainel, gravarPreferenciasPainel, lerPreferenciasPainel } from '../preferencias-painel.js';
 
@@ -105,20 +117,151 @@ async function carregarFiltros(aplicarPadrao: boolean): Promise<void> {
 function falhaPreferencia(e: unknown): void {
   erroPreferencia.value = e instanceof Error ? e.message : String(e);
 }
-watch(filtroAtual, async (id) => {
+// Recortes do filtro escolhido (setor, acomodação, leito, especialidade, tipo e situação): a lista vem recortada pela
+// API; sem filtro escolhido, nenhum recorte. Larguras das colunas do filtro (vazio = automática).
+const semRecortes = (): RecortesPainel => ({
+  setor: null,
+  acomodacao: null,
+  leito: null,
+  especialidade: null,
+  tipo: null,
+  situacao: null,
+});
+const recortes = ref<RecortesPainel>(semRecortes());
+const larguras = ref<Record<string, number | null>>({});
+async function aplicarFiltro(id: number | null): Promise<void> {
   const f = filtros.value.find((x) => x.id === id);
-  if (!f) return;
+  editando.value = false;
+  if (!f) {
+    recortes.value = semRecortes();
+    larguras.value = {};
+    return;
+  }
   unidade.value = f.unidade;
   vinculo.value = f.apenasMeusPacientes ? 'meus' : 'todos';
+  recortes.value = {
+    setor: f.setor,
+    acomodacao: f.acomodacao,
+    leito: f.leito,
+    especialidade: f.especialidade,
+    tipo: f.tipoAtendimento,
+    situacao: f.situacao,
+  };
   try {
-    const c = (await lerColunasDoFiltro(f.id)).colunas
+    const lidas = (await lerColunasDoFiltro(f.id)).colunas;
+    larguras.value = Object.fromEntries(lidas.map((x) => [x.coluna, x.largura]));
+    const c = lidas
       .map((x) => x.coluna)
       .filter((x): x is ColunaPainel => (COLUNAS_PAINEL as readonly string[]).includes(x));
     if (c.length >= 2) colunas.value = c;
   } catch (e) {
     falhaPreferencia(e);
   }
+}
+watch(filtroAtual, (id) => aplicarFiltro(id));
+// Edição dos recortes e das larguras do filtro escolhido, com as regras do domínio conferidas na hora.
+const editando = ref(false);
+const opcoesRecorte = ref<OpcoesFiltroPainel | null>(null);
+const rascunho = ref<RecortesPainel & { larguras: Record<string, number | null> }>({
+  ...semRecortes(),
+  larguras: {},
 });
+async function abrirEdicao(): Promise<void> {
+  if (filtroAtual.value === null) return;
+  rascunho.value = { ...recortes.value, larguras: { ...larguras.value } };
+  editando.value = true;
+  if (opcoesRecorte.value) return;
+  try {
+    opcoesRecorte.value = await lerOpcoesFiltro();
+  } catch (e) {
+    falhaPreferencia(e);
+  }
+}
+const qualquer = computed(() => ({ valor: null, rotulo: t('pep.equipe.filtros.qualquer') }));
+const paraOpcoes = (xs: readonly { id: number; rotulo: string }[] | undefined) => [
+  qualquer.value,
+  ...(xs ?? []).map((x) => ({ valor: x.id as number | null, rotulo: x.rotulo })),
+];
+const opcoesTipo = computed(() =>
+  TIPOS_ATENDIMENTO_FILTRO.map((v) => ({
+    valor: v as string | null,
+    rotulo: t(`pep.equipe.filtros.tipos.${v}`),
+  })),
+);
+const opcoesSituacao = computed(() =>
+  SITUACOES_PACIENTE_FILTRO.map((v) => ({
+    valor: v as string | null,
+    rotulo: t(`pep.equipe.filtros.situacoes.${v}`),
+  })),
+);
+const opcoesSetor = computed(() => paraOpcoes(opcoesRecorte.value?.setores));
+const opcoesAcomodacao = computed(() => paraOpcoes(opcoesRecorte.value?.acomodacoes));
+const opcoesEspecialidade = computed(() => paraOpcoes(opcoesRecorte.value?.especialidades));
+// O leito pertence a uma unidade: a lista mostra só os da unidade escolhida no painel.
+const opcoesLeito = computed(() =>
+  paraOpcoes(
+    (opcoesRecorte.value?.leitos ?? []).filter((l) => unidade.value !== null && l.unidade === unidade.value),
+  ),
+);
+watch(unidade, () => {
+  if (
+    editando.value &&
+    rascunho.value.leito !== null &&
+    !opcoesLeito.value.some((o) => o.valor === rascunho.value.leito)
+  )
+    rascunho.value.leito = null;
+});
+const filtroEditado = computed<FiltroPainel | null>(() => {
+  const f = filtros.value.find((x) => x.id === filtroAtual.value);
+  if (!f) return null;
+  const r = rascunho.value;
+  return {
+    nome: f.nome,
+    padrao: f.padrao,
+    tipoAtendimento: (r.tipo ?? 'todos') as TipoAtendimentoFiltro,
+    unidade: unidade.value,
+    setor: r.setor,
+    acomodacao: r.acomodacao,
+    leito: r.leito,
+    especialidade: r.especialidade,
+    situacao: r.situacao as SituacaoPacienteFiltro | null,
+    apenasMeusPacientes: vinculo.value === 'meus',
+  };
+});
+const colunasEditadas = computed(() =>
+  colunas.value.map((coluna) => {
+    const v = rascunho.value.larguras[coluna];
+    return { coluna, largura: v === undefined || v === null || Number.isNaN(v) ? null : Number(v) };
+  }),
+);
+const errosEdicao = computed(() => {
+  const f = filtroEditado.value;
+  if (!f) return [];
+  const outros = filtros.value.map((x) => ({ id: x.id, nome: x.nome, padrao: x.padrao }));
+  return [
+    ...validarFiltroPainel(f, outros, filtroAtual.value),
+    ...validarColunasDoFiltro(colunasEditadas.value, COLUNAS_PAINEL),
+  ];
+});
+function lerLargura(coluna: string, ev: Event): void {
+  const v = (ev.target as HTMLInputElement).value.trim();
+  rascunho.value.larguras = { ...rascunho.value.larguras, [coluna]: v === '' ? null : Number(v) };
+}
+async function gravarEdicao(): Promise<void> {
+  const atual = filtros.value.find((x) => x.id === filtroAtual.value);
+  const f = filtroEditado.value;
+  if (!atual || !f || errosEdicao.value.length) return;
+  try {
+    await alterarFiltro(atual.id, { ...f, versao: atual.versao });
+    await gravarColunasDoFiltro(atual.id, colunasEditadas.value);
+    await carregarFiltros(false);
+    await aplicarFiltro(atual.id);
+    avisoFiltro.value = t('pep.equipe.filtros.gravado_ok', { nome: atual.nome });
+    erroPreferencia.value = null;
+  } catch (e) {
+    falhaPreferencia(e);
+  }
+}
 async function salvarFiltro(): Promise<void> {
   const nome = nomeNovoFiltro.value.trim();
   if (!nome) return;
@@ -176,6 +319,7 @@ const painel = useQuery({
     vinculo.value,
     soFavoritos.value,
     favoritos.value.join(','),
+    recortes.value,
   ]),
   queryFn: () =>
     lerPainel({
@@ -183,6 +327,7 @@ const painel = useQuery({
       busca: busca.value,
       vinculo: vinculo.value,
       favoritos: soFavoritos.value ? favoritos.value : null,
+      recortes: filtroAtual.value === null ? null : recortes.value,
     }),
 });
 const opcoesUnidade = computed(() => [
@@ -292,6 +437,13 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
         data-testid="painel-filtro-padrao"
         @acionar="tornarPadrao"
       />
+      <SanteBotao
+        v-if="configurar && filtroAtual !== null"
+        variante="secundario"
+        :rotulo="t('pep.equipe.filtros.editar')"
+        data-testid="painel-filtro-editar"
+        @acionar="abrirEdicao"
+      />
       <label v-if="configurar">
         <span>{{ t('pep.equipe.filtros.nome') }}</span>
         <input v-model="nomeNovoFiltro" maxlength="60" autocomplete="off" data-testid="painel-filtro-nome" />
@@ -303,6 +455,81 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
         :desabilitado="!nomeNovoFiltro.trim()"
         :rotulo="t('pep.equipe.filtros.salvar')"
         data-testid="painel-filtro-salvar"
+      />
+    </form>
+    <form
+      v-if="editando && configurar && filtroEditado"
+      class="filtros recortes"
+      data-testid="painel-filtro-recortes"
+      @submit.prevent="gravarEdicao"
+    >
+      <p class="legenda">{{ t('pep.equipe.filtros.recortes', { nome: filtroEditado.nome }) }}</p>
+      <SanteSelecao
+        v-model="rascunho.tipo"
+        class="campo"
+        :rotulo="t('pep.equipe.filtros.tipo')"
+        :opcoes="opcoesTipo"
+        data-testid="painel-recorte-tipo"
+      />
+      <SanteSelecao
+        v-model="rascunho.situacao"
+        class="campo"
+        :rotulo="t('pep.equipe.filtros.situacao')"
+        :opcoes="[qualquer, ...opcoesSituacao]"
+        data-testid="painel-recorte-situacao"
+      />
+      <SanteSelecao
+        v-model="rascunho.setor"
+        class="campo"
+        :rotulo="t('pep.equipe.filtros.setor')"
+        :opcoes="opcoesSetor"
+        data-testid="painel-recorte-setor"
+      />
+      <SanteSelecao
+        v-model="rascunho.acomodacao"
+        class="campo"
+        :rotulo="t('pep.equipe.filtros.acomodacao')"
+        :opcoes="opcoesAcomodacao"
+        data-testid="painel-recorte-acomodacao"
+      />
+      <SanteSelecao
+        v-model="rascunho.leito"
+        class="campo"
+        :rotulo="t('pep.equipe.filtros.leito')"
+        :opcoes="opcoesLeito"
+        :desabilitado="unidade === null"
+        data-testid="painel-recorte-leito"
+      />
+      <SanteSelecao
+        v-model="rascunho.especialidade"
+        class="campo"
+        :rotulo="t('pep.equipe.filtros.especialidade')"
+        :opcoes="opcoesEspecialidade"
+        data-testid="painel-recorte-especialidade"
+      />
+      <fieldset class="colunas">
+        <legend>{{ t('pep.equipe.filtros.larguras') }}</legend>
+        <label v-for="c in colunas" :key="c">
+          <span>{{ t(`pep.doc.painel.col.${c}`) }}</span>
+          <input
+            type="number"
+            min="20"
+            max="2000"
+            step="1"
+            :value="rascunho.larguras[c] ?? ''"
+            :data-testid="`painel-largura-${c}`"
+            @input="lerLargura(c, $event)"
+          />
+        </label>
+      </fieldset>
+      <ul v-if="errosEdicao.length" class="erros" role="alert" data-testid="painel-filtro-erros">
+        <li v-for="e in errosEdicao" :key="`${e.campo}-${e.codigo}`">{{ e.mensagem }}</li>
+      </ul>
+      <SanteBotao
+        tipo="submit"
+        :desabilitado="errosEdicao.length > 0"
+        :rotulo="t('pep.equipe.filtros.gravar')"
+        data-testid="painel-filtro-gravar"
       />
     </form>
     <p v-if="avisoFiltro" role="status" data-testid="painel-filtro-aviso">{{ avisoFiltro }}</p>
@@ -334,7 +561,14 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
             <th v-if="configurar" scope="col">
               <span class="sr">{{ t('pep.doc.painel.favoritos') }}</span>
             </th>
-            <th v-for="c in colunasVistas" :key="c" scope="col">{{ t(`pep.doc.painel.col.${c}`) }}</th>
+            <th
+              v-for="c in colunasVistas"
+              :key="c"
+              scope="col"
+              :style="larguras[c] ? { width: `${larguras[c]}px` } : undefined"
+            >
+              {{ t(`pep.doc.painel.col.${c}`) }}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -425,6 +659,16 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
   border-radius: 6px;
   background: var(--sgh-fundo);
   color: var(--sgh-texto);
+}
+.recortes .legenda {
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: 600;
+}
+.erros {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--sgh-alerta);
 }
 .colunas {
   display: flex;

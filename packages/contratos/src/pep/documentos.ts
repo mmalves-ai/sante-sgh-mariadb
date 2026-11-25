@@ -97,6 +97,13 @@ export const esquemaFiltrosPainel = z
     /** IDs dos favoritos (deste navegador), com `favoritos=sim`. */
     ids: z.string().max(3000).optional(),
     vinculo: z.enum(VINCULOS_PAINEL).optional(),
+    /** Recortes do filtro salvo (F3.3, L90). */
+    setor: idRota.optional(),
+    acomodacao: idRota.optional(),
+    leito: idRota.optional(),
+    especialidade: idRota.optional(),
+    tipo: z.enum(['todos', 'internacao', 'ambulatorio', 'urgencia', 'externo', 'domiciliar']).optional(),
+    situacao: z.enum(['em_atendimento', 'aguardando', 'alta_prevista', 'alta', 'todos']).optional(),
   })
   .strict();
 export type FiltrosPainel = z.infer<typeof esquemaFiltrosPainel>;

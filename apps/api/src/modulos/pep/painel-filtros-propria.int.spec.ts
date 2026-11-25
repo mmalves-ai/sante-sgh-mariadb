@@ -215,4 +215,15 @@ describe.skipIf(SEM_BANCO)('PortaPainelFiltrosPropria contra o MariaDB (contrato
       }),
     ).rejects.toMatchObject({ problema: { status: 422, codigo: 'largura-invalida' } });
   });
+
+  it('opções dos recortes: só os do estabelecimento da sessão, ativos', async () => {
+    const o = await porta.opcoes(ctx());
+    expect(o.setores).toEqual([{ id: m.setor, rotulo: 'Setor sintético' }]);
+    expect(o.acomodacoes).toEqual([]);
+    expect(o.leitos).toEqual([]);
+    expect(o.especialidades.length).toBeGreaterThan(0);
+    // O outro estabelecimento não vê o setor deste.
+    const o2 = await porta.opcoes({ ...ctx(), estabelecimento: m.est, hospital: P2 });
+    expect(o2.setores).toEqual([]);
+  });
 });

@@ -131,6 +131,7 @@ import {
   type DocumentoHistoricoLido,
   type DocumentoProprioLido,
   type EpisodioLido,
+  type RecortesFiltroPainel,
   SITUACAO_DOC,
   TIPO_ATO,
 } from './tipos-pep.js';
@@ -431,6 +432,7 @@ export class ServicoDocumentos {
       favoritos: readonly number[] | null;
       vinculo?: VinculoPainel;
       profissional?: ProfissionalPep | null;
+      filtro?: RecortesFiltroPainel;
     },
   ): Promise<{
     pacientes: LinhaPainel[];
@@ -454,6 +456,7 @@ export class ServicoDocumentos {
         : f.vinculo === 'equipe'
           ? { equipe: { especialidades: prof?.especialidades ?? [] } }
           : {}),
+      ...(f.filtro ? { filtro: f.filtro } : {}),
     });
     const favoritos = new Set(f.favoritos ?? []);
     const doPainel = r.linhas.filter((l) => f.favoritos === null || favoritos.has(l.paciente));

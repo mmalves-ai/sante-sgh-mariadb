@@ -16,6 +16,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { tiposBaseDoFiltro } from '@sgh/dominio-pep';
 import type { ContextoDocs } from './documentos-porta.js';
 import { type NucleoDocumentosPep, recusaPendente } from './documentos-propria-comum.js';
 import { dataHora, fusoValido } from './registro-propria-comum.js';
@@ -132,6 +133,15 @@ const SQL_CBO_DO_PROFISSIONAL = (coluna: string) => `
 
 // ── Painel ───────────────────────────────────────────────────────────────────────────────────────
 
+/** A data de hoje (AAAA-MM-DD) no fuso do estabelecimento, para a alta prevista. */
+const hojeNoFuso = (fuso: string): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: fuso,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
 /**
  * Pacientes com atendimento aberto no estabelecimento (sem saída, nem encerrado nem cancelado), o mais recente de cada
  * paciente. Unidade: a da internação ou a do atendimento. Busca: parte do nome (maiúsculas) ou o número do prontuário.
@@ -179,6 +189,44 @@ export function painel(
         `COALESCE(i.especialidade_medica_id, a.especialidade_medica_id) IN (${marcadores(esp.length)})`,
       );
       p.push(...esp);
+    }
+    const r = f.filtro;
+    if (r) {
+      // Recortes do filtro salvo (F3.3, L90): setor da unidade de internação ou, sem ela, o do atendimento; acomodação
+      // e leito da internação; especialidade como no recorte da equipe; tipo e situação pelas regras do domínio.
+      if (r.setor !== null) {
+        filtros.push('COALESCE(uin.setor_funcional_id, a.setor_funcional_id) = ?');
+        p.push(r.setor);
+      }
+      if (r.acomodacao !== null) {
+        filtros.push('COALESCE(i.acomodacao_id, lh.acomodacao_id) = ?');
+        p.push(r.acomodacao);
+      }
+      if (r.leito !== null) {
+        filtros.push('i.leito_hospitalar_id = ?');
+        p.push(r.leito);
+      }
+      if (r.especialidade !== null) {
+        filtros.push('COALESCE(i.especialidade_medica_id, a.especialidade_medica_id) = ?');
+        p.push(r.especialidade);
+      }
+      if (r.tipoAtendimento === 'domiciliar')
+        filtros.push(`EXISTS (SELECT 1 FROM internacao_domiciliar d WHERE d.paciente_id = a.paciente_id
+                         AND d.estabelecimento_id = a.estabelecimento_id AND d.situacao = 'ativa'
+                         AND d.excluido_em IS NULL)`);
+      else if (r.tipoAtendimento !== null && r.tipoAtendimento !== 'todos') {
+        const tipos = tiposBaseDoFiltro(r.tipoAtendimento);
+        filtros.push(`k.tipo_base IN (${marcadores(tipos.length)})`);
+        p.push(...tipos);
+      }
+      if (r.situacao !== null && r.situacao !== 'todos') {
+        // A mesma ordem de situacaoDoPaciente (domínio): alta, alta prevista, aguardando, em atendimento.
+        filtros.push(`(CASE WHEN a.alta_medica_em IS NOT NULL OR i.situacao = 'alta_medica' THEN 'alta'
+                            WHEN i.data_prevista_alta IS NOT NULL AND DATE(i.data_prevista_alta) <= ? THEN 'alta_prevista'
+                            WHEN i.id IS NULL AND a.situacao = 'aberto' THEN 'aguardando'
+                            ELSE 'em_atendimento' END) = ?`);
+        p.push(hojeNoFuso(est.fuso), r.situacao);
+      }
     }
     const ls = await l.consultar(
       `SELECT a.id, a.numero, a.paciente_id, k.tipo_base, a.entrada_em, pf.nome,

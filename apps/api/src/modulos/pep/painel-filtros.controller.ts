@@ -35,6 +35,12 @@ export class PainelFiltrosController {
     return this.com(req, async (p, c) => ({ filtros: await p.filtros(c) }));
   }
 
+  @Get('opcoes')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.painelLer)
+  opcoes(@Req() req: RequisicaoAutorizada) {
+    return this.com(req, (p, c) => p.opcoes(c));
+  }
+
   @Post()
   @AuditadoNoHandler(AUDITORIA)
   @Permissao(PERMISSOES_EQUIPE_PAINEL.painelConfigurar)

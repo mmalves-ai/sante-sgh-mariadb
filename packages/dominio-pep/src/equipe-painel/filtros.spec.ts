@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type EstadoDoAtendimento,
   type FiltroPainel,
   filtrosQueDeixamDeSerPadrao,
   nasceComoPadrao,
   pacienteNoFiltro,
+  situacaoDoPaciente,
+  tiposBaseDoFiltro,
   type PacienteDoPainel,
   validarColunasDoFiltro,
   validarFiltroPainel,
@@ -128,5 +131,41 @@ describe('pacienteNoFiltro', () => {
   it('apenas meus pacientes: só os do usuário', () => {
     expect(pacienteNoFiltro(p, { ...base, apenasMeusPacientes: true })).toBe(false);
     expect(pacienteNoFiltro({ ...p, doUsuario: true }, { ...base, apenasMeusPacientes: true })).toBe(true);
+  });
+});
+
+describe('tiposBaseDoFiltro', () => {
+  it('ambulatório inclui a teleconsulta; urgência é o pronto atendimento; todos e domiciliar não recortam', () => {
+    expect(tiposBaseDoFiltro('internacao')).toEqual(['internacao']);
+    expect(tiposBaseDoFiltro('ambulatorio')).toEqual(['ambulatorio', 'telessaude']);
+    expect(tiposBaseDoFiltro('urgencia')).toEqual(['pronto_atendimento']);
+    expect(tiposBaseDoFiltro('externo')).toEqual(['externo']);
+    expect(tiposBaseDoFiltro('todos')).toEqual([]);
+    expect(tiposBaseDoFiltro('domiciliar')).toEqual([]);
+  });
+});
+
+describe('situacaoDoPaciente', () => {
+  const base: EstadoDoAtendimento = {
+    altaMedica: false,
+    altaPrevista: null,
+    internado: true,
+    situacaoAtendimento: 'aberto',
+  };
+  const hoje = '2026-11-25';
+  it('alta médica vence a alta prevista', () => {
+    expect(situacaoDoPaciente({ ...base, altaMedica: true, altaPrevista: '2026-11-20' }, hoje)).toBe('alta');
+  });
+  it('alta prevista para hoje ou vencida; amanhã ainda não', () => {
+    expect(situacaoDoPaciente({ ...base, altaPrevista: '2026-11-25' }, hoje)).toBe('alta_prevista');
+    expect(situacaoDoPaciente({ ...base, altaPrevista: '2026-11-24T10:00:00' }, hoje)).toBe('alta_prevista');
+    expect(situacaoDoPaciente({ ...base, altaPrevista: '2026-11-26' }, hoje)).toBe('em_atendimento');
+  });
+  it('aguardando só sem internação e com o atendimento aberto', () => {
+    expect(situacaoDoPaciente({ ...base, internado: false }, hoje)).toBe('aguardando');
+    expect(
+      situacaoDoPaciente({ ...base, internado: false, situacaoAtendimento: 'em_observacao' }, hoje),
+    ).toBe('em_atendimento');
+    expect(situacaoDoPaciente(base, hoje)).toBe('em_atendimento');
   });
 });

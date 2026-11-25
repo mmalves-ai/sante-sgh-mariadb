@@ -59,6 +59,17 @@ export interface ColunaDoFiltro {
   coluna: string;
   largura: number | null;
 }
+export interface OpcaoRecorte {
+  id: number;
+  rotulo: string;
+}
+export interface OpcoesFiltroPainel {
+  setores: OpcaoRecorte[];
+  acomodacoes: OpcaoRecorte[];
+  leitos: (OpcaoRecorte & { unidade: number | null })[];
+  especialidades: OpcaoRecorte[];
+}
+export const lerOpcoesFiltro = () => pedir<OpcoesFiltroPainel>(`${P}/painel/filtros/opcoes`);
 export const lerFiltros = () => pedir<{ filtros: FiltroPainelSalvo[] }>(`${P}/painel/filtros`);
 export const incluirFiltro = (f: NovoFiltroPainel) => pedir<{ id: number }>(`${P}/painel/filtros`, 'POST', f);
 export const alterarFiltro = (id: number, f: NovoFiltroPainel & { versao: number }) =>

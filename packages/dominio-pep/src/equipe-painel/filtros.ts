@@ -170,3 +170,53 @@ export function pacienteNoFiltro(p: PacienteDoPainel, f: FiltroPainel): boolean 
     if (f[campo] !== null && p[campo] !== f[campo]) return false;
   return true;
 }
+
+/** Tipo de base do atendimento (o fluxo que a categoria segue) a que cada tipo do filtro corresponde. */
+export type TipoBaseAtendimento =
+  'ambulatorio' | 'pronto_atendimento' | 'externo' | 'internacao' | 'telessaude';
+
+/**
+ * Tipos de base que entram no recorte do tipo de atendimento: ambulatório inclui a teleconsulta; urgência é o pronto
+ * atendimento; "domiciliar" não é tipo de base (o paciente tem internação domiciliar ativa) e "todos" não recorta
+ * (lista vazia nos dois casos).
+ */
+export function tiposBaseDoFiltro(tipo: TipoAtendimentoFiltro): TipoBaseAtendimento[] {
+  switch (tipo) {
+    case 'internacao':
+      return ['internacao'];
+    case 'ambulatorio':
+      return ['ambulatorio', 'telessaude'];
+    case 'urgencia':
+      return ['pronto_atendimento'];
+    case 'externo':
+      return ['externo'];
+    default:
+      return [];
+  }
+}
+
+/** O que a lista sabe do atendimento aberto para dizer a situação do paciente. */
+export interface EstadoDoAtendimento {
+  /** Alta médica dada (no atendimento ou na internação), aguardando a saída. */
+  readonly altaMedica: boolean;
+  /** Data prevista da alta da internação (AAAA-MM-DD), quando houver. */
+  readonly altaPrevista: string | null;
+  readonly internado: boolean;
+  /** Situação do atendimento: aberto, em_atendimento ou em_observacao. */
+  readonly situacaoAtendimento: string;
+}
+
+/**
+ * Situação do paciente na lista, nesta ordem: alta (alta médica dada, sem saída); alta prevista (a data prevista é hoje
+ * ou já passou); aguardando (atendimento aberto e ainda não iniciado, sem internação); em atendimento (o resto). `hoje`
+ * é a data do estabelecimento (AAAA-MM-DD). A consulta do painel repete esta ordem no SQL.
+ */
+export function situacaoDoPaciente(
+  e: EstadoDoAtendimento,
+  hoje: string,
+): Exclude<SituacaoPacienteFiltro, 'todos'> {
+  if (e.altaMedica) return 'alta';
+  if (e.altaPrevista !== null && e.altaPrevista.slice(0, 10) <= hoje) return 'alta_prevista';
+  if (!e.internado && e.situacaoAtendimento === 'aberto') return 'aguardando';
+  return 'em_atendimento';
+}
