@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 507, M: 198, P: 57, N: 252 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 508, M: 198, P: 57, N: 253 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(507);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(508);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -353,6 +353,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/sus/apac', // M51 (etapa 3)
         '/faturamento/sus/aih', // M51 (etapa 4)
         '/faturamento/sus/bpa', // M51 (etapa 2)
+        '/faturamento/sus/cadastros/estabelecimento', // C2-123 (06-SUS L61)
         '/faturamento/sus/ciha', // M51 (etapa 1)
         '/faturamento/sus/contratualizacao', // M55 (etapa 5)
         '/faturamento/sus/programacao', // C2-114 (06-SUS L54)
