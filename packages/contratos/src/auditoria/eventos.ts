@@ -2229,6 +2229,13 @@ export const EVENTOS_AUDITAVEIS = {
       'Parceiro de integração nova cadastrado, mudado, ativado ou desativado (ou a credencial emitida)',
     legado: null,
   },
+  // C2-037 (08-INTG L134): o arquivo da entrega ao parceiro leva dados pessoais e sensíveis de muitos pacientes.
+  integracaoPacoteEntregaExportado: {
+    codigo: 'integracao.pacote-entrega.exportado',
+    descricao:
+      'Arquivo da entrega ao parceiro baixado pelo operador (entrega, arquivo e SHA-256; nunca o conteúdo)',
+    legado: null,
+  },
   integracaoMortoTratado: {
     codigo: 'integracao.morto.tratado',
     descricao: 'Mensagem da fila de mortos reprocessada, corrigida ou descartada (com o motivo)',

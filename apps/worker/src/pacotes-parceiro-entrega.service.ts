@@ -10,7 +10,12 @@
 // Ligado fora de dev/ci; em dev/ci só com PACOTES_PARCEIRO_ENTREGA=ligado. Log só com contagens e códigos; nunca o
 // conteúdo nem a chave do pseudônimo (PACOTES_PARCEIRO_CHAVE_PSEUDONIMO).
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { montarArquivoPacote, protocoloSimulado, transporteDaEntrega } from '@sgh/dominio-integracao';
+import {
+  conferirPacoteNoCatalogo,
+  montarArquivoPacote,
+  protocoloSimulado,
+  transporteDaEntrega,
+} from '@sgh/dominio-integracao';
 import { criarArmazemLocal, NucleoProprio } from '@sgh/nucleo';
 import { clientesDoWorker } from './clientes-worker.js';
 import { logger } from './logger.js';
@@ -63,6 +68,13 @@ export async function cicloEntregas(
   const devidos = await porta.devidos(ref, agora);
   r.devidos = devidos.length;
   for (const p of devidos) {
+    // A regra do catálogo de novo na hora de gerar (LGPD art. 6 III, 11 e 46): o pacote gravado antes da trava, ou
+    // mudado por fora, não sai com identificador aberto, sensível sem marca, duas visões ou pseudônimo no anonimizado.
+    const conferencia = conferirPacoteNoCatalogo(p, p.campos);
+    if (conferencia.length > 0) {
+      r.recusas.push(...conferencia.map((e) => e.codigo));
+      continue;
+    }
     const lidas = await porta.linhas(ref, p);
     if (lidas.acimaDoTeto) {
       r.recusas.push('volume-acima-do-teto');

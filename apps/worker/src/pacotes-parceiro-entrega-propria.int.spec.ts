@@ -29,6 +29,7 @@ const DIA1 = new Date('2031-03-10T06:00:00.000Z');
 const DIA2 = new Date('2031-03-11T06:00:00.000Z');
 const DIA3 = new Date('2031-03-12T06:00:00.000Z');
 const DIA4 = new Date('2031-03-13T06:00:00.000Z');
+const DIA6 = new Date('2031-03-15T06:00:00.000Z');
 
 it('toda visão do catálogo tem leitura de cada campo (e nada além)', () => {
   for (const v of VISOES_EXPORTAVEIS)
@@ -191,6 +192,8 @@ describe.skipIf(SEM_BANCO)('agendador das entregas aos parceiros sobre o banco p
       entidade: 'pacote_parceiro',
       entidadeId: pacote,
       origem: 'integracao',
+      // A guarda legal entra com a entrega, na mesma transação.
+      retencaoAte: '2036-03-10',
     });
     // Segunda volta na mesma hora: nada devido.
     expect((await cicloEntregas(porta, { ambiente: 'dev', chave: CHAVE }, DIA1)).geradas).toBe(0);
@@ -260,5 +263,112 @@ describe.skipIf(SEM_BANCO)('agendador das entregas aos parceiros sobre o banco p
     );
     expect((await cicloEntregas(porta, { ambiente: 'dev', chave: CHAVE }, dia5)).geradas).toBe(0);
     expect(await entregas()).toHaveLength(4);
+  }, 120_000);
+  const arquivosAtivos = async (id: number) =>
+    Number(
+      (
+        await ler(
+          "SELECT COUNT(*) AS n FROM arquivo WHERE entidade = 'pacote_parceiro' AND entidade_id = ? AND excluido_em IS NULL",
+          [id],
+        )
+      )[0]!['n'],
+    );
+
+  it('pacote inativado entre a leitura e o registro, ou erro no registro: nenhum arquivo fica guardado', async () => {
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE pacote_parceiro SET ativo = TRUE WHERE id = ?', [pacote]),
+    );
+    const antes = await arquivosAtivos(pacote);
+    // Outra sessão inativa o pacote depois de devidos() e antes de registrar().
+    const corrida = Object.create(porta) as PortaEntregasAgendadasPropria;
+    corrida.registrar = async (ref, p, a, agora) => {
+      await escrever(nucleo, (e) =>
+        e.executar('UPDATE pacote_parceiro SET ativo = FALSE WHERE id = ?', [p.id]),
+      );
+      return porta.registrar(ref, p, a, agora);
+    };
+    const r = await cicloEntregas(corrida, { ambiente: 'dev', chave: CHAVE }, DIA6);
+    expect(r).toMatchObject({ devidos: 1, geradas: 0 });
+    expect(await entregas()).toHaveLength(4);
+    expect(await arquivosAtivos(pacote)).toBe(antes);
+    // O registro falha depois de guardar: o arquivo é descartado (sem guarda legal, sem entrega).
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE pacote_parceiro SET ativo = TRUE WHERE id = ?', [pacote]),
+    );
+    const quebrada = new PortaEntregasAgendadasPropria(nucleo, CLIENTE, criarArmazemLocal(nucleo, { raiz }), {
+      executar: () => Promise.reject(new Error('falha sintética')),
+    } as never);
+    const ref = (await quebrada.referencia(DIA6))!;
+    const [p] = await quebrada.devidos(ref, DIA6);
+    const conteudo = `sintetico;${Date.now()}`;
+    await expect(
+      quebrada.registrar(
+        ref,
+        p!,
+        {
+          conteudo,
+          tipoMime: 'text/csv',
+          extensao: 'csv',
+          quantidadeRegistros: 0,
+          tamanhoBytes: conteudo.length,
+          hashSha256: createHash('sha256').update(conteudo).digest('hex'),
+        },
+        DIA6,
+      ),
+    ).rejects.toThrow(/falha sintética/);
+    expect(await arquivosAtivos(pacote)).toBe(antes);
+    expect(await entregas()).toHaveLength(4);
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE pacote_parceiro SET ativo = FALSE WHERE id = ?', [pacote]),
+    );
+  }, 120_000);
+
+  it('o agendador confere o pacote contra o catálogo: identificador aberto e duas visões não geram', async () => {
+    // Pacote gravado por fora (antes da trava do catálogo): pseudonimizado com o prontuário original e duas visões.
+    const ruim = await escrever(nucleo, async (e) => {
+      await e.executar('SET FOREIGN_KEY_CHECKS = 0');
+      const agora = new Date();
+      const id = await inserirSintetico(e, 'pacote_parceiro', {
+        parceiro_dados_id: parceiro,
+        codigo: 'c2037-ruim',
+        nome: 'Pacote fora da regra',
+        conteudo: 'Internações com entrada no período',
+        formato: 'csv',
+        meio_entrega: 'sftp',
+        periodicidade: 'diaria',
+        agenda: '02:00',
+        anonimizacao: 'pseudonimizada',
+        revisado_em: agora,
+        proxima_revisao_em: '2031-12-31',
+        criado_em: agora,
+      });
+      const campo = (sequencia: number, entidade: string, c: string, tratamento: string) =>
+        inserirSintetico(e, 'pacote_parceiro_campo', {
+          pacote_parceiro_id: id,
+          sequencia,
+          entidade,
+          campo: c,
+          rotulo_saida: c,
+          tratamento,
+          dado_sensivel: false,
+          justificativa: 'Massa sintética fora da regra',
+          criado_em: agora,
+        });
+      await campo(1, 'internacao', 'prontuario', 'original');
+      await campo(2, 'atendimento', 'entrada', 'original');
+      await e.executar('SET FOREIGN_KEY_CHECKS = 1');
+      return id;
+    });
+    const r = await cicloEntregas(porta, { ambiente: 'dev', chave: CHAVE }, DIA6);
+    expect(r).toMatchObject({ devidos: 1, geradas: 0 });
+    expect(r.recusas).toEqual(expect.arrayContaining(['identificador-sem-tratamento', 'visoes-misturadas']));
+    expect(
+      Number(
+        (
+          await ler('SELECT COUNT(*) AS n FROM entrega_pacote_parceiro WHERE pacote_parceiro_id = ?', [ruim])
+        )[0]!['n'],
+      ),
+    ).toBe(0);
+    expect(await arquivosAtivos(ruim)).toBe(0);
   }, 120_000);
 });

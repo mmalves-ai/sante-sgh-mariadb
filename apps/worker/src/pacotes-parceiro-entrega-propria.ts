@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import {
   entregaDevida,
   fusoEmMinutos,
+  type PeriodicidadePacote,
   podeMudarEntrega,
   revisaoEmDia,
   type SituacaoEntrega,
@@ -56,6 +57,7 @@ export interface CampoAgendado {
   readonly campo: string;
   readonly rotuloSaida: string;
   readonly tratamento: 'original' | 'pseudonimizado' | 'mascarado' | 'generalizado' | 'agregado';
+  readonly dadoSensivel: boolean;
 }
 
 export interface PacoteAgendado {
@@ -63,6 +65,7 @@ export interface PacoteAgendado {
   readonly codigo: string;
   readonly parceiro: string;
   readonly formato: 'csv' | 'json' | 'xml' | 'fhir' | 'parquet' | 'pdf';
+  readonly periodicidade: PeriodicidadePacote;
   readonly meioEntrega: 'api' | 'webhook' | 'sftp' | 'arquivo_seguro' | 'email_seguro';
   readonly anonimizacao: 'nenhuma' | 'pseudonimizada' | 'anonimizada' | 'agregada';
   readonly endereco: string | null;
@@ -119,7 +122,31 @@ const ENTRADA_REGISTRO = z.object({
   hash: z.string().regex(/^[0-9a-f]{64}$/),
   formato: z.string(),
   campos: z.number().int().min(1),
+  retencao: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
+
+const SQL_REGRA_PACOTE = `SELECT p.id, p.ativo, p.proxima_revisao_em, d.ativo AS parceiro_ativo
+     FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
+    WHERE p.id = ? AND d.excluido_em IS NULL`;
+const SQL_FIM_ENTREGUE = `SELECT MAX(periodo_fim) AS fim FROM entrega_pacote_parceiro
+    WHERE pacote_parceiro_id = ? AND situacao NOT IN ('rejeitada','falhou')`;
+
+const diaDoBanco = (v: unknown) => (v instanceof Date ? dia(v) : String(v).slice(0, 10));
+
+/** A regra da entrega relida: pacote e parceiro ativos, revisão em dia e o período ainda não entregue. */
+function regraDaEntregaVale(
+  pacote: readonly Record<string, unknown>[],
+  ultimo: readonly Record<string, unknown>[],
+  fim: string,
+  agora: Date,
+): boolean {
+  const x = pacote[0];
+  if (!x || !Number(x['ativo']) || !Number(x['parceiro_ativo'])) return false;
+  const prox = x['proxima_revisao_em'];
+  if (!revisaoEmDia(prox ? diaDoBanco(prox) : null, dia(agora))) return false;
+  const u = ultimo[0]?.['fim'];
+  return !(u && new Date(u as string).getTime() >= new Date(fim).getTime());
+}
 
 const ENTRADA_SITUACAO = z.object({
   entrega: z.number().int().positive(),
@@ -183,7 +210,7 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
         });
         if (!devida) continue;
         const campos = await l.consultar(
-          `SELECT sequencia, entidade, campo, rotulo_saida, tratamento FROM pacote_parceiro_campo
+          `SELECT sequencia, entidade, campo, rotulo_saida, tratamento, dado_sensivel FROM pacote_parceiro_campo
             WHERE pacote_parceiro_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
           [id],
           { teto: 200 },
@@ -193,6 +220,7 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
           codigo: String(x['codigo']),
           parceiro: String(x['parceiro']),
           formato: String(x['formato']) as PacoteAgendado['formato'],
+          periodicidade: String(x['periodicidade']) as PeriodicidadePacote,
           meioEntrega: String(x['meio_entrega']) as PacoteAgendado['meioEntrega'],
           anonimizacao: String(x['anonimizacao']) as PacoteAgendado['anonimizacao'],
           endereco: txt(x['endereco']),
@@ -202,6 +230,7 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
             campo: String(k['campo']),
             rotuloSaida: String(k['rotulo_saida']),
             tratamento: String(k['tratamento']) as CampoAgendado['tratamento'],
+            dadoSensivel: Boolean(Number(k['dado_sensivel'])),
           })),
           devida,
         });
@@ -269,7 +298,20 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
       correlacao: `pacote-${p.id}`,
       chaveIdempotencia: `worker.pacote.${p.id}.${chave}.${randomUUID()}`.slice(0, 80),
     });
-    // O arquivo vai à porta de arquivos (endereçado pelo hash, gravado uma vez); guarda de 5 anos.
+    const fim = p.devida.fim.toISOString();
+    // Minimização (LGPD art. 6 III): a regra é relida ANTES de guardar o arquivo; sem entrega devida, nada é guardado.
+    const vale = await this.ler(ref.id, async (l) =>
+      regraDaEntregaVale(
+        await l.consultar(SQL_REGRA_PACOTE, [p.id], { teto: 1 }),
+        await l.consultar(SQL_FIM_ENTREGUE, [p.id], { teto: 1 }),
+        fim,
+        agora,
+      ),
+    );
+    if (!vale) return null;
+    // O arquivo vai à porta de arquivos SEM guarda legal; a guarda de 5 anos só entra na mesma transação que registra
+    // a entrega. Se a entrega não vier (outra volta, pacote inativado no meio) ou der erro, o arquivo é descartado:
+    // nenhuma exportação de dado pessoal fica guardada sem entrega que aponte para ela.
     const retencao = new Date(agora);
     retencao.setUTCFullYear(retencao.getUTCFullYear() + 5);
     const arq = await this.armazem.guardar(
@@ -280,36 +322,20 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
         finalidade: 'pacote_parceiro',
         entidade: 'pacote_parceiro',
         entidadeId: p.id,
-        retencaoAte: dia(retencao),
+        retencaoAte: null,
         origem: 'integracao',
       },
       ctx('arquivo'),
     );
     const op = definirOperacao<z.infer<typeof ENTRADA_REGISTRO>, { entrega: number | null }>({
       nome: 'integracao.parceiro.entrega_agendada',
-      tabelas: ['entrega_pacote_parceiro'],
+      tabelas: ['entrega_pacote_parceiro', 'arquivo'],
       entrada: ENTRADA_REGISTRO,
       gravar: async (tx, e) => {
         // A trava do pacote serializa duas voltas; a regra é relida dentro dela.
-        const [x] = await tx.consultarParaAtualizar(
-          `SELECT p.id, p.ativo, p.proxima_revisao_em, d.ativo AS parceiro_ativo
-             FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
-            WHERE p.id = ? AND d.excluido_em IS NULL`,
-          [e.pacote],
-          { teto: 1 },
-        );
-        if (!x || !Number(x['ativo']) || !Number(x['parceiro_ativo'])) return { entrega: null };
-        const prox = x['proxima_revisao_em'];
-        const proxima = prox instanceof Date ? dia(prox) : prox ? String(prox).slice(0, 10) : null;
-        if (!revisaoEmDia(proxima, dia(agora))) return { entrega: null };
-        const [u] = await tx.consultar(
-          `SELECT MAX(periodo_fim) AS fim FROM entrega_pacote_parceiro
-            WHERE pacote_parceiro_id = ? AND situacao NOT IN ('rejeitada','falhou')`,
-          [e.pacote],
-          { teto: 1 },
-        );
-        if (u?.['fim'] && new Date(u['fim'] as string).getTime() >= new Date(e.fim).getTime())
-          return { entrega: null };
+        const x = await tx.consultarParaAtualizar(SQL_REGRA_PACOTE, [e.pacote], { teto: 1 });
+        const u = await tx.consultar(SQL_FIM_ENTREGUE, [e.pacote], { teto: 1 });
+        if (!regraDaEntregaVale(x, u, e.fim, agora)) return { entrega: null };
         const entrega = await tx.incluir('entrega_pacote_parceiro', {
           pacote_parceiro_id: e.pacote,
           operacao: 'inclusao',
@@ -324,28 +350,65 @@ export class PortaEntregasAgendadasPropria implements PortaEntregasAgendadas {
           hash_sha256: e.hash,
           situacao: 'gerada',
         });
+        // A guarda legal do arquivo, agora que uma entrega aponta para ele (só aumenta).
+        const [f] = await tx.consultarParaAtualizar(
+          'SELECT id, retencao_ate, versao FROM arquivo WHERE id = ?',
+          [e.arquivo],
+          { teto: 1 },
+        );
+        const atual = f?.['retencao_ate'] ? diaDoBanco(f['retencao_ate']) : null;
+        if (f && (atual === null || atual < e.retencao))
+          await tx.alterar('arquivo', e.arquivo, n(f['versao']), { retencao_ate: e.retencao });
         return { entrega };
       },
       alvo: (e) => ({ tabela: 'pacote_parceiro', id: e.pacote }),
     });
-    const r = await this.executor.executar(
-      op,
-      this.cliente,
-      {
-        pacote: p.id,
-        arquivo: arq.id,
-        inicio: p.devida.inicio.toISOString(),
-        fim: p.devida.fim.toISOString(),
-        quantidade: a.quantidadeRegistros,
-        tamanho: a.tamanhoBytes,
-        hash: a.hashSha256,
-        formato: p.formato,
-        campos: p.campos.length,
-      },
-      ctx('entrega'),
-    );
-    const entrega = r.resultado?.entrega ?? null;
-    return entrega === null ? null : { entrega, arquivo: arq.id };
+    let entrega: number | null;
+    try {
+      const r = await this.executor.executar(
+        op,
+        this.cliente,
+        {
+          pacote: p.id,
+          arquivo: arq.id,
+          inicio: p.devida.inicio.toISOString(),
+          fim,
+          quantidade: a.quantidadeRegistros,
+          tamanho: a.tamanhoBytes,
+          hash: a.hashSha256,
+          formato: p.formato,
+          campos: p.campos.length,
+          retencao: dia(retencao),
+        },
+        ctx('entrega'),
+      );
+      entrega = r.resultado?.entrega ?? null;
+    } catch (e) {
+      await this.descartar(arq, ctx('descarte'));
+      throw e;
+    }
+    if (entrega === null) {
+      await this.descartar(arq, ctx('descarte'));
+      return null;
+    }
+    return { entrega, arquivo: arq.id };
+  }
+
+  /** Descarta o arquivo guardado sem entrega (o reaproveitado é de outra entrega e fica). */
+  private async descartar(
+    arq: { readonly id: number; readonly reaproveitado: boolean },
+    ctx: {
+      cliente: string;
+      estabelecimento: number;
+      usuario: null;
+      correlacao: string;
+      chaveIdempotencia: string;
+    },
+  ): Promise<void> {
+    if (arq.reaproveitado) return;
+    const m = await this.armazem.metadado(ctx, arq.id);
+    if (!m || m.retencaoAte !== null) return;
+    await this.armazem.excluir(arq.id, m.versao, ctx);
   }
 
   async situacao(

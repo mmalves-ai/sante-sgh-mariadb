@@ -6,12 +6,17 @@
 // limite, cancelamento sem apagar, retornos em sequência com a situação avançando e o descadastro bloqueando o canal;
 // pacote com campos (o tirado fica excluído), entrega devida pela agenda, nada devido depois, transições; perfis,
 // recebida idempotente, rejeitada com motivo e substituição pela mais nova. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
-import { type Escritor, NucleoProprio } from '@sgh/nucleo';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { criarArmazemLocal, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { RegistradorTrilhaPropria } from '../../autorizacao/trilha-propria.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { PortaClassificacaoExternaPropria } from './classificacao-externa-propria.js';
 import { PortaMensagensPacientePropria } from './mensagens-paciente-propria.js';
 import { PortaPacotesParceiroPropria } from './pacotes-parceiro-propria.js';
+import { baixarArquivoDaEntrega } from './pacotes-visoes.controller.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
@@ -52,6 +57,7 @@ async function limpar(e: Escritor): Promise<void> {
   const pac =
     "(SELECT x.id FROM (SELECT p.id FROM pacote_parceiro p JOIN parceiro_dados d ON d.id = p.parceiro_dados_id WHERE d.codigo = 'f396-par') x)";
   await e.executar(`DELETE FROM entrega_pacote_parceiro WHERE pacote_parceiro_id IN ${pac}`);
+  await e.executar(`DELETE FROM arquivo WHERE entidade = 'pacote_parceiro' AND entidade_id IN ${pac}`);
   await e.executar(`DELETE FROM pacote_parceiro_campo WHERE pacote_parceiro_id IN ${pac}`);
   await e.executar(`DELETE FROM pacote_parceiro WHERE id IN ${pac}`);
   await e.executar("DELETE FROM parceiro_dados WHERE codigo = 'f396-par'");
@@ -570,6 +576,85 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
     const semArq = await erro(pac.arquivoDaEntrega(ctx(), e1.id));
     expect(semArq).toMatchObject({ status: 404, codigo: 'entrega-sem-arquivo' });
     expect((await erro(pac.arquivoDaEntrega(ctx(), 2_000_000_000))).status).toBe(404);
+  }, 120_000);
+
+  it('L134: o download do arquivo da entrega lê com a sessão e vai à trilha (quem, entrega, arquivo, hash)', async () => {
+    const raiz = mkdtempSync(join(tmpdir(), 'f396-arquivos-'));
+    try {
+      const armazem = criarArmazemLocal(nucleo, { raiz });
+      const [ent] = await ler<{ id: unknown; pacote: unknown }>(
+        `SELECT MIN(en.id) AS id, MIN(en.pacote_parceiro_id) AS pacote FROM entrega_pacote_parceiro en
+           JOIN pacote_parceiro p ON p.id = en.pacote_parceiro_id JOIN parceiro_dados d ON d.id = p.parceiro_dados_id
+          WHERE d.codigo = 'f396-par'`,
+      );
+      const entrega = Number(ent!.id);
+      const conteudo = `paciente;entrada\r\nps-sintetico;2031-01-01\r\n${Date.now()}`;
+      const arq = await armazem.guardar(
+        {
+          conteudo: new TextEncoder().encode(conteudo),
+          nomeOriginal: 'uti-2031-01-01.csv',
+          tipoMime: 'text/csv',
+          finalidade: 'pacote_parceiro',
+          entidade: 'pacote_parceiro',
+          entidadeId: Number(ent!.pacote),
+          retencaoAte: null,
+          origem: 'integracao',
+        },
+        {
+          cliente: CLIENTE,
+          estabelecimento: m.est,
+          usuario: m.usuario,
+          correlacao: P,
+          chaveIdempotencia: `f396-arq-${Date.now()}`,
+        },
+      );
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+        e.executar('UPDATE entrega_pacote_parceiro SET arquivo_id = ? WHERE id = ?', [arq.id, entrega]),
+      );
+      const [u] = await ler<{ login: unknown }>('SELECT login FROM usuario WHERE id = ?', [m.usuario]);
+      const quem = (correlacao: string) => ({
+        porta: ctx(),
+        estabelecimento: m.est,
+        rede: 'teste',
+        hospital: P,
+        login: String(u!.login),
+        estacao: 'TESTE:127.0.0.1',
+        correlacao,
+      });
+      const d = {
+        porta: pac,
+        arquivos: { armazem, cliente: CLIENTE },
+        trilha: new RegistradorTrilhaPropria(nucleo, CLIENTE),
+      };
+      const x = await baixarArquivoDaEntrega(d, quem('f396-baixa-1'), entrega);
+      expect(x.conteudo.toString('utf8')).toBe(conteudo);
+      expect(x).toMatchObject({ nome: 'uti-2031-01-01.csv', tipoMime: 'text/csv', hash: arq.hash });
+      const trilha = await ler(
+        `SELECT acao, usuario_id, estabelecimento_id, JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.evento')) AS evento,
+                JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.chaveNatural')) AS chave
+           FROM trilha_auditoria WHERE entidade = 'entrega_pacote_parceiro' AND entidade_id = ?
+            AND JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.evento')) = 'integracao.pacote-entrega.exportado' ORDER BY id`,
+        [entrega],
+      );
+      expect(trilha).toHaveLength(1);
+      expect(trilha[0]).toMatchObject({
+        acao: 'exportacao',
+        evento: 'integracao.pacote-entrega.exportado',
+        chave: `arquivo:${arq.id};sha256:${arq.hash}`,
+      });
+      expect(Number(trilha[0]!['usuario_id'])).toBe(m.usuario);
+      expect(Number(trilha[0]!['estabelecimento_id'])).toBe(m.est);
+      // Sem trilha, sem dado: a falha ao registrar recusa o download.
+      await expect(
+        baixarArquivoDaEntrega(
+          { ...d, trilha: { registrar: () => Promise.reject(new Error('fora')) } },
+          quem('f396-baixa-2'),
+          entrega,
+        ),
+      ).rejects.toMatchObject({ tipo: 'trilha-indisponivel' });
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
   }, 120_000);
 
   it('L140: perfis enviados, recebida idempotente, rejeitada com motivo e substituição pela mais nova', async () => {
