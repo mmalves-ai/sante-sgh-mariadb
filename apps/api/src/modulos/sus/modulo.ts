@@ -9,6 +9,8 @@ import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import { LeitosUtiSusController } from './leitos-uti.controller.js';
+import { EstabelecimentoSusController } from './estabelecimento-sus.controller.js';
+import { PORTA_ESTABELECIMENTO_SUS, PortaEstabelecimentoSusPropria } from './estabelecimento-sus-propria.js';
 import { LaudoInternacaoSusController } from './laudo-internacao-sus.controller.js';
 import { ContaAihComplementoController } from './conta-aih-complemento.controller.js';
 import {
@@ -69,6 +71,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       SusAihController,
       ServicoWebSusController,
       LeitosUtiSusController,
+      EstabelecimentoSusController,
       LaudoInternacaoSusController,
       ContaAihComplementoController,
       TransplanteSusController,
@@ -103,6 +106,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaLeitosUtiPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (06-SUS linha 61): habilitações, serviços e regras por tipo de prestador do estabelecimento.
+      {
+        provide: PORTA_ESTABELECIMENTO_SUS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaEstabelecimentoSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F8 (06-SUS linha 65): notificação de doador e inscrição de receptor para a central de transplantes.

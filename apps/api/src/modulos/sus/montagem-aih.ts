@@ -23,6 +23,7 @@ import {
   racaSia,
   type ResultadoAih,
   utiPorAcomodacaoDoParametro,
+  habilitacoesDaCompetencia,
 } from '@sgh/dominio-faturamento';
 import { conferirTetosDiarias, type LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import { cnesDaCompetencia, type ParametrosSus } from './montagem.js';
@@ -116,7 +117,7 @@ export function montarAihs(
         return id === undefined ? null : cat(id);
       },
       compatibilidades: compat,
-      habilitacoes: p.habilitacoes,
+      habilitacoes: habilitacoesDaCompetencia(p.habilitacoesCadastradas, comp, p.habilitacoes),
       leitosUti,
       ...(habilitacoesUti
         ? {

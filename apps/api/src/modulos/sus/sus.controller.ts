@@ -34,6 +34,10 @@
 // o arquivo daqui já é a fonte do envio. BPA, APAC e AIH ficam desligados por estabelecimento (DP-35).
 import { PORTA_PROGRAMACAO_SUS, type PortaProgramacaoSusPropria } from './programacao-propria.js';
 import {
+  PORTA_ESTABELECIMENTO_SUS,
+  type PortaEstabelecimentoSusPropria,
+} from './estabelecimento-sus-propria.js';
+import {
   Body,
   Controller,
   Get,
@@ -174,6 +178,10 @@ export class SusController {
     @Optional()
     @Inject(PORTA_PROGRAMACAO_SUS)
     programacao: PortaProgramacaoSusPropria | null = null,
+    // 06-SUS linha 61: as habilitações cadastradas com vigência substituem o parâmetro de texto na crítica.
+    @Optional()
+    @Inject(PORTA_ESTABELECIMENTO_SUS)
+    private readonly estabelecimentoSus: PortaEstabelecimentoSusPropria | null = null,
   ) {
     this.liberacao = new LiberacaoPep(configuracao, cache);
     const log = new Logger('SusController');
@@ -222,6 +230,18 @@ export class SusController {
       };
   }
 
+  /** As habilitações do cadastro do estabelecimento (sem banco próprio ou na falha da leitura, o parâmetro vale). */
+  private async habilitacoesCadastradas(
+    s: SessaoCadastro,
+  ): Promise<Pick<ParametrosSus, 'habilitacoesCadastradas'>> {
+    if (!this.estabelecimentoSus) return {};
+    try {
+      return { habilitacoesCadastradas: await this.estabelecimentoSus.habilitacoesCadastradas(s.porta) };
+    } catch {
+      return {};
+    }
+  }
+
   /** Os parâmetros do faturamento SUS resolvidos para o estabelecimento da sessão. */
   private async parametros(s: SessaoCadastro): Promise<ParametrosSus> {
     let valores: Awaited<ReturnType<FonteConfiguracao['valoresParametro']>> = [];
@@ -261,6 +281,7 @@ export class SusController {
         : null,
       fontePorConvenio: fontesDoParametro(texto('faturamento.sus.ciha.fontePorConvenio')),
       habilitacoes: habilitacoesDoParametro(texto('faturamento.sus.habilitacoes')),
+      ...(await this.habilitacoesCadastradas(s)),
       apac: { uf: texto('faturamento.sus.apac.uf').trim() },
       bpa: {
         orgaoOrigem: texto('faturamento.sus.bpa.orgaoOrigem').trim(),

@@ -19,6 +19,8 @@ import {
   camposAusentesCabecalhoBpa,
   catalogoSigtapDaCompetencia,
   compatibilidadesDaCompetencia,
+  habilitacoesDaCompetencia,
+  type HabilitacaoEstabelecimentoVigencia,
   montarBpa,
   type ResultadoBpa,
   chaveDaCritica,
@@ -45,6 +47,11 @@ export interface ParametrosSus {
   readonly fontePorConvenio: ReadonlyMap<number, string>;
   /** Etapa 2: as habilitações do CNES (parâmetro `faturamento.sus.habilitacoes`) e o cabeçalho do BPA-Mag. */
   readonly habilitacoes: ReadonlySet<string>;
+  /**
+   * As habilitações do cadastro do estabelecimento com vigência (06-SUS linha 61): quando há alguma, a crítica usa as
+   * vigentes na competência no lugar do parâmetro de texto.
+   */
+  readonly habilitacoesCadastradas?: readonly HabilitacaoEstabelecimentoVigencia[];
   readonly bpa: CabecalhoBpa;
   /** Etapa 3: o código IBGE da UF do gestor no registro da APAC (o cabeçalho do APAC-Mag é o do BPA). */
   readonly apac: { readonly uf: string };
@@ -211,7 +218,7 @@ export function montarBpaDaCompetencia(
     convenios: { sus: p.conveniosSus, particular: p.conveniosParticular },
     procedimento,
     compatibilidades: compatibilidadesDaCompetencia(competencia, dados.compatibilidades),
-    habilitacoes: p.habilitacoes,
+    habilitacoes: habilitacoesDaCompetencia(p.habilitacoesCadastradas, competencia, p.habilitacoes),
     cnsValido,
     cidExiste: (cid) => dados.cids.has(cid),
     equivalencia: (procto) => eq.get(procto) ?? null,
@@ -327,7 +334,7 @@ export function montarApacDaCompetencia(
     convenios: { sus: p.conveniosSus, particular: p.conveniosParticular },
     procedimento,
     compatibilidades: compatibilidadesDaCompetencia(competencia, dados.compatibilidades),
-    habilitacoes: p.habilitacoes,
+    habilitacoes: habilitacoesDaCompetencia(p.habilitacoesCadastradas, competencia, p.habilitacoes),
     cnsValido,
     cidExiste: (cid) => dados.cids.has(cid),
     equivalencia: (procto) => eq.get(procto) ?? null,
