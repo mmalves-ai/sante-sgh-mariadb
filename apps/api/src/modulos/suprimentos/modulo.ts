@@ -57,6 +57,11 @@ import { PORTA_ENDERECAMENTO, portaEnderecamentoIndisponivel } from './enderecam
 import { AtaEmpenhoController } from './ata-empenho.controller.js';
 import { PORTA_ATA_EMPENHO, portaAtaEmpenhoIndisponivel } from './ata-empenho.js';
 import { EntradaDoacaoController } from './entrada-doacao.controller.js';
+import { ConferenciaRecebimentoController } from './conferencia-recebimento.controller.js';
+import {
+  PORTA_CONFERENCIA_RECEBIMENTO,
+  portaConferenciaRecebimentoIndisponivel,
+} from './conferencia-recebimento.js';
 import { PORTA_ENTRADA_DOACAO, portaEntradaDoacaoIndisponivel } from './entrada-doacao.js';
 
 export interface OpcoesModuloSuprimentos {
@@ -146,6 +151,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./enderecamento.js')).PortaEnderecamentoPropria(ctx.nucleo)
       : portaEnderecamentoIndisponivel();
+  // C2-038 (05-SUP linha 21): a conferência física do recebimento grava só no banco próprio (503 sem o núcleo).
+  const conferenciaRecebimento =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./conferencia-recebimento.js')).PortaConferenciaRecebimentoPropria(ctx.nucleo)
+      : portaConferenciaRecebimentoIndisponivel();
   // C1-126 (09-AREA linha 79): a entrada por doação grava só no banco próprio (503 sem o núcleo).
   const entradaDoacao =
     ctx.nucleo && ctx.configuracao.clientePadrao
@@ -221,6 +231,7 @@ export async function modulo(
       VinculoReferenciaPrecoController,
       EnderecamentoController,
       EntradaDoacaoController,
+      ConferenciaRecebimentoController,
       ConsignadoController,
       TaxaConsignacaoController,
       SlaContratoController,
@@ -241,6 +252,7 @@ export async function modulo(
       { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
       { provide: PORTA_ENDERECAMENTO, useValue: enderecamento },
       { provide: PORTA_ENTRADA_DOACAO, useValue: entradaDoacao },
+      { provide: PORTA_CONFERENCIA_RECEBIMENTO, useValue: conferenciaRecebimento },
       { provide: PORTA_CONSIGNADO, useValue: consignado },
       { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
       { provide: PORTA_SLA_CONTRATO, useValue: slaContrato },

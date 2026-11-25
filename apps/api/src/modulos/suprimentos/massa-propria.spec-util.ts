@@ -492,6 +492,16 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
       [like],
     );
     await e.executar(`DELETE FROM requisicao_material WHERE estabelecimento_id IN (${ests})`, [like]);
+    // C2-038: a conferência física e os impostos por item antes da nota (chaves estrangeiras).
+    await e.executar(
+      `DELETE FROM conferencia_recebimento_item WHERE conferencia_recebimento_id IN (SELECT id FROM conferencia_recebimento WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM conferencia_recebimento WHERE estabelecimento_id IN (${ests})`, [like]);
+    await e.executar(
+      `DELETE FROM nota_entrada_imposto WHERE nota_entrada_item_id IN (SELECT ni.id FROM nota_entrada_item ni JOIN nota_entrada ne ON ne.id = ni.nota_entrada_id WHERE ne.estabelecimento_id IN (${ests}))`,
+      [like],
+    );
     await e.executar(
       `DELETE FROM nota_entrada_item WHERE nota_entrada_id IN (SELECT id FROM nota_entrada WHERE estabelecimento_id IN (${ests}))`,
       [like],

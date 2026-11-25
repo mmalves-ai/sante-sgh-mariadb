@@ -23,6 +23,7 @@ import {
   mesFechado,
   PARAMETROS_PADRAO,
   valorDaSugestao,
+  parametroCustoDe,
 } from '@sgh/dominio-suprimentos';
 import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
@@ -120,7 +121,7 @@ export class ServicoSuprimentos {
 
   async registrarNota(
     s: SessaoCadastro,
-    e: Omit<RegistrarEntradaNFEntrada, 'tolerancias'>,
+    e: Omit<RegistrarEntradaNFEntrada, 'tolerancias' | 'recuperaveis'>,
   ): Promise<ResultadoSuprimentos> {
     const apoio = this.apoios.apoios.notaFiscal;
     const [q, p, d] = await Promise.all([
@@ -129,7 +130,18 @@ export class ServicoSuprimentos {
       apoio.parametro(s, 'suprimentos.notaToleranciaPrazoDias'),
     ]);
     const tolerancias = { quantidadePct: q || 5, precoPct: p || 2, prazoDias: d || 3 };
-    return this.executar(s, 'suprimentos.registrarEntradaNF', { ...e, tolerancias });
+    // C2-038 (05-SUP linha 21): o que o estabelecimento recupera como crédito (padrão do hospital: nada).
+    const [icms, ipi, pisCofins] = await Promise.all([
+      apoio.parametro(s, 'suprimentos.notaRecuperaIcms'),
+      apoio.parametro(s, 'suprimentos.notaRecuperaIpi'),
+      apoio.parametro(s, 'suprimentos.notaRecuperaPisCofins'),
+    ]);
+    const { recuperaveis } = parametroCustoDe({ icms, ipi, pisCofins });
+    return this.executar(s, 'suprimentos.registrarEntradaNF', {
+      ...e,
+      tolerancias,
+      recuperaveis: [...recuperaveis],
+    });
   }
 
   // ── Transferência em dois passos (D-TRANSF-28) ──────────────────────────────────────────────────────

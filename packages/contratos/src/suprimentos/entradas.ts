@@ -15,6 +15,7 @@ import { esquemaContratoDoVinculo } from './contrato.js';
 import { esquemaManipulacaoNaSaida } from './manipulacao.js';
 import { esquemaOpmeNaDevolucao, esquemaOpmeNaSaida } from './opme-entradas.js';
 import { idBanco } from '../validacao/id-banco.js';
+import { TRIBUTOS_NOTA } from './regras/custo-entrada-nf.js';
 
 const id = idBanco;
 const smallint = z.number().int().positive().max(32_767);
@@ -196,6 +197,22 @@ export type ReceberTransferenciaEntrada = z.infer<typeof esquemaReceberTransfere
 
 // ── suprimentos.registrarEntradaNF ────────────────────────────────────────────────────────────────────
 
+/** C2-038 (05-SUP linha 21): imposto do item da nota (base, alíquota em %, valor e CST/CSOSN). */
+export const esquemaImpostoItemNota = z
+  .object({
+    tributo: z.enum(TRIBUTOS_NOTA),
+    base: valor,
+    aliquota: z.number().min(0).max(100),
+    valor,
+    cst: z
+      .string()
+      .trim()
+      .regex(/^\d{2,3}$/)
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
 export const esquemaItemNota = z
   .object({
     item: id,
@@ -205,6 +222,8 @@ export const esquemaItemNota = z
     fator: z.number().min(0).max(100_000).default(0),
     marca: livre(25).optional(),
     lotes: z.array(esquemaLoteItem).max(50).default([]),
+    /** C2-038 (05-SUP linha 21): os impostos destacados no item (do XML ou digitados). */
+    impostos: z.array(esquemaImpostoItemNota).max(TRIBUTOS_NOTA.length).default([]),
   })
   .strict();
 
@@ -218,7 +237,12 @@ export const esquemaRegistrarEntradaNF = z
     desconto: valor.default(0),
     frete: valor.default(0),
     outros: valor.default(0),
+    seguro: valor.default(0),
     observacao: livre(60).optional(),
+    /** C2-038: a conferência física validada desta entrega (o recebimento usa uma vez só). */
+    conferencia: id.optional(),
+    /** C2-038: os tributos que o estabelecimento recupera como crédito (a API resolve pelo parâmetro). */
+    recuperaveis: z.array(z.enum(TRIBUTOS_NOTA)).max(TRIBUTOS_NOTA.length).default([]),
     pedido: z
       .object({ ano: z.number().int().min(2000).max(2100), doc: id })
       .strict()

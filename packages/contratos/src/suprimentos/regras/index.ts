@@ -72,3 +72,6 @@ export * from './entrada-doacao.js';
 // C2-015 (05-SUP linha 22): devolução de compra ao fornecedor (quantidade, chave da NF-e e abatimento no contas a pagar).
 export * from './devolucao-fornecedor.js';
 export * from './ata-empenho.js';
+// C2-038 (05-SUP linha 21): impostos por item e custo de entrada; conferência física do recebimento.
+export * from './custo-entrada-nf.js';
+export * from './conferencia-recebimento.js';

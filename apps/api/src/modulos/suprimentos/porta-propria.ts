@@ -41,6 +41,7 @@ import {
   centrosDasConcessoes,
   conferirCompetencia,
   conferirCorrecaoValidade,
+  conferirImpostosItem,
   conferirItensPedido,
   conferirLocal,
   conferirLoteEntrada,
@@ -52,6 +53,7 @@ import {
   exigeJustificativa,
   faixaDoValor,
   conferirVencedoraDoContrato,
+  custoEntradaNota,
   planejarVencedor,
   podeConsolidarNota,
   type PropostaCotacao,
@@ -67,6 +69,13 @@ import {
   validadeSuspeita,
   vencido,
 } from '@sgh/dominio-suprimentos';
+import {
+  conferenciaParaNota,
+  gravarImpostosItem,
+  ligarConferenciaNota,
+  ligarItemConferido,
+  TABELAS_RECEBIMENTO_NF,
+} from './recebimento-nf-gravacao.js';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -2738,8 +2747,26 @@ async function registrarEntradaNF(
       e.aprovacaoComprador ? { aprovador: String(usuarioDe(tx)), motivo: e.aprovacaoComprador } : null,
     ),
   );
-  const bruto = e.itens.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0);
-  const acrescimo = e.frete + e.outros - e.desconto;
+  // C2-038 (05-SUP linha 21): os impostos por item e o custo de entrada pela regra do domínio (IPI e ICMS-ST no custo,
+  // o recuperável como crédito); a conferência física validada desta entrega, quando há.
+  for (const [k, it] of e.itens.entries()) recusar(conferirImpostosItem(it.impostos ?? [], k + 1));
+  const custos = custoEntradaNota(
+    e.itens.map((i) => ({
+      quantidade: i.quantidade,
+      valorUnitario: i.valorUnitario,
+      quantidadeEstoque: qtd(i.quantidade * (i.fator > 0 ? i.fator : 1)),
+      impostos: i.impostos ?? [],
+    })),
+    { desconto: e.desconto, frete: e.frete, seguro: e.seguro ?? 0, outros: e.outros },
+    { recuperaveis: e.recuperaveis ?? [] },
+  );
+  const conferencia = e.conferencia
+    ? await conferenciaParaNota(tx, est, e.conferencia, {
+        fornecedor: e.fornecedor,
+        local: e.local,
+        itens: e.itens.map((i) => i.item),
+      })
+    : null;
   const numero = await tx.proximoNumero('nota_entrada');
   const agora = new Date();
   const nota = await tx.incluir('nota_entrada', {
@@ -2755,11 +2782,17 @@ async function registrarEntradaNF(
     data_entrada: hoje,
     recebido_em: agora,
     recebido_por_usuario_id: usuarioDe(tx),
-    valor_produtos: reais2(bruto),
+    valor_produtos: custos.valorProdutos,
     valor_desconto: e.desconto,
     valor_frete: e.frete,
+    valor_seguro: e.seguro ?? 0,
     valor_outras_despesas: e.outros,
-    valor_total: reais2(bruto + acrescimo),
+    base_calculo_icms: custos.totais.baseIcms,
+    valor_icms: custos.totais.icms,
+    base_calculo_icms_st: custos.totais.baseIcmsSt,
+    valor_icms_st: custos.totais.icmsSt,
+    valor_ipi: custos.totais.ipi,
+    valor_total: custos.valorTotal,
     situacao: 'confirmada',
     confirmada_em: agora,
     confirmada_por_usuario_id: usuarioDe(tx),
@@ -2769,8 +2802,9 @@ async function registrarEntradaNF(
     const insumo = await insumoAtivo(tx, it.item);
     const fator = it.fator > 0 ? it.fator : 1;
     const qEstoque = qtd(it.quantidade * fator);
-    const valorItem = reais2(it.quantidade * it.valorUnitario);
-    const custoTotal = reais2(valorItem + (bruto > 0 ? (acrescimo * valorItem) / bruto : 0));
+    const ci = custos.itens[k]!;
+    const valorItem = ci.valorProdutos;
+    const custoTotal = ci.custoTotal;
     const lotes = await lotesDaEntrada(tx, est, insumo, qEstoque, it.lotes, hoje);
     const pi = itensPedido.find((r) => n(r['insumo_id']) === it.item);
     const ni = await tx.incluir('nota_entrada_item', {
@@ -2782,12 +2816,17 @@ async function registrarEntradaNF(
       quantidade: it.quantidade,
       quantidade_estoque: qEstoque,
       valor_unitario: it.valorUnitario,
+      valor_desconto: ci.desconto,
+      valor_frete: ci.frete,
+      valor_outras_despesas: reais2(ci.outros + ci.seguro),
       valor_total: valorItem,
-      custo_unitario: qEstoque > 0 ? Math.round((custoTotal / qEstoque) * 1_000_000) / 1_000_000 : 0,
+      custo_unitario: ci.custoUnitario,
       lote_insumo_id: lotes.length === 1 ? lotes[0]!.id : null,
       pedido_compra_item_id: pi ? n(pi['id']) : null,
       marca: it.marca ?? null,
     });
+    await gravarImpostosItem(tx, ni, ci.impostos);
+    if (conferencia) await ligarItemConferido(tx, conferencia, it.item, ni);
     await movimentar(tx, est, {
       local: e.local,
       insumo: it.item,
@@ -2819,6 +2858,7 @@ async function registrarEntradaNF(
       ...(pedido['aprovado_em'] ? {} : { aprovado_em: agora }),
     });
   }
+  if (conferencia) await ligarConferenciaNota(tx, conferencia, nota);
   const c = chaveLida(numero.valor, hoje);
   return { id: nota, ano: c.ano, mes: c.mes, doc: c.doc, itens: e.itens.length };
 }
@@ -3505,6 +3545,8 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'reserva_endereco',
   'nota_entrada',
   'nota_entrada_item',
+  // C2-038 (05-SUP linha 21): impostos por item e a conferência física ligada à nota.
+  ...TABELAS_RECEBIMENTO_NF,
   'pedido_compra',
   'pedido_compra_item',
   'cotacao',

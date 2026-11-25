@@ -11,6 +11,16 @@ export interface ItemDoXml {
   readonly quantidade: number;
   readonly valorUnitario: number;
   readonly lotes: readonly { lote: string; validade: string; quantidade: number }[];
+  /** C2-038 (05-SUP linha 21): os impostos destacados no item (ICMS, ICMS-ST, FCP-ST, IPI, PIS e COFINS). */
+  readonly impostos: readonly ImpostoDoXml[];
+}
+
+export interface ImpostoDoXml {
+  readonly tributo: 'ICMS' | 'ICMS_ST' | 'FCP_ST' | 'IPI' | 'PIS' | 'COFINS';
+  readonly base: number;
+  readonly aliquota: number;
+  readonly valor: number;
+  readonly cst: string | null;
 }
 
 export interface NotaDoXml {
@@ -19,6 +29,11 @@ export interface NotaDoXml {
   readonly numero: number;
   readonly serie: string;
   readonly emissao: string;
+  /** Despesas do total da NF-e (rateadas aos itens no custo de entrada). */
+  readonly frete: number;
+  readonly seguro: number;
+  readonly outros: number;
+  readonly desconto: number;
   readonly itens: readonly ItemDoXml[];
 }
 
@@ -76,6 +91,63 @@ function desescapar(t: string): string {
     .replace(/&amp;/g, '&');
 }
 
+/** Os impostos do grupo <imposto> do item: o grupo do ICMS (qualquer CST/CSOSN), IPI tributado, PIS e COFINS. */
+function impostosDoItem(det: string): ImpostoDoXml[] {
+  const imp = blocos(det, 'imposto')[0] ?? '';
+  if (!imp) return [];
+  const r: ImpostoDoXml[] = [];
+  const cstDe = (b: string) => (tag(b, 'CST') || tag(b, 'CSOSN')).slice(0, 3) || null;
+  const icms = blocos(imp, 'ICMS')[0] ?? '';
+  if (icms) {
+    const cst = cstDe(icms);
+    const v = numero(tag(icms, 'vICMS'));
+    if (v > 0)
+      r.push({
+        tributo: 'ICMS',
+        base: numero(tag(icms, 'vBC')),
+        aliquota: numero(tag(icms, 'pICMS')),
+        valor: v,
+        cst,
+      });
+    const st = numero(tag(icms, 'vICMSST'));
+    if (st > 0)
+      r.push({
+        tributo: 'ICMS_ST',
+        base: numero(tag(icms, 'vBCST')),
+        aliquota: numero(tag(icms, 'pICMSST')),
+        valor: st,
+        cst,
+      });
+    const fcp = numero(tag(icms, 'vFCPST'));
+    if (fcp > 0)
+      r.push({
+        tributo: 'FCP_ST',
+        base: numero(tag(icms, 'vBCFCPST')),
+        aliquota: numero(tag(icms, 'pFCPST')),
+        valor: fcp,
+        cst,
+      });
+  }
+  const grupos = [
+    ['IPI', 'IPI', 'pIPI', 'vIPI'],
+    ['PIS', 'PIS', 'pPIS', 'vPIS'],
+    ['COFINS', 'COFINS', 'pCOFINS', 'vCOFINS'],
+  ] as const;
+  for (const [tributo, marca, aliq, val] of grupos) {
+    const b = blocos(imp, marca)[0] ?? '';
+    const v = b ? numero(tag(b, val)) : 0;
+    if (v > 0)
+      r.push({
+        tributo,
+        base: numero(tag(b, 'vBC')),
+        aliquota: numero(tag(b, aliq)),
+        valor: v,
+        cst: cstDe(b),
+      });
+  }
+  return r;
+}
+
 export function lerXmlNota(xml: string): NotaDoXml {
   if (/<!DOCTYPE|<!ENTITY/i.test(xml))
     throw new ErroProblema(
@@ -107,14 +179,20 @@ export function lerXmlNota(xml: string): NotaDoXml {
         validade: tag(r, 'dVal').slice(0, 10),
         quantidade: numero(tag(r, 'qLote')),
       })),
+      impostos: impostosDoItem(d),
     };
   });
+  const tot = blocos(xml, 'ICMSTot')[0] ?? '';
   return {
     cnpjEmitente: tag(emit, 'CNPJ') || tag(emit, 'CPF'),
     nomeEmitente: tag(emit, 'xNome').slice(0, 120),
     numero: nNF,
     serie: tag(ide, 'serie').slice(0, 3) || '1',
     emissao: (tag(ide, 'dhEmi') || tag(ide, 'dEmi')).slice(0, 10),
+    frete: numero(tag(tot, 'vFrete')),
+    seguro: numero(tag(tot, 'vSeg')),
+    outros: numero(tag(tot, 'vOutro')),
+    desconto: numero(tag(tot, 'vDesc')),
     itens,
   };
 }
