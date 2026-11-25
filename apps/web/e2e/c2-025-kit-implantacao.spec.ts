@@ -1,9 +1,11 @@
 // E2E @C2-025 (01-ADM L98, ficha F78-01): o que falta para operar pelo caminho da tela /administracao/implantacao. O
 // administrador vê o diagnóstico do hospital novo pelo checklist padrão (contagem e mínimo de cada cadastro), abre a
 // implantação, reconta os cadastros, dispensa um item com o motivo (o botão só libera com o motivo, regra do domínio
-// conferida na hora) e inclui e mede uma meta. As rotas /api/implantacao/kit exigem o banco próprio e o E2E roda com a
+// conferida na hora), inclui e mede uma meta e acrescenta um item ao checklist padrão (edição da plataforma). As rotas /api/implantacao/kit exigem o banco próprio e o E2E roda com a
 // fonte sintética (sem núcleo): as respostas da API são simuladas pelo Playwright com massa SINTÉTICA. O efeito no banco
-// está no contrato de efeito apps/api/src/modulos/implantacao/kit-implantacao-propria.int.spec.ts.
+// está no contrato de efeito apps/api/src/modulos/implantacao/kit-implantacao-propria.int.spec.ts. A massa usa os códigos
+// e as chaves de contagem reais do checklist padrão (migração 01_SIS/95 e CONTAGENS_CADASTRO da porta). Pendente: rodar
+// o mesmo caminho contra um cliente novo criado pelo painel (banco próprio), fora da fonte sintética.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -29,7 +31,7 @@ const modelo = (id: number, codigo: string, modulo: string, titulo: string, crit
   descricao: null,
   modulo,
   tipo: 'cadastro_minimo',
-  entidade: codigo === 'CAD-LEITO' ? 'leito' : 'convenio',
+  entidade: codigo === 'INT-LEITOS' ? 'leito_hospitalar' : 'operadora_saude_estabelecimento',
   quantidadeMinima: 1,
   orientacao: null,
   ordem: id,
@@ -37,8 +39,24 @@ const modelo = (id: number, codigo: string, modulo: string, titulo: string, crit
   ativo: true,
   versao: 1,
 });
-const LEITO = modelo(1, 'CAD-LEITO', 'internacao', 'Leitos cadastrados', true);
-const CONVENIO = modelo(2, 'CAD-CONVENIO', 'faturamento', 'Convênios cadastrados', false);
+const LEITO = modelo(1, 'INT-LEITOS', 'internacao', 'Leitos', true);
+const CONVENIO = modelo(2, 'FAT-CONVENIOS', 'faturamento', 'Convênios atendidos', false);
+// As chaves de contagem que a porta conhece (CONTAGENS_CADASTRO), na ordem que a rota devolve.
+const CONTAGENS = [
+  'centro_custo',
+  'conta_bancaria',
+  'exame',
+  'leito_hospitalar',
+  'local_estoque',
+  'operadora_saude_estabelecimento',
+  'perfil_acesso',
+  'profissional',
+  'sala_cirurgica',
+  'setor_funcional',
+  'tabela_preco',
+  'unidade_internacao',
+  'usuario',
+];
 
 interface Estado {
   aberta: boolean;
@@ -170,8 +188,7 @@ test.describe('O que falta para operar @C2-025 @fase7', () => {
       const caminho = new URL(req.url()).pathname.replace(/^\/api\/implantacao\/kit\/?/, '');
       if (req.method() === 'GET') {
         if (caminho === '') return json(rota, painel(e));
-        if (caminho === 'modelo')
-          return json(rota, { itens: [LEITO, CONVENIO], contagens: ['convenio', 'leito'] });
+        if (caminho === 'modelo') return json(rota, { itens: [LEITO, CONVENIO], contagens: CONTAGENS });
         return rota.fallback();
       }
       pedidos.push({
@@ -192,6 +209,7 @@ test.describe('O que falta para operar @C2-025 @fase7', () => {
         e.meta = true;
         return json(rota, { id: 31 }, 201);
       }
+      if (caminho === 'modelo') return json(rota, { id: 41 }, 201);
       if (caminho === 'metas/31/medicao') {
         e.medida = true;
         return json(rota, { id: 31, situacao: 'atingida' });
@@ -204,7 +222,7 @@ test.describe('O que falta para operar @C2-025 @fase7', () => {
     await expect(page.getByTestId('kit-implantacao')).toBeVisible();
 
     // Diagnóstico sem implantação: a contagem e o mínimo de cada cadastro.
-    await expect(page.getByTestId('kit-diag-CAD-LEITO')).toContainText('0/1');
+    await expect(page.getByTestId('kit-diag-INT-LEITOS')).toContainText('0/1');
     await expect(page.getByTestId('kit-abrir-gravar')).toBeDisabled();
     await page.getByTestId('kit-nome').locator('input').fill('Implantação sintética');
     await page.getByTestId('kit-inicio').fill('2026-11-25');
@@ -228,7 +246,7 @@ test.describe('O que falta para operar @C2-025 @fase7', () => {
         dataFimPrevista: '2027-01-31',
       },
     });
-    const leito = page.getByTestId('kit-item-CAD-LEITO');
+    const leito = page.getByTestId('kit-item-INT-LEITOS');
     await expect(leito.getByTestId('kit-item-atrasado')).toBeVisible();
 
     await page.getByTestId('kit-recontar').click();
@@ -236,7 +254,7 @@ test.describe('O que falta para operar @C2-025 @fase7', () => {
     expect(pedidos[1]).toMatchObject({ metodo: 'POST', caminho: '5/conferencia' });
 
     // Pronto sem atingir o mínimo é recusado na hora; dispensa só com o motivo.
-    const convenio = page.getByTestId('kit-item-CAD-CONVENIO');
+    const convenio = page.getByTestId('kit-item-FAT-CONVENIOS');
     await escolher(convenio.getByTestId('kit-item-nova-situacao'), { rotulo: 'Pronto' });
     await expect(convenio.getByTestId('kit-item-falta')).toBeVisible();
     await expect(convenio.getByTestId('kit-item-gravar')).toBeDisabled();
@@ -246,7 +264,7 @@ test.describe('O que falta para operar @C2-025 @fase7', () => {
     await expect(convenio.getByTestId('kit-item-gravar')).toBeEnabled();
     await semViolacaoAxe(page, '/administracao/implantacao (o que falta)');
     await convenio.getByTestId('kit-item-gravar').click();
-    await expect(page.getByTestId('kit-item-CAD-CONVENIO')).toHaveCount(0);
+    await expect(page.getByTestId('kit-item-FAT-CONVENIOS')).toHaveCount(0);
     await expect(page.getByTestId('kit-percentual')).toContainText('50%');
     expect(pedidos[2]).toMatchObject({
       metodo: 'PATCH',
@@ -275,6 +293,34 @@ test.describe('O que falta para operar @C2-025 @fase7', () => {
       metodo: 'POST',
       caminho: 'metas/31/medicao',
       corpo: { valorMedido: 95, versao: 1 },
+    });
+
+    // Checklist padrão editável pela plataforma: cadastro mínimo só grava com a chave de contagem escolhida.
+    await page.getByTestId('kit-modelo').locator('summary').click();
+    await page.getByTestId('kit-modelo-codigo').locator('input').fill('FAT-TABELAS-SUS');
+    await page.getByTestId('kit-modelo-titulo').locator('input').fill('Tabela SUS vinculada');
+    await page.getByTestId('kit-modelo-modulo').locator('input').fill('faturamento');
+    await expect(page.getByTestId('kit-modelo-salvar')).toBeDisabled();
+    await escolher(page.getByTestId('kit-modelo-entidade'), 'tabela_preco');
+    await page.getByTestId('kit-modelo-minimo').locator('input').fill('1');
+    await escolher(page.getByTestId('kit-modelo-critico'), 'sim');
+    await expect(page.getByTestId('kit-modelo-salvar')).toBeEnabled();
+    await semViolacaoAxe(page, '/administracao/implantacao (checklist padrão)');
+    await page.getByTestId('kit-modelo-salvar').click();
+    await expect(page.getByTestId('kit-aviso')).toContainText('Gravado.');
+    expect(pedidos[5]).toMatchObject({
+      metodo: 'POST',
+      caminho: 'modelo',
+      corpo: {
+        codigo: 'FAT-TABELAS-SUS',
+        titulo: 'Tabela SUS vinculada',
+        modulo: 'faturamento',
+        tipo: 'cadastro_minimo',
+        entidade: 'tabela_preco',
+        quantidadeMinima: 1,
+        critico: true,
+        ativo: true,
+      },
     });
   });
 });

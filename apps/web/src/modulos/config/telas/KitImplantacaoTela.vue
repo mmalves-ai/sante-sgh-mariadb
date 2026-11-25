@@ -502,19 +502,50 @@ const salvarModelo = () =>
       <summary>{{ k('modelo') }}</summary>
       <p>{{ k('modeloTexto') }}</p>
       <form class="linha" @submit.prevent="salvarModelo">
-        <SanteCampoTexto v-model="itemModelo.codigo" :rotulo="k('codigo')" :max-bytes="30" />
-        <SanteCampoTexto v-model="itemModelo.titulo" :rotulo="k('tituloItem')" :max-bytes="200" />
-        <SanteCampoTexto v-model="itemModelo.modulo" :rotulo="k('modulo')" :max-bytes="30" />
+        <SanteCampoTexto
+          v-model="itemModelo.codigo"
+          data-testid="kit-modelo-codigo"
+          :rotulo="k('codigo')"
+          :max-bytes="30"
+        />
+        <SanteCampoTexto
+          v-model="itemModelo.titulo"
+          data-testid="kit-modelo-titulo"
+          :rotulo="k('tituloItem')"
+          :max-bytes="200"
+        />
+        <SanteCampoTexto
+          v-model="itemModelo.modulo"
+          data-testid="kit-modelo-modulo"
+          :rotulo="k('modulo')"
+          :max-bytes="30"
+        />
         <SanteSelecao v-model="itemModelo.tipo" :rotulo="k('tipo')" :opcoes="opTipos" />
         <SanteSelecao
           v-if="itemModelo.tipo === 'cadastro_minimo'"
           v-model="itemModelo.entidade"
+          data-testid="kit-modelo-entidade"
           :rotulo="k('entidade')"
           :opcoes="opContagens"
         />
-        <SanteCampoTexto v-model="itemModelo.minimo" :rotulo="k('quantidadeMinima')" :max-bytes="6" />
-        <SanteSelecao v-model="itemModelo.critico" :rotulo="k('critico')" :opcoes="opSimNao" />
-        <SanteBotao tipo="submit" :rotulo="k('salvarModelo')" :desabilitado="!modeloValido" />
+        <SanteCampoTexto
+          v-model="itemModelo.minimo"
+          data-testid="kit-modelo-minimo"
+          :rotulo="k('quantidadeMinima')"
+          :max-bytes="6"
+        />
+        <SanteSelecao
+          v-model="itemModelo.critico"
+          data-testid="kit-modelo-critico"
+          :rotulo="k('critico')"
+          :opcoes="opSimNao"
+        />
+        <SanteBotao
+          tipo="submit"
+          data-testid="kit-modelo-salvar"
+          :rotulo="k('salvarModelo')"
+          :desabilitado="!modeloValido"
+        />
       </form>
     </details>
   </section>

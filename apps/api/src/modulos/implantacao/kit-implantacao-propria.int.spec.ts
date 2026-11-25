@@ -4,7 +4,8 @@
 // um item por linha ativa do modelo, conferido pela contagem; a recontagem depois de cadastrar setores (pendente, em
 // andamento, pronto); a dispensa com motivo e a reabertura; o prazo e o responsável; a recusa de marcar pronto à mão
 // abaixo do mínimo; a meta com a medição e a situação; a fase "virada" com o instante; a edição do modelo pela
-// plataforma; e as recusas (segunda implantação aberta, versão velha). SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+// plataforma; as recusas (segunda implantação aberta, versão velha); e que as contagens de usuários, profissionais e
+// exames são do estabelecimento: com dois hospitais na mesma base, um não conta os cadastros do outro. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -13,9 +14,16 @@ import { PortaKitImplantacaoPropria } from './kit-implantacao-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const P = 'c2025kit';
+const P2 = 'c2025kit2';
 const MODELO_TESTE = 'C2025-TESTE';
 
 async function limpar(e: Escritor): Promise<void> {
+  const ests = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
+  const sd = `(SELECT id FROM setor_diagnostico WHERE estabelecimento_id IN ${ests})`;
+  await e.executar(`DELETE FROM exame_setor_executante WHERE setor_diagnostico_id IN ${sd}`, [P, P2]);
+  await e.executar(`DELETE FROM setor_diagnostico WHERE estabelecimento_id IN ${ests}`, [P, P2]);
+  await e.executar(`DELETE FROM lotacao_profissional WHERE estabelecimento_id IN ${ests}`, [P, P2]);
+  await e.executar(`DELETE FROM usuario_estabelecimento WHERE estabelecimento_id IN ${ests}`, [P, P2]);
   const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
   const imp = `(SELECT id FROM implantacao_estabelecimento WHERE estabelecimento_id IN ${est})`;
   await e.executar(`DELETE FROM item_prontidao WHERE implantacao_estabelecimento_id IN ${imp}`, [P]);
@@ -23,16 +31,25 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM implantacao_estabelecimento WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar('DELETE FROM modelo_item_prontidao WHERE codigo = ?', [MODELO_TESTE]);
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
 }
 
 describe.skipIf(SEM_BANCO)('PortaKitImplantacaoPropria contra o MariaDB (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaKitImplantacaoPropria;
   let est = 0;
+  let est2 = 0;
   let usuario = 0;
   const ctx = () => ({ cliente: CLIENTE, hospital: P, usuario, correlacao: P });
+  const ctx2 = () => ({ cliente: CLIENTE, hospital: P2, usuario, correlacao: P });
+  // Sem implantação aberta, a contagem vem do diagnóstico; com ela, da recontagem gravada no item.
+  const contagem = async (c: ReturnType<typeof ctx>, codigo: string) => {
+    const p = await porta.painel(c);
+    if (!p.implantacao) return p.diagnostico.find((d) => d.codigo === codigo)?.contagem;
+    await porta.conferir(c, p.implantacao.id);
+    return (await porta.painel(c)).itens.find((i) => i.modelo.codigo === codigo)?.quantidadeRealizada;
+  };
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p)) as Promise<T[]>;
   const item = async (codigo: string) =>
@@ -77,6 +94,11 @@ describe.skipIf(SEM_BANCO)('PortaKitImplantacaoPropria contra o MariaDB (contrat
         `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
          VALUES (?, ?, ?, 'America/Sao_Paulo', NOW(3))`,
         [P, `Hospital novo sintético ${P}`, `Hospital novo sintético ${P} (fictício)`],
+      );
+      est2 = await e.inserir(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, ?, ?, 'America/Sao_Paulo', NOW(3))`,
+        [P2, `Outro hospital sintético ${P2}`, `Outro hospital sintético ${P2} (fictício)`],
       );
     });
     porta = new PortaKitImplantacaoPropria(nucleo, CLIENTE);
@@ -131,8 +153,8 @@ describe.skipIf(SEM_BANCO)('PortaKitImplantacaoPropria contra o MariaDB (contrat
       concluido_em: null,
     });
     expect((await item('ADM-SETORES'))['ultima_conferencia_em']).not.toBeNull();
-    // O cadastro da rede (usuários do cliente de teste) já conta.
-    expect((await item('ADM-USUARIOS'))['quantidade_realizada']).toBeGreaterThan(0);
+    // O hospital novo não herda os usuários das outras unidades da base: conta só quem tem acesso a ele.
+    expect((await item('ADM-USUARIOS'))['quantidade_realizada']).toBe(0);
     // Segunda implantação aberta recusa, sem escrita.
     expect(await falha(porta.iniciar(ctx(), { nome: 'Outra implantação' }))).toMatch(/implantação aberta/);
 
@@ -157,6 +179,70 @@ describe.skipIf(SEM_BANCO)('PortaKitImplantacaoPropria contra o MariaDB (contrat
     // Sem mudança, a recontagem não sobe a versão.
     await porta.conferir(ctx(), r.id);
     expect((await item('ADM-SETORES'))['versao']).toBe(3);
+  });
+
+  it('dois hospitais na mesma base: usuários, profissionais e exames de um não contam no outro', async () => {
+    const [u] = await ler<{ a: number; b: number }>(
+      'SELECT MIN(id) AS a, MAX(id) AS b FROM usuario WHERE excluido_em IS NULL',
+    );
+    const [pr] = await ler<{ id: number }>(
+      "SELECT MIN(id) AS id FROM profissional WHERE situacao = 'ativo' AND excluido_em IS NULL",
+    );
+    const [cbo] = await ler<{ id: number }>('SELECT MIN(id) AS id FROM ocupacao_cbo');
+    const [ex] = await ler<{ id: number }>(
+      'SELECT MIN(id) AS id FROM exame WHERE ativo AND excluido_em IS NULL',
+    );
+    if (!u?.a || !u.b || u.a === u.b || !pr?.id || !cbo?.id || !ex?.id)
+      throw new Error(
+        'O cliente de teste precisa de 2 usuários, 1 profissional ativo, 1 CBO e 1 exame ativo.',
+      );
+    // Tudo cadastrado só no outro hospital.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `outro-${P2}` }, async (e) => {
+      for (const id of [u.a, u.b])
+        await e.inserir(
+          `INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em)
+           VALUES (?, ?, CURRENT_DATE, NOW(3))`,
+          [id, est2],
+        );
+      await e.inserir(
+        `INSERT INTO lotacao_profissional (profissional_id, estabelecimento_id, ocupacao_cbo_id, vigencia_inicio, criado_em)
+         VALUES (?, ?, ?, CURRENT_DATE, NOW(3))`,
+        [pr.id, est2, cbo.id],
+      );
+      const sd = await e.inserir(
+        `INSERT INTO setor_diagnostico (estabelecimento_id, codigo, nome, tipo, criado_em)
+         VALUES (?, ?, ?, 'laboratorio', NOW(3))`,
+        [est2, `${P2}-lab`, 'Laboratório sintético'],
+      );
+      await e.inserir(
+        'INSERT INTO exame_setor_executante (exame_id, setor_diagnostico_id, criado_em) VALUES (?, ?, NOW(3))',
+        [ex.id, sd],
+      );
+    });
+    expect(await contagem(ctx2(), 'ADM-USUARIOS')).toBe(2);
+    expect(await contagem(ctx2(), 'CAD-PROFISSIONAIS')).toBe(1);
+    expect(await contagem(ctx2(), 'SADT-EXAMES')).toBe(1);
+    expect(await contagem(ctx(), 'ADM-USUARIOS')).toBe(0);
+    expect(await contagem(ctx(), 'CAD-PROFISSIONAIS')).toBe(0);
+    expect(await contagem(ctx(), 'SADT-EXAMES')).toBe(0);
+    // Acesso vencido não conta; o acesso vigente ao hospital novo conta só nele, e a recontagem grava a contagem.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `acesso-${P}` }, async (e) => {
+      await e.inserir(
+        `INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, vigencia_fim, criado_em)
+         VALUES (?, ?, '2020-01-01', '2020-12-31', NOW(3))`,
+        [u.a, est],
+      );
+      await e.inserir(
+        `INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em)
+         VALUES (?, ?, CURRENT_DATE, NOW(3))`,
+        [u.b, est],
+      );
+    });
+    expect(await contagem(ctx(), 'ADM-USUARIOS')).toBe(1);
+    expect(await contagem(ctx2(), 'ADM-USUARIOS')).toBe(2);
+    const imp = (await porta.painel(ctx())).implantacao!.id;
+    await porta.conferir(ctx(), imp);
+    expect(await item('ADM-USUARIOS')).toMatchObject({ quantidade_realizada: 1, situacao: 'em_andamento' });
   });
 
   it('dispensa com motivo, reabre pela contagem, prazo e responsável; recusa pronto à mão abaixo do mínimo', async () => {

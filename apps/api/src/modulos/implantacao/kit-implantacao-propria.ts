@@ -54,15 +54,25 @@ const TABELAS = [
 
 /**
  * As contagens conhecidas do cadastro mínimo, pela chave gravada em `modelo_item_prontidao.entidade`. Todas recebem o
- * id do estabelecimento (as de cadastro da rede ignoram o parâmetro).
+ * id do estabelecimento e contam só o que vale nele: usuários pelo acesso vigente ao estabelecimento
+ * (`usuario_estabelecimento`), profissionais pela lotação vigente (`lotacao_profissional`) e exames pelo setor
+ * executante do estabelecimento (`exame_setor_executante` + `setor_diagnostico`). Perfis e tabelas de preço da rede
+ * (estabelecimento nulo) valem para todos.
  */
 export const CONTAGENS_CADASTRO: Readonly<Record<string, string>> = {
   setor_funcional:
     'SELECT COUNT(*) AS n FROM setor_funcional WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL',
-  usuario: 'SELECT COUNT(*) AS n FROM usuario WHERE excluido_em IS NULL AND ? IS NOT NULL',
+  usuario: `SELECT COUNT(DISTINCT u.id) AS n FROM usuario u
+      JOIN usuario_estabelecimento ue ON ue.usuario_id = u.id
+     WHERE ue.estabelecimento_id = ? AND ue.excluido_em IS NULL AND ue.vigencia_inicio <= CURRENT_DATE
+       AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= CURRENT_DATE) AND u.excluido_em IS NULL`,
   perfil_acesso:
     'SELECT COUNT(*) AS n FROM perfil_acesso WHERE (estabelecimento_id = ? OR estabelecimento_id IS NULL) AND ativo AND excluido_em IS NULL',
-  profissional: 'SELECT COUNT(*) AS n FROM profissional WHERE excluido_em IS NULL AND ? IS NOT NULL',
+  profissional: `SELECT COUNT(DISTINCT p.id) AS n FROM profissional p
+      JOIN lotacao_profissional l ON l.profissional_id = p.id
+     WHERE l.estabelecimento_id = ? AND l.ativo AND l.excluido_em IS NULL AND l.vigencia_inicio <= CURRENT_DATE
+       AND (l.vigencia_fim IS NULL OR l.vigencia_fim >= CURRENT_DATE)
+       AND p.situacao = 'ativo' AND p.excluido_em IS NULL`,
   unidade_internacao:
     'SELECT COUNT(*) AS n FROM unidade_internacao WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL',
   leito_hospitalar:
@@ -71,7 +81,11 @@ export const CONTAGENS_CADASTRO: Readonly<Record<string, string>> = {
     'SELECT COUNT(*) AS n FROM operadora_saude_estabelecimento WHERE estabelecimento_id = ? AND excluido_em IS NULL',
   tabela_preco:
     'SELECT COUNT(*) AS n FROM tabela_preco WHERE (estabelecimento_id = ? OR estabelecimento_id IS NULL) AND excluido_em IS NULL',
-  exame: 'SELECT COUNT(*) AS n FROM exame WHERE ativo AND excluido_em IS NULL AND ? IS NOT NULL',
+  exame: `SELECT COUNT(DISTINCT e.id) AS n FROM exame e
+      JOIN exame_setor_executante x ON x.exame_id = e.id
+      JOIN setor_diagnostico s ON s.id = x.setor_diagnostico_id
+     WHERE s.estabelecimento_id = ? AND s.ativo AND s.excluido_em IS NULL
+       AND x.ativo AND x.excluido_em IS NULL AND e.ativo AND e.excluido_em IS NULL`,
   sala_cirurgica:
     'SELECT COUNT(*) AS n FROM sala_cirurgica WHERE estabelecimento_id = ? AND excluido_em IS NULL',
   local_estoque:
