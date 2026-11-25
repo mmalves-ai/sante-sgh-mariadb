@@ -36,7 +36,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F3 (03-PEP linha 124): o item "Seções do sumário de alta" da administração do PEP entrou à mão (mesmo motivo); a
 // contagem acompanha.
 // F3.5 (05-SADT linha 7): o item "Postos de coleta" do laboratório entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":434,"M":198,"P":57,"N":179};
+// F8 (07-FIN linha 70): o item "Notas de crédito e de débito" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":435,"M":198,"P":57,"N":180};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -290,6 +291,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.tesouraria.fluxo-de-caixa-realizado-e-projetado","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Fluxo de caixa realizado e projetado"],"titulo":"Fluxo de caixa realizado e projetado","selo":"N","fase":3,"rota":"/financeiro/tesouraria/fluxo-caixa","permissao":"financeiro.fluxoCaixa.ler"},
   {"id":"financeiro.tesouraria.previsao-e-provisao","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Previsão e provisão"],"titulo":"Previsão e provisão","selo":"N","fase":3,"rota":"/financeiro/tesouraria/previsao","permissao":"financeiro.fluxoCaixa.ler"},
   {"id":"financeiro.tesouraria.encontro-de-contas","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Encontro de contas"],"titulo":"Encontro de contas","selo":"N","fase":3,"rota":"/financeiro/tesouraria/encontro-contas","permissao":"financeiro.tituloPagar.ler"},
+  {"id":"financeiro.notas-de-credito-e-de-debito","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Notas de crédito e de débito"],"titulo":"Notas de crédito e de débito","selo":"N","fase":3,"rota":"/financeiro/notas-credito-debito","permissao":"financeiro.notaCreditoDebito.ler"},
   {"id":"financeiro.apropriacao-gerencial-grupo-subgrupo-item","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Apropriação gerencial"],"titulo":"Apropriação gerencial","selo":"M","fase":3,"rota":"/financeiro/gerencial","permissao":"financeiro.classificacao.ler"},
   {"id":"financeiro.apropriacao-gerencial-grupo-subgrupo-item.reclassificacao-gerencial","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Apropriação gerencial","Reclassificação gerencial"],"titulo":"Reclassificação gerencial","selo":"M","fase":3,"rota":"/financeiro/gerencial/reclassificar","permissao":"financeiro.classificacao.ler"},
   {"id":"financeiro.orcamento-empresarial","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Orçamento empresarial"],"titulo":"Orçamento empresarial","selo":"P","fase":6,"rota":"/financeiro/orcamento","permissao":"financeiro.orcamento.ler"},

@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('434 itens: M 198, P 57, N 179, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 434, M: 198, P: 57, N: 179 });
+  it('436 itens: M 198, P 57, N 181, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 436, M: 198, P: 57, N: 181 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(434);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(436);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -345,6 +345,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/internacao/admissao', // M21
         '/internacao/censo', // M16
         '/internacao/controles/formularios-obito', // F78.04-1 (04-INT linha 74)
+        '/internacao/gases/setores', // C1-050 (05-SUP linha 30)
         '/internacao/leitos-sus', // F78.04-2 (04-INT linha 79)
         '/internacao/controles/isolamento', // F78.04-1 (04-INT linha 75)
         '/internacao/controles/regulacao', // F78.04-1 (04-INT linha 78)
@@ -550,6 +551,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/receber/titulos', // M32
         '/financeiro/tesouraria/conciliacao', // M32
         '/financeiro/tesouraria/encontro-contas', // F8 (07-FIN linha 69)
+        '/financeiro/notas-credito-debito', // F8 (07-FIN linha 70)
         '/financeiro/tesouraria/fluxo-caixa', // M32
         '/financeiro/tesouraria/movimento', // M32
         '/financeiro/tesouraria/periodo', // F3.8 (07-FIN linha 85)
