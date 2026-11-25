@@ -25,6 +25,8 @@ import {
 } from './premissas-cenarios.js';
 import { PremissasCenariosOrcamentoController } from './premissas-cenarios.controller.js';
 import { PortaPremissasOrcamentoPropria } from './premissas-cenarios-propria.js';
+import { ProjetoResultadoController } from './projeto-resultado.controller.js';
+import { PORTA_PROJETO_RESULTADO, PortaProjetoResultadoPropria } from './projeto-resultado-propria.js';
 
 export interface OpcoesModuloOrcamento {
   /** Porta pronta (testes). */
@@ -56,7 +58,10 @@ export function portaDasPremissas(ctx: ContextoModulo, orcamento: PortaOrcamento
 }
 
 /** A porta do orçamento estatístico e dos indicadores por setor (C1-129) pela mesma regra. */
-export function portaDasEstatisticas(ctx: ContextoModulo, orcamento: PortaOrcamento): PortaEstatisticasOrcamento {
+export function portaDasEstatisticas(
+  ctx: ContextoModulo,
+  orcamento: PortaOrcamento,
+): PortaEstatisticasOrcamento {
   const cliente = ctx.configuracao.clientePadrao;
   if (ctx.nucleo && cliente && orcamento.destino === 'banco')
     return new PortaEstatisticasOrcamentoPropria(ctx.nucleo, cliente);
@@ -76,11 +81,24 @@ export async function modulo(
   const estatisticas = opcoes.estatisticas ?? portaDasEstatisticas(ctx, porta);
   return {
     module: ModuloOrcamento,
-    controllers: [OrcamentoController, PremissasCenariosOrcamentoController, EstatisticasOrcamentoController],
+    controllers: [
+      OrcamentoController,
+      PremissasCenariosOrcamentoController,
+      EstatisticasOrcamentoController,
+      // C2-107 (07-FIN linha 128): projeto como centro de resultado; sem banco do cliente, 503.
+      ProjetoResultadoController,
+    ],
     providers: [
       { provide: PORTA_ORCAMENTO, useValue: porta },
       { provide: PORTA_PREMISSAS_ORCAMENTO, useValue: premissas },
       { provide: PORTA_ESTATISTICAS_ORCAMENTO, useValue: estatisticas },
+      {
+        provide: PORTA_PROJETO_RESULTADO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProjetoResultadoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
     ],
     exports: [PORTA_ORCAMENTO],
   };
