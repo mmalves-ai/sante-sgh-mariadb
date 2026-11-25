@@ -831,7 +831,7 @@ apuracao_custo	FIN	principal	F7	Apuração mensal do custeio por absorção, com
 apuracao_irpj_csll	FIN	principal	F7	Apuração do IRPJ e da CSLL no lucro real, com base, adicional e provisão	MV SPED_ECF_IRPJ_CSLL, CONFIGURACAO_PROVISAO_LALUR	07	3
 apuracao_pis_cofins	FIN	principal	F3	Apuração mensal de PIS e COFINS (débitos, créditos e saldo a recolher ou a compensar)	MV SPED_PIS_COFINS_REG_A170, EMPRESA_SPED_PIS_COFINS; SPDATA SDNATRECEITA; paridade estrutural: era F7	07	4
 apuracao_resultado	FIN	principal	F7	Apuração e encerramento do resultado do exercício, com lançamentos gerados	MV FECHAMENTO_DO_MES, DADOS_BALANCETE	07	0
-apuracao_retencao	FIN	principal	F7	Apuração por tributo, código de receita e período dos valores retidos, com total a recolher	MV FINAN_LOTE_TRIBUTO, FINAN_VERSAO_TRIBUTO, FINAN_LOTE_IMPOSTO	07	2
+apuracao_retencao	FIN	principal	F7	Apuração por tributo, código de receita e período dos valores retidos, com total a recolher	MV FINAN_LOTE_TRIBUTO, FINAN_VERSAO_TRIBUTO, FINAN_LOTE_IMPOSTO; cancelamento da compensação do retido por tomadores, com quem, quando e motivo (07-FIN linha 109; migração 14_FIN/91_compensacao_sofrida_cancelamento)	07	2
 apuracao_retencao_item	FIN	vinculo	F7	Retenção incluída na apuração, ligada à parcela de origem	MV FINAN_LOTE_TRIBUTO_IT	07	1
 arquivo_efd_contribuicoes	FIN	principal	F3	Arquivo da EFD-Contribuições gerado por competência, com situação, recibo e retificação	SPDATA SDPARAM; MV EMPRESA_SPED_PIS_COFINS, SPED_PIS_COFINS_REG_0111, SPED_PIS_COFINS_REG_A100	07	5
 arquivo_efd_fiscal	FIN	principal	F7	Arquivo da escrituração fiscal digital de ICMS e IPI por competência, com finalidade (original ou retificação) e situação	rodada2:nova	07	1

@@ -6,6 +6,8 @@
 //   GET  /api/financeiro/retencao-sofrida/municipios?termo=        município do serviço, para a regra do ISS
 //   GET  /api/financeiro/retencao-sofrida/saldo       o saldo a compensar por tributo
 //   POST /api/financeiro/retencao-sofrida/compensar   { competencia: AAAA-MM, tributo }
+//   GET  /api/financeiro/retencao-sofrida/compensacoes            as compensações vivas (para conferir e cancelar)
+//   POST /api/financeiro/retencao-sofrida/cancelar-compensacao    { apuracao, motivo }  o crédito volta ao saldo
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import type { ResultadoFinanceiro } from '@sgh/contratos';
@@ -19,6 +21,8 @@ import { corpo } from '../exames/public-api.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import {
   buscarMunicipiosRetencao,
+  compensacoesSofridas,
+  esquemaCancelamentoCompensacao,
   esquemaCompensacaoSofrida,
   esquemaRetencaoSofrida,
   OPERACOES_RETENCAO_SOFRIDA,
@@ -152,6 +156,25 @@ export class RetencaoSofridaController {
       'financeiro.compensarRetencaoSofrida',
       corpo(esquemaCompensacaoSofrida, b),
       'Compensação registrada; o crédito usado saiu do saldo a compensar.',
+    );
+  }
+
+  @Get('compensacoes')
+  @Permissao('financeiro.reinf.ler')
+  compensacoes(@Req() req: RequisicaoAutorizada) {
+    return this.ler(req, (l, est) => compensacoesSofridas(l, est));
+  }
+
+  @Post('cancelar-compensacao')
+  @HttpCode(200)
+  @Permissao('financeiro.reinf.gerar')
+  @AuditadoNoHandler('financeiro.cancelarCompensacaoSofrida pelo executor (trilha na mesma transação)')
+  cancelarCompensacao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.cancelarCompensacaoSofrida',
+      corpo(esquemaCancelamentoCompensacao, b),
+      'Compensação cancelada; o crédito voltou ao saldo a compensar.',
     );
   }
 }

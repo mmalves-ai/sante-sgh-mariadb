@@ -3,7 +3,8 @@
 // previdenciária). O retido quita a parcela junto com o dinheiro recebido e vira crédito do hospital: fica "a
 // compensar" até entrar na apuração do tributo próprio de uma competência. A sugestão sai da regra vigente no momento
 // "recebimento" (retencao-regra.ts); o valor informado pelo tomador pode diferir por arredondamento, nunca passar da
-// base nem do saldo da parcela.
+// base nem do saldo da parcela. A data do recebimento não é futura (o período financeiro é conferido na operação). A
+// compensação pode ser cancelada com motivo: o crédito volta ao saldo e nada é apagado.
 import { centavos, type RecusaFinanceiro } from '@sgh/contratos/regras-financeiro';
 
 export interface ItemRetencaoSofrida {
@@ -25,8 +26,9 @@ export const totalRetidoSofrido = (itens: readonly { readonly valor: number }[])
   centavos(itens.reduce((s, i) => s + i.valor, 0));
 
 /**
- * Confere a retenção sofrida antes de gravar: há item, um tributo por vez, base e valor positivos, alíquota entre 0 e
- * 100, o retido cabe na base, o tributo ainda não foi retido nesta parcela e a soma cabe no saldo em aberto.
+ * Confere a retenção sofrida antes de gravar: a data do recebimento não é futura, há item, um tributo por vez, base e
+ * valor positivos, alíquota entre 0 e 100, o retido cabe na base, o tributo ainda não foi retido nesta parcela e a soma
+ * cabe no saldo em aberto.
  */
 export function conferirRetencaoSofrida(p: {
   readonly emAberto: boolean;
@@ -34,7 +36,17 @@ export function conferirRetencaoSofrida(p: {
   readonly itens: readonly ItemRetencaoSofrida[];
   /** Tributos já retidos (vivos) nesta parcela. */
   readonly jaRetidos: readonly number[];
+  /** Data do recebimento (AAAA-MM-DD): quando o tomador pagou a fatura descontada. */
+  readonly data: string;
+  /** O dia de hoje (AAAA-MM-DD), dado por quem chama. */
+  readonly hoje: string;
 }): RecusaFinanceiro | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.data) || Number.isNaN(Date.parse(`${p.data}T00:00:00Z`)))
+    return rec('data-invalida', 'Informe a data do recebimento.', ['data']);
+  if (p.data > p.hoje)
+    return rec('data-futura', 'A data do recebimento não pode ser futura: o tomador ainda não pagou.', [
+      'data',
+    ]);
   if (!p.emAberto)
     return rec('titulo-ja-baixado', 'O título não tem parcela em aberto para abater a retenção.', ['titulo']);
   if (p.itens.length === 0) return rec('sem-item', 'Informe ao menos um tributo retido.', ['itens']);
@@ -105,22 +117,42 @@ export interface SaldoACompensar {
   readonly aCompensar: number;
   /** A competência mais antiga com crédito ainda não compensado; nula quando não sobra crédito. */
   readonly desde: string | null;
+  /** O crédito ainda não compensado, por competência (da mais antiga para a mais nova). */
+  readonly creditos: readonly { readonly competencia: string; readonly valor: number }[];
 }
 
 /** O saldo a compensar por tributo: o retido pelos tomadores menos o que já entrou em compensação. */
 export function saldoACompensar(retidos: readonly RetidoSofrido[]): SaldoACompensar[] {
-  const m = new Map<string, { retido: number; compensado: number; desde: string | null }>();
+  const m = new Map<string, { retido: number; compensado: number; abertos: Map<string, number> }>();
   for (const r of retidos) {
-    const a = m.get(r.tributo) ?? { retido: 0, compensado: 0, desde: null };
+    const a = m.get(r.tributo) ?? { retido: 0, compensado: 0, abertos: new Map<string, number>() };
     a.retido = centavos(a.retido + r.valor);
     if (r.compensado) a.compensado = centavos(a.compensado + r.valor);
-    else if (a.desde === null || r.competencia < a.desde) a.desde = r.competencia;
+    else a.abertos.set(r.competencia, centavos((a.abertos.get(r.competencia) ?? 0) + r.valor));
     m.set(r.tributo, a);
   }
   return [...m.entries()]
-    .map(([tributo, a]) => ({ tributo, ...a, aCompensar: centavos(a.retido - a.compensado) }))
+    .map(([tributo, a]) => {
+      const creditos = [...a.abertos.entries()]
+        .map(([competencia, valor]) => ({ competencia, valor }))
+        .sort((x, y) => x.competencia.localeCompare(y.competencia));
+      return {
+        tributo,
+        retido: a.retido,
+        compensado: a.compensado,
+        aCompensar: centavos(a.retido - a.compensado),
+        desde: creditos[0]?.competencia ?? null,
+        creditos,
+      };
+    })
     .sort((a, b) => a.tributo.localeCompare(b.tributo));
 }
+
+/** O crédito que cabe na apuração da competência: só o retido até ela (é o valor que a compensação vai usar). */
+export const creditoAteACompetencia = (
+  creditos: readonly { readonly competencia: string; readonly valor: number }[],
+  competencia: string,
+): number => totalRetidoSofrido(creditos.filter((c) => c.competencia <= competencia));
 
 /**
  * Confere a compensação do crédito na apuração de uma competência: só entra o retido até ela (crédito de mês futuro
@@ -139,3 +171,29 @@ export function conferirCompensacaoSofrida(
     ]);
   return null;
 }
+
+/**
+ * Confere o cancelamento da compensação: ela existe, ainda não foi cancelada e o motivo é dito. O crédito volta ao
+ * saldo a compensar e as retenções voltam a poder ser estornadas; a apuração fica gravada como cancelada.
+ */
+export function conferirCancelamentoCompensacao(p: {
+  readonly existe: boolean;
+  readonly cancelada: boolean;
+  readonly motivo: string;
+}): RecusaFinanceiro | null {
+  if (!p.existe) return rec('nao-encontrado', 'A compensação não é deste estabelecimento.', ['apuracao']);
+  if (p.cancelada) return rec('compensacao-cancelada', 'A compensação já foi cancelada.', ['apuracao']);
+  if (p.motivo.trim().length < 5)
+    return rec('sem-motivo', 'Diga o motivo do cancelamento (5 letras ou mais).', ['motivo']);
+  return null;
+}
+
+/**
+ * O município do serviço para a regra do ISS retido pelo tomador: o da nota de serviço ligada ao título (onde o serviço
+ * foi prestado); sem nota, o do estabelecimento prestador (o hospital presta o serviço onde fica). Nulo: sem município
+ * conhecido, só a regra geral (sem município) vale.
+ */
+export const municipioDoServicoRetido = (p: {
+  readonly nota: number | null;
+  readonly estabelecimento: number | null;
+}): number | null => p.nota ?? p.estabelecimento;
