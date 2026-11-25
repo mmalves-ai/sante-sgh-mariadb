@@ -63,7 +63,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-030 (05-SUP linha 26) e C2-015 (05-SUP linha 22): os itens "Ata de registro de preços e empenho" e "Devolução ao
 // fornecedor" de compras entraram à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":452,"M":198,"P":57,"N":197};
+// C2-012 (04-CC linha 106): o item "Profilaxia antimicrobiana" do centro cirúrgico entrou à mão (mesmo motivo); a
+// contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":453,"M":198,"P":57,"N":198};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -150,6 +152,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"centro-cirurgico.salas-cirurgicas-e-usuarios-permitidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Salas cirúrgicas e usuários permitidos"],"titulo":"Salas cirúrgicas e usuários permitidos","selo":"M","fase":2,"rota":"/cirurgia/salas","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.procedimentos-cirurgicos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Procedimentos cirúrgicos"],"titulo":"Procedimentos cirúrgicos","selo":"N","fase":3,"rota":"/cirurgia/procedimentos-cirurgicos","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.documentos-exigidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Documentos exigidos"],"titulo":"Documentos exigidos","selo":"N","fase":5,"rota":"/cirurgia/documentos-exigidos","permissao":"cirurgia.sala.ler"},
+  {"id":"centro-cirurgico.profilaxia-antimicrobiana","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Profilaxia antimicrobiana"],"titulo":"Profilaxia antimicrobiana","selo":"N","fase":5,"rota":"/cirurgia/profilaxia","permissao":"qualidade.ccih.ler"},
   {"id":"centro-cirurgico.nota-de-sala-e-consumo-para-a-conta","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Nota de sala e consumo para a conta"],"titulo":"Nota de sala e consumo para a conta","selo":"M","fase":3,"rota":"/cirurgia/notas-sala","permissao":"cirurgia.nota.ler"},
   {"id":"centro-cirurgico.avaliacao-pre-anestesica-apa","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Avaliação pré-anestésica"],"titulo":"Avaliação pré-anestésica","selo":"N","fase":5,"rota":"/bloco/apa","permissao":"cirurgia.apa.ler"},
   {"id":"centro-cirurgico.checklist-de-cirurgia-segura-oms","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Checklist de cirurgia segura"],"titulo":"Checklist de cirurgia segura","selo":"N","fase":5,"rota":"/bloco/checklist","permissao":"cirurgia.checklist.ler"},
