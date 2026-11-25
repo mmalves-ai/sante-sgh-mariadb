@@ -3,7 +3,7 @@
 // registrada e relançada (a fila tenta de novo). A falha do próprio registro não derruba a entrega nem causa reenvio:
 // é devolvida a quem chamou, que a põe no log.
 import { identificadorDaMensagem } from '@sgh/dominio-acesso';
-import type { RegistroEnvio } from './registro-envio-proprio.js';
+import type { OrigemDoEnvio, RegistroEnvio } from './registro-envio-proprio.js';
 import type { MensagemEmail } from './smtp.js';
 
 export interface EntregaComRegistro {
@@ -15,6 +15,8 @@ export interface EntregaComRegistro {
   readonly montar: (para: string) => MensagemEmail;
   readonly enviar: (m: MensagemEmail) => Promise<void>;
   readonly registro: RegistroEnvio | null;
+  /** Finalidade, modelo e servidor cadastrados usados (01-ADM L77), para o registro de envio. */
+  readonly origem?: OrigemDoEnvio;
 }
 
 /** Devolve as falhas do registro (nomes dos erros), para o log; a falha do envio é relançada depois de registrada. */
@@ -32,6 +34,7 @@ export async function entregarComRegistro(e: EntregaComRegistro): Promise<string
         identificador: m.idMensagem ?? '',
         aceito,
         ...(aceito ? {} : { erro }),
+        ...(e.origem ? { origem: e.origem } : {}),
       });
     } catch (x) {
       falhasDoRegistro.push(x instanceof Error ? x.name : 'erro');

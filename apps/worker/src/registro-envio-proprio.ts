@@ -5,7 +5,8 @@
 //   soma a tentativa: o histórico mostra um envio com N tentativas, não N envios.
 // - Fora de produção o aceite fica "capturado" (a mensagem só chegou à caixa de captura), nunca "enviado".
 // - O erro guardado é o resumo do domínio (tipo e código de resposta): nunca endereço nem conteúdo.
-// O servidor usado é o do ambiente (SMTP_URL), por isso servidor_email_id fica nulo.
+// A finalidade, o modelo e o servidor cadastrados usados (email-saida-propria.ts) vão a finalidade_email_id,
+// modelo_email_id e servidor_email_id; nulos quando a mensagem saiu pelo servidor do ambiente e com o texto padrão.
 import { randomUUID } from 'node:crypto';
 import { resultadoDaTentativa, resumoDoErro } from '@sgh/dominio-acesso';
 import { definirOperacao, type Executor } from '@sgh/nucleo';
@@ -26,6 +27,14 @@ export interface TentativaDeEnvio {
   /** O servidor aceitou a mensagem. */
   readonly aceito: boolean;
   readonly erro?: unknown;
+  /** Finalidade, modelo e servidor cadastrados usados na entrega (nulos: texto padrão e servidor do ambiente). */
+  readonly origem?: OrigemDoEnvio;
+}
+
+export interface OrigemDoEnvio {
+  readonly finalidade: number | null;
+  readonly modelo: number | null;
+  readonly servidor: number | null;
 }
 
 // Tipo (não interface): o resultado da operação do Executor é um registro de valores simples.
@@ -48,6 +57,9 @@ const ENTRADA = z.object({
   identificador: z.string().min(3).max(255),
   aceito: z.boolean(),
   erro: z.string().max(1000).nullable(),
+  finalidade: z.number().int().positive().nullable(),
+  modelo: z.number().int().positive().nullable(),
+  servidor: z.number().int().positive().nullable(),
 });
 
 export class RegistroEnvioProprio implements RegistroEnvio {
@@ -98,6 +110,9 @@ export class RegistroEnvioProprio implements RegistroEnvio {
       }
       const envio = await tx.incluir('envio_email', {
         estabelecimento_id: e.estabelecimento,
+        finalidade_email_id: e.finalidade,
+        modelo_email_id: e.modelo,
+        servidor_email_id: e.servidor,
         remetente: e.remetente,
         assunto: e.assunto,
         corpo: e.corpo,
@@ -153,6 +168,9 @@ export class RegistroEnvioProprio implements RegistroEnvio {
         identificador: t.identificador,
         aceito: t.aceito,
         erro: t.aceito ? null : resumoDoErro(t.erro),
+        finalidade: t.origem?.finalidade ?? null,
+        modelo: t.origem?.modelo ?? null,
+        servidor: t.origem?.servidor ?? null,
       },
       {
         cliente: this.cliente,

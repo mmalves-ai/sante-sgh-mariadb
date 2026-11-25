@@ -12,17 +12,25 @@
 // na fila, ErroDestinatarioNaoConfigurado), nunca entregue a um endereço comum.
 // Melhoria (01-ADM L77): cada tentativa de entrega fica no registro geral de envio do cliente (envio_email e
 // envio_email_destinatario: situação, tentativas, identificador da mensagem), pela porta registro-envio-proprio.ts.
+// Melhoria (01-ADM L77): a mensagem sai pelo servidor de e-mail cadastrado no cliente (o da finalidade do alerta e do
+// estabelecimento antes do padrão; SSL/TLS ou STARTTLS e a senha lida do cofre pela referência) e com o texto do modelo
+// vigente da finalidade (os campos do alerta nos marcadores), pela regra do domínio (email-saida.ts) e pela leitura
+// email-saida-propria.ts. Fora de produção a conexão é sempre a captura local (SMTP_URL), sem senha; sem servidor
+// cadastrado, o do ambiente; modelo com marcador sem valor, o texto padrão (o alerta nunca se perde).
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import { type AlertaSuporteJob, conferirAlertaSuporte } from '@sgh/contratos';
+import { conexaoDaSaida, MENSAGEM_SAIDA, textoPeloModelo, valoresDoAlerta } from '@sgh/dominio-acesso';
 import { envioExternoPermitido, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { clientesDoWorker, type NucleoClientes } from './clientes-worker.js';
+import { leitorDoCofre } from './cofre-leitura.js';
 import { entregarComRegistro } from './email-entrega.js';
+import { type SaidaDoCadastro, saidaDoCliente } from './email-saida-propria.js';
 import { logger } from './logger.js';
 import { conexaoValkey, filaDeEmail, PREFIXO_FILAS } from './relay-outbox.js';
 import { RegistroEnvioProprio } from './registro-envio-proprio.js';
 import type { NucleoWorker } from './servico-worker.js';
-import { enviarSmtp, type MensagemEmail } from './smtp.js';
+import { conexaoDoUrl, enviarPelaConexao, type MensagemEmail } from './smtp.js';
 
 export interface AlertaEmergenciaJob {
   readonly rede: string;
@@ -316,22 +324,95 @@ export class EmailService implements OnApplicationBootstrap, OnApplicationShutdo
     const dominio = dominioDoCliente(cliente);
     const de = process.env['EMAIL_REMETENTE']?.trim() || `nao-responda@${dominio}.invalid`;
     // 01-ADM L77: toda tentativa (aceita ou não) vai ao registro geral de envio do cliente (envio_email).
-    const registro = this.nucleo
-      ? new RegistroEnvioProprio(this.nucleo, cliente, envioExternoPermitido(process.env))
-      : null;
+    const producao = envioExternoPermitido(process.env);
+    const registro = this.nucleo ? new RegistroEnvioProprio(this.nucleo, cliente, producao) : null;
+    const local = (() => {
+      const c = conexaoDoUrl(smtp);
+      return { host: c.host, porta: c.porta };
+    })();
+    const lerSegredo = leitorDoCofre(process.env);
     const w = new Worker(
       filaDeEmail(cliente),
       async (job) => {
         const enviar = async (destinos: readonly string[], m: (para: string) => MensagemEmail) => {
           const hospital = (job.data as { hospital?: unknown } | null)?.hospital;
+          const codigoEstab = typeof hospital === 'string' ? hospital : null;
+          // O cadastro do cliente (servidor, finalidade, modelo); indisponível, a saída do ambiente.
+          let cadastro: SaidaDoCadastro | null = null;
+          if (this.nucleo)
+            try {
+              cadastro = await saidaDoCliente(this.nucleo, cliente, job.name, codigoEstab);
+            } catch (e) {
+              logger.warn(
+                { fila: 'email', cliente, erro: e instanceof Error ? e.name : 'erro' },
+                'e-mail: cadastro de saída indisponível',
+              );
+            }
+          const conexao = conexaoDaSaida(cadastro?.servidor ?? null, {
+            producao,
+            local,
+            remetentePadrao: de,
+          });
+          if ('recusa' in conexao) throw new Error(MENSAGEM_SAIDA[conexao.recusa]);
+          let senha: string | null = null;
+          if (conexao.usuario) {
+            senha = conexao.referenciaCofre && lerSegredo ? await lerSegredo(conexao.referenciaCofre) : null;
+            if (!senha) throw new Error(MENSAGEM_SAIDA['senha-indisponivel']);
+          }
+          let modeloUsado: number | null = null;
+          const montar = (para: string): MensagemEmail => {
+            const padrao = m(para);
+            const doCadastro = {
+              ...padrao,
+              de: conexao.remetente,
+              deNome: conexao.remetenteNome,
+              responderPara: conexao.responderPara,
+            };
+            if (!cadastro?.modelo) return doCadastro;
+            const t = textoPeloModelo(cadastro.modelo, valoresDoAlerta(job.data, padrao));
+            if ('faltando' in t) {
+              logger.warn(
+                { fila: 'email', cliente, tipo: job.name, modelo: cadastro.modelo.id, faltando: t.faltando },
+                'e-mail: modelo com marcador sem valor, texto padrão',
+              );
+              return doCadastro;
+            }
+            modeloUsado = cadastro.modelo.id;
+            return {
+              para,
+              de: t.remetente ?? conexao.remetente,
+              deNome: t.remetenteNome ?? conexao.remetenteNome,
+              responderPara: t.responderPara ?? conexao.responderPara,
+              assunto: t.assunto,
+              texto: t.texto,
+            };
+          };
           const falhas = await entregarComRegistro({
             chave: `${job.name}.${job.id ?? 'sem-numero'}`,
             dominio,
-            estabelecimento: typeof hospital === 'string' ? hospital : null,
+            estabelecimento: codigoEstab,
             destinos,
-            montar: m,
-            enviar: (mensagem) => enviarSmtp(smtp, mensagem),
+            montar,
+            enviar: (mensagem) =>
+              enviarPelaConexao(
+                {
+                  host: conexao.host,
+                  porta: conexao.porta,
+                  seguranca: conexao.seguranca,
+                  usuario: conexao.usuario,
+                  senha,
+                  tempoMs: conexao.tempoLimiteSegundos * 1000,
+                },
+                mensagem,
+              ),
             registro,
+            origem: {
+              finalidade: cadastro?.finalidade ?? null,
+              get modelo() {
+                return modeloUsado;
+              },
+              servidor: conexao.servidor,
+            },
           });
           if (falhas.length > 0)
             logger.warn(
