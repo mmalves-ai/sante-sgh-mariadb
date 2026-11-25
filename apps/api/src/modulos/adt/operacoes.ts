@@ -56,6 +56,8 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { conferirCadastroNaAbertura } from '../cadastro/campos-abertura.js';
+import { recusarEntradaDeFalecido } from '@sgh/dominio-atendimento';
+import { vidaDoPaciente } from '../cadastro/vida-do-paciente.js';
 import { FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import {
   type CancelarAltaBancoEntrada,
@@ -382,10 +384,13 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
     const usuario = usuarioDe(ctx);
     // A trava do paciente serializa duas admissões simultâneas da mesma pessoa (a conferência abaixo vale sob ela).
     const [pac] = await tx.consultarParaAtualizar(
-      'SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      'SELECT id, situacao, falecido, data_hora_obito FROM paciente WHERE id = ? AND excluido_em IS NULL',
       [e.paciente],
     );
     if (!pac) throw naoEncontrado('Paciente não encontrado', 'O paciente não existe no cadastro.');
+    // 02-CAD linha 13: o paciente com óbito registrado não é internado (regra do domínio).
+    const vivo = recusarEntradaDeFalecido(vidaDoPaciente(pac), 'internacao');
+    if (!vivo.ok) throw recusa(vivo.codigo, vivo.mensagem, { campos: ['paciente'] });
     if (pac['situacao'] !== 'ativo' && pac['situacao'] !== 'provisorio')
       throw recusa('paciente-inativo', 'O cadastro do paciente não está ativo.');
     const jaInternado = await tx.uma(
@@ -1107,8 +1112,14 @@ const preInternar = definirOperacao<PreInternarEntrada, ResultadoOperacao>({
   acao: 'inclusao',
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    if (!(await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [e.paciente])))
-      throw naoEncontrado('Paciente não encontrado', 'O paciente não existe no cadastro.');
+    const pac = await tx.uma(
+      'SELECT id, situacao, falecido, data_hora_obito FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      [e.paciente],
+    );
+    if (!pac) throw naoEncontrado('Paciente não encontrado', 'O paciente não existe no cadastro.');
+    // 02-CAD linha 13: o paciente com óbito registrado não recebe pré-internação (regra do domínio).
+    const vivo = recusarEntradaDeFalecido(vidaDoPaciente(pac), 'pre-internacao');
+    if (!vivo.ok) throw recusa(vivo.codigo, vivo.mensagem, { campos: ['paciente'] });
     const pendente = await tx.uma(
       `SELECT id FROM agendamento_internacao WHERE estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL
           AND situacao IN (${SITUACOES_PRE_PENDENTES.map(() => '?').join(', ')})`,
