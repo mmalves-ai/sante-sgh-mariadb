@@ -45,10 +45,17 @@ test.describe('@M57.3 BI consolidado da Rede e serviços compartilhados', () => 
     await expect(tela.getByRole('heading', { level: 1 })).toHaveText('BI consolidado da Rede');
     await expect(page.getByTestId('bi-rede-tabela')).toBeVisible();
 
-    // Os dois estabelecimentos no consolidado; o pseudônimo por estabelecimento (a DP-42 não liberou o comum).
+    // Todos os estabelecimentos da rede no consolidado: os configurados (ESTABELECIMENTOS, no E2E 'pc,hs' quando falta)
+    // e o sintético da rede (REDE_SINTETICA_SEGUNDO), cada um incluído e com a sua coluna; o pseudônimo por
+    // estabelecimento (a DP-42 não liberou o comum).
     const ests = page.getByTestId('bi-rede-estabelecimentos');
-    await expect(ests.locator('li')).toHaveCount(2);
     await expect(page.getByTestId('bi-rede-est-sx')).toContainText('Incluído');
+    const n = await ests.locator('li').count();
+    expect(n).toBeGreaterThanOrEqual(2);
+    for (let i = 0; i < n; i++) await expect(ests.locator('li').nth(i)).toContainText('Incluído');
+    await expect(page.getByTestId('bi-rede-tabela').locator('thead th')).toHaveCount(n + 3);
+    // As parcelas da conta: uma por estabelecimento ("a + b + … ").
+    const parcelas = Array.from({ length: n }, () => '\\d+').join(' \\+ ');
     await expect(page.getByTestId('bi-rede-pseudonimo')).toContainText('por estabelecimento');
 
     // Período fixo (o sintético é determinístico pela semente) e os 13 indicadores com a conta.
@@ -59,11 +66,13 @@ test.describe('@M57.3 BI consolidado da Rede e serviços compartilhados', () => 
     const linhas = page.getByTestId('bi-rede-tabela').locator('tbody tr');
     await expect(linhas).toHaveCount(13);
     // Contagem: a soma das partes; taxa: (a + b) ÷ (c + d) × 100.
-    await expect(page.getByTestId('bi-rede-ind-admissoes')).toContainText(/\d+ \+ \d+ = \d+/);
+    await expect(page.getByTestId('bi-rede-ind-admissoes')).toContainText(new RegExp(`${parcelas} = \\d+`));
     await expect(page.getByTestId('bi-rede-ind-taxaMortalidadeGeral')).toContainText(
-      /\(\d+ \+ \d+\) ÷ \(\d+ \+ \d+\) × 100 = /,
+      new RegExp(`\\(${parcelas}\\) ÷ \\(${parcelas}\\) × 100 = `),
     );
-    await expect(page.getByTestId('bi-rede-ind-mediaPacientesDia')).toContainText(/\(\d+ \+ \d+\) ÷ 30 = /);
+    await expect(page.getByTestId('bi-rede-ind-mediaPacientesDia')).toContainText(
+      new RegExp(`\\(${parcelas}\\) ÷ 30 = `),
+    );
     // Nada de pessoa no BI.
     await expect(tela).not.toContainText('PACIENTE SINT');
     await semViolacaoAxe(page, 'BI consolidado da Rede');
