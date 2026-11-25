@@ -479,3 +479,54 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     });
   });
 });
+
+describe('recurso em lote pela tela (06-FAT linha 29, E2E do M31)', () => {
+  interface ItemLido {
+    item: number;
+    versao: string;
+    estado: string;
+    valorRecurso: number;
+    dataRetorno: string | null;
+    desfecho: string | null;
+  }
+  it('o item decidido "recorrer" fica pronto para o recurso (recorrida, sem valor), entra no lote e recebe o desfecho parcial', async () => {
+    const s = await entrar('SINT.TISS');
+    const hoje = (await get(s, '/tiss/apoio')).json().hoje as string;
+    const ler = async () => (await get(s, '/tiss/glosas/contas/9201')).json() as ItemLido[];
+    const alvo = (await ler()).find((i) => i.estado === 'pendente');
+    expect(alvo).toBeDefined();
+    const dec = await post(s, '/tiss/glosas/decisao', {
+      item: alvo!.item,
+      decisao: 'recorrer',
+      texto: 'Procedimento realizado conforme a prescrição',
+      evidencia: 'Evolução médica do dia do atendimento',
+    });
+    expect(dec.statusCode).toBe(200);
+    expect(dec.json().mensagem).toContain('recurso');
+    // O que a tela usa para "marcar todos": decidido "recorrer" e ainda sem recurso registrado.
+    const decidido = (await ler()).find((i) => i.item === alvo!.item)!;
+    expect(decidido).toMatchObject({ estado: 'recorrida', valorRecurso: 0, dataRetorno: null });
+    // O recurso montado em lote (valor nulo: cada item pleiteia o que não foi aceito).
+    const rec = await post(s, '/tiss/glosas/recurso', {
+      itens: [{ item: decidido.item, versao: decidido.versao, valor: null, quantidade: null }],
+      dataProtocolo: hoje,
+    });
+    expect(rec.statusCode).toBe(200);
+    expect(rec.json().mensagem).toContain('Recurso registrado');
+    const emRecurso = (await ler()).find((i) => i.item === alvo!.item)!;
+    expect(emRecurso.estado).toBe('recorrida');
+    expect(emRecurso.valorRecurso).toBeGreaterThan(0);
+    // O desfecho parcial como a tela manda (motivo 0 = não informado).
+    const parc = await post(s, '/tiss/glosas/desfecho', {
+      itens: [{ item: emRecurso.item, versao: emRecurso.versao, desfecho: 'parcial', valor: 30, motivo: 0 }],
+      data: hoje,
+      numeroDemonstrativo: 'DEM-R-E2E',
+    });
+    expect(parc.statusCode).toBe(200);
+    expect(parc.json().mensagem).toContain('Desfecho');
+    expect((await ler()).find((i) => i.item === alvo!.item)).toMatchObject({
+      estado: 'encerrada',
+      desfecho: 'parcial',
+    });
+  });
+});
