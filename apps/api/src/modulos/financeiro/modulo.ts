@@ -16,6 +16,7 @@ import {
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import type { ContextoModulo } from '../registro.js';
 import { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemoria } from './armazem.js';
+import { AlteracaoTituloPagarController } from './alteracao-titulo-pagar.controller.js';
 import { CartaoController } from './cartao.controller.js';
 import { comCartaoNoFluxo } from './cartao-propria.js';
 import { CompensacaoPrevisaoController } from './compensacao-previsao.controller.js';
@@ -88,6 +89,8 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       // F3.8, 07-FIN linha 113: o ciclo da nota de serviço (lote, cancelamento, substituição, histórico).
       NotaServicoController,
       CartaoController,
+      // F3.8, 07-FIN linha 63: alterar o título a pagar não pago.
+      AlteracaoTituloPagarController,
     ],
     providers: [
       { provide: PORTA_FINANCEIRO, useValue: porta },

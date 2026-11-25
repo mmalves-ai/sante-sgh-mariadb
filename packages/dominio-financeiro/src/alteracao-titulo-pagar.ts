@@ -47,17 +47,17 @@ export interface TituloPagarAlteravel {
 
 /** O pedido de alteração: só os campos que vêm mudam (os ausentes ficam como estão). */
 export interface AlteracaoTituloPagar {
-  readonly credor?: number;
-  readonly documento?: string;
-  readonly serie?: string;
-  readonly emissao?: string;
-  readonly valorDocumento?: number;
-  readonly centroCusto?: number | null;
-  readonly referente?: string;
-  readonly observacao?: string;
-  readonly parcelas?: readonly ParcelaInformada[];
-  readonly retencoes?: readonly RetencaoTituloAlteravel[];
-  readonly justificativa?: string;
+  readonly credor?: number | undefined;
+  readonly documento?: string | undefined;
+  readonly serie?: string | undefined;
+  readonly emissao?: string | undefined;
+  readonly valorDocumento?: number | undefined;
+  readonly centroCusto?: number | null | undefined;
+  readonly referente?: string | undefined;
+  readonly observacao?: string | undefined;
+  readonly parcelas?: readonly ParcelaInformada[] | undefined;
+  readonly retencoes?: readonly RetencaoTituloAlteravel[] | undefined;
+  readonly justificativa?: string | undefined;
 }
 
 export const CAMPOS_DESCRITIVOS_TITULO = ['referente', 'observacao'] as const;
