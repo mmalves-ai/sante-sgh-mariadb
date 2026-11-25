@@ -19,6 +19,13 @@ export const CHAVE_PERMISSAO_OU = 'sgh:permissao-ou';
 export const PermissaoOu = (...codigos: string[]) => SetMetadata(CHAVE_PERMISSAO_OU, codigos);
 /** A guarda não confere sessão nem permissão (o handler confere o que precisar). Diga por quê. */
 export const Publica = (motivo: string) => SetMetadata(CHAVE_PUBLICA, motivo);
+export const CHAVE_CONTA_PLATAFORMA = 'sgh:conta-plataforma';
+/**
+ * Junto do `@Permissao`: a rota também atende a SESSÃO DA CONTA DA PLATAFORMA (ADR 0021). Com o cookie da conta na
+ * requisição, a guarda tenta a sessão do hospital sem efeito colateral e, se ela não passar, deixa o handler
+ * conferir a conta (papel, CSRF próprio). Diga por quê.
+ */
+export const AceitaContaPlataforma = (motivo: string) => SetMetadata(CHAVE_CONTA_PLATAFORMA, motivo);
 /** Grava o evento do catálogo de auditoria (SGH_TRILHA e, quando o Delphi registra, a trilha do legado). */
 export const Auditar = (evento: string) => SetMetadata(CHAVE_AUDITAR, evento);
 export const CHAVE_AUDITADO_NO_HANDLER = 'sgh:auditado-no-handler';

@@ -1,5 +1,6 @@
-// Cliente da tela "Carga e sincronismo" (obra carga-painel, ADR 0010): só o administrador da plataforma. Gravações
-// com o CSRF; as respostas passam pelos esquemas dos contratos. Problem Details viram ErroApi (a mensagem do servidor
+// Cliente da tela "Carga e sincronismo" (obra carga-painel, ADR 0010): a conta da plataforma com papel plataforma
+// (ADR 0021) ou o administrador da plataforma. Gravações com o CSRF da sessão em uso (o da conta, x-csrf-plataforma,
+// ou o da sessão do hospital, x-csrf; o servidor confere o da sessão que atendeu); as respostas passam pelos esquemas dos contratos. Problem Details viram ErroApi (a mensagem do servidor
 // vai à tela). A senha da origem só vai na gravação e nunca volta.
 import {
   type CargaCliente,
@@ -17,10 +18,47 @@ import {
   esquemaTesteOrigem,
 } from '@sgh/contratos';
 import { z } from 'zod';
-import { tokenCsrf } from '../../api.js';
+import { buscarSessao, tokenCsrf } from '../../api.js';
 import { erroDaResposta } from '../../casca/erros/problem-details.js';
+import { buscarEu, csrfPlataforma } from '../suporte/api-suporte.js';
 
 const B = '/api/plataforma/carga';
+
+/** Qual sessão atende a tela: a conta da plataforma, o administrador, outra (sem permissão) ou nenhuma. */
+export type AcessoCarga = 'conta' | 'administrador' | 'sem-permissao' | 'sem-sessao';
+
+let sessaoEmUso: 'conta' | 'administrador' = 'administrador';
+
+/**
+ * A guarda da tela (rota pública, como as da conta da plataforma): primeiro a conta da plataforma (GET
+ * /api/plataforma/eu; só o papel plataforma), depois a sessão do hospital do administrador (ator 'plataforma').
+ * Guarda a sessão em uso para o CSRF das gravações.
+ */
+export async function acessoDaCarga(buscar: typeof fetch = fetch): Promise<AcessoCarga> {
+  try {
+    const eu = await buscarEu(buscar);
+    if (eu.conta.papel === 'PLATAFORMA') {
+      sessaoEmUso = 'conta';
+      return 'conta';
+    }
+    return 'sem-permissao';
+  } catch {
+    /* sem conta da plataforma: tenta o administrador */
+  }
+  try {
+    const s = await buscarSessao(buscar);
+    if (s.usuario.ator === 'plataforma') {
+      sessaoEmUso = 'administrador';
+      return 'administrador';
+    }
+    return 'sem-permissao';
+  } catch {
+    return 'sem-sessao';
+  }
+}
+
+const csrfDaSessao = (): Record<string, string> =>
+  sessaoEmUso === 'conta' ? { 'x-csrf-plataforma': csrfPlataforma() } : { 'x-csrf': tokenCsrf() };
 const cli = (codigo: string) => `${B}/clientes/${encodeURIComponent(codigo)}`;
 
 async function pedir<T>(metodo: 'GET' | 'POST' | 'PUT', url: string, esquema: z.ZodType<T>, corpo?: unknown) {
@@ -28,7 +66,7 @@ async function pedir<T>(metodo: 'GET' | 'POST' | 'PUT', url: string, esquema: z.
     method: metodo,
     headers: {
       accept: 'application/json',
-      ...(metodo === 'GET' ? {} : { 'content-type': 'application/json', 'x-csrf': tokenCsrf() }),
+      ...(metodo === 'GET' ? {} : { 'content-type': 'application/json', ...csrfDaSessao() }),
     },
     ...(metodo === 'GET' ? {} : { body: JSON.stringify(corpo ?? {}) }),
   });

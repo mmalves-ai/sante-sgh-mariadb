@@ -14,8 +14,10 @@ import {
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import {
+  acessoDaCarga,
   cargaAtiva,
   gravarOrigemServidor,
   iniciarCarga,
@@ -30,6 +32,7 @@ import {
 } from '../api-carga.js';
 
 const { t } = useI18n();
+const roteador = useRouter();
 const conectores = ref<ConectorCarga[] | null>(null);
 const selecionado = ref<string>('');
 const carga = ref<CargaCliente | null>(null);
@@ -223,7 +226,18 @@ async function testar(): Promise<void> {
   }
 }
 
+// Rota pública (como as da conta da plataforma): a tela confere a sessão. Conta da plataforma com papel plataforma
+// ou administrador carregam; outra sessão vê o aviso; sem nenhuma, vai ao login.
 onMounted(async () => {
+  const acesso = await acessoDaCarga();
+  if (acesso === 'sem-sessao') {
+    await roteador.replace('/plataforma/entrar');
+    return;
+  }
+  if (acesso === 'sem-permissao') {
+    erro.value = t('carga.soPlataforma');
+    return;
+  }
   await carregarConectores();
 });
 onBeforeUnmount(() => {

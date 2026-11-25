@@ -230,6 +230,21 @@ export interface DadosOrigemServidor {
   readonly nomeExibicao: string;
 }
 
+/**
+ * Quem pediu a ação da carga: o administrador da plataforma (id em administrador_plataforma; 0 vira null) ou a
+ * CONTA DA PLATAFORMA (ADR 0021, papel plataforma). As colunas *_por e administrador_plataforma_id têm chave
+ * estrangeira para administrador_plataforma: com a conta ficam nulas e o id da conta vai no detalhe do
+ * cliente_evento (conta_plataforma_id), que é a trilha das ações da carga.
+ */
+export type AtorCarga = number | null | { readonly conta: string };
+
+/** O id do administrador para as colunas *_por (null para a conta da plataforma). */
+export const adminDoAtor = (a: AtorCarga): number | null => (typeof a === 'object' && a !== null ? null : a);
+
+/** O que o ator acrescenta ao detalhe do evento (só o id da conta, quando é a conta da plataforma). */
+export const detalheDoAtor = (a: AtorCarga): Record<string, unknown> =>
+  typeof a === 'object' && a !== null ? { conta_plataforma_id: a.conta } : {};
+
 export interface RepositorioCarga {
   listarConectores(): Promise<LinhaConectorCarga[]>;
   /**
@@ -241,7 +256,7 @@ export interface RepositorioCarga {
     codigo: string,
     dados: DadosOrigemServidor,
     referenciaSenha: string,
-    admin: number | null,
+    ator: AtorCarga,
     antesDeConfirmar?: () => Promise<void>,
   ): Promise<{ origemId: number; nova: boolean }>;
   /** Cliente existe? Tem origem de servidor ativa? (sem segredo) */
@@ -254,10 +269,10 @@ export interface RepositorioCarga {
   enfileirarCarga(
     codigo: string,
     decidir: (s: SituacaoCarga) => PlanoCarga,
-    admin: number | null,
+    ator: AtorCarga,
   ): Promise<{ id: number; plano: PlanoCarga }>;
   /** Grava o pedido de pausa na execução ativa (idempotente) com o evento; devolve o id. */
-  pedirPausa(codigo: string, admin: number | null): Promise<number>;
+  pedirPausa(codigo: string, ator: AtorCarga): Promise<number>;
   arquivoLog(codigo: string, id: number): Promise<string | null | undefined>;
 }
 
@@ -351,7 +366,7 @@ export class ServicoCarga {
     );
   }
 
-  async gravarOrigemServidor(codigo: string, corpo: unknown, admin: number | null): Promise<OrigemServidor> {
+  async gravarOrigemServidor(codigo: string, corpo: unknown, ator: AtorCarga): Promise<OrigemServidor> {
     const cod = codigoValido(codigo);
     const r = esquemaOrigemServidorEntrada.safeParse(corpo);
     if (!r.success)
@@ -366,7 +381,7 @@ export class ServicoCarga {
     if (senha === undefined) {
       if (!(await this.senhaDefinida(referencia)))
         throw new ErroOnboarding('invalido', 'Informe a senha do usuário de leitura.');
-      await this.repo.gravarOrigemServidor(cod, dados, referencia, admin);
+      await this.repo.gravarOrigemServidor(cod, dados, referencia, ator);
     } else {
       if (!this.cofre.disponivel)
         throw new ErroOnboarding('indisponivel', 'O cofre de segredos não está configurado neste ambiente.');
@@ -375,7 +390,7 @@ export class ServicoCarga {
       const anterior = await this.cofre.ler(referencia);
       let gravou = false;
       try {
-        await this.repo.gravarOrigemServidor(cod, dados, referencia, admin, async () => {
+        await this.repo.gravarOrigemServidor(cod, dados, referencia, ator, async () => {
           await this.cofre.gravar(referencia, senha);
           gravou = true;
         });
@@ -403,21 +418,21 @@ export class ServicoCarga {
     return this.ponte.testarOrigem(cod);
   }
 
-  async pedirCarga(codigo: string, corpo: unknown, admin: number | null): Promise<number> {
+  async pedirCarga(codigo: string, corpo: unknown, ator: AtorCarga): Promise<number> {
     const r = esquemaPedirCargaEntrada.safeParse(corpo);
     if (!r.success) throw new ErroOnboarding('invalido', 'Modo: completa ou diferencial.');
     const modo = r.data.modo;
-    const { id } = await this.repo.enfileirarCarga(codigoValido(codigo), (s) => decidirCarga(modo, s), admin);
+    const { id } = await this.repo.enfileirarCarga(codigoValido(codigo), (s) => decidirCarga(modo, s), ator);
     return id;
   }
 
-  async retomar(codigo: string, admin: number | null): Promise<number> {
-    const { id } = await this.repo.enfileirarCarga(codigoValido(codigo), decidirRetomada, admin);
+  async retomar(codigo: string, ator: AtorCarga): Promise<number> {
+    const { id } = await this.repo.enfileirarCarga(codigoValido(codigo), decidirRetomada, ator);
     return id;
   }
 
-  pausar(codigo: string, admin: number | null): Promise<number> {
-    return this.repo.pedirPausa(codigoValido(codigo), admin);
+  pausar(codigo: string, ator: AtorCarga): Promise<number> {
+    return this.repo.pedirPausa(codigoValido(codigo), ator);
   }
 
   async carga(codigo: string): Promise<CargaCliente> {

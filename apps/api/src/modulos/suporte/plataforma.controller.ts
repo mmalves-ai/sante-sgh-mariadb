@@ -40,7 +40,6 @@ import {
   type SegundoFatorPlataforma,
   type Sessao,
   type SessaoComoTela,
-  type TipoProblema,
   type UsuarioComo,
 } from '@sgh/contratos';
 import { z } from 'zod';
@@ -50,22 +49,26 @@ import { AuditadoNoHandler, Publica } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import {
   CABECALHO_CSRF,
-  CABECALHO_CSRF_PLATAFORMA,
   COOKIE_CSRF,
-  COOKIE_CSRF_PLATAFORMA,
   cookieCsrf,
   cookieSessao,
   cookiesApagados,
   cookiesPlataforma,
   cookiesPlataformaApagados,
   lerCookie,
-  lerCookiePlataforma,
   lerCookieSessao,
 } from '../../sessao/cookies.js';
 import type { ResolvedorRede } from '../../sessao/rede.js';
 import { ErroSessao, type ServicoSessao } from '../../sessao/servico-sessao.js';
 import { RESOLVEDOR_REDE, SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import { ErroConflitoCorrecao, ErroPreviaCorrecao } from './correcao.js';
+import {
+  contaDaSessao,
+  idSessaoConta,
+  prefixoHostDoAmbiente,
+  problemaDaPlataforma,
+  redeDaRequisicao,
+} from './sessao-conta.js';
 import type { ServicoComo } from './servico-como.js';
 import { type ContaComAtribuicoes, ErroPlataforma, type ServicoPlataforma } from './servico-plataforma.js';
 
@@ -82,19 +85,6 @@ interface Res {
   header(nome: string, valor: string | string[]): unknown;
 }
 
-const ERROS: Record<ErroPlataforma['tipo'], [TipoProblema, number, string]> = {
-  'credencial-invalida': ['nao-autenticado', 401, 'E-mail, senha ou código inválidos'],
-  'muitas-tentativas': ['muitas-tentativas', 429, 'Muitas tentativas'],
-  'sessao-encerrada': ['nao-autenticado', 401, 'Sessão da plataforma encerrada'],
-  'sem-permissao': ['sem-permissao', 403, 'Sem permissão'],
-  indisponivel: ['indisponivel', 503, 'Serviço indisponível'],
-  'entrada-invalida': ['entrada-invalida', 400, 'Dados inválidos'],
-  'nao-encontrado': ['nao-encontrado', 404, 'Não encontrado'],
-  conflito: ['recusa-de-negocio', 409, 'Operação recusada'],
-  'rede-desconhecida': ['rede-desconhecida', 404, 'Endereço sem rede configurada'],
-};
-
-const SEM_PREFIXO = new Set(['dev', 'ci']);
 const NUMERO = /^\d{1,18}$/;
 
 @Controller('plataforma')
@@ -108,12 +98,11 @@ export class PlataformaController {
   ) {}
 
   private get prefixoHost(): boolean {
-    return !SEM_PREFIXO.has(this.configuracao.ambiente);
+    return prefixoHostDoAmbiente(this.configuracao.ambiente);
   }
 
   private rede(req: Req): string | null {
-    const host = req.headers['host'];
-    return this.resolvedor.resolver(Array.isArray(host) ? host[0] : host);
+    return redeDaRequisicao(req, this.resolvedor);
   }
 
   private servicos(): { p: ServicoPlataforma; c: ServicoComo } {
@@ -122,10 +111,7 @@ export class PlataformaController {
   }
 
   private erro(e: unknown): never {
-    if (e instanceof ErroPlataforma) {
-      const [tipo, status, titulo] = ERROS[e.tipo];
-      throw new ErroProblema(tipo, status, titulo, e.detalhe);
-    }
+    if (e instanceof ErroPlataforma) throw problemaDaPlataforma(e);
     if (e instanceof ErroPreviaCorrecao)
       throw new ErroProblema('recusa-de-negocio', 409, 'A correção mudou depois da prévia', e.message, {
         codigo: 'correcao-previa-divergente',
@@ -147,28 +133,22 @@ export class PlataformaController {
   }
 
   private idPlataforma(req: Req): string | null {
-    return lerCookiePlataforma(req.headers['cookie'] as string | undefined, this.prefixoHost);
+    return idSessaoConta(req, this.configuracao.ambiente);
   }
 
   /** A conta da sessão da plataforma (401 sem ela). Nas escritas, o CSRF próprio. */
   private async conta(req: Req, escrita = false): Promise<ContaComAtribuicoes> {
     const { p } = this.servicos();
-    const id = this.idPlataforma(req);
-    let lido: Awaited<ReturnType<ServicoPlataforma['ler']>> = null;
     try {
-      lido = await p.ler(id, this.rede(req));
+      return await contaDaSessao(
+        p,
+        req,
+        { ambiente: this.configuracao.ambiente, resolvedor: this.resolvedor },
+        escrita,
+      );
     } catch (e) {
       this.erro(e);
     }
-    if (!lido || !id) throw new ErroProblema('nao-autenticado', 401, 'Sessão da plataforma necessária');
-    if (escrita) {
-      const doCookie = lerCookie(req.headers['cookie'] as string | undefined, COOKIE_CSRF_PLATAFORMA);
-      const bruto = req.headers[CABECALHO_CSRF_PLATAFORMA];
-      const doCabecalho = Array.isArray(bruto) ? bruto[0] : bruto;
-      const ok = !!doCookie && doCookie === doCabecalho && (await p.csrfConfere(id, doCabecalho));
-      if (!ok) throw new ErroProblema('sem-permissao', 403, 'Requisição não autenticada (CSRF)');
-    }
-    return lido.conta;
   }
 
   private analisar<T>(

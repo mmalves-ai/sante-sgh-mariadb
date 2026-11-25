@@ -5,8 +5,14 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync }
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import type { ExecutionContext } from '@nestjs/common';
+import type { Reflector } from '@nestjs/core';
+import { CHAVE_CONTA_PLATAFORMA, CHAVE_PERMISSAO } from '../../autorizacao/decoradores.js';
+import { GuardaPermissao, type RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import type { ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
 import { ErroProblema } from '../../problema.filter.js';
+import type { ResolvedorRede } from '../../sessao/rede.js';
+import type { ServicoPlataforma } from '../suporte/servico-plataforma.js';
 import { CargaController } from './carga.controller.js';
 import { PonteConectorScript } from './ponte-script.js';
 import { ErroOnboarding } from './porta.js';
@@ -26,9 +32,32 @@ import {
 } from './servico-carga.js';
 
 const req = (usuario: Record<string, unknown> | null) =>
-  ({ sgh: usuario ? { sessao: { usuario } } : undefined }) as unknown as RequisicaoAutorizada;
+  ({ headers: {}, sgh: usuario ? { sessao: { usuario } } : undefined }) as unknown as RequisicaoAutorizada;
 const PLAT = req({ id: 'plataforma:7', login: 'plataforma:adm', ator: 'plataforma' });
 const SENHA = 'segredo-de-teste-123';
+
+// Conta da plataforma (ADR 0021) falsa: a sessão 'sp' é da conta 41 (papel plataforma), 'ss' da 42 (suporte); o CSRF
+// próprio guardado na sessão é 'tok'. Em dev o cookie é sem o prefixo __Host- (sgh_plataforma).
+const CONTAS: Record<string, { id: string; papel: 'PLATAFORMA' | 'SUPORTE' }> = {
+  sp: { id: '41', papel: 'PLATAFORMA' },
+  ss: { id: '42', papel: 'SUPORTE' },
+};
+const plataformaFalsa = {
+  ler: async (id: string | null) => {
+    const c = id ? CONTAS[id] : undefined;
+    return c ? { registro: {}, conta: { ...c, ativo: true, atribuicoes: [] } } : null;
+  },
+  csrfConfere: async (_id: string, t: string | undefined) => t === 'tok',
+} as unknown as ServicoPlataforma;
+const rede = { resolver: () => 'rede-teste' } as unknown as ResolvedorRede;
+const reqConta = (sessao: string, csrf: string | null = null, sgh?: Record<string, unknown>) =>
+  ({
+    headers: {
+      cookie: `sgh_plataforma=${sessao}; sgh_pcsrf=tok`,
+      ...(csrf ? { 'x-csrf-plataforma': csrf } : {}),
+    },
+    ...(sgh ? { sgh: { sessao: { usuario: sgh } } } : {}),
+  }) as unknown as RequisicaoAutorizada;
 
 const tmp = mkdtempSync(join(tmpdir(), 'carga-spec-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
@@ -104,7 +133,10 @@ function montar(
     gravarOrigemServidor: async (c, d, ref, a, antesDeConfirmar) => {
       // Como o repositório real: a carga ativa recusa antes de tudo; a falha 'depois' simula o commit que não fecha.
       if (o.falhaOrigem === 'conflito')
-        throw new ErroOnboarding('conflito', 'Há uma carga em andamento: pause ou aguarde antes de trocar a origem.');
+        throw new ErroOnboarding(
+          'conflito',
+          'Há uma carga em andamento: pause ou aguarde antes de trocar a origem.',
+        );
       if (antesDeConfirmar) await antesDeConfirmar();
       if (o.falhaOrigem === 'depois') throw new Error('transação falhou');
       chamadas.push(`origem ${c} ${JSON.stringify(d)} ${ref} ${a}`);
@@ -113,11 +145,11 @@ function montar(
     cargaDoCliente: async (c) => (c === 'nenhum' ? null : { origemId: 3, execucao: o.execucao ?? null }),
     enfileirarCarga: async (c, decidir, a) => {
       const plano = decidir(sit);
-      chamadas.push(`enfileirar ${c} ${plano.tipo} ${plano.modo} ${a}`);
+      chamadas.push(`enfileirar ${c} ${plano.tipo} ${plano.modo} ${JSON.stringify(a)}`);
       return { id: 9, plano };
     },
     pedirPausa: async (c, a) => {
-      chamadas.push(`pausar ${c} ${a}`);
+      chamadas.push(`pausar ${c} ${JSON.stringify(a)}`);
       return 5;
     },
     arquivoLog: async (_c, id) => (id === 5 ? 'exemplo/execucao-5.log' : id === 6 ? null : undefined),
@@ -129,7 +161,7 @@ function montar(
     },
   };
   const s = new ServicoCarga(repo, ponte, cofre, o.pastaLogs === undefined ? tmp : o.pastaLogs);
-  return { c: new CargaController(s), s, chamadas, cofreValores };
+  return { c: new CargaController(s, plataformaFalsa, { ambiente: 'dev' }, rede), s, chamadas, cofreValores };
 }
 
 async function status(p: Promise<unknown>): Promise<number> {
@@ -159,6 +191,111 @@ describe('carga: portão do administrador da plataforma', () => {
 
   it('sem o serviço (sem núcleo), 503', async () => {
     expect(await status(new CargaController(null).conectores(PLAT))).toBe(503);
+  });
+});
+
+describe('carga: conta da plataforma (ADR 0021)', () => {
+  it('papel plataforma lê (200) e grava com o CSRF próprio; o evento leva o id da conta, sem administrador', async () => {
+    const { c, chamadas } = montar();
+    expect(await status(c.conectores(reqConta('sp')))).toBe(200);
+    expect(await status(c.carga(reqConta('sp'), 'exemplo'))).toBe(200);
+    expect(await c.iniciar(reqConta('sp', 'tok'), 'exemplo', { modo: 'completa' })).toEqual({ execucao: 9 });
+    expect(await c.pausar(reqConta('sp', 'tok'), 'exemplo')).toEqual({ execucao: 5 });
+    expect(chamadas).toEqual([
+      'enfileirar exemplo importar completa {"conta":"41"}',
+      'pausar exemplo {"conta":"41"}',
+    ]);
+  });
+
+  it('escrita sem o CSRF próprio ou com outro dá 403, sem chamar nada', async () => {
+    const { c, chamadas } = montar();
+    expect(await status(c.iniciar(reqConta('sp'), 'exemplo', { modo: 'completa' }))).toBe(403);
+    expect(await status(c.pausar(reqConta('sp', 'outro'), 'exemplo'))).toBe(403);
+    expect(await status(c.testar(reqConta('sp'), 'exemplo'))).toBe(403);
+    expect(await status(c.origemServidor(reqConta('sp'), 'exemplo', {}))).toBe(403);
+    expect(chamadas).toEqual([]);
+  });
+
+  it('papel suporte recebe 403 em todas as rotas', async () => {
+    const { c, chamadas } = montar();
+    const u = reqConta('ss', 'tok');
+    expect(await status(c.conectores(u))).toBe(403);
+    expect(await status(c.carga(u, 'exemplo'))).toBe(403);
+    expect(await status(c.iniciar(u, 'exemplo', { modo: 'completa' }))).toBe(403);
+    expect(await status(c.retomar(u, 'exemplo'))).toBe(403);
+    expect(await status(c.log(u, 'exemplo', '5'))).toBe(403);
+    expect(chamadas).toEqual([]);
+  });
+
+  it('sem sessão nenhuma, ou com a sessão da conta encerrada, 401', async () => {
+    const { c } = montar();
+    expect(await status(c.conectores(req(null)))).toBe(401);
+    expect(await status(c.conectores(reqConta('vencida')))).toBe(401);
+  });
+
+  it('o administrador (sessão do hospital) segue valendo, mesmo com um cookie de conta encerrada', async () => {
+    const { c, chamadas } = montar();
+    expect(await status(c.conectores(PLAT))).toBe(200);
+    const adm = reqConta('vencida', null, { id: 'plataforma:7', ator: 'plataforma' });
+    expect(await c.pausar(adm, 'exemplo')).toEqual({ execucao: 5 });
+    expect(chamadas).toEqual(['pausar exemplo 7']);
+  });
+});
+
+describe('guarda: @AceitaContaPlataforma', () => {
+  const META: Record<string, unknown> = {
+    [CHAVE_PERMISSAO]: 'config.conexao.ler',
+    [CHAVE_CONTA_PLATAFORMA]: 'conta',
+  };
+  const reflector = { getAllAndOverride: (k: string) => META[k] } as unknown as Reflector;
+  const sessao = (permissoes: string[], extra: Record<string, unknown> = {}) => ({
+    sessao: {
+      usuario: { id: 'plataforma:7', ator: 'plataforma' },
+      permissoes,
+      escopos: [],
+      bloqueada: false,
+    },
+    real: true,
+    ...extra,
+  });
+  const guarda = (r: unknown, csrf = true) =>
+    new GuardaPermissao(
+      reflector,
+      { resolver: async () => r, csrfConfere: async () => csrf } as unknown as ResolvedorSessao,
+      null,
+    );
+  const ctx = (req: Record<string, unknown>) =>
+    ({
+      getHandler: () => undefined,
+      getClass: () => undefined,
+      switchToHttp: () => ({ getRequest: () => req }),
+    }) as unknown as ExecutionContext;
+  const comCookie = (method = 'GET') =>
+    ({ method, headers: { cookie: 'sgh_plataforma=sp' } }) as Record<string, unknown>;
+
+  it('com o cookie da conta e sem sessão do hospital, deixa o handler conferir (sem req.sgh)', async () => {
+    const r = comCookie();
+    expect(await guarda(null).canActivate(ctx(r))).toBe(true);
+    expect(r['sgh']).toBeUndefined();
+  });
+
+  it('com o cookie da conta, a sessão do hospital que passa inteira vira req.sgh; a que falha (CSRF, permissão, como) não', async () => {
+    const ok = comCookie('POST');
+    await guarda(sessao(['config.conexao.ler'])).canActivate(ctx(ok));
+    expect((ok['sgh'] as { permissao: string }).permissao).toBe('config.conexao.ler');
+    const semCsrf = comCookie('POST');
+    expect(await guarda(sessao(['config.conexao.ler']), false).canActivate(ctx(semCsrf))).toBe(true);
+    expect(semCsrf['sgh']).toBeUndefined();
+    const semPerm = comCookie();
+    await guarda(sessao([])).canActivate(ctx(semPerm));
+    expect(semPerm['sgh']).toBeUndefined();
+    const como = comCookie();
+    await guarda(sessao(['config.conexao.ler'], { como: { atorTipo: 'suporte' } })).canActivate(ctx(como));
+    expect(como['sgh']).toBeUndefined();
+  });
+
+  it('sem o cookie da conta, a regra de sempre: sem sessão 401', async () => {
+    expect(await status(guarda(null).canActivate(ctx({ method: 'GET', headers: {} })))).toBe(401);
   });
 });
 
@@ -211,7 +348,9 @@ describe('carga: origem do servidor e senha no cofre', () => {
     expect(sem.cofreValores.has(ref)).toBe(false);
     const b = montar({ falhaOrigem: 'depois' });
     b.cofreValores.set(ref, 'anterior');
-    await expect(b.s.gravarOrigemServidor('exemplo', { ...corpo, senha: SENHA }, 7)).rejects.toThrow('transação falhou');
+    await expect(b.s.gravarOrigemServidor('exemplo', { ...corpo, senha: SENHA }, 7)).rejects.toThrow(
+      'transação falhou',
+    );
     expect(b.cofreValores.get(ref)).toBe('anterior');
   });
 

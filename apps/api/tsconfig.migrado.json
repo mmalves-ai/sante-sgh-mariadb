@@ -744,6 +744,7 @@
     "src/modulos/suporte/correcao.ts",
     "src/modulos/suporte/servico-como.ts",
     "src/modulos/suporte/servico-plataforma.ts",
+    "src/modulos/suporte/sessao-conta.ts",
     "src/modulos/suporte/plataforma.controller.ts",
     "src/modulos/suporte/modulo.ts",
     "src/modulos/suporte/seguranca.spec.ts",

@@ -11,12 +11,14 @@ export const rotasPlataformaOnboarding: RouteRecordRaw[] = [
     component: () => import('./telas/ClientesPlataformaTela.vue'),
     meta: { permissao: PERMISSAO_ONBOARDING },
   },
-  // Carga e sincronismo (obra carga-painel, ADR 0010): mesma permissão declarada da API (`config.conexao.ler`,
-  // técnica); o servidor só atende o administrador da plataforma.
+  // Carga e sincronismo (obra carga-painel, ADR 0010): atende a conta da plataforma (ADR 0021, papel plataforma) e o
+  // administrador da plataforma. Pública para a guarda das sessões do hospital, como as telas da conta da plataforma:
+  // a tela confere a sessão (sem nenhuma, vai ao login) e o servidor confere de novo em cada rota. A permissão
+  // declarada (a da API, técnica) fica para o menu do painel técnico.
   {
     path: '/plataforma/carga',
     name: 'plataforma.carga',
     component: () => import('./telas/CargaSincronismoTela.vue'),
-    meta: { permissao: PERMISSAO_ONBOARDING },
+    meta: { publica: true, permissao: PERMISSAO_ONBOARDING },
   },
 ];

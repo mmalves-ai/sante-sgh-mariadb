@@ -7,8 +7,10 @@ import { criarI18n, instalarUi, resolverMarca } from '@sgh/ui';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { App } from 'vue';
+import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { mensagensWeb } from '../../i18n/pt-BR.js';
 import {
+  acessoDaCarga,
   cargaAtiva,
   gravarOrigemServidor,
   iniciarCarga,
@@ -104,12 +106,43 @@ const conectores = {
 };
 
 type Rota = (url: string, init: RequestInit) => unknown;
-function servidor(rotas: Record<string, Rota>) {
+/** GET /api/plataforma/eu da conta da plataforma (ADR 0021), sintética. */
+const EU = (papel: 'PLATAFORMA' | 'SUPORTE') => ({
+  conta: { id: '41', email: 'conta@exemplo.test', nome: null, papel },
+  podeEntrarComo: true,
+  podeDesignar: papel === 'PLATAFORMA',
+  expiraEm: '2026-11-24T23:00:00.000Z',
+  segundoFatorObrigatorio: true,
+});
+/** GET /api/sessao do hospital, sintética: o administrador da plataforma (ator 'plataforma') ou um usuário. */
+const SESSAO = (ator: boolean) => ({
+  usuario: {
+    id: ator ? 'plataforma:7' : '15',
+    nome: 'Pessoa sintética',
+    ...(ator ? { ator: 'plataforma' } : {}),
+  },
+  rede: null,
+  estabelecimentos: [],
+  estabelecimentoAtivo: null,
+  permissoes: ['config.conexao.ler'],
+  sintetica: true,
+  bloqueioInatividadeSegundos: 0,
+});
+/** Sem a rota no mapa: a conta da plataforma com papel plataforma (o caso do dono). */
+function servidor(rotasDadas: Record<string, Rota>) {
+  const rotas: Record<string, Rota> = { 'GET /api/plataforma/eu': () => EU('PLATAFORMA'), ...rotasDadas };
   const f = vi.fn(async (url: string, init: RequestInit = {}) => {
     const chave = `${init.method ?? 'GET'} ${url}`;
     const r = rotas[chave];
     if (!r) return new Response(JSON.stringify({ title: `sem rota ${chave}`, status: 404 }), { status: 404 });
-    return new Response(JSON.stringify(r(url, init)), {
+    let corpo: unknown;
+    try {
+      corpo = r(url, init);
+    } catch (resposta) {
+      if (resposta instanceof Response) return resposta;
+      throw resposta;
+    }
+    return new Response(JSON.stringify(corpo), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
@@ -118,10 +151,28 @@ function servidor(rotas: Record<string, Rota>) {
   return f;
 }
 const B = '/api/plataforma/carga';
-const montar = () =>
-  mount(CargaSincronismoTela, { global: { plugins: [i18n(), ui] }, attachTo: document.body });
+const Vazia = { template: '<div />' };
+let roteador: Router;
+const montar = () => {
+  roteador = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/plataforma/carga', component: Vazia },
+      { path: '/plataforma/entrar', component: Vazia },
+    ],
+  });
+  void roteador.push('/plataforma/carga');
+  return mount(CargaSincronismoTela, {
+    global: { plugins: [i18n(), ui, roteador] },
+    attachTo: document.body,
+  });
+};
 const chamadas = (f: ReturnType<typeof servidor>, chave: string) =>
   f.mock.calls.filter(([u, i]) => `${(i as RequestInit | undefined)?.method ?? 'GET'} ${u}` === chave);
+/** Responde com o erro (Problem Details) na rota dada. */
+const falha = (status: number) => () => {
+  throw new Response(JSON.stringify({ title: 'Recusado', status }), { status });
+};
 
 /** Responde "Sim" no diálogo de confirmação do SanteBotao destrutivo ("Confirmar", último botão do rodapé). */
 async function confirmar() {
@@ -434,17 +485,89 @@ describe('tela Carga e sincronismo', () => {
   });
 
   it('sessão que não é da plataforma (403) recebe o aviso claro, não o erro cru da API', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ title: 'Proibido', status: 403 }), { status: 403 })),
-    );
+    servidor({ [`GET ${B}/conectores`]: falha(403) });
     const w = montar();
     await flushPromises();
     await flushPromises();
     expect(w.find('[data-testid="carga-erro"]').text()).toContain(
       'Esta tela é do administrador da plataforma',
     );
-    expect(w.find('[data-testid="carga-erro"]').text()).not.toContain('Proibido');
+    expect(w.find('[data-testid="carga-erro"]').text()).not.toContain('Recusado');
+    w.unmount();
+  });
+});
+
+describe('guarda da tela (rota pública, como as da conta da plataforma)', () => {
+  it('conta da plataforma com papel plataforma: carrega e grava com o CSRF da conta', async () => {
+    document.cookie = 'sgh_pcsrf=tok-conta';
+    document.cookie = 'sgh_csrf=tok-hospital';
+    const f = servidor({
+      [`GET ${B}/conectores`]: () => conectores,
+      [`GET ${B}/clientes/prontocardio/carga`]: () => cargaAtivaResp(),
+      [`POST ${B}/clientes/prontocardio/carga/pausar`]: () => ({ execucao: 12 }),
+    });
+    expect(await acessoDaCarga()).toBe('conta');
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    expect(chamadas(f, `GET ${B}/conectores`).length).toBe(1);
+    expect(chamadas(f, 'GET /api/sessao').length).toBe(0);
+    await import('./api-carga.js').then((m) => m.pausarCarga('prontocardio'));
+    const [, i] = chamadas(f, `POST ${B}/clientes/prontocardio/carga/pausar`).at(-1)!;
+    expect((i as RequestInit).headers).toMatchObject({ 'x-csrf-plataforma': 'tok-conta' });
+    expect((i as RequestInit).headers).not.toHaveProperty('x-csrf');
+    w.unmount();
+  });
+
+  it('papel suporte: aviso claro, sem ler os conectores', async () => {
+    const f = servidor({ 'GET /api/plataforma/eu': () => EU('SUPORTE') });
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    expect(w.find('[data-testid="carga-erro"]').text()).toContain(
+      'Esta tela é do administrador da plataforma',
+    );
+    expect(chamadas(f, `GET ${B}/conectores`).length).toBe(0);
+    w.unmount();
+  });
+
+  it('administrador (sessão do hospital, ator plataforma): carrega e grava com o CSRF da sessão do hospital', async () => {
+    document.cookie = 'sgh_csrf=tok-hospital';
+    const f = servidor({
+      'GET /api/plataforma/eu': falha(401),
+      'GET /api/sessao': () => SESSAO(true),
+      [`GET ${B}/conectores`]: () => conectores,
+      [`GET ${B}/clientes/prontocardio/carga`]: () => cargaAtivaResp(),
+      [`POST ${B}/clientes/prontocardio/carga/pausar`]: () => ({ execucao: 12 }),
+    });
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    expect(chamadas(f, `GET ${B}/conectores`).length).toBe(1);
+    await import('./api-carga.js').then((m) => m.pausarCarga('prontocardio'));
+    const [, i] = chamadas(f, `POST ${B}/clientes/prontocardio/carga/pausar`).at(-1)!;
+    expect((i as RequestInit).headers).toHaveProperty('x-csrf');
+    expect((i as RequestInit).headers).not.toHaveProperty('x-csrf-plataforma');
+    w.unmount();
+  });
+
+  it('usuário do hospital que não é o administrador: aviso claro', async () => {
+    const f = servidor({ 'GET /api/plataforma/eu': falha(401), 'GET /api/sessao': () => SESSAO(false) });
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    expect(w.find('[data-testid="carga-erro"]').exists()).toBe(true);
+    expect(chamadas(f, `GET ${B}/conectores`).length).toBe(0);
+    w.unmount();
+  });
+
+  it('sem sessão nenhuma: vai ao login da plataforma', async () => {
+    const f = servidor({ 'GET /api/plataforma/eu': falha(401), 'GET /api/sessao': falha(401) });
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    expect(roteador.currentRoute.value.path).toBe('/plataforma/entrar');
+    expect(chamadas(f, `GET ${B}/conectores`).length).toBe(0);
     w.unmount();
   });
 });

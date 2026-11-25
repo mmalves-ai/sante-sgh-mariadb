@@ -6,13 +6,16 @@ import type { Escritor } from '@sgh/nucleo';
 import type { NucleoPlataforma } from '../../sessao/fonte-plataforma.js';
 import { execucaoDaLinha } from './execucao.js';
 import { ErroOnboarding, type RepositorioOnboarding } from './porta.js';
-import type {
-  DadosOrigemServidor,
-  LinhaConectorCarga,
-  LinhaExecucaoCarga,
-  PlanoCarga,
-  RepositorioCarga,
-  SituacaoCarga,
+import {
+  adminDoAtor,
+  type AtorCarga,
+  type DadosOrigemServidor,
+  detalheDoAtor,
+  type LinhaConectorCarga,
+  type LinhaExecucaoCarga,
+  type PlanoCarga,
+  type RepositorioCarga,
+  type SituacaoCarga,
 } from './servico-carga.js';
 
 const COLUNAS_EXECUCAO = `e.id, e.tipo, e.estado, e.etapa, e.percentual, e.contadores, e.motivo_falha, e.solicitado_em,
@@ -199,13 +202,14 @@ async function evento(
   cid: number,
   tipo: string,
   detalhe: Record<string, unknown>,
-  admin: number | null,
+  ator: AtorCarga,
 ): Promise<void> {
+  const admin = adminDoAtor(ator);
   await e.executar(
     `INSERT INTO cliente_evento (cliente_id, tipo, detalhe, ocorrido_em, administrador_plataforma_id, criado_em,
                                  criado_por)
      VALUES (?, ?, ?, UTC_TIMESTAMP(3), ?, UTC_TIMESTAMP(3), ?)`,
-    [cid, tipo, JSON.stringify(detalhe), admin, admin],
+    [cid, tipo, JSON.stringify({ ...detalhe, ...detalheDoAtor(ator) }), admin, admin],
   );
 }
 
@@ -266,9 +270,10 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
     codigo: string,
     d: DadosOrigemServidor,
     referenciaSenha: string,
-    admin: number | null,
+    ator: AtorCarga,
     antesDeConfirmar?: () => Promise<void>,
   ): Promise<{ origemId: number; nova: boolean }> {
+    const admin = adminDoAtor(ator);
     return this.nucleo.escreverPlataforma('carga-origem-servidor', async (e) => {
       const cid = await clienteTravado(e, codigo);
       const ativa = await e.uma('SELECT id FROM conector_execucao WHERE cliente_ativo = ?', [cid]);
@@ -317,7 +322,7 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
         cid,
         'conector_origem_servidor',
         { cliente_origem_id: origemId, nova, host: d.host, porta: d.porta, origens_desativadas: desativadas },
-        admin,
+        ator,
       );
       // Por último, ainda na transação: a senha vai ao cofre só quando nada mais pode recusar o pedido.
       if (antesDeConfirmar) await antesDeConfirmar();
@@ -349,8 +354,9 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
   async enfileirarCarga(
     codigo: string,
     decidir: (s: SituacaoCarga) => PlanoCarga,
-    admin: number | null,
+    ator: AtorCarga,
   ): Promise<{ id: number; plano: PlanoCarga }> {
+    const admin = adminDoAtor(ator);
     try {
       return await this.nucleo.escreverPlataforma('carga-enfileirar', async (e) => {
         const cid = await clienteTravado(e, codigo);
@@ -418,7 +424,7 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
           cid,
           EVENTO[plano.tipo],
           { estado: 'fila', execucao_id: id, tipo: plano.tipo, modo: plano.modo, ...contadores },
-          admin,
+          ator,
         );
         return { id, plano };
       });
@@ -429,7 +435,8 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
     }
   }
 
-  async pedirPausa(codigo: string, admin: number | null): Promise<number> {
+  async pedirPausa(codigo: string, ator: AtorCarga): Promise<number> {
+    const admin = adminDoAtor(ator);
     return this.nucleo.escreverPlataforma('carga-pausar', async (e) => {
       const cid = await clienteTravado(e, codigo);
       const l = (
@@ -452,7 +459,7 @@ export class RepositorioCargaPlataforma implements RepositorioCarga {
           WHERE id = ?`,
         [admin, admin, id],
       );
-      await evento(e, cid, 'conector_pausa', { execucao_id: id, estado: String(l['estado']) }, admin);
+      await evento(e, cid, 'conector_pausa', { execucao_id: id, estado: String(l['estado']) }, ator);
       return id;
     });
   }
