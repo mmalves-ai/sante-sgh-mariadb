@@ -24,6 +24,7 @@ export * from './regra-coparticipacao.js';
 export * from './franquia.js';
 export * from './autorizacao.js';
 export * from './autorizacao-rol.js';
+export * from './autorizacao-prazo-alcada.js';
 // Etapa 6 (F5): as contas médicas recebidas (protocolo, críticas e glosa automática, revisão, recurso e pagamento).
 export * from './conta.js';
 export * from './conta-conferencia.js';
