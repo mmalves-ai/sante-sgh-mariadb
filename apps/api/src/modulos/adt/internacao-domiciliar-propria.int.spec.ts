@@ -98,6 +98,20 @@ describe.skipIf(SEM_BANCO)('PortaInternacaoDomiciliarPropria contra o MariaDB (c
         )
       )[0]!['n'],
     );
+  // Trilha de auditoria gravada pelo executor: as operações, em ordem, de cada registro da massa, todas com o
+  // usuário da sessão e o estabelecimento do teste (as recusas não deixam linha).
+  const trilha = async (tabela: string, id: number) => {
+    const r = await ler(
+      `SELECT JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.operacao')) AS operacao, usuario_id, estabelecimento_id
+         FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ? ORDER BY id`,
+      [tabela, id],
+    );
+    for (const x of r) {
+      expect(Number(x['usuario_id'])).toBe(m['usuario']);
+      expect(Number(x['estabelecimento_id'])).toBe(m['est']);
+    }
+    return r.map((x) => String(x['operacao']));
+  };
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
@@ -240,6 +254,12 @@ describe.skipIf(SEM_BANCO)('PortaInternacaoDomiciliarPropria contra o MariaDB (c
       }),
     ).rejects.toMatchObject(recusa);
     m['orc'] = o.id as never;
+    expect(await trilha('orcamento_internacao_domiciliar', o.id as never)).toEqual([
+      'internacao.domiciliar.orcamento.criar',
+      'internacao.domiciliar.orcamento.alterar',
+      'internacao.domiciliar.orcamento.enviar',
+      'internacao.domiciliar.orcamento.aprovar',
+    ]);
   });
 
   it('transferência para casa e ciclo da internação domiciliar', async () => {
@@ -300,6 +320,15 @@ describe.skipIf(SEM_BANCO)('PortaInternacaoDomiciliarPropria contra o MariaDB (c
     await porta.acaoInternacao(ctx(), t.id as never, 'retomar', { versao: Number(d['versao']) });
     m['dom'] = t.id as never;
     m['domB'] = tb.id as never;
+    expect(await trilha('internacao_domiciliar', t.id as never)).toEqual([
+      'internacao.domiciliar.transferir',
+      'internacao.domiciliar.iniciar',
+      'internacao.domiciliar.suspender',
+      'internacao.domiciliar.retomar',
+    ]);
+    expect(await trilha('internacao_domiciliar', tb.id as never)).toEqual([
+      'internacao.domiciliar.transferir',
+    ]);
   });
 
   it('chamado com o endereço da internação, visita do chamado, conclusão com desfecho e encerramento', async () => {
@@ -400,6 +429,27 @@ describe.skipIf(SEM_BANCO)('PortaInternacaoDomiciliarPropria contra o MariaDB (c
       motivo: 'Chamado aberto por engano',
     });
     expect(await linha('c', avulso.id as never)).toMatchObject({ situacao: 'anulado' });
+    // Trilha: o chamado com o ciclo inteiro (a visita extra nasce na atribuição, sob o chamado), a visita do chamado
+    // com início e realização, a visita agendada, o avulso anulado e o encerramento da internação.
+    expect(await trilha('chamado_domiciliar', ch.id as never)).toEqual([
+      'internacao.domiciliar.chamado.abrir',
+      'internacao.domiciliar.chamado.triar',
+      'internacao.domiciliar.chamado.atribuir',
+      'internacao.domiciliar.chamado.concluir',
+    ]);
+    expect(await trilha('visita_domiciliar', v['id'] as never)).toEqual([
+      'internacao.domiciliar.visita.iniciar',
+      'internacao.domiciliar.visita.realizar',
+    ]);
+    expect(await trilha('visita_domiciliar', ag.id as never)).toEqual([
+      'internacao.domiciliar.visita.agendar',
+    ]);
+    expect(await trilha('chamado_domiciliar', avulso.id as never)).toEqual([
+      'internacao.domiciliar.chamado.abrir',
+      'internacao.domiciliar.chamado.anular',
+    ]);
+    expect((await trilha('internacao_domiciliar', m['dom']!)).at(-1)).toBe('internacao.domiciliar.encerrar');
+
     // Visão do paciente e painel.
     const visao = await porta.paciente(ctx(), m['pacA']!);
     expect(visao.enderecos.map((x) => x.id)).toEqual([m['endA']]);
