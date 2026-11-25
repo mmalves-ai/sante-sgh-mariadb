@@ -7,6 +7,8 @@ export * from './fluxo.js';
 export * from './painel.js';
 export * from './identificacao.js';
 export * from './indicadores.js';
+// 02-REC linha 33: cadastro da estrutura da recepção (ponto, guichês e serviços de senha).
+export * from './estrutura.js';
 // A máquina de estados da senha e a ordem da fila moram em @sgh/contratos (as receitas do legado as usam: o adaptador
 // não importa os pacotes de domínio); daqui seguem para a API e a tela.
 export {
