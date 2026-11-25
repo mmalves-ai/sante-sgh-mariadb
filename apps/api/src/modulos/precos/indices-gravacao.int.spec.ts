@@ -14,6 +14,7 @@ import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import type { CtxPrecos } from './fonte.js';
 import { FontePrecosPropria } from './fonte-propria.js';
 import { GravadorIndices } from './indices-gravacao.js';
+import { opcoesIndicesPropria } from './indices.controller.js';
 import { ServicoPrecos } from './servico.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -337,6 +338,29 @@ describe.skipIf(SEM_BANCO)(
         [ids.est, ids.usuario],
       );
       expect(Number(trilha[0]?.n)).toBe(4);
+    });
+
+    it('opções da tela: as vigências gravadas do acordo e da tabela do acordo, para a linha do tempo', async () => {
+      const o = await nucleo.lerSomente(
+        { cliente: CLIENTE, estabelecimento: ids.est, usuario: null, correlacao: 't' },
+        (l) => opcoesIndicesPropria(l, ids.est, ids.fonte),
+      );
+      expect(o.tabelas.map((t) => t.id)).toContain(ids.tabela);
+      expect(o.tabelas.map((t) => t.id)).not.toContain(ids.tabelaFora);
+      const ch = o.vigencias.filter(
+        (v) => v.tipo === 'indice' && v.chave === String(ids.ch) && v.tabelaId === null,
+      );
+      expect(ch.map((v) => [v.inicio, v.valor])).toEqual([
+        ['2026-03-01', 0.55],
+        ['2025-01-01', 0.5],
+      ]);
+      const pa = o.vigencias.filter((v) => v.tipo === 'porte-anestesico' && v.tabelaId === ids.tabela);
+      expect(pa.map((v) => [v.chave, v.inicio, v.valor, v.valorHorarioEspecial])).toEqual([
+        ['1', '2025-01-01', 150, 195],
+      ]);
+      expect(o.vigencias.some((v) => v.tipo === 'porte' && v.chave === `${P}3A` && v.valor === 210)).toBe(
+        true,
+      );
     });
 
     it('modelo CH: o total sai de valor_indice × quantidade com o porte anestésico do regime, nunca da vigência', async () => {

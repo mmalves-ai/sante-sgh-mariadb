@@ -23,6 +23,72 @@ export interface OpcoesIndices {
   readonly indices: { id: number; codigo: string; descricao: string; tipo: string }[];
   readonly portes: { codigo: string; descricao: string }[];
   readonly tabelas: { id: number; codigo: string; descricao: string; regime: string }[];
+  /** Vigências já gravadas (fora as de exclusão), para a linha do tempo e a recusa na hora da data repetida. */
+  readonly vigencias: VigenciaIndice[];
+}
+
+export interface VigenciaIndice {
+  readonly tipo: TipoGravacaoIndice;
+  /** indice: id do índice; porte e porte-anestesico: código do porte. */
+  readonly chave: string;
+  /** null: valor do acordo (sem tabela); senão, a tabela de honorários do acordo. */
+  readonly tabelaId: number | null;
+  readonly inicio: string;
+  readonly valor: number;
+  readonly valorHorarioEspecial: number | null;
+}
+
+const dataIso = (v: unknown): string =>
+  v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : '';
+const numOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+/** Vigências do acordo (fonte, sem tabela) e das tabelas de honorários do acordo, no mesmo escopo da gravação. */
+async function vigenciasIndices(l: Leitor, conv: number, tabelas: number[]): Promise<VigenciaIndice[]> {
+  const naTabela = tabelas.length
+    ? ` OR (v.fonte_pagadora_id IS NULL AND v.tabela_preco_id IN (${tabelas.map(() => '?').join(', ')}))`
+    : '';
+  const escopo = `((v.fonte_pagadora_id = ? AND v.tabela_preco_id IS NULL)${naTabela})`;
+  const p = [conv, ...tabelas];
+  const indices = await l.consultar(
+    `SELECT v.indice_cobranca_id AS chave, v.tabela_preco_id, v.vigencia_inicio, v.valor_indice AS valor
+       FROM valor_indice v WHERE v.operacao <> 'exclusao' AND ${escopo}
+      ORDER BY v.vigencia_inicio DESC, v.id DESC`,
+    p,
+    { teto: 2_000 },
+  );
+  const portes = await l.consultar(
+    `SELECT po.codigo AS chave, v.tabela_preco_id, v.vigencia_inicio, v.valor
+       FROM valor_porte_medico v JOIN porte_procedimento po ON po.id = v.porte_procedimento_id
+      WHERE v.operacao <> 'exclusao' AND ${escopo}
+      ORDER BY v.vigencia_inicio DESC, v.id DESC`,
+    p,
+    { teto: 2_000 },
+  );
+  const anest = tabelas.length
+    ? await l.consultar(
+        `SELECT v.porte_anestesico AS chave, v.tabela_preco_id, v.vigencia_inicio, v.valor, v.valor_horario_especial
+           FROM valor_porte_anestesico v
+          WHERE v.operacao <> 'exclusao' AND v.tabela_preco_id IN (${tabelas.map(() => '?').join(', ')})
+          ORDER BY v.vigencia_inicio DESC, v.id DESC`,
+        tabelas,
+        { teto: 2_000 },
+      )
+    : [];
+  const linha =
+    (tipo: TipoGravacaoIndice) =>
+    (r: Record<string, unknown>): VigenciaIndice => ({
+      tipo,
+      chave: String(r['chave']),
+      tabelaId: numOuNulo(r['tabela_preco_id']),
+      inicio: dataIso(r['vigencia_inicio']),
+      valor: Number(r['valor']),
+      valorHorarioEspecial: numOuNulo(r['valor_horario_especial']),
+    });
+  return [
+    ...indices.map(linha('indice')),
+    ...portes.map(linha('porte')),
+    ...anest.map(linha('porte-anestesico')),
+  ];
 }
 
 /** As opções do formulário: catálogos da rede e as tabelas de honorários do acordo deste estabelecimento. */
@@ -49,7 +115,9 @@ export async function opcoesIndicesPropria(l: Leitor, est: number, conv: number)
     [conv, est],
     { teto: 200 },
   );
+  const idsTabela = [...new Set(tabelas.map((r) => Number(r['id'])))];
   return {
+    vigencias: await vigenciasIndices(l, conv, idsTabela),
     indices: indices.map((r) => ({
       id: Number(r['id']),
       codigo: String(r['codigo']),

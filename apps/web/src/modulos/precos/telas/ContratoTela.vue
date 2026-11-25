@@ -14,6 +14,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import ConfirmacaoCritica from '../componentes/ConfirmacaoCritica.vue';
 import OpcoesCredenciamentoConvenio from '../componentes/OpcoesCredenciamentoConvenio.vue';
+import IndicesContrato from '../componentes/IndicesContrato.vue';
 import RegrasAcordoContrato from '../componentes/RegrasAcordoContrato.vue';
 import {
   alterarContrato,
@@ -552,6 +553,11 @@ const opcoesTipoMod = computed(() =>
               </tr>
             </tbody>
           </table>
+          <IndicesContrato
+            :codigo="codigo"
+            :pode-editar="c.permissoes.editarContrato"
+            @gravado="consulta.refetch()"
+          />
           <RegrasAcordoContrato :codigo="codigo" :pode-editar="c.permissoes.editarContrato" />
         </template>
 
