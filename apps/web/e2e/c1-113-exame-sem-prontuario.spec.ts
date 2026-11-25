@@ -75,7 +75,11 @@ test.describe('@C1-113 marcação de exame sem prontuário', () => {
             status: 409,
             detail: 'Já existe paciente com este nome e nascimento.',
             codigo: 'paciente-possivelmente-cadastrado',
-            dependentes: [{ rotulo: 'paciente', total: 1, amostra: [CANDIDATO] }],
+            // Mesmo formato do servidor (pre-cadastro-marcacao.ts): candidatos pelo id, em texto, no esquema do contrato.
+            campos: ['nome'],
+            dependentes: [
+              { rotulo: 'paciente', quantidade: 1, amostra: [String(CANDIDATO)], origem: 'logica' },
+            ],
           },
           409,
         );

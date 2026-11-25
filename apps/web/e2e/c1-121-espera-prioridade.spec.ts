@@ -31,8 +31,17 @@ async function entrar(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-/** Inclui o paciente sintético na fila da agenda, com o grupo legal escolhido ('' = pelo cadastro e pela idade). */
-async function incluir(page: Page, termo: string, paciente: number, agenda: string, grupo: string) {
+/**
+ * Inclui o paciente sintético na fila da agenda, com o grupo legal escolhido ('' = pelo cadastro e pela idade), e
+ * devolve o id do pedido gravado (a lista mostra o nome mascarado, então a linha é achada pelo id).
+ */
+async function incluir(
+  page: Page,
+  termo: string,
+  paciente: number,
+  agenda: string,
+  grupo: string,
+): Promise<number> {
   const regiao = page.getByRole('region', { name: 'Incluir na fila' });
   await page.getByTestId('espera-termo').fill(termo);
   await page.getByTestId('espera-termo').press('Enter');
@@ -40,12 +49,20 @@ async function incluir(page: Page, termo: string, paciente: number, agenda: stri
   await escolher(regiao.getByLabel('Agenda'), agenda);
   await escolher(page.getByTestId('espera-urgencia'), 'normal');
   await escolher(page.getByTestId('espera-prioridade-legal'), grupo);
+  const resposta = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && /\/api\/agenda\/espera$/.test(new URL(r.url()).pathname),
+  );
   await page.getByTestId('botao-incluir-espera').click();
+  const corpo = (await (await resposta).json()) as { resultado?: { espera?: unknown } };
   await expect(page.getByTestId('espera-mensagem')).toContainText('Incluído na fila');
+  const id = Number(corpo.resultado?.espera);
+  expect(id).toBeGreaterThan(0);
+  return id;
 }
 
-const linha = (page: Page, nome: string, agenda: string): Locator =>
-  page.getByTestId('tabela-espera').locator('tbody tr').filter({ hasText: nome }).filter({ hasText: agenda });
+/** A linha do pedido na lista, pelo id gravado, conferindo que é da agenda esperada. */
+const linha = (page: Page, id: number, agenda: string): Locator =>
+  page.getByTestId('tabela-espera').getByTestId(`espera-${id}`).filter({ hasText: agenda });
 
 test.describe('Lista de espera com prioridade legal @C1-121 @fase3', () => {
   test.setTimeout(120_000);
@@ -60,11 +77,11 @@ test.describe('Lista de espera com prioridade legal @C1-121 @fase3', () => {
     await semViolacaoAxe(page, '/agenda/espera');
 
     // Entra primeiro sem prioridade; depois, a gestante (grupo 3).
-    await incluir(page, 'cinthya', 1003, '903', '');
-    await incluir(page, 'silva', 1001, '903', '3');
+    const primeiro = await incluir(page, 'cinthya', 1003, '903', '');
+    const depois = await incluir(page, 'silva', 1001, '903', '3');
 
-    const gestante = linha(page, 'JOSÉ', 'ORTOPEDIA');
-    const semPrioridade = linha(page, 'CINTHYA', 'ORTOPEDIA');
+    const gestante = linha(page, depois, 'ORTOPEDIA');
+    const semPrioridade = linha(page, primeiro, 'ORTOPEDIA');
     await expect(gestante.locator('td').nth(0)).toHaveText('1');
     await expect(gestante.locator('td').nth(3)).toContainText('Preferencial');
     await expect(gestante.locator('td').nth(3)).toContainText('Gestante');
@@ -84,8 +101,8 @@ test.describe('Lista de espera com prioridade legal @C1-121 @fase3', () => {
     await expect(page.getByTestId('tela-espera')).toBeVisible();
 
     await incluir(page, 'cinthya', 1003, '904', '');
-    await incluir(page, 'silva', 1002, '904', '');
-    const segundo = linha(page, 'JOSÉ', 'PEDIATRIA');
+    const idSegundo = await incluir(page, 'silva', 1002, '904', '');
+    const segundo = linha(page, idSegundo, 'PEDIATRIA');
     await expect(segundo.locator('td').nth(0)).toHaveText('2');
 
     await segundo.getByRole('button', { name: 'Marcar' }).click();

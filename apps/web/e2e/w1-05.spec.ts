@@ -94,6 +94,28 @@ test.describe('Atendimento: corrigir a ficha, estornar o extra, excluir; fichas 
     page,
   }) => {
     const externas = vigiarExternas(page);
+    // A prévia do preço e do credenciamento (ADR 0009) exige o banco do cliente; o E2E roda com a fonte sintética, por
+    // isso a leitura da prévia é simulada (massa SINTÉTICA). Sem ela, a tela fica fechada (falha fechada) e o
+    // lançamento não sai. O cálculo está em precos/agenda-preco e no contrato de efeito do preço.
+    await page.route('**/api/atendimento/*/preco**', (r) =>
+      r.request().method() !== 'GET'
+        ? r.fallback()
+        : r.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              valor: 10,
+              origem: 'tabela_convenio',
+              regraPrecoParticularId: null,
+              tabelaPrecoId: null,
+              textoOrigemId: null,
+              estimada: false,
+              credenciamento: { credenciado: true, efeito: 'nenhum', credenciamentoId: null, motivo: null },
+              explicacao: 'Tabela sintética do convênio',
+              recusa: null,
+            }),
+          }),
+    );
     await entrar(page, 'SINT.ATENDIMENTO');
     const reg = await abrirConsulta(page);
 
