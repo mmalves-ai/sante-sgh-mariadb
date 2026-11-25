@@ -31,6 +31,12 @@ export const esquemaPainelRotinas = z.object({
       situacao: z.string(),
       ativo: z.boolean(),
       permiteAcionamentoManual: z.boolean(),
+      /** Falso: a rotina não se suspende (vigia da plataforma); só se retoma a que já estava suspensa. */
+      permiteSuspensao: z.boolean(),
+      /** Rotina do cliente inteiro (todos os estabelecimentos). */
+      doCliente: z.boolean(),
+      /** A sessão pode acionar e suspender (rotina do cliente exige o alcance do cliente). */
+      podeGerir: z.boolean(),
       intervaloSegundos: z.number().nullable(),
       toleranciaAtrasoSegundos: z.number().nullable(),
       ultimaExecucaoEm: z.string().nullable(),

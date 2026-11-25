@@ -1,6 +1,7 @@
 // Rotinas agendadas do worker vistas na Administração (01-SIS L95, ficha F3.9): o registrador que envolve cada volta
 // de um serviço agendado por cliente. Antes da volta lê o estado da rotina (suspensa ou inativa: não roda; pedido
-// manual pendente: a volta é a do pedido); depois grava pela porta própria (rotinas-registro-proprio.ts) a execução,
+// manual pendente: a volta é a do pedido e recebe o disparo 'manual', que muda o trabalho feito: no censo, a janela de
+// recuperação dos dias sem retrato passa de 7 para 31 dias); depois grava pela porta própria (rotinas-registro-proprio.ts) a execução,
 // as etapas e a situação da rotina, pela regra do domínio (destinoDaVolta: volta vazia só marca a rotina viva). O
 // registro nunca derruba o serviço: a falha de gravar o histórico vai ao log (só códigos) e a volta segue.
 import {
@@ -19,7 +20,9 @@ export const ROTINAS_WORKER = {
   censo: {
     codigo: 'internacao.censo.fechamento',
     nome: 'Fechamento do censo diário',
-    descricao: 'Retrato do censo de cada unidade de internação no fechamento do dia, por estabelecimento.',
+    descricao:
+      'Retrato do censo de cada unidade de internação no fechamento do dia, por estabelecimento. Acionada à mão, ' +
+      'recupera os dias sem retrato dos últimos 31 dias (a volta agendada confere 7).',
     categoria: 'fechamento',
     intervaloSegundos: 60,
     toleranciaAtrasoSegundos: 1800,
@@ -32,7 +35,8 @@ export const ROTINAS_WORKER = {
     categoria: 'integracao',
     intervaloSegundos: 1,
     toleranciaAtrasoSegundos: 1800,
-    permiteAcionamentoManual: true,
+    // Roda a cada segundo: um pedido à mão não anteciparia nada.
+    permiteAcionamentoManual: false,
   },
   envioRelatorios: {
     codigo: 'relatorio.envio.agendado',
@@ -41,7 +45,8 @@ export const ROTINAS_WORKER = {
     categoria: 'relatorio',
     intervaloSegundos: 60,
     toleranciaAtrasoSegundos: 1800,
-    permiteAcionamentoManual: true,
+    // A volta já envia todo relatório vencido; enviar antes da agenda é o "enviar agora" do próprio relatório.
+    permiteAcionamentoManual: false,
   },
   vigiaBanco: {
     codigo: 'manutencao.vigia.banco',
@@ -51,6 +56,8 @@ export const ROTINAS_WORKER = {
     intervaloSegundos: 60,
     toleranciaAtrasoSegundos: 1800,
     permiteAcionamentoManual: false,
+    // Vigia da plataforma inteira (métricas e alertas de todos os clientes): não para pela suspensão de um cliente.
+    permiteSuspensao: false,
   },
 } as const satisfies Record<string, DefinicaoRotina>;
 
@@ -99,17 +106,20 @@ export class RegistradorRotinas {
     cliente: string,
     def: DefinicaoRotina,
     correlacao: string,
-    fn: () => Promise<MedidaVolta<R>>,
+    fn: (disparo: DisparoExecucao) => Promise<MedidaVolta<R>>,
   ): Promise<R | null> {
     const porta = this.porta(cliente);
     const estado = await porta.estado(def.codigo).catch(() => null);
-    if (estado && (!estado.ativo || estado.situacao === 'suspensa')) return null;
+    // A rotina que não aceita suspensão (vigia da plataforma) segue registrando mesmo se ficou suspensa de antes:
+    // os alertas não somem do painel; a tela só oferece "Retomar" para ela.
+    const suspensa = estado?.situacao === 'suspensa' && def.permiteSuspensao !== false;
+    if (estado && (!estado.ativo || suspensa)) return null;
     const disparo: DisparoExecucao = estado?.manualPendente ? 'manual' : 'agendado';
     const inicioEm = this.agora();
     let medida: MedidaVolta<R> | null = null;
     let erro: unknown = null;
     try {
-      medida = await fn();
+      medida = await fn(disparo);
     } catch (e) {
       erro = e;
     }
@@ -168,7 +178,7 @@ export async function voltaPorEstabelecimentoComRotina<
   env: NodeJS.ProcessEnv,
   correlacao: string,
   fabrica: (cliente: string) => P,
-  fn: (porta: P, est: AlvoEstabelecimento) => Promise<R>,
+  fn: (porta: P, est: AlvoEstabelecimento, disparo: DisparoExecucao) => Promise<R>,
   falhou: (cliente: string, estabelecimento: string | null, erro: unknown) => void,
   agora: () => Date = () => new Date(),
 ): Promise<Volta<R>[]> {
@@ -182,7 +192,7 @@ export async function voltaPorEstabelecimentoComRotina<
   }
   for (const cliente of clientes) {
     try {
-      await registrador.rodar(cliente, def, correlacao, async () => {
+      await registrador.rodar(cliente, def, correlacao, async (disparo) => {
         const porta = fabrica(cliente);
         const ests = await porta.estabelecimentos();
         const etapas: EtapaVolta[] = [];
@@ -191,7 +201,7 @@ export async function voltaPorEstabelecimentoComRotina<
         for (const est of ests) {
           const inicioEm = agora();
           try {
-            const resultado = await fn(porta, est);
+            const resultado = await fn(porta, est, disparo);
             r.push({ cliente, estabelecimento: est.codigo, resultado });
             const v = medir(resultado);
             soma.lidos += v.lidos;

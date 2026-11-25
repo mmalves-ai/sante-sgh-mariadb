@@ -4,7 +4,10 @@
 // - a volta sem trabalho só marca a rotina viva (nenhuma execução nova) e a volta que falhou deixa a mensagem (só o
 //   tipo do erro) e a rotina "com falha";
 // - o pedido manual pendente (aguardando) é tomado pela volta seguinte: a mesma linha, disparo manual, encerrada;
-// - a rotina suspensa não roda pelo registrador e continua suspensa depois de uma volta já em curso.
+// - a rotina suspensa não roda pelo registrador e continua suspensa depois de uma volta já em curso;
+// - o pedido manual chega à volta como disparo 'manual' (o serviço muda o trabalho por ele) e o cadastro acompanha a
+//   definição do worker (acionamento manual e suspensão, guardada nos parâmetros);
+// - a rotina não suspensível (vigia da plataforma) segue registrando mesmo se ficou suspensa de antes.
 // Massa sintética (código teste.l95w.*), apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -216,5 +219,55 @@ describe.skipIf(SEM_BANCO)('registro das rotinas agendadas do worker sobre o ban
     const ex2 = await execucoes(Number(rot?.['id']));
     expect(ex2[1]).toMatchObject({ situacao: 'falhou', mensagem_erro: 'RangeError' });
     expect((await rotina('e'))?.['situacao']).toBe('com_falha');
+  });
+
+  it('o pedido manual chega à volta como disparo manual e o cadastro segue a definição do worker', async () => {
+    const registrador = new RegistradorRotinas(() => porta);
+    const disparos: string[] = [];
+    const medir = async (d: string) => {
+      disparos.push(d);
+      return { resultado: d, gravados: d === 'manual' ? 1 : 0 };
+    };
+    await registrador.rodar(CLIENTE, def('f'), 'teste-l95w', medir);
+    const id = Number((await rotina('f'))?.['id']);
+    const pedido = await escrever(nucleo, (e) =>
+      e.inserir(
+        "INSERT INTO execucao_rotina (rotina_agendada_id, ocorrido_em, disparo, situacao, criado_em) VALUES (?, ?, 'manual', 'aguardando', ?)",
+        [id, T0, T0],
+      ),
+    );
+    expect(await registrador.rodar(CLIENTE, def('f'), 'teste-l95w', medir)).toBe('manual');
+    expect(disparos).toEqual(['agendado', 'manual']);
+    const ex = await execucoes(id);
+    expect(ex.find((x) => x['id'] === pedido)).toMatchObject({
+      disparo: 'manual',
+      situacao: 'concluida',
+      registros_gravados: 1,
+    });
+    // A definição mudou no worker: sem acionamento manual e sem suspensão; a linha já cadastrada acompanha.
+    await porta.registrar(
+      volta('f', { definicao: { ...def('f'), permiteAcionamentoManual: false, permiteSuspensao: false } }),
+    );
+    const rot = await rotina('f');
+    expect(Boolean(rot?.['permite_acionamento_manual'])).toBe(false);
+    // O driver devolve a coluna JSON já lida (objeto) ou como texto, conforme a versão.
+    const par: unknown = rot?.['parametros'];
+    expect(typeof par === 'string' ? JSON.parse(par) : par).toEqual({ suspensivel: false });
+  });
+
+  it('a rotina não suspensível segue registrando mesmo se ficou suspensa de antes', async () => {
+    const naoSusp = { ...def('g'), permiteSuspensao: false };
+    const r = await porta.registrar(volta('g', { definicao: naoSusp, historico: false, etapas: [] }));
+    await escrever(nucleo, (e) =>
+      e.executar("UPDATE rotina_agendada SET situacao = 'suspensa' WHERE id = ?", [r.rotina]),
+    );
+    const registrador = new RegistradorRotinas(() => porta);
+    const x = await registrador.rodar(CLIENTE, naoSusp, 'teste-l95w', async () => ({
+      resultado: 1,
+      avisos: 2,
+    }));
+    expect(x).toBe(1);
+    const [ex] = await execucoes(r.rotina);
+    expect(ex).toMatchObject({ situacao: 'concluida_com_avisos' });
   });
 });

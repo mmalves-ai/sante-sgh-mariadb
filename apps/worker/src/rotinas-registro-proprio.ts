@@ -13,6 +13,7 @@ import {
   type DefinicaoRotina,
   type DisparoExecucao,
   MENSAGEM_ROTINA,
+  parametrosDaRotina,
   proximaExecucaoPorIntervalo,
   type SituacaoExecucao,
   type SituacaoRotina,
@@ -87,6 +88,7 @@ const ENTRADA = z.object({
   intervaloSegundos: z.number().int().positive(),
   toleranciaAtrasoSegundos: z.number().int().min(0),
   permiteAcionamentoManual: z.boolean(),
+  permiteSuspensao: z.boolean(),
   situacao: z.enum(['concluida', 'concluida_com_avisos', 'falhou', 'cancelada', 'expirada']),
   inicioEm: z.date(),
   fimEm: z.date(),
@@ -154,6 +156,7 @@ export class RegistroRotinasProprio implements PortaRotinas {
         intervaloSegundos: d.intervaloSegundos,
         toleranciaAtrasoSegundos: d.toleranciaAtrasoSegundos,
         permiteAcionamentoManual: d.permiteAcionamentoManual,
+        permiteSuspensao: d.permiteSuspensao !== false,
         situacao: v.situacao,
         inicioEm: v.inicioEm,
         fimEm: v.fimEm,
@@ -201,6 +204,7 @@ export class RegistroRotinasProprio implements PortaRotinas {
         intervalo_segundos: e.intervaloSegundos,
         tolerancia_atraso_segundos: e.toleranciaAtrasoSegundos,
         permite_acionamento_manual: e.permiteAcionamentoManual,
+        parametros: JSON.stringify(parametrosDaRotina({ permiteSuspensao: e.permiteSuspensao })),
         situacao: 'ociosa',
         ativo: true,
       });
@@ -276,10 +280,13 @@ export class RegistroRotinasProprio implements PortaRotinas {
         });
       }
     }
-    // 4) A rotina depois da volta: situação pela regra, última e próxima execução.
+    // 4) A rotina depois da volta: situação pela regra, última e próxima execução; o acionamento manual e a suspensão
+    //    seguem a definição do worker (o código é a fonte: a rotina cadastrada antes acompanha a mudança).
     const situacaoRotina = situacaoDaRotinaApos(String(rot['situacao']) as SituacaoRotina, e.situacao);
     await tx.alterar('rotina_agendada', rotina, Number(rot['versao']), {
       situacao: situacaoRotina,
+      permite_acionamento_manual: e.permiteAcionamentoManual,
+      parametros: JSON.stringify(parametrosDaRotina({ permiteSuspensao: e.permiteSuspensao })),
       ultima_execucao_em: e.fimEm,
       proxima_execucao_em: proximaExecucaoPorIntervalo(e.fimEm, e.intervaloSegundos),
     });

@@ -39,7 +39,9 @@ export type RecusaRotina =
   | 'rotina-suspensa'
   | 'sem-acionamento-manual'
   | 'execucao-em-curso'
-  | 'fora-da-vigencia';
+  | 'fora-da-vigencia'
+  | 'rotina-nao-suspensivel'
+  | 'rotina-do-cliente';
 
 export const MENSAGEM_ROTINA: Readonly<Record<RecusaRotina, string>> = {
   'transicao-invalida': 'A execução não pode passar para essa situação (execução encerrada não muda).',
@@ -51,6 +53,10 @@ export const MENSAGEM_ROTINA: Readonly<Record<RecusaRotina, string>> = {
   'sem-acionamento-manual': 'Esta rotina não aceita acionamento manual.',
   'execucao-em-curso': 'Já há uma execução desta rotina em curso; aguarde o fim.',
   'fora-da-vigencia': 'A rotina está fora do período de vigência.',
+  'rotina-nao-suspensivel':
+    'Esta rotina vale para a plataforma inteira e não se suspende pelo cliente; só se retoma a que já estava suspensa.',
+  'rotina-do-cliente':
+    'Esta rotina vale para todos os estabelecimentos do cliente: acionar ou suspender exige o alcance do cliente.',
 };
 
 export const execucaoEncerrada = (s: SituacaoExecucao): boolean => SITUACOES_FINAIS_EXECUCAO.includes(s);
@@ -159,6 +165,70 @@ export interface DefinicaoRotina {
   /** Atraso aceito antes de a rotina aparecer como atrasada (segundos). */
   readonly toleranciaAtrasoSegundos: number;
   readonly permiteAcionamentoManual: boolean;
+  /**
+   * Falso: a rotina não para pela suspensão do cliente (ex.: a vigia do banco, que roda para a plataforma inteira e só
+   * registra no cliente). A tela não oferece "Suspender" e a suspensão é recusada. Omitido: suspensível.
+   */
+  readonly permiteSuspensao?: boolean;
+}
+
+/** Parâmetros guardados com a rotina (JSON): por ora só se ela aceita suspensão. */
+export function parametrosDaRotina(def: Pick<DefinicaoRotina, 'permiteSuspensao'>): { suspensivel: boolean } {
+  return { suspensivel: def.permiteSuspensao !== false };
+}
+
+/** Lê dos parâmetros guardados se a rotina aceita suspensão (ausente ou ilegível: aceita). */
+export function rotinaSuspensivel(parametros: unknown): boolean {
+  let p: unknown = parametros;
+  if (typeof p === 'string') {
+    try {
+      p = JSON.parse(p);
+    } catch {
+      return true;
+    }
+  }
+  return !(p && typeof p === 'object' && (p as { suspensivel?: unknown }).suspensivel === false);
+}
+
+/**
+ * Rotina do cliente inteiro (sem estabelecimento) só se aciona ou suspende com o alcance do cliente: o administrador
+ * de um estabelecimento não para nem antecipa o trabalho dos outros estabelecimentos.
+ */
+export function conferirAlcanceRotina(
+  rotinaDoCliente: boolean,
+  alcanceCliente: boolean,
+): RecusaRotina | null {
+  return rotinaDoCliente && !alcanceCliente ? 'rotina-do-cliente' : null;
+}
+
+/** Etapa de uma execução vista na administração. */
+export interface EtapaVisivel {
+  readonly nome: string;
+  readonly lidos: number;
+  readonly gravados: number;
+  readonly rejeitados: number;
+}
+
+/**
+ * O histórico de uma rotina do cliente visto por quem não tem o alcance do cliente: some a etapa que leva o código de
+ * outro estabelecimento do cliente, e os volumes da execução passam a ser a soma das etapas que ficaram (o total do
+ * cliente não aparece). Sem etapa escondida, a execução fica como está.
+ */
+export function visaoDoEstabelecimento<E extends EtapaVisivel>(
+  volumes: VolumesExecucao,
+  etapas: readonly E[],
+  outrosEstabelecimentos: ReadonlySet<string>,
+): { volumes: VolumesExecucao; etapas: E[] } {
+  const ficam = etapas.filter((e) => !outrosEstabelecimentos.has(e.nome));
+  if (ficam.length === etapas.length) return { volumes, etapas: [...etapas] };
+  return {
+    volumes: {
+      lidos: ficam.reduce((a, e) => a + e.lidos, 0),
+      gravados: ficam.reduce((a, e) => a + e.gravados, 0),
+      rejeitados: ficam.reduce((a, e) => a + e.rejeitados, 0),
+    },
+    etapas: ficam,
+  };
 }
 
 /**
@@ -201,7 +271,12 @@ export function proximaExecucaoPorIntervalo(ultimaEm: Date, intervaloSegundos: n
 export function conferirSuspensao(
   atual: SituacaoRotina,
   acao: 'suspender' | 'retomar',
-): { recusa: 'rotina-suspensa' | 'rotina-nao-suspensa'; mensagem: string } | { situacao: SituacaoRotina } {
+  suspensivel = true,
+):
+  | { recusa: 'rotina-suspensa' | 'rotina-nao-suspensa' | 'rotina-nao-suspensivel'; mensagem: string }
+  | { situacao: SituacaoRotina } {
+  if (acao === 'suspender' && !suspensivel)
+    return { recusa: 'rotina-nao-suspensivel', mensagem: MENSAGEM_ROTINA['rotina-nao-suspensivel'] };
   if (acao === 'suspender')
     return atual === 'suspensa'
       ? { recusa: 'rotina-suspensa', mensagem: 'A rotina já está suspensa.' }

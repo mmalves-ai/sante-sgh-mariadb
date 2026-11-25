@@ -38,6 +38,7 @@ const { t } = useI18n({
       executar: 'Executar agora',
       suspender: 'Suspender',
       retomar: 'Retomar',
+      semAlcance: 'Vale para todos os estabelecimentos: acionar ou suspender exige o alcance do cliente.',
       confirmaSuspender: 'Suspender a rotina? Ela não roda até alguém retomá-la.',
       historico: 'Histórico',
       fecharHistorico: 'Fechar histórico',
@@ -180,7 +181,10 @@ const alternar = (id: number) => (aberta.value = aberta.value === id ? null : id
                   :data-testid="`historico-${r.codigo}`"
                   @acionar="alternar(r.id)"
                 />
-                <template v-if="podeAcionar">
+                <small v-if="podeAcionar && !r.podeGerir" :data-testid="`sem-alcance-${r.codigo}`">{{
+                  t('semAlcance')
+                }}</small>
+                <template v-if="podeAcionar && r.podeGerir">
                   <SanteBotao
                     v-if="r.permiteAcionamentoManual"
                     :rotulo="t('executar')"
@@ -198,7 +202,7 @@ const alternar = (id: number) => (aberta.value = aberta.value === id ? null : id
                     @acionar="agir(() => suspensaoRotina(r.id, r.versao, 'retomar'), t('ok'))"
                   />
                   <SanteBotao
-                    v-else
+                    v-else-if="r.permiteSuspensao"
                     :rotulo="t('suspender')"
                     variante="destrutivo"
                     :confirmacao="t('confirmaSuspender')"

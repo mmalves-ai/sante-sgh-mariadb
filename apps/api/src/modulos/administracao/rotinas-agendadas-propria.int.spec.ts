@@ -3,7 +3,10 @@
 // - acionar deixa a execução "aguardando", disparo manual, com quem pediu e a trilha; o segundo pedido com o primeiro
 //   pendente, a rotina que não aceita manual e a suspensa são recusados sem gravar;
 // - suspender muda a situação e cancela o pedido pendente (a linha fica, cancelada); retomar volta a ociosa;
-// - o histórico traz as execuções (mais recentes primeiro) com as etapas e o login de quem disparou.
+// - o histórico traz as execuções (mais recentes primeiro) com as etapas e o login de quem disparou;
+// - alcance (dois estabelecimentos): sem config.rotinaCliente.gerir, a rotina do cliente inteiro não se aciona nem se
+//   suspende (nada gravado) e o histórico esconde a etapa do outro estabelecimento, com os volumes das que ficaram;
+// - a rotina que não aceita suspensão (vigia da plataforma) recusa suspender.
 // Massa sintética (prefixo L95A), apagada no fim.
 import { randomUUID } from 'node:crypto';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -14,6 +17,7 @@ import { RotinasAgendadasPropria } from './rotinas-agendadas-propria.js';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L95A';
+const P2 = 'L95B';
 const AGORA = new Date('2026-11-25T12:00:00.000Z');
 
 async function codigo(p: Promise<unknown>): Promise<string> {
@@ -29,14 +33,16 @@ async function codigo(p: Promise<unknown>): Promise<string> {
 describe.skipIf(SEM_BANCO)('rotinas agendadas na administração, no banco próprio', () => {
   const nucleo = new NucleoProprio();
   const porta = new RotinasAgendadasPropria(nucleo, CLIENTE, () => AGORA);
-  const ids = { est: 0, usuario: 0, a: 0, b: 0, ex: 0 };
-  const ctx = () => ({
+  const ids = { est: 0, est2: 0, usuario: 0, a: 0, b: 0, c: 0, ex: 0, exc: 0 };
+  const ctx = (alcanceCliente = true) => ({
     hospital: P,
     login: `${P}.A`,
+    alcanceCliente,
     correlacao: 'teste-l95a',
     chaveIdempotencia: `tl95a-${randomUUID()}`,
   });
-  const leitura = { hospital: P, login: `${P}.A` };
+  const leitura = { hospital: P, login: `${P}.A`, alcanceCliente: true };
+  const leituraEst = { ...leitura, alcanceCliente: false };
   const todos = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-l95a' }, (l) => l.consultar(sql, p));
 
@@ -66,6 +72,12 @@ describe.skipIf(SEM_BANCO)('rotinas agendadas na administração, no banco próp
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [P, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, AGORA],
       );
+      ids.est2 = await g(
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [P2],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [P2, `ESTAB ${P2} SINTETICO`, `ESTAB ${P2} SINTETICO`, AGORA],
+      );
       ids.usuario = await g(
         'SELECT id FROM usuario WHERE login = ?',
         [`${P}.A`],
@@ -75,12 +87,41 @@ describe.skipIf(SEM_BANCO)('rotinas agendadas na administração, no banco próp
     });
     await limpar();
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l95a' }, async (e) => {
-      const rotina = (codigo: string, manual: boolean, proxima: Date) =>
+      const rotina = (codigo: string, manual: boolean, proxima: Date, parametros: string | null = null) =>
         e.inserir(
           `INSERT INTO rotina_agendada (estabelecimento_id, codigo, nome, categoria, tipo_agenda, intervalo_segundos,
-             tolerancia_atraso_segundos, permite_acionamento_manual, situacao, ultima_execucao_em, proxima_execucao_em, criado_em)
-           VALUES (NULL, ?, ?, 'manutencao', 'intervalo', 60, 600, ?, 'ociosa', ?, ?, ?)`,
-          [codigo, `ROTINA ${codigo}`, manual, new Date(proxima.getTime() - 60_000), proxima, AGORA],
+             tolerancia_atraso_segundos, permite_acionamento_manual, parametros, situacao, ultima_execucao_em, proxima_execucao_em, criado_em)
+           VALUES (NULL, ?, ?, 'manutencao', 'intervalo', 60, 600, ?, ?, 'ociosa', ?, ?, ?)`,
+          [
+            codigo,
+            `ROTINA ${codigo}`,
+            manual,
+            parametros,
+            new Date(proxima.getTime() - 60_000),
+            proxima,
+            AGORA,
+          ],
+        );
+      ids.c = await rotina(
+        'teste.l95a.c',
+        true,
+        new Date(AGORA.getTime() + 60_000),
+        JSON.stringify({ suspensivel: false }),
+      );
+      ids.exc = await e.inserir(
+        `INSERT INTO execucao_rotina (rotina_agendada_id, ocorrido_em, disparo, inicio_em, fim_em, situacao,
+           registros_lidos, registros_gravados, registros_rejeitados, criado_em)
+         VALUES (?, ?, 'agendado', ?, ?, 'concluida_com_avisos', 5, 5, 1, ?)`,
+        [ids.c, AGORA, AGORA, AGORA, AGORA],
+      );
+      for (const [seq, nome, v] of [
+        [1, P, 2],
+        [2, P2, 3],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO execucao_rotina_etapa (execucao_rotina_id, sequencia, nome, situacao, registros_lidos,
+             registros_gravados, registros_rejeitados, criado_em) VALUES (?, ?, ?, 'concluida', ?, ?, ?, ?)`,
+          [ids.exc, seq, nome, v, v, seq - 1, AGORA],
         );
       ids.a = await rotina('teste.l95a.a', true, new Date(AGORA.getTime() - 3_600_000));
       ids.b = await rotina('teste.l95a.b', false, new Date(AGORA.getTime() + 60_000));
@@ -188,5 +229,59 @@ describe.skipIf(SEM_BANCO)('rotinas agendadas na administração, no banco próp
       expect.objectContaining({ sequencia: 1, nome: 'EST-SINTETICO', lidos: 5, gravados: 4, rejeitados: 1 }),
     ]);
     expect(await codigo(porta.historico(leitura, 999_999_999))).toBe('rotina-desconhecida');
+  });
+
+  it('alcance: sem o do cliente, a rotina do cliente não se aciona nem se suspende e o histórico esconde o outro estabelecimento', async () => {
+    const versao = async (id: number) =>
+      Number((await todos('SELECT versao FROM rotina_agendada WHERE id = ?', [id]))[0]?.['versao']);
+    const contar = async () =>
+      Number(
+        (await todos('SELECT COUNT(*) AS q FROM execucao_rotina WHERE rotina_agendada_id = ?', [ids.c]))[0]?.[
+          'q'
+        ],
+      );
+    const antes = await contar();
+    expect(await codigo(porta.acionar(ctx(false), { id: ids.c }))).toBe('rotina-do-cliente');
+    expect(
+      await codigo(
+        porta.suspensao(ctx(false), { id: ids.c, versao: await versao(ids.c), acao: 'suspender' }),
+      ),
+    ).toBe('rotina-do-cliente');
+    expect(await contar()).toBe(antes);
+    const [r] = await todos('SELECT situacao FROM rotina_agendada WHERE id = ?', [ids.c]);
+    expect(r?.['situacao']).toBe('ociosa');
+
+    const estPainel = (await porta.painel(leituraEst)).rotinas.find((y) => y.id === ids.c);
+    expect(estPainel).toMatchObject({
+      doCliente: true,
+      podeGerir: false,
+      permiteSuspensao: false,
+      impedimentoAcionar: expect.stringContaining('alcance do cliente'),
+      ultima: { id: ids.exc, lidos: 2, gravados: 2, rejeitados: 0 },
+    });
+    const est = await porta.historico(leituraEst, ids.c);
+    expect(
+      est.execucoes.map((x) => [x.lidos, x.gravados, x.rejeitados, x.etapas.map((y) => y.nome)]),
+    ).toEqual([[2, 2, 0, [P]]]);
+    // Com o alcance do cliente, tudo aparece.
+    const cli = await porta.historico(leitura, ids.c);
+    expect(
+      cli.execucoes.map((x) => [x.lidos, x.gravados, x.rejeitados, x.etapas.map((y) => y.nome)]),
+    ).toEqual([[5, 5, 1, [P, P2]]]);
+    expect((await porta.painel(leitura)).rotinas.find((y) => y.id === ids.c)).toMatchObject({
+      podeGerir: true,
+      impedimentoAcionar: null,
+    });
+  });
+
+  it('a rotina que não aceita suspensão recusa suspender, sem gravar', async () => {
+    const v = Number(
+      (await todos('SELECT versao FROM rotina_agendada WHERE id = ?', [ids.c]))[0]?.['versao'],
+    );
+    expect(await codigo(porta.suspensao(ctx(), { id: ids.c, versao: v, acao: 'suspender' }))).toBe(
+      'rotina-nao-suspensivel',
+    );
+    const [r] = await todos('SELECT situacao, versao FROM rotina_agendada WHERE id = ?', [ids.c]);
+    expect(r).toMatchObject({ situacao: 'ociosa', versao: v });
   });
 });

@@ -28,6 +28,8 @@ export const PERMISSOES_M10_CODIGOS = {
   emailLer: 'config.email.ler',
   rotinaLer: 'config.rotina.ler',
   rotinaAcionar: 'config.rotina.acionar',
+  // C2-065: alcance do cliente nas rotinas sem estabelecimento (acionar, suspender, histórico de todos).
+  rotinaCliente: 'config.rotinaCliente.gerir',
   emailEditar: 'config.email.editar',
   empresaLer: 'organizacao.empresa.ler',
   estruturaLer: 'organizacao.estrutura.ler',
@@ -176,6 +178,15 @@ export const PERMISSOES_M10: readonly DeclaracaoPermissao[] = [
 
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.rotinaCliente,
+    descricao:
+      'Alcance do cliente nas rotinas agendadas de todos os estabelecimentos: acionar, suspender e ver as etapas de todos',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['diretoria-rede'],
     categoria: 'tecnica',
   },
   {

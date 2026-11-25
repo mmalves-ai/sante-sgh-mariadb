@@ -3,6 +3,8 @@
 // - GET  /api/administracao/rotinas/:id/execucoes (config.rotina.ler): histórico com as etapas e quem disparou;
 // - POST /api/administracao/rotinas/:id/acionar (config.rotina.acionar): pede a execução à mão;
 // - POST /api/administracao/rotinas/:id/suspensao (config.rotina.acionar): suspende ou retoma ({ versao, acao }).
+// A rotina do cliente inteiro só se aciona ou suspende com config.rotinaCliente.gerir (alcance do cliente); sem ele, o
+// histórico mostra só as etapas do estabelecimento da sessão.
 // Gravações pelo executor, com a trilha na mesma transação.
 import {
   Body,
@@ -28,6 +30,10 @@ import type { RotinasAgendadasPropria } from './rotinas-agendadas-propria.js';
 
 export const ROTINAS_AGENDADAS = Symbol('ROTINAS_AGENDADAS');
 
+/** A sessão tem o alcance do cliente (rotinas de todos os estabelecimentos). */
+const alcanceCliente = (req: RequisicaoAutorizada): boolean =>
+  (req.sgh?.sessao.permissoes ?? []).includes(C.rotinaCliente);
+
 const corpoDe = (c: unknown): Record<string, unknown> =>
   c && typeof c === 'object' && !Array.isArray(c) ? (c as Record<string, unknown>) : {};
 
@@ -49,6 +55,7 @@ export class RotinasAgendadasController {
     return {
       hospital: s.hospital,
       login: s.login,
+      alcanceCliente: alcanceCliente(req),
       correlacao: g.correlacao,
       chaveIdempotencia: g.chaveIdempotencia,
       ...(g.enderecoIp ? { enderecoIp: g.enderecoIp } : {}),
@@ -60,7 +67,7 @@ export class RotinasAgendadasController {
   async painel(@Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     return this.banco()
-      .painel({ hospital: s.hospital, login: s.login })
+      .painel({ hospital: s.hospital, login: s.login, alcanceCliente: alcanceCliente(req) })
       .catch((x: unknown) => problema(x));
   }
 
@@ -73,7 +80,11 @@ export class RotinasAgendadasController {
   ) {
     const s = sessaoDe(req);
     return this.banco()
-      .historico({ hospital: s.hospital, login: s.login }, id, Number(limite) || 50)
+      .historico(
+        { hospital: s.hospital, login: s.login, alcanceCliente: alcanceCliente(req) },
+        id,
+        Number(limite) || 50,
+      )
       .catch((x: unknown) => problema(x));
   }
 

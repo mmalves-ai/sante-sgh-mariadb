@@ -35,6 +35,9 @@ const rotina = (id: number, codigo: string, nome: string, extra: Record<string, 
   situacao: 'ociosa',
   ativo: true,
   permiteAcionamentoManual: true,
+  permiteSuspensao: true,
+  doCliente: true,
+  podeGerir: true,
   intervaloSegundos: 60,
   toleranciaAtrasoSegundos: 1800,
   ultimaExecucaoEm: iso(-30),
@@ -47,10 +50,13 @@ const rotina = (id: number, codigo: string, nome: string, extra: Record<string, 
   ...extra,
 });
 
-function simular(page: Page) {
+function simular(page: Page, extraTodas: Record<string, unknown> = {}) {
   const st = { acionados: [] as number[], suspensoes: [] as unknown[] };
   const rotinas = [
-    rotina(1, 'relatorio.envio.agendado', 'Envio agendado de relatórios'),
+    // O envio agendado já manda todo relatório vencido: sem "Executar agora".
+    rotina(1, 'relatorio.envio.agendado', 'Envio agendado de relatórios', {
+      permiteAcionamentoManual: false,
+    }),
     rotina(2, 'internacao.censo.fechamento', 'Fechamento do censo diário', {
       atrasada: true,
       atrasoSegundos: 7200,
@@ -58,6 +64,7 @@ function simular(page: Page) {
     }),
     rotina(3, 'integracao.eventos.relay', 'Envio dos eventos às integrações', {
       situacao: 'com_falha',
+      permiteAcionamentoManual: false,
       ultima: {
         id: 30,
         situacao: 'falhou',
@@ -75,9 +82,11 @@ function simular(page: Page) {
     rotina(4, 'manutencao.vigia.banco', 'Vigia do banco de dados', {
       situacao: 'suspensa',
       permiteAcionamentoManual: false,
+      // Vigia da plataforma: não se suspende pelo cliente; a que ficou suspensa de antes só se retoma.
+      permiteSuspensao: false,
       impedimentoAcionar: 'A rotina está suspensa; retome-a antes de acionar.',
     }),
-  ];
+  ].map((x) => ({ ...x, ...extraTodas }));
   void page.route('**/api/administracao/rotinas**', (r) => {
     const url = new URL(r.request().url());
     const m = /\/rotinas\/(\d+)\/(acionar|suspensao|execucoes)$/.exec(url.pathname);
@@ -176,20 +185,51 @@ test.describe('@C2-065 rotinas agendadas', () => {
     await expect(hist).toContainText('HOSP-SINT-B');
     await expect(hist).toContainText('TypeError');
 
-    // Executar agora: o pedido fica pendente e o botão desabilita com o motivo.
-    await page.getByTestId('executar-relatorio.envio.agendado').click();
+    // Executar agora (só o censo, que recupera os dias sem retrato): o pedido fica pendente e o botão desabilita.
+    await expect(page.getByTestId('executar-relatorio.envio.agendado')).toHaveCount(0);
+    await page.getByTestId('executar-internacao.censo.fechamento').click();
     await expect(page.getByTestId('rotinas-aviso')).toContainText('Execução pedida');
-    expect(st.acionados).toEqual([1]);
-    await expect(page.getByTestId('executar-relatorio.envio.agendado')).toBeDisabled();
+    expect(st.acionados).toEqual([2]);
+    await expect(page.getByTestId('executar-internacao.censo.fechamento')).toBeDisabled();
 
     // A vigia não aceita acionamento à mão (sem botão) e está suspensa: retomar num clique.
     await expect(page.getByTestId('executar-manutencao.vigia.banco')).toHaveCount(0);
     await page.getByTestId('retomar-manutencao.vigia.banco').click();
     await expect(page.getByTestId('rotinas-aviso')).toHaveText('Feito.');
     expect(st.suspensoes).toEqual([{ id: 4, versao: 3, acao: 'retomar' }]);
-    await expect(page.getByTestId('suspender-manutencao.vigia.banco')).toBeVisible();
+    // Retomada, a vigia não oferece "Suspender" (não para pela suspensão do cliente); as outras oferecem.
+    await expect(page.getByTestId('retomar-manutencao.vigia.banco')).toHaveCount(0);
+    await expect(page.getByTestId('suspender-manutencao.vigia.banco')).toHaveCount(0);
+    await expect(page.getByTestId('suspender-relatorio.envio.agendado')).toBeVisible();
 
     await semViolacaoAxe(page, 'rotinas agendadas');
+    expect(externas).toEqual([]);
+  });
+
+  test('sem o alcance do cliente, a rotina de todos os estabelecimentos não se aciona nem se suspende', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const st = simular(page, { podeGerir: false, impedimentoAcionar: 'exige o alcance do cliente' });
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/administracao/sistema/rotinas');
+
+    const censo = page.getByTestId('rotina-internacao.censo.fechamento');
+    await expect(page.getByTestId('sem-alcance-internacao.censo.fechamento')).toContainText(
+      'alcance do cliente',
+    );
+    await expect(censo.getByRole('button', { name: 'Executar agora' })).toHaveCount(0);
+    await expect(page.getByTestId('suspender-internacao.censo.fechamento')).toHaveCount(0);
+    await expect(page.getByTestId('retomar-manutencao.vigia.banco')).toHaveCount(0);
+    // O histórico continua aberto a quem lê.
+    await page.getByTestId('historico-internacao.censo.fechamento').click();
+    await expect(page.getByTestId('historico-lista-internacao.censo.fechamento')).toContainText(
+      'por SINT.ADMIN',
+    );
+    expect(st.acionados).toEqual([]);
+    expect(st.suspensoes).toEqual([]);
+
+    await semViolacaoAxe(page, 'rotinas agendadas sem alcance');
     expect(externas).toEqual([]);
   });
 });

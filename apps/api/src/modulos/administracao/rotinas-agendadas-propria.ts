@@ -8,14 +8,20 @@
 // - sistema.rotina_acionar: pede a execução à mão (fica "aguardando" com quem pediu; a próxima volta do worker a
 //   toma), só pela regra do acionamento manual (ativa, não suspensa, aceita manual, na vigência, sem outra em curso);
 // - sistema.rotina_suspender / sistema.rotina_retomar: a suspensa não roda; ao suspender, o pedido manual pendente é
-//   cancelado (o histórico fica, nunca apagado).
+//   cancelado (o histórico fica, nunca apagado); a rotina que não aceita suspensão (vigia da plataforma) é recusada.
+// Alcance: a rotina do cliente inteiro (sem estabelecimento) só se aciona ou suspende com o alcance do cliente
+// (config.rotinaCliente.gerir); sem ele, o histórico esconde as etapas dos outros estabelecimentos e os volumes da
+// execução passam a ser os das etapas que ficaram (regra visaoDoEstabelecimento do domínio).
 import {
   conferirAcionamentoManual,
+  conferirAlcanceRotina,
   conferirMudancaExecucao,
   conferirSuspensao,
   MENSAGEM_ROTINA,
   rotinaAtrasada,
+  rotinaSuspensivel,
   type SituacaoRotina,
+  visaoDoEstabelecimento,
 } from '@sgh/dominio-integracao';
 import {
   type ContextoOperacao,
@@ -56,6 +62,8 @@ export interface NucleoRotinas {
 export interface ContextoRotinas {
   readonly hospital: string;
   readonly login: string;
+  /** A sessão tem o alcance do cliente (config.rotinaCliente.gerir): vê e comanda a rotina de todos os estabelecimentos. */
+  readonly alcanceCliente: boolean;
 }
 export type ContextoGravacaoRotinas = ContextoRotinas & {
   readonly correlacao: string;
@@ -86,6 +94,12 @@ export interface RotinaLida {
   readonly situacao: string;
   readonly ativo: boolean;
   readonly permiteAcionamentoManual: boolean;
+  /** Falso: a rotina não se suspende (só se retoma a que já estava suspensa). */
+  readonly permiteSuspensao: boolean;
+  /** Rotina do cliente inteiro (sem estabelecimento). */
+  readonly doCliente: boolean;
+  /** A sessão pode acionar e suspender esta rotina (alcance). */
+  readonly podeGerir: boolean;
   readonly intervaloSegundos: number | null;
   readonly toleranciaAtrasoSegundos: number | null;
   readonly ultimaExecucaoEm: string | null;
@@ -118,6 +132,8 @@ const naoEncontrada = () => new ErroOperacao(404, 'rotina-desconhecida', 'Rotina
 const SQL_EXECUCAO = `SELECT x.id, x.situacao, x.disparo, x.ocorrido_em, x.inicio_em, x.fim_em, x.registros_lidos,
   x.registros_gravados, x.registros_rejeitados, x.mensagem_erro, u.login
   FROM execucao_rotina x LEFT JOIN usuario u ON u.id = x.usuario_id`;
+
+const pick = (x: ResumoExecucao) => ({ lidos: x.lidos, gravados: x.gravados, rejeitados: x.rejeitados });
 
 const resumo = (x: Linha): ResumoExecucao => ({
   id: num(x['id']),
@@ -185,7 +201,23 @@ export class RotinasAgendadasPropria {
   ) {
     const q = await this.nucleo.lerSomente(
       { cliente: this.cliente, correlacao: 'administracao.rotina' },
-      (l) => this.quem(l, c),
+      async (l) => {
+        const quem = await this.quem(l, c);
+        // A rotina do cliente inteiro só com o alcance do cliente (o estabelecimento da rotina nunca muda).
+        const id = (entrada as { id?: unknown } | null)?.id;
+        const r =
+          typeof id === 'number'
+            ? await l.uma('SELECT estabelecimento_id FROM rotina_agendada WHERE id = ?', [id])
+            : null;
+        const fora = r
+          ? conferirAlcanceRotina(
+              r['estabelecimento_id'] === null || r['estabelecimento_id'] === undefined,
+              c.alcanceCliente,
+            )
+          : null;
+        if (fora) throw new ErroOperacao(403, fora, 'Rotina', MENSAGEM_ROTINA[fora]);
+        return quem;
+      },
     );
     const ctx: ContextoOperacao = {
       cliente: this.cliente,
@@ -247,7 +279,9 @@ export class RotinasAgendadasPropria {
             },
             agora,
           );
-          const impedimento = conferirAcionamentoManual(base, pendentes > 0, agora);
+          const doCliente = x['estabelecimento_id'] === null || x['estabelecimento_id'] === undefined;
+          const foraDoAlcance = conferirAlcanceRotina(doCliente, c.alcanceCliente);
+          const impedimento = foraDoAlcance ?? conferirAcionamentoManual(base, pendentes > 0, agora);
           const ultimaId = numOuNull(x['ultima_id']);
           return {
             id: num(x['id']),
@@ -259,6 +293,9 @@ export class RotinasAgendadasPropria {
             situacao,
             ativo: base.ativo,
             permiteAcionamentoManual: base.permiteAcionamentoManual,
+            permiteSuspensao: rotinaSuspensivel(x['parametros']),
+            doCliente,
+            podeGerir: foraDoAlcance === null,
             intervaloSegundos: numOuNull(x['intervalo_segundos']),
             toleranciaAtrasoSegundos: numOuNull(x['tolerancia_atraso_segundos']),
             ultimaExecucaoEm: iso(x['ultima_execucao_em']),
@@ -270,6 +307,15 @@ export class RotinasAgendadasPropria {
             ultima: ultimaId !== null ? (ultimas.get(ultimaId) ?? null) : null,
           };
         });
+        // Sem o alcance do cliente, a última execução da rotina do cliente não mostra o total dos outros
+        // estabelecimentos: os volumes vêm do histórico filtrado.
+        if (!c.alcanceCliente)
+          for (let i = 0; i < rotinas.length; i++) {
+            const r = rotinas[i]!;
+            if (!r.doCliente || !r.ultima) continue;
+            const visto = (await this.execucoesVisiveis(l, r.id, estabelecimento, false, 1, r.ultima.id))[0];
+            if (visto) rotinas[i] = { ...r, ultima: { ...r.ultima, ...pick(visto) } };
+          }
         return { rotinas, agora: agora.toISOString() };
       },
     );
@@ -281,44 +327,80 @@ export class RotinasAgendadasPropria {
       async (l) => {
         const { estabelecimento } = await this.quem(l, c);
         const r = await l.uma(
-          'SELECT id FROM rotina_agendada WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)',
+          'SELECT id, estabelecimento_id FROM rotina_agendada WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)',
           [id, estabelecimento],
         );
         if (!r) throw naoEncontrada();
+        const doCliente = r['estabelecimento_id'] === null || r['estabelecimento_id'] === undefined;
         const lim = Math.max(1, Math.min(200, Math.trunc(limite) || 50));
-        const ex = await l.consultar(
-          `${SQL_EXECUCAO} WHERE x.rotina_agendada_id = ? ORDER BY x.id DESC LIMIT ${lim}`,
-          [id],
-          {
-            teto: 200,
-          },
-        );
-        const etapas = new Map<number, EtapaLida[]>();
-        const ids = ex.map((x) => num(x['id']));
-        if (ids.length)
-          for (const e of await l.consultar(
-            `SELECT * FROM execucao_rotina_etapa WHERE execucao_rotina_id IN (${ids.map(() => '?').join(',')}) ORDER BY execucao_rotina_id, sequencia`,
-            ids,
-            { teto: 20_000 },
-          )) {
-            const k = num(e['execucao_rotina_id']);
-            const lista = etapas.get(k) ?? [];
-            lista.push({
-              sequencia: num(e['sequencia']),
-              nome: String(e['nome']),
-              situacao: String(e['situacao']),
-              inicioEm: iso(e['inicio_em']),
-              fimEm: iso(e['fim_em']),
-              lidos: num(e['registros_lidos']),
-              gravados: num(e['registros_gravados']),
-              rejeitados: num(e['registros_rejeitados']),
-              mensagem: txt(e['mensagem']),
-            });
-            etapas.set(k, lista);
-          }
-        return { execucoes: ex.map((x) => ({ ...resumo(x), etapas: etapas.get(num(x['id'])) ?? [] })) };
+        return {
+          execucoes: await this.execucoesVisiveis(
+            l,
+            id,
+            estabelecimento,
+            !doCliente || c.alcanceCliente,
+            lim,
+          ),
+        };
       },
     );
+  }
+
+  /**
+   * As execuções de uma rotina com as etapas. Sem o alcance do cliente, some a etapa de outro estabelecimento e os
+   * volumes passam a ser os das etapas que ficaram (domínio: visaoDoEstabelecimento).
+   */
+  private async execucoesVisiveis(
+    l: Leitor,
+    id: number,
+    estabelecimento: number,
+    alcanceCliente: boolean,
+    lim: number,
+    soExecucao: number | null = null,
+  ): Promise<ExecucaoLida[]> {
+    const ex = await l.consultar(
+      `${SQL_EXECUCAO} WHERE x.rotina_agendada_id = ? AND (? IS NULL OR x.id = ?) ORDER BY x.id DESC LIMIT ${lim}`,
+      [id, soExecucao, soExecucao],
+      {
+        teto: 200,
+      },
+    );
+    const etapas = new Map<number, EtapaLida[]>();
+    const ids = ex.map((x) => num(x['id']));
+    if (ids.length)
+      for (const e of await l.consultar(
+        `SELECT * FROM execucao_rotina_etapa WHERE execucao_rotina_id IN (${ids.map(() => '?').join(',')}) ORDER BY execucao_rotina_id, sequencia`,
+        ids,
+        { teto: 20_000 },
+      )) {
+        const k = num(e['execucao_rotina_id']);
+        const lista = etapas.get(k) ?? [];
+        lista.push({
+          sequencia: num(e['sequencia']),
+          nome: String(e['nome']),
+          situacao: String(e['situacao']),
+          inicioEm: iso(e['inicio_em']),
+          fimEm: iso(e['fim_em']),
+          lidos: num(e['registros_lidos']),
+          gravados: num(e['registros_gravados']),
+          rejeitados: num(e['registros_rejeitados']),
+          mensagem: txt(e['mensagem']),
+        });
+        etapas.set(k, lista);
+      }
+    const lidas = ex.map((x) => ({ ...resumo(x), etapas: etapas.get(num(x['id'])) ?? [] }));
+    if (alcanceCliente) return lidas;
+    const outros = new Set(
+      (
+        await l.consultar('SELECT codigo FROM estabelecimento WHERE id <> ?', [estabelecimento], {
+          teto: 10_000,
+        })
+      ).map((x) => String(x['codigo'])),
+    );
+    return lidas.map((x) => {
+      const v = visaoDoEstabelecimento(x, x.etapas, outros);
+      return { ...x, ...v.volumes, etapas: v.etapas };
+    });
   }
 
   // ── Gravação ────────────────────────────────────────────────────────────────────────────────────
@@ -382,7 +464,11 @@ export class RotinasAgendadasPropria {
     estabelecimento: number | null,
   ): Promise<{ id: number; situacao: string; cancelados: number }> {
     const r = await this.rotinaDoEstabelecimento(tx, e.id, estabelecimento);
-    const v = conferirSuspensao(String(r['situacao']) as SituacaoRotina, e.acao);
+    const v = conferirSuspensao(
+      String(r['situacao']) as SituacaoRotina,
+      e.acao,
+      rotinaSuspensivel(r['parametros']),
+    );
     if ('recusa' in v) throw recusa(v.recusa, v.mensagem);
     await tx.alterar('rotina_agendada', e.id, e.versao, { situacao: v.situacao });
     let cancelados = 0;

@@ -17,6 +17,7 @@ import {
   relogioDeParede,
   VERSAO_CALCULO_CENSO,
 } from '@sgh/dominio-internacao';
+import type { DisparoExecucao } from '@sgh/dominio-integracao';
 import { NucleoProprio } from '@sgh/nucleo';
 import { CHAVE_FECHAMENTO, type PortaCenso, PortaCensoPropria } from './censo-fechamento-propria.js';
 import { logger } from './logger.js';
@@ -32,6 +33,15 @@ import {
 export { CHAVE_FECHAMENTO };
 /** Dias para trás que cada ciclo confere (o último fechado e os que ficaram sem retrato). */
 export const JANELA_FECHAMENTO_DIAS = 7;
+/**
+ * Dias para trás que a volta pedida à mão na Administração confere (01-SIS L95): recupera os retratos que ficaram
+ * faltando depois de uma parada do worker maior que a semana da volta agendada.
+ */
+export const JANELA_RECUPERACAO_DIAS = 31;
+
+/** A janela da volta pelo disparo: a manual recupera o mês; a agendada confere a semana. */
+export const janelaDoFechamento = (disparo: DisparoExecucao): number =>
+  disparo === 'manual' ? JANELA_RECUPERACAO_DIAS : JANELA_FECHAMENTO_DIAS;
 
 export function fechamentoLigado(env: NodeJS.ProcessEnv): boolean {
   return servicoLigado(env, 'CENSO_FECHAMENTO');
@@ -54,6 +64,7 @@ export async function fecharCensoDoEstabelecimento(
   porta: PortaCenso,
   est: AlvoEstabelecimento,
   agoraReal: number,
+  janelaDias: number = JANELA_FECHAMENTO_DIAS,
 ): Promise<ResultadoFechamento> {
   const cfg = await porta.configuracao(est, new Date(agoraReal));
   if (!cfg.ligada) return { situacao: 'desligado' };
@@ -62,11 +73,9 @@ export async function fecharCensoDoEstabelecimento(
   const intensivas = [...cfg.categoriasIntensivas];
   const agora = relogioDeParede(agoraReal, est.fuso);
   const ultimo = diaDoCenso(agora, horaFechamento) - 1;
-  const ja = new Set(
-    await porta.diasFechados(est, dataDoDia(ultimo - JANELA_FECHAMENTO_DIAS + 1), dataDoDia(ultimo)),
-  );
+  const ja = new Set(await porta.diasFechados(est, dataDoDia(ultimo - janelaDias + 1), dataDoDia(ultimo)));
   const pendentes: string[] = [];
-  for (let d = ultimo - JANELA_FECHAMENTO_DIAS + 1; d <= ultimo; d++)
+  for (let d = ultimo - janelaDias + 1; d <= ultimo; d++)
     if (!ja.has(dataDoDia(d))) pendentes.push(dataDoDia(d));
   if (pendentes.length === 0) return { situacao: 'ja-fechado' };
   const motor = new MotorInternacao(await porta.movimento(est), { horaFechamento, intensivas, agora });
@@ -143,8 +152,8 @@ export class CensoFechamentoService implements OnApplicationBootstrap, OnApplica
     if (this.rodando || !nucleo || !fabrica) return [];
     this.rodando = true;
     try {
-      const fn = (porta: PortaCenso, est: AlvoEstabelecimento) =>
-        fecharCensoDoEstabelecimento(porta, est, agoraReal);
+      const fn = (porta: PortaCenso, est: AlvoEstabelecimento, disparo: DisparoExecucao = 'agendado') =>
+        fecharCensoDoEstabelecimento(porta, est, agoraReal, janelaDoFechamento(disparo));
       const falhou = (cliente: string, estabelecimento: string | null, e: unknown) =>
         logger.warn(
           { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },
