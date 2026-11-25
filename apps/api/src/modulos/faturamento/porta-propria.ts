@@ -61,6 +61,7 @@ import {
 import { z } from 'zod';
 import type { LiberacaoGravacao, TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil } from '../exames/relogio.js';
+import { gravarRecebivelCartao } from '../financeiro/public-api.js';
 import { versaoTexto } from './esquemas.js';
 import { OPERACOES_CONTA, precoVigente, tabelasDePreco } from './operacoes.js';
 import type {
@@ -251,6 +252,8 @@ export const TABELAS_GRAVACAO_DIRETA = [
   'sessao_caixa',
   'movimento_caixa',
   'recebimento_particular',
+  'transacao_cartao',
+  'parcela_recebivel_cartao',
   'recibo',
   'orcamento_particular',
   'orcamento_particular_item',
@@ -2022,6 +2025,26 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
           cartao_autorizacao: eletronico ? comprovante : null,
           cartao_parcelas: p.forma.startsWith('cartao') ? p.parcelas : null,
         });
+        // F3.8 (07-FIN linha 89): com a administradora e a bandeira, a venda em cartão vira a transação e as parcelas a
+        // receber da administradora (taxa vigente, líquido e data prevista), na mesma transação do recebimento.
+        if (p.cartao && (p.forma === 'cartao-debito' || p.forma === 'cartao-credito')) {
+          const instante = agora();
+          await gravarRecebivelCartao(tx, est, {
+            administradora: p.cartao.administradora,
+            bandeira: p.cartao.bandeira,
+            modalidade: p.forma === 'cartao-debito' ? 'debito' : 'credito',
+            parcelas: p.parcelas,
+            valor: p.valor,
+            dataVenda: civil(instante).data,
+            instante,
+            nsu: p.comprovante ?? `SIM-${mov}`,
+            autorizacao: p.comprovante ?? `SIM-${mov}`,
+            finalCartao: p.cartao.finalCartao ?? null,
+            moduloOrigem: 'caixa',
+            caixa: n(sessao['caixa_id']),
+            sessaoCaixa: r.caixa,
+          });
+        }
         const coluna = TOTAL_DA_ESPECIE[especie] ?? 'total_outras_formas';
         totais[coluna] = r2((totais[coluna] ?? n(sessao[coluna])) + liquido);
         recebido = r2(recebido + liquido);

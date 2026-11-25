@@ -330,7 +330,7 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
             "INSERT INTO tipo_movimento_caixa (codigo, descricao, sentido, criado_em) VALUES (?, ?, 'entrada', ?)",
             [TIPO_MOVIMENTO_RECEBIMENTO, 'RECEBIMENTO PARTICULAR', agora],
           );
-      for (const meio of ['dinheiro', 'pix'])
+      for (const meio of ['dinheiro', 'pix', 'cartao_credito'])
         ids.formas.push(
           await garantir(
             e,
@@ -1232,6 +1232,144 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       g.fecharCaixa({ usuario: 'x', id: sessao, contado: 110 }),
     );
     expect(fechado.esperado).toBe(110);
+  });
+
+  // F3.8 (07-FIN linha 89): o recebimento em cartão com a administradora e a bandeira grava a transação e as parcelas a
+  // receber da administradora, na mesma transação do recebimento.
+  it('recebimento em cartão de crédito parcelado: transação e parcelas a receber, líquidas da taxa vigente', async () => {
+    const t = trilha('orcamento_particular');
+    const BANDEIRA = `${P}-BAND-FAT`;
+    const limparCartao = (e: Escritor) =>
+      (async () => {
+        await e.executar(
+          'DELETE p FROM parcela_recebivel_cartao p JOIN transacao_cartao x ON x.id = p.transacao_cartao_id WHERE x.estabelecimento_id = ?',
+          [ids.est],
+        );
+        await e.executar('DELETE FROM transacao_cartao WHERE estabelecimento_id = ?', [ids.est]);
+        await e.executar('DELETE FROM taxa_administradora WHERE estabelecimento_id = ?', [ids.est]);
+        await e.executar('DELETE FROM administradora_cartao WHERE estabelecimento_id = ?', [ids.est]);
+        await e.executar('DELETE FROM bandeira_cartao WHERE codigo = ?', [BANDEIRA]);
+      })();
+    const cad = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f38-07' }, async (e) => {
+      await limparCartao(e);
+      const bandeira = await e.inserir(
+        "INSERT INTO bandeira_cartao (codigo, descricao, modalidade, criado_em) VALUES (?, 'BANDEIRA SINTETICA', 'credito_debito', NOW(3))",
+        [BANDEIRA],
+      );
+      const administradora = await e.inserir(
+        "INSERT INTO administradora_cartao (estabelecimento_id, nome, permite_parcelamento, criado_em) VALUES (?, 'ADMINISTRADORA SINTETICA', TRUE, NOW(3))",
+        [ids.est],
+      );
+      await e.inserir(
+        `INSERT INTO taxa_administradora (estabelecimento_id, administradora_cartao_id, modalidade, parcela_inicial,
+           parcela_final, tipo_taxa, percentual_taxa, dias_repasse, vigencia_inicio, criado_em)
+         VALUES (?, ?, 'credito', 1, 12, 'percentual', 2, 30, '2026-01-01', NOW(3))`,
+        [ids.est, administradora],
+      );
+      return { bandeira, administradora };
+    });
+    try {
+      const orc = await porta.gravarSgh(c, t, (g) =>
+        g.registrarOrcamento({
+          prontuario: 0,
+          nome: 'Interessado Sintetico',
+          itens: [{ descricao: 'Consulta sintética', quantidade: 2, unitario: 50 }],
+          desconto: 0,
+          validadeDias: 30,
+          urgencia: false,
+          exigeGarantiaAntes: false,
+          usuario: 'x',
+        }),
+      );
+      await escrever(
+        "UPDATE sessao_caixa SET situacao = 'fechada', fechada_em = NOW(3) WHERE estabelecimento_id = ? AND situacao = 'aberta'",
+        [ids.est],
+      );
+      const sessao = await porta.gravarSgh(c, t, (g) => g.abrirCaixa({ usuario: 'x', saldoInicial: 0 }));
+      const receber = (comprovante: string, cartao: { administradora: number; bandeira: number }) =>
+        porta.gravarSgh(c, t, (g) =>
+          g.receberParticular({
+            caixa: sessao,
+            orcamento: orc.id,
+            conta: null,
+            pagamentos: [
+              {
+                forma: 'cartao-credito',
+                valor: 100,
+                comprovante,
+                parcelas: 2,
+                cartao: { ...cartao, finalCartao: '4321' },
+              },
+            ],
+            usuario: 'x',
+            simulado: true,
+          }),
+        );
+      // Bandeira que não existe: nada do recebimento fica gravado (a mesma transação).
+      expect(codigoDe(await erroDe(receber('CARTAO-SINT-0', { ...cad, bandeira: 999_999_999 })))).toBe(
+        'bandeira-cartao-inexistente',
+      );
+      const ler = (sql: string, p: unknown[]) =>
+        nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f38-07' }, (l) => l.consultar(sql, p));
+      expect(
+        Number(
+          (
+            await ler(
+              'SELECT COUNT(*) AS q FROM movimento_caixa WHERE sessao_caixa_id = ? AND natureza = ?',
+              [sessao, 'entrada'],
+            )
+          )[0]?.['q'],
+        ),
+      ).toBe(0);
+      const r = await receber('CARTAO-SINT-1', cad);
+      expect(r.pagamentos).toHaveLength(1);
+      const [tr] = await ler(
+        `SELECT id, tipo_cartao, modalidade, quantidade_parcelas, nsu, final_cartao, valor_bruto, valor_taxa,
+                valor_liquido, modulo_origem, sessao_caixa_id, situacao
+           FROM transacao_cartao WHERE estabelecimento_id = ?`,
+        [ids.est],
+      );
+      expect(tr).toMatchObject({
+        tipo_cartao: 'credito',
+        modalidade: 'parcelado_estabelecimento',
+        quantidade_parcelas: 2,
+        nsu: 'CARTAO-SINT-1',
+        final_cartao: '4321',
+        modulo_origem: 'caixa',
+        sessao_caixa_id: sessao,
+        situacao: 'autorizada',
+      });
+      expect([
+        Number(tr?.['valor_bruto']),
+        Number(tr?.['valor_taxa']),
+        Number(tr?.['valor_liquido']),
+      ]).toEqual([100, 2, 98]);
+      const ps = await ler(
+        `SELECT sequencia, valor_bruto, valor_taxa, valor_liquido, situacao, DATEDIFF(data_prevista, CURDATE()) AS dias
+           FROM parcela_recebivel_cartao WHERE transacao_cartao_id = ? ORDER BY sequencia`,
+        [tr?.['id']],
+      );
+      expect(
+        ps.map((x) => [
+          Number(x['sequencia']),
+          Number(x['valor_bruto']),
+          Number(x['valor_taxa']),
+          Number(x['valor_liquido']),
+          x['situacao'],
+        ]),
+      ).toEqual([
+        [1, 50, 1, 49, 'prevista'],
+        [2, 50, 1, 49, 'prevista'],
+      ]);
+      expect(Number(ps[1]?.['dias']) - Number(ps[0]?.['dias'])).toBe(30);
+      expect(Math.abs(Number(ps[0]?.['dias']) - 30)).toBeLessThanOrEqual(1);
+      expect((await porta.caixas(c, null)).find((x) => x.id === sessao)?.porForma).toEqual({
+        'cartao-credito': 100,
+      });
+      await porta.gravarSgh(c, t, (g) => g.fecharCaixa({ usuario: 'x', id: sessao, contado: 0 }));
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f38-07' }, (e) => limparCartao(e));
+    }
   });
 });
 

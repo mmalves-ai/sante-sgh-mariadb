@@ -191,6 +191,22 @@ export const esquemaReceberParticular = z
             /** Comprovante registrado à mão (NSU, autorização) quando o conector não é usado. */
             comprovante: texto(40).nullable().default(null),
             parcelas: z.number().int().min(1).max(24).default(1),
+            /**
+             * Cartão: a administradora e a bandeira da venda. Com elas o recebimento grava a transação e as parcelas a
+             * receber da administradora (líquidas da taxa vigente, com a data prevista do crédito).
+             */
+            cartao: z
+              .object({
+                administradora: id,
+                bandeira: id,
+                finalCartao: z
+                  .string()
+                  .regex(/^\d{4}$/)
+                  .nullable()
+                  .default(null),
+              })
+              .strict()
+              .optional(),
           })
           .strict(),
       )

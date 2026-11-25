@@ -16,6 +16,8 @@ import {
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import type { ContextoModulo } from '../registro.js';
 import { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemoria } from './armazem.js';
+import { CartaoController } from './cartao.controller.js';
+import { comCartaoNoFluxo } from './cartao-propria.js';
 import { CompensacaoPrevisaoController } from './compensacao-previsao.controller.js';
 import { ContabilFiscalController } from './contabil-fiscal.controller.js';
 import { FinanceiroController } from './financeiro.controller.js';
@@ -44,7 +46,8 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
   const porta: PortaFinanceiro =
     opcoes.porta ??
     (ctx.nucleo
-      ? new PortaFinanceiroPropria(ctx.nucleo)
+      ? // F3.8 (07-FIN linha 89): as parcelas previstas de cartão entram no fluxo de caixa projetado.
+        comCartaoNoFluxo(new PortaFinanceiroPropria(ctx.nucleo), ctx.nucleo)
       : memoria
         ? new PortaFinanceiroMemoria(null)
         : portaFinanceiroIndisponivel());
@@ -77,6 +80,7 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       ReinfEventosController,
       ReceberAcordosController,
       NotaCessaoController,
+      CartaoController,
     ],
     providers: [
       { provide: PORTA_FINANCEIRO, useValue: porta },
