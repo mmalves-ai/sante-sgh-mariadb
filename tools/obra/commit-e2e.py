@@ -66,6 +66,19 @@ while fila:
         incluir.add(r); fila.append(r)
 
 base = git('rev-parse', f'{REF}^{{commit}}').strip()
+if '--arvore' in sys.argv:
+    # Foto da árvore de trabalho inteira (o que os construtores compilam), para o E2E em lote com rodada aberta: o HEAD
+    # leva linhas de um agente que dependem de arquivo sem commit de outro. A prova final continua o ci-sim do HEAD.
+    with tempfile.TemporaryDirectory() as d:
+        env = dict(os.environ, GIT_INDEX_FILE=os.path.join(d, 'index'))
+        git('read-tree', base, env=env)
+        git('add', '-A', '--', 'apps', 'packages', 'db', 'tools', 'conector', 'catalogos', env=env)
+        tree = git('write-tree', env=env).strip()
+    sha = git('commit-tree', tree, '-p', base, inp=f'E2E: foto da árvore de trabalho sobre {base[:8]} (fora da main)\n').strip()
+    git('update-ref', 'refs/obra/e2e', sha)
+    print(f'commit-e2e: {sha[:8]} = foto da árvore sobre {base[:8]}')
+    print(sha)
+    sys.exit(0)
 if not incluir:
     print(f'commit-e2e: {base[:8]} (nada a acrescentar)')
     print(base)
