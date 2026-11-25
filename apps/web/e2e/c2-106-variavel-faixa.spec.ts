@@ -1,9 +1,11 @@
 // E2E @C2-106 (06-FAT linha 48): remuneração variável por faixa e rateio da equipe na tela de regras do repasse, sobre a
 // porta PRÓPRIA (MariaDB, cliente do E2E). O analista monta uma equipe de dois médicos pela busca, vê na hora a recusa
 // das cotas que não somam 100% (60 + 30), corrige para 60/40 e grava; inclui uma regra por faixa para a equipe, vê na
-// hora a recusa das faixas sobrepostas, corrige e grava; escolhe a apuração em aberto e confere a simulação da regra
-// (período, medida e partes da equipe); encerra a regra no fim do mês (nada apagado) e confere pela API o que ficou no
-// banco; axe sem violação séria em cada estado.
+// hora a recusa das faixas sobrepostas, corrige e grava; recompõe a equipe (a composição anterior ganha fim, nada é
+// apagado); escolhe a apuração em aberto e confere a simulação da regra (período, medida, faixa aplicada, valor e as
+// partes 60/40 da equipe); lança a remuneração variável (mensagem com a quantidade, partes marcadas como lançadas e
+// o botão sem segundo lançamento); encerra a regra no fim do mês (nada apagado) e confere pela API o que ficou no
+// banco; axe sem violação séria em cada estado. As faixas têm valor fixo, para o valor não depender da produção.
 //
 // Fonte dos dados: sintética. A equipe e a regra só existem no banco próprio (sem ele a API responde 503 e o teste é
 // pulado com o motivo). Nada por índice de combo: o evento, a apuração e os dois médicos são lidos pela API e cada
@@ -21,10 +23,27 @@ interface Painel {
   equipes: {
     id: number;
     codigo: string;
-    membros: { profissional: number | null; cota: number; fim: string | null }[];
+    membros: {
+      profissional: number | null;
+      cota: number;
+      chefe: boolean;
+      inicio: string;
+      fim: string | null;
+    }[];
   }[];
   eventos: { id: number }[];
   apuracoes: { id: number; competencia: string; situacao: string }[];
+}
+interface Simulacao {
+  regras: {
+    regra: number;
+    medida: number;
+    faixa: number | null;
+    valor: number;
+    fecha: boolean;
+    pendencias: string[];
+    partes: { profissional: number | null; cota: number; valor: number; lancado: boolean }[];
+  }[];
 }
 interface Favorecido {
   profissional: number;
@@ -41,6 +60,14 @@ async function entrar(page: Page, login: string): Promise<void> {
   await page.getByTestId('botao-entrar').click();
   await expect(page).toHaveURL(/\/inicio/);
 }
+
+const isoLocal = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const diaSeguinte = (iso: string): string => {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + 1);
+  return isoLocal(d);
+};
 
 const ultimoDia = (comp: string): string => {
   const [a, m] = comp.split('-').map(Number) as [number, number];
@@ -86,7 +113,9 @@ async function adicionarMembro(
 test.describe('remuneração variável por faixa e rateio da equipe @C2-106', () => {
   test.setTimeout(180_000);
 
-  test('equipe recusada na hora → 60/40 → regra por faixa → simular → encerrar; axe', async ({ page }) => {
+  test('equipe recusada na hora → 60/40 → recompor → regra por faixa → simular → lançar → encerrar; axe', async ({
+    page,
+  }) => {
     const externas = vigiarExternas(page);
     await entrar(page, 'SINT.REP.ANALISTA');
 
@@ -135,6 +164,52 @@ test.describe('remuneração variável por faixa e rateio da equipe @C2-106', ()
     await expect(page.getByTestId(`vf-equipe-${equipe}`)).toContainText('60%');
     await expect(page.getByTestId(`vf-equipe-${equipe}`)).toContainText('40%');
 
+    // ── Nova composição: o outro médico passa a chefe com 60%; a anterior ganha fim no dia anterior (nada apagado) ──
+    const hoje = isoLocal(new Date());
+    const novaData = hoje > de ? hoje : diaSeguinte(de);
+    await page.getByTestId(`vf-recompor-${equipe}`).click();
+    await expect(page.getByTestId('vf-membros')).toBeVisible();
+    await page.getByTestId('vf-equipe-inicio').fill(novaData);
+    await page.getByTestId('vf-membro-remover-1').click();
+    await page.getByTestId('vf-membro-remover-0').click();
+    await adicionarMembro(page, b, '60', true);
+    await adicionarMembro(page, a, '40', false);
+    await expect(page.getByTestId('vf-soma-cotas')).toContainText('100%');
+    const [recompos] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().endsWith(`${R}/equipes/${equipe}/recompor`) && r.request().method() === 'POST',
+      ),
+      page.getByTestId('vf-equipe-gravar').click(),
+    ]);
+    expect(recompos.status()).toBe(200);
+    await expect(page.getByTestId('vf-mensagem')).toContainText('Gravado');
+    const aposRecompor = (await (await page.request.get(R)).json()) as Painel;
+    const historico = aposRecompor.equipes.find((e) => e.id === equipe)?.membros ?? [];
+    const ontem = isoLocal(new Date(new Date(`${novaData}T12:00:00`).getTime() - 86_400_000));
+    // A composição anterior fica no histórico com fim no dia anterior; a nova é a vigente (b chefe 60, a 40).
+    expect(
+      historico
+        .filter((m) => m.fim === ontem)
+        .map((m) => [m.profissional, m.cota])
+        .sort(),
+    ).toEqual(
+      [
+        [a.profissional, 60],
+        [b.profissional, 40],
+      ].sort(),
+    );
+    expect(
+      historico
+        .filter((m) => m.fim === null && m.inicio === novaData)
+        .map((m) => [m.profissional, m.cota, m.chefe])
+        .sort(),
+    ).toEqual(
+      [
+        [b.profissional, 60, true],
+        [a.profissional, 40, false],
+      ].sort(),
+    );
+
     // ── Regra por faixa para a equipe: faixas sobrepostas recusadas na hora, depois corrigidas ──
     await page.getByTestId('vf-regra-codigo').fill(`VF${sufixo}`);
     await page.getByTestId('vf-regra-descricao').fill(`Produtividade sintética ${sufixo}`);
@@ -143,14 +218,16 @@ test.describe('remuneração variável por faixa e rateio da equipe @C2-106', ()
     await escolher(page.getByTestId('vf-regra-indicador'), 'quantidade_procedimentos');
     await escolher(page.getByTestId('vf-regra-periodo'), 'mensal');
     await escolher(page.getByTestId('vf-regra-evento'), String(evento!.id));
+    // Sem fim na inclusão: o encerramento adiante é que fecha a regra no mês (encerrar nunca estende).
     await page.getByTestId('vf-regra-inicio').fill(de);
-    await page.getByTestId('vf-regra-fim').fill(ate);
     await page.getByTestId('vf-faixa-0-de').fill('0');
     await page.getByTestId('vf-faixa-0-ate').fill('10');
     await page.getByTestId('vf-faixa-0-percentual').fill('5');
+    await page.getByTestId('vf-faixa-0-valor-fixo').fill('100');
     await page.getByTestId('vf-faixa-adicionar').click();
     await page.getByTestId('vf-faixa-1-de').fill('10');
     await page.getByTestId('vf-faixa-1-percentual').fill('8');
+    await page.getByTestId('vf-faixa-1-valor-fixo').fill('200');
     await expect(page.getByTestId('vf-regra-problemas')).toContainText('se sobrepõem');
     await expect(page.getByTestId('vf-regra-incluir')).toBeDisabled();
     await page.getByTestId('vf-faixa-1-de').fill('11');
@@ -165,19 +242,73 @@ test.describe('remuneração variável por faixa e rateio da equipe @C2-106', ()
     await expect(page.getByTestId('vf-mensagem')).toContainText('Gravado');
     await expect(page.getByTestId(`vf-regra-${regra}`)).toContainText('Acréscimo');
 
-    // ── Na apuração: a regra do mês com o período, a medida e as duas partes da equipe ──
-    await escolher(page.getByTestId('vf-apuracao'), String(apuracao!.id));
+    // ── Na apuração: a regra do mês com o período, a medida, a faixa, o valor e as duas partes 60/40 da equipe ──
+    const [simulou] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes(`${R}/simulacao`) && r.request().method() === 'GET'),
+      escolher(page.getByTestId('vf-apuracao'), String(apuracao!.id)),
+    ]);
+    expect(simulou.ok()).toBe(true);
+    const sim = ((await simulou.json()) as Simulacao).regras.find((r) => r.regra === regra);
+    expect(sim).toBeDefined();
     await expect(page.getByTestId('vf-simulacao')).toBeVisible();
     await expect(page.getByTestId(`vf-sim-${regra}`)).toContainText(`Período ${de} a ${ate}`);
-    await expect(page.getByTestId(`vf-sim-${regra}-medida`)).toBeVisible();
+    await expect(page.getByTestId(`vf-sim-${regra}-medida`)).toHaveText(String(sim!.medida));
+    // Contagem inteira: até 10 cai na faixa 1 (5% + R$ 100), de 11 em diante na faixa 2 (8% + R$ 200).
+    const faixaEsperada = sim!.medida <= 10 ? 1 : 2;
+    expect(sim!.faixa).toBe(faixaEsperada);
+    await expect(page.getByTestId(`vf-sim-${regra}-faixa`)).toContainText(`na faixa ${faixaEsperada}`);
+    expect(sim!.valor).toBeGreaterThanOrEqual(faixaEsperada === 1 ? 100 : 200);
+    expect(sim!.fecha).toBe(true);
+    expect(sim!.pendencias).toEqual([]);
+    // Rateio pelas cotas: 60% e 40% do valor (o centavo que sobra vai ao chefe), e a soma fecha no valor.
+    const centavos = Math.round(sim!.valor * 100);
+    const partes = [...sim!.partes].sort((x, y) => y.cota - x.cota);
+    expect(partes.map((p) => p.cota)).toEqual([60, 40]);
+    expect(Math.round(partes[1]!.valor * 100)).toBe(Math.round((centavos * 40) / 100));
+    expect(Math.round(partes[0]!.valor * 100) + Math.round(partes[1]!.valor * 100)).toBe(centavos);
+    expect(partes.every((p) => !p.lancado)).toBe(true);
+    for (const i of [0, 1]) {
+      await expect(page.getByTestId(`vf-sim-${regra}-parte-${i}`)).toContainText(/60%|40%/);
+      await expect(page.getByTestId(`vf-sim-${regra}-parte-${i}`)).toContainText('a lançar');
+    }
     await semViolacaoAxe(page, '/repasse/regras (simulação da regra por faixa)');
+
+    // ── Lançar: a mensagem traz a quantidade; as partes passam a lançadas; o botão não lança de novo ──
+    await expect(page.getByTestId('vf-lancar')).toBeEnabled();
+    const [lancou] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith(`${R}/lancar`) && r.request().method() === 'POST'),
+      page.getByTestId('vf-lancar').click(),
+    ]);
+    expect(lancou.status()).toBe(200);
+    const lanc = (await lancou.json()) as { lancamentos: number };
+    expect(lanc.lancamentos).toBeGreaterThanOrEqual(2);
+    await expect(page.getByTestId('vf-mensagem')).toContainText(
+      `${lanc.lancamentos} lançamento(s) gravado(s)`,
+    );
+    const reSim = (await (
+      await page.request.get(`${R}/simulacao?apuracao=${apuracao!.id}`)
+    ).json()) as Simulacao;
+    const lancada = reSim.regras.find((r) => r.regra === regra);
+    expect(lancada?.partes.map((p) => p.lancado)).toEqual([true, true]);
+    for (const i of [0, 1])
+      await expect(page.getByTestId(`vf-sim-${regra}-parte-${i}`)).toContainText('lançado');
+    // Segundo clique: o botão fica desabilitado e nenhuma chamada de lançamento sai.
+    let novosLancamentos = 0;
+    page.on('request', (q) => {
+      if (q.url().endsWith(`${R}/lancar`) && q.method() === 'POST') novosLancamentos += 1;
+    });
+    await expect(page.getByTestId('vf-lancar')).toBeDisabled();
+    await page.getByTestId('vf-lancar').click({ force: true });
+    await page.waitForTimeout(500);
+    expect(novosLancamentos).toBe(0);
 
     // ── Encerrar no último dia do mês: só grava o fim da vigência (nada apagado) ──
     await page.getByTestId(`vf-fim-${regra}`).fill(ate);
     await page.getByTestId(`vf-encerrar-${regra}`).click();
     await expect(page.getByTestId('vf-mensagem')).toContainText('nada foi apagado');
 
-    // O que ficou no banco, pela API: a equipe com as cotas 60/40 vigentes e a regra da equipe fechada no mês.
+    // O que ficou no banco, pela API: a equipe com as cotas 60/40 vigentes (a anterior no histórico) e a regra da
+    // equipe fechada no mês.
     const depois = (await (await page.request.get(R)).json()) as Painel;
     const eq = depois.equipes.find((e) => e.id === equipe);
     expect(

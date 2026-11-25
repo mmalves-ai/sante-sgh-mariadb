@@ -714,13 +714,13 @@ async function lancar() {
                 </small>
               </th>
               <td :data-testid="`vf-sim-${r.regra}-medida`">{{ r.medida }}</td>
-              <td>
+              <td :data-testid="`vf-sim-${r.regra}-faixa`">
                 {{ r.faixa ?? k('apuracao.semFaixa') }}<small> · {{ r.memoria }}</small>
               </td>
               <td :data-testid="`vf-sim-${r.regra}-valor`">{{ reais(r.valor) }}</td>
               <td>
                 <ul>
-                  <li v-for="(p, i) in r.partes" :key="i">
+                  <li v-for="(p, i) in r.partes" :key="i" :data-testid="`vf-sim-${r.regra}-parte-${i}`">
                     {{ `${p.nome} · ${pct(p.cota)} · ${reais(p.valor)} · ` }}
                     {{ p.lancado ? k('apuracao.lancado') : k('apuracao.aLancar') }}
                   </li>
