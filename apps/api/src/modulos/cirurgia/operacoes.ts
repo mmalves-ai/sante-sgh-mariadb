@@ -25,6 +25,7 @@ import {
 } from '@sgh/contratos';
 import {
   conferirConfirmacaoCirurgia,
+  conferirDocumentosCirurgia,
   conferirHorarioNaSala,
   conferirParticipacao,
   conferirTempos,
@@ -45,6 +46,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { civil, FUSO_PADRAO, horaDe, instante, n, nn, texto } from './banco-apoio.js';
+import { exigenciasDaCirurgia } from './documentos-cirurgia-propria.js';
 import { conferirGradeNaTx } from './grade-sala-propria.js';
 import type { GravadorSghCirurgia } from './porta.js';
 import { conferirAlteracaoPedido } from './regras.js';
@@ -495,6 +497,11 @@ export function gravadorCirurgia(
       const autorizacao = await autorizacaoDaCirurgia(tx, r.id);
       const conferida = conferirConfirmacaoCirurgia(autorizacao, nova, r.complemento ?? null);
       if (!conferida.ok) throw recusa(conferida.codigo, conferida.mensagem);
+      // Documentos obrigatórios (04-CC linha 104): a confirmação exige os que geram pendência; a entrada no bloco e o
+      // início, os que bloqueiam (consentimento e avaliação pré-anestésica sempre que exigidos).
+      const docs = await exigenciasDaCirurgia(tx, est(tx), r.id);
+      const documentos = conferirDocumentosCirurgia(docs.exigidos, docs.registros, nova, docs.dataCirurgia);
+      if (!documentos.ok) throw recusa(documentos.codigo, documentos.mensagem);
       const posterior = conferida.comunicarDepois
         ? {
             autorizacao_posterior_justificativa: (r.complemento ?? '').trim().slice(0, 500),

@@ -28,6 +28,7 @@ import ErroCirurgia from '../componentes/ErroCirurgia.vue';
 import KitPadraoAgendamento from '../componentes/KitPadraoAgendamento.vue';
 // F8 (04-CC linha 103): reserva de equipamentos e hemocomponentes no pedido da cirurgia.
 import ReservasCirurgia from '../componentes/ReservasCirurgia.vue';
+import DocumentosCirurgia from '../componentes/DocumentosCirurgia.vue';
 // F7 (04-CC linha 102): a autorização prévia da operadora por etapas, com a senha que libera o bloco.
 import AutorizacaoCirurgia from '../componentes/AutorizacaoCirurgia.vue';
 import { usarCirurgia } from '../usar-cirurgia.js';
@@ -403,6 +404,7 @@ async function pendencia(): Promise<void> {
       </section>
 
       <AutorizacaoCirurgia v-if="!ehSolicitacao" :agendamento="numero" />
+      <DocumentosCirurgia v-if="!ehSolicitacao" :agendamento="numero" />
       <KitPadraoAgendamento v-if="!ehSolicitacao" :agendamento="numero" />
       <ReservasCirurgia v-if="!ehSolicitacao" :agendamento="numero" />
 

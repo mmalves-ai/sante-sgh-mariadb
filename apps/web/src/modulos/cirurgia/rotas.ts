@@ -55,6 +55,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Textos padrão da descrição` },
   },
   {
+    // F8, 04-CC L104: documentos exigidos antes da cirurgia (tipos e regras; bloqueio do início).
+    path: '/cirurgia/documentos-exigidos',
+    name: 'cirurgia.documentos-exigidos',
+    component: () => import('./telas/DocumentosExigidosTela.vue'),
+    meta: { permissao: 'cirurgia.sala.ler', menu: `${M} > Documentos exigidos` },
+  },
+  {
     // F3.4, 04-CC L91: cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter).
     path: '/cirurgia/procedimentos-cirurgicos',
     name: 'cirurgia.procedimentos-cirurgicos',

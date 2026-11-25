@@ -46,6 +46,8 @@ import { PORTA_GRADE_SALA, PortaGradeSalaPropria } from './grade-sala-propria.js
 import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js';
 import { KitAgendamentoController } from './kit-agendamento.controller.js';
 import { ReservaCirurgiaController } from './reserva-cirurgia.controller.js';
+import { DocumentosCirurgiaController } from './documentos-cirurgia.controller.js';
+import { PORTA_DOCUMENTOS_CIRURGIA, PortaDocumentosCirurgiaPropria } from './documentos-cirurgia-propria.js';
 import { ProcedimentoCirurgicoController } from './procedimento-cirurgico.controller.js';
 import {
   PORTA_PROCEDIMENTO_CIRURGICO,
@@ -132,6 +134,7 @@ export async function moduloCirurgia(
       GradeSalaController,
       KitAgendamentoController,
       ReservaCirurgiaController,
+      DocumentosCirurgiaController,
       ProcedimentoCirurgicoController,
     ],
     providers: [
@@ -189,6 +192,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaReservaCirurgiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-CC linha 104): documentos obrigatórios antes da cirurgia; sem núcleo, 503.
+      {
+        provide: PORTA_DOCUMENTOS_CIRURGIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDocumentosCirurgiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.4 (04-CC linha 91): cadastro do procedimento cirúrgico no banco do cliente; sem núcleo, 503.

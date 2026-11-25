@@ -35,3 +35,5 @@ export * from './reserva-cirurgia.js';
 export * from './procedimento-cirurgico.js';
 // F7 (04-CC linha 102): autorização prévia da cirurgia eletiva por etapas e a trava da confirmação sem senha.
 export * from './autorizacao-convenio.js';
+// F8 (04-CC linha 104): documentos obrigatórios antes da cirurgia, com bloqueio do início.
+export * from './documentos-pre-operatorio.js';
