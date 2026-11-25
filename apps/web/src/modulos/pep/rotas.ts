@@ -247,6 +247,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuarioRestrito.ler' },
   },
   {
+    // 03-PEP L97: exame físico estruturado por sistema e região (mapa do corpo, achados padronizados, lado, resumo).
+    path: `/pep/paciente/:paciente${id}/exame-fisico`,
+    name: 'pep.exameFisico',
+    component: () => import('./telas/ExameFisicoTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     // 09-AREA L84: diagnósticos do paciente com a CID-10 e o conceito clínico equivalente (registro no atendimento).
     path: `/pep/paciente/:paciente${id}/diagnosticos`,
     name: 'pep.diagnosticos',

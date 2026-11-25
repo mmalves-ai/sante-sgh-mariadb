@@ -64,6 +64,8 @@ import {
   CadastroCatalogoPrescricaoPropria,
 } from './prescricao-propria-cadastro.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
+import { EXAME_FISICO, ExameFisicoController } from './exame-fisico.controller.js';
+import { ExameFisicoPropria } from './exame-fisico-propria.js';
 import { ProntuarioRestritoController } from './prontuario-restrito.controller.js';
 import { PORTA_PRONTUARIO_RESTRITO, PortaProntuarioRestritoPropria } from './prontuario-restrito-propria.js';
 import { AvisosClinicosRegrasController } from './avisos-clinicos-regras.controller.js';
@@ -220,6 +222,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       FarmacovigilanciaController,
       PrescricaoCadastroController,
       NotasPacienteController,
+      ExameFisicoController,
       ProntuarioRestritoController,
       AvisosClinicosRegrasController,
       TerminologiaClinicaController,
@@ -314,6 +317,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaProntuarioRestritoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L97: exame físico estruturado por sistema e região do corpo; sem núcleo, 503.
+      {
+        provide: EXAME_FISICO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ExameFisicoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L102: notas e lembretes livres sobre o paciente; sem núcleo, 503.
