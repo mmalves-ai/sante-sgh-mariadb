@@ -47,3 +47,6 @@ export * from './troca-tiss.js';
 export * from './portal-prestador-pedidos.js';
 // F8 (08-SGO linha 100, C2-095): comercial — proposta de adesão, metas, campanhas de desconto e comissão com estorno.
 export * from './comercial.js';
+// F8 (08-SGO linha 115, C2-102): promoção da saúde e gestão de crônicos — elegibilidade, acompanhamento, questionário,
+// bonificação (RN ANS 264 e 265/2011) e custo do crônico antes e depois da entrada.
+export * from './programa-saude.js';
