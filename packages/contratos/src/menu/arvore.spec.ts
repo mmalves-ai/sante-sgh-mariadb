@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 490, M: 198, P: 57, N: 235 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 491, M: 198, P: 57, N: 236 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(490);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(491);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -610,6 +610,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/internacao/diferenca-acomodacao', // internacao-e-leitos.internacao.diferenca-de-acomodacao
         '/pep/prontuario-restrito', // pep.pedidos-de-acesso-a-prontuario-restrito
         '/relatorios/paineis-gerenciais', // C2-077 (01-REL L112)
+        '/relatorios/paineis-tv', // C2-088 (01-REL L116)
         '/sadt/autoliberacao', // F8 (05-SADT linha 11)
       ].sort(),
     );

@@ -121,7 +121,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":490,"M":198,"P":57,"N":235};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":491,"M":198,"P":57,"N":236};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -501,6 +501,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"relatorios-e-bi.envio-agendado-por-e-mail","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Envio agendado por e-mail"],"titulo":"Envio agendado por e-mail","selo":"P","fase":3,"rota":"/relatorios/agendamentos","permissao":"relatorio.agendamento.ler"},
   {"id":"relatorios-e-bi.paineis-gerenciais-assistencial-operacional-financeiro","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis gerenciais"],"titulo":"Painéis gerenciais","selo":"N","fase":1,"rota":"/relatorios/paineis/assistencial","permissao":"relatorio.paineis.ler"},
   {"id":"relatorios-e-bi.paineis-gerenciais-montados","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis montados"],"titulo":"Painéis montados","selo":"N","fase":3,"rota":"/relatorios/paineis-gerenciais","permissao":"relatorio.painelGerencial.ler"},
+  {"id":"relatorios-e-bi.paineis-de-tv-operacionais","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis de TV operacionais"],"titulo":"Painéis de TV operacionais","selo":"N","fase":3,"rota":"/relatorios/paineis-tv","permissao":"relatorio.painelTv.editar"},
   {"id":"relatorios-e-bi.indicadores-hospitalares-portaria-312-anahp","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Indicadores hospitalares"],"titulo":"Indicadores hospitalares","selo":"N","fase":1,"rota":"/relatorios/indicadores","permissao":"relatorio.indicadores.ler"},
   {"id":"relatorios-e-bi.paineis-de-tv-e-central-de-comando","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis de TV e central de comando"],"titulo":"Painéis de TV e central de comando","selo":"M","fase":2,"rota":"/paineis","permissao":"relatorio.painel.ler"},
   {"id":"relatorios-e-bi.painel-de-glosas-e-ciclo-de-receita","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painel de glosas e ciclo de receita"],"titulo":"Painel de glosas e ciclo de receita","selo":"N","fase":3,"rota":"/relatorios/glosas","permissao":"relatorio.glosa.ler"},

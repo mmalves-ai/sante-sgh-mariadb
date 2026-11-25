@@ -42,4 +42,25 @@ export const rotasRelatorios: RouteRecordRaw[] = [
     component: () => import('./telas/PaineisGerenciaisTela.vue'),
     meta: { permissao: 'relatorio.painelGerencial.ler' },
   },
+  {
+    // 01-REL L116: painéis de TV operacionais (cadastro, blocos e televisores).
+    path: '/relatorios/paineis-tv',
+    name: 'relatorios.paineisTv',
+    component: () => import('./telas/PaineisTvOperacionaisTela.vue'),
+    meta: { permissao: 'relatorio.painelTv.editar' },
+  },
+  {
+    path: '/relatorios/paineis-tv/:id(\\d+)/tela',
+    name: 'relatorios.paineisTv.tela',
+    component: () => import('./telas/TvOperacionalTela.vue'),
+    props: true,
+    meta: { permissao: 'relatorio.painelTv.exibir' },
+  },
+  {
+    // O televisor pareado (sessão da conta da TV com relatorio.painelTv.exibir).
+    path: '/tv/operacional',
+    name: 'relatorios.tvOperacional',
+    component: () => import('./telas/TvOperacionalTela.vue'),
+    meta: { permissao: 'relatorio.painelTv.exibir' },
+  },
 ];
