@@ -45,7 +45,9 @@ export const mensagensRegistroOncologico = {
   gravarPlano: 'Registrar plano',
   progresso: '{r} de {f} frações · {d} de {t} cGy',
   aprovar: 'Aprovar com o físico',
-  fisico: 'Vínculo do físico médico',
+  fisico: 'Físico médico que conferiu o planejamento',
+  semFisico:
+    'Nenhum físico médico (CBO 2131-50) com lotação vigente neste estabelecimento: cadastre a lotação antes de aprovar.',
   sessao: 'Registrar sessão',
   desfecho: 'Desfecho',
   doseAplicada: 'Dose aplicada (cGy)',

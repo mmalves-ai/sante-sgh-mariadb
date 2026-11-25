@@ -13,6 +13,10 @@ Grava:
   mesmos códigos, com ponto: C50.4), sem as que a CID-O-3 não tem como sítio (C43 melanoma e C46 Kaposi, que lá viram
   pele e partes moles pela morfologia; C45 mesotelioma; C78-C79 secundárias; C81-C97 hematológicas) e com o sítio
   hematopoético C42.0-C42.4 da própria CID-O-3. Categoria sem subcategoria vira o .9 (SOE), como na CID-O-3.
+  PENDÊNCIA (C2-073): a lista é DERIVADA da CID-10, não a tabela oficial de topografia da CID-O-3 (o arquivo do
+  DATASUS só traz a morfologia). Por isso versao_fonte = 'derivada CID-10 <edição>' e não 'CID-O-3'. Os sítios que a
+  CID-10 descreve como secundários (C77 linfonodos) e o C80 levam o texto da CID-O-3 (SITIOS_CIDO3). Trocar pela
+  tabela oficial de topografia (INCA/OMS) quando ela entrar no cache por carregador versionado.
 """
 import io
 import json
@@ -243,7 +247,7 @@ def carregar(banco: str) -> dict:
     _upsert(banco, "topografia_tumor",
             ["codigo_cid_o", "descricao", "categoria", "ativo", "vigencia_inicio", "versao_fonte", "criado_em",
              "versao"],
-            [[c, d, cat, 1, VIGENCIA, f"CID-O-3 ({ver})"[:30], AGORA, 1] for c, d, cat in topografias(cats, subs4)],
+            [[c, d, cat, 1, VIGENCIA, versao_topografia(ver), AGORA, 1] for c, d, cat in topografias(cats, subs4)],
             ["descricao", "categoria", "vigencia_inicio", "versao_fonte"])
 
     cont = _consulta(banco, f"""
@@ -266,6 +270,25 @@ TOPOGRAFIA_HEMATOPOETICA = [
     ("C42.3", "Sistema reticuloendotelial, SOE"),
     ("C42.4", "Sistema hematopoético, SOE"),
 ]
+# Sítios cujo texto da CID-10 não serve de topografia (a CID-10 os descreve como secundários ou sem sítio).
+SITIOS_CIDO3 = {
+    "C77.0": "Linfonodos da cabeça, face e pescoço",
+    "C77.1": "Linfonodos intratorácicos",
+    "C77.2": "Linfonodos intra-abdominais",
+    "C77.3": "Linfonodos da axila ou do membro superior",
+    "C77.4": "Linfonodos da região inguinal ou do membro inferior",
+    "C77.5": "Linfonodos intrapélvicos",
+    "C77.8": "Linfonodos de múltiplas regiões",
+    "C77.9": "Linfonodo, SOE",
+    "C80.9": "Localização primária desconhecida",
+}
+
+
+def versao_topografia(ver):
+    """Rótulo da fonte da topografia: derivada da CID-10 (não é a tabela oficial da CID-O-3; ver a pendência)."""
+    return f"derivada CID-10 {ver}"[:30]
+
+
 _PREFIXO_NEOPLASIA = re.compile(
     r"^Neoplasia(s)? maligna(s)?( secundária e não especificada| secundária)?( d[aoe]s?| de)?\s+", re.I)
 
@@ -292,6 +315,9 @@ def topografias(cats, subs4):
             linhas[f"{cat}.9"] = ((d[:1].upper() + d[1:])[:150], cat)
     for cod, d in TOPOGRAFIA_HEMATOPOETICA:
         linhas[cod] = (d, "C42")
+    for cod, d in SITIOS_CIDO3.items():
+        if cod[:3] in desc_cat:
+            linhas[cod] = (d, cod[:3])
     return sorted((c, d, cat) for c, (d, cat) in linhas.items())
 
 

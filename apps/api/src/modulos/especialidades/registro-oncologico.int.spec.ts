@@ -13,6 +13,7 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'C2073';
 const codigoDe = (e: unknown) => (e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : String(e));
+const camposDe = (e: unknown) => (e instanceof ErroOperacao ? (e.problema['campos'] as unknown) : null);
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
   return l ? Number(l.id) : e.inserir(ins, pi);
@@ -21,7 +22,15 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, cliente f22_o2)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaRegistroOncologicoPropria;
-  const ids = { est: 0, usuario: 0, paciente: 0, profissional: 0, atendimento: 0, internacao: 0 };
+  const ids = {
+    est: 0,
+    usuario: 0,
+    paciente: 0,
+    profissional: 0,
+    fisico: 0,
+    atendimento: 0,
+    internacao: 0,
+  };
   let c: ContextoPortaM18;
   let autor: Autor;
   let seq = 0;
@@ -45,6 +54,7 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
       await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM usuario_vinculo_profissional WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM lotacao_profissional WHERE estabelecimento_id = ?', [ids.est]);
     })();
 
   beforeAll(async () => {
@@ -166,6 +176,7 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
         );
       const pp = await pessoa(`PACIENTE SINTETICA ${P}`);
       const pm = await pessoa(`MEDICO SINTETICO ${P}`);
+      const pf = await pessoa(`FISICO SINTETICO ${P}`);
       ids.paciente = await garantir(
         e,
         'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
@@ -179,6 +190,26 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
         [pm],
         "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
         [pm, agora],
+      );
+      // O físico médico (CBO 2131-50) com lotação vigente no estabelecimento; o médico não tem lotação de físico.
+      ids.fisico = await garantir(
+        e,
+        'SELECT id FROM profissional WHERE pessoa_fisica_id = ?',
+        [pf],
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pf, agora],
+      );
+      const cboFisico = await garantir(
+        e,
+        'SELECT id FROM ocupacao_cbo WHERE codigo_cbo = ?',
+        ['213150'],
+        "INSERT INTO ocupacao_cbo (codigo_cbo, descricao, area_saude, versao_fonte, criado_em) VALUES ('213150', 'FISICO (MEDICINA) C2073', TRUE, 'teste C2073', ?)",
+        [agora],
+      );
+      await e.inserir(
+        `INSERT INTO lotacao_profissional (profissional_id, estabelecimento_id, ocupacao_cbo_id, vigencia_inicio, criado_em)
+         VALUES (?, ?, ?, '2026-01-01', ?)`,
+        [ids.fisico, ids.est, cboFisico, agora],
       );
       ids.atendimento = await e.inserir(
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
@@ -314,6 +345,12 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
     await expect(
       porta.registrarTumor(c, autor, { ...tumor, cid: 'D05.1', topografia: 'C34.1' }, chave()),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'tumor-invalido');
+    // A topografia de outro sítio (pulmão) com o CID da mama é recusada no campo da topografia.
+    await expect(
+      porta.registrarTumor(c, autor, { ...tumor, topografia: 'C34.1', morfologia: '8140/3' }, chave()),
+    ).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'tumor-invalido' && JSON.stringify(camposDe(e)) === '["topografia"]',
+    );
     expect(
       await contar('SELECT COUNT(*) AS n FROM diagnostico_oncologico WHERE estabelecimento_id = ?', [
         ids.est,
@@ -435,7 +472,19 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
     await expect(porta.registrarSessao(c, autor, { ...sessao, plano: idPlano }, chave())).rejects.toSatisfy(
       (e) => codigoDe(e) === 'sessao-radioterapia-invalida',
     );
-    await porta.aprovar(c, autor, { id: idPlano, fisico: ids.profissional, versao: 1 }, chave());
+    // O físico tem de ser físico médico lotado no estabelecimento: o médico e um id inexistente são recusados.
+    for (const fisico of [ids.profissional, 999_999_999])
+      await expect(porta.aprovar(c, autor, { id: idPlano, fisico, versao: 1 }, chave())).rejects.toSatisfy(
+        (e) => codigoDe(e) === 'aprovacao-plano-invalida' && JSON.stringify(camposDe(e)) === '["fisico"]',
+      );
+    expect((await porta.cadastros(c)).fisicos.map((f) => f.codigo)).toEqual([String(ids.fisico)]);
+    await porta.aprovar(c, autor, { id: idPlano, fisico: ids.fisico, versao: 1 }, chave());
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM tratamento_radioterapia WHERE id = ? AND situacao = 'aprovado' AND fisico_profissional_id = ?",
+        [idPlano, ids.fisico],
+      ),
+    ).toBe(1);
     expect((await porta.registrarSessao(c, autor, { ...sessao, plano: idPlano }, chave())).situacao).toBe(
       'em_andamento',
     );

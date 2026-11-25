@@ -87,6 +87,7 @@ const esquemaCadastros = z.object({
   regioes: z.array(item),
   aparelhos: z.array(item.extend({ modalidade: z.string() })),
   estadios: z.array(item),
+  fisicos: z.array(item).default([]),
 });
 const esquemaGravado = z.object({
   ok: z.boolean(),

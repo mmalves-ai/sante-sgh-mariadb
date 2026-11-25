@@ -80,6 +80,7 @@ test.describe('@C2-073 registro oncológico e radioterapia', () => {
         regioes: [{ codigo: 'mama', descricao: 'Mama' }],
         aparelhos: [],
         estadios: ['IIB', 'IV'].map((c) => ({ codigo: c, descricao: `Estádio ${c}` })),
+        fisicos: [{ codigo: '4401', descricao: 'FISICO SINTETICO C2073' }],
       }),
     );
     await page.route(`${E}/registro/busca?**`, (r) => {
@@ -94,7 +95,10 @@ test.describe('@C2-073 registro oncológico e radioterapia', () => {
                   { codigo: 'M8500/2', descricao: 'MORFOLOGIA IN SITU SINTETICA' },
                   { codigo: 'M8500/3', descricao: 'MORFOLOGIA SINTETICA' },
                 ]
-              : [{ codigo: 'C50.4', descricao: 'QUADRANTE SINTETICO' }],
+              : [
+                  { codigo: 'C50.4', descricao: 'QUADRANTE SINTETICO' },
+                  { codigo: 'C34.1', descricao: 'PULMAO SINTETICO' },
+                ],
       });
     });
     await page.route(`${E}/registro/tumores?**`, (r) => {
@@ -135,7 +139,7 @@ test.describe('@C2-073 registro oncológico e radioterapia', () => {
     });
     await page.route(`${E}/registro/planos?**`, (r) => {
       enviados['plano'] = r.request().postDataJSON();
-      estado.planos = [PLANO];
+      estado.planos = [{ ...PLANO, versao: 1, situacao: 'em_planejamento', fisico: false }];
       return json(
         r,
         {
@@ -146,6 +150,11 @@ test.describe('@C2-073 registro oncológico e radioterapia', () => {
         },
         201,
       );
+    });
+    await page.route(`${E}/registro/planos/7311/aprovacao?**`, (r) => {
+      enviados['aprovacao'] = r.request().postDataJSON();
+      estado.planos = [PLANO];
+      return json(r, { ok: true, id: 7311, situacao: 'aprovado', mensagem: 'Plano aprovado.' }, 201);
     });
     await page.route(`${E}/registro/planos/7311/sessoes?**`, (r) => {
       enviados['sessao'] = r.request().postDataJSON();
@@ -178,6 +187,13 @@ test.describe('@C2-073 registro oncológico e radioterapia', () => {
     await page.getByTestId('onco-novo-tumor').click();
     await page.getByTestId('onco-busca-cid').getByRole('textbox').fill('C50');
     await page.getByTestId('onco-escolher-cid-C50.4').click();
+    // A topografia de outro sítio (pulmão para CID de mama) é recusada na hora; volta à sugerida.
+    await page.getByTestId('onco-busca-topografia').getByRole('textbox').fill('C3');
+    await page.getByTestId('onco-escolher-topografia-C34.1').click();
+    await page.getByTestId('onco-diagnosticado-em').getByRole('textbox').fill('01/10/2026');
+    await expect(page.getByTestId('onco-erros-tumor')).toContainText('não é do sítio do CID');
+    await page.getByTestId('onco-busca-topografia').getByRole('textbox').fill('C50');
+    await page.getByTestId('onco-escolher-topografia-C50.4').click();
     await page.getByTestId('onco-busca-morfologia').getByRole('textbox').fill('8500');
     await page.getByTestId('onco-escolher-morfologia-M8500/2').click();
     await page.getByTestId('onco-diagnosticado-em').getByRole('textbox').fill('01/10/2026');
@@ -217,6 +233,15 @@ test.describe('@C2-073 registro oncológico e radioterapia', () => {
       fracoesPrevistas: 25,
       regiao: 'mama',
     });
+
+    // Aprovação: o físico médico vem da lista dos lotados no estabelecimento (nada de digitar id).
+    await page.getByTestId('onco-aprovar-7311').click();
+    await expect(page.getByTestId('onco-confirmar-aprovacao')).toBeDisabled();
+    await escolher(page.getByLabel('Físico médico que conferiu o planejamento'), {
+      rotulo: 'FISICO SINTETICO C2073',
+    });
+    await page.getByTestId('onco-confirmar-aprovacao').click();
+    expect(enviados['aprovacao']).toMatchObject({ fisico: 4401, versao: 1 });
 
     // Sessão: um clique, com a dose da fração já preenchida.
     await page.getByTestId('onco-sessao-7311').click();

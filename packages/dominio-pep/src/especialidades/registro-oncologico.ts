@@ -79,8 +79,27 @@ export function comportamentoDoCid(cid: string): readonly string[] | null {
   return null;
 }
 
+/**
+ * A categoria da topografia (CID-O-3) que o CID-10 do tumor exige; null quando a CID-10 não fixa o sítio.
+ * - C00-C76 (sítio na própria CID-10): a mesma categoria (C50.4 → C50.x), exceto C43 (melanoma: pele, C44),
+ *   C45 (mesotelioma) e C46 (Kaposi), cujo sítio vem da morfologia;
+ * - C77 (linfonodos) → C77; C80 (primário desconhecido) → C80;
+ * - C90-C96 (mieloma e leucemias) → C42 (sistema hematopoético);
+ * - linfomas (C81-C86, C88), secundárias C78-C79, C97 e as neoplasias D: sem sítio fixo pelo CID.
+ */
+export function topografiasDoCid(cid: string): readonly string[] | null {
+  const cat = cid.replace('.', '').toUpperCase().slice(0, 3);
+  if (cat === 'C43') return ['C44'];
+  if (/^C4[56]$/.test(cat)) return null;
+  if (/^C([0-6]\d|7[0-7]|80)$/.test(cat)) return [cat];
+  if (/^C9[0-6]$/.test(cat)) return ['C42'];
+  return null;
+}
+
 export interface TumorEntrada {
   readonly cid: string;
+  /** Topografia da CID-O-3 (C50.4); conferida contra a categoria do CID. */
+  readonly topografia: string;
   readonly morfologia: string | null;
   readonly diagnosticadoEm: string;
   readonly baseDiagnostica: BaseDiagnostico;
@@ -94,6 +113,19 @@ export function conferirTumor(t: TumorEntrada, hoje: string): ErroCampoOnco[] {
   const cat = t.cid.replace('.', '').toUpperCase().slice(0, 3);
   if (!/^(C\d\d|D0\d|D[1-3]\d|D4[0-8])$/.test(cat))
     erros.push(erro('cid', 'O CID do tumor tem de ser de neoplasia (C00 a D48).'));
+  const topo = t.topografia.trim().toUpperCase();
+  if (!/^C\d\d\.\d$/.test(topo))
+    erros.push(erro('topografia', 'A topografia tem o formato C00.0 (CID-O-3).'));
+  else {
+    const aceitas = topografiasDoCid(t.cid);
+    if (aceitas && !aceitas.includes(topo.slice(0, 3)))
+      erros.push(
+        erro(
+          'topografia',
+          `A topografia ${topo} não é do sítio do CID ${t.cid} (esperado ${aceitas.map((a) => `${a}.x`).join(' ou ')}).`,
+        ),
+      );
+  }
   if (!dataValida(t.diagnosticadoEm)) erros.push(erro('diagnosticadoEm', 'Data do diagnóstico inválida.'));
   else if (t.diagnosticadoEm > hoje)
     erros.push(erro('diagnosticadoEm', 'A data do diagnóstico não pode ser futura.'));
@@ -255,6 +287,29 @@ export function conferirPlanoRadioterapia(p: PlanoRtEntrada, hoje: string): Erro
   if (p.inicioPrevisto !== null && (!dataValida(p.inicioPrevisto) || p.inicioPrevisto < hoje))
     erros.push(erro('inicioPrevisto', 'O início previsto é hoje ou depois.'));
   return erros;
+}
+
+// ── Quem confere e quem aplica a radioterapia (CBO 2002) ───────────────────────────────────────────────────────────
+
+/** CBO do físico médico ("Físico (medicina)"), o responsável técnico que confere o planejamento. */
+export const CBO_FISICO_MEDICO = '213150';
+/** CBO do técnico e do tecnólogo em radiologia, que aplicam a fração no aparelho. */
+export const CBOS_TECNICO_RADIOTERAPIA = ['324115', '324120'] as const;
+const soDigitos = (cbo: string | null | undefined) => (cbo ?? '').replace(/\D/g, '');
+
+/** O profissional é físico médico pelo CBO. */
+export function ehFisicoMedico(cbo: string | null | undefined): boolean {
+  return soDigitos(cbo) === CBO_FISICO_MEDICO;
+}
+
+/** Quem registra a sessão (fração aplicada): o médico, o físico médico ou o técnico/tecnólogo em radiologia. */
+export function podeRegistrarSessaoRadioterapia(cbo: string | null | undefined): boolean {
+  const c = soDigitos(cbo);
+  return (
+    c.startsWith('225') ||
+    c === CBO_FISICO_MEDICO ||
+    (CBOS_TECNICO_RADIOTERAPIA as readonly string[]).includes(c)
+  );
 }
 
 /** Aprovação do plano: só em planejamento e com o físico médico que conferiu o planejamento. */

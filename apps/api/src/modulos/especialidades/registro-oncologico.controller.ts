@@ -8,11 +8,12 @@
 //   POST /api/especialidades/oncologia/registro/planos                  pep.radioterapia.plano.registrar (médico)
 //   POST /api/especialidades/oncologia/registro/planos/:id/aprovacao    pep.radioterapia.plano.aprovar (físico informado)
 //   POST /api/especialidades/oncologia/registro/planos/:id/encerramento pep.radioterapia.plano.encerrar (motivo)
-//   POST /api/especialidades/oncologia/registro/planos/:id/sessoes      pep.radioterapia.sessao.registrar
+//   POST /api/especialidades/oncologia/registro/planos/:id/sessoes      pep.radioterapia.sessao.registrar (médico,
+//                                                                        físico médico ou técnico/tecnólogo em radiologia)
 //   POST /api/especialidades/oncologia/registro/aparelhos               pep.radioterapia.aparelho.incluir
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS as E, PERMISSOES_ESPECIALIDADES_CODIGOS as P } from '@sgh/contratos';
-import { categoriaDoCbo } from '@sgh/dominio-pep';
+import { categoriaDoCbo, podeRegistrarSessaoRadioterapia } from '@sgh/dominio-pep';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -101,6 +102,25 @@ export class RegistroOncologicoController {
         403,
         'Categoria profissional',
         'O registro oncológico e o plano de radioterapia são do médico: a sessão precisa do vínculo com o conselho ativo.',
+        { codigo: 'categoria-nao-autorizada' },
+      );
+    return { paciente: i.paciente, internacao: i.internacao, profissional: v.vinculo };
+  }
+
+  /**
+   * Quem registra a sessão (a fração aplicada no aparelho): quem a aplica de fato, o técnico ou tecnólogo em
+   * radiologia, além do médico e do físico médico (CBO, pelo domínio). A trilha fica com o autor verdadeiro.
+   */
+  private async autorSessao(s: SessaoCadastro, reg: number): Promise<Autor> {
+    const i = await this.daInternacao(s, reg, P.oncologiaRegistrar);
+    const vs = await this.especialidades.vinculos(s.porta, s.login).catch(() => []);
+    const v = vs.find((x) => x.ativo && podeRegistrarSessaoRadioterapia(x.cbo));
+    if (!v)
+      throw new ErroProblema(
+        'sem-permissao',
+        403,
+        'Categoria profissional',
+        'A sessão de radioterapia é registrada pelo médico, pelo físico médico ou pelo técnico/tecnólogo em radiologia: a sessão precisa do vínculo ativo com uma dessas ocupações.',
         { codigo: 'categoria-nao-autorizada' },
       );
     return { paciente: i.paciente, internacao: i.internacao, profissional: v.vinculo };
@@ -256,7 +276,7 @@ export class RegistroOncologicoController {
     const e = corpo(esquemaSessao, b);
     const r = await this.porta.registrarSessao(
       s.porta,
-      await this.autor(s, idDaRota(reg)),
+      await this.autorSessao(s, idDaRota(reg)),
       { ...e, plano: idDaRota(id) },
       chaveIdempotencia(req),
     );

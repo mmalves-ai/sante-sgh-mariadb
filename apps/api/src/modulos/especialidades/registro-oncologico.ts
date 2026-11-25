@@ -10,6 +10,7 @@
 // motivo e o plano encerrado antes do fim guarda o motivo.
 import {
   BASES_DIAGNOSTICO,
+  CBO_FISICO_MEDICO,
   categoriaTnm,
   conferirAprovacaoPlano,
   conferirEncerramentoPlano,
@@ -128,6 +129,8 @@ export interface CadastrosOncologia {
   readonly regioes: ItemCadastro[];
   readonly aparelhos: (ItemCadastro & { modalidade: string })[];
   readonly estadios: ItemCadastro[];
+  /** Físicos médicos com lotação vigente no estabelecimento (codigo = id do profissional). */
+  readonly fisicos: ItemCadastro[];
 }
 export type CatalogoBusca = 'topografia' | 'morfologia' | 'cid';
 
@@ -193,6 +196,15 @@ async function hojeDe(l: Pick<Leitor, 'uma'>): Promise<string> {
   const r = await l.uma<Linha>("SELECT DATE_FORMAT(NOW(), '%Y-%m-%d') AS hoje", []);
   return String(r?.['hoje']);
 }
+
+/** Os físicos médicos (CBO) com lotação vigente e ativa no estabelecimento; `hoje` no fuso do estabelecimento. */
+const SQL_FISICOS = `SELECT DISTINCT pr.id, COALESCE(pr.nome_exibicao, pf.nome) AS nome
+  FROM lotacao_profissional lp
+  JOIN profissional pr ON pr.id = lp.profissional_id AND pr.excluido_em IS NULL AND pr.situacao = 'ativo'
+  JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+  JOIN ocupacao_cbo oc ON oc.id = lp.ocupacao_cbo_id
+ WHERE lp.estabelecimento_id = ? AND lp.ativo AND lp.excluido_em IS NULL
+   AND lp.vigencia_inicio <= ? AND (lp.vigencia_fim IS NULL OR lp.vigencia_fim >= ?) AND oc.codigo_cbo = ?`;
 
 const SQL_TUMOR = `SELECT d.id, d.versao, d.situacao, d.lateralidade, d.base_diagnostica, d.desempenho_ecog,
     DATE_FORMAT(d.diagnosticado_em, '%Y-%m-%d') AS diagnosticado_em, cid.codigo_termo AS cid, cid.descricao AS cid_descricao,
@@ -394,7 +406,8 @@ export class PortaRegistroOncologicoPropria implements PortaRegistroOncologico {
     const ctx = this.contexto(c);
     return this.nucleo.lerSomente(ctx, async (l) => {
       const item = (r: Linha) => ({ codigo: String(r['codigo']), descricao: String(r['descricao']) });
-      const [intencoes, regioes, aparelhos, estadios] = await Promise.all([
+      const hoje = await hojeDe(l);
+      const [intencoes, regioes, aparelhos, estadios, fisicos] = await Promise.all([
         l.consultar<Linha>(
           'SELECT codigo, descricao FROM intencao_tratamento_oncologico WHERE ativo ORDER BY ordem, descricao',
           [],
@@ -411,12 +424,19 @@ export class PortaRegistroOncologicoPropria implements PortaRegistroOncologico {
           "SELECT codigo, descricao FROM estadio_clinico WHERE ativo AND sistema = 'tnm' AND tipo = 'grupo' ORDER BY ordem, codigo",
           [],
         ),
+        l.consultar<Linha>(`${SQL_FISICOS} ORDER BY nome LIMIT 200`, [
+          ctx.estabelecimento,
+          hoje,
+          hoje,
+          CBO_FISICO_MEDICO,
+        ]),
       ]);
       return {
         intencoes: intencoes.map(item),
         regioes: regioes.map(item),
         aparelhos: aparelhos.map((r) => ({ ...item(r), modalidade: String(r['modalidade']) })),
         estadios: estadios.map(item),
+        fisicos: fisicos.map((r) => ({ codigo: String(r['id']), descricao: String(r['nome']) })),
       };
     });
   }
@@ -752,8 +772,17 @@ export class PortaRegistroOncologicoPropria implements PortaRegistroOncologico {
       chave,
       async (tx, est) => {
         const p = await this.planoDoPaciente(tx, x.id, a.paciente, est);
+        // O físico tem de existir, estar ativo, com lotação vigente NESTE estabelecimento e CBO de físico médico.
+        const hoje = await hojeDe(tx);
+        const fisico = await tx.uma<Linha>(`${SQL_FISICOS} AND pr.id = ?`, [
+          est,
+          hoje,
+          hoje,
+          CBO_FISICO_MEDICO,
+          x.fisico,
+        ]);
         recusarErros(
-          conferirAprovacaoPlano(String(p['situacao']) as SituacaoPlanoRt, x.fisico > 0),
+          conferirAprovacaoPlano(String(p['situacao']) as SituacaoPlanoRt, fisico !== null),
           'aprovacao-plano-invalida',
         );
         await tx.alterar('tratamento_radioterapia', x.id, x.versao, {

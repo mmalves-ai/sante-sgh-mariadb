@@ -8,9 +8,12 @@ import {
   conferirPlanoRadioterapia,
   conferirSessaoRadioterapia,
   conferirTumor,
+  ehFisicoMedico,
   estadioDecorrente,
   normalizarMorfologia,
+  podeRegistrarSessaoRadioterapia,
   rotuloTnm,
+  topografiasDoCid,
   type EstadiamentoEntrada,
   type PlanoRtAtual,
   type TumorEntrada,
@@ -20,6 +23,7 @@ const HOJE = '2026-11-25';
 const campos = (e: readonly { campo: string }[]) => e.map((x) => x.campo);
 const tumor = (x: Partial<TumorEntrada> = {}): TumorEntrada => ({
   cid: 'C50.4',
+  topografia: 'C50.4',
   morfologia: 'M8500/3',
   diagnosticadoEm: '2026-10-01',
   baseDiagnostica: 'histologia_primario',
@@ -71,8 +75,33 @@ describe('registro do tumor (CID-10 × CID-O-3)', () => {
   });
   it('lateralidade só em órgão par', () => {
     expect(
-      campos(conferirTumor(tumor({ cid: 'C16.0', morfologia: '8140/3', lateralidade: 'direita' }), HOJE)),
+      campos(
+        conferirTumor(
+          tumor({ cid: 'C16.0', topografia: 'C16.0', morfologia: '8140/3', lateralidade: 'direita' }),
+          HOJE,
+        ),
+      ),
     ).toEqual(['lateralidade']);
+  });
+  it('topografia do mesmo sítio do CID (C00-C76); melanoma na pele; hematológicas no C42', () => {
+    expect(campos(conferirTumor(tumor({ topografia: 'C34.1' }), HOJE))).toEqual(['topografia']);
+    expect(campos(conferirTumor(tumor({ topografia: 'C50' }), HOJE))).toEqual(['topografia']);
+    expect(conferirTumor(tumor({ topografia: 'c50.9' }), HOJE)).toEqual([]);
+    expect(topografiasDoCid('C43.5')).toEqual(['C44']);
+    expect(topografiasDoCid('C77.3')).toEqual(['C77']);
+    expect(topografiasDoCid('C80.9')).toEqual(['C80']);
+    expect(topografiasDoCid('C91.0')).toEqual(['C42']);
+    expect(topografiasDoCid('C83.3')).toBeNull();
+    expect(topografiasDoCid('C79.5')).toBeNull();
+    expect(topografiasDoCid('D05.1')).toBeNull();
+    expect(
+      campos(
+        conferirTumor(
+          tumor({ cid: 'C92.0', topografia: 'C50.4', morfologia: '9861/3', lateralidade: 'nao_se_aplica' }),
+          HOJE,
+        ),
+      ),
+    ).toEqual(['topografia']);
   });
 });
 
@@ -153,6 +182,17 @@ describe('radioterapia: plano e sessões', () => {
     expect(campos(conferirAprovacaoPlano('aprovado', true))).toEqual(['situacao']);
     expect(campos(conferirEncerramentoPlano('em_andamento', ' '))).toEqual(['motivo']);
     expect(campos(conferirEncerramentoPlano('concluido', 'x'))).toEqual(['situacao']);
+  });
+  it('físico médico e quem registra a sessão, pelo CBO', () => {
+    expect(ehFisicoMedico('2131-50')).toBe(true);
+    expect(ehFisicoMedico('225125')).toBe(false);
+    expect(ehFisicoMedico(null)).toBe(false);
+    expect(podeRegistrarSessaoRadioterapia('225125')).toBe(true);
+    expect(podeRegistrarSessaoRadioterapia('213150')).toBe(true);
+    expect(podeRegistrarSessaoRadioterapia('3241-15')).toBe(true);
+    expect(podeRegistrarSessaoRadioterapia('324120')).toBe(true);
+    expect(podeRegistrarSessaoRadioterapia('223505')).toBe(false);
+    expect(podeRegistrarSessaoRadioterapia('')).toBe(false);
   });
   const atual = (x: Partial<PlanoRtAtual> = {}): PlanoRtAtual => ({
     situacao: 'aprovado',

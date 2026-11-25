@@ -225,7 +225,12 @@ function gravarPlano(tumorId: number) {
   );
 }
 const planosDo = (id: number) => (dados.data.value?.planos ?? []).filter((p) => p.tumor === id);
-const fisico = ref<number | null>(null);
+/** O físico médico que conferiu o planejamento: escolhido entre os lotados no estabelecimento (id do profissional). */
+const fisico = ref<string>('');
+const opcoesFisicos = computed(() => [
+  { valor: '', rotulo: '—' },
+  ...(cadastros.data.value?.fisicos ?? []).map((f) => ({ valor: f.codigo, rotulo: f.descricao })),
+]);
 const aprovando = ref<number | null>(null);
 const sessaoDe = reactive<
   Record<number, { desfecho: (typeof DESFECHOS_SESSAO_RT)[number]; dose: number | null; motivo: string }>
@@ -462,23 +467,24 @@ const pct = (p: PlanoLido) => Math.min(100, Math.round((p.doseAcumuladaCgy / p.d
                       aprovarPlanoRt(
                         reg,
                         p.id,
-                        { fisico, versao: p.versao },
+                        { fisico: Number(fisico), versao: p.versao },
                         novaChaveEspecialidade('aprovar-rt'),
                       ),
                     () => (aprovando = null),
                   )
                 "
               >
-                <div class="campo">
-                  <label :for="`onco-fisico-${p.id}`">{{ k('fisico') }}</label>
-                  <input
-                    :id="`onco-fisico-${p.id}`"
-                    v-model.number="fisico"
-                    type="number"
-                    min="1"
-                    data-testid="onco-fisico"
-                  />
-                </div>
+                <SanteSelecao
+                  v-model="fisico"
+                  :rotulo="k('fisico')"
+                  :opcoes="opcoesFisicos"
+                  busca
+                  obrigatorio
+                  data-testid="onco-fisico"
+                />
+                <p v-if="opcoesFisicos.length === 1" class="dica" data-testid="onco-sem-fisico">
+                  {{ k('semFisico') }}
+                </p>
                 <SanteBotao
                   tipo="submit"
                   :rotulo="k('confirmar')"

@@ -117,7 +117,15 @@ class TopografiaCidO(unittest.TestCase):
         t = {c: (d, cat) for c, d, cat in m.topografias(cats, subs4)}
         self.assertEqual(t["C50.4"], ("Quadrante superior externo da mama", "C50"))
         self.assertEqual(t["C01.9"], ("Base da língua", "C01"))
-        self.assertEqual(t["C77.9"][1], "C77")
+        self.assertEqual(t["C77.9"], ("Linfonodo, SOE", "C77"))
+        self.assertEqual(t["C77.3"], ("Linfonodos da axila ou do membro superior", "C77"))
         self.assertIn("C42.1", t)
         for fora in ("C43.0", "C79.9", "C91.0", "C43.9"):
             self.assertNotIn(fora, t)
+
+    def test_fonte_rotulada_como_derivada_e_nao_cid_o3(self):
+        m = _cid10()
+        v = m.versao_topografia("2008")
+        self.assertTrue(v.startswith("derivada CID-10"))
+        self.assertNotIn("CID-O", v)
+        self.assertLessEqual(len(v), 30)
