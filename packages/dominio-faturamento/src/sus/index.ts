@@ -25,3 +25,5 @@ export * from './configuracao-sus.js';
 export * from './servico-web.js';
 // F7 (06-SUS linha 59): leitos de UTI habilitados (cadastro por tipo e vigência) e diárias de UTI por competência.
 export * from './leito-uti-habilitado.js';
+// F8 (06-SUS linha 65): notificação de potencial doador e inscrição de receptor para a central estadual de transplantes.
+export * from './transplante.js';

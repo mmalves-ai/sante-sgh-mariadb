@@ -286,6 +286,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.susLeitoUti.ler' },
   },
   {
+    // F8 (06-SUS linha 65): notificação de doador e inscrição de receptor para a central estadual de transplantes.
+    path: '/faturamento/sus/transplantes',
+    name: 'faturamento.susTransplantes',
+    component: () => import('./telas/TransplanteSusTela.vue'),
+    meta: { permissao: 'faturamento.susTransplante.ler' },
+  },
+  {
     path: '/inicio/faturamento',
     name: 'inicio.faturamento',
     component: () => import('./telas/WorklistFaturamentoTela.vue'),

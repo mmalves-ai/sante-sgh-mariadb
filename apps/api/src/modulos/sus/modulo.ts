@@ -18,6 +18,8 @@ import type { ArmazemArquivoSus } from './servico.js';
 import { ENVIADOR_SERVICO_WEB_SUS, enviadorServicoWebSusDoAmbiente } from './servico-web-enviador.js';
 import { NUCLEO_SERVICO_WEB_SUS, ServicoWebSusController } from './servico-web.controller.js';
 import { SusAihController } from './sus-aih.controller.js';
+import { TransplanteSusController } from './transplante.controller.js';
+import { PORTA_TRANSPLANTE, PortaTransplantePropria } from './transplante-propria.js';
 import { ARMAZEM_ARQUIVO_SUS, SusController } from './sus.controller.js';
 
 export interface OpcoesModuloSus {
@@ -48,7 +50,13 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
   const armazem = opcoes.armazem ?? armazemDoSus(ctx, porta);
   return {
     module: ModuloSus,
-    controllers: [SusController, SusAihController, ServicoWebSusController, LeitosUtiSusController],
+    controllers: [
+      SusController,
+      SusAihController,
+      ServicoWebSusController,
+      LeitosUtiSusController,
+      TransplanteSusController,
+    ],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
       { provide: ARMAZEM_ARQUIVO_SUS, useValue: armazem },
@@ -61,6 +69,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaLeitosUtiPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (06-SUS linha 65): notificação de doador e inscrição de receptor para a central de transplantes.
+      {
+        provide: PORTA_TRANSPLANTE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaTransplantePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
     ],

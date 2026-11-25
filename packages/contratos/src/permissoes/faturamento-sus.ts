@@ -106,4 +106,26 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     'Registrar, enviar e cancelar envios ao serviço web do SUS (simulador fora de produção)',
     { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
   ),
+  // F8 (06-SUS linha 65): notificação de potencial doador e inscrição de receptor para a central estadual de
+  // transplantes; recurso só do novo, concedido por perfil. Conteúdo clínico (dado sensível).
+  p(
+    'faturamento.susTransplante.ler',
+    'Consultar as notificações de potencial doador, as inscrições de receptor, o histórico enviado à central e o arquivo de conferência',
+    {
+      categoria: 'clinica',
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+    },
+  ),
+  p(
+    'faturamento.susTransplante.registrar',
+    'Notificar o potencial doador, inscrever e alterar o receptor e registrar o protocolo e o número devolvidos pela central de transplantes',
+    {
+      categoria: 'clinica',
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+    },
+  ),
 ];
