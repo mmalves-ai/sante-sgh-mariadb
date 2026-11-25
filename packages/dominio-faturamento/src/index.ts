@@ -43,6 +43,7 @@ export * from './tiss/elegibilidade-transmissao.js';
 export * from './tiss/autorizacao-previa.js';
 export * from './tiss/opme-guia.js';
 export * from './tiss/apresentacao.js';
+export * from './tiss/montagem-apresentacao.js';
 // F3.7 (06-FAT linha 31): calendário de entrega da fatura por fonte pagadora.
 export * from './tiss/calendario-entrega.js';
 // F3.7 (06-FAT linhas 21, 22 e 24): parecer do item na auditoria, protocolo entre setores e acompanhamento da guia.

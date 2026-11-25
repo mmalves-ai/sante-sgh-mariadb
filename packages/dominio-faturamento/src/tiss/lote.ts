@@ -20,6 +20,27 @@ export interface Cabecalho {
   readonly hora: string;
   readonly codigoPrestadorNaOperadora: string;
   readonly registroANS: string;
+  /**
+   * Identificação do contratado pela regra de apresentação da fonte pagadora (06-FAT linha 30): CNPJ ou CPF no lugar
+   * do código na operadora, na escolha do padrão. Ausente: o código na operadora.
+   */
+  readonly identificacao?: { readonly tipo: 'codigo' | 'cnpj' | 'cpf'; readonly valor: string };
+}
+
+/** O contratado na escolha do ct_contratadoDados (código, CPF ou CNPJ). */
+function contratadoDados(cab: Cabecalho): Elemento {
+  const i = cab.identificacao;
+  if (i?.tipo === 'cnpj') return el('cnpjContratado', i.valor);
+  if (i?.tipo === 'cpf') return el('cpfContratado', i.valor);
+  return el('codigoPrestadorNaOperadora', cab.codigoPrestadorNaOperadora);
+}
+
+/** O prestador na origem da mensagem (ct_prestadorIdentificacao: CNPJ, CPF ou código). */
+function prestadorOrigem(cab: Cabecalho): Elemento {
+  const i = cab.identificacao;
+  if (i?.tipo === 'cnpj') return el('CNPJ', i.valor);
+  if (i?.tipo === 'cpf') return el('CPF', i.valor);
+  return el('codigoPrestadorNaOperadora', cab.codigoPrestadorNaOperadora);
 }
 
 export interface Beneficiario {
@@ -306,7 +327,7 @@ function despesasXml(ds: readonly Despesa[] | undefined): Elemento | null {
 }
 
 function guiaXml(g: Guia, cab: Cabecalho): Elemento {
-  const contratado = el('codigoPrestadorNaOperadora', cab.codigoPrestadorNaOperadora);
+  const contratado = contratadoDados(cab);
   switch (g.tipo) {
     case 'consulta':
       return el(
@@ -423,7 +444,12 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
         ),
         el(
           'localContratado',
-          el('codigoContratado', el('codigoNaOperadora', cab.codigoPrestadorNaOperadora)),
+          el(
+            'codigoContratado',
+            cab.identificacao?.tipo === 'cnpj'
+              ? el('cnpjLocalExecutante', cab.identificacao.valor)
+              : el('codigoNaOperadora', cab.codigoPrestadorNaOperadora),
+          ),
           el('nomeContratado', g.nomeContratado),
           el('cnes', g.cnes),
         ),
@@ -482,10 +508,7 @@ function cabecalhoXml(cab: Cabecalho, tipoTransacao: string): Elemento {
       el('dataRegistroTransacao', cab.data),
       el('horaRegistroTransacao', cab.hora),
     ),
-    el(
-      'origem',
-      el('identificacaoPrestador', el('codigoPrestadorNaOperadora', cab.codigoPrestadorNaOperadora)),
-    ),
+    el('origem', el('identificacaoPrestador', prestadorOrigem(cab))),
     el('destino', el('registroANS', cab.registroANS)),
     el('Padrao', PADRAO_TISS),
   );
@@ -545,7 +568,7 @@ export function mensagemRecursoGlosa(cab: Cabecalho, r: RecursoGlosa): MensagemT
         el('numeroGuiaRecGlosaPrestador', r.numeroGuiaRecurso),
         el('nomeOperadora', r.nomeOperadora),
         el('objetoRecurso', '2'),
-        el('dadosContratado', el('codigoPrestadorNaOperadora', cab.codigoPrestadorNaOperadora)),
+        el('dadosContratado', contratadoDados(cab)),
         el('numeroLote', r.numeroLote),
         el('numeroProtocolo', r.numeroProtocolo),
         el(
