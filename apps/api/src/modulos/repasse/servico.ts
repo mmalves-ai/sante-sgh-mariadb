@@ -54,6 +54,10 @@ import {
   reais,
   centavos,
   descontoDoDebito,
+  type ContaParaRpa,
+  type DadoFiscalParaRpa,
+  destinoDoPagamento,
+  parametrosDoProfissional,
   totalizar,
   transicaoApuracao,
   transicaoVersaoRegra,
@@ -76,6 +80,16 @@ import { ApoioGravacao } from '../exames/public-api.js';
 import type { ContextoRepasse, FiltroRegrasPorta, GravadorRepasse, PortaRepasse } from './porta.js';
 
 const ctx = (s: SessaoCadastro): ContextoRepasse => s.porta;
+
+/**
+ * O dado fiscal e a conta principal do profissional que valem no dia (a leitura `destinoDoRepasse` do complemento do
+ * cadastro, F3.1). Sem a fonte (porta em memória), o RPA usa a regra geral dos parâmetros.
+ */
+export type FonteFiscalRepasse = (
+  c: ContextoRepasse,
+  profissional: number,
+  dia: string,
+) => Promise<{ dadoFiscal: DadoFiscalParaRpa | null; conta: ContaParaRpa | null }>;
 const E = EVENTOS_AUDITAVEIS;
 /** Página padrão e máxima da lista de pendentes da apuração. */
 const TAMANHO_PENDENTES = 50;
@@ -275,6 +289,7 @@ export class ServicoRepasse {
     private readonly trilha: RegistradorTrilha,
     configuracao: FonteConfiguracao | null,
     cache: CacheConfig | null,
+    private readonly fiscal: FonteFiscalRepasse | null = null,
   ) {
     this.apoio = new ApoioGravacao<GravadorRepasse>(
       { chave: 'repasse', nome: 'o repasse médico', operacoes: OPERACOES_REPASSE_TELA, semLiberacao: true },
@@ -953,12 +968,29 @@ export class ServicoRepasse {
     return (await this.porta.rpas(ctx(s), f)).map((r) => ({ ...r, valor: 0, titulo: null }));
   }
 
+  /**
+   * O cálculo do RPA no servidor: os parâmetros gerais ajustados pelo dado fiscal do profissional vigente hoje no
+   * estabelecimento (o que é retido, a alíquota do ISS e o percentual do INSS) e o destino do pagamento (a conta
+   * principal, mascarada). Quem recebe por empresa no dia é recusado (o repasse sai em demonstrativo).
+   */
   private async calcularRpa(
     s: SessaoCadastro,
     e: EmitirRpaEntrada,
-  ): Promise<{ calculo: CalculoRpa; ids: number[] }> {
+  ): Promise<{
+    calculo: CalculoRpa;
+    ids: number[];
+    origemFiscal: 'dado-fiscal' | 'regra-geral';
+    destinoPagamento: string | null;
+  }> {
     const p = await this.parametrosRpa(s);
     if (!p.ok) throw recusar('rpa-sem-tabela', 'Tabelas do RPA não definidas', p.motivo);
+    const destino =
+      this.fiscal && e.tipo === 'M' && e.profissional
+        ? await this.fiscal(ctx(s), e.profissional, await this.porta.hoje(ctx(s)))
+        : { dadoFiscal: null, conta: null };
+    const doProfissional = parametrosDoProfissional(p.valor, destino.dadoFiscal);
+    if (!doProfissional.ok)
+      throw recusar(doProfissional.codigo, 'RPA não se aplica', doProfissional.motivo, 422);
     const ls = await this.porta.lancamentos(ctx(s), {
       empresa: e.empresa,
       competencia: e.competencia,
@@ -977,18 +1009,25 @@ export class ServicoRepasse {
       throw recusar('ja-em-rpa', 'Lançamento já em RPA', `Já estão em RPA: ${livres.emRpa.join(', ')}.`);
     const bruto = ids.reduce((t, i) => t + centavos(pedidos.get(i)!.valor), 0);
     return {
-      calculo: calcularRpa({ brutoCentavos: bruto, baseInssOutrasEmpresasCentavos: 0 }, p.valor),
+      calculo: calcularRpa(
+        { brutoCentavos: bruto, baseInssOutrasEmpresasCentavos: 0 },
+        doProfissional.parametros,
+      ),
       ids,
+      origemFiscal: doProfissional.origem,
+      destinoPagamento: destinoDoPagamento(destino.conta),
     };
   }
 
   async previaRpa(s: SessaoCadastro, e: EmitirRpaEntrada): Promise<PreviaRpaResposta> {
-    const { calculo, ids } = await this.calcularRpa(s, e);
+    const { calculo, ids, origemFiscal, destinoPagamento } = await this.calcularRpa(s, e);
     return {
       prestador: e.prestador,
       lancamentos: ids,
       retencoes: retencoesResposta(calculo),
       documento: e.tipo === 'M' ? 'rpa' : 'demonstrativo',
+      origemFiscal,
+      destinoPagamento,
     };
   }
 

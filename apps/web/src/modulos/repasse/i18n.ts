@@ -179,6 +179,11 @@ export const mensagensRepasse = {
     iss: 'ISS',
     liquido: 'Líquido',
     conta: 'Líquido = bruto − INSS − IRRF − ISS',
+    origemDadoFiscal: 'Retenções pelo dado fiscal do cadastro do profissional vigente hoje.',
+    origemRegraGeral:
+      'Retenções pela regra geral do repasse: o profissional não tem dado fiscal vigente no cadastro.',
+    destinoPagamento: 'Pagamento em: {destino}',
+    semContaPrincipal: 'O profissional não tem conta principal ativa no cadastro.',
     acumuloInss: 'Base de INSS já usada no mês nas outras empresas',
     tabelaAusente:
       'A tabela vigente de {imposto} não está definida nas configurações. O RPA não é emitido sem ela.',

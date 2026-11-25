@@ -6,10 +6,12 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
-import { calcularItem, resolverRegra } from '@sgh/dominio-repasse';
+import { calcularItem, calcularRpa, parametrosDoProfissional, resolverRegra } from '@sgh/dominio-repasse';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
+import { fonteFiscalDoComplemento } from './fonte-fiscal.js';
 import { PortaRepassePropria } from './porta-propria.js';
+import { ProfissionalComplementoProprio } from '../cadastro/profissional-complemento-proprio.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -937,5 +939,155 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
     const c = calcularItem(item, todas, opcoes);
     expect(c.percentual).not.toBe(100);
     expect(c.regra).not.toBeNull();
+  });
+
+  it('C2-004: o RPA usa o dado fiscal e a conta do cadastro do profissional (destinoDoRepasse lido do banco)', async () => {
+    const fonte = fonteFiscalDoComplemento(new ProfissionalComplementoProprio(nucleo as never, CLIENTE));
+    const geral = {
+      inssAliquota: 11,
+      inssTetoCentavos: 800_000,
+      irrf: [{ ateCentavos: null, aliquota: 0, deducaoCentavos: 0 }],
+      issAliquota: 5,
+      reterIss: true,
+      reterInss: true,
+      reterIrrf: true,
+    };
+    const criados: { fiscal: number[]; conta: number[] } = { fiscal: [], conta: [] };
+    try {
+      // Sem dado fiscal vigente nem conta: a regra geral, sem destino.
+      // O profissional é o da preparação do teste: sobra de execução interrompida sai antes.
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-c2-004' }, async (e) => {
+        await e.executar('DELETE FROM profissional_dado_fiscal WHERE profissional_id = ?', [
+          ids.profissional,
+        ]);
+        await e.executar('DELETE FROM conta_bancaria_profissional WHERE profissional_id = ?', [
+          ids.profissional,
+        ]);
+      });
+      const vazio = await fonte(ctx, ids.profissional, '2026-10-31');
+      expect(parametrosDoProfissional(geral, vazio.dadoFiscal)).toMatchObject({
+        ok: true,
+        origem: 'regra-geral',
+      });
+      // O dado fiscal do estabelecimento (sem ISS, INSS de 20%) vale sobre o geral; a conta principal é o destino.
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-c2-004' }, async (e) => {
+        const seq = async (t: string) =>
+          Number(
+            (
+              await e.uma<{ s: number }>(
+                `SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM ${t} WHERE profissional_id = ?`,
+                [ids.profissional],
+              )
+            )?.s ?? 1,
+          );
+        for (const [est, retemIss] of [
+          [null, true],
+          [ids.est, false],
+        ] as const)
+          criados.fiscal.push(
+            await e.inserir(
+              `INSERT INTO profissional_dado_fiscal (profissional_id, sequencia, estabelecimento_id, vigencia_inicio,
+                 tipo_recebedor, regime_tributario, aliquota_iss, percentual_inss, retem_iss, retem_inss, retem_irrf,
+                 criado_em, criado_por)
+               VALUES (?, ?, ?, '2026-01-01', 'pessoa_fisica', 'autonomo', 2, 20, ?, TRUE, TRUE, NOW(3), ?)`,
+              [ids.profissional, await seq('profissional_dado_fiscal'), est, retemIss, ids.analista],
+            ),
+          );
+        criados.conta.push(
+          await e.inserir(
+            `INSERT INTO conta_bancaria_profissional (profissional_id, sequencia, tipo_chave_pix, chave_pix, favorecido_nome,
+               favorecido_tipo, favorecido_documento, principal, ativo, criado_em, criado_por)
+             VALUES (?, ?, 'email', 'sintetico.c2004@exemplo.invalid', 'Favorecido sintetico', 'fisica', '52998224725',
+               TRUE, TRUE, NOW(3), ?)`,
+            [ids.profissional, await seq('conta_bancaria_profissional'), ids.analista],
+          ),
+        );
+      });
+      const d = await fonte(ctx, ids.profissional, '2026-10-31');
+      expect(d.dadoFiscal).toMatchObject({ estabelecimento: ids.est, retemIss: false, percentualInss: 20 });
+      expect(d.conta).toMatchObject({ principal: true, ativo: true, tipoChavePix: 'email' });
+      // No outro estabelecimento vale o geral do profissional (com ISS).
+      expect((await fonte(outro, ids.profissional, '2026-10-31')).dadoFiscal).toMatchObject({
+        retemIss: true,
+      });
+      const p = parametrosDoProfissional(geral, d.dadoFiscal);
+      if (!p.ok) throw new Error(p.motivo);
+      expect(p.origem).toBe('dado-fiscal');
+      const c = calcularRpa({ brutoCentavos: 50_000, baseInssOutrasEmpresasCentavos: 0 }, p.parametros);
+      // O efeito no banco: o RPA emitido grava as retenções do dado fiscal (INSS 20% = 100,00; ISS não retido).
+      const l2 = Number(
+        (
+          await porta.executar(
+            ctx,
+            'repasse.lancarEvento',
+            {
+              origem: 'ajuste',
+              empresa: 1,
+              competencia: comp,
+              data: '2026-10-12',
+              evento: ids.evento,
+              tipo: 'M',
+              prestador: ids.profissional,
+              profissional: ids.profissional,
+              valor: 500,
+              justificativa: 'Ajuste C2-004',
+            },
+            octx(ctx),
+          )
+        ).resultado['lancamento'],
+      );
+      const rpa = Number(
+        (
+          await porta.executar(
+            ctx,
+            'repasse.emitirRpa',
+            {
+              empresa: 1,
+              competencia: comp,
+              tipo: 'M',
+              prestador: ids.profissional,
+              profissional: ids.profissional,
+              lancamentos: [l2],
+              emissao: '2026-10-31',
+              vencimento: '2026-11-10',
+              retencoes: {
+                bruto: c.brutoCentavos / 100,
+                baseInss: c.baseInssCentavos / 100,
+                inss: c.inssCentavos / 100,
+                baseIrrf: c.baseIrrfCentavos / 100,
+                faixaIrrf: c.faixaIrrf,
+                irrf: c.irrfCentavos / 100,
+                iss: c.issCentavos / 100,
+                liquido: c.liquidoCentavos / 100,
+              },
+            },
+            octx(ctx),
+          )
+        ).resultado['rpa'],
+      );
+      const rt = await nucleo.lerSomente(ctx, (l) =>
+        l.consultar(
+          'SELECT t.codigo, x.aliquota, x.valor FROM rpa_retencao x JOIN tributo t ON t.id = x.tributo_id WHERE x.rpa_id = ? ORDER BY x.sequencia',
+          [rpa],
+        ),
+      );
+      const porTributo = new Map(
+        rt.map((x) => [String(x['codigo']), [Number(x['aliquota']), Number(x['valor'])]]),
+      );
+      expect(porTributo.get('INSS')).toEqual([20, 100]);
+      expect(porTributo.get('ISS')?.[1] ?? 0).toBe(0);
+      expect(await contar('SELECT valor_retencoes AS q FROM rpa WHERE id = ?', [rpa])).toBe(100);
+      // Quem recebe por empresa no dia não tem RPA.
+      expect(parametrosDoProfissional(geral, { ...d.dadoFiscal!, tipoRecebedor: 'pessoa_juridica' }).ok).toBe(
+        false,
+      );
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-c2-004' }, async (e) => {
+        for (const i of criados.fiscal)
+          await e.executar('DELETE FROM profissional_dado_fiscal WHERE id = ?', [i]);
+        for (const i of criados.conta)
+          await e.executar('DELETE FROM conta_bancaria_profissional WHERE id = ?', [i]);
+      });
+    }
   });
 });

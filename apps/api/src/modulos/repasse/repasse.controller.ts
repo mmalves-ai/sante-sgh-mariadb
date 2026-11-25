@@ -70,7 +70,8 @@ import {
 import { corpo, inteiroOuNulo } from '../exames/public-api.js';
 import { htmlDemonstrativo, htmlRpaEmitido } from './documentos.js';
 import { PORTA_REPASSE, type PortaRepasse } from './porta.js';
-import { ServicoRepasse } from './servico.js';
+import { FONTE_FISCAL_REPASSE } from './fonte-fiscal.js';
+import { type FonteFiscalRepasse, ServicoRepasse } from './servico.js';
 
 export const GERADOR_PDF_REPASSE = Symbol('GERADOR_PDF_REPASSE');
 type GeradorPdf = (html: string, titulo: string) => Promise<Buffer>;
@@ -117,8 +118,9 @@ export class RepasseController {
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
     @Optional() @Inject(GERADOR_PDF_REPASSE) private readonly pdf: GeradorPdf | null = null,
+    @Optional() @Inject(FONTE_FISCAL_REPASSE) fiscal: FonteFiscalRepasse | null = null,
   ) {
-    this.servico = new ServicoRepasse(porta, trilha, configuracao, cache);
+    this.servico = new ServicoRepasse(porta, trilha, configuracao, cache, fiscal);
   }
 
   /** A senha conferida de novo (M05); só a porta em memória sem sessão real (dev/ci sem login) dispensa. */

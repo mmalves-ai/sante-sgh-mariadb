@@ -164,6 +164,23 @@ async function emitir() {
       </div>
     </dl>
     <p v-if="previa" data-testid="rp-conta">{{ previa.retencoes.conta }}</p>
+    <p v-if="previa?.origemFiscal" data-testid="rp-origem-fiscal">
+      {{
+        previa.origemFiscal === 'dado-fiscal'
+          ? t('repasse.rpa.origemDadoFiscal')
+          : t('repasse.rpa.origemRegraGeral')
+      }}
+    </p>
+    <p
+      v-if="previa && previa.documento === 'rpa' && previa.destinoPagamento !== undefined"
+      data-testid="rp-destino"
+    >
+      {{
+        previa.destinoPagamento
+          ? t('repasse.rpa.destinoPagamento', { destino: previa.destinoPagamento })
+          : t('repasse.rpa.semContaPrincipal')
+      }}
+    </p>
     <span v-if="previa" class="campo">
       <label for="rp-senha">{{ t('repasse.rpa.senha') }}</label>
       <input

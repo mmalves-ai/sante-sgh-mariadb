@@ -227,6 +227,10 @@ export interface PreviaRpaResposta {
   readonly lancamentos: readonly number[];
   readonly retencoes: RetencoesRpaResposta;
   readonly documento: 'rpa' | 'demonstrativo';
+  /** De onde vieram as retenções: o dado fiscal do cadastro do profissional vigente hoje, ou a regra geral. */
+  readonly origemFiscal?: 'dado-fiscal' | 'regra-geral';
+  /** A conta principal do profissional, mascarada (banco, agência, final da conta ou tipo da chave); null: sem conta. */
+  readonly destinoPagamento?: string | null;
 }
 
 export interface ResultadoRepasse {

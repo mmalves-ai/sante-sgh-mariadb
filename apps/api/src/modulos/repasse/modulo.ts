@@ -19,6 +19,7 @@ import { portaRepasseIndisponivel, PortaRepassePropria } from './porta-propria.j
 import { GERADOR_PDF_REPASSE, RepasseController } from './repasse.controller.js';
 import { FavorecidosRepasseController } from './favorecidos.controller.js';
 import { PORTA_FAVORECIDOS_REPASSE, PortaFavorecidosRepassePropria } from './favorecidos-propria.js';
+import { FONTE_FISCAL_REPASSE, fonteFiscalRepasse } from './fonte-fiscal.js';
 
 export interface OpcoesModuloRepasse {
   /** Testes: a porta já montada. */
@@ -72,6 +73,11 @@ export async function moduloRepasse(
             {
               provide: PORTA_FAVORECIDOS_REPASSE,
               useValue: new PortaFavorecidosRepassePropria(ctx.nucleo, ctx.configuracao.clientePadrao),
+            },
+            // O dado fiscal e a conta do profissional (cadastro, F3.1) no cálculo do RPA.
+            {
+              provide: FONTE_FISCAL_REPASSE,
+              useValue: fonteFiscalRepasse(ctx.nucleo, ctx.configuracao.clientePadrao),
             },
           ]
         : []),
