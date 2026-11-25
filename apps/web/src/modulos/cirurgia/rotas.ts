@@ -40,6 +40,14 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Registro de cirurgia` },
   },
   {
+    // F3.4-5, 04-CC L100: gasto de sala do ato (sugestão pela lista padrão, conferência e débito na conta).
+    path: `/cirurgia/gasto-sala/:ato${id}?`,
+    name: 'cirurgia.gasto-sala',
+    component: () => import('./telas/GastoSalaTela.vue'),
+    props: (r) => ({ ato: r.params['ato'] ?? '' }),
+    meta: { permissao: 'cirurgia.registro.ler', menu: `${M} > Gasto de sala` },
+  },
+  {
     // F3.4-3, 04-CC L91: cadastro do texto padrão da descrição cirúrgica.
     path: '/cirurgia/textos-padrao',
     name: 'cirurgia.textos-padrao',

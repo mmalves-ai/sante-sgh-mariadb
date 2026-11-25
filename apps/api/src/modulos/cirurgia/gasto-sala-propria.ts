@@ -169,6 +169,65 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     super(nucleo, cliente, TABELAS, 'cirurgia.gasto-sala');
   }
 
+  // ── Apoio da tela: locais de estoque, produtos e lotes do estabelecimento ─────────────────────────────
+
+  /** Os locais de estoque vivos do estabelecimento e, com a busca (3+ letras ou o código), os produtos ativos. */
+  apoio(c: ContextoPortaPropria, busca: string | null) {
+    const termo = (busca ?? '').trim();
+    return this.ler(c, 'apoio', async (l, est) => ({
+      locais: (
+        await l.consultar<Linha>(
+          `SELECT id, nome, centro_custo_id FROM local_estoque
+            WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome LIMIT 500`,
+          [est.id],
+        )
+      ).map((x) => ({ id: num(x['id']), nome: String(x['nome']), comCentro: x['centro_custo_id'] !== null })),
+      produtos:
+        termo.length < 3
+          ? []
+          : (
+              await l.consultar<Linha>(
+                `SELECT id, codigo, nome, controla_lote, opme FROM insumo
+                  WHERE excluido_em IS NULL AND situacao = 'ativo' AND (nome LIKE ? OR codigo = ?)
+                  ORDER BY nome LIMIT 30`,
+                [`%${termo}%`, termo],
+              )
+            ).map((x) => ({
+              id: num(x['id']),
+              codigo: String(x['codigo']),
+              nome: String(x['nome']),
+              controlaLote: bool(x['controla_lote']),
+              opme: bool(x['opme']),
+            })),
+    }));
+  }
+
+  /** Os lotes liberados e na validade do produto no estabelecimento, com o saldo no local (validade primeiro). */
+  lotes(c: ContextoPortaPropria, insumo: number, local: number | null) {
+    return this.ler(c, 'lotes', async (l, est) => {
+      const hoje = await hojeNoEstabelecimento(l, est.id);
+      return (
+        await l.consultar<Linha>(
+          `SELECT lt.id, lt.numero_lote, lt.validade, COALESCE(SUM(sl.quantidade), 0) AS saldo
+             FROM lote_insumo lt
+             LEFT JOIN saldo_lote sl ON sl.lote_insumo_id = lt.id AND sl.local_estoque_id = ?
+            WHERE lt.insumo_id = ? AND lt.estabelecimento_id = ? AND lt.excluido_em IS NULL
+              AND lt.situacao = 'liberado' AND lt.validade >= ?
+            GROUP BY lt.id, lt.numero_lote, lt.validade ORDER BY lt.validade, lt.id LIMIT 100`,
+          [local, insumo, est.id, hoje],
+        )
+      ).map((x) => {
+        const v = x['validade'];
+        return {
+          id: num(x['id']),
+          numero: String(x['numero_lote']),
+          validade: v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10),
+          saldo: num(x['saldo']),
+        };
+      });
+    });
+  }
+
   // ── Lista padrão de material por procedimento ──────────────────────────────────────────────────────────
 
   listarLista(c: ContextoPortaPropria, procedimento: number | null) {
