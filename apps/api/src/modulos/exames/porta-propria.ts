@@ -32,6 +32,7 @@ import {
 } from './apoio-gravacao.js';
 import { OPERACOES_EXAME_DESLIGADAS } from './esquemas.js';
 import { OPERACOES_EXAME } from './operacoes.js';
+import { agendasOcultasDoUsuario, exigirManutencaoDeExame } from './papel-nominal.js';
 import { type GravadorCoberturaExame, METODOS_PORTA_EXAME, type PortaExame } from './porta.js';
 import { FUSO_PADRAO, horaCivil, horaDeMinutos, instanteCivil, relogioDoEstabelecimento } from './relogio.js';
 import {
@@ -213,15 +214,20 @@ export class PortaExamePropria implements PortaExame {
   }
 
   agendas(c: ContextoPortaM18): Promise<AgendaExame[]> {
-    return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_AGENDAS} ORDER BY a.nome, a.id`, [est])).map(agendaDe),
-    );
+    return this.ler(c, async (l, est) => {
+      // 02-AGE 40: a agenda restrita a uma lista de usuários some de quem não está nela.
+      const ocultas = await agendasOcultasDoUsuario(l, est, c.usuario);
+      return (await l.consultar(`${SQL_AGENDAS} ORDER BY a.nome, a.id`, [est]))
+        .map(agendaDe)
+        .filter((a) => !ocultas.has(a.id));
+    });
   }
 
   agenda(c: ContextoPortaM18, id: number): Promise<AgendaExame | null> {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(`${SQL_AGENDAS} AND a.id = ?`, [est, id]);
-      return r ? agendaDe(r) : null;
+      if (!r || (await agendasOcultasDoUsuario(l, est, c.usuario)).has(id)) return null;
+      return agendaDe(r);
     });
   }
 
@@ -422,8 +428,13 @@ export class PortaExamePropria implements PortaExame {
         `${SQL_MARCACOES} AND m.paciente_id = ? ORDER BY h.inicio_em DESC, m.id DESC LIMIT ${TETO_MARCACOES_EXAME + 1}`,
         [est, idPaciente],
       );
+      // 02-AGE 40: a marcação em agenda restrita não aparece para quem não está na lista dela.
+      const ocultas = await agendasOcultasDoUsuario(l, est, c.usuario);
       return {
-        itens: linhas.slice(0, TETO_MARCACOES_EXAME).map((r) => marcacaoDe(r, fuso)),
+        itens: linhas
+          .filter((r) => !ocultas.has(n(r['agenda_servico_id'])))
+          .slice(0, TETO_MARCACOES_EXAME)
+          .map((r) => marcacaoDe(r, fuso)),
         truncado: linhas.length > TETO_MARCACOES_EXAME,
       };
     });
@@ -447,7 +458,11 @@ export class PortaExamePropria implements PortaExame {
       const fuso = await this.fuso(l, est);
       const ini = instanteCivil(f.de, '00:00', fuso);
       const fim = new Date(instanteCivil(f.ate, '00:00', fuso).getTime() + 86_400_000);
-      const filtro = f.agendas ? `AND a.id IN (${lista(f.agendas.length)})` : '';
+      // 02-AGE 40: cancelamento em agenda restrita não aparece para quem não está na lista dela.
+      const ocultas = [...(await agendasOcultasDoUsuario(l, est, c.usuario))];
+      const filtro =
+        (f.agendas ? `AND a.id IN (${lista(f.agendas.length)})` : '') +
+        (ocultas.length > 0 ? ` AND a.id NOT IN (${lista(ocultas.length)})` : '');
       const base = `
           FROM cancelamento_marcacao cm
           JOIN marcacao_horario m ON m.id = cm.marcacao_horario_id
@@ -462,7 +477,7 @@ export class PortaExamePropria implements PortaExame {
           LEFT JOIN usuario um ON um.id = m.responsavel_usuario_id
          WHERE cm.estabelecimento_id = ? AND cm.excluido_em IS NULL AND ca.natureza = 'exame'
            AND cm.cancelado_em >= ? AND cm.cancelado_em < ? ${filtro}`;
-      const p = [est, ini, fim, ...(f.agendas ?? [])];
+      const p = [est, ini, fim, ...(f.agendas ?? []), ...ocultas];
       const total = n((await l.uma(`SELECT COUNT(*) AS total ${base}`, p))?.['total']);
       const porPagina = Math.max(1, Math.min(f.porPagina, 200));
       const pular = Math.max(0, (Math.max(1, f.pagina) - 1) * porPagina);
@@ -637,6 +652,8 @@ function gravadorCobertura(
       [agenda, est],
     );
     if (!a) throw recusa('agenda-desconhecida', 'A agenda de exames não existe neste estabelecimento.');
+    // 02-AGE 40: a cobertura por exame da agenda restrita é manutenção (quem marca nela ou o gestor da agenda).
+    await exigirManutencaoDeExame(tx, agenda, tx.contexto.usuario);
   };
   const linhaDa = (r: { agenda: number; exame: number; convenio: number | null }) =>
     tx.consultarParaAtualizar(

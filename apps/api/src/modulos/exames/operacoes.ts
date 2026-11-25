@@ -36,7 +36,7 @@ import {
 } from '@sgh/nucleo';
 import type { PessoaSemProntuario } from '@sgh/dominio-agenda';
 import { dataNoFuso, preCadastroDaMarcacao } from '../agenda/pre-cadastro-marcacao.js';
-import { exigirMarcacaoNominal } from '../agenda/usuarios-agenda.js';
+import { exigirManutencaoDeExame, exigirMarcacaoDeExame } from './papel-nominal.js';
 import { instanteCivil, minutosDaHora, normalizarHora } from './relogio.js';
 
 type Linha = Record<string, unknown>;
@@ -140,8 +140,9 @@ async function marcarNoHorario(tx: TxOperacao, ctx: ContextoOperacao, e: Marcar)
   const usuario = usuarioDe(ctx);
   const a = await agendaDeExame(tx, est, e.agenda);
   if (!a.ativo) throw recusa('agenda-inativa', 'A agenda de exames está inativa: não aceita marcação.');
-  // 02-AGE 40: agenda de exame restrita a uma lista de usuários só aceita quem está nela com "pode marcar".
-  await exigirMarcacaoNominal(tx, a.id, usuario);
+  // 02-AGE 40: agenda de exame restrita a uma lista de usuários só aceita quem está nela com "pode marcar" (e o
+  // administrador da plataforma).
+  await exigirMarcacaoDeExame(tx, a.id, usuario);
   const inicio = instanteCivil(e.data, e.hora, await fusoDe(tx, est));
   if (inicio.getTime() <= Date.now())
     throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
@@ -269,7 +270,7 @@ async function marcacaoTravada(tx: TxOperacao, ctx: ContextoOperacao, id: number
   );
   if (!m) throw naoEncontrado('Marcação não encontrada', 'A marcação não existe mais.');
   // 02-AGE 40: cancelar ou remarcar na agenda restrita é de quem está na lista dela com "pode marcar".
-  await exigirMarcacaoNominal(tx, n(m['agenda_nominal']), usuarioDe(ctx));
+  await exigirMarcacaoDeExame(tx, n(m['agenda_nominal']), usuarioDe(ctx));
   if (m['significado'] === 'cancelada') throw recusa('ja-cancelada', 'A marcação já foi cancelada.');
   if (m['atendido_em'] !== null || ['realizada', 'em_atendimento'].includes(String(m['significado'])))
     throw recusa('ja-atendido', 'O exame já foi atendido: a marcação não pode mais ser desfeita.');
@@ -469,6 +470,8 @@ export const gerarGradeExame = definirOperacao<GerarGradeExameEntrada, Resultado
     const usuario = usuarioDe(ctx);
     const a = await agendaDeExame(tx, est, e.agenda);
     if (!a.ativo) throw recusa('agenda-inativa', 'A agenda de exames está inativa: não aceita geração.');
+    // 02-AGE 40: gerar a grade da agenda restrita é manutenção: de quem marca nela ou do gestor da agenda.
+    await exigirManutencaoDeExame(tx, a.id, usuario);
     const fuso = await fusoDe(tx, est);
     const duracao = minutosDaHora(e.duracao);
     const agora = Date.now();
@@ -563,6 +566,8 @@ export const definirCoberturaExame = definirOperacao<DefinirCoberturaExameEntrad
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
     const a = await agendaDeExame(tx, est, e.agenda);
+    // 02-AGE 40: as fontes pagadoras aceitas pela agenda restrita são manutenção (quem marca nela ou o gestor).
+    await exigirManutencaoDeExame(tx, a.id, ctx.usuario);
     const linhas = await tx.consultarParaAtualizar(
       'SELECT id, versao, fonte_pagadora_id, excluido_em FROM agenda_fonte_pagadora WHERE agenda_servico_id = ?',
       [a.id],
@@ -633,7 +638,7 @@ export const agendarExameSemProntuario = definirOperacao<AgendarExameSemProntuar
       return { marcacao: id, agenda: e.agenda, preCadastro: n(r?.['pre_cadastro_id']) };
     },
     eventos: (e, r) => [
-      { tipo: 'agenda.exame.semProntuario', carga: { marcacao: r['marcacao'] ?? null, agenda: e.agenda } },
+      { tipo: 'agenda.exame.sem_prontuario', carga: { marcacao: r['marcacao'] ?? null, agenda: e.agenda } },
     ],
     alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: n(r['marcacao']) }),
   },

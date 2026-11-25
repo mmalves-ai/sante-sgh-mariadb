@@ -15,6 +15,7 @@ import {
 } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoPortaM18 } from './apoio-gravacao.js';
+import { comPapelNominal } from './papel-nominal.js';
 import type { PortaExame } from './porta.js';
 import { PortaExameMemoria } from './porta-memoria.js';
 import { PortaExamePropria } from './porta-propria.js';
@@ -406,6 +407,173 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-01-05-nominal' }, (e) =>
       e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ?', [ids.agenda]),
     );
+  });
+
+  it('02-AGE 40: na agenda de exame restrita a manutenção (grade, fontes pagadoras, cobertura por exame) é de quem marca ou do gestor; a agenda some da leitura de quem está fora; o administrador da plataforma marca', async () => {
+    const longe = horaCivil(new Date(Date.now() + 25 * 86_400_000)).data;
+    const a = [ids.agenda];
+    const outro = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-01-05-nominal-manut' },
+      async (e) => {
+        const id = await garantir(
+          e,
+          'SELECT id FROM usuario WHERE login = ?',
+          ['l0105.lista'],
+          "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+          ['l0105.lista', 'USUARIO SINTETICO L0105 LISTA', new Date()],
+        );
+        await e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ?', a);
+        await e.executar(
+          'INSERT INTO agenda_usuario (agenda_servico_id, usuario_id, pode_marcar, criado_em) VALUES (?, ?, TRUE, ?), (?, ?, FALSE, ?)',
+          [ids.agenda, id, new Date(), ids.agenda, ids.usuario, new Date()],
+        );
+        return id;
+      },
+    );
+    const foto = async () => {
+      const k = async (sql: string) => Number((await ler<{ k: number }>(sql, a))[0]?.k);
+      return {
+        geracoes: await k('SELECT COUNT(*) AS k FROM geracao_grade WHERE agenda_servico_id = ?'),
+        horarios: await k('SELECT COUNT(*) AS k FROM horario_agenda WHERE agenda_servico_id = ?'),
+        fontes: await k('SELECT COUNT(*) AS k FROM agenda_fonte_pagadora WHERE agenda_servico_id = ?'),
+        exames: await k('SELECT COUNT(*) AS k FROM agenda_servico_exame WHERE agenda_servico_id = ?'),
+        marcacoes: await k(
+          'SELECT COUNT(*) AS k FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id WHERE h.agenda_servico_id = ?',
+        ),
+      };
+    };
+    const antes = await foto();
+    const grade = {
+      agenda: ids.agenda,
+      de: longe,
+      ate: longe,
+      duracao: '00:20',
+      horarios: [{ data: longe, hora: '10:00' }],
+      escala: [
+        {
+          semana: 2,
+          duracao: '00:20',
+          horaInicio: '10:00',
+          horaFim: '10:20',
+          intervaloInicio: null,
+          intervaloFim: null,
+        },
+      ],
+      semanas: ['T', 'T', 'T', 'T', 'T', 'T', 'T'],
+    };
+    const fonte = (convenio: number) => ({ agenda: ids.agenda, convenio, acao: 'incluir' });
+    const coberto = { agenda: ids.agenda, exame: ids.exame, convenio: null };
+    const trilha = (r: number) => ({
+      estabelecimento: ids.est,
+      usuario: ids.usuario,
+      acao: 'inclusao' as const,
+      entidade: 'agenda_servico_exame',
+      entidadeId: r,
+      correlacao: 'teste-40-cobertura',
+    });
+    const manutencoes = () =>
+      Promise.all([
+        porta.executar(ctx, 'agenda.gerarGradeExame', grade, opCtx()).catch((e) => e),
+        porta.executar(ctx, 'agenda.definirCoberturaExame', fonte(ids.fonte), opCtx()).catch((e) => e),
+        porta.gravarSgh(ctx, trilha, (g) => g.incluirCobertura(coberto)).catch((e) => e),
+      ]);
+    // Quem só consulta vê a agenda, mas não a mantém: as três manutenções são recusadas e nada é gravado.
+    expect((await manutencoes()).map(codigoDe)).toEqual([
+      'agenda-restrita',
+      'agenda-restrita',
+      'agenda-restrita',
+    ]);
+    expect(await porta.agenda(ctx, ids.agenda)).not.toBeNull();
+    expect(await foto()).toEqual(antes);
+    // Fora da lista: a agenda some da leitura (lista, detalhe, marcações do paciente) e a manutenção é recusada.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-01-05-nominal-manut' }, (e) =>
+      e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ? AND usuario_id = ?', [
+        ids.agenda,
+        ids.usuario,
+      ]),
+    );
+    expect((await manutencoes()).map(codigoDe)).toEqual([
+      'agenda-restrita',
+      'agenda-restrita',
+      'agenda-restrita',
+    ]);
+    expect(await porta.agenda(ctx, ids.agenda)).toBeNull();
+    expect((await porta.agendas(ctx)).map((x) => x.id)).not.toContain(ids.agenda);
+    expect(
+      (await porta.marcacoesDoPaciente(ctx, ids.paciente)).itens.filter((m) => m.agenda === ids.agenda),
+    ).toEqual([]);
+    const cancelados = await porta.cancelamentos(ctx, {
+      de: horaCivil(new Date(Date.now() - 86_400_000)).data,
+      ate: longe,
+      agendas: null,
+      pagina: 1,
+      porPagina: 50,
+    });
+    expect(cancelados.itens.filter((x) => x.nomeAgenda === `ULTRASSOM ${P}`)).toEqual([]);
+    expect(await foto()).toEqual(antes);
+    // Quem está na lista e marca vê a agenda e também a mantém.
+    const ctxOutro = { ...ctx, usuario: outro };
+    expect((await porta.agendas(ctxOutro)).map((x) => x.id)).toContain(ids.agenda);
+    await porta.executar(ctxOutro, 'agenda.definirCoberturaExame', fonte(ids.fonte2), opCtx(ctxOutro));
+    // O gestor da agenda, fora da lista, vê e mantém (grade, fonte pagadora, cobertura por exame), mas não marca.
+    const marcar = {
+      agenda: ids.agenda,
+      data: longe,
+      hora: '10:00',
+      paciente: ids.paciente,
+      convenio: ids.fonte,
+      exame: ids.exame,
+      solicitante: null,
+      retorno: false,
+      canal: 'telefone',
+    };
+    await comPapelNominal({ gestor: true, administrador: false }, async () => {
+      expect(await porta.agenda(ctx, ids.agenda)).not.toBeNull();
+      const g = await porta.executar(ctx, 'agenda.gerarGradeExame', grade, opCtx());
+      expect(g.resultado['horarios']).toBe(1);
+      await porta.executar(ctx, 'agenda.definirCoberturaExame', fonte(ids.fonte), opCtx());
+      expect(await porta.gravarSgh(ctx, trilha, (x) => x.incluirCobertura(coberto))).toBeGreaterThan(0);
+      const m = await porta.executar(ctx, 'agenda.agendarExame', marcar, opCtx()).catch((e) => e);
+      expect(codigoDe(m)).toBe('agenda-restrita');
+    });
+    expect(await foto()).toEqual({
+      geracoes: antes.geracoes + 1,
+      horarios: antes.horarios + 1,
+      fontes: antes.fontes + 2,
+      exames: antes.exames + 1,
+      marcacoes: antes.marcacoes,
+    });
+    const [h] = await ler<{ id: number }>(
+      'SELECT id FROM horario_agenda WHERE agenda_servico_id = ? AND data_referencia = ?',
+      [ids.agenda, longe],
+    );
+    // O administrador da plataforma marca sem estar na lista (pode tudo); o responsável fica gravado.
+    const feita = await comPapelNominal({ gestor: false, administrador: true }, () =>
+      porta.executar(ctx, 'agenda.agendarExame', marcar, opCtx()),
+    );
+    expect(
+      await ler('SELECT horario_agenda_id, responsavel_usuario_id FROM marcacao_horario WHERE id = ?', [
+        Number(feita.resultado['marcacao']),
+      ]),
+    ).toEqual([{ horario_agenda_id: Number(h?.id), responsavel_usuario_id: ids.usuario }]);
+    // Desfaz o que este caso gravou (os casos seguintes partem da agenda sem lista, sem fonte e sem cobertura).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-01-05-nominal-manut' }, async (e) => {
+      const hs = [Number(h?.id)];
+      await e.executar(
+        'DELETE i FROM marcacao_horario_item i JOIN marcacao_horario m ON m.id = i.marcacao_horario_id WHERE m.horario_agenda_id = ?',
+        hs,
+      );
+      await e.executar('DELETE FROM marcacao_horario WHERE horario_agenda_id = ?', hs);
+      await e.executar('DELETE FROM horario_agenda WHERE id = ?', hs);
+      await e.executar('DELETE FROM geracao_grade WHERE agenda_servico_id = ? AND periodo_inicio = ?', [
+        ids.agenda,
+        longe,
+      ]);
+      await e.executar('DELETE FROM agenda_fonte_pagadora WHERE agenda_servico_id = ?', a);
+      await e.executar('DELETE FROM agenda_servico_exame WHERE agenda_servico_id = ?', a);
+      await e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ?', a);
+    });
+    expect(await foto()).toEqual(antes);
   });
 
   it('02-AGE 44: marca o exame sem prontuário com o pré-cadastro na mesma transação e devolve a vaga ao cancelar', async () => {
