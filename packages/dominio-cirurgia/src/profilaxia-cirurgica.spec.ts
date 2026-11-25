@@ -43,10 +43,11 @@ const adm = (em: Date, o: Partial<AdministracaoProfilaxia> = {}): AdministracaoP
   dose: 2000,
   unidade: 5,
   via: 7,
+  finalidade: 'profilatica',
   ...o,
 });
 const encerrado = (em: Date | null, antimicrobiano = 10) => [
-  { prescricaoItem: 100, antimicrobiano, encerradoEm: em },
+  { prescricaoItem: 100, antimicrobiano, encerradoEm: em, finalidade: 'profilatica' as const },
 ];
 const ATO = { incisao: H(8), fim: H(10), pesoKg: 80 };
 const DEPOIS = H(23, 59);
@@ -171,6 +172,53 @@ describe('auditoria da profilaxia do ato', () => {
     );
     expect(aberto.duracaoAdequada).toBe(false);
     expect(aberto.situacao).toBe('nao_conforme');
+  });
+  it('tratamento iniciado no 2º dia de pós-operatório com a mesma droga não é profilaxia prolongada', () => {
+    const d2 = new Date(H(10).getTime() + 30 * 3_600_000);
+    const r = auditarProfilaxia(
+      ATO,
+      [CEFAZOLINA],
+      [adm(H(7, 30)), adm(d2, { prescricaoItem: 200, finalidade: 'terapeutica' })],
+      [
+        ...encerrado(H(12)),
+        { prescricaoItem: 200, antimicrobiano: 10, encerradoEm: null, finalidade: 'terapeutica' },
+      ],
+      new Date(d2.getTime() + 3_600_000),
+    );
+    expect(r).toMatchObject({ situacao: 'conforme', duracaoAdequada: true, prescricaoItem: 100 });
+    expect(r.motivos).not.toContain('profilaxia-prolongada');
+    expect(r.motivos).not.toContain('sem-marca-profilatica');
+  });
+  it('tratamento dado antes da cirurgia nunca é a primeira dose', () => {
+    const r = auditarProfilaxia(
+      ATO,
+      [CEFAZOLINA],
+      [adm(H(7, 30)), adm(H(7, 50), { prescricaoItem: 200, finalidade: 'empirica' })],
+      encerrado(H(12)),
+      DEPOIS,
+    );
+    expect(r).toMatchObject({ minutosAntesIncisao: 30, prescricaoItem: 100, situacao: 'conforme' });
+    const so = auditarProfilaxia(
+      ATO,
+      [CEFAZOLINA],
+      [adm(H(7, 50), { finalidade: 'terapeutica' })],
+      [],
+      DEPOIS,
+    );
+    expect(so.motivos).toEqual(['sem-dose']);
+  });
+  it('sem ficha (sem marca profilática): depois do limite dá alerta, não prolongamento', () => {
+    const d2 = new Date(H(10).getTime() + 30 * 3_600_000);
+    const r = auditarProfilaxia(
+      ATO,
+      [CEFAZOLINA],
+      [adm(H(7, 30), { finalidade: null }), adm(d2, { finalidade: null })],
+      [{ prescricaoItem: 100, antimicrobiano: 10, encerradoEm: null, finalidade: null }],
+      new Date(d2.getTime() + 3_600_000),
+    );
+    expect(r).toMatchObject({ situacao: 'conforme', duracaoAdequada: true });
+    expect(r.motivos).toContain('sem-marca-profilatica');
+    expect(r.motivos).not.toContain('profilaxia-prolongada');
   });
   it('item aberto dentro das 24 h fica pendente', () => {
     const r = auditarProfilaxia(ATO, [CEFAZOLINA], [adm(H(7, 30))], encerrado(null), H(12));

@@ -14,6 +14,7 @@
 //     auditoria vigente, e os indicadores (conformidade, momento e duração adequados).
 import {
   type AdministracaoProfilaxia,
+  type FinalidadeAntimicrobiano,
   auditarProfilaxia,
   conferirProtocoloProfilaxia,
   exigeJanelaLonga,
@@ -186,17 +187,27 @@ function protocoloLido(r: Linha): ProtocoloProfilaxiaLido {
   };
 }
 
+const FINALIDADES: readonly FinalidadeAntimicrobiano[] = ['profilatica', 'empirica', 'terapeutica'];
+/** O código da finalidade da ficha; sem ficha (ou código desconhecido), nulo: sem marca profilática. */
+const finalidadeDe = (v: unknown): FinalidadeAntimicrobiano | null =>
+  FINALIDADES.find((f) => f === v) ?? null;
+
 const opcoesDe = async (l: Leitor, sql: string) =>
   (await l.consultar<Linha>(sql)).map((r) => ({ id: num(r['id']), rotulo: String(r['rotulo']) }));
 
-/** As administrações de antimicrobiano checadas no atendimento, na janela da cirurgia (um registro por horário). */
+/**
+ * As administrações de antimicrobiano checadas no atendimento, na janela da cirurgia (um registro por horário), com a
+ * finalidade da ficha do antimicrobiano: o domínio separa a profilaxia (ficha profilática) do tratamento.
+ */
 const SQL_ADMINISTRACOES = `
   SELECT h.id, h.prescricao_item_id, h.administrado_em, h.quantidade_administrada, pi.via_de_uso_id,
-         up.unidade_medida_id, up.fator_conversao, COALESCE(fa.antimicrobiano_id, am.id) AS antimicrobiano
+         up.unidade_medida_id, up.fator_conversao, COALESCE(fa.antimicrobiano_id, am.id) AS antimicrobiano,
+         ft.codigo AS finalidade
     FROM horario_administracao h
     JOIN prescricao_item pi ON pi.id = h.prescricao_item_id
     LEFT JOIN unidade_prescricao up ON up.id = COALESCE(h.unidade_prescricao_id, pi.unidade_prescricao_id)
-    LEFT JOIN ficha_antimicrobiano fa ON fa.prescricao_item_id = pi.id
+    LEFT JOIN ficha_antimicrobiano fa ON fa.prescricao_item_id = pi.id AND fa.excluido_em IS NULL
+    LEFT JOIN finalidade_terapeutica ft ON ft.id = fa.finalidade_terapeutica_id
     LEFT JOIN item_prescritivel ip ON ip.id = pi.item_prescritivel_id
     LEFT JOIN antimicrobiano am ON ip.principio_ativo_id IS NOT NULL AND am.principio_ativo_id = ip.principio_ativo_id
    WHERE h.atendimento_id = ? AND h.estabelecimento_id = ? AND h.administrado_em IS NOT NULL
@@ -205,11 +216,12 @@ const SQL_ADMINISTRACOES = `
 
 /** Os itens prescritos de antimicrobiano do atendimento que cruzam a janela, com o encerramento. */
 const SQL_ITENS = `
-  SELECT pi.id, COALESCE(fa.antimicrobiano_id, am.id) AS antimicrobiano,
+  SELECT pi.id, COALESCE(fa.antimicrobiano_id, am.id) AS antimicrobiano, ft.codigo AS finalidade,
          COALESCE(pi.suspenso_em, pi.fim_em, IF(pi.situacao <> 'ativo', pi.alterado_em, NULL)) AS encerrado_em
     FROM prescricao_item pi
     JOIN prescricao p ON p.id = pi.prescricao_id
-    LEFT JOIN ficha_antimicrobiano fa ON fa.prescricao_item_id = pi.id
+    LEFT JOIN ficha_antimicrobiano fa ON fa.prescricao_item_id = pi.id AND fa.excluido_em IS NULL
+    LEFT JOIN finalidade_terapeutica ft ON ft.id = fa.finalidade_terapeutica_id
     LEFT JOIN item_prescritivel ip ON ip.id = pi.item_prescritivel_id
     LEFT JOIN antimicrobiano am ON ip.principio_ativo_id IS NOT NULL AND am.principio_ativo_id = ip.principio_ativo_id
    WHERE p.atendimento_id = ? AND p.estabelecimento_id = ? AND pi.inicio_em <= ?
@@ -398,6 +410,7 @@ export class PortaProfilaxiaCirurgicaPropria extends PortaEstabelecimentoPropria
                 dose: q !== null && unidade !== null ? q * (numOuNull(r['fator_conversao']) ?? 1) : null,
                 unidade,
                 via: numOuNull(r['via_de_uso_id']),
+                finalidade: finalidadeDe(r['finalidade']),
               };
             })
         : [];
@@ -406,6 +419,7 @@ export class PortaProfilaxiaCirurgicaPropria extends PortaEstabelecimentoPropria
             prescricaoItem: num(r['id']),
             antimicrobiano: numOuNull(r['antimicrobiano']),
             encerradoEm: instante(r['encerrado_em']),
+            finalidade: finalidadeDe(r['finalidade']),
           }))
         : [];
       const r = auditarProfilaxia(

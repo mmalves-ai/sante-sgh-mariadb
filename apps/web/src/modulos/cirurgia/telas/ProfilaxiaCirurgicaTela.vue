@@ -79,6 +79,8 @@ const { t } = useI18n({
         'repique-faltando': 'repique faltando',
         'profilaxia-prolongada': 'profilaxia além do limite',
         'duracao-em-curso': 'prescrição ainda aberta (reaudite depois)',
+        'sem-marca-profilatica':
+          'antimicrobiano sem ficha profilática (confira se é profilaxia ou tratamento)',
       },
       resultado: 'Auditoria gravada: {s}. {m}',
       procedimento: 'Procedimento',

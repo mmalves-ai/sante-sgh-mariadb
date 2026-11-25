@@ -8,8 +8,9 @@
 // cefazolina sem escrita e a de 120 aceita para a vancomicina; desativar e reativar pela versão (nada apagado); a
 // auditoria conforme (dose 30 minutos antes da incisão, item encerrado em 24 horas) com o avaliador e o instante; a
 // nova auditoria do mesmo ato deixa a anterior no histórico com a marca de exclusão; a dose 90 minutos antes é não
-// conforme; o ato sem incisão não é avaliável; o painel do período conta as cirurgias e a conformidade; a sessão de
-// outro estabelecimento recebe 404 sem escrita.
+// conforme; o ato sem incisão não é avaliável; o tratamento (ficha terapêutica) da mesma droga iniciado no 2º dia de
+// pós-operatório não vira profilaxia prolongada e a cirurgia segue conforme, com a dose profilática pela ficha; o
+// painel do período conta as cirurgias e a conformidade; a sessão de outro estabelecimento recebe 404 sem escrita.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -35,6 +36,10 @@ async function limpar(e: Escritor): Promise<void> {
     P2,
   ]);
   await e.executar(`DELETE FROM horario_administracao WHERE estabelecimento_id IN (${ests})`, [P, P2]);
+  await e.executar(
+    `DELETE FROM ficha_antimicrobiano WHERE prescricao_item_id IN (SELECT id FROM prescricao_item WHERE prescricao_id IN (${presc}))`,
+    [P, P2],
+  );
   await e.executar(`DELETE FROM prescricao_item WHERE prescricao_id IN (${presc})`, [P, P2]);
   await e.executar(`DELETE FROM prescricao WHERE estabelecimento_id IN (${ests})`, [P, P2]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${COD('')}%`]);
@@ -73,6 +78,7 @@ describe.skipIf(SEM_BANCO)('PortaProfilaxiaCirurgicaPropria contra o MariaDB (co
     atoA: number;
     atoB: number;
     atoC: number;
+    atoD: number;
   };
   const ctx = (hospital = P) => ({ cliente: CLIENTE, hospital, usuario: m.usuario, correlacao: P });
   const ler = (sql: string, p: unknown[] = []) =>
@@ -145,6 +151,7 @@ describe.skipIf(SEM_BANCO)('PortaProfilaxiaCirurgicaPropria contra o MariaDB (co
         });
       const atA = await atendimento('A');
       const atB = await atendimento('B');
+      const atD = await atendimento('D');
       const ua = await min('unidade_assistencial', {
         estabelecimento_id: est,
         codigo: 'CC1',
@@ -199,17 +206,28 @@ describe.skipIf(SEM_BANCO)('PortaProfilaxiaCirurgicaPropria contra o MariaDB (co
         principio_ativo_id: paCef,
       });
       let numero = 0;
-      // A prescrição do atendimento com o item da cefazolina e o horário checado.
-      const prescrever = async (at: number, administrado: Date, fim: Date | null) => {
+      const finalidade = async (codigo: string) =>
+        Number(
+          (await e.uma('SELECT id FROM finalidade_terapeutica WHERE codigo = ?', [codigo]))?.['id'] ?? 0,
+        );
+      // A prescrição do atendimento com o item da cefazolina e o horário checado; com `ficha`, a ficha do
+      // antimicrobiano do item com a finalidade (profilática ou terapêutica).
+      const prescrever = async (
+        at: number,
+        administrado: Date,
+        fim: Date | null,
+        ficha?: { finalidade: string; inicio: Date },
+      ) => {
+        const inicio = ficha?.inicio ?? H(6);
         const pr = await min('prescricao', {
           estabelecimento_id: est,
           numero: 920120 + ++numero,
           paciente_id: paciente,
           atendimento_id: at,
           prescritor_profissional_id: prof,
-          prescrito_em: H(6),
-          vigencia_inicio_em: H(6),
-          vigencia_fim_em: H(6, 0, 11),
+          prescrito_em: inicio,
+          vigencia_inicio_em: inicio,
+          vigencia_fim_em: new Date(inicio.getTime() + 24 * 3_600_000),
         });
         const item = await min('prescricao_item', {
           prescricao_id: pr,
@@ -218,7 +236,7 @@ describe.skipIf(SEM_BANCO)('PortaProfilaxiaCirurgicaPropria contra o MariaDB (co
           item_prescritivel_id: itemCef,
           via_de_uso_id: via,
           unidade_prescricao_id: unidadePresc,
-          inicio_em: H(6),
+          inicio_em: inicio,
           fim_em: fim,
           lancamento_profissional_id: prof,
         });
@@ -234,9 +252,32 @@ describe.skipIf(SEM_BANCO)('PortaProfilaxiaCirurgicaPropria contra o MariaDB (co
           administrado_em: administrado,
           administrado_por_profissional_id: prof,
         });
+        if (ficha) {
+          const fid = await finalidade(ficha.finalidade);
+          if (!fid) throw new Error('O cliente de teste precisa das finalidades do antimicrobiano.');
+          await min('ficha_antimicrobiano', {
+            estabelecimento_id: est,
+            paciente_id: paciente,
+            atendimento_id: at,
+            prescricao_item_id: item,
+            antimicrobiano_id: cefazolina,
+            prescritor_profissional_id: prof,
+            finalidade_terapeutica_id: fid,
+            origem_infeccao: ficha.finalidade === 'profilatica' ? 'profilaxia_cirurgica' : 'hospitalar',
+            justificativa: 'Justificativa sintética',
+            data_inicio: inicio,
+            dias_previstos: ficha.finalidade === 'profilatica' ? 1 : 7,
+            data_fim_prevista: inicio,
+            origem: 'sistema',
+          });
+        }
       };
       await prescrever(atA, H(7, 30), H(12));
       await prescrever(atB, H(6, 30), null);
+      // Atendimento D: a profilaxia pela ficha profilática (30 min antes, encerrada em 24 h) e, no 2º dia de
+      // pós-operatório, o tratamento de infecção com a mesma droga, aberto e com dose além do limite da duração.
+      await prescrever(atD, H(7, 30), H(12), { finalidade: 'profilatica', inicio: H(6) });
+      await prescrever(atD, H(16, 0, 11), null, { finalidade: 'terapeutica', inicio: H(15, 0, 11) });
       const ato = async (at: number, n: string, incisao: Date | null, fim: Date | null, situacao: string) => {
         const id = await e.inserir(
           `INSERT INTO ato_cirurgico (estabelecimento_id, numero, atendimento_id, paciente_id, sala_cirurgica_id,
@@ -262,6 +303,7 @@ describe.skipIf(SEM_BANCO)('PortaProfilaxiaCirurgicaPropria contra o MariaDB (co
         atoA: await ato(atA, 'A', H(8), H(10), 'realizado'),
         atoB: await ato(atB, 'B', H(8), H(10), 'realizado'),
         atoC: await ato(atA, 'C', null, null, 'em_andamento'),
+        atoD: await ato(atD, 'D', H(8), H(10), 'realizado'),
       };
     });
     porta = new PortaProfilaxiaCirurgicaPropria(nucleo, CLIENTE);
@@ -362,16 +404,29 @@ describe.skipIf(SEM_BANCO)('PortaProfilaxiaCirurgicaPropria contra o MariaDB (co
     });
   });
 
+  it('o tratamento da mesma droga iniciado no 2º dia de pós-operatório não é profilaxia prolongada', async () => {
+    const d = await porta.auditar(ctx(), m.atoD, {});
+    expect(d).toMatchObject({ situacao: 'conforme', minutosAntesIncisao: 30, antimicrobiano: m.cefazolina });
+    expect(d.motivos).not.toContain('profilaxia-prolongada');
+    expect(d.motivos).not.toContain('sem-marca-profilatica');
+    expect((await auditorias(m.atoD))[0]).toMatchObject({
+      situacao: 'conforme',
+      duracao_adequada: 1,
+      momento_adequado: 1,
+      excluida: 0,
+    });
+  });
+
   it('o painel do período conta as cirurgias com incisão e a conformidade', async () => {
     const p = await porta.painel(ctx(), { de: '2030-03-10', ate: '2030-03-10' });
-    expect(p.cirurgias.map((x) => x.ato).sort()).toEqual([m.atoA, m.atoB].sort());
+    expect(p.cirurgias.map((x) => x.ato).sort()).toEqual([m.atoA, m.atoB, m.atoD].sort());
     expect(p.indicadores).toMatchObject({
-      cirurgias: 2,
-      auditadas: 2,
-      conformes: 1,
+      cirurgias: 3,
+      auditadas: 3,
+      conformes: 2,
       naoConformes: 1,
-      momentoAdequado: 1,
-      percentualConforme: 50,
+      momentoAdequado: 2,
+      percentualConforme: 66.7,
     });
     await expect(porta.painel(ctx(), { de: '2030-03-11', ate: '2030-03-10' })).rejects.toMatchObject(
       recusa422,

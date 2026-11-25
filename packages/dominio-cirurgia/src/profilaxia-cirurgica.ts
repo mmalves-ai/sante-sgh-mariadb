@@ -125,13 +125,23 @@ export interface AdministracaoProfilaxia {
   readonly dose: number | null;
   readonly unidade: number | null;
   readonly via: number | null;
+  /** A finalidade da ficha do antimicrobiano do item; nula quando o item não tem ficha (sem marca profilática). */
+  readonly finalidade?: FinalidadeAntimicrobiano | null;
 }
+
+/** A finalidade da ficha do antimicrobiano: só a profilática conta como profilaxia; empírica e terapêutica são tratamento. */
+export type FinalidadeAntimicrobiano = 'profilatica' | 'empirica' | 'terapeutica';
+
+const tratamento = (x: { finalidade?: FinalidadeAntimicrobiano | null }) =>
+  x.finalidade !== undefined && x.finalidade !== null && x.finalidade !== 'profilatica';
+const marcada = (x: { finalidade?: FinalidadeAntimicrobiano | null }) => x.finalidade === 'profilatica';
 
 export interface ItemProfilaxiaPrescrito {
   readonly prescricaoItem: number;
   readonly antimicrobiano: number | null;
   /** Fim do item (encerrado, suspenso ou vencido); nulo enquanto ativo sem fim. */
   readonly encerradoEm: Date | null;
+  readonly finalidade?: FinalidadeAntimicrobiano | null;
 }
 
 export interface AtoProfilaxia {
@@ -186,6 +196,11 @@ function vazio(situacao: SituacaoAuditoriaProfilaxia, motivo: string): Resultado
  * Audita a profilaxia do ato contra os protocolos que valem para ele (já filtrados por procedimento, classe e
  * vigência, em ordem de preferência), com as administrações de antimicrobiano checadas no atendimento e os itens
  * prescritos. `agora` decide se a duração ainda está em curso.
+ *
+ * Só conta como profilaxia o que a ficha do antimicrobiano marca como profilático. O tratamento (ficha empírica ou
+ * terapêutica), antes ou depois da cirurgia, nunca é a primeira dose, o repique nem o prolongamento. O que não tem
+ * ficha entra como profilaxia possível, com o alerta 'sem-marca-profilatica'; depois do limite da duração, só dá o
+ * alerta, não o prolongamento.
  */
 export function auditarProfilaxia(
   ato: AtoProfilaxia,
@@ -197,17 +212,18 @@ export function auditarProfilaxia(
   if (!ato.incisao) return vazio('nao_avaliavel', 'sem-incisao');
   if (!protocolos.length) return vazio('nao_avaliavel', 'sem-protocolo');
   const incisao = ato.incisao.getTime();
-  const ordenadas = [...administracoes].sort(
-    (a, b) => a.administradoEm.getTime() - b.administradoEm.getTime(),
-  );
+  const ordenadas = administracoes
+    .filter((a) => !tratamento(a))
+    .sort((a, b) => a.administradoEm.getTime() - b.administradoEm.getTime());
   const motivos: string[] = [];
   const ordemProtocolos = [...protocolos].sort((a, b) => a.ordem - b.ordem);
   const doProtocolo = (a: AdministracaoProfilaxia) =>
     ordemProtocolos.find((p) => p.antimicrobiano === a.antimicrobiano) ?? null;
-  // A primeira dose: a última antes (ou na) incisão de um antimicrobiano do protocolo; sem ela, a última antes de
-  // qualquer antimicrobiano; sem nada antes, a primeira depois (dose atrasada).
+  // A primeira dose: a última antes (ou na) incisão de um antimicrobiano do protocolo, a marcada como profilática
+  // primeiro; sem ela, a última antes de qualquer antimicrobiano; sem nada antes, a primeira depois (dose atrasada).
   const antes = ordenadas.filter((a) => a.administradoEm.getTime() <= incisao);
   const primeira =
+    [...antes].reverse().find((a) => doProtocolo(a) && marcada(a)) ??
     [...antes].reverse().find((a) => doProtocolo(a)) ??
     antes[antes.length - 1] ??
     ordenadas.find((a) => a.administradoEm.getTime() > incisao) ??
@@ -226,6 +242,7 @@ export function auditarProfilaxia(
   const protocolo = p ?? ordemProtocolos[0]!;
   const drogaAdequada = p !== null;
   if (!drogaAdequada) motivos.push('droga-fora-do-protocolo');
+  let semMarca = !marcada(primeira);
 
   const minutos = Math.round((incisao - primeira.administradoEm.getTime()) / MIN);
   const janela = janelaDoProtocolo(protocolo);
@@ -273,20 +290,27 @@ export function auditarProfilaxia(
   // Duração: nenhuma dose da droga depois do limite e o item prescrito encerrado até ele.
   const limite =
     (ato.fim ?? ato.incisao).getTime() + (protocolo.duracaoMaximaHoras ?? DURACAO_PADRAO_HORAS) * HORA;
-  const doseDepois = mesma.some((a) => a.administradoEm.getTime() > limite);
-  const itensDaDroga = itens.filter((i) => i.antimicrobiano === primeira.antimicrobiano);
-  const itemAlemDoLimite = itensDaDroga.some(
-    (i) => i.encerradoEm !== null && i.encerradoEm.getTime() > limite,
-  );
-  const itemAberto = itensDaDroga.some((i) => i.encerradoEm === null);
+  // Depois do limite, só a dose marcada como profilática prolonga; a sem ficha dá o alerta.
+  const depois = mesma.filter((a) => a.administradoEm.getTime() > limite);
+  const doseDepois = depois.some(marcada);
+  if (depois.some((a) => !marcada(a))) semMarca = true;
+  const itensDaDroga = itens.filter((i) => i.antimicrobiano === primeira.antimicrobiano && !tratamento(i));
+  const alemDoLimite = itensDaDroga.filter((i) => i.encerradoEm !== null && i.encerradoEm.getTime() > limite);
+  const itemAlemDoLimite = alemDoLimite.some(marcada);
+  const abertos = itensDaDroga.filter((i) => i.encerradoEm === null);
+  const itemAberto = abertos.length > 0;
+  const abertoMarcado = abertos.some(marcada);
+  if (alemDoLimite.some((i) => !marcada(i)) || (agora.getTime() > limite && abertos.some((i) => !marcada(i))))
+    semMarca = true;
   let duracaoAdequada: boolean | null;
-  if (doseDepois || itemAlemDoLimite || (itemAberto && agora.getTime() > limite)) {
+  if (doseDepois || itemAlemDoLimite || (abertoMarcado && agora.getTime() > limite)) {
     duracaoAdequada = false;
     motivos.push('profilaxia-prolongada');
-  } else if (itemAberto) {
+  } else if (itemAberto && agora.getTime() <= limite) {
     duracaoAdequada = null;
     motivos.push('duracao-em-curso');
   } else duracaoAdequada = true;
+  if (semMarca) motivos.push('sem-marca-profilatica');
 
   const criterios = [
     drogaAdequada,
