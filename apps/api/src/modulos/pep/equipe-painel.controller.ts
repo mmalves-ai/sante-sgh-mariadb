@@ -61,7 +61,6 @@ import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api
 import { AcessoPacientePep } from './acesso-paciente.js';
 import { PORTA_EQUIPE_PAINEL, type PortaEquipePainelPropria } from './equipe-painel-propria.js';
 import { ESTADO_PRONTUARIO } from './prontuario.controller.js';
-import { vinculoPelaEquipe } from './vinculo-pela-equipe.js';
 import type { EstadoProntuario } from './sessao-prontuario.js';
 
 export const PERMISSOES_EQUIPE_PAINEL = {
@@ -101,7 +100,6 @@ export class EquipePainelController {
       configuracao,
       vinculo,
       emergencia,
-      vinculoNoCliente: vinculoPelaEquipe(porta),
     });
   }
 

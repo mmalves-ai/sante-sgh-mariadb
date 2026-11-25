@@ -71,8 +71,6 @@ import { PORTA_DOCUMENTOS, type PortaDocumentos } from './documentos-porta.js';
 import { categoriaDe } from './documentos-servico.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 import { ServicoProntuario } from './servico.js';
-import { PORTA_EQUIPE_PAINEL, type PortaEquipePainelPropria } from './equipe-painel-propria.js';
-import { vinculoPelaEquipe } from './vinculo-pela-equipe.js';
 
 export const SERVICO_PRONTUARIO = Symbol('SERVICO_PRONTUARIO');
 export const ESTADO_PRONTUARIO = Symbol('ESTADO_PRONTUARIO');
@@ -105,12 +103,8 @@ export class ProntuarioController {
     @Optional()
     @Inject(PORTA_DOCUMENTOS)
     private readonly documentos: Pick<PortaDocumentos, 'profissional'> | null = null,
-    @Optional()
-    @Inject(PORTA_EQUIPE_PAINEL)
-    equipe: Pick<PortaEquipePainelPropria, 'vinculoDoUsuario'> | null = null,
   ) {
     this.acesso = new AcessoPacientePep({
-      vinculoNoCliente: vinculoPelaEquipe(equipe),
       estado,
       trilha,
       alerta,

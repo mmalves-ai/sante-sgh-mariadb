@@ -27,6 +27,7 @@ import type { RegistroEmergencia } from '../acesso/emergencia.controller.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { FonteConfiguracao } from '../config/public-api.js';
 import type { EstadoProntuario } from './sessao-prontuario.js';
+import { vinculoNaSessaoDe } from './vinculo-pela-equipe.js';
 
 export interface DependenciasAcessoPaciente {
   readonly estado: EstadoProntuario;
@@ -35,11 +36,6 @@ export interface DependenciasAcessoPaciente {
   readonly configuracao: FonteConfiguracao | null;
   readonly vinculo: VinculoAssistencialPort;
   readonly emergencia: RegistroEmergencia | null;
-  /**
-   * 03-PEP L94: o vínculo pela equipe assistencial no banco do cliente (a conta da sessão está na equipe vigente de um
-   * atendimento aberto do paciente). Consultado quando a porta de vínculo não dá vínculo; sem ele, nada muda.
-   */
-  readonly vinculoNoCliente?: ((s: SessaoCadastro, paciente: number) => Promise<boolean>) | null;
 }
 
 /** Recurso na trilha: o prontuário ao vivo (M15) ou os registros clínicos (M22). */
@@ -63,12 +59,15 @@ export function chaveSessaoPep(s: SessaoCadastro) {
 export class AcessoPacientePep {
   constructor(private readonly d: DependenciasAcessoPaciente) {}
 
-  /** A forma do vínculo: a da porta de vínculo; sem ela, a da equipe assistencial do cliente (falha fechada). */
+  /**
+   * A forma do vínculo: a da porta de vínculo pelo login; sem ela, a da porta pela sessão (o provedor global da equipe
+   * assistencial, VinculoAssistencialPelaEquipe, no módulo do PEP). Erro na consulta: sem vínculo (falha fechada).
+   */
   private async formaDoVinculo(s: SessaoCadastro, paciente: number): Promise<FormaVinculo | null> {
     const forma = await this.d.vinculo.vinculo(s.login, { idPaciente: paciente });
-    if (forma !== null || !this.d.vinculoNoCliente) return forma;
-    const pelaEquipe = await this.d.vinculoNoCliente(s, paciente).catch(() => false);
-    return pelaEquipe ? 'equipe' : null;
+    if (forma !== null) return forma;
+    const naSessao = vinculoNaSessaoDe(this.d.vinculo);
+    return naSessao ? naSessao(s, paciente).catch(() => null) : null;
   }
 
   /**
