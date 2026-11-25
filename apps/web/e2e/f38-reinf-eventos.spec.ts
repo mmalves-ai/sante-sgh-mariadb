@@ -360,7 +360,7 @@ test.describe('financeiro: EFD-REINF por evento @F3.8-12', () => {
     // Outra suspensão do mesmo processo (INSS, para todos os beneficiários): vara, indicativo, vigência e decisão
     // seguem preenchidos; só o número e o tributo mudam.
     await page.getByTestId('re-p-numero').fill(PROCESSO);
-    await escolher(page.getByTestId('re-p-tributo'), 'INSS');
+    await escolher(page.getByTestId('re-p-tributo'), 'inss');
     await page.getByTestId('re-p-incluir').click();
     await expect(page.getByTestId('re-ok')).toContainText('Processo com suspensão gravado');
     expect(corpos.at(-1)).toEqual({

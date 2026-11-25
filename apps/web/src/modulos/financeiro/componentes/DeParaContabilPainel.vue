@@ -104,7 +104,7 @@ const linhas = computed(() => {
 });
 const totalFaltas = computed(() => (faltas.data.value ?? []).reduce((s, f) => s + f.fatos, 0));
 
-async function salvar(corpo: Record<string, unknown>) {
+async function salvar(corpo: Record<string, unknown>): Promise<boolean> {
   erro.value = null;
   ok.value = '';
   try {
@@ -112,14 +112,36 @@ async function salvar(corpo: Record<string, unknown>) {
     ok.value = r.mensagem;
     await qc.invalidateQueries({ queryKey: ['financeiro', 'de-para-completo'] });
     await qc.invalidateQueries({ queryKey: ['financeiro', 'sem-de-para'] });
+    return true;
   } catch (e) {
     erro.value = e;
+    return false;
   }
 }
-function contaAlterada(l: (typeof linhas.value)[number], lado: 'debito' | 'credito', valor: string) {
+/**
+ * O que se digita num campo da grade fica aqui até a gravação dele dar certo. Sem isso, a releitura da grade depois de
+ * gravar outro campo redesenha a linha e apaga o que se digitava no vizinho (o campo é ligado à conta gravada), e a
+ * saída do campo não grava nada. Na recusa, o digitado continua no campo junto com o motivo.
+ */
+const rascunho = ref<Record<string, string>>({});
+const chaveCampo = (l: { evento: string; natureza: number | null }, lado: 'debito' | 'credito') =>
+  `${l.evento}|${l.natureza ?? ''}|${lado}`;
+async function contaAlterada(l: (typeof linhas.value)[number], lado: 'debito' | 'credito', valor: string) {
+  const chave = chaveCampo(l, lado);
+  if (await gravarConta(l, lado, valor)) {
+    const resto = { ...rascunho.value };
+    delete resto[chave];
+    rascunho.value = resto;
+  }
+}
+function gravarConta(
+  l: (typeof linhas.value)[number],
+  lado: 'debito' | 'credito',
+  valor: string,
+): Promise<boolean> | boolean {
   const atual = l[lado];
   const conta = valor.trim();
-  if (atual && atual.conta === conta) return;
+  if (atual && atual.conta === conta) return true;
   if (atual && atual.lado === lado)
     return salvar({
       tipo: 'conta',
@@ -131,7 +153,7 @@ function contaAlterada(l: (typeof linhas.value)[number], lado: 'debito' | 'credi
       conta: conta || atual.conta,
       ativo: conta !== '',
     });
-  if (!conta) return;
+  if (!conta) return true;
   return salvar({
     tipo: 'conta',
     id: null,
@@ -277,12 +299,13 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
           </td>
           <td v-for="lado in ['debito', 'credito'] as const" :key="lado">
             <input
-              :value="l[lado]?.conta ?? ''"
+              :value="rascunho[chaveCampo(l, lado)] ?? l[lado]?.conta ?? ''"
               :disabled="!podeEditar"
               maxlength="50"
               pattern="[0-9A-Za-z][0-9A-Za-z.\-]*"
               :aria-label="`${l.rotulo} ${t(lado)}`"
               :data-testid="`dp-${lado}-${l.evento}-${l.natureza ?? 'geral'}`"
+              @input="rascunho[chaveCampo(l, lado)] = ($event.target as HTMLInputElement).value"
               @change="contaAlterada(l, lado, ($event.target as HTMLInputElement).value)"
             />
             <small
