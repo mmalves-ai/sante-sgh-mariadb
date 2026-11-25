@@ -1149,6 +1149,17 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
         inicio: '2026-11-15',
         fim: '2026-11-21',
       });
+      // O formato que a tela lê (e que o E2E f36-livro-oficial @C1-038 simula sobre a fonte sintética) é o da API real.
+      expect(Object.keys(r.json() as object)).toEqual(
+        expect.arrayContaining([
+          'livro',
+          'titulo',
+          'termoAbertura',
+          'termoEncerramento',
+          'paginas',
+          'fechado',
+        ]),
+      );
       // A tela lê a chave do oficial desligada; o fechamento oficial é recusado pela chave e nada fica no banco.
       expect(
         (
@@ -1183,15 +1194,23 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
           }
         ).funcionalidades['livroOficial']?.ligada,
       ).toBe(true);
+      const gravacao = (
+        await app.inject({ method: 'GET', url: '/api/farmacia/gravacao', headers: { cookie: farma.cookie } })
+      ).json() as { operacoes: Record<string, { ligada: boolean }> };
+      expect(gravacao.operacoes['fecharLivro']?.ligada).toBe(true);
+      expect(gravacao.operacoes['fecharLivroOficial']?.ligada).toBe(true);
       await cnpj(null);
       r = await fechar(farma, true);
       expect([r.statusCode, cod(r)]).toEqual([409, 'estabelecimento-sem-cnpj']);
+      expect(r.headers['content-type']).toMatch(/problem\+json/);
+      expect((r.json() as { detail?: string }).detail).toContain('CNPJ do estabelecimento');
       expect(await oficiais()).toBe(0);
       // Com o CNPJ: o fechamento oficial grava o livro, o arquivo do conteúdo com o hash e os dois termos.
       await cnpj('92400000000155');
       r = await fechar(farma, true);
       expect(r.statusCode, JSON.stringify(r.json())).toBe(200);
       const feito = r.json() as { mensagem: string; ids: { livro: number; hash: string } };
+      expect(Object.keys(feito)).toEqual(expect.arrayContaining(['mensagem', 'repetida', 'ids', 'avisos']));
       expect(feito.mensagem).toMatch(/oficial/);
       expect(feito.ids.hash).toMatch(/^[0-9a-f]{64}$/);
       const linha = await ler(
@@ -1225,6 +1244,10 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
       };
       expect(lido.modo).toBe('oficial');
       expect(lido.fechado).toMatchObject({ modo: 'oficial', hash: feito.ids.hash });
+      expect(Object.keys(lido.fechado)).toEqual(expect.arrayContaining(['em', 'por', 'guardaAte', 'termos']));
+      expect(Object.keys(lido.fechado.termos[0]!)).toEqual(
+        expect.arrayContaining(['paginaInicial', 'paginaFinal', 'razaoSocial', 'responsavel', 'emitidoEm']),
+      );
       expect(lido.fechado.termos.map((t) => [t.tipo, t.cnpj, t.conteudoGuardado])).toEqual([
         ['abertura', '92400000000155', false],
         ['encerramento', '92400000000155', true],

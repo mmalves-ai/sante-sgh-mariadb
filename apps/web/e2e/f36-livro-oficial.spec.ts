@@ -10,7 +10,10 @@
 // no banco (livro oficial com o arquivo e o hash, os dois termos, as recusas e a leitura dos termos gravados) está em
 // apps/api/src/modulos/farmacia/porta-propria-dispensacao.int.spec.ts, que prova também as mesmas rotas pela HTTP sobre
 // o MariaDB (chave do livro oficial pela configuração, permissão, recusa 409 sem CNPJ, termos gravados relidos e o
-// refechamento travado): as respostas simuladas aqui seguem as que a API real devolve ali.
+// refechamento travado): as respostas simuladas aqui seguem as que a API real devolve ali, e o int.spec confere o
+// formato delas (campos do livro, das operações, do termo gravado, da resposta do fechamento e o 409 problem+json com o
+// texto do CNPJ). Por que não contra o MariaDB no navegador: o E2E da esteira (ci.yml, tools/obra/e2e-vm.sh) sobe a API
+// com SGH_NUCLEO_SEM_BANCO=1 e a fonte sintética, sem ler nem gravar cliente da VM; não há modo de E2E com banco.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 
@@ -59,7 +62,7 @@ const pagina = (n: number, nome: string) => ({
   ],
 });
 
-test.describe('Livro de controlados: fechamento oficial @F3.6-05 @fase3', () => {
+test.describe('Livro de controlados: fechamento oficial @F3.6-05 @C1-038 @fase3', () => {
   test.setTimeout(180_000);
 
   test('período conferido na hora, confirmação do oficial, recusa do servidor e termos gravados na leitura; axe', async ({
