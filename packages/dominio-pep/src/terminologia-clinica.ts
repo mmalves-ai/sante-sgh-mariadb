@@ -67,6 +67,8 @@ export interface EntradaDiagnostico {
   readonly observacao?: string | null;
   /** O atendimento é do paciente informado. */
   readonly atendimentoDoPaciente: boolean;
+  /** O atendimento é do estabelecimento da sessão (o diagnóstico fica no estabelecimento do atendimento). */
+  readonly atendimentoDoEstabelecimento: boolean;
   /** Já há diagnóstico principal ativo neste atendimento. */
   readonly principalAtivoExiste: boolean;
 }
@@ -76,6 +78,11 @@ export function validarRegistroDiagnostico(e: EntradaDiagnostico, hoje: Date): F
   const f: FalhaTerminologia[] = [];
   if (!e.atendimentoDoPaciente)
     f.push({ codigo: 'atendimento-de-outro-paciente', mensagem: 'O atendimento não é deste paciente.' });
+  if (!e.atendimentoDoEstabelecimento)
+    f.push({
+      codigo: 'atendimento-de-outro-estabelecimento',
+      mensagem: 'O atendimento é de outro estabelecimento: registre o diagnóstico no estabelecimento dele.',
+    });
   if (!e.cid) f.push({ codigo: 'cid-inexistente', mensagem: 'A CID-10 informada não existe no catálogo.' });
   else if (e.cid.terminologia !== TERMINOLOGIA_DIAGNOSTICO)
     f.push({ codigo: 'cid-de-outra-terminologia', mensagem: 'O diagnóstico é codificado pela CID-10.' });
@@ -101,12 +108,22 @@ export function validarRegistroDiagnostico(e: EntradaDiagnostico, hoje: Date): F
   return f;
 }
 
-/** Trocar (ou tirar) o conceito equivalente só vale em diagnóstico não inativado. */
+/**
+ * Trocar (ou tirar) o conceito equivalente só vale em diagnóstico não inativado e do estabelecimento da sessão
+ * (`doEstabelecimento` ausente conta como do estabelecimento).
+ */
 export function validarTrocaConceito(
-  diagnostico: { readonly situacao: string },
+  diagnostico: { readonly situacao: string; readonly doEstabelecimento?: boolean },
   conceito: TermoCatalogo | null | undefined,
   hoje: Date,
 ): FalhaTerminologia[] {
+  if (diagnostico.doEstabelecimento === false)
+    return [
+      {
+        codigo: 'diagnostico-de-outro-estabelecimento',
+        mensagem: 'O diagnóstico é de outro estabelecimento: o conceito muda só no estabelecimento dele.',
+      },
+    ];
   if (diagnostico.situacao === 'inativado')
     return [
       {
@@ -136,6 +153,22 @@ export function validarRegiaoDoExame(
   if (!vigente(regiao, hoje))
     return [{ codigo: 'regiao-inativa', mensagem: 'A região anatômica está inativa ou fora de vigência.' }];
   if (jaLigada) return [{ codigo: 'regiao-ja-ligada', mensagem: 'A região já está ligada a este exame.' }];
+  return [];
+}
+
+/**
+ * Tornar padrão uma região já ligada: a ligação tem de estar ativa e ainda não ser a padrão. A troca é uma gravação só
+ * (a anterior deixa de ser padrão na mesma transação), sem retirar e religar.
+ */
+export function validarPadraoDoExame(
+  ligacao: { readonly ativo: boolean; readonly padrao: boolean } | null,
+): FalhaTerminologia[] {
+  if (!ligacao || !ligacao.ativo)
+    return [
+      { codigo: 'regiao-nao-ligada', mensagem: 'A região não está ligada a este exame: ligue-a primeiro.' },
+    ];
+  if (ligacao.padrao)
+    return [{ codigo: 'regiao-ja-padrao', mensagem: 'A região já é a padrão deste exame.' }];
   return [];
 }
 

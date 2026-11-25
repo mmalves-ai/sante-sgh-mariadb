@@ -4,9 +4,10 @@
 // (sistema c2032); a CID-10 é a oficial carregada. Tudo limpo antes e depois (a trilha pelo utilitário comum).
 // Prova o que fica no banco: o diagnóstico do atendimento com a CID-10 e o conceito equivalente; a troca e a retirada
 // do conceito (versão sobe, nada apagado); as recusas sem gravar (capítulo da CID, conceito inativo, conceito de outra
-// terminologia, segundo principal, atendimento de outro paciente, diagnóstico inativado); a busca com a equivalência
+// terminologia, segundo principal, atendimento de outro paciente ou de outro estabelecimento, diagnóstico
+// inativado); a busca com a equivalência
 // primeiro; a região anatômica ligada ao exame (padrão única, retirada só desativa, religação na mesma linha); a
-// visão por paciente; a trilha de cada gravação. SGH_NUCLEO_SEM_BANCO=1 pula.
+// visão por paciente; tornar padrão a região já ligada numa gravação só; a trilha de cada gravação. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -197,6 +198,10 @@ describe.skipIf(SEM_BANCO)(
       await expect(registrar({ paciente: pacienteOutro })).rejects.toMatchObject(
         recusada('atendimento-de-outro-paciente'),
       );
+      // O atendimento do mesmo paciente no outro estabelecimento: a sessão está no C2032, o diagnóstico não entra.
+      await expect(registrar({ atendimento: m!.atendimentoOutro })).rejects.toMatchObject(
+        recusada('atendimento-de-outro-estabelecimento'),
+      );
       expect(await contarDiag()).toBe(antes);
     });
 
@@ -310,6 +315,58 @@ describe.skipIf(SEM_BANCO)(
         [ids.exame, reg.mao, reg.dedo],
       );
       expect(Number(n[0]!['n'])).toBe(2);
+    });
+
+    it('tornar padrão a região já ligada: uma gravação, a anterior desmarcada, nada retirado', async () => {
+      // Estado do caso anterior: mão e dedo ligadas, o dedo é a padrão.
+      const antes = await ler<{ id: number; regiao: number; versao: number; ativo: number; padrao: number }>(
+        `SELECT id, regiao_anatomica_codificada_id AS regiao, versao, ativo, padrao FROM exame_regiao_anatomica
+          WHERE exame_id = ? AND regiao_anatomica_codificada_id IN (?, ?)`,
+        [ids.exame, reg.mao, reg.dedo],
+      );
+      const mao = antes.find((x) => Number(x.regiao) === reg.mao)!;
+      const dedo = antes.find((x) => Number(x.regiao) === reg.dedo)!;
+      expect(Number(dedo.padrao)).toBe(1);
+      const r = await porta.gravarRegiaoDoExame(ctx(), { acao: 'padrao', exame: ids.exame, regiao: reg.mao });
+      expect(r.resultado).toEqual({ ligacao: Number(mao.id), ativo: true });
+      const depois = await ler<{
+        id: number;
+        versao: number;
+        ativo: number;
+        padrao: number;
+        desativado_em: unknown;
+      }>('SELECT id, versao, ativo, padrao, desativado_em FROM exame_regiao_anatomica WHERE id IN (?, ?)', [
+        mao.id,
+        dedo.id,
+      ]);
+      const m2 = depois.find((x) => Number(x.id) === Number(mao.id))!;
+      const d2 = depois.find((x) => Number(x.id) === Number(dedo.id))!;
+      expect([Number(m2.ativo), Number(m2.padrao), m2.desativado_em]).toEqual([1, 1, null]);
+      expect(Number(m2.versao)).toBe(Number(mao.versao) + 1);
+      expect([Number(d2.ativo), Number(d2.padrao), d2.desativado_em]).toEqual([1, 0, null]);
+      expect(Number(d2.versao)).toBe(Number(dedo.versao) + 1);
+      expect((await porta.regioes({ exame: ids.exame })).filter((x) => x.padrao).map((x) => x.id)).toEqual([
+        reg.mao,
+      ]);
+      // A trilha registra a troca como uma gravação da operação (sem retirada nem religação).
+      const t = await ler(
+        `SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'exame_regiao_anatomica' AND entidade_id = ?`,
+        [mao.id],
+      );
+      expect(Number(t[0]!['n'])).toBeGreaterThanOrEqual(1);
+      // Recusas sem gravar: já é a padrão; região não ligada; ligação retirada.
+      await expect(
+        porta.gravarRegiaoDoExame(ctx(), { acao: 'padrao', exame: ids.exame, regiao: reg.mao }),
+      ).rejects.toMatchObject(recusada('regiao-ja-padrao'));
+      await expect(
+        porta.gravarRegiaoDoExame(ctx(), { acao: 'padrao', exame: ids.exame, regiao: reg.velha }),
+      ).rejects.toMatchObject(recusada('regiao-nao-ligada'));
+      await porta.gravarRegiaoDoExame(ctx(), { acao: 'retirar', exame: ids.exame, regiao: reg.dedo });
+      await expect(
+        porta.gravarRegiaoDoExame(ctx(), { acao: 'padrao', exame: ids.exame, regiao: reg.dedo }),
+      ).rejects.toMatchObject(recusada('regiao-nao-ligada'));
+      const fim = await ler('SELECT padrao FROM exame_regiao_anatomica WHERE id = ?', [mao.id]);
+      expect(Number(fim[0]!['padrao'])).toBe(1);
     });
   },
 );

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Regiões anatômicas do exame (F8, 09-AREA linha 84), dentro da ficha do exame em `/sadt/catalogo`: as regiões
-// codificadas (hierarquia "estrutura do corpo" da terminologia clínica) que o exame admite, com a padrão sugerida no
-// pedido. Ligar é buscar e escolher, com a opção de já marcar como padrão (a padrão é única: a nova tira a anterior);
+// codificadas (hierarquia "estrutura do corpo" da terminologia clínica) que o exame admite, com a padrão marcada. Ligar é buscar e escolher, com a opção de já marcar como padrão (a padrão é única: a nova tira a anterior);
 // retirar só desativa a ligação, que pode ser religada. A regra final (região ativa, repetida) é do servidor.
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -11,8 +10,7 @@ const props = defineProps<{ exameId: number }>();
 
 const T = {
   titulo: 'Regiões anatômicas do exame',
-  texto:
-    'Regiões codificadas que o exame admite. A padrão vem sugerida no pedido do exame; retirar só desativa a ligação.',
+  texto: 'Regiões codificadas que o exame admite, com a padrão marcada; retirar só desativa a ligação.',
   nenhuma: 'Nenhuma região ligada a este exame.',
   padrao: 'padrão',
   buscar: 'Buscar a região (nome ou código)',
@@ -88,10 +86,9 @@ async function ligar() {
     padrao.value = false;
   }
 }
-// Tornar padrão: retira e religa como padrão (a ligação é desativada, nunca apagada).
+// Tornar padrão: uma gravação só no servidor (a anterior deixa de ser padrão na mesma transação; nada é retirado).
 async function tornarPadrao(r: RegiaoTela) {
-  if (await gravar({ acao: 'retirar', regiao: r.id }))
-    await gravar({ acao: 'ligar', regiao: r.id, padrao: true });
+  await gravar({ acao: 'padrao', regiao: r.id });
 }
 </script>
 

@@ -4,7 +4,7 @@
 // GET  /api/pep/terminologia-clinica/regioes?texto=&superior=&exame=   regiões anatômicas (as do exame, com a padrão)
 // GET  /api/pep/terminologia-clinica/paciente/:p/diagnosticos          visão por paciente
 // POST /api/pep/terminologia-clinica/diagnosticos                      registrar; trocar ou tirar o conceito
-// POST /api/pep/terminologia-clinica/exame-regioes                     ligar (com a padrão) ou retirar a região do exame
+// POST /api/pep/terminologia-clinica/exame-regioes                     ligar, tornar padrão (uma gravação) ou retirar
 // Toda gravação leva a chave de idempotência e o x-csrf (como as demais do prontuário).
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';

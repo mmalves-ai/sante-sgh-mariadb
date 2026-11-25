@@ -4,6 +4,7 @@ import {
   ordenarSugestoesConceito,
   type TermoCatalogo,
   validarConceitoClinico,
+  validarPadraoDoExame,
   validarRegiaoDoExame,
   validarRegistroDiagnostico,
   validarTrocaConceito,
@@ -28,6 +29,7 @@ const base = {
   cid: cid(),
   tipo: 'secundario' as const,
   atendimentoDoPaciente: true,
+  atendimentoDoEstabelecimento: true,
   principalAtivoExiste: false,
 };
 const codigos = (f: readonly { codigo: string }[]) => f.map((x) => x.codigo);
@@ -78,6 +80,9 @@ describe('registro do diagnóstico do atendimento', () => {
       'atendimento-de-outro-paciente',
     ]);
     expect(
+      codigos(validarRegistroDiagnostico({ ...base, atendimentoDoEstabelecimento: false }, HOJE)),
+    ).toEqual(['atendimento-de-outro-estabelecimento']);
+    expect(
       codigos(validarRegistroDiagnostico({ ...base, conceito: conceito({ ativo: false }) }, HOJE)),
     ).toEqual(['conceito-inativo']);
     expect(codigos(validarRegistroDiagnostico({ ...base, observacao: 'x'.repeat(2001) }, HOJE))).toEqual([
@@ -93,6 +98,20 @@ describe('troca do conceito e região do exame', () => {
     ]);
     expect(validarTrocaConceito({ situacao: 'ativo' }, conceito(), HOJE)).toEqual([]);
     expect(validarTrocaConceito({ situacao: 'resolvido' }, undefined, HOJE)).toEqual([]);
+  });
+  it('não troca o conceito do diagnóstico de outro estabelecimento', () => {
+    expect(
+      codigos(validarTrocaConceito({ situacao: 'ativo', doEstabelecimento: false }, conceito(), HOJE)),
+    ).toEqual(['diagnostico-de-outro-estabelecimento']);
+    expect(validarTrocaConceito({ situacao: 'ativo', doEstabelecimento: true }, conceito(), HOJE)).toEqual(
+      [],
+    );
+  });
+  it('tornar padrão: só a ligação ativa que ainda não é a padrão', () => {
+    expect(validarPadraoDoExame({ ativo: true, padrao: false })).toEqual([]);
+    expect(codigos(validarPadraoDoExame(null))).toEqual(['regiao-nao-ligada']);
+    expect(codigos(validarPadraoDoExame({ ativo: false, padrao: false }))).toEqual(['regiao-nao-ligada']);
+    expect(codigos(validarPadraoDoExame({ ativo: true, padrao: true }))).toEqual(['regiao-ja-padrao']);
   });
   it('nível da região pela profundidade', () => {
     expect([0, 1, 2, 3, 4, 9].map(nivelRegiaoPorProfundidade)).toEqual([

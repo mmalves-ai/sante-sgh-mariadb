@@ -7,7 +7,10 @@
 // - diagnósticos do paciente (visão por paciente, com a CID-10 e o conceito equivalente);
 // - registro do diagnóstico do atendimento (CID-10 obrigatória, conceito clínico opcional) e troca do conceito
 //   equivalente (a versão sobe; nada é apagado);
-// - região anatômica do exame (exame_regiao_anatomica): ligar e retirar (retirar só desativa; religar reativa).
+// - região anatômica do exame (exame_regiao_anatomica): ligar, tornar padrão a já ligada (uma gravação, a anterior
+//   desmarcada na mesma transação) e retirar (retirar só desativa; religar reativa).
+// - o diagnóstico fica no estabelecimento do atendimento: atendimento (ou diagnóstico) de outro estabelecimento é
+//   recusado.
 import {
   CERTEZAS_DIAGNOSTICO,
   ESCOPOS_DIAGNOSTICO,
@@ -18,6 +21,7 @@ import {
   TERMINOLOGIA_CONCEITO_CLINICO,
   TERMINOLOGIA_DIAGNOSTICO,
   TIPOS_DIAGNOSTICO,
+  validarPadraoDoExame,
   validarRegiaoDoExame,
   validarRegistroDiagnostico,
   validarTrocaConceito,
@@ -75,6 +79,8 @@ export type EntradaDiagnostico = z.infer<typeof esquemaDiagnostico>;
 export const esquemaRegiaoExame = z.discriminatedUnion('acao', [
   z.object({ acao: z.literal('ligar'), exame: id, regiao: id, padrao: z.boolean().default(false) }).strict(),
   z.object({ acao: z.literal('retirar'), exame: id, regiao: id }).strict(),
+  /** Tornar padrão a região já ligada: a anterior deixa de ser padrão na mesma transação. */
+  z.object({ acao: z.literal('padrao'), exame: id, regiao: id }).strict(),
 ]);
 export type EntradaRegiaoExame = z.infer<typeof esquemaRegiaoExame>;
 
@@ -431,13 +437,21 @@ export class TerminologiaClinicaPropria {
     const hoje = this.agora();
     if (e.acao === 'conceito') {
       const [d] = await tx.consultarParaAtualizar(
-        'SELECT id, versao, situacao FROM diagnostico_atendimento WHERE id = ? AND excluido_em IS NULL',
+        `SELECT id, versao, situacao, estabelecimento_id FROM diagnostico_atendimento
+          WHERE id = ? AND excluido_em IS NULL`,
         [e.diagnostico],
         { teto: 1 },
       );
       if (!d) throw inexistente('O diagnóstico');
       const conceito = e.conceito === null ? undefined : await termo(tx, e.conceito);
-      const f = validarTrocaConceito({ situacao: String(d['situacao']) }, conceito, hoje);
+      const f = validarTrocaConceito(
+        {
+          situacao: String(d['situacao']),
+          doEstabelecimento: num(d['estabelecimento_id']) === Number(tx.contexto.estabelecimento),
+        },
+        conceito,
+        hoje,
+      );
       if (f.length) recusar(f);
       const versao = await tx.alterar('diagnostico_atendimento', e.diagnostico, e.versao, {
         snomed_termo_terminologia_id: e.conceito,
@@ -459,9 +473,10 @@ export class TerminologiaClinicaPropria {
     );
     if (!prof)
       throw recusa('usuario-sem-profissional', 'O diagnóstico é registrado por um profissional de saúde.');
-    const a = await tx.uma('SELECT paciente_id FROM atendimento WHERE id = ? AND excluido_em IS NULL', [
-      e.atendimento,
-    ]);
+    const a = await tx.uma(
+      'SELECT paciente_id, estabelecimento_id FROM atendimento WHERE id = ? AND excluido_em IS NULL',
+      [e.atendimento],
+    );
     if (!a) throw inexistente('O atendimento');
     const principal = await tx.uma(
       `SELECT id FROM diagnostico_atendimento WHERE atendimento_id = ? AND tipo = 'principal'
@@ -475,6 +490,7 @@ export class TerminologiaClinicaPropria {
         tipo: e.tipo,
         observacao: e.observacao ?? null,
         atendimentoDoPaciente: num(a['paciente_id']) === e.paciente,
+        atendimentoDoEstabelecimento: num(a['estabelecimento_id']) === Number(tx.contexto.estabelecimento),
         principalAtivoExiste: Boolean(principal),
       },
       hoje,
@@ -502,11 +518,22 @@ export class TerminologiaClinicaPropria {
     const ex = await tx.uma('SELECT id FROM exame WHERE id = ?', [e.exame]);
     if (!ex) throw inexistente('O exame');
     const [atual] = await tx.consultarParaAtualizar(
-      `SELECT id, versao, ativo FROM exame_regiao_anatomica
+      `SELECT id, versao, ativo, padrao FROM exame_regiao_anatomica
         WHERE exame_id = ? AND regiao_anatomica_codificada_id = ?`,
       [e.exame, e.regiao],
       { teto: 1 },
     );
+    if (e.acao === 'padrao') {
+      const fp = validarPadraoDoExame(
+        atual ? { ativo: bool(atual['ativo']), padrao: bool(atual['padrao']) } : null,
+      );
+      if (fp.length) recusar(fp);
+      await this.desmarcarPadrao(tx, e.exame);
+      await tx.alterar('exame_regiao_anatomica', num(atual!['id']), num(atual!['versao']), {
+        padrao: true,
+      } as never);
+      return { ligacao: num(atual!['id']), ativo: true };
+    }
     if (e.acao === 'retirar') {
       if (!atual || !bool(atual['ativo']))
         throw recusa('regiao-nao-ligada', 'A região não está ligada a este exame.');
@@ -527,12 +554,7 @@ export class TerminologiaClinicaPropria {
       this.agora(),
     );
     if (f.length) recusar(f);
-    if (e.padrao)
-      await tx.executar(
-        `UPDATE exame_regiao_anatomica SET padrao = FALSE, alterado_em = ?, alterado_por = ?, versao = versao + 1
-          WHERE exame_id = ? AND padrao = TRUE`,
-        [this.agora(), tx.contexto.usuario, e.exame],
-      );
+    if (e.padrao) await this.desmarcarPadrao(tx, e.exame);
     // A ligação retirada (inativa, nunca padrão) volta na mesma linha: a versão dela não mudou com o UPDATE acima.
     if (atual) {
       await tx.alterar('exame_regiao_anatomica', num(atual['id']), num(atual['versao']), {
@@ -550,5 +572,14 @@ export class TerminologiaClinicaPropria {
       ativo: true,
     } as never);
     return { ligacao, ativo: true };
+  }
+
+  /** A padrão é única por exame: a anterior deixa de ser padrão (a versão dela sobe), sem desativar a ligação. */
+  private desmarcarPadrao(tx: TxOperacao, exame: number) {
+    return tx.executar(
+      `UPDATE exame_regiao_anatomica SET padrao = FALSE, alterado_em = ?, alterado_por = ?, versao = versao + 1
+        WHERE exame_id = ? AND padrao = TRUE`,
+      [this.agora(), tx.contexto.usuario, exame],
+    );
   }
 }
