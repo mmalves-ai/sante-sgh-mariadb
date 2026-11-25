@@ -223,6 +223,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/SimulacaoReceitaTela.vue'),
     meta: { permissao: 'faturamento.preco.simular' },
   },
+  // C2-103 (06-FAT L37): integração contábil da receita (eventos, pendências e divergências; apurar a conta).
+  {
+    path: '/faturamento/receita-contabil',
+    name: 'faturamento.receitaContabil',
+    component: () => import('./telas/ReceitaContabilTela.vue'),
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
   {
     path: '/faturamento/particular/orcamentos',
     name: 'faturamento.orcamentos',
