@@ -5,6 +5,7 @@
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com estabelecimentos SINTÉTICOS em memória;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // Melhoria: tipos próprios (tipos-indice.ts), sem nome de tabela do sistema de origem.
+import type { ContextoNucleo } from '@sgh/nucleo';
 import type {
   CadastroRedeLido,
   CandidatoParaGravarRede,
@@ -78,6 +79,11 @@ export interface PortaRede {
   redeConfigurada(): string | null;
   /** Os estabelecimentos configurados (ARQ-1), com o nome de exibição. */
   estabelecimentos(): readonly EstabelecimentoRede[];
+  /**
+   * O banco de UM estabelecimento da rede (cliente e id no @sgh/nucleo), para as leituras de outros módulos pela porta
+   * própria (BI da Rede). Só a porta própria tem; recusa o estabelecimento fora da rede da sessão.
+   */
+  contextoBanco?(c: ContextoRede): Promise<ContextoNucleo>;
   cadastrosPorIds(c: ContextoRede, ids: readonly number[]): Promise<CadastroRedeLido[]>;
   procurarCandidatos(c: ContextoRede, chaves: ChavesProcuraRede): Promise<number[]>;
   loteCadastros(

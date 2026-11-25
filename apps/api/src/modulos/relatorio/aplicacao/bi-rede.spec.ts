@@ -153,4 +153,45 @@ describe('BI consolidado da Rede (serviço)', () => {
     const b = await s.consolidado({ rede: REDE, hospital: 'pc' });
     expect(b.estabelecimentos.every((e) => e.situacao === 'indisponivel')).toBe(true);
   });
+
+  it('banco próprio: cada estabelecimento é lido no banco dele; sem o banco, fica indisponível e o resto segue', async () => {
+    const portas: string[] = [];
+    const fonte = new FonteInternacaoMemoria({ variantes: { sx: { semente: 2057, fator: 0.6 } } });
+    const internacao = new ServicoInternacao(fonte, null);
+    const s = montar({
+      internacao: {
+        indice: (c, p, de, ate) => {
+          portas.push(`${c.hospital}:${c.porta?.cliente}:${c.porta?.estabelecimento}:${c.porta?.correlacao}`);
+          return internacao.indice(c, p, de, ate);
+        },
+        motor: (c, p) => internacao.motor(c, p),
+        painelGerencial: (c, p, painel, de, ate) => {
+          portas.push(`${c.hospital}:${c.porta?.cliente}:${painel}`);
+          return internacao.painelGerencial(c, p, painel, de, ate);
+        },
+      },
+      contextoBanco: async (_r, h) => ({
+        cliente: h === 'pc' ? 'cli_a' : 'cli_b',
+        estabelecimento: h === 'pc' ? 1 : 2,
+        usuario: null,
+        correlacao: 'x',
+      }),
+    });
+    const b = await s.consolidado({ rede: REDE, hospital: 'pc' }, '2025-01', '2025-03');
+    expect(portas).toEqual(['pc:cli_a:1:bi-rede', 'sx:cli_b:2:bi-rede']);
+    expect(b.estabelecimentos.map((e) => e.situacao)).toEqual(['incluido', 'incluido']);
+    await s.painel({ rede: REDE, hospital: 'pc' }, 'operacional', '2025-01', '2025-03');
+    expect(portas.slice(2)).toEqual(['pc:cli_a:operacional', 'sx:cli_b:operacional']);
+    const semBanco = montar({
+      contextoBanco: async (_r, h) => {
+        if (h === 'sx') throw new Error('fora da rede deste cliente');
+        return { cliente: 'cli_a', estabelecimento: 1, usuario: null, correlacao: 'x' };
+      },
+    });
+    const f = await semBanco.consolidado({ rede: REDE, hospital: 'pc' }, '2025-01', '2025-03');
+    expect(f.estabelecimentos.map((e) => [e.codigo, e.situacao])).toEqual([
+      ['pc', 'incluido'],
+      ['sx', 'indisponivel'],
+    ]);
+  });
 });

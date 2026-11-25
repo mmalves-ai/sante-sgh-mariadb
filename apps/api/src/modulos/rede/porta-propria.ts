@@ -31,6 +31,7 @@ import { randomUUID } from 'node:crypto';
 import { FAIXAS_PONTUACAO_REDE } from '@sgh/contratos';
 import { chavePar, ErroChaveRede, ladosDaChave } from '@sgh/dominio-rede';
 import {
+  type ContextoNucleo,
   type ContextoOperacao,
   definirOperacao,
   ErroOperacao,
@@ -507,6 +508,15 @@ export class PortaRedePropria implements PortaRede {
 
   estabelecimentos(): readonly EstabelecimentoRede[] {
     return this.lista;
+  }
+
+  async contextoBanco(c: ContextoRede): Promise<ContextoNucleo> {
+    return {
+      cliente: this.cliente,
+      estabelecimento: await this.estId(c),
+      usuario: null,
+      correlacao: 'rede-bi',
+    };
   }
 
   private async estId(c: ContextoRede): Promise<number> {

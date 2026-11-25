@@ -89,6 +89,10 @@ export class BiRedeController {
         liberacao.ligadaNoEstabelecimento(rede, hospital, CHAVE_LIBERACAO_BI_REDE),
       pseudonimoComum: (rede, hospital) =>
         liberacao.ligadaNoEstabelecimento(rede, hospital, CHAVE_PSEUDONIMO_COMUM_REDE),
+      // Banco próprio: o movimento de cada estabelecimento é lido no banco dele (sem a porta, a fonte em memória).
+      ...(porta.contextoBanco
+        ? { contextoBanco: (rede: string, hospital: string) => porta.contextoBanco!({ rede, hospital }) }
+        : {}),
     });
     return this.servicoPronto;
   }

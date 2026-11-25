@@ -36,8 +36,10 @@ import {
   serieDe,
   type ValorConsolidado,
 } from '@sgh/dominio-relatorio';
+import type { ContextoNucleo } from '@sgh/nucleo';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { ParametrosM16 } from '../../internacao/configuracao.js';
+import type { CtxInternacao } from '../../internacao/fonte.js';
 import type { ServicoInternacao } from '../../internacao/servico.js';
 
 export interface EstabelecimentoDaRede {
@@ -60,6 +62,11 @@ export interface DependenciasBiRede {
   biLigado(rede: string, hospital: string): Promise<boolean>;
   /** A chave `rede.pseudonimoComum` (DP-42) ligada no estabelecimento. */
   pseudonimoComum(rede: string, hospital: string): Promise<boolean>;
+  /**
+   * O banco de UM estabelecimento (cliente e id do estabelecimento no @sgh/nucleo): a leitura do movimento vai pela
+   * porta própria dele. Ausente: a fonte em memória (dev/ci). Falha: o estabelecimento fica indisponível.
+   */
+  contextoBanco?(rede: string, hospital: string): Promise<ContextoNucleo>;
   readonly agora?: () => Date;
 }
 
@@ -126,6 +133,14 @@ interface Lido {
 
 export class ServicoBiRede {
   constructor(private readonly d: DependenciasBiRede) {}
+
+  /** O contexto da leitura de UM estabelecimento: com o banco dele (porta própria) quando a instalação o tem. */
+  private async ctxDe(s: SessaoBiRede, hospital: string, traceId: string): Promise<CtxInternacao> {
+    const base = { rede: s.rede, hospital, traceId };
+    if (!this.d.contextoBanco) return base;
+    const p = await this.d.contextoBanco(s.rede, hospital);
+    return { ...base, porta: { ...p, correlacao: traceId } };
+  }
 
   /** Regra 12: os estabelecimentos da rede da sessão (recusa antes de qualquer leitura). */
   private daRede(s: SessaoBiRede): EstabelecimentoDaRede[] {
@@ -231,8 +246,8 @@ export class ServicoBiRede {
     for (let k = 0; k < lidos.length; k++) {
       const l = lidos[k]!;
       if (l.est.situacao !== 'incluido' || !l.parametros) continue;
-      const ctx = { rede: s.rede, hospital: l.est.codigo, traceId: 'bi-rede' };
       try {
+        const ctx = await this.ctxDe(s, l.est.codigo, 'bi-rede');
         const indice = await this.d.internacao.indice(
           ctx,
           l.parametros,
@@ -354,8 +369,8 @@ export class ServicoBiRede {
     for (let k = 0; k < lidos.length; k++) {
       const l = lidos[k]!;
       if (l.est.situacao !== 'incluido' || !l.parametros) continue;
-      const ctx = { rede: s.rede, hospital: l.est.codigo, traceId: `bi-rede-${painel}` };
       try {
+        const ctx = await this.ctxDe(s, l.est.codigo, `bi-rede-${painel}`);
         const p = await this.d.internacao.painelGerencial(
           ctx,
           l.parametros,
