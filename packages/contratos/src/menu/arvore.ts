@@ -35,7 +35,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F8 (07-FIN linha 69): o item "Encontro de contas" da tesouraria entrou à mão (mesmo motivo); a contagem acompanha.
 // F3 (03-PEP linha 124): o item "Seções do sumário de alta" da administração do PEP entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":433,"M":198,"P":57,"N":178};
+// F3.5 (05-SADT linha 7): o item "Postos de coleta" do laboratório entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":434,"M":198,"P":57,"N":179};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -181,6 +182,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"diagnostico-sadt.laboratorio.coleta-etiquetas-e-mapa-de-trabalho","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Coleta, etiquetas e mapa de trabalho"],"titulo":"Coleta, etiquetas e mapa de trabalho","selo":"P","fase":2,"rota":"/sadt/coleta","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.laboratorio.rastreio-de-amostra","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Rastreio de amostra"],"titulo":"Rastreio de amostra","selo":"N","fase":2,"rota":"/sadt/amostras","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.laboratorio.recoletas","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Recoletas"],"titulo":"Recoletas","selo":"M","fase":2,"rota":"/sadt/recoletas","permissao":"sadt.amostra.ler"},
+  {"id":"diagnostico-sadt.laboratorio.postos-de-coleta","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Postos de coleta"],"titulo":"Postos de coleta","selo":"N","fase":3,"rota":"/sadt/postos-coleta","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.escala-de-execucao","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Escala de execução"],"titulo":"Escala de execução","selo":"M","fase":3,"rota":"/sadt/escala-execucao","permissao":"sadt.catalogo.ler"},
   {"id":"diagnostico-sadt.entrega-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Entrega de resultados"],"titulo":"Entrega de resultados","selo":"M","fase":3,"rota":"/sadt/entregas","permissao":"sadt.laudo.ler"},
   {"id":"diagnostico-sadt.prazos-de-entrega-e-publicacao-no-portal","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Prazos de entrega e publicação no portal"],"titulo":"Prazos de entrega e publicação no portal","selo":"M","fase":3,"rota":"/sadt/entregas/cadastro","permissao":"sadt.catalogo.ler"},
