@@ -3297,6 +3297,27 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: { grupo: 'LABAPOIO', opcoesGrupo: [] },
     perfisConcedidos: ['laboratorio-apoio'],
   },
+  /**
+   * C1-122 (06-FAT linha 24, no fim da lista, pelo ID sintético das outras): faturista das guias do convênio no
+   * hospital: consulta as guias (faturamento.guia.ler) e as acompanha (faturamento.pendencia.editar: assumir,
+   * resposta da operadora, pendências e anexos). Quem só consulta é o SINT.TISS.
+   */
+  'SINT.GUIAS': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'GUIAS',
+      opcoesGrupo: [
+        ...new Set([
+          ...opcoesTiss('faturamento.guia.ler'),
+          ...opcoesFaturamento('faturamento.conta.ler', 'faturamento.pendencia.editar'),
+        ]),
+      ].sort((x, y) => x - y),
+    },
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

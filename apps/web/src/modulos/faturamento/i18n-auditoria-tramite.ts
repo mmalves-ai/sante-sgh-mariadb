@@ -123,6 +123,8 @@ export const mensagensAuditoriaTramite = {
     fonte: 'Convênio',
     responsavel: 'Responsável',
     semResponsavel: 'Sem responsável',
+    somenteConsulta:
+      'Somente consulta: registrar a resposta, as pendências, os anexos e assumir a guia pede a permissão de editar as pendências do faturamento.',
     assumir: 'Assumir a guia',
     pendencias: 'Pendências',
     cirurgia: 'Cirurgia',

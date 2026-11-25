@@ -129,8 +129,8 @@ function simular(page: Page) {
         const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
         st.corpos.push({ rota: caminho, tipo: req.headers()['content-type'] ?? '', corpo });
         if (caminho === '/guias/70/responsavel') {
-          st.responsavel = 'SINT.TISS';
-          evento({ evento: 'responsavel', de: null, para: null, observacao: 'SINT.TISS' });
+          st.responsavel = 'SINT.GUIAS';
+          evento({ evento: 'responsavel', de: null, para: null, observacao: 'SINT.GUIAS' });
           return json(rota, { id: 70 });
         }
         if (caminho === '/guias/70/pendencias') {
@@ -156,7 +156,7 @@ function simular(page: Page) {
           Object.assign(p, {
             situacao: 'resolvida',
             resolvidaEm: '2026-11-25T11:00:00.000Z',
-            resolvidoPor: 'SINT.TISS',
+            resolvidoPor: 'SINT.GUIAS',
             solucao: corpo['solucao'],
           });
           // A pendência resolvida devolve a guia à situação de antes da pendência.
@@ -202,7 +202,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     const externas = vigiarExternas(page);
     const s = simular(page);
     await s.ligar();
-    await entrar(page, 'SINT.TISS');
+    await entrar(page, 'SINT.GUIAS');
     const menu = page.getByRole('navigation', { name: 'Menu principal' });
     await menu.locator('#menu-buscar').fill('Guias do convênio');
     await menu.getByRole('link', { name: 'Guias do convênio' }).click();
@@ -242,7 +242,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     const externas = vigiarExternas(page);
     const s = simular(page);
     await s.ligar();
-    await entrar(page, 'SINT.TISS');
+    await entrar(page, 'SINT.GUIAS');
     await page.goto('/faturamento/guias-convenio');
     await page.getByTestId('gc-G-C1122-1').click();
     const painel = page.getByTestId('gc-painel');
@@ -257,8 +257,8 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
       tipo: expect.stringContaining('application/json'),
       corpo: { responsavelId: null },
     });
-    await expect(painel).toContainText('Responsável: SINT.TISS');
-    await expect(page.getByTestId('gc-G-C1122-1')).toContainText('SINT.TISS');
+    await expect(painel).toContainText('Responsável: SINT.GUIAS');
+    await expect(page.getByTestId('gc-G-C1122-1')).toContainText('SINT.GUIAS');
 
     // Pendência: sem motivo, barrada na hora; com o motivo e o prazo, a guia vai a "pendente".
     const formPend = page.getByTestId('gc-form-pendencia');
@@ -298,7 +298,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
       rota: '/guias/pendencias/801/resolucao',
       corpo: { solucao: 'Laudo recebido do setor de imagem' },
     });
-    await expect(pend).toContainText('Laudo recebido do setor de imagem (SINT.TISS)');
+    await expect(pend).toContainText('Laudo recebido do setor de imagem (SINT.GUIAS)');
     await expect(painel.locator('h2')).toContainText('Solicitada');
     await expect(formResp).not.toContainText('Resolva as pendências abertas da guia');
 
@@ -364,6 +364,51 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     await expect(historico).toContainText('Resposta da operadora · Solicitada → Autorizada');
     await expect(historico).toContainText('Anexo incluído');
     await semViolacaoAxe(page, '/faturamento/guias-convenio (painel)');
+    expect(externas).toEqual([]);
+  });
+
+  test('quem só consulta (SINT.TISS, sem faturamento.pendencia.editar) vê a fila e o painel, sem nenhuma ação de gravação', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const s = simular(page);
+    // Uma pendência já aberta: o leitor a vê, mas não tem como resolvê-la.
+    s.st.situacao = 'pendente';
+    s.st.pendencias.push({
+      id: 801,
+      sequencia: 1,
+      situacao: 'aberta',
+      motivo: 'Falta laudo sintético',
+      descricao: null,
+      abertaEm: '2026-11-25T10:00:00.000Z',
+      prazoEm: null,
+      responsavel: null,
+      resolvidaEm: null,
+      resolvidoPor: null,
+      solucao: null,
+    });
+    await s.ligar();
+    await entrar(page, 'SINT.TISS');
+    const menu = page.getByRole('navigation', { name: 'Menu principal' });
+    await menu.locator('#menu-buscar').fill('Guias do convênio');
+    await menu.getByRole('link', { name: 'Guias do convênio' }).click();
+    await expect(page).toHaveURL(/\/faturamento\/guias-convenio$/);
+    await page.getByTestId('gc-G-C1122-1').click();
+    const painel = page.getByTestId('gc-painel');
+    await expect(painel).toContainText('G-C1122-1');
+    await expect(page.getByTestId('gc-somente-consulta')).toBeVisible();
+    await expect(page.getByTestId('gc-pend-1')).toContainText('Falta laudo sintético');
+    await expect(page.getByTestId('gc-historico')).toBeVisible();
+    // Nenhuma ação de gravação: nem assumir, nem resposta, nem pendência (abrir ou resolver), nem anexo.
+    await expect(page.getByTestId('gc-assumir')).toHaveCount(0);
+    await expect(page.getByTestId('gc-form-resposta')).toHaveCount(0);
+    await expect(page.getByTestId('gc-responder')).toHaveCount(0);
+    await expect(page.getByTestId('gc-form-pendencia')).toHaveCount(0);
+    await expect(page.getByTestId('gc-form-anexo')).toHaveCount(0);
+    await expect(painel.getByRole('button', { name: 'Resolver' })).toHaveCount(0);
+    await expect(page.getByTestId('gc-pend-1').locator('input')).toHaveCount(0);
+    await semViolacaoAxe(page, '/faturamento/guias-convenio (somente consulta)');
+    expect(s.st.corpos).toEqual([]);
     expect(externas).toEqual([]);
   });
 });

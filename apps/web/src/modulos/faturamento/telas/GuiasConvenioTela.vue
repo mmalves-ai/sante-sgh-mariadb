@@ -23,10 +23,14 @@ import {
   resolverPendenciaGuia,
   responderGuia,
 } from '../api-auditoria-tramite.js';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 
 const { t } = useI18n();
 const qc = useQueryClient();
+/** As cinco gravações da guia (assumir, responder, pendência, resolução, anexo) pedem esta permissão no servidor;
+ * quem só consulta (faturamento.guia.ler) vê a fila e o painel, sem as ações. */
+const podeEditar = computed(() => pode('faturamento.pendencia.editar'));
 const situacao = ref<string | null>(null);
 const minhas = ref(false);
 const cirurgia = ref(false);
@@ -258,7 +262,12 @@ async function anexar() {
       <p>
         {{ t('auditoriaTramite.guia.responsavel') }}:
         {{ guia.data.value.responsavel ?? t('auditoriaTramite.guia.semResponsavel') }}
-        <button type="button" data-testid="gc-assumir" @click="rodar(() => assumirGuia(escolhida!, chave()))">
+        <button
+          v-if="podeEditar"
+          type="button"
+          data-testid="gc-assumir"
+          @click="rodar(() => assumirGuia(escolhida!, chave()))"
+        >
           {{ t('auditoriaTramite.guia.assumir') }}
         </button>
       </p>
@@ -267,7 +276,10 @@ async function anexar() {
         <span v-if="guia.data.value.validadeSenha"> · {{ guia.data.value.validadeSenha }}</span>
       </p>
 
-      <form class="filtros" data-testid="gc-form-resposta" @submit.prevent="responder">
+      <p v-if="!podeEditar" class="secundario" data-testid="gc-somente-consulta">
+        {{ t('auditoriaTramite.guia.somenteConsulta') }}
+      </p>
+      <form v-if="podeEditar" class="filtros" data-testid="gc-form-resposta" @submit.prevent="responder">
         <h3>{{ t('auditoriaTramite.guia.resposta') }}</h3>
         <SanteSelecao
           v-model="resposta.resposta"
@@ -311,23 +323,30 @@ async function anexar() {
         <li v-for="p in guia.data.value.pendencias" :key="p.id" :data-testid="`gc-pend-${p.sequencia}`">
           {{ p.motivo }}<span v-if="p.descricao"> · {{ p.descricao }}</span> · {{ dataHora(p.abertaEm) }}
           <template v-if="p.situacao === 'aberta' || p.situacao === 'em_tratamento'">
-            <input
-              v-model="solucoes[p.id]"
-              :placeholder="t('auditoriaTramite.guia.solucao')"
-              maxlength="500"
-            />
-            <button
-              type="button"
-              :disabled="(solucoes[p.id] ?? '').trim().length < 3"
-              @click="rodar(() => resolverPendenciaGuia(p.id, solucoes[p.id]!, chave()))"
-            >
-              {{ t('auditoriaTramite.guia.resolver') }}
-            </button>
+            <template v-if="podeEditar">
+              <input
+                v-model="solucoes[p.id]"
+                :placeholder="t('auditoriaTramite.guia.solucao')"
+                maxlength="500"
+              />
+              <button
+                type="button"
+                :disabled="(solucoes[p.id] ?? '').trim().length < 3"
+                @click="rodar(() => resolverPendenciaGuia(p.id, solucoes[p.id]!, chave()))"
+              >
+                {{ t('auditoriaTramite.guia.resolver') }}
+              </button>
+            </template>
           </template>
           <span v-else class="secundario"> · {{ p.solucao }} ({{ p.resolvidoPor }})</span>
         </li>
       </ul>
-      <form class="filtros" data-testid="gc-form-pendencia" @submit.prevent="abrirPendencia">
+      <form
+        v-if="podeEditar"
+        class="filtros"
+        data-testid="gc-form-pendencia"
+        @submit.prevent="abrirPendencia"
+      >
         <SanteSelecao
           v-model="pendencia.motivoId"
           :rotulo="t('auditoriaTramite.motivo')"
@@ -356,7 +375,7 @@ async function anexar() {
           {{ t(`auditoriaTramite.guia.tiposAnexo.${a.tipo}`) }} · {{ a.nome }} · {{ dataHora(a.em) }}
         </li>
       </ul>
-      <form class="filtros" data-testid="gc-form-anexo" @submit.prevent="anexar">
+      <form v-if="podeEditar" class="filtros" data-testid="gc-form-anexo" @submit.prevent="anexar">
         <SanteSelecao
           v-model="anexo.tipoDocumento"
           :rotulo="t('auditoriaTramite.guia.tipoDocumento')"
