@@ -19,6 +19,26 @@ export const TIPOS_ATENDIMENTO_COBRANCA: readonly string[] = [
   'todos',
 ];
 
+/**
+ * Tipo de atendimento da cobrança pela natureza da conta (o credenciamento e as exceções presos a um tipo de
+ * atendimento valem só nele). Pronto atendimento é urgência; a conta domiciliar não tem tipo de cobrança próprio e
+ * só casa com o que vale para todos.
+ */
+export function tipoAtendimentoDaConta(natureza: string | null): TipoAtendimentoCobranca | null {
+  switch (natureza) {
+    case 'internacao':
+      return 'internacao';
+    case 'pronto_atendimento':
+      return 'urgencia';
+    case 'ambulatorial':
+      return 'ambulatorial';
+    case 'externo':
+      return 'externo';
+    default:
+      return null;
+  }
+}
+
 const vigente = (inicio: string, fim: string | null, data: string) =>
   inicio <= data && (fim === null || fim >= data);
 

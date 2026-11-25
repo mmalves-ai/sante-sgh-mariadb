@@ -425,7 +425,7 @@ function gerarLote(montador: MontadorLoteTiss | null) {
         const [ct] = await tx.consultarParaAtualizar<Linha>(
           `SELECT id, versao, numero, fonte_pagadora_id, natureza, situacao, competencia, inicio_em, fim_em,
                   senha_autorizacao, cobertura_paciente_id, valor_total, atendimento_id, guia_fonte_pagadora_id,
-                  tipo_cobranca, tipo_conta_id
+                  tipo_cobranca, tipo_conta_id, plano_fonte_pagadora_id
              FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [it.id, est],
         );

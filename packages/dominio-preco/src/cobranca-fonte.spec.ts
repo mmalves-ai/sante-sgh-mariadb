@@ -10,6 +10,7 @@ import {
   type PedidoCobranca,
   precoReferenciaNaData,
   quantidadeNaFonte,
+  tipoAtendimentoDaConta,
   validarCredenciamentoCobranca,
   validarEquivalencia,
   validarExcecaoCredenciamento,
@@ -554,5 +555,28 @@ describe('de-para aplicado ao item da guia', () => {
     const d = itemNaFonte(item, { ...base, fatorDivisao: 2, percentual: 150 });
     expect(d.quantidade).toBe(1);
     expect(d.valorUnitario).toBe(45);
+  });
+});
+
+describe('tipo de atendimento da cobrança pela conta', () => {
+  it('internação, pronto atendimento como urgência, ambulatorial e externo; domiciliar e desconhecido sem tipo', () => {
+    expect(tipoAtendimentoDaConta('internacao')).toBe('internacao');
+    expect(tipoAtendimentoDaConta('pronto_atendimento')).toBe('urgencia');
+    expect(tipoAtendimentoDaConta('ambulatorial')).toBe('ambulatorial');
+    expect(tipoAtendimentoDaConta('externo')).toBe('externo');
+    expect(tipoAtendimentoDaConta('domiciliar')).toBeNull();
+    expect(tipoAtendimentoDaConta(null)).toBeNull();
+  });
+  it('a exceção da equipe presa à internação vale na conta de internação e não na de pronto atendimento', () => {
+    const x = exc({ profissionalId: null, equipeId: 70, tipoAtendimento: 'internacao', itemId: 10 });
+    const daConta = (natureza: string) => ({ ...pc, tipoAtendimento: tipoAtendimentoDaConta(natureza) });
+    expect(conferirCobranca([cred({})], [x], daConta('internacao'))).toMatchObject({
+      permitido: false,
+      origem: 'excecao',
+    });
+    expect(conferirCobranca([cred({})], [x], daConta('pronto_atendimento'))).toMatchObject({
+      permitido: true,
+      origem: 'credenciamento',
+    });
   });
 });

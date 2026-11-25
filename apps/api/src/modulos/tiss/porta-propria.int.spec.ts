@@ -865,6 +865,156 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     }
   }, 90_000);
 
+  it('gerar o lote com o credenciamento pelo plano, pela equipe e pelo tipo de atendimento da conta (06-FAT linha 8): o credenciamento só no plano do paciente libera a fonte que barra; a exceção que proíbe da equipe de outro tipo de atendimento não vale; a da equipe na internação recusa com o motivo', async () => {
+    const cobranca = new ServicoCobranca(nucleo);
+    const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-f378p' }, fn);
+    const m = await escrever(async (e) => {
+      const agora = new Date();
+      const item = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        ['83160005'],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'honorario', ?, ?)",
+        ['83160005', 'HONORARIO SINTETICO 83160005', ids.grupo, agora],
+      );
+      const plano = await e.inserir(
+        'INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, codigo, descricao, criado_em) VALUES (?, ?, ?, ?)',
+        [ids.fonte, `${P}-PL`, 'PLANO SINTETICO F378', agora],
+      );
+      const equipe = await e.inserir(
+        `INSERT INTO equipe_profissional (estabelecimento_id, codigo, nome, tipo, vigencia_inicio, criado_em)
+         VALUES (?, ?, 'EQUIPE SINTETICA F378', 'cirurgica', '2025-01-01', ?)`,
+        [ids.est, `${P}-EQ`, agora],
+      );
+      await e.inserir(
+        `INSERT INTO equipe_profissional_membro (equipe_profissional_id, profissional_id, vigencia_inicio, criado_em)
+         VALUES (?, ?, '2025-01-01', ?)`,
+        [equipe, ids.prof, agora],
+      );
+      const conta = async (sufixo: string) => {
+        const id = await e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           plano_fonte_pagadora_id, tipo_conta_id, natureza, competencia, inicio_em, fim_em, situacao, valor_itens,
+           valor_total, fechada_em, fechada_por_usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?, 'fechada', 120, 120, ?, ?, ?)`,
+          [
+            ids.est,
+            `${P}-${sufixo}`,
+            ids.atendimento,
+            ids.paciente,
+            ids.fonte,
+            plano,
+            ids.tipoConta,
+            competencia,
+            agora,
+            agora,
+            agora,
+            ids.usuario,
+            agora,
+          ],
+        );
+        await e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em,
+           quantidade, valor_unitario, valor_total, executante_profissional_id, criado_em)
+         VALUES (?, 1, ?, ?, 1, 120, 120, ?, ?)`,
+          [id, item, agora, ids.prof, agora],
+        );
+        return id;
+      };
+      return { item, plano, equipe, a: await conta('PA'), b: await conta('PB') };
+    });
+    const entrada = async (conta: number) => ({
+      convenio: ids.fonte,
+      tipoGuia: 4,
+      contas: [{ id: conta, versao: await versaoDaConta(conta) }],
+    });
+    const lotes = async () =>
+      Number(
+        (await lerUma('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))?.['q'],
+      );
+    const gerados: number[] = [];
+    try {
+      await escrever((e) =>
+        e.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = TRUE WHERE id = ?', [ids.fonte]),
+      );
+      // 1) O executante tem credenciamento só no plano da conta: a fonte que barra gera o lote.
+      await cobranca.gravar('credenciamento', op(), {
+        fontePagadoraId: ids.fonte,
+        planoId: m.plano,
+        profissionalId: ids.prof,
+        vigenciaInicio: '2025-01-01',
+      });
+      // A exceção que proíbe da equipe presa ao atendimento ambulatorial não vale na conta de internação.
+      await cobranca.gravar('excecao', op(), {
+        equipeId: m.equipe,
+        fontePagadoraId: ids.fonte,
+        tipoAtendimento: 'ambulatorial',
+        itemId: m.item,
+        efeito: 'proibe',
+        motivo: 'SO NO AMBULATORIO F378',
+        vigenciaInicio: '2025-01-01',
+      });
+      const antes = await lotes();
+      const r1 = await porta.executar(c, 'faturamento.gerarLote', await entrada(m.a), op());
+      gerados.push(Number(r1.resultado['lote']));
+      expect(r1.resultado).toMatchObject({ contas: 1 });
+      expect(String(r1.resultado['alertas'] ?? '')).not.toContain('credenciamento');
+      expect(await lotes()).toBe(antes + 1);
+      expect(await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [m.a])).toMatchObject({
+        situacao: 'faturada',
+      });
+      // 2) A exceção que proíbe da equipe do executante, no plano da conta e na internação, recusa sem gravar.
+      await cobranca.gravar('excecao', op(), {
+        equipeId: m.equipe,
+        fontePagadoraId: ids.fonte,
+        planoId: m.plano,
+        tipoAtendimento: 'internacao',
+        itemId: m.item,
+        efeito: 'proibe',
+        motivo: 'EQUIPE FORA DO CONTRATO F378',
+        vigenciaInicio: '2025-01-01',
+      });
+      const e2 = await erroDe(porta.executar(c, 'faturamento.gerarLote', await entrada(m.b), op()));
+      expect(codigo(e2)).toBe('credenciamento-barra-cobranca');
+      expect(e2.message).toContain(`${P}-PB`);
+      expect(e2.message).toContain('EQUIPE FORA DO CONTRATO F378');
+      expect(e2.message).not.toContain('SO NO AMBULATORIO F378');
+      expect(await lotes()).toBe(antes + 1);
+      expect(await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [m.b])).toMatchObject({
+        situacao: 'fechada',
+      });
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-f378p' }, async (e) => {
+        await e.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = FALSE WHERE id = ?', [
+          ids.fonte,
+        ]);
+        for (const lote of gerados) {
+          const a = await e.uma<{ arquivo_id: number }>('SELECT arquivo_id FROM lote_tiss WHERE id = ?', [
+            lote,
+          ]);
+          await e.executar('DELETE FROM lote_tiss_conta WHERE lote_tiss_id = ?', [lote]);
+          await e.executar(
+            'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?)',
+            [lote],
+          );
+          await e.executar('DELETE FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote]);
+          await e.executar('DELETE FROM lote_tiss WHERE id = ?', [lote]);
+          await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
+        }
+        await e.executar('DELETE FROM excecao_credenciamento WHERE estabelecimento_id = ?', [ids.est]);
+        await e.executar('DELETE FROM credenciamento_cobranca WHERE estabelecimento_id = ?', [ids.est]);
+        await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (?, ?)', [m.a, m.b]);
+        await e.executar('DELETE FROM conta_hospitalar WHERE id IN (?, ?)', [m.a, m.b]);
+        await e.executar('DELETE FROM equipe_profissional_membro WHERE equipe_profissional_id = ?', [
+          m.equipe,
+        ]);
+        await e.executar('DELETE FROM equipe_profissional WHERE id = ?', [m.equipe]);
+        await e.executar('DELETE FROM plano_fonte_pagadora WHERE id = ?', [m.plano]);
+      });
+    }
+  }, 90_000);
+
   it('gerar o lote com faixa de números da operadora (02-CAD linha 25): a guia nasce com o número da faixa, o uso fica gravado, a faixa esgota e avisa; sem número o lote recusa sem gravar; o lote refeito reusa o número e regrava o valor; a guia importada vai ao lote com o número dela; número já usado na fonte pagadora recusa; a guia de outra fonte pagadora não é reusada', async () => {
     const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
       nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-f3111' }, fn);

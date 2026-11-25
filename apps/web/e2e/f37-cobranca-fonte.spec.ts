@@ -100,6 +100,10 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
       avisos: [],
     }),
   );
+  // A lista do credenciamento acompanha o que a tela grava e encerra (a tela recarrega depois de cada ação).
+  const credenciados: Record<string, unknown>[] = [
+    { id: 21, profissional: 'PROFISSIONAL SINTETICO F372', inicio: '2025-01-01', fim: null, versao: 1 },
+  ];
   await page.route('**/api/faturamento/credenciamento?**', (rota) =>
     json(
       rota,
@@ -111,10 +115,32 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
           ['fim', 'Vigência: fim'],
           ['versao', 'Versão'],
         ],
-        [{ id: 21, profissional: 'PROFISSIONAL SINTETICO F372', inicio: '2025-01-01', fim: null, versao: 1 }],
+        credenciados,
       ),
     ),
   );
+  await page.route('**/api/faturamento/credenciamento-cobranca', (rota) => {
+    if (rota.request().method() !== 'POST') return rota.continue();
+    const corpo = rota.request().postDataJSON() as Record<string, unknown>;
+    enviados.push({ url: rota.request().url(), corpo });
+    credenciados.push({
+      id: 22,
+      profissional: `PROFISSIONAL ${String(corpo['profissionalId'])} F372`,
+      inicio: corpo['vigenciaInicio'],
+      fim: null,
+      versao: 1,
+    });
+    return json(rota, { id: 22 }, 201);
+  });
+  await page.route('**/api/faturamento/credenciamento-cobranca/*/encerramento', (rota) => {
+    if (rota.request().method() !== 'POST') return rota.continue();
+    const corpo = rota.request().postDataJSON() as Record<string, unknown>;
+    enviados.push({ url: rota.request().url(), corpo });
+    const id = Number(/credenciamento-cobranca\/(\d+)\/encerramento/.exec(rota.request().url())?.[1]);
+    const alvo = credenciados.find((x) => x['id'] === id);
+    if (alvo) Object.assign(alvo, { fim: corpo['vigenciaFim'], versao: Number(alvo['versao']) + 1 });
+    return json(rota, { id }, 200);
+  });
   await page.route('**/api/faturamento/credenciamento/excecoes?**', (rota) =>
     json(
       rota,
@@ -217,7 +243,6 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
     '**/api/faturamento/de-para',
     '**/api/faturamento/de-para/*/encerramento',
     '**/api/faturamento/credenciamento/excecoes',
-    '**/api/faturamento/credenciamento-cobranca',
   ])
     await page.route(caminho, (rota) => {
       if (rota.request().method() !== 'POST') return rota.continue();
@@ -306,6 +331,27 @@ test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004 @C1-022', () => {
       recebeDiretoDaFonte: false,
       vigenciaInicio: hoje,
     });
+    // A lista recarrega com o credenciamento gravado.
+    await expect(page.getByTestId('cobranca-lista')).toContainText('PROFISSIONAL 601 F372');
+    await expect(page.getByTestId('encerrar-22')).toBeVisible();
+
+    // Encerrar o credenciamento antigo: fim antes de hoje é recusado na hora; vai a versão, o fim e o motivo;
+    // a lista recarrega com a linha ainda lá e o fim gravado nela (nada se apaga).
+    await page.getByTestId('encerrar-21').click();
+    await page.getByTestId('enc-fim').fill('2020-01-01');
+    await expect(page.getByTestId('enc-erro')).toBeVisible();
+    await expect(page.getByTestId('enc-confirmar')).toBeDisabled();
+    await page.getByTestId('enc-fim').fill(hoje);
+    await page.getByTestId('enc-motivo').fill('DESCREDENCIADO F372');
+    await page.getByTestId('enc-confirmar').click();
+    await expect(page.getByTestId('cobranca-aviso')).toContainText('Registro 21 encerrado');
+    expect(enviados.at(-1)?.url).toMatch(/\/api\/faturamento\/credenciamento-cobranca\/21\/encerramento$/);
+    expect(enviados.at(-1)?.corpo).toEqual({ versao: 1, vigenciaFim: hoje, motivo: 'DESCREDENCIADO F372' });
+    const linha21 = page
+      .getByTestId('cobranca-lista')
+      .getByRole('row', { name: /PROFISSIONAL SINTETICO F372/ });
+    await expect(linha21).toContainText('2025-01-01');
+    await expect(linha21).toContainText(hoje);
 
     // Exceção: proibir sem motivo é recusado na hora; com o motivo, vai o profissional e o item.
     await page.getByTestId('cobranca-aba-excecoes').click();

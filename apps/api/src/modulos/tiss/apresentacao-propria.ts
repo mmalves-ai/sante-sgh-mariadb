@@ -27,6 +27,7 @@ import {
   aplicarValoresPadrao,
   valorApresentado,
 } from '@sgh/dominio-faturamento';
+import { tipoAtendimentoDaConta } from '@sgh/dominio-preco';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -188,6 +189,30 @@ export async function apresentarLote(
     )) !== null;
   // A mesma conferência (quem, o quê, tipo de conta e dia) é feita uma vez só no lote.
   const credenciamento = new Map<string, Promise<string | null>>();
+  // Equipes vigentes de quem executou no dia (a exceção por equipe vale para os membros).
+  const equipesDoDia = new Map<string, Promise<number[]>>();
+  const equipesDe = (prof: number, dia: string) => {
+    const k = `${prof}|${dia}`;
+    let r = equipesDoDia.get(k);
+    if (!r) {
+      r = tx
+        .consultar<Linha>(
+          `SELECT DISTINCT m.equipe_profissional_id
+             FROM equipe_profissional_membro m
+             JOIN equipe_profissional e ON e.id = m.equipe_profissional_id
+            WHERE m.profissional_id = ? AND e.estabelecimento_id = ? AND e.ativo = TRUE
+              AND m.excluido_em IS NULL AND e.excluido_em IS NULL
+              AND m.vigencia_inicio <= ? AND (m.vigencia_fim IS NULL OR m.vigencia_fim >= ?)
+              AND e.vigencia_inicio <= ? AND (e.vigencia_fim IS NULL OR e.vigencia_fim >= ?)
+            ORDER BY m.equipe_profissional_id
+            LIMIT 20`,
+          [prof, est, dia, dia, dia, dia],
+        )
+        .then((ls) => ls.map((l) => n(l['equipe_profissional_id'])));
+      equipesDoDia.set(k, r);
+    }
+    return r;
+  };
   const avisos: string[] = [];
   const barrados: string[] = [];
   const saida: { conta: ContaTiss; regra: RegraApresentacao | null }[] = [];
@@ -198,6 +223,8 @@ export async function apresentarLote(
     const id = n(c.linha['id']);
     const rotulo = texto(c.linha['numero']) || String(id);
     const tipoConta = nn(c.linha['tipo_conta_id']);
+    const plano = nn(c.linha['plano_fonte_pagadora_id']);
+    const tipoAtendimento = tipoAtendimentoDaConta(texto(c.linha['natureza']) || null);
     const regra = escolherRegraApresentacao(regras, tipoConta);
     conferidas.push({ rotulo, regra });
     const origens = await tx.consultar<Linha>(
@@ -220,25 +247,29 @@ export async function apresentarLote(
         if (prof === null) continue;
         const item = n(o['item_faturavel_id']);
         const dia = dataIso(o['realizado_em']) || hoje;
-        const chave = `${prof}|${item}|${tipoConta ?? ''}|${dia}`;
+        const chave = `${prof}|${item}|${tipoConta ?? ''}|${plano ?? ''}|${tipoAtendimento ?? ''}|${dia}`;
         let motivo = credenciamento.get(chave);
         if (!motivo) {
-          motivo = conferirCobrancaPropria(tx as unknown as Leitor, est, {
-            fontePagadoraId: fonte,
-            planoId: null,
-            itemId: item,
-            profissionalId: prof,
-            prestadorId: null,
-            equipeIds: [],
-            tipoContaId: tipoConta,
-            tipoAtendimento: null,
-            quantidade: 1,
-            data: dia,
-          }).then((r) =>
-            r.credenciamento.permitido
-              ? null
-              : (r.credenciamento.motivo ?? 'quem executou não pode cobrar este item nesta fonte pagadora'),
-          );
+          motivo = equipesDe(prof, dia)
+            .then((equipeIds) =>
+              conferirCobrancaPropria(tx as unknown as Leitor, est, {
+                fontePagadoraId: fonte,
+                planoId: plano,
+                itemId: item,
+                profissionalId: prof,
+                prestadorId: null,
+                equipeIds,
+                tipoContaId: tipoConta,
+                tipoAtendimento,
+                quantidade: 1,
+                data: dia,
+              }),
+            )
+            .then((r) =>
+              r.credenciamento.permitido
+                ? null
+                : (r.credenciamento.motivo ?? 'quem executou não pode cobrar este item nesta fonte pagadora'),
+            );
           credenciamento.set(chave, motivo);
         }
         const m = await motivo;
