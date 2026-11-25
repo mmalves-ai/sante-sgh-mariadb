@@ -48,6 +48,7 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM configuracao_tiss_fonte_pagadora WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(`DELETE FROM sequencia_negocio WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar("DELETE FROM versao_padrao_tiss WHERE descricao = 'Versão sintética f7862aut'");
+  await e.executar("DELETE FROM solicitante_externo WHERE numero_conselho = 'SINT7862D'");
   await e.executar("DELETE FROM solicitante_externo WHERE numero_conselho = 'SINT7862'");
   await e.executar('DELETE FROM cobertura_paciente WHERE numero_carteira LIKE ?', ['SINTF7862A%']);
   await limparTrilhaDaMassa(e, { codigos: [P] });
@@ -62,6 +63,7 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
     paciente: number;
     cobertura: number;
     externo: number;
+    duplicado: number;
     conta: number;
     faturavel: number;
     atendimento: number;
@@ -119,6 +121,15 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
                  (SELECT id FROM ocupacao_cbo WHERE codigo_cbo = '225125' LIMIT 1), '1130000000', ?)`,
         [agora],
       );
+      // Cadastro duplicado já unificado no solicitante acima (inativo, com o ponteiro): pedido novo nunca nasce nele.
+      const duplicado = await e.inserir(
+        `INSERT INTO solicitante_externo (nome, conselho_classe_id, numero_conselho, conselho_unidade_federativa_id, ocupacao_cbo_id,
+                                          ativo, sucessor_solicitante_externo_id, unificado_em, unificado_por, criado_em)
+         VALUES ('Solicitante sintético duplicado', (SELECT id FROM conselho_classe WHERE codigo_tiss = '06' LIMIT 1), 'SINT7862D',
+                 (SELECT id FROM unidade_federativa WHERE codigo_ibge = '35' LIMIT 1),
+                 (SELECT id FROM ocupacao_cbo WHERE codigo_cbo = '225125' LIMIT 1), FALSE, ?, ?, ?, ?)`,
+        [externo, agora, usuario, agora],
+      );
       const conta = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id,
                                        natureza, competencia, inicio_em, criado_em)
@@ -130,7 +141,19 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
          VALUES (?, ?, ?, 1000, '2026-01-01', ?)`,
         [est, fonte, faturavel, agora],
       );
-      return { usuario, paciente, cobertura, externo, conta, faturavel, atendimento, est, fonte, motivo };
+      return {
+        usuario,
+        paciente,
+        cobertura,
+        externo,
+        duplicado,
+        conta,
+        faturavel,
+        atendimento,
+        est,
+        fonte,
+        motivo,
+      };
     });
     porta = new PortaAutorizacaoPreviaPropria(nucleo, CLIENTE, armazemXmlMemoria());
   }, 60_000);
@@ -422,5 +445,24 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
       m.est,
     ]);
     expect(Number(n['n'])).toBe(4);
+  });
+
+  it('pedido com o solicitante unificado em outro grava o cadastro que responde hoje', async () => {
+    const p = await porta.criar(ctx(), {
+      tipo: 'sp_sadt',
+      cobertura: m.cobertura,
+      solicitanteExterno: m.duplicado,
+      indicacaoClinica: 'Indicação sintética',
+      itens: [item({ quantidade: 1 })],
+    });
+    const s = await um('SELECT solicitante_externo_id FROM solicitacao_autorizacao WHERE id = ?', [p.id]);
+    expect(Number(s['solicitante_externo_id'])).toBe(m.externo);
+    // O duplicado fica como estava: inativo, com o ponteiro, sem pedido nenhum ligado a ele.
+    expect(
+      await um(
+        'SELECT ativo, sucessor_solicitante_externo_id AS suc, (SELECT COUNT(*) FROM solicitacao_autorizacao WHERE solicitante_externo_id = ?) AS n FROM solicitante_externo WHERE id = ?',
+        [m.duplicado, m.duplicado],
+      ),
+    ).toMatchObject({ ativo: 0, suc: m.externo, n: 0 });
   });
 });

@@ -53,6 +53,7 @@ import {
   registrarArquivoGuardado,
   retencaoAte,
 } from './armazem-xml.js';
+import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import { diaCivil } from './elegibilidade-propria.js';
 
 export const PORTA_AUTORIZACAO_PREVIA = Symbol('PORTA_AUTORIZACAO_PREVIA');
@@ -417,7 +418,8 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
           numero_carteira: String(cp['numero_carteira']).trim(),
           validade_carteira: dataIso(cp['validade']),
           solicitante_profissional_id: e.solicitanteProfissional,
-          solicitante_externo_id: e.solicitanteExterno,
+          // O cadastro unificado em outro não recebe pedido novo: grava o que responde hoje (F3.1, 02-CAD linha 20).
+          solicitante_externo_id: await solicitanteQueRespondeHoje(tx, e.solicitanteExterno),
           carater_atendimento_tiss_id: num(carater['id']),
           regime_internacao: e.regime,
           diarias_solicitadas: e.diarias,
