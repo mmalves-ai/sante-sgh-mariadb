@@ -20,6 +20,7 @@ export * from './laudo/habilitacao.js';
 export * from './laudo/autenticacao.js';
 export * from './laudo/numero.js';
 export * from './laudo/redacao.js';
+export * from './laudo/complementos.js';
 export * from './laudo/estruturado.js';
 export * from './apoio/remessa.js';
 export * from './portal/acesso.js';
