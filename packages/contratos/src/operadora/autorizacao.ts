@@ -624,6 +624,14 @@ export const MENSAGENS_AUTORIZACAO: Readonly<Record<string, string>> = {
   'critica-bloqueante':
     'O pedido tem crítica que impede a autorização (veja as críticas). Negue com o motivo ou peça complemento.',
   'critica-obrigatoria': 'Escolha a crítica que justifica a negativa ou o corte.',
+  'alcada-fora-da-vigencia':
+    'A sua alçada de autorizador não está vigente. A diretoria da operadora renova a alçada.',
+  'alcada-nao-autoriza':
+    'A sua alçada não autoriza guia nem procedimento. Leve o pedido a quem tem a alçada.',
+  'alcada-nao-nega': 'A sua alçada não nega item. Leve a negativa ou o corte a quem tem a alçada.',
+  'alcada-nao-prorroga':
+    'A sua alçada não autoriza prorrogação de internação. Leve o pedido a quem tem a alçada.',
+  'alcada-valor-acima': 'O valor autorizado passa do limite da sua alçada. Leve o pedido à alçada superior.',
   'fundamento-obrigatorio':
     'Informe a cláusula do contrato ou o dispositivo legal que justifica a negativa ou o corte.',
   'quantidade-acima-do-pedido': 'A quantidade autorizada não pode passar da pedida.',

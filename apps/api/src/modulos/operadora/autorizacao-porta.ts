@@ -6,6 +6,7 @@
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
 // Melhoria: o contexto é o do @sgh/nucleo (cliente, estabelecimento e usuário por id) e o estabelecimento de cada
 // gravação vem da sessão, nunca da entrada.
+import type { AlcadaAutorizador, PrazoRegulatorio } from '@sgh/dominio-operadora';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { Prestador } from './rede-porta.js';
@@ -104,6 +105,13 @@ export interface PortaAutorizacaoOperadora {
     beneficiario: number,
     codigos: readonly string[],
   ): Promise<DadosRegrasRol>;
+  /** C2-122: os prazos regulatórios da resposta (prazo_atendimento_regulatorio, com a unidade). */
+  prazosRegulatorios(c: ContextoAutorizacao): Promise<PrazoRegulatorio[]>;
+  /** C2-122: a alçada ligada ao auditor (null: sem alçada) e o limite de valor do próprio auditor. */
+  alcadaDoAuditor(
+    c: ContextoAutorizacao,
+    auditor: number,
+  ): Promise<{ alcada: AlcadaAutorizador | null; limite: number | null }>;
   autorizacoes(
     c: ContextoAutorizacao,
     f: FiltroAutorizacoesPorta,
@@ -140,6 +148,8 @@ export const METODOS_PORTA_AUTORIZACAO: ReadonlySet<string> = new Set([
   'buscarTuss',
   'nomeDoCid',
   'regrasDoRol',
+  'prazosRegulatorios',
+  'alcadaDoAuditor',
   'autorizacoes',
   'totais',
   'autorizacao',

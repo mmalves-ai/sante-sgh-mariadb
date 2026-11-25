@@ -233,6 +233,15 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     return { sexo: '', nascimento: '', regras: [] };
   }
 
+  /** C2-122: sem cadastro regulatório na memória, vale o padrão da norma. */
+  async prazosRegulatorios() {
+    return [];
+  }
+
+  async alcadaDoAuditor() {
+    return { alcada: null, limite: null };
+  }
+
   private vencida(p: PedidoMem): boolean {
     return EM_ABERTO.has(p.situacao) && p.prazoEm < this.agora();
   }

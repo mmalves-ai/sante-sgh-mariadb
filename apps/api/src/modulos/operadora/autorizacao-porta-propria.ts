@@ -19,6 +19,7 @@
 // profissional.
 // Pendente (pedido ao orquestrador): anexos da resposta do prestador pelo portal (armazenamento de arquivos) respondem
 // 501 `modelo-pendente`.
+import type { AlcadaAutorizador, PrazoRegulatorio } from '@sgh/dominio-operadora';
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   BasePortaOperadoraPropria,
@@ -325,6 +326,65 @@ export class PortaAutorizacaoOperadoraPropria
     });
   }
 
+  /** C2-122: os prazos regulatórios da resposta ao pedido, com a unidade do cálculo (RN 395 e RN 566). */
+  prazosRegulatorios(c: ContextoAutorizacao): Promise<PrazoRegulatorio[]> {
+    return this.ler(c, async (l) => {
+      const linhas = await l.consultar(
+        `SELECT p.codigo, p.prazo, u.unidade_base, p.vigencia_inicio, p.vigencia_fim, p.ativo
+           FROM prazo_atendimento_regulatorio p
+           JOIN unidade_prazo u ON u.id = p.unidade_prazo_id
+          WHERE p.codigo IN ('resposta_padrao', 'resposta_complexa')
+            AND u.unidade_base IN ('hora', 'dia', 'dia_util')
+          ORDER BY p.vigencia_inicio DESC, p.id DESC`,
+        [],
+      );
+      return linhas.map((r) => ({
+        codigo: txt(r['codigo']),
+        prazo: num(r['prazo']),
+        unidade: txt(r['unidade_base']) as PrazoRegulatorio['unidade'],
+        vigenciaInicio: data(r['vigencia_inicio']) ?? '',
+        vigenciaFim: data(r['vigencia_fim']),
+        ativo: bool(r['ativo']),
+      }));
+    });
+  }
+
+  /** C2-122: a alçada do autorizador ligada ao auditor e o limite de valor do próprio auditor. */
+  alcadaDoAuditor(
+    c: ContextoAutorizacao,
+    auditor: number,
+  ): Promise<{ alcada: AlcadaAutorizador | null; limite: number | null }> {
+    return this.ler(c, async (l) => {
+      const r = await l.uma(
+        `SELECT a.valor_limite_alcada, al.id AS alcada_id, al.nivel, al.valor_limite, al.autoriza_guia,
+                al.autoriza_procedimento, al.autoriza_prorrogacao, al.nega_item, al.vigencia_inicio,
+                al.vigencia_fim, al.ativo
+           FROM auditor_plano a
+           LEFT JOIN alcada_autorizador_plano al ON al.id = a.alcada_autorizador_plano_id
+          WHERE a.id = ? AND a.excluido_em IS NULL`,
+        [auditor],
+      );
+      if (!r) return { alcada: null, limite: null };
+      return {
+        limite: numOuNulo(r['valor_limite_alcada']),
+        alcada:
+          r['alcada_id'] === null || r['alcada_id'] === undefined
+            ? null
+            : {
+                nivel: num(r['nivel']),
+                valorLimite: numOuNulo(r['valor_limite']),
+                autorizaGuia: bool(r['autoriza_guia']),
+                autorizaProcedimento: bool(r['autoriza_procedimento']),
+                autorizaProrrogacao: bool(r['autoriza_prorrogacao']),
+                negaItem: bool(r['nega_item']),
+                vigenciaInicio: data(r['vigencia_inicio']) ?? '',
+                vigenciaFim: data(r['vigencia_fim']),
+                ativo: bool(r['ativo']),
+              },
+      };
+    });
+  }
+
   // ---- pedidos ----
 
   autorizacoes(
@@ -470,7 +530,7 @@ export class PortaAutorizacaoOperadoraPropria
     return this.ler(c, async (l) => {
       const linhas = await l.consultar(
         `SELECT i.id, i.sequencia, i.descricao, i.quantidade_solicitada, i.quantidade_autorizada, i.situacao,
-                f.codigo, f.descricao AS item_descricao
+                i.valor_referencia, f.codigo, f.descricao AS item_descricao
            FROM pedido_autorizacao_plano_item i
            JOIN pedido_autorizacao_plano pa ON pa.id = i.pedido_autorizacao_plano_id
            JOIN item_faturavel f ON f.id = i.item_faturavel_id
@@ -487,6 +547,7 @@ export class PortaAutorizacaoOperadoraPropria
         quantidadeSolicitada: num(i['quantidade_solicitada']),
         quantidadeAutorizada: numOuNulo(i['quantidade_autorizada']),
         situacao: txt(i['situacao']) as DadosItemAutorizacao['situacao'],
+        valorReferencia: numOuNulo(i['valor_referencia']),
       }));
     });
   }

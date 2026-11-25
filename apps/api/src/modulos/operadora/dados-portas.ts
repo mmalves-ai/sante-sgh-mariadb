@@ -752,6 +752,8 @@ export interface DadosItemAutorizacao {
   readonly quantidadeSolicitada: number;
   readonly quantidadeAutorizada: number | null;
   readonly situacao: 'pendente' | 'autorizado' | 'parcial' | 'negado';
+  /** C2-122: o valor unitário de referência da análise (para a alçada do autorizador). */
+  readonly valorReferencia?: number | null;
 }
 
 export interface DadosItemCobranca extends EntradaItemCobranca {

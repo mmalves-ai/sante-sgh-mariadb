@@ -31,7 +31,7 @@ export interface PrazoCalculado {
 }
 
 /** A linha vigente no dia (a de início mais recente), ou null. */
-export function prazoVigente(
+export function prazoRegulatorioVigente(
   linhas: readonly PrazoRegulatorio[],
   codigo: string,
   hoje: string,
@@ -72,7 +72,7 @@ export function prazoDaRespostaRegulatorio(
   const complexo = p.altaComplexidade || p.tipoGuia === TIPO_GUIA.internacao;
   const codigo = complexo ? CODIGO_PRAZO_RESPOSTA.complexo : CODIGO_PRAZO_RESPOSTA.padrao;
   const tipo: TipoPrazo = complexo ? 'complexo' : 'padrao';
-  const linha = prazoVigente(linhas, codigo, instante.slice(0, 10));
+  const linha = prazoRegulatorioVigente(linhas, codigo, instante.slice(0, 10));
   if (linha)
     return { tipo, prazoEm: vencimentoDoPrazo(instante, linha.prazo, linha.unidade), origem: codigo };
   const dias = complexo ? PARAMETROS_AUTORIZACAO.diasUteisComplexo : PARAMETROS_AUTORIZACAO.diasUteisPadrao;
@@ -85,7 +85,7 @@ export function parametrosDosPrazos(
   hoje: string,
 ): { diasUteisPadrao: number; diasUteisComplexo: number; diasValidadeSenha: number } {
   const dias = (codigo: string, padrao: number) => {
-    const l = prazoVigente(linhas, codigo, hoje);
+    const l = prazoRegulatorioVigente(linhas, codigo, hoje);
     return l && l.unidade === 'dia_util' ? l.prazo : padrao;
   };
   return {

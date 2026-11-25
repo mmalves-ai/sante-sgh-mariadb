@@ -20,6 +20,7 @@ import {
   type RegistrarAutorizacaoEntrada,
   SITUACOES_EM_ABERTO,
   SITUACOES_GUIA_OPERADORA,
+  TIPO_GUIA,
   TABELA_PROCEDIMENTOS,
   TIPOS_GUIA_OPERADORA,
 } from '@sgh/contratos';
@@ -38,8 +39,9 @@ import {
   designacaoVigente,
   negativaParaRegistro,
   nomeDeBusca,
-  PARAMETROS_AUTORIZACAO,
-  prazoDaResposta,
+  parametrosDosPrazos,
+  prazoDaRespostaRegulatorio,
+  problemasDaAlcada,
   type Problema,
   problemasDaDesignacao,
   problemasDaJunta,
@@ -206,7 +208,8 @@ export class ServicoAutorizacaoOperadora {
       podeDecidir: x.podeDecidir && x.ligada,
       podeDesignar: x.podeDesignar && x.ligada,
       hoje: relogio.hoje,
-      parametros: { ...PARAMETROS_AUTORIZACAO },
+      // C2-122: os prazos vigentes do cadastro regulatório (RN 395).
+      parametros: parametrosDosPrazos(await this.porta.prazosRegulatorios(c), relogio.hoje),
     };
   }
 
@@ -375,7 +378,8 @@ export class ServicoAutorizacaoOperadora {
     if (problemas.length) throw recusaDasRegras(problemas);
     const operadora = (await this.porta.operadoras(c)).find((o) => o.id === el.beneficiario.operadora);
     if (!operadora) throw recusaDasRegras([{ codigo: 'operadora-inexistente', campo: 'carteirinha' }]);
-    const prazo = prazoDaResposta(e, relogio.agora);
+    // C2-122: o prazo da resposta pelo cadastro regulatório vigente (prazo_atendimento_regulatorio).
+    const prazo = prazoDaRespostaRegulatorio(e, relogio.agora, await this.porta.prazosRegulatorios(c));
     const itens: EntradaItemRegistro[] = e.itens.map((i) => ({
       tabela: i.tabela,
       codigo: i.codigo,
@@ -646,6 +650,23 @@ export class ServicoAutorizacaoOperadora {
       new Set(dominios.critica.map((x) => x.codigo)),
     );
     if (resultado.problemas.length || !auditor) throw recusaDasRegras(resultado.problemas);
+    // C2-122: a alçada do autorizador (alcada_autorizador_plano ligada ao auditor) e o limite de valor do auditor.
+    const alcada = await this.porta.alcadaDoAuditor(c, auditor.id);
+    const valores = new Map(itens.map((i) => [i.id, i.valorReferencia ?? null]));
+    const foraDaAlcada = problemasDaAlcada(
+      alcada.alcada,
+      alcada.limite,
+      {
+        situacao: resultado.situacao,
+        itens: resultado.itens.map((i) => ({
+          quantidade: i.quantidade,
+          valorUnitario: valores.get(i.id) ?? null,
+        })),
+        prorrogacao: a.tipoGuia === TIPO_GUIA.internacao && a.guiaPrincipal !== null,
+      },
+      relogio.hoje,
+    );
+    if (foraDaAlcada.length) throw recusaDasRegras(foraDaAlcada);
     const registroAns = operadoras.find((o) => o.id === a.operadora)?.registroAns;
     if (!registroAns) throw recusaDasRegras([{ codigo: 'operadora-inexistente' }]);
     // C2-122: a negativa formal (RN 395) da decisão negada ou parcial, com o comunicado ao beneficiário.
