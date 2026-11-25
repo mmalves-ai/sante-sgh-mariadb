@@ -181,3 +181,6 @@ export function situacaoDaGlosaNoRecurso(
     return { situacao: 'em_recurso', valorRecuperado, encerrada: false };
   return { situacao: valorRecuperado > 0 ? 'recuperada' : 'encerrada', valorRecuperado, encerrada: true };
 }
+
+// A guia de recurso TISS do lote de recurso (faltas e montagem por guia de origem).
+export * from './recurso-tiss.js';

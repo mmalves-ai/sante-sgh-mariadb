@@ -5,7 +5,11 @@
 //   quando veio dele. Regra 7 do domínio (conferirBaixa).
 // - Recurso (faturamento.registrarRecurso): um lote de recurso por fonte pagadora, com os itens decididos como
 //   "recorrer" (a justificativa da decisão vai ao item do recurso), o valor pleiteado e o protocolo; a glosa vai a
-//   "em recurso". Regra do domínio: conferirItemDoRecurso.
+//   "em recurso". Regra do domínio: conferirItemDoRecurso. Cada recurso vira a guia de recurso TISS 04.03.00
+//   (RECURSO_GLOSA, por item): um lote de recurso por fonte pagadora e lote de origem; o XML passa no XSD, é guardado
+//   pela porta de arquivos e fica num lote_tiss "recurso_glosa" (arquivo, hash, valor), ligado ao recurso
+//   (recurso_glosa.lote_tiss_id) e ao lote de origem. Sem lote de origem protocolado ou cadastro TISS, o recurso é
+//   gravado e o alerta diz o que falta para a guia (faltasDoRecursoTiss); XSD recusado não grava nada.
 // - Retorno (faturamento.registrarRetornoRecurso): acatado, parcial ou negado por item, com o demonstrativo e o
 //   motivo; o recurso e a glosa mudam de situação quando o último item retorna (situacaoDoRecurso,
 //   situacaoDaGlosaNoRecurso). Nada é apagado: o retorno é gravado uma vez no item do recurso.
@@ -17,6 +21,10 @@ import {
 } from '@sgh/contratos';
 import {
   conferirBaixa,
+  faltasDoRecursoTiss,
+  type ItemRecursoTiss,
+  type MontadorRecursoTiss,
+  recursoTissDoLote,
   conferirDesfecho,
   conferirItemDoRecurso,
   lotesDeRecurso,
@@ -25,6 +33,7 @@ import {
   situacaoDaGlosaNoRecurso,
   situacaoDoRecurso,
   valorPadraoDoRecurso,
+  VERSAO_TISS_VIGENTE,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -38,6 +47,7 @@ import {
 import { versaoNumero } from '../faturamento/esquemas.js';
 import { esquemaBaixaComPrazo, esquemaRecursoComPrazo } from './esquemas.js';
 import { sincronizarGlosaDoItem, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { tabelaTissDoItem } from './regras-tiss.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -240,130 +250,333 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
 
 // ── Lote de recurso ─────────────────────────────────────────────────────────────────────────────────────
 
-const registrarRecurso = definirOperacao<RecursoComPrazo, ResultadoOperacao>({
-  nome: 'faturamento.registrar-recurso',
-  tabelas: ['recurso_glosa', 'recurso_glosa_item', 'glosa', 'glosa_item', 'sequencia_negocio'],
-  entrada: esquemaRecursoComPrazo,
-  async gravar(tx, e, ctx) {
-    const est = estabelecimentoDe(ctx);
-    const linhas = await itensTravados(tx, est, e.itens);
-    const alertas = new Set<string>();
-    const pedidos = e.itens.map((it, k) => {
-      const l = linhas[k]!;
-      if (l['glosa_item'] === null)
-        throw recusa(
-          'nao-conciliado',
-          `Item ${it.item}: sem glosa baixada; baixe o retorno antes de recorrer.`,
-        );
-      const emRecurso = l['recurso_glosa_id'] !== null || n(l['valor_recursado']) > 0;
-      // Reapresentação: o recurso atual do item já teve retorno (negado ou em parte); o novo fica ligado a ele, com o
-      // prazo contado da data do retorno e o teto descontado do que já voltou.
-      const retornado = emRecurso && l['data_recuperacao'] !== null;
-      const g = {
-        decisao: texto(l['decisao']),
-        justificativa: l['justificativa'] === null ? null : texto(l['justificativa']),
-        valorGlosado: n(l['valor_glosado']),
-        valorAceito: n(l['valor_aceito']),
-        emRecurso,
-        retornoAnterior: retornado ? { valorAcatado: n(l['valor_recuperado']) } : null,
-        // Glosa sem prazo gravado (anterior à baixa por item, ou de outra origem): a mesma regra da grade.
-        prazo: retornado
-          ? prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_recuperacao']))
-              .prazo
-          : (dataIso(l['data_limite_recurso']) ??
-            prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_glosa'])).prazo),
-      };
-      const valor = r2(it.valor ?? valorPadraoDoRecurso(g));
-      const r = conferirItemDoRecurso(g, valor, e.dataProtocolo);
-      if (r)
-        throw recusa(r.codigo, `Item ${it.item}: ${r.mensagem}`, r.campos ? { campos: [...r.campos] } : {});
-      const quantidade = it.quantidade ?? (n(l['quantidade_glosada']) || n(l['quantidade']) || 1);
-      return {
-        l,
-        valor,
-        quantidade,
-        prazo: g.prazo,
-        fontePagadora: n(l['fonte_pagadora_id']),
-        recursoAnterior: retornado ? n(l['recurso_glosa_id']) : null,
-      };
-    });
-    for (const p of pedidos) {
-      const m = await tx.uma<Linha>('SELECT permite_reapresentacao FROM motivo_glosa WHERE id = ?', [
-        p.l['motivo_glosa_id'],
-      ]);
-      if (m && !n(m['permite_reapresentacao']))
-        alertas.add(
-          'O motivo desta glosa não admite reapresentação pela terminologia: o recurso pode ser negado.',
-        );
-    }
-    const enviado = new Date(`${e.dataProtocolo}T12:00:00Z`);
-    const recursos: number[] = [];
-    const porGlosa = new Map<number, number>();
-    for (const lote of lotesDeRecurso(pedidos)) {
-      const total = r2(lote.itens.reduce((t, p) => t + p.valor, 0));
-      const prazos = lote.itens.map((p) => p.prazo).filter((x): x is string => !!x);
-      const rec = await tx.incluir('recurso_glosa', {
-        estabelecimento_id: est,
-        numero: await numeroNegocio(tx, 'recurso_glosa', est, ctx.usuario),
-        fonte_pagadora_id: lote.fontePagadora,
-        recurso_glosa_anterior_id: lote.recursoAnterior,
-        objeto: 'item',
-        prazo_ate: prazos.length ? prazos.sort()[0] : null,
-        enviado_em: enviado,
-        situacao: 'enviado',
-        valor_recursado: total,
-      });
-      recursos.push(rec);
-      for (const [k, p] of lote.itens.entries()) {
-        await tx.incluir('recurso_glosa_item', {
-          recurso_glosa_id: rec,
-          sequencia: k + 1,
-          glosa_item_id: n(p.l['glosa_item']),
-          conta_hospitalar_item_id: n(p.l['id']),
-          motivo_glosa_id: p.l['motivo_glosa_id'] ?? null,
-          justificativa: texto(p.l['justificativa']),
-          quantidade_recursada: p.quantidade,
-          valor_recursado: p.valor,
-        });
-        // No item da glosa, o recursado é o total pleiteado na cadeia de recursos: o que já voltou nos anteriores mais o
-        // valor deste (sem reapresentação, só este); o valor de cada recurso fica no item do recurso.
-        const recursado = r2(n(p.l['valor_recuperado']) + p.valor);
-        await tx.alterar('glosa_item', n(p.l['glosa_item']), n(p.l['versao_glosa']), {
-          valor_recursado: recursado,
-          quantidade_recursada: p.quantidade,
-          recurso_glosa_id: rec,
-          // Reapresentação: o item volta a esperar retorno; o anterior fica no item do recurso antigo (retornado_em) e
-          // o valor recuperado segue somado.
-          ...(lote.recursoAnterior !== null ? { data_recuperacao: null } : {}),
-        });
-        const gid = n(p.l['glosa_id']);
-        porGlosa.set(gid, r2((porGlosa.get(gid) ?? 0) + recursado - n(p.l['valor_recursado'])));
-      }
-    }
-    for (const [gid, valor] of porGlosa) {
-      const [cab] = await tx.consultarParaAtualizar<Linha>(
-        'SELECT id, versao, valor_recursado FROM glosa WHERE id = ? AND excluido_em IS NULL',
-        [gid],
-      );
-      if (cab)
-        await tx.alterar('glosa', gid, n(cab['versao']), {
-          valor_recursado: r2(n(cab['valor_recursado']) + valor),
-          situacao: 'em_recurso',
-          encerrado_em: null,
-        });
-    }
-    return {
-      itens: e.itens.length,
-      primeiro: e.itens[0]!.item,
-      recursos: recursos.join(','),
-      alertas: [...alertas].join(' '),
-    };
+/** O lote TISS de origem da conta (o mais recente não cancelado, fora os de recurso) e a guia principal nele. */
+const SQL_ORIGEM = `
+  SELECT lt.id AS lote, lt.numero_lote, lt.numero_protocolo,
+         (SELECT gt.numero_guia_prestador FROM guia_tiss gt WHERE gt.lote_tiss_id = lt.id AND gt.conta_hospitalar_id = ltc.conta_hospitalar_id
+             AND gt.excluido_em IS NULL ORDER BY gt.guia_tiss_principal_id IS NOT NULL, gt.id LIMIT 1) AS numero_guia,
+         (SELECT gt.numero_guia_operadora FROM guia_tiss gt WHERE gt.lote_tiss_id = lt.id AND gt.conta_hospitalar_id = ltc.conta_hospitalar_id
+             AND gt.excluido_em IS NULL ORDER BY gt.guia_tiss_principal_id IS NOT NULL, gt.id LIMIT 1) AS guia_operadora,
+         (SELECT gt.senha FROM guia_tiss gt WHERE gt.lote_tiss_id = lt.id AND gt.conta_hospitalar_id = ltc.conta_hospitalar_id
+             AND gt.excluido_em IS NULL ORDER BY gt.guia_tiss_principal_id IS NOT NULL, gt.id LIMIT 1) AS senha
+    FROM lote_tiss_conta ltc JOIN lote_tiss lt ON lt.id = ltc.lote_tiss_id
+   WHERE ltc.conta_hospitalar_id = ? AND ltc.excluido_em IS NULL AND lt.excluido_em IS NULL
+     AND lt.situacao <> 'cancelado' AND lt.tipo_envio <> 'recurso_glosa'
+   ORDER BY lt.id DESC LIMIT 1`;
+
+/** O item recorrido como vai à guia de recurso: o item faturável, a data e o motivo da glosa na terminologia. */
+const SQL_ITEM_TISS = `
+  SELECT ifa.codigo, ifa.descricao, ifa.tipo_item, ci.realizado_em, mg.codigo_tuss
+    FROM conta_hospitalar_item ci
+    JOIN item_faturavel ifa ON ifa.id = ci.item_faturavel_id
+    LEFT JOIN motivo_glosa mg ON mg.id = ?
+   WHERE ci.id = ?`;
+
+/** O cadastro TISS vigente do convênio no estabelecimento (como na geração do lote) e o nome da operadora. */
+const SQL_CADASTRO_TISS = `
+  SELECT f.nome, c.registro_ans, c.codigo_prestador_operadora, c.versao_padrao_tiss_id, f.registro_ans AS registro_fonte
+    FROM fonte_pagadora f
+    LEFT JOIN configuracao_tiss_fonte_pagadora c ON c.fonte_pagadora_id = f.id AND c.estabelecimento_id = ?
+          AND c.ativo = TRUE AND c.vigencia_inicio <= CURRENT_DATE
+          AND (c.vigencia_fim IS NULL OR c.vigencia_fim >= CURRENT_DATE)
+   WHERE f.id = ? AND f.excluido_em IS NULL
+   ORDER BY c.vigencia_inicio DESC LIMIT 1`;
+
+/**
+ * A guia de recurso TISS do recurso gravado: confere as faltas (alerta, nada de XML), monta e valida no XSD (recusa
+ * se o XSD não aceita), guarda o XML e grava o lote_tiss "recurso_glosa" com o arquivo; devolve o id do lote ou null.
+ */
+async function guiaDeRecursoTiss(
+  tx: TxOperacao,
+  montador: MontadorRecursoTiss | null,
+  d: {
+    readonly est: number;
+    readonly usuario: number | null;
+    readonly fonte: number;
+    readonly loteOrigem: number | null;
+    readonly numeroRecurso: string;
+    readonly dataRecurso: string;
+    readonly enviado: Date;
+    readonly origem: Linha | null;
+    readonly itens: readonly ItemRecursoTiss[];
   },
-  alvo: (_e, r) => ({ tabela: 'recurso_glosa', id: n(String(r['recursos']).split(',')[0]) }),
-  trilha: (e, r) => ({
-    dados: { itens: e.itens.length, dataProtocolo: e.dataProtocolo, recursos: r['recursos'] },
-  }),
-});
+  alertas: Set<string>,
+): Promise<number | null> {
+  const cfg = await tx.uma<Linha>(SQL_CADASTRO_TISS, [d.est, d.fonte]);
+  const o = {
+    numeroLote: d.origem ? texto(d.origem['numero_lote']) || null : null,
+    numeroProtocolo: d.origem ? texto(d.origem['numero_protocolo']) || null : null,
+    registroAns: texto(cfg?.['registro_ans'] ?? cfg?.['registro_fonte']).replace(/\D/g, ''),
+    codigoPrestador: texto(cfg?.['codigo_prestador_operadora']).trim(),
+    nomeOperadora: texto(cfg?.['nome']),
+  };
+  const faltas = faltasDoRecursoTiss(o, d.itens);
+  if (faltas.length) {
+    alertas.add(
+      `A guia de recurso TISS do recurso ${d.numeroRecurso} não foi gerada: falta ${faltas.join(', ')}. O recurso ficou registrado.`,
+    );
+    return null;
+  }
+  if (!montador) {
+    alertas.add(
+      `A guia de recurso TISS do recurso ${d.numeroRecurso} não foi gerada: a guarda do XML TISS não está configurada.`,
+    );
+    return null;
+  }
+  const versao =
+    cfg?.['versao_padrao_tiss_id'] ??
+    (
+      await tx.uma<Linha>(
+        'SELECT id FROM versao_padrao_tiss WHERE codigo_tiss = ? AND ativo = TRUE LIMIT 1',
+        [VERSAO_TISS_VIGENTE],
+      )
+    )?.['id'];
+  if (!versao)
+    throw recusa(
+      'versao-tiss-ausente',
+      `A versão ${VERSAO_TISS_VIGENTE} do padrão TISS não está no catálogo do estabelecimento.`,
+    );
+  await garantirSequencia(
+    tx,
+    { tipo: 'lote_tiss', estabelecimento: d.est, inicio: 1 },
+    { usuario: d.usuario, agora: new Date() },
+  );
+  const numeroLote = String((await tx.proximoNumero('lote_tiss')).valor).padStart(12, '0');
+  const m = await montador({
+    hospital: String(d.est),
+    convenio: d.fonte,
+    numeroLote,
+    prestador: { registroAns: o.registroAns, codigoPrestador: o.codigoPrestador },
+    recurso: recursoTissDoLote(d.numeroRecurso, d.dataRecurso, o, d.itens),
+    agora: new Date(),
+  });
+  if (!m.valido)
+    throw recusa(
+      'xsd-invalido',
+      `A guia de recurso não passou no XSD da TISS ${VERSAO_TISS_VIGENTE}: ${m.explicacao.slice(0, 3).join(' ')}`,
+    );
+  const arquivo = await tx.incluir('arquivo', {
+    estabelecimento_id: d.est,
+    entidade: 'lote_tiss',
+    finalidade: 'xml_lote_tiss',
+    nome_original: `recurso-${numeroLote}.xml`,
+    tipo_mime: 'application/xml',
+    tamanho_bytes: m.bytes,
+    hash_sha256: m.hashArquivo,
+    chave_armazenamento: m.chaveObjeto,
+    imutavel: true,
+  });
+  const lote = await tx.incluir('lote_tiss', {
+    estabelecimento_id: d.est,
+    fonte_pagadora_id: d.fonte,
+    numero_lote: numeroLote,
+    sequencial: numeroLote,
+    tipo_envio: 'recurso_glosa',
+    original_lote_tiss_id: d.loteOrigem,
+    tipo_guia: 'recurso_glosa',
+    versao_padrao_tiss_id: versao,
+    gerado_em: new Date(),
+    quantidade_guias: m.guias,
+    valor_total: m.valor,
+    hash_epilogo: m.hashEpilogo,
+    hash_arquivo: m.hashArquivo,
+    tamanho_bytes: m.bytes,
+    arquivo_id: arquivo,
+    situacao: 'enviado',
+    enviado_em: d.enviado,
+  });
+  await tx.alterar('arquivo', arquivo, 1, { entidade_id: lote });
+  return lote;
+}
+
+const registrarRecurso = (montador: MontadorRecursoTiss | null) =>
+  definirOperacao<RecursoComPrazo, ResultadoOperacao>({
+    nome: 'faturamento.registrar-recurso',
+    tabelas: [
+      'recurso_glosa',
+      'recurso_glosa_item',
+      'glosa',
+      'glosa_item',
+      'sequencia_negocio',
+      'lote_tiss',
+      'arquivo',
+    ],
+    entrada: esquemaRecursoComPrazo,
+    async gravar(tx, e, ctx) {
+      const est = estabelecimentoDe(ctx);
+      const linhas = await itensTravados(tx, est, e.itens);
+      const alertas = new Set<string>();
+      const pedidos = e.itens.map((it, k) => {
+        const l = linhas[k]!;
+        if (l['glosa_item'] === null)
+          throw recusa(
+            'nao-conciliado',
+            `Item ${it.item}: sem glosa baixada; baixe o retorno antes de recorrer.`,
+          );
+        const emRecurso = l['recurso_glosa_id'] !== null || n(l['valor_recursado']) > 0;
+        // Reapresentação: o recurso atual do item já teve retorno (negado ou em parte); o novo fica ligado a ele, com o
+        // prazo contado da data do retorno e o teto descontado do que já voltou.
+        const retornado = emRecurso && l['data_recuperacao'] !== null;
+        const g = {
+          decisao: texto(l['decisao']),
+          justificativa: l['justificativa'] === null ? null : texto(l['justificativa']),
+          valorGlosado: n(l['valor_glosado']),
+          valorAceito: n(l['valor_aceito']),
+          emRecurso,
+          retornoAnterior: retornado ? { valorAcatado: n(l['valor_recuperado']) } : null,
+          // Glosa sem prazo gravado (anterior à baixa por item, ou de outra origem): a mesma regra da grade.
+          prazo: retornado
+            ? prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_recuperacao']))
+                .prazo
+            : (dataIso(l['data_limite_recurso']) ??
+              prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_glosa']))
+                .prazo),
+        };
+        const valor = r2(it.valor ?? valorPadraoDoRecurso(g));
+        const r = conferirItemDoRecurso(g, valor, e.dataProtocolo);
+        if (r)
+          throw recusa(r.codigo, `Item ${it.item}: ${r.mensagem}`, r.campos ? { campos: [...r.campos] } : {});
+        const quantidade = it.quantidade ?? (n(l['quantidade_glosada']) || n(l['quantidade']) || 1);
+        return {
+          l,
+          valor,
+          quantidade,
+          prazo: g.prazo,
+          fontePagadora: n(l['fonte_pagadora_id']),
+          recursoAnterior: retornado ? n(l['recurso_glosa_id']) : null,
+        };
+      });
+      // O lote TISS de origem de cada conta: a guia de recurso cita um lote e o protocolo dele.
+      const origens = new Map<number, Linha | null>();
+      for (const p of pedidos) {
+        const conta = n(p.l['conta_hospitalar_id']);
+        if (!origens.has(conta)) origens.set(conta, (await tx.uma<Linha>(SQL_ORIGEM, [conta])) ?? null);
+      }
+      const comOrigem = pedidos.map((p) => {
+        const og = origens.get(n(p.l['conta_hospitalar_id'])) ?? null;
+        return { ...p, origem: og, loteOrigem: og ? n(og['lote']) : null };
+      });
+      for (const p of pedidos) {
+        const m = await tx.uma<Linha>('SELECT permite_reapresentacao FROM motivo_glosa WHERE id = ?', [
+          p.l['motivo_glosa_id'],
+        ]);
+        if (m && !n(m['permite_reapresentacao']))
+          alertas.add(
+            'O motivo desta glosa não admite reapresentação pela terminologia: o recurso pode ser negado.',
+          );
+      }
+      const enviado = new Date(`${e.dataProtocolo}T12:00:00Z`);
+      const recursos: number[] = [];
+      const porGlosa = new Map<number, number>();
+      const lotesTiss: number[] = [];
+      for (const lote of lotesDeRecurso(comOrigem)) {
+        const total = r2(lote.itens.reduce((t, p) => t + p.valor, 0));
+        const prazos = lote.itens.map((p) => p.prazo).filter((x): x is string => !!x);
+        const numeroRecurso = await numeroNegocio(tx, 'recurso_glosa', est, ctx.usuario);
+        const rec = await tx.incluir('recurso_glosa', {
+          estabelecimento_id: est,
+          numero: numeroRecurso,
+          fonte_pagadora_id: lote.fontePagadora,
+          recurso_glosa_anterior_id: lote.recursoAnterior,
+          objeto: 'item',
+          prazo_ate: prazos.length ? prazos.sort()[0] : null,
+          enviado_em: enviado,
+          situacao: 'enviado',
+          valor_recursado: total,
+        });
+        recursos.push(rec);
+        for (const [k, p] of lote.itens.entries()) {
+          await tx.incluir('recurso_glosa_item', {
+            recurso_glosa_id: rec,
+            sequencia: k + 1,
+            glosa_item_id: n(p.l['glosa_item']),
+            conta_hospitalar_item_id: n(p.l['id']),
+            motivo_glosa_id: p.l['motivo_glosa_id'] ?? null,
+            justificativa: texto(p.l['justificativa']),
+            quantidade_recursada: p.quantidade,
+            valor_recursado: p.valor,
+          });
+          // No item da glosa, o recursado é o total pleiteado na cadeia de recursos: o que já voltou nos anteriores mais o
+          // valor deste (sem reapresentação, só este); o valor de cada recurso fica no item do recurso.
+          const recursado = r2(n(p.l['valor_recuperado']) + p.valor);
+          await tx.alterar('glosa_item', n(p.l['glosa_item']), n(p.l['versao_glosa']), {
+            valor_recursado: recursado,
+            quantidade_recursada: p.quantidade,
+            recurso_glosa_id: rec,
+            // Reapresentação: o item volta a esperar retorno; o anterior fica no item do recurso antigo (retornado_em) e
+            // o valor recuperado segue somado.
+            ...(lote.recursoAnterior !== null ? { data_recuperacao: null } : {}),
+          });
+          const gid = n(p.l['glosa_id']);
+          porGlosa.set(gid, r2((porGlosa.get(gid) ?? 0) + recursado - n(p.l['valor_recursado'])));
+        }
+        const itensTiss: ItemRecursoTiss[] = [];
+        for (const p of lote.itens) {
+          const it = await tx.uma<Linha>(SQL_ITEM_TISS, [p.l['motivo_glosa_id'] ?? null, n(p.l['id'])]);
+          itensTiss.push({
+            numeroGuia: p.origem ? texto(p.origem['numero_guia']) || null : null,
+            numeroGuiaOperadora: p.origem ? texto(p.origem['guia_operadora']) || null : null,
+            senha: p.origem ? texto(p.origem['senha']) || null : null,
+            data: dataIso(it?.['realizado_em']),
+            codigoTabela: tabelaTissDoItem(texto(it?.['tipo_item'])),
+            codigo: texto(it?.['codigo']),
+            descricao: texto(it?.['descricao']),
+            codigoGlosa: it?.['codigo_tuss'] ? texto(it['codigo_tuss']).padStart(4, '0') : null,
+            valorRecursado: p.valor,
+            justificativa: texto(p.l['justificativa']),
+          });
+        }
+        const loteTiss = await guiaDeRecursoTiss(
+          tx,
+          montador,
+          {
+            est,
+            usuario: ctx.usuario ?? null,
+            fonte: lote.fontePagadora,
+            loteOrigem: lote.loteOrigem,
+            numeroRecurso,
+            dataRecurso: e.dataProtocolo,
+            enviado,
+            origem: lote.itens[0]!.origem,
+            itens: itensTiss,
+          },
+          alertas,
+        );
+        if (loteTiss !== null) {
+          await tx.alterar('recurso_glosa', rec, 1, { lote_tiss_id: loteTiss });
+          lotesTiss.push(loteTiss);
+        }
+      }
+      for (const [gid, valor] of porGlosa) {
+        const [cab] = await tx.consultarParaAtualizar<Linha>(
+          'SELECT id, versao, valor_recursado FROM glosa WHERE id = ? AND excluido_em IS NULL',
+          [gid],
+        );
+        if (cab)
+          await tx.alterar('glosa', gid, n(cab['versao']), {
+            valor_recursado: r2(n(cab['valor_recursado']) + valor),
+            situacao: 'em_recurso',
+            encerrado_em: null,
+          });
+      }
+      return {
+        itens: e.itens.length,
+        primeiro: e.itens[0]!.item,
+        recursos: recursos.join(','),
+        lotesTiss: lotesTiss.join(','),
+        alertas: [...alertas].join(' '),
+      };
+    },
+    alvo: (_e, r) => ({ tabela: 'recurso_glosa', id: n(String(r['recursos']).split(',')[0]) }),
+    trilha: (e, r) => ({
+      dados: {
+        itens: e.itens.length,
+        dataProtocolo: e.dataProtocolo,
+        recursos: r['recursos'],
+        lotesTiss: r['lotesTiss'],
+      },
+    }),
+  });
 
 // ── Retorno do recurso ──────────────────────────────────────────────────────────────────────────────────
 
@@ -492,9 +705,20 @@ const registrarRetornoRecurso = definirOperacao<RegistrarRetornoRecursoEntrada, 
   }),
 });
 
-/** As três operações do ciclo da glosa por item, pelo nome do executor. */
-export const operacoesGlosa = {
-  'faturamento.registrarGlosa': registrarGlosa,
-  'faturamento.registrarRecurso': registrarRecurso,
-  'faturamento.registrarRetornoRecurso': registrarRetornoRecurso,
-} as const;
+/** O montador da guia de recurso que acompanha o do lote (criarMontadorLote); null sem a guarda do XML. */
+export function montadorRecursoDe(montador: unknown): MontadorRecursoTiss | null {
+  const r = (montador as { readonly recurso?: unknown } | null)?.recurso;
+  return typeof r === 'function' ? (r as MontadorRecursoTiss) : null;
+}
+
+/** As três operações do ciclo da glosa por item, pelo nome do executor (o recurso gera a guia TISS com o montador). */
+export function operacoesGlosaCom(montador: unknown) {
+  return {
+    'faturamento.registrarGlosa': registrarGlosa,
+    'faturamento.registrarRecurso': registrarRecurso(montadorRecursoDe(montador)),
+    'faturamento.registrarRetornoRecurso': registrarRetornoRecurso,
+  } as const;
+}
+
+/** Sem a guarda do XML: o recurso é gravado e o alerta diz que a guia TISS não foi gerada. */
+export const operacoesGlosa = operacoesGlosaCom(null);
