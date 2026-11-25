@@ -179,10 +179,11 @@ export class EscrituracaoEfdController {
     if (t === null) throw new ErroProblema('nao-encontrado', 404, 'Arquivo não encontrado');
     if (t === 'desatualizado')
       throw new ErroProblema(
-        'arquivo-desatualizado',
+        'recusa-de-negocio',
         409,
         'A escrituração mudou depois deste arquivo',
         'Gere o arquivo de novo para baixar o texto atual.',
+        { codigo: 'arquivo-desatualizado' },
       );
     return t;
   }
