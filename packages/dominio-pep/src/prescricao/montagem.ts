@@ -12,6 +12,7 @@ import {
   SEM_FREQUENCIA,
 } from './catalogo.js';
 import { horariosPrevistos } from './horarios-previstos.js';
+import { MENSAGENS_ITEM_GRAVAVEL, type RecusaItemGravavel } from './itens-gravaveis.js';
 import { DIA, localDe, minLocal, minutoDoDia } from './tempo.js';
 import type { Periodo } from './vigencia.js';
 
@@ -175,6 +176,13 @@ export interface PadroesMontagem {
 
 export class ErroMontagem extends Error {
   override readonly name = 'ErroMontagem';
+  /** Código da recusa do domínio (422), quando o item é incoerente e não só mal formado. */
+  constructor(
+    mensagem: string,
+    readonly codigo?: RecusaItemGravavel,
+  ) {
+    super(mensagem);
+  }
 }
 
 export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMontagem): ItemMontado {
@@ -334,7 +342,13 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
         const volume = d.componentes
           .filter((cp) => cp.principal && etapaDe(cp) === e.etapa)
           .reduce((s, cp) => s + cp.dose, 0);
-        const fator = c.mlPorHora?.(e.unidadeInfusao) ?? 1;
+        // Sem conversão para mL/h (dose por peso, por exemplo) a duração não sai da velocidade: recusa, nunca fator 1.
+        const fator = c.mlPorHora ? c.mlPorHora(e.unidadeInfusao) : 1;
+        if (fator === null)
+          throw new ErroMontagem(
+            MENSAGENS_ITEM_GRAVAVEL['solucao-unidade-sem-conversao'],
+            'solucao-unidade-sem-conversao',
+          );
         const minutos = Math.max(1, Math.round((volume / (e.velocidade * fator)) * 60));
         const a = cursor;
         cursor += minutos;

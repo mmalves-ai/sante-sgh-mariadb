@@ -1,6 +1,7 @@
 // C2-087: o serviço da prescrição passa à montagem a conversão da unidade de velocidade de infusão em mL/h pela
 // sigla do cadastro (mL/h, gotas/min). A duração de cada etapa da solução sai do volume ÷ (velocidade × fator):
-// 500 mL a 125 mL/h duram 240 min; 500 mL a 42 gotas/min (126 mL/h) duram 238 min.
+// 500 mL a 125 mL/h duram 240 min; 500 mL a 42 gotas/min (126 mL/h) duram 238 min. Unidade sem conversão (mg/kg/min)
+// é recusada com 422 'solucao-unidade-sem-conversao': nunca vira mL/h por omissão.
 import { esquemaItemPrescricao, type ItemPrescricao } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
@@ -66,8 +67,8 @@ describe('montagem da solução pelo serviço: unidade de infusão (C2-087)', ()
     ]);
   });
 
-  it('unidade sem conversão conhecida fica em mL/h (fator 1), sem inventar outra', async () => {
-    const r = await montar(
+  it('unidade sem conversão para mL/h (dose por peso) é recusada com 422, sem duração inventada', async () => {
+    const r = montar(
       {} as ContextoPrescricao,
       { tipo: 'I' },
       vig,
@@ -75,7 +76,8 @@ describe('montagem da solução pelo serviço: unidade de infusão (C2-087)', ()
       [solucao(3, 100)],
       '2026-10-21T15:00',
     );
-    const e = r[0]?.detalhe.etapas?.[0];
-    expect(e && minutos(e.fim) - minutos(e.inicio)).toBe(300);
+    await expect(r).rejects.toMatchObject({
+      problema: { codigo: 'solucao-unidade-sem-conversao', status: 422 },
+    });
   });
 });

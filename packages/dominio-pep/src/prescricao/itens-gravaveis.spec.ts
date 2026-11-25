@@ -231,7 +231,7 @@ describe('conferência do item antes de gravar (03-PEP L105)', () => {
         },
       ),
     ).toBeNull();
-    // Unidade sem conversão: não confere volume.
+    // Unidade sem conversão para mL/h (dose por peso): não há como conferir volume × tempo, a etapa é recusada.
     expect(
       conferirItemGravavel(
         sol({ etapas: [longa], componentes: [{ dose: 500, principal: true, etapa: 1 }] }),
@@ -239,7 +239,7 @@ describe('conferência do item antes de gravar (03-PEP L105)', () => {
           mlPorHora: () => null,
         },
       ),
-    ).toBeNull();
+    ).toBe('solucao-unidade-sem-conversao');
     expect([mlPorHoraDaSigla('mL/h'), mlPorHoraDaSigla('gts/min'), mlPorHoraDaSigla('mgts/min')]).toEqual([
       1, 3, 1,
     ]);

@@ -3,6 +3,8 @@
 // no período, VMI com os tempos inspiratório e expiratório, VNI com a pressão de suporte e a duração da sessão e
 // hemocomponente com a indicação clínica. Sessão real sobre a fonte sintética e a porta da prescrição em MEMÓRIA
 // (pacientes, produtos e cadastros SINTÉTICOS; nada vai à cópia). Combos pelo e2e/combos.ts. axe sem violação séria.
+// No fim, o corpo do pedido de verificação prova que as etapas, a etapa de cada componente, a dose máxima, os tempos
+// da VMI, a pressão de suporte, a duração da VNI e a indicação do hemocomponente saíram do editor.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -125,6 +127,39 @@ test.describe('Prescrição: itens da gravação própria @C2-087', () => {
     await hemo.getByTestId('incluir-item').click();
     await expect(itens(page)).toHaveCount(5);
     await semViolacaoAxe(page, 'itens da prescrição');
+
+    // O que o editor coletou chega ao pedido: confere o corpo da verificação, item por item.
+    const pedido = page.waitForRequest((r) => r.method() === 'POST' && /\/verificar$/.test(r.url()));
+    await page.getByTestId('verificar-prescricao').click();
+    const corpo = (await pedido).postDataJSON() as { itens: { detalhe: Record<string, unknown> }[] };
+    const detalhe = (tipo: string) => corpo.itens.map((i) => i.detalhe).filter((d) => d['tipo'] === tipo);
+    expect(corpo.itens).toHaveLength(5);
+
+    const [solucao] = detalhe('solucao');
+    expect(solucao?.['etapas']).toEqual([
+      expect.objectContaining({ etapa: 1, velocidade: 125 }),
+      expect.objectContaining({ etapa: 2, velocidade: 50 }),
+    ]);
+    const componentes = solucao?.['componentes'] as { produto: number; dose: number; etapa?: number }[];
+    expect(componentes.map((c) => [c.produto, c.dose, c.etapa ?? 1])).toEqual([
+      [504, 500, 1],
+      [508, 250, 2],
+    ]);
+
+    const [medicamento] = detalhe('medicamento');
+    expect(medicamento?.['seNecessario']).toEqual(
+      expect.objectContaining({
+        intervaloMinimoHoras: 6,
+        doseMaxima: expect.objectContaining({ dose: 4, periodoHoras: expect.any(Number) }),
+      }),
+    );
+
+    const [vmi] = detalhe('vmi');
+    expect(vmi).toEqual(expect.objectContaining({ tempoInspiratorio: 1, tempoExpiratorio: 2.5 }));
+    const [vni] = detalhe('vni');
+    expect(vni).toEqual(expect.objectContaining({ pressaoSuporte: 8, duracaoMinutos: 60 }));
+    const [hemo] = detalhe('hemoterapia');
+    expect(hemo?.['indicacao']).toBe('Anemia sintomática com hemoglobina abaixo do alvo.');
     expect(externas).toEqual([]);
   });
 });

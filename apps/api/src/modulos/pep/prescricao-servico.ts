@@ -58,7 +58,7 @@ import {
   montarIndiceBusca,
   TETO_SUGESTOES,
 } from '@sgh/dominio-pep';
-import type { ContextoOperacao } from '@sgh/nucleo';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import type {
   AtendimentoDaPrescricao,
   GravacaoPrescricao,
@@ -477,6 +477,8 @@ export class ServicoPrescricao {
     try {
       return itens.map((i) => montarItem(i, ctxM, padroes));
     } catch (e) {
+      if (e instanceof ErroMontagem && e.codigo)
+        throw new ErroOperacao(422, e.codigo, 'Operação recusada', e.message);
       if (e instanceof ErroMontagem)
         throw new ErroProblema('entrada-invalida', 400, 'Item inválido', e.message);
       throw e;

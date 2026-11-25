@@ -113,6 +113,7 @@ export type RecusaItemGravavel =
   | 'solucao-etapa-sobreposta'
   | 'solucao-etapa-fora-da-vigencia'
   | 'solucao-volume-incoerente'
+  | 'solucao-unidade-sem-conversao'
   | 'ventilacao-fio2-fora-da-faixa'
   | 'ventilacao-parametro-invalido'
   | 'ventilacao-sem-alvo'
@@ -158,6 +159,8 @@ export const MENSAGENS_ITEM_GRAVAVEL: Readonly<Record<RecusaItemGravavel, string
   'solucao-etapa-fora-da-vigencia': 'As etapas da solução têm de caber na vigência do item.',
   'solucao-volume-incoerente':
     'O volume da etapa não confere com a velocidade e a duração (volume = velocidade × tempo).',
+  'solucao-unidade-sem-conversao':
+    'A unidade da velocidade da etapa não tem conversão para mL/h (como dose por peso): prescreva a etapa em mL/h ou gotas/min.',
   'ventilacao-fio2-fora-da-faixa': 'A fração inspirada de oxigênio vai de 21% a 100%.',
   'ventilacao-parametro-invalido':
     'Parâmetro ventilatório fora da faixa clínica (FR 4 a 60, PEEP 3 a 30, VC 20 a 1.500 mL, pressão controlada 5 a 50, IPAP 4 a 40, EPAP 3 a 25, pressão de suporte 1 a 30, tempos de 0,2 a 10 s, sessão até 24 h).',
@@ -266,7 +269,8 @@ function conferirSolucao(
   if (c.mlPorHora)
     for (const e of s.etapas) {
       const fator = c.mlPorHora(e.unidadeInfusao);
-      if (fator === null) continue;
+      // Sem conversão não há como conferir volume = velocidade × tempo: a etapa não grava com duração inventada.
+      if (fator === null) return 'solucao-unidade-sem-conversao';
       const minutos = minutosCivis(e.fim) - minutosCivis(e.inicio);
       if (!volumeConfere(e.volume, e.velocidade * fator, minutos)) return 'solucao-volume-incoerente';
     }
