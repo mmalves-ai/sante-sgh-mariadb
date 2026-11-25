@@ -5,6 +5,7 @@ import { mensagensCorrecao } from './i18n-correcoes.js';
 import { mensagensMercado } from './i18n-mercado.js';
 import { mensagensContencao } from './i18n-contencao.js';
 import { mensagensTrr } from './i18n-trr.js';
+import { mensagensAuditoriaChecagem } from './i18n-auditoria-checagem.js';
 import { mensagensProtocoloInternado } from './i18n-protocolo-internado.js';
 import { mensagensLesao } from './i18n-lesao.js';
 import { mensagensClassificacao, mensagensEscores, mensagensIndices } from './i18n-escores.js';
@@ -19,6 +20,8 @@ export const mensagensEnfermagem = {
   contencao: mensagensContencao,
   // W0-03, mercado M2: Time de Resposta Rápida e a ficha da parada.
   trr: mensagensTrr,
+  // 09-AREA linha 86 (C1-035): auditoria das checagens.
+  auditoriaChecagem: mensagensAuditoriaChecagem,
   // W0-03, mercado M3: protocolos gerenciados no internado.
   protocoloInternado: mensagensProtocoloInternado,
   // W0-03, mercado M4: feridas e lesão por pressão.
