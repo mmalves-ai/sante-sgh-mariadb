@@ -7,13 +7,17 @@
 //     paciente que podem atender a reserva (sem cirurgia ou desta cirurgia). Só leitura;
 //   - reservar equipamento: uma linha com a sequência seguinte, o período (o informado ou a janela da cirurgia) e a
 //     situação "reservado"; o equipamento fica travado na transação, e o período que cruza outra reserva vigente do
-//     mesmo equipamento (qualquer cirurgia) é recusado (422) sem escrita;
+//     mesmo equipamento (qualquer cirurgia) é recusado (422) sem escrita; a reserva de cirurgia cancelada, suspensa,
+//     reprovada ou realizada não ocupa o equipamento;
 //   - pedir hemocomponente: uma linha com a sequência seguinte, a quantidade de bolsas, a situação "solicitada" e a
 //     prova cruzada "solicitada" quando o tipo a exige ("dispensada" quando não);
 //   - ligar à requisição: a reserva guarda o item da requisição transfusional (mesmo paciente, mesmo tipo, requisição
-//     viva e sem outra cirurgia), passa a "reservada" com as bolsas já liberadas, e a requisição sem cirurgia passa a
-//     apontar esta cirurgia (a agência a enxerga);
-//   - cancelar: a reserva fica com a situação cancelada e a versão lida; nunca apagada.
+//     viva e sem outra cirurgia), passa a "reservada" com as bolsas já liberadas (sem bolsa liberada segue
+//     "solicitada", com o vínculo gravado), e a requisição sem cirurgia passa a apontar esta cirurgia (a agência a
+//     enxerga). O item que já atende outra reserva vigente e a reserva já ligada são recusados (422) sem escrita, com o
+//     item travado na transação; as opções da leitura não trazem o item já ligado;
+//   - cancelar: a reserva fica com a situação cancelada e a versão lida; nunca apagada. Na cirurgia cancelada,
+//     suspensa ou reprovada, o cancelamento libera a reserva ainda aberta.
 // Cirurgia de outro estabelecimento: 404 do agendamento, sem escrita.
 import {
   conferirCancelamentoEquipamento,
@@ -25,6 +29,7 @@ import {
   type OcupacaoEquipamento,
   periodoDaCirurgia,
   provaCruzadaInicial,
+  reservaLiberavel,
   reservaPeloVinculo,
 } from '@sgh/dominio-cirurgia';
 import { ErroOperacao, type Leitor, type TxOperacao } from '@sgh/nucleo';
@@ -95,6 +100,8 @@ export interface ReservasDaCirurgia {
   readonly numero: string;
   readonly situacao: string;
   readonly aberta: boolean;
+  /** A reserva aberta pode ser cancelada (cirurgia aberta, ou cancelada, suspensa ou reprovada para liberar). */
+  readonly liberavel: boolean;
   readonly periodo: { readonly inicio: string; readonly fim: string } | null;
   readonly equipamentos: ReservaEquipamentoLida[];
   readonly hemocomponentes: ReservaHemocomponenteLida[];
@@ -263,6 +270,9 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
       const reqs = await l.consultar<Linha>(
         `${SQL_ITEM_REQUISICAO} AND q.paciente_id = ? AND q.situacao <> 'cancelada' AND i.situacao <> 'cancelado'
             AND (q.agendamento_cirurgico_id IS NULL OR q.agendamento_cirurgico_id = ?)
+            AND NOT EXISTS (SELECT 1 FROM reserva_hemocomponente_cirurgia x
+                             WHERE x.requisicao_transfusao_item_id = i.id AND x.excluido_em IS NULL
+                               AND x.situacao IN ('solicitada', 'reservada'))
           ORDER BY q.solicitado_em DESC, i.sequencia LIMIT 100`,
         [est.id, a.paciente, agendamento],
       );
@@ -271,6 +281,7 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
         numero: a.numero,
         situacao: a.situacao,
         aberta: listaMaterialAberta(a.situacao),
+        liberavel: reservaLiberavel(a.situacao),
         periodo: a.periodo,
         equipamentos,
         hemocomponentes,
@@ -321,12 +332,13 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
       const ocupacoes = eq
         ? (
             await tx.consultar<Linha>(
-              `SELECT r.agendamento_cirurgico_id, a.numero, DATE_FORMAT(r.reserva_inicio, '%Y-%m-%d %H:%i') AS inicio,
+              `SELECT r.agendamento_cirurgico_id, a.numero, a.situacao AS situacao_agendamento, DATE_FORMAT(r.reserva_inicio, '%Y-%m-%d %H:%i') AS inicio,
                       DATE_FORMAT(r.reserva_fim, '%Y-%m-%d %H:%i') AS fim, r.situacao
                  FROM reserva_equipamento_cirurgia r
                  JOIN agendamento_cirurgico a ON a.id = r.agendamento_cirurgico_id
-                WHERE r.equipamento_saude_id = ? AND r.excluido_em IS NULL
+                WHERE r.equipamento_saude_id = ? AND r.excluido_em IS NULL AND a.excluido_em IS NULL
                   AND r.situacao IN ('reservado', 'confirmado', 'em_uso')
+                  AND a.situacao NOT IN ('cancelado', 'suspenso', 'reprovado', 'realizado')
                   AND r.reserva_inicio < ? AND r.reserva_fim > ?`,
               [e.equipamento, `${periodo.fim}:00`, `${periodo.inicio}:00`],
             )
@@ -336,6 +348,7 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
             inicio: String(r['inicio']),
             fim: String(r['fim']),
             situacao: String(r['situacao']),
+            situacaoAgendamento: String(r['situacao_agendamento']),
           }))
         : [];
       const quantidade = e.quantidade ?? 1;
@@ -397,7 +410,8 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
     return this.gravarSemCorrida(c, 'cirurgia.reserva.hemocomponente-requisicao', async (tx, est) => {
       const a = await this.agendamento(tx, est.id, agendamento, true);
       const [r] = await tx.consultarParaAtualizar<Linha>(
-        `SELECT id, hemocomponente_id, situacao, quantidade_solicitada FROM reserva_hemocomponente_cirurgia
+        `SELECT id, hemocomponente_id, situacao, quantidade_solicitada, requisicao_transfusao_item_id
+           FROM reserva_hemocomponente_cirurgia
           WHERE id = ? AND agendamento_cirurgico_id = ? AND excluido_em IS NULL`,
         [reserva, agendamento],
       );
@@ -417,10 +431,24 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
             quantidadeAtendida: num(i['quantidade_atendida']),
           }
         : null;
+      // Com o item travado acima, as outras reservas vigentes ligadas a ele são lidas com trava (leitura atual).
+      const outras = i
+        ? await tx.consultarParaAtualizar<Linha>(
+            `SELECT id FROM reserva_hemocomponente_cirurgia
+              WHERE requisicao_transfusao_item_id = ? AND id <> ? AND excluido_em IS NULL
+                AND situacao IN ('solicitada', 'reservada')`,
+            [e.requisicaoItem, reserva],
+          )
+        : [];
       const problemas = conferirVinculoRequisicao(
         a,
-        { hemocomponente: num(r['hemocomponente_id']), situacao: String(r['situacao']) },
+        {
+          hemocomponente: num(r['hemocomponente_id']),
+          situacao: String(r['situacao']),
+          requisicaoItem: numOuNull(r['requisicao_transfusao_item_id']),
+        },
         item,
+        outras.length,
       );
       if (problemas.length || !item || !i) throw recusaRegra('Vínculo com a requisição recusado', problemas);
       const v = reservaPeloVinculo(num(r['quantidade_solicitada']), item);

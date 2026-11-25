@@ -88,6 +88,7 @@ function simular(page: Page, aberta: () => boolean) {
     numero: 'CC-FIC-1',
     situacao: aberta() ? 'agendado' : 'realizado',
     aberta: aberta(),
+    liberavel: aberta(),
     periodo: { inicio: '2030-03-10 08:00', fim: '2030-03-10 10:00' },
     equipamentos: eqs.map((e) => {
       const o = EQUIPAMENTOS.find((x) => x.id === e.equipamento)!;
@@ -145,7 +146,9 @@ function simular(page: Page, aberta: () => boolean) {
         corpos.push(c);
         const h = hemos.find((x) => x.id === id)!;
         h.requisicaoItem = c.requisicaoItem;
-        h.situacao = 'reservada';
+        // Só passa a reservada com bolsa liberada pela agência (regra do domínio).
+        const liberadas = REQUISICOES.find((x) => x.item === c.requisicaoItem)?.liberadas ?? 0;
+        h.situacao = liberadas > 0 ? 'reservada' : 'solicitada';
         h.versao += 1;
         return json(rota, { id, agendamento: AG, requisicao: 'RT-FIC-1' });
       });

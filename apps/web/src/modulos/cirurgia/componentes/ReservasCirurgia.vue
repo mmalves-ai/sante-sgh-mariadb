@@ -27,6 +27,8 @@ const { t } = useI18n({
     'pt-BR': {
       titulo: 'Reserva de equipamentos e hemocomponentes',
       fechada: 'As reservas desta cirurgia estão fechadas: a cirurgia já começou, terminou ou foi cancelada.',
+      liberar:
+        'A cirurgia não vai acontecer como marcada: cancele as reservas ainda abertas para liberar o equipamento e o sangue.',
       equipamentos: 'Equipamentos',
       semEquipamento: 'Nenhum equipamento reservado.',
       equipamento: 'Equipamento',
@@ -84,6 +86,8 @@ const chaveConsulta = computed(() => ['cirurgia', 'reservas', props.agendamento]
 const consulta = useQuery({ queryKey: chaveConsulta, queryFn: () => lerReservasCirurgia(props.agendamento) });
 const dados = computed(() => consulta.data.value);
 const editavel = computed(() => Boolean(dados.value?.aberta) && podeEditar.value);
+// Cirurgia aberta, ou cancelada, suspensa ou reprovada: a reserva ainda aberta pode ser cancelada (liberada).
+const liberavel = computed(() => Boolean(dados.value?.liberavel) && podeEditar.value);
 
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
@@ -236,6 +240,7 @@ const situacaoTexto = (s: string) => t(`situacao.${s}`);
     <ErroCirurgia v-if="consulta.isError.value" :erro="consulta.error.value" />
     <template v-else-if="dados">
       <p v-if="!dados.aberta" role="status" data-testid="reservas-fechada">{{ t('fechada') }}</p>
+      <p v-if="!dados.aberta && liberavel" role="status" data-testid="reservas-liberar">{{ t('liberar') }}</p>
 
       <h3>{{ t('equipamentos') }}</h3>
       <p v-if="dados.equipamentos.length === 0" data-testid="reservas-sem-equipamento">
@@ -260,7 +265,7 @@ const situacaoTexto = (s: string) => t(`situacao.${s}`);
           }}
           · <strong>{{ situacaoTexto(r.situacao) }}</strong>
           <SanteBotao
-            v-if="editavel && (r.situacao === 'reservado' || r.situacao === 'confirmado')"
+            v-if="liberavel && (r.situacao === 'reservado' || r.situacao === 'confirmado')"
             variante="secundario"
             :rotulo="t('cancelar')"
             :desabilitado="ocupado"
@@ -328,10 +333,10 @@ const situacaoTexto = (s: string) => t(`situacao.${s}`);
           </span>
           <span v-if="h.observacao" class="secundario"> · {{ h.observacao }}</span>
           <div
-            v-if="editavel && (h.situacao === 'solicitada' || h.situacao === 'reservada')"
+            v-if="liberavel && (h.situacao === 'solicitada' || h.situacao === 'reservada')"
             class="acoes-linha"
           >
-            <template v-if="!h.requisicaoItem">
+            <template v-if="editavel && !h.requisicaoItem">
               <template v-if="opcoesRequisicao(h.hemocomponente).length > 1">
                 <span :data-testid="`reserva-hemo-escolha-requisicao-${h.sequencia}`">
                   <SanteSelecao

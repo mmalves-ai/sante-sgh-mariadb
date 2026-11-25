@@ -10,6 +10,7 @@ import {
   type OcupacaoEquipamento,
   periodoDaCirurgia,
   provaCruzadaInicial,
+  reservaLiberavel,
   reservaPeloVinculo,
 } from './reserva-cirurgia.js';
 
@@ -102,7 +103,31 @@ describe('conferirReservaEquipamento', () => {
     expect(conferirCancelamentoEquipamento('confirmado', 'confirmado')).toEqual([]);
     expect(campos(conferirCancelamentoEquipamento('agendado', 'em_uso'))).toEqual(['reserva']);
     expect(campos(conferirCancelamentoEquipamento('agendado', 'cancelado'))).toEqual(['reserva']);
-    expect(campos(conferirCancelamentoEquipamento('cancelado', 'reservado'))).toEqual(['situacao']);
+    expect(campos(conferirCancelamentoEquipamento('em_andamento', 'reservado'))).toEqual(['situacao']);
+    expect(campos(conferirCancelamentoEquipamento('realizado', 'reservado'))).toEqual(['situacao']);
+  });
+  it('a cirurgia cancelada, suspensa ou reprovada libera a reserva aberta; realizada ou em andamento, não', () => {
+    for (const s of ['cancelado', 'suspenso', 'reprovado']) {
+      expect(reservaLiberavel(s)).toBe(true);
+      expect(conferirCancelamentoEquipamento(s, 'reservado')).toEqual([]);
+      expect(conferirCancelamentoHemocomponente(s, 'solicitada')).toEqual([]);
+    }
+    expect(reservaLiberavel('agendado')).toBe(true);
+    expect(reservaLiberavel('em_andamento')).toBe(false);
+    expect(reservaLiberavel('realizado')).toBe(false);
+  });
+  it('a cirurgia cancelada, suspensa, reprovada ou realizada não ocupa o equipamento', () => {
+    const periodo = { inicio: '2026-12-01 08:00', fim: '2026-12-01 10:00' };
+    const de = (situacaoAgendamento: string) => ({
+      ...ocup(11, '2026-12-01 09:00', '2026-12-01 11:00'),
+      situacaoAgendamento,
+    });
+    for (const s of ['cancelado', 'suspenso', 'reprovado', 'realizado'])
+      expect(conflitosEquipamento(10, periodo, [de(s)])).toEqual([]);
+    expect(conflitosEquipamento(10, periodo, [de('agendado')]).length).toBe(1);
+    expect(
+      conferirReservaEquipamento(AG, { ...periodo, quantidade: 1 }, { situacao: 'ativo' }, [de('cancelado')]),
+    ).toEqual([]);
   });
 });
 
@@ -157,12 +182,22 @@ describe('hemocomponente da cirurgia', () => {
     ]);
     expect(campos(conferirVinculoRequisicao(ag, reserva, null))).toEqual(['requisicao']);
   });
-  it('reservada com as bolsas já liberadas, até o pedido', () => {
+  it('o item atende uma reserva vigente só, e a reserva já ligada não troca de item', () => {
+    expect(campos(conferirVinculoRequisicao(ag, reserva, item, 1))).toEqual(['requisicao']);
+    expect(campos(conferirVinculoRequisicao(ag, { ...reserva, requisicaoItem: 99 }, item))).toEqual([
+      'reserva',
+    ]);
+    expect(conferirVinculoRequisicao(ag, { ...reserva, requisicaoItem: null }, item, 0)).toEqual([]);
+  });
+  it('reservada com as bolsas já liberadas, até o pedido; sem bolsa liberada, segue solicitada', () => {
     expect(reservaPeloVinculo(2, { quantidadeAtendida: 0 })).toEqual({
-      situacao: 'reservada',
+      situacao: 'solicitada',
       quantidadeReservada: 0,
     });
-    expect(reservaPeloVinculo(2, { quantidadeAtendida: 1 }).quantidadeReservada).toBe(1);
+    expect(reservaPeloVinculo(2, { quantidadeAtendida: 1 })).toEqual({
+      situacao: 'reservada',
+      quantidadeReservada: 1,
+    });
     expect(reservaPeloVinculo(2, { quantidadeAtendida: 5 }).quantidadeReservada).toBe(2);
   });
   it('cancelamento só da reserva aberta', () => {

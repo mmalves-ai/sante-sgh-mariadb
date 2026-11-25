@@ -12,6 +12,7 @@ const esquemaReservas = z.object({
   numero: z.string(),
   situacao: z.string(),
   aberta: z.boolean(),
+  liberavel: z.boolean(),
   periodo: periodo.nullable(),
   equipamentos: z.array(
     z.object({

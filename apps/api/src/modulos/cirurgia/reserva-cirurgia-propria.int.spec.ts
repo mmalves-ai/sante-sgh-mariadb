@@ -8,7 +8,10 @@
 // (422) sem escrita, e passa depois de cancelada a primeira (que fica com a situação cancelada, sem apagar);
 // equipamento desativado é recusado; o hemocomponente nasce "solicitada" com a prova cruzada "solicitada"; ligado ao
 // item da requisição, fica "reservada" com as bolsas liberadas e a requisição passa a apontar a cirurgia; requisição
-// de outro tipo é recusada; a sessão de outro estabelecimento recebe 404 sem escrita.
+// de outro tipo é recusada; a sessão de outro estabelecimento recebe 404 sem escrita. A cirurgia cancelada não prende
+// mais o equipamento (outra cirurgia o reserva no mesmo horário) e libera a própria reserva aberta; o item da
+// requisição atende uma reserva vigente só (a segunda é recusada sem escrita e o item sai das opções), a reserva já
+// ligada não troca de item, e o item sem bolsa liberada deixa a reserva "solicitada" com o vínculo gravado.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,6 +27,8 @@ interface Massa {
   usuario: number;
   ag1: number;
   ag2: number;
+  ag3: number;
+  ag4: number;
   equipamento: number;
   desativado: number;
   hemo: number;
@@ -31,6 +36,7 @@ interface Massa {
   requisicao: number;
   item: number;
   itemOutro: number;
+  itemZero: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -163,6 +169,8 @@ describe.skipIf(SEM_BANCO)('PortaReservaCirurgiaPropria contra o MariaDB (contra
         usuario,
         ag1: await agend(1, '2030-03-10 08:00:00'),
         ag2: await agend(2, '2030-03-10 09:00:00'),
+        ag3: await agend(3, '2030-03-12 08:00:00'),
+        ag4: await agend(4, '2030-03-12 08:30:00'),
         equipamento: await equip('E1', 'ativo'),
         desativado: await equip('E2', 'desativado'),
         hemo: h1,
@@ -170,6 +178,7 @@ describe.skipIf(SEM_BANCO)('PortaReservaCirurgiaPropria contra o MariaDB (contra
         requisicao,
         item: await item(1, h1, 1),
         itemOutro: await item(2, h2, 0),
+        itemZero: await item(3, h1, 0),
       };
     });
     porta = new PortaReservaCirurgiaPropria(nucleo, CLIENTE);
@@ -188,7 +197,7 @@ describe.skipIf(SEM_BANCO)('PortaReservaCirurgiaPropria contra o MariaDB (contra
     expect(r.aberta).toBe(true);
     expect(r.opcoes.equipamentos.map((x) => x.id)).toEqual([m.equipamento]);
     expect(r.opcoes.hemocomponentes.some((h) => h.id === m.hemo && h.exigeProva)).toBe(true);
-    expect(r.opcoes.requisicoes.map((x) => x.item)).toEqual([m.item, m.itemOutro]);
+    expect(r.opcoes.requisicoes.map((x) => x.item)).toEqual([m.item, m.itemOutro, m.itemZero]);
     await expect(porta.reservas(ctx(P2), m.ag1)).rejects.toMatchObject({ problema: { status: 404 } });
     await expect(
       porta.reservarEquipamento(ctx(P2), m.ag1, { equipamento: m.equipamento }),
@@ -298,5 +307,79 @@ describe.skipIf(SEM_BANCO)('PortaReservaCirurgiaPropria contra o MariaDB (contra
     await porta.cancelar(ctx(), m.ag1, 'hemocomponente', lido.id, { versao: lido.versao });
     expect((await hemos())[0]).toMatchObject({ situacao: 'cancelada', versao: 3 });
     expect(await trilha('reserva_hemocomponente_cirurgia')).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a cirurgia cancelada não prende o equipamento: outra cirurgia reserva o horário, e a cancelada libera a dela', async () => {
+    const doEquip = () =>
+      ler(
+        `SELECT agendamento_cirurgico_id AS ag, situacao, versao FROM reserva_equipamento_cirurgia
+          WHERE agendamento_cirurgico_id IN (?, ?) ORDER BY id`,
+        [m.ag3, m.ag4],
+      );
+    await porta.reservarEquipamento(ctx(), m.ag3, { equipamento: m.equipamento });
+    await expect(
+      porta.reservarEquipamento(ctx(), m.ag4, { equipamento: m.equipamento }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    // A cirurgia 3 é cancelada (o cancelamento do agendamento é outra operação; aqui só a situação gravada).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+      e.executar("UPDATE agendamento_cirurgico SET situacao = 'cancelado', cancelado_em = ? WHERE id = ?", [
+        new Date(),
+        m.ag3,
+      ]),
+    );
+    await porta.reservarEquipamento(ctx(), m.ag4, { equipamento: m.equipamento });
+    expect((await doEquip()).map((l) => [l['ag'], l['situacao']])).toEqual([
+      [m.ag3, 'reservado'],
+      [m.ag4, 'reservado'],
+    ]);
+    // Liberação: a cirurgia cancelada cancela a reserva que ficou aberta (nada apagado); pedir nova é recusado.
+    const r3 = await porta.reservas(ctx(), m.ag3);
+    expect(r3).toMatchObject({ aberta: false, liberavel: true });
+    await porta.cancelar(ctx(), m.ag3, 'equipamento', r3.equipamentos[0]!.id, {
+      versao: r3.equipamentos[0]!.versao,
+    });
+    await expect(
+      porta.reservarEquipamento(ctx(), m.ag3, { equipamento: m.equipamento }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    expect((await doEquip()).map((l) => [l['ag'], l['situacao'], l['versao']])).toEqual([
+      [m.ag3, 'cancelado', 2],
+      [m.ag4, 'reservado', 1],
+    ]);
+  });
+
+  it('o item da requisição atende uma reserva só; sem bolsa liberada a reserva segue solicitada com o vínculo', async () => {
+    const pedir = () => porta.pedirHemocomponente(ctx(), m.ag1, { hemocomponente: m.hemo, quantidade: 2 });
+    await pedir();
+    await pedir();
+    const abertas = (await porta.reservas(ctx(), m.ag1)).hemocomponentes.filter(
+      (h) => h.situacao === 'solicitada',
+    );
+    expect(abertas.length).toBe(2);
+    const [h1, h2] = abertas as [(typeof abertas)[0], (typeof abertas)[0]];
+    await porta.ligarRequisicao(ctx(), m.ag1, h1.id, { requisicaoItem: m.item, versao: h1.versao });
+    // O mesmo item para a segunda reserva: recusado sem escrita, e o item sai das opções.
+    await expect(
+      porta.ligarRequisicao(ctx(), m.ag1, h2.id, { requisicaoItem: m.item, versao: h2.versao }),
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'regra-violada' } });
+    const depois = await porta.reservas(ctx(), m.ag1);
+    expect(depois.opcoes.requisicoes.map((x) => x.item)).toEqual([m.itemOutro, m.itemZero]);
+    expect(depois.hemocomponentes.find((h) => h.id === h2.id)).toMatchObject({
+      requisicaoItem: null,
+      versao: 1,
+      situacao: 'solicitada',
+    });
+    // Item sem bolsa liberada: vínculo gravado, a reserva segue solicitada com zero bolsas reservadas.
+    await porta.ligarRequisicao(ctx(), m.ag1, h2.id, { requisicaoItem: m.itemZero, versao: h2.versao });
+    const linhas = await hemos();
+    expect(linhas.slice(-2)).toEqual([
+      expect.objectContaining({ situacao: 'reservada', reservada: 1, item: m.item, versao: 2 }),
+      expect.objectContaining({ situacao: 'solicitada', reservada: 0, item: m.itemZero, versao: 2 }),
+    ]);
+    // A reserva já ligada não troca de item (nem para um item livre).
+    await porta.cancelar(ctx(), m.ag1, 'hemocomponente', h1.id, { versao: 2 });
+    await expect(
+      porta.ligarRequisicao(ctx(), m.ag1, h2.id, { requisicaoItem: m.item, versao: 2 }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    expect((await hemos()).slice(-1)[0]).toMatchObject({ item: m.itemZero, versao: 2 });
   });
 });

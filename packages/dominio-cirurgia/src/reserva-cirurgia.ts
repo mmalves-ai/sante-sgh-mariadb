@@ -6,7 +6,12 @@
 //     recusado com o número das cirurgias que já o ocupam;
 //   - o hemocomponente pedido nasce com a prova cruzada solicitada quando o tipo a exige (ou dispensada), e se liga ao
 //     item da requisição transfusional do mesmo paciente e do mesmo tipo de hemocomponente, que a agência atende;
-//   - nada se apaga: a reserva desfeita fica com a situação cancelada.
+//   - nada se apaga: a reserva desfeita fica com a situação cancelada;
+//   - a cirurgia cancelada, suspensa, reprovada ou realizada não prende mais o equipamento (a ocupação dela não conta
+//     no conflito), e a reserva aberta da cirurgia cancelada, suspensa ou reprovada pode ser liberada (cancelada);
+//   - o item da requisição transfusional atende uma reserva vigente só: a mesma bolsa não conta duas vezes, e a
+//     reserva já ligada não troca de item;
+//   - ligada, a reserva só passa a "reservada" com ao menos uma bolsa liberada pela agência.
 // A porta reconfere tudo no banco, com o equipamento travado na transação (duas reservas simultâneas passam uma de
 // cada vez).
 import { listaMaterialAberta } from './kit-agendamento.js';
@@ -23,6 +28,15 @@ export const SITUACOES_EQUIPAMENTO_OCUPADO = ['reservado', 'confirmado', 'em_uso
 export const SITUACOES_EQUIPAMENTO_CANCELAVEL = ['reservado', 'confirmado'] as const;
 /** Situações da reserva de hemocomponente que ainda podem ser ligadas à requisição ou canceladas. */
 export const SITUACOES_HEMOCOMPONENTE_ABERTA = ['solicitada', 'reservada'] as const;
+/** Situações da cirurgia que soltam o equipamento: a reserva dela não ocupa mais o horário. */
+export const SITUACOES_AGENDAMENTO_SOLTA_RESERVA = [
+  'cancelado',
+  'suspenso',
+  'reprovado',
+  'realizado',
+] as const;
+/** Situações da cirurgia em que a reserva ainda aberta pode ser liberada (a cirurgia não vai acontecer como marcada). */
+export const SITUACOES_AGENDAMENTO_LIBERA_RESERVA = ['cancelado', 'suspenso', 'reprovado'] as const;
 /** Duração máxima de uma reserva de equipamento (uma cirurgia longa cabe; um dia inteiro não). */
 export const RESERVA_EQUIPAMENTO_MAXIMA_MINUTOS = 24 * 60;
 export const QUANTIDADE_MAXIMA_EQUIPAMENTO = 20;
@@ -46,6 +60,16 @@ export interface OcupacaoEquipamento {
   readonly inicio: string;
   readonly fim: string;
   readonly situacao: string;
+  /** Situação da cirurgia dona da reserva; cancelada, suspensa, reprovada ou realizada não ocupa. */
+  readonly situacaoAgendamento?: string;
+}
+
+/** Se a reserva aberta pode ser cancelada: com as reservas abertas ou para liberar a cirurgia que não vai acontecer. */
+export function reservaLiberavel(situacaoAgendamento: string): boolean {
+  return (
+    listaMaterialAberta(situacaoAgendamento) ||
+    inclui(SITUACOES_AGENDAMENTO_LIBERA_RESERVA, situacaoAgendamento)
+  );
 }
 
 /** As ocupações de outras cirurgias que cruzam o período pedido (só as que ocupam o equipamento). */
@@ -60,6 +84,7 @@ export function conflitosEquipamento(
     (o) =>
       o.agendamento !== agendamento &&
       inclui(SITUACOES_EQUIPAMENTO_OCUPADO, o.situacao) &&
+      !inclui(SITUACOES_AGENDAMENTO_SOLTA_RESERVA, o.situacaoAgendamento ?? '') &&
       minutosAbsolutos(o.inicio) < ate &&
       de < minutosAbsolutos(o.fim),
   );
@@ -124,7 +149,7 @@ export function conferirCancelamentoEquipamento(
   situacaoReserva: string,
 ): ProblemaReservaCirurgia[] {
   const p: ProblemaReservaCirurgia[] = [];
-  if (!listaMaterialAberta(situacaoAgendamento))
+  if (!reservaLiberavel(situacaoAgendamento))
     p.push({ campo: 'situacao', mensagem: 'As reservas desta cirurgia estão fechadas.' });
   if (!inclui(SITUACOES_EQUIPAMENTO_CANCELAVEL, situacaoReserva))
     p.push({ campo: 'reserva', mensagem: 'Só a reserva ainda não usada pode ser cancelada.' });
@@ -172,14 +197,26 @@ export interface ItemRequisicaoParaReserva {
 /** As recusas do vínculo da reserva de hemocomponente com o item da requisição transfusional. */
 export function conferirVinculoRequisicao(
   agendamento: { readonly id: number; readonly paciente: number; readonly situacao: string },
-  reserva: { readonly hemocomponente: number; readonly situacao: string },
+  reserva: {
+    readonly hemocomponente: number;
+    readonly situacao: string;
+    /** Item da requisição já ligado a esta reserva (null: ainda sem vínculo). */
+    readonly requisicaoItem?: number | null;
+  },
   item: ItemRequisicaoParaReserva | null,
+  /** Quantas outras reservas vigentes (solicitada ou reservada) já estão ligadas a este item. */
+  outrasReservasDoItem = 0,
 ): ProblemaReservaCirurgia[] {
   const p: ProblemaReservaCirurgia[] = [];
   if (!listaMaterialAberta(agendamento.situacao))
     p.push({ campo: 'situacao', mensagem: 'As reservas desta cirurgia estão fechadas.' });
   if (!inclui(SITUACOES_HEMOCOMPONENTE_ABERTA, reserva.situacao))
     p.push({ campo: 'reserva', mensagem: 'A reserva já foi usada, devolvida ou cancelada.' });
+  if (reserva.requisicaoItem != null)
+    p.push({
+      campo: 'reserva',
+      mensagem: 'A reserva já está ligada a um item da requisição transfusional: cancele e peça de novo.',
+    });
   if (!item) {
     p.push({
       campo: 'requisicao',
@@ -198,18 +235,25 @@ export function conferirVinculoRequisicao(
     });
   if (item.situacaoRequisicao === 'cancelada' || item.situacaoItem === 'cancelado')
     p.push({ campo: 'requisicao', mensagem: 'A requisição transfusional foi cancelada.' });
+  if (outrasReservasDoItem > 0)
+    p.push({
+      campo: 'requisicao',
+      mensagem:
+        'Este item da requisição já atende outra reserva de hemocomponente: as bolsas não contam duas vezes.',
+    });
   return p;
 }
 
-/** Ligada à requisição, a reserva passa a reservada com as bolsas que a agência já liberou (até o pedido). */
+/**
+ * Ligada à requisição, a reserva guarda as bolsas que a agência já liberou (até o pedido) e só passa a "reservada"
+ * com ao menos uma bolsa; sem bolsa liberada, segue "solicitada" (o vínculo fica gravado).
+ */
 export function reservaPeloVinculo(
   quantidadeSolicitada: number,
   item: Pick<ItemRequisicaoParaReserva, 'quantidadeAtendida'>,
-): { readonly situacao: 'reservada'; readonly quantidadeReservada: number } {
-  return {
-    situacao: 'reservada',
-    quantidadeReservada: Math.max(0, Math.min(quantidadeSolicitada, item.quantidadeAtendida)),
-  };
+): { readonly situacao: 'solicitada' | 'reservada'; readonly quantidadeReservada: number } {
+  const quantidadeReservada = Math.max(0, Math.min(quantidadeSolicitada, item.quantidadeAtendida));
+  return { situacao: quantidadeReservada > 0 ? 'reservada' : 'solicitada', quantidadeReservada };
 }
 
 /** As recusas do cancelamento da reserva de hemocomponente. */
@@ -218,7 +262,7 @@ export function conferirCancelamentoHemocomponente(
   situacaoReserva: string,
 ): ProblemaReservaCirurgia[] {
   const p: ProblemaReservaCirurgia[] = [];
-  if (!listaMaterialAberta(situacaoAgendamento))
+  if (!reservaLiberavel(situacaoAgendamento))
     p.push({ campo: 'situacao', mensagem: 'As reservas desta cirurgia estão fechadas.' });
   if (!inclui(SITUACOES_HEMOCOMPONENTE_ABERTA, situacaoReserva))
     p.push({ campo: 'reserva', mensagem: 'A reserva já foi usada, devolvida ou cancelada.' });
