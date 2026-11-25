@@ -19,6 +19,8 @@ export {
   SITUACOES_PEDIDO_FECHADAS,
   situacaoAposCancelamento,
   type SituacaoAcompanhamentoPedido,
+  valorPedidoNoContrato,
+  type ItemValorNoContrato,
 } from './regras/pedido-gestao.js';
 
 const id = idBanco;
@@ -177,6 +179,12 @@ export interface GestaoPedidoCompra {
     readonly canceladoEm: string | null;
     readonly motivoCancelamento: string | null;
     readonly justificativaCancelamento: string | null;
+    /** O contrato do fornecedor a que o pedido nasceu ligado (número e saldo comprometido pelo pedido). */
+    readonly contrato: {
+      readonly id: number;
+      readonly numero: string;
+      readonly valorComprometido: number;
+    } | null;
   };
   readonly hoje: string;
   readonly itens: readonly ItemGestaoPedido[];

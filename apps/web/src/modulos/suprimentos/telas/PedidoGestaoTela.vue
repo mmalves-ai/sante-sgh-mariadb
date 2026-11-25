@@ -241,6 +241,17 @@ const opcoesSituacaoContato = SITUACOES_ACOMPANHAMENTO_PEDIDO.map((x) => ({
           }})</span
         >
       </p>
+      <p v-if="g.data.value.pedido.contrato" data-testid="pg-contrato">
+        {{ M.contrato }}:
+        <RouterLink to="/suprimentos/contratos">{{ g.data.value.pedido.contrato.numero }}</RouterLink>
+        · {{ M.comprometido }}:
+        <strong data-testid="pg-contrato-valor">{{
+          g.data.value.pedido.contrato.valorComprometido.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          })
+        }}</strong>
+      </p>
 
       <h2>{{ M.itens }}</h2>
       <article

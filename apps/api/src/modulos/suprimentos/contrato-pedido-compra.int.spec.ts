@@ -24,11 +24,24 @@ import { PortaSuprimentosPropria } from './porta-propria.js';
 
 const RODADA = Date.now().toString(36);
 const PREFIXO_NUMERO = 'CTPC-';
+const MOTIVO = `ctpc_${RODADA}`.slice(0, 30);
 let k = 0;
 
 /** Os contratos da massa (pelo número) e o que aponta para eles saem; o pedido fica sem contrato. */
 async function limparContratos(e: Escritor): Promise<void> {
   const sub = `SELECT id FROM contrato_fornecedor WHERE numero LIKE '${PREFIXO_NUMERO}%'`;
+  // 05-SUP linha 20: os cancelamentos da gestão dos pedidos ligados saem antes (os pedidos saem pelo limparMassa).
+  const itens = `SELECT x.id FROM pedido_compra_item x JOIN pedido_compra p ON p.id = x.pedido_compra_id
+                  WHERE p.contrato_fornecedor_id IN (${sub})`;
+  await e.executar(
+    `DELETE FROM cancelamento_pedido_compra_entrega WHERE cancelamento_pedido_compra_item_id IN
+       (SELECT id FROM cancelamento_pedido_compra_item WHERE pedido_compra_item_id IN (${itens}))`,
+    [],
+  );
+  await e.executar(
+    `DELETE FROM cancelamento_pedido_compra_item WHERE pedido_compra_item_id IN (${itens})`,
+    [],
+  );
   await e.executar(
     `UPDATE pedido_compra SET contrato_fornecedor_id = NULL WHERE contrato_fornecedor_id IN (${sub})`,
     [],
@@ -138,6 +151,15 @@ describe.skipIf(SEM_BANCO)(
       if (nucleo) {
         await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpa-ctpc' }, limparContratos);
         if (m) await limparMassa(nucleo, m);
+        await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpa-ctpc-motivo' }, (e) =>
+          e.executar(
+            `DELETE FROM motivo_cancelamento_compra WHERE codigo = ? AND id NOT IN
+               (SELECT motivo_cancelamento_compra_id FROM pedido_compra WHERE motivo_cancelamento_compra_id IS NOT NULL)
+               AND id NOT IN (SELECT motivo_cancelamento_compra_id FROM pedido_compra_item
+                               WHERE motivo_cancelamento_compra_id IS NOT NULL)`,
+            [MOTIVO],
+          ),
+        );
         await nucleo.encerrar();
       }
     });
@@ -248,6 +270,113 @@ describe.skipIf(SEM_BANCO)(
         Number(doContrato.id),
       ]);
       expect(Number(w!.vencedor)).toBe(1);
+    });
+
+    it('05-SUP linha 20: o pedido ligado aprovado compromete o contrato; o cancelamento da gestão devolve ao saldo', async () => {
+      const consumido = async () => (await contratos.detalhar(ctxContrato, vigente))!.saldoDetalhe.consumido;
+      const antes = await consumido();
+      const r = await op('criarPedido', {
+        centroCusto: m.centroCusto,
+        fornecedores: [m.fornecedor],
+        itens: [{ item: m.insumo, quantidade: 10 }],
+        contrato: { contrato: vigente, excecao: null, pedidoDeOrigem: null },
+      });
+      const ano = Number(r.resultado['ano']);
+      const doc = Number(r.resultado['doc']);
+      const pedido = { ano, doc };
+      const [prop] = await ler<{ id: number }>(
+        `SELECT cri.id FROM pedido_compra p
+           JOIN cotacao_fornecedor cf ON cf.cotacao_id = p.cotacao_id
+           JOIN cotacao_resposta_item cri ON cri.cotacao_fornecedor_id = cf.id
+          WHERE p.estabelecimento_id = ? AND p.ano = ? AND p.numero = ?`,
+        [m.estA, ano, doc],
+      );
+      await op('registrarProposta', { pedido, proposta: Number(prop!.id), valorUnitario: 10 });
+      await op('definirVencedorCotacao', {
+        pedido,
+        item: m.insumo,
+        seq: 1,
+        vencedoras: [Number(prop!.id)],
+        justificativa: 'Fornecedor do contrato vigente (teste fictício)',
+      });
+      // Em cotação, o pedido ainda não compromete o contrato.
+      expect(await consumido()).toBe(antes);
+      const supervisor = { ...c, usuario: m.usuario3 } as ContextoSuprimentos;
+      const aprovacao: TrilhaDaGravacao = {
+        estabelecimento: m.estA,
+        usuario: m.usuario3,
+        acao: 'operacao',
+        entidade: 'pedido_compra',
+        entidadeId: null,
+        dadosDepois: { evento: 'suprimentos.pedido.aprovado' },
+        correlacao: null,
+      };
+      const ap = await porta.gravarSgh(supervisor, aprovacao, (g) =>
+        g.aprovarPedido({
+          ano,
+          doc,
+          decisao: 'aprovado',
+          justificativa: '',
+          usuario: 'x',
+          nivel: 3,
+          faixas: [{ ate: Number.POSITIVE_INFINITY, nivel: 1 }],
+        }),
+      );
+      expect(ap.valor).toBe(100);
+      expect(await consumido()).toBe(antes + 100);
+
+      const mot = await op('gravarMotivoCancelamentoCompra', {
+        codigo: MOTIVO,
+        descricao: 'Fornecedor sem estoque (teste)',
+        aplicaPedido: true,
+        aplicaItem: true,
+        exigeJustificativa: true,
+        ativo: true,
+      });
+      const motivo = Number(mot.resultado['id']);
+      const [item] = await ler<{ id: number }>(
+        `SELECT x.id FROM pedido_compra_item x JOIN pedido_compra p ON p.id = x.pedido_compra_id
+          WHERE p.estabelecimento_id = ? AND p.ano = ? AND p.numero = ?`,
+        [m.estA, ano, doc],
+      );
+      await op('cancelarCompra', {
+        pedido,
+        item: Number(item!.id),
+        quantidade: 4,
+        motivo,
+        justificativa: 'Fornecedor entrega só seis unidades',
+      });
+      // O cancelamento parcial devolve ao saldo 4 × R$ 10,00; o valor aprovado do pedido fica como foi aprovado.
+      expect(await consumido()).toBe(antes + 60);
+      const [pv] = await ler<{ valor_total: string; contrato: number }>(
+        `SELECT valor_total, contrato_fornecedor_id AS contrato FROM pedido_compra
+          WHERE estabelecimento_id = ? AND ano = ? AND numero = ?`,
+        [m.estA, ano, doc],
+      );
+      expect(Number(pv!.valor_total)).toBe(100);
+      expect(Number(pv!.contrato)).toBe(vigente);
+      const gestao = await porta.gestaoPedido(c, ano, doc);
+      expect(gestao?.pedido.contrato).toMatchObject({ id: vigente, valorComprometido: 60 });
+      expect(gestao?.pedido.contrato?.numero.startsWith(PREFIXO_NUMERO)).toBe(true);
+      const det = await contratos.detalhar(ctxContrato, vigente);
+      expect(
+        det?.vinculos.find((v) => v.tipo === 'pedido' && v.chaveNatural === `${ano}/${doc}`)?.valor,
+      ).toBe(60);
+
+      // O cancelamento do resto do pedido libera tudo; o vínculo fica no histórico, inativo.
+      await op('cancelarCompra', {
+        pedido,
+        item: null,
+        quantidade: null,
+        motivo,
+        justificativa: 'Compra desistida pela área (teste)',
+      });
+      expect(await consumido()).toBe(antes);
+      const det2 = await contratos.detalhar(ctxContrato, vigente);
+      const v2 = det2?.vinculos.find((v) => v.tipo === 'pedido' && v.chaveNatural === `${ano}/${doc}`);
+      expect(v2).toMatchObject({ ativo: false, valor: 0 });
+      const gestao2 = await porta.gestaoPedido(c, ano, doc);
+      expect(gestao2?.pedido.contrato?.valorComprometido).toBe(0);
     });
   },
 );

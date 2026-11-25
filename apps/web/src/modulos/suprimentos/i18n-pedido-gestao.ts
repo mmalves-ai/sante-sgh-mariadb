@@ -5,6 +5,8 @@ export const mensagensPedidoGestao = {
   carregando: 'Carregando…',
   fornecedor: 'Fornecedor',
   situacao: 'Situação',
+  contrato: 'Contrato do fornecedor',
+  comprometido: 'compromete do saldo',
   cancelado: 'Cancelado',
   itens: 'Itens e entregas programadas',
   item: 'Item',

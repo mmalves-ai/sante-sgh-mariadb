@@ -24,6 +24,7 @@ import {
   repartirEntregas,
   type SituacaoAcompanhamentoPedido,
   situacaoAposCancelamento,
+  valorPedidoNoContrato,
 } from '@sgh/contratos';
 import type { RecusaSuprimentos } from '@sgh/contratos/regras-suprimentos';
 import { recusa, type Leitor, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
@@ -353,10 +354,12 @@ export async function lerGestaoPedido(
 ): Promise<GestaoPedidoCompra | null> {
   const p = await l.uma<Linha>(
     `SELECT p.id, p.ano, p.numero, p.situacao, p.data_pedido, p.cancelado_em, p.justificativa_cancelamento,
+            p.valor_total, p.contrato_fornecedor_id, ct.numero AS contrato_numero,
             m.descricao AS motivo, COALESCE(f.nome_fantasia, f.razao_social) AS fornecedor
        FROM pedido_compra p
        LEFT JOIN motivo_cancelamento_compra m ON m.id = p.motivo_cancelamento_compra_id
        LEFT JOIN empresa_fornecedora f ON f.id = p.empresa_fornecedora_id
+       LEFT JOIN contrato_fornecedor ct ON ct.id = p.contrato_fornecedor_id
       WHERE p.estabelecimento_id = ? AND p.ano = ? AND p.numero = ? AND p.excluido_em IS NULL`,
     [est, ano, doc],
   );
@@ -364,7 +367,7 @@ export async function lerGestaoPedido(
   const id = n(p['id']);
   const itens = await l.consultar<Linha>(
     `SELECT x.id, x.sequencia, x.insumo_id, COALESCE(i.nome, x.descricao_servico) AS nome, x.quantidade,
-            x.quantidade_recebida, x.quantidade_cancelada, x.cancelado_em, m.descricao AS motivo
+            x.quantidade_recebida, x.quantidade_cancelada, x.cancelado_em, x.valor_unitario, m.descricao AS motivo
        FROM pedido_compra_item x
        LEFT JOIN insumo i ON i.id = x.insumo_id
        LEFT JOIN motivo_cancelamento_compra m ON m.id = x.motivo_cancelamento_compra_id
@@ -410,6 +413,22 @@ export async function lerGestaoPedido(
       canceladoEm: instante(p['cancelado_em']),
       motivoCancelamento: textoOuNulo(p['motivo']),
       justificativaCancelamento: textoOuNulo(p['justificativa_cancelamento']),
+      // 05-SUP linha 20: o contrato a que o pedido nasceu ligado e o que ele ainda compromete do saldo.
+      contrato:
+        p['contrato_fornecedor_id'] === null || p['contrato_fornecedor_id'] === undefined
+          ? null
+          : {
+              id: n(p['contrato_fornecedor_id']),
+              numero: String(p['contrato_numero'] ?? ''),
+              valorComprometido: valorPedidoNoContrato({
+                situacao: String(p['situacao']),
+                valorAprovado: n(p['valor_total']),
+                itens: itens.map((x) => ({
+                  cancelada: n(x['quantidade_cancelada']),
+                  valorUnitario: n(x['valor_unitario']),
+                })),
+              }),
+            },
     },
     hoje,
     itens: itens.map((x) => {

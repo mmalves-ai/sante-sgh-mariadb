@@ -6,6 +6,7 @@ import {
   entregaAtrasada,
   repartirEntregas,
   situacaoAposCancelamento,
+  valorPedidoNoContrato,
 } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 
@@ -161,5 +162,30 @@ describe('conferirAcompanhamentoPedido', () => {
     expect(cod(conferirAcompanhamentoPedido({ ...a, situacaoPedido: 'cancelado' }))).toEqual([
       'pedido-encerrado',
     ]);
+  });
+});
+
+describe('valorPedidoNoContrato (05-SUP linha 20: o pedido ligado ao contrato)', () => {
+  const base = { situacao: 'aprovado', valorAprovado: 100, itens: [{ cancelada: 0, valorUnitario: 10 }] };
+  it('o aprovado inteiro compromete o contrato', () => {
+    expect(valorPedidoNoContrato(base)).toBe(100);
+  });
+  it('o cancelamento parcial devolve ao saldo a quantidade cancelada pelo preço adjudicado', () => {
+    expect(
+      valorPedidoNoContrato({
+        ...base,
+        situacao: 'parcialmente_recebido',
+        itens: [
+          { cancelada: 3, valorUnitario: 10 },
+          { cancelada: 0.5, valorUnitario: 2.25 },
+        ],
+      }),
+    ).toBe(68.88);
+  });
+  it('cancelado, reprovado ou ainda sem aprovação não comprometem nada; nunca fica negativo', () => {
+    expect(valorPedidoNoContrato({ ...base, situacao: 'cancelado' })).toBe(0);
+    expect(valorPedidoNoContrato({ ...base, situacao: 'reprovado' })).toBe(0);
+    expect(valorPedidoNoContrato({ ...base, situacao: 'em_cotacao', valorAprovado: 0 })).toBe(0);
+    expect(valorPedidoNoContrato({ ...base, itens: [{ cancelada: 20, valorUnitario: 10 }] })).toBe(0);
   });
 });

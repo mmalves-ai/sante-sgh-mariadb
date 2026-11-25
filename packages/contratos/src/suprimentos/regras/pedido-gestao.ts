@@ -2,7 +2,7 @@
 // do fornecedor e cancelamento justificado do pedido ou do item. Regras puras: a API confere antes de gravar e a tela
 // confere na hora, com as mesmas mensagens e os mesmos campos. Nada se apaga: o cancelamento marca quantidade, data e
 // motivo, e a entrega que já recebeu algo fica como está.
-import { qtd3, recusa, type RecusaSuprimentos } from './recusa.js';
+import { qtd3, reais, recusa, type RecusaSuprimentos } from './recusa.js';
 
 export const SITUACOES_ACOMPANHAMENTO_PEDIDO = [
   'em_dia',
@@ -158,6 +158,27 @@ export function conferirCancelamentoCompra(c: CancelamentoCompraConferido): {
     }
   }
   return { recusas: r, cancelar: r.length ? [] : cancelar };
+}
+
+/** O item do pedido como o saldo do contrato o lê: a quantidade cancelada e o preço adjudicado. */
+export interface ItemValorNoContrato {
+  readonly cancelada: number;
+  readonly valorUnitario: number;
+}
+
+/**
+ * O valor que o pedido compromete do contrato do fornecedor: o valor aprovado menos o que a gestão cancelou depois
+ * (quantidade cancelada vezes o preço adjudicado), nunca abaixo de zero. O pedido cancelado ou reprovado não compromete
+ * nada; o que ainda não foi aprovado (valor zero) também não.
+ */
+export function valorPedidoNoContrato(p: {
+  readonly situacao: string;
+  readonly valorAprovado: number;
+  readonly itens: readonly ItemValorNoContrato[];
+}): number {
+  if (p.situacao === 'cancelado' || p.situacao === 'reprovado' || p.valorAprovado <= 0) return 0;
+  const cancelado = p.itens.reduce((s, i) => s + Math.max(0, i.cancelada) * Math.max(0, i.valorUnitario), 0);
+  return Math.max(0, reais(p.valorAprovado - cancelado));
 }
 
 /** A situação do pedido depois do cancelamento: sem nada a chegar, cancelado (nada veio) ou encerrado (algo veio). */

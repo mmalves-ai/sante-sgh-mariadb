@@ -30,6 +30,7 @@ import {
   type TipoContrato,
   type TipoEventoContrato,
   type VinculoContrato,
+  valorPedidoNoContrato,
 } from '@sgh/contratos';
 import {
   avaliarFornecedor,
@@ -316,6 +317,23 @@ async function lerVinculos(
     [est, ...ids],
     { teto: 200_000 },
   );
+  // 05-SUP linha 20: o que a gestão do pedido cancelou depois da aprovação volta ao saldo do contrato.
+  const cancelados = new Map<number, { cancelada: number; valorUnitario: number }[]>();
+  if (pedidos.length) {
+    const ems = pedidos.map(() => '?').join(', ');
+    const itens = await l.consultar(
+      `SELECT x.pedido_compra_id, x.quantidade_cancelada, x.valor_unitario
+         FROM pedido_compra_item x
+        WHERE x.excluido_em IS NULL AND x.quantidade_cancelada > 0 AND x.pedido_compra_id IN (${ems})`,
+      pedidos.map((x) => num(x['id'])),
+      { teto: 200_000 },
+    );
+    for (const x of itens) {
+      const lista = cancelados.get(num(x['pedido_compra_id'])) ?? [];
+      lista.push({ cancelada: num(x['quantidade_cancelada']), valorUnitario: num(x['valor_unitario']) });
+      cancelados.set(num(x['pedido_compra_id']), lista);
+    }
+  }
   const titulos = await l.consultar(
     `SELECT t.id, t.contrato_fornecedor_id, t.numero_documento, t.serie_documento, t.valor_liquido, t.situacao,
             t.criado_em, u.login
@@ -342,7 +360,17 @@ async function lerVinculos(
     });
     m.set(num(x['contrato_fornecedor_id']), lista);
   };
-  for (const x of pedidos) por('pedido', x, `${num(x['ano'])}/${num(x['numero'])}`, num(x['valor_total']));
+  for (const x of pedidos)
+    por(
+      'pedido',
+      x,
+      `${num(x['ano'])}/${num(x['numero'])}`,
+      valorPedidoNoContrato({
+        situacao: String(x['situacao']),
+        valorAprovado: num(x['valor_total']),
+        itens: cancelados.get(num(x['id'])) ?? [],
+      }),
+    );
   for (const x of titulos)
     por(
       'titulo',
