@@ -8,15 +8,15 @@ e o motivo), o E2E verde e a revisão sem achado alto aberto (ficha da fase, `do
 | Marco | Funções | Cobertas | Parciais | Faltam | E2E | Revisão (alta?) | Aceito? |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
 | [F3.1 Cadastros](F3.1-cadastros.md) | 21 | 7 | 14 | 0 | 16 arquivos do marco rodados em 24/11 à noite (commit 63ddf805): 30 testes, 15 verdes e 15 vermelhos; os vermelhos estão na ficha, função a função | Sim: os 15 casos de E2E vermelhos (linhas 2, 4, 6, 9, 12, 16, 18, 20, 25, 26 e 27) | Não |
-| [F3.2 Recepção e agenda](F3.2-recepcao-agenda.md) | 15 | 4 | 11 | 0 | recepcao.spec.ts vermelho (caso totem → painel → guichê, API da árvore recusou a conexão); 1 de 2 verde; provas das fatias F3.2-1 a 4 não rodadas (memória) | Sim: manutenção de feriado e dia não útil (02-AGE 41) | Não |
+| [F3.2 Recepção e agenda](F3.2-recepcao-agenda.md) | 15 | 4 | 11 | 0 | E2E das fatias rodados em 25/11 (lotes 1 e 2): f32-atendimento-correcao-indicadores 0 de 2, w1-05 0 de 5, m20 1 de 3, f32-valores-habituais 0 de 2 verdes (param na tela de impressos e na herança); f32-estrutura-recepcao, recepcao e f32-locais-atendimento não rodados | Sim: manutenção de feriado e dia não útil (02-AGE 41) | Não |
 | [F3.3 Prontuário](F3.3-prontuario.md) | 35 | 17 | 18 | 0 | Óbito e preceptoria verdes (commit 2328d71b); provas das fatias F3.3-1 a 6 não rodadas (memória) | Sim: receita sem itens estruturados (03-PEP L121) | Não |
 | [F3.4 Internação e centro cirúrgico](F3.4-internacao-cc.md) | 22 | 9 | 13 | 0 | @M18 e pré-internação não terminaram (fila da trava pesada) | Sim: equipe cirúrgica por função (04-CC 95) e clínica por letra nos contratos | Não |
 | [F3.5 SADT](F3.5-sadt.md) | 17 | 0 | 16 | 1 | @M26 esgotou o tempo (rc 124), não provado | Não: o alto da 2ª via foi corrigido (migração 10_SADT/40) | Não |
-| [F3.6 Suprimentos](F3.6-suprimentos.md) | 19 | 6 | 13 | 0 | @F3.6 não rodado | Sim: os dois altos da linha 7 (regra de integração ligada à prescrição; horários padrão unificados) | Não |
+| [F3.6 Suprimentos](F3.6-suprimentos.md) | 19 | 8 | 11 | 0 | Integrador 25/11: f36-item-cadastro, f36-local-escopo, f36-separacao, f36-livro-oficial e f36-kit-requisicao verdes; f36.spec.ts 1 de 2 (parâmetros da integração, linha 7, vermelho) | Sim: os dois altos da linha 7 (regra de integração ligada à prescrição; horários padrão unificados) | Não |
 | [F3.7 Faturamento](F3.7-faturamento.md) | 40 | 7 | 33 | 0 | @F3.7 e @M31 escritos, não rodados; tsc do marco limpo; 10 contratos de efeito verdes, 6 vermelhos (integrador C, 24/11) | Sim: marcas de texto no contrato da tela (FALTA 5) | Não |
-| [F3.8 Financeiro](F3.8-financeiro.md) | 19 | 5 | 14 | 0 | @F3.8 não rodado; tsc do marco limpo; 3 contratos de efeito verdes, 2 vermelhos (integrador C, 24/11) | Não: altos corrigidos em a6241f4e, prova pendente | Não |
+| [F3.8 Financeiro](F3.8-financeiro.md) | 19 | 10 | 9 | 0 | 10 de 13 arquivos de E2E verdes (vermelhos ou não rodados: f38-depara-contabil, f38-financeiro, f38-reinf-eventos) (integrador, 24/11, commit 87854931); tsc e vue-tsc do financeiro limpos | Não | Não |
 | [F3.9 Apoio](F3.9-apoio.md) | 67 | 39 | 28 | 0 | @M53.8 não rodado; tsc do marco limpo; 6 contratos de efeito verdes, 6 vermelhos (integrador C, 24/11) | Sim: corrigidos só na ficha (01-ADM L57/L59, 04-HOT L126 a L128, permissões por letra, gravações da qualidade) | Não |
-| **Total** | **255** | **92** | **146** | **17** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
+| **Total** | **255** | **101** | **153** | **1** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
 
 ## Integração (24/11)
 
