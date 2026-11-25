@@ -230,6 +230,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       NotasPacienteController,
       CurvasCrescimentoController,
       ExameFisicoController,
+      TransplanteClinicoController,
       NotaSoapController,
       ProntuarioRestritoController,
       AvisosClinicosRegrasController,
@@ -243,7 +244,6 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
     providers: [
       { provide: PORTA_CADASTRO, useValue: cadastro },
       { provide: PORTA_REDE, useValue: rede },
-      TransplanteClinicoController,
       { provide: PORTA_PRONTUARIO, useValue: p.prontuario },
       { provide: SERVICO_PRONTUARIO, useValue: new ServicoProntuario(p.prontuario, cadastro) },
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
