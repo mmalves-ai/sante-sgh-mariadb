@@ -19,3 +19,4 @@ export * from './producao.js';
 export * from './producao-conta.js';
 export * from './favorecido.js';
 export * from './fiscal-profissional.js';
+export * from './remuneracao-variavel.js';
