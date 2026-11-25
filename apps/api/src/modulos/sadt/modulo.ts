@@ -58,6 +58,7 @@ import {
 } from './interface-equipamento.controller.js';
 import { EntregaResultadoController, SERVICO_ENTREGA_RESULTADO } from './entrega-resultado.controller.js';
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
+import { SERVICO_SOROTECA, SorotecaController } from './soroteca.controller.js';
 import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
 
 export interface OpcoesModuloSadt {
@@ -156,6 +157,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       LaudoGrandezasController,
       ApoioRemessaController,
       LimitesExameController,
+      SorotecaController,
       EntregaResultadoController,
       EscalaExecucaoController,
       InterfaceEquipamentoController,
@@ -263,6 +265,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoEntregaResultado } = await import('./aplicacao/entrega-resultado-propria.js');
           return new ServicoEntregaResultado(ctx.nucleo);
+        },
+      },
+      // Soroteca: guarda, retirada, devolução e expurgo da amostra (05-SADT linha 9): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_SOROTECA,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoSoroteca } = await import('./aplicacao/soroteca-propria.js');
+          return new ServicoSoroteca(ctx.nucleo);
         },
       },
       // Limites do pedido de exame (05-SADT linha 6): só no banco do cliente (sem ele, 503).
