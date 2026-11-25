@@ -41,7 +41,8 @@ Regra das tabelas concluídas da execução interrompida Y (tabela de controle `
    (`AND coluna IS NULL`: nunca sobrescreve).
 5. Cadeia: se Y é ela mesma uma continuação (`contadores.continuar_de` = X) e falhou cedo (sem imagem, ou antes de
    marcar o que herdou), as concluídas de X entram também; as pendências de cada tabela pulada são lidas da cadeia
-   da execução que a concluiu.
+   da execução que a concluiu. A ponta da cadeia que caiu antes da imagem (e não continua outra) não traz nada,
+   sem derrubar o que as outras concluíram (antes, o SemImagem dela subia e a continuação relia tudo).
 6. Base declarada (0094, ADR 0010): quando a origem da execução tem `continua_de_origem_id` (o administrador declarou
    que a origem nova lê a MESMA base da anterior, como a cópia do arquivo que passou a ser servida pelo servidor
    Firebird), as concluídas da última importação da origem anterior (e da cadeia dela) entram também, aceitando o
@@ -141,10 +142,15 @@ def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None
         tabs, regra, img = set(), "sem_imagem", None
     origem = {t: anterior for t in tabs}
     if de:  # a continuação `anterior` falhou antes de marcar o que herdou: herda da que ela continuava
-        r = concluidas(conn, ctl, int(de), plano, contagens, sha256, contadores_de, _heranca=False)
+        try:
+            r = concluidas(conn, ctl, int(de), plano, contagens, sha256, contadores_de, _heranca=False)
+        except SemImagem:  # a ponta da cadeia caiu antes da imagem (e não continua outra): não traz nada
+            r = {"origem": {}, "regra": "sem_imagem", "imagem_anterior": None}
+            regra = "%s+cadeia(%d:sem_imagem)" % (regra, int(de))
+        else:
+            regra = "%s+cadeia(%d)" % (regra, int(de))
         for t, e in r["origem"].items():
             origem.setdefault(t, e)
-        regra = "%s+cadeia(%d)" % (regra, int(de))
         img = img or r["imagem_anterior"]
     base = base_declarada(conn, anterior) if _heranca else None
     if base and base["aceita"]:  # regra 6: a origem anterior com a mesma base, declarada pelo administrador

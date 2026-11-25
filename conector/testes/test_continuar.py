@@ -225,6 +225,9 @@ class RegraConcluidas(unittest.TestCase):
         self.assertEqual((r["tabelas"], r["origem"]), ({"B"}, {"B": 7}))
         self.assertRaises(continuar.NaoContinuavel, continuar.concluidas, self.root, self.ctl, 8, plano, cont,
                           "a" * 64)  # sem a cadeia, a 8 sem imagem não continua
+        # a ponta da cadeia caiu antes da imagem e não continua outra (a 30 não gravou nada): não derruba a cadeia
+        r = continuar.concluidas(self.root, self.ctl, 9, plano, cont, "a" * 64, {9: {"continuar_de": 30}}.get)
+        self.assertIn("+cadeia(30:sem_imagem)", r["regra"])
         # chave antiga que sumiu do arquivo (imagem anterior) além das n de agora: roda de novo, mesmo marcada
         for k, i in (("1", img), ("2", img), ("velha", img + 99)):
             self._x("INSERT INTO {b}.conector_origem (tabela_origem, chave_original, entidade_destino, id_destino,"
