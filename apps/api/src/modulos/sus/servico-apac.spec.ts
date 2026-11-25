@@ -171,6 +171,28 @@ describe('faturamento SUS, etapa 3: APAC', () => {
     const r1 = await sv.criticar(s, { instrumento: 'apac', competencia: COMP });
     expect(r1).toMatchObject({ registros: 1, bloqueantes: 0, avisos: 0, corrigidas: 2 });
     const v1 = (await sv.listarCompetencias(s, 'apac'))[0]!;
+    // 06-SUS linha 54: a produção acima de um teto que bloqueia (o complemento da crítica) impede a geração, na hora.
+    let tetoEstourado = true;
+    sv.registrarComplementoCritica(async (_s, instrumento, competencia) =>
+      tetoEstourado
+        ? [
+            {
+              chave: `teto:1:${instrumento}:${competencia}`,
+              regra: 'producao-acima-do-teto',
+              gravidade: 'bloqueante' as const,
+              conta: null,
+              convenio: null,
+              atendimento: null,
+              item: null,
+              detalhe: JSON.stringify({ limite: 'teto', id: 1, saldoValor: -5 }),
+            },
+          ]
+        : [],
+    );
+    await expect(sv.gerarApac(s, { competencia: COMP, versao: v1.versao })).rejects.toEqual(
+      recusa('criticas-bloqueantes-abertas'),
+    );
+    tetoEstourado = false;
     const g = await sv.gerarApac(s, { competencia: COMP, versao: v1.versao });
     expect(g.arquivo).toMatchObject({
       instrumento: 'apac',

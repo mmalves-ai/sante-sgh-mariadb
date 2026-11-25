@@ -10,7 +10,10 @@
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { armazemSusMemoria } from './armazem.js';
+import { PortaSusMemoria } from './porta-memoria.js';
 import { PortaProgramacaoSusPropria } from './programacao-propria.js';
+import { ServicoSus, type SessaoSus } from './servico.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -313,6 +316,17 @@ describe.skipIf(SEM_BANCO)('PortaProgramacaoSusPropria contra o MariaDB (contrat
       destino_cota_procedimento_sus_id: d.destino,
     });
 
+    // A geração (BPA, APAC e AIH) confere o saldo gravado no MariaDB na hora, ligada como no controlador: o teto que
+    // bloqueia e foi excedido impede gerar o BPA; inativado o teto, a geração não é mais impedida pelo saldo.
+    const sv = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria());
+    sv.registrarComplementoCritica((_s, instrumento, competencia) =>
+      porta.criticasDaCompetencia(ctx(), instrumento, competencia),
+    );
+    const sessaoSus = { hospital: P } as SessaoSus;
+    await expect(sv.exigirSaldoParaGerar(sessaoSus, 'bpa', COMP)).rejects.toMatchObject({
+      extras: { codigo: 'criticas-bloqueantes-abertas' },
+    });
+    await expect(sv.exigirSaldoParaGerar(sessaoSus, 'aih', COMP)).resolves.toBeUndefined();
     await porta.inativarLimite(ctx(), 'teto', teto.id, { versao: 1 });
     await expect(porta.inativarLimite(ctx(), 'teto', teto.id, { versao: 2 })).rejects.toMatchObject({
       problema: { status: 422 },
@@ -323,6 +337,7 @@ describe.skipIf(SEM_BANCO)('PortaProgramacaoSusPropria contra o MariaDB (contrat
     expect(
       (await porta.criticasDaCompetencia(ctx(), 'bpa', COMP)).filter((c) => c.gravidade === 'bloqueante'),
     ).toEqual([]);
+    await expect(sv.exigirSaldoParaGerar(sessaoSus, 'bpa', COMP)).resolves.toBeUndefined();
   });
 
   it('a nova programação encerra a anterior na véspera; o rascunho é cancelado; isolamento e trilha', async () => {

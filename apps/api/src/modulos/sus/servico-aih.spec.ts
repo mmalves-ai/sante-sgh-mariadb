@@ -254,6 +254,28 @@ describe('faturamento SUS, etapa 4: AIH', () => {
     const c2 = await sus.criticar(s, { instrumento: 'aih', competencia: COMP });
     expect(c2.porRegra).toEqual({ 'aih-sem-laudo': 1, 'item-sem-sigtap': 1 });
     const comp = (await sus.listarCompetencias(s, 'aih'))[0];
+    // 06-SUS linha 54: a produção acima de um teto que bloqueia (o complemento da crítica) impede a geração, na hora.
+    let tetoEstourado = true;
+    sus.registrarComplementoCritica(async (_s, instrumento, competencia) =>
+      tetoEstourado
+        ? [
+            {
+              chave: `teto:1:${instrumento}:${competencia}`,
+              regra: 'producao-acima-do-teto',
+              gravidade: 'bloqueante' as const,
+              conta: null,
+              convenio: null,
+              atendimento: null,
+              item: null,
+              detalhe: JSON.stringify({ limite: 'teto', id: 1, saldoValor: -5 }),
+            },
+          ]
+        : [],
+    );
+    await expect(aih.gerarSisaih(s, { competencia: COMP, versao: comp?.versao ?? '' })).rejects.toEqual(
+      recusa('criticas-bloqueantes-abertas'),
+    );
+    tetoEstourado = false;
     const g = await aih.gerarSisaih(s, { competencia: COMP, versao: comp?.versao ?? '' });
     expect(g.arquivo).toMatchObject({
       instrumento: 'aih',

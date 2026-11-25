@@ -322,6 +322,20 @@ export class ServicoSus {
     this.complemento = fn;
   }
 
+  /**
+   * 06-SUS linha 54, na geração: o saldo de teto, cota e programação é conferido de novo, na hora (o limite pode ter
+   * mudado depois da crítica). Produção acima de um limite que bloqueia impede a geração do BPA, da APAC e da AIH.
+   */
+  async exigirSaldoParaGerar(
+    s: SessaoSus,
+    instrumento: 'bpa' | 'apac' | 'aih',
+    competencia: string,
+  ): Promise<void> {
+    if (!this.complemento) return;
+    const extras = await this.complemento(s, instrumento, competencia);
+    if (extras.some((c) => c.gravidade === 'bloqueante')) throw recusa('criticas-bloqueantes-abertas');
+  }
+
   /** Etapa 4: a crítica do instrumento passa a usar a montagem dada (a AIH registra a dela). */
   registrarMontagem(instrumento: InstrumentoSus, montador: MontadorCriticaSus): void {
     this.montadores.set(instrumento, montador);
@@ -832,6 +846,7 @@ export class ServicoSus {
     if (versaoSus(comp.versao) !== e.versao) throw recusa('versao-alterada');
     if (m.resultado.criticas.some((c) => c.gravidade === 'bloqueante') || m.cnes === null)
       throw recusa('criticas-bloqueantes-abertas');
+    await this.exigirSaldoParaGerar(s, 'bpa', comp.competencia);
     const r = m.resultado;
     if (r.consolidado.length + r.individualizado.length === 0) throw recusa('bpa-sem-producao');
     const arquivo = gerarArquivoBpa(
@@ -1320,6 +1335,7 @@ export class ServicoSus {
     if (versaoSus(comp.versao) !== e.versao) throw recusa('versao-alterada');
     if (m.resultado.criticas.some((c) => c.gravidade === 'bloqueante') || m.cnes === null)
       throw recusa('criticas-bloqueantes-abertas');
+    await this.exigirSaldoParaGerar(s, 'apac', comp.competencia);
     const r = m.resultado;
     if (r.apacs.length === 0) throw recusa('apac-sem-apresentacao');
     const arquivo = gerarArquivoApac(

@@ -794,6 +794,7 @@ export class ServicoSusAih {
     if (versaoSus(comp.versao) !== e.versao) throw recusa('versao-alterada');
     if (m.todas.some((c) => c.gravidade === 'bloqueante') || m.cnes === null)
       throw recusa('criticas-bloqueantes-abertas');
+    await this.sus.exigirSaldoParaGerar(s, 'aih', comp.competencia);
     if (m.apresentaveis.length === 0) throw recusa('aih-sem-producao');
     const paraArquivo = await this.porta.ler(this.ctx(s), async (l) => {
       const out = [];

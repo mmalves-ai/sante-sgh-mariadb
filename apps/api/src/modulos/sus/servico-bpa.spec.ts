@@ -96,6 +96,43 @@ describe('faturamento SUS, etapa 2: BPA', () => {
     const r2 = await sv.criticar(s, { instrumento: 'bpa', competencia: '202609' });
     expect(r2).toMatchObject({ registros: 4, bloqueantes: 0, corrigidas: 1 });
 
+    // 06-SUS linha 54: a produção acima de um teto que bloqueia (o complemento da crítica) impede a geração, na hora.
+    let tetoEstourado = true;
+    sv.registrarComplementoCritica(async (_s, instrumento, competencia) =>
+      tetoEstourado
+        ? [
+            {
+              chave: `teto:1:${instrumento}:${competencia}`,
+              regra: 'producao-acima-do-teto',
+              gravidade: 'bloqueante' as const,
+              conta: null,
+              convenio: null,
+              atendimento: null,
+              item: null,
+              detalhe: JSON.stringify({ limite: 'teto', id: 1, saldoValor: -5 }),
+            },
+          ]
+        : [],
+    );
+    const r3 = await sv.criticar(s, { instrumento: 'bpa', competencia: '202609' });
+    expect(r3).toMatchObject({ bloqueantes: 1 });
+    expect(r3.porRegra).toMatchObject({ 'producao-acima-do-teto': 1 });
+    const c3 = await sv.listarCriticas(s, {
+      instrumento: 'bpa',
+      competencia: '202609',
+      pagina: 0,
+      porPagina: 50,
+    });
+    expect(c3.itens.map((x) => x.regra)).toContain('producao-acima-do-teto');
+    const v3 = (await sv.listarCompetencias(s, 'bpa'))[0]!;
+    await expect(sv.gerarBpa(s, { competencia: '202609', versao: v3.versao })).rejects.toEqual(
+      recusa('criticas-bloqueantes-abertas'),
+    );
+    // O teto ampliado (o complemento sem estouro): a crítica de novo libera a geração.
+    tetoEstourado = false;
+    expect(await sv.criticar(s, { instrumento: 'bpa', competencia: '202609' })).toMatchObject({
+      bloqueantes: 0,
+    });
     const comp = (await sv.listarCompetencias(s, 'bpa'))[0]!;
     await expect(sv.gerarBpa(s, { competencia: '202609', versao: '0000000001' })).rejects.toEqual(
       recusa('versao-alterada'),
