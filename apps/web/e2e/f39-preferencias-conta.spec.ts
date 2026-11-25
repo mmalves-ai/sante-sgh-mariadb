@@ -59,7 +59,8 @@ test.describe('Preferências seguem a conta @F39-3 @fase3', () => {
     await expect(page.locator('html')).toHaveClass(/modo-escuro/);
 
     // Navegador limpo (outro computador): a conta é a fonte.
-    const limpo = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    const baseURL = test.info().project.use.baseURL;
+    const limpo = await browser.newContext(baseURL ? { baseURL } : {});
     try {
       const outra = await limpo.newPage();
       await entrar(outra);
