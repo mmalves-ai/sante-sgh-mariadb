@@ -23,6 +23,9 @@ export const CAMPOS_OPCAO = [
   'nacionalidade',
   'paisNascimento',
   'capacidadeCivil',
+  'orientacaoSexual',
+  'situacaoFamiliar',
+  'idiomaIndigena',
 ] as const;
 export type CampoOpcao = (typeof CAMPOS_OPCAO)[number];
 
@@ -46,9 +49,13 @@ export type Demografia = Record<CampoOpcao, number | null> & {
   temRepresentanteVigente: boolean;
   opcoes: Record<CampoOpcao, OpcaoDemografia[]> & {
     condicoesVulnerabilidade: OpcaoDemografia[];
+    /** Doenças crônicas por CID-10 (a descrição já traz o código entre parênteses). */
+    condicoesCronicas: OpcaoDemografia[];
     informantes: string[];
   };
   vulnerabilidades: Vulnerabilidade[];
+  /** Doenças crônicas referidas no cadastro (declaração, não diagnóstico), com a mesma forma da vulnerabilidade. */
+  condicoesCronicas: Vulnerabilidade[];
 };
 export type GravacaoDemografia = Record<CampoOpcao, number | null> & {
   usaNomeSocial: boolean;
@@ -96,19 +103,27 @@ export const declararVulnerabilidade = (p: number, c: Record<string, unknown>) =
   pedir<{ id: number }>(`${C}/pacientes/${p}/vulnerabilidades`, 'POST', c);
 export const encerrarVulnerabilidade = (p: number, id: number, fim: string) =>
   pedir<{ id: number }>(`${C}/pacientes/${p}/vulnerabilidades/${id}/encerrar`, 'POST', { fim });
+export const declararCondicaoCronica = (p: number, c: Record<string, unknown>) =>
+  pedir<{ id: number }>(`${C}/pacientes/${p}/condicoes-cronicas`, 'POST', c);
+export const encerrarCondicaoCronica = (p: number, id: number, fim: string) =>
+  pedir<{ id: number }>(`${C}/pacientes/${p}/condicoes-cronicas/${id}/encerrar`, 'POST', { fim });
+
+export type PendenciaDemografia =
+  'nomeSocial' | 'nomeSocialIgual' | 'povoIndigena' | 'idiomaIndigena' | 'capacidadeCivil';
 
 /** O que impede a gravação, conferido na tela antes de ir ao servidor (a regra é a mesma do domínio). */
 export function pendenciasDemografia(
   f: GravacaoDemografia,
   d: Pick<Demografia, 'nome' | 'opcoes' | 'temRepresentanteVigente' | 'capacidadeCivil'>,
-): ('nomeSocial' | 'nomeSocialIgual' | 'povoIndigena' | 'capacidadeCivil')[] {
-  const p: ('nomeSocial' | 'nomeSocialIgual' | 'povoIndigena' | 'capacidadeCivil')[] = [];
+): PendenciaDemografia[] {
+  const p: PendenciaDemografia[] = [];
   const plano = (s: string) =>
     s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   const social = (f.nomeSocial ?? '').trim();
   if (f.usaNomeSocial && social === '') p.push('nomeSocial');
   else if (social !== '' && plano(social) === plano(d.nome)) p.push('nomeSocialIgual');
   if (exigeEtnia(f.racaCor, d) && f.povoIndigena === null) p.push('povoIndigena');
+  if (!exigeEtnia(f.racaCor, d) && f.idiomaIndigena !== null) p.push('idiomaIndigena');
   const capacidade = d.opcoes.capacidadeCivil.find((o) => o.id === f.capacidadeCivil);
   if (capacidade?.marca && f.capacidadeCivil !== d.capacidadeCivil && !d.temRepresentanteVigente)
     p.push('capacidadeCivil');

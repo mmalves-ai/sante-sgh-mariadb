@@ -5,10 +5,13 @@
 // usado sem o nome, raça/cor indígena sem o povo, capacidade que exige responsável sem responsável vigente) e o botão
 // só libera sem pendência. O povo indígena só aparece com a raça/cor que o exige. A vulnerabilidade é declarada com
 // data e informante e encerrada com data; nada é apagado. O servidor confere tudo de novo (regra no domínio).
+// Cadastro nacional (09-AREA linha 73): orientação sexual (opcional, com 'não quis declarar'), situação familiar, língua
+// indígena (opcional, só com a raça/cor indígena, junto do povo) e as doenças crônicas referidas (CondicoesCronicas).
 import { SanteSelecao } from '@sgh/ui';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import CondicoesCronicasPaciente from './CondicoesCronicasPaciente.vue';
 import {
   buscarOcupacoes,
   CAMPOS_OPCAO,
@@ -45,6 +48,9 @@ const vazio = (): Formulario => ({
   nacionalidade: 0,
   paisNascimento: 0,
   capacidadeCivil: 0,
+  orientacaoSexual: 0,
+  situacaoFamiliar: 0,
+  idiomaIndigena: 0,
 });
 const form = ref<Formulario>(vazio());
 const ocupacao = ref<{ id: number; descricao: string } | null>(null);
@@ -52,7 +58,9 @@ const termoOcupacao = ref('');
 const achadas = ref<{ id: number; descricao: string }[] | null>(null);
 
 /** Os campos de escolha fora o povo indígena (que depende da raça/cor e tem lugar próprio na tela). */
-const CAMPOS_SIMPLES = CAMPOS_OPCAO.filter((c) => c !== 'povoIndigena' && c !== 'racaCor');
+const CAMPOS_SIMPLES = CAMPOS_OPCAO.filter(
+  (c) => c !== 'povoIndigena' && c !== 'racaCor' && c !== 'idiomaIndigena' && c !== 'orientacaoSexual',
+);
 
 const pedeEtnia = computed(() => (dados.value ? exigeEtnia(form.value.racaCor || null, dados.value) : false));
 const gravacao = computed<GravacaoDemografia>(() => {
@@ -70,6 +78,10 @@ const gravacao = computed<GravacaoDemografia>(() => {
     nacionalidade: id('nacionalidade'),
     paisNascimento: id('paisNascimento'),
     capacidadeCivil: id('capacidadeCivil'),
+    orientacaoSexual: id('orientacaoSexual'),
+    situacaoFamiliar: id('situacaoFamiliar'),
+    // A língua indígena também só vale com a raça/cor que exige a etnia (opcional nela).
+    idiomaIndigena: pedeEtnia.value ? id('idiomaIndigena') : null,
     ocupacao: ocupacao.value?.id ?? null,
   };
 });
@@ -195,6 +207,12 @@ async function declarar(): Promise<void> {
   }
 }
 
+async function cronicaAlterada(m: string): Promise<void> {
+  erro.value = null;
+  await carregar();
+  mensagem.value = m;
+}
+
 async function encerrar(v: Vulnerabilidade): Promise<void> {
   const fim = fins.value[v.id] ?? '';
   if (!fim) return;
@@ -232,6 +250,12 @@ async function encerrar(v: Vulnerabilidade): Promise<void> {
             <dt>{{ t('demografia.campos.povoIndigena') }}</dt>
             <dd>{{ descricao('povoIndigena') }}</dd>
           </template>
+          <template v-if="dados.idiomaIndigena">
+            <dt>{{ t('demografia.campos.idiomaIndigena') }}</dt>
+            <dd>{{ descricao('idiomaIndigena') }}</dd>
+          </template>
+          <dt>{{ t('demografia.campos.orientacaoSexual') }}</dt>
+          <dd>{{ descricao('orientacaoSexual') }}</dd>
           <template v-for="c in CAMPOS_SIMPLES" :key="c">
             <dt>{{ t(`demografia.campos.${c}`) }}</dt>
             <dd>{{ descricao(c) }}</dd>
@@ -271,7 +295,21 @@ async function encerrar(v: Vulnerabilidade): Promise<void> {
             :opcoes="opcoesDe('povoIndigena')"
           />
           <p v-if="dados.opcoes.povoIndigena.length === 0" class="ajuda">{{ t('demografia.semPovos') }}</p>
+          <SanteSelecao
+            v-model="form.idiomaIndigena"
+            :rotulo="t('demografia.campos.idiomaIndigena')"
+            :opcoes="opcoesDe('idiomaIndigena')"
+          />
+          <p v-if="dados.opcoes.idiomaIndigena.length === 0" class="ajuda">
+            {{ t('demografia.semIdiomas') }}
+          </p>
         </template>
+        <SanteSelecao
+          v-model="form.orientacaoSexual"
+          :rotulo="t('demografia.campos.orientacaoSexual')"
+          :opcoes="opcoesDe('orientacaoSexual')"
+        />
+        <p class="ajuda">{{ t('demografia.orientacaoAjuda') }}</p>
         <SanteSelecao
           v-for="c in CAMPOS_SIMPLES.filter((x) => x !== 'identidadeGenero')"
           :key="c"
@@ -403,6 +441,15 @@ async function encerrar(v: Vulnerabilidade): Promise<void> {
           {{ t('demografia.vulnerabilidade.declarar') }}
         </button>
       </form>
+
+      <!-- ── doenças crônicas referidas: mesma forma, lista própria ── -->
+      <CondicoesCronicasPaciente
+        :id-paciente="idPaciente"
+        :pode-editar="podeEditar"
+        :dados="dados"
+        @alterado="cronicaAlterada"
+        @erro="(e) => (erro = e)"
+      />
     </template>
   </section>
 </template>

@@ -6,6 +6,9 @@
 // a leitura recarregada depois de gravar, a vulnerabilidade declarada e encerrada (sem apagar: fica na lista como
 // encerrada) e a acessibilidade. O efeito no banco está no contrato de efeito
 // (apps/api/src/modulos/cadastro/demografia-paciente.int.spec.ts).
+// C1-099 (09-AREA linha 73): atributos do cadastro nacional na mesma ficha: orientação sexual opcional (com 'não quis
+// declarar'), situação familiar, língua indígena só com a raça/cor indígena e a doença crônica referida, declarada com
+// data e informante e encerrada sem apagar.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -46,9 +49,13 @@ async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
     nacionalidade: null,
     paisNascimento: null,
     capacidadeCivil: null,
+    orientacaoSexual: null,
+    situacaoFamiliar: null,
+    idiomaIndigena: null,
     ocupacao: null,
   };
   const vulnerabilidades: Record<string, unknown>[] = [];
+  const cronicas: Record<string, unknown>[] = [];
   const ocupacoes = [
     { id: 501, descricao: '322205 TECNICO DE ENFERMAGEM SINTETICO' },
     { id: 502, descricao: '223505 ENFERMEIRO SINTETICO' },
@@ -77,10 +84,15 @@ async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
           nacionalidade: [op(61, 'BRASILEIRA SINTETICA')],
           paisNascimento: [op(71, 'BRASIL SINTETICO')],
           capacidadeCivil: [op(81, 'PLENA SINTETICA'), op(82, 'INCAPAZ SINTETICA', true)],
+          orientacaoSexual: [op(101, 'ORIENTACAO SINTETICA'), op(102, 'Não quis declarar')],
+          situacaoFamiliar: [op(111, 'VIVE SO SINTETICO')],
+          idiomaIndigena: [op(121, 'LINGUA SINTETICA')],
           condicoesVulnerabilidade: [op(91, 'SITUACAO DE RUA SINTETICA')],
+          condicoesCronicas: [op(131, 'HIPERTENSAO SINTETICA (I10)')],
           informantes: ['paciente', 'responsavel', 'familiar', 'profissional', 'servico_social', 'outro'],
         },
         vulnerabilidades,
+        condicoesCronicas: cronicas,
       });
     const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
     pedidos.push({ metodo: req.method(), caminho: `pacientes/${PACIENTE}/demografia`, corpo });
@@ -101,6 +113,29 @@ async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
     vulnerabilidades.unshift({
       id,
       condicao: { id: 91, descricao: 'SITUACAO DE RUA SINTETICA' },
+      declaradaEm: corpo['declaradaEm'],
+      informanteTipo: corpo['informanteTipo'],
+      informanteNome: corpo['informanteNome'],
+      fim: null,
+      vigente: true,
+      observacao: null,
+    });
+    return json(rota, { id }, 201);
+  });
+  await page.route(`**/api/cadastros/pacientes/${PACIENTE}/condicoes-cronicas**`, (rota) => {
+    const req = rota.request();
+    const caminho = new URL(req.url()).pathname.replace('/api/cadastros/', '');
+    const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
+    pedidos.push({ metodo: req.method(), caminho, corpo });
+    if (caminho.endsWith('/encerrar')) {
+      const v = cronicas.find((x) => caminho.includes(`/condicoes-cronicas/${String(x['id'])}/`));
+      if (v) Object.assign(v, { vigente: false, fim: corpo['fim'] });
+      return json(rota, { id: v?.['id'] ?? 0 });
+    }
+    const id = 800 + cronicas.length;
+    cronicas.unshift({
+      id,
+      condicao: { id: 131, descricao: 'HIPERTENSAO SINTETICA (I10)' },
       declaradaEm: corpo['declaradaEm'],
       informanteTipo: corpo['informanteTipo'],
       informanteNome: corpo['informanteNome'],
@@ -182,6 +217,9 @@ test.describe('@F3.1 @F3.1-07 dados demográficos do paciente', () => {
         nacionalidade: 61,
         paisNascimento: null,
         capacidadeCivil: 81,
+        orientacaoSexual: null,
+        situacaoFamiliar: null,
+        idiomaIndigena: null,
         ocupacao: 502,
       },
     });
@@ -244,6 +282,109 @@ test.describe('@F3.1 @F3.1-07 dados demográficos do paciente', () => {
     expect(pedidos.at(-1)).toEqual({
       metodo: 'POST',
       caminho: `pacientes/${PACIENTE}/vulnerabilidades/700/encerrar`,
+      corpo: { fim: '2026-11-20' },
+    });
+  });
+
+  test('@C1-099 cadastro nacional: orientação sexual, situação familiar, língua indígena e doença crônica; axe', async ({
+    page,
+  }) => {
+    const pedidos: Pedido[] = [];
+    await entrar(page, 'SINT.RECEPCAO');
+    await simular(page, pedidos);
+
+    await page.goto(`/cadastros/pacientes/${PACIENTE}`);
+    const bloco = page.getByTestId('demografia-paciente');
+    await expect(bloco.getByTestId('demografia-leitura')).toContainText('Orientação sexual');
+    await bloco.getByTestId('editar-demografia').click();
+    const form = bloco.getByTestId('form-demografia');
+    const gravar = form.getByRole('button', { name: 'Gravar dados demográficos' });
+
+    // Orientação sexual opcional, com a ajuda do dado sensível; situação familiar pelo vocabulário oficial.
+    await expect(form.getByText(/Pergunta opcional/)).toBeVisible();
+    await escolher(form.getByRole('combobox', { name: 'Orientação sexual' }), {
+      rotulo: 'Não quis declarar',
+    });
+    await escolher(form.getByRole('combobox', { name: 'Situação familiar' }), {
+      rotulo: 'VIVE SO SINTETICO',
+    });
+
+    // A língua indígena só aparece com a raça/cor que exige a etnia, e é opcional nela.
+    await expect(form.getByRole('combobox', { name: 'Língua indígena falada' })).toHaveCount(0);
+    await escolher(form.getByRole('combobox', { name: 'Raça/cor' }), { rotulo: 'INDIGENA SINTETICA' });
+    await escolher(form.getByRole('combobox', { name: 'Povo indígena (etnia)' }), {
+      rotulo: 'POVO SINTETICO',
+    });
+    await expect(gravar).toBeEnabled();
+    await escolher(form.getByRole('combobox', { name: 'Língua indígena falada' }), {
+      rotulo: 'LINGUA SINTETICA',
+    });
+    await semViolacaoAxe(page, `/cadastros/pacientes/${PACIENTE} (demografia, cadastro nacional)`);
+    await gravar.click();
+    await expect(bloco.getByRole('status')).toContainText('Dados demográficos gravados.');
+    const put = pedidos.find((p) => p.metodo === 'PUT')!;
+    expect([
+      put.corpo['orientacaoSexual'],
+      put.corpo['situacaoFamiliar'],
+      put.corpo['racaCor'],
+      put.corpo['povoIndigena'],
+      put.corpo['idiomaIndigena'],
+    ]).toEqual([102, 111, 22, 31, 121]);
+    const leitura = bloco.getByTestId('demografia-leitura');
+    await expect(leitura).toContainText('LINGUA SINTETICA');
+    await expect(leitura).toContainText('VIVE SO SINTETICO');
+    await expect(leitura).toContainText('Não quis declarar');
+
+    // Trocar a raça/cor tira o povo e a língua indígena do pedido.
+    await bloco.getByTestId('editar-demografia').click();
+    await escolher(form.getByRole('combobox', { name: 'Raça/cor' }), { rotulo: 'PARDA SINTETICA' });
+    await expect(form.getByRole('combobox', { name: 'Língua indígena falada' })).toHaveCount(0);
+    await gravar.click();
+    await expect(bloco.getByRole('status')).toContainText('Dados demográficos gravados.');
+    const segundo = pedidos.filter((p) => p.metodo === 'PUT')[1]!;
+    expect([segundo.corpo['povoIndigena'], segundo.corpo['idiomaIndigena']]).toEqual([null, null]);
+
+    // Doença crônica referida: declarada com data e informante; a mesma vigente trava; encerrada fica na lista.
+    const cronicas = bloco.getByTestId('condicoes-cronicas-paciente');
+    await expect(cronicas).toContainText('Nenhuma doença crônica declarada.');
+    const nova = cronicas.getByTestId('nova-condicao-cronica');
+    const declarar = nova.getByRole('button', { name: 'Declarar doença crônica' });
+    await expect(declarar).toBeDisabled();
+    await escolher(nova.getByRole('combobox', { name: 'Doença crônica' }), {
+      rotulo: 'HIPERTENSAO SINTETICA (I10)',
+    });
+    await nova.getByLabel('Declarada em').fill('2026-11-12');
+    await escolher(nova.getByRole('combobox', { name: 'Quem informou' }), { rotulo: 'Outra pessoa' });
+    await expect(nova.getByText('Informe o nome de quem declarou a doença crônica.')).toBeVisible();
+    await expect(declarar).toBeDisabled();
+    await nova.getByLabel('Nome de quem informou').fill('VIZINHA SINTETICA');
+    await declarar.click();
+    await expect(bloco.getByRole('status')).toContainText('Doença crônica declarada.');
+    expect(pedidos.find((p) => p.caminho === `pacientes/${PACIENTE}/condicoes-cronicas`)).toEqual({
+      metodo: 'POST',
+      caminho: `pacientes/${PACIENTE}/condicoes-cronicas`,
+      corpo: {
+        condicao: 131,
+        declaradaEm: '2026-11-12',
+        informanteTipo: 'outro',
+        informanteNome: 'VIZINHA SINTETICA',
+      },
+    });
+    const vigente = cronicas.locator('tr[data-situacao="vigente"]');
+    await expect(vigente).toContainText('HIPERTENSAO SINTETICA (I10)');
+    await escolher(nova.getByRole('combobox', { name: 'Doença crônica' }), {
+      rotulo: 'HIPERTENSAO SINTETICA (I10)',
+    });
+    await expect(nova.getByText('O paciente já tem esta doença crônica vigente.')).toBeVisible();
+    await expect(declarar).toBeDisabled();
+    await semViolacaoAxe(page, `/cadastros/pacientes/${PACIENTE} (demografia, doença crônica)`);
+    await vigente.getByLabel('Data do fim').fill('2026-11-20');
+    await vigente.getByRole('button', { name: 'Encerrar' }).click();
+    await expect(bloco.getByRole('status')).toContainText('Doença crônica encerrada.');
+    await expect(cronicas.locator('tr[data-situacao="encerrada"]')).toContainText('Encerrada 20/11/2026');
+    expect(pedidos.at(-1)).toEqual({
+      metodo: 'POST',
+      caminho: `pacientes/${PACIENTE}/condicoes-cronicas/800/encerrar`,
       corpo: { fim: '2026-11-20' },
     });
   });
