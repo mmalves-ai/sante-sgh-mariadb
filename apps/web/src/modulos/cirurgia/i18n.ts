@@ -7,6 +7,7 @@ import { mensagensGradeSala } from './i18n-grade-sala.js';
 import { mensagensCartaoPreferencia } from './i18n-cartao-preferencia.js';
 import { mensagensProcedimentoCirurgico } from './i18n-procedimento-cirurgico.js';
 import { mensagensCmeCadastro } from './i18n-cme-cadastro.js';
+import { mensagensEquipeRealizada } from './i18n-equipe-realizada.js';
 export const mensagensCirurgia = {
   // F3.4-3, 04-CC L91: cadastro do texto padrão da descrição (i18n-texto-padrao.ts).
   textosPadrao: mensagensTextoPadrao,
@@ -22,6 +23,8 @@ export const mensagensCirurgia = {
   procedimentoCirurgico: mensagensProcedimentoCirurgico,
   // F7, 04-CME L115: cadastro da CME (produtos reprocessáveis, caixas e kits, fases e foto) (i18n-cme-cadastro.ts).
   cmeCadastro: mensagensCmeCadastro,
+  // F3.4, 04-CC L95: equipe realizada do ato e ponte com a conta (i18n-equipe-realizada.ts).
+  equipeRealizada: mensagensEquipeRealizada,
   carregando: 'Carregando…',
   nenhuma: 'Nada encontrado.',
   emConsulta: 'Centro cirúrgico em consulta',

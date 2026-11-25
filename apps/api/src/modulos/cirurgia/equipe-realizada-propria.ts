@@ -68,6 +68,8 @@ export interface EquipeRealizada {
   readonly saidaSala: string | null;
   readonly procedimentos: { readonly id: number; readonly sequencia: number; readonly descricao: string }[];
   readonly membros: MembroRealizado[];
+  /** Itens das contas da mesma internação, para escolher onde a equipe de cada procedimento entra. */
+  readonly itensConta: { readonly id: number; readonly conta: string; readonly descricao: string }[];
 }
 
 const esquemaLevar = z
@@ -133,6 +135,16 @@ export class PortaEquipeRealizadaPropria extends PortaEstabelecimentoPropria {
         [ato],
       );
       const membros = await membrosDoAto(l, ato);
+      const itens = await l.consultar<Linha>(
+        `SELECT i.id, ch.numero AS conta, f.descricao
+           FROM conta_hospitalar_item i
+           JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
+           JOIN item_faturavel f ON f.id = i.item_faturavel_id
+          WHERE ch.atendimento_id = ? AND ch.estabelecimento_id = ? AND i.excluido_em IS NULL
+          ORDER BY ch.id, i.sequencia
+          LIMIT 200`,
+        [num(a['atendimento_id']), est.id],
+      );
       return {
         ato,
         numero: String(a['numero']),
@@ -163,6 +175,11 @@ export class PortaEquipeRealizadaPropria extends PortaEstabelecimentoPropria {
                 })
               : 0,
           percentual: numOuNull(m['percentual_participacao']),
+        })),
+        itensConta: itens.map((i) => ({
+          id: num(i['id']),
+          conta: String(i['conta']),
+          descricao: String(i['descricao']),
         })),
       };
     });

@@ -22,6 +22,7 @@ import {
 } from '../api-cirurgia.js';
 import AvisoCirurgia from '../componentes/AvisoCirurgia.vue';
 import ErroCirurgia from '../componentes/ErroCirurgia.vue';
+import EquipeRealizadaPainel from '../componentes/EquipeRealizadaPainel.vue';
 import { profissionalDaEscolha, usarCirurgia } from '../usar-cirurgia.js';
 
 const { t } = useI18n();
@@ -52,6 +53,8 @@ const lista = useQuery({
     }),
 });
 const podeRevisar = pode('ligacao');
+// 04-CC L95: a equipe realizada do ato aberta abaixo da lista (membros, minutos, percentual e a ponte com a conta).
+const equipeAberta = ref<number | null>(null);
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
@@ -726,6 +729,15 @@ async function registrar(): Promise<void> {
                   :data-testid="`realizada-gasto-${r.id}`"
                   >{{ t('cirurgia.registro.lancarGasto') }}</RouterLink
                 >
+                <SanteBotao
+                  variante="texto"
+                  :rotulo="t('cirurgia.equipeRealizada.abrir')"
+                  :aria-label="
+                    t('cirurgia.equipeRealizada.abrirAria', { data: dataBr(r.data), sala: r.sala })
+                  "
+                  :data-testid="`realizada-equipe-${r.id}`"
+                  @acionar="equipeAberta = r.id"
+                />
                 <!-- 04-CC L96: a descrição cirúrgica e as intercorrências do mesmo ato. -->
                 <RouterLink
                   :to="{ name: 'cirurgia.descricao', params: { ato: String(r.id) } }"
@@ -739,6 +751,11 @@ async function registrar(): Promise<void> {
             </tr>
           </tbody>
         </table>
+        <EquipeRealizadaPainel
+          v-if="equipeAberta !== null"
+          :ato="equipeAberta"
+          @fechar="equipeAberta = null"
+        />
       </template>
     </section>
   </section>

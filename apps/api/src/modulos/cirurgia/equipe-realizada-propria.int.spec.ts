@@ -42,6 +42,10 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM ato_cirurgico WHERE estabelecimento_id IN (${est})`, [P, P2]);
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN (${est})`, [P, P2]);
   await e.executar('DELETE FROM funcao_equipe_cobranca WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM procedimento_cirurgico WHERE codigo IN (?, ?)', [`${P}-PC1`, `${P}-PC2`]);
+  await e.executar('DELETE FROM item_faturavel WHERE codigo = ?', [P]);
+  await e.executar('DELETE FROM grupo_faturamento WHERE codigo = ?', [P]);
+  await e.executar('DELETE FROM tipo_conta WHERE codigo = ?', [P]);
   await limparTrilhaDaMassa(e, { codigos: [P, P2] });
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
 }
@@ -82,14 +86,29 @@ describe.skipIf(SEM_BANCO)('PortaEquipeRealizadaPropria contra o MariaDB (contra
       if (profs.length < 5) throw new Error('O cliente de teste precisa de cinco profissionais.');
       ['cir', 'anA', 'anB', 'aux0', 'aux1'].forEach((k, i) => (m[k] = n(profs[i]!['id'])));
       m['circ'] = m['aux0']!;
-      const procs = await e.consultar('SELECT id FROM procedimento_cirurgico ORDER BY id LIMIT 2');
-      if (procs.length < 2) throw new Error('O cliente de teste precisa de dois procedimentos cirúrgicos.');
+      const procCir = (s: string) =>
+        e.inserir('INSERT INTO procedimento_cirurgico (codigo, descricao, criado_em) VALUES (?, ?, ?)', [
+          `${P}-${s}`,
+          `PROCEDIMENTO SINTETICO ${s}`,
+          agora,
+        ]);
+      const procs = [{ id: await procCir('PC1') }, { id: await procCir('PC2') }];
       const at = await e.uma(
         'SELECT categoria_atendimento_id AS c, carater_atendimento_tiss_id AS t, fonte_pagadora_id AS f FROM atendimento LIMIT 1',
       );
       if (!at) throw new Error('O cliente de teste precisa de um atendimento.');
-      m['tipoConta'] = await um('SELECT MIN(tipo_conta_id) FROM conta_hospitalar');
-      m['itemFat'] = await um('SELECT MIN(item_faturavel_id) FROM conta_hospitalar_item');
+      m['tipoConta'] = await e.inserir(
+        "INSERT INTO tipo_conta (codigo, descricao, natureza, criado_em) VALUES (?, ?, 'internacao', ?)",
+        [P, `TIPO DE CONTA SINTETICO ${P}`, agora],
+      );
+      const grupo = await e.inserir(
+        "INSERT INTO grupo_faturamento (codigo, descricao, tipo_grupo, criado_em) VALUES (?, ?, 'sadt', ?)",
+        [P, `GRUPO SINTETICO ${P}`, agora],
+      );
+      m['itemFat'] = await e.inserir(
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'procedimento', ?, ?)",
+        [P, `HONORARIO SINTETICO ${P}`, grupo, agora],
+      );
       m['sala'] = await um('SELECT MIN(id) FROM sala_cirurgica');
       m['carater'] = await um('SELECT MIN(id) FROM carater_cirurgia');
       const funcao = (codigo: string) =>
@@ -219,6 +238,7 @@ describe.skipIf(SEM_BANCO)('PortaEquipeRealizadaPropria contra o MariaDB (contra
       ['auxiliar1', m['aux0'], 90, 30],
     ]);
     expect(r.membros[0]).toMatchObject({ principal: true });
+    expect(r.itensConta.map((i) => i.id)).toEqual([m['item0'], m['item1']]);
   });
 
   it('leva a equipe aos itens: troca na vaga, auxiliar por procedimento, sem circulante; sem repetir', async () => {
@@ -230,15 +250,28 @@ describe.skipIf(SEM_BANCO)('PortaEquipeRealizadaPropria contra o MariaDB (contra
     });
     expect(r.itens.map((i) => i.incluidos)).toEqual([3, 3]);
     expect(r.itens[0]!.foraDaVaga.map((f) => f.profissional)).toEqual([m['anA']]);
+    // A ordem no item é a do faturamento (cirurgião primeiro; os demais pela ordem de apresentação da função de
+    // cobrança do cliente, regra de calcularEquipeItem com teste próprio): aqui confere o cirurgião e o conjunto.
+    const emOrdem = (l: Record<string, unknown>[]) => [
+      [n(l[0]!['prof']), l[0]!['tipo']],
+      ...l
+        .slice(1)
+        .map((x) => [n(x['prof']), x['tipo']])
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]))),
+    ];
     const e0 = await equipeDoItem(m['item0']!);
-    expect(e0.map((x) => [n(x['prof']), x['tipo']])).toEqual([
+    expect(emOrdem(e0)).toEqual([
       [m['cir'], 'cirurgiao'],
       [m['anB'], 'anestesista'],
       [m['aux0'], 'auxiliar'],
     ]);
     expect(e0.every((x) => n(x['criado_por']) === m['usuario'])).toBe(true);
     const e1 = await equipeDoItem(m['item1']!);
-    expect(e1.map((x) => n(x['prof']))).toEqual([m['cir'], m['anB'], m['aux1']]);
+    expect(emOrdem(e1)).toEqual([
+      [m['cir'], 'cirurgiao'],
+      [m['anB'], 'anestesista'],
+      [m['aux1'], 'auxiliar'],
+    ]);
     expect(
       await ler("SELECT id FROM trilha_auditoria WHERE entidade = 'ato_cirurgico' AND entidade_id = ?", [
         m['ato'],
