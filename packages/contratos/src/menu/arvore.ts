@@ -53,6 +53,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C1-114 (06-FAT linha 22): o item "Protocolo de documentos entre setores" das contas do paciente entrou à mão (mesmo
 // motivo); a contagem acompanha.
+// C2-036 (03-PEP L131): o item "Cópias do prontuário" do PEP entrou à mão (mesmo motivo); a contagem acompanha.
 // C1-109 (03-PEP L147): o item "Anotações administrativas do caso" do NIR entrou à mão (mesmo motivo); a contagem
 // acompanha. Pede a leitura do NIR (internacao.solicitacaoLeito.ler); o serviço social e o prontuário chegam pelos
 // atalhos das telas do paciente.
@@ -76,7 +77,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-039 (01-ADM L114): o item "Página inicial por perfil" da administração entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":459,"M":198,"P":57,"N":204};
+// C2-033 (08-INTG L136): o item "Fila do ERP corporativo" das integrações entrou à mão (mesmo motivo; F8 vai como fase
+// 7, o teto da escala do menu, como o item "Limites do pedido de exame"); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":461,"M":198,"P":57,"N":206};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -176,6 +179,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.linha-do-tempo-e-documentos-do-prontuario","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Linha do tempo e documentos do prontuário"],"titulo":"Linha do tempo e documentos do prontuário","selo":"M","fase":2,"rota":"/pep/pacientes?aba=linha-do-tempo","permissao":"pep.prontuario.ler"},
   {"id":"pep.registros-clinicos-anamnese-evolucao-escalas-rascunhos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Registros clínicos"],"titulo":"Registros clínicos","selo":"M","fase":2,"rota":"/pep/rascunhos","permissao":"pep.evolucao.criar"},
   {"id":"pep.documentos-exigidos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Documentos exigidos"],"titulo":"Documentos exigidos","selo":"N","fase":7,"rota":"/pep/documentos-exigidos","permissao":"pep.prontuario.ler"},
+  {"id":"pep.copias-do-prontuario","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Cópias do prontuário"],"titulo":"Cópias do prontuário","selo":"N","fase":3,"rota":"/pep/copias-prontuario","permissao":"pep.prontuario.ler"},
   {"id":"pep.parecer-e-interconsulta","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Parecer e interconsulta"],"titulo":"Parecer e interconsulta","selo":"M","fase":2,"rota":"/pep/interconsultas","permissao":"pep.interconsulta.ler"},
   {"id":"pep.alergias-e-reacoes-adversas","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Alergias e reações adversas"],"titulo":"Alergias e reações adversas","selo":"M","fase":2,"rota":"/pep/pacientes?aba=alergias","permissao":"pep.alergia.ler"},
   {"id":"pep.lista-de-problemas-e-diagnosticos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Lista de problemas e diagnósticos"],"titulo":"Lista de problemas e diagnósticos","selo":"N","fase":2,"rota":"/pep/pacientes?aba=problemas","permissao":"pep.problema.ler"},
@@ -528,6 +532,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"administracao.integracoes.sms-e-whatsapp-confirmacoes","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","SMS e WhatsApp"],"titulo":"SMS e WhatsApp","selo":"P","fase":3,"rota":"/admin/integracoes/mensagens","permissao":"integracao.mensagem.ler"},
   {"id":"administracao.integracoes.fachada-sante-api-hal-ai-para-quando-o-modelo-evoluir","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Fachada sante-api para quando o modelo evoluir"],"titulo":"Fachada sante-api para quando o modelo evoluir","selo":"N","fase":7,"rota":"/administracao/integracoes/fachada","permissao":"integracao.fachada.ler"},
   {"id":"administracao.integracoes.monitor-de-filas-e-reprocessamento","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Monitor de filas e reprocessamento"],"titulo":"Monitor de filas e reprocessamento","selo":"N","fase":3,"rota":"/admin/integracoes/monitor","permissao":"integracao.fila.ler"},
+  {"id":"administracao.integracoes.fila-erp-corporativo","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Fila do ERP corporativo"],"titulo":"Fila do ERP corporativo","selo":"N","fase":7,"rota":"/admin/integracoes/erp","permissao":"integracao.filaErp.ler"},
   {"id":"administracao.integracoes.leiautes-de-importacao-cep","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Leiautes de importação"],"titulo":"Leiautes de importação","selo":"M","fase":1,"rota":"/administracao/integracoes/leiautes","permissao":"catalogo.leiaute.ler"},
   {"id":"administracao.integracoes.cargas-do-data-mart","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Cargas do data mart"],"titulo":"Cargas do data mart","selo":"N","fase":3,"rota":"/relatorios/datamart/cargas","permissao":"relatorio.datamart.ler"},
   {"id":"administracao.coexistencia-com-o-legado.estabelecimentos-da-rede-uma-conexao-por-hospital","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Estabelecimentos e conexões"],"titulo":"Estabelecimentos e conexões","selo":"N","fase":0,"rota":"/administracao/coexistencia/estabelecimentos","permissao":"config.estabelecimento.ler"},
