@@ -178,12 +178,23 @@ export class ServicoMapaTrabalho {
         }
         const fuso = await tx.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
         const hoje = relogioNoFuso(String(fuso?.['fuso_horario'] || FUSO_PADRAO)).hoje;
-        const [aberto] = await tx.consultarParaAtualizar(
-          `SELECT id, numero FROM grupo_trabalho_bancada
-            WHERE estabelecimento_id = ? AND bancada_analitica_id = ? AND data_trabalho = ? AND situacao = 'aberto'
-              AND excluido_em IS NULL ORDER BY id LIMIT 1`,
-          [est, b!['id'], hoje],
+        // O exame que já está num lote em andamento é retido nesse lote (nunca duplicado em outro); sem ele, no
+        // lote aberto do dia da bancada.
+        const [doExame] = await tx.consultarParaAtualizar(
+          `SELECT g.id, g.numero FROM grupo_trabalho_bancada g
+             JOIN grupo_trabalho_bancada_item gi ON gi.grupo_trabalho_bancada_id = g.id AND gi.excluido_em IS NULL
+            WHERE g.estabelecimento_id = ? AND gi.exame_item_id = ? AND g.excluido_em IS NULL
+              AND g.situacao IN ('aberto', 'em_processamento') ORDER BY g.id DESC LIMIT 1`,
+          [est, item],
         );
+        const [aberto] = doExame
+          ? [doExame]
+          : await tx.consultarParaAtualizar(
+              `SELECT id, numero FROM grupo_trabalho_bancada
+                WHERE estabelecimento_id = ? AND bancada_analitica_id = ? AND data_trabalho = ? AND situacao = 'aberto'
+                  AND excluido_em IS NULL ORDER BY id LIMIT 1`,
+              [est, b!['id'], hoje],
+            );
         let lote = aberto ? n(aberto['id']) : 0;
         let numero = aberto ? String(aberto['numero']) : '';
         if (!aberto) {
