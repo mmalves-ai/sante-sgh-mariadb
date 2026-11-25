@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PortaCadastroPropria } from '../cadastro/porta-propria.js';
 import { CATEGORIAS_ASSINAVEIS } from './documentos-porta-propria.js';
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { ErroProntuario } from './tipos-pep.js';
@@ -160,6 +161,23 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       };
     });
   const vivo = { falecido: false, declaracao: null, em: null };
+  // A leitura da ficha do cadastro (a mesma da busca), pela porta própria do cadastro.
+  const fichaDoObito = async (paciente: number) => {
+    const ctx = {
+      cliente: CLIENTE,
+      estabelecimento: ids.est,
+      usuario: null,
+      correlacao: `${P}-ficha`,
+      rede: '',
+      hospital: '',
+    };
+    const [p] = await new PortaCadastroPropria(nucleo, CLIENTE).lerPacientes(ctx, [paciente]);
+    return {
+      obito: p?.obito ?? null,
+      obitoDeclaracao: p?.obitoDeclaracao ?? null,
+      obitoCausa: p?.obitoCausa ?? null,
+    };
+  };
 
   beforeAll(async () => {
     const banco = `cliente_${CLIENTE}`;
@@ -856,9 +874,21 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     expect(
       await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
     ).toBe(2);
+    // 02-CAD linha 13: a ficha e a busca do cadastro mostram o óbito da declaração emitida: data civil, número e
+    // causa básica (a última linha preenchida da parte I).
+    expect(await fichaDoObito(ids.pacienteC)).toEqual({
+      obito: '2026-11-22',
+      obitoDeclaracao: 'L9800003',
+      obitoCausa: 'Causa sintética b',
+    });
     // Rascunho (sem número) cancelado: sem data de emissão inventada e sem evento de emissão; só o de cancelamento.
     await porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null });
     expect(await cadastro(ids.pacienteC)).toEqual(vivo);
+    expect(await fichaDoObito(ids.pacienteC)).toEqual({
+      obito: null,
+      obitoDeclaracao: null,
+      obitoCausa: null,
+    });
     const rascunho = await porta.registrarObito(G(), { ...o, numero: null });
     expect(await cadastro(ids.pacienteC)).toEqual(vivo);
     await porta.cancelarObito(G(), {

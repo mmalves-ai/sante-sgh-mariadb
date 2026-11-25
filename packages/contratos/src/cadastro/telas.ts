@@ -141,7 +141,14 @@ export const esquemaFichaPaciente = z.object({
   carteirinhas: z.array(z.object({ convenio: z.number().int(), nome: z.string() })),
   /** Texto livre clínico da ficha legada (alergia e medicamentos em uso): visível, nunca editado (regra 8). */
   clinicoLegado: z.object({ alergia: z.string().nullable(), medicamentos: z.string().nullable() }),
-  obito: z.object({ data: z.string().nullable() }).nullable(),
+  /** 02-CAD linha 13: data, número da declaração de óbito emitida e causa básica (parte I), quando houver. */
+  obito: z
+    .object({
+      data: z.string().nullable(),
+      declaracao: z.string().nullable().optional(),
+      causa: z.string().nullable().optional(),
+    })
+    .nullable(),
   cadastro: z.object({ em: z.string().nullable(), alteradoEm: z.string().nullable() }),
   permissoes: z.object({
     editar: z.boolean(),

@@ -220,7 +220,9 @@ export async function montarFicha(
       : null,
     carteirinhas: [...x.carteirinhas],
     clinicoLegado: { alergia: p.alergia, medicamentos: p.medicamentos },
-    obito: p.obito ? { data: p.obito } : null,
+    obito: p.obito
+      ? { data: p.obito, declaracao: p.obitoDeclaracao ?? null, causa: p.obitoCausa ?? null }
+      : null,
     cadastro: { em: p.cadastradoEm, alteradoEm: p.alteradoEm },
     permissoes: { ...perm },
     gravacao: {

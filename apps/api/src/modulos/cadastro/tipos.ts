@@ -46,6 +46,10 @@ export interface PacienteFicha {
   /** O cadastro que absorveu este numa unificação (null: não unificado). */
   readonly unificadoEm: number | null;
   readonly obito: string | null;
+  /** Número da declaração de óbito emitida no prontuário (02-CAD linha 13), quando houver. */
+  readonly obitoDeclaracao?: string | null;
+  /** Causa básica (última linha preenchida da parte I da declaração), quando houver. */
+  readonly obitoCausa?: string | null;
   readonly cadastradoEm: string | null;
   readonly alteradoEm: string | null;
   readonly alergia: string | null;

@@ -1891,6 +1891,8 @@ export const mensagensWeb = {
       clinicoAjuda:
         'O cadastro não guarda dado clínico novo: este texto fica como está, sem cópia nem exclusão.',
       obito: 'Óbito em {data}',
+      obitoDeclaracao: 'declaração de óbito nº {numero}',
+      obitoCausa: 'causa básica: {causa}',
       cadastradoEm: 'Cadastrado em {data}; última alteração em {alterado}.',
       editar: 'Alterar o cadastro',
       historico: 'Linha do tempo do cadastro',

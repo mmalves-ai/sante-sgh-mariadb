@@ -177,6 +177,10 @@ const SELECT_PACIENTE = `
          pf.id AS pessoa_id, pf.nome, pf.nome_social, pf.data_nascimento, sx.sigla AS sexo, pf.nome_mae,
          pf.mae_desconhecida, pf.nome_pai, pf.cpf, pf.cns, pf.estado_civil_id, pf.classificacao_raca_cor_id,
          pf.crenca_religiosa_id, pf.nacionalidade_id, nac.descricao AS nacionalidade, pf.data_obito,
+         p.data_hora_obito, dob.numero AS obito_declaracao, estdo.fuso_horario AS obito_fuso,
+         (SELECT c.descricao FROM declaracao_obito_causa c
+           WHERE c.declaracao_obito_id = dob.id AND c.parte = 'I' AND c.excluido_em IS NULL
+           ORDER BY c.linha DESC, c.sequencia DESC LIMIT 1) AS obito_causa,
          mn.nome AS naturalidade, ufn.sigla AS uf_naturalidade,
          en.cep, en.logradouro, en.numero AS numero_endereco, en.complemento,
          COALESCE(br.descricao, en.bairro_nome) AS bairro, me.nome AS cidade, ufe.sigla AS uf,
@@ -202,6 +206,8 @@ const SELECT_PACIENTE = `
     JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
     LEFT JOIN sexo sx ON sx.id = pf.sexo_id
     LEFT JOIN nacionalidade nac ON nac.id = pf.nacionalidade_id
+    LEFT JOIN declaracao_obito dob ON dob.id = p.declaracao_obito_id AND dob.situacao = 'emitida'
+    LEFT JOIN estabelecimento estdo ON estdo.id = dob.estabelecimento_id
     LEFT JOIN municipio_ibge mn ON mn.id = pf.naturalidade_municipio_ibge_id
     LEFT JOIN unidade_federativa ufn ON ufn.id = mn.unidade_federativa_id
     LEFT JOIN endereco_pessoa en ON en.id = (
@@ -217,6 +223,22 @@ const PARAMETROS_PACIENTE = [
   CODIGOS_DOMINIO_CADASTRO.telefoneCelular,
   CODIGOS_DOMINIO_CADASTRO.telefoneRecado,
 ];
+
+/**
+ * 02-CAD linha 13: a data do óbito no cadastro. A declaração emitida no prontuário (paciente.data_hora_obito, em UTC)
+ * vale primeiro, na data civil do fuso do estabelecimento que a emitiu; sem ela, a data do óbito da pessoa.
+ */
+function dataDoObito(l: Linha): string | null {
+  const d = l['data_hora_obito'];
+  if (d instanceof Date && !Number.isNaN(d.getTime()))
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: texto(l['obito_fuso']) ?? 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  return dataIso(d) ?? dataIso(l['data_obito']);
+}
 
 export function pacienteDaLinha(l: Linha): PacienteFicha {
   const id = inteiro(l['id']) ?? 0;
@@ -261,7 +283,9 @@ export function pacienteDaLinha(l: Linha): PacienteFicha {
     ativo: situacao === 'ativo' || situacao === 'provisorio',
     unificadoEm:
       situacao === 'unificado' && sobrevivente !== null && sobrevivente !== id ? sobrevivente : null,
-    obito: dataIso(l['data_obito']),
+    obito: dataDoObito(l),
+    obitoDeclaracao: texto(l['obito_declaracao']),
+    obitoCausa: texto(l['obito_causa']),
     cadastradoEm: dataIso(l['criado_em']),
     alteradoEm: dataIso(l['alterado_em']),
     alergia: texto(l['alergia']),

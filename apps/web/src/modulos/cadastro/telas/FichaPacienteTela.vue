@@ -63,6 +63,16 @@ const ficha = useQuery({
   staleTime: 0,
 });
 const f = computed(() => ficha.data.value);
+// 02-CAD linha 13: o óbito do cadastro com a data, o número da declaração emitida e a causa básica.
+const textoObito = computed(() => {
+  const o = f.value?.obito;
+  if (!o) return '';
+  return [
+    t('cadastro.ficha.obito', { data: dataBr(o.data) }),
+    ...(o.declaracao ? [t('cadastro.ficha.obitoDeclaracao', { numero: o.declaracao })] : []),
+    ...(o.causa ? [t('cadastro.ficha.obitoCausa', { causa: o.causa })] : []),
+  ].join('; ');
+});
 // Cadastrar grava agora para este login? (passo 0 do executor no servidor; o motivo vem de lá.)
 const gravacaoNovo = useQuery({
   queryKey: ['cadastro', 'gravacao'],
@@ -480,11 +490,7 @@ const sim = (b: boolean) => (b ? t('cadastro.sim') : t('cadastro.nao'));
         :texto="t('cadastro.ficha.unificado', { id: f.unificadoEm })"
         variante="aviso"
       />
-      <SanteAlerta
-        v-if="f?.obito"
-        :texto="t('cadastro.ficha.obito', { data: dataBr(f.obito.data) })"
-        variante="info"
-      />
+      <SanteAlerta v-if="f?.obito" :texto="textoObito" data-testid="ficha-obito" variante="info" />
       <SanteAlerta
         v-if="motivoSemGravacao"
         :texto="t('cadastro.ficha.semGravacao', { motivo: motivoSemGravacao })"
