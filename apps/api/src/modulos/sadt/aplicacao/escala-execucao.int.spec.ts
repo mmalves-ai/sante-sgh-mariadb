@@ -2,7 +2,9 @@
 // massa SINTÉTICA). Prova o que fica no banco: a escala com o papel, os plantões (inclusive o que vira a noite) e os
 // exames, com a trilha; a escala de laudo do mesmo profissional em outro setor no mesmo horário recusada pelo choque,
 // sem gravar nada; a escala inválida recusada com todos os campos; o encerramento da vigência que não apaga (com a
-// versão conferida); outro estabelecimento não vê a escala. Saída só com contagens.
+// versão conferida); outro estabelecimento não vê a escala. A fila do setor lida do banco sai na ordem da regra (o
+// urgente antes), só com o exame que espera a execução, com a prioridade legal vigente do paciente e com quem está
+// escalado na hora; os combos da tela saem do cadastro. Saída só com contagens.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -24,6 +26,7 @@ describe.skipIf(SEM_BANCO)('escala de execução do diagnóstico (MariaDB, clien
   let nucleo: NucleoProprio;
   let escalas: ServicoEscalaExecucao;
   let m: MassaSadt | null = null;
+  let grupo: number | null = null;
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-l19esc' }, (l) => l.uma(sql, p));
   const contar = async (sql: string, p: unknown[]) => Number((await um(sql, p))?.['n'] ?? 0);
@@ -48,6 +51,13 @@ describe.skipIf(SEM_BANCO)('escala de execução do diagnóstico (MariaDB, clien
           [est],
         );
         await x('DELETE FROM escala_execucao WHERE estabelecimento_id = ?', [est]);
+      });
+    }
+    if (m && grupo !== null) {
+      const g = grupo;
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-l19esc' }, async (e) => {
+        await e.executar('DELETE FROM paciente_prioridade_legal WHERE grupo_prioridade_legal_id = ?', [g]);
+        await e.executar('DELETE FROM grupo_prioridade_legal WHERE id = ?', [g]);
       });
     }
     await limparMassaSadt(nucleo, m);
@@ -148,5 +158,77 @@ describe.skipIf(SEM_BANCO)('escala de execução do diagnóstico (MariaDB, clien
         [id],
       ),
     ).toBe(2);
+  }, 120_000);
+  it('a fila do setor sai do banco na ordem da regra, com a prioridade legal e quem está escalado na hora', async () => {
+    const c = contexto(m!);
+    // Quarta-feira, 25/11/2026, 15:00 UTC: de manhã ao meio-dia em qualquer fuso do país.
+    const quarta = new Date('2026-11-25T15:00:00Z');
+    const quinta = new Date('2026-11-26T15:00:00Z');
+    // Sem escala no laboratório: os dois exames que esperam estão na fila (o liberado não), sem ninguém escalado.
+    const semEscala = await escalas.fila(c, m!.setorLab, quarta);
+    expect(semEscala.itens.map((x) => x.id).sort()).toEqual([m!.itemLab, m!.itemLab2].sort());
+    expect(semEscala.semExecutante).toBe(2);
+    expect(semEscala.data).toBe('2026-11-25');
+
+    // O segundo exame vira urgente e o paciente ganha uma prioridade legal vigente; o plantão de quarta cobre o exame.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-l19esc' }, async (e) => {
+      await e.executar('UPDATE exame_item SET urgente = TRUE WHERE id = ?', [m!.itemLab2]);
+      grupo = await e.inserir(
+        `INSERT INTO grupo_prioridade_legal (codigo, descricao, ativo, peso, criado_em)
+         VALUES (?, 'Prioridade de teste E19', TRUE, 0, ?)`,
+        [`${m!.marca}-GP`, new Date()],
+      );
+      await e.executar(
+        `INSERT INTO paciente_prioridade_legal (paciente_id, grupo_prioridade_legal_id, vigencia_inicio, criado_em)
+         VALUES (?, ?, '2026-01-01', ?)`,
+        [m!.base.paciente, grupo, new Date()],
+      );
+    });
+    const { id: plantaoLab } = await escalas.incluir(c, {
+      setor: m!.setorLab,
+      profissional: m!.base.profissional2,
+      papel: 'executa',
+      descricao: 'Bancada quarta E19',
+      vigenciaInicio: '2026-11-01',
+      plantoes: [{ diaSemana: 4, inicio: '08:00', fim: '18:00', capacidade: 30 }],
+      exames: [{ exame: m!.exameLab }],
+    });
+
+    const fila = await escalas.fila(c, m!.setorLab, quarta);
+    // A ordem é a da regra: o urgente primeiro; a posição acompanha.
+    expect(fila.itens.map((x) => x.id)).toEqual([m!.itemLab2, m!.itemLab]);
+    expect(fila.itens.map((x) => x.posicao)).toEqual([1, 2]);
+    expect(fila.itens.map((x) => x.urgente)).toEqual([true, false]);
+    // A prioridade legal vigente do paciente entra na ordem (o grupo de peso 0 chama antes de todos).
+    expect(fila.itens.every((x) => x.grupoPrioridade === grupo && x.ordemPrioridade === 0)).toBe(true);
+    // Quem executa agora: a escala de quarta, com o profissional dela; na quinta, ninguém.
+    expect(fila.itens.map((x) => x.executantes.map((e) => e.escala))).toEqual([[plantaoLab], [plantaoLab]]);
+    expect(fila.itens[0]!.executantes[0]!.profissional).toBe(m!.base.profissional2);
+    expect(fila.semExecutante).toBe(0);
+    expect((await escalas.fila(c, m!.setorLab, quinta)).semExecutante).toBe(2);
+    // A prioridade que venceu ontem não vale mais.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-l19esc' }, (e) =>
+      e.executar(
+        "UPDATE paciente_prioridade_legal SET vigencia_fim = '2026-11-24' WHERE grupo_prioridade_legal_id = ?",
+        [grupo],
+      ),
+    );
+    expect((await escalas.fila(c, m!.setorLab, quarta)).itens.some((x) => x.grupoPrioridade === grupo)).toBe(
+      false,
+    );
+    // A fila é do estabelecimento: de outro, o setor não existe.
+    expect(
+      await escalas.fila(contexto(m!, m!.base.outroEst), m!.setorLab, quarta).catch(problemaDe),
+    ).toMatchObject({
+      codigo: 'setor-inexistente',
+    });
+
+    // Os combos da tela saem do cadastro: o setor, o exame e o profissional da massa, e o dia civil de hoje.
+    const op = await escalas.opcoes(c);
+    expect(op.setores.map((x) => x.id)).toEqual(expect.arrayContaining([m!.setorLab, m!.setorImagem]));
+    expect(op.exames.map((x) => x.id)).toEqual(expect.arrayContaining([m!.exameLab, m!.exameImagem]));
+    expect(op.profissionais.map((x) => x.id)).toContain(m!.base.profissional2);
+    expect(op.gruposPrioridade.map((x) => x.id)).toContain(grupo);
+    expect(op.hoje).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   }, 120_000);
 });

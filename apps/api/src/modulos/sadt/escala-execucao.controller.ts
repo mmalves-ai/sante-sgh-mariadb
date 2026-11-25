@@ -1,6 +1,9 @@
 // Escala de execução do diagnóstico (F3.5, 05-SADT linha 19): quem executa ou lauda em cada setor, em que dias e
 // horários (inclusive o plantão que vira a noite) e quais exames atende, com o limite por turno e as vagas reservadas.
 //   GET  /api/sadt/escalas-execucao[?setor=]          as escalas do estabelecimento (vigentes primeiro)
+//   GET  /api/sadt/escalas-execucao/opcoes            nomes para os combos da tela e o dia de hoje
+//   GET  /api/sadt/escalas-execucao/fila?setor=       a fila do setor na ordem de chamada (urgência, prioridade
+//                                                     legal, chegada), com quem está escalado agora para cada exame
 //   POST /api/sadt/escalas-execucao                   inclui (a regra confere tudo e o choque do mesmo executante)
 //   POST /api/sadt/escalas-execucao/:id/encerrar      encerra a vigência (nunca apaga)
 // Ler: `sadt.catalogo.ler`; gravar: `sadt.catalogo.editar` (o cargo dá o acesso; o administrador pode tudo).
@@ -32,6 +35,21 @@ export class EscalaExecucaoController {
   @Permissao('sadt.catalogo.ler')
   listar(@Query('setor') setor: string | undefined, @Req() req: RequisicaoAutorizada) {
     return this.s.listar(sessaoDe(req).porta, setor ? idDaRota(setor) : null);
+  }
+
+  @Get('opcoes')
+  @Permissao('sadt.catalogo.ler')
+  opcoes(@Req() req: RequisicaoAutorizada) {
+    return this.s.opcoes(sessaoDe(req).porta);
+  }
+
+  // A fila mostra o paciente e o exame pedido: pede a leitura da requisição, não a do catálogo.
+  @Get('fila')
+  @Permissao('sadt.requisicao.ler')
+  fila(@Query('setor') setor: string | undefined, @Req() req: RequisicaoAutorizada) {
+    if (!setor)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Informe o setor da fila.');
+    return this.s.fila(sessaoDe(req).porta, idDaRota(setor));
   }
 
   @Post()

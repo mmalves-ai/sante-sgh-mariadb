@@ -8,7 +8,13 @@ import {
   conflitosDoExecutante,
   type EscalaExecucao,
   type ExameDaEscala,
+  executantesDoExame,
+  type GrupoPrioridade,
+  idadeEm,
+  type NaFila,
+  ordenarFilaDoSetor,
   type PlantaoEscala,
+  prioridadeDoPaciente,
 } from '@sgh/dominio-sadt';
 import {
   type ContextoNucleo,
@@ -20,6 +26,7 @@ import {
 } from '@sgh/nucleo';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
 
@@ -86,6 +93,59 @@ export interface EscalaExecucaoGravada extends EscalaExecucao {
   readonly versao: number;
 }
 
+/** Um nome do cadastro para os combos da tela da escala. */
+export interface OpcaoDaEscala {
+  readonly id: number;
+  readonly nome: string;
+}
+
+/** O que a tela da escala precisa para montar os combos, numa leitura só. */
+export interface OpcoesDaEscala {
+  readonly setores: OpcaoDaEscala[];
+  readonly profissionais: OpcaoDaEscala[];
+  readonly recursos: OpcaoDaEscala[];
+  readonly exames: OpcaoDaEscala[];
+  readonly gruposPrioridade: OpcaoDaEscala[];
+  /** O dia civil do estabelecimento (a grade abre na semana dele). */
+  readonly hoje: string;
+}
+
+/** Quem está de plantão para o exame agora (a escala e o executante dela). */
+export interface ExecutanteAgora {
+  readonly escala: number;
+  readonly descricao: string;
+  readonly profissional: number | null;
+  readonly recurso: number | null;
+}
+
+/** O exame pedido que espera a execução no setor, já na posição em que deve ser chamado. */
+export interface ItemDaFilaDoSetor extends NaFila {
+  readonly posicao: number;
+  readonly requisicao: string;
+  readonly paciente: string;
+  readonly exame: number;
+  readonly exameNome: string;
+  readonly situacao: string;
+  /** O grupo de prioridade legal que valeu na ordem (nulo: sem prioridade). */
+  readonly grupoPrioridade: number | null;
+  readonly grupoPrioridadeNome: string | null;
+  /** Quem executa este exame agora pela escala (vazio: ninguém escalado para ele nesta hora). */
+  readonly executantes: ExecutanteAgora[];
+}
+
+export interface FilaDoSetor {
+  readonly setor: number;
+  /** O dia e a hora civis do estabelecimento usados na conta. */
+  readonly data: string;
+  readonly hora: string;
+  readonly itens: ItemDaFilaDoSetor[];
+  /** Quantos exames da fila não têm ninguém escalado agora. */
+  readonly semExecutante: number;
+}
+
+/** O exame que espera a execução: pedido, autorizado ou agendado (o colhido ou em análise já saiu da fila). */
+const SITUACOES_NA_FILA = ['solicitado', 'autorizado', 'agendado'] as const;
+
 /** A recusa da regra: todos os problemas de uma vez, cada um no seu campo (a tela marca na hora). */
 const recusaDaRegra = (codigo: string, mensagem: string, campos: readonly string[]) =>
   recusa(codigo, mensagem, { campos: [...new Set(campos)] });
@@ -147,6 +207,144 @@ export class ServicoEscalaExecucao {
   listar(c: ContextoSadt, setor: number | null = null): Promise<EscalaExecucaoGravada[]> {
     const est = this.est(c);
     return this.nucleo.lerSomente(this.ctxNucleo(c), (l) => escalasDe(l, est, setor));
+  }
+
+  /** Os nomes para os combos da tela (setores, quem executa, salas, exames e grupos prioritários) e o dia de hoje. */
+  opcoes(c: ContextoSadt): Promise<OpcoesDaEscala> {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
+      const nomes = async (sql: string, p: unknown[], teto: number): Promise<OpcaoDaEscala[]> =>
+        (await l.consultar(sql, p, { teto })).map((r: Linha) => ({ id: n(r['id']), nome: texto(r['nome']) }));
+      const fuso = await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+      return {
+        setores: await nomes(
+          `SELECT id, nome FROM setor_diagnostico
+            WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome, id`,
+          [est],
+          500,
+        ),
+        profissionais: await nomes(
+          `SELECT pr.id, COALESCE(NULLIF(pr.nome_exibicao, ''), pf.nome) AS nome
+             FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+            WHERE pr.situacao = 'ativo' AND pr.excluido_em IS NULL ORDER BY nome, pr.id`,
+          [],
+          5000,
+        ),
+        recursos: await nomes(
+          `SELECT id, descricao AS nome FROM recurso_agendavel
+            WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY descricao, id`,
+          [est],
+          1000,
+        ),
+        exames: await nomes(
+          'SELECT id, nome FROM exame WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome, id',
+          [],
+          8000,
+        ),
+        gruposPrioridade: await nomes(
+          'SELECT id, descricao AS nome FROM grupo_prioridade_legal WHERE ativo = TRUE ORDER BY peso, id',
+          [],
+          100,
+        ),
+        hoje: relogioNoFuso(String(fuso?.['fuso_horario'] || FUSO_PADRAO)).hoje,
+      };
+    });
+  }
+
+  /**
+   * A fila do setor na ordem de chamada: os exames pedidos que esperam a execução, com a urgência do pedido, a
+   * prioridade legal do paciente (a de idade pela data de nascimento, as demais pela condição registrada e vigente) e
+   * a chegada (a hora do pedido). A ordem é a regra do domínio (ordenarFilaDoSetor); cada exame traz quem está
+   * escalado para ele agora. `agora` só é passado em teste.
+   */
+  fila(c: ContextoSadt, setor: number, agora: Date = new Date()): Promise<FilaDoSetor> {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
+      const s = await l.uma(
+        `SELECT sd.id, e.fuso_horario FROM setor_diagnostico sd JOIN estabelecimento e ON e.id = sd.estabelecimento_id
+          WHERE sd.id = ? AND sd.estabelecimento_id = ? AND sd.excluido_em IS NULL`,
+        [setor, est],
+      );
+      if (!s) throw recusa('setor-inexistente', 'O setor do diagnóstico não existe neste estabelecimento.');
+      const { hoje, hora: horaAgora } = relogioNoFuso(String(s['fuso_horario'] || FUSO_PADRAO), agora);
+      const linhas = await l.consultar(
+        `SELECT ei.id, ei.exame_id, ex.nome AS exame_nome, ei.situacao, r.numero, r.paciente_id, r.solicitado_em,
+                (ei.urgente = TRUE OR r.prioridade <> 'rotina') AS urgente,
+                CASE WHEN pf.usa_nome_social = TRUE AND COALESCE(pf.nome_social, '') <> '' THEN pf.nome_social
+                     ELSE pf.nome END AS paciente,
+                DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nascimento
+           FROM exame_item ei
+           JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id AND r.excluido_em IS NULL
+                                  AND r.situacao <> 'cancelada'
+           JOIN exame ex ON ex.id = ei.exame_id
+           JOIN paciente p ON p.id = r.paciente_id
+           JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+          WHERE r.estabelecimento_id = ? AND COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id) = ?
+            AND ei.excluido_em IS NULL AND ei.situacao IN (${lista(SITUACOES_NA_FILA.length)})`,
+        [est, setor, ...SITUACOES_NA_FILA],
+        { teto: 2000 },
+      );
+      if (!linhas.length) return { setor, data: hoje, hora: horaAgora, itens: [], semExecutante: 0 };
+      const grupos = (
+        await l.consultar(
+          'SELECT id, peso, idade_minima, descricao FROM grupo_prioridade_legal WHERE ativo = TRUE',
+          [],
+        )
+      ).map((g: Linha) => ({
+        id: n(g['id']),
+        peso: n(g['peso']),
+        idadeMinima: nn(g['idade_minima']),
+        nome: texto(g['descricao']),
+      }));
+      const pacientes = [...new Set(linhas.map((r: Linha) => n(r['paciente_id'])))];
+      const registros = await l.consultar(
+        `SELECT paciente_id, grupo_prioridade_legal_id FROM paciente_prioridade_legal
+          WHERE excluido_em IS NULL AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+            AND paciente_id IN (${lista(pacientes.length)})`,
+        [hoje, hoje, ...pacientes],
+        { teto: 10000 },
+      );
+      const registradosDe = (paciente: number): number[] =>
+        registros
+          .filter((x: Linha) => n(x['paciente_id']) === paciente)
+          .map((x: Linha) => n(x['grupo_prioridade_legal_id']));
+      const escalas = await escalasDe(l, est, setor);
+      const candidatos = linhas.map((r: Linha) => {
+        const grupo = prioridadeDoPaciente(
+          grupos as readonly GrupoPrioridade[],
+          idadeEm(r['nascimento'] === null ? null : texto(r['nascimento']), hoje),
+          registradosDe(n(r['paciente_id'])),
+        );
+        const exame = n(r['exame_id']);
+        return {
+          id: n(r['id']),
+          urgente: Boolean(Number(r['urgente'] ?? 0)),
+          ordemPrioridade: grupo?.peso ?? null,
+          chegada: new Date(r['solicitado_em'] as string | Date).toISOString(),
+          requisicao: texto(r['numero']),
+          paciente: texto(r['paciente']),
+          exame,
+          exameNome: texto(r['exame_nome']),
+          situacao: texto(r['situacao']),
+          grupoPrioridade: grupo?.id ?? null,
+          grupoPrioridadeNome: grupo ? (grupos.find((g) => g.id === grupo.id)?.nome ?? null) : null,
+          executantes: executantesDoExame(escalas, setor, exame, hoje, horaAgora).map((e) => ({
+            escala: (e as EscalaExecucaoGravada).id,
+            descricao: e.descricao,
+            profissional: e.profissional,
+            recurso: e.recurso,
+          })),
+        };
+      });
+      const itens = ordenarFilaDoSetor(candidatos).map((x, i) => ({ ...x, posicao: i + 1 }));
+      return {
+        setor,
+        data: hoje,
+        hora: horaAgora,
+        itens,
+        semExecutante: itens.filter((x) => x.executantes.length === 0).length,
+      };
+    });
   }
 
   /** Inclui a escala: a regra confere tudo e o choque com outra escala do mesmo executante em qualquer setor. */
