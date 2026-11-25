@@ -5,6 +5,11 @@
 //     chave natural (o mesmo procedimento, o mesmo insumo, o mesmo profissional na mesma função não se repetem);
 //   - havendo procedimentos, exatamente um é o principal: sem marcação, o primeiro passa a ser (menos um clique); duas
 //     marcações são recusadas. A guia TISS de solicitação de internação leva ao menos o principal;
+//   - o procedimento principal é um só para a pré-internação: o procedimento previsto gravado nela é a fonte. Sem
+//     marcação, o principal do plano é o previsto (se está na lista), senão o primeiro; o principal gravado no plano
+//     passa a ser o previsto da pré-internação na mesma gravação. Pela tabela do SUS, o principal é o procedimento
+//     da tabela do SUS previsto na pré-internação: os itens do plano entram como secundários, e marcar um deles como
+//     principal é recusado com a explicação;
 //   - o plano só muda enquanto a pré-internação está pendente (solicitada, aguardando autorização, autorizada,
 //     confirmada ou na fila de espera); internada, cancelada ou com falta, o plano é histórico;
 //   - a fila de espera eletiva (pré-internação sem data) é ordenada pela prioridade clínica (urgente, prioritária,
@@ -56,6 +61,13 @@ export interface PlanoPreEntrada {
   readonly equipe: readonly ProfissionalPrevistoEntrada[];
 }
 
+/** O procedimento previsto na pré-internação: item faturável ou, pelo SUS, da tabela do SUS. */
+export interface ProcedimentoPrevistoPre {
+  readonly item: number | null;
+  readonly sus: boolean;
+}
+export const SEM_PREVISTO: ProcedimentoPrevistoPre = { item: null, sus: false };
+
 /** O plano só muda com a pré-internação pendente; depois é histórico. */
 export function planoEditavel(situacao: string): boolean {
   return (SITUACOES_PRE_INTERNACAO_PENDENTES as readonly string[]).includes(situacao);
@@ -63,11 +75,15 @@ export function planoEditavel(situacao: string): boolean {
 
 const quantidadeValida = (q: number) => Number.isFinite(q) && q > 0 && q <= 99_999;
 
-/** Confere o plano inteiro e devolve o plano normalizado (principal definido, observação aparada). */
+/**
+ * Confere o plano inteiro e devolve o plano normalizado (principal definido, observação aparada) e o item que passa a
+ * ser o procedimento previsto da pré-internação (null: o previsto não muda, plano sem procedimento ou pelo SUS).
+ */
 export function validarPlanoPreInternacao(
   e: PlanoPreEntrada,
   situacao: string,
-): ResultadoPlanoPre<{ valor: PlanoPreEntrada }> {
+  previsto: ProcedimentoPrevistoPre = SEM_PREVISTO,
+): ResultadoPlanoPre<{ valor: PlanoPreEntrada; principal: number | null }> {
   const problemas: ProblemaPlanoPre[] = [];
   if (!planoEditavel(situacao))
     problemas.push({
@@ -95,13 +111,25 @@ export function validarPlanoPreInternacao(
     itens.add(p.item);
   });
   const principais = e.procedimentos.filter((p) => p.principal).length;
-  if (principais > 1)
+  if (previsto.sus && principais > 0)
+    problemas.push({
+      campo: 'procedimentos',
+      mensagem:
+        'Pré-internação pelo SUS: o principal é o procedimento da tabela do SUS previsto nela; os procedimentos do plano entram como secundários.',
+    });
+  else if (principais > 1)
     problemas.push({
       campo: 'procedimentos',
       mensagem: 'Só um procedimento é o principal da internação.',
     });
+  const indicePadrao = Math.max(
+    0,
+    e.procedimentos.findIndex((p) => p.item === previsto.item),
+  );
   const procedimentos = e.procedimentos.map((p, i) =>
-    principais === 0 && i === 0 ? { ...p, principal: true, incluirNaGuia: true } : p,
+    !previsto.sus && principais === 0 && i === indicePadrao
+      ? { ...p, principal: true, incluirNaGuia: true }
+      : p,
   );
   const principal = procedimentos.find((p) => p.principal);
   if (principal && !principal.incluirNaGuia)
@@ -136,12 +164,31 @@ export function validarPlanoPreInternacao(
   if (problemas.length) return { ok: false, problemas };
   return {
     ok: true,
+    principal: previsto.sus ? null : (principal?.item ?? null),
     valor: {
       procedimentos,
       materiais: e.materiais.map((m) => ({ ...m, observacao: m.observacao?.trim() || null })),
       equipe: e.equipe,
     },
   };
+}
+
+/**
+ * Na leitura, o principal do plano é o procedimento previsto da pré-internação (uma fonte só, a mesma da lista das
+ * pré-internações e da fila): marca a linha do previsto e, se ele ainda não está no plano, põe-no à frente como
+ * principal (criado por `linhaDoPrevisto`). Pelo SUS, nenhuma linha do plano é a principal.
+ */
+export function alinharPrincipalLido<T extends { readonly item: number; readonly principal: boolean }>(
+  linhas: readonly T[],
+  previsto: ProcedimentoPrevistoPre,
+  linhaDoPrevisto: (item: number) => T | null,
+): T[] {
+  if (previsto.sus) return linhas.map((l) => ({ ...l, principal: false }));
+  if (previsto.item === null) return [...linhas];
+  const alinhadas = linhas.map((l) => ({ ...l, principal: l.item === previsto.item }));
+  if (alinhadas.some((l) => l.principal)) return alinhadas;
+  const nova = linhaDoPrevisto(previsto.item);
+  return nova ? [{ ...nova, principal: true }, ...alinhadas] : alinhadas;
 }
 
 /** Linha da lista gravada: a chave natural e se está vigente (excluída = removida do plano, guardada). */

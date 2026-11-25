@@ -2,12 +2,15 @@
 // Plano previsto da pré-internação (C2-048, 04-INT linha 70): procedimentos (um principal, que entra na guia TISS de
 // solicitação de internação), materiais e medicamentos (inclusive OPME) e a equipe prevista por função. Tudo numa
 // tela: busca, adiciona, confere na hora (repetido, quantidade) e grava a lista inteira com a versão lida. O que sai
-// do plano fica guardado no banco; encerrada a pré-internação, o plano é só leitura (histórico).
+// do plano fica guardado no banco; encerrada a pré-internação, o plano é só leitura (histórico). O principal é o
+// procedimento previsto da pré-internação (uma fonte só); pelo SUS, é o da tabela do SUS e os itens são secundários.
+// O material leva o fornecedor previsto (consignado ou OPME), escolhido entre os fornecedores achados pela busca.
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
+  buscarFornecedoresPlano,
   buscarInsumosPlano,
   buscarItensPlano,
   buscarProfissionaisPlano,
@@ -40,7 +43,8 @@ interface Mat {
   insumo: number;
   rotulo: string;
   quantidade: string;
-  fornecedor: number | null;
+  /** Fornecedor previsto ('' = sem fornecedor). */
+  fornecedor: string;
   observacao: string;
 }
 interface Eqp {
@@ -50,6 +54,7 @@ interface Eqp {
   funcaoDescricao: string;
 }
 const procs = ref<Proc[]>([]);
+const fornecedoresDoPlano = ref<{ valor: string; rotulo: string }[]>([]);
 const mats = ref<Mat[]>([]);
 const eqp = ref<Eqp[]>([]);
 watch(
@@ -68,14 +73,18 @@ watch(
       insumo: x.insumo,
       rotulo: `${x.codigo} · ${x.nome}${x.unidade ? ` (${x.unidade})` : ''}`,
       quantidade: String(x.quantidade),
-      fornecedor: x.fornecedor,
+      fornecedor: x.fornecedor === null ? '' : String(x.fornecedor),
       observacao: x.observacao ?? '',
     }));
+    fornecedoresDoPlano.value = p.materiais
+      .filter((x) => x.fornecedor !== null)
+      .map((x) => ({ valor: String(x.fornecedor), rotulo: x.fornecedorNome ?? String(x.fornecedor) }));
     eqp.value = p.equipe.map((x) => ({ ...x }));
   },
   { immediate: true },
 );
 const editavel = computed(() => props.podeGravar && !!plano.data.value?.plano?.editavel);
+const sus = computed(() => plano.data.value?.plano?.procedimentoSus ?? null);
 
 const qtd = (s: string) => Number(s.replace(',', '.'));
 const qtdValida = (s: string) => Number.isFinite(qtd(s)) && qtd(s) > 0;
@@ -108,6 +117,13 @@ const profs = useQuery({
   enabled: computed(() => pedidoProf.value.length >= 2),
 });
 const profEscolhido = ref('');
+const termoForn = ref('');
+const pedidoForn = ref('');
+const forns = useQuery({
+  queryKey: computed(() => ['adt', 'pre-plano-forns', pedidoForn.value]),
+  queryFn: () => buscarFornecedoresPlano(pedidoForn.value),
+  enabled: computed(() => pedidoForn.value.length >= 2),
+});
 const funcaoEscolhida = ref('');
 const escolha = { valor: '', rotulo: t('adt.escolha') };
 const opcoes = computed(() => ({
@@ -127,6 +143,17 @@ const opcoes = computed(() => ({
     escolha,
     ...(apoio.data.value?.funcoes ?? []).map((f) => ({ valor: String(f.id), rotulo: f.descricao })),
   ],
+  // Sem fornecedor, os já gravados no plano e os achados pela busca (sem repetir).
+  fornecedores: [
+    { valor: '', rotulo: t('adt.prePlano.semFornecedor') },
+    ...[
+      ...fornecedoresDoPlano.value,
+      ...(forns.data.value ?? []).map((f) => ({
+        valor: String(f.id),
+        rotulo: `${f.fantasia ?? f.nome}${f.opme ? ` · ${t('adt.prePlano.opme')}` : ''}`,
+      })),
+    ].filter((o, i, todos) => todos.findIndex((x) => x.valor === o.valor) === i),
+  ],
   vias: ['', ...VIAS_ACESSO].map((v) => ({ valor: v, rotulo: t(`adt.prePlano.vias.${v}`) })),
 }));
 const aviso = ref<string | null>(null);
@@ -143,7 +170,7 @@ function adicionarItem(): void {
     item: id,
     rotulo,
     quantidade: '1',
-    principal: procs.value.length === 0,
+    principal: procs.value.length === 0 && !sus.value,
     viaAcesso: '',
     incluirNaGuia: true,
   });
@@ -164,7 +191,7 @@ function adicionarInsumo(): void {
     return;
   }
   const rotulo = opcoes.value.insumos.find((o) => o.valor === insumoEscolhido.value)?.rotulo ?? String(id);
-  mats.value.push({ insumo: id, rotulo, quantidade: '1', fornecedor: null, observacao: '' });
+  mats.value.push({ insumo: id, rotulo, quantidade: '1', fornecedor: '', observacao: '' });
   insumoEscolhido.value = '';
 }
 function adicionarProf(): void {
@@ -207,7 +234,7 @@ async function gravar(): Promise<void> {
       materiais: mats.value.map((x) => ({
         insumo: x.insumo,
         quantidade: qtd(x.quantidade),
-        fornecedor: x.fornecedor,
+        fornecedor: x.fornecedor ? Number(x.fornecedor) : null,
         observacao: x.observacao.trim() || null,
       })),
       equipe: eqp.value.map((x) => ({ profissional: x.profissional, funcao: x.funcao })),
@@ -237,6 +264,12 @@ async function gravar(): Promise<void> {
       />
 
       <h3>{{ t('adt.prePlano.procedimentos') }}</h3>
+      <SanteAlerta
+        v-if="sus"
+        variante="info"
+        :texto="t('adt.prePlano.principalSus', { codigo: sus.codigo, descricao: sus.descricao })"
+        data-testid="pre-plano-principal-sus"
+      />
       <p v-if="procs.length === 0" class="secundario">{{ t('adt.prePlano.vazio') }}</p>
       <ul v-else class="lista-simples" data-testid="pre-plano-procedimentos">
         <li v-for="(p, i) in procs" :key="p.item" class="acoes" :data-testid="`pre-plano-proc-${p.item}`">
@@ -247,7 +280,7 @@ async function gravar(): Promise<void> {
             :max-bytes="10"
             :data-testid="`pre-plano-proc-qtd-${p.item}`"
           />
-          <label
+          <label v-if="!sus"
             ><input
               type="radio"
               name="pre-plano-principal"
@@ -298,7 +331,7 @@ async function gravar(): Promise<void> {
           @acionar="adicionarItem"
         />
       </form>
-      <p v-if="editavel" class="secundario">{{ t('adt.prePlano.principalAuto') }}</p>
+      <p v-if="editavel && !sus" class="secundario">{{ t('adt.prePlano.principalAuto') }}</p>
 
       <h3>{{ t('adt.prePlano.materiais') }}</h3>
       <p v-if="mats.length === 0" class="secundario">{{ t('adt.prePlano.vazio') }}</p>
@@ -306,6 +339,13 @@ async function gravar(): Promise<void> {
         <li v-for="(m, i) in mats" :key="m.insumo" class="acoes" :data-testid="`pre-plano-mat-${m.insumo}`">
           <span>{{ m.rotulo }}</span>
           <SanteCampoTexto v-model="m.quantidade" :rotulo="t('adt.prePlano.quantidade')" :max-bytes="10" />
+          <SanteSelecao
+            v-model="m.fornecedor"
+            :rotulo="t('adt.prePlano.fornecedor')"
+            :opcoes="opcoes.fornecedores"
+            :desabilitado="!editavel"
+            :data-testid="`pre-plano-mat-fornecedor-${m.insumo}`"
+          />
           <SanteCampoTexto v-model="m.observacao" :rotulo="t('adt.prePlano.observacao')" :max-bytes="500" />
           <SanteBotao
             v-if="editavel"
@@ -340,6 +380,28 @@ async function gravar(): Promise<void> {
           data-testid="pre-plano-adicionar-insumo"
           @acionar="adicionarInsumo"
         />
+      </form>
+      <form
+        v-if="editavel && mats.length > 0"
+        class="filtros"
+        role="search"
+        @submit.prevent="pedidoForn = termoForn.trim()"
+      >
+        <SanteCampoTexto
+          v-model="termoForn"
+          :rotulo="t('adt.prePlano.buscarFornecedor')"
+          :max-bytes="60"
+          data-testid="pre-plano-termo-fornecedor"
+        />
+        <SanteBotao
+          tipo="submit"
+          variante="secundario"
+          :rotulo="t('adt.buscar')"
+          data-testid="pre-plano-buscar-fornecedor"
+        />
+        <span v-if="forns.data.value" role="status" data-testid="pre-plano-fornecedores-achados">{{
+          t('adt.prePlano.fornecedoresAchados', { n: forns.data.value.length })
+        }}</span>
       </form>
 
       <h3>{{ t('adt.prePlano.equipe') }}</h3>

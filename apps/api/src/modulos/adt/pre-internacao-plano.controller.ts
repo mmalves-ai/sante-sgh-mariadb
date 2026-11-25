@@ -4,6 +4,7 @@
 //   GET  /api/internacao/pre-internacao/busca/itens?termo          procedimentos (itens faturáveis em uso)
 //   GET  /api/internacao/pre-internacao/busca/insumos?termo        materiais e medicamentos em uso
 //   GET  /api/internacao/pre-internacao/busca/profissionais?termo  profissionais ativos
+//   GET  /api/internacao/pre-internacao/busca/fornecedores?termo   fornecedores ativos (material consignado ou OPME)
 //   GET  /api/internacao/pre-internacao/fila                       fila de espera ordenada (prioridade, data do pedido)
 //   GET  /api/internacao/pre-internacao/pacientes/:p/plano         plano da pré-internação pendente do paciente
 //   GET  /api/internacao/pre-internacao/:id/plano                  plano de uma pré-internação
@@ -81,6 +82,12 @@ export class PreInternacaoPlanoController {
   @Permissao(P.ler)
   profissionais(@Req() req: RequisicaoAutorizada, @Query('termo') termo = '') {
     return this.com(req, (p, c) => p.buscarProfissionais(c, String(termo).slice(0, 60)));
+  }
+
+  @Get('busca/fornecedores')
+  @Permissao(P.ler)
+  fornecedores(@Req() req: RequisicaoAutorizada, @Query('termo') termo = '') {
+    return this.com(req, (p, c) => p.buscarFornecedores(c, String(termo).slice(0, 60)));
   }
 
   @Get('fila')

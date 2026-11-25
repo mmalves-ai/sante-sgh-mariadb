@@ -17,6 +17,7 @@ const esquemaPlano = z.object({
   prioridade: z.enum(PRIORIDADES_FILA),
   editavel: z.boolean(),
   versao: n,
+  procedimentoSus: z.object({ codigo: txt, descricao: txt }).nullable(),
   procedimentos: z.array(
     z.object({
       item: n,
@@ -75,6 +76,11 @@ export const buscarInsumosPlano = (t: string) =>
   );
 export const buscarProfissionaisPlano = (t: string) =>
   ler(`${C}/busca/profissionais?termo=${q(t)}`, z.array(z.object({ id: n, nome: txt })));
+export const buscarFornecedoresPlano = (t: string) =>
+  ler(
+    `${C}/busca/fornecedores?termo=${q(t)}`,
+    z.array(z.object({ id: n, nome: txt, fantasia: txt.nullable(), opme: z.boolean() })),
+  );
 export const lerPlanoDoPaciente = (paciente: number) =>
   ler(`${C}/pacientes/${paciente}/plano`, z.object({ plano: esquemaPlano.nullable() }));
 export const lerFilaEspera = () =>

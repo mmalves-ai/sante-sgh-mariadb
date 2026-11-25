@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  alinharPrincipalLido,
   conferirMudancaPrioridade,
   diasDeEspera,
   diferencaPlano,
@@ -123,6 +124,81 @@ describe('plano da pré-internação (C2-048)', () => {
     ]);
     expect(d.incluir).toEqual([{ valor: 'd', sequencia: 4 }]);
     expect(d.remover).toEqual([{ id: 11, versao: 3 }]);
+  });
+});
+
+describe('procedimento principal: uma fonte só com a pré-internação (C2-048)', () => {
+  it('sem marcação, o principal é o procedimento previsto da pré-internação, que segue o principal gravado', () => {
+    const r = validarPlanoPreInternacao(
+      { procedimentos: [proc(1), proc(2, false, false)], materiais: [], equipe: [] },
+      'solicitado',
+      { item: 2, sus: false },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.valor.procedimentos.map((p) => [p.item, p.principal, p.incluirNaGuia])).toEqual([
+        [1, false, true],
+        [2, true, true],
+      ]);
+      expect(r.principal).toBe(2);
+    }
+    const marcado = validarPlanoPreInternacao(
+      { procedimentos: [proc(1, true), proc(2)], materiais: [], equipe: [] },
+      'solicitado',
+      { item: 2, sus: false },
+    );
+    expect(marcado.ok && marcado.principal).toBe(1);
+    const semProc = validarPlanoPreInternacao(
+      { procedimentos: [], materiais: [], equipe: [] },
+      'solicitado',
+      {
+        item: 2,
+        sus: false,
+      },
+    );
+    expect(semProc.ok && semProc.principal).toBeNull();
+  });
+
+  it('pelo SUS, os itens do plano são secundários: marcar principal é recusado, e o previsto não muda', () => {
+    const r = validarPlanoPreInternacao(
+      { procedimentos: [proc(1), proc(2)], materiais: [], equipe: [] },
+      'solicitado',
+      { item: null, sus: true },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.valor.procedimentos.every((p) => !p.principal)).toBe(true);
+      expect(r.principal).toBeNull();
+    }
+    const recusa = validarPlanoPreInternacao(
+      { procedimentos: [proc(1, true)], materiais: [], equipe: [] },
+      'solicitado',
+      { item: null, sus: true },
+    );
+    expect(recusa.ok).toBe(false);
+    if (!recusa.ok) expect(recusa.problemas[0]!.mensagem).toMatch(/SUS/);
+  });
+
+  it('na leitura, o principal é o previsto: marca a linha ou a põe à frente; pelo SUS nenhuma é principal', () => {
+    const linhas = [
+      { item: 1, principal: true },
+      { item: 2, principal: false },
+    ];
+    expect(alinharPrincipalLido(linhas, { item: 2, sus: false }, () => null)).toEqual([
+      { item: 1, principal: false },
+      { item: 2, principal: true },
+    ]);
+    expect(
+      alinharPrincipalLido(linhas, { item: 9, sus: false }, (item) => ({ item, principal: false })),
+    ).toEqual([
+      { item: 9, principal: true },
+      { item: 1, principal: false },
+      { item: 2, principal: false },
+    ]);
+    expect(alinharPrincipalLido(linhas, { item: null, sus: true }, () => null).some((l) => l.principal)).toBe(
+      false,
+    );
+    expect(alinharPrincipalLido(linhas, { item: null, sus: false }, () => null)).toEqual(linhas);
   });
 });
 

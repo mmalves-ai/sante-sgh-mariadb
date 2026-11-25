@@ -7,12 +7,18 @@
 //     a versão lida da pré-internação (versão velha: 409, nada gravado). O que sai do plano é marcado como excluído
 //     (excluido_em, excluido_por), nunca apagado; o que volta reaproveita a linha antiga; o novo entra no fim da
 //     sequência. A pré-internação ganha versão nova a cada gravação do plano;
+//   - o procedimento principal é um só: o previsto da pré-internação (agendamento_internacao.item_faturavel_id ou,
+//     pelo SUS, procedimento_sigtap_id), o mesmo que a lista das pré-internações e a fila mostram. A leitura do plano
+//     parte dele (marca a linha ou a põe à frente); a gravação passa o principal do plano para o previsto na mesma
+//     transação. Pelo SUS, os itens do plano são secundários e marcar um principal é recusado (422);
+//   - o fornecedor previsto do material (consignado ou OPME) é buscado entre os fornecedores ativos e conferido;
 //   - pré-internação internada, cancelada ou com falta não muda de plano (422); item, insumo, profissional, função ou
 //     fornecedor inexistente ou fora de uso é recusado (422, com o campo), nunca gravado;
 //   - a fila de espera é a pré-internação sem data (situação 'em_espera'), na ordem do domínio (prioridade clínica, data
 //     do pedido); a posição é calculada na leitura. A mudança de prioridade grava `prioridade` com a versão e acrescenta
 //     a justificativa datada à observação (nada se perde).
 import {
+  alinharPrincipalLido,
   conferirMudancaPrioridade,
   diasDeEspera,
   diferencaPlano,
@@ -21,7 +27,9 @@ import {
   planoEditavel,
   PRIORIDADES_FILA_INTERNACAO,
   type PrioridadeFilaInternacao,
+  type PlanoPreEntrada,
   type ProblemaPlanoPre,
+  type ProcedimentoPrevistoPre,
   validarPlanoPreInternacao,
   VIAS_ACESSO_PROCEDIMENTO,
 } from '@sgh/dominio-internacao';
@@ -99,6 +107,8 @@ export interface PlanoPreLido {
   readonly prioridade: PrioridadeFilaInternacao;
   readonly editavel: boolean;
   readonly versao: number;
+  /** Pré-internação pelo SUS: o procedimento principal, da tabela do SUS (os itens do plano são secundários). */
+  readonly procedimentoSus: { readonly codigo: string; readonly descricao: string } | null;
   readonly procedimentos: {
     readonly item: number;
     readonly codigo: string;
@@ -154,8 +164,14 @@ const conflito = () =>
   });
 const like = (termo: string) => `%${termo.trim().replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
 
-const SQL_PRE = `SELECT id, numero, paciente_id, situacao, prioridade, observacao, versao FROM agendamento_internacao
+const SQL_PRE = `SELECT id, numero, paciente_id, situacao, prioridade, observacao, versao, item_faturavel_id,
+       procedimento_sigtap_id FROM agendamento_internacao
   WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`;
+
+const previstoDe = (a: Record<string, unknown>): ProcedimentoPrevistoPre => ({
+  item: numOuNull(a['item_faturavel_id']),
+  sus: a['procedimento_sigtap_id'] !== null && a['procedimento_sigtap_id'] !== undefined,
+});
 
 // Todas as linhas do plano (inclusive as que saíram), travadas, com a chave natural de cada lista.
 const SQL_LINHAS_PROC = `SELECT id, sequencia, versao, excluido_em, item_faturavel_id AS chave
@@ -234,6 +250,28 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
     );
   }
 
+  /** Fornecedores ativos (razão social, nome fantasia ou CNPJ/CPF), para o material consignado ou OPME. */
+  buscarFornecedores(c: ContextoPortaPropria, termo: string) {
+    if (termo.trim().length < 2) return Promise.resolve([]);
+    const doc = termo.replace(/\D/g, '');
+    return this.ler(c, 'busca-fornecedores', async (l) =>
+      (
+        await l.consultar(
+          `SELECT id, razao_social, nome_fantasia, fornece_opme FROM empresa_fornecedora
+            WHERE situacao = 'ativo' AND excluido_em IS NULL
+              AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj = ? OR cpf = ?)
+            ORDER BY fornece_opme DESC, razao_social LIMIT 20`,
+          [like(termo), like(termo), doc || '-', doc || '-'],
+        )
+      ).map((r) => ({
+        id: num(r['id']),
+        nome: String(r['razao_social']),
+        fantasia: txtOuNull(r['nome_fantasia']),
+        opme: bool(r['fornece_opme']),
+      })),
+    );
+  }
+
   // ── Plano ──
 
   private async lerPlano(l: Leitor, est: number, pre: number): Promise<PlanoPreLido> {
@@ -264,6 +302,29 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
       [pre],
     );
     const situacao = String(a['situacao']);
+    const previsto = previstoDe(a);
+    const sus = previsto.sus
+      ? await l.uma('SELECT codigo_sigtap, descricao FROM procedimento_sigtap WHERE id = ?', [
+          a['procedimento_sigtap_id'],
+        ])
+      : null;
+    const linhaPrevista =
+      previsto.item === null
+        ? null
+        : await l.uma(
+            `SELECT id AS item_faturavel_id, codigo, descricao, 1 AS quantidade, TRUE AS principal, NULL AS via_acesso,
+                    TRUE AS incluir_na_guia FROM item_faturavel WHERE id = ?`,
+            [previsto.item],
+          );
+    const procLido = (r: Record<string, unknown>) => ({
+      item: num(r['item_faturavel_id']),
+      codigo: String(r['codigo']),
+      descricao: String(r['descricao']),
+      quantidade: Number(r['quantidade']),
+      principal: bool(r['principal']),
+      viaAcesso: txtOuNull(r['via_acesso']),
+      incluirNaGuia: bool(r['incluir_na_guia']),
+    });
     return {
       preInternacao: num(a['id']),
       numero: String(a['numero']),
@@ -272,15 +333,12 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
       prioridade: String(a['prioridade']) as PrioridadeFilaInternacao,
       editavel: planoEditavel(situacao),
       versao: num(a['versao']),
-      procedimentos: procedimentos.map((r) => ({
-        item: num(r['item_faturavel_id']),
-        codigo: String(r['codigo']),
-        descricao: String(r['descricao']),
-        quantidade: Number(r['quantidade']),
-        principal: bool(r['principal']),
-        viaAcesso: txtOuNull(r['via_acesso']),
-        incluirNaGuia: bool(r['incluir_na_guia']),
-      })),
+      procedimentoSus: sus
+        ? { codigo: String(sus['codigo_sigtap']), descricao: String(sus['descricao']) }
+        : null,
+      procedimentos: alinharPrincipalLido(procedimentos.map(procLido), previsto, () =>
+        linhaPrevista ? procLido(linhaPrevista) : null,
+      ),
       materiais: materiais.map((r) => ({
         insumo: num(r['insumo_id']),
         codigo: String(r['codigo']),
@@ -323,7 +381,7 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
       const [a] = await tx.consultarParaAtualizar(SQL_PRE, [pre, est.id]);
       if (!a) throw naoEncontrado('Pré-internação');
       if (num(a['versao']) !== e.versao) throw conflito();
-      const v = validarPlanoPreInternacao(e, String(a['situacao']));
+      const v = validarPlanoPreInternacao(e, String(a['situacao']), previstoDe(a));
       if (!v.ok) return recusou('Plano não gravado', v.problemas);
       const plano = v.valor;
       await this.conferirReferencias(tx, plano);
@@ -398,12 +456,20 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
         (p) => `${p.profissional}:${p.funcao}`,
         (p) => ({ profissional_id: p.profissional, funcao_equipe_cirurgica_id: p.funcao }),
       );
-      const versao = await tx.alterar(T_PRE, pre, e.versao, {});
+      // O principal do plano é o procedimento previsto da pré-internação (uma fonte só); pelo SUS, não muda.
+      const versao = await tx.alterar(
+        T_PRE,
+        pre,
+        e.versao,
+        v.principal !== null && v.principal !== numOuNull(a['item_faturavel_id'])
+          ? { item_faturavel_id: v.principal }
+          : {},
+      );
       return { tabela: T_PRE, id: pre, versao };
     });
   }
 
-  private async conferirReferencias(tx: TxOperacao, p: ReturnType<typeof esquemaPlano.parse>): Promise<void> {
+  private async conferirReferencias(tx: TxOperacao, p: PlanoPreEntrada): Promise<void> {
     const problemas: ProblemaPlanoPre[] = [];
     const conferir = async (sql: string, valor: number, campo: string, mensagem: string) => {
       if (!(await tx.uma(sql, [valor]))) problemas.push({ campo, mensagem });
@@ -424,10 +490,10 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
       );
       if (x.fornecedor !== null)
         await conferir(
-          'SELECT id FROM empresa_fornecedora WHERE id = ? AND excluido_em IS NULL',
+          "SELECT id FROM empresa_fornecedora WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
           x.fornecedor,
           `materiais.${i}.fornecedor`,
-          'O fornecedor não existe.',
+          'O fornecedor não existe ou não está ativo.',
         );
     }
     for (const [i, x] of p.equipe.entries()) {
@@ -454,8 +520,7 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
       const linhas = await l.consultar(
         `SELECT a.id, a.numero, a.paciente_id, COALESCE(p.nome_social, pf.nome) AS nome, p.numero_prontuario,
                 a.prioridade, a.solicitado_em, a.versao, em.descricao AS especialidade,
-                (SELECT i.descricao FROM agendamento_internacao_procedimento x JOIN item_faturavel i ON i.id = x.item_faturavel_id
-                  WHERE x.agendamento_internacao_id = a.id AND x.excluido_em IS NULL AND x.principal LIMIT 1) AS principal,
+                COALESCE(itf.descricao, ps.descricao) AS principal,
                 (SELECT COUNT(*) FROM agendamento_internacao_procedimento x
                   WHERE x.agendamento_internacao_id = a.id AND x.excluido_em IS NULL) AS n_proc,
                 (SELECT COUNT(*) FROM agendamento_internacao_material x
@@ -466,6 +531,8 @@ export class PortaPreInternacaoPlanoPropria extends PortaEstabelecimentoPropria 
            JOIN paciente p ON p.id = a.paciente_id
            JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
            LEFT JOIN especialidade_medica em ON em.id = a.especialidade_medica_id
+           LEFT JOIN item_faturavel itf ON itf.id = a.item_faturavel_id
+           LEFT JOIN procedimento_sigtap ps ON ps.id = a.procedimento_sigtap_id
           WHERE a.estabelecimento_id = ? AND a.situacao = 'em_espera' AND a.excluido_em IS NULL
           LIMIT 1000`,
         [est.id],

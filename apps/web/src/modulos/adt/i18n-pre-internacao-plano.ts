@@ -10,6 +10,13 @@ export const mensagensPrePlano = {
   buscarItem: 'Procedimento (código ou nome)',
   buscarInsumo: 'Material (código ou nome)',
   buscarProfissional: 'Profissional (nome)',
+  buscarFornecedor: 'Fornecedor (nome ou CNPJ)',
+  fornecedor: 'Fornecedor previsto',
+  fornecedoresAchados: '{n} fornecedor(es) para escolher na linha do material.',
+  semFornecedor: 'Sem fornecedor',
+  opme: 'OPME',
+  principalSus:
+    'Pelo SUS, o procedimento principal é o da tabela do SUS previsto na pré-internação: {codigo} · {descricao}. Os procedimentos abaixo entram como secundários.',
   funcao: 'Função na equipe',
   quantidade: 'Quantidade',
   principal: 'Principal',

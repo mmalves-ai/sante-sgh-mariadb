@@ -1,7 +1,7 @@
 // E2E @C2-048 (F3, 04-INT linha 70): plano previsto da pré-internação e fila de espera eletiva pelo caminho da tela
 // (`/internacao/pre`). Na lista das pré-internações, "Plano" abre os procedimentos, os materiais e a equipe previstos
 // da pré-internação do paciente: busca e adiciona o procedimento (o primeiro vira o principal, na guia TISS), o
-// material e o profissional com a função; o repetido é avisado na hora, a quantidade inválida trava a gravação, e a
+// material com o fornecedor previsto (OPME, achado pela busca de fornecedores) e o profissional com a função; o repetido é avisado na hora, a quantidade inválida trava a gravação, e a
 // gravação manda a lista inteira com a versão lida. Na fila de espera (pré-internações sem data, ordenadas pela
 // prioridade clínica e pela data do pedido), a mudança de prioridade pede justificativa (o botão trava sem ela) e a
 // fila volta reordenada. Os combos são SanteSelecao (nenhum <select> nativo). O plano e a fila só existem no banco do
@@ -38,6 +38,7 @@ function simular(page: Page) {
     prioridade: 'normal',
     editavel: true,
     versao: 1,
+    procedimentoSus: null,
     procedimentos: [] as Record<string, unknown>[],
     materiais: [] as Record<string, unknown>[],
     equipe: [] as Record<string, unknown>[],
@@ -118,6 +119,9 @@ function simular(page: Page) {
   void page.route(new RegExp(`${B}/busca/insumos`), (r) =>
     json(r, [{ id: 401, codigo: 'MAT-1', nome: 'Grampeador sintético', unidade: 'UN' }]),
   );
+  void page.route(new RegExp(`${B}/busca/fornecedores`), (r) =>
+    json(r, [{ id: 601, nome: 'Fornecedora Sintética Ltda', fantasia: 'OPME Sintética', opme: true }]),
+  );
   void page.route(new RegExp(`${B}/busca/profissionais`), (r) =>
     json(r, [{ id: 501, nome: 'Cirurgiã Sintética' }]),
   );
@@ -137,7 +141,7 @@ function simular(page: Page) {
       codigo: 'MAT-1',
       nome: 'Grampeador sintético',
       unidade: 'UN',
-      fornecedorNome: null,
+      fornecedorNome: m['fornecedor'] ? 'OPME Sintética' : null,
     }));
     plano.equipe = (corpo['equipe'] as Record<string, unknown>[]).map((e) => ({
       ...e,
@@ -212,6 +216,11 @@ test.describe('internação: plano da pré-internação e fila de espera @C2-048
     await escolher(page.getByTestId('pre-plano-insumo'), { rotulo: 'MAT-1 · Grampeador sintético (UN)' });
     await page.getByTestId('pre-plano-adicionar-insumo').click();
     await expect(page.getByTestId('pre-plano-mat-401')).toBeVisible();
+    // O fornecedor previsto do material (consignado ou OPME): busca e escolhe na linha do material.
+    await page.getByTestId('pre-plano-termo-fornecedor').fill('opme');
+    await page.getByTestId('pre-plano-buscar-fornecedor').click();
+    await expect(page.getByTestId('pre-plano-fornecedores-achados')).toContainText('1 fornecedor');
+    await escolher(page.getByTestId('pre-plano-mat-fornecedor-401'), { rotulo: 'OPME Sintética · OPME' });
 
     await page.getByTestId('pre-plano-termo-prof').fill('cirurg');
     await page.getByTestId('pre-plano-buscar-prof').click();
@@ -232,7 +241,7 @@ test.describe('internação: plano da pré-internação e fila de espera @C2-048
     expect(st.corpos.at(-1)?.corpo).toEqual({
       versao: 1,
       procedimentos: [{ item: 301, quantidade: 1, principal: true, viaAcesso: null, incluirNaGuia: true }],
-      materiais: [{ insumo: 401, quantidade: 1, fornecedor: null, observacao: null }],
+      materiais: [{ insumo: 401, quantidade: 1, fornecedor: 601, observacao: null }],
       equipe: [{ profissional: 501, funcao: 11 }],
     });
     await expect(page.getByTestId('pre-fila-701')).toContainText('1 proc. · 1 mat. · 1 equipe');
