@@ -1,5 +1,6 @@
 // F3.8, 07-FIN linha 111: rotas da EFD-REINF por evento (competência, beneficiário, processo, envio e retorno).
 //   GET  /api/financeiro/reinf/painel?periodo=AAAA-MM    eventos da competência com valores, lote e retornos; processos
+//                                                        e os títulos com retenção fora dos eventos (credor sem CPF/CNPJ)
 //   GET  /api/financeiro/reinf/eventos/:id/xml           XML do evento (retificador com o recibo do original; R-9000)
 //   POST /api/financeiro/reinf/processos                 processo com suspensão (tributo e, se houver, beneficiário)
 //   POST /api/financeiro/reinf/processos/alterar         { processo, vara, vigenciaInicio, vigenciaFim } (vale para todas as suspensões)
