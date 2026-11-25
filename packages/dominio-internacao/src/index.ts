@@ -23,3 +23,5 @@ export * from './leitos-sus.js';
 export * from './comunicacao-operadora.js';
 export * from './transporte-paciente.js';
 export * from './destino-corpo.js';
+// C2-048 (04-INT linha 70): plano previsto da pré-internação (procedimentos, materiais, equipe) e fila de espera.
+export * from './pre-internacao-plano.js';
