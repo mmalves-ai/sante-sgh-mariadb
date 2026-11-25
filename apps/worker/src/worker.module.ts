@@ -1,6 +1,7 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { CensoFechamentoService } from './censo-fechamento.service.js';
 import { ClassificacaoEstouroService } from './classificacao-estouro.service.js';
+import { AvisoClinicoEmailService } from './aviso-clinico-email.service.js';
 import { ContratosVencimentoService } from './contratos-vencimento.service.js';
 import { DataMartCargaService } from './datamart-carga.service.js';
 import { FilaErpService } from './exportacao-erp/fila.service.js';
@@ -52,6 +53,8 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   'pessoas-conselho': PessoasConselhoService,
   // M55 (etapa 3): o alerta diário de vencimento dos contratos com fornecedores (90, 60, 30 dias e vencido).
   'contratos-vencimento': ContratosVencimentoService,
+  // 03-PEP L133: o despacho por e-mail do aviso clínico das regras (enviado ou falha; fora de produção, a captura).
+  'aviso-clinico-email': AvisoClinicoEmailService,
   // 01-ADM L115: a carga diária do data mart pseudonimizado com o registro (carga_data_mart e etapas).
   'datamart-carga': DataMartCargaService,
   // 08-INTG L134: o agendador das entregas aos parceiros (arquivo tratado na porta de arquivos, envio simulado fora de produção).
@@ -104,6 +107,8 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     PessoasConselhoService,
     // M55 (etapa 3): alerta de vencimento dos contratos (CONTRATOS_ALERTA_DIARIO=ligado em dev/ci).
     ContratosVencimentoService,
+    // 03-PEP L133: despacho por e-mail do aviso clínico (AVISO_CLINICO_EMAIL=ligado em dev/ci).
+    AvisoClinicoEmailService,
     // 01-ADM L115: carga diária do data mart (DATAMART_CARGA_DIARIA=ligado em dev/ci).
     DataMartCargaService,
     PacotesParceiroEntregaService,

@@ -437,6 +437,7 @@ onMounted(carregar);
     </fieldset>
 
     <h2>{{ k('emitirTitulo') }}</h2>
+    <p data-testid="avr-emitir-dica">{{ k('emitirDica') }}</p>
     <div class="linha" data-testid="avr-emitir-form">
       <SanteSelecao
         v-model="evento.tipoAviso"

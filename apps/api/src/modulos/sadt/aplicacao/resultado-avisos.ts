@@ -5,6 +5,9 @@
 //     registro fica, com a situação). O laboratório é acionado antes da liberação, não depois.
 //   - retificação: quem já tinha aberto o resultado liberado recebe um aviso clínico na caixa de avisos, com o exame e
 //     o motivo (nunca o valor), ligado ao resultado e à versão guardada.
+//   - os dois eventos passam também pela central de regras de aviso clínico (03-PEP L133, pep/aviso-clinico-emissao):
+//     o valor crítico como categoria 'valor_critico' e a retificação como 'resultado', com o setor e a especialidade do
+//     atendimento (ex.: "valor crítico na UTI avisa a enfermagem"), na mesma transação. Sem regra, nada a mais.
 // A decisão é do domínio (dominio-sadt/critico/regra-aviso); aqui só se lê e grava.
 import {
   alvosDoAviso,
@@ -15,10 +18,23 @@ import {
   type RegraCriticoCandidata,
 } from '@sgh/dominio-sadt';
 import type { definirOperacao } from '@sgh/nucleo';
+import { emitirAvisoClinicoNaTx } from '../../pep/aviso-clinico-emissao.js';
 
 type Tx = Parameters<Parameters<typeof definirOperacao>[0]['gravar']>[0];
 
 const n = (v: unknown) => Number(v);
+
+/** O atendimento do pedido do resultado (o setor e a especialidade do evento saem dele). */
+async function atendimentoDoResultado(tx: Tx, resultado: number): Promise<number | null> {
+  const r = await tx.uma(
+    `SELECT r.atendimento_id FROM resultado_exame re
+       JOIN exame_item ei ON ei.id = re.exame_item_id
+       JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+      WHERE re.id = ?`,
+    [resultado],
+  );
+  return r ? Number(r['atendimento_id']) : null;
+}
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
 /** Tabelas que estes avisos gravam (para a declaração da operação). */
@@ -108,6 +124,15 @@ export async function avisarCriticosDoResultado(
       nivel_escalonamento: 0,
     });
   }
+  await emitirAvisoClinicoNaTx(tx, a.estabelecimento, tx.contexto.usuario ?? null, {
+    categoria: 'valor_critico',
+    paciente: a.paciente,
+    atendimento: await atendimentoDoResultado(tx, a.resultado),
+    resultadoExame: a.resultado,
+    moduloOrigem: 'sadt.resultado',
+    entidadeOrigem: 'resultado_exame',
+    chaveOrigem: a.resultado,
+  });
   return { gerados: alvos.length, cancelados: superados.length };
 }
 
@@ -130,6 +155,15 @@ export async function avisarQuemViuARetificacao(
     )
   ).map((x) => ({ usuario: n(x['usuario_id']), vistoEm: new Date(x['visualizado_em'] as string | Date) }));
   const destinatarios = destinatariosDaRetificacao(leituras, tx.contexto.usuario ?? null, a.agora);
+  await emitirAvisoClinicoNaTx(tx, a.estabelecimento, tx.contexto.usuario ?? null, {
+    categoria: 'resultado',
+    paciente: a.paciente,
+    atendimento: await atendimentoDoResultado(tx, a.resultado),
+    resultadoExame: a.resultado,
+    moduloOrigem: 'sadt.resultado',
+    entidadeOrigem: 'resultado_exame_versao',
+    chaveOrigem: a.versaoGuardada,
+  });
   if (!destinatarios.length) return 0;
   const ex = await tx.uma(
     `SELECT x.nome, r.atendimento_id FROM resultado_exame re

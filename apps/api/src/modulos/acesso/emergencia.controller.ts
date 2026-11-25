@@ -10,6 +10,7 @@
 // Melhoria: a recusa de negócio da abertura (motivo inexistente, sessão sem conta) responde como recusa, não como 503.
 // A rota de demonstração (só AMBIENTE=dev) abre o "prontuário" de um paciente SINTÉTICO de recurso novo
 // (vínculo sempre exigido), para provar a decisão em passos e o diálogo no E2E até o PEP (M15).
+import { emitirAvisoClinicoNaTx, TABELAS_EMISSAO_AVISO_CLINICO } from '../pep/aviso-clinico-emissao.js';
 import { Body, Controller, Get, HttpCode, Inject, NotFoundException, Param, Post, Req } from '@nestjs/common';
 import {
   EVENTOS_AUDITAVEIS,
@@ -352,7 +353,7 @@ export const RELAY_ENTREGA_ALERTA_EMERGENCIA = false;
 const ABRIR_EMERGENCIA = definirOperacao({
   // O nome da operação é o código auditável da quebra de vidro: é o que o histórico de acessos ao prontuário procura.
   nome: EVENTOS_AUDITAVEIS.emergenciaAberta.codigo,
-  tabelas: ['acesso_emergencial'],
+  tabelas: ['acesso_emergencial', ...TABELAS_EMISSAO_AVISO_CLINICO],
   entrada: z
     .object({
       rede: z.string().max(64),
@@ -393,6 +394,17 @@ const ABRIR_EMERGENCIA = definirOperacao({
       endereco_ip: e.enderecoIp,
       estacao_trabalho_id: estacao ? estacao['id'] : null,
     });
+    // A abertura passa pela central de regras de aviso clínico (03-PEP L133): categoria 'acesso_emergencia', sem o
+    // autor; o texto do aviso é o da regra (nunca a justificativa).
+    if (ctx.estabelecimento)
+      await emitirAvisoClinicoNaTx(tx, ctx.estabelecimento, ctx.usuario ?? null, {
+        categoria: 'acesso_emergencia',
+        paciente: e.paciente,
+        atendimento: e.atendimento,
+        moduloOrigem: 'acesso.emergencia',
+        entidadeOrigem: 'acesso_emergencial',
+        chaveOrigem: id,
+      });
     return { id };
   },
   alvo: (_e, r) => ({ tabela: 'acesso_emergencial', id: Number(r.id) }),

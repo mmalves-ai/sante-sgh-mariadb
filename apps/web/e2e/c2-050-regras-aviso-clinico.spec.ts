@@ -168,7 +168,8 @@ test.describe('central de regras de aviso clínico (03-PEP L133) @F33 @C2-050', 
       alvos: [{ tipo: 'setor', id: 31 }],
     });
 
-    // Emissão do evento: quem as regras avisam.
+    // Teste da regra com um evento simulado: quem as regras avisam (os eventos reais passam sozinhos).
+    await expect(tela.getByTestId('avr-emitir-dica')).toContainText('Teste da regra');
     const emitir = tela.getByTestId('avr-emitir-form');
     await escolher(emitir.getByTestId('avr-emitir-evento'), 'valor_critico_sint');
     await escolher(emitir.getByTestId('avr-emitir-setor'), '31');

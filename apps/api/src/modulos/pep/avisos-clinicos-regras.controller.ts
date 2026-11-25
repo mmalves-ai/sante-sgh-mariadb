@@ -2,7 +2,8 @@
 //   GET  /api/pep/avisos-clinicos/regras          tipos de aviso, regras, avisos emitidos recentes e opções de alvo
 //   POST /api/pep/avisos-clinicos/regras/tipos    cria ou altera o tipo de aviso (o evento clínico)
 //   POST /api/pep/avisos-clinicos/regras          cria ou altera a regra (evento, setor/especialidade, canal, alvos)
-//   POST /api/pep/avisos-clinicos/regras/emitir   o evento clínico passa pelas regras e gera os avisos
+//   POST /api/pep/avisos-clinicos/regras/emitir   teste da regra: um evento simulado passa pelas regras (aviso marcado
+//                                                 como teste; os eventos reais passam por aviso-clinico-emissao.ts)
 // Ler: pep.admin.ler; gravar e emitir: pep.admin.editar. A gravação vai à trilha pelo executor (mesma transação).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Req } from '@nestjs/common';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';

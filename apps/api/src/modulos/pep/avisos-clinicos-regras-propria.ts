@@ -8,24 +8,22 @@
 //   notifica_tela / notifica_email, uma linha de versão a cada gravação (regra_alerta_versao) e os destinatários em
 //   regra_alerta_destinatario (setor, especialidade, categoria profissional, perfil, usuário), no escopo do
 //   estabelecimento: o que sai da lista fica inativo, nunca apagado; o que volta é reativado.
-// - Emissão: o evento clínico (tipo, paciente, atendimento, setor, especialidade, origem) passa pelas regras ativas do
-//   estabelecimento; cada regra que cobre o evento gera um aviso_clinico (regra_alerta_id, prioridade do tipo) com os
+// - Emissão: pelo serviço interno aviso-clinico-emissao.ts, chamado na transação do evento real (valor crítico e
+//   retificação do resultado, acesso de emergência); aqui só o teste da regra pela central. O evento passa pelas regras
+//   ativas do estabelecimento; cada regra que cobre o evento gera um aviso_clinico (regra_alerta_id, prioridade do tipo) com os
 //   destinatários em aviso_clinico_destinatario: canal 'sistema' cai na central de avisos de quem recebe; canal 'email'
-//   fica pendente para o despacho de e-mail (fora de produção a saída é a captura local, regra 6). O autor do evento
+//   fica pendente para o despacho de e-mail do worker (aviso-clinico-email.service.ts), que marca enviado ou falha (fora
+//   de produção a saída é a captura local, regra 6). O autor do evento
 //   não é avisado. Sem regra que cubra o evento, nada é gravado.
 import {
   ALVOS_AVISO_CLINICO,
   type AlvoAvisoClinico,
   CANAIS_AVISO_CLINICO,
-  type CandidatoAvisoClinico,
   type CanalAvisoClinico,
   CATEGORIAS_TIPO_AVISO_CLINICO,
-  destinatariosDoAviso,
   MENSAGEM_REGRA_AVISO_CLINICO,
   PRIORIDADES_TIPO_AVISO_CLINICO,
-  prioridadeDoAviso,
   type RecusaRegraAvisoClinico,
-  type RegraAvisoClinicoAplicavel,
   validarRegraAvisoClinico,
   validarTipoAvisoClinico,
 } from '@sgh/dominio-pep';
@@ -39,8 +37,13 @@ import {
   num,
   numOuNull,
   PortaEstabelecimentoPropria,
-  txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import {
+  CENARIO_AVISO_CLINICO,
+  conferirSetorEspecialidade,
+  emitirAvisoClinicoNaTx,
+  lerRegrasAvisoClinico,
+} from './aviso-clinico-emissao.js';
 
 export const PORTA_REGRAS_AVISO_CLINICO = Symbol('PORTA_REGRAS_AVISO_CLINICO');
 
@@ -53,7 +56,7 @@ const TABELAS = [
   'aviso_clinico',
   'aviso_clinico_destinatario',
 ];
-const CENARIO = 'aviso_clinico';
+const CENARIO = CENARIO_AVISO_CLINICO;
 const TETO = 5000;
 
 const COLUNA_ALVO: Readonly<Record<AlvoAvisoClinico, string>> = {
@@ -113,14 +116,6 @@ export const esquemaEventoAvisoClinico = z
     especialidade: id.nullable().default(null),
     titulo: z.string().trim().max(200).nullable().default(null),
     mensagem: z.string().trim().max(4000).nullable().default(null),
-    moduloOrigem: z.string().trim().max(60).nullable().default(null),
-    entidadeOrigem: z
-      .string()
-      .trim()
-      .regex(/^[a-z][a-z0-9_]{1,63}$/)
-      .nullable()
-      .default(null),
-    chaveOrigem: id.nullable().default(null),
   })
   .strict();
 
@@ -177,29 +172,6 @@ const recusar = (r: RecusaRegraAvisoClinico) =>
   new ErroOperacao(422, r, 'Regra de aviso clínico recusada', MENSAGEM_REGRA_AVISO_CLINICO[r]);
 const conflito = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Regra de aviso clínico recusada', detalhe);
-const dia = (v: unknown): string | null => {
-  if (v === null || v === undefined) return null;
-  if (typeof v === 'string') return v.slice(0, 10);
-  const d = v as Date;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-const hoje = (): string => dia(new Date())!;
-const json = (v: unknown): Record<string, unknown> => {
-  const x = typeof v === 'string' ? (JSON.parse(v) as unknown) : v;
-  return x && typeof x === 'object' ? (x as Record<string, unknown>) : {};
-};
-const canaisDe = (r: Record<string, unknown>): CanalAvisoClinico[] => [
-  ...(bool(r['notifica_tela']) ? (['sistema'] as const) : []),
-  ...(bool(r['notifica_email']) ? (['email'] as const) : []),
-];
-const ids = (v: unknown): number[] =>
-  v === null || v === undefined || v === ''
-    ? []
-    : String(v)
-        .split(',')
-        .map(Number)
-        .filter((n) => n > 0);
-
 export class PortaRegrasAvisoClinicoPropria extends PortaEstabelecimentoPropria {
   constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
     super(nucleo, cliente, TABELAS, 'pep.avisosClinicosRegras');
@@ -289,54 +261,8 @@ export class PortaRegrasAvisoClinicoPropria extends PortaEstabelecimentoPropria 
     });
   }
 
-  private async regras(l: Pick<Leitor, 'consultar'>, est: number): Promise<RegraAvisoClinicoLida[]> {
-    const linhas = await l.consultar(
-      `SELECT r.id, r.versao, r.codigo, r.nome, r.condicao, r.mensagem, r.notifica_tela, r.notifica_email,
-              r.vigencia_inicio, r.vigencia_fim, r.numero_versao_vigente, r.estabelecimento_id,
-              (r.ativo AND COALESCE(re.ativo, TRUE)) AS ativo
-         FROM regra_alerta r
-         JOIN cenario_alerta ca ON ca.id = r.cenario_alerta_id AND ca.codigo = ?
-         LEFT JOIN regra_alerta_estabelecimento re ON re.regra_alerta_id = r.id AND re.estabelecimento_id = ?
-        WHERE r.estabelecimento_id IS NULL OR r.estabelecimento_id = ?
-        ORDER BY r.nome, r.id`,
-      [CENARIO, est, est],
-      { teto: TETO },
-    );
-    const alvos =
-      linhas.length === 0
-        ? []
-        : await l.consultar(
-            `SELECT regra_alerta_id, tipo_destinatario, destino_id FROM regra_alerta_destinatario
-              WHERE regra_alerta_id IN (${linhas.map(() => '?').join(',')}) AND ativo AND excluido_em IS NULL
-                AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
-              ORDER BY id`,
-            [...linhas.map((r) => r['id']), est],
-            { teto: TETO },
-          );
-    return linhas.map((r) => {
-      const cond = json(r['condicao']);
-      return {
-        id: num(r['id']),
-        versao: num(r['versao']),
-        codigo: String(r['codigo']),
-        nome: String(r['nome']),
-        tipoAviso: txtOuNull(cond['tipoAviso']),
-        setorEvento: numOuNull(cond['setorEvento']),
-        especialidadeEvento: numOuNull(cond['especialidadeEvento']),
-        mensagem: String(r['mensagem']),
-        canais: canaisDe(r),
-        alvos: alvos
-          .filter((a) => num(a['regra_alerta_id']) === num(r['id']))
-          .map((a) => ({
-            tipo: String(a['tipo_destinatario']) as AlvoAvisoClinico,
-            id: num(a['destino_id']),
-          })),
-        vigenciaInicio: dia(r['vigencia_inicio'])!,
-        vigenciaFim: dia(r['vigencia_fim']),
-        ativo: bool(r['ativo']),
-        numeroVersao: num(r['numero_versao_vigente']),
-      };
-    });
+  private regras(l: Pick<Leitor, 'consultar'>, est: number): Promise<RegraAvisoClinicoLida[]> {
+    return lerRegrasAvisoClinico(l, est);
   }
 
   /** Cria ou altera o tipo de aviso (o evento clínico); nunca apaga (desativa). */
@@ -393,6 +319,7 @@ export class PortaRegrasAvisoClinicoPropria extends PortaEstabelecimentoPropria 
       ]);
       if (!tipo) throw conflito('tipo-inexistente', 'Tipo de aviso inexistente ou inativo.');
       await this.conferirAlvos(tx, est.id, e.alvos);
+      await conferirSetorEspecialidade(tx, est.id, e.setorEvento, e.especialidadeEvento);
       const cenario = await this.cenario(tx);
       const conteudo = {
         codigo: e.codigo,
@@ -529,119 +456,23 @@ export class PortaRegrasAvisoClinicoPropria extends PortaEstabelecimentoPropria 
     }
   }
 
-  /** O evento clínico passa pelas regras: um aviso por regra que o cobre, com os destinatários por canal. */
+  /**
+   * Teste da regra pela central (pep.admin.editar): um evento simulado do tipo escolhido passa pelas regras pelo mesmo
+   * serviço que os eventos reais usam (emitirAvisoClinicoNaTx). O aviso sai marcado como teste (origem
+   * 'pep.aviso_clinico.teste' e o título "Teste da regra: ..."), para quem recebe nunca o confundir com um evento real.
+   */
   async emitir(
     c: ContextoPortaPropria,
     entrada: unknown,
   ): Promise<{ avisos: number[]; destinatarios: number }> {
     const e = entradaValida(esquemaEventoAvisoClinico, entrada);
     return this.gravar(c, 'pep.aviso_clinico.emitir', TABELAS, async (tx, est, usuario) => {
-      const tipo = await tx.uma(
-        'SELECT descricao, prioridade FROM tipo_aviso_clinico WHERE codigo = ? AND ativo',
-        [e.tipoAviso],
-      );
-      if (!tipo) throw conflito('tipo-inexistente', 'Tipo de aviso inexistente ou inativo.');
-      const lidas = await this.regras(tx, est.id);
-      const regras: RegraAvisoClinicoAplicavel[] = lidas.map((r) => ({
-        id: r.id,
-        tipoAviso: r.tipoAviso ?? '',
-        setorEvento: r.setorEvento,
-        especialidadeEvento: r.especialidadeEvento,
-        ativa: r.ativo,
-        vigenciaInicio: r.vigenciaInicio,
-        vigenciaFim: r.vigenciaFim,
-        canais: r.canais,
-        alvos: r.alvos,
-      }));
-      const mensagens = new Map(lidas.map((r) => [r.id, r.mensagem]));
-      const candidatos = await this.candidatos(tx, est.id);
-      const avisos = destinatariosDoAviso(
-        regras,
-        { tipoAviso: e.tipoAviso, setor: e.setor, especialidade: e.especialidade, dia: hoje() },
-        candidatos,
-        usuario,
-      );
-      const prioridade = prioridadeDoAviso(String(tipo['prioridade']));
-      const agora = new Date();
-      const gravados: number[] = [];
-      let total = 0;
-      for (const a of avisos) {
-        const aviso = await tx.incluir('aviso_clinico', {
-          estabelecimento_id: est.id,
-          regra_alerta_id: a.regra,
-          paciente_id: e.paciente,
-          atendimento_id: e.atendimento,
-          especialidade_medica_id: e.especialidade,
-          titulo: e.titulo ?? String(tipo['descricao']),
-          mensagem: e.mensagem ?? mensagens.get(a.regra) ?? String(tipo['descricao']),
-          prioridade,
-          canal: a.destinos.some((d) => d.canal === 'email') ? 'email' : 'sistema',
-          exibe_janela: prioridade === 'critica',
-          situacao: 'pendente',
-          gerado_em: agora,
-          modulo_origem: e.moduloOrigem ?? 'pep.aviso_clinico',
-          entidade_origem: e.entidadeOrigem,
-          entidade_origem_chave: e.chaveOrigem,
-        });
-        let seq = 0;
-        for (const d of a.destinos) {
-          await tx.incluir('aviso_clinico_destinatario', {
-            aviso_clinico_id: aviso,
-            sequencia: ++seq,
-            usuario_id: d.usuario,
-            profissional_id: d.profissional,
-            canal: d.canal,
-            situacao: 'pendente',
-          });
-        }
-        total += seq;
-        gravados.push(aviso);
-      }
-      return { tabela: 'aviso_clinico', id: gravados[0] ?? null, avisos: gravados, destinatarios: total };
+      const r = await emitirAvisoClinicoNaTx(tx, est.id, usuario, {
+        ...e,
+        teste: true,
+        moduloOrigem: 'pep.aviso_clinico.teste',
+      });
+      return { tabela: 'aviso_clinico', id: r.avisos[0] ?? null, ...r };
     }).then((r) => ({ avisos: r.avisos, destinatarios: r.destinatarios }));
-  }
-
-  /**
-   * Quem pode receber no estabelecimento: usuários ativos com acesso vigente, o profissional vigente da conta, os
-   * setores da lotação ativa, as especialidades ativas, as categorias pelo conselho da inscrição ativa e os perfis
-   * vigentes no estabelecimento. Só o fato de ter e-mail é lido, nunca o endereço.
-   */
-  private async candidatos(tx: TxOperacao, est: number): Promise<CandidatoAvisoClinico[]> {
-    const linhas = await tx.consultar(
-      `SELECT u.id AS usuario, up.profissional_id AS profissional,
-              (u.email IS NOT NULL AND u.email <> '') AS tem_email,
-              (SELECT GROUP_CONCAT(DISTINCT lp.setor_funcional_id) FROM lotacao_profissional lp
-                WHERE lp.profissional_id = up.profissional_id AND lp.estabelecimento_id = ? AND lp.ativo
-                  AND lp.excluido_em IS NULL AND lp.setor_funcional_id IS NOT NULL) AS setores,
-              (SELECT GROUP_CONCAT(DISTINCT pe.especialidade_medica_id) FROM profissional_especialidade pe
-                WHERE pe.profissional_id = up.profissional_id AND pe.ativo AND pe.excluido_em IS NULL) AS especialidades,
-              (SELECT GROUP_CONCAT(DISTINCT cp.id) FROM inscricao_conselho ic
-                 JOIN categoria_profissional cp ON cp.conselho_classe_id = ic.conselho_classe_id AND cp.ativo
-                WHERE ic.profissional_id = up.profissional_id AND ic.situacao = 'ativa'
-                  AND ic.excluido_em IS NULL) AS categorias,
-              (SELECT GROUP_CONCAT(DISTINCT p.perfil_acesso_id) FROM usuario_perfil p
-                WHERE p.usuario_id = u.id AND p.estabelecimento_id = ? AND p.excluido_em IS NULL
-                  AND p.vigencia_inicio <= CURDATE()
-                  AND (p.vigencia_fim IS NULL OR p.vigencia_fim >= CURDATE())) AS perfis
-         FROM usuario u
-         JOIN usuario_estabelecimento ue ON ue.usuario_id = u.id AND ue.estabelecimento_id = ?
-              AND ue.excluido_em IS NULL AND ue.vigencia_inicio <= CURDATE()
-              AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= CURDATE())
-         LEFT JOIN usuario_profissional up ON up.usuario_id = u.id AND up.excluido_em IS NULL
-              AND up.vigencia_inicio <= CURDATE() AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= CURDATE())
-        WHERE u.excluido_em IS NULL AND u.situacao = 'ativo'
-        ORDER BY u.id`,
-      [est, est, est],
-      { teto: TETO },
-    );
-    return linhas.map((r) => ({
-      usuario: num(r['usuario']),
-      profissional: numOuNull(r['profissional']),
-      setores: ids(r['setores']),
-      especialidades: ids(r['especialidades']),
-      categorias: ids(r['categorias']),
-      perfis: ids(r['perfis']),
-      temEmail: bool(r['tem_email']),
-    }));
   }
 }
