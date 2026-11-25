@@ -93,6 +93,7 @@ import { mensagensCarga } from '../modulos/plataforma/i18n-carga.js';
 import { mensagensDigitalizacao } from '../modulos/same/i18n-digitalizacao.js';
 import { mensagensSameTramite } from '../modulos/same/i18n-tramite.js';
 import { mensagensElegibilidade } from '../modulos/tiss/i18n-elegibilidade.js';
+import { mensagensAutorizacaoPrevia } from '../modulos/tiss/i18n-autorizacao-previa.js';
 import { mensagensCompetenciaTrabalho } from '../modulos/tiss/i18n-competencia-trabalho.js';
 import { mensagensPortal } from '../modulos/portal/i18n.js';
 import { mensagensBiRede } from '../modulos/rede/i18n-bi.js';
@@ -2393,6 +2394,7 @@ export const mensagensWeb = {
   // F3.9: protocolo e empréstimo do arquivo; elegibilidade do beneficiário.
   sameTramite: mensagensSameTramite,
   elegibilidade: mensagensElegibilidade,
+  autorizacaoPrevia: mensagensAutorizacaoPrevia,
   // F3.7 (06-FAT linha 32): o módulo da competência de trabalho do faturista.
   competenciaTrabalho: mensagensCompetenciaTrabalho,
   protocolos: mensagensProtocolos,

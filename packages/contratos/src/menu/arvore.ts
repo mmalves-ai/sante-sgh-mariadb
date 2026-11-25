@@ -6,6 +6,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
 // C2-068 (04-INT L83, F8): o item "Ambulância e maqueiros" dos leitos entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-081 (06-FAT L27, F7): os itens "Autorização prévia à operadora" da recepção e da internação entraram à mão (mesmo
+// motivo); a contagem acompanha.
 // C2-079 (04-INT L84, F8): o item "Internação domiciliar" da internação entrou à mão (mesmo motivo); a contagem
 // acompanha.
 // C2-071 (05-SADT L18, F7): o item "Mamografia e anatomia patológica" do diagnóstico entrou à mão (mesmo motivo); a
@@ -115,7 +117,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":486,"M":198,"P":57,"N":231};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":488,"M":198,"P":57,"N":233};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -163,6 +165,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"recepcao.atendimento.abertura-de-atendimento-ambulatorio-pa-sadt","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Abertura de atendimento"],"titulo":"Abertura de atendimento","selo":"M","fase":2,"rota":"/recepcao/atendimento/novo","permissao":"atendimento.atendimento.ler"},
   {"id":"recepcao.atendimento.dados-do-segurado-titular-e-carteirinha","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Dados do segurado/titular e carteirinha"],"titulo":"Dados do segurado/titular e carteirinha","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=segurado","permissao":"atendimento.atendimento.ler"},
   {"id":"recepcao.atendimento.elegibilidade-e-autorizacao-previa-tiss","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Elegibilidade e autorização prévia"],"titulo":"Elegibilidade e autorização prévia","selo":"N","fase":3,"rota":"/faturamento/elegibilidade","permissao":"atendimento.atendimento.ler"},
+  {"id":"recepcao.atendimento.autorizacao-previa-a-operadora","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Autorização prévia à operadora"],"titulo":"Autorização prévia à operadora","selo":"N","fase":7,"rota":"/faturamento/autorizacoes","permissao":"faturamento.autorizacao.ler"},
   {"id":"recepcao.atendimento.procedimentos-extras-do-atendimento-externo","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Procedimentos extras do atendimento externo"],"titulo":"Procedimentos extras do atendimento externo","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=procedimentos","permissao":"atendimento.atendimento.ler"},
   {"id":"recepcao.atendimento.fluxo-do-paciente-por-local-fila-de-consultorio","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Fluxo do paciente por local"],"titulo":"Fluxo do paciente por local","selo":"M","fase":2,"rota":"/consultorio/fila","permissao":"atendimento.fila.ler"},
   {"id":"recepcao.atendimento.alta-saida-e-cancelamento-do-atendimento","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Alta, saída e cancelamento do atendimento"],"titulo":"Alta, saída e cancelamento do atendimento","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=encerrar","permissao":"atendimento.atendimento.ler"},
@@ -177,6 +180,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.internacao.pre-internacao-e-agendamento-de-internacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Pré-internação e agendamento de internação"],"titulo":"Pré-internação e agendamento de internação","selo":"M","fase":2,"rota":"/internacao/pre","permissao":"internacao.pre.ler"},
   {"id":"internacao-e-leitos.internacao.admissao-nova-internacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Admissão"],"titulo":"Admissão","selo":"M","fase":2,"rota":"/internacao/admissao","permissao":"internacao.internacao.criar"},
   {"id":"internacao-e-leitos.internacao.guias-e-autorizacoes-do-convenio","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Guias e autorizações do convênio"],"titulo":"Guias e autorizações do convênio","selo":"M","fase":2,"rota":"/internacao?acao=guias","permissao":"internacao.internacao.ler"},
+  {"id":"internacao-e-leitos.internacao.autorizacao-previa-e-prorrogacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Autorização prévia e prorrogação"],"titulo":"Autorização prévia e prorrogação","selo":"N","fase":7,"rota":"/faturamento/autorizacoes?origem=internacao","permissao":"faturamento.autorizacao.ler"},
   {"id":"internacao-e-leitos.internacao.trocas-de-clinica-convenio-especialidade-e-medico","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Trocas de clínica, convênio, especialidade e médico"],"titulo":"Trocas de clínica, convênio, especialidade e médico","selo":"M","fase":2,"rota":"/internacao?acao=trocas","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.internacao.diferenca-de-acomodacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Diferença de acomodação"],"titulo":"Diferença de acomodação","selo":"N","fase":3,"rota":"/internacao/diferenca-acomodacao","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.internacao.procedimentos-extras-e-apac-da-internacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Procedimentos extras e APAC da internação"],"titulo":"Procedimentos extras e APAC da internação","selo":"M","fase":2,"rota":"/internacao?acao=procedimentos","permissao":"internacao.internacao.ler"},

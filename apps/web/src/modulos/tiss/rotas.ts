@@ -72,4 +72,11 @@ export const rotasTiss: RouteRecordRaw[] = [
     component: () => import('./telas/ElegibilidadeTela.vue'),
     meta: { permissao: 'atendimento.atendimento.ler' },
   },
+  // C2-081 (06-FAT L27): autorização prévia à operadora, visão por paciente (recepção e internação).
+  {
+    path: '/faturamento/autorizacoes',
+    name: 'tiss.autorizacoes',
+    component: () => import('./telas/AutorizacaoPreviaTela.vue'),
+    meta: { permissao: 'faturamento.autorizacao.ler' },
+  },
 ];
