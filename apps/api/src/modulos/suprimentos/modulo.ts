@@ -30,6 +30,11 @@ import { ContratoController } from './contrato.controller.js';
 import { PORTA_CONTRATO } from './contrato-porta.js';
 import { PORTA_TAXA_CONSIGNACAO, portaTaxaConsignacaoIndisponivel } from './consignado-taxa.js';
 import { SlaContratoController } from './sla-contrato.controller.js';
+import { HomologacaoFornecedorController } from './homologacao-fornecedor.controller.js';
+import {
+  PORTA_HOMOLOGACAO_FORNECEDOR,
+  portaHomologacaoFornecedorIndisponivel,
+} from './homologacao-fornecedor.js';
 import { PORTA_SLA_CONTRATO, portaSlaContratoIndisponivel } from './sla-contrato.js';
 import { ManipulacaoController } from './manipulacao.controller.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
@@ -140,6 +145,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./sla-contrato.js')).PortaSlaContratoPropria(ctx.nucleo)
       : portaSlaContratoIndisponivel();
+  // 09-AREA linha 66: a homologação do fornecedor por questionário grava só no banco próprio (503 sem o núcleo).
+  const homologacaoFornecedor =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./homologacao-fornecedor.js')).PortaHomologacaoFornecedorPropria(ctx.nucleo)
+      : portaHomologacaoFornecedorIndisponivel();
   const taxaConsignacao =
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./consignado-taxa.js')).PortaTaxaConsignacaoPropria(ctx.nucleo)
@@ -177,6 +187,7 @@ export async function modulo(
       ConsignadoController,
       TaxaConsignacaoController,
       SlaContratoController,
+      HomologacaoFornecedorController,
       ContratoController,
       ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
     ],
@@ -190,6 +201,7 @@ export async function modulo(
       { provide: PORTA_CONSIGNADO, useValue: consignado },
       { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
       { provide: PORTA_SLA_CONTRATO, useValue: slaContrato },
+      { provide: PORTA_HOMOLOGACAO_FORNECEDOR, useValue: homologacaoFornecedor },
       { provide: PORTA_CONTRATO, useValue: contrato },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],
