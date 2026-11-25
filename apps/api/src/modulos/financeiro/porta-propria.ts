@@ -92,6 +92,7 @@ import {
   SITUACOES_CONTA_TITULAVEL,
   TIPO_APROVACAO_TITULO,
 } from './operacoes.js';
+import { exigirTipoLancamentoLiberado } from './gestao-propria.js';
 import {
   type ArquivoGuardadoFinanceiro,
   type BasesDrePorta,
@@ -2279,6 +2280,18 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
     // do título, pelo valor e pelo tipo de credor; quem pediu não aprova) e o pagamento por outra pessoa (a saída).
     async concederAdiantamento(d) {
       recusar(conferirConcessao({ valor: d.valor, referente: d.referente, data: d.data, prazo: d.prazo }));
+      // F3.8, 07-FIN linha 99: o tipo de credor liberado aos perfis de quem pede (lista branca, quando há). Tipo sem
+      // cadastro não está em lista nenhuma: o perfil restrito não pede.
+      const tipoPedido = await tx.uma('SELECT id FROM tipo_credor WHERE codigo = ? AND ativo = TRUE', [
+        d.tipoCredor === 'profissional' ? 'medico' : 'fornecedor',
+      ]);
+      await exigirTipoLancamentoLiberado(
+        tx,
+        est,
+        usuario ?? 0,
+        Number(tipoPedido?.['id'] ?? 0),
+        'adiantamento',
+      );
       if (!d.contasEscopo.includes(d.conta)) throw foraDoEscopo();
       if (!(await contasDoEscopo(tx, est, usuario, 'movimentar')).includes(d.conta)) throw foraDoEscopo();
       const tabelaCredor = d.tipoCredor === 'profissional' ? 'profissional' : 'empresa_fornecedora';
