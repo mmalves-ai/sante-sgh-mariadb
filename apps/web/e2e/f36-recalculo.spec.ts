@@ -42,7 +42,7 @@ const diferenca = (saldo: number, extra: Record<string, unknown>) => ({
   ...extra,
 });
 
-test.describe('recálculo auditado do saldo (05-SUP linha 16) @F3.6', () => {
+test.describe('recálculo auditado do saldo (05-SUP linha 16) @F3.6 @C1-073', () => {
   test('prévia com o período refeito e os pendentes, aplicação com motivo e registro na lista; axe', async ({
     page,
   }) => {
