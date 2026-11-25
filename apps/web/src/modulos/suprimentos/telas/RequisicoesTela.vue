@@ -41,6 +41,8 @@ const mensagem = ref<string | null>(null);
 // ── Nova requisição ──
 const rLocal = ref('');
 const rCentro = ref('');
+// Urgência: o local que só atende urgente recusa a requisição comum (política do local, 05-SUP linha 3).
+const rUrgente = ref(false);
 const rItens = ref<{ item: number; nome: string; quantidade: string }[]>([]);
 const opcoesCentros = computed(() => [
   { valor: '', rotulo: t('suprimentos.escolha') },
@@ -65,12 +67,14 @@ async function enviarRequisicao(): Promise<void> {
         local: Number(rLocal.value),
         centroCusto: Number(rCentro.value),
         localConsumo: cc?.localConsumo ?? 1,
+        ...(rUrgente.value ? { urgente: true } : {}),
         itens: rItens.value.map((i) => ({ item: i.item, quantidade: numero(i.quantidade) })),
       },
       novaChave('requisicao'),
     );
     mensagem.value = r.mensagem;
     rItens.value = [];
+    rUrgente.value = false;
     await cliente.invalidateQueries({ queryKey: ['suprimentos', 'requisicoes'] });
   } catch (x) {
     erro.value = x;
@@ -168,6 +172,10 @@ const podeAtender = computed(() => gravacao.data.value?.operacoes['atenderRequis
           :opcoes="opcoesCentros"
           data-testid="req-cc"
         />
+        <label class="campo"
+          ><input v-model="rUrgente" type="checkbox" data-testid="req-urgente" />
+          {{ t('suprimentos.requisicoes.urgente') }}</label
+        >
       </div>
       <BuscaItem testid="req-busca" @escolher="incluirItem" />
       <ul>
