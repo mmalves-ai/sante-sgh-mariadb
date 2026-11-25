@@ -23,7 +23,6 @@ export const mensagensSusAih = {
     quantidade: 'Leitos habilitados',
     inicio: 'A partir da competência',
     fim: 'Até a competência (opcional)',
-    liberaCritica: 'Dispensar a crítica de lotação de UTI',
     salvo: 'Habilitação gravada.',
     encerrada: 'Habilitação gravada; a anterior foi encerrada no mês anterior.',
     vazio: 'Nenhum leito de UTI habilitado.',

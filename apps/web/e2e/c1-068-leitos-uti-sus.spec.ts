@@ -54,7 +54,6 @@ test.describe('C1-068 leitos de UTI habilitados @C1-068', () => {
           unidade: corpo['unidade'],
           unidadeDescricao: 'Unidade sintética de terapia intensiva',
           quantidadeLeitos: corpo['quantidadeLeitos'],
-          liberaCritica: corpo['liberaCritica'],
           vigenciaInicio: corpo['vigenciaInicio'],
           vigenciaFim: corpo['vigenciaFim'],
           ativo: true,
@@ -97,7 +96,6 @@ test.describe('C1-068 leitos de UTI habilitados @C1-068', () => {
         quantidadeLeitos: 10,
         vigenciaInicio: '2026-03-01',
         vigenciaFim: null,
-        liberaCritica: false,
       },
     });
     await expect(page.getByTestId('leitos-uti-linha-701')).toContainText('2026-03');
@@ -110,7 +108,7 @@ test.describe('C1-068 leitos de UTI habilitados @C1-068', () => {
     await expect(page.getByTestId('leitos-uti-aviso')).toHaveText('Habilitação gravada.');
     expect(pedidos[1]).toEqual({
       caminho: '/api/sus/leitos-uti/701/vigencia',
-      corpo: { vigenciaInicio: '2026-03-01', vigenciaFim: '2026-12-31', liberaCritica: false, versao: 1 },
+      corpo: { vigenciaInicio: '2026-03-01', vigenciaFim: '2026-12-31', versao: 1 },
     });
 
     // Inativar pede confirmação e leva a versão; a linha fica, inativa.

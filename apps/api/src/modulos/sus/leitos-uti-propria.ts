@@ -44,14 +44,12 @@ const esquemaInclusao = z
     quantidadeLeitos: z.number().int(),
     vigenciaInicio: dia,
     vigenciaFim: dia.nullable().default(null),
-    liberaCritica: z.boolean().default(false),
   })
   .strict();
 const esquemaVigencia = z
   .object({
     vigenciaInicio: dia,
     vigenciaFim: dia.nullable(),
-    liberaCritica: z.boolean().optional(),
     versao: z.number().int().positive(),
   })
   .strict();
@@ -68,7 +66,6 @@ export interface LeitoUtiHabilitadoLido {
   readonly unidade: number | null;
   readonly unidadeDescricao: string | null;
   readonly quantidadeLeitos: number;
-  readonly liberaCritica: boolean;
   readonly vigenciaInicio: string;
   readonly vigenciaFim: string | null;
   readonly ativo: boolean;
@@ -125,7 +122,6 @@ export class PortaLeitosUtiPropria extends PortaEstabelecimentoPropria {
           unidade: numOuNull(r['unidade_internacao_id']),
           unidadeDescricao: txtOuNull(r['unidade_descricao']),
           quantidadeLeitos: num(r['quantidade_leitos']),
-          liberaCritica: bool(r['libera_critica']),
           vigenciaInicio: dataIso(r['vigencia_inicio'])!,
           vigenciaFim: dataIso(r['vigencia_fim']),
           ativo: bool(r['ativo']),
@@ -198,7 +194,6 @@ export class PortaLeitosUtiPropria extends PortaEstabelecimentoPropria {
         tipo_uti_dominio_sus_id: e.tipo,
         unidade_internacao_id: e.unidade,
         quantidade_leitos: e.quantidadeLeitos,
-        libera_critica: e.liberaCritica,
         vigencia_inicio: e.vigenciaInicio,
         vigencia_fim: e.vigenciaFim,
         ativo: true,
@@ -207,13 +202,13 @@ export class PortaLeitosUtiPropria extends PortaEstabelecimentoPropria {
     });
   }
 
-  /** Altera a vigência (e a dispensa da crítica) com a versão lida; a quantidade muda por nova habilitação. */
+  /** Altera a vigência com a versão lida; a quantidade muda por nova habilitação. */
   async alterarVigencia(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaVigencia, entrada);
     return this.gravar(c, 'faturamento.sus.leitouti.vigencia', TABELAS, async (tx, est) => {
       const atual = await tx.uma(
         `SELECT id, tipo_uti_dominio_sus_id, unidade_internacao_id, quantidade_leitos, vigencia_inicio, vigencia_fim,
-                ativo, libera_critica
+                ativo
            FROM leito_uti_habilitado WHERE id = ? AND estabelecimento_id = ?`,
         [id, est.id],
       );
@@ -244,7 +239,6 @@ export class PortaLeitosUtiPropria extends PortaEstabelecimentoPropria {
       await tx.alterar('leito_uti_habilitado', id, e.versao, {
         vigencia_inicio: e.vigenciaInicio,
         vigencia_fim: e.vigenciaFim,
-        libera_critica: e.liberaCritica ?? bool(atual['libera_critica']),
       });
       return { tabela: 'leito_uti_habilitado', id };
     });

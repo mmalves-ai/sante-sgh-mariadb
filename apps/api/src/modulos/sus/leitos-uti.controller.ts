@@ -2,7 +2,7 @@
 //   GET  /api/sus/leitos-uti                    habilitações do estabelecimento (vigentes, passadas e inativas)
 //   GET  /api/sus/leitos-uti/opcoes             tipos de UTI do domínio SUS e unidades de internação
 //   POST /api/sus/leitos-uti                    inclui (a nova quantidade encerra a anterior aberta na véspera)
-//   POST /api/sus/leitos-uti/:id/vigencia       { vigenciaInicio, vigenciaFim, liberaCritica?, versao }
+//   POST /api/sus/leitos-uti/:id/vigencia       { vigenciaInicio, vigenciaFim, versao }
 //   POST /api/sus/leitos-uti/:id/inativar       { versao } (nada apagado)
 import {
   Body,

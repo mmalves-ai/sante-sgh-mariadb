@@ -26,7 +26,7 @@ import {
   TABELAS_SUS_AIH,
 } from './porta-propria-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
-import { GravacaoSusPropria, TABELAS_SUS } from './porta-propria.js';
+import { GravacaoSusPropria, LeituraSusPropria, TABELAS_SUS } from './porta-propria.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -486,6 +486,7 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
         dataEntrada: '2026-01-30',
         dataSaida: '2026-02-01',
         diarias: 2,
+        unidade: null,
       },
       {
         tipo: Number(TIPO_UTI),
@@ -494,6 +495,7 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
         dataEntrada: '2026-02-01',
         dataSaida: '2026-02-02',
         diarias: 1,
+        unidade: null,
       },
     ];
     await gravar(ids.est, (g) =>
@@ -973,5 +975,95 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     expect(
       await contar('SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ?', [id]),
     ).toBe(2);
+  }, 120_000);
+
+  it('a diária de UTI pela habilitação da competência, não pela de hoje (F7, 06-SUS linha 59)', async () => {
+    // A habilitação encerrada em janeiro, antes do fechamento: janeiro passa e aponta a habilitação; fevereiro, sem
+    // habilitação na competência, recusa o fechamento inteiro e nada fica.
+    const vigencia = (fim: string | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 't93-aih-uti-vigencia' }, (e) =>
+        e.executar('UPDATE leito_uti_habilitado SET vigencia_fim = ? WHERE id = ?', [fim, ids.habUti]),
+      );
+    await vigencia('2026-01-31');
+    try {
+      expect(
+        await nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: ids.est, correlacao }, (l) =>
+          new LeituraSusPropria(l, ids.est).habilitacoesUti(),
+        ),
+      ).toEqual([
+        {
+          id: ids.habUti,
+          tipo: Number(TIPO_UTI),
+          unidade: null,
+          vigenciaInicio: '2026-01-01',
+          vigenciaFim: '2026-01-31',
+          ativo: true,
+        },
+      ]);
+      const id = await gravar(ids.est, (g) => g.inserirAih(laudo()));
+      await gravar(ids.est, (g) =>
+        g.autorizarAih(
+          { id, versao: 1 },
+          {
+            faixa: ids.faixa,
+            numero: numeroAih(BASE + 5n),
+            autorizador: '',
+            dataAutorizacao: '2026-03-04',
+            por: 'x',
+          },
+        ),
+      );
+      const fechar = {
+        procedimentoRealizado: SIG_P,
+        permanencia: 4,
+        diariasUti: 3,
+        diariasUtiAnterior: 2,
+        itens: [],
+        por: 'x',
+      };
+      const jan = {
+        tipo: Number(TIPO_UTI),
+        procedimento: SIG_U,
+        competencia: '202601',
+        dataEntrada: '2026-01-29',
+        dataSaida: '2026-01-31',
+        diarias: 2,
+        unidade: null,
+      };
+      const fev = {
+        ...jan,
+        competencia: '202602',
+        dataEntrada: '2026-02-01',
+        dataSaida: '2026-02-02',
+        diarias: 1,
+      };
+      await expect(
+        gravar(ids.est, (g) =>
+          g.fecharAih({ id, versao: 2, fechamento: 0 }, { ...fechar, diariasCompetencia: [jan, fev] }),
+        ),
+      ).rejects.toThrow(/uti-nao-habilitada/);
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ?', [id]),
+      ).toBe(0);
+      expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({ situacao: 'autorizada', versao: 2 });
+
+      await gravar(ids.est, (g) =>
+        g.fecharAih(
+          { id, versao: 2, fechamento: 0 },
+          { ...fechar, diariasUti: 2, diariasCompetencia: [jan] },
+        ),
+      );
+      expect(
+        await contar(
+          `SELECT COUNT(*) AS n FROM diaria_uti_sus d JOIN conta_aih c ON c.id = d.conta_aih_id
+            WHERE c.autorizacao_internacao_sus_id = ? AND d.leito_uti_habilitado_id = ? AND d.competencia = '202601'
+              AND d.quantidade_lancada = 2 AND d.quantidade_cobrada = 2`,
+          [id, ids.habUti],
+        ),
+      ).toBe(1);
+      expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({ situacao: 'fechada', versao: 3 });
+    } finally {
+      await vigencia(null);
+    }
   }, 120_000);
 });

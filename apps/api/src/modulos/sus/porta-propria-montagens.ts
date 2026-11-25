@@ -9,6 +9,7 @@
 // - O item da conta liga à SIGTAP pela equivalência vigente do item faturável (a do instrumento antes da de todos).
 // - O "registro" da tela é o atendimento (CIHA, BPA e APAC) ou a internação (AIH); as contas parciais vão juntas.
 // O paciente lido aqui vai só ao arquivo do gestor: nunca à tela, à trilha nem ao log.
+import type { HabilitacaoUtiVigencia } from '@sgh/dominio-faturamento';
 import type { Leitor } from '@sgh/nucleo';
 import type { AtendimentoBpaLido, AtendimentoLido, DadosBpaLidos, DadosCihaLidos } from './porta.js';
 import type { DadosAihLidos } from './porta-aih.js';
@@ -63,6 +64,8 @@ export interface ApoioMontagemSus {
   }>;
   cnesCadastrados(): Promise<number[]>;
   leitosUti(): Promise<{ tipo: number; nome: string; leitos: number }[]>;
+  /** As habilitações de UTI com vigência e unidade, pelo código do tipo no SIH (a crítica por competência). */
+  habilitacoesUti?(): Promise<HabilitacaoUtiVigencia[]>;
   sigtapPorCodigo(codigo: string): Promise<{ id: number; codigo: string; nome: string } | null>;
 }
 
@@ -742,7 +745,7 @@ export class MontagensSusPropria {
     for (const parte of lotes(internacoes.map((i) => i.registro))) {
       const ls = await this.l.consultar(
         `SELECT o.internacao_id, ${dia('o.data_hora_inicio')} AS entrada, ${dia('o.data_hora_fim')} AS saida,
-                a.codigo_enfermaria_aih AS acomodacao
+                a.codigo_enfermaria_aih AS acomodacao, o.unidade_internacao_id AS unidade
            FROM ocupacao_leito o LEFT JOIN acomodacao a ON a.id = o.acomodacao_id
           WHERE o.estabelecimento_id = ? AND o.excluido_em IS NULL AND o.internacao_id IN (${marcadores(parte.length)})
           ORDER BY o.internacao_id, o.data_hora_inicio, o.id`,
@@ -759,6 +762,7 @@ export class MontagensSusPropria {
           entrada: txt(x['entrada']),
           saida: txtOuNulo(x['saida']),
           acomodacao,
+          unidade: numOuNulo(x['unidade']),
         });
       }
     }
@@ -788,6 +792,7 @@ export class MontagensSusPropria {
       porCodigo,
       cids,
       leitosUti: await this.apoio.leitosUti(),
+      ...(this.apoio.habilitacoesUti ? { habilitacoesUti: await this.apoio.habilitacoesUti() } : {}),
       cnesCadastrados: await this.apoio.cnesCadastrados(),
     };
   }

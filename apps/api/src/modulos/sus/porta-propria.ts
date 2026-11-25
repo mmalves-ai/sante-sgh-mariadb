@@ -640,6 +640,7 @@ export class LeituraSusPropria implements LeituraSus {
       sigtapDosIds: (ids) => this.sigtapDosIds(ids),
       cnesCadastrados: () => this.cnesCadastrados(),
       leitosUti: () => this.leitosUti(),
+      habilitacoesUti: () => this.habilitacoesUti(),
       sigtapPorCodigo: (c) => this.sigtapPorCodigo(c),
     }));
   }
@@ -713,6 +714,41 @@ export class LeituraSusPropria implements LeituraSus {
   }
 
   // ── AIH: leitos de UTI habilitados (o restante do ciclo é pendente de modelo) ──
+
+  /**
+   * As habilitações de UTI do estabelecimento com a vigência e a unidade, pelo código do tipo no SIH: a crítica do
+   * fechamento olha a competência de cada diária (F7, 06-SUS linha 59), não os leitos de hoje.
+   */
+  async habilitacoesUti(): Promise<
+    {
+      id: number;
+      tipo: number;
+      unidade: number | null;
+      vigenciaInicio: string;
+      vigenciaFim: string | null;
+      ativo: boolean;
+    }[]
+  > {
+    const ls = await this.l.consultar(
+      `SELECT h.id, d.codigo_oficial, d.codigo, h.unidade_internacao_id AS unidade,
+              ${dia('h.vigencia_inicio')} AS vigencia_inicio, ${dia('h.vigencia_fim')} AS vigencia_fim
+         FROM leito_uti_habilitado h JOIN dominio_sus d ON d.id = h.tipo_uti_dominio_sus_id
+        WHERE h.estabelecimento_id = ? AND h.ativo
+        ORDER BY h.vigencia_inicio, h.id`,
+      [this.est],
+      { teto: 2000 },
+    );
+    return ls
+      .map((x) => ({
+        id: num(x['id']),
+        tipo: Number(txtOuNulo(x['codigo_oficial']) ?? txt(x['codigo'])),
+        unidade: numOuNulo(x['unidade']),
+        vigenciaInicio: txt(x['vigencia_inicio']),
+        vigenciaFim: txtOuNulo(x['vigencia_fim']),
+        ativo: true,
+      }))
+      .filter((x) => Number.isFinite(x.tipo));
+  }
 
   async leitosUti(): Promise<{ tipo: number; nome: string; leitos: number }[]> {
     const hoje = hojeIso();

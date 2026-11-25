@@ -45,7 +45,6 @@ const f = reactive({
   quantidadeLeitos: null as number | null,
   inicio: mesAtual(),
   fim: '',
-  liberaCritica: false,
 });
 const opTipos = computed(() => [
   { valor: null, rotulo: t('faturamentoSus.aih.leitosUtiCadastro.tipo') },
@@ -68,7 +67,7 @@ const problemas = computed(() => {
 const erro = ref<unknown>(null);
 const aviso = ref('');
 const acao = useMutation({
-  mutationFn: (fn: () => Promise<{ encerrada?: number | null }>) => fn(),
+  mutationFn: (fn: () => Promise<{ id: number; encerrada?: number | null }>) => fn(),
   onSuccess: (r) => {
     erro.value = null;
     aviso.value = t(
@@ -92,24 +91,21 @@ const incluir = () =>
       quantidadeLeitos: Number(f.quantidadeLeitos),
       vigenciaInicio: inicioDe(f.inicio),
       vigenciaFim: f.fim ? fimDe(f.fim) : null,
-      liberaCritica: f.liberaCritica,
     }),
   );
 
 const editando = ref<number | null>(null);
-const v = reactive({ inicio: '', fim: '', liberaCritica: false });
+const v = reactive({ inicio: '', fim: '' });
 const editar = (x: LeitoUti) => {
   editando.value = x.id;
   v.inicio = mesDe(x.vigenciaInicio);
   v.fim = mesDe(x.vigenciaFim);
-  v.liberaCritica = x.liberaCritica;
 };
 const gravarVigencia = (x: LeitoUti) =>
   acao.mutate(() =>
     alterarVigenciaLeitoUti(x.id, {
       vigenciaInicio: inicioDe(v.inicio),
       vigenciaFim: v.fim ? fimDe(v.fim) : null,
-      liberaCritica: v.liberaCritica,
       versao: x.versao,
     }),
   );
@@ -184,10 +180,6 @@ const situacao = (x: LeitoUti) =>
         >{{ t('faturamentoSus.aih.leitosUtiCadastro.fim') }}
         <input v-model="f.fim" type="month" data-testid="leitos-uti-fim"
       /></label>
-      <label
-        ><input v-model="f.liberaCritica" type="checkbox" data-testid="leitos-uti-libera" />
-        {{ t('faturamentoSus.aih.leitosUtiCadastro.liberaCritica') }}</label
-      >
       <ul v-if="problemas.length" class="problemas" data-testid="leitos-uti-problemas">
         <li v-for="p in problemas" :key="p">{{ p }}</li>
       </ul>
@@ -226,10 +218,6 @@ const situacao = (x: LeitoUti) =>
           <td v-if="editando === x.id">
             <input v-model="v.inicio" type="month" required data-testid="leitos-uti-vig-inicio" />
             <input v-model="v.fim" type="month" data-testid="leitos-uti-vig-fim" />
-            <label
-              ><input v-model="v.liberaCritica" type="checkbox" />
-              {{ t('faturamentoSus.aih.leitosUtiCadastro.liberaCritica') }}</label
-            >
           </td>
           <td v-else>
             {{ mesDe(x.vigenciaInicio) }} —

@@ -187,6 +187,8 @@ export interface PassagemLeito {
   readonly entrada: string;
   readonly saida: string | null;
   readonly acomodacao: number;
+  /** A unidade de internação da ocupação (a habilitação de UTI é por unidade). */
+  readonly unidade?: number | null;
 }
 
 export interface LoteSaida {

@@ -14,6 +14,7 @@ import {
   type DiariaUtiCompetencia,
   diariasUtiPorCompetencia,
   diasDePermanencia,
+  habilitacaoUtiDaCompetencia,
   type InternacaoAih,
   type LinhaSisaih,
   montarAih,
@@ -98,6 +99,8 @@ export function montarAihs(
   const leitosUti = new Map<number, number>();
   for (const l of dados.leitosUti) leitosUti.set(l.tipo, (leitosUti.get(l.tipo) ?? 0) + l.leitos);
   const uti = utiPorAcomodacaoDoParametro(pAih.utiPorAcomodacao);
+  // A crítica de UTI não habilitada pela competência de cada diária e pela unidade (F7, 06-SUS linha 59).
+  const habilitacoesUti = dados.habilitacoesUti;
   const porRegistro = new Map(dados.internacoes.map((x) => [x.registro, x]));
   return aihs.map((a) => {
     const i = porRegistro.get(a.registro) ?? null;
@@ -113,6 +116,12 @@ export function montarAihs(
       compatibilidades: compat,
       habilitacoes: p.habilitacoes,
       leitosUti,
+      ...(habilitacoesUti
+        ? {
+            utiHabilitada: (tipo: number, competencia: string, unidade: number | null) =>
+              habilitacaoUtiDaCompetencia(habilitacoesUti, tipo, competencia, unidade) !== null,
+          }
+        : {}),
       utiPorAcomodacao: uti,
       cnsValido,
       cidExiste: (cid) => dados.cids.has(cid),
@@ -160,7 +169,12 @@ export function montarAihs(
         })),
       passagens: dados.passagens
         .filter((x) => x.registro === i.registro)
-        .map((x) => ({ entrada: x.entrada, saida: x.saida, acomodacao: x.acomodacao })),
+        .map((x) => ({
+          entrada: x.entrada,
+          saida: x.saida,
+          acomodacao: x.acomodacao,
+          unidade: x.unidade ?? null,
+        })),
     };
     const r = montarAih(comRealizado, internacao, ctx);
     // A especialidade (D-ESPEC-AIH-51): a da internação; sem ela, a única da lista de leitos da SIGTAP do principal.

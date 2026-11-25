@@ -150,14 +150,13 @@ describe.skipIf(SEM_BANCO)('PortaLeitosUtiPropria contra o MariaDB (contrato de 
     await porta.alterarVigencia(ctx(), segunda, {
       vigenciaInicio: '2026-03-01',
       vigenciaFim: '2026-12-31',
-      liberaCritica: true,
       versao: 1,
     });
     const [s] = await ler(
-      'SELECT vigencia_fim, libera_critica, versao, alterado_por FROM leito_uti_habilitado WHERE id = ?',
+      'SELECT vigencia_fim, versao, alterado_por FROM leito_uti_habilitado WHERE id = ?',
       [segunda],
     );
-    expect(s).toMatchObject({ libera_critica: 1, versao: 2, alterado_por: m.usuario });
+    expect(s).toMatchObject({ versao: 2, alterado_por: m.usuario });
     await expect(
       porta.alterarVigencia(ctx(), segunda, { vigenciaInicio: '2026-03-01', vigenciaFim: null, versao: 1 }),
     ).rejects.toBeTruthy();
@@ -188,7 +187,6 @@ describe.skipIf(SEM_BANCO)('PortaLeitosUtiPropria contra o MariaDB (contrato de 
       classe: 'adulto',
       nivel: 2,
       quantidadeLeitos: 12,
-      liberaCritica: true,
     });
     const op = await porta.opcoes(ctx());
     expect(op.tipos.map((x) => x.id)).toEqual(expect.arrayContaining([m.adulto, m.neo]));

@@ -15,7 +15,6 @@ export const esquemaLeitoUti = z.object({
   unidade: z.number().nullable(),
   unidadeDescricao: z.string().nullable(),
   quantidadeLeitos: z.number(),
-  liberaCritica: z.boolean(),
   vigenciaInicio: z.string(),
   vigenciaFim: z.string().nullable(),
   ativo: z.boolean(),
@@ -35,7 +34,6 @@ export const incluirLeitoUti = (corpo: {
   quantidadeLeitos: number;
   vigenciaInicio: string;
   vigenciaFim: string | null;
-  liberaCritica: boolean;
 }) =>
   enviar(
     B,
@@ -45,7 +43,7 @@ export const incluirLeitoUti = (corpo: {
   );
 export const alterarVigenciaLeitoUti = (
   id: number,
-  corpo: { vigenciaInicio: string; vigenciaFim: string | null; liberaCritica: boolean; versao: number },
+  corpo: { vigenciaInicio: string; vigenciaFim: string | null; versao: number },
 ) => enviar(`${B}/${id}/vigencia`, corpo, comId, novaChave('sus-leito-uti-vigencia'));
 export const inativarLeitoUti = (id: number, versao: number) =>
   enviar(`${B}/${id}/inativar`, { versao }, comId, novaChave('sus-leito-uti-inativar'));

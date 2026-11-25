@@ -651,8 +651,9 @@ export class GravacoesAihPropria {
 
   /**
    * As diárias de UTI da conta por competência (diaria_uti_sus): o tipo de UTI do SIH pelo domínio SUS do cliente (a
-   * classe e o nível pela descrição), a habilitação vigente do tipo na competência e o procedimento da diária. Sem
-   * corte: a quantidade lançada é a cobrada (a falta de leito habilitado já é crítica bloqueante no fechamento).
+   * classe e o nível pela descrição), a habilitação vigente do tipo na competência e na unidade da passagem (com recuo
+   * para a de todo o estabelecimento) e o procedimento da diária. Sem habilitação na competência, recusa (a mesma regra
+   * da crítica bloqueante do fechamento, conferida de novo na gravação). Sem corte: a quantidade lançada é a cobrada.
    */
   private async gravarDiariasUti(conta: number, diarias: readonly DiariaUtiCompetencia[]): Promise<void> {
     let sequencia = 0;
@@ -699,7 +700,13 @@ export class GravacoesAihPropria {
         })),
         t.id,
         d.competencia,
+        d.unidade ?? null,
       );
+      if (habilitacao === null)
+        throw recusa(
+          'uti-nao-habilitada',
+          `Não há leitos de UTI deste tipo habilitados na competência ${d.competencia.slice(4)}/${d.competencia.slice(0, 4)} para a unidade da passagem.`,
+        );
       const sigtap = await this.sigtapId(d.procedimento);
       if (!sigtap)
         throw recusa('procedimento-inexistente', 'A diária de UTI não existe na tabela unificada.');
