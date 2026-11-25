@@ -174,8 +174,19 @@ test.describe('Setores, ramais e centro de custo @F3.1-13 @F3.1', () => {
             title: 'Operação recusada',
             status: 409,
             codigo: 'setor-com-leitos-ativos',
-            detail: 'Inative antes os leitos das unidades de internação deste setor.',
+            detail:
+              'Inative antes os leitos das unidades de internação deste setor. Há paciente ocupando leito neste setor: transfira ou dê alta antes.',
             campos: ['situacao'],
+            regras: [
+              {
+                codigo: 'setor-com-leitos-ativos',
+                mensagem: 'Inative antes os leitos das unidades de internação deste setor.',
+              },
+              {
+                codigo: 'setor-com-pacientes-internados',
+                mensagem: 'Há paciente ocupando leito neste setor: transfira ou dê alta antes.',
+              },
+            ],
           }),
         });
       }
@@ -252,9 +263,11 @@ test.describe('Setores, ramais e centro de custo @F3.1-13 @F3.1', () => {
     await page.getByLabel('Data', { exact: true }).fill('2026-11-20');
     await situacao.click();
     await expect(page.getByTestId('mensagem-erro')).toContainText('Operação recusada');
-    await expect(page.getByTestId('recusa-motivo')).toHaveText(
+    // Dois impedimentos: os dois aparecem de uma vez (sem uma volta por motivo).
+    await expect(page.getByTestId('recusa-motivo').locator('li')).toHaveText([
       'Inative antes os leitos das unidades de internação deste setor.',
-    );
+      'Há paciente ocupando leito neste setor: transfira ou dê alta antes.',
+    ]);
     await expect(page.getByTestId('gravado')).toHaveCount(0);
     await expect(motivo).toHaveValue('Setor fechado pela reforma');
     await semViolacaoAxe(page, 'setores: recusa da inativação');
@@ -285,5 +298,72 @@ test.describe('Setores, ramais e centro de custo @F3.1-13 @F3.1', () => {
       motivo: 'Setor reaberto depois da reforma',
     });
     await semViolacaoAxe(page, 'setores: árvore');
+  });
+
+  test('gravação do setor recusada: todos os motivos de uma vez; código sem texto próprio mostra o detalhe; sem detalhe, o texto de reserva', async ({
+    page,
+  }) => {
+    const recusa = (corpo: Record<string, unknown>) => ({
+      status: 409,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({
+        type: 'urn:sgh:problema:recusa-de-negocio',
+        title: 'Operação recusada',
+        status: 409,
+        ...corpo,
+      }),
+    });
+    // Na ordem: dois motivos (regras), um código que a tela não conhece só com o detalhe, um sem detalhe, e aceita.
+    const respostas = [
+      recusa({
+        codigo: 'responsavel-sem-inicio',
+        detail: 'Informe o início da responsabilidade. Já existe setor com este código.',
+        campos: ['responsavelInicio', 'codigo'],
+        regras: [
+          { codigo: 'responsavel-sem-inicio', mensagem: 'Informe o início da responsabilidade.' },
+          { codigo: 'codigo-repetido', mensagem: 'Já existe setor com este código.' },
+        ],
+      }),
+      recusa({ codigo: 'superior-em-ciclo', detail: 'O setor superior não pode ser um subordinado dele.' }),
+      recusa({ codigo: 'codigo-sem-texto' }),
+    ];
+    let gravacoes = 0;
+    await page.route('**/api/cadastros/estrutura-gestao**', (rota) => {
+      const r = rota.request();
+      if (r.method() === 'GET') return json(rota, ESTRUTURA);
+      gravacoes += 1;
+      const resposta = respostas.shift();
+      return resposta ? rota.fulfill(resposta) : json(rota, { id: 41 });
+    });
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/cadastros/estrutura');
+    await page.getByTestId('aba-setores').click();
+    await page.getByTestId('setor-S1').getByRole('button').click();
+    const motivos = page.getByTestId('recusa-motivo').locator('li');
+    const gravar = page.getByTestId('gravar-setor');
+
+    await gravar.click();
+    await expect(page.getByTestId('mensagem-erro')).toContainText('Operação recusada');
+    await expect(motivos).toHaveText([
+      'Informe o início da responsabilidade.',
+      'Já existe setor com este código.',
+    ]);
+    await expect(page.getByTestId('gravado')).toHaveCount(0);
+    // O formulário continua aberto com o que foi digitado.
+    await expect(page.locator('input[name="setor-codigo"]')).toHaveValue('S1');
+    await semViolacaoAxe(page, 'setores: recusa da gravação com dois motivos');
+
+    await gravar.click();
+    await expect(motivos).toHaveText(['O setor superior não pode ser um subordinado dele.']);
+
+    await gravar.click();
+    await expect(motivos).toHaveText([
+      'A gravação foi recusada: confira os campos preenchidos e tente de novo.',
+    ]);
+
+    await gravar.click();
+    await expect(page.getByTestId('gravado')).toBeVisible();
+    await expect(page.getByTestId('recusa-motivo')).toHaveCount(0);
+    expect(gravacoes).toBe(4);
   });
 });

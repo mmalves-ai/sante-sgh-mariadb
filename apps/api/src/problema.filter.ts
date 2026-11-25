@@ -94,6 +94,9 @@ export function problemaDoNucleo(p: ProblemDetails): Problema {
     detail: p.detail,
     ...(p.codigo ? { codigo: p.codigo } : {}),
     ...(p.campos ? { campos: [...p.campos] } : p.colunas ? { campos: [...p.colunas] } : {}),
+    ...(p.regras?.length
+      ? { regras: p.regras.map((r) => ({ codigo: r.codigo, mensagem: r.mensagem })) }
+      : {}),
   };
 }
 

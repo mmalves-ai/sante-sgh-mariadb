@@ -7,6 +7,7 @@ import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { tipoDoProblema } from '@sgh/contratos';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import {
@@ -31,11 +32,21 @@ const dados = computed(() => consulta.data.value);
 const aba = ref<'estabelecimento' | 'unidades' | 'setores'>('estabelecimento');
 const erro = ref<unknown>(null);
 const ok = ref(false);
-/** O que resolver antes, pelo código da recusa (setor com leitos ativos, paciente no leito, data futura…). */
-const recusa = computed(() => {
-  const codigo = erro.value instanceof ErroApi ? erro.value.problema?.codigo : null;
-  const chave = `estruturaGestao.recusas.${codigo}`;
-  return codigo && te(chave) ? t(chave) : null;
+/**
+ * O que resolver antes, com TODOS os motivos da recusa de uma vez (setor com subordinados, leitos ativos e paciente
+ * no leito aparece com os três). A mensagem vem da API (`regras`, a mesma fonte dos códigos); sem ela, vale o texto
+ * da tela pelo código, depois o detalhe da recusa e, por fim, um texto de reserva: a recusa nunca fica sem motivo.
+ */
+const recusas = computed<string[]>(() => {
+  const p = erro.value instanceof ErroApi ? erro.value.problema : null;
+  if (!p || tipoDoProblema(p) !== 'recusa-de-negocio') return [];
+  const doCodigo = (codigo: string | undefined): string | null => {
+    const chave = `estruturaGestao.recusas.${codigo}`;
+    return codigo && te(chave) ? t(chave) : null;
+  };
+  const lista = (p.regras ?? []).map((r) => r.mensagem.trim() || doCodigo(r.codigo) || '').filter(Boolean);
+  if (lista.length) return [...new Set(lista)];
+  return [doCodigo(p.codigo) ?? (p.detail?.trim() || t('estruturaGestao.recusas.reserva'))];
 });
 
 async function fazer(fn: () => Promise<unknown>, depois?: () => void): Promise<void> {
@@ -179,7 +190,9 @@ const nomeUnidade = (id: number | null) =>
     </div>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <MensagemErro v-if="erro" :erro="erro" />
-    <p v-if="recusa" role="alert" data-testid="recusa-motivo">{{ recusa }}</p>
+    <ul v-if="recusas.length" class="recusas" role="alert" data-testid="recusa-motivo">
+      <li v-for="r in recusas" :key="r">{{ r }}</li>
+    </ul>
     <p v-if="ok" role="status" data-testid="gravado">{{ t('estruturaGestao.comum.gravado') }}</p>
     <p v-if="consulta.isPending.value">{{ t('estruturaGestao.comum.carregando') }}</p>
 
@@ -580,6 +593,10 @@ const nomeUnidade = (id: number | null) =>
 }
 .aviso {
   color: var(--sgh-alerta);
+}
+.recusas {
+  margin: 0;
+  padding-left: var(--sgh-espaco-3);
 }
 .arvore {
   list-style: none;

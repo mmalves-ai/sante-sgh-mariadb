@@ -24,6 +24,13 @@ export interface ProblemDetails {
   readonly restricao?: string;
   readonly dependentes?: readonly DependenteDoProblema[];
   readonly podeInativar?: boolean;
+  readonly regras?: readonly RegraDoProblema[];
+}
+
+/** Um motivo da recusa (código e mensagem em português): a recusa com vários motivos leva todos de uma vez. */
+export interface RegraDoProblema {
+  readonly codigo: string;
+  readonly mensagem: string;
 }
 
 export interface ExtrasProblema {
@@ -32,6 +39,7 @@ export interface ExtrasProblema {
   readonly restricao?: string;
   readonly dependentes?: readonly DependenteDoProblema[];
   readonly podeInativar?: boolean;
+  readonly regras?: readonly RegraDoProblema[];
 }
 
 export class ErroOperacao extends Error {

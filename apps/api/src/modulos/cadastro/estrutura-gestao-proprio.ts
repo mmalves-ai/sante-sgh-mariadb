@@ -96,15 +96,23 @@ const MENSAGENS: Record<string, [string, string]> = {
   'mais-de-um-principal': ['Marque um só ramal principal.', 'ramais'],
   'mais-de-um-responsavel': ['Marque um só ramal do responsável.', 'ramais'],
 };
+/** Recusa com TODOS os motivos de uma vez (`regras`): a tela lista o que resolver sem uma volta por motivo. */
 function recusarErros(erros: readonly string[]): void {
   if (!erros.length) return;
-  throw recusa(erros[0]!, erros.map((e) => MENSAGENS[e]?.[0] ?? e).join(' '), {
-    campos: [...new Set(erros.map((e) => MENSAGENS[e]?.[1] ?? e))],
+  const unicos = [...new Set(erros)];
+  const regras = unicos.map((e) => ({
+    codigo: e,
+    mensagem: MENSAGENS[e]?.[0] ?? 'Confira os dados informados.',
+  }));
+  throw recusa(unicos[0]!, regras.map((r) => r.mensagem).join(' '), {
+    campos: [...new Set(unicos.map((e) => MENSAGENS[e]?.[1] ?? e))],
+    regras,
   });
 }
 const naoAchado = (o: string) =>
   new ErroOperacao(404, `${o.toLowerCase()}-inexistente`, 'Não encontrado', `${o} não encontrado.`);
-const recusaCampo = (codigo: string, msg: string, campo: string) => recusa(codigo, msg, { campos: [campo] });
+const recusaCampo = (codigo: string, msg: string, campo: string) =>
+  recusa(codigo, msg, { campos: [campo], regras: [{ codigo, mensagem: msg }] });
 
 /** Confere que o id existe na tabela de apoio (e no estabelecimento, quando a tabela é dele). */
 async function existe(
