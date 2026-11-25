@@ -49,6 +49,13 @@ export const rotasOperadora: RouteRecordRaw[] = [
   },
   // M56 (etapa 8, F7): o portal do prestador credenciado, lado da operadora (contas do portal e domínios do item; as
   // contas só a quem lê a rede). O atendimento com protocolo entra na tela das autorizações.
+  // 08-SGO L107 (C2-061): trocas TISS com os prestadores (recebidas e enviadas; receber a mensagem em arquivo).
+  {
+    path: '/operadora/troca-tiss',
+    name: 'operadora.trocaTiss',
+    component: () => import('./telas/TrocaTissOperadoraTela.vue'),
+    meta: { permissao: 'operadora.conta.ler' },
+  },
   {
     path: '/operadora/portal-prestador',
     name: 'operadora.portalPrestador',
