@@ -36,6 +36,8 @@ import { EMAIL_CONFIGURACAO, EmailConfiguracaoController } from './email-configu
 import { EmailConfiguracaoPropria } from './email-configuracao-propria.js';
 import { cofreEmailDoAmbiente, testadorDoAmbiente } from './email-teste-conexao.js';
 import { SERVICO_SBIS, ServicoSbis } from './sbis/servico.js';
+import { ALCADA_APROVACAO, AlcadaAprovacaoController } from './alcada-aprovacao.controller.js';
+import { AlcadaAprovacaoPropria } from './alcada-aprovacao-propria.js';
 
 /** O produto não convive com sistema anterior (ADR 0003). */
 export const SEM_SISTEMA_ANTERIOR: SituacaoEstabelecimento = Object.freeze({
@@ -120,6 +122,7 @@ export async function modulo(
       PreferenciasController,
       NotificacaoRegraController,
       EmailConfiguracaoController,
+      AlcadaAprovacaoController,
       ...(opcoes.controladores ?? []),
     ],
     providers: [
@@ -152,6 +155,14 @@ export async function modulo(
                 // A senha do servidor vai só ao cofre (chave presa ao cliente); a tela vê "senha definida".
                 cofreEmailDoAmbiente(ctx.env),
               )
+            : null,
+      },
+      // Alçadas de aprovação (01-ADM L59): só com o banco próprio; sem ele, 503.
+      {
+        provide: ALCADA_APROVACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new AlcadaAprovacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(opcoes.provedores ?? []),

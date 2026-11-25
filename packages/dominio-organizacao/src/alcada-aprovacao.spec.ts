@@ -87,6 +87,12 @@ describe('alçada de aprovação', () => {
         { id: 7, inicio: '2026-02-01', fim: null },
       ]),
     ).toEqual({ recusa: 'vigencia-sobreposta' });
+    // A nova no meio da anterior aberta deixaria um buraco no fim: recusa.
+    expect(
+      planejarVigencia({ inicio: '2026-06-01', fim: '2026-07-01' }, [
+        { id: 7, inicio: '2026-01-01', fim: null },
+      ]),
+    ).toEqual({ recusa: 'vigencia-sobreposta' });
     expect(
       planejarVigencia({ inicio: '2026-12-01', fim: null }, [
         { id: 7, inicio: '2026-01-01', fim: null },

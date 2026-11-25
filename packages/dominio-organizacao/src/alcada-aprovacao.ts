@@ -126,9 +126,13 @@ export type PlanoVigencia =
 
 /**
  * A vigência nova contra as regras ativas do mesmo estabelecimento e documento (sem a própria, se alteração).
- * A regra aberta (ou que termina depois) que começou antes da nova é encerrada na véspera; qualquer outra
- * sobreposição recusa.
+ * A regra que começou antes da nova é encerrada na véspera quando a nova vai até onde ela ia (ou além); qualquer
+ * outra sobreposição (inclusive a nova no meio da anterior) recusa.
  */
+/** A nova vai até onde a anterior ia (ou além): só então a anterior é encerrada na véspera, sem buraco. */
+const cobreOFim = (novaFim: string | null, fim: string | null): boolean =>
+  novaFim === null || (fim !== null && novaFim >= fim);
+
 export function planejarVigencia(
   nova: { readonly inicio: string; readonly fim: string | null },
   existentes: readonly VigenciaExistente[],
@@ -138,7 +142,7 @@ export function planejarVigencia(
   );
   if (sobre.length === 0) return { recusa: null, encerrar: null };
   const [e] = sobre;
-  if (sobre.length === 1 && e && e.inicio < nova.inicio)
+  if (sobre.length === 1 && e && e.inicio < nova.inicio && cobreOFim(nova.fim, e.fim))
     return { recusa: null, encerrar: { id: e.id, fim: vespera(nova.inicio) } };
   return { recusa: 'vigencia-sobreposta' };
 }
