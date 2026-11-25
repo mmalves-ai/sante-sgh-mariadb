@@ -112,6 +112,10 @@ export const mensagensAtendimento = {
     buscarPaciente: 'Buscar paciente',
     escolherPaciente: 'Escolher {nome} (prontuário {pront})',
     herdado: 'Campos preenchidos do atendimento de {data}: confira antes de gravar.',
+    daCarteira:
+      'Convênio, plano, carteirinha e validade preenchidos da carteira do cadastro do paciente: confira antes de gravar.',
+    semCarteiraUtil: 'O paciente não tem carteira em vigor no cadastro.',
+    verCarteiras: 'Atualizar as carteiras na ficha do paciente',
     anteriores: '{n} atendimento(s) anteriores',
     ficha: 'Dados do atendimento',
     eletivo: 'Eletivo',

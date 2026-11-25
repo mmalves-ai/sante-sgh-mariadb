@@ -144,6 +144,7 @@ const coberturas = useQuery({
   enabled: computed(() => paciente.value !== null),
   retry: false,
 });
+const herdou = ref<string[]>([]);
 const daCarteira = ref<number | null>(null);
 const propostaVista = ref(false);
 const CAMPOS_DA_CARTEIRA = ['convenio', 'matricula', 'plano', 'validadeCarteira'];
@@ -165,6 +166,8 @@ function limparCarteira(): void {
 watch(
   () => paciente.value?.id ?? 0,
   () => {
+    // A carteira é do paciente: ao trocar de paciente, o convênio que veio dela sai junto.
+    if (daCarteira.value !== null) convenio.value = '';
     limparCarteira();
     propostaVista.value = false;
   },
@@ -172,13 +175,15 @@ watch(
 watch(
   () => [coberturas.data.value, convenio.value, apoio.data.value, paciente.value?.id ?? 0] as const,
   ([c, conv, a, pac]) => {
-    if (!c || !a || !pac || coberturas.isFetching.value) return;
-    // Convênio vazio: a proposta entra uma vez por paciente (quem esvaziar o campo depois não é contrariado).
-    if (conv === '' && propostaVista.value) return limparCarteira();
+    if (!c || !a || !pac) return;
+    // A proposta entra uma vez por paciente (quem esvaziar o convênio depois não é contrariado) e vence o convênio
+    // herdado do atendimento anterior; o convênio do agendamento ou escolhido pela pessoa fica.
+    const primeira = !propostaVista.value;
+    if (conv === '' && !primeira) return limparCarteira();
     propostaVista.value = true;
     const p = preenchimentoDaCobertura(
       c,
-      conv,
+      primeira && herdou.value.includes('convenio') ? '' : conv,
       a.convenios.filter((x) => x.aceita).map((x) => x.codigo),
     );
     if (!p) return limparCarteira();
@@ -194,7 +199,6 @@ watch(
 
 // A herança: o servidor aplica as marcas em vigor e as regras da cobertura (plano e carteirinha só com o convênio,
 // validade vencida vira aviso); a tela preenche todos os campos herdados e a pessoa confere.
-const herdou = ref<string[]>([]);
 const avisosHeranca = computed(() => historico.data.value?.anterior?.avisos ?? []);
 watch(
   () => historico.data.value,
