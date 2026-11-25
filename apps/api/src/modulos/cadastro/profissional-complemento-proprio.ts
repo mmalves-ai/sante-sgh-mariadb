@@ -210,9 +210,9 @@ const operacaoGravarFiscal = (trilha: RegistroTrilhaTela) =>
         throw recusaCampos('estabelecimento-inexistente', 'O estabelecimento não existe.', [
           'estabelecimento',
         ]);
-      const vigentes = await tx.consultar(
+      const vigentes = await tx.consultarParaAtualizar(
         `SELECT id, estabelecimento_id, vigencia_inicio, vigencia_fim, versao FROM profissional_dado_fiscal
-          WHERE profissional_id = ? AND excluido_em IS NULL FOR UPDATE`,
+          WHERE profissional_id = ? AND excluido_em IS NULL`,
         [e.profissional],
       );
       const versoes = new Map(vigentes.map((v) => [Number(v['id']), Number(v['versao'])]));
@@ -375,9 +375,9 @@ const operacaoIncluirConta = (trilha: RegistroTrilhaTela) =>
           'O favorecido não é o profissional nem a empresa dele no dado fiscal. Confirme o pagamento a terceiro.',
           ['favorecidoDocumento'],
         );
-      const ativas = await tx.consultar(
+      const ativas = await tx.consultarParaAtualizar(
         `SELECT id, versao, principal FROM conta_bancaria_profissional
-          WHERE profissional_id = ? AND ativo AND excluido_em IS NULL FOR UPDATE`,
+          WHERE profissional_id = ? AND ativo AND excluido_em IS NULL`,
         [e.profissional],
       );
       // A primeira conta é a principal; a nova principal tira a marca da anterior (uma só).
@@ -455,18 +455,18 @@ const operacaoIncluirRqe = (trilha: RegistroTrilhaTela) =>
         );
       // O mesmo RQE na UF é de um só profissional: a leitura trava o intervalo (UF, número) do índice até o COMMIT, na
       // inclusão e na volta do inativado.
-      const outro = await tx.uma(
+      const [outro] = await tx.consultarParaAtualizar(
         `SELECT id FROM profissional_rqe WHERE unidade_federativa_id = ? AND numero_rqe = ? AND ativo
-            AND excluido_em IS NULL AND profissional_id <> ? FOR UPDATE`,
+            AND excluido_em IS NULL AND profissional_id <> ?`,
         [uf['id'], e.numero, e.profissional],
       );
       if (outro)
         throw recusaCampos('rqe-de-outro', 'Este RQE nesta UF já está no cadastro de outro profissional.', [
           'numero',
         ]);
-      const ja = await tx.uma(
+      const [ja] = await tx.consultarParaAtualizar(
         `SELECT id, versao, ativo, numero_rqe FROM profissional_rqe WHERE profissional_id = ?
-            AND especialidade_medica_id = ? AND unidade_federativa_id = ? AND excluido_em IS NULL FOR UPDATE`,
+            AND especialidade_medica_id = ? AND unidade_federativa_id = ? AND excluido_em IS NULL`,
         [e.profissional, e.especialidade, uf['id']],
       );
       const valores = {
@@ -568,9 +568,9 @@ const operacaoIncluirAssinatura = (trilha: RegistroTrilhaTela) =>
       }
       // Uma assinatura vigente por tipo (regra do domínio): a anterior aberta encerra na véspera da nova; qualquer outra
       // sobreposição (com fim informado, ou que começa no mesmo dia ou depois) recusa.
-      const ativas = await tx.consultar(
+      const ativas = await tx.consultarParaAtualizar(
         `SELECT id, versao, vigencia_inicio, vigencia_fim FROM profissional_assinatura WHERE profissional_id = ?
-            AND tipo = ? AND ativo AND excluido_em IS NULL FOR UPDATE`,
+            AND tipo = ? AND ativo AND excluido_em IS NULL`,
         [e.profissional, e.tipo],
       );
       const versoes = new Map(ativas.map((a) => [Number(a['id']), Number(a['versao'])]));
