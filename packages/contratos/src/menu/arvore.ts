@@ -53,7 +53,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C1-114 (06-FAT linha 22): o item "Protocolo de documentos entre setores" das contas do paciente entrou à mão (mesmo
 // motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":446,"M":198,"P":57,"N":191};
+// C1-109 (03-PEP L147): o item "Anotações administrativas do caso" do NIR entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":447,"M":198,"P":57,"N":192};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -127,6 +129,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.nir-e-regulacao.reserva-de-leito-validade-e-confirmacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Reserva de leito"],"titulo":"Reserva de leito","selo":"N","fase":5,"rota":"/internacao/nir/reservas","permissao":"internacao.reservaLeito.ler"},
   {"id":"internacao-e-leitos.nir-e-regulacao.alta-prevista-dpa-e-barreiras-de-alta","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Alta prevista e barreiras de alta"],"titulo":"Alta prevista e barreiras de alta","selo":"N","fase":5,"rota":"/internacao/nir/altas-previstas","permissao":"internacao.altaPrevista.ler"},
   {"id":"internacao-e-leitos.nir-e-regulacao.quadro-de-permanencia-verde-amarelo-vermelho","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Quadro de permanência"],"titulo":"Quadro de permanência","selo":"N","fase":5,"rota":"/internacao/nir/permanencia","permissao":"internacao.permanencia.ler"},
+  {"id":"internacao-e-leitos.nir-e-regulacao.anotacoes-administrativas-do-caso","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Anotações administrativas do caso"],"titulo":"Anotações administrativas do caso","selo":"N","fase":7,"rota":"/pep/anotacoes-administrativas","permissao":"pep.prontuario.ler"},
   {"id":"internacao-e-leitos.nir-e-regulacao.regulacao-estadual-gerint-gercon-n-de-regulacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Regulação estadual"],"titulo":"Regulação estadual","selo":"P","fase":5,"rota":"/internacao/nir/regulacao","permissao":"internacao.regulacao.ler"},
   {"id":"internacao-e-leitos.nir-e-regulacao.quadro-clinico-e-evolucao-da-regulacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Quadro clínico e evolução da regulação"],"titulo":"Quadro clínico e evolução da regulação","selo":"N","fase":7,"rota":"/internacao/controles/regulacao","permissao":"internacao.regulacao.ler"},
   {"id":"internacao-e-leitos.controles-da-internacao.auditoria-do-isolamento","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Auditoria do isolamento"],"titulo":"Auditoria do isolamento","selo":"N","fase":7,"rota":"/internacao/controles/isolamento","permissao":"qualidade.precaucao.ler"},

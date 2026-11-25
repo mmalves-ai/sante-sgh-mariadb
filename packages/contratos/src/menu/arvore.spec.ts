@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('446 itens: M 198, P 57, N 191, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 446, M: 198, P: 57, N: 191 });
+  it('447 itens: M 198, P 57, N 192, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 447, M: 198, P: 57, N: 192 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(446);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(447);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -404,6 +404,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/pep/admin/modelos', // M22
         '/pep/admin/tipos', // M22
         '/pep/uti/indices', // M45 (etapa 2)
+        '/pep/anotacoes-administrativas', // C1-109 (03-PEP L147)
         '/pep/cadastros/nutricao', // M23: Nutrição clínica (CRUD genérico das dietas)
         '/pep/especialidades/obstetricia', // M45 (etapa 6)
         '/pep/especialidades/oftalmologia', // M45 (etapa 6)
