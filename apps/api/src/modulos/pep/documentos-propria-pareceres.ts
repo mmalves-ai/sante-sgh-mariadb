@@ -947,6 +947,7 @@ export class DocumentosPropriaPareceres {
         'declaracao_obito_evento',
         'documento_prontuario',
         'documento_prontuario_evento',
+        'paciente',
       ],
       async (tx, est, s, falhar) => {
         await this.exigirAtendimento(tx, est.id, o.paciente, o.atendimento, falhar);
@@ -1008,7 +1009,7 @@ export class DocumentosPropriaPareceres {
             origem: 'sistema',
           });
         // A emissão (com número) é o primeiro evento da declaração; o rascunho ainda não tem evento.
-        if (numero !== null)
+        if (numero !== null) {
           await tx.incluir('declaracao_obito_evento', {
             declaracao_obito_id: id,
             operacao: 'inclusao',
@@ -1017,6 +1018,10 @@ export class DocumentosPropriaPareceres {
             ocorrido_em: agora,
             usuario_id: s.usuario,
           });
+          // 02-CAD linha 13: a emissão marca o óbito no cadastro na mesma transação (falecido, declaração e data),
+          // e o paciente deixa de abrir atendimento, marcação e internação (regra do domínio do atendimento).
+          await this.marcarObitoNoCadastro(tx, o.paciente, { declaracao: id, em: o.dataHora });
+        }
         return { id, documento };
       },
       (r) => ({ tabela: 'declaracao_obito', id: r.id }),
@@ -1039,7 +1044,13 @@ export class DocumentosPropriaPareceres {
     return this.gravar(
       c,
       'pep.obito.cancelar',
-      ['declaracao_obito', 'declaracao_obito_evento', 'documento_prontuario', 'documento_prontuario_evento'],
+      [
+        'declaracao_obito',
+        'declaracao_obito_evento',
+        'documento_prontuario',
+        'documento_prontuario_evento',
+        'paciente',
+      ],
       async (tx, est, s, falhar) => {
         this.inscricaoDa(s, o.cbo, falhar);
         const d = (
@@ -1072,6 +1083,8 @@ export class DocumentosPropriaPareceres {
           ocorrido_em: agora,
           usuario_id: s.usuario,
         });
+        // 02-CAD linha 13: a declaração cancelada desfaz a marca do óbito no cadastro, se era ela a ligada ao paciente.
+        await this.desfazerObitoNoCadastro(tx, o.paciente, id);
         const documento = numOuNull(d!['documento_prontuario_id']);
         if (documento !== null) {
           const cancelado = await tx.uma(
@@ -1110,6 +1123,38 @@ export class DocumentosPropriaPareceres {
       (r) => ({ tabela: 'declaracao_obito', id: r.id }),
       (r) => ({ motivo: o.motivo.trim(), dados: { evento: 'pep.obito.cancelado', documento: r.documento } }),
     );
+  }
+
+  /** Marca o óbito no cadastro do paciente (02-CAD linha 13), sob a trava da linha do paciente. */
+  private async marcarObitoNoCadastro(
+    tx: TxOperacao,
+    paciente: number,
+    o: { declaracao: number; em: Date },
+  ): Promise<void> {
+    const [p] = await tx.consultarParaAtualizar(
+      'SELECT id, versao FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      [paciente],
+    );
+    if (!p) return;
+    await tx.alterar('paciente', paciente, num(p['versao']), {
+      falecido: true,
+      declaracao_obito_id: o.declaracao,
+      data_hora_obito: o.em,
+    });
+  }
+
+  /** Desfaz a marca do óbito quando a declaração cancelada é a ligada ao paciente. */
+  private async desfazerObitoNoCadastro(tx: TxOperacao, paciente: number, declaracao: number): Promise<void> {
+    const [p] = await tx.consultarParaAtualizar(
+      'SELECT id, versao FROM paciente WHERE id = ? AND declaracao_obito_id = ? AND excluido_em IS NULL',
+      [paciente, declaracao],
+    );
+    if (!p) return;
+    await tx.alterar('paciente', paciente, num(p['versao']), {
+      falecido: false,
+      declaracao_obito_id: null,
+      data_hora_obito: null,
+    });
   }
 
   // ── Ciência de valor crítico ────────────────────────────────────────────────────────────────────

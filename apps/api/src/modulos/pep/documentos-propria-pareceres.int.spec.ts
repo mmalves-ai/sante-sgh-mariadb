@@ -84,6 +84,12 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       const est = "(SELECT id FROM estabelecimento WHERE codigo LIKE CONCAT(?, '%'))";
       // A trilha (fecho, cabeça da cadeia, idempotência que aponta para ela e linhas) só do lote (SBIS-16).
       await limparTrilhaDaMassa(e, { prefixo: P });
+      // A marca do óbito no cadastro aponta para a declaração (fk_paciente_declaracao_obito_id): sai antes dela.
+      await e.executar(
+        `UPDATE paciente SET falecido = FALSE, declaracao_obito_id = NULL, data_hora_obito = NULL
+          WHERE declaracao_obito_id IN (SELECT id FROM declaracao_obito WHERE estabelecimento_id IN ${est})`,
+        [P],
+      );
       await e.executar(
         `DELETE ev FROM documento_prontuario_evento ev JOIN documento_prontuario d ON d.id = ev.documento_prontuario_id
           WHERE d.estabelecimento_id IN ${est}`,
@@ -139,6 +145,21 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, async (l) =>
       Number((await l.uma(sql, p))?.['n'] ?? 0),
     );
+  // 02-CAD linha 13: a marca do óbito no cadastro (falecido, declaração ligada e data copiada da declaração).
+  const cadastro = (paciente: number) =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, async (l) => {
+      const x = await l.uma(
+        'SELECT falecido, declaracao_obito_id, data_hora_obito FROM paciente WHERE id = ?',
+        [paciente],
+      );
+      const d = x?.['data_hora_obito'];
+      return {
+        falecido: Number(x?.['falecido'] ?? 0) === 1,
+        declaracao: x?.['declaracao_obito_id'] == null ? null : Number(x['declaracao_obito_id']),
+        em: d instanceof Date ? d.toISOString() : d == null ? null : String(d),
+      };
+    });
+  const vivo = { falecido: false, declaracao: null, em: null };
 
   beforeAll(async () => {
     const banco = `cliente_${CLIENTE}`;
@@ -671,6 +692,8 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       atendimento: ids.atendimento,
     });
     expect(await recusa(porta.registrarObito(G(), o))).toEqual({ codigo: 'ja-registrado', status: 409 });
+    // O rascunho (sem número) ainda não é a declaração emitida: o cadastro não muda.
+    expect(await cadastro(ids.paciente)).toEqual(vivo);
     expect(
       await contar(
         `SELECT COUNT(*) AS n FROM documento_prontuario d
@@ -705,6 +728,12 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         [ob.id],
       ),
     ).toBe(1);
+    // 02-CAD linha 13: a emissão marca o óbito no cadastro na mesma transação.
+    expect(await cadastro(ids.pacienteB)).toEqual({
+      falecido: true,
+      declaracao: ob.id,
+      em: '2026-11-22T11:00:00.000Z',
+    });
     expect(
       await recusa(
         porta.registrarObito(G(), { ...o, paciente: ids.pacienteC, atendimento: ids.atendimentoC }),
@@ -713,6 +742,8 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     expect(
       await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
     ).toBe(0);
+    // A recusa desfaz tudo: o cadastro do paciente C segue vivo.
+    expect(await cadastro(ids.pacienteC)).toEqual(vivo);
   });
 
   it('óbito (L126): causas em linhas, evento de emissão; cancelamento com motivo e evento; nova declaração depois', async () => {
@@ -758,10 +789,14 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       status: 403,
     });
     expect(await eventos('cancelamento')).toBe(0);
+    // Recusado o cancelamento, a marca do óbito continua.
+    expect(await cadastro(ids.pacienteC)).toMatchObject({ falecido: true, declaracao: ob.id });
     expect(await porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null })).toEqual({
       id: ob.id,
       documento: ob.documento,
     });
+    // 02-CAD linha 13: a declaração cancelada desfaz a marca no cadastro na mesma transação.
+    expect(await cadastro(ids.pacienteC)).toEqual(vivo);
     expect(
       await contar(
         `SELECT COUNT(*) AS n FROM declaracao_obito
@@ -813,12 +848,19 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     // Cancelada, a pessoa pode receber nova declaração (com outro número); a cancelada continua no banco.
     const nova = await porta.registrarObito(G(), { ...o, numero: 'L9800003' });
     expect(await porta.obito(C(), ids.pacienteC)).toMatchObject({ id: nova.id, numero: 'L9800003' });
+    expect(await cadastro(ids.pacienteC)).toEqual({
+      falecido: true,
+      declaracao: nova.id,
+      em: '2026-11-22T12:00:00.000Z',
+    });
     expect(
       await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
     ).toBe(2);
     // Rascunho (sem número) cancelado: sem data de emissão inventada e sem evento de emissão; só o de cancelamento.
     await porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null });
+    expect(await cadastro(ids.pacienteC)).toEqual(vivo);
     const rascunho = await porta.registrarObito(G(), { ...o, numero: null });
+    expect(await cadastro(ids.pacienteC)).toEqual(vivo);
     await porta.cancelarObito(G(), {
       paciente: ids.pacienteC,
       motivo: 'Rascunho aberto no paciente errado',
