@@ -2,8 +2,9 @@
 // 02-REC linha 34: manutenção dos locais de atendimento (consultórios e salas) numa tela só. A lista à esquerda e,
 // no local escolhido, a semana de funcionamento (grade inteira gravada de uma vez, com a regra do domínio validando
 // na hora), os locais para onde ele encaminha, os locais que ele consulta e quem o opera ou atende nele. A recusa do
-// servidor aparece no próprio painel.
-import { localAberto, validarHorarioLocal } from '@sgh/dominio-atendimento';
+// servidor aparece no próprio painel. Cada bloco tem o seu rascunho: gravar um bloco repõe só ele, e o que está
+// editado nos outros continua na tela até ser gravado ou até a troca de local.
+import { ligacoesComLocalAtivo, localAberto, validarHorarioLocal } from '@sgh/dominio-atendimento';
 import { SanteBotao, SanteCampoTexto, SanteChave, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -15,6 +16,7 @@ import {
   buscarUsuariosLocal,
   type FaixaLocal,
   lerLocaisAtendimento,
+  type LocalAtendimento,
   manterLocalAtendimento,
 } from '../api-locais-atendimento.js';
 
@@ -27,9 +29,6 @@ const erro = ref<unknown>(null);
 const mensagem = ref('');
 const escolhido = ref('');
 const local = computed(() => dados.data.value?.locais.find((l) => String(l.id) === escolhido.value) ?? null);
-const outros = computed(() =>
-  (dados.data.value?.locais ?? []).filter((l) => l.id !== local.value?.id && l.ativo),
-);
 const opcoesLocais = computed(() => [
   { valor: '', rotulo: t('locaisAtendimento.nenhum') },
   ...(dados.data.value?.locais ?? []).map((l) => ({
@@ -45,6 +44,9 @@ async function gravar(a: AcaoLocal): Promise<number | null> {
     const r = await manterLocalAtendimento(a, novaChave('locais'));
     mensagem.value = r.mensagem ?? '';
     await qc.invalidateQueries({ queryKey: CHAVE });
+    // Só o bloco gravado volta ao que o servidor devolveu; os outros rascunhos ficam como o usuário deixou.
+    const l = local.value;
+    if (a.acao !== 'incluir' && l && l.id === a.local) repor[a.acao](l);
     return r.resultado.local;
   } catch (e) {
     erro.value = e;
@@ -86,25 +88,56 @@ const faixas = ref<{ dia: string; inicio: string; fim: string }[]>([]);
 const destinos = ref<number[]>([]);
 const consultados = ref<number[]>([]);
 const usuarios = ref<{ usuario: number; rotulo: string; atuaNoLocal: boolean; podeOperar: boolean }[]>([]);
-watch(
-  local,
-  (l) => {
-    if (!l) return;
+// Um repositor por bloco (a chave é a ação que grava o bloco).
+const repor: Record<Exclude<AcaoLocal['acao'], 'incluir'>, (l: LocalAtendimento) => void> = {
+  dados: (l) => {
     descricao.value = l.descricao;
     encaminha.value = l.permiteEncaminhamento;
     modulo.value = l.moduloRecepcao === null ? '' : String(l.moduloRecepcao);
     ativo.value = l.ativo;
+  },
+  horario: (l) => {
     faixas.value = l.horario.map((f) => ({
       dia: f.diaNaoUtil ? 'nu' : String(f.diaSemana),
       inicio: f.inicio,
       fim: f.fim,
     }));
+  },
+  encaminhamentos: (l) => {
     destinos.value = [...l.encaminhaPara];
+  },
+  visibilidade: (l) => {
     consultados.value = [...l.consulta];
+  },
+  usuarios: (l) => {
     usuarios.value = l.usuarios.map((u) => ({ ...u, rotulo: `${u.nome} (${u.login})` }));
+  },
+};
+// O rascunho inteiro só é reposto ao TROCAR de local (pelo id): a recarga da consulta, depois de uma gravação ou ao
+// voltar à janela, não descarta o que está editado e ainda não foi gravado.
+watch(
+  () => local.value?.id,
+  () => {
+    const l = local.value;
+    if (l) for (const bloco of Object.values(repor)) bloco(l);
   },
   { immediate: true },
 );
+
+// ── Ligações entre locais ──
+const todos = computed(() => dados.data.value?.locais ?? []);
+// Os outros locais ativos e, só para a ligação sair, o inativo que ainda está ligado a este (dado antigo).
+const outros = computed(() =>
+  todos.value.filter(
+    (l) =>
+      l.id !== local.value?.id &&
+      (l.ativo || destinos.value.includes(l.id) || consultados.value.includes(l.id)),
+  ),
+);
+// O envio leva só as ligações com local ativo: a ligação com o inativo sai na gravação, sem o usuário procurá-la.
+const destinosVigentes = computed(() => ligacoesComLocalAtivo(destinos.value, todos.value));
+const consultadosVigentes = computed(() => ligacoesComLocalAtivo(consultados.value, todos.value));
+const ligadoAInativo = computed(() => outros.value.some((l) => !l.ativo));
 
 const opcoesDia = computed(() => [
   ...[1, 2, 3, 4, 5, 6, 7].map((d) => ({
@@ -330,14 +363,19 @@ const usuarioSemPapel = computed(() => usuarios.value.some((u) => !u.atuaNoLocal
             </thead>
             <tbody>
               <tr v-for="o in outros" :key="o.id">
-                <td>{{ o.codigo }} · {{ o.descricao }}</td>
+                <td>
+                  {{ o.codigo }} · {{ o.descricao }}
+                  <span v-if="!o.ativo" :data-testid="`local-ligado-inativo-${o.id}`">
+                    {{ t('locaisAtendimento.inativo') }}
+                  </span>
+                </td>
                 <td>
                   <SanteChave
                     :ligada="destinos.includes(o.id)"
                     :rotulo="t('locaisAtendimento.ligacoes.encaminhaPara', { local: o.descricao })"
                     ocultar-rotulo
                     :data-testid="`local-destino-${o.id}`"
-                    :desabilitada="!local.permiteEncaminhamento"
+                    :desabilitada="!local.permiteEncaminhamento || !o.ativo"
                     @alternar="destinos = alternar(destinos, o.id)"
                   />
                 </td>
@@ -347,21 +385,25 @@ const usuarioSemPapel = computed(() => usuarios.value.some((u) => !u.atuaNoLocal
                     :rotulo="t('locaisAtendimento.ligacoes.consulta', { local: o.descricao })"
                     ocultar-rotulo
                     :data-testid="`local-consulta-${o.id}`"
+                    :desabilitada="!o.ativo"
                     @alternar="consultados = alternar(consultados, o.id)"
                   />
                 </td>
               </tr>
             </tbody>
           </table>
+          <p v-if="ligadoAInativo" data-testid="local-ligado-inativo">
+            {{ t('locaisAtendimento.ligacoes.inativoSai') }}
+          </p>
           <template v-if="props.podeEditar">
             <SanteBotao
               v-if="local.permiteEncaminhamento"
               :rotulo="t('locaisAtendimento.ligacoes.gravarEncaminhamentos')"
-              @acionar="gravar({ acao: 'encaminhamentos', local: local.id, destinos })"
+              @acionar="gravar({ acao: 'encaminhamentos', local: local.id, destinos: destinosVigentes })"
             />
             <SanteBotao
               :rotulo="t('locaisAtendimento.ligacoes.gravarConsultados')"
-              @acionar="gravar({ acao: 'visibilidade', local: local.id, consultados })"
+              @acionar="gravar({ acao: 'visibilidade', local: local.id, consultados: consultadosVigentes })"
             />
           </template>
         </fieldset>

@@ -75,6 +75,12 @@ export class LocaisAtendimentoController {
       },
       e,
     );
-    return { ok: true, resultado: r.resultado, repetida: r.repetida, mensagem: MENSAGEM[e.acao] };
+    // Inativar o local retira as ligações dos outros locais com ele: a resposta diz quantas saíram.
+    const retiradas = e.acao === 'dados' ? r.resultado.itens - 1 : 0;
+    const mensagem =
+      retiradas > 0
+        ? `${MENSAGEM[e.acao]} ${retiradas} ligação(ões) de outros locais com este local foram retiradas.`
+        : MENSAGEM[e.acao];
+    return { ok: true, resultado: r.resultado, repetida: r.repetida, mensagem };
   }
 }

@@ -52,6 +52,8 @@ export const mensagensLocaisAtendimento = {
     colunaConsulta: 'Consulta os atendimentos',
     encaminhaPara: 'Encaminha para {local}',
     consulta: 'Consulta {local}',
+    inativoSai:
+      'Há ligação com local inativo: ela não vale mais e sai quando os encaminhamentos ou os locais consultados forem gravados.',
     gravarEncaminhamentos: 'Gravar encaminhamentos',
     gravarConsultados: 'Gravar locais consultados',
   },

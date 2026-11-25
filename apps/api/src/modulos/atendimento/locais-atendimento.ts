@@ -3,11 +3,13 @@
 // aqui ficam a leitura da unidade e a gravação pelo executor (trilha na mesma transação), numa operação só com cinco
 // ações: incluir o local, alterar os dados do local, gravar a semana de funcionamento, os locais para onde encaminha,
 // os locais que ele consulta e quem o opera ou atende nele. Ligação retirada nunca apaga a linha: fica a exclusão
-// lógica (quem e quando) e volta pela mesma linha. A faixa de horário é configuração sem exclusão lógica: a semana
+// lógica (quem e quando) e volta pela mesma linha. Inativar o local retira, na mesma transação e também por exclusão
+// lógica, as ligações dos outros locais que apontam para ele (ninguém fica preso a um destino inativo). A faixa de horário é configuração sem exclusão lógica: a semana
 // anterior fica na trilha (entrada da operação) antes de ser trocada.
 import {
   diferencaLista,
   type FaixaHorarioLocal,
+  ligacoesQueSaemAoInativar,
   type LocalDaUnidade,
   validarHorarioLocal,
   validarLigacaoLocais,
@@ -407,7 +409,26 @@ export class LocaisAtendimentoPropria {
         ativo: e.ativo,
         ...(e.moduloRecepcao !== undefined ? { modulo_recepcao_id: e.moduloRecepcao } : {}),
       });
-      return { local: e.local, acao: e.acao, itens: 1 };
+      // Local inativo não recebe encaminhamento nem é consultado: as ligações de entrada saem com ele.
+      let retiradas = 0;
+      for (const [tabela, coluna] of [
+        ['local_atendimento_encaminhamento', 'destino_local_atendimento_id'],
+        ['local_atendimento_visibilidade', 'consultado_local_atendimento_id'],
+      ] as const) {
+        if (e.ativo) break;
+        const entradas = await tx.consultarParaAtualizar(
+          `SELECT id, versao FROM ${tabela} WHERE ${coluna} = ? AND excluido_em IS NULL`,
+          [e.local],
+        );
+        for (const x of ligacoesQueSaemAoInativar(e.ativo, entradas)) {
+          await tx.alterar(tabela, num(x['id']), num(x['versao']), {
+            excluido_em: agora,
+            excluido_por: ctx.usuario ?? null,
+          });
+          retiradas++;
+        }
+      }
+      return { local: e.local, acao: e.acao, itens: 1 + retiradas };
     }
     if (e.acao === 'horario') {
       const v = validarHorarioLocal(e.faixas);

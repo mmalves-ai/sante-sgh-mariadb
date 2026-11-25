@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   diferencaLista,
+  ligacoesComLocalAtivo,
+  ligacoesQueSaemAoInativar,
   localAberto,
   validarHorarioLocal,
   validarLigacaoLocais,
@@ -72,6 +74,19 @@ describe('ligação entre locais', () => {
     expect(cod(validarLigacaoLocais('encaminhamento', locais[1]!, [1], locais))).toBe('local-nao-encaminha');
     expect(cod(validarLigacaoLocais('visibilidade', locais[1]!, [1], locais))).toBe('ok');
     expect(cod(validarLigacaoLocais('encaminhamento', locais[1]!, [], locais))).toBe('ok');
+  });
+  it('ao inativar o local saem as ligações que apontam para ele; ativo, nenhuma', () => {
+    const entradas = [{ id: 10 }, { id: 11 }];
+    expect(ligacoesQueSaemAoInativar(false, entradas)).toEqual(entradas);
+    expect(ligacoesQueSaemAoInativar(true, entradas)).toEqual([]);
+  });
+  it('das ligações do local, só valem as com local ativo da unidade', () => {
+    expect(ligacoesComLocalAtivo([3, 2, 2, 99], locais)).toEqual([2]);
+    // Com as vigentes, a regra de ligação aceita a gravação que a ligação antiga com o inativo travava.
+    expect('recusa' in validarLigacaoLocais('visibilidade', locais[0]!, [2, 3], locais)).toBe(true);
+    expect(
+      validarLigacaoLocais('visibilidade', locais[0]!, ligacoesComLocalAtivo([2, 3], locais), locais),
+    ).toEqual({ destinos: [2] });
   });
   it('calcula o que entra, volta e sai sem apagar', () => {
     expect(diferencaLista([1, 2], [3], [2, 3, 4])).toEqual({ incluir: [4], reativar: [3], retirar: [1] });

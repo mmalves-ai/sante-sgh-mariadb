@@ -4,7 +4,9 @@
 // página dos locais, a inclusão de um local com a recepção e o módulo, a grade de funcionamento validada na hora pela
 // regra do domínio (faixa sobreposta trava o botão sem ir ao servidor), o encaminhamento e a visibilidade entre
 // locais, o local que não encaminha com os destinos travados, os usuários do local com o papel exigido e a
-// inativação pelos dados. O efeito no banco (semana trocada inteira, exclusão lógica e reativação da mesma linha,
+// inativação pelos dados; o rascunho de um bloco que sobrevive à gravação de outro; a ligação antiga com local
+// inativo, que aparece marcada, não vai no envio e some ao gravar; e o local inativado, que deixa de ser destino dos
+// outros sem prender ninguém. O efeito no banco (semana trocada inteira, exclusão lógica e reativação da mesma linha,
 // trilha, recusas sem gravação) está no contrato de efeito
 // (apps/api/src/modulos/atendimento/locais-atendimento.int.spec.ts).
 import { expect, type Page, type Route, test } from '@playwright/test';
@@ -72,6 +74,20 @@ test.describe('F3.2 locais de atendimento: horário, encaminhamento e quem vê @
         ativo: true,
         horario: [{ diaSemana: 2, diaNaoUtil: false, inicio: '08:00', fim: '12:00' }],
         encaminhaPara: [],
+        // Ligação antiga com um local hoje inativo (dado anterior à regra de inativação).
+        consulta: [904],
+        usuarios: [],
+      },
+      {
+        ...base,
+        id: 904,
+        codigo: 'SALA4',
+        descricao: 'SALA SINTETICA 4',
+        moduloRecepcao: null,
+        permiteEncaminhamento: false,
+        ativo: false,
+        horario: [],
+        encaminhaPara: [],
         consulta: [],
         usuarios: [],
       },
@@ -126,6 +142,12 @@ test.describe('F3.2 locais de atendimento: horário, encaminhamento e quem vê @
         l.permiteEncaminhamento = c['permiteEncaminhamento'] === true;
         l.ativo = c['ativo'] === true;
         l.moduloRecepcao = (c['moduloRecepcao'] as number | null) ?? null;
+        // Como o servidor: inativar retira as ligações dos outros locais com este.
+        if (!l.ativo)
+          for (const o of locais) {
+            o.encaminhaPara = o.encaminhaPara.filter((x) => x !== id);
+            o.consulta = o.consulta.filter((x) => x !== id);
+          }
       }
       if (c['acao'] === 'horario') l.horario = c['faixas'] as Faixa[];
       if (c['acao'] === 'encaminhamentos') l.encaminhaPara = c['destinos'] as number[];
@@ -195,17 +217,29 @@ test.describe('F3.2 locais de atendimento: horário, encaminhamento e quem vê @
 
     // Encaminhamento e visibilidade entre locais, cada um gravado inteiro.
     const ligacoes = page.getByTestId('local-ligacoes');
+    // A ligação antiga com o local inativo aparece marcada e travada, com o aviso de que sai ao gravar.
+    await expect(page.getByTestId('local-ligado-inativo-904')).toBeVisible();
+    await expect(page.getByTestId('local-consulta-904')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('local-consulta-904')).toBeDisabled();
+    await expect(page.getByTestId('local-ligado-inativo')).toBeVisible();
+    // Dois blocos editados, um gravado: o rascunho do outro (locais consultados) fica como estava.
     await page.getByTestId('local-destino-902').click();
+    await page.getByTestId('local-consulta-902').click();
+    await page.getByTestId('local-consulta-903').click();
     await ligacoes.getByRole('button', { name: 'Gravar encaminhamentos' }).click();
     await expect(aviso).toHaveText('Locais de encaminhamento gravados.');
     expect(pedidos[2]).toEqual({ acao: 'encaminhamentos', local: 901, destinos: [902] });
-    await page.getByTestId('local-consulta-902').click();
-    await page.getByTestId('local-consulta-903').click();
+    await expect(page.getByTestId('local-resumo')).toContainText('encaminha para 1 · consulta 1');
+    await expect(page.getByTestId('local-consulta-902')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('local-consulta-903')).toHaveAttribute('aria-checked', 'true');
+    // O envio leva só os locais ativos: o inativo sai sem o usuário desmarcar, e a linha dele some.
     await ligacoes.getByRole('button', { name: 'Gravar locais consultados' }).click();
     await expect(aviso).toHaveText('Locais consultados gravados.');
     expect(pedidos[3]).toEqual({ acao: 'visibilidade', local: 901, consultados: [902, 903] });
     await expect(page.getByTestId('local-resumo')).toContainText('encaminha para 1 · consulta 2');
     await expect(page.getByTestId('local-destino-902')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('local-consulta-904')).toHaveCount(0);
+    await expect(page.getByTestId('local-ligado-inativo')).toHaveCount(0);
 
     // Usuários do local: quem entra sem papel trava a gravação até marcar se atende ou opera.
     const usuarios = page.getByTestId('local-usuarios');
@@ -245,6 +279,15 @@ test.describe('F3.2 locais de atendimento: horário, encaminhamento e quem vê @
       moduloRecepcao: null,
     });
     await expect(page.getByTestId('local-ativo')).toHaveAttribute('aria-checked', 'false');
-    expect(pedidos).toHaveLength(6);
+
+    // O local inativado deixa de ser destino e de ser consultado pelo 901, que segue gravando sem recusa.
+    await escolher(page.getByTestId('local-escolhido'), '901');
+    await expect(page.getByTestId('local-resumo')).toContainText('encaminha para 0 · consulta 1');
+    await expect(page.getByTestId('local-destino-902')).toHaveCount(0);
+    await expect(page.getByTestId('local-consulta-903')).toHaveAttribute('aria-checked', 'true');
+    await ligacoes.getByRole('button', { name: 'Gravar locais consultados' }).click();
+    await expect(aviso).toHaveText('Locais consultados gravados.');
+    expect(pedidos[6]).toEqual({ acao: 'visibilidade', local: 901, consultados: [903] });
+    expect(pedidos).toHaveLength(7);
   });
 });

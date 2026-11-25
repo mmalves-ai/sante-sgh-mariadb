@@ -3,7 +3,8 @@
 // registros do lote são limpos antes e depois. Prova o que fica no banco: o local incluído, a semana de funcionamento
 // trocada inteira, o encaminhamento e a visibilidade entre locais com exclusão lógica (quem e quando) e reativação da
 // mesma linha, os usuários do local com o papel, a trilha na mesma transação e as recusas do domínio (faixa
-// sobreposta, origem que não encaminha, local ligado a si, usuário sem papel), sem gravar nada na recusa.
+// sobreposta, origem que não encaminha, local ligado a si, usuário sem papel), sem gravar nada na recusa; e que
+// inativar um local retira, na mesma gravação, as ligações dos outros locais com ele, sem prender ninguém.
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -273,6 +274,59 @@ describe.skipIf(SEM_BANCO)('manutenção dos locais de atendimento (banco própr
         [ids.l1],
       ),
     ).toBeGreaterThanOrEqual(7);
+  });
+
+  it('inativar o local retira as ligações de entrada (exclusão lógica) e ninguém fica preso a ele', async () => {
+    // Estado: C1 encaminha para C2 e C3; C2 consulta C1. C3 passa a consultar C2.
+    await manter({ acao: 'visibilidade', local: ids.l3, consultados: [ids.l2] });
+    const dadosC2 = (ativo: boolean) =>
+      manter({
+        acao: 'dados',
+        local: ids.l2,
+        descricao: 'CONSULTORIO SINTETICO C2',
+        permiteEncaminhamento: false,
+        ativo,
+      });
+    const entradas = () =>
+      ler<{ t: string; excluido_em: Date | null; excluido_por: number | null }>(
+        `SELECT 'e' AS t, excluido_em, excluido_por FROM local_atendimento_encaminhamento
+          WHERE destino_local_atendimento_id = ?
+         UNION ALL
+         SELECT 'v', excluido_em, excluido_por FROM local_atendimento_visibilidade
+          WHERE consultado_local_atendimento_id = ?`,
+        [ids.l2, ids.l2],
+      );
+    // 1 do local + 2 ligações de entrada (C1 encaminha para C2, C3 consulta C2).
+    expect((await dadosC2(false)).resultado.itens).toBe(3);
+    const r = await entradas();
+    expect(r.map((x) => x.t).sort()).toEqual(['e', 'v']);
+    expect(r.every((x) => x.excluido_em !== null && Number(x.excluido_por) === ids.a)).toBe(true);
+    // A ligação que PARTE do local inativo fica (volta a valer quando ele for reativado).
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM local_atendimento_visibilidade WHERE local_atendimento_id = ? AND excluido_em IS NULL',
+        [ids.l2],
+      ),
+    ).toBe(1);
+    const lista = await locais.lista({ hospital: EST, login: LOGINS[0] });
+    expect(lista.locais.find((x) => x.id === ids.l2)!.ativo).toBe(false);
+    expect(lista.locais.find((x) => x.id === ids.l1)!.encaminhaPara).toEqual([ids.l3]);
+    expect(lista.locais.find((x) => x.id === ids.l3)!.consulta).toEqual([]);
+    // C1 e C3 gravam as ligações que a leitura devolve, sem recusa; ligar ao inativo segue recusado.
+    await manter({ acao: 'encaminhamentos', local: ids.l1, destinos: [ids.l3] });
+    await manter({ acao: 'visibilidade', local: ids.l3, consultados: [] });
+    await expect(
+      manter({ acao: 'encaminhamentos', local: ids.l1, destinos: [ids.l2, ids.l3] }),
+    ).rejects.toMatchObject(recusada('local-destino-invalido'));
+    // Gravar de novo o inativo não tem mais o que retirar; reativar não devolve as ligações.
+    expect((await dadosC2(false)).resultado.itens).toBe(1);
+    expect((await dadosC2(true)).resultado.itens).toBe(1);
+    expect((await entradas()).every((x) => x.excluido_em !== null)).toBe(true);
+    // Reativado, volta a poder ser destino, pela mesma linha.
+    await manter({ acao: 'encaminhamentos', local: ids.l1, destinos: [ids.l2, ids.l3] });
+    const depois = await entradas();
+    expect(depois.filter((x) => x.t === 'e')).toHaveLength(1);
+    expect(depois.find((x) => x.t === 'e')!.excluido_em).toBeNull();
   });
 
   it('grava o módulo de recepção do local (F3.1, 02-CAD linha 2): escolhe, mantém sem informar, retira e recusa o inexistente', async () => {

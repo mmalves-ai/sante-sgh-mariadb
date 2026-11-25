@@ -136,6 +136,28 @@ export function validarLigacaoLocais(
   return { destinos: unicos.sort((a, b) => a - b) };
 }
 
+/**
+ * Local inativo não recebe encaminhamento nem é consultado. Ao gravar o local como inativo, as ligações vigentes que
+ * apontam para ele (quem encaminha para ele, quem o consulta) saem junto, por exclusão lógica, na mesma gravação:
+ * assim nenhum outro local fica preso a um destino que a regra recusa. Reativar o local não as devolve (quem liga de
+ * novo decide). As ligações que partem dele ficam: voltam a valer quando ele for reativado.
+ */
+export function ligacoesQueSaemAoInativar<T>(ativoDepois: boolean, entradas: readonly T[]): T[] {
+  return ativoDepois ? [] : [...entradas];
+}
+
+/**
+ * Das ligações de um local, as que valem (com local ativo da unidade). A tela usa para o envio: a ligação antiga com
+ * um local hoje inativo (dado anterior à regra acima) aparece marcada e sai sozinha na primeira gravação.
+ */
+export function ligacoesComLocalAtivo(
+  ligados: readonly number[],
+  locaisDaUnidade: readonly Pick<LocalDaUnidade, 'id' | 'ativo'>[],
+): number[] {
+  const ativos = new Set(locaisDaUnidade.filter((l) => l.ativo).map((l) => l.id));
+  return [...new Set(ligados)].filter((id) => ativos.has(id)).sort((a, b) => a - b);
+}
+
 /** Vínculo do usuário com o local: atende nele (consultório) e/ou o opera (recepção, chamada). */
 export interface UsuarioDoLocal {
   readonly usuario: number;
