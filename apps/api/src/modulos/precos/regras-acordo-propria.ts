@@ -6,7 +6,7 @@
 // regra vem com TODAS as dimensões que a restringem (plano, grupo, item, função da equipe, tipo de conta, regime, tipo
 // de lançamento, destino do excedente): uma dimensão nula é "vale para todos". E com a vigência e "vigente na data".
 // Escopo: o estabelecimento da sessão (as regras com estabelecimento nulo valem para todos); nada de outro
-// estabelecimento. Somente leitura.
+// estabelecimento. A gravação fica em regras-acordo-gravacao.ts.
 import type { Leitor, NucleoProprio } from '@sgh/nucleo';
 import { recusa } from '@sgh/nucleo';
 import type { CtxPrecos } from './fonte.js';
@@ -20,6 +20,8 @@ const txt = (v: unknown): string | null => (v === null || v === undefined || v =
 const sim = (v: unknown) => v === true || v === 1 || v === '1';
 
 export interface VigenciaRegra {
+  /** Versão da linha, para encerrar a vigência sem sobrescrever uma alteração concorrente. */
+  readonly versao: number;
   readonly inicio: string;
   readonly fim: string | null;
   readonly vigente: boolean;
@@ -102,7 +104,12 @@ export function vigenteNaData(inicio: string, fim: string | null, data: string):
 function vig(r: Linha, data: string, ativo = true): VigenciaRegra {
   const inicio = dataIso(r['vigencia_inicio']) ?? '';
   const fim = dataIso(r['vigencia_fim']);
-  return { inicio, fim, vigente: ativo && vigenteNaData(inicio, fim, data) };
+  return {
+    versao: Number(r['versao'] ?? 1),
+    inicio,
+    fim,
+    vigente: ativo && vigenteNaData(inicio, fim, data),
+  };
 }
 
 const DO_ESTAB = (a: string) => `(${a}.estabelecimento_id IS NULL OR ${a}.estabelecimento_id = ?)`;

@@ -14,6 +14,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import ConfirmacaoCritica from '../componentes/ConfirmacaoCritica.vue';
 import OpcoesCredenciamentoConvenio from '../componentes/OpcoesCredenciamentoConvenio.vue';
+import RegrasAcordoContrato from '../componentes/RegrasAcordoContrato.vue';
 import {
   alterarContrato,
   alterarSituacao,
@@ -551,6 +552,7 @@ const opcoesTipoMod = computed(() =>
               </tr>
             </tbody>
           </table>
+          <RegrasAcordoContrato :codigo="codigo" :pode-editar="c.permissoes.editarContrato" />
         </template>
 
         <template v-if="aba.id === 'modificadores'">

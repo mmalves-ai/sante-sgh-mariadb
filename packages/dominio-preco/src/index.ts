@@ -12,3 +12,6 @@ export * from './saneamento.js';
 export * from './preco-particular.js';
 export * from './credenciamento.js';
 export * from './cobranca-fonte.js';
+export * from './regras-acordo.js';
+export * from './regras-acordo-calculo.js';
+export * from './indice-cobranca.js';
