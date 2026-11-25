@@ -1,6 +1,8 @@
 // Cadastro do procedimento cirúrgico (F3.4, 04-CC linha 91). Rotas (porta própria; sem banco do cliente, 503):
 //   GET  /api/cirurgia/procedimentos-cirurgicos?q=&todos=1     a lista (busca; os fora de uso só com todos=1)
 //   GET  /api/cirurgia/procedimentos-cirurgicos/apoio          opções dos combos (grupo, porte, especialidade...)
+//   GET  /api/cirurgia/procedimentos-cirurgicos/itens-faturaveis?q=  busca do item cobrado (TUSS ou tabela própria)
+//   GET  /api/cirurgia/procedimentos-cirurgicos/sigtap?q=      busca do procedimento SUS vigente
 //   GET  /api/cirurgia/procedimentos-cirurgicos/:id            um procedimento
 //   POST /api/cirurgia/procedimentos-cirurgicos                inclui
 //   PUT  /api/cirurgia/procedimentos-cirurgicos/:id            altera com a versão lida
@@ -63,6 +65,18 @@ export class ProcedimentoCirurgicoController {
   @Permissao(PERMISSOES_PROCEDIMENTO_CIRURGICO.ler)
   apoio(@Req() req: RequisicaoAutorizada) {
     return this.com(req, (p, c) => p.apoio(c));
+  }
+
+  @Get('itens-faturaveis')
+  @Permissao(PERMISSOES_PROCEDIMENTO_CIRURGICO.ler)
+  itensFaturaveis(@Req() req: RequisicaoAutorizada, @Query('q') q?: string) {
+    return this.com(req, (p, c) => p.buscarItensFaturaveis(c, (q ?? '').slice(0, 60)));
+  }
+
+  @Get('sigtap')
+  @Permissao(PERMISSOES_PROCEDIMENTO_CIRURGICO.ler)
+  sigtap(@Req() req: RequisicaoAutorizada, @Query('q') q?: string) {
+    return this.com(req, (p, c) => p.buscarSigtap(c, (q ?? '').slice(0, 60)));
   }
 
   @Get(':id')

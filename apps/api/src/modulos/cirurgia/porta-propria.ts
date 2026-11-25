@@ -31,6 +31,7 @@ import {
   type TrilhaDaGravacao,
 } from '../exames/public-api.js';
 import { civil, dataOuNulo, FUSO_PADRAO, instante, lista, n, nn, texto, verdadeiro } from './banco-apoio.js';
+import { buscarProcedimentosComSugestao } from './procedimento-cirurgico-propria.js';
 import {
   type EscritaDireta,
   gravadorCirurgia,
@@ -636,17 +637,9 @@ export class PortaCirurgiaPropria implements PortaCirurgia {
     return new Map(r.map((x) => [n(x['id']), texto(x['descricao'])]));
   }
 
+  /** Com as sugestões do cadastro do procedimento (caráter, anestesia, duração): C1-089. */
   buscarProcedimentos(c: ContextoPortaM18, q: string) {
-    return this.ler(c, async (l) =>
-      (
-        await l.consultar(
-          `SELECT id, descricao FROM procedimento_cirurgico
-            WHERE excluido_em IS NULL AND ativo = TRUE AND (descricao LIKE ? OR codigo LIKE ? OR mnemonico LIKE ?)
-            ORDER BY descricao LIMIT 50`,
-          [`%${q}%`, `${q}%`, `${q}%`],
-        )
-      ).map((x) => ({ codigo: n(x['id']), nome: texto(x['descricao']) })),
-    );
+    return this.ler(c, (l) => buscarProcedimentosComSugestao(l, q));
   }
 
   opcoes(c: ContextoPortaM18): Promise<OpcoesDaCirurgia> {

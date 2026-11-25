@@ -3,6 +3,8 @@
 // busca com a situação, o formulário que inclui ou altera (com versão) com os combos de grupo, porte, especialidade,
 // natureza, caráter e anestesia, a validação na hora pela mesma regra do domínio que a API aplica, a duração sugerida
 // pelo porte num clique, tirar de uso e voltar (nada se apaga) e o atalho para os textos padrão do procedimento.
+// Ligação com o faturamento: o item cobrado (TUSS ou tabela própria) e o procedimento SUS, achados por busca no
+// servidor e escolhidos com SanteSelecao; via de acesso (TISS) e classe de contaminação esperada (controle de infecção).
 import {
   duracaoSugeridaProcedimento,
   NATUREZAS_PROCEDIMENTO_CIRURGICO,
@@ -14,6 +16,9 @@ import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   alterarProcedimento,
+  buscarItensFaturaveis,
+  buscarSigtap,
+  type ItemCatalogo,
   incluirProcedimento,
   lerApoioProcedimento,
   lerProcedimentosCirurgicos,
@@ -47,6 +52,12 @@ const vazio = () => ({
   especialidade: '',
   carater: '',
   tipoAnestesia: '',
+  viaAcesso: '',
+  classeContaminacao: '',
+  itemFaturavel: '',
+  itemRotulo: '',
+  procedimentoSigtap: '',
+  sigtapRotulo: '',
   duracaoMediaMinutos: '' as number | '',
   tempoPreparoSalaMinutos: '' as number | '',
   exigeLateralidade: false,
@@ -77,6 +88,35 @@ const opcoesCarater = computed(() =>
 const opcoesAnestesia = computed(() =>
   opcoesDe(ap.value?.anestesias, t('cirurgia.procedimentoCirurgico.semSugestao')),
 );
+const opcoesVia = computed(() => opcoesDe(ap.value?.vias, t('cirurgia.procedimentoCirurgico.semInformar')));
+const opcoesClasse = computed(() =>
+  opcoesDe(ap.value?.classesContaminacao, t('cirurgia.procedimentoCirurgico.semInformar')),
+);
+
+// Busca no servidor do item cobrado e do SUS (a partir de 2 letras); a opção já gravada fica sempre na lista.
+const termoItem = ref('');
+const termoSigtap = ref('');
+const itensAchados = useQuery({
+  queryKey: computed(() => ['cirurgia', 'procedimentos-cirurgicos', 'itens', termoItem.value.trim()]),
+  queryFn: () => buscarItensFaturaveis(termoItem.value),
+  enabled: computed(() => termoItem.value.trim().length >= 2),
+});
+const sigtapAchados = useQuery({
+  queryKey: computed(() => ['cirurgia', 'procedimentos-cirurgicos', 'sigtap', termoSigtap.value.trim()]),
+  queryFn: () => buscarSigtap(termoSigtap.value),
+  enabled: computed(() => termoSigtap.value.trim().length >= 2),
+});
+const rotuloCatalogo = (x: ItemCatalogo) => `${x.codigo} — ${x.descricao}`;
+const opcoesCatalogo = (achados: ItemCatalogo[] | undefined, atual: string, rotuloAtual: string) => {
+  const xs = (achados ?? []).map((x) => ({ valor: String(x.id), rotulo: rotuloCatalogo(x) }));
+  const comAtual =
+    atual && !xs.some((x) => x.valor === atual) ? [{ valor: atual, rotulo: rotuloAtual }, ...xs] : xs;
+  return [{ valor: '', rotulo: t('cirurgia.procedimentoCirurgico.semLigacao') }, ...comAtual];
+};
+const opcoesItem = computed(() => opcoesCatalogo(itensAchados.data.value, f.itemFaturavel, f.itemRotulo));
+const opcoesSigtap = computed(() =>
+  opcoesCatalogo(sigtapAchados.data.value, f.procedimentoSigtap, f.sigtapRotulo),
+);
 const opcoesNatureza = computed(() =>
   NATUREZAS_PROCEDIMENTO_CIRURGICO.map((n) => ({
     valor: n,
@@ -103,6 +143,10 @@ const corpo = () => ({
   especialidade: idOuNulo(f.especialidade),
   carater: idOuNulo(f.carater),
   tipoAnestesia: idOuNulo(f.tipoAnestesia),
+  viaAcesso: idOuNulo(f.viaAcesso),
+  classeContaminacao: idOuNulo(f.classeContaminacao),
+  itemFaturavel: idOuNulo(f.itemFaturavel),
+  procedimentoSigtap: idOuNulo(f.procedimentoSigtap),
   duracaoMediaMinutos: minutosOuNulo(f.duracaoMediaMinutos),
   tempoPreparoSalaMinutos: minutosOuNulo(f.tempoPreparoSalaMinutos),
   exigeLateralidade: f.exigeLateralidade,
@@ -151,6 +195,12 @@ const editar = (x: ProcedimentoCirurgico) => {
     especialidade: valor(x.especialidade),
     carater: valor(x.carater),
     tipoAnestesia: valor(x.tipoAnestesia),
+    viaAcesso: valor(x.viaAcesso),
+    classeContaminacao: valor(x.classeContaminacao),
+    itemFaturavel: valor(x.itemFaturavel),
+    itemRotulo: x.itemFaturavel ? `${x.itemFaturavelCodigo ?? ''} — ${x.itemFaturavelDescricao ?? ''}` : '',
+    procedimentoSigtap: valor(x.procedimentoSigtap),
+    sigtapRotulo: x.procedimentoSigtap ? `${x.sigtapCodigo ?? ''} — ${x.sigtapDescricao ?? ''}` : '',
     duracaoMediaMinutos: x.duracaoMediaMinutos ?? '',
     tempoPreparoSalaMinutos: x.tempoPreparoSalaMinutos ?? '',
     exigeLateralidade: x.exigeLateralidade,
@@ -229,6 +279,46 @@ const MARCAS = ['exigeLateralidade', 'exigeExameImagem', 'exigePlano', 'obstetri
         :opcoes="opcoesAnestesia"
         data-testid="procedimento-anestesia"
       />
+      <SanteSelecao
+        v-model="f.viaAcesso"
+        :rotulo="t('cirurgia.procedimentoCirurgico.viaAcesso')"
+        :opcoes="opcoesVia"
+        data-testid="procedimento-via"
+      />
+      <SanteSelecao
+        v-model="f.classeContaminacao"
+        :rotulo="t('cirurgia.procedimentoCirurgico.classeContaminacao')"
+        :opcoes="opcoesClasse"
+        data-testid="procedimento-classe"
+      />
+      <fieldset>
+        <legend>{{ t('cirurgia.procedimentoCirurgico.faturamento') }}</legend>
+        <label
+          >{{ t('cirurgia.procedimentoCirurgico.buscarItem') }}
+          <input v-model="termoItem" type="search" maxlength="60" data-testid="procedimento-busca-item"
+        /></label>
+        <SanteSelecao
+          v-model="f.itemFaturavel"
+          :rotulo="t('cirurgia.procedimentoCirurgico.itemFaturavel')"
+          :opcoes="opcoesItem"
+          :busca="false"
+          data-testid="procedimento-item"
+        />
+        <label
+          >{{ t('cirurgia.procedimentoCirurgico.buscarSigtap') }}
+          <input v-model="termoSigtap" type="search" maxlength="60" data-testid="procedimento-busca-sigtap"
+        /></label>
+        <SanteSelecao
+          v-model="f.procedimentoSigtap"
+          :rotulo="t('cirurgia.procedimentoCirurgico.procedimentoSigtap')"
+          :opcoes="opcoesSigtap"
+          :busca="false"
+          data-testid="procedimento-sigtap"
+        />
+        <p v-if="!f.itemFaturavel" role="note" data-testid="procedimento-sem-faturamento">
+          {{ t('cirurgia.procedimentoCirurgico.semFaturamento') }}
+        </p>
+      </fieldset>
       <label
         >{{ t('cirurgia.procedimentoCirurgico.duracao') }}
         <input
@@ -319,6 +409,7 @@ const MARCAS = ['exigeLateralidade', 'exigeExameImagem', 'exigePlano', 'obstetri
             <th scope="col">{{ t('cirurgia.procedimentoCirurgico.descricao') }}</th>
             <th scope="col">{{ t('cirurgia.procedimentoCirurgico.porte') }}</th>
             <th scope="col">{{ t('cirurgia.procedimentoCirurgico.especialidade') }}</th>
+            <th scope="col">{{ t('cirurgia.procedimentoCirurgico.cobranca') }}</th>
             <th scope="col">{{ t('cirurgia.procedimentoCirurgico.textos') }}</th>
             <th scope="col">{{ t('cirurgia.procedimentoCirurgico.situacao') }}</th>
             <th scope="col"></th>
@@ -330,6 +421,7 @@ const MARCAS = ['exigeLateralidade', 'exigeExameImagem', 'exigePlano', 'obstetri
             <td>{{ x.descricao }}</td>
             <td>{{ x.porteDescricao ?? '—' }}</td>
             <td>{{ x.especialidadeDescricao ?? '—' }}</td>
+            <td>{{ [x.itemFaturavelCodigo, x.sigtapCodigo].filter(Boolean).join(' · ') || '—' }}</td>
             <td>
               <RouterLink to="/cirurgia/textos-padrao">{{
                 t('cirurgia.procedimentoCirurgico.verTextos', { n: x.textosPadrao })

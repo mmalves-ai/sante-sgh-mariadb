@@ -29,7 +29,16 @@ const P = '/api/cirurgia';
 
 const esquemaGravacaoCirurgia = z.object({ agenda: esquemaGravacaoAgenda, registro: esquemaGravacaoAgenda });
 const esquemaProfissionais = z.array(z.object({ id: z.number(), cod: z.number(), nome: z.string() }));
-const esquemaProcedimentos = z.array(z.object({ codigo: z.number(), nome: z.string() }));
+// Com as sugestões do cadastro do procedimento (C1-089): caráter, anestesia e duração; vazias quando não há.
+const esquemaProcedimentos = z.array(
+  z.object({
+    codigo: z.number(),
+    nome: z.string(),
+    carater: z.number().nullable().optional(),
+    anestesia: z.number().nullable().optional(),
+    duracaoMin: z.number().nullable().optional(),
+  }),
+);
 
 // ── Leituras ────────────────────────────────────────────────────────────────────────────────────────
 export const lerOpcoesCirurgia = (): Promise<OpcoesCirurgia> => ler(`${P}/opcoes`, esquemaOpcoesCirurgia);

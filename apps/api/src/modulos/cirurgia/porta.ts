@@ -136,7 +136,19 @@ export interface PortaCirurgia extends PortaGravacaoM18<GravadorSghCirurgia> {
   /** Os registros dados com o código e o nome, mesmo fora dos profissionais do bloco (o cirurgião do pedido do portal). */
   profissionaisPorRegistro(c: ContextoPortaM18, ids: readonly number[]): Promise<ProfissionalDoBloco[]>;
   nomesProcedimentos(c: ContextoPortaM18, codigos: readonly number[]): Promise<Map<number, string>>;
-  buscarProcedimentos(c: ContextoPortaM18, texto: string): Promise<{ codigo: number; nome: string }[]>;
+  /** A busca do agendamento; a porta própria devolve também o caráter, a anestesia e a duração sugeridos pelo cadastro. */
+  buscarProcedimentos(
+    c: ContextoPortaM18,
+    texto: string,
+  ): Promise<
+    {
+      codigo: number;
+      nome: string;
+      carater?: number | null;
+      anestesia?: number | null;
+      duracaoMin?: number | null;
+    }[]
+  >;
   opcoes(c: ContextoPortaM18): Promise<OpcoesDaCirurgia>;
   pacientePorProntuario(c: ContextoPortaM18, pront: number): Promise<{ id: number; nome: string } | null>;
   pacientes(c: ContextoPortaM18, ids: readonly number[]): Promise<PacienteDaCirurgia[]>;

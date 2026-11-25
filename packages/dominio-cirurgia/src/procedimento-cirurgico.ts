@@ -107,3 +107,35 @@ export function duracaoSugeridaProcedimento(
   if (referenciaDoPorte && referenciaDoPorte > 0) return referenciaDoPorte;
   return null;
 }
+
+/** O que o cadastro do procedimento sugere ao agendamento (vazio: sem sugestão). */
+export interface SugestaoDoProcedimento {
+  readonly carater?: number | null | undefined;
+  readonly anestesia?: number | null | undefined;
+  /** A duração média do procedimento ou, sem ela, a de referência do porte (duracaoSugeridaProcedimento). */
+  readonly duracaoMin?: number | null | undefined;
+}
+
+export interface CamposSugeridosDoAgendamento {
+  readonly carater: number | null;
+  readonly anestesia: number | null;
+  readonly duracaoMin: number | null;
+}
+
+/**
+ * Os campos do agendamento depois de escolher o procedimento: o caráter e a duração sugeridos pelo cadastro valem
+ * (são o padrão do procedimento; o cartão de preferência do cirurgião, quando existe, vem depois e ganha na duração);
+ * a anestesia sugerida só preenche quando ainda não foi escolhida (a escolha do anestesista não é desfeita).
+ * Sem sugestão, o campo fica como estava.
+ */
+export function aplicarSugestoesDoProcedimento(
+  atual: CamposSugeridosDoAgendamento,
+  s: SugestaoDoProcedimento,
+): CamposSugeridosDoAgendamento {
+  const positivo = (v: number | null | undefined) => (v && v > 0 ? v : null);
+  return {
+    carater: positivo(s.carater) ?? atual.carater,
+    anestesia: atual.anestesia ?? positivo(s.anestesia),
+    duracaoMin: positivo(s.duracaoMin) ?? atual.duracaoMin,
+  };
+}

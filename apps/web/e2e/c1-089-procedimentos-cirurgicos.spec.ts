@@ -1,5 +1,5 @@
 // C1-089 (F3.4, 04-CC linha 91): o cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter e
-// anestesia sugeridos, duração e exigências do agendamento). A validação roda na hora pela mesma regra do domínio que a
+// anestesia sugeridos, duração, exigências do agendamento e a ligação com o faturamento: item cobrado e SUS por busca). A validação roda na hora pela mesma regra do domínio que a
 // API aplica: o botão de salvar só libera com código, descrição, porte e especialidade corretos. Quem mantém as tabelas
 // do bloco (SINT.BLOCO: Tabelas › Salas, cirurgia.sala.ler e .editar) chega à tela; os combos são SanteSelecao (nenhum
 // <select> nativo). Axe em cada passo.
@@ -44,6 +44,17 @@ test.describe('centro cirúrgico: cadastro do procedimento cirúrgico @C1-089 @F
     await expect(page.getByTestId('procedimento-porte')).toBeVisible();
     await expect(page.getByTestId('procedimento-especialidade')).toBeVisible();
     await expect(page.getByTestId('procedimento-carater')).toBeVisible();
+    // Ligação com o faturamento: via, classe, item cobrado e SUS; a busca do item vai ao servidor (rota existe: 503).
+    for (const id of ['procedimento-via', 'procedimento-classe', 'procedimento-item', 'procedimento-sigtap'])
+      await expect(page.getByTestId(id)).toBeVisible();
+    await expect(page.getByTestId('procedimento-sem-faturamento')).toBeVisible();
+    const itens = page.waitForResponse((r) => r.url().includes(`${API}/itens-faturaveis`));
+    await page.getByTestId('procedimento-busca-item').fill('3031');
+    expect((await itens).status()).toBe(503);
+    const sus = page.waitForResponse((r) => r.url().includes(`${API}/sigtap`));
+    await page.getByTestId('procedimento-busca-sigtap').fill('0407');
+    expect((await sus).status()).toBe(503);
+    await esperarSemSelectNativo(tela);
 
     const salvar = page.getByTestId('procedimento-salvar');
     const problemas = page.getByTestId('procedimento-problemas');

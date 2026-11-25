@@ -10,7 +10,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import type { AgendamentoCirurgico, ResultadoBuscaPaciente } from '@sgh/contratos';
-import { proximoInicioLivre } from '@sgh/dominio-cirurgia';
+import { aplicarSugestoesDoProcedimento, proximoInicioLivre } from '@sgh/dominio-cirurgia';
 import { dataBr, horaDoContrato } from '../../agenda/formato.js';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import {
@@ -24,6 +24,7 @@ import {
   solicitarCirurgia,
 } from '../api-cirurgia.js';
 import { lerCartaoAplicavel } from '../api-cartao-preferencia.js';
+import { lerGradeAberta } from '../api-grade-sala.js';
 import AvisoCirurgia from '../componentes/AvisoCirurgia.vue';
 import ErroCirurgia from '../componentes/ErroCirurgia.vue';
 import { profissionalDaEscolha, usarCirurgia } from '../usar-cirurgia.js';
@@ -53,6 +54,28 @@ const mapa = useQuery({
       pedidoMapa.value.sala ? Number(pedidoMapa.value.sala) : null,
     ),
 });
+// 04-CC linha 92: a grade aberta de cada sala no período do mapa, pintada sob os blocos (sala sem grade: nada).
+const gradeAberta = useQuery({
+  queryKey: computed(() => [
+    'cirurgia',
+    'grade-sala',
+    'aberta',
+    mapa.data.value?.de ?? '',
+    pedidoMapa.value.dias,
+  ]),
+  queryFn: () => lerGradeAberta(mapa.data.value?.de ?? '', pedidoMapa.value.dias),
+  enabled: computed(() => !!mapa.data.value?.de),
+});
+const gradeDa = (dia: string, sala: number) => {
+  const d = gradeAberta.data.value?.dias.find((x) => x.dia === dia);
+  const s = d?.salas.find((x) => x.sala === sala);
+  return s ? { feriado: d?.feriado ?? false, faixas: s.faixas } : null;
+};
+const estiloFaixa = (f: { inicio: string; fim: string }) => {
+  const ini = Math.min(Math.max(minutos(f.inicio) - ABRE, 0), TURNO);
+  const fim = Math.min(Math.max(minutos(f.fim) - ABRE, 0), TURNO);
+  return { left: `${(ini / TURNO) * 100}%`, width: `${((fim - ini) / TURNO) * 100}%` };
+};
 function verMapa(): void {
   pedidoMapa.value = { inicio: inicio.value, dias: Number(dias.value), sala: sala.value };
 }
@@ -101,8 +124,25 @@ const fExcecao = ref(false);
 const fMotivoExcecao = ref('');
 const solicitacao = ref<number | null>(null);
 const termoProc = ref('');
-const procs = ref<{ codigo: number; nome: string }[]>([]);
+type ProcedimentoBuscado = Awaited<ReturnType<typeof buscarProcedimentos>>[number];
+const procs = ref<ProcedimentoBuscado[]>([]);
 const procedimento = ref<{ codigo: number; nome: string } | null>(null);
+// C1-089: escolher o procedimento aplica o caráter, a anestesia e a duração sugeridos pelo cadastro dele.
+function escolherProcedimento(p: ProcedimentoBuscado): void {
+  procedimento.value = p;
+  const idOuNulo = (v: string) => (v ? Number(v) : null);
+  const r = aplicarSugestoesDoProcedimento(
+    {
+      carater: idOuNulo(fCarater.value),
+      anestesia: idOuNulo(fAnestesia.value),
+      duracaoMin: idOuNulo(fDuracao.value),
+    },
+    p,
+  );
+  fCarater.value = r.carater === null ? fCarater.value : String(r.carater);
+  fAnestesia.value = r.anestesia === null ? '' : String(r.anestesia);
+  fDuracao.value = r.duracaoMin === null ? fDuracao.value : String(r.duracaoMin);
+}
 async function procurarProcedimento(): Promise<void> {
   procs.value = termoProc.value.trim().length >= 3 ? await buscarProcedimentos(termoProc.value.trim()) : [];
 }
@@ -395,7 +435,30 @@ async function descartarSolicitacao(s: AgendamentoCirurgico): Promise<void> {
           :data-testid="`mapa-${d.dia}-sala-${s.sala}`"
         >
           <h3>{{ nomeSala(s.sala) }} · {{ t('cirurgia.mapa.ocupacao', { p: s.ocupacao }) }}</h3>
+          <p
+            v-if="gradeDa(d.dia, s.sala)"
+            class="secundario"
+            :data-testid="`mapa-grade-${d.dia}-sala-${s.sala}`"
+          >
+            {{
+              gradeDa(d.dia, s.sala)?.faixas.length
+                ? t('cirurgia.gradeSala.mapaAberta', {
+                    faixas: gradeDa(d.dia, s.sala)
+                      ?.faixas.map((g) => t('cirurgia.faixa', { de: g.inicio, ate: g.fim }))
+                      .join(', '),
+                  })
+                : gradeDa(d.dia, s.sala)?.feriado
+                  ? t('cirurgia.gradeSala.mapaFechadaFeriado')
+                  : t('cirurgia.gradeSala.mapaFechada')
+            }}
+          </p>
           <div class="linha-do-tempo" aria-hidden="true">
+            <span
+              v-for="g in gradeDa(d.dia, s.sala)?.faixas ?? []"
+              :key="`g-${g.inicio}`"
+              class="faixa-aberta"
+              :style="estiloFaixa(g)"
+            ></span>
             <span
               v-for="a in s.agendamentos"
               :key="a.id ?? a.estadoId ?? a.hora"
@@ -544,7 +607,7 @@ async function descartarSolicitacao(s: AgendamentoCirurgico): Promise<void> {
             variante="texto"
             :rotulo="t('cirurgia.mapa.escolherProcedimento', { nome: p.nome, codigo: p.codigo })"
             :data-testid="`procedimento-${p.codigo}`"
-            @acionar="procedimento = p"
+            @acionar="escolherProcedimento(p)"
           />
         </li>
       </ul>
@@ -675,6 +738,12 @@ async function descartarSolicitacao(s: AgendamentoCirurgico): Promise<void> {
   background: var(--sgh-foco);
   opacity: 0.6;
   border-radius: 3px;
+}
+.linha-do-tempo .faixa-aberta {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--sgh-primaria-suave);
 }
 .linha-do-tempo .bloco.sobreposto {
   background: var(--sgh-alerta);

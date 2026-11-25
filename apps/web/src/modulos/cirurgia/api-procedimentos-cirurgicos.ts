@@ -22,6 +22,14 @@ export const esquemaProcedimentoCirurgico = z.object({
   carater: z.number().nullable(),
   caraterDescricao: z.string().nullable(),
   tipoAnestesia: z.number().nullable(),
+  viaAcesso: z.number().nullable(),
+  classeContaminacao: z.number().nullable(),
+  itemFaturavel: z.number().nullable(),
+  itemFaturavelCodigo: z.string().nullable(),
+  itemFaturavelDescricao: z.string().nullable(),
+  procedimentoSigtap: z.number().nullable(),
+  sigtapCodigo: z.string().nullable(),
+  sigtapDescricao: z.string().nullable(),
   duracaoMediaMinutos: z.number().nullable(),
   tempoPreparoSalaMinutos: z.number().nullable(),
   exigeLateralidade: z.boolean(),
@@ -45,7 +53,13 @@ export const esquemaApoioProcedimento = z.object({
   especialidades: z.array(opcao),
   carateres: z.array(opcao),
   anestesias: z.array(opcao),
+  vias: z.array(opcao),
+  classesContaminacao: z.array(opcao),
 });
+
+/** Item de catálogo das buscas do item cobrado (TUSS ou tabela própria) e do procedimento SUS. */
+export const esquemaItemCatalogo = z.object({ id: z.number(), codigo: z.string(), descricao: z.string() });
+export type ItemCatalogo = z.infer<typeof esquemaItemCatalogo>;
 export type ApoioProcedimento = z.infer<typeof esquemaApoioProcedimento>;
 
 export interface EntradaProcedimento {
@@ -58,6 +72,10 @@ export interface EntradaProcedimento {
   especialidade: number | null;
   carater: number | null;
   tipoAnestesia: number | null;
+  viaAcesso: number | null;
+  classeContaminacao: number | null;
+  itemFaturavel: number | null;
+  procedimentoSigtap: number | null;
   duracaoMediaMinutos: number | null;
   tempoPreparoSalaMinutos: number | null;
   exigeLateralidade: boolean;
@@ -79,6 +97,10 @@ export const lerProcedimentosCirurgicos = (q: string, todos: boolean) => {
   return ler(`${T}?${p.toString()}`, lista);
 };
 export const lerApoioProcedimento = () => ler(`${T}/apoio`, esquemaApoioProcedimento);
+const busca = (rota: string, q: string) =>
+  ler(`${T}/${rota}?${new URLSearchParams({ q: q.trim() }).toString()}`, z.array(esquemaItemCatalogo));
+export const buscarItensFaturaveis = (q: string) => busca('itens-faturaveis', q);
+export const buscarSigtap = (q: string) => busca('sigtap', q);
 export const incluirProcedimento = (corpo: EntradaProcedimento) =>
   enviar(T, corpo, comId, novaChave('procedimento-cirurgico'));
 export async function alterarProcedimento(id: number, corpo: EntradaProcedimento & { versao: number }) {

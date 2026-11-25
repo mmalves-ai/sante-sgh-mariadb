@@ -1,6 +1,7 @@
 // Regras do cadastro do procedimento cirúrgico (F3.4, 04-CC linha 91).
 import { describe, expect, it } from 'vitest';
 import {
+  aplicarSugestoesDoProcedimento,
   duracaoSugeridaProcedimento,
   normalizarCodigoProcedimento,
   validarProcedimentoCirurgico,
@@ -55,5 +56,24 @@ describe('cadastro do procedimento cirúrgico', () => {
     expect(duracaoSugeridaProcedimento(90, 120)).toBe(90);
     expect(duracaoSugeridaProcedimento(null, 120)).toBe(120);
     expect(duracaoSugeridaProcedimento(0, null)).toBeNull();
+  });
+
+  it('aplica ao agendamento o caráter e a duração sugeridos; a anestesia só quando ainda não escolhida', () => {
+    const atual = { carater: 2, anestesia: null, duracaoMin: 60 };
+    expect(aplicarSugestoesDoProcedimento(atual, { carater: 1, anestesia: 4, duracaoMin: 120 })).toEqual({
+      carater: 1,
+      anestesia: 4,
+      duracaoMin: 120,
+    });
+    expect(
+      aplicarSugestoesDoProcedimento(
+        { ...atual, anestesia: 7 },
+        { carater: 1, anestesia: 4, duracaoMin: 120 },
+      ),
+    ).toEqual({ carater: 1, anestesia: 7, duracaoMin: 120 });
+    expect(aplicarSugestoesDoProcedimento(atual, {})).toEqual(atual);
+    expect(aplicarSugestoesDoProcedimento(atual, { carater: null, anestesia: 0, duracaoMin: 0 })).toEqual(
+      atual,
+    );
   });
 });
