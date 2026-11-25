@@ -139,7 +139,7 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
     });
 }
 
-test.describe('F3.7 cobrança por fonte pagadora @F3.7', () => {
+test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004', () => {
   test('faturista confere a guia, grava de-para, exceção e equivalência do mat/med e encerra sem apagar', async ({
     page,
   }) => {
