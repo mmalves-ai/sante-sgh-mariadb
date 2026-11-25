@@ -22,3 +22,4 @@ export * from './estruturada.js';
 export * from './acesso-nominal.js';
 export * from './marcacao-sem-prontuario.js';
 export * from './perfil-marcacao.js';
+export * from './cota-prazo.js';
