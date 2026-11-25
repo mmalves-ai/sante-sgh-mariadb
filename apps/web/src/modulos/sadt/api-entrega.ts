@@ -19,6 +19,8 @@ export const ATENDIMENTOS_PRAZO = [
 ] as const;
 export const REGRAS_RESTRICAO = ['nunca_publicar', 'apos_entrega_presencial', 'apos_dias'] as const;
 export const PUBLICOS_PORTAL = ['paciente', 'medico_externo', 'empresa', 'interno'] as const;
+/** Os públicos que o portal aplica hoje (os únicos que o cadastro oferece e aceita). */
+export const PUBLICOS_PORTAL_APLICADOS = ['paciente', 'medico_externo'] as const;
 export const SITUACOES_PRAZO = [
   'sem_prazo',
   'no_prazo',
@@ -104,6 +106,8 @@ const esquemaCadastro = z.object({
       diasVisibilidade: n.nullable(),
       global: z.boolean(),
       ativo: z.boolean(),
+      /** É o perfil que o portal usa hoje para o público, neste estabelecimento. */
+      aplicado: z.boolean().default(false),
     }),
   ),
   setores: z.array(opcao),

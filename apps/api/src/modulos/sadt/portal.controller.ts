@@ -11,19 +11,7 @@
 //   POST   /api/portal/laudos/:liberacao             abrir o laudo (grava data e IP da visualização)
 //   DELETE /api/portal/sessao                        sair
 //   GET    /api/portal/:hospital/validar/:codigo     validação pública do laudo (sem conteúdo clínico)
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Inject,
-  Optional,
-  Param,
-  Post,
-  Req,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Req, Res } from '@nestjs/common';
 import {
   esquemaAutocadastroMedico,
   esquemaEntrarPortalMedico,
@@ -72,27 +60,37 @@ export class PortalController {
   constructor(
     @Inject(CONFIGURACAO) private readonly configuracao: Configuracao,
     @Inject(SERVICO_PORTAL) private readonly portal: ServicoPortal,
-    /** O perfil do portal e o exame restrito (05-SADT linha 21); sem o banco do cliente, não há o que filtrar. */
-    @Optional()
+    /**
+     * O perfil do portal e o exame restrito (05-SADT linha 21). O módulo sempre fornece: o serviço com o banco do
+     * cliente, ou nulo quando o destino do SADT não é o banco (aí não há perfil nem restrição cadastrados).
+     */
     @Inject(SERVICO_ENTREGA_RESULTADO)
-    private readonly entrega: ServicoEntregaResultado | null = null,
+    private readonly entrega: ServicoEntregaResultado | null,
   ) {}
 
   /**
    * Das liberações publicadas, as que o perfil do portal deste acesso pode ver agora (setores e dias de visibilidade do
-   * perfil; exame que nunca é publicado, só depois da entrega no balcão ou só depois da carência).
+   * perfil; exame que nunca é publicado, só depois da entrega no balcão ou só depois da carência). Falha fechada: com
+   * o banco do cliente, o estabelecimento ainda não resolvido pelo mapa é resolvido pelo código na própria leitura, e
+   * o que não se resolve não publica nada.
    */
   private async publicaveis(
     s: { readonly hospital: string; readonly perfil: 'paciente' | 'medicoExterno' },
     liberacoes: readonly number[],
   ): Promise<Set<number>> {
+    if (!this.entrega) return new Set(liberacoes);
     const c = contextoDoEstabelecimento(s.hospital);
-    if (!this.entrega || c.estabelecimento === null) return new Set(liberacoes);
-    return this.entrega.publicaveisNoPortal(
-      { ...c, usuario: null, correlacao: 'portal-publicacao' },
-      s.perfil === 'paciente' ? 'paciente' : 'medico_externo',
-      liberacoes,
-    );
+    const cliente = c.cliente || this.configuracao.clientePadrao || '';
+    if (cliente === '') return new Set();
+    const publico = s.perfil === 'paciente' ? 'paciente' : 'medico_externo';
+    const correlacao = 'portal-publicacao';
+    return c.estabelecimento === null
+      ? this.entrega.publicaveisNoPortalPeloCodigo({ cliente, correlacao }, s.hospital, publico, liberacoes)
+      : this.entrega.publicaveisNoPortal(
+          { cliente, estabelecimento: c.estabelecimento, usuario: null, correlacao },
+          publico,
+          liberacoes,
+        );
   }
 
   private get prefixoHost(): boolean {

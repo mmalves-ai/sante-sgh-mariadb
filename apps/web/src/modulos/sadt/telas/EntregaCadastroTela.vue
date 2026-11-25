@@ -15,7 +15,7 @@ import {
   lerCadastroEntrega,
   type PerfilPortalCadastrado,
   PRIORIDADES_PRAZO,
-  PUBLICOS_PORTAL,
+  PUBLICOS_PORTAL_APLICADOS,
   REGRAS_RESTRICAO,
   salvarPerfilPortal,
 } from '../api-entrega.js';
@@ -44,7 +44,9 @@ const atendimentos = computed(() => [
   ...ATENDIMENTOS_PRAZO.map((a) => ({ valor: a, rotulo: t(`${P}.atendimentos.${a}`) })),
 ]);
 const regras = computed(() => REGRAS_RESTRICAO.map((r) => ({ valor: r, rotulo: t(`${P}.regras.${r}`) })));
-const publicos = computed(() => PUBLICOS_PORTAL.map((p) => ({ valor: p, rotulo: t(`${P}.publicos.${p}`) })));
+const publicos = computed(() =>
+  PUBLICOS_PORTAL_APLICADOS.map((p) => ({ valor: p, rotulo: t(`${P}.publicos.${p}`) })),
+);
 const diasDaSemana = computed(() => (tm(`${P}.diasDaSemana`) as unknown[]).map((d) => rt(d as string)));
 const nomeSetor = (id: number) => cadastro.data.value?.setores.find((s) => s.id === id)?.nome ?? `#${id}`;
 const idOuNulo = (v: string) => (v ? Number(v) : null);
@@ -96,6 +98,11 @@ const perfilValido = computed(
     perfil.value.descricao.trim().length >= 3 &&
     (perfil.value.visibilidade.trim() === '' || Number(perfil.value.visibilidade) >= 1),
 );
+/** O que dizer do perfil ativo: é o que o portal usa, há outro do mesmo público valendo, ou o público não é aplicado. */
+function usoDoPerfil(p: PerfilPortalCadastrado): 'aplicado' | 'naoAplicado' | 'publicoSemEfeito' {
+  if (!(PUBLICOS_PORTAL_APLICADOS as readonly string[]).includes(p.publico)) return 'publicoSemEfeito';
+  return p.aplicado ? 'aplicado' : 'naoAplicado';
+}
 function editar(p: PerfilPortalCadastrado): void {
   perfil.value = {
     id: p.id,
@@ -326,6 +333,7 @@ const desativar = (tipo: 'prazo' | 'restricao' | 'perfil', id: number) =>
 
     <fieldset data-testid="entrega-perfis">
       <legend>{{ t(`${P}.perfis`) }}</legend>
+      <p data-testid="perfil-regra">{{ t(`${P}.umPorPublico`) }}</p>
       <div class="linha">
         <label
           >{{ t(`${P}.codigo`) }}<input v-model="perfil.codigo" maxlength="30" data-testid="perfil-codigo"
@@ -373,6 +381,10 @@ const desativar = (tipo: 'prazo' | 'restricao' | 'perfil', id: number) =>
       <ul>
         <li v-for="p in cadastro.data.value?.perfis ?? []" :key="p.id" :class="{ inativa: !p.ativo }">
           {{ p.codigo }} · {{ p.descricao }} · {{ t(`${P}.publicos.${p.publico}`) }} ·
+          <strong v-if="p.ativo" :data-testid="`perfil-uso-${p.id}`">{{
+            t(`${P}.${usoDoPerfil(p)}`)
+          }}</strong>
+          <template v-if="p.ativo"> · </template>
           {{ p.setores.length === 0 ? t(`${P}.todosOsSetores`) : p.setores.map(nomeSetor).join(', ') }}
           <template v-if="!p.ocultaExameRestrito"> · {{ t(`${P}.veRestrito`) }}</template>
           <template v-if="p.diasVisibilidade !== null">

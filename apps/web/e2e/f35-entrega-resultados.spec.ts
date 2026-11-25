@@ -268,6 +268,34 @@ test.describe('Entrega de resultados @F3.5-13 @fase3', () => {
             diasVisibilidade: 90,
             global: false,
             ativo: true,
+            aplicado: true,
+          },
+          // Trazidos de outro sistema: ativo do mesmo público que o portal não usa, e público ainda sem efeito.
+          {
+            id: 90,
+            versao: 1,
+            codigo: 'PAC-ANTIGO',
+            descricao: 'Paciente antigo sintetico',
+            publico: 'paciente',
+            setores: [],
+            ocultaExameRestrito: true,
+            diasVisibilidade: null,
+            global: false,
+            ativo: true,
+            aplicado: false,
+          },
+          {
+            id: 89,
+            versao: 1,
+            codigo: 'EMPRESA',
+            descricao: 'Empresa sintetica',
+            publico: 'empresa',
+            setores: [],
+            ocultaExameRestrito: true,
+            diasVisibilidade: null,
+            global: false,
+            ativo: true,
+            aplicado: false,
           },
         ];
         return json(rota, { id: 91 });
@@ -350,6 +378,11 @@ test.describe('Entrega de resultados @F3.5-13 @fase3', () => {
     });
     await expect(page.getByTestId('entrega-perfis')).toContainText('LABORATORIO SINTETICO');
     await expect(page.getByTestId('entrega-perfis')).toContainText('visível por 90 dia(s)');
+    // Um perfil por público: a tela diz a regra, qual perfil o portal usa e qual ativo não tem efeito.
+    await expect(page.getByTestId('perfil-regra')).toContainText('um perfil por público');
+    await expect(page.getByTestId('perfil-uso-91')).toHaveText('em uso no portal');
+    await expect(page.getByTestId('perfil-uso-90')).toContainText('o portal usa outro perfil');
+    await expect(page.getByTestId('perfil-uso-89')).toContainText('ainda não aplica perfil a este público');
     // Editar carrega o perfil no formulário (com a versão lida).
     await page.getByTestId('perfil-editar-91').click();
     await expect(page.getByTestId('perfil-codigo')).toHaveValue('PACIENTE');

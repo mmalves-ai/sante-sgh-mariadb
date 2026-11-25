@@ -7,9 +7,12 @@ import {
   conferirRestricaoPortal,
   cpfConfere,
   escolherPrazo,
+  perfilAplicado,
+  perfisSubstituidos,
   type PrazoEntrega,
   preverEntrega,
   publicacaoNoPortal,
+  publicoAplicado,
   RecusaEntrega,
   restricaoVigente,
   situacaoDoPrazo,
@@ -203,6 +206,7 @@ describe('publicação no portal: perfil e exame restrito', () => {
     const p = {
       codigo: 'PAC',
       descricao: 'Paciente',
+      publico: 'paciente' as const,
       diasVisibilidade: null,
       atualizacaoMinutos: null,
       setores: [],
@@ -260,5 +264,43 @@ describe('publicação no portal: perfil e exame restrito', () => {
     expect(publicacaoNoPortal(perfil, { ...carencia, diasCarencia: 2 }, laudo, agora)).toEqual({
       publica: true,
     });
+  });
+
+  it('um perfil ativo por público e alcance: o salvo substitui os outros, e o do estabelecimento vence o geral', () => {
+    const perfis = [
+      { id: 1, publico: 'paciente' as const, global: false, ativo: true },
+      { id: 2, publico: 'paciente' as const, global: true, ativo: true },
+      { id: 3, publico: 'medico_externo' as const, global: false, ativo: true },
+      { id: 4, publico: 'paciente' as const, global: false, ativo: false },
+      { id: 5, publico: 'paciente' as const, global: false, ativo: true },
+    ];
+    // O novo do estabelecimento desativa só os ativos do mesmo público e do mesmo alcance.
+    expect(perfisSubstituidos({ id: 9, publico: 'paciente', global: false }, perfis)).toEqual([1, 5]);
+    expect(perfisSubstituidos({ id: 9, publico: 'paciente', global: true }, perfis)).toEqual([2]);
+    expect(perfisSubstituidos({ id: 3, publico: 'medico_externo', global: false }, perfis)).toEqual([]);
+    // Reativar (salvar de novo) o antigo desativa o que estava valendo.
+    expect(perfisSubstituidos({ id: 4, publico: 'paciente', global: false }, perfis)).toEqual([1, 5]);
+    // O aplicado: o do estabelecimento antes do geral; entre dois do mesmo alcance (carga), o mais novo.
+    expect(perfilAplicado(perfis, 'paciente')?.id).toBe(5);
+    expect(perfilAplicado([perfis[1]!, perfis[3]!], 'paciente')?.id).toBe(2);
+    expect(perfilAplicado([perfis[3]!], 'paciente')).toBeNull();
+    expect(perfilAplicado(perfis, 'medico_externo')?.id).toBe(3);
+    // Público que o portal não aplica: nenhum perfil vale, e o cadastro recusa.
+    expect(perfilAplicado([{ id: 7, publico: 'empresa', global: false, ativo: true }], 'empresa')).toBeNull();
+    expect(publicoAplicado('interno')).toBe(false);
+    const base = {
+      codigo: 'EMP',
+      descricao: 'Empresa',
+      diasVisibilidade: null,
+      atualizacaoMinutos: null,
+      setores: [],
+    };
+    expect(codigo(() => conferirPerfilPortal({ ...base, publico: 'empresa' }))).toBe(
+      'perfil-publico-sem-efeito',
+    );
+    expect(codigo(() => conferirPerfilPortal({ ...base, publico: 'interno' }))).toBe(
+      'perfil-publico-sem-efeito',
+    );
+    expect(() => conferirPerfilPortal({ ...base, publico: 'medico_externo' })).not.toThrow();
   });
 });

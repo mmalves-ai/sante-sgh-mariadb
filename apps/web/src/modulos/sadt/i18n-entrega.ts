@@ -101,6 +101,11 @@ export const mensagensEntrega = {
       empresa: 'Empresa',
       interno: 'Interno',
     },
+    umPorPublico:
+      'Vale um perfil por público: ao salvar, o perfil anterior do mesmo público e do mesmo alcance é desativado. O do estabelecimento vence o que vale para todos.',
+    aplicado: 'em uso no portal',
+    naoAplicado: 'ativo, mas o portal usa outro perfil deste público',
+    publicoSemEfeito: 'o portal ainda não aplica perfil a este público',
     setoresDoPerfil: 'Setores que o perfil vê (nenhum marcado: todos)',
     todosOsSetores: 'todos os setores',
     ocultaRestrito: 'Oculta os exames restritos',
@@ -144,6 +149,8 @@ export const recusasEntrega = {
   'perfil-codigo-invalido': 'O código do perfil tem de 2 a 30 letras, números, ponto, hífen ou sublinhado.',
   'perfil-codigo-repetido': 'Já existe um perfil do portal com este código.',
   'perfil-sem-descricao': 'Descreva o perfil.',
+  'perfil-publico-sem-efeito':
+    'O portal ainda não aplica perfil a este público: cadastre o perfil do paciente ou o do médico externo.',
   'perfil-visibilidade-invalida': 'Os dias de visibilidade começam em 1 (ou vazio: sem limite).',
   'perfil-setor-repetido': 'O mesmo setor aparece duas vezes no perfil.',
   'setor-inexistente': 'O setor não existe neste estabelecimento.',

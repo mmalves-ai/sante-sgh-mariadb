@@ -5,7 +5,10 @@
 // decidindo o que cada público vê; o que é de outro estabelecimento não é visto nem alterado. Saída só com contagens.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ErroProblema } from '../../../problema.filter.js';
 import { limparTrilhaDaMassa } from '../../../teste/limpar-trilha.spec-util.js';
+import { desligarMapaEstabelecimentos, ligarMapaEstabelecimentos } from '../../cadastro/contexto-nucleo.js';
+import { PortalController } from '../portal.controller.js';
 import {
   CLIENTE,
   contexto,
@@ -407,5 +410,151 @@ describe.skipIf(SEM_BANCO)('entrega de resultados e portal (MariaDB, cliente f22
         [paciente.id, medico.id, restricao.id],
       ),
     ).toBeGreaterThanOrEqual(5);
+  }, 60_000);
+
+  it('um perfil ativo por público e alcance: o novo desativa o anterior sem apagar; público sem efeito é recusado', async () => {
+    const c = contexto(m!);
+    const est = m!.base.est;
+    const ve = async () => (await servico.publicaveisNoPortal(c, 'paciente', [liberacao])).has(liberacao);
+    const ativos = () =>
+      contar(
+        "SELECT COUNT(*) AS n FROM perfil_portal_resultado WHERE estabelecimento_id = ? AND publico = 'paciente' AND ativo = TRUE",
+        [est],
+      );
+    // O primeiro perfil do paciente só publica o setor de imagem: o laudo do laboratório some.
+    const restrito = await servico.salvarPerfil(c, {
+      codigo: `${m!.marca}-P1`,
+      descricao: 'Paciente so imagem sintetico',
+      publico: 'paciente',
+      setores: [m!.setorImagem],
+    });
+    expect(await ativos()).toBe(1);
+    expect(await ve()).toBe(false);
+    // O segundo do mesmo público e alcance passa a valer e desativa o primeiro (que fica no banco, com a trilha).
+    const aberto = await servico.salvarPerfil(c, {
+      codigo: `${m!.marca}-P2`,
+      descricao: 'Paciente todos os setores sintetico',
+      publico: 'paciente',
+    });
+    expect(await ativos()).toBe(1);
+    expect(await um('SELECT ativo FROM perfil_portal_resultado WHERE id = ?', [restrito.id])).toMatchObject({
+      ativo: 0,
+    });
+    expect(await um('SELECT ativo FROM perfil_portal_resultado WHERE id = ?', [aberto.id])).toMatchObject({
+      ativo: 1,
+    });
+    expect(await ve()).toBe(true);
+    let cadastro = await servico.cadastro(c);
+    expect(cadastro.perfis.find((p) => p.id === aberto.id)).toMatchObject({ ativo: true, aplicado: true });
+    expect(cadastro.perfis.find((p) => p.id === restrito.id)).toMatchObject({
+      ativo: false,
+      aplicado: false,
+    });
+    // O perfil de outro público não é tocado.
+    const medico = await servico.salvarPerfil(c, {
+      codigo: `${m!.marca}-M1`,
+      descricao: 'Medico sintetico',
+      publico: 'medico_externo',
+    });
+    expect(await ativos()).toBe(1);
+    expect(await um('SELECT ativo FROM perfil_portal_resultado WHERE id = ?', [medico.id])).toMatchObject({
+      ativo: 1,
+    });
+    // Salvar de novo o primeiro o reativa e desativa o que estava valendo: nunca dois ativos.
+    await servico.salvarPerfil(c, {
+      id: restrito.id,
+      codigo: `${m!.marca}-P1`,
+      descricao: 'Paciente so imagem sintetico',
+      publico: 'paciente',
+      setores: [m!.setorImagem],
+    });
+    expect(await ativos()).toBe(1);
+    expect(await um('SELECT ativo FROM perfil_portal_resultado WHERE id = ?', [aberto.id])).toMatchObject({
+      ativo: 0,
+    });
+    expect(await ve()).toBe(false);
+    // Dois ativos gravados por fora (carga de outro sistema): o portal aplica o mais novo e o cadastro diz qual.
+    await nucleo.escrever(ctx, (e) =>
+      e.executar('UPDATE perfil_portal_resultado SET ativo = TRUE WHERE id = ?', [aberto.id]),
+    );
+    expect(await ativos()).toBe(2);
+    expect(await ve()).toBe(true);
+    cadastro = await servico.cadastro(c);
+    expect(cadastro.perfis.find((p) => p.id === aberto.id)).toMatchObject({ ativo: true, aplicado: true });
+    expect(cadastro.perfis.find((p) => p.id === restrito.id)).toMatchObject({ ativo: true, aplicado: false });
+    // Público que o portal ainda não aplica: recusado sem gravar nada.
+    const antes = await contar(
+      'SELECT COUNT(*) AS n FROM perfil_portal_resultado WHERE estabelecimento_id = ?',
+      [est],
+    );
+    for (const publico of ['empresa', 'interno'])
+      expect(
+        await recusa(
+          servico.salvarPerfil(c, { codigo: `${m!.marca}-X`, descricao: 'Sem efeito sintetico', publico }),
+        ),
+      ).toBe('perfil-publico-sem-efeito');
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM perfil_portal_resultado WHERE estabelecimento_id = ?', [est]),
+    ).toBe(antes);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'perfil_portal_resultado' AND entidade_id IN (?, ?)",
+        [restrito.id, aberto.id],
+      ),
+    ).toBeGreaterThanOrEqual(3);
+    for (const p of [restrito.id, aberto.id, medico.id])
+      await servico.desativar(c, 'perfil', p).catch(() => undefined);
+  }, 60_000);
+
+  it('o portal (controller) só lista e só abre o que o filtro deixa, com ou sem o mapa de estabelecimentos lido', async () => {
+    const c = contexto(m!);
+    const codigo = String(
+      (await um('SELECT codigo FROM estabelecimento WHERE id = ?', [m!.base.est]))?.['codigo'] ?? '',
+    );
+    expect(codigo).not.toBe('');
+    let abertos = 0;
+    const sessao = { hospital: codigo, perfil: 'paciente' as const };
+    const portal = {
+      sessao: () => sessao,
+      laudos: async () => ({ laudos: [{ liberacao }] }),
+      abrir: async () => ({ aberto: ++abertos }),
+    };
+    const controller = (entrega: ServicoEntregaResultado | null, hospital = codigo) => {
+      sessao.hospital = hospital;
+      return new PortalController(
+        { ambiente: 'dev', clientePadrao: CLIENTE } as never,
+        portal as never,
+        entrega,
+      );
+    };
+    const req = { headers: {} };
+    const lista = async (k: PortalController) => (await k.laudos(req)).laudos.length;
+    const abre = (k: PortalController) =>
+      k.abrir(String(liberacao), {}, req).then(
+        () => 200,
+        (e: unknown) => (e instanceof ErroProblema ? e.getStatus() : -1),
+      );
+
+    for (const comMapa of [false, true]) {
+      desligarMapaEstabelecimentos();
+      if (comMapa) await ligarMapaEstabelecimentos(CLIENTE, nucleo);
+      // Sem restrição ativa: lista e abre.
+      expect(await lista(controller(servico))).toBe(1);
+      expect(await abre(controller(servico))).toBe(200);
+      const restricao = await servico.incluirRestricao(c, { exame: m!.exameLab, regra: 'nunca_publicar' });
+      // Com o exame que nunca é publicado: some da lista e o endereço direto responde 404, sem abrir.
+      const antes = abertos;
+      expect(await lista(controller(servico))).toBe(0);
+      expect(await abre(controller(servico))).toBe(404);
+      expect(abertos).toBe(antes);
+      // Estabelecimento que não se resolve: nada é publicado (falha fechada).
+      expect(await lista(controller(servico, 'zzinexist'))).toBe(0);
+      expect(await abre(controller(servico, 'zzinexist'))).toBe(404);
+      expect(abertos).toBe(antes);
+      await servico.desativar(c, 'restricao', restricao.id);
+    }
+    desligarMapaEstabelecimentos();
+    // Só o destino que não é o banco do cliente (serviço nulo pelo módulo) dispensa o filtro.
+    expect(await lista(controller(null))).toBe(1);
   }, 60_000);
 });

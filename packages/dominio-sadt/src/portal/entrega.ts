@@ -208,6 +208,17 @@ export const REGRAS_RESTRICAO_PORTAL = ['nunca_publicar', 'apos_entrega_presenci
 export type RegraRestricaoPortal = (typeof REGRAS_RESTRICAO_PORTAL)[number];
 export const PUBLICOS_PORTAL = ['paciente', 'medico_externo', 'empresa', 'interno'] as const;
 export type PublicoPortal = (typeof PUBLICOS_PORTAL)[number];
+/**
+ * Os públicos que o portal aplica hoje: o acesso do paciente e o do médico externo. Os outros dois existem no
+ * vocabulário (um perfil trazido de outro sistema pode tê-los), mas nenhum acesso do portal os usa: o cadastro não os
+ * aceita, para ninguém confiar num perfil que não filtra nada.
+ */
+export const PUBLICOS_PORTAL_APLICADOS = [
+  'paciente',
+  'medico_externo',
+] as const satisfies readonly PublicoPortal[];
+export const publicoAplicado = (p: PublicoPortal): boolean =>
+  (PUBLICOS_PORTAL_APLICADOS as readonly PublicoPortal[]).includes(p);
 
 export interface RestricaoPortal {
   readonly regra: RegraRestricaoPortal;
@@ -243,6 +254,7 @@ export interface PerfilPortal {
 export function conferirPerfilPortal(p: {
   codigo: string;
   descricao: string;
+  publico: PublicoPortal;
   diasVisibilidade: number | null;
   atualizacaoMinutos: number | null;
   setores: readonly number[];
@@ -250,6 +262,11 @@ export function conferirPerfilPortal(p: {
   if (!/^[A-Za-z0-9_.-]{2,30}$/.test(p.codigo))
     recusar('perfil-codigo-invalido', 'O código do perfil tem de 2 a 30 letras, números, ponto, hífen ou _.');
   if (p.descricao.trim().length < 3) recusar('perfil-sem-descricao', 'Descreva o perfil.');
+  if (!publicoAplicado(p.publico))
+    recusar(
+      'perfil-publico-sem-efeito',
+      'O portal ainda não aplica perfil a este público: cadastre o perfil do paciente ou o do médico externo.',
+    );
   if (p.diasVisibilidade !== null && (!Number.isInteger(p.diasVisibilidade) || p.diasVisibilidade < 1))
     recusar('perfil-visibilidade-invalida', 'Os dias de visibilidade começam em 1 (ou vazio: sem limite).');
   if (p.atualizacaoMinutos !== null && (!Number.isInteger(p.atualizacaoMinutos) || p.atualizacaoMinutos < 1))
@@ -259,6 +276,43 @@ export function conferirPerfilPortal(p: {
     );
   if (new Set(p.setores).size !== p.setores.length)
     recusar('perfil-setor-repetido', 'O mesmo setor aparece duas vezes no perfil.');
+}
+
+/** O que a escolha do perfil olha: o público, o alcance (do estabelecimento ou de todos) e se está ativo. */
+export interface PerfilNoAlcance {
+  readonly id: number;
+  readonly publico: PublicoPortal;
+  readonly global: boolean;
+  readonly ativo: boolean;
+}
+
+/**
+ * Um perfil ativo por público e alcance: ao salvar (ou reativar) um perfil, os outros ativos do mesmo público e do
+ * mesmo alcance são desativados (ficam no histórico). Devolve os ids a desativar.
+ */
+export function perfisSubstituidos(
+  salvo: Omit<PerfilNoAlcance, 'ativo'>,
+  existentes: readonly PerfilNoAlcance[],
+): number[] {
+  return existentes
+    .filter((p) => p.ativo && p.id !== salvo.id && p.publico === salvo.publico && p.global === salvo.global)
+    .map((p) => p.id);
+}
+
+/**
+ * O perfil que o portal aplica a um público: o do estabelecimento vence o que vale para todos; se houver mais de um
+ * ativo no mesmo alcance (perfis trazidos de outro sistema, antes de alguém salvá-los aqui), vale o mais novo. Público
+ * que o portal não aplica não tem perfil aplicado.
+ */
+export function perfilAplicado<T extends PerfilNoAlcance>(
+  perfis: readonly T[],
+  publico: PublicoPortal,
+): T | null {
+  if (!publicoAplicado(publico)) return null;
+  const candidatos = perfis
+    .filter((p) => p.ativo && p.publico === publico)
+    .sort((a, b) => Number(a.global) - Number(b.global) || b.id - a.id);
+  return candidatos[0] ?? null;
 }
 
 export type MotivoNaoPublicado = 'setor' | 'expirado' | 'restrito' | 'aguarda_entrega' | 'carencia';

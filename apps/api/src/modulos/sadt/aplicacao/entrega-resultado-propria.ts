@@ -13,7 +13,9 @@ import {
   conferirPrazo,
   conferirRestricaoPortal,
   escolherPrazo,
+  perfilAplicado,
   type PerfilPortal,
+  perfisSubstituidos,
   type PrazoEntrega,
   preverEntrega,
   PRIORIDADES_PRAZO,
@@ -172,7 +174,8 @@ type Opcao = { id: number; nome: string };
 export interface CadastroEntrega {
   readonly prazos: readonly PrazoCadastrado[];
   readonly restricoes: readonly RestricaoCadastrada[];
-  readonly perfis: readonly PerfilCadastrado[];
+  /** `aplicado`: é o perfil que o portal usa hoje para o público, neste estabelecimento. */
+  readonly perfis: readonly (PerfilCadastrado & { readonly aplicado: boolean })[];
   readonly setores: readonly Opcao[];
   readonly setoresSolicitantes: readonly Opcao[];
   readonly materiais: readonly Opcao[];
@@ -368,7 +371,10 @@ export class ServicoEntregaResultado {
         l,
         perfisL.map((r) => n(r['id'])),
       );
-      const perfis = perfisL.map((r) => perfilDe(r, setoresDosPerfis.get(n(r['id'])) ?? []));
+      const lidos = perfisL.map((r) => perfilDe(r, setoresDosPerfis.get(n(r['id'])) ?? []));
+      // O que o portal aplica neste estabelecimento, por público (o ativo que não é o aplicado aparece avisado).
+      const aplicados = new Set(PUBLICOS_PORTAL.map((p) => perfilAplicado(lidos, p)?.id ?? 0));
+      const perfis = lidos.map((p) => ({ ...p, aplicado: aplicados.has(p.id) }));
       const opcao = (r: Linha) => ({ id: n(r['id']), nome: texto(r['nome']) });
       const setores = (
         await l.consultar(
@@ -496,6 +502,27 @@ export class ServicoEntregaResultado {
           await tx.alterar('perfil_portal_resultado', e.id, e.versao ?? n(atual['versao']), valores);
           perfil = e.id;
         }
+        // Um perfil ativo por público e alcance: o que acaba de ser salvo (ou reativado) substitui os outros, que
+        // ficam no histórico, desativados. A regra é do domínio (perfisSubstituidos).
+        const doPublico = await tx.consultar(
+          `SELECT id, versao, publico, estabelecimento_id, ativo FROM perfil_portal_resultado
+            WHERE publico = ? AND ativo = TRUE AND estabelecimento_id <=> ? LIMIT 500`,
+          [e.publico, e.global ? null : est],
+        );
+        const substituidos = new Set(
+          perfisSubstituidos(
+            { id: perfil, publico: e.publico, global: e.global },
+            doPublico.map((r) => ({
+              id: n(r['id']),
+              publico: texto(r['publico']) as PublicoPortal,
+              global: r['estabelecimento_id'] === null || r['estabelecimento_id'] === undefined,
+              ativo: sim(r['ativo']),
+            })),
+          ),
+        );
+        for (const r of doPublico)
+          if (substituidos.has(n(r['id'])))
+            await tx.alterar('perfil_portal_resultado', n(r['id']), n(r['versao']), { ativo: false });
         // Os setores do perfil: o que saiu é excluído logicamente; o que voltou é reativado; o novo é incluído.
         const atuais = await tx.consultar(
           'SELECT id, versao, setor_diagnostico_id, excluido_em FROM perfil_portal_setor WHERE perfil_portal_resultado_id = ?',
@@ -802,18 +829,54 @@ export class ServicoEntregaResultado {
   ): Promise<Set<number>> {
     const est = this.est(c);
     if (liberacoes.length === 0) return Promise.resolve(new Set());
-    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
-      const pr = await l.uma(
-        `SELECT * FROM perfil_portal_resultado WHERE ativo = TRUE AND publico = ?
+    return this.nucleo.lerSomente(this.ctxNucleo(c), (l) => visiveisNoPortal(l, est, publico, liberacoes));
+  }
+
+  /**
+   * O mesmo, para o acesso do portal cujo estabelecimento ainda não tem o id resolvido (o endereço traz o código): o
+   * id sai do código na própria leitura. Falha fechada: código desconhecido não publica nada.
+   */
+  publicaveisNoPortalPeloCodigo(
+    c: { readonly cliente: string; readonly correlacao: string },
+    codigoEstabelecimento: string,
+    publico: PublicoPortal,
+    liberacoes: readonly number[],
+  ): Promise<Set<number>> {
+    if (liberacoes.length === 0) return Promise.resolve(new Set());
+    return this.nucleo.lerSomente(
+      { cliente: c.cliente, estabelecimento: null, usuario: null, correlacao: c.correlacao.slice(0, 64) },
+      async (l) => {
+        const e = await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+          codigoEstabelecimento,
+        ]);
+        return e ? visiveisNoPortal(l, n(e['id']), publico, liberacoes) : new Set<number>();
+      },
+    );
+  }
+}
+
+/** A leitura da publicação: o perfil aplicado ao público (regra do domínio) e a restrição de cada exame. */
+async function visiveisNoPortal(
+  l: Leitor,
+  est: number,
+  publico: PublicoPortal,
+  liberacoes: readonly number[],
+): Promise<Set<number>> {
+  const ativos = await l.consultar(
+    `SELECT * FROM perfil_portal_resultado WHERE ativo = TRUE AND publico = ?
             AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
-          ORDER BY (estabelecimento_id IS NULL), id DESC LIMIT 1`,
-        [publico, est],
-      );
-      const perfil = pr
-        ? perfilDe(pr, (await setoresPorPerfil(l, [n(pr['id'])])).get(n(pr['id'])) ?? [])
-        : null;
-      const linhas = await l.consultar(
-        `SELECT lp.id, ei.id AS item, ei.exame_id, COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id) AS setor,
+          ORDER BY id DESC LIMIT 500`,
+    [publico, est],
+  );
+  const escolhido = perfilAplicado(
+    ativos.map((r) => perfilDe(r, [])),
+    publico,
+  );
+  const perfil = escolhido
+    ? { ...escolhido, setores: (await setoresPorPerfil(l, [escolhido.id])).get(escolhido.id) ?? [] }
+    : null;
+  const linhas = await l.consultar(
+    `SELECT lp.id, ei.id AS item, ei.exame_id, COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id) AS setor,
                 COALESCE(re.liberado_em, lp.liberado_em) AS liberado_em,
                 EXISTS (SELECT 1 FROM entrega_resultado_item x JOIN entrega_resultado er ON er.id = x.entrega_resultado_id
                          WHERE x.exame_item_id = ei.id AND x.excluido_em IS NULL AND er.situacao = 'entregue'
@@ -823,45 +886,43 @@ export class ServicoEntregaResultado {
            JOIN exame_item ei ON ei.id = re.exame_item_id
            JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
           WHERE lp.estabelecimento_id = ? AND lp.id IN (${lista(liberacoes.length)})`,
-        [est, ...liberacoes],
-      );
-      const exames = [...new Set(linhas.map((r) => n(r['exame_id'])))];
-      const restricoes =
-        exames.length === 0
-          ? []
-          : await l.consultar(
-              `SELECT exame_id, regra, dias_carencia, estabelecimento_id FROM exame_restricao_portal
+    [est, ...liberacoes],
+  );
+  const exames = [...new Set(linhas.map((r) => n(r['exame_id'])))];
+  const restricoes =
+    exames.length === 0
+      ? []
+      : await l.consultar(
+          `SELECT exame_id, regra, dias_carencia, estabelecimento_id FROM exame_restricao_portal
                 WHERE ativo = TRUE AND exame_id IN (${lista(exames.length)})
                   AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)`,
-              [...exames, est],
-            );
-      const agora = new Date();
-      const visiveis = new Set<number>();
-      for (const r of linhas) {
-        const restricao = restricaoVigente(
-          restricoes
-            .filter((x) => n(x['exame_id']) === n(r['exame_id']))
-            .map((x) => ({
-              regra: texto(x['regra']) as RegraRestricaoPortal,
-              diasCarencia: nn(x['dias_carencia']),
-              global: x['estabelecimento_id'] === null || x['estabelecimento_id'] === undefined,
-            })),
+          [...exames, est],
         );
-        const d = publicacaoNoPortal(
-          perfil,
-          restricao,
-          {
-            setor: nn(r['setor']),
-            liberadoEm: instante(r['liberado_em']),
-            entreguePresencialmente: sim(r['entregue']),
-          },
-          agora,
-        );
-        if (d.publica) visiveis.add(n(r['id']));
-      }
-      return visiveis;
-    });
+  const agora = new Date();
+  const visiveis = new Set<number>();
+  for (const r of linhas) {
+    const restricao = restricaoVigente(
+      restricoes
+        .filter((x) => n(x['exame_id']) === n(r['exame_id']))
+        .map((x) => ({
+          regra: texto(x['regra']) as RegraRestricaoPortal,
+          diasCarencia: nn(x['dias_carencia']),
+          global: x['estabelecimento_id'] === null || x['estabelecimento_id'] === undefined,
+        })),
+    );
+    const d = publicacaoNoPortal(
+      perfil,
+      restricao,
+      {
+        setor: nn(r['setor']),
+        liberadoEm: instante(r['liberado_em']),
+        entreguePresencialmente: sim(r['entregue']),
+      },
+      agora,
+    );
+    if (d.publica) visiveis.add(n(r['id']));
   }
+  return visiveis;
 }
 
 const TABELAS_DO_CADASTRO = {
