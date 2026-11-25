@@ -87,12 +87,16 @@ export interface AcaoRaas {
   readonly cid: string | null;
 }
 
-/** A ação lançada no registro: instrumento do tipo, quantidade inteira, datas na competência e depois da admissão. */
+/**
+ * A ação lançada no registro: instrumento do tipo, quantidade inteira, datas na competência, depois da admissão e, no
+ * registro concluído, até a conclusão (alta) do paciente.
+ */
 export function conferirAcaoRaas(
   tipo: TipoRaas,
   competencia: CompetenciaSus,
   dataAdmissao: string,
   a: Omit<AcaoRaas, 'sequencia'>,
+  dataConclusao: string | null = null,
 ): ProblemaRaas[] {
   const p: ProblemaRaas[] = [];
   if (!a.registros.includes(REGISTRO_DO_TIPO_RAAS[tipo]))
@@ -113,7 +117,43 @@ export function conferirAcaoRaas(
     else if (!dataNaCompetencia(a.dataFim, competencia))
       p.push({ campo: 'dataFim', mensagem: 'O fim da ação tem de estar dentro da competência.' });
   }
+  // Só confere contra a conclusão a data que já passou pelas regras acima (um problema por campo).
+  if (dataConclusao !== null) {
+    if (!p.some((x) => x.campo === 'dataInicio') && a.dataInicio > dataConclusao)
+      p.push({
+        campo: 'dataInicio',
+        mensagem: 'A ação não pode ser posterior à conclusão do acompanhamento.',
+      });
+    else if (
+      a.dataFim !== null &&
+      !p.some((x) => x.campo === 'dataFim' || x.campo === 'dataInicio') &&
+      a.dataFim > dataConclusao
+    )
+      p.push({
+        campo: 'dataFim',
+        mensagem: 'O fim da ação não pode ser posterior à conclusão do acompanhamento.',
+      });
+  }
   return p;
+}
+
+/** A conclusão não pode ser anterior à última ação ativa do registro (início ou fim, o que for mais tarde). */
+export function conferirConclusaoRaas(
+  dataConclusao: string,
+  acoes: readonly Pick<AcaoRaas, 'dataInicio' | 'dataFim'>[],
+): ProblemaRaas[] {
+  const ultima = acoes.reduce<string | null>((m, a) => {
+    const d = a.dataFim !== null && a.dataFim > a.dataInicio ? a.dataFim : a.dataInicio;
+    return m === null || d > m ? d : m;
+  }, null);
+  return ultima !== null && dataConclusao < ultima
+    ? [
+        {
+          campo: 'dataConclusao',
+          mensagem: `A conclusão não pode ser anterior à última ação lançada (${ultima}).`,
+        },
+      ]
+    : [];
 }
 
 export function rotuloTipoRaas(t: TipoRaas): string {
@@ -183,7 +223,7 @@ export function criticarRegistroRaas(r: RegistroRaasParaCritica): CriticaRaas[] 
     add(REGRAS_CRITICA_RAAS.cabecalho, 'bloqueante', p.campo, p.mensagem);
   const vistos = new Set<string>();
   for (const a of r.acoes) {
-    for (const p of conferirAcaoRaas(r.tipo, r.competencia, r.dataAdmissao, a))
+    for (const p of conferirAcaoRaas(r.tipo, r.competencia, r.dataAdmissao, a, r.dataConclusao))
       add(REGRAS_CRITICA_RAAS.acao, 'bloqueante', p.campo, `Ação ${a.sequencia}: ${p.mensagem}`, a.sequencia);
     if (!cnsValido(a.cnsProfissional))
       add(

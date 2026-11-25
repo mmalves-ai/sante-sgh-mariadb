@@ -9,6 +9,7 @@
 import {
   conferirAcaoRaas,
   conferirCabecalhoRaas,
+  conferirConclusaoRaas,
   LOCAIS_RAAS,
   type LocalRaas,
   REGISTRO_DO_TIPO_RAAS,
@@ -225,17 +226,23 @@ const problemasAcao = computed(() => {
   if (a.dataInicio)
     p.push(
       // O instrumento do procedimento é conferido pela API, que conhece a tabela unificada.
-      ...conferirAcaoRaas(d.tipo, d.competencia, d.dataAdmissao, {
-        procedimento: a.procedimento,
-        registros: [REGISTRO_DO_TIPO_RAAS[d.tipo]],
-        cbo: a.cbo || null,
-        cnsProfissional: null,
-        dataInicio: a.dataInicio,
-        dataFim: a.dataFim || null,
-        quantidade: Number(a.quantidade),
-        local: a.local,
-        cid: a.cid.trim() || null,
-      }).map((x) => x.mensagem),
+      ...conferirAcaoRaas(
+        d.tipo,
+        d.competencia,
+        d.dataAdmissao,
+        {
+          procedimento: a.procedimento,
+          registros: [REGISTRO_DO_TIPO_RAAS[d.tipo]],
+          cbo: a.cbo || null,
+          cnsProfissional: null,
+          dataInicio: a.dataInicio,
+          dataFim: a.dataFim || null,
+          quantidade: Number(a.quantidade),
+          local: a.local,
+          cid: a.cid.trim() || null,
+        },
+        d.dataConclusao,
+      ).map((x) => x.mensagem),
     );
   else p.push(t('acao.dataInicio'));
   return p;
@@ -281,7 +288,9 @@ const problemasConclusao = computed(() => {
     destino: conclusao.value.destino,
     estrategiaSaudeFamilia: false,
     cnesSaudeFamilia: null,
-  }).map((x) => x.mensagem);
+  })
+    .concat(conferirConclusaoRaas(conclusao.value.data, d.acoes))
+    .map((x) => x.mensagem);
 });
 const concluir = () => {
   const d = detalhe.data.value;

@@ -19,6 +19,7 @@ import {
   chaveCriticaRaas,
   conferirAcaoRaas,
   conferirCabecalhoRaas,
+  conferirConclusaoRaas,
   continuacaoRaas,
   criticarRegistroRaas,
   gerarArquivoRaas,
@@ -529,17 +530,23 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
         if (!pr) throw naoEncontrado('Profissional');
       }
       const tipoR = String(r['tipo_raas']) as TipoRaas;
-      const p = conferirAcaoRaas(tipoR, String(r['competencia']), dataIso(r['data_admissao'])!, {
-        procedimento: e.procedimento,
-        registros: registrosDoTexto(proc['registros']),
-        cbo: e.cbo,
-        cnsProfissional: null,
-        dataInicio: e.dataInicio,
-        dataFim: e.dataFim,
-        quantidade: e.quantidade,
-        local: e.local,
-        cid: e.cid,
-      });
+      const p = conferirAcaoRaas(
+        tipoR,
+        String(r['competencia']),
+        dataIso(r['data_admissao'])!,
+        {
+          procedimento: e.procedimento,
+          registros: registrosDoTexto(proc['registros']),
+          cbo: e.cbo,
+          cnsProfissional: null,
+          dataInicio: e.dataInicio,
+          dataFim: e.dataFim,
+          quantidade: e.quantidade,
+          local: e.local,
+          cid: e.cid,
+        },
+        dataIso(r['data_conclusao']),
+      );
       if (p.length) throw recusaRegra('Ação recusada', p);
       const seq = await tx.uma(
         'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM registro_raas_procedimento WHERE registro_raas_id = ?',
@@ -597,6 +604,7 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
         estrategiaSaudeFamilia: bool(r['estrategia_saude_familia']),
         cnesSaudeFamilia: txtOuNull(r['cnes_unidade_saude_familia']),
       });
+      p.push(...conferirConclusaoRaas(e.dataConclusao, (await tx.consultar(SQL_ACAO, [id])).map(acaoDe)));
       if (p.length) throw recusaRegra('Conclusão recusada', p);
       await tx.alterar(T_REGISTRO, id, e.versao, {
         data_conclusao: e.dataConclusao,
@@ -707,6 +715,41 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
     return out;
   }
 
+  /** A crítica do domínio sobre o estado atual dos registros lidos (usada na crítica e de novo na remessa). */
+  private static criticasDe(
+    lidos: Awaited<ReturnType<PortaRaasPropria['paraCritica']>>,
+    tipo: TipoRaas,
+    competencia: string,
+  ) {
+    return lidos.flatMap(({ linha: r, acoes }) =>
+      criticarRegistroRaas({
+        id: num(r['id']),
+        tipo,
+        competencia,
+        dataAdmissao: dataIso(r['data_admissao'])!,
+        dataConclusao: dataIso(r['data_conclusao']),
+        destino: numOuNull(r['destino_dominio_sus_id']),
+        estrategiaSaudeFamilia: bool(r['estrategia_saude_familia']),
+        cnesSaudeFamilia: txtOuNull(r['cnes_unidade_saude_familia']),
+        cidPrincipal: txtOuNull(r['cid']),
+        cnsPaciente: txtOuNull(r['cns']),
+        cpfPaciente: txtOuNull(r['cpf']),
+        acoes: acoes.map((a): AcaoRaas => ({
+          sequencia: a.sequencia,
+          procedimento: a.procedimento,
+          registros: a.registros,
+          cbo: a.cbo,
+          cnsProfissional: a.cnsProfissional,
+          dataInicio: a.dataInicio,
+          dataFim: a.dataFim,
+          quantidade: a.quantidade,
+          local: a.local,
+          cid: a.cid,
+        })),
+      }),
+    );
+  }
+
   /** A crítica da competência e tipo: grava as críticas novas, reabre as que voltaram e corrige as que sumiram. */
   async criticar(
     c: ContextoPortaPropria,
@@ -716,33 +759,7 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
     return this.gravar(c, 'faturamento.sus.raas.criticar', TABELAS, async (tx, est, usuario) => {
       const comp = await this.competenciaAberta(tx, est.id, e.competencia);
       const lidos = await this.paraCritica(tx, est.id, e.competencia, e.tipo);
-      const criticas = lidos.flatMap(({ linha: r, acoes }) =>
-        criticarRegistroRaas({
-          id: num(r['id']),
-          tipo: e.tipo,
-          competencia: e.competencia,
-          dataAdmissao: dataIso(r['data_admissao'])!,
-          dataConclusao: dataIso(r['data_conclusao']),
-          destino: numOuNull(r['destino_dominio_sus_id']),
-          estrategiaSaudeFamilia: bool(r['estrategia_saude_familia']),
-          cnesSaudeFamilia: txtOuNull(r['cnes_unidade_saude_familia']),
-          cidPrincipal: txtOuNull(r['cid']),
-          cnsPaciente: txtOuNull(r['cns']),
-          cpfPaciente: txtOuNull(r['cpf']),
-          acoes: acoes.map((a): AcaoRaas => ({
-            sequencia: a.sequencia,
-            procedimento: a.procedimento,
-            registros: a.registros,
-            cbo: a.cbo,
-            cnsProfissional: a.cnsProfissional,
-            dataInicio: a.dataInicio,
-            dataFim: a.dataFim,
-            quantidade: a.quantidade,
-            local: a.local,
-            cid: a.cid,
-          })),
-        }),
-      );
+      const criticas = PortaRaasPropria.criticasDe(lidos, e.tipo, e.competencia);
       const ids = lidos.map((x) => num(x.linha['id']));
       const existentes = ids.length
         ? await tx.consultarParaAtualizar(
@@ -839,7 +856,11 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
               [comp, ...ids],
             )
           : null;
-        const recusa = recusaGerarRemessaRaas(ids.length, num(bloq?.['n']));
+        // A crítica gravada pode estar velha (ação lançada ou conclusão depois dela): roda de novo sobre o estado atual.
+        const atuais = PortaRaasPropria.criticasDe(lidos, e.tipo, e.competencia).filter(
+          (k) => k.gravidade === 'bloqueante',
+        );
+        const recusa = recusaGerarRemessaRaas(ids.length, Math.max(num(bloq?.['n']), atuais.length));
         if (recusa) throw recusaRegra('Remessa recusada', [recusa]);
         const semCritica = await tx.uma('SELECT criticada_em FROM competencia_sus WHERE id = ?', [comp]);
         if (!semCritica?.['criticada_em'])

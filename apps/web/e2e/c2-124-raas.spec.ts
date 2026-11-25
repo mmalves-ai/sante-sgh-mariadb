@@ -167,8 +167,11 @@ test.describe('C2-124 RAAS psicossocial e domiciliar @C2-124', () => {
       .poll(() => pedidos.find((p) => p.caminho.endsWith('/acoes/61/retirar'))?.corpo)
       .toMatchObject({ versao: 1 });
 
-    // Conclusão: sem destino trava; com o destino, vai.
+    // Conclusão: antes da última ação lançada trava na hora; sem destino trava; com o destino, vai.
+    await page.getByTestId('raas-conclusao-data').fill('2026-01-05');
+    await expect(page.getByTestId('raas-conclusao-problemas')).toContainText('última ação');
     await page.getByTestId('raas-conclusao-data').fill('2026-01-28');
+    await expect(page.getByTestId('raas-conclusao-problemas')).not.toContainText('última ação');
     await expect(page.getByTestId('raas-concluir')).toBeDisabled();
     await escolher(page.getByTestId('raas-conclusao-destino'), '12');
     await page.getByTestId('raas-concluir').click();

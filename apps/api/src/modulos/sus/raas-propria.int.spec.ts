@@ -292,6 +292,20 @@ describe.skipIf(SEM_BANCO)('PortaRaasPropria contra o MariaDB (contrato de efeit
       orgaoDestino: 'Secretaria sintética',
       indicadorDestino: 'M',
     };
+    // Crítica limpa e depois uma ação nova sem profissional (sem CNS): a crítica gravada ficou velha e a remessa
+    // roda a crítica de novo sobre o estado atual, recusando sem marcar nada como exportado.
+    const semCns = await porta.lancarAcao(ctx(), r.id, {
+      ...acao({ profissional: null, dataInicio: '2026-01-11' }),
+      versao: await versaoDe(r.id),
+    });
+    expect(await codigoDoErro(porta.gerarRemessa(ctx(), corpoRemessa))).toMatch(/^422/);
+    expect(
+      (
+        await ler("SELECT COUNT(*) AS n FROM registro_raas WHERE id = ? AND situacao = 'exportado'", [r.id])
+      )[0],
+    ).toEqual({ n: 0 });
+    const [v3] = await ler('SELECT versao FROM registro_raas_procedimento WHERE id = ?', [semCns.id]);
+    await porta.retirarAcao(ctx(), semCns.id, { versao: Number(v3!['versao']) });
     const g1 = await porta.gerarRemessa(ctx(), corpoRemessa);
     expect(g1).toMatchObject({ registros: 1, substituidas: 0 });
     expect(conferirEstrutura(LEIAUTE_RAAS, g1.conteudo)).toEqual([]);
@@ -358,11 +372,44 @@ describe.skipIf(SEM_BANCO)('PortaRaasPropria contra o MariaDB (contrato de efeit
         }),
       ),
     ).toMatch(/^422/);
+    // A conclusão não pode ficar antes da última ação ativa; retirada a ação, a conclusão passa.
+    const depois = await porta.lancarAcao(ctx(), c.id, {
+      ...acao({ dataInicio: '2026-02-12' }),
+      versao: await versaoDe(c.id),
+    });
+    expect(
+      await codigoDoErro(
+        porta.concluir(ctx(), c.id, {
+          dataConclusao: '2026-02-10',
+          destino: m.destino,
+          versao: await versaoDe(c.id),
+        }),
+      ),
+    ).toMatch(/^422/);
+    const [v4] = await ler('SELECT versao FROM registro_raas_procedimento WHERE id = ?', [depois.id]);
+    await porta.retirarAcao(ctx(), depois.id, { versao: Number(v4!['versao']) });
     await porta.concluir(ctx(), c.id, {
       dataConclusao: '2026-02-10',
       destino: m.destino,
       versao: await versaoDe(c.id),
     });
+    // Concluído: ação com data depois da conclusão (alta) é recusada e não grava.
+    expect(
+      await codigoDoErro(
+        porta.lancarAcao(ctx(), c.id, {
+          ...acao({ dataInicio: '2026-02-11' }),
+          versao: await versaoDe(c.id),
+        }),
+      ),
+    ).toMatch(/^422/);
+    expect(
+      (
+        await ler(
+          'SELECT COUNT(*) AS n FROM registro_raas_procedimento WHERE registro_raas_id = ? AND excluido_em IS NULL',
+          [c.id],
+        )
+      )[0],
+    ).toEqual({ n: 0 });
     expect(
       (
         await ler(

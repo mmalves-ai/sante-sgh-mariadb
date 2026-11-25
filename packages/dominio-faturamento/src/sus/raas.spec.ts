@@ -7,6 +7,7 @@ import {
   chaveCriticaRaas,
   conferirAcaoRaas,
   conferirCabecalhoRaas,
+  conferirConclusaoRaas,
   continuacaoRaas,
   criticarRegistroRaas,
   gerarArquivoRaas,
@@ -103,6 +104,24 @@ describe('RAAS: ação', () => {
     expect(conferir({ dataFim: '2026-01-09' })).toEqual(['dataFim']);
     expect(conferir({ dataFim: '2026-02-02' })).toEqual(['dataFim']);
   });
+  it('no registro concluído, recusa ação com início ou fim depois da conclusão', () => {
+    const comAlta = (x: Partial<AcaoRaas>) =>
+      conferirAcaoRaas('atencao_psicossocial', '202601', '2026-01-05', acao(x), '2026-01-15').map(
+        (p) => p.campo,
+      );
+    expect(comAlta({ dataInicio: '2026-01-15' })).toEqual([]);
+    expect(comAlta({ dataInicio: '2026-01-16' })).toEqual(['dataInicio']);
+    expect(comAlta({ dataInicio: '2026-01-10', dataFim: '2026-01-20' })).toEqual(['dataFim']);
+  });
+  it('a conclusão não pode ser anterior à última ação ativa', () => {
+    const acoes = [
+      acao({ dataInicio: '2026-01-10' }),
+      acao({ dataInicio: '2026-01-12', dataFim: '2026-01-18' }),
+    ];
+    expect(conferirConclusaoRaas('2026-01-18', acoes)).toEqual([]);
+    expect(conferirConclusaoRaas('2026-01-17', acoes).map((p) => p.campo)).toEqual(['dataConclusao']);
+    expect(conferirConclusaoRaas('2026-01-01', [])).toEqual([]);
+  });
 });
 
 describe('RAAS: crítica da competência', () => {
@@ -127,6 +146,14 @@ describe('RAAS: crítica da competência', () => {
     expect(c.map((x) => [x.regra, x.campo])).toEqual([
       ['raas.cabecalho', 'destino'],
       ['raas.acao', 'dataInicio'],
+    ]);
+  });
+  it('ação posterior à conclusão vira bloqueante', () => {
+    const c = criticarRegistroRaas(
+      registro({ dataConclusao: '2026-01-08', destino: 3, acoes: [acao({ dataInicio: '2026-01-10' })] }),
+    );
+    expect(c.map((x) => [x.regra, x.gravidade, x.campo])).toEqual([
+      ['raas.acao', 'bloqueante', 'dataInicio'],
     ]);
   });
   it('avisa a ação repetida e a domiciliar fora do domicílio', () => {
