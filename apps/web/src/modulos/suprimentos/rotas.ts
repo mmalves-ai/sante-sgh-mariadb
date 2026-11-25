@@ -79,6 +79,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/AtasEmpenhoTela.vue'),
     meta: { permissao: 'suprimentos.licitacao.ler' },
   },
+  // C2-030 (05-SUP linha 26): os lances da disputa aberta do pregão e do leilão (aberta pela tela da licitação).
+  {
+    path: '/suprimentos/licitacao/lances',
+    name: 'suprimentos.licitacao.lances',
+    component: () => import('./telas/LancesPregaoTela.vue'),
+    meta: { permissao: 'suprimentos.licitacao.ler' },
+  },
   {
     path: '/suprimentos/itens',
     name: 'suprimentos.itens',

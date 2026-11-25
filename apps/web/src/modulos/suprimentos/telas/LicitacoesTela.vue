@@ -26,6 +26,7 @@ import {
   rotuloModalidade,
 } from '../componentes/licitacao-tela.js';
 import { data, reais } from '../usar-suprimentos.js';
+import { mensagensLancePregao } from '../i18n-lance-pregao.js';
 import './estilo-opme.css';
 
 const { t } = useI18n();
@@ -166,6 +167,9 @@ async function cadastrado(id: number, m: string): Promise<void> {
           data-testid="lic-desligado"
         />
         <p v-if="mensagem" role="status" data-testid="lic-mensagem">{{ mensagem }}</p>
+        <RouterLink to="/suprimentos/licitacao/lances" data-testid="lic-lances">{{
+          mensagensLancePregao.titulo
+        }}</RouterLink>
 
         <h2 class="sgh-visualmente-oculto">{{ k('painel.titulo') }}</h2>
         <ul class="cartoes-licitacao" data-testid="lic-painel">

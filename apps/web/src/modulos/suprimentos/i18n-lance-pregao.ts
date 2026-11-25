@@ -1,0 +1,28 @@
+// Textos da tela dos lances do pregão e do leilão (C2-030, 05-SUP linha 26; Lei 14.133/2021, art. 56 e 57).
+export const mensagensLancePregao = {
+  titulo: 'Lances da disputa',
+  texto:
+    'Registre os lances da sessão do pregão ou do leilão item a item. Cada lance tem de melhorar a oferta anterior do próprio licitante; o último lance passa a ser a oferta da proposta no julgamento. Nada é apagado.',
+  voltar: 'Voltar à licitação',
+  carregando: 'Carregando…',
+  processo: 'Processo em sessão',
+  escolha: 'Escolha',
+  semProcesso: 'Nenhum pregão ou leilão em sessão neste estabelecimento.',
+  intervalo: 'Intervalo mínimo do edital (%)',
+  sentidoMenor: 'Disputa pelo menor preço: o lance fica abaixo da oferta anterior.',
+  sentidoMaior: 'Disputa pelo maior lance: o lance fica acima da oferta anterior.',
+  item: 'Item {sequencia}: {descricao} ({quantidade})',
+  licitante: 'Licitante',
+  valor: 'Valor unitário do lance',
+  registrar: 'Registrar lance',
+  registrado: 'Lance de {valor} registrado (lance {rodada} do licitante; posição {posicao}).',
+  classificacao: 'Classificação parcial',
+  posicao: 'Posição',
+  oferta: 'Oferta',
+  proposta: 'Proposta',
+  historico: 'Lances do item',
+  rodada: 'Lance',
+  hora: 'Hora',
+  semLance: 'Nenhum lance neste item.',
+  fora: 'fora da disputa',
+} as const;
