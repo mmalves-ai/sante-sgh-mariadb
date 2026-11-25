@@ -2,7 +2,7 @@
 // (gravada) sobre a linha do mapa fechado (`mapa_dieta_item`, `mapa_dieta`, lidas) e o tipo (`tipo_ocorrencia_refeicao`,
 // cadastro genérico, lido). Contrato de efeito:
 //   - registrar: a copa informa a unidade, a refeição, o dia e a internação; a linha do mapa fechado é achada pelo
-//     atendimento da internação (sem mapa fechado: 422); a regra do domínio valida (justificativa quando o tipo exige,
+//     atendimento da internação, só em mapa fechado, em produção ou distribuído (mapa aberto, cancelado ou ausente: 422); a regra do domínio valida (justificativa quando o tipo exige,
 //     momento, tipo em uso, linha não cancelada) antes do banco; grava a ocorrência com o atendimento, o paciente, a
 //     refeição do dia, o registrante e `resolvida` falso; devolve o aviso de reposição quando o tipo a gera;
 //   - resolver: a providência com a versão lida; `resolvida`, `resolvida_em` e `resolvida_por_usuario_id`; a já
@@ -160,7 +160,7 @@ export class PortaOcorrenciaRefeicaoPropria extends PortaEstabelecimentoPropria 
     });
   }
 
-  /** A linha do mapa fechado da internação (pelo atendimento) na unidade, refeição e dia. */
+  /** A linha do mapa fechado (fechado, em produção ou distribuído) da internação (pelo atendimento) na unidade, refeição e dia; mapa aberto não recebe ocorrência. */
   private async linhaDoMapa(l: Leitor, est: number, e: z.infer<typeof esquemaRegistrar>) {
     const i = await l.uma(
       `SELECT id, atendimento_id, paciente_id FROM internacao
@@ -173,7 +173,7 @@ export class PortaOcorrenciaRefeicaoPropria extends PortaEstabelecimentoPropria 
          JOIN mapa_dieta m ON m.id = it.mapa_dieta_id
          JOIN unidade_internacao ui ON ui.id = m.unidade_internacao_id
         WHERE m.estabelecimento_id = ? AND ui.codigo = ? AND m.refeicao_do_dia_id = ? AND m.data_referencia = ?
-          AND m.excluido_em IS NULL AND m.situacao <> 'cancelado'
+          AND m.excluido_em IS NULL AND m.situacao IN ('fechado', 'em_producao', 'distribuido')
           AND it.atendimento_id = ? AND it.excluido_em IS NULL
         ORDER BY m.id DESC LIMIT 1`,
       [est, e.unidade, e.refeicao, e.data, num(i['atendimento_id'])],

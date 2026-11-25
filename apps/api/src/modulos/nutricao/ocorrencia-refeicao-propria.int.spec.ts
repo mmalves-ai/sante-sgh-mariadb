@@ -16,6 +16,7 @@ const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const P = 'c1131oc';
 const HOJE = new Date().toISOString().slice(0, 10);
+const ONTEM = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
 
 interface Massa {
   est: number;
@@ -171,6 +172,18 @@ describe.skipIf(SEM_BANCO)('PortaOcorrenciaRefeicaoPropria contra o MariaDB (con
           );
         const itemNoMapa = await item(1, 0, 'previsto');
         await item(2, 2, 'cancelado');
+        // Mapa ainda aberto (vindo de importação) da mesma unidade e refeição no dia anterior, com a mesma internação.
+        const mapaAberto = await e.inserir(
+          `INSERT INTO mapa_dieta (estabelecimento_id, data_referencia, refeicao_do_dia_id, setor_funcional_id,
+             unidade_internacao_id, horario_corte, situacao, origem, criado_em)
+           VALUES (?, ?, ?, 1, ?, ?, 'aberto', 'migracao', ?)`,
+          [est, ONTEM, refeicao, ui, agora, agora],
+        );
+        await e.inserir(
+          `INSERT INTO mapa_dieta_item (mapa_dieta_id, sequencia, atendimento_id, paciente_id, modalidade_dieta_id,
+             situacao, criado_em) VALUES (?, 1, ?, ?, ?, 'previsto', ?)`,
+          [mapaAberto, atds[0], pacs[0], modalidade, agora],
+        );
         return {
           est,
           usuario: Number(usuario['id']),
@@ -257,6 +270,18 @@ describe.skipIf(SEM_BANCO)('PortaOcorrenciaRefeicaoPropria contra o MariaDB (con
     await expect(
       porta.registrar(ctx(), { ...base(m.intNoMapa, m.tipoSimples), unidade: 'NAO-EXISTE' }),
     ).rejects.toMatchObject({ problema: { status: 422 } });
+    expect(await total()).toBe(antes);
+  });
+
+  it('recusa a ocorrência sobre a bandeja de mapa ainda aberto, sem gravar', async () => {
+    const antes = await total();
+    await expect(
+      porta.registrar(ctx(), {
+        ...base(m.intNoMapa, m.tipoSimples),
+        data: ONTEM,
+        ocorridoEm: `${ONTEM}T12:00`,
+      }),
+    ).rejects.toMatchObject({ problema: { status: 422, title: 'Sem bandeja no mapa' } });
     expect(await total()).toBe(antes);
   });
 
