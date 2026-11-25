@@ -8,6 +8,7 @@ import { mensagensDestinoCorpo } from './i18n-destino-corpo.js';
 import { mensagensRegulacaoEntrada } from './i18n-regulacao-entrada.js';
 import { mensagensLeitosSus } from './i18n-leitos-sus.js';
 import { mensagensProducaoHospitalar } from './i18n-producao-hospitalar.js';
+import { mensagensDiferencaAcomodacao } from './i18n-diferenca-acomodacao.js';
 import { mensagensRegistros } from './i18n-registros.js';
 import { mensagensSameGuarda } from './i18n-same-guarda.js';
 import { mensagensPrePlano } from './i18n-pre-internacao-plano.js';
@@ -30,6 +31,8 @@ export const mensagensAdt = {
   // F78.04-2, 04-INT L79 e L80: leitos do sistema público e comunicação à operadora (i18n-leitos-sus.ts).
   leitosSus: mensagensLeitosSus,
   producao: mensagensProducaoHospitalar,
+  // C2-062, 04-INT L81: diferença de acomodação com aceite e cobrança na conta particular.
+  diferencaAcomodacao: mensagensDiferencaAcomodacao,
   // F3.4, 04-INT L67: diagnósticos e acidente da internação (i18n-registros.ts).
   registros: mensagensRegistros,
   // C2-048, 04-INT L70: plano previsto da pré-internação e fila de espera (i18n-pre-internacao-plano.ts).

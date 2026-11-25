@@ -284,6 +284,13 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.censo.ler' },
   },
   {
+    // C2-062, 04-INT L81: diferença de acomodação por paciente (proposta, aceite e cobrança na conta particular).
+    path: '/internacao/diferenca-acomodacao',
+    name: 'adt.diferencaAcomodacao',
+    component: () => import('./telas/DiferencaAcomodacaoTela.vue'),
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
     // F78.04-2, 04-INT L80: comunicação da internação e da alta à operadora, pela internação.
     path: `/internacao/:reg${reg}/comunicacoes-operadora`,
     name: 'adt.comunicacoesOperadora',
