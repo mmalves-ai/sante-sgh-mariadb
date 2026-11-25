@@ -118,7 +118,9 @@ async function simular(page: Page, enviados: Record<string, unknown>[]): Promise
 }
 
 test.describe('@C2-043 descontos por volume e franquias (06-FAT linha 19)', () => {
-  test('faixas e franquia conferidas na hora e aplicação na conta com o total do convênio', async ({ page }) => {
+  test('faixas e franquia conferidas na hora e aplicação na conta com o total do convênio', async ({
+    page,
+  }) => {
     const enviados: Record<string, unknown>[] = [];
     await simular(page, enviados);
     await entrar(page, 'SINT.TISS');
