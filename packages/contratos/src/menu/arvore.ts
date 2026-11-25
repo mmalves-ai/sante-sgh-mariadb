@@ -87,7 +87,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F8 vai como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-046 (09-AREA L87): o item "Produção hospitalar mensal" dos leitos entrou à mão (mesmo motivo; F8 vai como
 // fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":465,"M":198,"P":57,"N":210};
+// C2-044 (05-SUP linha 29): o item "Central de material esterilizado" do centro cirúrgico entrou à mão (mesmo
+// motivo; F7 vai como fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":466,"M":198,"P":57,"N":211};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -177,6 +179,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"centro-cirurgico.procedimentos-cirurgicos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Procedimentos cirúrgicos"],"titulo":"Procedimentos cirúrgicos","selo":"N","fase":3,"rota":"/cirurgia/procedimentos-cirurgicos","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.documentos-exigidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Documentos exigidos"],"titulo":"Documentos exigidos","selo":"N","fase":5,"rota":"/cirurgia/documentos-exigidos","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.profilaxia-antimicrobiana","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Profilaxia antimicrobiana"],"titulo":"Profilaxia antimicrobiana","selo":"N","fase":5,"rota":"/cirurgia/profilaxia","permissao":"qualidade.ccih.ler"},
+  {"id":"centro-cirurgico.central-de-material-esterilizado","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Central de material esterilizado"],"titulo":"Central de material esterilizado","selo":"N","fase":7,"rota":"/cirurgia/cme","permissao":"cirurgia.cme.ler"},
   {"id":"centro-cirurgico.mutiroes-cirurgicos-do-sus","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Mutirões cirúrgicos do SUS"],"titulo":"Mutirões cirúrgicos do SUS","selo":"N","fase":7,"rota":"/cirurgia/mutiroes","permissao":"faturamento.sus.ler"},
   {"id":"centro-cirurgico.nota-de-sala-e-consumo-para-a-conta","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Nota de sala e consumo para a conta"],"titulo":"Nota de sala e consumo para a conta","selo":"M","fase":3,"rota":"/cirurgia/notas-sala","permissao":"cirurgia.nota.ler"},
   {"id":"centro-cirurgico.avaliacao-pre-anestesica-apa","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Avaliação pré-anestésica"],"titulo":"Avaliação pré-anestésica","selo":"N","fase":5,"rota":"/bloco/apa","permissao":"cirurgia.apa.ler"},
