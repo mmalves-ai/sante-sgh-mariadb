@@ -111,9 +111,9 @@ export const reabrirCompetencia = (
 
 export const listarDemonstrativos = (f: { lote?: string }) =>
   ler(`${T}/demonstrativos${qs(f)}`, z.array(confiar<DemonstrativoLido>()));
-export const lerDemonstrativo = (id: number) =>
+export const lerDemonstrativo = (id: number, tipo: 'analise' | 'pagamento' = 'analise') =>
   ler(
-    `${T}/demonstrativos/${id}`,
+    `${T}/demonstrativos/${id}${tipo === 'pagamento' ? '?tipo=pagamento' : ''}`,
     confiar<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] }>(),
   );
 export const importarDemonstrativo = (

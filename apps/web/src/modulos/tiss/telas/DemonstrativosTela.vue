@@ -3,7 +3,8 @@
 // análise de conta da operadora: o XML da TISS (quando a operadora fornece) ou a digitação assistida sobre os itens do
 // lote (DP-33.8); a importação é idempotente (o mesmo número ou o mesmo arquivo não entra duas vezes) e cada item casa
 // com o item da conta pelo sequencial da guia. Conciliar baixa os itens casados (valor e quantidade pagos e o motivo da
-// glosa: sem motivo não fecha a conciliação).
+// glosa: sem motivo não fecha a conciliação). O demonstrativo de pagamento (XML com protocolos, débitos e créditos, ou a
+// digitação agrupada por guia) entra na mesma lista e abre as linhas por protocolo para conferir.
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import type { ItemGlosaLido } from '@sgh/contratos';
@@ -38,6 +39,8 @@ const dataEmissao = ref('');
 const xml = ref('');
 const digitado = ref<Record<number, { pago: string; motivo: string }>>({});
 const aberto = ref<number | null>(null);
+// O de pagamento (linhas por protocolo, débitos e créditos) abre só para conferir: a baixa por item é pelo de análise.
+const abertoTipo = ref<'analise' | 'pagamento'>('analise');
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const avisos = ref<readonly string[]>([]);
@@ -73,8 +76,8 @@ const lista = useQuery({
   queryFn: () => listarDemonstrativos({ lote: loteAberto.value ? String(loteAberto.value) : '' }),
 });
 const detalhe = useQuery({
-  queryKey: computed(() => ['tiss', 'demonstrativo', aberto.value]),
-  queryFn: () => lerDemonstrativo(aberto.value!),
+  queryKey: computed(() => ['tiss', 'demonstrativo', abertoTipo.value, aberto.value]),
+  queryFn: () => lerDemonstrativo(aberto.value!, abertoTipo.value),
   enabled: computed(() => aberto.value !== null),
 });
 function abrirLote() {
@@ -122,7 +125,10 @@ async function importar() {
     );
     mensagem.value = r.mensagem;
     avisos.value = r.avisos;
-    if (typeof r.ids['demonstrativo'] === 'number') aberto.value = r.ids['demonstrativo'];
+    if (typeof r.ids['demonstrativo'] === 'number') {
+      abertoTipo.value = tipo.value;
+      aberto.value = r.ids['demonstrativo'];
+    }
     await qc.invalidateQueries({ queryKey: ['tiss'] });
   } catch (e) {
     erro.value = e;
@@ -137,7 +143,7 @@ async function conciliar() {
   mensagem.value = null;
   gravando.value = true;
   try {
-    const dem = (lista.data.value ?? []).find((x) => x.id === aberto.value);
+    const dem = (lista.data.value ?? []).find((x) => x.id === aberto.value && x.tipo === 'analise');
     const casados = d.itens.filter((i) => i.situacao === 'casado' && i.item !== null && i.versaoItem);
     const r = await baixar(
       {
@@ -302,13 +308,18 @@ async function conciliar() {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="d in lista.data.value" :key="d.id" :data-testid="`dm-${d.id}`">
+        <tr
+          v-for="d in lista.data.value"
+          :key="`${d.tipo}-${d.id}`"
+          :data-testid="d.tipo === 'pagamento' ? `dm-pag-${d.id}` : `dm-${d.id}`"
+        >
           <td>
             {{ d.numero }} <span class="secundario">· {{ data(d.dataEmissao) }}</span>
           </td>
           <td>{{ d.lote }}</td>
           <td>
             {{ d.origem === 'xml' ? t('tiss.demonstrativos.xml') : t('tiss.demonstrativos.digitacao') }}
+            <span class="secundario">· {{ t(`tiss.demonstrativos.${d.tipo}`) }}</span>
           </td>
           <td>{{ d.itens }}</td>
           <td>{{ d.casados }} · {{ t('tiss.demonstrativos.semCasamento', { n: d.semCasamento }) }}</td>
@@ -316,7 +327,14 @@ async function conciliar() {
           <td>{{ reais(d.valorPago) }}</td>
           <td>{{ d.importadoPor }} · {{ quando(d.importadoEm) }}</td>
           <td>
-            <button type="button" :data-testid="`dm-ver-${d.id}`" @click="aberto = d.id">
+            <button
+              type="button"
+              :data-testid="d.tipo === 'pagamento' ? `dm-ver-pag-${d.id}` : `dm-ver-${d.id}`"
+              @click="
+                abertoTipo = d.tipo;
+                aberto = d.id;
+              "
+            >
               {{ t('tiss.abrir') }}
             </button>
           </td>
@@ -352,6 +370,7 @@ async function conciliar() {
         </tbody>
       </table>
       <button
+        v-if="abertoTipo === 'analise'"
         type="button"
         :disabled="
           gravando ||
