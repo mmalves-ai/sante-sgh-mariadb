@@ -1,18 +1,36 @@
 <script setup lang="ts">
 // Fornecedores e terceiros (ficha do M28, seção 7): `/suprimentos/fornecedores`. Consulta pelo nome, fantasia ou
 // código; o CNPJ/CPF aparece conferido (dígitos verificadores) e o da pessoa física mascarado; dados bancários só
-// mascarados. O cadastro (incluir, alterar, inativar) é P2 e segue desligado (POL-3): a tela mostra o motivo.
+// mascarados. O cadastro do fornecedor (05-SUP linha 23: incluir e alterar, contas de pagamento, avaliação periódica e
+// ocorrências) abre na própria tela, pela busca do cadastro e pelo botão Novo fornecedor, para quem pode editar.
 import { SanteBotao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { buscarFornecedoresCadastro, lerPainelCadastroFornecedor } from '../api-cadastro-fornecedor.js';
 import { listarFornecedores, listarPrestadores, listarTerceiros } from '../api-suprimentos.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
-import { usarSuprimentos } from '../usar-suprimentos.js';
+import FornecedorCadastroPainel from '../componentes/FornecedorCadastroPainel.vue';
+import { mensagensCadastroFornecedor as MC } from '../i18n-cadastro-fornecedor.js';
 
 const { t } = useI18n();
-const { motivoFuncionalidade } = usarSuprimentos();
+// O cadastro: o painel traz categorias, bancos e o que o usuário pode; a ficha abre pela busca ou vazia (novo).
+const painelCadastro = useQuery({
+  queryKey: ['suprimentos', 'cadastro-fornecedor', 'painel'],
+  queryFn: lerPainelCadastroFornecedor,
+  retry: false,
+});
+const termoCadastro = ref('');
+const buscaCadastro = ref<string | null>(null);
+const resultadoCadastro = useQuery({
+  queryKey: ['suprimentos', 'cadastro-fornecedor', 'busca', buscaCadastro],
+  queryFn: () => buscarFornecedoresCadastro(buscaCadastro.value ?? ''),
+  enabled: computed(() => buscaCadastro.value !== null),
+});
+const aberto = ref<{ id: number | null; vez: number } | null>(null);
+let vez = 0;
+const abrir = (id: number | null) => (aberto.value = { id, vez: ++vez });
 const termo = ref('');
 const busca = ref('');
 const lista = useQuery({
@@ -34,9 +52,52 @@ const prestadores = useQuery({
   <section class="tela-agenda" aria-labelledby="forn-titulo" data-testid="tela-suprimentos-fornecedores">
     <h1 id="forn-titulo">{{ t('suprimentos.fornecedores.titulo') }}</h1>
     <p>{{ t('suprimentos.fornecedores.texto') }}</p>
-    <AvisoSuprimentos
-      :motivo="motivoFuncionalidade('suprimentos.cadastros') ?? t('suprimentos.fornecedores.edicaoDesligada')"
-    />
+    <section aria-labelledby="forn-cadastro-titulo" data-testid="forn-cadastro">
+      <h2 id="forn-cadastro-titulo">{{ MC.titulo }}</h2>
+      <ErroSuprimentos v-if="painelCadastro.error.value" :erro="painelCadastro.error.value" />
+      <p v-else-if="!painelCadastro.data.value" role="status">{{ MC.carregando }}</p>
+      <template v-else>
+        <form class="filtros" @submit.prevent="buscaCadastro = termoCadastro.trim()">
+          <span class="campo">
+            <label for="forn-cadastro-termo">{{ MC.busca }}</label>
+            <input id="forn-cadastro-termo" v-model="termoCadastro" data-testid="forn-cadastro-termo" />
+          </span>
+          <SanteBotao
+            tipo="submit"
+            variante="secundario"
+            :rotulo="MC.buscar"
+            data-testid="forn-cadastro-buscar"
+          />
+          <SanteBotao
+            v-if="painelCadastro.data.value.pode.editar"
+            :rotulo="MC.novo"
+            data-testid="forn-cadastro-novo"
+            @acionar="abrir(null)"
+          />
+        </form>
+        <ErroSuprimentos v-if="resultadoCadastro.error.value" :erro="resultadoCadastro.error.value" />
+        <ul v-else-if="resultadoCadastro.data.value" data-testid="forn-cadastro-resultado">
+          <li v-for="f in resultadoCadastro.data.value.itens" :key="f.id">
+            {{ f.razaoSocial }}<template v-if="f.nomeFantasia"> · {{ f.nomeFantasia }}</template> ·
+            {{ f.documento }} · {{ f.situacao }}
+            <SanteBotao
+              variante="secundario"
+              :rotulo="MC.abrir"
+              :data-testid="`forn-cadastro-abrir-${f.id}`"
+              @acionar="abrir(f.id)"
+            />
+          </li>
+          <li v-if="resultadoCadastro.data.value.itens.length === 0">{{ MC.nenhum }}</li>
+        </ul>
+        <FornecedorCadastroPainel
+          v-if="aberto"
+          :key="aberto.vez"
+          :fornecedor-id="aberto.id"
+          :painel="painelCadastro.data.value"
+          @fechar="aberto = null"
+        />
+      </template>
+    </section>
     <form class="filtros" @submit.prevent="busca = termo.trim()">
       <span class="campo">
         <label for="forn-termo">{{ t('suprimentos.fornecedores.busca') }}</label>
