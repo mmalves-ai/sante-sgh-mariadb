@@ -4,7 +4,12 @@
 // (botão bloqueado até preencher); registra e vê o lote nas reconciliações do atendimento; a lista se atualiza (o
 // suspenso sai dos ativos). Na alta, a mesma lista volta só com o que continua ativo. Sessão real sobre a fonte
 // sintética de dev (pacientes e medicamentos SINTÉTICOS; nada vai à cópia). axe sem violação séria.
-import { expect, test, type Page } from '@playwright/test';
+// A lista de uso contínuo mora só no banco do cliente: sem ele (fonte sintética), /api/pep/farmacovigilancia responde
+// 503. Por isso as rotas da farmacovigilância e a leitura das reconciliações do atendimento são simuladas (page.route
+// com massa sintética, no formato de api-farmacovigilancia.ts e de esquemaReconciliacaoLida), e o corpo enviado em
+// cada inclusão e na reconciliação é conferido. O contexto do paciente e a liberação são as rotas reais. O que fica no
+// banco é provado pelo contrato de efeito farmacovigilancia-propria.int.spec.ts.
+import { expect, test, type Page, type Route } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
@@ -28,6 +33,91 @@ async function incluirNaLista(page: Page, nome: string, posologia: string): Prom
   await expect(page.locator('[data-testid^="farmaco-uso-"]').filter({ hasText: nome }).first()).toBeVisible();
 }
 
+type Uso = {
+  id: number;
+  versao: number;
+  medicamento: string;
+  posologia: string | null;
+  fonte: string;
+  conduta: string | null;
+  suspenso: boolean;
+  justificativaSuspensao: string | null;
+};
+type Decisao = { usoContinuo: number; conduta: string; justificativa: string | null };
+type Lote = {
+  id: number;
+  momento: string;
+  registradoEm: string;
+  registradoPor: string;
+  medicamentos: unknown[];
+};
+
+/** Simula a farmacovigilância do paciente (lista de uso contínuo) e a leitura das reconciliações do atendimento. */
+async function simularLista(page: Page) {
+  const usos: Uso[] = [];
+  const lotes: Lote[] = [];
+  const corpos: Record<string, unknown>[] = [];
+  const json = (r: Route, corpo: unknown, status = 200) =>
+    r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
+  await page.route(`**/api/pep/farmacovigilancia/paciente/${PACIENTE}`, (r) =>
+    json(r, {
+      reacoes: [],
+      usoContinuo: usos,
+      itensPrescritos: [],
+      gravidades: [{ id: 1, descricao: 'Leve', nivel: 1 }],
+      causalidades: [],
+      nivelGrave: 3,
+    }),
+  );
+  await page.route('**/api/pep/farmacovigilancia/uso-continuo', async (r) => {
+    const corpo = r.request().postDataJSON() as Record<string, unknown>;
+    corpos.push(corpo);
+    if (corpo['acao'] === 'incluir') {
+      usos.push({
+        id: 500 + usos.length,
+        versao: 1,
+        medicamento: String(corpo['descricaoLivre']),
+        posologia: (corpo['posologia'] as string | null) ?? null,
+        fonte: String(corpo['fonte']),
+        conduta: null,
+        suspenso: false,
+        justificativaSuspensao: null,
+      });
+      return json(r, { ok: true }, 201);
+    }
+    if (corpo['acao'] === 'reconciliar') {
+      const decisoes = corpo['decisoes'] as Decisao[];
+      const medicamentos = decisoes.map((d) => {
+        const u = usos.find((x) => x.id === d.usoContinuo)!;
+        u.conduta = d.conduta;
+        if (d.conduta === 'suspender') {
+          u.suspenso = true;
+          u.justificativaSuspensao = d.justificativa;
+        }
+        return {
+          descricao: u.medicamento,
+          fonte: 'paciente',
+          conduta: d.conduta,
+          ...(d.justificativa ? { justificativa: d.justificativa } : {}),
+        };
+      });
+      lotes.push({
+        id: 9100 + lotes.length,
+        momento: String(corpo['momento']),
+        registradoEm: new Date().toISOString(),
+        registradoPor: 'MEDICO SINTETICO',
+        medicamentos,
+      });
+      return json(r, { ok: true }, 201);
+    }
+    return json(r, { type: 'urn:sgh:problema:recusa-de-negocio', title: 'Ação não simulada' }, 422);
+  });
+  await page.route(`**/api/pep/prescricao/${PACIENTE}/reconciliacao?*`, (r) =>
+    r.request().method() === 'GET' ? json(r, lotes) : r.fallback(),
+  );
+  return corpos;
+}
+
 function cartaoDoUso(page: Page, nome: string) {
   return page
     .locator('[data-testid^="recon-uso-"]')
@@ -40,6 +130,7 @@ test.describe('Reconciliação pela lista de uso contínuo @C1-031 @fase7', () =
     page,
   }) => {
     const externas = vigiarExternas(page);
+    const corpos = await simularLista(page);
     await entrar(page, 'SINT.MEDICO');
     const marca = Date.now().toString(36).slice(-5).toUpperCase();
     const manter = `ENALAPRIL SINTETICO ${marca}`;
@@ -49,6 +140,10 @@ test.describe('Reconciliação pela lista de uso contínuo @C1-031 @fase7', () =
     await expect(page.getByTestId('farmaco-tela')).toBeVisible();
     await incluirNaLista(page, manter, '10 mg de 12 em 12 horas');
     await incluirNaLista(page, suspender, '20 mg à noite');
+    expect(corpos.map((c) => [c['acao'], c['paciente'], c['descricaoLivre'], c['posologia']])).toEqual([
+      ['incluir', PACIENTE, manter, '10 mg de 12 em 12 horas'],
+      ['incluir', PACIENTE, suspender, '20 mg à noite'],
+    ]);
 
     await page.goto(`/pep/paciente/${PACIENTE}/reconciliacao`);
     await expect(page.getByTestId('tela-reconciliacao')).toBeVisible();
@@ -73,6 +168,15 @@ test.describe('Reconciliação pela lista de uso contínuo @C1-031 @fase7', () =
     await expect(lista.getByTestId('recon-lista-registrar')).toBeEnabled();
     await lista.getByTestId('recon-lista-registrar').click();
     await expect(lista.getByTestId('recon-lista-ok')).toBeVisible();
+    // O corpo enviado: uma decisão por medicamento ativo, a justificativa só na conduta diferente de manter.
+    const rec = corpos.find((c) => c['acao'] === 'reconciliar')!;
+    expect(rec['paciente']).toBe(PACIENTE);
+    expect(rec['momento']).toBe('admissao');
+    expect(Number(rec['atendimento'])).toBeGreaterThan(0);
+    expect(rec['decisoes']).toEqual([
+      { usoContinuo: 500, conduta: 'manter', justificativa: null },
+      { usoContinuo: 501, conduta: 'suspender', justificativa: 'Mialgia SINTETICA na admissão.' },
+    ]);
 
     // O lote aparece nas reconciliações do atendimento, com a conduta e a justificativa.
     const lote = page.locator('[data-testid^="reconciliacao-"]').filter({ hasText: suspender }).last();

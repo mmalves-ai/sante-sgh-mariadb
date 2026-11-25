@@ -51,6 +51,8 @@ test.describe('@C1-096 Reuso de dialisadores na hemodiálise', () => {
     await entrar(page, 'SINT.ENF.PLANTAO');
     const leitura = page.waitForResponse((r) => r.url().endsWith(`${D}/em-uso`));
     const menu = page.getByRole('navigation', { name: 'Menu principal' });
+    // Área > grupo > item: a Agenda fica dentro de "Atendimento ao paciente", que começa fechada.
+    await menu.getByRole('button', { name: /^Atendimento ao paciente/ }).click();
     await menu.getByRole('button', { name: /^Agenda/ }).click();
     await menu.getByRole('link', { name: 'Reuso de dialisadores' }).click();
     await expect(page).toHaveURL(/\/agenda\/sessoes\/dialisadores/);

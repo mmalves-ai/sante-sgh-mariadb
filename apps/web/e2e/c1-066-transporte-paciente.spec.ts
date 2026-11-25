@@ -40,7 +40,7 @@ test.describe('internação: pedido de transporte do paciente @C1-066', () => {
 
   test('validação na hora do pedido pela internação, atalho para a fila; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/1/transporte');
     await expect(page.getByTestId('tela-transporte')).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Transporte do paciente');
@@ -206,7 +206,7 @@ test.describe('internação: pedido de transporte do paciente @C1-066', () => {
       },
     );
 
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/1/transporte');
     await expect(page.getByTestId('transporte-internacao')).toContainText('INT-SINT-1');
     await expect(page.getByTestId('transporte-form')).toBeVisible();
