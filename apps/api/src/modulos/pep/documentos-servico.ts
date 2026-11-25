@@ -118,6 +118,7 @@ import {
   tipoDoModelo,
   xmlDoAtestado,
   linhasDaCausa,
+  acaoCancelamentoObito,
   validarCancelamentoObito,
   type LinhaCausaObito,
 } from '@sgh/dominio-pep';
@@ -1804,7 +1805,16 @@ export class ServicoDocumentos {
     c: ContextoDocs,
     paciente: number,
     atendimentoPedido: number | null,
-    acoes: { finalizar: AcaoLiberada; obito: AcaoLiberada },
+    acoes: {
+      finalizar: AcaoLiberada;
+      obito: AcaoLiberada;
+      /**
+       * 04-INT L74: quem lê (login) e se a sessão tem a permissão do responsável técnico ou diretor clínico
+       * (`pep.declaracaoObito.cancelarOutro`); sem o login, ninguém é tido como emissor e só o terceiro cancela.
+       */
+      login?: string;
+      cancelarDeOutro?: boolean;
+    },
     /** F3.3 (L124): as seções do atendimento com a janela de cada uma; nulo (sem banco próprio): o episódio inteiro. */
     secoesComJanela: ((atendimento: number) => Promise<readonly SecaoComJanela[]>) | null = null,
   ): Promise<AltaPaciente> {
@@ -1838,7 +1848,7 @@ export class ServicoDocumentos {
     const [sumarios, transf, obito, problemas, alergias, episodio0, janelas] = await Promise.all([
       this.porta.sumarios(c, at.id),
       this.porta.transferencias(c, at.id),
-      this.porta.obito(c, paciente),
+      this.porta.obito(c, paciente, acoes.login),
       this.problemas(c, paciente),
       this.porta.alergias(c, paciente),
       this.porta
@@ -1887,14 +1897,27 @@ export class ServicoDocumentos {
       })),
       finalizado,
       transferencias: transf,
-      obito: obito ? { id: obito.id, em: obito.em, numero: obito.numero, documento: obito.documento } : null,
+      obito: obito
+        ? {
+            id: obito.id,
+            em: obito.em,
+            numero: obito.numero,
+            documento: obito.documento,
+            emissor: obito.emissor,
+          }
+        : null,
       finalizar: finalizado
         ? { pode: false, motivo: 'O sumário de alta deste atendimento já foi finalizado.' }
         : acoes.finalizar,
       obitoAcao: obito ? { pode: false, motivo: 'O óbito do paciente já foi registrado.' } : acoes.obito,
-      cancelarObitoAcao: obito
-        ? acoes.obito
-        : { pode: false, motivo: 'O paciente não tem declaração de óbito vigente.' },
+      // Cancela quem tem a ação clínica de emitir e, pela regra do domínio, emitiu a declaração ou tem a permissão do
+      // responsável técnico (04-INT L74): o médico que não pode nem vê o formulário; o terceiro é sinalizado.
+      // O responsável técnico pode não emitir pelo seu grupo e ainda cancelar a de outro médico.
+      cancelarObitoAcao: !obito
+        ? { pode: false, motivo: 'O paciente não tem declaração de óbito vigente.' }
+        : !acoes.obito.pode && acoes.cancelarDeOutro !== true
+          ? acoes.obito
+          : acaoCancelamentoObito(obito.emitidaPeloUsuario, acoes.cancelarDeOutro === true),
     };
   }
 

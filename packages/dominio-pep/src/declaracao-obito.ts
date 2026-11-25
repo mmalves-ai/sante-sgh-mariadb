@@ -87,3 +87,27 @@ export function validarCancelamentoObito(
 export function statusDaRecusaObito(codigo: RecusaCancelamentoObito['codigo']): number {
   return codigo === 'motivo-obrigatorio' ? 422 : codigo === 'nao-emissor' ? 403 : 409;
 }
+
+/**
+ * O que a tela mostra antes de o médico escrever o motivo (04-INT L74): pode cancelar quem emitiu a declaração ou, por
+ * cima dele, quem tem a permissão do responsável técnico ou diretor clínico. A mesma regra de
+ * `validarCancelamentoObito`, sem o motivo, para que o médico que não pode cancelar nem veja o formulário (sem
+ * preencher motivo e senha para receber a recusa) e quem cancela por terceiro saiba disso, e de quem é a declaração,
+ * antes de confirmar.
+ */
+export function acaoCancelamentoObito(
+  ehEmissor: boolean,
+  podeCancelarDeOutro: boolean,
+):
+  | { readonly pode: true; readonly motivo: null; readonly porTerceiro: boolean }
+  | { readonly pode: false; readonly motivo: string; readonly porTerceiro: false } {
+  const v = validarCancelamentoObito(
+    'emitida',
+    'x'.repeat(MIN_MOTIVO_CANCELAMENTO_OBITO),
+    ehEmissor,
+    podeCancelarDeOutro,
+  );
+  return v.ok
+    ? { pode: true, motivo: null, porTerceiro: v.deOutroMedico }
+    : { pode: false, motivo: v.mensagem, porTerceiro: false };
+}

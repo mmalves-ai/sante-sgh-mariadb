@@ -182,15 +182,22 @@ export interface PortaDocumentos {
     c: ContextoDocs,
     atendimento: number,
   ): Promise<{ id: number; destino: string; em: string; documento: number | null }[]>;
+  /**
+   * A declaração de óbito vigente. Com o `login` de quem lê (04-INT L74), diz também se foi ele que a emitiu
+   * (`emitidaPeloUsuario`) e o nome do emissor, para a tela saber quem pode cancelar antes do motivo.
+   */
   obito(
     c: ContextoDocs,
     paciente: number,
+    login?: string,
   ): Promise<{
     id: number;
     em: string;
     numero: string | null;
     documento: number | null;
     atendimento: number;
+    emissor: string | null;
+    emitidaPeloUsuario: boolean;
   } | null>;
   ciencias(c: ContextoDocs, paciente: number): Promise<CienciaLida[]>;
   fila(

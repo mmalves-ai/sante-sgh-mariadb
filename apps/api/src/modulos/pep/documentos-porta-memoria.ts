@@ -1169,7 +1169,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   async transferencias(c: ContextoDocs, atendimento: number) {
     return this.est(c.hospital).transferencias.filter((t) => t.atendimento === atendimento);
   }
-  async obito(c: ContextoDocs, paciente: number) {
+  async obito(c: ContextoDocs, paciente: number, login?: string) {
     const o = this.est(c.hospital).obitos.find((x) => x.paciente === paciente && x.situacao !== 'cancelada');
     return o
       ? {
@@ -1179,6 +1179,8 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           numero: o.numero,
           documento: o.documento,
           atendimento: o.atendimento,
+          emissor: `PROFISSIONAL ${o.emissor}`,
+          emitidaPeloUsuario: login !== undefined && o.emissor === login,
         }
       : null;
   }

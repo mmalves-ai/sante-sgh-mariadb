@@ -887,29 +887,39 @@ export class DocumentosPropriaPareceres {
   obito(
     c: ContextoDocs,
     paciente: number,
+    login?: string,
   ): Promise<{
     id: number;
     em: string;
     numero: string | null;
     documento: number | null;
     atendimento: number;
+    emissor: string | null;
+    emitidaPeloUsuario: boolean;
   } | null> {
     return this.ler(c, 'obito', async (l, est) => {
       const x = await l.uma(
-        `SELECT id, obito_em, numero, documento_prontuario_id, atendimento_id FROM declaracao_obito
-          WHERE estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL AND situacao <> 'cancelada'
-          ORDER BY obito_em DESC, id DESC LIMIT 1`,
+        `SELECT d.id, d.obito_em, d.numero, d.documento_prontuario_id, d.atendimento_id, d.profissional_id,
+                pf.nome AS emissor
+           FROM declaracao_obito d
+           LEFT JOIN profissional p ON p.id = d.profissional_id
+           LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+          WHERE d.estabelecimento_id = ? AND d.paciente_id = ? AND d.excluido_em IS NULL AND d.situacao <> 'cancelada'
+          ORDER BY d.obito_em DESC, d.id DESC LIMIT 1`,
         [est.id, paciente],
       );
-      return x
-        ? {
-            id: num(x['id']),
-            em: dataHora(x['obito_em'], est.fuso) ?? '',
-            numero: textoOuNull(x['numero']),
-            documento: numOuNull(x['documento_prontuario_id']),
-            atendimento: num(x['atendimento_id']),
-          }
-        : null;
+      if (!x) return null;
+      // O mesmo critério do cancelamento: o profissional da sessão (vínculo vigente) é o que emitiu a declaração.
+      const sessao = login ? await this.sessaoClinica(l, est.id, login) : null;
+      return {
+        id: num(x['id']),
+        em: dataHora(x['obito_em'], est.fuso) ?? '',
+        numero: textoOuNull(x['numero']),
+        documento: numOuNull(x['documento_prontuario_id']),
+        atendimento: num(x['atendimento_id']),
+        emissor: textoOuNull(x['emissor']),
+        emitidaPeloUsuario: sessao !== null && sessao.profissional === numOuNull(x['profissional_id']),
+      };
     });
   }
 

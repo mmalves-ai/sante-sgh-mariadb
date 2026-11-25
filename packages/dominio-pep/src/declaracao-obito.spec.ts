@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { linhasDaCausa, statusDaRecusaObito, validarCancelamentoObito } from './declaracao-obito.js';
+import {
+  acaoCancelamentoObito,
+  linhasDaCausa,
+  statusDaRecusaObito,
+  validarCancelamentoObito,
+} from './declaracao-obito.js';
 
 describe('declaração de óbito: causas em linhas', () => {
   it('parte I em ordem, linhas vazias de fora, parte II por último', () => {
@@ -73,5 +78,20 @@ describe('declaração de óbito: cancelamento', () => {
       ok: true,
       deOutroMedico: false,
     });
+  });
+});
+
+describe('declaração de óbito: o que a tela mostra antes do motivo (04-INT L74)', () => {
+  it('o emissor pode cancelar, sem ser por terceiro', () => {
+    expect(acaoCancelamentoObito(true, false)).toEqual({ pode: true, motivo: null, porTerceiro: false });
+    expect(acaoCancelamentoObito(true, true)).toEqual({ pode: true, motivo: null, porTerceiro: false });
+  });
+  it('o responsável técnico ou diretor clínico cancela a de outro médico, sinalizado como por terceiro', () => {
+    expect(acaoCancelamentoObito(false, true)).toEqual({ pode: true, motivo: null, porTerceiro: true });
+  });
+  it('o médico que não emitiu e não tem a permissão não vê o formulário: recebe o motivo da recusa', () => {
+    const a = acaoCancelamentoObito(false, false);
+    expect(a.pode).toBe(false);
+    expect(a.motivo).toMatch(/Só o médico que emitiu/);
   });
 });

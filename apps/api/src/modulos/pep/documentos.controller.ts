@@ -99,7 +99,7 @@ import { regraJustificativaImpressao } from '@sgh/dominio-pep';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
 import { camposDoDocumentoPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
 import { type ContextoGravacaoPep, ErroProntuario } from './tipos-pep.js';
-import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Auditar, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
@@ -189,6 +189,25 @@ function traduzir(e: unknown): never {
       { codigo: e.codigo },
     );
   throw problemaDoCadastro(e);
+}
+
+/**
+ * 04-INT L74 (CFM Res. 1.779/2005): a sessão tem a permissão do responsável técnico ou diretor clínico para cancelar a
+ * declaração de óbito de outro médico (concedida ao perfil diretoria-clinica). Exportada para o teste do controller.
+ */
+const CANCELAR_OBITO_DE_OUTRO = 'pep.declaracaoObito.cancelarOutro';
+export function podeCancelarObitoDeOutro(req: RequisicaoAutorizada): boolean {
+  return (req.sgh?.sessao.permissoes ?? []).includes(CANCELAR_OBITO_DE_OUTRO);
+}
+
+/**
+ * A permissão com que a sessão entra na rota de `PermissaoOu`: a primeira da lista que ela tem (a guarda já garantiu
+ * uma). O diretor clínico pode não emitir nem ler o sumário pelo seu grupo e ainda assim abrir a declaração de outro
+ * médico para cancelá-la (04-INT L74).
+ */
+export function permissaoDaSessao(req: RequisicaoAutorizada, ...codigos: string[]): string {
+  const tem = req.sgh?.sessao.permissoes ?? [];
+  return codigos.find((c) => tem.includes(c)) ?? codigos[0]!;
 }
 
 const TABELA_DO_TIPO: Readonly<Record<TipoDocumentoAberto, string>> = {
@@ -1119,6 +1138,7 @@ export class DocumentosPepController {
 
   @Get('paciente/:p/alta')
   @Permissao('pep.sumarioAlta.ler')
+  @PermissaoOu('pep.declaracaoObito.cancelarOutro')
   @Auditar('pep.documento.lido')
   async alta(
     @Param('p') p: string,
@@ -1126,7 +1146,12 @@ export class DocumentosPepController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<AltaPaciente> {
     const s = sessaoDe(req);
-    const paciente = await this.paciente(s, p, 'pep.sumarioAlta.ler', true);
+    const paciente = await this.paciente(
+      s,
+      p,
+      permissaoDaSessao(req, 'pep.sumarioAlta.ler', CANCELAR_OBITO_DE_OUTRO),
+      true,
+    );
     const prof = await this.prof(s);
     const [finalizar0, obito0] = await Promise.all([
       this.acao(s, 'pep.sumarioAlta.finalizar', RECURSOS_M23.documentos, 'pep.finalizarSumarioAlta'),
@@ -1142,6 +1167,9 @@ export class DocumentosPepController {
       {
         finalizar: finalizar0.pode && !catSum.pode ? catSum : finalizar0,
         obito: obito0.pode && !catObito.pode ? catObito : obito0,
+        // 04-INT L74: quem pode cancelar a declaração, sabido antes do motivo (emissor ou responsável técnico).
+        login: s.login,
+        cancelarDeOutro: podeCancelarObitoDeOutro(req),
       },
       // F3.3 (L124): a janela de cada seção configurada recorta o episódio que monta o sumário.
       portaSecoes ? (atd: number) => portaSecoes.vigentesDoAtendimento(this.c(s), atd, paciente) : null,
@@ -1235,16 +1263,22 @@ export class DocumentosPepController {
   @Post('paciente/:p/alta/obito/cancelar')
   @HttpCode(200)
   @Permissao('pep.declaracaoObito.emitir')
+  @PermissaoOu('pep.declaracaoObito.cancelarOutro')
   @AuditadoNoHandler('declaracao_obito e declaracao_obito_evento na mesma transação, com a trilha (crítica)')
   async cancelarObito(@Param('p') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, RECURSOS_M23.documentos);
     const e = validar(esquemaCancelamentoObito, corpo);
-    const paciente = await this.paciente(s, p, 'pep.declaracaoObito.emitir', false);
+    const paciente = await this.paciente(
+      s,
+      p,
+      permissaoDaSessao(req, 'pep.declaracaoObito.emitir', CANCELAR_OBITO_DE_OUTRO),
+      false,
+    );
     await this.reautenticado(req, e.senha);
     const prof = this.servico.exigirProfissional(await this.prof(s));
     // 04-INT L74 (CFM Res. 1.779/2005): o responsável técnico ou diretor clínico cancela a declaração de outro médico.
-    const deOutro = (req.sgh?.sessao.permissoes ?? []).includes('pep.declaracaoObito.cancelarOutro');
+    const deOutro = podeCancelarObitoDeOutro(req);
     return this.gravarSgh(() => this.servico.cancelarObito(this.sgh(s, 'obito'), paciente, e, prof, deOutro));
   }
 

@@ -212,6 +212,16 @@ async function cancelar(): Promise<void> {
         @submit.prevent="cancelar"
       >
         <h3>{{ t('pep.doc.alta.cancelarObito') }}</h3>
+        <SanteAlerta
+          v-if="dados.data.value.cancelarObitoAcao.porTerceiro"
+          variante="aviso"
+          data-testid="cancelar-obito-terceiro"
+          :texto="
+            t('pep.doc.alta.cancelamentoPorTerceiro', {
+              emissor: dados.data.value.obito?.emissor ?? t('pep.doc.alta.emissorNaoIdentificado'),
+            })
+          "
+        />
         <label
           ><span>{{ t('pep.doc.alta.motivoCancelamento') }}</span
           ><textarea

@@ -708,6 +708,8 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       numero: null,
       documento: ob.documento,
       atendimento: ids.atendimento,
+      emissor: expect.any(String),
+      emitidaPeloUsuario: false,
     });
     expect(await recusa(porta.registrarObito(G(), o))).toEqual({ codigo: 'ja-registrado', status: 409 });
     // O rascunho (sem número) ainda não é a declaração emitida: o cadastro não muda.
@@ -929,6 +931,14 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     });
     const motivo = 'Causa básica registrada na linha errada pelo emissor';
     const base = { paciente: ids.pacienteC, motivo, cbo: null };
+    // A leitura diz, antes do motivo, se quem lê emitiu a declaração (o mesmo critério do cancelamento) e de quem ela é.
+    const doEmissor = await porta.obito(C(), ids.pacienteC, LOGIN);
+    expect(doEmissor).toMatchObject({ id: ob.id, emitidaPeloUsuario: true, emissor: expect.any(String) });
+    expect(await porta.obito(C(), ids.pacienteC, RESIDENTE)).toMatchObject({
+      id: ob.id,
+      emitidaPeloUsuario: false,
+      emissor: doEmissor!.emissor,
+    });
     // Sem a permissão do responsável técnico, quem não emitiu continua recusado (403) e nada muda.
     expect(await recusa(porta.cancelarObito(G(RESIDENTE), { ...base, podeCancelarDeOutro: false }))).toEqual({
       codigo: 'nao-emissor',

@@ -780,11 +780,21 @@ export interface AltaPaciente {
   readonly versoes: readonly VersaoSumario[];
   readonly finalizado: boolean;
   readonly transferencias: readonly { id: number; destino: string; em: string; documento: number | null }[];
-  readonly obito: { id: number; em: string; numero: string | null; documento: number | null } | null;
+  readonly obito: {
+    id: number;
+    em: string;
+    numero: string | null;
+    documento: number | null;
+    /** Nome do médico que emitiu a declaração (04-INT L74: quem cancela por terceiro vê de quem é). */
+    emissor?: string | null;
+  } | null;
   readonly finalizar: AcaoLiberada;
   readonly obitoAcao: AcaoLiberada;
-  /** Cancelar a declaração vigente (03-PEP L126): a mesma ação clínica de quem emite, só com declaração vigente. */
-  readonly cancelarObitoAcao: AcaoLiberada;
+  /**
+   * Cancelar a declaração vigente (03-PEP L126): quem a emitiu ou, por cima dele, o responsável técnico ou diretor
+   * clínico (04-INT L74, `porTerceiro`); o médico que não pode recebe `pode: false` com o motivo, antes de preencher.
+   */
+  readonly cancelarObitoAcao: AcaoLiberada & { readonly porTerceiro?: boolean };
 }
 
 export const esquemaRelatorioTransferencia = z

@@ -333,6 +333,9 @@ export const mensagensDocumentos = {
     confirmarCancelamento:
       'Cancelar a declaração? Ela continua no prontuário com o motivo, e uma nova declaração poderá ser emitida.',
     obitoCancelado: 'Declaração de óbito cancelada. O motivo fica registrado.',
+    cancelamentoPorTerceiro:
+      'Declaração emitida por {emissor}. Você a cancela como responsável técnico ou diretor clínico: o cancelamento fica registrado como feito por terceiro.',
+    emissorNaoIdentificado: 'outro médico',
   },
   anexos: {
     titulo: 'Anexos e documentos digitalizados',

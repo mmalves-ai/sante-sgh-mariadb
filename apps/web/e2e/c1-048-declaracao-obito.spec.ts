@@ -2,8 +2,11 @@
 //  1. Formulários numerados da declaração de óbito (controles da internação): o lote é conferido na hora (final menor
 //     que o inicial recusa e desabilita o recebimento; a quantidade aparece antes de gravar) e o recebimento envia o
 //     intervalo. Promovido do rascunho do F78.04-1 (só a parte dos formulários).
-//  2. Cancelamento por terceiro (CFM Res. 1.779/2005): o diretor clínico abre a aba de alta do paciente com a
-//     declaração emitida por outro médico, escreve o motivo, confirma com a senha e a aba volta sem o óbito.
+//  2. Cancelamento por terceiro (CFM Res. 1.779/2005): o SINT.DIRETOR.CLINICO (perfil diretoria-clinica) entra, a
+//     sessão real traz pep.declaracaoObito.cancelarOutro, a leitura real da alta abre para ele, a tela mostra que o
+//     cancelamento é por terceiro e de quem é a declaração, ele escreve o motivo e confirma com a senha; o pedido real
+//     chega ao servidor com a sessão dele e não é recusado por permissão (404: o paciente não tem declaração gravada).
+//  3. O médico comum (SINT.RESIDENTE) que não emitiu e não tem a permissão nem vê o formulário de cancelamento.
 // Nada é gravado na base do E2E: o paciente sintético 1001 é de dezenas de specs vizinhas (ver o cabeçalho de
 // c1-029-obito-bloqueia-entrada.spec.ts); as gravações e as releituras são respostas simuladas pelo Playwright. O que
 // fica no banco está nos contratos de efeito apps/api/src/modulos/adt/controles-assistenciais-propria.int.spec.ts
@@ -85,35 +88,56 @@ test.describe('@C1-048 declaração de óbito @fase7', () => {
     });
   });
 
-  test('o diretor clínico cancela a declaração emitida por outro médico, com motivo e senha; axe', async ({
+  test('o diretor clínico cancela a declaração emitida por outro médico, com motivo e senha, pela sessão dele; axe', async ({
     page,
   }) => {
     let cancelada = false;
     let corpoCancelamento: Record<string, unknown> | null = null;
-    await entrar(page, 'SINT.MEDICO');
-    await page.route(`**/api/pep/paciente/${PACIENTE}/alta/obito/cancelar`, (rota) => {
+    let statusRealCancelar = 0;
+    let statusRealAlta = 0;
+    await entrar(page, 'SINT.DIRETOR.CLINICO');
+    // A sessão real do diretor clínico leva a permissão do responsável técnico (perfil diretoria-clinica), sem a de
+    // emitir: é ela sozinha que abre a aba e o cancelamento.
+    const sessao = (await (await page.request.get('/api/sessao')).json()) as { permissoes?: string[] };
+    expect(sessao.permissoes).toContain('pep.declaracaoObito.cancelarOutro');
+    await page.route(`**/api/pep/paciente/${PACIENTE}/alta/obito/cancelar`, async (rota) => {
       if (rota.request().method() !== 'POST') return rota.fallback();
       corpoCancelamento = (rota.request().postDataJSON() ?? {}) as Record<string, unknown>;
+      // O pedido real chega ao servidor com a sessão do diretor: a guarda e a porta não o recusam por permissão (403);
+      // como o paciente sintético não tem declaração gravada na base do E2E, a porta responde 404 (registro-inexistente).
+      const real = await rota.fetch();
+      statusRealCancelar = real.status();
       cancelada = true;
       return json(rota, { id: 9_048_001, documento: 9_048_002, deOutroMedico: true });
     });
     await page.route(new RegExp(`/api/pep/paciente/${PACIENTE}/alta(\\?.*)?$`), async (rota) => {
       if (rota.request().method() !== 'GET') return rota.fallback();
       const real = await rota.fetch();
+      statusRealAlta = real.status();
       const corpo = (await real.json()) as Record<string, unknown>;
       if (cancelada) return json(rota, { ...corpo, obito: null });
       return json(rota, {
         ...corpo,
-        obito: { id: 9_048_001, em: '2026-11-20T13:00:00.000Z', numero: '90004801', documento: 9_048_002 },
+        obito: {
+          id: 9_048_001,
+          em: '2026-11-20T13:00:00.000Z',
+          numero: '90004801',
+          documento: 9_048_002,
+          emissor: 'MEDICO EMISSOR SINTETICO',
+        },
         obitoAcao: { pode: false, motivo: 'O óbito do paciente já foi registrado.' },
-        cancelarObitoAcao: { pode: true, motivo: null },
+        cancelarObitoAcao: { pode: true, motivo: null, porTerceiro: true },
       });
     });
     await page.goto(`/pep/paciente/${PACIENTE}/alergias`);
     await page.getByTestId('aba-alta').click();
     await expect(page.getByTestId('aba-alta-conteudo')).toContainText('Óbito registrado em');
+    // A leitura real da alta abre para o diretor clínico (sem a leitura do sumário pelo grupo, pela permissão nova).
+    expect(statusRealAlta).toBe(200);
     const form = page.getByTestId('form-cancelar-obito');
     await expect(form).toBeVisible();
+    // Antes de escrever o motivo, ele vê que cancela por terceiro e de quem é a declaração.
+    await expect(page.getByTestId('cancelar-obito-terceiro')).toContainText('MEDICO EMISSOR SINTETICO');
     // Validação na hora: motivo curto não libera o cancelamento.
     await page.getByTestId('cancelar-obito-motivo').fill('curto');
     await expect(page.getByTestId('cancelar-obito')).toBeDisabled();
@@ -124,6 +148,51 @@ test.describe('@C1-048 declaração de óbito @fase7', () => {
     await page.getByTestId('confirmacao').getByRole('button').last().click();
     await expect(page.getByTestId('aba-alta-conteudo')).toContainText('Declaração de óbito cancelada.');
     expect(corpoCancelamento).toMatchObject({ motivo: 'Causa básica SINTETICA registrada na linha errada' });
+    expect(statusRealCancelar).not.toBe(403);
+    expect(statusRealCancelar).toBe(404);
     await expect(page.getByTestId('aba-alta-conteudo')).not.toContainText('Óbito registrado em');
+  });
+
+  test('o médico comum que não emitiu a declaração não vê o cancelamento (recusa nao-emissor)', async ({
+    page,
+  }) => {
+    let pedidosCancelar = 0;
+    await entrar(page, 'SINT.RESIDENTE');
+    const sessao = (await (await page.request.get('/api/sessao')).json()) as { permissoes?: string[] };
+    expect(sessao.permissoes ?? []).not.toContain('pep.declaracaoObito.cancelarOutro');
+    await page.route(`**/api/pep/paciente/${PACIENTE}/alta/obito/cancelar`, (rota) => {
+      pedidosCancelar += 1;
+      return rota.fallback();
+    });
+    // A leitura simulada é a que o servidor devolve a quem não emitiu e não tem a permissão (regra do domínio
+    // acaoCancelamentoObito; a recusa real nao-emissor está em apps/api/src/modulos/pep/declaracao-obito-terceiro.spec.ts).
+    await page.route(new RegExp(`/api/pep/paciente/${PACIENTE}/alta(\\?.*)?$`), async (rota) => {
+      if (rota.request().method() !== 'GET') return rota.fallback();
+      const real = await rota.fetch();
+      const corpo = (await real.json()) as Record<string, unknown>;
+      return json(rota, {
+        ...corpo,
+        obito: {
+          id: 9_048_001,
+          em: '2026-11-20T13:00:00.000Z',
+          numero: '90004801',
+          documento: 9_048_002,
+          emissor: 'MEDICO EMISSOR SINTETICO',
+        },
+        obitoAcao: { pode: false, motivo: 'O óbito do paciente já foi registrado.' },
+        cancelarObitoAcao: {
+          pode: false,
+          motivo:
+            'Só o médico que emitiu a declaração de óbito, ou o responsável técnico ou diretor clínico, pode cancelá-la.',
+          porTerceiro: false,
+        },
+      });
+    });
+    await page.goto(`/pep/paciente/${PACIENTE}/alergias`);
+    await page.getByTestId('aba-alta').click();
+    await expect(page.getByTestId('aba-alta-conteudo')).toContainText('Óbito registrado em');
+    // Sem preencher motivo e senha para depois receber 403: o formulário nem aparece.
+    await expect(page.getByTestId('form-cancelar-obito')).toHaveCount(0);
+    expect(pedidosCancelar).toBe(0);
   });
 });
