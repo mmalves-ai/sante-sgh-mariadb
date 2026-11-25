@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('430 itens: M 198, P 57, N 175, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 430, M: 198, P: 57, N: 175 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 431, M: 198, P: 57, N: 176 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(430);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(431);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -320,6 +320,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/particular/pagamentos',
         '/faturamento/portes-terceiros',
         '/faturamento/regras-faturabilidade', // M30
+        '/faturamento/servicos-acessorios', // F8 (06-FAT linha 23)
         '/faturamento/simulador',
         '/faturamento/sus/apac', // M51 (etapa 3)
         '/faturamento/sus/aih', // M51 (etapa 4)

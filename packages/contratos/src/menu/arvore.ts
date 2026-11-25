@@ -30,7 +30,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // F7 (09-AREA linha 83): o item "Perfil epidemiológico pela CID-10" da vigilância entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":430,"M":198,"P":57,"N":175};
+// F8 (06-FAT linha 23): o item "Ambulância e ligações tarifadas" entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":431,"M":198,"P":57,"N":176};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -242,6 +244,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.motor-de-precos.de-para-de-exames-por-convenio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","De-para de exames por convênio"],"titulo":"De-para de exames por convênio","selo":"M","fase":1,"rota":"/faturamento/de-para-exames","permissao":"preco.dePara.ler"},
   {"id":"faturamento.motor-de-precos.portes-anestesicos-e-tabelas-proprias-de-operadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Portes anestésicos e tabelas próprias de operadora"],"titulo":"Portes anestésicos e tabelas próprias de operadora","selo":"M","fase":1,"rota":"/faturamento/portes-terceiros","permissao":"preco.porte.ler"},
   {"id":"faturamento.motor-de-precos.regras-de-faturabilidade-senha-carteira-guia","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Regras de faturabilidade"],"titulo":"Regras de faturabilidade","selo":"N","fase":3,"rota":"/faturamento/regras-faturabilidade","permissao":"faturamento.regra.ler"},
+  {"id":"faturamento.motor-de-precos.servicos-acessorios-ambulancia-e-ligacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Ambulância e ligações tarifadas"],"titulo":"Ambulância e ligações tarifadas","selo":"N","fase":7,"rota":"/faturamento/servicos-acessorios","permissao":"faturamento.regra.ler"},
   {"id":"faturamento.motor-de-precos.simulador-explicar-preco-impacto-de-reajuste","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Simulador"],"titulo":"Simulador","selo":"N","fase":3,"rota":"/faturamento/simulador","permissao":"faturamento.preco.simular"},
   {"id":"faturamento.faturamento-sus.bpa-producao-ambulatorial","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","BPA"],"titulo":"BPA","selo":"N","fase":5,"rota":"/faturamento/sus/bpa","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.faturamento-sus.apac-laudos-e-autorizacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","APAC"],"titulo":"APAC","selo":"N","fase":5,"rota":"/faturamento/sus/apac","permissao":"faturamento.sus.ler"},
