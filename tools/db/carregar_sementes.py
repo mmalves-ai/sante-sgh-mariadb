@@ -30,6 +30,8 @@ CHAVE = {
     # Raça/cor pelo código do IBGE e nacionalidade pelo código do cadastro nacional de usuários do SUS (F3.1-07).
     "classificacao_raca_cor": "codigo_ibge",
     "nacionalidade": "codigo_cadsus",
+    # Situação de convívio familiar pelo código oficial da tabela do cadastro (09-AREA linha 73).
+    "situacao_convivio_familiar": "codigo_esus",
 }
 
 

@@ -286,5 +286,161 @@
       "codigo_cadsus": "3",
       "descricao": "Estrangeira"
     }
+  ],
+  "orientacao_sexual_declarada": [
+    {
+      "codigo": "heterossexual",
+      "descricao": "Heterossexual"
+    },
+    {
+      "codigo": "gay",
+      "descricao": "Gay"
+    },
+    {
+      "codigo": "lesbica",
+      "descricao": "Lésbica"
+    },
+    {
+      "codigo": "bissexual",
+      "descricao": "Bissexual"
+    },
+    {
+      "codigo": "assexual",
+      "descricao": "Assexual"
+    },
+    {
+      "codigo": "pansexual",
+      "descricao": "Pansexual"
+    },
+    {
+      "codigo": "outra",
+      "descricao": "Outra"
+    },
+    {
+      "codigo": "nao_declarado",
+      "descricao": "Não quis declarar"
+    }
+  ],
+  "situacao_convivio_familiar": [
+    {
+      "codigo_esus": "1",
+      "descricao": "Convive com companheiro(a) e filho(s)"
+    },
+    {
+      "codigo_esus": "2",
+      "descricao": "Convive com companheiro(a), com laços conjugais e sem filhos"
+    },
+    {
+      "codigo_esus": "3",
+      "descricao": "Convive com companheiro(a), com filho(s) e/ou outro(s) familiar(es)"
+    },
+    {
+      "codigo_esus": "4",
+      "descricao": "Convive com familiar(es), sem companheiro(a)"
+    },
+    {
+      "codigo_esus": "5",
+      "descricao": "Convive com outra(s) pessoa(s), sem laços consanguíneos e/ou conjugais"
+    },
+    {
+      "codigo_esus": "6",
+      "descricao": "Vive só"
+    },
+    {
+      "codigo_esus": "9",
+      "descricao": "Não quis declarar"
+    }
+  ],
+  "condicao_cronica": [
+    {
+      "codigo": "hipertensao",
+      "descricao": "Hipertensão arterial",
+      "codigo_cid10": "I10"
+    },
+    {
+      "codigo": "diabetes_tipo_1",
+      "descricao": "Diabetes tipo 1",
+      "codigo_cid10": "E10"
+    },
+    {
+      "codigo": "diabetes_tipo_2",
+      "descricao": "Diabetes tipo 2",
+      "codigo_cid10": "E11"
+    },
+    {
+      "codigo": "asma",
+      "descricao": "Asma",
+      "codigo_cid10": "J45"
+    },
+    {
+      "codigo": "dpoc",
+      "descricao": "Doença pulmonar obstrutiva crônica",
+      "codigo_cid10": "J44"
+    },
+    {
+      "codigo": "insuficiencia_cardiaca",
+      "descricao": "Insuficiência cardíaca",
+      "codigo_cid10": "I50"
+    },
+    {
+      "codigo": "doenca_coronariana",
+      "descricao": "Doença coronariana crônica",
+      "codigo_cid10": "I25"
+    },
+    {
+      "codigo": "doenca_renal_cronica",
+      "descricao": "Doença renal crônica",
+      "codigo_cid10": "N18"
+    },
+    {
+      "codigo": "hiv",
+      "descricao": "Infecção pelo HIV",
+      "codigo_cid10": "B24"
+    },
+    {
+      "codigo": "epilepsia",
+      "descricao": "Epilepsia",
+      "codigo_cid10": "G40"
+    },
+    {
+      "codigo": "obesidade",
+      "descricao": "Obesidade",
+      "codigo_cid10": "E66"
+    },
+    {
+      "codigo": "cirrose",
+      "descricao": "Cirrose e fibrose do fígado",
+      "codigo_cid10": "K74"
+    },
+    {
+      "codigo": "doenca_falciforme",
+      "descricao": "Doença falciforme",
+      "codigo_cid10": "D57"
+    },
+    {
+      "codigo": "hipotireoidismo",
+      "descricao": "Hipotireoidismo",
+      "codigo_cid10": "E03"
+    },
+    {
+      "codigo": "alzheimer",
+      "descricao": "Doença de Alzheimer",
+      "codigo_cid10": "G30"
+    },
+    {
+      "codigo": "parkinson",
+      "descricao": "Doença de Parkinson",
+      "codigo_cid10": "G20"
+    },
+    {
+      "codigo": "esquizofrenia",
+      "descricao": "Esquizofrenia",
+      "codigo_cid10": "F20"
+    },
+    {
+      "codigo": "artrite_reumatoide",
+      "descricao": "Artrite reumatoide",
+      "codigo_cid10": "M05"
+    }
   ]
 }

@@ -320,6 +320,7 @@ paciente_deficiencia	CAD	vinculo	F7	Deficiências declaradas pelo paciente, com 
 paciente_linha_cuidado	CAD	vinculo	F8	Inscrição do paciente em programa de saúde, com estado atual, profissional de referência e datas	F11; MV PACIENTE_PROGRAMA_SAUDE; uma só inscrição viva por paciente, programa e estabelecimento (02-CAD linha 11; migração 03_CAD/95_linha_cuidado_inscricao)	02	1
 paciente_linha_cuidado_historico	CAD	historico	F8	Linha do tempo das mudanças de estado do paciente no programa	F11; MV HIST_PACIENTE_PROGRAMA_SAUDE	02	1
 paciente_versao	CAD	historico	F3	Retrato imutável do cadastro do paciente, com contatos, gravado a cada registro clínico ou mudança relevante	F8; SPDATA HTPACIENTE, HTPACTELEFONE; MV LOG_PACIENTE_ATENDIME*, MVTO_PACIENTE	02	4
+paciente_condicao_cronica	CAD	vinculo	F7	Doenças crônicas declaradas no cadastro do paciente, com data e informante; uma vigente por condição	Produto: condições de saúde referidas do cadastro nacional (09-AREA linha 73; migração 03_CAD/97_condicao_cronica_declarada)	02	0
 paciente_vulnerabilidade	CAD	vinculo	F7	Vulnerabilidades declaradas do paciente, com data e informante	F15; MV VULNERABILIDADE_SOCIAL	02	0
 pais_referencia	CAD	catalogo_publico	F3	Países com códigos da Receita Federal, do eSocial e ISO	F14; SPDATA TBPAISES (279); MV PAIS*	02	4
 pendencia_plano	CAD	configuracao	F7	Pendências que o plano impõe antes do atendimento (carência, coparticipação, aviso)	F24; MV CON_PLA_PENDENCIA, CON_PLA_OBS	02	2
