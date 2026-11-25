@@ -77,6 +77,7 @@ import { operacaoAgenda } from './operacoes.js';
 import { dataNoFuso, preCadastroDaMarcacao } from './pre-cadastro-marcacao.js';
 import { grupoLegalDaEspera, gruposVigentesDaEspera } from './prioridade-espera.js';
 import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
+import { exigirRegrasDaMarcacao } from './cota-prazo.js';
 import { exigirPerfilMarcacao } from './perfil-marcacao.js';
 import { agendasOcultas, exigirGravacaoNominal, type PapelNominal } from './usuarios-agenda.js';
 import type {
@@ -1291,6 +1292,7 @@ export class PortaAgendaPropria implements PortaAgenda {
             );
           const encaixe = nome === 'agenda.encaixar';
           const alertas: string[] = [];
+          const avisos: string[] = [];
           const m = await this.marcarNoHorario(tx, ctx, {
             agenda: e.agenda,
             data: e.data,
@@ -1304,15 +1306,19 @@ export class PortaAgendaPropria implements PortaAgenda {
             encaixe: encaixe ? ('motivo' in e ? String(e.motivo) : '') : null,
             remarcadaDe: null,
             alertas,
+            avisos,
           });
+          // Os avisos vão num texto só (uma linha por aviso): o resultado da operação é plano.
+          const comAvisos = avisos.length ? { avisos: avisos.join('\n') } : {};
           return alertas.length
             ? {
                 marcacao: m,
                 agenda: e.agenda,
                 alerta: 'profissional-nao-credenciado',
                 alertaMotivo: alertas[0]!,
+                ...comAvisos,
               }
-            : { marcacao: m, agenda: e.agenda };
+            : { marcacao: m, agenda: e.agenda, ...comAvisos };
         },
         alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: Number(r.marcacao) }),
       });
@@ -1323,6 +1329,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       entrada: esquemaAgendarSemProntuario,
       gravar: async (tx, e, ctx) => {
         const alertas: string[] = [];
+        const avisos: string[] = [];
         const m = await this.marcarNoHorario(tx, ctx, {
           agenda: e.agenda,
           data: e.data,
@@ -1341,9 +1348,15 @@ export class PortaAgendaPropria implements PortaAgenda {
           encaixe: null,
           remarcadaDe: null,
           alertas,
+          avisos,
         });
         const [r] = await tx.consultar('SELECT pre_cadastro_id FROM marcacao_horario WHERE id = ?', [m]);
-        const base = { marcacao: m, agenda: e.agenda, preCadastro: num(r?.['pre_cadastro_id']) };
+        const base = {
+          marcacao: m,
+          agenda: e.agenda,
+          preCadastro: num(r?.['pre_cadastro_id']),
+          ...(avisos.length ? { avisos: avisos.join('\n') } : {}),
+        };
         return alertas.length
           ? { ...base, alerta: 'profissional-nao-credenciado', alertaMotivo: alertas[0]! }
           : base;
@@ -2374,6 +2387,8 @@ export class PortaAgendaPropria implements PortaAgenda {
       remarcadaDe: number | null;
       /** ADR 0009, decisão 25: recebe o alerta de credenciamento (sem bloqueio) para o resultado. */
       alertas?: string[];
+      /** 02-AGE 47: avisos da marcação (texto do prazo ao paciente, regra estimada da agenda, cota que só alerta). */
+      avisos?: string[];
     },
   ): Promise<number> {
     const a = await this.travarAgenda(tx, ctx, p.agenda, 'marcacao');
@@ -2493,6 +2508,24 @@ export class PortaAgendaPropria implements PortaAgenda {
       'SELECT especialidade_medica_id FROM agenda_especialidade WHERE agenda_servico_id = ? AND excluido_em IS NULL ORDER BY principal DESC, id LIMIT 1',
       [p.agenda],
     );
+    // 02-AGE 47: restrição da agenda, prazo de aviso e cota de marcação (regras do domínio, na mesma transação).
+    const avisos = await exigirRegrasDaMarcacao(tx, {
+      estabelecimento: Number(ctx.estabelecimento),
+      agenda: p.agenda,
+      data: p.data,
+      inicio,
+      agora: this.agora(),
+      paciente: p.paciente,
+      preCadastro: preCadastroId,
+      nascimento: pac ? dataIso(pac['data_nascimento']) : nascimentoPre,
+      fontePagadora: num(fp['id']),
+      especialidade: esp ? num(esp['especialidade_medica_id']) : null,
+      tipoMarcacao: num(tipo['id']),
+      retorno: p.retorno,
+      encaixe: p.encaixe !== null,
+      administrador: this.papel.getStore()?.administrador === true,
+    });
+    p.avisos?.push(...avisos);
     const dur = num(a['duracao_horario_minutos']);
     let horario: number;
     if (p.encaixe !== null) {
