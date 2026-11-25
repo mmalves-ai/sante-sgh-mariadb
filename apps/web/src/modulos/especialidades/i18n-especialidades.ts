@@ -1,6 +1,10 @@
 // Textos das telas das especialidades sob demanda e do lactário (M45, etapa 6; DP-32). Textos de produto (ADR 0023):
 // só o que a pessoa faz aqui.
+import { mensagensLentes } from './i18n-lentes.js';
+
 export const mensagensEspecialidades = {
+  // 03-PEP linha 139: a prescrição de lentes da oftalmologia (i18n-lentes.ts).
+  lentes: mensagensLentes,
   carregando: 'Carregando…',
   nenhum: 'Nenhuma internação encontrada.',
   cortada: 'A lista passou do limite e foi cortada: refine a busca.',

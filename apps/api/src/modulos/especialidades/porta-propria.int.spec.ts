@@ -5,13 +5,14 @@
 // o registro; o segundo usa o mesmo partograma; a trilha vai na mesma transação. Recusas: outro estabelecimento,
 // paciente divergente, valor fora da faixa (CHECK do banco) e as gravações que ainda esperam o modelo.
 // A mesma bateria de leitura do partograma roda na memória e no banco. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
-import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
-import { conferirPartograma } from '@sgh/dominio-pep';
+import { type ContextoNucleo, type Escritor, ErroOperacao, type Linha, NucleoProprio } from '@sgh/nucleo';
+import { conferirPartograma, somarMesesLente } from '@sgh/dominio-pep';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import type { PortaEspecialidades } from './porta.js';
 import { PortaEspecialidadesMemoria } from './porta-memoria.js';
 import { PortaEspecialidadesPropria } from './porta-propria.js';
+import { PortaPrescricaoLentePropria } from './prescricao-lente.js';
 import type { NovoPontoPartograma } from './tipos.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -100,6 +101,10 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
           [ids.est, ids.outroEst],
         );
       await e.executar('DELETE FROM preparo_lactario WHERE estabelecimento_id IN (?, ?)', [
+        ids.est,
+        ids.outroEst,
+      ]);
+      await e.executar('DELETE FROM prescricao_lente WHERE estabelecimento_id IN (?, ?)', [
         ids.est,
         ids.outroEst,
       ]);
@@ -800,5 +805,154 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     ]);
     expect(hist[1]!.id).toBe(ev);
     expect(await porta.alteracoesOrdens({ ...ctx, estabelecimento: ids.outroEst }, [id])).toEqual([]);
+  });
+  it('prescrição de lentes: contrato de efeito (emite com o atendimento da internação, idempotente, trilha), lê por paciente, cancela com motivo sem apagar', async () => {
+    const lentes = new PortaPrescricaoLentePropria(nucleo);
+    // A idempotência do executor fica no banco entre as execuções: uma chave nova por rodada.
+    const rodada = Date.now().toString(36);
+    const chaveLente = (n: string) => `c1082-${rodada}-${n}`;
+    const olho = (x: Record<string, unknown> = {}) => ({
+      esferico: null,
+      cilindrico: null,
+      eixo: null,
+      prisma: null,
+      basePrisma: null,
+      acuidade: null,
+      ...x,
+    });
+    const prescricao = {
+      tipo: 'oculos' as const,
+      uso: 'multifocal' as const,
+      od: olho({ esferico: -1.5, cilindrico: -0.75, eixo: 180, acuidade: '20/20' }),
+      oe: olho({ esferico: -1.25, prisma: 1, basePrisma: 'interna' }),
+      adicao: 2,
+      distanciaPupilarMm: 63,
+      curvaBase: null,
+      diametro: null,
+      validadeAte: null,
+      observacao: 'Uso contínuo',
+    };
+    const emissao = {
+      internacao: ids.internacao,
+      paciente: ids.paciente,
+      profissional: ids.profissional,
+      prescricao,
+    };
+    const r = await lentes.emitir(ctx, emissao, chaveLente('0001'));
+    expect(await lentes.emitir(ctx, emissao, chaveLente('0001'))).toEqual(r);
+    const ler = <T extends Linha>(sql: string, p: unknown[]) =>
+      nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-c1-082' }, (l) => l.consultar<T>(sql, p));
+    const [hoje] = await ler<{ d: string }>("SELECT DATE_FORMAT(NOW(), '%Y-%m-%d') AS d", []);
+    expect(r.validadeAte).toBe(somarMesesLente(String(hoje!.d), 12));
+    const linhas = await ler<Record<string, unknown>>(
+      `SELECT paciente_id, atendimento_id, profissional_id, tipo, uso, esferico_olho_direito, cilindrico_olho_direito,
+              eixo_olho_direito, prisma_olho_esquerdo, base_prisma_olho_esquerdo, adicao, distancia_pupilar_mm,
+              DATE_FORMAT(validade_ate, '%Y-%m-%d') AS validade_ate, situacao, versao, criado_por
+         FROM prescricao_lente WHERE estabelecimento_id = ?`,
+      [ids.est],
+    );
+    expect(linhas).toHaveLength(1);
+    const x = linhas[0]!;
+    expect(Number(x['atendimento_id'])).toBe(ids.atendimento);
+    expect(Number(x['paciente_id'])).toBe(ids.paciente);
+    expect(Number(x['profissional_id'])).toBe(ids.profissional);
+    expect(Number(x['criado_por'])).toBe(ids.usuario);
+    expect(x).toMatchObject({
+      tipo: 'oculos',
+      uso: 'multifocal',
+      situacao: 'emitida',
+      base_prisma_olho_esquerdo: 'interna',
+    });
+    expect(
+      [x['esferico_olho_direito'], x['cilindrico_olho_direito'], x['eixo_olho_direito']].map(Number),
+    ).toEqual([-1.5, -0.75, 180]);
+    expect([
+      Number(x['adicao']),
+      Number(x['distancia_pupilar_mm']),
+      Number(x['prisma_olho_esquerdo']),
+    ]).toEqual([2, 63, 1]);
+    expect(x['validade_ate']).toBe(r.validadeAte);
+    const trilha = (acao: string) =>
+      ler<{ n: unknown; motivo: unknown }>(
+        "SELECT COUNT(*) AS n, MAX(motivo) AS motivo FROM trilha_auditoria WHERE entidade = 'prescricao_lente' AND entidade_id = ? AND acao = ?",
+        [r.id, acao],
+      ).then((t) => t[0]!);
+    expect(Number((await trilha('inclusao')).n)).toBe(1);
+
+    // Recusas: regra do domínio (multifocal sem adição), paciente divergente e internação de outro estabelecimento.
+    const erro = (p: Promise<unknown>) => p.then(() => 'ok', codigoDe);
+    expect(
+      await erro(
+        lentes.emitir(ctx, { ...emissao, prescricao: { ...prescricao, adicao: null } }, chaveLente('0002')),
+      ),
+    ).toBe('prescricao-lente-invalida');
+    expect(
+      await erro(lentes.emitir(ctx, { ...emissao, paciente: ids.paciente + 99_999 }, chaveLente('0003'))),
+    ).toBe('paciente-divergente');
+    expect(
+      await erro(lentes.emitir({ ...ctx, estabelecimento: ids.outroEst }, emissao, chaveLente('0004'))),
+    ).toBe('registro-inexistente');
+
+    // Visão por paciente: com o prescritor e a internação; nada no outro estabelecimento.
+    const lidas = await lentes.doPaciente(ctx, ids.paciente);
+    expect(lidas.itens).toHaveLength(1);
+    expect(lidas.itens[0]).toMatchObject({
+      id: r.id,
+      versao: 1,
+      internacao: ids.internacao,
+      situacao: 'emitida',
+      vigente: true,
+      adicao: 2,
+      profissional: `MEDICA SINTETICA ${P}`,
+    });
+    expect(lidas.itens[0]!.od).toEqual({
+      esferico: -1.5,
+      cilindrico: -0.75,
+      eixo: 180,
+      prisma: null,
+      basePrisma: null,
+      acuidade: '20/20',
+    });
+    expect((await lentes.doPaciente({ ...ctx, estabelecimento: ids.outroEst }, ids.paciente)).itens).toEqual(
+      [],
+    );
+
+    // Cancelamento: motivo na trilha, versão sobe, a linha fica; o segundo cancelamento é recusado.
+    expect(
+      await erro(
+        lentes.cancelar(
+          ctx,
+          { id: r.id, paciente: ids.paciente, motivo: ' ', versao: 1 },
+          chaveLente('0005'),
+        ),
+      ),
+    ).toBe('cancelamento-lente-invalido');
+    await lentes.cancelar(
+      ctx,
+      { id: r.id, paciente: ids.paciente, motivo: 'grau revisto', versao: 1 },
+      chaveLente('0006'),
+    );
+    const [depois] = await ler<Record<string, unknown>>(
+      'SELECT situacao, versao, excluido_em FROM prescricao_lente WHERE id = ?',
+      [r.id],
+    );
+    expect(depois).toMatchObject({ situacao: 'cancelada', excluido_em: null });
+    expect(Number(depois!['versao'])).toBe(2);
+    const t2 = await trilha('alteracao');
+    expect(Number(t2.n)).toBe(1);
+    expect(t2.motivo).toBe('grau revisto');
+    expect(
+      await erro(
+        lentes.cancelar(
+          ctx,
+          { id: r.id, paciente: ids.paciente, motivo: 'de novo', versao: 2 },
+          chaveLente('0007'),
+        ),
+      ),
+    ).toBe('cancelamento-lente-invalido');
+    expect((await lentes.doPaciente(ctx, ids.paciente)).itens[0]).toMatchObject({
+      situacao: 'cancelada',
+      vigente: false,
+    });
   });
 });

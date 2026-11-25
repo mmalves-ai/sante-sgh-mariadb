@@ -22,6 +22,13 @@ import { EspecialidadesController } from './especialidades.controller.js';
 import { PORTA_ESPECIALIDADES, type PortaEspecialidades } from './porta.js';
 import { PortaEspecialidadesMemoria } from './porta-memoria.js';
 import { portaEspecialidadesIndisponivel, PortaEspecialidadesPropria } from './porta-propria.js';
+import {
+  PORTA_PRESCRICAO_LENTE,
+  type PortaPrescricaoLente,
+  PortaPrescricaoLenteMemoria,
+  portaPrescricaoLenteIndisponivel,
+  PortaPrescricaoLentePropria,
+} from './prescricao-lente.js';
 
 export interface OpcoesModuloEspecialidades {
   /** Testes: a porta já montada. */
@@ -65,12 +72,20 @@ export async function moduloEspecialidades(
             parametrosIniciais: parametrosIniciaisSinteticos,
           })
         : null;
+  // 03-PEP linha 139: a prescrição de lentes segue o destino da porta das especialidades.
+  const lentes: PortaPrescricaoLente =
+    porta.destino === 'banco' && ctx.nucleo
+      ? new PortaPrescricaoLentePropria(ctx.nucleo)
+      : porta.destino === 'memoria'
+        ? new PortaPrescricaoLenteMemoria()
+        : portaPrescricaoLenteIndisponivel();
   return {
     module: ModuloEspecialidades,
     controllers: [EspecialidadesController],
     providers: [
       { provide: PORTA_ESPECIALIDADES, useValue: porta },
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
+      { provide: PORTA_PRESCRICAO_LENTE, useValue: lentes },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
   };

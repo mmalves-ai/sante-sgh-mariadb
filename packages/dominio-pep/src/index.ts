@@ -108,6 +108,7 @@ export * from './nutricao/correcao.js';
 // M45, etapa 6: especialidades sob demanda (oftalmologia, oncologia, obstetrícia) e o lactário (DP-32, desligados).
 export * from './especialidades/comum.js';
 export * from './especialidades/oftalmologia.js';
+export * from './especialidades/prescricao-lente.js';
 export * from './especialidades/oncologia.js';
 export * from './especialidades/obstetricia.js';
 export * from './especialidades/lactario.js';

@@ -17,12 +17,15 @@ import {
   registrarExameOftalmologico,
 } from '../api-especialidades.js';
 import AvisoEspecialidade from '../componentes/AvisoEspecialidade.vue';
+import LentesPainel from '../componentes/LentesPainel.vue';
 import CabecalhoInternacao from '../componentes/CabecalhoInternacao.vue';
 import ErroEspecialidade from '../componentes/ErroEspecialidade.vue';
 import { instanteCurto, numero } from '../regras-especialidades.js';
 
 const { t } = useI18n();
 const rota = useRoute();
+// 03-PEP linha 139: os exames e a prescrição de lentes do mesmo paciente, em abas (?aba=lentes abre direto).
+const aba = ref<'exames' | 'lentes'>(rota.query['aba'] === 'lentes' ? 'lentes' : 'exames');
 const reg = computed(() => Number(rota.params['reg']));
 const gravacao = useQuery({
   queryKey: ['especialidades', 'oftalmologia', 'gravacao'],
@@ -149,145 +152,170 @@ async function gravar(): Promise<void> {
         }}</RouterLink>
       </p>
       <AvisoEspecialidade :motivo="aviso" />
-      <SanteAlerta
-        v-if="mensagem"
-        variante="info"
-        :texto="mensagem"
-        anunciar
-        data-testid="oftalmo-mensagem"
-      />
-      <ul v-if="alertas.length" class="alertas" data-testid="oftalmo-alertas">
-        <li v-for="a in alertas" :key="a">{{ a }}</li>
-      </ul>
-      <section class="painel" aria-labelledby="oftalmo-exames">
-        <h2 id="oftalmo-exames">{{ t('especialidades.oftalmologia.exames') }}</h2>
-        <p v-if="dados.data.value.exames.length === 0">{{ t('especialidades.oftalmologia.semExames') }}</p>
-        <article
-          v-for="x in dados.data.value.exames"
-          :key="x.id"
-          class="registro"
-          :data-testid="`oftalmo-exame-${x.id}`"
+      <div class="abas" role="tablist">
+        <button
+          v-for="a in ['exames', 'lentes'] as const"
+          :key="a"
+          type="button"
+          role="tab"
+          :aria-selected="aba === a"
+          :data-testid="`oftalmo-aba-${a}`"
+          @click="aba = a"
         >
-          <p>
-            <strong>{{ t(`especialidades.oftalmologia.classificacoes.${x.classificacao}`) }}</strong>
-            · {{ x.por }} · {{ instanteCurto(x.em) }}
-          </p>
-          <table class="tabela">
-            <caption>
-              {{
-                t('especialidades.oftalmologia.olhos')
-              }}
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">{{ t('especialidades.oftalmologia.olho') }}</th>
-                <th scope="col">{{ t('especialidades.oftalmologia.acuidadeSc') }}</th>
-                <th scope="col">{{ t('especialidades.oftalmologia.acuidadeCc') }}</th>
-                <th scope="col">{{ t('especialidades.oftalmologia.pio') }}</th>
-                <th scope="col">{{ t('especialidades.oftalmologia.gonioscopia') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="k in OLHOS" :key="k">
-                <th scope="row">{{ t(`especialidades.oftalmologia.lados.${k}`) }}</th>
-                <td>{{ x[k].acuidadeSemCorrecao ?? '-' }}</td>
-                <td>{{ x[k].acuidadeComCorrecao ?? '-' }}</td>
-                <td>{{ x[k].pio === null ? '-' : `${numero(x[k].pio)} mmHg` }}</td>
-                <td>{{ x[k].gonioscopia ?? '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <ul v-if="x.exames.length" class="lista-simples">
-            <li v-for="(i, n) in x.exames" :key="n">
-              {{ i.exame }} ({{ t(`especialidades.oftalmologia.lados.${i.lado}`) }}): {{ i.resultado }}
-            </li>
-          </ul>
-          <p v-for="a in x.alertas" :key="a" class="alerta-texto">{{ a }}</p>
-          <p v-if="x.conduta">{{ t('especialidades.conduta') }}: {{ x.conduta }}</p>
-        </article>
-      </section>
-      <section class="painel" aria-labelledby="oftalmo-novo">
-        <h2 id="oftalmo-novo">{{ t('especialidades.oftalmologia.novo') }}</h2>
-        <p v-if="!pode" class="secundario">{{ motivoPode }}</p>
-        <form v-else class="formulario" data-testid="form-oftalmo" @submit.prevent="gravar">
-          <fieldset v-for="o in olhos" :key="o.chave" class="grade">
-            <legend>{{ t(`especialidades.oftalmologia.lados.${o.chave}`) }}</legend>
-            <SanteSelecao
-              v-model="o.valor.acuidadeSemCorrecao"
-              :rotulo="t('especialidades.oftalmologia.acuidadeScDe', { olho: o.chave.toUpperCase() })"
-              :opcoes="acuidades"
-            />
-            <SanteSelecao
-              v-model="o.valor.acuidadeComCorrecao"
-              :rotulo="t('especialidades.oftalmologia.acuidadeCcDe', { olho: o.chave.toUpperCase() })"
-              :opcoes="acuidades"
-            />
-            <div class="campo">
-              <label :for="`pio-${o.chave}`">{{
-                t('especialidades.oftalmologia.pioDe', { olho: o.chave.toUpperCase() })
-              }}</label>
-              <input
-                :id="`pio-${o.chave}`"
-                v-model="pioTexto[o.chave]"
-                type="text"
-                inputmode="decimal"
-                maxlength="5"
-              />
-            </div>
-            <SanteSelecao
-              v-model="o.valor.gonioscopia"
-              :rotulo="t('especialidades.oftalmologia.gonioscopiaDe', { olho: o.chave.toUpperCase() })"
-              :opcoes="graduacoes"
-            />
-          </fieldset>
-          <SanteSelecao
-            v-model="metodoPio"
-            :rotulo="t('especialidades.oftalmologia.metodo')"
-            :opcoes="metodos"
-          />
-          <fieldset class="itens">
-            <legend>{{ t('especialidades.oftalmologia.complementares') }}</legend>
-            <div v-for="(x, i) in itens" :key="i" class="grade">
+          {{ t(a === 'exames' ? 'especialidades.lentes.abaExames' : 'especialidades.lentes.aba') }}
+        </button>
+      </div>
+      <LentesPainel
+        v-if="aba === 'lentes'"
+        :reg="reg"
+        :pode="pode"
+        :motivo-pode="motivoPode"
+        :paciente="{
+          nome: dados.data.value.internacao.nome,
+          prontuario: dados.data.value.internacao.prontuario,
+        }"
+      />
+      <template v-else>
+        <SanteAlerta
+          v-if="mensagem"
+          variante="info"
+          :texto="mensagem"
+          anunciar
+          data-testid="oftalmo-mensagem"
+        />
+        <ul v-if="alertas.length" class="alertas" data-testid="oftalmo-alertas">
+          <li v-for="a in alertas" :key="a">{{ a }}</li>
+        </ul>
+        <section class="painel" aria-labelledby="oftalmo-exames">
+          <h2 id="oftalmo-exames">{{ t('especialidades.oftalmologia.exames') }}</h2>
+          <p v-if="dados.data.value.exames.length === 0">{{ t('especialidades.oftalmologia.semExames') }}</p>
+          <article
+            v-for="x in dados.data.value.exames"
+            :key="x.id"
+            class="registro"
+            :data-testid="`oftalmo-exame-${x.id}`"
+          >
+            <p>
+              <strong>{{ t(`especialidades.oftalmologia.classificacoes.${x.classificacao}`) }}</strong>
+              · {{ x.por }} · {{ instanteCurto(x.em) }}
+            </p>
+            <table class="tabela">
+              <caption>
+                {{
+                  t('especialidades.oftalmologia.olhos')
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{{ t('especialidades.oftalmologia.olho') }}</th>
+                  <th scope="col">{{ t('especialidades.oftalmologia.acuidadeSc') }}</th>
+                  <th scope="col">{{ t('especialidades.oftalmologia.acuidadeCc') }}</th>
+                  <th scope="col">{{ t('especialidades.oftalmologia.pio') }}</th>
+                  <th scope="col">{{ t('especialidades.oftalmologia.gonioscopia') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="k in OLHOS" :key="k">
+                  <th scope="row">{{ t(`especialidades.oftalmologia.lados.${k}`) }}</th>
+                  <td>{{ x[k].acuidadeSemCorrecao ?? '-' }}</td>
+                  <td>{{ x[k].acuidadeComCorrecao ?? '-' }}</td>
+                  <td>{{ x[k].pio === null ? '-' : `${numero(x[k].pio)} mmHg` }}</td>
+                  <td>{{ x[k].gonioscopia ?? '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <ul v-if="x.exames.length" class="lista-simples">
+              <li v-for="(i, n) in x.exames" :key="n">
+                {{ i.exame }} ({{ t(`especialidades.oftalmologia.lados.${i.lado}`) }}): {{ i.resultado }}
+              </li>
+            </ul>
+            <p v-for="a in x.alertas" :key="a" class="alerta-texto">{{ a }}</p>
+            <p v-if="x.conduta">{{ t('especialidades.conduta') }}: {{ x.conduta }}</p>
+          </article>
+        </section>
+        <section class="painel" aria-labelledby="oftalmo-novo">
+          <h2 id="oftalmo-novo">{{ t('especialidades.oftalmologia.novo') }}</h2>
+          <p v-if="!pode" class="secundario">{{ motivoPode }}</p>
+          <form v-else class="formulario" data-testid="form-oftalmo" @submit.prevent="gravar">
+            <fieldset v-for="o in olhos" :key="o.chave" class="grade">
+              <legend>{{ t(`especialidades.oftalmologia.lados.${o.chave}`) }}</legend>
               <SanteSelecao
-                v-model="x.exame"
-                :rotulo="t('especialidades.oftalmologia.exame', { n: i + 1 })"
-                :opcoes="exames"
-                busca
+                v-model="o.valor.acuidadeSemCorrecao"
+                :rotulo="t('especialidades.oftalmologia.acuidadeScDe', { olho: o.chave.toUpperCase() })"
+                :opcoes="acuidades"
               />
               <SanteSelecao
-                v-model="x.lado"
-                :rotulo="t('especialidades.oftalmologia.lado', { n: i + 1 })"
-                :opcoes="lados"
+                v-model="o.valor.acuidadeComCorrecao"
+                :rotulo="t('especialidades.oftalmologia.acuidadeCcDe', { olho: o.chave.toUpperCase() })"
+                :opcoes="acuidades"
               />
-              <SanteCampoTexto
-                v-model="x.resultado"
-                :rotulo="t('especialidades.oftalmologia.resultado', { n: i + 1 })"
-                :max-bytes="500"
+              <div class="campo">
+                <label :for="`pio-${o.chave}`">{{
+                  t('especialidades.oftalmologia.pioDe', { olho: o.chave.toUpperCase() })
+                }}</label>
+                <input
+                  :id="`pio-${o.chave}`"
+                  v-model="pioTexto[o.chave]"
+                  type="text"
+                  inputmode="decimal"
+                  maxlength="5"
+                />
+              </div>
+              <SanteSelecao
+                v-model="o.valor.gonioscopia"
+                :rotulo="t('especialidades.oftalmologia.gonioscopiaDe', { olho: o.chave.toUpperCase() })"
+                :opcoes="graduacoes"
               />
-              <SanteBotao variante="texto" :rotulo="t('especialidades.remover')" @click="removerExame(i)" />
-            </div>
+            </fieldset>
+            <SanteSelecao
+              v-model="metodoPio"
+              :rotulo="t('especialidades.oftalmologia.metodo')"
+              :opcoes="metodos"
+            />
+            <fieldset class="itens">
+              <legend>{{ t('especialidades.oftalmologia.complementares') }}</legend>
+              <div v-for="(x, i) in itens" :key="i" class="grade">
+                <SanteSelecao
+                  v-model="x.exame"
+                  :rotulo="t('especialidades.oftalmologia.exame', { n: i + 1 })"
+                  :opcoes="exames"
+                  busca
+                />
+                <SanteSelecao
+                  v-model="x.lado"
+                  :rotulo="t('especialidades.oftalmologia.lado', { n: i + 1 })"
+                  :opcoes="lados"
+                />
+                <SanteCampoTexto
+                  v-model="x.resultado"
+                  :rotulo="t('especialidades.oftalmologia.resultado', { n: i + 1 })"
+                  :max-bytes="500"
+                />
+                <SanteBotao variante="texto" :rotulo="t('especialidades.remover')" @click="removerExame(i)" />
+              </div>
+              <SanteBotao
+                variante="secundario"
+                :rotulo="t('especialidades.oftalmologia.adicionar')"
+                data-testid="oftalmo-adicionar"
+                @click="adicionarExame"
+              />
+            </fieldset>
+            <SanteCampoTexto
+              v-model="conduta"
+              :rotulo="t('especialidades.condutaOpcional')"
+              :max-bytes="1000"
+              multilinha
+            />
+            <ErroEspecialidade v-if="erro" :erro="erro" />
             <SanteBotao
-              variante="secundario"
-              :rotulo="t('especialidades.oftalmologia.adicionar')"
-              data-testid="oftalmo-adicionar"
-              @click="adicionarExame"
+              tipo="submit"
+              :rotulo="t('especialidades.gravar')"
+              :desabilitado="ocupado"
+              data-testid="oftalmo-gravar"
             />
-          </fieldset>
-          <SanteCampoTexto
-            v-model="conduta"
-            :rotulo="t('especialidades.condutaOpcional')"
-            :max-bytes="1000"
-            multilinha
-          />
-          <ErroEspecialidade v-if="erro" :erro="erro" />
-          <SanteBotao
-            tipo="submit"
-            :rotulo="t('especialidades.gravar')"
-            :desabilitado="ocupado"
-            data-testid="oftalmo-gravar"
-          />
-        </form>
-      </section>
+          </form>
+        </section>
+      </template>
     </template>
   </section>
 </template>

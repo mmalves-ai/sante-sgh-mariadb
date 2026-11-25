@@ -5,6 +5,9 @@
 //   GET  /api/especialidades/oftalmologia/cadastros          acuidades, exames, grupos, graduações e o limite da PIO
 //   GET  /api/especialidades/oftalmologia/internacoes/:reg   os exames da internação (auditado)
 //   POST /api/especialidades/oftalmologia/exames             pep.registrarExameOftalmologico (médico)
+//   GET  /api/especialidades/oftalmologia/internacoes/:reg/lentes   as prescrições de lentes do paciente (auditado)
+//   POST /api/especialidades/oftalmologia/lentes             pep.prescricao-lente.emitir (médico; óculos ou contato)
+//   POST /api/especialidades/oftalmologia/lentes/:id/cancelamento   pep.prescricao-lente.cancelar (motivo; nada apagado)
 //   GET  /api/especialidades/oncologia/protocolos            os protocolos (todas as versões) e os tipos do cadastro
 //   POST /api/especialidades/oncologia/protocolos            pep.publicarProtocoloOncologico (médico; imutável)
 //   GET  /api/especialidades/oncologia/internacoes/:reg      os ciclos do paciente (auditado)
@@ -152,6 +155,14 @@ import {
   PORTA_ESPECIALIDADES,
   type PortaEspecialidades,
 } from './porta.js';
+import {
+  esquemaCancelamentoLente,
+  esquemaEmissaoLente,
+  PORTA_PRESCRICAO_LENTE,
+  type PortaPrescricaoLente,
+  type PrescricaoLenteLida,
+  portaPrescricaoLenteIndisponivel,
+} from './prescricao-lente.js';
 
 /**
  * A tela da obstetrícia com o recém-nascido lido: peso, Apgar, idade gestacional e as classificações podem ser null
@@ -191,6 +202,22 @@ const NOME_CATEGORIA: Readonly<Record<string, string>> = {
   'oncologia.validar': 'A validação do ciclo é do farmacêutico',
   'obstetricia.registrar': 'O partograma e o recém-nascido são registrados pelo médico ou pela enfermagem',
 };
+
+const CHAVE_IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
+/** A Idempotency-Key da gravação (uma por intenção de gravar); sem ela, 400. */
+function chaveIdempotencia(req: RequisicaoAutorizada): string {
+  const bruto = req.headers['idempotency-key'];
+  const k = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (typeof k !== 'string' || !CHAVE_IDEMPOTENCIA.test(k))
+    throw new ErroProblema(
+      'entrada-invalida',
+      400,
+      'Pedido incompleto',
+      'A Idempotency-Key do pedido falta ou é inválida.',
+    );
+  return k;
+}
+const dataBr = (d: string) => d.split('-').reverse().join('/');
 
 const recusaDominio = (x: unknown): never => {
   if (x instanceof ErroEspecialidade)
@@ -255,6 +282,9 @@ export class EspecialidadesController {
     @Optional() @Inject(REGISTRO_EMERGENCIA) emergencia: RegistroEmergencia | null = null,
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
+    @Optional()
+    @Inject(PORTA_PRESCRICAO_LENTE)
+    private readonly lentes: PortaPrescricaoLente = portaPrescricaoLenteIndisponivel(),
   ) {
     const novo = (chave: string, nome: string) =>
       new ApoioGravacao<GravadorEspecialidades>(
@@ -501,6 +531,58 @@ export class EspecialidadesController {
       this.cadastroOftalmo(s),
     ]);
     return { internacao: cab, exames: exames.map((x) => this.exameLido(x, c.dominio)) };
+  }
+
+  // ── Prescrição de lentes (03-PEP linha 139) ──
+  @Get('especialidades/oftalmologia/internacoes/:reg/lentes')
+  @Permissao(P.oftalmologiaLer)
+  @Auditar(E.especialidadeLida.codigo)
+  async lentesDoPaciente(
+    @Param('reg') reg: string,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ hoje: string; itens: PrescricaoLenteLida[] }> {
+    const s = sessaoDe(req);
+    const i = await this.internacaoLida(s, reg, P.oftalmologiaLer);
+    return this.lentes.doPaciente(s.porta, i.paciente);
+  }
+
+  @Post('especialidades/oftalmologia/lentes')
+  @HttpCode(201)
+  @Permissao(P.oftalmologiaRegistrar)
+  @AuditadoNoHandler('pep.prescricao-lente.emitir pelo executor (trilha na mesma transação)')
+  async emitirLente(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const { internacao, ...prescricao } = corpo(esquemaEmissaoLente, b);
+    const v = await this.vinculoDa(s, 'oftalmologia.registrar');
+    const i = await this.internacaoLida(s, String(internacao), P.oftalmologiaRegistrar);
+    const r = await this.lentes.emitir(
+      s.porta,
+      { internacao: i.internacao, paciente: i.paciente, profissional: v.vinculo, prescricao },
+      chaveIdempotencia(req),
+    );
+    return { ok: true, ...r, mensagem: `Prescrição de lentes emitida, válida até ${dataBr(r.validadeAte)}.` };
+  }
+
+  @Post('especialidades/oftalmologia/lentes/:id/cancelamento')
+  @HttpCode(200)
+  @Permissao(P.oftalmologiaRegistrar)
+  @AuditadoNoHandler('pep.prescricao-lente.cancelar pelo executor (trilha na mesma transação, com o motivo)')
+  async cancelarLente(
+    @Param('id') id: string,
+    @Query('internacao') reg: string | undefined,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const s = sessaoDe(req);
+    const e = corpo(esquemaCancelamentoLente, b);
+    await this.vinculoDa(s, 'oftalmologia.registrar');
+    const i = await this.internacaoLida(s, reg ?? '', P.oftalmologiaRegistrar);
+    const r = await this.lentes.cancelar(
+      s.porta,
+      { id: idDaRota(id), paciente: i.paciente, motivo: e.motivo, versao: e.versao },
+      chaveIdempotencia(req),
+    );
+    return { ok: true, ...r, mensagem: 'Prescrição de lentes cancelada: fica no histórico com o motivo.' };
   }
 
   @Post('especialidades/oftalmologia/exames')
