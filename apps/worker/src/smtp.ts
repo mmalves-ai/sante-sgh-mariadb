@@ -141,6 +141,9 @@ class Conversa {
 
 /** Envia pela conexão dada. Responde só quando o servidor aceitou a mensagem (250). */
 export async function enviarPelaConexao(c: ConexaoSmtp, m: MensagemEmail): Promise<void> {
+  // A senha (AUTH PLAIN, só base64) nunca vai por canal sem cifra: falha fechada antes de conectar.
+  if (c.usuario && c.seguranca !== 'ssl_tls' && c.seguranca !== 'starttls')
+    throw new Error('SMTP: autenticação exige SSL/TLS ou STARTTLS');
   const tempoMs = c.tempoMs ?? 10_000;
   const bruto: Socket | TLSSocket =
     c.seguranca === 'ssl_tls'

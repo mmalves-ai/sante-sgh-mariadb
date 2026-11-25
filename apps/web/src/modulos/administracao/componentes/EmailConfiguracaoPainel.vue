@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// 01-ADM linha 77: e-mail do sistema numa tela só. Servidores de saída (a senha nunca aparece nem é digitada aqui:
-// só a referência dela no cofre; o teste de conexão mostra e guarda o resultado), modelos de mensagem (os campos
+// 01-ADM linha 77: e-mail do sistema numa tela só. Servidores de saída (o cadastro leva só a referência da senha no
+// cofre; a senha é digitada num campo só de escrita, vai direto ao cofre e a tela mostra só se está guardada; o teste
+// de conexão mostra e guarda o resultado), modelos de mensagem (os campos
 // nascem dos marcadores do texto e a pré-visualização troca cada um pelo exemplo, na hora) e o registro dos últimos
 // envios. A regra do domínio valida na hora, antes de ir ao servidor; a recusa do servidor aparece no painel.
 import {
@@ -10,6 +11,7 @@ import {
   preencherModelo,
   SEGURANCAS_EMAIL,
   type SegurancaEmail,
+  senhaServidorEmailValida,
   validarModeloEmail,
   validarServidorEmail,
 } from '@sgh/dominio-acesso/autorizacao';
@@ -20,6 +22,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { novaChave } from '../../agenda/api-agenda.js';
 import {
+  definirSenhaServidorEmail,
   gravarModeloEmail,
   gravarServidorEmail,
   lerPainelEmail,
@@ -186,6 +189,35 @@ async function testar() {
       r.resultado.sucesso
         ? t('emailSistema.servidores.resultadoOk')
         : t('emailSistema.servidores.resultadoFalhou', { detalhe: r.resultado.detalhe }),
+  );
+}
+
+// ── Senha do servidor: só escrita, vai direto ao cofre; nunca volta para a tela ──
+const senhaNova = ref('');
+watch(servidorEscolhido, () => (senhaNova.value = ''));
+const recusaSenha = computed(() =>
+  senhaNova.value === '' || senhaServidorEmailValida(senhaNova.value)
+    ? ''
+    : t('emailSistema.servidores.senhaInvalida'),
+);
+const situacaoSenha = computed(() => {
+  const d = servidor.value?.senhaDefinida;
+  return t(
+    d === true
+      ? 'emailSistema.servidores.senhaDefinida'
+      : d === false
+        ? 'emailSistema.servidores.senhaNaoDefinida'
+        : 'emailSistema.servidores.senhaCofreIndisponivel',
+  );
+});
+async function gravarSenha() {
+  const s = servidor.value;
+  const senha = senhaNova.value;
+  if (!s || !senhaServidorEmailValida(senha)) return;
+  senhaNova.value = '';
+  await executar(
+    () => definirSenhaServidorEmail(s.id, s.versao, senha, novaChave('email-senha')),
+    () => t('emailSistema.servidores.senhaGravada'),
   );
 }
 
@@ -455,6 +487,35 @@ const rotuloSituacao = (s: string) => (SITUACOES.includes(s) ? t(`emailSistema.e
           </fieldset>
         </form>
         <p v-if="servidor" data-testid="email-servidor-teste">{{ situacaoTeste }}</p>
+        <form
+          v-if="servidor && servidor.exigeAutenticacao"
+          data-testid="email-servidor-senha"
+          @submit.prevent="gravarSenha"
+        >
+          <p data-testid="email-servidor-senha-situacao">{{ situacaoSenha }}</p>
+          <div v-if="props.podeEditar" class="grade">
+            <label>
+              {{ t('emailSistema.servidores.senhaNova') }}
+              <input
+                v-model="senhaNova"
+                type="password"
+                autocomplete="new-password"
+                maxlength="500"
+                data-testid="email-servidor-senha-campo"
+              />
+            </label>
+          </div>
+          <p v-if="props.podeEditar" class="ajuda">{{ t('emailSistema.servidores.senhaAjuda') }}</p>
+          <p v-if="recusaSenha" role="alert" data-testid="email-servidor-senha-recusa">{{ recusaSenha }}</p>
+          <div v-if="props.podeEditar" class="acoes">
+            <SanteBotao
+              tipo="submit"
+              :rotulo="t('emailSistema.servidores.senhaGravar')"
+              :desabilitado="!senhaNova || !!recusaSenha || servidorMudou"
+              data-testid="email-servidor-senha-gravar"
+            />
+          </div>
+        </form>
       </section>
 
       <section class="painel" aria-labelledby="email-modelos-titulo">

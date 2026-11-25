@@ -7,8 +7,8 @@
 import { connect as conectarTcp, type Socket } from 'node:net';
 import { connect as conectarTls, type TLSSocket } from 'node:tls';
 import { type Ambiente, containersLocais, ehDestinoLocal, envioExternoPermitido } from '@sgh/nucleo';
-import { chaveMestra, resumoDoErro } from '@sgh/dominio-acesso';
-import { cofreDoAmbiente } from '../assinatura/infra/cofre.js';
+import { autenticacaoSemCifra, chaveMestra, MENSAGEM_SAIDA, resumoDoErro } from '@sgh/dominio-acesso';
+import { type Cofre, cofreDoAmbiente } from '../assinatura/infra/cofre.js';
 
 export interface ServidorParaTeste {
   readonly host: string;
@@ -92,6 +92,8 @@ export async function conversarTeste(
   senha: string | null,
   tempoMs: number,
 ): Promise<string> {
+  // A senha nunca vai sem cifra (defesa também aqui, além do testador e do cadastro).
+  if (autenticacaoSemCifra(s.seguranca, s.usuario)) return MENSAGEM_SAIDA['autenticacao-sem-tls'];
   const l = new Linhas(socket, tempoMs);
   try {
     let r = await l.proxima();
@@ -129,9 +131,14 @@ export async function conversarTeste(
   }
 }
 
+/** O cofre de arquivo do ambiente (o mesmo da assinatura); indisponível sem chave mestra ou sem COFRE_DIR. */
+export function cofreEmailDoAmbiente(env: Ambiente): Cofre {
+  return cofreDoAmbiente(env, chaveMestra(env['PLATAFORMA_CHAVE_MESTRA']), process.cwd());
+}
+
 /** O leitor da senha no cofre do ambiente (o mesmo cofre de arquivo da API); null quando indisponível. */
 export function senhaDoCofreDoAmbiente(env: Ambiente): LerSenhaCofre | null {
-  const cofre = cofreDoAmbiente(env, chaveMestra(env['PLATAFORMA_CHAVE_MESTRA']), process.cwd());
+  const cofre = cofreEmailDoAmbiente(env);
   if (!cofre.disponivel) return null;
   return async (referencia) => {
     try {
@@ -150,6 +157,9 @@ export function testadorDoAmbiente(
   return async (s) => {
     if (!envioExternoPermitido(env) && !ehDestinoLocal(s.host, containersLocais(env)))
       return { neutralizado: true };
+    // Autenticação sem SSL/TLS nem STARTTLS: falha fechada sem conectar (a senha nem é lida do cofre).
+    if (autenticacaoSemCifra(s.seguranca, s.usuario))
+      return { sucesso: false, detalhe: MENSAGEM_SAIDA['autenticacao-sem-tls'] };
     const tempoMs = Math.min(Math.max(s.tempoLimiteSegundos, 5), 300) * 1000;
     const senha = s.usuario && s.referenciaCofre && lerSenha ? await lerSenha(s.referenciaCofre) : null;
     const socket: Socket =

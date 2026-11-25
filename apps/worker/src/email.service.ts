@@ -20,7 +20,13 @@
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import { type AlertaSuporteJob, conferirAlertaSuporte } from '@sgh/contratos';
-import { conexaoDaSaida, MENSAGEM_SAIDA, textoPeloModelo, valoresDoAlerta } from '@sgh/dominio-acesso';
+import {
+  chaveCofreEmail,
+  conexaoDaSaida,
+  MENSAGEM_SAIDA,
+  textoPeloModelo,
+  valoresDoAlerta,
+} from '@sgh/dominio-acesso';
 import { envioExternoPermitido, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { clientesDoWorker, type NucleoClientes } from './clientes-worker.js';
 import { leitorDoCofre } from './cofre-leitura.js';
@@ -356,7 +362,9 @@ export class EmailService implements OnApplicationBootstrap, OnApplicationShutdo
           if ('recusa' in conexao) throw new Error(MENSAGEM_SAIDA[conexao.recusa]);
           let senha: string | null = null;
           if (conexao.usuario) {
-            senha = conexao.referenciaCofre && lerSegredo ? await lerSegredo(conexao.referenciaCofre) : null;
+            // A chave é presa ao cliente da fila: a referência cadastrada sozinha nunca abre o cofre.
+            const chave = chaveCofreEmail(cliente, conexao.referenciaCofre);
+            senha = chave && lerSegredo ? await lerSegredo(chave) : null;
             if (!senha) throw new Error(MENSAGEM_SAIDA['senha-indisponivel']);
           }
           let modeloUsado: number | null = null;

@@ -23,6 +23,7 @@ export type RecusaEmail =
   | 'porta-invalida'
   | 'seguranca-invalida'
   | 'autenticacao-incompleta'
+  | 'autenticacao-sem-tls'
   | 'referencia-cofre-invalida'
   | 'tempo-limite-invalido'
   | 'limite-hora-invalido'
@@ -44,6 +45,8 @@ export const MENSAGEM_EMAIL: Readonly<Record<RecusaEmail, string>> = {
   'seguranca-invalida': 'A segurança da conexão é nenhuma, SSL/TLS ou STARTTLS.',
   'autenticacao-incompleta':
     'O servidor que exige autenticação precisa do usuário e da referência da senha no cofre.',
+  'autenticacao-sem-tls':
+    'O servidor que exige autenticação precisa de SSL/TLS ou STARTTLS: a senha nunca trafega sem cifra.',
   'referencia-cofre-invalida':
     'Informe a referência da senha no cofre de segredos (uma chave, como email/saida/principal), nunca a senha.',
   'tempo-limite-invalido': 'O tempo limite vai de 5 a 300 segundos.',
@@ -217,6 +220,8 @@ export function validarServidorEmail(e: ServidorEmailEntrada): RecusaEmail | nul
   const usuario = (e.usuarioAutenticacao ?? '').trim();
   const referencia = (e.referenciaCofre ?? '').trim();
   if (e.exigeAutenticacao && (!usuario || !referencia)) return 'autenticacao-incompleta';
+  // A senha (AUTH PLAIN, só base64) nunca vai por canal sem cifra.
+  if ((e.exigeAutenticacao || usuario) && e.seguranca === 'nenhuma') return 'autenticacao-sem-tls';
   if (referencia && !referenciaCofreValida(referencia)) return 'referencia-cofre-invalida';
   if (!enderecoEmailValido(e.remetenteEmail)) return 'endereco-invalido';
   if (e.responderPara && !enderecoEmailValido(e.responderPara)) return 'endereco-invalido';

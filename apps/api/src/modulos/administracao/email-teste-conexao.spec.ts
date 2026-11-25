@@ -3,8 +3,20 @@
 // STARTTLS cadastrado e não anunciado é falha. Servidor SMTP falso
 // em loopback (nada sai da máquina).
 import { createServer, type Server } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testadorDoAmbiente } from './email-teste-conexao.js';
+
+// O canal SSL/TLS é simulado por TCP em loopback (o servidor falso não tem certificado): o que se prova aqui é a
+// conversa e a recusa de autenticar sem cifra, não o TLS do Node.
+vi.mock('node:tls', async (original) => {
+  const real = await original<typeof import('node:tls')>();
+  const net = await import('node:net');
+  return {
+    ...real,
+    connect: (o: { host?: string; port?: number; socket?: unknown }) =>
+      o.socket ? real.connect(o as never) : net.connect({ host: o.host!, port: o.port! }),
+  };
+});
 
 let servidor: Server | null = null;
 afterEach(async () => {
@@ -45,6 +57,7 @@ function smtpFalso(recursos: string[], aceitaAuth: boolean, recebido: string[]):
 const env = { SGH_AMBIENTE: 'desenvolvimento' };
 const cofre = async (r: string) => (r === 'email/saida/sintetico' ? 'Sintetica#1' : null);
 const base = { host: '127.0.0.1', seguranca: 'nenhuma', tempoLimiteSegundos: 5 };
+const cifrado = { ...base, seguranca: 'ssl_tls' };
 
 describe('teste de conexão com autenticação', () => {
   it('autentica com o usuário e a senha do cofre', async () => {
@@ -54,7 +67,7 @@ describe('teste de conexão com autenticação', () => {
       env,
       cofre,
     )({
-      ...base,
+      ...cifrado,
       porta,
       usuario: 'envio',
       referenciaCofre: 'email/saida/sintetico',
@@ -67,16 +80,26 @@ describe('teste de conexão com autenticação', () => {
     const recebido: string[] = [];
     let porta = await smtpFalso(['AUTH PLAIN'], false, recebido);
     const t = testadorDoAmbiente(env, cofre);
-    const recusada = await t({ ...base, porta, usuario: 'envio', referenciaCofre: 'email/saida/sintetico' });
+    const recusada = await t({
+      ...cifrado,
+      porta,
+      usuario: 'envio',
+      referenciaCofre: 'email/saida/sintetico',
+    });
     expect(recusada).toEqual({
       sucesso: false,
       detalhe: 'O servidor recusou a autenticação (resposta 535).',
     });
-    const semSenha = await t({ ...base, porta, usuario: 'envio', referenciaCofre: 'email/saida/outra' });
+    const semSenha = await t({ ...cifrado, porta, usuario: 'envio', referenciaCofre: 'email/saida/outra' });
     expect(semSenha).toMatchObject({ sucesso: false, detalhe: expect.stringContaining('não está no cofre') });
     await new Promise<void>((ok) => servidor!.close(() => ok()));
     porta = await smtpFalso([], true, recebido);
-    const semPlain = await t({ ...base, porta, usuario: 'envio', referenciaCofre: 'email/saida/sintetico' });
+    const semPlain = await t({
+      ...cifrado,
+      porta,
+      usuario: 'envio',
+      referenciaCofre: 'email/saida/sintetico',
+    });
     expect(semPlain).toMatchObject({ sucesso: false, detalhe: expect.stringContaining('PLAIN') });
     expect(JSON.stringify([recusada, semSenha, semPlain])).not.toContain('Sintetica#1');
   });
@@ -92,5 +115,17 @@ describe('teste de conexão com autenticação', () => {
       detalhe: expect.stringContaining('STARTTLS'),
     });
     expect(recebido.some((l) => l.startsWith('AUTH'))).toBe(false);
+  });
+  it('autenticação sem SSL/TLS nem STARTTLS: falha sem conectar e sem ler a senha', async () => {
+    const recebido: string[] = [];
+    const porta = await smtpFalso(['AUTH PLAIN'], true, recebido);
+    let lida = false;
+    const r = await testadorDoAmbiente(env, async () => {
+      lida = true;
+      return 'Sintetica#1';
+    })({ ...base, porta, usuario: 'envio', referenciaCofre: 'email/saida/sintetico' });
+    expect(r).toMatchObject({ sucesso: false, detalhe: expect.stringContaining('sem cifra') });
+    expect(lida).toBe(false);
+    expect(recebido).toEqual([]);
   });
 });

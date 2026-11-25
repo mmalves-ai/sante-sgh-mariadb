@@ -2,7 +2,9 @@
 // - GET  /api/administracao/email (config.email.ler): servidores, modelos de mensagem com os campos, finalidades e o
 //   registro dos últimos envios (situação, tentativas, identificador da mensagem);
 // - POST /api/administracao/email/modelos | servidores | servidores/:id/teste (config.email.editar): gravações pelo
-//   executor (trilha na mesma transação). A senha do servidor nunca trafega: só a referência dela no cofre.
+//   executor (trilha na mesma transação). O cadastro do servidor leva só a referência da senha no cofre;
+// - POST /api/administracao/email/servidores/:id/senha (config.email.editar): a senha vai só ao cofre (chave presa ao
+//   cliente), nunca ao banco, à trilha nem à resposta; a tela vê "senha definida".
 import {
   Body,
   Controller,
@@ -79,6 +81,25 @@ export class EmailConfiguracaoController {
   async servidor(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.banco()
       .gravarServidor(this.gravacao(req, 'email-servidor'), corpoDe(corpo))
+      .catch((x: unknown) => problema(x));
+  }
+
+  @Post('administracao/email/servidores/:id/senha')
+  @HttpCode(200)
+  @Permissao(C.emailEditar)
+  @AuditadoNoHandler('email.servidor_senha_definir pelo executor (trilha na mesma transação, sem a senha)')
+  async senha(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const c = corpoDe(corpo);
+    return this.banco()
+      .definirSenha(this.gravacao(req, 'email-servidor-senha'), {
+        servidor: id,
+        versao: c['versao'],
+        senha: c['senha'],
+      })
       .catch((x: unknown) => problema(x));
   }
 

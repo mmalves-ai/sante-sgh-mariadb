@@ -29,6 +29,8 @@ const esquemaServidor = z.object({
   ativo: z.boolean(),
   ultimoTesteEm: z.string().nullable(),
   ultimoTesteSucesso: z.boolean().nullable(),
+  /** A senha está no cofre (nulo: sem referência ou cofre indisponível); nunca a senha. */
+  senhaDefinida: z.boolean().nullable().default(null),
 });
 export type ServidorEmailTela = z.infer<typeof esquemaServidor>;
 
@@ -130,6 +132,15 @@ export const testarServidorEmail = (servidor: number, chave: string) =>
     {},
     chave,
     z.object({ resultado: z.object({ servidor: z.number(), sucesso: z.boolean(), detalhe: z.string() }) }),
+  );
+
+/** A senha do servidor vai só ao cofre (chave presa ao cliente); a resposta nunca a devolve. */
+export const definirSenhaServidorEmail = (servidor: number, versao: number, senha: string, chave: string) =>
+  gravar(
+    `/servidores/${servidor}/senha`,
+    { versao, senha },
+    chave,
+    z.object({ resultado: z.object({ servidor: z.number(), senhaDefinida: z.literal(true) }) }),
   );
 
 export interface ModeloEmailEnvio {

@@ -38,6 +38,15 @@ export const mensagensEmailSistema = {
     testeFalhou: 'Último teste em {quando}: sem resposta do servidor.',
     resultadoOk: 'Conexão testada: o servidor respondeu.',
     resultadoFalhou: 'Conexão testada: sem sucesso ({detalhe}).',
+    senhaNova: 'Senha do servidor',
+    senhaAjuda:
+      'A senha vai direto ao cofre de segredos: não fica no cadastro, não volta para a tela e só pode ser trocada.',
+    senhaGravar: 'Guardar a senha no cofre',
+    senhaGravada: 'Senha guardada no cofre. Teste a conexão de novo.',
+    senhaInvalida: 'A senha tem de 1 a 500 caracteres, sem quebra de linha.',
+    senhaDefinida: 'Senha guardada no cofre.',
+    senhaNaoDefinida: 'Senha ainda não guardada no cofre: o envio autenticado falha até ela ser informada.',
+    senhaCofreIndisponivel: 'Cofre de segredos indisponível neste ambiente.',
   },
   modelos: {
     titulo: 'Modelos de mensagem',

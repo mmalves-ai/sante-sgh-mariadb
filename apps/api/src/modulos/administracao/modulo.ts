@@ -34,7 +34,7 @@ import { NOTIFICACAO_REGRA, NotificacaoRegraController } from './notificacao-reg
 import { NotificacaoRegraPropria } from './notificacao-regra-propria.js';
 import { EMAIL_CONFIGURACAO, EmailConfiguracaoController } from './email-configuracao.controller.js';
 import { EmailConfiguracaoPropria } from './email-configuracao-propria.js';
-import { testadorDoAmbiente } from './email-teste-conexao.js';
+import { cofreEmailDoAmbiente, testadorDoAmbiente } from './email-teste-conexao.js';
 import { SERVICO_SBIS, ServicoSbis } from './sbis/servico.js';
 
 /** O produto não convive com sistema anterior (ADR 0003). */
@@ -148,6 +148,9 @@ export async function modulo(
                 ctx.configuracao.clientePadrao,
                 ctx.configuracao.ambiente === 'producao',
                 testadorDoAmbiente(ctx.env),
+                undefined,
+                // A senha do servidor vai só ao cofre (chave presa ao cliente); a tela vê "senha definida".
+                cofreEmailDoAmbiente(ctx.env),
               )
             : null,
       },

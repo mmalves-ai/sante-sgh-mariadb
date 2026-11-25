@@ -1,6 +1,11 @@
 // 01-ADM L77: por onde e com que texto sai o e-mail do sistema (servidor cadastrado, captura fora de produção, modelo).
 import { describe, expect, it } from 'vitest';
+import { validarServidorEmail } from './email-configuracao.js';
 import {
+  autenticacaoSemCifra,
+  chaveCofreEmail,
+  chaveCofreEmailValida,
+  senhaServidorEmailValida,
   conexaoDaSaida,
   FINALIDADE_DO_ALERTA,
   servidorDaSaida,
@@ -113,5 +118,70 @@ describe('modelo', () => {
   it('texto do HTML e finalidades dos alertas', () => {
     expect(textoDoHtml('a<br>b<p>c</p>d')).toBe('a\nbc\nd');
     expect(Object.values(FINALIDADE_DO_ALERTA)).toHaveLength(4);
+  });
+});
+
+describe('autenticação só com cifra (a senha nunca trafega aberta)', () => {
+  const cadastro = {
+    codigo: 'PRINCIPAL',
+    nome: 'Principal',
+    host: 'smtp.sintetico.invalid',
+    porta: 25,
+    seguranca: 'nenhuma',
+    exigeAutenticacao: true,
+    usuarioAutenticacao: 'envio',
+    referenciaCofre: 'email/saida/principal',
+    remetenteEmail: 'r@sintetico.invalid',
+  };
+  it('o cadastro recusa autenticação sem SSL/TLS nem STARTTLS', () => {
+    expect(validarServidorEmail(cadastro)).toBe('autenticacao-sem-tls');
+    expect(validarServidorEmail({ ...cadastro, seguranca: 'starttls' })).toBeNull();
+    expect(
+      validarServidorEmail({ ...cadastro, exigeAutenticacao: false, usuarioAutenticacao: null }),
+    ).toBeNull();
+  });
+  it('a saída em produção falha fechada com o servidor antigo que autentica sem cifra', () => {
+    expect(conexaoDaSaida(srv(1, { seguranca: 'nenhuma' }), amb)).toEqual({ recusa: 'autenticacao-sem-tls' });
+    expect(
+      conexaoDaSaida(srv(1, { seguranca: 'nenhuma', exigeAutenticacao: false }), amb),
+    ).not.toHaveProperty('recusa');
+  });
+  it('autenticacaoSemCifra', () => {
+    expect(autenticacaoSemCifra('nenhuma', 'envio')).toBe(true);
+    expect(autenticacaoSemCifra('ssl_tls', 'envio')).toBe(false);
+    expect(autenticacaoSemCifra('nenhuma', null)).toBe(false);
+  });
+});
+
+describe('chave da senha no cofre presa ao cliente', () => {
+  it('compõe pelo cliente; a mesma referência em dois clientes dá chaves diferentes', () => {
+    expect(chaveCofreEmail('f22_o5', 'email/saida/principal')).toBe(
+      'email/cliente/f22_o5/email/saida/principal',
+    );
+    expect(chaveCofreEmail('f22_o4', 'email/saida/principal')).not.toBe(
+      chaveCofreEmail('f22_o5', 'email/saida/principal'),
+    );
+  });
+  it('a referência cadastrada não escapa do prefixo do cliente', () => {
+    const c = chaveCofreEmail('f22_o5', 'email/cliente/f22_o4/email/saida/principal');
+    expect(c?.startsWith('email/cliente/f22_o5/')).toBe(true);
+    expect(chaveCofreEmail('f22_o5', '../outro')).toBeNull();
+    expect(chaveCofreEmail('F22/O5', 'email/saida/principal')).toBeNull();
+    expect(chaveCofreEmail('f22_o5', null)).toBeNull();
+  });
+  it('o cofre só aceita chave de e-mail composta', () => {
+    expect(chaveCofreEmailValida('email/cliente/f22_o5/email/saida/principal')).toBe(true);
+    expect(chaveCofreEmailValida('email/saida/principal')).toBe(false);
+    expect(chaveCofreEmailValida('email/cliente/f22_o5/')).toBe(false);
+  });
+});
+
+describe('senha do servidor digitada pelo administrador', () => {
+  it('aceita texto de 1 a 500 sem caractere de controle', () => {
+    expect(senhaServidorEmailValida('Sintetica#1 com espaço')).toBe(true);
+    expect(senhaServidorEmailValida('')).toBe(false);
+    expect(senhaServidorEmailValida('a'.repeat(501))).toBe(false);
+    expect(senhaServidorEmailValida('linha\r\nRCPT')).toBe(false);
+    expect(senhaServidorEmailValida(123)).toBe(false);
   });
 });

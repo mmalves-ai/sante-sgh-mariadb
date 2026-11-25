@@ -10,13 +10,18 @@
 // - email.servidor_teste: grava o resultado do teste de conexão (ultimo_teste_em, ultimo_teste_sucesso). A conversa
 //   com o servidor acontece antes, fora da transação; fora de produção, servidor que não é local não é contatado e
 //   nada é gravado (recusa teste-neutralizado).
+// - email.servidor_senha_definir: grava a senha do servidor no cofre de segredos pela chave presa ao cliente
+//   (email/cliente/<cliente>/<referência>); no banco fica só o efeito (o teste anterior deixa de valer, versão sobe)
+//   e a trilha, nunca a senha: ela não entra na entrada do executor. O painel mostra só "senha definida" ou não.
 // - painel: servidores, modelos (com os campos), finalidades e o registro dos últimos envios (envio_email com os
 //   destinatários), só do estabelecimento da sessão e do que vale para todos.
 import {
+  chaveCofreEmail,
   marcadoresDoModelo,
   MENSAGEM_EMAIL,
   type RecusaEmail,
   SEGURANCAS_EMAIL,
+  senhaServidorEmailValida,
   validarModeloEmail,
   validarServidorEmail,
 } from '@sgh/dominio-acesso';
@@ -118,6 +123,14 @@ export const esquemaServidorEmail = z
 export type EntradaServidorEmail = z.infer<typeof esquemaServidorEmail>;
 
 const esquemaTeste = z.object({ servidor: id }).strict();
+const esquemaSenha = z.object({ servidor: id, versao: id }).strict();
+
+/** O cofre de segredos visto pela porta: só saber se a senha existe e gravá-la (nunca ler para a tela). */
+export interface CofreSenhaEmail {
+  readonly disponivel: boolean;
+  existe(chave: string): Promise<boolean>;
+  gravar(chave: string, valor: string): Promise<void>;
+}
 const esquemaResultadoTeste = z.object({ servidor: id, sucesso: z.boolean() }).strict();
 
 export interface ContextoEmail {
@@ -155,6 +168,8 @@ export interface ServidorEmailLido {
   readonly ultimoTesteEm: string | null;
   /** Nulo: nunca testado. */
   readonly ultimoTesteSucesso: boolean | null;
+  /** A senha está no cofre (nulo: sem referência ou cofre indisponível). Nunca a senha. */
+  readonly senhaDefinida: boolean | null;
 }
 export interface ModeloEmailLido {
   readonly id: number;
@@ -248,7 +263,19 @@ export class EmailConfiguracaoPropria {
     private readonly producao: boolean,
     private readonly testador: TestadorConexao,
     private readonly agora: () => Date = () => new Date(),
+    private readonly cofre: CofreSenhaEmail | null = null,
   ) {}
+
+  /** A chave da senha no cofre, presa ao cliente desta porta (nunca o texto cadastrado sozinho). */
+  private chave(referencia: unknown): string | null {
+    return referencia == null ? null : chaveCofreEmail(this.cliente, String(referencia));
+  }
+
+  private async senhaDefinida(referencia: unknown): Promise<boolean | null> {
+    const chave = this.chave(referencia);
+    if (!chave || !this.cofre?.disponivel) return null;
+    return this.cofre.existe(chave).catch(() => null);
+  }
 
   private async quem(l: Leitor, c: ContextoEmail) {
     const e = await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
@@ -341,7 +368,13 @@ export class EmailConfiguracaoPropria {
         ativo: bool(x['ativo']),
         ultimoTesteEm: iso(x['ultimo_teste_em']),
         ultimoTesteSucesso: boolOuNull(x['ultimo_teste_sucesso']),
+        senhaDefinida: null,
       }));
+      for (let i = 0; i < servidores.length; i++)
+        servidores[i] = {
+          ...servidores[i]!,
+          senhaDefinida: await this.senhaDefinida(servidores[i]!.referenciaCofre),
+        };
       const linhasModelo = await l.consultar(
         `SELECT m.id, m.versao, m.estabelecimento_id, f.codigo AS finalidade, m.codigo, m.nome, m.assunto, m.corpo_html,
                 m.corpo_texto, m.remetente_nome, m.remetente_email, m.responder_para, m.envia_sms, m.texto_sms,
@@ -455,7 +488,8 @@ export class EmailConfiguracaoPropria {
       ...(bool(s['exige_autenticacao'])
         ? {
             usuario: s['usuario_autenticacao'] == null ? null : String(s['usuario_autenticacao']),
-            referenciaCofre: s['referencia_cofre'] == null ? null : String(s['referencia_cofre']),
+            // A chave presa ao cliente: a referência de outro cliente nunca é lida.
+            referenciaCofre: this.chave(s['referencia_cofre']),
           }
         : {}),
     });
@@ -469,6 +503,49 @@ export class EmailConfiguracaoPropria {
       sucesso: r.sucesso,
     });
     return { resultado: { ...g.resultado, detalhe: r.detalhe }, repetida: g.repetida };
+  }
+
+  /**
+   * Grava a senha do servidor no cofre (chave presa ao cliente). A senha não entra na entrada do executor (nem na
+   * trilha nem na idempotência): vai só ao cofre, dentro da transação que marca o teste anterior como sem valor.
+   */
+  async definirSenha(c: ContextoGravacaoEmail, entrada: unknown) {
+    const corpo = (entrada && typeof entrada === 'object' ? entrada : {}) as Record<string, unknown>;
+    const senha = corpo['senha'];
+    const e = esquemaSenha.safeParse({ servidor: corpo['servidor'], versao: corpo['versao'] });
+    if (!e.success)
+      throw new ErroOperacao(
+        400,
+        'entrada-invalida',
+        'Dados inválidos',
+        'Informe o servidor e a versão lida.',
+      );
+    if (!senhaServidorEmailValida(senha))
+      throw recusa('senha-invalida', 'A senha tem de 1 a 500 caracteres, sem quebra de linha.');
+    const cofre = this.cofre;
+    if (!cofre?.disponivel)
+      throw recusa('cofre-indisponivel', 'O cofre de segredos não está disponível neste ambiente.');
+    const op = definirOperacao<z.infer<typeof esquemaSenha>, { servidor: number; senhaDefinida: true }>({
+      nome: 'email.servidor_senha_definir',
+      tabelas: ['servidor_email'],
+      entrada: esquemaSenha,
+      gravar: async (tx, x, ctx) => {
+        const s = await this.servidorDoAlcance(tx, x.servidor, ctx.estabelecimento ?? null);
+        if (!bool(s['exige_autenticacao']))
+          throw recusa('sem-autenticacao', 'O servidor não exige autenticação: não há senha a guardar.');
+        const chave = this.chave(s['referencia_cofre']);
+        if (!chave) throw recusa('referencia-cofre-invalida', MENSAGEM_EMAIL['referencia-cofre-invalida']);
+        // A senha mudou: o teste anterior não vale mais.
+        await tx.alterar('servidor_email', x.servidor, x.versao, {
+          ultimo_teste_em: null,
+          ultimo_teste_sucesso: null,
+        });
+        await cofre.gravar(chave, senha);
+        return { servidor: x.servidor, senhaDefinida: true as const };
+      },
+      alvo: (x) => ({ tabela: 'servidor_email', id: x.servidor }),
+    });
+    return this.exec<{ servidor: number; senhaDefinida: true }>(op as never, c, e.data);
   }
 
   private async servidorDoAlcance(l: Leitor, servidor: number, est: number | null) {

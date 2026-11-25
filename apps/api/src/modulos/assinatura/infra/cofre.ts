@@ -11,7 +11,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { lerReferenciaSegredoLegado } from '@sgh/contratos';
-import { referenciaCofreValida } from '@sgh/dominio-acesso';
+import { chaveCofreEmailValida } from '@sgh/dominio-acesso';
 import { lerReferenciaCofre, lerReferenciaCofreConector } from '@sgh/dominio-documento';
 
 export interface Cofre {
@@ -60,8 +60,9 @@ function exigirReferencia(r: string): void {
     !lerReferenciaCofre(r) &&
     !lerReferenciaSegredoLegado(r) &&
     !lerReferenciaCofreConector(r) &&
-    // 01-ADM L77: a senha do servidor de e-mail cadastrado (servidor_email.referencia_cofre, ex.: email/saida/principal).
-    !referenciaCofreValida(r)
+    // 01-ADM L77: a senha do servidor de e-mail cadastrado, presa ao cliente
+    // (email/cliente/<cliente>/<servidor_email.referencia_cofre>; chaveCofreEmail do domínio).
+    !chaveCofreEmailValida(r)
   )
     throw new Error('Referência de cofre inválida.');
 }

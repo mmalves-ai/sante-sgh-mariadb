@@ -14,3 +14,5 @@ export * from './privacidade/pedido-titular.js';
 export * from './notificacao/notificacao-regra.js';
 // 01-ADM L77: validação do servidor e do modelo de e-mail na tela (a mesma do servidor; sem node:crypto).
 export * from './notificacao/email-configuracao.js';
+// Sem node:crypto: a tela valida na hora a senha do servidor que vai ao cofre.
+export { senhaServidorEmailValida } from './notificacao/email-saida.js';

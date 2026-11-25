@@ -1,8 +1,20 @@
 // 01-ADM L77: envio pelo servidor cadastrado (autenticação PLAIN com a senha do cofre, STARTTLS exigido quando
 // cadastrado, remetente com nome e "responder para"), provado contra um servidor SMTP falso em loopback.
 import { createServer, type Server } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { conexaoDoUrl, enviarPelaConexao, montarMensagem } from './smtp.js';
+
+// O canal SSL/TLS é simulado por TCP em loopback (o servidor falso não tem certificado): o que se prova aqui é a
+// conversa e a recusa de autenticar sem cifra, não o TLS do Node.
+vi.mock('node:tls', async (original) => {
+  const real = await original<typeof import('node:tls')>();
+  const net = await import('node:net');
+  return {
+    ...real,
+    connect: (o: { host?: string; port?: number; socket?: unknown }) =>
+      o.socket ? real.connect(o as never) : net.connect({ host: o.host!, port: o.port! }),
+  };
+});
 
 let servidor: Server | null = null;
 afterEach(async () => {
@@ -65,7 +77,7 @@ describe('envio pelo servidor cadastrado', () => {
     const recebido: string[] = [];
     const porta = await smtpFalso(['AUTH LOGIN PLAIN'], recebido);
     await enviarPelaConexao(
-      { host: '127.0.0.1', porta, seguranca: 'nenhuma', usuario: 'envio', senha: 'Sintetica#1' },
+      { host: '127.0.0.1', porta, seguranca: 'ssl_tls', usuario: 'envio', senha: 'Sintetica#1' },
       msg,
     );
     const auth = recebido.find((l) => l.startsWith('AUTH PLAIN '));
@@ -83,17 +95,28 @@ describe('envio pelo servidor cadastrado', () => {
     expect(recebido.some((l) => l.startsWith('AUTH'))).toBe(false);
     await expect(
       enviarPelaConexao(
-        { host: '127.0.0.1', porta, seguranca: 'nenhuma', usuario: 'envio', senha: 'x' },
+        { host: '127.0.0.1', porta, seguranca: 'ssl_tls', usuario: 'envio', senha: 'x' },
         msg,
       ),
     ).rejects.toThrow('sem autenticação PLAIN');
     await expect(
       enviarPelaConexao(
-        { host: '127.0.0.1', porta, seguranca: 'nenhuma', usuario: 'envio', senha: null },
+        { host: '127.0.0.1', porta, seguranca: 'ssl_tls', usuario: 'envio', senha: null },
         msg,
       ),
     ).rejects.toThrow('senha indisponível');
     expect(recebido.filter((l) => l.startsWith('MAIL FROM'))).toHaveLength(1);
+  });
+  it('autenticação sem SSL/TLS nem STARTTLS: recusa antes de conectar (a senha nunca vai aberta)', async () => {
+    const recebido: string[] = [];
+    const porta = await smtpFalso(['AUTH PLAIN'], recebido);
+    await expect(
+      enviarPelaConexao(
+        { host: '127.0.0.1', porta, seguranca: 'nenhuma', usuario: 'envio', senha: 'Sintetica#1' },
+        msg,
+      ),
+    ).rejects.toThrow('exige SSL/TLS ou STARTTLS');
+    expect(recebido).toEqual([]);
   });
   it('STARTTLS cadastrado e não anunciado: recusa (nunca cai para texto aberto)', async () => {
     const recebido: string[] = [];

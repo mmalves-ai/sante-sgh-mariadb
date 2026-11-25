@@ -6,6 +6,8 @@
 //   só libera com o cadastro gravado e mostra o resultado e quando foi;
 // - modelo: os campos nascem dos marcadores do texto, a pré-visualização troca cada um pelo exemplo e aponta o que
 //   falta; marcador mal escrito trava o botão; o pedido leva os campos com descrição e exemplo;
+// - C1-063: autenticação sem SSL/TLS nem STARTTLS é recusada na hora; a senha do servidor vai num campo só de
+//   escrita, direto à rota do cofre (com a versão lida), o campo se esvazia e a tela mostra só "senha guardada";
 // - registro de envio: situação, tentativas e identificador da mensagem, com filtro por situação.
 // O efeito no banco está nos contratos de efeito email-configuracao-propria.int.spec.ts (API) e
 // registro-envio-proprio.int.spec.ts (worker).
@@ -28,7 +30,7 @@ const json = (rota: Route, corpo: unknown, status = 200) =>
   rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
 
 test.describe('F3.9 e-mail do sistema: servidor, modelo e registro de envio @F3.9 @F3.9-04', () => {
-  test('grava o servidor sem senha, testa a conexão, grava o modelo com os campos e filtra os envios', async ({
+  test('@C1-063 grava o servidor sem senha, testa a conexão, guarda a senha no cofre, grava o modelo com os campos e filtra os envios', async ({
     page,
   }) => {
     const pedidos: { caminho: string; corpo: Record<string, unknown> }[] = [];
@@ -83,6 +85,7 @@ test.describe('F3.9 e-mail do sistema: servidor, modelo e registro de envio @F3.
           versao: 1,
           ultimoTesteEm: null,
           ultimoTesteSucesso: null,
+          senhaDefinida: false,
         });
         return json(r, { resultado: { servidor: 701 }, repetida: false });
       }
@@ -96,6 +99,15 @@ test.describe('F3.9 e-mail do sistema: servidor, modelo e registro de envio @F3.
           resultado: { servidor: 701, sucesso: true, detalhe: 'Servidor respondeu.' },
           repetida: false,
         });
+      }
+      if (caminho === '/servidores/701/senha') {
+        Object.assign(servidores[0]!, {
+          versao: 3,
+          ultimoTesteEm: null,
+          ultimoTesteSucesso: null,
+          senhaDefinida: true,
+        });
+        return json(r, { resultado: { servidor: 701, senhaDefinida: true }, repetida: false });
       }
       if (caminho === '/modelos') {
         modelos.push({ ...c, id: 801, versao: 1 });
@@ -129,6 +141,9 @@ test.describe('F3.9 e-mail do sistema: servidor, modelo e registro de envio @F3.
     await expect(gravarServidor).toBeEnabled();
     // A troca da segurança leva a porta habitual.
     await expect(servidor.getByLabel('Porta')).toHaveValue('587');
+    // Autenticação sem cifra: recusada na hora (a senha nunca trafega aberta).
+    await escolher(page.getByTestId('email-servidor-seguranca'), { rotulo: 'Nenhuma' });
+    await expect(page.getByTestId('email-servidor-recusa')).toContainText('sem cifra');
     await escolher(page.getByTestId('email-servidor-seguranca'), { rotulo: 'SSL/TLS' });
     await expect(servidor.getByLabel('Porta')).toHaveValue('465');
     await expect(page.getByTestId('email-servidor-testar')).toHaveCount(0);
@@ -163,6 +178,21 @@ test.describe('F3.9 e-mail do sistema: servidor, modelo e registro de envio @F3.
     await expect(page.getByTestId('email-servidor-teste')).toContainText('24/11/2026');
     expect(pedidos[1]!.caminho).toBe('/servidores/701/teste');
 
+    // ── Senha do servidor (C1-063): só escrita, vai direto ao cofre; a tela mostra só se está guardada ──
+    await expect(page.getByTestId('email-servidor-senha-situacao')).toContainText('ainda não guardada');
+    const campoSenha = page.getByTestId('email-servidor-senha-campo');
+    const gravarSenha = page.getByTestId('email-servidor-senha-gravar');
+    await expect(gravarSenha).toBeDisabled();
+    await campoSenha.fill('Sintetica#Cofre1');
+    await gravarSenha.click();
+    await expect(aviso).toHaveText('Senha guardada no cofre. Teste a conexão de novo.');
+    await expect(page.getByTestId('email-servidor-senha-situacao')).toHaveText('Senha guardada no cofre.');
+    await expect(campoSenha).toHaveValue('');
+    expect(pedidos[2]).toEqual({
+      caminho: '/servidores/701/senha',
+      corpo: { versao: 2, senha: 'Sintetica#Cofre1' },
+    });
+
     // ── Modelo: campos pelos marcadores, pré-visualização e validação na hora ──
     const modelo = page.getByTestId('email-modelo');
     const gravarModelo = page.getByTestId('email-modelo-gravar');
@@ -189,8 +219,8 @@ test.describe('F3.9 e-mail do sistema: servidor, modelo e registro de envio @F3.
     await modelo.getByLabel('Assunto').fill('Pedido {{pedido.numero}} pronto');
     await gravarModelo.click();
     await expect(aviso).toHaveText('Gravado.');
-    expect(pedidos[2]!.caminho).toBe('/modelos');
-    expect(pedidos[2]!.corpo).toMatchObject({
+    expect(pedidos[3]!.caminho).toBe('/modelos');
+    expect(pedidos[3]!.corpo).toMatchObject({
       finalidade: 'LAUDO',
       codigo: 'LAUDO.PRONTO',
       assunto: 'Pedido {{pedido.numero}} pronto',
@@ -200,7 +230,7 @@ test.describe('F3.9 e-mail do sistema: servidor, modelo e registro de envio @F3.
         { marcador: 'pessoa.nome', descricao: 'Nome da pessoa', exemplo: 'PESSOA SINTETICA' },
       ],
     });
-    expect(pedidos).toHaveLength(3);
+    expect(pedidos).toHaveLength(4);
 
     // ── Registro de envio: situação, tentativas e identificador; filtro por situação ──
     const tabela = page.getByTestId('email-envios');

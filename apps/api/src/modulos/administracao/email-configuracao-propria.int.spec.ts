@@ -7,11 +7,16 @@
 // - o modelo de mensagem gravado mantém os campos iguais aos marcadores do texto: o que sai é marcado como excluído
 //   (a linha fica) e volta se o marcador voltar; marcador mal escrito e finalidade inexistente são recusados;
 // - o painel devolve servidores, modelos e o registro de envio do próprio estabelecimento e do que vale para todos;
-//   o de outro estabelecimento não aparece nem pode ser alterado. Massa sintética (prefixo L77E).
+//   o de outro estabelecimento não aparece nem pode ser alterado;
+// - C1-063: a senha do servidor vai só ao cofre, pela chave presa ao cliente (email/cliente/<cliente>/<referência>):
+//   no banco fica o teste anterior zerado e a versão nova; a senha não aparece no banco, na trilha nem na
+//   idempotência; o painel mostra só "senha definida"; o teste de conexão lê pela chave do cliente.
+// Massa sintética (prefixo L77E).
 import { randomUUID } from 'node:crypto';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { CofreMemoria } from '../assinatura/infra/cofre.js';
 import { EmailConfiguracaoPropria } from './email-configuracao-propria.js';
 import type { ResultadoTesteConexao, ServidorParaTeste } from './email-teste-conexao.js';
 
@@ -37,6 +42,8 @@ describe.skipIf(SEM_BANCO)('e-mail do sistema no banco próprio', () => {
   let testadoCom: ServidorParaTeste | null = null;
   let agora = T0;
   let porta: EmailConfiguracaoPropria;
+  const cofre = new CofreMemoria();
+  const SENHA = 'Sintetica#Cofre-L77E';
   const ids = { est: 0, est2: 0, usuario: 0, fin: 0 };
   const ctx = (hospital = P) => ({
     hospital,
@@ -129,6 +136,7 @@ describe.skipIf(SEM_BANCO)('e-mail do sistema no banco próprio', () => {
         return teste;
       },
       () => agora,
+      cofre,
     );
   });
 
@@ -236,7 +244,7 @@ describe.skipIf(SEM_BANCO)('e-mail do sistema no banco próprio', () => {
     // C1-063: servidor que exige autenticação vai ao teste com o usuário e a referência da senha (nunca a senha).
     expect(testadoCom).toMatchObject({
       usuario: 'envio-sintetico',
-      referenciaCofre: 'email/saida/sintetico',
+      referenciaCofre: `email/cliente/${CLIENTE}/email/saida/sintetico`,
     });
     let l = await um(
       'SELECT ultimo_teste_em, ultimo_teste_sucesso, versao FROM servidor_email WHERE id = ?',
@@ -271,6 +279,59 @@ describe.skipIf(SEM_BANCO)('e-mail do sistema no banco próprio', () => {
         servidor,
       ]),
     ).toMatchObject({ host: 'smtp2.sintetico.invalid', ultimo_teste_em: null, ultimo_teste_sucesso: null });
+  });
+
+  it('a senha vai só ao cofre pela chave do cliente; no banco fica o teste zerado e a versão nova, nunca a senha', async () => {
+    const antes = await um('SELECT versao FROM servidor_email WHERE id = ?', [servidor]);
+    const versao = Number(antes?.['versao']);
+    // Recusas: senha com quebra de linha, versão lida antiga e cofre indisponível não gravam nada.
+    expect(await codigo(porta.definirSenha(ctx(), { servidor, versao, senha: 'a\r\nRCPT' }))).toBe(
+      'senha-invalida',
+    );
+    expect(await codigo(porta.definirSenha(ctx(), { servidor, versao: versao - 1, senha: SENHA }))).not.toBe(
+      'gravou',
+    );
+    const semCofre = new EmailConfiguracaoPropria(
+      nucleo,
+      CLIENTE,
+      false,
+      async () => teste,
+      () => agora,
+    );
+    expect(await codigo(semCofre.definirSenha(ctx(), { servidor, versao, senha: SENHA }))).toBe(
+      'cofre-indisponivel',
+    );
+    expect(await cofre.existe(`email/cliente/${CLIENTE}/email/saida/sintetico`)).toBe(false);
+    expect((await porta.painel(ctx())).servidores.find((s) => s.id === servidor)?.senhaDefinida).toBe(false);
+
+    teste = { sucesso: true, detalhe: 'Servidor respondeu.' };
+    await porta.testarServidor(ctx(), { servidor });
+    const r = await porta.definirSenha(ctx(), { servidor, versao: versao + 1, senha: SENHA });
+    expect(r.resultado).toEqual({ servidor, senhaDefinida: true });
+    expect(
+      await um('SELECT ultimo_teste_em, ultimo_teste_sucesso, versao FROM servidor_email WHERE id = ?', [
+        servidor,
+      ]),
+    ).toMatchObject({
+      ultimo_teste_em: null,
+      ultimo_teste_sucesso: null,
+      versao: versao + 2,
+    });
+    // A chave é presa ao cliente: a mesma referência de outro cliente não é a mesma chave.
+    expect(await cofre.ler(`email/cliente/${CLIENTE}/email/saida/sintetico`)).toBe(SENHA);
+    expect(await cofre.ler('email/cliente/outro_cliente/email/saida/sintetico')).toBeNull();
+    // A senha não vai ao banco: nem ao cadastro, nem à trilha, nem à idempotência.
+    const linha = await um('SELECT * FROM servidor_email WHERE id = ?', [servidor]);
+    expect(JSON.stringify(linha)).not.toContain(SENHA);
+    for (const t of ['trilha_auditoria', 'idempotencia_operacao']) {
+      const ultimas = await todos(`SELECT * FROM ${t} ORDER BY id DESC LIMIT 20`, []);
+      expect(
+        JSON.stringify(ultimas, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v)),
+      ).not.toContain(SENHA);
+    }
+    const lido = (await porta.painel(ctx())).servidores.find((s) => s.id === servidor);
+    expect(lido?.senhaDefinida).toBe(true);
+    expect(JSON.stringify(lido)).not.toContain(SENHA);
   });
 
   let modelo = 0;

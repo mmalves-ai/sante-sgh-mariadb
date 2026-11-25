@@ -7,7 +7,54 @@
 // - O texto vem do modelo vigente da finalidade (modelo_email): os marcadores são trocados pelos valores do alerta;
 //   marcador sem valor devolve `faltando` e quem envia usa o texto padrão (o alerta nunca se perde por um modelo
 //   incompleto).
-import { preencherModelo, type SegurancaEmail, SEGURANCAS_EMAIL } from './email-configuracao.js';
+// - A chave da senha no cofre é presa ao cliente: `email/cliente/<cliente>/<referência cadastrada>`, com o cliente
+//   vindo da sessão (API) ou da fila (worker), nunca do texto cadastrado; o administrador de um cliente não alcança
+//   o segredo de outro, mesmo cadastrando a mesma referência.
+// - A autenticação só vai por canal cifrado (SSL/TLS ou STARTTLS): servidor que autentica sem cifra é recusado.
+import {
+  preencherModelo,
+  referenciaCofreValida,
+  type SegurancaEmail,
+  SEGURANCAS_EMAIL,
+} from './email-configuracao.js';
+
+/** O começo de toda chave de senha de servidor de e-mail no cofre. */
+export const PREFIXO_COFRE_EMAIL = 'email/cliente/';
+const CLIENTE_COFRE = /^[a-z0-9]+([_-][a-z0-9]+)*$/;
+
+/** A chave da senha no cofre para o cliente (null: cliente ou referência fora do formato, falha fechada). */
+export function chaveCofreEmail(cliente: string, referencia: string | null | undefined): string | null {
+  const ref = (referencia ?? '').trim();
+  if (!CLIENTE_COFRE.test(cliente) || cliente.length > 64 || !referenciaCofreValida(ref)) return null;
+  return `${PREFIXO_COFRE_EMAIL}${cliente}/${ref}`;
+}
+
+/** A chave é de senha de servidor de e-mail de um cliente (o que o cofre aceita para o e-mail). */
+export function chaveCofreEmailValida(chave: string): boolean {
+  if (!chave.startsWith(PREFIXO_COFRE_EMAIL)) return false;
+  const resto = chave.slice(PREFIXO_COFRE_EMAIL.length);
+  const barra = resto.indexOf('/');
+  if (barra < 1) return false;
+  return chaveCofreEmail(resto.slice(0, barra), resto.slice(barra + 1)) === chave;
+}
+
+/**
+ * A senha do servidor que o administrador digita (vai só ao cofre): de 1 a 500 caracteres, sem caractere de controle
+ * (quebra de linha ou nulo quebrariam a conversa SMTP e o AUTH PLAIN).
+ */
+export function senhaServidorEmailValida(senha: unknown): senha is string {
+  if (typeof senha !== 'string' || senha.length < 1 || senha.length > 500) return false;
+  for (let i = 0; i < senha.length; i++) {
+    const c = senha.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return false;
+  }
+  return true;
+}
+
+/** Autenticação (usuário) por canal sem cifra: recusada no cadastro, na saída e no cliente SMTP. */
+export function autenticacaoSemCifra(seguranca: string, usuario: string | null | undefined): boolean {
+  return !!usuario && seguranca !== 'ssl_tls' && seguranca !== 'starttls';
+}
 
 /** A finalidade (finalidade_email.codigo, carga inicial da migração 02_ADM/99) de cada alerta da fila de e-mail. */
 export const FINALIDADE_DO_ALERTA: Readonly<Record<string, string>> = {
@@ -74,8 +121,10 @@ export interface ConexaoDeSaida {
   readonly servidor: number | null;
 }
 
-export type RecusaSaida = 'sem-servidor' | 'senha-indisponivel';
+export type RecusaSaida = 'sem-servidor' | 'senha-indisponivel' | 'autenticacao-sem-tls';
 export const MENSAGEM_SAIDA: Readonly<Record<RecusaSaida, string>> = {
+  'autenticacao-sem-tls':
+    'O servidor de e-mail exige autenticação sem SSL/TLS nem STARTTLS: a senha não é enviada sem cifra.',
   'sem-servidor': 'Nenhum servidor de e-mail cadastrado nem configurado no ambiente.',
   'senha-indisponivel': 'A senha do servidor de e-mail não está no cofre.',
 };
@@ -115,6 +164,8 @@ export function conexaoDaSaida(
   const seguranca = (SEGURANCAS_EMAIL as readonly string[]).includes(servidor.seguranca)
     ? (servidor.seguranca as SegurancaEmail)
     : 'starttls';
+  // A senha nunca vai sem cifra: autenticação com segurança "nenhuma" falha fechada.
+  if (servidor.exigeAutenticacao && seguranca === 'nenhuma') return { recusa: 'autenticacao-sem-tls' };
   return {
     host: servidor.host,
     porta: servidor.porta,
