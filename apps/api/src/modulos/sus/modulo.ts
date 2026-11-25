@@ -29,6 +29,8 @@ import { PortaSusPropria } from './porta-propria.js';
 import { ApacComplementosController } from './apac-complementos.controller.js';
 import { PORTA_APAC_COMPLEMENTOS, PortaApacComplementosPropria } from './apac-complementos-propria.js';
 import { ProgramacaoSusController } from './programacao.controller.js';
+import { RaasSusController } from './raas.controller.js';
+import { PORTA_RAAS, PortaRaasPropria } from './raas-propria.js';
 import { PORTA_PROGRAMACAO_SUS, PortaProgramacaoSusPropria } from './programacao-propria.js';
 import type { ArmazemArquivoSus } from './servico.js';
 import { ENVIADOR_SERVICO_WEB_SUS, enviadorServicoWebSusDoAmbiente } from './servico-web-enviador.js';
@@ -77,6 +79,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       TransplanteSusController,
       ProgramacaoSusController,
       ApacComplementosController,
+      RaasSusController,
     ],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
@@ -138,6 +141,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaApacComplementosPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (06-SUS linha 64): RAAS da atenção psicossocial e domiciliar (registro, crítica e remessa).
+      {
+        provide: PORTA_RAAS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRaasPropria(ctx.nucleo, ctx.configuracao.clientePadrao, armazem)
             : null,
       },
     ],

@@ -47,7 +47,7 @@ const registro = (x: Partial<RegistroRaasParaCritica> = {}): RegistroRaasParaCri
 });
 
 describe('RAAS: tipo pelo instrumento de registro', () => {
-  it('08 é psicossocial, 09 domiciliar, os dois quando o procedimento admite os dois', () => {
+  it('09 é psicossocial, 08 domiciliar, os dois quando o procedimento admite os dois', () => {
     expect(tiposRaasDoProcedimento(['raas-psicossocial'])).toEqual(['atencao_psicossocial']);
     expect(tiposRaasDoProcedimento(['raas-domiciliar', 'bpa-i'])).toEqual(['atencao_domiciliar']);
     expect(tiposRaasDoProcedimento(['raas-psicossocial', 'raas-domiciliar'])).toHaveLength(2);

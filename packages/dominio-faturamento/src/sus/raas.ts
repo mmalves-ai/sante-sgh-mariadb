@@ -1,5 +1,5 @@
-// RAAS: registro das ações ambulatoriais de saúde da atenção psicossocial (CAPS, instrumento 08 da tabela unificada) e
-// da atenção domiciliar (instrumento 09), por paciente e competência (06-SUS linha 64). Regras puras: o que pode ser
+// RAAS: registro das ações ambulatoriais de saúde da atenção psicossocial (CAPS, instrumento 09 da tabela unificada) e
+// da atenção domiciliar (instrumento 08), por paciente e competência (06-SUS linha 64). Regras puras: o que pode ser
 // lançado (cabeçalho e ação), a crítica da competência, a continuação do acompanhamento na competência seguinte e o
 // arquivo de largura fixa da remessa. Desenho próprio: um registro por paciente, tipo e competência (a ação lançada ao
 // longo do mês entra no mesmo registro), validação na hora da ação e a crítica com código estável, gravidade e campo.

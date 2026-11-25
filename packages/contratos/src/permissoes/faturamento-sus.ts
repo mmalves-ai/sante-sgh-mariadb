@@ -106,6 +106,25 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     'Registrar, enviar e cancelar envios ao serviço web do SUS (simulador fora de produção)',
     { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
   ),
+  // F8 (06-SUS linha 64): RAAS da atenção psicossocial e da atenção domiciliar.
+  p(
+    'faturamento.susRaas.ler',
+    'Consultar os registros RAAS, as ações, as críticas e as remessas da competência',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+    },
+  ),
+  p(
+    'faturamento.susRaas.registrar',
+    'Incluir o registro RAAS, lançar e retirar ação, concluir, continuar na competência seguinte e rodar a crítica',
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p('faturamento.susRaas.gerar', 'Gerar a remessa RAAS da competência (arquivo com hash)', {
+    criticidade: 'sensivel',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+  }),
   // F8 (06-SUS linha 65): notificação de potencial doador e inscrição de receptor para a central estadual de
   // transplantes; recurso só do novo, concedido por perfil. Conteúdo clínico (dado sensível).
   // F7 (06-SUS linha 54): programação físico-orçamentária, tetos e cotas; recurso só do novo, concedido por perfil.

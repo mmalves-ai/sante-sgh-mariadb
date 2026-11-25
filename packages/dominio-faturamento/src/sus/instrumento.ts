@@ -12,8 +12,9 @@ export const REGISTROS_SIGTAP = {
   '05': 'aih-secundario',
   '06': 'apac-principal',
   '07': 'apac-secundario',
-  '08': 'raas-psicossocial',
-  '09': 'raas-domiciliar',
+  // Tabela unificada (tb_registro): 08 é a RAAS da atenção domiciliar e 09 a da atenção psicossocial.
+  '08': 'raas-domiciliar',
+  '09': 'raas-psicossocial',
 } as const;
 export type RegistroSigtap = (typeof REGISTROS_SIGTAP)[keyof typeof REGISTROS_SIGTAP];
 
