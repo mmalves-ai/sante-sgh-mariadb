@@ -51,6 +51,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C1-106 (01-REL L113): o item "Cargas do data mart" da administração entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-077 (01-REL L112): o item "Painéis montados" dos relatórios e BI entrou à mão (mesmo motivo); a contagem
+// acompanha.
 // C1-112 (09-AREA linha 74): o item "Óbitos: funerária, cartório e liberação do corpo" entrou à mão (mesmo motivo); a
 // contagem acompanha.
 // C1-114 (06-FAT linha 22): o item "Protocolo de documentos entre setores" das contas do paciente entrou à mão (mesmo
@@ -64,40 +66,46 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C1-128 (04-CC linha 104): o item "Documentos exigidos" do centro cirúrgico entrou à mão (mesmo motivo); a contagem
 // acompanha.
-// C2-030 (05-SUP linha 26) e C2-015 (05-SUP linha 22): os itens "Ata de registro de preços e empenho" e "Devolução ao
-// fornecedor" de compras entraram à mão (mesmo motivo); a contagem acompanha.
 // C2-012 (04-CC linha 106): o item "Profilaxia antimicrobiana" do centro cirúrgico entrou à mão (mesmo motivo); a
 // contagem acompanha.
-// C2-014 (06-SUS linha 65): o item "Transplantes para a central estadual" do faturamento SUS entrou à mão (mesmo
-// motivo); a contagem acompanha.
+// C2-030 (05-SUP linha 26): o item "Ata de registro de preços e empenho" das compras entrou à mão (mesmo motivo); a
+// contagem acompanha.
+// C2-016 (07-FIN linha 65): os itens "Fluxos de aprovação" e "Minhas aprovações" do financeiro entraram à mão
+// (mesmo motivo); a contagem acompanha.
+// C2-015 (05-SUP linha 22): o item "Devolução ao fornecedor" de compras entrou à mão (mesmo motivo); a contagem
+// acompanha.
 // C2-013 (03-PEP L110): o item "Auditoria de antimicrobianos" da CCIH entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-014 (06-SUS linha 65): o item "Transplantes para a central estadual" do faturamento SUS entrou à mão (mesmo
+// motivo); a contagem acompanha.
 // C2-025 (01-ADM L98): o item "O que falta para operar" da implantação entrou à mão (mesmo motivo); a contagem
 // acompanha.
 // C2-028 (03-PEP L132): o item "Documentos exigidos" do PEP entrou à mão (mesmo motivo); a contagem acompanha.
 // C2-029 (06-FAT linha 13): o item "Criação e quebra de contas" do faturamento entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-031 (07-FIN linha 78): o item "Cobrança com boleto" das contas a receber entrou à mão (mesmo motivo); a
+// contagem acompanha.
 // C2-039 (01-ADM L114): o item "Página inicial por perfil" da administração entrou à mão (mesmo motivo); a contagem
 // acompanha.
 // C2-033 (08-INTG L136): o item "Fila do ERP corporativo" das integrações entrou à mão (mesmo motivo; F8 vai como fase
 // 7, o teto da escala do menu, como o item "Limites do pedido de exame"); a contagem acompanha.
 // C2-040 (02-REC L39): o item "Contato ativo antes da consulta" da agenda ambulatorial entrou à mão (mesmo motivo);
 // a contagem acompanha.
-// C2-043 (06-FAT linha 19): o item "Descontos por volume e franquias" do motor de preços entrou à mão (mesmo motivo; F8 vai
-// como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-041 (04-CC linha 108): o item "Mutirões cirúrgicos do SUS" do centro cirúrgico entrou à mão (mesmo motivo;
 // F8 vai como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-046 (09-AREA L87): o item "Produção hospitalar mensal" dos leitos entrou à mão (mesmo motivo; F8 vai como
 // fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-044 (05-SUP linha 29): o item "Central de material esterilizado" do centro cirúrgico entrou à mão (mesmo
 // motivo; F7 vai como fase 7); a contagem acompanha.
-// C2-050 (03-PEP L133): o item "Regras de aviso clínico" da administração do PEP entrou à mão (mesmo motivo); a
-// contagem acompanha.
 // C2-045 (07-FIN linha 90): o item "Cobrança Pix" de contas a receber entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-050 (03-PEP L133): o item "Regras de aviso clínico" da administração do PEP entrou à mão (mesmo motivo); a
+// contagem acompanha.
 // C2-056 (03-PEP L93): o item "Pedidos de acesso a prontuário restrito" do PEP entrou à mão (mesmo motivo; F8 vai
 // como fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":470,"M":198,"P":57,"N":215};
+// C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
+// fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":481,"M":198,"P":57,"N":226};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -159,6 +167,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.internacao.admissao-nova-internacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Admissão"],"titulo":"Admissão","selo":"M","fase":2,"rota":"/internacao/admissao","permissao":"internacao.internacao.criar"},
   {"id":"internacao-e-leitos.internacao.guias-e-autorizacoes-do-convenio","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Guias e autorizações do convênio"],"titulo":"Guias e autorizações do convênio","selo":"M","fase":2,"rota":"/internacao?acao=guias","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.internacao.trocas-de-clinica-convenio-especialidade-e-medico","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Trocas de clínica, convênio, especialidade e médico"],"titulo":"Trocas de clínica, convênio, especialidade e médico","selo":"M","fase":2,"rota":"/internacao?acao=trocas","permissao":"internacao.internacao.ler"},
+  {"id":"internacao-e-leitos.internacao.diferenca-de-acomodacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Diferença de acomodação"],"titulo":"Diferença de acomodação","selo":"N","fase":3,"rota":"/internacao/diferenca-acomodacao","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.internacao.procedimentos-extras-e-apac-da-internacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Procedimentos extras e APAC da internação"],"titulo":"Procedimentos extras e APAC da internação","selo":"M","fase":2,"rota":"/internacao?acao=procedimentos","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.internacao.alta-hospitalar-medica-e-administrativa","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Alta hospitalar"],"titulo":"Alta hospitalar","selo":"M","fase":2,"rota":"/internacao?acao=alta","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.internacao.fichas-e-impressos-da-internacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Internação","Fichas e impressos da internação"],"titulo":"Fichas e impressos da internação","selo":"M","fase":2,"rota":"/internacao?acao=impressos","permissao":"internacao.internacao.ler"},
@@ -238,6 +247,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"enfermagem.checagem-por-codigo-de-barras-pulseira-e-dose","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Checagem por código de barras"],"titulo":"Checagem por código de barras","selo":"N","fase":2,"rota":"/beira-leito/checagem","permissao":"enfermagem.administracao.ler"},
   {"id":"enfermagem.horarios-padrao-de-medicacao-por-unidade","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Horários-padrão de medicação por unidade"],"titulo":"Horários-padrão de medicação por unidade","selo":"M","fase":2,"rota":"/cadastros/prescricao/horarios-padrao","permissao":"pep.gradeHorario.ler"},
   {"id":"enfermagem.sinais-vitais-e-controles-grade-e-grafico","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Sinais vitais e controles"],"titulo":"Sinais vitais e controles","selo":"N","fase":2,"rota":"/beira-leito/sinais-vitais","permissao":"enfermagem.sinalVital.ler"},
+  {"id":"enfermagem.limites-de-alerta-dos-sinais-vitais","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Limites de alerta dos sinais vitais"],"titulo":"Limites de alerta dos sinais vitais","selo":"N","fase":3,"rota":"/enfermagem/limites-sinais","permissao":"enfermagem.sinalVital.ler"},
   {"id":"enfermagem.escores-de-risco-news2-braden-morse-dor","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Escores de risco"],"titulo":"Escores de risco","selo":"N","fase":5,"rota":"/enfermagem/escores","permissao":"enfermagem.escore.ler"},
   {"id":"enfermagem.balanco-hidrico-ganhos-perdas-fechamento-24-h","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Balanço hídrico"],"titulo":"Balanço hídrico","selo":"N","fase":5,"rota":"/enfermagem/balanco","permissao":"enfermagem.balanco.ler"},
   {"id":"enfermagem.processo-de-enfermagem-sae-nanda-i-ou-cipe","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Processo de enfermagem / SAE"],"titulo":"Processo de enfermagem / SAE","selo":"N","fase":5,"rota":"/enfermagem/sae","permissao":"enfermagem.sae.ler"},
@@ -265,6 +275,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"diagnostico-sadt.entrega-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Entrega de resultados"],"titulo":"Entrega de resultados","selo":"M","fase":3,"rota":"/sadt/entregas","permissao":"sadt.laudo.ler"},
   {"id":"diagnostico-sadt.prazos-de-entrega-e-publicacao-no-portal","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Prazos de entrega e publicação no portal"],"titulo":"Prazos de entrega e publicação no portal","selo":"M","fase":3,"rota":"/sadt/entregas/cadastro","permissao":"sadt.catalogo.ler"},
   {"id":"diagnostico-sadt.limites-do-pedido-de-exame","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Limites do pedido de exame"],"titulo":"Limites do pedido de exame","selo":"N","fase":7,"rota":"/sadt/limites","permissao":"sadt.catalogo.ler"},
+  {"id":"diagnostico-sadt.autoliberacao-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Autoliberação de resultados"],"titulo":"Autoliberação de resultados","selo":"N","fase":7,"rota":"/sadt/autoliberacao","permissao":"sadt.resultado.ler"},
   {"id":"diagnostico-sadt.laboratorio.digitacao-e-importacao-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Digitação e importação de resultados"],"titulo":"Digitação e importação de resultados","selo":"M","fase":2,"rota":"/sadt/resultados/digitacao","permissao":"sadt.resultado.ler"},
   {"id":"diagnostico-sadt.laboratorio.interfaces-de-equipamento","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Interfaces de equipamento"],"titulo":"Interfaces de equipamento","selo":"P","fase":3,"rota":"/sadt/laboratorio/interfaces","permissao":"sadt.interface.ler"},
   {"id":"diagnostico-sadt.laboratorio.laboratorio-de-apoio-envio-e-retorno","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Laboratório de apoio"],"titulo":"Laboratório de apoio","selo":"M","fase":3,"rota":"/sadt/laboratorio/apoio","permissao":"sadt.apoio.ler"},
@@ -326,6 +337,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.particular.conta-corrente-do-paciente","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Conta corrente do paciente"],"titulo":"Conta corrente do paciente","selo":"N","fase":7,"rota":"/faturamento/conta-corrente","permissao":"faturamento.pagamento.ler"},
   {"id":"faturamento.convenios-tiss.guias-tiss-emissao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Guias TISS"],"titulo":"Guias TISS","selo":"M","fase":3,"rota":"/faturamento/guias","permissao":"faturamento.guia.ler"},
   {"id":"faturamento.convenios-tiss.guias-do-convenio-no-hospital","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Guias do convênio"],"titulo":"Guias do convênio","selo":"N","fase":3,"rota":"/faturamento/guias-convenio","permissao":"faturamento.guia.ler"},
+  {"id":"faturamento.convenios-tiss.liberacao-de-opme-acima-do-limite","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Liberação de OPME acima do limite"],"titulo":"Liberação de OPME acima do limite","selo":"N","fase":7,"rota":"/faturamento/opme-liberacao","permissao":"faturamento.autorizacao.ler"},
   {"id":"faturamento.convenios-tiss.remessa-e-lotes-tiss-xml-envio-protocolo","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Remessa e lotes TISS"],"titulo":"Remessa e lotes TISS","selo":"M","fase":3,"rota":"/faturamento/lotes","permissao":"faturamento.lote.ler"},
   {"id":"faturamento.convenios-tiss.webservices-tiss-por-operadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Webservices TISS por operadora"],"titulo":"Webservices TISS por operadora","selo":"P","fase":3,"rota":"/integracao/tiss","permissao":"integracao.tiss.ler"},
   {"id":"faturamento.convenios-tiss.fechamento-de-competencia-por-convenio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Fechamento de competência por convênio"],"titulo":"Fechamento de competência por convênio","selo":"M","fase":3,"rota":"/faturamento/competencias","permissao":"faturamento.competencia.ler"},
@@ -369,12 +381,15 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.contas-a-pagar.adiantamentos-a-fornecedores-e-medicos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Adiantamentos a fornecedores e médicos"],"titulo":"Adiantamentos a fornecedores e médicos","selo":"M","fase":3,"rota":"/financeiro/pagar/adiantamentos","permissao":"financeiro.adiantamento.ler"},
   {"id":"financeiro.contas-a-pagar.pagamentos-eletronicos-remessa-e-retorno-bancario","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Pagamentos eletrônicos"],"titulo":"Pagamentos eletrônicos","selo":"P","fase":3,"rota":"/financeiro/pagar/remessas","permissao":"financeiro.remessa.ler"},
   {"id":"financeiro.contas-a-pagar.aprovacao-de-pagamentos-por-alcada","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Aprovação de pagamentos por alçada"],"titulo":"Aprovação de pagamentos por alçada","selo":"N","fase":3,"rota":"/financeiro/pagar/aprovacao","permissao":"financeiro.tituloPagar.ler"},
+  {"id":"financeiro.aprovacao.fluxos-de-aprovacao","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Aprovações","Fluxos de aprovação"],"titulo":"Fluxos de aprovação","selo":"N","fase":7,"rota":"/financeiro/aprovacao/fluxos","permissao":"financeiro.fluxoAprovacao.configurar"},
+  {"id":"financeiro.aprovacao.minhas-aprovacoes","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Aprovações","Minhas aprovações"],"titulo":"Minhas aprovações","selo":"N","fase":7,"rota":"/financeiro/aprovacoes","permissao":"financeiro.fluxoAprovacao.decidir"},
   {"id":"financeiro.contas-a-receber.titulos-a-receber-convenio-e-particular","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Títulos a receber"],"titulo":"Títulos a receber","selo":"M","fase":3,"rota":"/financeiro/receber/titulos","permissao":"financeiro.tituloReceber.ler"},
   {"id":"financeiro.contas-a-receber.conta-corrente-de-convenios","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Conta corrente de convênios"],"titulo":"Conta corrente de convênios","selo":"M","fase":3,"rota":"/financeiro/receber/convenios","permissao":"financeiro.creditoConvenio.ler"},
   {"id":"financeiro.contas-a-receber.renegociacao-de-titulos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Renegociação de títulos"],"titulo":"Renegociação de títulos","selo":"P","fase":3,"rota":"/financeiro/receber/renegociacoes","permissao":"financeiro.tituloReceber.ler"},
-  {"id":"financeiro.contas-a-receber.cobranca-pix","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Cobrança Pix"],"titulo":"Cobrança Pix","selo":"N","fase":7,"rota":"/financeiro/receber/pix","permissao":"financeiro.cobrancaBancaria.ler"},
   {"id":"financeiro.contas-a-receber.baixa-por-demonstrativo-com-glosa-no-titulo","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Baixa por demonstrativo, com glosa no título"],"titulo":"Baixa por demonstrativo, com glosa no título","selo":"N","fase":3,"rota":"/financeiro/receber/demonstrativos","permissao":"financeiro.tituloReceber.ler"},
   {"id":"financeiro.contas-a-receber.desconto-e-cessao-de-recebiveis","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Desconto e cessão de recebíveis"],"titulo":"Desconto e cessão de recebíveis","selo":"N","fase":3,"rota":"/financeiro/receber/cessao","permissao":"financeiro.cessaoRecebivel.ler"},
+  {"id":"financeiro.contas-a-receber.cobranca-com-boleto","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Cobrança com boleto"],"titulo":"Cobrança com boleto","selo":"N","fase":7,"rota":"/financeiro/receber/cobranca-bancaria","permissao":"financeiro.cobrancaBancaria.ler"},
+  {"id":"financeiro.contas-a-receber.cobranca-pix","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Cobrança Pix"],"titulo":"Cobrança Pix","selo":"N","fase":7,"rota":"/financeiro/receber/pix","permissao":"financeiro.cobrancaBancaria.ler"},
   {"id":"financeiro.tesouraria.movimento-bancario-e-saldos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Movimento bancário e saldos"],"titulo":"Movimento bancário e saldos","selo":"M","fase":3,"rota":"/financeiro/tesouraria/movimento","permissao":"financeiro.movimento.ler"},
   {"id":"financeiro.tesouraria.fechamento-do-periodo-financeiro","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Fechamento do período financeiro"],"titulo":"Fechamento do período financeiro","selo":"N","fase":3,"rota":"/financeiro/tesouraria/periodo","permissao":"financeiro.movimento.ler"},
   {"id":"financeiro.tesouraria.conciliacao-bancaria-extrato","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Conciliação bancária"],"titulo":"Conciliação bancária","selo":"N","fase":3,"rota":"/financeiro/tesouraria/conciliacao","permissao":"financeiro.conciliacao.ler"},
@@ -392,6 +407,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.fiscal.tabelas-fiscais-e-sped-importador","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","Tabelas fiscais e SPED"],"titulo":"Tabelas fiscais e SPED","selo":"M","fase":1,"rota":"/financeiro/fiscal/tabelas","permissao":"catalogo.item.ler"},
   {"id":"financeiro.fiscal.naturezas-de-operacao-e-orgaos-arrecadadores","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","Naturezas de operação e órgãos arrecadadores"],"titulo":"Naturezas de operação e órgãos arrecadadores","selo":"M","fase":3,"rota":"/cadastros/dominios/grupo/financeiroNaturezas","permissao":"config.dominio.ler"},
   {"id":"financeiro.fiscal.nfs-e-nota-fiscal-de-servico","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","NFS-e"],"titulo":"NFS-e","selo":"P","fase":3,"rota":"/financeiro/fiscal/nfse","permissao":"financeiro.nfse.ler"},
+  {"id":"financeiro.fiscal.nf-e-de-saida-de-mercadoria","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","NF-e de saída de mercadoria"],"titulo":"NF-e de saída de mercadoria","selo":"N","fase":7,"rota":"/financeiro/fiscal/notas-mercadoria","permissao":"financeiro.notaMercadoria.ler"},
   {"id":"financeiro.fiscal.dmed-declaracao-anual-de-servicos-medicos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","DMED"],"titulo":"DMED","selo":"N","fase":3,"rota":"/financeiro/fiscal/dmed","permissao":"financeiro.dmed.ler"},
   {"id":"financeiro.fiscal.efd-reinf-retencoes-series-r-2000-e-r-4000","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Fiscal","EFD-REINF"],"titulo":"EFD-REINF","selo":"N","fase":3,"rota":"/financeiro/fiscal/reinf","permissao":"financeiro.reinf.ler"},
   {"id":"hotelaria-e-apoio.higienizacao.painel-de-execucao-em-tempo-real-com-prazo","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Higienização","Painel de execução em tempo real"],"titulo":"Painel de execução em tempo real","selo":"P","fase":2,"rota":"/higienizacao/painel","permissao":"hotelaria.limpeza.ler"},
@@ -459,6 +475,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"relatorios-e-bi.catalogo-de-relatorios-parametrizados","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Catálogo de relatórios parametrizados"],"titulo":"Catálogo de relatórios parametrizados","selo":"M","fase":3,"rota":"/relatorios","permissao":"relatorio.catalogo.ler"},
   {"id":"relatorios-e-bi.envio-agendado-por-e-mail","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Envio agendado por e-mail"],"titulo":"Envio agendado por e-mail","selo":"P","fase":3,"rota":"/relatorios/agendamentos","permissao":"relatorio.agendamento.ler"},
   {"id":"relatorios-e-bi.paineis-gerenciais-assistencial-operacional-financeiro","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis gerenciais"],"titulo":"Painéis gerenciais","selo":"N","fase":1,"rota":"/relatorios/paineis/assistencial","permissao":"relatorio.paineis.ler"},
+  {"id":"relatorios-e-bi.paineis-gerenciais-montados","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis montados"],"titulo":"Painéis montados","selo":"N","fase":3,"rota":"/relatorios/paineis-gerenciais","permissao":"relatorio.painelGerencial.ler"},
   {"id":"relatorios-e-bi.indicadores-hospitalares-portaria-312-anahp","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Indicadores hospitalares"],"titulo":"Indicadores hospitalares","selo":"N","fase":1,"rota":"/relatorios/indicadores","permissao":"relatorio.indicadores.ler"},
   {"id":"relatorios-e-bi.paineis-de-tv-e-central-de-comando","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painéis de TV e central de comando"],"titulo":"Painéis de TV e central de comando","selo":"M","fase":2,"rota":"/paineis","permissao":"relatorio.painel.ler"},
   {"id":"relatorios-e-bi.painel-de-glosas-e-ciclo-de-receita","area":"RELATÓRIOS E BI","grupo":null,"caminho":["Relatórios e BI","Painel de glosas e ciclo de receita"],"titulo":"Painel de glosas e ciclo de receita","selo":"N","fase":3,"rota":"/relatorios/glosas","permissao":"relatorio.glosa.ler"},
@@ -478,6 +495,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"cadastros.pacientes-cadastro-unico.unificacao-de-prontuarios","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Unificação de prontuários"],"titulo":"Unificação de prontuários","selo":"P","fase":1,"rota":"/cadastros/pacientes/duplicidades","permissao":"cadastro.duplicidade.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.historico-de-alteracoes-do-cadastro","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Histórico de alterações do cadastro"],"titulo":"Histórico de alterações do cadastro","selo":"M","fase":1,"rota":"/cadastros/pacientes/historico","permissao":"cadastro.historico.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.programas-e-linhas-de-cuidado","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Programas e linhas de cuidado"],"titulo":"Programas e linhas de cuidado","selo":"N","fase":7,"rota":"/cadastros/pacientes/linhas-cuidado","permissao":"cadastro.linhaCuidado.ler"},
+  {"id":"cadastros.pacientes-cadastro-unico.acesso-restrito-ao-prontuario","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Acesso restrito ao prontuário"],"titulo":"Acesso restrito ao prontuário","selo":"N","fase":7,"rota":"/cadastros/pacientes/acesso-restrito","permissao":"cadastro.acessoRestrito.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.campos-obrigatorios-do-cadastro","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Campos obrigatórios do cadastro"],"titulo":"Campos obrigatórios do cadastro","selo":"M","fase":1,"rota":"/cadastros/regras-campo","permissao":"config.parametro.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.pessoas-cpf-cnpj","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Pessoas"],"titulo":"Pessoas","selo":"M","fase":1,"rota":"/cadastros/pessoas","permissao":"cadastro.pessoa.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.mpi-da-rede-paciente-unico-entre-os-dois-hospitais","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","MPI da Rede"],"titulo":"MPI da Rede","selo":"N","fase":7,"rota":"/cadastros/pacientes/rede","permissao":"rede.mpi.ler"},
@@ -568,6 +586,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"administracao.coexistencia-com-o-legado.conferencia-de-gravacao-triggers-generators-sentinelas","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Conferência de gravação"],"titulo":"Conferência de gravação","selo":"N","fase":0,"rota":"/administracao/coexistencia/gravacao","permissao":"config.gravacao.ler"},
   {"id":"administracao.coexistencia-com-o-legado.saude-das-conexoes-e-avisos-de-colisao","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Conexões e avisos de colisão"],"titulo":"Conexões e avisos de colisão","selo":"N","fase":0,"rota":"/administracao/coexistencia/conexoes","permissao":"config.conexao.ler"},
   {"id":"administracao.coexistencia-com-o-legado.painel-da-matriz-de-cobertura","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Painel da matriz de cobertura"],"titulo":"Painel da matriz de cobertura","selo":"N","fase":1,"rota":"/administracao/coexistencia/matriz","permissao":"config.matriz.ler"},
+  {"id":"administracao.rotinas-agendadas","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Rotinas agendadas"],"titulo":"Rotinas agendadas","selo":"N","fase":3,"rota":"/administracao/sistema/rotinas","permissao":"config.rotina.ler"},
   {"id":"administracao.saude-do-sistema-observabilidade","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Saúde do sistema"],"titulo":"Saúde do sistema","selo":"N","fase":1,"rota":"/administracao/saude","permissao":"sistema.saude.ler"},
   {"id":"administracao.carga-e-sincronismo","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Carga e sincronismo"],"titulo":"Carga e sincronismo","selo":"N","fase":4,"rota":"/plataforma/carga","permissao":"config.conexao.ler"},
 ];

@@ -17,6 +17,8 @@ import { lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
 import { Worker } from 'bullmq';
 import { clientesDaLista, clientesDoWorker } from '../clientes-worker.js';
 import { logger } from '../logger.js';
+import { RegistroRotinasProprio } from '../rotinas-registro-proprio.js';
+import { RegistradorRotinas, ROTINAS_WORKER } from '../rotinas-worker.js';
 import { conexaoValkey, PREFIXO_FILAS } from '../relay-outbox.js';
 import { enviarSmtp } from '../smtp.js';
 import { type ConclusaoEnvio, type DependenciasEnvio, processarEnvio } from './envio-agendado.js';
@@ -141,6 +143,8 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
   private readonly workers: Worker[] = [];
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
+  /** 01-SIS L95: a volta dos vencidos registrada como rotina na Administração. */
+  private registrador: RegistradorRotinas | null = null;
 
   /** Teste: o núcleo e a porta sem subir o banco. */
   usar(nucleo: NucleoEnvio, fabrica: FabricaPortaEnvio): void {
@@ -153,6 +157,7 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
     try {
       const nucleo = new NucleoProprio({ env: process.env });
       this.usar(nucleo, (cliente) => new PortaEnvioRelatorioPropria(nucleo, cliente));
+      this.registrador = new RegistradorRotinas((cliente) => new RegistroRotinasProprio(nucleo, cliente));
     } catch (e) {
       logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'envio agendado: sem o banco, só a fila');
     }
@@ -221,11 +226,22 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
     try {
       for (const cliente of await clientesDoWorker(nucleo, process.env, 'relatorio-envio')) {
         try {
-          const porta = fabrica(cliente);
-          const x = await enviarVencidos(porta, cliente, dependenciasDoEnvio(porta), {
-            agora,
-            baseWeb: base,
-          });
+          const volta = () => {
+            const porta = fabrica(cliente);
+            return enviarVencidos(porta, cliente, dependenciasDoEnvio(porta), { agora, baseWeb: base });
+          };
+          const x = this.registrador
+            ? await this.registrador.rodar(
+                cliente,
+                ROTINAS_WORKER.envioRelatorios,
+                'relatorio-envio',
+                async () => {
+                  const y = await volta();
+                  return { resultado: y, lidos: y.agendamentos, gravados: y.processados, rejeitados: 0 };
+                },
+              )
+            : await volta();
+          if (!x) continue;
           r.push(x);
           if (x.agendamentos > 0) logger.info({ cliente, ...x }, 'envio agendado: vencidos');
         } catch (e) {

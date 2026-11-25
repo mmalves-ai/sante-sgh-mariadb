@@ -9,6 +9,8 @@ import { consumirEventoFinanceiro } from './financeiro/consumidor-financeiro.js'
 import { acessoDoNucleo } from './integracao/acesso.js';
 import { distribuirEvento } from './integracao/consumidor-idempotente.js';
 import { logger } from './logger.js';
+import { RegistroRotinasProprio } from './rotinas-registro-proprio.js';
+import { RegistradorRotinas, ROTINAS_WORKER, tipoDoErro } from './rotinas-worker.js';
 import { cicloRelayOutbox } from './relay-outbox-proprio.js';
 import { consumidorNulo, type Fila, filaBullmq } from './relay-outbox.js';
 
@@ -24,6 +26,8 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
   private readonly clientes = new Map<string, DoCliente>();
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
+  /** 01-SIS L95: a volta registrada como rotina na Administração. */
+  private registrador: RegistradorRotinas | null = null;
 
   onApplicationBootstrap(): void {
     if (process.env['OUTBOX_RELAY'] === 'desligado') return;
@@ -35,7 +39,9 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
     try {
       const intervalo = lerInteiroAmbiente(process.env, 'OUTBOX_INTERVALO_MS', 1_000, 200, 600_000);
       this.url = url;
-      this.nucleo = new NucleoProprio({ env: process.env });
+      const nucleo = new NucleoProprio({ env: process.env });
+      this.nucleo = nucleo;
+      this.registrador = new RegistradorRotinas((cliente) => new RegistroRotinasProprio(nucleo, cliente));
       this.temporizador = setInterval(() => void this.ciclo(), intervalo);
       this.temporizador.unref();
     } catch (e) {
@@ -71,13 +77,21 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
     try {
       for (const cliente of await clientesDoWorker(nucleo, process.env, 'relay-outbox')) {
         try {
-          const r = await cicloRelayOutbox(nucleo, cliente, this.doCliente(nucleo, cliente).fila.publicar);
-          if (r.lidos > 0) logger.info({ cliente, ...r }, 'relay da outbox');
+          const volta = () =>
+            cicloRelayOutbox(nucleo, cliente, this.doCliente(nucleo, cliente).fila.publicar);
+          // O relay roda a cada segundo: só a volta com falha de publicação vira histórico (com os volumes); a
+          // volta sem falha marca a rotina viva.
+          const r = this.registrador
+            ? await this.registrador.rodar(cliente, ROTINAS_WORKER.relay, 'relay-outbox', async () => {
+                const x = await volta();
+                return x.falhas > 0
+                  ? { resultado: x, lidos: x.lidos, gravados: x.publicados, rejeitados: x.falhas }
+                  : { resultado: x };
+              })
+            : await volta();
+          if (r && r.lidos > 0) logger.info({ cliente, ...r }, 'relay da outbox');
         } catch (e) {
-          logger.warn(
-            { cliente, erro: e instanceof Error ? e.name : 'erro' },
-            'relay da outbox: ciclo falhou',
-          );
+          logger.warn({ cliente, erro: tipoDoErro(e) }, 'relay da outbox: ciclo falhou');
         }
       }
     } catch (e) {

@@ -38,6 +38,8 @@ import { cofreEmailDoAmbiente, testadorDoAmbiente } from './email-teste-conexao.
 import { SERVICO_SBIS, ServicoSbis } from './sbis/servico.js';
 import { ALCADA_APROVACAO, AlcadaAprovacaoController } from './alcada-aprovacao.controller.js';
 import { AlcadaAprovacaoPropria } from './alcada-aprovacao-propria.js';
+import { ROTINAS_AGENDADAS, RotinasAgendadasController } from './rotinas-agendadas.controller.js';
+import { RotinasAgendadasPropria } from './rotinas-agendadas-propria.js';
 
 /** O produto não convive com sistema anterior (ADR 0003). */
 export const SEM_SISTEMA_ANTERIOR: SituacaoEstabelecimento = Object.freeze({
@@ -123,6 +125,7 @@ export async function modulo(
       NotificacaoRegraController,
       EmailConfiguracaoController,
       AlcadaAprovacaoController,
+      RotinasAgendadasController,
       ...(opcoes.controladores ?? []),
     ],
     providers: [
@@ -163,6 +166,14 @@ export async function modulo(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new AlcadaAprovacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // Rotinas agendadas (01-SIS L95): só com o banco próprio; sem ele, 503.
+      {
+        provide: ROTINAS_AGENDADAS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new RotinasAgendadasPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(opcoes.provedores ?? []),

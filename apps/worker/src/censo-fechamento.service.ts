@@ -20,6 +20,8 @@ import {
 import { NucleoProprio } from '@sgh/nucleo';
 import { CHAVE_FECHAMENTO, type PortaCenso, PortaCensoPropria } from './censo-fechamento-propria.js';
 import { logger } from './logger.js';
+import { RegistroRotinasProprio } from './rotinas-registro-proprio.js';
+import { RegistradorRotinas, ROTINAS_WORKER, voltaPorEstabelecimentoComRotina } from './rotinas-worker.js';
 import {
   type AlvoEstabelecimento,
   type NucleoServico,
@@ -103,18 +105,29 @@ export class CensoFechamentoService implements OnApplicationBootstrap, OnApplica
   private fabrica: FabricaPortaCenso | null = null;
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
+  /** 01-SIS L95: a volta registrada como rotina na Administração (sem ele, nos testes, só a volta). */
+  private registrador: RegistradorRotinas | null = null;
 
   /** Teste: o núcleo e a porta sem subir o banco. */
-  usar(nucleo: NucleoServico, fabrica: FabricaPortaCenso): void {
+  usar(
+    nucleo: NucleoServico,
+    fabrica: FabricaPortaCenso,
+    registrador: RegistradorRotinas | null = null,
+  ): void {
     this.nucleo = nucleo;
     this.fabrica = fabrica;
+    this.registrador = registrador;
   }
 
   onApplicationBootstrap(): void {
     if (!fechamentoLigado(process.env)) return;
     try {
       const nucleo = new NucleoProprio({ env: process.env });
-      this.usar(nucleo, (cliente) => new PortaCensoPropria(nucleo, cliente));
+      this.usar(
+        nucleo,
+        (cliente) => new PortaCensoPropria(nucleo, cliente),
+        new RegistradorRotinas((cliente) => new RegistroRotinasProprio(nucleo, cliente)),
+      );
       this.temporizador = setInterval(() => void this.ciclo(), 60_000);
       this.temporizador.unref();
     } catch (e) {
@@ -130,18 +143,30 @@ export class CensoFechamentoService implements OnApplicationBootstrap, OnApplica
     if (this.rodando || !nucleo || !fabrica) return [];
     this.rodando = true;
     try {
-      const voltas = await voltaPorEstabelecimento(
-        nucleo,
-        process.env,
-        'censo-fechamento',
-        fabrica,
-        (porta, est) => fecharCensoDoEstabelecimento(porta, est, agoraReal),
-        (cliente, estabelecimento, e) =>
-          logger.warn(
-            { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },
-            'fechamento do censo falhou',
-          ),
-      );
+      const fn = (porta: PortaCenso, est: AlvoEstabelecimento) =>
+        fecharCensoDoEstabelecimento(porta, est, agoraReal);
+      const falhou = (cliente: string, estabelecimento: string | null, e: unknown) =>
+        logger.warn(
+          { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },
+          'fechamento do censo falhou',
+        );
+      const voltas = this.registrador
+        ? await voltaPorEstabelecimentoComRotina(
+            this.registrador,
+            ROTINAS_WORKER.censo,
+            (x: ResultadoFechamento) => ({
+              lidos: 0,
+              gravados: x.situacao === 'fechado' ? x.dias.length : 0,
+              rejeitados: 0,
+            }),
+            nucleo,
+            process.env,
+            'censo-fechamento',
+            fabrica,
+            fn,
+            falhou,
+          )
+        : await voltaPorEstabelecimento(nucleo, process.env, 'censo-fechamento', fabrica, fn, falhou);
       for (const v of voltas) {
         const x = v.resultado;
         if (x.situacao === 'fechado')

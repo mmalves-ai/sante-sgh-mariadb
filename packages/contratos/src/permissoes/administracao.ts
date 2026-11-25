@@ -26,6 +26,8 @@ export const PERMISSOES_M10_CODIGOS = {
   // A resposta do destinatário ao aviso recebido (ciência e resolução), sempre da própria conta.
   notificacaoResponder: 'acesso.notificacao.responder',
   emailLer: 'config.email.ler',
+  rotinaLer: 'config.rotina.ler',
+  rotinaAcionar: 'config.rotina.acionar',
   emailEditar: 'config.email.editar',
   empresaLer: 'organizacao.empresa.ler',
   estruturaLer: 'organizacao.estrutura.ler',
@@ -159,6 +161,22 @@ export const PERMISSOES_M10: readonly DeclaracaoPermissao[] = [
     descricao: 'Responder aos avisos recebidos (ciência e resolução), sempre da própria conta',
 
     concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
+  },
+  {
+    codigo: C.rotinaLer,
+    descricao: 'Consultar as rotinas agendadas: última e próxima execução, atraso e histórico com etapas',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.rotinaAcionar,
+    descricao: 'Acionar à mão, suspender e retomar as rotinas agendadas',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
   },
   {
     codigo: C.emailLer,

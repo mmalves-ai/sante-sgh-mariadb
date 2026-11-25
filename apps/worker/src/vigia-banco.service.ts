@@ -7,7 +7,10 @@
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { metrics } from '@opentelemetry/api';
 import { type EstadoPool, NucleoProprio } from '@sgh/nucleo';
+import { clientesDoWorker } from './clientes-worker.js';
 import { logger } from './logger.js';
+import { RegistroRotinasProprio } from './rotinas-registro-proprio.js';
+import { RegistradorRotinas, ROTINAS_WORKER } from './rotinas-worker.js';
 import {
   type AlertaVigiaBanco,
   alertasDaColeta,
@@ -56,6 +59,8 @@ export class VigiaBancoService implements OnApplicationBootstrap, OnApplicationS
   private ultima: RodadaVigiaBanco | null = null;
   private servicos: ReadonlyMap<string, number> = new Map();
   private avisouPermissao = false;
+  /** 01-SIS L95: a rodada registrada como rotina na Administração de cada cliente. */
+  private registrador: RegistradorRotinas | null = null;
 
   /** Teste: o núcleo e a sondagem sem subir o banco. */
   usar(nucleo: NucleoVigiaBanco, sondar?: Sondagem, limiteMs = 5_000): void {
@@ -68,7 +73,9 @@ export class VigiaBancoService implements OnApplicationBootstrap, OnApplicationS
     if (process.env['VIGIA_BANCO'] === 'desligado') return;
     try {
       const cfg = lerConfiguracaoVigiaBanco(process.env);
-      this.usar(new NucleoProprio({ env: process.env }), undefined, cfg.limiteTransacaoMs);
+      const nucleo = new NucleoProprio({ env: process.env });
+      this.usar(nucleo, undefined, cfg.limiteTransacaoMs);
+      this.registrador = new RegistradorRotinas((cliente) => new RegistroRotinasProprio(nucleo, cliente));
       this.registrarMetricas();
       this.temporizador = setInterval(() => void this.ciclo(), cfg.intervaloMs);
       this.temporizador.unref();
@@ -119,6 +126,7 @@ export class VigiaBancoService implements OnApplicationBootstrap, OnApplicationS
         alertas,
         duracaoMs: Date.now() - inicio,
       };
+      await this.registrarRodada(this.ultima);
       return this.ultima;
     } catch (e) {
       logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'vigia do banco: rodada falhou');
@@ -126,6 +134,32 @@ export class VigiaBancoService implements OnApplicationBootstrap, OnApplicationS
     } finally {
       this.coletando = false;
     }
+  }
+
+  /** A rodada vai à rotina de cada cliente: os alertas viram etapas e a execução fica com avisos. */
+  private async registrarRodada(r: RodadaVigiaBanco): Promise<void> {
+    const registrador = this.registrador;
+    const nucleo = this.nucleo;
+    if (!registrador || !nucleo) return;
+    const agora = new Date();
+    const clientes = await clientesDoWorker(nucleo, process.env, 'vigia-banco').catch(() => [] as string[]);
+    for (const cliente of clientes)
+      await registrador
+        .rodar(cliente, ROTINAS_WORKER.vigiaBanco, 'vigia-banco', async () => ({
+          resultado: null,
+          avisos: r.alertas.length,
+          etapas: r.alertas.map((a) => ({
+            nome: a.tipo,
+            situacao: 'concluida_com_avisos' as const,
+            inicioEm: new Date(agora.getTime() - r.duracaoMs),
+            fimEm: agora,
+            lidos: a.quantidade,
+            gravados: 0,
+            rejeitados: 0,
+            mensagem: a.tipo,
+          })),
+        }))
+        .catch(() => undefined);
   }
 
   private registrarMetricas(): void {

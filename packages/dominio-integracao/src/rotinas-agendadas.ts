@@ -147,3 +147,66 @@ export function conferirAcionamentoManual(
 export function situacaoFinalSemErro(v: VolumesExecucao, avisos = 0): 'concluida' | 'concluida_com_avisos' {
   return v.rejeitados > 0 || avisos > 0 ? 'concluida_com_avisos' : 'concluida';
 }
+
+/** Cadastro de uma rotina do worker: o código é a identidade (o cadastro no banco é idempotente por ele). */
+export interface DefinicaoRotina {
+  readonly codigo: string;
+  readonly nome: string;
+  readonly descricao: string;
+  readonly categoria: 'carga' | 'envio' | 'fechamento' | 'integracao' | 'manutencao' | 'relatorio' | 'outra';
+  /** De quanto em quanto tempo a volta roda (segundos). */
+  readonly intervaloSegundos: number;
+  /** Atraso aceito antes de a rotina aparecer como atrasada (segundos). */
+  readonly toleranciaAtrasoSegundos: number;
+  readonly permiteAcionamentoManual: boolean;
+}
+
+/**
+ * A volta sem trabalho (nada lido, gravado nem rejeitado, sem falha) não vira histórico: só marca a rotina como viva
+ * (última e próxima execução), no máximo a cada este intervalo. Assim o histórico mostra o que aconteceu, não um
+ * registro por minuto de "nada a fazer".
+ */
+export const INTERVALO_MARCACAO_SEGUNDOS = 900;
+
+export type DestinoDaVolta = 'historico' | 'marcar' | 'nada';
+
+/**
+ * O que gravar de uma volta encerrada: histórico (execução e etapas) quando houve falha, avisos, volume ou
+ * acionamento por alguém; só a marca de vida quando a última marca já passou do intervalo; nada nos demais casos.
+ */
+export function destinoDaVolta(
+  v: {
+    readonly situacao: SituacaoExecucao;
+    readonly volumes: VolumesExecucao;
+    readonly disparo: DisparoExecucao;
+  },
+  ultimaMarcaEm: Date | null,
+  agora: Date,
+): DestinoDaVolta {
+  if (v.disparo !== 'agendado') return 'historico';
+  if (v.situacao !== 'concluida') return 'historico';
+  if (v.volumes.lidos + v.volumes.gravados + v.volumes.rejeitados > 0) return 'historico';
+  if (!ultimaMarcaEm || agora.getTime() - ultimaMarcaEm.getTime() >= INTERVALO_MARCACAO_SEGUNDOS * 1000)
+    return 'marcar';
+  return 'nada';
+}
+
+/** Próxima execução prevista pela agenda por intervalo (sem intervalo, sem previsão). */
+export function proximaExecucaoPorIntervalo(ultimaEm: Date, intervaloSegundos: number | null): Date | null {
+  if (!intervaloSegundos || intervaloSegundos <= 0) return null;
+  return new Date(ultimaEm.getTime() + intervaloSegundos * 1000);
+}
+
+/** Suspender e retomar: só se suspende rotina não suspensa e só se retoma a suspensa (volta ociosa). */
+export function conferirSuspensao(
+  atual: SituacaoRotina,
+  acao: 'suspender' | 'retomar',
+): { recusa: 'rotina-suspensa' | 'rotina-nao-suspensa'; mensagem: string } | { situacao: SituacaoRotina } {
+  if (acao === 'suspender')
+    return atual === 'suspensa'
+      ? { recusa: 'rotina-suspensa', mensagem: 'A rotina já está suspensa.' }
+      : { situacao: 'suspensa' };
+  return atual === 'suspensa'
+    ? { situacao: 'ociosa' }
+    : { recusa: 'rotina-nao-suspensa', mensagem: 'A rotina não está suspensa.' };
+}

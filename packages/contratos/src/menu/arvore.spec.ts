@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 470, M: 198, P: 57, N: 215 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 481, M: 198, P: 57, N: 226 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(469);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(481);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -566,6 +566,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/fiscal/dmed', // M32
         '/financeiro/fiscal/entradas', // M32
         '/financeiro/fiscal/nfse', // M32
+        '/financeiro/fiscal/notas-mercadoria', // C2-059 (07-FIN linha 114)
         '/financeiro/fiscal/reinf', // M32
         '/financeiro/gerencial', // M32
         '/financeiro/gerencial/reclassificar', // F3.8 (07-FIN linha 98)
@@ -577,7 +578,6 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/parametros', // M32
         '/financeiro/parametros/permissoes', // F3.8 (07-FIN linha 99)
         '/financeiro/receber/cessao', // F8 (07-FIN linha 79)
-        '/financeiro/receber/pix', // C2-045 (07-FIN linha 90)
         '/financeiro/receber/convenios', // M32
         '/financeiro/receber/demonstrativos', // M32
         '/financeiro/receber/renegociacoes', // M32
@@ -589,6 +589,18 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/tesouraria/movimento', // M32
         '/financeiro/tesouraria/periodo', // F3.8 (07-FIN linha 85)
         '/financeiro/tesouraria/previsao', // F8 (07-FIN linha 68)
+        '/administracao/sistema/rotinas', // administracao.rotinas-agendadas
+        '/cadastros/pacientes/acesso-restrito', // cadastros.pacientes-cadastro-unico.acesso-restrito-ao-prontuario
+        '/enfermagem/limites-sinais', // C2-003
+        '/faturamento/opme-liberacao', // faturamento.convenios-tiss.liberacao-de-opme-acima-do-limite
+        '/financeiro/aprovacao/fluxos', // C2-016 (07-FIN linha 65)
+        '/financeiro/aprovacoes', // C2-016 (07-FIN linha 65)
+        '/financeiro/receber/cobranca-bancaria', // C2-031 (07-FIN linha 78)
+        '/financeiro/receber/pix', // C2-045 (07-FIN linha 90)
+        '/internacao/diferenca-acomodacao', // internacao-e-leitos.internacao.diferenca-de-acomodacao
+        '/pep/prontuario-restrito', // pep.pedidos-de-acesso-a-prontuario-restrito
+        '/relatorios/paineis-gerenciais', // C2-077 (01-REL L112)
+        '/sadt/autoliberacao', // F8 (05-SADT linha 11)
       ].sort(),
     );
   });
@@ -650,6 +662,7 @@ describe('menu gerado da árvore (regra 12)', () => {
       '/administracao/coexistencia/matriz',
       '/administracao/coexistencia/schema',
       '/administracao/saude',
+      '/administracao/sistema/rotinas',
       '/plataforma/carga',
     ]);
     for (const i of tecnicas) {
