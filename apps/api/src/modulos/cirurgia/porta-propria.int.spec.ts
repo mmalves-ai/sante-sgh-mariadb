@@ -533,7 +533,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
         hora: '14:00',
         duracaoMin: 90,
         reg: 0,
-        pront: 930301,
+        pront: 930392,
         idPaciente: m.paciente,
         procedimento: m.procedimento,
         convenio: m.convenio,
@@ -772,7 +772,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
           hora: '15:00',
           duracaoMin: 60,
           reg: 0,
-          pront: 930301,
+          pront: 930392,
           idPaciente: m.paciente,
           procedimento: m.procedimento,
           convenio: m.convenio,
@@ -986,7 +986,7 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
     expect((await porta.buscarProcedimentos(ctx(m.est), `${P}-PROC`)).map((x) => x.codigo)).toContain(
       m.procedimento,
     );
-    expect(await porta.pacientePorProntuario(ctx(m.est), 930301)).toEqual({
+    expect(await porta.pacientePorProntuario(ctx(m.est), 930392)).toEqual({
       id: m.paciente,
       nome: `PACIENTE SINTETICO ${P}`,
     });
@@ -1241,6 +1241,10 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
   });
 
   it('grade da sala (04-CC linha 92): grava a faixa com trilha, a agenda recusa fora da grade e na reserva de outro cirurgião, inativar guarda a linha', async () => {
+    // Começa sem as cirurgias dos casos anteriores (o checklist deixa uma às 20:00 de amanhã na mesma sala).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-grade' }, (e) =>
+      limpar(e, [m.est, m.outro]),
+    );
     const grade = new PortaGradeSalaPropria(nucleo);
     const dia = ((new Date(`${amanha()}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
     const faixa = { diaSemana: dia, inicio: '19:00', fim: '23:00', vigenciaInicio: '2020-01-01' };
