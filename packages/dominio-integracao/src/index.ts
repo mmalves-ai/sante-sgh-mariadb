@@ -23,6 +23,7 @@ export * from './fachada/index.js';
 // F3.9-6: mensagens ao paciente (L133), pacotes e entregas de parceiros (L134) e classificação externa (L140).
 export * from './mensagens-paciente.js';
 export * from './pacotes-entregas.js';
+export * from './pacotes-visoes.js';
 export * from './classificacao-externa.js';
 export * from './classificacao-externa-envio.js';
 // F3.9-3: rotinas agendadas com histórico de execução (01-SIS L95).

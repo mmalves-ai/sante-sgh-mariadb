@@ -41,6 +41,8 @@ import { PORTA_MENSAGENS_PACIENTE, PortaMensagensPacientePropria } from './mensa
 import { PORTA_PACOTES_PARCEIRO, PortaPacotesParceiroPropria } from './pacotes-parceiro-propria.js';
 import { portaIntegracaoIndisponivel, PortaIntegracaoPropria } from './porta-propria.js';
 import { PrescricaoDigitalController } from './prescricao-digital.controller.js';
+import { FilaErpController } from './fila-erp.controller.js';
+import { PORTA_FILA_ERP, PortaFilaErpPropria } from './fila-erp-propria.js';
 import { PORTA_PRESCRICAO_DIGITAL, PortaPrescricaoDigitalPropria } from './prescricao-digital-propria.js';
 
 export interface OpcoesModuloIntegracao {
@@ -99,6 +101,7 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       FachadaController,
       ComunicacaoController,
       PrescricaoDigitalController,
+      FilaErpController,
     ],
     providers: [
       { provide: PORTA_INTEGRACAO, useValue: porta },
@@ -122,6 +125,11 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       {
         provide: PORTA_PRESCRICAO_DIGITAL,
         useValue: nucleo && cliente ? new PortaPrescricaoDigitalPropria(nucleo, cliente) : null,
+      },
+      // F8 (08-INTG L136): fila com o ERP corporativo; sem núcleo, 503.
+      {
+        provide: PORTA_FILA_ERP,
+        useValue: nucleo && cliente ? new PortaFilaErpPropria(nucleo, cliente) : null,
       },
       ...(local ? [{ provide: FONTE_CONFIGURACAO, useValue: local }] : []),
       {

@@ -40,6 +40,8 @@ export const PERMISSOES_M34_CODIGOS = {
   apoioDePara: 'sadt.apoio.configurar',
   prescricaoDigitalLer: 'pep.prescricaoDigital.ler',
   prescricaoDigitalEnviar: 'pep.prescricaoDigital.enviar',
+  filaErpLer: 'integracao.filaErp.ler',
+  filaErpOperar: 'integracao.filaErp.operar',
   datamartLer: 'relatorio.datamart.ler',
   datamartAcionar: 'relatorio.datamart.acionar',
 } as const;
@@ -369,6 +371,25 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     concessaoPorPerfil: 'por-perfil',
     perfis: [...ADMIN],
     categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  // F8 (08-INTG L136): fila com o ERP corporativo (monitor, geração, envio, retorno, conciliação); recurso só do
+  // novo, concedido por perfil.
+  {
+    codigo: C.filaErpLer,
+    descricao: 'Consultar a fila com o ERP corporativo: lotes, itens e retorno de cada registro',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: C.filaErpOperar,
+    descricao:
+      'Gerar, enviar, importar o retorno, conciliar e cancelar lotes da fila com o ERP corporativo (simulador fora de produção)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
     criticidade: 'sensivel',
   },
 ];

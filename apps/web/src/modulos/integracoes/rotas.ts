@@ -71,4 +71,10 @@ export const rotasIntegracoes: RouteRecordRaw[] = [
     component: () => import('./telas/PrescricaoDigitalTela.vue'),
     meta: { permissao: 'pep.prescricaoDigital.ler' },
   },
+  {
+    path: '/admin/integracoes/erp',
+    name: 'integracoes.filaErp',
+    component: () => import('./telas/FilaErpTela.vue'),
+    meta: { permissao: 'integracao.filaErp.ler' },
+  },
 ];
