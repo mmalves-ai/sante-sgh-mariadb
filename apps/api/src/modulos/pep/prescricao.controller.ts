@@ -103,6 +103,7 @@ import { reautenticar } from '../../autorizacao/reautenticacao.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
+import { ErroOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 import { FONTE_DOCUMENTO, type FonteDocumento } from '../documento/fonte.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
@@ -769,6 +770,14 @@ export class PrescricaoController {
             marcaSuporte: marca,
             justificativa: porque,
           });
+      // O registro único de impressão e exportação (01-ADM L82): a via só é entregue depois de gravada.
+      await this.servico.portaDados.registrarImpressao(s.porta, s.login, {
+        paciente,
+        prescricao: id,
+        via: e.emissao.via,
+        justificativa: porque,
+        hash: e.emissao.sha256,
+      });
       req.sghAlvo = {
         paciente,
         tabelaAlvo: 'prescricao',
@@ -778,7 +787,7 @@ export class PrescricaoController {
       res.header('content-disposition', `inline; filename="prescricao-${id}-via${e.emissao.via}.pdf"`);
       return Buffer.from(e.pdf);
     } catch (x) {
-      if (x instanceof ErroProblema) throw x;
+      if (x instanceof ErroProblema || x instanceof ErroOperacao) throw x;
       throw new ErroProblema(
         'indisponivel',
         503,

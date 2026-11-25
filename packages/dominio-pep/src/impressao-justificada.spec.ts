@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RAZOES_IMPRESSAO, regraJustificativaImpressao } from './impressao-justificada.js';
+import { RAZOES_IMPRESSAO, registroDaVia, regraJustificativaImpressao } from './impressao-justificada.js';
 
 describe('justificativa da impressão do prontuário (01-ADM L82)', () => {
   it('1ª via sem justificativa é recusada', () => {
@@ -44,5 +44,43 @@ describe('justificativa da impressão do prontuário (01-ADM L82)', () => {
         codigo: 'justificativa-longa',
       },
     );
+  });
+});
+
+describe('registro único de cada via emitida (01-ADM L82)', () => {
+  it('a 1ª via é impressão e leva a justificativa aparada', () => {
+    expect(
+      registroDaVia({ via: 1, texto: '  Entrega ao paciente na alta ', primeiraViaPedeTexto: true }),
+    ).toEqual({
+      ok: true,
+      operacao: 'impressao',
+      justificativa: 'Entrega ao paciente na alta',
+    });
+  });
+  it('a 1ª via sem texto só passa quando a emissão é o próprio ato de entrega (laudo)', () => {
+    expect(registroDaVia({ via: 1, primeiraViaPedeTexto: true })).toEqual({
+      ok: false,
+      codigo: 'justificativa-obrigatoria',
+    });
+    expect(registroDaVia({ via: 1, texto: '  ', primeiraViaPedeTexto: false })).toEqual({
+      ok: true,
+      operacao: 'impressao',
+      justificativa: null,
+    });
+  });
+  it('da 2ª via em diante é reimpressão e nunca sai sem o motivo', () => {
+    expect(registroDaVia({ via: 2, texto: null, primeiraViaPedeTexto: false })).toEqual({
+      ok: false,
+      codigo: 'motivo-obrigatorio',
+    });
+    expect(registroDaVia({ via: 3, texto: 'Via extraviada', primeiraViaPedeTexto: false })).toEqual({
+      ok: true,
+      operacao: 'reimpressao',
+      justificativa: 'Via extraviada',
+    });
+  });
+  it('o texto longo é cortado no que cabe no registro', () => {
+    const r = registroDaVia({ via: 1, texto: 'x'.repeat(600), primeiraViaPedeTexto: true });
+    expect(r.ok && r.justificativa?.length).toBe(500);
   });
 });

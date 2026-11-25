@@ -62,3 +62,36 @@ export function regraJustificativaImpressao(e: {
     return { ok: false, codigo: 'justificativa-longa', mensagem: 'A justificativa passa do tamanho aceito.' };
   return { ok: true, tipo: 'impresso', justificativa: just };
 }
+
+/** Como a via entra no registro único de impressão e exportação (quem, quando, o quê e por quê). */
+export type OperacaoRegistroImpressao = 'impressao' | 'reimpressao';
+
+export type RegistroDaVia =
+  | {
+      readonly ok: true;
+      readonly operacao: OperacaoRegistroImpressao;
+      readonly justificativa: string | null;
+    }
+  | { readonly ok: false; readonly codigo: 'justificativa-obrigatoria' | 'motivo-obrigatorio' };
+
+/** O que cabe no texto do registro único. */
+export const TEXTO_MAXIMO_REGISTRO_IMPRESSAO = 500;
+
+/**
+ * A linha do registro único de cada via emitida (documento do prontuário, prescrição, laudo de exame): a 1ª via é
+ * "impressao" e as seguintes "reimpressao", sempre com o motivo. A 1ª via só dispensa o texto quando a emissão é o
+ * próprio ato de entrega (o laudo de exame liberado, `primeiraViaPedeTexto: false`).
+ */
+export function registroDaVia(e: {
+  readonly via: number;
+  readonly texto?: string | null;
+  readonly primeiraViaPedeTexto: boolean;
+}): RegistroDaVia {
+  const texto = (e.texto ?? '').trim().slice(0, TEXTO_MAXIMO_REGISTRO_IMPRESSAO);
+  if (e.via > 1)
+    return texto
+      ? { ok: true, operacao: 'reimpressao', justificativa: texto }
+      : { ok: false, codigo: 'motivo-obrigatorio' };
+  if (!texto && e.primeiraViaPedeTexto) return { ok: false, codigo: 'justificativa-obrigatoria' };
+  return { ok: true, operacao: 'impressao', justificativa: texto || null };
+}

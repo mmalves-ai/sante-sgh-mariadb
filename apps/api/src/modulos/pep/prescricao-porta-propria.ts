@@ -25,6 +25,7 @@ import { alergiasDaPrescricao } from './alergias-propria.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
 import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
 import { BASE_PLANO_PROPRIO, GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import { ImpressaoPrescricaoPropria } from './prescricao-propria-impressao.js';
 import { RegrasPrescricaoPropria2 } from './prescricao-propria-regras-2.js';
 import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import {
@@ -144,6 +145,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   private readonly gravacao: GravacaoPrescricaoPropria;
   /** Regra de alerta e ficha de antimicrobiano (prescricao-propria-regras-2.ts). */
   private readonly regras2: RegrasPrescricaoPropria2;
+  /** Registro único da via impressa (prescricao-propria-impressao.ts, 01-ADM L82). */
+  private readonly impressao: ImpressaoPrescricaoPropria;
 
   constructor(
     private readonly nucleo: NucleoRegistroGravacao,
@@ -154,6 +157,7 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
     this.catalogo = new CatalogoPrescricaoPropria(nucleo, cliente);
     this.gravacao = new GravacaoPrescricaoPropria(nucleo, cliente);
     this.regras2 = new RegrasPrescricaoPropria2(nucleo, cliente);
+    this.impressao = new ImpressaoPrescricaoPropria(nucleo, cliente);
   }
 
   private ler<T>(
@@ -586,5 +590,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   }
   desmarcarFavorito(...a: Parameters<PortaPrescricao['desmarcarFavorito']>) {
     return this.gravacao.desmarcarFavorito(...a);
+  }
+  registrarImpressao(...a: Parameters<PortaPrescricao['registrarImpressao']>) {
+    return this.impressao.registrarImpressao(...a);
   }
 }

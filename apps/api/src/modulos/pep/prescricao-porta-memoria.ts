@@ -35,6 +35,7 @@ import {
 import { ROTULOS_TIPO_ITEM, type SecaoCadastroPrescricao, tipoDoPlano } from '@sgh/contratos';
 import {
   decidirFavorito,
+  registroDaVia,
   type FavoritoNovo,
   frequencia as frequenciaDe,
   ordenarFavoritos,
@@ -1360,6 +1361,40 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
         'O favorito não foi encontrado entre os seus.',
       );
     f.ativo = false;
+    return id;
+  }
+  /** As vias impressas (como o registro único de impressão e exportação no banco; 01-ADM L82). */
+  readonly impressoes: {
+    id: number;
+    usuario: string;
+    paciente: number;
+    prescricao: number;
+    operacao: 'impressao' | 'reimpressao';
+    justificativa: string | null;
+  }[] = [];
+
+  async registrarImpressao(
+    _c: ContextoPrescricao,
+    usuario: string,
+    e: Parameters<PortaPrescricao['registrarImpressao']>[2],
+  ) {
+    const reg = registroDaVia({ via: e.via, texto: e.justificativa, primeiraViaPedeTexto: true });
+    if (!reg.ok)
+      throw new ErroOperacao(
+        400,
+        reg.codigo,
+        'Impressão não registrada',
+        'Informe por que a via é impressa.',
+      );
+    const id = this.impressoes.length + 1;
+    this.impressoes.push({
+      id,
+      usuario,
+      paciente: e.paciente,
+      prescricao: e.prescricao,
+      operacao: reg.operacao,
+      justificativa: reg.justificativa,
+    });
     return id;
   }
 }

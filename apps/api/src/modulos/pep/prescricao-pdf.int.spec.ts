@@ -148,6 +148,7 @@ describe('prescrição impressa em PDF/A (M24)', () => {
 
 describe('impressão pela API (porta em memória, serviço de emissão do Compose)', () => {
   let app: NestFastifyApplication;
+  let prescricao: PortaPrescricaoMemoria;
   const env: Record<string, string> = {
     ...envTeste,
     AMBIENTE: 'dev',
@@ -155,11 +156,8 @@ describe('impressão pela API (porta em memória, serviço de emissão do Compos
   };
   beforeAll(async () => {
     const trilha = new RegistradorTrilhaMemoria();
-    app = await criarAppPep(env, {
-      trilha,
-      cadastro: new PortaCadastroMemoria(),
-      prescricao: new PortaPrescricaoMemoria(trilha),
-    });
+    prescricao = new PortaPrescricaoMemoria(trilha);
+    app = await criarAppPep(env, { trilha, cadastro: new PortaCadastroMemoria(), prescricao });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });
@@ -208,5 +206,15 @@ describe('impressão pela API (porta em memória, serviço de emissão do Compos
     const dois = await imprimir({ motivo: 'Reimpressão para a enfermagem' });
     expect(dois.statusCode).toBe(200);
     expect(dois.headers['content-disposition']).toMatch(/via2\.pdf/);
+    // Cada via entregue foi antes ao registro único de impressão (a recusa não registra nada).
+    expect(prescricao.impressoes).toMatchObject([
+      { usuario: 'SINT.MEDICO', paciente: 1001, prescricao: id, operacao: 'impressao' },
+      {
+        paciente: 1001,
+        prescricao: id,
+        operacao: 'reimpressao',
+        justificativa: 'Reimpressão para a enfermagem',
+      },
+    ]);
   }, 300_000);
 });
