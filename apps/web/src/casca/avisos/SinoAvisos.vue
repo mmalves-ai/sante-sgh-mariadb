@@ -22,6 +22,8 @@ import {
 } from '../../modulos/inicio/api-inicio.js';
 import { pode } from '../sessao/pode.js';
 import { usarSessao } from '../sessao/sessao.js';
+import AvisosClinicosSino from './AvisosClinicosSino.vue';
+import { darCienciaAvisoClinico, lerAvisosClinicos } from './api-avisos-clinicos.js';
 import { avisosQueInterrompem, ordenarCentral, seloDoSino } from './avisos.js';
 import { usarCanalAvisos } from './canal.js';
 
@@ -39,6 +41,7 @@ const canal = usarCanalAvisos(
   () => {
     void cliente.invalidateQueries({ queryKey: ['avisos'] });
     void cliente.invalidateQueries({ queryKey: ['mensagens', 'caixa'] });
+    void cliente.invalidateQueries({ queryKey: ['avisos-clinicos'] });
   },
 );
 const central = useQuery({
@@ -55,10 +58,34 @@ const caixa = useQuery({
   retry: 0,
   refetchInterval: computed(() => canal.intervalo()),
 });
+// F3.5 (05-SADT linha 10): os avisos clínicos de quem os recebe (sem o banco do cliente, 503: a seção some).
+const clinicos = useQuery({
+  queryKey: computed(() => ['avisos-clinicos', dono.value]),
+  queryFn: () => lerAvisosClinicos(),
+  enabled: podeLer,
+  retry: 0,
+  refetchInterval: computed(() => canal.intervalo()),
+});
+const listaClinicos = computed(() => clinicos.data.value?.avisos ?? []);
+const cienciaEm = ref<number | null>(null);
+async function ciente(id: number): Promise<void> {
+  erro.value = null;
+  cienciaEm.value = id;
+  try {
+    await darCienciaAvisoClinico(id, novaChave('aviso-clinico-ciente'));
+    await cliente.invalidateQueries({ queryKey: ['avisos-clinicos'] });
+  } catch {
+    erro.value = t('trabalho.avisos.falhou');
+  } finally {
+    cienciaEm.value = null;
+  }
+}
 const desligada = computed(() => codigoDaRecusa(central.error.value) === 'recurso-desligado');
 const visivel = computed(() => podeLer.value && !desligada.value);
 const naoLidas = computed(() => caixa.data.value?.naoLidas ?? 0);
-const selo = computed(() => seloDoSino(central.data.value, naoLidas.value));
+const selo = computed(
+  () => seloDoSino(central.data.value, naoLidas.value) + (clinicos.data.value?.novos ?? 0),
+);
 const lista = computed(() => ordenarCentral(central.data.value?.avisos ?? []));
 const aberto = ref(false);
 const erro = ref<string | null>(null);
@@ -139,7 +166,16 @@ const quando = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)} ${s.slice(11, 
         }}</RouterLink>
       </p>
       <p v-if="erro" role="alert">{{ erro }}</p>
-      <p v-if="lista.length === 0" class="secundario">{{ t('trabalho.avisos.vazio') }}</p>
+      <AvisosClinicosSino
+        :avisos="listaClinicos"
+        :pode-ciencia="podeResolver"
+        :ocupado="cienciaEm"
+        @ciente="ciente"
+        @abrir="aberto = false"
+      />
+      <p v-if="lista.length === 0 && listaClinicos.length === 0" class="secundario">
+        {{ t('trabalho.avisos.vazio') }}
+      </p>
       <ul v-else class="sino__lista">
         <li
           v-for="a in lista"

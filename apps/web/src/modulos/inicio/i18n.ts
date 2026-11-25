@@ -128,6 +128,12 @@ export const mensagensTrabalho = {
     entendi: 'Entendi',
     verAgora: 'Ver agora',
     falhou: 'Não deu para mudar o aviso agora. Tente de novo.',
+    clinicos: {
+      titulo: 'Avisos clínicos',
+      estados: { novo: 'Novo', lido: 'Lido', ciente: 'Ciente' },
+      ciente: 'Estou ciente',
+      verPaciente: 'Ver os exames do paciente',
+    },
   },
   mensagens: {
     titulo: 'Mensagens internas e avisos',

@@ -12,14 +12,7 @@ import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import { pode as podePermissao } from '../../../casca/sessao/pode.js';
 import { liberarResultadoDoExame, retificarResultadoDoExame } from '../api-resultado.js';
-import {
-  lerConferencia,
-  lerDigitacao,
-  listarExamesSadt,
-  listarLiberacao,
-  novaChave,
-  retificarResultado,
-} from '../api-sadt.js';
+import { lerConferencia, lerDigitacao, listarExamesSadt, listarLiberacao, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
 import PacienteSadt from '../componentes/PacienteSadt.vue';
@@ -111,6 +104,13 @@ function abrirRetificacao(id: number) {
   retificando.value = true;
 }
 /** Validação na hora: a retificação de valores só grava com ao menos um valor novo digitado. */
+// A retificação só do texto do laudo grava pela rota da redação (motivo do cadastro, versão nova, a anterior fica e
+// quem já viu é avisado), na tela do laudo do mesmo exame pedido: nada de reenviar o texto antigo pela retificação
+// de valores.
+const TEXTO_LAUDO = {
+  retificarLaudo: 'Retificar só o texto do laudo',
+  retificarLaudoAjuda: 'Para mudar só o texto do laudo, abra a redação do laudo deste exame.',
+} as const;
 const temMudanca = computed(() => Object.values(novos.value).some((v) => (v ?? '').trim() !== ''));
 async function retificar(): Promise<void> {
   const f = ficha.data.value;
@@ -129,29 +129,12 @@ async function retificar(): Promise<void> {
           alfa: Number.isFinite(n) ? null : v.trim(),
         };
       });
-    // Sem valor mudado e com laudo, é a retificação do laudo (texto), que segue pela operação do laudo.
-    const r =
-      f.laudo && elementos.length === 0
-        ? {
-            gravado: null,
-            mensagem: (
-              await retificarResultado(
-                f.exame.id,
-                {
-                  versao: f.exame.versao,
-                  motivo: motivo.value,
-                  elementos: [],
-                  laudo: { texto: f.laudo.texto, html: f.laudo.html },
-                },
-                novaChave('retificar'),
-              )
-            ).mensagem,
-          }
-        : await retificarResultadoDoExame(
-            f.exame,
-            { elementos, motivo: motivo.value },
-            novaChave('retificar'),
-          );
+    // A retificação de valores; a do texto do laudo segue pela redação do laudo (link no diálogo).
+    const r = await retificarResultadoDoExame(
+      f.exame,
+      { elementos, motivo: motivo.value },
+      novaChave('retificar'),
+    );
     mensagem.value =
       r.mensagem ?? t(r.gravado?.critico ? 'sadt.liberacao.retificadoCritico' : 'sadt.liberacao.retificado');
     retificando.value = false;
@@ -337,6 +320,15 @@ async function retificar(): Promise<void> {
           </li>
         </ul>
       </section>
+      <p v-if="ficha.data.value?.laudo && alvo !== null" data-testid="retificar-laudo-ajuda">
+        {{ TEXTO_LAUDO.retificarLaudoAjuda }}
+        <RouterLink
+          :to="{ path: '/sadt/laudos/redacao', query: { item: String(alvo) } }"
+          data-testid="retificar-laudo"
+          @click="retificando = false"
+          >{{ TEXTO_LAUDO.retificarLaudo }}</RouterLink
+        >
+      </p>
       <span class="campo">
         <label for="retificar-motivo">{{ t('sadt.motivo') }}</label>
         <textarea id="retificar-motivo" v-model="motivo" rows="2" data-testid="retificar-motivo" />
@@ -345,7 +337,7 @@ async function retificar(): Promise<void> {
         <SanteBotao variante="texto" :rotulo="t('sadt.cancelar')" @acionar="retificando = false" />
         <SanteBotao
           :rotulo="t('sadt.liberacao.retificar')"
-          :desabilitado="ocupado || motivo.trim().length < 5 || (!temMudanca && !ficha.data.value?.laudo)"
+          :desabilitado="ocupado || motivo.trim().length < 5 || !temMudanca"
           data-testid="retificar-gravar"
           @acionar="retificar"
         />
