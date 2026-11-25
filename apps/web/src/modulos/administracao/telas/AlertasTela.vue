@@ -1,10 +1,12 @@
 <script setup lang="ts">
 // "Alertas e gatilhos do sistema" (M10, ficha seção 7): a manutenção das regras de alerta (01-ADM L75: incluir,
-// alterar, ativar e desativar, com destinatários) e, abaixo, a consulta dos alertas com os gatilhos.
+// alterar, ativar e desativar, com destinatários), a consolidação dos avisos com o histórico de envio e "meus avisos"
+// (01-ADM L76) e, abaixo, a consulta dos alertas com os gatilhos.
 import { useQuery } from '@tanstack/vue-query';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { buscarAlertas } from '../api.js';
+import NotificacoesConsolidacaoPainel from '../componentes/NotificacoesConsolidacaoPainel.vue';
 import RegrasAlertaManutencao from '../componentes/RegrasAlertaManutencao.vue';
 
 const { t } = useI18n();
@@ -15,6 +17,7 @@ const consulta = useQuery({ queryKey: ['adm', 'alertas'], queryFn: () => buscarA
   <section class="tela" aria-labelledby="alertas-titulo">
     <h1 id="alertas-titulo">{{ t('adm.alertas.titulo') }}</h1>
     <RegrasAlertaManutencao />
+    <NotificacoesConsolidacaoPainel />
     <h2>{{ t('regrasAlerta.consulta') }}</h2>
     <p>{{ t('regrasAlerta.consultaTexto') }}</p>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
