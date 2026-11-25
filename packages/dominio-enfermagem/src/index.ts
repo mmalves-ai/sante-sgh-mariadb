@@ -44,5 +44,7 @@ export * from './sae/prescricao-enfermeiro.js';
 export * from './sae/vacina.js';
 export * from './escores/deterioracao-pa.js';
 export * from './protocolos/protocolo-internado.js';
+export * from './protocolos/criterios-etapas.js';
 export * from './feridas/lesao.js';
 export * from './sae/montagem.js';
+export * from './central/central-comando.js';

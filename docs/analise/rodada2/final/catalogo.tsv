@@ -2329,6 +2329,7 @@ iniciativa_estrategica_nota	REL	item	F8	Comentário datado sobre uma iniciativa 
 iniciativa_estrategica_objetivo	REL	vinculo	F8	Objetivos a que cada iniciativa contribui	DBAPORTAL INICIATIVA_ACAO_OBJETIVO, INICIATIVA_ACAO_INDICADOR	01	1
 iniciativa_estrategica_participante	REL	vinculo	F8	Pessoas ou perfis ligados à iniciativa (responsável, equipe, leitor) e os avisos que recebem	rodada2:nova	01	2
 mapa_estrategico	REL	principal	F8	Mapa estratégico do estabelecimento ou da rede para um ciclo, com missão, visão e vigência	DBAPORTAL ESTRATEGIA, ESTRATEGIA_MAPA_DIAGRAMA, ESTRATEGIA_MAPA_IMAGEM	01	3
+meta_cuidado_24h	REL	principal	F8	Metas das 24 horas do paciente internado (checklist diário do cuidado: segurança, mobilização, sedação e dor, nutrição, dispositivos, exames, alta, família), com prazo, cumprimento e justificativa; nunca apagada	rodada2:nova; construir-2 C2-053 (01-ADM L117), migração 19_REL/96_meta_cuidado_24h	01	0
 meta_indicador	REL	configuracao	F3	Meta do indicador por estabelecimento, unidade e período	DBAPORTAL META_INDICADOR, META_MENSAL; DBAMV GF_META	01	8
 modelo_pagina_inicial	REL	configuracao	F8	Página inicial montada pelo hospital, com nome, estabelecimento e situação	DBACP PAGINA, PAGINA_CONFIGURACAO, PASTA; DBAPORTAL CONFIG_PORTAL	01	3
 modelo_pagina_inicial_bloco	REL	item	F8	Blocos de cada página inicial, com posição, tamanho e configuração	DBACP PORTLET_CONFIGURACAO, PORTLET_LINK_PARAM, PASTA_CONFIGURACAO	01	10
