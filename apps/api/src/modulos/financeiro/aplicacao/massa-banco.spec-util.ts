@@ -55,6 +55,22 @@ export async function limparMassa(nucleo: NucleoProprio, ests: readonly number[]
   const q = ests.map(() => '?').join(', ');
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-07' }, async (e) => {
     const x = (sql: string) => e.executar(sql, [...ests]);
+    // F3.8 (07-FIN linha 76): a baixa pelo demonstrativo de pagamento e os acordos de renegociação.
+    await x(
+      `DELETE i FROM recebimento_item_conta i JOIN recebimento r ON r.id = i.recebimento_id WHERE r.estabelecimento_id IN (${q})`,
+    );
+    await x(
+      `DELETE i FROM demonstrativo_analise_conta_item i JOIN demonstrativo_analise_conta d ON d.id = i.demonstrativo_analise_conta_id WHERE d.estabelecimento_id IN (${q})`,
+    );
+    await x(`DELETE FROM demonstrativo_analise_conta WHERE estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE x FROM titulo_renegociado x JOIN renegociacao r ON r.id = x.renegociacao_id WHERE r.estabelecimento_id IN (${q})`,
+    );
+    await x(`UPDATE renegociacao SET novo_titulo_receber_id = NULL WHERE estabelecimento_id IN (${q})`);
+    await x(
+      `UPDATE titulo_receber SET tipo_origem = 'avulso', renegociacao_id = NULL WHERE renegociacao_id IS NOT NULL AND estabelecimento_id IN (${q})`,
+    );
+    await x(`DELETE FROM renegociacao WHERE estabelecimento_id IN (${q})`);
     await x(
       `DELETE d FROM documento_origem_titulo d JOIN titulo_receber t ON t.id = d.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
     );
