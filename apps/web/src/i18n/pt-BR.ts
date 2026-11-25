@@ -1,5 +1,6 @@
 // Textos da aplicação web (vue-i18n, pt-BR). Nenhum texto cru nos templates (lint).
 import { mensagensAdministracao } from '../modulos/administracao/i18n.js';
+import { mensagensKitImplantacao } from '../modulos/config/i18n-kit-implantacao.js';
 import { mensagensCatalogos } from '../modulos/catalogos/i18n.js';
 import { mensagensPrecos } from '../modulos/precos/i18n.js';
 import { mensagensCobrancaFonte } from '../modulos/precos/i18n-cobranca.js';
@@ -19,6 +20,7 @@ import { mensagensEstruturada } from '../modulos/agenda/i18n-estruturada.js';
 import { mensagensUsuariosAgenda } from '../modulos/agenda/i18n-usuarios-agenda.js';
 import { mensagensContatoAtivo } from '../modulos/agenda/i18n-contato-ativo.js';
 import { mensagensCotasPrazos } from '../modulos/agenda/i18n-cotas-prazos.js';
+import { mensagensTurmas } from '../modulos/agenda/i18n-turmas.js';
 import { mensagensPerfisMarcacao } from '../modulos/agenda/i18n-perfis-marcacao.js';
 import { mensagensExames } from '../modulos/exames/i18n.js';
 import { mensagensAtendimento } from '../modulos/atendimento/i18n.js';
@@ -742,6 +744,8 @@ export const mensagensWeb = {
     voltar: 'Ir para o início',
   },
   config: {
+    // C2-025 (01-ADM L98): o que falta para operar (i18n-kit-implantacao.ts).
+    kitImplantacao: mensagensKitImplantacao,
     saude: {
       tituloBanco: 'Saúde das conexões e do banco',
       textoBanco:
@@ -2362,6 +2366,7 @@ export const mensagensWeb = {
   usuariosAgenda: mensagensUsuariosAgenda,
   perfisMarcacao: mensagensPerfisMarcacao,
   cotasPrazos: mensagensCotasPrazos,
+  turmas: mensagensTurmas,
   contatoAtivo: mensagensContatoAtivo,
   // M19: recepção, senhas, totens e painéis.
   recepcao: mensagensRecepcao,

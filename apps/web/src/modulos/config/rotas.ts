@@ -4,6 +4,20 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 export const rotasConfig: RouteRecordRaw[] = [
+  // C2-025 (01-ADM L98): o que falta para operar (diagnóstico, implantação, metas e checklist padrão).
+  {
+    path: '/administracao/implantacao',
+    name: 'config.implantacao.kit',
+    component: () => import('./telas/KitImplantacaoTela.vue'),
+    meta: { permissao: 'implantacao.kit.ler' },
+  },
+  // 01-SIS L95: rotinas agendadas do sistema (última e próxima execução, atraso, histórico, acionar e suspender).
+  {
+    path: '/administracao/sistema/rotinas',
+    name: 'config.rotinas',
+    component: () => import('../administracao/telas/RotinasTela.vue'),
+    meta: { permissao: 'config.rotina.ler' },
+  },
   {
     path: '/administracao/coexistencia/schema',
     name: 'config.schema',

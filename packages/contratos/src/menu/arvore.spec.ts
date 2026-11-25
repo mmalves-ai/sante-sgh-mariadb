@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 455, M: 198, P: 57, N: 200 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 469, M: 198, P: 57, N: 214 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(455);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(469);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -151,6 +151,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/administracao/coexistencia/matriz', // M14
         '/administracao/coexistencia/schema', // M02
         '/administracao/empresa', // M10
+        '/administracao/implantacao', // C2-025 (01-ADM L98)
         '/administracao/integracoes/fachada', // M58 (etapa 4: fachada da API de integração da Hal-AI)
         '/administracao/integracoes/leiautes', // M13
         '/administracao/liberacao', // M08 (POL-3)
@@ -303,6 +304,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/enfermagem/sae', // M45 (etapa 4)
         '/enfermagem/classificacao', // M45 (etapa 2)
         '/enfermagem/escores', // M45 (etapa 2)
+        '/enfermagem/limites-sinais', // C2-003
         '/enfermagem/plantao',
         '/enfermagem/turno',
         '/enfermagem/turno?secao=cuidados', // M45 (etapa 4): a prescrição de enfermagem no turno
@@ -317,6 +319,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/demonstrativos', // M31
         '/faturamento/credenciamento', // M12
         '/faturamento/de-para-exames',
+        '/faturamento/descontos-franquias', // C2-043 (06-FAT linha 19)
         '/faturamento/glosas', // M31
         '/faturamento/guias', // M31
         '/faturamento/guias-convenio', // C1-122 (06-FAT linha 24)
@@ -514,6 +517,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/relatorios/envios-regulatorios', // M48 (etapa 5): PM-QUALISS, IRAS e Notivisa
         '/relatorios/glosas', // M31
         '/relatorios/indicadores', // M16
+        '/relatorios/paineis-gerenciais', // C2-077 (01-REL L112)
         '/relatorios/paineis/assistencial', // M16
         '/sadt/agencia/cadastros', // M47 (etapa 2)
         '/sadt/agencia/estoque', // M47 (etapa 2)
@@ -521,6 +525,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/sadt/agencia/imuno', // M47 (etapa 2)
         '/sadt/agencia/requisicoes', // M47 (etapa 1)
         '/sadt/amostras',
+        '/sadt/autoliberacao', // F8 (05-SADT linha 11)
         '/sadt/atendimentos', // M26
         '/sadt/coleta',
         '/sadt/entregas', // F3.5 (05-SADT linha 21)
@@ -556,6 +561,8 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/fiscal/reinf', // M32
         '/financeiro/gerencial', // M32
         '/financeiro/gerencial/reclassificar', // F3.8 (07-FIN linha 98)
+        '/financeiro/aprovacao/fluxos', // C2-016 (07-FIN linha 65)
+        '/financeiro/aprovacoes', // C2-016 (07-FIN linha 65)
         '/financeiro/pagar/adiantamentos', // M32
         '/financeiro/pagar/aprovacao', // M32
         '/financeiro/pagar/borderos', // M32
