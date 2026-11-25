@@ -8,6 +8,10 @@
 import {
   ADITIVOS_COM_EFEITO,
   carenciasAplicadas,
+  creditoDoCancelamento,
+  efeitoDoAditivo,
+  motivoDaBaixa,
+  type OfertaDoContrato,
   lerParametro,
   PARAMETROS_OPERADORA,
   type ChaveParametroOperadora,
@@ -66,6 +70,9 @@ export const TABELAS_CADASTRO_COMPLEMENTAR = [
   'cancelamento_contrato_plano',
   'contrato_plano',
   'beneficiario_plano',
+  'contrato_plano_oferta',
+  'movimento_cadastral_beneficiario',
+  'credito_fatura_plano',
   'area_abrangencia_produto',
   'carencia_aplicada',
   'solicitacao_cartao_beneficiario',
@@ -219,6 +226,8 @@ export interface EntradaAditivo {
   valorNovo: number | null;
   novaVigenciaFim: string | null;
   descricao: string;
+  /** Tabela de preço que passa a valer (inclusão, preço; na troca, opcional). */
+  tabelaPreco?: number | null;
 }
 export interface EntradaCancelamento {
   motivo: number;
@@ -228,6 +237,33 @@ export interface EntradaCancelamento {
   avisoRecebimento: string | null;
   avisoEntregueEm: string | null;
   observacao: string | null;
+  /** Crédito ao contratante pelo que pagou adiante do efeito (vira crédito de fatura na efetivação). */
+  valorCredito?: number | null;
+}
+
+export interface ContratoResumo {
+  id: number;
+  numero: string;
+  situacao: string;
+  inicio: string;
+  fim: string | null;
+  contratacao: string;
+}
+export interface PainelContrato {
+  contrato: ContratoResumo;
+  ofertas: {
+    id: number;
+    plano: number;
+    nomePlano: string;
+    tabela: number;
+    nomeTabela: string;
+    inicio: string;
+    fim: string | null;
+    vidas: number;
+  }[];
+  planos: { id: number; nome: string }[];
+  tabelas: { id: number; nome: string }[];
+  motivos: { id: number; descricao: string; exigeNotificacao: boolean; temBaixa: boolean }[];
 }
 
 export type Gravado = { id: number };
@@ -335,45 +371,247 @@ export class PortaCadastroComplementarPropria {
         campos: [campo],
       });
   }
-  /** O aditivo vigente de prorrogação ou renovação estende a vigência do contrato (prazo determinado). */
+  /** A tabela de preço citada é da operadora do contrato. */
+  private static async tabelaDaOperadora(l: Leitor, op: number, id: number | null): Promise<void> {
+    if (id === null) return;
+    const r = await l.uma(
+      'SELECT 1 AS ok FROM tabela_preco_plano WHERE id = ? AND operadora_saude_id = ? AND excluido_em IS NULL',
+      [id, op],
+    );
+    if (!r)
+      throw recusa('tabela-fora-da-operadora', 'A tabela de preço não é da operadora deste contrato.', {
+        campos: ['tabelaPreco'],
+      });
+  }
+  /** As ofertas do contrato (plano, tabela e período) e a contagem de beneficiários vigentes por plano. */
+  private static async ofertasDoContrato(l: Leitor, contrato: number) {
+    const os = await l.consultar(
+      'SELECT id, plano_comercializado_id, tabela_preco_plano_id, vigencia_inicio, vigencia_fim FROM contrato_plano_oferta WHERE contrato_plano_id = ? AND excluido_em IS NULL',
+      [contrato],
+      { teto: 500 },
+    );
+    const bs = await l.consultar(
+      `SELECT plano_comercializado_id AS p, COUNT(*) AS n FROM beneficiario_plano WHERE contrato_plano_id = ? AND excluido_em IS NULL
+          AND situacao <> 'excluido' AND fim_vigencia IS NULL GROUP BY plano_comercializado_id`,
+      [contrato],
+      { teto: 500 },
+    );
+    const porPlano = new Map(bs.map((b) => [Number(b['p']), Number(b['n'])]));
+    const ofertas: OfertaDoContrato[] = os.map((o) => ({
+      id: Number(o['id']),
+      plano: Number(o['plano_comercializado_id']),
+      tabela: Number(o['tabela_preco_plano_id']),
+      inicio: dataIso(o['vigencia_inicio']) ?? '',
+      fim: dataIso(o['vigencia_fim']),
+    }));
+    return { ofertas, vigentes: (p: number) => porPlano.get(p) ?? 0 };
+  }
+  /**
+   * O aditivo vigente muda o contrato: prorrogação ou renovação estende a vigência (prazo determinado); troca, inclusão,
+   * exclusão de plano e preço encerram a oferta antiga na véspera do efeito e abrem a nova (regra efeitoDoAditivo), e a
+   * troca leva os beneficiários vigentes ao plano novo com o movimento cadastral de mudança contratual.
+   */
   private static async aplicarAditivo(
     tx: TxOperacao,
     est: number,
     contrato: number,
-    tipo: string,
-    novaVigenciaFim: string | null,
+    a: {
+      tipo: string;
+      efeito: string;
+      novaVigenciaFim: string | null;
+      planoAnterior: number | null;
+      planoNovo: number | null;
+      tabelaPreco: number | null;
+    },
   ): Promise<void> {
-    if (!ADITIVOS_COM_EFEITO.includes(tipo) || !novaVigenciaFim) return;
-    const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
-    const fim = dataIso(ctr['fim_vigencia']);
-    if (fim !== null && novaVigenciaFim <= fim)
-      throw recusa('vigencia-invalida', 'O novo fim precisa ser depois do fim atual do contrato.', {
-        campos: ['novaVigenciaFim'],
+    if (ADITIVOS_COM_EFEITO.includes(a.tipo) && a.novaVigenciaFim) {
+      const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
+      const fim = dataIso(ctr['fim_vigencia']);
+      if (fim !== null && a.novaVigenciaFim <= fim)
+        throw recusa('vigencia-invalida', 'O novo fim precisa ser depois do fim atual do contrato.', {
+          campos: ['novaVigenciaFim'],
+        });
+      await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
+        fim_vigencia: a.novaVigenciaFim,
+        tipo_vigencia: 'determinada',
       });
-    await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
-      fim_vigencia: novaVigenciaFim,
-      tipo_vigencia: 'determinada',
-    });
+      return;
+    }
+    await tx.consultarParaAtualizar(
+      'SELECT id FROM contrato_plano_oferta WHERE contrato_plano_id = ? AND excluido_em IS NULL',
+      [contrato],
+      { teto: 500 },
+    );
+    const { ofertas, vigentes } = await PortaCadastroComplementarPropria.ofertasDoContrato(tx, contrato);
+    const ef = efeitoDoAditivo(a, ofertas, vigentes);
+    exigir(ef.problemas);
+    const versoes = new Map(
+      (
+        await tx.consultar(
+          'SELECT id, versao FROM contrato_plano_oferta WHERE contrato_plano_id = ?',
+          [contrato],
+          {
+            teto: 500,
+          },
+        )
+      ).map((o) => [Number(o['id']), Number(o['versao'])]),
+    );
+    for (const f of ef.fechar)
+      await tx.alterar('contrato_plano_oferta', f.oferta, versoes.get(f.oferta) ?? 1, {
+        vigencia_fim: f.fim,
+      });
+    for (const o of ef.abrir) {
+      const modelo = o.copiaDe
+        ? await tx.uma(
+            `SELECT tabela_preco_aposentado_id, faixa_etaria_modelo_id, regra_franquia_plano_id, grupo_prazo_carencia_id,
+                    indice_reajuste_plano_id, teto_franquia FROM contrato_plano_oferta WHERE id = ?`,
+            [o.copiaDe],
+          )
+        : null;
+      await tx.incluir('contrato_plano_oferta', {
+        contrato_plano_id: contrato,
+        plano_comercializado_id: o.plano,
+        tabela_preco_plano_id: o.tabela,
+        tabela_preco_aposentado_id: modelo?.['tabela_preco_aposentado_id'] ?? null,
+        faixa_etaria_modelo_id: modelo?.['faixa_etaria_modelo_id'] ?? null,
+        regra_franquia_plano_id: modelo?.['regra_franquia_plano_id'] ?? null,
+        grupo_prazo_carencia_id: modelo?.['grupo_prazo_carencia_id'] ?? null,
+        indice_reajuste_plano_id: modelo?.['indice_reajuste_plano_id'] ?? null,
+        teto_franquia: modelo?.['teto_franquia'] ?? null,
+        vigencia_inicio: o.inicio,
+      });
+    }
+    if (ef.mover) {
+      const bens = await tx.consultarParaAtualizar(
+        `SELECT b.id, b.versao, cp.produto_plano_id FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id
+          WHERE b.contrato_plano_id = ? AND b.plano_comercializado_id = ? AND b.excluido_em IS NULL
+            AND b.situacao <> 'excluido' AND b.fim_vigencia IS NULL`,
+        [contrato, ef.mover.de],
+        { teto: 100_000 },
+      );
+      const prod = await tx.uma('SELECT produto_plano_id FROM plano_comercializado WHERE id = ?', [
+        ef.mover.para,
+      ]);
+      for (const b of bens) {
+        await tx.alterar('beneficiario_plano', Number(b['id']), Number(b['versao']), {
+          plano_comercializado_id: ef.mover.para,
+        });
+        await tx.incluir('movimento_cadastral_beneficiario', {
+          beneficiario_plano_id: Number(b['id']),
+          operacao: 'alteracao',
+          dados: JSON.stringify({
+            tipo: 'mudanca_contratual',
+            planoAnterior: ef.mover.de,
+            planoNovo: ef.mover.para,
+          }),
+          ocorrido_em: new Date(),
+          usuario_id: tx.contexto.usuario,
+          tipo_movimento: 'mudanca_contratual',
+          data_efeito: a.efeito,
+          situacao: 'efetivado',
+          contrato_plano_anterior_id: contrato,
+          contrato_plano_id: contrato,
+          produto_plano_anterior_id: inteiro(b['produto_plano_id']),
+          produto_plano_id: inteiro(prod?.['produto_plano_id']),
+          canal: 'manual',
+        });
+      }
+    }
   }
-  /** Encerra o contrato na data de efeito e fecha a vigência dos beneficiários abertos. */
-  private static async encerrarContrato(tx: TxOperacao, est: number, contrato: number, efeito: string) {
+  /**
+   * Encerra o contrato na data de efeito: fecha a vigência e dá a baixa cadastral de cada beneficiário aberto (situação
+   * excluído, data e motivo de exclusão ligado ao motivo do cancelamento, com o movimento cadastral) e lança o crédito
+   * ao contratante pelo que foi pago adiante do efeito (crédito de fatura em aberto, abatido nas faturas seguintes).
+   */
+  private static async encerrarContrato(
+    tx: TxOperacao,
+    est: number,
+    contrato: number,
+    efeito: string,
+    k: { motivo: number; protocolo: string; credito: number | null },
+  ) {
     const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
+    const bens = await tx.consultarParaAtualizar(
+      `SELECT b.id, b.versao, b.inicio_vigencia, b.situacao, b.fim_vigencia, cp.produto_plano_id
+         FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id
+        WHERE b.contrato_plano_id = ? AND b.excluido_em IS NULL AND (b.fim_vigencia IS NULL OR b.situacao <> 'excluido')`,
+      [contrato],
+      { teto: 100_000 },
+    );
+    let motivoBaixa: number | null = null;
+    if (bens.length > 0) {
+      const ms = await tx.consultar(
+        "SELECT id, motivo_cancelamento_contrato_id FROM motivo_movimento_cadastral WHERE tipo_movimento = 'exclusao' AND ativo = TRUE AND motivo_cancelamento_contrato_id = ?",
+        [k.motivo],
+        { teto: 50 },
+      );
+      const m = motivoDaBaixa(
+        ms.map((x) => ({
+          id: Number(x['id']),
+          motivoCancelamento: inteiro(x['motivo_cancelamento_contrato_id']),
+        })),
+        k.motivo,
+      );
+      if ('codigo' in m) exigir([m]);
+      else motivoBaixa = m.id;
+    }
     const inicio = dataIso(ctr['inicio_vigencia']) ?? efeito;
     await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
       situacao: 'encerrado',
       fim_vigencia: efeito < inicio ? inicio : efeito,
       tipo_vigencia: 'determinada',
     });
-    // A vigência dos beneficiários termina com o contrato (a baixa cadastral de cada um segue pela rotina de baixa).
-    const bens = await tx.consultarParaAtualizar(
-      'SELECT id, versao, inicio_vigencia FROM beneficiario_plano WHERE contrato_plano_id = ? AND excluido_em IS NULL AND fim_vigencia IS NULL',
-      [contrato],
-      { teto: 100_000 },
-    );
     for (const b of bens) {
       const ini = dataIso(b['inicio_vigencia']) ?? efeito;
-      await tx.alterar('beneficiario_plano', Number(b['id']), Number(b['versao']), {
-        fim_vigencia: efeito < ini ? ini : efeito,
+      const fim = efeito < ini ? ini : efeito;
+      const ja = textoObrigatorio(b['situacao']) === 'excluido';
+      await tx.alterar(
+        'beneficiario_plano',
+        Number(b['id']),
+        Number(b['versao']),
+        ja
+          ? { fim_vigencia: dataIso(b['fim_vigencia']) ?? fim }
+          : {
+              fim_vigencia: fim,
+              situacao: 'excluido',
+              data_exclusao: fim,
+              motivo_movimento_cadastral_id: motivoBaixa,
+            },
+      );
+      if (!ja)
+        await tx.incluir('movimento_cadastral_beneficiario', {
+          beneficiario_plano_id: Number(b['id']),
+          operacao: 'alteracao',
+          dados: JSON.stringify({ tipo: 'exclusao', cancelamento: k.protocolo }),
+          ocorrido_em: new Date(),
+          usuario_id: tx.contexto.usuario,
+          tipo_movimento: 'exclusao',
+          motivo_movimento_cadastral_id: motivoBaixa,
+          data_efeito: fim,
+          situacao: 'efetivado',
+          contrato_plano_id: contrato,
+          produto_plano_id: inteiro(b['produto_plano_id']),
+          cancela_mensalidades: true,
+          canal: 'manual',
+        });
+    }
+    if (k.credito !== null && k.credito > 0) {
+      await garantirSequencia(
+        tx,
+        { tipo: 'credito_fatura_plano', estabelecimento: est },
+        { usuario: tx.contexto.usuario, agora: new Date() },
+      );
+      const numero = await tx.proximoNumero('credito_fatura_plano');
+      await tx.incluir('credito_fatura_plano', {
+        estabelecimento_id: est,
+        numero: numero.formatado,
+        contrato_plano_id: contrato,
+        tipo_credito: 'devolucao',
+        data_credito: efeito,
+        valor: k.credito,
+        saldo: k.credito,
+        motivo: `Cancelamento ${k.protocolo}: pagamento adiante do efeito`,
+        situacao: 'aberto',
       });
     }
   }
@@ -653,6 +891,95 @@ export class PortaCadastroComplementarPropria {
     );
   }
 
+  // ---- painel do contrato (tela de aditivos e cancelamento) ----
+  /** Contratos do estabelecimento pelo número (começo do número; até 20). */
+  contratosPorNumero(c: ContextoSessao, numero: string): Promise<ContratoResumo[]> {
+    const termo = numero.replace(/[%_\\]/g, '').trim();
+    return this.ler(c, async (l, est) => {
+      if (termo.length < 1) return [];
+      const rs = await l.consultar(
+        `SELECT cp.id, cp.numero, cp.situacao, cp.inicio_vigencia, cp.fim_vigencia, cl.tipo_contratacao
+           FROM contrato_plano cp JOIN classificacao_plano cl ON cl.id = cp.classificacao_plano_id
+          WHERE cp.estabelecimento_id = ? AND cp.excluido_em IS NULL AND cp.numero LIKE ? ORDER BY cp.numero LIMIT 20`,
+        [est, `${termo}%`],
+        { teto: 20 },
+      );
+      return rs.map(PortaCadastroComplementarPropria.resumo);
+    });
+  }
+  private static resumo(r: Record<string, unknown>): ContratoResumo {
+    return {
+      id: Number(r['id']),
+      numero: textoObrigatorio(r['numero']),
+      situacao: textoObrigatorio(r['situacao']),
+      inicio: dataIso(r['inicio_vigencia']) ?? '',
+      fim: dataIso(r['fim_vigencia']),
+      contratacao: textoObrigatorio(r['tipo_contratacao']),
+    };
+  }
+  /** O contrato com os planos ofertados (vigentes e encerrados), os planos e tabelas que o aditivo pode citar e os motivos. */
+  painelContrato(c: ContextoSessao, contrato: number): Promise<PainelContrato> {
+    return this.ler(c, async (l, est) => {
+      await PortaCadastroComplementarPropria.contratoDoEst(l, est, contrato);
+      const ctr = await l.uma(
+        `SELECT cp.id, cp.numero, cp.situacao, cp.inicio_vigencia, cp.fim_vigencia, cp.operadora_saude_id, cl.tipo_contratacao
+           FROM contrato_plano cp JOIN classificacao_plano cl ON cl.id = cp.classificacao_plano_id WHERE cp.id = ?`,
+        [contrato],
+      );
+      const op = Number(ctr!['operadora_saude_id']);
+      const ofertas = await l.consultar(
+        `SELECT o.id, o.plano_comercializado_id, pc.nome_comercial, o.tabela_preco_plano_id, t.nome AS tabela, o.vigencia_inicio, o.vigencia_fim,
+                (SELECT COUNT(*) FROM beneficiario_plano b WHERE b.contrato_plano_id = o.contrato_plano_id
+                   AND b.plano_comercializado_id = o.plano_comercializado_id AND b.excluido_em IS NULL
+                   AND b.situacao <> 'excluido' AND b.fim_vigencia IS NULL) AS vidas
+           FROM contrato_plano_oferta o JOIN plano_comercializado pc ON pc.id = o.plano_comercializado_id
+           JOIN tabela_preco_plano t ON t.id = o.tabela_preco_plano_id
+          WHERE o.contrato_plano_id = ? AND o.excluido_em IS NULL ORDER BY o.vigencia_inicio DESC, o.id DESC`,
+        [contrato],
+        { teto: 500 },
+      );
+      const planos = await l.consultar(
+        "SELECT id, nome_comercial FROM plano_comercializado WHERE estabelecimento_id = ? AND excluido_em IS NULL AND situacao = 'ativo' ORDER BY nome_comercial, id",
+        [est],
+        { teto: 500 },
+      );
+      const tabelas = await l.consultar(
+        'SELECT id, nome FROM tabela_preco_plano WHERE operadora_saude_id = ? AND excluido_em IS NULL ORDER BY nome, id',
+        [op],
+        { teto: 500 },
+      );
+      const motivos = await l.consultar(
+        `SELECT m.id, m.descricao, m.exige_notificacao_previa,
+                EXISTS (SELECT 1 FROM motivo_movimento_cadastral x WHERE x.motivo_cancelamento_contrato_id = m.id
+                          AND x.tipo_movimento = 'exclusao' AND x.ativo = TRUE) AS tem_baixa
+           FROM motivo_cancelamento_contrato m WHERE m.ativo = TRUE ORDER BY m.descricao, m.id`,
+        [],
+        { teto: 200 },
+      );
+      return {
+        contrato: PortaCadastroComplementarPropria.resumo(ctr!),
+        ofertas: ofertas.map((o) => ({
+          id: Number(o['id']),
+          plano: Number(o['plano_comercializado_id']),
+          nomePlano: textoObrigatorio(o['nome_comercial']),
+          tabela: Number(o['tabela_preco_plano_id']),
+          nomeTabela: textoObrigatorio(o['tabela']),
+          inicio: dataIso(o['vigencia_inicio']) ?? '',
+          fim: dataIso(o['vigencia_fim']),
+          vidas: Number(o['vidas']),
+        })),
+        planos: planos.map((x) => ({ id: Number(x['id']), nome: textoObrigatorio(x['nome_comercial']) })),
+        tabelas: tabelas.map((x) => ({ id: Number(x['id']), nome: textoObrigatorio(x['nome']) })),
+        motivos: motivos.map((x) => ({
+          id: Number(x['id']),
+          descricao: textoObrigatorio(x['descricao']),
+          exigeNotificacao: booleano(x['exige_notificacao_previa']),
+          temBaixa: booleano(x['tem_baixa']),
+        })),
+      };
+    });
+  }
+
   // ---- aditivo ----
   aditivos(c: ContextoSessao, contrato: number): Promise<Aditivo[]> {
     return this.ler(c, async (l, est) => {
@@ -691,6 +1018,15 @@ export class PortaCadastroComplementarPropria {
         );
         await PortaCadastroComplementarPropria.planoDoEst(tx, est, x.planoAnterior, 'planoAnterior');
         await PortaCadastroComplementarPropria.planoDoEst(tx, est, x.planoNovo, 'planoNovo');
+        const tabelaPreco = x.tabelaPreco ?? null;
+        await PortaCadastroComplementarPropria.tabelaDaOperadora(
+          tx,
+          Number(ctr['operadora_saude_id']),
+          tabelaPreco,
+        );
+        // Conferência antecipada dos planos ofertados: o rascunho já diz o que a assinatura vai recusar.
+        const { ofertas, vigentes } = await PortaCadastroComplementarPropria.ofertasDoContrato(tx, contrato);
+        exigir(efeitoDoAditivo({ ...x, tabelaPreco }, ofertas, vigentes).problemas);
         const vigente = x.assinatura !== null;
         const id = await tx.incluir('aditivo_contrato_plano', {
           contrato_plano_id: contrato,
@@ -707,12 +1043,13 @@ export class PortaCadastroComplementarPropria {
           novo_plano_comercializado_id: x.planoNovo,
           valor_anterior: x.valorAnterior,
           valor_novo: x.valorNovo,
+          tabela_preco_plano_id: tabelaPreco,
           nova_vigencia_fim: x.novaVigenciaFim,
           descricao: x.descricao,
           situacao: vigente ? 'vigente' : 'rascunho',
         });
         if (vigente)
-          await PortaCadastroComplementarPropria.aplicarAditivo(tx, est, contrato, x.tipo, x.novaVigenciaFim);
+          await PortaCadastroComplementarPropria.aplicarAditivo(tx, est, contrato, { ...x, tabelaPreco });
         return { id };
       },
     );
@@ -728,7 +1065,8 @@ export class PortaCadastroComplementarPropria {
       async (tx, est, hoje) => {
         const r = await umaTravada(
           tx,
-          `SELECT a.id, a.versao, a.situacao, a.tipo_aditivo, a.data_efeito, a.nova_vigencia_fim, a.contrato_plano_id
+          `SELECT a.id, a.versao, a.situacao, a.tipo_aditivo, a.data_efeito, a.nova_vigencia_fim, a.contrato_plano_id,
+                  a.anterior_plano_comercializado_id, a.novo_plano_comercializado_id, a.tabela_preco_plano_id
              FROM aditivo_contrato_plano a JOIN contrato_plano cp ON cp.id = a.contrato_plano_id
             WHERE a.id = ? AND cp.estabelecimento_id = ? AND a.excluido_em IS NULL`,
           [id, est],
@@ -746,13 +1084,14 @@ export class PortaCadastroComplementarPropria {
           situacao: 'vigente',
           data_assinatura: assinatura,
         });
-        await PortaCadastroComplementarPropria.aplicarAditivo(
-          tx,
-          est,
-          Number(r['contrato_plano_id']),
-          textoObrigatorio(r['tipo_aditivo']),
-          dataIso(r['nova_vigencia_fim']),
-        );
+        await PortaCadastroComplementarPropria.aplicarAditivo(tx, est, Number(r['contrato_plano_id']), {
+          tipo: textoObrigatorio(r['tipo_aditivo']),
+          efeito: dataIso(r['data_efeito']) ?? hoje,
+          novaVigenciaFim: dataIso(r['nova_vigencia_fim']),
+          planoAnterior: inteiro(r['anterior_plano_comercializado_id']),
+          planoNovo: inteiro(r['novo_plano_comercializado_id']),
+          tabelaPreco: inteiro(r['tabela_preco_plano_id']),
+        });
         return { id };
       },
     );
@@ -813,7 +1152,8 @@ export class PortaCadastroComplementarPropria {
           tipoContratacao: textoObrigatorio(ctr['tipo_contratacao']) as TipoContratacao,
           inicioContrato: dataIso(ctr['inicio_vigencia']) ?? hoje,
         });
-        exigir(plano.problemas);
+        const credito = creditoDoCancelamento(x.valorCredito ?? null);
+        exigir([...plano.problemas, ...(credito.problema ? [credito.problema] : [])]);
         await garantirSequencia(
           tx,
           { tipo: 'cancelamento_contrato_plano', estabelecimento: est },
@@ -833,11 +1173,16 @@ export class PortaCadastroComplementarPropria {
           dias_atraso: x.diasAtraso,
           aviso_recebimento: x.avisoRecebimento,
           aviso_entregue_em: x.avisoEntregueEm,
+          valor_credito: credito.valor,
           observacao: x.observacao,
         });
         // Pedido do titular no contrato individual (RN 412): efeito na ciência, sem depender de outra pessoa.
         if (plano.efetivarJa)
-          await PortaCadastroComplementarPropria.encerrarContrato(tx, est, contrato, plano.dataEfeito);
+          await PortaCadastroComplementarPropria.encerrarContrato(tx, est, contrato, plano.dataEfeito, {
+            motivo: x.motivo,
+            protocolo: protocolo.formatado,
+            credito: credito.valor,
+          });
         else
           await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
             situacao: 'em_cancelamento',
@@ -856,7 +1201,8 @@ export class PortaCadastroComplementarPropria {
       async (tx, est, hoje) => {
         const r = await umaTravada(
           tx,
-          `SELECT k.id, k.versao, k.situacao, k.data_efeito, k.contrato_plano_id FROM cancelamento_contrato_plano k
+          `SELECT k.id, k.versao, k.situacao, k.data_efeito, k.contrato_plano_id, k.motivo_cancelamento_contrato_id,
+                  k.protocolo, k.valor_credito FROM cancelamento_contrato_plano k
            JOIN contrato_plano cp ON cp.id = k.contrato_plano_id WHERE k.id = ? AND cp.estabelecimento_id = ?`,
           [id, est],
         );
@@ -874,6 +1220,11 @@ export class PortaCadastroComplementarPropria {
           est,
           Number(r['contrato_plano_id']),
           efeito,
+          {
+            motivo: Number(r['motivo_cancelamento_contrato_id']),
+            protocolo: textoObrigatorio(r['protocolo']),
+            credito: numero(r['valor_credito']),
+          },
         );
         return { id };
       },

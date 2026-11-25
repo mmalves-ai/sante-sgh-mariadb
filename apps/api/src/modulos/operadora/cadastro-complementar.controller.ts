@@ -7,6 +7,8 @@
 //   POST operadora/complementar/empresas/:op/departamentos        operadora.empresa.editar (id e versão no corpo: altera)
 //   GET  operadora/complementar/empresas/:op/parametros           operadora.beneficiario.ler
 //   POST operadora/complementar/empresas/:op/parametros           operadora.empresa.editar
+//   GET  operadora/complementar/contratos?numero=                operadora.beneficiario.ler
+//   GET  operadora/complementar/contratos/:id/painel              operadora.beneficiario.ler
 //   GET  operadora/complementar/contratos/:id/aditivos            operadora.beneficiario.ler
 //   POST operadora/complementar/contratos/:id/aditivos            operadora.beneficiario.editar
 //   GET  operadora/complementar/contratos/:id/cancelamentos       operadora.beneficiario.ler
@@ -84,6 +86,7 @@ const esquemaAditivo = z.object({
   valorNovo: z.number().nonnegative().nullable(),
   novaVigenciaFim: data.nullable(),
   descricao: z.string().min(1).max(4000),
+  tabelaPreco: id.nullable().default(null),
 });
 const esquemaCancelamento = z.object({
   motivo: id,
@@ -93,6 +96,7 @@ const esquemaCancelamento = z.object({
   avisoRecebimento: z.string().max(40).nullable(),
   avisoEntregueEm: data.nullable(),
   observacao: z.string().max(4000).nullable(),
+  valorCredito: z.number().nonnegative().max(9_999_999_999).nullable().default(null),
 });
 const esquemaAbrangencia = z.object({
   areas: z
@@ -203,6 +207,18 @@ export class CadastroComplementarOperadoraController {
         this.trilha(s, 'operadora.parametro.definido', 'parametro_operadora'),
       ),
     );
+  }
+
+  @Get('operadora/complementar/contratos')
+  @Permissao(LER)
+  contratos(@Query('numero') numero: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.ok(this.porta.contratosPorNumero(sessaoDe(req).porta, String(numero ?? '').slice(0, 30)));
+  }
+
+  @Get('operadora/complementar/contratos/:id/painel')
+  @Permissao(LER)
+  painelContrato(@Param('id') ctr: string, @Req() req: RequisicaoAutorizada) {
+    return this.ok(this.porta.painelContrato(sessaoDe(req).porta, idDaRota(ctr)));
   }
 
   @Get('operadora/complementar/contratos/:id/aditivos')

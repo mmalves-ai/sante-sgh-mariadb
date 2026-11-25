@@ -56,6 +56,16 @@ async function limparComplementar(n: NucleoProprio, m: MassaBase) {
     const ope =
       'SELECT operadora_saude_id FROM operadora_saude_estabelecimento WHERE estabelecimento_id IN (?, ?)';
     await e.executar(`DELETE FROM aditivo_contrato_plano WHERE contrato_plano_id IN (${ctr})`, ests);
+    await e.executar(`DELETE FROM contrato_plano_oferta WHERE contrato_plano_id IN (${ctr})`, ests);
+    await e.executar(`DELETE FROM credito_fatura_plano WHERE estabelecimento_id IN (?, ?)`, ests);
+    await e.executar(
+      `UPDATE beneficiario_plano SET plano_comercializado_id = (SELECT MIN(pc.id) FROM plano_comercializado pc WHERE pc.estabelecimento_id IN (?, ?) AND pc.codigo NOT LIKE 'f7808-%') WHERE contrato_plano_id IN (${ctr})`,
+      [...ests, ...ests],
+    );
+    await e.executar(
+      `DELETE FROM plano_comercializado WHERE estabelecimento_id IN (?, ?) AND codigo LIKE 'f7808-%'`,
+      ests,
+    );
     await e.executar(`DELETE FROM cancelamento_contrato_plano WHERE contrato_plano_id IN (${ctr})`, ests);
     await e.executar(`DELETE FROM carencia_aplicada WHERE beneficiario_plano_id IN (${ben})`, ests);
     await e.executar(
@@ -98,10 +108,20 @@ beforeAll(async () => {
             [codigo, `Motivo ${codigo} (sintético)`, tipo, exige],
           );
     };
-    return [
+    const ids = [
       await motivo('f7808-pedido', 'pedido_contratante', false),
       await motivo('f7808-inadimp', 'inadimplencia', true),
     ];
+    // O motivo de exclusão do beneficiário ligado a cada motivo de cancelamento (a baixa cadastral da efetivação).
+    for (const [i, m] of ids.entries()) {
+      const cod = `f7808-baixa-${i}`;
+      if (!(await e.uma('SELECT id FROM motivo_movimento_cadastral WHERE codigo = ?', [cod])))
+        await e.inserir(
+          "INSERT INTO motivo_movimento_cadastral (codigo, descricao, tipo_movimento, motivo_cancelamento_contrato_id, criado_em) VALUES (?, ?, 'exclusao', ?, NOW(3))",
+          [cod, `Baixa ${cod} (sintético)`, m],
+        );
+    }
+    return ids;
   });
   [motivoPedido, motivoInadimplencia] = ids as [number, number];
 }, 120_000);
@@ -571,15 +591,41 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
         )
       ).map((r) => [r['s'], Number(r['abertos'])])[0];
     expect(await fechado()).toEqual(['encerrado', 0]);
+    // Baixa cadastral de cada beneficiário: excluído na data de efeito, com o motivo ligado e o movimento de exclusão.
+    const baixa = async () =>
+      (
+        await q<{ s: unknown; d: unknown; m: unknown; n: unknown }>(
+          `SELECT b.situacao AS s, DATE_FORMAT(b.data_exclusao, '%Y-%m-%d') AS d, mm.codigo AS m,
+                  (SELECT COUNT(*) FROM movimento_cadastral_beneficiario v WHERE v.beneficiario_plano_id = b.id
+                     AND v.tipo_movimento = 'exclusao' AND v.motivo_movimento_cadastral_id = b.motivo_movimento_cadastral_id) AS n
+             FROM beneficiario_plano b JOIN motivo_movimento_cadastral mm ON mm.id = b.motivo_movimento_cadastral_id
+            WHERE b.contrato_plano_id = ? ORDER BY b.id`,
+          [ctr],
+        )
+      ).map((r) => [r['s'], r['d'], r['m'], Number(r['n'])]);
+    expect(await baixa()).toEqual([
+      ['excluido', hoje, 'f7808-baixa-0', 1],
+      ['excluido', hoje, 'f7808-baixa-0', 1],
+    ]);
 
     // Efetivação dos vencidos (a rotina diária): massa volta o contrato a ativo e pede por inadimplência com efeito hoje.
     await nucleo!.escrever({ cliente: CLIENTE, correlacao: 'preparo-f7808' }, (e) =>
       e.executar("UPDATE contrato_plano SET situacao = 'ativo', versao = versao + 1 WHERE id = ?", [ctr]),
     );
+    expect(
+      await codigoDe(
+        porta!.solicitarCancelamento(
+          c,
+          ctr,
+          { ...inadimp, avisoEntregueEm: somarDias(hoje, -25), valorCredito: 10.005 },
+          trilha('x'),
+        ),
+      ),
+    ).toBe('credito-invalido');
     const venc = await porta!.solicitarCancelamento(
       c,
       ctr,
-      { ...inadimp, avisoEntregueEm: somarDias(hoje, -25) },
+      { ...inadimp, avisoEntregueEm: somarDias(hoje, -25), valorCredito: 120.5 },
       trilha('operadora.cancelamento.solicitado'),
     );
     expect(await situacaoDoContrato()).toBe('em_cancelamento');
@@ -590,6 +636,15 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
       },
     );
     expect(await situacaoDoContrato()).toBe('encerrado');
+    // Crédito ao contratante pelo pago adiante: crédito de fatura em aberto com o saldo inteiro, com número de negócio.
+    const creditos = await q<{ v: unknown; s: unknown; t: unknown; x: unknown; n: unknown }>(
+      'SELECT valor AS v, saldo AS s, tipo_credito AS t, situacao AS x, numero AS n FROM credito_fatura_plano WHERE contrato_plano_id = ?',
+      [ctr],
+    );
+    expect(creditos.map((r) => [Number(r['v']), Number(r['s']), r['t'], r['x']])).toEqual([
+      [120.5, 120.5, 'devolucao', 'aberto'],
+    ]);
+    expect(String(creditos[0]!['n']).length).toBeGreaterThan(0);
     // Nada apagado: o histórico dos pedidos continua consultável.
     expect((await porta!.cancelamentos(c, ctr)).map((x) => [x.id, x.situacao])).toEqual([
       [ag.id, 'cancelado'],
@@ -615,5 +670,160 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
       'operadora.cancelamento.efetivar',
       'operadora.cancelamento.solicitar',
     ]);
+  });
+  it('08-SGO L94 (C2-108): troca, inclusão, preço e exclusão de plano mudam as ofertas do contrato e o plano dos beneficiários', async () => {
+    const c = contexto(massa!);
+    // Contrato próprio deste caso (o anterior ficou encerrado): nova carteira sintética.
+    const { servico } = servicoNoBanco(nucleo!);
+    const k = await montarCarteira(servico, sessao(massa!), { registro: '478082', base: '7809' });
+    const ctr = k.contrato;
+    const [h] = await q<{ h: unknown }>("SELECT DATE_FORMAT(CURRENT_DATE, '%Y-%m-%d') AS h");
+    const hoje = String(h!['h']);
+    const ids = await nucleo!.escrever({ cliente: CLIENTE, correlacao: 'preparo-f7808' }, async (e) => {
+      const [b] = (await e.consultar(
+        'SELECT plano_comercializado_id AS p FROM beneficiario_plano WHERE contrato_plano_id = ? LIMIT 1',
+        [ctr],
+      )) as { p: unknown }[];
+      const p1 = Number(b!['p']);
+      const novoPlano = (cod: string) =>
+        e.inserir(
+          `INSERT INTO plano_comercializado (estabelecimento_id, produto_plano_id, codigo, nome_comercial, vigencia_inicio, criado_em)
+           SELECT estabelecimento_id, produto_plano_id, ?, ?, vigencia_inicio, NOW(3) FROM plano_comercializado WHERE id = ?`,
+          [cod, `Plano ${cod} (sintético)`, p1],
+        );
+      const tabela = (cod: string) =>
+        e.inserir(
+          "INSERT INTO tabela_preco_plano (operadora_saude_id, codigo, nome, modelo_valor, situacao, vigencia_inicio, criado_em) VALUES (?, ?, ?, 'unico', 'vigente', '2020-01-01', NOW(3))",
+          [k.operadora, cod, `Tabela ${cod} (sintética)`],
+        );
+      const [p2, p3, t1, t2, t3] = [
+        await novoPlano('f7808-p2'),
+        await novoPlano('f7808-p3'),
+        await tabela('f7808-t1'),
+        await tabela('f7808-t2'),
+        await tabela('f7808-t3'),
+      ];
+      await e.executar(
+        "INSERT INTO contrato_plano_oferta (contrato_plano_id, plano_comercializado_id, tabela_preco_plano_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, '2020-01-01', NOW(3))",
+        [ctr, p1, t1],
+      );
+      return { p1, p2, p3, t1, t2, t3 };
+    });
+    const ad = {
+      assinatura: null,
+      efeito: somarDias(hoje, 1),
+      planoAnterior: null,
+      planoNovo: null,
+      valorAnterior: null,
+      valorNovo: null,
+      novaVigenciaFim: null,
+      descricao: 'Alteração acordada (sintético)',
+      tabelaPreco: null,
+    };
+    const ofertas = async () =>
+      (
+        await q<{ p: unknown; t: unknown; i: unknown; f: unknown }>(
+          `SELECT plano_comercializado_id AS p, tabela_preco_plano_id AS t, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS i,
+                  DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS f FROM contrato_plano_oferta WHERE contrato_plano_id = ? ORDER BY id`,
+          [ctr],
+        )
+      ).map((r) => [Number(r['p']), Number(r['t']), r['i'], r['f']]);
+    const planosDosBeneficiarios = async () =>
+      (
+        await q<{ p: unknown }>(
+          'SELECT DISTINCT plano_comercializado_id AS p FROM beneficiario_plano WHERE contrato_plano_id = ?',
+          [ctr],
+        )
+      ).map((r) => Number(r['p']));
+    // Recusas antecipadas no rascunho: exclusão do plano com vidas, inclusão sem tabela, tabela de outra operadora.
+    expect(
+      await codigoDe(
+        porta!.registrarAditivo(
+          c,
+          ctr,
+          { ...ad, tipo: 'exclusao_plano', planoAnterior: ids.p1 },
+          trilha('x'),
+        ),
+      ),
+    ).toBe('plano-com-beneficiarios');
+    expect(
+      await codigoDe(
+        porta!.registrarAditivo(c, ctr, { ...ad, tipo: 'inclusao_plano', planoNovo: ids.p3 }, trilha('x')),
+      ),
+    ).toBe('tabela-obrigatoria');
+    // Troca em rascunho não muda nada; a assinatura troca a oferta na véspera e leva os beneficiários ao plano novo.
+    const troca = await porta!.registrarAditivo(
+      c,
+      ctr,
+      { ...ad, tipo: 'troca_plano', planoAnterior: ids.p1, planoNovo: ids.p2 },
+      trilha('operadora.aditivo.registrado'),
+    );
+    expect(await ofertas()).toEqual([[ids.p1, ids.t1, '2020-01-01', null]]);
+    await porta!.assinarAditivo(c, troca.id, hoje, trilha('operadora.aditivo.assinado'));
+    expect(await ofertas()).toEqual([
+      [ids.p1, ids.t1, '2020-01-01', hoje],
+      [ids.p2, ids.t1, somarDias(hoje, 1), null],
+    ]);
+    expect(await planosDosBeneficiarios()).toEqual([ids.p2]);
+    const [mv] = await q<{ n: unknown }>(
+      "SELECT COUNT(*) AS n FROM movimento_cadastral_beneficiario v JOIN beneficiario_plano b ON b.id = v.beneficiario_plano_id WHERE b.contrato_plano_id = ? AND v.tipo_movimento = 'mudanca_contratual' AND v.data_efeito = ?",
+      [ctr, somarDias(hoje, 1)],
+    );
+    expect(Number(mv!['n'])).toBe(2);
+    // Inclusão assinada abre a oferta com a tabela do aditivo.
+    const efeito2 = somarDias(hoje, 2);
+    await porta!.registrarAditivo(
+      c,
+      ctr,
+      {
+        ...ad,
+        efeito: efeito2,
+        assinatura: hoje,
+        tipo: 'inclusao_plano',
+        planoNovo: ids.p3,
+        tabelaPreco: ids.t2,
+      },
+      trilha('operadora.aditivo.registrado'),
+    );
+    // Preço do plano 2: a oferta encerra na véspera e reabre com a tabela nova (as condições seguem).
+    await porta!.registrarAditivo(
+      c,
+      ctr,
+      {
+        ...ad,
+        efeito: efeito2,
+        assinatura: hoje,
+        tipo: 'preco',
+        planoNovo: ids.p2,
+        valorNovo: 350,
+        tabelaPreco: ids.t3,
+      },
+      trilha('operadora.aditivo.registrado'),
+    );
+    // Exclusão do plano 3 (sem vidas) a partir do dia seguinte à inclusão.
+    await porta!.registrarAditivo(
+      c,
+      ctr,
+      { ...ad, efeito: somarDias(hoje, 3), assinatura: hoje, tipo: 'exclusao_plano', planoAnterior: ids.p3 },
+      trilha('operadora.aditivo.registrado'),
+    );
+    expect(await ofertas()).toEqual([
+      [ids.p1, ids.t1, '2020-01-01', hoje],
+      [ids.p2, ids.t1, somarDias(hoje, 1), somarDias(hoje, 1)],
+      [ids.p3, ids.t2, efeito2, efeito2],
+      [ids.p2, ids.t3, efeito2, null],
+    ]);
+    const [ta] = await q<{ t: unknown; n: unknown }>(
+      "SELECT MAX(tabela_preco_plano_id) AS t, COUNT(*) AS n FROM aditivo_contrato_plano WHERE contrato_plano_id = ? AND situacao = 'vigente'",
+      [ctr],
+    );
+    expect([Number(ta!['t']), Number(ta!['n'])]).toEqual([ids.t3, 4]);
+    // O painel da tela mostra as ofertas com as vidas e acha o contrato pelo número.
+    const painel = await porta!.painelContrato(c, ctr);
+    expect(painel.ofertas.filter((o) => o.fim === null).map((o) => [o.plano, o.vidas])).toEqual([
+      [ids.p2, 2],
+    ]);
+    expect(painel.motivos.some((m) => m.temBaixa)).toBe(true);
+    expect((await porta!.contratosPorNumero(c, painel.contrato.numero)).map((x) => x.id)).toContain(ctr);
   });
 });

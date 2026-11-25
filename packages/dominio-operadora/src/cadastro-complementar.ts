@@ -689,3 +689,194 @@ export function problemasDoPedidoCartao(x: {
     );
   return r;
 }
+
+// ---- efeito do aditivo nos planos ofertados e baixa da efetivação do cancelamento (08-SGO L94, C2-108) ----
+
+/** Um plano ofertado no contrato, com a tabela de preço e o período (contrato_plano_oferta). */
+export interface OfertaDoContrato {
+  readonly id: number;
+  readonly plano: number;
+  readonly tabela: number;
+  readonly inicio: string;
+  readonly fim: string | null;
+}
+
+export interface AditivoNosPlanos {
+  readonly tipo: string;
+  readonly efeito: string;
+  readonly planoAnterior: number | null;
+  readonly planoNovo: number | null;
+  /** Tabela de preço que passa a valer (obrigatória na inclusão e no preço; na troca, sem ela, a do plano anterior). */
+  readonly tabelaPreco: number | null;
+}
+
+export interface EfeitoDoAditivo {
+  readonly problemas: ProblemaCadastro[];
+  /** Ofertas encerradas na véspera do efeito (nunca apagadas). */
+  readonly fechar: { readonly oferta: number; readonly fim: string }[];
+  /** Ofertas abertas no efeito; `copiaDe` leva as condições (franquia, carência, reajuste) da oferta anterior. */
+  readonly abrir: {
+    readonly plano: number;
+    readonly tabela: number;
+    readonly inicio: string;
+    readonly copiaDe: number | null;
+  }[];
+  /** Os beneficiários vigentes do plano anterior passam ao novo (troca de plano). */
+  readonly mover: { readonly de: number; readonly para: number } | null;
+}
+
+const ofertaVigente = (o: OfertaDoContrato, data: string) =>
+  o.inicio <= data && (o.fim === null || o.fim >= data);
+
+/**
+ * O que o aditivo vigente muda nos planos ofertados do contrato, a partir da data de efeito:
+ * - troca de plano: encerra a oferta do anterior na véspera, abre a do novo (mesmas condições; a tabela do aditivo ou a
+ *   do anterior) e leva os beneficiários vigentes do anterior para o novo;
+ * - inclusão: abre a oferta do plano novo com a tabela do aditivo;
+ * - exclusão: encerra a oferta do plano, só sem beneficiário vigente nele e sem deixar o contrato sem plano;
+ * - preço: troca a tabela de preço das ofertas vigentes (do plano citado ou de todas), encerrando e reabrindo cada uma.
+ * Os demais tipos (cláusula, norma, prorrogação) não mexem nos planos.
+ */
+export function efeitoDoAditivo(
+  a: AditivoNosPlanos,
+  ofertas: readonly OfertaDoContrato[],
+  beneficiariosVigentes: (plano: number) => number,
+): EfeitoDoAditivo {
+  const r: ProblemaCadastro[] = [];
+  const fechar: { oferta: number; fim: string }[] = [];
+  const abrir: { plano: number; tabela: number; inicio: string; copiaDe: number | null }[] = [];
+  let mover: { de: number; para: number } | null = null;
+  const vigentes = ofertas.filter((o) => ofertaVigente(o, a.efeito));
+  const daOferta = (plano: number | null) =>
+    plano === null ? undefined : vigentes.find((o) => o.plano === plano);
+  const vespera = somarDias(a.efeito, -1);
+  const encerrar = (o: OfertaDoContrato) => {
+    if (o.inicio > vespera)
+      r.push(
+        p(
+          'efeito-na-abertura',
+          'efeito',
+          'O plano começou a ser ofertado no próprio efeito; escolha outra data.',
+        ),
+      );
+    else fechar.push({ oferta: o.id, fim: vespera });
+  };
+  const exigirNaoOfertado = (plano: number | null) => {
+    if (plano !== null && ofertas.some((o) => o.plano === plano && (o.fim === null || o.fim >= a.efeito)))
+      r.push(p('plano-ja-ofertado', 'planoNovo', 'O plano novo já é ofertado neste contrato.'));
+  };
+  const exigirOfertado = (plano: number | null, campo: string) => {
+    const o = daOferta(plano);
+    if (plano !== null && !o)
+      r.push(p('plano-nao-ofertado', campo, 'O plano não é ofertado neste contrato na data de efeito.'));
+    return o;
+  };
+  if (!dataValida(a.efeito))
+    return { problemas: [p('data-invalida', 'efeito', 'Informe a data de efeito.')], fechar, abrir, mover };
+  switch (a.tipo) {
+    case 'troca_plano': {
+      const antes = exigirOfertado(a.planoAnterior, 'planoAnterior');
+      exigirNaoOfertado(a.planoNovo);
+      if (antes && a.planoNovo !== null) {
+        encerrar(antes);
+        abrir.push({
+          plano: a.planoNovo,
+          tabela: a.tabelaPreco ?? antes.tabela,
+          inicio: a.efeito,
+          copiaDe: antes.id,
+        });
+        mover = { de: antes.plano, para: a.planoNovo };
+      }
+      break;
+    }
+    case 'inclusao_plano':
+      exigirNaoOfertado(a.planoNovo);
+      if (a.tabelaPreco === null)
+        r.push(p('tabela-obrigatoria', 'tabelaPreco', 'Informe a tabela de preço do plano incluído.'));
+      else if (a.planoNovo !== null)
+        abrir.push({ plano: a.planoNovo, tabela: a.tabelaPreco, inicio: a.efeito, copiaDe: null });
+      break;
+    case 'exclusao_plano': {
+      const o = exigirOfertado(a.planoAnterior, 'planoAnterior');
+      if (o) {
+        if (beneficiariosVigentes(o.plano) > 0)
+          r.push(
+            p(
+              'plano-com-beneficiarios',
+              'planoAnterior',
+              'O plano ainda tem beneficiários vigentes; faça a troca de plano antes de excluí-lo.',
+            ),
+          );
+        else if (vigentes.length <= 1)
+          r.push(p('contrato-sem-plano', 'planoAnterior', 'O contrato não pode ficar sem plano ofertado.'));
+        else encerrar(o);
+      }
+      break;
+    }
+    case 'preco': {
+      if (a.tabelaPreco === null) {
+        r.push(p('tabela-obrigatoria', 'tabelaPreco', 'Informe a tabela de preço que passa a valer.'));
+        break;
+      }
+      const plano = a.planoNovo ?? a.planoAnterior;
+      const alvo = plano === null ? vigentes : vigentes.filter((o) => o.plano === plano);
+      if (alvo.length === 0)
+        r.push(p('plano-nao-ofertado', 'planoNovo', 'Nenhum plano ofertado no contrato na data de efeito.'));
+      const mudam = alvo.filter((o) => o.tabela !== a.tabelaPreco);
+      if (alvo.length > 0 && mudam.length === 0)
+        r.push(p('tabela-igual', 'tabelaPreco', 'A tabela de preço já é a vigente.'));
+      for (const o of mudam) {
+        encerrar(o);
+        abrir.push({ plano: o.plano, tabela: a.tabelaPreco, inicio: a.efeito, copiaDe: o.id });
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return r.length
+    ? { problemas: r, fechar: [], abrir: [], mover: null }
+    : { problemas: r, fechar, abrir, mover };
+}
+
+/** Motivo de exclusão cadastral (tipo exclusão, ativo) e o motivo de cancelamento do contrato a que ele está ligado. */
+export interface MotivoBaixa {
+  readonly id: number;
+  readonly motivoCancelamento: number | null;
+}
+
+/**
+ * O motivo da baixa cadastral dos beneficiários na efetivação do cancelamento: o motivo de exclusão ligado ao motivo
+ * do cancelamento (é ele que vai ao cadastro de beneficiários da ANS). Sem ligação, a efetivação para e diz o que falta.
+ */
+export function motivoDaBaixa(
+  motivos: readonly MotivoBaixa[],
+  motivoCancelamento: number,
+): { id: number } | ProblemaCadastro {
+  const m = motivos.filter((x) => x.motivoCancelamento === motivoCancelamento).sort((x, y) => x.id - y.id)[0];
+  return m
+    ? { id: m.id }
+    : p(
+        'motivo-baixa-ausente',
+        'motivo',
+        'Ligue um motivo de exclusão de beneficiário ao motivo deste cancelamento antes de efetivá-lo.',
+      );
+}
+
+/** Crédito ao contratante pelo que foi pago adiante do efeito: não negativo, em centavos; zero vira sem crédito. */
+export function creditoDoCancelamento(valor: number | null): {
+  valor: number | null;
+  problema: ProblemaCadastro | null;
+} {
+  if (valor === null || valor === 0) return { valor: null, problema: null };
+  if (!Number.isFinite(valor) || valor < 0 || Math.round(valor * 100) !== valor * 100)
+    return {
+      valor: null,
+      problema: p(
+        'credito-invalido',
+        'valorCredito',
+        'O crédito ao contratante é um valor positivo em centavos.',
+      ),
+    };
+  return { valor, problema: null };
+}
