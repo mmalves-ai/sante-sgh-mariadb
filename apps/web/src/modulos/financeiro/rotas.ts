@@ -103,6 +103,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.movimento.ler' },
   },
   {
+    // F7, 07-FIN linha 90: cobrança Pix sobre o título a receber, com a baixa automática e a devolução.
+    path: '/financeiro/receber/pix',
+    name: 'financeiro.receber.pix',
+    component: () => import('./telas/CobrancaPixTela.vue'),
+    meta: { permissao: 'financeiro.cobrancaBancaria.ler' },
+  },
+  {
     path: '/financeiro/receber/renegociacoes',
     name: 'financeiro.receber.renegociacoes',
     component: () => import('./telas/RenegociacoesTela.vue'),

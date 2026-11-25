@@ -91,7 +91,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C2-050 (03-PEP L133): o item "Regras de aviso clínico" da administração do PEP entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":467,"M":198,"P":57,"N":212};
+// C2-045 (07-FIN linha 90): o item "Cobrança Pix" de contas a receber entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":468,"M":198,"P":57,"N":213};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -364,6 +366,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.contas-a-receber.titulos-a-receber-convenio-e-particular","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Títulos a receber"],"titulo":"Títulos a receber","selo":"M","fase":3,"rota":"/financeiro/receber/titulos","permissao":"financeiro.tituloReceber.ler"},
   {"id":"financeiro.contas-a-receber.conta-corrente-de-convenios","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Conta corrente de convênios"],"titulo":"Conta corrente de convênios","selo":"M","fase":3,"rota":"/financeiro/receber/convenios","permissao":"financeiro.creditoConvenio.ler"},
   {"id":"financeiro.contas-a-receber.renegociacao-de-titulos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Renegociação de títulos"],"titulo":"Renegociação de títulos","selo":"P","fase":3,"rota":"/financeiro/receber/renegociacoes","permissao":"financeiro.tituloReceber.ler"},
+  {"id":"financeiro.contas-a-receber.cobranca-pix","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Cobrança Pix"],"titulo":"Cobrança Pix","selo":"N","fase":7,"rota":"/financeiro/receber/pix","permissao":"financeiro.cobrancaBancaria.ler"},
   {"id":"financeiro.contas-a-receber.baixa-por-demonstrativo-com-glosa-no-titulo","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Baixa por demonstrativo, com glosa no título"],"titulo":"Baixa por demonstrativo, com glosa no título","selo":"N","fase":3,"rota":"/financeiro/receber/demonstrativos","permissao":"financeiro.tituloReceber.ler"},
   {"id":"financeiro.contas-a-receber.desconto-e-cessao-de-recebiveis","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a receber","Desconto e cessão de recebíveis"],"titulo":"Desconto e cessão de recebíveis","selo":"N","fase":3,"rota":"/financeiro/receber/cessao","permissao":"financeiro.cessaoRecebivel.ler"},
   {"id":"financeiro.tesouraria.movimento-bancario-e-saldos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Movimento bancário e saldos"],"titulo":"Movimento bancário e saldos","selo":"M","fase":3,"rota":"/financeiro/tesouraria/movimento","permissao":"financeiro.movimento.ler"},

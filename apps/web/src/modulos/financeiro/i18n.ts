@@ -10,6 +10,7 @@ import { mensagensFluxoAprovacao } from './i18n-fluxo-aprovacao.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
 import { mensagensNotaCreditoFinanceiro } from './i18n-nota-credito.js';
 import { mensagensPagamentoEletronico } from './i18n-pagamento-eletronico.js';
+import { mensagensPixFinanceiro } from './i18n-pix.js';
 import { mensagensPrevisaoFinanceiro } from './i18n-previsao.js';
 
 export const mensagensFinanceiro = {
@@ -35,6 +36,8 @@ export const mensagensFinanceiro = {
   cessao: mensagensCessaoFinanceiro,
   // F7, 07-FIN linha 78: cobrança bancária com boleto (i18n-cobranca.ts).
   cobranca: mensagensCobrancaBancaria,
+  // F7, 07-FIN linha 90: cobrança Pix sobre o título a receber (i18n-pix.ts).
+  pix: mensagensPixFinanceiro,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   todos: 'Todos',
