@@ -15,6 +15,7 @@ import {
   painelEscrituracao,
   textoDoArquivoEfd,
 } from '../escrituracao-efd-propria.js';
+import { PortaFinanceiroPropria } from '../porta-propria.js';
 import {
   CLIENTE,
   codigoDaGravacao,
@@ -268,6 +269,17 @@ describe.skipIf(SEM_BANCO)(
           executar('financeiro.efdContribuicoesGerar', { periodo: PERIODO, regime: 'cumulativo' }),
         ),
       ).toBe('credito-no-regime-cumulativo');
+
+      // A lista da tela de entradas (porta do financeiro) lê as mesmas linhas, com o CFOP do cabeçalho.
+      const lista = await new PortaFinanceiroPropria(m.nucleo).escrituracao(
+        m.ctx(m.lanca) as never,
+        2026,
+        10,
+      );
+      expect(lista.map((x) => [x.nota, x.cfop, x.itens, x.itensComCfop])).toEqual([
+        [docA, 1933, 1, 1],
+        [docB, 1933, 2, 2],
+      ]);
 
       const g = await gerar();
       expect(g).toMatchObject({

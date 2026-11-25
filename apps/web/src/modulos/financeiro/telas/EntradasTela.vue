@@ -7,11 +7,14 @@ import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import { lerEntradas } from '../api-financeiro.js';
+import EscrituracaoFiscalPainel from '../componentes/EscrituracaoFiscalPainel.vue';
 import { data } from '../usar-financeiro.js';
 
 const { t } = useI18n();
 const filtro = reactive({ competencia: '' });
 const pedido = ref<{ ano?: string; mes?: string }>({});
+// F3.8, 07-FIN linha 108: a competência consultada abre os dados fiscais e a EFD-Contribuições.
+const competencia = ref('');
 const lista = useQuery({
   queryKey: computed(() => ['financeiro', 'entradas', pedido.value]),
   queryFn: () => lerEntradas(pedido.value),
@@ -19,6 +22,7 @@ const lista = useQuery({
 function consultar() {
   const [ano, mes] = filtro.competencia.split('-');
   pedido.value = filtro.competencia ? { ano: ano!, mes: String(Number(mes)) } : {};
+  competencia.value = filtro.competencia;
 }
 </script>
 
@@ -70,6 +74,7 @@ function consultar() {
       </tbody>
     </table>
     <p v-else>{{ t('financeiro.nenhum') }}</p>
+    <EscrituracaoFiscalPainel v-if="competencia" :competencia="competencia" />
   </section>
 </template>
 

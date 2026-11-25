@@ -1353,7 +1353,7 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       (
         await l.consultar(
           `SELECT e.id, e.numero_documento, e.data_emissao, e.empresa_fornecedora_id, e.modelo_documento, e.chave_acesso,
-                  cf.codigo AS cfop,
+                  cf.codigo_cfop AS cfop,
                   (SELECT COUNT(*) FROM escrituracao_item_entrada i WHERE i.escrituracao_entrada_id = e.id AND i.excluido_em IS NULL) AS itens,
                   (SELECT COUNT(*) FROM escrituracao_item_entrada i WHERE i.escrituracao_entrada_id = e.id AND i.excluido_em IS NULL
                       AND i.cfop_id IS NOT NULL) AS itens_cfop
