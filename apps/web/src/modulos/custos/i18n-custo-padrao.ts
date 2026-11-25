@@ -88,6 +88,15 @@ export const mensagensCustoPadrao = {
     competencia: 'Competência',
     semApuracao: 'Não há apuração de custos nesta competência.',
     semContas: 'Nenhuma conta da competência lançou este procedimento.',
+    semComparaveis:
+      'Nenhuma conta da competência tem só este procedimento: não há apurado do procedimento sozinho.',
+    base: 'Comparadas só as contas em que o procedimento é o único item realizado: o custo apurado delas é o do procedimento.',
+    naoComparaveisTitulo: 'Contas com outros itens (fora da comparação)',
+    naoComparaveisAviso:
+      'O custo apurado destas contas soma diárias, materiais, honorários e outros procedimentos; não mede o desvio do procedimento.',
+    outrosItens: 'Outros itens',
+    participacao: 'Parte do procedimento no valor da conta',
+    apuradoConta: 'Apurado da conta inteira',
     apuracao: 'Apuração versão {versao} ({situacao})',
     conta: 'Conta',
     quantidade: 'Qtd.',

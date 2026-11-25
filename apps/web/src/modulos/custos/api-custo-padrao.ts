@@ -74,10 +74,21 @@ export interface Comparacao {
     numero: string;
     quantidade: number;
     custoApurado: number;
+    outrosItens: number;
+    participacaoCent: number | null;
     custoPadrao: number;
     variacao: number;
     variacaoPercentualCent: number | null;
     classe: ClasseVariacao;
+  }[];
+  /** Contas que lançaram o procedimento com outros itens: o apurado é da conta inteira, fora dos totais. */
+  naoComparaveis: {
+    conta: number;
+    numero: string;
+    quantidade: number;
+    custoApurado: number;
+    outrosItens: number;
+    participacaoCent: number | null;
   }[];
   totalPadrao: number;
   totalApurado: number;

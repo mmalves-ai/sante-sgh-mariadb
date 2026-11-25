@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   calcularCustoPadrao,
   compararComApurado,
+  participacaoNaConta,
+  SITUACOES_ITEM_REALIZADO,
   custoDoItemCent,
   custoMinutoSala,
   custoUnitarioDoItem,
@@ -177,9 +179,23 @@ describe('ficha, vigência e ativação', () => {
 describe('comparação do padrão com o apurado', () => {
   it('padrão pela quantidade, variação, percentual e classe pela tolerância', () => {
     const c = compararComApurado(10_000, [
-      { conta: 1, numero: 'A', quantidade: 1, custoApurado: 10_500 },
-      { conta: 2, numero: 'B', quantidade: 2, custoApurado: 25_000 },
-      { conta: 3, numero: 'C', quantidade: 1, custoApurado: 8_000 },
+      {
+        conta: 1,
+        numero: 'A',
+        quantidade: 1,
+        custoApurado: 10_500,
+        outrosItens: 0,
+        participacaoCent: 10_000,
+      },
+      {
+        conta: 2,
+        numero: 'B',
+        quantidade: 2,
+        custoApurado: 25_000,
+        outrosItens: 0,
+        participacaoCent: 10_000,
+      },
+      { conta: 3, numero: 'C', quantidade: 1, custoApurado: 8_000, outrosItens: 0, participacaoCent: 10_000 },
     ]);
     expect(c.linhas.map((l) => [l.custoPadrao, l.variacao, l.variacaoPercentualCent, l.classe])).toEqual([
       [10_000, 500, 500, 'dentro'],
@@ -193,10 +209,44 @@ describe('comparação do padrão com o apurado', () => {
     expect(c.classe).toBe('dentro');
     expect(c.contagem).toEqual({ dentro: 1, acima: 1, abaixo: 1 });
   });
+  it('conta com outros itens não entra na comparação: o apurado dela é da conta inteira', () => {
+    const c = compararComApurado(10_000, [
+      {
+        conta: 1,
+        numero: 'A',
+        quantidade: 1,
+        custoApurado: 10_500,
+        outrosItens: 0,
+        participacaoCent: 10_000,
+      },
+      {
+        conta: 2,
+        numero: 'B',
+        quantidade: 1,
+        custoApurado: 300_000,
+        outrosItens: 4,
+        participacaoCent: 1_250,
+      },
+    ]);
+    expect(c.linhas.map((l) => l.numero)).toEqual(['A']);
+    expect(c.naoComparaveis.map((l) => [l.numero, l.outrosItens, l.participacaoCent])).toEqual([
+      ['B', 4, 1_250],
+    ]);
+    expect([c.totalPadrao, c.totalApurado, c.classe]).toEqual([10_000, 10_500, 'dentro']);
+    expect(c.contagem).toEqual({ dentro: 1, acima: 0, abaixo: 0 });
+  });
+  it('participação do procedimento no valor da conta e situações que contam como feito', () => {
+    expect(participacaoNaConta(2_500, 20_000)).toBe(1_250);
+    expect(participacaoNaConta(2_500, 0)).toBeNull();
+    expect(SITUACOES_ITEM_REALIZADO).not.toContain('estornado');
+    expect(SITUACOES_ITEM_REALIZADO).not.toContain('transferido');
+  });
   it('sem contas e com padrão zero', () => {
     expect(compararComApurado(0, []).classe).toBe('dentro');
     expect(
-      compararComApurado(0, [{ conta: 1, numero: 'A', quantidade: 1, custoApurado: 5 }]).linhas[0]?.classe,
+      compararComApurado(0, [
+        { conta: 1, numero: 'A', quantidade: 1, custoApurado: 5, outrosItens: 0, participacaoCent: null },
+      ]).linhas[0]?.classe,
     ).toBe('acima');
   });
 });

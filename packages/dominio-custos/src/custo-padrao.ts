@@ -299,8 +299,26 @@ export interface ContaApurada {
   readonly numero: string;
   /** Quantas vezes o procedimento foi lançado na conta. */
   readonly quantidade: number;
-  /** Custo apurado da conta (centavos). */
+  /** Custo apurado da conta inteira (centavos). */
   readonly custoApurado: number;
+  /**
+   * Itens realizados da conta que não são o procedimento (diárias, materiais, honorários, outros procedimentos). Com
+   * algum, o custo apurado da conta soma o custo alheio e não mede o desvio do procedimento.
+   */
+  readonly outrosItens: number;
+  /** Parte do procedimento no valor lançado da conta, em centésimos de ponto percentual (null: conta sem valor). */
+  readonly participacaoCent: number | null;
+}
+
+/**
+ * Situações do item de conta que contam como procedimento feito. Estornado não foi feito; transferido aparece também na
+ * conta de destino e contaria duas vezes.
+ */
+export const SITUACOES_ITEM_REALIZADO = ['lancado', 'conferido', 'glosado', 'sem_cobranca'] as const;
+
+/** Parte do procedimento no valor lançado da conta (centésimos de ponto percentual). */
+export function participacaoNaConta(valorProcedimentoCent: number, valorContaCent: number): number | null {
+  return valorContaCent > 0 ? Math.round((valorProcedimentoCent * 10_000) / valorContaCent) : null;
 }
 
 export type ClasseVariacao = 'dentro' | 'acima' | 'abaixo';
@@ -314,7 +332,13 @@ export interface LinhaComparacao extends ContaApurada {
 }
 
 export interface ComparacaoCustoPadrao {
+  /** Contas em que o procedimento é o único item realizado: o apurado delas é o custo do procedimento. */
   readonly linhas: LinhaComparacao[];
+  /**
+   * Contas que lançaram o procedimento junto com outros itens: o apurado é da conta inteira e não entra nos totais nem
+   * na classe; ficam listadas com a participação do procedimento no valor da conta.
+   */
+  readonly naoComparaveis: ContaApurada[];
   readonly totalPadrao: number;
   readonly totalApurado: number;
   readonly variacao: number;
@@ -334,9 +358,10 @@ const classificar = (pc: number | null, variacao: number, tolerancia: number): C
 };
 
 /**
- * Compara o custo-padrão (centavos por procedimento) com o custo apurado de cada conta que lançou o procedimento: o
+ * Compara o custo-padrão (centavos por procedimento) com o custo apurado das contas que lançaram o procedimento. Só se
+ * compara o que é comparável: a conta em que o procedimento é o único item realizado, cujo apurado é o custo dele. O
  * padrão da conta é o custo da ficha vezes a quantidade lançada; a variação é apurado − padrão, classificada pela
- * tolerância (acima, abaixo ou dentro).
+ * tolerância (acima, abaixo ou dentro). A conta com outros itens vai para `naoComparaveis`, fora dos totais.
  */
 export function compararComApurado(
   custoPadraoCent: number,
@@ -346,20 +371,24 @@ export function compararComApurado(
   const contagem: Record<ClasseVariacao, number> = { dentro: 0, acima: 0, abaixo: 0 };
   let totalPadrao = 0;
   let totalApurado = 0;
-  const linhas = contas.map((c) => {
-    const custoPadrao = custoDoItemCent(c.quantidade, custoPadraoCent / 100);
-    const variacao = c.custoApurado - custoPadrao;
-    const pc = percentualCent(variacao, custoPadrao);
-    const classe = classificar(pc, variacao, toleranciaCent);
-    contagem[classe] += 1;
-    totalPadrao += custoPadrao;
-    totalApurado += c.custoApurado;
-    return { ...c, custoPadrao, variacao, variacaoPercentualCent: pc, classe };
-  });
+  const naoComparaveis = contas.filter((c) => c.outrosItens > 0);
+  const linhas = contas
+    .filter((c) => c.outrosItens <= 0)
+    .map((c) => {
+      const custoPadrao = custoDoItemCent(c.quantidade, custoPadraoCent / 100);
+      const variacao = c.custoApurado - custoPadrao;
+      const pc = percentualCent(variacao, custoPadrao);
+      const classe = classificar(pc, variacao, toleranciaCent);
+      contagem[classe] += 1;
+      totalPadrao += custoPadrao;
+      totalApurado += c.custoApurado;
+      return { ...c, custoPadrao, variacao, variacaoPercentualCent: pc, classe };
+    });
   const variacao = totalApurado - totalPadrao;
   const pc = percentualCent(variacao, totalPadrao);
   return {
     linhas,
+    naoComparaveis,
     totalPadrao,
     totalApurado,
     variacao,

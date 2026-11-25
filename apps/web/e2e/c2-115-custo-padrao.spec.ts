@@ -73,10 +73,22 @@ function simular(page: Page) {
             numero: 'E2E-CH1',
             quantidade: 1,
             custoApurado: 1300,
+            outrosItens: 0,
+            participacaoCent: 10000,
             custoPadrao: total(),
             variacao: 1300 - total(),
             variacaoPercentualCent: 1818,
             classe: 'acima',
+          },
+        ],
+        naoComparaveis: [
+          {
+            conta: 2,
+            numero: 'E2E-CH2',
+            quantidade: 1,
+            custoApurado: 300000,
+            outrosItens: 3,
+            participacaoCent: 2500,
           },
         ],
         totalPadrao: total(),
@@ -162,6 +174,10 @@ test.describe('@C2-115 custo-padrão por procedimento', () => {
 
     await expect(page.getByTestId('cp-comparacao-resumo')).toContainText('apurado R$ 13,00');
     await expect(page.getByTestId('cp-comparacao-tabela')).toContainText('Acima do padrão');
+    // A conta com outros itens fica fora da comparação, com o apurado inteiro e a parte do procedimento.
+    await expect(page.getByTestId('cp-comparacao-tabela')).not.toContainText('E2E-CH2');
+    await expect(page.getByTestId('cp-nao-comparaveis')).toContainText('E2E-CH2');
+    await expect(page.getByTestId('cp-nao-comparaveis')).toContainText('25,00%');
     await semViolacaoAxe(page, '/custos/custo-padrao (ativa)');
   });
 });

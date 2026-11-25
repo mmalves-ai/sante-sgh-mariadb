@@ -1,12 +1,13 @@
 // Contrato de efeito do custo-padrão por procedimento (07-FIN L140, C2-115) contra o MariaDB real (cliente f22_o3, que
 // tem insumos, salas, acomodações e procedimentos cirúrgicos de teste). Massa SINTÉTICA: dois estabelecimentos fictícios,
 // um procedimento faturável, os custos de referência (custo médio do insumo, minuto do gás, minuto de duas salas e a
-// diária padrão da unidade) e, para a comparação, uma apuração com duas contas que lançaram o procedimento. Prova o que
+// diária padrão da unidade) e, para a comparação, uma apuração com contas que lançaram o procedimento (só ele, com outro item, estornado). Prova o que
 // fica no banco: a ficha em rascunho com a versão; cada item com o custo unitário de referência (ou o informado) e o
 // custo total; os totais da ficha (honorário, operacional, total) refeitos pela regra; as recusas sem linha (sem custo,
 // versão velha, ficha ativa); o item retirado com a data de exclusão (a linha fica); a ativação (padrão) e a nova versão
 // copiada da vigente que encerra a anterior na véspera; a inativação com motivo; a trilha por gravação; a comparação
-// padrão × apurado; outro estabelecimento não vê a ficha. SGH_NUCLEO_SEM_BANCO=1 pula o banco.
+// padrão × apurado só nas contas em que o procedimento é o único item realizado (a conta com outro item fica à parte,
+// com a participação; estornado e transferido não contam); outro estabelecimento não vê a ficha. SGH_NUCLEO_SEM_BANCO=1 pula o banco.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -458,13 +459,52 @@ describe.skipIf(SEM_BANCO)(`custo-padrão por procedimento contra o MariaDB (cli
         "INSERT INTO apuracao_custo (estabelecimento_id, competencia, situacao, criado_em) VALUES (?, '2026-05-01', 'apurada', ?)",
         [estA, agora],
       );
-      // Conta 1: 1 procedimento, custo 900,00 (padrão 823,50 → +9,3%, dentro). Conta 2: 2 procedimentos, custo 2.000,00
-      // (padrão 1.647,00 → +21,4%, acima). Uma terceira conta sem o procedimento não entra.
-      for (const [i, qtd, custo] of [
-        [1, 1, 900],
-        [2, 2, 2000],
-        [3, 0, 500],
-      ] as const) {
+      const outro = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        ['99321151'],
+        `INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em)
+           SELECT '99321151', 'DIARIA SINTETICA C2115', 'taxa', grupo_faturamento_id, ? FROM item_faturavel WHERE id = ?`,
+        [agora, proc],
+      );
+      // Conta 1: 1 procedimento, custo 900,00 (padrão 823,50 → +9,3%, dentro). Conta 2: 2 procedimentos e um lançamento
+      // estornado de 5 que não conta, custo 2.000,00 (padrão 1.647,00 → +21,4%, acima). Conta 3 sem o procedimento não
+      // entra. Conta 4: o procedimento e uma diária de 300,00, custo 3.000,00 com 2.000,00 de diárias: o apurado é da conta
+      // inteira, fica fora da comparação, com a participação de 25%. Conta 5: o procedimento só estornado e transferido,
+      // não aparece.
+      type Item = readonly [number, number, number, string];
+      const massa: readonly (readonly [number, readonly Item[], number, number])[] = [
+        [1, [[proc, 1, 100, 'lancado']], 900, 0],
+        [
+          2,
+          [
+            [proc, 2, 200, 'lancado'],
+            [proc, 5, 500, 'estornado'],
+          ],
+          2000,
+          0,
+        ],
+        [3, [], 500, 0],
+        [
+          4,
+          [
+            [proc, 1, 100, 'lancado'],
+            [outro, 3, 300, 'lancado'],
+          ],
+          3000,
+          2000,
+        ],
+        [
+          5,
+          [
+            [proc, 1, 100, 'estornado'],
+            [proc, 1, 100, 'transferido'],
+          ],
+          700,
+          0,
+        ],
+      ];
+      for (const [i, itens, custo, diarias] of massa) {
         const at = await e.inserir(
           `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
              fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, '2026-05-10 08:00:00', ?)`,
@@ -477,17 +517,19 @@ describe.skipIf(SEM_BANCO)(`custo-padrão por procedimento contra o MariaDB (cli
           [estA, `${COD}-CH${i}`, at, paciente, fonte, tipoConta, agora],
         );
         contas.push(conta);
-        if (qtd > 0)
+        let seq = 0;
+        for (const [item, qtd, valor, situacao] of itens)
           await e.executar(
             `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
                valor_unitario, valor_total, situacao, criado_em)
-             VALUES (?, 1, ?, '2026-05-10 09:00:00', ?, 100, ?, 'lancado', ?)`,
-            [conta, proc, qtd, 100 * qtd, agora],
+             VALUES (?, ?, ?, '2026-05-10 09:00:00', ?, ?, ?, ?, ?)`,
+            [conta, ++seq, item, qtd, valor / qtd, valor, situacao, agora],
           );
         await e.executar(
-          `INSERT INTO custo_conta_paciente (apuracao_custo_id, conta_hospitalar_id, atendimento_id, data_atendimento, custo_total, criado_em)
-           VALUES (?, ?, ?, '2026-05-10', ?, ?)`,
-          [apuracao, conta, at, custo, agora],
+          `INSERT INTO custo_conta_paciente (apuracao_custo_id, conta_hospitalar_id, atendimento_id, data_atendimento,
+             custo_diarias, custo_total, criado_em)
+           VALUES (?, ?, ?, '2026-05-10', ?, ?, ?)`,
+          [apuracao, conta, at, diarias, custo, agora],
         );
       }
     });
@@ -500,7 +542,18 @@ describe.skipIf(SEM_BANCO)(`custo-padrão por procedimento contra o MariaDB (cli
     ]);
     expect([c.totalPadrao, c.totalApurado, c.variacao]).toEqual([247_050, 290_000, 42_950]);
     expect(c.contagem).toEqual({ dentro: 1, acima: 1, abaixo: 0 });
-    expect((await porta.comparar(ctxA, v1, '2026-04')).linhas).toEqual([]);
+    // A conta com a diária não é comparada com o padrão: sai à parte, com o apurado inteiro e a participação.
+    expect(
+      c.naoComparaveis.map((l) => [
+        l.numero,
+        l.quantidade,
+        l.custoApurado,
+        l.outrosItens,
+        l.participacaoCent,
+      ]),
+    ).toEqual([[`${COD}-CH4`, 1, 300_000, 1, 2_500]]);
+    const semMaio = await porta.comparar(ctxA, v1, '2026-04');
+    expect([semMaio.linhas, semMaio.naoComparaveis]).toEqual([[], []]);
   });
 
   it('inativar com motivo; a trilha tem uma linha por gravação', async () => {

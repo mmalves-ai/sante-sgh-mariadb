@@ -14,6 +14,8 @@ import { randomUUID } from 'node:crypto';
 import {
   calcularCustoPadrao,
   compararComApurado,
+  participacaoNaConta,
+  SITUACOES_ITEM_REALIZADO,
   type ComparacaoCustoPadrao,
   custoDoItemCent,
   custoMinutoSala,
@@ -537,7 +539,10 @@ export class PortaFichaCustoPadraoPropria {
     });
   }
 
-  /** O padrão da ficha contra o custo apurado das contas da competência que lançaram o procedimento. */
+  /**
+   * O padrão da ficha contra o custo apurado das contas da competência que lançaram o procedimento. Só a conta em que
+   * ele é o único item realizado entra na comparação; a que tem outros itens sai à parte, com a participação dele.
+   */
   comparar(
     c: ContextoFichaCusto,
     id: number,
@@ -553,17 +558,39 @@ export class PortaFichaCustoPadraoPropria {
           ORDER BY numero_versao DESC, id DESC LIMIT 1`,
         [est, comp],
       );
+      // Itens realizados de cada conta da apuração (estornado e transferido não contam): quantas vezes o procedimento
+      // foi lançado, quantos itens alheios a conta tem e o valor de cada parte, para separar a conta comparável (só o
+      // procedimento) da conta cujo apurado soma custo alheio.
+      const realizados = SITUACOES_ITEM_REALIZADO.map(() => '?').join(', ');
       const contas = a
         ? await l.consultar(
-            `SELECT ch.id, ch.numero, k.custo_total, q.quantidade
+            `SELECT ch.id, ch.numero, k.custo_total, q.quantidade, q.outros_itens, q.valor_procedimento, q.valor_conta
                FROM custo_conta_paciente k
                JOIN conta_hospitalar ch ON ch.id = k.conta_hospitalar_id
-               JOIN (SELECT conta_hospitalar_id, SUM(quantidade) AS quantidade FROM conta_hospitalar_item
-                      WHERE item_faturavel_id = ? AND excluido_em IS NULL GROUP BY conta_hospitalar_id) q
+               JOIN (SELECT i.conta_hospitalar_id,
+                            SUM(CASE WHEN i.item_faturavel_id = ? THEN i.quantidade ELSE 0 END) AS quantidade,
+                            SUM(CASE WHEN i.item_faturavel_id = ? THEN 0 ELSE 1 END) AS outros_itens,
+                            SUM(CASE WHEN i.item_faturavel_id = ? THEN i.valor_total ELSE 0 END) AS valor_procedimento,
+                            SUM(i.valor_total) AS valor_conta
+                       FROM conta_hospitalar_item i
+                       JOIN custo_conta_paciente kk ON kk.conta_hospitalar_id = i.conta_hospitalar_id
+                      WHERE kk.apuracao_custo_id = ? AND kk.excluido_em IS NULL
+                        AND i.excluido_em IS NULL AND i.situacao IN (${realizados})
+                      GROUP BY i.conta_hospitalar_id
+                     HAVING SUM(CASE WHEN i.item_faturavel_id = ? THEN 1 ELSE 0 END) > 0) q
                  ON q.conta_hospitalar_id = ch.id
               WHERE k.apuracao_custo_id = ? AND k.excluido_em IS NULL AND ch.estabelecimento_id = ?
               ORDER BY ch.numero`,
-            [f.procedimento.id, Number(a['id']), est],
+            [
+              f.procedimento.id,
+              f.procedimento.id,
+              f.procedimento.id,
+              Number(a['id']),
+              ...SITUACOES_ITEM_REALIZADO,
+              f.procedimento.id,
+              Number(a['id']),
+              est,
+            ],
             { teto: 5000 },
           )
         : [];
@@ -574,6 +601,8 @@ export class PortaFichaCustoPadraoPropria {
           numero: String(r['numero']),
           quantidade: num(r['quantidade']),
           custoApurado: cent(r['custo_total']),
+          outrosItens: Number(r['outros_itens'] ?? 0),
+          participacaoCent: participacaoNaConta(cent(r['valor_procedimento']), cent(r['valor_conta'])),
         })),
         toleranciaCent,
       );

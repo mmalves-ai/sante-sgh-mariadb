@@ -578,10 +578,22 @@ const comparacao = useQuery({
                 })
               }}
             </p>
-            <p v-if="comparacao.data.value.linhas.length === 0" data-testid="cp-comparacao-vazia">
+            <p
+              v-if="
+                comparacao.data.value.linhas.length === 0 && comparacao.data.value.naoComparaveis.length === 0
+              "
+              data-testid="cp-comparacao-vazia"
+            >
               {{ t(`${K}.comparar.semContas`) }}
             </p>
+            <p
+              v-else-if="comparacao.data.value.linhas.length === 0"
+              data-testid="cp-comparacao-sem-comparaveis"
+            >
+              {{ t(`${K}.comparar.semComparaveis`) }}
+            </p>
             <template v-else>
+              <p class="secundario" data-testid="cp-comparacao-base">{{ t(`${K}.comparar.base`) }}</p>
               <p data-testid="cp-comparacao-resumo">
                 {{
                   t(`${K}.comparar.resumo`, {
@@ -615,6 +627,32 @@ const comparacao = useQuery({
                       <td class="numero">{{ reais(l.variacao) }}</td>
                       <td class="numero">{{ percentual(l.variacaoPercentualCent) }}</td>
                       <td>{{ t(`${K}.comparar.classes.${l.classe}`) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+            <template v-if="comparacao.data.value.naoComparaveis.length > 0">
+              <h3>{{ t(`${K}.comparar.naoComparaveisTitulo`) }}</h3>
+              <p class="secundario">{{ t(`${K}.comparar.naoComparaveisAviso`) }}</p>
+              <div class="rolagem">
+                <table class="tabela" data-testid="cp-nao-comparaveis">
+                  <thead>
+                    <tr>
+                      <th>{{ t(`${K}.comparar.conta`) }}</th>
+                      <th class="numero">{{ t(`${K}.comparar.quantidade`) }}</th>
+                      <th class="numero">{{ t(`${K}.comparar.outrosItens`) }}</th>
+                      <th class="numero">{{ t(`${K}.comparar.participacao`) }}</th>
+                      <th class="numero">{{ t(`${K}.comparar.apuradoConta`) }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="l in comparacao.data.value.naoComparaveis" :key="l.conta">
+                      <td class="conta">{{ l.numero }}</td>
+                      <td class="numero">{{ decimal4(l.quantidade) }}</td>
+                      <td class="numero">{{ l.outrosItens }}</td>
+                      <td class="numero">{{ percentual(l.participacaoCent) }}</td>
+                      <td class="numero">{{ reais(l.custoApurado) }}</td>
                     </tr>
                   </tbody>
                 </table>
