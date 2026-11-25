@@ -151,7 +151,24 @@ export const PERMISSOES_FATURAMENTO_M30: readonly DeclaracaoPermissao[] = [
     perfis: ['administrador-sistema'],
     categoria: 'financeira',
     criticidade: 'normal',
-  })),
+  })), // Protocolo de documentos entre setores (06-FAT L22, C1-114): permissões próprias, separadas do protocolo do lote da
+  // operadora (faturamento.protocolo.registrar, do supervisor), para o setor que emite e o que recebe.
+  {
+    codigo: 'faturamento.tramite.ler',
+    descricao: 'Consultar os protocolos de documentos entre setores (enviados e a receber do setor)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['protocolo-documentos', 'administrador-sistema'],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: 'faturamento.tramite.registrar',
+    descricao: 'Emitir, enviar, conferir item a item e cancelar o protocolo de documentos entre setores',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['protocolo-documentos', 'administrador-sistema'],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
 ];
 
 /** Os códigos (para as rotas e os testes). */

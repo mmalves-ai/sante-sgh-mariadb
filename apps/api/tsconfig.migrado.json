@@ -704,6 +704,7 @@
     "src/modulos/precos/convenios.controller.ts",
     "src/modulos/precos/escopo.spec.ts",
     "src/modulos/precos/de-para-permissao.spec.ts",
+    "src/modulos/faturamento/protocolo-tramite-permissao.spec.ts",
     "src/modulos/precos/fonte-memoria.ts",
     "src/modulos/precos/fonte-propria.int.spec.ts",
     "src/modulos/precos/fonte-propria.ts",

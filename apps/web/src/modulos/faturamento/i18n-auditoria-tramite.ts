@@ -93,6 +93,8 @@ export const mensagensAuditoriaTramite = {
     motivoRecusa: 'Motivo da recusa',
     confirmarConferencia: 'Confirmar conferência',
     motivoCancelamento: 'Motivo do cancelamento',
+    soConsulta:
+      'Seu perfil só consulta os protocolos: emitir, enviar, conferir e cancelar pedem o perfil de protocolo de documentos.',
     numero: 'Nº {numero}',
     itens: '{n} item(ns)',
     situacoes: {

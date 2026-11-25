@@ -17,9 +17,13 @@ import {
   lerProtocolos,
   type Protocolos,
 } from '../api-auditoria-tramite.js';
+import { usarSessao } from '../../../casca/sessao/sessao.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 
 const { t } = useI18n();
+// C1-114: gravar o protocolo pede a permissão própria do trâmite; sem ela a tela só consulta.
+const { permissoes } = usarSessao();
+const podeGravar = computed(() => permissoes.value.has('faturamento.tramite.registrar'));
 const setor = ref<number | null>(null);
 const qc = useQueryClient();
 const q = useQuery({
@@ -136,7 +140,10 @@ const motivoCancelamento = ref('');
         data-testid="prot-setor"
       />
 
-      <form class="filtros" data-testid="prot-form" @submit.prevent="emitir">
+      <p v-if="!podeGravar" class="secundario" role="note" data-testid="prot-so-consulta">
+        {{ t('auditoriaTramite.protocolo.soConsulta') }}
+      </p>
+      <form v-if="podeGravar" class="filtros" data-testid="prot-form" @submit.prevent="emitir">
         <h2>{{ t('auditoriaTramite.protocolo.novo') }}</h2>
         <SanteSelecao
           v-model="novo.remetenteId"
@@ -243,14 +250,14 @@ const motivoCancelamento = ref('');
           </li>
         </ul>
         <button
-          v-if="p.situacao === 'aberto'"
+          v-if="podeGravar && p.situacao === 'aberto'"
           type="button"
           @click="rodar(() => enviarProtocolo(p.id, chave()))"
         >
           {{ t('auditoriaTramite.protocolo.enviar') }}
         </button>
         <button
-          v-if="p.situacao === 'enviado' || p.situacao === 'recebido_parcial'"
+          v-if="podeGravar && (p.situacao === 'enviado' || p.situacao === 'recebido_parcial')"
           type="button"
           :data-testid="`prot-conferir-${p.numero}`"
           @click="conferir(p)"
@@ -258,7 +265,7 @@ const motivoCancelamento = ref('');
           {{ t('auditoriaTramite.protocolo.conferir') }}
         </button>
         <form
-          v-if="p.situacao === 'aberto'"
+          v-if="podeGravar && p.situacao === 'aberto'"
           @submit.prevent="rodar(() => cancelarProtocolo(p.id, motivoCancelamento, chave()))"
         >
           <input
@@ -271,7 +278,7 @@ const motivoCancelamento = ref('');
         </form>
 
         <form
-          v-if="emConferencia?.id === p.id"
+          v-if="podeGravar && emConferencia?.id === p.id"
           class="filtros"
           data-testid="prot-form-conferencia"
           @submit.prevent="confirmar"

@@ -6,6 +6,8 @@
 // situação do lote sai da conferência. As rotas /api/faturamento/protocolos-tramite exigem o banco próprio e o E2E roda
 // com a fonte sintética: as respostas são simuladas pelo Playwright com massa SINTÉTICA, no contrato do servidor. O
 // efeito no banco está no contrato de efeito apps/api/src/modulos/faturamento/auditoria-tramite-propria.int.spec.ts.
+// Permissão (C1-114): a tela e as rotas pedem faturamento.tramite.ler e faturamento.tramite.registrar, dadas pelo perfil
+// protocolo-documentos (SINT.CONTAS o recebe); a conta das contas sem o perfil (SINT.CONTAS.C10) não chega à tela.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -212,5 +214,18 @@ test.describe('@C1-114 Protocolo de documentos entre setores @fase3', () => {
     await expect(lote).toContainText('Recebido');
     await expect(lote).toContainText('Recusar: Faltou a assinatura');
     await expect(page.getByTestId('prot-conferir-1001')).toHaveCount(0);
+  });
+
+  test('sem o perfil de protocolo de documentos: nem o item do menu nem a tela', async ({ page }) => {
+    const s = simular(page);
+    await s.ligar();
+    await entrar(page, 'SINT.CONTAS.C10');
+    const menu = page.getByRole('navigation', { name: 'Menu principal' });
+    await menu.locator('#menu-buscar').fill('Protocolo de documentos');
+    await expect(menu.getByRole('link', { name: 'Protocolo de documentos entre setores' })).toHaveCount(0);
+    await page.goto('/faturamento/protocolos');
+    await expect(page).toHaveURL(/sem-permissao/);
+    await expect(page.getByTestId('protocolos-tramite')).toHaveCount(0);
+    expect(s.st.corpos).toHaveLength(0);
   });
 });

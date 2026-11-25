@@ -103,7 +103,7 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     path: '/faturamento/protocolos',
     name: 'faturamento.protocolosTramite',
     component: () => import('./telas/ProtocolosTramiteTela.vue'),
-    meta: { permissao: 'faturamento.conta.ler' },
+    meta: { permissao: 'faturamento.tramite.ler' },
   },
   {
     path: '/faturamento/guias-convenio',

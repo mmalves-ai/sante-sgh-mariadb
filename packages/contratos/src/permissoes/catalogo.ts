@@ -238,5 +238,11 @@ export const PERFIS_COMPLEMENTARES = [
    * responsável técnico habilitado). Só por concessão nominal da gestão de acessos ou pelo mapa aprovado.
    */
   'laboratorio-apoio',
+  /**
+   * C1-114 (06-FAT linha 22): protocolo de documentos entre setores (faturamento, arquivo e prontuário, recepção e
+   * demais setores que emitem ou recebem): emite, envia, confere item a item e cancela o protocolo do setor, sem o
+   * protocolo do lote da operadora. Só por concessão nominal da gestão de acessos ou pelo mapa aprovado.
+   */
+  'protocolo-documentos',
 ] as const;
 export type PerfilComplementar = (typeof PERFIS_COMPLEMENTARES)[number];

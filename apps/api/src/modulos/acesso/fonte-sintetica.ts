@@ -1373,6 +1373,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         'cirurgia.nota.ler',
       ),
     },
+    // C1-114: o faturista das contas emite e confere o protocolo de documentos entre setores (perfil próprio).
+    perfisConcedidos: ['protocolo-documentos'],
   },
   /** M30: operador do caixa do particular: orçamento, caixa, recebimento (Pix e cartão simulados) e recibo. */
   'SINT.CAIXA': {

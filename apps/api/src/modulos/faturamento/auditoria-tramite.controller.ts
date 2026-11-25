@@ -8,12 +8,14 @@
 //   GET  /api/faturamento/empresas-auditoria                   faturamento.auditoria.ler
 //   POST /api/faturamento/empresas-auditoria                   faturamento.regra.editar
 //   POST /api/faturamento/empresas-auditoria/:id/ativo         faturamento.regra.editar
-//   GET  /api/faturamento/protocolos-tramite?setor=            faturamento.conta.ler
-//   GET  /api/faturamento/protocolos-tramite/alvos?tipo=&numero= faturamento.conta.ler (item pelo número de negócio)
-//   POST /api/faturamento/protocolos-tramite                   faturamento.protocolo.registrar (emitir)
-//   POST /api/faturamento/protocolos-tramite/:id/envio         faturamento.protocolo.registrar
-//   POST /api/faturamento/protocolos-tramite/:id/conferencia   faturamento.protocolo.registrar
-//   POST /api/faturamento/protocolos-tramite/:id/cancelamento  faturamento.protocolo.registrar
+//   GET  /api/faturamento/protocolos-tramite?setor=            faturamento.tramite.ler
+//   GET  /api/faturamento/protocolos-tramite/alvos?tipo=&numero= faturamento.tramite.ler (item pelo número de negócio)
+//   POST /api/faturamento/protocolos-tramite                   faturamento.tramite.registrar (emitir)
+//   POST /api/faturamento/protocolos-tramite/:id/envio         faturamento.tramite.registrar
+//   POST /api/faturamento/protocolos-tramite/:id/conferencia   faturamento.tramite.registrar
+//   POST /api/faturamento/protocolos-tramite/:id/cancelamento  faturamento.tramite.registrar
+//   (C1-114: permissões próprias do trâmite, pelo perfil protocolo-documentos; a faturamento.protocolo.registrar é o
+//   protocolo do lote TISS, do supervisor, e não serve ao setor que recebe.)
 //   GET  /api/faturamento/guias-convenio?situacao=&minhas=1&cirurgia=1 faturamento.guia.ler (fila por paciente e prazo)
 //   GET  /api/faturamento/guias/:id/acompanhamento             faturamento.guia.ler
 //   POST /api/faturamento/guias/:id/resposta                   faturamento.pendencia.editar
@@ -202,7 +204,7 @@ export class AuditoriaTramiteController implements OnModuleInit {
 
   // ── Protocolo entre setores ──
   @Get('faturamento/protocolos-tramite')
-  @Permissao('faturamento.conta.ler')
+  @Permissao('faturamento.tramite.ler')
   protocolos(@Query('setor') setor: string | undefined, @Req() req: RequisicaoAutorizada) {
     const st = setor ? inteiro(setor, 'setor') : null;
     return this.rodar(() => this.s().ler(ctxDe(req, ORIGEM), (l, est) => protocolosPropria(l, est, st)));
@@ -210,7 +212,7 @@ export class AuditoriaTramiteController implements OnModuleInit {
 
   /** O item do lote pelo número de negócio (conta, atendimento, prontuário do volume, atendimento do documento). */
   @Get('faturamento/protocolos-tramite/alvos')
-  @Permissao('faturamento.conta.ler')
+  @Permissao('faturamento.tramite.ler')
   alvosProtocolo(
     @Query('tipo') tipo: string | undefined,
     @Query('numero') numero: string | undefined,
@@ -224,7 +226,7 @@ export class AuditoriaTramiteController implements OnModuleInit {
 
   @Post('faturamento/protocolos-tramite')
   @HttpCode(201)
-  @Permissao('faturamento.protocolo.registrar')
+  @Permissao('faturamento.tramite.registrar')
   @AuditadoNoHandler(EXECUTOR)
   emitir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.gravar('protocolo.emitir', req, objeto(corpo));
@@ -232,7 +234,7 @@ export class AuditoriaTramiteController implements OnModuleInit {
 
   @Post('faturamento/protocolos-tramite/:id/envio')
   @HttpCode(200)
-  @Permissao('faturamento.protocolo.registrar')
+  @Permissao('faturamento.tramite.registrar')
   @AuditadoNoHandler(EXECUTOR)
   enviar(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     return this.gravar('protocolo.enviar', req, { protocoloId: inteiro(id, 'id') });
@@ -240,7 +242,7 @@ export class AuditoriaTramiteController implements OnModuleInit {
 
   @Post('faturamento/protocolos-tramite/:id/conferencia')
   @HttpCode(200)
-  @Permissao('faturamento.protocolo.registrar')
+  @Permissao('faturamento.tramite.registrar')
   @AuditadoNoHandler(EXECUTOR)
   conferir(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.gravar('protocolo.conferir', req, { ...objeto(corpo), protocoloId: inteiro(id, 'id') });
@@ -248,7 +250,7 @@ export class AuditoriaTramiteController implements OnModuleInit {
 
   @Post('faturamento/protocolos-tramite/:id/cancelamento')
   @HttpCode(200)
-  @Permissao('faturamento.protocolo.registrar')
+  @Permissao('faturamento.tramite.registrar')
   @AuditadoNoHandler(EXECUTOR)
   cancelarProtocolo(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.gravar('protocolo.cancelar', req, { ...objeto(corpo), protocoloId: inteiro(id, 'id') });
