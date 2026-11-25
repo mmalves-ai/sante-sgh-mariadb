@@ -1024,6 +1024,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       ],
       conselho: true,
     },
+    // C1-092: o biomédico também monta a remessa ao apoio e mantém o de-para (perfil próprio do laboratório de apoio).
+    perfisConcedidos: ['laboratorio-apoio'],
   },
   /**
    * M26: médica radiologista (com conselho): as solicitações (2758, 6233), os resultados e laudos de imagem,
@@ -3280,6 +3282,20 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       ),
     },
     perfisConcedidos: ['faturamento-de-para'],
+  },
+  /**
+   * C1-092 (05-SADT linha 14, no fim da lista, pelo ID sintético das outras): técnico do laboratório de apoio, sem
+   * nenhuma opção do menu de origem: lê o apoio, monta, fecha e envia a remessa, imprime as etiquetas e mantém o
+   * de-para só pelo perfil `laboratorio-apoio`; não confere o resultado que volta (privativo do responsável técnico).
+   */
+  'SINT.LAB.APOIO': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: { grupo: 'LABAPOIO', opcoesGrupo: [] },
+    perfisConcedidos: ['laboratorio-apoio'],
   },
 };
 

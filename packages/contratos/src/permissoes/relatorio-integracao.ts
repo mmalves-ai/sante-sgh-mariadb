@@ -7,6 +7,8 @@ import type { DeclaracaoPermissao } from './tipos.js';
 export const OPCAO_INTERFACEAMENTO = 2964;
 
 const ADMIN = ['administrador-sistema'] as const;
+/** C1-092: o pessoal do laboratório de apoio (perfil próprio) recebe a leitura, a remessa e o de-para do apoio. */
+const APOIO = 'laboratorio-apoio';
 
 export const PERMISSOES_M34_CODIGOS = {
   catalogoLer: 'relatorio.catalogo.ler',
@@ -291,7 +293,7 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     descricao: 'Ver o laboratório de apoio: o de-para de exames, elementos e materiais e a fila de retorno',
 
     concessaoPorPerfil: 'por-perfil',
-    perfis: [...ADMIN],
+    perfis: [...ADMIN, APOIO],
     categoria: 'administrativa',
     criticidade: 'normal',
   },
@@ -311,7 +313,7 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
       'Montar, fechar, enviar ou cancelar a remessa de amostras ao laboratório de apoio e imprimir as etiquetas do apoio',
 
     concessaoPorPerfil: 'por-perfil',
-    perfis: [...ADMIN],
+    perfis: [...ADMIN, APOIO],
     categoria: 'administrativa',
     criticidade: 'normal',
   },
@@ -321,7 +323,7 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
       'Manter o de-para de analito e de material com o laboratório de apoio (desativar, nunca apagar)',
 
     concessaoPorPerfil: 'por-perfil',
-    perfis: [...ADMIN],
+    perfis: [...ADMIN, APOIO],
     categoria: 'administrativa',
     criticidade: 'normal',
   },

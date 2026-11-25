@@ -1208,6 +1208,7 @@
     "src/modulos/sadt/aplicacao/vigia-criticos.ts",
     "src/modulos/sadt/aplicacao/vigia-criticos.spec.ts",
     "src/modulos/sadt/aplicacao/apoios.spec.ts",
+    "src/modulos/sadt/apoio-permissao.spec.ts",
     "src/modulos/sadt/modulo.ts",
     "src/modulos/sadt/aplicacao/vigia-criticos.int.spec.ts",
     "src/modulos/sadt/infra/laudo-pdf.int.spec.ts",

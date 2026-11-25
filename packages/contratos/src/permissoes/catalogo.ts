@@ -232,5 +232,11 @@ export const PERFIS_COMPLEMENTARES = [
    * aprovado.
    */
   'faturamento-de-para',
+  /**
+   * C1-092 (05-SADT linha 14): laboratório de apoio: monta, fecha, envia e cancela a remessa de amostras, imprime as
+   * etiquetas do apoio e mantém o de-para de analito e de material, sem conferir o resultado que volta (privativo do
+   * responsável técnico habilitado). Só por concessão nominal da gestão de acessos ou pelo mapa aprovado.
+   */
+  'laboratorio-apoio',
 ] as const;
 export type PerfilComplementar = (typeof PERFIS_COMPLEMENTARES)[number];
