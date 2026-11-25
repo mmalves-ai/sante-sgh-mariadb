@@ -54,6 +54,17 @@ describe('dados demográficos do paciente', () => {
     expect(errosDemografia({ ...base, racaCorExigeEtnia: false })).toEqual([]);
   });
 
+  it('língua indígena: opcional, e só com a raça/cor que exige a etnia', () => {
+    const indigena = { ...base, racaCorExigeEtnia: true, temPovoIndigena: true };
+    expect(errosDemografia({ ...indigena, temIdiomaIndigena: true })).toEqual([]);
+    expect(errosDemografia({ ...indigena, temIdiomaIndigena: false })).toEqual([]);
+    expect(errosDemografia({ ...base, racaCorExigeEtnia: false, temIdiomaIndigena: true })).toEqual([
+      'idioma-indigena-indevido',
+    ]);
+    expect(errosDemografia({ ...base, temIdiomaIndigena: true })).toEqual(['idioma-indigena-indevido']);
+    expect(CAMPO_DO_ERRO_DEMOGRAFIA['idioma-indigena-indevido']).toBe('idiomaIndigena');
+  });
+
   it('capacidade civil que exige responsável legal só com representante vigente', () => {
     expect(errosDemografia({ ...base, capacidadeExigeResponsavel: true })).toEqual([
       'capacidade-sem-responsavel',

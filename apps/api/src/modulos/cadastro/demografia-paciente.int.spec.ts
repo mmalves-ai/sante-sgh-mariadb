@@ -2,7 +2,9 @@
 // teste, com a massa SINTÉTICA do lote 01-02 (prefixo F22L0102; nenhuma pessoa real): o que a gravação deixa na pessoa
 // e no cadastro do paciente, as recusas da regra (nome social, povo indígena, capacidade civil sem responsável, opção
 // fora do vocabulário) sem nada gravado, e a vulnerabilidade declarada e encerrada sem apagar. Os vocabulários vêm das
-// sementes do produto (db/sementes/03_cadastro_demografia.json); o povo indígena do teste é sintético e sai no fim.
+// sementes do produto (db/sementes/03_cadastro_demografia.json); o povo e a língua indígena do teste são sintéticos e
+// saem no fim. Atributos do cadastro nacional (09-AREA linha 73): orientação sexual, situação familiar, língua indígena
+// e a doença crônica declarada (migração 03_CAD/97_condicao_cronica_declarada).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -36,6 +38,9 @@ async function limparDemografia(nucleo: NucleoProprio): Promise<void> {
   const marca = [`%${NOME}%`];
   await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f31-07-demog-limpa' }, async (e) => {
     await e.executar(`DELETE FROM paciente_vulnerabilidade WHERE paciente_id IN (${pacientes})`, marca);
+    await e.executar(`DELETE FROM paciente_condicao_cronica WHERE paciente_id IN (${pacientes})`, marca);
+    await e.executar(`UPDATE paciente SET idioma_indigena_id = NULL WHERE id IN (${pacientes})`, marca);
+    await e.executar('DELETE FROM idioma_indigena WHERE codigo_cadsus = ?', [ETNIA_TESTE]);
     await e.executar(`DELETE FROM responsavel_paciente WHERE paciente_id IN (${pacientes})`, marca);
     await e.executar(`UPDATE paciente SET povo_indigena_id = NULL WHERE id IN (${pacientes})`, marca);
     await e.executar('UPDATE pessoa_fisica SET povo_indigena_id = NULL WHERE nome LIKE ?', marca);
@@ -51,6 +56,7 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
   let adulta = 0;
   let menor = 0;
   let povo = 0;
+  let idioma = 0;
   let vazio: EntradaDemografia;
 
   const um = <T extends Record<string, unknown>>(sql: string, p: readonly unknown[]) =>
@@ -88,6 +94,9 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
               pf.nacionalidade_id AS pf_nac, p.nacionalidade_id AS p_nac,
               pf.pais_nascimento_id AS pf_pais, p.nascimento_pais_referencia_id AS p_pais,
               pf.ocupacao_cbo_id AS pf_ocupacao, p.ocupacao_cbo_id AS p_ocupacao,
+              pf.orientacao_sexual_declarada_id AS pf_orientacao, p.orientacao_sexual_declarada_id AS p_orientacao,
+              pf.situacao_convivio_familiar_id AS pf_familia, p.situacao_convivio_familiar_id AS p_familia,
+              p.idioma_indigena_id AS p_idioma,
               p.capacidade_civil_id AS p_capacidade, pf.versao AS pf_versao, p.versao AS p_versao
          FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
       [paciente],
@@ -130,6 +139,10 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
         'INSERT INTO povo_indigena (codigo_etnia_sus, descricao, criado_em) VALUES (?, ?, ?)',
         [ETNIA_TESTE, `POVO SINTETICO ${MARCA}`, new Date()],
       );
+      idioma = await e.inserir(
+        'INSERT INTO idioma_indigena (codigo_cadsus, descricao, criado_em) VALUES (?, ?, ?)',
+        [ETNIA_TESTE, `LINGUA SINTETICA ${MARCA}`, new Date()],
+      );
     });
     demografia = new DemografiaPacientePropria(nucleo, CLIENTE_F22);
     ficha = new FichaComplementarPropria(nucleo, CLIENTE_F22);
@@ -145,6 +158,9 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
       nacionalidade: null,
       paisNascimento: null,
       capacidadeCivil: null,
+      orientacaoSexual: null,
+      situacaoFamiliar: null,
+      idiomaIndigena: null,
       ocupacao: null,
     };
   }, 180_000);
@@ -168,6 +184,20 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
     expect(d.opcoes.condicoesVulnerabilidade.length).toBeGreaterThan(0);
     expect(d.opcoes.povoIndigena.some((o) => o.id === povo)).toBe(true);
     expect(d.opcoes.informantes).toContain('servico_social');
+    // Cadastro nacional: orientação sexual opcional com "não quis declarar" por último, situação familiar pelo código
+    // oficial, doenças crônicas por CID-10 e a língua indígena em uso.
+    expect(d.opcoes.orientacaoSexual.length).toBeGreaterThanOrEqual(8);
+    expect(d.opcoes.orientacaoSexual.at(-1)?.descricao).toBe('Não quis declarar');
+    expect(d.opcoes.situacaoFamiliar.length).toBeGreaterThanOrEqual(7);
+    expect(d.opcoes.condicoesCronicas.length).toBeGreaterThanOrEqual(18);
+    expect(d.opcoes.condicoesCronicas.some((o) => o.descricao.endsWith('(I10)'))).toBe(true);
+    expect(d.opcoes.idiomaIndigena.some((o) => o.id === idioma)).toBe(true);
+    expect([d.orientacaoSexual, d.situacaoFamiliar, d.idiomaIndigena, d.condicoesCronicas]).toEqual([
+      null,
+      null,
+      null,
+      [],
+    ]);
     expect(await codigo(demografia.demografia(c(), 999_999_999))).toBe('paciente-inexistente');
   });
 
@@ -179,6 +209,9 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
     const nac = await idDe('nacionalidade', 'codigo_cadsus', '1');
     const capacidade = await idDe('capacidade_civil', 'codigo', 'plena');
     const pais = Number((await um('SELECT MIN(id) AS id FROM pais_referencia', []))?.['id'] ?? 0);
+    const orientacao = await idDe('orientacao_sexual_declarada', 'codigo', 'nao_declarado');
+    const familia = await idDe('situacao_convivio_familiar', 'codigo_esus', '6');
+    expect([orientacao, familia].every((x) => x > 0)).toBe(true);
     const busca = await demografia.ocupacoes(c(), 'enferm');
     expect(busca.itens.length).toBeGreaterThan(0);
     expect(busca.itens.length).toBeLessThanOrEqual(20);
@@ -198,6 +231,8 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
       nacionalidade: nac,
       paisNascimento: pais,
       capacidadeCivil: capacidade,
+      orientacaoSexual: orientacao,
+      situacaoFamiliar: familia,
       ocupacao,
     });
     const x = (await noBanco(adulta))!;
@@ -211,29 +246,35 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
       ['nac', nac],
       ['pais', pais],
       ['ocupacao', ocupacao],
+      ['orientacao', orientacao],
+      ['familia', familia],
     ] as const)
       expect([campo, Number(x[`pf_${campo}`]), Number(x[`p_${campo}`])]).toEqual([campo, id, id]);
-    expect([x['pf_povo'], x['p_povo']]).toEqual([null, null]);
+    expect([x['pf_povo'], x['p_povo'], x['p_idioma']]).toEqual([null, null, null]);
     expect(Number(x['p_capacidade'])).toBe(capacidade);
     expect(Number(x['pf_versao'])).toBe(Number(antes!['pf_versao']) + 1);
     expect(Number(x['p_versao'])).toBe(Number(antes!['p_versao']) + 1);
     expect(await trilhas(adulta)).toBe(t0 + 1);
     const d = await demografia.demografia(c(), adulta);
-    expect([d.usaNomeSocial, d.nomeSocial, d.racaCor, d.ocupacao?.id]).toEqual([
-      true,
-      `SOCIAL ${NOME}`,
-      raca,
-      ocupacao,
-    ]);
+    expect([
+      d.usaNomeSocial,
+      d.nomeSocial,
+      d.racaCor,
+      d.ocupacao?.id,
+      d.orientacaoSexual,
+      d.situacaoFamiliar,
+    ]).toEqual([true, `SOCIAL ${NOME}`, raca, ocupacao, orientacao, familia]);
     // Deixar de usar o nome social guarda o nome (a pessoa pode voltar a usar) e limpa o que saiu da tela.
     await gravar({ paciente: adulta, nomeSocial: `SOCIAL ${NOME}`, racaCor: raca });
     const y = (await noBanco(adulta))!;
-    expect([Number(y['pf_usa']), y['pf_social'], y['pf_genero'], y['p_capacidade']]).toEqual([
-      0,
-      `SOCIAL ${NOME}`,
-      null,
-      null,
-    ]);
+    expect([
+      Number(y['pf_usa']),
+      y['pf_social'],
+      y['pf_genero'],
+      y['p_capacidade'],
+      y['pf_orientacao'],
+      y['p_orientacao'],
+    ]).toEqual([0, `SOCIAL ${NOME}`, null, null, null, null]);
   });
 
   it('recusas da regra: nome social, povo indígena e opção fora do vocabulário, sem nada gravado', async () => {
@@ -254,11 +295,18 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
     expect(await codigo(gravar({ paciente: adulta, povoIndigena: povo }))).toBe('povo-indigena-indevido');
     expect(await codigo(gravar({ paciente: adulta, racaCor: 999_999_999 }))).toBe('opcao-invalida');
     expect(await codigo(gravar({ paciente: adulta, ocupacao: 999_999_999 }))).toBe('opcao-invalida');
+    expect(await codigo(gravar({ paciente: adulta, racaCor: parda, idiomaIndigena: idioma }))).toBe(
+      'idioma-indigena-indevido',
+    );
+    expect(await codigo(gravar({ paciente: adulta, orientacaoSexual: 999_999_999 }))).toBe('opcao-invalida');
+    expect(await codigo(gravar({ paciente: adulta, situacaoFamiliar: 999_999_999 }))).toBe('opcao-invalida');
     expect(await noBanco(adulta)).toEqual(antes);
     expect(await trilhas(adulta)).toBe(t0);
-    // A raça/cor indígena com o povo grava nos dois lugares.
-    await gravar({ paciente: adulta, racaCor: indigena, povoIndigena: povo });
+    // A raça/cor indígena com o povo grava nos dois lugares; a língua indígena é do cadastro do paciente.
+    await gravar({ paciente: adulta, racaCor: indigena, povoIndigena: povo, idiomaIndigena: idioma });
     const x = (await noBanco(adulta))!;
+    expect(Number(x['p_idioma'])).toBe(idioma);
+    expect((await demografia.demografia(c(), adulta)).idiomaIndigena).toBe(idioma);
     expect([Number(x['pf_raca']), Number(x['p_raca']), Number(x['pf_povo']), Number(x['p_povo'])]).toEqual([
       indigena,
       indigena,
@@ -362,6 +410,68 @@ describe.skipIf(SEM_BANCO)('dados demográficos do paciente no banco próprio', 
     expect(
       await contar(
         'SELECT COUNT(*) AS n FROM paciente_vulnerabilidade WHERE paciente_id = ? AND excluido_em IS NOT NULL',
+        [adulta],
+      ),
+    ).toBe(0);
+  });
+
+  it('doença crônica: declarada com data e informante, uma vigente por doença, encerrada sem apagar', async () => {
+    const d = await demografia.demografia(c(), adulta);
+    const hipertensao = d.opcoes.condicoesCronicas.find((o) => o.descricao.endsWith('(I10)'))!.id;
+    const nova = {
+      paciente: adulta,
+      condicao: hipertensao,
+      declaradaEm: '2026-10-01',
+      informanteTipo: 'paciente',
+      informanteNome: null,
+      observacao: null,
+    };
+    const t = trilha('paciente_condicao_cronica');
+    const linhas = () =>
+      contar('SELECT COUNT(*) AS n FROM paciente_condicao_cronica WHERE paciente_id = ?', [adulta]);
+    expect(
+      await codigo(demografia.declararCondicaoCronica(c(), { ...nova, declaradaEm: '2999-01-01' }, t)),
+    ).toBe('condicao-cronica-invalida');
+    expect(
+      await codigo(demografia.declararCondicaoCronica(c(), { ...nova, informanteTipo: 'responsavel' }, t)),
+    ).toBe('condicao-cronica-invalida');
+    expect(await codigo(demografia.declararCondicaoCronica(c(), { ...nova, condicao: 999_999_999 }, t))).toBe(
+      'opcao-invalida',
+    );
+    expect(await linhas()).toBe(0);
+    const id = await demografia.declararCondicaoCronica(c(), nova, t);
+    expect(id).toBeGreaterThan(0);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'paciente_condicao_cronica' AND entidade_id = ?",
+        [id],
+      ),
+    ).toBe(1);
+    expect(
+      await codigo(demografia.declararCondicaoCronica(c(), { ...nova, declaradaEm: '2026-10-15' }, t)),
+    ).toBe('condicao-cronica-ja-vigente');
+    const fim = { paciente: adulta, id, fim: '2026-09-30' };
+    expect(await codigo(demografia.encerrarCondicaoCronica(c(), fim, t))).toBe('fim-invalido');
+    expect(await codigo(demografia.encerrarCondicaoCronica(c(), { ...fim, paciente: menor }, t))).toBe(
+      'condicao-cronica-inexistente',
+    );
+    await demografia.encerrarCondicaoCronica(c(), { ...fim, fim: '2026-10-20' }, t);
+    const novo = await demografia.declararCondicaoCronica(
+      c(),
+      { ...nova, declaradaEm: '2026-11-01', informanteTipo: 'familiar', informanteNome: `IRMA ${NOME}` },
+      t,
+    );
+    expect(await linhas()).toBe(2);
+    const lista = (await demografia.demografia(c(), adulta)).condicoesCronicas;
+    expect(lista.map((v) => [v.id, v.vigente, v.declaradaEm, v.fim, v.informanteNome])).toEqual([
+      [novo, true, '2026-11-01', null, `IRMA ${NOME}`],
+      [id, false, '2026-10-01', '2026-10-20', null],
+    ]);
+    // A doença crônica não entra na lista de vulnerabilidades (listas separadas).
+    expect((await demografia.demografia(c(), adulta)).vulnerabilidades.some((v) => v.id === id)).toBe(false);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM paciente_condicao_cronica WHERE paciente_id = ? AND excluido_em IS NOT NULL',
         [adulta],
       ),
     ).toBe(0);

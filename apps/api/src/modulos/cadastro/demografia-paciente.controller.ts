@@ -5,6 +5,9 @@
 //   GET  /api/cadastros/ocupacoes-em-uso?termo=                          busca da ocupação (código ou trecho; até 20)
 //   POST /api/cadastros/pacientes/:id/vulnerabilidades                   declara a condição (data e informante)
 //   POST /api/cadastros/pacientes/:id/vulnerabilidades/:vid/encerrar     encerra com data (nada apagado)
+//   POST /api/cadastros/pacientes/:id/condicoes-cronicas                 declara a doença crônica referida
+//   POST /api/cadastros/pacientes/:id/condicoes-cronicas/:cid/encerrar   encerra com data (nada apagado)
+// Atributos do cadastro nacional (09-AREA linha 73): orientação sexual, situação familiar e língua indígena no bloco.
 // Toda gravação passa pelo executor (trilha na mesma transação). Só no banco do cliente (sem ele, 503).
 import {
   Body,
@@ -119,6 +122,9 @@ export class DemografiaPacienteController {
           nacionalidade: opcao(b, 'nacionalidade'),
           paisNascimento: opcao(b, 'paisNascimento'),
           capacidadeCivil: opcao(b, 'capacidadeCivil'),
+          orientacaoSexual: opcao(b, 'orientacaoSexual'),
+          situacaoFamiliar: opcao(b, 'situacaoFamiliar'),
+          idiomaIndigena: opcao(b, 'idiomaIndigena'),
           ocupacao: opcao(b, 'ocupacao'),
         },
         this.trilha(s, 'cadastro.gravarDemografiaPaciente', 'paciente', n),
@@ -176,6 +182,60 @@ export class DemografiaPacienteController {
         s.porta,
         { paciente: n, id: idDaRota(vid), fim: txt(b['fim']) ?? '' },
         this.trilha(s, 'cadastro.encerrarVulnerabilidadePaciente', 'paciente_vulnerabilidade', n),
+      ),
+    );
+    return { id: r };
+  }
+
+  @Post('pacientes/:id/condicoes-cronicas')
+  @HttpCode(201)
+  @Permissao('cadastro.paciente.editar')
+  @AuditadoNoHandler('executor: trilha na mesma transação')
+  async declararCronica(@Param('id') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const n = idDaRota(p);
+    const b = corpoDe(corpo);
+    const condicao = opcao(b, 'condicao');
+    if (condicao === null)
+      throw new ErroProblema('entrada-invalida', 422, 'Dados inválidos', 'Escolha a doença crônica.', {
+        codigo: 'opcao-invalida',
+        campos: ['condicao'],
+      });
+    const r = await this.rodar(() =>
+      this.servico().declararCondicaoCronica(
+        s.porta,
+        {
+          paciente: n,
+          condicao,
+          declaradaEm: txt(b['declaradaEm']) ?? '',
+          informanteTipo: txt(b['informanteTipo']) ?? '',
+          informanteNome: txt(b['informanteNome']),
+          observacao: txt(b['observacao']),
+        },
+        this.trilha(s, 'cadastro.declararCondicaoCronicaPaciente', 'paciente_condicao_cronica', n),
+      ),
+    );
+    return { id: r };
+  }
+
+  @Post('pacientes/:id/condicoes-cronicas/:cid/encerrar')
+  @HttpCode(200)
+  @Permissao('cadastro.paciente.editar')
+  @AuditadoNoHandler('executor: trilha na mesma transação')
+  async encerrarCronica(
+    @Param('id') p: string,
+    @Param('cid') cid: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const s = sessaoDe(req);
+    const n = idDaRota(p);
+    const b = corpoDe(corpo);
+    const r = await this.rodar(() =>
+      this.servico().encerrarCondicaoCronica(
+        s.porta,
+        { paciente: n, id: idDaRota(cid), fim: txt(b['fim']) ?? '' },
+        this.trilha(s, 'cadastro.encerrarCondicaoCronicaPaciente', 'paciente_condicao_cronica', n),
       ),
     );
     return { id: r };

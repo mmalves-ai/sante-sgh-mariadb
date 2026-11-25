@@ -1,6 +1,9 @@
 // Dados demográficos do paciente no banco próprio (F3.1, 02-CAD linha 15): nome social e o uso dele, identidade de
 // gênero, raça/cor e povo indígena, escolaridade, ocupação, religião, nacionalidade, país de nascimento, capacidade
 // civil e as condições de vulnerabilidade (declaradas com data e informante; encerradas com data, nunca apagadas).
+// Atributos do cadastro nacional (09-AREA linha 73): orientação sexual (opcional, com 'não quis declarar'; dado
+// sensível, LGPD art. 5º II), situação de convívio familiar, língua indígena (só com a raça/cor indígena) e as doenças
+// crônicas referidas (declaradas como a vulnerabilidade, pelo vocabulário de doenças crônicas por CID-10).
 //   - os dados são da pessoa (`pessoa_fisica`) e o cadastro do paciente (`paciente`) guarda a mesma escolha, na mesma
 //     transação: o prontuário lê o nome de tratamento pelo paciente, e o cadastro, pela pessoa;
 //   - a capacidade civil é só do paciente;
@@ -74,6 +77,9 @@ type CampoVocabulario =
   | 'nacionalidade'
   | 'paisNascimento'
   | 'capacidadeCivil'
+  | 'orientacaoSexual'
+  | 'situacaoFamiliar'
+  | 'idiomaIndigena'
   | 'ocupacao';
 
 const VIGENTE = '(vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)';
@@ -146,6 +152,30 @@ const VOCABULARIOS: readonly Vocabulario[] = [
     ordem: 'descricao',
   },
   {
+    campo: 'orientacaoSexual',
+    tabela: 'orientacao_sexual_declarada',
+    pessoa: 'orientacao_sexual_declarada_id',
+    paciente: 'orientacao_sexual_declarada_id',
+    emUso: 'ativo',
+    ordem: "codigo = 'nao_declarado', descricao",
+  },
+  {
+    campo: 'situacaoFamiliar',
+    tabela: 'situacao_convivio_familiar',
+    pessoa: 'situacao_convivio_familiar_id',
+    paciente: 'situacao_convivio_familiar_id',
+    emUso: `ativo AND ${VIGENTE}`,
+    ordem: 'codigo_esus',
+  },
+  {
+    campo: 'idiomaIndigena',
+    tabela: 'idioma_indigena',
+    pessoa: null,
+    paciente: 'idioma_indigena_id',
+    emUso: `ativo AND ${VIGENTE}`,
+    ordem: 'descricao',
+  },
+  {
     campo: 'ocupacao',
     tabela: 'ocupacao_cbo',
     pessoa: 'ocupacao_cbo_id',
@@ -177,6 +207,9 @@ export interface VulnerabilidadePaciente {
   versao: number;
 }
 
+/** Doença crônica declarada no cadastro (condição de saúde referida; o diagnóstico é da lista de problemas). */
+export type CondicaoCronicaPaciente = VulnerabilidadePaciente;
+
 export interface DemografiaPaciente {
   paciente: number;
   hoje: string;
@@ -191,14 +224,19 @@ export interface DemografiaPaciente {
   nacionalidade: number | null;
   paisNascimento: number | null;
   capacidadeCivil: number | null;
+  orientacaoSexual: number | null;
+  situacaoFamiliar: number | null;
+  idiomaIndigena: number | null;
   ocupacao: { id: number; descricao: string } | null;
   /** Há representante legal vigente hoje (a capacidade que exige responsável só grava com ele). */
   temRepresentanteVigente: boolean;
   opcoes: Record<Exclude<CampoVocabulario, 'ocupacao'>, OpcaoDemografia[]> & {
     condicoesVulnerabilidade: OpcaoDemografia[];
+    condicoesCronicas: OpcaoDemografia[];
     informantes: readonly string[];
   };
   vulnerabilidades: VulnerabilidadePaciente[];
+  condicoesCronicas: CondicaoCronicaPaciente[];
 }
 
 // ── Leitura do que está gravado (na transação de quem usa) ──
@@ -273,6 +311,7 @@ const MENSAGEM: Record<ErroDemografia, string> = {
   'nome-social-igual-ao-nome': 'O nome social é igual ao nome civil: deixe-o em branco.',
   'povo-indigena-exigido': 'Para a raça/cor indígena, informe o povo indígena (etnia).',
   'povo-indigena-indevido': 'O povo indígena só é informado com a raça/cor indígena.',
+  'idioma-indigena-indevido': 'A língua indígena só é informada com a raça/cor indígena.',
   'capacidade-sem-responsavel':
     'Esta capacidade civil exige responsável legal: inclua antes o responsável vigente na ficha do paciente.',
 };
@@ -293,6 +332,9 @@ const esquemaDemografia = z
     nacionalidade: idOpcional,
     paisNascimento: idOpcional,
     capacidadeCivil: idOpcional,
+    orientacaoSexual: idOpcional,
+    situacaoFamiliar: idOpcional,
+    idiomaIndigena: idOpcional,
     ocupacao: idOpcional,
   })
   .strict();
@@ -315,6 +357,7 @@ const operacaoGravarDemografia = (trilha: RegistroTrilhaTela) =>
         nomeSocial,
         racaCorExigeEtnia: marcas.racaCor,
         temPovoIndigena: e.povoIndigena !== null,
+        temIdiomaIndigena: e.idiomaIndigena !== null,
         capacidadeExigeResponsavel: marcas.capacidadeCivil,
         // A capacidade que já estava gravada não é conferida de novo (o responsável pode ter saído depois: a pendência
         // é da representação, e a ficha continua editável).
@@ -341,6 +384,35 @@ const operacaoGravarDemografia = (trilha: RegistroTrilhaTela) =>
     trilha: () => ({ dados: trilha.dadosDepois ?? null, motivo: null }),
   });
 
+/**
+ * O que é declarado no cadastro com data e informante e encerrado com data (nunca apagado): a condição de
+ * vulnerabilidade e a doença crônica referida. A mesma regra do domínio (errosVulnerabilidade) vale para as duas.
+ */
+interface Declaracao {
+  readonly tabela: 'paciente_vulnerabilidade' | 'paciente_condicao_cronica';
+  readonly coluna: 'condicao_vulnerabilidade_id' | 'condicao_cronica_id';
+  readonly vocabulario: 'condicao_vulnerabilidade' | 'condicao_cronica';
+  readonly operacao: string;
+  readonly erro: string;
+  readonly nome: string;
+}
+const VULNERABILIDADE: Declaracao = {
+  tabela: 'paciente_vulnerabilidade',
+  coluna: 'condicao_vulnerabilidade_id',
+  vocabulario: 'condicao_vulnerabilidade',
+  operacao: 'vulnerabilidade-paciente',
+  erro: 'vulnerabilidade',
+  nome: 'condição',
+};
+const CONDICAO_CRONICA: Declaracao = {
+  tabela: 'paciente_condicao_cronica',
+  coluna: 'condicao_cronica_id',
+  vocabulario: 'condicao_cronica',
+  operacao: 'condicao-cronica-paciente',
+  erro: 'condicao-cronica',
+  nome: 'doença crônica',
+};
+
 const esquemaVulnerabilidade = z
   .object({
     paciente: z.number().int().positive(),
@@ -353,29 +425,32 @@ const esquemaVulnerabilidade = z
   .strict();
 export type EntradaVulnerabilidade = z.infer<typeof esquemaVulnerabilidade>;
 
-const MENSAGEM_VULNERABILIDADE: Record<string, string> = {
-  'ja-vigente': 'O paciente já tem esta condição vigente: encerre-a antes de declarar de novo.',
-  declaradaEm: 'A data da declaração não pode ser futura nem anterior ao nascimento do paciente.',
-  informanteTipo: 'Escolha quem informou a condição.',
-  informanteNome: 'Informe o nome de quem declarou a condição.',
-};
+const mensagemDeclaracao = (d: Declaracao, erro: string): string =>
+  ({
+    'ja-vigente': `O paciente já tem esta ${d.nome} vigente: encerre-a antes de declarar de novo.`,
+    declaradaEm: 'A data da declaração não pode ser futura nem anterior ao nascimento do paciente.',
+    informanteTipo: `Escolha quem informou a ${d.nome}.`,
+    informanteNome: `Informe o nome de quem declarou a ${d.nome}.`,
+  })[erro] ?? 'Confira os dados da declaração.';
 
-const operacaoDeclararVulnerabilidade = (trilha: RegistroTrilhaTela) =>
+const operacaoDeclarar = (d: Declaracao, trilha: RegistroTrilhaTela) =>
   definirOperacao({
-    nome: 'cadastro.declarar-vulnerabilidade-paciente',
-    tabelas: ['paciente_vulnerabilidade'],
+    nome: `cadastro.declarar-${d.operacao}`,
+    tabelas: [d.tabela],
     entrada: esquemaVulnerabilidade,
     acao: 'inclusao',
     async gravar(tx, e) {
       const g = await gravado(tx, e.paciente);
-      const c = await tx.uma('SELECT id, ativo FROM condicao_vulnerabilidade WHERE id = ?', [e.condicao]);
+      const tabela = d.vocabulario;
+      const c = await tx.uma(`SELECT id, ativo FROM ${tabela} WHERE id = ?`, [e.condicao]);
       if (!c || !sim(c['ativo']))
-        throw recusaCampos('opcao-invalida', 'A condição escolhida não existe ou não está mais em uso.', [
+        throw recusaCampos('opcao-invalida', `A ${d.nome} escolhida não existe ou não está mais em uso.`, [
           'condicao',
         ]);
+      const declaradas = d.tabela;
       const vigente = await tx.uma(
-        `SELECT id FROM paciente_vulnerabilidade
-          WHERE paciente_id = ? AND condicao_vulnerabilidade_id = ? AND excluido_em IS NULL
+        `SELECT id FROM ${declaradas}
+          WHERE paciente_id = ? AND ${d.coluna} = ? AND excluido_em IS NULL
             AND (vigencia_fim IS NULL OR declarada_em = ?)`,
         [e.paciente, e.condicao, e.declaradaEm],
       );
@@ -387,13 +462,13 @@ const operacaoDeclararVulnerabilidade = (trilha: RegistroTrilhaTela) =>
       );
       if (erros.length > 0)
         throw recusaCampos(
-          erros[0] === 'ja-vigente' ? 'vulnerabilidade-ja-vigente' : 'vulnerabilidade-invalida',
-          MENSAGEM_VULNERABILIDADE[erros[0]!] ?? 'Confira os dados da condição.',
+          erros[0] === 'ja-vigente' ? `${d.erro}-ja-vigente` : `${d.erro}-invalida`,
+          mensagemDeclaracao(d, erros[0]!),
           erros.filter((x) => x !== 'ja-vigente'),
         );
-      const id = await tx.incluir('paciente_vulnerabilidade', {
+      const id = await tx.incluir(declaradas, {
         paciente_id: e.paciente,
-        condicao_vulnerabilidade_id: e.condicao,
+        [d.coluna]: e.condicao,
         declarada_em: e.declaradaEm,
         informante_tipo: e.informanteTipo,
         informante_nome: (e.informanteNome ?? '').trim() || null,
@@ -401,7 +476,7 @@ const operacaoDeclararVulnerabilidade = (trilha: RegistroTrilhaTela) =>
       });
       return { id };
     },
-    alvo: (_e, r) => ({ tabela: 'paciente_vulnerabilidade', id: Number(r.id) }),
+    alvo: (_e, r) => ({ tabela: d.tabela, id: Number(r.id) }),
     trilha: () => ({ dados: trilha.dadosDepois ?? null, motivo: null }),
   });
 
@@ -414,35 +489,59 @@ const esquemaFimVulnerabilidade = z
   .strict();
 export type EntradaFimVulnerabilidade = z.infer<typeof esquemaFimVulnerabilidade>;
 
-const operacaoEncerrarVulnerabilidade = (trilha: RegistroTrilhaTela) =>
+const operacaoEncerrar = (d: Declaracao, trilha: RegistroTrilhaTela) =>
   definirOperacao({
-    nome: 'cadastro.encerrar-vulnerabilidade-paciente',
-    tabelas: ['paciente_vulnerabilidade'],
+    nome: `cadastro.encerrar-${d.operacao}`,
+    tabelas: [d.tabela],
     entrada: esquemaFimVulnerabilidade,
     acao: 'alteracao',
     async gravar(tx, e) {
       const g = await gravado(tx, e.paciente);
+      const declaradas = d.tabela;
       const v = await tx.uma(
-        `SELECT id, versao, declarada_em FROM paciente_vulnerabilidade
+        `SELECT id, versao, declarada_em FROM ${declaradas}
           WHERE id = ? AND paciente_id = ? AND vigencia_fim IS NULL AND excluido_em IS NULL`,
         [e.id, e.paciente],
       );
       if (!v)
-        throw recusaCampos('vulnerabilidade-inexistente', 'A condição não existe ou já foi encerrada.', [
-          'id',
-        ]);
+        throw recusaCampos(`${d.erro}-inexistente`, `A ${d.nome} não existe ou já foi encerrada.`, ['id']);
       if (recusaFimVulnerabilidade(data(v['declarada_em']) ?? '', e.fim, g.hoje))
-        throw recusaCampos(
-          'fim-invalido',
-          'A data do fim não pode ser futura nem anterior à declaração da condição.',
-          ['fim'],
-        );
-      await tx.alterar('paciente_vulnerabilidade', e.id, Number(v['versao']), { vigencia_fim: e.fim });
+        throw recusaCampos('fim-invalido', 'A data do fim não pode ser futura nem anterior à declaração.', [
+          'fim',
+        ]);
+      await tx.alterar(declaradas, e.id, Number(v['versao']), { vigencia_fim: e.fim });
       return { id: e.id };
     },
-    alvo: (e) => ({ tabela: 'paciente_vulnerabilidade', id: e.id }),
+    alvo: (e) => ({ tabela: d.tabela, id: e.id }),
     trilha: () => ({ dados: trilha.dadosDepois ?? null, motivo: null }),
   });
+
+/** As declarações gravadas do paciente (vigentes primeiro, depois as encerradas, da mais nova à mais antiga). */
+async function declaracoes(l: Leitor, d: Declaracao, paciente: number): Promise<VulnerabilidadePaciente[]> {
+  const declaradas = d.tabela;
+  const tabela = d.vocabulario;
+  const linhas = await l.consultar(
+    `SELECT v.id, v.versao, v.${d.coluna} AS condicao_id, cv.descricao, v.declarada_em, v.informante_tipo,
+            v.informante_nome, v.vigencia_fim, v.observacao
+       FROM ${declaradas} v
+       JOIN ${tabela} cv ON cv.id = v.${d.coluna}
+      WHERE v.paciente_id = ? AND v.excluido_em IS NULL
+      ORDER BY v.vigencia_fim IS NULL DESC, v.declarada_em DESC, v.id DESC`,
+    [paciente],
+    { teto: TETO },
+  );
+  return linhas.map((x) => ({
+    id: Number(x['id']),
+    condicao: { id: Number(x['condicao_id']), descricao: String(x['descricao']) },
+    declaradaEm: data(x['declarada_em']) ?? '',
+    informanteTipo: String(x['informante_tipo']),
+    informanteNome: texto(x['informante_nome']),
+    fim: data(x['vigencia_fim']),
+    vigente: x['vigencia_fim'] === null || x['vigencia_fim'] === undefined,
+    observacao: texto(x['observacao']),
+    versao: Number(x['versao']),
+  }));
+}
 
 // ── Porta ──
 
@@ -522,6 +621,16 @@ export class DemografiaPacientePropria {
         descricao: String(x['descricao']),
         marca: false,
       }));
+      const cronicas = await l.consultar(
+        "SELECT id, CONCAT(descricao, ' (', codigo_cid10, ')') AS descricao FROM condicao_cronica WHERE ativo ORDER BY descricao",
+        [],
+        { teto: TETO },
+      );
+      opcoes.condicoesCronicas = cronicas.map((x) => ({
+        id: Number(x['id']),
+        descricao: String(x['descricao']),
+        marca: false,
+      }));
       opcoes.informantes = INFORMANTES_VULNERABILIDADE;
       const ocupacao =
         g.ids.ocupacao === null
@@ -530,16 +639,6 @@ export class DemografiaPacientePropria {
               'SELECT id, COALESCE(descricao_hospital, descricao) AS d FROM ocupacao_cbo WHERE id = ?',
               [g.ids.ocupacao],
             );
-      const vul = await l.consultar(
-        `SELECT v.id, v.versao, v.condicao_vulnerabilidade_id, cv.descricao, v.declarada_em, v.informante_tipo,
-                v.informante_nome, v.vigencia_fim, v.observacao
-           FROM paciente_vulnerabilidade v
-           JOIN condicao_vulnerabilidade cv ON cv.id = v.condicao_vulnerabilidade_id
-          WHERE v.paciente_id = ? AND v.excluido_em IS NULL
-          ORDER BY v.vigencia_fim IS NULL DESC, v.declarada_em DESC, v.id DESC`,
-        [paciente],
-        { teto: TETO },
-      );
       return {
         paciente,
         hoje: g.hoje,
@@ -554,20 +653,14 @@ export class DemografiaPacientePropria {
         nacionalidade: g.ids.nacionalidade,
         paisNascimento: g.ids.paisNascimento,
         capacidadeCivil: g.ids.capacidadeCivil,
+        orientacaoSexual: g.ids.orientacaoSexual,
+        situacaoFamiliar: g.ids.situacaoFamiliar,
+        idiomaIndigena: g.ids.idiomaIndigena,
         ocupacao: ocupacao ? { id: Number(ocupacao['id']), descricao: String(ocupacao['d']) } : null,
         temRepresentanteVigente: await temRepresentante(l, paciente),
         opcoes,
-        vulnerabilidades: vul.map((x) => ({
-          id: Number(x['id']),
-          condicao: { id: Number(x['condicao_vulnerabilidade_id']), descricao: String(x['descricao']) },
-          declaradaEm: data(x['declarada_em']) ?? '',
-          informanteTipo: String(x['informante_tipo']),
-          informanteNome: texto(x['informante_nome']),
-          fim: data(x['vigencia_fim']),
-          vigente: x['vigencia_fim'] === null || x['vigencia_fim'] === undefined,
-          observacao: texto(x['observacao']),
-          versao: Number(x['versao']),
-        })),
+        vulnerabilidades: await declaracoes(l, VULNERABILIDADE, paciente),
+        condicoesCronicas: await declaracoes(l, CONDICAO_CRONICA, paciente),
       };
     });
   }
@@ -603,7 +696,7 @@ export class DemografiaPacientePropria {
     e: EntradaVulnerabilidade,
     t: RegistroTrilhaTela,
   ): Promise<number> {
-    return this.executar(c, operacaoDeclararVulnerabilidade(t) as never, e, t);
+    return this.executar(c, operacaoDeclarar(VULNERABILIDADE, t) as never, e, t);
   }
 
   encerrarVulnerabilidade(
@@ -611,6 +704,24 @@ export class DemografiaPacientePropria {
     e: EntradaFimVulnerabilidade,
     t: RegistroTrilhaTela,
   ): Promise<number> {
-    return this.executar(c, operacaoEncerrarVulnerabilidade(t) as never, e, t);
+    return this.executar(c, operacaoEncerrar(VULNERABILIDADE, t) as never, e, t);
+  }
+
+  /** Declara a doença crônica referida (data e informante; uma vigente por doença). */
+  declararCondicaoCronica(
+    c: ContextoPorta,
+    e: EntradaVulnerabilidade,
+    t: RegistroTrilhaTela,
+  ): Promise<number> {
+    return this.executar(c, operacaoDeclarar(CONDICAO_CRONICA, t) as never, e, t);
+  }
+
+  /** Encerra a doença crônica declarada com a data do fim (nada é apagado). */
+  encerrarCondicaoCronica(
+    c: ContextoPorta,
+    e: EntradaFimVulnerabilidade,
+    t: RegistroTrilhaTela,
+  ): Promise<number> {
+    return this.executar(c, operacaoEncerrar(CONDICAO_CRONICA, t) as never, e, t);
   }
 }

@@ -10,6 +10,8 @@ export interface DemografiaConferida {
   /** Nulo: raça/cor não informada. Verdadeiro: a raça/cor escolhida exige a etnia (povo indígena). */
   readonly racaCorExigeEtnia: boolean | null;
   readonly temPovoIndigena: boolean;
+  /** A língua indígena falada foi informada (só com a raça/cor que exige etnia; opcional mesmo nela). */
+  readonly temIdiomaIndigena?: boolean;
   /** Nulo: capacidade civil não informada. Verdadeiro: a capacidade escolhida exige responsável legal. */
   readonly capacidadeExigeResponsavel: boolean | null;
   /** Há representante legal (responsável legal, guardião, tutor ou curador) vigente hoje no cadastro. */
@@ -21,6 +23,7 @@ export type ErroDemografia =
   | 'nome-social-igual-ao-nome'
   | 'povo-indigena-exigido'
   | 'povo-indigena-indevido'
+  | 'idioma-indigena-indevido'
   | 'capacidade-sem-responsavel';
 
 /** O campo da tela que cada recusa aponta. */
@@ -29,6 +32,7 @@ export const CAMPO_DO_ERRO_DEMOGRAFIA: Record<ErroDemografia, string> = {
   'nome-social-igual-ao-nome': 'nomeSocial',
   'povo-indigena-exigido': 'povoIndigena',
   'povo-indigena-indevido': 'povoIndigena',
+  'idioma-indigena-indevido': 'idiomaIndigena',
   'capacidade-sem-responsavel': 'capacidadeCivil',
 };
 
@@ -40,6 +44,7 @@ const semAcento = (s: string): string =>
  *   - quem usa nome social tem de informá-lo, e ele não repete o nome civil (o nome social guardado sem uso é aceito:
  *     a pessoa pode ter deixado de usar);
  *   - o povo indígena é informado sempre, e só, com a raça/cor que exige a etnia;
+ *   - a língua indígena é opcional, e só com a raça/cor que exige a etnia;
  *   - a capacidade civil que exige responsável legal só é gravada com representante vigente no cadastro.
  */
 export function errosDemografia(d: DemografiaConferida): ErroDemografia[] {
@@ -49,6 +54,7 @@ export function errosDemografia(d: DemografiaConferida): ErroDemografia[] {
   else if (social !== '' && semAcento(social) === semAcento(d.nome)) erros.push('nome-social-igual-ao-nome');
   if (d.racaCorExigeEtnia === true && !d.temPovoIndigena) erros.push('povo-indigena-exigido');
   if (d.racaCorExigeEtnia !== true && d.temPovoIndigena) erros.push('povo-indigena-indevido');
+  if (d.racaCorExigeEtnia !== true && d.temIdiomaIndigena === true) erros.push('idioma-indigena-indevido');
   if (d.capacidadeExigeResponsavel === true && !d.temRepresentanteVigente)
     erros.push('capacidade-sem-responsavel');
   return erros;
