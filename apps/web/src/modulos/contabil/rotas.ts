@@ -30,4 +30,11 @@ export const rotasContabil: RouteRecordRaw[] = [
     component: () => import('./SpedTela.vue'),
     meta: { permissao: 'contabil.sped.ler' },
   },
+  // C2-101 (07-FIN L127, F8): a consolidação gerencial (grupo, de-para, apuração com eliminação e demonstrações).
+  {
+    path: '/contabil/consolidacao',
+    name: 'contabil.consolidacao',
+    component: () => import('./ConsolidacaoTela.vue'),
+    meta: { permissao: 'contabil.consolidacao.ler' },
+  },
 ];
