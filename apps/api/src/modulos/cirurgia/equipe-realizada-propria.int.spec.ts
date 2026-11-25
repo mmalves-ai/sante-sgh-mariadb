@@ -6,7 +6,8 @@
 // Prova o que fica no banco: a leitura da equipe (membro a membro, minutos e percentual); levar à conta grava
 // conta_hospitalar_item_participante por procedimento (na vaga do anestesista entra quem ficou mais tempo, o outro
 // volta em foraDaVaga; o circulante não entra; o auxiliar só no item do seu procedimento), com a trilha; levar de
-// novo não repete; item de outra internação e procedimento de outro ato (422) sem escrita; a sessão de outro
+// novo não repete; a leitura só oferece procedimento ou honorário vivo de conta editável; item de outra internação,
+// procedimento de outro ato e item que não recebe equipe (taxa, estornado) (422) sem escrita; a sessão de outro
 // estabelecimento não enxerga o ato (404).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -43,7 +44,7 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN (${est})`, [P, P2]);
   await e.executar('DELETE FROM funcao_equipe_cobranca WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM procedimento_cirurgico WHERE codigo IN (?, ?)', [`${P}-PC1`, `${P}-PC2`]);
-  await e.executar('DELETE FROM item_faturavel WHERE codigo = ?', [P]);
+  await e.executar('DELETE FROM item_faturavel WHERE codigo IN (?, ?)', [P, `${P}-T`]);
   await e.executar('DELETE FROM grupo_faturamento WHERE codigo = ?', [P]);
   await e.executar('DELETE FROM tipo_conta WHERE codigo = ?', [P]);
   await limparTrilhaDaMassa(e, { codigos: [P, P2] });
@@ -108,6 +109,10 @@ describe.skipIf(SEM_BANCO)('PortaEquipeRealizadaPropria contra o MariaDB (contra
       m['itemFat'] = await e.inserir(
         "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'procedimento', ?, ?)",
         [P, `HONORARIO SINTETICO ${P}`, grupo, agora],
+      );
+      m['itemFatTaxa'] = await e.inserir(
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'taxa', ?, ?)",
+        [`${P}-T`, `TAXA SINTETICA ${P}`, grupo, agora],
       );
       m['sala'] = await um('SELECT MIN(id) FROM sala_cirurgica');
       m['carater'] = await um('SELECT MIN(id) FROM carater_cirurgia');
@@ -203,15 +208,18 @@ describe.skipIf(SEM_BANCO)('PortaEquipeRealizadaPropria contra o MariaDB (contra
         );
       m['conta'] = await conta(`${P}-C1`, m['atend']!);
       m['contaOutra'] = await conta(`${P}-C2`, m['atendOutro']!);
-      const item = (c: number, s: number) =>
+      const item = (c: number, s: number, fat = m['itemFat'], situacao = 'lancado') =>
         e.inserir(
           `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
              valor_unitario, valor_honorario, valor_custo_operacional, valor_total, situacao, criado_em)
-           VALUES (?, ?, ?, '2026-01-21 10:00:00', 1, 1000, 800, 200, 1000, 'lancado', ?)`,
-          [c, s, m['itemFat'], agora],
+           VALUES (?, ?, ?, '2026-01-21 10:00:00', 1, 1000, 800, 200, 1000, ?, ?)`,
+          [c, s, fat, situacao, agora],
         );
       m['item0'] = await item(m['conta']!, 1);
       m['item1'] = await item(m['conta']!, 2);
+      // Itens da mesma conta que não recebem equipe: a taxa (tipo) e o procedimento estornado.
+      m['itemTaxa'] = await item(m['conta']!, 3, m['itemFatTaxa']);
+      m['itemEstornado'] = await item(m['conta']!, 4, m['itemFat'], 'estornado');
       m['itemOutro'] = await item(m['contaOutra']!, 1);
     });
     porta = new PortaEquipeRealizadaPropria(nucleo, CLIENTE);
@@ -238,7 +246,12 @@ describe.skipIf(SEM_BANCO)('PortaEquipeRealizadaPropria contra o MariaDB (contra
       ['auxiliar1', m['aux0'], 90, 30],
     ]);
     expect(r.membros[0]).toMatchObject({ principal: true });
-    expect(r.itensConta.map((i) => i.id)).toEqual([m['item0'], m['item1']]);
+    // Só os itens que recebem equipe: a taxa e o estornado da mesma conta ficam de fora; a situação vem junto.
+    expect(r.itensConta.map((i) => [i.id, i.situacao])).toEqual([
+      [m['item0'], 'lancado'],
+      [m['item1'], 'lancado'],
+    ]);
+    expect(r.itensContaCortados).toBe(false);
   });
 
   it('leva a equipe aos itens: troca na vaga, auxiliar por procedimento, sem circulante; sem repetir', async () => {
@@ -292,6 +305,18 @@ describe.skipIf(SEM_BANCO)('PortaEquipeRealizadaPropria contra o MariaDB (contra
       porta.levarParaConta(ctx(), m['ato']!, { itens: [{ procedimento: m['procOutro'], item: m['item0'] }] }),
     ).rejects.toMatchObject({ problema: { status: 422, codigo: 'procedimento-de-outro-ato' } });
     expect(await equipeDoItem(m['itemOutro']!)).toHaveLength(0);
+    // Item que não recebe equipe (taxa; procedimento estornado): 422 item-sem-equipe, nada gravado.
+    for (const item of [m['itemTaxa'], m['itemEstornado']])
+      await expect(
+        porta.levarParaConta(ctx(), m['ato']!, {
+          itens: [
+            { procedimento: m['proc1'], item: m['item1'] },
+            { procedimento: m['proc0'], item },
+          ],
+        }),
+      ).rejects.toMatchObject({ problema: { status: 422, codigo: 'item-sem-equipe' } });
+    expect(await equipeDoItem(m['itemTaxa']!)).toHaveLength(0);
+    expect(await equipeDoItem(m['itemEstornado']!)).toHaveLength(0);
     await expect(porta.equipe(ctx(P2), m['ato']!)).rejects.toMatchObject({ problema: { status: 404 } });
     await expect(
       porta.levarParaConta(ctx(P2), m['ato']!, { itens: [{ procedimento: m['proc0'], item: m['item0'] }] }),

@@ -29,7 +29,11 @@ const esquemaEquipe = z.object({
       percentual: z.number().nullable(),
     }),
   ),
-  itensConta: z.array(z.object({ id: z.number(), conta: z.string(), descricao: z.string() })),
+  /** Só os itens que recebem equipe (procedimento ou honorário, vivos, de conta editável). */
+  itensConta: z.array(
+    z.object({ id: z.number(), conta: z.string(), descricao: z.string(), situacao: z.string() }),
+  ),
+  itensContaCortados: z.boolean(),
 });
 export type EquipeRealizada = z.infer<typeof esquemaEquipe>;
 

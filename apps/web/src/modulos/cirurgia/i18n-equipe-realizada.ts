@@ -17,10 +17,19 @@ export const mensagensEquipeRealizada = {
   conta: 'Levar a equipe à conta',
   contaTexto:
     'Escolha o item da conta de cada procedimento. Quem o faturista já pôs no item continua; na vaga única entra quem ficou mais tempo.',
-  semItens: 'A internação ainda não tem item na conta para receber a equipe.',
+  semItens:
+    'A internação não tem item de procedimento ou honorário, vivo e em conta aberta, para receber a equipe.',
   itemDo: 'Item da conta para {procedimento}',
   naoLevar: 'Não levar',
-  itemRotulo: 'Conta {conta} · {descricao}',
+  itemRotulo: 'Conta {conta} · {descricao} ({situacao})',
+  itensCortados:
+    'A lista mostra só os primeiros {n} itens que recebem equipe; os demais se ajustam na equipe do item, no faturamento.',
+  situacaoItem: {
+    lancado: 'lançado',
+    conferido: 'conferido',
+    glosado: 'glosado',
+    sem_cobranca: 'sem cobrança',
+  },
   levar: 'Levar à conta',
   nadaEscolhido: 'Escolha o item de ao menos um procedimento.',
   levada: 'Equipe levada: {n} participante(s) incluído(s).',

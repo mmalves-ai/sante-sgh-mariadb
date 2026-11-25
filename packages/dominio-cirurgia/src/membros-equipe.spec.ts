@@ -5,6 +5,7 @@ import {
   type MembroInformado,
   membrosDoProcedimento,
   minutosDeParticipacao,
+  motivoItemSemEquipe,
   principalDoAto,
   tipoCobrancaDaFuncao,
   vagaDaCobranca,
@@ -179,5 +180,22 @@ describe('leitura e ponte com a conta', () => {
     expect(r.foraDaVaga).toEqual([{ profissional: 1, funcaoCobranca: 10 }]);
     expect(vagaDaCobranca('auxiliar', 2)).toBe('auxiliar:2');
     expect(vagaDaCobranca('instrumentador', null)).toBeNull();
+  });
+});
+
+describe('motivoItemSemEquipe', () => {
+  const item = { tipoItem: 'procedimento', situacao: 'lancado', contaEditavel: true };
+  it('procedimento e honorário vivos de conta editável recebem a equipe', () => {
+    expect(motivoItemSemEquipe(item)).toBeNull();
+    expect(motivoItemSemEquipe({ ...item, tipoItem: 'honorario', situacao: 'conferido' })).toBeNull();
+  });
+  it('material, medicamento, diária e taxa não recebem equipe', () => {
+    for (const tipoItem of ['material', 'medicamento', 'diaria', 'taxa', 'opme'])
+      expect(motivoItemSemEquipe({ ...item, tipoItem })).toBe('tipo');
+  });
+  it('item estornado ou transferido e conta fechada não recebem equipe', () => {
+    expect(motivoItemSemEquipe({ ...item, situacao: 'estornado' })).toBe('inativo');
+    expect(motivoItemSemEquipe({ ...item, situacao: 'transferido' })).toBe('inativo');
+    expect(motivoItemSemEquipe({ ...item, contaEditavel: false })).toBe('conta-fechada');
   });
 });

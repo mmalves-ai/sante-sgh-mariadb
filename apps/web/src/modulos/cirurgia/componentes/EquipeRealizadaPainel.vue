@@ -12,7 +12,7 @@ import ErroCirurgia from './ErroCirurgia.vue';
 
 const props = defineProps<{ ato: number }>();
 const emit = defineEmits<{ fechar: [] }>();
-const { t } = useI18n();
+const { t, te } = useI18n();
 const cliente = useQueryClient();
 const { permissoes } = usarSessao();
 const podeLevar = computed(() => permissoes.value.has('faturamento.item.lancar'));
@@ -34,7 +34,13 @@ const opcoesItem = computed(() => [
   { valor: '', rotulo: t('cirurgia.equipeRealizada.naoLevar') },
   ...(equipe.data.value?.itensConta ?? []).map((i) => ({
     valor: String(i.id),
-    rotulo: t('cirurgia.equipeRealizada.itemRotulo', { conta: i.conta, descricao: i.descricao }),
+    rotulo: t('cirurgia.equipeRealizada.itemRotulo', {
+      conta: i.conta,
+      descricao: i.descricao,
+      situacao: te(`cirurgia.equipeRealizada.situacaoItem.${i.situacao}`)
+        ? t(`cirurgia.equipeRealizada.situacaoItem.${i.situacao}`)
+        : i.situacao,
+    }),
   })),
 ]);
 const pares = computed(() =>
@@ -118,6 +124,9 @@ const fora = computed(() => resultado.value?.itens.reduce((s, i) => s + i.foraDa
             :opcoes="opcoesItem"
             :data-testid="`equipe-conta-item-${p.sequencia}`"
           />
+          <p v-if="equipe.data.value.itensContaCortados" data-testid="equipe-conta-cortados">
+            {{ t('cirurgia.equipeRealizada.itensCortados', { n: equipe.data.value.itensConta.length }) }}
+          </p>
           <p v-if="pares.length === 0" role="status">{{ t('cirurgia.equipeRealizada.nadaEscolhido') }}</p>
           <SanteBotao
             tipo="submit"

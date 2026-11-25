@@ -254,3 +254,20 @@ export function equipeDoItemComOAto(
   }));
   return { participantes: [...semVaga, ...novos], incluidos: novos.length, foraDaVaga };
 }
+
+/** Tipos de item faturável que recebem a equipe do ato: o procedimento e o honorário (nunca material, diária, taxa). */
+export const TIPOS_ITEM_COM_EQUIPE = ['procedimento', 'honorario'] as const;
+/** Situações do item da conta que já não aceitam equipe (o registro fica, mas a equipe não muda). */
+export const SITUACOES_ITEM_SEM_EQUIPE = ['estornado', 'transferido'] as const;
+
+/** Por que o item da conta não recebe a equipe do ato; null quando recebe. */
+export function motivoItemSemEquipe(item: {
+  readonly tipoItem: string;
+  readonly situacao: string;
+  readonly contaEditavel: boolean;
+}): 'tipo' | 'inativo' | 'conta-fechada' | null {
+  if (!(TIPOS_ITEM_COM_EQUIPE as readonly string[]).includes(item.tipoItem)) return 'tipo';
+  if ((SITUACOES_ITEM_SEM_EQUIPE as readonly string[]).includes(item.situacao)) return 'inativo';
+  if (!item.contaEditavel) return 'conta-fechada';
+  return null;
+}

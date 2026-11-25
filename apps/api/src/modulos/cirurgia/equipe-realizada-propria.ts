@@ -8,16 +8,23 @@
 //     tinha ficam como estão; cada membro que gera honorário entra uma vez por profissional e função de cobrança; na
 //     vaga única do item (cirurgião, anestesista, cada auxiliar) entra quem ficou mais tempo e os demais da troca
 //     voltam na resposta (foraDaVaga); a vaga já ocupada no item não muda; a função sem honorário (circulante,
-//     pediatra) não entra. Item de outra internação, procedimento de outro ato, conta fechada ou função de cobrança
-//     não cadastrada são recusados sem escrita. Nada é apagado.
+//     pediatra) não entra. Item de outra internação, procedimento de outro ato, função de cobrança não cadastrada e
+//     item que não recebe equipe (material, medicamento, diária, taxa; estornado ou transferido; conta fechada:
+//     'item-sem-equipe', regra motivoItemSemEquipe do domínio) são recusados sem escrita. Nada é apagado.
+//   - a leitura só oferece os itens que recebem equipe (procedimento ou honorário, vivos, de conta editável), com a
+//     situação do item; passando de LIMITE_ITENS, avisa (itensContaCortados) em vez de cortar calado.
 import {
   equipeDoItemComOAto,
   type MembroParaConta,
   minutosDeParticipacao,
+  motivoItemSemEquipe,
   type ParticipanteDoItem,
+  SITUACOES_ITEM_SEM_EQUIPE,
+  TIPOS_ITEM_COM_EQUIPE,
   tipoCobrancaDaFuncao,
   vagaDaCobranca,
 } from '@sgh/dominio-cirurgia';
+import { contaEditavel, SITUACOES_CONTA_EDITAVEL } from '@sgh/dominio-faturamento';
 import { type ContextoOperacao, ErroOperacao, type Leitor } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
@@ -42,6 +49,7 @@ const TABELAS_CONTA = [
   'conta_hospitalar_item',
   'conta_hospitalar',
 ] as const;
+const LIMITE_ITENS = 200;
 
 type Linha = Record<string, unknown>;
 
@@ -69,7 +77,15 @@ export interface EquipeRealizada {
   readonly procedimentos: { readonly id: number; readonly sequencia: number; readonly descricao: string }[];
   readonly membros: MembroRealizado[];
   /** Itens das contas da mesma internação, para escolher onde a equipe de cada procedimento entra. */
-  readonly itensConta: { readonly id: number; readonly conta: string; readonly descricao: string }[];
+  /** Só os que recebem equipe: procedimento ou honorário, vivos, de conta editável. */
+  readonly itensConta: {
+    readonly id: number;
+    readonly conta: string;
+    readonly descricao: string;
+    readonly situacao: string;
+  }[];
+  /** Há mais itens que recebem equipe do que os listados (LIMITE_ITENS). */
+  readonly itensContaCortados: boolean;
 }
 
 const esquemaLevar = z
@@ -89,6 +105,12 @@ const iso = (v: unknown) => data(v)?.toISOString() ?? null;
 
 const recusa = (codigo: string, mensagem: string, campos: string[] = []) =>
   new ErroOperacao(422, codigo, 'Equipe não levada à conta', mensagem, { campos });
+
+const MENSAGEM_SEM_EQUIPE = {
+  tipo: 'O item não é procedimento nem honorário: a equipe do ato não entra nele.',
+  inativo: 'O item foi estornado ou transferido: a equipe não muda.',
+  'conta-fechada': 'A conta não está aberta: reabra-a para levar a equipe.',
+} as const;
 
 async function atoDoEstabelecimento(l: Leitor, est: number, ato: number) {
   const [a] = await l.consultar<Linha>(
@@ -135,15 +157,29 @@ export class PortaEquipeRealizadaPropria extends PortaEstabelecimentoPropria {
         [ato],
       );
       const membros = await membrosDoAto(l, ato);
+      const lista = (v: readonly string[]) => v.map(() => '?').join(', ');
+      const tipos = lista(TIPOS_ITEM_COM_EQUIPE);
+      const inativos = lista(SITUACOES_ITEM_SEM_EQUIPE);
+      const editaveis = lista(SITUACOES_CONTA_EDITAVEL);
+      const limite = LIMITE_ITENS + 1;
       const itens = await l.consultar<Linha>(
-        `SELECT i.id, ch.numero AS conta, f.descricao
+        `SELECT i.id, ch.numero AS conta, f.descricao, i.situacao
            FROM conta_hospitalar_item i
            JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
            JOIN item_faturavel f ON f.id = i.item_faturavel_id
           WHERE ch.atendimento_id = ? AND ch.estabelecimento_id = ? AND i.excluido_em IS NULL
+            AND f.tipo_item IN (${tipos})
+            AND i.situacao NOT IN (${inativos})
+            AND ch.situacao IN (${editaveis})
           ORDER BY ch.id, i.sequencia
-          LIMIT 200`,
-        [num(a['atendimento_id']), est.id],
+          LIMIT ${limite}`,
+        [
+          num(a['atendimento_id']),
+          est.id,
+          ...TIPOS_ITEM_COM_EQUIPE,
+          ...SITUACOES_ITEM_SEM_EQUIPE,
+          ...SITUACOES_CONTA_EDITAVEL,
+        ],
       );
       return {
         ato,
@@ -176,11 +212,13 @@ export class PortaEquipeRealizadaPropria extends PortaEstabelecimentoPropria {
               : 0,
           percentual: numOuNull(m['percentual_participacao']),
         })),
-        itensConta: itens.map((i) => ({
+        itensConta: itens.slice(0, LIMITE_ITENS).map((i) => ({
           id: num(i['id']),
           conta: String(i['conta']),
           descricao: String(i['descricao']),
+          situacao: String(i['situacao']),
         })),
+        itensContaCortados: itens.length > LIMITE_ITENS,
       };
     });
   }
@@ -246,14 +284,23 @@ export class PortaEquipeRealizadaPropria extends PortaEstabelecimentoPropria {
               `itens.${i}.procedimento`,
             ]);
           const [item] = await tx.consultar<Linha>(
-            `SELECT i.id FROM conta_hospitalar_item i JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
-            WHERE i.id = ? AND ch.atendimento_id = ? AND ch.estabelecimento_id = ? AND i.excluido_em IS NULL`,
+            `SELECT i.id, i.situacao, f.tipo_item, ch.situacao AS situacao_conta
+               FROM conta_hospitalar_item i
+               JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
+               JOIN item_faturavel f ON f.id = i.item_faturavel_id
+              WHERE i.id = ? AND ch.atendimento_id = ? AND ch.estabelecimento_id = ? AND i.excluido_em IS NULL`,
             [par.item, num(a['atendimento_id']), est.id],
           );
           if (!item)
             throw recusa('item-de-outra-internacao', 'O item não é de uma conta desta internação.', [
               `itens.${i}.item`,
             ]);
+          const motivo = motivoItemSemEquipe({
+            tipoItem: String(item['tipo_item']),
+            situacao: String(item['situacao']),
+            contaEditavel: contaEditavel(String(item['situacao_conta'])),
+          });
+          if (motivo) throw recusa('item-sem-equipe', MENSAGEM_SEM_EQUIPE[motivo], [`itens.${i}.item`]);
           const doProcedimento: MembroParaConta[] = membros
             .filter((m) => {
               const p = numOuNull(m['ato_cirurgico_procedimento_id']);

@@ -59,7 +59,8 @@ const EQUIPE = {
       percentual: 80,
     },
   ],
-  itensConta: [{ id: 501, conta: '9001', descricao: 'HONORARIO SINTETICO' }],
+  itensConta: [{ id: 501, conta: '9001', descricao: 'HONORARIO SINTETICO', situacao: 'lancado' }],
+  itensContaCortados: false,
 };
 
 test.describe('Equipe cirúrgica como lista de membros @C2-001', () => {
@@ -137,7 +138,9 @@ test.describe('Equipe cirúrgica como lista de membros @C2-001', () => {
         }),
       });
     });
-    await entrar(page, 'SINT.BLOCO');
+    // Quem leva a equipe à conta lê o registro (cirurgia.registro.ler) e lança na conta (faturamento.item.lancar):
+    // o SINT.BLOCO.CONTA. Sem a segunda, o formulário da ponte não aparece.
+    await entrar(page, 'SINT.BLOCO.CONTA');
     await page.goto('/cirurgia/registro');
     // O ato registrado no teste anterior (a porta em memória guarda); a equipe dele vem da rota simulada.
     await page.getByTestId('tabela-realizadas').locator('[data-testid^="realizada-equipe-"]').first().click();
@@ -151,6 +154,7 @@ test.describe('Equipe cirúrgica como lista de membros @C2-001', () => {
 
     // Sem item escolhido, o botão fica desligado; escolhido, leva numa gravação só.
     await expect(page.getByTestId('equipe-conta-levar')).toBeDisabled();
+    await expect(page.getByTestId('equipe-conta-cortados')).toHaveCount(0);
     await escolher(painel.getByLabel('Item da conta para PROCEDIMENTO SINTETICO A'), '501');
     await page.getByTestId('equipe-conta-levar').click();
     await expect(page.getByTestId('equipe-conta-resultado')).toContainText('1 participante');
