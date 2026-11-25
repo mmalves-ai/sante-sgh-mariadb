@@ -55,6 +55,11 @@ import { BUSCA_ATIVA_RESULTADO, PortaBuscaAtivaPropria } from './busca-ativa-pro
 import { CONSUMO_PADRAO_EXAME, PortaConsumoPadraoExamePropria } from './consumo-padrao-propria.js';
 import { HemodinamicaController } from './hemodinamica.controller.js';
 import { PORTA_HEMODINAMICA, PortaHemodinamicaPropria } from './hemodinamica-propria.js';
+import { LaudoMamaPatologiaController } from './laudo-mama-patologia.controller.js';
+import {
+  PORTA_LAUDO_MAMA_PATOLOGIA,
+  PortaLaudoMamaPatologiaPropria,
+} from './laudo-mama-patologia-propria.js';
 import { GRANDEZAS_LAUDO, PortaGrandezasLaudoPropria } from './laudo-grandezas-propria.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
@@ -180,6 +185,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       ConsumoPadraoExameController,
       BuscaAtivaResultadoController,
       HemodinamicaController,
+      LaudoMamaPatologiaController,
     ],
     providers: [
       // F8 (04-CC linha 107): registro do exame de hemodinâmica (só no banco do cliente).
@@ -188,6 +194,14 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaHemodinamicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (05-SADT linha 18): laudos estruturados de mamografia e de anatomia patológica (só no banco do cliente).
+      {
+        provide: PORTA_LAUDO_MAMA_PATOLOGIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaLaudoMamaPatologiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F8 (05-SADT linha 22): consumo padrão do exame, baixa no estoque e lançamento na conta (só no banco do cliente).

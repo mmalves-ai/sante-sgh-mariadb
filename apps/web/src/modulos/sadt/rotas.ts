@@ -183,6 +183,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/HemodinamicaTela.vue'),
     meta: { permissao: 'sadt.laudo.ler' },
   },
+  // C2-071 (05-SADT linha 18): laudos estruturados de mamografia e de anatomia patológica, peças da cirurgia e SISCAN.
+  {
+    path: '/sadt/laudos/especializados',
+    name: 'sadt.laudos.especializados',
+    component: () => import('./telas/LaudoMamaPatologiaTela.vue'),
+    meta: { permissao: 'sadt.laudo.ler' },
+  },
   {
     path: '/sadt/laudos',
     name: 'sadt.laudos',

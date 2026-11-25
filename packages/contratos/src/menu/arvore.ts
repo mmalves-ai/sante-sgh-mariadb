@@ -6,6 +6,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
 // C2-068 (04-INT L83, F8): o item "Ambulância e maqueiros" dos leitos entrou à mão (mesmo motivo); a contagem
 // acompanha.
+// C2-071 (05-SADT L18, F7): o item "Mamografia e anatomia patológica" do diagnóstico entrou à mão (mesmo motivo); a
+// contagem acompanha.
 
 // C2-061 (08-SGO L107): o item "Trocas TISS com os prestadores" da operadora própria entrou à mão (mesmo motivo; F7);
 // a contagem acompanha.
@@ -109,7 +111,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":483,"M":198,"P":57,"N":228};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":484,"M":198,"P":57,"N":229};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -288,6 +290,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"diagnostico-sadt.liberacao-de-exames-conferencia-e-valor-critico","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Liberação de exames"],"titulo":"Liberação de exames","selo":"M","fase":2,"rota":"/sadt/resultados/liberacao","permissao":"sadt.resultado.ler"},
   {"id":"diagnostico-sadt.laudos-emissao-impressao-e-autenticacao","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laudos: emissão, impressão e autenticação"],"titulo":"Laudos: emissão, impressão e autenticação","selo":"M","fase":2,"rota":"/sadt/laudos/emissao","permissao":"sadt.laudo.ler"},
   {"id":"diagnostico-sadt.metodos-graficos-eco-endoscopia-hemodinamica","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Métodos gráficos"],"titulo":"Métodos gráficos","selo":"M","fase":2,"rota":"/sadt/laudos","permissao":"sadt.laudo.ler"},
+  {"id":"diagnostico-sadt.mamografia-e-anatomia-patologica","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Mamografia e anatomia patológica"],"titulo":"Mamografia e anatomia patológica","selo":"N","fase":7,"rota":"/sadt/laudos/especializados","permissao":"sadt.laudo.ler"},
   {"id":"diagnostico-sadt.imagem.modalidades-dicom-e-visualizadores","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Imagem","Modalidades DICOM e visualizadores"],"titulo":"Modalidades DICOM e visualizadores","selo":"P","fase":2,"rota":"/cadastros/dominios/grupo/sadtModalidades","permissao":"config.dominio.ler"},
   {"id":"diagnostico-sadt.imagem.lista-de-trabalho-dicom-e-integracao-pacs-ris","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Imagem","Lista de trabalho DICOM e integração PACS/RIS"],"titulo":"Lista de trabalho DICOM e integração PACS/RIS","selo":"N","fase":5,"rota":"/sadt/imagem/worklist","permissao":"sadt.pacs.ler"},
   {"id":"diagnostico-sadt.agencia-transfusional.requisicao-transfusional-e-amostra","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Agência transfusional","Requisição transfusional e amostra"],"titulo":"Requisição transfusional e amostra","selo":"P","fase":5,"rota":"/sadt/agencia/requisicoes","permissao":"sadt.transfusao.ler"},

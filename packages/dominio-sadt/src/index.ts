@@ -45,3 +45,4 @@ export * from './microbiologia/antibiograma.js';
 export * from './microbiologia/cadastro-antibiograma.js';
 export * from './equipamento/interface.js';
 export * from './hemodinamica/registro.js';
+export * from './mama-patologia/laudos.js';
