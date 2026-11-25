@@ -97,6 +97,7 @@ import {
   OPERACAO_ALTERAR_HERANCA,
   valoresHerdaveisDoAnterior,
 } from './porta-propria-heranca.js';
+import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import type {
   ContextoAtendimento,
   DadosImpresso,
@@ -1725,7 +1726,8 @@ const OPERACAO_ABRIR = definirOperacao({
       unidade_assistencial_id: Number(unidade['id']),
       centro_custo_id: Number(cc['id']),
       local_atendimento_id: local,
-      solicitante_externo_id: num('solicitante'),
+      // O atendimento novo nasce no cadastro que responde hoje (o unificado em outro não recebe pedido novo).
+      solicitante_externo_id: await solicitanteQueRespondeHoje(tx, num('solicitante')),
       data_requisicao: (e['dataRequisicao'] as string | undefined) ?? null,
       marcacao_horario_id: marcacao,
       teleconsulta_id: tele,
