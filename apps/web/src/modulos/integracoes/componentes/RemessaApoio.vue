@@ -22,6 +22,7 @@ import {
   salvarDeParaAnalitoApoio,
   salvarDeParaMaterialApoio,
 } from '../api-apoio-remessa.js';
+import DeParaApoioNovo from './DeParaApoioNovo.vue';
 
 const props = defineProps<{ laboratorios: readonly { codigo: number; nome: string | null }[] }>();
 const cliente = useQueryClient();
@@ -52,7 +53,7 @@ const dePara = useQuery({
   queryFn: () => lerDeParaApoio(lab.value!),
   enabled: computed(() => lab.value !== null),
 });
-const etiquetas = ref<{ item: number; codigo: string; linhas: string[] }[]>([]);
+const etiquetas = ref<{ item: number; codigo: string; linhas: string[]; zpl: string }[]>([]);
 const meio = ref<'portal' | 'manual' | 'integracao'>('portal');
 const opcoesMeio = [
   { valor: 'portal' as const, rotulo: 'Portal do apoio' },
@@ -85,23 +86,44 @@ const abrir = () =>
     aberta.value = r.id;
     etiquetas.value = [];
   }, 'Remessa aberta com as amostras pendentes.');
-const agir = (acao: 'fechar' | 'reabrir' | 'enviar' | 'cancelar') =>
-  fazer(
-    () =>
-      agirRemessaApoio(aberta.value!, {
-        acao,
-        meio: meio.value,
-        protocolo: protocolo.value.trim() || null,
-        motivo: motivo.value.trim() || null,
-      }),
-    `Remessa: ${acao} feito.`,
-  );
+const FEITO = {
+  fechar: 'Remessa fechada.',
+  reabrir: 'Remessa reaberta.',
+  enviar: 'Remessa enviada.',
+  cancelar: 'Remessa cancelada.',
+} as const;
+async function agir(acao: 'fechar' | 'reabrir' | 'enviar' | 'cancelar'): Promise<void> {
+  let pedidos = 0;
+  await fazer(async () => {
+    const r = await agirRemessaApoio(aberta.value!, {
+      acao,
+      meio: meio.value,
+      protocolo: protocolo.value.trim() || null,
+      motivo: motivo.value.trim() || null,
+    });
+    pedidos = r.pedidos;
+  }, FEITO[acao]);
+  // O envio pela integração diz quantos pedidos saíram para a fila do apoio.
+  if (feito.value && pedidos > 0)
+    feito.value = `Remessa enviada: ${pedidos} pedido(s) na fila de envio ao apoio.`;
+}
 const retirar = (item: number) =>
   fazer(() => retirarItemRemessaApoio(aberta.value!, item), 'Item retirado da remessa (fica cancelado).');
 const imprimir = () =>
   fazer(async () => {
     etiquetas.value = await lerEtiquetasApoio(aberta.value!);
   }, 'Etiquetas do apoio prontas.');
+/** As etiquetas da remessa num arquivo só, na linguagem da impressora térmica. */
+function baixarEtiquetas(): void {
+  const url = URL.createObjectURL(
+    new Blob([etiquetas.value.map((e) => e.zpl).join('\n')], { type: 'text/plain;charset=utf-8' }),
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `etiquetas-apoio-${remessa.data.value?.numero ?? aberta.value}.zpl`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 const alternarAnalito = (d: DeParaApoio['analitos'][number]) =>
   fazer(
     () =>
@@ -167,6 +189,7 @@ const T = {
   s32: 'Ativo',
   s33: 'Materiais',
   s34: 'Material',
+  s35: 'Baixar para a impressora de etiquetas',
 } as const;
 </script>
 
@@ -256,6 +279,7 @@ const T = {
                   v-if="podeRemessa && remessa.data.value.situacao === 'aberta' && i.situacao !== 'cancelado'"
                   variante="texto"
                   :rotulo="T.s4"
+                  :data-testid="`remessa-apoio-retirar-${i.id}`"
                   @acionar="retirar(i.id)"
                 />
               </td>
@@ -270,12 +294,22 @@ const T = {
             @acionar="agir('fechar')"
           />
           <template v-if="remessa.data.value.situacao === 'fechada'">
-            <SanteSelecao v-model="meio" :rotulo="T.s6" :opcoes="opcoesMeio" />
+            <SanteSelecao
+              v-model="meio"
+              :rotulo="T.s6"
+              :opcoes="opcoesMeio"
+              data-testid="remessa-apoio-meio"
+            />
             <SanteCampoTexto v-model="protocolo" :rotulo="T.s7" :max-bytes="60" />
             <SanteBotao :rotulo="T.s8" data-testid="remessa-apoio-enviar" @acionar="agir('enviar')" />
             <SanteBotao variante="texto" :rotulo="T.s9" @acionar="agir('reabrir')" />
           </template>
-          <SanteBotao variante="secundario" :rotulo="T.s10" @acionar="imprimir" />
+          <SanteBotao
+            variante="secundario"
+            :rotulo="T.s10"
+            data-testid="remessa-apoio-etiquetas-gerar"
+            @acionar="imprimir"
+          />
           <form
             v-if="['aberta', 'fechada'].includes(remessa.data.value.situacao)"
             class="formulario"
@@ -285,6 +319,13 @@ const T = {
             <SanteBotao tipo="submit" variante="texto" :rotulo="T.s12" />
           </form>
         </template>
+        <SanteBotao
+          v-if="etiquetas.length"
+          variante="texto"
+          :rotulo="T.s35"
+          data-testid="remessa-apoio-etiquetas-baixar"
+          @acionar="baixarEtiquetas"
+        />
         <ul v-if="etiquetas.length" data-testid="remessa-apoio-etiquetas">
           <li v-for="e in etiquetas" :key="e.item">
             <strong>{{ e.codigo }}</strong> · {{ e.linhas.join(' · ') }}
@@ -292,6 +333,7 @@ const T = {
         </ul>
       </article>
       <h3>{{ T.s28 }}</h3>
+      <DeParaApoioNovo v-if="podeConfigurar" :laboratorio="lab" />
       <table class="tabela">
         <caption>
           {{

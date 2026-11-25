@@ -83,7 +83,9 @@ export const lerEtiquetasApoio = (id: number) =>
   ler(
     `${A}/remessas/${id}/etiquetas`,
     z.object({
-      itens: z.array(z.object({ item: z.number(), codigo: z.string(), linhas: z.array(z.string()) })),
+      itens: z.array(
+        z.object({ item: z.number(), codigo: z.string(), linhas: z.array(z.string()), zpl: z.string() }),
+      ),
     }),
   ).then((r) => r.itens);
 export const abrirRemessaApoio = (laboratorio: number) =>
@@ -105,7 +107,7 @@ export const agirRemessaApoio = (
   enviar(
     `${A}/remessas/${id}/acao`,
     corpo,
-    z.object({ id: z.number(), situacao: z.string() }),
+    z.object({ id: z.number(), situacao: z.string(), pedidos: z.number().default(0) }),
     novaChave('remessa-apoio-acao'),
   );
 export const retirarItemRemessaApoio = (id: number, item: number) =>
@@ -120,3 +122,18 @@ export const salvarDeParaAnalitoApoio = (corpo: Record<string, unknown>) =>
   enviar(`${A}/de-para/analito`, corpo, z.object({ id: z.number() }), novaChave('de-para-analito'));
 export const salvarDeParaMaterialApoio = (corpo: Record<string, unknown>) =>
   enviar(`${A}/de-para/material`, corpo, z.object({ id: z.number() }), novaChave('de-para-material'));
+
+const opcoesDePara = z.object({
+  exames: z.array(
+    z.object({
+      exame: z.number(),
+      nome: z.string(),
+      codigoExameApoio: z.string(),
+      analitos: z.array(z.object({ analito: z.number(), nome: z.string(), comDePara: z.boolean() })),
+    }),
+  ),
+  materiais: z.array(z.object({ material: z.number(), nome: z.string(), comDePara: z.boolean() })),
+});
+export type OpcoesDeParaApoio = z.infer<typeof opcoesDePara>;
+/** O que se pode incluir no de-para: os exames do apoio com os analitos e os materiais (marcado o que já tem). */
+export const lerOpcoesDeParaApoio = (lab: number) => ler(`${A}/${lab}/de-para/opcoes`, opcoesDePara);
