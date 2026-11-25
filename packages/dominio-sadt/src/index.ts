@@ -34,3 +34,4 @@ export * from './escala/index.js';
 export * from './resultado/ciclo.js';
 export * from './resultado/responsavel-setor.js';
 export * from './microbiologia/antibiograma.js';
+export * from './equipamento/interface.js';
