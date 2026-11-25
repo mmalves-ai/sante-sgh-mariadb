@@ -361,6 +361,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.susTransplante.ler' },
   },
   {
+    // C2-124 (06-SUS linha 64): RAAS da atenção psicossocial e da atenção domiciliar.
+    path: '/faturamento/sus/raas',
+    name: 'faturamento.susRaas',
+    component: () => import('./telas/RaasSusTela.vue'),
+    meta: { permissao: 'faturamento.susRaas.ler' },
+  },
+  {
     path: '/inicio/faturamento',
     name: 'inicio.faturamento',
     component: () => import('./telas/WorklistFaturamentoTela.vue'),

@@ -23,7 +23,7 @@ export const REGISTRO_DO_TIPO_RAAS: Readonly<Record<TipoRaas, RegistroSigtap>> =
 export const LOCAIS_RAAS = ['unidade', 'territorio', 'domicilio'] as const;
 export type LocalRaas = (typeof LOCAIS_RAAS)[number];
 
-export interface Problema {
+export interface ProblemaRaas {
   readonly campo: string;
   readonly mensagem: string;
 }
@@ -44,8 +44,8 @@ export interface CabecalhoRaas {
 }
 
 /** O cabeçalho do registro: admissão até o fim da competência, conclusão dentro dela e com destino, CNES da ESF. */
-export function conferirCabecalhoRaas(r: CabecalhoRaas): Problema[] {
-  const p: Problema[] = [];
+export function conferirCabecalhoRaas(r: CabecalhoRaas): ProblemaRaas[] {
+  const p: ProblemaRaas[] = [];
   const { inicio, fim } = intervaloDaCompetencia(r.competencia);
   if (r.dataAdmissao > fim)
     p.push({ campo: 'dataAdmissao', mensagem: 'A admissão não pode ser posterior ao fim da competência.' });
@@ -93,8 +93,8 @@ export function conferirAcaoRaas(
   competencia: CompetenciaSus,
   dataAdmissao: string,
   a: Omit<AcaoRaas, 'sequencia'>,
-): Problema[] {
-  const p: Problema[] = [];
+): ProblemaRaas[] {
+  const p: ProblemaRaas[] = [];
   if (!a.registros.includes(REGISTRO_DO_TIPO_RAAS[tipo]))
     p.push({
       campo: 'procedimento',
@@ -228,7 +228,7 @@ export function continuacaoRaas(r: {
   readonly competencia: CompetenciaSus;
   readonly dataConclusao: string | null;
   readonly situacao: string;
-}): { competencia: CompetenciaSus } | Problema {
+}): { competencia: CompetenciaSus } | ProblemaRaas {
   if (r.dataConclusao !== null)
     return { campo: 'dataConclusao', mensagem: 'O acompanhamento foi concluído: não há continuação.' };
   if (r.situacao === 'cancelado' || r.situacao === 'rejeitado')
@@ -237,7 +237,7 @@ export function continuacaoRaas(r: {
 }
 
 /** A remessa só sai sem crítica bloqueante aberta e com ao menos um registro. */
-export function recusaGerarRemessaRaas(registros: number, bloqueantes: number): Problema | null {
+export function recusaGerarRemessaRaas(registros: number, bloqueantes: number): ProblemaRaas | null {
   if (registros === 0)
     return { campo: 'registros', mensagem: 'Não há registro aberto ou fechado nesta competência e tipo.' };
   if (bloqueantes > 0)
