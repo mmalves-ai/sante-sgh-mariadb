@@ -24,13 +24,13 @@ const prob = (codigo: string, campo: string, detalhe: string): ProblemaComercial
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
 /** Idade completa em anos numa data (datas ISO). */
-export function idadeEm(nascimento: string, data: string): number {
+function idadeEm(nascimento: string, data: string): number {
   const [an, mn, dn] = nascimento.split('-').map(Number) as [number, number, number];
   const [a, m, d] = data.split('-').map(Number) as [number, number, number];
   return a - an - (m < mn || (m === mn && d < dn) ? 1 : 0);
 }
 /** Dias corridos entre duas datas ISO (b - a). */
-export function diasEntre(a: string, b: string): number {
+function diasEntre(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 const somarDias = (d: string, n: number) =>

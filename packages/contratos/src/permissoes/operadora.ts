@@ -180,6 +180,26 @@ export const PERMISSOES_OPERADORA_M56: readonly DeclaracaoPermissao[] = [
     [GESTOR, 'operadora-cobranca'],
     { categoria: 'financeira', criticidade: 'sensivel' },
   ),
+  // Comercial da operadora (08-SGO linha 100, C2-095; F8): a área comercial cadastra a força de venda, registra a proposta
+  // de adesão (RN ANS 195/2009) e acompanha metas e campanhas; a área financeira mantém a regra de comissão e apura,
+  // fecha e paga o lote de comissão (só sobre parcela paga, com estorno no cancelamento ou na inadimplência).
+  p(
+    'operadora.comercial.ler',
+    'Consultar propostas de adesão, força de venda, metas, campanhas e lotes de comissão',
+    [GESTOR, 'operadora-cadastro', 'operadora-cobranca'],
+  ),
+  p(
+    'operadora.comercial.registrar',
+    'Cadastrar corretoras, vendedores e equipes, registrar e conduzir a proposta de adesão, metas e campanhas',
+    [GESTOR, 'operadora-cadastro'],
+    { criticidade: 'sensivel' },
+  ),
+  p(
+    'operadora.comissao.apurar',
+    'Manter a regra de comissão e apurar, fechar, pagar ou cancelar o lote de comissão de venda',
+    [GESTOR, 'operadora-cobranca'],
+    { categoria: 'financeira', criticidade: 'sensivel' },
+  ),
   // Envios à ANS (F6): gerar o arquivo da competência; o envio real só em produção. Os catálogos da ANS ficam em
   // `catalogo.ans.ler` (catalogos.ts), do hospital e destes perfis (D-ANS-HOSPITAL-56).
   p('operadora.ans.ler', 'Consultar os envios à ANS (SIB, SIP, DIOPS, TPS), com arquivo, hash e recibo', [

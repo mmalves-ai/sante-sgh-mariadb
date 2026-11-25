@@ -46,6 +46,8 @@ import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js
 import { PortaAutorizacaoOperadoraPropria } from './autorizacao-porta-propria.js';
 import { BeneficiariosOperadoraController } from './beneficiarios.controller.js';
 import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
+import { ComercialOperadoraController } from './comercial.controller.js';
+import { METODOS_COMERCIAL, PORTA_COMERCIAL, PortaComercialPropria } from './comercial-propria.js';
 import { ReajusteColetivoOperadoraController } from './reajuste-coletivo.controller.js';
 import {
   METODOS_REAJUSTE_COLETIVO,
@@ -269,6 +271,7 @@ export async function moduloOperadora(
       CadastroComplementarOperadoraController,
       DeclaracoesAnsController,
       ReajusteColetivoOperadoraController,
+      ComercialOperadoraController,
       ContaConferenciaOperadoraController,
       ReembolsoOperadoraController,
       TrocaTissOperadoraController,
@@ -322,6 +325,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaReembolsoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaReembolsoPropria>(METODOS_REEMBOLSO),
+      },
+      // 08-SGO L100 (C2-095): comercial (proposta, força de venda, metas, campanhas, comissão) só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_COMERCIAL,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaComercialPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaComercialPropria>(METODOS_COMERCIAL),
       },
       // 08-SGO L96 (C1-086): índice, regra por sinistralidade e agrupamento do coletivo pequeno só no banco (sem núcleo, 503).
       {
