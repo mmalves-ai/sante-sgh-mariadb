@@ -65,6 +65,8 @@ import {
 } from './prescricao-propria-cadastro.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
+import { TERMINOLOGIA_CLINICA, TerminologiaClinicaController } from './terminologia-clinica.controller.js';
+import { TerminologiaClinicaPropria } from './terminologia-clinica-propria.js';
 import { ObrigatoriedadeDocumentoController } from './obrigatoriedade-documento.controller.js';
 import {
   PORTA_OBRIGATORIEDADE_DOCUMENTO,
@@ -204,6 +206,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       FarmacovigilanciaController,
       PrescricaoCadastroController,
       NotasPacienteController,
+      TerminologiaClinicaController,
       ObrigatoriedadeDocumentoController,
       AnotacoesAdministrativasController,
       ResultadosGruposController,
@@ -269,6 +272,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new FarmacovigilanciaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 09-AREA L84: terminologia clínica (conceito equivalente do diagnóstico, região anatômica); sem núcleo, 503.
+      {
+        provide: TERMINOLOGIA_CLINICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new TerminologiaClinicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L102: notas e lembretes livres sobre o paciente; sem núcleo, 503.

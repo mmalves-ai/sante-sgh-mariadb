@@ -3,6 +3,7 @@
 uso: python3 -I catalogos/carregar.py <codigo_cliente> [fonte ...]
      python3 -I catalogos/carregar.py --espelho <banco_espelho> [fonte ...]   (ADR 0006: o caminho padrão)
      fontes, na ordem de dependência: ibge, ddd, logradouro, etnia, bcb, cid10, sigtap, cfop, tiss   (sem argumento: todas)
+     opcionais, só quando nomeadas: snomed (terminologia clínica licenciada, pacote RF2 fornecido pela plataforma)
 
 Cada fonte é um módulo em catalogos/carregadores/<fonte>.py com a função carregar(banco: str) -> dict
 {tabela: linhas}; a lista AVISOS do módulo, se houver, é impressa e gravada no evento. Os carregadores são idempotentes (rodar de novo não duplica). A carga fica registrada
@@ -17,7 +18,10 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-ORDEM = ["ibge", "ddd", "logradouro", "etnia", "bcb", "cid10", "sigtap", "cfop", "tiss"]
+ORDEM = ["ibge", "ddd", "logradouro", "etnia", "bcb", "cid10", "sigtap", "cfop", "tiss", "snomed"]
+# Fontes que só carregam quando nomeadas (o pacote não é público: vem da plataforma).
+OPCIONAIS = {"snomed"}
+PADRAO = [f for f in ORDEM if f not in OPCIONAIS]
 
 
 def sql(banco, entrada=None, *args):
@@ -57,10 +61,10 @@ def main():
         raise SystemExit(__doc__)
     if sys.argv[1] == "--espelho":
         import re
-        carregar_espelho(re.sub(r"[^a-z0-9_]", "", sys.argv[2]), sys.argv[3:] or ORDEM)
+        carregar_espelho(re.sub(r"[^a-z0-9_]", "", sys.argv[2]), sys.argv[3:] or PADRAO)
         return
     codigo = sys.argv[1]
-    fontes = sys.argv[2:] or ORDEM
+    fontes = sys.argv[2:] or PADRAO
     r = sql("plataforma", None, "-N", "-e", f"select id, banco_nome from cliente where codigo='{codigo}'")
     if r.returncode or not r.stdout.strip():
         raise SystemExit(f"cliente {codigo} não encontrado na plataforma")
