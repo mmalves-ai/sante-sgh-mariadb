@@ -4,3 +4,4 @@
 export * from './agenda-preco/linhas.js';
 export * from './agenda-preco/porta.js';
 export * from './repasse-producao/porta.js';
+export * from './operadora-cancelamento/efetivacao.js';

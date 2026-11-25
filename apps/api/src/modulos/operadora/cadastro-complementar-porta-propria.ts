@@ -41,6 +41,12 @@ import {
   recusa,
   type TxOperacao,
 } from '@sgh/nucleo';
+import {
+  cancelamentosVencidos,
+  efetivarCancelamentoContrato,
+  encerrarContratoPlano,
+  type RegrasEfetivacao,
+} from '@sgh/persistencia';
 import { z } from 'zod';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import {
@@ -268,6 +274,12 @@ export interface PainelContrato {
 
 export type Gravado = { id: number };
 type Trilha = (r: Gravado) => RegistroTrilhaTela;
+
+/** As regras do domínio que a efetivação do cancelamento aplica (a mesma porta do worker, @sgh/persistencia). */
+const REGRAS_EFETIVACAO: RegrasEfetivacao = {
+  podeEfetivar: podeEfetivarCancelamento,
+  motivoDaBaixa,
+};
 
 const esquemaEntrada = z.record(z.string(), z.unknown());
 
@@ -523,98 +535,6 @@ export class PortaCadastroComplementarPropria {
    * excluído, data e motivo de exclusão ligado ao motivo do cancelamento, com o movimento cadastral) e lança o crédito
    * ao contratante pelo que foi pago adiante do efeito (crédito de fatura em aberto, abatido nas faturas seguintes).
    */
-  private static async encerrarContrato(
-    tx: TxOperacao,
-    est: number,
-    contrato: number,
-    efeito: string,
-    k: { motivo: number; protocolo: string; credito: number | null },
-  ) {
-    const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
-    const bens = await tx.consultarParaAtualizar(
-      `SELECT b.id, b.versao, b.inicio_vigencia, b.situacao, b.fim_vigencia, cp.produto_plano_id
-         FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id
-        WHERE b.contrato_plano_id = ? AND b.excluido_em IS NULL AND (b.fim_vigencia IS NULL OR b.situacao <> 'excluido')`,
-      [contrato],
-      { teto: 100_000 },
-    );
-    let motivoBaixa: number | null = null;
-    if (bens.length > 0) {
-      const ms = await tx.consultar(
-        "SELECT id, motivo_cancelamento_contrato_id FROM motivo_movimento_cadastral WHERE tipo_movimento = 'exclusao' AND ativo = TRUE AND motivo_cancelamento_contrato_id = ?",
-        [k.motivo],
-        { teto: 50 },
-      );
-      const m = motivoDaBaixa(
-        ms.map((x) => ({
-          id: Number(x['id']),
-          motivoCancelamento: inteiro(x['motivo_cancelamento_contrato_id']),
-        })),
-        k.motivo,
-      );
-      if ('codigo' in m) exigir([m]);
-      else motivoBaixa = m.id;
-    }
-    const inicio = dataIso(ctr['inicio_vigencia']) ?? efeito;
-    await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
-      situacao: 'encerrado',
-      fim_vigencia: efeito < inicio ? inicio : efeito,
-      tipo_vigencia: 'determinada',
-    });
-    for (const b of bens) {
-      const ini = dataIso(b['inicio_vigencia']) ?? efeito;
-      const fim = efeito < ini ? ini : efeito;
-      const ja = textoObrigatorio(b['situacao']) === 'excluido';
-      await tx.alterar(
-        'beneficiario_plano',
-        Number(b['id']),
-        Number(b['versao']),
-        ja
-          ? { fim_vigencia: dataIso(b['fim_vigencia']) ?? fim }
-          : {
-              fim_vigencia: fim,
-              situacao: 'excluido',
-              data_exclusao: fim,
-              motivo_movimento_cadastral_id: motivoBaixa,
-            },
-      );
-      if (!ja)
-        await tx.incluir('movimento_cadastral_beneficiario', {
-          beneficiario_plano_id: Number(b['id']),
-          operacao: 'alteracao',
-          dados: JSON.stringify({ tipo: 'exclusao', cancelamento: k.protocolo }),
-          ocorrido_em: new Date(),
-          usuario_id: tx.contexto.usuario,
-          tipo_movimento: 'exclusao',
-          motivo_movimento_cadastral_id: motivoBaixa,
-          data_efeito: fim,
-          situacao: 'efetivado',
-          contrato_plano_id: contrato,
-          produto_plano_id: inteiro(b['produto_plano_id']),
-          cancela_mensalidades: true,
-          canal: 'manual',
-        });
-    }
-    if (k.credito !== null && k.credito > 0) {
-      await garantirSequencia(
-        tx,
-        { tipo: 'credito_fatura_plano', estabelecimento: est },
-        { usuario: tx.contexto.usuario, agora: new Date() },
-      );
-      const numero = await tx.proximoNumero('credito_fatura_plano');
-      await tx.incluir('credito_fatura_plano', {
-        estabelecimento_id: est,
-        numero: numero.formatado,
-        contrato_plano_id: contrato,
-        tipo_credito: 'devolucao',
-        data_credito: efeito,
-        valor: k.credito,
-        saldo: k.credito,
-        motivo: `Cancelamento ${k.protocolo}: pagamento adiante do efeito`,
-        situacao: 'aberto',
-      });
-    }
-  }
   private static async beneficiarioDoEst(l: Leitor, est: number, id: number) {
     const r = await l.uma(
       `SELECT b.id, b.versao, b.data_adesao, b.contrato_plano_id, cp.produto_plano_id, cp.operadora_saude_id FROM beneficiario_plano b
@@ -1178,11 +1098,18 @@ export class PortaCadastroComplementarPropria {
         });
         // Pedido do titular no contrato individual (RN 412): efeito na ciência, sem depender de outra pessoa.
         if (plano.efetivarJa)
-          await PortaCadastroComplementarPropria.encerrarContrato(tx, est, contrato, plano.dataEfeito, {
-            motivo: x.motivo,
-            protocolo: protocolo.formatado,
-            credito: credito.valor,
-          });
+          await encerrarContratoPlano(
+            tx,
+            est,
+            contrato,
+            plano.dataEfeito,
+            {
+              motivo: x.motivo,
+              protocolo: protocolo.formatado,
+              credito: credito.valor,
+            },
+            REGRAS_EFETIVACAO,
+          );
         else
           await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
             situacao: 'em_cancelamento',
@@ -1199,33 +1126,7 @@ export class PortaCadastroComplementarPropria {
       'cancelamento_contrato_plano',
       trilha,
       async (tx, est, hoje) => {
-        const r = await umaTravada(
-          tx,
-          `SELECT k.id, k.versao, k.situacao, k.data_efeito, k.contrato_plano_id, k.motivo_cancelamento_contrato_id,
-                  k.protocolo, k.valor_credito FROM cancelamento_contrato_plano k
-           JOIN contrato_plano cp ON cp.id = k.contrato_plano_id WHERE k.id = ? AND cp.estabelecimento_id = ?`,
-          [id, est],
-        );
-        if (!r) throw naoEncontrado();
-        const efeito = dataIso(r['data_efeito']) ?? hoje;
-        const p = podeEfetivarCancelamento(textoObrigatorio(r['situacao']), efeito, hoje);
-        if (p) exigir([p]);
-        await tx.alterar('cancelamento_contrato_plano', id, Number(r['versao']), {
-          situacao: 'efetivado',
-          efetivado_em: new Date(),
-          efetivado_por_usuario_id: tx.contexto.usuario,
-        });
-        await PortaCadastroComplementarPropria.encerrarContrato(
-          tx,
-          est,
-          Number(r['contrato_plano_id']),
-          efeito,
-          {
-            motivo: Number(r['motivo_cancelamento_contrato_id']),
-            protocolo: textoObrigatorio(r['protocolo']),
-            credito: numero(r['valor_credito']),
-          },
-        );
+        await efetivarCancelamentoContrato(tx, est, id, hoje, REGRAS_EFETIVACAO);
         return { id };
       },
     );
@@ -1273,17 +1174,7 @@ export class PortaCadastroComplementarPropria {
     c: ContextoSessao,
     trilha: Trilha,
   ): Promise<{ efetivados: number[]; recusados: { id: number; codigo: string }[] }> {
-    const ids = await this.ler(c, async (l, est) =>
-      (
-        await l.consultar(
-          `SELECT k.id FROM cancelamento_contrato_plano k JOIN contrato_plano cp ON cp.id = k.contrato_plano_id
-            WHERE cp.estabelecimento_id = ? AND k.excluido_em IS NULL AND k.situacao IN ('solicitado','agendado')
-              AND k.data_efeito <= CURRENT_DATE ORDER BY k.data_efeito, k.id`,
-          [est],
-          { teto: 5000 },
-        )
-      ).map((r) => Number(r['id'])),
-    );
+    const ids = await this.ler(c, (l, est) => cancelamentosVencidos(l, est));
     const efetivados: number[] = [];
     const recusados: { id: number; codigo: string }[] = [];
     for (const id of ids) {
