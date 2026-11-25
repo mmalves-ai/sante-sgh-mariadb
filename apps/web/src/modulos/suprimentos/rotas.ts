@@ -156,6 +156,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     meta: { permissao: 'suprimentos.local.editar' },
   },
   {
+    // F8 (05-SUP linha 4): endereçamento do armazém (endereços em níveis e o endereço de cada item).
+    path: '/suprimentos/enderecamento',
+    name: 'suprimentos.enderecamento',
+    component: () => import('./telas/EnderecamentoTela.vue'),
+    meta: { permissao: 'suprimentos.local.ler' },
+  },
+  {
     path: '/suprimentos/usuarios-estoque/escopo',
     name: 'suprimentos.usuarios-estoque.escopo',
     component: () => import('./telas/EscopoUsuarioCadastroTela.vue'),

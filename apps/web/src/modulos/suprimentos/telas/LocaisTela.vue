@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n';
 import { listarSaldos } from '../api-suprimentos.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
+import { mensagensEnderecamento } from '../i18n-enderecamento.js';
 import { qtd, usarSuprimentos } from '../usar-suprimentos.js';
 
 const { t } = useI18n();
@@ -34,6 +35,10 @@ const abaixo = (q: number, min: number | null) => min !== null && q < min;
     <p v-if="podeEditar" class="atalhos">
       <RouterLink to="/suprimentos/locais/cadastro" data-testid="locais-cadastro">{{
         t('cadastroEstoque.atalhos.cadastroLocais')
+      }}</RouterLink>
+      ·
+      <RouterLink to="/suprimentos/enderecamento" data-testid="locais-enderecamento">{{
+        mensagensEnderecamento.atalho
       }}</RouterLink>
     </p>
     <table class="tabela" data-testid="locais-lista">

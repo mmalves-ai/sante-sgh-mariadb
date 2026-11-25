@@ -2,11 +2,14 @@
 // Lista de separação da requisição (F3.6, 05-SUP linha 6): `/suprimentos/requisicoes/:id/separacao`. Na tela e na
 // impressão: na ordem do endereço no armazém, só o que falta atender, os lotes de validade mais próxima e a falta
 // quando o saldo não cobre. O separador marca o que já pôs na caixa (só na tela, para não perder o fio).
-import { useQuery } from '@tanstack/vue-query';
-import { computed, reactive } from 'vue';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
+import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { listaSeparacao } from '../api-cadastro-estoque.js';
+import { liberarReservaSeparacao, reservarSeparacao, reservasDaRequisicao } from '../api-enderecamento.js';
+import { mensagensEnderecamento as R } from '../i18n-enderecamento.js';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 import { qtd } from '../usar-suprimentos.js';
 
@@ -20,6 +23,40 @@ const lista = useQuery({
 });
 const separado = reactive<Record<number, boolean>>({});
 const imprimir = () => globalThis.print?.();
+// F8 (05-SUP linha 4): a reserva do saldo livre para esta requisição (lotes de validade mais próxima) e a liberação.
+const fmt = (x: string, v: Record<string, string | number>) =>
+  x.replace(/\{(\w+)\}/g, (_y, k: string) => String(v[k] ?? ''));
+const podeReservar = computed(() => pode('suprimentos.requisicao.atender'));
+const cliente = useQueryClient();
+const reservas = useQuery({
+  queryKey: computed(() => ['suprimentos', 'separacao', 'reservas', id.value]),
+  queryFn: () => reservasDaRequisicao(id.value),
+  enabled: computed(() => id.value > 0),
+});
+const avisoReserva = ref<string[]>([]);
+const recarregarReservas = () =>
+  cliente.invalidateQueries({ queryKey: ['suprimentos', 'separacao', 'reservas', id.value] });
+const reservar = useMutation({
+  mutationFn: () => reservarSeparacao(id.value),
+  onSuccess: async (r) => {
+    const nomes = new Map((lista.data.value?.linhas ?? []).map((l) => [l.item, l.nome]));
+    avisoReserva.value = [
+      r.reservas ? fmt(R.reserva.feita, { n: r.reservas }) : R.reserva.nada,
+      ...r.faltas.map((f) =>
+        fmt(R.reserva.falta, { q: qtd(f.falta), item: nomes.get(f.insumo) ?? f.insumo }),
+      ),
+    ];
+    await recarregarReservas();
+  },
+});
+const liberar = useMutation({
+  mutationFn: () => liberarReservaSeparacao(id.value),
+  onSuccess: async (r) => {
+    avisoReserva.value = [fmt(R.reserva.liberada, { n: r.liberadas })];
+    await recarregarReservas();
+  },
+});
+const temAtiva = computed(() => (reservas.data.value ?? []).some((x) => x.situacao === 'ativa'));
 const dataHora = (s: string) => s.replace('T', ' ').slice(0, 16);
 </script>
 
@@ -49,6 +86,66 @@ const dataHora = (s: string) => s.replace('T', ' ').slice(0, 16);
           {{ t('cadastroEstoque.separacao.imprimir') }}
         </button>
       </p>
+      <section class="nao-imprime" data-testid="separacao-reserva" :aria-label="R.reserva.titulo">
+        <h2>{{ R.reserva.titulo }}</h2>
+        <p>{{ R.reserva.texto }}</p>
+        <ErroSuprimentos
+          v-if="reservar.error.value ?? liberar.error.value"
+          :erro="reservar.error.value ?? liberar.error.value"
+        />
+        <p v-if="podeReservar">
+          <button
+            type="button"
+            class="botao"
+            :disabled="reservar.isPending.value || lista.data.value.linhas.length === 0"
+            data-testid="separacao-reservar"
+            @click="reservar.mutate()"
+          >
+            {{ R.reserva.reservar }}
+          </button>
+          <button
+            v-if="temAtiva"
+            type="button"
+            class="botao"
+            :disabled="liberar.isPending.value"
+            data-testid="separacao-liberar"
+            @click="liberar.mutate()"
+          >
+            {{ R.reserva.liberar }}
+          </button>
+        </p>
+        <p v-for="a in avisoReserva" :key="a" role="status" data-testid="separacao-reserva-aviso">{{ a }}</p>
+        <p v-if="(reservas.data.value ?? []).length === 0">{{ R.reserva.vazia }}</p>
+        <table v-else class="tabela" data-testid="separacao-reservas">
+          <caption>
+            {{
+              R.reserva.titulo
+            }}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">{{ R.endereco }}</th>
+              <th scope="col">{{ t('suprimentos.item') }}</th>
+              <th scope="col">{{ R.reserva.lote }}</th>
+              <th scope="col">{{ R.reserva.reservada }}</th>
+              <th scope="col">{{ R.reserva.atendida }}</th>
+              <th scope="col">{{ R.reserva.liberadaCol }}</th>
+              <th scope="col">{{ R.situacao }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="x in reservas.data.value" :key="x.id" :data-testid="`separacao-reserva-${x.insumo}`">
+              <td>{{ x.endereco ?? t('cadastroEstoque.separacao.semEndereco') }}</td>
+              <td>{{ x.insumo }} · {{ x.nome }}</td>
+              <td>{{ x.lote ? `${x.lote} (${x.validade})` : '' }}</td>
+              <td>{{ qtd(x.reservada) }}</td>
+              <td>{{ qtd(x.atendida) }}</td>
+              <td>{{ qtd(x.liberada) }}</td>
+              <td>{{ R.reserva.situacoes[x.situacao] }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
       <p v-if="lista.data.value.linhas.length === 0">{{ t('cadastroEstoque.separacao.vazia') }}</p>
       <table v-else class="tabela" data-testid="separacao-linhas">
         <caption>
