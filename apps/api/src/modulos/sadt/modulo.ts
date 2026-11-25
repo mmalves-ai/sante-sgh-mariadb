@@ -65,6 +65,7 @@ import {
 } from './interface-equipamento.controller.js';
 import { EntregaResultadoController, SERVICO_ENTREGA_RESULTADO } from './entrega-resultado.controller.js';
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
+import { AutoliberacaoController, SERVICO_AUTOLIBERACAO } from './autoliberacao.controller.js';
 import { SERVICO_SOROTECA, SorotecaController } from './soroteca.controller.js';
 import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
 import {
@@ -169,6 +170,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       LaudoGrandezasController,
       ApoioRemessaController,
       LimitesExameController,
+      AutoliberacaoController,
       SorotecaController,
       EntregaResultadoController,
       EscalaExecucaoController,
@@ -314,6 +316,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoSoroteca } = await import('./aplicacao/soroteca-propria.js');
           return new ServicoSoroteca(ctx.nucleo);
+        },
+      },
+      // Autoliberação do resultado: fila de conferência e cadastro (05-SADT linha 11): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_AUTOLIBERACAO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoAutoliberacao } = await import('./aplicacao/autoliberacao-propria.js');
+          return new ServicoAutoliberacao(ctx.nucleo);
         },
       },
       // Limites do pedido de exame (05-SADT linha 6): só no banco do cliente (sem ele, 503).

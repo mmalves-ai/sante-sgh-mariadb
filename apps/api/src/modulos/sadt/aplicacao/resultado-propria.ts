@@ -27,6 +27,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
+import { avaliarNaDigitacao, retidoParaConferencia, TABELAS_AUTOLIBERACAO } from './autoliberacao-propria.js';
 import {
   avisarCriticosDoResultado,
   avisarQuemViuARetificacao,
@@ -53,6 +54,8 @@ export const esquemaRegistrarResultadoBanco = z
       .array(z.object({ variavel: z.number().int().positive(), valor: z.number().finite() }).strict())
       .max(50)
       .optional(),
+    /** Substâncias interferentes (condição da amostra: hemólise, lipemia...) apontadas pela bancada (05-SADT L11). */
+    interferentesAmostra: z.array(z.number().int().positive()).max(20).optional(),
   })
   .strict();
 export const esquemaLiberarResultadoBanco = z.object({}).strict();
@@ -67,6 +70,8 @@ export interface ResultadoGravado {
   readonly numeroVersao: number;
   readonly critico: boolean;
   readonly anormal: boolean;
+  /** Liberado pelas regras de autoliberação (05-SADT linha 11). */
+  readonly autoliberado: boolean;
 }
 
 const TABELAS = [
@@ -77,6 +82,7 @@ const TABELAS = [
   'resultado_variavel_formula',
   'exame_item',
   ...TABELAS_AVISOS_RESULTADO,
+  ...TABELAS_AUTOLIBERACAO,
 ];
 
 type Tx = Parameters<Parameters<typeof definirOperacao>[0]['gravar']>[0];
@@ -168,7 +174,31 @@ export class ServicoResultadoSadt {
           texto: e.observacao,
         });
       }
-      await tx.alterar('exame_item', exame, ctx.versaoExame, { situacao: 'resultado_digitado' });
+      // Autoliberação (05-SADT linha 11): sem regra ativa nada muda; com regra, a avaliação fica registrada e o resultado
+      // é liberado pela regra ou retido para a conferência do responsável técnico.
+      const decisao = await avaliarNaDigitacao(tx, {
+        agora: ctx.agora,
+        estabelecimento: ctx.estabelecimento,
+        exameItem: exame,
+        exameId: ctx.exameId,
+        paciente: ctx.paciente,
+        setor: ctx.setor,
+        resultado: id,
+        interferentesAmostra: e.interferentesAmostra ?? [],
+      });
+      if (decisao.decisao === 'liberar') {
+        await tx.alterar('resultado_exame', id, await this.versaoDe(tx, id), {
+          situacao: 'liberado',
+          autoliberado: true,
+          liberado_em: ctx.agora,
+          liberado_por_profissional_id: null,
+        });
+        await tx.alterar('exame_item', exame, ctx.versaoExame, {
+          situacao: 'liberado',
+          liberado_em: ctx.agora,
+          liberado_por_usuario_id: tx.contexto.usuario,
+        });
+      } else await tx.alterar('exame_item', exame, ctx.versaoExame, { situacao: 'resultado_digitado' });
       return id;
     });
   }
@@ -185,10 +215,15 @@ export class ServicoResultadoSadt {
       if (falha) throw recusa(falha, MENSAGEM_RESULTADO[falha]);
       await this.conferirResponsavel(tx, ctx.setor, ctx.exameId, prof);
       const id = n(ctx.resultado!['id']);
+      // O retido pela autoliberação (05-SADT linha 11): a liberação manual é a conferência do responsável técnico.
+      const conferencia = (await retidoParaConferencia(tx, id))
+        ? { conferido_por_profissional_id: prof, conferido_em: ctx.agora }
+        : {};
       await tx.alterar('resultado_exame', id, n(ctx.resultado!['versao']), {
         situacao: 'liberado',
         liberado_em: ctx.agora,
         liberado_por_profissional_id: prof,
+        ...conferencia,
       });
       await tx.alterar('exame_item', exame, ctx.versaoExame, {
         situacao: 'liberado',
@@ -601,7 +636,7 @@ export class ServicoResultadoSadt {
 
   private async ler(l: Leitor, exame: number): Promise<ResultadoGravado> {
     const r = await l.uma(
-      'SELECT id, situacao, numero_versao, critico, anormal FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL',
+      'SELECT id, situacao, numero_versao, critico, anormal, autoliberado FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL',
       [exame],
     );
     return {
@@ -611,6 +646,7 @@ export class ServicoResultadoSadt {
       numeroVersao: n(r?.['numero_versao'] ?? 0),
       critico: n(r?.['critico']) === 1,
       anormal: n(r?.['anormal']) === 1,
+      autoliberado: n(r?.['autoliberado']) === 1,
     };
   }
 }
