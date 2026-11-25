@@ -73,6 +73,7 @@ export * from './interconsulta.js';
 export * from './pedido-exame.js';
 export * from './sumario-alta.js';
 export * from './sumario-alta-secoes.js';
+export * from './sumario-alta-linhas.js';
 export * from './alertas-completude.js';
 export * from './sigilo-categoria.js';
 export * from './resultados.js';
