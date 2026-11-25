@@ -25,3 +25,4 @@ export * from './pedido-vaga.js';
 export * from './perfil-marcacao.js';
 export * from './cota-prazo.js';
 export * from './contato-ativo.js';
+export * from './item-agendavel.js';
