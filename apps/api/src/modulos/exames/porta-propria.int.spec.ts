@@ -626,6 +626,116 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     ).toHaveLength(1);
   });
 
+  it('02-AGE 44: homônimo de paciente (mesmo nome e nascimento) recusa com o candidato sem gravar nada; conferido, grava a marcação e um pré-cadastro novo', async () => {
+    const nome = `PESSOA SINTETICA ${P} HOMONIMA`;
+    const nascimento = '1961-03-04';
+    const candidato = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-l0105-homonimo' },
+      async (e) => {
+        const agora = new Date();
+        const pessoa = await garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ? AND data_nascimento = ?',
+          [nome, nascimento],
+          'INSERT INTO pessoa_fisica (nome, data_nascimento, criado_em) VALUES (?, ?, ?)',
+          [nome, nascimento, agora],
+        );
+        const pac = await garantir(
+          e,
+          'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+          [pessoa],
+          "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
+          [pessoa, 910_105_002, agora],
+        );
+        // Massa sintética de execuções anteriores: o pré-cadastro pendente da mesma pessoa seria reaproveitado; a
+        // exclusão lógica deixa a prova do pré-cadastro NOVO valer a cada execução (nada é apagado).
+        await e.executar(
+          "UPDATE pre_cadastro SET excluido_em = ?, excluido_por = ? WHERE estabelecimento_id = ? AND nome = ? AND situacao = 'pendente' AND excluido_em IS NULL",
+          [agora, ids.usuario, ids.est, nome],
+        );
+        return pac;
+      },
+    );
+    const entrada = {
+      agenda: ids.agenda,
+      data: dia,
+      hora: '08:20',
+      nome: ` ${nome.toLowerCase()} `,
+      nascimento,
+      telefone: '3133335555',
+      convenio: ids.fonte,
+      exame: ids.exame,
+      canal: 'telefone',
+    };
+    const contagem = async () => ({
+      pre: Number(
+        (
+          await ler<{ n: number }>(
+            'SELECT COUNT(*) AS n FROM pre_cadastro WHERE estabelecimento_id = ? AND excluido_em IS NULL',
+            [ids.est],
+          )
+        )[0]?.['n'],
+      ),
+      marcacoes: Number(
+        (
+          await ler<{ n: number }>(
+            'SELECT COUNT(*) AS n FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id WHERE h.agenda_servico_id = ?',
+            [ids.agenda],
+          )
+        )[0]?.['n'],
+      ),
+    });
+    const antes = await contagem();
+    const recusa = await porta
+      .executar(ctx, 'agenda.agendarExameSemProntuario', entrada, opCtx())
+      .catch((e: unknown) => e);
+    expect(codigoDe(recusa)).toBe('paciente-possivelmente-cadastrado');
+    expect((recusa as ErroOperacao).problema).toMatchObject({
+      dependentes: [
+        expect.objectContaining({ rotulo: 'paciente', quantidade: 1, amostra: [String(candidato)] }),
+      ],
+    });
+    // Nada gravado: nem marcação nem pré-cadastro; o horário segue livre.
+    expect(await contagem()).toEqual(antes);
+    const livres = await porta.vagas(ctx, { agendas: [ids.agenda], de: dia, ate: dia });
+    expect(livres.itens.map((v) => v.hora)).toContain('08:20');
+    // A central conferiu: é outra pessoa. A nova tentativa (outra chave) grava a marcação e um pré-cadastro novo.
+    const r = await porta.executar(
+      ctx,
+      'agenda.agendarExameSemProntuario',
+      { ...entrada, cadastroConferido: true },
+      opCtx(),
+    );
+    const id = Number(r.resultado['marcacao']);
+    const pre = Number(r.resultado['preCadastro']);
+    expect(pre).toBeGreaterThan(0);
+    const [m] = await ler('SELECT paciente_id, pre_cadastro_id FROM marcacao_horario WHERE id = ?', [id]);
+    expect(m).toMatchObject({ paciente_id: null, pre_cadastro_id: pre });
+    const [pc] = await ler(
+      "SELECT nome, situacao, telefone, DATE_FORMAT(data_nascimento, '%Y-%m-%d') AS nasc, excluido_em FROM pre_cadastro WHERE id = ?",
+      [pre],
+    );
+    expect(pc).toMatchObject({
+      nome,
+      situacao: 'pendente',
+      telefone: '3133335555',
+      nasc: nascimento,
+      excluido_em: null,
+    });
+    expect(await contagem()).toEqual({ pre: antes.pre + 1, marcacoes: antes.marcacoes + 1 });
+    // O paciente homônimo não é tocado: a marcação não vai para ele.
+    const [doCandidato] = await ler('SELECT COUNT(*) AS n FROM marcacao_horario WHERE paciente_id = ?', [
+      candidato,
+    ]);
+    expect(Number(doCandidato?.['n'])).toBe(0);
+    await porta.executar(
+      ctx,
+      'agenda.cancelarExame',
+      { marcacao: id, motivo: 'PAC-DESISTIU', solicitante: 'paciente' },
+      opCtx(),
+    );
+  });
+
   it('02-CAD 13: paciente com óbito emitido não marca exame (motivo e data; nenhuma marcação gravada, horário livre)', async () => {
     const obito = (falecido: boolean) =>
       nucleo.escrever({ cliente: CLIENTE, correlacao: 'obito-teste-01-05' }, (e) =>

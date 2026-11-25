@@ -7,9 +7,11 @@
 //  4. Conferido, a nova tentativa vai com `cadastroConferido` e outra chave de idempotência; a marcação gravada leva à
 //     ficha da marcação.
 // As duas gravações são respostas simuladas pelo Playwright (nada fica na base do E2E: a vaga sintética é usada pelo
-// vizinho m18). O que fica no banco (pré-cadastro e marcação na mesma transação, recusa do homônimo, devolução da
-// vaga ao cancelar) está no contrato de efeito apps/api/src/modulos/exames/porta-propria.int.spec.ts, caso
-// "02-AGE 44". Massa SINTÉTICA, como no vizinho m18.
+// vizinho m18). O que fica no banco está no contrato de efeito apps/api/src/modulos/exames/porta-propria.int.spec.ts,
+// nos dois casos "02-AGE 44": (a) nascimento improvável recusado, pré-cadastro e marcação na mesma transação e vaga
+// devolvida ao cancelar; (b) homônimo de paciente recusado com `paciente-possivelmente-cadastrado` e o candidato pelo
+// id, sem gravar marcação nem pré-cadastro, e, com `cadastroConferido`, a marcação gravada com um pré-cadastro novo.
+// Massa SINTÉTICA, como no vizinho m18.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
