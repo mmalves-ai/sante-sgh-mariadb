@@ -51,6 +51,11 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
       'DELETE FROM glosa_item WHERE glosa_id IN (SELECT id FROM glosa WHERE estabelecimento_id = ?)',
       est,
     );
+    // A reapresentação aponta o recurso anterior (fk_recurso_glosa_recurso_glosa_anterior_id): solta antes de apagar.
+    await e.executar(
+      'UPDATE recurso_glosa SET recurso_glosa_anterior_id = NULL WHERE estabelecimento_id = ?',
+      est,
+    );
     await e.executar('DELETE FROM recurso_glosa WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM glosa WHERE estabelecimento_id = ?', est);
     await e.executar(
@@ -676,5 +681,144 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
       valor_recuperado: '0.00',
       encerrada: 1,
     });
+  }, 120_000);
+
+  it('reapresentação: recurso negado ou em parte volta num recurso novo ligado ao anterior, com prazo do retorno e teto do que não voltou; nada apagado', async () => {
+    const [fa] = massa.fontes as [number, number];
+    const [x] = (await novaConta(`${P}-C6`, fa, 1)) as [number];
+    await executar('faturamento.registrarGlosa', {
+      itens: [{ item: x, versao: await versao(x), valorPago: 0, quantidadePaga: 0, motivo: 9734 }],
+      dataPagamento: '2026-11-10',
+      prazoParametro: `${fa}:30`,
+    });
+    await porta.gravarSgh(
+      c,
+      (y: { id: number }) => ({
+        estabelecimento: null,
+        usuario: null,
+        correlacao: null,
+        acao: 'alteracao' as const,
+        entidade: 'glosa_item',
+        entidadeId: y.id,
+        motivo: 'decisão da glosa (teste)',
+      }),
+      (g) =>
+        g.decidirGlosa({
+          item: x,
+          decisao: 'recorrer',
+          texto: 'Procedimento autorizado pela senha da guia',
+          evidencia: '',
+          usuario: 'x',
+          prazo: null,
+        }),
+    );
+    const recorrer = async (dataProtocolo: string, valor?: number) =>
+      executar('faturamento.registrarRecurso', {
+        itens: [{ item: x, versao: await versao(x), ...(valor === undefined ? {} : { valor }) }],
+        dataProtocolo,
+        prazoParametro: `${fa}:30`,
+      });
+    const retorno = async (data: string, desfecho: string, valor: number | null, motivo: number | null) =>
+      executar('faturamento.registrarRetornoRecurso', {
+        itens: [{ item: x, versao: await versao(x), desfecho, valor, motivo }],
+        data,
+        numeroDemonstrativo: 'DEM-0734R',
+      });
+    const recurso = (id: number) =>
+      lerUma(
+        `SELECT situacao, valor_recursado, valor_acatado, recurso_glosa_anterior_id AS anterior,
+                DATE_FORMAT(prazo_ate, '%Y-%m-%d') AS prazo FROM recurso_glosa WHERE id = ?`,
+        [id],
+      );
+    const itemGlosa = () =>
+      lerUma(
+        `SELECT gi.valor_recursado, gi.valor_recuperado, gi.data_recuperacao IS NULL AS aguardando, gi.recurso_glosa_id AS rec,
+                g.situacao, g.valor_recursado AS glosa_recursado, g.valor_recuperado AS glosa_recuperado,
+                g.encerrado_em IS NOT NULL AS encerrada
+           FROM glosa_item gi JOIN glosa g ON g.id = gi.glosa_id WHERE gi.conta_hospitalar_item_id = ?`,
+        [x],
+      );
+    const idDe = (r: { resultado: Record<string, unknown> }) => Number(String(r.resultado['recursos']));
+
+    // Primeiro recurso (200 dos 300 glosados); reapresentar antes do retorno recusa.
+    const r1 = idDe(await recorrer('2026-11-20', 200));
+    expect(codigo(await erroDe(recorrer('2026-11-21')))).toBe('ja-recorrido');
+    // Retorno em parte (50): a glosa encerra como recuperada.
+    await retorno('2026-12-05', 'parcial', 50, 9735);
+    expect(await recurso(r1)).toMatchObject({
+      situacao: 'acatado_parcial',
+      valor_acatado: '50.00',
+      anterior: null,
+    });
+    expect(await itemGlosa()).toMatchObject({
+      situacao: 'recuperada',
+      encerrada: 1,
+      valor_recuperado: '50.00',
+    });
+
+    // Reapresentação: teto = 300 − 50 que já voltou; prazo de 30 dias contado do retorno (05/12 → 04/01).
+    expect(codigo(await erroDe(recorrer('2026-12-10', 250.01)))).toBe('valor-acima-da-glosa');
+    expect(codigo(await erroDe(recorrer('2027-01-05')))).toBe('prazo-vencido');
+    const r2 = idDe(await recorrer('2026-12-10'));
+    expect(await recurso(r2)).toMatchObject({
+      situacao: 'enviado',
+      valor_recursado: '250.00',
+      anterior: r1,
+      prazo: '2027-01-04',
+    });
+    // O item volta a esperar retorno; o recursado da cadeia é o que voltou mais o novo pleito; a glosa reabre.
+    expect(await itemGlosa()).toMatchObject({
+      valor_recursado: '300.00',
+      valor_recuperado: '50.00',
+      aguardando: 1,
+      rec: r2,
+      situacao: 'em_recurso',
+      glosa_recursado: '300.00',
+      encerrada: 0,
+    });
+    // Nada apagado: o primeiro recurso e o retorno dele continuam como estavam.
+    expect(
+      await lerUma(
+        `SELECT r.situacao, ri.valor_recursado, ri.valor_acatado, DATE_FORMAT(ri.retornado_em, '%Y-%m-%d') AS em
+           FROM recurso_glosa r JOIN recurso_glosa_item ri ON ri.recurso_glosa_id = r.id WHERE r.id = ?`,
+        [r1],
+      ),
+    ).toMatchObject({
+      situacao: 'acatado_parcial',
+      valor_recursado: '200.00',
+      valor_acatado: '50.00',
+      em: '2026-12-05',
+    });
+
+    // Retorno da reapresentação: negado; repetir o retorno recusa; o recuperado continua 50 e a glosa encerra.
+    await retorno('2026-12-20', 'negado', null, 9735);
+    expect(codigo(await erroDe(retorno('2026-12-21', 'negado', null, 9735)))).toBe('retorno-ja-baixado');
+    expect(await recurso(r2)).toMatchObject({ situacao: 'negado', valor_acatado: '0.00' });
+    expect(await itemGlosa()).toMatchObject({
+      situacao: 'recuperada',
+      encerrada: 1,
+      valor_recuperado: '50.00',
+    });
+
+    // Segunda reapresentação, acatada por inteiro: tudo voltou e não há mais o que reapresentar.
+    const r3 = idDe(await recorrer('2026-12-22'));
+    expect(await recurso(r3)).toMatchObject({ valor_recursado: '250.00', anterior: r2 });
+    await retorno('2026-12-28', 'acatado', null, null);
+    expect(await recurso(r3)).toMatchObject({ situacao: 'acatado', valor_acatado: '250.00' });
+    expect(await itemGlosa()).toMatchObject({
+      valor_recursado: '300.00',
+      valor_recuperado: '300.00',
+      glosa_recuperado: '300.00',
+      situacao: 'recuperada',
+      encerrada: 1,
+    });
+    expect(codigo(await erroDe(recorrer('2026-12-29')))).toBe('nada-a-reapresentar');
+    expect(
+      await lerUma(
+        `SELECT COUNT(*) AS q FROM recurso_glosa r JOIN recurso_glosa_item ri ON ri.recurso_glosa_id = r.id
+          WHERE ri.conta_hospitalar_item_id = ? AND ri.retornado_em IS NOT NULL`,
+        [x],
+      ),
+    ).toMatchObject({ q: 3 });
   }, 120_000);
 });

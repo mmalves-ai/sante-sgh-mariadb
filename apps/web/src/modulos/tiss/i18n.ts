@@ -205,7 +205,9 @@ export const mensagensTiss = {
     desfechos: { acatado: 'Acatado', parcial: 'Parcial', negado: 'Negado' },
     decidir: 'Decidir',
     recorrer: 'Recorrer',
-    marcarTodos: 'Marcar todos os decididos como recorrer',
+    reapresentar: 'Reapresentar',
+    marcarTodos:
+      'Marcar todos os decididos como recorrer (e os recursos negados ou em parte, para reapresentar)',
     montarRecurso: 'Montar recurso ({n} itens)',
     paraRecurso: 'Marcar para o recurso',
     selecionar: 'Marcar o item {item} para o recurso',

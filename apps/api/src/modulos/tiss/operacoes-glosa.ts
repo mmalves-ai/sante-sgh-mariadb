@@ -255,23 +255,37 @@ const registrarRecurso = definirOperacao<RecursoComPrazo, ResultadoOperacao>({
           'nao-conciliado',
           `Item ${it.item}: sem glosa baixada; baixe o retorno antes de recorrer.`,
         );
+      const emRecurso = l['recurso_glosa_id'] !== null || n(l['valor_recursado']) > 0;
+      // Reapresentação: o recurso atual do item já teve retorno (negado ou em parte); o novo fica ligado a ele, com o
+      // prazo contado da data do retorno e o teto descontado do que já voltou.
+      const retornado = emRecurso && l['data_recuperacao'] !== null;
       const g = {
         decisao: texto(l['decisao']),
         justificativa: l['justificativa'] === null ? null : texto(l['justificativa']),
         valorGlosado: n(l['valor_glosado']),
         valorAceito: n(l['valor_aceito']),
-        emRecurso: l['recurso_glosa_id'] !== null || n(l['valor_recursado']) > 0,
+        emRecurso,
+        retornoAnterior: retornado ? { valorAcatado: n(l['valor_recuperado']) } : null,
         // Glosa sem prazo gravado (anterior à baixa por item, ou de outra origem): a mesma regra da grade.
-        prazo:
-          dataIso(l['data_limite_recurso']) ??
-          prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_glosa'])).prazo,
+        prazo: retornado
+          ? prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_recuperacao']))
+              .prazo
+          : (dataIso(l['data_limite_recurso']) ??
+            prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_glosa'])).prazo),
       };
       const valor = r2(it.valor ?? valorPadraoDoRecurso(g));
       const r = conferirItemDoRecurso(g, valor, e.dataProtocolo);
       if (r)
         throw recusa(r.codigo, `Item ${it.item}: ${r.mensagem}`, r.campos ? { campos: [...r.campos] } : {});
       const quantidade = it.quantidade ?? (n(l['quantidade_glosada']) || n(l['quantidade']) || 1);
-      return { l, valor, quantidade, prazo: g.prazo, fontePagadora: n(l['fonte_pagadora_id']) };
+      return {
+        l,
+        valor,
+        quantidade,
+        prazo: g.prazo,
+        fontePagadora: n(l['fonte_pagadora_id']),
+        recursoAnterior: retornado ? n(l['recurso_glosa_id']) : null,
+      };
     });
     for (const p of pedidos) {
       const m = await tx.uma<Linha>('SELECT permite_reapresentacao FROM motivo_glosa WHERE id = ?', [
@@ -292,6 +306,7 @@ const registrarRecurso = definirOperacao<RecursoComPrazo, ResultadoOperacao>({
         estabelecimento_id: est,
         numero: await numeroNegocio(tx, 'recurso_glosa', est, ctx.usuario),
         fonte_pagadora_id: lote.fontePagadora,
+        recurso_glosa_anterior_id: lote.recursoAnterior,
         objeto: 'item',
         prazo_ate: prazos.length ? prazos.sort()[0] : null,
         enviado_em: enviado,
@@ -310,13 +325,19 @@ const registrarRecurso = definirOperacao<RecursoComPrazo, ResultadoOperacao>({
           quantidade_recursada: p.quantidade,
           valor_recursado: p.valor,
         });
+        // No item da glosa, o recursado é o total pleiteado na cadeia de recursos: o que já voltou nos anteriores mais o
+        // valor deste (sem reapresentação, só este); o valor de cada recurso fica no item do recurso.
+        const recursado = r2(n(p.l['valor_recuperado']) + p.valor);
         await tx.alterar('glosa_item', n(p.l['glosa_item']), n(p.l['versao_glosa']), {
-          valor_recursado: p.valor,
+          valor_recursado: recursado,
           quantidade_recursada: p.quantidade,
           recurso_glosa_id: rec,
+          // Reapresentação: o item volta a esperar retorno; o anterior fica no item do recurso antigo (retornado_em) e
+          // o valor recuperado segue somado.
+          ...(lote.recursoAnterior !== null ? { data_recuperacao: null } : {}),
         });
         const gid = n(p.l['glosa_id']);
-        porGlosa.set(gid, r2((porGlosa.get(gid) ?? 0) + p.valor));
+        porGlosa.set(gid, r2((porGlosa.get(gid) ?? 0) + recursado - n(p.l['valor_recursado'])));
       }
     }
     for (const [gid, valor] of porGlosa) {
@@ -328,6 +349,7 @@ const registrarRecurso = definirOperacao<RecursoComPrazo, ResultadoOperacao>({
         await tx.alterar('glosa', gid, n(cab['versao']), {
           valor_recursado: r2(n(cab['valor_recursado']) + valor),
           situacao: 'em_recurso',
+          encerrado_em: null,
         });
     }
     return {
@@ -356,13 +378,22 @@ const registrarRetornoRecurso = definirOperacao<RegistrarRetornoRecursoEntrada, 
     const preparados = [];
     for (const [k, it] of e.itens.entries()) {
       const l = linhas[k]!;
+      // O retorno é do recurso atual do item (na reapresentação, o anterior já retornou e fica no item antigo).
+      const [ri] =
+        l['glosa_item'] === null || l['recurso_glosa_id'] === null
+          ? []
+          : await tx.consultarParaAtualizar<Linha>(
+              `SELECT id, versao, valor_recursado, valor_acatado, retornado_em FROM recurso_glosa_item
+                WHERE glosa_item_id = ? AND recurso_glosa_id = ? AND excluido_em IS NULL`,
+              [l['glosa_item'], l['recurso_glosa_id']],
+            );
       const d = conferirDesfecho({
         item: {
-          valorRecurso: l['glosa_item'] === null ? 0 : n(l['valor_recursado']),
+          valorRecurso: ri ? n(ri['valor_recursado']) : 0,
           quantidadeRecurso: 0,
           dataRecurso: dataIso(l['recurso_em']),
-          valorRetorno: n(l['valor_recuperado']),
-          dataRetorno: dataIso(l['data_recuperacao']),
+          valorRetorno: ri ? n(ri['valor_acatado']) : 0,
+          dataRetorno: ri ? dataIso(ri['retornado_em']) : null,
         },
         desfecho: it.desfecho,
         data: e.data,
@@ -379,11 +410,6 @@ const registrarRetornoRecurso = definirOperacao<RegistrarRetornoRecursoEntrada, 
       const motivo = it.desfecho === 'acatado' ? null : await motivoPorCodigo(tx, d.valores.motivo);
       if (it.desfecho !== 'acatado' && d.valores.motivo !== MOTIVO_NAO_INFORMADO && motivo === null)
         throw recusa('motivo-inexistente', `Item ${it.item}: o motivo não existe.`, { campos: ['motivo'] });
-      const [ri] = await tx.consultarParaAtualizar<Linha>(
-        `SELECT id, versao FROM recurso_glosa_item
-          WHERE glosa_item_id = ? AND recurso_glosa_id = ? AND excluido_em IS NULL`,
-        [l['glosa_item'], l['recurso_glosa_id']],
-      );
       if (!ri) throw recusa('sem-recurso', `Item ${it.item}: o item do recurso não foi encontrado.`);
       preparados.push({ l, valor: d.valores.valor, motivo, ri });
     }
@@ -398,7 +424,8 @@ const registrarRetornoRecurso = definirOperacao<RegistrarRetornoRecursoEntrada, 
         retornado_por_usuario_id: ctx.usuario,
       });
       await tx.alterar('glosa_item', n(p.l['glosa_item']), n(p.l['versao_glosa']), {
-        valor_recuperado: p.valor,
+        // Somado: na reapresentação, o que voltou nos recursos anteriores continua no item.
+        valor_recuperado: r2(n(p.l['valor_recuperado']) + p.valor),
         data_recuperacao: e.data,
       });
       recursos.add(n(p.l['recurso_glosa_id']));

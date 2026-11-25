@@ -47,6 +47,41 @@ describe('lote de recurso de glosa (06-FAT linha 34)', () => {
     expect(valorPadraoDoRecurso({ valorGlosado: 100, valorAceito: 30 })).toBe(70);
   });
 
+  it('reapresentação: o item com recurso retornado (negado ou em parte) volta num recurso novo, até o que não voltou', () => {
+    const negado = g({ emRecurso: true, retornoAnterior: { valorAcatado: 0 } });
+    expect(conferirItemDoRecurso(negado, 100, '2026-11-24')).toBeNull();
+    const parcial = g({ emRecurso: true, valorAceito: 10, retornoAnterior: { valorAcatado: 30 } });
+    expect(valorPadraoDoRecurso(parcial)).toBe(60);
+    expect(conferirItemDoRecurso(parcial, 60, '2026-11-24')).toBeNull();
+    expect(conferirItemDoRecurso(parcial, 60.01, '2026-11-24')?.codigo).toBe('valor-acima-da-glosa');
+    // Tudo já voltou: nada a reapresentar.
+    const tudo = g({ emRecurso: true, retornoAnterior: { valorAcatado: 100 } });
+    expect(conferirItemDoRecurso(tudo, 0.01, '2026-11-24')?.codigo).toBe('nada-a-reapresentar');
+    // Sem o retorno do recurso atual, continua recusado; o prazo (contado do retorno) e a decisão valem igual.
+    expect(
+      conferirItemDoRecurso(g({ emRecurso: true, retornoAnterior: null }), 1, '2026-11-24')?.codigo,
+    ).toBe('ja-recorrido');
+    expect(conferirItemDoRecurso({ ...negado, prazo: '2026-11-01' }, 1, '2026-11-24')?.codigo).toBe(
+      'prazo-vencido',
+    );
+    expect(conferirItemDoRecurso({ ...negado, decisao: 'aceitar' }, 1, '2026-11-24')?.codigo).toBe(
+      'glosa-aceita',
+    );
+  });
+
+  it('reapresentação: um lote por fonte e por recurso anterior', () => {
+    const l = lotesDeRecurso([
+      { fontePagadora: 1, recursoAnterior: null, i: 'a' },
+      { fontePagadora: 1, recursoAnterior: 7, i: 'b' },
+      { fontePagadora: 1, i: 'c' },
+      { fontePagadora: 1, recursoAnterior: 7, i: 'd' },
+    ]);
+    expect(l.map((x) => [x.fontePagadora, x.recursoAnterior, x.itens.map((y) => y.i)])).toEqual([
+      [1, null, ['a', 'c']],
+      [1, 7, ['b', 'd']],
+    ]);
+  });
+
   it('um lote por fonte pagadora, na ordem do pedido', () => {
     const l = lotesDeRecurso([
       { fontePagadora: 2, i: 1 },
