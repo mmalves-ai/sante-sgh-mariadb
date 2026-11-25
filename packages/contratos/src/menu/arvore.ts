@@ -37,7 +37,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // F3.5 (05-SADT linha 7): o item "Postos de coleta" do laboratório entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (07-FIN linha 70): o item "Notas de crédito e de débito" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":435,"M":198,"P":57,"N":180};
+// F8 (05-SUP linha 30): o item "Consumo de gases por setor" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":436,"M":198,"P":57,"N":181};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -113,6 +114,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.nir-e-regulacao.quadro-clinico-e-evolucao-da-regulacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Quadro clínico e evolução da regulação"],"titulo":"Quadro clínico e evolução da regulação","selo":"N","fase":7,"rota":"/internacao/controles/regulacao","permissao":"internacao.regulacao.ler"},
   {"id":"internacao-e-leitos.controles-da-internacao.auditoria-do-isolamento","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Auditoria do isolamento"],"titulo":"Auditoria do isolamento","selo":"N","fase":7,"rota":"/internacao/controles/isolamento","permissao":"qualidade.precaucao.ler"},
   {"id":"internacao-e-leitos.controles-da-internacao.formularios-da-declaracao-de-obito","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Formulários da declaração de óbito"],"titulo":"Formulários da declaração de óbito","selo":"N","fase":7,"rota":"/internacao/controles/formularios-obito","permissao":"pep.declaracaoObito.emitir"},
+  {"id":"internacao-e-leitos.controles-da-internacao.consumo-de-gases-por-setor","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Consumo de gases por setor"],"titulo":"Consumo de gases por setor","selo":"N","fase":7,"rota":"/internacao/gases/setores","permissao":"enfermagem.dispositivo.ler"},
   {"id":"internacao-e-leitos.leitos.leitos-do-sistema-publico-habilitacao-e-capacidade","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Leitos do sistema público"],"titulo":"Leitos do sistema público","selo":"N","fase":7,"rota":"/internacao/leitos-sus","permissao":"faturamento.susLeitoUti.ler"},
   {"id":"centro-cirurgico.agenda-cirurgica-mapa-de-salas","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Agenda cirúrgica"],"titulo":"Agenda cirúrgica","selo":"M","fase":2,"rota":"/cirurgia/mapa","permissao":"cirurgia.agenda.ler"},
   {"id":"centro-cirurgico.registro-de-cirurgia-procedimentos-equipe-tempos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Registro de cirurgia"],"titulo":"Registro de cirurgia","selo":"M","fase":2,"rota":"/cirurgia/registro","permissao":"cirurgia.registro.ler"},
