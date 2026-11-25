@@ -1,14 +1,16 @@
-// E2E @C1-057 (F3.4, 04-INT linha 68): a autorização da internação e as prorrogações. A admissão já leva à tela das
-// guias; ali o registro da prorrogação pede a conta parcial (combo do tema), o número da guia, a senha, as diárias
-// liberadas, o início (opcional: sem ele a validade começa no dia seguinte ao fim da anterior, sem buraco) e quem
-// autorizou na operadora. O botão só libera com conta e guia; nada de <select> cru; axe sem violação séria.
-// Na fonte sintética o histórico das guias (inicial, prorrogações, correção com motivo) precisa do banco do cliente: o
-// efeito no banco é provado no contrato de efeito apps/api/src/modulos/adt/registros-internacao.int.spec.ts
-// (prorrogação com a validade seguinte e o autorizador; correção sem linha nova nem diárias somadas). Sessão real
-// sobre a fonte sintética e as portas em MEMÓRIA (dados SINTÉTICOS; nada vai à cópia).
+// E2E @C1-057 (F3.4, 04-INT linha 68): a autorização da internação e as prorrogações, no que a fonte sintética permite.
+// A admissão leva à tela das guias com a guia inicial na conta principal (a linha da tabela, conta e número). A
+// prorrogação vai só na conta parcial aberta pelo faturamento: a fonte sintética não abre conta parcial, então a tela
+// avisa (guias-sem-parcial), o combo da conta não oferece nenhuma conta e o botão fica desabilitado mesmo com número,
+// início e autorizador preenchidos (a regra "gravar só com conta e guia", no lado da recusa). O histórico das
+// autorizações, a prévia do período, a gravação da prorrogação e a correção com motivo exigem o banco do cliente (a
+// leitura dos registros responde 503 na fonte sintética, e a tela mostra a mensagem de erro): ficam SEM E2E e são provados no
+// contrato de efeito apps/api/src/modulos/adt/registros-internacao.int.spec.ts (prorrogação com a validade seguinte e
+// o autorizador; correção sem linha nova nem diárias somadas). Sessão real sobre a fonte sintética e as portas em
+// MEMÓRIA (dados SINTÉTICOS; nada vai à cópia).
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
-import { escolher, esperarSemSelectNativo } from './combos.js';
+import { escolher, esperarOpcoes, esperarSemSelectNativo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 
@@ -53,7 +55,7 @@ async function admitir(page: Page): Promise<number> {
 test.describe('@C1-057 autorização da internação e prorrogações', () => {
   test.setTimeout(180_000);
 
-  test('guias: conta parcial em combo, início e autorizador; gravar só com conta e guia; axe', async ({
+  test('guia inicial da admissão; sem conta parcial a prorrogação não grava, com o aviso; axe', async ({
     page,
   }) => {
     const externas = vigiarExternas(page);
@@ -64,20 +66,27 @@ test.describe('@C1-057 autorização da internação e prorrogações', () => {
     const tela = page.getByTestId('tela-guias');
     await expect(tela).toBeVisible();
     await esperarSemSelectNativo(tela);
-    // A guia inicial nasce com a admissão e aparece entre as guias da conta.
-    await expect(page.getByTestId('tabela-guias')).toBeVisible();
+    // A guia inicial nasce com a admissão, na conta principal (a própria internação), com 1 diária.
+    const inicial = page.getByTestId(`guia-${reg}`);
+    await expect(inicial).toBeVisible();
+    await expect(inicial.locator('td').nth(0)).toHaveText(String(reg));
+    await expect(inicial.locator('td').nth(1)).toHaveText(String(reg));
+    await expect(inicial.locator('td').nth(4)).toHaveText('1');
+    // O histórico das autorizações pede o banco do cliente: a tela mostra o erro e não inventa histórico nem prévia.
+    await expect(tela.getByTestId('mensagem-erro')).toBeVisible();
+    await expect(page.getByTestId('tabela-historico-guias')).toHaveCount(0);
 
-    // O formulário da prorrogação: conta parcial, número, início e quem autorizou.
-    await expect(page.getByTestId('guia-conta')).toBeVisible();
-    await expect(page.getByTestId('guia-numero')).toBeVisible();
-    await expect(page.getByTestId('guia-inicio')).toBeVisible();
-    await expect(page.getByTestId('guia-autorizador')).toBeVisible();
+    // A prorrogação vai só na conta parcial: sem ela, o aviso, nenhuma conta para escolher e o botão desabilitado.
+    await expect(page.getByTestId('guias-sem-parcial')).toContainText('Nenhuma conta parcial aberta');
+    await esperarOpcoes(page.getByTestId('guia-conta'), 1);
     await expect(page.getByTestId('guia-gravar')).toBeDisabled();
-    // Só o número não basta: a prorrogação pede a conta parcial.
+    // Número, início e quem autorizou preenchidos não bastam: sem a conta parcial, nada grava.
     await page.getByTestId('guia-numero').locator('input').fill('PRORROG-0001');
-    await page.getByTestId('guia-autorizador').locator('input').fill('AUDITOR SINTETICO');
     await page.getByTestId('guia-inicio').fill('2026-01-10');
+    await page.getByTestId('guia-autorizador').locator('input').fill('AUDITOR SINTETICO');
     await expect(page.getByTestId('guia-gravar')).toBeDisabled();
+    await expect(page.getByTestId('guia-gravada')).toHaveCount(0);
+    await expect(page.getByTestId('guia-PRORROG-0001')).toHaveCount(0);
     await semViolacaoAxe(page, '/internacao/:reg/guias');
     expect(externas).toEqual([]);
   });
