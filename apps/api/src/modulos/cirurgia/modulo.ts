@@ -44,6 +44,8 @@ import { GastoSalaController } from './gasto-sala.controller.js';
 import { GradeSalaController } from './grade-sala.controller.js';
 import { PORTA_GRADE_SALA, PortaGradeSalaPropria } from './grade-sala-propria.js';
 import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js';
+import { KitAgendamentoController } from './kit-agendamento.controller.js';
+import { PORTA_KIT_AGENDAMENTO, PortaKitAgendamentoPropria } from './kit-agendamento-propria.js';
 
 export interface OpcoesModuloCirurgia {
   /** Testes: as portas já montadas. */
@@ -121,6 +123,7 @@ export async function moduloCirurgia(
       DescricaoCirurgicaController,
       GastoSalaController,
       GradeSalaController,
+      KitAgendamentoController,
     ],
     providers: [
       { provide: PORTA_CIRURGIA, useValue: cirurgia },
@@ -162,6 +165,14 @@ export async function moduloCirurgia(
       {
         provide: PORTA_GRADE_SALA,
         useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaGradeSalaPropria(ctx.nucleo) : null,
+      },
+      // F3.6 (05-SUP linha 13): kit padrão sugerido e aplicado no agendamento cirúrgico; sem núcleo, 503.
+      {
+        provide: PORTA_KIT_AGENDAMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaKitAgendamentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
       },
       { provide: AVISOS_BLOCO, useValue: new AvisosAtendimento(null, 'bloco') },
       // A trava da incisão lê a chave do hospital na fonte de configuração: no banco, a FONTE_CONFIGURACAO global (sem
