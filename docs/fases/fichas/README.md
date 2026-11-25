@@ -14,9 +14,9 @@ e o motivo), o E2E verde e a revisão sem achado alto aberto (ficha da fase, `do
 | [F3.5 SADT](F3.5-sadt.md) | 17 | 6 | 11 | 0 | 7 de 16 arquivos de E2E verdes (vermelhos: f35-pedido-recoleta, f35-resultado-ciclo, m26, m47-3; não rodados: f35-apoio-remessa, f35-interfaces-equipamento, f35-laudo-estruturado, f35-laudo-redacao, f35-posto-coleta) (integrador, 25/11) | Não: o alto da 2ª via foi corrigido (migração 10_SADT/40) | Não |
 | [F3.6 Suprimentos](F3.6-suprimentos.md) | 19 | 8 | 11 | 0 | Integrador 25/11: f36-item-cadastro, f36-local-escopo, f36-separacao, f36-livro-oficial e f36-kit-requisicao verdes; f36.spec.ts 1 de 2 (parâmetros da integração, linha 7, vermelho) | Sim: os dois altos da linha 7 (regra de integração ligada à prescrição; horários padrão unificados) | Não |
 | [F3.7 Faturamento](F3.7-faturamento.md) | 40 | 7 | 33 | 0 | @F3.7 e @M31 escritos, não rodados; tsc do marco limpo; 10 contratos de efeito verdes, 6 vermelhos (integrador C, 24/11) | Sim: marcas de texto no contrato da tela (FALTA 5) | Não |
-| [F3.8 Financeiro](F3.8-financeiro.md) | 19 | 10 | 9 | 0 | 10 de 13 arquivos de E2E verdes (vermelhos ou não rodados: f38-depara-contabil, f38-financeiro, f38-reinf-eventos) (integrador, 24/11, commit 87854931); tsc e vue-tsc do financeiro limpos | Não | Não |
-| [F3.9 Apoio](F3.9-apoio.md) | 67 | 39 | 28 | 0 | @M53.8 não rodado; tsc do marco limpo; 6 contratos de efeito verdes, 6 vermelhos (integrador C, 24/11) | Sim: corrigidos só na ficha (01-ADM L57/L59, 04-HOT L126 a L128, permissões por letra, gravações da qualidade) | Não |
-| **Total** | **255** | **114** | **141** | **0** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
+| [F3.8 Financeiro](F3.8-financeiro.md) | 19 | 14 | 5 | 0 | 13 de 13 arquivos de E2E verdes, 16/16 testes (integrador, 25/11, commits 08563660 e 794b92c9); tsc da API limpo | Não | Não |
+| [F3.9 Apoio](F3.9-apoio.md) | 67 | 41 | 26 | 0 | E2E dos lotes 1 e 2: f39-regras-alerta 1/1, f39-escopo-vinculo 2/2, f39-usuario-senha-inicial 2/2, administracao 9/10, f39-email-sistema 0/1 (integrador, 25/11); 6 contratos de efeito verdes, 6 vermelhos (integrador C, 24/11) | Sim: corrigidos só na ficha (01-ADM L57/L59, 04-HOT L126 a L128, permissões por letra, gravações da qualidade) | Não |
+| **Total** | **255** | **120** | **135** | **0** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
 
 ## Integração (24/11)
 
