@@ -87,6 +87,8 @@ export const mensagensAgenda = {
     'mesmo-horario': 'O destino é o mesmo horário da marcação.',
     'previa-desatualizada': 'A grade mudou desde a prévia. Gere a prévia de novo antes de gravar.',
     'geracao-revertida': 'Esta geração já foi revertida.',
+    'sem-horario':
+      'Nenhum horário novo no período: os horários da escala já existem ou caem em dia sem expediente, bloqueio ou hora já passada.',
     'nome-existente': 'Já existe agenda com este nome.',
     'confirmar-aceitar-todos':
       'Remover o último convênio faz a agenda aceitar todos. Confirme para continuar.',

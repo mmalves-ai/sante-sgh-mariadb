@@ -87,7 +87,10 @@ async function gravar(): Promise<void> {
         <label for="gerar-duracao">{{ t('agenda.gerar.duracao') }}</label>
         <input id="gerar-duracao" v-model="duracao" type="number" min="5" max="240" step="5" />
       </div>
-      <label><input v-model="feriados" type="checkbox" /> {{ t('agenda.gerar.feriados') }}</label>
+      <label
+        ><input v-model="feriados" type="checkbox" data-testid="gerar-feriados" />
+        {{ t('agenda.gerar.feriados') }}</label
+      >
       <SanteBotao tipo="submit" :rotulo="t('agenda.gerar.previa')" :desabilitado="!agenda || ocupado" />
     </form>
 
@@ -95,7 +98,7 @@ async function gravar(): Promise<void> {
       <h2 id="gerar-previa">
         {{ t('agenda.gerar.resumoPrevia', { n: previa.horarios, dias: previa.porDia.length }) }}
       </h2>
-      <p class="secundario">
+      <p class="secundario" data-testid="previa-pulados">
         {{
           t('agenda.gerar.pulados', {
             feriados: previa.pulados.feriados.length,
@@ -121,7 +124,7 @@ async function gravar(): Promise<void> {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="d in previa.porDia" :key="d.data">
+          <tr v-for="d in previa.porDia" :key="d.data" :data-testid="`previa-dia-${d.data}`">
             <td>{{ dataBr(d.data) }}</td>
             <td>{{ d.dia }}</td>
             <td>{{ d.horarios.map(horaBr).join(' · ') }}</td>
