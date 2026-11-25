@@ -34,6 +34,7 @@ import { PERMISSOES_FATURAMENTO_M30 } from './faturamento.js';
 import { PERMISSOES_FATURAMENTO_M31 } from './faturamento-tiss.js';
 import { PERMISSOES_FATURAMENTO_M51 } from './faturamento-sus.js';
 import { PERMISSOES_FINANCEIRO_M32 } from './financeiro.js';
+import { PERMISSOES_ESCRITURACAO_F38 } from './financeiro-escrituracao.js';
 import { PERMISSOES_REPASSE_M33 } from './repasse.js';
 import { PERMISSOES_MANUTENCAO_M55_F1 } from './manutencao.js';
 import {
@@ -122,6 +123,7 @@ export const CATALOGO_DECLARADO: readonly DeclaracaoPermissao[] = [
   ...PERMISSOES_FATURAMENTO_M30,
   ...PERMISSOES_FATURAMENTO_M31,
   ...PERMISSOES_FINANCEIRO_M32,
+  ...PERMISSOES_ESCRITURACAO_F38,
   ...PERMISSOES_REPASSE_M33,
   ...PERMISSOES_MANUTENCAO_M55_F1,
   ...PERMISSOES_CONTABIL_M54_F1,

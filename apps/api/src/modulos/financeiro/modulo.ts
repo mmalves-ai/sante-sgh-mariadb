@@ -20,6 +20,7 @@ import { CartaoController } from './cartao.controller.js';
 import { comCartaoNoFluxo } from './cartao-propria.js';
 import { CompensacaoPrevisaoController } from './compensacao-previsao.controller.js';
 import { ContabilFiscalController } from './contabil-fiscal.controller.js';
+import { EscrituracaoEfdController } from './escrituracao-efd.controller.js';
 import { RetencaoSofridaController } from './retencao-sofrida.controller.js';
 import { FinanceiroController } from './financeiro.controller.js';
 import { GestaoFinanceiroController } from './gestao.controller.js';
@@ -76,6 +77,7 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       PeriodoFinanceiroController,
       GestaoFinanceiroController,
       ContabilFiscalController,
+      EscrituracaoEfdController,
       RetencaoSofridaController,
       CompensacaoPrevisaoController,
       PagamentoEletronicoController,

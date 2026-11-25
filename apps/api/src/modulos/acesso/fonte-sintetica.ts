@@ -3182,7 +3182,12 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     senhaAlteradaEm: new Date(),
     concessoes: {
       grupo: 'FINGESTOR',
-      opcoesGrupo: opcoesFinanceiro('financeiro.tituloPagar.ler', 'financeiro.tituloPagar.criar'),
+      // F3.8, 07-FIN linha 108: abre a escrituração das entradas (classificar e gerar a EFD vêm do perfil).
+      opcoesGrupo: opcoesFinanceiro(
+        'financeiro.tituloPagar.ler',
+        'financeiro.tituloPagar.criar',
+        'financeiro.escrituracao.ler',
+      ),
     },
     perfisConcedidos: ['administrador-sistema'],
   },
