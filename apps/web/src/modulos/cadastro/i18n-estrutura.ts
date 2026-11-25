@@ -137,6 +137,7 @@ export const mensagensEstruturaGestao = {
     diasRetornoConsulta: 'Prazo de retorno da consulta (dias)',
     regras: 'Regras do lote e da guia',
     eletronicos: 'Serviços eletrônicos',
+    combinacaoInvalida: 'Combinação que o faturamento recusa: confira as regras ligadas a esta.',
     opcoes: {
       cnpj: 'CNPJ',
       cpf: 'CPF',

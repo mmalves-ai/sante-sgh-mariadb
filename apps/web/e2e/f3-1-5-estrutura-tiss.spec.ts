@@ -148,7 +148,7 @@ test.describe('Estrutura e configuração TISS @F3.1-5 @F3.1', () => {
       return json(rota, { id: p.caminho.endsWith('/setores') ? 42 : 22 });
     });
     await entrar(page, 'SINT.ADMIN');
-    await page.goto('/cadastros/estrutura');
+    await page.goto('/cadastros/estrutura/estabelecimento');
     await expect(page.getByRole('heading', { name: 'Estrutura do estabelecimento' })).toBeVisible();
 
     // Estabelecimento: CNPJ com dígito errado segura a gravação; o correto libera e vai com a versão.

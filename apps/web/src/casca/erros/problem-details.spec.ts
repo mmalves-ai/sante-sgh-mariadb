@@ -58,4 +58,23 @@ describe('Problem Details em português claro (regra 15)', () => {
     const semCorpo = await erroDaResposta(new Response('não é json', { status: 502 }));
     expect(semCorpo.problema).toBeNull();
   });
+
+  it('recusa de negócio mostra o motivo do servidor; 409 com código e sem alterações não é conflito de versão', () => {
+    const porTipo = mensagemDoErro(
+      new ErroApi({ type: urnProblema('recusa-de-negocio'), codigo: 'x', detail: 'Já foi unificado.' }, 409),
+    );
+    expect(porTipo.tipo).toBe('recusa-de-negocio');
+    expect(porTipo.motivo).toBe('Já foi unificado.');
+    const porCodigo = mensagemDoErro(
+      new ErroApi({ type: 'about:blank', codigo: 'favorecido-terceiro', detail: 'Confirme.' }, 409),
+    );
+    expect(porCodigo.tipo).toBe('recusa-de-negocio');
+    expect(porCodigo.motivo).toBe('Confirme.');
+    const versao = mensagemDoErro(
+      new ErroApi({ type: 'about:blank', codigo: 'x', detail: 'y', alteracoes: [] }, 409),
+    );
+    expect(versao.tipo).toBe('conflito-de-versao');
+    expect(versao.motivo).toBeNull();
+    expect(mensagemDoErro(new ErroApi(null, 409)).tipo).toBe('conflito-de-versao');
+  });
 });

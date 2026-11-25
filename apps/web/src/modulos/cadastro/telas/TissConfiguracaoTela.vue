@@ -4,7 +4,7 @@
 // véspera) e as faixas de números de guia com o consumo (usados, restantes e o aviso de faixa no fim). As regras
 // incoerentes (reapresentação sem faturamento eletrônico, lote acima de 100, contratado incompleto) aparecem na hora;
 // a API confere de novo pela regra do domínio. Encerrar a faixa pede motivo e nunca apaga.
-import { SanteBotao, SanteSelecao } from '@sgh/ui';
+import { SanteBotao, SanteChave, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -214,17 +214,25 @@ const TIPOS_GUIA = [
         />
         <fieldset class="largo">
           <legend>{{ t('estruturaGestao.tiss.regras') }}</legend>
-          <label v-for="c in SIMS" :key="c" class="marca">
-            <input v-model="cfg[c]" type="checkbox" :name="c" :aria-invalid="avisos.includes(c)" />
-            {{ t(`estruturaGestao.tiss.sims.${c}`) }}
-          </label>
+          <SanteChave
+            v-for="c in SIMS"
+            :key="c"
+            :ligada="!!cfg[c]"
+            :rotulo="t(`estruturaGestao.tiss.sims.${c}`)"
+            :descricao="avisos.includes(c) ? t('estruturaGestao.tiss.combinacaoInvalida') : ''"
+            @alternar="(v: boolean) => cfg && (cfg[c] = v)"
+          />
         </fieldset>
         <fieldset class="largo">
           <legend>{{ t('estruturaGestao.tiss.eletronicos') }}</legend>
-          <label v-for="c in ELETRONICOS" :key="c" class="marca">
-            <input v-model="cfg[c]" type="checkbox" :name="c" :aria-invalid="avisos.includes(c)" />
-            {{ t(`estruturaGestao.tiss.sims.${c}`) }}
-          </label>
+          <SanteChave
+            v-for="c in ELETRONICOS"
+            :key="c"
+            :ligada="!!cfg[c]"
+            :rotulo="t(`estruturaGestao.tiss.sims.${c}`)"
+            :descricao="avisos.includes(c) ? t('estruturaGestao.tiss.combinacaoInvalida') : ''"
+            @alternar="(v: boolean) => cfg && (cfg[c] = v)"
+          />
         </fieldset>
         <SanteBotao
           tipo="submit"

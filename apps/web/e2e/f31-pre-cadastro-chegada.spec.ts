@@ -148,13 +148,13 @@ test.describe('@F3.1 @F3.1-03 pré-cadastro e chegada', () => {
     await chegada.getByTestId('cadastrar-do-pre').click();
     await expect(page).toHaveURL(new RegExp(`/cadastros/pacientes/novo\\?preCadastro=${PRE}$`));
     await expect(page.getByTestId('ficha-do-pre-cadastro')).toBeVisible();
-    await expect(page.getByTestId('campo-nome')).toHaveValue('PRE SINTETICO CHEGADA');
+    await expect(page.getByTestId('campo-nome').locator('input')).toHaveValue('PRE SINTETICO CHEGADA');
     await expect(page.getByTestId('campo-celular')).toHaveValue(/99999.?0155/);
     await semViolacaoAxe(page, 'ficha nova do pré-cadastro');
 
     // A recepção completa só o que faltava e grava: o paciente é criado e o pré-cadastro ligado a ele na mesma ação.
     await escolher(page.getByTestId('campo-sexo'), 'F');
-    await page.getByTestId('campo-naturalidade').fill('BELO HORIZONTE');
+    await page.getByTestId('campo-naturalidade').locator('input').fill('BELO HORIZONTE');
     await page.getByTestId('campo-cep').fill('30130-000');
     await page.getByTestId('campo-cep').blur();
     await page.getByTestId('botao-salvar-paciente').click();

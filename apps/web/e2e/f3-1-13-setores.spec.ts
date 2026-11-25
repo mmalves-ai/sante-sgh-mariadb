@@ -193,7 +193,7 @@ test.describe('Setores, ramais e centro de custo @F3.1-13 @F3.1', () => {
       return json(rota, { id: 41 });
     });
     await entrar(page, 'SINT.ADMIN');
-    await page.goto('/cadastros/estrutura');
+    await page.goto('/cadastros/estrutura/estabelecimento');
     await expect(page.getByRole('heading', { name: 'Estrutura do estabelecimento' })).toBeVisible();
     await page.getByTestId('aba-setores').click();
 
@@ -336,7 +336,7 @@ test.describe('Setores, ramais e centro de custo @F3.1-13 @F3.1', () => {
       return resposta ? rota.fulfill(resposta) : json(rota, { id: 41 });
     });
     await entrar(page, 'SINT.ADMIN');
-    await page.goto('/cadastros/estrutura');
+    await page.goto('/cadastros/estrutura/estabelecimento');
     await page.getByTestId('aba-setores').click();
     await page.getByTestId('setor-S1').getByRole('button').click();
     const motivos = page.getByTestId('recusa-motivo').locator('li');

@@ -170,7 +170,9 @@ export const rotasCadastro: RouteRecordRaw[] = [
   },
   {
     // F3.1 (02-CAD linhas 26 e 27): estabelecimento, unidades e setores com ramais (manter, inativar sem apagar).
-    path: '/cadastros/estrutura',
+    // O caminho /cadastros/estrutura é da tela de rede, empresa e unidades (administração); dois registros no mesmo
+    // caminho fazem o roteador abrir só o primeiro.
+    path: '/cadastros/estrutura/estabelecimento',
     name: 'cadastro.estruturaGestao',
     component: () => import('./telas/EstruturaGestaoTela.vue'),
     meta: {

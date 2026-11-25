@@ -165,7 +165,7 @@ test.describe('Logotipos e mantenedora do estabelecimento @F3.1-12 @F3.1', () =>
   }) => {
     const pedidos = await simular(page);
     await entrar(page, 'SINT.ADMIN');
-    await page.goto('/cadastros/estrutura');
+    await page.goto('/cadastros/estrutura/estabelecimento');
     await page.getByTestId('aba-logotipos').click();
     await expect(page.getByRole('heading', { name: 'Logotipos por finalidade de uso' })).toBeVisible();
 
@@ -234,7 +234,7 @@ test.describe('Logotipos e mantenedora do estabelecimento @F3.1-12 @F3.1', () =>
   }) => {
     const pedidos = await simular(page);
     await entrar(page, 'SINT.ADMIN');
-    await page.goto('/cadastros/estrutura');
+    await page.goto('/cadastros/estrutura/estabelecimento');
     await page.getByTestId('aba-mantenedora').click();
     await expect(page.getByRole('heading', { name: 'Mantenedora do estabelecimento' })).toBeVisible();
     await expect(page.getByTestId('sem-mantenedora')).toBeVisible();
