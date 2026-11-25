@@ -1,0 +1,7 @@
+codigo;codigo_dcb;unidade;via;periodo;por_peso;idade_minima_dias;idade_maxima_dias;peso_minimo_kg;peso_maximo_kg;dias_tratamento;dose_minima_alerta;dose_maxima_alerta;dose_maxima_impeditiva;dose_minima_impeditiva;mensagem_maxima;mensagem_minima;referencia
+SINT-D1;SINT001;SINT-MG;SINT-VO;dose;nao;6570;;;;;;1000;2000;;Dose acima da usual do adulto (fictícia);;Base sintética
+SINT-D2;SINT001;SINT-MG;;dia;sim;30;4380;;;;;60;90;;Dose diária pediátrica por quilo (fictícia);;Base sintética
+SINT-D3;SINT002;SINT-MG;SINT-EV;tratamento;nao;;;;;7;;;5000;;;;
+SINT-D4;SINT002;SINT-MG;;dose;nao;;;;;;;300;200;;faixa invertida;;
+SINT-D5;SINT002;SINT-MG;;semana;nao;;;;;;;300;;;;;
+SINT-D6;SINT009;SINT-MG;;dose;nao;;;;;;;100;;;;;

@@ -3,7 +3,8 @@
 uso: python3 -I catalogos/licenciados/carregar.py <fonte> <edicao> <arquivo> --vigencia AAAA-MM-DD
                                                   [--espelho BANCO] [--publicacao AAAA-MM-DD] [--completa]
                                                   [--valor-uco N] [--valor-filme N]
-     fontes: brasindice, simpro (preço de mat/med por edição), cbhpm (honorários), cep (base de endereçamento)
+     fontes: brasindice, simpro (preço de mat/med por edição), cbhpm (honorários), cep (base de endereçamento),
+             base_dose, base_interacao (apoio à decisão na prescrição: dose e interação por princípio ativo)
 
 Grava SÓ no espelho (recusa banco que não seja espelho); o cliente recebe pelo "criar cliente" ou por
 "tools/db/espelho.py atualizar". O formato de cada fonte está em catalogos/licenciados/FORMATO.md (CSV ';', UTF-8,
@@ -21,6 +22,7 @@ import sys
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from types import SimpleNamespace
 
 RAIZ = Path(__file__).resolve().parents[2]
 LOTE = 1000
@@ -352,6 +354,21 @@ ON DUPLICATE KEY UPDATE logradouro_cep.tipo_cep = VALUES(tipo_cep), logradouro_c
 GERAR = {"matmed": sql_matmed, "cbhpm": sql_cbhpm, "cep": sql_cep}
 
 
+def _dose_interacao():
+    """Base de doses e interações (03-PEP L108): formato e SQL em dose_interacao.py, ligados às tabelas daqui."""
+    spec = importlib.util.spec_from_file_location("dose_interacao", Path(__file__).resolve().parent / "dose_interacao.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    aqui = SimpleNamespace(**globals())
+    LAYOUTS.update(mod.LAYOUTS)
+    FONTES.update(mod.FONTES)
+    NORMALIZAR.update(mod.normalizadores(aqui))
+    GERAR.update(mod.geradores(aqui))
+
+
+_dose_interacao()
+
+
 def _espelho():
     spec = importlib.util.spec_from_file_location("espelho_mod", RAIZ / "tools/db/espelho.py")
     mod = importlib.util.module_from_spec(spec)
@@ -384,6 +401,8 @@ def carregar(fonte, edicao, arquivo: Path, vigencia, espelho=None, publicacao=No
     lista_avisos = [f"{k} ({n})" if n > 1 else k for k, n in sorted(avisos.items())]
     if gravadas.get("sem_municipio_ou_uf"):
         lista_avisos.append(f"{gravadas['sem_municipio_ou_uf']} CEP sem município ou UF no espelho (carregue ibge antes)")
+    if gravadas.get("sem_principio_ativo"):
+        lista_avisos.append(f"{gravadas['sem_principio_ativo']} linha(s) sem princípio ativo, unidade ou via no espelho")
     reg = esp.registrar_carga(banco, fonte, "licenciado", edicao, gravadas, lista_avisos, arquivo.name, sha, vigencia)
     return {"fonte": fonte, "edicao": edicao, "espelho": banco, "linhas_arquivo": total, "validas": len(linhas),
             "recusadas": total - len(linhas), "gravadas": gravadas, "avisos": lista_avisos[:20], **reg}

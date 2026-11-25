@@ -53,6 +53,35 @@ class TestFormato(unittest.TestCase):
         with self.assertRaises(SystemExit):
             mod.ler(arq, "matmed")
 
+    def test_base_dose(self):
+        linhas, avisos, total = mod.ler(AQUI / "sintetico/base_dose_ed1.csv", "dose")
+        self.assertEqual((total, len(linhas)), (6, 4))
+        self.assertEqual(sorted(avisos), ["linha 5: faixa_de_dose_invertida", "linha 6: periodo_fora_do_dominio"])
+        d1, d2, d3 = linhas[0], linhas[1], linhas[2]
+        self.assertEqual((d1["por_peso"], d1["idade_minima_dias"], d1["dose_maxima_alerta"]), (0, 6570, mod.Decimal("1000")))
+        self.assertEqual((d2["por_peso"], d2["periodo"], d2["via"]), (1, "dia", None))
+        self.assertEqual((d3["periodo"], d3["dias_tratamento"]), ("tratamento", 7))
+        script, contagem = mod.GERAR["dose"]("base_dose", "Base de doses", "ED1", "2026-01-01", None, linhas, True)
+        sql = str(script)
+        self.assertIn("ON DUPLICATE KEY UPDATE", sql)
+        self.assertIn("WHERE codigo_base IS NOT NULL AND ativo AND edicao_base <> 'ED1'", sql)
+        self.assertIn("sem_principio_ativo", contagem)
+        with self.assertRaises(mod.LinhaInvalida):
+            mod.NORMALIZAR["dose"]({"codigo": "X", "codigo_dcb": "Y", "unidade": "Z", "periodo": "tratamento",
+                                    "dose_maxima_alerta": "1"})
+
+    def test_base_interacao(self):
+        linhas, avisos, total = mod.ler(AQUI / "sintetico/base_interacao_ed1.csv", "interacao")
+        self.assertEqual((total, len(linhas)), (4, 2))
+        self.assertEqual(sorted(avisos), ["linha 4: par_com_o_mesmo_principio", "linha 5: gravidade_fora_do_dominio"])
+        self.assertEqual(linhas[0]["_chave"], ("SINT001", "SINT002"))
+        script, _ = mod.GERAR["interacao"]("base_interacao", "Base de interações", "ED1", "2026-01-01", None, linhas, False)
+        sql = str(script)
+        self.assertIn("LEAST(a.id, b.id), GREATEST(a.id, b.id)", sql)
+        self.assertIn("edicao_base = IF(interacao_medicamentosa.edicao_base IS NULL, NULL", sql)
+        self.assertNotIn("SET ativo = FALSE", sql)
+        self.assertEqual(set(mod.FONTES) >= {"base_dose", "base_interacao"}, True)
+
     def test_decimal(self):
         self.assertEqual(mod.dec("1.234,50", "v"), mod.Decimal("1234.50"))
         with self.assertRaises(mod.LinhaInvalida):

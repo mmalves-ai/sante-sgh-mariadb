@@ -84,3 +84,43 @@ Destino: `logradouro_cep` e `bairro`. Exige os catálogos oficiais de município
 
 Arquivos de exemplo, 100% fictícios, em `catalogos/licenciados/sintetico/` (usados pelo teste
 `catalogos/licenciados/test_licenciados.py`).
+
+## base_dose (limites de dose por princípio ativo, 03-PEP L108)
+
+Destino: `limite_dose_principio`, com `codigo_base` (o código da linha na base) e `edicao_base` (a edição que a trouxe).
+O limite próprio do hospital (edição nula) nunca é tocado. Formato e SQL em `catalogos/licenciados/dose_interacao.py`.
+O princípio ativo é ligado pelo código da Denominação Comum Brasileira (`principio_ativo.codigo_dcb`), a unidade e a
+via pelo código do catálogo; a linha sem cadastro no espelho não entra e é contada em `sem_principio_ativo`.
+
+| coluna | obrigatória | conteúdo |
+|---|---|---|
+| codigo | sim | código do limite na base (até 30), chave da atualização por edição |
+| codigo_dcb | sim | código do princípio ativo na lista oficial (até 10) |
+| unidade | sim | código da unidade de prescrição (até 30) |
+| via | não | código da via de uso (vazio: qualquer via) |
+| periodo | não | dose (padrão), dia ou tratamento (tratamento exige `dias_tratamento`) |
+| por_peso | não | sim ou nao (padrão): limite por quilo de peso |
+| idade_minima_dias, idade_maxima_dias, dias_tratamento | não | inteiros >= 0 (mínima <= máxima) |
+| peso_minimo_kg, peso_maximo_kg | não | decimal >= 0 e < 10000 (mínimo <= máximo) |
+| dose_minima_impeditiva, dose_minima_alerta, dose_maxima_alerta, dose_maxima_impeditiva | ao menos uma | decimal >= 0, em ordem crescente |
+| mensagem_minima, mensagem_maxima | não | até 200 |
+| referencia | não | referência bibliográfica (até 300) |
+
+`--completa`: limite da base ausente da edição fica inativo (nunca apagado).
+
+## base_interacao (interações entre princípios ativos, 03-PEP L108)
+
+Destino: `interacao_medicamentosa` (o par fica na ordem do id, um por par), com `edicao_base`. A gravidade segue o
+domínio fixo `leve`, `moderada`, `grave` e `contraindicada` (níveis 1 a 4, semeados no espelho se faltarem). O par já
+cadastrado pelo hospital (edição nula) é mantido como está.
+
+| coluna | obrigatória | conteúdo |
+|---|---|---|
+| codigo_dcb, interagente_codigo_dcb | sim | os dois princípios ativos (diferentes); o par repetido em qualquer ordem é recusado |
+| gravidade | sim | leve, moderada, grave, contraindicada |
+| efeito | sim | até 4000 |
+| mecanismo, conduta | não | até 4000 |
+| referencia | não | até 500 |
+
+`--completa`: interação da base ausente da edição fica inativa. Prova: `test_licenciados.py` (formato) e
+`test_dose_interacao_banco.py` (o que fica no banco, numa transação desfeita).

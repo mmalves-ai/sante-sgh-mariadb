@@ -1,0 +1,5 @@
+codigo_dcb;interagente_codigo_dcb;gravidade;efeito;mecanismo;conduta;referencia
+SINT002;SINT001;grave;Aumento do risco de sangramento (fictício);Soma de efeitos (fictício);Monitorar e ajustar a dose;Base sintética
+SINT001;SINT003;moderada;Redução do efeito (fictício);;Espaçar as tomadas;
+SINT001;SINT001;leve;Par com o próprio princípio;;;
+SINT003;SINT004;fatal;Gravidade fora do domínio;;;
