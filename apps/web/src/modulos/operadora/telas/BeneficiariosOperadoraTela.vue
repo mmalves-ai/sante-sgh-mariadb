@@ -8,6 +8,7 @@ import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { mensagensProgramasSaude } from '../i18n-programas-saude.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import GrupoDominiosTela from '../../config/telas/GrupoDominiosTela.vue';
 import { lerTelaBeneficiarios } from '../api-operadora.js';
@@ -152,6 +153,11 @@ watch(
       <ElegibilidadeOperadora v-else />
     </template>
 
+    <p v-if="pode('operadora.promocao.ler')">
+      <RouterLink to="/operadora/programas-saude" data-testid="link-programas-saude">{{
+        mensagensProgramasSaude.titulo
+      }}</RouterLink>
+    </p>
     <GrupoDominiosTela subitem="operadoraBeneficiarios" embutida />
     <p>
       <RouterLink :to="`/consultas/item/${ITEM}`" data-testid="operadora-outras-tabelas">{{

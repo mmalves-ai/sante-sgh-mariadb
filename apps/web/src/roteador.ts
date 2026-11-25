@@ -49,6 +49,7 @@ import { rotasFinanceiro } from './modulos/financeiro/rotas.js';
 import { rotasRepasse } from './modulos/repasse/rotas.js';
 import { rotasAssinatura } from './modulos/assinatura/rotas.js';
 import { rotasOperadora } from './modulos/operadora/rotas.js';
+import { rotasProgramaSaude } from './modulos/operadora/rotas-programa-saude.js';
 import { rotasPessoas } from './modulos/pessoas/rotas.js';
 import { rotasSesmt } from './modulos/pessoas/sesmt/rotas.js';
 import { rotasF6 } from './modulos/pessoas/f6/rotas.js';
@@ -177,6 +178,8 @@ export function rotas(desenvolvimento: boolean): RouteRecordRaw[] {
     ...rotasAssinatura,
     // M56 (etapa F0): operadora própria (Envios à ANS com os catálogos da ANS).
     ...rotasOperadora,
+    // C2-102 (08-SGO L115): promoção da saúde e gestão de crônicos da operadora.
+    ...rotasProgramaSaude,
     // M52.1: colaboradores e admissão (gestão de pessoas, fatia F1).
     ...rotasPessoas,
     // M52.5: SESMT (ASO, CAT, riscos e EPI, vacinação do colaborador).
