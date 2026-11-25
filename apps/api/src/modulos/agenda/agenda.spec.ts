@@ -478,6 +478,27 @@ describe('prioridade legal na marcação (porta em memória)', () => {
     expect(de(m3)).toMatchObject({ prioridadeLegal: null, pesoPrioridadeLegal: null });
   });
 
+  it('02-AGE 49 remarcação mantém o grupo escolhido na marcação', async () => {
+    const p = novaP();
+    const m = await p.executar(ctxP('r1'), 'agenda.agendarConsulta', {
+      ...baseP,
+      hora: '08:30',
+      prioridadeLegal: 3,
+    });
+    const r = await p.executar(ctxP('r2'), 'agenda.remarcarConsulta', {
+      marcacao: (m.resultado as { marcacao: number }).marcacao,
+      destino: { agenda: 901, data: AMANHA, hora: '08:45' },
+      modo: 'liberar',
+      canal: 'telefone',
+    });
+    const nova = (r.resultado as { marcacao: number }).marcacao;
+    const dia = (await p.marcacoesDoDia(ctxP('x'), AMANHA)).itens;
+    expect(dia.find((x) => x.id === nova)).toMatchObject({
+      prioridadeLegal: 'Gestante',
+      pesoPrioridadeLegal: 2,
+    });
+  });
+
   it('grupo inexistente é recusado e nada é gravado', async () => {
     const p = novaP();
     await expect(

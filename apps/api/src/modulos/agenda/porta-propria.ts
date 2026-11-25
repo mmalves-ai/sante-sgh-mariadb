@@ -1645,6 +1645,7 @@ export class PortaAgendaPropria implements PortaAgenda {
             retorno: bool(m['retorno']),
             canal: e.canal,
             observacao: e.observacao ?? txt(m['observacao']),
+            prioridadeAnterior: numOuNull(m['grupo_prioridade_legal_id']),
             encaixe: null,
             remarcadaDe: num(m['id']),
           });
@@ -2195,7 +2196,7 @@ export class PortaAgendaPropria implements PortaAgenda {
   private async travarMarcacao(tx: TxOperacao, ctx: ContextoOperacao, id: number): Promise<Linha> {
     const [m] = await tx.consultarParaAtualizar(
       `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.pre_cadastro_id, m.encaixe, m.retorno, m.observacao, m.chegada_em,
-         m.atendido_em, m.canal_marcacao_id, s.significado, fp.codigo AS convenio, h.inicio_em,
+         m.atendido_em, m.canal_marcacao_id, m.grupo_prioridade_legal_id, s.significado, fp.codigo AS convenio, h.inicio_em,
          h.agenda_servico_id AS agenda_nominal
        FROM marcacao_horario m JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
        JOIN fonte_pagadora fp ON fp.id = m.fonte_pagadora_id JOIN horario_agenda h ON h.id = m.horario_agenda_id
@@ -2361,6 +2362,8 @@ export class PortaAgendaPropria implements PortaAgenda {
       observacao: string | null;
       /** 02-AGE 49: grupo de prioridade legal informado na marcação (a regra do domínio pode subir pela idade ou pelo cadastro). */
       prioridadeLegal?: number | null;
+      /** 02-AGE 49: grupo gravado na marcação remarcada; segue para a nova (desativado deixa de valer, sem recusa). */
+      prioridadeAnterior?: number | null;
       /** Motivo do encaixe; null = vaga da grade. */
       encaixe: string | null;
       remarcadaDe: number | null;
@@ -2571,6 +2574,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       })),
       {
         informada: p.prioridadeLegal ?? null,
+        anterior: p.prioridadeAnterior ?? null,
         doPaciente: doPaciente.map((x) => ({
           grupo: num(x['grupo_prioridade_legal_id']),
           vigenciaInicio: dataIso(x['vigencia_inicio']) ?? '',

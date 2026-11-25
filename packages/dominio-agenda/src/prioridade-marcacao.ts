@@ -8,7 +8,9 @@
 //     grupo por idade (o de maior idade mínima que a idade alcança);
 //   - vence o de menor peso (menor chama antes); no empate, o informado, depois o do cadastro, depois o da idade;
 //   - o informado inexistente ou inativo é recusado (nada é gravado com grupo inválido);
-//   - a recepção não tira a prioridade que a lei dá pela idade ou pelo cadastro: informar "sem grupo" não apaga.
+//   - a recepção não tira a prioridade que a lei dá pela idade ou pelo cadastro: informar "sem grupo" não apaga;
+//   - na remarcação, o grupo da marcação anterior segue para a nova (`anterior`, com o peso do informado); se o grupo
+//     foi desativado desde então, ele só deixa de valer, sem recusar a remarcação.
 import { idadeNaData } from './prioridade-idade.js';
 
 export interface GrupoPrioridadeCadastro {
@@ -39,6 +41,8 @@ export function prioridadeNaMarcacao(
   grupos: readonly GrupoPrioridadeCadastro[],
   e: {
     readonly informada?: number | null;
+    /** Grupo gravado na marcação que está sendo remarcada. */
+    readonly anterior?: number | null;
     readonly doPaciente?: readonly PrioridadeDoPaciente[];
     readonly nascimento?: string | null;
     /** Data da marcação (AAAA-MM-DD): a vigência e a idade contam nela. */
@@ -56,6 +60,10 @@ export function prioridadeNaMarcacao(
         motivo: 'O grupo de prioridade legal informado não existe ou está inativo.',
       };
     cand.push({ g, origem: 'informada' });
+  }
+  if (e.anterior != null) {
+    const g = ativos.find((x) => x.id === e.anterior);
+    if (g) cand.push({ g, origem: 'informada' });
   }
   for (const p of e.doPaciente ?? []) {
     if (p.vigenciaInicio > e.data || (p.vigenciaFim !== null && p.vigenciaFim < e.data)) continue;

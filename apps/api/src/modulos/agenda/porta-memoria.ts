@@ -899,6 +899,12 @@ export class PortaAgendaMemoria implements PortaAgenda {
           { convenio, retorno: m.retorno === 'S', canal: e['canal'], observacao: e['observacao'] ?? m.obs },
           login,
         );
+        // 02-AGE 49: o grupo da marcação remarcada segue para a nova pela mesma regra do domínio da porta própria.
+        const prio = prioridadeNaMarcacao(GRUPOS_PRIORIDADE_SINTETICOS, {
+          anterior: m.prioridadeLegal ?? null,
+          data: d.data,
+        });
+        nova.prioridadeLegal = prio.ok ? prio.grupo : null;
         s.ext.set(nova.id, {
           marcacao: nova.id,
           canal: e['canal'],

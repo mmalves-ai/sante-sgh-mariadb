@@ -67,6 +67,24 @@ describe('prioridadeNaMarcacao', () => {
     });
     expect(prioridadeNaMarcacao(G, { data: DATA, informada: 99 })).toMatchObject({ ok: false });
   });
+
+  it('remarcação: o grupo anterior segue; desativado deixa de valer sem recusar; a idade mais forte ainda vence', () => {
+    expect(prioridadeNaMarcacao(G, { data: DATA, anterior: 13 })).toEqual({
+      ok: true,
+      grupo: 13,
+      origem: 'informada',
+    });
+    expect(prioridadeNaMarcacao(G, { data: DATA, anterior: 14 })).toEqual({
+      ok: true,
+      grupo: null,
+      origem: null,
+    });
+    expect(prioridadeNaMarcacao(G, { data: DATA, anterior: 99 })).toMatchObject({ ok: true, grupo: null });
+    expect(prioridadeNaMarcacao(G, { data: DATA, anterior: 13, nascimento: '1940-01-01' })).toMatchObject({
+      grupo: 10,
+      origem: 'idade',
+    });
+  });
 });
 
 describe('ordenarEncaixes', () => {

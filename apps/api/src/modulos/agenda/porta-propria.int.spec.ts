@@ -563,6 +563,54 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
     });
   });
 
+  it('02-AGE 49 remarcação mantém o grupo escolhido na marcação (fora do cadastro e da idade)', async () => {
+    const grupo = Number(
+      (await linha('SELECT id FROM grupo_prioridade_legal WHERE codigo = ?', ['l0104-gestante']))?.['id'],
+    );
+    expect(grupo).toBeGreaterThan(0);
+    // O paciente A não tem o grupo no cadastro: só a escolha da recepção o dá.
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM paciente_prioridade_legal WHERE paciente_id = ? AND grupo_prioridade_legal_id = ?',
+        [ids.pacienteA, grupo],
+      ),
+    ).toBe(0);
+    const m = await porta.executar(ctx(), 'agenda.agendarConsulta', {
+      agenda: ids.agenda,
+      data: DIA,
+      hora: '08:45',
+      paciente: ids.pacienteA,
+      convenio: 9141,
+      retorno: false,
+      canal: 'telefone',
+      prioridadeLegal: grupo,
+    });
+    const id = Number(m.resultado['marcacao']);
+    const r = await porta.executar(ctx(), 'agenda.remarcarConsulta', {
+      marcacao: id,
+      destino: { agenda: ids.agenda, data: DIA, hora: '09:45' },
+      modo: 'liberar',
+      canal: 'telefone',
+    });
+    const nova = Number(r.resultado['marcacao']);
+    expect(
+      await linha(
+        'SELECT grupo_prioridade_legal_id, remarcada_marcacao_horario_id FROM marcacao_horario WHERE id = ?',
+        [nova],
+      ),
+    ).toMatchObject({ grupo_prioridade_legal_id: grupo, remarcada_marcacao_horario_id: id });
+    // A marcação de origem continua no banco com o seu grupo (histórico nunca apagado).
+    expect(
+      await linha('SELECT grupo_prioridade_legal_id FROM marcacao_horario WHERE id = ?', [id]),
+    ).toMatchObject({ grupo_prioridade_legal_id: grupo });
+    expect((await porta.marcacao(ctx(), nova))?.marcacao.prioridadeLegal).toBe('Gestante (sintético L0104)');
+    await porta.executar(ctx(), 'agenda.cancelarConsulta', {
+      marcacao: nova,
+      motivo: 'PAC-DESISTIU',
+      solicitante: 'paciente',
+    });
+  });
+
   it('02-AGE 42: marca sem prontuário, grava o pré-cadastro na mesma transação, reaproveita o da mesma pessoa e remarca mantendo o vínculo', async () => {
     const pessoa = {
       nome: 'pessoa  sintética l0104 sem pront',
