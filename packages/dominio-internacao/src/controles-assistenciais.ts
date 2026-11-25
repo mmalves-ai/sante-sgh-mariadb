@@ -402,6 +402,30 @@ export function decidirEventoRegulacao(
   }
 }
 
+/**
+ * Envio manual à central: as centrais públicas operam pelo próprio portal, e o hospital registra no contato com a
+ * central a data e a hora em que enviou o pedido por lá (o padrão enquanto não houver interface confirmada).
+ *   - só o contato com a central leva a data do envio;
+ *   - o envio não fica no futuro (tolerância de 5 minutos de relógio) nem antes da solicitação.
+ */
+export function conferirEnvioManual(
+  tipo: TipoEventoRegulacao,
+  enviadoEm: Date | null,
+  solicitadoEm: Date | null,
+  agora: Date,
+): { ok: true } | Recusa {
+  if (!enviadoEm) return { ok: true };
+  if (Number.isNaN(enviadoEm.getTime()))
+    return recusa('envio-invalido', 'Informe uma data e hora válidas do envio.');
+  if (tipo !== 'contato_central')
+    return recusa('envio-so-no-contato', 'A data do envio à central vai no contato com a central.');
+  if (enviadoEm.getTime() > agora.getTime() + 5 * 60_000)
+    return recusa('envio-no-futuro', 'O envio à central não pode ficar no futuro.');
+  if (solicitadoEm && enviadoEm.getTime() < solicitadoEm.getTime() - 60_000)
+    return recusa('envio-antes-da-solicitacao', 'O envio à central não pode ser anterior à solicitação.');
+  return { ok: true };
+}
+
 /** Situação que encerra a solicitação (marca o fim) ou a regula (marca a decisão da central). */
 export function marcasDaSituacao(nova: SituacaoRegulacao): { regulado: boolean; encerrado: boolean } {
   return {

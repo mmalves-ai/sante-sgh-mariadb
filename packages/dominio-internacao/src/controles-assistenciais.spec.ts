@@ -5,6 +5,7 @@ import {
   conferirQuadroClinico,
   type CriterioAuditoria,
   decidirAcaoFormularioObito,
+  conferirEnvioManual,
   decidirEventoRegulacao,
   gravidadeSugerida,
   marcasDaSituacao,
@@ -256,5 +257,29 @@ describe('regulação: quadro clínico e evolução (04-INT linha 78)', () => {
     });
     expect(marcasDaSituacao('negada')).toEqual({ regulado: true, encerrado: true });
     expect(marcasDaSituacao('em_analise')).toEqual({ regulado: false, encerrado: false });
+  });
+
+  it('envio manual à central: só no contato, nem no futuro nem antes da solicitação', () => {
+    const agora = new Date('2026-11-25T10:00:00Z');
+    const pedido = new Date('2026-11-25T08:00:00Z');
+    expect(conferirEnvioManual('contato_central', null, pedido, agora)).toEqual({ ok: true });
+    expect(conferirEnvioManual('contato_central', new Date('2026-11-25T09:30:00Z'), pedido, agora)).toEqual({
+      ok: true,
+    });
+    expect(conferirEnvioManual('contato_central', new Date('2026-11-25T10:03:00Z'), pedido, agora)).toEqual({
+      ok: true,
+    });
+    expect(
+      conferirEnvioManual('contato_central', new Date('2026-11-25T11:00:00Z'), pedido, agora),
+    ).toMatchObject({ codigo: 'envio-no-futuro' });
+    expect(
+      conferirEnvioManual('contato_central', new Date('2026-11-25T07:00:00Z'), pedido, agora),
+    ).toMatchObject({ codigo: 'envio-antes-da-solicitacao' });
+    expect(conferirEnvioManual('resposta', new Date('2026-11-25T09:30:00Z'), pedido, agora)).toMatchObject({
+      codigo: 'envio-so-no-contato',
+    });
+    expect(conferirEnvioManual('contato_central', new Date('x'), pedido, agora)).toMatchObject({
+      codigo: 'envio-invalido',
+    });
   });
 });

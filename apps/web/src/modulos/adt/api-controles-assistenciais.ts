@@ -222,7 +222,13 @@ export const registrarQuadroRegulacao = (id: number, corpo: Record<string, unkno
   );
 export const registrarEventoRegulacao = (
   id: number,
-  corpo: { tipo: string; situacaoNova: string | null; observacao: string | null; versao: number },
+  corpo: {
+    tipo: string;
+    situacaoNova: string | null;
+    observacao: string | null;
+    enviadoEm?: string | null;
+    versao: number;
+  },
 ) =>
   enviar(
     `${C}/regulacao/${id}/eventos`,

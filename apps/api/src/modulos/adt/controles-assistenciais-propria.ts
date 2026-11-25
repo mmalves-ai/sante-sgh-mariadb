@@ -22,6 +22,7 @@ import {
   conferirQuadroClinico,
   type CriterioAuditoria,
   decidirAcaoFormularioObito,
+  conferirEnvioManual,
   decidirEventoRegulacao,
   marcasDaSituacao,
   numerosDoLote,
@@ -163,6 +164,8 @@ const esquemaEvento = z
       .nullable()
       .default(null),
     observacao: z.string().trim().max(2000).nullable().default(null),
+    /** Envio manual pelo portal da central (data e hora informadas no contato com a central). */
+    enviadoEm: z.string().trim().datetime({ offset: true }).nullable().default(null),
     versao,
   })
   .strict();
@@ -1006,7 +1009,8 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
         })),
         envio: {
           automatico: false,
-          motivo: 'O envio à central é manual até a central confirmar a interface.',
+          motivo:
+            'O envio à central é manual, pelo portal da central: registre no contato com a central a data e a hora do envio.',
         },
       };
     });
@@ -1015,7 +1019,7 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
   private async solicitacaoAberta(tx: TxOperacao, solicitacao: number, estId: number) {
     const s = await travada(
       tx,
-      `SELECT id, situacao, versao, central_reguladora_id FROM solicitacao_regulacao
+      `SELECT id, situacao, versao, central_reguladora_id, solicitado_em FROM solicitacao_regulacao
         WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
       [solicitacao, estId],
     );
@@ -1147,6 +1151,10 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
         if (!d.ok) recusou('Evento recusado', d);
         const nova = (d as { situacaoNova: SituacaoRegulacao | null }).situacaoNova;
         const agora = new Date();
+        const enviadoEm = e.enviadoEm ? new Date(e.enviadoEm) : null;
+        const solicitadoEm = s['solicitado_em'] ? new Date(s['solicitado_em'] as string) : null;
+        const envio = conferirEnvioManual(e.tipo, enviadoEm, solicitadoEm, agora);
+        if (!envio.ok) recusou('Envio recusado', envio);
         const evento = await tx.incluir('evento_regulacao', {
           solicitacao_regulacao_id: solicitacao,
           central_reguladora_id: numOuNull(s['central_reguladora_id']),
@@ -1154,8 +1162,9 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
           situacao_anterior: atual,
           situacao_nova: nova ?? atual,
           observacao: e.observacao,
+          enviado_em: enviadoEm,
           operacao: nova ? 'alteracao' : 'inclusao',
-          dados: JSON.stringify({ tipo: e.tipo, de: atual, para: nova ?? atual }),
+          dados: JSON.stringify({ tipo: e.tipo, de: atual, para: nova ?? atual, enviadoEm: e.enviadoEm }),
           ocorrido_em: agora,
           usuario_id: usuario,
         });

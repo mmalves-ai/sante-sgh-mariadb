@@ -7,6 +7,7 @@
 // deixam o histórico).
 import {
   avaliarAuditoriaIsolamento,
+  conferirEnvioManual,
   conferirQuadroClinico,
   decidirAcaoFormularioObito,
   decidirEventoRegulacao,
@@ -348,7 +349,17 @@ const ev = reactive({
   tipo: 'contato_central' as TipoEventoRegulacao,
   situacaoNova: null as SituacaoRegulacao | null,
   observacao: '',
+  /** Data e hora do envio manual pelo portal da central (datetime-local, hora do navegador). */
+  enviadoEm: '',
 });
+const agoraLocal = () => {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
+const enviadoEmIso = computed(() =>
+  ev.tipo === 'contato_central' && ev.enviadoEm ? new Date(ev.enviadoEm).toISOString() : null,
+);
 const opTipos = computed(() =>
   (['resposta', 'mudanca_situacao', 'contato_central', 'cancelamento'] as const).map((x) => ({
     valor: x,
@@ -365,11 +376,18 @@ const opSituacoesReg = computed(() => [
 const conferenciaEvento = computed(() => {
   const s = linhaTempo.data.value?.solicitacao;
   if (!s) return null;
-  return decidirEventoRegulacao(
+  const d = decidirEventoRegulacao(
     s.situacao as SituacaoRegulacao,
     ev.tipo,
     ev.situacaoNova,
     ev.observacao.trim() || null,
+  );
+  if (!d.ok) return d;
+  return conferirEnvioManual(
+    ev.tipo,
+    enviadoEmIso.value ? new Date(enviadoEmIso.value) : null,
+    s.solicitadoEm ? new Date(s.solicitadoEm) : null,
+    new Date(),
   );
 });
 const gravarEvento = () =>
@@ -378,10 +396,12 @@ const gravarEvento = () =>
       tipo: ev.tipo,
       situacaoNova: ev.situacaoNova,
       observacao: ev.observacao.trim() || null,
+      enviadoEm: enviadoEmIso.value,
       versao: linhaTempo.data.value!.solicitacao.versao,
     });
     ev.observacao = '';
     ev.situacaoNova = null;
+    ev.enviadoEm = '';
     return t(`${K}.regulacao.eventoGravado`, { s: r.situacao });
   });
 </script>
@@ -677,6 +697,9 @@ const gravarEvento = () =>
           }}
           · {{ t(`${K}.regulacao.envioManual`) }}
         </p>
+        <p v-if="!linhaTempo.data.value.envio.automatico" data-testid="reg-envio-manual">
+          {{ t(`${K}.regulacao.envioManualAjuda`) }}
+        </p>
 
         <form data-testid="reg-quadro-form" @submit.prevent="gravarQuadro">
           <h2>{{ t(`${K}.regulacao.quadro`) }}</h2>
@@ -765,16 +788,38 @@ const gravarEvento = () =>
 
         <form class="filtros" data-testid="reg-evento-form" @submit.prevent="gravarEvento">
           <h2>{{ t(`${K}.regulacao.evento`) }}</h2>
-          <SanteSelecao v-model="ev.tipo" :rotulo="t(`${K}.regulacao.tipoEvento`)" :opcoes="opTipos" />
+          <SanteSelecao
+            v-model="ev.tipo"
+            :rotulo="t(`${K}.regulacao.tipoEvento`)"
+            :opcoes="opTipos"
+            data-testid="reg-evento-tipo"
+          />
           <SanteSelecao
             v-model="ev.situacaoNova"
             :rotulo="t(`${K}.regulacao.situacaoNova`)"
             :opcoes="opSituacoesReg"
+            data-testid="reg-evento-situacao"
           />
           <label
             >{{ t(`${K}.regulacao.observacao`) }}
             <input v-model="ev.observacao" maxlength="2000" data-testid="reg-evento-obs"
           /></label>
+          <label v-if="ev.tipo === 'contato_central'"
+            >{{ t(`${K}.regulacao.enviadoEm`) }}
+            <input
+              v-model="ev.enviadoEm"
+              type="datetime-local"
+              :max="agoraLocal()"
+              data-testid="reg-evento-enviado-em"
+          /></label>
+          <button
+            v-if="ev.tipo === 'contato_central'"
+            type="button"
+            data-testid="reg-evento-enviado-agora"
+            @click="ev.enviadoEm = agoraLocal()"
+          >
+            {{ t(`${K}.regulacao.enviadoAgora`) }}
+          </button>
           <p v-if="conferenciaEvento && !conferenciaEvento.ok" role="alert" data-testid="reg-evento-problema">
             {{ conferenciaEvento.mensagem }}
           </p>
@@ -801,6 +846,9 @@ const gravarEvento = () =>
             {{ quando(x.em) }} · {{ t(`${K}.regulacao.tiposEvento.${x.tipo}`) }} ·
             {{ `${x.de ?? ''} → ${x.para ?? ''}` }}
             <template v-if="x.observacao"> · {{ x.observacao }}</template>
+            <template v-if="x.enviadoEm">
+              · {{ t(`${K}.regulacao.enviadoNaLinha`, { d: quando(x.enviadoEm) }) }}</template
+            >
           </li>
         </ol>
       </template>

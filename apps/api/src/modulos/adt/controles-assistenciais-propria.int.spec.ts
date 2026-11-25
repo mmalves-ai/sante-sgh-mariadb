@@ -452,6 +452,34 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
       situacaoNova: 'em_analise',
       versao: 3,
     });
+    // Envio manual pelo portal da central: a data e a hora informadas ficam no contato, sem mudar a situação.
+    const enviado = new Date();
+    await porta.registrarEvento(ctx(), m.solicitacao, {
+      tipo: 'contato_central',
+      observacao: 'Pedido enviado pelo portal da central',
+      enviadoEm: enviado.toISOString(),
+      versao: 4,
+    });
+    expect(
+      await falha(
+        porta.registrarEvento(ctx(), m.solicitacao, {
+          tipo: 'contato_central',
+          observacao: 'Envio com hora errada',
+          enviadoEm: new Date(Date.now() + 60 * 60_000).toISOString(),
+          versao: 4,
+        }),
+      ),
+    ).toContain('envio-no-futuro');
+    expect(
+      await falha(
+        porta.registrarEvento(ctx(), m.solicitacao, {
+          tipo: 'resposta',
+          observacao: 'Resposta com data de envio',
+          enviadoEm: enviado.toISOString(),
+          versao: 4,
+        }),
+      ),
+    ).toContain('envio-so-no-contato');
     expect(
       await falha(
         porta.registrarEvento(ctx(), m.solicitacao, {
@@ -502,15 +530,24 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
       ['evolucao_clinica', 'solicitada', 'solicitada'],
       ['evolucao_clinica', 'solicitada', 'solicitada'],
       ['mudanca_situacao', 'solicitada', 'em_analise'],
+      ['contato_central', 'em_analise', 'em_analise'],
       ['resposta', 'em_analise', 'autorizada'],
       ['cancelamento', 'autorizada', 'cancelada'],
     ]);
-    expect(eventos.every((e) => Number(e['usuario_id']) === m.usuario && e['enviado_em'] === null)).toBe(
-      true,
+    expect(eventos.every((e) => Number(e['usuario_id']) === m.usuario)).toBe(true);
+    // Só o contato com a central guarda a data do envio manual (mesmo instante informado, sem fuso trocado).
+    expect(eventos.filter((e) => e['enviado_em'] !== null).map((e) => e['tipo_evento'])).toEqual([
+      'contato_central',
+    ]);
+    const envio = eventos.find((e) => e['tipo_evento'] === 'contato_central')!;
+    expect(Math.abs(new Date(envio['enviado_em'] as string).getTime() - enviado.getTime())).toBeLessThan(
+      1000,
     );
     const t = await porta.linhaDoTempoRegulacao(ctx(), m.solicitacao);
     expect(t.quadros).toHaveLength(2);
-    expect(t.eventos).toHaveLength(5);
+    expect(t.eventos).toHaveLength(6);
+    expect(t.eventos.find((e) => e.tipo === 'contato_central')?.enviadoEm).not.toBeNull();
+    expect(t.envio.automatico).toBe(false);
     expect(t.solicitacao.situacao).toBe('cancelada');
   });
 });

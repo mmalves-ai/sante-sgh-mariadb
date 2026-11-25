@@ -147,5 +147,10 @@ export const mensagensControlesAssistenciais = {
     eventos: 'Eventos',
     situacaoAtual: 'Situação atual: {s}',
     envioManual: 'Envio manual',
+    envioManualAjuda:
+      'A central opera pelo próprio portal: envie o pedido por lá e registre aqui, no contato com a central, a data e a hora do envio.',
+    enviadoEm: 'Enviado pelo portal da central em',
+    enviadoAgora: 'Agora',
+    enviadoNaLinha: 'enviado à central em {d}',
   },
 };
