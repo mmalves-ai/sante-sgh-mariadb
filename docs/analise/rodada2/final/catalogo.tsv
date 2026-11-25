@@ -578,7 +578,7 @@ empresa_auditoria_externa	FAT	principal	F3	Empresas de auditoria médica externa
 empresa_calculo_cumulativo_rpa	FAT	configuracao	F3	Estabelecimentos somados no cálculo cumulativo de impostos do RPA	R1#45; SP: RPEMPCALCIMP	06	1
 endpoint_tiss_fonte_pagadora	FAT	configuracao	F3	Canal de envio TISS por fonte pagadora (portal, serviço web), endereço e versão; credencial fica no cofre	R1#31; SP: TBTISSWEBSERV, TBTISSURLWSSGH, TBTISSFORMAENVPAD; MV: SITE_INTEGRA_CONVENIO	06	8
 envio_documento_tiss	FAT	principal	F7	Envio de documentos anexos à operadora pelo TISS, com protocolo de retorno	R1#28; MV: TISS_ENVIO_DOCUMENTOS, TISS_RETORNO_DOCUMENTOS	06	1
-envio_documento_tiss_item	FAT	item	F7	Documentos de um envio, com metadado e referência ao armazenamento de objetos	R1#28	06	1
+envio_documento_tiss_item	FAT	item	F7	Documentos de um envio, com metadado e referência ao armazenamento de objetos	R1#28; tipo e formato do documento no padrão TISS (06-FAT linha 28; migração 12_FAT/96_envio_documento_tipo)	06	1
 equipe_repasse_variavel	FAT	principal	F8	Equipe que divide a remuneração variável	R1#48; MV: EQUIPE_REP_VARIAVEL	06	1
 equipe_repasse_variavel_membro	FAT	item	F8	Membros da equipe de remuneração variável com a cota de cada um	R1#48; MV: IT_EQUIPE_REP_VARIAVEL	06	2
 equivalencia_item_fonte_pagadora	FAT	vinculo	F3	Código de faturamento do item do hospital (exame, serviço) em cada fonte pagadora e tipo de conta	R1#9; SP: SIREFCON	06	9
@@ -827,7 +827,7 @@ aplicacao_financeira	FIN	principal	F3	Aplicação financeira com instituição, 
 apolice_seguro	FIN	principal	F8	Apólice de seguro patrimonial, com seguradora, vigência e prêmio	MV SEGUROS	07	2
 apontamento_producao_contrato	FIN	principal	F8	Apontamento da produção do terceiro no período para conferência	MV GCTO_APONTAMENTO, GCTO_LOTE_APONTAMENTO	07	2
 apropriacao_imobilizado_andamento	FIN	item	F8	Custo apropriado ao imobilizado em andamento, ligado ao título ou à nota	MV IMOB_AND_BEM	07	1
-apropriacao_projeto	FIN	vinculo	F8	Apropriação de título, lançamento ou consumo ao projeto	MV PROJETO_ORCAMENTARIO, GCTO_CONTRATO_PROJ	07	4
+apropriacao_projeto	FIN	vinculo	F8	Apropriação de título a pagar ou a receber, lançamento, consumo ou contrato ao projeto, com natureza (receita ou despesa) e etapa	MV PROJETO_ORCAMENTARIO, GCTO_CONTRATO_PROJ; natureza, etapa e título a receber (07-FIN linha 128; migração 14_FIN/99_apropriacao_projeto_natureza)	07	4
 aprovacao_orcamento	FIN	historico	F7	Envio, aprovação e devolução da versão, com autor e parecer	MV ORCA_CONTROLE_CONCLUSAO; mecanismo de aprovação do 01	07	9
 aprovador_etapa	FIN	vinculo	F8	Usuário ou papel que aprova uma etapa do fluxo, com substituto e permissão de aprovar pelo celular	MV ALCA_APROVADOR, ALCA_APROVADOR_MOB, ALCA_APROVADOR_STAT	07	4
 apuracao_consolidacao	FIN	principal	F8	Rodada de consolidação por período, com situação e responsável	MV LOTE_GERENCIAL	07	1
@@ -2345,7 +2345,7 @@ painel_gerencial_item	REL	item	F3	Indicadores e gráficos de cada painel gerenci
 painel_gerencial_permissao	REL	vinculo	F3	Perfis ou usuários que podem abrir cada painel gerencial	rodada2:nova	verif-01	0
 painel_tv	REL	principal	F3	Painel de TV operacional: tipo, estabelecimento, unidade, tempo de rotação e situação	SPDATA PNCONFIGPORTAL (19); DBAMV PAINEL_CLINICO, CONFIG_PAINEL; MVBIKE PAINEL*	01	4
 painel_tv_bloco	REL	item	F3	Blocos exibidos em cada painel de TV, com filtro, ordem e tempo em tela	DBAMV PAINEL_CLINICO_GRUPO, PAINEL_CLINICO_PARAMETRO, CONFIG_PAINEL_FSCC	01	5
-painel_tv_dispositivo	REL	vinculo	F3	Televisores ou estações onde cada painel está ligado, com código de pareamento e último contato	SPDATA PNCONFIGPORTAL; painel de chamada é do grupo 02 (conflitos 2.5)	01	0
+painel_tv_dispositivo	REL	vinculo	F3	Televisores ou estações onde cada painel está ligado, com código de pareamento e último contato	SPDATA PNCONFIGPORTAL; painel de chamada é do grupo 02 (conflitos 2.5); validade do código e segredo do aparelho (01-REL L116; migração 19_REL/94_painel_tv_segredo)	01	0
 perspectiva_estrategica	REL	dominio	F8	Perspectivas do mapa estratégico (financeira, cliente, processos, aprendizado)	DBAPORTAL PERSPECTIVA, PERSPECTIVA_ORGANIZACAO; MVBIKE PERSPECTIVA_ESTRATEGIA	01	5
 ponderacao_procedimento	REL	configuracao	F8	Peso e tempo padrão por procedimento, exame ou item prescrito, para medir produção ponderada e carga de trabalho	rodada2:nova	01	1
 proposta_iniciativa	REL	principal	F8	Proposta de projeto antes da aprovação: objetivo, produto, marcos, prioridade, custo estimado e parecer	rodada2:nova	01	1
@@ -3731,3 +3731,5 @@ meta_produtividade_repasse_faixa	FAT	configuracao	F8	Faixas do valor apurado da 
 apuracao_meta_produtividade	FAT	historico	F8	Valor apurado da meta de produtividade na competência, com o histórico das correções	F8 (07-FIN linha 157)	06	0
 orcamento_ordem_servico_manutencao	HOT	historico	F7	Orçamento da ordem de serviço de manutenção com a aprovação ou reprovação pelo aprovador da oficina, dentro da alçada	F7 (04-HOT linha 135)	04	0
 remessa_conserto_manutencao	HOT	historico	F7	Remessa do equipamento ao fornecedor para conserto externo, com o termo de saída, a nota de remessa e o retorno	F7 (04-HOT linha 135)	04	0
+depara_conta_gerencial	FIN	vinculo	F8	De-para da conta contábil do estabelecimento para a conta do plano gerencial comum do grupo de consolidação	ADR 0002; C2-101 (07-FIN linha 127)	07	0
+ocorrencia_contabil_receita	FAT	historico	F3	Pendências e divergências da apuração da receita contábil do faturamento (fato sem regra, sem conta ou contabilizado que diverge), com o motivo e a resolução	R1#37; dep: lancamento_contabil_receita (06)	06	1
