@@ -39,6 +39,7 @@ import { z } from 'zod';
 import { esquemaLancarItem } from '@sgh/contratos';
 import { lancarItem, totalDosItens } from './operacoes.js';
 import { lancarLinhasDoKit } from './kit-lancamento.js';
+import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
 import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
 
 type Linha = Record<string, unknown>;
@@ -826,6 +827,14 @@ export const opTransferir = definirOperacao({
       e.motivo,
     );
     exigirValido(v.erros);
+    // Período fechado (C2-035): o item não sai da faixa fechada da origem nem entra na faixa fechada do destino.
+    for (const i of itens) {
+      const r = i['realizado_em'];
+      const realizado = r instanceof Date ? r : new Date(String(r));
+      const tipo = i['tipo_lancamento_id'] == null ? null : n(i['tipo_lancamento_id']);
+      await conferirLancamentoNoPeriodo(tx, origem.id, realizado, tipo);
+      await conferirLancamentoNoPeriodo(tx, destino.id, realizado, tipo);
+    }
     // Cobertura no destino, num ponto só para toda transferência (itens marcados, conta inteira e lote).
     const precos = await precosNoDestino(
       tx,

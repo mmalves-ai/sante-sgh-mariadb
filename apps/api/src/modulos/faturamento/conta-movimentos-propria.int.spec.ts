@@ -617,6 +617,19 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(await recusada(ids['contaFechada']!, [ids['itemA']!])).toBe('entrada-invalida');
     // Item realizado em 21/01 não entra na conta que começa em 01/02.
     expect(await recusada(ids['contaFevereiro']!, [ids['itemA']!])).toBe('entrada-invalida');
+    // Período fechado (C2-035): o item de 21/01 não sai da faixa fechada da origem nem entra na fechada do destino.
+    for (const conta of [ids['contaA']!, ids['contaB']!]) {
+      const periodo = await escrever((e) =>
+        e.inserir(
+          `INSERT INTO conta_hospitalar_periodo (conta_hospitalar_id, sequencia, inicio_em, fim_em, competencia,
+             fechado_em, criado_em) VALUES (?, 1, '2026-01-01 00:00:00', '2026-01-31 23:59:59.999', '2026-01-01',
+             NOW(3), NOW(3))`,
+          [conta],
+        ),
+      );
+      expect(await recusada(ids['contaB']!, [ids['itemA']!])).toBe('periodo-fechado');
+      await escrever((e) => e.executar('DELETE FROM conta_hospitalar_periodo WHERE id = ?', [periodo]));
+    }
     const r = await s.gravar('transferir', op(), {
       contaOrigemId: ids['contaA'],
       contaDestinoId: ids['contaB'],
