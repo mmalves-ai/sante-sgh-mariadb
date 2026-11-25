@@ -17,6 +17,8 @@ import {
 import { AgendasController } from './agendas.controller.js';
 import { ApoioAgendaController } from './apoio.controller.js';
 import { MarcacoesController } from './marcacoes.controller.js';
+import { CONTATO_ATIVO, ContatoAtivoController } from './contato-ativo.controller.js';
+import { ContatoAtivoPropria } from './contato-ativo.js';
 import { COTAS_PRAZOS, CotasPrazosController } from './cota-prazo.controller.js';
 import { CotasPrazosPropria } from './cota-prazo.js';
 import { PEDIDOS_VAGA, PedidosVagaController } from './pedido-vaga.controller.js';
@@ -106,6 +108,7 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
       PerfisMarcacaoController,
       PedidosVagaController,
       CotasPrazosController,
+      ContatoAtivoController,
     ],
     providers: [
       { provide: PORTA_AGENDA, useValue: porta },
@@ -128,6 +131,13 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
         useValue:
           porta.destino === 'propria' && ctx.nucleo && cliente
             ? new CotasPrazosPropria(ctx.nucleo, cliente)
+            : null,
+      },
+      {
+        provide: CONTATO_ATIVO,
+        useValue:
+          porta.destino === 'propria' && ctx.nucleo && cliente
+            ? new ContatoAtivoPropria(ctx.nucleo, cliente)
             : null,
       },
       {

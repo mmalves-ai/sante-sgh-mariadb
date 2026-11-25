@@ -45,6 +45,7 @@ evento_auditoria_alerta	ADM	item	F3	Alerta gerado por um evento da trilha (açã
 evento_auditoria_registro	ADM	item	F3	Registro afetado por cada evento, com tabela, chave e valores antes e depois	SPDATA TBLANTRILHASGH (1001); DBAMV AUDIT_COLUNA*, HIST_*	01	1
 evento_sessao	ADM	historico	F3	Entradas, saídas, falhas de login, expirações e trocas de estabelecimento, com origem e estação	DBASGU LOG_ACESSO_MV2000, MOD_LOG_ACESSO_MV2000, ESTAT_*; DBAMV LOG_ACESSO_PEP, LOG_CONTAGEM_USUARIO; SPDATA FPCON	01	8
 exame_item_assinatura	SADT	item	F3	Exames cobertos por cada assinatura de documento do prontuário (exames assinados em conjunto)	F4 conector L7-04 (pedido de modelo, rodada 3 de cobertura)	05	0
+exame_regiao_anatomica	SADT	configuracao	F8	Regiões anatômicas codificadas que o exame admite, com a região padrão sugerida no pedido; retirada só desativa	construir-2 C2-032 (09-AREA linha 84), migração 10_SADT/99_exame_regiao_anatomica	05	0
 exportacao_documento	ADM	historico	F3	Cada impressão ou exportação de documento do prontuário, com justificativa, usuário, formato e destino	SPDATA PRJUSTIF_IMP_EXPORTACAO (1001); DBAMV ACESSO_DOCUMENTO	01	1
 favorito_usuario	ADM	vinculo	F3	Telas marcadas como favoritas pelo usuário, com ordem	DBASGU USUARIO_MENU_FAVORITO	01	4
 finalidade_email	ADM	dominio	F3	Finalidades que enviam e-mail (laudo, relatório agendado, convite de conta, assinatura, notificação)	SPDATA PREMAILMODULO (4); DBASGU TIPO_EMAIL; DBAMV PROCESSO_EMAIL	01	5
@@ -63,6 +64,7 @@ lista_distribuicao_email	ADM	principal	F7	Lista nomeada de destinatários reutil
 lista_distribuicao_email_membro	ADM	item	F7	Usuários ou endereços que compõem cada lista de distribuição	DBAMV DESTINATARIO_UNIFICADO	01	1
 lote_assinatura	ADM	principal	F7	Assinatura de vários documentos de uma vez pelo mesmo signatário, com situação e erros por documento	DBAMV FILA_CARTORIO_DIGITAL, PW_RELATORIO_ASSINATURA_DIGIT; CARTORIO CARTORIO	01	1
 lote_assinatura_item	ADM	item	F7	Documento incluído num lote de assinatura, com ordem, situação e erro de cada documento	rodada2:nova	verif-01	0
+membro_agrupador_aprovacao	FIN	vinculo	F8	Valor que pertence ao agrupador de aprovação (centro de custo, credor ou natureza do critério)	07-FIN linha 65 (fluxo de aprovação configurável)	07	0
 mensagem_interna	ADM	principal	F3	Mensagem direta entre usuários, com assunto, texto e remetente	SPDATA TBMENSAG (98); DBASGU MENSAGEM; DBAPORTAL MENSAGEM	01	13
 mensagem_interna_destinatario	ADM	item	F3	Destinatários de cada mensagem interna, com leitura e arquivamento	SPDATA TBMENSAG (leitura); DBASGU USUARIO_MENSAGEM	01	11
 modelo_email	ADM	configuracao	F3	Modelo de mensagem por finalidade e estabelecimento: assunto, corpo e campos substituíveis	DBASGU TIPO_EMAIL, TAG_CAMPO_EMAIL	01	6
@@ -127,6 +129,7 @@ revisao_acesso_emergencial	ADM	historico	F3	Revisão posterior de cada acesso de
 segundo_fator_usuario	ADM	principal	F3	Fator adicional cadastrado pelo usuário (aplicativo autenticador, e-mail, chave física), com situação e data	rodada 1; DBASGU CONFIG_SGU	01	0
 servidor_email	ADM	configuracao	F3	Servidor de saída de e-mail por estabelecimento: endereço, porta, remetente e referência da credencial no cofre	SPDATA PREMAILCFG (2); DBAMV CONFIG_EMAIL; DBASGU SERVICO_ENVIO_EMAIL	01	6
 sessao_suporte	ADM	historico	F3	Sessão de suporte como o usuário: pedido, autorização, motivo, início, fim e usuário personificado	rodada 1 (entrar como, auditado)	01	0
+situacao_protocolo_recebimento	FAT	dominio	F3	Situações do protocolo de recebimento do lote TISS, numeradas pela terminologia TISS do status do protocolo (1 recebido a 10 bloqueio judicial do prestador; a situação fora dela fica inativa e sem número)	Produto: situações do protocolo lidas do banco, padrão da base que o hospital renomeia ou inativa (06-FAT linha 31; migrações 12_FAT/99_situacao_protocolo e 12_FAT/99_situacao_protocolo_tiss)	06	0
 tarefa_usuario	ADM	principal	F8	Tarefa atribuída a um usuário, com categoria, prioridade, período, percentual concluído e situação	rodada2:nova	01	1
 tela_sistema	ADM	dominio	F3	Telas do sistema por módulo, carregadas do código, para favorito, auditoria e permissão	SPDATA TBOPCOES (árvore de menu); DBASGU MENU; DBAMV MENU_SOUL	01	1
 termo_uso_versao	ADM	principal	F3	Versões do termo de uso do sistema, com texto, vigência e obrigatoriedade de novo aceite	SPDATA PRTERMOCAD (1); DBASGU TERMO_USO; conflitos 2.2 (dono 01)	01	3
@@ -801,6 +804,7 @@ valor_porte_anestesico	FAT	historico	F3	Valor de cada porte anestésico por tabe
 valor_porte_medico	FAT	historico	F3	Valor de cada porte de honorário por acordo ou tabela e vigência	R1#5; SP: TBPORMED; MV: VAL_PORTE_MEDICO*	06	2
 versao_padrao_tiss	FAT	catalogo_publico	F3	Versões do padrão TISS (troca, monitoramento) com vigência e esquema aceito	R1#7; SP: TBVERSAOTISS, TBVERSAOTISSPAD, TBVERSAOTISSMONIT; MV: TISS_VERSAO*; termos TUSS em terminologia/termo_terminologia (08)	06	5
 versao_tabela_preco	FAT	historico	F3	Edição publicada de uma tabela de preço, com data de vigência e origem da carga	R1#3; SP: HTPROCTO; MV: TAB_FAT*	06	0
+vinculo_mutirao_cirurgico	CC	vinculo	F8	AIH ou APAC marcada com o projeto ou mutirão cirúrgico do SUS, com a justificativa da inclusão e o histórico da retirada	rodada2:nova; C2-041 (04-CC linha 108; migração 08_CC/93_mutirao_vinculo)	04	1
 visita_auditoria_externa	FAT	principal	F7	Visita do auditor da operadora ao hospital, com contas analisadas e conclusão	R1#21; MV: AUDITORIA_IN_LOCO	06	1
 adiantamento	FIN	principal	F3	Adiantamento concedido a fornecedor ou médico, com valor, conta de saída, saldo a compensar e prazo	SPDATA MFADIFOR; MV CCOR_FINANCEIRA, CCOR_FINANCEIRA_LCTO	07	3
 adiantamento_paciente	FIN	principal	F7	Adiantamento ou caução do paciente particular, com saldo, tipo e vedação na urgência (Lei 12.653)	MV CAUCAO; caução é tipo de adiantamento conforme conflitos; depende de paciente (02)	07	2
@@ -1051,7 +1055,7 @@ natureza_operacao	FIN	dominio	F3	Natureza de operação das notas (simples remes
 natureza_rendimento	FIN	catalogo_publico	F3	Natureza de rendimento da EFD-REINF com tributos incidentes e indicadores	SPDATA FPITENSNATRENDIMENTO, FPNATUR_REND; MV REINF_TABELA_01; dono 07 conforme conflitos	07	3
 natureza_rendimento_deducao	FIN	catalogo_publico	F3	Deduções permitidas por natureza de rendimento	SPDATA FPITENSNATREND_DEDUTIVEL	07	1
 natureza_rendimento_isencao	FIN	catalogo_publico	F3	Rendimentos isentos permitidos por natureza de rendimento	SPDATA FPITENSNATREND_RENDISENTO	07	1
-nota_credito_debito	FIN	principal	F7	Nota de crédito ou de débito emitida ou recebida de fornecedor ou cliente (devolução, diferença de preço), que ajusta títulos	MV NOTA_CREDITO, NOTA_CREDITO_DEBITO, NOTA_CRE_DEB_SUPRI | func: devolução ao fornecedor; MV: NOTA_CRE_DEB_SUPRI	07	5
+nota_credito_debito	FIN	movimento	F8	Nota de crédito ou débito aplicada a uma parcela do título, com o efeito (abate ou acresce) e o valor do ajuste gravados para o cancelamento desfazer sem apagar	Produto: parcela, efeito, valor do ajuste e aplicação; motivos padrão da nota e do cancelamento; operação de desconto ou cessão com o portador e o cancelamento com motivo; liquidação do item pelo sacado (07-FIN linhas 70 e 79; migração 14_FIN/95_nota_cessao_portador)	07	7
 nota_credito_debito_item	FIN	item	F8	Linha da nota de crédito ou débito com natureza, centro de custo e valor	MV NOTA_CREDITO_DEBITO	07	4
 nota_empenho	FIN	principal	F8	Nota de empenho do gasto público, com credor, programa e valor	MV NOTA_EMPENHO, PEDIDO_EMPENHO_FORNECEDOR	07	1
 nota_empenho_item	FIN	item	F8	Item empenhado, ligado ao pedido de compra	MV NOTA_EMPENHO; depende de pedido de compra (05)	07	2
@@ -1556,7 +1560,7 @@ pacote_parceiro_campo	INTG	item	F3	Campos ou visões incluídos no pacote, para 
 padrao_troca	INTG	dominio	F3	Padrões de troca suportados (TISS, HL7 v2, FHIR, próprio do parceiro, arquivo)	F26; SPDATA TBTPWEBSERV (2)	08	3
 parceiro_dados	INTG	principal	F3	Parceiro que recebe dados: finalidade, base legal, contrato e responsável	F37	08	0
 pedido_mensagem_paciente	INTG	principal	F3	Pedido de envio à plataforma de mensagens: paciente, modelo, origem e situação	F36; DBAPS SMS_ENVIO, SMS_AVULSO	08	2
-pedido_mensagem_paciente_retorno	INTG	item	F3	Retornos de entrega e resposta do paciente por pedido	F36 (retorno_mensagem_paciente da rodada 1)	08	0
+pedido_mensagem_paciente_retorno	INTG	item	F3	Retornos de entrega e resposta do paciente por pedido, com o efeito da resposta na marcação ligada (confirmou a presença ou abriu o pedido de cancelamento ou de reagendamento)	F36 (retorno_mensagem_paciente da rodada 1); efeito da resposta (08-INTG L133; migração 17_INTG/96_efeito_resposta_mensagem)	08	0
 pedido_vinculo_profissional_externo	INTG	principal	F3	Autocadastro do médico solicitante aguardando conferência e vínculo	F42; SPDATA TBMEDSOLWEBCAD (5)	08	1
 perfil_fhir	INTG	configuracao	F7	Perfis de troca clínica adotados, com versão fixada e conjunto de valores	F33 (perfil_fhir_fixado da rodada 1)	08	0
 perfil_mensagem_hl7	INTG	configuracao	F3	Perfil de mensagem por parceiro e evento: versão, segmentos exigidos e regras	F28; MVINTEGRA HL7_EVENTO_SEGMENTO, HL7_SEGMENTO	08	2
@@ -2283,7 +2287,7 @@ regra_exigencia_autorizacao	REC	configuracao	F7	Quando a senha da operadora é e
 regra_heranca_campo	REC	configuracao	F3	Campos copiados do atendimento anterior para a nova ficha, por tipo de atendimento	F31; SPDATA REPARATE	02	1
 regra_impressao_ficha	REC	configuracao	F3	Quais fichas imprimir por fonte pagadora, especialidade, grupo de procedimento e unidade	F35; SPDATA RECONFIC, REESPFIC, REGRPFIC, REUNIFIC	02	7
 regra_origem_atendimento	REC	configuracao	F3	Combinações permitidas ou proibidas de origem, tipo de atendimento e fonte pagadora	F30; MV PROIB_ORIG_ATENDIME, REGRA_ATENDIMENTO, CONFIGURA_ATENDIMENTO	02	2
-resultado_contato	REC	dominio	F8	Resultados de contato (atendeu, confirmou, recusou, sem resposta, número errado)	F39	02	0
+resultado_contato	REC	dominio	F8	Resultados de contato (atendeu, confirmou, desistiu, sem resposta, número errado), com o efeito na marcação ligada (confirmar ou cancelar pela desistência)	F39; construir-2 C2-040 (02-REC linha 39), migração 04_REC/91_resultado_contato_efeito (efeito_marcacao e padrão da base)	02	0
 senha_emitida	REC	principal	F3	Senha emitida, com gerador, prioridade, momento e situação; o contador do dia vem desta tabela	F33; SPDATA TBSENHAATEND, TBULTSENHATEND (descartada)	02	2
 senha_emitida_marcacao	REC	vinculo	F3	Liga a senha à marcação da agenda que motivou a chegada	F33; SPDATA TBSENHAATEND_REPACAGD, TBSENHAATEND_SIPACAGD	02	2
 servico_atendimento	REC	dominio	F3	Serviço clínico em que o atendimento é aberto (ortopedia, cardiologia), com especialidade, anamnese padrão e caução exigida	rodada2:nova	02	3
@@ -3717,3 +3721,5 @@ atendimento_impresso_emitido	REC	historico	F3	Cada emissão de impresso do atend
 integracao_dose_estoque	SUP	historico	F3	Decisão da regra de integração prescrição × estoque para cada dose prescrita: regra vigente, local que atende (ou o substituto), se vai ao estoque e o instante de liberação para a farmácia	Produto: regra de integração aplicada à prescrição e ao aprazamento (05-SUP linha 7; migração 11_SUP/91_integracao_dose)	05	0
 layout_tarifador	FAT	configuracao	F8	Layout do arquivo de bilhetes da central telefônica (separador, cabeçalho, posição das colunas, formatos de data, duração e valor, DDD do hospital), por estabelecimento, para importar as ligações tarifadas	Produto: importação do arquivo do tarifador com layout configurável (06-FAT linha 23; migração 12_FAT/99_tarifador_layout)	06	0
 parametro_instrumento_sus	SUS	configuracao	F7	Parâmetros próprios de cada instrumento do faturamento SUS (CIHA, BPA, APAC, AIH) por estabelecimento, campos tipados dos leiautes do Ministério	C1-051 (06-SUS linha 53); db/migracoes/13_SUS/95_parametro_instrumento_tabelas.sql	06	0
+faixa_valor_categoria_clinica	INT	configuracao	F8	Valor da diária de cada categoria clínica por vigência, usado no valor dos períodos do atendimento (nada se apaga)	F8 (09-AREA linha 87)	04	1
+producao_hospitalar_mensal	INT	historico	F8	Produção hospitalar do mês por categoria clínica e do hospital: movimento, paciente-dia, ocupação, permanência, giro, pontualidade da alta e valor (Portaria MS 312/2002)	F8 (09-AREA linha 87)	04	1
