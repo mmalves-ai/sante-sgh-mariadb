@@ -8,6 +8,7 @@ import { mensagensSumarioSecoes } from './i18n-sumario-secoes.js';
 import { mensagensResultadosGrupos } from './i18n-resultados-grupos.js';
 import { mensagensFarmacovigilancia } from './i18n-farmacovigilancia.js';
 import { mensagensNotasPaciente } from './i18n-notas-paciente.js';
+import { mensagensProntuarioRestrito } from './i18n-prontuario-restrito.js';
 import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
 import { mensagensCopiasProntuario } from './i18n-copias-prontuario.js';
@@ -30,6 +31,7 @@ export const mensagensPep = {
   farmaco: mensagensFarmacovigilancia,
   // 03-PEP L102: notas e lembretes livres sobre o paciente.
   notas: mensagensNotasPaciente,
+  restrito: mensagensProntuarioRestrito,
   // 02-AGE linha 53: pedido de vaga do médico no prontuário.
   pedidoVaga: mensagensPedidoVaga,
   // 03-PEP L147: anotação administrativa do caso.

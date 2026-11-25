@@ -736,7 +736,7 @@ regra_grupo_faturamento_insumo	FAT	configuracao	F3	Grupo de faturamento padrão 
 regra_lancamento	FAT	configuracao	F3	Regra que gera itens na conta a partir de um evento clínico ou administrativo	R1#16; MV: REGRA*	06	15
 regra_lancamento_excecao	FAT	configuracao	F3	Exceção à regra de lançamento por fonte pagadora, setor ou item	R1#16; MV: ITREGRA_EXCECAO*, ITREGRA_EXCECAO_PRO_FAT*, REG_EXC_MATMED	06	10
 regra_lancamento_item	FAT	item	F3	Itens que a regra lança, com quantidade e condição	R1#16; MV: ITREGRA*	06	5
-lancamento_automatico_conta	FAT	controle	F3	Lançamento automático da conta (diária por dia de corte e taxa por regra), com a chave e o dia de referência que dão a idempotência e o estorno	F3.0 motores (conta-admissao); R1#16; MV: referência de recurso (lançamento automático de diárias)	06	1
+lancamento_automatico_conta	FAT	controle	F3	Lançamento automático da conta (diária por dia de corte e taxa por regra), com a chave e o dia de referência que dão a idempotência e o estorno	F3.0 motores (conta-admissao); R1#16; MV: referência de recurso (lançamento automático de diárias); origem na diferença de acomodação e no pacote de diárias (04-INT linha 81; migração 12_FAT/93_lancamento_automatico_origem)	06	1
 regra_montagem_guia	FAT	configuracao	F3	Regras configuráveis de montagem da guia TISS (agrupar, separar, campo a preencher)	R1#29; SP: TBTISSPARDEF; MV: TISS_CONFIG_ATEND*	06	2
 regra_montagem_guia_tipo	FAT	vinculo	F3	Regras de montagem que valem para cada tipo de guia	R1#29; SP: TBTISSTPGUIA_TBTISSPARDEF	06	1
 regra_percentual_cobranca	FAT	configuracao	F3	Percentual ou valor fixo sobre honorário, anestesia, filme, horário e mat/med aplicado pelo acordo a cada tabela	R1#1; SP: TBPERTHM, TBPERMEM; MV: EXCECAO_PERCENTUAL_COBRANCA	06	6
@@ -3724,3 +3724,5 @@ layout_tarifador	FAT	configuracao	F8	Layout do arquivo de bilhetes da central te
 parametro_instrumento_sus	SUS	configuracao	F7	Parâmetros próprios de cada instrumento do faturamento SUS (CIHA, BPA, APAC, AIH) por estabelecimento, campos tipados dos leiautes do Ministério	C1-051 (06-SUS linha 53); db/migracoes/13_SUS/95_parametro_instrumento_tabelas.sql	06	0
 faixa_valor_categoria_clinica	INT	configuracao	F8	Valor da diária de cada categoria clínica por vigência, usado no valor dos períodos do atendimento (nada se apaga)	F8 (09-AREA linha 87)	04	1
 producao_hospitalar_mensal	INT	historico	F8	Produção hospitalar do mês por categoria clínica e do hospital: movimento, paciente-dia, ocupação, permanência, giro, pontualidade da alta e valor (Portaria MS 312/2002)	F8 (09-AREA linha 87)	04	1
+senha_prontuario_paciente	PEP	historico	F8	Senha do paciente para autorizar o acesso ao prontuário restrito, só em resumo com sal (LGPD art. 46), com bloqueio por erros seguidos	F8 (03-PEP L93)	06	1
+acesso_prontuario_restrito	PEP	historico	F8	Cada abertura do prontuário restrito por uma autorização, numerada para contar contra o limite de aberturas	F8 (03-PEP L93)	06	1

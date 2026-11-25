@@ -496,4 +496,46 @@ export const PERMISSOES_PEP_M45_FORMULARIO_NOVO: readonly DeclaracaoPermissao[] 
     categoria: 'tecnica',
     criticidade: 'critica',
   },
+  // F8 (03-PEP L93): prontuário de acesso restrito. Quem autoriza o pedido também passa pela configuração da unidade
+  // (médico responsável, papel, diretoria clínica ou o paciente com a senha); a permissão é só a porta de entrada.
+  {
+    codigo: 'pep.prontuarioRestrito.ler',
+    descricao:
+      'Ver a restrição do prontuário do paciente, os pedidos de acesso, as autorizações e a contagem de aberturas',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['assistencial-com-conselho', 'diretoria-clinica', 'auditor'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'pep.prontuarioRestrito.pedir',
+    descricao:
+      'Pedir acesso ao prontuário restrito com motivo e justificativa, cancelar o próprio pedido e abrir pela autorização',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['assistencial-com-conselho'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'pep.prontuarioRestrito.autorizar',
+    descricao:
+      'Aprovar ou negar o pedido de acesso ao prontuário restrito (alçada pela configuração), registrar a senha do paciente e revogar a autorização',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['assistencial-com-conselho', 'diretoria-clinica'],
+    categoria: 'clinica',
+    criticidade: 'critica',
+  },
+  {
+    codigo: 'pep.prontuarioRestrito.configurar',
+    descricao:
+      'Restringir ou liberar o prontuário do paciente e configurar quem autoriza, a validade, a senha do paciente e o limite de aberturas',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['diretoria-clinica', 'administrador-sistema'],
+    categoria: 'clinica',
+    criticidade: 'critica',
+  },
 ];

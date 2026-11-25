@@ -202,6 +202,21 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.reconciliacao.ler', permissaoOu: ['pep.farmacovigilancia.avaliar'] },
   },
   {
+    // 03-PEP L93: pedidos de acesso a prontuário restrito da unidade (fila de quem autoriza) e configuração.
+    path: '/pep/prontuario-restrito',
+    name: 'pep.prontuarioRestrito',
+    component: () => import('./telas/ProntuarioRestritoTela.vue'),
+    meta: { permissao: 'pep.prontuarioRestrito.ler' },
+  },
+  {
+    // 03-PEP L93: visão por paciente do prontuário restrito (pedir, decidir, senha, abrir com a contagem).
+    path: `/pep/paciente/:paciente${id}/prontuario-restrito`,
+    name: 'pep.prontuarioRestrito.paciente',
+    component: () => import('./telas/ProntuarioRestritoTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuarioRestrito.ler' },
+  },
+  {
     // 03-PEP L102: notas e lembretes livres sobre o paciente (avisos em vigor, nota nova, encerrar, cancelar, validade).
     path: `/pep/paciente/:paciente${id}/notas`,
     name: 'pep.notas',
