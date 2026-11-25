@@ -3186,6 +3186,21 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     },
     perfisConcedidos: ['administrador-sistema'],
   },
+  /**
+   * F3.8, 07-FIN linha 67 (no fim da lista, pelo ID sintético das outras): quem só pede adiantamento, sem nenhuma
+   * permissão do título a pagar. A busca do credor tem de abrir para esta pessoa.
+   */
+  'SINT.FIN.ADIANTA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'FINADIANTA',
+      opcoesGrupo: opcoesFinanceiro('financeiro.adiantamento.ler', 'financeiro.adiantamento.conceder'),
+    },
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

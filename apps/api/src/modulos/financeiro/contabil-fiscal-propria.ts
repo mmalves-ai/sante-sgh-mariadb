@@ -88,6 +88,15 @@ export const esquemaDeParaContabil = z.discriminatedUnion('tipo', [
       ativo: z.boolean(),
     })
     .strict(),
+  // O credor médico (adiantamento e título de médico): o código do profissional no escritório contábil.
+  z
+    .object({
+      tipo: z.literal('profissional'),
+      profissional: id,
+      codigo: z.string().trim().min(1).max(40),
+      ativo: z.boolean(),
+    })
+    .strict(),
 ]);
 export type DeParaContabilEntrada = z.infer<typeof esquemaDeParaContabil>;
 
@@ -130,6 +139,14 @@ export async function deParaDoEstabelecimento(l: Leitor, est: number) {
       ORDER BY f.razao_social, d.id LIMIT 5000`,
     [est],
   );
+  const profissionais = await l.consultar(
+    `SELECT d.profissional_id AS id, d.codigo_externo, d.ativo, COALESCE(pr.nome_exibicao, pf.nome) AS nome
+       FROM depara_participante_externo d JOIN profissional pr ON pr.id = d.profissional_id
+       JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+      WHERE d.estabelecimento_id = ? AND d.sistema_externo_id IS NULL AND d.tipo_participante = 'profissional'
+      ORDER BY pf.nome, d.id LIMIT 5000`,
+    [est],
+  );
   const naturezas = await l.consultar(
     `SELECT id, codigo, descricao FROM natureza_financeira WHERE ativo = TRUE ORDER BY codigo LIMIT 3000`,
     [],
@@ -158,12 +175,19 @@ export async function deParaDoEstabelecimento(l: Leitor, est: number) {
         nome: texto(r['nome_fantasia'] ?? r['razao_social']),
         externo: texto(r['codigo_externo']),
       })),
+    /** O código externo dos credores médicos (adiantamento e título de médico), pelo profissional. */
+    profissionais: profissionais
+      .filter((r) => Number(r['ativo']))
+      .map((r) => ({ id: numero(r['id']), nome: texto(r['nome']), externo: texto(r['codigo_externo']) })),
   };
 }
 
 /**
  * Busca do fornecedor pelo nome (razão social ou fantasia), CNPJ, CPF ou código, para o código externo do credor no
- * de-para e o órgão arrecadador do recolhimento: a tela nunca pede o código interno digitado.
+ * de-para e o órgão arrecadador do recolhimento: a tela nunca pede o código interno digitado. O CNPJ (dado público da
+ * empresa) sai inteiro e é achado pelo começo; o CPF do fornecedor pessoa física só é achado INTEIRO (os onze dígitos:
+ * não se descobre documento de pessoa dígito a dígito) e sai mascarado. O CPF por inteiro é da leitura auditada, com
+ * finalidade (dados/mostrar).
  */
 export async function buscarFornecedores(l: Leitor, termo: string) {
   const t = termo.trim();
@@ -173,16 +197,31 @@ export async function buscarFornecedores(l: Leitor, termo: string) {
   const linhas = await l.consultar(
     `SELECT id, razao_social, nome_fantasia, cnpj, cpf FROM empresa_fornecedora
       WHERE situacao <> 'inativo'
-        AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR id = ? OR (? <> '' AND (cnpj LIKE ? OR cpf LIKE ?)))
+        AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR id = ? OR (? <> '' AND cnpj LIKE ?) OR (? <> '' AND cpf = ?))
       ORDER BY (id = ?) DESC, razao_social LIMIT 21`,
     // O código exato vem primeiro: os mesmos dígitos também abrem documentos, e o corte em 20 não pode escondê-lo.
-    [`%${t}%`, `%${t}%`, Number(t) || 0, digitos, `${digitos}%`, `${digitos}%`, Number(t) || 0],
+    [
+      `%${t}%`,
+      `%${t}%`,
+      Number(t) || 0,
+      digitos,
+      `${digitos}%`,
+      digitos.length === 11 ? digitos : '',
+      digitos,
+      Number(t) || 0,
+    ],
   );
   return linhas.slice(0, 20).map((r) => ({
     id: numero(r['id']),
     nome: texto(r['nome_fantasia'] ?? r['razao_social']),
-    documento: r['cnpj'] ? texto(r['cnpj']) : r['cpf'] ? texto(r['cpf']) : null,
+    documento: r['cnpj'] ? texto(r['cnpj']) : r['cpf'] ? cpfMascarado(texto(r['cpf'])) : null,
   }));
+}
+
+/** O CPF na lista de busca: só os seis dígitos do meio (o bastante para distinguir homônimos, nunca o documento). */
+export function cpfMascarado(cpf: string): string {
+  const d = cpf.replace(/\D/g, '');
+  return d.length === 11 ? `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**` : '***';
 }
 
 /**
@@ -300,6 +339,23 @@ const manterDeParaContabil = definirOperacao<DeParaContabilEntrada, ResultadoOpe
       );
       return { tabela: 'depara_participante_externo', linha, tipo: 'credor' };
     }
+    if (e.tipo === 'profissional') {
+      const p = await tx.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [
+        e.profissional,
+      ]);
+      if (!p) throw recusa('credor-inexistente', 'O profissional não existe.', { campos: ['profissional'] });
+      const linha = await manterCodigoExterno(
+        tx,
+        'depara_participante_externo',
+        'profissional_id',
+        e.profissional,
+        est,
+        { tipo_participante: 'profissional', profissional_id: e.profissional },
+        e.codigo,
+        e.ativo,
+      );
+      return { tabela: 'depara_participante_externo', linha, tipo: 'profissional' };
+    }
     if (e.natureza !== null) {
       const n = await tx.uma('SELECT id FROM natureza_financeira WHERE id = ?', [e.natureza]);
       if (!n)
@@ -352,6 +408,8 @@ export async function fatosContabeis(
     natureza: nulo(r['natureza_financeira_id']),
     centro: nulo(r['centro_custo_id']),
     credor: nulo(r['empresa_fornecedora_id']),
+    // O título de médico: o credor é o profissional (o participante externo sai pelo de-para dele).
+    profissional: r['empresa_fornecedora_id'] ? null : nulo(r['profissional_id']),
   });
   /** O retido (não dispensado) por chave (título ou parcela) e tributo, com a natureza do tributo. */
   const retidosPor = async (chave: 'p.titulo_pagar_id' | 'p.id', filtro: string, p: unknown[]) => {
@@ -378,7 +436,7 @@ export async function fatosContabeis(
   };
   const pagas = await l.consultar(
     `SELECT p.id, DATE(p.quitada_em) AS data, p.valor_pago, t.numero_documento, t.referente, t.natureza_financeira_id,
-            t.centro_custo_id, t.empresa_fornecedora_id, ${guia} AS guia,
+            t.centro_custo_id, t.empresa_fornecedora_id, t.profissional_id, ${guia} AS guia,
             (SELECT COALESCE(SUM(c.valor_compensado), 0) FROM compensacao_adiantamento c
               WHERE c.parcela_pagar_id = p.id AND c.excluido_em IS NULL) AS compensado,
             (SELECT tr.natureza_financeira_id FROM retencao_titulo rr JOIN tributo tr ON tr.id = rr.tributo_id
@@ -411,7 +469,8 @@ export async function fatosContabeis(
   }
   const emitidos = await l.consultar(
     `SELECT t.id, t.data_emissao AS data, t.valor_bruto - t.valor_desconto + t.valor_acrescimo AS valor_despesa,
-            t.numero_documento, t.referente, t.natureza_financeira_id, t.centro_custo_id, t.empresa_fornecedora_id
+            t.numero_documento, t.referente, t.natureza_financeira_id, t.centro_custo_id, t.empresa_fornecedora_id,
+            t.profissional_id
        FROM titulo_pagar t
       WHERE ${valido} AND NOT ${guia} AND t.data_emissao BETWEEN ? AND ? ORDER BY t.data_emissao, t.id LIMIT 20000`,
     [est, de, ate],
@@ -470,10 +529,12 @@ async function fatosDoAdiantamento(
     natureza: nulo(r['natureza_financeira_id']),
     centro: nulo(r['centro_custo_id']),
     credor: nulo(r['empresa_fornecedora_id']),
+    // Adiantamento a médico: o credor é o profissional (do adiantamento; na compensação, o do título baixado).
+    profissional: r['empresa_fornecedora_id'] ? null : nulo(r['profissional_id']),
   });
   const concessoes = await l.consultar(
     `SELECT a.numero, a.referente, NULL AS documento, a.natureza_financeira_id, a.centro_custo_id,
-            a.empresa_fornecedora_id, a.data_pagamento, a.valor_pago
+            a.empresa_fornecedora_id, a.profissional_id, a.data_pagamento, a.valor_pago
        FROM adiantamento a
       WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.valor_pago > 0
         AND a.data_pagamento BETWEEN ? AND ? ORDER BY a.data_pagamento, a.id LIMIT 20000`,
@@ -481,7 +542,7 @@ async function fatosDoAdiantamento(
   );
   const compensacoes = await l.consultar(
     `SELECT a.numero, a.referente, t.numero_documento AS documento, t.natureza_financeira_id, t.centro_custo_id,
-            t.empresa_fornecedora_id, c.data_compensacao, c.valor_compensado
+            t.empresa_fornecedora_id, t.profissional_id, c.data_compensacao, c.valor_compensado
        FROM compensacao_adiantamento c JOIN adiantamento a ON a.id = c.adiantamento_id
        JOIN parcela_pagar p ON p.id = c.parcela_pagar_id JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
       WHERE a.estabelecimento_id = ? AND c.excluido_em IS NULL AND p.excluido_em IS NULL AND t.excluido_em IS NULL
@@ -492,7 +553,7 @@ async function fatosDoAdiantamento(
   // A devolução é a entrada (crédito) na conta no grupo do adiantamento (a saída é o débito do mesmo grupo).
   const devolucoes = await l.consultar(
     `SELECT a.numero, a.referente, NULL AS documento, a.natureza_financeira_id, a.centro_custo_id,
-            a.empresa_fornecedora_id, m.data_movimento, m.valor
+            a.empresa_fornecedora_id, a.profissional_id, m.data_movimento, m.valor
        FROM movimento_bancario m JOIN adiantamento a
          ON a.grupo_lancamento_financeiro_id = m.grupo_lancamento_financeiro_id AND a.estabelecimento_id = m.estabelecimento_id
       WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND m.natureza = 'credito' AND m.situacao = 'ativo'

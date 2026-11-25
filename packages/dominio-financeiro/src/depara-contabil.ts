@@ -49,6 +49,8 @@ export interface FatoContabil {
   readonly natureza: number | null;
   readonly centro: number | null;
   readonly credor: number | null;
+  /** O credor médico (profissional), quando o credor não é fornecedor: o participante externo sai pelo de-para dele. */
+  readonly profissional?: number | null;
   /** O débito herdado de outra regra (a conta do passivo que este fato baixa, ou a despesa do título na retenção). */
   readonly debitoDe?: {
     readonly evento: string;
@@ -83,6 +85,7 @@ export interface TituloParaContabil {
   readonly natureza: number | null;
   readonly centro: number | null;
   readonly credor: number | null;
+  readonly profissional?: number | null;
   /** O retido de cada tributo (não dispensado), com a natureza do tributo (a conta do tributo a recolher). */
   readonly retencoes: readonly {
     readonly tributo: string;
@@ -98,7 +101,13 @@ export interface TituloParaContabil {
  */
 export function fatosDaApropriacao(t: TituloParaContabil, regua: 'competencia' | 'caixa'): FatoContabil[] {
   const principal = regua === 'competencia' ? 'fin_despesa_reconhecida' : 'fin_despesa_paga';
-  const base = { data: t.data, documento: t.documento, centro: t.centro, credor: t.credor };
+  const base = {
+    data: t.data,
+    documento: t.documento,
+    centro: t.centro,
+    credor: t.credor,
+    ...(t.profissional != null ? { profissional: t.profissional } : {}),
+  };
   const retidos = t.retencoes.filter((r) => r.valor > 0);
   const liquido = centavos(t.valorDespesa - retidos.reduce((s, r) => s + r.valor, 0));
   const fatos: FatoContabil[] = [];
@@ -128,6 +137,7 @@ export function fatoDoPagamento(p: {
   readonly natureza: number | null;
   readonly centro: number | null;
   readonly credor: number | null;
+  readonly profissional?: number | null;
   /** A guia do retido: a natureza do tributo recolhido; nulo: pagamento ao fornecedor. */
   readonly recolhimento: { readonly naturezaTributo: number | null } | null;
 }): FatoContabil {
@@ -158,6 +168,8 @@ export interface AdiantamentoParaContabil {
   readonly natureza: number | null;
   readonly centro: number | null;
   readonly credor: number | null;
+  /** O adiantamento a médico: o profissional credor (o fornecedor fica nulo). */
+  readonly profissional?: number | null;
 }
 /** A conta do adiantamento é uma só: o débito da concessão, que a compensação e a devolução creditam. */
 const CONTA_DO_ADIANTAMENTO = {
@@ -259,6 +271,8 @@ export function dePararFatos(
   regras: readonly RegraDeParaConta[],
   centros: ReadonlyMap<number, string>,
   credores: ReadonlyMap<number, string>,
+  /** O código externo do credor médico, pelo profissional (o par tipo e código do credor não se mistura). */
+  profissionais: ReadonlyMap<number, string> = new Map(),
 ): { readonly eventos: EventoFinanceiro[]; readonly depara: DePara[] } {
   const eventos: EventoFinanceiro[] = [];
   const depara: DePara[] = [];
@@ -271,7 +285,12 @@ export function dePararFatos(
       historico: f.historico,
       documento: f.documento,
       centroExterno: f.centro !== null ? (centros.get(f.centro) ?? '') : '',
-      participanteExterno: f.credor !== null ? (credores.get(f.credor) ?? '') : '',
+      participanteExterno:
+        f.credor !== null
+          ? (credores.get(f.credor) ?? '')
+          : f.profissional != null
+            ? (profissionais.get(f.profissional) ?? '')
+            : '',
     });
     depara.push({
       evento: chave,

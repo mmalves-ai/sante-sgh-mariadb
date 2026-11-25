@@ -93,6 +93,8 @@ export interface DeParaContabilPorta {
   readonly regras: readonly RegraDeParaConta[];
   readonly centros: ReadonlyMap<number, string>;
   readonly credores: ReadonlyMap<number, string>;
+  /** O código externo do credor médico, pelo profissional (ausente: nenhum mapeado). */
+  readonly profissionais?: ReadonlyMap<number, string>;
   readonly fatos: readonly FatoContabil[];
 }
 

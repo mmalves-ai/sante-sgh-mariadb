@@ -16,6 +16,7 @@ import {
   lerDeParaCompleto,
   lerSemDePara,
 } from '../api-contabil-fiscal.js';
+import BuscaCredor from './BuscaCredor.vue';
 import BuscaFornecedor from './BuscaFornecedor.vue';
 
 const props = defineProps<{ periodo: string; regua: string; podeEditar: boolean }>();
@@ -45,6 +46,10 @@ const { t } = useI18n({
       codigoCredor: 'Código no escritório',
       adicionarCredor: 'Gravar código do credor',
       semCredores: 'Nenhum credor com código externo: o lote leva o credor pelo código interno.',
+      medicos: 'Código do credor médico no escritório contábil',
+      novoMedico: 'Médico (adiantamento e título de médico)',
+      adicionarMedico: 'Gravar código do médico',
+      semMedicos: 'Nenhum médico com código externo: o lote sai sem o código do credor médico.',
       gravado: 'Gravado',
       lados: { debito: 'débito', credito: 'crédito', ambos: 'ambos' },
     },
@@ -166,6 +171,23 @@ function credorAlterado(c: { id: number; externo: string }, valor: string) {
   const v = valor.trim();
   if (v === c.externo) return;
   return salvar({ tipo: 'credor', fornecedor: c.id, codigo: v || c.externo, ativo: v !== '' });
+}
+// F3.8, 07-FIN linha 67: o credor médico (adiantamento e título de médico) tem o código próprio, pelo profissional.
+const medicoNovo = ref<number | null>(null);
+const codigoMedicoNovo = ref('');
+async function adicionarMedico() {
+  const codigo = codigoMedicoNovo.value.trim();
+  if (medicoNovo.value === null || !codigo) return;
+  await salvar({ tipo: 'profissional', profissional: medicoNovo.value, codigo, ativo: true });
+  if (!erro.value) {
+    codigoMedicoNovo.value = '';
+    medicoNovo.value = null;
+  }
+}
+function medicoAlterado(c: { id: number; externo: string }, valor: string) {
+  const v = valor.trim();
+  if (v === c.externo) return;
+  return salvar({ tipo: 'profissional', profissional: c.id, codigo: v || c.externo, ativo: v !== '' });
 }
 /** O código externo do centro: vazio desliga a regra atual (mandando o código que ela tem), nunca um marcador. */
 function centroAlterado(c: { id: number; externo: string | null }, valor: string) {
@@ -321,6 +343,41 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
         @click="adicionarCredor"
       >
         {{ t('adicionarCredor') }}
+      </button>
+    </div>
+    <h3>{{ t('medicos') }}</h3>
+    <p v-if="!dados.data.value?.profissionais?.length" class="secundario">{{ t('semMedicos') }}</p>
+    <ul class="lista-simples" data-testid="dp-medicos">
+      <li v-for="c in dados.data.value?.profissionais ?? []" :key="c.id">
+        <label :for="`dp-md-${c.id}`">{{ c.nome }}</label>
+        <input
+          :id="`dp-md-${c.id}`"
+          :value="c.externo"
+          :disabled="!podeEditar"
+          maxlength="40"
+          :data-testid="`dp-md-${c.id}`"
+          @change="medicoAlterado(c, ($event.target as HTMLInputElement).value)"
+        />
+      </li>
+    </ul>
+    <div v-if="podeEditar" class="formulario" data-testid="dp-medico-novo">
+      <BuscaCredor v-model="medicoNovo" tipo="profissional" :rotulo="t('novoMedico')" prefixo="dp-medico" />
+      <span class="campo">
+        <label for="dp-medico-codigo">{{ t('codigoCredor') }}</label>
+        <input
+          id="dp-medico-codigo"
+          v-model="codigoMedicoNovo"
+          maxlength="40"
+          data-testid="dp-medico-codigo"
+        />
+      </span>
+      <button
+        type="button"
+        :disabled="medicoNovo === null || !codigoMedicoNovo.trim()"
+        data-testid="dp-medico-gravar"
+        @click="adicionarMedico"
+      >
+        {{ t('adicionarMedico') }}
       </button>
     </div>
   </section>

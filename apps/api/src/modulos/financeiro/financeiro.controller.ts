@@ -71,7 +71,7 @@ import {
   TIPOS_CREDOR,
 } from '@sgh/dominio-financeiro';
 import { z } from 'zod';
-import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Auditar, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -399,8 +399,13 @@ export class FinanceiroController {
     return this.porta.adiantamentos(ctx(sessaoDe(req)));
   }
 
+  // A busca serve a quem lança título, a quem pede adiantamento (permissões separadas: quem só tem as do adiantamento
+  // também escolhe o credor) e a quem mantém o código externo do credor médico. A resposta não traz documento de
+  // pessoa por inteiro (o CPF sai mascarado e só é achado inteiro), como a lista vizinha dos adiantamentos; o
+  // documento sem máscara é só pela leitura auditada dados/mostrar.
   @Get('pagar/credores')
   @Permissao('financeiro.tituloPagar.ler')
+  @PermissaoOu('financeiro.adiantamento.conceder', 'financeiro.parametro.editar')
   credores(
     @Query() q: Record<string, string>,
     @Req() req: RequisicaoAutorizada,

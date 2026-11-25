@@ -93,12 +93,39 @@ watch(
   { immediate: true },
 );
 // F3.8, 07-FIN linha 67: o credor achado pelo nome, documento ou código (fornecedor ou médico) preenche o código do
-// campo; quem sabe o código segue digitando direto.
+// campo; quem sabe o código segue digitando direto. O nome escolhido e o código são UM estado só: o nome só fica na
+// tela enquanto o código do campo é o dele. Desfazer a escolha (outro texto, outro tipo) limpa o código; digitar outro
+// código desfaz a escolha. No título de médico o credor é o próprio profissional: a busca preenche os dois campos.
 const credorBuscado = ref<number | null>(null);
 function credorAchado(v: number | null) {
+  const anterior = credorBuscado.value;
   credorBuscado.value = v;
-  if (v !== null) novo.credor = String(v);
+  if (v !== null) {
+    novo.credor = String(v);
+    if (novo.tipo === 'M') novo.profissional = String(v);
+  } else if (anterior !== null && novo.credor === String(anterior)) {
+    // A escolha foi desfeita: o código que ela pôs sai junto.
+    novo.credor = '';
+    if (novo.profissional === String(anterior)) novo.profissional = '';
+  }
 }
+// O código digitado à mão diferente do escolhido desfaz a escolha (o nome exibido nunca é de outro código).
+watch(
+  () => novo.credor,
+  (c) => {
+    if (credorBuscado.value !== null && c !== String(credorBuscado.value)) credorBuscado.value = null;
+  },
+);
+// O credor é o par tipo e código: trocar o tipo limpa o código e o profissional (o código do fornecedor não vira o
+// credor do título de médico, nem o contrário).
+watch(
+  () => novo.tipo,
+  () => {
+    credorBuscado.value = null;
+    novo.credor = '';
+    novo.profissional = '';
+  },
+);
 // M55 (etapa 3): o título de fornecedor pode consumir um contrato dele (o vínculo na mesma transação).
 const contrato = ref<ContratoDoVinculo | null>(null);
 const credorFornecedor = computed(() => {
@@ -145,6 +172,8 @@ async function lancar() {
     mensagem.value = r.mensagem;
     avisos.value = r.avisos;
     chave = novaChave('titulo-pagar');
+    // O próximo lançamento começa sem nome escolhido (o código fica para quem lança vários do mesmo credor).
+    credorBuscado.value = null;
     abrindo.value = false;
     await qc.invalidateQueries({ queryKey: ['financeiro'] });
   } catch (e) {

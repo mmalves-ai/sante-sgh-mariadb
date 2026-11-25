@@ -819,7 +819,7 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
 
   /**
    * F3.8, 07-FIN linha 67: o credor do adiantamento escolhido pelo nome, documento ou código. Fornecedor: a mesma busca
-   * do de-para e das retenções. Profissional: pelo nome (civil ou de exibição) ou pelo código; o documento pessoal não
+   * do de-para e das retenções (CNPJ inteiro; CPF mascarado e achado só por inteiro). Profissional: pelo nome (civil ou de exibição) ou pelo código; o documento pessoal não
    * sai na resposta (a busca por CPF acha, mas a lista mostra só o nome).
    */
   credores(
@@ -1386,6 +1386,7 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
         regras: d.regras,
         centros: new Map(d.centros.filter((x) => x.externo).map((x) => [x.id, String(x.externo)])),
         credores: new Map(d.credores.map((x) => [x.id, x.externo])),
+        profissionais: new Map(d.profissionais.map((x) => [x.id, x.externo])),
         fatos: periodo ? await fatosContabeis(l, est, periodo.de, periodo.ate, periodo.regua) : [],
       };
     });

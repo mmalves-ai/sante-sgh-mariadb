@@ -2,6 +2,7 @@
 // F3.8, 07-FIN linha 67: o credor do adiantamento escolhido pelo nome, documento ou código, nunca pelo código interno
 // digitado às cegas. Vale para o fornecedor e para o médico (o tipo vem da tela); digita-se parte do nome, a lista
 // aparece logo abaixo e um clique escolhe. Trocar o tipo ou o texto desfaz a escolha (o par tipo e código não se mistura).
+// A consulta recusada ou falha aparece escrita (nunca um campo mudo com o botão de gravar desligado sem explicação).
 import type { CredorEncontrado } from '@sgh/contratos';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -26,6 +27,7 @@ const achados = useQuery({
   enabled: computed(
     () => (termo.value.trim().length >= 2 || /^\d$/.test(termo.value.trim())) && !escolhido.value,
   ),
+  retry: false,
 });
 function escolher(c: CredorEncontrado) {
   escolhido.value = c;
@@ -80,7 +82,10 @@ watch(
         </button>
       </li>
     </ul>
-    <small v-else-if="achados.data.value" class="secundario" role="status">
+    <small v-else-if="achados.isError.value" class="secundario" role="alert" :data-testid="`${prefixo}-erro`">
+      {{ t('financeiro.adiantamentos.credorErro') }}
+    </small>
+    <small v-else-if="achados.data.value" class="secundario" role="status" :data-testid="`${prefixo}-nenhum`">
       {{ t('financeiro.adiantamentos.credorNenhum') }}
     </small>
   </span>

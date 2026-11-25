@@ -653,7 +653,11 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         tipo: e.tipo,
         credorExiste: e.tipo === 'M' ? !!medico : !!FORNECEDORES[e.credor],
         profissional: e.profissional,
-        profissionalExiste: e.tipo === 'M' ? medico?.profissional === e.profissional : true,
+        // No banco próprio o credor médico é o próprio profissional: a busca devolve um código só, aceito nos dois campos.
+        profissionalExiste:
+          e.tipo === 'M'
+            ? !!medico && (medico.profissional === e.profissional || e.credor === e.profissional)
+            : true,
         comRetencao: e.retencoes.length > 0,
       }),
     );

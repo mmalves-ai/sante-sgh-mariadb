@@ -970,7 +970,7 @@ export class ServicoFinanceiro {
     // F3.8, 07-FIN linha 100: os fatos do período com a conta de cada lado pelo de-para por evento mantido na tela
     // (contabil-fiscal.controller.ts), mais o código externo do centro de custo e do credor.
     const dp = await this.porta.deParaContabil(ctx(s), { de, ate: fim, regua: e.regua });
-    const { eventos, depara } = dePararFatos(dp.fatos, dp.regras, dp.centros, dp.credores);
+    const { eventos, depara } = dePararFatos(dp.fatos, dp.regras, dp.centros, dp.credores, dp.profissionais);
     const lote = montarLoteContabil(eventos, depara);
     const hash = sha256(lote.conteudo);
     const chave = `contabil/${e.periodo}-${e.regua}-${hash.slice(0, 16)}.txt`;

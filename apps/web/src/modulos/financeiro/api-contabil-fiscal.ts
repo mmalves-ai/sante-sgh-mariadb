@@ -22,6 +22,8 @@ export interface DeParaCompleto {
   readonly naturezas: readonly { id: number; codigo: string; descricao: string }[];
   readonly centros: readonly { id: number; codigo: string; nome: string; externo: string | null }[];
   readonly credores: readonly { id: number; nome: string; externo: string }[];
+  /** Os credores médicos (profissionais) com código no escritório contábil. */
+  readonly profissionais?: readonly { id: number; nome: string; externo: string }[];
 }
 export interface FaltaDePara {
   readonly evento: string;

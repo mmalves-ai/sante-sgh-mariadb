@@ -60,4 +60,50 @@ describe('credor do adiantamento pela busca e com o nome na lista (memória)', (
     });
     expect(lista.find((x) => x.id === p)).toMatchObject({ credor: 7001, credorNome: 'MEDICO SINTETICO' });
   });
+
+  it('quem só tem as permissões do adiantamento acha o credor e pede (sem a leitura do título a pagar)', async () => {
+    const so = await a.entrar('SINT.FIN.ADIANTA');
+    // A pessoa não lê os títulos a pagar...
+    expect((await a.get(so, '/financeiro/pagar/titulos')).statusCode).toBe(403);
+    // ...mas escolhe o credor do adiantamento, do fornecedor e do médico, e pede.
+    const f = await a.get(so, '/financeiro/pagar/credores?tipo=fornecedor&termo=sintetico%20a');
+    expect([f.statusCode, f.json().map((c: { id: number }) => c.id)]).toEqual([200, [5001]]);
+    const p = await a.get(so, '/financeiro/pagar/credores?tipo=profissional&termo=medico');
+    expect([p.statusCode, p.json().map((c: { id: number }) => c.id)]).toEqual([200, [7001]]);
+    const r = await a.post(so, '/financeiro/pagar/adiantamentos', {
+      tipoCredor: 'fornecedor',
+      credor: 5001,
+      conta: 1,
+      valor: 50,
+      data: hoje,
+      prazo: null,
+      referente: 'SINTETICO SO ADIANTAMENTO',
+    });
+    expect(r.statusCode).toBe(200);
+    // Quem não tem nenhuma das permissões da busca segue sem ela.
+    const tesouraria = await a.entrar('SINT.FIN.TESFIS');
+    expect(
+      (await a.get(tesouraria, '/financeiro/pagar/credores?tipo=fornecedor&termo=sintetico')).statusCode,
+    ).toBe(403);
+  });
+
+  it('título de médico: o código que a busca devolve vale como credor e como profissional', async () => {
+    const [m] = await buscar('profissional', 'medico');
+    const r = await a.post(lanca, '/financeiro/pagar/titulos', {
+      tipo: 'M',
+      credor: m?.id,
+      profissional: m?.id,
+      documento: 672_069,
+      serie: '',
+      emissao: hoje,
+      valorDocumento: 100,
+      referente: 'SINTETICO TITULO MEDICO PELA BUSCA',
+      observacao: '',
+      parcelas: [{ parcela: 1, vencimento: hoje, valor: 100 }],
+      classificacao: { grupo: 216, subgrupo: 2, item: 1 },
+      retencoes: [],
+      centroCusto: null,
+    });
+    expect(r.statusCode).toBe(200);
+  });
 });

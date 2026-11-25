@@ -175,6 +175,7 @@ export const mensagensFinanceiro = {
     credor: 'Credor',
     credorDica: 'Digite parte do nome, o CNPJ, o CPF ou o código',
     credorNenhum: 'Nenhum credor encontrado neste tipo.',
+    credorErro: 'Não foi possível consultar os credores (sem permissão ou falha na consulta). Tente de novo.',
     credorEscolhido: 'Escolhido: {nome} (código {codigo})',
     credorSemNome: 'não encontrado no cadastro',
     referente: 'Finalidade',

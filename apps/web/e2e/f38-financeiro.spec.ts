@@ -40,6 +40,24 @@ test.describe('financeiro: adiantamento @F3.8 @F3.8-04', () => {
     await page.getByTestId('tp-novo-credor-nome-busca').fill('SINTETICO A');
     await page.getByTestId('tp-novo-credor-nome-opcao-5001').click();
     await expect(page.getByTestId('tp-novo-credor')).toHaveValue('5001');
+    // O nome escolhido e o código são um estado só: trocar o tipo limpa os dois (o código do fornecedor não vira o
+    // credor do título de médico), e no médico a busca preenche o credor e o profissional.
+    await escolher(page.getByTestId('tp-novo-tipo'), 'M');
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('');
+    await expect(page.getByTestId('tp-novo-credor-nome-escolhido')).toHaveCount(0);
+    await page.getByTestId('tp-novo-credor-nome-busca').fill('MEDICO');
+    await page.getByTestId('tp-novo-credor-nome-opcao-7001').click();
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('7001');
+    await expect(page.getByTestId('tp-novo-profissional')).toHaveValue('7001');
+    // Digitar outro código à mão desfaz a escolha: o nome exibido nunca é de outro código.
+    await page.getByTestId('tp-novo-credor').fill('7002');
+    await expect(page.getByTestId('tp-novo-credor-nome-escolhido')).toHaveCount(0);
+    await escolher(page.getByTestId('tp-novo-tipo'), 'F');
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('');
+    await page.getByTestId('tp-novo-credor-nome-busca').fill('SINTETICO A');
+    await page.getByTestId('tp-novo-credor-nome-opcao-5001').click();
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('5001');
+    await expect(page.getByTestId('tp-novo-credor-nome-escolhido')).toContainText('FORNECEDOR SINTETICO A');
     await page.getByTestId('tp-novo-documento').fill(documento);
     await page.getByTestId('tp-novo-valor').fill('1500');
     await page.getByTestId('tp-novo-quantas').fill('1');
