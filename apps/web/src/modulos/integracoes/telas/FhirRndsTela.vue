@@ -109,6 +109,9 @@ async function testar(): Promise<void> {
           @acionar="testar"
         />
         <p v-if="teste" role="status" data-testid="fhir-teste-resultado">{{ teste }}</p>
+        <RouterLink to="/admin/integracoes/rnds" data-testid="fhir-link-rnds-envios">{{
+          t('integracoes.fhir.enviosRnds')
+        }}</RouterLink>
         <MensagemErro v-if="erro" :erro="erro" />
       </section>
       <details>

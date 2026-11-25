@@ -17,6 +17,13 @@ export const rotasIntegracoes: RouteRecordRaw[] = [
     meta: { permissao: 'integracao.fhir.ler' },
   },
   {
+    // C2-085: os envios à RNDS por paciente (sumário de alta e resultado de exame, versões e retorno).
+    path: '/admin/integracoes/rnds',
+    name: 'integracoes.rndsEnvios',
+    component: () => import('./telas/RndsEnviosTela.vue'),
+    meta: { permissao: 'integracao.fhir.ler' },
+  },
+  {
     path: '/admin/integracoes/hl7',
     name: 'integracoes.hl7',
     component: () => import('./telas/Hl7MotorTela.vue'),

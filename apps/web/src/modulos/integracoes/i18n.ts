@@ -124,6 +124,7 @@ export const mensagensIntegracoes = {
     ligado: 'Ligado',
     desligado: 'Desligado',
     prerequisitos: 'Pré-requisitos',
+    enviosRnds: 'Envios à RNDS por paciente',
     identificacao: 'Identificação',
     cpf: 'Pacientes com CPF: {n}',
     cns: 'Pacientes com CNS: {n}',
