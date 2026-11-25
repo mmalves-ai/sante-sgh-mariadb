@@ -16,3 +16,12 @@ export * from './notificacao/notificacao-regra.js';
 export * from './notificacao/email-configuracao.js';
 // Sem node:crypto: a tela valida na hora a senha do servidor que vai ao cofre.
 export { senhaServidorEmailValida } from './notificacao/email-saida.js';
+// 01-ADM L84: visão de lista por usuário (colunas da visão guardada, mostrar/esconder e mover), a mesma regra que o
+// servidor usa ao gravar; sem node:crypto.
+export {
+  alternarColuna,
+  codigoTelaDoMenu,
+  colunasDaVisao,
+  moverColuna,
+  visaoDeFabrica,
+} from './preferencias/preferencias-usuario.js';

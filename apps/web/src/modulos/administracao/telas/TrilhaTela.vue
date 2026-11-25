@@ -12,13 +12,16 @@ import {
   ORIGENS_TRILHA,
   type OrigemTrilha,
   PERMISSOES_M59_F5_CODIGOS,
+  ROTA_TRILHA_AUDITORIA,
 } from '@sgh/contratos';
 import { useQuery } from '@tanstack/vue-query';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import ColunasDaLista from '../../../casca/preferencias/ColunasDaLista.vue';
+import { usarVisaoLista } from '../../../casca/preferencias/visao-lista.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import { buscarExclusoes, buscarTrilha, diaRelativo, type FiltroTrilhaTela, urlExportacao } from '../api.js';
 import { urlExportacaoSbis } from '../api-sbis.js';
@@ -95,6 +98,29 @@ const periodoSbis = computed(() =>
 );
 const exportarSbis = (formato: 'csv' | 'xml') =>
   filtro.value ? urlExportacaoSbis(filtro.value.inicio, filtro.value.fim, formato) : '#';
+// 01-ADM L84: as colunas da tabela seguem a visão guardada na conta (escolha e ordem), com as de fábrica sem ela.
+const visao = usarVisaoLista(ROTA_TRILHA_AUDITORIA);
+onMounted(() => void visao.carregar());
+const rotulosColunas = computed<Record<string, string>>(() =>
+  Object.fromEntries(visao.oferecidas.map((c) => [c, t(`adm.trilha.${c}`)])),
+);
+type LinhaTrilha = NonNullable<typeof trilha.data.value>['itens'][number];
+function celula(l: LinhaTrilha, coluna: string): string {
+  switch (coluna) {
+    case 'origem':
+      return t(`adm.trilha.origens.${l.origem}`);
+    case 'acao':
+      return l.resultado ? `${l.acao} (${l.resultado})` : l.acao;
+    case 'ator':
+      return l.atorReal ?? '—';
+    case 'dataHora':
+      return l.dataHora;
+    default: {
+      const v = (l as unknown as Record<string, unknown>)[coluna];
+      return v === null || v === undefined || v === '' ? '—' : String(v);
+    }
+  }
+}
 </script>
 
 <template>
@@ -182,6 +208,7 @@ const exportarSbis = (formato: 'csv' | 'xml') =>
           {{ t('sbis.exportacao.longo', { dias: DIAS_MAXIMOS_PROVA_CADEIA }) }}
         </p>
       </section>
+      <ColunasDaLista :visao="visao" :rotulos="rotulosColunas" prefixo="trilha" />
       <div class="rolagem" tabindex="0" role="region" :aria-label="t('adm.comum.rolagem')">
         <table data-testid="tabela-trilha">
           <caption>
@@ -191,33 +218,20 @@ const exportarSbis = (formato: 'csv' | 'xml') =>
           </caption>
           <thead>
             <tr>
-              <th scope="col">{{ t('adm.trilha.dataHora') }}</th>
-              <th scope="col">{{ t('adm.trilha.origem') }}</th>
-              <th scope="col">{{ t('adm.trilha.usuario') }}</th>
-              <th scope="col">{{ t('adm.trilha.acao') }}</th>
-              <th scope="col">{{ t('adm.trilha.opcao') }}</th>
-              <th scope="col">{{ t('adm.trilha.alvo') }}</th>
-              <th scope="col">{{ t('adm.trilha.paciente') }}</th>
-              <th scope="col">{{ t('adm.trilha.estacao') }}</th>
-              <th scope="col">{{ t('adm.trilha.ator') }}</th>
+              <th v-for="c in visao.visiveis.value" :key="c" scope="col" :data-testid="`trilha-cab-${c}`">
+                {{ rotulosColunas[c] }}
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="trilha.data.value.itens.length === 0">
-              <td colspan="9">{{ t('adm.comum.nenhum') }}</td>
+              <td :colspan="visao.visiveis.value.length">{{ t('adm.comum.nenhum') }}</td>
             </tr>
             <tr v-for="l in trilha.data.value.itens" :key="`${l.origem}-${l.id}`">
-              <th scope="row">{{ l.dataHora }}</th>
-              <td>{{ t(`adm.trilha.origens.${l.origem}`) }}</td>
-              <td>{{ l.usuario ?? '—' }}</td>
-              <td>
-                {{ l.acao }}<span v-if="l.resultado"> ({{ l.resultado }})</span>
-              </td>
-              <td>{{ l.opcao ?? '—' }}</td>
-              <td>{{ l.alvo ?? '—' }}</td>
-              <td>{{ l.paciente ?? '—' }}</td>
-              <td>{{ l.estacao ?? '—' }}</td>
-              <td>{{ l.atorReal ?? '—' }}</td>
+              <template v-for="(c, i) in visao.visiveis.value" :key="c">
+                <th v-if="i === 0" scope="row">{{ celula(l, c) }}</th>
+                <td v-else>{{ celula(l, c) }}</td>
+              </template>
             </tr>
           </tbody>
         </table>
