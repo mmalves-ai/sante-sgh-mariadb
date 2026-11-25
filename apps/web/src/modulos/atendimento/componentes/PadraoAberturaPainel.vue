@@ -15,6 +15,7 @@ import {
   lerPadraoAbertura,
   novaChave,
 } from '../api-atendimento.js';
+import { recarregarRascunho } from '../rascunho-padrao.js';
 import { usarAtendimento } from '../usar-atendimento.js';
 import ErroAtendimento from './ErroAtendimento.vue';
 
@@ -29,12 +30,21 @@ type Valores = Record<string, string>;
 const doEstabelecimento = ref<Valores>({});
 const pessoal = ref<Valores>({});
 const texto = (v: { id: number } | null): string => (v ? String(v.id) : '');
+// A releitura (depois de gravar um escopo, ou de outra estação mudar) traz o que está gravado, mas não descarta o que
+// a pessoa mudou na tela e ainda não gravou: gravar o estabelecimento não apaga a escolha pessoal pendente.
+type Configuracao = NonNullable<typeof cfg.data.value>;
+const lidos = (c: Configuracao | undefined, escopo: 'estabelecimento' | 'pessoal') =>
+  c?.campos.map((x) => ({ campo: x.campo, id: x[escopo]?.id ?? null }));
 watch(
   () => cfg.data.value,
-  (c) => {
+  (c, anterior) => {
     if (!c) return;
-    doEstabelecimento.value = Object.fromEntries(c.campos.map((x) => [x.campo, texto(x.estabelecimento)]));
-    pessoal.value = Object.fromEntries(c.campos.map((x) => [x.campo, texto(x.pessoal)]));
+    doEstabelecimento.value = recarregarRascunho(
+      doEstabelecimento.value,
+      lidos(c, 'estabelecimento') ?? [],
+      lidos(anterior, 'estabelecimento'),
+    );
+    pessoal.value = recarregarRascunho(pessoal.value, lidos(c, 'pessoal') ?? [], lidos(anterior, 'pessoal'));
   },
   { immediate: true },
 );
