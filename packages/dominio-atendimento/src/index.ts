@@ -6,6 +6,7 @@ export * from './conta-aberta.js';
 export * from './desfecho.js';
 export * from './fila-consultorio.js';
 export * from './heranca.js';
+export * from './padrao-abertura.js';
 export * from './impressos.js';
 export * from './indicadores.js';
 // F3.2 (02-REC linha 30): o que os grupos lidos do banco do cliente valem para o cálculo dos indicadores.

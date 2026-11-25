@@ -155,6 +155,7 @@ export * from './permissoes/bloco-seguro.js';
 export * from './atendimento/vocabulario.js';
 export * from './atendimento/entradas.js';
 export * from './atendimento/respostas.js';
+export * from './atendimento/padrao-abertura.js';
 export * from './permissoes/atendimento.js';
 export * from './atendimento/conta.js';
 export * from './atendimento/escore-pa.js';

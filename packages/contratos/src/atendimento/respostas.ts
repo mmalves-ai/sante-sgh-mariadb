@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { CODIGOS_COR_RISCO, esquemaRiscoNoQuadro } from '../recepcao/classificacao.js';
 import { esquemaProtocoloNoQuadro } from '../recepcao/protocolo-gerenciado.js';
 import { esquemaAlertaEscorePa } from './escore-pa.js';
+import { esquemaPadraoAplicado } from './padrao-abertura.js';
 import { CODIGOS_CARATER, CODIGOS_DESFECHO, CODIGOS_TIPO_ATENDIMENTO, ETAPAS_PA } from './vocabulario.js';
 
 const txt = z.string();
@@ -294,6 +295,8 @@ export const esquemaHerancaPaciente = z.object({
     }),
   ),
   historico: z.array(z.object({ reg: n, data: txt, tipo: txt, convenio: txt, profissional: txt })),
+  /** Os valores habituais (do usuário ou do estabelecimento) para o que a herança não preencheu. */
+  padrao: esquemaPadraoAplicado.optional(),
 });
 export type HerancaPaciente = z.infer<typeof esquemaHerancaPaciente>;
 
