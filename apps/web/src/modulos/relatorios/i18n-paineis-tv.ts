@@ -53,6 +53,8 @@ export const mensagensPaineisTv = {
     desligar: 'Desligar {nome}',
     codigoPareamento: 'Código para digitar na TV: {codigo}',
     pareado: 'Pareado',
+    codigoValidade: 'vale até {hora}',
+    codigoVencido: 'Código vencido: desligue e ligue de novo para gerar outro.',
     abrirTela: 'Ver como a TV mostra',
     tv: {
       titulo: 'Painel de TV',
@@ -68,6 +70,19 @@ export const mensagensPaineisTv = {
       atualizado: 'Atualizado às {hora}',
       semConexao: 'Sem conexão; mostrando os dados de {hora}.',
       bloco: 'Bloco {n} de {total}',
+      desligado:
+        'Este televisor foi desligado no cadastro do painel. Para voltar a exibir, digite um código novo.',
+      legenda: 'Legenda',
+      estados: {
+        livre: 'Livre',
+        ocupado: 'Ocupado',
+        prevista: 'Prevista',
+        atrasada: 'Atrasada',
+        em_sala: 'Em sala',
+        realizada: 'Realizada',
+        no_prazo: 'No prazo',
+        atrasado: 'Atrasado',
+      },
     },
   },
 };

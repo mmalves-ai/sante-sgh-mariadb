@@ -216,3 +216,33 @@ export function dispositivoNoAr(
   if (!ultimoContato) return false;
   return agora.getTime() - ultimoContato.getTime() <= atualizacaoSegundos * 3 * 1000;
 }
+
+/** Validade do código de pareamento: a TV tem este prazo para digitá-lo; depois, religar gera outro. */
+export const VALIDADE_PAREAMENTO_MINUTOS = 30;
+
+/** Até quando vale o código gerado agora. */
+export function expiracaoPareamento(agora: Date): Date {
+  return new Date(agora.getTime() + VALIDADE_PAREAMENTO_MINUTOS * 60_000);
+}
+
+/** O código ainda vale: tem validade gravada e ela não passou. */
+export function pareamentoVigente(expiraEm: Date | null, agora: Date): boolean {
+  return expiraEm !== null && agora.getTime() < expiraEm.getTime();
+}
+
+/**
+ * Estado de cada linha para o desenho em mapa e a cor na TV: leito livre ou ocupado; cirurgia prevista, atrasada, em
+ * sala ou realizada; pedido de laboratório ou dispensação no prazo ou atrasado.
+ */
+export type EstadoLinhaTv =
+  'livre' | 'ocupado' | 'prevista' | 'atrasada' | 'em_sala' | 'realizada' | 'no_prazo' | 'atrasado';
+
+export function estadoCirurgiaTv(situacao: string, atrasoInicioMinutos: number): EstadoLinhaTv {
+  if (situacao === 'realizado') return 'realizada';
+  if (situacao === 'em_andamento' || situacao === 'no_bloco') return 'em_sala';
+  return atrasoInicioMinutos > 0 ? 'atrasada' : 'prevista';
+}
+
+export function estadoPrazoTv(atrasoMinutos: number): EstadoLinhaTv {
+  return atrasoMinutos > 0 ? 'atrasado' : 'no_prazo';
+}

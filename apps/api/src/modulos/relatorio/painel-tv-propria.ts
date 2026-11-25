@@ -6,11 +6,13 @@
 //     sequência; o bloco que sai fica marcado como excluído e volta se for posto de novo) e mudar a situação (ativar
 //     exige bloco). Trava pela versão lida;
 //   - os TELEVISORES (painel_tv_dispositivo): ligar um televisor ao painel gera o código de pareamento; a TV digita o
-//     código uma vez (parear: o código é anulado) e depois avisa que está no ar (contato); desligar não apaga;
+//     código uma vez, dentro da validade (parear: o código é anulado e o aparelho recebe um segredo, do qual o banco
+//     guarda só o resumo SHA-256); a TV lê a tela e avisa que está no ar (contato) apresentando o segredo; desligar
+//     anula o resumo (a TV desligada é recusada e volta ao pareamento) e não apaga;
 //   - a TELA da TV: os blocos ativos com as linhas da fonte de cada um, lidas na hora do banco do cliente: ocupação da
 //     terapia intensiva (ocupacao_leito), fila da farmácia (dispensacao), mapa cirúrgico do dia (agendamento_cirurgico)
 //     e laboratório (requisicao_exame). Nenhum nome de paciente: só iniciais, número do pedido e tempos (LGPD).
-import { randomInt } from 'node:crypto';
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import {
   atrasoMinutos,
   type BlocoTvEntrada,
@@ -20,6 +22,9 @@ import {
   diasDePermanencia,
   dispositivoNoAr,
   type ErroRegraTv,
+  estadoCirurgiaTv,
+  estadoPrazoTv,
+  expiracaoPareamento,
   FONTES_BLOCO_TV,
   type FonteBlocoTv,
   FORMAS_BLOCO_TV,
@@ -29,6 +34,7 @@ import {
   MAXIMO_BLOCOS_TV,
   minutosDesde,
   normalizarCodigoPareamento,
+  pareamentoVigente,
   resumoOcupacaoTv,
   SITUACOES_PAINEL_TV,
 } from '@sgh/dominio-relatorio';
@@ -129,6 +135,17 @@ function lerFiltro(v: unknown): FiltroBloco {
   };
 }
 
+/** Resumo SHA-256 (hex) do segredo do aparelho: o segredo em si só existe na TV. */
+const resumoSegredo = (segredo: string): string => createHash('sha256').update(segredo, 'utf8').digest('hex');
+
+/** Confere o segredo apresentado pela TV contra o resumo gravado, em tempo constante. */
+function segredoConfere(segredo: string | null | undefined, resumo: unknown): boolean {
+  if (!segredo || typeof resumo !== 'string' || resumo.length !== 64) return false;
+  const a = Buffer.from(resumoSegredo(segredo), 'hex');
+  const b = Buffer.from(resumo, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 const data = (v: unknown): Date | null =>
   v === null || v === undefined ? null : v instanceof Date ? v : new Date(String(v).replace(' ', 'T'));
 
@@ -138,7 +155,8 @@ const SQL_PAINEL = `SELECT p.id, p.codigo, p.nome, p.situacao, p.tempo_rotacao_s
   WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`;
 const SQL_BLOCOS = `SELECT id, sequencia, titulo, forma_exibicao, filtro, tempo_em_tela_segundos, ativo
   FROM painel_tv_bloco WHERE painel_tv_id = ? AND excluido_em IS NULL ORDER BY sequencia`;
-const SQL_DISPOSITIVOS = `SELECT d.id, d.estacao_trabalho_id, e.nome AS estacao_nome, d.codigo_pareamento, d.pareado_em,
+const SQL_DISPOSITIVOS = `SELECT d.id, d.estacao_trabalho_id, e.nome AS estacao_nome, d.codigo_pareamento,
+    d.codigo_expira_em, d.pareado_em,
     d.ultimo_contato_em, d.versao_cliente, d.versao
   FROM painel_tv_dispositivo d JOIN estacao_trabalho e ON e.id = d.estacao_trabalho_id
   WHERE d.painel_tv_id = ? AND d.excluido_em IS NULL AND d.ativo = TRUE ORDER BY e.nome`;
@@ -251,7 +269,10 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
         id: num(d['id']),
         estacaoId: num(d['estacao_trabalho_id']),
         estacao: String(d['estacao_nome']),
-        codigoPareamento: txtOuNull(d['codigo_pareamento']),
+        codigoPareamento: pareamentoVigente(data(d['codigo_expira_em']), agora)
+          ? txtOuNull(d['codigo_pareamento'])
+          : null,
+        codigoExpiraEm: data(d['codigo_expira_em'])?.toISOString() ?? null,
         pareado: d['pareado_em'] !== null,
         ultimoContatoEm: data(d['ultimo_contato_em'])?.toISOString() ?? null,
         noAr: dispositivoNoAr(data(d['ultimo_contato_em']), agora, atualizacao),
@@ -394,7 +415,7 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
     c: ContextoComunicacao,
     painelId: number,
     entrada: unknown,
-  ): Promise<{ id: number; codigoPareamento: string }> {
+  ): Promise<{ id: number; codigoPareamento: string; codigoExpiraEm: string }> {
     const e = entradaValida(esquemaLigarDispositivo, entrada);
     return this.gravar(c, OPERACOES_PAINEL_TV.ligar, TABELAS_PAINEL_TV, async (tx, est) => {
       await this.travar(tx, est, painelId);
@@ -421,9 +442,12 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
           ],
           'Televisor já ligado',
         );
+      const expira = expiracaoPareamento(new Date());
       const valores = {
         codigo_pareamento: codigo,
+        codigo_expira_em: expira,
         pareado_em: null,
+        segredo_resumo: null,
         ultimo_contato_em: null,
         endereco_ip: null,
         versao_cliente: null,
@@ -441,7 +465,7 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
             estacao_trabalho_id: e.estacaoId,
             ...valores,
           });
-      return { id, codigoPareamento: codigo };
+      return { id, codigoPareamento: codigo, codigoExpiraEm: expira.toISOString() };
     });
   }
 
@@ -457,6 +481,8 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
       await tx.alterar(T_DISPOSITIVO, dispositivoId, num(d['versao']), {
         ativo: false,
         codigo_pareamento: null,
+        codigo_expira_em: null,
+        segredo_resumo: null,
         excluido_em: new Date(),
         excluido_por: usuario,
       });
@@ -464,12 +490,15 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
     });
   }
 
-  /** A TV digita o código uma vez: o código é anulado e a TV fica presa ao painel do dispositivo. */
+  /**
+   * A TV digita o código uma vez, dentro da validade: o código é anulado e o aparelho recebe o segredo que o prende ao
+   * televisor (devolvido só aqui; o banco guarda o resumo).
+   */
   async parear(
     c: ContextoComunicacao,
     entrada: unknown,
     ip: string | null,
-  ): Promise<{ id: number; painelId: number }> {
+  ): Promise<{ id: number; painelId: number; segredo: string }> {
     const e = entradaValida(esquemaParear, entrada);
     const codigo = normalizarCodigoPareamento(e.codigo);
     const invalido = () =>
@@ -478,7 +507,7 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
           {
             campo: 'codigo',
             codigo: 'codigo-invalido',
-            mensagem: 'Código de pareamento inválido ou já usado.',
+            mensagem: 'Código de pareamento inválido, vencido ou já usado.',
           },
         ],
         'Código inválido',
@@ -486,36 +515,40 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
     if (!codigo) throw invalido();
     return this.gravar(c, OPERACOES_PAINEL_TV.parear, TABELAS_PAINEL_TV, async (tx, est) => {
       const [d] = await tx.consultarParaAtualizar(
-        `SELECT d.id, d.painel_tv_id, d.versao FROM painel_tv_dispositivo d JOIN painel_tv p ON p.id = d.painel_tv_id
+        `SELECT d.id, d.painel_tv_id, d.codigo_expira_em, d.versao
+          FROM painel_tv_dispositivo d JOIN painel_tv p ON p.id = d.painel_tv_id
           WHERE d.codigo_pareamento = ? AND d.ativo = TRUE AND d.excluido_em IS NULL AND p.estabelecimento_id = ?
             AND p.excluido_em IS NULL`,
         [codigo, est],
         { teto: 1 },
       );
-      if (!d) throw invalido();
       const agora = new Date();
+      if (!d || !pareamentoVigente(data(d['codigo_expira_em']), agora)) throw invalido();
+      const segredo = randomBytes(32).toString('base64url');
       await tx.alterar(T_DISPOSITIVO, num(d['id']), num(d['versao']), {
         codigo_pareamento: null,
+        codigo_expira_em: null,
+        segredo_resumo: resumoSegredo(segredo),
         pareado_em: agora,
         ultimo_contato_em: agora,
         endereco_ip: ip ? ip.slice(0, 45) : null,
         versao_cliente: e.versaoCliente,
       });
-      return { id: num(d['id']), painelId: num(d['painel_tv_id']) };
+      return { id: num(d['id']), painelId: num(d['painel_tv_id']), segredo };
     });
   }
 
-  /** A TV pareada avisa que está no ar (a cada poucos minutos; não a cada atualização). */
-  async contato(c: ContextoComunicacao, dispositivoId: number, ip: string | null) {
+  /** A TV pareada avisa que está no ar (a cada poucos minutos), apresentando o segredo do aparelho. */
+  async contato(c: ContextoComunicacao, dispositivoId: number, segredo: string | null, ip: string | null) {
     return this.gravar(c, OPERACOES_PAINEL_TV.contato, TABELAS_PAINEL_TV, async (tx, est) => {
       const [d] = await tx.consultar(
-        `SELECT d.id, d.versao FROM painel_tv_dispositivo d JOIN painel_tv p ON p.id = d.painel_tv_id
+        `SELECT d.id, d.segredo_resumo, d.versao FROM painel_tv_dispositivo d JOIN painel_tv p ON p.id = d.painel_tv_id
           WHERE d.id = ? AND d.ativo = TRUE AND d.excluido_em IS NULL AND d.pareado_em IS NOT NULL
             AND p.estabelecimento_id = ?`,
         [dispositivoId, est],
         { teto: 1 },
       );
-      if (!d) throw naoEncontrado('Televisor pareado');
+      if (!d || !segredoConfere(segredo, d['segredo_resumo'])) throw naoEncontrado('Televisor pareado');
       await tx.alterar(T_DISPOSITIVO, dispositivoId, num(d['versao']), {
         ultimo_contato_em: new Date(),
         endereco_ip: ip ? ip.slice(0, 45) : null,
@@ -524,37 +557,56 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
     });
   }
 
-  /** O que a TV mostra: os blocos ativos do painel ativo, cada um com as linhas da sua fonte. */
+  /** Prévia do cadastro: o que a TV do painel mostra (rota de quem edita o painel). */
   async tela(c: ContextoComunicacao, id: number) {
-    return this.ler(c, 'painel_tv.tela', async (l, est) => {
-      const [p] = await l.consultar(SQL_PAINEL, [id, est]);
-      if (!p) throw naoEncontrado('Painel de TV');
-      const [ag] = await l.consultar('SELECT NOW(3) AS agora');
-      const agora = data(ag?.['agora'])!;
-      const ativo = p['situacao'] === 'ativo';
-      const blocos = ativo ? (await l.consultar(SQL_BLOCOS, [id])).filter((b) => bool(b['ativo'])) : [];
-      const saida = [];
-      for (const b of blocos) {
-        const f = lerFiltro(b['filtro']);
-        const limite = Math.min(Math.max(1, f.limite), LIMITE_LINHAS_TV);
-        saida.push({
-          sequencia: num(b['sequencia']),
-          titulo: String(b['titulo']),
-          fonte: f.fonte,
-          forma: String(b['forma_exibicao']),
-          tempoEmTelaSegundos: numOuNull(b['tempo_em_tela_segundos']) ?? num(p['tempo_rotacao_segundos']),
-          ...(await this.lerFonte(l, est, f, limite, agora)),
-        });
-      }
-      return {
-        id,
-        nome: String(p['nome']),
-        situacao: String(p['situacao']),
-        atualizacaoSegundos: num(p['atualizacao_segundos']),
-        atualizadoEm: agora.toISOString(),
-        blocos: saida,
-      };
+    return this.ler(c, 'painel_tv.tela', (l, est) => this.montarTela(l, est, id));
+  }
+
+  /**
+   * A tela pelo televisor: só o aparelho que apresenta o segredo de um televisor ativo e pareado lê o painel dele.
+   * Televisor desligado, de outro estabelecimento ou segredo errado: recusado (404), e a TV volta ao pareamento.
+   */
+  async telaDoTelevisor(c: ContextoComunicacao, dispositivoId: number, segredo: string | null) {
+    return this.ler(c, 'painel_tv.tela_televisor', async (l, est) => {
+      const [d] = await l.consultar(
+        `SELECT d.painel_tv_id, d.segredo_resumo FROM painel_tv_dispositivo d JOIN painel_tv p ON p.id = d.painel_tv_id
+          WHERE d.id = ? AND d.ativo = TRUE AND d.excluido_em IS NULL AND d.pareado_em IS NOT NULL
+            AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`,
+        [dispositivoId, est],
+      );
+      if (!d || !segredoConfere(segredo, d['segredo_resumo'])) throw naoEncontrado('Televisor pareado');
+      return { ...(await this.montarTela(l, est, num(d['painel_tv_id']))), televisorId: dispositivoId };
     });
+  }
+
+  private async montarTela(l: Leitor, est: number, id: number) {
+    const [p] = await l.consultar(SQL_PAINEL, [id, est]);
+    if (!p) throw naoEncontrado('Painel de TV');
+    const [ag] = await l.consultar('SELECT NOW(3) AS agora');
+    const agora = data(ag?.['agora'])!;
+    const ativo = p['situacao'] === 'ativo';
+    const blocos = ativo ? (await l.consultar(SQL_BLOCOS, [id])).filter((b) => bool(b['ativo'])) : [];
+    const saida = [];
+    for (const b of blocos) {
+      const f = lerFiltro(b['filtro']);
+      const limite = Math.min(Math.max(1, f.limite), LIMITE_LINHAS_TV);
+      saida.push({
+        sequencia: num(b['sequencia']),
+        titulo: String(b['titulo']),
+        fonte: f.fonte,
+        forma: String(b['forma_exibicao']),
+        tempoEmTelaSegundos: numOuNull(b['tempo_em_tela_segundos']) ?? num(p['tempo_rotacao_segundos']),
+        ...(await this.lerFonte(l, est, f, limite, agora)),
+      });
+    }
+    return {
+      id,
+      nome: String(p['nome']),
+      situacao: String(p['situacao']),
+      atualizacaoSegundos: num(p['atualizacao_segundos']),
+      atualizadoEm: agora.toISOString(),
+      blocos: saida,
+    };
   }
 
   private async lerFonte(l: Leitor, est: number, f: FiltroBloco, limite: number, agora: Date) {
@@ -591,6 +643,7 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
           paciente: x['data_hora_entrada'] !== null ? iniciaisDoNome(txtOuNull(x['nome'])) : 'Livre',
           dias:
             x['data_hora_entrada'] !== null ? diasDePermanencia(data(x['data_hora_entrada'])!, agora) : null,
+          estado: x['data_hora_entrada'] !== null ? 'ocupado' : 'livre',
         })),
         resumo: [
           { rotulo: 'Leitos', valor: r.leitos },
@@ -682,6 +735,10 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
           paciente: iniciaisDoNome(txtOuNull(x['nome'])),
           situacao: ROTULO[String(x['situacao'])] ?? String(x['situacao']),
           duracao: numOuNull(x['duracao_prevista_minutos']),
+          estado: estadoCirurgiaTv(
+            String(x['situacao']),
+            atrasoMinutos(data(x['inicio_previsto_em']), agora),
+          ),
         })),
         resumo: [
           { rotulo: 'Cirurgias do dia', valor: ls.length },
@@ -723,6 +780,7 @@ export class PortaPainelTvPropria extends BaseComunicacaoPropria {
         situacao: x['situacao'] === 'em_andamento' ? 'Em andamento' : 'Solicitada',
         espera: minutosDesde(data(x['solicitado_em'])!, agora),
         atraso: atraso[i]!,
+        estado: estadoPrazoTv(atraso[i]!),
       })),
       resumo: [
         { rotulo: 'Em aberto', valor: ls.length },

@@ -157,6 +157,8 @@ const situacao = useMutation({
 });
 const tvEscolhida = ref<number | null>(null);
 const codigoGerado = ref<string | null>(null);
+const horaCurta = (iso: string) =>
+  new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const ligar = useMutation({
   mutationFn: () => ligarTelevisor(escolhido.value as number, tvEscolhida.value as number),
   onSuccess: async (r) => {
@@ -356,7 +358,13 @@ watch(escolhido, () => {
         <ul class="ptv-tvs">
           <li v-for="d in painel.data.value.televisores" :key="d.id" :data-testid="`ptv-tv-${d.estacaoId}`">
             <strong>{{ d.estacao }}</strong>
-            <span v-if="d.codigoPareamento">{{ t('codigoPareamento', { codigo: d.codigoPareamento }) }}</span>
+            <span v-if="d.codigoPareamento"
+              >{{ t('codigoPareamento', { codigo: d.codigoPareamento }) }}
+              <template v-if="d.codigoExpiraEm"
+                >· {{ t('codigoValidade', { hora: horaCurta(d.codigoExpiraEm) }) }}</template
+              >
+            </span>
+            <span v-else-if="!d.pareado" role="alert">{{ t('codigoVencido') }}</span>
             <span v-else>{{ t('pareado') }} · {{ d.noAr ? t('noAr') : t('foraDoAr') }}</span>
             <button type="button" @click="desligar.mutate(d.id)">
               {{ t('desligar', { nome: d.estacao }) }}

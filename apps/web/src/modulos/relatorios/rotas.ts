@@ -54,7 +54,7 @@ export const rotasRelatorios: RouteRecordRaw[] = [
     name: 'relatorios.paineisTv.tela',
     component: () => import('./telas/TvOperacionalTela.vue'),
     props: true,
-    meta: { permissao: 'relatorio.painelTv.exibir' },
+    meta: { permissao: 'relatorio.painelTv.editar' },
   },
   {
     // O televisor pareado (sessão da conta da TV com relatorio.painelTv.exibir).

@@ -1,5 +1,6 @@
 // Cliente das rotas dos painéis de TV operacionais (01-REL L116): /api/relatorios/paineis-tv (painel-tv.controller.ts).
-// Gravações com CSRF e Idempotency-Key.
+// Gravações com CSRF e Idempotency-Key. A TV pareada se identifica pelo segredo do aparelho (cabeçalho x-tv-segredo),
+// recebido uma vez no pareamento; televisor desligado ou segredo recusado responde 404 e a TV volta ao pareamento.
 import { FONTES_BLOCO_TV, FORMAS_BLOCO_TV, SITUACOES_PAINEL_TV } from '@sgh/dominio-relatorio';
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
@@ -47,6 +48,7 @@ const esquemaPainel = z.object({
       estacaoId: z.number(),
       estacao: z.string(),
       codigoPareamento: z.string().nullable(),
+      codigoExpiraEm: z.string().nullable().optional(),
       pareado: z.boolean(),
       ultimoContatoEm: z.string().nullable(),
       noAr: z.boolean(),
@@ -102,6 +104,14 @@ export const lerPaineisTv = async (): Promise<ResumoPainelTv[]> =>
   (await ler(B, z.object({ itens: z.array(esquemaResumo) }))).itens;
 export const lerPainelTv = (id: number) => ler(`${B}/${id}`, esquemaPainel);
 export const lerTelaTv = (id: number) => ler(`${B}/${id}/tela`, esquemaTela);
+/** A tela pelo televisor pareado: o servidor confere o segredo do aparelho. */
+export const lerTelaTelevisor = async (tv: number, segredo: string): Promise<TelaPainelTv> =>
+  lerJson(
+    await fetch(`${B}/televisores/${tv}/tela`, {
+      headers: { accept: 'application/json', 'x-tv-segredo': segredo },
+    }),
+    esquemaTela,
+  );
 
 export interface NovoPainelTv {
   readonly codigo: string;
@@ -139,7 +149,7 @@ export const ligarTelevisor = (id: number, estacaoId: number) =>
   enviar(
     `${B}/${id}/televisores`,
     { estacaoId },
-    esquemaGravado.extend({ codigoPareamento: z.string() }),
+    esquemaGravado.extend({ codigoPareamento: z.string(), codigoExpiraEm: z.string().nullable().optional() }),
     novaChave('paineltv.ligar'),
   );
 export const desligarTelevisor = (id: number, tv: number) =>
@@ -148,8 +158,20 @@ export const parearTelevisor = (codigo: string) =>
   enviar(
     `${B}/parear`,
     { codigo, versaoCliente: 'web-1' },
-    esquemaGravado.extend({ painelId: z.number() }),
+    esquemaGravado.extend({ painelId: z.number(), segredo: z.string().min(20) }),
     novaChave('paineltv.parear'),
   );
-export const avisarContato = (tv: number) =>
-  enviar(`${B}/televisores/${tv}/contato`, {}, esquemaGravado, novaChave('paineltv.contato'));
+export async function avisarContato(tv: number, segredo: string) {
+  const r = await fetch(`${B}/televisores/${tv}/contato`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      'x-csrf': tokenCsrf(),
+      'idempotency-key': novaChave('paineltv.contato'),
+      'x-tv-segredo': segredo,
+    },
+    body: '{}',
+  });
+  return lerJson(r, esquemaGravado);
+}

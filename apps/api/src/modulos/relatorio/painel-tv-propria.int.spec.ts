@@ -293,6 +293,11 @@ describe.skipIf(SEM_BANCO)('Painéis de TV operacionais (contrato de efeito)', (
     const json = JSON.stringify(t);
     for (const nome of NOMES) expect(json).not.toContain(nome.split(' ')[0]!);
     const [uti, farmacia, mapa, lab] = t.blocos;
+    // Forma e estado de cada linha vão à TV: o mapa da terapia intensiva marca livre e ocupado; o laboratório, o atraso.
+    expect(uti!.forma).toBe('mapa');
+    expect(uti!.linhas.map((l) => l['estado']).sort()).toEqual(['livre', 'ocupado']);
+    expect(lab!.forma).toBe('lista');
+    expect(lab!.linhas.map((l) => l['estado'])).toContain('atrasado');
     expect(uti!.resumo).toEqual([
       { rotulo: 'Leitos', valor: 2 },
       { rotulo: 'Ocupados', valor: 1 },
@@ -300,8 +305,8 @@ describe.skipIf(SEM_BANCO)('Painéis de TV operacionais (contrato de efeito)', (
       { rotulo: 'Ocupação (%)', valor: 50 },
     ]);
     expect(uti!.linhas).toEqual([
-      { leito: 'U01', unidade: 'Unidade C2088UTI', paciente: 'T. C. V.', dias: 3 },
-      { leito: 'U02', unidade: 'Unidade C2088UTI', paciente: 'Livre', dias: null },
+      { leito: 'U01', unidade: 'Unidade C2088UTI', paciente: 'T. C. V.', dias: 3, estado: 'ocupado' },
+      { leito: 'U02', unidade: 'Unidade C2088UTI', paciente: 'Livre', dias: null, estado: 'livre' },
     ]);
     expect(farmacia!.linhas).toHaveLength(1);
     expect(farmacia!.linhas[0]).toMatchObject({
@@ -316,6 +321,7 @@ describe.skipIf(SEM_BANCO)('Painéis de TV operacionais (contrato de efeito)', (
       ['23:59', 'D. P.', 'Agendada'],
     ]);
     expect(mapa!.resumo.find((r) => r.rotulo === 'Início atrasado')!.valor).toBe(1);
+    expect(mapa!.linhas.map((l) => l['estado'])).toEqual(['atrasada', 'prevista']);
     expect(lab!.linhas.map((l) => [l['numero'], l['prioridade'], l['paciente']])).toEqual([
       ['C2088-R2', 'Urgente', 'F. R.'],
       ['C2088-R1', 'Rotina', 'E. M.'],
@@ -329,13 +335,44 @@ describe.skipIf(SEM_BANCO)('Painéis de TV operacionais (contrato de efeito)', (
     ]);
   });
 
-  it('televisor: código de pareamento, pareamento anula o código, código usado recusado, desligar não apaga', async () => {
+  it('televisor: código com validade, pareamento emite o segredo do aparelho, código usado recusado, desligar recusa a TV e não apaga', async () => {
     const ligado = await porta.ligarDispositivo(ctx(), painel, { estacaoId: m.tv });
     expect(ligado.codigoPareamento).toMatch(/^[2-9A-HJKMNP-Z]{6}$/);
     const d0 = (
-      await ler('SELECT codigo_pareamento, pareado_em FROM painel_tv_dispositivo WHERE id = ?', [ligado.id])
+      await ler(
+        `SELECT codigo_pareamento, pareado_em, TIMESTAMPDIFF(MINUTE, NOW(3), codigo_expira_em) AS validade
+           FROM painel_tv_dispositivo WHERE id = ?`,
+        [ligado.id],
+      )
     )[0]!;
     expect(d0).toMatchObject({ codigo_pareamento: ligado.codigoPareamento, pareado_em: null });
+    expect(Number(d0['validade'])).toBeGreaterThanOrEqual(28);
+    expect(Number(d0['validade'])).toBeLessThanOrEqual(30);
+    // Código vencido: recusado sem gravar; o cadastro já não mostra o código.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `vencer-${P}` }, (e) =>
+      e.executar(
+        'UPDATE painel_tv_dispositivo SET codigo_expira_em = NOW(3) - INTERVAL 1 MINUTE WHERE id = ?',
+        [ligado.id],
+      ),
+    );
+    expect(
+      (await erro(porta.parear(ctx(), { codigo: ligado.codigoPareamento, versaoCliente: null }, null))).texto,
+    ).toContain('codigo-invalido');
+    expect((await porta.detalhe(ctx(), painel)).televisores[0]).toMatchObject({
+      codigoPareamento: null,
+      pareado: false,
+    });
+    expect(
+      (
+        await ler('SELECT codigo_pareamento, pareado_em FROM painel_tv_dispositivo WHERE id = ?', [ligado.id])
+      )[0],
+    ).toMatchObject({ codigo_pareamento: ligado.codigoPareamento, pareado_em: null });
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `revalidar-${P}` }, (e) =>
+      e.executar(
+        'UPDATE painel_tv_dispositivo SET codigo_expira_em = NOW(3) + INTERVAL 30 MINUTE WHERE id = ?',
+        [ligado.id],
+      ),
+    );
     expect((await erro(porta.ligarDispositivo(ctx(), painel, { estacaoId: m.tv }))).texto).toContain(
       'televisor-ja-ligado',
     );
@@ -347,21 +384,37 @@ describe.skipIf(SEM_BANCO)('Painéis de TV operacionais (contrato de efeito)', (
       { codigo: ligado.codigoPareamento.toLowerCase(), versaoCliente: 'tv-1.0' },
       '10.0.0.9',
     );
-    expect(par).toEqual({ id: ligado.id, painelId: painel });
+    expect(par).toEqual({ id: ligado.id, painelId: painel, segredo: expect.stringMatching(/^[\w-]{40,}$/) });
     const d1 = (
       await ler(
-        `SELECT codigo_pareamento, pareado_em IS NOT NULL AS pareado, ultimo_contato_em IS NOT NULL AS contato,
-                endereco_ip, versao_cliente FROM painel_tv_dispositivo WHERE id = ?`,
+        `SELECT codigo_pareamento, codigo_expira_em, segredo_resumo, pareado_em IS NOT NULL AS pareado,
+                ultimo_contato_em IS NOT NULL AS contato, endereco_ip, versao_cliente
+           FROM painel_tv_dispositivo WHERE id = ?`,
         [ligado.id],
       )
     )[0]!;
-    expect(d1).toMatchObject({ codigo_pareamento: null, endereco_ip: '10.0.0.9', versao_cliente: 'tv-1.0' });
+    expect(d1).toMatchObject({
+      codigo_pareamento: null,
+      codigo_expira_em: null,
+      endereco_ip: '10.0.0.9',
+      versao_cliente: 'tv-1.0',
+    });
+    // O banco guarda só o resumo do segredo, nunca o segredo.
+    expect(String(d1['segredo_resumo'])).toMatch(/^[0-9a-f]{64}$/);
+    expect(String(d1['segredo_resumo'])).not.toBe(par.segredo);
     expect(Number(d1['pareado'])).toBe(1);
     expect(Number(d1['contato'])).toBe(1);
     expect(
       (await erro(porta.parear(ctx(), { codigo: ligado.codigoPareamento, versaoCliente: null }, null))).texto,
     ).toContain('codigo-invalido');
-    await porta.contato(ctx(), ligado.id, '10.0.0.10');
+    // A TV lê o painel dela pelo aparelho; sem o segredo, ou com outro, é recusada (o "no ar" não se forja).
+    const telaTv = await porta.telaDoTelevisor(ctx(), ligado.id, par.segredo);
+    expect(telaTv).toMatchObject({ id: painel, televisorId: ligado.id, situacao: 'ativo' });
+    expect(telaTv.blocos).toHaveLength(4);
+    expect((await erro(porta.telaDoTelevisor(ctx(), ligado.id, null))).status).toBe(404);
+    expect((await erro(porta.telaDoTelevisor(ctx(), ligado.id, 'outro-aparelho'))).status).toBe(404);
+    expect((await erro(porta.contato(ctx(), ligado.id, 'outro-aparelho', null))).status).toBe(404);
+    await porta.contato(ctx(), ligado.id, par.segredo, '10.0.0.10');
     const lista = await porta.paineis(ctx());
     expect(lista).toEqual([
       expect.objectContaining({ id: painel, situacao: 'ativo', blocos: 4, televisores: 1, noAr: true }),
@@ -374,6 +427,12 @@ describe.skipIf(SEM_BANCO)('Painéis de TV operacionais (contrato de efeito)', (
     )[0]!;
     expect(Number(d2['ativo'])).toBe(0);
     expect(Number(d2['excluido'])).toBe(1);
+    // Desligado: a TV deixa de exibir e de avisar contato, mesmo com o segredo que recebeu.
+    expect((await erro(porta.telaDoTelevisor(ctx(), ligado.id, par.segredo))).status).toBe(404);
+    expect((await erro(porta.contato(ctx(), ligado.id, par.segredo, null))).status).toBe(404);
+    expect(
+      (await ler('SELECT segredo_resumo FROM painel_tv_dispositivo WHERE id = ?', [ligado.id]))[0],
+    ).toMatchObject({ segredo_resumo: null });
     expect((await porta.detalhe(ctx(), painel)).televisores).toEqual([]);
   });
 });

@@ -2,14 +2,16 @@
 //   GET    /api/relatorios/paineis-tv/catalogo                    tipos, unidades intensivas, salas e televisores
 //   GET    /api/relatorios/paineis-tv                             os painéis do estabelecimento (blocos, TVs, no ar)
 //   GET    /api/relatorios/paineis-tv/:id                         o painel com os blocos e os televisores
-//   GET    /api/relatorios/paineis-tv/:id/tela                    o que a TV mostra (só iniciais, números e tempos)
+//   GET    /api/relatorios/paineis-tv/:id/tela                    prévia do que a TV mostra (quem edita o painel)
+//   GET    /api/relatorios/paineis-tv/televisores/:tv/tela        a TV pareada lê o painel dela (segredo do aparelho)
 //   POST   /api/relatorios/paineis-tv                             cria o painel (rascunho)
 //   PUT    /api/relatorios/paineis-tv/:id                         salva dados e blocos de uma vez
 //   POST   /api/relatorios/paineis-tv/:id/situacao                ativa, suspende ou inativa (nada é apagado)
 //   POST   /api/relatorios/paineis-tv/:id/televisores             liga um televisor e gera o código de pareamento
 //   POST   /api/relatorios/paineis-tv/:id/televisores/:tv/desligar desliga o televisor (fica no histórico)
 //   POST   /api/relatorios/paineis-tv/parear                      a TV digita o código uma vez
-//   POST   /api/relatorios/paineis-tv/televisores/:tv/contato     a TV pareada avisa que está no ar
+//   POST   /api/relatorios/paineis-tv/televisores/:tv/contato     a TV pareada avisa que está no ar (segredo)
+// O segredo do aparelho vem no cabeçalho x-tv-segredo; televisor desligado ou segredo errado recebe 404.
 import {
   Body,
   Controller,
@@ -35,6 +37,11 @@ const TRILHA =
   'cadastro do painel de TV, dos blocos e dos televisores, pareamento e contato pelo executor (trilha na mesma transação)';
 
 const ipDe = (req: RequisicaoAutorizada): string | null => (req as { ip?: string }).ip ?? null;
+const segredoDe = (req: RequisicaoAutorizada): string | null => {
+  const v = (req as { headers?: Record<string, string | string[] | undefined> }).headers?.['x-tv-segredo'];
+  const s = Array.isArray(v) ? v[0] : v;
+  return s && s.length <= 100 ? s : null;
+};
 
 @Controller('relatorios/paineis-tv')
 export class PainelTvController {
@@ -74,9 +81,15 @@ export class PainelTvController {
   }
 
   @Get(':id/tela')
-  @Permissao(P.painelTvExibir)
+  @Permissao(P.painelTvEditar)
   tela(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
     return this.com(req, (p, c) => p.tela(c, id));
+  }
+
+  @Get('televisores/:tv/tela')
+  @Permissao(P.painelTvExibir)
+  telaDoTelevisor(@Req() req: RequisicaoAutorizada, @Param('tv', ParseIntPipe) tv: number) {
+    return this.com(req, (p, c) => p.telaDoTelevisor(c, tv, segredoDe(req)));
   }
 
   @Post()
@@ -136,6 +149,6 @@ export class PainelTvController {
   @Permissao(P.painelTvExibir)
   @AuditadoNoHandler(TRILHA)
   contato(@Req() req: RequisicaoAutorizada, @Param('tv', ParseIntPipe) tv: number) {
-    return this.com(req, (p, c) => p.contato(c, tv, ipDe(req)));
+    return this.com(req, (p, c) => p.contato(c, tv, segredoDe(req), ipDe(req)));
   }
 }

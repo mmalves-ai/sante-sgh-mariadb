@@ -7,12 +7,17 @@ import {
   conferirTemposTv,
   diasDePermanencia,
   dispositivoNoAr,
+  estadoCirurgiaTv,
+  estadoPrazoTv,
+  expiracaoPareamento,
   gerarCodigoPareamento,
   iniciaisDoNome,
   MAXIMO_BLOCOS_TV,
   minutosDesde,
   normalizarCodigoPareamento,
+  pareamentoVigente,
   resumoOcupacaoTv,
+  VALIDADE_PAREAMENTO_MINUTOS,
 } from './painel-tv.js';
 
 const bloco = (b: Partial<BlocoTvEntrada> = {}): BlocoTvEntrada => ({
@@ -117,5 +122,29 @@ describe('painel de TV: pareamento do televisor', () => {
     expect(dispositivoNoAr(null, agora, 60)).toBe(false);
     expect(dispositivoNoAr(new Date('2026-11-25T11:57:30Z'), agora, 60)).toBe(true);
     expect(dispositivoNoAr(new Date('2026-11-25T11:56:59Z'), agora, 60)).toBe(false);
+  });
+
+  it('o código vale por um prazo e depois é recusado', () => {
+    const agora = new Date('2026-11-25T12:00:00Z');
+    const expira = expiracaoPareamento(agora);
+    expect(expira.getTime() - agora.getTime()).toBe(VALIDADE_PAREAMENTO_MINUTOS * 60_000);
+    expect(pareamentoVigente(expira, new Date('2026-11-25T12:29:59Z'))).toBe(true);
+    expect(pareamentoVigente(expira, new Date('2026-11-25T12:30:00Z'))).toBe(false);
+    expect(pareamentoVigente(null, agora)).toBe(false);
+  });
+});
+
+describe('painel de TV: estado da linha para o mapa', () => {
+  it('cirurgia: realizada, em sala, atrasada ou prevista', () => {
+    expect(estadoCirurgiaTv('realizado', 30)).toBe('realizada');
+    expect(estadoCirurgiaTv('em_andamento', 30)).toBe('em_sala');
+    expect(estadoCirurgiaTv('no_bloco', 0)).toBe('em_sala');
+    expect(estadoCirurgiaTv('confirmado', 5)).toBe('atrasada');
+    expect(estadoCirurgiaTv('agendado', 0)).toBe('prevista');
+  });
+
+  it('prazo: atrasado só com atraso positivo', () => {
+    expect(estadoPrazoTv(1)).toBe('atrasado');
+    expect(estadoPrazoTv(0)).toBe('no_prazo');
   });
 });
