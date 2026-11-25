@@ -59,6 +59,7 @@ import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
 import { conferirCoberturaNoLancamento } from './restricao-cobertura-propria.js';
 import { versaoNumero } from './esquemas.js';
 import { dispararKitsDoItem } from './kit-lancamento.js';
+import { apurarReceitaContabilDaConta, TABELAS_RECEITA_CONTABIL } from './receita-contabil-propria.js';
 import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
 import { aplicarAcordoNoItem, lancarExcedenteNoDestino } from './regras-acordo-conta.js';
 import {
@@ -243,6 +244,7 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
     'conta_hospitalar_etapa',
     ...TABELAS_PRODUCAO_CONTA,
     ...TABELAS_PUBLICACAO_FATO,
+    ...TABELAS_RECEITA_CONTABIL,
   ],
   entrada: esquemaFecharConta,
   travar: (e) => travaConta(e.conta, versaoDaTela(e.versao)),
@@ -312,6 +314,8 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
         campos: { fontePagadora: conta.fonte, plano: conta.plano, tabelaPreco: conta.tabela },
       },
     ]);
+    // F3.7 (06-FAT L37): a receita contábil por item, pela regra de conta contábil (chave do fato com o ciclo).
+    await apurarReceitaContabilDaConta(tx, est, conta.id);
     return { conta: conta.id };
   },
   eventos: (_e, r) => [{ tipo: 'faturamento.conta.fechada', carga: { conta: Number(r['conta']) } }],
@@ -320,7 +324,12 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
 
 export const reabrirConta = definirOperacao<ReabrirContaEntrada, ResultadoOperacao>({
   nome: 'faturamento.reabrir-conta',
-  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa', ...TABELAS_PUBLICACAO_FATO],
+  tabelas: [
+    'conta_hospitalar',
+    'conta_hospitalar_etapa',
+    ...TABELAS_PUBLICACAO_FATO,
+    ...TABELAS_RECEITA_CONTABIL,
+  ],
   entrada: esquemaReabrirConta,
   travar: (e) => travaConta(e.conta, versaoDaTela(e.versao)),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
@@ -352,6 +361,8 @@ export const reabrirConta = definirOperacao<ReabrirContaEntrada, ResultadoOperac
       hojeNoHospital(),
       e.motivo,
     );
+    // F3.7 (06-FAT L37): o estorno do que o fechamento deste ciclo contabilizou (um só, pela chave da reabertura).
+    await apurarReceitaContabilDaConta(tx, estabelecimentoDe(ctx), conta.id);
     return { conta: conta.id };
   },
   eventos: (_e, r) => [{ tipo: 'faturamento.conta.reaberta', carga: { conta: Number(r['conta']) } }],

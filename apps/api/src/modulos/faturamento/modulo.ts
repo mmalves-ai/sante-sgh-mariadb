@@ -62,6 +62,11 @@ import { PortaFaturamentoMemoria } from './porta-memoria.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
 import { RotinaDiariaContas } from './rotina-diaria.js';
 import {
+  ReceitaContabilController,
+  SERVICO_RECEITA_CONTABIL,
+  ServicoReceitaContabil,
+} from './receita-contabil.controller.js';
+import {
   SERVICO_SIMULACAO_RECEITA,
   ServicoSimulacaoReceita,
   SimulacaoReceitaController,
@@ -99,6 +104,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       RegrasComerciaisController,
       ParametrosFaturamentoController,
       SimulacaoReceitaController,
+      ReceitaContabilController,
       CoberturaController,
     ],
     providers: [
@@ -193,6 +199,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoSimulacaoReceita(ctx.nucleo)
+            : null,
+      },
+      // F3.7 (06-FAT L37): eventos, pendências e divergências da receita contábil (banco próprio).
+      {
+        provide: SERVICO_RECEITA_CONTABIL,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoReceitaContabil(ctx.nucleo)
             : null,
       },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.

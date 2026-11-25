@@ -25,6 +25,10 @@ import {
   recusa,
   type ResultadoOperacao,
 } from '@sgh/nucleo';
+import {
+  apurarReceitaContabilDosItens,
+  TABELAS_RECEITA_CONTABIL,
+} from '../faturamento/receita-contabil-propria.js';
 import { z } from 'zod';
 import { exigirPeriodoAberto } from './periodo-propria.js';
 import { dataIso, LANCAMENTO_RECEBIMENTO, numero, numeroOuNulo } from './vocabulario.js';
@@ -127,6 +131,7 @@ const baixarDemonstrativo = definirOperacao<z.infer<typeof esquemaBaixarDemonstr
     'parcela_receber',
     'titulo_receber',
     'sequencia_negocio',
+    ...TABELAS_RECEITA_CONTABIL,
   ],
   entrada: esquemaBaixarDemonstrativo as never,
   async gravar(tx, e, ctx: ContextoOperacao) {
@@ -260,6 +265,12 @@ const baixarDemonstrativo = definirOperacao<z.infer<typeof esquemaBaixarDemonstr
         });
       }
     }
+    // F3.7 (06-FAT L37): o recebido de cada item entra na receita contábil da conta (mesma transação).
+    await apurarReceitaContabilDosItens(
+      tx,
+      est,
+      plano.baixas.flatMap((b) => b.itens.map((i) => i.itemConta)),
+    );
     return {
       demonstrativo: e.demonstrativo,
       numero: numeroDemonstrativo,

@@ -14,6 +14,10 @@
 //   motivo; o recurso e a glosa mudam de situação quando o último item retorna (situacaoDoRecurso,
 //   situacaoDaGlosaNoRecurso). Nada é apagado: o retorno é gravado uma vez no item do recurso.
 import {
+  apurarReceitaContabilDosItens,
+  TABELAS_RECEITA_CONTABIL,
+} from '../faturamento/receita-contabil-propria.js';
+import {
   esquemaRegistrarRetornoRecurso,
   type RegistrarGlosaEntrada,
   type RegistrarRecursoEntrada,
@@ -186,6 +190,7 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
     'demonstrativo_analise_conta',
     'demonstrativo_analise_conta_item',
     ...TABELAS_PRODUCAO_CONTA,
+    ...TABELAS_RECEITA_CONTABIL,
   ],
   entrada: esquemaBaixaComPrazo,
   async gravar(tx, e, ctx) {
@@ -296,6 +301,12 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
         { estabelecimento: est, usuario: ctx.usuario },
       );
     }
+    // F3.7 (06-FAT L37): a receita contábil da conta acompanha a glosa (mesma transação).
+    await apurarReceitaContabilDosItens(
+      tx,
+      est,
+      e.itens.map((i) => i.item),
+    );
     return { itens: e.itens.length, primeiro: e.itens[0]!.item, glosados, glosas: glosas.size };
   },
   alvo: (e) => ({ tabela: 'conta_hospitalar_item', id: e.itens[0]!.item }),
@@ -456,6 +467,7 @@ const registrarRecurso = (montador: MontadorRecursoTiss | null) =>
       'sequencia_negocio',
       'lote_tiss',
       'arquivo',
+      ...TABELAS_RECEITA_CONTABIL,
     ],
     entrada: esquemaRecursoComPrazo,
     async gravar(tx, e, ctx) {
@@ -615,6 +627,12 @@ const registrarRecurso = (montador: MontadorRecursoTiss | null) =>
             encerrado_em: null,
           });
       }
+      // F3.7 (06-FAT L37): a glosa aceita no recurso entra na receita contábil da conta (mesma transação).
+      await apurarReceitaContabilDosItens(
+        tx,
+        estabelecimentoDe(ctx),
+        e.itens.map((i) => i.item),
+      );
       return {
         itens: e.itens.length,
         primeiro: e.itens[0]!.item,
@@ -638,7 +656,7 @@ const registrarRecurso = (montador: MontadorRecursoTiss | null) =>
 
 const registrarRetornoRecurso = definirOperacao<RegistrarRetornoRecursoEntrada, ResultadoOperacao>({
   nome: 'faturamento.registrar-retorno-recurso',
-  tabelas: ['recurso_glosa', 'recurso_glosa_item', 'glosa', 'glosa_item'],
+  tabelas: ['recurso_glosa', 'recurso_glosa_item', 'glosa', 'glosa_item', ...TABELAS_RECEITA_CONTABIL],
   entrada: esquemaRegistrarRetornoRecurso,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
@@ -748,6 +766,12 @@ const registrarRetornoRecurso = definirOperacao<RegistrarRetornoRecursoEntrada, 
         encerrado_em: s.encerrada ? new Date() : null,
       });
     }
+    // F3.7 (06-FAT L37): o recurso acatado entra na receita contábil da conta (mesma transação).
+    await apurarReceitaContabilDosItens(
+      tx,
+      est,
+      e.itens.map((i) => i.item),
+    );
     return { itens: e.itens.length, primeiro: e.itens[0]!.item, recursos: [...recursos].join(',') };
   },
   alvo: (_e, r) => ({ tabela: 'recurso_glosa', id: n(String(r['recursos']).split(',')[0]) }),
