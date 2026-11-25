@@ -231,7 +231,29 @@ export interface LivroControladosLido {
     final: number;
     movimentos: readonly { data: string; tipo: string; quantidade: number; documento: string }[];
   }[];
-  readonly fechado: { em: string; por: string; guardaAte: string; hash: string } | null;
+  readonly fechado: {
+    em: string;
+    por: string;
+    guardaAte: string;
+    hash: string;
+    /** Como o período foi fechado: o oficial prevalece sobre o de conferência. */
+    modo: 'conferencia' | 'oficial';
+    /** Os termos de abertura e de encerramento como ficaram gravados no fechamento, com o texto pronto. */
+    termos: readonly TermoLivroLido[];
+  } | null;
+}
+
+/** Termo de abertura ou de encerramento gravado no fechamento do livro de controlados. */
+export interface TermoLivroLido {
+  readonly tipo: 'abertura' | 'encerramento';
+  readonly paginaInicial: number;
+  readonly paginaFinal: number;
+  readonly razaoSocial: string;
+  readonly cnpj: string;
+  readonly responsavel: string;
+  readonly emitidoEm: string;
+  readonly conteudoGuardado: boolean;
+  readonly texto: string;
 }
 
 export interface DispensacaoAmbulatorialLida {

@@ -850,6 +850,8 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
       guardaAte: r.guardaAte,
       por: 'f24pf.farma',
       modo: 'conferencia',
+      // O estabelecimento do teste não tem CNPJ: o de conferência fecha sem termo, e a leitura não inventa.
+      termos: [],
     });
     expect(await porta.livroFechado(ctx, 2, new Date('2026-11-01T00:00:00'))).toBeNull();
     expect(await fechar('conferencia').catch((e: unknown) => e)).toBeInstanceOf(ErroOperacao);
@@ -948,9 +950,45 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
       );
       expect(createHash('sha256').update(lido.conteudo).digest('hex')).toBe(arq.hash);
       expect(JSON.parse(lido.conteudo.toString('utf8'))).toMatchObject({ titulo: 'LIVRO SINTETICO OFICIAL' });
-      expect(await porta.livroFechado(ctx, 2, new Date('2026-11-08T00:00:00'))).toMatchObject({
-        modo: 'oficial',
-      });
+      // A leitura do livro fechado devolve os termos GRAVADOS (emitente e responsável da época), abertura primeiro;
+      // só o de encerramento cita o conteúdo guardado.
+      const responsavel = await ler(
+        `SELECT COALESCE(NULLIF(pr.nome_exibicao, ''), pf.nome) AS nome
+           FROM livro_controlado lc JOIN profissional pr ON pr.id = lc.responsavel_tecnico_profissional_id
+           JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id WHERE lc.id = ?`,
+        [r.id],
+      );
+      const fechado = await porta.livroFechado(ctx, 2, new Date('2026-11-08T00:00:00'));
+      expect(fechado).toMatchObject({ modo: 'oficial', hash: arq.hash });
+      expect(String(responsavel?.['nome'] ?? '')).not.toBe('');
+      expect(fechado?.termos).toEqual([
+        {
+          tipo: 'abertura',
+          paginaInicial: 1,
+          paginaFinal: 3,
+          razaoSocial: expect.stringMatching(/\S/),
+          cnpj: '92400000000155',
+          responsavel: responsavel?.['nome'],
+          emitidoEm: fechado?.em,
+          conteudoGuardado: false,
+        },
+        {
+          tipo: 'encerramento',
+          paginaInicial: 1,
+          paginaFinal: 3,
+          razaoSocial: expect.stringMatching(/\S/),
+          cnpj: '92400000000155',
+          responsavel: responsavel?.['nome'],
+          emitidoEm: fechado?.em,
+          conteudoGuardado: true,
+        },
+      ]);
+      // O cadastro muda depois (o CNPJ sai no finally): o termo gravado continua o da época do fechamento.
+      await cnpj(null);
+      expect(
+        (await porta.livroFechado(ctx, 2, new Date('2026-11-08T00:00:00')))?.termos.map((t) => t.cnpj),
+      ).toEqual(['92400000000155', '92400000000155']);
+      await cnpj('92400000000155');
       // Fechar de novo o mesmo período recusa.
       expect(codigoDe(await fechar(arq).catch((e: unknown) => e))).toBe('livro-fechado');
     } finally {

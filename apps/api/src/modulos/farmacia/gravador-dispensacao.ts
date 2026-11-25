@@ -51,7 +51,7 @@ import type {
   RegistrarPerdaControladoEntrada,
 } from '@sgh/contratos';
 import { ErroOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
-import { civil, FUSO_PADRAO } from '../exames/relogio.js';
+import { civil, FUSO_PADRAO, instanteCivil } from '../exames/relogio.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from '../suprimentos/conta-estoque.js';
 import type { ExtrasGravacaoFarmacia } from './gravador-avaliacao.js';
 import type { GravadorSghFarmacia } from './porta.js';
@@ -1398,6 +1398,12 @@ export function gravadorDispensacao(
         'sem-vinculo-profissional',
         'O usuário da sessão não tem vínculo profissional no estabelecimento: o envio leva o farmacêutico responsável.',
       );
+    // O período é de dias civis do estabelecimento: do início do primeiro dia ao início do dia seguinte ao último, no
+    // fuso dele (a dispensação da noite, que no relógio universal já é o dia seguinte, entra no dia em que foi feita).
+    const [fa, fm, fd] = s.fim.split('-').map(Number) as [number, number, number];
+    const diaSeguinte = new Date(Date.UTC(fa, fm - 1, fd + 1)).toISOString().slice(0, 10);
+    const inicioDoPeriodo = instanteCivil(s.inicio, '00:00', await fuso());
+    const fimDoPeriodo = instanteCivil(diaSeguinte, '00:00', await fuso());
     // As dispensações ambulatoriais do período ainda não escrituradas, com o lançamento de saída de cada uma (travadas).
     const pend = await tx.consultarParaAtualizar<Linha>(
       `SELECT d.id, d.versao, d.receita_controlada_id, di.insumo_id, di.lote_insumo_id, li.numero_lote, di.quantidade,
@@ -1407,12 +1413,12 @@ export function gravadorDispensacao(
          JOIN lote_insumo li ON li.id = di.lote_insumo_id
          JOIN movimento_estoque m ON m.dispensacao_item_id = di.id AND m.natureza = 'saida' AND m.excluido_em IS NULL
         WHERE d.estabelecimento_id = ? AND d.tipo = 'ambulatorial' AND d.situacao <> 'cancelada' AND d.excluido_em IS NULL
-          AND d.dispensado_em >= ? AND d.dispensado_em < ? + INTERVAL 1 DAY
+          AND d.dispensado_em >= ? AND d.dispensado_em < ?
           AND NOT EXISTS (SELECT 1 FROM envio_controlado_nacional_item ei
                             JOIN envio_controlado_nacional en ON en.id = ei.envio_controlado_nacional_id
                            WHERE ei.movimento_estoque_id = m.id AND en.situacao <> 'cancelado' AND ei.excluido_em IS NULL)
         ORDER BY d.id`,
-      [est, s.inicio, s.fim],
+      [est, inicioDoPeriodo, fimDoPeriodo],
     );
     const env = montarEnvioSngpc(
       pend.map((x) => ({

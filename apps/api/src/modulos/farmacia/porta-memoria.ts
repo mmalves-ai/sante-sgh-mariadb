@@ -25,6 +25,7 @@ import {
   conferirRespostaIntervencao,
   etiquetasAceitas,
   guardaAte,
+  termosDoLivro,
   listaDoItem,
   montarEnvioSngpc,
   type RecusaSuprimentos,
@@ -1103,12 +1104,29 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
     }));
   }
   async livroFechado(c: ContextoFarmacia, livro: number, inicio: Date) {
-    const x = this.e(c)
-      .livros.filter((l) => l.livro === livro && l.inicio === iso(inicio))
-      .at(-1);
-    return x
-      ? { em: x.em, por: x.por, guardaAte: x.guardaAte, hash: x.hash, conteudo: x.conteudo, modo: x.modo }
-      : null;
+    // Como a porta própria: o oficial prevalece sobre o de conferência; entre iguais, o mais recente.
+    const doPeriodo = this.e(c).livros.filter((l) => l.livro === livro && l.inicio === iso(inicio));
+    const x = doPeriodo.filter((l) => l.modo === 'oficial').at(-1) ?? doPeriodo.at(-1);
+    if (!x) return null;
+    const paginas = (JSON.parse(x.conteudo) as { paginas?: unknown[] }).paginas?.length ?? 0;
+    return {
+      em: x.em,
+      por: x.por,
+      guardaAte: x.guardaAte,
+      hash: x.hash,
+      conteudo: x.conteudo,
+      modo: x.modo,
+      termos: termosDoLivro(paginas).map((t) => ({
+        tipo: t.tipo,
+        paginaInicial: t.paginaInicial,
+        paginaFinal: t.paginaFinal,
+        razaoSocial: 'HOSPITAL SINTETICO',
+        cnpj: '00000000000191',
+        responsavel: x.por,
+        emitidoEm: x.em,
+        conteudoGuardado: false,
+      })),
+    };
   }
   async locais() {
     return [{ codigo: LOCAL_FARMACIA_SINTETICO, nome: 'FARMACIA SINTETICA' }];

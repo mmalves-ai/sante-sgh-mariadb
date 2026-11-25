@@ -2,13 +2,16 @@
 // guarda de 2 anos, fechado pelo farmacêutico responsável, escrituração semanal; o oficial só com a chave da VISA.
 import { describe, expect, it } from 'vitest';
 import {
+  cnpjFormatado,
   conferirEmitenteDoLivro,
   conferirFechamentoLivro,
   guardaAte,
   LIVROS_CONTROLADOS,
   livroDaLista,
   montarLivro,
+  ordenarTermos,
   termosDoLivro,
+  textoDoTermo,
 } from '@sgh/contratos/regras-suprimentos';
 
 describe('livro de controlados (regra 9)', () => {
@@ -98,5 +101,49 @@ describe('livro de controlados (regra 9)', () => {
     );
     expect(conferirEmitenteDoLivro({ razaoSocial: 'H', cnpj: '12345678000190', oficial: true })).toBeNull();
     expect(conferirEmitenteDoLivro({ razaoSocial: 'H', cnpj: null, oficial: false })).toBeNull();
+  });
+  it('termo gravado: o texto traz páginas, emitente com o CNPJ formatado, período, responsável e emissão', () => {
+    const abertura = {
+      tipo: 'abertura' as const,
+      paginaInicial: 1,
+      paginaFinal: 3,
+      razaoSocial: 'HOSPITAL SINTETICO LTDA',
+      cnpj: '92400000000155',
+      responsavel: 'FARMACEUTICA SINTETICA',
+      emitidoEm: '2026-11-15T08:30',
+      conteudoGuardado: false,
+    };
+    const livro = {
+      titulo: 'Livro de entorpecentes',
+      inicio: '2026-11-08',
+      fim: '2026-11-14',
+      oficial: true,
+    };
+    const a = textoDoTermo(abertura, livro);
+    expect(a).toMatch(/^Termo de abertura: este livro contém 3 página\(s\), numeradas de 1 a 3/);
+    expect(a).toContain('HOSPITAL SINTETICO LTDA, CNPJ 92.400.000/0001-55');
+    expect(a).toContain('no período de 08/11/2026 a 14/11/2026');
+    expect(a).toContain('Responsável técnico: FARMACEUTICA SINTETICA. Emitido em 15/11/2026.');
+    expect(a).not.toMatch(/conferência/);
+    const e = textoDoTermo({ ...abertura, tipo: 'encerramento', conteudoGuardado: true }, livro);
+    expect(e).toMatch(
+      /^Termo de encerramento:.*contém 3 página\(s\).*escrituradas de 08\/11\/2026 a 14\/11\/2026/,
+    );
+    expect(e).toContain('O conteúdo fechado está guardado no arquivo do livro.');
+    // O de conferência avisa que não substitui o oficial, e não cita arquivo.
+    const c = textoDoTermo({ ...abertura, tipo: 'encerramento' }, { ...livro, oficial: false });
+    expect(c).toMatch(/Relatório de conferência: não substitui o livro oficial\.$/);
+    expect(c).not.toContain('guardado no arquivo');
+    // Sem nome de responsável o termo diz, sem inventar; CNPJ fora do formato sai como veio.
+    expect(textoDoTermo({ ...abertura, responsavel: '' }, livro)).toContain(
+      'Responsável técnico: não identificado.',
+    );
+    expect(cnpjFormatado('123')).toBe('123');
+  });
+  it('termos gravados saem na ordem do livro: abertura e depois encerramento', () => {
+    expect(ordenarTermos([{ tipo: 'encerramento' }, { tipo: 'abertura' }]).map((t) => t.tipo)).toEqual([
+      'abertura',
+      'encerramento',
+    ]);
   });
 });

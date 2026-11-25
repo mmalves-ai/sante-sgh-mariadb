@@ -345,7 +345,15 @@ describe('controlados, livro e SNGPC (regras 4, 9 e 10)', () => {
     const conf = await post(s, '/farmacia/livro/fechar', { livro: 1, inicio: l.inicio, fim: l.fim });
     expect(conf.statusCode).toBe(200);
     expect(conf.json().mensagem).toMatch(/modo conferência/);
-    expect((await get(s, '/farmacia/livro?livro=1')).json().fechado.hash).toMatch(/^[0-9a-f]{64}$/);
+    const fechado = (await get(s, '/farmacia/livro?livro=1')).json().fechado;
+    expect(fechado.hash).toMatch(/^[0-9a-f]{64}$/);
+    // A leitura do livro fechado traz o modo do fechamento e os termos gravados, com o texto pronto para a tela.
+    expect(fechado.modo).toBe('conferencia');
+    expect(fechado.termos.map((t: { tipo: string }) => t.tipo)).toEqual(['abertura', 'encerramento']);
+    expect(fechado.termos[0].texto).toMatch(
+      /^Termo de abertura: .*CNPJ 00\.000\.000\/0001-91.*não substitui/,
+    );
+    expect(fechado.termos[1].texto).toMatch(/^Termo de encerramento: /);
   });
 
   it('SNGPC desligado: nenhuma escrita (a recusa vem antes da transação)', async () => {

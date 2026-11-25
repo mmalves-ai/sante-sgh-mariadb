@@ -2,7 +2,10 @@
 // Livro de controlados (ficha do M29, seção 7; regra 9; DP-47.14): `/farmacia/livro`. Os 4 livros, uma página por
 // substância, os termos; modo conferência até a aprovação prévia da Vigilância Sanitária (a chave do livro oficial
 // tem esse pré-requisito); fechado pelo farmacêutico responsável; PDF/A pelo conversor do servidor.
-import { LIVROS_CONTROLADOS } from '@sgh/contratos/regras-suprimentos';
+// F3.6 (05-SUP linha 10): o período fechado mostra os termos como ficaram GRAVADOS (emitente, páginas, responsável e
+// emissão da época), o período é conferido na hora (até 7 dias) e o fechamento oficial pede confirmação, porque guarda
+// o conteúdo e não se refaz.
+import { conferirFechamentoLivro, LIVROS_CONTROLADOS } from '@sgh/contratos/regras-suprimentos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -29,13 +32,43 @@ const l = useQuery({
 });
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
-async function fechar(oficial: boolean): Promise<void> {
+const confirmando = ref(false);
+const fechado = computed(() => l.data.value?.fechado ?? null);
+const oficial = computed(() =>
+  fechado.value ? fechado.value.modo === 'oficial' : l.data.value?.modo === 'oficial',
+);
+const termo = (tipo: 'abertura' | 'encerramento') =>
+  fechado.value?.termos.find((x) => x.tipo === tipo) ?? null;
+/** O período do livro conferido na hora pela mesma regra do servidor (só o que não depende do banco). */
+const recusaPeriodo = computed(() => {
+  const x = l.data.value;
+  if (!x) return null;
+  const r = conferirFechamentoLivro({
+    responsavelTecnico: true,
+    inicio: x.inicio,
+    fim: x.fim,
+    oficial: false,
+    chaveOficialLigada: true,
+    jaFechado: false,
+  });
+  return r ? r.mensagem : null;
+});
+const podeFechar = computed(() => pode('fecharLivro') && !recusaPeriodo.value && !fechado.value);
+const podeFecharOficial = computed(
+  () => pode('fecharLivroOficial') && !recusaPeriodo.value && fechado.value?.modo !== 'oficial',
+);
+async function fechar(comoOficial: boolean): Promise<void> {
   const x = l.data.value;
   if (!x) return;
   erro.value = null;
+  mensagem.value = null;
+  confirmando.value = false;
   try {
     mensagem.value = (
-      await fecharLivro({ livro: x.livro, inicio: x.inicio, fim: x.fim, oficial }, novaChave('livro'))
+      await fecharLivro(
+        { livro: x.livro, inicio: x.inicio, fim: x.fim, oficial: comoOficial },
+        novaChave('livro'),
+      )
     ).mensagem;
     await l.refetch();
   } catch (e) {
@@ -64,9 +97,12 @@ async function fechar(oficial: boolean): Promise<void> {
     <p v-if="mensagem" role="status" data-testid="livro-mensagem">{{ mensagem }}</p>
     <template v-if="l.data.value">
       <p data-testid="livro-modo">
-        {{ l.data.value.modo === 'oficial' ? t('farmacia.livro.oficial') : t('farmacia.livro.conferencia') }}
+        {{ oficial ? t('farmacia.livro.oficial') : t('farmacia.livro.conferencia') }}
       </p>
-      <p>{{ l.data.value.termoAbertura }}</p>
+      <p v-if="recusaPeriodo" role="alert" data-testid="livro-periodo">{{ recusaPeriodo }}</p>
+      <p data-testid="livro-termo-abertura" :data-gravado="termo('abertura') ? 'sim' : 'nao'">
+        {{ termo('abertura')?.texto ?? l.data.value.termoAbertura }}
+      </p>
       <section
         v-for="p in l.data.value.paginas"
         :key="p.pagina"
@@ -89,7 +125,14 @@ async function fechar(oficial: boolean): Promise<void> {
           </li>
         </ul>
       </section>
-      <p>{{ l.data.value.termoEncerramento }}</p>
+      <p data-testid="livro-termo-encerramento" :data-gravado="termo('encerramento') ? 'sim' : 'nao'">
+        {{ termo('encerramento')?.texto ?? l.data.value.termoEncerramento }}
+      </p>
+      <p v-if="fechado" data-testid="livro-termos-situacao">
+        {{
+          fechado.termos.length ? t('farmacia.livro.termosGravados') : t('farmacia.livro.termosNaoGravados')
+        }}
+      </p>
       <p v-if="l.data.value.fechado" data-testid="livro-fechado">
         {{
           t('farmacia.livro.fechado', {
@@ -103,17 +146,49 @@ async function fechar(oficial: boolean): Promise<void> {
         <a :href="urlPdfLivro(consulta)" data-testid="livro-pdf">{{ t('farmacia.livro.pdf') }}</a>
         <SanteBotao
           :rotulo="t('farmacia.livro.fechar')"
-          :desabilitado="!pode('fecharLivro')"
+          :desabilitado="!podeFechar"
           data-testid="livro-fechar"
           @acionar="fechar(false)"
         />
         <SanteBotao
           variante="secundario"
           :rotulo="t('farmacia.livro.fecharOficial')"
-          :desabilitado="!pode('fecharLivroOficial')"
-          @acionar="fechar(true)"
+          :desabilitado="!podeFecharOficial || confirmando"
+          data-testid="livro-fechar-oficial"
+          @acionar="confirmando = true"
         />
       </div>
+      <section
+        v-if="confirmando"
+        class="painel"
+        aria-labelledby="lv-confirma"
+        data-testid="livro-confirmar-oficial"
+      >
+        <h2 id="lv-confirma">{{ t('farmacia.livro.confirmarTitulo') }}</h2>
+        <p>
+          {{
+            t('farmacia.livro.confirmarTexto', {
+              titulo: l.data.value.titulo,
+              inicio: data(l.data.value.inicio),
+              fim: data(l.data.value.fim),
+              paginas: l.data.value.paginas.length,
+            })
+          }}
+        </p>
+        <div class="acoes">
+          <SanteBotao
+            :rotulo="t('farmacia.livro.confirmar')"
+            data-testid="livro-confirmar"
+            @acionar="fechar(true)"
+          />
+          <SanteBotao
+            variante="secundario"
+            :rotulo="t('farmacia.livro.desistir')"
+            data-testid="livro-desistir"
+            @acionar="confirmando = false"
+          />
+        </div>
+      </section>
     </template>
   </section>
 </template>

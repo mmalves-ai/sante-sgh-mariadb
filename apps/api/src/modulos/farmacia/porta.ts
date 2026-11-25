@@ -11,6 +11,7 @@ import type {
   ClasseMedicamento,
   DecisaoAvaliacao,
   LivroMontado,
+  TermoGravado,
   TipoIntervencao,
 } from '@sgh/contratos/regras-suprimentos';
 import type { ParametrosIntegracaoEditaveis } from '@sgh/contratos';
@@ -194,6 +195,8 @@ export interface PortaFarmacia extends PortaGravacaoM18<GravadorSghFarmacia> {
     hash: string;
     conteudo: string;
     modo: string;
+    /** Os termos de abertura e de encerramento gravados no fechamento (vazio quando o cadastro não tinha o emitente). */
+    termos: TermoGravado[];
   } | null>;
   parametrosIntegracao(c: ContextoFarmacia): Promise<ParametrosIntegracaoLidos>;
   /** F3.6: as regras de integração prescrição × estoque, as grades de horário padrão e as opções da tela. */

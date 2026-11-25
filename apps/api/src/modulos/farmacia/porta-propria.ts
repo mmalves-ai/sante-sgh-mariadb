@@ -28,7 +28,12 @@ import type {
   ParametrosIntegracaoEditaveis,
   RegistrarPerdaControladoEntrada,
 } from '@sgh/contratos';
-import { guardaAte, type LivroMontado } from '@sgh/contratos/regras-suprimentos';
+import {
+  guardaAte,
+  type LivroMontado,
+  ordenarTermos,
+  type TermoGravado,
+} from '@sgh/contratos/regras-suprimentos';
 import {
   type ContextoOperacao,
   criarArmazemLocal,
@@ -960,22 +965,48 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
       const r = await l.uma(
-        `SELECT lc.encerrado_em, lc.guarda_ate, lc.hash_conteudo, lc.modo_fechamento, u.login
+        `SELECT lc.id, lc.encerrado_em, lc.guarda_ate, lc.hash_conteudo, lc.modo_fechamento, u.login
            FROM livro_controlado lc LEFT JOIN usuario u ON u.id = lc.criado_por
           WHERE lc.estabelecimento_id = ? AND lc.numero IN (?, ?) AND lc.situacao = 'encerrado' AND lc.excluido_em IS NULL
           ORDER BY lc.modo_fechamento = 'oficial' DESC, lc.id DESC LIMIT 1`,
         [est, `L${livro}-${dataLocal(inicio)}-O`, `L${livro}-${dataLocal(inicio)}-C`],
       );
-      return r
-        ? {
-            em: minutoCivil(r['encerrado_em'], fuso),
-            por: texto(r['login']),
-            guardaAte: dataIso(r['guarda_ate']),
-            hash: texto(r['hash_conteudo']),
-            conteudo: '',
-            modo: texto(r['modo_fechamento']),
-          }
-        : null;
+      if (!r) return null;
+      // Os termos como ficaram gravados no fechamento (o emitente e o responsável são os da época, não os de hoje).
+      const termos = ordenarTermos(
+        (
+          await l.consultar(
+            `SELECT t.tipo, t.pagina_inicial, t.pagina_final, t.razao_social, t.cnpj, t.emitido_em, t.arquivo_id,
+                    COALESCE(NULLIF(pr.nome_exibicao, ''), pf.nome) AS responsavel
+               FROM termo_livro_controlado t
+               LEFT JOIN profissional pr ON pr.id = t.responsavel_profissional_id
+               LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+              WHERE t.livro_controlado_id = ? AND t.excluido_em IS NULL
+              ORDER BY t.sequencia LIMIT 10`,
+            [n(r['id'])],
+          )
+        )
+          .filter((t) => ['abertura', 'encerramento'].includes(texto(t['tipo'])))
+          .map((t): TermoGravado => ({
+            tipo: texto(t['tipo']) as TermoGravado['tipo'],
+            paginaInicial: n(t['pagina_inicial']),
+            paginaFinal: n(t['pagina_final']),
+            razaoSocial: texto(t['razao_social']),
+            cnpj: texto(t['cnpj']),
+            responsavel: texto(t['responsavel']),
+            emitidoEm: minutoCivil(t['emitido_em'] ?? r['encerrado_em'], fuso),
+            conteudoGuardado: t['arquivo_id'] !== null && t['arquivo_id'] !== undefined,
+          })),
+      );
+      return {
+        em: minutoCivil(r['encerrado_em'], fuso),
+        por: texto(r['login']),
+        guardaAte: dataIso(r['guarda_ate']),
+        hash: texto(r['hash_conteudo']),
+        conteudo: '',
+        modo: texto(r['modo_fechamento']),
+        termos,
+      };
     });
   }
 
