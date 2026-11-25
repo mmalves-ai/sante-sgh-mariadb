@@ -34,6 +34,15 @@ export interface DescricaoLida {
   readonly envioAnatomopatologico: boolean;
   readonly descricaoPecas: string | null;
   readonly assinadaEm: string | null;
+  /**
+   * Nível da assinatura: a eletrônica avançada (senha conferida de novo) ou a ICP-Brasil (envelope ligado), e o
+   * documento do prontuário que a fila ICP do cirurgião assina (null: rascunho, ou sem tipo de documento cadastrado).
+   */
+  readonly assinatura: {
+    readonly nivel: 'eletronica-avancada' | 'icp-brasil' | null;
+    readonly documento: number | null;
+    readonly envelope: number | null;
+  };
   readonly achados: { achado: number; rotulo: string; complemento: string | null }[];
   readonly adendos: { sequencia: number; texto: string; motivo: string; registradoEm: string | null }[];
 }
@@ -161,7 +170,11 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
         [ato],
       );
       const ds = await l.consultar(
-        `SELECT d.*, ${NOME_PROF} AS nome FROM descricao_cirurgica d
+        `SELECT d.*, ${NOME_PROF} AS nome,
+                (SELECT dp.id FROM documento_prontuario dp
+                  WHERE dp.entidade_origem = 'descricao_cirurgica' AND dp.entidade_origem_id = d.id
+                    AND dp.excluido_em IS NULL ORDER BY dp.numero_versao DESC LIMIT 1) AS documento_prontuario
+           FROM descricao_cirurgica d
            JOIN profissional pr ON pr.id = d.cirurgiao_profissional_id
            JOIN pessoa_fisica pfp ON pfp.id = pr.pessoa_fisica_id
           WHERE d.ato_cirurgico_id = ? AND d.excluido_em IS NULL ORDER BY d.id`,
@@ -195,6 +208,16 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
           envioAnatomopatologico: verdadeiro(d['envio_anatomopatologico']),
           descricaoPecas: textoOuNulo(d['descricao_pecas']),
           assinadaEm: civil(d['assinada_em'], fuso),
+          assinatura: {
+            nivel:
+              d['documento_assinado_id'] !== null
+                ? 'icp-brasil'
+                : d['assinada_em'] !== null
+                  ? 'eletronica-avancada'
+                  : null,
+            documento: nn(d['documento_prontuario']),
+            envelope: nn(d['documento_assinado_id']),
+          },
           achados: achados.map((x) => ({
             achado: n(x['achado_cirurgico_padrao_id']),
             rotulo: texto(x['descricao']),

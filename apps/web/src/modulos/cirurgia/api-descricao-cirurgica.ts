@@ -26,6 +26,11 @@ const descricao = z.object({
   envioAnatomopatologico: z.boolean(),
   descricaoPecas: z.string().nullable(),
   assinadaEm: z.string().nullable(),
+  assinatura: z.object({
+    nivel: z.enum(['eletronica-avancada', 'icp-brasil']).nullable(),
+    documento: z.number().nullable(),
+    envelope: z.number().nullable(),
+  }),
   achados: z.array(z.object({ achado: z.number(), rotulo: z.string(), complemento: z.string().nullable() })),
   adendos: z.array(
     z.object({

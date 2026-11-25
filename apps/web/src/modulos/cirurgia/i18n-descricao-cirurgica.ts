@@ -35,6 +35,11 @@ export const mensagensDescricaoCirurgica = {
   situacao: 'Situação',
   situacoes: { rascunho: 'Rascunho', assinada: 'Assinada', retificada: 'Retificada (com adendo)' },
   assinadaEm: 'Assinada em {quando}',
+  nivel: {
+    'eletronica-avancada': 'Assinatura eletrônica avançada, com a senha conferida de novo.',
+    'icp-brasil': 'Assinada com certificado digital ICP-Brasil.',
+    assinarComCertificado: 'Assinar com certificado ICP-Brasil (fila de assinaturas)',
+  },
   adendos: 'Adendos',
   adendo: 'Novo adendo',
   adendoTexto: 'Texto do adendo',

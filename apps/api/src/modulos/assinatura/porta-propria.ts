@@ -132,7 +132,14 @@ export const TABELAS_ASSINATURA = [
   'documento_prontuario_evento',
   'documento_assinado',
   'assinatura_documento',
+  'descricao_cirurgica',
 ] as const;
+
+/**
+ * O registro de origem que guarda o envelope da própria assinatura ICP (a descrição cirúrgica: CFM 1.821/2007 e
+ * 2.299/2021). Ao concluir a ICP do documento do prontuário que o representa, o envelope é ligado também na origem.
+ */
+const TABELA_DESCRICAO_CIRURGICA = 'descricao_cirurgica';
 
 /** Resultado da consulta pública no vocabulário do banco (CHECK ck_consulta_verificacao_documento_resultado). */
 const RESULTADO_NO_BANCO: Readonly<Record<ResultadoVerificacao, string>> = {
@@ -968,7 +975,8 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
     const u = await this.usuarioDoLogin(tx, ctx.usuario);
     const [d] = await tx.consultarParaAtualizar(
       `SELECT dp.id, dp.versao, dp.situacao_documento_prontuario_id, dp.documento_assinado_id, dp.paciente_id,
-              dp.atendimento_id, dp.profissional_id, dp.titulo, t.codigo AS tipo
+              dp.atendimento_id, dp.profissional_id, dp.titulo, dp.entidade_origem, dp.entidade_origem_id,
+              t.codigo AS tipo
          FROM documento_prontuario dp JOIN tipo_documento_clinico t ON t.id = dp.tipo_documento_clinico_id
         WHERE dp.id = ? AND dp.estabelecimento_id = ?`,
       [documento, est],
@@ -1060,6 +1068,31 @@ export class PortaAssinaturaPropria implements PortaAssinaturaIcp {
       dados: JSON.stringify({ nivel: 'icp-brasil', assinatura: n(a['id']), comoSuporte }),
       ocorrido_em: agora,
       usuario_id: u.id,
+    });
+    if (texto(d['entidade_origem']) === TABELA_DESCRICAO_CIRURGICA)
+      await this.ligarEnvelopeNaDescricao(tx, documento, n(d['entidade_origem_id']));
+  }
+
+  /** A descrição cirúrgica assinada recebe o envelope ICP do documento que a representa (uma vez; nunca troca). */
+  private async ligarEnvelopeNaDescricao(
+    tx: TxOperacao,
+    documento: number,
+    descricao: number,
+  ): Promise<void> {
+    const dp = await tx.uma('SELECT documento_assinado_id FROM documento_prontuario WHERE id = ?', [
+      documento,
+    ]);
+    const envelope = nn(dp?.['documento_assinado_id'] ?? null);
+    if (envelope === null) return;
+    const [dc] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, documento_assinado_id FROM ${TABELA_DESCRICAO_CIRURGICA}
+        WHERE id = ? AND excluido_em IS NULL`,
+      [descricao],
+      { teto: 1 },
+    );
+    if (!dc || dc['documento_assinado_id'] !== null) return;
+    await tx.alterar(TABELA_DESCRICAO_CIRURGICA, descricao, n(dc['versao']), {
+      documento_assinado_id: envelope,
     });
   }
 

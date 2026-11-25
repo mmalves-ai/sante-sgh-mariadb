@@ -97,6 +97,9 @@ function simular(page: Page) {
           envioAnatomopatologico: false,
           descricaoPecas: null,
           assinadaEm: b['assinar'] ? '2026-11-25 10:30' : null,
+          assinatura: b['assinar']
+            ? { nivel: 'eletronica-avancada', documento: 901, envelope: null }
+            : { nivel: null, documento: null, envelope: null },
           achados: ((b['achados'] as { achado: number }[]) ?? []).map((a) => ({
             achado: a.achado,
             rotulo: 'ACHADO FICTICIO',
@@ -213,6 +216,12 @@ test.describe('@C2-019 descrição cirúrgica assinada e intercorrências', () =
     await expect(page.getByTestId('descricao-aviso')).toHaveText('Descrição assinada.');
     // Assinada: o formulário sai e a descrição fica só para leitura, com o adendo.
     await expect(page.getByTestId('descricao-form')).toHaveCount(0);
+    // Assinatura eletrônica avançada com a senha; o cirurgião com certificado segue para a fila ICP-Brasil.
+    await expect(page.getByTestId('descricao-nivel-801')).toContainText('eletrônica avançada');
+    await expect(page.getByTestId('descricao-assinar-icp-801')).toHaveAttribute(
+      'href',
+      /\/pep\/assinaturas$/,
+    );
     const assinou = sim.corpos.find((c) => c['assinar'] === true)!;
     expect(assinou).toMatchObject({
       assinar: true,

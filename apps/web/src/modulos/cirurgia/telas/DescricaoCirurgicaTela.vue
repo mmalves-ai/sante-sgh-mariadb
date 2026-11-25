@@ -427,6 +427,19 @@ const situacao = (s: string) =>
       >
         <h2>{{ d.cirurgiaoNome }} · {{ situacao(d.situacao) }}</h2>
         <p v-if="d.assinadaEm">{{ t('cirurgia.descricao.assinadaEm', { quando: d.assinadaEm }) }}</p>
+        <p v-if="d.assinatura.nivel" :data-testid="`descricao-nivel-${d.id}`">
+          {{ t(`cirurgia.descricao.nivel.${d.assinatura.nivel}`) }}
+          <RouterLink
+            v-if="
+              d.assinatura.nivel === 'eletronica-avancada' &&
+              d.assinatura.documento !== null &&
+              d.cirurgiao === dados.eu.profissional
+            "
+            to="/pep/assinaturas"
+            :data-testid="`descricao-assinar-icp-${d.id}`"
+            >{{ t('cirurgia.descricao.nivel.assinarComCertificado') }}</RouterLink
+          >
+        </p>
         <pre v-if="d.situacao !== 'rascunho' || d.cirurgiao !== dados.eu.profissional">{{
           d.descricaoTecnica
         }}</pre>

@@ -193,9 +193,91 @@ async function gravarAchados(tx: TxOperacao, descricao: number, itens: SalvarDes
 
 export const TABELAS_DESCRICAO = ['descricao_cirurgica', 'descricao_cirurgica_achado'] as const;
 
+/** Os tipos de documento que a fila ICP do autor reconhece para o registro cirúrgico (o código, na ordem de escolha). */
+const CODIGOS_TIPO_ICP = ['registro-clinico'] as const;
+
+/**
+ * A descrição assinada entra no prontuário como documento (linha do tempo do paciente) ligado à origem
+ * `descricao_cirurgica`: é por ele que o cirurgião com certificado ICP-Brasil assina na fila de assinaturas (CFM
+ * 1.821/2007 e 2.299/2021, SBIS NGS2); sem certificado, vale a assinatura eletrônica avançada com a senha conferida
+ * de novo (Lei 14.063/2020). O tipo vem do cadastro do cliente (o código que a fila ICP conhece, ou a categoria
+ * registro cirúrgico); sem tipo ou situação cadastrados, a descrição fica só com a eletrônica (devolve null).
+ */
+async function documentoDaDescricao(
+  tx: TxOperacao,
+  descricao: number,
+  ato: number,
+  prof: number,
+  e: SalvarDescricaoEntrada,
+): Promise<number | null> {
+  const tipo = await tx.uma(
+    `SELECT id FROM tipo_documento_clinico
+      WHERE ativo = TRUE AND (codigo IN (?) OR categoria = 'registro_cirurgico')
+      ORDER BY (codigo IN (?)) DESC, (ordem IS NULL), ordem, id LIMIT 1`,
+    [CODIGOS_TIPO_ICP[0], CODIGOS_TIPO_ICP[0]],
+  );
+  const situacao = await tx.uma(
+    `SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo = TRUE
+      ORDER BY (ordem IS NULL), ordem, id LIMIT 1`,
+  );
+  if (!tipo || !situacao) return null;
+  const a = await tx.uma(
+    'SELECT paciente_id, atendimento_id, inicio_cirurgia_em, entrada_sala_em FROM ato_cirurgico WHERE id = ?',
+    [ato],
+  );
+  if (!a) return null;
+  const [ja] = await tx.consultar(
+    `SELECT id FROM documento_prontuario
+      WHERE entidade_origem = 'descricao_cirurgica' AND entidade_origem_id = ? AND numero_versao = 1`,
+    [descricao],
+  );
+  if (ja) return n(ja['id']);
+  const agora = new Date();
+  const conteudo = {
+    descricao_tecnica: e.descricaoTecnica,
+    achados: e.achadosTexto,
+    acidentes_intraoperatorios: e.acidentes,
+    sangramento_estimado_ml: e.sangramentoMl,
+    envio_anatomopatologico: e.envioAnatomopatologico,
+    descricao_pecas: e.envioAnatomopatologico ? e.descricaoPecas : null,
+    achados_padrao: e.achados.map((x) => x.achado),
+    assinatura_eletronica: { nivel: 'eletronica-avancada', reautenticacao: true },
+  };
+  const documento = await tx.incluir('documento_prontuario', {
+    estabelecimento_id: est(tx),
+    paciente_id: n(a['paciente_id']),
+    atendimento_id: a['atendimento_id'] === null ? null : n(a['atendimento_id']),
+    tipo_documento_clinico_id: n(tipo['id']),
+    situacao_documento_prontuario_id: n(situacao['id']),
+    entidade_origem: 'descricao_cirurgica',
+    entidade_origem_id: descricao,
+    titulo: 'Descrição cirúrgica',
+    profissional_id: prof,
+    referencia_em: a['inicio_cirurgia_em'] ?? a['entrada_sala_em'] ?? agora,
+    lancado_em: agora,
+    fechado_em: agora,
+    numero_versao: 1,
+    confidencial: false,
+    conteudo: JSON.stringify(conteudo),
+    origem: 'sistema',
+  });
+  await tx.incluir('documento_prontuario_evento', {
+    documento_prontuario_id: documento,
+    operacao: 'inclusao',
+    acao: 'criacao',
+    situacao_documento_prontuario_id: n(situacao['id']),
+    profissional_id: prof,
+    evento_em: agora,
+    dados: JSON.stringify({ origem: 'descricao_cirurgica', nivel: 'eletronica-avancada' }),
+    ocorrido_em: agora,
+    usuario_id: n(tx.contexto.usuario),
+  });
+  return documento;
+}
+
 const salvar = definirOperacao<SalvarDescricaoEntrada, ResultadoOperacao>({
   nome: 'cirurgia.salvar-descricao',
-  tabelas: [...TABELAS_DESCRICAO],
+  tabelas: [...TABELAS_DESCRICAO, 'documento_prontuario', 'documento_prontuario_evento'],
   entrada: esquemaSalvarDescricao as never,
   async gravar(tx, e) {
     const ato = await atoTravado(tx, e.ato);
@@ -252,7 +334,12 @@ const salvar = definirOperacao<SalvarDescricaoEntrada, ResultadoOperacao>({
         cirurgiao_profissional_id: prof,
       });
     await gravarAchados(tx, id, e.achados);
-    return { descricao: id, situacao: e.assinar ? 'assinada' : 'rascunho' } as ResultadoOperacao;
+    const documento = e.assinar ? await documentoDaDescricao(tx, id, e.ato, prof, e) : null;
+    return {
+      descricao: id,
+      situacao: e.assinar ? 'assinada' : 'rascunho',
+      documento,
+    } as ResultadoOperacao;
   },
   alvo: (_e, r) => ({ tabela: 'descricao_cirurgica', id: n((r as Linha)['descricao']) }),
   trilha: (e) => ({ dados: { ato: e.ato, assinada: e.assinar, achados: e.achados.length }, motivo: null }),
