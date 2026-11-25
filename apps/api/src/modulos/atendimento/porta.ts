@@ -44,6 +44,8 @@ export interface FichasConfiguradas {
     readonly ordem: number;
     readonly selecionada: boolean;
     readonly emitidas: number;
+    /** O texto do modelo, impresso abaixo da identificação do atendimento. */
+    readonly texto?: string | null;
   }[];
 }
 export type { DimensaoSelecao };

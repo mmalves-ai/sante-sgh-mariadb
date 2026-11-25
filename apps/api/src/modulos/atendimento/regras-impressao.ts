@@ -120,6 +120,8 @@ export interface ConfiguracaoImpressao {
 /** A ficha configurada do atendimento, com as vezes em que já saiu. */
 export interface FichaDoAtendimento extends FichaPelaRegra {
   readonly emitidas: number;
+  /** O texto que o modelo imprime abaixo da identificação do atendimento (nulo: o modelo usa leiaute de relatório). */
+  readonly texto: string | null;
 }
 
 export interface EmissaoImpresso {
@@ -240,7 +242,23 @@ export async function lerFichasDoAtendimento(
     { teto: 2000 },
   );
   const vezes = new Map(emitidas.map((e) => [num(e['m']), num(e['n'])]));
-  return fichas.map((f) => ({ ...f, emitidas: vezes.get(f.modelo) ?? 0 }));
+  const textos = new Map(
+    (
+      await l.consultar(
+        `SELECT id, conteudo FROM modelo_ficha_impressa WHERE id IN (${fichas.map(() => '?').join(', ')})`,
+        fichas.map((f) => f.modelo),
+        { teto: 2000 },
+      )
+    ).map((x) => [
+      num(x['id']),
+      x['conteudo'] === null || x['conteudo'] === undefined ? null : String(x['conteudo']),
+    ]),
+  );
+  return fichas.map((f) => ({
+    ...f,
+    emitidas: vezes.get(f.modelo) ?? 0,
+    texto: textos.get(f.modelo) ?? null,
+  }));
 }
 
 /**

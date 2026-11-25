@@ -846,7 +846,7 @@ export class AtendimentoController implements OnModuleDestroy {
         },
       );
     // A ficha configurada (modelo das fichas a imprimir do atendimento): só um modelo que a configuração manda.
-    let modelo: { modelo: number; nome: string } | null = null;
+    let modelo: { modelo: number; nome: string; texto?: string | null } | null = null;
     if (e.modelo !== undefined) {
       const fichas = await this.fichasDoAtendimento(s, d);
       const f = fichas.lista.find((x) => x.modelo === e.modelo);
@@ -858,7 +858,7 @@ export class AtendimentoController implements OnModuleDestroy {
           'Esta ficha não está entre as que a configuração manda imprimir para este atendimento.',
           { codigo: 'ficha-nao-configurada' },
         );
-      modelo = { modelo: f.modelo, nome: f.nome };
+      modelo = { modelo: f.modelo, nome: f.nome, texto: fichas.textos?.get(f.modelo) ?? null };
     }
     // Pulseira e etiqueta: a 1ª impressão fica registrada e a reimpressão só sai com o motivo (01-ADM L79).
     const gerado = await emitirComIdentificacao(this.identificacao, s, { atendimento: d.reg }, e, () =>
@@ -904,7 +904,7 @@ export class AtendimentoController implements OnModuleDestroy {
   private async fichasDoAtendimento(
     s: SessaoCadastro,
     d: DadosImpresso,
-  ): Promise<{ lista: ImpressosAtendimento['fichas']; lida: boolean }> {
+  ): Promise<{ lista: ImpressosAtendimento['fichas']; lida: boolean; textos?: Map<number, string | null> }> {
     try {
       const lidas = await this.porta.fichasConfiguradas(s.porta, d.reg);
       if (!lidas) return { lista: [], lida: false };
@@ -918,6 +918,7 @@ export class AtendimentoController implements OnModuleDestroy {
             ordem: f.ordem,
           })),
           lida: true,
+          textos: new Map(lidas.prontas.map((f) => [f.modelo, f.texto ?? null])),
         };
       const modelos: ModeloFicha[] = [...lidas.modelos];
       const lista = fichasAImprimir(
@@ -1020,7 +1021,7 @@ export class AtendimentoController implements OnModuleDestroy {
     s: SessaoCadastro,
     d: DadosImpresso,
     impresso: string,
-    modelo: { modelo: number; nome: string } | null = null,
+    modelo: { modelo: number; nome: string; texto?: string | null } | null = null,
   ): Promise<ImpressoGerado> {
     const fonte = this.documento;
     if (!fonte)
@@ -1049,6 +1050,8 @@ export class AtendimentoController implements OnModuleDestroy {
       { rotulo: 'Profissional', valor: d.profissional },
       { rotulo: 'Especialidade', valor: d.especialidade || 'Não se aplica' },
       ...(d.leito ? [{ rotulo: 'Leito', valor: d.leito }] : []),
+      // 02-REC linha 35: o texto do modelo configurado sai abaixo da identificação do atendimento.
+      ...(modelo?.texto ? [{ rotulo: 'Informações', valor: modelo.texto }] : []),
     ];
     try {
       const r = await fonte.emissao.emitir({

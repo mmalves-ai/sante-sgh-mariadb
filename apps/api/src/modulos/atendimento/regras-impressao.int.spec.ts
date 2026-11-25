@@ -336,6 +336,7 @@ describe.skipIf(SEM_BANCO)('regras de impressão da recepção contra o MariaDB 
         selecionada: true,
         regra: regra.especifica,
         emitidas: 0,
+        texto: 'Texto sintético do modelo.',
       },
       {
         modelo: modelos.ficha,
@@ -345,6 +346,7 @@ describe.skipIf(SEM_BANCO)('regras de impressão da recepção contra o MariaDB 
         selecionada: true,
         regra: regra.geral,
         emitidas: 0,
+        texto: 'Texto sintético do modelo.',
       },
       {
         modelo: modelos.grupo,
@@ -354,6 +356,7 @@ describe.skipIf(SEM_BANCO)('regras de impressão da recepção contra o MariaDB 
         selecionada: true,
         regra: regra.grupo,
         emitidas: 0,
+        texto: 'Texto sintético do modelo.',
       },
     ]);
     const c = await regras.configuracao({ hospital: CODIGO_ESTAB, login: m.login });
