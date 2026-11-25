@@ -14,6 +14,7 @@ import { CadastroProtocolosPrescricaoPropria } from './prescricao-propria-protoc
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'c2097';
+const EST2 = 'c2097b';
 const LOGIN = 'teste.c2097.a';
 const recusada = (codigo: string, status?: number) => ({
   problema: expect.objectContaining({ codigo, ...(status ? { status } : {}) }),
@@ -22,7 +23,7 @@ const recusada = (codigo: string, status?: number) => ({
 describe.skipIf(SEM_BANCO)('cadastro de protocolos, kits e receitas padrão (banco próprio, MariaDB)', () => {
   let nucleo: NucleoProprio;
   let cad: CadastroProtocolosPrescricaoPropria;
-  const ids = { est: 0, tipo: 0, unidade: 0, itemA: 0, itemB: 0, itemC: 0, esp: 0 };
+  const ids = { est: 0, est2: 0, tipo: 0, unidade: 0, itemA: 0, itemB: 0, itemC: 0, esp: 0, via: 0 };
 
   const garantir = async (e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]) => {
     const l = await e.uma<{ id: number }>(sel, p);
@@ -47,7 +48,7 @@ describe.skipIf(SEM_BANCO)('cadastro de protocolos, kits e receitas padrão (ban
       [],
     );
     await e.executar("DELETE FROM modelo_receita WHERE nome LIKE 'C2097 %'", []);
-    await limparTrilhaDaMassa(e, { codigos: [EST] });
+    await limparTrilhaDaMassa(e, { codigos: [EST, EST2] });
   };
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-c2097' }, (l) =>
@@ -78,7 +79,19 @@ describe.skipIf(SEM_BANCO)('cadastro de protocolos, kits e receitas padrão (ban
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [EST, `Hospital sintético ${EST}`, `Hospital sintético ${EST} (fictício)`, agora],
       );
+      ids.est2 = await garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [EST2],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [EST2, `Hospital sintético ${EST2}`, `Hospital sintético ${EST2} (fictício)`, agora],
+      );
       await limpar(e);
+      const via = await e.uma<{ id: number }>(
+        'SELECT id FROM via_de_uso WHERE sigla IS NOT NULL ORDER BY id LIMIT 1',
+        [],
+      );
+      ids.via = via ? Number(via.id) : 0;
       await garantir(
         e,
         'SELECT id FROM usuario WHERE login = ?',
@@ -263,6 +276,120 @@ describe.skipIf(SEM_BANCO)('cadastro de protocolos, kits e receitas padrão (ban
     expect(its[0]!.excluido_em).toBeNull();
     const k = (await cad.kits(leitura)).find((x) => x.id === r.id)!;
     expect(k.itens.map((i) => i.papel)).toEqual(['principal', 'diluente']);
+  });
+
+  it('alteração: o protocolo geral continua geral quando outro estabelecimento o altera; o tipo do kit não muda', async () => {
+    const geral = await cad.gravarProtocolo(ctx(), {
+      codigo: 'C2097 GERAL',
+      nome: 'C2097 Protocolo geral',
+      todosEstabelecimentos: true,
+      itens: [{ sequencia: 1, tipoItem: 'cuidado', descricao: 'Decúbito elevado' }],
+    });
+    const deB = () => ({ ...ctx(), hospital: EST2 });
+    const alteracao = {
+      id: geral.id,
+      versao: geral.versao,
+      codigo: 'C2097 GERAL',
+      nome: 'C2097 Protocolo geral revisto',
+      itens: [{ sequencia: 1, tipoItem: 'cuidado', descricao: 'Decúbito elevado a 30 graus' }],
+    };
+    // B tenta tornar o geral só dele: recusado, nada muda.
+    await expect(
+      cad.gravarProtocolo(deB(), { ...alteracao, todosEstabelecimentos: false }),
+    ).rejects.toMatchObject(recusada('abrangencia-imutavel', 422));
+    expect(
+      await um('SELECT estabelecimento_id, nome, versao FROM protocolo_prescricao WHERE id = ?', [geral.id]),
+    ).toMatchObject({
+      estabelecimento_id: null,
+      nome: 'C2097 Protocolo geral',
+      versao: 1,
+    });
+    // B altera mantendo a abrangência: continua geral e visível em A.
+    await cad.gravarProtocolo(deB(), { ...alteracao, todosEstabelecimentos: true });
+    expect(
+      await um('SELECT estabelecimento_id, nome FROM protocolo_prescricao WHERE id = ?', [geral.id]),
+    ).toMatchObject({
+      estabelecimento_id: null,
+      nome: 'C2097 Protocolo geral revisto',
+    });
+    const emA = (await cad.protocolos(leitura)).find((x) => x.id === geral.id);
+    expect(emA?.todosEstabelecimentos).toBe(true);
+    // O protocolo só de A não se altera de B.
+    const deA = await cad.gravarProtocolo(ctx(), {
+      codigo: 'C2097 SOA',
+      nome: 'C2097 Só de A',
+      itens: [{ sequencia: 1, tipoItem: 'cuidado', descricao: 'Jejum' }],
+    });
+    await expect(
+      cad.gravarProtocolo(deB(), {
+        id: deA.id,
+        versao: 1,
+        codigo: 'C2097 SOA',
+        nome: 'C2097 Tomado',
+        itens: [{ sequencia: 1, tipoItem: 'cuidado', descricao: 'Jejum' }],
+      }),
+    ).rejects.toMatchObject(recusada('registro-inexistente', 404));
+
+    const kit = await cad.gravarKit(ctx(), {
+      codigo: 'C2097 K2',
+      nome: 'C2097 Kit de medicamento',
+      tipoKit: 'medicamento',
+      itens: [{ sequencia: 1, item: ids.itemA, papel: 'principal', quantidade: 1, unidade: ids.unidade }],
+    });
+    expect(await cad.tipoDoKit(leitura, kit.id)).toBe('medicamento');
+    await expect(
+      cad.gravarKit(ctx(), {
+        id: kit.id,
+        versao: kit.versao,
+        codigo: 'C2097 K2',
+        nome: 'C2097 Kit de medicamento',
+        tipoKit: 'solucao',
+        itens: [
+          { sequencia: 1, item: ids.itemA, papel: 'principal', quantidade: 1, unidade: ids.unidade },
+          { sequencia: 2, item: ids.itemC, papel: 'diluente', quantidade: 100, unidade: ids.unidade },
+        ],
+      }),
+    ).rejects.toMatchObject(recusada('tipo-kit-imutavel', 422));
+    expect(await um('SELECT tipo_kit, versao FROM kit_prescricao WHERE id = ?', [kit.id])).toMatchObject({
+      tipo_kit: 'medicamento',
+      versao: 1,
+    });
+  });
+
+  it('aplicação do kit: o de medicamento vira um item por linha com o detalhe sugerido; o inativo não se aplica', async () => {
+    const r = await cad.gravarKit(ctx(), {
+      codigo: 'C2097 K3',
+      nome: 'C2097 Kit para aplicar',
+      tipoKit: 'medicamento',
+      via: ids.via || null,
+      itens: [
+        { sequencia: 1, item: ids.itemB, papel: 'componente', quantidade: 2, unidade: ids.unidade },
+        { sequencia: 2, item: ids.itemA, papel: 'principal', quantidade: 1, unidade: ids.unidade },
+        { sequencia: 3, item: ids.itemC, papel: 'material', quantidade: 1, unidade: ids.unidade },
+      ],
+    });
+    const a = await cad.kitParaAplicar(leitura, r.id);
+    expect(a).toMatchObject({ kit: r.id, forma: 'itens', problema: null, revisar: [3] });
+    expect(a.linhas.map((l) => [l.sequencia, l.produto, l.dose, l.unidade])).toEqual([
+      [2, ids.itemA, 1, 'mlc'],
+      [1, ids.itemB, 2, 'mlc'],
+    ]);
+    expect(a.sugestoes).toHaveLength(2);
+    if (ids.via) expect(a.sugestoes.every((x) => x?.tipo === 'medicamento')).toBe(true);
+    await cad.gravarKit(ctx(), {
+      id: r.id,
+      versao: r.versao,
+      codigo: 'C2097 K3',
+      nome: 'C2097 Kit para aplicar',
+      tipoKit: 'medicamento',
+      ativo: false,
+      itens: [{ sequencia: 2, item: ids.itemA, papel: 'principal', quantidade: 1, unidade: ids.unidade }],
+    });
+    const inativo = await cad.kitParaAplicar(leitura, r.id);
+    expect([inativo.problema, inativo.sugestoes.length]).toEqual(['kit-inativo', 0]);
+    await expect(cad.kitParaAplicar(leitura, 999_999_999)).rejects.toMatchObject(
+      recusada('registro-inexistente', 404),
+    );
   });
 
   it('receita padrão: geral livre e da especialidade estruturada; a pessoal exige o profissional da conta', async () => {

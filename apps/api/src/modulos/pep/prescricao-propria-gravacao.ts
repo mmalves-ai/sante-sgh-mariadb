@@ -189,6 +189,24 @@ export async function registrarProtocolosAplicados(
   return ids.length;
 }
 
+/**
+ * Os kits de onde vieram itens da prescrição (03-PEP L107): têm de existir, vivos e ativos, e o item grava o kit em
+ * prescricao_item.kit_prescricao_id. Kit inexistente ou inativo recusa a gravação inteira.
+ */
+export async function conferirKitsAplicados(
+  tx: TxOperacao,
+  kits: Readonly<Record<string, number>> | undefined,
+): Promise<void> {
+  const ids = [...new Set(Object.values(kits ?? {}).filter((k) => Number.isInteger(k) && k > 0))];
+  if (ids.length === 0) return;
+  const vivos = await tx.consultar(
+    `SELECT id FROM kit_prescricao WHERE id IN (${ids.map(() => '?').join(',')}) AND excluido_em IS NULL AND ativo`,
+    ids,
+  );
+  if (vivos.length !== ids.length)
+    throw recusar(404, 'registro-inexistente', 'O kit aplicado não existe ou está inativo.');
+}
+
 export function recusaPendenteGravacao(oque: string): ErroOperacao {
   return new ErroOperacao(
     501,
@@ -752,6 +770,7 @@ export class GravacaoPrescricaoPropria {
           if (e.origem.itens.some((x) => x.ativo && !ativos.has(x.item)))
             throw recusar(409, 'origem-alterada', 'Item da origem suspenso.');
         }
+        await conferirKitsAplicados(tx, e.kits);
         const agora = new Date();
         const numero = await tx.proximoNumero('prescricao');
         const prescricao = await tx.incluir('prescricao', {
@@ -789,6 +808,7 @@ export class GravacaoPrescricaoPropria {
             inicio,
             fim,
             e.sgh,
+            e.kits?.[it.chave] ?? null,
           );
           porChave.set(it.chave, r.item);
           horarios += r.horarios;
@@ -1649,6 +1669,7 @@ async function inserirItem(
   inicio: Date,
   fim: Date,
   sgh: GravacaoPrescricao['sgh'] | undefined,
+  kit: number | null = null,
 ): Promise<{ item: number; horarios: number }> {
   const d = it.detalhe;
   const proprio = it.plano >= BASE_PLANO_PROPRIO;
@@ -1706,6 +1727,7 @@ async function inserirItem(
     horario_gerado: it.horarios.length > 0,
     justificativa_alergia: d.tipo === 'medicamento' ? d.justificativaAlergia : null,
     origem: 'sistema',
+    kit_prescricao_id: kit,
   });
   await gravarDetalhe(tx, d, {
     item,

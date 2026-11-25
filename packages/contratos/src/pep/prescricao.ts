@@ -417,6 +417,8 @@ export const esquemaItemPrescricao = z.object({
   observacaoEnfermagem: textoCp1252(2_000).optional(),
   /** Item vindo de protocolo ou kit (vínculo do protocolo só para indicador; regra 2). */
   protocolo: ID.optional(),
+  /** Item vindo de um kit de medicamentos ou de soluções (03-PEP L107): gravado em prescricao_item.kit_prescricao_id. */
+  kit: ID.optional(),
   /** Campos preenchidos automaticamente (protocolo ou kit): a marca do legado. */
   autopreenchido: z
     .array(z.enum(['dose', 'quantidade-itens', 'etapa']))

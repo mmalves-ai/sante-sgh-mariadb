@@ -785,6 +785,8 @@ export const esquemaGravacaoPrescricao = z
     justificativaRetroativo: textoCp1252(255).nullable(),
     observacaoGeral: textoCp1252(4_000).nullable(),
     protocolos: z.array(ID).max(20),
+    /** O kit de onde veio cada item, pela chave do item (03-PEP L107). */
+    kits: z.record(z.string().min(1).max(40), ID).optional(),
     itens: z.array(esquemaItemGravacao).min(1).max(150),
     origem: z
       .object({

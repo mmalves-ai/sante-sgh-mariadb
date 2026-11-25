@@ -645,6 +645,7 @@ export class ServicoPrescricao {
       justificativaRetroativo: e.justificativaRetroativo ?? null,
       observacaoGeral: e.observacaoGeral ?? null,
       protocolos: [...new Set(e.itens.map((i) => i.protocolo).filter((x): x is number => x !== undefined))],
+      kits: Object.fromEntries(e.itens.flatMap((i) => (i.kit ? [[i.chave, i.kit] as const] : []))),
       itens: r.montados,
       origem,
       documento,
@@ -657,8 +658,18 @@ export class ServicoPrescricao {
         coassinaturaExigida: exigeCoassinatura(prescritor.categoria),
         origemModo:
           e.origem?.modo ??
-          (e.itens.some((i) => i.protocolo) ? 'protocolo' : e.futuras.length ? 'futura' : null),
-        origemId: e.origem?.prescricao ?? e.itens.find((i) => i.protocolo)?.protocolo ?? null,
+          (e.itens.some((i) => i.protocolo)
+            ? 'protocolo'
+            : e.itens.some((i) => i.kit)
+              ? 'kit'
+              : e.futuras.length
+                ? 'futura'
+                : null),
+        origemId:
+          e.origem?.prescricao ??
+          e.itens.find((i) => i.protocolo)?.protocolo ??
+          e.itens.find((i) => i.kit)?.kit ??
+          null,
         itens: sghItens,
         decisoes,
         fichas,

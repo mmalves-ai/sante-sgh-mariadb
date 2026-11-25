@@ -6,8 +6,11 @@
 // ativo = false; kit: excluido_em/excluido_por), nunca apagado, e a prescrição que usou o item continua ligada.
 // A receita padrão pessoal é do profissional da sessão (nunca de outro); a geral e a da especialidade pedem quem
 // cuida dos protocolos da instituição (a rota confere).
+import { esquemaDetalheItem } from '@sgh/contratos';
 import {
   ABRANGENCIAS_RECEITA,
+  aplicacaoDoKit,
+  MENSAGENS_APLICACAO_KIT,
   FORMATOS_RECEITA,
   MENSAGENS_CADASTRO_PROTOCOLO,
   PAPEIS_ITEM_KIT,
@@ -430,6 +433,129 @@ export class CadastroProtocolosPrescricaoPropria {
     });
   }
 
+  /** Tipo gravado do kit (para a rota conferir a permissão pelo tipo que está no banco); null se não existe. */
+  tipoDoKit(c: ContextoCadastroCatalogo, kit: number): Promise<string | null> {
+    return this.ler(c, async (l) => {
+      const k = await l.uma('SELECT tipo_kit FROM kit_prescricao WHERE id = ? AND excluido_em IS NULL', [
+        kit,
+      ]);
+      return k ? String(k['tipo_kit']) : null;
+    });
+  }
+
+  /**
+   * O kit pronto para entrar na prescrição (regra aplicacaoDoKit do domínio): o kit de medicamento vira um item por
+   * linha; o de solução, uma solução com os componentes. Cada linha volta com o detalhe sugerido (null quando falta
+   * dado para a prescrição, e o prescritor completa).
+   */
+  kitParaAplicar(c: ContextoCadastroCatalogo, kit: number) {
+    return this.ler(c, async (l) => {
+      const k = await l.uma(
+        `SELECT k.id, k.nome, k.tipo_kit, k.ativo, k.via_de_uso_id, k.frequencia_administracao_id,
+                k.velocidade_infusao, k.unidade_infusao_id, COALESCE(v.sigla, v.descricao) AS via_sigla
+           FROM kit_prescricao k LEFT JOIN via_de_uso v ON v.id = k.via_de_uso_id
+          WHERE k.id = ? AND k.excluido_em IS NULL`,
+        [kit],
+      );
+      if (!k) throw inexistente('O kit');
+      const its = await l.consultar(
+        `SELECT i.sequencia, i.item_prescritivel_id, i.papel, i.quantidade, i.unidade_prescricao_id,
+                i.via_de_uso_id, i.frequencia_administracao_id, up.sigla AS unidade_sigla,
+                COALESCE(v.sigla, v.descricao) AS via_sigla, ip.descricao AS item_nome
+           FROM kit_prescricao_item i
+           LEFT JOIN item_prescritivel ip ON ip.id = i.item_prescritivel_id AND ip.excluido_em IS NULL
+           LEFT JOIN unidade_prescricao up ON up.id = i.unidade_prescricao_id
+           LEFT JOIN via_de_uso v ON v.id = i.via_de_uso_id
+          WHERE i.kit_prescricao_id = ? AND i.excluido_em IS NULL ORDER BY i.sequencia, i.id`,
+        [kit],
+        { teto: 200 },
+      );
+      const porSeq = new Map(its.map((i) => [num(i['sequencia']), i]));
+      const a = aplicacaoDoKit({
+        id: kit,
+        tipoKit: String(k['tipo_kit']) as (typeof TIPOS_KIT)[number],
+        ativo: bool(k['ativo']),
+        via: numOuNull(k['via_de_uso_id']),
+        frequencia: numOuNull(k['frequencia_administracao_id']),
+        velocidade: numOuNull(k['velocidade_infusao']),
+        unidadeInfusao: numOuNull(k['unidade_infusao_id']),
+        itens: its.map((i) => ({
+          sequencia: num(i['sequencia']),
+          // O item fora do cadastro vivo não entra (fica para revisar).
+          item: i['item_nome'] === null ? null : numOuNull(i['item_prescritivel_id']),
+          papel: String(i['papel']) as (typeof PAPEIS_ITEM_KIT)[number],
+          quantidade: num(i['quantidade']),
+          unidade: numOuNull(i['unidade_prescricao_id']),
+          via: numOuNull(i['via_de_uso_id']),
+          frequencia: numOuNull(i['frequencia_administracao_id']),
+        })),
+      });
+      const viaSigla = (seq: number) =>
+        a.forma === 'solucao'
+          ? txt(k['via_sigla'])
+          : (txt(porSeq.get(seq)?.['via_sigla']) ?? txt(k['via_sigla']));
+      const detalhe = (bruto: unknown) => {
+        const r = esquemaDetalheItem.safeParse(bruto);
+        return r.success ? r.data : null;
+      };
+      const linhas = a.linhas.map((x) => ({
+        sequencia: x.sequencia,
+        papel: x.papel,
+        produto: x.item,
+        produtoNome: txt(porSeq.get(x.sequencia)?.['item_nome']),
+        dose: x.quantidade,
+        unidade: txt(porSeq.get(x.sequencia)?.['unidade_sigla']),
+        principal: x.principal,
+      }));
+      const sugestoes =
+        a.problema !== null
+          ? []
+          : a.forma === 'solucao'
+            ? [
+                detalhe({
+                  tipo: 'solucao',
+                  via: viaSigla(0),
+                  frequencia: numOuNull(k['frequencia_administracao_id']),
+                  componentes: linhas.map((x) => ({
+                    produto: x.produto,
+                    dose: x.dose,
+                    unidade: x.unidade,
+                    principal: x.principal,
+                    etapa: 1,
+                  })),
+                  etapas: [
+                    {
+                      etapa: 1,
+                      velocidade: numOuNull(k['velocidade_infusao']),
+                      unidadeInfusao: numOuNull(k['unidade_infusao_id']),
+                    },
+                  ],
+                }),
+              ]
+            : a.linhas.map((x) =>
+                detalhe({
+                  tipo: 'medicamento',
+                  item: { produto: x.item },
+                  dose: x.quantidade,
+                  unidade: txt(porSeq.get(x.sequencia)?.['unidade_sigla']),
+                  via: viaSigla(x.sequencia),
+                  frequencia: x.frequencia,
+                }),
+              );
+      return {
+        kit,
+        nome: String(k['nome']),
+        tipoKit: String(k['tipo_kit']),
+        forma: a.forma,
+        problema: a.problema,
+        mensagem: a.problema ? MENSAGENS_APLICACAO_KIT[a.problema] : null,
+        revisar: a.revisar,
+        linhas,
+        sugestoes,
+      };
+    });
+  }
+
   private async profissionalDe(l: Leitor | TxOperacao, usuario: number): Promise<number | null> {
     const p = await l.uma(
       `SELECT profissional_id FROM usuario_profissional
@@ -575,12 +701,30 @@ export class CadastroProtocolosPrescricaoPropria {
           e.itens.flatMap((i) => (i.unidade ? [i.unidade] : [])),
           'A unidade',
         );
+        // Na alteração o dono não muda: o protocolo geral continua geral (visível em todos os estabelecimentos) e o
+        // do estabelecimento continua dele; trocar a abrangência de um protocolo existente é recusado.
+        if (e.id) {
+          const atual = await tx.uma(
+            `SELECT estabelecimento_id FROM protocolo_prescricao
+              WHERE id = ? AND excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+            [e.id, est],
+          );
+          if (!atual) throw inexistente('O protocolo');
+          if ((atual['estabelecimento_id'] === null) !== e.todosEstabelecimentos)
+            throw new ErroOperacao(
+              422,
+              'abrangencia-imutavel',
+              'Cadastro recusado',
+              'A abrangência do protocolo (todos os estabelecimentos ou só este) não muda depois de criado: crie outro protocolo.',
+              { campos: ['todosEstabelecimentos'] },
+            );
+        }
         const g = await CadastroProtocolosPrescricaoPropria.cabecalho(
           tx,
           'protocolo_prescricao',
           e,
           {
-            estabelecimento_id: e.todosEstabelecimentos ? null : est,
+            ...(e.id ? {} : { estabelecimento_id: e.todosEstabelecimentos ? null : est }),
             codigo,
             nome: e.nome,
             tipo: 'protocolo',
@@ -649,6 +793,23 @@ export class CadastroProtocolosPrescricaoPropria {
           e.itens.flatMap((i) => (i.unidade ? [i.unidade] : [])),
           'A unidade',
         );
+        // O tipo do kit não muda na alteração: a permissão de quem grava é conferida pelo tipo (medicamento ou
+        // solução), e trocar o tipo passaria por cima da permissão do outro.
+        if (e.id) {
+          const atual = await tx.uma(
+            'SELECT tipo_kit FROM kit_prescricao WHERE id = ? AND excluido_em IS NULL',
+            [e.id],
+          );
+          if (!atual) throw inexistente('O kit');
+          if (String(atual['tipo_kit']) !== e.tipoKit)
+            throw new ErroOperacao(
+              422,
+              'tipo-kit-imutavel',
+              'Cadastro recusado',
+              'O tipo do kit não muda depois de criado: crie outro kit.',
+              { campos: ['tipoKit'] },
+            );
+        }
         const g = await CadastroProtocolosPrescricaoPropria.cabecalho(
           tx,
           'kit_prescricao',

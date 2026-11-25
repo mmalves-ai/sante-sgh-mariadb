@@ -91,6 +91,7 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`${P} %`]);
   await e.executar('DELETE FROM protocolo_prescricao WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM kit_prescricao WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM antimicrobiano WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM principio_ativo WHERE codigo_dcb LIKE ?', [`${P}%`]);
@@ -777,5 +778,39 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
     expect(aplicados).toHaveLength(1);
     expect(Number(aplicados[0]!['protocolo_prescricao_id'])).toBe(meu);
     expect(aplicados[0]!['aplicado_em']).not.toBeNull();
+  });
+
+  it('prescrever com kit: cada item do kit grava o kit de origem; kit inativo recusa sem gravar', async () => {
+    const [vivo, inativo] = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-kt` }, async (e) => {
+      const agora = new Date();
+      const kit = (codigo: string, ativo: boolean) =>
+        e.inserir(
+          "INSERT INTO kit_prescricao (codigo, nome, tipo_kit, ativo, criado_em) VALUES (?, ?, 'medicamento', ?, ?)",
+          [codigo, `Kit sintético ${codigo}`, ativo, agora],
+        );
+      return [await kit(`${P}KT1`, true), await kit(`${P}KT2`, false)];
+    });
+    const comKit = (kit: number): GravacaoPrescricao => ({
+      ...gravacao(140, 150),
+      itens: [item('k1', [141]), item('k2', [142])],
+      kits: { k1: kit },
+    });
+    const antes = await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est]);
+    await expect(porta.prescrever(c, 'pep.prescrever', comKit(inativo), ctx())).rejects.toMatchObject({
+      problema: { status: 404, codigo: 'registro-inexistente' },
+    });
+    expect(await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est])).toBe(
+      antes,
+    );
+    const r = await porta.prescrever(c, 'pep.prescrever', comKit(vivo), ctx());
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.consultar(
+        'SELECT sequencia, kit_prescricao_id FROM prescricao_item WHERE prescricao_id = ? ORDER BY sequencia',
+        [r.prescricao],
+      ),
+    );
+    expect(
+      linhas.map((x) => (x['kit_prescricao_id'] === null ? null : Number(x['kit_prescricao_id']))),
+    ).toEqual([vivo, null]);
   });
 });
