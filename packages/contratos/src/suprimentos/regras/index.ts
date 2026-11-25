@@ -68,6 +68,8 @@ export * from './identificacao-estoque.js';
 export * from './romaneio-entrega.js';
 // C1-124 (05-SUP linha 12): produção interna (lote produzido da manipulação e kit montado).
 export * from './producao-interna.js';
+// C2-092 (05-SUP linha 11): fracionamento e unitarização de dose com o lote de origem até a dose (RDC 67/2007).
+export * from './unitarizacao-dose.js';
 // C1-126 (09-AREA linha 79): entrada de produtos recebidos em doação (doador, termo e custo pelo valor justo).
 export * from './entrada-doacao.js';
 // C2-015 (05-SUP linha 22): devolução de compra ao fornecedor (quantidade, chave da NF-e e abatimento no contas a pagar).

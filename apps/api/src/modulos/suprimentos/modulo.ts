@@ -43,6 +43,8 @@ import { PORTA_ROMANEIO_ENTREGA, portaRomaneioEntregaIndisponivel } from './roma
 import { ManipulacaoController } from './manipulacao.controller.js';
 import { ProducaoInternaController } from './producao-interna.controller.js';
 import { PORTA_PRODUCAO_INTERNA, portaProducaoInternaIndisponivel } from './producao-interna.js';
+import { UnitarizacaoDoseController } from './unitarizacao-dose.controller.js';
+import { PORTA_UNITARIZACAO_DOSE, portaUnitarizacaoDoseIndisponivel } from './unitarizacao-dose.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
 import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
 import { OpmeController } from './opme.controller.js';
@@ -234,6 +236,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./producao-interna.js')).PortaProducaoInternaPropria(ctx.nucleo)
       : portaProducaoInternaIndisponivel();
+  // C2-092 (05-SUP linha 11): fracionamento e unitarização de dose com o lote de origem até a dose, só no banco próprio.
+  const unitarizacaoDose =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./unitarizacao-dose.js')).PortaUnitarizacaoDosePropria(ctx.nucleo)
+      : portaUnitarizacaoDoseIndisponivel();
   // C2-017 (09-AREA linha 81): o processo de contratação pública grava no banco próprio; sem o núcleo, a memória só em
   // dev/ci com as fontes sintéticas; fora disso, 503 em tudo.
   const licitacao =
@@ -287,6 +294,7 @@ export async function modulo(
       LancePregaoController,
       ManipulacaoController,
       ProducaoInternaController,
+      UnitarizacaoDoseController,
       ...(comCirurgia ? [OpmeController] : []),
     ],
     providers: [
@@ -312,6 +320,7 @@ export async function modulo(
       { provide: PORTA_ATA_EMPENHO, useValue: ataEmpenho },
       { provide: PORTA_LANCE_PREGAO, useValue: lancePregao },
       { provide: PORTA_PRODUCAO_INTERNA, useValue: producaoInterna },
+      { provide: PORTA_UNITARIZACAO_DOSE, useValue: unitarizacaoDose },
     ],
     exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],
   };
