@@ -766,6 +766,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         6921,
       ],
     },
+    // C1-040: o supervisor do faturamento também mantém o de-para da fonte pagadora (perfil próprio).
+    perfisConcedidos: ['faturamento-de-para'],
   },
   /** M12: faturista só de consulta (sem códigos de prestador, sem dados bancários, sem alterar nada). */
   'SINT.FATURISTA': {
@@ -3250,6 +3252,28 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       opcoesGrupo: opcoesFinanceiro('financeiro.tituloPagar.ler'),
     },
     perfisConcedidos: ['cadastro-credor'],
+  },
+  /**
+   * C1-040 (06-FAT linha 9, no fim da lista, pelo ID sintético das outras): faturista do de-para, que consulta convênios,
+   * contratos, tabelas e o de-para e mantém o de-para da fonte pagadora (perfil `faturamento-de-para`), sem editar o
+   * contrato do convênio (segregação de funções).
+   */
+  'SINT.FAT.DEPARA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'FATDEPARA',
+      opcoesGrupo: opcoesDasPermissoes(
+        'convenio.operadora.ler',
+        'convenio.contrato.ler',
+        'preco.tabela.ler',
+        'preco.dePara.ler',
+      ),
+    },
+    perfisConcedidos: ['faturamento-de-para'],
   },
 };
 

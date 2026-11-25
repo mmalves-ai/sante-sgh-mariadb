@@ -226,5 +226,11 @@ export const PERFIS_COMPLEMENTARES = [
    * separado de quem gera a remessa e de quem paga (segregação de funções). Só por concessão nominal ou pelo mapa aprovado.
    */
   'cadastro-credor',
+  /**
+   * C1-040 (06-FAT linha 9): de-para do faturamento: inclui e encerra o de-para do item do hospital para o código da
+   * fonte pagadora, sem editar o contrato do convênio (segregação de funções). Só por concessão nominal ou pelo mapa
+   * aprovado.
+   */
+  'faturamento-de-para',
 ] as const;
 export type PerfilComplementar = (typeof PERFIS_COMPLEMENTARES)[number];
