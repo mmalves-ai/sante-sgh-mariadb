@@ -181,7 +181,7 @@ export class TurmasAtividadeController {
       ok: true,
       ...r,
       mensagem: r.resultado.promovido
-        ? 'Participação encerrada; o primeiro da espera ocupou a vaga.'
+        ? 'Participação encerrada; o primeiro da espera que cabia na vaga e no limite da fonte ocupou a vaga.'
         : 'Participação encerrada.',
     };
   }

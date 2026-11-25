@@ -78,6 +78,13 @@ const opcoesDe = (k: keyof NonNullable<typeof opcoes.data.value>, vazio: string 
   ...(opcoes.data.value?.[k] ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
 ];
 const idOuNulo = (v: string) => (v === '' ? null : Number(v));
+/** Planos da fonte escolhida (o combo some sem fonte; a opção vazia vale para a fonte inteira ou sem plano). */
+const opcoesPlano = (fonte: string, vazio: string) => [
+  { valor: '', rotulo: vazio },
+  ...(opcoes.data.value?.plano ?? [])
+    .filter((o) => String(o.fontePagadora) === fonte)
+    .map((o) => ({ valor: String(o.id), rotulo: o.nome })),
+];
 const inteiroOuNulo = (v: string) => (v.trim() === '' ? null : /^\d+$/.test(v.trim()) ? Number(v) : NaN);
 const texto = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
 
@@ -102,7 +109,7 @@ const f = reactive({
   exigeAcompanhante: false,
   ativo: true,
   profissionais: [] as { profissional: string; principal: boolean }[],
-  fontes: [] as { fontePagadora: string; limite: string }[],
+  fontes: [] as { fontePagadora: string; plano: string; limite: string }[],
 });
 function abrirCadastro(x: TurmaLida | null) {
   erro.value = null;
@@ -130,6 +137,7 @@ function abrirCadastro(x: TurmaLida | null) {
   }));
   f.fontes = (x?.fontes ?? []).map((p) => ({
     fontePagadora: String(p.fontePagadora),
+    plano: texto(p.plano),
     limite: texto(p.limite),
   }));
 }
@@ -156,7 +164,11 @@ const entradaTurma = computed(() => ({
     .map((p) => ({ profissional: Number(p.profissional), principal: p.principal })),
   fontes: f.fontes
     .filter((p) => p.fontePagadora !== '')
-    .map((p) => ({ fontePagadora: Number(p.fontePagadora), plano: null, limite: inteiroOuNulo(p.limite) })),
+    .map((p) => ({
+      fontePagadora: Number(p.fontePagadora),
+      plano: idOuNulo(p.plano),
+      limite: inteiroOuNulo(p.limite),
+    })),
 }));
 const recusaTurma = computed(() => {
   if (editando.value === null) return null;
@@ -255,6 +267,7 @@ const doPaciente = useQuery({
 });
 const insc = reactive({
   fontePagadora: '',
+  plano: '',
   indicacao: '',
   acompanhante: false,
   encaixe: false,
@@ -275,7 +288,7 @@ function confirmarInscricao() {
         {
           paciente: paciente.value!.id,
           fontePagadora: Number(insc.fontePagadora),
-          plano: null,
+          plano: idOuNulo(insc.plano),
           indicacaoProfissional: idOuNulo(insc.indicacao),
           acompanhante: insc.acompanhante,
           encaixe: insc.encaixe,
@@ -472,6 +485,14 @@ const dataHoraBr = (s: string | null) =>
           v-model="p.fontePagadora"
           :rotulo="t('turmas.campos.fontePagadora')"
           :opcoes="opcoesDe('fontePagadora', t('turmas.escolha'))"
+          @update:model-value="p.plano = ''"
+        />
+        <SanteSelecao
+          v-if="p.fontePagadora !== ''"
+          :id="`turma-fonte-plano-${i}`"
+          v-model="p.plano"
+          :rotulo="t('turmas.campos.plano')"
+          :opcoes="opcoesPlano(p.fontePagadora, t('turmas.fonteInteira'))"
         />
         <SanteCampoTexto v-model="p.limite" :rotulo="t('turmas.campos.limite')" :max-bytes="3" />
         <SanteBotao variante="texto" :rotulo="t('turmas.remover')" @acionar="f.fontes.splice(i, 1)" />
@@ -479,7 +500,8 @@ const dataHoraBr = (s: string | null) =>
       <SanteBotao
         variante="secundario"
         :rotulo="t('turmas.adicionarFonte')"
-        @acionar="f.fontes.push({ fontePagadora: '', limite: '' })"
+        data-testid="turma-add-fonte"
+        @acionar="f.fontes.push({ fontePagadora: '', plano: '', limite: '' })"
       />
       <p v-if="recusaTurma" role="alert" data-testid="turma-recusa">{{ recusaTurma.mensagem }}</p>
       <div class="acoes">
@@ -692,7 +714,10 @@ const dataHoraBr = (s: string | null) =>
               {{ p.nome }}<span v-if="p.prontuario"> · {{ p.prontuario }}</span>
             </td>
             <td>{{ p.fontePagadora }}</td>
-            <td>{{ situacaoTexto(p) }}</td>
+            <td>
+              {{ situacaoTexto(p)
+              }}<span v-if="p.desligadoEm"> · {{ t('turmas.saiuEm', { data: dataBr(p.desligadoEm) }) }}</span>
+            </td>
             <td>{{ t('turmas.frequencia') }}: {{ freqTexto(p.frequencia) }}</td>
             <td class="acoes">
               <SanteBotao
@@ -772,9 +797,15 @@ const dataHoraBr = (s: string | null) =>
               {{ t('turmas.nenhumaDoPaciente') }}
             </p>
             <ul v-else-if="doPaciente.data.value" class="lista-simples">
-              <li v-for="x in doPaciente.data.value" :key="x.turma">
-                {{ x.codigo }} · {{ x.descricao }} · {{ situacaoTexto(x) }} · {{ t('turmas.frequencia') }}:
-                {{ freqTexto(x.frequencia) }} · {{ dataHoraBr(x.proximoEncontro) }}
+              <li v-for="x in doPaciente.data.value" :key="x.participacao">
+                {{ x.codigo }} · {{ x.descricao }} · {{ situacaoTexto(x) }} ·
+                {{
+                  x.desligadoEm
+                    ? t('turmas.saiuEm', { data: dataBr(x.desligadoEm) })
+                    : t('turmas.desde', { data: dataBr(x.inscritoEm) })
+                }}
+                · {{ t('turmas.frequencia') }}: {{ freqTexto(x.frequencia) }}
+                <template v-if="!x.desligadoEm"> · {{ dataHoraBr(x.proximoEncontro) }}</template>
               </li>
             </ul>
           </div>
@@ -784,6 +815,14 @@ const dataHoraBr = (s: string | null) =>
               v-model="insc.fontePagadora"
               :rotulo="t('turmas.campos.fontePagadora')"
               :opcoes="opcoesDe('fontePagadora', t('turmas.escolha'))"
+              @update:model-value="insc.plano = ''"
+            />
+            <SanteSelecao
+              v-if="insc.fontePagadora !== ''"
+              id="inscricao-plano"
+              v-model="insc.plano"
+              :rotulo="t('turmas.campos.plano')"
+              :opcoes="opcoesPlano(insc.fontePagadora, t('turmas.semPlano'))"
             />
             <SanteSelecao
               id="inscricao-indicacao"

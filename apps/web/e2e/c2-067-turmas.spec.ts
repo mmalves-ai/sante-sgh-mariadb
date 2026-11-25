@@ -29,6 +29,10 @@ const OPCOES = {
   setorFuncional: [{ id: 6721, nome: 'AMBULATORIO SINTETICO' }],
   profissional: [{ id: 6731, nome: 'PROFISSIONAL SINTETICO C2067' }],
   fontePagadora: [{ id: 6741, nome: 'CONVENIO SINTETICO C2067' }],
+  plano: [
+    { id: 6745, nome: 'PLANO SINTETICO C2067', fontePagadora: 6741 },
+    { id: 6746, nome: 'PLANO DE OUTRA FONTE', fontePagadora: 6742 },
+  ],
   sexo: [{ id: 6751, nome: 'Feminino sintético' }],
 };
 const PACIENTE = {
@@ -110,6 +114,10 @@ function simular(page: Page) {
       st.turma = corpo;
       return ok(r, { turma: 6801 }, 'Turma criada.');
     }
+    if (caminho === '/6801') {
+      st.turma = corpo;
+      return ok(r, { turma: 6801 }, 'Turma gravada.');
+    }
     if (caminho.endsWith('/escalas')) {
       st.escalas.push({ ...corpo, id: 6811, versao: 1, turma: 6801 });
       return ok(r, { escala: 6811 }, 'Escala da turma gravada.');
@@ -138,6 +146,8 @@ function simular(page: Page) {
         situacao: 'inscrito',
         posicaoEspera: null,
         inscritoEm: '2030-03-01',
+        desligadoEm: null,
+        motivoDesligamento: null,
         frequencia: null,
       });
       return ok(
@@ -152,8 +162,13 @@ function simular(page: Page) {
       return ok(r, { encontro: 6821, registradas: 1 }, 'Presença registrada.');
     }
     if (caminho.endsWith('/sair')) {
-      st.participantes[0] = { ...st.participantes[0], situacao: 'desistente' };
-      return ok(r, { participante: 6831, promovido: null }, 'Participação encerrada.');
+      st.participantes[0] = {
+        ...st.participantes[0],
+        situacao: 'desistente',
+        desligadoEm: '2030-03-20',
+        motivoDesligamento: corpo['motivo'],
+      };
+      return ok(r, { participante: 6831, promovido: null, promovidos: 0 }, 'Participação encerrada.');
     }
     return json(r, { title: 'não simulado' }, 404);
   });
@@ -181,6 +196,10 @@ test.describe('@C2-067 agenda de grupos e turmas', () => {
     await page.getByTestId('turma-vagas').locator('input, textarea').first().fill('2');
     await page.getByTestId('turma-add-prof').click();
     await escolher(edicao.getByLabel('Profissional', { exact: true }), '6731');
+    // Fonte aceita só por um plano dela, com limite: o combo de plano mostra só os planos da fonte escolhida.
+    await page.getByTestId('turma-add-fonte').click();
+    await escolher(edicao.getByLabel('Fonte pagadora'), '6741');
+    await escolher(edicao.getByLabel('Plano'), '6745');
     await page.getByTestId('turma-idade-min').locator('input, textarea').first().fill('60');
     await page.getByTestId('turma-idade-max').locator('input, textarea').first().fill('18');
     await expect(page.getByTestId('turma-recusa')).toContainText('idade máxima');
@@ -201,12 +220,21 @@ test.describe('@C2-067 agenda de grupos e turmas', () => {
         idadeMinimaAnos: 18,
         idadeMaximaAnos: 90,
         profissionais: [{ profissional: 6731, principal: true }],
+        fontes: [{ fontePagadora: 6741, plano: 6745, limite: null }],
       },
     });
 
     // Escala e geração dos encontros.
     await page.getByTestId('turma-abrir-6801').click();
     await expect(page.getByTestId('turma-detalhe')).toBeVisible();
+    // Editar e gravar de novo preserva o plano da fonte aceita (nada de fonte retirada e recriada sem plano).
+    await page.getByTestId('turma-editar').click();
+    await page.getByTestId('turma-gravar').click();
+    await expect(page.getByTestId('turmas-mensagem')).toHaveText('Turma gravada.');
+    expect(st.corpos.at(-1)).toMatchObject({
+      url: '/api/agenda/turmas/6801',
+      corpo: { versao: 1, fontes: [{ fontePagadora: 6741, plano: 6745, limite: null }] },
+    });
     await page.getByTestId('escala-fim').locator('input, textarea').first().fill('13:00');
     await expect(page.getByTestId('escala-recusa')).toContainText('depois do início');
     await page.getByTestId('escala-fim').locator('input, textarea').first().fill('15:30');
@@ -229,11 +257,12 @@ test.describe('@C2-067 agenda de grupos e turmas', () => {
     await page.getByTestId(`inscricao-paciente-${PACIENTE.id}`).click();
     await expect(page.getByTestId('turmas-do-paciente')).toContainText('não participa');
     await escolher(page.getByTestId('turma-inscricao').getByLabel('Fonte pagadora'), '6741');
+    await escolher(page.getByTestId('turma-inscricao').getByLabel('Plano'), '6745');
     await page.getByTestId('inscricao-confirmar').click();
     await expect(page.getByTestId('turmas-mensagem')).toHaveText('Paciente inscrito.');
     expect(st.corpos.at(-1)).toMatchObject({
       url: '/api/agenda/turmas/6801/participantes',
-      corpo: { paciente: PACIENTE.id, fontePagadora: 6741, encaixe: false },
+      corpo: { paciente: PACIENTE.id, fontePagadora: 6741, plano: 6745, encaixe: false },
     });
 
     // Presença: falta justificada sem justificativa é recusada na hora; todos presentes grava.
@@ -260,6 +289,7 @@ test.describe('@C2-067 agenda de grupos e turmas', () => {
       url: '/api/agenda/turmas/participantes/6831/sair',
       corpo: { versao: 1, saida: 'desistente', motivo: 'Mudou de cidade' },
     });
+    await expect(page.getByTestId('participante-6831')).toContainText('saiu em 20/03/2030');
 
     await semViolacaoAxe(page, 'agenda de grupos e turmas');
     expect(externas).toEqual([]);

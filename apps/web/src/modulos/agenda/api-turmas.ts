@@ -90,6 +90,8 @@ const esquemaParticipante = z.object({
   situacao: z.enum(['em_espera', 'inscrito', 'ativo', 'concluido', 'desistente', 'desligado']),
   posicaoEspera: z.number().nullable(),
   inscritoEm: z.string(),
+  desligadoEm: z.string().nullable(),
+  motivoDesligamento: z.string().nullable(),
   frequencia: z.number().nullable(),
 });
 export type ParticipanteLido = z.infer<typeof esquemaParticipante>;
@@ -115,11 +117,14 @@ const esquemaPresencaEncontro = z.object({
 export type PresencaEncontro = z.infer<typeof esquemaPresencaEncontro>;
 const esquemaDoPaciente = z.array(
   z.object({
+    participacao: z.number(),
     turma: z.number(),
     codigo: z.string(),
     descricao: z.string(),
     situacao: esquemaParticipante.shape.situacao,
     posicaoEspera: z.number().nullable(),
+    inscritoEm: z.string(),
+    desligadoEm: z.string().nullable(),
     frequencia: z.number().nullable(),
     proximoEncontro: z.string().nullable(),
   }),
@@ -132,6 +137,7 @@ const esquemaOpcoes = z.object({
   setorFuncional: opcao,
   profissional: opcao,
   fontePagadora: opcao,
+  plano: z.array(z.object({ id: z.number(), nome: z.string(), fontePagadora: z.number() })),
   sexo: opcao,
 });
 export type OpcoesTurma = z.infer<typeof esquemaOpcoes>;

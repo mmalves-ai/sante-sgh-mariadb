@@ -4,7 +4,10 @@
 // sobreposição, a geração dos encontros sem feriado e sem repetir, a inscrição com as recusas (idade, sexo, indicação,
 // fonte, limite da fonte) e a espera com posição, a saída com a promoção do primeiro da espera, a presença (recusa no
 // encontro futuro, falta justificada, participante que passa a ativo, encontro realizado), o cancelamento com motivo,
-// a visão por paciente com a frequência e a trilha na mesma transação. SGH_NUCLEO_SEM_BANCO=1 pula.
+// a visão por paciente com a frequência e a trilha na mesma transação; a promoção da espera só para vaga regular e
+// dentro do limite da fonte (saída de quem estava no encaixe não promove; a fonte no limite fica na espera); a volta de
+// quem saiu como participação nova, com a encerrada intacta e a frequência de cada uma separada. SGH_NUCLEO_SEM_BANCO=1
+// pula.
 import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -514,5 +517,117 @@ describe.skipIf(SEM_BANCO)('agenda de grupos e turmas (porta própria, MariaDB)'
       [ids.est],
     );
     expect(Number(trilha[0]!['n'])).toBeGreaterThanOrEqual(8);
+  });
+
+  it('promoção da espera: só vaga regular e limite da fonte; a volta de quem saiu é participação nova', async () => {
+    const [p1, p2, p3, p4] = ids.pac as [number, number, number, number];
+    const p5 = ids.criança;
+    const t2 = await turmas.salvarTurma(ctxG(), {
+      ...turmaBase(),
+      codigo: 'GRP-ENC',
+      descricao: 'GRUPO SINTETICO COM ENCAIXE',
+      vagas: 2,
+      vagasEncaixe: 1,
+      exigeIndicacaoMedica: false,
+      idadeMinimaAnos: null,
+      idadeMaximaAnos: null,
+      fontes: [
+        { fontePagadora: ids.fpA, plano: null, limite: 1 },
+        { fontePagadora: ids.fpB, plano: null, limite: null },
+      ],
+    });
+    const turma = t2.resultado.turma;
+    const ins = (paciente: number, x: Record<string, unknown> = {}) =>
+      turmas.inscrever(ctxG(), { ...inscricao(paciente, { indicacaoProfissional: null, ...x }), turma });
+    const linha = async (paciente: number) =>
+      (
+        await ler<Record<string, unknown>>(
+          `SELECT id, versao, situacao, posicao_espera FROM turma_participante
+            WHERE turma_atividade_id = ? AND paciente_id = ? ORDER BY id DESC LIMIT 1`,
+          [turma, paciente],
+        )
+      )[0]!;
+    const sair = async (paciente: number) => {
+      const l = await linha(paciente);
+      return turmas.sair(ctxG(), {
+        participante: Number(l['id']),
+        versao: Number(l['versao']),
+        saida: 'desistente',
+        motivo: 'Teste sintético',
+      });
+    };
+    await ins(p1, { fontePagadora: ids.fpB });
+    await ins(p2, { fontePagadora: ids.fpB });
+    expect((await ins(p3, { fontePagadora: ids.fpB, encaixe: true })).resultado.situacao).toBe('inscrito');
+    // Fonte A com limite 1 e 0 usadas: os dois entram na espera (a turma está cheia).
+    expect((await ins(p4)).resultado).toMatchObject({ situacao: 'em_espera', posicaoEspera: 1 });
+    expect((await ins(p5)).resultado).toMatchObject({ situacao: 'em_espera', posicaoEspera: 2 });
+    // Sai quem estava no encaixe: ficam 2 de 2 vagas regulares, ninguém sobe.
+    expect((await sair(p3)).resultado).toMatchObject({ promovido: null, promovidos: 0 });
+    expect((await linha(p4))['situacao']).toBe('em_espera');
+    // Sai um da fonte B: abre vaga regular e sobe o primeiro da espera (fonte A passa a 1 de 1).
+    const s1 = await sair(p1);
+    expect(s1.resultado.promovido).toBe(Number((await linha(p4))['id']));
+    expect((await linha(p4))['situacao']).toBe('inscrito');
+    // Sai o outro da fonte B: há vaga, mas o próximo da espera é da fonte A, já no limite: fica na espera.
+    expect((await sair(p2)).resultado).toMatchObject({ promovido: null, promovidos: 0 });
+    expect((await linha(p5))['situacao']).toBe('em_espera');
+    const fonteA = await ler<Record<string, unknown>>(
+      `SELECT COUNT(*) AS n FROM turma_participante WHERE turma_atividade_id = ? AND fonte_pagadora_id = ?
+          AND situacao IN ('inscrito','ativo')`,
+      [turma, ids.fpA],
+    );
+    expect(Number(fonteA[0]!['n'])).toBe(1);
+
+    // Volta de quem saiu (turma 1, cheia: a volta entra na espera): a participação encerrada fica com a data e a
+    // presença; a nova é outra linha, com frequência própria.
+    const [pa] = await ler<Record<string, unknown>>(
+      "SELECT id, versao, paciente_id FROM turma_participante WHERE turma_atividade_id = ? AND situacao = 'ativo'",
+      [ids.turma],
+    );
+    const pac = Number(pa!['paciente_id']);
+    await turmas.sair(ctxG(), {
+      participante: Number(pa!['id']),
+      versao: Number(pa!['versao']),
+      saida: 'concluido',
+      motivo: null,
+    });
+    await expect(turmas.inscrever(ctxG(), inscricao(p3))).rejects.toMatchObject(
+      recusada('paciente-ja-na-turma'),
+    );
+    const volta = await turmas.inscrever(ctxG(), inscricao(pac, { fontePagadora: ids.fpB }));
+    expect(volta.resultado.participante).not.toBe(Number(pa!['id']));
+    const historico = await ler<Record<string, unknown>>(
+      `SELECT id, situacao, desligado_em, inscrito_em FROM turma_participante
+        WHERE turma_atividade_id = ? AND paciente_id = ? ORDER BY id`,
+      [ids.turma, pac],
+    );
+    expect(historico.map((x) => [Number(x['id']), x['situacao']])).toEqual([
+      [Number(pa!['id']), 'concluido'],
+      [volta.resultado.participante, 'em_espera'],
+    ]);
+    expect(historico[0]!['desligado_em']).not.toBeNull();
+    expect(historico[1]!['desligado_em']).toBeNull();
+    const pres = await ler<Record<string, unknown>>(
+      'SELECT COUNT(*) AS n FROM turma_presenca WHERE turma_participante_id = ?',
+      [Number(pa!['id'])],
+    );
+    expect(Number(pres[0]!['n'])).toBe(1);
+    const det = await turmas.detalhe(ctxL, ids.turma);
+    const doPac = det.participantes.filter((x) => x.paciente === pac);
+    expect(doPac.map((x) => [x.situacao, x.frequencia])).toEqual([
+      ['em_espera', null],
+      ['concluido', 100],
+    ]);
+    expect(doPac[1]!.desligadoEm).not.toBeNull();
+    const visao = await turmas.doPaciente(ctxL, pac);
+    // O paciente também tem a participação encerrada na turma com encaixe: a visão traz todas, a mais nova primeiro.
+    expect(visao.filter((x) => x.turma === turma).map((x) => x.situacao)).toEqual(['desistente']);
+    expect(
+      visao.filter((x) => x.turma === ids.turma).map((x) => [x.participacao, x.situacao, x.frequencia]),
+    ).toEqual([
+      [volta.resultado.participante, 'em_espera', null],
+      [Number(pa!['id']), 'concluido', 100],
+    ]);
   });
 });

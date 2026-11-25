@@ -1,15 +1,18 @@
 // Agenda de grupos e turmas (02-AGE linha 50) sobre turma_atividade, turma_escala, turma_profissional,
 // turma_fonte_pagadora, turma_encontro, turma_participante e turma_presenca. A regra é do domínio (@sgh/dominio-agenda:
-// validarTurma, validarEscala, gerarEncontros, decidirInscricao, decidirSaida, proximoDaEspera, validarPresenca,
+// validarTurma, validarEscala, gerarEncontros, decidirInscricao, decidirSaida, decidirPromocao, validarPresenca,
 // validarCancelamentoEncontro, frequencia); aqui ficam a leitura, a contagem sob trava e as gravações pelo executor
 // (trilha na mesma transação). Nada se apaga: profissional retirado ganha fim de vigência, fonte retirada ganha
-// excluido_em, encontro cancelado fica com o motivo, participação encerrada fica com a data e o motivo.
+// excluido_em, encontro cancelado fica com o motivo, participação encerrada fica com a data e o motivo. Cada inscrição é
+// uma participação própria (linha nova ao voltar quem saiu; migração 05_AGE/92): a encerrada guarda as presenças dela e a
+// frequência de cada participação conta só os encontros dela.
 import {
   decidirInscricao,
+  decidirPromocao,
   decidirSaida,
+  type FonteDaTurma,
   frequencia,
   gerarEncontros,
-  proximoDaEspera,
   SAIDAS_PARTICIPANTE,
   SITUACOES_PRESENCA,
   type SituacaoEncontro,
@@ -192,6 +195,8 @@ export interface ParticipanteLido {
   readonly situacao: SituacaoParticipante;
   readonly posicaoEspera: number | null;
   readonly inscritoEm: string;
+  readonly desligadoEm: string | null;
+  readonly motivoDesligamento: string | null;
   readonly frequencia: number | null;
 }
 export interface TurmaDetalhe {
@@ -211,11 +216,14 @@ export interface PresencaDoEncontro {
   }[];
 }
 export interface ParticipacaoDoPaciente {
+  readonly participacao: number;
   readonly turma: number;
   readonly codigo: string;
   readonly descricao: string;
   readonly situacao: SituacaoParticipante;
   readonly posicaoEspera: number | null;
+  readonly inscritoEm: string;
+  readonly desligadoEm: string | null;
   readonly frequencia: number | null;
   readonly proximoEncontro: string | null;
 }
@@ -229,6 +237,8 @@ export interface OpcoesTurma {
   readonly setorFuncional: OpcaoTurma[];
   readonly profissional: OpcaoTurma[];
   readonly fontePagadora: OpcaoTurma[];
+  /** Planos das fontes, para escolher o plano aceito e o do paciente (filtrados pela fonte na tela). */
+  readonly plano: (OpcaoTurma & { readonly fontePagadora: number })[];
   readonly sexo: OpcaoTurma[];
 }
 
@@ -291,7 +301,10 @@ export class TurmasAtividadePropria {
     gravar: (tx, e, ctx) => this.gravarInscricao(tx, e, ctx),
     alvo: (_e, r) => ({ tabela: 'turma_participante', id: r.participante }),
   });
-  private readonly sairOp = definirOperacao<EntradaSair, { participante: number; promovido: number | null }>({
+  private readonly sairOp = definirOperacao<
+    EntradaSair,
+    { participante: number; promovido: number | null; promovidos: number }
+  >({
     nome: 'agenda.turma_participante_sair',
     tabelas: ['turma_participante'],
     entrada: esquemaSair,
@@ -445,14 +458,15 @@ export class TurmasAtividadePropria {
       ).map((x) => this.encontroDe(q.fuso, x));
       const parts = await l.consultar(
         `SELECT p.id, p.versao, p.paciente_id, COALESCE(NULLIF(pf.nome_social, ''), pf.nome) AS nome,
-                pa.numero_prontuario, f.nome AS fonte, p.situacao, p.posicao_espera, p.inscrito_em
+                pa.numero_prontuario, f.nome AS fonte, p.situacao, p.posicao_espera, p.inscrito_em, p.desligado_em,
+                p.motivo_desligamento
            FROM turma_participante p
            JOIN paciente pa ON pa.id = p.paciente_id
            JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
            JOIN fonte_pagadora f ON f.id = p.fonte_pagadora_id
           WHERE p.turma_atividade_id = ? AND p.excluido_em IS NULL
           ORDER BY FIELD(p.situacao, 'ativo', 'inscrito', 'em_espera', 'concluido', 'desistente', 'desligado'),
-                   p.posicao_espera, nome
+                   p.posicao_espera, nome, p.inscrito_em DESC
           LIMIT 1000`,
         [turma],
       );
@@ -496,6 +510,8 @@ export class TurmasAtividadePropria {
           situacao: String(x['situacao']) as SituacaoParticipante,
           posicaoEspera: numOuNulo(x['posicao_espera']),
           inscritoEm: dataIso(x['inscrito_em']) ?? '',
+          desligadoEm: dataIso(x['desligado_em']),
+          motivoDesligamento: textoOuNulo(x['motivo_desligamento']),
           frequencia: freq.get(num(x['id'])) ?? null,
         })),
       };
@@ -579,12 +595,12 @@ export class TurmasAtividadePropria {
     const agora = this.agora();
     return this.ler(q.estabelecimento, async (l) => {
       const linhas = await l.consultar(
-        `SELECT p.id, t.id AS turma, t.codigo, t.descricao, p.situacao, p.posicao_espera,
+        `SELECT p.id, t.id AS turma, t.codigo, t.descricao, p.situacao, p.posicao_espera, p.inscrito_em, p.desligado_em,
                 (SELECT MIN(x.inicio) FROM turma_encontro x WHERE x.turma_atividade_id = t.id AND x.excluido_em IS NULL
                     AND x.situacao = 'previsto' AND x.inicio >= ?) AS proximo
            FROM turma_participante p JOIN turma_atividade t ON t.id = p.turma_atividade_id
           WHERE p.paciente_id = ? AND t.estabelecimento_id = ? AND p.excluido_em IS NULL
-          ORDER BY p.inscrito_em DESC LIMIT 200`,
+          ORDER BY p.inscrito_em DESC, p.id DESC LIMIT 200`,
         [agora, paciente, q.estabelecimento],
       );
       const freq = await this.frequencias(
@@ -592,11 +608,14 @@ export class TurmasAtividadePropria {
         linhas.map((x) => num(x['id'])),
       );
       return linhas.map((x) => ({
+        participacao: num(x['id']),
         turma: num(x['turma']),
         codigo: String(x['codigo']),
         descricao: String(x['descricao']),
         situacao: String(x['situacao']) as SituacaoParticipante,
         posicaoEspera: numOuNulo(x['posicao_espera']),
+        inscritoEm: dataIso(x['inscrito_em']) ?? '',
+        desligadoEm: dataIso(x['desligado_em']),
         frequencia: freq.get(num(x['id'])) ?? null,
         proximoEncontro: x['proximo'] ? nomeData(q.fuso, x['proximo']) : null,
       }));
@@ -628,6 +647,16 @@ export class TurmasAtividadePropria {
         fontePagadora: await lista(
           'SELECT id, nome FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome LIMIT 500',
         ),
+        plano: (
+          await l.consultar(
+            `SELECT id, descricao AS nome, fonte_pagadora_id FROM plano_fonte_pagadora
+              WHERE excluido_em IS NULL ORDER BY descricao LIMIT 3000`,
+          )
+        ).map((x) => ({
+          id: num(x['id']),
+          nome: String(x['nome']),
+          fontePagadora: num(x['fonte_pagadora_id']),
+        })),
         sexo: await lista('SELECT id, descricao AS nome FROM sexo WHERE ativo ORDER BY descricao'),
       };
     });
@@ -682,7 +711,11 @@ export class TurmasAtividadePropria {
     >(this.inscreverOp, c, e);
   }
   sair(c: ContextoGravacaoTurmas, e: unknown) {
-    return this.rodar<unknown, { participante: number; promovido: number | null }>(this.sairOp, c, e);
+    return this.rodar<unknown, { participante: number; promovido: number | null; promovidos: number }>(
+      this.sairOp,
+      c,
+      e,
+    );
   }
   registrarPresenca(c: ContextoGravacaoTurmas, e: unknown) {
     return this.rodar<unknown, { encontro: number; registradas: number }>(this.presencaOp, c, e);
@@ -1040,38 +1073,17 @@ export class TurmasAtividadePropria {
       throw recusa('profissional-inexistente', 'O profissional que indicou não existe.', {
         campos: ['indicacaoProfissional'],
       });
-    const anterior = await tx.uma(
-      'SELECT id, versao, situacao FROM turma_participante WHERE turma_atividade_id = ? AND paciente_id = ?',
+    const vigente = await tx.uma(
+      `SELECT id FROM turma_participante
+        WHERE turma_atividade_id = ? AND paciente_id = ? AND excluido_em IS NULL
+          AND situacao IN ('em_espera','inscrito','ativo')`,
       [e.turma, e.paciente],
     );
-    if (anterior && ['em_espera', 'inscrito', 'ativo'].includes(String(anterior['situacao'])))
+    if (vigente)
       throw recusa('paciente-ja-na-turma', 'O paciente já está nesta turma (inscrito ou na espera).');
-    const participacoes = await tx.consultar(
-      `SELECT fonte_pagadora_id, plano_fonte_pagadora_id, situacao, posicao_espera FROM turma_participante
-        WHERE turma_atividade_id = ? AND excluido_em IS NULL AND situacao IN ('em_espera','inscrito','ativo')`,
-      [e.turma],
-    );
-    const ocupam = participacoes.filter((x) => x['situacao'] !== 'em_espera');
-    const fontes = (
-      await tx.consultar(
-        `SELECT fonte_pagadora_id, plano_fonte_pagadora_id, limite_marcacoes FROM turma_fonte_pagadora
-          WHERE turma_atividade_id = ? AND excluido_em IS NULL`,
-        [e.turma],
-      )
-    ).map((f) => {
-      const fonte = num(f['fonte_pagadora_id']);
-      const plano = numOuNulo(f['plano_fonte_pagadora_id']);
-      return {
-        fontePagadora: fonte,
-        plano,
-        limite: numOuNulo(f['limite_marcacoes']),
-        usadas: ocupam.filter(
-          (x) =>
-            num(x['fonte_pagadora_id']) === fonte &&
-            (plano === null || numOuNulo(x['plano_fonte_pagadora_id']) === plano),
-        ).length,
-      };
-    });
+    const participacoes = await this.participacoesVigentes(tx, e.turma);
+    const ocupam = participacoes.filter((x) => x.situacao !== 'em_espera');
+    const fontes = await this.fontesComUso(tx, e.turma, ocupam);
     const d = decidirInscricao({
       hoje,
       turma: {
@@ -1093,29 +1105,21 @@ export class TurmasAtividadePropria {
       encaixe: e.encaixe,
       fontes,
       ocupadas: ocupam.length,
-      ultimaPosicaoEspera: Math.max(0, ...participacoes.map((x) => numOuNulo(x['posicao_espera']) ?? 0)),
+      ultimaPosicaoEspera: Math.max(0, ...participacoes.map((x) => x.posicaoEspera ?? 0)),
     });
     if (!d.ok) throw recusa(d.codigo, d.mensagem, d.campo ? { campos: [d.campo] } : undefined);
-    const valores = {
+    // Cada inscrição é uma participação própria: quem saiu e volta ganha linha nova; a encerrada fica como está.
+    const participante = await tx.incluir('turma_participante', {
+      turma_atividade_id: e.turma,
+      paciente_id: e.paciente,
       fonte_pagadora_id: e.fontePagadora,
       plano_fonte_pagadora_id: e.plano,
       indicacao_profissional_id: e.indicacaoProfissional,
       situacao: d.situacao,
       posicao_espera: d.posicaoEspera,
       inscrito_em: this.agora(),
-      desligado_em: null,
-      motivo_desligamento: null,
       observacao: e.observacao?.trim() || null,
-    };
-    // Volta de quem já saiu: a mesma linha (chave turma + paciente) recebe a nova inscrição; a trilha guarda a anterior.
-    const participante = anterior
-      ? (await tx.alterar('turma_participante', num(anterior['id']), num(anterior['versao']), valores),
-        num(anterior['id']))
-      : await tx.incluir('turma_participante', {
-          turma_atividade_id: e.turma,
-          paciente_id: e.paciente,
-          ...valores,
-        });
+    });
     return {
       participante,
       situacao: d.situacao,
@@ -1128,7 +1132,7 @@ export class TurmasAtividadePropria {
     tx: TxOperacao,
     e: EntradaSair,
     ctx: ContextoOperacao,
-  ): Promise<{ participante: number; promovido: number | null }> {
+  ): Promise<{ participante: number; promovido: number | null; promovidos: number }> {
     const est = Number(ctx.estabelecimento);
     const p = await tx.uma(
       `SELECT p.id, p.turma_atividade_id, p.situacao FROM turma_participante p
@@ -1149,26 +1153,67 @@ export class TurmasAtividadePropria {
       motivo_desligamento: e.motivo?.trim() || null,
       posicao_espera: null,
     });
-    if (atual === 'em_espera') return { participante: e.participante, promovido: null };
-    // Vaga liberada: o primeiro da espera sobe, na mesma transação.
-    const espera = (
+    if (atual === 'em_espera') return { participante: e.participante, promovido: null, promovidos: 0 };
+    // Vaga liberada: sobe da espera quem couber numa vaga regular e no limite da fonte (regra no domínio).
+    const t = await tx.uma('SELECT vagas FROM turma_atividade WHERE id = ?', [turma]);
+    const participacoes = await this.participacoesVigentes(tx, turma);
+    const ocupam = participacoes.filter((x) => x.situacao !== 'em_espera');
+    const sobem = decidirPromocao({
+      vagas: num(t?.['vagas']),
+      ocupadas: ocupam.length,
+      fontes: await this.fontesComUso(tx, turma, ocupam),
+      espera: participacoes.filter((x) => x.situacao === 'em_espera'),
+    });
+    for (const x of sobem)
+      await tx.alterar('turma_participante', x.id, x.versao, { situacao: 'inscrito', posicao_espera: null });
+    return {
+      participante: e.participante,
+      promovido: sobem[0]?.id ?? null,
+      promovidos: sobem.length,
+    };
+  }
+
+  /** Participações vigentes da turma (na espera, inscritas e ativas), lidas depois da trava da turma. */
+  private async participacoesVigentes(tx: TxOperacao, turma: number) {
+    return (
       await tx.consultar(
-        `SELECT id, versao, posicao_espera FROM turma_participante
-          WHERE turma_atividade_id = ? AND situacao = 'em_espera' AND excluido_em IS NULL`,
+        `SELECT id, versao, fonte_pagadora_id, plano_fonte_pagadora_id, situacao, posicao_espera FROM turma_participante
+          WHERE turma_atividade_id = ? AND excluido_em IS NULL AND situacao IN ('em_espera','inscrito','ativo')`,
         [turma],
       )
     ).map((x) => ({
       id: num(x['id']),
       versao: num(x['versao']),
+      fontePagadora: num(x['fonte_pagadora_id']),
+      plano: numOuNulo(x['plano_fonte_pagadora_id']),
+      situacao: String(x['situacao']) as SituacaoParticipante,
       posicaoEspera: numOuNulo(x['posicao_espera']),
     }));
-    const prox = proximoDaEspera(espera);
-    if (prox)
-      await tx.alterar('turma_participante', prox.id, prox.versao, {
-        situacao: 'inscrito',
-        posicao_espera: null,
-      });
-    return { participante: e.participante, promovido: prox?.id ?? null };
+  }
+
+  /** Fontes aceitas pela turma com as participações que ocupam vaga por fonte (a regra sem plano conta a fonte toda). */
+  private async fontesComUso(
+    tx: TxOperacao,
+    turma: number,
+    ocupam: readonly { fontePagadora: number; plano: number | null }[],
+  ): Promise<FonteDaTurma[]> {
+    return (
+      await tx.consultar(
+        `SELECT fonte_pagadora_id, plano_fonte_pagadora_id, limite_marcacoes FROM turma_fonte_pagadora
+          WHERE turma_atividade_id = ? AND excluido_em IS NULL`,
+        [turma],
+      )
+    ).map((f) => {
+      const fonte = num(f['fonte_pagadora_id']);
+      const plano = numOuNulo(f['plano_fonte_pagadora_id']);
+      return {
+        fontePagadora: fonte,
+        plano,
+        limite: numOuNulo(f['limite_marcacoes']),
+        usadas: ocupam.filter((x) => x.fontePagadora === fonte && (plano === null || x.plano === plano))
+          .length,
+      };
+    });
   }
 
   private async gravarPresenca(

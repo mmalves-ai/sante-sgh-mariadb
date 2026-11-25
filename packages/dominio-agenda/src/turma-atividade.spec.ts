@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   type DadosTurma,
   decidirInscricao,
+  decidirPromocao,
   decidirSaida,
+  fonteAceita,
   frequencia,
   gerarEncontros,
   idadeNaTurma,
@@ -279,5 +281,57 @@ describe('turma: presença e encontro', () => {
     expect(validarCancelamentoEncontro('realizado', 'x')?.codigo).toBe('encontro-realizado');
     expect(frequencia(['presente', 'falta', 'presente', 'falta_justificada'])).toBe(50);
     expect(frequencia([])).toBeNull();
+  });
+});
+
+describe('turma: promoção da espera', () => {
+  const esp = (id: number, posicaoEspera: number, fontePagadora = 1, plano: number | null = null) => ({
+    id,
+    posicaoEspera,
+    fontePagadora,
+    plano,
+  });
+  it('sobe o primeiro da espera só se a saída abriu vaga regular', () => {
+    const espera = [esp(7, 2), esp(5, 1)];
+    expect(decidirPromocao({ vagas: 2, ocupadas: 1, fontes: [], espera }).map((x) => x.id)).toEqual([5]);
+    // Saiu quem estava no encaixe: ficam 2 de 2 vagas, ninguém sobe para o encaixe.
+    expect(decidirPromocao({ vagas: 2, ocupadas: 2, fontes: [], espera })).toEqual([]);
+    // Vagas reduzidas na edição: ainda acima das vagas, ninguém sobe.
+    expect(decidirPromocao({ vagas: 2, ocupadas: 3, fontes: [], espera })).toEqual([]);
+    // Vagas aumentadas: sobem tantos quantos couberem, na ordem.
+    expect(decidirPromocao({ vagas: 5, ocupadas: 2, fontes: [], espera }).map((x) => x.id)).toEqual([5, 7]);
+  });
+  it('respeita o limite da fonte: pula quem não cabe e sobe o próximo que cabe', () => {
+    const fontes = [
+      { fontePagadora: 1, plano: null, limite: 1, usadas: 1 },
+      { fontePagadora: 2, plano: null, limite: null, usadas: 0 },
+    ];
+    const espera = [esp(10, 1, 1), esp(11, 2, 1), esp(12, 3, 2)];
+    expect(decidirPromocao({ vagas: 5, ocupadas: 1, fontes, espera }).map((x) => x.id)).toEqual([12]);
+    // Fonte A com 0 de 1: duas vagas abertas, só um da fonte A sobe.
+    const livre = [{ ...fontes[0]!, usadas: 0 }, fontes[1]!];
+    expect(
+      decidirPromocao({ vagas: 4, ocupadas: 2, fontes: livre, espera: [esp(10, 1, 1), esp(11, 2, 1)] }).map(
+        (x) => x.id,
+      ),
+    ).toEqual([10]);
+    // Fonte que deixou de ser aceita: fica na espera.
+    expect(decidirPromocao({ vagas: 5, ocupadas: 0, fontes, espera: [esp(20, 1, 3)] })).toEqual([]);
+  });
+  it('o plano usa a regra do plano e conta também no limite da fonte inteira', () => {
+    const fontes = [
+      { fontePagadora: 1, plano: 9, limite: 5, usadas: 0 },
+      { fontePagadora: 1, plano: null, limite: 1, usadas: 0 },
+    ];
+    expect(fonteAceita(fontes, 1, 9)).toBe(fontes[0]);
+    expect(fonteAceita(fontes, 1, 8)).toBe(fontes[1]);
+    expect(fonteAceita(fontes, 2, null)).toBeNull();
+    const sobem = decidirPromocao({
+      vagas: 9,
+      ocupadas: 0,
+      fontes,
+      espera: [esp(1, 1, 1, 9), esp(2, 2, 1, 8)],
+    });
+    expect(sobem.map((x) => x.id)).toEqual([1]);
   });
 });

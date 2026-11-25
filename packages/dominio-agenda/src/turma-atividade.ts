@@ -239,6 +239,28 @@ export interface RegrasInscricao {
   readonly exigeAcompanhante: boolean;
 }
 
+/** Fonte aceita pela turma e o que ela já usa (o limite conta só quem ocupa vaga). */
+export interface FonteDaTurma {
+  readonly fontePagadora: number;
+  /** Nulo: a fonte inteira, qualquer plano. */
+  readonly plano: number | null;
+  readonly limite: number | null;
+  readonly usadas: number;
+}
+
+/** A regra da fonte que vale para a fonte e o plano do paciente: a do plano, senão a da fonte inteira. */
+export function fonteAceita<F extends Omit<FonteDaTurma, 'usadas'>>(
+  fontes: readonly F[],
+  fontePagadora: number,
+  plano: number | null,
+): F | null {
+  return (
+    fontes.find((f) => f.fontePagadora === fontePagadora && f.plano !== null && f.plano === plano) ??
+    fontes.find((f) => f.fontePagadora === fontePagadora && f.plano === null) ??
+    null
+  );
+}
+
 export interface PedidoInscricao {
   readonly hoje: string;
   readonly turma: RegrasInscricao;
@@ -249,12 +271,7 @@ export interface PedidoInscricao {
   readonly acompanhanteInformado: boolean;
   readonly encaixe: boolean;
   /** Fontes aceitas pela turma (vazio: todas) com as participações que já ocupam vaga por fonte. */
-  readonly fontes: readonly {
-    readonly fontePagadora: number;
-    readonly plano: number | null;
-    readonly limite: number | null;
-    readonly usadas: number;
-  }[];
+  readonly fontes: readonly FonteDaTurma[];
   /** Participações que ocupam vaga (inscrito e ativo). */
   readonly ocupadas: number;
   /** Maior posição na espera hoje (0: ninguém). */
@@ -312,9 +329,7 @@ export function decidirInscricao(p: PedidoInscricao): DecisaoInscricao {
       'acompanhante',
     );
   if (p.fontes.length > 0) {
-    const aceita =
-      p.fontes.find((f) => f.fontePagadora === p.fontePagadora && f.plano !== null && f.plano === p.plano) ??
-      p.fontes.find((f) => f.fontePagadora === p.fontePagadora && f.plano === null);
+    const aceita = fonteAceita(p.fontes, p.fontePagadora, p.plano);
     if (!aceita)
       return nao(
         'fonte-nao-aceita',
@@ -363,6 +378,55 @@ export function proximoDaEspera<T extends { readonly id: number; readonly posica
     .filter((x) => x.posicaoEspera !== null)
     .sort((a, b) => a.posicaoEspera! - b.posicaoEspera! || a.id - b.id);
   return lista[0] ?? null;
+}
+
+export interface EsperaNaTurma {
+  readonly id: number;
+  readonly posicaoEspera: number | null;
+  readonly fontePagadora: number;
+  readonly plano: number | null;
+}
+
+export interface PedidoPromocao<T extends EsperaNaTurma> {
+  /** Vagas regulares da turma (o encaixe só se usa a pedido, na inscrição: a espera não sobe para o encaixe). */
+  readonly vagas: number;
+  /** Participações que ocupam vaga depois da saída (inscrito e ativo, inclusive as de encaixe). */
+  readonly ocupadas: number;
+  /** Fontes aceitas pela turma (vazio: todas) com as usadas depois da saída. */
+  readonly fontes: readonly FonteDaTurma[];
+  readonly espera: readonly T[];
+}
+
+/**
+ * Quem sobe da espera quando abre vaga: na ordem da espera, cada um que caiba numa vaga regular livre e cuja fonte
+ * (ou plano) esteja aceita e abaixo do limite. Quem não cabe pela fonte fica na espera, na mesma posição, e o próximo
+ * que caiba sobe. Sem vaga regular (a saída foi de quem ocupava o encaixe, ou as vagas foram reduzidas), ninguém sobe.
+ */
+export function decidirPromocao<T extends EsperaNaTurma>(p: PedidoPromocao<T>): T[] {
+  let livres = p.vagas - p.ocupadas;
+  if (livres <= 0) return [];
+  const usadas = new Map(p.fontes.map((f) => [f, f.usadas]));
+  const sobem: T[] = [];
+  const fila = p.espera
+    .filter((x) => x.posicaoEspera !== null)
+    .sort((a, b) => a.posicaoEspera! - b.posicaoEspera! || a.id - b.id);
+  for (const x of fila) {
+    if (livres <= 0) break;
+    if (p.fontes.length > 0) {
+      const f = fonteAceita(p.fontes, x.fontePagadora, x.plano);
+      if (!f) continue;
+      const u = usadas.get(f) ?? 0;
+      if (f.limite !== null && u >= f.limite) continue;
+      usadas.set(f, u + 1);
+      // O limite da fonte inteira também conta quem entra por um plano dela.
+      for (const g of p.fontes)
+        if (g !== f && g.fontePagadora === x.fontePagadora && g.plano === null)
+          usadas.set(g, (usadas.get(g) ?? 0) + 1);
+    }
+    sobem.push(x);
+    livres--;
+  }
+  return sobem;
 }
 
 export interface PedidoPresenca {
