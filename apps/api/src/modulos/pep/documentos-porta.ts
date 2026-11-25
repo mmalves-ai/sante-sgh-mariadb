@@ -273,10 +273,13 @@ export interface PortaDocumentos {
       comoSuporte?: boolean;
     },
   ): Promise<{ id: number; documento: number }>;
-  /** Cancela a declaração de óbito vigente do paciente, com motivo e evento (03-PEP L126). Nada é apagado. */
+  /**
+   * Cancela a declaração de óbito vigente do paciente, com motivo e evento (03-PEP L126). Nada é apagado. Cancela o
+   * emissor ou, com `podeCancelarDeOutro` (permissão do responsável técnico ou diretor clínico), quem não a emitiu.
+   */
   cancelarObito(
     c: ContextoGravacaoPep,
-    o: { paciente: number; motivo: string; cbo: number | null },
+    o: { paciente: number; motivo: string; cbo: number | null; podeCancelarDeOutro?: boolean },
   ): Promise<{ id: number; documento: number | null }>;
   assinar(
     c: ContextoGravacaoPep,

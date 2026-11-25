@@ -50,22 +50,28 @@ export type RecusaCancelamentoObito =
   | { readonly codigo: 'nao-emissor'; readonly mensagem: string };
 
 /**
- * Pode cancelar? Só a declaração não cancelada, só pelo médico que a emitiu (quem atesta responde pelo documento) e
- * sempre com motivo escrito (de 10 a 2000 caracteres). Devolve o motivo limpo, ou a recusa. `ehEmissor` fica
- * verdadeiro só na conferência prévia do motivo, antes de a porta conhecer a declaração.
+ * Pode cancelar? Só a declaração não cancelada e sempre com motivo escrito (de 10 a 2000 caracteres). Cancela o médico
+ * que a emitiu (quem atesta responde pelo documento) ou, por cima dele, quem tem a permissão do responsável técnico ou
+ * do diretor clínico (`podeCancelarDeOutro`; CFM Res. 1.779/2005), também com motivo e com a trilha do cancelamento por
+ * terceiro. Devolve o motivo limpo e se o cancelamento é de outro médico, ou a recusa. `ehEmissor` fica verdadeiro só
+ * na conferência prévia do motivo, antes de a porta conhecer a declaração.
  */
 export function validarCancelamentoObito(
   situacao: SituacaoDeclaracaoObito,
   motivo: string,
   ehEmissor = true,
-): { readonly ok: true; readonly motivo: string } | ({ readonly ok: false } & RecusaCancelamentoObito) {
+  podeCancelarDeOutro = false,
+):
+  | { readonly ok: true; readonly motivo: string; readonly deOutroMedico: boolean }
+  | ({ readonly ok: false } & RecusaCancelamentoObito) {
   if (situacao === 'cancelada')
     return { ok: false, codigo: 'ja-cancelada', mensagem: 'A declaração de óbito já foi cancelada.' };
-  if (!ehEmissor)
+  if (!ehEmissor && !podeCancelarDeOutro)
     return {
       ok: false,
       codigo: 'nao-emissor',
-      mensagem: 'Só o médico que emitiu a declaração de óbito pode cancelá-la.',
+      mensagem:
+        'Só o médico que emitiu a declaração de óbito, ou o responsável técnico ou diretor clínico, pode cancelá-la.',
     };
   const m = (motivo ?? '').trim();
   if (m.length < MIN_MOTIVO_CANCELAMENTO_OBITO || m.length > MAX_MOTIVO_CANCELAMENTO_OBITO)
@@ -74,7 +80,7 @@ export function validarCancelamentoObito(
       codigo: 'motivo-obrigatorio',
       mensagem: `O motivo do cancelamento tem de ${MIN_MOTIVO_CANCELAMENTO_OBITO} a ${MAX_MOTIVO_CANCELAMENTO_OBITO} caracteres.`,
     };
-  return { ok: true, motivo: m };
+  return { ok: true, motivo: m, deOutroMedico: !ehEmissor };
 }
 
 /** Status HTTP de cada recusa do cancelamento. */

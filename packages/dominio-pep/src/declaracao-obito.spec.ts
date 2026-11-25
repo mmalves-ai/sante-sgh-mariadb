@@ -22,6 +22,7 @@ describe('declaração de óbito: cancelamento', () => {
     expect(validarCancelamentoObito('emitida', '  Número do formulário trocado  ')).toEqual({
       ok: true,
       motivo: 'Número do formulário trocado',
+      deOutroMedico: false,
     });
     expect(validarCancelamentoObito('rascunho', 'Paciente identificado errado').ok).toBe(true);
   });
@@ -49,5 +50,28 @@ describe('declaração de óbito: cancelamento', () => {
     expect(statusDaRecusaObito('nao-emissor')).toBe(403);
     expect(statusDaRecusaObito('motivo-obrigatorio')).toBe(422);
     expect(statusDaRecusaObito('ja-cancelada')).toBe(409);
+  });
+  it('responsável técnico ou diretor clínico: cancela a de outro médico, com motivo e marcado como de terceiro', () => {
+    expect(
+      validarCancelamentoObito('emitida', '  Causa básica registrada na linha errada ', false, true),
+    ).toEqual({
+      ok: true,
+      motivo: 'Causa básica registrada na linha errada',
+      deOutroMedico: true,
+    });
+    // A permissão não dispensa o motivo nem reabre a já cancelada.
+    expect(validarCancelamentoObito('emitida', 'curto', false, true)).toMatchObject({
+      ok: false,
+      codigo: 'motivo-obrigatorio',
+    });
+    expect(validarCancelamentoObito('cancelada', 'Motivo qualquer válido', false, true)).toMatchObject({
+      ok: false,
+      codigo: 'ja-cancelada',
+    });
+    // O próprio emissor com a permissão: cancelamento comum, não de terceiro.
+    expect(validarCancelamentoObito('emitida', 'Número do formulário trocado', true, true)).toMatchObject({
+      ok: true,
+      deOutroMedico: false,
+    });
   });
 });

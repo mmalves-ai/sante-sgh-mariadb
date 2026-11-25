@@ -1243,7 +1243,9 @@ export class DocumentosPepController {
     const paciente = await this.paciente(s, p, 'pep.declaracaoObito.emitir', false);
     await this.reautenticado(req, e.senha);
     const prof = this.servico.exigirProfissional(await this.prof(s));
-    return this.gravarSgh(() => this.servico.cancelarObito(this.sgh(s, 'obito'), paciente, e, prof));
+    // 04-INT L74 (CFM Res. 1.779/2005): o responsável técnico ou diretor clínico cancela a declaração de outro médico.
+    const deOutro = (req.sgh?.sessao.permissoes ?? []).includes('pep.declaracaoObito.cancelarOutro');
+    return this.gravarSgh(() => this.servico.cancelarObito(this.sgh(s, 'obito'), paciente, e, prof, deOutro));
   }
 
   // ── Anexos e tempos ──────────────────────────────────────────────────────────────────────────────

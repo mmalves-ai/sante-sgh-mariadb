@@ -914,6 +914,72 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     ).toBe(3);
   });
 
+  it('óbito (04-INT L74): o responsável técnico cancela a declaração de outro médico, com motivo, evento e trilha de terceiro', async () => {
+    const ob = await porta.registrarObito(G(), {
+      paciente: ids.pacienteC,
+      atendimento: ids.atendimentoC,
+      dataHora: new Date('2026-11-22T12:00:00Z'),
+      numero: 'L9800004',
+      causas: 'Causa sintética a',
+      causasLinhas: [
+        { sequencia: 1, parte: 'I' as const, linha: 'a' as const, descricao: 'Causa sintética a' },
+      ],
+      cbo: null,
+      hashConteudo: HASH,
+    });
+    const motivo = 'Causa básica registrada na linha errada pelo emissor';
+    const base = { paciente: ids.pacienteC, motivo, cbo: null };
+    // Sem a permissão do responsável técnico, quem não emitiu continua recusado (403) e nada muda.
+    expect(await recusa(porta.cancelarObito(G(RESIDENTE), { ...base, podeCancelarDeOutro: false }))).toEqual({
+      codigo: 'nao-emissor',
+      status: 403,
+    });
+    // Com a permissão, o motivo continua obrigatório.
+    expect(
+      await recusa(
+        porta.cancelarObito(G(RESIDENTE), { ...base, motivo: 'curto', podeCancelarDeOutro: true }),
+      ),
+    ).toEqual({ codigo: 'motivo-obrigatorio', status: 422 });
+    expect(await cadastro(ids.pacienteC)).toMatchObject({ falecido: true, declaracao: ob.id });
+    const trilhaTerceiro = () =>
+      contar(
+        `SELECT COUNT(*) AS n FROM trilha_auditoria
+          WHERE estabelecimento_id = ? AND entidade = 'declaracao_obito' AND entidade_id = ? AND motivo = ?
+            AND JSON_CONTAINS(dados_depois, 'true', '$.dados.canceladoPorTerceiro') = 1`,
+        [ids.est, ob.id, motivo],
+      );
+    expect(await trilhaTerceiro()).toBe(0);
+    expect(await porta.cancelarObito(G(RESIDENTE), { ...base, podeCancelarDeOutro: true })).toMatchObject({
+      id: ob.id,
+      documento: ob.documento,
+      deOutroMedico: true,
+    });
+    // A declaração fica, cancelada com data e motivo; o evento de cancelamento é do usuário de quem cancelou.
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM declaracao_obito d
+           JOIN declaracao_obito_evento e ON e.declaracao_obito_id = d.id AND e.tipo_evento = 'cancelamento'
+           JOIN usuario u ON u.id = e.usuario_id AND u.login = ?
+          WHERE d.id = ? AND d.situacao = 'cancelada' AND d.cancelada_em IS NOT NULL AND d.motivo_cancelamento = ?
+            AND d.excluido_em IS NULL AND e.motivo = ? AND e.numero = 'L9800004'`,
+        [RESIDENTE, ob.id, motivo, motivo],
+      ),
+    ).toBe(1);
+    // O documento do prontuário sai de vigência com o evento marcado como cancelamento por terceiro.
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM documento_prontuario_evento
+          WHERE documento_prontuario_id = ? AND acao = 'cancelamento' AND justificativa = ?
+            AND JSON_CONTAINS(dados, 'true', '$.cancelado_por_terceiro') = 1
+            AND JSON_VALUE(dados, '$.profissional_emissor') IS NOT NULL`,
+        [ob.documento, motivo],
+      ),
+    ).toBe(1);
+    // A trilha (crítica) registra o cancelamento por terceiro, com o motivo.
+    expect(await trilhaTerceiro()).toBe(1);
+    expect(await cadastro(ids.pacienteC)).toEqual(vivo);
+  });
+
   it('ciência: inclusão pelo sistema, fechamento da comunicação aberta, exame de outro paciente 404; trilha', async () => {
     const trilha = () =>
       contar(

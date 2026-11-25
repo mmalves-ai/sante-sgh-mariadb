@@ -1922,7 +1922,10 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   /** Como na porta própria: a declaração fica, cancelada com data e motivo; o documento sai de vigência com evento. */
-  async cancelarObito(c: ContextoGravacaoPep, o: { paciente: number; motivo: string; cbo: number | null }) {
+  async cancelarObito(
+    c: ContextoGravacaoPep,
+    o: { paciente: number; motivo: string; cbo: number | null; podeCancelarDeOutro?: boolean },
+  ) {
     const e = this.est(c.hospital);
     const x = e.obitos.find((d) => d.paciente === o.paciente && d.situacao !== 'cancelada');
     if (!x)
@@ -1931,7 +1934,12 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         'O paciente não tem declaração de óbito vigente.',
         404,
       );
-    const v = validarCancelamentoObito(x.situacao, o.motivo, x.emissor === c.usuarioLogin);
+    const v = validarCancelamentoObito(
+      x.situacao,
+      o.motivo,
+      x.emissor === c.usuarioLogin,
+      o.podeCancelarDeOutro === true,
+    );
     if (!v.ok) throw new ErroProntuario(v.codigo, v.mensagem, statusDaRecusaObito(v.codigo));
     const agora = new Date().toISOString();
     x.situacao = 'cancelada';
@@ -1946,6 +1954,9 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       tabela: 'declaracao_obito',
       id: x.id,
       paciente: o.paciente,
+      ...((v as { deOutroMedico: boolean }).deOutroMedico
+        ? { canceladoPorTerceiro: true, emissor: x.emissor }
+        : {}),
     });
     return { id: x.id, documento: x.documento };
   }

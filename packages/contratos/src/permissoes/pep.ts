@@ -400,6 +400,19 @@ export const PERMISSOES_PEP_M23: readonly DeclaracaoPermissao[] = [
     'critica',
     true,
   ),
+  // CFM Res. 1.779/2005: além do emissor, o responsável técnico ou diretor clínico cancela a declaração de outro médico
+  // (sempre com motivo e trilha do cancelamento por terceiro). Recurso novo, concedido à diretoria clínica pelo perfil.
+  {
+    codigo: 'pep.declaracaoObito.cancelarOutro',
+    descricao:
+      'Cancelar a declaração de óbito emitida por outro médico (responsável técnico ou diretor clínico)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['diretoria-clinica'],
+    categoria: 'clinica',
+    criticidade: 'critica',
+    exigeConselho: true,
+  },
   clinica('pep.anexo.ler', 'Ver os anexos e documentos digitalizados do paciente'),
   clinica('pep.anexo.criar', 'Anexar documento digitalizado ou exame externo ao prontuário'),
   clinica(

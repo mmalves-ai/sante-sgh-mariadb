@@ -1035,12 +1035,14 @@ export class DocumentosPropriaPareceres {
    *   - o evento de cancelamento da declaração;
    *   - o documento do prontuário sai de vigência (situação de categoria "cancelado") com o evento "cancelamento" e o
    *     motivo na cadeia de eventos do documento; a fila de assinatura e a validação deixam de tratá-lo como vigente.
-   * Só o médico que emitiu cancela. Nada é apagado; o paciente pode receber uma nova declaração.
+   * Cancela o médico que emitiu ou, com a permissão do responsável técnico ou diretor clínico (`podeCancelarDeOutro`,
+   * CFM Res. 1.779/2005), outro médico: o evento fica com o usuário de quem cancelou e a trilha marca o cancelamento por
+   * terceiro com o profissional emissor. Nada é apagado; o paciente pode receber uma nova declaração.
    */
   async cancelarObito(
     c: ContextoGravacaoPep,
-    o: { paciente: number; motivo: string; cbo: number | null },
-  ): Promise<{ id: number; documento: number | null }> {
+    o: { paciente: number; motivo: string; cbo: number | null; podeCancelarDeOutro?: boolean },
+  ): Promise<{ id: number; documento: number | null; deOutroMedico?: boolean; emissor?: number }> {
     return this.gravar(
       c,
       'pep.obito.cancelar',
@@ -1063,9 +1065,15 @@ export class DocumentosPropriaPareceres {
         )[0];
         if (!d) falhar('registro-inexistente', 'O paciente não tem declaração de óbito vigente.', 404);
         const situacao = String(d!['situacao']) as 'rascunho' | 'emitida';
-        const v = validarCancelamentoObito(situacao, o.motivo, num(d!['profissional_id']) === s.profissional);
+        const emissor = num(d!['profissional_id']);
+        const v = validarCancelamentoObito(
+          situacao,
+          o.motivo,
+          emissor === s.profissional,
+          o.podeCancelarDeOutro === true,
+        );
         if (!v.ok) falhar(v.codigo, v.mensagem, statusDaRecusaObito(v.codigo));
-        const motivo = (v as { motivo: string }).motivo;
+        const { motivo, deOutroMedico } = v as { motivo: string; deOutroMedico: boolean };
         const agora = new Date();
         const id = num(d!['id']);
         // Sem data de emissão inventada: o rascunho cancelado fica com emitida_em nulo (06_PEP/99_obito_rascunho).
@@ -1112,16 +1120,26 @@ export class DocumentosPropriaPareceres {
               profissional_id: s.profissional,
               justificativa: motivo,
               evento_em: agora,
-              dados: JSON.stringify({ declaracao_obito: id }),
+              dados: JSON.stringify({
+                declaracao_obito: id,
+                ...(deOutroMedico ? { cancelado_por_terceiro: true, profissional_emissor: emissor } : {}),
+              }),
               ocorrido_em: agora,
               usuario_id: s.usuario,
             });
           }
         }
-        return { id, documento };
+        return deOutroMedico ? { id, documento, deOutroMedico, emissor } : { id, documento };
       },
       (r) => ({ tabela: 'declaracao_obito', id: r.id }),
-      (r) => ({ motivo: o.motivo.trim(), dados: { evento: 'pep.obito.cancelado', documento: r.documento } }),
+      (r) => ({
+        motivo: o.motivo.trim(),
+        dados: {
+          evento: 'pep.obito.cancelado',
+          documento: r.documento,
+          ...(r.deOutroMedico ? { canceladoPorTerceiro: true, profissionalEmissor: r.emissor } : {}),
+        },
+      }),
     );
   }
 

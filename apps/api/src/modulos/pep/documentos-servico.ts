@@ -2052,16 +2052,23 @@ export class ServicoDocumentos {
 
   /**
    * Cancela a declaração de óbito vigente, com motivo (03-PEP L126): a mesma ação clínica de quem emite; aqui só o motivo
-   * é conferido, e a porta recusa (403) quem não emitiu a declaração.
+   * é conferido, e a porta recusa (403) quem não emitiu a declaração, salvo com a permissão do responsável técnico ou
+   * diretor clínico (`podeCancelarDeOutro`, 04-INT L74).
    */
-  async cancelarObito(c: ContextoGravacaoPep, paciente: number, o: CancelamentoObito, prof: ProfissionalPep) {
+  async cancelarObito(
+    c: ContextoGravacaoPep,
+    paciente: number,
+    o: CancelamentoObito,
+    prof: ProfissionalPep,
+    podeCancelarDeOutro = false,
+  ) {
     this.exigirAcao(prof, 'declaracao-obito');
     const v = validarCancelamentoObito('emitida', o.motivo);
     if (!v.ok)
       throw new ErroProblema('entrada-invalida', 400, 'Motivo do cancelamento', v.mensagem, {
         campos: ['motivo'],
       });
-    return this.porta.cancelarObito(c, { paciente, motivo: v.motivo, cbo: prof.cbo });
+    return this.porta.cancelarObito(c, { paciente, motivo: v.motivo, cbo: prof.cbo, podeCancelarDeOutro });
   }
 
   async obito(
