@@ -2,10 +2,12 @@
 // caminho da tela. O administrador (SINT.ADMIN, que pode tudo) inclui um kit de solução: sem o diluente a regra do
 // domínio trava o Salvar na hora; com o diluente grava. Depois grava um protocolo com um item do catálogo (busca por
 // nome). No editor da prescrição, o médico (SINT.MEDICO) favorita o protocolo escolhido e o aplica em um clique pelo
-// atalho; tirar dos favoritos desmarca. Combos são SanteSelecao (nenhum <select> nativo). O cadastro e os favoritos
+// atalho; tirar dos favoritos desmarca. Também escolhe um kit pelo combo e o aplica (os itens entram marcados com o
+// kit), favorita o kit e o último item incluído e aplica os dois pelos atalhos. Combos são SanteSelecao (nenhum <select> nativo). O cadastro e os favoritos
 // só existem no banco do cliente (na fonte sintética a API responde 503): as respostas são simuladas pelo Playwright
 // com massa SINTÉTICA, no contrato do servidor. O que fica no banco está nos contratos de efeito
-// apps/api/src/modulos/pep/prescricao-propria-protocolos.int.spec.ts e prescricao-propria-favoritos.int.spec.ts.
+// apps/api/src/modulos/pep/prescricao-propria-protocolos.int.spec.ts, prescricao-propria-favoritos.int.spec.ts e
+// prescricao-propria-gravacao.int.spec.ts (o item do kit grava o kit de origem).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher, esperarSemSelectNativo } from './combos.js';
@@ -66,6 +68,88 @@ function simularFavoritos(page: Page) {
     return json(r, { id: 51 });
   });
   return { marcados, desmarcados };
+}
+
+const KIT = {
+  id: 77,
+  versao: 1,
+  codigo: 'KIT-SINT-2',
+  nome: 'Kit sintético de analgesia',
+  tipoKit: 'medicamento',
+  item: null,
+  via: 3,
+  frequencia: null,
+  doseInicial: null,
+  doseFinal: null,
+  velocidade: null,
+  unidadeInfusao: null,
+  ativo: true,
+  itens: [],
+};
+const sugestao = (produto: number) => ({
+  tipo: 'medicamento',
+  item: { produto },
+  dose: 1,
+  unidade: 'g',
+  via: 'EV',
+  frequencia: null,
+});
+function simularKit(page: Page) {
+  const buscas: string[] = [];
+  void page.route(PRODUTOS, (r) => {
+    buscas.push(r.request().url());
+    return json(r, [
+      {
+        produto: 702,
+        nome: 'Dipirona sintética 1 g',
+        unidade: 'g',
+        padronizado: true,
+        principiosAtivos: [],
+        altoAlerta: false,
+        controlado: false,
+        antimicrobiano: false,
+        doseMinima: null,
+        doseMaxima: null,
+      },
+    ]);
+  });
+  void page.route(PADROES, (r) => {
+    const url = r.request().url();
+    if (url.endsWith('/kits')) return json(r, { kits: [KIT] });
+    if (url.endsWith('/kits/77/aplicacao'))
+      return json(r, {
+        kit: 77,
+        nome: KIT.nome,
+        tipoKit: 'medicamento',
+        forma: 'itens',
+        problema: null,
+        mensagem: null,
+        revisar: [3],
+        linhas: [
+          {
+            sequencia: 1,
+            papel: 'principal',
+            produto: 702,
+            produtoNome: 'Dipirona sintética 1 g',
+            dose: 1,
+            unidade: 'g',
+            principal: false,
+          },
+          {
+            sequencia: 2,
+            papel: 'componente',
+            produto: 703,
+            produtoNome: 'Ondansetrona sintética 4 mg',
+            dose: 1,
+            unidade: 'g',
+            principal: false,
+          },
+        ],
+        sugestoes: [sugestao(703), sugestao(702)],
+      });
+    return json(r, {}, 404);
+  });
+  return { buscas };
 }
 
 test.describe('@C2-097 padrões da prescrição e favoritos do prescritor', () => {
@@ -147,6 +231,42 @@ test.describe('@C2-097 padrões da prescrição e favoritos do prescritor', () =
     await page.getByTestId('atalhos-favoritos').locator('[data-testid^="desmarcar-favorito-"]').click();
     await expect(page.getByTestId('favoritos-vazio')).toBeVisible();
     expect(fav.desmarcados).toHaveLength(1);
+    expect(externas).toEqual([]);
+  });
+
+  test('kit no editor: aplicado pelo combo e pelo atalho; favorito do kit e do último item incluído', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const fav = simularFavoritos(page);
+    const kit = simularKit(page);
+    await entrar(page, 'SINT.MEDICO');
+    await page.goto('/pep/paciente/1001/prescricao/nova?montar=1');
+    const barra = page.getByTestId('aplicar-kit');
+    await expect(barra).toBeVisible();
+    await esperarSemSelectNativo(page.locator('body'));
+    await expect(page.getByTestId('favoritar-kit')).toBeDisabled();
+    await expect(page.getByTestId('favoritar-item')).toBeDisabled();
+    await escolher(barra.getByTestId('escolher-kit'), KIT.nome);
+    await barra.getByTestId('botao-aplicar-kit').click();
+    await expect(page.getByTestId('aviso-protocolo')).toContainText('2 item(ns) do kit');
+    await expect(page.getByTestId('aviso-protocolo')).toContainText('1 item(ns) do kit ficam para completar');
+    const linhas = page.getByTestId('itens-prescricao').locator('tbody tr');
+    await expect(linhas).toHaveCount(2);
+
+    await page.getByTestId('favoritar-kit').click();
+    await expect.poll(() => fav.marcados.length).toBe(1);
+    expect(fav.marcados[0]).toMatchObject({ tipo: 'kit_prescricao', alvo: 77, rotulo: KIT.nome });
+    await page.getByTestId('favorito-kit_prescricao-77').click();
+    await expect(linhas).toHaveCount(4);
+
+    // O último item incluído (Dipirona, 702) vira favorito e, pelo atalho, fica escolhido no formulário.
+    await page.getByTestId('favoritar-item').click();
+    await expect.poll(() => fav.marcados.length).toBe(2);
+    expect(fav.marcados[1]).toMatchObject({ tipo: 'item_prescritivel', alvo: 702 });
+    await page.getByTestId('favorito-item_prescritivel-702').click();
+    await expect.poll(() => kit.buscas.length).toBeGreaterThan(0);
+    await semViolacaoAxe(page, 'c2-097 kit e favoritos no editor');
     expect(externas).toEqual([]);
   });
 });

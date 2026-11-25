@@ -1,34 +1,46 @@
 <script setup lang="ts">
-// Atalhos dos favoritos do prescritor no editor da prescrição (03-PEP L107): os protocolos favoritos aparecem como
-// botões que aplicam o protocolo em um clique; a estrela marca o protocolo escolhido no combo. Tirar dos favoritos
-// não apaga: o servidor desmarca a linha e a reativa se o protocolo voltar a ser favorito.
+// Atalhos dos favoritos do prescritor no editor da prescrição (03-PEP L107): protocolos, kits e itens favoritos
+// aparecem como botões que se aplicam em um clique (o protocolo e o kit entram inteiros; o item fica escolhido no
+// formulário). A estrela marca o protocolo ou o kit escolhido no combo, ou o último item incluído. Tirar dos favoritos
+// não apaga: o servidor desmarca a linha e a reativa se o alvo voltar a ser favorito.
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { desmarcarFavorito, listarFavoritos, marcarFavorito } from '../../api-padroes-prescricao.js';
+import {
+  desmarcarFavorito,
+  type FavoritoPrescritor,
+  listarFavoritos,
+  marcarFavorito,
+} from '../../api-padroes-prescricao.js';
 
-const props = defineProps<{ escolhido: string; rotuloEscolhido: string }>();
-const emit = defineEmits<{ aplicar: [protocolo: number] }>();
+type Tipo = FavoritoPrescritor['tipo'];
+withDefaults(
+  defineProps<{
+    escolhido: string;
+    rotuloEscolhido: string;
+    kitEscolhido?: string;
+    rotuloKit?: string;
+    itemEscolhido?: number | null;
+    rotuloItem?: string;
+  }>(),
+  { kitEscolhido: '', rotuloKit: '', itemEscolhido: null, rotuloItem: '' },
+);
+const emit = defineEmits<{ aplicar: [tipo: Tipo, alvo: number, rotulo: string] }>();
 const { t } = useI18n();
 const qc = useQueryClient();
 const chave = ['presc', 'favoritos'];
 const favoritos = useQuery({ queryKey: chave, queryFn: () => listarFavoritos(), staleTime: 60_000 });
-const protocolos = computed(() =>
-  (favoritos.data.value ?? []).filter((f) => f.tipo === 'protocolo_prescricao'),
-);
-const jaFavorito = computed(() => protocolos.value.some((f) => String(f.alvo) === props.escolhido));
+const lista = computed(() => favoritos.data.value ?? []);
+const ja = (tipo: Tipo, alvo: string | number | null) =>
+  alvo !== null && alvo !== '' && lista.value.some((f) => f.tipo === tipo && String(f.alvo) === String(alvo));
 const ocupado = ref(false);
 
-async function marcar(): Promise<void> {
-  if (!props.escolhido || jaFavorito.value || ocupado.value) return;
+async function marcar(tipo: Tipo, alvo: string | number | null, rotulo: string): Promise<void> {
+  if (alvo === null || alvo === '' || ja(tipo, alvo) || ocupado.value) return;
   ocupado.value = true;
   try {
-    await marcarFavorito({
-      tipo: 'protocolo_prescricao',
-      alvo: Number(props.escolhido),
-      rotulo: props.rotuloEscolhido,
-    });
+    await marcarFavorito({ tipo, alvo: Number(alvo), rotulo });
     await qc.invalidateQueries({ queryKey: chave });
   } finally {
     ocupado.value = false;
@@ -50,28 +62,48 @@ async function desmarcar(id: number): Promise<void> {
     <SanteBotao
       :rotulo="t('pep.padroes.favoritos.marcar')"
       variante="secundario"
-      :desabilitado="!escolhido || jaFavorito || ocupado"
+      :desabilitado="!escolhido || ja('protocolo_prescricao', escolhido) || ocupado"
       data-testid="favoritar-protocolo"
-      @acionar="marcar"
+      @acionar="marcar('protocolo_prescricao', escolhido, rotuloEscolhido)"
+    />
+    <SanteBotao
+      :rotulo="t('pep.padroes.favoritos.marcarKit')"
+      variante="secundario"
+      :desabilitado="!kitEscolhido || ja('kit_prescricao', kitEscolhido) || ocupado"
+      data-testid="favoritar-kit"
+      @acionar="marcar('kit_prescricao', kitEscolhido, rotuloKit)"
+    />
+    <SanteBotao
+      :rotulo="t('pep.padroes.favoritos.marcarItem')"
+      variante="secundario"
+      :desabilitado="itemEscolhido === null || ja('item_prescritivel', itemEscolhido) || ocupado"
+      data-testid="favoritar-item"
+      @acionar="marcar('item_prescritivel', itemEscolhido, rotuloItem)"
     />
     <span class="titulo">{{ t('pep.padroes.favoritos.titulo') }}</span>
-    <p v-if="!protocolos.length" class="vazio" data-testid="favoritos-vazio">
+    <p v-if="!lista.length" class="vazio" data-testid="favoritos-vazio">
       {{ t('pep.padroes.favoritos.vazio') }}
     </p>
     <ul v-else class="lista">
-      <li v-for="f in protocolos" :key="f.id">
+      <li v-for="f in lista" :key="f.id">
         <SanteBotao
-          :rotulo="t('pep.padroes.favoritos.aplicar', { rotulo: f.rotulo })"
+          :rotulo="`${t(`pep.padroes.favoritos.tipo.${f.tipo}`)}: ${t('pep.padroes.favoritos.aplicar', { rotulo: f.rotulo })}`"
           variante="secundario"
-          :data-testid="`favorito-${f.alvo}`"
-          @acionar="emit('aplicar', f.alvo)"
+          :data-testid="
+            f.tipo === 'protocolo_prescricao' ? `favorito-${f.alvo}` : `favorito-${f.tipo}-${f.alvo}`
+          "
+          @acionar="emit('aplicar', f.tipo, f.alvo, f.rotulo)"
         />
         <button
           type="button"
           class="tirar"
           :aria-label="t('pep.padroes.favoritos.desmarcar', { rotulo: f.rotulo })"
           :disabled="ocupado"
-          :data-testid="`desmarcar-favorito-${f.alvo}`"
+          :data-testid="
+            f.tipo === 'protocolo_prescricao'
+              ? `desmarcar-favorito-${f.alvo}`
+              : `desmarcar-favorito-${f.tipo}-${f.alvo}`
+          "
           @click="desmarcar(f.id)"
         >
           {{ t('pep.padroes.favoritos.tirar') }}

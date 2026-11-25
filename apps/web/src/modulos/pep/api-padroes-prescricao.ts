@@ -1,6 +1,7 @@
 // Cadastro editável dos padrões da prescrição (03-PEP L107): protocolos, kits de medicamentos e de soluções e receitas
 // padrão, cada um com os itens; e os favoritos do prescritor (atalhos no editor da prescrição). Rotas em
 // /api/pep/prescricao/padroes/* e /api/pep/prescricao/favoritos; gravação com a versão lida e chave de idempotência.
+import { esquemaDetalheItem } from '@sgh/contratos';
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
 import { erroDaResposta } from '../../casca/erros/problem-details.js';
@@ -161,3 +162,29 @@ export const marcarFavorito = (
 ) => enviar(`${P}/favoritos`, f, z.object({ id: z.number().int() }), b);
 export const desmarcarFavorito = (id: number, b: typeof fetch = fetch) =>
   enviar(`${P}/favoritos/${id}/desmarcar`, {}, z.object({ id: z.number().int() }), b);
+
+// ── Aplicação do kit no editor da prescrição ────────────────────────────────────────────────────
+const esquemaAplicacaoKit = z.object({
+  kit: z.number().int(),
+  nome: z.string(),
+  tipoKit: z.string(),
+  forma: z.enum(['solucao', 'itens']),
+  problema: z.string().nullable(),
+  mensagem: z.string().nullable(),
+  revisar: z.array(z.number().int()),
+  linhas: z.array(
+    z.object({
+      sequencia: z.number().int(),
+      papel: z.string(),
+      produto: z.number().int(),
+      produtoNome: z.string().nullable(),
+      dose: z.number(),
+      unidade: z.string().nullable(),
+      principal: z.boolean(),
+    }),
+  ),
+  sugestoes: z.array(esquemaDetalheItem.nullable()),
+});
+export type AplicacaoKit = z.infer<typeof esquemaAplicacaoKit>;
+export const aplicacaoDoKit = (id: number, b: typeof fetch = fetch) =>
+  ler(`${P}/padroes/kits/${id}/aplicacao`, esquemaAplicacaoKit, b);

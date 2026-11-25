@@ -14,7 +14,7 @@ import {
 } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
@@ -34,6 +34,7 @@ import CabecalhoProntuario from '../componentes/CabecalhoProntuario.vue';
 import ItemEditor from '../componentes/prescricao/ItemEditor.vue';
 import PainelAlertas from '../componentes/prescricao/PainelAlertas.vue';
 import AtalhosFavoritos from '../componentes/prescricao/AtalhosFavoritos.vue';
+import { aplicacaoDoKit, type FavoritoPrescritor, listarKitsPadrao } from '../api-padroes-prescricao.js';
 import { useConexao } from '../conexao.js';
 import { agoraLocal, descreverItem } from '../descricao-item.js';
 import { dataHoraBr } from '../formato.js';
@@ -228,10 +229,75 @@ async function aplicarProtocolo(): Promise<void> {
     .filter(Boolean)
     .join(' ');
 }
-/** Favorito do prescritor: aplica o protocolo em um clique (mesma regra de aplicabilidade do combo). */
-async function aplicarFavorito(id: number): Promise<void> {
-  protocolo.value = String(id);
-  await aplicarProtocolo();
+// ── Kit de medicamentos ou de soluções (03-PEP L107) ──────────────────────────────────────────────
+const kits = useQuery({
+  queryKey: ['presc', 'kits'],
+  queryFn: () => listarKitsPadrao(),
+  enabled: montar,
+  staleTime: 60_000,
+});
+const kit = ref('');
+const opcoesKit = computed(() => [
+  { valor: '', rotulo: t('pep.padroes.aplicarKit.escolher') },
+  ...(kits.data.value ?? []).filter((k) => k.ativo).map((k) => ({ valor: String(k.id), rotulo: k.nome })),
+]);
+const rotuloKit = computed(() => kits.data.value?.find((k) => String(k.id) === kit.value)?.nome ?? '');
+/** Aplica o kit: cada linha com detalhe entra marcada com o kit (gravado no item); o resto fica para completar. */
+async function aplicarKit(): Promise<void> {
+  if (!kit.value) return;
+  const id = Number(kit.value);
+  const a = await aplicacaoDoKit(id);
+  if (a.problema) {
+    avisoProtocolo.value = a.mensagem ?? a.problema;
+    return;
+  }
+  for (const l of a.linhas) if (l.produtoNome) produtosVistos.set(l.produto, l.produtoNome);
+  let ok = 0;
+  for (const [n, d] of a.sugestoes.entries())
+    if (d) {
+      ok++;
+      incluir({
+        chave: `k${id}-${n}-${Date.now().toString(36)}`.slice(0, 40),
+        detalhe: d,
+        kit: id,
+        autopreenchido: ['dose'],
+        decisoes: [],
+      });
+    }
+  const semDetalhe = a.sugestoes.length - ok;
+  avisoProtocolo.value = [
+    t('pep.padroes.aplicarKit.aplicado', { n: ok }),
+    semDetalhe ? t('pep.padroes.aplicarKit.semDetalhe', { n: semDetalhe }) : '',
+    a.revisar.length ? t('pep.padroes.aplicarKit.revisar', { n: a.revisar.length }) : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+// O último medicamento incluído, que a estrela pode tornar favorito.
+const ultimoItem = computed(() => {
+  const d = [...itens.value].reverse().find((i) => i.detalhe.tipo === 'medicamento')?.detalhe;
+  return d && d.tipo === 'medicamento'
+    ? { id: d.item.produto, rotulo: produtosVistos.get(d.item.produto) ?? '' }
+    : null;
+});
+const editorItem = ref<{ escolherFavorito: (produto: number, nome: string) => Promise<boolean> } | null>(
+  null,
+);
+
+/** Favorito do prescritor em um clique: o protocolo e o kit se aplicam; o item fica escolhido no formulário. */
+async function aplicarFavorito(tipo: FavoritoPrescritor['tipo'], id: number, rotulo: string): Promise<void> {
+  if (tipo === 'protocolo_prescricao') {
+    protocolo.value = String(id);
+    await aplicarProtocolo();
+  } else if (tipo === 'kit_prescricao') {
+    kit.value = String(id);
+    await aplicarKit();
+  } else {
+    aba.value = 'medicamentos';
+    await nextTick();
+    await editorItem.value?.escolherFavorito(id, rotulo);
+  }
 }
 const rotuloProtocolo = computed(
   () => protocolos.data.value?.find((p) => String(p.id) === protocolo.value)?.nome ?? '',
@@ -454,9 +520,27 @@ const titulo = computed(() => {
             @acionar="aplicarProtocolo"
           />
         </div>
+        <div class="barra" data-testid="aplicar-kit">
+          <SanteSelecao
+            v-model="kit"
+            :rotulo="t('pep.padroes.aplicarKit.kit')"
+            :opcoes="opcoesKit"
+            data-testid="escolher-kit"
+          />
+          <SanteBotao
+            :rotulo="t('pep.padroes.aplicarKit.aplicar')"
+            variante="secundario"
+            data-testid="botao-aplicar-kit"
+            @acionar="aplicarKit"
+          />
+        </div>
         <AtalhosFavoritos
           :escolhido="protocolo"
           :rotulo-escolhido="rotuloProtocolo"
+          :kit-escolhido="kit"
+          :rotulo-kit="rotuloKit"
+          :item-escolhido="ultimoItem?.id ?? null"
+          :rotulo-item="ultimoItem?.rotulo ?? ''"
           @aplicar="aplicarFavorito"
         />
         <p v-if="avisoProtocolo" role="status" data-testid="aviso-protocolo">{{ avisoProtocolo }}</p>
@@ -496,6 +580,7 @@ const titulo = computed(() => {
       </div>
       <div :id="`painel-${aba}`" role="tabpanel" :aria-labelledby="`aba-${aba}`" class="painel-aba">
         <ItemEditor
+          ref="editorItem"
           :key="aba"
           :grupo="aba"
           :dominios="dominios.data.value"

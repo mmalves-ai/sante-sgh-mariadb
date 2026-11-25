@@ -348,7 +348,12 @@ async function salvar(): Promise<void> {
               ><textarea v-model="form.indicacao" rows="2" />
             </label>
             <label class="marca"
-              ><input v-model="form.todosEstabelecimentos" type="checkbox" />
+              ><input
+                v-model="form.todosEstabelecimentos"
+                type="checkbox"
+                :disabled="Boolean(form.id)"
+                data-testid="padrao-todos-estabelecimentos"
+              />
               <span>{{ t('pep.padroes.todosEstabelecimentos') }}</span></label
             >
           </template>
@@ -357,6 +362,7 @@ async function salvar(): Promise<void> {
             v-model="form.tipoKit"
             :rotulo="t('pep.padroes.tipoKit')"
             :opcoes="opcoes(TIPOS_KIT, 'tiposKit')"
+            :desabilitado="Boolean(form.id)"
             data-testid="padrao-tipo-kit"
           />
           <template v-if="secao === 'receitas'">

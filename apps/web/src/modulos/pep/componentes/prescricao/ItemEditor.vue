@@ -160,6 +160,15 @@ async function buscar(destino: 'produto' | 'componente' | number): Promise<void>
     buscando.value = false;
   }
 }
+/** Favorito do prescritor (03-PEP L107): busca o item pelo nome e já o deixa escolhido no formulário. */
+async function escolherFavorito(produto: number, nome: string): Promise<boolean> {
+  f.termo = nome;
+  await buscar('produto');
+  const p = encontrados.value.find((x) => x.produto === produto);
+  if (p) escolher(p);
+  return p !== undefined;
+}
+defineExpose({ escolherFavorito });
 function escolher(p: ItemBuscado): void {
   const d = destinoBusca.value;
   if (d === 'produto') {
