@@ -11,6 +11,8 @@
 // recusada; quem aprovou o título não efetiva); o encontro efetivado se estorna com motivo (baixas estornadas, os dois
 // lados voltam, nada se apaga); o título já conciliado e o de outro credor são recusados; a liquidação parcial grava
 // diferença zero; a previsão se estende, a ocorrência se cancela e a previsão se encerra, com motivo.
+// Recebimento do encontro (25/11): o lado a receber grava o recebimento de meio e forma "encontro_contas" sem conta nem
+// caixa, ligado ao item; o estorno o deixa estornado com o motivo.
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -279,6 +281,27 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
     expect([Number(pr?.['saldo']), pr?.['situacao'], pr?.['titulo'], Number(pr?.['valor_recebido'])]).toEqual(
       [0, 'recebida', 'recebido', 350],
     );
+    // O lado a receber grava o recebimento do encontro: meio e forma "encontro_contas", sem conta nem caixa, ligado
+    // ao item do encontro (aparece no recebimento por forma).
+    const rc = await consultar(
+      `SELECT r.id, r.valor_recebido, r.meio_baixa, r.situacao, r.conta_bancaria_id, r.caixa_id, f.codigo AS forma,
+              f.meio, (SELECT COUNT(*) FROM encontro_contas_item i WHERE i.recebimento_id = r.id AND i.encontro_contas_id = ?) AS ligado
+         FROM recebimento r JOIN forma_recebimento f ON f.id = r.forma_recebimento_id
+        WHERE r.parcela_receber_id = ? AND r.excluido_em IS NULL`,
+      [encontro, receber],
+    );
+    expect(
+      rc.map((r) => [
+        Number(r['valor_recebido']),
+        r['meio_baixa'],
+        r['situacao'],
+        r['conta_bancaria_id'],
+        r['caixa_id'],
+        r['forma'],
+        r['meio'],
+        Number(r['ligado']),
+      ]),
+    ).toEqual([[350, 'encontro_contas', 'efetivado', null, null, 'encontro_contas', 'compensacao', 1]]);
     const [tp] = await consultar('SELECT situacao FROM titulo_pagar WHERE id = ?', [
       Number(t['tituloPagar']),
     ]);
@@ -333,6 +356,15 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
     expect([Number(rv?.['saldo']), rv?.['situacao'], rv?.['titulo'], Number(rv?.['valor_recebido'])]).toEqual(
       [350, 'aberta', 'aberto', 0],
     );
+    // O recebimento do encontro fica estornado com o motivo; a linha não se apaga.
+    const rce = await consultar(
+      `SELECT situacao, estornado_em IS NOT NULL AS em, estorno_usuario_id, motivo_estorno FROM recebimento
+        WHERE parcela_receber_id = ? AND meio_baixa = 'encontro_contas' AND excluido_em IS NULL`,
+      [receber],
+    );
+    expect(
+      rce.map((r) => [r['situacao'], Number(r['em']), Number(r['estorno_usuario_id']), r['motivo_estorno']]),
+    ).toEqual([['estornado', 1, m.aprova, 'Estorno do encontro de contas: valor do parceiro contestado']]);
     const [tp2] = await consultar('SELECT situacao FROM titulo_pagar WHERE id = ?', [
       Number(t['tituloPagar']),
     ]);

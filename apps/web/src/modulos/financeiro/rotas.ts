@@ -113,6 +113,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.fluxoCaixa.ler' },
   },
   {
+    // F8, 07-FIN linha 69: encontro de contas entre o que se paga e o que se recebe do mesmo parceiro.
+    path: '/financeiro/tesouraria/encontro-contas',
+    name: 'financeiro.tesouraria.encontroContas',
+    component: () => import('./telas/EncontroContasTela.vue'),
+    meta: { permissao: 'financeiro.tituloPagar.ler' },
+  },
+  {
     path: '/financeiro/tesouraria/fluxo-caixa',
     name: 'financeiro.tesouraria.fluxo',
     component: () => import('./telas/FluxoCaixaTela.vue'),

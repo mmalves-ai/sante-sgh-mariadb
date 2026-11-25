@@ -32,7 +32,10 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // F8 (06-FAT linha 23): o item "Ambulância e ligações tarifadas" entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":431,"M":198,"P":57,"N":176};
+// F8 (07-FIN linha 69): o item "Encontro de contas" da tesouraria entrou à mão (mesmo motivo); a contagem acompanha.
+// F3 (03-PEP linha 124): o item "Seções do sumário de alta" da administração do PEP entrou à mão (mesmo motivo); a
+// contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":433,"M":198,"P":57,"N":178};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -151,6 +154,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.administracao-do-pep.modelos-de-impressao-e-cabecalhos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Modelos de impressão e cabeçalhos"],"titulo":"Modelos de impressão e cabeçalhos","selo":"M","fase":2,"rota":"/pep/admin/impressao","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.tipos-de-documento-fluxos-de-situacao-e-avisos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Tipos de documento, fluxos de situação e avisos"],"titulo":"Tipos de documento, fluxos de situação e avisos","selo":"M","fase":2,"rota":"/pep/admin/tipos","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.grupos-comparativos-de-resultados","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Grupos comparativos de resultados"],"titulo":"Grupos comparativos de resultados","selo":"N","fase":3,"rota":"/pep/resultados/grupos","permissao":"pep.admin.editar"},
+  {"id":"pep.administracao-do-pep.secoes-do-sumario-de-alta","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Seções do sumário de alta"],"titulo":"Seções do sumário de alta","selo":"N","fase":3,"rota":"/pep/sumario-alta/secoes","permissao":"pep.admin.ler"},
   {"id":"enfermagem.aprazamento-e-checagem-de-medicamentos-em-tela","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Aprazamento e checagem de medicamentos"],"titulo":"Aprazamento e checagem de medicamentos","selo":"P","fase":2,"rota":"/enfermagem/aprazamento","permissao":"enfermagem.horario.ler"},
   {"id":"enfermagem.checagem-por-codigo-de-barras-pulseira-e-dose","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Checagem por código de barras"],"titulo":"Checagem por código de barras","selo":"N","fase":2,"rota":"/beira-leito/checagem","permissao":"enfermagem.administracao.ler"},
   {"id":"enfermagem.horarios-padrao-de-medicacao-por-unidade","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Horários-padrão de medicação por unidade"],"titulo":"Horários-padrão de medicação por unidade","selo":"M","fase":2,"rota":"/cadastros/prescricao/horarios-padrao","permissao":"pep.gradeHorario.ler"},
@@ -283,6 +287,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.tesouraria.conciliacao-bancaria-extrato","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Conciliação bancária"],"titulo":"Conciliação bancária","selo":"N","fase":3,"rota":"/financeiro/tesouraria/conciliacao","permissao":"financeiro.conciliacao.ler"},
   {"id":"financeiro.tesouraria.fluxo-de-caixa-realizado-e-projetado","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Fluxo de caixa realizado e projetado"],"titulo":"Fluxo de caixa realizado e projetado","selo":"N","fase":3,"rota":"/financeiro/tesouraria/fluxo-caixa","permissao":"financeiro.fluxoCaixa.ler"},
   {"id":"financeiro.tesouraria.previsao-e-provisao","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Previsão e provisão"],"titulo":"Previsão e provisão","selo":"N","fase":3,"rota":"/financeiro/tesouraria/previsao","permissao":"financeiro.fluxoCaixa.ler"},
+  {"id":"financeiro.tesouraria.encontro-de-contas","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Tesouraria","Encontro de contas"],"titulo":"Encontro de contas","selo":"N","fase":3,"rota":"/financeiro/tesouraria/encontro-contas","permissao":"financeiro.tituloPagar.ler"},
   {"id":"financeiro.apropriacao-gerencial-grupo-subgrupo-item","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Apropriação gerencial"],"titulo":"Apropriação gerencial","selo":"M","fase":3,"rota":"/financeiro/gerencial","permissao":"financeiro.classificacao.ler"},
   {"id":"financeiro.apropriacao-gerencial-grupo-subgrupo-item.reclassificacao-gerencial","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Apropriação gerencial","Reclassificação gerencial"],"titulo":"Reclassificação gerencial","selo":"M","fase":3,"rota":"/financeiro/gerencial/reclassificar","permissao":"financeiro.classificacao.ler"},
   {"id":"financeiro.orcamento-empresarial","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Orçamento empresarial"],"titulo":"Orçamento empresarial","selo":"P","fase":6,"rota":"/financeiro/orcamento","permissao":"financeiro.orcamento.ler"},

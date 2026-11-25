@@ -5,7 +5,9 @@
 // Encontro de contas: o parceiro é o fornecedor; o lado a receber são os títulos do devedor com o MESMO CNPJ ou CPF.
 // A proposta grava o cabeçalho e os itens (valor compensado por parcela) aguardando aprovação; aprovar e efetivar é um
 // passo só, de outra pessoa: a parcela a pagar ganha a baixa na forma "encontro_contas" (sem conta bancária: não há
-// dinheiro), a parcela a receber tem o valor recebido aumentado pelo item, e os dois títulos recalculam a situação.
+// dinheiro), a parcela a receber tem o valor recebido aumentado pelo item, com um recebimento de meio de baixa e forma
+// "encontro_contas" sem conta nem caixa (migração 14_FIN/99_encontro_contas_recebimento), e os dois títulos recalculam a
+// situação. O estorno estorna a baixa e o recebimento, com o motivo.
 // Previsão: as ocorrências saem da regra na hora; realizar liga a ocorrência ao título e grava previsto × realizado.
 // Provisão: nasce com saldo; a liquidação pelo título a pagar e a reversão (ajuste com motivo) baixam o saldo.
 import {
@@ -238,12 +240,52 @@ const proporEncontro = definirOperacao<z.infer<typeof esquemaProporEncontro>, Re
   alvo: (_e, r) => ({ tabela: 'encontro_contas', id: numero(r['encontro']) || null }),
 });
 
+/** O recebimento da parcela a receber compensada no encontro (meio de baixa e forma "encontro_contas"). */
+async function incluirRecebimentoDoEncontro(
+  tx: TxOperacao,
+  est: number,
+  usuario: number,
+  parcela: number,
+  valor: number,
+  data: string,
+  encontro: number,
+): Promise<number> {
+  const forma = await tx.uma(
+    "SELECT id FROM forma_recebimento WHERE codigo = 'encontro_contas' AND ativo = TRUE",
+    [],
+  );
+  if (!forma)
+    throw recusa(
+      'forma-encontro-ausente',
+      'Falta a forma de recebimento do encontro de contas (encontro_contas) no cadastro.',
+    );
+  await garantirSequencia(
+    tx,
+    { tipo: 'recebimento', estabelecimento: est, prefixo: 'RC-' },
+    { usuario, agora: new Date() },
+  );
+  const num = await tx.proximoNumero('recebimento');
+  return tx.incluir('recebimento', {
+    estabelecimento_id: est,
+    numero: num.formatado,
+    parcela_receber_id: parcela,
+    data_recebimento: data,
+    forma_recebimento_id: numero(forma['id']),
+    valor_recebido: valor,
+    meio_baixa: 'encontro_contas',
+    observacao: `Encontro de contas ${encontro}`,
+  });
+}
+
 const efetivarEncontro = definirOperacao<z.infer<typeof esquemaEfetivarEncontro>, ResultadoOperacao>({
   nome: 'financeiro.efetivar_encontro_contas',
   tabelas: [
     'encontro_contas',
     'encontro_contas_item',
     'baixa_titulo',
+    'recebimento',
+    'forma_recebimento',
+    'sequencia_negocio',
     'parcela_pagar',
     'titulo_pagar',
     'parcela_receber',
@@ -323,6 +365,12 @@ const efetivarEncontro = definirOperacao<z.infer<typeof esquemaEfetivarEncontro>
         });
         titulosPagar.add(numero(p['titulo']));
       } else {
+        // O lado a receber ganha o recebimento do encontro (meio de baixa e forma próprios, sem conta nem caixa:
+        // não entra dinheiro), para aparecer nos relatórios de recebimento por forma.
+        const rec = await incluirRecebimentoDoEncontro(tx, est, usuario, pid, v, data, e.encontro);
+        await tx.alterar('encontro_contas_item', numero(it['id']), numero(it['versao']), {
+          recebimento_id: rec,
+        });
         const t = numero(p['titulo']);
         titulosReceber.set(t, centavos((titulosReceber.get(t) ?? 0) + v));
       }
@@ -370,7 +418,9 @@ const estornarEncontro = definirOperacao<z.infer<typeof esquemaEstornarEncontro>
   nome: 'financeiro.estornar_encontro_contas',
   tabelas: [
     'encontro_contas',
+    'encontro_contas_item',
     'baixa_titulo',
+    'recebimento',
     'parcela_pagar',
     'titulo_pagar',
     'parcela_receber',
@@ -390,7 +440,7 @@ const estornarEncontro = definirOperacao<z.infer<typeof esquemaEstornarEncontro>
     const agora = new Date();
     await exigirPeriodoAberto(tx, est, agora.toISOString().slice(0, 10), 'data');
     const itens = await tx.consultar(
-      'SELECT natureza, parcela_pagar_id, parcela_receber_id, valor_compensado, baixa_titulo_id FROM encontro_contas_item WHERE encontro_contas_id = ? AND excluido_em IS NULL ORDER BY sequencia',
+      'SELECT natureza, parcela_pagar_id, parcela_receber_id, valor_compensado, baixa_titulo_id, recebimento_id FROM encontro_contas_item WHERE encontro_contas_id = ? AND excluido_em IS NULL ORDER BY sequencia',
       [e.encontro],
     );
     const titulosPagar = new Set<number>();
@@ -439,6 +489,26 @@ const estornarEncontro = definirOperacao<z.infer<typeof esquemaEstornarEncontro>
         });
         titulosPagar.add(numero(p['titulo']));
       } else {
+        // O recebimento do encontro fica estornado com o motivo (encontros efetivados antes da migração 99 do
+        // recebimento não têm a linha: só a parcela volta).
+        if (it['recebimento_id'] !== null && it['recebimento_id'] !== undefined) {
+          const [rc] = await tx.consultarParaAtualizar(
+            "SELECT id, versao FROM recebimento WHERE id = ? AND situacao = 'efetivado' AND excluido_em IS NULL",
+            [numero(it['recebimento_id'])],
+            { teto: 1 },
+          );
+          if (!rc)
+            throw recusa(
+              'recebimento-ja-estornado',
+              'O recebimento do encontro já foi estornado por outra via: releia.',
+            );
+          await tx.alterar('recebimento', numero(rc['id']), numero(rc['versao']), {
+            situacao: 'estornado',
+            estornado_em: agora,
+            estorno_usuario_id: usuario,
+            motivo_estorno: `Estorno do encontro de contas: ${e.motivo}`.slice(0, 500),
+          });
+        }
         const t = numero(p['titulo']);
         titulosReceber.set(t, centavos((titulosReceber.get(t) ?? 0) + v));
       }
