@@ -27,11 +27,15 @@ import {
   type ResultadoLancamentoPlantao,
   type SugestaoRealizado,
   type TarifaPlantaoEntrada,
+  type EncerrarRegraPlantaoEntrada,
+  type ListaRegrasPlantao,
+  type RegraPlantaoEntrada,
 } from '@sgh/contratos';
 import {
   conferirDecisaoRealizado,
   conferirRealizado,
   conferirTarifa,
+  conferirRegraPlantao,
   dataDoLancamento,
   gruposRepasse,
   minutosRealizado,
@@ -217,7 +221,8 @@ export class ServicoRealizado {
       valorHora: r.valorHora,
       valor: r.valor,
       parcelas:
-        r.valor !== null && r.valorHora !== null ? valorRealizado(r.minutos, r.valorHora).parcelas : null,
+        r.parcelas ??
+        (r.valor !== null && r.valorHora !== null ? valorRealizado(r.minutos, r.valorHora).parcelas : null),
       lancamento: r.lancamento,
       versao: r.versao,
       estorno: r.estorno ?? null,
@@ -698,6 +703,47 @@ export class ServicoRealizado {
       async (g) => g.encerrarTarifa({ id: e.tarifa, fim: e.fim, por: s.login }),
     );
     return { id: e.tarifa, mensagem: 'Vigência da tarifa encerrada.' };
+  }
+
+  // ── Regras de plantão do repasse (C2-100) ───────────────────────────────────────────────────────────────────
+  // A regra mais específica vale antes da tarifa geral por hora, no valor do realizado aprovado (calculado na leitura:
+  // a regra incluída vale para o aprovado ainda não lançado).
+
+  async regrasPlantao(s: SessaoCadastro): Promise<ListaRegrasPlantao> {
+    const [rs, unidades] = await Promise.all([this.porta.regrasPlantao(s.porta), this.nomesUnidades(s)]);
+    return {
+      itens: rs.map((r) => ({ ...r, setorNome: r.setor !== null ? (unidades.get(r.setor) ?? null) : null })),
+    };
+  }
+
+  async incluirRegraPlantao(s: SessaoCadastro, e: RegraPlantaoEntrada): Promise<ResultadoF6> {
+    if (!s.pode(P.lancar)) throw semPermissao();
+    const recusa = conferirRegraPlantao(e);
+    if (recusa) throw recusar(recusa);
+    const id = await this.apoio.sgh(
+      s,
+      E.pessoasTarifaPlantaoGravada.codigo,
+      CHAVE_PESSOAS_PLANTAO_REALIZADO,
+      (n: number) => ({ tabela: 'regra_repasse_plantao', id: String(n) }),
+      async (g) => g.incluirRegraPlantao({ ...e, por: s.login }),
+    );
+    return {
+      id,
+      mensagem:
+        'Regra de plantão incluída: os plantões aprovados e ainda não lançados que ela alcança passam a ser valorados por ela.',
+    };
+  }
+
+  async encerrarRegraPlantao(s: SessaoCadastro, e: EncerrarRegraPlantaoEntrada): Promise<ResultadoF6> {
+    if (!s.pode(P.lancar)) throw semPermissao();
+    await this.apoio.sgh(
+      s,
+      E.pessoasTarifaPlantaoGravada.codigo,
+      CHAVE_PESSOAS_PLANTAO_REALIZADO,
+      { tabela: 'regra_repasse_plantao', id: String(e.regra) },
+      async (g) => g.encerrarRegraPlantao({ id: e.regra, fim: e.fim, por: s.login }),
+    );
+    return { id: e.regra, mensagem: 'Vigência da regra de plantão encerrada.' };
   }
 
   // ── Relatório ao repasse e lançamento ───────────────────────────────────────────────────────────────────────

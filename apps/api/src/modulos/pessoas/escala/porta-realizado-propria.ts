@@ -31,7 +31,13 @@ import {
   type LancarEventoRepasseEntrada,
   VINCULOS_PRESTADOR,
 } from '@sgh/contratos';
-import { tarifaVigente, valorRealizado } from '@sgh/dominio-pessoas';
+import {
+  type RegraPlantaoLida,
+  regraPlantaoAplicavel,
+  tarifaVigente,
+  valorPelaRegraPlantao,
+  valorRealizado,
+} from '@sgh/dominio-pessoas';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -75,7 +81,10 @@ export const ACOES_REALIZADO: Readonly<Record<string, AcaoGravacao>> = {
   'pessoas.realizado.registrado': { nome: 'pessoas.realizado.registrar', tabelas: ['plantao'] },
   'pessoas.realizado.decidido': { nome: 'pessoas.realizado.decidir', tabelas: ['plantao'] },
   'pessoas.realizado.estornado': { nome: 'pessoas.realizado.estornar', tabelas: ['plantao'] },
-  'pessoas.tarifa_plantao.gravada': { nome: 'pessoas.realizado.tarifa', tabelas: ['valor_hora_plantao'] },
+  'pessoas.tarifa_plantao.gravada': {
+    nome: 'pessoas.realizado.tarifa',
+    tabelas: ['valor_hora_plantao', 'regra_repasse_plantao'],
+  },
 };
 
 /** Tipos de plantão do modelo (ck_plantao_tipo): a tarifa sem tipo vale para cada um. */
@@ -101,7 +110,8 @@ const SQL_REALIZADO = `SELECT p.id, p.colaborador_id, p.setor_funcional_id, p.ti
   p.saida_registrada_em, p.observacao, p.revisado_em, ur.login AS informado_por, p.revisado_por_usuario_id,
   p.aprovado, p.aprovado_em, ua.login AS decidido_por, p.versao, v.id AS vinculo, p.fonte_realizado,
   p.motivo_recusa_realizado, p.lancamento_repasse_id, ul.login AS lancado_por, p.estornado_em,
-  ue.login AS estornado_por, p.motivo_estorno, p.estorno_lancamento_repasse_id
+  ue.login AS estornado_por, p.motivo_estorno, p.estorno_lancamento_repasse_id, p.escala_id, p.profissional_id,
+  p.especialidade_medica_id, p.inicio_em, p.fim_em
   FROM plantao p
   LEFT JOIN usuario ur ON ur.id = p.revisado_por_usuario_id
   LEFT JOIN usuario ua ON ua.id = p.aprovado_por_usuario_id
@@ -118,6 +128,52 @@ const SQL_TARIFA = `SELECT t.id, t.setor_funcional_id, t.tipo_plantao, t.vigenci
   WHERE t.estabelecimento_id = ? AND t.ativo = TRUE AND t.forma_pagamento = 'hora' AND t.profissional_id IS NULL
     AND t.grupo_setor_plantao_id IS NULL AND t.especialidade_medica_id IS NULL AND t.tipo_dia = 'todos'
     AND t.hora_inicio IS NULL AND t.valor_hora IS NOT NULL`;
+
+/** C2-100: as regras de plantão do repasse ativas (todas as vigências; o domínio escolhe a do dia). */
+const SQL_REGRA_PLANTAO = `SELECT id, descricao, profissional_id, escala_id, setor_funcional_id, especialidade_medica_id,
+  dia_semana, forma_remuneracao, horas_plantao, valor_padrao, valor_fim_semana, valor_feriado, percentual_feriado, fator,
+  valor_hora_extra_antes, percentual_hora_extra_antes, valor_hora_extra_depois, percentual_hora_extra_depois,
+  tolerancia_minutos, vigencia_inicio, vigencia_fim
+  FROM regra_repasse_plantao WHERE estabelecimento_id = ? AND ativo = TRUE`;
+
+/** Os feriados do estabelecimento (e os gerais), fora o ponto facultativo. */
+const SQL_FERIADO = `SELECT data FROM feriado WHERE ativo AND NOT ponto_facultativo
+  AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`;
+
+const decimalOuNulo = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+
+function regraPlantaoDe(r: Record<string, unknown>): RegraPlantaoLida {
+  return {
+    id: num(r['id']),
+    descricao: texto(r['descricao']),
+    profissional: numOuNulo(r['profissional_id']),
+    escala: numOuNulo(r['escala_id']),
+    setor: numOuNulo(r['setor_funcional_id']),
+    especialidade: numOuNulo(r['especialidade_medica_id']),
+    diaSemana: numOuNulo(r['dia_semana']),
+    forma: texto(r['forma_remuneracao']) === 'por_hora' ? 'por_hora' : 'por_plantao',
+    horasPlantao: decimalOuNulo(r['horas_plantao']),
+    valorPadrao: Number(r['valor_padrao']),
+    valorFimSemana: decimalOuNulo(r['valor_fim_semana']),
+    valorFeriado: decimalOuNulo(r['valor_feriado']),
+    percentualFeriado: decimalOuNulo(r['percentual_feriado']),
+    fator: decimalOuNulo(r['fator']),
+    valorHoraExtraAntes: decimalOuNulo(r['valor_hora_extra_antes']),
+    percentualHoraExtraAntes: decimalOuNulo(r['percentual_hora_extra_antes']),
+    valorHoraExtraDepois: decimalOuNulo(r['valor_hora_extra_depois']),
+    percentualHoraExtraDepois: decimalOuNulo(r['percentual_hora_extra_depois']),
+    toleranciaMinutos: num(r['tolerancia_minutos']),
+    inicio: dataIso(r['vigencia_inicio']),
+    fim: r['vigencia_fim'] === null || r['vigencia_fim'] === undefined ? null : dataIso(r['vigencia_fim']),
+  };
+}
+
+/** O que dá valor ao realizado aprovado: a regra de plantão (C2-100) e, sem regra, a tarifa geral por hora. */
+interface Valoracao {
+  readonly tarifas: readonly RegistroTarifaPlantao[];
+  readonly regras: readonly RegraPlantaoLida[];
+  readonly feriados: ReadonlySet<string>;
+}
 
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 
@@ -169,7 +225,7 @@ function tarifasDe(rs: readonly Record<string, unknown>[]): RegistroTarifaPlanta
 function realizadoDe(
   r: Record<string, unknown>,
   fuso: string,
-  tarifas: readonly RegistroTarifaPlantao[],
+  { tarifas, regras, feriados }: Valoracao,
 ): RegistroRealizado {
   const inicio = civilDoUtc(r['entrada_registrada_em'], fuso);
   const fim = civilDoUtc(r['saida_registrada_em'], fuso);
@@ -186,10 +242,24 @@ function realizadoDe(
       : aprovado
         ? 'aprovado'
         : 'recusado';
-  const t = aprovado
-    ? tarifaVigente(tarifas, texto(r['tipo']), num(r['setor_funcional_id']), inicio.slice(0, 10))
-    : null;
-  const v = t ? valorRealizado(minutos, t.valorHora) : null;
+  // C2-100: a regra de plantão mais específica vale antes da tarifa geral por hora.
+  const paraRegra = {
+    profissional: numOuNulo(r['profissional_id']),
+    escala: num(r['escala_id']),
+    setor: num(r['setor_funcional_id']),
+    especialidade: numOuNulo(r['especialidade_medica_id']),
+    previstoInicio: civilDoUtc(r['inicio_em'], fuso),
+    previstoFim: civilDoUtc(r['fim_em'], fuso),
+    realInicio: inicio,
+    realFim: fim,
+  };
+  const regra = aprovado ? regraPlantaoAplicavel(regras, paraRegra) : null;
+  const pr = regra ? valorPelaRegraPlantao(regra, paraRegra, feriados) : null;
+  const t =
+    aprovado && !pr
+      ? tarifaVigente(tarifas, texto(r['tipo']), num(r['setor_funcional_id']), inicio.slice(0, 10))
+      : null;
+  const v = pr ?? (t ? valorRealizado(minutos, t.valorHora) : null);
   return {
     id: num(r['id']),
     plantao: num(r['id']),
@@ -209,6 +279,8 @@ function realizadoDe(
     tarifa: t?.id ?? null,
     valorHora: t?.valorHora ?? null,
     valor: v?.valor ?? null,
+    regraPlantao: pr?.regra ?? null,
+    parcelas: v?.parcelas ?? null,
     lancamento: numOuNulo(r['lancamento_repasse_id']),
     lancadoPor: numOuNulo(r['lancamento_repasse_id']) === null ? null : textoOuNulo(r['lancado_por']),
     versao: num(r['versao']),
@@ -230,6 +302,11 @@ function instante(v: unknown): number {
 
 /** Leituras comuns à transação somente leitura e à de gravação. */
 const leitura = {
+  async regrasPlantao(l: Leitor, est: number): Promise<RegraPlantaoLida[]> {
+    return (await l.consultar(`${SQL_REGRA_PLANTAO} ORDER BY vigencia_inicio, id`, [est])).map(
+      regraPlantaoDe,
+    );
+  },
   async tarifas(l: Leitor, est: number): Promise<RegistroTarifaPlantao[]> {
     return tarifasDe(await l.consultar(`${SQL_TARIFA} ORDER BY t.vigencia_inicio, t.id`, [est]));
   },
@@ -240,13 +317,19 @@ const leitura = {
     filtro: string,
     params: unknown[],
   ): Promise<RegistroRealizado[]> {
-    const tarifas = await leitura.tarifas(l, est);
+    const valoracao: Valoracao = {
+      tarifas: await leitura.tarifas(l, est),
+      regras: await leitura.regrasPlantao(l, est),
+      feriados: new Set(
+        (await l.consultar(SQL_FERIADO, [est], { teto: 5_000 })).map((x) => dataIso(x['data'])),
+      ),
+    };
     return (
       await l.consultar(`${SQL_REALIZADO} ${filtro} ORDER BY p.entrada_registrada_em, p.id LIMIT 5000`, [
         est,
         ...params,
       ])
-    ).map((r) => realizadoDe(r, fuso, tarifas));
+    ).map((r) => realizadoDe(r, fuso, valoracao));
   },
   async plantao(
     l: Leitor,
@@ -486,6 +569,7 @@ function gravadorSobre(
       ),
     realizado: (id) => umRealizado(id),
     tarifas: () => leitura.tarifas(tx, est),
+    regrasPlantao: () => leitura.regrasPlantao(tx, est),
     async incluirRealizado(r) {
       const l = (
         await tx.consultarParaAtualizar(
@@ -579,6 +663,59 @@ function gravadorSobre(
       if (t.fim < dataIso(l['vigencia_inicio']) || (fimAtual !== null && t.fim > fimAtual))
         throw recusa('vigencia-invalida', 'O fim fica antes do início da tarifa ou depois do fim atual.');
       await tx.alterar('valor_hora_plantao', t.id, num(l['versao']), { vigencia_fim: t.fim });
+    },
+    async incluirRegraPlantao(x) {
+      for (const [tabela, id, nome] of [
+        ['setor_funcional', x.setor, 'O setor'],
+        ['escala', x.escala, 'A escala'],
+        ['profissional', x.profissional, 'O profissional'],
+      ] as const) {
+        if (id === null) continue;
+        const sql =
+          tabela === 'setor_funcional'
+            ? 'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ?'
+            : tabela === 'escala'
+              ? 'SELECT id FROM escala WHERE id = ? AND estabelecimento_id = ?'
+              : 'SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL';
+        if (!(await tx.uma(sql, tabela === 'profissional' ? [id] : [id, est])))
+          throw recusa(`${tabela}-inexistente`, `${nome} da regra não existe neste estabelecimento.`);
+      }
+      return tx.incluir('regra_repasse_plantao', {
+        estabelecimento_id: est,
+        descricao: x.descricao,
+        profissional_id: x.profissional,
+        escala_id: x.escala,
+        setor_funcional_id: x.setor,
+        especialidade_medica_id: x.especialidade,
+        dia_semana: x.diaSemana,
+        forma_remuneracao: x.forma,
+        horas_plantao: x.horasPlantao,
+        valor_padrao: x.valorPadrao,
+        valor_fim_semana: x.valorFimSemana,
+        valor_feriado: x.valorFeriado,
+        percentual_feriado: x.percentualFeriado,
+        fator: x.fator,
+        valor_hora_extra_antes: x.valorHoraExtraAntes,
+        percentual_hora_extra_antes: x.percentualHoraExtraAntes,
+        valor_hora_extra_depois: x.valorHoraExtraDepois,
+        percentual_hora_extra_depois: x.percentualHoraExtraDepois,
+        tolerancia_minutos: x.toleranciaMinutos,
+        vigencia_inicio: x.inicio,
+        vigencia_fim: x.fim,
+      });
+    },
+    async encerrarRegraPlantao(x) {
+      const l = (
+        await tx.consultarParaAtualizar(
+          'SELECT versao, vigencia_inicio, vigencia_fim FROM regra_repasse_plantao WHERE id = ? AND estabelecimento_id = ?',
+          [x.id, est],
+        )
+      )[0];
+      if (!l) throw recusa('regra-inexistente', 'A regra de plantão não existe neste estabelecimento.');
+      const fimAtual = l['vigencia_fim'] === null ? null : dataIso(l['vigencia_fim']);
+      if (x.fim < dataIso(l['vigencia_inicio']) || (fimAtual !== null && x.fim > fimAtual))
+        throw recusa('vigencia-invalida', 'O fim fica antes do início da regra ou depois do fim atual.');
+      await tx.alterar('regra_repasse_plantao', x.id, num(l['versao']), { vigencia_fim: x.fim });
     },
     // O valor do aprovado é calculado na leitura (tarifa vigente no dia): não há aprovado "sem valor" a valorar.
     realizadosSemValor: async () => [],
@@ -761,6 +898,9 @@ export class PortaRealizadoPropria implements PortaRealizado {
   }
   tarifas(c: ContextoRealizado): Promise<RegistroTarifaPlantao[]> {
     return this.ler(c, (l, est) => leitura.tarifas(l, est));
+  }
+  regrasPlantao(c: ContextoRealizado): Promise<RegraPlantaoLida[]> {
+    return this.ler(c, (l, est) => leitura.regrasPlantao(l, est));
   }
   /** O código do prestador por registro: o registro é o profissional, e o prestador do repasse é o próprio profissional. */
   codigosDosRegistros(c: ContextoRealizado, registros: readonly number[]): Promise<Map<number, number>> {

@@ -9,6 +9,7 @@ import {
 } from './tipos.js';
 import { ErroOperacao, type LinhaTrilha } from '@sgh/nucleo';
 import { VINCULOS_PRESTADOR } from '@sgh/contratos';
+import type { RegraPlantaoLida } from '@sgh/dominio-pessoas';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { PortaEscala } from './porta-escala.js';
@@ -27,13 +28,15 @@ interface Estado {
   seq: number;
   realizados: RegistroRealizado[];
   tarifas: RegistroTarifaPlantao[];
+  regras: RegraPlantaoLida[];
   lancamentos: number;
 }
-const novo = (): Estado => ({ seq: 5270, realizados: [], tarifas: [], lancamentos: 99_000 });
+const novo = (): Estado => ({ seq: 5270, realizados: [], tarifas: [], regras: [], lancamentos: 99_000 });
 const copiar = (s: Estado): Estado => ({
   seq: s.seq,
   realizados: s.realizados.map((x) => ({ ...x })),
   tarifas: s.tarifas.map((x) => ({ ...x })),
+  regras: s.regras.map((x) => ({ ...x })),
   lancamentos: s.lancamentos,
 });
 
@@ -178,6 +181,21 @@ export class PortaRealizadoMemoria implements PortaRealizado {
         ),
       realizado: async (i) => s.realizados.find((r) => r.id === i) ?? null,
       tarifas: async () => s.tarifas,
+      regrasPlantao: async () => s.regras,
+      incluirRegraPlantao: async (r) => {
+        const n = id();
+        const { por, ...dados } = r;
+        void por;
+        s.regras.push({ ...dados, id: n });
+        return n;
+      },
+      encerrarRegraPlantao: async (r) => {
+        const i = s.regras.findIndex((y) => y.id === r.id);
+        const x = s.regras[i];
+        if (!x || r.fim < x.inicio || (x.fim !== null && r.fim > x.fim))
+          throw recusa('vigencia-invalida', 'O fim fica antes do início da regra ou depois do fim atual.');
+        s.regras[i] = { ...x, fim: r.fim };
+      },
       incluirRealizado: async (r) => {
         for (const x of s.realizados)
           if (x.plantao === r.plantao && (x.situacao === 'informado' || x.situacao === 'recusado'))
@@ -386,6 +404,9 @@ export class PortaRealizadoMemoria implements PortaRealizado {
   }
   async tarifas(c: ContextoRealizado) {
     return this.e(c).tarifas;
+  }
+  async regrasPlantao(c: ContextoRealizado) {
+    return this.e(c).regras;
   }
   /** Os registros sintéticos: o código de prestador é o próprio registro + 9000 (nenhum dado real). */
   async codigosDosRegistros(_c: ContextoRealizado, rs: readonly number[]) {

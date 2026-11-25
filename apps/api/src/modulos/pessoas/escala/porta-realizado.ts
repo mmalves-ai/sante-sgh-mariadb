@@ -12,6 +12,7 @@ import {
   type RegistroTarifaPlantao,
 } from './tipos.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../../exames/public-api.js';
+import type { RegraPlantaoLida } from '@sgh/dominio-pessoas';
 
 export const PORTA_REALIZADO = Symbol('PORTA_REALIZADO');
 
@@ -44,6 +45,10 @@ export interface GravadorRealizado {
     por: string;
   }): Promise<number>;
   encerrarTarifa(t: { id: number; fim: string; por: string }): Promise<void>;
+  /** C2-100: as regras de plantão do repasse (valor por plantão ou por hora, dia útil, fim de semana, feriado). */
+  regrasPlantao(): Promise<RegraPlantaoLida[]>;
+  incluirRegraPlantao(r: Omit<RegraPlantaoLida, 'id'> & { por: string }): Promise<number>;
+  encerrarRegraPlantao(r: { id: number; fim: string; por: string }): Promise<void>;
   /** Os aprovados sem valor e não lançados que começam na vigência [de, ate] (ate null: sem fim). */
   realizadosSemValor(de: string, ate: string | null): Promise<RegistroRealizado[]>;
   plantoesPorIds(ids: readonly number[]): Promise<RegistroPlantaoParaRealizado[]>;
@@ -76,6 +81,7 @@ export interface PortaRealizado extends PortaGravacaoM18<GravadorRealizado> {
   realizadosAprovados(c: ContextoRealizado, de: string, ate: string): Promise<RegistroRealizado[]>;
   realizado(c: ContextoRealizado, id: number): Promise<RegistroRealizado | null>;
   tarifas(c: ContextoRealizado): Promise<RegistroTarifaPlantao[]>;
+  regrasPlantao(c: ContextoRealizado): Promise<RegraPlantaoLida[]>;
   codigosDosRegistros(c: ContextoRealizado, registros: readonly number[]): Promise<Map<number, number>>;
   /** W0-06: a apuração do repasse da competência (empresa 1), ou null. */
   apuracaoRepasse(c: ContextoRealizado, competencia: string): Promise<{ id: number; estado: string } | null>;
@@ -93,6 +99,7 @@ export const METODOS_PORTA_REALIZADO: ReadonlySet<string> = new Set([
   'realizadosAprovados',
   'realizado',
   'tarifas',
+  'regrasPlantao',
   'codigosDosRegistros',
   'apuracaoRepasse',
 ]);

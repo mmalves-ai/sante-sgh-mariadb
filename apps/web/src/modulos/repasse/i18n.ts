@@ -3,6 +3,7 @@
 import { mensagensFavorecidos } from './i18n-favorecidos.js';
 import { mensagensRateioCusto } from './i18n-rateio-custo.js';
 import { mensagensRemuneracaoVariavel } from './i18n-remuneracao-variavel.js';
+import { mensagensRegraPlantao } from './i18n-regra-plantao.js';
 
 export const mensagensRepasse = {
   carregando: 'Carregando…',
@@ -221,4 +222,5 @@ export const mensagensRepasse = {
   favorecidos: mensagensFavorecidos,
   rateioCusto: mensagensRateioCusto,
   remuneracaoVariavel: mensagensRemuneracaoVariavel,
+  regraPlantao: mensagensRegraPlantao,
 } as const;

@@ -8,6 +8,7 @@
 //   POST /api/pessoas/realizado/:id/estorno                     W0-06: estornar o aprovado, com motivo (o lançado leva o
 //                                                               lançamento negativo; o já apurado recusa com 409)
 //   GET  /api/pessoas/realizado/tarifas ; POST ; POST :id/encerramento   tarifas por hora (`pessoas.realizado.lancar`)
+//   GET  /api/pessoas/realizado/regras-plantao ; POST ; POST :id/encerramento  regras de plantão do repasse (C2-100)
 //   GET  /api/pessoas/realizado/repasse?competencia [/pdf | /csv]        o relatório de plantões realizados ao repasse
 //   POST /api/pessoas/realizado/repasse/lancamento              o lançamento no repasse (executor; chave e DP-33)
 import {
@@ -33,6 +34,9 @@ import {
   esquemaRegistrarRealizado,
   esquemaRelatorioRepasse,
   esquemaTarifaPlantao,
+  esquemaRegraPlantao,
+  esquemaEncerrarRegraPlantao,
+  type ListaRegrasPlantao,
   type ListaRealizado,
   type ListaTarifas,
   type RelatorioRepasse,
@@ -171,6 +175,35 @@ export class RealizadoController {
     return this.servico.encerrarTarifa(
       sessaoDe(req),
       corpo(esquemaEncerrarTarifa, { ...(b as object), tarifa: idDaRota(id) }),
+    );
+  }
+
+  @Get('regras-plantao')
+  @Permissao('pessoas.realizado.ler')
+  regrasPlantao(@Req() req: RequisicaoAutorizada): Promise<ListaRegrasPlantao> {
+    return this.servico.regrasPlantao(sessaoDe(req));
+  }
+
+  @Post('regras-plantao')
+  @HttpCode(200)
+  @Permissao('pessoas.realizado.lancar')
+  @AuditadoNoHandler(NA_TABELA('regra_repasse_plantao'))
+  incluirRegraPlantao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoF6> {
+    return this.servico.incluirRegraPlantao(sessaoDe(req), corpo(esquemaRegraPlantao, b));
+  }
+
+  @Post('regras-plantao/:id/encerramento')
+  @HttpCode(200)
+  @Permissao('pessoas.realizado.lancar')
+  @AuditadoNoHandler(NA_TABELA('regra_repasse_plantao'))
+  encerrarRegraPlantao(
+    @Param('id') id: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoF6> {
+    return this.servico.encerrarRegraPlantao(
+      sessaoDe(req),
+      corpo(esquemaEncerrarRegraPlantao, { ...(b as object), regra: idDaRota(id) }),
     );
   }
 

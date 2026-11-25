@@ -52,6 +52,7 @@ export * from './treinamento/pop.js';
 export * from './autoatendimento/escopo.js';
 export * from './autoatendimento/solicitacao.js';
 export * from './escala/realizado.js';
+export * from './escala/regra-plantao.js';
 // M53-F0: conferência dos lotes trocados com a folha externa, dono de cada dado na interface e exportação do ponto.
 export * from './folha/lote.js';
 export * from './folha/dono-do-dado.js';

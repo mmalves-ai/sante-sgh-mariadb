@@ -11,6 +11,7 @@
 // mês da apuração e o fixo é encerrado no último dia dele. Assim a execução seguinte, no mesmo banco, escolhe outro
 // médico em vez de bater no conflito de vigência, que continua recusado pela porta. Faltando algum desses dados, o teste
 // é pulado com o motivo dito. Nenhum dado de pessoa sai do teste (só ids em memória).
+// Segundo teste: a regra de plantão (remuneração por plantão) cadastrada na mesma tela, com o exemplo calculado na hora.
 import { expect, type APIRequestContext, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -170,6 +171,78 @@ test.describe('valor fixo mensal e mínimo garantido do repasse @C2-100', () => 
     expect(depois.fixos.filter((v) => v.id === fixo && v.inicio === de && v.fim === ate)).toHaveLength(1);
     expect(depois.minimos.filter((v) => v.inicio === de && v.fim === ate)).toHaveLength(1);
 
+    expect(externas).toEqual([]);
+  });
+
+  // Regra de plantão (remuneração por plantão): recusada na hora sem recorte, exemplo calculado (dia útil, fim de semana
+  // com fator e feriado pelo percentual), inclusão, conferência pela API do que ficou no banco e encerramento da vigência
+  // (nada apagado). Isolamento: descrição única por execução e vigência num ano futuro, encerrada no próprio dia.
+  test('regra de plantão: recusa na hora → exemplo calculado → incluir → encerrar; axe', async ({ page }) => {
+    const externas = vigiarExternas(page);
+    await entrar(page, 'SINT.REP.ANALISTA');
+    const P = '/api/pessoas/realizado';
+    const sonda = await page.request.get(`${P}/regras-plantao`);
+    test.skip(sonda.status() === 503, 'Sessão sem banco próprio: a regra de plantão grava só no MariaDB.');
+    test.skip(sonda.status() === 403, 'O perfil do E2E não lê o plantão realizado.');
+    expect(sonda.ok()).toBe(true);
+    const apoio = (await (await page.request.get(`${P}/apoio`)).json()) as {
+      unidades: { codigo: number }[];
+      acoes: { lancar: boolean; tarifa: boolean };
+    };
+    const setor = apoio.unidades[0]?.codigo;
+    test.skip(setor === undefined, 'Sem setor no estabelecimento do E2E.');
+
+    await page.goto('/repasse/regras');
+    await expect(page.getByTestId('rp-regras-plantao')).toBeVisible();
+    test.skip(
+      !(await page.getByTestId('rp-form').isVisible()),
+      'O perfil do E2E não cadastra regra de plantão.',
+    );
+
+    const nome = `PLANTAO E2E ${Date.now().toString(36).toUpperCase()}`;
+    const inicio = `2040-0${1 + (Date.now() % 9)}-01`;
+    await page.getByTestId('rp-descricao').fill(nome);
+    await page.getByTestId('rp-valorPadrao').fill('1200');
+    // Sem setor, escala nem profissional: recusado na hora, botão desligado.
+    await expect(page.getByTestId('rp-problema')).toContainText('profissional, a escala ou o setor');
+    await expect(page.getByTestId('rp-incluir')).toBeDisabled();
+    await escolher(page.getByTestId('rp-setor'), String(setor));
+    await escolher(page.getByTestId('rp-forma'), 'por_plantao');
+    await page.getByTestId('rp-horas').fill('12');
+    await page.getByTestId('rp-valorFimSemana').fill('1500');
+    await page.getByTestId('rp-fator').fill('1,2');
+    await page.getByTestId('rp-percentualFeriado').fill('100');
+    await page.getByTestId('rp-inicio').fill(inicio);
+    // O exemplo de 12 h pela mesma regra do servidor: 1200 × 1,2; 1500 × 1,2; (1200 + 100%) × 1,2.
+    await expect(page.getByTestId('rp-exemplo-util')).toContainText('1.440,00');
+    await expect(page.getByTestId('rp-exemplo-fim_semana')).toContainText('1.800,00');
+    await expect(page.getByTestId('rp-exemplo-feriado')).toContainText('2.880,00');
+    await semViolacaoAxe(page);
+    await page.getByTestId('rp-incluir').click();
+    await expect(page.getByTestId('rp-mensagem')).toContainText('Regra de plantão incluída');
+
+    // O que ficou no banco, pela API.
+    type Regra = {
+      id: number;
+      descricao: string;
+      setor: number | null;
+      valorPadrao: number;
+      fator: number | null;
+      inicio: string;
+      fim: string | null;
+    };
+    const lidas = ((await (await page.request.get(`${P}/regras-plantao`)).json()) as { itens: Regra[] })
+      .itens;
+    const regra = lidas.find((r) => r.descricao === nome);
+    expect(regra).toMatchObject({ setor, valorPadrao: 1200, fator: 1.2, inicio, fim: null });
+
+    // Encerrar no próprio dia do início: só grava o fim da vigência.
+    await page.getByTestId(`rp-fim-${regra!.id}`).fill(inicio);
+    await page.getByTestId(`rp-encerrar-${regra!.id}`).click();
+    await expect(page.getByTestId('rp-mensagem')).toContainText('encerrada');
+    const depois = ((await (await page.request.get(`${P}/regras-plantao`)).json()) as { itens: Regra[] })
+      .itens;
+    expect(depois.filter((r) => r.id === regra!.id && r.fim === inicio)).toHaveLength(1);
     expect(externas).toEqual([]);
   });
 });

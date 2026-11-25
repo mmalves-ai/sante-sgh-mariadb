@@ -333,6 +333,10 @@ export interface RegistroRealizado {
   readonly tarifa: number | null;
   readonly valorHora: number | null;
   readonly valor: number | null;
+  /** C2-100: a regra de plantão que deu o valor (null: tarifa geral por hora ou sem valor). */
+  readonly regraPlantao?: number | null;
+  /** A conta escrita do valor, parcela por parcela. */
+  readonly parcelas?: string | null;
   readonly lancamento: number | null;
   readonly lancadoPor: string | null;
   readonly versao: number;

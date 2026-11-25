@@ -443,6 +443,7 @@ export * from './permissoes/pessoas-ponto.js';
 // M52.6 (gestão de pessoas, F6): treinamentos e POP, autosserviço, plantão realizado para o repasse.
 export * from './pessoas/treinamento-vocabulario.js';
 export * from './pessoas/treinamento-entradas.js';
+export * from './pessoas/regra-plantao.js';
 export * from './pessoas/treinamento-respostas.js';
 export * from './permissoes/pessoas-f6.js';
 // M53-F1: rubricas, incidências e tabelas legais da folha (as regras puras em @sgh/dominio-pessoas).
