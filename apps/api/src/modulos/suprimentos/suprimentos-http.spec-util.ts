@@ -16,8 +16,6 @@ import { HOJE, type Sessao } from '../cirurgia/bloco-seguro.spec-util.js';
 import { moduloCirurgia } from '../cirurgia/modulo.js';
 import { PORTA_CIRURGIA } from '../cirurgia/porta.js';
 import { PortaCirurgiaMemoria } from '../cirurgia/porta-memoria.js';
-import { ConsignadoController } from './consignado.controller.js';
-import { PORTA_CONSIGNADO } from './consignado-porta.js';
 import { PortaConsignadoMemoria } from './consignado-porta-memoria.js';
 import { ContratoController } from './contrato.controller.js';
 import { PORTA_CONTRATO } from './contrato-porta.js';
@@ -66,7 +64,6 @@ export async function montarAppSuprimentos(o: { hhmm?: string; semChaves?: reado
   };
   const extras: Provider[] = [
     { provide: PORTA_CIRURGIA, useValue: cirurgia },
-    { provide: PORTA_CONSIGNADO, useValue: portas.consignado },
     { provide: PORTA_CONTRATO, useValue: portas.contrato },
     { provide: PORTA_LICITACAO, useValue: portas.licitacao },
   ];
@@ -87,6 +84,7 @@ export async function montarAppSuprimentos(o: { hhmm?: string; semChaves?: reado
             suprimentos: new PortaSuprimentosMemoria(null),
             opme,
             manipulacao: new PortaManipulacaoMemoria(),
+            consignado: portas.consignado,
             ...(o.semChaves ? { semChaves: o.semChaves } : {}),
           });
           // O OPME e a manipulação leem a porta do centro cirúrgico: o `modulo.ts` só os monta quando o registro já tem
@@ -98,12 +96,11 @@ export async function montarAppSuprimentos(o: { hhmm?: string; semChaves?: reado
             controllers: [
               ...(base.controllers ?? []),
               ...comCirurgia,
-              ConsignadoController,
               ContratoController,
               LicitacaoController,
             ],
             providers: [...(base.providers ?? []), ...extras],
-            exports: [...(base.exports ?? []), PORTA_CONSIGNADO, PORTA_CONTRATO, PORTA_LICITACAO],
+            exports: [...(base.exports ?? []), PORTA_CONTRATO, PORTA_LICITACAO],
           };
         },
       }),

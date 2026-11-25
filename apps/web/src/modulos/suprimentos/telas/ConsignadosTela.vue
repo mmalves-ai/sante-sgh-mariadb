@@ -26,9 +26,10 @@ import {
 } from '../api-consignado.js';
 import BuscaCodigoNome from '../componentes/BuscaCodigoNome.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
+import TaxaConsignacaoPainel from '../componentes/TaxaConsignacaoPainel.vue';
 import './estilo-opme.css';
 
-type Aba = 'saldo' | 'consumos' | 'remessa' | 'devolucao' | 'movimentos';
+type Aba = 'saldo' | 'consumos' | 'remessa' | 'devolucao' | 'movimentos' | 'taxas';
 const { t } = useI18n();
 const aba = ref<Aba>('saldo');
 const fornecedor = ref<number | null>(null);
@@ -263,7 +264,7 @@ async function devolver(): Promise<void> {
   );
   if (ok) Object.assign(formDevolucao, { quantidade: 1, motivo: '' });
 }
-const abas: Aba[] = ['saldo', 'consumos', 'remessa', 'devolucao', 'movimentos'];
+const abas: Aba[] = ['saldo', 'consumos', 'remessa', 'devolucao', 'movimentos', 'taxas'];
 </script>
 
 <template>
@@ -695,6 +696,13 @@ const abas: Aba[] = ['saldo', 'consumos', 'remessa', 'devolucao', 'movimentos'];
           @acionar="devolver"
         />
       </section>
+
+      <!-- Taxa de comercialização por faixa de valor (05-SUP linha 24) -->
+      <TaxaConsignacaoPainel
+        v-else-if="aba === 'taxas'"
+        :fornecedor="fornecedor"
+        :pode-registrar="podeRegistrar"
+      />
 
       <!-- Movimentos -->
       <template v-else>

@@ -22,6 +22,11 @@ import {
   type PortaCadastroEstoque,
   portaCadastroEstoqueIndisponivel,
 } from './cadastro-estoque-porta.js';
+import { ConsignadoController } from './consignado.controller.js';
+import { PORTA_CONSIGNADO, type PortaConsignado } from './consignado-porta.js';
+import { PortaConsignadoMemoria } from './consignado-porta-memoria.js';
+import { TaxaConsignacaoController } from './consignado-taxa.controller.js';
+import { PORTA_TAXA_CONSIGNACAO, portaTaxaConsignacaoIndisponivel } from './consignado-taxa.js';
 import { ManipulacaoController } from './manipulacao.controller.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
 import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
@@ -40,6 +45,8 @@ export interface OpcoesModuloSuprimentos {
   readonly suprimentos?: PortaSuprimentos;
   readonly opme?: PortaOpme;
   readonly manipulacao?: PortaManipulacao;
+  /** Testes: a porta do consignado já montada. */
+  readonly consignado?: PortaConsignado;
   /** Testes: a porta do cadastro do estoque (F3.6) já montada. */
   readonly cadastroEstoque?: PortaCadastroEstoque;
   /** Testes: as chaves de liberação da memória sem estas (a funcionalidade desligada fica em consulta). */
@@ -115,6 +122,19 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./vinculo-referencia-preco.js')).PortaVinculoReferenciaPropria(ctx.nucleo)
       : portaVinculoReferenciaIndisponivel();
+  // 05-SUP linha 24: o consignado grava no banco próprio; sem o núcleo, a memória só em dev/ci com as fontes sintéticas;
+  // fora disso, 503 em tudo. A taxa por faixa de valor grava só no banco próprio.
+  const consignado =
+    opcoes.consignado ??
+    (ctx.nucleo && ctx.configuracao.clientePadrao
+      ? (await import('./consignado-porta-propria.js')).portaConsignadoPropria(ctx.nucleo)
+      : !ctx.nucleo && fontesSinteticas(ctx.env)
+        ? new PortaConsignadoMemoria(opme instanceof PortaOpmeMemoria ? opme : null)
+        : (await import('./consignado-porta-propria.js')).portaConsignadoIndisponivel());
+  const taxaConsignacao =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./consignado-taxa.js')).PortaTaxaConsignacaoPropria(ctx.nucleo)
+      : portaTaxaConsignacaoIndisponivel();
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =
     memoria && !pedidos.includes('config')
@@ -133,6 +153,8 @@ export async function modulo(
       // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
       PedidoGestaoController,
       VinculoReferenciaPrecoController,
+      ConsignadoController,
+      TaxaConsignacaoController,
       ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
     ],
     providers: [
@@ -142,7 +164,9 @@ export async function modulo(
       { provide: PORTA_MANIPULACAO, useValue: manipulacao },
       { provide: PORTA_CADASTRO_ESTOQUE, useValue: cadastroEstoque },
       { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
+      { provide: PORTA_CONSIGNADO, useValue: consignado },
+      { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
     ],
-    exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO],
+    exports: [PORTA_SUPRIMENTOS, PORTA_OPME, PORTA_MANIPULACAO, PORTA_CONSIGNADO],
   };
 }

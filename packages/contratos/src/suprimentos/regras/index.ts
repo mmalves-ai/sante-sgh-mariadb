@@ -35,6 +35,8 @@ export * from './opme.js';
 // M46 (etapa 4): consignados (saldo, remessa, reposição, faturamento, devolução ao fornecedor, indicador) e manipulação
 // (abertura do item validado, capela, sobra, dupla conferência e baixa).
 export * from './consignado.js';
+// 05-SUP linha 24: a taxa de comercialização do consignado por faixa de valor, com vigência e teto.
+export * from './consignado-taxa.js';
 export * from './manipulacao.js';
 // M55 (etapa 3): contrato com fornecedor (vigência e alertas, reajuste, saldo, vínculo e avaliação).
 export * from './contrato.js';
