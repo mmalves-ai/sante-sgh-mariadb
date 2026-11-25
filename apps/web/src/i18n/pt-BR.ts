@@ -17,6 +17,7 @@ import { mensagensRegulacao } from '../modulos/adt/i18n-regulacao.js';
 import { mensagensAgenda } from '../modulos/agenda/i18n.js';
 import { mensagensEstruturada } from '../modulos/agenda/i18n-estruturada.js';
 import { mensagensUsuariosAgenda } from '../modulos/agenda/i18n-usuarios-agenda.js';
+import { mensagensContatoAtivo } from '../modulos/agenda/i18n-contato-ativo.js';
 import { mensagensCotasPrazos } from '../modulos/agenda/i18n-cotas-prazos.js';
 import { mensagensPerfisMarcacao } from '../modulos/agenda/i18n-perfis-marcacao.js';
 import { mensagensExames } from '../modulos/exames/i18n.js';
@@ -54,6 +55,7 @@ import { mensagensProfissionalProvisorio } from '../modulos/cadastro/i18n-provis
 import { mensagensEquipesCooperativas } from '../modulos/cadastro/i18n-equipes.js';
 import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
 import { mensagensLinhasCuidado } from '../modulos/cadastro/i18n-linhas-cuidado.js';
+import { mensagensAcessoRestrito } from '../modulos/cadastro/i18n-acesso-restrito.js';
 import { mensagensDemografia } from '../modulos/cadastro/i18n-demografia.js';
 import { mensagensComplementoProfissional } from '../modulos/cadastro/i18n-complemento-profissional.js';
 import { mensagensSesmt } from '../modulos/pessoas/sesmt/i18n.js';
@@ -2358,6 +2360,7 @@ export const mensagensWeb = {
   usuariosAgenda: mensagensUsuariosAgenda,
   perfisMarcacao: mensagensPerfisMarcacao,
   cotasPrazos: mensagensCotasPrazos,
+  contatoAtivo: mensagensContatoAtivo,
   // M19: recepção, senhas, totens e painéis.
   recepcao: mensagensRecepcao,
   classificacao: mensagensClassificacao,
@@ -2456,6 +2459,7 @@ export const mensagensWeb = {
   vinculos: mensagensVinculos,
   // F8 (02-CAD linha 11): programas de saúde e linhas de cuidado do paciente.
   linhasCuidado: mensagensLinhasCuidado,
+  acessoRestrito: mensagensAcessoRestrito,
   demografia: mensagensDemografia,
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,

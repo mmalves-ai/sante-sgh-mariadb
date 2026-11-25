@@ -87,6 +87,12 @@ export const rotasAgenda: RouteRecordRaw[] = [
     meta: { permissao: 'agenda.agenda.ler', menu: `${M} > Cotas e prazos de marcação` },
   },
   {
+    path: '/agenda/consultas/contato-ativo',
+    name: 'agenda.contatoAtivo',
+    component: () => import('./telas/ContatoAtivoTela.vue'),
+    meta: { permissao: 'agenda.marcacao.ler', menu: `${M} > Contato ativo antes da consulta` },
+  },
+  {
     path: '/agenda/consultas/indicadores',
     name: 'agenda.indicadores',
     component: () => import('./telas/IndicadoresTela.vue'),
