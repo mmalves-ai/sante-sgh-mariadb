@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import MinhaCompetenciaTrabalho from '../componentes/MinhaCompetenciaTrabalho.vue';
 import {
   fecharCompetencia,
   listarCompetencias,
@@ -24,6 +25,12 @@ const qc = useQueryClient();
 const { apoio, pode, motivo, motivoFuncionalidade } = usarTiss('lote');
 const convenio = ref('');
 const competencia = ref('');
+// A competência de trabalho do faturista é o padrão do filtro (sem ela, o mês corrente).
+const padraoTrabalho = ref('');
+function aoEscolherTrabalho(c: string) {
+  if (!competencia.value || competencia.value === padraoTrabalho.value) competencia.value = c;
+  padraoTrabalho.value = c;
+}
 const pedido = ref<{ convenio: string; competencia: string } | null>(null);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
@@ -45,7 +52,7 @@ function consultar() {
   if (!convenio.value) return;
   pedido.value = {
     convenio: convenio.value,
-    competencia: competencia.value || competenciaAtual(apoio.data.value?.hoje),
+    competencia: competencia.value || padraoTrabalho.value || competenciaAtual(apoio.data.value?.hoje),
   };
 }
 async function fechar() {
@@ -101,6 +108,7 @@ async function reabrir() {
     <h1 id="cp-titulo">{{ t('tiss.competencias.titulo') }}</h1>
     <p>{{ t('tiss.competencias.texto') }}</p>
     <AvisoFaturamento :motivo="motivoFuncionalidade('competencia')" />
+    <MinhaCompetenciaTrabalho :hoje="apoio.data.value?.hoje ?? ''" @escolhida="aoEscolherTrabalho" />
     <form class="filtros" @submit.prevent="consultar">
       <span class="campo">
         <SanteSelecao

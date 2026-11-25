@@ -130,6 +130,13 @@ export const mensagensTiss = {
     maisAntigo: 'Mais antigo sem protocolo',
     prazoRecurso: 'Prazo de recurso',
     dias: '{n} dia(s)',
+    janela: 'Janela de entrega',
+    janelaAberta: 'Aberta: fecha em {n} dia(s)',
+    janelaFutura: 'Abre em {n} dia(s)',
+    janelaDe: '{inicio} a {fim} (competência {competencia})',
+    restritivo: 'Só recebe dentro da janela',
+    pagamento: 'Pagamento previsto',
+    semCalendario: 'Sem calendário cadastrado',
   },
   competencias: {
     titulo: 'Fechamento de competência por convênio',
@@ -148,6 +155,15 @@ export const mensagensTiss = {
     confirmarImpacto:
       '{n} conta(s) desta competência já estão em lote (apresentadas à operadora). Confirmo que alterar uma conta apresentada exige cancelar ou reapresentar a guia.',
     ciclos: 'Fechamentos e reaberturas registrados: {n}',
+    trabalho: {
+      titulo: 'Minha competência de trabalho',
+      atual: 'Você está trabalhando na competência {competencia}; os filtros abrem nela.',
+      semEscolha: 'Sem competência de trabalho escolhida: os filtros abrem no mês corrente.',
+      inicio: 'Início do período (opcional)',
+      fim: 'Fim do período (opcional)',
+      gravar: 'Trabalhar nesta competência',
+      gravada: 'Competência de trabalho gravada.',
+    },
   },
   demonstrativos: {
     titulo: 'Demonstrativos e conciliação item a item',
