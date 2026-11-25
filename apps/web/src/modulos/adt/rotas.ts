@@ -277,6 +277,13 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.susLeitoUti.ler' },
   },
   {
+    // F8, 09-AREA L87: produção hospitalar mensal (Portaria 312), categoria clínica do paciente e faixas de valor.
+    path: '/internacao/producao-hospitalar',
+    name: 'adt.producaoHospitalar',
+    component: () => import('./telas/ProducaoHospitalarTela.vue'),
+    meta: { permissao: 'internacao.censo.ler' },
+  },
+  {
     // F78.04-2, 04-INT L80: comunicação da internação e da alta à operadora, pela internação.
     path: `/internacao/:reg${reg}/comunicacoes-operadora`,
     name: 'adt.comunicacoesOperadora',

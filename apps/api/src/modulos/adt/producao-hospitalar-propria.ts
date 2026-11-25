@@ -142,9 +142,10 @@ async function apurar(l: Leitor, est: number, mes: string, hoje: string): Promis
   const ids = ints.map((x) => num(x['atendimento_id']));
   for (let k = 0; k < ids.length; k += 1000) {
     const lote = ids.slice(k, k + 1000);
+    const marcas = lote.map(() => '?').join(',');
     const ps = await l.consultar<Linha>(
       `SELECT atendimento_id, clinica_assistencial_id, inicio_em, fim_em FROM atendimento_categoria_clinica
-        WHERE operacao <> 'exclusao' AND atendimento_id IN (${lote.map(() => '?').join(',')})
+        WHERE operacao <> 'exclusao' AND atendimento_id IN (${marcas})
         ORDER BY atendimento_id, inicio_em`,
       lote,
       { teto: 50_000 },
