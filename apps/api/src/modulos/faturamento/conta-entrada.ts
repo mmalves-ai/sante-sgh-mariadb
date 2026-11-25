@@ -23,10 +23,18 @@
 //   pendência), o grupo do catálogo quando a regra não traz o seu, e as exceções da regra de lançamento.
 // - cancelar (internação ou atendimento excluídos): estorna os automáticos com o motivo "cancelamento" e cancela a
 //   conta; conta com lançamento manual vigente ou já em faturamento recusa a exclusão (passa pelo faturamento).
+// - F3.4 (04-INT linha 81): pacote aplicado à conta (conta_hospitalar_pacote não descaracterizado) com diárias por
+//   acomodação (pacote_diaria_acomodacao): a diária incluída entra como item "sem_cobranca" de valor zero (chave
+//   "pacote-diaria:<pacote da conta>"), a excedente com o item e o valor do pacote; a conta particular de uma diferença de
+//   acomodação aceita (diferenca_acomodacao.conta_hospitalar_id) recebe só a cobrança diária da diferença (chave
+//   "diferenca:<id>", valor diário da diferença), sobre as diárias da internação na fonte pagadora da diferença.
 import { dataHoraParaInstante, FUSO_PADRAO, instanteParaDataHora } from '@sgh/contratos';
 import {
   apurarLancamentos,
   competenciaDaConta,
+  type DiferencaAcomodacao,
+  type PacoteDeDiarias,
+  type SituacaoDiferenca,
   escolherTipoConta,
   NATUREZA_TIPO_CONTA,
   naturezaDaEntrada,
@@ -263,9 +271,43 @@ export async function apurarConta(
       apurada: false,
     };
   const fuso = await fusoDoEstabelecimento(tx, est);
-  const natureza = texto(c['natureza']) as NaturezaContaPaciente;
-  const fonte = n(c['fonte_pagadora_id']);
-  const plano = nn(c['plano_fonte_pagadora_id']);
+  let natureza = texto(c['natureza']) as NaturezaContaPaciente;
+  let fonte = n(c['fonte_pagadora_id']);
+  let plano = nn(c['plano_fonte_pagadora_id']);
+  // F3.4 (04-INT linha 81): a conta particular das diferenças de acomodação recebe só a cobrança delas, sobre as diárias
+  // da internação na fonte pagadora da diferença (o plano é o da conta dessa fonte).
+  const difs = await tx.consultar<Linha>(
+    `SELECT id, fonte_pagadora_id, direito_categoria_acomodacao_id, utilizada_categoria_acomodacao_id, item_faturavel_id,
+            valor_diario, DATE_FORMAT(inicio_em, '%Y-%m-%d') AS inicio, DATE_FORMAT(fim_em, '%Y-%m-%d') AS fim, situacao,
+            aceite_paciente
+       FROM diferenca_acomodacao WHERE conta_hospitalar_id = ? AND excluido_em IS NULL ORDER BY id`,
+    [contaId],
+    { teto: 500 },
+  );
+  const diferencas: DiferencaAcomodacao[] | null = difs.length
+    ? difs.map((x) => ({
+        id: n(x['id']),
+        direito: n(x['direito_categoria_acomodacao_id']),
+        utilizada: n(x['utilizada_categoria_acomodacao_id']),
+        item: nn(x['item_faturavel_id']),
+        valorDiario: n(x['valor_diario']),
+        inicio: texto(x['inicio']),
+        fim: x['fim'] === null ? null : texto(x['fim']),
+        situacao: texto(x['situacao']) as SituacaoDiferenca,
+        aceite: Boolean(n(x['aceite_paciente'])),
+      }))
+    : null;
+  if (difs.length) {
+    natureza = 'internacao';
+    fonte = n(difs[0]!['fonte_pagadora_id']);
+    const principal = await tx.uma<Linha>(
+      `SELECT plano_fonte_pagadora_id FROM conta_hospitalar
+        WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND id <> ? AND situacao <> 'cancelada' AND excluido_em IS NULL
+        ORDER BY id LIMIT 1`,
+      [n(c['atendimento_id']), fonte, contaId],
+    );
+    plano = nn(principal?.['plano_fonte_pagadora_id']);
+  }
   let entrada = local(c['inicio_em'], fuso);
   let limite = local(agora, fuso);
   let alta = false;
@@ -310,7 +352,44 @@ export async function apurarConta(
     }
   }
   if (limite < entrada) limite = entrada;
-  const periodo = natureza === 'internacao' ? await trechoDaConta(tx, c, fuso) : null;
+  const periodo = natureza === 'internacao' && !diferencas ? await trechoDaConta(tx, c, fuso) : null;
+  // F3.4 (04-INT linha 81): o pacote aplicado à conta (o principal primeiro), com as diárias por acomodação.
+  const aplicados = diferencas
+    ? []
+    : await tx.consultar<Linha>(
+        `SELECT cp.id, cp.pacote_id, p.quantidade_diarias
+           FROM conta_hospitalar_pacote cp JOIN pacote p ON p.id = cp.pacote_id
+          WHERE cp.conta_hospitalar_id = ? AND cp.excluido_em IS NULL AND cp.descaracterizacao_pacote_id IS NULL
+            AND cp.recem_nascido = FALSE
+          ORDER BY cp.principal DESC, cp.id`,
+        [contaId],
+        { teto: 50 },
+      );
+  const diariasPacote = aplicados.length
+    ? await tx.consultar<Linha>(
+        `SELECT pacote_id, categoria_acomodacao_id, quantidade_diarias, diaria_item_faturavel_id, valor_diaria_adicional,
+                complementar_item_faturavel_id, quantidade_complementar, adicional_item_faturavel_id, quantidade_adicional
+           FROM pacote_diaria_acomodacao WHERE pacote_id IN (${aplicados.map(() => '?').join(',')})`,
+        aplicados.map((x) => n(x['pacote_id'])),
+        { teto: 500 },
+      )
+    : [];
+  const pacotes: PacoteDeDiarias[] = aplicados.map((x) => ({
+    contaPacote: n(x['id']),
+    incluidasGeral: nn(x['quantidade_diarias']),
+    acomodacoes: diariasPacote
+      .filter((d) => n(d['pacote_id']) === n(x['pacote_id']))
+      .map((d) => ({
+        categoriaAcomodacao: n(d['categoria_acomodacao_id']),
+        incluidas: n(d['quantidade_diarias']),
+        itemExcedente: nn(d['diaria_item_faturavel_id']),
+        valorExcedente: nn(d['valor_diaria_adicional']),
+        itemComplementar: nn(d['complementar_item_faturavel_id']),
+        quantidadeComplementar: nn(d['quantidade_complementar']),
+        itemAdicional: nn(d['adicional_item_faturavel_id']),
+        quantidadeAdicional: nn(d['quantidade_adicional']),
+      })),
+  }));
   const nasc = await tx.uma<Linha>(
     `SELECT TIMESTAMPDIFF(YEAR, pf.data_nascimento, ?) AS idade
        FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
@@ -457,6 +536,8 @@ export async function apurarConta(
     cancelada,
     // F8 (06-FAT linha 13): conta quebrada por período só recebe o devido do seu trecho.
     ...(periodo ? { periodo } : {}),
+    ...(diferencas ? { diferencas } : {}),
+    ...(pacotes.length ? { pacotes } : {}),
     recorte: {
       estabelecimento: est,
       setor: nn(at?.['setor_funcional_id']),
@@ -510,9 +591,19 @@ export async function apurarConta(
     // A tabela forçada pelo item da regra vale antes das tabelas da conta.
     const daRegra =
       d.tabelaPreco !== null ? [d.tabelaPreco, ...tabelas.filter((t) => t !== d.tabelaPreco)] : tabelas;
-    const preco = d.valorFixo !== null ? null : await precoVigente(tx, daRegra, d.item, d.dia);
-    const unitario = d.valorFixo ?? preco?.unitario ?? 0;
-    const origemPreco = d.valorFixo !== null ? 'valor_fixo_regra' : preco ? 'tabela' : 'sem_preco_vigente';
+    // A diária incluída no pacote entra sem cobrança (valor zero; o preço fechado é o do pacote).
+    const incluida = Boolean(d.semCobranca);
+    const preco = d.valorFixo !== null || incluida ? null : await precoVigente(tx, daRegra, d.item, d.dia);
+    const unitario = incluida ? 0 : (d.valorFixo ?? preco?.unitario ?? 0);
+    const origemPreco = incluida
+      ? 'incluido_pacote'
+      : d.valorFixo !== null
+        ? d.diferenca
+          ? 'valor_diferenca_acomodacao'
+          : 'valor_fixo_regra'
+        : preco
+          ? 'tabela'
+          : 'sem_preco_vigente';
     if (origemPreco === 'sem_preco_vigente') pendencias.push({ dia: d.dia, motivo: 'sem-preco' });
     const seq = await tx.uma<Linha>(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
@@ -533,8 +624,8 @@ export async function apurarConta(
       valor_total: r2(unitario * d.quantidade),
       // Só o preço da tabela é "tabela"; o valor fixo da regra e o zero sem preço são valores atribuídos (a memória diz a
       // origem e o faturista confere a pendência).
-      tipo_valorizacao: origemPreco === 'tabela' ? 'tabela' : 'manual',
-      situacao: 'lancado',
+      tipo_valorizacao: origemPreco === 'tabela' ? 'tabela' : incluida ? 'pacote' : 'manual',
+      situacao: incluida ? 'sem_cobranca' : 'lancado',
     });
     await tx.incluir('conta_hospitalar_item_memoria', {
       conta_hospitalar_item_id: item,
@@ -551,6 +642,8 @@ export async function apurarConta(
         dia: d.dia,
         regraDiaria: d.regraDiaria,
         regraItem: d.regraItem,
+        diferenca: d.diferenca ?? null,
+        contaPacote: d.contaPacote ?? null,
         categoriaAcomodacao: d.categoriaAcomodacao,
         vigencia: preco?.vigencia ?? null,
       }),
@@ -565,6 +658,8 @@ export async function apurarConta(
       categoria_acomodacao_id: d.categoriaAcomodacao,
       regra_diaria_id: d.regraDiaria,
       regra_lancamento_item_id: d.regraItem,
+      diferenca_acomodacao_id: d.diferenca ?? null,
+      conta_hospitalar_pacote_id: d.contaPacote ?? null,
       situacao: 'lancado',
     });
     lancados += 1;
@@ -710,8 +805,11 @@ export const apurarLancamentosDoDia = definirOperacao<z.infer<typeof esquemaApur
     const quebra = await quebrarContasPorPeriodo(tx, est);
     const contas = (
       await tx.consultar<Linha>(
-        `SELECT id, situacao FROM conta_hospitalar WHERE estabelecimento_id = ? AND natureza = 'internacao'
-          AND situacao <> 'cancelada' AND excluido_em IS NULL ORDER BY id`,
+        `SELECT id, situacao FROM conta_hospitalar c WHERE estabelecimento_id = ? AND situacao <> 'cancelada'
+          AND excluido_em IS NULL
+          AND (natureza = 'internacao' OR EXISTS (SELECT 1 FROM diferenca_acomodacao d
+                WHERE d.conta_hospitalar_id = c.id AND d.excluido_em IS NULL))
+          ORDER BY id`,
         [est],
         { teto: 20000 },
       )

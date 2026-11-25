@@ -9,10 +9,17 @@
 // conta; a troca de acomodação estorna a diária do dia ("troca_acomodacao") e lança a da nova; internar sem tipo de
 // conta da natureza não é barrado (a pendência volta) e a rotina diária abre a conta depois. F3.4 (04-INT linha 81): a
 // alta depois da virada e até a hora limite da regra com diária parcial estorna a cheia do dia ("alta") e lança a
-// parcial (item e quantidade da parcial), idempotente. SGH_NUCLEO_SEM_BANCO=1 pula.
+// parcial (item e quantidade da parcial), idempotente; a diferença de acomodação aceita cobra na conta particular um
+// dia por diária na acomodação utilizada (encerrar estorna os dias seguintes) e o pacote aplicado à conta lança a diária
+// incluída sem cobrança e a excedente com o item e o valor do pacote. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { dataHoraParaInstante, FUSO_PADRAO, instanteParaDataHora } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apurarLancamentosAutomaticos, apurarLancamentosDoDia } from '../faturamento/conta-entrada.js';
+import {
+  opAceitarDiferenca,
+  opDecidirDiferenca,
+  opRegistrarDiferenca,
+} from './diferenca-acomodacao-propria.js';
 import {
   CLIENTE_ADT,
   contextoAdt,
@@ -585,6 +592,195 @@ describe.skipIf(SEM_BANCO_ADT)(
         ),
       ).toBe(1);
       expect(await apurar(conta)).toMatchObject({ lancados: 0, estornados: 0 });
+    });
+
+    it('diferença de acomodação aceita cobra por dia na conta particular; o pacote inclui a diária e cobra a excedente (F3.4, 04-INT 81)', async () => {
+      const agoraLocal = instanteParaDataHora(new Date().toISOString(), FUSO_PADRAO);
+      const dia = (k: number) =>
+        new Date(Date.parse(`${agoraLocal.data}T00:00:00Z`) - k * 86_400_000).toISOString().slice(0, 10);
+      const executor = M().nucleo.criarExecutor();
+      const op = <E>(o: Parameters<typeof executor.executar>[0], e: E) =>
+        executor
+          .executar(o, CLIENTE_ADT, e, operacaoAdt(M()))
+          .then((r) => r.resultado as Record<string, unknown>);
+      // Uma internação em curso da massa (a do caso da transferência) ou uma nova.
+      let at = await lerAdt<{ id: number }>(
+        M(),
+        "SELECT id FROM internacao WHERE paciente_id IN (?, ?, ?) AND situacao = 'ativa' AND excluido_em IS NULL ORDER BY id DESC LIMIT 1",
+        [...M().pacientes],
+      );
+      if (!at) at = { id: Number((await internar(M().pacientes[1]!, '03'))['internacao']) };
+      const internacao = Number(at.id);
+      const t = new Date(dataHoraParaInstante(dia(2), '08:00', FUSO_PADRAO));
+      const base = await escrever<{ conta: number; particular: number; pacote: number }>(async (e) => {
+        const i = await e.uma<{ atendimento_id: number }>(
+          'SELECT atendimento_id FROM internacao WHERE id = ?',
+          [internacao],
+        );
+        const atendimento = Number(i?.atendimento_id);
+        await e.executar('UPDATE internacao SET data_hora_entrada = ? WHERE id = ?', [t, internacao]);
+        await e.executar(
+          'UPDATE ocupacao_leito SET data_hora_inicio = ?, categoria_acomodacao_id = ? WHERE internacao_id = ?',
+          [t, cfg.categoria, internacao],
+        );
+        await e.executar('UPDATE atendimento SET entrada_em = ? WHERE id = ?', [t, atendimento]);
+        await e.executar('UPDATE conta_hospitalar SET inicio_em = ? WHERE atendimento_id = ?', [
+          t,
+          atendimento,
+        ]);
+        const conta = Number(
+          (
+            await e.uma<{ id: number }>(
+              "SELECT id FROM conta_hospitalar WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND situacao <> 'cancelada' ORDER BY id LIMIT 1",
+              [atendimento, M().convenio],
+            )
+          )?.id,
+        );
+        // A conta particular do paciente no mesmo atendimento (outra fonte pagadora da massa).
+        const outra = Number(
+          (
+            await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM fonte_pagadora WHERE id <> ?', [
+              M().convenio,
+            ])
+          )?.id,
+        );
+        const ja = await e.uma<{ id: number }>(
+          "SELECT id FROM conta_hospitalar WHERE atendimento_id = ? AND fonte_pagadora_id = ? AND situacao <> 'cancelada'",
+          [atendimento, outra],
+        );
+        const particular = ja
+          ? Number(ja.id)
+          : await e.inserir(
+              `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+                 tipo_conta_id, natureza, tipo_cobranca, competencia, inicio_em, situacao, origem, criado_em)
+               SELECT estabelecimento_id, CONCAT(numero, 'P'), atendimento_id, paciente_id, ?, tipo_conta_id, natureza,
+                      tipo_cobranca, competencia, inicio_em, 'aberta', 'sistema', NOW(3)
+                 FROM conta_hospitalar WHERE id = ?`,
+              [outra, conta],
+            );
+        const pacote =
+          Number(
+            (await e.uma<{ id: number }>('SELECT id FROM pacote WHERE codigo = ?', [`${P}-PAC`]))?.id ?? 0,
+          ) ||
+          (await e.inserir(
+            "INSERT INTO pacote (codigo, descricao, tipo_pacote, item_faturavel_id, cobranca_item_faturavel_id, valor, vigencia_inicio, situacao, criado_em) VALUES (?, 'PACOTE SINTETICO', 'clinico', ?, ?, 500, '2020-01-01', 'ativo', NOW(3))",
+            [`${P}-PAC`, cfg.item, cfg.taxaItem],
+          ));
+        await e.executar('DELETE FROM pacote_diaria_acomodacao WHERE pacote_id = ?', [pacote]);
+        await e.inserir(
+          'INSERT INTO pacote_diaria_acomodacao (pacote_id, categoria_acomodacao_id, quantidade_diarias, diaria_item_faturavel_id, valor_diaria_adicional, criado_em) VALUES (?, ?, 1, ?, 60, NOW(3))',
+          [pacote, cfg.categoria, cfg.itemUti],
+        );
+        return { conta, particular, pacote };
+      });
+      await apurar(base.conta);
+      const diarias = await vigentes(base.conta, 'diaria');
+      expect(diarias).toBeGreaterThanOrEqual(2);
+
+      // Proposta e aceite: a conta particular (a única em outra fonte) recebe um dia de diferença por diária na
+      // acomodação utilizada, com o valor diário combinado; a conta do convênio não recebe nada da diferença.
+      const proposta = await op(opRegistrarDiferenca, {
+        internacao,
+        direito: cfg.uti,
+        utilizada: cfg.categoria,
+        item: cfg.taxaItem,
+        valorDiario: 80,
+        inicio: dia(2),
+      });
+      const dif = Number(proposta['id']);
+      await expect(
+        op(opRegistrarDiferenca, {
+          internacao,
+          direito: cfg.uti,
+          utilizada: cfg.uti,
+          valorDiario: 80,
+          inicio: dia(2),
+        }),
+      ).rejects.toThrow(/mesma de direito/);
+      const versao = async () =>
+        Number(
+          (
+            await lerAdt<{ v: number }>(M(), 'SELECT versao AS v FROM diferenca_acomodacao WHERE id = ?', [
+              dif,
+            ])
+          )?.v,
+        );
+      expect(
+        await op(opAceitarDiferenca, {
+          diferenca: dif,
+          versao: await versao(),
+          responsavel: 'RESPONSAVEL SINTETICO',
+        }),
+      ).toMatchObject({
+        lancados: diarias,
+      });
+      expect(
+        await lerAdt(
+          M(),
+          'SELECT situacao, aceite_paciente, conta_hospitalar_id FROM diferenca_acomodacao WHERE id = ?',
+          [dif],
+        ),
+      ).toMatchObject({ situacao: 'aceita', aceite_paciente: 1, conta_hospitalar_id: base.particular });
+      expect(await vigentes(base.particular, 'diferenca:')).toBe(diarias);
+      expect(
+        await num(
+          "SELECT COALESCE(SUM(i.valor_total), 0) AS n FROM lancamento_automatico_conta l JOIN conta_hospitalar_item i ON i.id = l.conta_hospitalar_item_id WHERE l.conta_hospitalar_id = ? AND l.situacao = 'lancado' AND l.diferenca_acomodacao_id = ?",
+          [base.particular, dif],
+        ),
+      ).toBe(80 * diarias);
+      expect(await num('SELECT valor_itens AS n FROM conta_hospitalar WHERE id = ?', [base.particular])).toBe(
+        80 * diarias,
+      );
+      expect(await vigentes(base.particular, 'diaria')).toBe(0);
+      expect(await vigentes(base.conta, 'diferenca:')).toBe(0);
+      expect(await apurar(base.particular)).toMatchObject({ lancados: 0, estornados: 0 });
+
+      // Encerrar no primeiro dia: os dias seguintes são estornados (ficam na história), só o primeiro segue cobrado.
+      expect(
+        await op(opDecidirDiferenca, {
+          diferenca: dif,
+          versao: await versao(),
+          acao: 'encerrar',
+          fim: dia(2),
+        }),
+      ).toMatchObject({ estornados: diarias - 1 });
+      expect(await vigentes(base.particular, 'diferenca:')).toBe(1);
+      expect(
+        await num(
+          "SELECT COUNT(*) AS n FROM lancamento_automatico_conta WHERE diferenca_acomodacao_id = ? AND situacao = 'estornado' AND motivo_estorno = 'regra_alterada'",
+          [dif],
+        ),
+      ).toBe(diarias - 1);
+
+      // Pacote aplicado à conta do convênio com 1 diária incluída na acomodação: a primeira entra sem cobrança (valor
+      // zero, situação "sem_cobranca"), as excedentes com o item e o valor do pacote; repetir não muda nada.
+      const cp = await escrever<number>((e) =>
+        e.inserir(
+          'INSERT INTO conta_hospitalar_pacote (conta_hospitalar_id, pacote_id, principal, valor_cobrado, aplicado_em, criado_em) VALUES (?, ?, TRUE, 500, NOW(3), NOW(3))',
+          [base.conta, base.pacote],
+        ),
+      );
+      expect(await apurar(base.conta)).toMatchObject({ lancados: diarias, estornados: diarias });
+      expect(await vigentes(base.conta, `pacote-diaria:${cp}`)).toBe(1);
+      expect(
+        await lerAdt(
+          M(),
+          "SELECT i.situacao, i.valor_total, i.tipo_valorizacao, DATE_FORMAT(l.dia_referencia, '%Y-%m-%d') AS dia FROM lancamento_automatico_conta l JOIN conta_hospitalar_item i ON i.id = l.conta_hospitalar_item_id WHERE l.conta_hospitalar_id = ? AND l.situacao = 'lancado' AND l.conta_hospitalar_pacote_id = ?",
+          [base.conta, cp],
+        ),
+      ).toMatchObject({
+        situacao: 'sem_cobranca',
+        valor_total: '0.00',
+        tipo_valorizacao: 'pacote',
+        dia: dia(2),
+      });
+      expect(
+        await num(
+          "SELECT COUNT(*) AS n FROM lancamento_automatico_conta l JOIN conta_hospitalar_item i ON i.id = l.conta_hospitalar_item_id WHERE l.conta_hospitalar_id = ? AND l.situacao = 'lancado' AND l.chave = 'diaria' AND i.item_faturavel_id = ? AND i.valor_unitario = 60",
+          [base.conta, cfg.itemUti],
+        ),
+      ).toBe(diarias - 1);
+      expect(await apurar(base.conta)).toMatchObject({ lancados: 0, estornados: 0 });
     });
   },
 );

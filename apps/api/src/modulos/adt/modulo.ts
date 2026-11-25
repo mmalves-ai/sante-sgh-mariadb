@@ -70,6 +70,11 @@ import { LeitosSusController } from './leitos-sus.controller.js';
 import { PORTA_LEITOS_SUS, PortaLeitosSusPropria } from './leitos-sus-propria.js';
 import { ComunicacaoOperadoraController } from './comunicacao-operadora.controller.js';
 import { ProducaoHospitalarController } from './producao-hospitalar.controller.js';
+import { DiferencaAcomodacaoController } from './diferenca-acomodacao.controller.js';
+import {
+  PORTA_DIFERENCA_ACOMODACAO,
+  PortaDiferencaAcomodacaoPropria,
+} from './diferenca-acomodacao-propria.js';
 import { PORTA_PRODUCAO_HOSPITALAR, PortaProducaoHospitalarPropria } from './producao-hospitalar-propria.js';
 import {
   PORTA_COMUNICACAO_OPERADORA,
@@ -147,6 +152,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       LeitosSusController,
       ComunicacaoOperadoraController,
       ProducaoHospitalarController,
+      DiferencaAcomodacaoController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
@@ -252,6 +258,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaProducaoHospitalarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.4 (04-INT linha 81): diferença de acomodação com aceite e cobrança na conta particular; sem núcleo, 503.
+      {
+        provide: PORTA_DIFERENCA_ACOMODACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDiferencaAcomodacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       {

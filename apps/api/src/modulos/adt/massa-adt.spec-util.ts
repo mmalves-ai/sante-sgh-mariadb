@@ -101,6 +101,9 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
   await e.executar(`DELETE FROM producao_repasse WHERE conta_hospitalar_id IN (${contas})`, ests);
   await e.executar(`DELETE FROM conta_hospitalar_etapa WHERE conta_hospitalar_id IN (${contas})`, ests);
   await e.executar(`DELETE FROM lancamento_automatico_conta WHERE conta_hospitalar_id IN (${contas})`, ests);
+  // F3.4 (04-INT linha 81): a diferença de acomodação e o pacote aplicado à conta (origens do lançamento automático).
+  await e.executar(`DELETE FROM diferenca_acomodacao WHERE internacao_id IN (${internacoes})`, ests);
+  await e.executar(`DELETE FROM conta_hospitalar_pacote WHERE conta_hospitalar_id IN (${contas})`, ests);
   await e.executar(`DELETE FROM atendimento_conta WHERE conta_hospitalar_id IN (${contas})`, ests);
   await e.executar(
     `DELETE m FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id WHERE i.conta_hospitalar_id IN (${contas})`,
