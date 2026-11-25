@@ -96,6 +96,12 @@ const esquemaComercialConta = z.object({
     numero: z.string(),
     situacao: z.string(),
     atendimentoId: z.number().nullable(),
+    // Valores da conta (06-FAT linha 19): total cobrado da fonte pagadora e parte do paciente (franquia).
+    valorItens: z.number().optional(),
+    valorAcrescimo: z.number().optional(),
+    valorDesconto: z.number().optional(),
+    valorPaciente: z.number().optional(),
+    valorTotal: z.number().optional(),
   }),
   previa: z.object({
     franquia: z.array(

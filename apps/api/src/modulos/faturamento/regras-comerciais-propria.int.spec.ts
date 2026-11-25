@@ -439,6 +439,8 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       ])[0];
     // A franquia é do paciente e sai do total da fonte; o desconto por volume sai do total da fonte.
     expect(await valoresConta()).toEqual([1000, 300, 200, 700]);
+    const painel = await s.ler(ctxL(), (l, est) => comercialDaContaPropria(l, est, ids['conta'] as number));
+    expect(painel.conta).toMatchObject({ valorItens: 1000, valorPaciente: 200, valorTotal: 700 });
     const r2 = await s.gravar('aplicar-comercial', op(), { contaId: ids['conta'] });
     expect(r2).toMatchObject({ substituidas: 2, valorTotal: 700 });
     // A reaplicação troca o abatimento (não soma duas vezes) e o volume segue o bruto da conta.

@@ -163,6 +163,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/ServicosAcessoriosTela.vue'),
     meta: { permissao: 'faturamento.regra.ler' },
   },
+  // F8 (06-FAT linha 19): desconto por volume e franquia do contrato, com o painel da conta (`?conta=`).
+  {
+    path: '/faturamento/descontos-franquias',
+    name: 'faturamento.descontosFranquias',
+    component: () => import('./telas/DescontosFranquiasTela.vue'),
+    meta: { permissao: 'faturamento.regra.ler' },
+  },
   // F8 (06-FAT linha 13): regras de criação e quebra automática de contas, com a simulação sobre o atendimento.
   {
     path: '/faturamento/regras-conta',

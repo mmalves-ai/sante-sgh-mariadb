@@ -107,6 +107,7 @@ export const mensagensFaturamento = {
     complementos: 'Períodos e segurado',
     ajustes: 'Horário especial, acréscimos, descontos e pacote',
     servicosAcessorios: 'Ambulância e ligações',
+    descontosFranquias: 'Franquia e desconto',
     notasFiscais: 'Nota fiscal',
     sigtap: 'Itens SUS',
     iniciarConferencia: 'Iniciar a conferência',

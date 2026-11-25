@@ -550,7 +550,8 @@ export const opSalvarFranquia = definirOperacao({
 });
 
 const COLUNAS_CONTA = `c.id, c.versao, c.numero, c.situacao, c.atendimento_id, c.paciente_id, c.fonte_pagadora_id,
-  c.plano_fonte_pagadora_id, c.contrato_fonte_pagadora_id, c.tabela_preco_id, c.competencia, c.inicio_em`;
+  c.plano_fonte_pagadora_id, c.contrato_fonte_pagadora_id, c.tabela_preco_id, c.competencia, c.inicio_em,
+  c.valor_itens, c.valor_acrescimo, c.valor_desconto, c.valor_paciente, c.valor_total`;
 async function contaDa(l: Consulta, est: number, contaId: number) {
   const c = await l.uma<Linha>(
     `SELECT ${COLUNAS_CONTA}, a.regime_atendimento_id, a.especialidade_medica_id, pf.data_nascimento
@@ -575,7 +576,7 @@ function idadeEm(nascimento: string | null, data: string): number | null {
 async function franquiasDoContrato(
   l: Consulta,
   contrato: number,
-): Promise<(FranquiaContrato & { descricao: string; plano: number | null })[]> {
+): Promise<(FranquiaContrato & { descricao: string; plano: number | null; versao: number })[]> {
   const fs = await l.consultar<Linha>(
     'SELECT * FROM franquia_contrato WHERE contrato_fonte_pagadora_id = ? ORDER BY id',
     [contrato],
@@ -590,6 +591,8 @@ async function franquiasDoContrato(
     : [];
   return fs.map((f) => ({
     id: n(f['id']),
+    // A versão vai à tela para a edição da franquia (trava otimista na gravação).
+    versao: n(f['versao']),
     descricao: String(f['descricao']),
     plano: nn(f['plano_fonte_pagadora_id']),
     tipo: String(f['tipo_franquia']) as FranquiaContrato['tipo'],
@@ -1482,6 +1485,12 @@ export async function comercialDaContaPropria(
       numero: String(c['numero']),
       situacao: String(c['situacao']),
       atendimentoId: nn(c['atendimento_id']),
+      // Valores da conta: o total é o cobrado da fonte pagadora; a parte do paciente é a franquia (06-FAT linha 19).
+      valorItens: n(c['valor_itens']),
+      valorAcrescimo: n(c['valor_acrescimo']),
+      valorDesconto: n(c['valor_desconto']),
+      valorPaciente: n(c['valor_paciente']),
+      valorTotal: n(c['valor_total']),
     },
     previa: { franquia: calc.franquia, desconto: calc.desconto, situacao: calc.situacao },
     aplicados,
