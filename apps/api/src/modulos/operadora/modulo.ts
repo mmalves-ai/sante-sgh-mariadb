@@ -78,6 +78,8 @@ import {
   PortaConferenciaContaPropria,
 } from './conta-conferencia-propria.js';
 import { ContasOperadoraController } from './contas.controller.js';
+import { METODOS_TROCA_TISS, PORTA_TROCA_TISS, PortaTrocaTissPropria } from './troca-tiss-propria.js';
+import { TrocaTissOperadoraController } from './troca-tiss.controller.js';
 import { METODOS_PORTA_CONTAS, PORTA_CONTAS_OPERADORA, type PortaContasOperadora } from './contas-porta.js';
 import { PortaContasOperadoraMemoria } from './contas-porta-memoria.js';
 import { PortaContasOperadoraPropria } from './contas-porta-propria.js';
@@ -260,6 +262,7 @@ export async function moduloOperadora(
       DeclaracoesAnsController,
       ReajusteColetivoOperadoraController,
       ContaConferenciaOperadoraController,
+      TrocaTissOperadoraController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -285,6 +288,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaConferenciaContaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaConferenciaContaPropria>(METODOS_CONFERENCIA_CONTA),
+      },
+      // 08-SGO L107 (C2-061): troca TISS recebida e demonstrativos enviados só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_TROCA_TISS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaTrocaTissPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaTrocaTissPropria>(METODOS_TROCA_TISS),
       },
       // 08-SGO L96 (C1-086): índice, regra por sinistralidade e agrupamento do coletivo pequeno só no banco (sem núcleo, 503).
       {

@@ -68,6 +68,7 @@ import { PORTA_CONFERENCIA_CONTA, type PortaConferenciaContaPropria } from './co
 import { type GravadorContas, PORTA_CONTAS_OPERADORA, type PortaContasOperadora } from './contas-porta.js';
 import { pagamentoDe, resumoDaConta, ServicoContasOperadora } from './contas-servico.js';
 import { contextoGravacao } from './contexto-gravacao.js';
+import { PORTA_TROCA_TISS, type PortaTrocaTissPropria } from './troca-tiss-propria.js';
 
 const E = EVENTOS_AUDITAVEIS;
 const RECURSO = 'operadora.contas';
@@ -98,6 +99,9 @@ export class ContasOperadoraController {
     @Optional()
     @Inject(PORTA_CONFERENCIA_CONTA)
     private readonly conferencia: PortaConferenciaContaPropria | null = null,
+    @Optional()
+    @Inject(PORTA_TROCA_TISS)
+    private readonly trocas: PortaTrocaTissPropria | null = null,
   ) {
     this.situacoes = new ServicoSituacaoOperadora(fonte, cache);
     this.servico = new ServicoContasOperadora(porta);
@@ -284,6 +288,24 @@ export class ContasOperadoraController {
           .catch((e: unknown) => {
             throw problemaDoCadastro(e);
           });
+        // C2-061: o envio ao prestador fica como troca TISS enviada (demonstrativo de análise).
+        if (this.trocas?.destino === 'banco')
+          await this.trocas
+            .registrarEnvioAnalise(s.porta, n, { hash: d.hash, informado: v.apresentado }, (r) =>
+              linhaTrilha(
+                s,
+                E.operadoraContaDemonstrativo.codigo,
+                RECURSO,
+                'operadora.troca-tiss.demonstrativo-analise.enviar',
+                {
+                  tabela: 'troca_tiss_operadora',
+                  id: String(r.id),
+                },
+              ),
+            )
+            .catch((e: unknown) => {
+              throw problemaDoCadastro(e);
+            });
       }
     }
     return d;
@@ -299,7 +321,47 @@ export class ContasOperadoraController {
     const n = idDaRota(id);
     const s = await this.exigirFatia(req);
     req.sghAlvo = { tabelaAlvo: TABELA, idAlvo: String(n) };
-    return this.servico.demonstrativoPagamento(s.porta, n);
+    const d = await this.servico.demonstrativoPagamento(s.porta, n);
+    // C2-061: o demonstrativo de pagamento entregue fica registrado (demonstrativo_pagamento_emitido e a troca enviada).
+    if (this.porta.destino === 'banco' && this.trocas?.destino === 'banco') {
+      const conta = await this.porta.conta(s.porta, n);
+      if (conta) {
+        const v = valoresDaConta(conta, conta.situacao);
+        const eventos = await this.porta.eventos(s.porta, n);
+        const pagoEm =
+          eventos
+            .filter((e) => e.evento === 'pagamento' && e.pagoEm)
+            .map((e) => e.pagoEm!)
+            .sort()
+            .at(-1) ?? null;
+        const glosa = Math.max(0, Math.round((v.glosado - v.acatado) * 100) / 100);
+        await this.trocas
+          .registrarDemonstrativoPagamento(
+            s.porta,
+            n,
+            {
+              numero: `P${conta.protocolo}`,
+              hash: d.hash,
+              dataPagamento: pagoEm,
+              informado: v.apresentado,
+              liberado: Math.max(0, Math.round((v.apresentado - glosa) * 100) / 100),
+              glosa,
+            },
+            (r) =>
+              linhaTrilha(
+                s,
+                E.operadoraContaDemonstrativoPagamento.codigo,
+                RECURSO,
+                'operadora.troca-tiss.demonstrativo-pagamento.registrar',
+                { tabela: 'demonstrativo_pagamento_emitido', id: String(r.id) },
+              ),
+          )
+          .catch((e: unknown) => {
+            throw problemaDoCadastro(e);
+          });
+      }
+    }
+    return d;
   }
 
   @Post(R.receber.caminho)
