@@ -5,6 +5,7 @@ import {
   dependentesAtivos,
   type DefinicaoAtributoGuia,
   guiaAceitaAtributos,
+  recusaObrigatoriosPendentes,
   sugerirProximoPeriodo,
   validarDefinicaoAtributo,
   validarPeriodoConta,
@@ -286,5 +287,19 @@ describe('campo adicional da operadora na guia', () => {
     expect(guiaAceitaAtributos('montada')).toBe(true);
     expect(guiaAceitaAtributos('glosada')).toBe(true);
     expect(guiaAceitaAtributos('enviada')).toBe(false);
+  });
+});
+
+describe('obrigatório da operadora antes do lote', () => {
+  it('recusa a conta com a guia e os campos que faltam; sem pendência, segue', () => {
+    expect(recusaObrigatoriosPendentes('C1', [{ numero: 'G1', faltam: [] }])).toBeNull();
+    expect(recusaObrigatoriosPendentes('C1', [])).toBeNull();
+    const r = recusaObrigatoriosPendentes('C1', [
+      { numero: 'G1', faltam: [] },
+      { numero: 'G2', faltam: ['Tratamento', 'Fase'] },
+    ]);
+    expect(r?.codigo).toBe('guia-obrigatorio-pendente');
+    expect(r?.mensagem).toContain('guia G2: Tratamento, Fase');
+    expect(r?.mensagem).not.toContain('G1');
   });
 });

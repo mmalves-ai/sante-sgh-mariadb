@@ -141,7 +141,7 @@ const rotulo = (a: AlertaPrescricao) => (a.item === '*' ? '' : (props.rotulos[a.
   padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
 }
 .alerta.bloqueio {
-  border-left-color: var(--sgh-perigo);
+  border-left-color: var(--sgh-alerta);
 }
 .alerta.justificar {
   border-left-color: var(--sgh-alerta);
@@ -177,7 +177,7 @@ textarea {
   flex-wrap: wrap;
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 p {
   margin: 0;

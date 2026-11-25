@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Lotação do profissional por estabelecimento e unidade (F3.1, 02-CAD linha 18): ocupação (CBO), carga semanal por
 // tipo com o total na hora, vínculo de trabalho do cadastro nacional e vigência. Encerrar grava o fim; nada se apaga.
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
@@ -43,6 +43,13 @@ const total = computed(
 const unidades = computed(() =>
   (opcoes.data.value?.unidades ?? []).filter((u) => u.estabelecimento === novo.value.estabelecimento),
 );
+// A unidade é do estabelecimento: trocado o estabelecimento, a unidade escolhida antes não vale mais.
+watch(
+  () => novo.value.estabelecimento,
+  () => {
+    novo.value.unidade = null;
+  },
+);
 const erro = ref<unknown>(null);
 
 async function fazer(fn: () => Promise<unknown>): Promise<void> {
@@ -70,7 +77,7 @@ const incluir = () =>
     </p>
     <p v-if="consulta.data.value?.itens.length === 0">{{ t('ligacoes.comum.nenhum') }}</p>
     <ul v-else-if="consulta.data.value" data-testid="lista-lotacoes">
-      <li v-for="l in consulta.data.value.itens" :key="l.id">
+      <li v-for="l in consulta.data.value.itens" :key="l.id" :data-testid="`lotacao-${l.id}`">
         {{
           t('ligacoes.lotacao.resumo', {
             est: l.estabelecimentoNome,
@@ -93,71 +100,110 @@ const incluir = () =>
           v-if="editar && l.vigenciaFim === null"
           :rotulo="t('ligacoes.comum.encerrar')"
           variante="secundario"
+          data-testid="lotacao-encerrar"
           @acionar="fazer(() => encerrarLotacao(profissional, l.id, l.versao, null))"
         />
       </li>
     </ul>
     <form v-if="editar" class="barra" data-testid="form-lotacao" @submit.prevent="incluir">
-      <div class="campo">
-        <label for="lot-est">{{ t('ligacoes.lotacao.estabelecimento') }}</label>
-        <select id="lot-est" v-model="novo.estabelecimento" required>
-          <option :value="null">{{ t('ligacoes.comum.escolha') }}</option>
-          <option v-for="e in opcoes.data.value?.estabelecimentos ?? []" :key="e.id" :value="e.id">
-            {{ e.nome }}
-          </option>
-        </select>
-      </div>
-      <div class="campo">
-        <label for="lot-un">{{ t('ligacoes.lotacao.unidade') }}</label>
-        <select id="lot-un" v-model="novo.unidade">
-          <option :value="null">—</option>
-          <option v-for="u in unidades" :key="u.id" :value="u.id">{{ u.nome }}</option>
-        </select>
-      </div>
+      <SanteSelecao
+        id="lot-est"
+        data-testid="lot-est"
+        v-model="novo.estabelecimento"
+        :rotulo="t('ligacoes.lotacao.estabelecimento')"
+        obrigatorio
+        :opcoes="[
+          { valor: null, rotulo: t('ligacoes.comum.escolha') },
+          ...(opcoes.data.value?.estabelecimentos ?? []).map((e) => ({ valor: e.id, rotulo: e.nome })),
+        ]"
+      />
+      <SanteSelecao
+        id="lot-un"
+        data-testid="lot-un"
+        v-model="novo.unidade"
+        :rotulo="t('ligacoes.lotacao.unidade')"
+        :opcoes="[{ valor: null, rotulo: '—' }, ...unidades.map((u) => ({ valor: u.id, rotulo: u.nome }))]"
+      />
       <div class="campo">
         <label for="lot-termo">{{ t('ligacoes.comum.buscar') }}</label>
-        <input id="lot-termo" v-model="termo" maxlength="60" />
+        <input id="lot-termo" data-testid="lot-termo" v-model="termo" maxlength="60" />
       </div>
-      <div class="campo">
-        <label for="lot-cbo">{{ t('ligacoes.lotacao.ocupacao') }}</label>
-        <select id="lot-cbo" v-model="novo.ocupacao" required>
-          <option :value="null">{{ t('ligacoes.comum.escolha') }}</option>
-          <option v-for="o in opcoes.data.value?.ocupacoes ?? []" :key="o.id" :value="o.id">
-            {{ o.codigo }} {{ o.descricao }}
-          </option>
-        </select>
-      </div>
-      <div class="campo">
-        <label for="lot-vinc">{{ t('ligacoes.lotacao.vinculo') }}</label>
-        <select id="lot-vinc" v-model="novo.tipoVinculo">
-          <option :value="null">—</option>
-          <option v-for="v in opcoes.data.value?.tiposVinculo ?? []" :key="v.id" :value="v.id">
-            {{ v.codigo }} {{ v.descricao }}
-          </option>
-        </select>
-      </div>
+      <SanteSelecao
+        id="lot-cbo"
+        data-testid="lot-cbo"
+        v-model="novo.ocupacao"
+        :rotulo="t('ligacoes.lotacao.ocupacao')"
+        obrigatorio
+        :opcoes="[
+          { valor: null, rotulo: t('ligacoes.comum.escolha') },
+          ...(opcoes.data.value?.ocupacoes ?? []).map((o) => ({
+            valor: o.id,
+            rotulo: `${o.codigo} ${o.descricao}`,
+          })),
+        ]"
+      />
+      <SanteSelecao
+        id="lot-vinc"
+        data-testid="lot-vinc"
+        v-model="novo.tipoVinculo"
+        :rotulo="t('ligacoes.lotacao.vinculo')"
+        :opcoes="[
+          { valor: null, rotulo: '—' },
+          ...(opcoes.data.value?.tiposVinculo ?? []).map((v) => ({
+            valor: v.id,
+            rotulo: `${v.codigo} ${v.descricao}`,
+          })),
+        ]"
+      />
       <div class="campo">
         <label for="lot-amb">{{ t('ligacoes.lotacao.ambulatorial') }}</label>
-        <input id="lot-amb" v-model.number="novo.cargaAmbulatorial" type="number" min="0" max="168" />
+        <input
+          id="lot-amb"
+          data-testid="lot-amb"
+          v-model.number="novo.cargaAmbulatorial"
+          type="number"
+          min="0"
+          max="168"
+        />
       </div>
       <div class="campo">
         <label for="lot-hosp">{{ t('ligacoes.lotacao.hospitalar') }}</label>
-        <input id="lot-hosp" v-model.number="novo.cargaHospitalar" type="number" min="0" max="168" />
+        <input
+          id="lot-hosp"
+          data-testid="lot-hosp"
+          v-model.number="novo.cargaHospitalar"
+          type="number"
+          min="0"
+          max="168"
+        />
       </div>
       <div class="campo">
         <label for="lot-out">{{ t('ligacoes.lotacao.outros') }}</label>
-        <input id="lot-out" v-model.number="novo.cargaOutros" type="number" min="0" max="168" />
+        <input
+          id="lot-out"
+          data-testid="lot-out"
+          v-model.number="novo.cargaOutros"
+          type="number"
+          min="0"
+          max="168"
+        />
       </div>
       <p :class="{ erro: total === 0 || total > 168 }" data-testid="lotacao-total" aria-live="polite">
         {{ t('ligacoes.lotacao.total', { n: total }) }}
       </p>
       <div class="campo">
         <label for="lot-ini">{{ t('ligacoes.comum.inicio') }}</label>
-        <input id="lot-ini" v-model="novo.vigenciaInicio" type="date" required />
+        <input id="lot-ini" data-testid="lot-ini" v-model="novo.vigenciaInicio" type="date" required />
       </div>
       <div class="campo">
         <label for="lot-fim">{{ t('ligacoes.comum.fim') }}</label>
-        <input id="lot-fim" v-model="novo.vigenciaFim" type="date" :min="novo.vigenciaInicio" />
+        <input
+          id="lot-fim"
+          data-testid="lot-fim"
+          v-model="novo.vigenciaFim"
+          type="date"
+          :min="novo.vigenciaInicio"
+        />
       </div>
       <label
         ><input v-model="novo.ocupacaoPadrao" type="checkbox" /> {{ t('ligacoes.lotacao.padrao') }}</label

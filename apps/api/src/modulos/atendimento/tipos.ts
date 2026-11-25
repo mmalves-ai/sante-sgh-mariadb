@@ -162,6 +162,8 @@ export interface ApoioAtendimentoDados {
     readonly estabelecimento: Record<string, boolean>;
     readonly pessoal: Record<string, boolean>;
   };
+  /** Os valores habituais da abertura, por escopo (estabelecimento e usuário da sessão). */
+  readonly padraoAbertura?: import('./porta-propria-padrao.js').PadraoAberturaLido;
 }
 
 /** A marcação de agenda que a abertura do atendimento preenche. */

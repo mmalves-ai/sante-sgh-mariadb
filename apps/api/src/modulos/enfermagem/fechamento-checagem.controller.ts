@@ -17,6 +17,7 @@ import { corpo } from '../exames/public-api.js';
 import {
   fechamentosDoDia,
   fecharChecagemTx,
+  type FechamentoFeito,
   reabrirChecagemTx,
   TABELAS_FECHAMENTO,
 } from './fechamento-checagem-propria.js';
@@ -47,10 +48,11 @@ export class FechamentoChecagemController {
   private propria(): PortaEnfermagemPropria {
     if (!(this.porta instanceof PortaEnfermagemPropria))
       throw new ErroProblema(
-        'pendente-modelo-proprio',
+        'recurso-desligado',
         501,
         'Fechamento da checagem',
         'O fechamento do turno grava só no banco próprio do cliente.',
+        { codigo: 'pendente-modelo-proprio' },
       );
     return this.porta;
   }
@@ -86,7 +88,7 @@ export class FechamentoChecagemController {
   async fechar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const e = corpo(esquemaFechamentoChecagem, b);
     const s = sessaoComAto(sessaoDe(req), e, null, ':fechamento-checagem');
-    const r = await this.propria().gravarNaTransacao(
+    const r = await this.propria().gravarNaTransacao<FechamentoFeito>(
       s.porta,
       'enfermagem.fechar-checagem-turno',
       TABELAS_FECHAMENTO,

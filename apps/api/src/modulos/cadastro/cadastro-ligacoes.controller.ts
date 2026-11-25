@@ -13,6 +13,9 @@
 //   PUT  /api/cadastros/solicitantes/:id                                  altera os dados e corrige o registro (colisão recusada)
 //   POST /api/cadastros/solicitantes/:id/situacao                         inativa ou reativa, com o motivo (nunca apaga)
 //   POST /api/cadastros/solicitantes/:id/codigos                          código na fonte pagadora (inclui, troca, inativa)
+//   POST /api/cadastros/solicitantes/:id/unificar                         unifica o duplicado neste cadastro (o absorvido fica
+//                                                                         inativo com o ponteiro; nenhum registro clínico muda)
+//   POST /api/cadastros/solicitantes/:id/desfazer-unificacao              devolve o cadastro unificado (reativa e tira o ponteiro)
 // Acesso só pelos níveis de cada cargo (cadastro.especialidade.editar, cadastro.profissional.editar,
 // cadastro.solicitante.editar). Gravações pelo executor, com a trilha na mesma transação.
 import {
@@ -342,6 +345,49 @@ export class CadastroLigacoesController {
       n,
     );
     return { id: await this.rodar(() => this.servico().mudarSituacaoSolicitante(s.porta, e, t)) };
+  }
+
+  @Post('solicitantes/:id/unificar')
+  @HttpCode(200)
+  @Permissao(PERMISSAO_SOLICITANTE_EDITAR)
+  @AuditadoNoHandler('executor: trilha na mesma transação')
+  async unificar(@Param('id') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const n = idDaRota(p);
+    const b = corpoDe(corpo);
+    const e = {
+      mantido: n,
+      absorvido: id(b['absorvido']) ?? 0,
+      versao: id(b['versao']) ?? 0,
+      motivo: txt(b['motivo']) ?? '',
+    };
+    const t = this.trilha(
+      s,
+      'cadastro.solicitante.alterado',
+      'unificarSolicitante',
+      'solicitante_externo',
+      n,
+    );
+    return { id: await this.rodar(() => this.servico().unificarSolicitante(s.porta, e, t)) };
+  }
+
+  @Post('solicitantes/:id/desfazer-unificacao')
+  @HttpCode(200)
+  @Permissao(PERMISSAO_SOLICITANTE_EDITAR)
+  @AuditadoNoHandler('executor: trilha na mesma transação')
+  async desfazerUnificacao(@Param('id') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const n = idDaRota(p);
+    const b = corpoDe(corpo);
+    const e = { absorvido: n, versao: id(b['versao']) ?? 0, motivo: txt(b['motivo']) ?? '' };
+    const t = this.trilha(
+      s,
+      'cadastro.solicitante.alterado',
+      'desfazerUnificacaoSolicitante',
+      'solicitante_externo',
+      n,
+    );
+    return { id: await this.rodar(() => this.servico().desfazerUnificacaoSolicitante(s.porta, e, t)) };
   }
 
   @Post('solicitantes/:id/codigos')

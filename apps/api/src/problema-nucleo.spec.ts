@@ -62,6 +62,25 @@ describe('Problem Details: erros do núcleo próprio', () => {
     expect(corpo['detail']).toBeUndefined();
   });
 
+  it('recusa com vários motivos leva todos em regras (código e mensagem), dentro do contrato da tela', () => {
+    const regras = [
+      { codigo: 'item-com-filhos', mensagem: 'Inative antes os subordinados.' },
+      { codigo: 'item-em-uso', mensagem: 'Encerre antes o uso em aberto.' },
+    ];
+    const { status, corpo } = capturar(
+      recusa('item-com-filhos', regras.map((r) => r.mensagem).join(' '), { campos: ['situacao'], regras }),
+    );
+    expect(status).toBe(409);
+    expect(corpo).toMatchObject({
+      type: urnProblema('recusa-de-negocio'),
+      codigo: 'item-com-filhos',
+      regras,
+    });
+    expect(esquemaProblema.parse(corpo).regras).toEqual(regras);
+    // Recusa de um motivo só, sem a lista: o corpo não ganha o campo.
+    expect(capturar(recusa('login-em-uso', 'Já existe.')).corpo['regras']).toBeUndefined();
+  });
+
   it('banco fora do ar sai 503 indisponível', () => {
     const { status, corpo } = capturar(Object.assign(new Error('x'), { code: 'ECONNREFUSED' }));
     expect(status).toBe(503);

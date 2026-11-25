@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Auditoria da conta item a item (F3.7, 06-FAT linha 21): `/faturamento/contas/:id/auditoria-itens`.
 // Uma tela por conta: abre a auditoria (interna ou da operadora, com a empresa externa), dá o parecer no próprio item
 // (mantido, alterado, glosa interna com motivo, excluído) com o valor aceito calculado na hora pela regra do domínio,
@@ -149,20 +150,24 @@ const cadastrarEmpresa = () =>
 
       <form v-if="!q.data.value.auditoria" class="filtros" data-testid="aud-abrir" @submit.prevent="abrir">
         <p class="secundario">{{ t('auditoriaTramite.auditoria.semAuditoria') }}</p>
-        <label>
-          {{ t('auditoriaTramite.auditoria.modalidade') }}
-          <select v-model="abertura.modalidade" data-testid="aud-modalidade">
-            <option v-for="m in MODALIDADES_AUDITORIA" :key="m" :value="m">
-              {{ t(`auditoriaTramite.auditoria.modalidades.${m}`) }}
-            </option>
-          </select>
-        </label>
-        <label v-if="abertura.modalidade !== 'interna'">
-          {{ t('auditoriaTramite.auditoria.empresa') }}
-          <select v-model.number="abertura.empresaExternaId" data-testid="aud-empresa">
-            <option v-for="e in q.data.value.empresas" :key="e.id" :value="e.id">{{ e.nome }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="abertura.modalidade"
+          :rotulo="t('auditoriaTramite.auditoria.modalidade')"
+          :opcoes="[
+            ...MODALIDADES_AUDITORIA.map((x) => ({
+              valor: x,
+              rotulo: t(`auditoriaTramite.auditoria.modalidades.${x}`),
+            })),
+          ]"
+          data-testid="aud-modalidade"
+        />
+        <SanteSelecao
+          v-if="abertura.modalidade !== 'interna'"
+          v-model="abertura.empresaExternaId"
+          :rotulo="t('auditoriaTramite.auditoria.empresa')"
+          :opcoes="[...q.data.value.empresas.map((e) => ({ valor: e.id, rotulo: e.nome }))]"
+          data-testid="aud-empresa"
+        />
         <label>
           <input v-model="abertura.bloqueiaConta" type="checkbox" />
           {{ t('auditoriaTramite.auditoria.bloqueia') }}
@@ -244,14 +249,18 @@ const cadastrarEmpresa = () =>
               data-testid="aud-valor"
             />
           </label>
-          <label v-if="parecer.decisao === 'glosado'">
-            {{ t('auditoriaTramite.motivo') }}
-            <select v-model.number="parecer.motivoGlosaId" data-testid="aud-motivo">
-              <option v-for="m in q.data.value.motivosGlosa" :key="m.id" :value="m.id">
-                {{ m.codigo }} · {{ m.descricao }}
-              </option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-if="parecer.decisao === 'glosado'"
+            v-model="parecer.motivoGlosaId"
+            :rotulo="t('auditoriaTramite.motivo')"
+            :opcoes="[
+              ...q.data.value.motivosGlosa.map((m) => ({
+                valor: m.id,
+                rotulo: `${m.codigo} · ${m.descricao}`,
+              })),
+            ]"
+            data-testid="aud-motivo"
+          />
           <label v-if="parecer.decisao !== 'mantido'">
             {{ t('auditoriaTramite.justificativa') }}
             <input v-model="parecer.justificativa" maxlength="2000" data-testid="aud-justificativa" />

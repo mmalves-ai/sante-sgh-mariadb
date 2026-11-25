@@ -141,7 +141,7 @@ export const PERMISSOES_CADASTRO_M11 = [
   // F3.1 (02-CAD linha 16): o dado fiscal do repasse e a conta para o pagamento do profissional, com acesso restrito ao
   // cargo do repasse (a edição do profissional não basta).
   {
-    codigo: 'cadastro.profissional.financeiro.ler',
+    codigo: 'cadastro.profissionalFinanceiro.ler',
     descricao:
       'Consultar os dados fiscais (regime, retenções, ISS) e as contas para o pagamento do profissional',
 
@@ -151,7 +151,7 @@ export const PERMISSOES_CADASTRO_M11 = [
     criticidade: 'sensivel',
   },
   {
-    codigo: 'cadastro.profissional.financeiro.editar',
+    codigo: 'cadastro.profissionalFinanceiro.editar',
     descricao:
       'Incluir e encerrar os dados fiscais do repasse e incluir e inativar as contas e chaves de pagamento do profissional',
 
@@ -182,15 +182,9 @@ export const PERMISSOES_CADASTRO_M11 = [
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
   },
-  // F3.1 (02-CAD linhas 17 e 20): manter as ligações da especialidade e o cadastro do solicitante externo.
-  {
-    codigo: 'cadastro.especialidade.editar',
-    descricao: 'Manter os procedimentos permitidos (com vigência) e as ocupações (CBO) de cada especialidade',
-
-    concessaoPorPerfil: 'por-perfil',
-    perfis: ['administrador-sistema'],
-    categoria: 'administrativa',
-  },
+  // F3.1 (02-CAD linhas 17 e 20): as ligações da especialidade (procedimentos permitidos com vigência e ocupações) usam
+  // cadastro.especialidade.editar, já declarada pelo cadastro genérico da especialidade (dominios/prefixos/cadastro.ts),
+  // com a linha do mapa do conector (opções 3683 e 3684); não se declara de novo.
   // F3.1 (02-CAD linhas 25, 26 e 27): estrutura do estabelecimento e configuração TISS por fonte pagadora.
   {
     codigo: 'cadastro.estrutura.editar',
@@ -235,6 +229,49 @@ export const PERMISSOES_CADASTRO_M11 = [
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
+  },
+  // F8 (02-CAD linha 11): catálogo de programas de saúde e linhas de cuidado.
+  {
+    codigo: 'cadastro.linhaCuidado.editar',
+    descricao:
+      'Manter o catálogo de programas de saúde e linhas de cuidado (código, critérios de entrada e saída, faixa etária e exigência do profissional de referência)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
+  // F8 (02-CAD linha 11, corretor): a inscrição em programa revela diagnóstico (hipertensão, gestação, oncologia, saúde
+  // mental), dado sensível pela LGPD art. 11. Por isso o programa tem permissões próprias, por perfil assistencial, e
+  // não as da recepção; a lista nominal dos inscritos fica só com quem coordena o programa.
+  {
+    codigo: 'cadastro.linhaCuidado.ler',
+    descricao:
+      'Ver os programas de saúde e as linhas de cuidado do paciente (inscrições, estado e linha do tempo) e o painel do programa por estado',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['assistencial-com-conselho', 'coordenador-medico', 'gestao-qualidade'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'cadastro.linhaCuidado.inscrever',
+    descricao:
+      'Inscrever o paciente em programa de saúde ou linha de cuidado, mudar o estado (suspender e encerrar com motivo) e trocar o profissional de referência',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['assistencial-com-conselho', 'coordenador-medico'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'cadastro.linhaCuidado.coordenar',
+    descricao:
+      'Ver a lista nominal dos inscritos de um programa de saúde (o paciente com acesso restrito sai pelo pseudônimo)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['coordenador-medico', 'gestao-qualidade', 'diretoria-clinica'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
   },
 ] as const satisfies readonly DeclaracaoPermissao[];
 

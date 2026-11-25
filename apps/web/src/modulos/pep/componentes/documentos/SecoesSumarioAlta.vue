@@ -69,7 +69,7 @@ function escrever(codigo: string, titulo: string, v: string): void {
 
 <style scoped>
 .secoes {
-  border: 1px solid var(--sante-borda, #ccc);
+  border: 1px solid var(--sgh-borda);
   padding: 0.5rem;
 }
 .lista {

@@ -124,13 +124,15 @@ export class PonteConectorScript implements PonteConector, PonteCarga {
     );
     const j = (r.json && typeof r.json === 'object' ? r.json : {}) as Record<string, unknown>;
     const texto = (v: unknown) => (v == null || v === '' ? null : String(v).slice(0, 80));
-    const tabelas = Number(j['tabelas']);
+    // Quantidade em variável própria: o gerador de privilégios lê `tabelas: <nome>` como tabelas declaradas.
+    const n = Number(j['tabelas']);
+    const tabelas = Number.isSafeInteger(n) && n >= 0 ? n : null;
     const ok = r.codigo === 0 && j['ok'] === true;
     return {
       ok,
       versaoServidor: texto(j['versaoServidor'] ?? j['versao_servidor'] ?? j['versao']),
       ods: texto(j['ods']),
-      tabelas: Number.isSafeInteger(tabelas) && tabelas >= 0 ? tabelas : null,
+      tabelas,
       mensagem: String(
         j['mensagem'] ?? j['motivo'] ?? j['erro'] ?? (ok ? 'Conexão aberta.' : 'A conexão falhou.'),
       ).slice(0, 300),

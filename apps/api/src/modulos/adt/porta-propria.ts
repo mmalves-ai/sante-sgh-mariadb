@@ -18,6 +18,10 @@
 // Os registros do SAME sem movimento (remessa, aceite, cobrança, exclusão, ocorrência e descarte) ficam em
 // ocorrencia_arquivo_prontuario, gravados e lidos aqui. Pendências (pedidos do lote 03-01 e da F2.4, lote 16): foto da
 // etapa da limpeza; as fichas da internação leem a configuração de documentos quando houver (por ora nenhuma ficha extra).
+import {
+  alertasRepresentacaoDoPaciente,
+  MENSAGEM_ALERTA_REPRESENTACAO,
+} from '../cadastro/representacao-paciente-propria.js';
 import { randomUUID } from 'node:crypto';
 import {
   type ApoioInternacaoTela,
@@ -223,9 +227,38 @@ export class PortaAdtPropria implements PortaAdt {
   async executar(c: ContextoAdt, op: string, entrada: unknown, ctx: ContextoOperacao) {
     const operacao = OPERACOES_ADT_BANCO[op];
     if (!operacao) throw recusa('operacao-desconhecida', 'Operação desconhecida na internação.');
-    void c;
     const r = await this.executor.executar(operacao, ctx.cliente, entrada as never, ctx);
-    return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
+    if (op !== 'internacao.internar')
+      return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
+    // F3.1 (02-CAD linha 4): o resultado da admissão leva o aviso da representação do paciente, como a abertura do
+    // atendimento, sem depender da tela nem da permissão de leitura do cadastro.
+    const aviso = await this.avisoRepresentacao(c, (entrada as { paciente?: unknown } | null)?.paciente);
+    return { resultado: { ...r.resultado, ...aviso }, repetida: r.repetida, trilha: r.trilha };
+  }
+
+  /**
+   * Aviso da representação do paciente internado (menor sem representante, incapaz sem curador, curatela sem a
+   * incapacidade registrada). Nunca bloqueia nem desfaz a admissão (a urgência não espera o cadastro): é lido depois
+   * de gravada, e a leitura que falha vira o aviso "não conferida", nunca o silêncio.
+   */
+  private async avisoRepresentacao(c: ContextoAdt, paciente: unknown): Promise<Record<string, string>> {
+    const id = Number(paciente);
+    if (!Number.isInteger(id) || id <= 0) return {};
+    try {
+      const alertas = await this.ler(c, (l) => alertasRepresentacaoDoPaciente(l, id));
+      return alertas.length === 0
+        ? {}
+        : {
+            alertaRepresentacao: alertas.join(','),
+            alertaRepresentacaoMotivo: alertas.map((a) => MENSAGEM_ALERTA_REPRESENTACAO[a]).join(' '),
+          };
+    } catch {
+      return {
+        alertaRepresentacao: 'nao-conferida',
+        alertaRepresentacaoMotivo:
+          'Não foi possível conferir a representação do paciente (menor ou incapaz): confira os responsáveis na ficha.',
+      };
+    }
   }
 
   async gravarSgh<T>(

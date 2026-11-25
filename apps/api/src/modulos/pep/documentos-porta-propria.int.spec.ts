@@ -59,6 +59,8 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
   const limpar = (e: Escritor) =>
     (async () => {
       const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+      // Massa de teste só (o registro de impressão/exportação é histórico e o produto nunca o apaga).
+      await e.executar(`DELETE FROM exportacao_documento WHERE estabelecimento_id IN ${est}`, [P]);
       await e.executar(
         `DELETE ev FROM documento_prontuario_evento ev JOIN documento_prontuario d ON d.id = ev.documento_prontuario_id
           WHERE d.estabelecimento_id IN ${est}`,
@@ -520,6 +522,95 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
     expect(ev).toMatchObject({ acao: 'impressao', justificativa: just, tipo: 'impresso' });
     expect(Number(ev!['usuario_id'])).toBe(ids.usuario);
     expect(Number(ev!['com_hora'])).toBe(1);
+    // O mesmo ato no registro único de impressões e exportações, com a via (impressão ou reimpressão).
+    await porta.registrarEventoDocumento(G(), {
+      documento: id,
+      tipo: 'segunda-via',
+      justificativa: 'Via extraviada',
+    });
+    const regs = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+      l.consultar(
+        `SELECT tipo_operacao, formato, destino, justificativa, usuario_id, paciente_id, estabelecimento_id
+           FROM exportacao_documento WHERE documento_prontuario_id = ? ORDER BY id DESC LIMIT 2`,
+        [id],
+      ),
+    );
+    expect(regs.map((r) => [r['tipo_operacao'], r['justificativa']])).toEqual([
+      ['reimpressao', 'Via extraviada'],
+      ['impressao', just],
+    ]);
+    for (const r of regs) {
+      expect(r).toMatchObject({ formato: 'pdf', destino: 'download' });
+      expect([Number(r['usuario_id']), Number(r['paciente_id']), Number(r['estabelecimento_id'])]).toEqual([
+        ids.usuario,
+        ids.paciente,
+        ids.est,
+      ]);
+    }
+  });
+
+  it('01-ADM L82: a exportação do prontuário completo grava justificativa, tipo, quem, quando e o resumo', async () => {
+    const tipo = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-preparo` }, (e) =>
+      garantir(
+        e,
+        'SELECT id FROM tipo_justificativa_exportacao WHERE codigo = ?',
+        [`${P}J`],
+        'INSERT INTO tipo_justificativa_exportacao (codigo, descricao, criado_em) VALUES (?, ?, ?)',
+        [`${P}J`, 'Pedido do paciente (sintético)', new Date()],
+      ),
+    );
+    const just = 'Cópia pedida pelo paciente para segunda opinião';
+    const r = await porta.registrarExportacaoProntuario(G(), {
+      paciente: ids.paciente,
+      justificativa: just,
+      tipoJustificativa: tipo,
+      linhas: 7,
+      hash: HASH,
+    });
+    const x = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+      l.uma(
+        `SELECT entidade, entidade_id, paciente_id, tipo_operacao, formato, destino, tipo_justificativa_exportacao_id,
+                justificativa, hash_sha256, JSON_VALUE(dados, '$.linhas') AS linhas, usuario_id, estabelecimento_id,
+                ocorrido_em IS NOT NULL AS com_hora
+           FROM exportacao_documento WHERE id = ?`,
+        [r.id],
+      ),
+    );
+    expect(x).toMatchObject({
+      entidade: 'paciente',
+      tipo_operacao: 'exportacao',
+      formato: 'texto',
+      destino: 'download',
+      justificativa: just,
+      hash_sha256: HASH,
+    });
+    expect(
+      [
+        'entidade_id',
+        'paciente_id',
+        'tipo_justificativa_exportacao_id',
+        'linhas',
+        'usuario_id',
+        'estabelecimento_id',
+        'com_hora',
+      ].map((k) => Number(x![k])),
+    ).toEqual([ids.paciente, ids.paciente, tipo, 7, ids.usuario, ids.est, 1]);
+    // Tipo inexistente ou inativo é recusado e nada é gravado.
+    const antes = await contar('SELECT COUNT(*) AS n FROM exportacao_documento WHERE paciente_id = ?', [
+      ids.paciente,
+    ]);
+    await expect(
+      porta.registrarExportacaoProntuario(G(), {
+        paciente: ids.paciente,
+        justificativa: just,
+        tipoJustificativa: 999_999_999,
+        linhas: 1,
+        hash: HASH,
+      }),
+    ).rejects.toMatchObject({ problema: { codigo: 'tipo-justificativa-invalido' } });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM exportacao_documento WHERE paciente_id = ?', [ids.paciente]),
+    ).toBe(antes);
   });
 
   it('operação sem adaptador próprio não é liberada (falha fechada)', async () => {

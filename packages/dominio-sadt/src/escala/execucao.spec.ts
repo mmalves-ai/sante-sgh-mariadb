@@ -108,6 +108,29 @@ describe('executantesDoExame', () => {
   });
 });
 
+describe('papel na escala: executa ou lauda (05-SADT linha 19)', () => {
+  it('a escala de laudo pede o profissional; papel desconhecido é recusado', () => {
+    expect(conferirEscala({ ...base, papel: 'lauda' })).toEqual([]);
+    expect(
+      conferirEscala({ ...base, papel: 'lauda', profissional: null, recurso: 4 }).map((p) => p.campo),
+    ).toEqual(['profissional']);
+    expect(conferirEscala({ ...base, papel: 'assiste' as unknown as 'lauda' }).map((p) => p.campo)).toEqual([
+      'papel',
+    ]);
+  });
+  it('quem executa e quem lauda são achados cada um pelo seu papel; sem papel conta como executa', () => {
+    const laudo: EscalaExecucao = { ...base, id: 9, profissional: 8, papel: 'lauda' };
+    expect(executantesDoExame([base, laudo], 10, 505, '2026-11-02', '08:30').map((e) => e.id)).toEqual([1]);
+    expect(
+      executantesDoExame([base, laudo], 10, 505, '2026-11-02', '08:30', 'lauda').map((e) => e.id),
+    ).toEqual([9]);
+  });
+  it('o mesmo profissional executando num setor e laudando em outro no mesmo horário conflita', () => {
+    const laudo: EscalaExecucao = { ...base, id: 9, setor: 11, papel: 'lauda' };
+    expect(conflitosDoExecutante(laudo, [base]).map((c) => c.escala)).toEqual([1]);
+  });
+});
+
 describe('plantão que vira a noite (setor 24 horas)', () => {
   // Tomografia de urgência: noturno de segunda (2) das 19:00 às 07:00 de terça.
   const noturno: EscalaExecucao = {

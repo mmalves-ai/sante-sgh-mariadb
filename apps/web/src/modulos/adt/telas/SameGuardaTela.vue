@@ -136,7 +136,17 @@ const salvarLocal = () =>
   );
 
 // Movimento de um volume: o formulário pelo tipo e pelas exigências da operação.
-const mov = reactive<Record<number, Record<string, string>>>({});
+interface FormMovimento {
+  operacao: string;
+  setorDestino: string;
+  localDestino: string;
+  previsao: string;
+  responsavel: string;
+  deliberacao: string;
+  observacao: string;
+  motivo: string;
+}
+const mov = reactive<Record<number, FormMovimento>>({});
 const doVolume = (v: VolumeTela) =>
   (mov[v.id] ??= {
     operacao: '',
@@ -237,8 +247,18 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
     <h1>{{ k('titulo') }}</h1>
     <p>{{ k('texto') }}</p>
     <form class="linha" @submit.prevent="buscar">
-      <SanteCampoTexto v-model="busca.prontuario" :rotulo="k('prontuario')" data-testid="guarda-prontuario" />
-      <SanteCampoTexto v-model="busca.etiqueta" :rotulo="k('etiqueta')" data-testid="guarda-etiqueta" />
+      <SanteCampoTexto
+        v-model="busca.prontuario"
+        :rotulo="k('prontuario')"
+        :max-bytes="20"
+        data-testid="guarda-prontuario"
+      />
+      <SanteCampoTexto
+        v-model="busca.etiqueta"
+        :rotulo="k('etiqueta')"
+        :max-bytes="30"
+        data-testid="guarda-etiqueta"
+      />
       <SanteBotao tipo="submit" :rotulo="k('buscar')" data-testid="guarda-buscar" />
     </form>
     <p v-if="erro" role="alert" class="erro" data-testid="guarda-erro">{{ erro }}</p>
@@ -298,6 +318,7 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
             "
             v-model="doVolume(v).responsavel"
             :rotulo="k('responsavel')"
+            :max-bytes="150"
             data-testid="guarda-responsavel"
           />
           <SanteSelecao
@@ -307,7 +328,7 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
             :opcoes="opDeliberacoes"
             data-testid="guarda-deliberacao"
           />
-          <SanteCampoTexto v-model="doVolume(v).observacao" :rotulo="k('observacao')" />
+          <SanteCampoTexto v-model="doVolume(v).observacao" :rotulo="k('observacao')" :max-bytes="2000" />
           <SanteBotao
             :rotulo="k('movimentar')"
             :desabilitado="!operacaoDe(v) || problemas(v).length > 0"
@@ -320,16 +341,21 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
         </ul>
 
         <div class="linha">
-          <SanteCampoTexto v-model="doVolume(v).motivo" :rotulo="k('motivo')" data-testid="guarda-motivo" />
+          <SanteCampoTexto
+            v-model="doVolume(v).motivo"
+            :rotulo="k('motivo')"
+            :max-bytes="500"
+            data-testid="guarda-motivo"
+          />
           <SanteBotao
             :rotulo="k('desfazer')"
-            :desabilitado="doVolume(v).motivo!.trim().length < 10"
+            :desabilitado="doVolume(v).motivo.trim().length < 10"
             data-testid="guarda-desfazer"
             @click="desfazer(v)"
           />
           <SanteBotao
             :rotulo="k('extravio')"
-            :desabilitado="doVolume(v).motivo!.trim().length < 10"
+            :desabilitado="doVolume(v).motivo.trim().length < 10"
             data-testid="guarda-extravio"
             @click="extraviar(v)"
           />
@@ -364,8 +390,8 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
           :opcoes="opLocais"
           data-testid="guarda-local"
         />
-        <SanteCampoTexto v-model="novo.linha" :rotulo="k('linha')" />
-        <SanteCampoTexto v-model="novo.coluna" :rotulo="k('coluna')" />
+        <SanteCampoTexto v-model="novo.linha" :rotulo="k('linha')" :max-bytes="10" />
+        <SanteCampoTexto v-model="novo.coluna" :rotulo="k('coluna')" :max-bytes="10" />
         <SanteSelecao v-model="novo.setor" :rotulo="k('setor')" :opcoes="opSetores" />
         <SanteBotao
           tipo="submit"
@@ -384,14 +410,20 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
           :rotulo="k('nivel')"
           :opcoes="NIVEIS.map((n) => ({ valor: n, rotulo: n }))"
         />
-        <SanteCampoTexto v-model="local.codigo" :rotulo="k('codigo')" data-testid="guarda-local-codigo" />
+        <SanteCampoTexto
+          v-model="local.codigo"
+          :rotulo="k('codigo')"
+          :max-bytes="30"
+          data-testid="guarda-local-codigo"
+        />
         <SanteCampoTexto
           v-model="local.descricao"
           :rotulo="k('descricao')"
+          :max-bytes="150"
           data-testid="guarda-local-descricao"
         />
         <SanteSelecao v-model="local.pai" :rotulo="k('pai')" :opcoes="opLocais" />
-        <SanteCampoTexto v-model="local.capacidade" :rotulo="k('capacidade')" />
+        <SanteCampoTexto v-model="local.capacidade" :rotulo="k('capacidade')" :max-bytes="7" />
         <SanteBotao
           tipo="submit"
           :rotulo="k('incluirLocal')"
@@ -415,15 +447,15 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
   align-items: end;
 }
 .volume {
-  border: 1px solid var(--sante-borda, #ccc);
+  border: 1px solid var(--sgh-borda);
   border-radius: 0.5rem;
   padding: 0.75rem;
 }
 .realce {
-  outline: 2px solid var(--sante-primaria, #2563eb);
+  outline: 2px solid var(--sgh-primaria);
 }
 .erro {
-  color: var(--sante-erro, #b91c1c);
+  color: var(--sgh-alerta);
 }
 .desfeito {
   text-decoration: line-through;

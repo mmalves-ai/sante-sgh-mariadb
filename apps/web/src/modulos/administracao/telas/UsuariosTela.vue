@@ -190,6 +190,21 @@ function abrirDaQuery(): void {
   void roteador.replace({ query: { ...rota.query, novo: undefined, nome: undefined, perfil: undefined } });
 }
 abrirDaQuery();
+const senhaNova = ref<{ login: string; senha: string; trocaObrigatoria: boolean } | null>(null);
+const dialogoInicial = ref(false);
+const copiada = ref(false);
+watch(dialogoInicial, (v) => {
+  if (!v) senhaNova.value = null;
+});
+async function copiarInicial(): Promise<void> {
+  if (!senhaNova.value) return;
+  try {
+    await navigator.clipboard?.writeText(senhaNova.value.senha);
+    copiada.value = true;
+  } catch {
+    copiada.value = false;
+  }
+}
 async function criar(): Promise<void> {
   faltaGrupo.value = !novo.value.grupo;
   cpfTocado.value = true;
@@ -197,7 +212,8 @@ async function criar(): Promise<void> {
   salvando.value = true;
   erro.value = null;
   try {
-    await criarUsuario(
+    const login = novo.value.login.trim();
+    const r = await criarUsuario(
       {
         login: novo.value.login,
         nomeCompleto: novo.value.nomeCompleto,
@@ -207,7 +223,13 @@ async function criar(): Promise<void> {
       senha.value,
     );
     dialogo.value = false;
-    aviso.value = t('adm.usuarios.criado');
+    // A senha inicial vem na mesma resposta e aparece uma vez só (fechar apaga); sem ela, o aviso diz o que fazer.
+    if (r.senhaProvisoria) {
+      senhaNova.value = { login, senha: r.senhaProvisoria, trocaObrigatoria: r.trocaObrigatoria !== false };
+      copiada.value = false;
+      dialogoInicial.value = true;
+      aviso.value = t('adm.usuarios.criadoComSenha', { login });
+    } else aviso.value = r.senhaPendente ?? t('adm.usuarios.criado');
     await cliente.invalidateQueries({ queryKey: ['adm', 'usuarios'] });
   } catch (e) {
     erro.value = e;
@@ -459,6 +481,42 @@ function clicarLinha(e: MouseEvent, login: string): void {
       </template>
     </div>
 
+    <!-- A senha inicial da conta recém-criada: uma vez, só para quem criou (fechar apaga) -->
+    <SanteDialogo
+      v-model:visivel="dialogoInicial"
+      :titulo="senhaNova ? t('adm.ficha.provisoria.titulo', { login: senhaNova.login }) : ''"
+    >
+      <div v-if="senhaNova" class="form" data-testid="senha-provisoria">
+        <p>{{ t('adm.ficha.provisoria.texto') }}</p>
+        <SanteAlerta
+          v-if="!senhaNova.trocaObrigatoria"
+          :texto="t('adm.ficha.provisoria.semTroca')"
+          variante="aviso"
+          data-testid="senha-provisoria-sem-troca"
+        />
+        <code class="senha-inicial" data-testid="senha-provisoria-valor">{{ senhaNova.senha }}</code>
+        <div class="senha-inicial__acoes">
+          <SanteBotao
+            :rotulo="copiada ? t('adm.ficha.provisoria.copiada') : t('adm.ficha.provisoria.copiar')"
+            variante="texto"
+            data-testid="senha-provisoria-copiar"
+            @acionar="copiarInicial"
+          />
+          <RouterLink
+            :to="caminhoFicha(senhaNova.login)"
+            class="senha-inicial__ficha"
+            data-testid="senha-provisoria-ficha"
+            >{{ t('adm.usuarios.abrir', { login: senhaNova.login }) }}</RouterLink
+          >
+          <SanteBotao
+            :rotulo="t('adm.ficha.provisoria.fechar')"
+            data-testid="senha-provisoria-fechar"
+            @acionar="dialogoInicial = false"
+          />
+        </div>
+      </div>
+    </SanteDialogo>
+
     <SanteDialogo v-model:visivel="dialogo" :titulo="t('adm.usuarios.novo')" largura="42rem">
       <form class="form" data-testid="form-novo-usuario" @submit.prevent="criar">
         <MensagemErro v-if="erro" :erro="erro" />
@@ -551,6 +609,22 @@ function clicarLinha(e: MouseEvent, login: string): void {
 </template>
 
 <style scoped>
+.senha-inicial {
+  display: block;
+  padding: var(--sgh-espaco-2);
+  font-size: 1.25rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+.senha-inicial__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sgh-espaco-2);
+}
 .usuarios {
   display: grid;
   gap: var(--sgh-espaco-3);

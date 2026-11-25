@@ -24,7 +24,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -107,6 +107,7 @@ export class FavorecidosRepasseController {
   }
 
   @Post('favorecidos')
+  @AuditadoNoHandler('executor: trilha na mesma transação do cadastro de favorecidos')
   @HttpCode(201)
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.editar)
   incluirFavorecido(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
@@ -114,6 +115,7 @@ export class FavorecidosRepasseController {
   }
 
   @Post('favorecidos/:id/encerrar')
+  @AuditadoNoHandler('executor: trilha na mesma transação do cadastro de favorecidos')
   @HttpCode(200)
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.editar)
   encerrarFavorecido(
@@ -131,6 +133,7 @@ export class FavorecidosRepasseController {
   }
 
   @Post('prestadores-terceiros')
+  @AuditadoNoHandler('executor: trilha na mesma transação do cadastro de favorecidos')
   @HttpCode(201)
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.editar)
   incluirPrestador(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
@@ -138,6 +141,7 @@ export class FavorecidosRepasseController {
   }
 
   @Post('prestadores-terceiros/:id')
+  @AuditadoNoHandler('executor: trilha na mesma transação do cadastro de favorecidos')
   @HttpCode(200)
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.editar)
   alterarPrestador(
@@ -157,6 +161,7 @@ export class FavorecidosRepasseController {
   }
 
   @Post('prestadores-terceiros/:id/contas')
+  @AuditadoNoHandler('executor: trilha na mesma transação do cadastro de favorecidos')
   @HttpCode(201)
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.editar)
   incluirContaPrestador(

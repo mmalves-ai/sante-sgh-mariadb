@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Modelos de orçamento padrão (F3.7, 06-FAT linha 40): `/faturamento/modelos-orcamento`.
 // Escolhe-se o modelo e a prévia já aparece montada (preço do modelo ou da tabela particular vigente, honorário pela
 // função, administração e acréscimo); a linha sem preço pede o valor ali mesmo e o orçamento sai num clique para o
@@ -260,13 +261,16 @@ const cadastrar = () =>
         <button type="button" :disabled="termoPaciente.trim().length < 2" @click="procurarPaciente">
           {{ t('particular.mo.buscar') }}
         </button>
-        <label v-if="pacientes.length">
-          {{ t('particular.mo.paciente') }}
-          <select v-model.number="destino.pacienteId" data-testid="mo-paciente">
-            <option :value="null">{{ t('particular.mo.escolhaPaciente') }}</option>
-            <option v-for="p in pacientes" :key="p.id" :value="p.id">{{ p.nome }} {{ p.prontuario }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-if="pacientes.length"
+          v-model="destino.pacienteId"
+          :rotulo="t('particular.mo.paciente')"
+          :opcoes="[
+            { valor: null, rotulo: t('particular.mo.escolhaPaciente') },
+            ...pacientes.map((p) => ({ valor: p.id, rotulo: `${p.nome} ${p.prontuario}` })),
+          ]"
+          data-testid="mo-paciente"
+        />
         <label>
           {{ t('particular.mo.interessado') }}
           <input v-model="destino.nomeInteressado" maxlength="150" data-testid="mo-interessado" />
@@ -297,24 +301,24 @@ const cadastrar = () =>
       <button type="button" :disabled="termoItem.trim().length < 2" @click="procurarItem">
         {{ t('particular.mo.buscar') }}
       </button>
-      <label>
-        {{ t('particular.mo.procedimento') }}
-        <select v-model.number="novo.procedimentoId" data-testid="mo-procedimento">
-          <option :value="0">{{ t('particular.mo.escolha') }}</option>
-          <option v-for="i in itensAchados" :key="i.id" :value="i.id">
-            {{ i.codigo }} {{ i.descricao }}
-          </option>
-        </select>
-      </label>
-      <label>
-        {{ t('particular.mo.acomodacao') }}
-        <select v-model.number="novo.acomodacaoId" data-testid="mo-acomodacao">
-          <option :value="0">{{ t('particular.mo.escolha') }}</option>
-          <option v-for="a in opcoes.data.value?.acomodacoes ?? []" :key="a.id" :value="a.id">
-            {{ a.descricao }}
-          </option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="novo.procedimentoId"
+        :rotulo="t('particular.mo.procedimento')"
+        :opcoes="[
+          { valor: 0, rotulo: t('particular.mo.escolha') },
+          ...itensAchados.map((i) => ({ valor: i.id, rotulo: `${i.codigo} ${i.descricao}` })),
+        ]"
+        data-testid="mo-procedimento"
+      />
+      <SanteSelecao
+        v-model="novo.acomodacaoId"
+        :rotulo="t('particular.mo.acomodacao')"
+        :opcoes="[
+          { valor: 0, rotulo: t('particular.mo.escolha') },
+          ...(opcoes.data.value?.acomodacoes ?? []).map((a) => ({ valor: a.id, rotulo: a.descricao })),
+        ]"
+        data-testid="mo-acomodacao"
+      />
       <label>
         {{ t('particular.mo.valorFechado') }}
         <input v-model.number="novo.valorFechado" type="number" min="0" step="0.01" />
@@ -333,27 +337,33 @@ const cadastrar = () =>
       </label>
       <fieldset v-for="(i, k) in novo.itens" :key="k">
         <legend>{{ t('particular.mo.item', { n: k + 1 }) }}</legend>
-        <select v-model="i.tipo" :aria-label="t('particular.mo.tipo')">
-          <option v-for="x in TIPOS_ITEM_MODELO" :key="x" :value="x">{{ tipo(x) }}</option>
-        </select>
-        <label v-if="i.tipo === 'honorario'">
-          {{ t('particular.mo.funcao') }}
-          <select v-model.number="i.funcaoId">
-            <option :value="null">{{ t('particular.mo.escolha') }}</option>
-            <option v-for="f in opcoes.data.value?.funcoes ?? []" :key="f.id" :value="f.id">
-              {{ f.descricao }} {{ f.percentual ?? '' }}
-            </option>
-          </select>
-        </label>
-        <label v-else>
-          {{ t('particular.mo.itemFaturavel') }}
-          <select v-model.number="i.itemId">
-            <option :value="null">{{ t('particular.mo.escolha') }}</option>
-            <option v-for="x in itensAchados" :key="x.id" :value="x.id">
-              {{ x.codigo }} {{ x.descricao }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="i.tipo"
+          :rotulo="t('particular.mo.tipo')"
+          ocultar-rotulo
+          :opcoes="[...TIPOS_ITEM_MODELO.map((x) => ({ valor: x, rotulo: tipo(x) }))]"
+        />
+        <SanteSelecao
+          v-if="i.tipo === 'honorario'"
+          v-model="i.funcaoId"
+          :rotulo="t('particular.mo.funcao')"
+          :opcoes="[
+            { valor: null, rotulo: t('particular.mo.escolha') },
+            ...(opcoes.data.value?.funcoes ?? []).map((f) => ({
+              valor: f.id,
+              rotulo: `${f.descricao} ${f.percentual ?? ''}`,
+            })),
+          ]"
+        />
+        <SanteSelecao
+          v-else
+          v-model="i.itemId"
+          :rotulo="t('particular.mo.itemFaturavel')"
+          :opcoes="[
+            { valor: null, rotulo: t('particular.mo.escolha') },
+            ...itensAchados.map((x) => ({ valor: x.id, rotulo: `${x.codigo} ${x.descricao}` })),
+          ]"
+        />
         <label>
           {{ t('particular.mo.quantidade') }}
           <input v-model.number="i.quantidade" type="number" min="0" step="0.0001" />

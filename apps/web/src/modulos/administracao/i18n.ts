@@ -49,7 +49,9 @@ export const mensagensAdministracao = {
     nunca: 'nunca',
     bloqueado: 'Bloqueado',
     novo: 'Novo usuário',
-    criado: 'Usuário criado. A primeira senha é definida pelo administrador do sistema.',
+    criado: 'Usuário criado.',
+    criadoComSenha:
+      'Usuário {login} criado. Entregue a senha inicial abaixo: ela é trocada no primeiro acesso.',
     perfilSugerido:
       'Perfil sugerido pelo cargo: {perfil}. Conceda-o na ficha depois de criar e conclua a tarefa em Tarefas do RH.',
     abrir: 'Abrir a ficha de {login}',
@@ -538,7 +540,7 @@ export const mensagensAdministracao = {
   email: {
     titulo: 'Servidor de e-mail e notificações',
     texto:
-      'O servidor que envia os e-mails do sistema (só consulta). A credencial aparece só como definida ou não.',
+      'Os servidores que enviam os e-mails do sistema, os modelos de mensagem e o registro de cada envio. A senha nunca aparece: só se está definida.',
     servidor: 'Servidor',
     porta: 'Porta',
     ssl: 'Conexão segura',
@@ -580,10 +582,7 @@ export const mensagensAdministracao = {
   },
   leitos: {
     titulo: 'Blocos, acomodações e leitos',
-    texto:
-      'Um cadastro só. O registro de conferência é mantido pelo banco de dados a cada gravação; a ocupação vem da internação e não se edita aqui.',
-    abaCadastro: 'Cadastro',
-    abaConferencia: 'Conferência',
+    texto: 'Um cadastro só. A ocupação vem da internação e não se edita aqui.',
     blocos: 'Cadastros de blocos, clínicas e especialidades de leito',
     totais: '{leitos} leito(s): {ativos} ativo(s), {ocupados} ocupado(s)',
     acomodacao: 'Acomodação {codigo}: {nome}',
@@ -621,21 +620,6 @@ export const mensagensAdministracao = {
     alterarAcomodacaoDe: 'Alterar a acomodação {codigo}',
     senhaAcoes: 'Para salvar o ramal, inativar ou reativar um leito, confirme a senha:',
     orfaos: '{n} leito(s) sem acomodação no cadastro',
-    conferenciaTexto:
-      'Onde o cadastro e o registro de conferência discordam, leito a leito pela chave bloco + acomodação + leito. Leitos de atendimento externo não entram.',
-    iguais: '{n} leito(s) iguais nos dois',
-    externo: '{n} leito(s) de atendimento externo (fora da comparação)',
-    retratos: '{n} retrato(s) de histórico',
-    divergencias: '{n} divergência(s)',
-    tipos: {
-      'leito-sem-espelho': 'Leito sem registro de conferência',
-      'espelho-sem-leito': 'Registro de conferência sem leito',
-      'situacao-diferente': 'Situação diferente',
-      'ramal-diferente': 'Ramal diferente',
-      'acomodacao-sem-espelho': 'Acomodação sem registro de conferência',
-      'espelho-sem-acomodacao': 'Registro de conferência sem acomodação',
-      'nome-diferente': 'Nome diferente',
-    },
     tempo: 'Calculada em {ms} ms',
   },
   locais: {

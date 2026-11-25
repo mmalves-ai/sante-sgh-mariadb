@@ -534,7 +534,10 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
     // Conta faturada: o uso do saldo nela não é mais estornado.
     const viva = cc.aplicacoes.find((x) => !x.estornado && x.adiantamento === ids['a2'])!;
     await escrever((e) =>
-      e.executar("UPDATE conta_hospitalar SET situacao = 'faturada' WHERE id = ?", [ids['conta']]),
+      e.executar(
+        "UPDATE conta_hospitalar SET situacao = 'faturada', fechada_em = CURRENT_TIMESTAMP(3), fechada_por_usuario_id = ? WHERE id = ?",
+        [ids['usuario'], ids['conta']],
+      ),
     );
     try {
       expect(
@@ -544,7 +547,10 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       ).toBe('conta-fechada');
     } finally {
       await escrever((e) =>
-        e.executar("UPDATE conta_hospitalar SET situacao = 'aberta' WHERE id = ?", [ids['conta']]),
+        e.executar(
+          "UPDATE conta_hospitalar SET situacao = 'aberta', fechada_em = NULL, fechada_por_usuario_id = NULL WHERE id = ?",
+          [ids['conta']],
+        ),
       );
     }
   });

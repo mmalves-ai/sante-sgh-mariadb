@@ -174,3 +174,11 @@ export const lerPerfis = () => ler(`${C}/perfis`, itens<PerfilPrioridade>());
 export const gravarPerfil = (c: Record<string, unknown>) => substituir<{ id: number }>(`${C}/perfis`, c);
 export const recebidasDoAtendimento = (a: number) =>
   ler(`${C}/atendimento/${a}`, itens<ClassificacaoRecebida>());
+/** Aplica a classificação recebida: gera a classificação interna do atendimento (F3.9, 08-INTG L140). */
+export const aplicarRecebida = (id: number) =>
+  enviar(
+    `${C}/recebidas/${id}/aplicacao`,
+    {},
+    confiar<{ id: number; classificacaoRiscoId: number; reclassificou: number | null }>(),
+    novaChave('aplicacao'),
+  );

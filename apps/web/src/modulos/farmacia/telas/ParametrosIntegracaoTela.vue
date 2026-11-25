@@ -11,7 +11,7 @@ import {
   MOMENTOS_INTEGRACAO,
   TIPOS_INTEGRACAO,
 } from '@sgh/contratos/regras-suprimentos';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -91,9 +91,17 @@ function escolherSubgrupo(v: number | null): void {
 }
 const nulo = (v: unknown) => (v === '' || v === null || v === undefined ? null : Number(v));
 
+/**
+ * A regra que vai à API: com a exceção por item, o grupo e o subgrupo foram só o caminho para achar o item na tela (o
+ * item já diz a que grupo pertence) e não entram no escopo da regra, que não combina item com grupo ou subgrupo.
+ */
+function regraDoForm(f: Form): Form {
+  return f.item === null ? f : { ...f, grupo: null, subgrupo: null };
+}
+
 /** As recusas na hora, pelas mesmas regras da API. */
 const recusasRegra = computed(() => {
-  const f = form.value;
+  const f = regraDoForm(form.value);
   const rs = conferirRegraIntegracao({ ...f, localAtendente: f.localAtendente ?? 0 }).map((r) => r.mensagem);
   if (f.localAtendente === null) rs.unshift(t('farmacia.parametros.semLocal'));
   return rs;
@@ -103,6 +111,12 @@ function editar(r: RegraIntegracaoLida): void {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { escopoNome, localNome, ...resto } = r;
   form.value = { ...vazio(), ...resto };
+  // A exceção por item volta com o caminho (grupo e subgrupo do item) para a escolha do item aparecer na tela.
+  if (r.item !== null) {
+    const subgrupo = opcoes.value?.itens.find((i) => i.id === r.item)?.subgrupo ?? null;
+    form.value.subgrupo = subgrupo;
+    form.value.grupo = opcoes.value?.subgrupos.find((s) => s.id === subgrupo)?.grupo ?? null;
+  }
   mensagem.value = null;
 }
 
@@ -111,7 +125,7 @@ async function gravarRegra(): Promise<void> {
   mensagem.value = null;
   if (recusasRegra.value.length) return;
   try {
-    const r = await gravarRegraIntegracao(form.value, novaChave('regra-integracao'));
+    const r = await gravarRegraIntegracao(regraDoForm(form.value), novaChave('regra-integracao'));
     mensagem.value = r.mensagem;
     form.value = vazio();
     await p.refetch();
@@ -244,125 +258,125 @@ async function gravarGrade(): Promise<void> {
           }}
         </h2>
         <span class="campo">
-          <label for="par-centro">{{ t('farmacia.parametros.centro') }}</label>
-          <select
-            id="par-centro"
-            :value="form.centroCusto ?? ''"
+          <SanteSelecao
+            v-model="form.centroCusto"
+            :rotulo="t('farmacia.parametros.centro')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.nenhum') },
+              ...opcoes.centros.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
             data-testid="par-centro"
-            @change="form.centroCusto = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.nenhum') }}</option>
-            <option v-for="o in opcoes.centros" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          />
         </span>
         <span class="campo">
-          <label for="par-setor">{{ t('farmacia.parametros.setor') }}</label>
-          <select
-            id="par-setor"
-            :value="form.setor ?? ''"
-            @change="form.setor = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.nenhum') }}</option>
-            <option v-for="o in opcoes.setores" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          <SanteSelecao
+            v-model="form.setor"
+            :rotulo="t('farmacia.parametros.setor')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.nenhum') },
+              ...opcoes.setores.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
+          />
         </span>
         <span class="campo">
-          <label for="par-unidade">{{ t('farmacia.parametros.unidade') }}</label>
-          <select
-            id="par-unidade"
-            :value="form.unidade ?? ''"
-            @change="form.unidade = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.nenhum') }}</option>
-            <option v-for="o in opcoes.unidades" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          <SanteSelecao
+            v-model="form.unidade"
+            :rotulo="t('farmacia.parametros.unidade')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.nenhum') },
+              ...opcoes.unidades.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
+          />
         </span>
         <span class="campo">
-          <label for="par-tipo-item">{{ t('farmacia.parametros.tipoItem') }}</label>
-          <select
-            id="par-tipo-item"
-            :value="form.tipoItem ?? ''"
-            @change="form.tipoItem = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.todos') }}</option>
-            <option v-for="o in opcoes.tiposItem" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          <SanteSelecao
+            v-model="form.tipoItem"
+            :rotulo="t('farmacia.parametros.tipoItem')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.todos') },
+              ...opcoes.tiposItem.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
+          />
         </span>
         <span class="campo">
-          <label for="par-grupo">{{ t('farmacia.parametros.grupo') }}</label>
-          <select
-            id="par-grupo"
-            :value="form.grupo ?? ''"
+          <SanteSelecao
+            :model-value="form.grupo"
+            @update:model-value="escolherGrupo"
+            :rotulo="t('farmacia.parametros.grupo')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.todos') },
+              ...opcoes.grupos.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
             data-testid="par-grupo"
-            @change="escolherGrupo(nulo(($event.target as HTMLSelectElement).value))"
-          >
-            <option value="">{{ t('farmacia.parametros.todos') }}</option>
-            <option v-for="o in opcoes.grupos" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          />
         </span>
         <span class="campo">
-          <label for="par-subgrupo">{{ t('farmacia.parametros.subgrupo') }}</label>
-          <select
-            id="par-subgrupo"
-            :value="form.subgrupo ?? ''"
+          <SanteSelecao
+            :model-value="form.subgrupo"
+            @update:model-value="escolherSubgrupo"
+            :rotulo="t('farmacia.parametros.subgrupo')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.todos') },
+              ...subgruposDoGrupo.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
             data-testid="par-subgrupo"
-            @change="escolherSubgrupo(nulo(($event.target as HTMLSelectElement).value))"
-          >
-            <option value="">{{ t('farmacia.parametros.todos') }}</option>
-            <option v-for="o in subgruposDoGrupo" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          />
         </span>
         <span v-if="form.subgrupo !== null" class="campo">
-          <label for="par-item">{{ t('farmacia.parametros.item') }}</label>
-          <select
-            id="par-item"
-            :value="form.item ?? ''"
+          <SanteSelecao
+            v-model="form.item"
+            :rotulo="t('farmacia.parametros.item')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.todos') },
+              ...itensDoSubgrupo.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
             data-testid="par-item"
-            @change="form.item = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.todos') }}</option>
-            <option v-for="o in itensDoSubgrupo" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          />
         </span>
         <span class="campo">
-          <label for="par-local">{{ t('farmacia.parametros.local') }}</label>
-          <select
-            id="par-local"
-            :value="form.localAtendente ?? ''"
+          <SanteSelecao
+            v-model="form.localAtendente"
+            :rotulo="t('farmacia.parametros.local')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.nenhum') },
+              ...opcoes.locais.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
             data-testid="par-local"
-            @change="form.localAtendente = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.nenhum') }}</option>
-            <option v-for="o in opcoes.locais" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          />
         </span>
         <span class="campo">
-          <label for="par-substituto">{{ t('farmacia.parametros.substituto') }}</label>
-          <select
-            id="par-substituto"
-            :value="form.localSubstituto ?? ''"
+          <SanteSelecao
+            v-model="form.localSubstituto"
+            :rotulo="t('farmacia.parametros.substituto')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.nenhum') },
+              ...opcoes.locais.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
             data-testid="par-substituto"
-            @change="form.localSubstituto = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.nenhum') }}</option>
-            <option v-for="o in opcoes.locais" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          />
         </span>
         <span class="campo">
-          <label for="par-tipo">{{ t('farmacia.parametros.tipoIntegracao') }}</label>
-          <select id="par-tipo" v-model="form.tipoIntegracao" data-testid="par-tipo">
-            <option v-for="x in TIPOS_INTEGRACAO" :key="x" :value="x">
-              {{ t(`farmacia.parametros.tipos.${x}`) }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="form.tipoIntegracao"
+            :rotulo="t('farmacia.parametros.tipoIntegracao')"
+            :opcoes="[
+              ...TIPOS_INTEGRACAO.map((x) => ({ valor: x, rotulo: t(`farmacia.parametros.tipos.${x}`) })),
+            ]"
+            data-testid="par-tipo"
+          />
         </span>
         <span class="campo">
-          <label for="par-momento">{{ t('farmacia.parametros.momento') }}</label>
-          <select id="par-momento" v-model="form.momento" data-testid="par-momento">
-            <option v-for="x in MOMENTOS_INTEGRACAO" :key="x" :value="x">
-              {{ t(`farmacia.parametros.momentos.${x}`) }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="form.momento"
+            :rotulo="t('farmacia.parametros.momento')"
+            :opcoes="[
+              ...MOMENTOS_INTEGRACAO.map((x) => ({
+                valor: x,
+                rotulo: t(`farmacia.parametros.momentos.${x}`),
+              })),
+            ]"
+            data-testid="par-momento"
+          />
         </span>
         <span v-if="form.momento === 'antes_do_horario'" class="campo">
           <label for="par-antecedencia">{{ t('farmacia.parametros.antecedencia') }}</label>
@@ -376,12 +390,13 @@ async function gravarGrade(): Promise<void> {
           />
         </span>
         <span class="campo">
-          <label for="par-forma">{{ t('farmacia.parametros.forma') }}</label>
-          <select id="par-forma" v-model="form.forma">
-            <option v-for="x in FORMAS_DISPENSACAO" :key="x" :value="x">
-              {{ t(`farmacia.parametros.formas.${x}`) }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="form.forma"
+            :rotulo="t('farmacia.parametros.forma')"
+            :opcoes="[
+              ...FORMAS_DISPENSACAO.map((x) => ({ valor: x, rotulo: t(`farmacia.parametros.formas.${x}`) })),
+            ]"
+          />
         </span>
         <span class="campo">
           <label for="par-prioridade">{{ t('farmacia.parametros.prioridade') }}</label>
@@ -445,27 +460,25 @@ async function gravarGrade(): Promise<void> {
       </table>
       <form class="filtros" data-testid="par-form-grade" @submit.prevent="gravarGrade()">
         <span class="campo">
-          <label for="par-frequencia">{{ t('farmacia.parametros.frequencia') }}</label>
-          <select
-            id="par-frequencia"
-            :value="frequencia ?? ''"
+          <SanteSelecao
+            v-model="frequencia"
+            :rotulo="t('farmacia.parametros.frequencia')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.nenhum') },
+              ...opcoes.frequencias.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
             data-testid="par-frequencia"
-            @change="frequencia = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.nenhum') }}</option>
-            <option v-for="o in opcoes.frequencias" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          />
         </span>
         <span class="campo">
-          <label for="par-setor-grade">{{ t('farmacia.parametros.setor') }}</label>
-          <select
-            id="par-setor-grade"
-            :value="setorGrade ?? ''"
-            @change="setorGrade = nulo(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('farmacia.parametros.todoEstabelecimento') }}</option>
-            <option v-for="o in opcoes.setores" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select>
+          <SanteSelecao
+            v-model="setorGrade"
+            :rotulo="t('farmacia.parametros.setor')"
+            :opcoes="[
+              { valor: null, rotulo: t('farmacia.parametros.todoEstabelecimento') },
+              ...opcoes.setores.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
+          />
         </span>
         <span class="campo">
           <label for="par-horarios">{{ t('farmacia.parametros.horariosTexto') }}</label>

@@ -1,7 +1,7 @@
 // Gravações do cadastro da conta no banco próprio (01-ADM L57 e L59), pelo Executor (trilha, saída e idempotência na
 // mesma transação; trava otimista pela versao): criar a conta (conta + vínculo ao estabelecimento + perfil principal
 // numa gravação só), alterar o nome e o CPF, trocar o grupo (perfil principal, com histórico de vigência) e conceder
-// ou retirar escopo (unidade, local de atendimento, convênio e tipo de prontuário; retirar é exclusão lógica, nunca
+// ou retirar escopo (unidade, local de atendimento, convênio, tipo de agenda e tipo de prontuário; retirar é exclusão lógica, nunca
 // apagamento). As regras ficam no domínio
 // (`@sgh/dominio-acesso`, cadastro-usuario.ts); aqui só a leitura do fato e a gravação.
 // Nenhum log nem trilha leva login, nome ou CPF: só ids e nomes de coluna (a troca de CPF leva a justificativa).
@@ -184,7 +184,10 @@ const operacaoTrocarGrupo = definirOperacao({
 
 /** Tabela de cada escopo, a coluna da entidade e a conferência de que a entidade vale no estabelecimento. */
 const ESCOPOS: Partial<
-  Record<TipoEscopo, { tabela: string; coluna: string; valida: string; noEst: boolean }>
+  Record<
+    TipoEscopo,
+    { tabela: string; coluna: string; valida: string; noEst: boolean; extras?: Record<string, unknown> }
+  >
 > = {
   unidade: {
     tabela: 'usuario_unidade',
@@ -205,6 +208,14 @@ const ESCOPOS: Partial<
     coluna: 'fonte_pagadora_id',
     valida: "SELECT id FROM fonte_pagadora WHERE id = ? AND situacao = 'ativa' AND excluido_em IS NULL",
     noEst: false,
+  },
+  // Tipo de agenda liberado: a pessoa consulta, marca e cancela nas agendas desse tipo.
+  tipoAgenda: {
+    tabela: 'usuario_tipo_agenda',
+    coluna: 'categoria_agenda_id',
+    valida: 'SELECT id FROM categoria_agenda WHERE id = ? AND ativo',
+    noEst: false,
+    extras: { pode_consultar: true, pode_marcar: true, pode_cancelar: true },
   },
   tipoProntuario: {
     tabela: 'usuario_tipo_prontuario',
@@ -239,7 +250,7 @@ function operacaoEscopo(tipo: TipoEscopo, conceder: boolean) {
       const r = conferirEscopo({ conceder, entidadeValida: ent !== null, jaTem: atual !== undefined });
       if (r) throw recusar(r);
       if (conceder) {
-        const id = await tx.incluir(d.tabela, { usuario_id: u.id, [d.coluna]: valor });
+        const id = await tx.incluir(d.tabela, { ...d.extras, usuario_id: u.id, [d.coluna]: valor });
         return { id, idUsuario: u.id };
       }
       // Retirar é exclusão lógica: a linha fica no banco (quem teve acesso a quê e até quando); a unicidade do par
@@ -271,6 +282,8 @@ export const OPERACOES_USUARIO_PROPRIA = {
   'acesso.retirarLocalUsuario': operacaoEscopo('local', false),
   'acesso.concederConvenioUsuario': operacaoEscopo('convenio', true),
   'acesso.retirarConvenioUsuario': operacaoEscopo('convenio', false),
+  'acesso.concederTipoAgendaUsuario': operacaoEscopo('tipoAgenda', true),
+  'acesso.retirarTipoAgendaUsuario': operacaoEscopo('tipoAgenda', false),
   'acesso.concederTipoProntuarioUsuario': operacaoEscopo('tipoProntuario', true),
   'acesso.retirarTipoProntuarioUsuario': operacaoEscopo('tipoProntuario', false),
 } as const;

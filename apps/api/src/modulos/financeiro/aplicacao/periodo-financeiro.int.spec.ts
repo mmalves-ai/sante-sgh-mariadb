@@ -205,7 +205,8 @@ describe.skipIf(SEM_BANCO)('período financeiro: fechar em ordem, travar e reabr
       await codigoDaGravacao(
         executar('financeiro.baixarTitulo', {
           cenario: 'pagar',
-          titulos: [{ titulo: 999_999_999, versao: 1 }],
+          // A versão é o carimbo de concorrência (texto) ou nula; a entrada tem de ser válida para chegar à trava.
+          titulos: [{ titulo: 999_999_999, versao: null }],
           conta: m.contaA,
           dataPagamento: D0,
           formaPagamento: 1,
@@ -213,6 +214,114 @@ describe.skipIf(SEM_BANCO)('período financeiro: fechar em ordem, travar e reabr
         }),
       ),
     ).toBe('periodo-fechado');
+    // A baixa do título a receber com a data do recebimento no mês fechado: a mesma trava, antes de ler o título.
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.baixarTitulo', {
+          cenario: 'receber',
+          titulo: 999_999_999,
+          versao: null,
+          conta: m.contaA,
+          dataRecebimento: D1,
+          valorRecebido: 5,
+          formaPagamento: 1,
+          motivo: 'RECEBIMENTO SINTETICO L0207',
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    // As gravações diretas do adiantamento (saída, compensação e devolução) passam pela mesma trava, antes de tudo.
+    const trilha = {
+      estabelecimento: null,
+      usuario: null,
+      acao: 'operacao' as const,
+      entidade: 'adiantamento',
+      entidadeId: 0,
+      correlacao: null,
+    };
+    const gravar = (f: Parameters<PortaFinanceiroPropria['gravarSgh']>[2]) =>
+      codigoDaGravacao(porta.gravarSgh(op(m.ctx(m.paga)), trilha, f));
+    const escopo = [m.contaA, m.contaB];
+    expect(
+      await gravar((g) =>
+        g.pagarAdiantamento({ adiantamento: 999_999_999, data: D1, usuario: 'x', contasEscopo: escopo }),
+      ),
+    ).toBe('periodo-fechado');
+    expect(
+      await gravar((g) =>
+        g.compensarAdiantamento({
+          adiantamento: 999_999_999,
+          parcela: 999_999_999,
+          valor: 5,
+          data: D0,
+          usuario: 'x',
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    expect(
+      await gravar((g) =>
+        g.devolverAdiantamento({
+          adiantamento: 999_999_999,
+          conta: m.contaA,
+          valor: 5,
+          data: D1,
+          motivo: 'Sobra devolvida',
+          usuario: 'x',
+          contasEscopo: escopo,
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    // O crédito não identificado com data no mês fechado não é atribuído a título: a trava vem pela data do crédito,
+    // depois de lido o crédito (por isso um crédito de verdade na massa); o crédito segue pendente e nada é recebido.
+    const credito = await m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'pf-02-07' }, (e) =>
+      e.inserir(
+        `INSERT INTO credito_nao_identificado (estabelecimento_id, conta_bancaria_id, data_credito, historico_extrato,
+           valor, criado_em) VALUES (?, ?, ?, 'CREDITO SINTETICO L0207 PERIODO', 12.34, ?)`,
+        [m.est, m.contaA, D1, new Date()],
+      ),
+    );
+    const recebimentos = async () =>
+      Number(
+        (await consultar('SELECT COUNT(*) AS n FROM recebimento WHERE estabelecimento_id = ?', [m.est]))[0]?.[
+          'n'
+        ] ?? 0,
+      );
+    const recebidosAntes = await recebimentos();
+    expect(
+      await gravar((g) =>
+        g.atribuirCredito({
+          credito,
+          tituloReceber: 999_999_999,
+          observacao: '',
+          usuario: 'x',
+          contasEscopo: escopo,
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    const [cr] = await consultar(
+      'SELECT situacao, titulo_receber_id, identificado_em FROM credito_nao_identificado WHERE id = ?',
+      [credito],
+    );
+    expect([cr?.['situacao'], cr?.['titulo_receber_id'], cr?.['identificado_em']]).toEqual([
+      'pendente',
+      null,
+      null,
+    ]);
+    expect(await recebimentos()).toBe(recebidosAntes);
+    // A recusa é da data: o mesmo crédito, datado no mês em curso, passa da trava e só para no título que não existe.
+    await m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'pf-02-07' }, (e) =>
+      e.executar('UPDATE credito_nao_identificado SET data_credito = ? WHERE id = ?', [MES_ATUAL, credito]),
+    );
+    expect(
+      await gravar((g) =>
+        g.atribuirCredito({
+          credito,
+          tituloReceber: 999_999_999,
+          observacao: '',
+          usuario: 'x',
+          contasEscopo: escopo,
+        }),
+      ),
+    ).toBe('titulo-inexistente');
     expect([await movimentosDoMes(ANTERIOR), await movimentosDoMes()]).toEqual(antes);
     for (const comp of [COMP, ANTERIOR])
       expect(await codigoDaGravacao(executar('financeiro.fecharPeriodo', { competencia: comp }))).toBe(

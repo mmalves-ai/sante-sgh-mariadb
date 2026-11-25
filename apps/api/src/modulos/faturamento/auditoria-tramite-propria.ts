@@ -46,6 +46,7 @@ import {
   type ContextoOperacao,
   definirOperacao,
   type Executor,
+  garantirSequencia,
   type Leitor,
   recusa,
   type TxOperacao,
@@ -743,7 +744,7 @@ async function setorAtivo(tx: TxOperacao, setor: number, campo: string) {
 
 export const opEmitirProtocolo = definirOperacao({
   nome: 'faturamento.emitir-protocolo-tramite',
-  tabelas: ['protocolo_tramite', 'protocolo_tramite_item'],
+  tabelas: ['protocolo_tramite', 'protocolo_tramite_item', 'sequencia_negocio'],
   entrada: z.object({
     remetenteId: id,
     destinatarioId: id,
@@ -773,6 +774,13 @@ export const opEmitirProtocolo = definirOperacao({
         });
     }
     const agora = new Date();
+    // A numeração do protocolo é do estabelecimento e nasce no primeiro protocolo (como a nota de crédito e débito):
+    // nenhum cliente novo fica sem emitir por falta de configuração.
+    await garantirSequencia(
+      tx,
+      { tipo: 'protocolo_tramite', estabelecimento: est, prefixo: null },
+      { usuario: usuario, agora },
+    );
     const numero = await tx.proximoNumero('protocolo_tramite');
     const protocolo = await tx.incluir('protocolo_tramite', {
       estabelecimento_id: est,

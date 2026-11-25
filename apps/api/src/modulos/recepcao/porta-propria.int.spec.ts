@@ -660,6 +660,48 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
       );
     const v1 = mt.versoes[1]!.id;
     expect(await recusada(assinar(v1))).toBe('termo-versao-antiga');
+    // F3.1 (02-CAD linha 4): o menor de idade e o incapaz não assinam o termo por si (o tipo de assinante deste caso
+    // é o próprio paciente); nada fica gravado. A data de nascimento volta ao que era e a condição sai no fim.
+    const pacienteTermo = (
+      await ler<{ id: number; nasc: string | null }>(
+        `SELECT pa.id, DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nasc FROM paciente pa
+           JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id WHERE pa.numero_prontuario = ?`,
+        [m.prontuario],
+      )
+    )[0]!;
+    const fora = (sql: string, p: unknown[]) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'rc0101-representacao' }, (e) => e.executar(sql, p));
+    const nascer = (d: string | null) =>
+      fora(
+        'UPDATE pessoa_fisica pf JOIN paciente pa ON pa.pessoa_fisica_id = pf.id SET pf.data_nascimento = ? WHERE pa.id = ?',
+        [d, pacienteTermo.id],
+      );
+    const ha10 = new Date();
+    ha10.setFullYear(ha10.getFullYear() - 10);
+    try {
+      await nascer(ha10.toISOString().slice(0, 10));
+      expect(await recusada(assinar(v2.id))).toBe('paciente-menor');
+      await nascer('1980-05-17');
+      await fora(
+        `INSERT INTO incapacidade_paciente (paciente_id, vigencia_inicio, documento_tipo, documento_data, criado_em)
+         VALUES (?, '2025-02-10', 'laudo_medico', '2025-02-10', ?)`,
+        [pacienteTermo.id, new Date()],
+      );
+      expect(await recusada(assinar(v2.id))).toBe('paciente-incapaz');
+      expect(
+        Number(
+          (
+            await ler<{ n: number }>(
+              'SELECT COUNT(*) AS n FROM termo_consentimento_recepcao WHERE paciente_id = ?',
+              [pacienteTermo.id],
+            )
+          )[0]?.n,
+        ),
+      ).toBe(0);
+    } finally {
+      await fora('DELETE FROM incapacidade_paciente WHERE paciente_id = ?', [pacienteTermo.id]);
+      await nascer(pacienteTermo.nasc);
+    }
     const a = await assinar(v2.id);
     expect(a.hash).toMatch(/^[0-9a-f]{64}$/);
     const doPaciente = await porta.termosDoPaciente(c, m.prontuario);

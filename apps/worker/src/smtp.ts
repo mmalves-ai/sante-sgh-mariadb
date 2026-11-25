@@ -8,9 +8,12 @@ export interface MensagemEmail {
   readonly para: string;
   readonly assunto: string;
   readonly texto: string;
+  /** Identificador da mensagem (cabeçalho Message-ID), estável entre as tentativas; registrado no envio. */
+  readonly idMensagem?: string;
 }
 
 const ENDERECO = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}$/;
+const ID_MENSAGEM = /^<[A-Za-z0-9._-]{1,150}@[A-Za-z0-9.-]{1,100}>$/;
 
 /** Cabeçalho em ASCII; assunto com acento vai em MIME (UTF-8, base64). */
 function cabecalhoAssunto(assunto: string): string {
@@ -21,6 +24,8 @@ function cabecalhoAssunto(assunto: string): string {
 
 export function montarMensagem(m: MensagemEmail, data = new Date()): string {
   if (!ENDERECO.test(m.de) || !ENDERECO.test(m.para)) throw new Error('Endereço de e-mail inválido.');
+  if (m.idMensagem !== undefined && !ID_MENSAGEM.test(m.idMensagem))
+    throw new Error('Identificador da mensagem fora do formato.');
   const corpo = Buffer.from(m.texto, 'utf8')
     .toString('base64')
     .replace(/.{1,76}/g, '$&\r\n');
@@ -29,6 +34,7 @@ export function montarMensagem(m: MensagemEmail, data = new Date()): string {
     `To: ${m.para}`,
     `Subject: ${cabecalhoAssunto(m.assunto)}`,
     `Date: ${data.toUTCString()}`,
+    ...(m.idMensagem ? [`Message-ID: ${m.idMensagem}`] : []),
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=utf-8',
     'Content-Transfer-Encoding: base64',

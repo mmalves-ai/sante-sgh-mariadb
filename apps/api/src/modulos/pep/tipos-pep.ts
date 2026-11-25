@@ -138,6 +138,8 @@ export const esquemaGravacaoAlergia = z
     reacao: textoCp1252(200).optional(),
     gravidade: z.enum(GRAVIDADES_ALERGIA).optional(),
     origem: z.enum(ORIGENS_ALERGIA).optional(),
+    /** Manifestações do catálogo (03-PEP L100); a porta própria grava em alergia_paciente_manifestacao. */
+    manifestacoes: z.array(ID).max(10).optional(),
     versao: z.string().max(200),
     hashConteudo: HASH,
     comoSuporte: z.boolean().optional(),
@@ -455,6 +457,25 @@ export const esquemaDetalheGravacao = z.discriminatedUnion('tipo', [
       velocidade: QTDE.nullable(),
       unidadeInfusao: ID.nullable(),
       caracteristicas: z.array(z.object({ caracteristica: ID, resposta: textoCp1252(100) }).strict()).max(20),
+      /** Composição por refeição do dia (03-PEP L112): alimento, quantidade, medida caseira e substituto. */
+      refeicoes: z
+        .array(
+          z
+            .object({
+              refeicao: ID,
+              alimento: ID,
+              quantidade: QTDE,
+              unidade: ID.nullable(),
+              medidaCaseira: ID.nullable(),
+              quantidadeMedidaCaseira: QTDE.nullable(),
+              substitui: z.number().int().min(1).max(60).nullable(),
+              percentualDiario: z.number().min(0).max(100).nullable(),
+              calorias: z.number().min(0).max(20_000).nullable(),
+            })
+            .strict(),
+        )
+        .max(60)
+        .optional(),
     })
     .strict(),
   z

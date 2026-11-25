@@ -1,7 +1,7 @@
 // Porta PRÓPRIA da notificação de incidentes (M48, etapa 1) sobre o MariaDB do cliente, pelo @sgh/nucleo:
 // notificacao_incidente, notificacao_incidente_evento (a linha do tempo) e notificacao_incidente_envio (o Notivisa), com
 // os cadastros tipo_incidente, classificacao_incidente e grau_dano (pelo código) e as leituras de estabelecimento,
-// setor_funcional, feriado, usuario, atendimento, paciente e pessoa_fisica. Leituras somente leitura no estabelecimento da
+// setor_funcional, dia_nao_util, usuario, atendimento, paciente e pessoa_fisica. Leituras somente leitura no estabelecimento da
 // sessão; gravações diretas numa operação do Executor (gravacaoDireta: trilha, outbox e idempotência na mesma
 // transação), com a notificação travada (FOR UPDATE) e conferida pela versão vista.
 // Melhoria: o protocolo vem da sequencia_negocio do estabelecimento por ano (uma sequência por ano), não de tabela à parte.

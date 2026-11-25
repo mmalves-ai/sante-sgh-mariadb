@@ -39,6 +39,7 @@ import { z } from 'zod';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
 import type { RegistroTrilhaTela } from './tipos.js';
+import { semIndefinidos } from '../../entrada-exata.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown): number => Number(v);
@@ -288,11 +289,11 @@ const operacaoAlterarCobertura = (trilha: RegistroTrilhaTela) =>
       const fonte = n(k['fonte_pagadora_id']);
       recusar(
         conferirCobertura({
+          ...novo,
           paciente: e.paciente,
           fontePagadora: await regraFonte(tx, fonte),
           plano: await regraPlano(tx, novo.plano),
           planoInformado: !!novo.plano,
-          ...novo,
         }),
       );
       await conferirEGravarDuplicata(tx, e.paciente, fonte, novo.numeroCarteira, e.id);
@@ -418,7 +419,7 @@ const operacaoRegistrarPreCadastro = (trilha: RegistroTrilhaTela) =>
     acao: 'inclusao',
     async gravar(tx, e) {
       const hoje = await hojeDo(tx);
-      recusar(conferirPreCadastro(e, hoje));
+      recusar(conferirPreCadastro(semIndefinidos(e), hoje));
       if (e.fontePagadora) {
         const f = await regraFonte(tx, e.fontePagadora);
         if (!f?.ativa)
@@ -661,7 +662,7 @@ const operacaoRegistrarCaptacao = (trilha: RegistroTrilhaTela) =>
       );
       recusar(
         conferirCaptacao({
-          ...e,
+          ...semIndefinidos(e),
           tipoIndicacao: t
             ? {
                 id: n(t['id']),

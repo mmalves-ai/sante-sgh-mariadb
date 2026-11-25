@@ -6,8 +6,8 @@ import {
   dataBr,
   destinoDaTecla,
   gruposDeRegistro,
-  horasValidas,
   indisponiveis,
+  OPERACOES_DA_ACAO,
   operacaoLigada,
   iniciais,
   mascarar,
@@ -68,7 +68,6 @@ describe('ficha do profissional: lógica pura', () => {
       'cadastro.incluirRegistroProfissional',
       'cadastro.alterarRegistroProfissional',
       'cadastro.definirEspecialidadeProfissional',
-      'cadastro.lotarProfissional',
       'cadastro.credenciarProfissional',
       'cadastro.vincularLoginProfissional',
       'cadastro.inativarProfissional',
@@ -87,31 +86,22 @@ describe('ficha do profissional: lógica pura', () => {
       'acaoDados',
       'acaoRegistros',
       'acaoEspecialidades',
-      'acaoLotacao',
       'acaoConvenios',
       'acaoLogin',
       'acaoSituacao',
       'acaoExcluir',
     ]);
-    expect(operacaoLigada(recusadas, 'cadastro.lotarProfissional')).toBe(false);
+    expect(operacaoLigada(recusadas, 'cadastro.credenciarProfissional')).toBe(false);
     // Só uma recusada: só a ação dela.
     const uma = {
       registros: [reg(1, true)],
-      operacoes: [{ operacao: 'cadastro.lotarProfissional', ligada: false }],
+      operacoes: [{ operacao: 'cadastro.credenciarProfissional', ligada: false }],
     };
-    expect(indisponiveis(uma, () => true, t)).toEqual([{ motivo: 'semEscrita', acoes: ['acaoLotacao'] }]);
+    expect(indisponiveis(uma, () => true, t)).toEqual([{ motivo: 'semEscrita', acoes: ['acaoConvenios'] }]);
     // Sem a situação (ficha antiga): não bloqueia; o servidor decide.
-    expect(operacaoLigada({}, 'cadastro.lotarProfissional')).toBe(true);
-  });
-
-  it('horas da lotação: só inteiro ("1,5" não vira 15)', () => {
-    expect(horasValidas('1,5')).toBeNull();
-    expect(horasValidas('1.5')).toBeNull();
-    expect(horasValidas('-1')).toBeNull();
-    expect(horasValidas('745')).toBeNull();
-    expect(horasValidas('')).toBe(0);
-    expect(horasValidas(' 20 ')).toBe(20);
-    expect(horasValidas('744')).toBe(744);
+    expect(operacaoLigada({}, 'cadastro.credenciarProfissional')).toBe(true);
+    // F3.1 (02-CAD linha 18): a lotação grava pela rota própria (lotacoes), fora das operações da ficha.
+    expect(Object.keys(OPERACOES_DA_ACAO)).not.toContain('acaoLotacao');
   });
 
   it('teclas das abas', () => {

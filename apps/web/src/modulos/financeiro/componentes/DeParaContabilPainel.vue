@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // F3.8, 07-FIN linha 100: o de-para contábil mantido aqui, por evento. Uma grade evento × lado (débito e crédito) com a
 // conta do escritório contábil, gravada ao sair do campo (validação na hora); a exceção por natureza entra na mesma
 // linha; o que falta mapear no período aparece em cima, para corrigir antes de exportar. O centro de custo ganha o
@@ -8,7 +9,15 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import { novaChave } from '../api-financeiro.js';
-import { gravarDePara, type Lado, lerDeParaCompleto, lerSemDePara } from '../api-contabil-fiscal.js';
+import {
+  type FornecedorEncontrado,
+  gravarDePara,
+  type Lado,
+  lerDeParaCompleto,
+  lerSemDePara,
+} from '../api-contabil-fiscal.js';
+import BuscaCredor from './BuscaCredor.vue';
+import BuscaFornecedor from './BuscaFornecedor.vue';
 
 const props = defineProps<{ periodo: string; regua: string; podeEditar: boolean }>();
 const { t } = useI18n({
@@ -32,6 +41,15 @@ const { t } = useI18n({
       faltam: 'Falta conta no período: {n} lançamento(s) ficariam fora do lote',
       nadaFalta: 'Todos os lançamentos do período têm conta nos dois lados.',
       centros: 'Código do centro de custo no escritório contábil',
+      credores: 'Código do credor no escritório contábil',
+      novoCredor: 'Fornecedor',
+      codigoCredor: 'Código no escritório',
+      adicionarCredor: 'Gravar código do credor',
+      semCredores: 'Nenhum credor com código externo: o lote leva o credor pelo código interno.',
+      medicos: 'Código do credor médico no escritório contábil',
+      novoMedico: 'Médico (adiantamento e título de médico)',
+      adicionarMedico: 'Gravar código do médico',
+      semMedicos: 'Nenhum médico com código externo: o lote sai sem o código do credor médico.',
       gravado: 'Gravado',
       lados: { debito: 'débito', credito: 'crédito', ambos: 'ambos' },
     },
@@ -86,7 +104,7 @@ const linhas = computed(() => {
 });
 const totalFaltas = computed(() => (faltas.data.value ?? []).reduce((s, f) => s + f.fatos, 0));
 
-async function salvar(corpo: Record<string, unknown>) {
+async function salvar(corpo: Record<string, unknown>): Promise<boolean> {
   erro.value = null;
   ok.value = '';
   try {
@@ -94,14 +112,36 @@ async function salvar(corpo: Record<string, unknown>) {
     ok.value = r.mensagem;
     await qc.invalidateQueries({ queryKey: ['financeiro', 'de-para-completo'] });
     await qc.invalidateQueries({ queryKey: ['financeiro', 'sem-de-para'] });
+    return true;
   } catch (e) {
     erro.value = e;
+    return false;
   }
 }
-function contaAlterada(l: (typeof linhas.value)[number], lado: 'debito' | 'credito', valor: string) {
+/**
+ * O que se digita num campo da grade fica aqui até a gravação dele dar certo. Sem isso, a releitura da grade depois de
+ * gravar outro campo redesenha a linha e apaga o que se digitava no vizinho (o campo é ligado à conta gravada), e a
+ * saída do campo não grava nada. Na recusa, o digitado continua no campo junto com o motivo.
+ */
+const rascunho = ref<Record<string, string>>({});
+const chaveCampo = (l: { evento: string; natureza: number | null }, lado: 'debito' | 'credito') =>
+  `${l.evento}|${l.natureza ?? ''}|${lado}`;
+async function contaAlterada(l: (typeof linhas.value)[number], lado: 'debito' | 'credito', valor: string) {
+  const chave = chaveCampo(l, lado);
+  if (await gravarConta(l, lado, valor)) {
+    const resto = { ...rascunho.value };
+    delete resto[chave];
+    rascunho.value = resto;
+  }
+}
+function gravarConta(
+  l: (typeof linhas.value)[number],
+  lado: 'debito' | 'credito',
+  valor: string,
+): Promise<boolean> | boolean {
   const atual = l[lado];
   const conta = valor.trim();
-  if (atual && atual.conta === conta) return;
+  if (atual && atual.conta === conta) return true;
   if (atual && atual.lado === lado)
     return salvar({
       tipo: 'conta',
@@ -113,7 +153,7 @@ function contaAlterada(l: (typeof linhas.value)[number], lado: 'debito' | 'credi
       conta: conta || atual.conta,
       ativo: conta !== '',
     });
-  if (!conta) return;
+  if (!conta) return true;
   return salvar({
     tipo: 'conta',
     id: null,
@@ -140,12 +180,43 @@ async function adicionarExcecao(evento: string) {
     novaConta.value[evento] = '';
   }
 }
+const credorNovo = ref<FornecedorEncontrado | null>(null);
+const codigoCredorNovo = ref('');
+async function adicionarCredor() {
+  const codigo = codigoCredorNovo.value.trim();
+  if (!credorNovo.value || !codigo) return;
+  await salvar({ tipo: 'credor', fornecedor: credorNovo.value.id, codigo, ativo: true });
+  if (!erro.value) codigoCredorNovo.value = '';
+}
+/** O código externo do credor: vazio desliga a regra (mandando o código que ela tem), como no centro. */
+function credorAlterado(c: { id: number; externo: string }, valor: string) {
+  const v = valor.trim();
+  if (v === c.externo) return;
+  return salvar({ tipo: 'credor', fornecedor: c.id, codigo: v || c.externo, ativo: v !== '' });
+}
+// F3.8, 07-FIN linha 67: o credor médico (adiantamento e título de médico) tem o código próprio, pelo profissional.
+const medicoNovo = ref<number | null>(null);
+const codigoMedicoNovo = ref('');
+async function adicionarMedico() {
+  const codigo = codigoMedicoNovo.value.trim();
+  if (medicoNovo.value === null || !codigo) return;
+  await salvar({ tipo: 'profissional', profissional: medicoNovo.value, codigo, ativo: true });
+  if (!erro.value) {
+    codigoMedicoNovo.value = '';
+    medicoNovo.value = null;
+  }
+}
+function medicoAlterado(c: { id: number; externo: string }, valor: string) {
+  const v = valor.trim();
+  if (v === c.externo) return;
+  return salvar({ tipo: 'profissional', profissional: c.id, codigo: v || c.externo, ativo: v !== '' });
+}
 /** O código externo do centro: vazio desliga a regra atual (mandando o código que ela tem), nunca um marcador. */
 function centroAlterado(c: { id: number; externo: string | null }, valor: string) {
   const v = valor.trim();
   if (v === (c.externo ?? '')) return;
   if (v) return salvar({ tipo: 'centro', centro: c.id, codigo: v, ativo: true });
-  if (c.externo) return salvar({ tipo: 'centro', centro: c.id, codigo: c.externo, ativo: false });
+  return c.externo ? salvar({ tipo: 'centro', centro: c.id, codigo: c.externo, ativo: false }) : undefined;
 }
 </script>
 
@@ -183,24 +254,31 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
           <td>
             {{ l.nomeNatureza }}
             <span v-if="l.natureza === null && podeEditar">
-              <select
-                v-model="novaNatureza[l.evento]"
-                :aria-label="t('adicionar')"
+              <SanteSelecao
+                :model-value="novaNatureza[l.evento] ?? null"
+                @update:model-value="(v) => (novaNatureza[l.evento] = v)"
+                :rotulo="t('adicionar')"
+                ocultar-rotulo
+                :opcoes="[
+                  { valor: null, rotulo: t('todas') },
+                  ...(dados.data.value?.naturezas ?? []).map((n) => ({
+                    valor: n.id,
+                    rotulo: `${n.codigo} ${n.descricao}`,
+                  })),
+                ]"
                 :data-testid="`dp-nat-${l.evento}`"
-              >
-                <option :value="null">{{ t('todas') }}</option>
-                <option v-for="n in dados.data.value?.naturezas" :key="n.id" :value="n.id">
-                  {{ n.codigo }} {{ n.descricao }}
-                </option>
-              </select>
-              <select
-                v-model="novoLado[l.evento]"
-                :aria-label="t('ladoExcecao')"
+              />
+              <SanteSelecao
+                :model-value="novoLado[l.evento] ?? 'debito'"
+                @update:model-value="(v) => (novoLado[l.evento] = v)"
+                :rotulo="t('ladoExcecao')"
+                ocultar-rotulo
+                :opcoes="[
+                  { valor: 'debito' as const, rotulo: t('lados.debito') },
+                  { valor: 'credito' as const, rotulo: t('lados.credito') },
+                ]"
                 :data-testid="`dp-nat-lado-${l.evento}`"
-              >
-                <option value="debito">{{ t('lados.debito') }}</option>
-                <option value="credito">{{ t('lados.credito') }}</option>
-              </select>
+              />
               <input
                 v-model="novaConta[l.evento]"
                 maxlength="50"
@@ -221,12 +299,13 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
           </td>
           <td v-for="lado in ['debito', 'credito'] as const" :key="lado">
             <input
-              :value="l[lado]?.conta ?? ''"
+              :value="rascunho[chaveCampo(l, lado)] ?? l[lado]?.conta ?? ''"
               :disabled="!podeEditar"
               maxlength="50"
               pattern="[0-9A-Za-z][0-9A-Za-z.\-]*"
               :aria-label="`${l.rotulo} ${t(lado)}`"
               :data-testid="`dp-${lado}-${l.evento}-${l.natureza ?? 'geral'}`"
+              @input="rascunho[chaveCampo(l, lado)] = ($event.target as HTMLInputElement).value"
               @change="contaAlterada(l, lado, ($event.target as HTMLInputElement).value)"
             />
             <small
@@ -254,5 +333,75 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
         />
       </li>
     </ul>
+    <h3>{{ t('credores') }}</h3>
+    <p v-if="!dados.data.value?.credores.length" class="secundario">{{ t('semCredores') }}</p>
+    <ul class="lista-simples" data-testid="dp-credores">
+      <li v-for="c in dados.data.value?.credores" :key="c.id">
+        <label :for="`dp-cr-${c.id}`">{{ c.nome }}</label>
+        <input
+          :id="`dp-cr-${c.id}`"
+          :value="c.externo"
+          :disabled="!podeEditar"
+          maxlength="40"
+          :data-testid="`dp-cr-${c.id}`"
+          @change="credorAlterado(c, ($event.target as HTMLInputElement).value)"
+        />
+      </li>
+    </ul>
+    <div v-if="podeEditar" class="formulario" data-testid="dp-credor-novo">
+      <BuscaFornecedor :rotulo="t('novoCredor')" prefixo="dp-credor" @escolhido="(f) => (credorNovo = f)" />
+      <span class="campo">
+        <label for="dp-credor-codigo">{{ t('codigoCredor') }}</label>
+        <input
+          id="dp-credor-codigo"
+          v-model="codigoCredorNovo"
+          maxlength="40"
+          data-testid="dp-credor-codigo"
+        />
+      </span>
+      <button
+        type="button"
+        :disabled="!credorNovo || !codigoCredorNovo.trim()"
+        data-testid="dp-credor-gravar"
+        @click="adicionarCredor"
+      >
+        {{ t('adicionarCredor') }}
+      </button>
+    </div>
+    <h3>{{ t('medicos') }}</h3>
+    <p v-if="!dados.data.value?.profissionais?.length" class="secundario">{{ t('semMedicos') }}</p>
+    <ul class="lista-simples" data-testid="dp-medicos">
+      <li v-for="c in dados.data.value?.profissionais ?? []" :key="c.id">
+        <label :for="`dp-md-${c.id}`">{{ c.nome }}</label>
+        <input
+          :id="`dp-md-${c.id}`"
+          :value="c.externo"
+          :disabled="!podeEditar"
+          maxlength="40"
+          :data-testid="`dp-md-${c.id}`"
+          @change="medicoAlterado(c, ($event.target as HTMLInputElement).value)"
+        />
+      </li>
+    </ul>
+    <div v-if="podeEditar" class="formulario" data-testid="dp-medico-novo">
+      <BuscaCredor v-model="medicoNovo" tipo="profissional" :rotulo="t('novoMedico')" prefixo="dp-medico" />
+      <span class="campo">
+        <label for="dp-medico-codigo">{{ t('codigoCredor') }}</label>
+        <input
+          id="dp-medico-codigo"
+          v-model="codigoMedicoNovo"
+          maxlength="40"
+          data-testid="dp-medico-codigo"
+        />
+      </span>
+      <button
+        type="button"
+        :disabled="medicoNovo === null || !codigoMedicoNovo.trim()"
+        data-testid="dp-medico-gravar"
+        @click="adicionarMedico"
+      >
+        {{ t('adicionarMedico') }}
+      </button>
+    </div>
   </section>
 </template>

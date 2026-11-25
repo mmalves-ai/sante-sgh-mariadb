@@ -77,6 +77,13 @@ export const rotasPrecos: RouteRecordRaw[] = [
     meta: { permissao: 'convenio.credenciamento.ler' },
   },
   {
+    // F3.7 (06-FAT linhas 6, 8 e 9): de-para, credenciamento com exceção, mat/med com a TUSS e a conferência da guia.
+    path: '/faturamento/cobranca-fonte',
+    name: 'precos.cobranca-fonte',
+    component: () => import('./telas/CobrancaFonteTela.vue'),
+    meta: { permissao: 'convenio.credenciamento.ler' },
+  },
+  {
     path: '/faturamento/de-para-exames',
     name: 'precos.de-para',
     component: () => import('./telas/MotorTela.vue'),

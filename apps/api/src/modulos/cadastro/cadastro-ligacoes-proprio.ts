@@ -13,6 +13,7 @@ import {
   camposFaltantes,
   chaveSolicitante,
   conflitosLotacao,
+  dadosNaUnificacao,
   errosCodigoNaFonte,
   errosInativacao,
   errosLotacao,
@@ -20,6 +21,7 @@ import {
   parecidos,
   periodosSobrepostos,
   principaisADesmarcar,
+  registroNaAlteracao,
   type SolicitanteParecido,
 } from '@sgh/dominio-cadastro';
 import {
@@ -34,6 +36,15 @@ import {
 import { z } from 'zod';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
+import {
+  dadosDoSolicitante,
+  type EntradaDesfazerUnificacaoSolicitante,
+  type EntradaUnificarSolicitante,
+  lerUnificacaoDoSolicitante,
+  opDesfazerUnificacaoSolicitante,
+  opUnificarSolicitante,
+  type UnificacaoDoSolicitante,
+} from './solicitante-unificacao-propria.js';
 import type { RegistroTrilhaTela } from './tipos.js';
 
 export const LIGACOES_CADASTRO = Symbol('LIGACOES_CADASTRO');
@@ -99,9 +110,9 @@ const opIncluirProcedimento = (t: RegistroTrilhaTela) =>
       )
         throw recusaCampo('procedimento-inexistente', 'Procedimento não encontrado.', 'procedimento');
       recusarErros(errosPeriodoProcedimento({ inicio: e.vigenciaInicio, fim: e.vigenciaFim }));
-      const atuais = await tx.consultar(
+      const atuais = await tx.consultarParaAtualizar(
         `SELECT id, item_faturavel_id, vigencia_inicio, vigencia_fim FROM especialidade_procedimento
-          WHERE especialidade_medica_id = ? AND item_faturavel_id = ? AND ativo AND excluido_em IS NULL FOR UPDATE`,
+          WHERE especialidade_medica_id = ? AND item_faturavel_id = ? AND ativo AND excluido_em IS NULL`,
         [e.especialidade, e.procedimento],
       );
       const cruzam = periodosSobrepostos(
@@ -181,9 +192,9 @@ const opGravarOcupacao = (t: RegistroTrilhaTela) =>
         throw naoAchado('Especialidade');
       if (!(await tx.uma('SELECT id FROM ocupacao_cbo WHERE id = ?', [e.ocupacao])))
         throw recusaCampo('cbo-inexistente', 'Ocupação (CBO) não encontrada.', 'ocupacao');
-      const linhas = await tx.consultar(
+      const linhas = await tx.consultarParaAtualizar(
         `SELECT id, ocupacao_cbo_id, principal, versao, excluido_em FROM especialidade_ocupacao
-          WHERE especialidade_medica_id = ? FOR UPDATE`,
+          WHERE especialidade_medica_id = ?`,
         [e.especialidade],
       );
       const ativas = linhas.filter((l) => l['excluido_em'] === null);
@@ -233,7 +244,11 @@ const opRetirarOcupacao = (t: RegistroTrilhaTela) =>
         [e.id, e.dono],
       );
       if (!x) throw naoAchado('Registro');
-      await tx.excluir('especialidade_ocupacao', e.id, e.versao);
+      // Exclusão lógica: a linha fica (com a marca de quem retirou) e religar a mesma ocupação a reaproveita.
+      await tx.alterar('especialidade_ocupacao', e.id, e.versao, {
+        excluido_em: new Date(),
+        excluido_por: tx.contexto.usuario,
+      });
       if (bool(x['principal'])) {
         const s = await tx.uma(
           `SELECT id, versao FROM especialidade_ocupacao WHERE especialidade_medica_id = ? AND excluido_em IS NULL
@@ -339,11 +354,11 @@ const opIncluirLotacao = (t: RegistroTrilhaTela, restrito: number | null) =>
           'Escolha o tipo ou o subtipo do vínculo de trabalho.',
           'tipoVinculo',
         );
-      const atuais = await tx.consultar(
+      const atuais = await tx.consultarParaAtualizar(
         `SELECT id, estabelecimento_id, unidade_assistencial_id, ocupacao_cbo_id, vigencia_inicio, vigencia_fim,
                 carga_horaria_ambulatorial + carga_horaria_hospitalar + carga_horaria_outros AS carga,
                 ocupacao_padrao, versao
-           FROM lotacao_profissional WHERE profissional_id = ? AND ativo AND excluido_em IS NULL FOR UPDATE`,
+           FROM lotacao_profissional WHERE profissional_id = ? AND ativo AND excluido_em IS NULL`,
         [e.profissional],
       );
       const c = conflitosLotacao(
@@ -468,23 +483,50 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
       const uf = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ?', [ufSigla]);
       if (!uf) throw recusaCampo('uf-inexistente', 'UF não encontrada.', 'uf');
       // Colisão pela chave do domínio (conselho, UF e número normalizados), não pela comparação exata do texto.
-      const chave = chaveSolicitante({
-        id: e.id,
-        conselho: sigla,
-        uf: ufSigla,
-        numero: Number(numero),
-        cbo: null,
-      });
-      const outros = (
+      const chave = chaveSolicitante({ conselho: sigla, uf: ufSigla, numero: Number(numero) });
+      // O duplicado unificado NESTE cadastro não impede: se o registro certo era o dele, os dois trocam de registro
+      // na mesma transação (regra do domínio), e a chave única do banco continua valendo.
+      const iguais = (
         await tx.consultar(`${SQL_SOLICITANTES} AND uf.sigla = ? AND s.id <> ?`, [ufSigla, e.id])
-      ).map(comparavel);
-      const iguais = outros.filter((o) => chave !== null && chaveSolicitante(o) === chave).map((o) => o.id);
-      if (iguais.length)
+      )
+        .filter((r) => chave !== null && chaveSolicitante(comparavel(r)) === chave)
+        .map((r) => ({
+          id: Number(r['id']),
+          sucessor: num(r['sucessor']),
+          registro: {
+            conselho: String(r['conselho']),
+            uf: String(r['uf']),
+            numero: String(r['numero_conselho']),
+          },
+        }));
+      const registro = registroNaAlteracao({
+        id: e.id,
+        anterior: {
+          conselho: String(atual['conselho']),
+          uf: String(atual['uf']),
+          numero: String(atual['numero_conselho']),
+        },
+        novo: { conselho: sigla, uf: ufSigla, numero },
+        iguais,
+      });
+      if (registro.recusar.length)
         throw recusa(
           'solicitante-existente',
-          `Já existe outro solicitante com este conselho, UF e número (cadastro ${iguais.join(', ')}).`,
+          `Já existe outro solicitante com este conselho, UF e número (cadastro ${registro.recusar.join(', ')}).`,
           { campos: ['numero'] },
         );
+      const versaoDe = async (id: number) =>
+        Number(
+          (await tx.consultarParaAtualizar('SELECT versao FROM solicitante_externo WHERE id = ?', [id]))[0]![
+            'versao'
+          ],
+        );
+      // Troca em três passos: o duplicado sai do número (valor de passagem, único por cadastro), este cadastro o
+      // assume e o duplicado fica com o número que este tinha.
+      if (registro.trocarCom !== null)
+        await tx.alterar('solicitante_externo', registro.trocarCom, await versaoDe(registro.trocarCom), {
+          numero_conselho: `~${registro.trocarCom}`,
+        });
       if (e.ocupacao !== null && !(await tx.uma('SELECT id FROM ocupacao_cbo WHERE id = ?', [e.ocupacao])))
         throw recusaCampo('cbo-inexistente', 'Ocupação (CBO) não encontrada.', 'ocupacao');
       if (
@@ -508,10 +550,22 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
         email: e.email,
         observacao: e.observacao || null,
       });
-      return { id: e.id };
+      if (registro.trocarCom !== null)
+        await tx.alterar('solicitante_externo', registro.trocarCom, await versaoDe(registro.trocarCom), {
+          conselho_classe_id: Number(atual['conselho_classe_id']),
+          conselho_unidade_federativa_id: Number(atual['conselho_unidade_federativa_id']),
+          numero_conselho: String(atual['numero_conselho']),
+        });
+      return { id: e.id, registroTrocadoCom: registro.trocarCom };
     },
     alvo: (e) => ({ tabela: 'solicitante_externo', id: e.id }),
-    trilha: () => ({ dados: t.dadosDepois ?? null, motivo: null }),
+    trilha: (_e, r) => ({
+      dados: {
+        ...((t.dadosDepois ?? {}) as Record<string, unknown>),
+        ...(r.registroTrocadoCom !== null ? { registroTrocadoCom: r.registroTrocadoCom } : {}),
+      },
+      motivo: null,
+    }),
   });
 
 const esquemaSituacao = z
@@ -527,10 +581,17 @@ const opSituacaoSolicitante = (t: RegistroTrilhaTela) =>
     acao: 'alteracao',
     async gravar(tx, e) {
       const s = await tx.uma(
-        'SELECT ativo, data_inscricao FROM solicitante_externo WHERE id = ? AND excluido_em IS NULL',
+        'SELECT ativo, data_inscricao, sucessor_solicitante_externo_id FROM solicitante_externo WHERE id = ? AND excluido_em IS NULL',
         [e.id],
       );
       if (!s) throw naoAchado('Solicitante');
+      // O cadastro unificado em outro só volta pelo desfazer da unificação (que devolve o ponteiro).
+      if (e.ativo && s['sucessor_solicitante_externo_id'] !== null)
+        throw recusaCampo(
+          'solicitante-unificado',
+          'Este cadastro foi unificado em outro: desfaça a unificação para reativá-lo.',
+          'ativo',
+        );
       if (bool(s['ativo']) === e.ativo)
         throw recusaCampo(
           'sem-alteracao',
@@ -574,9 +635,9 @@ const opCodigoFonte = (t: RegistroTrilhaTela) =>
         throw recusaCampo('fonte-inexistente', 'Fonte pagadora não encontrada.', 'fonte');
       const codigo = e.codigo.trim();
       if (e.ativo) recusarErros(errosCodigoNaFonte(codigo));
-      const atual = await tx.uma(
+      const [atual] = await tx.consultarParaAtualizar(
         `SELECT id, codigo_na_fonte, ativo, versao FROM solicitante_externo_fonte_pagadora
-          WHERE solicitante_externo_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL FOR UPDATE`,
+          WHERE solicitante_externo_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL`,
         [e.solicitante, e.fonte],
       );
       if (!atual) {
@@ -672,15 +733,34 @@ export interface FichaSolicitante {
   ativo: boolean;
   dataInativacao: string | null;
   faltaParaGuia: string[];
-  parecidos: { id: number; nome: string; registro: string; ativo: boolean; motivo: string }[];
+  /** Unificação (02-CAD linha 20): para onde este cadastro foi e quem foi unificado nele. */
+  unificadoEm: UnificacaoDoSolicitante['unificadoEm'];
+  absorvidos: UnificacaoDoSolicitante['absorvidos'];
+  /**
+   * Parecidos, com o que a unificação de cada um traria para este cadastro (`traz`: dados que este não tem) e o que
+   * os dois têm diferente (`difere`: fica o deste). Só os nomes dos campos.
+   */
+  parecidos: {
+    id: number;
+    nome: string;
+    registro: string;
+    ativo: boolean;
+    versao: number;
+    motivo: string;
+    traz: string[];
+    difere: string[];
+  }[];
   codigos: { id: number; versao: number; fonte: number; fonteNome: string; codigo: string; ativo: boolean }[];
 }
 
-const SQL_SOLICITANTES = `SELECT s.id, s.nome, cc.sigla AS conselho, uf.sigla AS uf, s.numero_conselho, o.codigo_cbo, s.ativo
+const SQL_SOLICITANTES = `SELECT s.id, s.nome, cc.sigla AS conselho, uf.sigla AS uf, s.numero_conselho, o.codigo_cbo, s.ativo, s.versao,
+       s.sucessor_solicitante_externo_id AS sucessor
   FROM solicitante_externo s JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
   JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
   LEFT JOIN ocupacao_cbo o ON o.id = s.ocupacao_cbo_id WHERE s.excluido_em IS NULL`;
-const comparavel = (r: Record<string, unknown>): SolicitanteParecido & { ativo: boolean } => ({
+const comparavel = (
+  r: Record<string, unknown>,
+): SolicitanteParecido & { ativo: boolean; versao: number } => ({
   id: Number(r['id']),
   nome: String(r['nome']),
   conselho: texto(r['conselho']),
@@ -688,6 +768,7 @@ const comparavel = (r: Record<string, unknown>): SolicitanteParecido & { ativo: 
   numero: /^\d+$/.test(String(r['numero_conselho'] ?? '')) ? Number(r['numero_conselho']) : null,
   cbo: texto(r['codigo_cbo']),
   ativo: bool(r['ativo']),
+  versao: Number(r['versao'] ?? 0),
 });
 
 export class CadastroLigacoesProprio {
@@ -770,6 +851,17 @@ export class CadastroLigacoesProprio {
   }
   mudarSituacaoSolicitante(c: ContextoPorta, e: EntradaSituacaoSolicitante, t: RegistroTrilhaTela) {
     return this.executar(c, opSituacaoSolicitante(t), e, t);
+  }
+  /** Unifica o duplicado no cadastro que continua (o absorvido fica inativo, com o ponteiro; nada clínico muda). */
+  unificarSolicitante(c: ContextoPorta, e: EntradaUnificarSolicitante, t: RegistroTrilhaTela) {
+    return this.executar(c, opUnificarSolicitante(t), e, t);
+  }
+  desfazerUnificacaoSolicitante(
+    c: ContextoPorta,
+    e: EntradaDesfazerUnificacaoSolicitante,
+    t: RegistroTrilhaTela,
+  ) {
+    return this.executar(c, opDesfazerUnificacaoSolicitante(t), e, t);
   }
   gravarCodigoFonte(c: ContextoPorta, e: EntradaCodigoFonte, t: RegistroTrilhaTela) {
     return this.executar(c, opCodigoFonte(t), e, t);
@@ -896,7 +988,7 @@ export class CadastroLigacoesProprio {
       const like = `%${(termo ?? '').replace(/[%_]/g, '')}%`;
       const [ests, unids, vincs, cbos, procs, esps] = await Promise.all([
         l.consultar(
-          'SELECT id, nome_fantasia AS nome FROM estabelecimento WHERE excluido_em IS NULL${soEst} ORDER BY nome_fantasia',
+          `SELECT id, nome_fantasia AS nome FROM estabelecimento WHERE excluido_em IS NULL${soEst} ORDER BY nome_fantasia`,
           estP,
         ),
         l.consultar(
@@ -974,6 +1066,8 @@ export class CadastroLigacoesProprio {
           nome: s.nome,
           registro: `${s.conselho} ${s.numero ?? ''}/${s.uf}`,
           ativo: s.ativo,
+          // Versão lida: a unificação a confere (o duplicado não é unificado por cima de outra alteração).
+          versao: s.versao,
           motivo: p.motivo,
         };
       });
@@ -996,11 +1090,32 @@ export class CadastroLigacoesProprio {
           WHERE x.solicitante_externo_id = ? AND x.excluido_em IS NULL ORDER BY x.ativo DESC, f.nome`,
         [id],
       );
-      return { s, cods };
+      return { s, cods, uni: await lerUnificacaoDoSolicitante(l, id) };
     });
     if (!f) throw naoAchado('Solicitante');
     const s = f.s;
     const cmp = comparavel(s);
+    // Quem já foi unificado neste cadastro sai dos parecidos (está na lista dos unificados).
+    const candidatos = (
+      await this.parecidosCom(c, {
+        id,
+        nome: cmp.nome,
+        conselho: cmp.conselho,
+        uf: cmp.uf,
+        numero: cmp.numero,
+      })
+    ).filter((p) => !f.uni.absorvidos.some((a) => a.id === p.id) && p.id !== f.uni.unificadoEm?.id);
+    const dadosDos = candidatos.length
+      ? await this.ler(c, (l) =>
+          l.consultar(
+            `SELECT id, cpf, cns, ocupacao_cbo_id, especialidade_medica_id, instituicao_nome, instituicao_cnpj,
+                    instituicao_codigo_cnes, telefone, email FROM solicitante_externo
+              WHERE id IN (${candidatos.map(() => '?').join(', ')})`,
+            candidatos.map((p) => p.id),
+          ),
+        )
+      : [];
+    const meus = dadosDoSolicitante(s);
     return {
       id,
       versao: Number(s['versao']),
@@ -1022,12 +1137,12 @@ export class CadastroLigacoesProprio {
       ativo: bool(s['ativo']),
       dataInativacao: data(s['data_inativacao']),
       faltaParaGuia: camposFaltantes(cmp),
-      parecidos: await this.parecidosCom(c, {
-        id,
-        nome: cmp.nome,
-        conselho: cmp.conselho,
-        uf: cmp.uf,
-        numero: cmp.numero,
+      unificadoEm: f.uni.unificadoEm,
+      absorvidos: f.uni.absorvidos,
+      parecidos: candidatos.map((p) => {
+        const d = dadosDos.find((x) => Number(x['id']) === p.id);
+        const r = d ? dadosNaUnificacao(meus, dadosDoSolicitante(d)) : null;
+        return { ...p, traz: r ? Object.keys(r.herdar) : [], difere: r ? [...r.divergentes] : [] };
       }),
       codigos: f.cods.map((x) => ({
         id: Number(x['id']),

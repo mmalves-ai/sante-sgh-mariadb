@@ -38,12 +38,27 @@ import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
 import { MapaTrabalhoController, SERVICO_MAPA_TRABALHO } from './mapa-trabalho.controller.js';
+import { LoteTrabalhoController, SERVICO_LOTE_TRABALHO } from './lote-trabalho.controller.js';
+import { ResultadoBancoController, SERVICO_RESULTADO_SADT } from './resultado-banco.controller.js';
 import { OrcamentoExamesController, SERVICO_ORCAMENTO_SADT } from './orcamento-exames.controller.js';
 import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
 import { CatalogoSadtController } from './catalogo.controller.js';
+import { PortaRespostasSadtPropria, RESPOSTAS_SADT } from './catalogo-respostas-propria.js';
+import { CatalogoRespostasSadtController } from './catalogo-respostas.controller.js';
+import { LaudoGrandezasController } from './laudo-grandezas.controller.js';
+import { GRANDEZAS_LAUDO, PortaGrandezasLaudoPropria } from './laudo-grandezas-propria.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
+import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
+import { EscalaExecucaoController, SERVICO_ESCALA_EXECUCAO } from './escala-execucao.controller.js';
+import {
+  InterfaceEquipamentoController,
+  SERVICO_INTERFACE_EQUIPAMENTO,
+} from './interface-equipamento.controller.js';
+import { EntregaResultadoController, SERVICO_ENTREGA_RESULTADO } from './entrega-resultado.controller.js';
+import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
+import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
 
 export interface OpcoesModuloSadt {
   /** Testes: as portas já montadas. */
@@ -131,20 +146,53 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       PortalController,
       PacsController,
       CatalogoSadtController,
+      CatalogoRespostasSadtController,
       PedidoSadtController,
       OrcamentoExamesController,
       MapaTrabalhoController,
+      LoteTrabalhoController,
+      ResultadoBancoController,
       LaudoRedacaoController,
+      LaudoGrandezasController,
+      ApoioRemessaController,
+      LimitesExameController,
+      EntregaResultadoController,
+      EscalaExecucaoController,
+      InterfaceEquipamentoController,
+      MicrobiologiaController,
     ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
       { provide: CATALOGO_SADT, useValue: ctx.nucleo ? new PortaCatalogoSadtPropria(ctx.nucleo) : null },
+      { provide: RESPOSTAS_SADT, useValue: ctx.nucleo ? new PortaRespostasSadtPropria(ctx.nucleo) : null },
+      {
+        provide: GRANDEZAS_LAUDO,
+        useValue: ctx.nucleo ? new PortaGrandezasLaudoPropria(ctx.nucleo) : null,
+      },
       ...(configuracaoMemoria ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracaoMemoria }] : []),
       { provide: PORTA_SADT, useValue: sadt },
       { provide: PORTA_PACS, useValue: pacs },
       { provide: AVISOS_SADT, useValue: avisos },
       // Pedido, cancelamento do item, kit com versão, recoleta e sub-amostras: só no banco do cliente (sem ele, 503).
       // Retenção do exame na bancada (mapa de trabalho): só no banco do cliente (sem ele, 503).
+      // Digitação, liberação e retificação do resultado pelo exame pedido (05-SADT linha 10): só no banco do cliente.
+      {
+        provide: SERVICO_RESULTADO_SADT,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoResultadoSadt } = await import('./aplicacao/resultado-propria.js');
+          return new ServicoResultadoSadt(ctx.nucleo);
+        },
+      },
+      // Lote de trabalho da bancada (abrir, fechar, imprimir): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_LOTE_TRABALHO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoLoteTrabalho } = await import('./aplicacao/lote-trabalho-propria.js');
+          return new ServicoLoteTrabalho(ctx.nucleo);
+        },
+      },
       {
         provide: SERVICO_MAPA_TRABALHO,
         useFactory: async () => {
@@ -170,6 +218,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           return new ServicoOrcamentoSadt(ctx.nucleo);
         },
       },
+      // Laboratório de apoio: remessa, etiqueta e de-para (05-SADT linha 14): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_APOIO_REMESSA,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoApoioRemessa } = await import('./aplicacao/apoio-remessa-propria.js');
+          return new ServicoApoioRemessa(ctx.nucleo);
+        },
+      },
       // Redação do laudo e laudo estruturado (05-SADT linhas 16 e 17): só no banco do cliente (sem ele, 503).
       {
         provide: SERVICO_LAUDO_REDACAO,
@@ -177,6 +234,53 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoLaudoRedacao } = await import('./aplicacao/laudo-redacao.js');
           return new ServicoLaudoRedacao(ctx.nucleo);
+        },
+      },
+      // Interface com os equipamentos do laboratório (05-SADT linha 13): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_INTERFACE_EQUIPAMENTO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoInterfaceEquipamento } =
+            await import('./aplicacao/interface-equipamento-propria.js');
+          return new ServicoInterfaceEquipamento(ctx.nucleo);
+        },
+      },
+      // Escala de execução (05-SADT linha 19): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_ESCALA_EXECUCAO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoEscalaExecucao } = await import('./aplicacao/escala-execucao-propria.js');
+          return new ServicoEscalaExecucao(ctx.nucleo);
+        },
+      },
+      // Entrega de resultados: prazo, protocolo do balcão e publicação no portal (05-SADT linha 21): só no banco do
+      // cliente (sem ele, 503 nas rotas, e o portal segue sem o filtro do perfil).
+      {
+        provide: SERVICO_ENTREGA_RESULTADO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoEntregaResultado } = await import('./aplicacao/entrega-resultado-propria.js');
+          return new ServicoEntregaResultado(ctx.nucleo);
+        },
+      },
+      // Limites do pedido de exame (05-SADT linha 6): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_LIMITES_EXAME,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoLimitesExame } = await import('./aplicacao/limites-exame-propria.js');
+          return new ServicoLimitesExame(ctx.nucleo);
+        },
+      },
+      // Microbiologia estruturada: cultura, isolados e antibiograma (05-SADT linha 12): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_MICROBIOLOGIA,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoMicrobiologia } = await import('./aplicacao/microbiologia-propria.js');
+          return new ServicoMicrobiologia(ctx.nucleo);
         },
       },
       // A central de avisos (o sino) é a comunicação do módulo acesso: sem ele, o aviso do crítico fica no painel do SADT.

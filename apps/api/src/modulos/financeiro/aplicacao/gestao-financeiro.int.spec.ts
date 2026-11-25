@@ -6,6 +6,11 @@
 // Escopo de contas: a primeira linha restringe o usuário à conta dada; retirar desliga as marcas (a linha fica);
 // ninguém altera o próprio escopo. Tipo de lançamento por perfil: liberado só o crédito avulso, a transferência do
 // usuário do perfil é recusada e não grava; liberada a transferência, grava.
+// Tipo de credor por perfil no título a pagar (a lista de cada operação é separada): liberado só outro tipo de credor,
+// o título do fornecedor é recusado e não grava; liberado o fornecedor, grava; a restrição do título a pagar não mexe no
+// movimento bancário, e a liberação fica com o tipo de credor (nunca com o tipo de lançamento).
+// Tipo de credor por perfil no pedido de adiantamento: fora da lista, o pedido é recusado e nenhum adiantamento nasce;
+// liberado o tipo, o pedido grava; a lista do adiantamento é separada da do título a pagar.
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -41,6 +46,21 @@ describe.skipIf(SEM_BANCO)('gestão do financeiro: reclassificação e permissõ
   };
   const escrever = <T>(fn: Parameters<MassaFinanceiro['nucleo']['escrever']>[1]) =>
     m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-gf-02-07' }, fn) as Promise<T>;
+
+  /** Um segundo tipo de credor a pagar (o código padrão do cadastro; a massa só garante o fornecedor). */
+  const outroTipoCredor = (diferenteDe: number) =>
+    escrever<number>(async (e) => {
+      const l = await e.uma<{ id: number }>(
+        "SELECT id FROM tipo_credor WHERE ativo = TRUE AND sentido IN ('pagar','ambos') AND id <> ? ORDER BY id LIMIT 1",
+        [diferenteDe],
+      );
+      return l
+        ? Number(l.id)
+        : e.inserir(
+            "INSERT INTO tipo_credor (codigo, descricao, natureza, criado_em) VALUES ('medico', 'Médico', 'medico', ?)",
+            [new Date()],
+          );
+    });
 
   beforeAll(async () => {
     m = await montarMassa();
@@ -383,5 +403,245 @@ describe.skipIf(SEM_BANCO)('gestão do financeiro: reclassificação e permissõ
       [perfilOutroEst],
     );
     expect(Number(nada?.['n'])).toBe(0);
+  });
+
+  it('tipo de credor por perfil no título a pagar: fora da lista é recusado e não grava; a lista é só desta operação', async () => {
+    await escrever(async (e) => {
+      await e.executar('DELETE FROM usuario_perfil WHERE usuario_id = ? AND perfil_acesso_id IN (?, ?)', [
+        m.paga,
+        perfil,
+        perfilLivre,
+      ]);
+      await e.executar(
+        'INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [m.paga, perfil, m.est, '2000-01-01', new Date()],
+      );
+    });
+    const lancar = (documento: number) =>
+      executar(
+        'financeiro.criarTituloPagar',
+        { ...tituloDaMassa(m, documento, 100), centroCusto: m.centro },
+        m.paga,
+      );
+    const titulos = async () =>
+      Number(
+        (
+          await consultar('SELECT COUNT(*) AS n FROM titulo_pagar WHERE estabelecimento_id = ?', [m.est])
+        )[0]?.['n'],
+      );
+    // Perfil livre no título a pagar: grava, e o tipo de credor gravado é o que a lista vai guardar.
+    const t1 = await lancar(920_799_001);
+    const [tc] = await consultar('SELECT tipo_credor_id AS t FROM titulo_pagar WHERE id = ?', [
+      Number((t1.resultado as Record<string, unknown>)['tituloPagar']),
+    ]);
+    const tipoDoTitulo = Number(tc?.['t']);
+    const outro = await outroTipoCredor(tipoDoTitulo);
+    expect(outro).toBeGreaterThan(0);
+    // Tipo que não é de credor a pagar: recusado e nada grava.
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.manterTipoLancamento', {
+          perfil,
+          tipo: 999_999_999,
+          liberado: true,
+          operacao: 'contas_pagar',
+        }),
+      ),
+    ).toBe('tipo-inexistente');
+    // Liberado só outro tipo de credor: o título deste credor é recusado e não grava.
+    const r = await executar('financeiro.manterTipoLancamento', {
+      perfil,
+      tipo: outro,
+      liberado: true,
+      operacao: 'contas_pagar',
+    });
+    expect((r.resultado as Record<string, unknown>)['restringiu']).toBe(true);
+    const n1 = await titulos();
+    expect(await codigoDaGravacao(lancar(920_799_002))).toBe('tipo-lancamento-nao-liberado');
+    expect(await titulos()).toBe(n1);
+    // A liberação fica com o tipo de credor, na operação do título a pagar; a marca de restrito também.
+    const linhas = await consultar(
+      `SELECT operacao, tipo_credor_id, tipo_lancamento_bancario_id, estabelecimento_id, criado_por
+         FROM permissao_tipo_lancamento WHERE perfil_acesso_id = ? AND operacao = 'contas_pagar'`,
+      [perfil],
+    );
+    expect(
+      linhas.map((x) => [
+        Number(x['tipo_credor_id']),
+        x['tipo_lancamento_bancario_id'],
+        Number(x['estabelecimento_id']),
+        Number(x['criado_por']),
+      ]),
+    ).toEqual([[outro, null, m.est, m.lanca]]);
+    const marcas = await consultar(
+      'SELECT operacao, excluido_em IS NULL AS vale FROM restricao_tipo_lancamento_perfil WHERE perfil_acesso_id = ? AND estabelecimento_id = ? ORDER BY operacao',
+      [perfil, m.est],
+    );
+    // No movimento bancário a restrição foi desfeita no caso anterior e segue desfeita: uma operação não mexe na outra.
+    expect(marcas.map((x) => [String(x['operacao']), Number(x['vale'])])).toEqual([
+      ['banco', 0],
+      ['contas_pagar', 1],
+    ]);
+    const hoje = new Date().toISOString().slice(0, 10);
+    expect(
+      await codigoDaGravacao(
+        executar(
+          'financeiro.lancarMovimento',
+          {
+            tipo: 'T',
+            data: hoje,
+            contaCredito: m.contaB,
+            contaDebito: m.contaA,
+            valor: 23.45,
+            historico: 'TRANSFERENCIA SINTETICA L0207 CREDOR',
+            classificacao: { grupo: 9207, subgrupo: 1, item: 1 },
+          },
+          m.paga,
+        ),
+      ),
+    ).toBe('gravou');
+    // Liberado o tipo do título: grava.
+    await executar('financeiro.manterTipoLancamento', {
+      perfil,
+      tipo: tipoDoTitulo,
+      liberado: true,
+      operacao: 'contas_pagar',
+    });
+    expect(await codigoDaGravacao(lancar(920_799_002))).toBe('gravou');
+    expect(await titulos()).toBe(n1 + 1);
+    // Retirar o tipo do título: a linha fica (histórico), o perfil segue restrito e o título volta a ser recusado.
+    await executar('financeiro.manterTipoLancamento', {
+      perfil,
+      tipo: tipoDoTitulo,
+      liberado: false,
+      operacao: 'contas_pagar',
+    });
+    expect(await codigoDaGravacao(lancar(920_799_003))).toBe('tipo-lancamento-nao-liberado');
+    const [fora] = await consultar(
+      "SELECT excluido_em IS NOT NULL AS fora, excluido_por FROM permissao_tipo_lancamento WHERE perfil_acesso_id = ? AND operacao = 'contas_pagar' AND tipo_credor_id = ?",
+      [perfil, tipoDoTitulo],
+    );
+    expect([Number(fora?.['fora']), Number(fora?.['excluido_por'])]).toEqual([1, m.lanca]);
+    // Um perfil livre que dá a criação do título abre todos os tipos (os perfis acumulam).
+    await escrever(async (e) => {
+      await e.executar(
+        'INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [m.paga, perfilLivre, m.est, '2000-01-01', new Date()],
+      );
+      await e.executar(
+        `INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em)
+         SELECT ?, id, ? FROM acao_sistema WHERE codigo = 'financeiro.tituloPagar.criar'`,
+        [perfilLivre, new Date()],
+      );
+    });
+    expect(await codigoDaGravacao(lancar(920_799_003))).toBe('gravou');
+    await escrever(async (e) => {
+      await e.executar('DELETE FROM usuario_perfil WHERE perfil_acesso_id = ?', [perfilLivre]);
+    });
+    // Desfazer a restrição do título a pagar é explícito e volta a valer só a permissão da operação.
+    expect(await codigoDaGravacao(lancar(920_799_004))).toBe('tipo-lancamento-nao-liberado');
+    await executar('financeiro.manterRestricaoTipoLancamento', {
+      perfil,
+      restrito: false,
+      operacao: 'contas_pagar',
+    });
+    expect(await codigoDaGravacao(lancar(920_799_004))).toBe('gravou');
+  });
+
+  it('tipo de credor por perfil no adiantamento: fora da lista o pedido é recusado e nada grava; liberado, grava', async () => {
+    await escrever(async (e) => {
+      await e.executar('DELETE FROM usuario_perfil WHERE usuario_id = ? AND perfil_acesso_id IN (?, ?)', [
+        m.paga,
+        perfil,
+        perfilLivre,
+      ]);
+      await e.executar(
+        'INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [m.paga, perfil, m.est, '2000-01-01', new Date()],
+      );
+    });
+    const pedir = () => {
+      const c = m.ctx(m.paga);
+      return porta.gravarSgh(
+        op(c),
+        {
+          estabelecimento: null,
+          usuario: null,
+          acao: 'operacao' as const,
+          entidade: 'adiantamento',
+          entidadeId: 0,
+          correlacao: null,
+        },
+        (g) =>
+          g.concederAdiantamento({
+            tipoCredor: 'fornecedor',
+            credor: m.fornecedor,
+            conta: m.contaA,
+            valor: 150,
+            data: new Date().toISOString().slice(0, 10),
+            prazo: null,
+            referente: 'SINTETICO L0207 adiantamento por tipo',
+            usuario: 'x',
+            contasEscopo: [m.contaA, m.contaB],
+          }),
+      );
+    };
+    const adiantamentos = async () =>
+      Number(
+        (
+          await consultar('SELECT COUNT(*) AS n FROM adiantamento WHERE estabelecimento_id = ?', [m.est])
+        )[0]?.['n'],
+      );
+    const fornecedor = Number(
+      (await consultar("SELECT id FROM tipo_credor WHERE codigo = 'fornecedor'", []))[0]?.['id'],
+    );
+    const outro = await outroTipoCredor(fornecedor);
+    // Perfil livre no adiantamento (a restrição do título a pagar, do caso anterior, não vale aqui): o pedido grava.
+    const n0 = await adiantamentos();
+    expect(await codigoDaGravacao(pedir())).toBe('gravou');
+    expect(await adiantamentos()).toBe(n0 + 1);
+    // Liberado só outro tipo de credor: o pedido ao fornecedor é recusado e nenhum adiantamento nasce.
+    await executar('financeiro.manterTipoLancamento', {
+      perfil,
+      tipo: outro,
+      liberado: true,
+      operacao: 'adiantamento',
+    });
+    expect(await codigoDaGravacao(pedir())).toBe('tipo-lancamento-nao-liberado');
+    expect(await adiantamentos()).toBe(n0 + 1);
+    const [linha] = await consultar(
+      `SELECT tipo_credor_id, tipo_lancamento_bancario_id FROM permissao_tipo_lancamento
+        WHERE perfil_acesso_id = ? AND estabelecimento_id = ? AND operacao = 'adiantamento' AND excluido_em IS NULL`,
+      [perfil, m.est],
+    );
+    expect([Number(linha?.['tipo_credor_id']), linha?.['tipo_lancamento_bancario_id']]).toEqual([
+      outro,
+      null,
+    ]);
+    // Liberado o fornecedor: grava.
+    await executar('financeiro.manterTipoLancamento', {
+      perfil,
+      tipo: fornecedor,
+      liberado: true,
+      operacao: 'adiantamento',
+    });
+    expect(await codigoDaGravacao(pedir())).toBe('gravou');
+    expect(await adiantamentos()).toBe(n0 + 2);
+    // Retirados os dois tipos, o perfil segue restrito sem nada; desfazer a restrição devolve o pedido.
+    for (const tipo of [outro, fornecedor])
+      await executar('financeiro.manterTipoLancamento', {
+        perfil,
+        tipo,
+        liberado: false,
+        operacao: 'adiantamento',
+      });
+    expect(await codigoDaGravacao(pedir())).toBe('tipo-lancamento-nao-liberado');
+    await executar('financeiro.manterRestricaoTipoLancamento', {
+      perfil,
+      restrito: false,
+      operacao: 'adiantamento',
+    });
+    expect(await codigoDaGravacao(pedir())).toBe('gravou');
+    expect(await adiantamentos()).toBe(n0 + 3);
   });
 });

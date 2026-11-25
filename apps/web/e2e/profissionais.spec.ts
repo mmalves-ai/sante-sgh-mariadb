@@ -184,21 +184,12 @@ test.describe('Profissionais: inclusão, login, inativação e exclusão só sem
       'Ativo',
     );
 
-    // Especialidade, lotação (horas só inteiras) e credenciamento.
+    // Especialidade e credenciamento (a lotação, com API própria, está no f31-lotacao-profissional.spec.ts).
     await page.getByTestId('prof-aba-especialidades').click();
     await escolher(page.getByTestId('ne-registro'), { indice: 1 });
     await escolher(page.getByTestId('ne-especialidade'), { rotulo: /CARDIOLOGIA/ });
     await page.getByTestId('incluir-especialidade').click();
     await expect(page.getByTestId('prof-painel-especialidades')).toContainText('CARDIOLOGIA');
-    await page.getByTestId('prof-aba-lotacao').click();
-    await escolher(page.getByTestId('nl-registro'), { indice: 1 });
-    await escolher(page.getByTestId('nl-unidade'), { rotulo: /AMBULATÓRIO/ });
-    await page.getByTestId('nl-amb').fill('1,5');
-    await page.getByTestId('gravar-lotacao').click();
-    await expect(page.getByTestId('edicao-recusa')).toContainText('inteiros');
-    await page.getByTestId('nl-amb').fill('15');
-    await page.getByTestId('gravar-lotacao').click();
-    await expect(page.getByTestId('prof-painel-lotacao')).toContainText('AMBULATÓRIO');
     await page.getByTestId('prof-aba-convenios').click();
     await escolher(page.getByTestId('nc-registro'), { indice: 1 });
     await escolher(page.getByTestId('nc-convenio'), { rotulo: /PLANO/ });

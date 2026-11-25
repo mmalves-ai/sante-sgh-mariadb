@@ -35,6 +35,7 @@ import {
 import { z } from 'zod';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
 import * as Alergias from './alergias-propria.js';
+import * as HistoricoAlergias from './alergias-historico-propria.js';
 import * as Painel from './documentos-propria-painel.js';
 import { DocumentosPropriaExames, type LeitorArquivos } from './documentos-propria-exames.js';
 import { OPERACOES_PEP_RESTO, operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
@@ -45,6 +46,7 @@ import {
 } from './documentos-propria-operacoes-2.js';
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
+import type { NucleoDocumentosPep } from './documentos-propria-comum.js';
 import type {
   AtendimentoPepLido,
   ContextoGravacaoPep,
@@ -54,14 +56,8 @@ import type {
   RetratosAtuais,
 } from './tipos-pep.js';
 
-/** O que a porta usa do NucleoProprio (os testes trocam). */
-export interface NucleoDocumentosPep {
-  lerSomente<T>(
-    contexto: { readonly cliente: string; readonly correlacao: string },
-    fn: (l: Leitor) => Promise<T>,
-  ): Promise<T>;
-  criarExecutor(): Executor;
-}
+// A base comum continua exportada por aqui (as partes da porta a importam desta porta).
+export { type NucleoDocumentosPep, recusaPendente } from './documentos-propria-comum.js';
 
 /** Situações em que o documento pode ser assinado (lista positiva). */
 export const CATEGORIAS_ASSINAVEIS: readonly string[] = ['lancado', 'validado', 'aguardando_assinatura'];
@@ -77,6 +73,7 @@ const TABELAS_DOCUMENTOS = [
   'documento_prontuario',
   'documento_prontuario_evento',
   'registro_assistencial',
+  'exportacao_documento',
 ] as const;
 
 const num = (v: unknown): number => Number(v);
@@ -103,15 +100,6 @@ function conteudoDe(v: unknown): Record<string, unknown> {
 function numeroDeNegocio(numero: unknown, id: unknown): number {
   const n = Number(String(numero ?? '').replace(/\D/g, ''));
   return Number.isSafeInteger(n) && n > 0 ? n : num(id);
-}
-
-export function recusaPendente(metodo: string): ErroOperacao {
-  return new ErroOperacao(
-    501,
-    'pendente-modelo-proprio',
-    'Ainda não disponível no banco próprio',
-    `A leitura ou gravação "${metodo}" dos documentos do prontuário ainda não tem adaptador no banco próprio.`,
-  );
 }
 
 const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao =>
@@ -741,7 +729,8 @@ export class PortaDocumentosPropria implements PortaDocumentos {
       'pep.documento.evento',
       async (tx, est, usuario) => {
         const [d] = await tx.consultarParaAtualizar(
-          `SELECT id, versao, situacao_documento_prontuario_id, vias_impressas FROM documento_prontuario
+          `SELECT id, versao, situacao_documento_prontuario_id, vias_impressas, paciente_id, atendimento_id
+             FROM documento_prontuario
             WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [ev.documento, est],
         );
@@ -767,6 +756,20 @@ export class PortaDocumentosPropria implements PortaDocumentos {
           ocorrido_em: agora,
           usuario_id: usuario,
         });
+        // Um registro só de toda impressão e exportação (01-ADM L82): quem, quando, a via e a justificativa.
+        await tx.incluir('exportacao_documento', {
+          estabelecimento_id: est,
+          documento_prontuario_id: ev.documento,
+          paciente_id: num(d['paciente_id']),
+          atendimento_id: numOuNull(d['atendimento_id']),
+          tipo_operacao:
+            ev.tipo === 'impresso' ? 'impressao' : ev.tipo === 'segunda-via' ? 'reimpressao' : 'exportacao',
+          formato: 'pdf',
+          destino: 'download',
+          justificativa: textoOuNull(ev.justificativa ?? null)?.slice(0, 500) ?? null,
+          ocorrido_em: agora,
+          usuario_id: usuario,
+        });
         return { documento: ev.documento as number | null, gravado: true };
       },
       (x) => ({ tabela: 'documento_prontuario', id: x.documento }),
@@ -775,6 +778,56 @@ export class PortaDocumentosPropria implements PortaDocumentos {
         motivo: ev.justificativa ?? null,
         dados: { evento: `documento.${ev.tipo}` },
       }),
+    );
+  }
+
+  async registrarExportacaoProntuario(
+    c: ContextoGravacaoPep,
+    e: {
+      paciente: number;
+      justificativa: string;
+      tipoJustificativa?: number | null;
+      linhas: number;
+      hash: string;
+    },
+  ): Promise<{ id: number }> {
+    return this.gravar(
+      c,
+      'pep.prontuario.exportacao',
+      async (tx, est, usuario) => {
+        const p = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [e.paciente]);
+        if (!p) throw recusar(404, 'paciente-inexistente', 'Paciente não encontrado.');
+        if (e.tipoJustificativa != null) {
+          const t = await tx.uma('SELECT id FROM tipo_justificativa_exportacao WHERE id = ? AND ativo', [
+            e.tipoJustificativa,
+          ]);
+          if (!t)
+            throw recusar(
+              400,
+              'tipo-justificativa-invalido',
+              'O tipo de justificativa não existe ou está inativo.',
+            );
+        }
+        const agora = new Date();
+        const id = await tx.incluir('exportacao_documento', {
+          estabelecimento_id: est,
+          entidade: 'paciente',
+          entidade_id: e.paciente,
+          paciente_id: e.paciente,
+          tipo_operacao: 'exportacao',
+          formato: 'texto',
+          destino: 'download',
+          tipo_justificativa_exportacao_id: e.tipoJustificativa ?? null,
+          justificativa: e.justificativa.slice(0, 500),
+          hash_sha256: e.hash,
+          dados: JSON.stringify({ linhas: e.linhas }),
+          ocorrido_em: agora,
+          usuario_id: usuario,
+        });
+        return { id: Number(id) };
+      },
+      (x) => ({ tabela: 'exportacao_documento', id: x.id }),
+      () => ({ acao: 'exportacao', motivo: e.justificativa, dados: { evento: 'prontuario.exportado' } }),
     );
   }
 
@@ -980,6 +1033,12 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   }
   versaoAlergias(...a: Parameters<PortaDocumentos['versaoAlergias']>) {
     return Alergias.versaoAlergias(this.nucleo, this.cliente, ...a);
+  }
+  historicoAlergia(...a: Parameters<PortaDocumentos['historicoAlergia']>) {
+    return HistoricoAlergias.historicoDaAlergia(this.nucleo, this.cliente, ...a);
+  }
+  manifestacoesAlergicas(...a: Parameters<PortaDocumentos['manifestacoesAlergicas']>) {
+    return HistoricoAlergias.catalogoManifestacoes(this.nucleo, this.cliente, ...a);
   }
   catalogoExames(...a: Parameters<PortaDocumentos['catalogoExames']>) {
     return this.exames.catalogoExames(...a);

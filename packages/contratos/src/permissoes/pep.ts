@@ -98,7 +98,9 @@ export const PERMISSOES_PEP_M22: readonly DeclaracaoPermissao[] = [
     descricao:
       'Editar a configuração do PEP que vale para todos os estabelecimentos do cliente (ex.: seções do sumário de alta)',
 
-    concessaoPorPerfil: null,
+    // Recurso novo, sem opção correspondente no menu de origem: concedido ao administrador do sistema.
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
     categoria: 'tecnica',
     criticidade: 'sensivel',
   },
@@ -296,7 +298,8 @@ export const PERMISSOES_PEP_M23: readonly DeclaracaoPermissao[] = [
     'pep.painel.ler',
     'Ver o painel "Meus pacientes" (internados e em atendimento por unidade, com favoritos e alertas)',
   ),
-  clinica(
+  // Recurso novo, sem opção correspondente no menu de origem: concedido a quem assiste com conselho.
+  recursoNovo(
     'pep.equipe.gerenciar',
     'Registrar a equipe assistencial do paciente: incluir o profissional com função e encerrar a participação com motivo',
 

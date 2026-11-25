@@ -1,0 +1,290 @@
+{
+  "classificacao_raca_cor": [
+    {
+      "codigo_ibge": "1",
+      "descricao": "Branca",
+      "codigo_cns": "01",
+      "codigo_esus": "01"
+    },
+    {
+      "codigo_ibge": "2",
+      "descricao": "Preta",
+      "codigo_cns": "02",
+      "codigo_esus": "02"
+    },
+    {
+      "codigo_ibge": "4",
+      "descricao": "Parda",
+      "codigo_cns": "03",
+      "codigo_esus": "03"
+    },
+    {
+      "codigo_ibge": "3",
+      "descricao": "Amarela",
+      "codigo_cns": "04",
+      "codigo_esus": "04"
+    },
+    {
+      "codigo_ibge": "5",
+      "descricao": "Indígena",
+      "codigo_cns": "05",
+      "codigo_esus": "05",
+      "exige_etnia": true
+    },
+    {
+      "codigo_ibge": "9",
+      "descricao": "Sem informação",
+      "codigo_cns": "99",
+      "codigo_esus": "99"
+    }
+  ],
+  "identidade_de_genero": [
+    {
+      "codigo": "mulher_cisgenero",
+      "descricao": "Mulher cisgênero"
+    },
+    {
+      "codigo": "homem_cisgenero",
+      "descricao": "Homem cisgênero"
+    },
+    {
+      "codigo": "mulher_transgenero",
+      "descricao": "Mulher transgênero",
+      "pede_nome_social": true
+    },
+    {
+      "codigo": "homem_transgenero",
+      "descricao": "Homem transgênero",
+      "pede_nome_social": true
+    },
+    {
+      "codigo": "travesti",
+      "descricao": "Travesti",
+      "pede_nome_social": true
+    },
+    {
+      "codigo": "nao_binario",
+      "descricao": "Pessoa não binária",
+      "pede_nome_social": true
+    },
+    {
+      "codigo": "outra",
+      "descricao": "Outra"
+    },
+    {
+      "codigo": "nao_informada",
+      "descricao": "Não informada"
+    }
+  ],
+  "nivel_escolaridade": [
+    {
+      "codigo": "analfabeto",
+      "descricao": "Analfabeto",
+      "codigo_esocial": "01",
+      "ordem": 1
+    },
+    {
+      "codigo": "fundamental_1_incompleto",
+      "descricao": "Até o 5º ano incompleto do ensino fundamental",
+      "codigo_esocial": "02",
+      "ordem": 2
+    },
+    {
+      "codigo": "fundamental_1_completo",
+      "descricao": "5º ano completo do ensino fundamental",
+      "codigo_esocial": "03",
+      "ordem": 3
+    },
+    {
+      "codigo": "fundamental_2_incompleto",
+      "descricao": "Do 6º ao 9º ano incompleto do ensino fundamental",
+      "codigo_esocial": "04",
+      "ordem": 4
+    },
+    {
+      "codigo": "fundamental_completo",
+      "descricao": "Ensino fundamental completo",
+      "codigo_esocial": "05",
+      "ordem": 5
+    },
+    {
+      "codigo": "medio_incompleto",
+      "descricao": "Ensino médio incompleto",
+      "codigo_esocial": "06",
+      "ordem": 6
+    },
+    {
+      "codigo": "medio_completo",
+      "descricao": "Ensino médio completo",
+      "codigo_esocial": "07",
+      "ordem": 7
+    },
+    {
+      "codigo": "superior_incompleto",
+      "descricao": "Educação superior incompleta",
+      "codigo_esocial": "08",
+      "ordem": 8
+    },
+    {
+      "codigo": "superior_completo",
+      "descricao": "Educação superior completa",
+      "codigo_esocial": "09",
+      "ordem": 9
+    },
+    {
+      "codigo": "pos_graduacao",
+      "descricao": "Pós-graduação completa",
+      "codigo_esocial": "10",
+      "ordem": 10
+    },
+    {
+      "codigo": "mestrado",
+      "descricao": "Mestrado completo",
+      "codigo_esocial": "11",
+      "ordem": 11
+    },
+    {
+      "codigo": "doutorado",
+      "descricao": "Doutorado completo",
+      "codigo_esocial": "12",
+      "ordem": 12
+    },
+    {
+      "codigo": "nao_informada",
+      "descricao": "Não informada",
+      "ordem": 99
+    }
+  ],
+  "crenca_religiosa": [
+    {
+      "codigo": "catolica",
+      "descricao": "Católica",
+      "grupo": "Cristã"
+    },
+    {
+      "codigo": "evangelica",
+      "descricao": "Evangélica",
+      "grupo": "Cristã"
+    },
+    {
+      "codigo": "espirita",
+      "descricao": "Espírita"
+    },
+    {
+      "codigo": "testemunha_de_jeova",
+      "descricao": "Testemunha de Jeová",
+      "grupo": "Cristã",
+      "recusa_hemoderivado": true,
+      "orientacao_assistencial": "Costuma recusar transfusão de sangue e hemoderivados: confirme com o paciente e registre o termo."
+    },
+    {
+      "codigo": "adventista",
+      "descricao": "Adventista",
+      "grupo": "Cristã"
+    },
+    {
+      "codigo": "umbanda",
+      "descricao": "Umbanda",
+      "grupo": "Matriz africana"
+    },
+    {
+      "codigo": "candomble",
+      "descricao": "Candomblé",
+      "grupo": "Matriz africana"
+    },
+    {
+      "codigo": "judaica",
+      "descricao": "Judaica"
+    },
+    {
+      "codigo": "islamica",
+      "descricao": "Islâmica"
+    },
+    {
+      "codigo": "budista",
+      "descricao": "Budista"
+    },
+    {
+      "codigo": "outra",
+      "descricao": "Outra"
+    },
+    {
+      "codigo": "sem_religiao",
+      "descricao": "Sem religião"
+    },
+    {
+      "codigo": "nao_declarada",
+      "descricao": "Não declarada"
+    }
+  ],
+  "capacidade_civil": [
+    {
+      "codigo": "plena",
+      "descricao": "Capacidade plena"
+    },
+    {
+      "codigo": "emancipado",
+      "descricao": "Menor emancipado"
+    },
+    {
+      "codigo": "relativamente_incapaz",
+      "descricao": "Relativamente incapaz",
+      "exige_responsavel_legal": true
+    },
+    {
+      "codigo": "absolutamente_incapaz",
+      "descricao": "Absolutamente incapaz (menor de 16 anos)",
+      "exige_responsavel_legal": true
+    }
+  ],
+  "condicao_vulnerabilidade": [
+    {
+      "codigo": "situacao_de_rua",
+      "descricao": "Pessoa em situação de rua"
+    },
+    {
+      "codigo": "privada_de_liberdade",
+      "descricao": "Pessoa privada de liberdade"
+    },
+    {
+      "codigo": "acolhimento_institucional",
+      "descricao": "Criança, adolescente ou idoso em acolhimento institucional"
+    },
+    {
+      "codigo": "violencia",
+      "descricao": "Pessoa em situação de violência"
+    },
+    {
+      "codigo": "migrante_refugiado",
+      "descricao": "Migrante, refugiado ou apátrida"
+    },
+    {
+      "codigo": "sem_rede_de_apoio",
+      "descricao": "Pessoa sem rede de apoio familiar"
+    },
+    {
+      "codigo": "comunidade_tradicional",
+      "descricao": "Pessoa de povo ou comunidade tradicional"
+    },
+    {
+      "codigo": "extrema_pobreza",
+      "descricao": "Pessoa em situação de extrema pobreza"
+    }
+  ],
+  "nacionalidade": [
+    {
+      "codigo_cadsus": "1",
+      "descricao": "Brasileira",
+      "brasileira": true
+    },
+    {
+      "codigo_cadsus": "2",
+      "descricao": "Brasileira por naturalização",
+      "brasileira": true
+    },
+    {
+      "codigo_cadsus": "3",
+      "descricao": "Estrangeira"
+    }
+  ]
+}

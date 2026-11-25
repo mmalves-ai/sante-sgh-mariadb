@@ -10,7 +10,6 @@ import { SETORES_SADT } from '@sgh/contratos';
 import type { PortaSadt } from './porta.js';
 import type {
   ContextoPacs,
-  ExameImagemPendente,
   GravadorPacs,
   ItemMwlBanco,
   ModalidadeLida,
@@ -113,19 +112,6 @@ export class PortaPacsMemoria implements PortaPacs {
 
   examesPorId(c: ContextoPacs, ids: readonly number[]) {
     return this.sadt.examesPorId(c, ids);
-  }
-
-  async examesSemItem(
-    c: ContextoPacs,
-    f: { desde: string; ate: string; atos: readonly number[]; teto: number },
-  ): Promise<{ itens: ExameImagemPendente[]; cortada: boolean }> {
-    const s = this.e(c);
-    const r = await this.sadt.examesDoSetor(c, { setor: 'imagem', inicio: f.desde, fim: f.ate });
-    const com = new Set([...s.itens.values()].map((i) => i.exame));
-    const todos = r.itens
-      .filter((x) => f.atos.includes(x.ato) && !com.has(x.id))
-      .map((x) => ({ exame: x.id, ato: x.ato, data: x.chave.data.slice(0, 10) }));
-    return { itens: todos.slice(0, f.teto), cortada: todos.length > f.teto };
   }
 
   async modalidades() {

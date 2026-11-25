@@ -1,6 +1,10 @@
 // Textos das telas da recepção (M19). Sem nome de sistema antigo (ADR 0023): o guichê aberto em outro lugar é
 // "aberto por outra pessoa"; a chamada feita fora destas telas é "chamada em outro guichê".
+import { mensagensEstruturaRecepcao } from './i18n-estrutura.js';
+
 export const mensagensRecepcao = {
+  // 02-REC linha 33: cadastro da estrutura da recepção pela tela.
+  estrutura: mensagensEstruturaRecepcao,
   carregando: 'Carregando…',
   nenhuma: 'Nada encontrado.',
   gravar: 'Gravar',

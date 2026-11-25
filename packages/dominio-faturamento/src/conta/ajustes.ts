@@ -262,11 +262,13 @@ export function conferirDecisaoAjuste(
   solicitante: number,
   decisor: number | null,
   decisao: 'aprovar' | 'recusar' | 'cancelar',
+  /** A alçada vigente permite que quem pediu aprove o próprio pedido (a faixa de valor continua valendo). */
+  permiteAutoaprovacao = false,
 ): string | null {
   if (situacao !== 'pendente_aprovacao') return 'O ajuste já foi decidido.';
   if (decisor === null) return 'Decisão sem usuário identificado.';
   if (decisao === 'cancelar') return decisor === solicitante ? null : 'Só quem pediu cancela o pedido.';
-  if (decisor === solicitante)
+  if (decisor === solicitante && !(permiteAutoaprovacao && decisao === 'aprovar'))
     return 'Quem pediu o ajuste não pode decidi-lo: peça a outro usuário com a alçada.';
   return null;
 }
@@ -280,6 +282,8 @@ export interface NivelAlcadaAjuste {
   readonly valorMinimo: number;
   /** Nulo: sem teto. */
   readonly valorMaximo: number | null;
+  /** Falso: o nível pode ser pulado quando outro nível exigido cobre o valor (padrão: obrigatório). */
+  readonly obrigatorio?: boolean;
 }
 
 /**
@@ -311,6 +315,81 @@ export function conferirAlcadaDoValor(
     nivel: null,
     motivo: `O ajuste de ${valor.toFixed(2)} passa a sua alçada (até ${teto.toFixed(2)}): peça a quem tem alçada maior.`,
   };
+}
+
+/** Regra da alçada vigente: níveis um após o outro (série) ou em qualquer ordem (paralelo). */
+export interface RegraAlcadaAjuste {
+  readonly modo: 'serie' | 'paralelo';
+  readonly permiteAutoaprovacao: boolean;
+}
+
+/** Uma aprovação já gravada no pedido: o nível e quem aprovou. */
+export interface AprovacaoDoNivel {
+  readonly nivel: number;
+  readonly usuarioId: number;
+}
+
+/**
+ * Alçada com vários níveis: os níveis exigidos são os que têm uma faixa que contém o valor (um nível cuja faixa não
+ * alcança o valor fica de fora; o não obrigatório também, se houver um obrigatório). Em série, só o primeiro nível
+ * que falta pode decidir; em paralelo, qualquer um que falte. A mesma pessoa não aprova dois níveis do mesmo pedido.
+ * O ajuste só fica aprovado quando o último nível exigido aprova (`conclui`); antes disso o pedido avança de nível.
+ */
+export function etapaDaAlcada(
+  valor: number,
+  niveis: readonly NivelAlcadaAjuste[],
+  regra: RegraAlcadaAjuste,
+  aprovacoes: readonly AprovacaoDoNivel[],
+  decisor: number,
+  perfisDoDecisor: readonly number[],
+): {
+  nivel: NivelAlcadaAjuste | null;
+  motivo: string | null;
+  conclui: boolean;
+  faltam: readonly number[];
+} {
+  if (!niveis.length) return { nivel: null, motivo: null, conclui: true, faltam: [] };
+  const contem = (n: NivelAlcadaAjuste) =>
+    valor >= n.valorMinimo && (n.valorMaximo === null || valor <= n.valorMaximo);
+  const comFaixa = niveis.filter(contem);
+  if (!comFaixa.length) {
+    const teto = Math.max(...niveis.map((n) => n.valorMaximo ?? Number.POSITIVE_INFINITY));
+    return {
+      nivel: null,
+      motivo: `O ajuste de ${valor.toFixed(2)} passa a alçada cadastrada (até ${teto.toFixed(2)}): ninguém o aprova.`,
+      conclui: false,
+      faltam: [],
+    };
+  }
+  const obrigatorios = comFaixa.filter((n) => n.obrigatorio !== false);
+  const exigidos = [...new Set((obrigatorios.length ? obrigatorios : comFaixa).map((n) => n.nivel))].sort(
+    (a, b) => a - b,
+  );
+  const aprovados = new Set(aprovacoes.map((a) => a.nivel));
+  const faltam = exigidos.filter((x) => !aprovados.has(x));
+  const decide = (n: NivelAlcadaAjuste) =>
+    (n.usuarioId !== null && n.usuarioId === decisor) ||
+    (n.perfilId !== null && perfisDoDecisor.includes(n.perfilId));
+  if (aprovacoes.some((a) => a.usuarioId === decisor))
+    return {
+      nivel: null,
+      motivo: 'Você já aprovou um nível deste pedido: o próximo nível é de outra pessoa.',
+      conclui: false,
+      faltam,
+    };
+  const podem = regra.modo === 'serie' ? faltam.slice(0, 1) : faltam;
+  const nivel =
+    comFaixa.filter((n) => podem.includes(n.nivel) && decide(n)).sort((a, b) => a.nivel - b.nivel)[0] ?? null;
+  if (!nivel) {
+    const meus = niveis.filter(decide);
+    const motivo = !meus.length
+      ? 'O seu cargo não está na alçada de aprovação de ajustes da conta.'
+      : regra.modo === 'serie' && faltam.length
+        ? `O pedido está no nível ${faltam[0]} da alçada: o seu cargo não decide esse nível para este valor.`
+        : `O ajuste de ${valor.toFixed(2)} não cabe na sua faixa da alçada: peça a quem tem a alçada desse valor.`;
+    return { nivel: null, motivo, conclui: false, faltam };
+  }
+  return { nivel, motivo: null, conclui: faltam.length === 1, faltam };
 }
 
 /** Totais de acréscimo e desconto da conta: só os ajustes aprovados mudam o valor. */

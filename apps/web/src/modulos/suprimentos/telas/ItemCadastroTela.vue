@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Cadastro do item (F3.6, 05-SUP linha 1): `/suprimentos/itens/cadastro/:id?`. Material e medicamento numa tela só,
 // gravados de uma vez: identificação, unidades e fatores (com a conversão à vista), controles, princípios ativos,
 // vias, códigos de barras, apresentações com o registro sanitário (o vencido aparece vencido) e estabilidade.
@@ -7,6 +8,8 @@ import type { ItemEstoqueEntrada } from '@sgh/contratos/regras-suprimentos';
 import {
   CONDICOES_ESTABILIDADE,
   conferirItemEstoque,
+  gtinValido,
+  PADROES_CODIGO_BARRAS,
   TIPOS_ITEM_ESTOQUE,
 } from '@sgh/contratos/regras-suprimentos';
 import { useQuery } from '@tanstack/vue-query';
@@ -84,6 +87,9 @@ const enviado = ref(false);
 const recusas = computed(() => (enviado.value ? conferirItemEstoque(f.value) : []));
 const doCampo = (...cs: string[]) =>
   recusas.value.filter((x) => x.campos?.some((c) => cs.includes(c))).map((x) => x.mensagem);
+/** Listas editadas na hora (códigos de barras e apresentações): a recusa aparece ao incluir, sem esperar o salvar. */
+const vivas = computed(() => conferirItemEstoque(f.value));
+const doCampoVivo = (c: string) => vivas.value.filter((x) => x.campos?.includes(c)).map((x) => x.mensagem);
 const subgrupos = computed(() =>
   (apoio.data.value?.subgrupos ?? []).filter((s) => s.grupo === f.value.grupo),
 );
@@ -192,12 +198,13 @@ function escolherFab(o: Opcao) {
   achadosFab.value = [];
   termoFab.value = '';
 }
-function incluirVia(ev: Event) {
-  const alvo = ev.target as HTMLSelectElement;
-  const v = Number(alvo.value);
+/** A via escolhida no combo entra na lista e o combo volta ao "Escolha". */
+const novaVia = ref('');
+function incluirVia() {
+  const v = Number(novaVia.value);
   if (v && !f.value.vias.some((x) => x.via === v))
     f.value.vias = [...f.value.vias, { via: v, padrao: !f.value.vias.length }];
-  alvo.value = '';
+  novaVia.value = '';
 }
 const nomeVia = (v: number) => apoio.data.value?.vias.find((x) => x.id === v)?.nome ?? String(v);
 const remover = <T,>(lista: readonly T[], i: number): T[] => lista.filter((_, k) => k !== i);
@@ -205,6 +212,67 @@ const remover = <T,>(lista: readonly T[], i: number): T[] => lista.filter((_, k)
 function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' | 'diluente', valor: string) {
   const v = valor.trim() === '' ? (campo === 'horas' ? 0 : null) : Number(valor);
   f.value.estabilidades = f.value.estabilidades.map((s, k) => (k === i ? { ...s, [campo]: v } : s));
+}
+/** Concentração e unidade do princípio ativo editadas na própria linha. */
+function mudarPrincipio(i: number, campo: 'concentracao' | 'unidade', valor: number | string | null) {
+  const v = valor === null || String(valor).trim() === '' ? null : Number(valor);
+  f.value.principiosAtivos = f.value.principiosAtivos.map((p, k) => (k === i ? { ...p, [campo]: v } : p));
+}
+const opcoesUnidade = computed(() => [
+  { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+  ...(apoio.data.value?.unidades ?? []).map((o) => ({ valor: o.id, rotulo: `${o.codigo} · ${o.nome}` })),
+]);
+/** Novo código de barras: GTIN conferido na hora; a unidade padrão é a de estoque. */
+const novoBarras = ref({
+  codigo: '',
+  padrao: 'gtin' as (typeof PADROES_CODIGO_BARRAS)[number],
+  quantidade: 1,
+  unidade: null as number | null,
+});
+const barrasInvalido = computed(
+  () =>
+    novoBarras.value.padrao === 'gtin' &&
+    novoBarras.value.codigo.trim() !== '' &&
+    !gtinValido(novoBarras.value.codigo.trim()),
+);
+function incluirBarras() {
+  const b = novoBarras.value;
+  const unidade = b.unidade ?? f.value.unidadeEstoque;
+  if (!b.codigo.trim() || barrasInvalido.value || !unidade) return;
+  f.value.codigosBarras = [
+    ...f.value.codigosBarras,
+    {
+      codigo: b.codigo.trim(),
+      padrao: b.padrao,
+      quantidade: Number(b.quantidade),
+      unidade,
+      principal: !f.value.codigosBarras.length,
+    },
+  ];
+  novoBarras.value = { codigo: '', padrao: b.padrao, quantidade: 1, unidade: null };
+}
+/** Nova apresentação comercial, com o registro sanitário opcional (fabricante: o do item). */
+const novaApr = ref({
+  nomeComercial: '',
+  apresentacao: '',
+  quantidadeEmbalagem: 1,
+  registro: '',
+  validade: '',
+});
+function incluirApresentacao() {
+  const a = novaApr.value;
+  if (!a.nomeComercial.trim()) return;
+  f.value.apresentacoes = [
+    ...f.value.apresentacoes,
+    {
+      nomeComercial: a.nomeComercial.trim(),
+      apresentacao: a.apresentacao.trim() || null,
+      fabricante: f.value.fabricante ?? null,
+      quantidadeEmbalagem: Number(a.quantidadeEmbalagem),
+      registro: a.registro.trim() ? { numero: a.registro.trim(), validade: a.validade || null } : null,
+    },
+  ];
+  novaApr.value = { nomeComercial: '', apresentacao: '', quantidadeEmbalagem: 1, registro: '', validade: '' };
 }
 </script>
 
@@ -237,51 +305,67 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
         <label class="campo"
           >{{ t('cadastroEstoque.item.nomeResumido') }} <input v-model="f.nomeResumido" maxlength="60"
         /></label>
-        <label class="campo"
-          >{{ t('cadastroEstoque.tipo') }}
-          <select v-model="f.tipo" data-testid="item-tipo">
-            <option v-for="x in TIPOS_ITEM_ESTOQUE" :key="x" :value="x">
-              {{ t(`cadastroEstoque.item.tipos.${x}`) }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.item.grupo') }}
-          <select v-model="f.grupo" data-testid="item-grupo" @change="f.subgrupo = null">
-            <option :value="0">{{ t('cadastroEstoque.escolha') }}</option>
-            <option v-for="o in apoio.data.value?.grupos ?? []" :key="o.id" :value="o.id">
-              {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.item.subgrupo') }}
-          <select v-model="f.subgrupo">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in subgrupos" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select></label
-        >
+        <SanteSelecao
+          v-model="f.tipo"
+          :rotulo="t('cadastroEstoque.tipo')"
+          :opcoes="[
+            ...TIPOS_ITEM_ESTOQUE.map((x) => ({ valor: x, rotulo: t(`cadastroEstoque.item.tipos.${x}`) })),
+          ]"
+          class="campo"
+          data-testid="item-tipo"
+        />
+        <SanteSelecao
+          v-model="f.grupo"
+          :rotulo="t('cadastroEstoque.item.grupo')"
+          :opcoes="[
+            { valor: 0, rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.grupos ?? []).map((o) => ({ valor: o.id, rotulo: o.nome })),
+          ]"
+          class="campo"
+          data-testid="item-grupo"
+          @update:model-value="f.subgrupo = null"
+        />
+        <SanteSelecao
+          :model-value="f.subgrupo ?? null"
+          @update:model-value="(v) => (f.subgrupo = v)"
+          :rotulo="t('cadastroEstoque.item.subgrupo')"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...subgrupos.map((o) => ({ valor: o.id, rotulo: o.nome })),
+          ]"
+          class="campo"
+        />
       </fieldset>
       <fieldset>
         <legend>{{ t('cadastroEstoque.item.unidades') }}</legend>
-        <label class="campo"
-          >{{ t('cadastroEstoque.item.unidadeEstoque') }}
-          <select v-model="f.unidadeEstoque" data-testid="item-unidadeEstoque">
-            <option :value="0">{{ t('cadastroEstoque.escolha') }}</option>
-            <option v-for="o in apoio.data.value?.unidades ?? []" :key="o.id" :value="o.id">
-              {{ o.codigo }} · {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label v-for="k in UNIDADES" :key="k" class="campo"
-          >{{ t(`cadastroEstoque.item.${k}`) }}
-          <select v-model="f[k]">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in apoio.data.value?.unidades ?? []" :key="o.id" :value="o.id">
-              {{ o.codigo }} · {{ o.nome }}
-            </option>
-          </select></label
-        >
+        <SanteSelecao
+          v-model="f.unidadeEstoque"
+          :rotulo="t('cadastroEstoque.item.unidadeEstoque')"
+          :opcoes="[
+            { valor: 0, rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.unidades ?? []).map((o) => ({
+              valor: o.id,
+              rotulo: `${o.codigo} · ${o.nome}`,
+            })),
+          ]"
+          class="campo"
+          data-testid="item-unidadeEstoque"
+        />
+        <SanteSelecao
+          v-for="k in UNIDADES"
+          :key="k"
+          :model-value="f[k] ?? null"
+          @update:model-value="(v) => (f[k] = v)"
+          :rotulo="t(`cadastroEstoque.item.${k}`)"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...(apoio.data.value?.unidades ?? []).map((o) => ({
+              valor: o.id,
+              rotulo: `${o.codigo} · ${o.nome}`,
+            })),
+          ]"
+          class="campo"
+        />
         <label class="campo"
           >{{ t('cadastroEstoque.item.fatorCompra') }}
           <input v-model.number="f.fatorCompraEstoque" type="number" min="0" step="any"
@@ -356,7 +440,24 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
         <legend>{{ t('cadastroEstoque.item.principios') }}</legend>
         <ul>
           <li v-for="(p, i) in f.principiosAtivos" :key="p.principio">
-            {{ nomesPa[p.principio] ?? p.principio }} · {{ p.concentracao ?? '' }} {{ sigla(p.unidade) }}
+            {{ nomesPa[p.principio] ?? p.principio }}
+            <label
+              >{{ t('cadastroEstoque.item.concentracao') }}
+              <input
+                type="number"
+                min="0"
+                step="any"
+                :value="p.concentracao ?? ''"
+                :data-testid="`principio-concentracao-${i}`"
+                @change="mudarPrincipio(i, 'concentracao', ($event.target as HTMLInputElement).value)"
+            /></label>
+            <SanteSelecao
+              :model-value="p.unidade ?? null"
+              :rotulo="t('cadastroEstoque.item.unidadeConcentracao')"
+              :opcoes="opcoesUnidade"
+              :data-testid="`principio-unidade-${i}`"
+              @update:model-value="(v) => mudarPrincipio(i, 'unidade', v)"
+            />
             <span v-if="p.principal"> · {{ t('cadastroEstoque.item.principal') }}</span>
             <button type="button" class="link" @click="f.principiosAtivos = remover(f.principiosAtivos, i)">
               {{ t('cadastroEstoque.remover') }}
@@ -395,12 +496,16 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
             </button>
           </li>
         </ul>
-        <select :aria-label="t('cadastroEstoque.item.vias')" @change="incluirVia">
-          <option value="">{{ t('cadastroEstoque.escolha') }}</option>
-          <option v-for="o in apoio.data.value?.vias ?? []" :key="o.id" :value="String(o.id)">
-            {{ o.nome }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="novaVia"
+          :rotulo="t('cadastroEstoque.item.vias')"
+          ocultar-rotulo
+          :opcoes="[
+            { valor: '', rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.vias ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
+          ]"
+          @update:model-value="incluirVia"
+        />
         <small v-for="m in doCampo('vias')" :key="m" class="erro">{{ m }}</small>
       </fieldset>
       <fieldset>
@@ -413,7 +518,51 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
             </button>
           </li>
         </ul>
-        <small v-for="m in doCampo('codigosBarras')" :key="m" class="erro">{{ m }}</small>
+        <div class="filtros">
+          <label class="campo"
+            >{{ t('cadastroEstoque.codigo') }}
+            <input v-model="novoBarras.codigo" inputmode="numeric" maxlength="60" data-testid="barras-codigo"
+          /></label>
+          <SanteSelecao
+            v-model="novoBarras.padrao"
+            :rotulo="t('cadastroEstoque.item.padraoBarras')"
+            :opcoes="
+              PADROES_CODIGO_BARRAS.map((x) => ({
+                valor: x,
+                rotulo: t(`cadastroEstoque.item.padroesBarras.${x}`),
+              }))
+            "
+            class="campo"
+          />
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.quantidade') }}
+            <input
+              v-model.number="novoBarras.quantidade"
+              type="number"
+              min="0"
+              step="any"
+              data-testid="barras-quantidade"
+          /></label>
+          <SanteSelecao
+            v-model="novoBarras.unidade"
+            :rotulo="t('cadastroEstoque.item.unidadeEstoque')"
+            :opcoes="opcoesUnidade"
+            class="campo"
+          />
+          <button
+            type="button"
+            class="botao"
+            data-testid="barras-incluir"
+            :disabled="barrasInvalido"
+            @click="incluirBarras"
+          >
+            {{ t('cadastroEstoque.incluir') }}
+          </button>
+        </div>
+        <small v-if="barrasInvalido" class="erro" data-testid="barras-invalido">{{
+          t('cadastroEstoque.item.gtinInvalido')
+        }}</small>
+        <small v-for="m in doCampoVivo('codigosBarras')" :key="m" class="erro">{{ m }}</small>
       </fieldset>
       <fieldset>
         <legend>{{ t('cadastroEstoque.item.apresentacoes') }}</legend>
@@ -430,7 +579,37 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
             </button>
           </li>
         </ul>
-        <small v-for="m in doCampo('apresentacoes')" :key="m" class="erro">{{ m }}</small>
+        <div class="filtros">
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.nomeComercial') }}
+            <input v-model="novaApr.nomeComercial" maxlength="150" data-testid="apr-nome"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.apresentacao') }}
+            <input v-model="novaApr.apresentacao" maxlength="150" data-testid="apr-apresentacao"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.embalagem') }}
+            <input
+              v-model.number="novaApr.quantidadeEmbalagem"
+              type="number"
+              min="0"
+              step="any"
+              data-testid="apr-quantidade"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.registro') }}
+            <input v-model="novaApr.registro" inputmode="numeric" maxlength="13" data-testid="apr-registro"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.validadeRegistro') }}
+            <input v-model="novaApr.validade" type="date" data-testid="apr-validade"
+          /></label>
+          <button type="button" class="botao" data-testid="apr-incluir" @click="incluirApresentacao">
+            {{ t('cadastroEstoque.incluir') }}
+          </button>
+        </div>
+        <small v-for="m in doCampoVivo('apresentacoes')" :key="m" class="erro">{{ m }}</small>
       </fieldset>
       <fieldset>
         <legend>{{ t('cadastroEstoque.item.estabilidades') }}</legend>
@@ -447,24 +626,32 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
                 :data-testid="`estabilidade-horas-${i}`"
                 @change="mudarEstabilidade(i, 'horas', ($event.target as HTMLInputElement).value)"
             /></label>
-            <label
-              >{{ t('cadastroEstoque.item.guarda') }}
-              <input
-                type="number"
-                min="1"
-                :value="s.condicaoArmazenamento ?? ''"
-                @change="
-                  mudarEstabilidade(i, 'condicaoArmazenamento', ($event.target as HTMLInputElement).value)
-                "
-            /></label>
-            <label v-if="s.condicao === 'diluido'"
-              >{{ t('cadastroEstoque.item.diluente') }}
-              <input
-                type="number"
-                min="1"
-                :value="s.diluente ?? ''"
-                @change="mudarEstabilidade(i, 'diluente', ($event.target as HTMLInputElement).value)"
-            /></label>
+            <SanteSelecao
+              :model-value="s.condicaoArmazenamento ?? null"
+              :rotulo="t('cadastroEstoque.item.guarda')"
+              :opcoes="[
+                { valor: null, rotulo: t('cadastroEstoque.item.qualquerGuarda') },
+                ...(apoio.data.value?.guardas ?? []).map((o) => ({ valor: o.id, rotulo: o.nome })),
+              ]"
+              :data-testid="`estabilidade-guarda-${i}`"
+              @update:model-value="
+                (v) => mudarEstabilidade(i, 'condicaoArmazenamento', v === null ? '' : String(v))
+              "
+            />
+            <SanteSelecao
+              v-if="s.condicao === 'diluido'"
+              :model-value="s.diluente ?? null"
+              :rotulo="t('cadastroEstoque.item.diluente')"
+              :opcoes="[
+                { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+                ...(apoio.data.value?.diluentes ?? []).map((o) => ({
+                  valor: o.id,
+                  rotulo: `${o.codigo} · ${o.nome}`,
+                })),
+              ]"
+              :data-testid="`estabilidade-diluente-${i}`"
+              @update:model-value="(v) => mudarEstabilidade(i, 'diluente', v === null ? '' : String(v))"
+            />
             <button type="button" class="link" @click="f.estabilidades = remover(f.estabilidades, i)">
               {{ t('cadastroEstoque.remover') }}
             </button>

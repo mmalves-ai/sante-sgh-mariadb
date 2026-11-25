@@ -21,7 +21,7 @@ async function entrar(page: Page, login: string): Promise<void> {
 const linhaCom = (page: Page, tabela: string, texto: string) =>
   page.getByTestId(tabela).locator('tbody tr', { hasText: texto });
 
-test.describe('financeiro: adiantamento @F3.8', () => {
+test.describe('financeiro: adiantamento @F3.8 @F3.8-04', () => {
   test.setTimeout(300_000);
 
   test('pedir → aprovar → pagar → compensar só o título aprovado → devolver; título pago e movimento; axe', async ({
@@ -36,7 +36,28 @@ test.describe('financeiro: adiantamento @F3.8', () => {
     await entrar(page, 'SINT.FIN.LANCA');
     await page.goto('/financeiro/pagar/titulos');
     await page.getByTestId('tp-novo').click();
-    await page.getByTestId('tp-novo-credor').fill('5001');
+    // O credor do título achado pelo nome preenche o código.
+    await page.getByTestId('tp-novo-credor-nome-busca').fill('SINTETICO A');
+    await page.getByTestId('tp-novo-credor-nome-opcao-5001').click();
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('5001');
+    // O nome escolhido e o código são um estado só: trocar o tipo limpa os dois (o código do fornecedor não vira o
+    // credor do título de médico), e no médico a busca preenche o credor e o profissional.
+    await escolher(page.getByTestId('tp-novo-tipo'), 'M');
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('');
+    await expect(page.getByTestId('tp-novo-credor-nome-escolhido')).toHaveCount(0);
+    await page.getByTestId('tp-novo-credor-nome-busca').fill('MEDICO');
+    await page.getByTestId('tp-novo-credor-nome-opcao-7001').click();
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('7001');
+    await expect(page.getByTestId('tp-novo-profissional')).toHaveValue('7001');
+    // Digitar outro código à mão desfaz a escolha: o nome exibido nunca é de outro código.
+    await page.getByTestId('tp-novo-credor').fill('7002');
+    await expect(page.getByTestId('tp-novo-credor-nome-escolhido')).toHaveCount(0);
+    await escolher(page.getByTestId('tp-novo-tipo'), 'F');
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('');
+    await page.getByTestId('tp-novo-credor-nome-busca').fill('SINTETICO A');
+    await page.getByTestId('tp-novo-credor-nome-opcao-5001').click();
+    await expect(page.getByTestId('tp-novo-credor')).toHaveValue('5001');
+    await expect(page.getByTestId('tp-novo-credor-nome-escolhido')).toContainText('FORNECEDOR SINTETICO A');
     await page.getByTestId('tp-novo-documento').fill(documento);
     await page.getByTestId('tp-novo-valor').fill('1500');
     await page.getByTestId('tp-novo-quantas').fill('1');
@@ -47,13 +68,17 @@ test.describe('financeiro: adiantamento @F3.8', () => {
     await page.goto('/financeiro/pagar/adiantamentos');
     await expect(page.getByTestId('tela-fin-adiantamentos')).toBeVisible();
     await expect(page.getByTestId('ad-conceder')).toBeDisabled();
-    await page.getByTestId('ad-novo-credor').fill('5001');
+    // O credor é achado pelo nome (parte dele), não pelo código digitado; sem credor escolhido não há pedido.
+    await page.getByTestId('ad-novo-credor-busca').fill('SINTETICO A');
+    await page.getByTestId('ad-novo-credor-opcao-5001').click();
+    await expect(page.getByTestId('ad-novo-credor-escolhido')).toContainText('FORNECEDOR SINTETICO A');
     await page.getByTestId('ad-novo-valor').fill('2000');
     await page.getByTestId('ad-novo-referente').fill(finalidade);
     await semViolacaoAxe(page, '/financeiro/pagar/adiantamentos (novo)');
     await page.getByTestId('ad-conceder').click();
     await expect(page.getByTestId('ad-mensagem')).toContainText('aguarda a aprovação');
     await expect(linhaCom(page, 'ad-lista', finalidade)).toContainText('Aguardando aprovação');
+    await expect(linhaCom(page, 'ad-lista', finalidade)).toContainText('FORNECEDOR SINTETICO A');
     // Quem pediu não aprova (a segregação no servidor).
     await linhaCom(page, 'ad-lista', finalidade).getByRole('button', { name: 'Aprovar' }).click();
     await expect(page.getByTestId('recusa-faturamento')).toContainText('Quem lançou');

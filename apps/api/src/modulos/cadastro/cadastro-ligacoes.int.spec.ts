@@ -2,13 +2,15 @@
 // teste f22_o1, com a massa SINTÉTICA do lote 01-02 (prefixo F22L0102; nenhuma pessoa real). Prova o que fica no banco:
 // procedimento da especialidade com vigência (sobreposição recusada; encerrar grava o fim e a linha fica), ocupação
 // principal única (retirar é exclusão lógica e a principal passa à que fica; religar volta na mesma linha), lotação por
-// estabelecimento e unidade (CBO, carga semanal, vigência; sobreposição e carga acima da semana recusadas; encerrar não
-// apaga) e solicitante externo (alterar, inativar com motivo e reativar, código por fonte pagadora; parecidos na ficha).
+// estabelecimento e unidade (CBO, carga semanal, tipo de vínculo de trabalho, vigência; sobreposição e carga acima da
+// semana recusadas; vínculo inexistente ou do nível mais alto da árvore recusado; encerrar não apaga) e solicitante
+// externo (alterar, inativar com motivo e reativar, código por fonte pagadora; parecidos na ficha).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CadastroLigacoesProprio } from './cadastro-ligacoes-proprio.js';
+import { OPERACAO_CADASTRAR_SOLICITANTE } from './porta-propria.js';
 import {
   CLIENTE_F22,
   contextoPorta,
@@ -27,6 +29,10 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
   let s: CadastroLigacoesProprio;
   let m: Massa | null = null;
   let cbo: number[] = [];
+  // Árvore sintética do tipo de vínculo de trabalho (códigos 97..: fora da faixa do cadastro nacional).
+  let vinculoRaiz = 0;
+  let vinculoTipo = 0;
+  const DESCRICAO_TIPO = `TIPO ${MARCA} LIG SINTETICO`;
   const solicitantes: number[] = [];
 
   const um = <T extends Record<string, unknown>>(sql: string, p: readonly unknown[]) =>
@@ -56,6 +62,8 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
         m!.especialidade,
       ]);
       await e.executar('DELETE FROM lotacao_profissional WHERE profissional_id = ?', [m!.profissional]);
+      await e.executar("DELETE FROM tipo_vinculo_trabalho WHERE codigo_cnes = '9701'", []);
+      await e.executar("DELETE FROM tipo_vinculo_trabalho WHERE codigo_cnes = '97'", []);
       await e.executar(
         `DELETE x FROM solicitante_externo_fonte_pagadora x JOIN solicitante_externo s ON s.id = x.solicitante_externo_id
           WHERE s.nome LIKE ?`,
@@ -72,6 +80,24 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
     s = new CadastroLigacoesProprio(nucleo, CLIENTE_F22);
     cbo = (await todos('SELECT id FROM ocupacao_cbo ORDER BY id LIMIT 2', [])).map((r) => Number(r['id']));
     await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, async (e) => {
+      await e.executar(
+        `INSERT INTO tipo_vinculo_trabalho (codigo_cnes, nivel, codigo_vinculo, descricao, ativo, criado_em)
+         VALUES ('97', 'vinculo', '97', ?, TRUE, NOW(3))`,
+        [`VINCULO ${MARCA} LIG SINTETICO`],
+      );
+      vinculoRaiz = Number(
+        (await e.uma<{ id: unknown }>("SELECT id FROM tipo_vinculo_trabalho WHERE codigo_cnes = '97'", []))!
+          .id,
+      );
+      await e.executar(
+        `INSERT INTO tipo_vinculo_trabalho (codigo_cnes, nivel, superior_tipo_vinculo_trabalho_id, codigo_vinculo,
+           codigo_tipo, descricao, ativo, criado_em) VALUES ('9701', 'tipo', ?, '97', '01', ?, TRUE, NOW(3))`,
+        [vinculoRaiz, DESCRICAO_TIPO],
+      );
+      vinculoTipo = Number(
+        (await e.uma<{ id: unknown }>("SELECT id FROM tipo_vinculo_trabalho WHERE codigo_cnes = '9701'", []))!
+          .id,
+      );
       for (const [nome, numero] of [
         [`ANA ${MARCA} LIG SINTETICA`, '9914001'],
         [`DRA ANA ${MARCA} LIG SINTETICA`, '9914002'],
@@ -216,6 +242,17 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
       vigenciaInicio: '2026-01-01',
       vigenciaFim: null,
     };
+    // Tipo de vínculo: só o tipo ou o subtipo (o nível mais alto da árvore não descreve o vínculo) e só o que existe.
+    const maior = await um<{ id: unknown }>('SELECT MAX(id) AS id FROM tipo_vinculo_trabalho', []);
+    for (const tipoVinculo of [vinculoRaiz, Number(maior!.id) + 1000])
+      await expect(s.incluirLotacao(c(), { ...base, tipoVinculo }, t('x'))).rejects.toMatchObject({
+        problema: { codigo: 'vinculo-inexistente' },
+      });
+    expect(
+      await todos('SELECT id FROM lotacao_profissional WHERE profissional_id = ?', [m!.profissional]),
+    ).toHaveLength(0);
+    expect((await s.opcoes(c(), null)).tiposVinculo.map((x) => x.id)).toContain(vinculoTipo);
+    expect((await s.opcoes(c(), null)).tiposVinculo.map((x) => x.id)).not.toContain(vinculoRaiz);
     const id = await s.incluirLotacao(c(), base, t('x'));
     await expect(
       s.incluirLotacao(c(), { ...base, vigenciaInicio: '2026-05-01' }, t('x')),
@@ -288,12 +325,12 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
     );
     const id2 = await s.incluirLotacao(
       c(),
-      { ...base, vigenciaInicio: '2026-05-01', cargaAmbulatorial: 30 },
+      { ...base, vigenciaInicio: '2026-05-01', cargaAmbulatorial: 30, tipoVinculo: vinculoTipo },
       t('x'),
     );
     const linhas = await todos(
       `SELECT id, unidade_assistencial_id AS u, ocupacao_padrao AS p, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS f,
-              carga_horaria_ambulatorial AS a, excluido_em FROM lotacao_profissional WHERE profissional_id = ? ORDER BY id`,
+              carga_horaria_ambulatorial AS a, tipo_vinculo_trabalho_id AS v, excluido_em FROM lotacao_profissional WHERE profissional_id = ? ORDER BY id`,
       [m!.profissional],
     );
     expect(
@@ -303,14 +340,20 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
         Number(l['p']),
         l['f'],
         Number(l['a']),
+        l['v'] === null ? null : Number(l['v']),
         l['excluido_em'],
       ]),
     ).toEqual([
-      [id, m!.unidade, 0, '2026-04-30', 20, null],
-      [id2, m!.unidade, 1, null, 30, null],
+      [id, m!.unidade, 0, '2026-04-30', 20, null, null],
+      [id2, m!.unidade, 1, null, 30, vinculoTipo, null],
     ]);
     const lidas = await s.lotacoes(c(), m!.profissional);
     expect(lidas.itens.map((x) => x.cargaSemanal)).toEqual([40, 30]);
+    // A leitura da aba devolve o tipo de vínculo gravado, com a descrição do catálogo.
+    expect(lidas.itens.map((x) => [x.id, x.tipoVinculo, x.tipoVinculoDescricao])).toEqual([
+      [id2, vinculoTipo, DESCRICAO_TIPO],
+      [id, null, null],
+    ]);
     // Trilha na mesma transação: inclusão e encerramento da lotação, no estabelecimento da sessão.
     expect(await trilhaDe('lotacao_profissional', id2)).toEqual(['inclusao', null, m!.estabelecimento]);
     expect(await trilhaDe('lotacao_profissional', id)).toEqual(['alteracao', null, m!.estabelecimento]);
@@ -446,5 +489,47 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
     expect(f.instituicaoCnes).toBe('1234567');
     const fb = await s.fichaSolicitante(c(), b);
     expect(fb.faltaParaGuia).toEqual(['cbo']);
+  });
+
+  it('solicitante: a inclusão recusa o repetido pela chave do domínio (zeros à esquerda não escapam)', async () => {
+    const sigla = String(
+      (await um<{ sigla: unknown }>('SELECT sigla FROM unidade_federativa WHERE id = ?', [m!.uf]))!.sigla,
+    );
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar(
+        `INSERT INTO solicitante_externo (nome, conselho_classe_id, numero_conselho, conselho_unidade_federativa_id,
+           data_inscricao, ativo, criado_em) VALUES (?, ?, '009914077', ?, '2026-01-01', TRUE, NOW(3))`,
+        [`ZERO ${MARCA} LIG SINTETICA`, m!.conselho, m!.uf],
+      ),
+    );
+    const ex = nucleo.criarExecutor();
+    const ctx = () => ({
+      cliente: CLIENTE_F22,
+      estabelecimento: m!.estabelecimento,
+      usuario: m!.usuario,
+      correlacao: COR,
+      chaveIdempotencia: `f3-1-4:${Math.random()}`,
+    });
+    const incluir = (numero: number, nome: string) =>
+      ex.executar(
+        OPERACAO_CADASTRAR_SOLICITANTE,
+        CLIENTE_F22,
+        { nome, conselho: m!.conselho, uf: sigla, numero },
+        ctx(),
+      );
+    await expect(incluir(9_914_077, `REPETIDO ${MARCA} LIG SINTETICA`)).rejects.toMatchObject({
+      problema: { codigo: 'solicitante-existente' },
+    });
+    const novo = await incluir(9_914_078, `NOVO ${MARCA} LIG SINTETICA`);
+    const id = Number((novo.resultado as { solicitante: unknown }).solicitante);
+    const linhas = await todos(
+      'SELECT numero_conselho, ativo FROM solicitante_externo WHERE conselho_classe_id = ? AND conselho_unidade_federativa_id = ? AND numero_conselho IN (?, ?, ?) ORDER BY id',
+      [m!.conselho, m!.uf, '009914077', '9914077', '9914078'],
+    );
+    expect(linhas.map((r) => [String(r['numero_conselho']), Number(r['ativo'])])).toEqual([
+      ['009914077', 1],
+      ['9914078', 1],
+    ]);
+    expect(id).toBeGreaterThan(0);
   });
 });

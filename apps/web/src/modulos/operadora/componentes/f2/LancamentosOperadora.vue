@@ -31,6 +31,8 @@ const vencimento = ref<string | null>(null);
 const valor = ref('');
 const descricao = ref('');
 const mensagem = ref<string | null>(null);
+/** Os avisos do lançamento (por exemplo, a coparticipação limitada pelo teto: o calculado e o lançado). */
+const avisos = ref<readonly string[]>([]);
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
 
@@ -65,6 +67,7 @@ async function lancar(): Promise<void> {
   ocupado.value = true;
   erro.value = null;
   mensagem.value = null;
+  avisos.value = [];
   try {
     const comum = {
       competencia: competencia.value.trim(),
@@ -85,6 +88,7 @@ async function lancar(): Promise<void> {
             valor: numeroDe(valor.value),
           });
     mensagem.value = r.mensagem;
+    avisos.value = r.avisos ?? [];
     valor.value = '';
     descricao.value = '';
     await cliente.invalidateQueries({ queryKey: ['operadora', 'cobrancas'] });
@@ -173,7 +177,10 @@ async function lancar(): Promise<void> {
         />
       </div>
     </form>
-    <p v-if="mensagem" role="status" data-testid="mensagem-lancamento">{{ mensagem }}</p>
+    <div v-if="mensagem" role="status" data-testid="mensagem-lancamento">
+      <p>{{ mensagem }}</p>
+      <p v-for="(a, i) in avisos" :key="i" data-testid="aviso-lancamento">{{ a }}</p>
+    </div>
     <ErroOperadora v-if="erro" :erro="erro" />
   </section>
 </template>

@@ -61,6 +61,7 @@ import {
 import { z } from 'zod';
 import type { LiberacaoGravacao, TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil } from '../exames/relogio.js';
+import { exigirCartaoNoRecebimento, gravarCartaoDoRecebimento } from '../financeiro/public-api.js';
 import { versaoTexto } from './esquemas.js';
 import { OPERACOES_CONTA, precoVigente, tabelasDePreco } from './operacoes.js';
 import type {
@@ -251,6 +252,9 @@ export const TABELAS_GRAVACAO_DIRETA = [
   'sessao_caixa',
   'movimento_caixa',
   'recebimento_particular',
+  'transacao_cartao',
+  'parcela_recebivel_cartao',
+  'meio_recebimento_particular',
   'recibo',
   'orcamento_particular',
   'orcamento_particular_item',
@@ -1901,6 +1905,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
       let paciente: number | null;
       let orcamento: Linha | undefined;
       let rotulo: string;
+      let atendimento: number | null = null;
       if (r.orcamento) {
         [orcamento] = await tx.consultarParaAtualizar<Linha>(
           `SELECT o.id, o.versao, o.numero, o.situacao, o.valor_total, o.aceito_em, o.paciente_id,
@@ -1924,7 +1929,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
         rotulo = `Recebimento do orçamento ${texto(orcamento['numero'])}`;
       } else {
         const [conta] = await tx.consultarParaAtualizar<Linha>(
-          `SELECT ch.id, ch.numero, ch.valor_total, ch.paciente_id, fp.tipo AS fonte_tipo,
+          `SELECT ch.id, ch.numero, ch.valor_total, ch.paciente_id, ch.atendimento_id, fp.tipo AS fonte_tipo,
                   COALESCE(NULLIF(pa.nome_social, ''), pf.nome) AS pagador,
                   (SELECT COALESCE(SUM(m.valor), 0) FROM movimento_caixa m WHERE m.conta_hospitalar_id = ch.id
                       AND m.situacao = 'ativo' AND m.excluido_em IS NULL) AS pago
@@ -1943,6 +1948,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
         saldo = r2(n(conta['valor_total']) - n(conta['pago']));
         pagador = texto(conta['pagador']);
         paciente = nn(conta['paciente_id']);
+        atendimento = nn(conta['atendimento_id']);
         rotulo = `Recebimento da conta ${texto(conta['numero'])}`;
       }
       const ok = conferirRecebimento({ saldo, pagamentos: r.pagamentos });
@@ -1970,6 +1976,14 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
             'O conector de Pix e cartão não está configurado: registre o comprovante à mão.',
             { campos: ['pagamentos'] },
           );
+        // F3.8 (07-FIN linha 89): com administradora ativa no estabelecimento, o cartão exige a administradora e a
+        // bandeira (senão a venda ficaria fora do que a administradora tem a creditar).
+        const emCartao = p.forma === 'cartao-debito' || p.forma === 'cartao-credito';
+        await exigirCartaoNoRecebimento(tx, est, {
+          emCartao,
+          cartaoInformado: !!p.cartao,
+          comprovante: p.comprovante,
+        });
         const especie = ESPECIE_DA_FORMA[p.forma];
         const forma = await tx.uma<Linha>(
           `SELECT id FROM forma_recebimento WHERE meio = ? AND ativo = TRUE AND uso IN ('recebimento','ambos')
@@ -2006,7 +2020,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
           responsavel_nome: pagador.slice(0, 150) || null,
         });
         const numero = await numeroDe('recebimento_particular', 'RP-');
-        await tx.incluir('recebimento_particular', {
+        const recebimento = await tx.incluir('recebimento_particular', {
           estabelecimento_id: est,
           numero: numero.formatado,
           recebido_em: agora(),
@@ -2020,8 +2034,33 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFaturamento {
           valor: p.valor,
           valor_troco: abate,
           cartao_autorizacao: eletronico ? comprovante : null,
+          cartao_nsu: p.cartao ? (p.comprovante ?? `SIM-${mov}`) : null,
           cartao_parcelas: p.forma.startsWith('cartao') ? p.parcelas : null,
         });
+        // F3.8 (07-FIN linha 89): com a administradora e a bandeira, a venda em cartão vira a transação e as parcelas a
+        // receber da administradora (taxa vigente, líquido e data prevista), na mesma transação do recebimento. O meio
+        // do recebimento guarda a transação: é a ligação entre o recebimento do paciente e o crédito da administradora.
+        if (p.cartao && emCartao) {
+          const instante = agora();
+          await gravarCartaoDoRecebimento(tx, est, {
+            recebimento,
+            formaRecebimento: n(forma['id']),
+            atendimento,
+            administradora: p.cartao.administradora,
+            bandeira: p.cartao.bandeira,
+            modalidade: p.forma === 'cartao-debito' ? 'debito' : 'credito',
+            parcelas: p.parcelas,
+            valor: p.valor,
+            dataVenda: civil(instante).data,
+            instante,
+            nsu: p.comprovante ?? `SIM-${mov}`,
+            autorizacao: p.comprovante ?? `SIM-${mov}`,
+            finalCartao: p.cartao.finalCartao ?? null,
+            moduloOrigem: 'caixa',
+            caixa: n(sessao['caixa_id']),
+            sessaoCaixa: r.caixa,
+          });
+        }
         const coluna = TOTAL_DA_ESPECIE[especie] ?? 'total_outras_formas';
         totais[coluna] = r2((totais[coluna] ?? n(sessao[coluna])) + liquido);
         recebido = r2(recebido + liquido);

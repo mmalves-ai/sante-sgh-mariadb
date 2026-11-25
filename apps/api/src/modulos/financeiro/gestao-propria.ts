@@ -5,11 +5,15 @@
 // Reclassificar: a natureza e o centro principal do cabeçalho mudam; as linhas de rateio anteriores ficam no banco,
 // marcadas como substituídas (quem e quando), e as novas entram com sequência seguinte; o antes, o depois e o motivo
 // vão à trilha. Escopo de contas: a linha por usuário e conta é mantida (nunca apagada: retirar é desligar as marcas).
-// Tipos de lançamento: a lista branca por perfil e estabelecimento (operação "banco"), com a marca de restrito em linha
-// própria (retirar o último tipo deixa o perfil restrito sem nada), conferida perfil a perfil no lançamento do movimento.
+// Tipos por perfil: a lista branca por perfil, estabelecimento e operação, com a marca de restrito em linha própria
+// (retirar o último tipo deixa o perfil restrito sem nada), conferida perfil a perfil na gravação: o tipo de lançamento
+// no movimento bancário, o tipo de credor no título a pagar e no pedido de adiantamento.
 import {
   conferirEscopoConta,
   conferirTipoLancamento,
+  NOMES_OPERACAO_TIPO_LANCAMENTO,
+  OPERACOES_TIPO_LANCAMENTO,
+  type OperacaoTipoLancamento,
   type PerfilNoTipoLancamento,
   planejarReclassificacao,
   type RateioGravado,
@@ -472,7 +476,25 @@ export async function usuariosDoEstabelecimento(l: Leitor, est: number) {
 
 // ── Tipos de lançamento por perfil ────────────────────────────────────────────────────────────────────────────
 
-export const esquemaTipoLancamentoPerfil = z.object({ perfil: id, tipo: id, liberado: z.boolean() }).strict();
+const operacaoTipo = z.enum(NOMES_OPERACAO_TIPO_LANCAMENTO).default('banco');
+export const esquemaTipoLancamentoPerfil = z
+  .object({ perfil: id, tipo: id, liberado: z.boolean(), operacao: operacaoTipo })
+  .strict();
+
+/** Onde mora o tipo de cada operação: o cadastro, a coluna da liberação e o filtro do que serve à operação. */
+const ALVO_TIPO = {
+  lancamento: {
+    tabela: 'tipo_lancamento_bancario',
+    coluna: 'tipo_lancamento_bancario_id',
+    filtro: 'ativo = TRUE',
+  },
+  credor: {
+    tabela: 'tipo_credor',
+    coluna: 'tipo_credor_id',
+    filtro: "ativo = TRUE AND sentido IN ('pagar','ambos')",
+  },
+} as const;
+const alvoDe = (o: OperacaoTipoLancamento) => ALVO_TIPO[OPERACOES_TIPO_LANCAMENTO[o].alvo];
 export type TipoLancamentoPerfilEntrada = z.infer<typeof esquemaTipoLancamentoPerfil>;
 
 /** O perfil tem de valer no estabelecimento da sessão (dele ou global): a lista é gravada por estabelecimento. */
@@ -488,18 +510,19 @@ async function perfilDoEstabelecimento(tx: Leitor, perfil: number, est: number):
     });
 }
 
-/** Liga ou desliga a marca de restrito do perfil na operação "banco" no estabelecimento (a linha nunca é apagada). */
+/** Liga ou desliga a marca de restrito do perfil na operação, no estabelecimento (a linha nunca é apagada). */
 async function marcarRestrito(
   tx: TxOperacao,
   perfil: number,
   est: number,
+  operacao: OperacaoTipoLancamento,
   restrito: boolean,
   usuario: number,
 ): Promise<{ id: number; mudou: boolean }> {
   const [atual] = await tx.consultarParaAtualizar(
     `SELECT id, versao, excluido_em FROM restricao_tipo_lancamento_perfil
-      WHERE perfil_acesso_id = ? AND estabelecimento_id = ? AND operacao = 'banco'`,
-    [perfil, est],
+      WHERE perfil_acesso_id = ? AND estabelecimento_id = ? AND operacao = ?`,
+    [perfil, est, operacao],
     { teto: 1 },
   );
   const vale = atual ? atual['excluido_em'] === null : false;
@@ -509,7 +532,7 @@ async function marcarRestrito(
       id: await tx.incluir('restricao_tipo_lancamento_perfil', {
         perfil_acesso_id: perfil,
         estabelecimento_id: est,
-        operacao: 'banco',
+        operacao,
       }),
       mudou: true,
     };
@@ -530,22 +553,23 @@ const manterTipoLancamento = definirOperacao<TipoLancamentoPerfilEntrada, Result
     const est = estabelecimentoDe(ctx);
     const usuario = usuarioDe(ctx);
     await perfilDoEstabelecimento(tx, e.perfil, est);
-    const tipo = await tx.uma('SELECT id FROM tipo_lancamento_bancario WHERE id = ? AND ativo = TRUE', [
-      e.tipo,
-    ]);
-    if (!tipo) throw recusa('tipo-inexistente', 'O tipo de lançamento não existe.', { campos: ['tipo'] });
+    const operacao = e.operacao ?? 'banco';
+    const alvo = alvoDe(operacao);
+    const tipo = await tx.uma(`SELECT id FROM ${alvo.tabela} WHERE id = ? AND ${alvo.filtro}`, [e.tipo]);
+    if (!tipo)
+      throw recusa('tipo-inexistente', 'O tipo não existe para esta operação.', { campos: ['tipo'] });
     const [atual] = await tx.consultarParaAtualizar(
       `SELECT id, versao, excluido_em FROM permissao_tipo_lancamento
-        WHERE perfil_acesso_id = ? AND estabelecimento_id = ? AND operacao = 'banco' AND tipo_lancamento_bancario_id = ?
+        WHERE perfil_acesso_id = ? AND estabelecimento_id = ? AND operacao = ? AND ${alvo.coluna} = ?
         ORDER BY id LIMIT 1`,
-      [e.perfil, est, e.tipo],
+      [e.perfil, est, operacao, e.tipo],
       { teto: 1 },
     );
     const vale = atual ? atual['excluido_em'] === null : false;
     if (vale === e.liberado)
       throw recusa('sem-mudanca', e.liberado ? 'O tipo já está liberado.' : 'O tipo já não está liberado.');
     // Liberar um tipo restringe o perfil (a primeira liberação liga a marca); retirar nunca desliga a marca.
-    const restricao = e.liberado ? await marcarRestrito(tx, e.perfil, est, true, usuario) : null;
+    const restricao = e.liberado ? await marcarRestrito(tx, e.perfil, est, operacao, true, usuario) : null;
     const linha = atual
       ? (await tx.alterar(
           'permissao_tipo_lancamento',
@@ -559,11 +583,12 @@ const manterTipoLancamento = definirOperacao<TipoLancamentoPerfilEntrada, Result
       : await tx.incluir('permissao_tipo_lancamento', {
           perfil_acesso_id: e.perfil,
           estabelecimento_id: est,
-          operacao: 'banco',
-          tipo_lancamento_bancario_id: e.tipo,
+          operacao,
+          [alvo.coluna]: e.tipo,
         });
     return {
       permissao: linha,
+      operacao,
       perfil: e.perfil,
       tipo: e.tipo,
       liberado: e.liberado,
@@ -573,7 +598,9 @@ const manterTipoLancamento = definirOperacao<TipoLancamentoPerfilEntrada, Result
   alvo: (_e, r) => ({ tabela: 'permissao_tipo_lancamento', id: numero(r['permissao']) || null }),
 });
 
-export const esquemaRestricaoTipoLancamento = z.object({ perfil: id, restrito: z.boolean() }).strict();
+export const esquemaRestricaoTipoLancamento = z
+  .object({ perfil: id, restrito: z.boolean(), operacao: operacaoTipo })
+  .strict();
 export type RestricaoTipoLancamentoEntrada = z.infer<typeof esquemaRestricaoTipoLancamento>;
 
 /** Restringir o perfil (mesmo sem nenhum tipo: nada passa) ou desfazer a restrição (volta a valer a operação). */
@@ -585,41 +612,41 @@ const manterRestricaoTipoLancamento = definirOperacao<RestricaoTipoLancamentoEnt
     const est = estabelecimentoDe(ctx);
     const usuario = usuarioDe(ctx);
     await perfilDoEstabelecimento(tx, e.perfil, est);
-    const r = await marcarRestrito(tx, e.perfil, est, e.restrito, usuario);
+    const operacao = e.operacao ?? 'banco';
+    const r = await marcarRestrito(tx, e.perfil, est, operacao, e.restrito, usuario);
     if (!r.mudou)
       throw recusa(
         'sem-mudanca',
         e.restrito ? 'O perfil já está restrito.' : 'O perfil já não está restrito.',
       );
-    return { restricao: r.id, perfil: e.perfil, restrito: e.restrito };
+    return { restricao: r.id, operacao, perfil: e.perfil, restrito: e.restrito };
   },
   alvo: (_e, r) => ({ tabela: 'restricao_tipo_lancamento_perfil', id: numero(r['restricao']) || null }),
 });
-
-/** A ação que dá a operação "banco" (lançar o movimento): o perfil livre só abre o tipo se a der. */
-const ACAO_BANCO = 'financeiro.movimento.criar';
 
 /** Os perfis vigentes do usuário no estabelecimento, cada um com a marca de restrito, a operação e a lista. */
 export async function perfisNoTipoLancamento(
   l: Leitor,
   est: number,
   usuario: number,
+  operacao: OperacaoTipoLancamento = 'banco',
 ): Promise<PerfilNoTipoLancamento[]> {
   const hoje = hojeIso();
+  const coluna = alvoDe(operacao).coluna;
   const linhas = await l.consultar(
     `SELECT a.id,
             EXISTS (SELECT 1 FROM restricao_tipo_lancamento_perfil r WHERE r.perfil_acesso_id = a.id
-                       AND r.estabelecimento_id = ? AND r.operacao = 'banco' AND r.excluido_em IS NULL) AS restrito,
+                       AND r.estabelecimento_id = ? AND r.operacao = ? AND r.excluido_em IS NULL) AS restrito,
             (a.administrador OR EXISTS (SELECT 1 FROM perfil_acao pa JOIN acao_sistema s ON s.id = pa.acao_sistema_id
                        WHERE pa.perfil_acesso_id = a.id AND pa.excluido_em IS NULL AND pa.permitido
                          AND s.ativo AND s.codigo = ?)) AS concede,
-            (SELECT GROUP_CONCAT(p.tipo_lancamento_bancario_id) FROM permissao_tipo_lancamento p
-               WHERE p.perfil_acesso_id = a.id AND p.estabelecimento_id = ? AND p.operacao = 'banco'
-                 AND p.excluido_em IS NULL AND p.tipo_lancamento_bancario_id IS NOT NULL) AS liberados
+            (SELECT GROUP_CONCAT(p.${coluna}) FROM permissao_tipo_lancamento p
+               WHERE p.perfil_acesso_id = a.id AND p.estabelecimento_id = ? AND p.operacao = ?
+                 AND p.excluido_em IS NULL AND p.${coluna} IS NOT NULL) AS liberados
        FROM usuario_perfil up JOIN perfil_acesso a ON a.id = up.perfil_acesso_id AND a.excluido_em IS NULL
       WHERE up.usuario_id = ? AND up.estabelecimento_id = ? AND up.excluido_em IS NULL
         AND up.vigencia_inicio <= ? AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= ?)`,
-    [est, ACAO_BANCO, est, usuario, est, hoje, hoje],
+    [est, operacao, OPERACOES_TIPO_LANCAMENTO[operacao].acao, est, operacao, usuario, est, hoje, hoje],
   );
   return linhas.map((r) => ({
     restrito: Number(r['restrito'] ?? 0) === 1,
@@ -628,34 +655,43 @@ export async function perfisNoTipoLancamento(
   }));
 }
 
-/** A trava do lançamento do movimento: o tipo, avaliado perfil a perfil (regra do domínio). */
+/** A trava da gravação (movimento, título a pagar, adiantamento): o tipo, avaliado perfil a perfil (regra do domínio). */
 export async function exigirTipoLancamentoLiberado(
   l: Leitor,
   est: number,
   usuario: number,
   tipo: number,
+  operacao: OperacaoTipoLancamento = 'banco',
 ): Promise<void> {
-  const perfis = await perfisNoTipoLancamento(l, est, usuario);
-  if (conferirTipoLancamento(perfis, tipo, '') === null) return;
-  const d = await l.uma('SELECT descricao FROM tipo_lancamento_bancario WHERE id = ?', [tipo]);
-  recusar(conferirTipoLancamento(perfis, tipo, String(d?.['descricao'] ?? tipo)));
+  const perfis = await perfisNoTipoLancamento(l, est, usuario, operacao);
+  if (conferirTipoLancamento(perfis, tipo, '', operacao) === null) return;
+  const alvo = alvoDe(operacao);
+  const d = await l.uma(`SELECT descricao FROM ${alvo.tabela} WHERE id = ?`, [tipo]);
+  recusar(conferirTipoLancamento(perfis, tipo, String(d?.['descricao'] ?? tipo), operacao));
 }
 
-/** Os tipos de lançamento ativos com a marca de liberado ao perfil neste estabelecimento (para a tela). */
-export async function tiposDoPerfil(l: Leitor, est: number, perfil: number) {
+/** Os tipos ativos da operação com a marca de liberado ao perfil neste estabelecimento (para a tela). */
+export async function tiposDoPerfil(
+  l: Leitor,
+  est: number,
+  perfil: number,
+  operacao: OperacaoTipoLancamento = 'banco',
+) {
+  const alvo = alvoDe(operacao);
   const linhas = await l.consultar(
-    `SELECT t.id, t.codigo, t.descricao, p.id AS pid FROM tipo_lancamento_bancario t
-       LEFT JOIN permissao_tipo_lancamento p ON p.tipo_lancamento_bancario_id = t.id AND p.perfil_acesso_id = ?
-            AND p.estabelecimento_id = ? AND p.operacao = 'banco' AND p.excluido_em IS NULL
-      WHERE t.ativo = TRUE ORDER BY t.descricao LIMIT 300`,
-    [perfil, est],
+    `SELECT t.id, t.codigo, t.descricao, p.id AS pid FROM ${alvo.tabela} t
+       LEFT JOIN permissao_tipo_lancamento p ON p.${alvo.coluna} = t.id AND p.perfil_acesso_id = ?
+            AND p.estabelecimento_id = ? AND p.operacao = ? AND p.excluido_em IS NULL
+      WHERE ${alvo.filtro.replace(/\b(ativo|sentido)\b/g, 't.$1')} ORDER BY t.descricao LIMIT 300`,
+    [perfil, est, operacao],
   );
   const marca = await l.uma(
     `SELECT id FROM restricao_tipo_lancamento_perfil WHERE perfil_acesso_id = ? AND estabelecimento_id = ?
-        AND operacao = 'banco' AND excluido_em IS NULL`,
-    [perfil, est],
+        AND operacao = ? AND excluido_em IS NULL`,
+    [perfil, est, operacao],
   );
   return {
+    operacao,
     restrito: !!marca,
     tipos: linhas.map((r) => ({
       tipo: numero(r['id']),

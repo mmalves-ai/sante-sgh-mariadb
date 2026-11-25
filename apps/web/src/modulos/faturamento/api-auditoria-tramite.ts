@@ -1,8 +1,10 @@
 // Cliente da auditoria item a item, do protocolo entre setores e do acompanhamento da guia do convênio (F3.7, 06-FAT
 // linhas 21, 22 e 24). As regras vêm de @sgh/dominio-faturamento (a mesma da API), para a recusa aparecer enquanto se
 // preenche; o servidor confere de novo.
+import { TIPO_CORPO_ANEXOS_PORTAL } from '@sgh/contratos';
 import { z } from 'zod';
-import { enviar, ler } from '../exames/api-exames.js';
+import { tokenCsrf } from '../../api.js';
+import { enviar, ler, lerJson } from '../exames/api-exames.js';
 
 const F = '/api/faturamento';
 const qualquer = z.record(z.string(), z.unknown());
@@ -115,6 +117,12 @@ const esquemaProtocolos = z.object({
 export type Protocolos = z.infer<typeof esquemaProtocolos>;
 export const lerProtocolos = (setor: number | null) =>
   ler(`${F}/protocolos-tramite${setor ? `?setor=${setor}` : ''}`, esquemaProtocolos);
+const esquemaAlvos = z.object({
+  itens: z.array(z.object({ id: z.number(), tipo: z.string(), rotulo: z.string() })),
+});
+/** O item do lote pelo número de negócio: conta, atendimento, prontuário (volumes) ou atendimento (documentos). */
+export const buscarAlvosProtocolo = (tipo: string, numero: string) =>
+  ler(`${F}/protocolos-tramite/alvos?${new URLSearchParams({ tipo, numero }).toString()}`, esquemaAlvos);
 export const emitirProtocolo = (corpo: Record<string, unknown>, chave: string) =>
   enviar(`${F}/protocolos-tramite`, corpo, qualquer, chave);
 export const enviarProtocolo = (id: number, chave: string) =>
@@ -224,5 +232,18 @@ export const resolverPendenciaGuia = (pendencia: number, solucao: string, chave:
   enviar(`${F}/guias/pendencias/${pendencia}/resolucao`, { solucao }, qualquer, chave);
 export const assumirGuia = (id: number, chave: string) =>
   enviar(`${F}/guias/${id}/responsavel`, { responsavelId: null }, qualquer, chave);
-export const anexarGuia = (id: number, corpo: Record<string, unknown>, chave: string) =>
-  enviar(`${F}/guias/${id}/anexos`, corpo, qualquer, chave);
+/** O anexo vai em base64 com o tipo próprio do corpo com anexos (teto de 15 MB no servidor; o JSON padrão aceita 1 MB). */
+export const anexarGuia = async (id: number, corpo: Record<string, unknown>, chave: string) =>
+  lerJson(
+    await fetch(`${F}/guias/${id}/anexos`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': TIPO_CORPO_ANEXOS_PORTAL,
+        'x-csrf': tokenCsrf(),
+        'idempotency-key': chave,
+      },
+      body: JSON.stringify(corpo),
+    }),
+    qualquer,
+  );

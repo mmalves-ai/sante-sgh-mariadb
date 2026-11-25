@@ -173,7 +173,7 @@ async function confirmar(): Promise<void> {
   padding-left: 1.25rem;
 }
 .aviso {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
   margin: 0;
 }
 .painel {

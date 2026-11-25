@@ -43,7 +43,14 @@ const acao = ref<{
 } | null>(null);
 /** Itens marcados para o recurso em lote (só os decididos como "recorrer" e ainda fora de recurso). */
 const selecionados = ref<number[]>([]);
-const prontoParaRecurso = (i: ItemGlosaLido) => i.estado === 'recorrida' && i.valorRecurso === 0;
+/**
+ * Reapresentação: o recurso do item voltou negado ou em parte (o retorno ficou abaixo do pleiteado); o item pode entrar
+ * num recurso novo, ligado ao anterior, pelo que ainda não voltou (o servidor confere prazo e teto).
+ */
+const reapresentavel = (i: ItemGlosaLido) =>
+  i.dataRetorno !== null && i.valorRecurso > 0 && i.valorRetorno < i.valorRecurso - 0.005;
+const prontoParaRecurso = (i: ItemGlosaLido) =>
+  (i.estado === 'recorrida' && i.valorRecurso === 0) || reapresentavel(i);
 const marcaveis = computed(() => (itens.data.value ?? []).filter(prontoParaRecurso));
 const marcados = computed(() => marcaveis.value.filter((i) => selecionados.value.includes(i.item)));
 function marcarTodos(v: boolean) {
@@ -363,7 +370,7 @@ const recursoAberto = (i: ItemGlosaLido) => i.valorRecurso > 0 && i.dataRetorno 
                 :data-testid="`gl-recorrer-${i.item}`"
                 @click="abrir('recorrer', i)"
               >
-                {{ t('tiss.glosas.recorrer') }}
+                {{ reapresentavel(i) ? t('tiss.glosas.reapresentar') : t('tiss.glosas.recorrer') }}
               </button>
               <button
                 v-if="recursoAberto(i)"

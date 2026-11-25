@@ -332,7 +332,8 @@ export class PortaGruposResultadoPropria {
   }
 
   /** Inclui ou altera (com a versão lida) o grupo e os itens em ordem. */
-  gravarGrupo(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+  // async: a recusa da validação chega como promessa rejeitada (quem chama trata um caminho só).
+  async gravarGrupo(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaGrupo, entrada);
     const itens = x.itens.map((i) => ({ ...i, rotulo: i.rotulo?.trim() ? i.rotulo.trim() : null }));
     const erros = validarGrupoResultado({ nome: x.nome, tipoExame: x.tipoExame, itens });
@@ -368,9 +369,11 @@ export class PortaGruposResultadoPropria {
         const valores = { nome: x.nome.trim(), tipo_exame: x.tipoExame, ordem: x.ordem, ativo: x.ativo };
         let grupo: number;
         if (x.id !== null) {
-          const a = await tx.uma('SELECT id, versao FROM painel_resultado_grupo WHERE id = ? FOR UPDATE', [
-            x.id,
-          ]);
+          const a = (
+            await tx.consultarParaAtualizar('SELECT id, versao FROM painel_resultado_grupo WHERE id = ?', [
+              x.id,
+            ])
+          )[0];
           if (!a) throw naoEncontrado('Grupo');
           if (x.versao === null || x.versao !== num(a['versao'])) throw conflito();
           await tx.alterar('painel_resultado_grupo', x.id, x.versao, valores);
@@ -388,9 +391,9 @@ export class PortaGruposResultadoPropria {
         }
         // Itens: todos vão para uma sequência provisória única (a chave única da ordem não colide na troca); os
         // escolhidos voltam a 1..n (uma linha com exclusão lógica vinda da carga é reativada) e os que saíram são removidos.
-        const atuais = await tx.consultar(
+        const atuais = await tx.consultarParaAtualizar(
           `SELECT id, exame_id, exame_analito_id, sequencia, versao, excluido_em FROM painel_resultado_grupo_exame
-          WHERE painel_resultado_grupo_id = ? ORDER BY id FOR UPDATE`,
+          WHERE painel_resultado_grupo_id = ? ORDER BY id`,
           [grupo],
         );
         const versao = new Map<number, number>(atuais.map((a) => [num(a['id']), num(a['versao'])]));
@@ -453,7 +456,8 @@ export class PortaGruposResultadoPropria {
     );
   }
 
-  gravarFiltro(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+  // async: a recusa da validação chega como promessa rejeitada (quem chama trata um caminho só).
+  async gravarFiltro(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaFiltro, entrada);
     const erros = validarFiltroResultado(x);
     if (erros.length) throw recusa(erros);
@@ -470,10 +474,12 @@ export class PortaGruposResultadoPropria {
       };
       let fid: number;
       if (x.id !== null) {
-        const a = await tx.uma(
-          'SELECT id, versao FROM filtro_resultado_usuario WHERE id = ? AND usuario_id = ? FOR UPDATE',
-          [x.id, usuario],
-        );
+        const a = (
+          await tx.consultarParaAtualizar(
+            'SELECT id, versao FROM filtro_resultado_usuario WHERE id = ? AND usuario_id = ?',
+            [x.id, usuario],
+          )
+        )[0];
         if (!a) throw naoEncontrado('Filtro');
         if (x.versao === null || x.versao !== num(a['versao'])) throw conflito();
         await tx.alterar('filtro_resultado_usuario', x.id, x.versao, valores);
@@ -493,8 +499,8 @@ export class PortaGruposResultadoPropria {
         fid = await tx.incluir('filtro_resultado_usuario', { usuario_id: usuario, ...valores });
       }
       if (x.padrao) {
-        const outros = await tx.consultar(
-          'SELECT id, versao FROM filtro_resultado_usuario WHERE usuario_id = ? AND padrao AND id <> ? FOR UPDATE',
+        const outros = await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM filtro_resultado_usuario WHERE usuario_id = ? AND padrao AND id <> ?',
           [usuario, fid],
         );
         for (const o of outros)
@@ -505,16 +511,19 @@ export class PortaGruposResultadoPropria {
   }
 
   /** O filtro é preferência do próprio usuário (não é registro clínico): sai de vez. */
-  excluirFiltro(c: ContextoDocs, filtro: number, versao: number): Promise<{ id: number }> {
+  // async: a recusa da validação chega como promessa rejeitada (quem chama trata um caminho só).
+  async excluirFiltro(c: ContextoDocs, filtro: number, versao: number): Promise<{ id: number }> {
     return this.gravar(
       c,
       'pep.resultados.excluir_filtro',
       'filtro_resultado_usuario',
       async (tx, usuario) => {
-        const a = await tx.uma(
-          'SELECT id, versao FROM filtro_resultado_usuario WHERE id = ? AND usuario_id = ? FOR UPDATE',
-          [filtro, usuario],
-        );
+        const a = (
+          await tx.consultarParaAtualizar(
+            'SELECT id, versao FROM filtro_resultado_usuario WHERE id = ? AND usuario_id = ?',
+            [filtro, usuario],
+          )
+        )[0];
         if (!a) throw naoEncontrado('Filtro');
         if (num(a['versao']) !== versao) throw conflito();
         await tx.excluir('filtro_resultado_usuario', filtro, versao);
@@ -530,7 +539,8 @@ export class PortaGruposResultadoPropria {
    * quando o escopo do filtro é o atendimento atual (ou quando vem sem filtro). O paciente já foi conferido (vínculo e
    * leitura registrada) pela rota.
    */
-  comparativo(c: ContextoDocs, paciente: number, p: PedidoComparativo): Promise<ComparativoPaciente> {
+  // async: a recusa da validação chega como promessa rejeitada (quem chama trata um caminho só).
+  async comparativo(c: ContextoDocs, paciente: number, p: PedidoComparativo): Promise<ComparativoPaciente> {
     const usuario = c.usuario;
     return this.ler(c, 'comparativo', async (l, est) => {
       let filtro: FiltroLido | null = null;

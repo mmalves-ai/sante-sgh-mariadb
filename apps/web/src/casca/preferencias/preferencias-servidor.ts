@@ -152,7 +152,7 @@ export async function destinoInicialDaConta(
   }
 }
 
-/** Só para testes: volta a decidir o destino. */
+/** Volta a decidir o destino: ao sair da sessão (a próxima pessoa abre a própria tela inicial) e nos testes. */
 export function reiniciarDestinoInicial(): void {
   destinoJaDecidido = false;
 }

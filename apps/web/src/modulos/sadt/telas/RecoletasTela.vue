@@ -7,6 +7,7 @@ import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
 import {
   cancelarRecoleta,
   coletarRecoleta,
@@ -15,6 +16,7 @@ import {
   listarRecoletas,
   pedirRecoleta,
 } from '../api-pedido.js';
+import { listarPostos, reimprimirEtiqueta } from '../api-posto-coleta.js';
 import { lerAmostraPorCodigo, novaChave } from '../api-sadt.js';
 import ErroSadt from '../componentes/ErroSadt.vue';
 import { quando } from '../usar-sadt.js';
@@ -27,6 +29,13 @@ const opcoes = computed(() => [
   { valor: '', rotulo: t('sadt.pedido.escolha') },
   ...(motivos.data.value?.recoleta ?? []).map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
 ]);
+// Os postos ativos do cadastro: a coleta da recoleta diz onde a amostra foi colhida (à beira do leito, sem posto).
+const postos = useQuery({ queryKey: ['sadt', 'postos-coleta', 'ativos'], queryFn: () => listarPostos() });
+const opcoesPosto = computed(() => [
+  { valor: '', rotulo: t('sadt.pedido.postos.semPosto') },
+  ...(postos.data.value?.itens ?? []).map((p) => ({ valor: String(p.id), rotulo: p.descricao })),
+]);
+const posto = ref<Record<number, string>>({});
 const codigo = ref('');
 const motivo = ref('');
 const motivoCancelar = ref<Record<number, string>>({});
@@ -71,10 +80,23 @@ const pedir = () =>
 const aliquotar = () =>
   executar(async () => {
     const r = await gerarAliquotas(await amostraDoCodigo(), novaChave('amostra.aliquotar'));
-    return t('sadt.pedido.aliquotas', {
+    const texto = t('sadt.pedido.aliquotas', {
       n: r.subamostras.length,
       codigos: r.subamostras.map((s) => s.codigo).join(', '),
     });
+    const naFila = r.etiquetasNaFila ?? 0;
+    return `${texto} ${
+      naFila === r.subamostras.length
+        ? t('sadt.pedido.postos.etiquetasNaFila', { n: naFila })
+        : t('sadt.pedido.postos.etiquetaPendente')
+    }`;
+  });
+const reimprimir = () =>
+  executar(async () => {
+    const r = await reimprimirEtiqueta(await amostraDoCodigo(), novaChave('amostra.etiqueta'));
+    return r.naFila > 0
+      ? t('sadt.pedido.postos.reimpressa', { via: r.via ?? 2 })
+      : t('sadt.pedido.postos.naoReimpressa');
   });
 const coletar = (id: number) =>
   executar(async () => {
@@ -84,10 +106,13 @@ const coletar = (id: number) =>
         identificadoresConferidos: identificadores.value[id] ?? false,
         pulseira: pulseira.value[id]?.trim() || null,
         estacao: estacao.value[id]?.trim() || null,
+        posto: posto.value[id] ? Number(posto.value[id]) : null,
       },
       novaChave('recoleta.coletar'),
     );
-    return t('sadt.pedido.coletada', { codigo: r.codigo });
+    return `${t('sadt.pedido.coletada', { codigo: r.codigo })} ${t(
+      r.etiquetaNaFila ? 'sadt.pedido.postos.etiquetaNaFila' : 'sadt.pedido.postos.etiquetaPendente',
+    )}`;
   });
 const cancelar = (id: number) =>
   executar(async () => {
@@ -115,12 +140,27 @@ const cancelar = (id: number) =>
         :opcoes="opcoes"
         data-testid="recoleta-motivo"
       />
-      <SanteBotao :disabled="!codigo || !motivo" data-testid="recoleta-pedir" @click="pedir">
-        {{ t('sadt.pedido.pedirRecoleta') }}
-      </SanteBotao>
-      <SanteBotao :disabled="!codigo" data-testid="recoleta-aliquotar" @click="aliquotar">
-        {{ t('sadt.pedido.gerarAliquotas') }}
-      </SanteBotao>
+      <SanteBotao
+        :rotulo="t('sadt.pedido.pedirRecoleta')"
+        :desabilitado="!codigo || !motivo"
+        data-testid="recoleta-pedir"
+        @acionar="pedir"
+      />
+      <SanteBotao
+        :rotulo="t('sadt.pedido.gerarAliquotas')"
+        :desabilitado="!codigo"
+        data-testid="recoleta-aliquotar"
+        @acionar="aliquotar"
+      />
+      <SanteBotao
+        :rotulo="t('sadt.pedido.postos.reimprimir')"
+        :desabilitado="!codigo"
+        data-testid="recoleta-reimprimir"
+        @acionar="reimprimir"
+      />
+      <RouterLink to="/sadt/postos-coleta" data-testid="recoleta-postos">{{
+        t('sadt.pedido.postos.abrir')
+      }}</RouterLink>
     </div>
     <p v-if="mensagem" role="status" data-testid="recoleta-mensagem">{{ mensagem }}</p>
     <ErroSadt v-if="erro" :erro="erro" />
@@ -154,13 +194,20 @@ const cancelar = (id: number) =>
           maxlength="64"
           :data-testid="`recoleta-estacao-${r.id}`"
         />
+        <SanteSelecao
+          v-if="(postos.data.value?.itens ?? []).length > 0"
+          :model-value="posto[r.id] ?? ''"
+          :rotulo="t('sadt.pedido.postos.naColeta')"
+          :opcoes="opcoesPosto"
+          :data-testid="`recoleta-posto-${r.id}`"
+          @update:model-value="(v: string) => (posto = { ...posto, [r.id]: v })"
+        />
         <SanteBotao
-          :disabled="!identificadores[r.id] || !(estacao[r.id] ?? '').trim()"
+          :rotulo="t('sadt.pedido.coletar')"
+          :desabilitado="!identificadores[r.id] || !(estacao[r.id] ?? '').trim()"
           :data-testid="`recoleta-coletar-${r.id}`"
-          @click="coletar(r.id)"
-        >
-          {{ t('sadt.pedido.coletar') }}
-        </SanteBotao>
+          @acionar="coletar(r.id)"
+        />
       </div>
       <div class="linha">
         <input v-model="motivoCancelar[r.id]" :aria-label="t('sadt.pedido.motivo')" maxlength="500" />
@@ -179,9 +226,11 @@ const cancelar = (id: number) =>
           :opcoes="opcoesMotivoExames"
           @update:model-value="(v: string) => (motivoExames = { ...motivoExames, [r.id]: v })"
         />
-        <SanteBotao :disabled="!podeCancelar(r.id)" @click="cancelar(r.id)">
-          {{ t('sadt.pedido.cancelarRecoleta') }}
-        </SanteBotao>
+        <SanteBotao
+          :rotulo="t('sadt.pedido.cancelarRecoleta')"
+          :desabilitado="!podeCancelar(r.id)"
+          @acionar="cancelar(r.id)"
+        />
       </div>
     </article>
   </section>

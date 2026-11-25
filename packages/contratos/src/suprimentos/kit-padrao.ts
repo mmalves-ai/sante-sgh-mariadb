@@ -7,10 +7,16 @@ import { TIPOS_KIT_PADRAO } from './regras/kit-padrao.js';
 // As regras puras do kit padrão vão também pelo índice: a tela confere na hora com as mesmas mensagens da API.
 export {
   chaveProcedimentoKit,
+  conferirKitDoPedido,
   conferirKitPadrao,
   diferencaItensKit,
+  type LinhaPedidoKit,
+  MAXIMO_KITS_NO_PEDIDO,
+  somarKitAoPedido,
   type ItemKitPadraoConferido,
   type KitPadraoConferido,
+  type KitPadraoDoProcedimento,
+  linhasDoKitPadrao,
   type ProcedimentoKitPadraoConferido,
   TIPOS_KIT_PADRAO,
   type TipoKitPadrao,
@@ -106,3 +112,19 @@ export type ProcedimentoKitBusca = z.infer<typeof esquemaProcedimentoKitBusca>;
 
 // F3.6 (05-SUP linha 20): a gestão do pedido de compra emitido vai ao índice por aqui (o índice está em edição paralela).
 export * from './pedido-gestao.js';
+
+/** O kit padrão de uma cirurgia ou procedimento, com a composição, para somar ao pedido de material. */
+export const esquemaKitPadraoSugerido = z.object({
+  procedimentoCirurgico: z.number().nullable(),
+  itemFaturavel: z.number().nullable(),
+  procedimentoCodigo: z.string(),
+  procedimentoNome: z.string(),
+  kit: z.number(),
+  codigo: z.string(),
+  nome: z.string(),
+  quantidadeKits: z.number(),
+  itens: z.array(
+    z.object({ insumo: z.number(), nome: z.string(), unidade: z.string(), quantidade: z.number() }),
+  ),
+});
+export type KitPadraoSugerido = z.infer<typeof esquemaKitPadraoSugerido>;

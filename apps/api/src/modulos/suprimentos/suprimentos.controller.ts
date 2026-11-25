@@ -864,9 +864,11 @@ export class SuprimentosController {
   previaRecalculo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<PreviaRecalculo> {
     if (!this.porta.previaRecalculo)
       throw new ErroProblema(
-        'recalculo-sem-banco',
+        'indisponivel',
         503,
         'O recálculo pelo razão só existe com o banco do cliente.',
+        undefined,
+        { codigo: 'recalculo-sem-banco' },
       );
     return this.porta.previaRecalculo(ctx(sessaoDe(req)), corpo(esquemaRecalcularSaldos, b));
   }
@@ -947,6 +949,13 @@ export class SuprimentosController {
   @Permissao('suprimentos.kit.editar')
   procedimentosKit(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
     return this.porta.procedimentosKit(ctx(sessaoDe(req)), String(termo ?? '').slice(0, 100));
+  }
+
+  // O kit padrão da cirurgia ou do procedimento, com a composição, para quem monta o pedido de material.
+  @Get('kits-padrao/sugestao')
+  @Permissao('suprimentos.requisicao.criar')
+  kitsPadraoSugeridos(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.porta.kitsPadraoSugeridos(ctx(sessaoDe(req)), String(termo ?? '').slice(0, 100));
   }
 
   @Post('kits-padrao')

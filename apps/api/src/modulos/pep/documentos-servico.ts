@@ -8,6 +8,7 @@
 import {
   GRAVIDADES_ALERGIA,
   type GravidadeAlergia,
+  type HistoricoAlergia,
   ORIGENS_ALERGIA,
   type OrigemAlergia,
   type AcaoLiberada,
@@ -69,6 +70,8 @@ import {
   comSigilo,
   conferirAtestado,
   conferirNovaAlergia,
+  manifestacoesDoPedido,
+  RecusaHistoricoAlergia,
   conferirReceita,
   documentoAtestado,
   documentoExameExterno,
@@ -898,12 +901,13 @@ export class ServicoDocumentos {
     prof: ProfissionalPep | null,
     acoes: { criar: AcaoLiberada; inativar: AcaoLiberada },
   ): Promise<AlergiasPaciente> {
-    const [als, cat, sit, ats, docs] = await Promise.all([
+    const [als, cat, sit, ats, docs, manifestacoes] = await Promise.all([
       this.porta.alergias(c, paciente),
       this.porta.catalogoAlergias(c),
       this.situacaoAlergias(c, paciente),
       this.atendimentos(c, paciente),
       this.porta.documentosSgh(c, paciente).catch(() => []),
+      this.porta.manifestacoesAlergicas(c),
     ]);
     const doNovo = new Set(docs.filter((d) => d.origemTabela === 'alergia_paciente').map((d) => d.origemId));
     const atual = ats.find((a) => a.aberto);
@@ -934,6 +938,7 @@ export class ServicoDocumentos {
       agentes: cat.agentes,
       principios: cat.principios,
       registros,
+      manifestacoes,
       criar:
         acoes.criar.pode && registros.length === 0
           ? {
@@ -953,6 +958,16 @@ export class ServicoDocumentos {
     o: OpcoesGravacao,
   ) {
     this.exigirAcao(prof, 'alergia');
+    let manifestacoes: number[];
+    try {
+      manifestacoes = manifestacoesDoPedido(e.nega, e.manifestacoes);
+    } catch (erro) {
+      if (!(erro instanceof RecusaHistoricoAlergia)) throw erro;
+      throw new ErroProblema('entrada-invalida', 400, 'Manifestações inválidas', erro.message, {
+        codigo: erro.codigo,
+        campos: ['manifestacoes'],
+      });
+    }
     const ats = await this.atendimentos(c, paciente);
     const abertos = ats.filter((a) => a.aberto);
     let atendimento: number | null = null;
@@ -1011,10 +1026,16 @@ export class ServicoDocumentos {
       ...(e.reacao ? { reacao: e.reacao } : {}),
       ...(e.gravidade ? { gravidade: e.gravidade } : {}),
       ...(e.origem ? { origem: e.origem } : {}),
+      ...(manifestacoes.length ? { manifestacoes } : {}),
       versao: e.versao,
       hashConteudo,
       ...(o.comoSuporte ? { comoSuporte: true } : {}),
     };
+  }
+
+  /** Linha do tempo e manifestações da alergia (03-PEP L100): nada é apagado, a retirada mostra o histórico. */
+  historicoAlergia(c: ContextoDocs, paciente: number, alergia: number): Promise<HistoricoAlergia> {
+    return this.porta.historicoAlergia(c, paciente, alergia);
   }
 
   async executar(c: ContextoDocs, operacao: string, entrada: unknown, ctx: ContextoOperacao) {

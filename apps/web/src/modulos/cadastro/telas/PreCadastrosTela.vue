@@ -4,10 +4,12 @@
 // na chegada, converte com um clique: o sistema reaproveita o paciente do mesmo CPF; sem ele, mostra os dados para a
 // ficha nova e liga ao paciente achado na busca, que mostra nome e nascimento e confere a divergência antes de ligar
 // (dados divergentes só com motivo). Quem já é paciente é avisado na gravação. Cancelar guarda o motivo; nada é apagado.
-import { computed, ref } from 'vue';
+import { SanteSelecao } from '@sgh/ui';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import IndicadorCaptacao from '../componentes/IndicadorCaptacao.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import { buscarPacientes } from '../api-cadastro.js';
@@ -140,6 +142,7 @@ void lerOpcoes()
   })
   .catch(() => undefined);
 void carregar();
+watch(situacao, () => void carregar());
 </script>
 
 <template>
@@ -159,13 +162,15 @@ void carregar();
         >{{ t('vinculos.pre.celular') }} <input v-model="f.celular" name="celular" maxlength="20" required
       /></label>
       <label>{{ t('vinculos.pre.cpf') }} <input v-model="f.cpf" name="cpf" maxlength="14" /></label>
-      <label v-if="opcoes"
-        >{{ t('vinculos.pre.fonte') }}
-        <select v-model.number="f.fontePagadora">
-          <option :value="0">{{ t('vinculos.pre.naoInformada') }}</option>
-          <option v-for="x in opcoes.fontes" :key="x.id" :value="x.id">{{ x.nome }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-if="opcoes"
+        v-model="f.fontePagadora"
+        :rotulo="t('vinculos.pre.fonte')"
+        :opcoes="[
+          { valor: 0, rotulo: t('vinculos.pre.naoInformada') },
+          ...opcoes.fontes.map((x) => ({ valor: x.id, rotulo: x.nome })),
+        ]"
+      />
       <label v-if="f.fontePagadora"
         >{{ t('vinculos.pre.carteira') }} <input v-model="f.numeroCarteira" maxlength="30"
       /></label>
@@ -181,12 +186,17 @@ void carregar();
 
     <h2>{{ t('vinculos.pre.lista') }}</h2>
     <form @submit.prevent="carregar">
-      <select v-model="situacao" :aria-label="t('vinculos.pre.situacao')" @change="carregar">
-        <option value="pendente">{{ t('vinculos.pre.pendentes') }}</option>
-        <option value="convertido">{{ t('vinculos.pre.convertidos') }}</option>
-        <option value="cancelado">{{ t('vinculos.pre.cancelados') }}</option>
-        <option value="">{{ t('vinculos.pre.todos') }}</option>
-      </select>
+      <SanteSelecao
+        v-model="situacao"
+        :rotulo="t('vinculos.pre.situacao')"
+        ocultar-rotulo
+        :opcoes="[
+          { valor: 'pendente', rotulo: t('vinculos.pre.pendentes') },
+          { valor: 'convertido', rotulo: t('vinculos.pre.convertidos') },
+          { valor: 'cancelado', rotulo: t('vinculos.pre.cancelados') },
+          { valor: '', rotulo: t('vinculos.pre.todos') },
+        ]"
+      />
       <input v-model="termo" :placeholder="t('vinculos.pre.nome')" :aria-label="t('vinculos.pre.nome')" />
       <button type="submit">{{ t('vinculos.pre.buscar') }}</button>
     </form>
@@ -260,7 +270,11 @@ void carregar();
             <dd>{{ v ?? '—' }}</dd>
           </template>
         </dl>
-        <RouterLink to="/cadastros/pacientes/novo">{{ t('vinculos.pre.cadastrar') }}</RouterLink>
+        <RouterLink
+          :to="{ path: '/cadastros/pacientes/novo', query: { preCadastro: String(previa.id) } }"
+          data-testid="cadastrar-do-pre"
+          >{{ t('vinculos.pre.cadastrar') }}</RouterLink
+        >
         <form data-testid="busca-paciente-chegada" @submit.prevent="buscarPaciente">
           <label
             >{{ t('vinculos.pre.buscaPaciente') }}
@@ -301,5 +315,6 @@ void carregar();
         </template>
       </template>
     </section>
+    <IndicadorCaptacao />
   </main>
 </template>

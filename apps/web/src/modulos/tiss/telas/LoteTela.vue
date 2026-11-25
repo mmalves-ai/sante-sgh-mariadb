@@ -13,7 +13,7 @@ import { enviarLote, lerLote, novaChave } from '../api-tiss.js';
 import { data, quando, reais, usarTiss } from '../usar-tiss.js';
 
 const props = defineProps<{ id: string }>();
-const { t } = useI18n();
+const { t, te } = useI18n();
 const qc = useQueryClient();
 const router = useRouter();
 const { pode, motivo, gravacao } = usarTiss('lote');
@@ -164,6 +164,29 @@ function protocolar() {
           </tr>
         </tbody>
       </table>
+
+      <h2>{{ t('tiss.loteTela.fatura') }}</h2>
+      <p v-if="!l.data.value.fatura" data-testid="lt-sem-fatura">{{ t('tiss.loteTela.semFatura') }}</p>
+      <dl v-else class="resumo" data-testid="lt-fatura">
+        <dt>{{ t('tiss.loteTela.faturaNumero') }}</dt>
+        <dd>{{ l.data.value.fatura.numero }}</dd>
+        <dt>{{ t('tiss.situacao') }}</dt>
+        <dd>
+          {{
+            te(`tiss.loteTela.faturaSituacoes.${l.data.value.fatura.situacao}`)
+              ? t(`tiss.loteTela.faturaSituacoes.${l.data.value.fatura.situacao}`)
+              : l.data.value.fatura.situacao
+          }}
+        </dd>
+        <dt>{{ t('tiss.loteTela.faturaContas') }}</dt>
+        <dd>{{ l.data.value.fatura.contas }}</dd>
+        <dt>{{ t('tiss.loteTela.faturaValor') }}</dt>
+        <dd>{{ reais(l.data.value.fatura.valorApresentado) }}</dd>
+        <dt>{{ t('tiss.protocolo') }}</dt>
+        <dd>{{ l.data.value.fatura.protocolo || '—' }}</dd>
+        <dt>{{ t('tiss.loteTela.faturaEntrega') }}</dt>
+        <dd>{{ data(l.data.value.fatura.entrega) }}</dd>
+      </dl>
 
       <h2>{{ t('tiss.loteTela.historico') }}</h2>
       <p v-if="l.data.value.historico.length === 0">{{ t('tiss.nenhum') }}</p>

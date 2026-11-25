@@ -36,6 +36,7 @@ describe.skipIf(SEM_BANCO)('mapa de trabalho: bancada do exame e retenção (Mar
   let bOutro = 0; // modelo de OUTRO estabelecimento, criado antes de todos (menor id)
   let itemX = 0; // segundo exame do setor da massa (bancada A)
   let itemSem = 0; // exame de um setor sem modelo de mapa
+  let motivoCanc = 0; // motivo de cancelamento sintético (o cancelamento exige data e motivo, pelo CHECK)
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-s35map' }, (l) => l.uma(sql, p));
 
@@ -116,6 +117,10 @@ describe.skipIf(SEM_BANCO)('mapa de trabalho: bancada do exame e retenção (Mar
         await e.executar(`DELETE FROM bancada_analitica WHERE id IN (${q})`, bancadas);
       });
     await limparMassaSadt(nucleo, m);
+    if (motivoCanc)
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s35map' }, (e) =>
+        e.executar('DELETE FROM motivo_cancelamento_item_exame WHERE id = ?', [motivoCanc]),
+      );
     await nucleo.encerrar();
   });
 
@@ -235,9 +240,17 @@ describe.skipIf(SEM_BANCO)('mapa de trabalho: bancada do exame e retenção (Mar
     ).toBe(1);
 
     // O exame cancelado com a retenção aberta: soltar fecha a retenção (nada fica retido para sempre).
-    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s35map' }, (e) =>
-      e.executar("UPDATE exame_item SET situacao = 'cancelado' WHERE id = ?", [itemX]),
-    );
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s35map' }, async (e) => {
+      const agora = new Date();
+      motivoCanc = await e.inserir(
+        `INSERT INTO motivo_cancelamento_item_exame (codigo, descricao, criado_em) VALUES (?, 'Cancelamento sintetico', ?)`,
+        [`${m!.marca}CM`.slice(0, 30), agora],
+      );
+      await e.executar(
+        "UPDATE exame_item SET situacao = 'cancelado', cancelado_em = ?, motivo_cancelamento_item_exame_id = ? WHERE id = ?",
+        [agora, motivoCanc, itemX],
+      );
+    });
     expect(await servico.soltar(c, { exame: itemX })).toMatchObject({ id: rx.id, situacao: 'pendente' });
   });
 });

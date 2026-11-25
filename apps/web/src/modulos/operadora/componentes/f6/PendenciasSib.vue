@@ -332,6 +332,6 @@ const movimento = (p: PendenciaSib) =>
   padding-left: 1rem;
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 </style>

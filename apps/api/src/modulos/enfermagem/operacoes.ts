@@ -30,6 +30,7 @@ import {
 import { exigirProfissional, fusoDe, instanteDe, profissionalDoLogin } from './banco-apoio.js';
 import { gravarLoteLido } from './lote-lido-propria.js';
 import { iniciarAtoTransfusional, TABELAS_INICIO_ATO } from './transfusao-porta-propria.js';
+import { liberarDosesPorEvento, TABELA_INTEGRACAO_DOSE } from '../farmacia/integracao-prescricao.js';
 
 /** Categoria do cadastro de situações → código do contrato das telas. */
 export const LETRA_DA_CATEGORIA: Readonly<Record<string, string>> = {
@@ -275,7 +276,7 @@ export const checarAdministracao = definirOperacao<ChecagemAdministracao, SaidaC
       if (m.papel === 'principal' && m.situacao === 'A')
         await gravarLoteLido(tx, est, {
           horario: h.id,
-          gtin: e.sgh.gtin,
+          gtin: e.sgh.codigoLido ?? e.sgh.gtin,
           lote: e.sgh.lote,
           validade: e.sgh.validade,
           quantidade: m.quantidade,
@@ -352,7 +353,7 @@ interface SaidaAprazamento extends ResultadoOperacao {
 /** Aprazar, reaprazar ou suprimir um horário ainda não checado. */
 export const aprazarHorario = definirOperacao<AprazamentoHorario, SaidaAprazamento>({
   nome: 'enfermagem.aprazar-horario',
-  tabelas: ['horario_administracao', 'horario_administracao_evento'],
+  tabelas: ['horario_administracao', 'horario_administracao_evento', TABELA_INTEGRACAO_DOSE],
   entrada: esquemaAprazamentoHorario as unknown as import('zod').ZodType<AprazamentoHorario>,
   async gravar(tx, e) {
     const est = estabelecimento(tx);
@@ -402,6 +403,10 @@ export const aprazarHorario = definirOperacao<AprazamentoHorario, SaidaAprazamen
       motivo: e.motivo,
       dados: { acao: e.acao },
     });
+    // A regra de integração com o estoque (05-SUP linha 7): o aprazamento libera a dose da regra "no aprazamento" e
+    // recalcula a da regra "antes do horário" pelo horário novo. A dose suprimida não entra na fila.
+    if (e.acao !== 'suprimir')
+      await liberarDosesPorEvento(tx, { est, evento: 'aprazamento', quando: agora, horario: h.id });
     return { horario: h.id, evento: id };
   },
   eventos: (e, r) => [{ tipo: 'enfermagem.horario.aprazado', carga: { horario: r.horario, acao: e.acao } }],

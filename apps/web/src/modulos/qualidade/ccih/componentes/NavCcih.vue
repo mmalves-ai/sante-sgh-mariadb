@@ -9,6 +9,7 @@ const telas = computed(() =>
   [
     { rota: '/qualidade/ccih/vigilancia', rotulo: 'vigilancia', permissao: 'qualidade.ccih.ler' },
     { rota: '/qualidade/ccih/iras', rotulo: 'iras', permissao: 'qualidade.iras.ler' },
+    { rota: '/qualidade/ccih/culturas', rotulo: 'culturas', permissao: 'qualidade.iras.ler' },
     {
       rota: '/qualidade/ccih/antimicrobianos',
       rotulo: 'antimicrobianos',

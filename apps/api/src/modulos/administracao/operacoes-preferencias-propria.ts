@@ -8,8 +8,12 @@
 // As regras ficam em `@sgh/dominio-acesso` (preferencias/preferencias-usuario.ts). A tela inicial e a lista de
 // telas que podem sê-la seguem só os níveis de acesso do cargo: a rota precisa estar numa entrada do menu cuja
 // permissão de leitura a sessão tem (`permissoesSessao`, preenchida pela rota da API a partir da sessão).
-import { ARVORE_MENU } from '@sgh/contratos';
+// As telas do menu vêm do código (a árvore do menu): a tela é registrada em `tela_sistema` na primeira vez em que
+// alguém a escolhe como inicial ou guarda uma visão dela (código derivado do endereço), sem carga prévia. A visão só
+// é aceita em tela que oferece lista (`colunasVisaoDaRota`) e só com as colunas que essa lista oferece.
+import { ARVORE_MENU, colunasVisaoDaRota } from '@sgh/contratos';
 import {
+  codigoTelaDoMenu,
   conferirTelaInicial,
   conferirVisaoTela,
   MENSAGEM_PREFERENCIA,
@@ -99,13 +103,73 @@ function usuarioDaSessao(tx: TxOperacao): number {
   return u;
 }
 
+const SQL_TELA = 'SELECT id, ativo, rota, avulsa FROM tela_sistema';
+
+/** Código do módulo do sistema a partir da área do menu (sem acento, minúsculo, até 30 caracteres). */
+const codigoModuloDaArea = (area: string): string =>
+  `menu.${area
+    .normalize('NFD')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()}`.slice(0, 30);
+
+/** Inclui e, se outra sessão incluiu a mesma chave no mesmo instante, relê (a linha existe de um jeito ou de outro). */
+async function incluirOuReler(
+  tx: TxOperacao,
+  tabela: string,
+  valores: Record<string, unknown>,
+  reler: () => Promise<Record<string, unknown> | null | undefined>,
+): Promise<void> {
+  try {
+    await tx.incluir(tabela, valores as Parameters<TxOperacao['incluir']>[1]);
+  } catch (e) {
+    if (!(await reler())) throw e;
+  }
+}
+
+/**
+ * A tela pelo código. A tela do menu que ainda não está no banco é registrada aqui (ativa, com o endereço e o título
+ * do menu, no módulo da área do menu): o cadastro das telas vem do código, não de carga. Código fora do menu e fora
+ * do banco: nulo.
+ */
 async function telaPorCodigo(tx: TxOperacao, codigo: string) {
-  return tx.uma('SELECT id, ativo, rota, avulsa FROM tela_sistema WHERE codigo = ?', [codigo]);
+  const achada = await tx.uma(`${SQL_TELA} WHERE codigo = ?`, [codigo]);
+  if (achada) return achada;
+  const item = ARVORE_MENU.find((i) => i.rota && i.permissao && codigoTelaDoMenu(i.rota) === codigo);
+  if (!item?.rota) return null;
+  const rota = item.rota;
+  // Já registrada com outro código (carga anterior do cadastro): vale a que está no banco.
+  const porRota = await tx.uma(`${SQL_TELA} WHERE rota = ?`, [rota]);
+  if (porRota) return porRota;
+  const codigoModulo = codigoModuloDaArea(item.area);
+  const lerModulo = () => tx.uma('SELECT id FROM modulo_sistema WHERE codigo = ?', [codigoModulo]);
+  if (!(await lerModulo()))
+    await incluirOuReler(
+      tx,
+      'modulo_sistema',
+      { codigo: codigoModulo, descricao: item.area.slice(0, 150), area: item.area.slice(0, 60) },
+      lerModulo,
+    );
+  const modulo = await lerModulo();
+  const lerTela = () => tx.uma(`${SQL_TELA} WHERE rota = ?`, [rota]);
+  await incluirOuReler(
+    tx,
+    'tela_sistema',
+    {
+      codigo,
+      descricao: item.titulo.slice(0, 150),
+      titulo: item.titulo.slice(0, 150),
+      modulo_sistema_id: num(modulo!['id']),
+      rota,
+    },
+    lerTela,
+  );
+  return lerTela();
 }
 
 const operacaoGravarGeral = definirOperacao({
   nome: 'preferencias.gravar_geral',
-  tabelas: ['preferencia_usuario'],
+  tabelas: ['preferencia_usuario', 'tela_sistema', 'modulo_sistema'],
   entrada: esquemaGravarPreferenciaGeral,
   async gravar(tx, e) {
     const usuario = usuarioDaSessao(tx);
@@ -160,13 +224,16 @@ const operacaoGravarGeral = definirOperacao({
 
 const operacaoGravarVisaoTela = definirOperacao({
   nome: 'preferencias.gravar_visao_tela',
-  tabelas: ['preferencia_tela_usuario'],
+  tabelas: ['preferencia_tela_usuario', 'tela_sistema', 'modulo_sistema'],
   entrada: esquemaGravarVisaoTela,
   async gravar(tx, e) {
     const usuario = usuarioDaSessao(tx);
     const t = await telaPorCodigo(tx, e.tela);
     if (!t || !bool(t['ativo'])) throw recusar('tela-inexistente');
     const tela = num(t['id']);
+    // Só a tela que oferece lista guarda visão, e só com as colunas que a lista oferece.
+    const colunasDaTela = colunasVisaoDaRota(vazio(t['rota']) ? null : String(t['rota']));
+    if (!colunasDaTela) throw recusar('tela-sem-visao');
     const daTela = await tx.consultarParaAtualizar(
       'SELECT id, versao, nome, padrao FROM preferencia_tela_usuario WHERE usuario_id = ? AND tela_sistema_id = ?',
       [usuario, tela],
@@ -174,6 +241,7 @@ const operacaoGravarVisaoTela = definirOperacao({
     const nomePedido = (e.nome ?? NOME_VISAO_PADRAO).trim();
     const mesma = daTela.find((a) => String(a['nome']) === nomePedido);
     const r = conferirVisaoTela(e, {
+      colunasDaTela,
       primeiraDaTela: daTela.length === 0,
       padraoAtual: mesma ? bool(mesma['padrao']) : undefined,
     });
@@ -237,7 +305,7 @@ export interface PreferenciasLidas {
   readonly guardadas: boolean;
   readonly geral: PreferenciaGeralNormalizada & { textoAmpliado: boolean };
   readonly telaInicial: { codigo: string; titulo: string; rota: string } | null;
-  /** Telas do menu que podem ser a inicial (ativas, com endereço e não avulsas). */
+  /** Telas do menu do cargo, vindas do código (podem ser a inicial); o código é o do banco quando já registrada. */
   readonly telasDoMenu: { codigo: string; titulo: string; rota: string }[];
   readonly visoes: VisaoTelaLida[];
   /** Por tela, o nome da visão que a tela abre. */
@@ -257,15 +325,29 @@ export async function lerPreferenciasDoUsuario(
 ): Promise<PreferenciasLidas> {
   const permitida = (rota: unknown) =>
     rotaPermitida(vazio(rota) ? null : String(rota), ARVORE_MENU, permissoes);
-  const telasDoMenu = (
-    await l.consultar(
-      'SELECT codigo, titulo, rota FROM tela_sistema WHERE ativo AND NOT avulsa AND rota IS NOT NULL ORDER BY titulo',
-      [],
-      { teto: 5000 },
-    )
-  )
-    .filter((x) => permitida(x['rota']))
-    .map((x) => ({ codigo: String(x['codigo']), titulo: String(x['titulo']), rota: String(x['rota']) }));
+  // As telas vêm do menu (código); a que já está registrada no banco usa o código e o título de lá, e a que o
+  // banco marcou como inativa ou avulsa não é oferecida.
+  const noBanco = new Map(
+    (
+      await l.consultar(
+        'SELECT codigo, titulo, rota, ativo, avulsa FROM tela_sistema WHERE rota IS NOT NULL',
+        [],
+        { teto: 5000 },
+      )
+    ).map((x) => [String(x['rota']), x] as const),
+  );
+  const porRota = new Map<string, { codigo: string; titulo: string; rota: string }>();
+  for (const i of ARVORE_MENU) {
+    if (!i.rota || !i.permissao || porRota.has(i.rota) || !permitida(i.rota)) continue;
+    const b = noBanco.get(i.rota);
+    if (b && (!bool(b['ativo']) || bool(b['avulsa']))) continue;
+    porRota.set(i.rota, {
+      codigo: b ? String(b['codigo']) : codigoTelaDoMenu(i.rota),
+      titulo: b ? String(b['titulo']) : i.titulo,
+      rota: i.rota,
+    });
+  }
+  const telasDoMenu = [...porRota.values()].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
   const linha =
     usuario === null
       ? null

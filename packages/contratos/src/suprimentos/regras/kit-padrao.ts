@@ -179,3 +179,68 @@ export function linhasDoKitPadrao(
       ativo: true,
     }));
 }
+
+/** A linha do pedido de material (requisição) na conta do kit: o item, a quantidade e o kit de onde ela veio. */
+export interface LinhaPedidoKit {
+  readonly item: number;
+  readonly nome: string;
+  readonly quantidade: number;
+  readonly kit: number | null;
+}
+
+/** O teto de kits somados de uma vez ao pedido (o que passa disso é erro de digitação). */
+export const MAXIMO_KITS_NO_PEDIDO = 999;
+
+/**
+ * Soma o kit padrão ao pedido de material: cada item da composição entra com a quantidade do kit × o número de kits.
+ * O item que já está no pedido tem a quantidade somada (nunca vira duas linhas); a linha continua marcada com o kit
+ * só quando tudo nela veio desse mesmo kit (a linha digitada à mão, ou de outro kit, fica sem a marca). Devolve
+ * `null` quando o número de kits não é inteiro de 1 a 999 ou o kit não tem item.
+ */
+export function somarKitAoPedido(
+  linhas: readonly LinhaPedidoKit[],
+  kit: {
+    readonly kit: number;
+    readonly itens: readonly {
+      readonly insumo: number;
+      readonly nome: string;
+      readonly quantidade: number;
+    }[];
+  },
+  quantidadeKits: number,
+): LinhaPedidoKit[] | null {
+  if (!Number.isInteger(quantidadeKits) || quantidadeKits < 1 || quantidadeKits > MAXIMO_KITS_NO_PEDIDO)
+    return null;
+  if (kit.itens.length === 0) return null;
+  const arredondar = (v: number) => Math.round(v * 10_000) / 10_000;
+  const r = linhas.map((l) => ({ ...l }));
+  for (const i of kit.itens) {
+    const total = arredondar(i.quantidade * quantidadeKits);
+    const atual = r.find((l) => l.item === i.insumo);
+    if (atual) {
+      atual.quantidade = arredondar(atual.quantidade + total);
+      if (atual.kit !== kit.kit) atual.kit = null;
+    } else r.push({ item: i.insumo, nome: i.nome, quantidade: total, kit: kit.kit });
+  }
+  return r;
+}
+
+/**
+ * A linha do pedido que cita um kit: o kit existe no estabelecimento, está ativo e o item faz parte da composição
+ * dele (a marca do kit na linha nunca aponta para um kit que não a explica). `kit` nulo é o kit não encontrado.
+ */
+export function conferirKitDoPedido(
+  kit: { readonly ativo: boolean; readonly insumos: readonly number[] } | null,
+  item: number,
+  linha: number,
+): RecusaSuprimentos[] {
+  const campos = [`itens.${linha}.kit`];
+  if (!kit)
+    return [
+      recusa('kit-inexistente', `O kit da linha ${linha + 1} não existe neste estabelecimento.`, campos),
+    ];
+  if (!kit.ativo) return [recusa('kit-inativo', `O kit da linha ${linha + 1} está inativo.`, campos)];
+  if (!kit.insumos.includes(item))
+    return [recusa('item-fora-do-kit', `O item da linha ${linha + 1} não faz parte do kit citado.`, campos)];
+  return [];
+}

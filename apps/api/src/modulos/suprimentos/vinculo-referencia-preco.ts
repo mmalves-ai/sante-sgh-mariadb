@@ -261,6 +261,8 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
   async buscar(c: ContextoPortaM18, insumo: number, termo: string): Promise<OpcaoReferenciaPreco[]> {
     const busca = termo.trim().slice(0, 60);
     if (busca.length < 2) return [];
+    // O código pelo começo (quem digita parte do código acha a referência), o EAN e o TUSS exatos, a descrição por trecho.
+    const escapado = busca.replace(/[%_\\]/g, '\\$&');
     return this.nucleo.lerSomente(this.contexto(c), async (l) => {
       const item = await l.uma<Linha>('SELECT estoque_unidade_medida_id FROM insumo WHERE id = ?', [insumo]);
       const unidades = await l.consultar<Linha>(
@@ -275,9 +277,9 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
         `SELECT ${COLUNAS_REFERENCIA} FROM item_referencia_matmed r
            LEFT JOIN unidade_medida um ON um.id = r.unidade_medida_id
           WHERE r.situacao = 'ativo' AND r.excluido_em IS NULL
-            AND (r.codigo_referencia = ? OR r.codigo_ean = ? OR r.codigo_tuss = ? OR r.descricao LIKE ?)
+            AND (r.codigo_referencia LIKE ? OR r.codigo_ean = ? OR r.codigo_tuss = ? OR r.descricao LIKE ?)
           ORDER BY r.codigo_referencia = ? DESC, r.descricao LIMIT 30`,
-        [busca, busca, busca, `%${busca.replace(/[%_\\]/g, '\\$&')}%`, busca],
+        [`${escapado}%`, busca, busca, `%${escapado}%`, busca],
       );
       const hoje = await hojeDo(l);
       const edicoes = new Map<string, { id: number; numero: string } | null>();
@@ -354,7 +356,7 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
   ): Promise<{ id: number }> {
     return this.gravar(
       c,
-      'vincularReferenciaPreco',
+      'vincular-referencia-preco',
       chave,
       { insumo, referencia: e.referencia, edicao: e.edicao, fator: e.fator, inicio: e.inicio },
       async (tx) => {
@@ -421,14 +423,20 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
     fim: string,
     chave: string,
   ): Promise<{ id: number }> {
-    return this.gravar(c, 'encerrarVinculoReferenciaPreco', chave, { insumo, vinculo, fim }, async (tx) => {
-      const linha = await this.linhaDoTempo(tx, insumo);
-      const v = linha.find((x) => x.id === vinculo) as
-        (VinculoReferenciaPrecoVigencia & { versao: number }) | undefined;
-      if (!v) throw recusa('vinculo-inexistente', 'O vínculo não é deste item.', { campos: ['vinculo'] });
-      recusarTodas(conferirEncerramentoVinculoReferencia(v, fim, await hojeDo(tx)));
-      await tx.alterar('insumo_referencia_preco', v.id, v.versao, { vigencia_fim: fim });
-      return v.id;
-    });
+    return this.gravar(
+      c,
+      'encerrar-vinculo-referencia-preco',
+      chave,
+      { insumo, vinculo, fim },
+      async (tx) => {
+        const linha = await this.linhaDoTempo(tx, insumo);
+        const v = linha.find((x) => x.id === vinculo) as
+          (VinculoReferenciaPrecoVigencia & { versao: number }) | undefined;
+        if (!v) throw recusa('vinculo-inexistente', 'O vínculo não é deste item.', { campos: ['vinculo'] });
+        recusarTodas(conferirEncerramentoVinculoReferencia(v, fim, await hojeDo(tx)));
+        await tx.alterar('insumo_referencia_preco', v.id, v.versao, { vigencia_fim: fim });
+        return v.id;
+      },
+    );
   }
 }

@@ -6,11 +6,13 @@ import {
   type AtendimentoDetalhe,
   type AtendimentosDia,
   type ConfiguracaoHeranca,
+  type ConfiguracaoPadraoAbertura,
   type EscoresPaDoAtendimento,
   esquemaApoioAtendimento,
   esquemaAtendimentoDetalhe,
   esquemaAtendimentosDia,
   esquemaConfiguracaoHeranca,
+  esquemaConfiguracaoPadraoAbertura,
   esquemaEscoresPaDoAtendimento,
   esquemaFilaConsultorio,
   esquemaGravacaoAtendimento,
@@ -120,6 +122,8 @@ export const lerHistoricoPaciente = (paciente: number): Promise<HerancaPaciente>
   ler(`${A}/pacientes/${paciente}/historico`, esquemaHerancaPaciente);
 export const lerConfiguracaoHeranca = (): Promise<ConfiguracaoHeranca> =>
   ler(`${A}/heranca`, esquemaConfiguracaoHeranca);
+export const lerPadraoAbertura = (): Promise<ConfiguracaoPadraoAbertura> =>
+  ler(`${A}/heranca/padrao`, esquemaConfiguracaoPadraoAbertura);
 export const listarNaoIdentificados = () => ler(`${A}/nao-identificados`, esquemaNaoIdentificados);
 export const lerQuadroPa = (): Promise<QuadroPa> => ler(`${PA}/quadro`, esquemaQuadroPa);
 export const lerObservacaoPa = (): Promise<ObservacaoPa> => ler(`${PA}/observacao`, esquemaObservacaoPa);
@@ -144,6 +148,9 @@ export const encerrarAtendimento = (reg: number, p: unknown, k: string) =>
 export const cancelarAtendimento = (reg: number, p: unknown, k: string) =>
   gravar(`${A}/${reg}/cancelar`, p, k);
 export const alterarHeranca = (p: unknown, k: string) => gravar(`${A}/heranca`, p, k);
+/** Valores habituais da abertura: os do estabelecimento e os de quem está na sessão. */
+export const definirPadraoAbertura = (p: unknown, k: string) => gravar(`${A}/heranca/padrao`, p, k);
+export const definirMeuPadraoAbertura = (p: unknown, k: string) => gravar(`${A}/heranca/padrao/meu`, p, k);
 export const marcarNaoIdentificado = (paciente: number, p: unknown, k: string) =>
   gravar(`${A}/pacientes/${paciente}/nao-identificado`, p, k);
 export const identificarPaciente = (paciente: number, destino: number, k: string) =>

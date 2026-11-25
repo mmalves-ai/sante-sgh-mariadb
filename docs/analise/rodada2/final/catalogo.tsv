@@ -247,7 +247,7 @@ classe_socioeconomica	CAD	dominio	F8	Faixas de classe socioeconômica para perfi
 classificacao_raca_cor	CAD	catalogo_publico	F3	Classificação de raça e cor oficial, com códigos para TISS, cadastro nacional e e-SUS	F15; SPDATA TBCOR (6); MV RACA_COR*	02	3
 classificacao_risco_area	CAD	dominio	F8	Cor de risco atribuída a uma área do território atendido, usada para classificar o risco de adoecer das famílias	rodada2:nova	02	1
 clinica_assistencial	CAD	dominio	F3	Clínicas (médica, cirúrgica, obstétrica, pediátrica) com tipo usado na TISS e no faturamento público	F27; SPDATA TBCLINICA (7)	02	3
-cobertura_paciente	CAD	principal	F3	Fonte pagadora e plano do paciente, com carteira, validade, titularidade e situação	F9; SPDATA RICADPAC_TBCONVEN; MV CARTEIRA, PACIENTE_CARTAO	02	3
+cobertura_paciente	CAD	principal	F3	Fonte pagadora e plano do paciente, com carteira, validade, titularidade e situação	F9; SPDATA RICADPAC_TBCONVEN; MV CARTEIRA, PACIENTE_CARTAO; unicidade da carteira só enquanto viva, a encerrada libera o número (02-CAD linha 9; migração 03_CAD/94_carteira_encerrada)	02	3
 comarca_judicial	CAD	dominio	F7	Comarcas e varas usadas para registrar processos judiciais do grupo	rodada2:nova	02	1
 complexidade_estabelecimento	CAD	dominio	F3	Nível de complexidade assistencial do estabelecimento (básica, média, alta)	F26; SPDATA TBCOMPLEXIDADE_HOSPITALAR (3)	02	1
 condicao_especial	CAD	dominio	F8	Condições que pedem atenção no atendimento: mobilidade reduzida, intérprete de libras, acompanhante obrigatório	F1; MV CONDICOES_ESPECIAIS_PAC	02	1
@@ -276,7 +276,7 @@ estabelecimento	CAD	principal	F3	Hospital ou clínica com CNES, tipo, porte, esf
 estabelecimento_externo	CAD	principal	F3	Estabelecimento de saúde externo (hospital, posto, policlínica) que encaminha, recebe transferência ou pede exame, com CNES, regional e contato	rodada2:nova	02	4
 estabelecimento_responsavel	CAD	item	F3	Responsáveis técnico, clínico e administrativo do estabelecimento, com registro e vigência	F26; SPDATA TBUNIDAD (responsáveis)	02	3
 estado_civil	CAD	dominio	F3	Estados civis aceitos no cadastro, com código para trocas oficiais	F15; SPDATA TBECIV (18)	02	2
-estado_linha_cuidado	CAD	dominio	F8	Estados do paciente dentro do programa (incluído, ativo, alta, abandono)	F11; MV ESTADO_PACIENTE_PROG_SAUDE	02	1
+estado_linha_cuidado	CAD	dominio	F8	Estados do paciente dentro do programa (incluído, ativo, alta, abandono)	F11; MV ESTADO_PACIENTE_PROG_SAUDE; estados padrão da base, um por natureza (02-CAD linha 11; migração 03_CAD/95_linha_cuidado_inscricao)	02	1
 estrutura_organizacional	CAD	principal	F7	Nó da estrutura organizacional hierárquica (diretoria, gerência, coordenação), com setor ligado e nó pai	rodada2:nova	02	1
 faixa_etaria	CAD	dominio	F3	Faixas de idade nomeadas (idade inicial e final) usadas em regra, estatística, custo, indicador, painel e relatório	rodada2:nova	02	3
 fonte_pagadora	CAD	principal	F3	Quem paga o atendimento (operadora, particular, público, empresa), com registro na agência, situação e tipo	F23; SPDATA TBCONVEN (77); MV CONVENIO*; termo único fonte_pagadora (conflitos.md)	02	5
@@ -317,7 +317,7 @@ paciente_acesso_restrito	CAD	principal	F8	Marca de paciente confidencial ou de d
 paciente_classe	CAD	vinculo	F8	Categorias atribuídas a cada paciente, com vigência e quem atribuiu	F1; MV CATEGORIA_PACIENTE	02	2
 paciente_condicao_especial	CAD	vinculo	F8	Condições especiais declaradas pelo paciente, com origem da informação e validade	F1; MV CONDICOES_ESPECIAIS_PAC	02	0
 paciente_deficiencia	CAD	vinculo	F7	Deficiências declaradas pelo paciente, com informante, data e necessidade de apoio no atendimento	rodada2:nova	verif-02	0
-paciente_linha_cuidado	CAD	vinculo	F8	Inscrição do paciente em programa de saúde, com estado atual, profissional de referência e datas	F11; MV PACIENTE_PROGRAMA_SAUDE	02	1
+paciente_linha_cuidado	CAD	vinculo	F8	Inscrição do paciente em programa de saúde, com estado atual, profissional de referência e datas	F11; MV PACIENTE_PROGRAMA_SAUDE; uma só inscrição viva por paciente, programa e estabelecimento (02-CAD linha 11; migração 03_CAD/95_linha_cuidado_inscricao)	02	1
 paciente_linha_cuidado_historico	CAD	historico	F8	Linha do tempo das mudanças de estado do paciente no programa	F11; MV HIST_PACIENTE_PROGRAMA_SAUDE	02	1
 paciente_versao	CAD	historico	F3	Retrato imutável do cadastro do paciente, com contatos, gravado a cada registro clínico ou mudança relevante	F8; SPDATA HTPACIENTE, HTPACTELEFONE; MV LOG_PACIENTE_ATENDIME*, MVTO_PACIENTE	02	4
 paciente_vulnerabilidade	CAD	vinculo	F7	Vulnerabilidades declaradas do paciente, com data e informante	F15; MV VULNERABILIDADE_SOCIAL	02	0
@@ -356,6 +356,7 @@ regiao_geografica	CAD	dominio	F7	Região ou zona geográfica interna, em níveis
 regional_saude	CAD	dominio	F7	Regional ou diretoria de saúde que agrupa municípios, usada na divisão de vagas e cotas	rodada2:nova	02	1
 regra_campo_cadastro	CAD	configuracao	F3	Obrigatoriedade e visibilidade de cada campo do cadastro por módulo de recepção, tipo de atendimento e fonte pagadora	F2; SPDATA ATPARAMGERAL, REPARAM; MV CONFIGURACAO_PACIENTE*, CONFIGURA_PACIENTE	02	3
 remessa_cnes	CAD	principal	F7	Conferência e exportação periódica para o cadastro nacional de estabelecimentos, com competência e situação	F29; MV LOG_PROCESSA_SCNES	02	0
+incapacidade_paciente	CAD	historico	F3	Condição de incapacidade do paciente, com data de início, documento que a prova e levantamento; uma só vigente por paciente	Produto: representação do incapaz com data e documento (02-CAD linha 4; migração 03_CAD/96_incapacidade_paciente)	02	0
 responsavel_paciente	CAD	vinculo	F3	Responsável legal, familiar, dependente ou contato de emergência do paciente, com parentesco, poderes e vigência	F4; SPDATA campos de responsável em RICADPAC, TBPARENTE; MV RESPONSAVEL	02	2
 sequencia_prontuario	CAD	configuracao	F3	Regra de numeração do prontuário por estabelecimento e tipo (interno, externo): prefixo, próximo número e dígito	F1; SPDATA TBGERSEQ (8)	02	3
 servico_classificacao	CAD	catalogo_publico	F7	Serviços especializados e classificações do cadastro nacional de estabelecimentos	F29; MV MULTI_EMPRESAS_SERVICO_CLASSIF; catalogo_publico:cnes	02	2
@@ -368,7 +369,7 @@ sigla_conselho	CAD	catalogo_publico	F3	Siglas de inscrição válidas para cada 
 sinonimo_especialidade	CAD	item	F8	Termos populares de cada especialidade usados na busca do guia de rede e do portal	rodada2:nova	02	1
 situacao_convivio_familiar	CAD	catalogo_publico	F3	Situação de convívio familiar da tabela do e-SUS	F15; SPDATA TBSITCONJUGAL (7); MV SITUACAO_FAMILIAR; areas-sem-dono #11; paridade estrutural: era F7	02	2
 situacao_posse_plano	CAD	dominio	F3	Resposta do paciente sobre ter plano de saúde ou cartão de desconto, usada na captação e no perfil	rodada2:nova	02	1
-solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta ou exame, com conselho, UF, ocupação e contato	F20; SPDATA TBMEDSOL; MV PRESTADOR_EXTERNO, PRESTADOR_REFERENCIA	02	7
+solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta ou exame, com conselho, UF, ocupação e contato	F20; SPDATA TBMEDSOL; MV PRESTADOR_EXTERNO, PRESTADOR_REFERENCIA; duplicado unificado por ponteiro para o cadastro que continua, sem apagar nem alterar registro clínico (02-CAD linha 20; migração 03_CAD/98_solicitante_unificacao); situação anterior guardada para o desfazer (migração 03_CAD/99_solicitante_unificacao_situacao)	02	7
 solicitante_externo_fonte_pagadora	CAD	vinculo	F3	Código do solicitante externo em cada fonte pagadora	F20; SPDATA TBMEDSOL_CODCON	02	1
 suspeita_duplicidade	CAD	principal	F3	Pares de cadastros com indício de duplicidade, com pontuação, critério e decisão do analista	F7; carga do dia 0; dono 02 (conflitos.md)	02	0
 telefone_pessoa	CAD	item	F3	Telefones da pessoa com tipo, DDD, ramal, consentimento para mensagem e indicação de principal	F3; SPDATA HTPACTELEFONE, TBTIPOTELEFONE; MV CONTATO_PACIENTE	02	8
@@ -760,7 +761,7 @@ rpa_lancamento	FAT	vinculo	F3	Lançamentos de repasse agrupados em cada RPA	R1#4
 rpa_retencao	FAT	item	F3	Retenções do RPA (INSS, IRRF, ISS) com base, alíquota e valor	R1#45; dep: natureza_rendimento (07)	06	1
 sequencial_guia	FAT	configuracao	F3	Contador de número de guia, transação e lote TISS por fonte pagadora e tipo de guia	R1#24; SP: TBSEGUIA; MV: TISS_NR_GUIA	06	2
 situacao_conta	FAT	dominio	F3	Situações da conta: aberta, em conferência, auditada, fechada, faturada, cancelada	R1#12	06	0
-solicitacao_autorizacao	FAT	principal	F7	Pedido eletrônico de autorização prévia (consulta, SADT, internação, prorrogação, quimio, radio, OPME) com tipo	R1#27; MV: TISS_SOL_GUIA*, INTEGRA_TISS_SOLICITACAO*; conflitos: dono 06; dep: autorizacao_internacao (04)	06	2
+solicitacao_autorizacao	FAT	principal	F7	Pedido eletrônico de autorização prévia (consulta, SADT, internação, prorrogação, quimio, radio, OPME) com tipo	R1#27; MV: TISS_SOL_GUIA*, INTEGRA_TISS_SOLICITACAO*; conflitos: dono 06; dep: autorizacao_internacao (04); situação pronta_envio e CHECK do envio (06-FAT linha 27; migração 12_FAT/99_autorizacao_envio)	06	2
 solicitacao_autorizacao_anexo_clinico	FAT	item	F7	Dados clínicos do anexo de quimioterapia, radioterapia ou OPME (CID, estadiamento, ciclos, finalidade)	R1#27; MV: TISS_RET_SOL_QUIMIO; SP: TBTISSESTTUMOR, TBTISSFINTRAT, TBTISSTPQUIMIO (termos em 08)	06	2
 solicitacao_autorizacao_diagnostico	FAT	item	F7	Diagnósticos principal e secundários informados no pedido de autorização à operadora	rodada2:nova	06	1
 solicitacao_autorizacao_item	FAT	item	F7	Itens pedidos na autorização, com código TUSS, quantidade e justificativa	R1#27; MV: TISS_ITSOL_GUIA*, TISS_ITSOL_OP_GUIA	06	3
@@ -830,7 +831,7 @@ apuracao_custo	FIN	principal	F7	Apuração mensal do custeio por absorção, com
 apuracao_irpj_csll	FIN	principal	F7	Apuração do IRPJ e da CSLL no lucro real, com base, adicional e provisão	MV SPED_ECF_IRPJ_CSLL, CONFIGURACAO_PROVISAO_LALUR	07	3
 apuracao_pis_cofins	FIN	principal	F3	Apuração mensal de PIS e COFINS (débitos, créditos e saldo a recolher ou a compensar)	MV SPED_PIS_COFINS_REG_A170, EMPRESA_SPED_PIS_COFINS; SPDATA SDNATRECEITA; paridade estrutural: era F7	07	4
 apuracao_resultado	FIN	principal	F7	Apuração e encerramento do resultado do exercício, com lançamentos gerados	MV FECHAMENTO_DO_MES, DADOS_BALANCETE	07	0
-apuracao_retencao	FIN	principal	F7	Apuração por tributo, código de receita e período dos valores retidos, com total a recolher	MV FINAN_LOTE_TRIBUTO, FINAN_VERSAO_TRIBUTO, FINAN_LOTE_IMPOSTO	07	2
+apuracao_retencao	FIN	principal	F7	Apuração por tributo, código de receita e período dos valores retidos, com total a recolher	MV FINAN_LOTE_TRIBUTO, FINAN_VERSAO_TRIBUTO, FINAN_LOTE_IMPOSTO; cancelamento da compensação do retido por tomadores, com quem, quando e motivo (07-FIN linha 109; migração 14_FIN/91_compensacao_sofrida_cancelamento)	07	2
 apuracao_retencao_item	FIN	vinculo	F7	Retenção incluída na apuração, ligada à parcela de origem	MV FINAN_LOTE_TRIBUTO_IT	07	1
 arquivo_efd_contribuicoes	FIN	principal	F3	Arquivo da EFD-Contribuições gerado por competência, com situação, recibo e retificação	SPDATA SDPARAM; MV EMPRESA_SPED_PIS_COFINS, SPED_PIS_COFINS_REG_0111, SPED_PIS_COFINS_REG_A100	07	5
 arquivo_efd_fiscal	FIN	principal	F7	Arquivo da escrituração fiscal digital de ICMS e IPI por competência, com finalidade (original ou retificação) e situação	rodada2:nova	07	1
@@ -1032,7 +1033,7 @@ motivo_adiantamento_paciente	FIN	dominio	F3	Motivo do depósito ou caução rece
 motivo_baixa_bem	FIN	dominio	F7	Motivos de baixa do bem	MV MOT_BAIXA	07	1
 motivo_bloqueio_titulo	FIN	dominio	F3	Motivos de bloqueio de pagamento: falta de aprovação, divergência de nota, pendência fiscal, ordem judicial	MV BLOQUEIO_ALCADA_FINAN	07	0
 motivo_cancelamento_cheque	FIN	dominio	F7	Motivo para cancelar cheque emitido, indicando se a folha fica inutilizada	rodada2:nova	07	1
-motivo_cancelamento_documento_fiscal	FIN	dominio	F3	Motivo para cancelar nota de serviço, nota de mercadoria ou nota de crédito e débito, com o código exigido pelo provedor municipal ou pela Sefaz	rodada2:nova	07	4
+motivo_cancelamento_documento_fiscal	FIN	dominio	F3	Motivo para cancelar nota de serviço, nota de mercadoria ou nota de crédito e débito, com o código exigido pelo provedor municipal ou pela Sefaz	rodada2:nova; motivos padrão do cancelamento e da substituição da nota de serviço (07-FIN linha 113; migração 14_FIN/90_nota_servico_prazo)	07	4
 motivo_devolucao_cheque	FIN	dominio	F7	Motivo de devolução de cheque recebido, seguindo as alíneas da compensação bancária	rodada2:nova	07	1
 motivo_lancamento_contabil	FIN	dominio	F7	Motivos de lançamento manual e de estorno	MV MOTIVO_LCTO	07	1
 motivo_movimento_orcamento	FIN	dominio	F7	Motivos de transferência, ajuste ou revisão de valores orçados	rodada2:nova	07	2
@@ -1135,7 +1136,7 @@ regra_contabilizacao_item	FIN	item	F7	Linha da regra: conta a débito e a crédi
 regra_controle_orcamentario	FIN	configuracao	F8	Regra de controle na operação: conferir saldo, bloquear ou alertar, por centro, natureza e documento	MV ORCA_CONTROLE, ORCA_CONTROLE_CONTA	07	2
 regra_deducao_nota_servico	FIN	configuracao	F7	Regra por fonte pagadora e grupo de item que diz quais parcelas do valor são deduzidas na nota fiscal de serviço	rodada2:nova	07	1
 regra_importacao_custo	FIN	configuracao	F8	Setor e natureza de custo que recebem valores importados de outros módulos (repasse médico) no custeio, com vigência	rodada2:nova	07	1
-regra_iss_municipio	FIN	configuracao	F3	Alíquota, retenção e local de incidência do ISS por município e serviço	SPDATA TBMUIBGE; MV SERVICO_NTFS, TRIBUTO_MUNICIPAL; município pelo catalogo_publico ibge	07	2
+regra_iss_municipio	FIN	configuracao	F3	Alíquota, retenção e local de incidência do ISS por município e serviço	SPDATA TBMUIBGE; MV SERVICO_NTFS, TRIBUTO_MUNICIPAL; município pelo catalogo_publico ibge; prazo do município para cancelar e substituir a nota de serviço (07-FIN linha 113; migração 14_FIN/90_nota_servico_prazo)	07	2
 regra_pis_cofins_conta	FIN	configuracao	F7	CST de PIS e COFINS e natureza do crédito por conta contábil, para a escrituração das contribuições	rodada2:nova	07	1
 regra_rateio_financeiro	FIN	configuracao	F3	Modelo de rateio reutilizável por natureza, com centros e percentuais	MV REGRA_RATEIO_FNFI	07	1
 regra_rateio_financeiro_item	FIN	item	F3	Centro de custo e percentual dentro de uma regra de rateio	MV REGRA_RATEIO_FNFI	07	2
@@ -1153,7 +1154,7 @@ responsavel_bem	FIN	historico	F3	Responsável pela guarda do bem por período	SP
 responsavel_orcamento	FIN	vinculo	F7	Usuário responsável por preencher e revisar cada centro de custo da versão	MV ORCA_PERFIL_USUA_SETOR, ORCA_PERFIL_USUA_CONTA	07	14
 resposta_padrao_aprovacao	FIN	dominio	F8	Respostas fixas do aprovador (aprovo, reprovo, devolvo para ajuste) com exigência de justificativa	MV ALCA_PONTO_RESP	07	2
 retencao_entrada_servico	FIN	item	F7	Tributo retido na entrada do serviço tomado, base da EFD-REINF R-2010 e R-4020	MV ITENT_SERV_IMPOSTO; areas-sem-dono 16	07	3
-retencao_titulo	FIN	item	F3	Tributo retido em parcela a pagar ou a receber, com base, alíquota, valor e código de receita	SPDATA MFDESACR; MV ITRETENCAO_TRIBUTO	07	8
+retencao_titulo	FIN	item	F3	Tributo retido em parcela a pagar ou a receber, com base, alíquota, valor e código de receita	SPDATA MFDESACR; MV ITRETENCAO_TRIBUTO; motivo do estorno da retenção sofrida (07-FIN linha 109; migração 14_FIN/91_retencao_sofrida_estorno)	07	8
 retorno_bancario	FIN	principal	F3	Arquivo de retorno de pagamentos lido do banco, com data de processamento e resumo	MV RETORNO_PAGCON_PAG	07	1
 retorno_bancario_item	FIN	item	F3	Linha do retorno de pagamento ligada ao item do borderô, com ocorrência, valor efetivado e data	MV RETORNO_PAGCON_PAG; SPDATA TBTPOCORBANCOPGTO	07	4
 retorno_cobranca	FIN	principal	F7	Arquivo de retorno da cobrança lido do banco, com resumo de liquidações e rejeições	MV RETORNO_COBRANCA, SEGMENTO_RETORNO_COBRANCA	07	2
@@ -1179,7 +1180,7 @@ sla_contrato	FIN	configuracao	F8	Acordo de nível de serviço por contrato e ser
 socio_titular_ecf	FIN	item	F7	Sócio ou titular informado na ECF, com participação e rendimentos	MV SPED_ECF_IDENT_SOCIOS_TITULAR, SPED_ECF_RENDIMENTOS_DIRI_CONS	07	2
 subgrupo_natureza_financeira	FIN	principal	F3	Subgrupo do plano gerencial, entre o grupo e a natureza	SPDATA TBGRUDES; MV CLASSIFICACAO_CONTA_FNFI	07	3
 suprimento_caixa	FIN	item	F3	Reforço de troco na sessão de caixa, com origem e responsável	MV EXTRA_CAIXA	07	0
-suspensao_processo_tributario	FIN	item	F3	Indicativo de suspensão de exigibilidade do processo, com código, data e valor suspenso	MV REINF_PROCESSO_SUSPENSAO; SPDATA FPESOCINDSUSP	07	7
+suspensao_processo_tributario	FIN	item	F3	Indicativo de suspensão de exigibilidade do processo, com código, data e valor suspenso	MV REINF_PROCESSO_SUSPENSAO; SPDATA FPESOCINDSUSP; tributo e beneficiário da suspensão (07-FIN linha 111; migração 14_FIN/98_suspensao_tributo); encerramento e anulação da suspensão com motivo, sem apagar (07-FIN linha 111; migração 14_FIN/90_suspensao_encerramento)	07	7
 tabela_fiscal_oficial	FIN	catalogo_publico	F3	Tabelas oficiais fiscais (CST, natureza do crédito, gênero, modelo de documento), com fonte e versão	SPDATA SDCSTPIS, SDCSTCOFINS, SDNATCREDITO, SDGENERO, SDTIPODOCTO, COTIPOITEM, DMCADLEIAUTE; MV CST_DI, CSOSN	07	13
 talao_cheque	FIN	principal	F7	Talão de cheques da conta bancária, com faixa de numeração inicial, final e próxima folha a emitir	rodada2:nova	07	1
 tarifa_bancaria	FIN	item	F7	Tarifa cobrada pelo banco na cobrança ou no pagamento, com origem no retorno e lançamento gerado	MV TARIFA_BANCARIA_RET	07	1
@@ -2254,11 +2255,11 @@ contato_ativo	REC	principal	F8	Tentativa de contato com o paciente (ligação, m
 declaracao_comparecimento	REC	principal	F3	Declaração de comparecimento ou de acompanhante emitida, com período e emissor	F35; MV DECLARACAO_COMPARECIMENTO_ACOM, CONFIG_DECLARACAO	02	2
 evento_senha	REC	historico	F3	Eventos da senha por local (chamar, atender, encaminhar, finalizar), com usuário e tempo	F33; SPDATA TBFLUXOATEND	02	1
 forma_atendimento	REC	dominio	F7	Modalidade do atendimento (presencial, a distância, domiciliar)	F30/F55; MV MODALIDADE_ATENDIMENTO*	02	1
-gerador_senha	REC	configuracao	F3	Botões do totem e geradores de senha por recepção, agenda, especialidade e prioridade	F33; SPDATA TBGERASENHA (36); MV FILA_SENHA*, SACR_MAQUINA_FILA*, SACR_CONFIGURACAO_MVTOTEM*	02	5
+gerador_senha	REC	configuracao	F3	Botões do totem e geradores de senha por recepção, agenda, especialidade e prioridade	F33; SPDATA TBGERASENHA (36); MV FILA_SENHA*, SACR_MAQUINA_FILA*, SACR_CONFIGURACAO_MVTOTEM*; posição do botão no totem e no balcão, do cadastro da estrutura pela tela (02-REC linha 33; migração 04_REC/99_estrutura_recepcao)	02	5
 grupo_atendimento	REC	dominio	F3	Grupos de atendimento usados para separar filas, relatórios e regras	F30; SPDATA TBCADGRUPOATEN (1)	02	2
 grupo_prioridade_legal	REC	dominio	F3	Grupos de prioridade legal (idoso, idoso acima de 80, gestante, pessoa com deficiência, autismo)	F33/F49; SPDATA TBGRUPOPRIORIDADE (10); MV PRIORID_PACIENTE	02	2
 guiche_recepcao	REC	principal	F3	Guichês de cada recepção	F33; SPDATA TBGUICHE (9)	02	2
-local_atendimento	REC	principal	F3	Consultório, sala ou ponto de atendimento, com painel, recepção e setor	F34; SPDATA TBLOCAL (31)	02	2
+local_atendimento	REC	principal	F3	Consultório, sala ou ponto de atendimento, com painel, recepção e setor	F34; SPDATA TBLOCAL (31); módulo de recepção do local, que dá o escopo da regra de campo do cadastro na abertura (02-CAD linha 2; migração 04_REC/98_modulo_recepcao_local)	02	2
 local_atendimento_encaminhamento	REC	vinculo	F3	Locais para onde cada local pode encaminhar o paciente	F34; SPDATA TBLOCALENCATE	02	1
 local_atendimento_horario	REC	configuracao	F3	Horário de funcionamento do local por dia da semana e em dia não útil	F34; SPDATA TBLOCALHORA (31)	02	1
 local_atendimento_visibilidade	REC	vinculo	F3	Locais cujos atendimentos cada local pode consultar	F34; SPDATA TBLOCALPESATE	02	1
@@ -2270,6 +2271,7 @@ motivo_encerramento_atendimento	REC	dominio	F3	Motivos de encerramento do atendi
 motivo_procura_atendimento	REC	dominio	F7	Motivo de procura informado na abertura do atendimento	rodada2:nova	02	1
 ocupacao_guiche	REC	historico	F3	Quem ocupou cada guichê e quando, para chamada e produtividade	F33; SPDATA TBSTATUSGUICHE	02	1
 origem_entrada_atendimento	REC	dominio	F3	Origens do atendimento (demanda espontânea, encaminhado, agendado, transferido)	F30; MV ORI_ATE, USU_ORIGEM	02	2
+padrao_abertura_atendimento	REC	configuracao	F3	Valores habituais da abertura do atendimento (unidade, centro de custo, convênio, especialidade), do estabelecimento e de cada usuário	F3.2, 02-REC linha 31: valores padrão do usuário para o paciente sem atendimento anterior; migração 04_REC/95_padrao_abertura	02	0
 painel_chamada	REC	configuracao	F3	Painel de chamada por local, com tipo, voz, layout e filas exibidas	F33; SPDATA PNCONFIG (5); MV MVPAINEL_CFG_VOZ	02	2
 ponto_recepcao	REC	principal	F3	Recepção ou setor que emite e chama senhas, com texto de impressão e estabelecimento	F33; SPDATA TBRECEPCAO (11); MV FILA_SENHA_MULTI_EMPRESAS*	02	1
 procedencia	REC	dominio	F3	Procedência do paciente (residência, outro serviço, via pública, judicial), com valor padrão	F30; SPDATA TBPROCED, TBPROCEDPADRAO	02	5
@@ -3704,3 +3706,11 @@ restricao_tipo_lancamento_perfil	FIN	vinculo	F3	Perfis restritos a uma lista de 
 responsavel_setor_funcional	CAD	historico	F3	Histórico dos responsáveis pelo setor, um período por linha com início e fim; a troca encerra o anterior na véspera e nunca sobrescreve	Produto: responsável do setor com vigência e histórico (02-CAD linha 27; migração 03_CAD/93_responsavel_setor)	02	0
 evento_vinculo_nota_faturamento	FIN	historico	F3	Histórico de ligações, ajustes, desligamentos (com motivo) e religamentos da nota fiscal com a fatura ou a conta, com valor anterior e novo	boa prática: vínculo fiscal com histórico próprio, desligamento justificado (06-FAT linha 36)	07	1
 parcela_remessa_bancaria	FIN	item	F3	Parcela a pagar enviada numa remessa bancária, com valor e vencimento mandados ao banco, pendente até o retorno (trava a prorrogação enquanto pendente)	Produto: prorrogação recusada com a parcela em remessa sem retorno (07-FIN linha 63; migração 14_FIN/92_parcela_remessa)	07	0
+parametro_operadora	SGO	configuracao	F7	Parâmetros gerais de cada operadora da instalação (prazos legais, cartão, inadimplência), um período de vigência por linha, nunca sobrescrito	Produto: parâmetros por operadora com vigência (08-SGO linha 93; migração 16_SGO/95_parametro_operadora)	08	0
+nota_credito_debito	FIN	movimento	F8	Nota de crédito ou débito aplicada a uma parcela do título, com o efeito (abate ou acresce) e o valor do ajuste gravados para o cancelamento desfazer sem apagar	Produto: parcela, efeito, valor do ajuste e aplicação; motivos padrão da nota e do cancelamento; operação de desconto ou cessão com o portador e o cancelamento com motivo; liquidação do item pelo sacado (07-FIN linhas 70 e 79; migração 14_FIN/95_nota_cessao_portador)	07	7
+resultado_cultura_versao	SADT	historico	F7	Versão substituída da cultura do resultado, guardada inteira (cabeçalho, isolados, antibiograma e laudo emitido) com o motivo da retificação, nunca alterada	Produto: laudo retificado com a versão anterior consultável, boa prática SBIS (05-SADT linha 12; migração 10_SADT/98_cultura_versao)	05	0
+regra_alerta_estabelecimento	ADM	vinculo	F8	Situação da regra de alerta global em cada estabelecimento: ativa ou desativada só nele, sem mudar a regra para os demais	Produto: notificação por regra com escopo por estabelecimento (01-ADM linha 76; migração 02_ADM/98_notificacao_escopo_estabelecimento)	01	0
+envio_notificacao_aviso	ADM	item	F8	Cada aviso reunido num envio de notificação, único por canal, para o aviso não sair duas vezes pelo mesmo canal	Produto: consolidação dos avisos com ligação indexável aviso-envio (01-ADM linha 76; migração 02_ADM/98_notificacao_escopo_estabelecimento)	01	0
+impressao_identificacao	ADM	historico	F3	Primeira impressão e número de vias da pulseira e da etiqueta de identificação de cada atendimento, com a estação e a impressora por onde saiu	Produto: reimpressão controlada da identificação do paciente (01-ADM linha 79; migração 02_ADM/93_impressao_identificacao)	01	0
+atendimento_impresso_emitido	REC	historico	F3	Cada emissão de impresso do atendimento (ficha, etiqueta, pulseira ou modelo configurado), com cópias, formato, responsável e a reimpressão numerada; só acréscimo	Produto: reimpressão auditável dos impressos da recepção (02-REC linha 35; migração 04_REC/94_impresso_emitido)	02	0
+integracao_dose_estoque	SUP	historico	F3	Decisão da regra de integração prescrição × estoque para cada dose prescrita: regra vigente, local que atende (ou o substituto), se vai ao estoque e o instante de liberação para a farmácia	Produto: regra de integração aplicada à prescrição e ao aprazamento (05-SUP linha 7; migração 11_SUP/91_integracao_dose)	05	0

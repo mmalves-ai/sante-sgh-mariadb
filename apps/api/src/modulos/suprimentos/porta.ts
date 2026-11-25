@@ -41,6 +41,7 @@ import type { FaixaAlcada } from '@sgh/dominio-suprimentos';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 import type {
   KitPadraoCadastro,
+  KitPadraoSugerido,
   PreviaRecalculo,
   ProcedimentoKitBusca,
   RecalcularSaldosEntrada,
@@ -212,6 +213,8 @@ export interface PortaSuprimentos extends PortaGravacaoM18<GravadorSghSuprimento
   kit(c: ContextoSuprimentos, id: number, hoje: string, alertaDias: number): Promise<KitRastreavel | null>;
   kitsPadraoCadastro(c: ContextoSuprimentos): Promise<KitPadraoCadastro[]>;
   procedimentosKit(c: ContextoSuprimentos, termo: string): Promise<ProcedimentoKitBusca[]>;
+  /** O kit padrão das cirurgias e procedimentos achados pelo termo, com a composição (para somar ao pedido). */
+  kitsPadraoSugeridos(c: ContextoSuprimentos, termo: string): Promise<KitPadraoSugerido[]>;
   kitsPadrao(
     c: ContextoSuprimentos,
   ): Promise<{ codigo: number; nome: string; itens: { item: number; nome: string; quantidade: number }[] }[]>;

@@ -6,8 +6,9 @@
 //   POST /api/internacoes/:reg/guias/:seq/correcao          internacao.corrigirGuia (motivo; sem linha nova)
 //   GET  /api/cadastros/estrutura/unidades/:id/operadores   quem opera a unidade (admitir, transferir, dar alta)
 //   POST /api/cadastros/estrutura/unidades/:id/operadores   internacao.definirOperadoresUnidade (lista inteira)
+//   GET  /api/cadastros/estrutura/operadores-candidatos?termo=  usuários ativos para a lista (login ou nome)
 // A guia e a prorrogação continuam pela rota da guia (POST /api/internacoes/:reg/guias), que agora grava o histórico.
-import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -31,19 +32,18 @@ import {
   esquemaRegistrarAcidente,
   esquemaRegistrarDiagnostico,
   esquemaRetirarDiagnostico,
+  lerCandidatosOperadores,
   lerOperadoresDaUnidade,
+  type CandidatoOperador,
   lerRegistrosDaInternacao,
   type OperadorDaUnidade,
   type RegistrosDaInternacao,
 } from './registros-internacao.js';
 
 const naoEncontrado = (o: string) =>
-  new ErroProblema(
-    'registro-inexistente',
-    404,
-    `${o} não encontrada`,
-    `${o} não existe neste estabelecimento.`,
-  );
+  new ErroProblema('nao-encontrado', 404, `${o} não encontrada`, `${o} não existe neste estabelecimento.`, {
+    codigo: 'registro-inexistente',
+  });
 
 @Controller()
 export class RegistrosInternacaoController {
@@ -158,6 +158,18 @@ export class RegistrosInternacaoController {
     );
     if (!r) throw naoEncontrado('Unidade de internação');
     return r;
+  }
+
+  @Get('cadastros/estrutura/operadores-candidatos')
+  @Permissao('organizacao.leito.editar')
+  @Auditar(EVENTOS_AUDITAVEIS.estruturaConsultada.codigo)
+  candidatos(
+    @Query('termo') termo: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<CandidatoOperador[]> {
+    return this.propria().lerNoEstabelecimento(ctxAdt(sessaoDe(req)), (l) =>
+      lerCandidatosOperadores(l, String(termo ?? '').slice(0, 60)),
+    );
   }
 
   @Post('cadastros/estrutura/unidades/:id/operadores')

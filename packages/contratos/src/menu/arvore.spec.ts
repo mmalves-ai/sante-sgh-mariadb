@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('410 itens: M 190, P 57, N 163, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 410, M: 190, P: 57, N: 163 });
+  it('426 itens: M 198, P 57, N 171, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 426, M: 198, P: 57, N: 171 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(410);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(426);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -207,6 +207,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cadastros/enfermagem/procedimentos',
         '/cadastros/especialidades', // M11
         '/cadastros/estrutura', // M10
+        '/cadastros/estrutura/calendario', // F3.1 (02-CAD linha 28)
         '/cadastros/estrutura/centros-custo',
         '/cadastros/estrutura/leitos',
         '/cadastros/estrutura/locais',
@@ -264,6 +265,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cadastros/pacientes/duplicidades',
         '/cadastros/pacientes/historico',
         '/cadastros/pacientes/rede', // M57 (etapa 1): MPI da Rede
+        '/cadastros/regras-campo', // F3.1 (02-CAD linha 2)
         '/cadastros/pessoas',
         '/cadastros/prescricao/frequencias', // M24
         '/cadastros/prescricao/hemocomponentes',
@@ -339,6 +341,10 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/integracao/tiss', // M31
         '/internacao/admissao', // M21
         '/internacao/censo', // M16
+        '/internacao/controles/formularios-obito', // F78.04-1 (04-INT linha 74)
+        '/internacao/leitos-sus', // F78.04-2 (04-INT linha 79)
+        '/internacao/controles/isolamento', // F78.04-1 (04-INT linha 75)
+        '/internacao/controles/regulacao', // F78.04-1 (04-INT linha 78)
         '/internacao/leitos/painel', // M16
         '/internacao/nir/altas-previstas', // M44 (etapa 2)
         '/internacao/nir/fila', // M44 (etapa 2)
@@ -449,6 +455,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/preferencias',
         '/preferencias/dicionario', // M27
         '/qualidade/ccih/antimicrobianos', // M48 (etapa 3)
+        '/qualidade/ccih/culturas', // F7 (09-AREA linha 68)
         '/qualidade/ccih/iras', // M48 (etapa 3)
         '/qualidade/ccih/maos-surtos', // M48 (etapa 3)
         '/qualidade/ccih/precaucoes', // M48 (etapa 3)
@@ -492,13 +499,19 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/sadt/amostras',
         '/sadt/atendimentos', // M26
         '/sadt/coleta',
+        '/sadt/entregas', // F3.5 (05-SADT linha 21)
+        '/sadt/entregas/cadastro', // F3.5 (05-SADT linha 21)
+        '/sadt/escala-execucao', // F3.5 (05-SADT linha 19)
         '/sadt/exames',
         '/sadt/imagem/worklist', // M47 (etapa 3)
         '/sadt/laboratorio/apoio', // M34
         '/sadt/laboratorio/interfaces', // M34
         '/sadt/laudos',
         '/sadt/laudos/emissao',
+        '/sadt/limites', // F8 (05-SADT linha 6)
         '/sadt/orcamentos',
+        '/sadt/pedido', // F3.5 (05-SADT linha 4)
+        '/sadt/recoletas', // F3.5 (05-SADT linha 7)
         '/sadt/resultados/digitacao',
         '/sadt/resultados/liberacao',
         '/sadt/solicitantes/autocadastro',
@@ -517,12 +530,14 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/fiscal/nfse', // M32
         '/financeiro/fiscal/reinf', // M32
         '/financeiro/gerencial', // M32
+        '/financeiro/gerencial/reclassificar', // F3.8 (07-FIN linha 98)
         '/financeiro/pagar/adiantamentos', // M32
         '/financeiro/pagar/aprovacao', // M32
         '/financeiro/pagar/borderos', // M32
         '/financeiro/pagar/remessas', // M32
         '/financeiro/pagar/titulos', // M32
         '/financeiro/parametros', // M32
+        '/financeiro/parametros/permissoes', // F3.8 (07-FIN linha 99)
         '/financeiro/receber/convenios', // M32
         '/financeiro/receber/demonstrativos', // M32
         '/financeiro/receber/renegociacoes', // M32
@@ -530,6 +545,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/tesouraria/conciliacao', // M32
         '/financeiro/tesouraria/fluxo-caixa', // M32
         '/financeiro/tesouraria/movimento', // M32
+        '/financeiro/tesouraria/periodo', // F3.8 (07-FIN linha 85)
       ].sort(),
     );
   });

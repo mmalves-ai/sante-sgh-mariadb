@@ -298,6 +298,8 @@ export const esquemaColetarAmostra = z
     /** Recipiente (tubo) da amostra, do cadastro de recipientes. */
     recipiente: smallint.optional(),
     estacao: z.string().trim().max(64).optional(),
+    /** Posto de coleta do cadastro onde a amostra foi colhida (à beira do leito, sem posto). */
+    posto: z.number().int().positive().optional(),
   })
   .strict();
 export type ColetarAmostraEntrada = z.infer<typeof esquemaColetarAmostra>;

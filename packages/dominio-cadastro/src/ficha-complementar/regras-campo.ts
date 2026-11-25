@@ -120,6 +120,17 @@ export function regrasNoEscopo(regras: readonly RegraCampo[], e: EscopoRegra): M
 const vazio = (v: unknown): boolean =>
   v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 
+// Campo que o cadastro pode declarar ausente: a declaração EXPLÍCITA (verdadeiro nos dados conferidos) atende a
+// obrigatoriedade: a mãe declarada desconhecida não deixa o paciente sem saída, nem obriga a digitar um nome falso.
+// Quem monta os dados só manda a declaração quando ela foi feita por uma pessoa; "nome vazio" não é declaração.
+const DECLARADO_AUSENTE: Readonly<Record<string, string>> = Object.freeze({ nomeMae: 'maeDesconhecida' });
+const falta = (dados: Readonly<Record<string, unknown>>, campo: string): boolean => {
+  const declaracao = Object.prototype.hasOwnProperty.call(DECLARADO_AUSENTE, campo)
+    ? DECLARADO_AUSENTE[campo]
+    : undefined;
+  return vazio(dados[campo]) && !(declaracao !== undefined && dados[declaracao] === true);
+};
+
 /**
  * Campos recusados pela regra. Cadastro: todo obrigatório vazio. Alteração: só os campos enviados (o obrigatório
  * mandado apagar; o somente leitura mandado mudar).
@@ -136,11 +147,61 @@ export function camposRecusados(
     const enviado = Object.prototype.hasOwnProperty.call(dados, campo) && dados[campo] !== undefined;
     if (
       r.exigencia === 'obrigatorio' &&
-      (modo === 'cadastro' ? vazio(dados[campo]) : enviado && vazio(dados[campo]))
+      (modo === 'cadastro' ? falta(dados, campo) : enviado && falta(dados, campo))
     )
       fora.push({ campo, rotulo, motivo: 'obrigatorio' });
     if (r.exigencia === 'somente_leitura' && modo === 'alteracao' && enviado)
       fora.push({ campo, rotulo, motivo: 'somente_leitura' });
   }
   return fora.sort((a, b) => a.campo.localeCompare(b.campo));
+}
+
+// ── Abertura do atendimento (recepção, pronto atendimento, exames e internação) ──
+// O atendimento só abre com o cadastro do paciente completo no escopo em que a recepção trabalha. A conferência é a
+// mesma do cadastro novo (todo obrigatório do escopo preenchido); "somente leitura", "opcional" e "oculto" não
+// impedem a abertura. O cadastro provisório (paciente ainda não identificado da urgência) nunca é barrado: a
+// identificação fica pendente e o cadastro é completado depois.
+
+/** Tipo de atendimento da regra pelo código do tipo com que a recepção abre o atendimento (nulo: só a regra geral). */
+const TIPO_REGRA_DA_ABERTURA: Readonly<Record<string, TipoAtendimentoRegra>> = Object.freeze({
+  consulta: 'ambulatorial',
+  pa: 'urgencia',
+  exame: 'externo',
+  requisicaoLab: 'externo',
+  internacao: 'internacao',
+  domiciliar: 'domiciliar',
+});
+
+export function tipoAtendimentoDaAbertura(codigo: string | null | undefined): TipoAtendimentoRegra | null {
+  return codigo && Object.prototype.hasOwnProperty.call(TIPO_REGRA_DA_ABERTURA, codigo)
+    ? (TIPO_REGRA_DA_ABERTURA[codigo] as TipoAtendimentoRegra)
+    : null;
+}
+
+export interface RecusaAberturaPorCadastro {
+  readonly codigo: 'cadastro-incompleto';
+  readonly detalhe: string;
+  /** Os campos do cadastro que faltam, em ordem alfabética. */
+  readonly campos: readonly string[];
+  readonly pendentes: readonly { readonly campo: string; readonly rotulo: string }[];
+}
+
+/** Recusa da abertura do atendimento quando o cadastro do paciente não cumpre a regra do escopo (nulo: pode abrir). */
+export function recusaAberturaPorCadastro(
+  regras: readonly RegraCampo[],
+  e: EscopoRegra,
+  dados: Readonly<Record<string, unknown>>,
+  opcoes: { readonly provisorio?: boolean } = {},
+): RecusaAberturaPorCadastro | null {
+  if (opcoes.provisorio) return null;
+  const pendentes = camposRecusados(regras, e, dados, 'cadastro')
+    .filter((f) => f.motivo === 'obrigatorio')
+    .map(({ campo, rotulo }) => ({ campo, rotulo }));
+  if (pendentes.length === 0) return null;
+  return {
+    codigo: 'cadastro-incompleto',
+    detalhe: `Complete o cadastro do paciente antes de abrir o atendimento: ${pendentes.map((p) => p.rotulo).join(', ')}.`,
+    campos: pendentes.map((p) => p.campo),
+    pendentes,
+  };
 }

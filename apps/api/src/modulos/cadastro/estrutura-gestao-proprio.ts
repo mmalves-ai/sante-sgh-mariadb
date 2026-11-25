@@ -96,15 +96,23 @@ const MENSAGENS: Record<string, [string, string]> = {
   'mais-de-um-principal': ['Marque um só ramal principal.', 'ramais'],
   'mais-de-um-responsavel': ['Marque um só ramal do responsável.', 'ramais'],
 };
+/** Recusa com TODOS os motivos de uma vez (`regras`): a tela lista o que resolver sem uma volta por motivo. */
 function recusarErros(erros: readonly string[]): void {
   if (!erros.length) return;
-  throw recusa(erros[0]!, erros.map((e) => MENSAGENS[e]?.[0] ?? e).join(' '), {
-    campos: [...new Set(erros.map((e) => MENSAGENS[e]?.[1] ?? e))],
+  const unicos = [...new Set(erros)];
+  const regras = unicos.map((e) => ({
+    codigo: e,
+    mensagem: MENSAGENS[e]?.[0] ?? 'Confira os dados informados.',
+  }));
+  throw recusa(unicos[0]!, regras.map((r) => r.mensagem).join(' '), {
+    campos: [...new Set(unicos.map((e) => MENSAGENS[e]?.[1] ?? e))],
+    regras,
   });
 }
 const naoAchado = (o: string) =>
   new ErroOperacao(404, `${o.toLowerCase()}-inexistente`, 'Não encontrado', `${o} não encontrado.`);
-const recusaCampo = (codigo: string, msg: string, campo: string) => recusa(codigo, msg, { campos: [campo] });
+const recusaCampo = (codigo: string, msg: string, campo: string) =>
+  recusa(codigo, msg, { campos: [campo], regras: [{ codigo, mensagem: msg }] });
 
 /** Confere que o id existe na tabela de apoio (e no estabelecimento, quando a tabela é dele). */
 async function existe(
@@ -387,8 +395,8 @@ const opGravarSetor = (t: RegistroTrilhaTela) =>
       await existe(tx, 'unidade_assistencial', e.unidade, 'unidade', est);
       await existe(tx, 'centro_custo', e.centroCusto, 'centroCusto', est);
       await existe(tx, 'profissional', e.responsavel, 'responsavel');
-      const arvore = await tx.consultar(
-        'SELECT id, setor_superior_id FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE',
+      const arvore = await tx.consultarParaAtualizar(
+        'SELECT id, setor_superior_id FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL',
         [est],
       );
       const superiores = new Map(arvore.map((r) => [Number(r['id']), num(r['setor_superior_id'])]));
@@ -410,13 +418,15 @@ const opGravarSetor = (t: RegistroTrilhaTela) =>
       const aberto =
         e.id === null
           ? null
-          : await tx.uma(
-              `SELECT id, profissional_id, vigencia_inicio, vigencia_fim, versao FROM responsavel_setor_funcional
-                WHERE setor_funcional_id = ? AND excluido_em IS NULL
-                  AND (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio)
-                ORDER BY vigencia_inicio DESC, id DESC LIMIT 1 FOR UPDATE`,
-              [e.id],
-            );
+          : ((
+              await tx.consultarParaAtualizar(
+                `SELECT id, profissional_id, vigencia_inicio, vigencia_fim, versao FROM responsavel_setor_funcional
+                  WHERE setor_funcional_id = ? AND excluido_em IS NULL
+                    AND (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio)
+                  ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
+                [e.id],
+              )
+            )[0] ?? null);
       const vigente = aberto
         ? {
             id: Number(aberto['id']),
@@ -480,8 +490,8 @@ const opGravarSetor = (t: RegistroTrilhaTela) =>
           });
       }
       // Ramais: os da lista ficam (alterados ou novos); os que saíram, exclusão lógica (a linha fica).
-      const atuais = await tx.consultar(
-        `SELECT id, sequencia, versao FROM ramal_setor WHERE setor_funcional_id = ? FOR UPDATE`,
+      const atuais = await tx.consultarParaAtualizar(
+        `SELECT id, sequencia, versao FROM ramal_setor WHERE setor_funcional_id = ?`,
         [id],
       );
       const vivos = new Set(e.ramais.map((r) => r.id).filter((x): x is number => x !== null));

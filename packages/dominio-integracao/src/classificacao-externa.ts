@@ -148,3 +148,69 @@ export function situacaoNaChegada(
 export function prazoAtendimento(classificadoEm: Date, tempoAlvoMinutos: number | null): Date | null {
   return tempoAlvoMinutos === null ? null : new Date(classificadoEm.getTime() + tempoAlvoMinutos * 60_000);
 }
+
+/** O que a aplicação de uma classificação recebida precisa conferir antes de gerar a classificação interna. */
+export interface RecebidaParaAplicar {
+  readonly situacao: SituacaoClassificacaoExterna;
+  readonly cor: string | null;
+  readonly tempoAlvoMinutos: number | null;
+  readonly classificadoEm: Date;
+  readonly queixaPrincipal: string | null;
+  readonly descricaoPrioridade: string | null;
+  readonly codigoPrioridade: string;
+}
+
+export interface PlanoAplicacao {
+  readonly cor: string;
+  readonly tempoAlvoMinutos: number;
+  readonly prazo: Date;
+  readonly queixa: string;
+}
+
+/**
+ * Regra da aplicação (F3.9, 08-INTG L140): só a recebida vigente (situação `recebida`) vira classificação interna; a
+ * cor e o tempo-alvo são obrigatórios (a classificação interna não existe sem nível nem prazo); o prazo conta da hora
+ * em que o sistema de triagem classificou, não da hora da aplicação; sem queixa informada, a interna leva a
+ * prioridade recebida como queixa, para nunca ficar vazia. Devolve os erros ou o plano a gravar.
+ */
+export function planoAplicacao(r: RecebidaParaAplicar): {
+  erros: ErroClassificacao[];
+  plano: PlanoAplicacao | null;
+} {
+  const erros: ErroClassificacao[] = [];
+  if (r.situacao !== 'recebida')
+    erros.push({
+      campo: 'situacao',
+      codigo: 'nao-vigente',
+      mensagem:
+        r.situacao === 'aplicada'
+          ? 'Esta classificação já foi aplicada ao atendimento.'
+          : 'Só a classificação recebida e vigente pode ser aplicada.',
+    });
+  if (!r.cor?.trim())
+    erros.push({
+      campo: 'cor',
+      codigo: 'sem-cor',
+      mensagem: 'A classificação recebida não traz a cor da prioridade.',
+    });
+  if (r.tempoAlvoMinutos === null || r.tempoAlvoMinutos < 0 || r.tempoAlvoMinutos > 1440)
+    erros.push({
+      campo: 'tempoAlvoMinutos',
+      codigo: 'sem-tempo-alvo',
+      mensagem: 'A classificação recebida não traz um tempo-alvo válido para o atendimento médico.',
+    });
+  if (erros.length > 0) return { erros, plano: null };
+  const tempo = r.tempoAlvoMinutos!;
+  const queixa =
+    r.queixaPrincipal?.trim() ||
+    `Classificação externa: ${r.descricaoPrioridade?.trim() || r.codigoPrioridade}`;
+  return {
+    erros,
+    plano: {
+      cor: r.cor!.trim(),
+      tempoAlvoMinutos: tempo,
+      prazo: prazoAtendimento(r.classificadoEm, tempo)!,
+      queixa,
+    },
+  };
+}

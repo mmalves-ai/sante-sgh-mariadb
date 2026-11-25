@@ -780,6 +780,24 @@ export interface OperadorDaUnidade {
   podeDarAlta: boolean;
 }
 
+/** Candidatos à lista de operadores da unidade: usuários ativos pelo login ou nome (até 30), para a tela escolher. */
+export interface CandidatoOperador {
+  usuario: number;
+  login: string;
+  nome: string;
+}
+export async function lerCandidatosOperadores(l: Leitor, termo: string): Promise<CandidatoOperador[]> {
+  const t = termo.trim();
+  if (t.length < 2) return [];
+  const like = `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const r = await l.consultar(
+    `SELECT id, login, nome FROM usuario
+      WHERE situacao = 'ativo' AND (login LIKE ? OR nome LIKE ?) ORDER BY login LIMIT 30`,
+    [like, like],
+  );
+  return r.map((x) => ({ usuario: num(x['id']), login: String(x['login']), nome: String(x['nome']) }));
+}
+
 export async function lerOperadoresDaUnidade(
   l: Leitor,
   est: number,

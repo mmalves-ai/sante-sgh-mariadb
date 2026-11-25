@@ -22,6 +22,7 @@
 // O portal de resultados lê e grava o protocolo do paciente (protocolo_acesso_portal) e a credencial do médico externo
 // (pedido e conta do portal). Pendência (a tela recebe o motivo, nada em silêncio): as operações do executor
 // (OPERACOES_SADT_PENDENTES: contrato novo da tela, pedido p-sadt).
+import { comCalculo, lerFormulasDoExame, lerTextosPadraoDoExame } from './aplicacao/formulas-leitura.js';
 import { lerBancadasDoMapa } from './aplicacao/mapa-trabalho-propria.js';
 import {
   type AmostraDetalhe,
@@ -61,14 +62,16 @@ import {
   avisoDoAlvo,
   dataDaReferencia,
   distribuirPorBancada,
+  emissaoSuperada,
   numeroDoLaudo,
   type RegraCriticoCandidata,
   SEQUENCIA_NUMERO_LAUDO,
 } from '@sgh/dominio-sadt';
+import { registroDaVia } from '@sgh/dominio-pep';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
-import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
+import { FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { OPERACOES_SADT_DIRETAS, OPERACOES_SADT_PENDENTES } from './operacoes.js';
 import {
   type AcessoPortalLido,
@@ -94,6 +97,7 @@ import {
   siglasDoAto,
   TIPOS_DO_SETOR,
 } from './vocabulario-banco.js';
+import { conferirPostoDaColeta } from './aplicacao/posto-coleta-propria.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoSadt = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -110,6 +114,8 @@ const TABELAS_GRAVACAO = [
   'visualizacao_resultado_exame',
   'emissao_laudo',
   'emissao_laudo_exame',
+  // O registro único de impressão e exportação (01-ADM L82): cada via do laudo entra nele.
+  'exportacao_documento',
   'sequencia_negocio',
   'orcamento_particular',
   'pedido_vinculo_profissional_externo',
@@ -731,6 +737,17 @@ export class PortaSadtPropria implements PortaSadt {
     return this.nucleo.lerSomente(contextoDe(c), (l) => fn(l, est));
   }
 
+  /** O dia civil do estabelecimento (AAAA-MM-DD) como o intervalo de instantes [início, fim) que o banco guarda. */
+  private async diaCivil(l: Leitor, est: number, data: string): Promise<[Date, Date]> {
+    const r = await l.uma<{ fuso_horario: string | null }>(
+      'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+      [est],
+    );
+    const fuso = r?.fuso_horario || FUSO_PADRAO;
+    const seguinte = new Date(Date.parse(`${data}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    return [instanteCivil(data, '00:00', fuso), instanteCivil(seguinte, '00:00', fuso)];
+  }
+
   private async hoje(l: Leitor, est: number): Promise<{ hoje: string; agora: string }> {
     const r = await l.uma<{ fuso_horario: string | null }>(
       'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
@@ -804,8 +821,11 @@ export class PortaSadtPropria implements PortaSadt {
   examesDoSetor(c: ContextoSadt, f: Parameters<PortaSadt['examesDoSetor']>[1]) {
     return this.ler(c, async (l, est) => {
       const { hoje } = await this.hoje(l, est);
-      const p: unknown[] = [est, f.inicio, f.fim];
-      let sql = `${SQL_EXAME} AND r.solicitado_em >= ? AND r.solicitado_em < DATE_ADD(?, INTERVAL 1 DAY)`;
+      // O período pedido é em dias civis do estabelecimento; os instantes ficam gravados em UTC (ver diaCivil).
+      const [inicio] = await this.diaCivil(l, est, f.inicio);
+      const [, fim] = await this.diaCivil(l, est, f.fim);
+      const p: unknown[] = [est, inicio, fim];
+      let sql = `${SQL_EXAME} AND r.solicitado_em >= ? AND r.solicitado_em < ?`;
       if (f.setor) {
         const tipos = TIPOS_DO_SETOR[f.setor];
         sql += ` AND sd.tipo IN (${lista(tipos.length)})`;
@@ -1131,10 +1151,13 @@ export class PortaSadtPropria implements PortaSadt {
           { teto: 500 },
         )
       ).map((x) => ({ codigo: n(x['id']), nome: texto(x['descricao']), sigla: texto(x['sigla']) }));
+      // Fórmula vigente na data do exame e textos padrão do exame (05-SADT linha 3): o calculado sai com a conta.
+      const formulas = await lerFormulasDoExame(l, exame.exame.id ?? 0, dia);
+      const textosPadrao = await lerTextosPadraoDoExame(l, exame.exame.id ?? 0);
       return {
         exame,
-        elementos,
-        variaveis,
+        ...comCalculo(elementos, variaveis, formulas, nn(pac?.['dias'])),
+        textosPadrao,
         observacoes,
         modelos,
         laudo:
@@ -1227,15 +1250,18 @@ export class PortaSadtPropria implements PortaSadt {
       const { hoje } = await this.hoje(l, est);
       const ls = await l.consultar(
         `SELECT a.id, a.gerado_em, a.prazo_em, a.situacao, a.nivel_escalonamento, a.comunicado_descricao, a.comunicado_em,
-                a.leitura_confirmada_em, re.exame_item_id, re.liberado_em, r.numero, ei.sequencia, r.atendimento_id,
+                a.leitura_confirmada_em, ei.id AS exame_item_id, COALESCE(re.liberado_em, ld.assinado_em) AS liberado_em,
+                r.numero, ei.sequencia, r.atendimento_id,
                 at.numero AS atendimento_numero, p.id AS paciente_id, p.numero_prontuario, pf.nome, pf.data_nascimento,
-                sx.sigla AS sexo, an.nome AS analito, ra.valor_numerico, ra.valor_texto, ur.simbolo,
+                sx.sigla AS sexo, COALESCE(an.nome, IF(ld.id IS NULL, NULL, 'Achado crítico do laudo')) AS analito,
+                ra.valor_numerico, COALESCE(ra.valor_texto, ld.achado_critico_descricao) AS valor_texto, ur.simbolo,
                 (SELECT cn.descricao FROM aviso_valor_critico_tentativa t JOIN canal_notificacao cn ON cn.id = t.canal_notificacao_id
                   WHERE t.aviso_valor_critico_id = a.id ORDER BY t.sequencia DESC LIMIT 1) AS canal,
                 COALESCE(uc.login, '') AS comunicado_por, COALESCE(pcf.nome, a.comunicado_descricao, '') AS destinatario
            FROM aviso_valor_critico a
-           JOIN resultado_exame re ON re.id = a.resultado_exame_id
-           JOIN exame_item ei ON ei.id = re.exame_item_id
+           LEFT JOIN resultado_exame re ON re.id = a.resultado_exame_id
+           LEFT JOIN laudo_diagnostico ld ON ld.id = a.laudo_diagnostico_id
+           JOIN exame_item ei ON ei.id = COALESCE(re.exame_item_id, ld.exame_item_id)
            JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
            JOIN atendimento at ON at.id = r.atendimento_id
            JOIN paciente p ON p.id = a.paciente_id
@@ -1437,9 +1463,12 @@ export class PortaSadtPropria implements PortaSadt {
 
   amostras(c: ContextoSadt, o: { data: string; estado?: EstadoAmostra }) {
     return this.ler(c, async (l, est) => {
-      const p: unknown[] = [o.data, o.data];
+      // O dia pedido é o dia civil do estabelecimento; os instantes ficam gravados em UTC. Sem a conversão, a amostra
+      // colhida à noite (depois das 21h no fuso de Brasília) caía no dia seguinte e sumia do rastreio do dia.
+      const [inicio, fim] = await this.diaCivil(l, est, o.data);
+      const p: unknown[] = [inicio, fim];
       let f =
-        'AND COALESCE(am.coletada_em, am.criado_em) >= ? AND COALESCE(am.coletada_em, am.criado_em) < DATE_ADD(?, INTERVAL 1 DAY)';
+        'AND COALESCE(am.coletada_em, am.criado_em) >= ? AND COALESCE(am.coletada_em, am.criado_em) < ?';
       if (o.estado) {
         f += ' AND am.situacao = ?';
         p.push(SITUACAO_DA_AMOSTRA[o.estado].situacao);
@@ -1449,9 +1478,9 @@ export class PortaSadtPropria implements PortaSadt {
         `SELECT COALESCE(ev.descricao, 'Sem motivo') AS motivo, COUNT(*) AS quantidade
            FROM amostra_biologica_evento ev JOIN amostra_biologica am ON am.id = ev.amostra_biologica_id
           WHERE am.estabelecimento_id = ? AND ev.evento = 'rejeitada'
-            AND ev.ocorrido_em >= ? AND ev.ocorrido_em < DATE_ADD(?, INTERVAL 1 DAY)
+            AND ev.ocorrido_em >= ? AND ev.ocorrido_em < ?
           GROUP BY COALESCE(ev.descricao, 'Sem motivo') ORDER BY quantidade DESC`,
-        [est, o.data, o.data],
+        [est, inicio, fim],
       );
       return {
         itens: itens.slice(0, 500),
@@ -1547,16 +1576,35 @@ export class PortaSadtPropria implements PortaSadt {
   validarLaudo(c: ContextoSadt, codigo: string) {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(
-        `SELECT el.numero, el.emitida_em, (SELECT COUNT(*) FROM emissao_laudo_exame ex WHERE ex.emissao_laudo_id = el.id
-                                   AND ex.excluido_em IS NULL) AS exames
+        `SELECT el.id, el.numero, el.emitida_em, (SELECT COUNT(*) FROM emissao_laudo_exame ex WHERE ex.emissao_laudo_id = el.id
+                                   AND ex.excluido_em IS NULL) AS exames,
+                (SELECT MAX(u.emitida_em) FROM emissao_laudo u WHERE u.estabelecimento_id = el.estabelecimento_id
+                    AND u.codigo_autenticacao = el.codigo_autenticacao AND u.excluido_em IS NULL) AS ultima_via
            FROM emissao_laudo el WHERE el.estabelecimento_id = ? AND el.codigo_autenticacao = ? AND el.excluido_em IS NULL
           ORDER BY el.numero_via, el.id LIMIT 1`,
         [est, codigo],
       );
+      // O laudo retificado depois da última via emitida: o código continua achando a emissão, mas ela não é mais a
+      // atual (a validação diz isso, sem dado clínico).
+      const retificacoes = r
+        ? (
+            await l.consultar(
+              `SELECT v.ocorrido_em FROM emissao_laudo_exame ex
+                 JOIN laudo_diagnostico ld ON ld.exame_item_id = ex.exame_item_id AND ld.excluido_em IS NULL
+                 JOIN laudo_diagnostico_versao v ON v.laudo_diagnostico_id = ld.id AND v.situacao = 'retificado'
+                WHERE ex.emissao_laudo_id = ? AND ex.excluido_em IS NULL`,
+              [n(r['id'])],
+            )
+          ).map((x) => new Date(x['ocorrido_em'] as string | Date))
+        : [];
       // A validação pública devolve o número do laudo (impresso no PDF ao lado do código), nunca dado clínico.
       return r
         ? {
             valido: true,
+            superado: emissaoSuperada(
+              new Date((r['ultima_via'] ?? r['emitida_em']) as string | Date),
+              retificacoes,
+            ),
             numero: texto(r['numero']),
             emitidoEm: instante(r['emitida_em']),
             exames: n(r['exames']),
@@ -1900,6 +1948,7 @@ export class PortaSadtPropria implements PortaSadt {
     );
   }
 
+  // O cadastro unificado em outro não entra na escolha: o pedido novo nasce no cadastro que continua (02-CAD linha 20).
   solicitantes(c: ContextoSadt, o: { termo?: string; numero?: number; uf?: string }) {
     return this.ler(c, async (l) => {
       const p: unknown[] = [];
@@ -1922,7 +1971,8 @@ export class PortaSadtPropria implements PortaSadt {
              FROM solicitante_externo s
              JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
              JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
-            WHERE s.excluido_em IS NULL ${f} ORDER BY s.nome, s.id LIMIT 50`,
+            WHERE s.excluido_em IS NULL AND s.sucessor_solicitante_externo_id IS NULL ${f}
+            ORDER BY s.nome, s.id LIMIT 50`,
           p,
           { teto: 50 },
         )
@@ -2307,6 +2357,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         material = nn(m?.['material_biologico_id']);
       }
       if (material === null) throw recusa('sem-material', 'O exame não tem material de coleta no cadastro.');
+      // O posto escolhido é do estabelecimento e está ativo; fora do horário, a coleta segue com o aviso gravado.
+      const avisosPosto = await conferirPostoDaColeta(tx, est, a.posto ?? null);
       const coletada = agora();
       const provisorio = `C${randomUUID().replace(/-/g, '').slice(0, 20).toUpperCase()}`;
       const id = await tx.incluir('amostra_biologica', {
@@ -2316,6 +2368,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         material_biologico_id: material,
         recipiente_coleta_id: a.recipiente ?? nn(primeiro['recipiente_coleta_id']),
         setor_diagnostico_id: nn(primeiro['setor']),
+        ponto_coleta_id: a.posto ?? null,
         situacao: 'coletada',
         coletada_em: coletada,
         coletada_no_setor: false,
@@ -2340,7 +2393,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         evento: 'coletada',
         ocorrido_em: coletada,
         usuario_id: usuario,
-        dados: JSON.stringify({ pulseiraConferida: a.pulseiraConferida, estacao: a.estacao }),
+        dados: JSON.stringify({
+          pulseiraConferida: a.pulseiraConferida,
+          estacao: a.estacao,
+          posto: a.posto ?? null,
+          avisosPosto,
+        }),
       });
       return { id, codigo };
     },
@@ -2648,7 +2706,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       const ids = r.idsExames ?? [];
       if (ids.length === 0) throw recusa('sem-exames', 'O laudo emitido precisa dos exames.');
       const itens = await tx.consultar(
-        `SELECT ei.id, r.paciente_id, r.id AS requisicao,
+        `SELECT ei.id, r.paciente_id, r.id AS requisicao, r.atendimento_id AS atendimento,
                 (SELECT MAX(re.id) FROM resultado_exame re WHERE re.exame_item_id = ei.id AND re.situacao = 'liberado') AS resultado
            FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
           WHERE r.estabelecimento_id = ? AND ei.id IN (${lista(ids.length)})`,
@@ -2705,6 +2763,26 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         emitida_em: quando,
         emitido_por_usuario_id: usuario,
         origem: 'sistema',
+      });
+      // Cada via do laudo entra no registro único de impressão e exportação (01-ADM L82): quem, quando, o paciente,
+      // o atendimento, o resumo do PDF e, da 2ª via em diante, o motivo do cadastro. A 1ª via é a própria entrega.
+      const reg = registroDaVia({ via, texto: via > 1 ? r.motivo : null, primeiraViaPedeTexto: false });
+      if (!reg.ok) throw recusa('motivo-obrigatorio', 'Informe o motivo da segunda via.');
+      await tx.incluir('exportacao_documento', {
+        estabelecimento_id: est,
+        entidade: 'emissao_laudo',
+        entidade_id: id,
+        paciente_id: n(itens[0]!['paciente_id']),
+        atendimento_id: nn(itens[0]!['atendimento']),
+        tipo_operacao: reg.operacao,
+        formato: 'pdf',
+        destino: 'download',
+        motivo_reimpressao_id: motivo,
+        justificativa: reg.justificativa,
+        hash_sha256: r.hashPdf && /^[0-9a-f]{64}$/.test(r.hashPdf) ? r.hashPdf : null,
+        dados: JSON.stringify({ via, exames: itens.length }),
+        ocorrido_em: quando,
+        usuario_id: usuario,
       });
       let seq = 0;
       for (const i of itens)

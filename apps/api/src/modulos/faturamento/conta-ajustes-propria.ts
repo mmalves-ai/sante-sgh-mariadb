@@ -12,6 +12,7 @@ import {
   classificarItens,
   composicaoDaVersao,
   conferirAlcadaDoValor,
+  etapaDaAlcada,
   conferirDecisaoAjuste,
   contaEditavel,
   diasDePermanenciaPacote,
@@ -20,6 +21,7 @@ import {
   acrescimoDoItem,
   type ItemParaPacote,
   type NivelAlcadaAjuste,
+  type RegraAlcadaAjuste,
   type SituacaoAjuste,
   validarAjusteConta,
   validarFaixaHorario,
@@ -37,6 +39,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import { totalDosItens } from './operacoes.js';
 
 type Linha = Record<string, unknown>;
@@ -47,7 +50,6 @@ const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const txn = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v));
 const b = (v: unknown) => v === true || v === 1 || v === '1';
 const r2 = (x: number) => Math.round(x * 100) / 100;
-const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const dataIso = (v: unknown): string | null =>
   v === null || v === undefined
     ? null
@@ -213,16 +215,13 @@ export async function horarioEspecialPropria(l: Consulta, est: number, tabela: n
   return { faixas, expediente };
 }
 
+/** Dos dias dos itens, os que são feriado no estabelecimento, pelo calendário único (cadastros > estrutura). */
 async function feriadosDe(l: Consulta, est: number, datas: string[]): Promise<Set<string>> {
   if (!datas.length) return new Set();
-  const r = await l.consultar<Linha>(
-    `SELECT f.data FROM feriado f JOIN estabelecimento e ON e.id = ?
-      WHERE f.ativo = 1 AND f.excluido_em IS NULL AND f.ponto_facultativo = 0 AND f.data IN (${lista(datas.length)})
-        AND (f.abrangencia = 'nacional' OR f.estabelecimento_id = e.id
-             OR (f.abrangencia = 'municipal' AND f.municipio_ibge_id = e.municipio_ibge_id))`,
-    [est, ...datas],
-  );
-  return new Set(r.map((x) => dataIso(x['data'])!));
+  const ordenadas = [...datas].sort();
+  const doPeriodo = await lerFeriadosDoPeriodo(l, est, ordenadas[0]!, ordenadas[ordenadas.length - 1]!);
+  const pedidas = new Set(datas);
+  return new Set(doPeriodo.map((x) => x.data).filter((x) => pedidas.has(x)));
 }
 
 /** O que a aplicação do horário especial faria em cada item cobrado da conta (sem gravar). */
@@ -612,8 +611,8 @@ async function tipoAprovacaoAjuste(tx: TxOperacao): Promise<number> {
 /** Os níveis da alçada vigente dos ajustes da conta no estabelecimento (vazio: sem alçada cadastrada). */
 async function niveisDaAlcada(l: Consulta, est: number, hoje: string) {
   const r = await l.consultar<Linha>(
-    `SELECT a.id AS alcada_id, nv.id, nv.nivel, nv.perfil_acesso_id, nv.aprovador_usuario_id, nv.valor_unitario_minimo,
-            nv.valor_unitario_maximo
+    `SELECT a.id AS alcada_id, a.modo_aprovacao, a.permite_autoaprovacao, nv.id, nv.nivel, nv.perfil_acesso_id,
+            nv.aprovador_usuario_id, nv.valor_unitario_minimo, nv.valor_unitario_maximo, nv.obrigatorio
        FROM alcada_aprovacao a
        JOIN tipo_documento_aprovacao t ON t.id = a.tipo_documento_aprovacao_id AND t.codigo = ?
        JOIN alcada_aprovacao_nivel nv ON nv.alcada_aprovacao_id = a.id AND nv.excluido_em IS NULL
@@ -633,8 +632,13 @@ async function niveisDaAlcada(l: Consulta, est: number, hoje: string) {
       usuarioId: nn(x['aprovador_usuario_id']),
       valorMinimo: n(x['valor_unitario_minimo']),
       valorMaximo: nn(x['valor_unitario_maximo']),
+      obrigatorio: Boolean(Number(x['obrigatorio'])),
     }));
-  return { alcada, niveis };
+  const regra: RegraAlcadaAjuste = {
+    modo: r[0]?.['modo_aprovacao'] === 'paralelo' ? 'paralelo' : 'serie',
+    permiteAutoaprovacao: Boolean(Number(r[0]?.['permite_autoaprovacao'] ?? 0)),
+  };
+  return { alcada, niveis, regra };
 }
 
 const hojeIso = () => new Date().toISOString().slice(0, 10);
@@ -712,11 +716,16 @@ export const opDecidirAjuste = definirOperacao({
     );
     if (!a) throw recusa('nao-encontrado', 'O ajuste não existe neste estabelecimento.', { campos: ['id'] });
     await travarConta(tx, est, n(a['conta_hospitalar_id']));
+    const hoje = hojeIso();
+    const pedido = nn(a['pedido_aprovacao_id']);
+    // A regra da alçada vale pelo pedido (a vigente quando foi pedido); sem pedido, pela vigente hoje.
+    const { niveis, regra } = await niveisDaAlcada(tx, est, hoje);
     const motivo = conferirDecisaoAjuste(
       String(a['situacao']) as SituacaoAjuste,
       n(a['solicitado_por_usuario_id']),
       ctx.usuario,
       e.decisao,
+      niveis.length > 0 && regra.permiteAutoaprovacao,
     );
     if (motivo) throw recusa('alcada', motivo, { campos: ['decisao'] });
     if (e.decisao === 'recusar' && !e.observacao)
@@ -730,11 +739,12 @@ export const opDecidirAjuste = definirOperacao({
           campos: ['decisao'],
         });
     }
-    // Alçada por valor: aprovar exige um nível da alçada vigente que cubra o valor (pelo usuário ou pelo cargo).
+    // Alçada por valor: com pedido no mecanismo, os níveis cuja faixa contém o valor aprovam um após o outro (série)
+    // ou em qualquer ordem (paralelo), cada um por uma pessoa; o ajuste só muda o total no último. Sem pedido (pedido
+    // antes de haver alçada), basta um nível que cubra o valor.
     let nivel: NivelAlcadaAjuste | null = null;
+    let faltam: readonly number[] = [];
     if (e.decisao === 'aprovar') {
-      const hoje = hojeIso();
-      const { niveis } = await niveisDaAlcada(tx, est, hoje);
       const perfis = niveis.length
         ? (
             await tx.consultar<Linha>(
@@ -744,9 +754,50 @@ export const opDecidirAjuste = definirOperacao({
             )
           ).map((x) => n(x['perfil_acesso_id']))
         : [];
-      const al = conferirAlcadaDoValor(n(a['valor']), niveis, ctx.usuario!, perfis);
-      if (al.motivo) throw recusa('alcada', al.motivo, { campos: ['decisao'] });
-      nivel = al.nivel;
+      if (pedido !== null) {
+        const aprovacoes = (
+          await tx.consultar<Linha>(
+            `SELECT nivel, aprovador_usuario_id FROM decisao_aprovacao
+              WHERE pedido_aprovacao_id = ? AND decisao = 'aprovado'`,
+            [pedido],
+          )
+        ).map((x) => ({ nivel: n(x['nivel']), usuarioId: n(x['aprovador_usuario_id']) }));
+        const et = etapaDaAlcada(n(a['valor']), niveis, regra, aprovacoes, ctx.usuario!, perfis);
+        if (et.motivo) throw recusa('alcada', et.motivo, { campos: ['decisao'] });
+        nivel = et.nivel;
+        if (!et.conclui) faltam = et.faltam.filter((x) => x !== et.nivel?.nivel);
+      } else {
+        const al = conferirAlcadaDoValor(n(a['valor']), niveis, ctx.usuario!, perfis);
+        if (al.motivo) throw recusa('alcada', al.motivo, { campos: ['decisao'] });
+        nivel = al.nivel;
+      }
+    }
+    if (faltam.length && pedido !== null) {
+      // Aprovação de um nível intermediário: grava a decisão do nível e avança o pedido; o ajuste segue pendente.
+      const pv = await tx.consultarParaAtualizar('SELECT versao FROM pedido_aprovacao WHERE id = ?', [
+        pedido,
+      ]);
+      await tx.incluir('decisao_aprovacao', {
+        pedido_aprovacao_id: pedido,
+        alcada_aprovacao_nivel_id: nivel?.id ?? null,
+        nivel: nivel?.nivel ?? 1,
+        aprovador_usuario_id: ctx.usuario,
+        decisao: 'aprovado',
+        justificativa: e.observacao,
+        valor_aprovado: n(a['valor']),
+        ocorrido_em: new Date(),
+      });
+      const proximo = niveis.find((x) => x.nivel === faltam[0]) ?? null;
+      await tx.alterar('pedido_aprovacao', pedido, n(pv[0]?.['versao']), {
+        nivel_atual: faltam[0],
+        alcada_aprovacao_nivel_id: proximo?.id ?? null,
+      });
+      return {
+        id: e.id,
+        situacao: 'pendente_aprovacao',
+        total: c.valorTotal,
+        avisos: `Aprovado no nível ${nivel?.nivel ?? 1}; falta o nível ${faltam.join(', ')} da alçada.`,
+      };
     }
     const situacao =
       e.decisao === 'aprovar' ? 'aprovado' : e.decisao === 'recusar' ? 'recusado' : 'cancelado';
@@ -754,7 +805,6 @@ export const opDecidirAjuste = definirOperacao({
       situacao,
       ...(e.decisao === 'cancelar' ? {} : { decidido_em: new Date(), decidido_por_usuario_id: ctx.usuario }),
     });
-    const pedido = nn(a['pedido_aprovacao_id']);
     if (pedido !== null) {
       const pv = await tx.consultarParaAtualizar('SELECT versao FROM pedido_aprovacao WHERE id = ?', [
         pedido,

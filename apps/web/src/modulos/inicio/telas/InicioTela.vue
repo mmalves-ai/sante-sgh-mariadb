@@ -454,7 +454,7 @@ const prazoTexto = (p: string) => `${p.slice(8, 10)}/${p.slice(5, 7)} ${p.slice(
   min-height: var(--sgh-alvo-minimo);
 }
 .cartao.urgente {
-  border-color: var(--sgh-perigo, var(--sgh-borda-forte));
+  border-color: var(--sgh-alerta);
   border-width: 2px;
 }
 .selo {

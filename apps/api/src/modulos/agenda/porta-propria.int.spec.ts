@@ -588,10 +588,17 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
       await contar('SELECT COUNT(*) AS n FROM pre_cadastro WHERE estabelecimento_id = ?', [ids.est]),
     ).toBe(preAntes);
     // Quem já é paciente (mesmo nome comparável e nascimento) não vira pré-cadastro sem a central confirmar: a recusa
-    // traz o paciente candidato e nada é gravado.
+    // traz o paciente candidato e nada é gravado. O paciente sintético A recebe um nascimento adulto (sem grupo legal de
+    // prioridade), que a massa do preparo não grava.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0104-nascimento' }, (e) =>
+      e.executar(
+        "UPDATE pessoa_fisica pf JOIN paciente p ON p.pessoa_fisica_id = pf.id SET pf.data_nascimento = '1980-05-06' WHERE p.id = ? AND pf.data_nascimento IS NULL",
+        [ids.pacienteA],
+      ),
+    );
     const ja = await linha(
       "SELECT pf.nome, DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nasc FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?",
-      [ids.paciente],
+      [ids.pacienteA],
     );
     expect(ja?.['nasc']).toBeTruthy();
     await expect(
@@ -606,7 +613,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
         dependentes: [
           expect.objectContaining({
             rotulo: 'paciente',
-            amostra: expect.arrayContaining([String(ids.paciente)]),
+            amostra: expect.arrayContaining([String(ids.pacienteA)]),
           }),
         ],
       },

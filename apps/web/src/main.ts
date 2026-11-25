@@ -15,7 +15,12 @@ import { criarRoteador } from './roteador.js';
 // Nome do produto e marca vêm da configuração da rede (GET /api/marca; DP-49). Sem resposta ou com um
 // pacote não registrado, a casca abre com o nome técnico e a marca NEUTRA (selo "marca não configurada"),
 // nunca com a marca de outra rede, e avisa no console.
-const marca = await buscarMarca().catch(() => null);
+// "Sem resposta" tem prazo: a montagem da casca espera esta leitura, e um pedido parado deixava a página em branco
+// (nem a tela de entrada aparecia).
+const PRAZO_MARCA_MS = 5_000;
+const marca = await buscarMarca((url, init) =>
+  fetch(url, { ...init, signal: AbortSignal.timeout(PRAZO_MARCA_MS) }),
+).catch(() => null);
 const { pacote, conhecida } = resolverMarca(marca?.marca);
 if (!conhecida) console.warn('[sgh] pacote de marca não registrado; usando a marca neutra');
 const produto = marca?.produto ?? 'SGH';

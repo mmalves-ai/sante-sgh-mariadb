@@ -165,7 +165,7 @@ const temFormatacao = computed(() =>
   font-weight: 600;
 }
 .obrigatorio {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 .editor__barra {
   display: flex;
@@ -193,7 +193,7 @@ const temFormatacao = computed(() =>
   color: var(--sgh-texto-secundario);
 }
 .editor__erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 .editor__previa {
   border-inline-start: 3px solid var(--sgh-borda);

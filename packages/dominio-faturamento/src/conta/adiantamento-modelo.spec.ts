@@ -51,6 +51,24 @@ describe('adiantamento do paciente (06-FAT linha 39)', () => {
     expect(situacaoPeloSaldo(100, 40, false)).toBe('aplicado_parcial');
     expect(situacaoPeloSaldo(100, 0, false)).toBe('aplicado');
     expect(situacaoPeloSaldo(100, 0, true)).toBe('devolvido');
+    // Devolução parcial: o resto do saldo segue usável (aplicar ou devolver depois).
+    expect(situacaoPeloSaldo(100, 40, true)).toBe('aplicado_parcial');
+    expect(
+      planejarAplicacao(
+        [
+          {
+            id: 1,
+            saldo: 40,
+            recebidoEm: '2026-11-01',
+            situacao: situacaoPeloSaldo(100, 40, true),
+            jaNaConta: false,
+          },
+        ],
+        100,
+        null,
+        null,
+      ).erros,
+    ).toEqual({});
   });
   it('aplica do mais antigo para o mais novo, até a dívida da conta ou o valor pedido', () => {
     const saldos = [

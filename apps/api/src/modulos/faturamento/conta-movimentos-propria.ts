@@ -35,7 +35,8 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import { totalDosItens } from './operacoes.js';
+import { esquemaLancarItem } from '@sgh/contratos';
+import { lancarItem, totalDosItens } from './operacoes.js';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
 
 type Linha = Record<string, unknown>;
@@ -304,6 +305,10 @@ export async function movimentosContaPropria(
     numero: c.numero,
     situacao: c.situacao,
     editavel: contaEditavel(c.situacao),
+    fontePagadoraId: c.fontePagadora,
+    fonte: txt(
+      (await l.uma<Linha>('SELECT nome FROM fonte_pagadora WHERE id = ?', [c.fontePagadora]))?.['nome'],
+    ),
     itens: itens.map((i) => ({
       id: n(i['id']),
       sequencia: n(i['sequencia']),
@@ -394,6 +399,21 @@ export async function buscarProfissionaisPropria(l: Leitor, termo: string) {
     { teto: 30 },
   );
   return linhas.map((p) => ({ id: n(p['id']), nome: txt(p['nome']), inscricao: txt(p['inscricao']) }));
+}
+
+/** Itens cobráveis ativos por código (exato ou início) ou parte da descrição: o cadastro do kit escolhe por aqui. */
+export async function buscarItensCobrancaPropria(l: Leitor, termo: string) {
+  const t = termo.trim().slice(0, 80);
+  if (t.length < 2) return [];
+  const esc = t.replace(/[%_\\]/g, (x) => `\\${x}`);
+  const linhas = await l.consultar<Linha>(
+    `SELECT id, codigo, descricao FROM item_faturavel
+      WHERE excluido_em IS NULL AND situacao = 'ativo' AND (codigo LIKE ? OR descricao LIKE ?)
+      ORDER BY codigo = ? DESC, codigo LIMIT 30`,
+    [`${esc}%`, `%${esc}%`, t],
+    { teto: 30 },
+  );
+  return linhas.map((i) => ({ id: n(i['id']), codigo: txt(i['codigo']), descricao: txt(i['descricao']) }));
 }
 
 // ── Linha 15: equipe do item ──────────────────────────────────────────────────────────────────────
@@ -992,8 +1012,38 @@ export const opTransferir = definirOperacao({
   trilha: (e) => ({ motivo: e.motivo }),
 });
 
+// ── Linha 15: lançamento manual com a equipe no mesmo pedido ──────────────────────────────────────
+// O item e a sua equipe entram na mesma transação: o lançamento é o de sempre (faturamento.lancar-item: preço, memória,
+// competência, credenciamento e o evento do item lançado), e a equipe passa pela mesma regra da edição (validarEquipeItem,
+// valor do ato pelo honorário do item recém-lançado). Recusada a equipe, o item também não entra.
+export const esquemaLancarComEquipe = esquemaLancarItem.extend({
+  equipe: esquemaEquipe.shape.participantes.min(1),
+});
+type LancarComEquipe = z.infer<typeof esquemaLancarComEquipe>;
+
+export const opLancarComEquipe = definirOperacao({
+  ...lancarItem,
+  nome: 'faturamento.lancar-item-com-equipe',
+  tabelas: [...new Set([...lancarItem.tabelas, ...opGravarEquipe.tabelas])],
+  entrada: esquemaLancarComEquipe,
+  travar: (e: LancarComEquipe, ctx: ContextoOperacao) => lancarItem.travar?.(e, ctx) ?? null,
+  async gravar(tx, e: LancarComEquipe, ctx) {
+    const { equipe, ...item } = e;
+    const r = await lancarItem.gravar(tx, item, ctx);
+    const itemId = Number(r['id']);
+    const eq = await opGravarEquipe.gravar(tx, esquemaEquipe.parse({ itemId, participantes: equipe }), ctx);
+    return {
+      ...r,
+      participantes: eq.participantes,
+      valorItem: eq.valorItem,
+      adicionalEquipe: eq.adicionalEquipe,
+    };
+  },
+});
+
 export const OPERACOES_MOVIMENTOS = {
   equipe: opGravarEquipe,
+  'lancar.equipe': opLancarComEquipe,
   'kit.lancar': opLancarKit,
   'kit.cadastrar': opCadastrarKit,
   transferir: opTransferir,

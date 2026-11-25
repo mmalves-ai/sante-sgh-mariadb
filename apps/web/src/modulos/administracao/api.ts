@@ -13,13 +13,11 @@ import {
   type InventarioContasBancoResposta,
   type ArvorePermissoes,
   type Backup,
-  type ConferenciaLeitos,
   type DadosFiscais,
   type Estrutura,
   esquemaAlertas,
   esquemaArvorePermissoes,
   esquemaBackup,
-  esquemaConferenciaLeitos,
   esquemaDadosFiscais,
   esquemaEstrutura,
   esquemaExclusoes,
@@ -143,7 +141,11 @@ export const bloquearNaRede = async (
 export const criarUsuario = (
   entrada: { login: string; nomeCompleto: string; grupo: string; cpf?: string },
   senha: string,
-) => gravar<{ id?: number }>(`${A}/usuarios`, { entrada, senha });
+) =>
+  gravar<{ id?: number; senhaProvisoria?: string; trocaObrigatoria?: boolean; senhaPendente?: string }>(
+    `${A}/usuarios`,
+    { entrada, senha },
+  );
 export const alterarNome = (login: string, nomeCompleto: string, versao: string, senha: string) =>
   gravar(`${A}/usuarios/${encodeURIComponent(login)}/nome`, { entrada: { nomeCompleto, versao }, senha });
 /** W1-01: troca do CPF (justificativa obrigatória; o CPF anterior e o motivo vão à trilha). */
@@ -292,8 +294,6 @@ export const revisarQuebra = (id: string, classificacao: 'justificado' | 'nao-ju
 const E = '/api/cadastros/estrutura';
 export const buscarEstrutura = (): Promise<Estrutura> => ler(E, esquemaEstrutura);
 export const buscarLeitos = (): Promise<Leitos> => ler(`${E}/leitos`, esquemaLeitos);
-export const buscarConferencia = (): Promise<ConferenciaLeitos> =>
-  ler(`${E}/leitos/conferencia`, esquemaConferenciaLeitos);
 /** Acomodação e leito pelas receitas, com a senha (reautenticação; ficha seção 5). */
 export const gravarLeito = (operacao: string, entrada: unknown, senha: string) =>
   gravar<{ id?: number }>(`${E}/leitos/${operacao}`, { entrada, senha });

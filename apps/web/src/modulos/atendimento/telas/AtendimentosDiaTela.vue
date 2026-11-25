@@ -62,6 +62,7 @@ const locais = computed(() => [
 ]);
 const podeIdentificar = pode('atendimento.atendimento.abrir');
 const veIndicadores = pode('atendimento.indicador.ler');
+const configuraImpressao = pode('documento.cadastro.editar');
 const dia = computed(() => lista.data.value?.data ?? '');
 const indicadores = useQuery({
   queryKey: computed(() => ['atendimento', 'indicadores', dia.value]),
@@ -89,6 +90,12 @@ const rotuloAcao = (a: Acao) => t(`atendimento.${a}.titulo`);
       <RouterLink to="/consultorio/fila">{{ t('atendimento.fila.titulo') }}</RouterLink>
       <RouterLink to="/pa/quadro">{{ t('atendimento.quadro.titulo') }}</RouterLink>
       <RouterLink to="/recepcao/atendimento/heranca">{{ t('atendimento.heranca.titulo') }}</RouterLink>
+      <RouterLink
+        v-if="configuraImpressao"
+        to="/recepcao/atendimento/regras-impressao"
+        data-testid="link-regras-impressao"
+        >{{ t('regrasImpressao.atalho') }}</RouterLink
+      >
       <RouterLink
         v-if="veIndicadores"
         to="/recepcao/atendimento/indicadores"

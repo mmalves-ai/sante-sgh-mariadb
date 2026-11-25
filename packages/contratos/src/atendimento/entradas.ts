@@ -78,6 +78,8 @@ export const esquemaAbrirAtendimento = z
     local: smallint.optional(),
     /** A marcação de consulta do dia (a partir do agendamento). */
     marcacao: id.optional(),
+    /** Módulo de recepção em que a tela trabalha: escolhe a regra de campo do cadastro conferida na abertura. */
+    moduloRecepcao: id.optional(),
     responsavel: esquemaResponsavel.optional(),
     /** Tipo de guia do SADT (H, E, S: só os valores vistos; a confirmar, DP-46.6); sem ele, o padrão do tipo. */
     tipoGuia: z.enum(['H', 'E', 'S']).optional(),
@@ -157,8 +159,8 @@ export const esquemaAlterarSegurado = z
     senhaConvenio: livre(20).optional(),
     validadeSenha: esquemaDataIso.nullable().optional(),
     plano: maiusculas(40).optional(),
-    /** Carimbo lido pela tela (DATA_HORA_ULTIMA_ATUALIZACAO): colisão com o outro sistema vira 409. */
-    versao: z.string().min(10).max(30),
+    /** Versão da ficha lida pela tela ("v3" na porta própria; carimbo na de memória): colisão vira 409. */
+    versao: z.string().min(1).max(30),
   })
   .strict()
   .refine(
@@ -195,8 +197,8 @@ export const esquemaAlterarAtendimento = z
     observacao: livre(400).nullable().optional(),
     carater: z.enum(CODIGOS_CARATER).optional(),
     justificativa: livre(200).refine((t) => t.length >= 10, 'Justifique com pelo menos 10 caracteres.'),
-    /** Carimbo lido pela tela (DATA_HORA_ULTIMA_ATUALIZACAO): colisão com o outro sistema vira 409. */
-    versao: z.string().min(10).max(30),
+    /** Versão da ficha lida pela tela ("v3" na porta própria; carimbo na de memória): colisão vira 409. */
+    versao: z.string().min(1).max(30),
   })
   .strict()
   .refine(
@@ -386,6 +388,10 @@ export const esquemaEmitirImpresso = z
     copias: z.number().int().min(1).max(10).default(1),
     /** A ficha configurada (modelo das fichas a imprimir): o PDF sai com o título do modelo. */
     modelo: z.number().int().positive().max(32_767).optional(),
+    /** Reimpressão da pulseira ou da etiqueta (01-ADM L79): motivo do catálogo, complemento e estação escolhida. */
+    motivo: z.number().int().positive().optional(),
+    complemento: z.string().trim().max(500).optional(),
+    estacao: z.number().int().positive().optional(),
   })
   .strict();
 export type EmitirImpressoEntrada = z.infer<typeof esquemaEmitirImpresso>;

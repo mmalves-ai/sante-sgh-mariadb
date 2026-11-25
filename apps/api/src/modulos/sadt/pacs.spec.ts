@@ -1,6 +1,6 @@
 // M47, etapa 3 (lista de trabalho DICOM e PACS) pela HTTP, com a sessão real sobre a fonte sintética e as portas EM
 // MEMÓRIA (o simulador de modalidade no lugar do PACS): as permissões pelas opções da imagem (quem só consulta não envia;
-// quem não tem, 403), a chave `imagem.worklist` desligada (consulta, com o motivo) e ligada, o envio com o número de
+// quem não tem, 403), o estabelecimento sem destino (consulta, com o motivo) e com o destino no parâmetro, o envio com o número de
 // acesso único e o item no simulador, o reenvio com o mesmo número (o simulador atualiza, não duplica) e a colisão do
 // envio visto, o status pelo simulador e pela entrada do PACS (credencial e escopo; a mensagem repetida devolve a
 // primeira; a fora de ordem não rebaixa), o link no prontuário e no portal; a trilha de cada gravação. Dados sintéticos.
@@ -24,7 +24,7 @@ import { PortaSadtMemoria } from './porta-memoria.js';
 const env: Record<string, string> = {
   ...envTeste,
   AMBIENTE: 'dev',
-  API_MODULOS: 'sadt,pep,acesso,config,integracao_teste',
+  API_MODULOS: 'sadt,pep,acesso,config,integracao',
 };
 const trilha = new RegistradorTrilhaMemoria();
 const documentos = new PortaDocumentosMemoria(trilha, null);
@@ -60,8 +60,9 @@ beforeAll(async () => {
       pep: async () => ({ modulo: (ctx) => moduloPep(ctx, { documentos }) }),
       acesso: REGISTRO_MODULOS['acesso']!,
       config: REGISTRO_MODULOS['config']!,
-      // A credencial do PACS (porta da integração) é o dublê acima.
-      integracao_teste: async () => ({
+      // A credencial do PACS (porta da integração) é o dublê acima, no nome do módulo real: com um nome fora do
+      // registro, o SADT não reconhece o módulo de configuração pedido e lê a fonte sintética dele, não a global.
+      integracao: async () => ({
         modulo: () => ({
           module: IntegracaoTeste,
           global: true,
@@ -123,11 +124,9 @@ interface Linha {
   paciente: { id: number; nome: string };
 }
 
-// PENDENTE (integração da onda 2 das ondas finais, registrado em saidas/onda-02f-integracao.md): com os módulos
-// registrados (sadt, pep, acesso, config), o pedido do exame no PEP passa, mas a liberação por pessoa da chave
-// imagem.worklist feita em /administracao/liberacao não chega ao ServicoPacs (403 recurso-desligado). Volta quando a
-// liberação do SADT ler a fonte global da configuração com o usuário da sessão.
-describe.skip('lista de trabalho DICOM (M47.3)', { timeout: 60_000 }, () => {
+// Sem chave de liberação (05-SADT linha 20): o que liga o envio é o destino do estabelecimento (parâmetro
+// pacs.parceiroWorklist, só no nível do estabelecimento) e a permissão do cargo.
+describe('lista de trabalho DICOM (M47.3)', { timeout: 60_000 }, () => {
   let medico: Sessao;
   let tec: Sessao;
   let exameRx: number;
@@ -151,14 +150,14 @@ describe.skip('lista de trabalho DICOM (M47.3)', { timeout: 60_000 }, () => {
     exameRx = rx!.exame;
     paciente = rx!.paciente.id;
     expect(rx!.modalidade).toEqual({ id: 6, sigla: 'CR' });
-    // Desligada (POL-3): a lista lê, o envio fica parado com o motivo.
-    expect(tela.liberacao.ligada).toBe(false);
+    // Sem destino no estabelecimento: a lista lê, o envio fica parado com o motivo (o parâmetro a informar).
+    expect(tela.liberacao).toBeUndefined();
     expect(tela.acoes).toMatchObject({ enviar: false, simular: false });
-    expect(tela.acoes.motivo).toMatch(/ainda não foi liberada/);
-    expect(tela.destino).toMatchObject({ modo: 'simulador', parceiro: 'Simulador de modalidade e PACS' });
+    expect(tela.acoes.motivo).toMatch(/pacs\.parceiroWorklist/);
+    expect(tela.destino).toMatchObject({ modo: 'desligado', parceiro: null });
     const recusa = await post(tec, '/sadt/imagem/worklist/enviar', { exames: [exameRx] });
-    expect(recusa.statusCode).toBe(403);
-    expect(recusa.json().codigo).toBe('recurso-desligado');
+    expect(recusa.statusCode, recusa.body).toBe(409);
+    expect(recusa.json().codigo).toBe('pacs-sem-destino');
   });
 
   it('permissões: quem não tem a opção da imagem recebe 403; quem só consulta lê e não envia', async () => {
@@ -171,32 +170,31 @@ describe.skip('lista de trabalho DICOM (M47.3)', { timeout: 60_000 }, () => {
     expect((await post(cons, '/sadt/imagem/worklist/enviar', { exames: [exameRx] })).statusCode).toBe(403);
   });
 
-  it('ligada: o envio cria o item com o número de acesso; o simulador recebe o item; o mesmo exame não entra duas vezes', async () => {
+  it('com o destino: o envio cria o item com o número de acesso; o simulador recebe o item; o mesmo exame não entra duas vezes', async () => {
     const adm = await entrar('SINT.ADMIN');
-    for (const [recurso, tipo] of [
-      ['imagem.worklist', 'contrato'],
-      ['imagem.worklist', 'aprovacao'],
-    ] as const) {
-      const p = await put(adm, '/administracao/liberacao/prerequisitos', {
-        recurso,
-        tipo,
-        situacao: 'cumprido',
-        validade: '2099-12-31',
-        evidencia: 'pré-requisito sintético do teste',
-        senha: SENHA,
-      });
-      expect(p.statusCode, p.body).toBe(200);
-    }
+    // A antiga chave não é mais recurso de liberação: a API recusa.
     const l = await post(adm, '/administracao/liberacao', {
       chave: 'imagem.worklist',
       tipo: 'recurso',
       escopo: 'pessoa',
-      valores: ['SINT.TEC.IMAGEM', 'SINT.TEC.IMAGEM.CONSULTA', 'SINT.MEDICO'],
+      valores: ['SINT.TEC.IMAGEM'],
       ligar: true,
       justificativa: 'Lista de trabalho sintética (teste do M47.3)',
       senha: SENHA,
     });
-    expect(l.statusCode, l.body).toBe(200);
+    expect(l.statusCode, l.body).toBe(404);
+    // O destino é do estabelecimento: o parâmetro com o código do parceiro (fora de produção, o simulador).
+    const d = await put(adm, '/administracao/parametros/pacs.parceiroWorklist', {
+      nivel: 'estabelecimento',
+      alvo: 'aa',
+      valor: 'pacs-simulador',
+      justificativa: 'Destino sintético da lista de trabalho (teste do M47.3)',
+      senha: SENHA,
+    });
+    expect(d.statusCode, d.body).toBe(200);
+    const comDestino = (await get(tec, '/sadt/imagem/worklist')).json();
+    expect(comDestino.destino).toMatchObject({ modo: 'simulador', motivo: null });
+    expect(comDestino.acoes).toMatchObject({ enviar: true, simular: true, motivo: null });
     const r = await post(tec, '/sadt/imagem/worklist/enviar', { exames: [exameRx, 999999] });
     expect(r.statusCode, r.body).toBe(201);
     expect(r.json()).toMatchObject({ ok: true, enviados: 1 });

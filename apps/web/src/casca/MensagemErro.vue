@@ -14,6 +14,7 @@ const m = computed(() => mensagemDoErro(props.erro));
   <div class="erro" role="alert" data-testid="mensagem-erro">
     <SanteAlerta :texto="t(m.titulo)" variante="alerta" />
     <p>{{ t(m.texto) }}</p>
+    <p v-if="m.motivo" class="erro__motivo" data-testid="mensagem-erro-motivo">{{ m.motivo }}</p>
     <p v-if="m.correlacao" class="erro__correlacao">{{ t('erros.correlacao', { codigo: m.correlacao }) }}</p>
   </div>
 </template>

@@ -216,6 +216,15 @@ function configuracaoLida(x: Record<string, unknown>): ConfiguracaoSetorLida {
   };
 }
 
+/** SELECT travado (FOR UPDATE pelo caminho próprio do Escritor): a primeira linha ou null. */
+async function umaTravada(
+  tx: TxOperacao,
+  sql: string,
+  p: readonly unknown[],
+): Promise<Record<string, unknown> | null> {
+  return (await tx.consultarParaAtualizar(sql, p))[0] ?? null;
+}
+
 export class PortaEquipePainelPropria {
   private readonly executor: Executor;
 
@@ -306,7 +315,7 @@ export class PortaEquipePainelPropria {
     });
   }
 
-  acompanhar(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+  async acompanhar(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaAcompanhar, entrada);
     return this.gravar(c, 'pep.painel.acompanhar', ['paciente_acompanhado'], async (tx, est, usuario) => {
       const pac = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [x.paciente]);
@@ -318,10 +327,9 @@ export class PortaEquipePainelPropria {
         );
         if (!a) throw naoEncontrado('Atendimento');
       }
-      const vig = await tx.consultar(
+      const vig = await tx.consultarParaAtualizar(
         `SELECT paciente_id FROM paciente_acompanhado
-          WHERE estabelecimento_id = ? AND usuario_id = ? AND paciente_id = ? AND fim_em IS NULL AND excluido_em IS NULL
-          FOR UPDATE`,
+          WHERE estabelecimento_id = ? AND usuario_id = ? AND paciente_id = ? AND fim_em IS NULL AND excluido_em IS NULL`,
         [est.id, usuario, x.paciente],
       );
       const erros = validarAcompanhar(
@@ -343,7 +351,7 @@ export class PortaEquipePainelPropria {
   }
 
   /** Deixa de acompanhar: grava o fim do período (a linha fica, com quem e quando). */
-  deixarDeAcompanhar(c: ContextoDocs, paciente: number): Promise<{ id: number }> {
+  async deixarDeAcompanhar(c: ContextoDocs, paciente: number): Promise<{ id: number }> {
     return this.gravar(
       c,
       'pep.painel.deixar_acompanhar',
@@ -374,14 +382,14 @@ export class PortaEquipePainelPropria {
   }
 
   /** Grava as colunas do usuário: as escolhidas com exibir e ordem; as demais do catálogo, ocultas. */
-  gravarColunas(c: ContextoDocs, entrada: unknown): Promise<{ colunas: string[] }> {
+  async gravarColunas(c: ContextoDocs, entrada: unknown): Promise<{ colunas: string[] }> {
     const x = entradaValida(esquemaColunas, entrada);
     const erros = validarColunasPainel(x.colunas, COLUNAS_PAINEL);
     if (erros.length) throw recusaRegra(erros);
     return this.gravar(c, 'pep.painel.colunas', ['painel_coluna_usuario'], async (tx, _est, usuario) => {
-      const atuais = await tx.consultar(
+      const atuais = await tx.consultarParaAtualizar(
         `SELECT id, coluna, versao FROM painel_coluna_usuario
-          WHERE usuario_id = ? AND painel_filtro_usuario_id IS NULL FOR UPDATE`,
+          WHERE usuario_id = ? AND painel_filtro_usuario_id IS NULL`,
         [usuario],
       );
       const porColuna = new Map(atuais.map((a) => [String(a['coluna']), a]));
@@ -397,7 +405,7 @@ export class PortaEquipePainelPropria {
   }
 
   /** Filtro salvo padrão do painel (a unidade que abre o painel), no banco por usuário e estabelecimento. */
-  gravarFiltroPadrao(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+  async gravarFiltroPadrao(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(z.object({ unidade: z.number().int().positive().nullable() }).strict(), entrada);
     return this.gravar(c, 'pep.painel.filtro_padrao', ['painel_filtro_usuario'], async (tx, est, usuario) => {
       if (x.unidade !== null) {
@@ -408,9 +416,10 @@ export class PortaEquipePainelPropria {
         );
         if (!u) throw naoEncontrado('Unidade');
       }
-      const a = await tx.uma(
+      const a = await umaTravada(
+        tx,
         `SELECT id, versao FROM painel_filtro_usuario
-          WHERE usuario_id = ? AND estabelecimento_id = ? ORDER BY padrao DESC, id LIMIT 1 FOR UPDATE`,
+          WHERE usuario_id = ? AND estabelecimento_id = ? ORDER BY padrao DESC, id LIMIT 1`,
         [usuario, est.id],
       );
       if (a) {
@@ -480,7 +489,7 @@ export class PortaEquipePainelPropria {
   }
 
   /** Inclui ou altera (com a versão lida) a configuração do setor e tipo de atendimento. */
-  gravarConfiguracaoSetor(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+  async gravarConfiguracaoSetor(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaConfiguracaoSetor, entrada);
     const erros = validarConfiguracaoSetor(x);
     if (erros.length) throw recusaRegra(erros);
@@ -502,9 +511,10 @@ export class PortaEquipePainelPropria {
           exige_evolucao_enfermagem: x.exigeEvolucaoEnfermagem,
           ativo: x.ativo,
         };
-        const a = await tx.uma(
+        const a = await umaTravada(
+          tx,
           `SELECT id, versao FROM configuracao_setor_prontuario
-            WHERE estabelecimento_id = ? AND setor_funcional_id = ? AND tipo_atendimento = ? FOR UPDATE`,
+            WHERE estabelecimento_id = ? AND setor_funcional_id = ? AND tipo_atendimento = ?`,
           [est.id, x.setor, x.tipoAtendimento],
         );
         if (a) {
@@ -599,7 +609,7 @@ export class PortaEquipePainelPropria {
   }
 
   /** Inclui o profissional na equipe do atendimento (abre a equipe na primeira inclusão), pelas regras do domínio. */
-  incluirMembro(
+  async incluirMembro(
     c: ContextoDocs,
     atendimento: number,
     entrada: unknown,
@@ -642,8 +652,9 @@ export class PortaEquipePainelPropria {
           [x.profissional],
         );
         const agora = new Date();
-        const e = await tx.uma(
-          'SELECT id, situacao FROM equipe_assistencial_paciente WHERE atendimento_id = ? AND excluido_em IS NULL FOR UPDATE',
+        const e = await umaTravada(
+          tx,
+          'SELECT id, situacao FROM equipe_assistencial_paciente WHERE atendimento_id = ? AND excluido_em IS NULL',
           [atendimento],
         );
         if (e && String(e['situacao']) === 'encerrada')
@@ -673,7 +684,7 @@ export class PortaEquipePainelPropria {
                   );
                 throw err;
               });
-        const atuais = (await tx.consultar(`${SQL_MEMBROS} FOR UPDATE`, [equipe])).map((m) =>
+        const atuais = (await tx.consultarParaAtualizar(SQL_MEMBROS, [equipe])).map((m) =>
           membroLido(m, est.fuso),
         );
         const funcao: FuncaoEquipe = {
@@ -744,7 +755,7 @@ export class PortaEquipePainelPropria {
    * Fim do atendimento: encerra a equipe (situação e fim) e fecha os membros vigentes com o motivo (nova versão das
    * linhas; nada apagado). Daí em diante, a equipe não dá vínculo nem recebe inclusão.
    */
-  encerrarEquipe(
+  async encerrarEquipe(
     c: ContextoDocs,
     atendimento: number,
     entrada: unknown,
@@ -755,13 +766,14 @@ export class PortaEquipePainelPropria {
       'pep.equipe.encerrar_equipe',
       ['equipe_assistencial_paciente', 'equipe_assistencial_membro'],
       async (tx, est) => {
-        const e = await tx.uma(
+        const e = await umaTravada(
+          tx,
           `SELECT id, situacao, versao FROM equipe_assistencial_paciente
-            WHERE atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+            WHERE atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [atendimento, est.id],
         );
         if (!e) throw naoEncontrado('Equipe');
-        const membros = (await tx.consultar(`${SQL_MEMBROS} FOR UPDATE`, [e['id']])).map((m) =>
+        const membros = (await tx.consultarParaAtualizar(SQL_MEMBROS, [e['id']])).map((m) =>
           membroLido(m, est.fuso),
         );
         const plano = planoEncerramentoEquipe(String(e['situacao']), membros);
@@ -793,15 +805,16 @@ export class PortaEquipePainelPropria {
   }
 
   /** Saída do membro: grava o fim e o motivo (nova versão da linha); a participação fica no histórico. */
-  encerrarMembro(c: ContextoDocs, membro: number, entrada: unknown): Promise<{ id: number }> {
+  async encerrarMembro(c: ContextoDocs, membro: number, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaSaida, entrada);
     return this.gravar(c, 'pep.equipe.encerrar_membro', ['equipe_assistencial_membro'], async (tx, est) => {
-      const r = await tx.uma(
+      const r = await umaTravada(
+        tx,
         `SELECT m.id, m.profissional_id, m.funcao_equipe_assistencial_id, m.responsavel_principal, m.recebe_notificacao,
                 m.inicio_em, m.fim_em, m.versao
            FROM equipe_assistencial_membro m
            JOIN equipe_assistencial_paciente e ON e.id = m.equipe_assistencial_paciente_id
-          WHERE m.id = ? AND e.estabelecimento_id = ? AND m.excluido_em IS NULL FOR UPDATE`,
+          WHERE m.id = ? AND e.estabelecimento_id = ? AND m.excluido_em IS NULL`,
         [membro, est.id],
       );
       const lido = r ? membroLido({ ...r, nome: '', descricao: '' }, est.fuso) : undefined;

@@ -4,8 +4,10 @@
 //                                                         (conta de outro estabelecimento só a quem pode ler lá)
 //   GET  /api/faturamento/profissionais-equipe?termo=     faturamento.item.lancar (busca por nome ou inscrição)
 //   POST /api/faturamento/itens/:item/equipe             faturamento.item.lancar (a equipe inteira do item)
+//   POST /api/faturamento/contas/:id/itens-com-equipe    faturamento.item.lancar (item manual e a equipe, juntos)
 //   POST /api/faturamento/contas/:id/kits                faturamento.item.lancar (lança um kit de cobrança)
 //   POST /api/faturamento/kits                           faturamento.regra.editar (cadastro do kit com os componentes)
+//   GET  /api/faturamento/itens-cobranca?termo=          faturamento.regra.editar (itens para o cadastro do kit)
 //   POST /api/faturamento/contas/:id/transferencias      faturamento.auditoria.ajustar (itens para outra conta)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
@@ -16,6 +18,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, ctxDe, inteiro, problemaDoPreco } from '../precos/base.js';
 import {
+  buscarItensCobrancaPropria,
   buscarProfissionaisPropria,
   gravarMovimentos,
   movimentosContaPropria,
@@ -86,6 +89,14 @@ export class MovimentosContaController {
     );
   }
 
+  @Get('faturamento/itens-cobranca')
+  @Permissao('faturamento.regra.editar')
+  itensCobranca(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().ler(ctxDe(req, 'conta-movimentos'), (l) => buscarItensCobrancaPropria(l, String(termo ?? ''))),
+    );
+  }
+
   @Post('faturamento/itens/:item/equipe')
   @HttpCode(200)
   @Permissao('faturamento.item.lancar')
@@ -95,6 +106,19 @@ export class MovimentosContaController {
       this.s().gravar('equipe', contextoOperacao(req, 'conta-movimentos'), {
         ...objeto(corpo),
         itemId: inteiro(item, 'item'),
+      }),
+    );
+  }
+
+  @Post('faturamento/contas/:id/itens-com-equipe')
+  @HttpCode(201)
+  @Permissao('faturamento.item.lancar')
+  @AuditadoNoHandler(EXECUTOR)
+  lancarComEquipe(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().gravar('lancar.equipe', contextoOperacao(req, 'conta-movimentos'), {
+        ...objeto(corpo),
+        conta: inteiro(id, 'id'),
       }),
     );
   }

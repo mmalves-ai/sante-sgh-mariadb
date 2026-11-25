@@ -2,7 +2,9 @@
 // Ficha do solicitante externo (F3.1, 02-CAD linha 20): dados editáveis (o registro no conselho fica), o que falta
 // para a guia, os cadastros parecidos (regra do domínio), inativar e reativar com o motivo (nunca apagar) e o código
 // do solicitante em cada fonte pagadora. Tudo numa tela só; a recusa da API aparece junto do campo.
-import { SanteBotao } from '@sgh/ui';
+// Unificação do duplicado: a partir da lista de parecidos, com o motivo, sem sair da ficha; o duplicado fica inativo e
+// aponta para este cadastro (atendimentos e pedidos já feitos não mudam) e a unificação pode ser desfeita na ficha dele.
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -10,9 +12,12 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import {
   alterarSolicitante,
+  desfazerUnificacaoSolicitante,
   gravarCodigoNaFonte,
   lerFichaSolicitante,
   mudarSituacaoSolicitante,
+  type Parecido,
+  unificarSolicitante,
 } from '../api-ligacoes.js';
 import { lerOpcoes } from '../api-vinculos.js';
 
@@ -50,6 +55,38 @@ const fonte = ref<number | null>(null);
 const codigo = ref('');
 const erro = ref<unknown>(null);
 const ok = ref(false);
+// Unificação: o parecido escolhido e o motivo (um de cada vez, na própria lista).
+const duplicado = ref<Parecido | null>(null);
+const motivoUnificar = ref('');
+const motivoDesfazer = ref('');
+const podeUnificar = computed(() => editar.value && !!f.value?.ativo && !f.value?.unificadoEm);
+const camposDaUnificacao = (campos: readonly string[]) =>
+  campos.map((c) => t(`ligacoes.solicitante.campoUnificacao.${c}`)).join(', ');
+function escolherDuplicado(p: Parecido | null): void {
+  duplicado.value = p;
+  motivoUnificar.value = '';
+}
+async function unificar(): Promise<void> {
+  const d = duplicado.value;
+  if (!d) return;
+  await fazer(() =>
+    unificarSolicitante(Number(props.id), {
+      absorvido: d.id,
+      versao: d.versao ?? 0,
+      motivo: motivoUnificar.value,
+    }),
+  );
+  if (ok.value) escolherDuplicado(null);
+}
+async function desfazer(): Promise<void> {
+  await fazer(() =>
+    desfazerUnificacaoSolicitante(Number(props.id), {
+      versao: f.value!.versao,
+      motivo: motivoDesfazer.value,
+    }),
+  );
+  if (ok.value) motivoDesfazer.value = '';
+}
 
 async function fazer(fn: () => Promise<unknown>): Promise<void> {
   erro.value = null;
@@ -86,6 +123,41 @@ const gravarDados = () =>
           {{ t('ligacoes.solicitante.inativo', { data: f.dataInativacao ?? '' }) }}
         </span>
       </p>
+      <section
+        v-if="f.unificadoEm"
+        class="aviso"
+        data-testid="solicitante-unificado"
+        aria-labelledby="sol-unificado"
+      >
+        <p id="sol-unificado">
+          {{ t('ligacoes.solicitante.unificadoEm') }}
+          <RouterLink :to="`/cadastros/solicitantes/${f.unificadoEm.id}`" data-testid="sol-unificado-em">{{
+            f.unificadoEm.nome
+          }}</RouterLink>
+          — {{ f.unificadoEm.registro }}
+          <template v-if="f.unificadoEm.quando">
+            {{ t('ligacoes.solicitante.unificadoDesde', { data: f.unificadoEm.quando }) }}
+          </template>
+        </p>
+        <div v-if="editar" class="barra">
+          <div class="campo">
+            <label for="sol-motivo-desfazer">{{ t('ligacoes.solicitante.desfazerMotivo') }}</label>
+            <input
+              id="sol-motivo-desfazer"
+              v-model="motivoDesfazer"
+              maxlength="200"
+              data-testid="sol-motivo-desfazer"
+            />
+          </div>
+          <SanteBotao
+            :rotulo="t('ligacoes.solicitante.desfazer')"
+            variante="secundario"
+            :desabilitado="motivoDesfazer.trim().length < 10"
+            data-testid="sol-desfazer-unificacao"
+            @acionar="desfazer"
+          />
+        </div>
+      </section>
       <p v-if="f.faltaParaGuia.length" class="aviso" data-testid="solicitante-falta-guia">
         {{ t('ligacoes.solicitante.faltaGuia', { campos: f.faltaParaGuia.join(', ') }) }}
       </p>
@@ -112,7 +184,7 @@ const gravarDados = () =>
         </form>
       </section>
 
-      <section v-if="editar" aria-labelledby="sol-situacao">
+      <section v-if="editar && !f.unificadoEm" aria-labelledby="sol-situacao">
         <h2 id="sol-situacao">
           {{ f.ativo ? t('ligacoes.solicitante.inativar') : t('ligacoes.solicitante.reativar') }}
         </h2>
@@ -139,6 +211,67 @@ const gravarDados = () =>
           <li v-for="p in f.parecidos" :key="p.id">
             <RouterLink :to="`/cadastros/solicitantes/${p.id}`">{{ p.nome }}</RouterLink>
             — {{ p.registro }} ({{ t(`ligacoes.solicitante.motivos.${p.motivo}`) }})
+            <SanteBotao
+              v-if="podeUnificar && duplicado?.id !== p.id"
+              :rotulo="t('ligacoes.solicitante.unificar')"
+              variante="secundario"
+              :data-testid="`sol-unificar-${p.id}`"
+              @acionar="escolherDuplicado(p)"
+            />
+            <div
+              v-if="podeUnificar && duplicado?.id === p.id"
+              class="barra"
+              data-testid="sol-unificar-painel"
+            >
+              <p class="aviso">
+                <strong>{{ t('ligacoes.solicitante.unificarTitulo', { nome: p.nome }) }}.</strong>
+                {{ t('ligacoes.solicitante.unificarAjuda') }}
+              </p>
+              <p v-if="p.traz?.length" data-testid="sol-unificar-traz">
+                {{ t('ligacoes.solicitante.unificarTraz') }} {{ camposDaUnificacao(p.traz) }}.
+              </p>
+              <p v-if="p.difere?.length" data-testid="sol-unificar-difere">
+                {{ t('ligacoes.solicitante.unificarDifere') }} {{ camposDaUnificacao(p.difere) }}.
+              </p>
+              <p data-testid="sol-unificar-registro">{{ t('ligacoes.solicitante.unificarRegistro') }}</p>
+              <div class="campo">
+                <label for="sol-motivo-unificar">{{ t('ligacoes.solicitante.unificarMotivo') }}</label>
+                <input
+                  id="sol-motivo-unificar"
+                  v-model="motivoUnificar"
+                  maxlength="200"
+                  data-testid="sol-motivo-unificar"
+                />
+              </div>
+              <SanteBotao
+                :rotulo="t('ligacoes.solicitante.unificarConfirmar')"
+                variante="destrutivo"
+                :confirmacao="t('ligacoes.solicitante.unificarPergunta')"
+                :desabilitado="motivoUnificar.trim().length < 10"
+                data-testid="sol-unificar-confirmar"
+                @acionar="unificar"
+              />
+              <SanteBotao
+                :rotulo="t('ligacoes.solicitante.cancelar')"
+                variante="texto"
+                data-testid="sol-unificar-cancelar"
+                @acionar="escolherDuplicado(null)"
+              />
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section v-if="f.absorvidos?.length" aria-labelledby="sol-unificados">
+        <h2 id="sol-unificados">{{ t('ligacoes.solicitante.unificados') }}</h2>
+        <ul data-testid="sol-lista-unificados">
+          <li v-for="a in f.absorvidos" :key="a.id">
+            <RouterLink :to="`/cadastros/solicitantes/${a.id}`">{{ a.nome }}</RouterLink>
+            — {{ a.registro }}
+            <template v-if="a.quando">{{
+              t('ligacoes.solicitante.unificadoDesde', { data: a.quando })
+            }}</template>
+            ({{ t('ligacoes.solicitante.atendimentosLigados', a.atendimentos) }})
           </li>
         </ul>
       </section>
@@ -169,15 +302,16 @@ const gravarDados = () =>
             fazer(() => gravarCodigoNaFonte(Number(id), { fonte: fonte!, codigo, ativo: true }))
           "
         >
-          <div class="campo">
-            <label for="sol-fonte">{{ t('ligacoes.solicitante.fonte') }}</label>
-            <select id="sol-fonte" v-model="fonte" data-testid="sol-fonte">
-              <option :value="null">{{ t('ligacoes.comum.escolha') }}</option>
-              <option v-for="x in fontes.data.value?.fontes ?? []" :key="x.id" :value="x.id">
-                {{ x.nome }}
-              </option>
-            </select>
-          </div>
+          <SanteSelecao
+            id="sol-fonte"
+            v-model="fonte"
+            :rotulo="t('ligacoes.solicitante.fonte')"
+            :opcoes="[
+              { valor: null, rotulo: t('ligacoes.comum.escolha') },
+              ...(fontes.data.value?.fontes ?? []).map((x) => ({ valor: x.id, rotulo: x.nome })),
+            ]"
+            data-testid="sol-fonte"
+          />
           <div class="campo">
             <label for="sol-codigo">{{ t('ligacoes.solicitante.codigo') }}</label>
             <input

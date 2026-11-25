@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Adiantamentos a fornecedores e médicos (F3.8, 07-FIN linha 67): `/financeiro/pagar/adiantamentos`. Pedir (sem saída),
 // aprovar na alçada (quem pediu não aprova), pagar (a saída, por outra pessoa), compensar o saldo num título aprovado do
-// MESMO credor (a lista vem filtrada pelo par tipo e código do credor, e o valor sugerido é o menor entre o saldo e o
+// MESMO credor (o credor é escolhido pelo nome, documento ou código e aparece com o nome na lista; a lista de títulos
+// vem filtrada pelo par tipo e código do credor, e o valor sugerido é o menor entre o saldo e o
 // título) e registrar a devolução do que sobrou. As regras ficam no domínio; a tela só evita o clique inútil.
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -20,12 +21,15 @@ import {
   novaChave,
   pagarAdiantamento,
 } from '../api-financeiro.js';
+import BuscaCredor from '../componentes/BuscaCredor.vue';
 import { data, opcoesContas, reais, usarFinanceiro } from '../usar-financeiro.js';
 
 const { t, te } = useI18n();
 const qc = useQueryClient();
 const { apoio, pode, motivoFuncionalidade } = usarFinanceiro();
-const hoje = () => new Date().toISOString().slice(0, 10);
+// A data do lançamento é a do estabelecimento (a que o servidor informa); a do navegador em UTC vira o dia seguinte
+// à noite e esconderia o lançamento do movimento do dia.
+const hoje = () => apoio.data.value?.hoje ?? new Date().toLocaleDateString('en-CA');
 const lista = useQuery({ queryKey: ['financeiro', 'adiantamentos'], queryFn: () => listarAdiantamentos() });
 const contas = computed(() => opcoesContas(apoio.data.value?.contas));
 const tipos = computed(() => [
@@ -33,8 +37,8 @@ const tipos = computed(() => [
   { valor: 'profissional', rotulo: t('financeiro.adiantamentos.profissional') },
 ]);
 const novo = reactive({
-  tipoCredor: 'fornecedor',
-  credor: '',
+  tipoCredor: 'fornecedor' as 'fornecedor' | 'profissional',
+  credor: null as number | null,
   conta: '',
   valor: '',
   prazo: '',
@@ -48,7 +52,7 @@ watch(
   { immediate: true },
 );
 const novoValido = computed(
-  () => Number(novo.credor) > 0 && Number(novo.valor) > 0 && !!novo.conta && novo.referente.trim().length > 0,
+  () => (novo.credor ?? 0) > 0 && Number(novo.valor) > 0 && !!novo.conta && novo.referente.trim().length > 0,
 );
 
 const aberto = ref<number | null>(null);
@@ -102,8 +106,8 @@ const conceder = () =>
   gravar(async () => {
     const r = await concederAdiantamento(
       {
-        tipoCredor: novo.tipoCredor as 'fornecedor' | 'profissional',
-        credor: Number(novo.credor),
+        tipoCredor: novo.tipoCredor,
+        credor: novo.credor ?? 0,
         conta: Number(novo.conta),
         valor: Number(novo.valor),
         data: hoje(),
@@ -112,7 +116,7 @@ const conceder = () =>
       },
       novaChave('adiantamento'),
     );
-    Object.assign(novo, { credor: '', valor: '', prazo: '', referente: '' });
+    Object.assign(novo, { credor: null, valor: '', prazo: '', referente: '' });
     return r;
   });
 const compensar = (id: number, parcela: number, saldoTitulo: number) =>
@@ -151,10 +155,12 @@ const devolver = (id: number) =>
         :opcoes="tipos"
         data-testid="ad-novo-tipo"
       />
-      <label class="campo">
-        {{ t('financeiro.adiantamentos.credor') }}
-        <input v-model="novo.credor" inputmode="numeric" data-testid="ad-novo-credor" />
-      </label>
+      <BuscaCredor
+        v-model="novo.credor"
+        :tipo="novo.tipoCredor"
+        :rotulo="t('financeiro.adiantamentos.credor')"
+        prefixo="ad-novo-credor"
+      />
       <SanteSelecao
         v-model="novo.conta"
         :rotulo="t('financeiro.conta')"
@@ -203,7 +209,10 @@ const devolver = (id: number) =>
         <template v-for="a in lista.data.value" :key="a.id">
           <tr>
             <td>{{ a.numero }}</td>
-            <td>{{ a.credor }}</td>
+            <td :data-testid="`ad-credor-${a.id}`">
+              {{ a.credorNome || t('financeiro.adiantamentos.credorSemNome') }}
+              <span class="secundario">({{ a.credor }})</span>
+            </td>
             <td>{{ t(`financeiro.adiantamentos.${a.tipoCredor}`) }}</td>
             <td>{{ data(a.emissao) }}</td>
             <td>{{ a.referente }}</td>

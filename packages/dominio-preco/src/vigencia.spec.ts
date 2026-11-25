@@ -35,4 +35,34 @@ describe('vigência (regra 1: maior data ≤ data-base)', () => {
     expect(t[0]?.futura).toBe(true);
     expect(t[3]?.invalida).toBe(true);
   });
+  it('a ordem da lista não importa: vale a maior data até a base e a menor data depois dela', () => {
+    const fora = [v('2026-10-20', 15), v('2024-01-01', 10), v('2025-03-15', 12), v('2027-02-01', 18)];
+    expect(vigenteEm(fora, '2026-12-31')?.valor).toBe(15);
+    expect(vigenteEm(fora, '2025-12-31')?.valor).toBe(12);
+    expect(proximaVigencia(fora, '2024-06-01')?.valor).toBe(12);
+    expect(proximaVigencia([v('2027-02-01', 18), v('2026-10-20', 15)], '2026-01-01')?.valor).toBe(15);
+    // Data futura inválida nunca é a próxima vigência.
+    expect(proximaVigencia([v('2026-02-30', 1), v('2201-01-01', 2)], '2026-01-01')).toBeNull();
+  });
+  it('linha do tempo: datas iguais mantêm a ordem; inválida não é futura nem vigente', () => {
+    const iguais = [v('2025-01-01', 1), v('2025-01-01', 2), v('2026-02-30', 3)];
+    const t = linhaDoTempo(iguais, '2025-06-01');
+    expect(t.map((x) => x.valor)).toEqual([3, 1, 2]);
+    expect(t.map((x) => [x.vigente, x.futura, x.invalida])).toEqual([
+      [false, false, true],
+      [true, false, false],
+      [false, false, false],
+    ]);
+    expect(linhaDoTempo([], '2025-06-01')).toEqual([]);
+  });
+  it('vigência aceita de 1900 a 2100 e só datas de calendário', () => {
+    expect(dataDeVigencia('1900-01-01')).toBe(true);
+    expect(dataDeVigencia('2100-12-31')).toBe(true);
+    expect(dataDeVigencia('1899-12-31')).toBe(false);
+    expect(dataDeVigencia('')).toBe(false);
+    expect(dataDeVigencia(undefined)).toBe(false);
+    expect(dataDeCalendario('2024-02-29')).toBe(true);
+    expect(dataDeCalendario('2025-02-29')).toBe(false);
+    expect(dataDeCalendario('2025-13-01')).toBe(false);
+  });
 });

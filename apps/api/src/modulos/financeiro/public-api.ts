@@ -24,3 +24,12 @@ export {
   TABELAS_TITULO_PAGAR,
   type TituloPagarGravado,
 } from './operacoes.js';
+// F3.8 (07-FIN linha 89): a venda em cartão do caixa grava a transação e as parcelas a receber da administradora.
+export {
+  exigirCartaoNoRecebimento,
+  gravarCartaoDoRecebimento,
+  gravarRecebivelCartao,
+  TABELAS_CARTAO_NO_RECEBIMENTO,
+  TABELAS_RECEBIVEL_CARTAO,
+  type VendaCartao,
+} from './cartao-propria.js';

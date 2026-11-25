@@ -6,6 +6,7 @@
 // intenção de gravar); Problem Details viram ErroApi e a recusa de negócio traz o texto em português do servidor.
 import type {
   AdiantamentoResposta,
+  CredorEncontrado,
   ApoioFinanceiro,
   BorderoResposta,
   ConciliacaoResposta,
@@ -81,6 +82,29 @@ export const criarTituloPagar = (corpo: NovoTituloPagar, chave: string) =>
   gravar(`${F}/pagar/titulos`, corpo, chave);
 export const excluirTituloPagar = (id: number, versao: string | null, chave: string) =>
   gravar(`${F}/pagar/titulos/${id}/excluir`, { versao }, chave);
+/** F3.8 (07-FIN linha 63): motivos de prorrogação, histórico da parcela e a prorrogação (o original fica). */
+export interface MotivoProrrogacao {
+  readonly id: number;
+  readonly descricao: string;
+  readonly exigeJustificativa: boolean;
+}
+export interface PassoProrrogacao {
+  readonly id: number;
+  readonly vencimentoAnterior: string;
+  readonly vencimentoNovo: string;
+  readonly motivo: string;
+  readonly justificativa: string;
+  readonly usuario: string;
+  readonly em: string;
+}
+export const lerMotivosProrrogacao = () => ler(`${F}/pagar/motivos-prorrogacao`, lista<MotivoProrrogacao>());
+export const lerProrrogacoes = (parcela: number) =>
+  ler(`${F}/pagar/titulos/${parcela}/prorrogacoes`, lista<PassoProrrogacao>());
+export const prorrogarParcela = (
+  parcela: number,
+  corpo: { vencimento: string; motivo: number; justificativa: string },
+  chave: string,
+) => gravar(`${F}/pagar/titulos/${parcela}/prorrogar`, { ...corpo, versao: null }, chave);
 export const lerFilaAprovacao = (dias: number) =>
   ler(`${F}/pagar/aprovacao${qs({ dias })}`, lista<ItemFilaAprovacao>());
 export const aprovarTitulo = (id: number, observacao: string, chave: string) =>
@@ -105,6 +129,9 @@ export const gerarRemessa = (
   chave: string,
 ) => gravar(`${F}/pagar/remessas`, corpo, chave);
 export const listarAdiantamentos = () => ler(`${F}/pagar/adiantamentos`, lista<AdiantamentoResposta>());
+/** O credor do adiantamento pelo nome, documento ou código (fornecedor ou profissional, pelo tipo escolhido). */
+export const buscarCredores = (tipo: 'fornecedor' | 'profissional', termo: string) =>
+  ler(`${F}/pagar/credores${qs({ tipo, termo })}`, lista<CredorEncontrado>());
 export const concederAdiantamento = (
   corpo: {
     tipoCredor: 'fornecedor' | 'profissional';

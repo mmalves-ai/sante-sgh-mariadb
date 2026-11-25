@@ -69,3 +69,35 @@ describe('alergia', () => {
     expect(impede(a).impede).toBe(false);
   });
 });
+
+describe('reação adversa prévia como alergia (03-PEP L103)', () => {
+  it('sem princípio no cadastro, cruza pelo item do cadastro da reação', () => {
+    const semPrincipio = produto({ produto: 33, nome: 'Contraste iodado', principiosAtivos: [] });
+    const reacao = {
+      alergia: -5,
+      nome: 'Reação adversa prévia: Contraste iodado (Grave)',
+      principios: [],
+      produtos: [33],
+    };
+    const a = alertasAlergia(item('i1', [{ produto: semPrincipio }]), contexto({ alergias: [reacao] }));
+    expect(a.map((x) => x.id)).toEqual(['alergia:33:-5']);
+    expect(alertasAlergia(item('i1', [{ produto: dipirona }]), contexto({ alergias: [reacao] }))).toEqual([]);
+  });
+  it('informado só pelo nome, cruza pelo nome do produto (sem acento, sem caixa) e não por nome curto', () => {
+    const amox = produto({ produto: 44, nome: 'AMOXICILINA 500MG CAPSULA', principiosAtivos: [900] });
+    const reacao = {
+      alergia: -6,
+      nome: 'Reação adversa prévia: amoxicilina (Moderada)',
+      principios: [],
+      nomesInformados: ['Amoxicilina genérica'],
+    };
+    expect(alertasAlergia(item('i1', [{ produto: amox }]), contexto({ alergias: [reacao] }))).toHaveLength(1);
+    expect(
+      alertasAlergia(
+        item('i1', [{ produto: amox }]),
+        contexto({ alergias: [{ ...reacao, nomesInformados: ['amo'] }] }),
+      ),
+    ).toEqual([]);
+    expect(alertasAlergia(item('i1', [{ produto: dipirona }]), contexto({ alergias: [reacao] }))).toEqual([]);
+  });
+});

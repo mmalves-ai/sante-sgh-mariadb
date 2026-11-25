@@ -26,8 +26,11 @@ import { AuditadoNoHandler, Publica } from '../../autorizacao/decoradores.js';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { lerCookie } from '../../sessao/cookies.js';
+import { contextoDoEstabelecimento } from '../cadastro/contexto-nucleo.js';
 import { corpo } from '../exames/public-api.js';
+import type { ServicoEntregaResultado } from './aplicacao/entrega-resultado-propria.js';
 import type { EntradaFeita, ServicoPortal } from './aplicacao/portal.js';
+import { SERVICO_ENTREGA_RESULTADO } from './entrega-resultado.controller.js';
 
 export const SERVICO_PORTAL = Symbol('SERVICO_PORTAL');
 export const COOKIE_PORTAL = '__Host-sgh_portal';
@@ -57,7 +60,38 @@ export class PortalController {
   constructor(
     @Inject(CONFIGURACAO) private readonly configuracao: Configuracao,
     @Inject(SERVICO_PORTAL) private readonly portal: ServicoPortal,
+    /**
+     * O perfil do portal e o exame restrito (05-SADT linha 21). O módulo sempre fornece: o serviço com o banco do
+     * cliente, ou nulo quando o destino do SADT não é o banco (aí não há perfil nem restrição cadastrados).
+     */
+    @Inject(SERVICO_ENTREGA_RESULTADO)
+    private readonly entrega: ServicoEntregaResultado | null,
   ) {}
+
+  /**
+   * Das liberações publicadas, as que o perfil do portal deste acesso pode ver agora (setores e dias de visibilidade do
+   * perfil; exame que nunca é publicado, só depois da entrega no balcão ou só depois da carência). Falha fechada: com
+   * o banco do cliente, o estabelecimento ainda não resolvido pelo mapa é resolvido pelo código na própria leitura, e
+   * o que não se resolve não publica nada.
+   */
+  private async publicaveis(
+    s: { readonly hospital: string; readonly perfil: 'paciente' | 'medicoExterno' },
+    liberacoes: readonly number[],
+  ): Promise<Set<number>> {
+    if (!this.entrega) return new Set(liberacoes);
+    const c = contextoDoEstabelecimento(s.hospital);
+    const cliente = c.cliente || this.configuracao.clientePadrao || '';
+    if (cliente === '') return new Set();
+    const publico = s.perfil === 'paciente' ? 'paciente' : 'medico_externo';
+    const correlacao = 'portal-publicacao';
+    return c.estabelecimento === null
+      ? this.entrega.publicaveisNoPortalPeloCodigo({ cliente, correlacao }, s.hospital, publico, liberacoes)
+      : this.entrega.publicaveisNoPortal(
+          { cliente, estabelecimento: c.estabelecimento, usuario: null, correlacao },
+          publico,
+          liberacoes,
+        );
+  }
 
   private get prefixoHost(): boolean {
     return !SEM_PREFIXO.has(this.configuracao.ambiente);
@@ -170,22 +204,37 @@ export class PortalController {
 
   @Get('laudos')
   @Publica('os laudos do acesso do portal (sessão do portal conferida no handler)')
-  laudos(@Req() req: Req): Promise<ListaPortal> {
-    return this.portal.laudos(this.sessao(req));
+  async laudos(@Req() req: Req): Promise<ListaPortal> {
+    const s = this.sessao(req);
+    const lista = await this.portal.laudos(s);
+    const visiveis = await this.publicaveis(
+      s,
+      lista.laudos.map((l) => l.liberacao),
+    );
+    return { ...lista, laudos: lista.laudos.filter((l) => visiveis.has(l.liberacao)) };
   }
 
   @Post('laudos/:liberacao')
   @HttpCode(200)
   @Publica('abrir o laudo no portal (sessão e CSRF do portal conferidos no handler)')
   @AuditadoNoHandler('sadt.registrarVisualizacaoPortal pelo executor e a leitura com a trilha_auditoria')
-  abrir(
+  async abrir(
     @Param('liberacao') liberacao: string,
     @Body() b: unknown,
     @Req() req: Req,
   ): Promise<LaudoPortalAberto> {
     if (lerIdBanco(liberacao) === null) throw new ErroProblema('nao-encontrado', 404, 'Laudo não encontrado');
     const acao = (b as Record<string, unknown> | null)?.['acao'] === 'download' ? 'download' : 'visualizacao';
-    return this.portal.abrir(this.sessao(req, true), Number(liberacao), this.ip(req), acao);
+    const s = this.sessao(req, true);
+    // O que o perfil não lista também não abre pelo endereço direto (mesma resposta do laudo que não é do acesso).
+    if (!(await this.publicaveis(s, [Number(liberacao)])).has(Number(liberacao)))
+      throw new ErroProblema(
+        'nao-encontrado',
+        404,
+        'Laudo não encontrado',
+        'O laudo não está disponível para este acesso.',
+      );
+    return this.portal.abrir(s, Number(liberacao), this.ip(req), acao);
   }
 
   @Delete('sessao')

@@ -1,14 +1,19 @@
 <script setup lang="ts">
-// "Servidor de e-mail e notificações" (M10, ficha seção 7; regras 10 e 19): só consulta; a credencial aparece só
-// como definida ou não; fora de produção, a saída é a caixa de teste.
+// "Servidor de e-mail e notificações" (M10, ficha seção 7; regras 10 e 19): o resumo em consulta (a credencial
+// aparece só como definida ou não; fora de produção, a saída é a caixa de teste) e, abaixo, a manutenção do e-mail do
+// sistema (01-ADM linha 77): servidores, modelos de mensagem e registro de envio.
 import { useQuery } from '@tanstack/vue-query';
 import { SanteAlerta } from '@sgh/ui';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import { pode } from '../../../casca/sessao/pode.js';
 import { buscarEmail } from '../api.js';
+import EmailConfiguracaoPainel from '../componentes/EmailConfiguracaoPainel.vue';
 
 const { t } = useI18n();
 const consulta = useQuery({ queryKey: ['adm', 'email'], queryFn: () => buscarEmail() });
+const podeEditar = computed(() => pode('config.email.editar'));
 const def = (b: boolean) => (b ? t('adm.email.definida') : t('adm.email.naoDefinida'));
 </script>
 
@@ -50,6 +55,7 @@ const def = (b: boolean) => (b ? t('adm.email.definida') : t('adm.email.naoDefin
         <li v-for="m in consulta.data.value.modulos" :key="m.id">{{ m.nome }}</li>
       </ul>
     </template>
+    <EmailConfiguracaoPainel :pode-editar="podeEditar" />
   </section>
 </template>
 

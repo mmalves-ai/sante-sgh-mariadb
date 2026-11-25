@@ -22,8 +22,10 @@ import { PLANO_DO_TIPO } from '@sgh/contratos';
 import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
 import { dataHora, fusoValido, PortaRegistroPropria } from './registro-porta-propria.js';
 import { alergiasDaPrescricao } from './alergias-propria.js';
+import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
 import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
-import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import { BASE_PLANO_PROPRIO, GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import { ImpressaoPrescricaoPropria } from './prescricao-propria-impressao.js';
 import { RegrasPrescricaoPropria2 } from './prescricao-propria-regras-2.js';
 import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import {
@@ -45,8 +47,9 @@ export const MOTIVO_PRESCRICAO_PENDENTE =
 /**
  * Código de plano dos tipos de item sem equivalente na lista de tipos oferecidos (cuidado, exame, material...): fora
  * da faixa dos códigos da lista (até 14), para não se confundir com um tipo oferecido; a tela mostra o nome do tipo.
+ * Definido uma vez só na gravação (o catálogo o importa de lá, sem import circular com esta porta).
  */
-export const BASE_PLANO_PROPRIO = 1000;
+export { BASE_PLANO_PROPRIO };
 
 /** Categoria do tipo de item (CHECK de tipo_item_prescricao) → código de plano da lista de tipos oferecidos. */
 const PLANO_DA_CATEGORIA: Readonly<Record<string, number>> = {
@@ -142,6 +145,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   private readonly gravacao: GravacaoPrescricaoPropria;
   /** Regra de alerta e ficha de antimicrobiano (prescricao-propria-regras-2.ts). */
   private readonly regras2: RegrasPrescricaoPropria2;
+  /** Registro único da via impressa (prescricao-propria-impressao.ts, 01-ADM L82). */
+  private readonly impressao: ImpressaoPrescricaoPropria;
 
   constructor(
     private readonly nucleo: NucleoRegistroGravacao,
@@ -152,6 +157,7 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
     this.catalogo = new CatalogoPrescricaoPropria(nucleo, cliente);
     this.gravacao = new GravacaoPrescricaoPropria(nucleo, cliente);
     this.regras2 = new RegrasPrescricaoPropria2(nucleo, cliente);
+    this.impressao = new ImpressaoPrescricaoPropria(nucleo, cliente);
   }
 
   private ler<T>(
@@ -496,8 +502,13 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   itensDoProtocolo(...a: Parameters<PortaPrescricao['itensDoProtocolo']>) {
     return this.catalogo.itensDoProtocolo(...a);
   }
-  alergias(...a: Parameters<PortaPrescricao['alergias']>) {
-    return alergiasDaPrescricao(this.nucleo, this.cliente, ...a);
+  async alergias(...a: Parameters<PortaPrescricao['alergias']>) {
+    // 03-PEP L103: a reação adversa não inativada do paciente alerta na prescrição seguinte como alergia.
+    const [alergias, reacoes] = await Promise.all([
+      alergiasDaPrescricao(this.nucleo, this.cliente, ...a),
+      new FarmacovigilanciaPropria(this.nucleo as never, this.cliente).alertasDaPrescricao(a[0], a[1]),
+    ]);
+    return [...alergias, ...reacoes];
   }
   produtosAtivos(...a: Parameters<PortaPrescricao['produtosAtivos']>) {
     return this.catalogo.produtosAtivos(...a);
@@ -570,5 +581,17 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   }
   gravarGrade(...a: Parameters<PortaPrescricao['gravarGrade']>) {
     return this.gravacao.gravarGrade(...a);
+  }
+  favoritos(...a: Parameters<PortaPrescricao['favoritos']>) {
+    return this.gravacao.favoritos(...a);
+  }
+  marcarFavorito(...a: Parameters<PortaPrescricao['marcarFavorito']>) {
+    return this.gravacao.marcarFavorito(...a);
+  }
+  desmarcarFavorito(...a: Parameters<PortaPrescricao['desmarcarFavorito']>) {
+    return this.gravacao.desmarcarFavorito(...a);
+  }
+  registrarImpressao(...a: Parameters<PortaPrescricao['registrarImpressao']>) {
+    return this.impressao.registrarImpressao(...a);
   }
 }

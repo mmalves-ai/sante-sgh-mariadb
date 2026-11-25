@@ -30,7 +30,6 @@ export const OPERACOES_CADASTRO_E_ACESSO: readonly string[] = [
   'cadastro.incluirRegistroProfissional',
   'cadastro.alterarRegistroProfissional',
   'cadastro.definirEspecialidadeProfissional',
-  'cadastro.lotarProfissional',
   'cadastro.credenciarProfissional',
   'cadastro.vincularLoginProfissional',
   'cadastro.inativarProfissional',

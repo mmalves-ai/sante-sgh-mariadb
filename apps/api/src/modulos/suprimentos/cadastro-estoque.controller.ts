@@ -30,6 +30,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import { PORTA_CADASTRO_ESTOQUE, type PortaCadastroEstoque } from './cadastro-estoque-porta.js';
+import { semIndefinidos } from '../../entrada-exata.js';
 
 const id = z.number().int().positive();
 const idOpc = id.nullable().optional();
@@ -215,7 +216,12 @@ export class CadastroEstoqueController {
     if (tipo !== 'principios' && tipo !== 'fabricantes' && tipo !== 'usuarios')
       throw naoEncontrado('Tipo de busca');
     if (tipo === 'usuarios' && !sessaoDe(req).pode('acesso.escopo.ler'))
-      throw new ErroProblema('proibido', 403, 'Sem permissão', 'Consultar usuários exige acesso.escopo.ler.');
+      throw new ErroProblema(
+        'sem-permissao',
+        403,
+        'Sem permissão',
+        'Consultar usuários exige acesso.escopo.ler.',
+      );
     return this.porta.buscar(sessaoDe(req).porta, tipo, (termo ?? '').trim().slice(0, 60));
   }
 
@@ -230,23 +236,23 @@ export class CadastroEstoqueController {
   @Post('itens')
   @HttpCode(201)
   @Permissao('suprimentos.item.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.incluirItem pelo executor (trilha na mesma transação)')
+  @AuditadoNoHandler('suprimentos.cadastro.incluir-item pelo executor (trilha na mesma transação)')
   incluirItem(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.porta.incluirItem(sessaoDe(req).porta, corpo(esquemaItem, b));
+    return this.porta.incluirItem(sessaoDe(req).porta, semIndefinidos(corpo(esquemaItem, b)));
   }
 
   @Put('itens/:id')
   @Permissao('suprimentos.item.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.alterarItem pelo executor (trilha na mesma transação)')
+  @AuditadoNoHandler('suprimentos.cadastro.alterar-item pelo executor (trilha na mesma transação)')
   alterarItem(@Param('id') v: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const { versao, ...e } = corpo(comVersao(esquemaItem), b);
-    return this.porta.alterarItem(sessaoDe(req).porta, idDaRota(v), versao, e);
+    return this.porta.alterarItem(sessaoDe(req).porta, idDaRota(v), versao, semIndefinidos(e));
   }
 
   @Post('itens/:id/situacao')
   @HttpCode(200)
   @Permissao('suprimentos.item.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.inativarItem/reativarItem pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.inativar-item/reativarItem pelo executor')
   situacaoItem(@Param('id') v: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const e = corpo(esquemaSituacao, b);
     return this.porta.situacaoItem(sessaoDe(req).porta, idDaRota(v), e.versao, e.ativo, e.motivo);
@@ -269,23 +275,23 @@ export class CadastroEstoqueController {
   @Post('locais')
   @HttpCode(201)
   @Permissao('suprimentos.local.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.incluirLocal pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.incluir-local pelo executor')
   incluirLocal(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.porta.incluirLocal(sessaoDe(req).porta, corpo(esquemaLocal, b));
+    return this.porta.incluirLocal(sessaoDe(req).porta, semIndefinidos(corpo(esquemaLocal, b)));
   }
 
   @Put('locais/:id')
   @Permissao('suprimentos.local.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.alterarLocal pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.alterar-local pelo executor')
   alterarLocal(@Param('id') v: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const { versao, ...e } = corpo(comVersao(esquemaLocal), b);
-    return this.porta.alterarLocal(sessaoDe(req).porta, idDaRota(v), versao, e);
+    return this.porta.alterarLocal(sessaoDe(req).porta, idDaRota(v), versao, semIndefinidos(e));
   }
 
   @Post('locais/:id/situacao')
   @HttpCode(200)
   @Permissao('suprimentos.local.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.inativarLocal/reativarLocal pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.inativar-local/reativarLocal pelo executor')
   situacaoLocal(@Param('id') v: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const e = corpo(esquemaSituacao, b);
     return this.porta.situacaoLocal(sessaoDe(req).porta, idDaRota(v), e.versao, e.ativo, e.motivo);
@@ -301,7 +307,7 @@ export class CadastroEstoqueController {
 
   @Put('usuarios/:usuario/locais/:local')
   @Permissao('acesso.escopo.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.escopoLocal pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.escopo-local pelo executor')
   gravarEscopoLocal(
     @Param('usuario') u: string,
     @Param('local') l: string,
@@ -312,14 +318,14 @@ export class CadastroEstoqueController {
       sessaoDe(req).porta,
       idDaRota(u, 'usuario'),
       idDaRota(l, 'local'),
-      corpo(esquemaEscopoLocal, b),
+      semIndefinidos(corpo(esquemaEscopoLocal, b)),
     );
   }
 
   @Post('usuarios/:usuario/locais/:local/retirar')
   @HttpCode(200)
   @Permissao('acesso.escopo.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.retirarEscopoLocal pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.retirar-escopo-local pelo executor')
   retirarEscopoLocal(
     @Param('usuario') u: string,
     @Param('local') l: string,
@@ -331,31 +337,31 @@ export class CadastroEstoqueController {
   @Post('usuarios/:usuario/classificacoes')
   @HttpCode(201)
   @Permissao('acesso.escopo.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.concederClassificacao pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.conceder-classificacao pelo executor')
   concederClassificacao(@Param('usuario') u: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.porta.concederClassificacao(
       sessaoDe(req).porta,
       idDaRota(u, 'usuario'),
-      corpo(esquemaClassificacao, b),
+      semIndefinidos(corpo(esquemaClassificacao, b)),
     );
   }
 
   @Post('usuarios/:usuario/centros-custo')
   @HttpCode(201)
   @Permissao('acesso.escopo.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.concederCentroCusto pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.conceder-centro-custo pelo executor')
   concederCentro(@Param('usuario') u: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.porta.concederCentroCusto(
       sessaoDe(req).porta,
       idDaRota(u, 'usuario'),
-      corpo(esquemaCentro, b),
+      semIndefinidos(corpo(esquemaCentro, b)),
     );
   }
 
   @Post('concessoes/:tipo/:id/retirar')
   @HttpCode(200)
   @Permissao('acesso.escopo.editar')
-  @AuditadoNoHandler('suprimentos.cadastro.retirarConcessao pelo executor')
+  @AuditadoNoHandler('suprimentos.cadastro.retirar-concessao pelo executor')
   retirarConcessao(
     @Param('tipo') tipo: string,
     @Param('id') v: string,

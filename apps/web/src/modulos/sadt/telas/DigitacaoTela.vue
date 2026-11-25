@@ -3,13 +3,15 @@
 // digitar do setor; ao abrir um, os elementos com a referência vigente no dia do exame (regra 5), a faixa crítica e o
 // valor fora da referência destacados enquanto se digita (o servidor decide e confere de novo). Resultado liberado não
 // muda aqui: só a retificação, na liberação. A importação de equipamento é do marco das interfaces (DP-17).
-import { foraDaReferencia } from '@sgh/dominio-sadt';
+// A gravação vai pelo exame pedido ao banco do cliente; o valor crítico abre o aviso na própria gravação e a tela diz.
+import { calcularAnalitos, foraDaReferencia } from '@sgh/dominio-sadt';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { lerDigitacao, listarExamesSadt, novaChave, registrarResultado } from '../api-sadt.js';
+import { digitarResultado } from '../api-resultado.js';
+import { lerDigitacao, listarExamesSadt, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
 import PacienteSadt from '../componentes/PacienteSadt.vue';
@@ -60,9 +62,59 @@ const numero = (v: string): number | null => {
   const n = Number(v.replace(',', '.'));
   return v.trim() !== '' && Number.isFinite(n) ? n : null;
 };
+// Analitos calculados (05-SADT linha 3): a conta é refeita pela regra do domínio enquanto se digita (o servidor
+// calcula de novo ao gravar). Sem conta possível, a tela diz o que falta em vez de mostrar zero.
+const calculos = computed(() => {
+  const f = ficha.data.value;
+  const comFormula = (f?.elementos ?? []).filter((e) => e.calculo);
+  if (!f || !comFormula.length) return new Map<number, { ok: boolean; valor?: number; motivo?: string }>();
+  return calcularAnalitos({
+    formulas: comFormula.map((e) => ({
+      analito: e.codigo,
+      expressao: e.calculo?.expressao ?? '',
+      casas: e.calculo?.casas ?? null,
+      variaveis: (e.calculo?.variaveis ?? []).map((v) => ({
+        id: v.codigo,
+        identificador: v.identificador,
+        descricao: v.identificador,
+        fonte: v.fonte,
+        analito: v.analito,
+        dadoPaciente: v.dadoPaciente,
+      })),
+    })),
+    valores: new Map(f.elementos.map((e) => [e.codigo, numero(valores.value[e.codigo] ?? '')])),
+    digitadas: Object.fromEntries(
+      Object.entries(variaveis.value).map(([k, v]) => [Number(k), numero(v ?? '')]),
+    ),
+    paciente: { idade: f.idadePaciente ?? null },
+  }) as Map<number, { ok: boolean; valor?: number; motivo?: string }>;
+});
+const valorCalculado = (codigo: number): number | null => {
+  const c = calculos.value.get(codigo);
+  return c?.ok && c.valor !== undefined ? c.valor : null;
+};
+const opcoesResposta = (rs: readonly { codigo: number; texto: string }[]) => [
+  { valor: '', rotulo: t('sadt.digitacao.escolha') },
+  ...rs.map((r) => ({ valor: r.texto, rotulo: r.texto })),
+];
+const textoEscolhido = ref<number | ''>('');
+const opcoesTexto = computed(() => [
+  { valor: '' as number | '', rotulo: t('sadt.digitacao.escolha') },
+  ...(ficha.data.value?.textosPadrao ?? []).map((x) => ({
+    valor: x.codigo as number | '',
+    rotulo: x.mnemonico ? `${x.descricao} · ${x.mnemonico}` : x.descricao,
+  })),
+]);
+/** O texto padrão escolhido entra na observação (sem repetir o que já está lá). */
+function inserirTexto(codigo: number | '' | null): void {
+  const x = ficha.data.value?.textosPadrao?.find((y) => y.codigo === codigo);
+  if (x && !observacao.value.includes(x.texto))
+    observacao.value = [observacao.value.trim(), x.texto].filter(Boolean).join(' ');
+  textoEscolhido.value = '';
+}
 function marca(codigo: number): 'abaixo' | 'acima' | 'critico' | null {
   const e = ficha.data.value?.elementos.find((x) => x.codigo === codigo);
-  const n = numero(valores.value[codigo] ?? '');
+  const n = e?.calculo ? valorCalculado(codigo) : numero(valores.value[codigo] ?? '');
   if (!e || n === null) return null;
   if (
     e.critico &&
@@ -83,23 +135,23 @@ async function gravar(): Promise<void> {
   ocupado.value = true;
   try {
     const elementos = f.elementos
-      .filter((e) => !e.titulo && (valores.value[e.codigo] ?? '').trim() !== '')
+      .filter((e) => !e.titulo && !e.calculo && (valores.value[e.codigo] ?? '').trim() !== '')
       .map((e) => {
         const v = valores.value[e.codigo] ?? '';
         const n = e.numerico ? numero(v) : null;
-        return { elemento: e.codigo, numerico: n, alfa: n === null ? v.trim() : null, absoluta: null };
+        return { elemento: e.codigo, numerico: n, alfa: n === null ? v.trim() : null };
       });
-    const r = await registrarResultado(
-      f.exame.id,
+    const r = await digitarResultado(
+      f.exame,
       {
-        versao: f.exame.versao,
         elementos,
-        observacoes: observacao.value.trim() ? [observacao.value.trim()] : [],
+        observacao: observacao.value.trim(),
         variaveis: variaveisDigitadas(variaveis.value),
       },
       novaChave('digitar'),
     );
-    mensagem.value = r.mensagem;
+    mensagem.value =
+      r.mensagem ?? t(r.gravado?.critico ? 'sadt.digitacao.gravadoCritico' : 'sadt.digitacao.gravado');
     await cliente.invalidateQueries({ queryKey: ['sadt'] });
   } catch (x) {
     erro.value = x;
@@ -196,14 +248,36 @@ async function gravar(): Promise<void> {
               <label :for="`elemento-${e.codigo}`">{{ e.nome }}</label>
             </td>
             <td>
+              <output
+                v-if="e.calculo"
+                :id="`elemento-${e.codigo}`"
+                :aria-describedby="`marca-${e.codigo}`"
+                :data-testid="`digitacao-calculado-${e.codigo}`"
+                :title="t('sadt.digitacao.calculado', { formula: e.calculo.expressao })"
+              >
+                {{ valorCalculado(e.codigo) ?? calculos.get(e.codigo)?.motivo ?? '—' }}
+              </output>
               <input
-                v-if="!e.titulo"
+                v-else-if="!e.titulo"
                 :id="`elemento-${e.codigo}`"
                 v-model="valores[e.codigo]"
                 :inputmode="e.numerico ? 'decimal' : 'text'"
                 :disabled="ficha.data.value.bloqueado"
                 :aria-describedby="`marca-${e.codigo}`"
                 :data-testid="`digitacao-valor-${e.codigo}`"
+              />
+              <SanteSelecao
+                v-if="!e.calculo && !e.titulo && e.respostasPadrao.length && !ficha.data.value.bloqueado"
+                :model-value="
+                  e.respostasPadrao.some((r) => r.texto === valores[e.codigo])
+                    ? (valores[e.codigo] ?? '')
+                    : ''
+                "
+                :rotulo="`${t('sadt.digitacao.respostaPadrao')}: ${e.nome}`"
+                ocultar-rotulo
+                :opcoes="opcoesResposta(e.respostasPadrao)"
+                :data-testid="`digitacao-resposta-${e.codigo}`"
+                @update:model-value="(v: string | number | null) => (valores[e.codigo] = String(v ?? ''))"
               />
               <span :id="`marca-${e.codigo}`" class="secundario" :data-testid="`digitacao-marca-${e.codigo}`">
                 <template v-if="marca(e.codigo) === 'critico'">
@@ -232,6 +306,14 @@ async function gravar(): Promise<void> {
         :variaveis="ficha.data.value.variaveis"
         :bloqueado="ficha.data.value.bloqueado"
         prefixo="digitacao"
+      />
+      <SanteSelecao
+        v-if="ficha.data.value.textosPadrao?.length && !ficha.data.value.bloqueado"
+        :model-value="textoEscolhido"
+        :rotulo="t('sadt.digitacao.textoPadrao')"
+        :opcoes="opcoesTexto"
+        data-testid="digitacao-texto-padrao"
+        @update:model-value="inserirTexto"
       />
       <span class="campo">
         <label for="digitacao-obs">{{ t('sadt.observacao') }}</label>

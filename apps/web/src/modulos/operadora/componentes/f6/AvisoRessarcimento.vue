@@ -132,6 +132,6 @@ const opcoesOperadora = computed(() =>
   gap: 0.75rem;
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 </style>

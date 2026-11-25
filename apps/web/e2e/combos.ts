@@ -76,3 +76,11 @@ export async function esperarOpcoes(campo: Locator, quantas: number | null): Pro
   if (quantas === null) await expect.poll(contar).toBeGreaterThan(0);
   else await expect.poll(contar).toBe(quantas);
 }
+
+/**
+ * Nenhum <select> nativo na área (ADR 0027): todo combo da tela é o SanteSelecao. O portão `combos` garante
+ * isso no código-fonte; aqui se confere a tela montada (componente de terceiro também não pode trazer um).
+ */
+export async function esperarSemSelectNativo(area: Locator): Promise<void> {
+  await expect(area.locator('select')).toHaveCount(0);
+}

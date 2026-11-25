@@ -47,7 +47,6 @@ describe.skipIf(SEM_BANCO)('lista nominal de usuários por agenda (porta própri
       est,
     );
     await e.executar('DELETE FROM marcacao_horario WHERE estabelecimento_id = ?', est);
-    await e.executar('UPDATE horario_agenda SET bloqueio_agenda_id = NULL WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM horario_agenda WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM bloqueio_agenda WHERE estabelecimento_id = ?', est);
     await e.executar(

@@ -26,6 +26,13 @@ export const rotasAdministracao: RouteRecordRaw[] = [
     meta: { permissao: PERMISSOES_M59_CODIGOS.contaBancoLer },
   },
   {
+    // 01-ADM L59: dar a uma conta existente o acesso a este estabelecimento, ou encerrá-lo (abre da ficha).
+    path: '/administracao/acesso/vinculo-conta',
+    name: 'adm.vinculoConta',
+    component: () => import('./telas/VinculoContaTela.vue'),
+    meta: { permissao: C.usuarioLer },
+  },
+  {
     path: '/administracao/acesso/usuarios/:login',
     name: 'adm.usuario',
     component: () => import('./telas/FichaUsuarioTela.vue'),

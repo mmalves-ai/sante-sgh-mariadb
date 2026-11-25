@@ -1,4 +1,6 @@
 // Gasto de sala do ato cirúrgico (F3.4, 04-CC linha 100). Rotas (porta própria; sem banco do cliente, 503):
+//   GET  /api/cirurgia/gasto-sala/apoio?busca=               locais de estoque e produtos ativos (busca 3+ letras)
+//   GET  /api/cirurgia/gasto-sala/lotes?insumo=&local=         lotes liberados na validade, com o saldo no local
 //   GET  /api/cirurgia/gasto-sala/lista?procedimento=          lista padrão de material (com as linhas fora de uso)
 //   POST /api/cirurgia/gasto-sala/lista                        inclui a linha (produto ou kit)
 //   POST /api/cirurgia/gasto-sala/lista/:id                    { versao, ativo?, quantidade?, obrigatorio? } (nada apagado)
@@ -64,6 +66,20 @@ export class GastoSalaController {
     return fn(this.porta, s.porta).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
+  }
+
+  @Get('apoio')
+  @Permissao(PERMISSOES_GASTO_SALA.ler)
+  apoio(@Req() req: RequisicaoAutorizada, @Query('busca') busca?: string) {
+    return this.com(req, (p, c) => p.apoio(c, busca ?? null));
+  }
+
+  @Get('lotes')
+  @Permissao(PERMISSOES_GASTO_SALA.ler)
+  lotes(@Req() req: RequisicaoAutorizada, @Query('insumo') insumo?: string, @Query('local') local?: string) {
+    const i = idOuNulo(insumo);
+    if (i === null) throw new ErroProblema('entrada-invalida', 400, 'Informe o produto');
+    return this.com(req, async (p, c) => ({ itens: await p.lotes(c, i, idOuNulo(local)) }));
   }
 
   @Get('lista')

@@ -2,6 +2,7 @@
 // Origem e indicação do paciente (F3.1, 02-CAD linha 12): de onde veio e quem indicou, na ficha. As exigências de quem
 // indicou vêm do tipo de indicação que o hospital mantém (pede o profissional, pede o complemento); o canal é só o meio de
 // chegada e a campanha pede o nome. O servidor confere de novo pela mesma regra do domínio.
+import { SanteSelecao } from '@sgh/ui';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
@@ -66,25 +67,27 @@ void carregar();
     <p v-if="itens.length === 0">{{ t('vinculos.captacao.nenhuma') }}</p>
     <ul v-else>
       <li v-for="i in itens" :key="i.id">
-        {{ `${i.captadoEm.slice(0, 10)} — ${canal(i.canal)} — ${i.tipoIndicacao.descricao}` }}
-        <template v-if="i.indicador">{{ `: ${i.indicador}` }}</template>
-        <template v-if="i.campanha">{{ ` (${i.campanha})` }}</template>
+        {{
+          `${i.captadoEm.slice(0, 10)} — ${canal(i.canal)} — ${i.tipoIndicacao.descricao}` +
+          (i.indicador ? `: ${i.indicador}` : '') +
+          (i.campanha ? ` (${i.campanha})` : '')
+        }}
       </li>
     </ul>
     <form v-if="podeEditar && opcoes" data-testid="nova-captacao" @submit.prevent="registrar">
-      <label
-        >{{ t('vinculos.captacao.canal') }}
-        <select v-model="f.canal">
-          <option v-for="c in opcoes.canais" :key="c" :value="c">{{ canal(c) }}</option>
-        </select>
-      </label>
-      <label
-        >{{ t('vinculos.captacao.tipo') }}
-        <select v-model.number="f.tipoIndicacao">
-          <option :value="0" disabled>{{ t('vinculos.comum.escolha') }}</option>
-          <option v-for="x in opcoes.tiposIndicacao" :key="x.id" :value="x.id">{{ x.descricao }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="f.canal"
+        :rotulo="t('vinculos.captacao.canal')"
+        :opcoes="opcoes.canais.map((c) => ({ valor: c, rotulo: canal(c) }))"
+      />
+      <SanteSelecao
+        v-model="f.tipoIndicacao"
+        :rotulo="t('vinculos.captacao.tipo')"
+        :opcoes="[
+          { valor: 0, rotulo: t('vinculos.comum.escolha'), desabilitada: true },
+          ...opcoes.tiposIndicacao.map((x) => ({ valor: x.id, rotulo: x.descricao })),
+        ]"
+      />
       <label v-if="tipo?.exigeProfissional"
         >{{ t('vinculos.captacao.profissional') }}
         <input v-model.number="f.indicadorProfissional" type="number" min="1"

@@ -18,7 +18,8 @@ import { idBanco } from '../validacao/id-banco.js';
 
 const id = idBanco;
 const smallint = z.number().int().positive().max(32_767);
-const local = z.number().int().min(1).max(99);
+// O local é o id do banco próprio (BIGINT), sem o teto de dois dígitos do código antigo.
+const local = id;
 const quantidade = z
   .number()
   .positive('A quantidade tem de ser maior que zero.')
@@ -99,9 +100,12 @@ export const esquemaRequisitarMaterial = z
     centroCusto: id,
     localConsumo: smallint,
     atendimento: id.optional(),
+    /** Requisição urgente (o local que só atende urgência recusa a comum). */
+    urgente: z.boolean().optional(),
     observacao: livre(60).optional(),
+    /** `kit`: o kit padrão de onde a linha veio (o item tem de fazer parte dele); fica gravado na linha. */
     itens: z
-      .array(z.object({ item: id, quantidade }).strict())
+      .array(z.object({ item: id, quantidade, kit: id.optional() }).strict())
       .min(1, 'Inclua ao menos um item.')
       .max(200),
   })

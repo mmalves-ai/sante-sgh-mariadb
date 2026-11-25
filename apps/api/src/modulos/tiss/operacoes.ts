@@ -36,6 +36,7 @@ import {
   normalizarProtocolo,
   VERSAO_TISS_VIGENTE,
   conferirReaberturaCompetencia,
+  recusaObrigatoriosPendentes,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -49,6 +50,10 @@ import {
 } from '@sgh/nucleo';
 import { civil } from '../exames/relogio.js';
 import { versaoNumero } from '../faturamento/esquemas.js';
+import {
+  carteiraDoSeguradoDaConta,
+  obrigatoriosPendentesDaConta,
+} from '../faturamento/conta-complementos-propria.js';
 import {
   caraterTiss,
   codigosDaInternacao,
@@ -72,6 +77,8 @@ import {
 import { operacoesGlosa } from './operacoes-glosa.js';
 // F3.7 (06-FAT linhas 29 a 31): regra de apresentação, valor padrão, credenciamento e fatura ao pagador no lote.
 import { apresentarLote, gravarFaturaDoLote, protocolarFaturaDoLote } from './apresentacao-propria.js';
+// F3.1 (02-CAD linha 25): o número da guia sai da faixa da operadora e a guia emitida fica gravada com o lote.
+import { gravarGuiasDoLote, numerarGuiasDoLote, TABELAS_NUMERACAO_GUIA } from './numeracao-guia.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -122,7 +129,10 @@ const SQL_PROFISSIONAL = `
    WHERE p.id = ? AND p.excluido_em IS NULL
    ORDER BY ic.principal DESC, ic.sequencia`;
 
-/** Guia TISS mais recente da conta para o tipo (quando o faturamento já a montou), com os códigos da TISS. */
+/**
+ * Guia TISS mais recente da conta para o tipo e a fonte pagadora da conta (quando o faturamento já a montou), com os
+ * códigos da TISS. A guia de outra fonte pagadora (conta que trocou de convênio) não vale para esta apresentação.
+ */
 const SQL_GUIA_DA_CONTA = `
   SELECT g.id, g.numero_guia_prestador, g.numero_guia_operadora, g.atendimento_recem_nascido, g.senha,
          g.data_autorizacao, g.executante_profissional_id, g.solicitante_profissional_id, g.tipo_faturamento,
@@ -135,7 +145,8 @@ const SQL_GUIA_DA_CONTA = `
     LEFT JOIN termo_terminologia me ON me.id = g.motivo_encerramento_termo_terminologia_id
     LEFT JOIN termo_terminologia tc ON tc.id = g.tipo_consulta_termo_terminologia_id
     LEFT JOIN termo_terminologia ta ON ta.id = g.tipo_atendimento_termo_terminologia_id
-   WHERE g.conta_hospitalar_id = ? AND g.tipo_guia = ? AND g.excluido_em IS NULL AND g.situacao <> 'cancelada'
+   WHERE g.conta_hospitalar_id = ? AND g.tipo_guia = ? AND g.fonte_pagadora_id = ? AND g.excluido_em IS NULL
+     AND g.situacao <> 'cancelada'
    ORDER BY g.id DESC LIMIT 1`;
 
 /** Tipo de guia do lote → tipo da guia TISS montada (guia_tiss.tipo_guia). */
@@ -237,18 +248,26 @@ async function contaTiss(
       WHERE a.id = ? AND a.excluido_em IS NULL`,
     [ct['atendimento_id']],
   );
-  const guia = await tx.uma<Linha>(SQL_GUIA_DA_CONTA, [n(ct['id']), TIPO_GUIA_TISS[tipoGuia]]);
+  const guia = await tx.uma<Linha>(SQL_GUIA_DA_CONTA, [
+    n(ct['id']),
+    TIPO_GUIA_TISS[tipoGuia],
+    n(ct['fonte_pagadora_id']),
+  ]);
   const autorizacao = ct['guia_fonte_pagadora_id']
     ? await tx.uma<Linha>(
         'SELECT numero_guia_operadora, data_autorizacao, senha FROM guia_fonte_pagadora WHERE id = ? AND excluido_em IS NULL',
         [ct['guia_fonte_pagadora_id']],
       )
     : null;
-  const carteira = ct['cobertura_paciente_id']
-    ? await tx.uma<Linha>('SELECT numero_carteira FROM cobertura_paciente WHERE id = ?', [
-        ct['cobertura_paciente_id'],
-      ])
-    : null;
+  // A carteira do segurado gravada na conta (06-FAT linha 12) vale sobre a da cobertura do paciente.
+  const seguradoConta = await carteiraDoSeguradoDaConta(tx, n(ct['id']));
+  const carteira = seguradoConta
+    ? { numero_carteira: seguradoConta }
+    : ct['cobertura_paciente_id']
+      ? await tx.uma<Linha>('SELECT numero_carteira FROM cobertura_paciente WHERE id = ?', [
+          ct['cobertura_paciente_id'],
+        ])
+      : null;
 
   const faltas: string[] = [];
   const executante = await executanteDaConta(
@@ -388,6 +407,7 @@ function gerarLote(montador: MontadorLoteTiss | null) {
       'sequencia_negocio',
       'fatura_fonte_pagadora',
       'fatura_fonte_pagadora_conta',
+      ...TABELAS_NUMERACAO_GUIA,
     ],
     entrada: esquemaGerarLote,
     async gravar(tx, e, ctx) {
@@ -435,6 +455,12 @@ function gerarLote(montador: MontadorLoteTiss | null) {
           e,
         );
         if (r) throw recusa(r.codigo, r.mensagem);
+        // Campo obrigatório da operadora sem valor na guia (06-FAT linha 10): a conta não vai ao lote.
+        const pend = recusaObrigatoriosPendentes(
+          texto(ct['numero']) || String(it.id),
+          await obrigatoriosPendentesDaConta(tx, est, it.id, TIPO_GUIA_TISS[tipoGuia]),
+        );
+        if (pend) throw recusa(pend.codigo, pend.mensagem);
         contas.push(ct);
       }
       const cfg = await tx.uma<Linha>(
@@ -475,8 +501,17 @@ function gerarLote(montador: MontadorLoteTiss | null) {
       }
       const hoje = civil(new Date(), await fusoDe(tx, est)).data;
       const ap = await apresentarLote(tx, est, e.convenio, tipoGuia, lidas, hoje);
-      montadas.push(...ap.montadas);
-      avisos.push(...ap.avisos);
+      // Só a guia que vai ao arquivo consome número da faixa da operadora (a omitida não gasta número).
+      const numerado = await numerarGuiasDoLote(
+        tx,
+        est,
+        e.convenio,
+        TIPO_GUIA_TISS[tipoGuia],
+        ap.montadas,
+        hoje,
+      );
+      montadas.push(...numerado.montadas);
+      avisos.push(...ap.avisos, ...numerado.avisos);
       const prestador = {
         registroAns: texto(ap.registroAns ?? cfg['registro_ans'] ?? cfg['registro_fonte']).replace(/\D/g, ''),
         codigoPrestador: texto(ap.codigoPrestador ?? cfg['codigo_prestador_operadora']).trim(),
@@ -551,6 +586,17 @@ function gerarLote(montador: MontadorLoteTiss | null) {
         });
         await tx.alterar('conta_hospitalar', n(ct['id']), n(ct['versao']), { situacao: 'faturada' });
       }
+      await gravarGuiasDoLote(tx, {
+        estabelecimento: est,
+        fonte: e.convenio,
+        tipoGuia: TIPO_GUIA_TISS[tipoGuia],
+        lote,
+        hoje,
+        agora: new Date(),
+        usuario: ctx.usuario ?? null,
+        numerado,
+        valores: ap.valores,
+      });
       const fatura = await gravarFaturaDoLote(tx, est, {
         fonte: e.convenio,
         lote,
@@ -625,6 +671,8 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
       const dados = {
         recebido_em: e.data ? new Date(`${e.data}T12:00:00Z`) : new Date(),
         situacao,
+        // O recibo do comprovante de entrega (06-FAT linha 31): vazio fica sem recibo, nunca texto inventado.
+        recibo: e.recibo.trim() || null,
         valor_protocolo: n(l['valor_total']),
         quantidade_guias: n(l['quantidade_guias']),
       };
@@ -681,7 +729,7 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
     };
   },
   alvo: (e) => ({ tabela: 'lote_tiss', id: e.lote }),
-  // O recibo do comprovante vai na trilha (o modelo do protocolo ainda não tem a coluna: pedido do lote 03-16).
+  // O recibo vai também à trilha (o registro do protocolo guarda o recibo vigente).
   trilha: (e) => ({ dados: { recibo: e.recibo, data: e.data, situacao: e.situacao } }),
 });
 

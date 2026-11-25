@@ -128,6 +128,30 @@ export const PERMISSOES_FATURAMENTO_M30: readonly DeclaracaoPermissao[] = [
     categoria: 'administrativa',
     criticidade: 'normal',
   },
+  // Autorização prévia à operadora (06-FAT L25 e L27): pedido, envio, andamento e resposta, ligados pelo cargo.
+  ...(
+    [
+      [
+        'faturamento.autorizacao.ler',
+        'Consultar os pedidos de autorização prévia do paciente e as respostas da operadora',
+      ],
+      [
+        'faturamento.autorizacao.solicitar',
+        'Montar, enviar, cancelar e consultar o andamento do pedido de autorização prévia',
+      ],
+      [
+        'faturamento.autorizacao.responder',
+        'Registrar a resposta da operadora ao pedido de autorização (senha, itens e valores)',
+      ],
+    ] as const
+  ).map(([codigo, descricao]): DeclaracaoPermissao => ({
+    codigo,
+    descricao,
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'financeira',
+    criticidade: 'normal',
+  })),
 ];
 
 /** Os códigos (para as rotas e os testes). */

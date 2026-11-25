@@ -34,6 +34,8 @@ export type DetalheGravavel =
       readonly velocidade: number | null;
       readonly unidadeInfusao: number | null;
       readonly caracteristicas: readonly { readonly caracteristica: number; readonly resposta: string }[];
+      /** Composição por refeição (alimento e quantidade em cada refeição do dia; 03-PEP L112). */
+      readonly refeicoes?: readonly RefeicaoDietaGravavel[];
     }
   | {
       readonly tipo: 'solucao';
@@ -84,6 +86,11 @@ export type RecusaItemGravavel =
   | 'dieta-velocidade-sem-unidade'
   | 'dieta-velocidade-indevida'
   | 'dieta-caracteristica-repetida'
+  | 'dieta-refeicao-indevida'
+  | 'dieta-refeicao-repetida'
+  | 'dieta-refeicao-medida-caseira'
+  | 'dieta-refeicao-substituto-invalido'
+  | 'dieta-refeicao-percentual-acima'
   | 'solucao-sem-principal'
   | 'solucao-etapa-repetida'
   | 'solucao-componente-sem-etapa'
@@ -116,6 +123,13 @@ export const MENSAGENS_ITEM_GRAVAVEL: Readonly<Record<RecusaItemGravavel, string
   'dieta-velocidade-sem-unidade': 'Informe a unidade da velocidade de infusão da dieta.',
   'dieta-velocidade-indevida': 'Só a dieta enteral tem velocidade de infusão.',
   'dieta-caracteristica-repetida': 'A mesma característica da dieta foi informada duas vezes.',
+  'dieta-refeicao-indevida': 'Jejum e dieta enteral não têm composição por refeição.',
+  'dieta-refeicao-repetida': 'O mesmo alimento foi informado duas vezes na mesma refeição.',
+  'dieta-refeicao-medida-caseira':
+    'A medida caseira e a quantidade dela vão juntas, com a quantidade maior que zero.',
+  'dieta-refeicao-substituto-invalido':
+    'O substituto aponta para um alimento anterior da mesma refeição que não é ele próprio substituto.',
+  'dieta-refeicao-percentual-acima': 'A soma da parte das calorias do dia nas refeições passa de 100%.',
   'solucao-sem-principal': 'A solução precisa de um componente principal (a base, como o soro).',
   'solucao-etapa-repetida': 'O número da etapa da solução se repete.',
   'solucao-componente-sem-etapa': 'Há componente ligado a uma etapa que não foi descrita.',
@@ -140,6 +154,51 @@ export const MENSAGENS_ITEM_GRAVAVEL: Readonly<Record<RecusaItemGravavel, string
 };
 
 const repetido = (xs: readonly number[]) => new Set(xs).size !== xs.length;
+
+/** Um alimento numa refeição do dia; `substitui` é a posição (1..n) do alimento anterior que ele pode trocar. */
+export interface RefeicaoDietaGravavel {
+  readonly refeicao: number;
+  readonly alimento: number;
+  readonly quantidade: number;
+  readonly medidaCaseira: number | null;
+  readonly quantidadeMedidaCaseira: number | null;
+  readonly substitui: number | null;
+  readonly percentualDiario: number | null;
+}
+
+/**
+ * Composição da dieta por refeição (03-PEP L112): só a dieta oral e a livre têm refeições; quantidade positiva; o
+ * mesmo alimento não se repete na refeição (o substituto é a alternativa declarada, apontando um alimento anterior da
+ * mesma refeição que não é ele próprio substituto); medida caseira com a quantidade dela; parte das calorias do dia
+ * somando até 100% (os substitutos não somam: trocam o titular).
+ */
+export function conferirRefeicoesDieta(
+  classe: ClasseDieta,
+  refeicoes: readonly RefeicaoDietaGravavel[],
+): RecusaItemGravavel | null {
+  if (refeicoes.length === 0) return null;
+  if (classe === 'jejum' || classe === 'enteral') return 'dieta-refeicao-indevida';
+  const titulares = new Set<string>();
+  let percentual = 0;
+  for (const [i, r] of refeicoes.entries()) {
+    if (!(r.quantidade > 0)) return 'dieta-quantidade-invalida';
+    if ((r.medidaCaseira === null) !== (r.quantidadeMedidaCaseira === null))
+      return 'dieta-refeicao-medida-caseira';
+    if (r.quantidadeMedidaCaseira !== null && !(r.quantidadeMedidaCaseira > 0))
+      return 'dieta-refeicao-medida-caseira';
+    if (r.substitui !== null) {
+      const alvo = r.substitui >= 1 && r.substitui <= i ? refeicoes[r.substitui - 1] : undefined;
+      if (!alvo || alvo.substitui !== null || alvo.refeicao !== r.refeicao || alvo.alimento === r.alimento)
+        return 'dieta-refeicao-substituto-invalido';
+      continue;
+    }
+    const chave = `${r.refeicao}:${r.alimento}`;
+    if (titulares.has(chave)) return 'dieta-refeicao-repetida';
+    titulares.add(chave);
+    percentual += r.percentualDiario ?? 0;
+  }
+  return percentual > 100 + 1e-9 ? 'dieta-refeicao-percentual-acima' : null;
+}
 const fio2Ok = (f: number | null) => f === null || (f >= 21 && f <= 100);
 /** Valor opcional: nulo passa; informado tem de estar na faixa. */
 const faixa = (v: number | null, min: number, max: number) => v === null || (v >= min && v <= max);
@@ -219,7 +278,7 @@ export function conferirItemGravavel(
       if (x.velocidade !== null && x.classe !== 'enteral') return 'dieta-velocidade-indevida';
       if (x.velocidade !== null && x.unidadeInfusao === null) return 'dieta-velocidade-sem-unidade';
       if (repetido(x.caracteristicas.map((k) => k.caracteristica))) return 'dieta-caracteristica-repetida';
-      return null;
+      return conferirRefeicoesDieta(x.classe, x.refeicoes ?? []);
     }
     case 'solucao':
       return conferirSolucao(d as Extract<DetalheGravavel, { tipo: 'solucao' }>, c);

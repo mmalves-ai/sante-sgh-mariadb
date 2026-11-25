@@ -6,11 +6,14 @@
 // marcados e os obrigatórios num só clique, cada um com as cópias da regra; os sob demanda podem ser marcados; o
 // obrigatório ainda não emitido fica em aviso.
 import { MOMENTOS_DOCUMENTO_INTERNACAO, obrigatoriosPendentes } from '@sgh/dominio-internacao';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { rotaDoSubitem } from '@sgh/contratos';
+import IdentificacaoImpressa, {
+  type PedidoIdentificacao,
+} from '../../atendimento/componentes/IdentificacaoImpressa.vue';
 import { blobDoPdf } from '../../atendimento/regras-tela.js';
 import { emitirImpresso, novaChave } from '../api-adt.js';
 import { emitirDocumento, lerFichasDoMomento } from '../api-documentos-internacao.js';
@@ -28,7 +31,16 @@ const IMPRESSOS = [
   { codigo: 'etiqueta', formato: 'zpl' },
 ] as const;
 const copias = ref<Record<string, number>>({ ficha: 1, pulseira: 1, etiqueta: 1 });
+// Pulseira e etiqueta (01-ADM L79): já impressa, só sai de novo com o motivo; a situação é relida a cada emissão.
+const identificacao = ref<Record<string, PedidoIdentificacao>>({});
+const emissoes = ref(0);
 const momento = ref<string>('admissao');
+const opMomentos = computed(() =>
+  MOMENTOS_DOCUMENTO_INTERNACAO.map((m) => ({
+    valor: m as string,
+    rotulo: t(`adt.documentos.momentos.${m}`),
+  })),
+);
 const fichas = useQuery({
   queryKey: computed(() => ['adt', 'fichas', reg.value, momento.value]),
   queryFn: () => lerFichasDoMomento(reg.value, momento.value),
@@ -102,7 +114,12 @@ async function emitir(
       reg.value,
       modelo
         ? { impresso: 'ficha', formato: 'pdf', copias: modelo.copias, modelo: modelo.modelo }
-        : { impresso: codigo, formato, copias: copias.value[codigo] ?? 1 },
+        : {
+            impresso: codigo,
+            formato,
+            copias: copias.value[codigo] ?? 1,
+            ...(identificacao.value[codigo]?.corpo ?? {}),
+          },
       novaChave(`imp-${codigo}`),
     );
     if (r.formato === 'pdf') {
@@ -111,6 +128,7 @@ async function emitir(
       mensagem.value = t('adt.impressos.pdfPronto');
       window.open(pdf.value, '_blank', 'noopener');
     } else mensagem.value = t('adt.impressos.enviado');
+    if (!modelo && codigo !== 'ficha') emissoes.value += 1;
   } catch (x) {
     erro.value = x;
   } finally {
@@ -144,21 +162,29 @@ const configuracao = rotaDoSubitem('internacao');
             max="10"
           />
           <SanteBotao
-            :rotulo="t('adt.impressos.emitir')"
-            :desabilitado="ocupado"
+            :rotulo="identificacao[i.codigo]?.rotulo ?? t('adt.impressos.emitir')"
+            :desabilitado="ocupado || identificacao[i.codigo]?.pronto === false"
             :data-testid="`imp-${i.codigo}`"
             @acionar="emitir(i.codigo, i.formato)"
+          />
+          <IdentificacaoImpressa
+            v-if="i.codigo !== 'ficha'"
+            alvo="internacao"
+            :id="reg"
+            :tipo="i.codigo"
+            :recarregar="emissoes"
+            @mudou="(p: PedidoIdentificacao) => (identificacao[i.codigo] = p)"
           />
         </li>
       </ul>
       <section class="painel" aria-labelledby="imp-fichas">
         <h2 id="imp-fichas">{{ t('adt.impressos.configuradas') }}</h2>
-        <label for="imp-momento">{{ t('adt.impressos.momento') }}</label>
-        <select id="imp-momento" v-model="momento" data-testid="imp-momento">
-          <option v-for="m in MOMENTOS_DOCUMENTO_INTERNACAO" :key="m" :value="m">
-            {{ t(`adt.documentos.momentos.${m}`) }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="momento"
+          :rotulo="t('adt.impressos.momento')"
+          :opcoes="opMomentos"
+          data-testid="imp-momento"
+        />
         <ErroAdt v-if="fichas.isError.value" :erro="fichas.error.value" />
         <p v-else-if="fichas.data.value && fichas.data.value.fichas.length === 0">{{ t('adt.nenhum') }}</p>
         <ul v-else-if="fichas.data.value" class="lista-simples" data-testid="imp-fichas">

@@ -57,6 +57,7 @@ import {
   textoOuNulo,
   utcDoLocal,
 } from '../banco-apoio.js';
+import { lerFeriadosDoPeriodo } from '../../agenda/dias-sem-expediente-leitor.js';
 import type { CorrecaoRegistrada } from '../tipos-pessoas.js';
 import {
   type ContextoPonto,
@@ -898,23 +899,11 @@ export class PortaPontoPropria implements PortaPonto {
   }
 
   /**
-   * Feriados nacionais, do município do estabelecimento e do próprio estabelecimento. Pendência: os estaduais (a UF
-   * do estabelecimento pelo município), pedido do lote 03-09.
+   * Feriados do estabelecimento pelo calendário único (nacionais, da UF, do município e do próprio estabelecimento;
+   * o ponto facultativo e o meio expediente não são feriado para a apuração).
    */
   feriados(c: ContextoPonto, de: string, ate: string): Promise<FeriadoDoPeriodo[]> {
-    return this.ler(c, async (l, est) =>
-      (
-        await l.consultar(
-          `SELECT f.data, f.nome FROM feriado f
-            WHERE f.ativo AND f.excluido_em IS NULL AND f.data BETWEEN ? AND ?
-              AND (f.abrangencia = 'nacional' OR f.estabelecimento_id = ?
-                   OR (f.abrangencia = 'municipal'
-                       AND f.municipio_ibge_id = (SELECT municipio_ibge_id FROM estabelecimento WHERE id = ?)))
-            ORDER BY f.data, f.id`,
-          [de, ate, est, est],
-        )
-      ).map((r) => ({ data: dataIso(r['data']) ?? '', nome: texto(r['nome']) })),
-    );
+    return this.ler(c, (l, est) => lerFeriadosDoPeriodo(l, est, de, ate));
   }
 
   arquivos(c: ContextoPonto, f: FiltroArquivosRelogio): Promise<ArquivoRelogio[]> {

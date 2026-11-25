@@ -35,7 +35,6 @@ const uf = z
   .trim()
   .transform((x) => x.toUpperCase())
   .pipe(z.string().regex(/^[A-Z]{2}$/, 'UF com duas letras.'));
-const horas = z.number().int().min(0).max(744);
 
 /** Registro novo no conselho com a ocupação (CBO): a chave do registro (CBO, número e UF) não muda depois. */
 export const esquemaRegistroNovoProfissional = z
@@ -141,19 +140,6 @@ export const esquemaEspecialidadeProfissional = z
   .object({ registro: id, especialidade: smallint, ativo: z.boolean() })
   .strict();
 export type EspecialidadeProfissionalEntrada = z.infer<typeof esquemaEspecialidadeProfissional>;
-
-/** Lotação do registro numa unidade, com a carga horária (horas por mês; zero vale). */
-export const esquemaLotacaoProfissional = z
-  .object({
-    registro: id,
-    unidade: smallint,
-    horasAmbulatorio: horas,
-    horasHospital: horas,
-    horasOutros: horas,
-    ativo: z.boolean(),
-  })
-  .strict();
-export type LotacaoProfissionalEntrada = z.infer<typeof esquemaLotacaoProfissional>;
 
 /** Credenciar ou descredenciar o registro num convênio. */
 export const esquemaCredenciamentoProfissional = z

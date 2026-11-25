@@ -1,4 +1,4 @@
-// F3.5 (decisão "tudo ligado"): o SADT não tem chave de liberação por setor; vale só a permissão do cargo. Sem nenhuma
+// F3.5 (decisão "tudo ligado", ADR 0003): o SADT grava só com a permissão do cargo, sem chave de liberação. Sem nenhuma
 // configuração de funcionalidades, quem tem a permissão grava; quem não tem recebe o motivo do perfil.
 import { describe, expect, it } from 'vitest';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';

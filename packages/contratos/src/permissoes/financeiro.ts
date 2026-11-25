@@ -37,7 +37,8 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     'financeiro.tituloPagar.prorrogar',
     'Prorrogar o vencimento da parcela a pagar (motivo da lista; título já aprovado pede também a permissão de aprovar e outra pessoa que não quem lançou)',
 
-    { criticidade: 'sensivel' },
+    // Recurso novo, sem opção correspondente no menu de origem: concedido ao administrador do sistema.
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
   ),
   p(
     'financeiro.tituloPagar.aprovar',
@@ -201,6 +202,48 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     'Exportar o lote contábil (contagem e soma conferíveis)',
 
     { criticidade: 'sensivel' },
+  ),
+  // F8, 07-FIN linhas 70 e 79: recursos novos, sem opção correspondente no menu de origem: concedidos ao administrador
+  // do sistema e dados pelo cargo.
+  p(
+    'financeiro.notaCreditoDebito.ler',
+    'Consultar as notas de crédito e de débito (fornecedor e cliente) e as parcelas que elas podem ajustar',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p(
+    'financeiro.notaCreditoDebito.emitir',
+    'Emitir a nota de crédito ou de débito com tributos e aplicá-la à parcela (abate ou acresce)',
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p('financeiro.notaCreditoDebito.cancelar', 'Cancelar a nota com motivo, desfazendo o ajuste na parcela', {
+    criticidade: 'sensivel',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+  }),
+  p(
+    'financeiro.cessaoRecebivel.ler',
+    'Consultar os portadores e as operações de desconto e cessão de recebíveis',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p(
+    'financeiro.cessaoRecebivel.contratar',
+    'Contratar o desconto ou a cessão de recebíveis (crédito da face e despesas na conta)',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      ...CONTA,
+    },
+  ),
+  p(
+    'financeiro.cessaoRecebivel.desfecho',
+    'Registrar a liquidação pelo sacado, a recompra ou o cancelamento da operação de desconto ou cessão',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      ...CONTA,
+    },
   ),
   p(
     'financeiro.dado.mostrar',

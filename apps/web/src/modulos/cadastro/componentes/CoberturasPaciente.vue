@@ -3,6 +3,7 @@
 // de carteira vencida ou a vencer e a carteira que o atendimento vai propor. Incluir numa linha só (a primeira já nasce
 // principal), renovar a validade, marcar a principal e encerrar com motivo; nada é apagado. O servidor confere tudo de
 // novo (regra no domínio); aqui a validação na hora só evita o vaivém.
+import { SanteSelecao } from '@sgh/ui';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
@@ -158,20 +159,24 @@ void carregar();
         data-testid="nova-carteira"
         @submit.prevent="incluir"
       >
-        <label
-          >{{ t('vinculos.cobertura.fonte') }}
-          <select v-model.number="novo.fontePagadora" required>
-            <option :value="0" disabled>{{ t('vinculos.comum.escolha') }}</option>
-            <option v-for="f in opcoes.fontes" :key="f.id" :value="f.id">{{ f.nome }}</option>
-          </select>
-        </label>
-        <label v-if="planos.length"
-          >{{ t('vinculos.cobertura.plano') }}
-          <select v-model.number="novo.plano">
-            <option :value="0">{{ t('vinculos.cobertura.semPlano') }}</option>
-            <option v-for="p in planos" :key="p.id" :value="p.id">{{ p.descricao }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="novo.fontePagadora"
+          :rotulo="t('vinculos.cobertura.fonte')"
+          obrigatorio
+          :opcoes="[
+            { valor: 0, rotulo: t('vinculos.comum.escolha'), desabilitada: true },
+            ...opcoes.fontes.map((f) => ({ valor: f.id, rotulo: f.nome })),
+          ]"
+        />
+        <SanteSelecao
+          v-if="planos.length"
+          v-model="novo.plano"
+          :rotulo="t('vinculos.cobertura.plano')"
+          :opcoes="[
+            { valor: 0, rotulo: t('vinculos.cobertura.semPlano') },
+            ...planos.map((p) => ({ valor: p.id, rotulo: p.descricao })),
+          ]"
+        />
         <label v-if="!fonte?.particular"
           >{{ t('vinculos.cobertura.carteira') }} <input v-model="novo.numeroCarteira" maxlength="30"
         /></label>
@@ -184,13 +189,14 @@ void carregar();
           <label
             >{{ t('vinculos.cobertura.titular') }} <input v-model="novo.titularNome" maxlength="150"
           /></label>
-          <label
-            >{{ t('vinculos.cobertura.parentesco') }}
-            <select v-model.number="novo.parentesco">
-              <option :value="0" disabled>{{ t('vinculos.comum.escolha') }}</option>
-              <option v-for="p in opcoes.parentescos" :key="p.id" :value="p.id">{{ p.descricao }}</option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-model="novo.parentesco"
+            :rotulo="t('vinculos.cobertura.parentesco')"
+            :opcoes="[
+              { valor: 0, rotulo: t('vinculos.comum.escolha'), desabilitada: true },
+              ...opcoes.parentescos.map((p) => ({ valor: p.id, rotulo: p.descricao })),
+            ]"
+          />
         </template>
         <ul v-if="pendencias.length && novo.fontePagadora" class="pendencias">
           <li v-for="p in pendencias" :key="p">{{ p }}</li>

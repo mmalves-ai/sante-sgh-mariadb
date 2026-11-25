@@ -229,35 +229,6 @@ export class PortaPacsPropria implements PortaPacs {
     return this.sadt.examesPorId(c, ids);
   }
 
-  examesSemItem(c: ContextoPacs, f: { desde: string; ate: string; atos: readonly number[]; teto: number }) {
-    return this.ler(c, async (l, est) => {
-      const ls = await l.consultar(
-        `SELECT ei.id, DATE(r.solicitado_em) AS data, sd.tipo, m.sigla_padrao
-           FROM exame_item ei
-           JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
-           JOIN setor_diagnostico sd ON sd.id = COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id)
-           JOIN exame e ON e.id = ei.exame_id
-           LEFT JOIN modalidade_imagem m ON m.id = e.modalidade_imagem_id
-          WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND ei.excluido_em IS NULL
-            AND sd.tipo = 'imagem' AND ei.situacao NOT IN ('cancelado', 'recusado')
-            AND r.solicitado_em >= ? AND r.solicitado_em < DATE_ADD(?, INTERVAL 1 DAY)
-            AND NOT EXISTS (SELECT 1 FROM item_lista_trabalho_imagem i
-                             WHERE i.exame_item_id = ei.id AND i.excluido_em IS NULL)
-          ORDER BY r.solicitado_em, ei.id`,
-        [est, f.desde, f.ate],
-        { teto: 5000 },
-      );
-      const todos = ls
-        .map((x) => ({
-          exame: n(x['id']),
-          ato: atoDoExame(texto(x['tipo']), x['sigla_padrao'] === null ? null : texto(x['sigla_padrao'])),
-          data: instante(x['data']).slice(0, 10),
-        }))
-        .filter((x) => f.atos.includes(x.ato));
-      return { itens: todos.slice(0, f.teto), cortada: todos.length > f.teto };
-    });
-  }
-
   modalidades(c: ContextoPacs): Promise<ModalidadeLida[]> {
     // Catálogo DICOM da rede inteira (modalidade_imagem não tem estabelecimento).
     return this.ler(c, async (l) =>

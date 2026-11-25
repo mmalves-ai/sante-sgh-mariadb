@@ -8,6 +8,7 @@
 //   POST /api/pep/paciente/:p/documentos/:tipo/:id/imprimir       PDF/A (1ª via; 2ª via com motivo)
 //   POST /api/pep/paciente/:p/exportar                            prontuário completo (crítica, justificativa)
 //   GET|POST /api/pep/paciente/:p/alergias[/:id/inativar]         alergias (executor)
+//   GET  /api/pep/paciente/:p/alergias/:id/historico               linha do tempo e manifestações da alergia
 //   GET|POST /api/pep/paciente/:p/problemas[/:id/situacao]        lista de problemas (só do novo)
 //   GET|POST /api/pep/paciente/:p/exames                          pedidos de exame (executor), avisos
 //   GET  /api/pep/paciente/:p/resultados                          resultados, tendência, críticos
@@ -24,6 +25,7 @@
 //   GET  /api/pep/assinaturas[/:id/previa], POST /api/pep/assinaturas   pendências e assinatura em lote
 // Toda leitura de dado do paciente passa pelo vínculo assistencial (AcessoPacientePep) e vai à trilha; as gravações
 // vão à trilha na mesma transação (executor ou transação SGH_). Cada ação depende da sua chave de liberação (POL-3).
+import { createHash } from 'node:crypto';
 import {
   Body,
   Controller,
@@ -41,6 +43,7 @@ import {
 import {
   type AcaoLiberada,
   type AlergiasPaciente,
+  type HistoricoAlergia,
   type AltaPaciente,
   type AnexosPaciente,
   type CabecalhoPep,
@@ -567,14 +570,26 @@ export class DocumentosPepController {
       if (!t.temMais || pagina >= 20) break;
       pagina++;
     }
+    const texto = linhas.join('\r\n');
+    // 01-ADM L82: a exportação só sai depois de gravada com a justificativa (texto e tipo) e o resumo do conteúdo.
+    const reg = await this.servico.porta.registrarExportacaoProntuario(
+      this.sgh(s, 'pep.prontuario.exportado'),
+      {
+        paciente,
+        justificativa: e.justificativa,
+        tipoJustificativa: e.tipoJustificativa ?? null,
+        linhas: linhas.length,
+        hash: createHash('sha256').update(texto, 'utf8').digest('hex'),
+      },
+    );
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'paciente',
-      idAlvo: String(paciente),
+      tabelaAlvo: 'exportacao_documento',
+      idAlvo: String(reg.id),
       chaveNaturalAlvo: `exportado;linhas:${linhas.length};justificativa:${e.tipoJustificativa ?? 'texto'}`,
     };
     res.header('content-disposition', `attachment; filename="prontuario-${paciente}.txt"`);
-    return linhas.join('\r\n');
+    return texto;
   }
 
   // ── Alergias ─────────────────────────────────────────────────────────────────────────────────────
@@ -594,6 +609,26 @@ export class DocumentosPepController {
       paciente,
       tabelaAlvo: 'alergia_paciente',
       chaveNaturalAlvo: `parte:alergias;n:${r.ativas.length}`,
+    };
+    return r;
+  }
+
+  @Get('paciente/:p/alergias/:id/historico')
+  @Permissao('pep.alergia.ler')
+  @Auditar('pep.cabecalho.lido')
+  async historicoAlergia(
+    @Param('p') p: string,
+    @Param('id') i: string,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<HistoricoAlergia> {
+    const s = sessaoDe(req);
+    const paciente = await this.paciente(s, p, 'pep.alergia.ler', true);
+    const alergia = idDaRota(i);
+    const r = await this.servico.historicoAlergia(this.c(s), paciente, alergia);
+    req.sghAlvo = {
+      paciente,
+      tabelaAlvo: 'alergia_paciente',
+      chaveNaturalAlvo: `parte:alergia-historico;id:${alergia};n:${r.passos.length}`,
     };
     return r;
   }

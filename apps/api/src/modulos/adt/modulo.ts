@@ -10,6 +10,8 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { AVISOS_ATENDIMENTO, AvisosAtendimento } from '../atendimento/public-api.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { IMPRESSAO_IDENTIFICACAO } from '../administracao/impressao-identificacao-emissao.js';
+import { ImpressaoIdentificacaoPropria } from '../administracao/impressao-identificacao-propria.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import {
   CACHE_CONFIG,
@@ -46,6 +48,19 @@ import { PORTA_SAME_GUARDA, PortaSameGuardaPropria } from './same-guarda-propria
 import { SameTramiteController } from './same-tramite.controller.js';
 import { PORTA_SAME_TRAMITE, PortaSameTramitePropria } from './same-tramite-propria.js';
 import { AVISOS_ADT } from './simbolos.js';
+import { ControlesAssistenciaisController } from './controles-assistenciais.controller.js';
+import {
+  PORTA_CONTROLES_ASSISTENCIAIS,
+  PortaControlesAssistenciaisPropria,
+} from './controles-assistenciais-propria.js';
+
+import { LeitosSusController } from './leitos-sus.controller.js';
+import { PORTA_LEITOS_SUS, PortaLeitosSusPropria } from './leitos-sus-propria.js';
+import { ComunicacaoOperadoraController } from './comunicacao-operadora.controller.js';
+import {
+  PORTA_COMUNICACAO_OPERADORA,
+  PortaComunicacaoOperadoraPropria,
+} from './comunicacao-operadora-propria.js';
 
 export interface OpcoesModuloAdt {
   /** Portas prontas (testes). */
@@ -110,10 +125,21 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       GasMedicinalController,
       SameGuardaController,
       SameTramiteController,
+      ControlesAssistenciaisController,
+      LeitosSusController,
+      ComunicacaoOperadoraController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
       { provide: PORTA_NIR, useValue: nir },
+      // Pulseira e etiqueta com a 1ª impressão registrada e a reimpressão por motivo (01-ADM L79): só no banco próprio.
+      {
+        provide: IMPRESSAO_IDENTIFICACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ImpressaoIdentificacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F3.4 (04-INT linha 82): gases medicinais por tempo de uso no banco do cliente; sem núcleo, 503.
       {
         provide: PORTA_GAS_MEDICINAL,
@@ -136,6 +162,29 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaSameTramitePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F78.04-1 (04-INT L74, L75, L78): formulários de óbito, auditoria do isolamento e evolução da regulação; sem núcleo, 503.
+      {
+        provide: PORTA_CONTROLES_ASSISTENCIAIS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaControlesAssistenciaisPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F78.04-2 (04-INT L79 e L80): leitos do sistema público e comunicação à operadora; sem núcleo, 503.
+      {
+        provide: PORTA_LEITOS_SUS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaLeitosSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      {
+        provide: PORTA_COMUNICACAO_OPERADORA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaComunicacaoOperadoraPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       {

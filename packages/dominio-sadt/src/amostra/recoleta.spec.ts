@@ -120,6 +120,9 @@ describe('sub-amostras', () => {
     expect(() => conferirAliquotagem('recebida', false, p)).not.toThrow();
     expect(() => conferirAliquotagem('coletada', false, p)).toThrow(/Receba/);
     expect(() => conferirAliquotagem('recebida', true, p)).toThrow(/já foram/);
+    // A primária já dividida (situação "aliquotada") recusa a segunda divisão pelo motivo certo.
+    expect(() => conferirAliquotagem('aliquotada', true, p)).toThrow(/já foram/);
+    expect(() => conferirAliquotagem('aliquotada', false, p)).toThrow(/já foram/);
     expect(() => conferirAliquotagem('recebida', false, [])).toThrow(/regra/);
   });
 });

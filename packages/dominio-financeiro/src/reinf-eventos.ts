@@ -43,6 +43,48 @@ export function conferirProcessoSuspensao(p: Omit<ProcessoSuspensao, 'id'>): Rec
   return null;
 }
 
+/**
+ * O fim de uma suspensão já lançada, sem apagar: `fim` com data encerra (a liminar caiu: vale até o dia, inclusive) e
+ * `fim` nulo anula (lançada por engano: nunca valeu). Sempre com o motivo; a já encerrada ou anulada não muda de novo.
+ */
+export function conferirEncerramentoSuspensao(
+  atual: { vigenciaInicio: string; encerradaEm: string | null; anulada: boolean },
+  e: { fim: string | null; motivo: string },
+): RecusaFinanceiro | null {
+  if (atual.anulada || atual.encerradaEm !== null)
+    return recusaFin('suspensao-ja-encerrada', 'A suspensão já foi encerrada ou anulada.', ['suspensao']);
+  if (e.motivo.trim().length < 5)
+    return recusaFin('motivo-obrigatorio', 'Informe o motivo (ao menos 5 letras).', ['motivo']);
+  if (e.fim !== null && e.fim < atual.vigenciaInicio)
+    return recusaFin(
+      'fim-antes-do-inicio',
+      'O fim da suspensão não vem antes do início da vigência. A lançada por engano é anulada.',
+      ['fim'],
+    );
+  return null;
+}
+
+/** O fim que vale para a suspensão: o menor entre o fim da vigência do processo e o encerramento dela. */
+export function fimDaSuspensao(vigenciaFim: string | null, encerradaEm: string | null): string | null {
+  if (vigenciaFim === null) return encerradaEm;
+  if (encerradaEm === null) return vigenciaFim;
+  return encerradaEm < vigenciaFim ? encerradaEm : vigenciaFim;
+}
+
+/** A alteração dos dados do processo (vara e vigência), que vale para todas as suspensões dele. */
+export function conferirAlteracaoProcesso(p: {
+  tipo: string;
+  vara: string | null;
+  vigenciaInicio: string;
+  vigenciaFim: string | null;
+}): RecusaFinanceiro | null {
+  if (p.tipo === 'judicial' && !(p.vara ?? '').trim())
+    return recusaFin('vara-obrigatoria', 'Informe a vara do processo judicial.', ['vara']);
+  if (p.vigenciaFim !== null && p.vigenciaFim < p.vigenciaInicio)
+    return recusaFin('vigencia-invalida', 'O fim da vigência vem depois do início.', ['vigenciaFim']);
+  return null;
+}
+
 /** O processo que suspende o tributo do beneficiário na competência: o do beneficiário vence o geral. */
 export function processoQueSuspende(
   processos: readonly ProcessoSuspensao[],

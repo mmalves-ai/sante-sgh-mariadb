@@ -2,19 +2,20 @@
 // Usuários do estoque e permissões por local (ficha do M28, seção 7): `/suprimentos/usuarios-locais`. Permissão
 // sensível do gestor de acessos. Mostra, por usuário, os locais × tipos de movimento (GELOCUSU), os centros de custo
 // e as classes do escopo e as marcas (autorizar requisição, pedido, necessidade; desbloquear o fechamento; lançar
-// controlado). A edição do escopo é P2 e segue desligada (POL-3).
+// controlado). A edição abre o cadastro do escopo do usuário (F3.6-1, 05-SUP linha 3).
 import { SanteBotao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { lerUsuarioEstoque, listarUsuariosEstoque } from '../api-suprimentos.js';
-import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 
 const { t } = useI18n();
 const termo = ref('');
 const busca = ref('');
 const escolhido = ref('');
+const podeEditar = computed(() => pode('acesso.escopo.editar'));
 const lista = useQuery({
   queryKey: ['suprimentos', 'usuarios', busca],
   queryFn: () => listarUsuariosEstoque(busca.value),
@@ -42,7 +43,11 @@ const sim = (b: boolean) => (b ? t('suprimentos.sim') : t('suprimentos.nao'));
   <section class="tela-agenda" aria-labelledby="usu-titulo" data-testid="tela-suprimentos-usuarios">
     <h1 id="usu-titulo">{{ t('suprimentos.usuarios.titulo') }}</h1>
     <p>{{ t('suprimentos.usuarios.texto') }}</p>
-    <AvisoSuprimentos :motivo="t('suprimentos.usuarios.edicaoDesligada')" />
+    <p v-if="podeEditar" class="atalhos">
+      <RouterLink to="/suprimentos/usuarios-estoque/escopo" data-testid="usu-escopo">{{
+        t('cadastroEstoque.atalhos.escopoUsuarios')
+      }}</RouterLink>
+    </p>
     <form class="filtros" @submit.prevent="busca = termo.trim()">
       <span class="campo">
         <label for="usu-termo">{{ t('suprimentos.usuarios.busca') }}</label>

@@ -35,6 +35,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import AplicarModelo from '../componentes/AplicarModelo.vue';
+import AtalhoVinculoConta from '../componentes/AtalhoVinculoConta.vue';
 import ConselhoUsuario from '../componentes/ConselhoUsuario.vue';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
@@ -537,6 +538,7 @@ const rotuloFiltroFlag = (f: FiltroFlag) =>
       <router-link :to="destinoVoltar" class="trilha__voltar" data-testid="ficha-voltar">
         <SanteIcone nome="seta" tamanho="1em" class="trilha__seta" />{{ t('adm.ficha.voltar') }}
       </router-link>
+      <AtalhoVinculoConta v-if="podeEditar" :login="login" />
     </nav>
     <div v-if="ficha.isError.value" class="falha">
       <MensagemErro :erro="ficha.error.value" />

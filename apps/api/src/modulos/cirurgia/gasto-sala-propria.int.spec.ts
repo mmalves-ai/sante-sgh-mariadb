@@ -31,6 +31,12 @@ interface Massa {
   atoCancelado: number;
   loteOutroEst: number;
   kitOutroEst: number;
+  /** Débito com conta aberta: o ato do segundo atendimento, a conta, o item faturável do produto com lote e o produto
+   *  sem lote e sem item faturável (vai ao setor). */
+  atoDebito: number;
+  conta: number;
+  faturavel: number;
+  insumoSetor: number;
 }
 
 const nucleo = new NucleoProprio();
@@ -57,6 +63,24 @@ async function limpar(e: Escritor) {
   await e.executar(`DELETE FROM consumo_cirurgia_motivo WHERE consumo_cirurgia_id IN (${gastos})`, []);
   await e.executar(`DELETE FROM consumo_cirurgia_item WHERE consumo_cirurgia_id IN (${gastos})`, []);
   await e.executar(`DELETE FROM consumo_cirurgia WHERE ato_cirurgico_id IN (${atos})`, []);
+  // A conta do débito (o movimento e o item da conta se apontam: solta o movimento antes; o movimento sai na massa).
+  const contas = `SELECT id FROM conta_hospitalar WHERE estabelecimento_id IN (${ESTS})`;
+  const itensConta = `SELECT id FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (${contas})`;
+  await e.executar(
+    `UPDATE movimento_estoque SET conta_hospitalar_item_id = NULL WHERE conta_hospitalar_item_id IN (${itensConta})`,
+    [],
+  );
+  await e.executar(
+    `DELETE FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id IN (${itensConta})`,
+    [],
+  );
+  await e.executar(`DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (${contas})`, []);
+  await e.executar(`DELETE FROM conta_hospitalar WHERE estabelecimento_id IN (${ESTS})`, []);
+  await e.executar(
+    'UPDATE insumo SET item_faturavel_id = NULL WHERE item_faturavel_id IN (SELECT id FROM item_faturavel WHERE codigo LIKE ?)',
+    [`${P}F%`],
+  );
+  await e.executar('DELETE FROM item_faturavel WHERE codigo LIKE ?', [`${P}F%`]);
   await e.executar(`DELETE FROM lista_material_procedimento WHERE estabelecimento_id IN (${ESTS})`, []);
   await e.executar(
     `DELETE FROM kit_material_item WHERE kit_material_id IN (SELECT id FROM kit_material WHERE codigo LIKE ?)`,
@@ -169,8 +193,74 @@ async function montar(s: MassaSuprimentos, e: Escritor): Promise<Massa> {
     "INSERT INTO sala_cirurgica (estabelecimento_id, unidade_cirurgica_id, codigo, descricao, situacao, criado_em) VALUES (?, ?, 'S1', 'SALA SINTETICA 1', 'ativa', ?)",
     [est, uc, agora],
   );
+  // O segundo atendimento, com conta aberta, recebe o débito do gasto de sala.
+  const atendimentoConta = await g(
+    'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+    [est, `${P}-AT2`],
+    `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+       fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [est, `${P}-AT2`, paciente, categoria, caraterTiss, convenio, cirurgiao, agora, agora],
+  );
+  const tipoConta = Number((await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM tipo_conta'))!.id);
+  const conta = await e.inserir(
+    `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id,
+       natureza, competencia, inicio_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?)`,
+    [
+      est,
+      `${P}-C${Date.now() % 1e6}`,
+      atendimentoConta,
+      paciente,
+      convenio,
+      tipoConta,
+      `${agora.toISOString().slice(0, 7)}-01`,
+      agora,
+      agora,
+    ],
+  );
+  const grupoFat = await g(
+    'SELECT id FROM grupo_faturamento WHERE codigo = ?',
+    [`${P}GF`],
+    "INSERT INTO grupo_faturamento (codigo, descricao, tipo_grupo, criado_em) VALUES (?, 'MATERIAL SINTETICO', 'material', ?)",
+    [`${P}GF`, agora],
+  );
+  const faturavel = await e.inserir(
+    `INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, insumo_id, criado_em)
+     VALUES (?, 'MATERIAL SINTETICO DO GASTO', 'material', ?, ?, ?)`,
+    [`${P}F1`, grupoFat, s.insumo, agora],
+  );
+  await e.executar('UPDATE insumo SET item_faturavel_id = ? WHERE id = ?', [faturavel, s.insumo]);
+  // O produto sem lote e sem item faturável, com saldo no local do gasto: vai ao setor (centro de custo do local). Grupo
+  // e unidade próprios: o produto sai depois da massa, que apaga os dela.
+  const grupoSetor = await inserirMinimo(e, 'grupo_insumo', { codigo: `${P}GS`, natureza: 'material' }, P);
+  const unidadeSetor = await inserirMinimo(e, 'unidade_medida', { codigo: `${P}US` }, P);
+  const insumoSetor = await inserirMinimo(
+    e,
+    'insumo',
+    {
+      codigo: `${P}N${Date.now() % 1e6}`,
+      nome: 'ITEM SINTETICO DO SETOR',
+      tipo: 'material',
+      grupo_insumo_id: grupoSetor,
+      estoque_unidade_medida_id: unidadeSetor,
+      situacao: 'ativo',
+    },
+    P,
+  );
+  await inserirMinimo(
+    e,
+    'saldo_estoque',
+    {
+      estabelecimento_id: est,
+      local_estoque_id: s.localA,
+      insumo_id: insumoSetor,
+      quantidade: 5,
+      quantidade_consignada: 0,
+      custo_medio: 1.5,
+    },
+    P,
+  );
   let n = 0;
-  const novoAto = async (situacao: string) => {
+  const novoAto = async (situacao: string, atd = atendimento) => {
     const ato = await e.inserir(
       `INSERT INTO ato_cirurgico (estabelecimento_id, numero, atendimento_id, paciente_id, sala_cirurgica_id, carater_cirurgia_id,
          entrada_sala_em, inicio_cirurgia_em, fim_cirurgia_em, saida_sala_em, situacao, criado_em)
@@ -178,7 +268,7 @@ async function montar(s: MassaSuprimentos, e: Escritor): Promise<Massa> {
       [
         est,
         `${P}-${Date.now() % 1e6}-${++n}`,
-        atendimento,
+        atd,
         paciente,
         sala,
         carater,
@@ -234,12 +324,34 @@ async function montar(s: MassaSuprimentos, e: Escritor): Promise<Massa> {
     atoCancelado: await novoAto('cancelado'),
     loteOutroEst,
     kitOutroEst,
+    atoDebito: await novoAto('realizado', atendimentoConta),
+    conta,
+    faturavel,
+    insumoSetor,
   };
+}
+
+/** O produto do setor sai antes da massa, com o próprio movimento, o item do documento e o saldo. */
+async function limparProdutoSetor() {
+  await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-limpa` }, async (e) => {
+    const ins = 'SELECT id FROM insumo WHERE codigo LIKE ?';
+    // O item do documento e o movimento se apontam: solta o item antes.
+    await e.executar(
+      `UPDATE documento_estoque_item SET movimento_estoque_id = NULL WHERE insumo_id IN (${ins})`,
+      [`${P}N%`],
+    );
+    for (const t of ['movimento_estoque', 'documento_estoque_item', 'saldo_estoque'])
+      await e.executar(`DELETE FROM ${t} WHERE insumo_id IN (${ins})`, [`${P}N%`]);
+    await e.executar('DELETE FROM insumo WHERE codigo LIKE ?', [`${P}N%`]);
+    await e.executar('DELETE FROM grupo_insumo WHERE codigo = ?', [`${P}GS`]);
+    await e.executar('DELETE FROM unidade_medida WHERE codigo = ?', [`${P}US`]);
+  });
 }
 
 describe.skipIf(SEM_BANCO)('gasto de sala do ato cirúrgico (04-CC linha 100): contrato de efeito', () => {
   beforeAll(async () => {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-limpa` }, limpar).catch(() => undefined);
+    await limparProdutoSetor().catch(() => undefined);
     const s = await montarMassa(nucleo);
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-massa` }, async (e) => {
       await limpar(e);
@@ -251,6 +363,7 @@ describe.skipIf(SEM_BANCO)('gasto de sala do ato cirúrgico (04-CC linha 100): c
   afterAll(async () => {
     if (!m) return;
     await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-limpa` }, limpar);
+    await limparProdutoSetor();
     await limparMassa(nucleo, m.s);
   }, 180_000);
 
@@ -429,5 +542,108 @@ describe.skipIf(SEM_BANCO)('gasto de sala do ato cirúrgico (04-CC linha 100): c
       codigo: 'regra-violada',
       campos: ['ato'],
     });
+  });
+  it('débito com conta aberta: saída do estoque, item faturável na conta com memória, o outro ao setor', async () => {
+    const saldoDe = async (insumo: number) =>
+      Number(
+        (
+          await ler<{ q: number }>(
+            'SELECT quantidade AS q FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ?',
+            [m.s.localA, insumo],
+          )
+        )[0]!.q,
+      );
+    const antes = [await saldoDe(m.s.insumo), await saldoDe(m.insumoSetor)];
+    // O gasto mistura o item do setor (primeiro) e o faturável (segundo): cada grupo sai num documento próprio, e o
+    // vínculo item → movimento tem de seguir o produto, não a posição no gasto.
+    const r = await porta.gravarDoAto(ctx(), m.atoDebito, {
+      local: m.s.localA,
+      itens: [
+        { insumo: m.insumoSetor, quantidade: 1, lote: null, faturar: false },
+        { insumo: m.s.insumo, quantidade: 2, lote: m.s.lote, faturar: true },
+      ],
+    });
+    const t = await porta.lerDoAto(ctx(), m.atoDebito, null);
+    await porta.conferir(ctx(m.s.usuario2), m.atoDebito, { versao: t.gasto!.versao });
+    const v = (await porta.lerDoAto(ctx(), m.atoDebito, null)).gasto!.versao;
+    expect(await porta.debitar(ctx(), m.atoDebito, { versao: v })).toMatchObject({ id: r.id, itensConta: 1 });
+    const [g] = await ler<{ situacao: string; conta_hospitalar_id: number; debitado_em: Date | null }>(
+      'SELECT situacao, conta_hospitalar_id, debitado_em FROM consumo_cirurgia WHERE id = ?',
+      [r.id],
+    );
+    expect(g!.situacao).toBe('debitada');
+    expect(Number(g!.conta_hospitalar_id)).toBe(m.conta);
+    expect(g!.debitado_em).not.toBeNull();
+    // Cada item do gasto aponta o movimento do próprio produto; só o faturável aponta o item da conta.
+    const itens = await ler<{
+      insumo_id: number;
+      quantidade: number;
+      mov_insumo: number;
+      mov_qtd: number;
+      mov_atendimento: number | null;
+      doc_atendimento: number | null;
+      conta_item: number | null;
+      ci_conta: number | null;
+      ci_faturavel: number | null;
+      ci_quantidade: number | null;
+      ci_movimento: number | null;
+      ci_lote: number | null;
+      ci_situacao: string | null;
+      memorias: number;
+    }>(
+      `SELECT i.insumo_id, i.quantidade, m.insumo_id AS mov_insumo, m.quantidade_estoque AS mov_qtd,
+              m.atendimento_id AS mov_atendimento, d.atendimento_id AS doc_atendimento, i.conta_hospitalar_item_id AS conta_item,
+              ci.conta_hospitalar_id AS ci_conta, ci.item_faturavel_id AS ci_faturavel, ci.quantidade AS ci_quantidade,
+              ci.movimento_estoque_id AS ci_movimento, ci.lote_insumo_id AS ci_lote, ci.situacao AS ci_situacao,
+              (SELECT COUNT(*) FROM conta_hospitalar_item_memoria x WHERE x.conta_hospitalar_item_id = ci.id) AS memorias
+         FROM consumo_cirurgia_item i
+         JOIN movimento_estoque m ON m.id = i.movimento_estoque_id
+         JOIN documento_estoque d ON d.id = m.documento_estoque_id
+         LEFT JOIN conta_hospitalar_item ci ON ci.id = i.conta_hospitalar_item_id
+        WHERE i.consumo_cirurgia_id = ? AND i.excluido_em IS NULL ORDER BY i.sequencia`,
+      [r.id],
+    );
+    expect(itens).toHaveLength(2);
+    const [setor, fat] = itens;
+    expect(Number(setor!.mov_insumo)).toBe(m.insumoSetor);
+    expect(Number(setor!.mov_qtd)).toBe(1);
+    expect(setor!.doc_atendimento).toBeNull();
+    expect(setor!.conta_item).toBeNull();
+    expect(Number(fat!.mov_insumo)).toBe(m.s.insumo);
+    expect(Number(fat!.mov_qtd)).toBe(2);
+    expect(Number(fat!.doc_atendimento)).toBe(Number(fat!.mov_atendimento));
+    expect(fat!.conta_item).not.toBeNull();
+    expect([
+      Number(fat!.ci_conta),
+      Number(fat!.ci_faturavel),
+      Number(fat!.ci_quantidade),
+      Number(fat!.ci_lote),
+      fat!.ci_situacao,
+      Number(fat!.memorias),
+    ]).toEqual([m.conta, m.faturavel, 2, m.s.lote, 'lancado', 1]);
+    // O item da conta e o movimento se apontam.
+    const [mv] = await ler<{ conta_hospitalar_item_id: number }>(
+      'SELECT conta_hospitalar_item_id FROM movimento_estoque WHERE id = ?',
+      [Number(fat!.ci_movimento)],
+    );
+    expect(Number(mv!.conta_hospitalar_item_id)).toBe(Number(fat!.conta_item));
+    // O saldo do local baixou o consumido.
+    expect([await saldoDe(m.s.insumo), await saldoDe(m.insumoSetor)]).toEqual([antes[0]! - 2, antes[1]! - 1]);
+    // Debitado não muda: novo débito, reabertura e cancelamento recusados (o estorno é na conta e no estoque).
+    const v2 = (await porta.lerDoAto(ctx(), m.atoDebito, null)).gasto!.versao;
+    expect((await falha(porta.debitar(ctx(), m.atoDebito, { versao: v2 }))).codigo).not.toBe('ok');
+    expect(
+      (
+        await falha(
+          porta.mudarComMotivo(
+            ctx(),
+            m.atoDebito,
+            'cancelar',
+            { versao: v2, motivo: 'tentativa depois' },
+            true,
+          ),
+        )
+      ).codigo,
+    ).not.toBe('ok');
   });
 });

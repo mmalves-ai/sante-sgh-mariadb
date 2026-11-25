@@ -12,7 +12,7 @@
 // Melhoria: o acompanhamento conta as gravações de cada operação pela trilha do núcleo (operação no registro da
 // trilha), sem tabela espelho; o uso de outro sistema por grupo não existe mais (sem convivência): o bloco sai nulo.
 // Pendências de modelo (pedidos do lote 03-16): a baixa do demonstrativo por item, o recurso e o retorno (pagamento
-// por item), a importação do demonstrativo, a evidência do prontuário na decisão, o recibo do protocolo, o calendário
+// por item), a importação do demonstrativo, a evidência do prontuário na decisão, o calendário
 // de entrega por convênio, o escopo de contas bancárias por usuário e os blocos de títulos e repasse do
 // acompanhamento: até lá, as gravações recusam com "operacao-pendente" e as leituras dizem o que falta.
 import { randomUUID } from 'node:crypto';
@@ -603,10 +603,18 @@ export class PortaTissPropria implements PortaTiss {
         [id, est],
       );
       const protocolos = await l.consultar<Linha>(
-        `SELECT p.numero_protocolo, p.recebido_em, p.situacao, p.criado_em, u.login
+        `SELECT p.numero_protocolo, p.recibo, p.recebido_em, p.situacao, p.criado_em, u.login
            FROM protocolo_recebimento p LEFT JOIN usuario u ON u.id = p.criado_por
           WHERE p.lote_tiss_id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL
           ORDER BY p.criado_em DESC, p.id DESC`,
+        [id, est],
+      );
+      // A fatura ao pagador gravada com o lote (a mais recente viva): número, situação, contas e o protocolo.
+      const fatura = await l.uma<Linha>(
+        `SELECT numero, situacao, quantidade_contas, valor_apresentado, protocolo_recebimento, data_entrega
+           FROM fatura_fonte_pagadora
+          WHERE lote_tiss_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+          ORDER BY id DESC LIMIT 1`,
         [id, est],
       );
       const mensagens = await l.consultar<Linha>(
@@ -625,14 +633,23 @@ export class PortaTissPropria implements PortaTiss {
           total: n(r['valor_total']),
           fechada: texto(r['situacao']),
         })),
+        fatura: fatura
+          ? {
+              numero: texto(fatura['numero']),
+              situacao: texto(fatura['situacao']),
+              contas: n(fatura['quantidade_contas']),
+              valorApresentado: n(fatura['valor_apresentado']),
+              protocolo: texto(fatura['protocolo_recebimento']),
+              entrega: dataIso(fatura['data_entrega']),
+            }
+          : null,
         historico: protocolos.map((r) => {
           const situacao = texto(r['situacao']);
           return {
             acao: situacao === 'cancelado' ? ('limpo' as const) : ('registrado' as const),
             protocolo: texto(r['numero_protocolo']),
             data: dataIso(r['recebido_em']),
-            // O recibo do comprovante aguarda a coluna no modelo (pedido do lote 03-16); vai à trilha da gravação.
-            recibo: '',
+            recibo: texto(r['recibo']),
             situacao: numeroDaSituacaoProtocolo(situacao),
             situacaoNome: nomeDaSituacaoProtocolo(situacao),
             autor: texto(r['login']),

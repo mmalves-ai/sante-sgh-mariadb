@@ -33,6 +33,21 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    // F3.4, 04-INT L67: diagnósticos e acidente da internação.
+    path: `/internacao/:reg${reg}/registros`,
+    name: 'adt.registros',
+    component: () => import('./telas/RegistrosInternacaoTela.vue'),
+    props: true,
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
+    // F3.4, 04-INT L65: quem opera cada unidade de internação (admitir, transferir para ela, dar alta).
+    path: '/internacao/unidades/operadores',
+    name: 'adt.operadoresUnidade',
+    component: () => import('./telas/OperadoresUnidadeTela.vue'),
+    meta: { permissao: 'organizacao.leito.ler' },
+  },
+  {
     path: `/internacao/:reg${reg}/trocas`,
     name: 'adt.trocas',
     component: () => import('./telas/TrocasTela.vue'),
@@ -60,6 +75,37 @@ export const rotasAdt: RouteRecordRaw[] = [
     component: () => import('./telas/GasesTela.vue'),
     props: true,
     meta: { permissao: 'enfermagem.dispositivo.ler' },
+  },
+  {
+    // F3.4-3, 04-INT L82: regra de cobrança dos gases (faixas e uso simultâneo).
+    path: '/internacao/gases/regras',
+    name: 'adt.gases.regras',
+    component: () => import('./telas/RegrasGasTela.vue'),
+    meta: { permissao: 'convenio.contrato.ler' },
+  },
+  {
+    // F78.04-1, 04-INT L74: formulários numerados da declaração de óbito (lote, uso, extravio, devolução).
+    path: '/internacao/controles/formularios-obito',
+    name: 'adt.controles.obito',
+    component: () => import('./telas/ControlesAssistenciaisTela.vue'),
+    props: { aba: 'obito' },
+    meta: { permissao: 'pep.declaracaoObito.emitir' },
+  },
+  {
+    // F78.04-1, 04-INT L75: auditoria do cumprimento do isolamento e avisos à CCIH.
+    path: '/internacao/controles/isolamento',
+    name: 'adt.controles.isolamento',
+    component: () => import('./telas/ControlesAssistenciaisTela.vue'),
+    props: { aba: 'isolamento' },
+    meta: { permissao: 'qualidade.precaucao.ler' },
+  },
+  {
+    // F78.04-1, 04-INT L78: quadro clínico estruturado e evolução da solicitação à central reguladora.
+    path: '/internacao/controles/regulacao',
+    name: 'adt.controles.regulacao',
+    component: () => import('./telas/ControlesAssistenciaisTela.vue'),
+    props: { aba: 'regulacao' },
+    meta: { permissao: 'internacao.regulacao.ler' },
   },
   {
     path: '/internacao/documentos',
@@ -179,5 +225,20 @@ export const rotasAdt: RouteRecordRaw[] = [
     name: 'nir.regulacao',
     component: () => import('./telas/RegulacaoTela.vue'),
     meta: { permissao: 'internacao.regulacao.ler' },
+  },
+  {
+    // F78.04-2, 04-INT L79: leitos do sistema público (habilitação, leitos do programa, capacidade e teto).
+    path: '/internacao/leitos-sus',
+    name: 'adt.leitosSus',
+    component: () => import('./telas/LeitosSusTela.vue'),
+    meta: { permissao: 'faturamento.susLeitoUti.ler' },
+  },
+  {
+    // F78.04-2, 04-INT L80: comunicação da internação e da alta à operadora, pela internação.
+    path: `/internacao/:reg${reg}/comunicacoes-operadora`,
+    name: 'adt.comunicacoesOperadora',
+    component: () => import('./telas/ComunicacaoOperadoraTela.vue'),
+    props: true,
+    meta: { permissao: 'internacao.internacao.ler' },
   },
 ];

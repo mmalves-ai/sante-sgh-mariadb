@@ -5,12 +5,15 @@
 // mercado (vínculo do insumo com fator de conversão, base pf da tabela da conta, fator da embalagem), pelo negociado
 // percentual de contrato vigente (o de contrato encerrado não vale) e sem preço; a devolução reduz o item; com a conta
 // fechada a devolução é recusada e nada fica (nem o saldo); sem conta aberta ou sem item faturável não há item.
+// O vínculo gravado pela ficha do item (porta do vínculo com a referência de preço, pelo Executor, 05-SUP linha 28) é o
+// que a saída usa: a referência e o fator dele dão a quantidade cobrada e o preço do item na conta.
 // O produto é um material próprio do hospital com id >= 10^12. Massa SINTÉTICA com o código "F3EC" (nenhuma pessoa
 // real). SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type ContextoNucleo, type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoSuprimentos } from '../suprimentos/porta.js';
 import { PortaSuprimentosPropria } from '../suprimentos/porta-propria.js';
+import { PortaVinculoReferenciaPropria } from '../suprimentos/vinculo-referencia-preco.js';
 import { PortaFarmaciaPropria } from './porta-propria.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 
@@ -24,6 +27,8 @@ const I_REF = ID_PROPRIO + 1;
 const I_NEG = ID_PROPRIO + 2;
 const I_SEM = ID_PROPRIO + 3;
 const I_NAOFAT = ID_PROPRIO + 4;
+/** O insumo cujo vínculo com a referência de preço é gravado pela porta do vínculo (ficha do item). */
+const I_VINC = ID_PROPRIO + 5;
 
 async function codigoDe(p: Promise<unknown>): Promise<string> {
   try {
@@ -57,6 +62,7 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
     conta: 0,
     contratoVigente: 0,
     contratoEncerrado: 0,
+    itemRef: 0,
   };
   const horarios: number[] = [];
   let ctx: ContextoNucleo;
@@ -381,6 +387,9 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
           unidade_medida_id: umFrasco,
         },
       );
+      ids.itemRef = itemRef;
+      // O vínculo do I_VINC nasce na prova, pela porta (a rodada anterior não deixa vínculo para trás).
+      await e.executar('DELETE FROM insumo_referencia_preco WHERE insumo_id = ?', [I_VINC]);
       await e.executar('DELETE FROM preco_referencia_matmed WHERE item_referencia_matmed_id = ?', [itemRef]);
       await e.inserir(
         `INSERT INTO preco_referencia_matmed (item_referencia_matmed_id, ocorrido_em, edicao_referencia_matmed_id, vigencia_inicio,
@@ -410,6 +419,7 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
         [3, I_NEG, ['EC-3']],
         [4, I_SEM, ['EC-4']],
         [5, I_NAOFAT, ['EC-5']],
+        [6, I_VINC, ['EC-6']],
       ] as const) {
         await g(
           'insumo',
@@ -755,6 +765,48 @@ describe.skipIf(SEM_BANCO)('motor estoque → conta pela farmácia (MariaDB)', (
     expect([Number(sem.i['quantidade']), Number(sem.i['valor_total'])]).toEqual([1, 0]);
     expect(sem.dados['regra']).toBe('sem_preco');
     expect(String(sem.i['observacao'])).toContain('Sem preço');
+  });
+
+  it('suprimentos, saída ao paciente com o vínculo gravado pela ficha do item: a referência e o fator do vínculo dão o preço', async () => {
+    const vinc = new PortaVinculoReferenciaPropria(nucleo);
+    const hoje = String((await ler("SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS d", []))?.['d']);
+    // Cinco unidades de estoque valem um frasco da referência (vínculo novo, pelo Executor, com a chave da tela).
+    const { id: vinculo } = await vinc.vincular(
+      ctx,
+      I_VINC,
+      { referencia: ids.itemRef, edicao: null, fator: 5, inicio: hoje },
+      `f3ec-vinc-${Date.now()}`,
+    );
+    const gravado = await ler(
+      `SELECT insumo_id, item_referencia_matmed_id, fator_conversao, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS inicio,
+              vigencia_fim, excluido_em FROM insumo_referencia_preco WHERE id = ?`,
+      [vinculo],
+    );
+    expect([
+      Number(gravado?.['insumo_id']),
+      Number(gravado?.['item_referencia_matmed_id']),
+      Number(gravado?.['fator_conversao']),
+      gravado?.['inicio'],
+      gravado?.['vigencia_fim'],
+      gravado?.['excluido_em'],
+    ]).toEqual([I_VINC, ids.itemRef, 5, hoje, null, null]);
+    await saidaPaciente(ids.atendimento, [{ item: I_VINC, quantidade: 10, lotes: [lote('EC-6', 10)] }]);
+    expect(await saldoDe(I_VINC)).toBe(0);
+    const mov = await saidaDo(I_VINC);
+    const id = Number(mov?.['conta_hospitalar_item_id']);
+    const i = await itemDaConta(id);
+    // pf 20 / embalagem 10 = 2 por frasco; 10 unidades de estoque / fator 5 do vínculo = 2 frascos = 4.
+    expect([
+      Number(i?.['conta_hospitalar_id']),
+      Number(i?.['movimento_estoque_id']),
+      Number(i?.['quantidade']),
+      Number(i?.['valor_unitario']),
+      Number(i?.['valor_total']),
+      i?.['situacao'],
+    ]).toEqual([ids.conta, Number(mov?.['id']), 2, 2, 4, 'lancado']);
+    const m = await memoriaDo(id);
+    expect(m.map((x) => x['operacao'])).toEqual(['inclusao']);
+    expect(json(m[0]!['dados'])).toMatchObject({ regra: 'referencia', quantidadeEstoque: 10 });
   });
 
   it('suprimentos, devolução: reduz o item na proporção e liga o lançamento de entrada ao item', async () => {

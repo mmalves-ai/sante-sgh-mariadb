@@ -78,6 +78,15 @@ const dataIso = (v: unknown): string =>
   v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : '';
 const nulo = (s: string | null | undefined) => (s && s.trim() ? s.trim() : null);
 
+/** Leitura com trava de linha dentro da gravação: o caminho de leitura recusa FOR UPDATE. */
+async function travarUma<T extends Linha = Linha>(
+  tx: TxOperacao,
+  sql: string,
+  p: readonly unknown[],
+): Promise<T | null> {
+  return (await tx.consultarParaAtualizar<T>(sql, p))[0] ?? null;
+}
+
 /** As recusas do domínio viram um 409 com todos os campos (nada gravado). */
 function recusarTodas(f: readonly RecusaCadastroEstoque[]): void {
   if (f.length)
@@ -145,15 +154,10 @@ async function referenciasItem(tx: TxOperacao, e: ItemEstoqueEntrada): Promise<v
     if (!(await tx.uma(sql, [id])))
       throw recusa('referencia-inexistente', `${nome} inexistente ou inativo.`, { campos: [campo] });
   };
-  await existe(
-    'SELECT id FROM grupo_insumo WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL',
-    e.grupo,
-    'grupo',
-    'Grupo',
-  );
+  await existe('SELECT id FROM grupo_insumo WHERE id = ? AND ativo = TRUE', e.grupo, 'grupo', 'Grupo');
   if (e.subgrupo) {
     const s = await tx.uma<Linha>(
-      'SELECT grupo_insumo_id FROM subgrupo_insumo WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL',
+      'SELECT grupo_insumo_id FROM subgrupo_insumo WHERE id = ? AND ativo = TRUE',
       [e.subgrupo],
     );
     if (!s || n(s['grupo_insumo_id']) !== e.grupo)
@@ -161,7 +165,7 @@ async function referenciasItem(tx: TxOperacao, e: ItemEstoqueEntrada): Promise<v
         campos: ['subgrupo'],
       });
   }
-  const un = 'SELECT id FROM unidade_medida WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL';
+  const un = 'SELECT id FROM unidade_medida WHERE id = ? AND ativo = TRUE';
   await existe(un, e.unidadeEstoque, 'unidadeEstoque', 'Unidade de estoque');
   await existe(un, e.unidadeCompra, 'unidadeCompra', 'Unidade de compra');
   await existe(un, e.unidadeConsumo, 'unidadeConsumo', 'Unidade de consumo');
@@ -170,18 +174,13 @@ async function referenciasItem(tx: TxOperacao, e: ItemEstoqueEntrada): Promise<v
   await existe(fab, e.fabricante, 'fabricante', 'Fabricante');
   for (const p of e.principiosAtivos)
     await existe(
-      'SELECT id FROM principio_ativo WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL',
+      'SELECT id FROM principio_ativo WHERE id = ? AND ativo = TRUE',
       p.principio,
       'principiosAtivos',
       'Princípio ativo',
     );
   for (const v of e.vias)
-    await existe(
-      'SELECT id FROM via_de_uso WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL',
-      v.via,
-      'vias',
-      'Via de uso',
-    );
+    await existe('SELECT id FROM via_de_uso WHERE id = ? AND ativo = TRUE', v.via, 'vias', 'Via de uso');
   for (const a of e.apresentacoes)
     await existe(fab, a.fabricante, 'apresentacoes', 'Fabricante da apresentação');
   for (const c of e.codigosBarras)
@@ -194,6 +193,9 @@ type Filho = { readonly chave: string; readonly valores: Record<string, unknown>
  * Acerta os filhos do item pela chave natural: alterar o que ficou (reabre linha marcada como excluída), incluir o
  * novo e, para o que saiu, excluir pela gravação auditada ou inativar (quando `inativar` é a coluna).
  */
+/** Filho com exclusão lógica marcada (tabela sem a coluna, como a estabilidade, nunca está). */
+const excluida = (r: Linha) => r['excluido_em'] !== null && r['excluido_em'] !== undefined;
+
 async function acertarFilhos(
   tx: TxOperacao,
   tabela: string,
@@ -202,13 +204,13 @@ async function acertarFilhos(
   novos: readonly Filho[],
   saida: { inativar: string } | 'excluir',
 ): Promise<void> {
-  const atuais = await tx.consultar<Linha>(`SELECT * FROM ${tabela} WHERE insumo_id = ? FOR UPDATE`, [
+  const atuais = await tx.consultarParaAtualizar<Linha>(`SELECT * FROM ${tabela} WHERE insumo_id = ?`, [
     insumo,
   ]);
   const porChave = new Map(atuais.map((r) => [chaveDe(r), r]));
   const ficam = new Set(novos.map((x) => x.chave));
   for (const r of atuais) {
-    if (ficam.has(chaveDe(r)) || r['excluido_em'] !== null) continue;
+    if (ficam.has(chaveDe(r)) || excluida(r)) continue;
     if (saida === 'excluir') await tx.excluir(tabela, n(r['id']), n(r['versao']));
     else if (b(r[saida.inativar]))
       await tx.alterar(tabela, n(r['id']), n(r['versao']), { [saida.inativar]: false });
@@ -220,11 +222,11 @@ async function acertarFilhos(
       const muda =
         Object.entries(valores).some(
           ([k, v]) => String(r[k] ?? '') !== String(v === true ? 1 : v === false ? 0 : (v ?? '')),
-        ) || r['excluido_em'] !== null;
+        ) || excluida(r);
       if (muda)
         await tx.alterar(tabela, n(r['id']), n(r['versao']), {
           ...valores,
-          ...(r['excluido_em'] !== null ? { excluido_em: null, excluido_por: null } : {}),
+          ...(excluida(r) ? { excluido_em: null, excluido_por: null } : {}),
         });
     } else await tx.incluir(tabela, { insumo_id: insumo, ...valores });
   }
@@ -315,9 +317,9 @@ async function gravarFilhosItem(tx: TxOperacao, id: number, e: ItemEstoqueEntrad
     );
     // O registro substituído (outro número) ou retirado deixa de valer: fica no histórico como cancelado.
     if (ap0)
-      for (const v of await tx.consultar<Linha>(
+      for (const v of await tx.consultarParaAtualizar<Linha>(
         `SELECT id, versao FROM registro_sanitario WHERE apresentacao_comercial_id = ? AND excluido_em IS NULL
-            AND situacao IN ('valido','em_revalidacao') AND (? IS NULL OR numero_registro <> ?) FOR UPDATE`,
+            AND situacao IN ('valido','em_revalidacao') AND (? IS NULL OR numero_registro <> ?)`,
         [n(ap0['id']), a.registro?.numero ?? null, a.registro?.numero ?? null],
       ))
         await tx.alterar('registro_sanitario', n(v['id']), n(v['versao']), { situacao: 'cancelado' });
@@ -329,8 +331,9 @@ async function gravarFilhosItem(tx: TxOperacao, id: number, e: ItemEstoqueEntrad
     );
     if (!ap) continue;
     const apId = n(ap['id']);
-    const reg = await tx.uma<Linha>(
-      'SELECT id, versao, situacao, data_validade FROM registro_sanitario WHERE apresentacao_comercial_id = ? AND numero_registro = ? FOR UPDATE',
+    const reg = await travarUma<Linha>(
+      tx,
+      'SELECT id, versao, situacao, data_validade FROM registro_sanitario WHERE apresentacao_comercial_id = ? AND numero_registro = ?',
       [apId, a.registro.numero],
     );
     const valores = {
@@ -420,8 +423,9 @@ async function incluirConcessao(
   inicio: string,
   valores: Record<string, unknown>,
 ): Promise<number> {
-  const cancelada = await tx.uma<Linha>(
-    `SELECT id, versao FROM ${tabela} WHERE ${par} AND vigencia_inicio = ? AND excluido_em IS NOT NULL FOR UPDATE`,
+  const cancelada = await travarUma<Linha>(
+    tx,
+    `SELECT id, versao FROM ${tabela} WHERE ${par} AND vigencia_inicio = ? AND excluido_em IS NOT NULL`,
     [...valoresPar, inicio],
   );
   if (!cancelada) return tx.incluir(tabela, valores);
@@ -483,8 +487,8 @@ async function referenciasLocal(tx: TxOperacao, est: number, e: LocalEstoqueEntr
 }
 
 async function gravarFilhosLocal(tx: TxOperacao, id: number, e: LocalEstoqueEntrada): Promise<void> {
-  const setores = await tx.consultar<Linha>(
-    'SELECT id, versao, setor_funcional_id, tipo_atendimento, padrao, excluido_em FROM local_estoque_setor WHERE local_estoque_id = ? FOR UPDATE',
+  const setores = await tx.consultarParaAtualizar<Linha>(
+    'SELECT id, versao, setor_funcional_id, tipo_atendimento, padrao, excluido_em FROM local_estoque_setor WHERE local_estoque_id = ?',
     [id],
   );
   for (const r of setores)
@@ -507,8 +511,8 @@ async function gravarFilhosLocal(tx: TxOperacao, id: number, e: LocalEstoqueEntr
       });
   }
   const chave = (g: unknown, s: unknown, i: unknown) => `${nn(g) ?? ''}|${nn(s) ?? ''}|${nn(i) ?? ''}`;
-  const cls = await tx.consultar<Linha>(
-    'SELECT id, versao, grupo_insumo_id, subgrupo_insumo_id, insumo_id, excluido_em FROM local_estoque_classificacao WHERE local_estoque_id = ? FOR UPDATE',
+  const cls = await tx.consultarParaAtualizar<Linha>(
+    'SELECT id, versao, grupo_insumo_id, subgrupo_insumo_id, insumo_id, excluido_em FROM local_estoque_classificacao WHERE local_estoque_id = ?',
     [id],
   );
   const novas = e.classificacoes.map((c) => chave(c.grupo, c.subgrupo, c.item));
@@ -616,28 +620,28 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
       hoje: await hojeDe(l),
       grupos: opcoes(
         await l.consultar(
-          'SELECT id, codigo, descricao AS nome FROM grupo_insumo WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY descricao',
+          'SELECT id, codigo, descricao AS nome FROM grupo_insumo WHERE ativo = TRUE ORDER BY descricao',
           [],
           { teto: 2000 },
         ),
       ),
       subgrupos: opcoes(
         await l.consultar(
-          'SELECT id, codigo, descricao AS nome, grupo_insumo_id AS grupo FROM subgrupo_insumo WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY descricao',
+          'SELECT id, codigo, descricao AS nome, grupo_insumo_id AS grupo FROM subgrupo_insumo WHERE ativo = TRUE ORDER BY descricao',
           [],
           { teto: 5000 },
         ),
       ),
       unidades: opcoes(
         await l.consultar(
-          'SELECT id, sigla AS codigo, descricao AS nome FROM unidade_medida WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY sigla',
+          'SELECT id, sigla AS codigo, descricao AS nome FROM unidade_medida WHERE ativo = TRUE ORDER BY sigla',
           [],
           { teto: 2000 },
         ),
       ),
       vias: opcoes(
         await l.consultar(
-          'SELECT id, codigo, descricao AS nome FROM via_de_uso WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY descricao',
+          'SELECT id, codigo, descricao AS nome FROM via_de_uso WHERE ativo = TRUE ORDER BY descricao',
           [],
           { teto: 500 },
         ),
@@ -663,6 +667,20 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
           { teto: 2000 },
         ),
       ),
+      guardas: opcoes(
+        await l.consultar(
+          'SELECT id, codigo, descricao AS nome FROM condicao_armazenamento WHERE ativo = TRUE ORDER BY descricao',
+          [],
+          { teto: 500 },
+        ),
+      ),
+      diluentes: opcoes(
+        await l.consultar(
+          "SELECT id, codigo, nome FROM insumo WHERE tipo = 'solucao' AND situacao = 'ativo' AND excluido_em IS NULL ORDER BY nome",
+          [],
+          { teto: 2000 },
+        ),
+      ),
     }));
   }
 
@@ -674,7 +692,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     const like = `%${termo.replace(/[%_\\]/g, (x) => `\\${x}`)}%`;
     const sql = {
       principios:
-        'SELECT id, CAST(id AS CHAR) AS codigo, descricao AS nome FROM principio_ativo WHERE ativo = TRUE AND excluido_em IS NULL AND descricao LIKE ? ORDER BY descricao LIMIT 30',
+        'SELECT id, CAST(id AS CHAR) AS codigo, descricao AS nome FROM principio_ativo WHERE ativo = TRUE AND descricao LIKE ? ORDER BY descricao LIMIT 30',
       fabricantes:
         "SELECT id, COALESCE(cnpj, '') AS codigo, nome FROM fabricante WHERE ativo = TRUE AND excluido_em IS NULL AND nome LIKE ? ORDER BY nome LIMIT 30",
       usuarios:
@@ -712,7 +730,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
         [id],
       );
       const ests = await l.consultar<Linha>(
-        'SELECT * FROM estabilidade_insumo WHERE insumo_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY id',
+        'SELECT * FROM estabilidade_insumo WHERE insumo_id = ? AND ativo = TRUE ORDER BY id',
         [id],
       );
       const fab = r['fabricante_id']
@@ -802,9 +820,9 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     });
   }
 
-  incluirItem(c: ContextoPortaM18, e: ItemEstoqueEntrada) {
+  async incluirItem(c: ContextoPortaM18, e: ItemEstoqueEntrada) {
     recusarTodas(conferirItemEstoque(e));
-    return this.gravar(c, 'incluirItem', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
+    return this.gravar(c, 'incluir-item', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
       if (await tx.uma('SELECT id FROM insumo WHERE codigo = ?', [e.codigo.trim()]))
         throw recusa('item-codigo-existente', `Já existe item com o código ${e.codigo.trim()}.`, {
           campos: ['codigo'],
@@ -817,13 +835,12 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     });
   }
 
-  alterarItem(c: ContextoPortaM18, id: number, versao: number, e: ItemEstoqueEntrada) {
+  async alterarItem(c: ContextoPortaM18, id: number, versao: number, e: ItemEstoqueEntrada) {
     recusarTodas(conferirItemEstoque(e));
-    return this.gravar(c, 'alterarItem', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
-      const atual = await tx.uma<Linha>(
-        'SELECT * FROM insumo WHERE id = ? AND excluido_em IS NULL FOR UPDATE',
-        [id],
-      );
+    return this.gravar(c, 'alterar-item', 'insumo', { codigo: e.codigo, tipo: e.tipo }, async (tx) => {
+      const atual = await travarUma<Linha>(tx, 'SELECT * FROM insumo WHERE id = ? AND excluido_em IS NULL', [
+        id,
+      ]);
       if (!atual) throw recusa('item-inexistente', 'Item inexistente.', { campos: ['id'] });
       recusarTodas(
         conferirAlteracaoItem(
@@ -870,10 +887,10 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
       );
   }
 
-  situacaoItem(c: ContextoPortaM18, id: number, versao: number, ativo: boolean, motivo: string) {
+  async situacaoItem(c: ContextoPortaM18, id: number, versao: number, ativo: boolean, motivo: string) {
     return this.gravar(
       c,
-      ativo ? 'reativarItem' : 'inativarItem',
+      ativo ? 'reativar-item' : 'inativar-item',
       'insumo',
       { ativo, motivo },
       async (tx) => {
@@ -964,11 +981,11 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     });
   }
 
-  incluirLocal(c: ContextoPortaM18, e: LocalEstoqueEntrada) {
+  async incluirLocal(c: ContextoPortaM18, e: LocalEstoqueEntrada) {
     recusarTodas(conferirLocalEstoque(e));
     return this.gravar(
       c,
-      'incluirLocal',
+      'incluir-local',
       'local_estoque',
       { codigo: e.codigo, tipo: e.tipo },
       async (tx, est) => {
@@ -989,17 +1006,18 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     );
   }
 
-  alterarLocal(c: ContextoPortaM18, id: number, versao: number, e: LocalEstoqueEntrada) {
+  async alterarLocal(c: ContextoPortaM18, id: number, versao: number, e: LocalEstoqueEntrada) {
     recusarTodas(conferirLocalEstoque(e, id));
     return this.gravar(
       c,
-      'alterarLocal',
+      'alterar-local',
       'local_estoque',
       { codigo: e.codigo, tipo: e.tipo },
       async (tx, est) => {
         if (
-          !(await tx.uma(
-            'SELECT id FROM local_estoque WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE',
+          !(await travarUma(
+            tx,
+            'SELECT id FROM local_estoque WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
             [id, est],
           ))
         )
@@ -1023,10 +1041,10 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     );
   }
 
-  situacaoLocal(c: ContextoPortaM18, id: number, versao: number, ativo: boolean, motivo: string) {
+  async situacaoLocal(c: ContextoPortaM18, id: number, versao: number, ativo: boolean, motivo: string) {
     return this.gravar(
       c,
-      ativo ? 'reativarLocal' : 'inativarLocal',
+      ativo ? 'reativar-local' : 'inativar-local',
       'local_estoque',
       { ativo, motivo },
       async (tx, est) => {
@@ -1144,7 +1162,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
       });
   }
 
-  gravarEscopoLocal(
+  async gravarEscopoLocal(
     c: ContextoPortaM18,
     usuario: number,
     local: number,
@@ -1153,7 +1171,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarUma(conferirEscopoLocal(e));
     return this.gravar(
       c,
-      'escopoLocal',
+      'escopo-local',
       'local_estoque_usuario',
       { usuario, local, permissoes: e.permissoes },
       async (tx, est) => {
@@ -1169,8 +1187,9 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
               AND local_estoque_id IN (SELECT id FROM local_estoque WHERE estabelecimento_id = ?)`,
             [usuario, local, est],
           );
-        const r = await tx.uma<Linha>(
-          'SELECT id, versao FROM local_estoque_usuario WHERE local_estoque_id = ? AND usuario_id = ? FOR UPDATE',
+        const r = await travarUma<Linha>(
+          tx,
+          'SELECT id, versao FROM local_estoque_usuario WHERE local_estoque_id = ? AND usuario_id = ?',
           [local, usuario],
         );
         if (!r)
@@ -1191,16 +1210,17 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     );
   }
 
-  retirarEscopoLocal(c: ContextoPortaM18, usuario: number, local: number) {
+  async retirarEscopoLocal(c: ContextoPortaM18, usuario: number, local: number) {
     return this.gravar(
       c,
-      'retirarEscopoLocal',
+      'retirar-escopo-local',
       'local_estoque_usuario',
       { usuario, local },
       async (tx, est) => {
         await this.usuarioELocal(tx, est, usuario, local);
-        const r = await tx.uma<Linha>(
-          'SELECT id, versao FROM local_estoque_usuario WHERE local_estoque_id = ? AND usuario_id = ? AND excluido_em IS NULL FOR UPDATE',
+        const r = await travarUma<Linha>(
+          tx,
+          'SELECT id, versao FROM local_estoque_usuario WHERE local_estoque_id = ? AND usuario_id = ? AND excluido_em IS NULL',
           [local, usuario],
         );
         if (!r) throw recusa('escopo-inexistente', 'O usuário não tem este local.', { campos: ['local'] });
@@ -1215,7 +1235,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     );
   }
 
-  concederClassificacao(
+  async concederClassificacao(
     c: ContextoPortaM18,
     usuario: number,
     e: ConcessaoEntrada & { grupo: number; subgrupo?: number | null },
@@ -1228,7 +1248,7 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     recusarUma(conferirConcessaoVigente({ inicio: e.inicio, fim: e.fim ?? null, permissoes: perms }));
     return this.gravar(
       c,
-      'concederClassificacao',
+      'conceder-classificacao',
       'usuario_estoque_classificacao',
       { usuario, grupo: e.grupo, subgrupo: e.subgrupo ?? null },
       async (tx, est) => {
@@ -1280,12 +1300,16 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
     );
   }
 
-  concederCentroCusto(c: ContextoPortaM18, usuario: number, e: ConcessaoEntrada & { centroCusto: number }) {
+  async concederCentroCusto(
+    c: ContextoPortaM18,
+    usuario: number,
+    e: ConcessaoEntrada & { centroCusto: number },
+  ) {
     const perms = [...(e.requisitar ? ['requisitar'] : []), ...(e.movimentar ? ['movimentar'] : [])];
     recusarUma(conferirConcessaoVigente({ inicio: e.inicio, fim: e.fim ?? null, permissoes: perms }));
     return this.gravar(
       c,
-      'concederCentroCusto',
+      'conceder-centro-custo',
       'usuario_estoque_centro_custo',
       { usuario, centroCusto: e.centroCusto },
       async (tx, est) => {
@@ -1335,12 +1359,18 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
    * Retirar a concessão: a que já valia é encerrada na véspera; a que começa hoje ou depois é cancelada (a linha fica
    * marcada como excluída, com o executor e o motivo na trilha). Nos dois casos deixa de valer na hora.
    */
-  retirarConcessao(c: ContextoPortaM18, tipo: 'classificacao' | 'centro-custo', id: number, motivo = '') {
+  async retirarConcessao(
+    c: ContextoPortaM18,
+    tipo: 'classificacao' | 'centro-custo',
+    id: number,
+    motivo = '',
+  ) {
     const tabela =
       tipo === 'classificacao' ? 'usuario_estoque_classificacao' : 'usuario_estoque_centro_custo';
-    return this.gravar(c, 'retirarConcessao', tabela, { tipo, id, motivo }, async (tx, est) => {
-      const r = await tx.uma<Linha>(
-        `SELECT id, versao, vigencia_inicio, vigencia_fim FROM ${tabela} WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+    return this.gravar(c, 'retirar-concessao', tabela, { tipo, id, motivo }, async (tx, est) => {
+      const r = await travarUma<Linha>(
+        tx,
+        `SELECT id, versao, vigencia_inicio, vigencia_fim FROM ${tabela} WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [id, est],
       );
       if (!r) throw recusa('concessao-inexistente', 'Concessão inexistente.', { campos: ['id'] });

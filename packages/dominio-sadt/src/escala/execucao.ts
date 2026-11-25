@@ -33,6 +33,8 @@ export interface EscalaExecucao {
   readonly setor: number;
   readonly profissional: number | null;
   readonly recurso: number | null;
+  /** O papel do profissional na escala: executa o exame ou lauda (o laudo pede o profissional; padrão: executa). */
+  readonly papel?: PapelNaEscala;
   readonly descricao: string;
   /** AAAA-MM-DD. */
   readonly vigenciaInicio: string;
@@ -41,6 +43,10 @@ export interface EscalaExecucao {
   readonly exames: readonly ExameDaEscala[];
   readonly ativa?: boolean;
 }
+
+/** Quem executa o exame (profissional ou sala) ou quem o lauda (sempre um profissional). */
+export type PapelNaEscala = 'executa' | 'lauda';
+export const PAPEIS_NA_ESCALA: readonly PapelNaEscala[] = ['executa', 'lauda'];
 
 export interface ProblemaEscala {
   readonly campo: string;
@@ -64,6 +70,13 @@ export function conferirEscala(e: EscalaExecucao): ProblemaEscala[] {
     p.push({
       campo: 'executante',
       mensagem: 'Informe o profissional que executa ou a sala/equipamento da escala.',
+    });
+  if (e.papel !== undefined && !PAPEIS_NA_ESCALA.includes(e.papel))
+    p.push({ campo: 'papel', mensagem: 'O papel na escala é executar ou laudar.' });
+  if (e.papel === 'lauda' && e.profissional === null)
+    p.push({
+      campo: 'profissional',
+      mensagem: 'A escala de laudo é de um profissional, não de sala ou equipamento.',
     });
   if (e.descricao.trim().length < 3)
     p.push({ campo: 'descricao', mensagem: 'Descreva a escala (ao menos 3 letras).' });
@@ -234,6 +247,7 @@ export function executantesDoExame(
   exame: number,
   data: string,
   hora: string,
+  papel: PapelNaEscala = 'executa',
 ): EscalaExecucao[] {
   // O momento em minutos desde 1970; o plantão começa no dia da data ou na véspera (o noturno que vira a noite), e a
   // vigência que vale é a do dia em que o plantão começou.
@@ -250,6 +264,7 @@ export function executantesDoExame(
   return escalas.filter(
     (e) =>
       e.ativa !== false &&
+      (e.papel ?? 'executa') === papel &&
       e.setor === setor &&
       e.exames.some((x) => x.exame === exame) &&
       e.plantoes.some((p) => cobre(e, p)),

@@ -10,13 +10,17 @@
 // AUDITORIA_EMAIL, ENCARREGADO_EMAIL, PLANTAO_EMAIL, AVISO_TI_EMAIL e AVISO_RT_EMAIL só desviam para a captura fora de
 // produção; em produção são ignoradas, e o cliente sem destinatário configurado tem o alerta recusado (falha visível
 // na fila, ErroDestinatarioNaoConfigurado), nunca entregue a um endereço comum.
+// Melhoria (01-ADM L77): cada tentativa de entrega fica no registro geral de envio do cliente (envio_email e
+// envio_email_destinatario: situação, tentativas, identificador da mensagem), pela porta registro-envio-proprio.ts.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import { type AlertaSuporteJob, conferirAlertaSuporte } from '@sgh/contratos';
 import { envioExternoPermitido, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { clientesDoWorker, type NucleoClientes } from './clientes-worker.js';
+import { entregarComRegistro } from './email-entrega.js';
 import { logger } from './logger.js';
 import { conexaoValkey, filaDeEmail, PREFIXO_FILAS } from './relay-outbox.js';
+import { RegistroEnvioProprio } from './registro-envio-proprio.js';
 import type { NucleoWorker } from './servico-worker.js';
 import { enviarSmtp, type MensagemEmail } from './smtp.js';
 
@@ -262,8 +266,7 @@ export function dominioDoCliente(cliente: string): string {
 
 @Injectable()
 export class EmailService implements OnApplicationBootstrap, OnApplicationShutdown {
-  private nucleo: (NucleoClientes & Pick<NucleoWorker, 'lerSomente'> & { encerrar(): Promise<void> }) | null =
-    null;
+  private nucleo: (NucleoClientes & NucleoWorker & { encerrar(): Promise<void> }) | null = null;
   private readonly consumidores = new Map<string, Worker>();
   private temporizador: NodeJS.Timeout | undefined;
 
@@ -312,12 +315,30 @@ export class EmailService implements OnApplicationBootstrap, OnApplicationShutdo
   private consumidor(cliente: string, valkey: string, smtp: string): Worker {
     const dominio = dominioDoCliente(cliente);
     const de = process.env['EMAIL_REMETENTE']?.trim() || `nao-responda@${dominio}.invalid`;
-    const enviar = async (destinos: readonly string[], m: (para: string) => MensagemEmail) => {
-      for (const para of destinos) await enviarSmtp(smtp, m(para));
-    };
+    // 01-ADM L77: toda tentativa (aceita ou não) vai ao registro geral de envio do cliente (envio_email).
+    const registro = this.nucleo
+      ? new RegistroEnvioProprio(this.nucleo, cliente, envioExternoPermitido(process.env))
+      : null;
     const w = new Worker(
       filaDeEmail(cliente),
       async (job) => {
+        const enviar = async (destinos: readonly string[], m: (para: string) => MensagemEmail) => {
+          const hospital = (job.data as { hospital?: unknown } | null)?.hospital;
+          const falhas = await entregarComRegistro({
+            chave: `${job.name}.${job.id ?? 'sem-numero'}`,
+            dominio,
+            estabelecimento: typeof hospital === 'string' ? hospital : null,
+            destinos,
+            montar: m,
+            enviar: (mensagem) => enviarSmtp(smtp, mensagem),
+            registro,
+          });
+          if (falhas.length > 0)
+            logger.warn(
+              { fila: 'email', cliente, tipo: job.name, erros: falhas },
+              'envio de e-mail sem registro',
+            );
+        };
         const tipos = ['alerta-suporte', 'alerta-emergencia', 'alerta-leitura', 'alerta-chamado'];
         if (!tipos.includes(job.name)) return;
         const cfg = await this.destinatarios(cliente);

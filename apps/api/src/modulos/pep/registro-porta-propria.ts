@@ -20,6 +20,7 @@
 // janela de dias desde a entrada).
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
 import type { ContextoRegistro, PortaRegistro } from './registro-porta.js';
+import { dataHora, fusoValido } from './registro-propria-comum.js';
 import { type NucleoRegistroGravacao, RegistroPropriaGravacao } from './registro-propria-gravacao.js';
 import {
   type AtendimentoLido,
@@ -30,21 +31,13 @@ import {
   atendimentoEmCurso,
 } from './tipos-pep.js';
 
-/** O que a porta usa do NucleoProprio (os testes trocam). */
-export interface NucleoLeituraPep {
-  lerSomente<T>(
-    contexto: { readonly cliente: string; readonly correlacao: string },
-    fn: (l: Leitor) => Promise<T>,
-  ): Promise<T>;
-}
+// A base comum continua exportada por aqui (as demais portas do PEP importam desta porta).
+export { dataHora, FUSO_PADRAO, fusoValido, type NucleoLeituraPep } from './registro-propria-comum.js';
 
 /** Atendimentos devolvidos por paciente (a tela mostra os mais recentes). */
 export const TETO_ATENDIMENTOS = 200;
 /** Janela do "uso recente" que ordena os modelos. */
 export const DIAS_USO_RECENTE = 90;
-
-/** Fuso do estabelecimento sem fuso válido no cadastro (o mesmo padrão da coluna estabelecimento.fuso_horario). */
-export const FUSO_PADRAO = 'America/Sao_Paulo';
 
 export const MOTIVO_GRAVACAO_PENDENTE =
   'O registro clínico no banco próprio ainda não grava: a tela fica em consulta até o adaptador de gravação.';
@@ -52,47 +45,6 @@ export const MOTIVO_GRAVACAO_PENDENTE =
 const num = (v: unknown): number => Number(v);
 const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const textoOuNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
-const formatadores = new Map<string, Intl.DateTimeFormat>();
-function formatador(fuso: string): Intl.DateTimeFormat {
-  let f = formatadores.get(fuso);
-  if (!f) {
-    f = new Intl.DateTimeFormat('en-CA', {
-      timeZone: fuso,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    });
-    formatadores.set(fuso, f);
-  }
-  return f;
-}
-/** Fuso IANA válido do estabelecimento; inválido ou vazio cai no padrão. */
-export function fusoValido(v: unknown): string {
-  const f = textoOuNull(v);
-  if (!f) return FUSO_PADRAO;
-  try {
-    formatador(f);
-    return f;
-  } catch {
-    return FUSO_PADRAO;
-  }
-}
-/**
- * Instante do banco (UTC) na data e hora civil do estabelecimento (AAAA-MM-DDTHH:MM:SS); null se vazio. Os getters
- * locais do processo não entram: o resultado não depende do TZ da máquina.
- */
-export const dataHora = (v: unknown, fuso: string): string | null => {
-  if (v === null || v === undefined) return null;
-  const d = v instanceof Date ? v : new Date(String(v));
-  if (Number.isNaN(d.getTime())) return null;
-  const partes = formatador(fuso).formatToParts(d);
-  const p = (t: string) => partes.find((x) => x.type === t)?.value ?? '00';
-  return `${p('year')}-${p('month')}-${p('day')}T${p('hour')}:${p('minute')}:${p('second')}`;
-};
 const TIPOS_ATENDIMENTO: readonly TipoAtendimento[] = [
   'ambulatorio',
   'pronto_atendimento',

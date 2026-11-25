@@ -59,6 +59,15 @@ export interface ProtocoloHistorico {
   readonly em: string;
 }
 
+export interface FaturaDoLote {
+  readonly numero: string;
+  readonly situacao: string;
+  readonly contas: number;
+  readonly valorApresentado: number;
+  readonly protocolo: string;
+  readonly entrega: string | null;
+}
+
 export interface LoteDetalhe extends LoteLido {
   readonly contasDoLote: readonly {
     readonly conta: number;
@@ -68,6 +77,8 @@ export interface LoteDetalhe extends LoteLido {
     readonly fechada: string;
   }[];
   readonly historico: readonly ProtocoloHistorico[];
+  /** A fatura ao pagador gravada com o lote (06-FAT linha 31): nula quando o lote veio antes dela. */
+  readonly fatura?: FaturaDoLote | null;
   readonly mensagens: readonly {
     readonly direcao: string;
     readonly destino: string;

@@ -10,3 +10,5 @@ export * from './vinculo.js';
 export * from './auditoria/periodo.js';
 export * from './usuario/login.js';
 export * from './privacidade/pedido-titular.js';
+// 01-ADM L75: regra de alerta conferida na tela enquanto se digita (a mesma do servidor; sem node:crypto).
+export * from './notificacao/notificacao-regra.js';

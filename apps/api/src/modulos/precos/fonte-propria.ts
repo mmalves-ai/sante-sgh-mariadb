@@ -19,8 +19,10 @@
 // o mesmo arquivo entra uma vez por tabela; a publicação aponta o lote do reajuste e a rejeição exige o motivo.
 // Melhoria: os contatos do convênio por área ficam em contato_fonte_pagadora; o CNPJ, o endereço e a nota fiscal são
 // os da pessoa jurídica (a do convênio ou a tomadora) e se editam no cadastro dela.
-// Pendências (pedidos do lote 02-12, saida/02-12.json): o reajuste e o desfazer pelo lote, os modificadores e as
-// referências de terceiros ainda não são lidos do modelo (a tela mostra vazio e as gravações ficam não liberadas).
+// Melhoria (06-FAT linha 3): o reajuste e o desfazer pelo lote gravam pelo Executor (reajuste-propria.ts); o desfazer
+// grava a exclusão da vigência, nunca apaga, e a leitura dos valores ignora a vigência excluída (VALOR_VALIDO).
+// Pendência (pedidos do lote 02-12, saida/02-12.json): os modificadores e as referências de terceiros ainda não são
+// lidos do modelo (a tela mostra vazio).
 import { randomUUID } from 'node:crypto';
 import type {
   AlterarContratoConvenioEntrada,
@@ -69,6 +71,14 @@ import type {
 } from './fonte.js';
 import { type NomeOperacaoPreco, OPERACOES_PRECO } from './operacoes.js';
 import {
+  autoriaDoItemPropria,
+  conferirDesfazer,
+  OP_DESFAZER,
+  OP_REAJUSTAR,
+  VALOR_VALIDO,
+} from './reajuste-propria.js';
+import {
+  type AutoriaPreco,
   type AlteracaoPlano,
   type CabecalhoTabela,
   type CargaImportacao,
@@ -262,17 +272,17 @@ const SQL_ITENS_HONORARIO = `
          pp.modelo_valor, po.codigo AS porte,
          v.vigencia_inicio, v.valor_honorario, v.valor_custo_operacional, v.valor_filme, v.valor_anestesia,
          v.valor_outros,
-         (SELECT COUNT(*) FROM preco_procedimento_valor x WHERE x.preco_procedimento_id = pp.id) AS vigencias,
-         (SELECT MAX(x.vigencia_inicio) FROM preco_procedimento_valor x WHERE x.preco_procedimento_id = pp.id) AS ultima,
+         (SELECT COUNT(*) FROM preco_procedimento_valor x WHERE x.preco_procedimento_id = pp.id AND ${VALOR_VALIDO}) AS vigencias,
+         (SELECT MAX(x.vigencia_inicio) FROM preco_procedimento_valor x WHERE x.preco_procedimento_id = pp.id AND ${VALOR_VALIDO}) AS ultima,
          EXISTS (SELECT 1 FROM preco_procedimento_valor x WHERE x.preco_procedimento_id = pp.id
-                   AND x.vigencia_inicio = ?) AS tem_na_data
+                   AND x.vigencia_inicio = ? AND ${VALOR_VALIDO}) AS tem_na_data
     FROM preco_procedimento pp
     JOIN tabela_preco t ON t.id = pp.tabela_preco_id
     LEFT JOIN item_faturavel it ON it.id = pp.item_faturavel_id
     LEFT JOIN porte_procedimento po ON po.id = pp.porte_procedimento_id
     LEFT JOIN preco_procedimento_valor v ON v.id = (
            SELECT x.id FROM preco_procedimento_valor x
-            WHERE x.preco_procedimento_id = pp.id AND x.vigencia_inicio <= ? AND x.operacao <> 'exclusao'
+            WHERE x.preco_procedimento_id = pp.id AND x.vigencia_inicio <= ? AND ${VALOR_VALIDO}
             ORDER BY x.vigencia_inicio DESC, x.id DESC LIMIT 1)
    WHERE pp.tabela_preco_id = ? AND t.estabelecimento_id = ? AND pp.excluido_em IS NULL AND t.excluido_em IS NULL`;
 
@@ -441,7 +451,12 @@ export class FontePrecosPropria implements FontePrecos {
 
   /** Só as operações já escritas sobre o modelo estão liberadas; as demais aguardam (null: não disponível). */
   estado(op: string): EstadoOperacao | null {
-    return op === 'convenio.alterarSituacao' || op === 'convenio.alterarContrato' ? 'liberada' : null;
+    return op === 'convenio.alterarSituacao' ||
+      op === 'convenio.alterarContrato' ||
+      op === 'preco.reajustar' ||
+      op === 'preco.desfazerReajuste'
+      ? 'liberada'
+      : null;
   }
 
   async executar(nome: NomeOperacaoPreco, c: CtxPrecos, entrada: unknown, ctx: ContextoGravacaoPreco) {
@@ -452,8 +467,12 @@ export class FontePrecosPropria implements FontePrecos {
         ? OP_SITUACAO
         : nome === 'convenio.alterarContrato'
           ? OP_CONTRATO
-          : null;
-    if (!op) throw erroNaoLiberada('o reajuste e o desfazer pelo lote aguardam a fonte própria');
+          : nome === 'preco.reajustar'
+            ? OP_REAJUSTAR
+            : nome === 'preco.desfazerReajuste'
+              ? OP_DESFAZER
+              : null;
+    if (!op) throw erroNaoLiberada('operação não liberada na fonte própria');
     const r = await this.executor.executar(op as typeof OP_SITUACAO, c.cliente, entrada, {
       ...contextoDe(c),
       chaveIdempotencia: ctx.chaveIdempotencia,
@@ -819,10 +838,10 @@ export class FontePrecosPropria implements FontePrecos {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
-          `SELECT v.* FROM preco_procedimento_valor v JOIN preco_procedimento pp ON pp.id = v.preco_procedimento_id
+          `SELECT x.* FROM preco_procedimento_valor x JOIN preco_procedimento pp ON pp.id = x.preco_procedimento_id
              JOIN tabela_preco t ON t.id = pp.tabela_preco_id
-            WHERE pp.id = ? AND pp.tabela_preco_id = ? AND t.estabelecimento_id = ? AND v.operacao <> 'exclusao'
-            ORDER BY v.vigencia_inicio DESC, v.id DESC`,
+            WHERE pp.id = ? AND pp.tabela_preco_id = ? AND t.estabelecimento_id = ? AND ${VALOR_VALIDO}
+            ORDER BY x.vigencia_inicio DESC, x.id DESC`,
           [cod, tab, est],
           { teto: 1_000 },
         )
@@ -830,8 +849,11 @@ export class FontePrecosPropria implements FontePrecos {
     );
   }
 
-  autoriaDoItem() {
-    return naoLido(null);
+  autoriaDoItem(c: CtxPrecos, tab: number, cod: number): Promise<AutoriaPreco[] | null> {
+    return this.ler(c, async (l, est) => {
+      const fuso = await fusoDe(l, est);
+      return autoriaDoItemPropria(l, est, tab, cod, (v) => localDe(v, fuso));
+    });
   }
 
   lotes(c: CtxPrecos, tab: number | null): Promise<LoteReajuste[] | null> {
@@ -1324,9 +1346,11 @@ export class FontePrecosPropria implements FontePrecos {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
-  async preConferirDesfazer(_c: CtxPrecos, _p: readonly DesfazerReajusteEntrada[]): Promise<void> {
-    throw erroNaoLiberada('o desfazer pelo lote aguarda a fonte própria');
+  /** Todas as partes do desfazer conferidas antes da primeira exclusão (só leitura). */
+  async preConferirDesfazer(c: CtxPrecos, partes: readonly DesfazerReajusteEntrada[]): Promise<void> {
+    await this.ler(c, async (l, est) => {
+      for (const p of partes) await conferirDesfazer(l, est, p);
+    });
   }
 
   /** Gravação direta (planos) pelo Executor: trilha e idempotência na mesma transação. */

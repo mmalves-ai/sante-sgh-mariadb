@@ -1,5 +1,6 @@
-// Leitor comum dos dias sem expediente do estabelecimento (F3.1, 02-CAD linha 28), usado pela agenda de consultas e
-// pela de exames: os nacionais calculados (fixos e Sexta-feira Santa) e o cadastro único `dia_nao_util` (nacional, da
+// Leitor comum dos dias sem expediente do estabelecimento (F3.1, 02-CAD linha 28), usado pela agenda de consultas,
+// pela de exames e, pelo dia inteiro (`lerFeriadosDoPeriodo`), pelo acréscimo de feriado da conta, pela grade da sala
+// cirúrgica, pelo ponto, pelo portal do paciente e pelos prazos da qualidade: os nacionais calculados (fixos e Sexta-feira Santa) e o cadastro único `dia_nao_util` (nacional, da
 // UF, do município e do estabelecimento; recorrência anual, data única e móvel; faixa do dia). A tabela `feriado`,
 // anterior ao cadastro único, não é mais lida aqui: a migração 05_AGE/90 copiou o que existia para `dia_nao_util`
 // (o Calendário controla de fato a agenda: inativar ou mudar a data da cópia vale na hora). A regra de qual vale está
@@ -70,4 +71,19 @@ export async function lerDiasSemExpediente(
       })),
     },
   );
+}
+
+/**
+ * Os feriados (dia inteiro sem expediente) do estabelecimento entre `de` e `ate`, em ordem de data e um por data: o
+ * que conta para acréscimo de feriado, grade de sala, ponto e prazo em dias úteis. O meio expediente e o ponto
+ * facultativo ficam fora (não são feriado: o dia conta como útil).
+ */
+export async function lerFeriadosDoPeriodo(
+  l: Pick<Leitor, 'uma' | 'consultar'>,
+  estabelecimento: number,
+  de: string,
+  ate: string,
+): Promise<{ data: string; nome: string }[]> {
+  const dias = await lerDiasSemExpediente(l, estabelecimento, de.slice(0, 10), ate.slice(0, 10));
+  return dias.filter((x) => !x.horaInicio).map((x) => ({ data: x.data, nome: x.nome }));
 }

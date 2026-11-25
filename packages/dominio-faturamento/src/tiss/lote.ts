@@ -523,6 +523,45 @@ export function mensagemRecursoGlosa(cab: Cabecalho, r: RecursoGlosa): MensagemT
   return montar(cab, 'RECURSO_GLOSA', corpo);
 }
 
+/**
+ * Comunicação de internação ou alta do beneficiário (COMUNICACAO_BENEFICIARIO, ctm_beneficiarioComunicacao em
+ * prestadorParaOperadora/comunicacaoInternacao): carteira e recém-nascido, data e tipo do evento (I internação, A
+ * alta) e, dentro de dadosInternacao, o tipo de internação (dm_tipoInternacao) no início ou o motivo de encerramento
+ * (dm_motivoSaida) na alta.
+ */
+export interface ComunicacaoBeneficiario {
+  readonly beneficiario: Beneficiario;
+  /** AAAA-MM-DD */
+  readonly dataEvento: string;
+  readonly tipoEvento: 'I' | 'A';
+  /** Obrigatório no evento I. */
+  readonly tipoInternacao: string | null;
+  /** Obrigatório no evento A. */
+  readonly motivoEncerramento: string | null;
+}
+
+export function mensagemComunicacaoBeneficiario(cab: Cabecalho, c: ComunicacaoBeneficiario): MensagemTiss {
+  const internacao = c.tipoEvento === 'I';
+  const valor = internacao ? c.tipoInternacao : c.motivoEncerramento;
+  if (!valor?.trim())
+    throw new ErroLoteTiss(
+      internacao
+        ? 'A comunicação de internação precisa do tipo de internação.'
+        : 'A comunicação de alta precisa do motivo de encerramento.',
+    );
+  const corpo = el(
+    'prestadorParaOperadora',
+    el(
+      'comunicacaoInternacao',
+      beneficiario(c.beneficiario),
+      el('dataEvento', c.dataEvento),
+      el('tipoEvento', c.tipoEvento),
+      el('dadosInternacao', el(internacao ? 'tipoInternacao' : 'motivoEncerramento', valor)),
+    ),
+  );
+  return montar(cab, 'COMUNICACAO_BENEFICIARIO', corpo);
+}
+
 /** Recalcula o hash a partir do XML serializado e compara com o do epílogo. */
 export function conferirHashEpilogo(xml: string): {
   readonly confere: boolean;

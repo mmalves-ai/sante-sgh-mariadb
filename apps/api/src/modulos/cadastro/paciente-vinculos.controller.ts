@@ -38,6 +38,7 @@ import {
   type OpcoesVinculos,
   type PreCadastroResumo,
 } from './paciente-vinculos-proprio.js';
+import { semIndefinidos } from '../../entrada-exata.js';
 
 export const VINCULOS_CADASTRO = Symbol('VINCULOS_CADASTRO');
 
@@ -263,7 +264,7 @@ export class PacienteVinculosController {
       { situacao, termo },
     );
     try {
-      return { itens: await this.servico().preCadastros(s.porta, f) };
+      return { itens: await this.servico().preCadastros(s.porta, semIndefinidos(f)) };
     } catch (e) {
       throw problemaDoCadastro(e);
     }
@@ -337,7 +338,7 @@ export class PacienteVinculosController {
     try {
       return await this.servico().converterPreCadastro(
         s.porta,
-        { id: idDaRota(id), paciente: b.paciente, motivoDivergencia: b.motivoDivergencia },
+        semIndefinidos({ id: idDaRota(id), paciente: b.paciente, motivoDivergencia: b.motivoDivergencia }),
         t,
         ctx.chaveIdempotencia,
       );

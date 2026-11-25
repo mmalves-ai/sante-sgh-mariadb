@@ -7,6 +7,7 @@
 // (apps/api/src/modulos/faturamento/conta-ajustes-propria.int.spec.ts).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
+import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const CONTA = 7305;
@@ -136,9 +137,9 @@ test.describe('ajustes da conta e pacote @F3.7', () => {
     await semViolacaoAxe(page, '/faturamento/contas/:id/ajustes');
 
     // Validação na hora: sem justificativa o pedido não sai; com ela, o desconto vai com o valor digitado.
-    await page.getByTestId('aj-tipo').selectOption('desconto');
-    await page.getByTestId('aj-motivo').selectOption({ label: 'Desconto comercial' });
-    await page.getByTestId('aj-forma').selectOption('valor');
+    await escolher(page.getByTestId('aj-tipo'), 'desconto');
+    await escolher(page.getByTestId('aj-motivo'), { rotulo: 'Desconto comercial' });
+    await escolher(page.getByTestId('aj-forma'), 'valor');
     await page.getByTestId('aj-valor').fill('50');
     await expect(page.getByTestId('aj-erros')).toContainText('Justifique');
     await expect(page.getByTestId('aj-pedir')).toBeDisabled();
@@ -181,7 +182,7 @@ test.describe('ajustes da conta e pacote @F3.7', () => {
     // Pacote: o alerta de teto aparece; a descaracterização exige motivo e justificativa.
     await expect(page.getByTestId('aj-alertas')).toContainText('passa o teto');
     await page.getByTestId('aj-abrir-desc').click();
-    await page.getByTestId('aj-motivo-desc').selectOption({ label: 'Intercorrência sintética' });
+    await escolher(page.getByTestId('aj-motivo-desc'), { rotulo: 'Intercorrência sintética' });
     await page.getByTestId('aj-just-desc').fill('curta');
     await expect(page.getByTestId('aj-descaracterizar')).toBeDisabled();
     await page.getByTestId('aj-just-desc').fill('Teto de consumo superado na internação');

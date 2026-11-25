@@ -25,6 +25,12 @@ import type { ContextoGravacao, LiberacaoOperacao, PacienteFicha } from '../cada
 import type { EstadoCatalogo } from '../cadastro/porta.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import {
+  definirPadraoMemoria,
+  type EstadoPadraoAbertura,
+  lerPadraoMemoria,
+  novoEstadoPadraoAbertura,
+} from './padrao-memoria.js';
+import {
   type ApoioAtendimentoDados,
   type AtendimentoPa,
   type EscorePaRegistrado,
@@ -159,8 +165,20 @@ interface Estado {
   excluidas: number[];
   /** A configuração da herança do atendimento anterior (as marcas T/F, como a linha única da rede). */
   heranca: Record<string, boolean>;
+  /** Os valores habituais da abertura, por escopo. */
+  padrao: EstadoPadraoAbertura;
 }
 
+const UNIDADES_APOIO = [
+  { codigo: 1, nome: `AMBULATORIO ${M}` },
+  { codigo: 2, nome: `LABORATORIO ${M}` },
+  { codigo: 3, nome: `PRONTO ATENDIMENTO ${M}` },
+];
+const CENTROS_APOIO = [
+  { codigo: 300400, nome: `PRONTO ATENDIMENTO ${M}` },
+  { codigo: 300500, nome: `LABORATORIO ${M}` },
+  { codigo: 300600, nome: `AMBULATORIO ${M}` },
+];
 const CONVENIOS = [
   { codigo: 306, nome: `CONVENIO EMPRESARIAL ${M}`, ativo: true },
   { codigo: 320, nome: `PLANO DE SAUDE ${M}`, ativo: true },
@@ -287,6 +305,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
       seq: 1,
       idem: new Map(),
       excluidas: [],
+      padrao: novoEstadoPadraoAbertura(),
       heranca: Object.fromEntries(
         HERANCAS.map((h) => [
           h.chave,
@@ -876,6 +895,15 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
         for (const h of mudadas) s.heranca[h.chave] = e['marcas'][h.campo] === true;
         return { versao: versaoHeranca(s.heranca), campos: mudadas.map((h) => h.chave).join(',') };
       }
+      case 'atendimento.definirPadraoAbertura':
+      case 'atendimento.definirMeuPadraoAbertura':
+        return definirPadraoMemoria(
+          s.padrao,
+          op === 'atendimento.definirMeuPadraoAbertura',
+          c.usuario,
+          e as never,
+          await this.apoio(c),
+        );
       default:
         throw new Error(`Operação ${op} sem gravação em memória no atendimento.`);
     }
@@ -1407,20 +1435,18 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     const s = this.e(c);
     return {
       convenios: CONVENIOS,
-      unidades: [
-        { codigo: 1, nome: `AMBULATORIO ${M}` },
-        { codigo: 2, nome: `LABORATORIO ${M}` },
-        { codigo: 3, nome: `PRONTO ATENDIMENTO ${M}` },
-      ],
+      unidades: UNIDADES_APOIO,
       especialidades: ESPECIALIDADES,
       profissionais: PROFISSIONAIS.map((p) => ({ ...p })),
-      centrosCusto: [
-        { codigo: 300400, nome: `PRONTO ATENDIMENTO ${M}` },
-        { codigo: 300500, nome: `LABORATORIO ${M}` },
-        { codigo: 300600, nome: `AMBULATORIO ${M}` },
-      ],
+      centrosCusto: CENTROS_APOIO,
       motivosExclusao: MOTIVOS_EXCLUSAO,
       heranca: { ...s.heranca },
+      padraoAbertura: lerPadraoMemoria(s.padrao, c.usuario, {
+        convenios: CONVENIOS,
+        unidades: UNIDADES_APOIO,
+        especialidades: ESPECIALIDADES,
+        centrosCusto: CENTROS_APOIO,
+      }),
     };
   }
 
@@ -1450,10 +1476,12 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
 
   async historico(c: ContextoAtendimento, paciente: number) {
     const s = this.e(c);
+    const { padraoAbertura } = await this.apoio(c);
     const doPaciente = s.fichas.filter((f) => f.paciente === paciente).sort((a, b) => b.reg - a.reg);
     const a = doPaciente.find((f) => !f.lab) ?? null;
     return {
       heranca: { ...s.heranca },
+      ...(padraoAbertura ? { padrao: padraoAbertura } : {}),
       anterior: a
         ? {
             reg: a.reg,

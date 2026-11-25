@@ -1,10 +1,22 @@
 // Textos das telas do financeiro e fiscal (M32): contas a pagar e a receber, tesouraria, gerencial, parâmetros, fiscal
 // e a exportação contábil. Sem nome de sistema antigo (ADR 0023) nem "outro sistema" (escopo estrito do verificador).
+import { mensagensAcordosFinanceiro } from './i18n-acordos.js';
+import { mensagensBaixaFinanceiro } from './i18n-baixa.js';
+import { mensagensCartaoFinanceiro } from './i18n-cartao.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
+import { mensagensPagamentoEletronico } from './i18n-pagamento-eletronico.js';
 
 export const mensagensFinanceiro = {
+  // F3.8, 07-FIN linha 89: cartão de débito e crédito (i18n-cartao.ts).
+  cartao: mensagensCartaoFinanceiro,
+  // F3.8, 07-FIN linha 76: acordos de renegociação e baixa pelo demonstrativo (i18n-acordos.ts).
+  acordos: mensagensAcordosFinanceiro,
   // F3.8, 07-FIN linhas 98 e 99: reclassificação e permissões (i18n-gestao.ts).
   gestao: mensagensGestaoFinanceiro,
+  // F3.8, 07-FIN linha 66: retorno do banco, remessa por Pix e dados bancários do credor.
+  pagamentoEletronico: mensagensPagamentoEletronico,
+  // F3.8, 07-FIN linha 63: baixa parcial, desconto e acréscimos na baixa (i18n-baixa.ts).
+  baixa: mensagensBaixaFinanceiro,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   todos: 'Todos',
@@ -58,6 +70,8 @@ export const mensagensFinanceiro = {
     'em-bordero': 'Em borderô',
     pago: 'Pago',
     'pago-parcial': 'Pago em parte',
+    cancelada: 'Cancelada',
+    renegociada: 'Renegociada',
   },
   situacoesReceber: {
     aberto: 'Em aberto',
@@ -81,6 +95,7 @@ export const mensagensFinanceiro = {
     lancadoPor: 'Lançado por',
     aprovacoes: 'Aprovações',
     credorNaoEncontrado: 'não encontrado no cadastro',
+    credorPeloNome: 'Achar o credor pelo nome',
     profissional: 'Profissional (médico)',
     valorDocumento: 'Valor do documento',
     referente: 'Referente a',
@@ -103,6 +118,21 @@ export const mensagensFinanceiro = {
     excluir: 'Excluir título em aberto',
     excluirTexto: 'Só o título em aberto se exclui; o pago se desfaz por estorno, com motivo.',
     legendaStatus: 'Código de situação gravado',
+    prorrogar: {
+      titulo: 'Prorrogar o vencimento',
+      texto:
+        'O vencimento original fica guardado e cada prorrogação vai ao histórico com o motivo. Parcela paga ou em remessa sem retorno não se prorroga.',
+      parcela: 'Parcela',
+      novoVencimento: 'Novo vencimento',
+      motivo: 'Motivo',
+      justificativa: 'Justificativa',
+      justificativaObrigatoria: 'Este motivo exige justificativa.',
+      dataParaTras: 'O novo vencimento tem de ser depois do atual ({atual}).',
+      botao: 'Prorrogar',
+      historico: 'Histórico de prorrogações da parcela',
+      passo: '{de} → {para}: {motivo} — {usuario} ({em})',
+      nenhuma: 'Nenhuma prorrogação.',
+    },
   },
   aprovacao: {
     titulo: 'Aprovação de pagamentos por alçada',
@@ -145,7 +175,12 @@ export const mensagensFinanceiro = {
     tipoCredor: 'Tipo de credor',
     fornecedor: 'Fornecedor',
     profissional: 'Médico',
-    credor: 'Código do credor',
+    credor: 'Credor',
+    credorDica: 'Digite parte do nome, o CNPJ, o CPF ou o código',
+    credorNenhum: 'Nenhum credor encontrado neste tipo.',
+    credorErro: 'Não foi possível consultar os credores (sem permissão ou falha na consulta). Tente de novo.',
+    credorEscolhido: 'Escolhido: {nome} (código {codigo})',
+    credorSemNome: 'não encontrado no cadastro',
     referente: 'Finalidade',
     prazo: 'Prazo para compensar',
     conceder: 'Pedir adiantamento',
@@ -223,7 +258,7 @@ export const mensagensFinanceiro = {
   },
   renegociacoes: {
     titulo: 'Renegociação de títulos',
-    texto: 'O histórico das renegociações. Nesta fase, só consulta.',
+    texto: 'Negocie os títulos em aberto de um devedor num acordo parcelado e acompanhe os acordos feitos.',
     em: 'Quando',
     responsavel: 'Responsável',
     titulos: 'Títulos',

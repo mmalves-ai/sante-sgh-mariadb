@@ -24,7 +24,11 @@ import {
 } from './massa-adt.spec-util.js';
 import { carimboVersao } from './operacoes.js';
 import { PortaAdtPropria } from './porta-propria.js';
-import { lerOperadoresDaUnidade, lerRegistrosDaInternacao } from './registros-internacao.js';
+import {
+  lerCandidatosOperadores,
+  lerOperadoresDaUnidade,
+  lerRegistrosDaInternacao,
+} from './registros-internacao.js';
 
 const codigoDe = (e: unknown) =>
   (e as { problema?: { codigo?: string } }).problema?.codigo ?? (e as { codigo?: string }).codigo;
@@ -89,6 +93,43 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
         )
       )?.id ?? 0,
     );
+
+  // A conta da internação: a aberta na entrada; quando o cadastro de tipos de conta do cliente de teste não deixa abrir
+  // (pendência do faturamento, fora deste contrato), uma conta sintética da mesma internação (apagada pela limpeza da
+  // massa, que tira as contas do estabelecimento).
+  const contaDaInternacao = async (id: number): Promise<number> => {
+    const ja = await lerAdt<{ id: number }>(
+      M(),
+      `SELECT c.id FROM conta_hospitalar c JOIN internacao i ON i.atendimento_id = c.atendimento_id
+        WHERE i.id = ? ORDER BY c.id LIMIT 1`,
+      [id],
+    );
+    if (ja) return Number(ja.id);
+    const tipo = await lerAdt<{ id: number }>(
+      M(),
+      "SELECT id FROM tipo_conta WHERE natureza = 'internacao' AND ativo ORDER BY ordem, id LIMIT 1",
+      [],
+    );
+    await M().nucleo.escrever({ cliente: CLIENTE_ADT, correlacao: 'int-registros-conta' }, (e) =>
+      e.executar(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+                tipo_conta_id, natureza, competencia, inicio_em, criado_em)
+         SELECT estabelecimento_id, CONCAT('R', id, '-1'), atendimento_id, paciente_id, fonte_pagadora_id, ?, 'internacao',
+                DATE_FORMAT(data_hora_entrada, '%Y-%m-01'), data_hora_entrada, NOW(3)
+           FROM internacao WHERE id = ?`,
+        [Number(tipo?.id), id],
+      ),
+    );
+    return Number(
+      (
+        await lerAdt<{ id: number }>(
+          M(),
+          `SELECT c.id FROM conta_hospitalar c JOIN internacao i ON i.atendimento_id = c.atendimento_id WHERE i.id = ?`,
+          [id],
+        )
+      )?.id,
+    );
+  };
 
   beforeAll(async () => {
     m = await prepararMassaAdt('R');
@@ -221,15 +262,7 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
   });
 
   it('prorrogação: nova linha com a validade seguinte e o autorizador; a guia inicial continua; buraco recusado', async () => {
-    const c = Number(
-      (
-        await lerAdt<{ id: number }>(
-          M(),
-          'SELECT id FROM conta_hospitalar WHERE estabelecimento_id = ? ORDER BY id DESC LIMIT 1',
-          [M().est],
-        )
-      )?.id,
-    );
+    const c = await contaDaInternacao(internacao);
     await expect(
       executar('internacao.registrarGuia', {
         internacao,
@@ -263,7 +296,11 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
       seguida: 1,
     });
     expect(
-      await lerAdt(M(), 'SELECT numero_guia, senha_autorizacao FROM internacao WHERE id = ?', [internacao]),
+      await lerAdt(
+        M(),
+        'SELECT numero_guia, senha_autorizacao, diarias_autorizadas FROM internacao WHERE id = ?',
+        [internacao],
+      ),
     ).toMatchObject({ numero_guia: 'G-PRORROGA', senha_autorizacao: 'S2', diarias_autorizadas: 7 });
     const leitura = await porta.lerNoEstabelecimento(contextoAdt(M()), (l, est, fuso) =>
       lerRegistrosDaInternacao(l, est, fuso, internacao),
@@ -297,7 +334,7 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
     expect(
       await lerAdt(
         M(),
-        `SELECT COUNT(*) AS n, SUM(diarias_autorizadas) AS d,
+        `SELECT COUNT(*) AS n, CAST(SUM(diarias_autorizadas) AS SIGNED) AS d,
                 MAX(CASE WHEN sequencia = 1 THEN CONCAT(numero_guia, '|', motivo_retificacao, '|', versao) END) AS ini
            FROM guia_internacao WHERE internacao_id = ?`,
         [internacao],
@@ -337,7 +374,7 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
            FROM diagnostico_internacao WHERE internacao_id = ? AND tipo = 'principal'`,
         [p2['diagnostico'], internacao],
       ),
-    ).toMatchObject({ vigentes: 1, trocado: 1 });
+    ).toMatchObject({ vigentes: '1', trocado: '1' });
     await expect(
       executar('internacao.retirarDiagnostico', { internacao, sequencia: p2['sequencia'], motivo: 'x' }),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'motivo-obrigatorio');
@@ -369,9 +406,10 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
         lerRegistrosDaInternacao(l, M().outro, fuso, internacao),
       ),
     ).toBeNull();
+    const unidade = await unidadeDaMassa();
     expect(
       await porta.lerNoEstabelecimento(contextoAdt(M()), (l) =>
-        lerOperadoresDaUnidade(l, M().outro, await unidadeDaMassa()),
+        lerOperadoresDaUnidade(l, M().outro, unidade),
       ),
     ).toBeNull();
     await expect(
@@ -379,11 +417,38 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
         alheio,
         'internacao.registrarDiagnostico',
         { internacao, cid: M().cid, tipo: 'secundario' },
-        { ...operacaoAdt(M()), reautenticadoEm: Date.now() },
+        { ...operacaoAdt(M(), M().outro), reautenticadoEm: Date.now() },
       ),
     ).rejects.toSatisfy(
       (e) => codigoDe(e) === 'registro-inexistente' || codigoDe(e) === 'sem-estabelecimento',
     );
+  });
+
+  it('candidatos à lista de operadores: só usuários ativos, pelo login, com o curinga do termo neutralizado', async () => {
+    const eu = await lerAdt<{ login: string; situacao: string }>(
+      M(),
+      'SELECT login, situacao FROM usuario WHERE id = ?',
+      [M().usuario],
+    );
+    const login = String(eu?.login);
+    const achados = await porta.lerNoEstabelecimento(contextoAdt(M()), (l) =>
+      lerCandidatosOperadores(l, login),
+    );
+    if (eu?.situacao === 'ativo') expect(achados.map((c) => c.usuario)).toContain(M().usuario);
+    expect(achados.length).toBeLessThanOrEqual(30);
+    const inativos = await lerAdt<{ n: number }>(
+      M(),
+      `SELECT COUNT(*) AS n FROM usuario WHERE situacao <> 'ativo' AND id IN (${achados.map(() => '?').join(',') || 'NULL'})`,
+      achados.map((c) => c.usuario),
+    );
+    expect(Number(inativos?.n)).toBe(0);
+    // Termo curto não busca; o % digitado não vira curinga (nenhum login tem %).
+    expect(
+      await porta.lerNoEstabelecimento(contextoAdt(M()), (l) => lerCandidatosOperadores(l, 'a')),
+    ).toEqual([]);
+    expect(
+      await porta.lerNoEstabelecimento(contextoAdt(M()), (l) => lerCandidatosOperadores(l, '%%')),
+    ).toEqual([]);
   });
 
   it('operadores da unidade: com a regra, quem não está liberado não admite; lista vazia retira sem apagar', async () => {
@@ -447,7 +512,7 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
            FROM permissao_unidade_usuario WHERE unidade_internacao_id = ?`,
         [unidade],
       ),
-    ).toMatchObject({ fora: 1, material: 1 });
+    ).toMatchObject({ fora: '1', material: '1' });
     // A linha só de material não conta como regra: a unidade volta ao cargo e o usuário dá alta.
     await executar('internacao.darAlta', {
       internacao: i2,

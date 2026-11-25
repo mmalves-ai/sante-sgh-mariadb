@@ -20,6 +20,7 @@
 //   PUT  /api/integracoes/classificacao-externa/perfis         inclui ou altera o perfil (com a versão lida)
 //   GET  /api/integracoes/classificacao-externa/perfis/envio   o que vai ao sistema de triagem (?sistema=)
 //   POST /api/integracoes/classificacao-externa/recebidas      recebe a classificação do atendimento (idempotente)
+//   POST /api/integracoes/classificacao-externa/recebidas/:id/aplicacao  gera a classificação interna da recebida
 //   GET  /api/integracoes/classificacao-externa/atendimento/:a as recebidas do atendimento, com o prazo
 import {
   Body,
@@ -36,7 +37,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { PERMISSOES_CLASSIFICACAO_CODIGOS as PC, PERMISSOES_M34_CODIGOS as P } from '@sgh/contratos';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -90,6 +91,7 @@ export class ComunicacaoController {
   }
 
   @Put('mensagens/modelos')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @Permissao(P.mensagemConfigurar)
   gravarModelo(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.mensagens, req, (p, c) => p.gravarModelo(c, corpo));
@@ -97,6 +99,7 @@ export class ComunicacaoController {
 
   /** O modelo do cliente inteiro (todos os estabelecimentos): permissão de alcance do cliente. */
   @Put('mensagens/modelos/cliente')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @Permissao(P.mensagemConfigurarCliente)
   gravarModeloCliente(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.mensagens, req, (p, c) =>
@@ -111,12 +114,14 @@ export class ComunicacaoController {
   }
 
   @Put('mensagens/regras')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @Permissao(P.mensagemConfigurar)
   gravarRegra(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.mensagens, req, (p, c) => p.gravarRegra(c, corpo));
   }
 
   @Post('mensagens/pedidos')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(201)
   @Permissao(P.mensagemEnviar)
   pedir(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
@@ -124,6 +129,7 @@ export class ComunicacaoController {
   }
 
   @Post('mensagens/pedidos/:id/cancelar')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(200)
   @Permissao(P.mensagemEnviar)
   cancelar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
@@ -131,6 +137,7 @@ export class ComunicacaoController {
   }
 
   @Post('mensagens/pedidos/:id/enviado')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(200)
   @Permissao(P.mensagemEnviar)
   enviado(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
@@ -138,6 +145,7 @@ export class ComunicacaoController {
   }
 
   @Post('mensagens/pedidos/:id/retornos')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(201)
   @Permissao(P.mensagemEnviar)
   retorno(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
@@ -158,12 +166,14 @@ export class ComunicacaoController {
   }
 
   @Put('pacotes')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @Permissao(P.parceiroEditar)
   gravarPacote(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.pacotes, req, (p, c) => p.gravarPacote(c, corpo));
   }
 
   @Post('pacotes/:id/revisao')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(200)
   @Permissao(P.parceiroRevisarMinimizacao)
   revisarPacote(
@@ -182,6 +192,7 @@ export class ComunicacaoController {
   }
 
   @Post('pacotes/:id/entregas')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(201)
   @Permissao(P.parceiroEditar)
   registrarEntrega(
@@ -193,6 +204,7 @@ export class ComunicacaoController {
   }
 
   @Post('entregas/:id/situacao')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(200)
   @Permissao(P.parceiroEditar)
   situacaoEntrega(
@@ -211,6 +223,7 @@ export class ComunicacaoController {
   }
 
   @Put('classificacao-externa/perfis')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @Permissao(P.classificacaoExternaConfigurar)
   gravarPerfil(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.classificacao, req, (p, c) => p.gravarPerfil(c, corpo));
@@ -226,10 +239,19 @@ export class ComunicacaoController {
   }
 
   @Post('classificacao-externa/recebidas')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
   @HttpCode(201)
   @Permissao(PC.classificacaoCriar)
   receber(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.classificacao, req, (p, c) => p.receber(c, corpo));
+  }
+
+  @Post('classificacao-externa/recebidas/:id/aplicacao')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
+  @HttpCode(201)
+  @Permissao(PC.classificacaoCriar)
+  aplicar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    return com(this.classificacao, req, (p, c) => p.aplicar(c, id));
   }
 
   @Get('classificacao-externa/atendimento/:a')

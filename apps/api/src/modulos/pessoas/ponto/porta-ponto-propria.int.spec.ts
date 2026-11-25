@@ -626,7 +626,10 @@ describe.skipIf(SEM_BANCO)('porta própria do ponto (MariaDB, cliente f22_o3)', 
     expect(d.justificativas.map((x) => x.codigo)).toContain(m.justificativa);
     expect(d.periodos.map((x) => x.codigo)).toContain(m.periodo);
     expect(d.destinosBanco.length).toBeGreaterThan(0);
-    expect(Array.isArray(await porta.feriados(ctx(m, m.rh), '2026-01-01', '2026-12-31'))).toBe(true);
+    // Pelo calendário único: os nacionais calculados vêm sem cadastro; o do estabelecimento, do cadastro.
+    expect((await porta.feriados(ctx(m, m.rh), '2026-01-01', '2026-12-31')).map((f) => f.data)).toEqual(
+      expect.arrayContaining(['2026-04-03', '2026-12-25']),
+    );
     expect((await porta.relogio(ctx(m, m.rh))).agora).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
   });
 });

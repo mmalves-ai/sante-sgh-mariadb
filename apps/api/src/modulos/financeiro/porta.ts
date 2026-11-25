@@ -8,6 +8,7 @@
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 import type {
   AdiantamentoResposta,
+  CredorEncontrado,
   AtribuirCreditoEntrada,
   AprovarAdiantamentoEntrada,
   CompensarAdiantamentoEntrada,
@@ -92,6 +93,8 @@ export interface DeParaContabilPorta {
   readonly regras: readonly RegraDeParaConta[];
   readonly centros: ReadonlyMap<number, string>;
   readonly credores: ReadonlyMap<number, string>;
+  /** O código externo do credor médico, pelo profissional (ausente: nenhum mapeado). */
+  readonly profissionais?: ReadonlyMap<number, string>;
   readonly fatos: readonly FatoContabil[];
 }
 
@@ -268,6 +271,12 @@ export interface PortaFinanceiro extends PortaGravacaoM18<GravadorSghFinanceiro>
   ): Promise<Map<number, { aprovador: string; faixa: number }[]>>;
   borderos(c: ContextoFinanceiro, de: string, ate: string): Promise<BorderoResposta[]>;
   adiantamentos(c: ContextoFinanceiro): Promise<AdiantamentoResposta[]>;
+  /** Busca do credor do adiantamento pelo nome, documento ou código (no máximo 20; termo com 2 letras ou mais). */
+  credores(
+    c: ContextoFinanceiro,
+    tipo: 'fornecedor' | 'profissional',
+    termo: string,
+  ): Promise<CredorEncontrado[]>;
   titulosReceber(c: ContextoFinanceiro, f: FiltroReceber): Promise<ListaTitulosReceber>;
   tituloReceber(
     c: ContextoFinanceiro,
@@ -355,6 +364,7 @@ export const METODOS_PORTA_FINANCEIRO: ReadonlySet<string> = new Set([
   'aprovacoesDosTitulos',
   'borderos',
   'adiantamentos',
+  'credores',
   'titulosReceber',
   'tituloReceber',
   'tituloDoItem',

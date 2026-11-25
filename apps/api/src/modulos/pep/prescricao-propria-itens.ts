@@ -158,6 +158,34 @@ export async function gravarDetalhe(tx: TxOperacao, d: Detalhe, c: ContextoDetal
           ),
           resposta: x.resposta,
         });
+      // Composição por refeição (03-PEP L112): a regra é do domínio (conferirRefeicoesDieta, chamada por
+      // conferirItemGravavel em conferirItensGravaveis, antes de qualquer gravação).
+      const refeicoes = d.refeicoes ?? [];
+      const gravados: number[] = [];
+      for (const [i, r] of refeicoes.entries())
+        gravados.push(
+          await tx.incluir('prescricao_dieta_refeicao_item', {
+            prescricao_item_dieta_id: dieta,
+            sequencia: i + 1,
+            horario_refeicao_id: await existe(tx, 'horario_refeicao', r.refeicao, 'A refeição'),
+            alimento_referencia_id: await existe(tx, 'alimento_referencia', r.alimento, 'O alimento'),
+            quantidade: r.quantidade,
+            unidade_medida_id:
+              r.unidade === null
+                ? null
+                : await existe(tx, 'unidade_medida', r.unidade, 'A unidade do alimento'),
+            medida_caseira_alimento_id:
+              r.medidaCaseira === null
+                ? null
+                : await existe(tx, 'medida_caseira_alimento', r.medidaCaseira, 'A medida caseira'),
+            quantidade_medida_caseira: r.quantidadeMedidaCaseira,
+            substituto_prescricao_dieta_refeicao_item_id:
+              r.substitui === null ? null : (gravados[r.substitui - 1] ?? null),
+            percentual_diario: r.percentualDiario,
+            calorias_kcal: r.calorias,
+            origem: 'sistema',
+          }),
+        );
       return;
     }
     case 'solucao': {

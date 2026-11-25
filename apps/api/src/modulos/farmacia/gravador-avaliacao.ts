@@ -22,6 +22,7 @@ import {
   type TipoIntervencao,
 } from '@sgh/contratos/regras-suprimentos';
 import { type EventoOperacao, recusa, type TxOperacao } from '@sgh/nucleo';
+import { liberarDosesPorEvento, TABELA_INTEGRACAO_DOSE } from './integracao-prescricao.js';
 import type { GravadorSghFarmacia } from './porta.js';
 
 type Linha = Record<string, unknown>;
@@ -32,6 +33,8 @@ export const TABELAS_AVALIACAO = [
   'avaliacao_farmaceutica',
   'avaliacao_farmaceutica_item',
   'intervencao_farmaceutica',
+  // O parecer que aprova libera as doses da regra "na liberação farmacêutica" (integracao-prescricao.ts).
+  TABELA_INTEGRACAO_DOSE,
 ] as const;
 
 /** O que a gravação deixa para a trilha e o outbox da operação (alvo, eventos com só ids e códigos). */
@@ -262,6 +265,10 @@ export function gravadorAvaliacao(
       });
       c.situacao = situacao;
     }
+    // A regra de integração com o estoque (05-SUP linha 7): o parecer que aprova o item libera as doses que esperavam
+    // a liberação do farmacêutico. O recusado e o que volta ao médico não liberam nada.
+    if (parecer === 'aprovado' || parecer === 'aprovado_com_ressalva')
+      await liberarDosesPorEvento(tx, { est, evento: 'liberacao_farmaceutica', quando: agora(), item: i.id });
     return id;
   };
 

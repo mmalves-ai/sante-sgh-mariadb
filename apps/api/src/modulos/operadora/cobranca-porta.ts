@@ -30,6 +30,15 @@ export type ContextoCobranca = ContextoPorta;
 /** O que a gravação da cobrança faz dentro da transação (com a trilha junto). */
 export interface GravadorCobranca {
   incluir(c: EntradaCobranca & { readonly por: string }): Promise<{ id: number; versao: number }>;
+  /**
+   * A regra de coparticipação vigente na competência do evento e o que já foi lançado ao beneficiário no mês e no ano,
+   * lidos dentro da transação com o beneficiário travado: dois lançamentos simultâneos não passam juntos do teto, e o
+   * evento de competência passada usa a regra que valia nela, não a de hoje (08-SGO L98).
+   */
+  coparticipacaoTravada(x: { contrato: number; beneficiario: number; competencia: string }): Promise<{
+    regra: DadosContratoCobranca['coparticipacao'];
+    acumulado: { mes: number; ano: number };
+  }>;
   baixar(b: {
     id: number;
     versao: number;
@@ -114,6 +123,15 @@ export interface PortaCobrancaOperadora {
     f: FiltroBaseMensalidades,
   ): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }>;
   contrato(c: ContextoCobranca, id: number): Promise<DadosContratoCobranca | null>;
+  /**
+   * A coparticipação já lançada ao beneficiário (cobranças não canceladas) na competência e no ano dela, para os tetos
+   * mensal e anual da regra (08-SGO L98).
+   */
+  coparticipacaoAcumulada(
+    c: ContextoCobranca,
+    beneficiario: number,
+    competencia: string,
+  ): Promise<{ mes: number; ano: number }>;
   beneficiario(
     c: ContextoCobranca,
     id: number,

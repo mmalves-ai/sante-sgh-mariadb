@@ -134,3 +134,84 @@ export function guardaAte(fim: string): string {
   const [a, m, d] = fim.split('-').map(Number) as [number, number, number];
   return `${a + GUARDA_LIVRO_ANOS}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+
+/** Termo de abertura ou de encerramento do livro fechado (Portaria 344, art. 62): páginas numeradas e emitente. */
+export interface TermoDoLivro {
+  readonly tipo: 'abertura' | 'encerramento';
+  readonly sequencia: 1 | 2;
+  readonly paginaInicial: number;
+  readonly paginaFinal: number;
+}
+
+/**
+ * O emitente dos termos: a razão social e o CNPJ do estabelecimento. O livro oficial não fecha sem eles (o termo é
+ * peça legal); o de conferência grava os termos quando o cadastro os tem.
+ */
+export function conferirEmitenteDoLivro(c: {
+  razaoSocial: string | null;
+  cnpj: string | null;
+  oficial: boolean;
+}): RecusaSuprimentos | null {
+  const completo = !!c.razaoSocial?.trim() && /^\d{14}$/.test(c.cnpj ?? '');
+  if (c.oficial && !completo)
+    return recusa(
+      'estabelecimento-sem-cnpj',
+      'O livro oficial leva nos termos a razão social e o CNPJ do estabelecimento: complete o cadastro do estabelecimento.',
+      ['estabelecimento'],
+    );
+  return null;
+}
+
+/** Os dois termos do livro fechado: a abertura (sequência 1) e o encerramento (2), da página 1 à última (mínimo 1). */
+export function termosDoLivro(paginas: number): readonly [TermoDoLivro, TermoDoLivro] {
+  const ultima = Math.max(1, Math.trunc(paginas));
+  return [
+    { tipo: 'abertura', sequencia: 1, paginaInicial: 1, paginaFinal: ultima },
+    { tipo: 'encerramento', sequencia: 2, paginaInicial: 1, paginaFinal: ultima },
+  ];
+}
+
+/** O termo como ficou gravado no fechamento: é ele, e não o texto montado na hora, que a leitura do livro mostra. */
+export interface TermoGravado {
+  readonly tipo: 'abertura' | 'encerramento';
+  readonly paginaInicial: number;
+  readonly paginaFinal: number;
+  readonly razaoSocial: string;
+  readonly cnpj: string;
+  /** Nome do farmacêutico responsável técnico que fechou. */
+  readonly responsavel: string;
+  /** Data e hora civil da emissão ("AAAA-MM-DDTHH:MM"). */
+  readonly emitidoEm: string;
+  /** O termo de encerramento do livro oficial cita o conteúdo guardado no arquivo. */
+  readonly conteudoGuardado: boolean;
+}
+
+/** CNPJ de 14 dígitos com a máscara; outro formato sai como veio. */
+export function cnpjFormatado(cnpj: string): string {
+  const m = /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/.exec(cnpj);
+  return m ? `${m[1]}.${m[2]}.${m[3]}/${m[4]}-${m[5]}` : cnpj;
+}
+
+/**
+ * O texto do termo gravado (Portaria 344, art. 62): quantas páginas numeradas, de quem é o livro (razão social e
+ * CNPJ), o período escriturado, quem responde e quando foi emitido. O de conferência diz que não substitui o oficial.
+ */
+export function textoDoTermo(
+  t: TermoGravado,
+  livro: { titulo: string; inicio: string; fim: string; oficial: boolean },
+): string {
+  const paginas = Math.max(1, t.paginaFinal - t.paginaInicial + 1);
+  const br = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+  const emitente = `${t.razaoSocial}, CNPJ ${cnpjFormatado(t.cnpj)}`;
+  const assinatura = `Responsável técnico: ${t.responsavel || 'não identificado'}. Emitido em ${br(t.emitidoEm)}.`;
+  const corpo =
+    t.tipo === 'abertura'
+      ? `Termo de abertura: este livro contém ${paginas} página(s), numeradas de ${t.paginaInicial} a ${t.paginaFinal}, e destina-se à escrituração de ${livro.titulo.toLowerCase()} de ${emitente}, no período de ${br(livro.inicio)} a ${br(livro.fim)}.`
+      : `Termo de encerramento: este livro, de ${emitente}, contém ${paginas} página(s), numeradas de ${t.paginaInicial} a ${t.paginaFinal}, escrituradas de ${br(livro.inicio)} a ${br(livro.fim)}.${t.conteudoGuardado ? ' O conteúdo fechado está guardado no arquivo do livro.' : ''}`;
+  return `${corpo} ${assinatura}${livro.oficial ? '' : ' Relatório de conferência: não substitui o livro oficial.'}`;
+}
+
+/** Os termos gravados na ordem do livro: a abertura antes do encerramento. */
+export function ordenarTermos<T extends { tipo: string }>(termos: readonly T[]): T[] {
+  return [...termos].sort((a, b) => Number(a.tipo !== 'abertura') - Number(b.tipo !== 'abertura'));
+}

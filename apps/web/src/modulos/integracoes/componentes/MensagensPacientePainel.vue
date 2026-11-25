@@ -2,6 +2,7 @@
 // F3.9, 08-INTG L133: modelos e regras de envio ao paciente pela Hal-AI, com conferência na hora (variáveis do texto,
 // respostas da confirmação), e a visão por paciente: os pedidos registrados, a situação e os retornos; cancelar só o
 // pendente, com o motivo (nada é apagado).
+import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -93,6 +94,7 @@ const regras = useQuery({ queryKey: ['integracoes', 'mensagens', 'regras'], quer
 const aviso = ref('');
 const falha = ref('');
 
+const lista = (xs: readonly string[]) => xs.map((x) => ({ valor: x, rotulo: x }));
 const m = reactive({
   codigo: '',
   descricao: '',
@@ -117,6 +119,9 @@ const r = reactive({
   maximoEnviosPaciente: null as number | null,
   exigeConsentimento: true,
 });
+const opcoesModelo = computed(() =>
+  (modelos.data.value?.itens ?? []).map((x) => ({ valor: x.id, rotulo: `${x.descricao} (${x.canal})` })),
+);
 
 async function executar(fn: () => Promise<unknown>) {
   aviso.value = '';
@@ -168,18 +173,8 @@ const cancelar = (id: number) => executar(() => cancelarPedido(id, motivo.value)
       <h3>{{ t('novoModelo') }}</h3>
       <label>{{ t('codigo') }} <input v-model="m.codigo" required maxlength="30" /></label>
       <label>{{ t('descricao') }} <input v-model="m.descricao" required maxlength="150" /></label>
-      <label
-        >{{ t('finalidade') }}
-        <select v-model="m.finalidade">
-          <option v-for="f in FINALIDADES" :key="f" :value="f">{{ f }}</option>
-        </select></label
-      >
-      <label
-        >{{ t('canal') }}
-        <select v-model="m.canal">
-          <option v-for="c in CANAIS" :key="c" :value="c">{{ c }}</option>
-        </select></label
-      >
+      <SanteSelecao v-model="m.finalidade" :rotulo="t('finalidade')" :opcoes="lista(FINALIDADES)" />
+      <SanteSelecao v-model="m.canal" :rotulo="t('canal')" :opcoes="lista(CANAIS)" />
       <label v-if="m.canal === 'email'"
         >{{ t('assunto') }} <input v-model="m.assunto" maxlength="255"
       /></label>
@@ -211,20 +206,8 @@ const cancelar = (id: number) => executar(() => cancelarPedido(id, motivo.value)
       <h3>{{ t('novaRegra') }}</h3>
       <label>{{ t('codigo') }} <input v-model="r.codigo" required maxlength="40" /></label>
       <label>{{ t('descricao') }} <input v-model="r.descricao" required maxlength="150" /></label>
-      <label
-        >{{ t('modelo') }}
-        <select v-model.number="r.modeloId" required>
-          <option v-for="x in modelos.data.value?.itens ?? []" :key="x.id" :value="x.id">
-            {{ x.descricao }} ({{ x.canal }})
-          </option>
-        </select>
-      </label>
-      <label
-        >{{ t('gatilho') }}
-        <select v-model="r.gatilho">
-          <option v-for="g in GATILHOS" :key="g" :value="g">{{ g }}</option>
-        </select></label
-      >
+      <SanteSelecao v-model="r.modeloId" :rotulo="t('modelo')" :opcoes="opcoesModelo" obrigatorio />
+      <SanteSelecao v-model="r.gatilho" :rotulo="t('gatilho')" :opcoes="lista(GATILHOS)" />
       <label>{{ t('antecedencia') }} <input v-model.number="r.antecedenciaMinutos" type="number" /></label>
       <label>{{ t('inicio') }} <input v-model="r.horaInicio" type="time" /></label>
       <label>{{ t('fim') }} <input v-model="r.horaFim" type="time" /></label>

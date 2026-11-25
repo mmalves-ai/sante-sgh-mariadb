@@ -7,7 +7,9 @@
 // o motivo "alta", sempre exercitada: a alta é recuada para antes da virada de ontem); cancelar a alta devolve as
 // diárias; excluir a internação estorna tudo (inclusive a taxa de abertura) com o motivo "cancelamento" e cancela a
 // conta; a troca de acomodação estorna a diária do dia ("troca_acomodacao") e lança a da nova; internar sem tipo de
-// conta da natureza não é barrado (a pendência volta) e a rotina diária abre a conta depois. SGH_NUCLEO_SEM_BANCO=1 pula.
+// conta da natureza não é barrado (a pendência volta) e a rotina diária abre a conta depois. F3.4 (04-INT linha 81): a
+// alta depois da virada e até a hora limite da regra com diária parcial estorna a cheia do dia ("alta") e lança a
+// parcial (item e quantidade da parcial), idempotente. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { dataHoraParaInstante, FUSO_PADRAO, instanteParaDataHora } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apurarLancamentosAutomaticos, apurarLancamentosDoDia } from '../faturamento/conta-entrada.js';
@@ -101,9 +103,36 @@ describe.skipIf(SEM_BANCO_ADT)(
         [conta, `${prefixo}%`],
       );
 
+    // Tipos de conta sintéticos de internação deixados ativos por outros contratos no mesmo cliente (ordem 0) empatam a
+    // escolha do tipo de conta da natureza (empate é recusa, nunca "o primeiro"): desligados durante este contrato e
+    // religados no fim, como o caso "sem tipo de conta" faz com todos.
+    let sinteticos: number[] = [];
+    const ligarSinteticos = (ativo: boolean) =>
+      sinteticos.length
+        ? escrever((e) =>
+            e.executar(
+              `UPDATE tipo_conta SET ativo = ? WHERE id IN (${sinteticos.map(() => '?').join(',')})`,
+              [ativo, ...sinteticos],
+            ),
+          )
+        : Promise.resolve();
+
     beforeAll(async () => {
       m = await prepararMassaAdt('C');
       porta = new PortaAdtPropria(M().nucleo);
+      sinteticos = String(
+        (
+          await lerAdt<{ ids: string | null }>(
+            M(),
+            "SELECT GROUP_CONCAT(id) AS ids FROM tipo_conta WHERE natureza = 'internacao' AND ativo = TRUE AND codigo LIKE 'L0%'",
+            [],
+          )
+        )?.ids ?? '',
+      )
+        .split(',')
+        .filter(Boolean)
+        .map(Number);
+      await ligarSinteticos(false);
       Object.assign(
         cfg,
         await escrever(async (e) => {
@@ -222,6 +251,7 @@ describe.skipIf(SEM_BANCO_ADT)(
     }, 90_000);
 
     afterAll(async () => {
+      if (m) await ligarSinteticos(true).catch(() => undefined);
       if (m && cfg.regraLancamento)
         await escrever(async (e) => {
           await e.executar('UPDATE regra_lancamento SET ativo = FALSE WHERE id IN (?, ?, ?)', [
@@ -467,6 +497,94 @@ describe.skipIf(SEM_BANCO_ADT)(
           [internacao],
         ),
       ).toBe(1);
+    });
+    it('diária parcial: alta depois da virada e até a hora limite troca a cheia do dia pela parcial (F3.4, 04-INT 81)', async () => {
+      const agoraLocal = instanteParaDataHora(new Date().toISOString(), FUSO_PADRAO);
+      const dia = (k: number) =>
+        new Date(Date.parse(`${agoraLocal.data}T00:00:00Z`) - k * 86_400_000).toISOString().slice(0, 10);
+      const par = await escrever<{ categoria: number; itemParcial: number }>(async (e) => {
+        const agora = new Date();
+        const id = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
+          const l = await e.uma<{ id: number }>(sel, p);
+          return l ? Number(l.id) : e.inserir(ins, pi);
+        };
+        const grupo = Number(
+          (await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM grupo_faturamento', []))?.id,
+        );
+        const categoria = await id(
+          'SELECT id FROM categoria_acomodacao WHERE codigo = ?',
+          [`${P}-PAR`],
+          "INSERT INTO categoria_acomodacao (codigo, descricao, tipo, criado_em) VALUES (?, ?, 'enfermaria', ?)",
+          [`${P}-PAR`, `PARCIAL ${P}`, agora],
+        );
+        const itemParcial = await id(
+          'SELECT id FROM item_faturavel WHERE codigo = ?',
+          [`${P}-DIP`],
+          "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, situacao, criado_em) VALUES (?, ?, 'diaria', ?, 'ativo', ?)",
+          [`${P}-DIP`, `ITEM SINTETICO ${P}-DIP`, grupo, agora],
+        );
+        await e.inserir(
+          `INSERT INTO regra_diaria (estabelecimento_id, categoria_acomodacao_id, item_faturavel_id, quantidade, hora_virada,
+             gera_diaria_parcial, parcial_hora_limite, parcial_item_faturavel_id, parcial_quantidade, vigencia_inicio, ativo, criado_em)
+           VALUES (?, ?, ?, 1, '12:00:00', TRUE, '18:00:00', ?, 0.5, '2020-01-01', TRUE, ?)`,
+          [M().est, categoria, cfg.item, itemParcial, agora],
+        );
+        return { categoria, itemParcial };
+      });
+      const r = await internar(M().pacientes[0]!, '01');
+      const internacao = Number(r['internacao']);
+      const conta = Number(r['conta']);
+      const t = new Date(dataHoraParaInstante(dia(2), '08:00', FUSO_PADRAO));
+      await escrever(async (e) => {
+        await e.executar('UPDATE internacao SET data_hora_entrada = ? WHERE id = ?', [t, internacao]);
+        await e.executar(
+          'UPDATE ocupacao_leito SET data_hora_inicio = ?, categoria_acomodacao_id = ? WHERE internacao_id = ?',
+          [t, par.categoria, internacao],
+        );
+        await e.executar('UPDATE conta_hospitalar SET inicio_em = ? WHERE id = ?', [t, conta]);
+        await e.executar(
+          'UPDATE atendimento a JOIN internacao i ON i.atendimento_id = a.id SET a.entrada_em = ? WHERE i.id = ?',
+          [t, internacao],
+        );
+      });
+      await apurar(conta);
+      await executar('internacao.darAlta', {
+        internacao,
+        motivo: M().motivoSaida,
+        medicoAlta: M().medico,
+        versao: await versaoDe(internacao),
+        horaSaida: '00:01',
+      });
+      // Alta recuada para ontem às 15:00: depois da virada (12:00) e antes da hora limite da parcial (18:00).
+      await escrever((e) =>
+        e.executar('UPDATE internacao SET data_hora_alta = ? WHERE id = ?', [
+          new Date(dataHoraParaInstante(dia(1), '15:00', FUSO_PADRAO)),
+          internacao,
+        ]),
+      );
+      await apurar(conta);
+      const linhas = await M().nucleo.lerSomente(
+        { cliente: CLIENTE_ADT, correlacao: 'int-0301c-parcial' },
+        (e) =>
+          e.consultar<{ chave: string; dia: string; item: number; qtd: number }>(
+            `SELECT l.chave, DATE_FORMAT(l.dia_referencia, '%Y-%m-%d') AS dia, i.item_faturavel_id AS item, i.quantidade AS qtd
+             FROM lancamento_automatico_conta l JOIN conta_hospitalar_item i ON i.id = l.conta_hospitalar_item_id
+            WHERE l.conta_hospitalar_id = ? AND l.situacao = 'lancado' AND l.chave LIKE 'diaria%' ORDER BY l.dia_referencia`,
+            [conta],
+          ),
+      );
+      expect(linhas.map((l) => `${l.dia}:${l.chave}:${Number(l.item)}:${Number(l.qtd)}`)).toEqual([
+        `${dia(2)}:diaria:${cfg.item}:1`,
+        `${dia(1)}:diaria-parcial:${par.itemParcial}:0.5`,
+      ]);
+      // A cheia do dia da alta foi estornada com o motivo "alta" (fica na história, nada se apaga).
+      expect(
+        await num(
+          "SELECT COUNT(*) AS n FROM lancamento_automatico_conta WHERE conta_hospitalar_id = ? AND chave = 'diaria' AND dia_referencia = ? AND motivo_estorno = 'alta'",
+          [conta, dia(1)],
+        ),
+      ).toBe(1);
+      expect(await apurar(conta)).toMatchObject({ lancados: 0, estornados: 0 });
     });
   },
 );

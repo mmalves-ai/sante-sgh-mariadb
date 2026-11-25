@@ -120,6 +120,12 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
         'DELETE FROM usuario_estoque_centro_custo WHERE usuario_id = ? AND centro_custo_id = ?',
         [m.usuario, m.centroCusto],
       );
+      // Lotes próprios da lista de separação: o saldo antes do bloqueio que ele referencia.
+      await e.executar(
+        'DELETE FROM saldo_lote WHERE lote_insumo_id IN (SELECT id FROM lote_insumo WHERE numero_lote LIKE ?)',
+        [like],
+      );
+      await e.executar('DELETE FROM bloqueio_lote WHERE motivo LIKE ?', [like]);
       await e.executar('DELETE FROM insumo WHERE codigo LIKE ?', [like]);
       await e.executar('DELETE FROM via_de_uso WHERE codigo LIKE ?', [like]);
       await e.executar('DELETE FROM principio_ativo WHERE descricao LIKE ?', [like]);
@@ -494,6 +500,18 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
     });
   }, 60_000);
 
+  it('apoio da tela: guardas e diluentes por lista, os mesmos do banco (soluções ativas)', async () => {
+    const ap = await porta.apoio(c);
+    const g = await um('SELECT COUNT(*) AS n FROM condicao_armazenamento WHERE ativo = TRUE', []);
+    const d = await um(
+      "SELECT COUNT(*) AS n FROM insumo WHERE tipo = 'solucao' AND situacao = 'ativo' AND excluido_em IS NULL",
+      [],
+    );
+    expect(ap.guardas.length).toBe(Number(g?.['n']));
+    expect(ap.diluentes.length).toBe(Number(d?.['n']));
+    expect(ap.guardas.every((o) => o.id > 0 && o.nome !== '')).toBe(true);
+  });
+
   it('lista de separação: só o que falta, endereço do local, lotes pela validade e a falta', async () => {
     const [reqId, reqCancelada] = await nucleo.escrever(
       { cliente: CLIENTE, correlacao: 't-f361-req' },
@@ -534,9 +552,29 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
               numero_lote: `${MARCA}${sufixo}`,
               validade,
               situacao,
+              // Lote recolhido ou bloqueado leva o motivo (ck_lote_insumo_bloqueio).
+              ...(situacao === 'liberado' ? {} : { motivo_bloqueio: `${MARCA} recolhimento de teste` }),
             },
             MARCA,
           );
+          // Saldo bloqueado no local exige o bloqueio registrado (ck_saldo_lote_bloqueio).
+          const bloqueio = bloqueado
+            ? await inserirMinimo(
+                e,
+                'bloqueio_lote',
+                {
+                  estabelecimento_id: m.estA,
+                  lote_insumo_id: li,
+                  tipo: 'bloqueio',
+                  motivo: `${MARCA} bloqueio de teste`,
+                  abrangencia: 'local_estoque',
+                  local_estoque_id: m.localA,
+                  bloqueado_por_usuario_id: m.usuario,
+                  situacao: 'ativo',
+                },
+                MARCA,
+              )
+            : null;
           await inserirMinimo(
             e,
             'saldo_lote',
@@ -546,6 +584,7 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
               lote_insumo_id: li,
               quantidade: q,
               bloqueado,
+              bloqueio_lote_id: bloqueio,
               competencia: '2026-11-01',
             },
             MARCA,
@@ -593,6 +632,9 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
             centro_custo_id: m.centroCusto,
             solicitante_usuario_id: m.usuario,
             situacao: 'cancelada',
+            // Cancelada leva quem e quando (ck_requisicao_material_cancelamento).
+            cancelado_em: new Date(),
+            cancelador_usuario_id: m.usuario,
           },
           MARCA,
         );

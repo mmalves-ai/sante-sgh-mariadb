@@ -82,7 +82,8 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
   const codigo = async (p: Promise<unknown>): Promise<string> =>
     p.then(
       () => 'gravou',
-      (x: { codigo?: string; tipo?: string }) => x.codigo ?? x.tipo ?? String(x),
+      (x: { problema?: { codigo?: string }; codigo?: string; tipo?: string }) =>
+        x.problema?.codigo ?? x.codigo ?? x.tipo ?? String(x),
     );
 
   beforeAll(async () => {
@@ -344,6 +345,25 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
         ),
       ),
     ).toBe('telefone-invalido');
+    // DDD sem área no plano de numeração (catálogo area_ddd) e número sem a forma de fixo nem de móvel: recusados.
+    const telAntes = Number((await um<{ n: unknown }>('SELECT COUNT(*) AS n FROM telefone_pessoa', []))?.n);
+    for (const [ddd, numero] of [
+      ['20', '999990311'],
+      ['31', '81234567'],
+      ['31', '99999031'],
+    ] as const)
+      expect(
+        await codigo(
+          ficha.incluirTelefone(
+            c(),
+            { ...tel, ddd, tipo: telMensagem, numero, nomeContato: null, aceitaMensagem: false },
+            trilha('t'),
+          ),
+        ),
+      ).toBe('telefone-invalido');
+    expect(Number((await um<{ n: unknown }>('SELECT COUNT(*) AS n FROM telefone_pessoa', []))?.n)).toBe(
+      telAntes,
+    );
     const t1 = await ficha.incluirTelefone(
       c(),
       { ...tel, tipo: telMensagem, numero: '999990311', nomeContato: null, aceitaMensagem: true },

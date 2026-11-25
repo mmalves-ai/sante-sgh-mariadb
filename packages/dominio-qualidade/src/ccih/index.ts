@@ -11,3 +11,4 @@ export * from './mensagens.js';
 // W0-04: correção e cancelamento (versão, competência fechada).
 export * from './correcao.js';
 export * from './bundle.js';
+export * from './analise-cultura.js';

@@ -4,7 +4,7 @@
 // véspera) e as faixas de números de guia com o consumo (usados, restantes e o aviso de faixa no fim). As regras
 // incoerentes (reapresentação sem faturamento eletrônico, lote acima de 100, contratado incompleto) aparecem na hora;
 // a API confere de novo pela regra do domínio. Encerrar a faixa pede motivo e nunca apaga.
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteChave, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -136,13 +136,15 @@ const TIPOS_GUIA = [
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <MensagemErro v-if="erro" :erro="erro" />
     <p v-if="ok" role="status" data-testid="gravado">{{ t('estruturaGestao.comum.gravado') }}</p>
-    <label>
-      {{ t('estruturaGestao.tiss.fonte') }}
-      <select v-model="fonte" name="fonte" data-testid="fonte">
-        <option :value="null">{{ t('estruturaGestao.comum.escolha') }}</option>
-        <option v-for="f in p?.fontes ?? []" :key="f.id" :value="f.id">{{ f.nome }}</option>
-      </select>
-    </label>
+    <SanteSelecao
+      v-model="fonte"
+      :rotulo="t('estruturaGestao.tiss.fonte')"
+      :opcoes="[
+        { valor: null, rotulo: t('estruturaGestao.comum.escolha') },
+        ...(p?.fontes ?? []).map((f) => ({ valor: f.id, rotulo: f.nome })),
+      ]"
+      data-testid="fonte"
+    />
 
     <template v-if="fonte && p">
       <h2>{{ t('estruturaGestao.tiss.vigencias') }}</h2>
@@ -153,9 +155,11 @@ const TIPOS_GUIA = [
           </button>
         </li>
       </ul>
-      <SanteBotao data-testid="nova-vigencia" @click="novaVigencia">{{
-        t('estruturaGestao.tiss.novaVigencia')
-      }}</SanteBotao>
+      <SanteBotao
+        :rotulo="t('estruturaGestao.tiss.novaVigencia')"
+        data-testid="nova-vigencia"
+        @acionar="novaVigencia"
+      />
 
       <form
         v-if="cfg"
@@ -177,12 +181,11 @@ const TIPOS_GUIA = [
           {{ t('estruturaGestao.tiss.vigenciaFim')
           }}<input v-model="cfg['vigenciaFim'] as string" type="date" name="vigenciaFim" />
         </label>
-        <label>
-          {{ t('estruturaGestao.tiss.versaoPadrao') }}
-          <select v-model="cfg['versaoPadrao']" name="versaoPadrao">
-            <option v-for="v in p.versoes" :key="v.id" :value="v.id">{{ v.nome }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="cfg['versaoPadrao'] as number | null"
+          :rotulo="t('estruturaGestao.tiss.versaoPadrao')"
+          :opcoes="p.versoes.map((v) => ({ valor: v.id, rotulo: v.nome }))"
+        />
         <label
           v-for="c in [
             'registroAns',
@@ -197,7 +200,7 @@ const TIPOS_GUIA = [
           {{ t(`estruturaGestao.tiss.${c}`) }}
           <input v-model="cfg[c] as string" :name="c" :aria-invalid="avisos.includes(c)" />
         </label>
-        <label
+        <SanteSelecao
           v-for="[c, ops] in [
             ['identificacaoPrestador', ['cnpj', 'cpf', 'codigo_operadora']],
             ['numeracaoGuia', ['prestador', 'operadora', 'sequencial_unico']],
@@ -205,29 +208,38 @@ const TIPOS_GUIA = [
             ['quebraResumoInternacao', ['nao_quebra', 'por_competencia', 'por_periodo', 'por_conta_parcial']],
           ] as const"
           :key="c"
-        >
-          {{ t(`estruturaGestao.tiss.${c}`) }}
-          <select v-model="cfg[c]" :name="c">
-            <option v-for="o in ops" :key="o" :value="o">{{ t(`estruturaGestao.tiss.opcoes.${o}`) }}</option>
-          </select>
-        </label>
+          v-model="cfg[c] as string"
+          :rotulo="t(`estruturaGestao.tiss.${c}`)"
+          :opcoes="ops.map((o) => ({ valor: o, rotulo: t(`estruturaGestao.tiss.opcoes.${o}`) }))"
+        />
         <fieldset class="largo">
           <legend>{{ t('estruturaGestao.tiss.regras') }}</legend>
-          <label v-for="c in SIMS" :key="c" class="marca">
-            <input v-model="cfg[c]" type="checkbox" :name="c" :aria-invalid="avisos.includes(c)" />
-            {{ t(`estruturaGestao.tiss.sims.${c}`) }}
-          </label>
+          <SanteChave
+            v-for="c in SIMS"
+            :key="c"
+            :ligada="!!cfg[c]"
+            :rotulo="t(`estruturaGestao.tiss.sims.${c}`)"
+            :descricao="avisos.includes(c) ? t('estruturaGestao.tiss.combinacaoInvalida') : ''"
+            @alternar="(v: boolean) => cfg && (cfg[c] = v)"
+          />
         </fieldset>
         <fieldset class="largo">
           <legend>{{ t('estruturaGestao.tiss.eletronicos') }}</legend>
-          <label v-for="c in ELETRONICOS" :key="c" class="marca">
-            <input v-model="cfg[c]" type="checkbox" :name="c" :aria-invalid="avisos.includes(c)" />
-            {{ t(`estruturaGestao.tiss.sims.${c}`) }}
-          </label>
+          <SanteChave
+            v-for="c in ELETRONICOS"
+            :key="c"
+            :ligada="!!cfg[c]"
+            :rotulo="t(`estruturaGestao.tiss.sims.${c}`)"
+            :descricao="avisos.includes(c) ? t('estruturaGestao.tiss.combinacaoInvalida') : ''"
+            @alternar="(v: boolean) => cfg && (cfg[c] = v)"
+          />
         </fieldset>
-        <SanteBotao type="submit" :disabled="avisos.length > 0" data-testid="gravar-configuracao">{{
-          t('estruturaGestao.comum.gravar')
-        }}</SanteBotao>
+        <SanteBotao
+          tipo="submit"
+          :rotulo="t('estruturaGestao.comum.gravar')"
+          :desabilitado="avisos.length > 0"
+          data-testid="gravar-configuracao"
+        />
       </form>
 
       <h2>{{ t('estruturaGestao.tiss.faixas') }}</h2>
@@ -260,17 +272,16 @@ const TIPOS_GUIA = [
         </tbody>
       </table>
       <SanteBotao
+        :rotulo="t('estruturaGestao.tiss.novaFaixa')"
         data-testid="nova-faixa"
-        @click="
+        @acionar="
           faixa = {
             tipoGuia: 'sp_sadt',
             formaGeracao: 'faixa_operadora',
             vigenciaInicio: new Date().toISOString().slice(0, 10),
           }
         "
-      >
-        {{ t('estruturaGestao.tiss.novaFaixa') }}
-      </SanteBotao>
+      />
       <form
         v-if="faixa"
         class="grade"
@@ -281,19 +292,19 @@ const TIPOS_GUIA = [
           )
         "
       >
-        <label>
-          {{ t('estruturaGestao.tiss.tipoGuia') }}
-          <select v-model="faixa['tipoGuia']" name="tipoGuia">
-            <option v-for="x in TIPOS_GUIA" :key="x" :value="x">{{ x }}</option>
-          </select>
-        </label>
-        <label>
-          {{ t('estruturaGestao.tiss.formaGeracao') }}
-          <select v-model="faixa['formaGeracao']" name="formaGeracao">
-            <option value="faixa_operadora">{{ t('estruturaGestao.tiss.faixaOperadora') }}</option>
-            <option value="sequencial_hospital">{{ t('estruturaGestao.tiss.sequencialHospital') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="faixa['tipoGuia'] as string"
+          :rotulo="t('estruturaGestao.tiss.tipoGuia')"
+          :opcoes="TIPOS_GUIA.map((x) => ({ valor: x, rotulo: x }))"
+        />
+        <SanteSelecao
+          v-model="faixa['formaGeracao'] as string"
+          :rotulo="t('estruturaGestao.tiss.formaGeracao')"
+          :opcoes="[
+            { valor: 'faixa_operadora', rotulo: t('estruturaGestao.tiss.faixaOperadora') },
+            { valor: 'sequencial_hospital', rotulo: t('estruturaGestao.tiss.sequencialHospital') },
+          ]"
+        />
         <label v-for="c in ['prefixo', 'tamanhoFixo', 'numeroInicial', 'numeroFinal'] as const" :key="c">
           {{ t(`estruturaGestao.tiss.${c}`) }}<input v-model="faixa[c] as string" :name="c" />
         </label>
@@ -304,9 +315,7 @@ const TIPOS_GUIA = [
         <p v-if="exemplo" data-testid="exemplo-numero">
           {{ t('estruturaGestao.tiss.exemplo', { n: exemplo }) }}
         </p>
-        <SanteBotao type="submit" data-testid="gravar-faixa">{{
-          t('estruturaGestao.comum.gravar')
-        }}</SanteBotao>
+        <SanteBotao tipo="submit" :rotulo="t('estruturaGestao.comum.gravar')" data-testid="gravar-faixa" />
       </form>
     </template>
   </section>
@@ -332,7 +341,7 @@ const TIPOS_GUIA = [
   grid-column: 1 / -1;
 }
 .aviso {
-  color: var(--sgh-cor-erro, #b00020);
+  color: var(--sgh-alerta);
 }
 .link {
   background: none;

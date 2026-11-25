@@ -239,3 +239,72 @@ export function decidirIntegracao(
         : null;
   return { integraEstoque: true, local, usouSubstituto: substituto, liberarEm };
 }
+
+// ── A regra aplicada às doses da prescrição (F3.6-04, 05-SUP linha 7) ───────────────────────────────────────────────
+// A prescrição e o aprazamento chamam estas funções para cada item com produto de estoque: a regra vigente decide se a
+// dose vai ao estoque, o local que a atende e o instante em que ela entra na fila da farmácia. O que não depende do
+// relógio da prescrição (liberação do farmacêutico, aprazamento da enfermagem) fica à espera do evento.
+
+/** Os eventos que liberam a dose depois da prescrição. */
+export const EVENTOS_LIBERACAO_DOSE = ['liberacao_farmaceutica', 'aprazamento'] as const;
+export type EventoLiberacaoDose = (typeof EVENTOS_LIBERACAO_DOSE)[number];
+
+export interface DoseDecidida extends DecisaoIntegracao {
+  readonly horario: Date;
+}
+
+/**
+ * A decisão de cada dose (horário) do item: uma só regra vale para o item inteiro (a vigente no contexto), e cada
+ * dose recebe o local e o instante de liberação. Sem regra que atenda, devolve regra nula e nenhuma dose decidida: o
+ * item segue sem integração automática.
+ */
+export function decidirDoses<R extends RegraCandidata>(
+  regras: readonly R[],
+  c: ContextoIntegracao,
+  o: { temSaldo: (local: number) => boolean; prescritoEm: Date; horarios: readonly Date[] },
+): { regra: R | null; doses: DoseDecidida[] } {
+  const regra = regraVigente(regras, c);
+  if (!regra) return { regra: null, doses: [] };
+  return {
+    regra,
+    doses: o.horarios.map((horario) => ({
+      horario,
+      ...decidirIntegracao(regra, { temSaldo: o.temSaldo, prescritoEm: o.prescritoEm, horarioDose: horario }),
+    })),
+  };
+}
+
+/**
+ * O instante de liberação depois de um evento. A liberação do farmacêutico libera a dose da regra "na liberação
+ * farmacêutica"; o aprazamento libera a da regra "no aprazamento" e recalcula a da regra "antes do horário" (o horário
+ * mudou). A primeira liberação por evento vale: repetir o evento não a adia. Nos demais casos o instante não muda.
+ */
+export function liberacaoPorEvento(
+  r: { readonly momento: string; readonly antecedenciaMinutos: number | null },
+  atual: Date | null,
+  evento: EventoLiberacaoDose,
+  o: { quando: Date; horarioDose: Date },
+): Date | null {
+  if (evento === 'liberacao_farmaceutica')
+    return r.momento === 'na_liberacao_farmaceutica' ? (atual ?? o.quando) : atual;
+  if (r.momento === 'no_aprazamento') return atual ?? o.quando;
+  if (r.momento === 'antes_do_horario')
+    return new Date(o.horarioDose.getTime() - (r.antecedenciaMinutos ?? 0) * 60_000);
+  return atual;
+}
+
+export const SITUACOES_DOSE_INTEGRADA = ['fora', 'sem_saldo', 'aguardando', 'liberada'] as const;
+
+/**
+ * Onde a dose está para a farmácia: fora (a regra diz sem integração), sem saldo (nem o local que atende nem o
+ * substituto têm o item), aguardando (o evento ou o instante de liberação ainda não chegou) ou liberada.
+ */
+export function situacaoDoseIntegrada(
+  d: { readonly integraEstoque: boolean; readonly local: number | null; readonly liberarEm: Date | null },
+  agora: Date,
+): (typeof SITUACOES_DOSE_INTEGRADA)[number] {
+  if (!d.integraEstoque) return 'fora';
+  if (d.local === null) return 'sem_saldo';
+  if (d.liberarEm === null || d.liberarEm.getTime() > agora.getTime()) return 'aguardando';
+  return 'liberada';
+}

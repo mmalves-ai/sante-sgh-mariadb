@@ -129,7 +129,8 @@ export class BaseComunicacaoPropria {
       estabelecimento: est,
       usuario,
       correlacao: (c.correlacao || nome).slice(0, 64),
-      chaveIdempotencia: `${nome}:${randomUUID()}`,
+      // A chave cabe no formato do núcleo (8 a 80 caracteres): o nome vai encurtado e o UUID garante a unicidade.
+      chaveIdempotencia: `${nome.slice(0, 40)}:${randomUUID()}`,
     };
     let feito: ({ id: number } & T) | null = null;
     const op = definirOperacao({

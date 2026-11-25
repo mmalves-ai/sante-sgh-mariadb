@@ -95,3 +95,10 @@ export function previaDaGuia(
 }
 export const definirOperadores = (unidade: number, corpo: unknown, chave: string) =>
   enviar(`${U}/${unidade}/operadores`, corpo, esquemaGravado, chave);
+export const esquemaCandidatos = z.array(
+  z.object({ usuario: z.number(), login: z.string(), nome: z.string() }),
+);
+export type CandidatoOperador = z.infer<typeof esquemaCandidatos>[number];
+/** Usuários ativos pelo login ou nome (até 30) para entrar na lista de operadores da unidade. */
+export const buscarCandidatosOperadores = (termo: string) =>
+  ler(`/api/cadastros/estrutura/operadores-candidatos?termo=${encodeURIComponent(termo)}`, esquemaCandidatos);

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Reclassificação gerencial (F3.8, 07-FIN linha 98): `/financeiro/gerencial/reclassificar?alvo=&id=`. A classificação
 // atual fica ao lado da nova; o rateio já vem preenchido com o atual, a soma e o valor de cada centro aparecem enquanto
 // se digita, e o botão só libera com 100%, sem centro repetido e com o motivo. O servidor confere de novo (tipo da
@@ -139,12 +140,14 @@ async function confirmar() {
 
     <form class="formulario" @submit.prevent="buscar">
       <span class="campo">
-        <label for="rc-alvo">{{ t('financeiro.gestao.reclassificar.alvo') }}</label>
-        <select id="rc-alvo" v-model="alvo" data-testid="rc-alvo">
-          <option v-for="a in ALVOS" :key="a" :value="a">
-            {{ t(`financeiro.gestao.reclassificar.alvos.${a}`) }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="alvo"
+          :rotulo="t('financeiro.gestao.reclassificar.alvo')"
+          :opcoes="[
+            ...ALVOS.map((x) => ({ valor: x, rotulo: t(`financeiro.gestao.reclassificar.alvos.${x}`) })),
+          ]"
+          data-testid="rc-alvo"
+        />
       </span>
       <span class="campo">
         <label for="rc-numero">{{ t('financeiro.gestao.reclassificar.numero') }}</label>
@@ -212,23 +215,30 @@ async function confirmar() {
       <form class="formulario" data-testid="rc-nova" @submit.prevent="confirmar">
         <h2>{{ t('financeiro.gestao.reclassificar.nova') }}</h2>
         <span class="campo">
-          <label for="rc-natureza">{{ t('financeiro.gestao.reclassificar.natureza') }}</label>
-          <select id="rc-natureza" v-model="natureza" data-testid="rc-natureza">
-            <option
-              v-for="c in apoio.data.value?.classificacoes ?? []"
-              :key="`${c.grupo}.${c.subgrupo}.${c.item}`"
-              :value="`${c.grupo}.${c.subgrupo}.${c.item}`"
-            >
-              {{ c.grupo }}.{{ c.subgrupo }}.{{ c.item }} {{ c.nome }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="natureza"
+            :rotulo="t('financeiro.gestao.reclassificar.natureza')"
+            :opcoes="[
+              ...(apoio.data.value?.classificacoes ?? []).map((c) => ({
+                valor: `${c.grupo}.${c.subgrupo}.${c.item}`,
+                rotulo: `${c.grupo}.${c.subgrupo}.${c.item} ${c.nome}`,
+              })),
+            ]"
+            data-testid="rc-natureza"
+          />
         </span>
         <div v-for="(l, i) in linhas" :key="i" class="linha" :data-testid="`rc-linha-${i}`">
-          <select v-model="l.centro" :aria-label="t('financeiro.gestao.reclassificar.centro')">
-            <option v-for="c in centros.data.value ?? []" :key="c.id" :value="String(c.id)">
-              {{ c.codigo }} {{ c.nome }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="l.centro"
+            :rotulo="t('financeiro.gestao.reclassificar.centro')"
+            ocultar-rotulo
+            :opcoes="[
+              ...(centros.data.value ?? []).map((c) => ({
+                valor: String(c.id),
+                rotulo: `${c.codigo} ${c.nome}`,
+              })),
+            ]"
+          />
           <input
             v-model.number="l.percentual"
             type="number"

@@ -728,6 +728,21 @@ export interface RecertificacoesGestaoTela {
   readonly campanhas: readonly CampanhaRecertTela[];
   /** As operações do efeito da retirada neste estabelecimento (desligada: o motivo aparece na tela). */
   readonly bloqueio: { readonly ligada: boolean; readonly motivo: string | null };
+  /**
+   * Os alvos que a campanha nova pode ter, com a contagem das contas que entram em cada um (grupo = perfil de acesso;
+   * setor = setor de quem usa a conta). Ausente quando o retrato das contas não pôde ser lido.
+   */
+  readonly alvos?: AlvosRecertTela;
+}
+
+export interface AlvoRecertTela {
+  readonly valor: string;
+  readonly contas: number;
+}
+export interface AlvosRecertTela {
+  readonly todos: number;
+  readonly grupos: readonly AlvoRecertTela[];
+  readonly setores: readonly AlvoRecertTela[];
 }
 
 /** GET /api/acesso/gestao/recertificacoes/:id — a campanha com as contas. */

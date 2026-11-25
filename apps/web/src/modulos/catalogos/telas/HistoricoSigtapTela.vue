@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Histórico de competências SIGTAP de um procedimento (M13, ficha seção 7): os valores e os atributos de cada
-// competência carregada (edição passada nunca é sobrescrita: cada competência tem a sua linha).
+// competência carregada (edição passada nunca é sobrescrita: cada competência tem a sua linha). 06-SUS L50: a
+// competência da tabela em uso, as carregadas e os pares compatível/incompatível/concomitante vigentes nela.
 import { SanteBotao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -86,6 +87,71 @@ const attrs = (a: Record<string, string | number | null>) =>
           </tbody>
         </table>
       </div>
+      <p data-testid="historico-em-uso">
+        {{
+          historico.data.value.competenciaEmUso
+            ? t('catalogos.historico.emUso', { c: historico.data.value.competenciaEmUso })
+            : t('catalogos.historico.semUso')
+        }}
+      </p>
+      <template v-if="historico.data.value.compatibilidades">
+        <h2>{{ t('catalogos.historico.compatibilidades') }}</h2>
+        <p v-if="historico.data.value.compatibilidades.length === 0">
+          {{ t('catalogos.historico.semCompatibilidade') }}
+        </p>
+        <div v-else class="rolagem" tabindex="0" role="region" :aria-label="t('catalogos.comum.tabela')">
+          <table data-testid="tabela-compatibilidades">
+            <caption>
+              {{
+                t('catalogos.historico.compatibilidades')
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ t('catalogos.historico.secundario') }}</th>
+                <th scope="col">{{ t('catalogos.historico.tipo') }}</th>
+                <th scope="col">{{ t('catalogos.historico.quantidadeMaxima') }}</th>
+                <th scope="col">{{ t('catalogos.historico.desde') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="p in historico.data.value.compatibilidades"
+                :key="`${p.secundario}-${p.tipo}`"
+                :data-testid="`par-${p.secundario}`"
+              >
+                <td>{{ p.secundario }} — {{ p.descricao ?? '' }}</td>
+                <td>{{ t(`catalogos.historico.tipos.${p.tipo}`) }}</td>
+                <td>{{ p.quantidadeMaxima ?? '' }}</td>
+                <td>{{ p.vigenciaInicio }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
+      <details v-if="historico.data.value.competenciasCarregadas?.length">
+        <summary>{{ t('catalogos.historico.carregadas') }}</summary>
+        <table data-testid="tabela-competencias-carregadas">
+          <thead>
+            <tr>
+              <th scope="col">{{ t('catalogos.historico.competencia') }}</th>
+              <th scope="col">{{ t('catalogos.historico.situacao') }}</th>
+              <th scope="col">{{ t('catalogos.historico.publicacao') }}</th>
+              <th scope="col">{{ t('catalogos.historico.procedimentos') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in historico.data.value.competenciasCarregadas" :key="c.codigo">
+              <td>
+                {{ c.codigo }}<strong v-if="c.vigente"> · {{ t('catalogos.historico.vigente') }}</strong>
+              </td>
+              <td>{{ c.situacao }}</td>
+              <td>{{ c.publicacao ?? '' }}</td>
+              <td>{{ c.procedimentos ?? '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
     </template>
   </section>
 </template>

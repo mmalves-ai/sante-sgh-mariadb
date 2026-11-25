@@ -43,7 +43,8 @@ const PLAT = 'plataforma_validacao_acesso_ligacao';
 const REDE = 'rede-teste';
 const HOSPITAL = 'alg01';
 const LOGIN = 'alg.ana';
-const MAILPIT = 'http://127.0.0.1:8325';
+// Captura local de e-mail (Mailpit, só loopback; a API dele é HTTP por desenho). Outro endereço: SGH_MAILPIT_API.
+const MAILPIT = process.env['SGH_MAILPIT_API']?.trim() || 'http://127.0.0.1:8325';
 const SUFIXO = randomUUID().slice(0, 8);
 const EMAIL_ADM = `adm.alg.${SUFIXO}@exemplo.invalid`;
 const EMAIL_USU = `alg.ana.${SUFIXO}@exemplo.invalid`;

@@ -18,16 +18,53 @@ const esquemaRestricao = z.object({
 export const esquemaAvaliacao = z.object({
   itens: z.array(z.object({ sequencia: n, exame: n, kitVersao: n.nullable() })),
   restricoes: z.array(esquemaRestricao),
+  // Cota, intervalo e último resultado (05-SADT linha 6).
+  limites: z
+    .array(
+      z.object({
+        tipo: z.enum(['cota', 'intervalo', 'ultimo_resultado']),
+        regra: n,
+        exame: n,
+        acao: z.enum(['bloquear', 'alertar', 'exigir_justificativa']),
+        mensagem: txt,
+      }),
+    )
+    .default([]),
+  // Os materiais que cada exame avulso aceita e o que vale no item (05-SADT linha 5).
+  materiais: z
+    .array(
+      z.object({
+        exame: n,
+        escolhido: n.nullable(),
+        opcoes: z.array(z.object({ id: n, descricao: txt, padrao: z.boolean() })),
+      }),
+    )
+    .default([]),
   segue: z.boolean(),
   codigo: txt.nullable(),
   motivo: txt.nullable(),
 });
 export type AvaliacaoPedido = z.infer<typeof esquemaAvaliacao>;
+/** O que entrou na conta e o que ficou pendente de cobrança (o pedido não espera a cobrança). */
+const esquemaCobranca = z.object({
+  conta: n.nullable(),
+  itens: z.array(
+    z.object({
+      item: n,
+      exame: txt,
+      contaItem: n.nullable(),
+      pendencia: txt.nullable(),
+      mensagem: txt.nullable(),
+    }),
+  ),
+});
+export type CobrancaPedido = z.infer<typeof esquemaCobranca>;
 const esquemaPedido = z.object({
   requisicao: n,
   numero: txt,
   itens: z.array(z.object({ id: n, exame: n, sequencia: n })),
   excecoes: n,
+  cobranca: esquemaCobranca.optional(),
 });
 const esquemaMotivos = z.object({
   setores: z.array(z.object({ id: n, nome: txt })),
@@ -84,7 +121,16 @@ const esquemaDoAtendimento = z.object({
       prioridade: txt,
       solicitadaEm: txt,
       itens: z.array(
-        z.object({ id: n, sequencia: n, exame: txt, situacao: txt, coletaPendente: z.boolean() }),
+        z.object({
+          id: n,
+          sequencia: n,
+          exame: txt,
+          situacao: txt,
+          coletaPendente: z.boolean(),
+          cobranca: z
+            .enum(['na_conta', 'do_orcamento', 'pendente', 'nao_se_aplica'])
+            .default('nao_se_aplica'),
+        }),
       ),
     }),
   ),
@@ -101,7 +147,7 @@ export interface CorpoPedido {
   setor: number;
   prioridade: 'rotina' | 'urgente' | 'emergencia';
   /** Setor executante próprio do exame (nulo: o setor do pedido); o material nulo usa o padrão do cadastro. */
-  exames: { exame: number; setor: number | null; urgente: boolean }[];
+  exames: { exame: number; setor: number | null; material: number | null; urgente: boolean }[];
   kits: number[];
   indicacaoClinica: string | null;
   confirmado: boolean;
@@ -123,9 +169,16 @@ export const cancelarItem = (item: number, motivo: number, complemento: string |
   enviar(
     `${S}/itens/${item}/cancelar`,
     { motivo, complemento },
-    z.object({ id: n, requisicaoCancelada: z.boolean() }),
+    z.object({
+      id: n,
+      requisicaoCancelada: z.boolean(),
+      conta: z.enum(['estornado', 'mantido', 'sem_lancamento']).default('sem_lancamento'),
+    }),
     chave,
   );
+/** Lança na conta os exames do atendimento que ficaram pendentes de cobrança. */
+export const lancarPendentesNaConta = (atendimento: number, chave: string) =>
+  enviar(`${S}/pedidos/atendimentos/${atendimento}/conta`, {}, esquemaCobranca, chave);
 export const listarRecoletas = () => ler(`${S}/recoletas${qs({ abertas: 'sim' })}`, esquemaRecoletas);
 export const pedirRecoleta = (amostra: number, motivo: number, chave: string) =>
   enviar(`${S}/amostras/${amostra}/recoleta`, { motivo }, z.object({ id: n, numero: txt }), chave);
@@ -134,9 +187,16 @@ export interface ConferenciaColeta {
   identificadoresConferidos: boolean;
   pulseira: string | null;
   estacao: string | null;
+  /** O posto de coleta do cadastro (null: à beira do leito). */
+  posto?: number | null;
 }
 export const coletarRecoleta = (id: number, conferencia: ConferenciaColeta, chave: string) =>
-  enviar(`${S}/recoletas/${id}/coletar`, conferencia, z.object({ id: n, amostra: n, codigo: txt }), chave);
+  enviar(
+    `${S}/recoletas/${id}/coletar`,
+    conferencia,
+    z.object({ id: n, amostra: n, codigo: txt, etiquetaNaFila: z.boolean().optional() }),
+    chave,
+  );
 export const cancelarRecoleta = (
   id: number,
   motivo: string,
@@ -154,6 +214,10 @@ export const gerarAliquotas = (amostra: number, chave: string) =>
   enviar(
     `${S}/amostras/${amostra}/subamostras`,
     {},
-    z.object({ id: n, subamostras: z.array(z.object({ id: n, codigo: txt, exames: n })) }),
+    z.object({
+      id: n,
+      subamostras: z.array(z.object({ id: n, codigo: txt, exames: n })),
+      etiquetasNaFila: n.optional(),
+    }),
     chave,
   );

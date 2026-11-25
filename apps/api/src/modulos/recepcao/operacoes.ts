@@ -29,6 +29,7 @@ import {
   textoDoMotivoSuspensao,
   textoSenha,
 } from '@sgh/contratos';
+import { grupoDaSenhaAoDesfazer, grupoDaSenhaNaChegada } from '@sgh/dominio-recepcao';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -532,7 +533,9 @@ const registrarChegada = definirOperacao({
     const { estabelecimento: idEst, usuario } = contexto(ctx);
     const est = await estabelecimento(tx, idEst);
     const [trava] = await tx.consultarParaAtualizar(
-      'SELECT id, versao, paciente_id FROM senha_emitida WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      `SELECT s.id, s.versao, s.paciente_id, s.grupo_prioridade_legal_id, gs.peso AS grupo_peso, gs.ativo AS grupo_ativo
+         FROM senha_emitida s LEFT JOIN grupo_prioridade_legal gs ON gs.id = s.grupo_prioridade_legal_id
+        WHERE s.id = ? AND s.estabelecimento_id = ? AND s.excluido_em IS NULL`,
       [e.senha, est.id],
       { teto: 1 },
     );
@@ -551,10 +554,11 @@ const registrarChegada = definirOperacao({
       );
     const [m] = await tx.consultarParaAtualizar(
       `SELECT m.id, m.versao, m.paciente_id, m.pre_cadastro_id, m.chegada_em, m.situacao_marcacao_id, sm.significado,
-              h.data_referencia, t.natureza
+              h.data_referencia, t.natureza, m.grupo_prioridade_legal_id, gm.peso AS grupo_peso, gm.ativo AS grupo_ativo
          FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id
          JOIN tipo_marcacao t ON t.id = m.tipo_marcacao_id
          JOIN situacao_marcacao sm ON sm.id = m.situacao_marcacao_id
+         LEFT JOIN grupo_prioridade_legal gm ON gm.id = m.grupo_prioridade_legal_id
         WHERE m.id = ? AND m.estabelecimento_id = ? AND m.excluido_em IS NULL`,
       [e.marcacao, est.id],
       { teto: 1 },
@@ -580,6 +584,18 @@ const registrarChegada = definirOperacao({
     if (ligada || m['chegada_em'] !== null)
       throw recusa('marcacao-ja-chegou', 'A chegada deste agendamento já foi registrada.');
     const chegou = await situacaoChegou(tx);
+    // 02-AGE 49: o grupo de prioridade legal escolhido na marcação segue o paciente na senha (regra do domínio: o
+    // mais forte vence; grupo desativado não vale). O grupo anterior da senha fica no histórico para o desfazer.
+    const grupoLegal = (r: Record<string, unknown>) =>
+      r['grupo_prioridade_legal_id'] === null
+        ? null
+        : {
+            id: num(r['grupo_prioridade_legal_id']),
+            peso: num(r['grupo_peso']),
+            ativo: bool(r['grupo_ativo']),
+          };
+    const prioridade = grupoDaSenhaNaChegada({ senha: grupoLegal(trava), marcacao: grupoLegal(m) });
+    const grupoAnterior = numOuNull(trava['grupo_prioridade_legal_id']);
     const agora = new Date();
     await tx.incluir('senha_emitida_marcacao', {
       senha_emitida_id: e.senha,
@@ -599,14 +615,22 @@ const registrarChegada = definirOperacao({
         situacao_anterior_id: num(m['situacao_marcacao_id']),
         chegada_em: agora.toISOString(),
         senha_emitida_id: e.senha,
+        ...(prioridade.mudou
+          ? { senha_grupo_anterior_id: grupoAnterior, senha_grupo_aplicado_id: prioridade.grupo }
+          : {}),
       }),
       ocorrido_em: agora,
       usuario_id: usuario,
     });
+    const naSenha: Record<string, unknown> = {};
     if (trava['paciente_id'] === null && m['paciente_id'] !== null)
-      await tx.alterar('senha_emitida', e.senha, num(trava['versao']), {
-        paciente_id: num(m['paciente_id']),
-      });
+      naSenha['paciente_id'] = num(m['paciente_id']);
+    if (prioridade.mudou) {
+      naSenha['grupo_prioridade_legal_id'] = prioridade.grupo;
+      naSenha['prioritaria'] = prioridade.grupo !== null;
+    }
+    if (Object.keys(naSenha).length)
+      await tx.alterar('senha_emitida', e.senha, num(trava['versao']), naSenha);
     return { senha: e.senha, marcacao: e.marcacao };
   },
   alvo: (_e, r) => ({ tabela: 'senha_emitida_marcacao', id: r.senha }),
@@ -638,9 +662,31 @@ async function situacaoAntesDaChegada(tx: TxOperacao, marcacao: number): Promise
   return num(padrao['id']);
 }
 
+/** Os dados gravados no histórico da última chegada da marcação (o grupo da senha antes e depois dela). */
+async function dadosDaChegada(
+  tx: TxOperacao,
+  marcacao: number,
+): Promise<{ senha_grupo_anterior_id?: number | null; senha_grupo_aplicado_id?: number | null }> {
+  const h = await tx.uma(
+    `SELECT dados FROM marcacao_horario_historico WHERE marcacao_horario_id = ? AND evento = 'chegada'
+      ORDER BY ocorrido_em DESC, id DESC LIMIT 1`,
+    [marcacao],
+  );
+  const bruto = h?.['dados'];
+  if (bruto === null || bruto === undefined) return {};
+  const d = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' ? v : null);
+  return 'senha_grupo_aplicado_id' in d
+    ? {
+        senha_grupo_anterior_id: n(d['senha_grupo_anterior_id']),
+        senha_grupo_aplicado_id: n(d['senha_grupo_aplicado_id']),
+      }
+    : {};
+}
+
 const desfazerChegada = definirOperacao({
   nome: 'recepcao.desfazer_chegada',
-  tabelas: ['senha_emitida_marcacao', 'marcacao_horario', 'marcacao_horario_historico'],
+  tabelas: ['senha_emitida_marcacao', 'marcacao_horario', 'marcacao_horario_historico', 'senha_emitida'],
   entrada: esquemaDesfazerChegada,
   async gravar(tx, e, ctx) {
     const { estabelecimento: idEst, usuario } = contexto(ctx);
@@ -670,6 +716,25 @@ const desfazerChegada = definirOperacao({
     const marcacao = num(v['marcacao_horario_id']);
     const anterior = await situacaoAntesDaChegada(tx, marcacao);
     const agora = new Date();
+    // 02-AGE 49: o grupo que a chegada pôs na senha volta ao anterior (se ninguém o mudou depois).
+    const daChegada = await dadosDaChegada(tx, marcacao);
+    const [sv] = await tx.consultarParaAtualizar(
+      'SELECT id, versao, grupo_prioridade_legal_id FROM senha_emitida WHERE id = ?',
+      [e.senha],
+      { teto: 1 },
+    );
+    const volta = sv
+      ? grupoDaSenhaAoDesfazer({
+          atual: numOuNull(sv['grupo_prioridade_legal_id']),
+          aplicadoNaChegada: daChegada.senha_grupo_aplicado_id,
+          anteriorNaChegada: daChegada.senha_grupo_anterior_id,
+        })
+      : null;
+    if (sv && volta)
+      await tx.alterar('senha_emitida', e.senha, num(sv['versao']), {
+        grupo_prioridade_legal_id: volta.grupo,
+        prioritaria: volta.grupo !== null,
+      });
     await tx.alterar('senha_emitida_marcacao', num(v['id']), num(v['versao']), {
       excluido_em: agora,
       excluido_por: usuario,

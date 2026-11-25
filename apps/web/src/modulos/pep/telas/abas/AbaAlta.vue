@@ -83,7 +83,11 @@ watch(
       encaminhamentos: linhas(s.encaminhamentos),
       condicao: s.condicaoAlta ?? '',
     };
-    secoes.value = (s.secoes ?? []).map((x) => ({ ...x }));
+    secoes.value = (s.secoes ?? []).map((x) => ({
+      codigo: x.codigo,
+      texto: x.texto,
+      ...(x.titulo !== undefined ? { titulo: x.titulo } : {}),
+    }));
   },
   { immediate: true },
 );

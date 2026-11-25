@@ -147,6 +147,14 @@ export const mensagensFarmacia = {
     fechar: 'Fechar o período (modo conferência)',
     fecharOficial: 'Fechar como livro oficial',
     fechado: 'Fechado por {por} em {em}; guarda até {guarda}.',
+    termosGravados: 'Os termos acima são os gravados no fechamento, com o emitente e o responsável da época.',
+    termosNaoGravados:
+      'Este fechamento não gravou os termos: o cadastro do estabelecimento estava sem a razão social ou o CNPJ.',
+    confirmarTitulo: 'Confirmar o fechamento oficial',
+    confirmarTexto:
+      '{titulo}, de {inicio} a {fim}, com {paginas} página(s). O fechamento oficial guarda o conteúdo e os termos de abertura e de encerramento, e não pode ser refeito.',
+    confirmar: 'Confirmar o fechamento oficial',
+    desistir: 'Não fechar agora',
     pdf: 'Baixar em PDF/A',
   },
   avaliacao: {

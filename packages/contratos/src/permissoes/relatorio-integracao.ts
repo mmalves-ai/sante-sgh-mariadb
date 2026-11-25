@@ -34,6 +34,8 @@ export const PERMISSOES_M34_CODIGOS = {
   interfaceLer: 'sadt.interface.ler',
   apoioLer: 'sadt.apoio.ler',
   apoioConferir: 'sadt.apoio.conferir',
+  apoioRemessa: 'sadt.apoio.remessa',
+  apoioDePara: 'sadt.apoio.configurar',
   prescricaoDigitalLer: 'pep.prescricaoDigital.ler',
 } as const;
 
@@ -302,6 +304,26 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     categoria: 'clinica',
     criticidade: 'sensivel',
     exigeConselho: true,
+  },
+  {
+    codigo: C.apoioRemessa,
+    descricao:
+      'Montar, fechar, enviar ou cancelar a remessa de amostras ao laboratório de apoio e imprimir as etiquetas do apoio',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: C.apoioDePara,
+    descricao:
+      'Manter o de-para de analito e de material com o laboratório de apoio (desativar, nunca apagar)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'administrativa',
+    criticidade: 'normal',
   },
   {
     codigo: C.prescricaoDigitalLer,

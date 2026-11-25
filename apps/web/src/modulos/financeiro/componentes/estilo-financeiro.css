@@ -28,7 +28,7 @@
   background: var(--sgh-primaria, currentColor);
 }
 .fluxo-barra--negativa {
-  background: var(--sgh-perigo, currentColor);
+  background: var(--sgh-alerta);
 }
 /* WCAG 2.5.8 (axe target-size): os botões, as marcas e os campos em linha da tabela têm alvo de 24 px. */
 .tabela button,

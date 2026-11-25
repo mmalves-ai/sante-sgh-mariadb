@@ -37,6 +37,11 @@ import {
   SERVICO_PARTICULAR_ADIANTAMENTO,
   ServicoParticularAdiantamento,
 } from './particular-adiantamento.controller.js';
+import {
+  RegrasComerciaisController,
+  SERVICO_REGRAS_COMERCIAIS,
+  ServicoRegrasComerciais,
+} from './regras-comerciais.controller.js';
 import { PORTA_FATURAMENTO, type PortaFaturamento, portaFaturamentoIndisponivel } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
@@ -70,6 +75,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       NotaVinculoController,
       ParticularAdiantamentoController,
       AuditoriaTramiteController,
+      RegrasComerciaisController,
     ],
     providers: [
       { provide: PORTA_FATURAMENTO, useValue: porta },
@@ -122,6 +128,15 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoParticularAdiantamento(ctx.nucleo, ctx.configuracao.ambiente)
+            : null,
+      },
+      // F8 (06-FAT linhas 13, 19 e 23): regras de criação e quebra de conta, franquia e desconto por volume, remoção e
+      // ligação tarifada (banco próprio).
+      {
+        provide: SERVICO_REGRAS_COMERCIAIS,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoRegrasComerciais(ctx.nucleo)
             : null,
       },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.

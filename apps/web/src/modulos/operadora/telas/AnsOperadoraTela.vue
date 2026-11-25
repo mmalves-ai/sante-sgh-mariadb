@@ -386,6 +386,6 @@ const rotuloObrigacao = (c: ObrigacaoAns) => a.value?.obrigacoes.find((o) => o.c
   overflow-x: auto;
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 </style>

@@ -89,7 +89,8 @@ test.describe('recálculo auditado do saldo (05-SUP linha 16) @F3.6', () => {
       return json(rota, { mensagem: 'Recálculo aplicado.', repetida: false, ids: { id: 1 }, avisos: [] });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // O supervisor do estoque tem suprimentos.recalculo.ler e .executar (fonte sintética); o SINT.ADMIN não tem o módulo.
+    await entrar(page, 'SINT.SUPERVISOR.ESTOQUE');
     await page.goto('/suprimentos/recalculos');
     await expect(page.getByTestId('tela-suprimentos-recalculos')).toBeVisible();
     await expect(page.getByTestId('rec-form')).toBeVisible();

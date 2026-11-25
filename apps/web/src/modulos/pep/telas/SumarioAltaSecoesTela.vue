@@ -4,8 +4,8 @@
 // marcadas). Validação na hora, a mesma regra do domínio na API. Tirar uma seção de uso é desmarcar "Em uso": nada é
 // apagado. Embaixo, os períodos de consulta próprios do cliente (horas antes da alta).
 // Ler exige pep.admin.ler; gravar, pep.admin.editar.
-import { SanteAlerta } from '@sgh/ui';
-import { onMounted, ref, watch } from 'vue';
+import { SanteAlerta, SanteSelecao } from '@sgh/ui';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   type Componente,
@@ -24,6 +24,19 @@ import {
 
 const { t } = useI18n();
 const k = (c: string) => t(`pep.sumarioSecoes.${c}`);
+const opcoesTipo = computed(() => TIPOS_ATENDIMENTO.map((x) => ({ valor: x, rotulo: k(`tipos.${x}`) })));
+const opcoesConteudo = computed(() => TIPOS_CONTEUDO.map((x) => ({ valor: x, rotulo: k(`conteudos.${x}`) })));
+const opcoesPeriodo = computed(() => [
+  { valor: '', rotulo: k('semPeriodo') },
+  ...PERIODOS.map((x) => ({ valor: `f:${x}`, rotulo: k(`periodosFixos.${x}`) })),
+  ...periodos.value
+    .filter((x) => x.ativo && x.id !== null)
+    .map((p) => ({ valor: `p:${p.id}`, rotulo: p.descricao })),
+]);
+const opcoesAbrangencia = computed(() => [
+  { valor: 0, rotulo: k('doEstabelecimento') },
+  { valor: null, rotulo: k('doCliente') },
+]);
 const tipo = ref<TipoAtendimentoSecao>('internacao');
 const itens = ref<Componente[]>([]);
 const vigentes = ref<SecaoVigente[]>([]);
@@ -134,12 +147,7 @@ onMounted(carregar);
     <p class="dica">{{ k('explica') }}</p>
     <SanteAlerta v-if="erro" :texto="erro" data-testid="sec-erro" />
     <p v-if="salvo" role="status" data-testid="sec-salvo">{{ salvo }}</p>
-    <label
-      >{{ k('tipo') }}
-      <select v-model="tipo" data-testid="sec-tipo">
-        <option v-for="x in TIPOS_ATENDIMENTO" :key="x" :value="x">{{ k(`tipos.${x}`) }}</option>
-      </select>
-    </label>
+    <SanteSelecao v-model="tipo" :rotulo="k('tipo')" :opcoes="opcoesTipo" data-testid="sec-tipo" />
     <div class="lado">
       <table>
         <thead>
@@ -185,35 +193,30 @@ onMounted(carregar);
               />
             </td>
             <td>
-              <select
-                v-model="c.tipoConteudo"
-                :aria-label="k('conteudo')"
+              <SanteSelecao
+                :model-value="c.tipoConteudo"
+                ocultar-rotulo
+                :rotulo="k('conteudo')"
+                :opcoes="opcoesConteudo"
                 data-testid="sec-conteudo"
-                @change="conteudo(c)"
-              >
-                <option v-for="x in TIPOS_CONTEUDO" :key="x" :value="x">{{ k(`conteudos.${x}`) }}</option>
-              </select>
+                @update:model-value="
+                  (v) => {
+                    c.tipoConteudo = v;
+                    conteudo(c);
+                  }
+                "
+              />
             </td>
             <td>
-              <select
-                :value="valorPeriodo(c)"
-                :disabled="!TIPOS_COM_PERIODO.has(c.tipoConteudo)"
-                :aria-label="k('periodo')"
+              <SanteSelecao
+                :model-value="valorPeriodo(c)"
+                :desabilitado="!TIPOS_COM_PERIODO.has(c.tipoConteudo)"
+                ocultar-rotulo
+                :rotulo="k('periodo')"
+                :opcoes="opcoesPeriodo"
                 data-testid="sec-periodo"
-                @change="escolherPeriodo(c, ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">{{ k('semPeriodo') }}</option>
-                <option v-for="x in PERIODOS" :key="x" :value="`f:${x}`">
-                  {{ k(`periodosFixos.${x}`) }}
-                </option>
-                <option
-                  v-for="p in periodos.filter((x) => x.ativo && x.id !== null)"
-                  :key="`p${p.id}`"
-                  :value="`p:${p.id}`"
-                >
-                  {{ p.descricao }}
-                </option>
-              </select>
+                @update:model-value="(v) => escolherPeriodo(c, v)"
+              />
             </td>
             <td>
               <input
@@ -227,15 +230,14 @@ onMounted(carregar);
               <span v-if="c.id">{{
                 c.estabelecimento === null ? k('doCliente') : k('doEstabelecimento')
               }}</span>
-              <select
+              <SanteSelecao
                 v-else
                 v-model="c.estabelecimento"
-                :aria-label="k('abrangencia')"
+                ocultar-rotulo
+                :rotulo="k('abrangencia')"
+                :opcoes="opcoesAbrangencia"
                 data-testid="sec-abrangencia"
-              >
-                <option :value="0">{{ k('doEstabelecimento') }}</option>
-                <option :value="null">{{ k('doCliente') }}</option>
-              </select>
+              />
             </td>
             <td>
               <input v-model="c.ativo" type="checkbox" :aria-label="k('ativa')" data-testid="sec-ativa" />

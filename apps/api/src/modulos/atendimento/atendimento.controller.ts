@@ -27,6 +27,9 @@
 //   POST /api/atendimento/pacientes/:id/identificar  a identificação: o cadastro de destino (encerra a marca)
 //   GET  /api/atendimento/heranca                    o que a ficha nova copia do atendimento anterior
 //   POST /api/atendimento/heranca                    atendimento.alterarHeranca
+//   GET  /api/atendimento/heranca/padrao             os valores habituais da abertura (estabelecimento e pessoal)
+//   POST /api/atendimento/heranca/padrao             atendimento.definirPadraoAbertura (estabelecimento)
+//   POST /api/atendimento/heranca/padrao/meu         atendimento.definirMeuPadraoAbertura (o usuário da sessão)
 import { createHash } from 'node:crypto';
 import {
   Body,
@@ -47,9 +50,11 @@ import {
   type AtendimentoDetalhe,
   type AtendimentosDia,
   type ConfiguracaoHeranca,
+  type ConfiguracaoPadraoAbertura,
   desfecho as desfechoDe,
   esquemaAbrirAtendimento,
   esquemaAlterarHeranca,
+  esquemaDefinirPadraoAbertura,
   esquemaAlterarAtendimento,
   esquemaAlterarSegurado,
   esquemaCancelarAtendimento,
@@ -76,12 +81,18 @@ import {
 } from '@sgh/contratos';
 import {
   copiasValidas,
+  copiasValidasDoModelo,
   fichasAImprimir,
   idadeEmAnos,
   type ModeloFicha,
   podeRegistrarDesfecho,
 } from '@sgh/dominio-atendimento';
 import { enfileirarZpl, ErroZpl, zplEtiquetaProntuario, zplPulseira } from '@sgh/dominio-documento';
+import {
+  emitirComIdentificacao,
+  IMPRESSAO_IDENTIFICACAO,
+} from '../administracao/impressao-identificacao-emissao.js';
+import type { ImpressaoIdentificacaoPropria } from '../administracao/impressao-identificacao-propria.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -132,6 +143,9 @@ export const OPERACOES_AMBULATORIO: Readonly<Record<string, string>> = {
   'atendimento.conduzirNoConsultorio': 'atendimento.fila.conduzir',
   'atendimento.encerrarAtendimento': 'atendimento.atendimento.encerrar',
   'atendimento.alterarHeranca': 'atendimento.heranca.editar',
+  'atendimento.definirPadraoAbertura': 'atendimento.heranca.editar',
+  // Os valores habituais de quem atende: basta poder abrir atendimento.
+  'atendimento.definirMeuPadraoAbertura': 'atendimento.atendimento.abrir',
 };
 /** Operações do pronto atendimento. */
 export const OPERACOES_PA: Readonly<Record<string, string>> = {
@@ -148,7 +162,7 @@ const ACOES_SGH_AMBULATORIO = {
 };
 const ACOES_SGH_PA = { etapa: 'pa.etapa.registrar', observacao: 'pa.observacao.alocar' };
 
-const TABELA_IMPRESSO = 'SGH_ATD_IMPRESSO';
+const TABELA_IMPRESSO = 'atendimento_impresso_emitido';
 const TABELA_NAO_IDENTIFICADO = 'SGH_ATD_NAO_IDENTIFICADO';
 
 /** Os apoios de gravação do M20 (uma chave de liberação cada): o controlador do PA usa os mesmos. */
@@ -245,6 +259,9 @@ export class AtendimentoController implements OnModuleDestroy {
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(AVISOS_ATENDIMENTO) private readonly avisos: AvisosAtendimento | null = null,
     @Optional() @Inject(BATIDA_EVENTOS_MS) private readonly batidaMs: number = BATIDA_EVENTOS_PADRAO_MS,
+    @Optional()
+    @Inject(IMPRESSAO_IDENTIFICACAO)
+    private readonly identificacao: ImpressaoIdentificacaoPropria | null = null,
   ) {
     this.apoios = new ApoiosAtendimento(porta, trilha, configuracao, cache);
     this.servico = new ServicoAtendimento(porta);
@@ -390,6 +407,43 @@ export class AtendimentoController implements OnModuleDestroy {
       'atendimento.alterarHeranca',
       e,
       'Configuração da herança gravada.',
+    ) as Promise<ResultadoAtendimento>;
+  }
+
+  @Get('heranca/padrao')
+  @Permissao('atendimento.atendimento.ler')
+  padraoAbertura(@Req() req: RequisicaoAutorizada): Promise<ConfiguracaoPadraoAbertura> {
+    return this.servico.configuracaoPadraoAbertura(ctx(sessaoDe(req)));
+  }
+
+  @Post('heranca/padrao')
+  @HttpCode(200)
+  @Permissao('atendimento.heranca.editar')
+  @AuditadoNoHandler('atendimento.definirPadraoAbertura pelo executor (trilha na mesma transação)')
+  definirPadraoAbertura(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAtendimento> {
+    const e = corpo(esquemaDefinirPadraoAbertura, b);
+    return this.apoios.ambulatorio.executar(
+      sessaoDe(req),
+      'atendimento.definirPadraoAbertura',
+      e,
+      'Valores habituais do estabelecimento gravados.',
+    ) as Promise<ResultadoAtendimento>;
+  }
+
+  @Post('heranca/padrao/meu')
+  @HttpCode(200)
+  @Permissao('atendimento.atendimento.abrir')
+  @AuditadoNoHandler('atendimento.definirMeuPadraoAbertura pelo executor (trilha na mesma transação)')
+  definirMeuPadraoAbertura(
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoAtendimento> {
+    const e = corpo(esquemaDefinirPadraoAbertura, b);
+    return this.apoios.ambulatorio.executar(
+      sessaoDe(req),
+      'atendimento.definirMeuPadraoAbertura',
+      e,
+      'Seus valores habituais foram gravados.',
     ) as Promise<ResultadoAtendimento>;
   }
 
@@ -750,7 +804,7 @@ export class AtendimentoController implements OnModuleDestroy {
   @Post(':reg/impressos')
   @HttpCode(201)
   @Permissao('atendimento.impresso.emitir')
-  @AuditadoNoHandler('impresso do atendimento (SGH_ATD_IMPRESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('emissão do impresso (atendimento_impresso_emitido) com a trilha na mesma transação')
   async emitir(
     @Param('reg') reg: string,
     @Body() b: unknown,
@@ -780,7 +834,8 @@ export class AtendimentoController implements OnModuleDestroy {
           campos: ['formato'],
         },
       );
-    if (!copiasValidas(e.impresso, e.copias))
+    // A ficha configurada aceita as cópias que a regra de impressão ou o modelo mandam (até o teto do modelo).
+    if (e.modelo !== undefined ? !copiasValidasDoModelo(e.copias) : !copiasValidas(e.impresso, e.copias))
       throw new ErroProblema(
         'entrada-invalida',
         400,
@@ -791,7 +846,7 @@ export class AtendimentoController implements OnModuleDestroy {
         },
       );
     // A ficha configurada (modelo das fichas a imprimir do atendimento): só um modelo que a configuração manda.
-    let modelo: { modelo: number; nome: string } | null = null;
+    let modelo: { modelo: number; nome: string; texto?: string | null } | null = null;
     if (e.modelo !== undefined) {
       const fichas = await this.fichasDoAtendimento(s, d);
       const f = fichas.lista.find((x) => x.modelo === e.modelo);
@@ -803,12 +858,12 @@ export class AtendimentoController implements OnModuleDestroy {
           'Esta ficha não está entre as que a configuração manda imprimir para este atendimento.',
           { codigo: 'ficha-nao-configurada' },
         );
-      modelo = { modelo: f.modelo, nome: f.nome };
+      modelo = { modelo: f.modelo, nome: f.nome, texto: fichas.textos?.get(f.modelo) ?? null };
     }
-    const gerado =
-      e.formato === 'zpl'
-        ? await this.zpl(s, d, e.impresso, e.copias)
-        : await this.pdf(s, d, e.impresso, modelo);
+    // Pulseira e etiqueta: a 1ª impressão fica registrada e a reimpressão só sai com o motivo (01-ADM L79).
+    const gerado = await emitirComIdentificacao(this.identificacao, s, { atendimento: d.reg }, e, () =>
+      e.formato === 'zpl' ? this.zpl(s, d, e.impresso, e.copias) : this.pdf(s, d, e.impresso, modelo),
+    );
     const resumo = createHash('sha256').update(gerado.conteudo).digest('hex');
     await this.apoios.doTipo(d.pa ? 'pa' : null).sgh(
       s,
@@ -849,10 +904,22 @@ export class AtendimentoController implements OnModuleDestroy {
   private async fichasDoAtendimento(
     s: SessaoCadastro,
     d: DadosImpresso,
-  ): Promise<{ lista: ImpressosAtendimento['fichas']; lida: boolean }> {
+  ): Promise<{ lista: ImpressosAtendimento['fichas']; lida: boolean; textos?: Map<number, string | null> }> {
     try {
-      const lidas = await this.porta.fichasConfiguradas(s.porta);
+      const lidas = await this.porta.fichasConfiguradas(s.porta, d.reg);
       if (!lidas) return { lista: [], lida: false };
+      // 02-REC linha 35: no banco do cliente a regra de impressão já decidiu as fichas do atendimento.
+      if (lidas.prontas)
+        return {
+          lista: lidas.prontas.map((f) => ({
+            modelo: f.modelo,
+            nome: f.nome,
+            copias: f.copias,
+            ordem: f.ordem,
+          })),
+          lida: true,
+          textos: new Map(lidas.prontas.map((f) => [f.modelo, f.texto ?? null])),
+        };
       const modelos: ModeloFicha[] = [...lidas.modelos];
       const lista = fichasAImprimir(
         modelos,
@@ -954,7 +1021,7 @@ export class AtendimentoController implements OnModuleDestroy {
     s: SessaoCadastro,
     d: DadosImpresso,
     impresso: string,
-    modelo: { modelo: number; nome: string } | null = null,
+    modelo: { modelo: number; nome: string; texto?: string | null } | null = null,
   ): Promise<ImpressoGerado> {
     const fonte = this.documento;
     if (!fonte)
@@ -983,6 +1050,8 @@ export class AtendimentoController implements OnModuleDestroy {
       { rotulo: 'Profissional', valor: d.profissional },
       { rotulo: 'Especialidade', valor: d.especialidade || 'Não se aplica' },
       ...(d.leito ? [{ rotulo: 'Leito', valor: d.leito }] : []),
+      // 02-REC linha 35: o texto do modelo configurado sai abaixo da identificação do atendimento.
+      ...(modelo?.texto ? [{ rotulo: 'Informações', valor: modelo.texto }] : []),
     ];
     try {
       const r = await fonte.emissao.emitir({

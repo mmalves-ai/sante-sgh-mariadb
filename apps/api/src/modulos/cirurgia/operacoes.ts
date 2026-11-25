@@ -43,6 +43,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { civil, FUSO_PADRAO, horaDe, instante, n, nn, texto } from './banco-apoio.js';
+import { conferirGradeNaTx } from './grade-sala-propria.js';
 import type { GravadorSghCirurgia } from './porta.js';
 import { conferirAlteracaoPedido } from './regras.js';
 
@@ -95,7 +96,8 @@ async function fusoDe(tx: TxOperacao): Promise<string> {
 }
 async function agendamentoDe(tx: TxOperacao, id: number): Promise<Linha> {
   const l = await tx.uma(
-    `SELECT id, versao, situacao, sala_cirurgica_id, inicio_previsto_em, duracao_prevista_minutos, tempo_limpeza_minutos
+    `SELECT id, versao, situacao, sala_cirurgica_id, inicio_previsto_em, duracao_prevista_minutos, tempo_limpeza_minutos,
+            especialidade_medica_id, cirurgiao_profissional_id
        FROM agendamento_cirurgico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [id, est(tx)],
   );
@@ -541,6 +543,15 @@ const agendar = definirOperacao<AgendarCirurgiaEntrada, ResultadoOperacao>({
     const sala = await salaTravada(tx, e.sala);
     const fuso = await fusoDe(tx);
     const inicio = instante(`${e.data} ${horaDe(e.hora)}`, fuso);
+    // 04-CC linha 92: a sala tem de estar aberta na grade (faixa, feriado e reserva) para a cirurgia inteira.
+    await conferirGradeNaTx(tx, fuso, {
+      sala: e.sala,
+      inicio,
+      duracaoMin: e.duracaoMin,
+      especialidade: e.especialidade > 0 ? e.especialidade : null,
+      cirurgiao: e.equipe.cirurgiao.id,
+      excecao: !!e.excecao,
+    });
     await conferirHorario(tx, fuso, sala, {
       id: e.solicitacao ?? 0,
       sala: e.sala,
@@ -651,6 +662,14 @@ const remarcar = definirOperacao<RemarcarCirurgiaEntrada, ResultadoOperacao>({
       'SELECT procedimento_cirurgico_id FROM agendamento_cirurgico_procedimento WHERE agendamento_cirurgico_id = ? AND excluido_em IS NULL',
       [e.agendamento],
     );
+    await conferirGradeNaTx(tx, fuso, {
+      sala: e.sala,
+      inicio,
+      duracaoMin: duracao,
+      especialidade: nn(a['especialidade_medica_id']),
+      cirurgiao: nn(a['cirurgiao_profissional_id']),
+      excecao: !!e.excecao,
+    });
     await conferirHorario(tx, fuso, sala, {
       id: e.agendamento,
       sala: e.sala,

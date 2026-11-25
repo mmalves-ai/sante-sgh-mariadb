@@ -11,7 +11,7 @@ import {
   TIPOS_KIT_PADRAO,
   type TipoKitPadrao,
 } from '@sgh/contratos';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -264,10 +264,12 @@ async function gravar(): Promise<void> {
         />
       </span>
       <span class="campo">
-        <label for="kp-tipo">{{ t('tipo') }}</label>
-        <select id="kp-tipo" v-model="form.tipo" data-testid="kit-padrao-tipo">
-          <option v-for="x in TIPOS_KIT_PADRAO" :key="x" :value="x">{{ t(`tipos.${x}`) }}</option>
-        </select>
+        <SanteSelecao
+          v-model="form.tipo"
+          :rotulo="t('tipo')"
+          :opcoes="[...TIPOS_KIT_PADRAO.map((x) => ({ valor: x, rotulo: t(`tipos.${x}`) }))]"
+          data-testid="kit-padrao-tipo"
+        />
       </span>
       <span class="campo">
         <input id="kp-ativo" v-model="form.ativo" type="checkbox" data-testid="kit-padrao-ativo" />

@@ -11,8 +11,11 @@ const TABELAS_ALVO = ['registro_assistencial', 'prescricao'] as const;
 const GRANT_ANEXO = /^GRANT ([A-Z, ]+) ON ([a-z][a-z0-9_]*) TO papel_aplicacao;$/;
 
 describe('privilégios gerados: nenhum DELETE em tabela clínica (SBIS-26)', () => {
+  // O gerador lê o DDL e os catálogos do repositório inteiro (cerca de 4 s sozinho): roda na coleta, como em
+  // privilegios.spec.ts, e não dentro do prazo de 5 s do teste, que estoura com o portão em paralelo.
+  const a = gerarArtefatos();
+
   it('o alcance gerado e o script versionado não concedem DELETE clínico a papel nenhum', () => {
-    const a = gerarArtefatos();
     expect(a.alcances.length).toBeGreaterThan(10);
     const doAlcance = a.alcances.flatMap((x) =>
       Object.entries(x.objetos)

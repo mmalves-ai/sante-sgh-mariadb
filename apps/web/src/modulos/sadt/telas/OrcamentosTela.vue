@@ -59,7 +59,8 @@ const cpf = ref('');
 const telefone = ref('');
 const fonte = ref('');
 const desconto = ref('');
-const validadeDias = ref('30');
+// Em branco, vale a validade padrão do estabelecimento (parâmetro); a prévia mostra a data na hora.
+const validadeDias = ref('');
 const itens = ref<{ exame: string; quantidade: string; valor: string }[]>([
   { exame: '', quantidade: '1', valor: '' },
 ]);
@@ -84,7 +85,7 @@ const corpo = computed<CorpoOrcamento>(() => ({
     .filter((i) => i.exame)
     .map((i) => ({ exame: Number(i.exame), quantidade: Number(i.quantidade) || 1, valor: numero(i.valor) })),
   desconto: numero(desconto.value) ?? 0,
-  validadeDias: Number(validadeDias.value) || 30,
+  ...(Number(validadeDias.value) >= 1 ? { validadeDias: Math.trunc(Number(validadeDias.value)) } : {}),
 }));
 const previa = ref<PreviaOrcamento | null>(null);
 const erroPrevia = ref<unknown>(null);
@@ -121,6 +122,7 @@ async function gravar(): Promise<void> {
     cpf.value = '';
     telefone.value = '';
     desconto.value = '';
+    validadeDias.value = '';
     itens.value = [{ exame: '', quantidade: '1', valor: '' }];
     await cliente.invalidateQueries({ queryKey: ['sadt', 'orcamentos'] });
   } catch (x) {
@@ -306,7 +308,14 @@ async function converter(id: number): Promise<void> {
         </span>
         <span class="campo">
           <label for="orc-val">{{ t('sadt.orcamentos.validadeDias') }}</label>
-          <input id="orc-val" v-model="validadeDias" type="number" min="1" max="180" />
+          <input
+            id="orc-val"
+            v-model="validadeDias"
+            type="number"
+            min="1"
+            max="180"
+            data-testid="orcamento-validade-dias"
+          />
         </span>
       </div>
       <div v-if="previa" data-testid="orcamento-previa">

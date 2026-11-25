@@ -2,6 +2,7 @@
 import { mensagensAdministracao } from '../modulos/administracao/i18n.js';
 import { mensagensCatalogos } from '../modulos/catalogos/i18n.js';
 import { mensagensPrecos } from '../modulos/precos/i18n.js';
+import { mensagensCobrancaFonte } from '../modulos/precos/i18n-cobranca.js';
 import { mensagensPep } from '../modulos/pep/i18n.js';
 import { mensagensConsultas } from '../modulos/consultas/i18n.js';
 import { mensagensInternacao } from '../modulos/internacao/i18n.js';
@@ -10,6 +11,7 @@ import { mensagensClassificacao } from '../modulos/recepcao/i18n-classificacao.j
 import { mensagensNir } from '../modulos/adt/i18n-nir.js';
 import { mensagensCrudNir } from '../modulos/adt/i18n-crud-nir.js';
 import { mensagensEscorePa } from '../modulos/atendimento/i18n-escore-pa.js';
+import { mensagensRegrasImpressao } from '../modulos/atendimento/i18n-regras-impressao.js';
 import { mensagensProtocolos } from '../modulos/recepcao/i18n-protocolos.js';
 import { mensagensRegulacao } from '../modulos/adt/i18n-regulacao.js';
 import { mensagensAgenda } from '../modulos/agenda/i18n.js';
@@ -43,9 +45,11 @@ import { mensagensContabil } from '../modulos/contabil/i18n.js';
 import { mensagensPatrimonio } from '../modulos/patrimonio/i18n.js';
 import { mensagensPessoas } from '../modulos/pessoas/i18n.js';
 import { mensagensEstruturaGestao } from '../modulos/cadastro/i18n-estrutura.js';
+import { mensagensIdentidadeEstabelecimento } from '../modulos/cadastro/i18n-identidade.js';
 import { mensagensLigacoes } from '../modulos/cadastro/i18n-ligacoes.js';
 import { mensagensCalendario } from '../modulos/cadastro/i18n-calendario.js';
 import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
+import { mensagensDemografia } from '../modulos/cadastro/i18n-demografia.js';
 import { mensagensComplementoProfissional } from '../modulos/cadastro/i18n-complemento-profissional.js';
 import { mensagensSesmt } from '../modulos/pessoas/sesmt/i18n.js';
 import { mensagensPonto } from '../modulos/pessoas/ponto/i18n.js';
@@ -65,6 +69,9 @@ import { mensagensIdentidade } from '../modulos/acesso/i18n-identidade.js';
 import { mensagensSaneamento } from '../modulos/acesso/i18n-saneamento.js';
 import { mensagensSegredos } from '../modulos/acesso/i18n-segredos.js';
 import { mensagensSbis } from '../modulos/administracao/i18n-sbis.js';
+import { mensagensRegrasAlerta } from '../modulos/administracao/i18n-alertas.js';
+import { mensagensLocaisAtendimento } from '../modulos/administracao/i18n-locais-atendimento.js';
+import { mensagensEmailSistema } from '../modulos/administracao/i18n-email.js';
 import { mensagensNutricao } from '../modulos/nutricao/i18n-nutricao.js';
 import { mensagensEspecialidades } from '../modulos/especialidades/i18n-especialidades.js';
 import { mensagensRouparia } from '../modulos/rouparia/i18n-rouparia.js';
@@ -72,6 +79,8 @@ import { mensagensSessoes } from '../modulos/sessoes/i18n-sessoes.js';
 import { mensagensOnboarding } from '../modulos/plataforma/i18n-onboarding.js';
 import { mensagensCarga } from '../modulos/plataforma/i18n-carga.js';
 import { mensagensDigitalizacao } from '../modulos/same/i18n-digitalizacao.js';
+import { mensagensSameTramite } from '../modulos/same/i18n-tramite.js';
+import { mensagensElegibilidade } from '../modulos/tiss/i18n-elegibilidade.js';
 import { mensagensPortal } from '../modulos/portal/i18n.js';
 import { mensagensBiRede } from '../modulos/rede/i18n-bi.js';
 import { mensagensPortalMedico } from '../modulos/portal-medico/i18n.js';
@@ -2302,6 +2311,7 @@ export const mensagensWeb = {
   },
   // M12: convênios, contratos, tabelas de preço e motor de preços.
   precos: mensagensPrecos,
+  cobrancaFonte: mensagensCobrancaFonte,
   adm: mensagensAdministracao,
   catalogos: mensagensCatalogos,
   // M15: prontuário ao vivo (consulta) e registro de acesso ao prontuário.
@@ -2322,6 +2332,7 @@ export const mensagensWeb = {
   crudNir: mensagensCrudNir,
   // W0-07 (M1): o alerta de deterioração e de sepse no PA.
   escorePa: mensagensEscorePa,
+  regrasImpressao: mensagensRegrasImpressao,
   // M45 (etapa 5): nutrição, mapa de dietas e serviço social.
   nutricao: mensagensNutricao,
   // M45 (etapa 6; DP-32): especialidades sob demanda e o lactário.
@@ -2335,6 +2346,9 @@ export const mensagensWeb = {
   // Obra carga-painel (ADR 0010): tela "Carga e sincronismo" do painel técnico.
   carga: mensagensCarga,
   digitalizacao: mensagensDigitalizacao,
+  // F3.9: protocolo e empréstimo do arquivo; elegibilidade do beneficiário.
+  sameTramite: mensagensSameTramite,
+  elegibilidade: mensagensElegibilidade,
   protocolos: mensagensProtocolos,
   regulacao: mensagensRegulacao,
   // M18: agenda de exames e centro cirúrgico.
@@ -2401,9 +2415,11 @@ export const mensagensWeb = {
   orcamentoEmpresarial: mensagensOrcamento,
   pessoas: mensagensPessoas,
   vinculos: mensagensVinculos,
+  demografia: mensagensDemografia,
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,
   estruturaGestao: mensagensEstruturaGestao,
+  identidadeEstabelecimento: mensagensIdentidadeEstabelecimento,
   complementoProfissional: mensagensComplementoProfissional,
   // M52.5: SESMT (ASO, vacinas, acidentes e CAT, riscos e EPI).
   sesmt: mensagensSesmt,
@@ -2443,6 +2459,12 @@ export const mensagensWeb = {
   segredos: mensagensSegredos,
   // M59 (etapa 5, F5): certificação SBIS, backup verificado e concessões da coexistência.
   sbis: mensagensSbis,
+  // 01-ADM L75: manutenção das regras de alerta.
+  regrasAlerta: mensagensRegrasAlerta,
+  // 02-REC linha 34: manutenção dos locais de atendimento (consultórios e salas).
+  locaisAtendimento: mensagensLocaisAtendimento,
+  // 01-ADM L77: modelos de mensagem, servidores de e-mail e registro de envio.
+  emailSistema: mensagensEmailSistema,
   // Entrada por e-mail: recuperação da conta da plataforma e o código do segundo fator no e-mail.
   acessoEmail: mensagensAcessoEmail,
 } as const;

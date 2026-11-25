@@ -340,7 +340,7 @@ const opcoesObrigacao = computed(() =>
   justify-content: space-between;
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 fieldset {
   margin: 0;

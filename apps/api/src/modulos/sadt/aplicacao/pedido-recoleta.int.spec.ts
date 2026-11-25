@@ -228,10 +228,12 @@ describe.skipIf(SEM_BANCO)(
       ).toEqual({
         id: a!.id,
         requisicaoCancelada: false,
+        conta: 'sem_lancamento',
       });
       expect(await servico.cancelarItem(c, b!.id, { motivo: dup })).toEqual({
         id: b!.id,
         requisicaoCancelada: true,
+        conta: 'sem_lancamento',
       });
       expect(codigoDe(await servico.cancelarItem(c, b!.id, { motivo: dup }).catch((e: unknown) => e))).toBe(
         'item-nao-cancelavel',
@@ -285,7 +287,22 @@ describe.skipIf(SEM_BANCO)(
         `${cab}, material_biologico_id) VALUES (?, ?, 'alerta', FALSE, 'Material diferente.', '2020-01-01', TRUE, UTC_TIMESTAMP(3), 1, ?)`,
         [m!.base.est, m!.exameImagem, Number(outroMaterial?.['m'])],
       );
-      restricoesExtra.push(rSexo, rIdade, rMaterial);
+      // Dia e horário sem depender do relógio: um dia da semana que não é hoje em nenhum fuso do país (nem o de UTC) e
+      // uma janela de uma hora que começa 10 horas depois de agora (UTC), fora da hora local de qualquer fuso do país.
+      const agora = new Date();
+      const hojeUtc = agora.getUTCDay() + 1;
+      const ontemUtc = ((hojeUtc + 5) % 7) + 1;
+      const diaFora = [1, 2, 3, 4, 5, 6, 7].find((d) => d !== hojeUtc && d !== ontemUtc)!;
+      const hh = (h: number) => `${String(((h % 24) + 24) % 24).padStart(2, '0')}:00:00`;
+      const rDia = await inserir(
+        `${cab}, dia_semana) VALUES (?, ?, 'alerta', FALSE, 'Só noutro dia.', '2020-01-01', TRUE, UTC_TIMESTAMP(3), 1, ?)`,
+        [m!.base.est, m!.exameImagem, diaFora],
+      );
+      const rHora = await inserir(
+        `${cab}, hora_inicio, hora_fim) VALUES (?, ?, 'alerta', FALSE, 'Só noutro horário.', '2020-01-01', TRUE, UTC_TIMESTAMP(3), 1, ?, ?)`,
+        [m!.base.est, m!.exameImagem, hh(agora.getUTCHours() + 10), hh(agora.getUTCHours() + 11)],
+      );
+      restricoesExtra.push(rSexo, rIdade, rMaterial, rDia, rHora);
       const pedido = {
         atendimento: m!.base.atendimento,
         setor: m!.setorImagem,
@@ -300,6 +317,8 @@ describe.skipIf(SEM_BANCO)(
       else expect(motivoDe(rIdade)).toBeUndefined();
       // Material: o padrão do cadastro do exame entra na avaliação; sem padrão, vira alerta.
       expect(motivoDe(rMaterial)).toMatchObject({ motivo: 'material' });
+      expect(motivoDe(rDia)).toMatchObject({ motivo: 'dia', tipo: 'alerta' });
+      expect(motivoDe(rHora)).toMatchObject({ motivo: 'horario', tipo: 'alerta' });
       expect(av).toMatchObject({ segue: false, codigo: 'restricao-confirmar' });
       const g = await servico.abrirPedido(c, { ...pedido, confirmado: true });
       reqs.push(g.requisicao);

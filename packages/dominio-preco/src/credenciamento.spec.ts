@@ -1,6 +1,11 @@
 import type { Credenciamento } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
-import { deveCredenciarTodosAoCriar, verificarCredenciamento } from './index.js';
+import {
+  deveCredenciarTodosAoCriar,
+  profissionalCredenciavel,
+  TIPOS_PROFISSIONAL_CREDENCIAVEIS,
+  verificarCredenciamento,
+} from './index.js';
 
 const cred = (p: Partial<Credenciamento>): Credenciamento => ({
   id: 1,
@@ -84,5 +89,67 @@ describe('credenciamento (decisões 25 e 26)', () => {
     expect(deveCredenciarTodosAoCriar({ ...base.opcoes, credenciaTodosAoCriar: true }, false)).toBe(true);
     expect(deveCredenciarTodosAoCriar({ ...base.opcoes, credenciaTodosAoCriar: true }, true)).toBe(false);
     expect(deveCredenciarTodosAoCriar(null, false)).toBe(false);
+  });
+  it('no mesmo nível de plano, o credenciamento do estabelecimento vence; depois, o de maior id', () => {
+    const geralDescredencia = cred({ id: 1, estabelecimentoId: 5, credenciado: false });
+    const r = verificarCredenciamento({ ...base, credenciamentos: [geralDescredencia, cred({ id: 2 })] });
+    expect([r.credenciado, r.efeito, r.credenciamentoId]).toEqual([false, 'alerta', 1]);
+    expect(r.motivo).toBe(
+      'O profissional está descredenciado neste convênio ou plano; o atendimento segue com alerta.',
+    );
+    const s = verificarCredenciamento({
+      ...base,
+      credenciamentos: [cred({ id: 3 }), cred({ id: 4, credenciado: false }), cred({ id: 2 })],
+    });
+    expect([s.efeito, s.credenciamentoId]).toEqual(['alerta', 4]);
+    // Credenciamento de outro profissional ou que ainda não começou não vale.
+    expect(
+      verificarCredenciamento({
+        ...base,
+        credenciamentos: [cred({ profissionalId: 102 }), cred({ vigenciaInicio: '2026-12-01' })],
+      }),
+    ).toMatchObject({ credenciado: false, credenciamentoId: null });
+  });
+  it('plano desconhecido: o alerta aponta o credenciamento de plano mais recente, só entre os vigentes e ativos', () => {
+    const semPlano = { ...base, planoId: null, planoSuperiorId: null, planoDesconhecido: true };
+    const v = verificarCredenciamento({
+      ...semPlano,
+      credenciamentos: [
+        cred({ id: 3, planoId: 31 }),
+        cred({ id: 8, planoId: 32 }),
+        cred({ id: 9, planoId: 33, credenciado: false }),
+        cred({ id: 10, planoId: 34, vigenciaFim: '2026-10-31' }),
+        cred({ id: 11, planoId: 35, profissionalId: 102 }),
+        cred({ id: 5, planoId: 36 }),
+      ],
+    });
+    expect([v.credenciado, v.efeito, v.credenciamentoId]).toEqual([false, 'alerta', 8]);
+    // Com o plano do paciente informado, a regra do plano desconhecido não se aplica.
+    const comPlano = verificarCredenciamento({
+      ...base,
+      planoId: 40,
+      planoSuperiorId: null,
+      planoDesconhecido: true,
+      credenciamentos: [cred({ id: 3, planoId: 31 })],
+      opcoes: { ...base.opcoes, bloqueiaSemCredenciamento: true },
+    });
+    expect([comPlano.efeito, comPlano.credenciamentoId]).toEqual(['bloqueio', null]);
+    expect(comPlano.motivo).toBe(
+      'O profissional não tem credenciamento vigente neste convênio ou plano; o convênio bloqueia o atendimento.',
+    );
+    // Só credenciamentos de plano descredenciados ou vencidos: segue a regra geral (sem opções, alerta).
+    const sem = verificarCredenciamento({
+      ...semPlano,
+      opcoes: null,
+      credenciamentos: [cred({ id: 9, planoId: 33, credenciado: false })],
+    });
+    expect([sem.efeito, sem.credenciamentoId]).toEqual(['alerta', null]);
+  });
+  it('em massa só entram os tipos que atendem pelo convênio', () => {
+    for (const t of TIPOS_PROFISSIONAL_CREDENCIAVEIS) expect(profissionalCredenciavel(t)).toBe(true);
+    expect(profissionalCredenciavel('administrativo')).toBe(false);
+    expect(profissionalCredenciavel('assistencial')).toBe(false);
+    expect(profissionalCredenciavel('')).toBe(false);
+    expect(deveCredenciarTodosAoCriar({ ...base.opcoes, credenciaTodosAoCriar: false }, false)).toBe(false);
   });
 });

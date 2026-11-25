@@ -22,3 +22,6 @@ export { portaPacsIndisponivel, PortaPacsPropria } from './pacs-porta-propria.js
 export { PortaPacsMemoria } from './pacs-porta-memoria.js';
 export { modoPacs, ServicoPacs } from './aplicacao/pacs.js';
 export { moduloSadt, portasDoSadt } from './modulo.js';
+// Laboratório de apoio (05-SADT linha 14): o retorno do resultado no item e na situação da remessa.
+export { marcarRetornoNaRemessa, TABELAS_RETORNO_REMESSA } from './aplicacao/apoio-retorno-remessa.js';
+export { ServicoApoioRemessa, TIPO_NUMERO_REMESSA } from './aplicacao/apoio-remessa-propria.js';

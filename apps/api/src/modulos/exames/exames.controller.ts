@@ -18,7 +18,19 @@
 //   GET  /api/agenda/exames/pacientes/:id/marcacoes         marcações de exame do paciente (auditado)
 //   GET  /api/agenda/exames/cancelamentos?de&ate&agenda&pagina   cancelados pela data do cancelamento (31 dias)
 //   GET  /api/agenda/exames/residuo?de&ate                  resíduo (coordenação): confirmado sem paciente, ocupado sem marcação
-import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Optional,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseInterceptors,
+} from '@nestjs/common';
 import {
   type BuscaVagasExame,
   type DetalheAgendaExame,
@@ -58,6 +70,7 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao } from './apoio-gravacao.js';
+import { InterceptadorPapelNominal } from './interceptador-papel-nominal.js';
 import { type GravadorCoberturaExame, PORTA_EXAME, type PortaExame } from './porta.js';
 import { type ContextoExame, exigirJanela, ServicoExame } from './servico.js';
 
@@ -111,6 +124,8 @@ export function ctxExame(s: SessaoCadastro): ContextoExame {
 }
 
 @Controller('agenda/exames')
+// 02-AGE 40: o papel da sessão (gestor, administrador) para a lista nominal da agenda restrita.
+@UseInterceptors(InterceptadorPapelNominal)
 export class ExamesController {
   private readonly apoio: ApoioGravacao<GravadorCoberturaExame>;
   private readonly servico: ServicoExame;

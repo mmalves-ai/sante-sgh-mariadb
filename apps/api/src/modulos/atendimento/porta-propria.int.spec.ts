@@ -761,13 +761,241 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     expect(Number(r.resultado['valor'])).toBe(80);
     expect(await itens()).toBe(antes + 1);
     expect(await contas()).toBe(1);
+
+    // F3.2 (02-REC linha 30): o extra fica na ficha pela sua sequência, ligado ao item que gerou na conta.
+    const seq = Number(r.resultado['seq']);
+    const totalConta = async () =>
+      Number((await ler('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [conta]))?.['valor_total']);
+    const totalAntes = await totalConta();
+    const ligado = await ler(
+      'SELECT ap.quantidade, ap.conta_hospitalar_item_id AS item, ap.principal FROM atendimento_procedimento ap WHERE ap.atendimento_id = ? AND ap.sequencia = ?',
+      [reg, seq],
+    );
+    const item = Number(ligado?.['item']);
+    expect(item).toBeGreaterThan(0);
+    expect(Number(ligado?.['principal'])).toBe(0);
+    const det = await porta.detalhe(c, reg);
+    expect(det?.extras.find((x) => x.seq === seq)).toMatchObject({ quantidade: 1, valor: 80 });
+
+    // Correção da quantidade: item e ficha juntos, total da conta e memória do cálculo na mesma transação.
+    const corr = await porta.executar(
+      c,
+      'atendimento.corrigirProcedimentoExtra',
+      { atendimento: reg, sequencia: seq, quantidade: 3, justificativa: 'Quantidade digitada errada' },
+      contextoGravacao(mm),
+    );
+    expect(corr.resultado).toMatchObject({ quantidadeAntes: 1, quantidade: 3, valorAntes: 80, valor: 240 });
+    expect(
+      await ler('SELECT quantidade, valor_total, situacao FROM conta_hospitalar_item WHERE id = ?', [item]),
+    ).toMatchObject({ valor_total: '240.00', situacao: 'lancado' });
+    expect(
+      Number(
+        (
+          await ler('SELECT quantidade FROM atendimento_procedimento WHERE conta_hospitalar_item_id = ?', [
+            item,
+          ])
+        )?.['quantidade'],
+      ),
+    ).toBe(3);
+    expect(await totalConta()).toBeCloseTo(totalAntes + 160, 2);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id = ? AND operacao = 'alteracao'",
+        [item],
+      ),
+    ).toBe(1);
+    expect(corr.trilha).toBeTruthy();
+    // Recusas do domínio: nada a corrigir e data antes do atendimento.
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.corrigirProcedimentoExtra',
+        { atendimento: reg, sequencia: seq, quantidade: 3, justificativa: 'Quantidade digitada errada' },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'nada-a-corrigir' } });
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.corrigirProcedimentoExtra',
+        { atendimento: reg, sequencia: seq, data: '2020-01-01', justificativa: 'Data digitada errada' },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'data-fora-do-atendimento' } });
+
+    // Estorno: operação crítica (sem reautenticação recusa); marca o item como estornado e encerra o extra da
+    // ficha sem apagar; o total da conta volta.
+    const estorno = { atendimento: reg, sequencia: seq, justificativa: 'Lançado no paciente errado' };
+    await expect(
+      porta.executar(c, 'atendimento.estornarProcedimentoExtra', estorno, contextoGravacao(mm)),
+    ).rejects.toBeTruthy();
+    expect(await ler('SELECT situacao FROM conta_hospitalar_item WHERE id = ?', [item])).toMatchObject({
+      situacao: 'lancado',
+    });
+    await porta.executar(
+      c,
+      'atendimento.estornarProcedimentoExtra',
+      estorno,
+      contextoGravacao(mm, { reautenticadoEm: Date.now() }),
+    );
+    expect(await ler('SELECT situacao FROM conta_hospitalar_item WHERE id = ?', [item])).toMatchObject({
+      situacao: 'estornado',
+    });
+    const encerrado = await ler(
+      'SELECT excluido_em FROM atendimento_procedimento WHERE conta_hospitalar_item_id = ?',
+      [item],
+    );
+    expect(encerrado?.['excluido_em']).toBeTruthy();
+    expect(await totalConta()).toBeCloseTo(totalAntes - 80, 2);
+    expect((await porta.detalhe(c, reg))?.extras.some((x) => x.seq === seq)).toBe(false);
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.estornarProcedimentoExtra',
+        estorno,
+        contextoGravacao(mm, { reautenticadoEm: Date.now() }),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'procedimento-inexistente' } });
+
+    // Segurado: grava a cobertura e sobe a versão da ficha; a versão velha recusa com 409.
+    const v1 = (await porta.detalhe(c, reg))!.versao;
+    const seg = await porta.executar(
+      c,
+      'atendimento.alterarSegurado',
+      { atendimento: reg, matricula: '654321', guia: 'G-77', versao: v1 },
+      contextoGravacao(mm),
+    );
+    expect(
+      await ler(
+        'SELECT numero_carteira, numero_guia FROM cobertura_atendimento WHERE atendimento_id = ? AND ordem = 1',
+        [reg],
+      ),
+    ).toMatchObject({ numero_carteira: '654321', numero_guia: 'G-77' });
+    expect(String(seg.resultado['versao'])).not.toBe(v1);
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.alterarSegurado',
+        { atendimento: reg, matricula: '111', versao: v1 },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { status: 409 } });
+
+    // Correção da ficha: observação e caráter gravados; convênio com conta vai ao faturamento; nada a alterar recusa.
+    const v2 = (await porta.detalhe(c, reg))!.versao;
+    await porta.executar(
+      c,
+      'atendimento.alterarAtendimento',
+      {
+        atendimento: reg,
+        observacao: 'RETORNO EM 30 DIAS',
+        carater: 'urgencia',
+        justificativa: 'Correção pedida pelo médico',
+        versao: v2,
+      },
+      contextoGravacao(mm),
+    );
+    expect(await ler('SELECT observacao FROM atendimento WHERE id = ?', [reg])).toMatchObject({
+      observacao: 'RETORNO EM 30 DIAS',
+    });
+    expect((await porta.detalhe(c, reg))?.carater).toBe('urgencia');
+    const v3 = (await porta.detalhe(c, reg))!.versao;
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.alterarAtendimento',
+        {
+          atendimento: reg,
+          observacao: 'RETORNO EM 30 DIAS',
+          justificativa: 'Correção pedida pelo médico',
+          versao: v3,
+        },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'nada-a-alterar' } });
+    const outra = await ler(
+      "SELECT id FROM fonte_pagadora WHERE id <> ? AND situacao = 'ativa' AND excluido_em IS NULL ORDER BY id LIMIT 1",
+      [mm.fonte],
+    );
+    if (outra)
+      await expect(
+        porta.executar(
+          c,
+          'atendimento.alterarAtendimento',
+          {
+            atendimento: reg,
+            convenio: Number(outra['id']),
+            justificativa: 'Convênio escolhido errado',
+            versao: v3,
+          },
+          contextoGravacao(mm),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'troca-de-conta' } });
   });
 
-  it('as operações ainda sem regra no banco respondem 501 (nada gravado)', async () => {
+  it('02-CAD 20: o atendimento pedido pelo solicitante unificado em outro nasce no cadastro que continua', async () => {
     const mm = m!;
-    await expect(
-      porta.executar(contextoPorta(mm), 'atendimento.alterarHeranca', {}, contextoGravacao(mm)),
-    ).rejects.toMatchObject({ problema: { status: 501 } });
-    await expect(porta.indicadores()).rejects.toMatchObject({ status: 501 });
+    const c = contextoPorta(mm);
+    const NUMEROS = ['F3110AT1', 'F3110AT2'];
+    const limpar = () =>
+      nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f3-1-10-abertura' }, async (w) => {
+        const doTeste = 'SELECT id FROM solicitante_externo WHERE numero_conselho IN (?, ?)';
+        await w.executar(
+          `UPDATE atendimento SET solicitante_externo_id = NULL WHERE solicitante_externo_id IN (SELECT id FROM (${doTeste}) x)`,
+          NUMEROS,
+        );
+        await w.executar(
+          'UPDATE solicitante_externo SET sucessor_solicitante_externo_id = NULL WHERE numero_conselho IN (?, ?)',
+          NUMEROS,
+        );
+        await w.executar('DELETE FROM solicitante_externo WHERE numero_conselho IN (?, ?)', NUMEROS);
+      });
+    await limpar();
+    try {
+      // Massa sintética: o cadastro que continua e o duplicado já unificado nele (inativo, com o ponteiro).
+      const [continua, duplicado] = await nucleo.escrever(
+        { cliente: CLIENTE_F22, correlacao: 'f3-1-10-abertura' },
+        async (w) => {
+          const novo = (nome: string, numero: string) =>
+            w.inserir(
+              `INSERT INTO solicitante_externo (nome, conselho_classe_id, numero_conselho, conselho_unidade_federativa_id,
+                 data_inscricao, ativo, criado_em) VALUES (?, ?, ?, ?, '2026-01-01', TRUE, NOW(3))`,
+              [nome, mm.conselho, numero, mm.uf],
+            );
+          const a = await novo(`SOLICITANTE QUE CONTINUA ${MARCA}`, NUMEROS[0]!);
+          const b = await novo(`SOLICITANTE DUPLICADO ${MARCA}`, NUMEROS[1]!);
+          await w.executar(
+            `UPDATE solicitante_externo SET ativo = FALSE, data_inativacao = CURRENT_DATE, ativo_antes_unificacao = TRUE,
+               sucessor_solicitante_externo_id = ?, unificado_em = NOW(3), unificado_por = ? WHERE id = ?`,
+            [a, mm.usuario, b],
+          );
+          return [a, b] as const;
+        },
+      );
+      const r = await porta.executar(
+        c,
+        'atendimento.abrirAtendimento',
+        { ...abertura(mm), solicitante: duplicado },
+        contextoGravacao(mm),
+      );
+      const reg = Number(r.resultado['reg']);
+      expect(reg).toBeGreaterThan(0);
+      // O que fica no banco: o atendimento aponta para o cadastro que continua, nunca para o duplicado.
+      expect(
+        Number((await ler('SELECT solicitante_externo_id AS s FROM atendimento WHERE id = ?', [reg]))?.['s']),
+      ).toBe(continua);
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM atendimento WHERE solicitante_externo_id = ?', [duplicado]),
+      ).toBe(0);
+      // O duplicado segue como estava: inativo e com o ponteiro.
+      expect(
+        await ler(
+          'SELECT ativo, sucessor_solicitante_externo_id AS s FROM solicitante_externo WHERE id = ?',
+          [duplicado],
+        ),
+      ).toMatchObject({ ativo: 0, s: continua });
+    } finally {
+      await limpar().catch(() => undefined);
+    }
   });
 });

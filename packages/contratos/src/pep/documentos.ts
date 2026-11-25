@@ -339,8 +339,32 @@ export interface AlergiasPaciente {
   readonly principios: readonly { id: number; nome: string }[];
   /** Registros clínicos do atendimento, do próprio profissional, a que a alergia pode ser ligada. */
   readonly registros: readonly RegistroParaAlergia[];
+  /** Catálogo de manifestações (urticária, broncoespasmo...) para a escolha ao registrar (03-PEP L100). */
+  readonly manifestacoes: readonly ManifestacaoAlergica[];
   readonly criar: AcaoLiberada;
   readonly inativar: AcaoLiberada;
+}
+
+export interface ManifestacaoAlergica {
+  readonly id: number;
+  readonly codigo: string;
+  readonly nome: string;
+}
+
+/** Um passo da linha do tempo da alergia (inclusão, retirada, reativação...), da mais antiga para a mais recente. */
+export interface PassoHistoricoAlergia {
+  readonly id: number;
+  readonly quando: string | null;
+  readonly titulo: string;
+  readonly quem: string | null;
+  readonly motivo: string | null;
+}
+
+/** Histórico da alergia: nada é apagado; a alergia retirada mostra o histórico inteiro (03-PEP L100). */
+export interface HistoricoAlergia {
+  readonly alergia: number;
+  readonly manifestacoes: readonly ManifestacaoAlergica[];
+  readonly passos: readonly PassoHistoricoAlergia[];
 }
 
 export const esquemaRegistrarAlergia = z
@@ -353,6 +377,8 @@ export const esquemaRegistrarAlergia = z
     reacao: textoCp1252(200).optional(),
     gravidade: z.enum(GRAVIDADES_ALERGIA).optional(),
     origem: z.enum(ORIGENS_ALERGIA).optional(),
+    /** Manifestações do catálogo (até 10); a declaração "nega alergias" não tem manifestação. */
+    manifestacoes: z.array(id).max(10).default([]),
     /** Controle otimista: as alergias ativas lidas pela tela (IDs, em ordem). */
     versao: z.string().max(200),
   })

@@ -10,6 +10,7 @@ import { lerLiberacaoProntuario } from '../../modulos/pep/api-pep.js';
 import { apagarTudoLocal as apagarRascunhos } from '../../modulos/pep/rascunho-local.js';
 import { apagarCofreLocal } from '../../modulos/enfermagem/cofre-local.js';
 import { usarBloqueio } from '../bloqueio/bloqueio.js';
+import { reiniciarDestinoInicial } from '../preferencias/preferencias-servidor.js';
 import { mensagemDoErro } from '../erros/problem-details.js';
 import { definirSessaoDaTela } from './pode.js';
 
@@ -161,6 +162,8 @@ export function usarSaida() {
       void cliente.cancelQueries();
       cliente.clear();
       bloqueio.desbloquear();
+      // 01-ADM L84: quem entrar em seguida neste navegador abre a própria tela inicial (o destino se decide de novo).
+      reiniciarDestinoInicial();
       if (como) window.location.assign('/plataforma');
       else await roteador.replace({ name: 'entrar' });
     }

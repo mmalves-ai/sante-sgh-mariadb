@@ -59,7 +59,20 @@ export interface Parecido {
   nome: string;
   registro: string;
   ativo: boolean;
+  /** Versão lida do cadastro parecido (a unificação a confere). */
+  versao?: number;
   motivo: 'mesmo-registro' | 'mesmo-nome' | 'numero-proximo';
+  /** Dados que a unificação traria deste parecido para a ficha aberta (ela não os tem). Só os nomes dos campos. */
+  traz?: string[];
+  /** Dados que os dois têm diferentes: na unificação fica o da ficha aberta. */
+  difere?: string[];
+}
+/** Cadastro do outro lado de uma unificação (02-CAD linha 20). */
+export interface SolicitanteUnificado {
+  id: number;
+  nome: string;
+  registro: string;
+  quando: string | null;
 }
 export interface FichaSolicitante {
   id: number;
@@ -82,6 +95,10 @@ export interface FichaSolicitante {
   ativo: boolean;
   dataInativacao: string | null;
   faltaParaGuia: string[];
+  /** Cadastro em que este foi unificado (o que continua), ou null. */
+  unificadoEm?: SolicitanteUnificado | null;
+  /** Cadastros unificados neste, com os atendimentos que seguem ligados a cada um. */
+  absorvidos?: (SolicitanteUnificado & { versao: number; atendimentos: number })[];
   parecidos: Parecido[];
   codigos: { id: number; versao: number; fonte: number; fonteNome: string; codigo: string; ativo: boolean }[];
 }
@@ -146,3 +163,9 @@ export const mudarSituacaoSolicitante = (id: number, c: { versao: number; ativo:
   pedir<Gravado>(`${C}/solicitantes/${id}/situacao`, 'POST', c);
 export const gravarCodigoNaFonte = (id: number, c: { fonte: number; codigo: string; ativo: boolean }) =>
   pedir<Gravado>(`${C}/solicitantes/${id}/codigos`, 'POST', c);
+/** Unifica o duplicado (`absorvido`) no cadastro `id`: o duplicado fica inativo e aponta para este. */
+export const unificarSolicitante = (id: number, c: { absorvido: number; versao: number; motivo: string }) =>
+  pedir<Gravado>(`${C}/solicitantes/${id}/unificar`, 'POST', c);
+/** Desfaz a unificação do cadastro `id` (ele volta a ficar ativo e deixa de apontar para o outro). */
+export const desfazerUnificacaoSolicitante = (id: number, c: { versao: number; motivo: string }) =>
+  pedir<Gravado>(`${C}/solicitantes/${id}/desfazer-unificacao`, 'POST', c);

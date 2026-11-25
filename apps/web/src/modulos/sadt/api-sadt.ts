@@ -153,6 +153,7 @@ export const conferirCodigoLaudo = (codigo: string) =>
     `${S}/laudos/codigo/${encodeURIComponent(codigo.trim())}`,
     z.object({
       valido: z.boolean(),
+      superado: z.boolean().optional(),
       numero: z.string().nullable(),
       emitidoEm: z.string().nullable(),
       exames: z.number(),

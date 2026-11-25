@@ -6,10 +6,15 @@
 // setor, da devolução, do cancelamento, da perda e da dupla conferência do controlado, do fechamento do livro, da
 // dispensação ambulatorial com o envio nacional e da avaliação pelo horário, com as recusas de cada uma.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { createHash } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { codigoEtiquetaDose, etiquetasAceitas, type LivroMontado } from '@sgh/contratos/regras-suprimentos';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
+  criarArmazemLocal,
   type Escritor,
   ErroOperacao,
   NucleoProprio,
@@ -66,7 +71,9 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
         'DELETE FROM conferencia_controlado WHERE estabelecimento_id = ?',
         'DELETE ei FROM envio_controlado_nacional_item ei JOIN envio_controlado_nacional en ON en.id = ei.envio_controlado_nacional_id WHERE en.estabelecimento_id = ?',
         'DELETE FROM envio_controlado_nacional WHERE estabelecimento_id = ?',
+        'DELETE t FROM termo_livro_controlado t JOIN livro_controlado l ON l.id = t.livro_controlado_id WHERE l.estabelecimento_id = ?',
         'DELETE FROM livro_controlado WHERE estabelecimento_id = ?',
+        "DELETE FROM arquivo WHERE estabelecimento_id = ? AND finalidade = 'livro_controlado'",
         'DELETE esi FROM entrega_setor_item esi JOIN entrega_setor es ON es.id = esi.entrega_setor_id WHERE es.estabelecimento_id = ?',
         'DELETE FROM entrega_setor WHERE estabelecimento_id = ?',
         'UPDATE receita_controlada SET dispensacao_id = NULL WHERE estabelecimento_id = ?',
@@ -843,6 +850,8 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
       guardaAte: r.guardaAte,
       por: 'f24pf.farma',
       modo: 'conferencia',
+      // O estabelecimento do teste não tem CNPJ: o de conferência fecha sem termo, e a leitura não inventa.
+      termos: [],
     });
     expect(await porta.livroFechado(ctx, 2, new Date('2026-11-01T00:00:00'))).toBeNull();
     expect(await fechar('conferencia').catch((e: unknown) => e)).toBeInstanceOf(ErroOperacao);
@@ -853,6 +862,141 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
         [ids.est],
       ),
     ).toBe(0);
+  });
+
+  it('livro oficial: conteúdo guardado no disco local (ADR 0004) com o hash, termos de abertura e encerramento e o emitente exigido', async () => {
+    const raizAntes = process.env['ARQUIVOS_RAIZ'];
+    const raiz = await mkdtemp(join(tmpdir(), 'f36-livro-'));
+    process.env['ARQUIVOS_RAIZ'] = raiz;
+    const livro = {
+      livro: 2,
+      inicio: '2026-11-08',
+      fim: '2026-11-14',
+      modo: 'oficial',
+      titulo: 'LIVRO SINTETICO OFICIAL',
+      paginas: [{ pagina: 1 }, { pagina: 2 }, { pagina: 3 }],
+      termoAbertura: 'ABERTURA SINTETICA',
+      termoEncerramento: 'ENCERRAMENTO SINTETICO',
+    } as unknown as LivroMontado;
+    const fechar = (conteudo: { arquivo: number; hash: string } | null) =>
+      porta.gravarSgh(ctx, null, (g) =>
+        g.fecharLivro({
+          livro,
+          usuario: 'f24pf.farma',
+          responsavelTecnico: true,
+          chaveOficialLigada: true,
+          conteudo,
+        }),
+      );
+    const cnpj = (v: string | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f36-livro' }, (e) =>
+        e.executar('UPDATE estabelecimento SET cnpj = ? WHERE id = ?', [v, ids.est]),
+      );
+    try {
+      const arq = await porta.guardarConteudoLivro(ctx, livro);
+      expect(arq.hash).toMatch(/^[0-9a-f]{64}$/);
+      // Sem CNPJ no cadastro o oficial recusa, e nada fica no livro.
+      expect(codigoDe(await fechar(arq).catch((e: unknown) => e))).toBe('estabelecimento-sem-cnpj');
+      await cnpj('92400000000155');
+      // O arquivo de outro conteúdo não serve: o hash tem de ser o deste livro.
+      const outro = await porta.guardarConteudoLivro(ctx, { ...livro, titulo: 'OUTRO' } as LivroMontado);
+      expect(
+        codigoDe(await fechar({ arquivo: outro.arquivo, hash: arq.hash }).catch((e: unknown) => e)),
+      ).toBe('conteudo-divergente');
+      const r = await fechar(arq);
+      expect(r.hash).toBe(arq.hash);
+      expect(
+        await ler(
+          'SELECT modo_fechamento, conteudo_arquivo_id, hash_conteudo, situacao, guarda_ate FROM livro_controlado WHERE id = ?',
+          [r.id],
+        ),
+      ).toMatchObject({
+        modo_fechamento: 'oficial',
+        conteudo_arquivo_id: arq.arquivo,
+        hash_conteudo: arq.hash,
+        situacao: 'encerrado',
+      });
+      const termos = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-f36-livro' }, (l) =>
+        l.consultar<Record<string, unknown>>(
+          'SELECT tipo, sequencia, pagina_inicial, pagina_final, cnpj, arquivo_id FROM termo_livro_controlado WHERE livro_controlado_id = ? ORDER BY sequencia',
+          [r.id],
+        ),
+      );
+      expect(
+        termos.map((t) => [t['tipo'], Number(t['sequencia']), Number(t['pagina_final']), t['cnpj']]),
+      ).toEqual([
+        ['abertura', 1, 3, '92400000000155'],
+        ['encerramento', 2, 3, '92400000000155'],
+      ]);
+      expect(termos[0]?.['arquivo_id']).toBeNull();
+      expect(Number(termos[1]?.['arquivo_id'])).toBe(arq.arquivo);
+      // O arquivo no disco é o conteúdo do livro (hash conferido) e tem a guarda legal do livro.
+      const meta = await ler(
+        'SELECT chave_armazenamento, hash_sha256, retencao_ate, tipo_mime FROM arquivo WHERE id = ?',
+        [arq.arquivo],
+      );
+      expect(meta).toMatchObject({ hash_sha256: arq.hash, tipo_mime: 'application/json' });
+      expect(
+        String(
+          meta?.['retencao_ate'] instanceof Date
+            ? (meta['retencao_ate'] as Date).toISOString()
+            : meta?.['retencao_ate'],
+        ).slice(0, 10),
+      ).toBe('2028-11-14');
+      // A leitura pela porta confere o hash no disco (falta ou divergência: erro); o conteúdo é o livro montado.
+      const lido = await criarArmazemLocal(nucleo, { raiz }).ler(
+        { cliente: CLIENTE, estabelecimento: ids.est, usuario: null, correlacao: 't-f36-livro' },
+        arq.arquivo,
+      );
+      expect(createHash('sha256').update(lido.conteudo).digest('hex')).toBe(arq.hash);
+      expect(JSON.parse(lido.conteudo.toString('utf8'))).toMatchObject({ titulo: 'LIVRO SINTETICO OFICIAL' });
+      // A leitura do livro fechado devolve os termos GRAVADOS (emitente e responsável da época), abertura primeiro;
+      // só o de encerramento cita o conteúdo guardado.
+      const responsavel = await ler(
+        `SELECT COALESCE(NULLIF(pr.nome_exibicao, ''), pf.nome) AS nome
+           FROM livro_controlado lc JOIN profissional pr ON pr.id = lc.responsavel_tecnico_profissional_id
+           JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id WHERE lc.id = ?`,
+        [r.id],
+      );
+      const fechado = await porta.livroFechado(ctx, 2, new Date('2026-11-08T00:00:00'));
+      expect(fechado).toMatchObject({ modo: 'oficial', hash: arq.hash });
+      expect(String(responsavel?.['nome'] ?? '')).not.toBe('');
+      expect(fechado?.termos).toEqual([
+        {
+          tipo: 'abertura',
+          paginaInicial: 1,
+          paginaFinal: 3,
+          razaoSocial: expect.stringMatching(/\S/),
+          cnpj: '92400000000155',
+          responsavel: responsavel?.['nome'],
+          emitidoEm: fechado?.em,
+          conteudoGuardado: false,
+        },
+        {
+          tipo: 'encerramento',
+          paginaInicial: 1,
+          paginaFinal: 3,
+          razaoSocial: expect.stringMatching(/\S/),
+          cnpj: '92400000000155',
+          responsavel: responsavel?.['nome'],
+          emitidoEm: fechado?.em,
+          conteudoGuardado: true,
+        },
+      ]);
+      // O cadastro muda depois (o CNPJ sai no finally): o termo gravado continua o da época do fechamento.
+      await cnpj(null);
+      expect(
+        (await porta.livroFechado(ctx, 2, new Date('2026-11-08T00:00:00')))?.termos.map((t) => t.cnpj),
+      ).toEqual(['92400000000155', '92400000000155']);
+      await cnpj('92400000000155');
+      // Fechar de novo o mesmo período recusa.
+      expect(codigoDe(await fechar(arq).catch((e: unknown) => e))).toBe('livro-fechado');
+    } finally {
+      await cnpj(null);
+      if (raizAntes === undefined) delete process.env['ARQUIVOS_RAIZ'];
+      else process.env['ARQUIVOS_RAIZ'] = raizAntes;
+      await rm(raiz, { recursive: true, force: true });
+    }
   });
 
   it('farmácia ambulatorial: receita retida, saída do lote, envio nacional e a leitura escriturada', async () => {

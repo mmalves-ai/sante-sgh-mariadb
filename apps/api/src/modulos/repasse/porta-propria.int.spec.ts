@@ -598,6 +598,13 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
     );
     expect([comProfissional?.profissional, comProfissional?.percentual]).toEqual([ids.profissional, 40]);
     const faixa = Number((await incluir(v)).resultado['regra']);
+    // O valor recebido da fonte pagadora, o recurso deferido e a conciliação chegam ao motor (base "recebido").
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-03-04r' }, (e) =>
+      e.executar(
+        'UPDATE producao_repasse SET valor_recebido = 420, valor_recurso_deferido = 30, conciliado = TRUE WHERE id = ?',
+        [ids.producao],
+      ),
+    );
     const { itens } = await porta.producao(ctx, comp, 0);
     const item = itens.find((x) => x.id === ids.producao)!;
     expect(item).toMatchObject({
@@ -605,8 +612,17 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
       convenio: ids.fonte,
       executante: ids.profissional,
       cobrado: 500,
+      pago: 420,
+      recursoDeferido: 30,
+      conciliado: true,
       tipoConta: 'E',
     });
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-03-04r' }, (e) =>
+      e.executar(
+        'UPDATE producao_repasse SET valor_recebido = 0, valor_recurso_deferido = 0, conciliado = FALSE WHERE id = ?',
+        [ids.producao],
+      ),
+    );
     expect((await porta.producao(outro, comp, 0)).itens).toEqual([]);
     expect(
       (
@@ -716,16 +732,31 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
       item: ids.producao,
       prestador: ids.profissional,
       regra: faixa,
-      dimensoes: 'procedimento',
-      ignoradas: '',
-      base: null,
+      dimensoes: 'procedimento,convenio',
+      ignoradas: JSON.stringify([{ regra: faixa + 1, motivo: 'fora-da-vigencia' }]),
+      base: 'cobrado',
       baseValor: 500,
       percentual: 30,
-      valorFixo: 0,
-      valorSemAdicional: 150,
-      adicional: null,
-      valor: 150,
+      valorFixo: 10,
+      valorSemAdicional: 160,
+      adicional: JSON.stringify({ tipo: 'fim-de-semana', percentual: 12.5 }),
+      valor: 180,
       pendencia: null,
+    };
+    // O item sem profissional entra na memória com a pendência e valor zero (antes ficava só no resumo).
+    const pendente = {
+      ...memoria,
+      prestador: null,
+      regra: null,
+      dimensoes: '',
+      ignoradas: '',
+      base: null,
+      percentual: 0,
+      valorFixo: 0,
+      valorSemAdicional: 0,
+      adicional: null,
+      valor: 0,
+      pendencia: 'sem-executante',
     };
     const re = await porta.gravarSgh(gestor, trilha('apuracao_repasse'), (g) =>
       g.gravarApuracao({
@@ -733,19 +764,32 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
         competencia: comp,
         apuradoPor: 'l0304r.gestor',
         simulacao: false,
-        totais: { itens: 1, comRepasse: 1, pendentes: 0, pendencias: '{}', base: 500, valor: 150 },
-        memorias: [memoria],
+        totais: {
+          itens: 2,
+          comRepasse: 1,
+          pendentes: 1,
+          pendencias: JSON.stringify({ 'sem-executante': 1 }),
+          base: 1000,
+          valor: 180,
+        },
+        memorias: [memoria, pendente],
       }),
     );
     expect(re).toEqual({ apuracao, recalculada: true });
-    expect(await porta.apuracao(ctx, apuracao)).toMatchObject({
+    // O resumo da apuração: itens, com repasse, pendentes e pendências por motivo.
+    const resumo = await porta.apuracao(ctx, apuracao);
+    expect(resumo).toMatchObject({
       estado: 'aberta',
       apuradoPor: 'l0304r.gestor',
+      itens: 2,
+      comRepasse: 1,
+      pendentes: 1,
+      conferidoPor: null,
     });
-    // A memória guarda a regra (pai) aplicada; o item de regra não é adivinhado na leitura.
-    expect(
-      (await porta.memorias(ctx, apuracao, null)).map((m) => [m.item, m.prestador, m.regra, m.valor]),
-    ).toEqual([[ids.producao, ids.profissional, null, 150]]);
+    expect(JSON.parse(resumo!.pendencias)).toEqual({ 'sem-executante': 1 });
+    // A memória completa volta como foi gravada (item da regra, dimensões, descartadas, base, fixo, adicional).
+    expect(await porta.memorias(ctx, apuracao, null)).toEqual([memoria, pendente]);
+    expect(await porta.memorias(ctx, apuracao, ids.profissional)).toEqual([memoria]);
     expect(
       await contar(
         'SELECT COUNT(*) AS q FROM apuracao_repasse_item WHERE apuracao_repasse_id = ? AND regra_repasse_id IS NOT NULL AND excluido_em IS NULL',
@@ -755,6 +799,11 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
     await porta.gravarSgh(gestor, trilha('apuracao_repasse'), (g) =>
       g.transicionarApuracao({ apuracao, de: 'aberta', para: 'conferida', por: 'l0304r.gestor' }),
     );
+    // Quem conferiu fica gravado e volta na leitura.
+    expect(await porta.apuracao(ctx, apuracao)).toMatchObject({
+      estado: 'conferida',
+      conferidoPor: 'l0304r.gestor',
+    });
     // Segregação no banco (ck_apuracao_repasse_segregacao): quem apurou por último não aprova.
     await expect(
       porta.gravarSgh(gestor, trilha('apuracao_repasse'), (g) =>

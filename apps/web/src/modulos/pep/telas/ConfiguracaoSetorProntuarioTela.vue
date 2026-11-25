@@ -4,7 +4,7 @@
 // estabelecimento, editável na linha; a tolerância só abre com o retroativo ligado (validação na hora, a mesma regra
 // do domínio na API). Sem configuração do setor vale a do setor para "todos", senão o padrão do estabelecimento.
 // Ler exige pep.admin.ler; gravar, pep.admin.editar.
-import { SanteAlerta } from '@sgh/ui';
+import { SanteAlerta, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
@@ -52,6 +52,17 @@ function problema(c: ConfiguracaoSetor): string | null {
   return null;
 }
 const problemaNova = computed(() => problema(nova.value));
+const opcoesSetor = computed(() => [
+  { valor: 0, rotulo: t('pep.equipe.setor.escolha'), desabilitada: true },
+  ...setores.value.map((s) => ({ valor: s.id, rotulo: s.nome })),
+]);
+const opcoesTipo = computed(() => TIPOS.map((x) => ({ valor: x, rotulo: t(`pep.equipe.setor.tipos.${x}`) })));
+const opcoesAssinatura = computed(() =>
+  (['nenhuma', 'eletronica', 'digital_icp'] as const).map((x) => ({
+    valor: x,
+    rotulo: t(`pep.equipe.setor.assinaturas.${x}`),
+  })),
+);
 
 async function carregar(): Promise<void> {
   try {
@@ -113,26 +124,25 @@ onMounted(carregar);
         >
           <td>
             <span v-if="c.id">{{ c.setorNome }}</span>
-            <select
+            <SanteSelecao
               v-else
-              v-model.number="c.setor"
-              :aria-label="t('pep.equipe.setor.setor')"
+              v-model="c.setor"
+              ocultar-rotulo
+              :rotulo="t('pep.equipe.setor.setor')"
+              :opcoes="opcoesSetor"
               data-testid="cfg-setor"
-            >
-              <option :value="0" disabled>{{ t('pep.equipe.setor.escolha') }}</option>
-              <option v-for="s in setores" :key="s.id" :value="s.id">{{ s.nome }}</option>
-            </select>
+            />
           </td>
           <td>
             <span v-if="c.id">{{ t(`pep.equipe.setor.tipos.${c.tipoAtendimento}`) }}</span>
-            <select
+            <SanteSelecao
               v-else
               v-model="c.tipoAtendimento"
-              :aria-label="t('pep.equipe.setor.atendimento')"
+              ocultar-rotulo
+              :rotulo="t('pep.equipe.setor.atendimento')"
+              :opcoes="opcoesTipo"
               data-testid="cfg-tipo"
-            >
-              <option v-for="x in TIPOS" :key="x" :value="x">{{ t(`pep.equipe.setor.tipos.${x}`) }}</option>
-            </select>
+            />
           </td>
           <td>
             <input
@@ -155,15 +165,13 @@ onMounted(carregar);
             />
           </td>
           <td>
-            <select
+            <SanteSelecao
               v-model="c.assinaturaExigida"
-              :aria-label="t('pep.equipe.setor.assinatura')"
+              ocultar-rotulo
+              :rotulo="t('pep.equipe.setor.assinatura')"
+              :opcoes="opcoesAssinatura"
               data-testid="cfg-assinatura"
-            >
-              <option value="nenhuma">{{ t('pep.equipe.setor.assinaturas.nenhuma') }}</option>
-              <option value="eletronica">{{ t('pep.equipe.setor.assinaturas.eletronica') }}</option>
-              <option value="digital_icp">{{ t('pep.equipe.setor.assinaturas.digital_icp') }}</option>
-            </select>
+            />
           </td>
           <td>
             <input

@@ -7,7 +7,11 @@ import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { tipoDoProblema } from '@sgh/contratos';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import IdentidadeLogotipos from '../componentes/IdentidadeLogotipos.vue';
+import IdentidadeMantenedora from '../componentes/IdentidadeMantenedora.vue';
+import { ErroApi } from '../../../casca/erros/problem-details.js';
 import {
   alterarEstabelecimento,
   buscarProfissionais,
@@ -23,13 +27,29 @@ import {
   type Unidade,
 } from '../api-estrutura.js';
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 const cliente = useQueryClient();
 const consulta = useQuery({ queryKey: ['cadastro', 'estrutura-gestao'], queryFn: lerEstrutura });
 const dados = computed(() => consulta.data.value);
-const aba = ref<'estabelecimento' | 'unidades' | 'setores'>('estabelecimento');
+const aba = ref<'estabelecimento' | 'unidades' | 'setores' | 'logotipos' | 'mantenedora'>('estabelecimento');
 const erro = ref<unknown>(null);
 const ok = ref(false);
+/**
+ * O que resolver antes, com TODOS os motivos da recusa de uma vez (setor com subordinados, leitos ativos e paciente
+ * no leito aparece com os três). A mensagem vem da API (`regras`, a mesma fonte dos códigos); sem ela, vale o texto
+ * da tela pelo código, depois o detalhe da recusa e, por fim, um texto de reserva: a recusa nunca fica sem motivo.
+ */
+const recusas = computed<string[]>(() => {
+  const p = erro.value instanceof ErroApi ? erro.value.problema : null;
+  if (!p || tipoDoProblema(p) !== 'recusa-de-negocio') return [];
+  const doCodigo = (codigo: string | undefined): string | null => {
+    const chave = `estruturaGestao.recusas.${codigo}`;
+    return codigo && te(chave) ? t(chave) : null;
+  };
+  const lista = (p.regras ?? []).map((r) => r.mensagem.trim() || doCodigo(r.codigo) || '').filter(Boolean);
+  if (lista.length) return [...new Set(lista)];
+  return [doCodigo(p.codigo) ?? (p.detail?.trim() || t('estruturaGestao.recusas.reserva'))];
+});
 
 async function fazer(fn: () => Promise<unknown>, depois?: () => void): Promise<void> {
   erro.value = null;
@@ -169,11 +189,31 @@ const nomeUnidade = (id: number | null) =>
       >
         {{ t(`estruturaGestao.abas.${a}`) }}
       </button>
+      <!-- F3.1 (02-CAD linha 26): logotipos e mantenedora, cada um com a sua leitura e as suas mensagens. -->
+      <button
+        v-for="a in ['logotipos', 'mantenedora'] as const"
+        :key="a"
+        type="button"
+        role="tab"
+        :aria-selected="aba === a"
+        :data-testid="`aba-${a}`"
+        @click="((aba = a), (erro = null), (ok = false))"
+      >
+        {{ t(`identidadeEstabelecimento.abas.${a}`) }}
+      </button>
     </div>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <MensagemErro v-if="erro" :erro="erro" />
+    <!-- O papel de alerta fica no invólucro: na própria lista ele apagava a semântica de lista dos itens (axe listitem). -->
+    <div v-if="recusas.length" role="alert" data-testid="recusa-motivo">
+      <ul class="recusas">
+        <li v-for="r in recusas" :key="r">{{ r }}</li>
+      </ul>
+    </div>
     <p v-if="ok" role="status" data-testid="gravado">{{ t('estruturaGestao.comum.gravado') }}</p>
-    <p v-if="consulta.isPending.value">{{ t('estruturaGestao.comum.carregando') }}</p>
+    <IdentidadeLogotipos v-if="aba === 'logotipos'" />
+    <IdentidadeMantenedora v-else-if="aba === 'mantenedora'" />
+    <p v-else-if="consulta.isPending.value">{{ t('estruturaGestao.comum.carregando') }}</p>
 
     <template v-else-if="dados">
       <!-- Estabelecimento -->
@@ -382,22 +422,25 @@ const nomeUnidade = (id: number | null) =>
               t('estruturaGestao.setor.precisaCentroCusto')
             }}</small>
           </span>
-          <label>
-            {{ t('estruturaGestao.setor.responsavel') }}
-            <input
-              v-model="termo"
-              :placeholder="(setor['responsavelNome'] as string) || ''"
-              name="setor-responsavel"
-              list="setor-profissionais"
-            />
+          <!-- A lista dos achados fica fora do rótulo da busca: dentro dele, o clique na lista voltava o foco ao campo. -->
+          <span class="busca-responsavel">
+            <label>
+              {{ t('estruturaGestao.setor.responsavel') }}
+              <input
+                v-model="termo"
+                :placeholder="(setor['responsavelNome'] as string) || ''"
+                name="setor-responsavel"
+              />
+            </label>
             <SanteSelecao
               v-if="achados.length"
               v-model="setor['responsavel'] as number | null"
-              :rotulo="t('estruturaGestao.setor.responsavel')"
+              :rotulo="t('estruturaGestao.setor.responsavelAchado')"
               ocultar-rotulo
+              data-testid="setor-responsavel-achado"
               :opcoes="achados.map((p) => ({ valor: p.id, rotulo: p.nome }))"
             />
-          </label>
+          </span>
           <label v-for="c in ['responsavelInicio', 'responsavelFim'] as const" :key="c">
             {{ t(`estruturaGestao.setor.${c}`)
             }}<input v-model="setor[c] as string" type="date" :name="`setor-${c}`" />
@@ -451,7 +494,11 @@ const nomeUnidade = (id: number | null) =>
                 :aria-label="t('estruturaGestao.setor.contato')"
                 :placeholder="t('estruturaGestao.setor.contato')"
               />
-              <input v-model="r.telefoneExterno" :placeholder="t('estruturaGestao.setor.telefoneExterno')" />
+              <input
+                v-model="r.telefoneExterno"
+                :aria-label="t('estruturaGestao.setor.telefoneExterno')"
+                :placeholder="t('estruturaGestao.setor.telefoneExterno')"
+              />
               <label class="marca"
                 ><input
                   v-model="r.principal"
@@ -565,6 +612,19 @@ const nomeUnidade = (id: number | null) =>
 }
 .aviso {
   color: var(--sgh-alerta);
+}
+/* Campo da busca e a lista dos achados empilhados com folga: colados, o campo ficava abaixo do alvo mínimo (axe target-size). */
+.busca-responsavel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.busca-responsavel input {
+  min-block-size: 1.5rem;
+}
+.recusas {
+  margin: 0;
+  padding-left: var(--sgh-espaco-3);
 }
 .arvore {
   list-style: none;

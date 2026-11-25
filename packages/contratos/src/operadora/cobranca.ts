@@ -541,6 +541,13 @@ export const MENSAGENS_COBRANCA: Readonly<Record<string, string>> = {
   'beneficiario-excluido': 'O beneficiário está excluído desde antes da competência.',
   'produto-sem-coparticipacao': 'O produto do beneficiário não tem coparticipação.',
   'coparticipacao-zero': 'A coparticipação deste evento dá zero.',
+  'coparticipacao-teto-atingido':
+    'O beneficiário já atingiu o teto de coparticipação do mês ou do ano: nada a lançar neste evento.',
+  'coparticipacao-teto-invalido':
+    'Os tetos da coparticipação têm de ser maiores que zero, com o do evento até o do mês e o do mês até o do ano.',
+  'coparticipacao-limitada-evento': 'A coparticipação foi limitada ao teto por evento.',
+  'coparticipacao-limitada-mensal': 'A coparticipação foi limitada ao que falta do teto do mês.',
+  'coparticipacao-limitada-anual': 'A coparticipação foi limitada ao que falta do teto do ano.',
   'nao-aberta': 'Só a cobrança em aberto aceita esta ação.',
   'nao-paga': 'Só a cobrança paga pode ter a baixa estornada.',
   'pagamento-futuro': 'A data do pagamento não pode ser depois de hoje.',

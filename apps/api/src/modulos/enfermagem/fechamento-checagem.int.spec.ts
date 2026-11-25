@@ -126,7 +126,7 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
             item,
             situacaoLida,
             situacao,
-            quantidade: situacao === 'A' ? 1 : null,
+            quantidade: situacao === 'A' ? 1 : 0,
             justificativa: null,
             papel: 'principal',
           },
@@ -386,7 +386,7 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
     });
     // O que não confere é recusado sem a observação, e nada é gravado no horário.
     for (const [leitura, resultado] of [
-      [{ gtin: gs1(validadeBloqueado, 'L0113-OK') }, 'lote bloqueado'],
+      [{ codigoLido: gs1(validadeBloqueado, 'L0113-OK') }, 'lote bloqueado'],
       [{ gtin: GTIN_B, lote: 'L0113-OK', validade: validadeOk }, 'produto divergente'],
       [{ gtin: GTIN_A, lote: 'L0113-VENC' }, 'lote vencido'],
       [{ gtin: '7890000113999', lote: 'L0113-SEM-CADASTRO' }, 'nao identificado'],
@@ -403,7 +403,7 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
       ]),
     ).toMatchObject({ n: 0 });
     // DataMatrix GS1 da caixa (código da embalagem): o lote e a validade vêm da própria etiqueta.
-    await checar(c, h[3]!, 'A', { gtin: gs1(validadeOk, 'L0113-OK') });
+    await checar(c, h[3]!, 'A', { codigoLido: gs1(validadeOk, 'L0113-OK') });
     expect(await lido(h[3]!)).toMatchObject({
       meio_leitura: 'datamatrix',
       resultado: 'conforme',
@@ -424,7 +424,7 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
       justificativa: 'Única ampola disponível, liberada pela farmácia',
     });
     // Sem leitura (não administrado com motivo): nenhum lote lido.
-    await checar(c, h[1]!, 'N', { motivo: 'Paciente em jejum para exame' });
+    await checar(c, h[1]!, 'N', { motivo: 'jejum', observacao: 'Em jejum para exame' });
     expect(
       await uma('SELECT COUNT(*) AS n FROM administracao_lote_lido WHERE horario_administracao_id = ?', [
         h[1],

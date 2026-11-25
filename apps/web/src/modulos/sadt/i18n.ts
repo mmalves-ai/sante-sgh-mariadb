@@ -1,6 +1,10 @@
 // Textos das telas do SADT, dos laudos e do portal de resultados (M26). Sem nome de sistema antigo (ADR 0023).
 import { mensagensAgencia } from './i18n-agencia.js';
 import { mensagensPedido } from './i18n-pedido.js';
+import { mensagensEntrega, recusasEntrega } from './i18n-entrega.js';
+import { mensagensEscalaExecucao } from './i18n-escala-execucao.js';
+import { mensagensLimites } from './i18n-limites.js';
+import { mensagensLoteTrabalho } from './i18n-lote-trabalho.js';
 import { mensagensTransfusao } from './i18n-transfusao.js';
 
 export const mensagensSadt = {
@@ -115,7 +119,7 @@ export const mensagensSadt = {
     informado: 'informado no balcão',
     bruto: 'Bruto',
     desconto: 'Desconto',
-    validadeDias: 'Validade (dias)',
+    validadeDias: 'Validade em dias (vazio: padrão do estabelecimento)',
     validoAte: 'Válido até {data}',
     remover: 'Remover',
     gravadoNumero: 'Orçamento {numero} gravado: total {total}.',
@@ -200,11 +204,17 @@ export const mensagensSadt = {
     faixa: 'Faixa de referência',
     intervalo: '{de} a {ate}',
     gravado: 'Resultado digitado.',
+    gravadoCritico:
+      'Resultado digitado. Valor crítico: o aviso foi aberto para a comunicação ao responsável.',
     bloqueado: 'Resultado liberado: só a retificação muda o valor.',
     dataInvalida: 'Há data antiga inválida neste resultado: confira antes de liberar.',
     fora: 'Fora da referência',
-    criticoAviso: 'Valor crítico: o aviso sai ao responsável na liberação.',
+    criticoAviso: 'Valor crítico: o aviso é aberto ao gravar, para a comunicação ao responsável.',
     variaveis: 'Variáveis de fórmula',
+    calculado: 'Calculado pela fórmula: {formula}',
+    respostaPadrao: 'Resposta padrão',
+    textoPadrao: 'Inserir texto padrão na observação',
+    escolha: 'Escolha',
     importar:
       'A importação de equipamento fica para a interface do laboratório (decisão pendente): digite os valores.',
   },
@@ -215,10 +225,13 @@ export const mensagensSadt = {
     liberar: 'Liberar',
     confirmarCritico: 'Vi o valor crítico e confirmo a liberação',
     liberado: 'Resultado liberado.',
+    liberadoCritico: 'Resultado liberado. O aviso do valor crítico segue no painel até a comunicação.',
     retificar: 'Retificar',
     retificarTitulo: 'Retificar o resultado liberado',
     retificarTexto: 'A versão anterior fica guardada com o motivo, e quem já tinha visto é avisado.',
-    retificado: 'Resultado retificado.',
+    retificado: 'Resultado retificado. Quem já tinha visto foi avisado.',
+    retificadoCritico:
+      'Resultado retificado com valor crítico: o aviso foi aberto e quem já tinha visto foi avisado.',
     versoes: 'Versões',
     versao: 'Versão {n} em {em}{motivo}',
     viramAntes: '{n} pessoa(s) tinham visto antes',
@@ -271,6 +284,8 @@ export const mensagensSadt = {
     nenhumaEmissao: 'Nenhuma emissão deste exame.',
     emissao: 'Laudo número {numero} · {codigo} · {em} · {por} · {vias} via(s) seguinte(s)',
     validoNumero: 'Laudo número {numero} válido: emitido em {em}, {n} exame(s).',
+    superado:
+      'Atenção: este laudo foi retificado depois desta emissão. A via impressa não é mais a atual: emita a nova via.',
     editor: 'Laudo de imagem e métodos gráficos',
     editorTexto:
       'Os exames de imagem, endoscopia e métodos gráficos recebidos a laudar. O laudo é privativo de médico; assinar libera o laudo.',
@@ -350,9 +365,12 @@ export const mensagensSadt = {
     otpauth: 'Cadastre este código no aplicativo autenticador:',
     validar: 'Validar laudo',
     valido: 'Laudo válido: emitido em {em}, {n} exame(s).',
+    superado: 'Atenção: este laudo foi retificado depois desta emissão. Peça ao hospital a via atual.',
     invalido: 'Código não encontrado.',
   },
   recusas: {
+    // F3.5 (05-SADT linha 21): as recusas da entrega de resultados.
+    ...recusasEntrega,
     'pedido-suspenso': 'O pedido foi suspenso no prontuário.',
     'pedido-recebido': 'O pedido já foi recebido pelo setor.',
     'exame-nao-recebido': 'Receba o pedido no setor antes de digitar o resultado.',
@@ -384,4 +402,11 @@ export const mensagensSadt = {
   agencia: mensagensAgencia,
   // F3.5: pedido de exames, cancelamento do item e recoleta.
   pedido: mensagensPedido,
+  limites: mensagensLimites,
+  // F3.5 (05-SADT linha 21): entrega de resultados no balcão, prazos e publicação no portal.
+  entrega: mensagensEntrega,
+  // F3.5 (05-SADT linha 19): escala de execução e fila do setor.
+  escala: mensagensEscalaExecucao,
+  // F3.5: lote de trabalho da bancada no mapa de trabalho.
+  lote: mensagensLoteTrabalho,
 };

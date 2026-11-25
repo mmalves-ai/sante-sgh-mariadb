@@ -9,6 +9,7 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { criarContaComSenhaInicial, SENHA_INICIAL_PENDENTE } from './criacao-com-senha.js';
 import { modulo } from './modulo.js';
 
 const A = '/api/administracao/acesso';
@@ -103,5 +104,92 @@ describe('redefinir a senha pela ficha (troca pelo novo ligada)', () => {
     // Varredura: a provisória e a senha do gestor não vão à trilha.
     const t = JSON.stringify(trilha);
     expect(t).not.toContain(corpo.senhaProvisoria);
+  });
+});
+
+describe('criar a conta com a senha inicial (regra da composição)', () => {
+  it('a conta criada recebe a senha; a recusa da criação sobe sem pedir senha', async () => {
+    let pedidas = 0;
+    const dar = async () => {
+      pedidas += 1;
+      return { senhaProvisoria: 'sintetica-123', trocaObrigatoria: true };
+    };
+    const r = await criarContaComSenhaInicial(async () => ({ idUsuario: 7 }), dar);
+    expect(r).toEqual({
+      conta: { idUsuario: 7 },
+      senhaInicial: { emitida: true, senha: { senhaProvisoria: 'sintetica-123', trocaObrigatoria: true } },
+    });
+    await expect(
+      criarContaComSenhaInicial(async () => {
+        throw new Error('login-em-uso');
+      }, dar),
+    ).rejects.toThrow('login-em-uso');
+    expect(pedidas).toBe(1);
+  });
+
+  it('a falha da senha não desfaz a conta: fica pendente, com o motivo', async () => {
+    const semPorta = await criarContaComSenhaInicial(async () => ({ idUsuario: 8 }), null);
+    expect(semPorta).toEqual({
+      conta: { idUsuario: 8 },
+      senhaInicial: { emitida: false, motivo: SENHA_INICIAL_PENDENTE },
+    });
+    const falhou = await criarContaComSenhaInicial(
+      async () => ({ idUsuario: 9 }),
+      async () => {
+        throw Object.assign(new Error('x'), { detalhe: 'Serviço de senha indisponível.' });
+      },
+    );
+    expect(falhou.conta).toEqual({ idUsuario: 9 });
+    expect(falhou.senhaInicial).toEqual({
+      emitida: false,
+      motivo: `${SENHA_INICIAL_PENDENTE} (Serviço de senha indisponível.)`,
+    });
+    const vazia = await criarContaComSenhaInicial(
+      async () => ({ idUsuario: 10 }),
+      async () => ({ senhaProvisoria: '', trocaObrigatoria: true }),
+    );
+    expect(vazia.senhaInicial.emitida).toBe(false);
+  });
+});
+
+describe('criar usuário pela HTTP: a senha inicial volta na resposta da criação (01-ADM L57)', () => {
+  let app: NestFastifyApplication;
+  let trilha: RegistradorTrilhaMemoria;
+  beforeAll(async () => {
+    ({ app, trilha } = await subir({ ACESSO_TROCA_SENHA_PELO_NOVO: 'sim' }));
+  });
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('cria e devolve a senha inicial sem cache e sem trilha da senha; a criação recusada não devolve senha', async () => {
+    const c = cliente(app);
+    const g = await c.entrar('SINT.GESTOR');
+    expect(g.status).toBeLessThan(300);
+    const opcoes = (await c.get(g, `${A}/usuarios-opcoes`)).json() as {
+      grupos: { nome: string; ativo: boolean }[];
+    };
+    const grupo = opcoes.grupos.find((x) => x.ativo)?.nome ?? '';
+    expect(grupo).not.toBe('');
+    const entrada = { login: 'SINT.NOVA57', nomeCompleto: 'USUARIA SINTETICA NOVA', grupo };
+
+    const semSenha = await c.post(g, `${A}/usuarios`, { entrada });
+    expect(semSenha.statusCode).toBe(401);
+
+    const r = await c.post(g, `${A}/usuarios`, { entrada, senha: SENHA });
+    expect(r.statusCode).toBe(201);
+    expect(r.headers['cache-control']).toBe('no-store');
+    const corpo = r.json() as Record<string, unknown>;
+    expect(corpo['operacao']).toBe('acesso.criarUsuario');
+    expect(corpo['senhaPendente']).toBeUndefined();
+    expect(String(corpo['senhaProvisoria'])).toMatch(/^.{12,}$/);
+    expect(JSON.stringify(trilha)).not.toContain(String(corpo['senhaProvisoria']));
+
+    expect(corpo['trocaObrigatoria']).toBeDefined();
+
+    // Login repetido: recusa da criação, sem senha na resposta.
+    const repetido = await c.post(g, `${A}/usuarios`, { entrada, senha: SENHA });
+    expect(repetido.statusCode).toBeGreaterThanOrEqual(400);
+    expect(repetido.body).not.toContain('senhaProvisoria');
   });
 });

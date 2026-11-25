@@ -34,7 +34,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import type { ContextoRegistro, ProvaLida } from './registro-porta.js';
-import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-porta-propria.js';
+import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-propria-comum.js';
 import {
   type CabecalhoDocumentoLido,
   type CabecalhoRegistroLido,

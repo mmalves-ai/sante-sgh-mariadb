@@ -11,3 +11,5 @@ export * from './classificacao.js';
 export * from './titulo-receber.js';
 export * from './glosa-titulo.js';
 export * from './tipo-movimento.js';
+export * from './renegociacao.js';
+export * from './baixa-demonstrativo.js';

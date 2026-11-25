@@ -803,7 +803,7 @@ const pode = computed(() => dados.value?.gravacao ?? null);
   padding: 0 var(--sgh-espaco-1);
 }
 .selo.vencida {
-  border-color: var(--sgh-perigo, currentColor);
+  border-color: var(--sgh-alerta);
   font-weight: 700;
 }
 .turnos {

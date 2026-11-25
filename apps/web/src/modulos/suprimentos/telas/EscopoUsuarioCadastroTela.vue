@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Escopo do usuário no estoque (F3.6, 05-SUP linha 3): `/suprimentos/usuarios-estoque/escopo`. Busca o usuário e mostra
 // uma grade local × ação (marca e grava a linha); grupos de itens e centros de custo com vigência. Retirar o local
 // deixa a linha marcada sem ação; retirar a concessão fecha a vigência (o histórico fica na lista como encerrada).
@@ -142,17 +143,17 @@ const nomeLocal = (l: number) =>
           </tr>
         </tbody>
       </table>
-      <select
+      <SanteSelecao
         v-model="novoLocal"
-        :aria-label="t('cadastroEstoque.escopo.local')"
+        :rotulo="t('cadastroEstoque.escopo.local')"
+        ocultar-rotulo
+        :opcoes="[
+          { valor: '', rotulo: t('cadastroEstoque.escopo.conceder') },
+          ...(apoio.data.value?.locais ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
+        ]"
         data-testid="escopo-novo-local"
-        @change="incluirLocal"
-      >
-        <option value="">{{ t('cadastroEstoque.escopo.conceder') }}</option>
-        <option v-for="o in apoio.data.value?.locais ?? []" :key="o.id" :value="String(o.id)">
-          {{ o.nome }}
-        </option>
-      </select>
+        @update:model-value="incluirLocal"
+      />
 
       <label
         >{{ t('cadastroEstoque.escopo.motivoRetirada') }}
@@ -190,12 +191,16 @@ const nomeLocal = (l: number) =>
           )
         "
       >
-        <select v-model="cl.grupo" :aria-label="t('cadastroEstoque.item.grupo')" required>
-          <option value="">{{ t('cadastroEstoque.escolha') }}</option>
-          <option v-for="o in apoio.data.value?.grupos ?? []" :key="o.id" :value="String(o.id)">
-            {{ o.nome }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="cl.grupo"
+          :rotulo="t('cadastroEstoque.item.grupo')"
+          ocultar-rotulo
+          :opcoes="[
+            { valor: '', rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.grupos ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
+          ]"
+          obrigatorio
+        />
         <label
           >{{ t('cadastroEstoque.escopo.inicio') }} <input v-model="cl.inicio" type="date" required
         /></label>
@@ -245,12 +250,19 @@ const nomeLocal = (l: number) =>
           )
         "
       >
-        <select v-model="cc.centro" :aria-label="t('cadastroEstoque.local.centroCusto')" required>
-          <option value="">{{ t('cadastroEstoque.escolha') }}</option>
-          <option v-for="o in apoio.data.value?.centrosCusto ?? []" :key="o.id" :value="String(o.id)">
-            {{ o.codigo }} · {{ o.nome }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="cc.centro"
+          :rotulo="t('cadastroEstoque.local.centroCusto')"
+          ocultar-rotulo
+          :opcoes="[
+            { valor: '', rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.centrosCusto ?? []).map((o) => ({
+              valor: String(o.id),
+              rotulo: `${o.codigo} · ${o.nome}`,
+            })),
+          ]"
+          obrigatorio
+        />
         <label
           >{{ t('cadastroEstoque.escopo.inicio') }} <input v-model="cc.inicio" type="date" required
         /></label>

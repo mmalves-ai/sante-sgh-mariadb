@@ -8,7 +8,14 @@
 import {
   aplicarModelo,
   avaliarValores,
+  avisoDoAchadoCritico,
+  conferirPalavrasChave,
+  destinatariosDaRetificacaoDoLaudo,
+  exameAposAssinatura,
+  mudancaDePalavras,
+  PRAZO_ACHADO_CRITICO_MINUTOS,
   camposDoModelo,
+  completarValoresCalculados,
   conferirAssinante,
   conferirDonoDoModelo,
   conferirExameParaLaudo,
@@ -18,6 +25,7 @@ import {
   conferirTextoParaAssinar,
   ehMedico,
   type FaixaDaGrandeza,
+  type FormulaDaGrandeza,
   type GrandezaDoLaudo,
   ordenarModelos,
   type PacienteDoExame,
@@ -39,8 +47,20 @@ import {
 } from '@sgh/nucleo';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { lerFormulasDasGrandezas } from '../laudo-grandezas-propria.js';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
+import {
+  buscarPorPalavras,
+  filaDeLaudos,
+  laudosAnteriores,
+  modelosParaManutencao,
+  pacienteDoExame,
+  palavrasAtivas,
+  palavrasDoLaudo,
+  setoresDeLaudo,
+  versaoDoLaudo,
+} from './laudo-leituras.js';
 
 // ── Entradas ────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -60,6 +80,8 @@ const corpoLaudo = {
   pesoKg: z.number().positive().max(500).nullable().default(null),
   alturaCm: z.number().positive().max(260).nullable().default(null),
   valores: z.array(valor).max(500).default([]),
+  /** As palavras-chave do laudo (ids do cadastro); sem o campo, as gravadas ficam como estão. */
+  palavrasChave: z.array(id).max(100).nullable().default(null),
 };
 const semCriticoVazio = (x: { achadoCritico: boolean; achadoCriticoDescricao: string | null }) =>
   !x.achadoCritico || (x.achadoCriticoDescricao ?? '').length >= 5;
@@ -103,7 +125,20 @@ export interface LaudoEmRedacao {
     idadeDias: number | null;
     /** A data do exame (realização, coleta ou pedido): a da faixa e da idade. */
     dataExame: string;
+    nome: string;
+    prontuario: string;
   };
+  /** As palavras-chave vigentes do laudo e as do cadastro ativo (para a escolha na tela). */
+  readonly palavrasChave: readonly number[];
+  readonly palavras: readonly { id: number; codigo: string; descricao: string }[];
+  /** Os laudos assinados anteriores do mesmo exame do paciente, para comparar. */
+  readonly anteriores: readonly {
+    item: number;
+    assinadoEm: string | null;
+    resultado: string | null;
+    achadoCritico: boolean;
+    texto: string;
+  }[];
   readonly laudo: {
     id: number;
     situacao: SituacaoLaudo;
@@ -130,6 +165,8 @@ export interface LaudoEmRedacao {
   readonly secoes: readonly { id: number; nome: string; ordem: number }[];
   readonly grandezas: readonly (GrandezaDoLaudo & { secao: number | null; sigla: string })[];
   readonly faixas: readonly FaixaDaGrandeza[];
+  /** As fórmulas das medidas calculadas (a tela faz a mesma conta na hora, pela regra do domínio). */
+  readonly formulas: readonly FormulaDaGrandeza[];
   readonly valores: readonly ValorAvaliado[];
   readonly modelos: readonly {
     id: number;
@@ -149,6 +186,13 @@ export interface LaudoGravado {
   readonly versaoAtual: number;
   readonly valores: number;
   readonly foraReferencia: number;
+  /** A assinatura liberou o exame (ele segue para a emissão). */
+  readonly exameLiberado?: boolean;
+  /** O que houve com o aviso do achado crítico e quantas pessoas foram avisadas (quem pediu; quem emitiu). */
+  readonly avisoCritico?: 'abrir' | 'cancelar' | 'nada';
+  readonly avisados?: number;
+  /** Emissões do laudo anteriores a esta retificação (a via impressa deixou de ser a atual). */
+  readonly emissoesSuperadas?: number;
 }
 
 // ── Utilitários ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -184,7 +228,17 @@ function daRegra<T>(fn: () => T): T {
   }
 }
 
-const TABELAS = ['laudo_diagnostico', 'laudo_diagnostico_versao', 'valor_grandeza_laudo', 'modelo_laudo'];
+const TABELAS = [
+  'laudo_diagnostico',
+  'laudo_diagnostico_versao',
+  'valor_grandeza_laudo',
+  'modelo_laudo',
+  'laudo_palavra_chave',
+  'exame_item',
+  'aviso_valor_critico',
+  'aviso_clinico',
+  'aviso_clinico_destinatario',
+];
 
 interface MedidasPaciente {
   pesoKg: number | null;
@@ -393,7 +447,9 @@ export class ServicoLaudoRedacao {
         { teto: 100 },
       )
     ).map((r) => ({ id: n(r['id']), nome: texto(r['nome']), ordem: n(r['ordem']) }));
-    return { grandezas, faixas, secoes };
+    // A medida calculada sai da fórmula vigente na data do exame (grandeza-calculada.ts); o digitado nela é ignorado.
+    const formulas = await lerFormulasDasGrandezas(l, exame);
+    return { grandezas, faixas, secoes, formulas };
   }
 
   /** O profissional da sessão com o vínculo que assina (o de médico ativo primeiro). */
@@ -546,12 +602,22 @@ export class ServicoLaudoRedacao {
       };
       return {
         exame: { item, exame: b.exame, nome: b.nomeExame, setor: b.setor, tipoSetor: b.tipoSetor },
-        paciente: { id: b.paciente, sexo: b.sexo, idadeDias: b.idadeDias, dataExame: b.dataExame },
+        paciente: {
+          id: b.paciente,
+          sexo: b.sexo,
+          idadeDias: b.idadeDias,
+          dataExame: b.dataExame,
+          ...(await pacienteDoExame(l, b.paciente)),
+        },
+        palavrasChave: laudo ? await palavrasDoLaudo(l, laudo.id) : [],
+        palavras: await palavrasAtivas(l),
+        anteriores: await laudosAnteriores(l, est, b.paciente, b.exame, item),
         laudo,
         versoes,
         secoes: cat.secoes,
         grandezas: cat.grandezas,
         faixas: cat.faixas,
+        formulas: cat.formulas,
         valores,
         modelos,
         pode: { salvar: tenta('salvar'), assinar: tenta('salvar'), retificar: tenta('retificar') },
@@ -591,7 +657,14 @@ export class ServicoLaudoRedacao {
       if (!m) throw recusa('modelo-inexistente', 'O modelo não existe ou está inativo.');
       const cat = await this.catalogo(l, b.exame);
       const p = this.paciente(b, entrada.pesoKg, entrada.alturaCm);
-      const av = daRegra(() => avaliarValores(cat.grandezas, entrada.valores, cat.faixas, p));
+      const av = daRegra(() =>
+        avaliarValores(
+          cat.grandezas,
+          completarValoresCalculados(cat.grandezas, entrada.valores, cat.formulas, p),
+          cat.faixas,
+          p,
+        ),
+      );
       const sc = superficieCorporal(p.pesoKg, p.alturaCm);
       return aplicarModelo(texto(m['texto']), {
         ...valoresParaModelo(cat.grandezas, av),
@@ -603,7 +676,209 @@ export class ServicoLaudoRedacao {
     });
   }
 
+  /** A lista de trabalho de quem lauda (exames realizados sem laudo assinado) e os setores para o filtro. */
+  fila(c: ContextoSadt, setor: number | null) {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => ({
+      itens: await filaDeLaudos(l, est, setor),
+      setores: await setoresDeLaudo(l, est),
+    }));
+  }
+
+  /** O texto inteiro de uma versão anterior do laudo. */
+  versaoAnterior(c: ContextoSadt, item: number, numero: number) {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
+      await this.base(l, est, item);
+      return versaoDoLaudo(l, est, item, numero);
+    });
+  }
+
+  /** As palavras-chave ativas do cadastro. */
+  palavrasChave(c: ContextoSadt) {
+    return this.nucleo.lerSomente(this.ctxNucleo(c), (l) => palavrasAtivas(l));
+  }
+
+  /** Busca de casos pelas palavras-chave (os laudos assinados que têm todas). */
+  buscar(c: ContextoSadt, palavras: readonly number[]) {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), (l) => buscarPorPalavras(l, est, palavras));
+  }
+
+  /** Os modelos para a manutenção (os do estabelecimento e os pessoais de quem está na sessão). */
+  modelos(c: ContextoSadt) {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) =>
+      modelosParaManutencao(l, est, await this.profissionalDoUsuario(l, c.usuario)),
+    );
+  }
+
   // ── Gravações ─────────────────────────────────────────────────────────────────────────────────────────────
+
+  /** Grava as palavras-chave do laudo: a nova entra, a que voltou é reativada e a retirada fica marcada (nunca apaga). */
+  private async gravarPalavras(tx: TxOperacao, laudo: number, pedidas: readonly number[] | null) {
+    if (pedidas === null) return;
+    const gravadas = (
+      await tx.consultarParaAtualizar(
+        'SELECT id, palavra_chave_laudo_id, versao, excluido_em FROM laudo_palavra_chave WHERE laudo_diagnostico_id = ?',
+        [laudo],
+        { teto: 1000 },
+      )
+    ).map((r) => ({
+      id: n(r['id']),
+      palavra: n(r['palavra_chave_laudo_id']),
+      versao: n(r['versao']),
+      excluida: r['excluido_em'] !== null,
+    }));
+    // A palavra já vigente no laudo continua aceita mesmo se o cadastro a desativou depois; a nova tem de estar ativa.
+    const aceitas = new Set([
+      ...(
+        await tx.consultar('SELECT id FROM palavra_chave_laudo WHERE ativo = TRUE', [], { teto: 5000 })
+      ).map((r) => n(r['id'])),
+      ...gravadas.filter((g) => !g.excluida).map((g) => g.palavra),
+    ]);
+    const quer = daRegra(() => conferirPalavrasChave(pedidas, aceitas));
+    const m = mudancaDePalavras(gravadas, quer);
+    const versaoDe = (i: number) => gravadas.find((g) => g.id === i)!.versao;
+    for (const palavra of m.incluir)
+      await tx.incluir('laudo_palavra_chave', {
+        laudo_diagnostico_id: laudo,
+        palavra_chave_laudo_id: palavra,
+      });
+    for (const i of m.reativar)
+      await tx.alterar('laudo_palavra_chave', i, versaoDe(i), { excluido_em: null, excluido_por: null });
+    for (const i of m.retirar)
+      await tx.alterar('laudo_palavra_chave', i, versaoDe(i), {
+        excluido_em: new Date(),
+        excluido_por: tx.contexto.usuario,
+      });
+  }
+
+  /** O atendimento do pedido e as contas de quem pediu o exame (para os avisos). */
+  private async pedido(tx: TxOperacao, item: number) {
+    const q = await tx.uma(
+      `SELECT q.atendimento_id, q.solicitante_profissional_id FROM exame_item ei
+         JOIN requisicao_exame q ON q.id = ei.requisicao_exame_id WHERE ei.id = ?`,
+      [item],
+    );
+    const prof = nn(q?.['solicitante_profissional_id']);
+    const solicitantes =
+      prof === null
+        ? []
+        : (
+            await tx.consultar(
+              `SELECT u.id FROM usuario u JOIN profissional pr ON pr.id = ? AND ${DO_USUARIO}
+                WHERE u.excluido_em IS NULL ORDER BY u.id`,
+              [prof],
+              { teto: 5 },
+            )
+          ).map((r) => n(r['id']));
+    return { atendimento: nn(q?.['atendimento_id']), solicitantes };
+  }
+
+  /** Aviso clínico com destinatários, ligado ao laudo; devolve quantos foram avisados (sem destinatário, nada grava). */
+  private async avisoClinico(
+    tx: TxOperacao,
+    est: number,
+    b: Base,
+    laudo: number,
+    atendimento: number | null,
+    a: { titulo: string; mensagem: string; prioridade: 'alta' | 'critica' },
+    destinatarios: readonly number[],
+  ): Promise<number> {
+    if (destinatarios.length === 0) return 0;
+    const aviso = await tx.incluir('aviso_clinico', {
+      estabelecimento_id: est,
+      paciente_id: b.paciente,
+      atendimento_id: atendimento,
+      titulo: a.titulo,
+      mensagem: a.mensagem.slice(0, 2000),
+      prioridade: a.prioridade,
+      canal: 'sistema',
+      situacao: 'pendente',
+      gerado_em: new Date(),
+      modulo_origem: 'sadt.laudo',
+      entidade_origem: 'laudo_diagnostico',
+      entidade_origem_chave: laudo,
+    });
+    let sequencia = 0;
+    for (const usuario of destinatarios)
+      await tx.incluir('aviso_clinico_destinatario', {
+        aviso_clinico_id: aviso,
+        sequencia: ++sequencia,
+        usuario_id: usuario,
+        canal: 'sistema',
+        situacao: 'pendente',
+      });
+    return destinatarios.length;
+  }
+
+  /**
+   * O achado crítico do laudo assinado abre o aviso crítico (o mesmo painel e a mesma comunicação do valor crítico do
+   * laboratório, com o prazo da regra do exame) e avisa quem pediu o exame; a retificação que mantém o achado não
+   * repete o aviso, e a que o retira cancela o aviso ainda não comunicado (sem apagar).
+   */
+  private async avisarAchadoCritico(
+    tx: TxOperacao,
+    est: number,
+    b: Base,
+    laudo: number,
+    p: { achadoCritico: boolean; achadoCriticoDescricao: string | null },
+  ): Promise<{ acao: 'abrir' | 'cancelar' | 'nada'; avisados: number }> {
+    const avisos = await tx.consultarParaAtualizar(
+      'SELECT id, versao, situacao FROM aviso_valor_critico WHERE laudo_diagnostico_id = ? AND excluido_em IS NULL',
+      [laudo],
+      { teto: 100 },
+    );
+    const acao = avisoDoAchadoCritico(
+      p.achadoCritico,
+      avisos.map((a) => ({ situacao: texto(a['situacao']) })),
+    );
+    if (acao === 'cancelar') {
+      for (const a of avisos)
+        if (['pendente', 'em_contato', 'escalonado'].includes(texto(a['situacao'])))
+          await tx.alterar('aviso_valor_critico', n(a['id']), n(a['versao']), {
+            situacao: 'cancelado',
+            observacao: 'Achado crítico retirado na retificação do laudo, antes da comunicação.',
+          });
+      return { acao, avisados: 0 };
+    }
+    if (acao !== 'abrir') return { acao, avisados: 0 };
+    const agora = new Date();
+    const regra = await tx.uma(
+      `SELECT id, prazo_comunicacao_minutos FROM regra_valor_critico
+        WHERE (estabelecimento_id = ? OR estabelecimento_id IS NULL) AND ativo = TRUE AND exame_id = ?
+          AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+        ORDER BY estabelecimento_id IS NULL, id LIMIT 1`,
+      [est, b.exame, agora, agora],
+    );
+    const minutos = nn(regra?.['prazo_comunicacao_minutos']) ?? PRAZO_ACHADO_CRITICO_MINUTOS;
+    await tx.incluir('aviso_valor_critico', {
+      estabelecimento_id: est,
+      laudo_diagnostico_id: laudo,
+      paciente_id: b.paciente,
+      regra_valor_critico_id: regra ? n(regra['id']) : null,
+      gerado_em: agora,
+      prazo_em: new Date(agora.getTime() + minutos * 60_000),
+      situacao: 'pendente',
+      nivel_escalonamento: 0,
+    });
+    const { atendimento, solicitantes } = await this.pedido(tx, b.item);
+    const avisados = await this.avisoClinico(
+      tx,
+      est,
+      b,
+      laudo,
+      atendimento,
+      {
+        titulo: 'Achado crítico em laudo',
+        mensagem: `O laudo de ${b.nomeExame} que você pediu tem achado crítico: ${p.achadoCriticoDescricao ?? ''}`,
+        prioridade: 'critica',
+      },
+      solicitantes.filter((u) => u !== tx.contexto.usuario),
+    );
+    return { acao, avisados };
+  }
 
   /** Grava as medidas do laudo: atualiza a da mesma grandeza, inclui a nova e marca a retirada (nunca apaga). */
   private async gravarValores(tx: TxOperacao, laudo: number, av: readonly ValorAvaliado[]): Promise<void> {
@@ -670,12 +945,13 @@ export class ServicoLaudoRedacao {
     const alturaCm = herda ? nn(ld['altura_cm']) : p.alturaCm;
     const medidas = { pesoKg, alturaCm, superficieCorporal: superficieCorporal(pesoKg, alturaCm) };
     const cat = await this.catalogo(tx, b.exame);
+    const pac = this.paciente(b, pesoKg, alturaCm);
     const av = daRegra(() =>
       avaliarValores(
         cat.grandezas,
-        p.valores,
+        completarValoresCalculados(cat.grandezas, p.valores, cat.formulas, pac),
         cat.faixas,
-        this.paciente(b, pesoKg, alturaCm),
+        pac,
         exigirObrigatorias,
       ),
     );
@@ -732,6 +1008,7 @@ export class ServicoLaudoRedacao {
       });
     }
     await this.gravarValores(tx, laudo, av);
+    await this.gravarPalavras(tx, laudo, p.palavrasChave);
     return laudo;
   }
 
@@ -851,12 +1128,31 @@ export class ServicoLaudoRedacao {
         assinado_por_usuario_id: tx.contexto.usuario,
         versao_atual: numero,
       });
+      // A assinatura libera o exame (segue para a emissão e para o prontuário); o já liberado fica como está.
+      const [ei] = await tx.consultarParaAtualizar(
+        'SELECT versao, situacao FROM exame_item WHERE id = ?',
+        [item],
+        {
+          teto: 1,
+        },
+      );
+      const liberar = exameAposAssinatura(texto(ei!['situacao']));
+      if (liberar)
+        await tx.alterar('exame_item', item, n(ei!['versao']), {
+          situacao: liberar,
+          liberado_em: agora,
+          liberado_por_usuario_id: tx.contexto.usuario,
+        });
+      const critico = await this.avisarAchadoCritico(tx, est, b, laudo, p);
       return {
         id: laudo,
         situacao,
         versaoAtual: numero,
         valores: av.length,
         foraReferencia: av.filter((x) => x.foraReferencia).length,
+        exameLiberado: liberar !== null,
+        avisoCritico: critico.acao,
+        avisados: critico.avisados,
       };
     });
   }
@@ -882,6 +1178,7 @@ export class ServicoLaudoRedacao {
       const laudo = n(ld['id']);
       await tx.alterar('laudo_diagnostico', laudo, n(ld['versao']), { ...this.campos(p, medidas) });
       await this.gravarValores(tx, laudo, av);
+      await this.gravarPalavras(tx, laudo, p.palavrasChave);
       const numero = await this.versao(
         tx,
         laudo,
@@ -902,12 +1199,46 @@ export class ServicoLaudoRedacao {
         laudista_profissional_id: v!.profissional,
         versao_atual: numero,
       });
+      const critico = await this.avisarAchadoCritico(tx, est, b, laudo, p);
+      // O laudo que já tinha sido emitido: a via impressa deixa de ser a atual (a validação do código passa a dizer
+      // isso) e quem emitiu e quem pediu são avisados para emitir e buscar a nova via.
+      const emissoes = await tx.consultar(
+        `SELECT el.id, el.emitido_por_usuario_id FROM emissao_laudo_exame ex
+           JOIN emissao_laudo el ON el.id = ex.emissao_laudo_id
+          WHERE ex.exame_item_id = ? AND ex.excluido_em IS NULL AND el.excluido_em IS NULL`,
+        [item],
+        { teto: 200 },
+      );
+      let avisados = critico.avisados;
+      if (emissoes.length > 0) {
+        const { atendimento, solicitantes } = await this.pedido(tx, item);
+        avisados += await this.avisoClinico(
+          tx,
+          est,
+          b,
+          laudo,
+          atendimento,
+          {
+            titulo: 'Laudo emitido foi retificado',
+            mensagem: `O laudo de ${b.nomeExame}, já emitido, foi retificado (versão ${numero}). A via emitida antes não é mais a atual: emita a nova via.`,
+            prioridade: 'alta',
+          },
+          destinatariosDaRetificacaoDoLaudo(
+            emissoes.map((e) => nn(e['emitido_por_usuario_id'])),
+            solicitantes,
+            tx.contexto.usuario,
+          ),
+        );
+      }
       return {
         id: laudo,
         situacao,
         versaoAtual: numero,
         valores: av.length,
         foraReferencia: av.filter((x) => x.foraReferencia).length,
+        avisoCritico: critico.acao,
+        avisados,
+        emissoesSuperadas: emissoes.length,
       };
     });
   }

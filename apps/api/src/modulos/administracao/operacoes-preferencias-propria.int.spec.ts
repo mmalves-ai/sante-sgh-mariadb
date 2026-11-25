@@ -3,9 +3,12 @@
 // tela do menu; a visão de tela guarda colunas e ordenação, nasce padrão e a nova padrão tira a marca da anterior
 // (nada apagado) e regravar a padrão sem dizer `padrao` mantém a marca; a tela inicial e as telas oferecidas seguem
 // só o menu do cargo (rota de entrada do menu com permissão da sessão); valor fora da faixa e conta sem pessoa são
-// recusados sem gravar. Massa sintética (prefixo L84I).
+// recusados sem gravar. A visão é de uma lista de verdade (a trilha de auditoria): a tela do menu é registrada no
+// banco na primeira gravação (código derivado do endereço, ativa, uma linha só), coluna que a lista não oferece é
+// recusada e tela sem lista não guarda visão. Massa sintética (prefixo L84I).
 import { randomUUID } from 'node:crypto';
-import { ARVORE_MENU } from '@sgh/contratos';
+import { ARVORE_MENU, COLUNAS_VISAO_POR_ROTA, ROTA_TRILHA_AUDITORIA } from '@sgh/contratos';
+import { codigoTelaDoMenu } from '@sgh/dominio-acesso';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroProblema } from '../../problema.filter.js';
@@ -16,6 +19,11 @@ import type { ContextoGestao } from './tipos.js';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L84I';
+/** A lista que guarda visão: a trilha de auditoria, pelo código que a tela do menu recebe. */
+const LISTA = codigoTelaDoMenu(ROTA_TRILHA_AUDITORIA);
+
+/** Coluna JSON: o driver pode devolvê-la já interpretada ou como texto. */
+const doBanco = (v: unknown): unknown => (typeof v === 'string' ? JSON.parse(v) : v);
 
 async function codigo(p: Promise<unknown>): Promise<string> {
   try {
@@ -179,20 +187,37 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
     });
   });
 
-  it('visão de tela: nasce padrão; a nova padrão tira a marca da anterior; nada apagado', async () => {
+  it('visão de tela: registra a tela do menu, nasce padrão; a nova padrão tira a marca da anterior; nada apagado', async () => {
+    // O cadastro da tela vem do código: a primeira visão registra a tela do menu (uma linha, ativa, com o endereço).
+    const telaLista = async () =>
+      (await um('SELECT codigo FROM tela_sistema WHERE rota = ?', [ROTA_TRILHA_AUDITORIA]))?.['codigo'] as
+        string | undefined;
+    const codigoLista = (await telaLista()) ?? LISTA;
     await exec('preferencias.gravarVisaoTela', {
-      tela: P,
-      colunas: ['leito', 'paciente', 'idade'],
-      ordenacao: [{ coluna: 'leito', direcao: 'asc' }],
+      tela: codigoLista,
+      colunas: ['dataHora', 'usuario', 'acao'],
+      ordenacao: [{ coluna: 'dataHora', direcao: 'asc' }],
       itensPorPagina: 50,
     });
+    const registrada = await todos(
+      'SELECT codigo, ativo, avulsa, titulo, modulo_sistema_id FROM tela_sistema WHERE rota = ?',
+      [ROTA_TRILHA_AUDITORIA],
+    );
+    expect(registrada).toHaveLength(1);
+    expect(registrada[0]).toMatchObject({ codigo: codigoLista });
+    expect(Number(registrada[0]!['ativo'])).toBe(1);
+    expect(Number(registrada[0]!['avulsa'])).toBe(0);
+    expect(Number(registrada[0]!['modulo_sistema_id'])).toBeGreaterThan(0);
     await exec('preferencias.gravarVisaoTela', {
-      tela: P,
+      tela: codigoLista,
       nome: 'Plantão noturno',
-      colunas: ['paciente', 'leito'],
-      ordenacao: [{ coluna: 'paciente', direcao: 'desc' }],
+      colunas: ['usuario', 'dataHora'],
+      ordenacao: [{ coluna: 'usuario', direcao: 'desc' }],
       padrao: true,
     });
+    expect(await todos('SELECT id FROM tela_sistema WHERE rota = ?', [ROTA_TRILHA_AUDITORIA])).toHaveLength(
+      1,
+    );
     const v = await todos(
       'SELECT nome, padrao, colunas_visiveis, ordenacao, itens_por_pagina FROM preferencia_tela_usuario WHERE usuario_id = ? ORDER BY nome',
       [ids.pessoa],
@@ -201,18 +226,25 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
       ['padrao', 0],
       ['Plantão noturno', 1],
     ]);
-    expect(JSON.parse(String(v[0]!['colunas_visiveis']))).toEqual(['leito', 'paciente', 'idade']);
+    expect(doBanco(v[0]!['colunas_visiveis'])).toEqual(['dataHora', 'usuario', 'acao']);
     expect(Number(v[0]!['itens_por_pagina'])).toBe(50);
-    expect(JSON.parse(String(v[1]!['ordenacao']))).toEqual([{ coluna: 'paciente', direcao: 'desc' }]);
+    expect(doBanco(v[1]!['ordenacao'])).toEqual([{ coluna: 'usuario', direcao: 'desc' }]);
     const lidas = await fonte.lerPreferencias(
       { rede: 'rede-sint', hospital: P, traceId: 't' },
       ids.pessoa,
-      P,
+      codigoLista,
+      new Set(['auditoria.trilha.ler']),
     );
-    expect(lidas.visaoInicialPorTela[P]).toBe('Plantão noturno');
+    expect(lidas.visaoInicialPorTela[codigoLista]).toBe('Plantão noturno');
     expect(lidas.visoes).toHaveLength(2);
+    // A tela é oferecida a quem tem a permissão do menu, com o código que está no banco.
+    expect(lidas.telasDoMenu.find((t) => t.rota === ROTA_TRILHA_AUDITORIA)?.codigo).toBe(codigoLista);
     // Regravar a visão padrão (só as colunas, sem `padrao`) mantém a marca; a outra segue sem ela.
-    await exec('preferencias.gravarVisaoTela', { tela: P, nome: 'Plantão noturno', colunas: ['paciente'] });
+    await exec('preferencias.gravarVisaoTela', {
+      tela: codigoLista,
+      nome: 'Plantão noturno',
+      colunas: ['usuario'],
+    });
     const marcas = await todos(
       'SELECT nome, padrao, versao FROM preferencia_tela_usuario WHERE usuario_id = ? ORDER BY nome',
       [ids.pessoa],
@@ -225,15 +257,31 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
     expect(
       await codigo(
         exec('preferencias.gravarVisaoTela', {
-          tela: P,
-          colunas: ['leito'],
-          ordenacao: [{ coluna: 'idade', direcao: 'asc' }],
+          tela: codigoLista,
+          colunas: ['dataHora'],
+          ordenacao: [{ coluna: 'usuario', direcao: 'asc' }],
         }),
       ),
     ).toBe('ordenacao-fora-das-colunas');
+    // Coluna que a lista não oferece e tela que não tem lista: recusadas sem gravar.
+    expect(COLUNAS_VISAO_POR_ROTA[ROTA_TRILHA_AUDITORIA]).not.toContain('salario');
+    expect(
+      await codigo(
+        exec('preferencias.gravarVisaoTela', { tela: codigoLista, colunas: ['dataHora', 'salario'] }),
+      ),
+    ).toBe('coluna-desconhecida');
+    expect(await codigo(exec('preferencias.gravarVisaoTela', { tela: P, colunas: ['dataHora'] }))).toBe(
+      'tela-sem-visao',
+    );
     expect(await codigo(exec('preferencias.gravarVisaoTela', { tela: 'L84INEXISTE', colunas: ['a'] }))).toBe(
       'tela-inexistente',
     );
+    const depois = await todos(
+      'SELECT nome, colunas_visiveis FROM preferencia_tela_usuario WHERE usuario_id = ? ORDER BY nome',
+      [ids.pessoa],
+    );
+    expect(depois).toHaveLength(2);
+    expect(doBanco(depois[1]!['colunas_visiveis'])).toEqual(['usuario']);
     const trilha = await um(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao = 'teste-l84i' AND usuario_id = ?",
       [ids.pessoa],

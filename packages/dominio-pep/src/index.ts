@@ -48,6 +48,7 @@ export * from './prescricao/se-necessario.js';
 export * from './prescricao/itens-gravaveis.js';
 export * from './prescricao/renovacao.js';
 export * from './prescricao/copia.js';
+export * from './prescricao/favoritos.js';
 export * from './prescricao/protocolo.js';
 export * from './prescricao/receita-alta.js';
 export * from './prescricao/avaliacao.js';
@@ -109,4 +110,8 @@ export * from './especialidades/obstetricia.js';
 export * from './especialidades/lactario.js';
 export * from './especialidades/ciclo-de-vida.js';
 export * from './equipe-painel/regras.js';
+export * from './equipe-painel/filtros.js';
 export * from './impressao-justificada.js';
+// 03-PEP L103/L104: farmacovigilância no paciente e lista de uso contínuo com a reconciliação que parte dela.
+export * from './farmacovigilancia.js';
+export * from './obrigatoriedade-documento.js';

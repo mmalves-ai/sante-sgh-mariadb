@@ -12,6 +12,7 @@ export * from './competencia.js';
 export * from './cotacao.js';
 export * from './conferencia-nf.js';
 export * from './escopo.js';
+export * from './politica-local.js';
 export * from './inventario.js';
 export * from './ponto-pedido.js';
 export * from './alcada.js';
@@ -52,3 +53,5 @@ export * from './kit-padrao.js';
 export * from './recalculo-saldo.js';
 // F3.6 (05-SUP linha 28): vínculo do item com a referência de preço de material e medicamento (código, edição, fator).
 export * from './vinculo-referencia-preco.js';
+// F3.6 (05-SUP linha 14): etiqueta de identificação (DataMatrix GS1 e código linear) e leitura pelo padrão configurado.
+export * from './identificacao-estoque.js';

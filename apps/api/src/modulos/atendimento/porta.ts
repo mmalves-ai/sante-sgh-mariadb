@@ -33,6 +33,20 @@ export type ContextoAtendimento = ContextoPorta;
 export interface FichasConfiguradas {
   readonly modelos: readonly ModeloFicha[];
   readonly selecoes: readonly SelecaoFicha[];
+  /**
+   * As fichas já decididas pela regra de impressão do banco do cliente (02-REC linha 35), com as vezes em que cada
+   * uma já saiu para o atendimento. Presente: vale esta lista, e modelos e seleções não são usados.
+   */
+  readonly prontas?: readonly {
+    readonly modelo: number;
+    readonly nome: string;
+    readonly copias: number;
+    readonly ordem: number;
+    readonly selecionada: boolean;
+    readonly emitidas: number;
+    /** O texto do modelo, impresso abaixo da identificação do atendimento. */
+    readonly texto?: string | null;
+  }[];
 }
 export type { DimensaoSelecao };
 
@@ -159,6 +173,8 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     /** As marcas da herança em vigor para a sessão, pela chave da regra. */
     heranca: Record<string, boolean>;
     anterior: { reg: number; data: string; valores: Record<string, string | number | null> } | null;
+    /** Os valores habituais da abertura, por escopo (para o que a herança não preencher). */
+    padrao?: import('./porta-propria-padrao.js').PadraoAberturaLido;
     historico: { reg: number; data: string; tipo: string; convenio: string; profissional: string }[];
   }>;
   previaCancelamento(c: ContextoAtendimento, reg: number): Promise<PreviaCancelamentoDados | null>;
@@ -175,7 +191,7 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     itens: readonly { cabecalho: string; desde: string }[],
   ): Promise<Map<string, SinaisRecentes>>;
   /** A configuração das fichas a imprimir do estabelecimento (null: sem configuração, vale a ficha padrão). */
-  fichasConfiguradas(c: ContextoAtendimento): Promise<FichasConfiguradas | null>;
+  fichasConfiguradas(c: ContextoAtendimento, reg?: number): Promise<FichasConfiguradas | null>;
   naoIdentificados(c: ContextoAtendimento): Promise<
     {
       paciente: number;

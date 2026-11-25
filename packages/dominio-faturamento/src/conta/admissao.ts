@@ -15,6 +15,11 @@
 //   prioridade; empate é "regra ambígua" (o dia fica sem diária e volta na lista de pendências da apuração).
 //   Regra por faixa etária que não substitui a geral soma uma diária adicional; a do acompanhante só vale com
 //   acompanhante na internação.
+// - Diária parcial (F3.4, 04-INT linha 81): com a regra que gera parcial, a alta no dia seguinte à entrada ou depois,
+//   passada a virada mais a tolerância mas até a hora limite da parcial, troca a diária cheia desse último dia pela
+//   parcial (item e quantidade da parcial; sem eles, os da diária). Só a contagem fechada pela alta tem parcial: com a
+//   internação em curso o dia é cheio e, dada a alta, a apuração estorna a cheia ("alta") e lança a parcial (chave
+//   própria, idempotente). O primeiro dia é sempre cheio; as diárias adicionais e a do acompanhante não mudam.
 // - Taxas: regra_lancamento ativa, vigente, de ação "incluir" e sem confirmação do faturista. Gatilho
 //   "abertura_atendimento": uma vez, no dia da entrada, se o item vale para a natureza da conta; gatilho
 //   "diaria_internacao": junto de cada diária (ou só da primeira, quando a regra lança uma vez por conta).
@@ -122,6 +127,21 @@ export interface RegraDiaria {
   readonly prioridade: number;
   readonly vigenciaInicio: string;
   readonly vigenciaFim: string | null;
+  /** Diária parcial (regra que gera parcial): saída até a hora limite troca a diária cheia do dia da alta por esta. */
+  readonly parcial?: DiariaParcial | null;
+}
+
+/** Diária parcial da regra (gera_diaria_parcial): nulos no item e na quantidade usam os da diária cheia. */
+export interface DiariaParcial {
+  readonly horaLimite: string;
+  readonly item: number | null;
+  readonly quantidade: number | null;
+}
+
+/** Verdadeiro: a alta em `limite` cobra a parcial no `dia` (não é o primeiro dia; saída até a hora limite). */
+export function cobraParcial(r: RegraDiaria, dia: string, limite: string, alta: boolean): boolean {
+  if (!alta || !r.parcial || limite.slice(0, 10) !== dia) return false;
+  return limite.slice(11, 16) <= r.parcial.horaLimite.slice(0, 5);
 }
 
 /** Item de uma regra de lançamento automático (regra_lancamento + regra_lancamento_item). */
@@ -473,7 +493,14 @@ export function lancamentosDevidos(e: EntradaApuracao): {
       });
       if ('regra' in regras.principal) {
         const r = regras.principal.regra;
-        devidos.push(desejoDeDiaria('diaria', r, dia, hora, categoria));
+        if (!primeira && r.parcial && cobraParcial(r, dia, e.limite, e.alta)) {
+          const cheia = desejoDeDiaria('diaria-parcial', r, dia, hora, categoria);
+          devidos.push({
+            ...cheia,
+            item: r.parcial.item ?? r.item,
+            quantidade: r.parcial.quantidade ?? r.quantidade,
+          });
+        } else devidos.push(desejoDeDiaria('diaria', r, dia, hora, categoria));
         virada = r.horaVirada;
         tolerancia = r.toleranciaMinutos;
       } else pendencias.push({ dia, motivo: regras.principal.falta });

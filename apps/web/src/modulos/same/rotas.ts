@@ -10,4 +10,11 @@ export const rotasSame: RouteRecordRaw[] = [
     component: () => import('./telas/DigitalizacaoTela.vue'),
     meta: { permissao: P.ler },
   },
+  // F3.9 (04-HOT L127 e L128): protocolo em lote entre setores e empréstimo de prontuário.
+  {
+    path: '/same/tramite',
+    name: 'same.tramite',
+    component: () => import('./telas/TramiteTela.vue'),
+    meta: { permissao: 'same.movimento.ler' },
+  },
 ];

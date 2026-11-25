@@ -87,7 +87,7 @@ export class DocumentosInternacaoController {
   @Post('modelos')
   @HttpCode(201)
   @Permissao('config.parametro.editar')
-  @AuditadoNoHandler('internacao.documento.salvarModelo pelo executor (trilha na mesma transação)')
+  @AuditadoNoHandler('internacao.documento.salvar_modelo pelo executor (trilha na mesma transação)')
   salvarModelo(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.p().salvarModelo(ctxAdt(sessaoDe(req)), corpo(esquemaModeloDocumento, b), modeloComum(req));
   }
@@ -95,7 +95,7 @@ export class DocumentosInternacaoController {
   @Post('regras')
   @HttpCode(201)
   @Permissao('config.parametro.editar')
-  @AuditadoNoHandler('internacao.documento.salvarRegra pelo executor (trilha na mesma transação)')
+  @AuditadoNoHandler('internacao.documento.salvar_regra pelo executor (trilha na mesma transação)')
   salvarRegra(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.p().salvarRegra(ctxAdt(sessaoDe(req)), corpo(esquemaRegraDocumento, b));
   }

@@ -19,8 +19,8 @@
 // limites de sessão por perfil (limite_sessao_perfil); as exceções das contas dormentes (excecao_conta_dormente); a
 // conferência do registro no conselho (conferencia_registro_conselho, sobre inscricao_conselho do profissional da conta);
 // o RH (perfil_cargo_rh, resolucao_tarefa_rh, com vínculos, histórico de cargo, férias e afastamentos lidos do RH).
-// Todas só por inclusão (linha nova), com a trilha na mesma transação. Pedidos de acesso e campanhas de recertificação:
-// tabelas existem, adaptador a escrever (pedido ao orquestrador; respondem "adaptador-pendente").
+// Todas só por inclusão (linha nova), com a trilha na mesma transação. Pedidos de acesso: pedido-acesso-propria.ts
+// (01-ADM L57). Campanhas de recertificação: recertificacao-propria.ts (01-ADM L57).
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -52,6 +52,8 @@ import {
   type TrilhaGestao,
   type UsuarioGestao,
 } from './gestao-tipos.js';
+import { PedidoAcessoProprio } from './pedido-acesso-propria.js';
+import { contasDoRetratoRecert, RecertificacaoPropria } from './recertificacao-propria.js';
 import type { ValidarResolucaoRhMemoria } from './rh-memoria.js';
 import {
   type AfastamentoRhLido,
@@ -954,30 +956,7 @@ class FonteGestaoPropria implements FonteGestao {
   }
 
   contasRecert(_rede: string, hospital: string) {
-    return this.ler(hospital, async (l, est) =>
-      (
-        await l.consultar(
-          `SELECT u.login,
-                  (SELECT GROUP_CONCAT(DISTINCT pa.codigo ORDER BY pa.codigo) FROM usuario_perfil up
-                     JOIN perfil_acesso pa ON pa.id = up.perfil_acesso_id
-                    WHERE up.usuario_id = u.id AND up.estabelecimento_id = ? AND ${PERFIL_VIGENTE}) AS perfis
-             FROM usuario u
-            WHERE u.excluido_em IS NULL AND u.situacao = 'ativo' AND ${VINCULO}
-            ORDER BY u.login`,
-          [est, est],
-          { teto: TETO * 4 },
-        )
-      ).map((x) => ({
-        login: txt(x['login']),
-        grupo: null,
-        ativo: true,
-        bloqueado: false,
-        setores: [],
-        perfis: txt(x['perfis'])
-          .split(',')
-          .filter((s) => s !== ''),
-      })),
-    );
+    return this.ler(hospital, (l, est) => contasDoRetratoRecert(l, est));
   }
 
   // ── Operações da conta (bloqueio e papéis de segurança) ─────────────────────────────────────
@@ -1740,43 +1719,57 @@ class FonteGestaoPropria implements FonteGestao {
     return num(p['id']);
   }
 
-  // ── Tabelas existentes, adaptador a escrever (pedido ao orquestrador) ──────────────────────────
-
-  campanhasRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  // ── Recertificação (01-ADM L57): adaptador em recertificacao-propria.ts ─────────────────────────
+  private readonly recert = new RecertificacaoPropria(
+    (hospital, fn) => this.ler(hospital, fn),
+    (def, hospital, quem, entrada, fn) => this.gravar(def, hospital, quem, entrada, fn),
+  );
+  campanhasRecert(...[, hospital]: Parameters<FonteGestao['campanhasRecert']>) {
+    return this.recert.campanhasRecert(hospital);
   }
-  campanhaRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  campanhaRecert(...[, hospital, id]: Parameters<FonteGestao['campanhaRecert']>) {
+    return this.recert.campanhaRecert(hospital, id);
   }
-  abrirCampanhaRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  abrirCampanhaRecert(...[, hospital, p, t]: Parameters<FonteGestao['abrirCampanhaRecert']>) {
+    return this.recert.abrirCampanhaRecert(hospital, p, t);
   }
-  decidirRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  decidirRecert(...[, hospital, p, t, validar]: Parameters<FonteGestao['decidirRecert']>) {
+    return this.recert.decidirRecert(hospital, p, t, validar);
   }
-  fecharCampanhaRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  fecharCampanhaRecert(...[, hospital, p, t]: Parameters<FonteGestao['fecharCampanhaRecert']>) {
+    return this.recert.fecharCampanhaRecert(hospital, p, t);
   }
-  pedidosAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  // ── Pedido de acesso (01-ADM L57): adaptador em pedido-acesso-propria.ts ─────────────────────────
+  private readonly pedidos = new PedidoAcessoProprio(
+    (hospital, fn) => this.ler(hospital, fn),
+    (def, hospital, quem, entrada, fn) => this.gravar(def, hospital, quem, entrada, fn),
+  );
+  pedidosAcesso(...[, hospital, filtro]: Parameters<FonteGestao['pedidosAcesso']>) {
+    return this.pedidos.pedidosAcesso(hospital, filtro);
   }
-  pedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  pedidoAcesso(...[, hospital, id]: Parameters<FonteGestao['pedidoAcesso']>) {
+    return this.pedidos.pedidoAcesso(hospital, id);
   }
-  pedirAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  pedirAcesso(...[, hospital, p, t]: Parameters<FonteGestao['pedirAcesso']>) {
+    return this.pedidos.pedirAcesso(hospital, p, t);
   }
-  decidirPedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  decidirPedidoAcesso(
+    ...[, hospital, p, t, validar, conceder]: Parameters<FonteGestao['decidirPedidoAcesso']>
+  ) {
+    return this.pedidos.decidirPedidoAcesso(hospital, p, t, validar, conceder);
   }
-  concederPedidoAprovado(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  concederPedidoAprovado(...[, hospital, pedido, c]: Parameters<FonteGestao['concederPedidoAprovado']>) {
+    return this.pedidos.concederPedidoAprovado(hospital, pedido, c);
   }
-  concessaoPedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  concessaoPedidoAcesso(
+    ...[, hospital, pedido, concessao, t]: Parameters<FonteGestao['concessaoPedidoAcesso']>
+  ) {
+    return this.pedidos.concessaoPedidoAcesso(hospital, pedido, concessao, t);
   }
-  cancelarPedidoAcesso(): Promise<never> {
-    return adaptadorPendenteGestao('O pedido de acesso');
+  cancelarPedidoAcesso(
+    ...[, hospital, pedido, motivo, por, t]: Parameters<FonteGestao['cancelarPedidoAcesso']>
+  ) {
+    return this.pedidos.cancelarPedidoAcesso(hospital, pedido, motivo, por, t);
   }
 }
 

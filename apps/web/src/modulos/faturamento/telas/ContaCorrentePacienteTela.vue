@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Conta corrente do paciente particular (F3.7, 06-FAT linha 39): `/faturamento/pacientes/:id/conta-corrente`.
 // Tudo do paciente numa tela: o saldo, o recebimento de adiantamento ou caução no caixa aberto (com a vedação da caução
 // exigida na urgência avisada enquanto se marca), o uso do saldo em cada conta em aberto com um clique (o devido já
@@ -206,23 +207,25 @@ const devolver = () =>
 
       <h2>{{ t('particular.cc.receber') }}</h2>
       <form class="filtros" data-testid="cc-form-receber" @submit.prevent="receber">
-        <label>
-          {{ t('particular.cc.tipo') }}
-          <select v-model="rec.tipo" data-testid="cc-tipo">
-            <option value="adiantamento">{{ rotulo('adiantamento') }}</option>
-            <option value="caucao">{{ rotulo('caucao') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="rec.tipo"
+          :rotulo="t('particular.cc.tipo')"
+          :opcoes="[
+            { valor: 'adiantamento' as const, rotulo: rotulo('adiantamento') },
+            { valor: 'caucao' as const, rotulo: rotulo('caucao') },
+          ]"
+          data-testid="cc-tipo"
+        />
         <label>
           {{ t('particular.cc.valor') }}
           <input v-model.number="rec.valor" type="number" min="0" step="0.01" data-testid="cc-valor" />
         </label>
-        <label>
-          {{ t('particular.cc.forma') }}
-          <select v-model="rec.forma" data-testid="cc-forma">
-            <option v-for="f in FORMAS_ADIANTAMENTO" :key="f" :value="f">{{ rotulo(f) }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="rec.forma"
+          :rotulo="t('particular.cc.forma')"
+          :opcoes="[...FORMAS_ADIANTAMENTO.map((x) => ({ valor: x, rotulo: rotulo(x) }))]"
+          data-testid="cc-forma"
+        />
         <label v-if="rec.forma === 'cartao_credito'">
           {{ t('particular.cc.parcelas') }}
           <input v-model.number="rec.parcelas" type="number" min="1" max="99" />
@@ -235,20 +238,21 @@ const devolver = () =>
           {{ t('particular.cc.pagador') }}
           <input v-model="rec.pagadorNome" maxlength="150" />
         </label>
-        <label>
-          {{ t('particular.cc.atendimento') }}
-          <select v-model.number="rec.atendimentoId" data-testid="cc-atendimento">
-            <option :value="0">{{ t('particular.cc.semAtendimento') }}</option>
-            <option v-for="a in q.data.value.atendimentos" :key="a.id" :value="a.id">
-              {{
-                t('particular.cc.atendimentoOpcao', {
-                  numero: a.numero,
-                  data: a.entradaEm ? data(a.entradaEm) : '',
-                })
-              }}
-            </option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="rec.atendimentoId"
+          :rotulo="t('particular.cc.atendimento')"
+          :opcoes="[
+            { valor: 0, rotulo: t('particular.cc.semAtendimento') },
+            ...q.data.value.atendimentos.map((a) => ({
+              valor: a.id,
+              rotulo: t('particular.cc.atendimentoOpcao', {
+                numero: a.numero,
+                data: a.entradaEm ? data(a.entradaEm) : '',
+              }),
+            })),
+          ]"
+          data-testid="cc-atendimento"
+        />
         <p v-if="urgencia" class="secundario" data-testid="cc-urgencia">{{ t('particular.cc.urgencia') }}</p>
         <label v-if="rec.tipo === 'caucao' && urgencia">
           <input v-model="rec.declaracaoVoluntaria" type="checkbox" /> {{ t('particular.cc.voluntaria') }}
@@ -362,15 +366,17 @@ const devolver = () =>
           {{ t('particular.cc.valor') }}
           <input v-model.number="dev.valor" type="number" min="0" step="0.01" />
         </label>
-        <label>
-          {{ t('particular.cc.forma') }}
-          <select v-model="dev.forma" data-testid="cc-dev-forma">
-            <option value="pix">{{ rotulo('pix') }}</option>
-            <option value="dinheiro">{{ t('particular.cc.dinheiroCaixa') }}</option>
-            <option value="transferencia">{{ rotulo('transferencia') }}</option>
-            <option value="cheque">{{ rotulo('cheque') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="dev.forma"
+          :rotulo="t('particular.cc.forma')"
+          :opcoes="[
+            { valor: 'pix' as const, rotulo: rotulo('pix') },
+            { valor: 'dinheiro' as const, rotulo: t('particular.cc.dinheiroCaixa') },
+            { valor: 'transferencia' as const, rotulo: rotulo('transferencia') },
+            { valor: 'cheque' as const, rotulo: rotulo('cheque') },
+          ]"
+          data-testid="cc-dev-forma"
+        />
         <label>
           {{ t('particular.cc.favorecido') }}
           <input v-model="dev.favorecidoNome" maxlength="150" />

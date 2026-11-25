@@ -46,6 +46,8 @@ const esquemaAtoChecagem = z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .nullable(),
+    /** O código como foi lido (etiqueta GS1 DataMatrix ou código de barras), para o lote lido e o meio de leitura. */
+    codigoLido: z.string().trim().min(3).max(120).nullable().optional(),
     conferente: z.string().max(60).nullable(),
     dispositivo: z.string().max(64).nullable(),
     /** O aparelho foi exigido e conferido no começo (a gravação recusa sem ele). */

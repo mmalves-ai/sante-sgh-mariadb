@@ -200,7 +200,7 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
       id: null,
       versao: null,
       codigo: `${COD}U1`,
-      nome: `Ambulatório ${MARCA}`,
+      nome: `Ambulatório lateral ${MARCA}`,
       nomeCompleto: null,
       sigla: 'AMB',
       tipo: 'ambulatorio',
@@ -570,12 +570,22 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
     ).rejects.toMatchObject({
       problema: { codigo: 'faixa-sobreposta' },
     });
+    // Outro tipo de guia com o mesmo prefixo, tamanho e números: o número da guia é único por fonte pagadora.
+    await expect(ts.incluirFaixa(c(), { ...base, tipoGuia: 'internacao' }, t('x'))).rejects.toMatchObject({
+      problema: { codigo: 'faixa-repete-numero-de-outro-tipo' },
+    });
     const opReservar = definirOperacao({
       nome: 'teste.tiss.reservar-numero',
       tabelas: ['faixa_numeracao_guia'],
       entrada: z.object({ tipo: z.string() }).strict(),
       async gravar(tx, e, ctx) {
-        const r = await reservarNumeroGuia(tx, ctx.estabelecimento, m!.fonte, e.tipo, '2026-03-01');
+        const r = await reservarNumeroGuia(
+          tx,
+          ctx.estabelecimento ?? m!.estabelecimento,
+          m!.fonte,
+          e.tipo,
+          '2026-03-01',
+        );
         return { id: r.faixa, numero: r.numero, esgotada: r.esgotada };
       },
       alvo: (_e, r) => ({ tabela: 'faixa_numeracao_guia', id: Number(r.id) }),

@@ -169,7 +169,7 @@ defineExpose({ executar });
 }
 .confirmar-destrutivo :deep(button),
 .confirmar-destrutivo {
-  --sgh-botao-fundo: var(--sgh-perigo, var(--sgh-alerta));
+  --sgh-botao-fundo: var(--sgh-alerta);
 }
 .acoes {
   display: flex;

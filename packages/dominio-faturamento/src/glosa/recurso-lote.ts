@@ -26,8 +26,14 @@ export interface GlosaParaRecurso {
   readonly valorAceito: number;
   /** A glosa já tem recurso registrado. */
   readonly emRecurso: boolean;
-  /** Data limite para recorrer (null = sem prazo conhecido). */
+  /** Data limite para recorrer (null = sem prazo conhecido). Na reapresentação, contada do retorno anterior. */
   readonly prazo: string | null;
+  /**
+   * O recurso em que o item está já teve retorno (negado ou acatado em parte): o item pode ser reapresentado num recurso
+   * novo, ligado ao anterior. `valorAcatado` é o que já voltou nos recursos anteriores (somado). Ausente ou null = o
+   * recurso atual ainda espera o retorno.
+   */
+  readonly retornoAnterior?: { readonly valorAcatado: number } | null;
 }
 
 /**
@@ -39,7 +45,9 @@ export function conferirItemDoRecurso(
   valor: number,
   dataProtocolo: string,
 ): RecusaRecurso | null {
-  if (g.emRecurso) return recusa('ja-recorrido', 'Este item já tem recurso registrado.');
+  const reapresentacao = g.emRecurso && !!g.retornoAnterior;
+  if (g.emRecurso && !reapresentacao)
+    return recusa('ja-recorrido', 'Este item já tem recurso aguardando o retorno da operadora.');
   if (g.decisao === 'aceitar') return recusa('glosa-aceita', 'A glosa foi aceita: não há o que recorrer.');
   if (g.decisao !== 'recorrer')
     return recusa(
@@ -54,32 +62,54 @@ export function conferirItemDoRecurso(
       `O prazo para recorrer venceu em ${g.prazo}; o protocolo é de ${dataProtocolo}.`,
       ['dataProtocolo'],
     );
-  const teto = centavos(g.valorGlosado - g.valorAceito);
+  const teto = valorPadraoDoRecurso(g);
+  if (reapresentacao && teto < 0.01)
+    return recusa(
+      'nada-a-reapresentar',
+      'Os recursos anteriores já recuperaram todo o valor não aceito: não há o que reapresentar.',
+    );
   if (!(valor >= 0.01)) return recusa('valor-invalido', 'O valor do recurso tem de ser positivo.', ['valor']);
   if (valor > teto + 0.005)
     return recusa(
       'valor-acima-da-glosa',
-      `O valor do recurso (${valor.toFixed(2)}) passa do que não foi aceito da glosa (${teto.toFixed(2)}).`,
+      reapresentacao
+        ? `O valor da reapresentação (${valor.toFixed(2)}) passa do que ainda não voltou da glosa (${teto.toFixed(2)}).`
+        : `O valor do recurso (${valor.toFixed(2)}) passa do que não foi aceito da glosa (${teto.toFixed(2)}).`,
       ['valor'],
     );
   return null;
 }
 
-/** Valor pleiteado padrão: o que não foi aceito da glosa. */
-export const valorPadraoDoRecurso = (g: Pick<GlosaParaRecurso, 'valorGlosado' | 'valorAceito'>): number =>
-  centavos(g.valorGlosado - g.valorAceito);
+/**
+ * Valor pleiteado padrão: o que não foi aceito da glosa; na reapresentação, descontado o que os recursos anteriores já
+ * recuperaram.
+ */
+export const valorPadraoDoRecurso = (
+  g: Pick<GlosaParaRecurso, 'valorGlosado' | 'valorAceito' | 'retornoAnterior'>,
+): number => centavos(g.valorGlosado - g.valorAceito - (g.retornoAnterior?.valorAcatado ?? 0));
 
-/** Agrupa os itens do pedido por fonte pagadora: um lote de recurso por fonte, na ordem em que aparecem. */
-export function lotesDeRecurso<T extends { readonly fontePagadora: number }>(
+/**
+ * Agrupa os itens do pedido em lotes de recurso: um por fonte pagadora e, na reapresentação, por recurso anterior (o
+ * recurso novo fica ligado ao que teve o retorno), na ordem em que aparecem.
+ */
+export function lotesDeRecurso<
+  T extends { readonly fontePagadora: number; readonly recursoAnterior?: number | null },
+>(
   itens: readonly T[],
-): { readonly fontePagadora: number; readonly itens: readonly T[] }[] {
-  const mapa = new Map<number, T[]>();
+): {
+  readonly fontePagadora: number;
+  readonly recursoAnterior: number | null;
+  readonly itens: readonly T[];
+}[] {
+  const mapa = new Map<string, { fontePagadora: number; recursoAnterior: number | null; itens: T[] }>();
   for (const i of itens) {
-    const l = mapa.get(i.fontePagadora) ?? [];
-    l.push(i);
-    mapa.set(i.fontePagadora, l);
+    const anterior = i.recursoAnterior ?? null;
+    const chave = `${i.fontePagadora}|${anterior ?? ''}`;
+    const l = mapa.get(chave) ?? { fontePagadora: i.fontePagadora, recursoAnterior: anterior, itens: [] };
+    l.itens.push(i);
+    mapa.set(chave, l);
   }
-  return [...mapa.entries()].map(([fontePagadora, l]) => ({ fontePagadora, itens: l }));
+  return [...mapa.values()];
 }
 
 /** Retorno de um item recorrido: o valor que a operadora acatou (null = sem retorno ainda). */

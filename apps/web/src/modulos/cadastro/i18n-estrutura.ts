@@ -17,6 +17,22 @@ export const mensagensEstruturaGestao = {
     escolha: '— escolha —',
     sim: 'Sim',
   },
+  // Recusa da gravação: a tela lista os motivos que a API devolve (todos de uma vez). Estes textos valem quando a
+  // recusa chega só com o código; `reserva` é o último recurso, para a recusa nunca ficar sem orientação.
+  recusas: {
+    reserva: 'A gravação foi recusada: confira os campos preenchidos e tente de novo.',
+    'setor-com-filhos-ativos': 'Inative antes os setores subordinados a este.',
+    'setor-com-leitos-ativos': 'Inative antes os leitos das unidades de internação deste setor.',
+    'setor-com-pacientes-internados': 'Há paciente ocupando leito neste setor: transfira ou dê alta antes.',
+    'setor-com-atendimentos-abertos': 'Há atendimentos abertos neste setor: encerre-os antes.',
+    'inativacao-futura': 'A inativação vale no dia em que é gravada: use hoje ou uma data passada.',
+    'inativacao-antes-da-criacao': 'A inativação não pode ser anterior à criação do setor.',
+    'situacao-igual': 'O registro já está nesta situação.',
+    'responsavel-inicio-antes-do-anterior':
+      'O novo responsável começa depois do início do responsável atual.',
+    'ramal-repetido': 'Ramal repetido no setor.',
+    'ramal-invalido': 'O ramal tem de 2 a 10 dígitos.',
+  },
   abas: { estabelecimento: 'Estabelecimento', unidades: 'Unidades', setores: 'Setores e ramais' },
   estabelecimento: {
     titulo: 'Estrutura do estabelecimento',
@@ -69,6 +85,7 @@ export const mensagensEstruturaGestao = {
     unidade: 'Unidade',
     centroCusto: 'Centro de custo',
     responsavel: 'Responsável (digite 3 letras do nome)',
+    responsavelAchado: 'Profissional encontrado',
     responsavelInicio: 'Responsável desde',
     responsavelFim: 'Responsável até',
     historicoResponsaveis: 'Quem já respondeu pelo setor',
@@ -120,6 +137,7 @@ export const mensagensEstruturaGestao = {
     diasRetornoConsulta: 'Prazo de retorno da consulta (dias)',
     regras: 'Regras do lote e da guia',
     eletronicos: 'Serviços eletrônicos',
+    combinacaoInvalida: 'Combinação que o faturamento recusa: confira as regras ligadas a esta.',
     opcoes: {
       cnpj: 'CNPJ',
       cpf: 'CPF',

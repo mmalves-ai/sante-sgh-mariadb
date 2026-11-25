@@ -35,6 +35,8 @@ const esquemaMovimentos = z.object({
   numero: z.string(),
   situacao: z.string(),
   editavel: z.boolean(),
+  fontePagadoraId: z.number(),
+  fonte: z.string(),
   itens: z.array(item),
   funcoes: z.array(
     z.object({
@@ -102,3 +104,20 @@ export const transferirItens = (
   corpo: { contaDestinoId: number; itens: number[]; motivo: string },
   chave: string,
 ) => enviar(`${F}/contas/${conta}/transferencias`, corpo, qualquer, chave);
+
+const esquemaItensCobranca = z.array(z.object({ id: z.number(), codigo: z.string(), descricao: z.string() }));
+/** Itens cobráveis por código ou parte da descrição (ao menos 2 letras), para o cadastro do kit. */
+export const buscarItensCobranca = (termo: string) =>
+  ler(`${F}/itens-cobranca?termo=${encodeURIComponent(termo)}`, esquemaItensCobranca);
+export interface KitPedido {
+  codigo: string;
+  descricao: string;
+  tipoKit: 'procedimento' | 'sala' | 'cota' | 'outro';
+  modo: 'aberto' | 'fechado';
+  itemId: number | null;
+  fontePagadoraId: number | null;
+  planoId: number | null;
+  todosEstabelecimentos: boolean;
+  componentes: { itemId: number; quantidade: number; inclusoNoPacote: boolean }[];
+}
+export const cadastrarKit = (corpo: KitPedido, chave: string) => enviar(`${F}/kits`, corpo, qualquer, chave);

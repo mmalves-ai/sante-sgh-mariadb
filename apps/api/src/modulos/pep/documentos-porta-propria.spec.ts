@@ -312,8 +312,14 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
       tabela: 'documento_prontuario_evento',
       valores: { acao: 'impressao', justificativa: 'perda' },
     });
+    // O registro único de impressão e exportação (01-ADM L82): a segunda via é reimpressão, com a justificativa.
+    expect(d.escritas[2]).toMatchObject({
+      tabela: 'exportacao_documento',
+      valores: { documento_prontuario_id: 10, tipo_operacao: 'reimpressao', justificativa: 'perda' },
+    });
+    expect(d.escritas).toHaveLength(3);
     await d.porta.registrarEventoDocumento(G, { documento: 10, tipo: 'visualizado' });
-    expect(d.escritas).toHaveLength(2);
+    expect(d.escritas).toHaveLength(3);
     expect(d.trilhas[1]).toMatchObject({ extras: { acao: 'consulta' } });
   });
 

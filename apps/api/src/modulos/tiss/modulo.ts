@@ -34,6 +34,8 @@ import {
 } from './tiss.controller.js';
 import { ElegibilidadeController } from './elegibilidade.controller.js';
 import { PORTA_ELEGIBILIDADE, PortaElegibilidadePropria } from './elegibilidade-propria.js';
+import { AutorizacaoPreviaController } from './autorizacao-previa.controller.js';
+import { PORTA_AUTORIZACAO_PREVIA, PortaAutorizacaoPreviaPropria } from './autorizacao-previa-propria.js';
 
 export interface OpcoesModuloTiss {
   /** Testes: a porta já montada. */
@@ -82,7 +84,12 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
         : null;
   return {
     module: ModuloTiss,
-    controllers: [TissController, ElegibilidadeController, ApresentacaoTissController],
+    controllers: [
+      TissController,
+      ElegibilidadeController,
+      ApresentacaoTissController,
+      AutorizacaoPreviaController,
+    ],
     providers: [
       { provide: PORTA_TISS, useValue: porta },
       // F3.9 (08-INTG L128): consulta de elegibilidade e resposta da operadora; sem núcleo, 503.
@@ -91,6 +98,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaElegibilidadePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 06-FAT L25 e L27: autorização prévia à operadora (pedido, envio, resposta, andamento); sem núcleo, 503.
+      {
+        provide: PORTA_AUTORIZACAO_PREVIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaAutorizacaoPreviaPropria(ctx.nucleo, ctx.configuracao.clientePadrao, armazem)
             : null,
       },
       { provide: ARMAZEM_XML_TISS, useValue: armazem },

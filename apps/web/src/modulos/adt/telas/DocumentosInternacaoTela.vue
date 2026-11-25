@@ -13,7 +13,7 @@ import {
   validarModeloDocumento,
   validarRegraDocumento,
 } from '@sgh/dominio-internacao';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -151,6 +151,33 @@ const rota = useRoute();
 const regDaRota = Number(rota.query['reg']);
 const reg = ref<number | null>(Number.isInteger(regDaRota) && regDaRota > 0 ? regDaRota : null);
 const momentoPrevia = ref('admissao');
+// Opções dos combos (SanteSelecao): o vazio (null) é "todos"; o modelo da regra começa em 0, sem escolha.
+const todos = computed(() => ({ valor: null, rotulo: t('adt.documentos.todos') }));
+const opMomentos = computed(() =>
+  MOMENTOS.map((m) => ({ valor: m as string, rotulo: t(`adt.documentos.momentos.${m}`) })),
+);
+const opMomentosModelo = computed(() =>
+  MOMENTOS_MODELO_DOCUMENTO.map((m) => ({ valor: m as string, rotulo: t(`adt.documentos.momentos.${m}`) })),
+);
+const opEspecialidades = computed(() => [
+  todos.value,
+  ...(apoio.data.value?.especialidades ?? []).map((e) => ({ valor: e.codigo, rotulo: e.nome })),
+]);
+const opConvenios = computed(() => [
+  todos.value,
+  ...(apoio.data.value?.convenios ?? []).map((c) => ({ valor: c.codigo, rotulo: c.nome })),
+]);
+const opModalidades = computed(() => [
+  todos.value,
+  ...(config.data.value?.modalidades ?? []).map((m) => ({ valor: m.codigo, rotulo: m.nome })),
+]);
+const opModelosAtivos = computed(() => [
+  { valor: 0, rotulo: t('adt.documentos.escolha'), desabilitada: true },
+  ...(config.data.value?.modelos ?? [])
+    .filter((x) => x.ativo)
+    .map((m) => ({ valor: m.id, rotulo: m.titulo })),
+]);
+
 const previa = useQuery({
   queryKey: computed(() => ['adt', 'documentos', 'previa', reg.value, momentoPrevia.value]),
   queryFn: () => lerDocumentosDaInternacao(reg.value!, momentoPrevia.value),
@@ -177,10 +204,12 @@ const numero = (v: string) => (v === '' ? null : Number(v));
           data-testid="doc-reg"
           @change="reg = numero(($event.target as HTMLInputElement).value)"
         />
-        <label for="doc-momento-previa">{{ t('adt.documentos.momento') }}</label>
-        <select id="doc-momento-previa" v-model="momentoPrevia">
-          <option v-for="m in MOMENTOS" :key="m" :value="m">{{ t(`adt.documentos.momentos.${m}`) }}</option>
-        </select>
+        <SanteSelecao
+          v-model="momentoPrevia"
+          :rotulo="t('adt.documentos.momento')"
+          :opcoes="opMomentos"
+          data-testid="doc-momento-previa"
+        />
         <ErroAdt v-if="previa.isError.value" :erro="previa.error.value" />
         <ul v-else-if="previa.data.value" class="lista-simples" data-testid="doc-previa-lista">
           <li v-if="previa.data.value.documentos.length === 0">{{ t('adt.documentos.nenhumSai') }}</li>
@@ -244,12 +273,12 @@ const numero = (v: string) => (v === '' ? null : Number(v));
             :aria-invalid="!!problemasModelo['conteudo']"
           />
           <p class="secundario">{{ t('adt.documentos.marcadores') }} {{ MARCADORES }}</p>
-          <label for="doc-momento-modelo">{{ t('adt.documentos.momentoModelo') }}</label>
-          <select id="doc-momento-modelo" v-model="modelo.momento">
-            <option v-for="m in MOMENTOS_MODELO_DOCUMENTO" :key="m" :value="m">
-              {{ t(`adt.documentos.momentos.${m}`) }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="modelo.momento"
+            :rotulo="t('adt.documentos.momentoModelo')"
+            :opcoes="opMomentosModelo"
+            data-testid="doc-momento-modelo"
+          />
           <label for="doc-copias-modelo">{{ t('adt.impressos.copias') }}</label>
           <input
             id="doc-copias-modelo"
@@ -259,13 +288,12 @@ const numero = (v: string) => (v === '' ? null : Number(v));
             max="20"
             :aria-invalid="!!problemasModelo['copias']"
           />
-          <label for="doc-esp-modelo">{{ t('adt.documentos.especialidade') }}</label>
-          <select id="doc-esp-modelo" v-model="modelo.especialidade">
-            <option :value="null">{{ t('adt.documentos.todos') }}</option>
-            <option v-for="e in apoio.data.value?.especialidades ?? []" :key="e.codigo" :value="e.codigo">
-              {{ e.nome }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="modelo.especialidade"
+            :rotulo="t('adt.documentos.especialidade')"
+            :opcoes="opEspecialidades"
+            data-testid="doc-esp-modelo"
+          />
           <label for="doc-idade-min">{{ t('adt.documentos.idadeMinima') }}</label>
           <input
             id="doc-idade-min"
@@ -336,42 +364,39 @@ const numero = (v: string) => (v === '' ? null : Number(v));
           </li>
         </ul>
         <form v-if="podeEditar" class="grade-form" data-testid="doc-form-regra" @submit.prevent="gravarRegra">
-          <label for="doc-regra-modelo">{{ t('adt.documentos.modelo') }}</label>
-          <select
-            id="doc-regra-modelo"
-            v-model.number="regra.modelo"
+          <SanteSelecao
+            v-model="regra.modelo"
+            :rotulo="t('adt.documentos.modelo')"
+            :opcoes="opModelosAtivos"
             :aria-invalid="!!problemasRegra['modelo']"
-          >
-            <option :value="0" disabled>{{ t('adt.documentos.escolha') }}</option>
-            <option v-for="m in config.data.value.modelos.filter((x) => x.ativo)" :key="m.id" :value="m.id">
-              {{ m.titulo }}
-            </option>
-          </select>
-          <label for="doc-regra-momento">{{ t('adt.documentos.momento') }}</label>
-          <select id="doc-regra-momento" v-model="regra.momento" :aria-invalid="!!problemasRegra['momento']">
-            <option v-for="m in MOMENTOS" :key="m" :value="m">{{ t(`adt.documentos.momentos.${m}`) }}</option>
-          </select>
-          <label for="doc-regra-convenio">{{ t('adt.documentos.convenio') }}</label>
-          <select id="doc-regra-convenio" v-model="regra.convenio">
-            <option :value="null">{{ t('adt.documentos.todos') }}</option>
-            <option v-for="c in apoio.data.value?.convenios ?? []" :key="c.codigo" :value="c.codigo">
-              {{ c.nome }}
-            </option>
-          </select>
-          <label for="doc-regra-esp">{{ t('adt.documentos.especialidade') }}</label>
-          <select id="doc-regra-esp" v-model="regra.especialidade">
-            <option :value="null">{{ t('adt.documentos.todos') }}</option>
-            <option v-for="e in apoio.data.value?.especialidades ?? []" :key="e.codigo" :value="e.codigo">
-              {{ e.nome }}
-            </option>
-          </select>
-          <label for="doc-regra-modalidade">{{ t('adt.documentos.modalidade') }}</label>
-          <select id="doc-regra-modalidade" v-model="regra.modalidade">
-            <option :value="null">{{ t('adt.documentos.todos') }}</option>
-            <option v-for="mo in config.data.value.modalidades" :key="mo.codigo" :value="mo.codigo">
-              {{ mo.nome }}
-            </option>
-          </select>
+            obrigatorio
+            data-testid="doc-regra-modelo"
+          />
+          <SanteSelecao
+            v-model="regra.momento"
+            :rotulo="t('adt.documentos.momento')"
+            :opcoes="opMomentos"
+            :aria-invalid="!!problemasRegra['momento']"
+            data-testid="doc-regra-momento"
+          />
+          <SanteSelecao
+            v-model="regra.convenio"
+            :rotulo="t('adt.documentos.convenio')"
+            :opcoes="opConvenios"
+            data-testid="doc-regra-convenio"
+          />
+          <SanteSelecao
+            v-model="regra.especialidade"
+            :rotulo="t('adt.documentos.especialidade')"
+            :opcoes="opEspecialidades"
+            data-testid="doc-regra-esp"
+          />
+          <SanteSelecao
+            v-model="regra.modalidade"
+            :rotulo="t('adt.documentos.modalidade')"
+            :opcoes="opModalidades"
+            data-testid="doc-regra-modalidade"
+          />
           <label for="doc-regra-copias">{{ t('adt.impressos.copias') }}</label>
           <input
             id="doc-regra-copias"

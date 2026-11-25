@@ -155,6 +155,6 @@ async function gerar(): Promise<void> {
   user-select: all;
 }
 .recuperar__erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 </style>

@@ -4,6 +4,7 @@
 // código da recusa em `problema.codigo`. As entradas são conferidas pelos esquemas dos contratos antes de sair.
 import type {
   AlergiasPaciente,
+  HistoricoAlergia,
   AltaPaciente,
   AnexarDocumento,
   AnexosPaciente,
@@ -152,6 +153,8 @@ export const lerAlergias = (p: number, b: typeof fetch = fetch) =>
   ler<AlergiasPaciente>(`${pac(p)}/alergias`, b);
 export const registrarAlergia = (p: number, e: RegistrarAlergia) =>
   enviar<{ alergia: number; documento: number }>(`${pac(p)}/alergias`, e, novaChave('alergia'));
+export const lerHistoricoAlergia = (p: number, id: number, b: typeof fetch = fetch) =>
+  ler<HistoricoAlergia>(`${pac(p)}/alergias/${id}/historico`, b);
 export const inativarAlergia = (p: number, id: number, motivo: string, versao: string) =>
   enviar<{ ok: true }>(`${pac(p)}/alergias/${id}/inativar`, { motivo, versao }, novaChave('alergia'));
 

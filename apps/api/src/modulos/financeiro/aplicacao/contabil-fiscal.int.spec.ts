@@ -14,7 +14,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import { ApoiosFinanceiro } from '../apoios.js';
-import { OPERACOES_CONTABIL_FISCAL, retidoEmAberto, sugestaoRetencao } from '../contabil-fiscal-propria.js';
+import {
+  apoioRetencao,
+  buscarFornecedores,
+  deParaDoEstabelecimento,
+  OPERACOES_CONTABIL_FISCAL,
+  retidoEmAberto,
+  sugestaoRetencao,
+} from '../contabil-fiscal-propria.js';
 import { PortaFinanceiroPropria } from '../porta-propria.js';
 import { ServicoFinanceiro } from '../servico.js';
 import {
@@ -392,5 +399,55 @@ describe.skipIf(SEM_BANCO)('de-para contábil, regras de retenção e recolhimen
       [m.est],
     );
     expect(Number(fora[0]?.['n'])).toBe(0);
+  });
+
+  it('tela: o credor achado pelo nome ganha o código externo, aparece com o nome e desliga sem apagar; apoio da retenção', async () => {
+    const ler = <T>(fn: (l: Parameters<Parameters<typeof m.nucleo.lerSomente>[1]>[0]) => Promise<T>) =>
+      m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'cf-100-tela' }, fn);
+    const [f] = await consultar('SELECT razao_social, cnpj FROM empresa_fornecedora WHERE id = ?', [
+      m.fornecedor,
+    ]);
+    const nome = String(f?.['razao_social']);
+    const achados = await ler((l) => buscarFornecedores(l, nome.slice(0, 6)));
+    expect(achados.some((a) => a.id === m.fornecedor)).toBe(true);
+    if (f?.['cnpj'])
+      expect((await ler((l) => buscarFornecedores(l, String(f['cnpj'])))).map((a) => a.id)).toContain(
+        m.fornecedor,
+      );
+    expect(await ler((l) => buscarFornecedores(l, 'x'))).toEqual([]);
+    await executar('financeiro.manterDeParaContabil', {
+      tipo: 'credor',
+      fornecedor: m.fornecedor,
+      codigo: 'F-TELA-1',
+      ativo: true,
+    });
+    const comCodigo = await ler((l) => deParaDoEstabelecimento(l, m.est));
+    const credor = comCodigo.credores.find((c) => c.id === m.fornecedor);
+    expect(credor?.externo).toBe('F-TELA-1');
+    expect(credor?.nome.length).toBeGreaterThan(0);
+    // O outro estabelecimento não vê o código deste.
+    expect(
+      (await ler((l) => deParaDoEstabelecimento(l, m.outroEst))).credores.map((c) => c.externo),
+    ).not.toContain('F-TELA-1');
+    // Vazio na tela desliga mandando o código atual: a linha fica (histórico), fora da lista ativa.
+    await executar('financeiro.manterDeParaContabil', {
+      tipo: 'credor',
+      fornecedor: m.fornecedor,
+      codigo: 'F-TELA-1',
+      ativo: false,
+    });
+    expect((await ler((l) => deParaDoEstabelecimento(l, m.est))).credores.map((c) => c.id)).not.toContain(
+      m.fornecedor,
+    );
+    const guardada = await consultar(
+      `SELECT COUNT(*) AS n FROM depara_participante_externo
+        WHERE estabelecimento_id = ? AND empresa_fornecedora_id = ? AND codigo_externo = 'F-TELA-1' AND ativo = FALSE`,
+      [m.est, m.fornecedor],
+    );
+    expect(Number(guardada[0]?.['n'])).toBe(1);
+    const apoio = await ler((l) => apoioRetencao(l));
+    expect(apoio.tributos.length).toBeGreaterThan(0);
+    expect(apoio.tributos.every((x) => x.id > 0 && x.sigla.length > 0)).toBe(true);
+    expect(apoio.naturezas.some((n) => n.id === natureza)).toBe(true);
   });
 });

@@ -19,8 +19,10 @@
 // Melhoria: observação sem dois leitos para o mesmo atendimento; na transferência a contagem das horas continua a da
 // primeira entrada; justificativa e horas pelo domínio; a saída devolve o atendimento a "em atendimento".
 // Herança do atendimento anterior: porta-propria-heranca.ts (regra_heranca_campo por escopo).
-// Pendente (pedido ao orquestrador): alteração, segurado, procedimento extra, impressos, paciente
-// não identificado, escore do PA, sinais, indicadores e marcação respondem 501 (ou vazio no quadro) até a regra e o
+// Correção da ficha (segurado, alteração, correção e estorno do extra): porta-propria-correcao.ts.
+// Indicadores do período (contagens e marcas de tempo): porta-propria-indicadores.ts.
+// Pendente (pedido ao orquestrador): impressos, paciente
+// não identificado, escore do PA, sinais e marcação respondem 501 (ou vazio no quadro) até a regra e o
 // modelo chegarem.
 import { randomUUID } from 'node:crypto';
 import {
@@ -69,7 +71,12 @@ import {
 } from '@sgh/dominio-atendimento';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
+import { conferirCadastroNaAbertura } from '../cadastro/campos-abertura.js';
 import { nomeNoNucleo } from '../cadastro/porta-propria.js';
+import {
+  alertasRepresentacaoDoPaciente,
+  MENSAGEM_ALERTA_REPRESENTACAO,
+} from '../cadastro/representacao-paciente-propria.js';
 import type { LiberacaoOperacao, RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { GravacaoFeita } from '../exames/public-api.js';
 import {
@@ -81,13 +88,22 @@ import {
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
+import { gravarImpressoEmitido, lerFichasDoAtendimento } from './regras-impressao.js';
+import { OPERACOES_CORRECAO_FICHA } from './porta-propria-correcao.js';
 import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
+import { diaDeslocado, lerIndicadoresProprios } from './porta-propria-indicadores.js';
 import {
   lerEscoposHeranca,
   lerMarcasHeranca,
   OPERACAO_ALTERAR_HERANCA,
   valoresHerdaveisDoAnterior,
 } from './porta-propria-heranca.js';
+import {
+  lerPadraoAbertura,
+  OPERACAO_DEFINIR_MEU_PADRAO_ABERTURA,
+  OPERACAO_DEFINIR_PADRAO_ABERTURA,
+} from './porta-propria-padrao.js';
+import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import type {
   ContextoAtendimento,
   DadosImpresso,
@@ -371,7 +387,8 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
       if (!r.transferencia && a.situacao === 'em_observacao') await mudarSituacao(tx, a, 'em_atendimento');
       return { horas, id: Number(o.id) };
     },
-    registrarImpresso: () => Promise.reject(pendenteGravacao('Registro de impresso')),
+    // 02-REC linha 35: cada emissão fica numerada por impresso do atendimento (a segunda em diante é reimpressão).
+    registrarImpresso: (r) => gravarImpressoEmitido(tx, estabelecimento, r),
     marcarNaoIdentificado: () => Promise.reject(pendenteGravacao('Paciente não identificado')),
     identificarPaciente: () => Promise.reject(pendenteGravacao('Identificação do paciente')),
     registrarEscorePa: () => Promise.reject(pendenteGravacao('Escore do pronto atendimento')),
@@ -384,6 +401,7 @@ const TABELAS_GRAVACAO_DIRETA = [
   'atendimento_etapa_pa',
   'atendimento_situacao_historico',
   'ocupacao_leito_observacao',
+  'atendimento_impresso_emitido',
 ];
 
 export class PortaAtendimentoPropria implements PortaAtendimento {
@@ -592,8 +610,10 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
         [reg],
       );
       const procs = await l.consultar(
-        `SELECT ap.sequencia, ap.principal, ap.quantidade, i.id AS item, i.descricao FROM atendimento_procedimento ap
+        `SELECT ap.sequencia, ap.principal, ap.quantidade, i.id AS item, i.descricao, ci.valor_total
+           FROM atendimento_procedimento ap
            JOIN item_faturavel i ON i.id = ap.item_faturavel_id
+           LEFT JOIN conta_hospitalar_item ci ON ci.id = ap.conta_hospitalar_item_id
           WHERE ap.atendimento_id = ? AND ap.excluido_em IS NULL ORDER BY ap.sequencia`,
         [reg],
         { teto: 500 },
@@ -655,7 +675,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
             procedimento: Number(p['item']),
             nome: texto(p['descricao']) ?? '',
             quantidade: Number(p['quantidade']),
-            valor: 0,
+            valor: Number(p['valor_total'] ?? 0),
             profissional: r.profissional.nome,
             seq: Number(p['sequencia']),
           })),
@@ -863,8 +883,24 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
     });
   }
 
-  indicadores(): Promise<IndicadoresDados> {
-    return pendenteLeitura('Indicadores do atendimento');
+  /** Os agregados dos indicadores no período (porta-propria-indicadores.ts): só do estabelecimento da sessão. */
+  indicadores(
+    c: ContextoAtendimento,
+    o: { inicio: string; fim: string; unidade?: number },
+  ): Promise<IndicadoresDados> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      const fuso = await this.fuso(l, est);
+      return lerIndicadoresProprios(l, {
+        estabelecimento: est,
+        de: inicioDoDia(o.inicio, fuso),
+        ate: inicioDoDia(diaDeslocado(o.fim, 1), fuso),
+        deVisitas: inicioDoDia(diaDeslocado(o.inicio, -3), fuso),
+        ...(o.unidade ? { unidade: o.unidade } : {}),
+        civil: (d) => localNoFuso(d, fuso),
+        agora: new Date(),
+      });
+    });
   }
 
   apoio(c: ContextoAtendimento): Promise<ApoioAtendimentoDados> {
@@ -927,6 +963,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
           return {
             heranca: h.marcas,
             herancaEscopo: { estabelecimento: h.estabelecimento, pessoal: h.pessoal },
+            padraoAbertura: await lerPadraoAbertura(l, est, c.usuario),
           };
         })()),
       };
@@ -1003,6 +1040,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
       const ult = lista[0];
       return {
         heranca: await lerMarcasHeranca(l, est, c.usuario),
+        padrao: await lerPadraoAbertura(l, est, c.usuario),
         anterior: ult
           ? {
               reg: ult.reg,
@@ -1153,9 +1191,16 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
     return new Map();
   }
 
-  /** Pendente: a configuração das fichas (modelo_ficha_impressa e regra_impressao_ficha) ainda não é lida: vale a padrão. */
-  async fichasConfiguradas(): Promise<FichasConfiguradas | null> {
-    return null;
+  /**
+   * As fichas que a regra de impressão manda para o atendimento (02-REC linha 35): por fonte pagadora, especialidade,
+   * grupo de faturamento, unidade e tipo de atendimento. Sem o atendimento, não há o que decidir (vale a padrão).
+   */
+  async fichasConfiguradas(c: ContextoAtendimento, reg?: number): Promise<FichasConfiguradas | null> {
+    if (reg === undefined) return null;
+    const prontas = await this.ler(c, async (l) =>
+      lerFichasDoAtendimento(l, await this.estabelecimento(c, l), reg),
+    );
+    return prontas ? { modelos: [], selecoes: [], prontas } : null;
   }
 
   naoIdentificados(): Promise<
@@ -1522,6 +1567,17 @@ const OPERACAO_ABRIR = definirOperacao({
     );
     if (conv['situacao'] !== 'ativa')
       throw recusa('convenio-inativo', 'Convênio inativo.', { campos: ['convenio'] });
+    // Regra de campo do cadastro (02-CAD linha 2): o atendimento só abre com o cadastro completo no escopo da
+    // recepção (módulo, tipo de atendimento e convênio); o cadastro provisório do não identificado não é barrado.
+    await conferirCadastroNaAbertura(tx, {
+      estabelecimento: est,
+      paciente: Number(pac['id']),
+      tipo: String(e['tipo']),
+      fontePagadora: Number(conv['id']),
+      local: num('local'),
+      modulo: num('moduloRecepcao'),
+      provisorio: String(pac['situacao']) === 'provisorio',
+    });
     const prof = await exigir(
       "SELECT id FROM profissional WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
       [num('profissional')],
@@ -1687,7 +1743,8 @@ const OPERACAO_ABRIR = definirOperacao({
       unidade_assistencial_id: Number(unidade['id']),
       centro_custo_id: Number(cc['id']),
       local_atendimento_id: local,
-      solicitante_externo_id: num('solicitante'),
+      // O atendimento novo nasce no cadastro que responde hoje (o unificado em outro não recebe pedido novo).
+      solicitante_externo_id: await solicitanteQueRespondeHoje(tx, num('solicitante')),
       data_requisicao: (e['dataRequisicao'] as string | undefined) ?? null,
       marcacao_horario_id: marcacao,
       teleconsulta_id: tele,
@@ -1771,8 +1828,17 @@ const OPERACAO_ABRIR = definirOperacao({
     // Sem tipo de conta da natureza, o atendimento abre e a pendência volta para o faturista (alertaConta).
     const { conta, pendencia } = await abrirContaDaEntrada(tx, est, id);
     if (conta !== null) await apurarConta(tx, est, conta, agora);
+    // F3.1 (02-CAD linha 4): menor sem representante ou incapaz sem curador no cadastro. O atendimento abre (a
+    // urgência não espera o cadastro) e o aviso volta para a recepção regularizar a ficha.
+    const representacao = await alertasRepresentacaoDoPaciente(tx, Number(pac['id']));
     const aberto = {
       ...(pendencia !== null ? { alertaConta: pendencia.codigo, alertaContaMotivo: pendencia.mensagem } : {}),
+      ...(representacao.length > 0
+        ? {
+            alertaRepresentacao: representacao.join(','),
+            alertaRepresentacaoMotivo: representacao.map((a) => MENSAGEM_ALERTA_REPRESENTACAO[a]).join(' '),
+          }
+        : {}),
       reg: id,
       cabecalho: numero.formatado,
       tipo: String(e['tipo']),
@@ -1797,7 +1863,7 @@ const GRUPO_DO_EXTRA: Readonly<Record<string, 2 | 3>> = { honorario: 2, procedim
  */
 const OPERACAO_LANCAR_EXTRA = definirOperacao({
   nome: 'atendimento.lancar-procedimento-extra',
-  tabelas: [...lancarItem.tabelas],
+  tabelas: [...lancarItem.tabelas, 'atendimento_procedimento'],
   entrada: esquemaLancarProcedimentoExtra,
   acao: 'inclusao',
   async gravar(tx, e, ctx) {
@@ -1866,13 +1932,28 @@ const OPERACAO_LANCAR_EXTRA = definirOperacao({
       }),
       ctx,
     );
-    const seq = await tx.uma(
-      'SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND id <= ?',
-      [conta, Number(r['id'])],
+    // O extra fica na ficha com a sua sequência (estável) e o item que gerou na conta: a correção e o estorno
+    // mudam os dois juntos (porta-propria-correcao.ts).
+    const proxima = await tx.uma(
+      'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM atendimento_procedimento WHERE atendimento_id = ?',
+      [Number(a['id'])],
     );
+    const seq = Number(proxima?.['s'] ?? 1);
+    const doCatalogo = await tx.uma(
+      'SELECT id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL LIMIT 1',
+      [String(e.procedimento)],
+    );
+    await tx.incluir('atendimento_procedimento', {
+      atendimento_id: Number(a['id']),
+      sequencia: seq,
+      item_faturavel_id: Number(doCatalogo?.['id']),
+      quantidade: e.quantidade,
+      principal: false,
+      conta_hospitalar_item_id: Number(r['id']),
+    });
     return {
       reg: Number(a['id']),
-      seq: Number(seq?.['n'] ?? 1),
+      seq,
       procedimento: e.procedimento,
       quantidade: e.quantidade,
       conta,
@@ -1894,4 +1975,7 @@ const OPERACOES_PROPRIAS: Readonly<Record<string, Operacao<any, ResultadoOperaca
   'atendimento.conduzirNoConsultorio': OPERACAO_CONDUZIR,
   'atendimento.lancarProcedimentoExtra': OPERACAO_LANCAR_EXTRA,
   'atendimento.alterarHeranca': OPERACAO_ALTERAR_HERANCA,
+  'atendimento.definirPadraoAbertura': OPERACAO_DEFINIR_PADRAO_ABERTURA,
+  'atendimento.definirMeuPadraoAbertura': OPERACAO_DEFINIR_MEU_PADRAO_ABERTURA,
+  ...OPERACOES_CORRECAO_FICHA,
 };

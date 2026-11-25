@@ -15,10 +15,12 @@ import {
   avaliarPedido,
   buscarAtendimentos,
   cancelarItem,
+  type CobrancaPedido,
   type CorpoPedido,
   gravarPedido,
   lerEventosDoItem,
   lerMotivosPedido,
+  lancarPendentesNaConta,
   lerPedidosDoAtendimento,
   listarKits,
 } from '../api-pedido.js';
@@ -60,6 +62,7 @@ function trocar(): void {
   atendimento.value = null;
   pacienteConfirmado.value = false;
   avaliacao.value = null;
+  avisoCobranca.value = null;
 }
 const cabecalho = computed(() => {
   const a = cab.value;
@@ -80,6 +83,9 @@ const prioridade = ref<CorpoPedido['prioridade']>('rotina');
 const exames = ref<number[]>([]);
 const setorDoExame = ref<Record<number, string>>({});
 const urgenteDoExame = ref<Record<number, boolean>>({});
+// Material por exame: as opções vêm da avaliação (os materiais ativos do cadastro do exame); vazio = o padrão.
+const materialDoExame = ref<Record<number, string>>({});
+const materiaisDoExame = ref<Record<number, { valor: string; rotulo: string }[]>>({});
 const kitsEscolhidos = ref<number[]>([]);
 const indicacao = ref('');
 const confirmado = ref(false);
@@ -114,6 +120,7 @@ const corpo = (): CorpoPedido | null => {
     exames: exames.value.map((exame) => ({
       exame,
       setor: Number(setorDoExame.value[exame] ?? '') || null,
+      material: Number(materialDoExame.value[exame] ?? '') || null,
       urgente: urgenteDoExame.value[exame] ?? false,
     })),
     kits: kitsEscolhidos.value,
@@ -124,13 +131,26 @@ const corpo = (): CorpoPedido | null => {
 };
 // Validação na hora: cada mudança do pedido reavalia as restrições.
 watch(
-  [atendimento, setor, exames, kitsEscolhidos, setorDoExame, urgenteDoExame],
+  [atendimento, setor, exames, kitsEscolhidos, setorDoExame, urgenteDoExame, materialDoExame],
   async () => {
     const c = corpo();
     avaliacao.value = null;
     if (!c) return;
     try {
       avaliacao.value = await avaliarPedido(c, novaChave('pedido.avaliar'));
+      // As opções ficam guardadas entre uma avaliação e outra: o seletor não some enquanto a tela reavalia.
+      materiaisDoExame.value = {
+        ...materiaisDoExame.value,
+        ...Object.fromEntries(
+          avaliacao.value.materiais.map((m) => [
+            m.exame,
+            m.opcoes.map((o) => ({
+              valor: o.padrao ? '' : String(o.id),
+              rotulo: o.padrao ? t('sadt.pedido.materialPadraoOpcao', { nome: o.descricao }) : o.descricao,
+            })),
+          ]),
+        ),
+      };
       erro.value = null;
     } catch (x) {
       erro.value = x;
@@ -138,16 +158,44 @@ watch(
   },
   { deep: true },
 );
-const pedeJustificativa = computed(() =>
-  (avaliacao.value?.restricoes ?? []).some(
-    (r) => r.tipo === 'bloqueio' && r.excecao === null && r.permiteExcecao,
-  ),
+const pedeJustificativa = computed(
+  () =>
+    (avaliacao.value?.restricoes ?? []).some(
+      (r) => r.tipo === 'bloqueio' && r.excecao === null && r.permiteExcecao,
+    ) || (avaliacao.value?.limites ?? []).some((l) => l.acao !== 'alertar'),
 );
 const semPermissaoExcecao = computed(
   () => pedeJustificativa.value && doAtendimento.data.value?.podeAutorizarExcecao === false,
 );
 const ocupado = ref(false);
 const podeGravar = computed(() => !ocupado.value && pacienteConfirmado.value && corpo() !== null);
+// A cobrança não segura o pedido: o que não entrou na conta aparece na hora, com o motivo, e é lançado depois.
+const avisoCobranca = ref<string | null>(null);
+function resumoPendencias(c: CobrancaPedido | undefined): string | null {
+  const pend = (c?.itens ?? []).filter((i) => i.contaItem === null && i.pendencia !== 'do-orcamento');
+  if (!pend.length) return null;
+  const motivos = [...new Set(pend.map((i) => i.mensagem ?? ''))].filter(Boolean).join(' ');
+  return t('sadt.pedido.cobrancaPendente', { n: pend.length, motivos });
+}
+const temPendente = computed(
+  () =>
+    doAtendimento.data.value?.requisicoes.some((r) => r.itens.some((i) => i.cobranca === 'pendente')) ??
+    false,
+);
+async function lancarPendentes(): Promise<void> {
+  const at = atendimento.value;
+  if (!at) return;
+  erro.value = null;
+  try {
+    const r = await lancarPendentesNaConta(at, novaChave('pedido.conta'));
+    const feitos = r.itens.filter((i) => i.contaItem !== null).length;
+    mensagem.value = t('sadt.pedido.lancados', { n: feitos, p: r.itens.length - feitos });
+    avisoCobranca.value = resumoPendencias(r);
+    await cliente.invalidateQueries({ queryKey: ['sadt', 'pedido', 'atendimento'] });
+  } catch (x) {
+    erro.value = x;
+  }
+}
 async function gravar(): Promise<void> {
   const c = corpo();
   if (!c || !pacienteConfirmado.value) return;
@@ -156,7 +204,9 @@ async function gravar(): Promise<void> {
   try {
     const r = await gravarPedido(c, novaChave('pedido.gravar'));
     mensagem.value = t('sadt.pedido.gravado', { numero: r.numero, n: r.itens.length });
+    avisoCobranca.value = resumoPendencias(r.cobranca);
     exames.value = [];
+    materialDoExame.value = {};
     kitsEscolhidos.value = [];
     justificativa.value = '';
     confirmado.value = false;
@@ -191,13 +241,13 @@ const exigeComplemento = (id: number) =>
 async function cancelar(item: number): Promise<void> {
   erro.value = null;
   try {
-    await cancelarItem(
+    const r = await cancelarItem(
       item,
       Number(motivoCancelar.value[item]),
       complemento.value[item]?.trim() || null,
       novaChave('pedido.cancelar'),
     );
-    mensagem.value = t('sadt.pedido.cancelado');
+    mensagem.value = t(`sadt.pedido.canceladoConta.${r.conta}`);
     await cliente.invalidateQueries({ queryKey: ['sadt', 'pedido', 'atendimento'] });
     if (linhaDoTempo.value[item]) await verEventos(item);
   } catch (x) {
@@ -220,9 +270,12 @@ async function verEventos(item: number): Promise<void> {
     <div v-if="atendimento === null" class="linha">
       <label for="pedido-busca">{{ t('sadt.pedido.buscarPaciente') }}</label>
       <input id="pedido-busca" v-model="busca" data-testid="pedido-busca" @keyup.enter="buscar" />
-      <SanteBotao :disabled="busca.trim().length < 2" data-testid="pedido-buscar" @click="buscar">
-        {{ t('sadt.pedido.buscar') }}
-      </SanteBotao>
+      <SanteBotao
+        :rotulo="t('sadt.pedido.buscar')"
+        :desabilitado="busca.trim().length < 2"
+        data-testid="pedido-buscar"
+        @acionar="buscar"
+      />
     </div>
     <ul v-if="atendimento === null && encontrados" data-testid="pedido-encontrados">
       <li v-if="encontrados.length === 0">{{ t('sadt.pedido.nenhumAtendimento') }}</li>
@@ -230,9 +283,11 @@ async function verEventos(item: number): Promise<void> {
         {{ a.nome }} ·
         {{ a.idadeAnos === null ? t('sadt.pedido.semIdade') : t('sadt.pedido.idade', { n: a.idadeAnos }) }} ·
         {{ t('sadt.pedido.atendimento') }} {{ a.numero }}
-        <SanteBotao :data-testid="`pedido-escolher-${a.id}`" @click="escolher(a)">
-          {{ t('sadt.pedido.escolher') }}
-        </SanteBotao>
+        <SanteBotao
+          :rotulo="t('sadt.pedido.escolher')"
+          :data-testid="`pedido-escolher-${a.id}`"
+          @acionar="escolher(a)"
+        />
       </li>
     </ul>
 
@@ -243,9 +298,7 @@ async function verEventos(item: number): Promise<void> {
           <input v-model="pacienteConfirmado" type="checkbox" data-testid="pedido-paciente-confirmado" />
           {{ t('sadt.pedido.pacienteConfirmado') }}
         </label>
-        <SanteBotao data-testid="pedido-trocar" @click="trocar">{{
-          t('sadt.pedido.trocarPaciente')
-        }}</SanteBotao>
+        <SanteBotao :rotulo="t('sadt.pedido.trocarPaciente')" data-testid="pedido-trocar" @acionar="trocar" />
       </header>
 
       <div class="linha">
@@ -280,6 +333,14 @@ async function verEventos(item: number): Promise<void> {
               :opcoes="setoresDoExame"
               @update:model-value="(v: string) => (setorDoExame = { ...setorDoExame, [e.id]: v })"
             />
+            <SanteSelecao
+              v-if="(materiaisDoExame[e.id] ?? []).length > 1"
+              :model-value="materialDoExame[e.id] ?? ''"
+              :rotulo="t('sadt.pedido.materialDoExame')"
+              :opcoes="materiaisDoExame[e.id] ?? []"
+              :data-testid="`pedido-material-${e.id}`"
+              @update:model-value="(v: string) => (materialDoExame = { ...materialDoExame, [e.id]: v })"
+            />
             <label>
               <input
                 type="checkbox"
@@ -296,13 +357,29 @@ async function verEventos(item: number): Promise<void> {
 
       <div v-if="avaliacao" class="avisos" data-testid="pedido-avisos" aria-live="polite">
         <h2>{{ t('sadt.pedido.avisos') }}</h2>
-        <p v-if="avaliacao.restricoes.length === 0">{{ t('sadt.pedido.semAvisos') }}</p>
+        <p v-if="avaliacao.restricoes.length === 0 && avaliacao.limites.length === 0">
+          {{ t('sadt.pedido.semAvisos') }}
+        </p>
         <ul>
           <li v-for="r in avaliacao.restricoes" :key="`${r.regra}-${r.exame}`" :class="r.tipo">
             {{ nomeExame(r.exame) }}: {{ r.mensagem }}
           </li>
         </ul>
-        <label v-if="avaliacao.restricoes.some((r) => r.tipo === 'alerta')">
+        <ul v-if="avaliacao.limites.length" data-testid="pedido-limites">
+          <li
+            v-for="l in avaliacao.limites"
+            :key="`${l.tipo}-${l.regra}-${l.exame}`"
+            :class="l.acao === 'alertar' ? 'alerta' : 'bloqueio'"
+          >
+            {{ nomeExame(l.exame) }}: {{ l.mensagem }}
+          </li>
+        </ul>
+        <label
+          v-if="
+            avaliacao.restricoes.some((r) => r.tipo === 'alerta') ||
+            avaliacao.limites.some((l) => l.acao === 'alertar')
+          "
+        >
           <input v-model="confirmado" type="checkbox" data-testid="pedido-confirmar" />
           {{ t('sadt.pedido.confirmar') }}
         </label>
@@ -319,17 +396,29 @@ async function verEventos(item: number): Promise<void> {
           />
         </template>
       </div>
-      <SanteBotao :disabled="!podeGravar" data-testid="pedido-gravar" @click="gravar">
-        {{ t('sadt.pedido.gravar') }}
-      </SanteBotao>
+      <SanteBotao
+        :rotulo="t('sadt.pedido.gravar')"
+        :desabilitado="!podeGravar"
+        data-testid="pedido-gravar"
+        @acionar="gravar"
+      />
     </template>
     <p v-if="mensagem" role="status" data-testid="pedido-mensagem">{{ mensagem }}</p>
+    <p v-if="avisoCobranca" class="bloqueio" role="status" data-testid="pedido-cobranca-pendente">
+      {{ avisoCobranca }}
+    </p>
     <ErroSadt v-if="erro" :erro="erro" />
     <ErroSadt v-if="doAtendimento.isError.value" :erro="doAtendimento.error.value" />
 
     <section v-if="doAtendimento.data.value" data-testid="pedido-anteriores">
       <h2>{{ t('sadt.pedido.anteriores') }}</h2>
       <p v-if="doAtendimento.data.value.requisicoes.length === 0">{{ t('sadt.pedido.semAnteriores') }}</p>
+      <SanteBotao
+        v-if="temPendente"
+        :rotulo="t('sadt.pedido.lancarPendentes')"
+        data-testid="pedido-lancar-pendentes"
+        @acionar="lancarPendentes"
+      />
       <article
         v-for="r in doAtendimento.data.value.requisicoes"
         :key="r.id"
@@ -337,7 +426,12 @@ async function verEventos(item: number): Promise<void> {
       >
         <h3>{{ r.numero }} · {{ r.situacao }} · {{ quando(r.solicitadaEm) }}</h3>
         <div v-for="i in r.itens" :key="i.id" class="item" :data-testid="`pedido-item-${i.id}`">
-          <p>{{ i.sequencia }}. {{ i.exame }} · {{ i.situacao }}</p>
+          <p>
+            {{ i.sequencia }}. {{ i.exame }} · {{ i.situacao }}
+            <span v-if="i.cobranca !== 'nao_se_aplica'" :data-testid="`pedido-cobranca-${i.id}`">
+              · {{ t(`sadt.pedido.cobranca.${i.cobranca}`) }}
+            </span>
+          </p>
           <template v-if="CANCELAVEIS.includes(i.situacao)">
             <SanteSelecao
               :model-value="motivoCancelar[i.id] ?? ''"
@@ -352,16 +446,17 @@ async function verEventos(item: number): Promise<void> {
               maxlength="500"
             />
             <SanteBotao
-              :disabled="!motivoCancelar[i.id]"
+              :rotulo="t('sadt.pedido.cancelar')"
+              :desabilitado="!motivoCancelar[i.id]"
               :data-testid="`pedido-cancelar-${i.id}`"
-              @click="cancelar(i.id)"
-            >
-              {{ t('sadt.pedido.cancelar') }}
-            </SanteBotao>
+              @acionar="cancelar(i.id)"
+            />
           </template>
-          <SanteBotao :data-testid="`pedido-eventos-${i.id}`" @click="verEventos(i.id)">
-            {{ t('sadt.pedido.linhaDoTempo') }}
-          </SanteBotao>
+          <SanteBotao
+            :rotulo="t('sadt.pedido.linhaDoTempo')"
+            :data-testid="`pedido-eventos-${i.id}`"
+            @acionar="verEventos(i.id)"
+          />
           <ol v-if="linhaDoTempo[i.id]" :data-testid="`pedido-linha-${i.id}`">
             <li v-for="(ev, k) in linhaDoTempo[i.id]" :key="k">
               {{ quando(ev.em) }} · {{ ev.evento }}<template v-if="ev.motivo"> · {{ ev.motivo }}</template>
@@ -388,7 +483,7 @@ async function verEventos(item: number): Promise<void> {
 }
 .cabecalho {
   padding: 0.5rem;
-  border: 1px solid var(--sante-borda, #ccc);
+  border: 1px solid var(--sgh-borda);
 }
 fieldset {
   display: grid;
@@ -399,6 +494,6 @@ fieldset {
 }
 .avisos .bloqueio,
 .bloqueio {
-  color: var(--sante-erro, #b00020);
+  color: var(--sgh-alerta);
 }
 </style>

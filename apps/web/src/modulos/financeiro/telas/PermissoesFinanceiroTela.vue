@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Permissões do financeiro (F3.8, 07-FIN linha 99): `/financeiro/parametros/permissoes`. À esquerda, o escopo de contas
 // de um usuário (consulta e movimento com vigência, gravados por conta, com a regra conferida na hora: quem movimenta
-// consulta; a vigência não se inverte). À direita, os tipos de lançamento de um perfil (marcar grava na hora). A tela
+// consulta; a vigência não se inverte). À direita, os tipos de um perfil em cada operação (tipo de lançamento no movimento
+// bancário, tipo de credor no título a pagar e no adiantamento; marcar grava na hora; cada operação tem a sua lista). A tela
 // avisa quando o usuário ou o perfil ainda está livre e o que muda ao gravar a primeira linha. Ninguém altera o próprio
 // escopo (o servidor recusa).
 import { SanteSelecao } from '@sgh/ui';
@@ -19,6 +20,8 @@ import {
   lerPerfis,
   lerTiposDoPerfil,
   lerUsuarios,
+  type OperacaoTipo,
+  OPERACOES_TIPO,
 } from '../api-gestao.js';
 import { usarFinanceiro } from '../usar-financeiro.js';
 
@@ -30,6 +33,10 @@ const usuarios = useQuery({ queryKey: ['financeiro', 'gestao', 'usuarios'], quer
 const perfis = useQuery({ queryKey: ['financeiro', 'gestao', 'perfis'], queryFn: () => lerPerfis() });
 const usuario = ref('');
 const perfil = ref('');
+const operacao = ref<OperacaoTipo>('banco');
+const opcoesOperacoes = computed(() =>
+  OPERACOES_TIPO.map((o) => ({ valor: o, rotulo: t(`financeiro.gestao.permissoes.operacoes.${o}`) })),
+);
 const opcoesUsuarios = computed(() =>
   (usuarios.data.value ?? []).map((u) => ({ valor: String(u.id), rotulo: `${u.nome} (${u.login})` })),
 );
@@ -42,8 +49,8 @@ const escopo = useQuery({
   enabled: computed(() => !!usuario.value),
 });
 const tipos = useQuery({
-  queryKey: computed(() => ['financeiro', 'gestao', 'tipos', perfil.value]),
-  queryFn: () => lerTiposDoPerfil(Number(perfil.value)),
+  queryKey: computed(() => ['financeiro', 'gestao', 'tipos', perfil.value, operacao.value]),
+  queryFn: () => lerTiposDoPerfil(Number(perfil.value), operacao.value),
   enabled: computed(() => !!perfil.value),
 });
 
@@ -104,9 +111,13 @@ const gravarConta = (conta: number) => {
   );
 };
 const alternarTipo = (tipo: number, liberado: boolean) =>
-  void acao((chave) => gravarTipoDoPerfil({ perfil: Number(perfil.value), tipo, liberado }, chave));
+  void acao((chave) =>
+    gravarTipoDoPerfil({ perfil: Number(perfil.value), tipo, liberado, operacao: operacao.value }, chave),
+  );
 const alternarRestricao = (restrito: boolean) =>
-  void acao((chave) => gravarRestricaoDoPerfil({ perfil: Number(perfil.value), restrito }, chave));
+  void acao((chave) =>
+    gravarRestricaoDoPerfil({ perfil: Number(perfil.value), restrito, operacao: operacao.value }, chave),
+  );
 </script>
 
 <template>
@@ -203,6 +214,14 @@ const alternarRestricao = (restrito: boolean) =>
         data-testid="pfin-perfil"
       />
     </span>
+    <span class="campo">
+      <SanteSelecao
+        v-model="operacao"
+        :rotulo="t('financeiro.gestao.permissoes.operacao')"
+        :opcoes="opcoesOperacoes"
+        data-testid="pfin-operacao"
+      />
+    </span>
     <ErroFaturamento v-if="tipos.error.value" :erro="tipos.error.value" />
     <template v-else-if="tipos.data.value">
       <p data-testid="pfin-tipos-aviso">
@@ -227,7 +246,7 @@ const alternarRestricao = (restrito: boolean) =>
       <table class="tabela" data-testid="pfin-tipos">
         <thead>
           <tr>
-            <th scope="col">{{ t('financeiro.gestao.permissoes.tipo') }}</th>
+            <th scope="col">{{ t(`financeiro.gestao.permissoes.tipoDaOperacao.${operacao}`) }}</th>
             <th scope="col">{{ t('financeiro.gestao.permissoes.liberado') }}</th>
           </tr>
         </thead>

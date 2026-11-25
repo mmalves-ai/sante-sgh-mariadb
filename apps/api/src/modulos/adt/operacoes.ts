@@ -55,6 +55,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { conferirCadastroNaAbertura } from '../cadastro/campos-abertura.js';
 import { FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import {
   type CancelarAltaBancoEntrada,
@@ -396,6 +397,17 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
         campos: ['paciente'],
       });
     await exigirExiste(tx, 'fonte_pagadora', e.convenio, 'convenio', 'O convênio');
+    // Regra de campo do cadastro (02-CAD linha 2): a admissão só grava com o cadastro completo no escopo da internação
+    // (tipo "internacao" e convênio); recusada, nada da admissão fica no banco (nem atendimento, nem leito ocupado). O
+    // cadastro provisório (paciente não identificado) não é barrado. A pré-internação não confere: é o preparo da
+    // vaga, feito antes de o paciente chegar, e o cadastro é completado até a admissão, que é onde a regra vale.
+    await conferirCadastroNaAbertura(tx, {
+      estabelecimento: est,
+      paciente: e.paciente,
+      tipo: 'internacao',
+      fontePagadora: e.convenio,
+      provisorio: pac['situacao'] === 'provisorio',
+    });
     await exigirExiste(tx, 'especialidade_medica', e.especialidade, 'especialidade', 'A especialidade');
     await exigirExiste(tx, 'profissional', e.medicoAssistente, 'medicoAssistente', 'O médico assistente');
     await exigirExiste(tx, 'profissional', e.medicoSolicitante, 'medicoSolicitante', 'O médico solicitante');

@@ -174,6 +174,11 @@ const cobrar = (contaId: number, movimento: number) =>
   <section class="tela-agenda" aria-labelledby="same-titulo" data-testid="tela-same">
     <h1 id="same-titulo">{{ t('adt.same.titulo') }}</h1>
     <p>{{ t('adt.same.texto') }}</p>
+    <p>
+      <RouterLink to="/same/guarda" data-testid="same-ir-guarda">{{ t('adt.sameGuarda.titulo') }}</RouterLink>
+      ·
+      <RouterLink to="/same/tramite" data-testid="same-ir-tramite">{{ t('sameTramite.titulo') }}</RouterLink>
+    </p>
     <AvisoAdt :motivo="aviso" />
     <form class="filtros" role="search" @submit.prevent="ler">
       <div class="campo">

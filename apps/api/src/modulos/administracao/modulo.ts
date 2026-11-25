@@ -15,10 +15,12 @@ import { fontesSinteticas } from '../../sessao/montar.js';
 import { AuditoriaController } from './auditoria.controller.js';
 import { EstruturaController } from './estrutura.controller.js';
 import { FONTE_ADMINISTRACAO, type FonteAdministracao, fonteAdministracaoIndisponivel } from './fonte.js';
+import { cadastroMemoriaAtual } from '../cadastro/porta-memoria.js';
 import { fonteAdministracaoMemoria } from './fonte-memoria.js';
 import { PermissoesController } from './permissoes.controller.js';
 import { RedeCpfController } from './rede-cpf.controller.js';
 import { UsuariosController } from './usuarios.controller.js';
+import { UsuariosVinculoController } from './usuarios-vinculo.controller.js';
 import { VersaoService } from '../../versao.service.js';
 import type { ContextoModulo } from '../registro.js';
 import type { FontesMedidas } from './sbis/medidas.js';
@@ -28,6 +30,11 @@ import { PortaSbisPropria } from './sbis/porta-propria.js';
 import { SbisController } from './sbis/sbis.controller.js';
 import { ImpressaoController } from './impressao.controller.js';
 import { PreferenciasController } from './preferencias.controller.js';
+import { NOTIFICACAO_REGRA, NotificacaoRegraController } from './notificacao-regra.controller.js';
+import { NotificacaoRegraPropria } from './notificacao-regra-propria.js';
+import { EMAIL_CONFIGURACAO, EmailConfiguracaoController } from './email-configuracao.controller.js';
+import { EmailConfiguracaoPropria } from './email-configuracao-propria.js';
+import { testadorDoAmbiente } from './email-teste-conexao.js';
 import { SERVICO_SBIS, ServicoSbis } from './sbis/servico.js';
 
 /** O produto não convive com sistema anterior (ADR 0003). */
@@ -60,7 +67,15 @@ export async function fonteDaAdministracao(ctx: ContextoModulo): Promise<FonteAd
     const { FonteAdministracaoPropria } = await import('./fonte-propria.js');
     return new FonteAdministracaoPropria(ctx.nucleo, cliente, { rede: ctx.configuracao.rede });
   }
-  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return fonteAdministracaoMemoria(ctx.trilha);
+  // X-01: o profissional do login vem da memória do cadastro do mesmo processo (a aba Login do sistema grava ali).
+  if (!ctx.nucleo && fontesSinteticas(ctx.env))
+    return fonteAdministracaoMemoria(
+      ctx.trilha,
+      null,
+      'dev',
+      () => [],
+      (c, login) => cadastroMemoriaAtual()?.profissionalDoLogin(c as never, login) ?? null,
+    );
   return fonteAdministracaoIndisponivel();
 }
 
@@ -95,6 +110,7 @@ export async function modulo(
     module: ModuloAdministracao,
     controllers: [
       UsuariosController,
+      UsuariosVinculoController,
       RedeCpfController,
       PermissoesController,
       EstruturaController,
@@ -102,12 +118,39 @@ export async function modulo(
       SbisController,
       ImpressaoController,
       PreferenciasController,
+      NotificacaoRegraController,
+      EmailConfiguracaoController,
       ...(opcoes.controladores ?? []),
     ],
     providers: [
       { provide: FONTE_ADMINISTRACAO, useValue: fonte },
       { provide: PORTA_SBIS, useValue: porta },
       { provide: SERVICO_SBIS, useValue: servico },
+      // Notificação por regra (01-ADM L76): só com o banco próprio; sem ele, 503.
+      {
+        provide: NOTIFICACAO_REGRA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new NotificacaoRegraPropria(
+                ctx.nucleo,
+                ctx.configuracao.clientePadrao,
+                ctx.configuracao.ambiente === 'producao',
+              )
+            : null,
+      },
+      // E-mail do sistema (01-ADM L77): modelos, servidores e registro de envio; só com o banco próprio (sem ele, 503).
+      {
+        provide: EMAIL_CONFIGURACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new EmailConfiguracaoPropria(
+                ctx.nucleo,
+                ctx.configuracao.clientePadrao,
+                ctx.configuracao.ambiente === 'producao',
+                testadorDoAmbiente(ctx.env),
+              )
+            : null,
+      },
       ...(opcoes.provedores ?? []),
     ],
     // Global: os pedidos de acesso (módulo acesso) leem a fonte da administração.

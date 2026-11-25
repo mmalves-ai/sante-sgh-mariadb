@@ -72,7 +72,7 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
     regime: 'autonomo',
     inscricaoMunicipal: null,
     inscricaoInss: null,
-    pisPasep: '12056412547',
+    pisPasep: '12056412545',
     categoriaSefip: null,
     aliquotaIss: 5,
     percentualInss: 11,
@@ -120,8 +120,8 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
         e,
         'SELECT id FROM banco WHERE codigo_ispb = ?',
         ['99010216'],
-        'INSERT INTO banco (codigo_ispb, descricao, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
-        ['99010216', `BANCO ${MARCA}`, '2020-01-01', agora],
+        'INSERT INTO banco (codigo_ispb, descricao, vigencia_inicio, versao_fonte, criado_em) VALUES (?, ?, ?, ?, ?)',
+        ['99010216', `BANCO ${MARCA}`, '2020-01-01', 'massa-teste', agora],
       );
     });
     siglaUf = String(

@@ -29,9 +29,11 @@ import {
   listaDoItem,
   livroDaLista,
   LIVROS_CONTROLADOS,
+  conferirFechamentoLivro,
   type LivroMontado,
   montarFila,
   montarLivro,
+  textoDoTermo,
   nomeDaSituacao,
   ordenarFilaAvaliacao,
   resumoPorGrupo,
@@ -43,6 +45,7 @@ import {
 import { enfileirarZpl, ErroZpl, zplEtiquetaDose } from '@sgh/dominio-documento';
 import type { DoseDaFila, Triagem } from './tipos.js';
 import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
+import { recusa } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { FonteDocumento } from '../documento/public-api.js';
@@ -572,6 +575,8 @@ export class ServicoFarmacia {
     livro: number,
     inicio: string,
     fim: string,
+    /** No fechamento, o modo pedido; na leitura (omitido), o modo em que o período está fechado. */
+    comoOficial?: boolean,
   ): Promise<LivroControladosLido & { montado: LivroMontado }> {
     if (!LIVROS_CONTROLADOS.some((l) => l.id === livro))
       throw new ErroProblema('nao-encontrado', 404, 'Livro inválido');
@@ -581,13 +586,15 @@ export class ServicoFarmacia {
       inicio: dataDe(inicio),
       fim: dataDe(fim),
     });
-    const oficial = (await this.apoios.apoios.livroOficial.liberacao(s)).ligada;
+    const f = await this.porta.livroFechado(ctx(s), livro, dataDe(inicio));
+    // O período fechado como oficial é lido como oficial: o termo de abertura não leva o aviso de conferência.
+    const oficial = comoOficial ?? f?.modo === 'oficial';
     const montado = montarLivro({
       livro: livro as 1 | 2 | 3 | 4,
       inicio,
       fim,
       estabelecimento: s.hospital.toUpperCase(),
-      oficial: false,
+      oficial,
       substancias: saldos.flatMap((x) => {
         const l = listaDoItem(x.lista);
         return l ? [{ item: x.item, nome: x.nome, lista: l, saldoAnterior: x.anterior }] : [];
@@ -600,8 +607,7 @@ export class ServicoFarmacia {
         documento: m.documento,
       })),
     });
-    const f = await this.porta.livroFechado(ctx(s), livro, dataDe(inicio));
-    void oficial;
+    const fechadoOficial = f?.modo === 'oficial';
     return {
       livro: montado.livro,
       titulo: montado.titulo,
@@ -619,7 +625,19 @@ export class ServicoFarmacia {
           documento: m.documento,
         })),
       })),
-      fechado: f ? { em: f.em, por: f.por, guardaAte: f.guardaAte, hash: f.hash } : null,
+      fechado: f
+        ? {
+            em: f.em,
+            por: f.por,
+            guardaAte: f.guardaAte,
+            hash: f.hash,
+            modo: fechadoOficial ? 'oficial' : 'conferencia',
+            termos: f.termos.map((t) => ({
+              ...t,
+              texto: textoDoTermo(t, { titulo: montado.titulo, inicio, fim, oficial: fechadoOficial }),
+            })),
+          }
+        : null,
       montado,
     };
   }
@@ -638,16 +656,35 @@ ${p.movimentos.map((m) => `<tr><td>${esc(m.data)}</td><td>${esc(m.tipo)}</td><td
 </table></section>`,
       )
       .join('\n');
+    // O livro fechado leva os termos como ficaram gravados; sem fechamento (ou sem o emitente), os montados na hora.
+    const gravado = (tipo: 'abertura' | 'encerramento') =>
+      l.fechado?.termos.find((t) => t.tipo === tipo)?.texto;
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(l.titulo)}</title></head><body>
-<h1>${esc(l.titulo)}</h1><p>${esc(l.termoAbertura)}</p>${paginas}<p>${esc(l.termoEncerramento)}</p>
+<h1>${esc(l.titulo)}</h1><p>${esc(gravado('abertura') ?? l.termoAbertura)}</p>${paginas}<p>${esc(gravado('encerramento') ?? l.termoEncerramento)}</p>
 ${l.fechado ? `<p>Fechado por ${esc(l.fechado.por)} em ${esc(l.fechado.em)}; guarda até ${esc(l.fechado.guardaAte)}; impressão digital ${esc(l.fechado.hash)}.</p>` : ''}
 </body></html>`;
   }
 
   async fecharLivro(s: SessaoCadastro, livro: number, inicio: string, fim: string, oficial: boolean) {
-    const l = await this.livro(s, livro, inicio, fim);
+    const l = await this.livro(s, livro, inicio, fim, oficial);
     const chaveOficial = (await this.apoios.apoios.livroOficial.liberacao(s)).ligada;
     const montado: LivroMontado = { ...l.montado, modo: oficial ? 'oficial' : 'conferencia' };
+    // O oficial guarda antes o conteúdo na porta de arquivos (ADR 0004); só depois das regras que não leem o banco,
+    // para não guardar arquivo de quem não pode fechar. A gravação confere o hash do arquivo com o do livro.
+    let conteudo: { arquivo: number; hash: string } | null = null;
+    if (oficial) {
+      const r0 = conferirFechamentoLivro({
+        responsavelTecnico: s.pode('suprimentos.livro.fechar'),
+        inicio: montado.inicio,
+        fim: montado.fim,
+        oficial,
+        chaveOficialLigada: chaveOficial,
+        jaFechado: false,
+      });
+      if (r0) throw recusa(r0.codigo, r0.mensagem, r0.campos ? { campos: r0.campos } : {});
+      if (this.apoios.porta.guardarConteudoLivro)
+        conteudo = await this.apoios.porta.guardarConteudoLivro(ctx(s), montado);
+    }
     const r = await this.apoios.apoios.controlados.sgh(
       s,
       EVENTOS_AUDITAVEIS.suprimentosLivroFechado.codigo,
@@ -659,6 +696,7 @@ ${l.fechado ? `<p>Fechado por ${esc(l.fechado.por)} em ${esc(l.fechado.em)}; gua
           usuario: s.login,
           responsavelTecnico: s.pode('suprimentos.livro.fechar'),
           chaveOficialLigada: chaveOficial,
+          conteudo,
         }),
     );
     return resultado(

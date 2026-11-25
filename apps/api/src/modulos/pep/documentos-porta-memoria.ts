@@ -3,7 +3,12 @@
 // encerrado), com catálogo de exames, kits, resultados (um potássio crítico), modelos de impressão e alergias
 // sintéticos. As gravações conferem a entrada pelos MESMOS esquemas das receitas do executor e guardam o que o
 // adaptador gravaria, por estabelecimento; nada vai à cópia. Marca "SINTETICO".
-import { statusDaRecusaObito, validarCancelamentoObito } from '@sgh/dominio-pep';
+import {
+  linhaDoTempoDaAlergia,
+  manifestacoesDoPedido,
+  statusDaRecusaObito,
+  validarCancelamentoObito,
+} from '@sgh/dominio-pep';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import {
   type CompletudePainelLida,
@@ -168,6 +173,13 @@ const AGENTES = [
   { id: 3, nome: `CAMARÃO ${M}`, tipo: 'Alimento' },
   { id: 4, nome: `LÁTEX ${M}`, tipo: 'Outro' },
 ];
+/** Manifestações SINTÉTICAS do catálogo (a porta própria lê manifestacao_alergica). */
+const MANIFESTACOES = [
+  { id: 1, codigo: 'SINT-URT', nome: `URTICÁRIA ${M}` },
+  { id: 2, codigo: 'SINT-BRO', nome: `BRONCOESPASMO ${M}` },
+  { id: 3, codigo: 'SINT-EDE', nome: `EDEMA ${M}` },
+];
+
 const PRINCIPIOS = [
   { id: 1, nome: `METAMIZOL ${M}` },
   { id: 2, nome: `BENZILPENICILINA ${M}` },
@@ -187,8 +199,13 @@ type CampoAlergiaCompleta =
 
 interface Estado {
   alergias: (Omit<AlergiaDoProntuarioLida, CampoAlergiaCompleta> &
-    Partial<Pick<AlergiaDoProntuarioLida, CampoAlergiaCompleta>> & { paciente: number })[];
-  documentos: (DocumentoProprioLido & { eventos: { tipo: string; em: string }[] })[];
+    Partial<Pick<AlergiaDoProntuarioLida, CampoAlergiaCompleta>> & {
+      paciente: number;
+      manifestacoes?: readonly number[];
+    })[];
+  documentos: (DocumentoProprioLido & {
+    eventos: { tipo: string; em: string; justificativa?: string }[];
+  })[];
   legados: (DocumentoHistoricoLido & {
     familia: 'receita' | 'atestado' | 'externo';
     tpPadrao: number | null;
@@ -978,6 +995,39 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   async catalogoAlergias() {
     return { agentes: AGENTES, principios: PRINCIPIOS };
   }
+  async manifestacoesAlergicas() {
+    return MANIFESTACOES.map((m) => ({ ...m }));
+  }
+  /** A linha do tempo que a memória sabe dar: a inclusão e, se retirada, a retirada com o motivo (03-PEP L100). */
+  async historicoAlergia(c: ContextoDocs, paciente: number, alergia: number) {
+    const a = this.est(c.hospital).alergias.find((x) => x.id === alergia && x.paciente === paciente);
+    if (!a)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Alergia não encontrada',
+        'A alergia não é deste paciente.',
+      );
+    const ids = new Set(a.manifestacoes ?? []);
+    return {
+      alergia,
+      manifestacoes: MANIFESTACOES.filter((m) => ids.has(m.id)),
+      passos: linhaDoTempoDaAlergia([
+        { id: 1, evento: 'inclusao', ocorridoEm: a.registradaEm, profissional: a.profissional, motivo: null },
+        ...(a.ativa
+          ? []
+          : [
+              {
+                id: 2,
+                evento: 'inativacao',
+                ocorridoEm: a.inativadaEm ?? null,
+                profissional: null,
+                motivo: a.motivoInativacao ?? null,
+              },
+            ]),
+      ]),
+    };
+  }
   async registrosParaAlergia(c: ContextoDocs, atendimento: number, cbos: readonly number[]) {
     return this.regs(c.hospital)
       .filter((r) => r.atendimento === atendimento && cbos.includes(r.cbo) && !r.suspenso)
@@ -1244,6 +1294,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
           registradaEm: agora,
           profissional: `PROFISSIONAL ${M}`,
           principios: PRINCIPIOS.filter((p) => x.principios.includes(p.id)).map((p) => p.nome),
+          manifestacoes: manifestacoesDoPedido(false, x.manifestacoes),
         });
         const documento = this.novoDocumento(c.hospital, {
           tipo: 'alergia',
@@ -1280,7 +1331,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             'A lista de alergias mudou desde a leitura.',
           );
         const i = e.alergias.indexOf(a);
-        e.alergias[i] = { ...a, ativa: false };
+        e.alergias[i] = { ...a, ativa: false, inativadaEm: agora, motivoInativacao: x.motivo };
         await this.auditar(c, login, 'pep.alergia.inativada', {
           tabela: 'alergia_paciente',
           id: a.id,
@@ -1961,7 +2012,37 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     },
   ) {
     const d = this.est(c.hospital).documentos.find((x) => x.id === ev.documento);
-    if (d) d.eventos.push({ tipo: ev.tipo, em: new Date().toISOString() });
+    // Como no banco: a justificativa (01-ADM L82) fica no próprio evento.
+    if (d)
+      d.eventos.push({
+        tipo: ev.tipo,
+        em: new Date().toISOString(),
+        ...(ev.justificativa ? { justificativa: ev.justificativa } : {}),
+      });
+  }
+
+  /** As exportações do prontuário gravadas (como exportacao_documento no banco; 01-ADM L82). */
+  readonly exportacoes: {
+    hospital: string;
+    paciente: number;
+    justificativa: string;
+    tipoJustificativa: number | null;
+    linhas: number;
+    hash: string;
+  }[] = [];
+
+  async registrarExportacaoProntuario(
+    c: ContextoGravacaoPep,
+    e: {
+      paciente: number;
+      justificativa: string;
+      tipoJustificativa?: number | null;
+      linhas: number;
+      hash: string;
+    },
+  ) {
+    this.exportacoes.push({ hospital: c.hospital, ...e, tipoJustificativa: e.tipoJustificativa ?? null });
+    return { id: this.exportacoes.length };
   }
 
   async trazerPedidosAnteriores() {

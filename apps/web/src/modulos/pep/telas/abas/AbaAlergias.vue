@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
 import { inativarAlergia, lerAlergias, registrarAlergia } from '../../api-documentos.js';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
+import HistoricoDaAlergia from './HistoricoDaAlergia.vue';
 import { dataHoraBr } from '../../formato.js';
 
 const props = defineProps<{ paciente: number }>();
@@ -35,6 +36,7 @@ const reacao = ref('');
 const gravidade = ref<GravidadeAlergia | ''>('');
 const origem = ref<OrigemAlergia | ''>('');
 const observacao = ref('');
+const manifestacoes = ref<number[]>([]);
 const motivo = ref('');
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
@@ -79,11 +81,13 @@ async function registrar(): Promise<void> {
       ...(gravidade.value ? { gravidade: gravidade.value } : {}),
       ...(origem.value ? { origem: origem.value } : {}),
       ...(observacao.value.trim() ? { observacao: observacao.value.trim() } : {}),
+      manifestacoes: nega.value ? [] : manifestacoes.value,
       versao: versao.value,
     });
     mensagem.value = t('pep.doc.gravado');
     agente.value = null;
     reacao.value = '';
+    manifestacoes.value = [];
     await atualizar();
   } catch (e) {
     erro.value = e;
@@ -124,6 +128,7 @@ async function inativar(id: number): Promise<void> {
           <p>
             {{ dataHoraBr(a.registradaEm) }}<span v-if="a.profissional"> · {{ a.profissional }}</span>
           </p>
+          <HistoricoDaAlergia :paciente="paciente" :alergia="a.id" />
           <div v-if="dados.data.value.inativar.pode" class="linha">
             <label class="campo">
               <span>{{ t('pep.doc.motivo') }}</span>
@@ -143,6 +148,7 @@ async function inativar(id: number): Promise<void> {
         <ul class="lista">
           <li v-for="a in dados.data.value.historico" :key="a.id" class="cartao">
             {{ a.agente }} · {{ dataHoraBr(a.registradaEm) }}
+            <HistoricoDaAlergia :paciente="paciente" :alergia="a.id" />
           </li>
         </ul>
       </details>
@@ -181,6 +187,18 @@ async function inativar(id: number): Promise<void> {
             :rotulo="t('pep.doc.alergias.principios')"
             :opcoes="opcoesPrincipio"
           />
+          <fieldset v-if="dados.data.value.manifestacoes.length" data-testid="alergia-manifestacoes">
+            <legend>{{ t('pep.doc.alergias.manifestacoes') }}</legend>
+            <label v-for="m in dados.data.value.manifestacoes" :key="m.id" class="marca"
+              ><input
+                v-model="manifestacoes"
+                type="checkbox"
+                :value="m.id"
+                :disabled="manifestacoes.length >= 10 && !manifestacoes.includes(m.id)"
+                :data-testid="`alergia-manifestacao-${m.id}`"
+              />{{ m.nome }}</label
+            >
+          </fieldset>
           <label
             ><span>{{ t('pep.doc.alergias.reacao') }}</span
             ><input v-model="reacao" maxlength="200" data-testid="alergia-reacao"

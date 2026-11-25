@@ -9,6 +9,7 @@
 //   POST /api/faturamento/empresas-auditoria                   faturamento.regra.editar
 //   POST /api/faturamento/empresas-auditoria/:id/ativo         faturamento.regra.editar
 //   GET  /api/faturamento/protocolos-tramite?setor=            faturamento.conta.ler
+//   GET  /api/faturamento/protocolos-tramite/alvos?tipo=&numero= faturamento.conta.ler (item pelo número de negócio)
 //   POST /api/faturamento/protocolos-tramite                   faturamento.protocolo.registrar (emitir)
 //   POST /api/faturamento/protocolos-tramite/:id/envio         faturamento.protocolo.registrar
 //   POST /api/faturamento/protocolos-tramite/:id/conferencia   faturamento.protocolo.registrar
@@ -19,8 +20,22 @@
 //   POST /api/faturamento/guias/:id/pendencias                 faturamento.pendencia.editar
 //   POST /api/faturamento/guias/pendencias/:id/resolucao       faturamento.pendencia.editar
 //   POST /api/faturamento/guias/:id/responsavel                faturamento.pendencia.editar
-//   POST /api/faturamento/guias/:id/anexos                     faturamento.pendencia.editar (conteúdo em base64)
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
+//   POST /api/faturamento/guias/:id/anexos                     faturamento.pendencia.editar (conteúdo em base64, corpo
+//                                                               `application/vnd.sgh.anexos+json` com teto de 15 MB)
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  type OnModuleInit,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
+import { LIMITE_CORPO_ANEXOS_PORTAL, TIPO_CORPO_ANEXOS_PORTAL } from '@sgh/contratos';
 import { validarAnexoGuia } from '@sgh/dominio-faturamento';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { recusa } from '@sgh/nucleo';
@@ -38,6 +53,7 @@ import {
   type NomeOperacaoAuditoriaTramite,
   protocolosPropria,
 } from './auditoria-tramite-propria.js';
+import { alvosProtocoloPropria, entradaBuscaAlvo } from './protocolo-alvos-propria.js';
 
 export const SERVICO_AUDITORIA_TRAMITE = Symbol('SERVICO_AUDITORIA_TRAMITE');
 const EXECUTOR = 'executor: trilha e autoria na mesma transação';
@@ -68,9 +84,34 @@ export class ServicoAuditoriaTramite {
 const objeto = (c: unknown): Record<string, unknown> =>
   c !== null && typeof c === 'object' && !Array.isArray(c) ? (c as Record<string, unknown>) : {};
 
+/** O pedaço do Fastify usado para o tipo do corpo com anexo (o JSON padrão, com teto próprio). */
+interface InstanciaComParser {
+  hasContentTypeParser(tipo: string): boolean;
+  addContentTypeParser(tipo: string, opcoes: { parseAs: 'string'; bodyLimit: number }, parser: unknown): void;
+  getDefaultJsonParser(proto: 'error', construtor: 'error'): unknown;
+}
+
 @Controller()
-export class AuditoriaTramiteController {
-  constructor(@Inject(SERVICO_AUDITORIA_TRAMITE) private readonly servico: ServicoAuditoriaTramite | null) {}
+export class AuditoriaTramiteController implements OnModuleInit {
+  constructor(
+    @Inject(SERVICO_AUDITORIA_TRAMITE) private readonly servico: ServicoAuditoriaTramite | null,
+    private readonly adaptador: HttpAdapterHost,
+  ) {}
+
+  /**
+   * O anexo da guia (até 10 MB, que em base64 vira cerca de 13,4 MB) passa do teto padrão do JSON (1 MB): ele vem com o
+   * tipo próprio do corpo com anexos, com o mesmo parser JSON seguro do Fastify e o teto de 15 MB. O registro é único na
+   * instância (o portal do prestador registra o mesmo tipo; quem chegar primeiro registra).
+   */
+  onModuleInit(): void {
+    const f = this.adaptador.httpAdapter?.getInstance?.() as InstanciaComParser | undefined;
+    if (!f?.hasContentTypeParser || f.hasContentTypeParser(TIPO_CORPO_ANEXOS_PORTAL)) return;
+    f.addContentTypeParser(
+      TIPO_CORPO_ANEXOS_PORTAL,
+      { parseAs: 'string', bodyLimit: LIMITE_CORPO_ANEXOS_PORTAL },
+      f.getDefaultJsonParser('error', 'error'),
+    );
+  }
 
   private s(): ServicoAuditoriaTramite {
     if (!this.servico)
@@ -165,6 +206,20 @@ export class AuditoriaTramiteController {
   protocolos(@Query('setor') setor: string | undefined, @Req() req: RequisicaoAutorizada) {
     const st = setor ? inteiro(setor, 'setor') : null;
     return this.rodar(() => this.s().ler(ctxDe(req, ORIGEM), (l, est) => protocolosPropria(l, est, st)));
+  }
+
+  /** O item do lote pelo número de negócio (conta, atendimento, prontuário do volume, atendimento do documento). */
+  @Get('faturamento/protocolos-tramite/alvos')
+  @Permissao('faturamento.conta.ler')
+  alvosProtocolo(
+    @Query('tipo') tipo: string | undefined,
+    @Query('numero') numero: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.rodar(async () => {
+      const e = entradaBuscaAlvo(tipo, numero);
+      return this.s().ler(ctxDe(req, ORIGEM), (l, est) => alvosProtocoloPropria(l, est, e.tipo, e.numero));
+    });
   }
 
   @Post('faturamento/protocolos-tramite')

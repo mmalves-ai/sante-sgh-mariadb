@@ -31,6 +31,8 @@ import { PORTA_ATENDIMENTO, type PortaAtendimento } from '../atendimento/porta.j
 import type { ContextoModulo } from '../registro.js';
 import { CENTRAL_AVISOS_QUALIDADE, type CentralAvisosQualidade } from './central-pendencias.js';
 import { AgravoController } from './agravo.controller.js';
+import { AnaliseCulturaController, PORTA_ANALISE_CULTURA } from './analise-cultura.controller.js';
+import { PortaAnaliseCulturaPropria } from './porta-analise-cultura-propria.js';
 import { CcihController } from './ccih.controller.js';
 import { GestaoQualidadeController } from './gestao.controller.js';
 import { NotificacaoController } from './notificacao.controller.js';
@@ -124,6 +126,7 @@ export async function modulo(
       NotificacaoController,
       SegurancaPacienteController,
       CcihController,
+      AnaliseCulturaController,
       AgravoController,
       GestaoQualidadeController,
       RevisaoProntuarioController,
@@ -131,6 +134,12 @@ export async function modulo(
     providers: [
       { provide: PORTA_QUALIDADE, useValue: opcoes.qualidade ?? padrao?.qualidade },
       { provide: PORTA_CCIH, useValue: opcoes.ccih ?? padrao?.ccih },
+      // A análise da cultura positiva (F7, 09-AREA linha 68): só a porta própria; sem banco, a rota responde 503.
+      {
+        provide: PORTA_ANALISE_CULTURA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaAnaliseCulturaPropria(ctx.nucleo) : null,
+      },
       { provide: PORTA_AGRAVO, useValue: opcoes.agravo ?? padrao?.agravo },
       { provide: PORTA_GESTAO, useValue: opcoes.gestao ?? padrao?.gestao },
       { provide: RESUMO_SUGESTAO, useValue: resumo },

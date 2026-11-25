@@ -16,10 +16,20 @@ import {
 import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import type { ContextoModulo } from '../registro.js';
 import { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemoria } from './armazem.js';
+import { CartaoController } from './cartao.controller.js';
+import { comCartaoNoFluxo } from './cartao-propria.js';
+import { CompensacaoPrevisaoController } from './compensacao-previsao.controller.js';
 import { ContabilFiscalController } from './contabil-fiscal.controller.js';
+import { EscrituracaoEfdController } from './escrituracao-efd.controller.js';
+import { RetencaoSofridaController } from './retencao-sofrida.controller.js';
 import { FinanceiroController } from './financeiro.controller.js';
 import { GestaoFinanceiroController } from './gestao.controller.js';
+import { PagamentoEletronicoController } from './pagamento-eletronico.controller.js';
+import { NotaCessaoController } from './nota-cessao.controller.js';
+import { NotaServicoController } from './nota-servico.controller.js';
 import { NUCLEO_PERIODO_FINANCEIRO, PeriodoFinanceiroController } from './periodo.controller.js';
+import { ReceberAcordosController } from './receber-acordos.controller.js';
+import { ReinfEventosController } from './reinf-eventos.controller.js';
 import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
 import { PortaFinanceiroMemoria } from './porta-memoria.js';
 import { portaFinanceiroIndisponivel, PortaFinanceiroPropria } from './porta-propria.js';
@@ -39,7 +49,8 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
   const porta: PortaFinanceiro =
     opcoes.porta ??
     (ctx.nucleo
-      ? new PortaFinanceiroPropria(ctx.nucleo)
+      ? // F3.8 (07-FIN linha 89): as parcelas previstas de cartão entram no fluxo de caixa projetado.
+        comCartaoNoFluxo(new PortaFinanceiroPropria(ctx.nucleo), ctx.nucleo)
       : memoria
         ? new PortaFinanceiroMemoria(null)
         : portaFinanceiroIndisponivel());
@@ -67,6 +78,16 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       PeriodoFinanceiroController,
       GestaoFinanceiroController,
       ContabilFiscalController,
+      EscrituracaoEfdController,
+      RetencaoSofridaController,
+      CompensacaoPrevisaoController,
+      PagamentoEletronicoController,
+      ReinfEventosController,
+      ReceberAcordosController,
+      NotaCessaoController,
+      // F3.8, 07-FIN linha 113: o ciclo da nota de serviço (lote, cancelamento, substituição, histórico).
+      NotaServicoController,
+      CartaoController,
     ],
     providers: [
       { provide: PORTA_FINANCEIRO, useValue: porta },

@@ -18,6 +18,11 @@ export interface MensagemErro {
   readonly texto: string;
   readonly correlacao: string | null;
   readonly tipo: TipoProblema | 'rede';
+  /**
+   * Só na recusa de negócio: o motivo que a regra do domínio escreveu em português para o usuário (`detail`).
+   * Os demais tipos nunca mostram o texto do servidor.
+   */
+  readonly motivo?: string | null;
 }
 
 const POR_STATUS: Partial<Record<number, TipoProblema>> = {
@@ -32,16 +37,30 @@ const POR_STATUS: Partial<Record<number, TipoProblema>> = {
   503: 'indisponivel',
 };
 
-/** Nunca usa `detail` nem `title` do servidor no texto: só os textos pt-BR da aplicação. */
+/** O 409 com `codigo` e sem as alterações do conflito de versão é recusa de negócio, não conflito de versão. */
+function recusaPeloCodigo(erro: ErroApi): boolean {
+  const p = erro.problema;
+  return erro.status === 409 && !!p?.codigo && !p.alteracoes;
+}
+
+/**
+ * Título e texto são sempre os textos pt-BR da aplicação. O `detail` do servidor só aparece como motivo da
+ * recusa de negócio, porque ali ele é a frase da regra para o usuário ("Confira o motivo abaixo").
+ */
 export function mensagemDoErro(erro: unknown): MensagemErro {
   if (erro instanceof ErroApi) {
     const tipo =
-      (erro.problema && tipoDoProblema(erro.problema)) ?? POR_STATUS[erro.status] ?? 'erro-interno';
+      (erro.problema && tipoDoProblema(erro.problema)) ??
+      (recusaPeloCodigo(erro) ? 'recusa-de-negocio' : undefined) ??
+      POR_STATUS[erro.status] ??
+      'erro-interno';
+    const motivo = tipo === 'recusa-de-negocio' ? erro.problema?.detail?.trim() || null : null;
     return {
       tipo,
       titulo: `erros.${tipo}.titulo`,
       texto: `erros.${tipo}.texto`,
       correlacao: erro.problema?.correlacao ?? null,
+      motivo,
     };
   }
   if (erro instanceof TypeError) {

@@ -264,6 +264,8 @@ export const mensagensSuprimentos = {
       'O setor pede o material ao estoque; o estoque atende no todo ou em parte pela saída ligada à requisição.',
     nova: 'Nova requisição',
     localAtende: 'Local que atende',
+    urgente: 'Urgente (o local que só atende urgência recusa a requisição comum)',
+    doKit: 'do kit padrão',
     enviar: 'Enviar a requisição',
     numero: 'Requisição {n}',
     pedida: 'Pedida',

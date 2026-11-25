@@ -175,18 +175,6 @@ describe('D-PROF-39: inclusão e edição do profissional (memória)', () => {
         .statusCode,
     ).toBe(200);
     expect(
-      (
-        await enviar(s, 'PUT', `${P}/4/lotacao`, {
-          registro: reg,
-          unidade: 2,
-          horasAmbulatorio: 10,
-          horasHospital: 0,
-          horasOutros: 0,
-          ativo: true,
-        })
-      ).statusCode,
-    ).toBe(200);
-    expect(
       (await enviar(s, 'PUT', `${P}/4/credenciamentos`, { registro: reg, convenio: 10, credenciado: true }))
         .statusCode,
     ).toBe(200);
@@ -200,9 +188,8 @@ describe('D-PROF-39: inclusão e edição do profissional (memória)', () => {
         (e: { registro: number; codigo: number }) => e.registro === reg && e.codigo === 2,
       ),
     ).toBe(true);
-    expect(
-      g.lotacao.some((e: { registro: number; unidade: number }) => e.registro === reg && e.unidade === 2),
-    ).toBe(true);
+    // F3.1 (02-CAD linha 18): a lotação antiga por registro saiu; a rota não existe mais (a nova é `lotacoes`).
+    expect((await enviar(s, 'PUT', `${P}/4/lotacao`, { registro: reg, unidade: 2 })).statusCode).toBe(404);
     // IDOR: o registro 10 é da ANA (3), não do BRUNO (4).
     expect(
       (await enviar(s, 'PUT', `${P}/4/especialidades`, { registro: 10, especialidade: 2, ativo: true }))
@@ -221,13 +208,10 @@ describe('D-PROF-39: inclusão e edição do profissional (memória)', () => {
     const rec = await entrar('SINT.RECEPCAO');
     expect(
       (
-        await enviar(rec, 'PUT', `${P}/4/lotacao`, {
+        await enviar(rec, 'PUT', `${P}/4/credenciamentos`, {
           registro: reg,
-          unidade: 1,
-          horasAmbulatorio: 1,
-          horasHospital: 0,
-          horasOutros: 0,
-          ativo: true,
+          convenio: 10,
+          credenciado: true,
         })
       ).statusCode,
     ).toBe(403);
@@ -415,7 +399,7 @@ describe('D-PROF-39: login do profissional, inativar/reativar e exclusão só se
         'cadastro.excluirProfissional',
       ]),
     );
-    expect(f.operacoes).toHaveLength(12);
+    expect(f.operacoes).toHaveLength(11);
     expect(f.operacoes.every((o) => typeof o.ligada === 'boolean')).toBe(true);
   });
 

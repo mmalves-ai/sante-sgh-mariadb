@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
-import { horasValidas, operacaoLigada } from '../profissional-tela.js';
+import { operacaoLigada } from '../profissional-tela.js';
 import {
   alterarDadosProfissional,
   excluirRegistroProfissional,
@@ -24,12 +24,11 @@ import {
   definirEspecialidadeProfissional,
   incluirRegistroProfissional,
   lerOpcoesProfissional,
-  lotarProfissional,
 } from '../api-cadastro.js';
 
 const props = defineProps<{
   ficha: FichaProfissional;
-  secao: 'dados' | 'registros' | 'especialidades' | 'lotacao' | 'convenios';
+  secao: 'dados' | 'registros' | 'especialidades' | 'convenios';
 }>();
 const emit = defineEmits<{ gravado: [] }>();
 const { t } = useI18n();
@@ -253,42 +252,6 @@ const especialidadesEditaveis = computed(() =>
   props.ficha.especialidades.filter((e) => reais.value.some((r) => r.id === e.registro)),
 );
 
-// ── Lotação ──
-const nl = ref({
-  registro: null as number | null,
-  unidade: null as number | null,
-  horasAmbulatorio: '0',
-  horasHospital: '0',
-  horasOutros: '0',
-  ativo: true,
-});
-async function gravarLotacao(): Promise<void> {
-  const x = nl.value;
-  if (x.registro === null || x.unidade === null) {
-    recusa.value = T('obrigatorios');
-    return;
-  }
-  // Só inteiro: "1,5" é recusado com o motivo (antes virava 15 em silêncio).
-  const horas = [x.horasAmbulatorio, x.horasHospital, x.horasOutros].map(horasValidas);
-  if (horas.some((v) => v === null)) {
-    recusa.value = T('horasInvalidas');
-    return;
-  }
-  const [amb = 0, hosp = 0, out = 0] = horas as number[];
-  const registro = x.registro;
-  const unidade = x.unidade;
-  await executar(() =>
-    lotarProfissional(props.ficha.id, {
-      registro,
-      unidade,
-      horasAmbulatorio: amb,
-      horasHospital: hosp,
-      horasOutros: out,
-      ativo: x.ativo,
-    }),
-  );
-}
-
 // ── Credenciamento ──
 const nc = ref({ registro: null as number | null, convenio: null as number | null });
 async function credenciar(): Promise<void> {
@@ -484,56 +447,6 @@ const credenciamentosEditaveis = computed(() =>
           tipo="submit"
           :desabilitado="gravando"
           data-testid="incluir-especialidade"
-        />
-      </form>
-    </template>
-
-    <template v-if="secao === 'lotacao'">
-      <h3>{{ t('cadastro.profissionais.lotacao') }}</h3>
-      <form
-        class="grade"
-        :aria-label="T('gravarLotacao')"
-        data-testid="form-lotacao"
-        @submit.prevent="gravarLotacao"
-      >
-        <SanteSelecao
-          v-model="nl.registro"
-          :rotulo="T('registroAlvo')"
-          :opcoes="registros"
-          busca
-          data-testid="nl-registro"
-        />
-        <SanteSelecao
-          v-model="nl.unidade"
-          :rotulo="T('unidade')"
-          :opcoes="lista(o?.unidades)"
-          busca
-          data-testid="nl-unidade"
-        />
-        <div class="campo">
-          <label for="nl-amb">{{ T('horasAmbulatorio') }}</label>
-          <input
-            id="nl-amb"
-            v-model="nl.horasAmbulatorio"
-            inputmode="numeric"
-            maxlength="3"
-            data-testid="nl-amb"
-          />
-        </div>
-        <div class="campo">
-          <label for="nl-hosp">{{ T('horasHospital') }}</label>
-          <input id="nl-hosp" v-model="nl.horasHospital" inputmode="numeric" maxlength="3" />
-        </div>
-        <div class="campo">
-          <label for="nl-out">{{ T('horasOutros') }}</label>
-          <input id="nl-out" v-model="nl.horasOutros" inputmode="numeric" maxlength="3" />
-        </div>
-        <label class="marcar"><input v-model="nl.ativo" type="checkbox" /> {{ T('lotacaoAtiva') }}</label>
-        <SanteBotao
-          :rotulo="T('gravarLotacao')"
-          tipo="submit"
-          :desabilitado="gravando"
-          data-testid="gravar-lotacao"
         />
       </form>
     </template>

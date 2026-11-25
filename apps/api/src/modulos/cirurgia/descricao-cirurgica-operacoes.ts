@@ -104,10 +104,11 @@ export async function profissionalDaConta(tx: TxOperacao, estabelecimento: numbe
 /** O ato do estabelecimento, travado, com a janela e a equipe; recusa o cancelado e o de outro estabelecimento. */
 async function atoTravado(tx: TxOperacao, ato: number) {
   const e = est(tx);
-  const a = await tx.uma(
+  const [a] = await tx.consultarParaAtualizar(
     `SELECT id, situacao, entrada_sala_em, saida_sala_em FROM ato_cirurgico
-      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [ato, e],
+    { teto: 1 },
   );
   if (!a || texto(a['situacao']) === 'cancelado')
     throw recusa('registro-inexistente', 'O ato cirúrgico não existe neste estabelecimento.');
@@ -195,13 +196,14 @@ const salvar = definirOperacao<SalvarDescricaoEntrada, ResultadoOperacao>({
     const ato = await atoTravado(tx, e.ato);
     const conta = await profissionalDaConta(tx, ato.est);
     const prof = regra(() => conferirAutorDaDescricao(conta, ato.equipe));
-    const linha = await tx.uma(
-      'SELECT * FROM descricao_cirurgica WHERE ato_cirurgico_id = ? AND cirurgiao_profissional_id = ? FOR UPDATE',
+    const [linha] = await tx.consultarParaAtualizar(
+      'SELECT * FROM descricao_cirurgica WHERE ato_cirurgico_id = ? AND cirurgiao_profissional_id = ?',
       [e.ato, prof],
+      { teto: 1 },
     );
     regra(() =>
       conferirGravacaoDescricao(
-        atual(linha),
+        atual(linha ?? null),
         { profissional: prof, versao: e.versao, assinar: e.assinar },
         {
           descricaoTecnica: e.descricaoTecnica,
@@ -256,13 +258,14 @@ const adendo = definirOperacao<AdendoDescricaoEntrada, ResultadoOperacao>({
   tabelas: ['descricao_cirurgica', 'descricao_cirurgica_adendo'],
   entrada: esquemaAdendoDescricao as never,
   async gravar(tx, e) {
-    const linha = await tx.uma(
+    const [linha] = await tx.consultarParaAtualizar(
       `SELECT d.* FROM descricao_cirurgica d JOIN ato_cirurgico a ON a.id = d.ato_cirurgico_id
-        WHERE d.id = ? AND a.estabelecimento_id = ? AND d.excluido_em IS NULL FOR UPDATE`,
+        WHERE d.id = ? AND a.estabelecimento_id = ? AND d.excluido_em IS NULL`,
       [e.descricao, est(tx)],
+      { teto: 1 },
     );
     const conta = await profissionalDaConta(tx, est(tx));
-    regra(() => conferirAdendoDescricao(atual(linha), conta, e));
+    regra(() => conferirAdendoDescricao(atual(linha ?? null), conta, e));
     const d = linha!;
     const s = await tx.uma<{ s: number | null }>(
       'SELECT MAX(sequencia) AS s FROM descricao_cirurgica_adendo WHERE descricao_cirurgica_id = ?',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Guias do convênio no hospital (F3.7, 06-FAT linha 24): `/faturamento/guias-convenio`.
 // A fila mostra as guias abertas (pendentes primeiro, com a contagem de pendências, o responsável e a marca da
 // cirurgia); ao escolher uma, o painel ao lado reúne a resposta da operadora (número, senha, validade, dias), as
@@ -182,15 +183,15 @@ async function anexar() {
     <ErroFaturamento v-if="erro" :erro="erro" />
     <p v-if="aviso" role="status">{{ aviso }}</p>
     <div class="filtros">
-      <label>
-        {{ t('auditoriaTramite.guia.filtro') }}
-        <select v-model="situacao" data-testid="gc-situacao">
-          <option :value="null">{{ t('auditoriaTramite.guia.abertas') }}</option>
-          <option v-for="s in SITUACOES" :key="s" :value="s">
-            {{ t(`auditoriaTramite.guia.situacoes.${s}`) }}
-          </option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="situacao"
+        :rotulo="t('auditoriaTramite.guia.filtro')"
+        :opcoes="[
+          { valor: null, rotulo: t('auditoriaTramite.guia.abertas') },
+          ...SITUACOES.map((x) => ({ valor: x, rotulo: t(`auditoriaTramite.guia.situacoes.${x}`) })),
+        ]"
+        data-testid="gc-situacao"
+      />
       <label><input v-model="minhas" type="checkbox" /> {{ t('auditoriaTramite.guia.minhas') }}</label>
       <label
         ><input v-model="cirurgia" type="checkbox" data-testid="gc-fila-cirurgia" />
@@ -268,11 +269,15 @@ async function anexar() {
 
       <form class="filtros" data-testid="gc-form-resposta" @submit.prevent="responder">
         <h3>{{ t('auditoriaTramite.guia.resposta') }}</h3>
-        <select v-model="resposta.resposta" data-testid="gc-resposta">
-          <option v-for="r in RESPOSTAS" :key="r" :value="r">
-            {{ t(`auditoriaTramite.guia.respostas.${r}`) }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="resposta.resposta"
+          :rotulo="t('auditoriaTramite.guia.resposta')"
+          ocultar-rotulo
+          :opcoes="[
+            ...RESPOSTAS.map((x) => ({ valor: x, rotulo: t(`auditoriaTramite.guia.respostas.${x}`) })),
+          ]"
+          data-testid="gc-resposta"
+        />
         <label>
           {{ t('auditoriaTramite.guia.operadora') }}
           <input v-model="resposta.numeroOperadora" maxlength="20" />
@@ -323,11 +328,13 @@ async function anexar() {
         </li>
       </ul>
       <form class="filtros" data-testid="gc-form-pendencia" @submit.prevent="abrirPendencia">
-        <select v-model.number="pendencia.motivoId" data-testid="gc-motivo">
-          <option v-for="m in guia.data.value.motivosPendencia" :key="m.id" :value="m.id">
-            {{ m.descricao }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="pendencia.motivoId"
+          :rotulo="t('auditoriaTramite.motivo')"
+          ocultar-rotulo
+          :opcoes="[...guia.data.value.motivosPendencia.map((m) => ({ valor: m.id, rotulo: m.descricao }))]"
+          data-testid="gc-motivo"
+        />
         <input v-model="pendencia.descricao" maxlength="500" :placeholder="t('auditoriaTramite.motivo')" />
         <label>
           {{ t('auditoriaTramite.guia.prazo') }}
@@ -350,11 +357,17 @@ async function anexar() {
         </li>
       </ul>
       <form class="filtros" data-testid="gc-form-anexo" @submit.prevent="anexar">
-        <select v-model="anexo.tipoDocumento">
-          <option v-for="tp in TIPOS_ANEXO_GUIA" :key="tp" :value="tp">
-            {{ t(`auditoriaTramite.guia.tiposAnexo.${tp}`) }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="anexo.tipoDocumento"
+          :rotulo="t('auditoriaTramite.guia.tipoDocumento')"
+          ocultar-rotulo
+          :opcoes="[
+            ...TIPOS_ANEXO_GUIA.map((x) => ({
+              valor: x,
+              rotulo: t(`auditoriaTramite.guia.tiposAnexo.${x}`),
+            })),
+          ]"
+        />
         <input type="file" accept="application/pdf,image/jpeg,image/png" @change="escolherArquivo" />
         <p v-for="(m, k) in errosAnexo" :key="k" role="alert">{{ m }}</p>
         <button type="submit" :disabled="!anexo.arquivo || Object.keys(errosAnexo).length > 0">
@@ -380,7 +393,7 @@ async function anexar() {
 
 <style scoped>
 .alerta {
-  color: var(--cor-erro, #b00020);
+  color: var(--sgh-alerta);
   font-weight: 600;
 }
 </style>

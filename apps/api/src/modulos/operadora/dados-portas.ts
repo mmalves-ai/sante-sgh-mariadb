@@ -423,7 +423,14 @@ export interface DadosContratoCobranca {
   readonly produto: number;
   readonly produtoNome: string;
   readonly natureza: string;
-  readonly coparticipacao: { readonly tipo: number; readonly valor: number | null };
+  /** A regra geral de coparticipação vigente (a do contrato prevalece sobre a do plano), com os tetos (08-SGO L98). */
+  readonly coparticipacao: {
+    readonly tipo: number;
+    readonly valor: number | null;
+    readonly tetoEvento?: number | null;
+    readonly tetoMensal?: number | null;
+    readonly tetoAnual?: number | null;
+  };
   readonly precos: readonly number[] | null;
 }
 

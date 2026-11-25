@@ -102,7 +102,9 @@ export class PacientesController {
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
     /** F3.1: regras de campo do cadastro (só no banco do cliente; sem ele, a regra não é conferida). */
-    @Optional() @Inject(FICHA_COMPLEMENTAR) private readonly ficha: FichaComplementarPropria | null = null,
+    @Optional()
+    @Inject(FICHA_COMPLEMENTAR)
+    private readonly fichaComplementar: FichaComplementarPropria | null = null,
   ) {}
 
   /**
@@ -496,8 +498,13 @@ export class PacientesController {
         campos: [...new Set(e.error.issues.map((i) => i.path.join('.')))],
       });
     const ctx = contextoOperacao(s, 'cadastro-paciente');
-    const r = await gravarComRegra(this.ficha, s.porta, e.data, 'cadastro', escopoDaConsulta(consulta), () =>
-      this.porta.cadastrar(s.porta, e.data, ctx),
+    const r = await gravarComRegra(
+      this.fichaComplementar,
+      s.porta,
+      e.data,
+      'cadastro',
+      escopoDaConsulta(consulta),
+      () => this.porta.cadastrar(s.porta, e.data, ctx),
     ).catch((x: unknown) => {
       throw problemaDoCadastro(x);
     });
@@ -532,7 +539,7 @@ export class PacientesController {
       });
     const ctx = contextoOperacao(s, 'cadastro-alteracao');
     const r = await gravarComRegra(
-      this.ficha,
+      this.fichaComplementar,
       s.porta,
       e.data.alteracoes,
       'alteracao',

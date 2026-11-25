@@ -7,8 +7,8 @@
 //   no campo de 20 posições; encerrar a faixa grava a situação e o fim (nunca apaga);
 // - consumo da faixa na emissão: `reservarNumeroGuia(tx, ...)` trava a faixa vigente, devolve o número formatado,
 //   avança o próximo e marca "esgotada" no último; exportado para a emissão da guia chamar na mesma transação,
-//   antes de incluir a guia_tiss (o número nasce com a guia: nada de número provisório). Nenhuma operação insere
-//   guia_tiss ainda, por isso o consumo na emissão segue como falta da 02-CAD linha 25.
+//   antes de incluir a guia_tiss (o número nasce com a guia: nada de número provisório). Quem chama é a geração do
+//   lote (`api/tiss/numeracao-guia.ts`), que grava a guia emitida e o uso do número na faixa.
 // A regra é a do domínio (@sgh/dominio-faturamento); aqui só leitura, conferência no banco e gravação pelo executor.
 import { randomUUID } from 'node:crypto';
 import {
@@ -93,6 +93,10 @@ const MENSAGENS: Record<string, [string, string]> = {
   'tamanho-insuficiente': ['O tamanho fixo não comporta o número final.', 'tamanhoFixo'],
   'numero-longo': ['Prefixo e número passam das 20 posições da guia.', 'tamanhoFixo'],
   'faixa-sobreposta': ['A faixa cruza outra faixa deste tipo de guia.', 'numeroInicial'],
+  'faixa-repete-numero-de-outro-tipo': [
+    'A faixa repete números de uma faixa de outro tipo de guia desta fonte pagadora: o número da guia é único por fonte pagadora. Use outro prefixo ou outro intervalo.',
+    'numeroInicial',
+  ],
 };
 function recusarErros(erros: readonly string[]): void {
   if (!erros.length) return;
@@ -190,9 +194,9 @@ const opGravarConfiguracao = (t: RegistroTrilhaTela) =>
           'Versão do padrão não encontrada ou inativa.',
           'versaoPadrao',
         );
-      const atuais = await tx.consultar(
+      const atuais = await tx.consultarParaAtualizar(
         `SELECT id, vigencia_inicio, vigencia_fim, versao FROM configuracao_tiss_fonte_pagadora
-          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND ativo FOR UPDATE`,
+          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND ativo`,
         [est, e.fontePagadora],
       );
       const lidas = atuais.map((a) => ({
@@ -268,10 +272,11 @@ const opIncluirFaixa = (t: RegistroTrilhaTela) =>
     async gravar(tx, e, ctx) {
       if (!(await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ?', [e.fontePagadora])))
         throw naoAchado('Fonte pagadora');
-      const existentes = await tx.consultar(
-        `SELECT id, numero_inicial, numero_final, proximo_numero, situacao FROM faixa_numeracao_guia
-          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ? FOR UPDATE`,
-        [ctx.estabelecimento, e.fontePagadora, e.tipoGuia],
+      const existentes = await tx.consultarParaAtualizar(
+        `SELECT id, numero_inicial, numero_final, proximo_numero, situacao, tipo_guia, prefixo, tamanho_fixo
+           FROM faixa_numeracao_guia
+          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ?`,
+        [ctx.estabelecimento, e.fontePagadora],
       );
       recusarErros(
         errosFaixa(
@@ -282,6 +287,9 @@ const opIncluirFaixa = (t: RegistroTrilhaTela) =>
             numeroFinal: Number(x['numero_final']),
             proximoNumero: Number(x['proximo_numero']),
             situacao: String(x['situacao']),
+            tipoGuia: String(x['tipo_guia']),
+            prefixo: texto(x['prefixo']),
+            tamanhoFixo: num(x['tamanho_fixo']),
           })),
         ),
       );
@@ -337,6 +345,8 @@ const opEncerrarFaixa = (t: RegistroTrilhaTela) =>
 
 export interface NumeroReservado {
   readonly numero: string;
+  /** O número consumido, sem prefixo nem zeros (a sequência dentro da faixa). */
+  readonly sequencia: number;
   readonly faixa: number;
   readonly esgotada: boolean;
   readonly restantes: number;
@@ -355,11 +365,11 @@ export async function reservarNumeroGuia(
   dia?: string,
 ): Promise<NumeroReservado> {
   const hoje = dia ?? data((await tx.uma<{ d: unknown }>('SELECT CURRENT_DATE AS d', []))?.d)!;
-  const linhas = await tx.consultar(
+  const linhas = await tx.consultarParaAtualizar(
     `SELECT id, prefixo, tamanho_fixo, numero_inicial, numero_final, proximo_numero, vigencia_inicio, vigencia_fim,
             situacao, versao
        FROM faixa_numeracao_guia
-      WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ? AND situacao = 'ativa' FOR UPDATE`,
+      WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ? AND situacao = 'ativa'`,
     [estabelecimento, fontePagadora, tipoFaixaDaGuia(tipoGuia)],
   );
   const faixas = linhas.map((r) => ({
@@ -390,6 +400,7 @@ export async function reservarNumeroGuia(
   });
   return {
     numero: c.numero,
+    sequencia: f.proximoNumero,
     faixa: f.id,
     esgotada: c.esgotada,
     restantes: c.restantes,

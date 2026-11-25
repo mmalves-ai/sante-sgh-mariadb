@@ -125,6 +125,8 @@ export * from './recepcao/entradas.js';
 export * from './recepcao/respostas.js';
 export * from './recepcao/estados.js';
 export * from './recepcao/fila.js';
+// 02-REC linha 33: cadastro da estrutura da recepção pela tela.
+export * from './recepcao/estrutura.js';
 export * from './permissoes/recepcao.js';
 // M44 (etapa 1): classificação de risco no pronto atendimento.
 export * from './recepcao/classificacao.js';
@@ -155,6 +157,7 @@ export * from './permissoes/bloco-seguro.js';
 export * from './atendimento/vocabulario.js';
 export * from './atendimento/entradas.js';
 export * from './atendimento/respostas.js';
+export * from './atendimento/padrao-abertura.js';
 export * from './permissoes/atendimento.js';
 export * from './atendimento/conta.js';
 export * from './atendimento/escore-pa.js';
@@ -474,4 +477,6 @@ export * from './patrimonio/patrimonio.js';
 export * from './patrimonio/ajuste.js';
 export * from './permissoes/patrimonio.js';
 export * from './plataforma/onboarding.js';
+// 01-ADM L84: colunas que cada lista oferece para a visão guardada por usuário.
+export * from './visao-lista.js';
 export * from './plataforma/carga.js';

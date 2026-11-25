@@ -105,6 +105,10 @@ export interface ResultadoParaDigitacaoLido {
   readonly alertaDataInvalida: boolean;
   readonly bloqueado: boolean;
   readonly grandezas: { codigo: number; nome: string; sigla: string }[];
+  /** Textos padrão oferecidos na digitação do exame (05-SADT linha 3). */
+  readonly textosPadrao?: { codigo: number; descricao: string; texto: string; mnemonico: string | null }[];
+  /** Idade do paciente em anos completos na data do exame, para o cálculo das fórmulas. */
+  readonly idadePaciente?: number | null;
 }
 
 export interface ApoioSadtLido {
@@ -177,6 +181,8 @@ export interface GravadorSghSadt {
     pulseiraConferida: boolean;
     origem?: number | null;
     estacao: string | null;
+    /** Posto de coleta do cadastro (sem posto: à beira do leito). */
+    posto?: number | null;
     usuario: string;
   }): Promise<{ id: number; codigo: string }>;
   mudarEstadoAmostra(r: {
@@ -352,7 +358,14 @@ export interface PortaSadt extends PortaGravacaoM18<GravadorSghSadt> {
   validarLaudo(
     c: ContextoSadt,
     codigo: string,
-  ): Promise<{ valido: boolean; numero: string | null; emitidoEm: string | null; exames: number }>;
+  ): Promise<{
+    valido: boolean;
+    numero: string | null;
+    emitidoEm: string | null;
+    exames: number;
+    /** O laudo foi retificado depois da última via emitida com este código (a via impressa não é mais a atual). */
+    superado?: boolean;
+  }>;
   laudoParaEmitir(c: ContextoSadt, ids: readonly number[]): Promise<LaudoParaEmitir | null>;
   requisicoes(
     c: ContextoSadt,

@@ -12,6 +12,7 @@ import { RELATORIOS_CATALOGO } from '../relatorio/catalogo.js';
 import { PARAMETROS_REPASSE } from './repasse.js';
 import { PARAMETROS_MANUTENCAO } from './manutencao.js';
 import { PARAMETROS_PACS } from './pacs.js';
+import { PARAMETROS_SADT_SETOR } from './sadt-setor.js';
 import { PARAMETROS_PESSOAS } from './pessoas.js';
 import { PARAMETROS_PORTAL } from './portal.js';
 import { PARAMETROS_DOCUMENTO_ASSINATURA } from './documento-assinatura.js';
@@ -2312,6 +2313,8 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
   ...PARAMETROS_ESPECIALIDADES,
   // M47 (etapa 3): a lista de trabalho DICOM (modalidade por setor, janela da geração automática e o visualizador).
   ...PARAMETROS_PACS,
+  // F3.5 (05-SADT linha 25): parâmetros do diagnóstico por setor (numeração, impressão, obrigatoriedades do pedido).
+  ...PARAMETROS_SADT_SETOR,
   // M55 (fatia F2): rouparia e lavanderia (tolerância do retorno, prazo do retorno, preço do kg e prazo do cancelamento).
   ...PARAMETROS_ROUPARIA,
   ...PARAMETROS_CONTRATUALIZACAO,

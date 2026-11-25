@@ -23,6 +23,7 @@ import {
   type RecertificacoesGestaoTela,
 } from '@sgh/contratos';
 import {
+  alvosDaRecert,
   itensDaCampanhaRecert,
   PRAZO_RECERT_MAXIMO_DIAS,
   prazoRecertPadrao,
@@ -185,12 +186,16 @@ export class RecertificacaoController {
       }),
     );
     const b = this.fonte.receita(OPERACAO_BLOQUEIO_RECERT, hospital);
+    // Os alvos com a contagem de contas: a tela só oferece escopo que tem o que recertificar. Sem o retrato, a lista
+    // das campanhas segue (a abertura recusa com o motivo).
+    const alvos = await this.fonte.contasRecert(rede, hospital).then(alvosDaRecert, () => null);
     return {
       hoje,
       prazoPadrao: prazoRecertPadrao(hoje),
       prazoMaximoDias: PRAZO_RECERT_MAXIMO_DIAS,
       campanhas,
       bloqueio: { ligada: b.ligada, motivo: b.motivo },
+      ...(alvos ? { alvos } : {}),
     };
   }
 

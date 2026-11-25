@@ -16,6 +16,8 @@ export * from './elegibilidade.js';
 export * from './sinteticos.js';
 export * from './rede.js';
 export * from './cobranca.js';
+// F7 (08-SGO linha 98): coparticipação com tetos por evento, mês e ano.
+export * from './coparticipacao.js';
 export * from './autorizacao.js';
 // Etapa 6 (F5): as contas médicas recebidas (protocolo, críticas e glosa automática, revisão, recurso e pagamento).
 export * from './conta.js';
@@ -31,3 +33,5 @@ export * from './ans/ressarcimento.js';
 export * from './ans/retorno.js';
 // Etapa 8 (F7): o atendimento ao beneficiário com protocolo e o acesso ao portal do prestador.
 export * from './atendimento.js';
+// F7 (08-SGO linhas 93 a 95): responsáveis, setores, parâmetros, aditivo, cancelamento, abrangência, carência e cartão.
+export * from './cadastro-complementar.js';

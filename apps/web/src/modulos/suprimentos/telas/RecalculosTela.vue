@@ -5,7 +5,7 @@
 // o porquê) e aplica com um clique. O razão nunca é editado; cada aplicação fica registrada com o motivo e todas as
 // diferenças, listada abaixo.
 import { conferirRecalculo, type ItemBusca, type PreviaRecalculo } from '@sgh/contratos';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -93,13 +93,17 @@ async function aplicar(): Promise<void> {
     <p>{{ t('suprimentos.recalculos.texto') }}</p>
     <AvisoSuprimentos :motivo="pode(OP) ? null : motivoOp(OP)" />
     <form v-if="pode(OP)" class="formulario" data-testid="rec-form" @submit.prevent="verPrevia">
-      <label class="campo">
-        {{ t('suprimentos.recalculos.local') }}
-        <select v-model="local" data-testid="rec-local" @change="mudou">
-          <option :value="null">{{ t('suprimentos.recalculos.todos') }}</option>
-          <option v-for="l in locais" :key="l.codigo" :value="l.codigo">{{ l.nome }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="local"
+        :rotulo="t('suprimentos.recalculos.local')"
+        :opcoes="[
+          { valor: null, rotulo: t('suprimentos.recalculos.todos') },
+          ...locais.map((l) => ({ valor: l.codigo, rotulo: l.nome })),
+        ]"
+        class="campo"
+        data-testid="rec-local"
+        @update:model-value="mudou"
+      />
       <div class="campo">
         <span v-if="item" data-testid="rec-item">
           {{ item.nome }}
@@ -125,9 +129,12 @@ async function aplicar(): Promise<void> {
       <ul v-if="motivo.length > 0 && recusas.length > 0" class="erros" data-testid="rec-recusas">
         <li v-for="x in recusas" :key="x.codigo">{{ x.mensagem }}</li>
       </ul>
-      <SanteBotao type="submit" :disabled="!valido || ocupado" data-testid="rec-previa">
-        {{ t('suprimentos.recalculos.verPrevia') }}
-      </SanteBotao>
+      <SanteBotao
+        :rotulo="t('suprimentos.recalculos.verPrevia')"
+        tipo="submit"
+        :desabilitado="!valido || ocupado"
+        data-testid="rec-previa"
+      />
     </form>
     <ErroSuprimentos v-if="erro" :erro="erro" />
     <p v-if="mensagem" role="status" data-testid="rec-mensagem">{{ mensagem }}</p>
@@ -180,13 +187,12 @@ async function aplicar(): Promise<void> {
       </table>
       <p v-else data-testid="rec-sem-diferenca">{{ t('suprimentos.recalculos.semDiferenca') }}</p>
       <SanteBotao
+        :rotulo="t('suprimentos.recalculos.aplicar')"
         v-if="previa.diferencas.length > previa.pendentes"
-        :disabled="ocupado"
+        :desabilitado="ocupado"
         data-testid="rec-aplicar"
-        @click="aplicar"
-      >
-        {{ t('suprimentos.recalculos.aplicar') }}
-      </SanteBotao>
+        @acionar="aplicar"
+      />
     </section>
 
     <ErroSuprimentos v-if="r.error.value" :erro="r.error.value" />

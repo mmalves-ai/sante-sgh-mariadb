@@ -21,7 +21,12 @@ export const PERMISSOES_M10_CODIGOS = {
   termoLer: 'acesso.termo.ler',
   termoAceitar: 'acesso.termo.aceitar',
   alertaLer: 'config.alerta.ler',
+  // Notificação por regra (01-ADM L76): gravar regra de alerta e de consolidação, consolidar e registrar a entrega.
+  alertaEditar: 'config.alerta.editar',
+  // A resposta do destinatário ao aviso recebido (ciência e resolução), sempre da própria conta.
+  notificacaoResponder: 'acesso.notificacao.responder',
   emailLer: 'config.email.ler',
+  emailEditar: 'config.email.editar',
   empresaLer: 'organizacao.empresa.ler',
   estruturaLer: 'organizacao.estrutura.ler',
   leitoLer: 'organizacao.leito.ler',
@@ -141,8 +146,32 @@ export const PERMISSOES_M10: readonly DeclaracaoPermissao[] = [
     categoria: 'tecnica',
   },
   {
+    codigo: C.alertaEditar,
+    descricao:
+      'Gravar as regras de alerta e de consolidação dos avisos, consolidar e registrar a entrega por canal',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.notificacaoResponder,
+    descricao: 'Responder aos avisos recebidos (ciência e resolução), sempre da própria conta',
+
+    concessaoPorPerfil: 'todos-os-perfis-de-pessoa',
+  },
+  {
     codigo: C.emailLer,
     descricao: 'Consultar o servidor de e-mail e as notificações (credencial só "definida / não definida")',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.emailEditar,
+    descricao:
+      'Gravar os modelos de mensagem e os servidores de e-mail (a senha só como referência do cofre) e testar a conexão',
 
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,

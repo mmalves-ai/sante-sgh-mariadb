@@ -1,11 +1,21 @@
 // Validação da mensagem no XSD oficial 04.03.00 pelo libxml2 (xmllint compilado para WebAssembly; sem rede,
 // sem instalação no sistema). O XSD é versionado com SHA-256 (xsd/04.03.00/SHA256SUMS): arquivo alterado ou
 // faltando recusa a validação. Lote só é "pronto" depois de válido e com o hash do epílogo conferido.
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { validateXML } from 'xmllint-wasm';
 import { conferirHashEpilogo, type MensagemTiss, PADRAO_TISS, VERSAO_TISS } from './lote.js';
+
+// Os módulos do Node e o `xmllint-wasm` entram por importação tardia (como no eSocial, D-XSD-NODE-536): o índice de
+// @sgh/dominio-faturamento chega à web (ajustes da conta, conta corrente do paciente, atributos da guia), e a
+// importação estática de `node:fs` quebrava a navegação no navegador ("Module node:fs has been externalized").
+async function moduloNode() {
+  const [fs, path, url] = await Promise.all([import('node:fs'), import('node:path'), import('node:url')]);
+  return {
+    existsSync: fs.existsSync,
+    readFileSync: fs.readFileSync,
+    dirname: path.dirname,
+    resolve: path.resolve,
+    pathToFileURL: url.pathToFileURL,
+  };
+}
 
 export const PASTA_XSD = new URL('./xsd/04.03.00/', import.meta.url);
 
@@ -13,7 +23,8 @@ export const PASTA_XSD = new URL('./xsd/04.03.00/', import.meta.url);
  * M31: a pasta do XSD quando o código roda empacotado (a API num arquivo só: o XSD vai ao lado do main.js, copiado no
  * build), com TISS_XSD_PASTA para a implantação e a pasta do código-fonte no repositório como último recurso.
  */
-export function pastaXsd(): URL {
+export async function pastaXsd(): Promise<URL> {
+  const { existsSync, dirname, resolve, pathToFileURL } = await moduloNode();
   const candidatos = [
     PASTA_XSD,
     ...(process.env['TISS_XSD_PASTA'] ? [pathToFileURL(`${resolve(process.env['TISS_XSD_PASTA'])}/`)] : []),
@@ -39,7 +50,9 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 /** Lê os XSD da pasta e confere cada um contra o SHA256SUMS versionado. */
-export async function carregarEsquemas(pasta: URL = pastaXsd()): Promise<ArquivoEsquema[]> {
+export async function carregarEsquemas(pastaInformada?: URL): Promise<ArquivoEsquema[]> {
+  const { readFileSync } = await moduloNode();
+  const pasta = pastaInformada ?? (await pastaXsd());
   const manifesto = readFileSync(new URL('SHA256SUMS', pasta), 'utf8')
     .split('\n')
     .map((l) => l.trim())
@@ -74,6 +87,7 @@ export async function validarNoXsd(
 ): Promise<ResultadoValidacao> {
   const raiz = esquemas.find((e) => e.fileName === XSD_RAIZ);
   if (!raiz) throw new ErroEsquemaTiss(`Esquema raiz ${XSD_RAIZ} ausente.`);
+  const { validateXML } = await import('xmllint-wasm');
   const r = await validateXML({
     xml: [{ fileName: 'mensagem.xml', contents: bytes }],
     schema: [raiz],

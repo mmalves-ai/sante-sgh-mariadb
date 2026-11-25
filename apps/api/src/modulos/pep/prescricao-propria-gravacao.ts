@@ -32,7 +32,15 @@ import {
   gravarDetalhe,
   produtoDoItem,
 } from './prescricao-propria-itens.js';
+import { integrarDosesDoItem } from '../farmacia/integracao-prescricao.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
+import {
+  desmarcarFavorito,
+  type FavoritoNovo,
+  type FavoritoPrescritorLido,
+  lerFavoritos,
+  marcarFavorito,
+} from './prescricao-propria-favoritos.js';
 import type {
   CabecalhoDocumentoLido,
   CampoDocumentoLido,
@@ -69,7 +77,19 @@ export const TABELAS_GRAVACAO_PRESCRICAO = [
   'prescricao',
   'prescricao_item',
   'prescricao_item_medicamento',
+  // Detalhe de cada tipo de item (prescricao-propria-itens.ts): sem eles a transação recusa a gravação.
+  'prescricao_item_se_necessario',
+  'prescricao_item_dieta',
+  'prescricao_item_dieta_caracteristica',
+  'prescricao_dieta_refeicao_item',
+  'prescricao_item_solucao',
+  'prescricao_item_solucao_etapa',
+  'prescricao_item_solucao_componente',
+  'prescricao_item_ventilacao',
+  'favorito_prescritor',
   'horario_administracao',
+  // A decisão da regra de integração com o estoque para cada dose (05-SUP linha 7, integracao-prescricao.ts).
+  'integracao_dose_estoque',
   'prescricao_evento',
   'decisao_alerta',
   'planejamento_prescricao',
@@ -99,7 +119,7 @@ export const CATEGORIA_DO_PLANO: Readonly<Record<number, string>> = {
   [PLANO_DO_TIPO.hemoterapia]: 'hemocomponente',
   [PLANO_DO_TIPO.procedimento]: 'procedimento',
 };
-/** Mesmo valor da porta própria: plano acima dele = id do tipo de item próprio. */
+/** Plano a partir dele = id do tipo de item próprio (a porta própria e o catálogo usam este, sem cópia). */
 export const BASE_PLANO_PROPRIO = 1000;
 
 /** Decisão do contrato → decisão gravada (CHECK de decisao_alerta). "exibido" (só aviso) fica como aceito. */
@@ -1203,6 +1223,42 @@ export class GravacaoPrescricaoPropria {
     );
   }
 
+  /** Favoritos do prescritor da sessão (03-PEP L107); sem profissional vinculado, lista vazia. */
+  favoritos(c: ContextoPrescricao, usuario: string): Promise<FavoritoPrescritorLido[]> {
+    return this.ler(c, 'favoritos', async (l, est) => {
+      const prof = await profissionalDaSessao(l, contextoDoLogin(c, 'pep.favoritos', usuario), null);
+      return prof ? lerFavoritos(l, prof.profissional, est.id) : [];
+    });
+  }
+
+  /** Marca um favorito do prescritor da sessão (inclui ou reativa o antigo do mesmo alvo). */
+  marcarFavorito(c: ContextoPrescricao, usuario: string, f: FavoritoNovo): Promise<number> {
+    return this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.marcarFavorito', usuario),
+      'pep.marcarFavorito',
+      null,
+      (tx, est, prof) => marcarFavorito(tx, prof.profissional, est.id, f),
+      (id) => ({ tabela: 'favorito_prescritor', id }),
+      null,
+      f,
+    );
+  }
+
+  /** Desmarca um favorito do prescritor da sessão (ativo = false, sem apagar). */
+  desmarcarFavorito(c: ContextoPrescricao, usuario: string, id: number): Promise<number> {
+    return this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.desmarcarFavorito', usuario),
+      'pep.desmarcarFavorito',
+      null,
+      (tx, _est, prof) => desmarcarFavorito(tx, prof.profissional, id),
+      (r) => ({ tabela: 'favorito_prescritor', id: r }),
+      null,
+      { id },
+    );
+  }
+
   /** Ainda sem adaptador: a ficha pede o cadastro de antimicrobiano, finalidade e sítio do modelo próprio. */
   async registrarFicha(): Promise<number> {
     throw recusaPendenteGravacao('ficha de antimicrobiano');
@@ -1609,6 +1665,9 @@ async function inserirItem(
         situacao_checagem_id: num(s['id']),
         origem: 'sistema',
       });
+    // A regra de integração prescrição × estoque (05-SUP linha 7) decide, para cada dose do item com produto de
+    // estoque, o local que a atende e quando ela entra na fila da farmácia. O indicador não vem mais da montagem.
+    await integrarDosesDoItem(tx, { est: est.id, atendimento, item, prescritoEm: new Date() });
   }
   return { item, horarios: it.horarios.length };
 }

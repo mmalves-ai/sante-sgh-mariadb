@@ -23,6 +23,7 @@
 // usadas ficam em geracao_grade_periodo.
 // Melhoria: o vínculo da agenda (profissional, especialidade principal, local, unidade) fica na própria agenda,
 // sem tabela de "ligação proposta".
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   MOTIVOS_CANCELAMENTO,
   RESULTADOS_CONFIRMACAO,
@@ -251,14 +252,23 @@ const SELECT_AGENDA = `SELECT a.id, a.nome, a.profissional_id, a.ativo, a.duraca
   (SELECT COUNT(*) FROM agenda_especialidade e WHERE e.agenda_servico_id = a.id AND e.excluido_em IS NULL) AS especialidades
 FROM agenda_servico a WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL`;
 
+/** 02-AGE 40: o papel da sessão que a trava nominal considera além da lista da agenda. */
+const papelDaSessao = (c: ContextoGravacao): PapelNominal => ({
+  gestor: c.gestorDeAgendas === true,
+  administrador: c.administrador === true,
+});
+
 export class PortaAgendaPropria implements PortaAgenda {
   readonly destino = 'propria' as const;
   private readonly executor: Executor;
   private readonly estabs = new Map<string, Estab>();
   private readonly fusos = new Map<number, string>();
   private readonly operacoes: Readonly<Record<string, Operacao<never, ResultadoOperacao>>>;
-  /** 02-AGE 40: o papel da sessão (gestor de agendas, administrador) para a trava nominal, por contexto da gravação. */
-  private readonly papeis = new WeakMap<ContextoOperacao, PapelNominal>();
+  /**
+   * 02-AGE 40: o papel da sessão (gestor de agendas, administrador) para a trava nominal, no contexto assíncrono da
+   * gravação (o executor confere e copia o contexto da operação, então ele não serve de chave).
+   */
+  private readonly papel = new AsyncLocalStorage<PapelNominal>();
 
   constructor(
     private readonly nucleo: NucleoAgenda,
@@ -331,7 +341,6 @@ export class PortaAgendaPropria implements PortaAgenda {
       chaveIdempotencia: `${c.chaveIdempotencia}${sufixo}`.slice(0, 80),
       ...(c.enderecoIp ? { enderecoIp: c.enderecoIp } : {}),
     };
-    this.papeis.set(ctx, { gestor: c.gestorDeAgendas === true, administrador: c.administrador === true });
     return ctx;
   }
 
@@ -342,7 +351,7 @@ export class PortaAgendaPropria implements PortaAgenda {
     agenda: number,
     tipo: 'marcacao' | 'manutencao',
   ): Promise<void> {
-    return exigirGravacaoNominal(tx, agenda, ctx.usuario, tipo, this.papeis.get(ctx));
+    return exigirGravacaoNominal(tx, agenda, ctx.usuario, tipo, this.papel.getStore());
   }
 
   // ── Gravações ─────────────────────────────────────────────────────────────────────────────────────
@@ -364,7 +373,10 @@ export class PortaAgendaPropria implements PortaAgenda {
     operacaoAgenda(operacao);
     const op = this.operacoes[operacao];
     if (!op) throw recusa('operacao-desconhecida', 'Operação da agenda desconhecida.');
-    const r = await this.executor.executar(op, this.cliente, entrada, await this.contexto(c));
+    const ctx = await this.contexto(c);
+    const r = await this.papel.run(papelDaSessao(c), () =>
+      this.executor.executar(op, this.cliente, entrada, ctx),
+    );
     return {
       resultado: r.resultado,
       repetida: r.repetida,
@@ -374,8 +386,11 @@ export class PortaAgendaPropria implements PortaAgenda {
 
   async gravar<T>(c: ContextoGravacao, fn: (g: GravadorAgenda) => Promise<T>): Promise<T> {
     let n = 0;
-    const rodar = async <E, S extends ResultadoOperacao>(op: Operacao<E, S>, e: E): Promise<S> =>
-      (await this.executor.executar(op, this.cliente, e, await this.contexto(c, `:${++n}`))).resultado;
+    const rodar = async <E, S extends ResultadoOperacao>(op: Operacao<E, S>, e: E): Promise<S> => {
+      const ctx = await this.contexto(c, `:${++n}`);
+      return (await this.papel.run(papelDaSessao(c), () => this.executor.executar(op, this.cliente, e, ctx)))
+        .resultado;
+    };
     const A = this.apoio;
     const g: GravadorAgenda = {
       planejarEscala: async (r) => Number((await rodar(A.planejarEscala, r)).id),

@@ -21,7 +21,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -58,6 +58,7 @@ export class ResultadosGruposController {
   }
 
   @Put('grupos')
+  @AuditadoNoHandler('executor: trilha na mesma transação dos grupos e filtros de resultado')
   @Permissao(PERMISSOES_GRUPOS_RESULTADO.editar)
   gravarGrupo(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarGrupo(c, corpo));
@@ -76,12 +77,14 @@ export class ResultadosGruposController {
   }
 
   @Put('filtros')
+  @AuditadoNoHandler('executor: trilha na mesma transação dos grupos e filtros de resultado')
   @Permissao(PERMISSOES_GRUPOS_RESULTADO.ler)
   gravarFiltro(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarFiltro(c, corpo));
   }
 
   @Delete('filtros/:id')
+  @AuditadoNoHandler('executor: trilha na mesma transação dos grupos e filtros de resultado')
   @Permissao(PERMISSOES_GRUPOS_RESULTADO.ler)
   excluirFiltro(
     @Req() req: RequisicaoAutorizada,

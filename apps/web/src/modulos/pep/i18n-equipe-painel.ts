@@ -55,4 +55,14 @@ export const mensagensEquipePainel = {
     },
     assinaturas: { nenhuma: 'Nenhuma', eletronica: 'Eletrônica', digital_icp: 'Digital (certificado)' },
   },
+  // F3.3 (L90): filtros salvos do painel de pacientes.
+  filtros: {
+    salvo: 'Filtro salvo',
+    nenhum: 'Sem filtro salvo',
+    padrao: '{nome} (padrão)',
+    nome: 'Nome do novo filtro',
+    salvar: 'Salvar como filtro',
+    tornarPadrao: 'Abrir sempre com este',
+    salvo_ok: 'Filtro "{nome}" salvo.',
+  },
 };

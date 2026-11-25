@@ -483,7 +483,9 @@ describe.skipIf(SEM_BANCO)('fonte própria da gestão de acessos contra o MariaD
     expect(await codigo(fonte.publicarPoliticaSenha('teste', EST, {} as never, new Date(), trilha()))).toBe(
       'entrada-invalida',
     );
-    expect(await codigo(fonte.pedidosAcesso('teste', EST))).toBe('adaptador-pendente');
+    // Pedido de acesso e recertificação ligados no banco próprio (01-ADM L57): a leitura responde.
+    expect(Array.isArray(await fonte.pedidosAcesso('teste', EST))).toBe(true);
+    expect(Array.isArray(await fonte.campanhasRecert('teste', EST))).toBe(true);
     expect(await fonte.grupos('teste', EST)).toEqual([]);
   });
 

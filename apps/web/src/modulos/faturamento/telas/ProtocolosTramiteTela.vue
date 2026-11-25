@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Protocolo de documentos entre setores (F3.7, 06-FAT linha 22): `/faturamento/protocolos`.
 // Escolhido o meu setor, a tela mostra o que sai e o que chega. O protocolo novo nasce já enviado (um clique), com os
 // itens conferidos pela regra do domínio enquanto se preenche; quem recebe confere item a item (recebido ou recusado
 // com motivo) e a situação do lote sai sozinha (recebido, em parte ou recusado).
 import { type ItemProtocoloEntrada, TIPOS_ITEM_PROTOCOLO, validarProtocolo } from '@sgh/dominio-faturamento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
+  buscarAlvosProtocolo,
   cancelarProtocolo,
   conferirProtocolo,
   emitirProtocolo,
@@ -57,7 +59,39 @@ async function emitir() {
   const ok = await rodar(() =>
     emitirProtocolo({ ...novo, remetenteId: novo.remetenteId || setor.value }, chave()),
   );
-  if (ok) novo.itens = [];
+  if (ok) {
+    novo.itens = [];
+    buscas.value = {};
+  }
+}
+
+// ── Item pelo número de negócio (conta, atendimento, prontuário do volume, atendimento do documento) ──
+type Opcao = { id: number; rotulo: string };
+const buscas = ref<Record<number, { numero: string; opcoes: Opcao[] | null; erro: unknown }>>({});
+const busca = (k: number) => (buscas.value[k] ??= { numero: '', opcoes: null, erro: null });
+async function buscarAlvo(k: number) {
+  const item = novo.itens[k] as { tipo: string; alvoId: number | null };
+  const b = busca(k);
+  b.erro = null;
+  b.opcoes = null;
+  item.alvoId = null;
+  if (!b.numero.trim()) return;
+  try {
+    b.opcoes = (await buscarAlvosProtocolo(item.tipo, b.numero.trim())).itens;
+    if (b.opcoes.length === 1) item.alvoId = b.opcoes[0]!.id;
+  } catch (e) {
+    b.erro = e;
+  }
+}
+function incluirItem() {
+  novo.itens.push({ tipo: 'conta', alvoId: null, descricao: null });
+  buscas.value[novo.itens.length - 1] = { numero: '', opcoes: null, erro: null };
+}
+function tirarItem(k: number) {
+  novo.itens.splice(k, 1);
+  const r: typeof buscas.value = {};
+  novo.itens.forEach((_, j) => (r[j] = buscas.value[j < k ? j : j + 1] ?? busca(j)));
+  buscas.value = r;
 }
 
 // ── Conferência ──
@@ -92,65 +126,93 @@ const motivoCancelamento = ref('');
     <ErroFaturamento v-if="erro" :erro="erro" />
     <p v-if="aviso" role="status">{{ aviso }}</p>
     <template v-if="q.data.value">
-      <label>
-        {{ t('auditoriaTramite.protocolo.setor') }}
-        <select v-model="setor" data-testid="prot-setor">
-          <option :value="null">{{ t('auditoriaTramite.protocolo.todos') }}</option>
-          <option v-for="s in q.data.value.setores" :key="s.id" :value="s.id">{{ s.descricao }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="setor"
+        :rotulo="t('auditoriaTramite.protocolo.setor')"
+        :opcoes="[
+          { valor: null, rotulo: t('auditoriaTramite.protocolo.todos') },
+          ...q.data.value.setores.map((s) => ({ valor: s.id, rotulo: s.descricao })),
+        ]"
+        data-testid="prot-setor"
+      />
 
       <form class="filtros" data-testid="prot-form" @submit.prevent="emitir">
         <h2>{{ t('auditoriaTramite.protocolo.novo') }}</h2>
-        <label>
-          {{ t('auditoriaTramite.protocolo.de') }}
-          <select v-model.number="novo.remetenteId" data-testid="prot-de">
-            <option v-for="s in q.data.value.setores" :key="s.id" :value="s.id">{{ s.descricao }}</option>
-          </select>
-        </label>
-        <label>
-          {{ t('auditoriaTramite.protocolo.para') }}
-          <select v-model.number="novo.destinatarioId" data-testid="prot-para">
-            <option v-for="s in q.data.value.setores" :key="s.id" :value="s.id">{{ s.descricao }}</option>
-          </select>
-        </label>
-        <label>
-          {{ t('auditoriaTramite.protocolo.prioridade') }}
-          <select v-model="novo.prioridade">
-            <option value="normal">{{ t('auditoriaTramite.protocolo.prioridades.normal') }}</option>
-            <option value="urgente">{{ t('auditoriaTramite.protocolo.prioridades.urgente') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="novo.remetenteId"
+          :rotulo="t('auditoriaTramite.protocolo.de')"
+          :opcoes="[...q.data.value.setores.map((s) => ({ valor: s.id, rotulo: s.descricao }))]"
+          data-testid="prot-de"
+        />
+        <SanteSelecao
+          v-model="novo.destinatarioId"
+          :rotulo="t('auditoriaTramite.protocolo.para')"
+          :opcoes="[...q.data.value.setores.map((s) => ({ valor: s.id, rotulo: s.descricao }))]"
+          data-testid="prot-para"
+        />
+        <SanteSelecao
+          v-model="novo.prioridade"
+          :rotulo="t('auditoriaTramite.protocolo.prioridade')"
+          :opcoes="[
+            { valor: 'normal' as const, rotulo: t('auditoriaTramite.protocolo.prioridades.normal') },
+            { valor: 'urgente' as const, rotulo: t('auditoriaTramite.protocolo.prioridades.urgente') },
+          ]"
+        />
         <label
           ><input v-model="novo.enviarJa" type="checkbox" />
           {{ t('auditoriaTramite.protocolo.enviarJa') }}</label
         >
         <fieldset v-for="(i, k) in novo.itens" :key="k" :data-testid="`prot-item-${k}`">
-          <select v-model="i.tipo">
-            <option v-for="tp in TIPOS_ITEM_PROTOCOLO" :key="tp" :value="tp">
-              {{ t(`auditoriaTramite.protocolo.tipos.${tp}`) }}
-            </option>
-          </select>
-          <input
-            v-if="i.tipo !== 'documento'"
-            v-model.number="(i as { alvoId: number | null }).alvoId"
-            inputmode="numeric"
-            :placeholder="t('auditoriaTramite.protocolo.alvo')"
+          <SanteSelecao
+            v-model="i.tipo"
+            :rotulo="t('auditoriaTramite.protocolo.tipoItem')"
+            ocultar-rotulo
+            :data-testid="`prot-item-${k}-tipo`"
+            @update:model-value="() => nextTick(() => buscarAlvo(k))"
+            :opcoes="[
+              ...TIPOS_ITEM_PROTOCOLO.map((x) => ({
+                valor: x,
+                rotulo: t(`auditoriaTramite.protocolo.tipos.${x}`),
+              })),
+            ]"
           />
           <input
-            v-else
+            v-model="busca(k).numero"
+            maxlength="20"
+            :aria-label="t(`auditoriaTramite.protocolo.numeroDe.${i.tipo}`)"
+            :placeholder="t(`auditoriaTramite.protocolo.numeroDe.${i.tipo}`)"
+            :data-testid="`prot-item-${k}-numero`"
+            @change="buscarAlvo(k)"
+            @keydown.enter.prevent="buscarAlvo(k)"
+          />
+          <SanteSelecao
+            v-if="busca(k).opcoes?.length"
+            v-model="(i as { alvoId: number | null }).alvoId"
+            :rotulo="t('auditoriaTramite.protocolo.alvo')"
+            ocultar-rotulo
+            :opcoes="[
+              { valor: null, rotulo: t('auditoriaTramite.protocolo.escolha') },
+              ...busca(k).opcoes!.map((o) => ({ valor: o.id, rotulo: o.rotulo })),
+            ]"
+            :data-testid="`prot-item-${k}-alvo`"
+          />
+          <span v-else-if="busca(k).opcoes" role="alert">{{
+            t('auditoriaTramite.protocolo.naoAchado')
+          }}</span>
+          <ErroFaturamento v-if="busca(k).erro" :erro="busca(k).erro" />
+          <input
+            v-if="i.tipo === 'documento'"
             v-model="(i as { descricao: string | null }).descricao"
             maxlength="200"
             :placeholder="t('auditoriaTramite.protocolo.descricao')"
+            :data-testid="`prot-item-${k}-descricao`"
           />
           <span v-if="erros[`itens.${k}`]" role="alert">{{ erros[`itens.${k}`] }}</span>
-          <button type="button" @click="novo.itens.splice(k, 1)">{{ '×' }}</button>
+          <button type="button" :aria-label="t('auditoriaTramite.protocolo.tirarItem')" @click="tirarItem(k)">
+            {{ '×' }}
+          </button>
         </fieldset>
-        <button
-          type="button"
-          data-testid="prot-incluir"
-          @click="novo.itens.push({ tipo: 'conta', alvoId: null, descricao: null })"
-        >
+        <button type="button" data-testid="prot-incluir" @click="incluirItem">
           {{ t('auditoriaTramite.protocolo.incluirItem') }}
         </button>
         <span v-if="erros['destinatarioId']" role="alert">{{ erros['destinatarioId'] }}</span>

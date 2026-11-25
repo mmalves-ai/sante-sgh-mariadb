@@ -29,11 +29,20 @@ import type {
   RegistrarPerdaControladoEntrada,
 } from '@sgh/contratos';
 import {
+  guardaAte,
+  type LivroMontado,
+  ordenarTermos,
+  type TermoGravado,
+} from '@sgh/contratos/regras-suprimentos';
+import {
   type ContextoOperacao,
+  criarArmazemLocal,
   definirOperacao,
   ErroOperacao,
   type Executor,
   type Leitor,
+  lerRaizArquivos,
+  type NucleoArmazem,
   type NucleoProprio,
   recusa,
   type ResultadoOperacao,
@@ -50,6 +59,7 @@ import {
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { type ExtrasGravacaoFarmacia, gravadorAvaliacao, TABELAS_AVALIACAO } from './gravador-avaliacao.js';
 import {
+  armazenamentoIndisponivel,
   ENTREGA_DO_NUMERO,
   gravadorDispensacao,
   NUMERO_DA_ENTREGA,
@@ -190,6 +200,34 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
       [est],
     );
     return r?.fuso_horario || FUSO_PADRAO;
+  }
+
+  /**
+   * O conteúdo do livro oficial na porta de arquivos (ADR 0004: disco local sob ARQUIVOS_RAIZ, metadado na tabela
+   * `arquivo` pelo Executor), com a guarda legal do livro. Sem raiz: a mesma recusa do fechamento (nada gravado).
+   */
+  async guardarConteudoLivro(
+    c: ContextoFarmacia,
+    livro: LivroMontado,
+  ): Promise<{ arquivo: number; hash: string }> {
+    const est = c.estabelecimento;
+    if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    const raiz = lerRaizArquivos(process.env);
+    const nucleo = this.nucleo as NucleoFarmacia & Partial<NucleoArmazem>;
+    if (!raiz || typeof nucleo.cliente !== 'function') throw armazenamentoIndisponivel();
+    const armazem = criarArmazemLocal(nucleo as NucleoArmazem, { raiz, executor: this.executor });
+    const g = await armazem.guardar(
+      {
+        conteudo: Buffer.from(JSON.stringify(livro), 'utf8'),
+        nomeOriginal: `livro-controlado-${livro.livro}-${livro.inicio}.json`,
+        tipoMime: 'application/json',
+        finalidade: 'livro_controlado',
+        entidade: 'livro_controlado',
+        retencaoAte: guardaAte(livro.fim),
+      },
+      { ...contextoDe(c), chaveIdempotencia: `farmacia:livro:${randomUUID()}` },
+    );
+    return { arquivo: g.id, hash: g.hash };
   }
 
   // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -927,22 +965,48 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
       const r = await l.uma(
-        `SELECT lc.encerrado_em, lc.guarda_ate, lc.hash_conteudo, lc.modo_fechamento, u.login
+        `SELECT lc.id, lc.encerrado_em, lc.guarda_ate, lc.hash_conteudo, lc.modo_fechamento, u.login
            FROM livro_controlado lc LEFT JOIN usuario u ON u.id = lc.criado_por
           WHERE lc.estabelecimento_id = ? AND lc.numero IN (?, ?) AND lc.situacao = 'encerrado' AND lc.excluido_em IS NULL
           ORDER BY lc.modo_fechamento = 'oficial' DESC, lc.id DESC LIMIT 1`,
         [est, `L${livro}-${dataLocal(inicio)}-O`, `L${livro}-${dataLocal(inicio)}-C`],
       );
-      return r
-        ? {
-            em: minutoCivil(r['encerrado_em'], fuso),
-            por: texto(r['login']),
-            guardaAte: dataIso(r['guarda_ate']),
-            hash: texto(r['hash_conteudo']),
-            conteudo: '',
-            modo: texto(r['modo_fechamento']),
-          }
-        : null;
+      if (!r) return null;
+      // Os termos como ficaram gravados no fechamento (o emitente e o responsável são os da época, não os de hoje).
+      const termos = ordenarTermos(
+        (
+          await l.consultar(
+            `SELECT t.tipo, t.pagina_inicial, t.pagina_final, t.razao_social, t.cnpj, t.emitido_em, t.arquivo_id,
+                    COALESCE(NULLIF(pr.nome_exibicao, ''), pf.nome) AS responsavel
+               FROM termo_livro_controlado t
+               LEFT JOIN profissional pr ON pr.id = t.responsavel_profissional_id
+               LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+              WHERE t.livro_controlado_id = ? AND t.excluido_em IS NULL
+              ORDER BY t.sequencia LIMIT 10`,
+            [n(r['id'])],
+          )
+        )
+          .filter((t) => ['abertura', 'encerramento'].includes(texto(t['tipo'])))
+          .map((t): TermoGravado => ({
+            tipo: texto(t['tipo']) as TermoGravado['tipo'],
+            paginaInicial: n(t['pagina_inicial']),
+            paginaFinal: n(t['pagina_final']),
+            razaoSocial: texto(t['razao_social']),
+            cnpj: texto(t['cnpj']),
+            responsavel: texto(t['responsavel']),
+            emitidoEm: minutoCivil(t['emitido_em'] ?? r['encerrado_em'], fuso),
+            conteudoGuardado: t['arquivo_id'] !== null && t['arquivo_id'] !== undefined,
+          })),
+      );
+      return {
+        em: minutoCivil(r['encerrado_em'], fuso),
+        por: texto(r['login']),
+        guardaAte: dataIso(r['guarda_ate']),
+        hash: texto(r['hash_conteudo']),
+        conteudo: '',
+        modo: texto(r['modo_fechamento']),
+        termos,
+      };
     });
   }
 

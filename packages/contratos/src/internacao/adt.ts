@@ -698,6 +698,10 @@ export const esquemaEmitirImpressoInternacao = z
     copias: z.number().int().min(1).max(10).default(1),
     /** A ficha configurada (modelo das fichas a imprimir da internação): o PDF sai com o nome do modelo. */
     modelo: z.number().int().positive().max(32_767).optional(),
+    /** Reimpressão da pulseira ou da etiqueta (01-ADM L79): motivo do catálogo, complemento e estação escolhida. */
+    motivo: z.number().int().positive().optional(),
+    complemento: z.string().trim().max(500).optional(),
+    estacao: z.number().int().positive().optional(),
   })
   .strict();
 export type EmitirImpressoInternacaoEntrada = z.infer<typeof esquemaEmitirImpressoInternacao>;

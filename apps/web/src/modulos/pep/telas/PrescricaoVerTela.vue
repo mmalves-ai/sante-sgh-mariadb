@@ -310,7 +310,9 @@ async function imprimir(): Promise<void> {
         <form class="imprimir" data-testid="imprimir-prescricao" @submit.prevent="imprimir">
           <SanteCampoTexto
             v-model="motivoVia"
-            :rotulo="impressoes > 0 ? t('pep.presc.ver.segundaVia') : t('pep.presc.ver.justificativa')"
+            :rotulo="
+              impressoes > 0 ? t('pep.presc.ver.segundaVia') : t('pep.presc.ver.justificativaImpressao')
+            "
             :max-bytes="200"
             obrigatorio
           />
@@ -520,7 +522,7 @@ tr.suspenso-correcao td {
   padding: 0 var(--sgh-espaco-1);
 }
 .prova.alterado {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
   font-weight: 700;
 }
 .obs {

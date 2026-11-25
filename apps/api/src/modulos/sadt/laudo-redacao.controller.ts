@@ -6,8 +6,13 @@
 //   POST /api/sadt/laudos/redacao/:item/previa       o texto do modelo com as medidas (nada gravado)
 //   GET  /api/sadt/laudos/motivos-retificacao        motivos ativos
 //   POST /api/sadt/laudos/modelos                    inclui ou altera o modelo de laudo
+//   GET  /api/sadt/laudos/modelos                    os modelos para a manutenção (do estabelecimento e os pessoais)
+//   GET  /api/sadt/laudos/fila?setor=                a lista de trabalho: exames realizados sem laudo assinado
+//   GET  /api/sadt/laudos/redacao/:item/versoes/:n   o texto inteiro de uma versão anterior
+//   GET  /api/sadt/laudos/palavras-chave             as palavras-chave ativas
+//   GET  /api/sadt/laudos/busca?palavras=1,2         busca de casos: os laudos assinados com todas as palavras
 // Tudo ligado para todos: o que cada cargo faz vem só da permissão de cada rota.
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
@@ -49,6 +54,44 @@ export class LaudoRedacaoController {
   @Permissao('sadt.laudo.ler')
   async motivos(@Req() req: RequisicaoAutorizada) {
     return { itens: await this.s.motivosRetificacao(sessaoDe(req).porta) };
+  }
+
+  @Get('fila')
+  @Permissao('sadt.laudo.ler')
+  @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
+  fila(@Query('setor') setor: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.s.fila(sessaoDe(req).porta, setor ? idDaRota(setor) : null);
+  }
+
+  @Get('palavras-chave')
+  @Permissao('sadt.laudo.ler')
+  async palavras(@Req() req: RequisicaoAutorizada) {
+    return { itens: await this.s.palavrasChave(sessaoDe(req).porta) };
+  }
+
+  @Get('busca')
+  @Permissao('sadt.laudo.ler')
+  @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
+  async busca(@Query('palavras') palavras: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const ids = (palavras ?? '')
+      .split(',')
+      .map((x) => Number(x))
+      .filter((x) => Number.isInteger(x) && x > 0)
+      .slice(0, 20);
+    return { itens: await this.s.buscar(sessaoDe(req).porta, ids) };
+  }
+
+  @Get('modelos')
+  @Permissao('sadt.laudo.ler')
+  modelos(@Req() req: RequisicaoAutorizada) {
+    return this.s.modelos(sessaoDe(req).porta);
+  }
+
+  @Get('redacao/:item/versoes/:numero')
+  @Permissao('sadt.laudo.ler')
+  @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
+  versao(@Param('item') item: string, @Param('numero') numero: string, @Req() req: RequisicaoAutorizada) {
+    return this.s.versaoAnterior(sessaoDe(req).porta, idDaRota(item), idDaRota(numero));
   }
 
   @Get('redacao/:item')
@@ -94,6 +137,7 @@ export class LaudoRedacaoController {
   }
 
   @Post('modelos')
+  @HttpCode(200)
   @Permissao('sadt.laudo.criar')
   @AuditadoNoHandler('o modelo de laudo com a trilha_auditoria na mesma transação')
   salvarModelo(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {

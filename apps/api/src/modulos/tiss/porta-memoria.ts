@@ -1274,8 +1274,8 @@ export class PortaTissMemoria implements PortaTiss {
           ? 'encerrada'
           : i.valorRecurso > 0
             ? 'recorrida'
-            : dec?.estado === 'aceita'
-              ? 'aceita'
+            : dec?.estado === 'aceita' || dec?.estado === 'recorrida'
+              ? dec.estado
               : 'pendente';
     const p = prazoRecurso(prazoParam, conta.convenio, i.dataPagamento);
     const m = MOTIVOS.find((x) => x.codigo === i.motivo);

@@ -206,6 +206,34 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
         [cod1, id],
       ),
     ).toMatchObject({ n: 2, v: 3, mesmo: 2, motivadas: 2 });
+    // 01-ADM L82: cada via do laudo entra no registro único de impressão e exportação: a 1ª como impressão (a
+    // própria entrega, sem texto), as seguintes como reimpressão com o motivo do cadastro, quem emitiu e o paciente.
+    const registro = await escrever((e) =>
+      e.consultar(
+        `SELECT x.tipo_operacao, x.motivo_reimpressao_id IS NOT NULL AS motivada, x.justificativa, x.paciente_id,
+                x.atendimento_id, x.usuario_id IS NOT NULL AS quem, x.formato, el.numero_via
+           FROM exportacao_documento x JOIN emissao_laudo el ON el.id = x.entidade_id
+          WHERE x.entidade = 'emissao_laudo' AND (el.id = ? OR el.emissao_original_id = ?) ORDER BY el.numero_via`,
+        [id, id],
+      ),
+    );
+    const daVia = {
+      paciente_id: m!.base.paciente,
+      atendimento_id: m!.base.atendimento,
+      quem: 1,
+      formato: 'pdf',
+    };
+    expect(registro).toMatchObject([
+      { ...daVia, numero_via: 1, tipo_operacao: 'impressao', motivada: 0, justificativa: null },
+      {
+        ...daVia,
+        numero_via: 2,
+        tipo_operacao: 'reimpressao',
+        motivada: 1,
+        justificativa: 'Paciente perdeu a primeira via',
+      },
+      { ...daVia, numero_via: 3, tipo_operacao: 'reimpressao', motivada: 1 },
+    ]);
     const depois = await escrever(async (e) =>
       e.uma(
         "SELECT proximo_valor FROM sequencia_negocio WHERE tipo = 'laudo_exame' AND estabelecimento_id = ?",
@@ -449,6 +477,16 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
     const par = await porta.parametros(c, 'laboratorio', m!.base.login);
     expect(par.ocultos).toEqual([]);
     expect(par.campos.every((x) => x.campo.startsWith('sadt.'))).toBe(true);
+    // 05-SADT linha 25 (migração 10_SADT/97): as definições semeadas, com o padrão; só as do próprio setor.
+    const campo = (k: string) => par.campos.find((x) => x.campo === k)?.valor;
+    expect(campo('sadt.laboratorio.numeracaoExame')).toBe('continua');
+    expect(campo('sadt.laboratorio.exigeMaterial')).toBe('true');
+    expect(campo('sadt.laboratorio.viasLaudo')).toBe('1');
+    expect(campo('sadt.validadeOrcamentoDias')).toBe('30');
+    expect(par.campos.some((x) => x.campo.startsWith('sadt.imagem.'))).toBe(false);
+    expect((await porta.parametros(c, 'imagem', m!.base.login)).campos.map((x) => x.campo)).toContain(
+      'sadt.imagem.exigeMaterial',
+    );
     const ind = await porta.indicadores(c, {
       inicio: hoje,
       fim: hoje,

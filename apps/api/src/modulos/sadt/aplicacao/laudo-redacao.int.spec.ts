@@ -6,9 +6,16 @@
 // como excluída (nunca apagada); o modelo pessoal com os campos variáveis. E ainda (corretor F3.5-4): o exame não
 // realizado recusado; a faixa pela data do exame (vigência); o peso e a altura gravados e herdados na retificação (a
 // marca da medida indexada se mantém); o hash reproduzido do banco; a trilha de cada gravação; a recusa de outro
-// estabelecimento, do modelo inativo ou de outro estabelecimento e do modelo pessoal de outro médico. Só contagens.
+// estabelecimento, do modelo inativo ou de outro estabelecimento e do modelo pessoal de outro médico. E (F3.5-09, linha
+// 16): a lista de trabalho; as palavras-chave do laudo (a retirada marcada, nunca apagada) e a busca de casos por elas;
+// a assinatura que libera o exame; o achado crítico que abre o aviso crítico (lido pelo painel de avisos) e avisa quem
+// pediu, sem repetir na retificação e cancelado sem apagar quando o achado sai; a retificação por outro laudista
+// recusada sem gravar; a retificação do laudo já emitido, que avisa quem emitiu e deixa a emissão superada na validação
+// do código; o texto inteiro da versão anterior; os modelos da manutenção sem o pessoal de outro médico. Só contagens.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { PortaSadtPropria } from '../porta-propria.js';
 import { hashDaVersao, ServicoLaudoRedacao } from './laudo-redacao.js';
 import {
   CLIENTE,
@@ -33,7 +40,19 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
   let nucleo: NucleoProprio;
   let servico: ServicoLaudoRedacao;
   let m: MassaSadt | null = null;
-  const ids = { secao: 0, fe: 0, massa: 0, obs: 0, inscricao: 0, motivo: 0, modelo: 0 };
+  const ids = {
+    secao: 0,
+    fe: 0,
+    massa: 0,
+    obs: 0,
+    inscricao: 0,
+    inscricao2: 0,
+    motivo: 0,
+    modelo: 0,
+    palavraA: 0,
+    palavraB: 0,
+  };
+  const codigoEmissao = randomUUID();
   const ctxT = { cliente: CLIENTE, correlacao: 't-f354' };
   const um = (sql: string, p: unknown[]) => nucleo.lerSomente(ctxT, (l) => l.uma(sql, p));
   const todos = (sql: string, p: unknown[]) => nucleo.lerSomente(ctxT, (l) => l.consultar(sql, p));
@@ -83,6 +102,19 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
           "INSERT INTO motivo_retificacao_laudo (codigo, descricao, ativo, criado_em) VALUES ('T-F354', 'Correção de medida', TRUE, ?)",
           [agora],
         ));
+      const palavra = async (codigo: string, descricao: string) =>
+        Number((await e.uma('SELECT id FROM palavra_chave_laudo WHERE codigo = ?', [codigo]))?.['id']) ||
+        (await ins(
+          'INSERT INTO palavra_chave_laudo (codigo, descricao, ativo, criado_em) VALUES (?, ?, TRUE, ?)',
+          [codigo, descricao, agora],
+        ));
+      ids.palavraA = await palavra('T-F359-A', 'Caso de ensino (teste)');
+      ids.palavraB = await palavra('T-F359-B', 'Achado raro (teste)');
+      // Quem pediu o exame é o segundo profissional (outra conta): é ele que o aviso procura.
+      await e.executar('UPDATE requisicao_exame SET solicitante_profissional_id = ? WHERE id = ?', [
+        m!.base.profissional2,
+        m!.requisicaoImagem,
+      ]);
     });
   }, 60_000);
 
@@ -91,6 +123,19 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
       await nucleo.escrever(ctxT, async (e) => {
         const x = (sql: string, p: unknown[]) => e.executar(sql, p);
         const laudos = `(SELECT id FROM laudo_diagnostico WHERE exame_item_id = ${Number(m!.itemImagem)})`;
+        await x(
+          `DELETE d FROM aviso_clinico_destinatario d JOIN aviso_clinico a ON a.id = d.aviso_clinico_id
+            WHERE a.entidade_origem = 'laudo_diagnostico' AND a.entidade_origem_chave IN ${laudos}`,
+          [],
+        );
+        await x(
+          `DELETE FROM aviso_clinico WHERE entidade_origem = 'laudo_diagnostico' AND entidade_origem_chave IN ${laudos}`,
+          [],
+        );
+        await x(`DELETE FROM aviso_valor_critico WHERE laudo_diagnostico_id IN ${laudos}`, []);
+        await x(`DELETE FROM laudo_palavra_chave WHERE laudo_diagnostico_id IN ${laudos}`, []);
+        await x('DELETE FROM emissao_laudo_exame WHERE exame_item_id = ?', [m!.itemImagem]);
+        await x('DELETE FROM emissao_laudo WHERE codigo_autenticacao = ?', [codigoEmissao]);
         await x(`DELETE FROM valor_grandeza_laudo WHERE laudo_diagnostico_id IN ${laudos}`, []);
         await x(`DELETE FROM laudo_diagnostico_versao WHERE laudo_diagnostico_id IN ${laudos}`, []);
         await x('DELETE FROM laudo_diagnostico WHERE exame_item_id = ?', [m!.itemImagem]);
@@ -106,7 +151,9 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         await x('DELETE FROM grandeza_laudo WHERE exame_id = ?', [m!.exameImagem]);
         await x('DELETE FROM secao_laudo_estruturado WHERE exame_id = ?', [m!.exameImagem]);
         await x("DELETE FROM motivo_retificacao_laudo WHERE codigo = 'T-F354'", []);
+        await x("DELETE FROM palavra_chave_laudo WHERE codigo IN ('T-F359-A', 'T-F359-B')", []);
         if (ids.inscricao) await x('DELETE FROM inscricao_conselho WHERE id = ?', [ids.inscricao]);
+        if (ids.inscricao2) await x('DELETE FROM inscricao_conselho WHERE id = ?', [ids.inscricao2]);
       });
     }
     await limparMassaSadt(nucleo, m);
@@ -158,6 +205,14 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         [item],
       ),
     );
+
+    // A lista de trabalho traz o exame realizado sem laudo assinado, com o paciente (só contagem aqui).
+    const porta = new PortaSadtPropria(nucleo);
+    const naFila = async () => (await servico.fila(c, null)).itens.filter((x) => x.item === item);
+    expect((await naFila()).map((x) => ({ laudo: x.laudo, comPaciente: x.paciente.length > 0 }))).toEqual([
+      { laudo: null, comPaciente: true },
+    ]);
+    expect((await servico.fila(c, m!.setorLab)).itens.filter((x) => x.item === item)).toEqual([]);
 
     // Outro estabelecimento não abre nem grava o exame; o modelo de outro estabelecimento e o inativo são recusados.
     const cOutro = { ...c, estabelecimento: m!.base.outroEst };
@@ -222,8 +277,25 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         { grandeza: ids.massa, numero: 240 },
         { grandeza: ids.obs, texto: 'Sem alterações' },
       ],
+      palavrasChave: [ids.palavraA, ids.palavraB],
     });
     expect(r).toMatchObject({ situacao: 'rascunho', valores: 3, foraReferencia: 1 });
+    const palavras = () =>
+      todos(
+        'SELECT palavra_chave_laudo_id AS p, excluido_em IS NOT NULL AS excluida FROM laudo_palavra_chave WHERE laudo_diagnostico_id = ? ORDER BY palavra_chave_laudo_id',
+        [r.id],
+      );
+    expect(await palavras()).toEqual(
+      [ids.palavraA, ids.palavraB].sort((a, b) => a - b).map((p) => ({ p, excluida: 0 })),
+    );
+    // A palavra-chave fora do cadastro é recusada e nada muda.
+    expect(
+      await falha(
+        servico.salvar(c, item, { texto: 'Rascunho com palavra recusada.', palavrasChave: [999_999_999] }),
+      ),
+    ).toBe('palavra-chave-inexistente');
+    expect((await palavras()).filter((x) => !x['excluida'])).toHaveLength(2);
+    expect((await naFila()).map((x) => x.laudo)).toEqual(['rascunho']);
     const medidasRascunho = await todos(
       'SELECT grandeza_laudo_id AS g, sequencia, valor_numerico AS v, fora_referencia AS fora, excluido_em IS NOT NULL AS excl FROM valor_grandeza_laudo WHERE laudo_diagnostico_id = ? ORDER BY sequencia',
       [r.id],
@@ -302,6 +374,20 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
            ocupacao_cbo_id, situacao, principal, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'ativa', FALSE, ?)`,
         [m!.base.profissional, seq, conselho, uf, `9${Date.now() % 1_000_000}`, cbo, new Date()],
       );
+      // O segundo médico (quem pediu o exame): também habilitado, para provar que não retifica o laudo do colega.
+      const seq2 = Number(
+        (
+          await e.uma(
+            'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM inscricao_conselho WHERE profissional_id = ?',
+            [m!.base.profissional2],
+          )
+        )?.['s'],
+      );
+      ids.inscricao2 = await e.inserir(
+        `INSERT INTO inscricao_conselho (profissional_id, sequencia, conselho_classe_id, unidade_federativa_id, numero_inscricao,
+           ocupacao_cbo_id, situacao, principal, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'ativa', FALSE, ?)`,
+        [m!.base.profissional2, seq2, conselho, uf, `8${Date.now() % 1_000_000}`, cbo, new Date()],
+      );
     });
 
     // FE 60 fora de 40–50 (faixa do dia do exame) e massa indexada fora.
@@ -314,6 +400,9 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         { grandeza: ids.fe, numero: 60 },
         { grandeza: ids.massa, numero: 240 },
       ],
+      palavrasChave: [ids.palavraA],
+      achadoCritico: true,
+      achadoCriticoDescricao: 'Achado sintético de teste',
     });
     expect(a).toMatchObject({
       id: r.id,
@@ -321,7 +410,91 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
       versaoAtual: 1,
       valores: 2,
       foraReferencia: 2,
+      exameLiberado: true,
+      avisoCritico: 'abrir',
+      avisados: 1,
     });
+    // A assinatura libera o exame (segue para a emissão) e ele sai da lista de trabalho.
+    expect(
+      await um(
+        'SELECT situacao, liberado_em IS NOT NULL AS liberado, liberado_por_usuario_id AS por FROM exame_item WHERE id = ?',
+        [item],
+      ),
+    ).toEqual({ situacao: 'liberado', liberado: 1, por: m!.base.usuario });
+    expect(await naFila()).toEqual([]);
+    // A palavra retirada fica marcada como excluída, nunca apagada.
+    expect(await palavras()).toEqual(
+      [ids.palavraA, ids.palavraB]
+        .sort((x, y) => x - y)
+        .map((p) => ({ p, excluida: p === ids.palavraB ? 1 : 0 })),
+    );
+    // O achado crítico abre o aviso crítico com a origem no laudo (sem resultado de laboratório), no prazo padrão, e
+    // avisa quem pediu o exame (a outra conta).
+    const avisosDoLaudo = () =>
+      todos(
+        `SELECT situacao, resultado_exame_id IS NULL AS sem_resultado, TIMESTAMPDIFF(MINUTE, gerado_em, prazo_em) AS prazo
+           FROM aviso_valor_critico WHERE laudo_diagnostico_id = ? ORDER BY id`,
+        [r.id],
+      );
+    expect(await avisosDoLaudo()).toEqual([{ situacao: 'pendente', sem_resultado: 1, prazo: 60 }]);
+    const avisosClinicos = () =>
+      todos(
+        `SELECT a.prioridade, d.usuario_id AS para FROM aviso_clinico a JOIN aviso_clinico_destinatario d ON d.aviso_clinico_id = a.id
+          WHERE a.entidade_origem = 'laudo_diagnostico' AND a.entidade_origem_chave = ? ORDER BY a.id`,
+        [r.id],
+      );
+    expect(await avisosClinicos()).toEqual([{ prioridade: 'critica', para: m!.base.usuario2 }]);
+    // O painel de avisos críticos lê o aviso do laudo junto com os do laboratório.
+    const dia = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
+    const painel = await porta.avisos(c, { inicio: dia(-1), fim: dia(1), pendentes: true });
+    const noPainel = painel.filter((x) => x.exame === item);
+    expect(noPainel.map((x) => x.elemento)).toEqual(['Achado crítico do laudo']);
+    // O aviso do laboratório (o da massa) continua no mesmo painel.
+    expect(painel.filter((x) => x.id === m!.aviso)).toHaveLength(1);
+
+    // O laudo é emitido (massa sintética da emissão, por outra conta) e o código vale.
+    await nucleo.escrever(ctxT, async (e) => {
+      const antes = new Date(Date.now() - 60_000);
+      const emissao = await e.inserir(
+        `INSERT INTO emissao_laudo (estabelecimento_id, numero, codigo_autenticacao, numero_via, paciente_id, requisicao_exame_id,
+           tipo_emissao, laudo_gerado_em, emitida_em, emitido_por_usuario_id, criado_em) VALUES (?, ?, ?, 1, ?, ?, 'pdf', ?, ?, ?, ?)`,
+        [
+          m!.base.est,
+          `T${m!.marca}`.slice(0, 30),
+          codigoEmissao,
+          m!.base.paciente,
+          m!.requisicaoImagem,
+          antes,
+          antes,
+          m!.base.usuario2,
+          antes,
+        ],
+      );
+      await e.executar(
+        'INSERT INTO emissao_laudo_exame (emissao_laudo_id, sequencia, exame_item_id, laudo_diagnostico_id, criado_em) VALUES (?, 1, ?, ?, ?)',
+        [emissao, item, r.id, antes],
+      );
+    });
+    expect(await porta.validarLaudo(c, codigoEmissao)).toMatchObject({ valido: true, superado: false });
+
+    // Outro médico habilitado não retifica o laudo do colega: recusado sem gravar nada.
+    const cOutroMedico = { ...c, usuario: m!.base.usuario2 };
+    expect(
+      await falha(
+        servico.retificar(cOutroMedico, item, {
+          motivo: ids.motivo,
+          texto: 'Texto retificado por outro médico.',
+          valores: [{ grandeza: ids.fe, numero: 10 }],
+        }),
+      ),
+    ).toBe('retificacao-de-outro-laudista');
+    expect(
+      await um(
+        `SELECT ld.situacao, ld.versao_atual AS v, (SELECT COUNT(*) FROM laudo_diagnostico_versao x WHERE x.laudo_diagnostico_id = ld.id) AS versoes
+           FROM laudo_diagnostico ld WHERE ld.id = ?`,
+        [r.id],
+      ),
+    ).toEqual({ situacao: 'assinado', v: 1, versoes: 1 });
     const l1 = await um(
       `SELECT situacao, versao_atual, laudista_profissional_id IS NOT NULL AS laudista, assinado_em IS NOT NULL AS assinado
          FROM laudo_diagnostico WHERE id = ?`,
@@ -359,15 +532,29 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         { grandeza: ids.fe, numero: 58 },
         { grandeza: ids.massa, numero: 240 },
       ],
+      achadoCritico: true,
+      achadoCriticoDescricao: 'Achado sintético de teste',
     });
     expect(rt).toMatchObject({ situacao: 'retificado', versaoAtual: 2, foraReferencia: 2 });
+    // O achado crítico mantido não repete o aviso; o laudo já emitido avisa quem emitiu e quem pediu (a mesma conta,
+    // uma vez) e a emissão anterior fica superada na validação do código. Sem o campo, as palavras-chave ficam.
+    expect(rt).toMatchObject({ avisoCritico: 'nada', avisados: 1, emissoesSuperadas: 1 });
+    expect(await avisosDoLaudo()).toHaveLength(1);
+    expect(await avisosClinicos()).toEqual([
+      { prioridade: 'critica', para: m!.base.usuario2 },
+      { prioridade: 'alta', para: m!.base.usuario2 },
+    ]);
+    expect(await porta.validarLaudo(c, codigoEmissao)).toMatchObject({ valido: true, superado: true });
+    expect((await palavras()).filter((x) => !x['excluida'])).toHaveLength(1);
     // Segunda retificação retira a massa: fica marcada como excluída, nunca apagada.
     const rt3 = await servico.retificar(c, item, {
       motivoTexto: 'Medida da massa retirada por revisão.',
       texto: 'Fração de ejeção de 58%. Laudo retificado sem a massa.',
       valores: [{ grandeza: ids.fe, numero: 58 }],
     });
-    expect(rt3).toMatchObject({ situacao: 'retificado', versaoAtual: 3 });
+    expect(rt3).toMatchObject({ situacao: 'retificado', versaoAtual: 3, avisoCritico: 'cancelar' });
+    // O achado crítico retirado cancela o aviso ainda não comunicado: a linha fica, cancelada.
+    expect((await avisosDoLaudo()).map((x) => x['situacao'])).toEqual(['cancelado']);
     expect(
       await todos(
         'SELECT grandeza_laudo_id AS g, fora_referencia AS fora, excluido_em IS NOT NULL AS excluida FROM valor_grandeza_laudo WHERE laudo_diagnostico_id = ? ORDER BY sequencia',
@@ -424,6 +611,36 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
     expect(tela.valores.map((v) => v.grandeza)).toEqual([ids.fe]);
     expect(tela.modelos[0]?.id).toBe(modelo.id);
     expect(tela.pode).toEqual({ salvar: false, assinar: false, retificar: true });
+    expect(tela.paciente.nome.length > 0).toBe(true);
+    expect(tela.palavrasChave).toEqual([ids.palavraA]);
+    expect(tela.palavras.filter((x) => [ids.palavraA, ids.palavraB].includes(x.id))).toHaveLength(2);
+    expect(tela.anteriores).toEqual([]);
+    // O texto inteiro de uma versão anterior (a assinada), com a foto das medidas; outro estabelecimento não a lê.
+    const v1 = await servico.versaoAnterior(c, item, 1);
+    expect(v1).toMatchObject({
+      numero: 1,
+      situacao: 'assinado',
+      texto: 'Fração de ejeção de 60%. Laudo de teste.',
+      achadoCritico: true,
+    });
+    expect(v1.valores).toHaveLength(2);
+    expect(await falha(servico.versaoAnterior(c, item, 9))).toBe('versao-inexistente');
+    expect(await falha(servico.versaoAnterior(cOutro, item, 1))).toBe('exame-inexistente');
+    // Busca de casos: o laudo com todas as palavras pedidas (a retirada não conta); outro estabelecimento não acha.
+    expect((await servico.buscar(c, [ids.palavraA])).filter((x) => x.item === item)).toHaveLength(1);
+    expect((await servico.buscar(c, [ids.palavraA, ids.palavraB])).filter((x) => x.item === item)).toEqual(
+      [],
+    );
+    expect(await servico.buscar(cOutro, [ids.palavraA])).toEqual([]);
+    // Manutenção dos modelos: o pessoal de quem está na sessão e os do estabelecimento (o inativo também); o pessoal
+    // de outro médico não aparece.
+    const manut = await servico.modelos(c);
+    const idsManut = manut.itens.map((x) => x.id);
+    expect(idsManut).toContain(modelo.id);
+    expect(idsManut).toContain(modeloInativo);
+    expect(idsManut).not.toContain(modeloAlheio);
+    expect(idsManut).not.toContain(modeloOutroEst);
+    expect(manut.itens.find((x) => x.id === modelo.id)).toMatchObject({ pessoal: true, ativo: true });
 
     // O exame de laboratório não lauda por aqui.
     expect(await falha(servico.abrir(c, m!.itemLab))).toBe('setor-sem-laudo');

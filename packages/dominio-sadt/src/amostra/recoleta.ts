@@ -208,19 +208,185 @@ export function planoDeSubamostras(
   }));
 }
 
-/** A amostra primária só se divide recebida (ou triada) e uma vez só. */
+/** A amostra primária só se divide recebida (ou triada) e uma vez só: a já dividida diz isso, não "não recebida". */
 export function conferirAliquotagem(
   situacao: string,
   jaTemFilhas: boolean,
   plano: readonly SubamostraPlanejada[],
 ) {
+  if (jaTemFilhas || situacao === 'aliquotada')
+    throw new RecusaAmostra('amostra-aliquotada', 'As alíquotas desta amostra já foram geradas.');
   if (!['recebida', 'triada'].includes(situacao))
     throw new RecusaAmostra(
       'amostra-nao-recebida',
       'Receba a amostra no laboratório antes de gerar as alíquotas.',
     );
-  if (jaTemFilhas)
-    throw new RecusaAmostra('amostra-aliquotada', 'As alíquotas desta amostra já foram geradas.');
   if (plano.length === 0)
     throw new RecusaAmostra('sem-regra-subamostra', 'Nenhum exame desta amostra tem regra de alíquota.');
+}
+
+// ── Posto de coleta (cadastro próprio) ──────────────────────────────────────────────────────────────────────
+// O posto é o lugar onde a amostra é colhida: a sala do hospital (interno), a unidade fora dele (externo) ou a equipe
+// que vai à casa do paciente (domiciliar). Diz qual setor de laboratório recebe as amostras e em que horário atende.
+// A coleta registra o posto escolhido; fora do horário ela não é recusada (a coleta aconteceu e precisa ficar
+// registrada): vira um aviso gravado na passagem da amostra.
+
+export const TIPOS_DE_POSTO = ['interno', 'externo', 'domiciliar'] as const;
+export type TipoDePosto = (typeof TIPOS_DE_POSTO)[number];
+
+export interface CadastroDoPosto {
+  readonly codigo: string;
+  readonly descricao: string;
+  readonly tipo: TipoDePosto;
+  /** Setor de laboratório que recebe as amostras do posto. */
+  readonly setorLaboratorio: number | null;
+  /** Horário de atendimento (HH:MM); os dois ou nenhum. */
+  readonly horarioInicio: string | null;
+  readonly horarioFim: string | null;
+  readonly funcionaFimDeSemana: boolean;
+}
+
+const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+const minutos = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+
+/**
+ * Confere o cadastro do posto antes de gravar e devolve-o normalizado (código em maiúsculas, textos aparados): código
+ * único no estabelecimento, descrição, tipo, setor de laboratório que recebe e horário coerente (fim depois do início).
+ */
+export function conferirCadastroDoPosto(
+  p: CadastroDoPosto,
+  codigosEmUso: readonly string[] = [],
+): CadastroDoPosto {
+  const codigo = p.codigo.trim().toUpperCase();
+  const descricao = p.descricao.trim();
+  if (!/^[A-Z0-9._-]{1,30}$/.test(codigo))
+    throw new RecusaAmostra(
+      'posto-codigo-invalido',
+      'O código do posto tem de 1 a 30 letras, dígitos, ponto, hífen ou sublinhado.',
+    );
+  if (codigosEmUso.some((c) => c.trim().toUpperCase() === codigo))
+    throw new RecusaAmostra('posto-codigo-repetido', 'Já existe posto de coleta com este código.');
+  if (descricao.length < 3 || descricao.length > 150)
+    throw new RecusaAmostra('posto-descricao-invalida', 'Descreva o posto com 3 a 150 caracteres.');
+  if (!(TIPOS_DE_POSTO as readonly string[]).includes(p.tipo))
+    throw new RecusaAmostra('posto-tipo-invalido', 'O posto é interno, externo ou domiciliar.');
+  if (p.setorLaboratorio === null)
+    throw new RecusaAmostra(
+      'posto-sem-setor',
+      'Escolha o setor de laboratório que recebe as amostras do posto.',
+    );
+  const inicio = p.horarioInicio?.trim() || null;
+  const fim = p.horarioFim?.trim() || null;
+  if ((inicio === null) !== (fim === null))
+    throw new RecusaAmostra('posto-horario-incompleto', 'Informe o início e o fim do horário, ou nenhum.');
+  if (inicio !== null && fim !== null) {
+    if (!HORA.test(inicio) || !HORA.test(fim))
+      throw new RecusaAmostra('posto-horario-invalido', 'O horário do posto vai no formato HH:MM.');
+    if (minutos(fim) <= minutos(inicio))
+      throw new RecusaAmostra('posto-horario-invalido', 'O fim do horário do posto vem depois do início.');
+  }
+  return { ...p, codigo, descricao, horarioInicio: inicio, horarioFim: fim };
+}
+
+export interface PostoNaColeta {
+  readonly ativo: boolean;
+  readonly horarioInicio: string | null;
+  readonly horarioFim: string | null;
+  readonly funcionaFimDeSemana: boolean;
+}
+
+export type AvisoDoPosto = 'fora-do-horario' | 'fim-de-semana';
+
+/**
+ * Confere o posto escolhido na coleta. O posto é opcional (a coleta à beira do leito não tem posto); o inexistente e o
+ * inativo são recusados. Fora do horário ou em fim de semana em posto que não abre, a coleta segue com o aviso, que a
+ * gravação guarda na passagem da amostra. `quando` é o relógio do estabelecimento: dia da semana (0 = domingo) e HH:MM.
+ */
+export function conferirPostoNaColeta(
+  posto: PostoNaColeta | null,
+  informado: boolean,
+  quando: { readonly diaSemana: number; readonly hora: string },
+): readonly AvisoDoPosto[] {
+  if (!informado) return [];
+  if (!posto)
+    throw new RecusaAmostra('posto-inexistente', 'O posto de coleta não existe neste estabelecimento.');
+  if (!posto.ativo) throw new RecusaAmostra('posto-inativo', 'O posto de coleta está inativo.');
+  const avisos: AvisoDoPosto[] = [];
+  if (!posto.funcionaFimDeSemana && (quando.diaSemana === 0 || quando.diaSemana === 6))
+    avisos.push('fim-de-semana');
+  if (posto.horarioInicio && posto.horarioFim && HORA.test(quando.hora)) {
+    const agora = minutos(quando.hora);
+    if (agora < minutos(posto.horarioInicio) || agora >= minutos(posto.horarioFim))
+      avisos.push('fora-do-horario');
+  }
+  return avisos;
+}
+
+// ── Etiqueta da recoleta e da alíquota ──────────────────────────────────────────────────────────────────────
+// Toda amostra nova sai com etiqueta: a da recoleta diz que é recoleta, a da alíquota diz qual é entre quantas. A
+// primeira via usa a mesma chave da coleta comum (o clique repetido não imprime duas vezes); a reimpressão é uma via
+// numerada, registrada na passagem da amostra.
+
+export type TipoDeEtiqueta = 'coleta' | 'recoleta' | 'aliquota';
+
+/** O tipo da etiqueta pelo que a amostra é: alíquota (tem primária), recoleta (repetição) ou coleta comum. */
+export function tipoDaEtiqueta(a: {
+  readonly ehAliquota: boolean;
+  readonly repeticao: boolean;
+}): TipoDeEtiqueta {
+  return a.ehAliquota ? 'aliquota' : a.repeticao ? 'recoleta' : 'coleta';
+}
+
+export const LARGURA_LINHA_ETIQUETA = 18;
+
+/**
+ * A linha de exames da etiqueta (cabe em 18 caracteres): a marca do tipo ("RC" na recoleta; "A1/3" na alíquota 1 de 3)
+ * e os códigos dos exames; os que não couberem viram "+n", nunca um código cortado ao meio.
+ */
+export function linhaDaEtiqueta(e: {
+  readonly tipo: TipoDeEtiqueta;
+  readonly exames: readonly string[];
+  readonly indice?: number;
+  readonly total?: number;
+}): string {
+  const marca =
+    e.tipo === 'recoleta'
+      ? 'RC'
+      : e.tipo === 'aliquota'
+        ? `A${Math.max(1, e.indice ?? 1)}/${Math.max(e.indice ?? 1, e.total ?? 1)}`
+        : '';
+  const codigos = e.exames.map((c) => c.trim()).filter(Boolean);
+  let linha = marca;
+  for (let i = 0; i < codigos.length; i += 1) {
+    const resto = codigos.length - i - 1;
+    const proxima = linha ? `${linha} ${codigos[i]}` : codigos[i]!;
+    const reserva = resto > 0 ? ` +${resto}`.length : 0;
+    if (proxima.length + reserva > LARGURA_LINHA_ETIQUETA) {
+      const sobra = ` +${resto + 1}`;
+      return linha
+        ? `${linha}${sobra}`.slice(0, LARGURA_LINHA_ETIQUETA)
+        : codigos[i]!.slice(0, LARGURA_LINHA_ETIQUETA);
+    }
+    linha = proxima;
+  }
+  return linha;
+}
+
+/**
+ * A via a imprimir e a chave da fila. Amostra que já não atende exame (rejeitada, cancelada, descartada) não ganha
+ * etiqueta. A primeira via tem a chave da coleta comum; a reimpressão pedida soma uma via.
+ */
+export function viaDaEtiqueta(
+  codigo: string,
+  situacao: string,
+  viasImpressas: number,
+  reimpressao: boolean,
+): { readonly via: number; readonly chave: string } {
+  if (inativa(situacao))
+    throw new RecusaAmostra(
+      'amostra-inativa',
+      'A amostra foi rejeitada, cancelada ou descartada: não se imprime etiqueta dela.',
+    );
+  const via = reimpressao ? Math.max(1, viasImpressas) + 1 : 1;
+  return { via, chave: via === 1 ? `amostra-${codigo}` : `amostra-${codigo}-v${via}` };
 }

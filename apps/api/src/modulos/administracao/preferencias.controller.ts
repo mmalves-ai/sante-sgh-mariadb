@@ -13,9 +13,10 @@ import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, ctxDe, problema, sessaoDe } from './comum.js';
 import { FONTE_ADMINISTRACAO, type FonteAdministracao } from './fonte.js';
 import type { PreferenciasLidas } from './operacoes-preferencias-propria.js';
+import { preferenciasMemoria } from './preferencias-memoria.js';
 import type { Ctx } from './tipos.js';
 
-/** A fonte própria lê as preferências; a de memória não (503, falha fechada). */
+/** A fonte própria lê as preferências do banco; a sintética, da memória por login; outra qualquer: 503. */
 interface FonteComPreferencias {
   lerPreferencias?(
     c: Ctx,
@@ -33,10 +34,12 @@ export class PreferenciasController {
   @Permissao(PERMISSOES_ACESSO.preferenciaLer)
   async ler(@Req() req: RequisicaoAutorizada, @Query('tela') tela?: string): Promise<PreferenciasLidas> {
     const f = this.fonte as unknown as FonteComPreferencias;
-    if (typeof f.lerPreferencias !== 'function')
-      throw new ErroProblema('indisponivel', 503, 'Preferências indisponíveis neste ambiente');
     const t = typeof tela === 'string' && /^[A-Za-z0-9._-]{1,30}$/.test(tela) ? tela : undefined;
     const s = sessaoDe(req);
+    // Fonte sintética (dev e E2E, sem banco): a memória por login, com as mesmas regras do domínio.
+    if (this.fonte.destino === 'memoria') return preferenciasMemoria.ler(s.login, t, s.permissoes);
+    if (typeof f.lerPreferencias !== 'function')
+      throw new ErroProblema('indisponivel', 503, 'Preferências indisponíveis neste ambiente');
     return f
       .lerPreferencias(ctxDe(req, 'preferencias-ler'), s.usuario, t, s.permissoes)
       .catch((x: unknown) => problema(x));

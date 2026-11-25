@@ -91,13 +91,13 @@ describe.skipIf(SEM_BANCO)(
         let fonte = fo ? Number(fo.id) : 0;
         if (!fonte) {
           fonte = await e.inserir(
-            "INSERT INTO fonte_referencia_matmed (codigo, descricao, tipo_fonte, criado_em) VALUES ('outra', 'PUBLICACAO SINTETICA', 'outra', ?)",
+            "INSERT INTO fonte_referencia_matmed (codigo, descricao, tipo_fonte, criado_em) VALUES ('outra', 'PUBLICACAO SINTETICA', 'propria', ?)",
             [agora],
           );
           fonteCriada = fonte;
         }
         fonteX = await e.inserir(
-          "INSERT INTO fonte_referencia_matmed (codigo, descricao, tipo_fonte, criado_em) VALUES (?, 'OUTRA SINTETICA', 'outra', ?)",
+          "INSERT INTO fonte_referencia_matmed (codigo, descricao, tipo_fonte, criado_em) VALUES (?, 'OUTRA SINTETICA', 'propria', ?)",
           [`${COD}X`, agora],
         );
         const edicao = (f: number, num: string) =>

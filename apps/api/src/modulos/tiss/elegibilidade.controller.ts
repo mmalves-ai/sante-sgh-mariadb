@@ -15,7 +15,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -49,6 +49,7 @@ export class ElegibilidadeController {
   }
 
   @Post()
+  @AuditadoNoHandler('executor: trilha na mesma transação da consulta de elegibilidade')
   @HttpCode(201)
   @Permissao(PERMISSOES_ELEGIBILIDADE.gravar)
   consultar(@Req() req: RequisicaoAutorizada, @Body() b: unknown) {
@@ -56,6 +57,7 @@ export class ElegibilidadeController {
   }
 
   @Post(':id/resposta')
+  @AuditadoNoHandler('executor: trilha na mesma transação da consulta de elegibilidade')
   @HttpCode(200)
   @Permissao(PERMISSOES_ELEGIBILIDADE.gravar)
   responder(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {

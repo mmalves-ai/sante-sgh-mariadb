@@ -10,6 +10,7 @@ import { useRoute } from 'vue-router';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import BaixaPorDemonstrativo from '../componentes/BaixaPorDemonstrativo.vue';
 import GlosaDoTitulo from '../componentes/GlosaDoTitulo.vue';
 import { lerTituloReceber, listarTitulosReceber, novaChave, registrarGlosa } from '../api-financeiro.js';
 import { data, reais, usarFinanceiro } from '../usar-financeiro.js';
@@ -89,6 +90,7 @@ async function registrar() {
     <h1 id="dm-titulo">{{ t('financeiro.demonstrativos.titulo') }}</h1>
     <p>{{ t('financeiro.demonstrativos.texto') }}</p>
     <AvisoFaturamento :motivo="motivoFuncionalidade('contasReceber')" />
+    <BaixaPorDemonstrativo />
     <span class="campo">
       <SanteSelecao
         v-model="escolhido"

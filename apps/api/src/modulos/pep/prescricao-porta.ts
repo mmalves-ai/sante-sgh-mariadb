@@ -7,6 +7,7 @@
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { SecaoCadastroPrescricao } from '@sgh/contratos';
 import type { ContextoOperacao } from '@sgh/nucleo';
+import type { FavoritoNovo, FavoritoPrescritorLido } from './prescricao-propria-favoritos.js';
 import type {
   AlergiaLida,
   DadosClinicosLidos,
@@ -177,4 +178,23 @@ export interface PortaPrescricao {
   registrarReconciliacao(c: ContextoPrescricao, usuario: string, r: ReconciliacaoGravacao): Promise<number>;
   registrarFicha(c: ContextoPrescricao, usuario: string, f: FichaAvulsa): Promise<number>;
   gravarGrade(c: ContextoPrescricao, autor: string, g: NovaGradeClasse): Promise<number>;
+  /** Favoritos do prescritor da sessão (03-PEP L107). */
+  favoritos(c: ContextoPrescricao, usuario: string): Promise<FavoritoPrescritorLido[]>;
+  marcarFavorito(c: ContextoPrescricao, usuario: string, f: FavoritoNovo): Promise<number>;
+  desmarcarFavorito(c: ContextoPrescricao, usuario: string, id: number): Promise<number>;
+  /**
+   * A via impressa da prescrição no registro único de impressão e exportação (01-ADM L82): quem, quando, o
+   * paciente, a via e a justificativa (1ª via) ou o motivo (nova via). Devolve o id do registro.
+   */
+  registrarImpressao(
+    c: ContextoPrescricao,
+    usuario: string,
+    e: {
+      readonly paciente: number;
+      readonly prescricao: number;
+      readonly via: number;
+      readonly justificativa: string;
+      readonly hash?: string | null;
+    },
+  ): Promise<number>;
 }

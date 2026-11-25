@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Equipe, kits e transferência da conta (F3.7, 06-FAT linhas 14, 15 e 16): `/faturamento/contas/:id/movimentos`.
 // Uma tela só por conta: a lista de itens com a equipe de cada um (editada no lugar, com o valor previsto do ato), o
 // kit lançado de uma vez e os itens marcados na lista transferidos para outra conta do paciente. A validação do domínio
@@ -16,7 +17,9 @@ import {
   type ParticipantePedido,
   transferirItens,
 } from '../api-movimentos.js';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
+import KitCadastro from '../componentes/KitCadastro.vue';
 
 const props = defineProps<{ id: string }>();
 const { t } = useI18n();
@@ -143,6 +146,14 @@ async function lancar() {
   }
 }
 
+// Cadastro do kit na mesma tela (quem pode editar as regras de cobrança): gravado, já aparece na lista para lançar.
+const podeCadastrarKit = computed(() => pode('faturamento.regra.editar'));
+async function kitGravado(codigo: string) {
+  erro.value = null;
+  aviso.value = t('movimentosConta.kitGravado', { codigo });
+  await qc.invalidateQueries({ queryKey: ['faturamento', 'movimentos'] });
+}
+
 // ── Transferência ──
 const marcados = ref<number[]>([]);
 const transf = reactive({ destino: 0, motivo: '' });
@@ -233,28 +244,32 @@ async function transferir() {
           {{ t('movimentosConta.buscar') }}
         </button>
         <fieldset v-for="(p, k) in equipe" :key="k" :data-testid="`mov-participante-${k}`">
-          <label>
-            {{ t('movimentosConta.profissional') }}
-            <select v-model.number="p.profissionalId" required :data-testid="`mov-profissional-${k}`">
-              <option :value="0" disabled>{{ t('movimentosConta.escolhaProfissional') }}</option>
-              <option v-for="o in opcoesProfissional" :key="o.id" :value="o.id">{{ o.nome }}</option>
-            </select>
-          </label>
-          <label>
-            {{ t('movimentosConta.funcao') }}
-            <select v-model.number="p.funcaoId" required>
-              <option v-for="f in q.data.value.funcoes" :key="f.id" :value="f.id">{{ f.descricao }}</option>
-            </select>
-          </label>
-          <label>
-            {{ t('movimentosConta.grau') }}
-            <select v-model="p.grauId" :data-testid="`mov-grau-${k}`">
-              <option :value="null">{{ t('movimentosConta.grauDaFuncao') }}</option>
-              <option v-for="g in q.data.value.graus" :key="g.id" :value="g.id">
-                {{ g.codigo }} · {{ g.descricao }}
-              </option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-model="p.profissionalId"
+            :rotulo="t('movimentosConta.profissional')"
+            :opcoes="[
+              { valor: 0, rotulo: t('movimentosConta.escolhaProfissional'), desabilitada: true },
+              ...opcoesProfissional.map((o) => ({ valor: o.id, rotulo: o.nome })),
+            ]"
+            obrigatorio
+            :data-testid="`mov-profissional-${k}`"
+          />
+          <SanteSelecao
+            v-model="p.funcaoId"
+            :rotulo="t('movimentosConta.funcao')"
+            :opcoes="[...q.data.value.funcoes.map((f) => ({ valor: f.id, rotulo: f.descricao }))]"
+            obrigatorio
+          />
+          <SanteSelecao
+            :model-value="p.grauId ?? null"
+            @update:model-value="(v) => (p.grauId = v)"
+            :rotulo="t('movimentosConta.grau')"
+            :opcoes="[
+              { valor: null, rotulo: t('movimentosConta.grauDaFuncao') },
+              ...q.data.value.graus.map((g) => ({ valor: g.id, rotulo: `${g.codigo} · ${g.descricao}` })),
+            ]"
+            :data-testid="`mov-grau-${k}`"
+          />
           <label>
             {{ t('movimentosConta.percentual') }}
             <input
@@ -273,12 +288,12 @@ async function transferir() {
               "
             />
           </label>
-          <label>
-            {{ t('movimentosConta.formaPagamento') }}
-            <select v-model="p.formaPagamento">
-              <option v-for="f in FORMAS" :key="f" :value="f">{{ t(`movimentosConta.formas.${f}`) }}</option>
-            </select>
-          </label>
+          <SanteSelecao
+            :model-value="p.formaPagamento ?? 'via_hospital'"
+            @update:model-value="(v) => (p.formaPagamento = v)"
+            :rotulo="t('movimentosConta.formaPagamento')"
+            :opcoes="[...FORMAS.map((x) => ({ valor: x, rotulo: t(`movimentosConta.formas.${x}`) }))]"
+          />
           <span class="secundario">{{ t('movimentosConta.valorAto', { valor: moeda(previstoDe(p)) }) }}</span>
           <span
             v-if="
@@ -321,14 +336,18 @@ async function transferir() {
         <h2>{{ t('movimentosConta.kit') }}</h2>
         <p v-if="!q.data.value.kits.length" class="secundario">{{ t('movimentosConta.semKit') }}</p>
         <form v-else class="filtros" data-testid="mov-form-kit" @submit.prevent="lancar">
-          <label>
-            {{ t('movimentosConta.escolhaKit') }}
-            <select v-model.number="kit.id" required data-testid="mov-kit">
-              <option v-for="k in q.data.value.kits" :key="k.id" :value="k.id">
-                {{ k.codigo }} · {{ k.descricao }} ({{ t(`movimentosConta.modo.${k.modo}`) }})
-              </option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-model="kit.id"
+            :rotulo="t('movimentosConta.escolhaKit')"
+            :opcoes="[
+              ...q.data.value.kits.map((k) => ({
+                valor: k.id,
+                rotulo: `${k.codigo} · ${k.descricao} (${t(`movimentosConta.modo.${k.modo}`)})`,
+              })),
+            ]"
+            obrigatorio
+            data-testid="mov-kit"
+          />
           <label>
             {{ t('movimentosConta.vezes') }}
             <input v-model.number="kit.vezes" type="number" min="1" step="1" required />
@@ -338,18 +357,30 @@ async function transferir() {
           </button>
         </form>
 
+        <KitCadastro
+          v-if="podeCadastrarKit"
+          :fonte-pagadora-id="q.data.value.fontePagadoraId"
+          :fonte="q.data.value.fonte"
+          @gravado="kitGravado"
+          @erro="(e) => (erro = e)"
+        />
+
         <h2>{{ t('movimentosConta.transferir') }}</h2>
         <form class="filtros" data-testid="mov-form-transferir" @submit.prevent="transferir">
-          <label>
-            {{ t('movimentosConta.destino') }}
-            <select v-model.number="transf.destino" required data-testid="mov-destino">
-              <option :value="0" disabled>{{ t('movimentosConta.escolhaDestino') }}</option>
-              <option v-for="d in q.data.value.destinos" :key="d.id" :value="d.id" :disabled="!d.aberta">
-                {{ d.numero }} · {{ d.fonte
-                }}{{ d.outroEstabelecimento ? ` (${t('movimentosConta.outroEstab')})` : '' }}
-              </option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-model="transf.destino"
+            :rotulo="t('movimentosConta.destino')"
+            :opcoes="[
+              { valor: 0, rotulo: t('movimentosConta.escolhaDestino'), desabilitada: true },
+              ...q.data.value.destinos.map((d) => ({
+                valor: d.id,
+                rotulo: `${d.numero} · ${d.fonte}${d.outroEstabelecimento ? ` (${t('movimentosConta.outroEstab')})` : ''}`,
+                desabilitada: !d.aberta,
+              })),
+            ]"
+            obrigatorio
+            data-testid="mov-destino"
+          />
           <label>
             {{ t('movimentosConta.motivo') }}
             <input v-model="transf.motivo" minlength="5" maxlength="500" required data-testid="mov-motivo" />

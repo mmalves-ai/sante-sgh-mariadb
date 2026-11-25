@@ -238,7 +238,7 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
     );
   }
 
-  iniciar(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
+  async iniciar(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaIniciar, entrada);
     return this.gravar(c, 'internacao.gas.iniciar', ['uso_gas_medicinal'], async (tx, est, usuario) => {
       const agora = new Date();
@@ -325,7 +325,11 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
     });
   }
 
-  encerrar(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number; horasUso: number }> {
+  async encerrar(
+    c: ContextoPortaPropria,
+    id: number,
+    entrada: unknown,
+  ): Promise<{ id: number; horasUso: number }> {
     const x = entradaValida(
       z.object({ fim: quando.optional(), versao: z.number().int().positive() }).strict(),
       entrada,
@@ -354,7 +358,7 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
     });
   }
 
-  cancelar(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number }> {
+  async cancelar(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(
       z.object({ motivo: z.string().trim().min(5).max(400), versao: z.number().int().positive() }).strict(),
       entrada,
@@ -381,7 +385,7 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
     return this.ler(c, 'regras', (l, est) => regrasDoGas(l, est.id, gas));
   }
 
-  incluirRegra(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
+  async incluirRegra(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaRegra, entrada);
     const regra: RegraCobrancaGas = {
       unidade: e.unidade,
@@ -468,7 +472,7 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
   }
 
   /** Encerra a vigência da regra (nada é apagado; a conta já lançada guarda a regra na memória). */
-  encerrarRegra(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number }> {
+  async encerrarRegra(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(
       z
         .object({ vigenciaFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), versao: z.number().int().positive() })

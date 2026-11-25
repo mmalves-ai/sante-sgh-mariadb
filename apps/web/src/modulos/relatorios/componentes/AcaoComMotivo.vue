@@ -66,7 +66,7 @@ function confirmar(): void {
 
 <style scoped>
 .erro {
-  color: var(--sgh-perigo-texto, var(--sgh-texto));
+  color: var(--sgh-alerta);
   font-weight: 600;
   margin: 0;
 }

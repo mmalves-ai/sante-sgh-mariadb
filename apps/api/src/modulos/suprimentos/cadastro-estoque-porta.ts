@@ -1,7 +1,8 @@
 // Porta do cadastro do estoque (F3.6, 05-SUP linhas 1, 3 e 6): o item (material e medicamento) com unidades,
 // princípios ativos, vias, códigos de barras, apresentações com registro sanitário e estabilidades; o local de estoque
 // com setores atendidos e classificação; o escopo do usuário por local, classificação e centro de custo; e a lista de
-// separação da requisição a atender. Só a porta própria (MariaDB) grava; sem o núcleo, a indisponível (503).
+// separação da requisição a atender. Só a porta própria (MariaDB) grava no banco; em dev/ci com as fontes sintéticas,
+// a porta em memória (`cadastro-estoque-porta-memoria.ts`); fora disso, a indisponível (503).
 import type {
   ItemEstoqueEntrada,
   LinhaSeparacao,
@@ -29,6 +30,9 @@ export interface ApoioCadastroEstoque {
   readonly setores: Opcao[];
   readonly centrosCusto: Opcao[];
   readonly locais: Opcao[];
+  /** As guardas (condições de armazenamento) e os diluentes (soluções ativas) que a estabilidade escolhe por lista. */
+  readonly guardas: Opcao[];
+  readonly diluentes: Opcao[];
 }
 
 export interface FichaItemEdicao extends ItemEstoqueEntrada {
@@ -108,7 +112,7 @@ export interface ConcessaoEntrada {
 }
 
 export interface PortaCadastroEstoque {
-  readonly destino: 'banco' | 'indisponivel';
+  readonly destino: 'banco' | 'memoria' | 'indisponivel';
   apoio(c: ContextoPortaM18): Promise<ApoioCadastroEstoque>;
   buscar(
     c: ContextoPortaM18,
@@ -178,13 +182,34 @@ export function portaCadastroEstoqueIndisponivel(): PortaCadastroEstoque {
   const falha = () =>
     Promise.reject(
       new ErroProblema(
-        'servico-indisponivel',
+        'indisponivel',
         503,
         'Cadastro do estoque indisponível',
         'O cadastro do estoque grava só no banco próprio do cliente.',
+        { codigo: 'servico-indisponivel' },
       ),
     );
-  return new Proxy({ destino: 'indisponivel' } as PortaCadastroEstoque, {
-    get: (alvo, p) => (p === 'destino' ? alvo.destino : falha),
-  });
+  // Objeto com os métodos da porta, não um Proxy que responde a qualquer chave: o Nest procura `then` e os ganchos
+  // (onModuleInit…) em todo provedor, e um Proxy devolveria a recusa para eles (a montagem do módulo travava).
+  return {
+    destino: 'indisponivel',
+    apoio: falha,
+    buscar: falha,
+    fichaItem: falha,
+    incluirItem: falha,
+    alterarItem: falha,
+    situacaoItem: falha,
+    locais: falha,
+    fichaLocal: falha,
+    incluirLocal: falha,
+    alterarLocal: falha,
+    situacaoLocal: falha,
+    escopoUsuario: falha,
+    gravarEscopoLocal: falha,
+    retirarEscopoLocal: falha,
+    concederClassificacao: falha,
+    concederCentroCusto: falha,
+    retirarConcessao: falha,
+    separacao: falha,
+  };
 }

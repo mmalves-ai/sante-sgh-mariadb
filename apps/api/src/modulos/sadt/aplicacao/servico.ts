@@ -36,7 +36,7 @@ import {
   conferirColeta,
   fraseDaEmissao,
   indicadoresCriticos,
-  podeMudar,
+  conferirPassagemDoRastreio,
   podeNoEstado,
   rotuloDaVia,
 } from '@sgh/dominio-sadt';
@@ -313,6 +313,7 @@ export class ServicoSadt {
       identificadoresConferidos: true;
       recipiente?: number | undefined;
       estacao?: string | undefined;
+      posto?: number | undefined;
     },
   ): Promise<ColetaRegistrada> {
     const exames = await this.porta.examesPorId(ctx(s), e.exames);
@@ -368,6 +369,7 @@ export class ServicoSadt {
           exames: exames.map((x) => ({ id: x.id, chave: chaveTexto(x) })),
           pulseiraConferida: internado,
           estacao,
+          posto: e.posto ?? null,
           usuario: s.login,
         }),
     );
@@ -424,9 +426,13 @@ export class ServicoSadt {
   async mudarEstado(s: SessaoCadastro, id: number, e: MudarEstadoAmostraEntrada): Promise<AmostraDetalhe> {
     const a = await this.porta.amostraPorId(ctx(s), id);
     if (!a) return naoEncontrado('A amostra não existe.');
-    const p = podeMudar(a.estado, e.estado);
+    const p = conferirPassagemDoRastreio(a.estado, e.estado);
     if (!p.pode)
-      recusa('Passagem não permitida', p.motivo ?? 'Passagem de estado não permitida.', 'amostra-transicao');
+      recusa(
+        'Passagem não permitida',
+        p.motivo ?? 'Passagem de estado não permitida.',
+        p.codigo ?? 'amostra-transicao',
+      );
     const rejeicao = e.estado === 'rejeitada' || e.estado === 'recoleta';
     const permissao = rejeicao ? 'sadt.amostra.rejeitar' : 'sadt.amostra.receber';
     if (!s.pode(permissao))

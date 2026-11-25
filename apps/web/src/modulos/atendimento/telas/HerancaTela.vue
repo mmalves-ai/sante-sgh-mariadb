@@ -4,12 +4,13 @@
 // estabelecimento (vale para todos) e a pessoal (só para mim: segue o estabelecimento, herda ou não herda). "Seguir o
 // estabelecimento" encerra a regra pessoal sem apagá-la. A gravação confere a configuração lida (outra estação mudou:
 // o aviso e a releitura).
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { alterarHeranca, lerConfiguracaoHeranca, novaChave } from '../api-atendimento.js';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
+import PadraoAberturaPainel from '../componentes/PadraoAberturaPainel.vue';
 import { usarAtendimento } from '../usar-atendimento.js';
 
 type Pessoal = 'segue' | 'sim' | 'nao';
@@ -19,6 +20,11 @@ const { pode } = usarAtendimento();
 const cfg = useQuery({ queryKey: ['atendimento', 'heranca'], queryFn: () => lerConfiguracaoHeranca() });
 const doEstabelecimento = ref<Record<string, boolean>>({});
 const pessoal = ref<Record<string, Pessoal>>({});
+const opcoesPessoal = computed(() => [
+  { valor: 'segue' as Pessoal, rotulo: t('atendimento.heranca.segue') },
+  { valor: 'sim' as Pessoal, rotulo: t('atendimento.heranca.herda') },
+  { valor: 'nao' as Pessoal, rotulo: t('atendimento.heranca.naoHerda') },
+]);
 const comoPessoal = (v: boolean | null): Pessoal => (v === null ? 'segue' : v ? 'sim' : 'nao');
 watch(
   () => cfg.data.value,
@@ -100,16 +106,15 @@ async function gravar(paraMim: boolean): Promise<void> {
               />
             </td>
             <td>
-              <select
-                v-model="pessoal[c.campo]"
-                :disabled="!podeGravar"
-                :aria-label="`${c.rotulo}: ${t('atendimento.heranca.paraMim')}`"
+              <SanteSelecao
+                :model-value="pessoal[c.campo] ?? 'segue'"
+                :desabilitado="!podeGravar"
+                ocultar-rotulo
+                :rotulo="`${c.rotulo}: ${t('atendimento.heranca.paraMim')}`"
+                :opcoes="opcoesPessoal"
                 :data-testid="`heranca-pessoal-${c.campo}`"
-              >
-                <option value="segue">{{ t('atendimento.heranca.segue') }}</option>
-                <option value="sim">{{ t('atendimento.heranca.herda') }}</option>
-                <option value="nao">{{ t('atendimento.heranca.naoHerda') }}</option>
-              </select>
+                @update:model-value="(v) => (pessoal[c.campo] = v)"
+              />
             </td>
             <td :data-testid="`heranca-vigor-${c.campo}`">
               {{ c.herda ? t('atendimento.heranca.herda') : t('atendimento.heranca.naoHerda') }}
@@ -134,6 +139,7 @@ async function gravar(paraMim: boolean): Promise<void> {
       <p v-if="mensagem" role="status">{{ mensagem }}</p>
       <ErroAtendimento v-if="erro" :erro="erro" />
     </form>
+    <PadraoAberturaPainel />
   </section>
 </template>
 

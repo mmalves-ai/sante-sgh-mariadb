@@ -32,6 +32,7 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import { semIndefinidos } from '../../entrada-exata.js';
 
 export const PORTA_TEXTO_PADRAO_CIRURGIA = Symbol('PORTA_TEXTO_PADRAO_CIRURGIA');
 
@@ -127,7 +128,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
   }
 
   /** Preenche os campos do texto com os valores, sem gravar (a descrição usa o resultado). */
-  preencher(c: ContextoPortaPropria, id: number, entrada: unknown) {
+  async preencher(c: ContextoPortaPropria, id: number, entrada: unknown) {
     const x = entradaValida(
       z.object({ valores: z.record(z.string(), z.string().max(2000)) }).strict(),
       entrada,
@@ -156,7 +157,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
   }
 
   private async conferir(tx: Leitor, e: z.infer<typeof esquemaTexto>, id: number | null): Promise<void> {
-    const p = validarTextoPadrao(e);
+    const p = validarTextoPadrao(semIndefinidos(e));
     if (p.length) throw recusaRegra('Texto padrão recusado', p);
     if (e.procedimento !== null) {
       const pc = await tx.uma('SELECT id FROM procedimento_cirurgico WHERE id = ?', [e.procedimento]);
@@ -215,11 +216,11 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     };
   }
 
-  incluir(c: ContextoPortaPropria, entrada: unknown, quem: QuemGravaTexto): Promise<{ id: number }> {
+  async incluir(c: ContextoPortaPropria, entrada: unknown, quem: QuemGravaTexto): Promise<{ id: number }> {
     const e = entradaValida(esquemaTexto, entrada);
     return this.gravar(
       c,
-      'cirurgia.textoPadrao.incluir',
+      'cirurgia.texto-padrao.incluir',
       ['texto_padrao_cirurgia'],
       async (tx: TxOperacao, _est, usuario) => {
         await this.conferirDono(tx, usuario, quem, e.cirurgiao);
@@ -230,7 +231,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     );
   }
 
-  alterar(
+  async alterar(
     c: ContextoPortaPropria,
     id: number,
     entrada: unknown,
@@ -242,7 +243,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     );
     return this.gravar(
       c,
-      'cirurgia.textoPadrao.alterar',
+      'cirurgia.texto-padrao.alterar',
       ['texto_padrao_cirurgia'],
       async (tx: TxOperacao, _est, usuario) => {
         const a = await tx.uma('SELECT id, profissional_id FROM texto_padrao_cirurgia WHERE id = ?', [id]);
@@ -257,7 +258,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
   }
 
   /** Tira de uso ou volta ao uso (nunca apaga: a descrição já assinada guarda o texto que usou). */
-  definirUso(
+  async definirUso(
     c: ContextoPortaPropria,
     id: number,
     entrada: unknown,
@@ -269,7 +270,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     );
     return this.gravar(
       c,
-      'cirurgia.textoPadrao.uso',
+      'cirurgia.texto-padrao.uso',
       ['texto_padrao_cirurgia'],
       async (tx, _est, usuario) => {
         const a = await tx.uma('SELECT id, profissional_id FROM texto_padrao_cirurgia WHERE id = ?', [id]);

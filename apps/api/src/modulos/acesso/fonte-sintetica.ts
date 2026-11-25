@@ -685,6 +685,18 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
           'suprimentos',
           'sadt',
         ),
+        // F3.6 (05-SUP linhas 1, 3 e 13): o administrador mantém o cadastro do estoque: o item e o medicamento, o local e
+        // o escopo dos usuários do estoque, o kit padrão da cirurgia e a requisição que o usa.
+        ...opcoesSuprimentos(
+          'suprimentos.item.*',
+          'suprimentos.local.*',
+          'suprimentos.kit.ler',
+          'suprimentos.kit.editar',
+          'acesso.escopo.*',
+          'suprimentos.requisicao.ler',
+          'suprimentos.requisicao.criar',
+        ),
+        ...opcoesDasPermissoes('acesso.escopo.editar'),
       ],
     },
   },
@@ -3169,6 +3181,42 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     bloqueado: false,
     senhaAlteradaEm: new Date(),
     concessoes: { papeis: [4], opcoesPapel: [3984, 6390, 6391, 6392] },
+  },
+  /**
+   * F3.8, 07-FIN linha 63 (no fim do mapa: o ID sintético é a posição): quem gere o contas a pagar e prorroga o
+   * vencimento. A permissão de prorrogar não vem de opção de menu: é dada por perfil (administrador do sistema).
+   */
+  'SINT.FIN.GESTOR': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'FINGESTOR',
+      // F3.8, 07-FIN linha 108: abre a escrituração das entradas (classificar e gerar a EFD vêm do perfil).
+      opcoesGrupo: opcoesFinanceiro(
+        'financeiro.tituloPagar.ler',
+        'financeiro.tituloPagar.criar',
+        'financeiro.escrituracao.ler',
+      ),
+    },
+    perfisConcedidos: ['administrador-sistema'],
+  },
+  /**
+   * F3.8, 07-FIN linha 67 (no fim da lista, pelo ID sintético das outras): quem só pede adiantamento, sem nenhuma
+   * permissão do título a pagar. A busca do credor tem de abrir para esta pessoa.
+   */
+  'SINT.FIN.ADIANTA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'FINADIANTA',
+      opcoesGrupo: opcoesFinanceiro('financeiro.adiantamento.ler', 'financeiro.adiantamento.conceder'),
+    },
   },
 };
 

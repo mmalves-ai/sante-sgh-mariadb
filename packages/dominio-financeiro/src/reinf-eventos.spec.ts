@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { RetencaoServico } from './declaracoes.js';
 import {
+  conferirAlteracaoProcesso,
+  conferirEncerramentoSuspensao,
   conferirProcessoSuspensao,
+  fimDaSuspensao,
   conferirRetornoReinf,
   conferirTransmissaoReinf,
   montarEventosReinf,
@@ -177,5 +180,38 @@ describe('EFD-REINF por evento', () => {
     const [e] = montarEventosReinf('R-2000', '2026-10', '3', [ret(A)], []);
     const volta = planejarEnvioReinf([{ evento: e!, hash: 'h5' }], [gv({}), exc('aceito')]);
     expect(volta.novos[0]).toMatchObject({ retifica: null, substitui: null });
+  });
+  it('suspensão encerrada vale até o dia; anulada nunca vale; a já encerrada não muda; processo alterado é conferido', () => {
+    const atual = { vigenciaInicio: '2026-01-01', encerradaEm: null, anulada: false };
+    const ok = { fim: '2026-09-30', motivo: 'Liminar cassada' };
+    expect(conferirEncerramentoSuspensao(atual, ok)).toBeNull();
+    expect(conferirEncerramentoSuspensao(atual, { fim: null, motivo: 'Lançada por engano' })).toBeNull();
+    expect(conferirEncerramentoSuspensao(atual, { ...ok, motivo: 'x' })?.codigo).toBe('motivo-obrigatorio');
+    expect(conferirEncerramentoSuspensao(atual, { ...ok, fim: '2025-12-31' })?.codigo).toBe(
+      'fim-antes-do-inicio',
+    );
+    expect(conferirEncerramentoSuspensao({ ...atual, encerradaEm: '2026-09-30' }, ok)?.codigo).toBe(
+      'suspensao-ja-encerrada',
+    );
+    expect(conferirEncerramentoSuspensao({ ...atual, anulada: true }, ok)?.codigo).toBe(
+      'suspensao-ja-encerrada',
+    );
+    expect(fimDaSuspensao(null, null)).toBeNull();
+    expect(fimDaSuspensao(null, '2026-09-30')).toBe('2026-09-30');
+    expect(fimDaSuspensao('2026-12-31', '2026-09-30')).toBe('2026-09-30');
+    expect(fimDaSuspensao('2026-06-30', '2026-09-30')).toBe('2026-06-30');
+    // Encerrada em setembro: suspende até a competência de setembro e não suspende a de outubro.
+    const p = (fim: string | null) => [proc({ vigenciaFim: fimDaSuspensao(null, fim) })];
+    const de = (periodo: string, fim: string | null) =>
+      montarEventosReinf('R-2000', periodo, '3', [ret(A, { dataEmissao: `${periodo}-05` })], p(fim))[0];
+    expect(de('2026-09', '2026-09-30')?.valorSuspenso).toBe(110);
+    expect(de('2026-10', '2026-09-30')).toMatchObject({ valorSuspenso: 0, valorRetido: 110 });
+    const dados = { tipo: 'judicial', vara: '0001', vigenciaInicio: '2026-01-01', vigenciaFim: null };
+    expect(conferirAlteracaoProcesso(dados)).toBeNull();
+    expect(conferirAlteracaoProcesso({ ...dados, vara: ' ' })?.codigo).toBe('vara-obrigatoria');
+    expect(conferirAlteracaoProcesso({ ...dados, tipo: 'administrativo', vara: null })).toBeNull();
+    expect(conferirAlteracaoProcesso({ ...dados, vigenciaFim: '2025-12-31' })?.codigo).toBe(
+      'vigencia-invalida',
+    );
   });
 });

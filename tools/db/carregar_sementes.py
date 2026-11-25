@@ -25,7 +25,12 @@ SQL = RAIZ / "tools/db/sql.sh"
 PASTA = RAIZ / "db/sementes"
 NOME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 # Chave natural das tabelas que não usam `codigo` (o padrão).
-CHAVE = {"graduacao_oftalmologica": "sigla"}
+CHAVE = {
+    "graduacao_oftalmologica": "sigla",
+    # Raça/cor pelo código do IBGE e nacionalidade pelo código do cadastro nacional de usuários do SUS (F3.1-07).
+    "classificacao_raca_cor": "codigo_ibge",
+    "nacionalidade": "codigo_cadsus",
+}
 
 
 def chave(tabela: str) -> str:

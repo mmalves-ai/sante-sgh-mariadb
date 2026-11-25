@@ -27,3 +27,13 @@ condition = "AND"
 paths = ['''(^|/)tools/schema-check/homologado/[a-z0-9]+\.json$''']
 regexTarget = "secret"
 regexes = ['''^[0-9a-f]{16,64}$''']
+
+[[allowlists]]
+# C1-017 (2026-11-25, commit 463ea2b8, autorizado pelo dono): a junção SQL "JOIN capitulo_cid10 c ON c.id =
+# a.capitulo_cid10_id" casa com a regra generic-api-key ("id = <valor>"), mas é nome de coluna. Vale só nesse arquivo
+# e só para esse texto exato: qualquer outro achado ali continua acusado.
+description = "Junção SQL lida como chave genérica"
+condition = "AND"
+paths = ['''(^|/)apps/api/src/modulos/qualidade/porta-perfil-cid-propria\.ts$''']
+regexTarget = "match"
+regexes = ['''id = a\.capitulo_cid10_id''']

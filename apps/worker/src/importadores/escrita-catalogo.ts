@@ -143,6 +143,8 @@ export const ESCRITAS: Readonly<Record<string, MapaEscrita>> = Object.freeze({
   },
   // A cidade e o código IBGE do arquivo apontam o mesmo município (o IBGE manda quando vier); a cidade não é gravada
   // como texto: o endereço lê o nome do município.
+  // O tipo de logradouro do arquivo (rua, avenida…) vira a espécie do catálogo oficial, pela sigla ou pela descrição;
+  // tipo vazio ou fora do catálogo não recusa o lote: o CEP entra sem espécie (o endereço lê só o logradouro).
   cep: {
     tabela: 'logradouro_cep',
     chave: { campo: 'cep', coluna: 'codigo_cep' },
@@ -153,6 +155,15 @@ export const ESCRITAS: Readonly<Record<string, MapaEscrita>> = Object.freeze({
         r['unidade_federativa_id'] = await ufPorSigla(tx, texto(presentes['uf']));
       if (Object.hasOwn(presentes, 'ibge') || Object.hasOwn(presentes, 'cidade'))
         r['municipio_ibge_id'] = await municipio(tx, ctx);
+      const tipo = texto(presentes['tipoLogradouro']);
+      if (tipo) {
+        const especies = await tx.consultar<{ id: unknown }>(
+          'SELECT id FROM especie_logradouro WHERE ativo = TRUE AND (sigla = ? OR descricao = ?)',
+          [tipo, tipo],
+          { teto: 2 },
+        );
+        if (especies.length === 1) r['especie_logradouro_id'] = Number(especies[0]!.id);
+      }
       return r;
     },
     exigeNaInclusao: ['unidade_federativa_id', 'municipio_ibge_id'],

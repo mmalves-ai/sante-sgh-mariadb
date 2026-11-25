@@ -103,7 +103,7 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 .grade input[aria-invalid='true'] {
-  border-color: var(--sgh-perigo);
+  border-color: var(--sgh-alerta);
 }
 .grade .fixa {
   position: sticky;

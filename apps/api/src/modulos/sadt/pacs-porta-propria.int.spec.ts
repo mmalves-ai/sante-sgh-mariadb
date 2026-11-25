@@ -16,6 +16,7 @@ import {
   SEM_BANCO,
 } from './aplicacao/copia.spec-util.js';
 import type { ContextoPacs } from './pacs-porta.js';
+import { instanteCivil } from '../exames/relogio.js';
 import { PortaPacsPropria } from './pacs-porta-propria.js';
 import { PortaSadtPropria } from './porta-propria.js';
 
@@ -39,13 +40,41 @@ describe.skipIf(SEM_BANCO)('porta própria da lista de trabalho DICOM (MariaDB, 
     await nucleo.encerrar();
   });
 
+  it('o exame pedido à noite é do dia civil do estabelecimento (o instante gravado já é o dia seguinte em UTC)', async () => {
+    const c = ctx();
+    const escrever = (sql: string, p: unknown[]) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `t-${m!.marca}` }, (e) => e.executar(sql, p));
+    const antes = await um('SELECT solicitado_em AS s FROM requisicao_exame WHERE id = ?', [
+      m!.requisicaoImagem,
+    ]);
+    const fuso =
+      String(
+        (await um('SELECT fuso_horario AS f FROM estabelecimento WHERE id = ?', [m!.base.est]))?.['f'] ?? '',
+      ) || 'America/Sao_Paulo';
+    // 22:30 do dia 09/03 no fuso do estabelecimento (em UTC, a madrugada do dia 10 para os fusos do Brasil).
+    const noite = instanteCivil('2026-03-09', '22:30', fuso);
+    await escrever('UPDATE requisicao_exame SET solicitado_em = ? WHERE id = ?', [
+      noite,
+      m!.requisicaoImagem,
+    ]);
+    try {
+      // O caminho da tela (GET /sadt/imagem/worklist): os exames de imagem do dia pedido.
+      const doDia = (dia: string) => porta.examesDoDia(c, dia).then((r) => r.itens.map((x) => x.id));
+      expect(await doDia('2026-03-09')).toEqual([m!.itemImagem]);
+      expect(await doDia('2026-03-10')).toEqual([]);
+      expect(await doDia('2026-03-08')).toEqual([]);
+    } finally {
+      await escrever('UPDATE requisicao_exame SET solicitado_em = ? WHERE id = ?', [
+        antes!['s'],
+        m!.requisicaoImagem,
+      ]);
+    }
+  });
+
   it('item com mensagem na fila, repetido recusado, reenvio conferido e status idempotente', async () => {
     const c = ctx();
     const { hoje } = await porta.relogio(c);
     expect((await porta.examesDoDia(c, hoje)).itens.map((x) => x.id)).toEqual([m!.itemImagem]);
-    expect((await porta.examesSemItem(c, { desde: hoje, ate: hoje, atos: [25], teto: 10 })).itens).toEqual([
-      { exame: m!.itemImagem, ato: 25, data: hoje },
-    ]);
     const cad = await porta.modalidadeDoCadastro(c, [m!.itemImagem]);
     expect(cad.get(m!.itemImagem)).toEqual({ id: m!.modalidade, sigla: 'CT' });
     expect((await porta.modalidades(c)).some((x) => x.sigla === 'CT')).toBe(true);

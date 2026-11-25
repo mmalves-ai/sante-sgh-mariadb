@@ -2,12 +2,16 @@
 //   GET  /api/financeiro/contabil-fiscal/de-para                    eventos, regras de conta, naturezas, centros, credores
 //   GET  /api/financeiro/contabil-fiscal/sem-de-para?periodo=&regua= o que falta mapear antes de exportar o lote
 //   POST /api/financeiro/contabil-fiscal/de-para                    { tipo: conta | centro | credor, ... }
+//   GET  /api/financeiro/contabil-fiscal/fornecedores?termo=        busca do credor pelo nome, documento ou código
+//   GET  /api/financeiro/contabil-fiscal/retencao/apoio             tributos e naturezas ativos (escolha pelo nome)
 //   GET  /api/financeiro/contabil-fiscal/retencao/regras            regras com vigência (vigentes e encerradas)
 //   POST /api/financeiro/contabil-fiscal/retencao/regras            { acao: incluir | encerrar, ... }
 //   GET  /api/financeiro/contabil-fiscal/retencao/sugestao?valor=&data=&participante=&momento=&municipio=
 //   GET  /api/financeiro/contabil-fiscal/retencao/em-aberto?competencia=AAAA-MM
 //   POST /api/financeiro/contabil-fiscal/retencao/recolhimento      { competencia, tributo, credor, natureza, codigoReceita }
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
+// Sessão sintética (dev/ci sem banco do cliente, E2E): o de-para, o que falta no período e a busca do fornecedor
+// respondem pela porta em memória, com as mesmas regras (contabil-fiscal-memoria.ts); as retenções seguem só no banco.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
 import type { ResultadoFinanceiro } from '@sgh/contratos';
 import { eventosSemDePara, PARTICIPANTES_RETENCAO } from '@sgh/dominio-financeiro';
@@ -18,6 +22,8 @@ import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
+  apoioRetencao,
+  buscarFornecedores,
   deParaDoEstabelecimento,
   esquemaDeParaContabil,
   esquemaRecolhimento,
@@ -29,7 +35,9 @@ import {
   retidoEmAberto,
   sugestaoRetencao,
 } from './contabil-fiscal-propria.js';
+import type { DeParaContabilMemoria, PortaDeParaMemoria } from './contabil-fiscal-memoria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
+import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
 import { resultadoFin } from './servico.js';
 
 const PERIODO = /^\d{4}-\d{2}$/;
@@ -50,8 +58,16 @@ export class ContabilFiscalController {
 
   constructor(
     @Optional() @Inject(NUCLEO_PERIODO_FINANCEIRO) private readonly nucleo: NucleoProprio | null = null,
+    @Optional() @Inject(PORTA_FINANCEIRO) private readonly porta: PortaFinanceiro | null = null,
   ) {
     this.executor = nucleo ? nucleo.criarExecutor() : null;
+  }
+
+  /** Sem núcleo, o de-para da porta em memória da sessão sintética (E2E); com banco, nunca. */
+  private memoria(req: RequisicaoAutorizada): DeParaContabilMemoria | null {
+    if (this.nucleo || this.porta?.destino !== 'memoria') return null;
+    const p = this.porta as PortaFinanceiro & Partial<PortaDeParaMemoria>;
+    return p.deParaContabilMemoria ? p.deParaContabilMemoria(sessaoDe(req).porta) : null;
   }
 
   private ler<T>(req: RequisicaoAutorizada, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
@@ -84,6 +100,8 @@ export class ContabilFiscalController {
   @Get('de-para')
   @Permissao('financeiro.exportacaoContabil.ler')
   dePara(@Req() req: RequisicaoAutorizada) {
+    const memoria = this.memoria(req);
+    if (memoria) return memoria.completo();
     return this.ler(req, (l, est) => deParaDoEstabelecimento(l, est));
   }
 
@@ -96,6 +114,11 @@ export class ContabilFiscalController {
   ) {
     const p = competencia(periodo);
     const r = regua === 'caixa' ? 'caixa' : 'competencia';
+    const memoria = this.memoria(req);
+    if (memoria && this.porta)
+      return this.porta
+        .deParaContabil(sessaoDe(req).porta, { de: `${p}-01`, ate: fimDoMes(p), regua: r })
+        .then((dp) => eventosSemDePara(dp.fatos, dp.regras));
     return this.ler(req, async (l, est) =>
       eventosSemDePara(await fatosContabeis(l, est, `${p}-01`, fimDoMes(p), r), await regrasDePara(l, est)),
     );
@@ -105,13 +128,36 @@ export class ContabilFiscalController {
   @HttpCode(200)
   @Permissao('financeiro.parametro.editar')
   @AuditadoNoHandler('financeiro.manterDeParaContabil pelo executor (trilha na mesma transação)')
-  manterDePara(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+  async manterDePara(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    const memoria = this.memoria(req);
+    if (memoria) {
+      const entrada = corpo(esquemaDeParaContabil, b);
+      try {
+        return resultadoFin('De-para contábil gravado.', false, memoria.manter(entrada));
+      } catch (e) {
+        throw problemaDoCadastro(e);
+      }
+    }
     return this.gravar(
       req,
       'financeiro.manterDeParaContabil',
       corpo(esquemaDeParaContabil, b),
       'De-para contábil gravado.',
     );
+  }
+
+  @Get('fornecedores')
+  @Permissao('financeiro.tituloPagar.ler')
+  fornecedores(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const memoria = this.memoria(req);
+    if (memoria) return memoria.fornecedores(String(termo ?? ''));
+    return this.ler(req, (l) => buscarFornecedores(l, String(termo ?? '').slice(0, 100)));
+  }
+
+  @Get('retencao/apoio')
+  @Permissao('financeiro.parametro.ler')
+  apoio(@Req() req: RequisicaoAutorizada) {
+    return this.ler(req, (l) => apoioRetencao(l));
   }
 
   @Get('retencao/regras')

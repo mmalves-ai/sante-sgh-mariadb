@@ -63,12 +63,6 @@ export interface StatusEstudoBanco {
   readonly recebidoEm: string;
 }
 
-export interface ExameImagemPendente {
-  readonly exame: number;
-  readonly ato: number;
-  readonly data: string;
-}
-
 export interface ModalidadeLida {
   readonly id: number;
   readonly sigla: string;
@@ -129,10 +123,6 @@ export interface PortaPacs extends PortaGravacaoM18<GravadorPacs> {
     f?: { readonly ato?: number | undefined; readonly termo?: string | undefined },
   ): Promise<{ itens: ExameSadt[]; cortada: boolean }>;
   examesPorId(c: ContextoPacs, ids: readonly number[]): Promise<ExameSadt[]>;
-  examesSemItem(
-    c: ContextoPacs,
-    f: { desde: string; ate: string; atos: readonly number[]; teto: number },
-  ): Promise<{ itens: ExameImagemPendente[]; cortada: boolean }>;
   modalidades(c: ContextoPacs): Promise<ModalidadeLida[]>;
   modalidadeDoCadastro(
     c: ContextoPacs,
@@ -153,7 +143,6 @@ export const METODOS_PORTA_PACS: ReadonlySet<string> = new Set([
   'relogio',
   'examesDoDia',
   'examesPorId',
-  'examesSemItem',
   'modalidades',
   'modalidadeDoCadastro',
   'visualizadores',

@@ -4,7 +4,7 @@
 //   GET  /api/financeiro/pagar/titulos (auditada) | pagar/titulos/:id ; POST pagar/titulos | pagar/titulos/:id/excluir
 //   GET  /api/financeiro/pagar/aprovacao ; POST pagar/titulos/:id/aprovar ; GET/POST alcadas
 //   GET  pagar/motivos-prorrogacao | pagar/titulos/:id/prorrogacoes ; POST pagar/titulos/:id/prorrogar
-//   GET  /api/financeiro/pagar/borderos ; POST pagar/baixa ; GET/POST pagar/remessas ; GET pagar/adiantamentos
+//   GET  /api/financeiro/pagar/borderos ; POST pagar/baixa ; GET/POST pagar/remessas ; GET pagar/adiantamentos ; GET pagar/credores?tipo=&termo=
 //   POST /api/financeiro/dados/mostrar (auditada: o documento sem máscara, com a finalidade)
 //   GET  /api/financeiro/receber/titulos (auditada) | receber/titulos/:id | receber/contas-sem-titulo
 //   POST receber/titulos | receber/competencia | receber/titulos/:id/baixa | receber/titulos/:id/glosa
@@ -17,6 +17,7 @@
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type AdiantamentoResposta,
+  type CredorEncontrado,
   type ApoioFinanceiro,
   type BorderoResposta,
   type ConciliacaoResposta,
@@ -70,7 +71,7 @@ import {
   TIPOS_CREDOR,
 } from '@sgh/dominio-financeiro';
 import { z } from 'zod';
-import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Auditar, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -396,6 +397,24 @@ export class FinanceiroController {
   @Permissao('financeiro.adiantamento.ler')
   adiantamentos(@Req() req: RequisicaoAutorizada): Promise<AdiantamentoResposta[]> {
     return this.porta.adiantamentos(ctx(sessaoDe(req)));
+  }
+
+  // A busca serve a quem lança título, a quem pede adiantamento (permissões separadas: quem só tem as do adiantamento
+  // também escolhe o credor) e a quem mantém o código externo do credor médico. A resposta não traz documento de
+  // pessoa por inteiro (o CPF sai mascarado e só é achado inteiro), como a lista vizinha dos adiantamentos; o
+  // documento sem máscara é só pela leitura auditada dados/mostrar.
+  @Get('pagar/credores')
+  @Permissao('financeiro.tituloPagar.ler')
+  @PermissaoOu('financeiro.adiantamento.conceder', 'financeiro.parametro.editar')
+  credores(
+    @Query() q: Record<string, string>,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<CredorEncontrado[]> {
+    return this.porta.credores(
+      ctx(sessaoDe(req)),
+      q['tipo'] === 'profissional' ? 'profissional' : 'fornecedor',
+      String(q['termo'] ?? '').slice(0, 100),
+    );
   }
 
   @Post('pagar/adiantamentos')

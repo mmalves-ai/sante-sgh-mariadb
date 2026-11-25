@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   codigoDaAmostra,
   codigoValido,
+  aceitaPedidoDeRecoleta,
   conferirColeta,
+  conferirPassagemDoRastreio,
   digitoVerificador,
   gruposDeColeta,
   podeMudar,
@@ -102,5 +104,24 @@ describe('passagens de estado da amostra', () => {
     expect(podeMudar('coletada', 'coletada').motivo).toMatch(/já está/);
     expect(podeMudar('recoleta', 'coletada').motivo).toMatch(/substituída/);
     expect(podeMudar('emAnalise', 'recebida').motivo).toMatch(/não permitida/);
+  });
+  it('a recoleta não passa pelo rastreio: nasce do pedido de recoleta com a nova coleta', () => {
+    const r = conferirPassagemDoRastreio('rejeitada', 'recoleta');
+    expect(r.pode).toBe(false);
+    expect(r.codigo).toBe('recoleta-pelo-pedido');
+    expect(conferirPassagemDoRastreio('recebida', 'rejeitada')).toEqual({
+      pode: true,
+      motivo: null,
+      codigo: null,
+    });
+    expect(conferirPassagemDoRastreio('emAnalise', 'recebida').codigo).toBe('amostra-transicao');
+    expect(conferirPassagemDoRastreio('recoleta', 'recoleta').motivo).toMatch(/já está/);
+    expect(
+      ['coletada', 'emTransporte', 'recebida', 'emAnalise', 'rejeitada'].every((e) =>
+        aceitaPedidoDeRecoleta(e as 'coletada'),
+      ),
+    ).toBe(true);
+    expect(aceitaPedidoDeRecoleta('aguardandoColeta')).toBe(false);
+    expect(aceitaPedidoDeRecoleta('recoleta')).toBe(false);
   });
 });

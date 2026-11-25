@@ -24,3 +24,5 @@ export * from './fachada/index.js';
 export * from './mensagens-paciente.js';
 export * from './pacotes-entregas.js';
 export * from './classificacao-externa.js';
+// F3.9-3: rotinas agendadas com histórico de execução (01-SIS L95).
+export * from './rotinas-agendadas.js';

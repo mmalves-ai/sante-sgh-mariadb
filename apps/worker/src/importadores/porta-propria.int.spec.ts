@@ -425,6 +425,106 @@ describe.skipIf(SEM_BANCO)('publicador de catálogos sobre o banco próprio (f22
     });
   });
 
+  it('CEP: o tipo de logradouro do arquivo vira a espécie do catálogo; tipo fora do catálogo não recusa nem apaga', async () => {
+    const CEP2 = '99051301';
+    const DNE = 'ZQ513';
+    const limparEspecie = () =>
+      escrever(nucleo, async (e) => {
+        await e.executar('DELETE FROM logradouro_cep WHERE codigo_cep = ?', [CEP2]);
+        await e.executar('DELETE FROM especie_logradouro WHERE codigo_dne = ?', [DNE]);
+      });
+    await limparEspecie();
+    try {
+      await escrever(nucleo, (e) =>
+        e.executar(
+          `INSERT INTO especie_logradouro (codigo_dne, codigo_esocial, descricao, sigla, ativo, criado_em, versao)
+           VALUES (?, 'ZQ5', 'Tipo sintético 513', 'ZQ5', TRUE, UTC_TIMESTAMP(3), 1)`,
+          [DNE],
+        ),
+      );
+      const especie = Number(
+        (await ler('SELECT id FROM especie_logradouro WHERE codigo_dne = ?', [DNE]))?.['id'],
+      );
+      expect(especie).toBeGreaterThan(0);
+      const id = await escrever(nucleo, (e) =>
+        cargaAprovada(e, {
+          estabelecimento: est,
+          aprovador,
+          catalogo: 'cep',
+          linhas: [
+            {
+              entidade: 'cep',
+              chave: `cep=${CEP2}`,
+              comparacao: 'novo',
+              depois: {
+                cep: CEP2,
+                uf: UF,
+                ibge: MUN[0]!,
+                logradouro: 'SINTETICA TRES',
+                tipoLogradouro: 'tipo sintético 513',
+              },
+              lote: 1,
+            },
+          ],
+        }),
+      );
+      const d = deps();
+      expect((await publicarCarga(d, (await d.porta.carga(id))!)).situacao).toBe('publicada');
+      const lido = async () => {
+        const x = await ler(
+          'SELECT logradouro, especie_logradouro_id, versao FROM logradouro_cep WHERE codigo_cep = ?',
+          [CEP2],
+        );
+        return {
+          logradouro: x?.['logradouro'],
+          especie: Number(x?.['especie_logradouro_id']),
+          versao: Number(x?.['versao']),
+        };
+      };
+      expect(await lido()).toEqual({ logradouro: 'SINTETICA TRES', especie, versao: 1 });
+      const id2 = await escrever(nucleo, (e) =>
+        cargaAprovada(e, {
+          estabelecimento: est,
+          aprovador,
+          catalogo: 'cep',
+          linhas: [
+            {
+              entidade: 'cep',
+              chave: `cep=${CEP2}`,
+              comparacao: 'alterado',
+              antes: { logradouro: 'SINTETICA TRES' },
+              depois: { logradouro: 'SINTETICA QUATRO', tipoLogradouro: 'Tipo fora do catálogo 513' },
+              lote: 1,
+            },
+          ],
+        }),
+      );
+      expect((await publicarCarga(d, (await d.porta.carga(id2))!)).situacao).toBe('publicada');
+      expect(await lido()).toEqual({ logradouro: 'SINTETICA QUATRO', especie, versao: 2 });
+      const id3 = await escrever(nucleo, (e) =>
+        cargaAprovada(e, {
+          estabelecimento: est,
+          aprovador,
+          catalogo: 'cep',
+          linhas: [
+            {
+              entidade: 'cep',
+              chave: `cep=${CEP2}`,
+              comparacao: 'alterado',
+              antes: { logradouro: 'SINTETICA QUATRO' },
+              depois: { tipoLogradouro: 'zq5' },
+              lote: 1,
+            },
+          ],
+        }),
+      );
+      expect((await publicarCarga(d, (await d.porta.carga(id3))!)).situacao).toBe('publicada');
+      expect((await lido()).especie).toBe(especie);
+    } finally {
+      await limparEspecie();
+    }
+  });
+
   it('procedimento: altera a competência do que existe; procedimento novo é recusado', async () => {
     const id = await escrever(nucleo, (e) =>
       cargaAprovada(e, {

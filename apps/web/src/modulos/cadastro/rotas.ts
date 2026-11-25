@@ -64,6 +64,13 @@ export const rotasCadastro: RouteRecordRaw[] = [
     meta: { permissao: 'cadastro.paciente.ler' },
   },
   {
+    // F3.1 (02-CAD linha 2): campos obrigatórios do cadastro por módulo, tipo de atendimento e fonte pagadora.
+    path: '/cadastros/regras-campo',
+    name: 'cadastro.regras-campo',
+    component: () => import('./telas/RegrasCampoTela.vue'),
+    meta: { permissao: 'config.parametro.ler' },
+  },
+  {
     // F3.1 (02-CAD linhas 3 e 4): contatos e responsáveis do paciente.
     path: `/cadastros/pacientes/:id${id}/contatos`,
     name: 'cadastro.paciente.contatos',
@@ -163,7 +170,9 @@ export const rotasCadastro: RouteRecordRaw[] = [
   },
   {
     // F3.1 (02-CAD linhas 26 e 27): estabelecimento, unidades e setores com ramais (manter, inativar sem apagar).
-    path: '/cadastros/estrutura',
+    // O caminho /cadastros/estrutura é da tela de rede, empresa e unidades (administração); dois registros no mesmo
+    // caminho fazem o roteador abrir só o primeiro.
+    path: '/cadastros/estrutura/estabelecimento',
     name: 'cadastro.estruturaGestao',
     component: () => import('./telas/EstruturaGestaoTela.vue'),
     meta: {
