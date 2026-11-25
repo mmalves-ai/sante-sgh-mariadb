@@ -109,7 +109,7 @@ test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1
       const compl = page.getByTestId('operadora-complementar');
       await expect(compl).toBeVisible();
       await expect(compl.getByTestId('compl-papeis-sem-titular')).toContainText('Responsável técnico');
-      await semViolacaoAxe(page);
+      await semViolacaoAxe(page, 'operadora: cadastro complementar');
 
       // Responsável: auditoria independente achada pelo CNPJ da própria empresa sintética.
       await compl.getByTestId('compl-resp-novo').click();
@@ -118,7 +118,7 @@ test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1
       await fr.getByLabel('CPF ou CNPJ').fill(docB);
       await fr.getByTestId('compl-resp-buscar').click();
       await expect(fr.getByTestId('compl-resp-pessoa')).toContainText(`Operadora B ${sufixo}`);
-      await semViolacaoAxe(page);
+      await semViolacaoAxe(page, 'operadora: cadastro complementar');
       await fr.getByTestId('compl-resp-gravar').click();
       await expect(compl.getByTestId('compl-mensagem')).toContainText('Responsável registrado');
       await expect(compl.getByTestId('tabela-responsaveis')).toContainText('Auditoria independente');
@@ -144,7 +144,7 @@ test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1
       await escolher(fd.getByTestId('compl-dep-superior'), { rotulo: /Autorização \(AUT\)/ });
       await fd.getByTestId('compl-dep-gravar').click();
       await expect(compl.getByTestId('departamento-REG')).toContainText('Autorização');
-      await semViolacaoAxe(page);
+      await semViolacaoAxe(page, 'operadora: cadastro complementar');
 
       // Parâmetro: fora da faixa recusado na hora; 18 grava e deixa de ser o padrão.
       await compl.getByTestId('compl-par-alterar-prazo_cpt_meses').click();

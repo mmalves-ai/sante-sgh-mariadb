@@ -145,12 +145,19 @@ const contatoDe = (x: Linha): ContatoLido => ({
   anterior: numOuNulo(x['anterior_contato_ativo_id']),
 });
 
+/** O estabelecimento da sessão que grava (o executor já recusa a escrita sem ele; aqui o tipo fica explícito). */
+function estabelecimentoDaGravacao(ctx: ContextoOperacao): number {
+  if (ctx.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  return ctx.estabelecimento;
+}
+
 export class ContatoAtivoPropria {
   private readonly executor: Executor;
   private readonly sessao = new AsyncLocalStorage<{ podeCancelar: boolean }>();
   private readonly registrarOp = definirOperacao<
     EntradaRegistrarContato,
-    { contato: number; efeito: string | null; novaTentativa: number | null; alertas: string[] }
+    // Os alertas vão numa linha cada (o resultado guardado pela idempotência só tem valores simples).
+    { contato: number; efeito: string | null; novaTentativa: number | null; alertas: string }
   >({
     nome: 'agenda.contato_ativo_registrar',
     tabelas: [
@@ -352,7 +359,8 @@ export class ContatoAtivoPropria {
     const r = await this.sessao.run({ podeCancelar: c.podeCancelar }, () =>
       this.executor.executar(this.registrarOp, this.cliente, entrada, ctx),
     );
-    return { resultado: r.resultado, repetida: r.repetida };
+    const alertas = r.resultado.alertas.split('\n').filter((a) => a !== '');
+    return { resultado: { ...r.resultado, alertas }, repetida: r.repetida };
   }
 
   async programar(c: ContextoGravacaoContato, entrada: unknown) {
@@ -401,7 +409,7 @@ export class ContatoAtivoPropria {
   }
 
   private async gravarRegistro(tx: TxOperacao, e: EntradaRegistrarContato, ctx: ContextoOperacao) {
-    const est = ctx.estabelecimento;
+    const est = estabelecimentoDaGravacao(ctx);
     const agora = this.agora();
     await this.exigirPaciente(tx, e.paciente);
     const r = await tx.uma(
@@ -493,7 +501,7 @@ export class ContatoAtivoPropria {
         assunto: 'Nova tentativa programada pela central',
         programado_para: d.novaTentativaEm,
       });
-    return { contato, efeito: d.efeito, novaTentativa, alertas: [...d.alertas] };
+    return { contato, efeito: d.efeito, novaTentativa, alertas: d.alertas.join('\n') };
   }
 
   private async confirmar(tx: TxOperacao, ctx: ContextoOperacao, m: Linha, canal: string, agora: Date) {
@@ -582,7 +590,7 @@ export class ContatoAtivoPropria {
     });
     if (motivo) throw recusa('programacao-invalida', motivo);
     await this.exigirPaciente(tx, e.paciente);
-    if (e.marcacao !== null) await this.travarMarcacao(tx, ctx.estabelecimento, e.marcacao, e.paciente);
+    if (e.marcacao !== null) await this.travarMarcacao(tx, estabelecimentoDaGravacao(ctx), e.marcacao, e.paciente);
     const contato = await tx.incluir('contato_ativo', {
       estabelecimento_id: ctx.estabelecimento,
       paciente_id: e.paciente,

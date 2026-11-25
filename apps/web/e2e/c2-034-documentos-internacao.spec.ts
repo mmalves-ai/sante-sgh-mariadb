@@ -63,7 +63,7 @@ test.describe('@C2-034 documentos da internação conforme o convênio', () => {
     await page.goto(`/internacao/${reg}/impressos`);
     const tela = page.getByTestId('tela-impressos-internacao');
     await expect(tela).toBeVisible();
-    await esperarSemSelectNativo(page);
+    await esperarSemSelectNativo(page.locator('body'));
     await expect(page.locator('[data-testid="tela-impressos-internacao"] select')).toHaveCount(0);
 
     // Os documentos do momento: a ficha comum e o termo que a regra do convênio 901 manda (2 cópias).
@@ -90,7 +90,7 @@ test.describe('@C2-034 documentos da internação conforme o convênio', () => {
     await page.getByTestId('imp-configurar-documentos').click();
     await expect(page).toHaveURL(new RegExp(`/internacao/documentos\\?reg=${reg}$`));
     await expect(page.getByTestId('tela-documentos-internacao')).toBeVisible();
-    await esperarSemSelectNativo(page);
+    await esperarSemSelectNativo(page.locator('body'));
     await semViolacaoAxe(page, '/internacao/documentos');
 
     expect(externas).toEqual([]);

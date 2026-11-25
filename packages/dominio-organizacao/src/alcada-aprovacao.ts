@@ -12,6 +12,7 @@
 //   - regra já usada em pedido de aprovação não troca os níveis: abre-se uma vigência nova (o pedido antigo continua
 //     apontando para a regra com que foi decidido; histórico nunca apagado);
 //   - encerrar fecha a vigência (a linha fica no banco); a regra que ainda não começou é desativada.
+import { vespera } from './gestao-estrutura.js';
 
 export type RecusaAlcada =
   | 'descricao-obrigatoria'
@@ -107,12 +108,8 @@ export function validarAlcada(r: RegraAlcada): RecusaAlcada | null {
 export const quantidadeNiveis = (niveis: readonly LinhaNivelAlcada[]): number =>
   niveis.reduce((m, n) => Math.max(m, n.nivel), 0);
 
-/** Véspera de uma data ISO (AAAA-MM-DD), sem fuso. */
-export function vespera(diaIso: string): string {
-  const d = new Date(`${diaIso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
+/** Véspera de uma data ISO (AAAA-MM-DD): a mesma regra da gestão da estrutura, exportada também por aqui. */
+export { vespera };
 
 export interface VigenciaExistente {
   readonly id: number;

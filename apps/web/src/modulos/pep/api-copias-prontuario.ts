@@ -90,7 +90,7 @@ async function enviar(url: string, corpo: Record<string, unknown>, buscar: typeo
     body: JSON.stringify(corpo),
   });
   if (!r.ok) throw await erroDaResposta(r);
-  return z.record(z.unknown()).parse(await r.json());
+  return z.record(z.string(), z.unknown()).parse(await r.json());
 }
 
 export const lerCopias = (paciente: number | null, buscar: typeof fetch = fetch) =>

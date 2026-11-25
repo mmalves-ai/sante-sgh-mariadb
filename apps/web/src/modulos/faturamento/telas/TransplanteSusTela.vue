@@ -295,9 +295,19 @@ const abrirNotificacao = (x: NotificacaoDoador) => {
 };
 const opConsentimento = computed(() => [
   { valor: null, rotulo: t('doador.semResposta') },
-  { valor: true, rotulo: t('doador.consentiu') },
-  { valor: false, rotulo: t('doador.naoConsentiu') },
+  { valor: 'sim', rotulo: t('doador.consentiu') },
+  { valor: 'nao', rotulo: t('doador.naoConsentiu') },
 ]);
+// A seleção trabalha com texto; o formulário guarda o consentimento da família como sim, não ou sem resposta.
+const consentimentoEscolhido = computed<string | number | null>({
+  get: () => {
+    const v = formDoador.value?.familiaConsentiu ?? null;
+    return v === null ? null : v ? 'sim' : 'nao';
+  },
+  set: (v) => {
+    if (formDoador.value) formDoador.value.familiaConsentiu = v === null ? null : v === 'sim';
+  },
+});
 const opCentrais = computed(() => [
   { valor: null, rotulo: t('doador.semCentral') },
   ...(opcoes.data.value?.centrais ?? []).map((c) => ({ valor: c.id, rotulo: `${c.sigla} — ${c.nome}` })),
@@ -693,7 +703,7 @@ const imprimir = () => window.print();
             data-testid="transplante-doador-abordagem"
         /></label>
         <SanteSelecao
-          v-model="formDoador.familiaConsentiu"
+          v-model="consentimentoEscolhido"
           :rotulo="t('doador.consentimento')"
           :opcoes="opConsentimento"
           data-testid="transplante-doador-consentimento"

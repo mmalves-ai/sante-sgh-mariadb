@@ -40,7 +40,7 @@ const roteador = (): Router =>
   });
 const montar = (c: unknown, r: Router = roteador(), props: Record<string, unknown> = {}) =>
   mount(c as never, {
-    props,
+    props: props as never,
     global: {
       plugins: [
         r,

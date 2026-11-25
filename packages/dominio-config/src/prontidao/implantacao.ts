@@ -102,9 +102,9 @@ export function conferirMudancaItem(item: ItemParaMudanca, pedido: PedidoMudanca
 
 /** Confere as datas do projeto de implantação. */
 export function conferirDatasImplantacao(d: {
-  readonly dataInicioPrevista?: string | null;
-  readonly dataFimPrevista?: string | null;
-  readonly dataViradaPrevista?: string | null;
+  readonly dataInicioPrevista?: string | null | undefined;
+  readonly dataFimPrevista?: string | null | undefined;
+  readonly dataViradaPrevista?: string | null | undefined;
 }): ProblemaImplantacao[] {
   const p: ProblemaImplantacao[] = [];
   if (d.dataInicioPrevista && d.dataFimPrevista && d.dataFimPrevista < d.dataInicioPrevista)

@@ -185,6 +185,6 @@ test.describe('@C1-015 serviços acessórios da conta (06-FAT linha 23)', () => 
     await page.getByTestId('sa-conta-lancar-ligacoes').click();
     await expect(page.getByTestId('sa-mensagem')).toContainText('1 ligação(ões) lançada(s)');
     expect(enviados).toContainEqual({ lancamento: true });
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'serviços acessórios');
   });
 });

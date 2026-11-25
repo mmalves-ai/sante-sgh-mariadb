@@ -189,7 +189,7 @@ test.describe('@C1-084 conta corrente do paciente: adiantamento, uso, estorno e 
     });
     // O operador do caixa não aprova (sem a permissão do financeiro).
     await expect(page.getByTestId('cc-aprovar-8430')).toHaveCount(0);
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'conta corrente do paciente');
 
     // Outra pessoa, do financeiro, abre a conta corrente e aprova o pedido.
     await entrar(page, 'SINT.FIN.APROVA');

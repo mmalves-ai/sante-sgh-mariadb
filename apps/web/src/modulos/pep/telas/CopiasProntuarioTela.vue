@@ -223,7 +223,7 @@ function entregar(p: PedidoCopiaTela) {
     <h1>{{ t('pep.copias.titulo') }}</h1>
     <p class="explicacao">{{ t('pep.copias.explicacao') }}</p>
     <MensagemErro v-if="erro" :erro="erro" />
-    <SanteAlerta v-if="ok" variante="sucesso" :texto="ok" />
+    <SanteAlerta v-if="ok" variante="info" :texto="ok" />
 
     <form v-if="id === null" class="linha" @submit.prevent="buscar">
       <label>

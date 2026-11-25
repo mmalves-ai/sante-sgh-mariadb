@@ -76,7 +76,7 @@ test.describe('@C1-115 cadastro editável do catálogo da prescrição', () => {
     await page.goto('/cadastros/prescricao/frequencias');
     const fr = page.getByTestId('form-frequencia');
     await expect(fr).toBeVisible();
-    await esperarSemSelectNativo(page);
+    await esperarSemSelectNativo(page.locator('body'));
     await fr.getByTestId('fr-codigo').getByRole('textbox').fill('6/6h sint');
     await fr.getByTestId('fr-descricao').getByRole('textbox').fill('De 6 em 6 horas sintética');
     await expect(page.getByTestId('fr-falta')).toContainText('intervalo');
@@ -125,6 +125,6 @@ test.describe('@C1-115 cadastro editável do catálogo da prescrição', () => {
     await expect(page.getByTestId('cp-falta-sinonimo')).toBeVisible();
     await expect(page.getByTestId('cp-incluir-sinonimo')).toBeDisabled();
     await semViolacaoAxe(page, 'c1-115 catálogo da prescrição');
-    expect(externas()).toEqual([]);
+    expect(externas).toEqual([]);
   });
 });
