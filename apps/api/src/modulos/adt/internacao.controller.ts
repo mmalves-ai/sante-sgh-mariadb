@@ -75,7 +75,12 @@ import { FONTE_DOCUMENTO, type FonteDocumento } from '../documento/public-api.js
 import { corpo, dataDaConsulta } from '../exames/public-api.js';
 import { CONFIGURACAO_M16, type ConfiguracaoM16, PARAMETROS_PADRAO } from '../internacao/public-api.js';
 import { AVISOS_ATENDIMENTO, type AvisosAtendimento } from '../atendimento/public-api.js';
+import { logger } from '../../logger.js';
 import { ApoiosAdt, ctxAdt, janelaOutroSistema } from './apoios.js';
+import {
+  PORTA_COMUNICACAO_OPERADORA,
+  type PortaComunicacaoOperadoraPropria,
+} from './comunicacao-operadora-propria.js';
 import { AVISOS_ADT } from './simbolos.js';
 import { type DadosImpressoInternacao, PORTA_ADT, type PortaAdt } from './porta.js';
 import { ServicoAdt } from './servico.js';
@@ -139,6 +144,9 @@ export class InternacaoController {
     @Optional()
     @Inject(IMPRESSAO_IDENTIFICACAO)
     private readonly identificacao: ImpressaoIdentificacaoPropria | null = null,
+    @Optional()
+    @Inject(PORTA_COMUNICACAO_OPERADORA)
+    private readonly comunicacao: PortaComunicacaoOperadoraPropria | null = null,
   ) {
     this.apoios = new ApoiosAdt(porta, trilha, configuracao, cache);
     this.servico = new ServicoAdt(porta, janelaOutroSistema(configuracao));
@@ -146,6 +154,24 @@ export class InternacaoController {
 
   private avisar<T>(s: SessaoCadastro, p: Promise<T>): Promise<T> {
     return avisandoAdt([this.avisos, this.avisosAtendimento], s, p);
+  }
+
+  /**
+   * C2-070: depois de internar ou de registrar a saída, gera as comunicações devidas à operadora (e envia pelo serviço
+   * web quando cadastrado), numa operação própria. A falha não desfaz a internação nem a alta: a comunicação fica para
+   * a tela (gerar à mão) e o erro vai para o log, só com o código.
+   */
+  private async comunicarOperadora(s: SessaoCadastro, internacao: unknown): Promise<void> {
+    const id = Number(internacao);
+    if (!this.comunicacao || !Number.isInteger(id) || id <= 0) return;
+    try {
+      await this.comunicacao.disparar(s.porta, id);
+    } catch (e) {
+      logger.warn(
+        { internacao: id, erro: e instanceof Error ? e.name : 'erro' },
+        'comunicação à operadora não gerada',
+      );
+    }
   }
 
   @Get('gravacao')
@@ -301,7 +327,7 @@ export class InternacaoController {
       );
     // Os atributos do leito no novo (sexo e faixa de idade): o leito feminino ou pediátrico não aceita qualquer um.
     await this.servico.exigirCompativel(ctxAdt(s), l, { paciente: e.paciente }, 'leito');
-    return this.avisar(
+    const r = await this.avisar(
       s,
       this.apoios.adt.executar(
         s,
@@ -310,6 +336,8 @@ export class InternacaoController {
         'Paciente internado.',
       ) as Promise<ResultadoInternacao>,
     );
+    await this.comunicarOperadora(s, r.resultado['internacao']);
+    return r;
   }
 
   @Get(':reg')
@@ -494,7 +522,7 @@ export class InternacaoController {
         'O motivo da saída não combina com o destino decidido na alta médica: use o motivo do médico ou peça que ele corrija a alta médica.',
         { codigo: 'motivo-incoerente', campos: ['motivo'] },
       );
-    return this.avisar(
+    const r = await this.avisar(
       s,
       this.apoios.adt.executar(
         s,
@@ -503,6 +531,8 @@ export class InternacaoController {
         'Saída registrada: o leito foi para a higienização.',
       ) as Promise<ResultadoInternacao>,
     );
+    await this.comunicarOperadora(s, internacao);
+    return r;
   }
 
   @Post(':reg/alta/cancelar')
@@ -625,7 +655,7 @@ export class InternacaoController {
     }
     // Pulseira e etiqueta: a 1ª impressão fica registrada e a reimpressão só sai com o motivo (01-ADM L79).
     const gerado = await emitirComIdentificacao(this.identificacao, s, { internacao: d.reg }, e, () =>
-      e.formato === 'pdf' ? this.pdf(s, d, modelo) : this.zpl(s, d, e.impresso, e.copias),
+      e.formato === 'pdf' ? this.pdf(s, d, modelo, copias) : this.zpl(s, d, e.impresso, e.copias),
     );
     await this.trilha.registrar({
       evento: EVENTOS_AUDITAVEIS.internacaoImpressoEmitido.codigo,
@@ -649,6 +679,7 @@ export class InternacaoController {
     s: SessaoCadastro,
     d: DadosImpressoInternacao,
     modelo: { modelo: number; nome: string; texto?: string } | null = null,
+    copias = 1,
   ): Promise<ImpressoGerado> {
     const fonte = this.documento;
     if (!fonte)
@@ -684,10 +715,19 @@ export class InternacaoController {
           // O texto do modelo escolhido pela regra de convênio e especialidade (F3.4, 04-INT linha 69).
           // Os campos variáveis ({paciente}, {leito}...) recebem os dados da internação na emissão.
           ...(modelo?.texto
-            ? [{ rotulo: 'Documento', valor: preencherMarcadores(modelo.texto, valoresDoDocumento(d)) }]
+            ? [
+                {
+                  rotulo: 'Documento',
+                  valor: preencherMarcadores(modelo.texto, valoresDoDocumento(d)),
+                  // O negrito do editor (**...**) e os parágrafos chegam ao PDF; o resto do texto sai escapado.
+                  formato: 'marcado' as const,
+                },
+              ]
             : []),
         ],
         autor: s.login,
+        // 04-INT L69: as cópias da regra saem no mesmo PDF; a ficha geral sem modelo sai em uma.
+        ...(modelo ? { copias } : {}),
       });
       return {
         impresso: 'ficha',
