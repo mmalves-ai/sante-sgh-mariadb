@@ -1,9 +1,11 @@
 // E2E @C1-009 @F39-5 (04-HOT L128, ficha F3.9): a fila de solicitações do arquivo e a autorização pelo motivo, pelo
 // caminho da tela /same/tramite. O arquivista pede o prontuário com o motivo que exige autorização (o aviso aparece na
 // hora; a linha sem paciente válido é barrada); no empréstimo direto, o mesmo motivo é barrado na hora; na fila, a
-// solicitação aguardando não deixa entregar, a negativa sem justificativa fica bloqueada e a autorização sai com a
-// justificativa; autorizada, o volume é entregue por empréstimo ao setor; o item não achado sai da fila com onde se
-// procurou; a outra solicitação é cancelada com motivo. As rotas /api/same/tramite exigem o banco próprio e o E2E roda
+// solicitação aguardando não deixa entregar e o arquivista (sem a permissão de autorizar) só vê que ela aguarda. O
+// responsável do arquivo (perfil que autoriza, outro usuário) decide: no pedido que ele mesmo fez a decisão não aparece;
+// a negativa sem justificativa fica bloqueada e a autorização sai com a justificativa; autorizada, o volume é entregue
+// por empréstimo ao setor; o item "todos os volumes" é entregue pelo volume do paciente digitado (conferido na hora); o
+// item não achado sai da fila com onde se procurou; a outra solicitação é cancelada com motivo. As rotas /api/same/tramite exigem o banco próprio e o E2E roda
 // com a fonte sintética (sem núcleo): as respostas da API são simuladas pelo Playwright com massa SINTÉTICA. O efeito
 // no banco está no contrato de efeito apps/api/src/modulos/adt/same-tramite-propria.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
@@ -43,14 +45,20 @@ interface Estado {
   versao: number;
   item1: string;
   item2: string;
+  item3: string;
   cancelada: boolean;
+  /** Id do responsável na sessão: a solicitação 53 é o pedido que ele mesmo fez (aguardando). */
+  proprio: number | null;
 }
 
 const solicitacoes = (e: Estado) => [
   {
     id: 50,
     numero: 3001,
-    situacao: e.item1 === 'pendente' && e.item2 === 'pendente' ? 'pendente' : 'em_atendimento',
+    situacao:
+      e.item1 === 'pendente' && e.item2 === 'pendente' && e.item3 === 'pendente'
+        ? 'pendente'
+        : 'em_atendimento',
     autorizacao: e.autorizacao,
     solicitante: 900,
     motivo: 'Pesquisa sintética',
@@ -58,9 +66,27 @@ const solicitacoes = (e: Estado) => [
     destino: 'Pesquisa clínica sintética',
     solicitadaEm: '2026-11-25T10:00:00.000Z',
     desejadaPara: null,
-    itens: 2,
+    itens: 3,
     versao: e.versao,
   },
+  ...(e.proprio === null
+    ? []
+    : [
+        {
+          id: 53,
+          numero: 3004,
+          situacao: 'pendente',
+          autorizacao: 'aguardando',
+          solicitante: e.proprio,
+          motivo: 'Pesquisa sintética',
+          urgente: false,
+          destino: 'Pesquisa clínica sintética',
+          solicitadaEm: '2026-11-25T12:00:00.000Z',
+          desejadaPara: null,
+          itens: 1,
+          versao: 1,
+        },
+      ]),
   ...(e.cancelada
     ? []
     : [
@@ -102,11 +128,22 @@ const itens = (e: Estado) => [
     observacao: e.item2 === 'nao_localizado' ? 'Estante 4 e setor de pesquisa' : null,
     atendidoEm: null,
   },
+  // Pedido de todos os volumes do paciente (volume nulo): o arquivo escolhe o volume que sai.
+  {
+    id: 503,
+    sequencia: 3,
+    paciente: 7401,
+    volume: null,
+    matricula: null,
+    situacao: e.item3,
+    observacao: null,
+    atendidoEm: null,
+  },
 ];
 
 test.describe('Solicitação de prontuário e autorização pelo motivo @C1-009 @F39-5 @fase3', () => {
   test.setTimeout(180_000);
-  test('pede com o motivo que exige autorização, autoriza com justificativa, entrega, não localizado e cancela; axe', async ({
+  test('pede com o motivo que exige autorização, outro responsável autoriza com justificativa, entrega (com e sem volume), não localizado e cancela; axe', async ({
     page,
   }) => {
     const pedidos: { caminho: string; corpo: Record<string, unknown> }[] = [];
@@ -115,7 +152,9 @@ test.describe('Solicitação de prontuário e autorização pelo motivo @C1-009 
       versao: 1,
       item1: 'pendente',
       item2: 'pendente',
+      item3: 'pendente',
       cancelada: false,
+      proprio: null,
     };
     await page.route('**/api/same/tramite/**', (rota) => {
       const req = rota.request();
@@ -137,7 +176,8 @@ test.describe('Solicitação de prontuário e autorização pelo motivo @C1-009 
         return json(rota, { id: 50, autorizacao: 'autorizada', situacao: 'pendente' });
       }
       if (caminho === 'emprestimos') {
-        e.item1 = 'emprestado';
+        if ((req.postDataJSON() as { volume?: number }).volume === 9201) e.item1 = 'emprestado';
+        else e.item3 = 'emprestado';
         e.versao += 1;
         return json(rota, { id: 72, prazo: '2026-12-10T10:00:00.000Z', solicitacao: 'em_atendimento' }, 201);
       }
@@ -187,12 +227,27 @@ test.describe('Solicitação de prontuário e autorização pelo motivo @C1-009 
       corpo: { localArquivo: 21, destino: 2, motivo: 6, itens: [{ paciente: 7402, volume: 9301 }] },
     });
 
-    // Fila: aguardando não deixa entregar; negar exige justificativa; autoriza com a justificativa.
-    const s = page.getByTestId('sol-3001');
+    // Fila do arquivista: aguardando não deixa entregar; sem a permissão de autorizar, a decisão não aparece.
+    let s = page.getByTestId('sol-3001');
     await expect(s.getByTestId('sol-autorizacao')).toContainText('aguardando autorização');
+    await expect(s.getByTestId('sol-aguarda-decisor')).toBeVisible();
+    await expect(s.getByTestId('sol-decisao')).toHaveCount(0);
     await s.getByTestId('sol-ver-itens').click();
     await expect(s.getByTestId('sol-falta-entrega')).toContainText('aguarda a autorização');
     await expect(s.getByTestId('sol-item-1').getByTestId('sol-entregar')).toBeDisabled();
+
+    // O responsável do arquivo (outro usuário, com a permissão por perfil) decide; no pedido que ele mesmo fez, não.
+    await entrar(page, 'SINT.ARQUIVO.RESP');
+    const eu = (await (await page.request.get('/api/sessao')).json()) as { usuario: { id: string } };
+    e.proprio = Number(eu.usuario.id);
+    await page.goto('/same/tramite');
+    await page.getByTestId('tramite-aba-solicitacoes').click();
+    const proprio = page.getByTestId('sol-3004');
+    await expect(proprio.getByTestId('sol-proprio-pedido')).toContainText('não autoriza o próprio pedido');
+    await expect(proprio.getByTestId('sol-decisao')).toHaveCount(0);
+    s = page.getByTestId('sol-3001');
+    await expect(s.getByTestId('sol-aguarda-decisor')).toHaveCount(0);
+    await s.getByTestId('sol-ver-itens').click();
     await expect(s.getByTestId('sol-negar')).toBeDisabled();
     await s.getByTestId('sol-justificativa').locator('input').fill('Projeto aprovado pelo comitê sintético');
     await expect(s.getByTestId('sol-negar')).toBeEnabled();
@@ -227,6 +282,23 @@ test.describe('Solicitação de prontuário e autorização pelo motivo @C1-009 
     });
     await expect(item2).toContainText('não localizado');
 
+    // Item "todos os volumes": o volume que sai é digitado e conferido na hora; o servidor confere que é do paciente.
+    const item3 = s.getByTestId('sol-item-3');
+    await expect(item3).toContainText('volume todos');
+    await expect(item3.getByTestId('sol-entregar')).toBeDisabled();
+    await item3.getByTestId('sol-volume-entrega').locator('input').fill('9x');
+    await expect(item3.getByTestId('sol-volume-entrega-erro')).toContainText('número do volume');
+    await expect(item3.getByTestId('sol-entregar')).toBeDisabled();
+    await item3.getByTestId('sol-volume-entrega').locator('input').fill('9204');
+    await expect(item3.getByTestId('sol-volume-entrega-erro')).toHaveCount(0);
+    await item3.getByTestId('sol-entregar').click();
+    await expect(page.getByTestId('tramite-aviso')).toHaveText('Volume emprestado.');
+    expect(pedidos[4]).toEqual({
+      caminho: 'emprestimos',
+      corpo: { volume: 9204, destinoSetor: 11, solicitacao: 50 },
+    });
+    await expect(item3).toContainText('emprestado');
+
     // A outra solicitação é cancelada com motivo (sem motivo, bloqueado).
     const outra = page.getByTestId('sol-3002');
     await expect(outra.getByTestId('sol-autorizacao')).toHaveCount(0);
@@ -234,7 +306,7 @@ test.describe('Solicitação de prontuário e autorização pelo motivo @C1-009 
     await outra.getByTestId('sol-motivo-cancelar').locator('input').fill('Paciente teve alta');
     await outra.getByTestId('sol-cancelar').click();
     await expect(page.getByTestId('tramite-aviso')).toHaveText('Solicitação nº 3002 cancelada.');
-    expect(pedidos[4]).toEqual({
+    expect(pedidos[5]).toEqual({
       caminho: 'solicitacoes/51/cancelar',
       corpo: { motivo: 'Paciente teve alta', versao: 1 },
     });

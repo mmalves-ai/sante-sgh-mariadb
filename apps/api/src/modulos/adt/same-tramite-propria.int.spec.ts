@@ -606,4 +606,48 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
       porta.emprestar(ctx(), { volume: m.v2, destinoSetor: m.setorB, solicitacao: n.id }),
     ).rejects.toMatchObject({ problema: { status: 422 } });
   });
+
+  it('item sem volume (todos os volumes do paciente): atendido pelo empréstimo de um volume do paciente', async () => {
+    const motivo = Number(
+      (await um("SELECT id FROM motivo_solicitacao_prontuario WHERE codigo = 'auditoria'"))['id'],
+    );
+    const v5 = await nucleo.escrever({ cliente: CLIENTE, correlacao: `v5-${P}` }, async (e) => {
+      const tipo = await e.uma('SELECT MIN(id) AS id FROM tipo_documento_arquivo');
+      const agora = new Date();
+      return e.inserir(
+        `INSERT INTO volume_prontuario (estabelecimento_id, paciente_id, tipo_documento_arquivo_id, numero_volume,
+           local_arquivo_id, aberto_em, abertura_usuario_id, no_local, situacao, criado_em)
+         VALUES (?, ?, ?, 5, ?, ?, ?, TRUE, 'arquivado', ?)`,
+        [m.est, m.paciente, tipo!['id'], m.arquivo, agora, m.usuario, agora],
+      );
+    });
+    const s = await porta.solicitar(ctx(), {
+      localArquivo: m.arquivo,
+      destino: m.trB,
+      motivo,
+      itens: [{ paciente: m.paciente, volume: null }],
+    });
+    const [item] = await porta.itensDaSolicitacao(ctx(), s.id);
+    expect(item).toMatchObject({ paciente: m.paciente, volume: null, situacao: 'pendente' });
+    const e = await porta.emprestar(ctx(), { volume: v5, destinoSetor: m.setorB, solicitacao: s.id });
+    expect(e.solicitacao).toBe('atendida');
+    const emp = await um(
+      'SELECT movimento_prontuario_id, solicitacao_prontuario_id, situacao FROM emprestimo_prontuario WHERE id = ?',
+      [e.id],
+    );
+    expect(emp).toMatchObject({ situacao: 'emprestado', solicitacao_prontuario_id: s.id });
+    const fim = await um(
+      `SELECT i.situacao, i.volume_prontuario_id, i.atendido_em IS NOT NULL AS atendido, mv.volume_prontuario_id AS volume_entregue
+         FROM solicitacao_prontuario_item i JOIN movimento_prontuario mv ON mv.id = i.movimento_prontuario_id
+        WHERE i.solicitacao_prontuario_id = ?`,
+      [s.id],
+    );
+    // O pedido continua "todos os volumes"; o volume entregue fica no movimento da guarda ligado ao item.
+    expect(fim).toMatchObject({ situacao: 'emprestado', volume_prontuario_id: null, atendido: 1 });
+    expect(Number(fim['volume_entregue'])).toBe(v5);
+    expect(Number(emp['movimento_prontuario_id'])).toBeGreaterThan(0);
+    expect(
+      (await um('SELECT situacao, no_local FROM volume_prontuario WHERE id = ?', [v5]))['situacao'],
+    ).toBe('emprestado');
+  });
 });

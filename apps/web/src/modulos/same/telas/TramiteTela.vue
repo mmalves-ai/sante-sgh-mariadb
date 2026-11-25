@@ -21,9 +21,11 @@ import {
   TIPOS_ITEM_PROTOCOLO,
   type TipoItemProtocolo,
 } from '@sgh/dominio-hotelaria';
+import { PERMISSOES_M21_CODIGOS } from '@sgh/contratos';
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { usarSessao } from '../../../casca/sessao/sessao.js';
 import {
   type ApoioTramite,
   cancelarProtocolo,
@@ -206,17 +208,27 @@ const itensSol = reactive<Record<number, ItemSol[]>>({});
 const acaoSol = reactive<
   Record<
     number,
-    { motivo: string; justificativa: string; setor: number | null; ondeProcurou: Record<number, string> }
+    {
+      motivo: string;
+      justificativa: string;
+      setor: number | null;
+      ondeProcurou: Record<number, string>;
+      // Item "todos os volumes": o volume do paciente que o arquivo entrega (o servidor confere que é do paciente).
+      volumeEntrega: Record<number, string>;
+    }
   >
 >({});
 function guardarItens(id: number, itens: ItemSol[]): void {
   itensSol[id] = itens;
-  for (const i of itens) acaoSol[id]!.ondeProcurou[i.id] ??= '';
+  for (const i of itens) {
+    acaoSol[id]!.ondeProcurou[i.id] ??= '';
+    acaoSol[id]!.volumeEntrega[i.id] ??= '';
+  }
 }
 async function carregarSolicitacoes(): Promise<void> {
   solicitacoes.value = (await lerSolicitacoes()).itens;
   for (const s of solicitacoes.value) {
-    acaoSol[s.id] ??= { motivo: '', justificativa: '', setor: null, ondeProcurou: {} };
+    acaoSol[s.id] ??= { motivo: '', justificativa: '', setor: null, ondeProcurou: {}, volumeEntrega: {} };
     if (itensSol[s.id]) guardarItens(s.id, (await lerItensSolicitacao(s.id)).itens);
   }
 }
@@ -238,6 +250,14 @@ const verItens = (s: SolicitacaoTela) =>
     else guardarItens(s.id, (await lerItensSolicitacao(s.id)).itens);
     return null;
   });
+// A decisão é de quem tem a permissão (por perfil) e nunca de quem pediu: sem a permissão, a tela só mostra que o pedido
+// aguarda; com ela, a regra do domínio confere na hora o solicitante contra o usuário da sessão (o servidor confere de novo).
+const { sessao, permissoes } = usarSessao();
+const podeDecidir = computed(() => permissoes.value.has(PERMISSOES_M21_CODIGOS.sameAutorizarSolicitacao));
+const usuarioSessao = computed(() => {
+  const id = sessao.value?.usuario.id ?? '';
+  return /^\d+$/.test(id) ? Number(id) : -1;
+});
 const faltaDecisao = (s: SolicitacaoTela, decisao: 'autorizar' | 'negar') =>
   conferirDecisaoAutorizacao({
     situacao: s.situacao as SituacaoSolicitacao,
@@ -245,9 +265,9 @@ const faltaDecisao = (s: SolicitacaoTela, decisao: 'autorizar' | 'negar') =>
     decisao,
     justificativa: acaoSol[s.id]?.justificativa ?? null,
     solicitante: s.solicitante,
-    // Quem pediu não decide: o servidor confere pelo usuário da sessão.
-    responsavel: -1,
+    responsavel: usuarioSessao.value,
   }).map((x) => x.mensagem);
+const proprioPedido = (s: SolicitacaoTela) => s.solicitante === usuarioSessao.value;
 const decidir = (s: SolicitacaoTela, decisao: 'autorizar' | 'negar') =>
   tentar(async () => {
     await decidirAutorizacao(s.id, decisao, acaoSol[s.id]!.justificativa.trim() || null, s.versao);
@@ -284,9 +304,17 @@ const faltaEntrega = (s: SolicitacaoTela) =>
     autorizacao: s.autorizacao,
     comSolicitacao: true,
   }).map((x) => x.mensagem);
+// O item "todos os volumes" pede o número do volume que sai, conferido na hora.
+const faltaVolumeEntrega = (s: SolicitacaoTela, i: ItemSol): string | null => {
+  if (i.volume !== null) return null;
+  const v = (acaoSol[s.id]?.volumeEntrega[i.id] ?? '').trim();
+  if (!v) return k('volumeEntregaFalta');
+  return /^\d{1,9}$/.test(v) && Number(v) > 0 ? null : k('volumeEntregaNumero');
+};
 const entregar = (s: SolicitacaoTela, i: ItemSol) =>
   tentar(async () => {
-    await emprestar({ volume: i.volume, destinoSetor: acaoSol[s.id]!.setor, solicitacao: s.id });
+    const volume = i.volume ?? Number(acaoSol[s.id]!.volumeEntrega[i.id]!.trim());
+    await emprestar({ volume, destinoSetor: acaoSol[s.id]!.setor, solicitacao: s.id });
     await Promise.all([carregarSolicitacoes(), carregarEmprestimos()]);
     return k('emprestado');
   });
@@ -625,7 +653,13 @@ onMounted(() =>
             · {{ k(`autorizacoes.${s.autorizacao}`) }}</span
           >
         </h3>
-        <div v-if="s.autorizacao === 'aguardando'" class="linha" data-testid="sol-decisao">
+        <p v-if="s.autorizacao === 'aguardando' && !podeDecidir" data-testid="sol-aguarda-decisor">
+          {{ k('aguardaDecisor') }}
+        </p>
+        <p v-else-if="s.autorizacao === 'aguardando' && proprioPedido(s)" data-testid="sol-proprio-pedido">
+          {{ k('proprioPedido') }}
+        </p>
+        <div v-else-if="s.autorizacao === 'aguardando'" class="linha" data-testid="sol-decisao">
           <SanteCampoTexto
             v-model="acaoSol[s.id]!.justificativa"
             :rotulo="k('justificativa')"
@@ -675,10 +709,26 @@ onMounted(() =>
                 <template v-if="i.observacao"> · {{ i.observacao }}</template>
               </span>
               <template v-if="i.situacao === 'pendente'">
+                <SanteCampoTexto
+                  v-if="i.volume === null"
+                  v-model="acaoSol[s.id]!.volumeEntrega[i.id]!"
+                  :rotulo="k('volumeEntrega')"
+                  :max-bytes="9"
+                  data-testid="sol-volume-entrega"
+                />
+                <span
+                  v-if="acaoSol[s.id]!.volumeEntrega[i.id] && faltaVolumeEntrega(s, i)"
+                  class="erro"
+                  data-testid="sol-volume-entrega-erro"
+                  >{{ faltaVolumeEntrega(s, i) }}</span
+                >
                 <SanteBotao
-                  v-if="i.volume !== null"
                   :rotulo="k('entregar')"
-                  :desabilitado="faltaEntrega(s).length > 0 || acaoSol[s.id]!.setor === null"
+                  :desabilitado="
+                    faltaEntrega(s).length > 0 ||
+                    acaoSol[s.id]!.setor === null ||
+                    faltaVolumeEntrega(s, i) !== null
+                  "
                   data-testid="sol-entregar"
                   @acionar="entregar(s, i)"
                 />

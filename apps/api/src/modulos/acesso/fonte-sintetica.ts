@@ -3218,6 +3218,22 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       opcoesGrupo: opcoesFinanceiro('financeiro.adiantamento.ler', 'financeiro.adiantamento.conceder'),
     },
   },
+  /**
+   * C1-009 (04-HOT L128, no fim da lista, pelo ID sintético das outras): responsável do arquivo que decide os pedidos
+   * de prontuário cujo motivo exige autorização (perfil `diretoria-clinica`), com o controle de prontuários do SAME.
+   */
+  'SINT.ARQUIVO.RESP': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'ARQUIVO_SAME',
+      opcoesGrupo: [2361, 2362, 2363, 2364, 4569, 2365, 2366, 2367, 2368, 2468, 2488],
+    },
+    perfisConcedidos: ['diretoria-clinica'],
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */
