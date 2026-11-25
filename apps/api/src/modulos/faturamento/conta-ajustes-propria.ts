@@ -39,6 +39,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import { totalDosItens } from './operacoes.js';
 
 type Linha = Record<string, unknown>;
@@ -49,7 +50,6 @@ const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const txn = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v));
 const b = (v: unknown) => v === true || v === 1 || v === '1';
 const r2 = (x: number) => Math.round(x * 100) / 100;
-const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const dataIso = (v: unknown): string | null =>
   v === null || v === undefined
     ? null
@@ -215,16 +215,13 @@ export async function horarioEspecialPropria(l: Consulta, est: number, tabela: n
   return { faixas, expediente };
 }
 
+/** Dos dias dos itens, os que são feriado no estabelecimento, pelo calendário único (cadastros > estrutura). */
 async function feriadosDe(l: Consulta, est: number, datas: string[]): Promise<Set<string>> {
   if (!datas.length) return new Set();
-  const r = await l.consultar<Linha>(
-    `SELECT f.data FROM feriado f JOIN estabelecimento e ON e.id = ?
-      WHERE f.ativo = 1 AND f.excluido_em IS NULL AND f.ponto_facultativo = 0 AND f.data IN (${lista(datas.length)})
-        AND (f.abrangencia = 'nacional' OR f.estabelecimento_id = e.id
-             OR (f.abrangencia = 'municipal' AND f.municipio_ibge_id = e.municipio_ibge_id))`,
-    [est, ...datas],
-  );
-  return new Set(r.map((x) => dataIso(x['data'])!));
+  const ordenadas = [...datas].sort();
+  const doPeriodo = await lerFeriadosDoPeriodo(l, est, ordenadas[0]!, ordenadas[ordenadas.length - 1]!);
+  const pedidas = new Set(datas);
+  return new Set(doPeriodo.map((x) => x.data).filter((x) => pedidas.has(x)));
 }
 
 /** O que a aplicação do horário especial faria em cada item cobrado da conta (sem gravar). */

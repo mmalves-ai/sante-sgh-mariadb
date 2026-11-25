@@ -46,8 +46,11 @@ async function limpar(e: Escritor, ests: readonly number[]): Promise<void> {
     `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (${em}) AND tipo = 'manifestacao_ouvidoria'`,
     ests,
   );
-  await e.executar(`DELETE FROM feriado WHERE estabelecimento_id IN (${em})`, ests);
-  await e.executar(`DELETE FROM feriado WHERE nome IN (${FERIADOS.map(() => '?').join(', ')})`, FERIADOS);
+  await e.executar(`DELETE FROM dia_nao_util WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE FROM dia_nao_util WHERE descricao IN (${FERIADOS.map(() => '?').join(', ')})`,
+    FERIADOS,
+  );
   await e.executar(`UPDATE estabelecimento SET municipio_ibge_id = NULL WHERE id IN (${em})`, ests);
   await e.executar('DELETE FROM municipio_ibge WHERE codigo_ibge = ?', [MUNICIPIO]);
   await e.executar(
@@ -145,11 +148,11 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do paciente (MariaDB, clien
         [pacientes[1], pfMae!.id, agora],
       );
       await e.executar(
-        "INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, criado_em) VALUES ('2034-11-02', 'FERIADO SINTETICO', 'estabelecimento', ?, ?)",
+        "INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, criado_em) VALUES ('FERIADO SINTETICO', 'estabelecimento', ?, 'data_unica', '2034-11-02', ?)",
         [est, agora],
       );
       await e.executar(
-        "INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, criado_em) VALUES ('2034-11-03', 'FERIADO DO OUTRO', 'estabelecimento', ?, ?)",
+        "INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, criado_em) VALUES ('FERIADO DO OUTRO', 'estabelecimento', ?, 'data_unica', '2034-11-03', ?)",
         [outro, agora],
       );
       // A UF e o município do estabelecimento (sintético, sob uma UF do catálogo) para os feriados estadual e municipal.
@@ -170,15 +173,27 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do paciente (MariaDB, clien
         [MUNICIPIO, uf.id, agora],
       );
       await e.executar('UPDATE estabelecimento SET municipio_ibge_id = ? WHERE id = ?', [municipio, est]);
-      const outraUf = uf.sigla === 'ZX' ? 'ZW' : 'ZX';
+      // Outra UF (o calendário único guarda a UF pelo id): a segunda do catálogo, ou uma sintética.
+      const segunda = await e.uma<{ id: number }>(
+        'SELECT id FROM unidade_federativa WHERE id <> ? ORDER BY id LIMIT 1',
+        [uf.id],
+      );
+      let outraUf = segunda ? Number(segunda.id) : 0;
+      if (!outraUf) {
+        const pais = await e.uma<{ id: number }>('SELECT id FROM pais_referencia ORDER BY id LIMIT 1', []);
+        outraUf = await e.inserir(
+          "INSERT INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES ('98', 'ZX', 'OUTRA UF SINTETICA', ?, ?)",
+          [pais!.id, agora],
+        );
+      }
       for (const [dia, nome, abr, ufF, mun] of [
         ['2034-11-06', 'L0312 NACIONAL', 'nacional', null, null],
-        ['2034-11-07', 'L0312 ESTADUAL', 'estadual', uf.sigla, null],
+        ['2034-11-07', 'L0312 ESTADUAL', 'estadual', uf.id, null],
         ['2034-11-08', 'L0312 MUNICIPAL', 'municipal', null, municipio],
         ['2034-11-09', 'L0312 OUTRA UF', 'estadual', outraUf, null],
       ] as const)
         await e.executar(
-          'INSERT INTO feriado (data, nome, abrangencia, uf, municipio_ibge_id, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
+          "INSERT INTO dia_nao_util (data, descricao, abrangencia, unidade_federativa_id, municipio_ibge_id, recorrencia, criado_em) VALUES (?, ?, ?, ?, ?, 'data_unica', ?)",
           [dia, nome, abr, ufF, mun, agora],
         );
       return { est, outro, pacientes, capacidade };

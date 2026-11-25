@@ -127,6 +127,7 @@ async function limpar(e: Escritor, ests: readonly number[]) {
     `DELETE g FROM grade_sala_cirurgica g JOIN sala_cirurgica s ON s.id = g.sala_cirurgica_id WHERE s.estabelecimento_id IN (${em})`,
     ests,
   );
+  await e.executar(`DELETE FROM dia_nao_util WHERE estabelecimento_id IN (${em})`, ests);
 }
 
 beforeAll(async () => {
@@ -1272,6 +1273,23 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     expect((await grade.grade(ctx(m.est), m.sala))?.faixas.map((f) => [f.inicio, f.fim, f.ativo])).toEqual([
       ['19:00', '23:00', true],
     ]);
+    // Feriado do calendário único (cadastros > estrutura): a faixa que não vale em feriado fecha a sala no dia; a
+    // que vale abre. O dia fica cadastrado até o fim do caso (o resultado não depende do calendário de amanhã).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-feriado-grade' }, (e) =>
+      e.inserir(
+        "INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, criado_em) VALUES ('FERIADO SINTETICO DA GRADE', 'estabelecimento', ?, 'data_unica', ?, ?)",
+        [m.est, amanha(), new Date()],
+      ),
+    );
+    await expect(
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('19:30'), op(m.est)),
+    ).rejects.toThrow(/sala-fechada-na-grade/);
+    await grade.executar(
+      ctx(m.est),
+      'cirurgia.gravarFaixaGrade',
+      { sala: m.sala, faixa: id, versao: 1, ...faixa, valeFeriado: true },
+      op(m.est),
+    );
     // A agenda confere a grade: fora dela e passando do fim recusa; dentro grava.
     await expect(
       porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('18:00'), op(m.est)),
@@ -1290,7 +1308,7 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     await grade.executar(
       ctx(m.est),
       'cirurgia.gravarFaixaGrade',
-      { sala: m.sala, faixa: id, versao: 1, ...faixa, profissional: m.anestesista },
+      { sala: m.sala, faixa: id, versao: 2, ...faixa, valeFeriado: true, profissional: m.anestesista },
       op(m.est),
     );
     await expect(
@@ -1298,15 +1316,15 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     ).rejects.toThrow(/grade-reservada-cirurgiao/);
     // Inativar: a linha fica (ativo falso, versão nova), de outro estabelecimento é recusado; sem faixa ativa, não restringe.
     await expect(
-      grade.executar(ctx(m.outro), 'cirurgia.inativarFaixaGrade', { faixa: id, versao: 2 }, op(m.outro)),
+      grade.executar(ctx(m.outro), 'cirurgia.inativarFaixaGrade', { faixa: id, versao: 3 }, op(m.outro)),
     ).rejects.toThrow(/faixa-inexistente/);
-    await grade.executar(ctx(m.est), 'cirurgia.inativarFaixaGrade', { faixa: id, versao: 2 }, op(m.est));
+    await grade.executar(ctx(m.est), 'cirurgia.inativarFaixaGrade', { faixa: id, versao: 3 }, op(m.est));
     const [depois] = await ler<Record<string, unknown>>(
       'SELECT ativo, versao FROM grade_sala_cirurgica WHERE id = ?',
       [id],
     );
     expect(Number(depois?.['ativo'])).toBe(0);
-    expect(Number(depois?.['versao'])).toBe(3);
+    expect(Number(depois?.['versao'])).toBe(4);
     const livre = await porta.executar(
       ctx(m.est),
       'cirurgia.agendarCirurgia',

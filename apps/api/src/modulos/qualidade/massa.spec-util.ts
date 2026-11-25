@@ -89,7 +89,7 @@ export async function limparQualidade(e: Escritor, ests: readonly number[]): Pro
     `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (${em}) AND tipo LIKE 'notificacao_incidente_%'`,
     ests,
   );
-  await e.executar(`DELETE FROM feriado WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM dia_nao_util WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM notificacao_agravo WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM gatilho_exame_agravo WHERE estabelecimento_id IN (${em})`, ests);
 }
@@ -178,7 +178,7 @@ export async function prepararMassaQualidade(marca: string): Promise<MassaQualid
         );
       await limparQualidade(e, [est, outro]);
       await e.executar(
-        "INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, criado_em) VALUES ('2026-11-02', 'FERIADO SINTETICO', 'estabelecimento', ?, ?)",
+        "INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, criado_em) VALUES ('FERIADO SINTETICO', 'estabelecimento', ?, 'data_unica', '2026-11-02', ?)",
         [est, agora],
       );
       return { est, outro, usuario, gestor, setor, setorOutro };

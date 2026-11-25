@@ -7,6 +7,7 @@
 // Melhoria: os feriados dos prazos casam a UF e o município do endereço do estabelecimento (nada de feriado estadual ou
 // municipal de outro lugar) e não contam o ponto facultativo (o prazo regulatório corre nele: só o feriado o suspende).
 import { ErroOperacao, type Leitor, type NucleoProprio, recusa, type TxOperacao } from '@sgh/nucleo';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import type { ContextoPortaM18, LiberacaoGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 
@@ -112,7 +113,7 @@ export async function setoresDoEstabelecimento(
 
 /**
  * Os feriados do período que valem no estabelecimento: os nacionais, os estaduais da UF do município do endereço, os
- * municipais desse município e os do próprio estabelecimento (o cadastro do cliente; ativos e não excluídos). O ponto
+ * municipais desse município e os do próprio estabelecimento (o calendário único do cliente; ativos e não excluídos). O ponto
  * facultativo fica de fora por decisão explícita: o prazo regulatório e o de análise correm nele (não é feriado legal).
  * Sem município no endereço, valem só os nacionais e os do estabelecimento.
  */
@@ -122,21 +123,7 @@ export async function feriadosDoEstabelecimento(
   de: string,
   ate: string,
 ): Promise<{ data: string; nome: string }[]> {
-  const linhas = await l.consultar(
-    `SELECT f.data, f.nome FROM feriado f
-       JOIN estabelecimento e ON e.id = ?
-       LEFT JOIN municipio_ibge m ON m.id = e.municipio_ibge_id
-       LEFT JOIN unidade_federativa uf ON uf.id = m.unidade_federativa_id
-      WHERE f.data BETWEEN ? AND ? AND f.ativo = TRUE AND f.excluido_em IS NULL AND f.ponto_facultativo = FALSE
-        AND (f.abrangencia = 'nacional'
-             OR (f.abrangencia = 'estadual' AND f.uf = uf.sigla)
-             OR (f.abrangencia = 'municipal' AND f.municipio_ibge_id = e.municipio_ibge_id)
-             OR (f.abrangencia = 'estabelecimento' AND f.estabelecimento_id = e.id))
-      ORDER BY f.data, f.id`,
-    [est, de.slice(0, 10), ate.slice(0, 10)],
-    { teto: 1000 },
-  );
-  return linhas.map((r) => ({ data: dataIso(r['data']) ?? '', nome: texto(r['nome']) }));
+  return lerFeriadosDoPeriodo(l, est, de, ate);
 }
 
 /** O id da conta pelo login (ativa ou não; null: não existe). */

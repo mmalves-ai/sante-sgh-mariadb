@@ -38,6 +38,7 @@ import {
   type PortaPortalPaciente,
   type TrilhaDaGravacao,
 } from './porta.js';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import { erroDeDominio, gravadorGravacaoPropria, TABELAS_GRAVACAO_PORTAL } from './porta-propria-gravacao.js';
 import { LeiturasPortalProprias } from './porta-propria-leitura.js';
 import type { ItemDominioPortal, PacientePortal, RegistroTrilhaPortal } from './tipos.js';
@@ -308,25 +309,8 @@ export class PortaPortalPropria implements PortaPortalPaciente {
     ate: string,
   ): Promise<readonly { data: string; nome: string }[]> {
     const est = await this.estabelecimento(c);
-    // Os nacionais, os do estado e os do município do estabelecimento, e os do próprio estabelecimento.
-    return this.ler(c, async (l) =>
-      (
-        await l.consultar(
-          `SELECT f.data, f.nome FROM feriado f
-            WHERE f.ativo AND f.excluido_em IS NULL AND f.data BETWEEN ? AND ?
-              AND (f.abrangencia = 'nacional'
-                   OR (f.abrangencia = 'estabelecimento' AND f.estabelecimento_id = ?)
-                   OR (f.abrangencia = 'municipal' AND f.municipio_ibge_id = (SELECT e.municipio_ibge_id FROM estabelecimento e WHERE e.id = ?))
-                   OR (f.abrangencia = 'estadual' AND f.uf = (SELECT uf.sigla FROM estabelecimento e
-                                                                JOIN municipio_ibge mi ON mi.id = e.municipio_ibge_id
-                                                                JOIN unidade_federativa uf ON uf.id = mi.unidade_federativa_id
-                                                               WHERE e.id = ?)))
-            ORDER BY f.data`,
-          [de, ate, est, est, est],
-          { teto: TETO },
-        )
-      ).map((x) => ({ data: dataIso(x['data']) ?? '', nome: String(x['nome']) })),
-    );
+    // Pelo calendário único: os nacionais, os do estado e os do município do estabelecimento, e os do próprio.
+    return this.ler(c, (l) => lerFeriadosDoPeriodo(l, est, de, ate));
   }
 
   async manifestacoes(c: ContextoPortal, paciente: number): Promise<ManifestacaoPortalLida[]> {

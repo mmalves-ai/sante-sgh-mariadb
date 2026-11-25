@@ -2,8 +2,8 @@
 // da sala (grade_sala_cirurgica), gravação e inativação pelo Executor (trilha na mesma transação) e a conferência da
 // agenda: agendar e remarcar releem as faixas sob a trava da sala e recusam o horário fora da grade, na faixa reservada
 // a outro cirurgião ou especialidade, ou em feriado sem faixa que valha no feriado (regra do @sgh/dominio-cirurgia).
-// A faixa nunca é apagada: inativar guarda a linha (ativo = falso) e a trilha. Feriado: o nacional e o do
-// estabelecimento (ponto facultativo não fecha a sala).
+// A faixa nunca é apagada: inativar guarda a linha (ativo = falso) e a trilha. Feriado: o do calendário único do
+// cliente (nacional, da UF, do município e do estabelecimento; ponto facultativo e meio expediente não fecham a sala).
 import { randomUUID } from 'node:crypto';
 import { conferirGradeSala, type FaixaGradeSala, validarFaixaGrade } from '@sgh/dominio-cirurgia';
 import {
@@ -18,6 +18,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { civil, n, nn, verdadeiro } from './banco-apoio.js';
 
@@ -50,20 +51,14 @@ const faixaDe = (x: Record<string, unknown>): FaixaLida => ({
   versao: n(x['versao']),
 });
 
-type Consulta = Pick<Leitor, 'consultar'>;
+type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
 
 async function faixasDaSala(l: Consulta, sala: number, est: number): Promise<FaixaLida[]> {
   return (await l.consultar(`${SQL_FAIXAS} ORDER BY g.dia_semana, g.hora_inicio`, [sala, est])).map(faixaDe);
 }
 
 async function ehFeriado(l: Consulta, data: string, est: number): Promise<boolean> {
-  const r = await l.consultar(
-    `SELECT id FROM feriado
-      WHERE data = ? AND ativo = TRUE AND excluido_em IS NULL AND ponto_facultativo = FALSE
-        AND (abrangencia = 'nacional' OR (abrangencia = 'estabelecimento' AND estabelecimento_id = ?)) LIMIT 1`,
-    [data, est],
-  );
-  return r.length > 0;
+  return (await lerFeriadosDoPeriodo(l, est, data, data)).length > 0;
 }
 
 const diaSeguinte = (data: string): string => {

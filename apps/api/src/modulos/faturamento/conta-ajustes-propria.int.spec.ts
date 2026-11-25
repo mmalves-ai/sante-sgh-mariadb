@@ -119,7 +119,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     await e.executar('DELETE FROM motivo_ajuste_conta WHERE codigo LIKE ?', [`${P}%`]);
     await e.executar('DELETE FROM motivo_descaracterizacao_pacote WHERE codigo LIKE ?', [`${P}%`]);
     await e.executar('DELETE FROM acrescimo_horario_especial WHERE estabelecimento_id = ?', [ids.est]);
-    await e.executar('DELETE FROM feriado WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM dia_nao_util WHERE estabelecimento_id = ?', [ids.est]);
     const pac = await e.consultar<{ id: number }>('SELECT id FROM pacote WHERE codigo LIKE ?', [`${P}%`]);
     for (const { id } of pac)
       for (const t of [
@@ -322,7 +322,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       );
       await lancar(m.conta4, 1, m.itemB, m.grupo2, '2025-06-10 15:00:00', 70);
       await e.inserir(
-        "INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, criado_em) VALUES ('2026-01-22', ?, 'estabelecimento', ?, ?)",
+        "INSERT INTO dia_nao_util (descricao, abrangencia, estabelecimento_id, recorrencia, data, criado_em) VALUES (?, 'estabelecimento', ?, 'data_unica', '2026-01-22', ?)",
         [`FERIADO ${P}`, ids.est, agora],
       );
     });

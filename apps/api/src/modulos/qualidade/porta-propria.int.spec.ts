@@ -450,22 +450,22 @@ describe.skipIf(SEM_BANCO_QUA)(
           const munRj = await mun('3304557', rj);
           await e.executar('UPDATE estabelecimento SET municipio_ibge_id = ? WHERE id = ?', [munSp, m.est]);
           await e.executar('UPDATE estabelecimento SET municipio_ibge_id = ? WHERE id = ?', [munRj, m.outro]);
-          await e.executar("DELETE FROM feriado WHERE nome LIKE 'FERIADO SINTETICO 0403%'", []);
+          await e.executar("DELETE FROM dia_nao_util WHERE descricao LIKE 'FERIADO SINTETICO 0403%'", []);
           const f = (
             data: string,
             nome: string,
             abr: string,
-            ufS: string | null,
+            ufI: number | null,
             munI: number | null,
             pf = false,
           ) =>
             e.executar(
-              'INSERT INTO feriado (data, nome, abrangencia, uf, municipio_ibge_id, ponto_facultativo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
-              [data, nome, abr, ufS, munI, pf, agora],
+              "INSERT INTO dia_nao_util (data, descricao, abrangencia, unidade_federativa_id, municipio_ibge_id, facultativo, recorrencia, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'data_unica', ?)",
+              [data, nome, abr, ufI, munI, pf, agora],
             );
           await f('2031-03-01', 'FERIADO SINTETICO 0403 NACIONAL', 'nacional', null, null);
-          await f('2031-03-02', 'FERIADO SINTETICO 0403 SP', 'estadual', 'SP', null);
-          await f('2031-03-03', 'FERIADO SINTETICO 0403 RJ', 'estadual', 'RJ', null);
+          await f('2031-03-02', 'FERIADO SINTETICO 0403 SP', 'estadual', sp, null);
+          await f('2031-03-03', 'FERIADO SINTETICO 0403 RJ', 'estadual', rj, null);
           await f('2031-03-04', 'FERIADO SINTETICO 0403 MUN SP', 'municipal', null, munSp);
           await f('2031-03-05', 'FERIADO SINTETICO 0403 MUN RJ', 'municipal', null, munRj);
           await f('2031-03-06', 'FERIADO SINTETICO 0403 FACULTATIVO', 'nacional', null, null, true);
@@ -489,7 +489,7 @@ describe.skipIf(SEM_BANCO_QUA)(
             correlacao: 'limpeza-feriados-0403',
           },
           async (e) => {
-            await e.executar("DELETE FROM feriado WHERE nome LIKE 'FERIADO SINTETICO 0403%'", []);
+            await e.executar("DELETE FROM dia_nao_util WHERE descricao LIKE 'FERIADO SINTETICO 0403%'", []);
             await e.executar('UPDATE estabelecimento SET municipio_ibge_id = NULL WHERE id IN (?, ?)', [
               m.est,
               m.outro,

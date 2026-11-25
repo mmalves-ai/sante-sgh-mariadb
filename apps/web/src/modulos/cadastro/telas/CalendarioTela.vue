@@ -371,7 +371,7 @@ const dataBr = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
   border-bottom: 1px solid var(--sgh-borda);
 }
 .inativo {
-  opacity: 0.6;
+  /* Sem opacidade: o texto esmaecido falhava no contraste (axe); o inativo se marca pelo risco e pelo rótulo. */
   text-decoration: line-through;
 }
 .acoes {
