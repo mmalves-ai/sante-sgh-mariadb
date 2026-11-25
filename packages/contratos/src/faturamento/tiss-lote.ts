@@ -57,6 +57,11 @@ export interface ContaTiss {
   readonly executantePadrao?: boolean;
   /** Os campos adicionais da operadora informados na guia (06-FAT linha 10), já no texto da observação (até 500). */
   readonly observacao?: string;
+  /**
+   * Fator de redução da guia (reducaoAcrescimo, duas casas) que leva ao total o desconto por volume e a franquia aplicados
+   * na conta (06-FAT linha 19); sem abatimento, ausente (1.00).
+   */
+  readonly reducaoAcrescimo?: number;
   readonly itens: readonly ItemContaTiss[];
 }
 

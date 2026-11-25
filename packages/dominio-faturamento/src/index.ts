@@ -27,6 +27,7 @@ export * from './conta/periodos-conta.js';
 // F3.7 (06-FAT linha 36): a nota fiscal de serviço que documenta a fatura do convênio ou a conta do particular.
 export * from './conta/nota-vinculo.js';
 export * from './conta/regras-comerciais.js';
+export * from './conta/efeito-comercial.js';
 export * from './conta/tarifador.js';
 // F3.7 (06-FAT linha 37): o evento contábil da receita faturada, glosada e recuperada pela regra de conta contábil.
 export * from './conta/receita-contabil.js';

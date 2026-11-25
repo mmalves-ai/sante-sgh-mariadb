@@ -48,6 +48,8 @@ export interface ItemExecutado {
   readonly procedimento: Procedimento;
   readonly quantidade: number;
   readonly valorUnitario: number;
+  /** Fator de redução ou acréscimo do item (reducaoAcrescimo, duas casas); sem ele, 1.00. */
+  readonly reducaoAcrescimo?: number;
 }
 
 export interface GuiaConsulta {
@@ -117,6 +119,8 @@ export interface Despesa {
   /** dm_unidadeMedida (ex.: 036 unidade). */
   readonly unidadeMedida: string;
   readonly valorUnitario: number;
+  /** Fator de redução ou acréscimo (reducaoAcrescimo, duas casas); sem ele, 1.00. */
+  readonly reducaoAcrescimo?: number;
 }
 
 export interface MembroEquipe {
@@ -190,8 +194,17 @@ export function dinheiro(v: number): string {
   return (Math.round(v * 100) / 100).toFixed(2);
 }
 
+/** O fator do item no XML (st_decimal3-2) e o valor da linha com ele (quantidade × unitário × fator). */
+const fator = (i: { readonly reducaoAcrescimo?: number }) => i.reducaoAcrescimo ?? 1;
+const fatorXml = (i: { readonly reducaoAcrescimo?: number }) => fator(i).toFixed(2);
+const valorLinha = (i: {
+  readonly quantidade: number;
+  readonly valorUnitario: number;
+  readonly reducaoAcrescimo?: number;
+}) => i.quantidade * i.valorUnitario * fator(i);
+
 const soma = (itens: readonly ItemExecutado[]) =>
-  itens.reduce((s, i) => s + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100;
+  itens.reduce((s, i) => s + Math.round(valorLinha(i) * 100), 0) / 100;
 
 /** O booleano no domínio dmSimNao do XML da TISS. */
 const simNao = (v: boolean): string => (v ? 'S' : 'N');
@@ -230,16 +243,16 @@ function itemExecutado(i: ItemExecutado, cabecalho: string): Elemento {
     el('dataExecucao', i.data),
     procedimento('procedimento', i.procedimento),
     el('quantidadeExecutada', String(i.quantidade)),
-    el('reducaoAcrescimo', '1.00'),
+    el('reducaoAcrescimo', fatorXml(i)),
     el('valorUnitario', dinheiro(i.valorUnitario)),
-    el('valorTotal', dinheiro(i.quantidade * i.valorUnitario)),
+    el('valorTotal', dinheiro(valorLinha(i))),
   );
 }
 
 const somaDespesas = (ds: readonly Despesa[], codigos: readonly string[]) =>
   ds
     .filter((d) => codigos.includes(d.codigoDespesa))
-    .reduce((s, d) => s + Math.round(d.quantidade * d.valorUnitario * 100), 0) / 100;
+    .reduce((s, d) => s + Math.round(valorLinha(d) * 100), 0) / 100;
 
 function valorTotal(itens: readonly ItemExecutado[], despesas: readonly Despesa[] = []): Elemento {
   const proc = soma(itens);
@@ -282,9 +295,9 @@ function despesasXml(ds: readonly Despesa[] | undefined): Elemento | null {
           el('codigoProcedimento', d.codigo),
           el('quantidadeExecutada', quantidade4(d.quantidade)),
           el('unidadeMedida', d.unidadeMedida),
-          el('reducaoAcrescimo', '1.00'),
+          el('reducaoAcrescimo', fatorXml(d)),
           el('valorUnitario', dinheiro(d.valorUnitario)),
-          el('valorTotal', dinheiro(d.quantidade * d.valorUnitario)),
+          el('valorTotal', dinheiro(valorLinha(d))),
           el('descricaoProcedimento', d.descricao),
         ),
       ),
@@ -434,9 +447,9 @@ function guiaXml(g: Guia, cab: Cabecalho): Elemento {
               el('dataExecucao', i.data),
               procedimento('procedimento', i.procedimento),
               el('quantidadeExecutada', String(i.quantidade)),
-              el('reducaoAcrescimo', '1.00'),
+              el('reducaoAcrescimo', fatorXml(i)),
               el('valorUnitario', dinheiro(i.valorUnitario)),
-              el('valorTotal', dinheiro(i.quantidade * i.valorUnitario)),
+              el('valorTotal', dinheiro(valorLinha(i))),
               ...i.equipe.map((m) =>
                 el(
                   'profissionais',

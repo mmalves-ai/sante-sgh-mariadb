@@ -11,7 +11,11 @@ import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } fro
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoRegrasComerciais } from './regras-comerciais.controller.js';
-import { comercialDaContaPropria, simularRegraContaPropria } from './regras-comerciais-propria.js';
+import {
+  abatimentoComercialDaConta,
+  comercialDaContaPropria,
+  simularRegraContaPropria,
+} from './regras-comerciais-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -420,8 +424,30 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
     // A gravação ignora o vínculo da requisição e usa o da carteira (titular): a franquia vale.
     const r1 = await s.gravar('aplicar-comercial', op(), { contaId: ids['conta'], vinculo: 'pensionista' });
     expect(r1).toMatchObject({ franquia: 200, desconto: 100, substituidas: 0 });
+    expect(r1).toMatchObject({ valorTotal: 700, valorPaciente: 200 });
+    const valoresConta = async () =>
+      (
+        await linhas(
+          'SELECT valor_itens, valor_desconto, valor_paciente, valor_total FROM conta_hospitalar WHERE id = ?',
+          [ids['conta']],
+        )
+      ).map((x) => [
+        Number(x['valor_itens']),
+        Number(x['valor_desconto']),
+        Number(x['valor_paciente']),
+        Number(x['valor_total']),
+      ])[0];
+    // A franquia é do paciente e sai do total da fonte; o desconto por volume sai do total da fonte.
+    expect(await valoresConta()).toEqual([1000, 300, 200, 700]);
     const r2 = await s.gravar('aplicar-comercial', op(), { contaId: ids['conta'] });
-    expect(r2).toMatchObject({ substituidas: 2 });
+    expect(r2).toMatchObject({ substituidas: 2, valorTotal: 700 });
+    // A reaplicação troca o abatimento (não soma duas vezes) e o volume segue o bruto da conta.
+    expect(await valoresConta()).toEqual([1000, 300, 200, 700]);
+    // A guia TISS leva o abatimento no fator dos itens: (1000 − 300) / 1000.
+    expect(await s.ler(ctxL(), (l) => abatimentoComercialDaConta(l, ids['conta'] as number, 1000))).toEqual({
+      abatimento: 300,
+      fator: 0.7,
+    });
     const aplicadas = await linhas(
       `SELECT sequencia, tipo, valor, franquia_contrato_id, regra_desconto_volume_id, excluido_em, excluido_por, criado_por, observacao
          FROM conta_hospitalar_franquia WHERE conta_hospitalar_id = ? ORDER BY sequencia`,
@@ -565,8 +591,12 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
     expect(JSON.stringify(itens[0]?.['dados'])).toContain('remocao_ambulancia');
     expect(JSON.stringify(itens[2]?.['dados'])).toContain('ligacao_tarifada');
     expect(Number(ls[0]?.['item'])).toBeGreaterThan(0);
-    const [conta] = await linhas('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [ids['conta']]);
-    expect(Number(conta?.['valor_total'])).toBe(1479.5);
+    const [conta] = await linhas('SELECT valor_itens, valor_total FROM conta_hospitalar WHERE id = ?', [
+      ids['conta'],
+    ]);
+    // O total refeito mantém o abatimento comercial aplicado na linha 19 (franquia 200 + desconto 100).
+    expect(Number(conta?.['valor_itens'])).toBe(1479.5);
+    expect(Number(conta?.['valor_total'])).toBe(1179.5);
     const visao = await s.ler(ctxL(), (l, est) => comercialDaContaPropria(l, est, ids['conta'] as number));
     expect(visao.ligacoes.map((x) => x.situacao)).toEqual(['lancada', 'nao_cobrada']);
   });

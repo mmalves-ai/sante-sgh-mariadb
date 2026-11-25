@@ -56,8 +56,12 @@ const texto = (s: string, max: number) =>
     .trim()
     .slice(0, max) || 'NAO INFORMADO';
 
-function executado(i: ItemContaTiss): ItemExecutado {
+/** O fator comercial da conta (desconto por volume e franquia, 06-FAT linha 19) só vai quando reduz. */
+const comFator = (f: number | undefined) => (f !== undefined && f !== 1 ? { reducaoAcrescimo: f } : {});
+
+function executado(i: ItemContaTiss, f?: number): ItemExecutado {
   return {
+    ...comFator(f),
     sequencial: i.sequencial,
     data: i.data,
     procedimento: {
@@ -70,9 +74,10 @@ function executado(i: ItemContaTiss): ItemExecutado {
   };
 }
 
-function despesa(i: ItemContaTiss, seq: number): Despesa {
+function despesa(i: ItemContaTiss, seq: number, f?: number): Despesa {
   const nat = i.natureza === 'procedimento' ? 'taxa' : i.natureza;
   return {
+    ...comFator(f),
     sequencial: seq,
     codigoDespesa: CODIGO_DESPESA[nat],
     data: i.data,
@@ -90,7 +95,9 @@ const ehProcedimento = (i: ItemContaTiss) => i.natureza === 'procedimento';
 /** A guia da conta no tipo do lote (regra 1: só o leiaute 04.03.00). */
 export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
   const procs = c.itens.filter(ehProcedimento);
-  const despesas = c.itens.filter((i) => !ehProcedimento(i)).map((i, k) => despesa(i, k + 1));
+  const despesas = c.itens
+    .filter((i) => !ehProcedimento(i))
+    .map((i, k) => despesa(i, k + 1, c.reducaoAcrescimo));
   const beneficiario = { numeroCarteira: texto(c.carteira, 20), atendimentoRN: c.atendimentoRN };
   // Os campos adicionais da operadora vão na observação da guia (06-FAT linha 10), em todo tipo de guia.
   const obs = c.observacao ? { observacao: c.observacao } : {};
@@ -106,7 +113,11 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         dataAtendimento: c.inicio.data,
         tipoConsulta: c.tipoConsulta,
         procedimento: { codigoTabela: proc?.codigoTabela ?? '22', codigo: (proc?.codigo ?? '').slice(0, 10) },
-        valor: c.itens.reduce((s, i) => s + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100,
+        valor:
+          c.itens.reduce(
+            (s, i) => s + Math.round(i.quantidade * i.valorUnitario * (c.reducaoAcrescimo ?? 1) * 100),
+            0,
+          ) / 100,
         ...obs,
       };
     }
@@ -120,7 +131,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         cnes: p.cnes,
         caraterAtendimento: c.caraterAtendimento,
         tipoAtendimento: c.tipoAtendimento,
-        itens: procs.map(executado),
+        itens: procs.map((i) => executado(i, c.reducaoAcrescimo)),
         despesas,
         ...obs,
       };
@@ -141,7 +152,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         regimeInternacao: c.regimeInternacao,
         motivoEncerramento: c.motivoEncerramento,
         indicadorAcidente: c.indicadorAcidente ?? '9',
-        itens: procs.map(executado),
+        itens: procs.map((i) => executado(i, c.reducaoAcrescimo)),
         despesas,
         ...obs,
       };
@@ -161,7 +172,7 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         itens: c.itens
           .filter((i) => i.tipo === 2)
           .map((i) => ({
-            ...executado(i),
+            ...executado(i, c.reducaoAcrescimo),
             equipe: [
               {
                 grauParticipacao: '00',

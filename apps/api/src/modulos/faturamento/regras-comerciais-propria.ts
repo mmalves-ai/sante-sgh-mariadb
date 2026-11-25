@@ -13,6 +13,8 @@
 import {
   calcularDescontoVolume,
   calcularFranquia,
+  efeitoComercialNaConta,
+  fatorReducaoGuia,
   cobrancaLigacao,
   cobrancaRemocao,
   contaEditavel,
@@ -622,7 +624,10 @@ async function franquiasDoContrato(
   }));
 }
 
-/** O volume medido no banco pela base da regra (fatura da conta, competência da fonte ou quantidade de contas). */
+/**
+ * O volume medido no banco pela base da regra (fatura da conta, competência da fonte ou quantidade de contas). O valor
+ * é o bruto (itens + acréscimo), antes da franquia e do desconto: aplicar o desconto não muda o volume que o decide.
+ */
 async function volumeDa(
   l: Consulta,
   est: number,
@@ -631,7 +636,7 @@ async function volumeDa(
 ): Promise<{ volume: number; medida: string }> {
   if (base === 'valor_fatura') {
     const f = await l.uma<Linha>(
-      `SELECT fc.fatura_fonte_pagadora_id AS f, (SELECT COALESCE(SUM(x.valor_total), 0) FROM fatura_fonte_pagadora_conta y
+      `SELECT fc.fatura_fonte_pagadora_id AS f, (SELECT COALESCE(SUM(x.valor_itens + x.valor_acrescimo), 0) FROM fatura_fonte_pagadora_conta y
                JOIN conta_hospitalar x ON x.id = y.conta_hospitalar_id
               WHERE y.fatura_fonte_pagadora_id = fc.fatura_fonte_pagadora_id AND x.situacao <> 'cancelada'
                 AND x.excluido_em IS NULL) AS v
@@ -641,7 +646,7 @@ async function volumeDa(
     if (f) return { volume: n(f['v']), medida: 'valor_fatura' };
   }
   const r = await l.uma<Linha>(
-    `SELECT COALESCE(SUM(valor_total), 0) AS v, COUNT(*) AS q FROM conta_hospitalar
+    `SELECT COALESCE(SUM(valor_itens + valor_acrescimo), 0) AS v, COUNT(*) AS q FROM conta_hospitalar
       WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND competencia = ? AND situacao <> 'cancelada'
         AND excluido_em IS NULL`,
     [est, c['fonte_pagadora_id'], dia(c['competencia'])],
@@ -790,7 +795,7 @@ export async function calculoComercialConta(
 export const esquemaAplicarComercial = z.object({ contaId: id });
 export const opAplicarComercial = definirOperacao({
   nome: 'faturamento.aplicar-franquia-desconto-conta',
-  tabelas: ['conta_hospitalar_franquia'],
+  tabelas: ['conta_hospitalar_franquia', 'conta_hospitalar'],
   entrada: esquemaAplicarComercial,
   async gravar(tx, e) {
     const est = estDe(tx.contexto);
@@ -805,9 +810,13 @@ export const opAplicarComercial = definirOperacao({
         'O contrato tem franquia e a carteira do paciente nesta fonte pagadora não está no cadastro: informe a titularidade (titular, dependente ou pensionista) na cobertura do paciente antes de aplicar.',
         { campos: ['coberturaPaciente'] },
       );
-    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [e.contaId]);
+    const [cab] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, valor_itens, valor_acrescimo, valor_desconto, valor_paciente FROM conta_hospitalar
+        WHERE id = ?`,
+      [e.contaId],
+    );
     const anteriores = await tx.consultar<Linha>(
-      `SELECT id, versao FROM conta_hospitalar_franquia WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
+      `SELECT id, versao, tipo, valor FROM conta_hospitalar_franquia WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
           AND tipo IN ('franquia','desconto_volume')`,
       [e.contaId],
       { teto: 1000 },
@@ -847,10 +856,54 @@ export const opAplicarComercial = definirOperacao({
         observacao: `Desconto por volume (${r.desconto.medida} ${r.desconto.volume.toFixed(2)}).`,
       });
     }
-    return { contaId: e.contaId, franquia, desconto, substituidas: anteriores.length };
+    // A franquia é do paciente e sai do total da fonte; o desconto por volume sai do total da fonte (e da guia TISS).
+    const somaTipo = (t: string) =>
+      r2(anteriores.filter((x) => x['tipo'] === t).reduce((a, x) => a + n(x['valor']), 0));
+    const efeito = efeitoComercialNaConta(
+      {
+        valorItens: n(cab?.['valor_itens']),
+        valorAcrescimo: n(cab?.['valor_acrescimo']),
+        valorDesconto: n(cab?.['valor_desconto']),
+        valorPaciente: n(cab?.['valor_paciente']),
+      },
+      { franquia: somaTipo('franquia'), desconto: somaTipo('desconto_volume') },
+      { franquia, desconto: r.desconto && desconto > 0 ? desconto : 0 },
+    );
+    await tx.alterar('conta_hospitalar', e.contaId, n(cab?.['versao']), {
+      valor_desconto: efeito.valorDesconto,
+      valor_paciente: efeito.valorPaciente,
+      valor_total: efeito.valorTotal,
+    });
+    return {
+      contaId: e.contaId,
+      franquia,
+      desconto,
+      substituidas: anteriores.length,
+      valorTotal: efeito.valorTotal,
+      valorPaciente: efeito.valorPaciente,
+    };
   },
   alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.contaId }),
 });
+
+/**
+ * O abatimento comercial vigente da conta (desconto por volume e franquia aplicados) e o fator de redução da guia TISS
+ * (reducaoAcrescimo) sobre o bruto da guia. Sem abatimento, fator null (a guia segue com 1.00).
+ */
+export async function abatimentoComercialDaConta(
+  l: Pick<Consulta, 'uma'>,
+  contaId: number,
+  bruto: number,
+): Promise<{ abatimento: number; fator: number | null }> {
+  const a = await l.uma<Linha>(
+    `SELECT COALESCE(SUM(valor), 0) AS v FROM conta_hospitalar_franquia
+      WHERE conta_hospitalar_id = ? AND excluido_em IS NULL AND tipo IN ('franquia','desconto_volume')`,
+    [contaId],
+  );
+  const abatimento = r2(n(a?.['v']));
+  const f = fatorReducaoGuia(bruto, abatimento);
+  return { abatimento, fator: f === 1 ? null : f };
+}
 
 // ── Linha 23: remoção em ambulância e ligação tarifada ────────────────────────────────────────────────
 
