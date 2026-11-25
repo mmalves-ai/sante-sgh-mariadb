@@ -749,7 +749,7 @@ regra_repasse_plantao	FAT	configuracao	F8	Remuneração de plantão por setor: v
 regra_repasse_profissional	FAT	vinculo	F3	Profissionais aos quais a regra de repasse se aplica	R1#43; SP: TBREPGER_TBCBOPRO; dep: profissional (02)	06	3
 regra_repasse_resultado	FAT	configuracao	F8	Percentual do resultado do serviço distribuído aos profissionais	R1#48; MV: REPASSE_PERC_RESULTADO	06	1
 regra_repasse_valor_fixo	FAT	configuracao	F8	Valor fixo mensal pago ao profissional ou equipe, com vigência	R1#47; MV: REPASSE_VALOR_FIXO	06	1
-regra_repasse_variavel	FAT	configuracao	F8	Remuneração variável por produtividade ou resultado, com indicador e período	R1#48; MV: REG_REP_VARIAVEL, REG_REPASSE_PROD, REG_REPASSE_PROD_EXCECAO	06	2
+regra_repasse_variavel	FAT	configuracao	F8	Remuneração variável por produtividade ou resultado, com indicador e período	R1#48; MV: REG_REP_VARIAVEL, REG_REPASSE_PROD, REG_REPASSE_PROD_EXCECAO; 12_FAT/97_variavel_evento_desconto: evento_desconto_repasse_id (evento das faixas de desconto)	06	2
 regra_repasse_variavel_faixa	FAT	item	F8	Faixas escalonadas da remuneração variável e o percentual ou valor de cada uma	R1#48; MV: FAIXA_REP_VARIAVEL, ITREG_REP_ESCALONAMENTO, ITREG_REPASSE_PROD	06	5
 regra_repasse_versao	FAT	historico	F3	Versões da regra de repasse com vigência e autor	R1#43; MV: ITREG_REPASSE_VIGENCIA, CTRL_ALTERA_REGRA_REPASSE*	06	2
 regra_transferencia_conta	FAT	configuracao	F7	Regra de transferência ou espelhamento de conta entre estabelecimentos, com de-para de fonte pagadora, origem e setor	rodada2:nova	06	4
