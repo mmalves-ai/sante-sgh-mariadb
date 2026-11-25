@@ -371,6 +371,7 @@ export const mensagensSadt = {
   recusas: {
     // F3.5 (05-SADT linha 21): as recusas da entrega de resultados.
     ...recusasEntrega,
+    indisponivel: 'Esta função precisa do banco do cliente e não está disponível nesta fonte de dados.',
     'pedido-suspenso': 'O pedido foi suspenso no prontuário.',
     'pedido-recebido': 'O pedido já foi recebido pelo setor.',
     'exame-nao-recebido': 'Receba o pedido no setor antes de digitar o resultado.',
