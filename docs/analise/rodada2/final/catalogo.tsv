@@ -1154,7 +1154,7 @@ remessa_cobranca_item	FIN	item	F7	Boleto e instrução incluídos na remessa (re
 rendimento_aplicacao	FIN	item	F7	Rendimento, imposto e resgate mensais de uma aplicação financeira	MV CON_COR	07	0
 renegociacao	FIN	principal	F3	Acordo que substitui parcelas em aberto por novas, com juros, desconto e termo aceito	SPDATA MFCABECRENEGO	07	1
 reserva_numero_nota	FIN	item	F7	Número e série de nota fiscal reservados para uma fonte pagadora antes da emissão, com baixa ou cancelamento da reserva	rodada2:nova	07	1
-reserva_orcamentaria	FIN	principal	F8	Valor comprometido por solicitação, pedido, nota ou título, com consumo e liberação	MV ORCA_CONTROLE_MOV, ORCA_REALIZADO_MOV	07	6
+reserva_orcamentaria	FIN	principal	F8	Valor comprometido por solicitação, pedido, nota ou título, com consumo e liberação	MV ORCA_CONTROLE_MOV, ORCA_REALIZADO_MOV; liberação com quem, quando e o motivo (07-FIN linha 130; migração 14_FIN/99_reserva_orcamentaria_liberacao)	07	6
 responsavel_bem	FIN	historico	F3	Responsável pela guarda do bem por período	SPDATA GPTP_RESPONSAVEL; paridade estrutural: era F7	07	1
 responsavel_orcamento	FIN	vinculo	F7	Usuário responsável por preencher e revisar cada centro de custo da versão	MV ORCA_PERFIL_USUA_SETOR, ORCA_PERFIL_USUA_CONTA	07	14
 resposta_padrao_aprovacao	FIN	dominio	F8	Respostas fixas do aprovador (aprovo, reprovo, devolvo para ajuste) com exigência de justificativa	MV ALCA_PONTO_RESP	07	2
