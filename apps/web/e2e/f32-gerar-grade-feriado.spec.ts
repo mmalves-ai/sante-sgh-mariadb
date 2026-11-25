@@ -56,7 +56,7 @@ async function verPrevia(page: Page): Promise<void> {
   await expect(page.getByTestId('previa-grade')).toBeVisible();
 }
 
-test.describe('F3.2 gerar a grade pulando o dia sem expediente @F3.2-07', () => {
+test.describe('F3.2 gerar a grade pulando o dia sem expediente @F3.2-07 @C1-087', () => {
   test.setTimeout(120_000);
   test('a prévia pula o dia do calendário, a gravação gera só os dias úteis e o lote é revertido', async ({
     page,

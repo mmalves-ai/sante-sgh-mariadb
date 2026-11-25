@@ -6,7 +6,7 @@
 // banco (trilha, duplicidade no alvo, faixas, versão, inativação com motivo, móveis, sessão do outro estabelecimento)
 // está no contrato de efeito (apps/api/src/modulos/cadastro/calendario-proprio.int.spec.ts).
 import { expect, type Page, type Route, test } from '@playwright/test';
-import { semViolacaoAxe } from './ajuda.js';
+import { itemDoMenu, semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
@@ -26,7 +26,7 @@ const json = (rota: Route, corpo: unknown, status = 200) =>
 
 type Item = Record<string, unknown> & { id: number; versao: number; ativo: boolean };
 
-test.describe('F3.1 calendário de feriados e dias não úteis @F3.1', () => {
+test.describe('F3.1 calendário de feriados e dias não úteis @F3.1 @C1-087', () => {
   test('inclui meio expediente do estabelecimento, gera móveis e inativa com motivo', async ({ page }) => {
     const pedidos: { metodo: string; caminho: string; corpo: Record<string, unknown> }[] = [];
     const itens: Item[] = [];
@@ -86,7 +86,8 @@ test.describe('F3.1 calendário de feriados e dias não úteis @F3.1', () => {
 
     await entrar(page, 'SINT.ADMIN');
     // O item do menu Cadastros > Estrutura leva à tela.
-    await page.goto('/cadastros/estrutura/calendario');
+    await (await itemDoMenu(page, 'Calendário de feriados e dias não úteis')).click();
+    await expect(page).toHaveURL(/\/cadastros\/estrutura\/calendario$/);
     await expect(page.getByTestId('tela-calendario')).toBeVisible();
     await expect(page.getByTestId('cal-resumo')).toContainText('HOSPITAL SINTETICO');
 
