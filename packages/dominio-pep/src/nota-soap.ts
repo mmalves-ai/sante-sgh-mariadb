@@ -338,3 +338,10 @@ export function textoNotaSoap(
     return [`${sigla[p]}: ${txt}${cods.length ? `${txt ? ' ' : ''}[${cods.join('; ')}]` : ''}`];
   }).join('\n');
 }
+
+/** A nota nasce em atendimento do paciente que não foi cancelado (o encerrado aceita a nota tardia do atendimento). */
+export function atendimentoAceitaNota(situacao: string): FalhaRegra[] {
+  return situacao === 'cancelado'
+    ? [falha('atendimento-cancelado', 'O atendimento foi cancelado: escolha outro atendimento do paciente.')]
+    : [];
+}

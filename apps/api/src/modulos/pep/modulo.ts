@@ -66,6 +66,8 @@ import {
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
 import { EXAME_FISICO, ExameFisicoController } from './exame-fisico.controller.js';
 import { ExameFisicoPropria } from './exame-fisico-propria.js';
+import { NOTA_SOAP, NotaSoapController } from './nota-soap.controller.js';
+import { NotaSoapPropria } from './nota-soap-propria.js';
 import { ProntuarioRestritoController } from './prontuario-restrito.controller.js';
 import { PORTA_PRONTUARIO_RESTRITO, PortaProntuarioRestritoPropria } from './prontuario-restrito-propria.js';
 import { AvisosClinicosRegrasController } from './avisos-clinicos-regras.controller.js';
@@ -223,6 +225,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       PrescricaoCadastroController,
       NotasPacienteController,
       ExameFisicoController,
+      NotaSoapController,
       ProntuarioRestritoController,
       AvisosClinicosRegrasController,
       TerminologiaClinicaController,
@@ -325,6 +328,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ExameFisicoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L98: nota clínica em quatro partes codificada (CID-10; CIAP-2 por configuração); sem núcleo, 503.
+      {
+        provide: NOTA_SOAP,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new NotaSoapPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L102: notas e lembretes livres sobre o paciente; sem núcleo, 503.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   acaoNotaSoap,
+  atendimentoAceitaNota,
   cidsSugeridos,
   CONFIGURACAO_NOTA_SOAP_PADRAO,
   type ConfiguracaoNotaSoap,
@@ -224,5 +225,12 @@ describe('ciclo da nota', () => {
         { parte: 'avaliacao', rotulo: 'I10 Hipertensão' },
       ]),
     ).toBe('S: Dor\nA: [I10 Hipertensão]\nP: Repouso');
+  });
+});
+
+describe('atendimento da nota', () => {
+  it('recusa o atendimento cancelado e aceita o encerrado', () => {
+    expect(atendimentoAceitaNota('cancelado')[0]!.codigo).toBe('atendimento-cancelado');
+    expect(atendimentoAceitaNota('encerrado')).toEqual([]);
   });
 });
