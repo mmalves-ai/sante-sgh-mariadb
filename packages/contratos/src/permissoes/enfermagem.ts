@@ -32,6 +32,9 @@ export const PERMISSOES_ENFERMAGEM = {
   plantaoAceitar: 'enfermagem.plantao.aceitar',
   dispositivoLer: 'enfermagem.dispositivo.ler',
   dispositivoEditar: 'enfermagem.dispositivo.editar',
+  // 09-AREA linha 86 (C1-035): a auditoria das checagens (amostra sorteada, auditores e avaliação de cada checagem).
+  auditoriaChecagemLer: 'enfermagem.auditoriaChecagem.ler',
+  auditoriaChecagemAuditar: 'enfermagem.auditoriaChecagem.auditar',
 } as const;
 const P = PERMISSOES_ENFERMAGEM;
 
@@ -97,5 +100,18 @@ export const PERMISSOES_ENFERMAGEM_M25: readonly DeclaracaoPermissao[] = [
     'Autorizar e retirar tablets e coletores do modo beira do leito',
 
     { categoria: 'tecnica', criticidade: 'normal' },
+  ),
+  // Recurso só do novo (09-AREA linha 86): concedido por perfil à qualidade, à auditoria e à enfermagem com conselho.
+  p(P.auditoriaChecagemLer, 'Ver as auditorias das checagens de enfermagem, com a amostra e o resultado', {
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['gestao-qualidade', 'auditor', 'assistencial-com-conselho', 'administrador-sistema'],
+  }),
+  p(
+    P.auditoriaChecagemAuditar,
+    'Abrir a auditoria das checagens (sorteio da amostra), avaliar cada checagem, concluir e cancelar com o motivo',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['gestao-qualidade', 'auditor', 'assistencial-com-conselho', 'administrador-sistema'],
+    },
   ),
 ];

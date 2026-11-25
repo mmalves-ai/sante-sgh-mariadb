@@ -9,6 +9,7 @@ export * from './checagem/infusao.js';
 export * from './checagem/glicemia.js';
 export * from './checagem/fechamento-turno.js';
 export * from './checagem/registro-turno.js';
+export * from './checagem/auditoria-checagem.js';
 export * from './offline/sincronizacao.js';
 export * from './sinais/validacao.js';
 export * from './sinais/limites-setor.js';
