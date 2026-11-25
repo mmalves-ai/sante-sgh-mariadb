@@ -64,6 +64,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.adiantamento.ler' },
   },
   {
+    // F7, 07-FIN linha 78: cobrança bancária com boleto (carteiras, emissão, remessa e retorno).
+    path: '/financeiro/receber/cobranca-bancaria',
+    name: 'financeiro.receber.cobrancaBancaria',
+    component: () => import('./telas/CobrancaBancariaTela.vue'),
+    meta: { permissao: 'financeiro.cobrancaBancaria.ler' },
+  },
+  {
     path: '/financeiro/receber/titulos',
     name: 'financeiro.receber.titulos',
     component: () => import('./telas/TitulosReceberTela.vue'),

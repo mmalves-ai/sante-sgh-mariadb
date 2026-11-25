@@ -4,6 +4,7 @@ import { mensagensAcordosFinanceiro } from './i18n-acordos.js';
 import { mensagensBaixaFinanceiro } from './i18n-baixa.js';
 import { mensagensCartaoFinanceiro } from './i18n-cartao.js';
 import { mensagensCessaoFinanceiro } from './i18n-cessao.js';
+import { mensagensCobrancaBancaria } from './i18n-cobranca.js';
 import { mensagensEncontroFinanceiro } from './i18n-encontro.js';
 import { mensagensFluxoAprovacao } from './i18n-fluxo-aprovacao.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
@@ -32,6 +33,8 @@ export const mensagensFinanceiro = {
   fluxoAprovacao: mensagensFluxoAprovacao,
   // F8, 07-FIN linha 79: portador do título, desconto e cessão de recebíveis (i18n-cessao.ts).
   cessao: mensagensCessaoFinanceiro,
+  // F7, 07-FIN linha 78: cobrança bancária com boleto (i18n-cobranca.ts).
+  cobranca: mensagensCobrancaBancaria,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   todos: 'Todos',
