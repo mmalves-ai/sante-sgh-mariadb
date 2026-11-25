@@ -31,6 +31,7 @@ import {
 import {
   type CampoPadraoTiss,
   conferirFechamentoCompetencia,
+  conferirEntregaNoCalendario,
   conferirRegistroProtocolo,
   faltasDoPrestador,
   normalizarProtocolo,
@@ -73,7 +74,6 @@ import {
   unitarioDaGuia,
   grupoTissDoItem,
   naturezaDoItem,
-  situacaoProtocoloDoNumero,
   tabelaTissDoItem,
   TIPO_GUIA_NO_MODELO,
   type TipoGuiaLote,
@@ -670,9 +670,51 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
     const r = conferirRegistroProtocolo(anterior, e.acao, np.protocolo);
     if (r) throw recusa(r.codigo, r.mensagem);
     if (e.acao === 'registrar') {
-      const situacao = situacaoProtocoloDoNumero(e.situacao) ?? (e.situacao === null ? 'recebido' : null);
+      // A situação vem do banco (situacao_protocolo_recebimento, só as ativas); sem situação, recebido.
+      const situacao =
+        e.situacao === null
+          ? 'recebido'
+          : texto(
+              (
+                await tx.uma<Linha>(
+                  'SELECT codigo FROM situacao_protocolo_recebimento WHERE numero_tiss = ? AND ativo',
+                  [e.situacao],
+                )
+              )?.['codigo'],
+            ) || null;
       if (!situacao)
         throw recusa('situacao-inexistente', 'A situação do protocolo não existe.', { campos: ['situacao'] });
+      // O calendário de entrega da fonte pagadora (06-FAT linha 31): a competência com janela restritiva só
+      // recebe a fatura dentro dela; a regra é do domínio (conferirEntregaNoCalendario).
+      const dataEntrega = e.data ?? civil(new Date(), await fusoDe(tx, est)).data;
+      const competencias = (
+        await tx.consultar<Linha>(
+          `SELECT DISTINCT ch.competencia FROM lote_tiss_conta ltc
+             JOIN conta_hospitalar ch ON ch.id = ltc.conta_hospitalar_id
+            WHERE ltc.lote_tiss_id = ? AND ltc.excluido_em IS NULL AND ch.competencia IS NOT NULL`,
+          [e.lote],
+        )
+      ).map((r) => dataIso(r['competencia']));
+      if (competencias.length > 0) {
+        const marcas = competencias.map(() => '?').join(', ');
+        const janelas = (
+          await tx.consultar<Linha>(
+            `SELECT competencia, entrega_inicio, entrega_fim, restritivo FROM calendario_entrega_fatura
+              WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND ativo
+                AND competencia IN (${marcas})`,
+            [est, l['fonte_pagadora_id'], ...competencias],
+          )
+        ).map((r) => ({
+          competencia: dataIso(r['competencia']),
+          entregaInicio: dataIso(r['entrega_inicio']),
+          entregaFim: dataIso(r['entrega_fim']),
+          pagamentoPrevisto: null,
+          prazoPagamentoDias: null,
+          restritivo: Boolean(Number(r['restritivo'])),
+        }));
+        const fora = conferirEntregaNoCalendario(janelas, competencias, dataEntrega);
+        if (fora) throw recusa(fora.codigo, fora.mensagem, { campos: [...(fora.campos ?? [])] });
+      }
       // O número é único por convênio (também o cancelado): o registro cancelado deste lote é reativado.
       const [existente] = await tx.consultarParaAtualizar<Linha>(
         `SELECT id, versao, lote_tiss_id, situacao, excluido_em FROM protocolo_recebimento
@@ -720,12 +762,7 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
         situacao: 'protocolado',
         protocolado_em: new Date(),
       });
-      await protocolarFaturaDoLote(
-        tx,
-        e.lote,
-        np.protocolo,
-        e.data ?? civil(new Date(), await fusoDe(tx, est)).data,
-      );
+      await protocolarFaturaDoLote(tx, e.lote, np.protocolo, dataEntrega);
     } else {
       if (l['protocolo_recebimento_id']) {
         const p = await tx.uma<Linha>('SELECT versao FROM protocolo_recebimento WHERE id = ?', [

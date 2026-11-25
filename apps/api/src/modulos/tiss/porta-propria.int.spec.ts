@@ -121,6 +121,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
         est,
       );
       await e.executar('DELETE FROM protocolo_recebimento WHERE estabelecimento_id IN (?, ?)', est);
+      await e.executar('DELETE FROM calendario_entrega_fatura WHERE estabelecimento_id IN (?, ?)', est);
       await e.executar(
         'DELETE FROM lote_tiss_conta WHERE lote_tiss_id IN (SELECT id FROM lote_tiss WHERE estabelecimento_id IN (?, ?))',
         est,
@@ -1670,6 +1671,150 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       'faturamento.registrarProtocolo',
       { lote: ids.lote, acao: 'limpar', protocolo: 'PRT0316', situacao: null },
       op(),
+    );
+  });
+
+  it('calendário de entrega e situações do banco (06-FAT linha 31): a janela restritiva recusa o protocolo fora dela sem gravar; dentro grava; o painel de prazos traz a janela aberta ou a próxima e o pagamento previsto; a situação vem do banco e a inativa recusa', async () => {
+    const dia = (n: number) =>
+      new Date(Date.parse(`${hoje}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+    const comp = String(
+      (
+        await lerUma("SELECT DATE_FORMAT(competencia, '%Y-%m-%d') AS c FROM conta_hospitalar WHERE id = ?", [
+          ids.conta,
+        ])
+      )?.['c'],
+    );
+    const outraComp = comp === competencia ? `${anoAnt}-${String(mesAnt).padStart(2, '0')}-01` : competencia;
+    const janela = (cp: string, ini: string, fim: string, restritivo: boolean, prazo: number | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-calendario-c1130' }, (e) =>
+        e.inserir(
+          `INSERT INTO calendario_entrega_fatura (estabelecimento_id, fonte_pagadora_id, competencia, entrega_inicio,
+             entrega_fim, prazo_pagamento_dias, restritivo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [ids.est, ids.fonte, cp, ini, fim, prazo, restritivo, new Date()],
+        ),
+      );
+    const protocolos = async () =>
+      Number(
+        (
+          await lerUma('SELECT COUNT(*) AS q FROM protocolo_recebimento WHERE lote_tiss_id = ?', [ids.lote])
+        )?.['q'],
+      );
+    const prazosDaFonte = async () =>
+      (await porta.prazos(c, { hoje, paradoDias: 15, prazoRecurso: '', convenios: null })).find(
+        (x) => x.convenio === ids.fonte,
+      );
+
+    // Situações do protocolo lidas do banco: as sete do padrão da base, com o número do status TISS.
+    expect((await porta.situacoesProtocolo(c)).map((x) => x.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+
+    // Janela restritiva da competência da conta do lote, de daqui a 10 a 15 dias, com pagamento 30 dias depois.
+    await janela(comp, dia(10), dia(15), true, 30);
+    const antes = await protocolos();
+    const fora = await erroDe(
+      porta.executar(
+        c,
+        'faturamento.registrarProtocolo',
+        { lote: ids.lote, acao: 'registrar', protocolo: 'PRTC1130', data: hoje, recibo: '', situacao: 2 },
+        op(),
+      ),
+    );
+    expect(codigo(fora)).toBe('entrega-fora-da-janela');
+    expect(fora.problema['campos']).toEqual(['data']);
+    expect(await protocolos()).toBe(antes);
+    expect(await lerUma('SELECT numero_protocolo FROM lote_tiss WHERE id = ?', [ids.lote])).toMatchObject({
+      numero_protocolo: null,
+    });
+    expect(await prazosDaFonte()).toMatchObject({
+      entregas: [dia(10)],
+      proximaEntrega: dia(10),
+      entrega: {
+        competencia: comp,
+        inicio: dia(10),
+        fim: dia(15),
+        situacao: 'futura',
+        dias: 10,
+        pagamentoPrevisto: dia(45),
+        restritivo: true,
+      },
+    });
+
+    // Dentro da janela grava, com a situação escolhida pelo número do banco (2 = em análise) no histórico.
+    await porta.executar(
+      c,
+      'faturamento.registrarProtocolo',
+      { lote: ids.lote, acao: 'registrar', protocolo: 'PRTC1130', data: dia(12), recibo: '', situacao: 2 },
+      op(),
+    );
+    expect(
+      await lerUma(
+        'SELECT situacao, recibo FROM protocolo_recebimento WHERE lote_tiss_id = ? AND numero_protocolo = ?',
+        [ids.lote, 'PRTC1130'],
+      ),
+    ).toMatchObject({ situacao: 'em_analise', recibo: null });
+    expect((await porta.lote(c, ids.lote, hoje))?.historico[0]).toMatchObject({
+      acao: 'registrado',
+      situacao: 2,
+      situacaoNome: 'Em análise',
+    });
+    await porta.executar(
+      c,
+      'faturamento.registrarProtocolo',
+      { lote: ids.lote, acao: 'limpar', protocolo: 'PRTC1130', situacao: null },
+      op(),
+    );
+
+    // Uma janela aberta hoje (outra competência, não restritiva) passa à frente da futura, com os dias até fechar.
+    await janela(outraComp, dia(-1), dia(3), false, null);
+    expect(await prazosDaFonte()).toMatchObject({
+      entregas: [dia(-1), dia(10)],
+      proximaEntrega: dia(-1),
+      entrega: {
+        competencia: outraComp,
+        situacao: 'aberta',
+        dias: 3,
+        pagamentoPrevisto: null,
+        restritivo: false,
+      },
+    });
+
+    // A situação inativada no banco some da escolha e o registro com ela recusa sem gravar.
+    const alterar = (ativo: boolean) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-calendario-c1130' }, (e) =>
+        e.executar(
+          "UPDATE situacao_protocolo_recebimento SET ativo = ? WHERE codigo = 'aguardando_informacao'",
+          [ativo],
+        ),
+      );
+    await alterar(false);
+    try {
+      expect((await porta.situacoesProtocolo(c)).map((x) => x.id)).not.toContain(5);
+      expect(
+        codigo(
+          await erroDe(
+            porta.executar(
+              c,
+              'faturamento.registrarProtocolo',
+              {
+                lote: ids.lote,
+                acao: 'registrar',
+                protocolo: 'PRTC1130',
+                data: dia(12),
+                recibo: '',
+                situacao: 5,
+              },
+              op(),
+            ),
+          ),
+        ),
+      ).toBe('situacao-inexistente');
+    } finally {
+      await alterar(true);
+    }
+    expect(await lerUma('SELECT numero_protocolo FROM lote_tiss WHERE id = ?', [ids.lote])).toMatchObject({
+      numero_protocolo: null,
+    });
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-calendario-c1130' }, (e) =>
+      e.executar('DELETE FROM calendario_entrega_fatura WHERE estabelecimento_id = ?', [ids.est]),
     );
   });
 

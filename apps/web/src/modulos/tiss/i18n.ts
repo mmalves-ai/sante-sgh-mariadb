@@ -130,6 +130,13 @@ export const mensagensTiss = {
     maisAntigo: 'Mais antigo sem protocolo',
     prazoRecurso: 'Prazo de recurso',
     dias: '{n} dia(s)',
+    janela: 'Janela de entrega',
+    janelaAberta: 'Aberta: fecha em {n} dia(s)',
+    janelaFutura: 'Abre em {n} dia(s)',
+    janelaDe: '{inicio} a {fim} (competência {competencia})',
+    restritivo: 'Só recebe dentro da janela',
+    pagamento: 'Pagamento previsto',
+    semCalendario: 'Sem calendário cadastrado',
   },
   competencias: {
     titulo: 'Fechamento de competência por convênio',
