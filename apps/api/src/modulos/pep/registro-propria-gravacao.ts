@@ -35,6 +35,7 @@ import {
 import { z } from 'zod';
 import type { ContextoRegistro, ProvaLida } from './registro-porta.js';
 import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-propria-comum.js';
+import { conferirRegraDoSetor } from './registro-propria-regra-setor.js';
 import {
   type CabecalhoDocumentoLido,
   type CabecalhoRegistroLido,
@@ -1340,6 +1341,15 @@ export class RegistroPropriaGravacao {
       );
       const respostas = e.linhas.filter(temValor).map((l) => respostaDaLinha(l, campos));
       const agora = new Date();
+      // 03-PEP L91: o retroativo e a assinatura exigida pela configuração do setor (ou do estabelecimento).
+      await conferirRegraDoSetor(tx, {
+        estabelecimento: est.id,
+        atendimento: e.atendimento,
+        usuario: prof.usuario,
+        ocorridoEm: localParaUtc(e.dataHoraClinica, est.fuso),
+        agora,
+        assinaturaEstabelecimento: e.assinaturaEstabelecimento,
+      });
       let coassinatura: CoassinaturaGravavel | null = null;
       if (e.supervisao) {
         const preceptor = e.supervisao.idProfissional;

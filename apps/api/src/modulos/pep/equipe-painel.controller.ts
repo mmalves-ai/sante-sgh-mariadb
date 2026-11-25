@@ -15,8 +15,9 @@
 //   GET    /api/pep/equipe/profissional/:profissional/especialidades  especialidades do profissional (para a tela)
 // A equipe é dado do paciente: ler, incluir e encerrar passam pela mesma guarda de vínculo assistencial do prontuário
 // (AcessoPacientePep), e a leitura vai à trilha de acesso ao prontuário.
-// A configuração que vale usa o padrão do ESTABELECIMENTO (parâmetro pep.evolucao.toleranciaRetroativoMinutos) quando o
-// setor não tem a sua.
+// A configuração que vale usa o padrão do ESTABELECIMENTO (assinatura do parâmetro pep.prontuario.assinaturaExigida;
+// retroativo com justificativa, sem limite em horas) quando o setor não tem a sua. A gravação do registro clínico
+// aplica a mesma regra (registro-propria-regra-setor.ts).
 import {
   Body,
   Controller,
@@ -114,12 +115,12 @@ export class EquipePainelController {
     return paciente;
   }
 
-  /** O padrão do estabelecimento (tolerância do retroativo em minutos, parâmetro por estabelecimento). */
+  /** O padrão do estabelecimento (assinatura exigida, parâmetro por estabelecimento; retroativo com justificativa). */
   private async padraoEstabelecimento(s: SessaoCadastro) {
     const valores: ValorParametro[] = this.configuracao
       ? await this.configuracao.valoresParametro(s.rede, s.hospital).catch(() => [])
       : [];
-    const def = definicaoParametro('pep.evolucao.toleranciaRetroativoMinutos');
+    const def = definicaoParametro('pep.prontuario.assinaturaExigida');
     if (!def || !valores.length) return configuracaoPadraoDoEstabelecimento(null);
     const sujeito: SujeitoParametro = {
       rede: s.rede,
@@ -130,7 +131,7 @@ export class EquipePainelController {
       usuario: s.login,
     };
     const v = valorTipado(def, resolverParametro(def, valores, sujeito, new Date()).valor);
-    return configuracaoPadraoDoEstabelecimento(typeof v === 'number' ? v : null);
+    return configuracaoPadraoDoEstabelecimento(typeof v === 'string' ? v : null);
   }
 
   @Get('painel/acompanhados')

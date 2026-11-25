@@ -45,6 +45,8 @@ export const mensagensEquipePainel = {
     escolhaSetor: 'Escolha o setor.',
     toleranciaSemRetroativo: 'A tolerância só vale com o registro retroativo permitido.',
     toleranciaFora: 'A tolerância vai de 1 a 720 horas.',
+    padraoEstabelecimento:
+      'Setor sem regra própria segue o padrão do estabelecimento: assinatura {assinatura}; registro retroativo aceito com justificativa, sem limite em horas. A regra vale na gravação de cada registro clínico.',
     tipos: {
       todos: 'Todos',
       internacao: 'Internação',

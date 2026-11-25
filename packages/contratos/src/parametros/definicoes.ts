@@ -303,6 +303,22 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     origem:
       'regra 10 do M22: perfil de 2026-06 a 2026-07 (97% dos registros sem justificativa gravados até 15 minutos depois do horário clínico)',
   },
+  // 03-PEP L91: a assinatura exigida no registro clínico do estabelecimento (o setor sobrepõe na configuração do
+  // prontuário por setor).
+  {
+    chave: 'pep.prontuario.assinaturaExigida',
+    modulo: 'pep',
+    descricao:
+      'Assinatura exigida no registro clínico quando o setor não tem configuração própria: nenhuma, eletrônica (a da sessão) ou digital ICP-Brasil',
+    tipo: 'lista',
+    padrao: 'eletronica',
+    opcoes: ['nenhuma', 'eletronica', 'digital_icp'],
+    niveis: ['estabelecimento', 'rede'],
+    critico: true,
+    dono: 'comissão de prontuário',
+    origem:
+      'ficha F3.3, 03-PEP L91 (CFM 1.638/2002 e 1.821/2007; SBIS NGS2: regra institucional, nunca do usuário)',
+  },
   {
     chave: 'pep.evolucao.modelosLiberados',
     modulo: 'pep',

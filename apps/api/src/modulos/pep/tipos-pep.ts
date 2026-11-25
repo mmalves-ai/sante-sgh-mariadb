@@ -892,6 +892,8 @@ export const esquemaGravacaoEvolucao = z
     dataHoraClinica: HORA_LOCAL,
     justificativaRetroativo: textoCp1252(255).optional(),
     toleranciaMin: z.number().int().min(0).max(1440),
+    /** 03-PEP L91: a assinatura exigida do estabelecimento (parâmetro), quando o setor não tem configuração. */
+    assinaturaEstabelecimento: z.enum(['nenhuma', 'eletronica', 'digital_icp']).optional(),
     retratos: esquemaRetratos,
     linhas: z.array(esquemaLinhaGravacao).min(1).max(5_000),
     rtf: z.string().min(10).max(4_000_000),

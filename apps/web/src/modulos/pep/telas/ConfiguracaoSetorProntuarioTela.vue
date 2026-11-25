@@ -2,7 +2,9 @@
 // Regras do prontuário por setor e tipo de atendimento (F3.3, linha 03-PEP L91): registro retroativo com tolerância,
 // assinatura exigida e evoluções exigidas antes de prescrever. Uma grade com todas as configurações do
 // estabelecimento, editável na linha; a tolerância só abre com o retroativo ligado (validação na hora, a mesma regra
-// do domínio na API). Sem configuração do setor vale a do setor para "todos", senão o padrão do estabelecimento.
+// do domínio na API). Sem configuração do setor vale a do setor para "todos", senão o padrão do estabelecimento
+// (assinatura pelo parâmetro pep.prontuario.assinaturaExigida, mostrado no topo). A gravação de cada registro clínico
+// confere o retroativo e a assinatura por esta regra (recusa na hora, sem gravar).
 // Ler exige pep.admin.ler; gravar, pep.admin.editar.
 import { SanteAlerta, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, ref } from 'vue';
@@ -28,6 +30,7 @@ const setores = ref<{ id: number; nome: string }[]>([]);
 const erro = ref<string | null>(null);
 const salvo = ref<string | null>(null);
 const nova = ref<ConfiguracaoSetor>(vazia());
+const assinaturaPadrao = ref<ConfiguracaoSetor['assinaturaExigida'] | null>(null);
 
 function vazia(): ConfiguracaoSetor {
   return {
@@ -69,6 +72,7 @@ async function carregar(): Promise<void> {
     const r = await lerConfiguracoesSetor();
     itens.value = r.itens;
     setores.value = r.setores;
+    assinaturaPadrao.value = r.padrao?.assinaturaExigida ?? null;
   } catch (x) {
     erro.value = x instanceof Error ? x.message : String(x);
   }
@@ -100,6 +104,13 @@ onMounted(carregar);
     <h1>{{ t('pep.equipe.setor.titulo') }}</h1>
     <SanteAlerta v-if="erro" :texto="erro" data-testid="cfg-erro" />
     <p v-if="salvo" role="status">{{ salvo }}</p>
+    <p v-if="assinaturaPadrao" class="dica" data-testid="cfg-padrao">
+      {{
+        t('pep.equipe.setor.padraoEstabelecimento', {
+          assinatura: t(`pep.equipe.setor.assinaturas.${assinaturaPadrao}`),
+        })
+      }}
+    </p>
     <table>
       <thead>
         <tr>

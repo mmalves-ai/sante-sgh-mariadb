@@ -101,7 +101,12 @@ export interface ConfiguracaoSetor {
   versao?: number | null;
 }
 export const lerConfiguracoesSetor = () =>
-  pedir<{ itens: ConfiguracaoSetor[]; setores: { id: number; nome: string }[] }>(`${P}/prontuario-setor`);
+  pedir<{
+    itens: ConfiguracaoSetor[];
+    setores: { id: number; nome: string }[];
+    /** O padrão do estabelecimento (parâmetro da assinatura exigida), quando o setor não tem configuração. */
+    padrao?: { assinaturaExigida: ConfiguracaoSetor['assinaturaExigida'] };
+  }>(`${P}/prontuario-setor`);
 export const gravarConfiguracaoSetor = (c: ConfiguracaoSetor) =>
   pedir<{ id: number }>(`${P}/prontuario-setor`, 'PUT', {
     setor: c.setor,

@@ -4,7 +4,9 @@
 //   - Colunas do painel: só as do catálogo, sem repetição, no mínimo duas; ficam no banco por usuário (troca de
 //     computador não perde o painel).
 //   - Configuração por setor: a do setor e tipo de atendimento vence a do setor para "todos", que vence o padrão do
-//     estabelecimento; a tolerância do retroativo só existe com o retroativo permitido.
+//     estabelecimento; a tolerância do retroativo só existe com o retroativo permitido. A gravação do registro clínico
+//     confere o retroativo e a assinatura exigida pela configuração que vale (03-PEP L91). A regra é institucional
+//     (estabelecimento e setor), nunca preferência do usuário (CFM 1.638/2002 e 1.821/2007, SBIS NGS2).
 //   - Equipe assistencial: um único responsável principal vigente por atendimento, e a função de responsável é de
 //     categoria médica; o mesmo profissional não entra duas vezes na mesma função ao mesmo tempo; a saída grava o fim
 //     e o motivo (histórico nunca apagado). Quem está na equipe vigente tem vínculo com o paciente e recebe pendências
@@ -98,21 +100,56 @@ export interface ConfiguracaoSetor extends ConfiguracaoProntuario {
 }
 
 /**
- * O padrão do estabelecimento a partir do parâmetro de tolerância do retroativo (minutos, por estabelecimento): 0 =
- * sem retroativo; acima de 0, retroativo aceito com a tolerância em horas cheias (mínimo 1). Sem parâmetro, o padrão do
- * código. A assinatura exigida do estabelecimento segue a do código (a política de assinatura é a do módulo próprio).
+ * O padrão do estabelecimento, quando o setor não tem configuração: o registro retroativo é aceito com justificativa
+ * (acima da tolerância em minutos do parâmetro `pep.evolucao.toleranciaRetroativoMinutos`, regra do serviço de
+ * registro), sem limite em horas; a proibição e o limite em horas são regra do SETOR. A assinatura exigida vem do
+ * parâmetro `pep.prontuario.assinaturaExigida` do estabelecimento; sem ele (ou com valor fora da lista), a do código.
  */
 export function configuracaoPadraoDoEstabelecimento(
-  toleranciaMinutos: number | null,
+  assinatura: string | null | undefined,
 ): ConfiguracaoProntuario {
-  if (toleranciaMinutos === null || !Number.isFinite(toleranciaMinutos) || toleranciaMinutos < 0)
-    return CONFIGURACAO_PRONTUARIO_PADRAO;
-  if (toleranciaMinutos === 0) return { ...CONFIGURACAO_PRONTUARIO_PADRAO, permiteRetroativo: false };
   return {
     ...CONFIGURACAO_PRONTUARIO_PADRAO,
     permiteRetroativo: true,
-    toleranciaRetroativoHoras: Math.min(720, Math.max(1, Math.ceil(toleranciaMinutos / 60))),
+    toleranciaRetroativoHoras: null,
+    assinaturaExigida: ASSINATURAS_EXIGIDAS.includes(assinatura as AssinaturaExigida)
+      ? (assinatura as AssinaturaExigida)
+      : CONFIGURACAO_PRONTUARIO_PADRAO.assinaturaExigida,
   };
+}
+
+/** O tipo do atendimento na configuração do prontuário, a partir do fluxo do atendimento (telessaúde: só "todos"). */
+export function tipoProntuarioDoAtendimento(tipoBase: string | null | undefined): TipoAtendimentoProntuario {
+  const t = String(tipoBase ?? '');
+  return t !== 'todos' && TIPOS_ATENDIMENTO_PRONTUARIO.includes(t as TipoAtendimentoProntuario)
+    ? (t as TipoAtendimentoProntuario)
+    : 'todos';
+}
+
+/**
+ * A gravação do registro clínico pela configuração que vale (setor e tipo, setor ou estabelecimento): o horário clínico
+ * dentro da regra do retroativo, e a assinatura digital ICP-Brasil exigida só com certificado vigente do autor (a
+ * assinatura eletrônica é a da própria sessão autenticada; "nenhuma" não pede nada). Devolve a primeira recusa.
+ */
+export function conferirRegistroPelaConfiguracao(
+  c: ConfiguracaoProntuario,
+  x: { readonly ocorridoEm: Date; readonly agora: Date; readonly certificadoIcpVigente: boolean },
+): ErroRegraPainel | null {
+  const r = avaliarRetroativo(c, x.ocorridoEm, x.agora);
+  if (!r.permitido)
+    return {
+      campo: 'dataHoraClinica',
+      codigo: 'retroativo-fora-da-regra',
+      mensagem: r.motivo ?? 'O horário clínico está fora da regra do retroativo do setor.',
+    };
+  if (c.assinaturaExigida === 'digital_icp' && !x.certificadoIcpVigente)
+    return {
+      campo: 'assinatura',
+      codigo: 'assinatura-icp-exigida',
+      mensagem:
+        'Este setor exige assinatura digital ICP-Brasil: cadastre um certificado vigente antes de finalizar o registro.',
+    };
+  return null;
 }
 
 /** Padrão do código quando o setor não tem configuração: sem retroativo e assinatura eletrônica. */

@@ -89,6 +89,12 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     );
     await e.executar(`DELETE FROM registro_assistencial WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM configuracao_setor_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(
+      'DELETE FROM certificado_usuario WHERE usuario_id IN (SELECT id FROM usuario WHERE login = ?)',
+      [`${P}.medico`],
+    );
     const doModelo = `IN (SELECT c.id FROM modelo_campo c JOIN modelo_documento_versao v ON v.id = c.modelo_documento_versao_id
                           JOIN modelo_documento_clinico m ON m.id = v.modelo_documento_clinico_id WHERE m.codigo LIKE ?)`;
     await e.executar(`DELETE FROM modelo_campo_opcao WHERE modelo_campo_id ${doModelo}`, [`${PM}_%`]);
@@ -750,6 +756,125 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     const x = await g.modelosImpressao(C);
     expect(Array.isArray(x.fichas) && Array.isArray(x.relatorios)).toBe(true);
   });
+
+  it('regra do prontuário (03-PEP L91): retroativo e assinatura exigida pelo setor ou pelo estabelecimento', async () => {
+    const contar = async () =>
+      Number(
+        (
+          await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+            l.uma('SELECT COUNT(*) AS n FROM registro_assistencial WHERE estabelecimento_id = ?', [
+              m.estabelecimento,
+            ]),
+          )
+        )?.['n'],
+      );
+    const escrever = (sql: string, p: unknown[]) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) => e.inserir(sql, p));
+    // Dois dias antes de agora (a diferença do fuso não muda o resultado contra 6 h e 720 h).
+    const anteontem = new Date(Date.now() - 48 * 3_600_000).toISOString().slice(0, 16);
+    const agora = new Date();
+    // 1) Sem configuração do setor: o padrão do estabelecimento aceita o retroativo com justificativa; a assinatura
+    //    digital ICP exigida pelo estabelecimento recusa o autor sem certificado vigente e nada fica gravado.
+    const n0 = await contar();
+    await expect(
+      g.registrar(C, { ...registro(), assinaturaEstabelecimento: 'digital_icp' } as never, ctx()),
+    ).rejects.toMatchObject({ problema: { codigo: 'assinatura-icp-exigida' } });
+    expect(await contar()).toBe(n0);
+    const cert = await escrever(
+      `INSERT INTO certificado_usuario (usuario_id, midia, nome_titular, cpf_titular, emissor, numero_serie,
+         impressao_digital, valido_de, valido_ate, criado_em) VALUES (?, 'a1', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        m.medico,
+        'Titular sintético',
+        '00000000000',
+        'AC sintética',
+        `${P}-1`,
+        'e'.repeat(64),
+        new Date(agora.getTime() - 86_400_000),
+        new Date(agora.getTime() + 365 * 86_400_000),
+        agora,
+      ],
+    );
+    expect(cert).toBeGreaterThan(0);
+    await g.registrar(C, { ...registro(), assinaturaEstabelecimento: 'digital_icp' } as never, ctx());
+    expect(await contar()).toBe(n0 + 1);
+    // Certificado revogado não vale.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+      e.executar("UPDATE certificado_usuario SET situacao = 'revogado', revogado_em = ? WHERE id = ?", [
+        agora,
+        cert,
+      ]),
+    );
+    await expect(
+      g.registrar(C, { ...registro(), assinaturaEstabelecimento: 'digital_icp' } as never, ctx()),
+    ).rejects.toMatchObject({ problema: { codigo: 'assinatura-icp-exigida' } });
+
+    // 2) O setor do atendimento sem retroativo (para "todos"): recusa o horário de anteontem; o horário de agora grava.
+    const setor = await escrever(
+      `INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em)
+       VALUES (?, ?, 'Setor sintético', 'assistencial', ?)`,
+      [m.estabelecimento, `${P}-s`, agora],
+    );
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+      e.executar('UPDATE atendimento SET setor_funcional_id = ? WHERE id = ?', [setor, m.atendimento]),
+    );
+    try {
+      await escrever(
+        `INSERT INTO configuracao_setor_prontuario (estabelecimento_id, setor_funcional_id, tipo_atendimento,
+           permite_retroativo, tolerancia_retroativo_horas, assinatura_exigida, criado_em)
+         VALUES (?, ?, 'todos', FALSE, NULL, 'eletronica', ?)`,
+        [m.estabelecimento, setor, agora],
+      );
+      const n1 = await contar();
+      await expect(
+        g.registrar(C, { ...registro(), dataHoraClinica: anteontem } as never, ctx()),
+      ).rejects.toMatchObject({ problema: { codigo: 'retroativo-fora-da-regra', status: 422 } });
+      expect(await contar()).toBe(n1);
+      // A configuração do setor vale sobre a do estabelecimento: eletrônica no setor, sem certificado, grava.
+      const futuro = new Date(Date.now() + 26 * 3_600_000).toISOString().slice(0, 16);
+      await g.registrar(
+        C,
+        { ...registro(), dataHoraClinica: futuro, assinaturaEstabelecimento: 'digital_icp' } as never,
+        ctx(),
+      );
+      expect(await contar()).toBe(n1 + 1);
+
+      // 3) Setor e tipo (internação) vencem o setor para "todos": retroativo até 720 h grava; com 6 h, recusa.
+      const tipo = await escrever(
+        `INSERT INTO configuracao_setor_prontuario (estabelecimento_id, setor_funcional_id, tipo_atendimento,
+           permite_retroativo, tolerancia_retroativo_horas, assinatura_exigida, criado_em)
+         VALUES (?, ?, 'internacao', TRUE, 720, 'nenhuma', ?)`,
+        [m.estabelecimento, setor, agora],
+      );
+      await g.registrar(C, { ...registro(), dataHoraClinica: anteontem } as never, ctx());
+      expect(await contar()).toBe(n1 + 2);
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+        e.executar('UPDATE configuracao_setor_prontuario SET tolerancia_retroativo_horas = 6 WHERE id = ?', [
+          tipo,
+        ]),
+      );
+      const recusa = await g
+        .registrar(C, { ...registro(), dataHoraClinica: anteontem } as never, ctx())
+        .catch((x: unknown) => x as { problema: { codigo: string; detalhe: string } });
+      expect(recusa).toMatchObject({ problema: { codigo: 'retroativo-fora-da-regra' } });
+      expect(JSON.stringify(recusa)).toMatch(/6 h/);
+      // Configuração inativa não conta: volta a valer a do setor para "todos" (sem retroativo).
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+        e.executar(
+          'UPDATE configuracao_setor_prontuario SET tolerancia_retroativo_horas = 720, ativo = FALSE WHERE id = ?',
+          [tipo],
+        ),
+      );
+      await expect(
+        g.registrar(C, { ...registro(), dataHoraClinica: anteontem } as never, ctx()),
+      ).rejects.toMatchObject({ problema: { codigo: 'retroativo-fora-da-regra' } });
+      expect(await contar()).toBe(n1 + 2);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+        e.executar('UPDATE atendimento SET setor_funcional_id = NULL WHERE id = ?', [m.atendimento]),
+      );
+    }
+  }, 90_000);
 
   function registro() {
     return {

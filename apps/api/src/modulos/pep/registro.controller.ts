@@ -104,6 +104,7 @@ const MOTIVO_PREREQUISITO =
   'O registro clínico tem pré-requisito pendente neste estabelecimento: a conferência modelo a modelo pelos chave-usuários.';
 
 const TOLERANCIA = 'pep.evolucao.toleranciaRetroativoMinutos';
+const PARAMETRO_ASSINATURA = 'pep.prontuario.assinaturaExigida';
 
 const chaveSessao = chaveSessaoPep;
 
@@ -308,7 +309,11 @@ export class RegistroClinicoController {
       );
   }
 
-  private async parametros(s: SessaoCadastro): Promise<{ liberados: Set<string>; toleranciaMin: number }> {
+  private async parametros(s: SessaoCadastro): Promise<{
+    liberados: Set<string>;
+    toleranciaMin: number;
+    assinatura: 'nenhuma' | 'eletronica' | 'digital_icp' | undefined;
+  }> {
     let valores: ValorParametro[] = [];
     try {
       valores = this.configuracao ? await this.configuracao.valoresParametro(s.rede, s.hospital) : [];
@@ -330,6 +335,7 @@ export class RegistroClinicoController {
     };
     const lista = ler(PARAMETRO_MODELOS_LIBERADOS);
     const tol = ler(TOLERANCIA);
+    const ass = String(ler(PARAMETRO_ASSINATURA) ?? '');
     return {
       liberados: new Set(
         String(lista ?? '')
@@ -338,6 +344,8 @@ export class RegistroClinicoController {
           .filter(Boolean),
       ),
       toleranciaMin: typeof tol === 'number' && Number.isFinite(tol) ? tol : 15,
+      // 03-PEP L91: a assinatura exigida do estabelecimento (o setor sobrepõe na gravação).
+      assinatura: ass === 'nenhuma' || ass === 'eletronica' || ass === 'digital_icp' ? ass : undefined,
     };
   }
 
@@ -549,7 +557,11 @@ export class RegistroClinicoController {
       ...(supervisao ? { supervisao } : {}),
     });
     try {
-      const r = await this.servico.registrar(s.porta, m.gravacao, contextoOperacao(s, 'evolucao'));
+      const r = await this.servico.registrar(
+        s.porta,
+        { ...m.gravacao, ...(par.assinatura ? { assinaturaEstabelecimento: par.assinatura } : {}) },
+        contextoOperacao(s, 'evolucao'),
+      );
       return { registro: r.registro, hash: m.gravacao.hashConteudo, avisos: m.avisos };
     } catch (x) {
       throw problemaDoCadastro(x);

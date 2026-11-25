@@ -4,6 +4,7 @@ import {
   avaliarRetroativo,
   categoriaCombinaComFuncao,
   configuracaoPadraoDoEstabelecimento,
+  conferirRegistroPelaConfiguracao,
   CONFIGURACAO_PRONTUARIO_PADRAO,
   type ConfiguracaoSetor,
   destinatariosDePendencias,
@@ -12,6 +13,7 @@ import {
   type MembroEquipe,
   resolverConfiguracaoProntuario,
   temVinculoPelaEquipe,
+  tipoProntuarioDoAtendimento,
   validarAcompanhar,
   validarColunasPainel,
   validarConfiguracaoSetor,
@@ -39,20 +41,67 @@ describe('pacientes acompanhados e colunas do painel', () => {
 });
 
 describe('padrão do prontuário do estabelecimento', () => {
-  it('vem do parâmetro de tolerância (minutos): 0 sem retroativo, acima disso horas cheias; sem parâmetro, o do código', () => {
-    expect(configuracaoPadraoDoEstabelecimento(null)).toEqual(CONFIGURACAO_PRONTUARIO_PADRAO);
-    expect(configuracaoPadraoDoEstabelecimento(0).permiteRetroativo).toBe(false);
-    expect(configuracaoPadraoDoEstabelecimento(90)).toMatchObject({
+  it('retroativo com justificativa e sem limite em horas; assinatura do parâmetro do estabelecimento', () => {
+    expect(configuracaoPadraoDoEstabelecimento(null)).toEqual({
+      ...CONFIGURACAO_PRONTUARIO_PADRAO,
       permiteRetroativo: true,
-      toleranciaRetroativoHoras: 2,
+      toleranciaRetroativoHoras: null,
     });
-    expect(configuracaoPadraoDoEstabelecimento(15).toleranciaRetroativoHoras).toBe(1);
+    expect(configuracaoPadraoDoEstabelecimento('digital_icp').assinaturaExigida).toBe('digital_icp');
+    expect(configuracaoPadraoDoEstabelecimento('nenhuma').assinaturaExigida).toBe('nenhuma');
+    expect(configuracaoPadraoDoEstabelecimento('qualquer').assinaturaExigida).toBe('eletronica');
   });
   it('estabelecimento vale sobre o padrão do código quando o setor não tem configuração', () => {
-    const est = configuracaoPadraoDoEstabelecimento(120);
+    const est = configuracaoPadraoDoEstabelecimento('digital_icp');
     const r = resolverConfiguracaoProntuario([], 10, 'internacao', est);
     expect(r).toEqual({ configuracao: est, origem: 'padrao' });
-    expect(r.configuracao.toleranciaRetroativoHoras).toBe(2);
+    expect(r.configuracao.assinaturaExigida).toBe('digital_icp');
+  });
+  it('tipo do prontuário pelo fluxo do atendimento', () => {
+    expect(tipoProntuarioDoAtendimento('internacao')).toBe('internacao');
+    expect(tipoProntuarioDoAtendimento('pronto_atendimento')).toBe('pronto_atendimento');
+    expect(tipoProntuarioDoAtendimento('telessaude')).toBe('todos');
+    expect(tipoProntuarioDoAtendimento(null)).toBe('todos');
+  });
+});
+
+describe('gravação do registro pela configuração que vale', () => {
+  const agora = new Date('2026-11-25T12:00:00Z');
+  const h = (n: number) => new Date(agora.getTime() - n * 3_600_000);
+  const setor = {
+    ...CONFIGURACAO_PRONTUARIO_PADRAO,
+    permiteRetroativo: true,
+    toleranciaRetroativoHoras: 6,
+  };
+  it('retroativo: dentro da tolerância passa; fora dela ou no setor sem retroativo, recusa', () => {
+    expect(
+      conferirRegistroPelaConfiguracao(setor, { ocorridoEm: h(5), agora, certificadoIcpVigente: false }),
+    ).toBeNull();
+    expect(
+      conferirRegistroPelaConfiguracao(setor, { ocorridoEm: h(7), agora, certificadoIcpVigente: false }),
+    ).toMatchObject({ codigo: 'retroativo-fora-da-regra', campo: 'dataHoraClinica' });
+    expect(
+      conferirRegistroPelaConfiguracao(CONFIGURACAO_PRONTUARIO_PADRAO, {
+        ocorridoEm: h(1),
+        agora,
+        certificadoIcpVigente: true,
+      })?.codigo,
+    ).toBe('retroativo-fora-da-regra');
+    expect(
+      conferirRegistroPelaConfiguracao(configuracaoPadraoDoEstabelecimento(null), {
+        ocorridoEm: h(200),
+        agora,
+        certificadoIcpVigente: false,
+      }),
+    ).toBeNull();
+  });
+  it('assinatura: ICP exige certificado vigente; eletrônica e nenhuma não pedem', () => {
+    const icp = { ...setor, assinaturaExigida: 'digital_icp' as const };
+    const x = { ocorridoEm: agora, agora, certificadoIcpVigente: false };
+    expect(conferirRegistroPelaConfiguracao(icp, x)?.codigo).toBe('assinatura-icp-exigida');
+    expect(conferirRegistroPelaConfiguracao(icp, { ...x, certificadoIcpVigente: true })).toBeNull();
+    expect(conferirRegistroPelaConfiguracao(setor, x)).toBeNull();
+    expect(conferirRegistroPelaConfiguracao({ ...setor, assinaturaExigida: 'nenhuma' }, x)).toBeNull();
   });
 });
 
