@@ -56,3 +56,5 @@ export * from './programa-saude.js';
 export * from './declaracao-saude.js';
 // 08-SGO L101 (C2-118): locais, especialidades, qualificação divulgada e suspensão do prestador da rede.
 export * from './rede-cadastro.js';
+// 08-SGO L102 (C2-120): remuneração do prestador (tabela, valoração, pacote, reajuste, calendário, adiantamento, lote).
+export * from './remuneracao-rede.js';
