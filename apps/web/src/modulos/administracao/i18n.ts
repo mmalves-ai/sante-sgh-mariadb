@@ -540,7 +540,7 @@ export const mensagensAdministracao = {
   email: {
     titulo: 'Servidor de e-mail e notificações',
     texto:
-      'O servidor que envia os e-mails do sistema (só consulta). A credencial aparece só como definida ou não.',
+      'Os servidores que enviam os e-mails do sistema, os modelos de mensagem e o registro de cada envio. A senha nunca aparece: só se está definida.',
     servidor: 'Servidor',
     porta: 'Porta',
     ssl: 'Conexão segura',

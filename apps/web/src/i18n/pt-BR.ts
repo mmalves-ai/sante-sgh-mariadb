@@ -11,6 +11,7 @@ import { mensagensClassificacao } from '../modulos/recepcao/i18n-classificacao.j
 import { mensagensNir } from '../modulos/adt/i18n-nir.js';
 import { mensagensCrudNir } from '../modulos/adt/i18n-crud-nir.js';
 import { mensagensEscorePa } from '../modulos/atendimento/i18n-escore-pa.js';
+import { mensagensRegrasImpressao } from '../modulos/atendimento/i18n-regras-impressao.js';
 import { mensagensProtocolos } from '../modulos/recepcao/i18n-protocolos.js';
 import { mensagensRegulacao } from '../modulos/adt/i18n-regulacao.js';
 import { mensagensAgenda } from '../modulos/agenda/i18n.js';
@@ -70,6 +71,7 @@ import { mensagensSegredos } from '../modulos/acesso/i18n-segredos.js';
 import { mensagensSbis } from '../modulos/administracao/i18n-sbis.js';
 import { mensagensRegrasAlerta } from '../modulos/administracao/i18n-alertas.js';
 import { mensagensLocaisAtendimento } from '../modulos/administracao/i18n-locais-atendimento.js';
+import { mensagensEmailSistema } from '../modulos/administracao/i18n-email.js';
 import { mensagensNutricao } from '../modulos/nutricao/i18n-nutricao.js';
 import { mensagensEspecialidades } from '../modulos/especialidades/i18n-especialidades.js';
 import { mensagensRouparia } from '../modulos/rouparia/i18n-rouparia.js';
@@ -2329,6 +2331,7 @@ export const mensagensWeb = {
   crudNir: mensagensCrudNir,
   // W0-07 (M1): o alerta de deterioração e de sepse no PA.
   escorePa: mensagensEscorePa,
+  regrasImpressao: mensagensRegrasImpressao,
   // M45 (etapa 5): nutrição, mapa de dietas e serviço social.
   nutricao: mensagensNutricao,
   // M45 (etapa 6; DP-32): especialidades sob demanda e o lactário.
@@ -2457,6 +2460,8 @@ export const mensagensWeb = {
   regrasAlerta: mensagensRegrasAlerta,
   // 02-REC linha 34: manutenção dos locais de atendimento (consultórios e salas).
   locaisAtendimento: mensagensLocaisAtendimento,
+  // 01-ADM L77: modelos de mensagem, servidores de e-mail e registro de envio.
+  emailSistema: mensagensEmailSistema,
   // Entrada por e-mail: recuperação da conta da plataforma e o código do segundo fator no e-mail.
   acessoEmail: mensagensAcessoEmail,
 } as const;

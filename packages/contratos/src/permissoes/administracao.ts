@@ -26,6 +26,7 @@ export const PERMISSOES_M10_CODIGOS = {
   // A resposta do destinatário ao aviso recebido (ciência e resolução), sempre da própria conta.
   notificacaoResponder: 'acesso.notificacao.responder',
   emailLer: 'config.email.ler',
+  emailEditar: 'config.email.editar',
   empresaLer: 'organizacao.empresa.ler',
   estruturaLer: 'organizacao.estrutura.ler',
   leitoLer: 'organizacao.leito.ler',
@@ -162,6 +163,15 @@ export const PERMISSOES_M10: readonly DeclaracaoPermissao[] = [
   {
     codigo: C.emailLer,
     descricao: 'Consultar o servidor de e-mail e as notificações (credencial só "definida / não definida")',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.emailEditar,
+    descricao:
+      'Gravar os modelos de mensagem e os servidores de e-mail (a senha só como referência do cofre) e testar a conexão',
 
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,

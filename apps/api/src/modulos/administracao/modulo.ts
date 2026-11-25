@@ -31,6 +31,9 @@ import { ImpressaoController } from './impressao.controller.js';
 import { PreferenciasController } from './preferencias.controller.js';
 import { NOTIFICACAO_REGRA, NotificacaoRegraController } from './notificacao-regra.controller.js';
 import { NotificacaoRegraPropria } from './notificacao-regra-propria.js';
+import { EMAIL_CONFIGURACAO, EmailConfiguracaoController } from './email-configuracao.controller.js';
+import { EmailConfiguracaoPropria } from './email-configuracao-propria.js';
+import { testadorDoAmbiente } from './email-teste-conexao.js';
 import { SERVICO_SBIS, ServicoSbis } from './sbis/servico.js';
 
 /** O produto não convive com sistema anterior (ADR 0003). */
@@ -107,6 +110,7 @@ export async function modulo(
       ImpressaoController,
       PreferenciasController,
       NotificacaoRegraController,
+      EmailConfiguracaoController,
       ...(opcoes.controladores ?? []),
     ],
     providers: [
@@ -122,6 +126,19 @@ export async function modulo(
                 ctx.nucleo,
                 ctx.configuracao.clientePadrao,
                 ctx.configuracao.ambiente === 'producao',
+              )
+            : null,
+      },
+      // E-mail do sistema (01-ADM L77): modelos, servidores e registro de envio; só com o banco próprio (sem ele, 503).
+      {
+        provide: EMAIL_CONFIGURACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new EmailConfiguracaoPropria(
+                ctx.nucleo,
+                ctx.configuracao.clientePadrao,
+                ctx.configuracao.ambiente === 'producao',
+                testadorDoAmbiente(ctx.env),
               )
             : null,
       },
