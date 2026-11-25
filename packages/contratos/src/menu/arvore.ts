@@ -39,7 +39,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F8 (07-FIN linha 70): o item "Notas de crédito e de débito" entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (05-SUP linha 30): o item "Consumo de gases por setor" entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (07-FIN linha 79): o item "Desconto e cessão de recebíveis" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":437,"M":198,"P":57,"N":182};
+// F8 (03-PEP linha 125): o item "Transporte de pacientes" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":438,"M":198,"P":57,"N":183};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -105,6 +106,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.leitos.painel-de-leitos-ao-vivo-consulta-da-ocupacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Painel de leitos ao vivo"],"titulo":"Painel de leitos ao vivo","selo":"M","fase":1,"rota":"/internacao/leitos/painel","permissao":"internacao.leitos.ler"},
   {"id":"internacao-e-leitos.leitos.mapa-de-leitos-operacional-admitir-transferir-bloquear","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Mapa de leitos operacional"],"titulo":"Mapa de leitos operacional","selo":"M","fase":2,"rota":"/leitos/mapa","permissao":"leitos.mapa.ler"},
   {"id":"internacao-e-leitos.leitos.transferencia-de-leito","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Transferência de leito"],"titulo":"Transferência de leito","selo":"M","fase":2,"rota":"/leitos/transferencias","permissao":"leitos.transferencia.criar"},
+  {"id":"internacao-e-leitos.leitos.transporte-de-pacientes","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Transporte de pacientes"],"titulo":"Transporte de pacientes","selo":"N","fase":7,"rota":"/internacao/transportes","permissao":"internacao.internacao.ler"},
   {"id":"internacao-e-leitos.leitos.historico-de-ocupacao-periodos","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Histórico de ocupação"],"titulo":"Histórico de ocupação","selo":"M","fase":2,"rota":"/leitos/historico","permissao":"leitos.mapa.ler"},
   {"id":"internacao-e-leitos.leitos.censo-hospitalar-diario-portaria-312","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Censo hospitalar diário"],"titulo":"Censo hospitalar diário","selo":"N","fase":1,"rota":"/internacao/censo","permissao":"internacao.censo.ler"},
   {"id":"internacao-e-leitos.nir-e-regulacao.solicitacao-de-leito-e-fila-priorizada","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Solicitação de leito e fila priorizada"],"titulo":"Solicitação de leito e fila priorizada","selo":"N","fase":5,"rota":"/internacao/nir/fila","permissao":"internacao.solicitacaoLeito.ler"},

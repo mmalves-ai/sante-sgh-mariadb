@@ -3,6 +3,7 @@
 import { mensagensControlesAssistenciais } from './i18n-controles-assistenciais.js';
 import { mensagensGases } from './i18n-gases.js';
 import { mensagensGasesSetor } from './i18n-gases-setor.js';
+import { mensagensTransporte } from './i18n-transporte.js';
 import { mensagensLeitosSus } from './i18n-leitos-sus.js';
 import { mensagensRegistros } from './i18n-registros.js';
 import { mensagensSameGuarda } from './i18n-same-guarda.js';
@@ -16,6 +17,8 @@ export const mensagensAdt = {
   gases: mensagensGases,
   // C1-050, 05-SUP L30: consumo de gás por setor (i18n-gases-setor.ts).
   gasesSetor: mensagensGasesSetor,
+  // C1-066, 03-PEP L125: pedido de transporte do paciente (i18n-transporte.ts).
+  transporte: mensagensTransporte,
   // F78.04-2, 04-INT L79 e L80: leitos do sistema público e comunicação à operadora (i18n-leitos-sus.ts).
   leitosSus: mensagensLeitosSus,
   // F3.4, 04-INT L67: diagnósticos e acidente da internação (i18n-registros.ts).
@@ -65,6 +68,7 @@ export const mensagensAdt = {
     procedimentos: 'Procedimentos',
     alta: 'Alta',
     impressos: 'Impressos',
+    transporte: 'Transporte',
   },
   lista: {
     titulo: 'Pacientes internados',
