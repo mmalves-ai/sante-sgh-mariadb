@@ -1,14 +1,17 @@
 <script setup lang="ts">
 // F3.9, 08-INTG L133: modelos e regras de envio ao paciente pela Hal-AI, com conferência na hora (variáveis do texto,
 // respostas da confirmação), e a visão por paciente: os pedidos registrados, a situação e os retornos; cancelar só o
-// pendente, com o motivo (nada é apagado).
+// pendente, com o motivo (nada é apagado). C2-023: modelo do cliente inteiro (permissão de alcance do cliente), avisos
+// gerados agora a partir dos eventos (marcação, véspera, resultado, alta) e o efeito da resposta na marcação.
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   cancelarPedido,
+  dispararEventos,
   gravarModelo,
+  gravarModeloCliente,
   gravarRegra,
   lerModelos,
   lerRegras,
@@ -83,6 +86,14 @@ const { t } = useI18n({
       motivo: 'Motivo do cancelamento',
       gravado: 'Gravado.',
       nenhum: 'Nenhuma mensagem para este paciente.',
+      doCliente: 'Modelo do cliente inteiro (todos os estabelecimentos)',
+      gerar: 'Gerar avisos dos eventos agora',
+      gerados: 'Avisos gerados: {n}. Recusados: {r}.',
+      efeito: 'Efeito na marcação',
+      efeito_confirmar_presenca: 'Presença confirmada',
+      efeito_pedir_cancelamento: 'Pedido de cancelamento aberto',
+      efeito_pedir_reagendamento: 'Pedido de reagendamento aberto',
+      efeito_nenhum: 'Sem efeito',
     },
   },
 });
@@ -105,6 +116,7 @@ const m = reactive({
   respostaConfirmacao: '',
   respostaRecusa: '',
 });
+const modeloDoCliente = ref(false);
 const desconhecidas = computed(() =>
   [...m.corpo.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/g)].map((x) => x[1]!).filter((v) => !VARIAVEIS.includes(v)),
 );
@@ -136,7 +148,7 @@ async function executar(fn: () => Promise<unknown>) {
 }
 const salvarModelo = () =>
   executar(() =>
-    gravarModelo({
+    (modeloDoCliente.value ? gravarModeloCliente : gravarModelo)({
       ...m,
       assunto: m.assunto || null,
       respostaConfirmacao: m.respostaConfirmacao || null,
@@ -144,6 +156,24 @@ const salvarModelo = () =>
     }),
   );
 const salvarRegra = () => executar(() => gravarRegra({ ...r }));
+async function gerarAvisos() {
+  aviso.value = '';
+  falha.value = '';
+  try {
+    const d = await dispararEventos();
+    const rec = Object.values(d.recusados).reduce((a, b) => a + b, 0);
+    aviso.value = t('gerados', { n: d.pedidos, r: rec });
+    await cliente.invalidateQueries({ queryKey: ['integracoes', 'mensagens'] });
+  } catch (e) {
+    falha.value = e instanceof Error ? e.message : String(e);
+  }
+}
+const efeitos = (rs: readonly { efeitoResposta?: string | null }[]) =>
+  rs
+    .map((x) => x.efeitoResposta)
+    .filter((x): x is string => !!x)
+    .map((x) => t('efeito_' + x))
+    .join('; ');
 
 const pacienteId = ref<number | null>(null);
 const pedidos = useQuery({
@@ -187,6 +217,10 @@ const cancelar = (id: number) => executar(() => cancelarPedido(id, motivo.value)
         <label>{{ t('sim') }} <input v-model="m.respostaConfirmacao" maxlength="30" /></label>
         <label>{{ t('nao') }} <input v-model="m.respostaRecusa" maxlength="30" /></label>
       </template>
+      <label
+        ><input v-model="modeloDoCliente" type="checkbox" data-testid="mensagens-modelo-cliente" />
+        {{ t('doCliente') }}</label
+      >
       <button type="submit" :disabled="desconhecidas.length > 0">{{ t('gravar') }}</button>
     </form>
 
@@ -216,6 +250,8 @@ const cancelar = (id: number) => executar(() => cancelarPedido(id, motivo.value)
       <button type="submit">{{ t('gravar') }}</button>
     </form>
 
+    <button type="button" data-testid="mensagens-gerar" @click="gerarAvisos">{{ t('gerar') }}</button>
+
     <h2>{{ t('verPaciente') }}</h2>
     <label
       >{{ t('paciente') }}
@@ -229,6 +265,7 @@ const cancelar = (id: number) => executar(() => cancelarPedido(id, motivo.value)
         <th>{{ t('situacao') }}</th>
         <th>{{ t('agendado') }}</th>
         <th>{{ t('retornos') }}</th>
+        <th>{{ t('efeito') }}</th>
         <th />
       </tr>
       <tr v-for="p in pedidos.data.value.itens" :key="p.id">
@@ -237,6 +274,7 @@ const cancelar = (id: number) => executar(() => cancelarPedido(id, motivo.value)
         <td>{{ p.situacao }}</td>
         <td>{{ p.agendadoPara ? new Date(p.agendadoPara).toLocaleString('pt-BR') : '' }}</td>
         <td>{{ p.retornos.map((x) => x.respostaInterpretada ?? x.tipo).join(' → ') }}</td>
+        <td data-testid="mensagens-efeito">{{ efeitos(p.retornos) }}</td>
         <td>
           <template v-if="p.situacao === 'pendente'">
             <input v-model="motivo" :placeholder="t('motivo')" maxlength="500" />

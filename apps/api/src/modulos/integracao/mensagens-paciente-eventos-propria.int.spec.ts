@@ -295,6 +295,14 @@ describe.skipIf(SEM_BANCO)(
       );
       expect(ret.map((x) => x.efeito_resposta)).toEqual(['confirmar_presenca', 'pedir_cancelamento']);
       expect(ret.every((x) => x.confirmacao_marcacao_id !== null)).toBe(true);
+      // A visão por paciente mostra o efeito da resposta em cada retorno.
+      const visao = await msg.doPaciente(hal, m.paciente);
+      const efeitos = visao
+        .filter((x) => [Number(p1), Number(p2)].includes(x.id))
+        .flatMap((x) => x.retornos.map((t) => t.efeitoResposta))
+        .filter(Boolean)
+        .sort();
+      expect(efeitos).toEqual(['confirmar_presenca', 'pedir_cancelamento']);
       // A trilha do retorno é do usuário técnico da credencial.
       const [trilha] = await ler<{ n: number }>(
         'SELECT COUNT(*) AS n FROM pedido_mensagem_paciente_retorno WHERE pedido_mensagem_paciente_id IN (?, ?) AND criado_por = ?',

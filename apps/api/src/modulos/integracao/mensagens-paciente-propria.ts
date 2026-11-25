@@ -178,7 +178,12 @@ export interface PedidoMensagemLido {
   readonly lidoEm: string | null;
   readonly canceladoEm: string | null;
   readonly motivoCancelamento: string | null;
-  readonly retornos: { tipo: string; recebidoEm: string; respostaInterpretada: string | null }[];
+  readonly retornos: {
+    tipo: string;
+    recebidoEm: string;
+    respostaInterpretada: string | null;
+    efeitoResposta: string | null;
+  }[];
 }
 
 const hhmm = (v: unknown): string | null => (v === null || v === undefined ? null : String(v).slice(0, 5));
@@ -629,7 +634,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
       const ids = ped.map((x) => num(x['id']));
       const ret = ids.length
         ? await l.consultar(
-            `SELECT pedido_mensagem_paciente_id AS p, tipo, recebido_em, resposta_interpretada
+            `SELECT pedido_mensagem_paciente_id AS p, tipo, recebido_em, resposta_interpretada, efeito_resposta
                FROM pedido_mensagem_paciente_retorno
               WHERE pedido_mensagem_paciente_id IN (${ids.map(() => '?').join(',')}) AND excluido_em IS NULL
               ORDER BY sequencia`,
@@ -654,6 +659,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
             tipo: String(t['tipo']),
             recebidoEm: dataOuNull(t['recebido_em'])!,
             respostaInterpretada: txtOuNull(t['resposta_interpretada']),
+            efeitoResposta: txtOuNull(t['efeito_resposta']),
           })),
       }));
     });

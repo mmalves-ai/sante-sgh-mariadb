@@ -70,7 +70,12 @@ export interface PedidoMensagem {
   readonly enviadoEm: string | null;
   readonly canceladoEm: string | null;
   readonly motivoCancelamento: string | null;
-  readonly retornos: readonly { tipo: string; recebidoEm: string; respostaInterpretada: string | null }[];
+  readonly retornos: readonly {
+    tipo: string;
+    recebidoEm: string;
+    respostaInterpretada: string | null;
+    efeitoResposta?: string | null;
+  }[];
 }
 
 export const lerModelos = () => ler(`${I}/mensagens/modelos`, itens<ModeloMensagem>());
@@ -87,6 +92,13 @@ export const cancelarPedido = (id: number, motivo: string) =>
     { motivo },
     confiar<{ id: number }>(),
     novaChave('cancelar'),
+  );
+export const dispararEventos = () =>
+  enviar(
+    `${I}/mensagens/disparo`,
+    {},
+    confiar<{ pedidos: number; recusados: Record<string, number> }>(),
+    novaChave('disparo'),
   );
 export const pedidosDoPaciente = (p: number) => ler(`${I}/mensagens/paciente/${p}`, itens<PedidoMensagem>());
 
