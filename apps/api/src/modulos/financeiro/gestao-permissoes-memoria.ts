@@ -39,6 +39,10 @@ const TIPOS = {
     { tipo: 9502, codigo: 'medico', descricao: 'MÉDICO' },
     { tipo: 9503, codigo: 'tributos', descricao: 'TRIBUTOS' },
   ],
+  documento: [
+    { tipo: 9601, codigo: 'fatura', descricao: 'FATURA' },
+    { tipo: 9602, codigo: 'recibo', descricao: 'RECIBO' },
+  ],
 } as const;
 
 interface LinhaEscopo {

@@ -34,7 +34,7 @@ export interface EscopoConta {
   readonly temLinha: boolean;
 }
 /** As operações que têm tipo por perfil: o movimento (tipo de lançamento), o título a pagar e o adiantamento (credor). */
-export const OPERACOES_TIPO = ['banco', 'contas_pagar', 'adiantamento'] as const;
+export const OPERACOES_TIPO = ['banco', 'contas_pagar', 'adiantamento', 'contas_receber'] as const;
 export type OperacaoTipo = (typeof OPERACOES_TIPO)[number];
 export interface TipoDoPerfil {
   readonly tipo: number;

@@ -6,8 +6,8 @@
 // só lança os tipos da sua lista (vazia: nenhum); o perfil livre segue a permissão da operação. Os perfis acumulam: um
 // perfil restrito a mais nunca tira o que um perfil livre que dá a operação já dava.
 // A mesma lista vale em cada operação que tem tipo: o movimento bancário (tipo de lançamento), o título a pagar e o
-// adiantamento (tipo de credor). Cada operação tem a sua marca de restrito e a sua lista: restringir o perfil no
-// movimento não o restringe no título a pagar.
+// adiantamento (tipo de credor), e o título a receber (tipo de documento financeiro: fatura, nota, recibo). Cada
+// operação tem a sua marca de restrito e a sua lista: restringir o perfil no movimento não o restringe no título a pagar.
 import { type RecusaFinanceiro, recusaFin } from '@sgh/contratos/regras-financeiro';
 
 export interface PedidoEscopoConta {
@@ -50,6 +50,7 @@ export const OPERACOES_TIPO_LANCAMENTO = {
   banco: { alvo: 'lancamento', acao: 'financeiro.movimento.criar' },
   contas_pagar: { alvo: 'credor', acao: 'financeiro.tituloPagar.criar' },
   adiantamento: { alvo: 'credor', acao: 'financeiro.adiantamento.conceder' },
+  contas_receber: { alvo: 'documento', acao: 'financeiro.tituloReceber.criar' },
 } as const;
 export type OperacaoTipoLancamento = keyof typeof OPERACOES_TIPO_LANCAMENTO;
 export const NOMES_OPERACAO_TIPO_LANCAMENTO = Object.keys(OPERACOES_TIPO_LANCAMENTO) as [
@@ -61,6 +62,7 @@ const RECUSA_DA_OPERACAO: Readonly<Record<OperacaoTipoLancamento, (descricao: st
   banco: (d) => `O seu perfil não lança "${d}"`,
   contas_pagar: (d) => `O seu perfil não lança título a pagar de credor do tipo "${d}"`,
   adiantamento: (d) => `O seu perfil não pede adiantamento a credor do tipo "${d}"`,
+  contas_receber: (d) => `O seu perfil não emite título a receber com o documento "${d}"`,
 };
 
 /**

@@ -1064,13 +1064,33 @@ const criarTituloReceber = definirOperacao<CriarTituloReceberEntrada, ResultadoO
       [],
       'a natureza financeira de receita',
     );
-    const tipoDocumento = await idObrigatorio(
-      tx,
-      `SELECT id FROM tipo_documento_financeiro WHERE ativo = TRUE AND sentido IN ('receber','ambos')
-        ORDER BY (codigo = 'fatura') DESC, nativo_sistema DESC, id LIMIT 1`,
-      [],
-      'o tipo de documento financeiro a receber',
-    );
+    // F3.8, 07-FIN linha 99: o tipo de documento escolhido (ou o padrão do cadastro) tem de servir a receber e estar
+    // liberado aos perfis do usuário no título a receber (lista branca, quando há).
+    const tipoDocumento = e.tipoDocumento
+      ? numero(
+          (
+            await tx.uma(
+              `SELECT id FROM tipo_documento_financeiro WHERE id = ? AND ativo = TRUE AND sentido IN ('receber','ambos')`,
+              [e.tipoDocumento],
+            )
+          )?.['id'],
+        )
+      : await idObrigatorio(
+          tx,
+          `SELECT id FROM tipo_documento_financeiro WHERE ativo = TRUE AND sentido IN ('receber','ambos')
+            ORDER BY (codigo = 'fatura') DESC, nativo_sistema DESC, id LIMIT 1`,
+          [],
+          'o tipo de documento financeiro a receber',
+        );
+    if (!tipoDocumento)
+      throw recusa(
+        'tipo-documento-invalido',
+        'O tipo de documento não existe ou não serve a título a receber.',
+        {
+          campos: ['tipoDocumento'],
+        },
+      );
+    await exigirTipoLancamentoLiberado(tx, est, usuario, tipoDocumento, 'contas_receber');
     const valor = centavos(contas.reduce((x, c) => x + numero(c['valor_total']), 0));
     await garantirSequencia(
       tx,

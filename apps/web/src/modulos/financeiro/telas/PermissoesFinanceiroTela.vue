@@ -2,7 +2,8 @@
 // Permissões do financeiro (F3.8, 07-FIN linha 99): `/financeiro/parametros/permissoes`. À esquerda, o escopo de contas
 // de um usuário (consulta e movimento com vigência, gravados por conta, com a regra conferida na hora: quem movimenta
 // consulta; a vigência não se inverte). À direita, os tipos de um perfil em cada operação (tipo de lançamento no movimento
-// bancário, tipo de credor no título a pagar e no adiantamento; marcar grava na hora; cada operação tem a sua lista). A tela
+// bancário, tipo de credor no título a pagar e no adiantamento, tipo de documento no título a receber; marcar grava na
+// hora; cada operação tem a sua lista). A tela
 // avisa quando o usuário ou o perfil ainda está livre e o que muda ao gravar a primeira linha. Ninguém altera o próprio
 // escopo (o servidor recusa).
 import { SanteSelecao } from '@sgh/ui';

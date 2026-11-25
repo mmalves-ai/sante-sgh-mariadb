@@ -106,25 +106,45 @@ describe('tipo por perfil na operação', () => {
     );
   });
 
-  it('cada operação diz o que foi recusado: movimento, título a pagar e adiantamento', () => {
+  it('cada operação diz o que foi recusado: movimento, título a pagar, adiantamento e título a receber', () => {
     const de = (o: (typeof NOMES_OPERACAO_TIPO_LANCAMENTO)[number]) =>
       conferirTipoLancamento([restrito()], 3, 'FORNECEDOR', o)?.mensagem ?? '';
     expect(de('banco')).toContain('não lança "FORNECEDOR"');
     expect(de('contas_pagar')).toContain('título a pagar de credor do tipo "FORNECEDOR"');
     expect(de('adiantamento')).toContain('adiantamento a credor do tipo "FORNECEDOR"');
+    expect(de('contas_receber')).toContain('título a receber com o documento "FORNECEDOR"');
     for (const o of NOMES_OPERACAO_TIPO_LANCAMENTO) expect(de(o)).toContain('peça a liberação');
   });
 
   it('o movimento guarda tipo de lançamento; o título a pagar e o adiantamento, tipo de credor', () => {
-    expect(NOMES_OPERACAO_TIPO_LANCAMENTO).toEqual(['banco', 'contas_pagar', 'adiantamento']);
+    expect(NOMES_OPERACAO_TIPO_LANCAMENTO).toEqual([
+      'banco',
+      'contas_pagar',
+      'adiantamento',
+      'contas_receber',
+    ]);
     expect(OPERACOES_TIPO_LANCAMENTO.banco).toEqual({
       alvo: 'lancamento',
       acao: 'financeiro.movimento.criar',
     });
     expect(OPERACOES_TIPO_LANCAMENTO.contas_pagar.alvo).toBe('credor');
     expect(OPERACOES_TIPO_LANCAMENTO.adiantamento.alvo).toBe('credor');
+    expect(OPERACOES_TIPO_LANCAMENTO.contas_receber).toEqual({
+      alvo: 'documento',
+      acao: 'financeiro.tituloReceber.criar',
+    });
     expect(new Set(NOMES_OPERACAO_TIPO_LANCAMENTO.map((o) => OPERACOES_TIPO_LANCAMENTO[o].acao)).size).toBe(
-      3,
+      4,
     );
+  });
+
+  it('título a receber: o perfil restrito só emite com o tipo de documento da lista; um perfil livre que dá a operação libera', () => {
+    const lista: PerfilNoTipoLancamento = { restrito: true, concedeOperacao: true, liberados: [11] };
+    expect(conferirTipoLancamento([lista], 11, 'FATURA', 'contas_receber')).toBeNull();
+    expect(conferirTipoLancamento([lista], 12, 'RECIBO', 'contas_receber')?.codigo).toBe(
+      'tipo-lancamento-nao-liberado',
+    );
+    const livre: PerfilNoTipoLancamento = { restrito: false, concedeOperacao: true, liberados: [] };
+    expect(conferirTipoLancamento([lista, livre], 12, 'RECIBO', 'contas_receber')).toBeNull();
   });
 });

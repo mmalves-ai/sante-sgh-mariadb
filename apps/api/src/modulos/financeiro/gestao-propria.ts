@@ -493,6 +493,11 @@ const ALVO_TIPO = {
     coluna: 'tipo_credor_id',
     filtro: "ativo = TRUE AND sentido IN ('pagar','ambos')",
   },
+  documento: {
+    tabela: 'tipo_documento_financeiro',
+    coluna: 'tipo_documento_financeiro_id',
+    filtro: "ativo = TRUE AND sentido IN ('receber','ambos')",
+  },
 } as const;
 const alvoDe = (o: OperacaoTipoLancamento) => ALVO_TIPO[OPERACOES_TIPO_LANCAMENTO[o].alvo];
 export type TipoLancamentoPerfilEntrada = z.infer<typeof esquemaTipoLancamentoPerfil>;
@@ -655,7 +660,7 @@ export async function perfisNoTipoLancamento(
   }));
 }
 
-/** A trava da gravação (movimento, título a pagar, adiantamento): o tipo, avaliado perfil a perfil (regra do domínio). */
+/** A trava da gravação (movimento, título a pagar, adiantamento, título a receber): o tipo, avaliado perfil a perfil (regra do domínio). */
 export async function exigirTipoLancamentoLiberado(
   l: Leitor,
   est: number,

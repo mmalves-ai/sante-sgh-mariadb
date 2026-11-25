@@ -201,6 +201,8 @@ export const esquemaCriarTituloReceber = z
     /** Número do documento (o da fatura; 0 = o número da primeira conta). */
     documento: inteiro(2_147_483_647).default(0),
     referente: textoCp1252(50).default(''),
+    /** Tipo de documento financeiro a receber (fatura, nota, recibo); nulo = o padrão do cadastro. */
+    tipoDocumento: id.nullable().default(null),
   })
   .strict();
 export type CriarTituloReceberEntrada = z.infer<typeof esquemaCriarTituloReceber>;

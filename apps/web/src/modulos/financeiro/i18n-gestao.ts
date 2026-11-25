@@ -57,11 +57,13 @@ export const mensagensGestaoFinanceiro = {
       banco: 'Movimento bancário (tipo de lançamento)',
       contas_pagar: 'Título a pagar (tipo de credor)',
       adiantamento: 'Adiantamento (tipo de credor)',
+      contas_receber: 'Título a receber (tipo de documento)',
     },
     tipoDaOperacao: {
       banco: 'Tipo de lançamento',
       contas_pagar: 'Tipo de credor',
       adiantamento: 'Tipo de credor',
+      contas_receber: 'Tipo de documento',
     },
     perfil: 'Perfil de acesso',
     tiposLivre:
