@@ -19,6 +19,8 @@ import { PortaAtendimentoMemoria } from './porta-memoria.js';
 import { PortaAtendimentoPropria } from './porta-propria.js';
 import { RegrasImpressaoPropria } from './regras-impressao.js';
 import { REGRAS_IMPRESSAO, RegrasImpressaoController } from './regras-impressao.controller.js';
+import { RegraPlanoPropria } from './regra-plano-propria.js';
+import { REGRA_PLANO, RegraPlanoController } from './regra-plano.controller.js';
 
 export interface OpcoesModuloAtendimento {
   /** Porta pronta (testes). */
@@ -59,6 +61,7 @@ export async function modulo(
       PaController,
       LocaisAtendimentoController,
       RegrasImpressaoController,
+      RegraPlanoController,
       ImpressaoIdentificacaoController,
     ],
     providers: [
@@ -85,6 +88,14 @@ export async function modulo(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new RegrasImpressaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // Regra própria do plano da fonte pagadora na recepção (02-CAD linha 24): só no banco próprio.
+      {
+        provide: REGRA_PLANO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new RegraPlanoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // Os avisos ao vivo do atendimento (sem o vigia do sistema de origem: os eventos vêm das gravações).

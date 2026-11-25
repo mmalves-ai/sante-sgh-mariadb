@@ -5,6 +5,7 @@ import {
   inicioPeriodoTeto,
   type PropostaRegraPlano,
   type RegraPlano,
+  validarEncerramentoRegraPlano,
   validarRegraPlano,
 } from './regra-plano.js';
 
@@ -190,5 +191,20 @@ describe('inicioPeriodoTeto', () => {
   it('conta o dia da abertura', () => {
     expect(inicioPeriodoTeto('2026-11-25', 1)).toBe('2026-11-25');
     expect(inicioPeriodoTeto('2026-03-01', 30)).toBe('2026-01-31');
+  });
+});
+
+describe('validarEncerramentoRegraPlano', () => {
+  it('aceita da véspera em diante e recusa passado, antes do início e regra já terminada', () => {
+    expect(validarEncerramentoRegraPlano('2026-01-01', null, '2026-11-24', '2026-11-25')).toEqual({});
+    expect(validarEncerramentoRegraPlano('2026-01-01', null, '2026-11-23', '2026-11-25')).toHaveProperty(
+      'vigenciaFim',
+    );
+    expect(validarEncerramentoRegraPlano('2026-12-01', null, '2026-11-30', '2026-11-25')).toHaveProperty(
+      'vigenciaFim',
+    );
+    expect(
+      validarEncerramentoRegraPlano('2026-01-01', '2026-06-30', '2026-12-31', '2026-11-25'),
+    ).toHaveProperty('vigenciaFim');
   });
 });

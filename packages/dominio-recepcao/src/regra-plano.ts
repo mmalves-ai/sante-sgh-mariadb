@@ -243,3 +243,22 @@ export function inicioPeriodoTeto(data: string, dias: number): string {
   d.setUTCDate(d.getUTCDate() - (dias - 1));
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * Encerramento da vigência: nunca antes do início, nunca antes da véspera de hoje (o passado não muda) e nunca numa
+ * regra que já terminou antes de hoje.
+ */
+export function validarEncerramentoRegraPlano(
+  inicio: string,
+  fimAtual: string | null,
+  fimNovo: string,
+  hoje: string,
+): ErrosRegraPlano {
+  if (!DATA.test(fimNovo)) return { vigenciaFim: 'Informe a data do fim da vigência.' };
+  if (fimAtual !== null && fimAtual < hoje)
+    return { vigenciaFim: 'A regra já terminou: o histórico não muda.' };
+  if (fimNovo < inicio) return { vigenciaFim: 'O fim da vigência não pode ser antes do início.' };
+  if (fimNovo < inicioPeriodoTeto(hoje, 2))
+    return { vigenciaFim: 'O fim da vigência vai no máximo até a véspera de hoje.' };
+  return {};
+}
