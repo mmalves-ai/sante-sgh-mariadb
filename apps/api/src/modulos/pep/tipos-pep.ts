@@ -656,7 +656,7 @@ export interface FuturaProgramada {
 export interface ReconciliacaoGravacao {
   readonly atendimento: number;
   readonly paciente: number;
-  readonly momento: 'admissao' | 'alta';
+  readonly momento: 'admissao' | 'transferencia' | 'alta';
   readonly linhas: readonly {
     readonly descricao: string;
     readonly produto: number | null;
@@ -1427,7 +1427,7 @@ export interface FuturaGravadaLida {
 
 export interface ReconciliacaoGravadaLida {
   readonly lote: number;
-  readonly momento: 'admissao' | 'alta';
+  readonly momento: 'admissao' | 'transferencia' | 'alta';
   readonly em: string | null;
   readonly usuario: string;
   readonly linhas: readonly {

@@ -361,7 +361,11 @@ export function lerReconciliacoes(
 }
 export function registrarReconciliacao(
   paciente: number,
-  p: { atendimento: number; momento: 'admissao' | 'alta'; medicamentos: ReconciliacaoLida['medicamentos'] },
+  p: {
+    atendimento: number;
+    momento: ReconciliacaoLida['momento'];
+    medicamentos: ReconciliacaoLida['medicamentos'];
+  },
   buscar: typeof fetch = fetch,
 ): Promise<{ lote: number }> {
   return enviar(`${P}/${paciente}/reconciliacao`, p, z.object({ lote: z.number() }), null, buscar);

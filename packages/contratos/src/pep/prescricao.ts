@@ -739,7 +739,8 @@ export const esquemaFuturaLida = z.object({
 });
 export type FuturaLida = z.infer<typeof esquemaFuturaLida>;
 
-export const MOMENTOS_RECONCILIACAO = ['admissao', 'alta'] as const;
+/** Admissão, transferência e alta (a transferência entre unidades também pede reconciliação, 03-PEP L104). */
+export const MOMENTOS_RECONCILIACAO = ['admissao', 'transferencia', 'alta'] as const;
 export const CONDUTAS_RECONCILIACAO = ['manter', 'suspender', 'substituir', 'ajustar'] as const;
 
 export const esquemaReconciliacao = z

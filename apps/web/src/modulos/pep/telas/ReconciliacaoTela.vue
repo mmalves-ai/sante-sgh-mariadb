@@ -1,14 +1,20 @@
 <script setup lang="ts">
-// Reconciliação medicamentosa (M24; ficha, seção 7): os medicamentos em uso antes da internação, a fonte da
-// informação e a conduta de cada um na admissão e na alta (manter, suspender, substituir, ajustar). Suspender ou
-// substituir pede justificativa. Registro só desta aplicação, com chave de liberação própria.
-import { CONDUTAS_RECONCILIACAO, type ReconciliacaoLida } from '@sgh/contratos';
+// Reconciliação medicamentosa (M24; ficha, seção 7; 03-PEP L104): parte da lista de uso contínuo do paciente. Na
+// admissão, na transferência e na alta cada medicamento ativo da lista é decidido uma vez (manter, suspender,
+// substituir, ajustar); conduta diferente de manter pede justificativa, conferida na hora pela mesma regra do
+// domínio que o servidor aplica (validarReconciliacaoDaLista). O lote grava ligado a cada medicamento da lista e a
+// lista se atualiza (suspenso com autor e justificativa). Medicamento fora da lista: incluir na lista (tela de uso
+// contínuo) ou registrar avulso no formulário de baixo.
+import { CONDUTAS_RECONCILIACAO, MOMENTOS_RECONCILIACAO, type ReconciliacaoLida } from '@sgh/contratos';
+import { validarReconciliacaoDaLista, type CondutaReconciliacaoLista } from '@sgh/dominio-pep';
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import { pode } from '../../../casca/sessao/pode.js';
+import { gravarUsoContinuo, lerFarmacovigilancia, type UsoContinuoTela } from '../api-farmacovigilancia.js';
 import {
   lerContexto,
   lerLiberacaoPrescricao,
@@ -55,7 +61,77 @@ const lidas = useQuery({
   enabled: computed(() => !!atendimento.value),
   staleTime: 0,
 });
-const momento = ref<'admissao' | 'alta'>('admissao');
+const momento = ref<ReconciliacaoLida['momento']>('admissao');
+const opcoesMomento = computed(() =>
+  MOMENTOS_RECONCILIACAO.map((m) => ({ valor: m, rotulo: t(`pep.presc.reconciliacao.momentos.${m}`) })),
+);
+
+// A reconciliação pela lista de uso contínuo: uma decisão por medicamento ativo.
+const chaveLista = computed(() => ['pep', 'farmacovigilancia', id.value]);
+const lista = useQuery({ queryKey: chaveLista, queryFn: () => lerFarmacovigilancia(id.value), staleTime: 0 });
+const ativos = computed<UsoContinuoTela[]>(() =>
+  (lista.data.value?.usoContinuo ?? []).filter((u) => !u.suspenso),
+);
+type Decisao = { conduta: CondutaReconciliacaoLista; justificativa: string };
+const decisoes = reactive<Record<number, Decisao>>({});
+watch(
+  ativos,
+  (xs) => {
+    for (const u of xs) decisoes[u.id] ??= { conduta: 'manter', justificativa: '' };
+  },
+  { immediate: true },
+);
+const decisaoDe = (u: UsoContinuoTela): Decisao =>
+  (decisoes[u.id] ??= { conduta: 'manter', justificativa: '' });
+const faltaJustificativa = (u: UsoContinuoTela): boolean => {
+  const d = decisaoDe(u);
+  return d.conduta !== 'manter' && d.justificativa.trim().length < 5;
+};
+const decisoesEnvio = computed(() =>
+  ativos.value.map((u) => {
+    const d = decisaoDe(u);
+    return {
+      usoContinuo: u.id,
+      conduta: d.conduta,
+      justificativa: d.conduta === 'manter' ? null : d.justificativa.trim() || null,
+    };
+  }),
+);
+const falhasLista = computed(() =>
+  validarReconciliacaoDaLista(
+    ativos.value.map((u) => u.id),
+    decisoesEnvio.value,
+  ),
+);
+const podeLista = computed(() => pode('pep.reconciliacao.registrar'));
+const erroLista = ref<unknown>(null);
+const okLista = ref('');
+const enviandoLista = ref(false);
+async function reconciliarLista(): Promise<void> {
+  okLista.value = '';
+  if (falhasLista.value.length > 0 || !atendimento.value || ativos.value.length === 0) return;
+  erroLista.value = null;
+  enviandoLista.value = true;
+  try {
+    await gravarUsoContinuo({
+      acao: 'reconciliar',
+      paciente: id.value,
+      atendimento: Number(atendimento.value),
+      momento: momento.value,
+      decisoes: decisoesEnvio.value,
+    });
+    okLista.value = t('pep.presc.reconciliacao.lista.registrada', { n: decisoesEnvio.value.length });
+    for (const k of Object.keys(decisoes)) delete decisoes[Number(k)];
+    await Promise.all([
+      cliente.invalidateQueries({ queryKey: chaveLista.value }),
+      cliente.invalidateQueries({ queryKey: chaveQ.value }),
+    ]);
+  } catch (e) {
+    erroLista.value = e;
+  } finally {
+    enviandoLista.value = false;
+  }
+}
 const linhas = reactive<
   {
     descricao: string;
@@ -138,15 +214,75 @@ const ligada = computed(() => liberacao.data.value?.reconciliacao.ligada ?? fals
         <SanteSelecao
           v-model="momento"
           :rotulo="t('pep.presc.reconciliacao.momento')"
-          :opcoes="
-            (['admissao', 'alta'] as const).map((m) => ({
-              valor: m,
-              rotulo: t(`pep.presc.reconciliacao.momentos.${m}`),
-            }))
-          "
+          :opcoes="opcoesMomento"
           data-testid="recon-momento"
         />
       </div>
+      <section class="bloco" aria-labelledby="recon-lista-titulo" data-testid="recon-lista">
+        <h2 id="recon-lista-titulo">{{ t('pep.presc.reconciliacao.lista.titulo') }}</h2>
+        <MensagemErro v-if="lista.isError.value" :erro="lista.error.value" />
+        <p v-else-if="!lista.data.value" role="status">{{ t('pep.presc.carregando') }}</p>
+        <template v-else-if="ativos.length === 0">
+          <p role="status" data-testid="recon-lista-vazia">{{ t('pep.presc.reconciliacao.lista.vazia') }}</p>
+        </template>
+        <form v-else class="bloco" data-testid="form-recon-lista" @submit.prevent="reconciliarLista">
+          <p>{{ t('pep.presc.reconciliacao.lista.texto', { n: ativos.length }) }}</p>
+          <fieldset v-for="u in ativos" :key="u.id" class="linha" :data-testid="`recon-uso-${u.id}`">
+            <legend>{{ u.medicamento }}</legend>
+            <p class="detalhe">
+              <span v-if="u.posologia">{{ u.posologia }} · </span>{{ t('pep.presc.reconciliacao.fonte') }}:
+              {{ t(`pep.farmaco.fontes.${u.fonte}`) }}
+            </p>
+            <SanteSelecao
+              v-model="decisaoDe(u).conduta"
+              :rotulo="t('pep.presc.reconciliacao.conduta')"
+              :opcoes="
+                CONDUTAS_RECONCILIACAO.map((x) => ({
+                  valor: x,
+                  rotulo: t(`pep.presc.reconciliacao.condutas.${x}`),
+                }))
+              "
+              :data-testid="`recon-uso-conduta-${u.id}`"
+            />
+            <div v-if="decisaoDe(u).conduta !== 'manter'" class="campo">
+              <label :for="`recon-uso-just-${u.id}`">{{ t('pep.presc.reconciliacao.justificativa') }}</label>
+              <input
+                :id="`recon-uso-just-${u.id}`"
+                v-model="decisaoDe(u).justificativa"
+                maxlength="250"
+                :aria-invalid="faltaJustificativa(u)"
+                :aria-describedby="faltaJustificativa(u) ? `recon-uso-just-msg-${u.id}` : undefined"
+                :data-testid="`recon-uso-justificativa-${u.id}`"
+              />
+              <small v-if="faltaJustificativa(u)" :id="`recon-uso-just-msg-${u.id}`" class="falta">
+                {{ t('pep.presc.reconciliacao.lista.justificativaFalta') }}
+              </small>
+            </div>
+          </fieldset>
+          <div class="barra">
+            <SanteBotao
+              :rotulo="t('pep.presc.reconciliacao.lista.registrar', { n: ativos.length })"
+              tipo="submit"
+              :desabilitado="!online || !podeLista || !atendimento || enviandoLista || falhasLista.length > 0"
+              data-testid="recon-lista-registrar"
+            />
+          </div>
+          <SanteAlerta
+            v-if="okLista"
+            variante="info"
+            :texto="okLista"
+            anunciar
+            data-testid="recon-lista-ok"
+          />
+        </form>
+        <MensagemErro v-if="erroLista" :erro="erroLista" />
+        <p>
+          <RouterLink :to="`/pep/paciente/${id}/farmacovigilancia`" data-testid="recon-lista-editar">
+            {{ t('pep.presc.reconciliacao.lista.editar') }}
+          </RouterLink>
+        </p>
+      </section>
+      <h2>{{ t('pep.presc.reconciliacao.avulsa') }}</h2>
       <form v-if="ligada" class="bloco" data-testid="form-reconciliacao" @submit.prevent="registrar">
         <fieldset v-for="(l, i) in linhas" :key="i" class="linha">
           <legend>{{ t('pep.presc.reconciliacao.medicamento') }} {{ i + 1 }}</legend>
@@ -279,6 +415,13 @@ input {
   background: var(--sgh-fundo);
   color: var(--sgh-texto);
   min-height: var(--sgh-alvo-minimo);
+}
+.detalhe {
+  margin: 0;
+  flex-basis: 100%;
+}
+.falta {
+  color: var(--sgh-alerta-texto);
 }
 .registro h3 {
   font-size: var(--sgh-fonte-base);

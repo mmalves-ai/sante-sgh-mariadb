@@ -455,6 +455,13 @@ describe.skipIf(SEM_BANCO)('farmacovigilância e uso contínuo (banco próprio, 
         'alta',
       ),
     ).rejects.toMatchObject(recusada('fora-da-lista'));
+    // Transferência entre unidades (03-PEP L104): também parte da lista ativa, com o momento gravado no lote.
+    const tr = await rec([{ usoContinuo: ua, conduta: 'manter' }], 'transferencia');
+    const [loteTr] = await ler(
+      'SELECT r.momento, COUNT(i.id) AS itens FROM reconciliacao_medicamentosa r JOIN reconciliacao_item i ON i.reconciliacao_medicamentosa_id = r.id WHERE r.id = ? GROUP BY r.momento',
+      [tr.resultado.alvo],
+    );
+    expect([loteTr!['momento'], Number(loteTr!['itens'])]).toEqual(['transferencia', 1]);
     await rec([{ usoContinuo: ua, conduta: 'manter' }], 'alta');
     const tela = await fv.doPaciente({ hospital: EST, login: LOGIN }, ids.paciente);
     expect(tela.usoContinuo.map((x) => [x.id, x.suspenso, x.conduta])).toEqual([

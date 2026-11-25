@@ -347,7 +347,18 @@ export const mensagensPrescricao = {
     texto:
       'Registre os medicamentos em uso antes da internação e a conduta de cada um na admissão e na alta. Suspender ou substituir pede justificativa.',
     momento: 'Momento',
-    momentos: { admissao: 'Admissão', alta: 'Alta' },
+    momentos: { admissao: 'Admissão', transferencia: 'Transferência', alta: 'Alta' },
+    lista: {
+      titulo: 'Pela lista de uso contínuo',
+      texto:
+        'Decida a conduta de cada um dos {n} medicamento(s) ativos da lista. Diferente de manter pede justificativa.',
+      vazia: 'O paciente não tem medicamento ativo na lista de uso contínuo.',
+      editar: 'Incluir ou suspender medicamentos na lista de uso contínuo',
+      justificativaFalta: 'Informe a justificativa (ao menos 5 caracteres).',
+      registrar: 'Reconciliar a lista ({n} medicamentos)',
+      registrada: 'Reconciliação registrada: {n} medicamento(s) decididos; a lista foi atualizada.',
+    },
+    avulsa: 'Medicamento fora da lista (registro avulso)',
     medicamento: 'Medicamento em uso',
     dose: 'Dose',
     frequencia: 'Frequência',
