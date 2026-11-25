@@ -100,6 +100,8 @@ export const esquemaRequisitarMaterial = z
     centroCusto: id,
     localConsumo: smallint,
     atendimento: id.optional(),
+    /** Requisição urgente (o local que só atende urgência recusa a comum). */
+    urgente: z.boolean().optional(),
     observacao: livre(60).optional(),
     itens: z
       .array(z.object({ item: id, quantidade }).strict())

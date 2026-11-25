@@ -125,6 +125,7 @@ import {
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from './conta-estoque.js';
+import { conferirParcialDoLocal, conferirPolitica } from './politica-local-propria.js';
 import {
   chaveDaTela,
   contextoNucleo,
@@ -347,6 +348,17 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSuprimentos {
       await localDoEstabelecimento(tx, est, t.origem, 'origem');
       await localDoEstabelecimento(tx, est, t.destino, 'destino');
       recusar(conferirTransferencia(await escopoDaOperacao(tx, est), t.origem, t.destino)[0] ?? null);
+      // F3.6 (05-SUP linha 3): a origem atende transferência, o destino guarda os itens e o usuário os movimenta.
+      recusar(
+        await conferirPolitica(tx, {
+          est,
+          usuario: usuarioDaOperacao(),
+          itens: t.itens.map((i) => i.item),
+          acao: 'movimentar',
+          locaisQueGuardam: [t.destino],
+          pedido: { local: t.origem, tipo: 'transferencia' },
+        }),
+      );
       const doc = await novoDocumento(tx, est, {
         tipo: 'transferencia',
         tipoMovimento: await tipoMovimentoId(tx, TIPO_MOVIMENTO.envio),
@@ -1898,6 +1910,16 @@ export async function registrarSaida(
   const escopo = await escopoDaOperacao(tx, est);
   recusar(conferirLocal(escopo, e.local, 'saida'));
   recusar(conferirCentroCusto(escopo, e.centroCusto, 'saida'));
+  // F3.6 (05-SUP linha 3): o local guarda os itens e o usuário movimenta o grupo deles.
+  recusar(
+    await conferirPolitica(tx, {
+      est,
+      usuario: usuarioDe(tx),
+      itens: e.itens.map((i) => i.item),
+      acao: 'movimentar',
+      locaisQueGuardam: [e.local],
+    }),
+  );
   const paraPaciente = e.destino === 1 || e.destino === 3;
   if (paraPaciente && !e.atendimento)
     throw recusa('sem-paciente', 'Informe o atendimento do paciente.', { campos: ['atendimento'] });
@@ -1938,6 +1960,24 @@ export async function registrarSaida(
     itensRequisicao = await tx.consultarParaAtualizar<Linha>(
       'SELECT * FROM requisicao_material_item WHERE requisicao_material_id = ? AND excluido_em IS NULL ORDER BY sequencia',
       [n(requisicao['id'])],
+    );
+    // F3.6 (05-SUP linha 3): o local que não atende em parte leva tudo o que está pendente na requisição.
+    recusar(
+      await conferirParcialDoLocal(
+        tx,
+        est,
+        e.local,
+        itensRequisicao.map((r) => ({
+          pendente: qtd(
+            n(r['quantidade_solicitada']) - n(r['quantidade_cancelada']) - n(r['quantidade_atendida']),
+          ),
+          atendido: qtd(
+            e.itens
+              .filter((it) => (it.seq ? n(r['sequencia']) === it.seq : n(r['insumo_id']) === it.item))
+              .reduce((t, it) => t + it.quantidade, 0),
+          ),
+        })),
+      ),
     );
   }
   const tipo = paraPaciente ? 'saida_paciente' : e.destino === 5 ? 'saida_terceiro' : 'saida_setor';
@@ -2215,6 +2255,23 @@ async function requisitarMaterial(
   await centroDoEstabelecimento(tx, est, e.centroCusto);
   recusar(conferirCentroCusto(await escopoDaOperacao(tx, est), e.centroCusto));
   const paraPaciente = e.destino === 1 || e.destino === 3;
+  // F3.6 (05-SUP linha 3): o local atende este tipo de pedido (e só urgente, quando é o caso), atende o setor de quem
+  // pede, guarda os itens, e o usuário requisita o grupo deles.
+  recusar(
+    await conferirPolitica(tx, {
+      est,
+      usuario: usuarioDe(tx),
+      itens: e.itens.map((i) => i.item),
+      acao: 'requisitar',
+      locaisQueGuardam: [e.local],
+      pedido: {
+        local: e.local,
+        tipo: paraPaciente ? 'paciente' : 'setor',
+        urgente: e.urgente ?? false,
+        centroCusto: e.centroCusto,
+      },
+    }),
+  );
   if (paraPaciente && !e.atendimento)
     throw recusa('sem-paciente', 'Informe o atendimento do paciente.', { campos: ['atendimento'] });
   if (paraPaciente && e.atendimento) await pacienteDoAtendimento(tx, est, e.atendimento);
@@ -2231,6 +2288,7 @@ async function requisitarMaterial(
     atendimento_id: paraPaciente ? (e.atendimento ?? null) : null,
     solicitante_usuario_id: usuarioDe(tx),
     solicitado_em: em,
+    urgente: e.urgente ?? false,
     situacao: 'solicitada',
     observacao: e.observacao ?? null,
   });
@@ -2407,6 +2465,19 @@ async function transferir(tx: TxOperacao, est: number, e: TransferirEntrada, hoj
   await localDoEstabelecimento(tx, est, e.origem, 'origem');
   await localDoEstabelecimento(tx, est, e.destino, 'destino');
   recusar(conferirTransferencia(await escopoDaOperacao(tx, est), e.origem, e.destino)[0] ?? null);
+  // F3.6 (05-SUP linha 3): a origem atende transferência, o destino guarda os itens e o usuário os movimenta (o
+  // recebimento de um envio já passou por isto no envio).
+  if (!e.envio)
+    recusar(
+      await conferirPolitica(tx, {
+        est,
+        usuario: usuarioDe(tx),
+        itens: e.itens.map((i) => i.item),
+        acao: 'movimentar',
+        locaisQueGuardam: [e.destino],
+        pedido: { local: e.origem, tipo: 'transferencia' },
+      }),
+    );
   const tipoSai = await tipoMovimentoId(tx, TIPO_MOVIMENTO.transferenciaSaida);
   const tipoEntra = await tipoMovimentoId(tx, TIPO_MOVIMENTO.transferenciaEntrada);
   let doc: { id: number; numero: number; em: Date };
@@ -2531,6 +2602,16 @@ async function registrarEntradaNF(
   await exigirMesAberto(tx, est, hoje);
   await localDoEstabelecimento(tx, est, e.local);
   recusar(conferirLocal(await escopoDaOperacao(tx, est), e.local, 'entrada'));
+  // F3.6 (05-SUP linha 3): o local guarda os itens da nota e o usuário movimenta o grupo deles.
+  recusar(
+    await conferirPolitica(tx, {
+      est,
+      usuario: usuarioDe(tx),
+      itens: e.itens.map((i) => i.item),
+      acao: 'movimentar',
+      locaisQueGuardam: [e.local],
+    }),
+  );
   const f = await tx.uma<Linha>(
     "SELECT id FROM empresa_fornecedora WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
     [e.fornecedor],
@@ -2688,6 +2769,15 @@ async function criarPedido(tx: TxOperacao, est: number, e: CriarPedidoEntrada, h
     );
   recusar(conferirItensPedido(e.itens)[0] ?? null);
   await centroDoEstabelecimento(tx, est, e.centroCusto);
+  // F3.6 (05-SUP linha 3): o usuário compra só o grupo da concessão dele.
+  recusar(
+    await conferirPolitica(tx, {
+      est,
+      usuario: usuarioDe(tx),
+      itens: e.itens.map((i) => i.item),
+      acao: 'comprar',
+    }),
+  );
   if (!e.fornecedores.length)
     throw recusa(
       'sem-fornecedor',

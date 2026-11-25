@@ -12,6 +12,7 @@ export * from './competencia.js';
 export * from './cotacao.js';
 export * from './conferencia-nf.js';
 export * from './escopo.js';
+export * from './politica-local.js';
 export * from './inventario.js';
 export * from './ponto-pedido.js';
 export * from './alcada.js';
