@@ -232,6 +232,14 @@ const pendente = (e: EncontroContas) => e.situacao === 'aguardando_aprovacao' ||
                 </td>
                 <td>
                   {{ p.titulo }}<span v-if="p.documento"> · {{ p.documento }}</span>
+                  <span v-if="p.devedor" :data-testid="`ec-devedor-${p.id}`">
+                    ·
+                    {{
+                      p.tipoDevedor === 'fonte_pagadora'
+                        ? t('financeiro.encontro.devedorFonte', { nome: p.devedor })
+                        : p.devedor
+                    }}
+                  </span>
                   <span v-if="p.emOutroEncontro"> · {{ t('financeiro.encontro.emOutro') }}</span>
                 </td>
                 <td>{{ p.parcela }}</td>

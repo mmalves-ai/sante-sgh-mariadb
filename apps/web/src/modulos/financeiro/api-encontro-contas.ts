@@ -23,6 +23,9 @@ export interface ParcelaEncontroTela {
   readonly vencimento: string;
   readonly saldo: number;
   readonly emOutroEncontro: boolean;
+  /** Lado a receber: quem deve (o cliente financeiro ou a fonte pagadora com o mesmo CNPJ). */
+  readonly devedor?: string;
+  readonly tipoDevedor?: 'cliente' | 'fonte_pagadora';
 }
 export interface ParcelasDoParceiro {
   readonly pagar: readonly ParcelaEncontroTela[];

@@ -185,3 +185,21 @@ export function desfazerCompensacaoParcela(p: {
     situacao: acumulado > 0 ? 'parcial' : 'aberta',
   };
 }
+
+export type TipoDevedorEncontro = 'cliente' | 'fonte_pagadora' | 'paciente';
+
+/**
+ * O documento (só dígitos) do devedor de uma parcela a receber, para casar com o fornecedor no encontro de contas.
+ * Casa o cliente financeiro (CNPJ ou CPF) e também a fonte pagadora, pelo CNPJ da pessoa jurídica dela: a operadora
+ * ou o convênio que também é fornecedor ou credor do hospital é o caso mais comum. O paciente nunca entra no encontro
+ * (a conta do paciente não se compensa com o que o hospital paga): devolve vazio, e a regra recusa a parcela.
+ */
+export function documentoDoDevedor(d: {
+  readonly tipo: TipoDevedorEncontro | string;
+  readonly cnpj: string | null;
+  readonly cpf: string | null;
+}): string {
+  if (d.tipo === 'cliente') return so(d.cnpj ?? d.cpf ?? '');
+  if (d.tipo === 'fonte_pagadora') return so(d.cnpj ?? '');
+  return '';
+}

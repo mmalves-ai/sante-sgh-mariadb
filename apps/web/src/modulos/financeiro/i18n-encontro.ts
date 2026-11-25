@@ -16,6 +16,7 @@ export const mensagensEncontroFinanceiro = {
   vencimento: 'Vencimento',
   saldo: 'Saldo',
   emOutro: 'Em outro encontro pendente',
+  devedorFonte: 'convênio {nome}',
   semParcela: 'Nenhuma parcela em aberto deste lado.',
   totais:
     'A pagar marcado {pagar} · A receber marcado {receber} · Compensado {compensado} · Saldo líquido {saldo}',

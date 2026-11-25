@@ -26,3 +26,10 @@ ALTER TABLE encontro_contas_item
 -- Forma de recebimento padrão de produto (não do hospital): INSERT IGNORE pelo código, sem reescrever o ajuste local.
 INSERT IGNORE INTO forma_recebimento (codigo, descricao, meio, uso, criado_em) VALUES
   ('encontro_contas', 'Baixa por encontro de contas com o mesmo parceiro', 'compensacao', 'recebimento', NOW(3));
+
+-- O devedor do lado a receber também pode ser a fonte pagadora (convênio ou operadora) com o mesmo CNPJ do fornecedor
+-- (correção da revisão, 25/11): o encontro guarda a fonte, como já guarda o cliente financeiro.
+ALTER TABLE encontro_contas
+  ADD COLUMN IF NOT EXISTS fonte_pagadora_id BIGINT UNSIGNED NULL COMMENT 'Parceiro como fonte pagadora devedora (lado a receber)' AFTER cliente_financeiro_id;
+ALTER TABLE encontro_contas
+  ADD KEY IF NOT EXISTS ix_encontro_contas_fonte_pagadora (fonte_pagadora_id);

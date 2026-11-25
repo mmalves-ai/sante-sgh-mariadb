@@ -28,6 +28,7 @@ import {
   liquidarProvisao,
   type ParcelaEncontro,
   PERIODICIDADES,
+  documentoDoDevedor,
   planejarEncontroContas,
   type RecusaFinanceiro,
   reverterProvisao,
@@ -167,9 +168,12 @@ const proporEncontro = definirOperacao<z.infer<typeof esquemaProporEncontro>, Re
       { teto: 200 },
     );
     const receber = await tx.consultarParaAtualizar(
-      `SELECT p.id, p.situacao, p.saldo, p.vencimento, c.cnpj, c.cpf, c.id AS cliente
+      `SELECT p.id, p.situacao, p.saldo, p.vencimento, t.tipo_devedor, c.cnpj, c.cpf, c.id AS cliente,
+              t.fonte_pagadora_id AS fonte, pj.cnpj AS cnpj_fonte
          FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id
          LEFT JOIN cliente_financeiro c ON c.id = t.cliente_financeiro_id
+         LEFT JOIN fonte_pagadora fp ON fp.id = t.fonte_pagadora_id
+         LEFT JOIN pessoa_juridica pj ON pj.id = fp.pessoa_juridica_id
         WHERE p.id IN (${ph(e.parcelasReceber)}) AND t.estabelecimento_id = ? AND p.excluido_em IS NULL
           AND t.excluido_em IS NULL AND t.situacao NOT IN ('cancelado','renegociado')`,
       [...e.parcelasReceber, est],
@@ -187,7 +191,16 @@ const proporEncontro = definirOperacao<z.infer<typeof esquemaProporEncontro>, Re
       situacao: String(l['situacao']),
       saldo: numero(l['saldo']),
       vencimento: dataIso(l['vencimento']) ?? '',
-      documento: doc(l),
+      // O devedor do lado a receber casa pelo cliente financeiro e também pela fonte pagadora (convênio ou operadora)
+      // com o mesmo CNPJ; o paciente nunca entra (regra do domínio).
+      documento:
+        natureza === 'pagar'
+          ? doc(l)
+          : documentoDoDevedor({
+              tipo: String(l['tipo_devedor'] ?? ''),
+              cnpj: (l['tipo_devedor'] === 'fonte_pagadora' ? l['cnpj_fonte'] : l['cnpj']) as string | null,
+              cpf: (l['cpf'] as string | null) ?? null,
+            }),
       emOutroEncontro: (natureza === 'pagar' ? outrosP : outrosR).has(numero(l['id'])),
     });
     // Parcelas repetidas na entrada também são recusadas pela regra (a consulta devolve cada uma só uma vez).
@@ -213,7 +226,8 @@ const proporEncontro = definirOperacao<z.infer<typeof esquemaProporEncontro>, Re
       numero: num.formatado,
       data_operacao: e.data,
       empresa_fornecedora_id: e.fornecedor,
-      cliente_financeiro_id: numero(receber[0]?.['cliente']) || null,
+      cliente_financeiro_id: numero(receber.find((r) => r['cliente'] != null)?.['cliente']) || null,
+      fonte_pagadora_id: numero(receber.find((r) => r['fonte'] != null)?.['fonte']) || null,
       total_pagar: plano.totalPagar,
       total_receber: plano.totalReceber,
       saldo_liquido: plano.saldoLiquido,
@@ -1110,12 +1124,17 @@ export async function parceirosComEncontro(l: Leitor, est: number) {
               WHERE t.empresa_fornecedora_id = f.id AND t.estabelecimento_id = ? AND p.excluido_em IS NULL
                 AND p.situacao IN ('aberta','parcial') AND p.saldo > 0) AS pagar,
             (SELECT COALESCE(SUM(p.saldo), 0) FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id
-               JOIN cliente_financeiro c ON c.id = t.cliente_financeiro_id
-              WHERE (c.cnpj = f.cnpj OR c.cpf = f.cpf) AND t.estabelecimento_id = ? AND p.excluido_em IS NULL
+               LEFT JOIN cliente_financeiro c ON c.id = t.cliente_financeiro_id AND t.tipo_devedor = 'cliente'
+               LEFT JOIN fonte_pagadora fp ON fp.id = t.fonte_pagadora_id AND t.tipo_devedor = 'fonte_pagadora'
+               LEFT JOIN pessoa_juridica pj ON pj.id = fp.pessoa_juridica_id
+              WHERE (c.cnpj = f.cnpj OR c.cpf = f.cpf OR pj.cnpj = f.cnpj) AND t.estabelecimento_id = ?
+                AND p.excluido_em IS NULL AND t.excluido_em IS NULL
                 AND p.situacao IN ('aberta','parcial') AND p.saldo > 0) AS receber
        FROM empresa_fornecedora f
       WHERE (f.cnpj IS NOT NULL OR f.cpf IS NOT NULL)
-        AND EXISTS (SELECT 1 FROM cliente_financeiro c WHERE c.excluido_em IS NULL AND (c.cnpj = f.cnpj OR c.cpf = f.cpf))
+        AND (EXISTS (SELECT 1 FROM cliente_financeiro c WHERE c.excluido_em IS NULL AND (c.cnpj = f.cnpj OR c.cpf = f.cpf))
+          OR EXISTS (SELECT 1 FROM fonte_pagadora fp JOIN pessoa_juridica pj ON pj.id = fp.pessoa_juridica_id
+                      WHERE fp.excluido_em IS NULL AND pj.cnpj = f.cnpj))
       ORDER BY f.razao_social LIMIT 200`,
     [est, est],
   );
@@ -1143,10 +1162,13 @@ export async function parcelasDoParceiro(l: Leitor, est: number, fornecedor: num
     [fornecedor, est],
   );
   const receber = await l.consultar(
-    `SELECT p.id, t.numero, t.numero_documento, p.sequencia, p.vencimento, p.saldo, ${ocupada('parcela_receber_id')} AS ocupada
+    `SELECT p.id, t.numero, t.numero_documento, p.sequencia, p.vencimento, p.saldo, ${ocupada('parcela_receber_id')} AS ocupada,
+            t.tipo_devedor, COALESCE(c.nome, fp.nome) AS devedor
        FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id
-       JOIN cliente_financeiro c ON c.id = t.cliente_financeiro_id
-       JOIN empresa_fornecedora f ON f.id = ? AND (c.cnpj = f.cnpj OR c.cpf = f.cpf)
+       LEFT JOIN cliente_financeiro c ON c.id = t.cliente_financeiro_id AND t.tipo_devedor = 'cliente'
+       LEFT JOIN fonte_pagadora fp ON fp.id = t.fonte_pagadora_id AND t.tipo_devedor = 'fonte_pagadora'
+       LEFT JOIN pessoa_juridica pj ON pj.id = fp.pessoa_juridica_id
+       JOIN empresa_fornecedora f ON f.id = ? AND (c.cnpj = f.cnpj OR c.cpf = f.cpf OR pj.cnpj = f.cnpj)
       WHERE t.estabelecimento_id = ? AND p.excluido_em IS NULL AND t.excluido_em IS NULL
         AND p.situacao IN ('aberta','parcial') AND p.saldo > 0
       ORDER BY p.vencimento, p.id LIMIT 200`,
@@ -1161,7 +1183,13 @@ export async function parcelasDoParceiro(l: Leitor, est: number, fornecedor: num
     saldo: numero(r['saldo']),
     emOutroEncontro: numero(r['ocupada']) > 0,
   });
-  return { pagar: pagar.map(mapa), receber: receber.map(mapa) };
+  // O lado a receber diz quem deve: o cliente financeiro ou a fonte pagadora (convênio) com o mesmo CNPJ.
+  const devedor = (r: Record<string, unknown>) => ({
+    ...mapa(r),
+    devedor: String(r['devedor'] ?? ''),
+    tipoDevedor: r['tipo_devedor'] === 'fonte_pagadora' ? ('fonte_pagadora' as const) : ('cliente' as const),
+  });
+  return { pagar: pagar.map(mapa), receber: receber.map(devedor) };
 }
 
 export async function encontrosDoEstabelecimento(l: Leitor, est: number) {

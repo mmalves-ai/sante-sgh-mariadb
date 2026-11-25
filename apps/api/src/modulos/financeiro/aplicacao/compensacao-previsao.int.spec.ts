@@ -13,9 +13,13 @@
 // diferença zero; a previsão se estende, a ocorrência se cancela e a previsão se encerra, com motivo.
 // Recebimento do encontro (25/11): o lado a receber grava o recebimento de meio e forma "encontro_contas" sem conta nem
 // caixa, ligado ao item; o estorno o deixa estornado com o motivo.
+// Devedor convênio (correção da revisão, 25/11): o título a receber da fonte pagadora cuja pessoa jurídica tem o mesmo
+// CNPJ do fornecedor entra no encontro (lista de parceiros, parcelas do parceiro, proposta e efetivação), e o encontro
+// guarda a fonte pagadora.
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { parceirosComEncontro, parcelasDoParceiro } from '../compensacao-previsao-propria.js';
 import { PortaFinanceiroPropria } from '../porta-propria.js';
 import {
   CLIENTE,
@@ -43,6 +47,8 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
   let m: MassaFinanceiro;
   let porta: PortaFinanceiroPropria;
   let cliente = 0;
+  let fonteMesmoCnpj = 0;
+  let pjCriada = 0;
   let contaPassivo = 0;
   let naturezaDespesa = 0;
   const consultar = (sql: string, p: unknown[]) =>
@@ -77,7 +83,7 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
     );
 
   /** Um título a receber do cliente financeiro (mesmo CNPJ do fornecedor), com uma parcela. */
-  const tituloReceber = (valor: number, documento: string) =>
+  const tituloReceber = (valor: number, documento: string, fonte = 0) =>
     escrever<number>(async (e) => {
       const agora = new Date();
       const tipoDoc = await e.uma<{ id: number }>(
@@ -89,14 +95,15 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
         [],
       );
       const t = await e.inserir(
-        `INSERT INTO titulo_receber (estabelecimento_id, numero, tipo_devedor, cliente_financeiro_id, tipo_origem,
+        `INSERT INTO titulo_receber (estabelecimento_id, numero, tipo_devedor, ${fonte ? 'fonte_pagadora_id' : 'cliente_financeiro_id'}, tipo_origem,
            tipo_documento_financeiro_id, numero_documento, data_emissao, data_lancamento, valor_bruto, valor_liquido,
            natureza_financeira_id, criado_em)
-         VALUES (?, ?, 'cliente', ?, 'avulso', ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, 'avulso', ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           m.est,
           `${P}-R${documento}`,
-          cliente,
+          fonte ? 'fonte_pagadora' : 'cliente',
+          fonte || cliente,
           Number(tipoDoc?.id),
           documento,
           HOJE,
@@ -164,6 +171,24 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
         "SELECT id FROM natureza_financeira WHERE codigo = '9207.1.1'",
         [],
       );
+      // A fonte pagadora (convênio) sintética cuja pessoa jurídica tem o mesmo CNPJ do fornecedor.
+      const pjExistente = (
+        await e.uma<{ id: number }>('SELECT id FROM pessoa_juridica WHERE cnpj = ?', [f?.cnpj])
+      )?.id;
+      const pj =
+        pjExistente ??
+        (await e.inserir(
+          "INSERT INTO pessoa_juridica (cnpj, razao_social, criado_em) VALUES (?, 'CONVENIO FORNECEDOR SINTETICO L0207', ?)",
+          [f?.cnpj, agora],
+        ));
+      pjCriada = pjExistente ? 0 : Number(pj);
+      const fonte =
+        (await e.uma<{ id: number }>('SELECT id FROM fonte_pagadora WHERE codigo = ?', [`${P}-CONVF`]))?.id ??
+        (await e.inserir(
+          "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, pessoa_juridica_id, criado_em) VALUES (?, 'CONVENIO FORNECEDOR SINTETICO L0207', 'operadora', 'ativa', ?, ?)",
+          [`${P}-CONVF`, Number(pj), agora],
+        ));
+      fonteMesmoCnpj = Number(fonte);
       return { cliente: Number(c), contaPassivo: Number(conta), naturezaDespesa: Number(nat?.id) };
     }));
   }, 120_000);
@@ -197,6 +222,15 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
         'DELETE c FROM cliente_financeiro c WHERE c.id = ? AND NOT EXISTS (SELECT 1 FROM titulo_receber t WHERE t.cliente_financeiro_id = c.id)',
         [cliente],
       );
+      await e.executar(
+        'DELETE f FROM fonte_pagadora f WHERE f.id = ? AND NOT EXISTS (SELECT 1 FROM titulo_receber t WHERE t.fonte_pagadora_id = f.id)',
+        [fonteMesmoCnpj],
+      );
+      if (pjCriada)
+        await e.executar(
+          'DELETE j FROM pessoa_juridica j WHERE j.id = ? AND NOT EXISTS (SELECT 1 FROM fonte_pagadora f WHERE f.pessoa_juridica_id = j.id)',
+          [pjCriada],
+        );
       await e.executar(
         "DELETE c FROM conta_contabil c JOIN plano_contas p ON p.id = c.plano_contas_id WHERE p.codigo = 'L0207-PC' AND NOT EXISTS (SELECT 1 FROM provisao_passivo v WHERE v.conta_contabil_id = c.id)",
         [],
@@ -409,6 +443,61 @@ describe.skipIf(SEM_BANCO)('encontro de contas, previsão e provisão (MariaDB)'
       [pagar[0], encontro],
     );
     expect([c?.['situacao'], Number(c?.['baixas'])]).toEqual(['aguardando_aprovacao', 0]);
+  });
+
+  it('convênio com o mesmo CNPJ do fornecedor: aparece nas leituras, entra na proposta e se efetiva', async () => {
+    const t = resultado(await executar('financeiro.criarTituloPagar', tituloDaMassa(m, 920_868_011, 300)));
+    const pagar = await parcelasPagarDo(Number(t['tituloPagar']));
+    const receber = await tituloReceber(200, '920869011', fonteMesmoCnpj);
+    const ler = <T>(fn: (l: Parameters<typeof parceirosComEncontro>[0]) => Promise<T>) =>
+      m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f8-cp' }, fn);
+    const parceiros = await ler((l) => parceirosComEncontro(l, m.est));
+    const parceiro = parceiros.find((p) => p.id === m.fornecedor);
+    expect(parceiro?.receber).toBeGreaterThanOrEqual(200);
+    const lados = await ler((l) => parcelasDoParceiro(l, m.est, m.fornecedor));
+    expect(lados.receber.find((p) => p.id === receber)).toMatchObject({
+      tipoDevedor: 'fonte_pagadora',
+      devedor: 'CONVENIO FORNECEDOR SINTETICO L0207',
+      saldo: 200,
+    });
+    const proposta = resultado(
+      await executar('financeiro.proporEncontroContas', {
+        fornecedor: m.fornecedor,
+        data: HOJE,
+        parcelasPagar: pagar,
+        parcelasReceber: [receber],
+      }),
+    );
+    expect(proposta).toMatchObject({ compensado: 200, saldoLiquido: -100, itens: 2 });
+    const encontro = Number(proposta['encontro']);
+    const [cab] = await consultar(
+      'SELECT empresa_fornecedora_id, cliente_financeiro_id, fonte_pagadora_id FROM encontro_contas WHERE id = ?',
+      [encontro],
+    );
+    expect(cab).toMatchObject({
+      empresa_fornecedora_id: m.fornecedor,
+      cliente_financeiro_id: null,
+      fonte_pagadora_id: fonteMesmoCnpj,
+    });
+    await aprovarTitulo(pagar[0]!, m.aprova);
+    expect(
+      resultado(await executar('financeiro.efetivarEncontroContas', { encontro }, m.paga)),
+    ).toMatchObject({
+      situacao: 'efetivado',
+    });
+    const [pr] = await consultar(
+      `SELECT p.saldo, p.situacao, t.valor_recebido,
+              (SELECT COUNT(*) FROM recebimento r WHERE r.parcela_receber_id = p.id AND r.meio_baixa = 'encontro_contas'
+                 AND r.excluido_em IS NULL) AS recebimentos
+         FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE p.id = ?`,
+      [receber],
+    );
+    expect([
+      Number(pr?.['saldo']),
+      pr?.['situacao'],
+      Number(pr?.['valor_recebido']),
+      Number(pr?.['recebimentos']),
+    ]).toEqual([0, 'recebida', 200, 1]);
   });
 
   it('cancela a proposta pendente com motivo, a linha fica, e a parcela volta a poder entrar', async () => {
