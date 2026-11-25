@@ -64,6 +64,7 @@ import {
   CadastroCatalogoPrescricaoPropria,
 } from './prescricao-propria-cadastro.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
+import { CURVAS_CRESCIMENTO, CurvasCrescimentoController } from './curvas-crescimento.controller.js';
 import { EXAME_FISICO, ExameFisicoController } from './exame-fisico.controller.js';
 import { ExameFisicoPropria } from './exame-fisico-propria.js';
 import { NOTA_SOAP, NotaSoapController } from './nota-soap.controller.js';
@@ -76,6 +77,7 @@ import {
   PortaRegrasAvisoClinicoPropria,
 } from './avisos-clinicos-regras-propria.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
+import { CurvasCrescimentoPropria } from './curvas-crescimento-propria.js';
 import { TERMINOLOGIA_CLINICA, TerminologiaClinicaController } from './terminologia-clinica.controller.js';
 import { TerminologiaClinicaPropria } from './terminologia-clinica-propria.js';
 import { ObrigatoriedadeDocumentoController } from './obrigatoriedade-documento.controller.js';
@@ -224,6 +226,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       FarmacovigilanciaController,
       PrescricaoCadastroController,
       NotasPacienteController,
+      CurvasCrescimentoController,
       ExameFisicoController,
       NotaSoapController,
       ProntuarioRestritoController,
@@ -336,6 +339,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new NotaSoapPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L141: curvas de crescimento (OMS e INTERGROWTH) e medida de crescimento; sem núcleo, 503.
+      {
+        provide: CURVAS_CRESCIMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new CurvasCrescimentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L102: notas e lembretes livres sobre o paciente; sem núcleo, 503.
