@@ -129,7 +129,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // fase 7); a contagem acompanha.
 // C2-083 (07-FIN L157): o item "Remuneração variável" do repasse médico entrou à mão (mesmo motivo; F8 vai como
 // fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":496,"M":198,"P":57,"N":241};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":497,"M":198,"P":57,"N":242};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -385,6 +385,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.motor-de-precos.servicos-acessorios-ambulancia-e-ligacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Ambulância e ligações tarifadas"],"titulo":"Ambulância e ligações tarifadas","selo":"N","fase":7,"rota":"/faturamento/servicos-acessorios","permissao":"faturamento.regra.ler"},
   {"id":"faturamento.motor-de-precos.simulador-explicar-preco-impacto-de-reajuste","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Simulador"],"titulo":"Simulador","selo":"N","fase":3,"rota":"/faturamento/simulador","permissao":"faturamento.preco.simular"},
   {"id":"faturamento.motor-de-precos.simulacao-de-receita","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Simulação de receita"],"titulo":"Simulação de receita","selo":"N","fase":7,"rota":"/faturamento/simulacao-receita","permissao":"faturamento.preco.simular"},
+  {"id":"faturamento.motor-de-precos.restricao-de-cobertura-e-compatibilidade","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Motor de preços","Restrição de cobertura e compatibilidade"],"titulo":"Restrição de cobertura e compatibilidade","selo":"N","fase":7,"rota":"/faturamento/cobertura","permissao":"faturamento.regra.ler"},
   {"id":"faturamento.faturamento-sus.bpa-producao-ambulatorial","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","BPA"],"titulo":"BPA","selo":"N","fase":5,"rota":"/faturamento/sus/bpa","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.faturamento-sus.apac-laudos-e-autorizacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","APAC"],"titulo":"APAC","selo":"N","fase":5,"rota":"/faturamento/sus/apac","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.faturamento-sus.aih-internacao-sih","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","AIH"],"titulo":"AIH","selo":"N","fase":5,"rota":"/faturamento/sus/aih","permissao":"faturamento.sus.ler"},
