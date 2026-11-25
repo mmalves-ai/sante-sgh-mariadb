@@ -16,3 +16,4 @@ export * from './ciclo.js';
 export * from './lancamentos.js';
 export * from './demonstracoes.js';
 export * from './sped.js';
+export * from './publicacao.js';

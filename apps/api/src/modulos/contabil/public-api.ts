@@ -6,3 +6,4 @@ export { DemonstracoesContabilController, GERADOR_PDF_CONTABIL } from './demonst
 export { PORTA_CONTABIL, type PortaContabil } from './porta.js';
 export { portaContabilIndisponivel, PortaContabilPropria } from './porta-propria.js';
 export { PortaContabilMemoria } from './porta-memoria.js';
+export { estornarFatosDaOrigem, publicarFatos, TABELAS_PUBLICACAO_FATO } from './publicacao-fato.js';

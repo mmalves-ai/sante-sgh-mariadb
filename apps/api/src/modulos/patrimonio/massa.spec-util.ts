@@ -37,6 +37,12 @@ export async function limparGravacoes(e: Escritor, ests: readonly number[]): Pro
   );
   await e.executar(`DELETE FROM inventario_bem WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM movimento_bem WHERE estabelecimento_id IN (${em})`, ests);
+  // Fatos contábeis publicados pela depreciação e pelo impairment (ADR 0003): o estorno aponta para o original.
+  await e.executar(
+    `DELETE FROM fato_contabil WHERE estabelecimento_id IN (${em}) AND estornado_fato_contabil_id IS NOT NULL`,
+    ests,
+  );
+  await e.executar(`DELETE FROM fato_contabil WHERE estabelecimento_id IN (${em})`, ests);
   for (const t of ['ajuste_valor_bem', 'laudo_bem', 'cota_depreciacao'])
     await e.executar(
       `DELETE x FROM ${t} x JOIN bem_patrimonial b ON b.id = x.bem_patrimonial_id WHERE b.estabelecimento_id IN (${em})`,

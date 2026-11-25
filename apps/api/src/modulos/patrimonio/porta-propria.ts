@@ -38,10 +38,16 @@ import {
   travarEConferir,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { ultimoDiaDaCompetencia } from '@sgh/dominio-contabil';
 import { z } from 'zod';
 import { registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import {
+  estornarFatosDaOrigem,
+  publicarFatos,
+  TABELAS_PUBLICACAO_FATO,
+} from '../contabil/publicacao-fato.js';
 import type { ContextoPatrimonio, PortaPatrimonio } from './porta.js';
 import type {
   AjusteDoBem,
@@ -777,9 +783,70 @@ const calcularZ = z.object({
   dados: dadosZ,
 });
 
+/** O bem como o fato contábil precisa: centro de custo onde está, grupo e plaqueta (ADR 0003: publicado na hora). */
+async function fatosDosBens(
+  tx: TxOperacao,
+  bens: readonly number[],
+): Promise<{ id: number; est: number; centro: number | null; grupo: string | null; plaqueta: string }[]> {
+  if (bens.length === 0) return [];
+  const rs = await tx.consultar(
+    `SELECT b.id, b.estabelecimento_id, b.centro_custo_id, b.plaqueta, g.codigo AS grupo
+       FROM bem_patrimonial b LEFT JOIN grupo_bem g ON g.id = b.grupo_bem_id
+      WHERE b.id IN (${bens.map(() => '?').join(',')})`,
+    [...bens],
+  );
+  return rs.map((r: Record<string, unknown>) => ({
+    id: Number(r['id']),
+    est: Number(r['estabelecimento_id']),
+    centro: r['centro_custo_id'] == null ? null : Number(r['centro_custo_id']),
+    grupo: r['grupo'] == null ? null : String(r['grupo']),
+    plaqueta: String(r['plaqueta'] ?? ''),
+  }));
+}
+
+/** Data de hoje no fuso do hospital (a data contábil do estorno da depreciação). */
+function hojeNoBrasil(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
+/** Um fato `depreciacao` por cota, no último dia da competência, pelo centro de custo onde o bem está. */
+async function publicarFatosDaDepreciacao(
+  tx: TxOperacao,
+  est: number,
+  competencia: string,
+  cotas: readonly { id: number; bem: number; valorCent: number }[],
+): Promise<void> {
+  const bens = new Map(
+    (
+      await fatosDosBens(
+        tx,
+        cotas.map((k) => k.bem),
+      )
+    ).map((b) => [b.id, b]),
+  );
+  const data = ultimoDiaDaCompetencia(competencia);
+  await publicarFatos(
+    tx,
+    est,
+    cotas.map((k) => {
+      const b = bens.get(k.bem);
+      return {
+        tipo: 'depreciacao' as const,
+        entidade: 'cota_depreciacao',
+        entidadeId: k.id,
+        data,
+        valorCentavos: k.valorCent,
+        centroCusto: b?.centro ?? null,
+        documento: `depreciação ${competencia} bem ${b?.plaqueta ?? k.bem}`,
+        campos: { grupoBem: b?.grupo ?? null, bem: k.bem },
+      };
+    }),
+  );
+}
+
 const opCalcular = definirOperacao({
   nome: 'patrimonio.depreciacao.calcular',
-  tabelas: ['calculo_depreciacao', 'cota_depreciacao'],
+  tabelas: ['calculo_depreciacao', 'cota_depreciacao', ...TABELAS_PUBLICACAO_FATO],
   entrada: calcularZ,
   async gravar(tx, x, ctx) {
     const dia = primeiroDia(x.competencia);
@@ -822,8 +889,9 @@ const opCalcular = definirOperacao({
         throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
       throw e;
     }
+    const cotasGravadas: { id: number; bem: number; valorCent: number }[] = [];
     for (const k of x.cotas) {
-      await tx.incluir('cota_depreciacao', {
+      const cota = await tx.incluir('cota_depreciacao', {
         bem_patrimonial_id: k.bem,
         calculo_depreciacao_id: id,
         competencia: dia,
@@ -835,7 +903,9 @@ const opCalcular = definirOperacao({
         valor_cota: decimal(k.valorCent),
         valor_residual: decimal(Math.max(0, k.baseCent - k.acumuladaAntesCent - k.valorCent)),
       });
+      cotasGravadas.push({ id: cota, bem: k.bem, valorCent: k.valorCent });
     }
+    await publicarFatosDaDepreciacao(tx, Number(ctx.estabelecimento), x.competencia, cotasGravadas);
     return { id };
   },
   alvo: (_x, r) => ({ tabela: 'calculo_depreciacao', id: r.id }),
@@ -844,7 +914,7 @@ const opCalcular = definirOperacao({
 
 const opEstornarCalculo = definirOperacao({
   nome: 'patrimonio.depreciacao.estornar',
-  tabelas: ['calculo_depreciacao', 'cota_depreciacao', 'ajuste_valor_bem'],
+  tabelas: ['calculo_depreciacao', 'cota_depreciacao', 'ajuste_valor_bem', ...TABELAS_PUBLICACAO_FATO],
   entrada: z.object({
     calculo: z.number().int().positive(),
     motivo: z.string().trim().min(1).max(500),
@@ -896,6 +966,15 @@ const opEstornarCalculo = definirOperacao({
       [x.calculo],
       { teto: TETO_BENS_LEITURA },
     );
+    // O estorno da cota vira o estorno do fato contábil (o fato original fica; ITG 2000, item 32).
+    await estornarFatosDaOrigem(
+      tx,
+      Number(ctx.estabelecimento),
+      'cota_depreciacao',
+      cotas.map((k) => Number(k['id'])),
+      hojeNoBrasil(),
+      x.motivo,
+    );
     for (const k of cotas) await tx.excluir('cota_depreciacao', inteiro(k['id']), inteiro(k['versao']));
     return { id: x.calculo };
   },
@@ -905,7 +984,7 @@ const opEstornarCalculo = definirOperacao({
 
 const opRegistrarAjuste = definirOperacao({
   nome: 'patrimonio.ajuste.registrar',
-  tabelas: ['ajuste_valor_bem', 'bem_patrimonial'],
+  tabelas: ['ajuste_valor_bem', 'bem_patrimonial', ...TABELAS_PUBLICACAO_FATO],
   entrada: z.object({
     bem: z.number().int().positive(),
     versao: z.number().int().min(0),
@@ -953,6 +1032,22 @@ const opRegistrarAjuste = definirOperacao({
       motivo: x.motivo,
       origem_ajuste: x.origem,
     });
+    // CPC 01: só a perda por impairment tem lançamento; a revisão de estimativa e a reavaliação não geram fato.
+    if (x.tipo === 'impairment') {
+      const [b] = await fatosDosBens(tx, [x.bem]);
+      await publicarFatos(tx, Number(b?.est), [
+        {
+          tipo: 'impairment',
+          entidade: 'ajuste_valor_bem',
+          entidadeId: id,
+          data: x.data,
+          valorCentavos: x.perdaCent,
+          centroCusto: b?.centro ?? null,
+          documento: `impairment ajuste ${id} bem ${b?.plaqueta ?? x.bem}`,
+          campos: { grupoBem: b?.grupo ?? null, bem: x.bem },
+        },
+      ]);
+    }
     // O ajuste muda o valor contábil do bem: a versão do bem sobe (a tela aberta antes fica desatualizada).
     await tx.alterar('bem_patrimonial', x.bem, x.versao, {});
     return { id };
@@ -963,7 +1058,7 @@ const opRegistrarAjuste = definirOperacao({
 
 const opEstornarAjuste = definirOperacao({
   nome: 'patrimonio.ajuste.estornar',
-  tabelas: ['ajuste_valor_bem', 'bem_patrimonial'],
+  tabelas: ['ajuste_valor_bem', 'bem_patrimonial', ...TABELAS_PUBLICACAO_FATO],
   entrada: z.object({
     ajuste: z.number().int().positive(),
     versao: z.number().int().min(0),
@@ -999,6 +1094,14 @@ const opEstornarAjuste = definirOperacao({
       motivo_estorno: x.motivo,
       origem_estorno: x.origem,
     });
+    await estornarFatosDaOrigem(
+      tx,
+      Number(ctx.estabelecimento),
+      'ajuste_valor_bem',
+      [x.ajuste],
+      x.hoje,
+      x.motivo,
+    );
     const bem = inteiro(relido?.['bem_patrimonial_id']);
     const [b] = await tx.consultarParaAtualizar('SELECT versao FROM bem_patrimonial WHERE id = ?', [bem]);
     await tx.alterar('bem_patrimonial', bem, inteiro(b?.versao), {});
