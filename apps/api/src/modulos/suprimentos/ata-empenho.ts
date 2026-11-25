@@ -142,12 +142,13 @@ export interface ProcessoParaAta {
     readonly valor: number;
   }[];
 }
-export interface ResultadoAtaEmpenho {
+// Tipo (não interface) para servir de resultado da operação, que só guarda valores simples.
+export type ResultadoAtaEmpenho = {
   readonly id: number;
   readonly numero: string;
   readonly itens: number;
   readonly valorTotal: number;
-}
+};
 
 export interface PortaAtaEmpenho {
   readonly destino: 'banco' | 'indisponivel';
