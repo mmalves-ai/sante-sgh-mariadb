@@ -64,7 +64,7 @@ interface Evento {
   usuario: string;
 }
 
-test.describe('financeiro: ciclo da nota de serviço @F3.8-13', () => {
+test.describe('financeiro: ciclo da nota de serviço @F3.8-13 @C1-062', () => {
   test.setTimeout(180_000);
 
   test('lote por faturas com dedução conferida na hora, cancelar e substituir na linha, prazo e histórico; axe', async ({
@@ -261,6 +261,9 @@ test.describe('financeiro: ciclo da nota de serviço @F3.8-13', () => {
     await page.goto('/financeiro/fiscal/nfse');
     await expect(page.getByTestId('tela-fin-nfse')).toBeVisible();
     await expect(page.getByTestId('ns-ciclo')).toBeVisible();
+    // A nota só sai pelo ciclo: o formulário avulso e a lista antiga não existem mais na tela.
+    await expect(page.getByTestId('nf-formulario')).toHaveCount(0);
+    await expect(page.getByTestId('nf-lista')).toHaveCount(0);
     await expect(page.getByTestId('ns-destino')).toContainText('simulador');
     await expect(page.getByTestId('ns-faturas').locator('tbody tr')).toHaveCount(3);
     // A alíquota vem da regra do município; sem fatura escolhida o botão fica desligado.

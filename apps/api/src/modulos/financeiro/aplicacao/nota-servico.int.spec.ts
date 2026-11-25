@@ -3,8 +3,10 @@
 // tomador do cadastro, as deduções da base, os eventos e a ligação com a fatura; a fatura com nota ativa não ganha
 // outra; repetir o pedido (a mesma chave) não emite de novo. O cancelamento e a substituição exigem motivo ativo do
 // catálogo, justificativa e o prazo do município; nada é apagado: a nota fica "cancelada" ou "substituida", com o
-// evento e a substituta ligada. Fora do simulador a nota fica só com o RPS gerado.
-import { randomUUID } from 'node:crypto';
+// evento e a substituta ligada. Fora do simulador a nota fica só com o RPS gerado. O XML de cada nota (a emitida e
+// a substituta) fica no armazém de arquivos, registrado em `arquivo` (hash, tamanho, imutável, guarda legal) e ligado
+// por `nota_servico.xml_arquivo_id`.
+import { createHash, randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -12,9 +14,11 @@ import {
   historicoNotaServico,
   motivosNotaServico,
   notasServico,
-  OPERACOES_NOTA_SERVICO,
+  type OperacaoNotaServico,
+  operacoesNotaServico,
   parametrosNotaServico,
 } from '../nota-servico-propria.js';
+import { armazemFinanceiroMemoria } from '../armazem.js';
 import {
   CLIENTE,
   codigoDaGravacao,
@@ -27,6 +31,8 @@ import {
 
 const CNPJ_SINTETICO = '11222333000181';
 const JUSTIFICATIVA = 'Valor da fatura corrigido depois da conferência.';
+const ARMAZEM = armazemFinanceiroMemoria();
+const OPERACOES = operacoesNotaServico(ARMAZEM);
 
 describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e substituição (MariaDB)', () => {
   let m: MassaFinanceiro;
@@ -44,10 +50,10 @@ describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e subs
     chaveIdempotencia: `t0207-ns-${randomUUID()}`,
   });
   const executar = (
-    nome: keyof typeof OPERACOES_NOTA_SERVICO,
+    nome: OperacaoNotaServico,
     entrada: unknown,
     c: ContextoNucleo & { chaveIdempotencia: string } = ctx(),
-  ) => m.nucleo.criarExecutor().executar(OPERACOES_NOTA_SERVICO[nome] as never, CLIENTE, entrada, c);
+  ) => m.nucleo.criarExecutor().executar(OPERACOES[nome] as never, CLIENTE, entrada, c);
   const nota = (titulo: number, valor: number, deducoes: unknown[] = []) => ({
     tituloReceber: titulo,
     classificacao: '010101',
@@ -100,6 +106,7 @@ describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e subs
         );
       await x('UPDATE nota_servico SET substitui_nota_servico_id = NULL WHERE estabelecimento_id IN (?, ?)');
       await x('DELETE FROM nota_servico WHERE estabelecimento_id IN (?, ?)');
+      await x("DELETE FROM arquivo WHERE entidade = 'nota_servico' AND estabelecimento_id IN (?, ?)");
       await x('DELETE FROM lote_nota_servico WHERE estabelecimento_id IN (?, ?)');
       await x('DELETE FROM regra_iss_municipio WHERE estabelecimento_id IN (?, ?)');
       await x('UPDATE estabelecimento SET municipio_ibge_id = NULL WHERE id IN (?, ?)');
@@ -192,6 +199,43 @@ describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e subs
     await limparMassa(m.nucleo, [est, outroEst]);
     await m.nucleo.encerrar();
   });
+
+  /** O XML da nota: no armazém, registrado em `arquivo` (ligado à nota, imutável, 5 anos) com o mesmo hash. */
+  const xmlGuardado = async (nota: number) => {
+    const [a] = await consultar(
+      `SELECT a.entidade, a.entidade_id, a.finalidade, a.tipo_mime, a.tamanho_bytes, a.hash_sha256,
+              a.chave_armazenamento, a.imutavel, a.estabelecimento_id,
+              DATEDIFF(a.retencao_ate, CURRENT_DATE) BETWEEN 1825 AND 1828 AS cinco_anos,
+              JSON_UNQUOTE(JSON_EXTRACT(ev.dados, '$.hashXml')) AS hash_evento
+         FROM nota_servico n
+         JOIN arquivo a ON a.id = n.xml_arquivo_id
+         JOIN evento_nota_servico ev ON ev.nota_servico_id = n.id AND ev.tipo_evento = 'emissao'
+        WHERE n.id = ?`,
+      [nota],
+    );
+    expect(a, `nota ${nota} sem XML registrado`).toBeDefined();
+    expect([a?.['entidade'], Number(a?.['entidade_id']), a?.['finalidade'], a?.['tipo_mime']]).toEqual([
+      'nota_servico',
+      nota,
+      'xml_nota_servico',
+      'application/xml',
+    ]);
+    expect([
+      Boolean(Number(a?.['imutavel'])),
+      Boolean(Number(a?.['cinco_anos'])),
+      Number(a?.['estabelecimento_id']),
+    ]).toEqual([true, true, est]);
+    const bytes = ARMAZEM.objetos.get(String(a?.['chave_armazenamento']));
+    expect(bytes, 'XML ausente do armazém').toBeDefined();
+    const hash = createHash('sha256')
+      .update(bytes as Uint8Array)
+      .digest('hex');
+    expect([hash, hash, (bytes as Uint8Array).length]).toEqual([
+      a?.['hash_sha256'],
+      a?.['hash_evento'],
+      Number(a?.['tamanho_bytes']),
+    ]);
+  };
 
   it('emite o lote: lote, notas com tomador e dedução, eventos e a fatura ligada; sem repetir nem duplicar', async () => {
     // Sem o município do estabelecimento a nota não tem onde ser prestada.
@@ -291,6 +335,8 @@ describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e subs
     ]);
     expect(await eventos(res.notas[0]?.id as number)).toEqual(['emissao', 'autorizacao']);
     expect(await notaDaFatura(fat['NS1'] as number)).toBe(res.notas[0]?.id);
+    // O XML de cada nota fica no armazém e no registro de arquivos, ligado à nota, com o hash do evento da emissão.
+    for (const n of res.notas) await xmlGuardado(n.id);
 
     // O mesmo pedido de novo (a mesma chave) não emite outra nota; outra emissão para a fatura é recusada.
     const de_novo = await emitir(pedido, 'simulador', c);
@@ -393,6 +439,7 @@ describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e subs
     );
     expect([Number(ev?.['s']), ev?.['motivo']]).toEqual([res.substituta, JUSTIFICATIVA]);
     expect(await notaDaFatura(fat['NS2'] as number)).toBe(res.substituta);
+    await xmlGuardado(res.substituta);
     // A dedução da original continua no banco; a substituída não se altera de novo.
     expect(
       Number(
@@ -492,6 +539,8 @@ describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e subs
     const n = await umaNota(res.notas[0]?.id as number);
     expect(n).toMatchObject({ situacao: 'rps_gerado', numero_nota: null, ambiente: 'producao' });
     expect(await eventos(res.notas[0]?.id as number)).toEqual(['emissao']);
+    // O RPS gerado também guarda o XML que irá à prefeitura.
+    await xmlGuardado(res.notas[0]?.id as number);
     const [lote] = await consultar('SELECT situacao, protocolo FROM lote_nota_servico WHERE id = ?', [
       res.lote,
     ]);

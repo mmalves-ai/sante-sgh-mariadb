@@ -219,14 +219,12 @@ test.describe('financeiro: contas a pagar, a receber e tesouraria @M32', () => {
     await page.goto('/financeiro/gerencial');
     await expect(page.getByTestId('gr-dre')).toBeVisible();
     await expect(page.getByTestId('gr-indicadores')).toBeVisible();
-    // A NFS-e vai ao simulador; a REINF sai gerada e não enviada.
+    // A NFS-e só sai pelo ciclo da nota de serviço no banco do cliente (f38-nota-servico.spec): o formulário avulso
+    // e a lista antiga saíram da tela. A REINF sai gerada e não enviada.
     await page.goto('/financeiro/fiscal/nfse');
-    await page.getByTestId('nf-titulo-receber').fill('9001');
-    await page.getByTestId('nf-classificacao').fill('010101');
-    await page.getByTestId('nf-item').fill('4.03');
-    await page.getByTestId('nf-valor').fill('100');
-    await page.getByTestId('nf-emitir').click();
-    await expect(page.getByTestId('nf-mensagem')).toBeVisible();
+    await expect(page.getByTestId('tela-fin-nfse')).toBeVisible();
+    await expect(page.getByTestId('nf-formulario')).toHaveCount(0);
+    await expect(page.getByTestId('nf-lista')).toHaveCount(0);
     await page.goto('/financeiro/fiscal/reinf');
     await page.getByTestId('dc-gerar').click();
     await expect(page.getByTestId('dc-mensagem')).toBeVisible();

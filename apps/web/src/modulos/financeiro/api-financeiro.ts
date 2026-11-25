@@ -269,20 +269,7 @@ export const listarApropriacoes = (f: Filtro) =>
 
 // ── Fiscal e contábil ───────────────────────────────────────────────────────────────────────────────────────────
 export const lerEntradas = (f: Filtro) => ler(`${F}/fiscal/entradas${qs(f)}`, lista<EscrituracaoResposta>());
-export const listarNfse = () => ler(`${F}/fiscal/nfse`, lista<RegistroFiscalResposta>());
-export const emitirNfse = (
-  corpo: {
-    tituloReceber: number | null;
-    conta: number | null;
-    momento: 'apresentacao' | 'recebimento';
-    classificacao: string;
-    itemServico: string;
-    valorServicos: number;
-    aliquotaIss: number;
-    issRetido: boolean;
-  },
-  chave: string,
-) => gravar(`${F}/fiscal/nfse`, corpo, chave);
+// A nota de serviço sai pelo ciclo no banco do cliente (api-nota-servico / NotasServicoCiclo), não por aqui.
 export const listarDeclaracoes = (tipo: 'dmed' | 'reinf') =>
   ler(`${F}/fiscal/declaracoes${tipo === 'dmed' ? '/dmed' : ''}`, lista<RegistroFiscalResposta>());
 export const gerarDeclaracao = (

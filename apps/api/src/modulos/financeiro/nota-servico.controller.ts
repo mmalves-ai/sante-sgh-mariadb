@@ -26,11 +26,14 @@ import {
   historicoNotaServico,
   motivosNotaServico,
   notasServico,
-  OPERACOES_NOTA_SERVICO,
+  type OperacaoNotaServico,
+  operacoesNotaServico,
   parametrosNotaServico,
 } from './nota-servico-propria.js';
+import type { ArmazemFinanceiro } from './armazem.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import { resultadoFin } from './servico.js';
+import { ARMAZEM_FINANCEIRO } from './simbolos.js';
 
 const SITUACOES = [
   'rascunho',
@@ -54,13 +57,17 @@ const objeto = (b: unknown): Record<string, unknown> =>
 @Controller('financeiro/fiscal/notas-servico')
 export class NotaServicoController {
   private readonly executor: Executor | null;
+  private readonly operacoes: ReturnType<typeof operacoesNotaServico>;
   /** A prefeitura só em produção e com o provedor municipal ligado (ainda não há): fora disso, o simulador. */
   private readonly destino = destinoNfse((process.env['AMBIENTE'] ?? 'dev').trim() || 'dev', false);
 
   constructor(
+    @Inject(ARMAZEM_FINANCEIRO) armazem: ArmazemFinanceiro,
     @Optional() @Inject(NUCLEO_PERIODO_FINANCEIRO) private readonly nucleo: NucleoProprio | null = null,
   ) {
     this.executor = nucleo ? nucleo.criarExecutor() : null;
+    // O XML de cada nota vai ao armazém de arquivos do financeiro (ADR 0004), registrado na transação da emissão.
+    this.operacoes = operacoesNotaServico(armazem);
   }
 
   private ler<T>(req: RequisicaoAutorizada, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
@@ -76,14 +83,14 @@ export class NotaServicoController {
 
   private async gravar(
     req: RequisicaoAutorizada,
-    op: keyof typeof OPERACOES_NOTA_SERVICO,
+    op: OperacaoNotaServico,
     entrada: unknown,
     mensagem: (r: Record<string, unknown>) => string,
   ): Promise<ResultadoFinanceiro> {
     if (!this.executor) throw new ErroProblema('indisponivel', 503, 'Banco do cliente indisponível');
     const s = sessaoDe(req);
     const r = await this.executor
-      .executar(OPERACOES_NOTA_SERVICO[op] as never, s.porta.cliente, entrada, contextoOperacao(s, op))
+      .executar(this.operacoes[op] as never, s.porta.cliente, entrada, contextoOperacao(s, op))
       .catch((e: unknown) => {
         throw problemaDoCadastro(e);
       });

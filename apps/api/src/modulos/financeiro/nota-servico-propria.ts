@@ -7,6 +7,8 @@
 // e a substituta aponta para a original. As regras são do @sgh/dominio-financeiro (nfse.ts, nfse-ciclo.ts).
 // Fora de produção a prefeitura é o simulador (a nota sai autorizada com número sintético, em ambiente de
 // homologação); em produção a nota fica com o RPS gerado, à espera do provedor municipal (porta de integração).
+// O XML de cada nota vai ao armazém de arquivos do financeiro (disco da máquina, ADR 0004) e é registrado em `arquivo`
+// (hash, tamanho, imutável e guarda legal) na mesma transação; `nota_servico.xml_arquivo_id` aponta para ele.
 import { createHash } from 'node:crypto';
 import { centavos } from '@sgh/contratos/regras-financeiro';
 import {
@@ -34,6 +36,8 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
+import { type ArmazemFinanceiro, ErroSobrescritaArquivo } from './armazem.js';
 import { instanteIso, numero, texto, versaoTexto } from './vocabulario.js';
 
 const id = z.number().int().positive();
@@ -440,6 +444,7 @@ async function incluirNota(
     paraOnde: 'simulador' | 'prefeitura';
     substitui: { id: number; numero: string | null } | null;
     agora: Date;
+    armazem: ArmazemFinanceiro;
   },
 ): Promise<NotaGravada> {
   const { nota: n, tomador, agora } = p;
@@ -454,6 +459,28 @@ async function incluirNota(
   });
   const simulada = p.paraOnde === 'simulador' ? simularPrefeitura(xml, rps) : null;
   const dia = agora.toISOString().slice(0, 10);
+  // O XML vai ao disco antes do registro (a chave leva o RPS e o hash). A mesma chave já guardada é o mesmo conteúdo
+  // (a transação anterior desfeita com o mesmo RPS): segue para o registro, que confere o hash.
+  const bytesXml = new TextEncoder().encode(xml);
+  const hashXml = createHash('sha256').update(bytesXml).digest('hex');
+  const chaveXml = `nfse/${p.est}/rps-${rps}-${hashXml.slice(0, 16)}.xml`;
+  try {
+    await p.armazem.guardar(chaveXml, bytesXml, 'application/xml');
+  } catch (x) {
+    if (!(x instanceof ErroSobrescritaArquivo)) throw x;
+  }
+  const arquivo = await registrarArquivoGuardado(tx, {
+    estabelecimento: p.est,
+    entidade: 'nota_servico',
+    entidadeId: null,
+    finalidade: 'xml_nota_servico',
+    nomeOriginal: `rps-${rps}.xml`,
+    tipoMime: 'application/xml',
+    tamanhoBytes: bytesXml.length,
+    hash: hashXml,
+    chave: chaveXml,
+    retencaoAte: retencaoAte(agora),
+  });
   const notaId = await tx.incluir('nota_servico', {
     estabelecimento_id: p.est,
     lote_nota_servico_id: p.lote,
@@ -489,7 +516,9 @@ async function incluirNota(
     valor_liquido: calculo.valorLiquido,
     situacao: simulada ? 'autorizada' : 'rps_gerado',
     substitui_nota_servico_id: p.substitui?.id ?? null,
+    xml_arquivo_id: arquivo.id,
   });
+  await ligarArquivo(tx, arquivo, notaId);
   for (const [i, d] of n.deducoes.entries())
     await tx.incluir('deducao_nota_servico', {
       nota_servico_id: notaId,
@@ -543,7 +572,7 @@ async function incluirNota(
       valorCbs: calculo.valorCbs,
       retencoesFederais: calculo.retencoesFederais,
       destino: p.paraOnde,
-      hashXml: createHash('sha256').update(xml).digest('hex'),
+      hashXml,
     }),
   });
   if (simulada)
@@ -572,101 +601,106 @@ async function garantirNumeracao(tx: Tx, ctx: ContextoOperacao, est: number, ago
     await garantirSequencia(tx, { tipo, estabelecimento: est, prefixo: '' }, { usuario: ctx.usuario, agora });
 }
 
-const emitirNotasServico = definirOperacao<z.infer<typeof esquemaEmitirNotasServico>, ResultadoOperacao>({
-  nome: 'financeiro.emitir_notas_servico',
-  tabelas: [
-    'lote_nota_servico',
-    'nota_servico',
-    'deducao_nota_servico',
-    'tributo_nota_servico',
-    'evento_nota_servico',
-    'titulo_receber',
-    'sequencia_negocio',
-  ],
-  entrada: esquemaEmitirNotasServico as never,
-  async gravar(tx, e, ctx) {
-    const est = estabelecimentoDe(ctx);
-    const agora = new Date();
-    const municipio = await municipioExigido(tx, est);
-    await garantirNumeracao(tx, ctx, est, agora);
-    const numeroLote = (await tx.proximoNumero(SEQUENCIA_LOTE)).valor;
-    const titulos = e.notas.flatMap((n) => (n.tituloReceber === null ? [] : [n.tituloReceber]));
-    const contas = e.notas.flatMap((n) => (n.tituloReceber === null && n.conta !== null ? [n.conta] : []));
-    const ph = (v: readonly number[]) => (v.length ? v.map(() => '?').join(', ') : 'NULL');
-    const ativas = await tx.consultar(
-      `SELECT titulo_receber_id, conta_hospitalar_id FROM nota_servico
+const emitirNotasServico = (armazem: ArmazemFinanceiro) =>
+  definirOperacao<z.infer<typeof esquemaEmitirNotasServico>, ResultadoOperacao>({
+    nome: 'financeiro.emitir_notas_servico',
+    tabelas: [
+      'lote_nota_servico',
+      'nota_servico',
+      'deducao_nota_servico',
+      'tributo_nota_servico',
+      'evento_nota_servico',
+      'titulo_receber',
+      'sequencia_negocio',
+      'arquivo',
+    ],
+    entrada: esquemaEmitirNotasServico as never,
+    async gravar(tx, e, ctx) {
+      const est = estabelecimentoDe(ctx);
+      const agora = new Date();
+      const municipio = await municipioExigido(tx, est);
+      await garantirNumeracao(tx, ctx, est, agora);
+      const numeroLote = (await tx.proximoNumero(SEQUENCIA_LOTE)).valor;
+      const titulos = e.notas.flatMap((n) => (n.tituloReceber === null ? [] : [n.tituloReceber]));
+      const contas = e.notas.flatMap((n) => (n.tituloReceber === null && n.conta !== null ? [n.conta] : []));
+      const ph = (v: readonly number[]) => (v.length ? v.map(() => '?').join(', ') : 'NULL');
+      const ativas = await tx.consultar(
+        `SELECT titulo_receber_id, conta_hospitalar_id FROM nota_servico
         WHERE estabelecimento_id = ? AND excluido_em IS NULL AND situacao IN ${ATIVAS}
           AND (titulo_receber_id IN (${ph(titulos)})
                OR (titulo_receber_id IS NULL AND conta_hospitalar_id IN (${ph(contas)})))`,
-      [est, ...titulos, ...contas],
-    );
-    recusar(
-      conferirLoteNfse(
-        e.notas.map(pedidoDe),
-        ativas.map((a) => ({
-          tituloReceber: idOuNulo(a['titulo_receber_id']),
-          conta: a['titulo_receber_id'] === null ? idOuNulo(a['conta_hospitalar_id']) : null,
-        })),
-      ),
-    );
-    const tomadores: Tomador[] = [];
-    for (const [i, n] of e.notas.entries())
-      tomadores.push(
-        await tomadorDaNota(
-          tx,
-          est,
-          n,
-          `Nota ${i + 1}: `,
-          `notas.${i}.${n.tituloReceber !== null ? 'tituloReceber' : 'conta'}`,
+        [est, ...titulos, ...contas],
+      );
+      recusar(
+        conferirLoteNfse(
+          e.notas.map(pedidoDe),
+          ativas.map((a) => ({
+            tituloReceber: idOuNulo(a['titulo_receber_id']),
+            conta: a['titulo_receber_id'] === null ? idOuNulo(a['conta_hospitalar_id']) : null,
+          })),
         ),
       );
-    const calculos = e.notas.map((n) => calcularNfseComDeducoes(n));
-    const dia = agora.toISOString().slice(0, 10);
-    const simulador = e.destino === 'simulador';
-    const lote = await tx.incluir('lote_nota_servico', {
-      estabelecimento_id: est,
-      numero_lote: numeroLote,
-      versao_leiaute: '1.00',
-      metodo_envio: 'sincrono',
-      quantidade_rps: e.notas.length,
-      valor_total_servicos: centavos(calculos.reduce((s, c) => s + c.valorServicos, 0)),
-      valor_total_deducoes: centavos(calculos.reduce((s, c) => s + c.valorDeducoes, 0)),
-      data_inicio: dia,
-      data_fim: dia,
-      protocolo: simulador ? `SIM-L${numeroLote}` : null,
-      enviado_em: simulador ? agora : null,
-      recebido_em: simulador ? agora : null,
-      situacao: simulador ? 'processado' : 'gerado',
-      mensagem_retorno: simulador ? 'Lote processado pelo simulador da prefeitura (fora de produção).' : null,
-    });
-    const gravadas: NotaGravada[] = [];
-    for (const [i, n] of e.notas.entries())
-      gravadas.push(
-        await incluirNota(tx, ctx, {
-          est,
-          municipio,
-          nota: n,
-          tomador: tomadores[i] as Tomador,
-          lote,
-          paraOnde: e.destino,
-          substitui: null,
-          agora,
-        }),
-      );
-    // O resultado da operação é plano (vai à trilha e à idempotência): as notas saem pela ordem do pedido.
-    return {
-      lote,
-      numeroLote,
-      quantidade: gravadas.length,
-      valorServicos: centavos(calculos.reduce((s, c) => s + c.valorServicos, 0)),
-      valorLiquido: centavos(gravadas.reduce((s, g) => s + g.calculo.valorLiquido, 0)),
-      destino: e.destino,
-      notas: gravadas.map((g) => g.id).join(','),
-      numeros: gravadas.map((g) => g.numero ?? '').join(','),
-    };
-  },
-  alvo: (_e, r) => ({ tabela: 'lote_nota_servico', id: numero(r['lote']) || null }),
-});
+      const tomadores: Tomador[] = [];
+      for (const [i, n] of e.notas.entries())
+        tomadores.push(
+          await tomadorDaNota(
+            tx,
+            est,
+            n,
+            `Nota ${i + 1}: `,
+            `notas.${i}.${n.tituloReceber !== null ? 'tituloReceber' : 'conta'}`,
+          ),
+        );
+      const calculos = e.notas.map((n) => calcularNfseComDeducoes(n));
+      const dia = agora.toISOString().slice(0, 10);
+      const simulador = e.destino === 'simulador';
+      const lote = await tx.incluir('lote_nota_servico', {
+        estabelecimento_id: est,
+        numero_lote: numeroLote,
+        versao_leiaute: '1.00',
+        metodo_envio: 'sincrono',
+        quantidade_rps: e.notas.length,
+        valor_total_servicos: centavos(calculos.reduce((s, c) => s + c.valorServicos, 0)),
+        valor_total_deducoes: centavos(calculos.reduce((s, c) => s + c.valorDeducoes, 0)),
+        data_inicio: dia,
+        data_fim: dia,
+        protocolo: simulador ? `SIM-L${numeroLote}` : null,
+        enviado_em: simulador ? agora : null,
+        recebido_em: simulador ? agora : null,
+        situacao: simulador ? 'processado' : 'gerado',
+        mensagem_retorno: simulador
+          ? 'Lote processado pelo simulador da prefeitura (fora de produção).'
+          : null,
+      });
+      const gravadas: NotaGravada[] = [];
+      for (const [i, n] of e.notas.entries())
+        gravadas.push(
+          await incluirNota(tx, ctx, {
+            est,
+            municipio,
+            nota: n,
+            tomador: tomadores[i] as Tomador,
+            lote,
+            paraOnde: e.destino,
+            substitui: null,
+            agora,
+            armazem,
+          }),
+        );
+      // O resultado da operação é plano (vai à trilha e à idempotência): as notas saem pela ordem do pedido.
+      return {
+        lote,
+        numeroLote,
+        quantidade: gravadas.length,
+        valorServicos: centavos(calculos.reduce((s, c) => s + c.valorServicos, 0)),
+        valorLiquido: centavos(gravadas.reduce((s, g) => s + g.calculo.valorLiquido, 0)),
+        destino: e.destino,
+        notas: gravadas.map((g) => g.id).join(','),
+        numeros: gravadas.map((g) => g.numero ?? '').join(','),
+      };
+    },
+    alvo: (_e, r) => ({ tabela: 'lote_nota_servico', id: numero(r['lote']) || null }),
+  });
 
 /** A nota a alterar, travada, com o motivo lido do catálogo e os prazos do município onde o serviço foi prestado. */
 async function notaParaAlterar(tx: Tx, est: number, nota: number, motivoId: number) {
@@ -751,78 +785,78 @@ const cancelarNotaServico = definirOperacao<z.infer<typeof esquemaCancelarNotaSe
   alvo: (e) => ({ tabela: 'nota_servico', id: e.nota }),
 });
 
-const substituirNotaServico = definirOperacao<
-  z.infer<typeof esquemaSubstituirNotaServico>,
-  ResultadoOperacao
->({
-  nome: 'financeiro.substituir_nota_servico',
-  tabelas: [
-    'nota_servico',
-    'deducao_nota_servico',
-    'tributo_nota_servico',
-    'evento_nota_servico',
-    'titulo_receber',
-    'sequencia_negocio',
-  ],
-  entrada: esquemaSubstituirNotaServico as never,
-  async gravar(tx, e, ctx) {
-    const est = estabelecimentoDe(ctx);
-    const agora = new Date();
-    const municipio = await municipioExigido(tx, est);
-    await garantirNumeracao(tx, ctx, est, agora);
-    const a = await notaParaAlterar(tx, est, e.nota, e.motivo);
-    recusar(
-      conferirSubstituicaoNfse(
-        a.emitida,
-        a.motivo,
-        e.justificativa,
-        a.hoje,
-        a.prazos.prazoSubstituicaoDias,
-        pedidoDe(e.nova),
-      ),
-    );
-    const campo = e.nova.tituloReceber !== null ? 'nova.tituloReceber' : 'nova.conta';
-    const tomador = await tomadorDaNota(tx, est, e.nova, '', campo);
-    // A original sai de cena antes de a substituta entrar: a fatura nunca fica com duas notas ativas.
-    await tx.alterar('nota_servico', e.nota, numero(a.linha['versao']), {
-      situacao: 'substituida',
-      motivo_cancelamento_documento_fiscal_id: e.motivo,
-    });
-    const nova = await incluirNota(tx, ctx, {
-      est,
-      municipio,
-      nota: e.nova,
-      tomador,
-      lote: null,
-      paraOnde: e.destino,
-      substitui: {
-        id: e.nota,
-        numero: a.linha['numero_nota'] === null ? null : texto(a.linha['numero_nota']),
-      },
-      agora,
-    });
-    const evento = await tx.incluir('evento_nota_servico', {
-      nota_servico_id: e.nota,
-      operacao: 'alteracao',
-      tipo_evento: 'substituicao',
-      substituta_nota_servico_id: nova.id,
-      motivo_cancelamento_documento_fiscal_id: e.motivo,
-      motivo: e.justificativa,
-      ocorrido_em: agora,
-      usuario_id: ctx.usuario,
-    });
-    return {
-      nota: e.nota,
-      situacao: 'substituida',
-      substituta: nova.id,
-      rps: nova.rps,
-      numero: nova.numero,
-      liquido: nova.calculo.valorLiquido,
-      evento,
-    };
-  },
-  alvo: (e) => ({ tabela: 'nota_servico', id: e.nota }),
-});
+const substituirNotaServico = (armazem: ArmazemFinanceiro) =>
+  definirOperacao<z.infer<typeof esquemaSubstituirNotaServico>, ResultadoOperacao>({
+    nome: 'financeiro.substituir_nota_servico',
+    tabelas: [
+      'nota_servico',
+      'deducao_nota_servico',
+      'tributo_nota_servico',
+      'evento_nota_servico',
+      'titulo_receber',
+      'sequencia_negocio',
+      'arquivo',
+    ],
+    entrada: esquemaSubstituirNotaServico as never,
+    async gravar(tx, e, ctx) {
+      const est = estabelecimentoDe(ctx);
+      const agora = new Date();
+      const municipio = await municipioExigido(tx, est);
+      await garantirNumeracao(tx, ctx, est, agora);
+      const a = await notaParaAlterar(tx, est, e.nota, e.motivo);
+      recusar(
+        conferirSubstituicaoNfse(
+          a.emitida,
+          a.motivo,
+          e.justificativa,
+          a.hoje,
+          a.prazos.prazoSubstituicaoDias,
+          pedidoDe(e.nova),
+        ),
+      );
+      const campo = e.nova.tituloReceber !== null ? 'nova.tituloReceber' : 'nova.conta';
+      const tomador = await tomadorDaNota(tx, est, e.nova, '', campo);
+      // A original sai de cena antes de a substituta entrar: a fatura nunca fica com duas notas ativas.
+      await tx.alterar('nota_servico', e.nota, numero(a.linha['versao']), {
+        situacao: 'substituida',
+        motivo_cancelamento_documento_fiscal_id: e.motivo,
+      });
+      const nova = await incluirNota(tx, ctx, {
+        est,
+        municipio,
+        nota: e.nova,
+        tomador,
+        lote: null,
+        paraOnde: e.destino,
+        substitui: {
+          id: e.nota,
+          numero: a.linha['numero_nota'] === null ? null : texto(a.linha['numero_nota']),
+        },
+        agora,
+        armazem,
+      });
+      const evento = await tx.incluir('evento_nota_servico', {
+        nota_servico_id: e.nota,
+        operacao: 'alteracao',
+        tipo_evento: 'substituicao',
+        substituta_nota_servico_id: nova.id,
+        motivo_cancelamento_documento_fiscal_id: e.motivo,
+        motivo: e.justificativa,
+        ocorrido_em: agora,
+        usuario_id: ctx.usuario,
+      });
+      return {
+        nota: e.nota,
+        situacao: 'substituida',
+        substituta: nova.id,
+        rps: nova.rps,
+        numero: nova.numero,
+        liquido: nova.calculo.valorLiquido,
+        evento,
+      };
+    },
+    alvo: (e) => ({ tabela: 'nota_servico', id: e.nota }),
+  });
 
 const definirPrazoNotaServico = definirOperacao<z.infer<typeof esquemaPrazoNotaServico>, ResultadoOperacao>({
   nome: 'financeiro.definir_prazo_nota_servico',
@@ -875,9 +909,12 @@ const definirPrazoNotaServico = definirOperacao<z.infer<typeof esquemaPrazoNotaS
 });
 
 /** As operações desta parte, pelo nome da rota. */
-export const OPERACOES_NOTA_SERVICO = {
-  'financeiro.emitirNotasServico': emitirNotasServico,
-  'financeiro.cancelarNotaServico': cancelarNotaServico,
-  'financeiro.substituirNotaServico': substituirNotaServico,
-  'financeiro.definirPrazoNotaServico': definirPrazoNotaServico,
-} as const;
+/** As operações do ciclo, com o armazém onde o XML de cada nota emitida (ou substituta) é guardado. */
+export const operacoesNotaServico = (armazem: ArmazemFinanceiro) =>
+  ({
+    'financeiro.emitirNotasServico': emitirNotasServico(armazem),
+    'financeiro.cancelarNotaServico': cancelarNotaServico,
+    'financeiro.substituirNotaServico': substituirNotaServico(armazem),
+    'financeiro.definirPrazoNotaServico': definirPrazoNotaServico,
+  }) as const;
+export type OperacaoNotaServico = keyof ReturnType<typeof operacoesNotaServico>;
