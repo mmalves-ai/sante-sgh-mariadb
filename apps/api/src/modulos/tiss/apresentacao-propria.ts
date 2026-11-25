@@ -705,3 +705,35 @@ export async function gravarApresentacao(
   const r = await executor.executar(op, ctx.cliente, entrada, ctx);
   return r.resultado as Record<string, unknown>;
 }
+
+// ── Opções da tela de cadastro ──────────────────────────────────────────────────────────────────────
+
+const opcaoDe = (r: Linha) => ({
+  id: n(r['id']),
+  rotulo: `${texto(r['codigo'])} — ${texto(r['descricao'])}`,
+});
+
+/** Os combos da tela da regra: versões TISS de troca, tipos de conta, grupos, funções na equipe, regimes e origens. */
+export async function lerOpcoesApresentacao(l: Consulta) {
+  const lista = async (sql: string) => (await l.consultar<Linha>(sql, [])).map(opcaoDe);
+  // Em sequência: o leitor usa uma conexão só.
+  const versoesTiss = await lista(
+    "SELECT id, codigo_tiss AS codigo, descricao FROM versao_padrao_tiss WHERE ativo = TRUE AND componente = 'troca' ORDER BY vigencia_inicio DESC, id DESC",
+  );
+  const tiposConta = await lista(
+    'SELECT id, codigo, descricao FROM tipo_conta WHERE ativo = TRUE ORDER BY ordem, id',
+  );
+  const grupos = await lista(
+    'SELECT id, codigo, descricao FROM grupo_faturamento WHERE ativo = TRUE ORDER BY descricao, id',
+  );
+  const funcoes = await lista(
+    'SELECT id, codigo, descricao FROM funcao_equipe_cobranca WHERE ativo = TRUE ORDER BY descricao, id',
+  );
+  const regimes = await lista(
+    'SELECT id, codigo_tiss AS codigo, descricao FROM regime_atendimento ORDER BY codigo_tiss, id',
+  );
+  const origens = await lista(
+    'SELECT id, codigo, descricao FROM origem_entrada_atendimento WHERE ativo = TRUE ORDER BY descricao, id',
+  );
+  return { versoesTiss, tiposConta, grupos, funcoes, regimes, origens };
+}

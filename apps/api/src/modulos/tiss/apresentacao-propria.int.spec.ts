@@ -9,7 +9,7 @@ import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoApresentacaoTiss } from './apresentacao.controller.js';
-import { lerApresentacao } from './apresentacao-propria.js';
+import { lerApresentacao, lerOpcoesApresentacao } from './apresentacao-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -258,5 +258,16 @@ describe.skipIf(SEM_BANCO)('regra de apresentação TISS na fonte própria (Mari
       ),
     );
     expect(Number(q?.q)).toBeGreaterThanOrEqual(5);
+  });
+
+  it('as opções da tela trazem a versão TISS e o grupo da massa, com código e descrição', async () => {
+    const o = await nucleo.lerSomente(
+      { cliente: CLIENTE, estabelecimento: ids.est, correlacao: 'teste-f377' },
+      (l) => lerOpcoesApresentacao(l),
+    );
+    expect(o.versoesTiss.map((v) => v.id)).toContain(ids.versaoTiss);
+    expect(o.grupos.map((g) => g.id)).toContain(ids.grupo);
+    expect(o.tiposConta.length).toBeGreaterThan(0);
+    for (const lista of Object.values(o)) for (const x of lista) expect(x.rotulo).toMatch(/^.+ — .+$/);
   });
 });

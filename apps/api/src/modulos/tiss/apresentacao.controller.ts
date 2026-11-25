@@ -1,6 +1,7 @@
 // Regras de apresentação TISS por fonte pagadora (06-FAT linha 30): leitura e gravações. A aplicação no lote fica em
 // faturamento.gerarLote (operacoes.ts → apresentacao-propria.ts).
 //   GET  /api/faturamento/tiss/apresentacao?convenio                 convenio.contrato.ler (regras, itens e valores padrão)
+//   GET  /api/faturamento/tiss/apresentacao/opcoes                   convenio.contrato.ler (combos da tela de cadastro)
 //   POST /api/faturamento/tiss/apresentacao/regras                   convenio.contrato.editar (inclui ou altera a regra)
 //   POST /api/faturamento/tiss/apresentacao/itens                    convenio.contrato.editar (o que vai em cada guia)
 //   POST /api/faturamento/tiss/apresentacao/itens/:id/desativacao    convenio.contrato.editar (nunca apaga)
@@ -17,6 +18,7 @@ import { contextoOperacao, ctxDe, inteiro, problemaDoPreco } from '../precos/bas
 import {
   gravarApresentacao,
   lerApresentacao,
+  lerOpcoesApresentacao,
   type NomeOperacaoApresentacao,
 } from './apresentacao-propria.js';
 
@@ -76,6 +78,12 @@ export class ApresentacaoTissController {
     return this.rodar(() =>
       this.s().ler(ctxDe(req, 'apresentacao-tiss'), (l, est) => lerApresentacao(l, est, c)),
     );
+  }
+
+  @Get('opcoes')
+  @Permissao('convenio.contrato.ler')
+  opcoes(@Req() req: RequisicaoAutorizada) {
+    return this.rodar(() => this.s().ler(ctxDe(req, 'apresentacao-tiss'), (l) => lerOpcoesApresentacao(l)));
   }
 
   @Post('regras')
