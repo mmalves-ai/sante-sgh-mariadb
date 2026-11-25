@@ -26,6 +26,7 @@ export * from './adiantamento.js';
 export * from './indicadores.js';
 export * from './orcamento.js';
 export * from './orcamento-premissas.js';
+export * from './orcamento-estatistico.js';
 export * from './baixa-pagar.js';
 export * from './prorrogacao.js';
 export * from './periodo-financeiro.js';
