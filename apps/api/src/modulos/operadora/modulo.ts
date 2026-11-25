@@ -53,6 +53,12 @@ import {
 } from './beneficiario-saude-propria.js';
 import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
 import { RegrasCoparticipacaoController } from './regras-coparticipacao.controller.js';
+import { RemuneracaoRedeController } from './remuneracao-rede.controller.js';
+import {
+  METODOS_REMUNERACAO_REDE,
+  PORTA_REMUNERACAO_REDE,
+  PortaRemuneracaoRedePropria,
+} from './remuneracao-rede-propria.js';
 import {
   METODOS_REGRAS_COPARTICIPACAO,
   PORTA_REGRAS_COPARTICIPACAO,
@@ -289,6 +295,7 @@ export async function moduloOperadora(
       CobrancaOperadoraController,
       AutorizacaoOperadoraController,
       ContasOperadoraController,
+      RemuneracaoRedeController,
       AnsOperadoraController,
       AtendimentoOperadoraController,
       PortalPrestadorController,
@@ -393,6 +400,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaReajusteColetivoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaReajusteColetivoPropria>(METODOS_REAJUSTE_COLETIVO),
+      },
+      // 08-SGO L102 (C2-120): remuneração e pagamento do prestador só no banco do cliente (sem núcleo, 503).
+      {
+        provide: PORTA_REMUNERACAO_REDE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRemuneracaoRedePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaRemuneracaoRedePropria>(METODOS_REMUNERACAO_REDE),
       },
       // 08-SGO L110: TPS apurada, conferência cadastral e DMED só no banco do cliente (sem núcleo, 503).
       {
