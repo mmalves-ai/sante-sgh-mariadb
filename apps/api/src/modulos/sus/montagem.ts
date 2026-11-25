@@ -22,6 +22,8 @@ import {
   habilitacoesDaCompetencia,
   type HabilitacaoEstabelecimentoVigencia,
   montarBpa,
+  type RegrasDaCriticaSus,
+  vedacoesPorTipoPrestador,
   type ResultadoBpa,
   chaveDaCritica,
   cnesValido,
@@ -52,11 +54,42 @@ export interface ParametrosSus {
    * vigentes na competência no lugar do parâmetro de texto.
    */
   readonly habilitacoesCadastradas?: readonly HabilitacaoEstabelecimentoVigencia[];
+  /** As regras por tipo de prestador e do serviço automático do cadastro SUS do estabelecimento (06-SUS linha 61). */
+  readonly regrasDaCritica?: RegrasDaCriticaSus;
   readonly bpa: CabecalhoBpa;
   /** Etapa 3: o código IBGE da UF do gestor no registro da APAC (o cabeçalho do APAC-Mag é o do BPA). */
   readonly apac: { readonly uf: string };
   /** Etapa 4: as diárias de UTI por acomodação e o diretor clínico do SISAIH01. */
   readonly aih?: ParametrosAih;
+}
+
+/**
+ * As críticas do procedimento vedado ao tipo de prestador (06-SUS linha 61) nos itens da saída: o SIGTAP do item ou o da
+ * equivalência do hospital, pelo código do catálogo lido. Sem regras no cadastro, nenhuma.
+ */
+export function vedacoesDaSaida(
+  regras: RegrasDaCriticaSus | undefined,
+  competencia: string,
+  saida: 'bpa' | 'apac' | 'aih',
+  codigoDoSigtap: ReadonlyMap<number, string>,
+  itens: readonly {
+    conta: number | null;
+    atendimento: number | null;
+    item: number | null;
+    sigtap: number | null;
+    procedimento: number | null;
+  }[],
+  equivalencia: (procedimento: number) => number | null,
+) {
+  if (!regras) return [];
+  const conferir = itens.flatMap((i) => {
+    const sigtap = i.sigtap ?? (i.procedimento !== null ? equivalencia(i.procedimento) : null);
+    const codigo = sigtap !== null ? codigoDoSigtap.get(sigtap) : undefined;
+    return sigtap !== null && codigo
+      ? [{ conta: i.conta, atendimento: i.atendimento, item: i.item, sigtap, codigo }]
+      : [];
+  });
+  return vedacoesPorTipoPrestador(regras, conferir, competencia, saida);
 }
 
 export interface MontagemCiha {
@@ -224,6 +257,22 @@ export function montarBpaDaCompetencia(
     equivalencia: (procto) => eq.get(procto) ?? null,
     apacLiberada,
   });
+  const vedadas = vedacoesDaSaida(
+    p.regrasDaCritica,
+    competencia,
+    'bpa',
+    new Map(dados.procedimentos.map((x) => [x.id, x.codigo])),
+    atendimentos.flatMap((a) =>
+      a.itens.map((i) => ({
+        conta: a.conta,
+        atendimento: a.atendimento,
+        item: i.item,
+        sigtap: i.sigtap,
+        procedimento: i.procedimento,
+      })),
+    ),
+    (x) => eq.get(x) ?? null,
+  );
   const doCabecalho = camposAusentesCabecalhoBpa(p.bpa).map((campo) => ({
     regra: 'dado-minimo-ausente' as const,
     gravidade: 'bloqueante' as const,
@@ -232,7 +281,7 @@ export function montarBpaDaCompetencia(
     item: null,
     detalhe: { campo },
   }));
-  const criticas: NovaCriticaSus[] = [...resultado.criticas, ...doCabecalho].map((c) => ({
+  const criticas: NovaCriticaSus[] = [...resultado.criticas, ...vedadas, ...doCabecalho].map((c) => ({
     chave: chaveDaCritica(c),
     regra: c.regra,
     gravidade: c.gravidade,
@@ -243,7 +292,7 @@ export function montarBpaDaCompetencia(
     detalhe: JSON.stringify(c.detalhe),
   }));
   return {
-    resultado: { ...resultado, criticas: [...resultado.criticas, ...doCabecalho] },
+    resultado: { ...resultado, criticas: [...resultado.criticas, ...vedadas, ...doCabecalho] },
     cnes,
     criticas,
     registroDaConta,
@@ -339,6 +388,22 @@ export function montarApacDaCompetencia(
     cidExiste: (cid) => dados.cids.has(cid),
     equivalencia: (procto) => eq.get(procto) ?? null,
   });
+  const vedadas = vedacoesDaSaida(
+    p.regrasDaCritica,
+    competencia,
+    'apac',
+    new Map(dados.procedimentos.map((x) => [x.id, x.codigo])),
+    atendimentos.flatMap((a) =>
+      a.itens.map((i) => ({
+        conta: a.conta,
+        atendimento: a.atendimento,
+        item: i.item,
+        sigtap: i.sigtap,
+        procedimento: i.procedimento,
+      })),
+    ),
+    (x) => eq.get(x) ?? null,
+  );
   const doCabecalho = camposAusentesCabecalhoApac({ ...p.bpa, uf: p.apac.uf }).map((campo) => ({
     regra: 'dado-minimo-ausente' as const,
     gravidade: 'bloqueante' as const,
@@ -347,7 +412,7 @@ export function montarApacDaCompetencia(
     item: null,
     detalhe: { campo },
   }));
-  const todas = [...resultado.criticas, ...doCabecalho];
+  const todas = [...resultado.criticas, ...vedadas, ...doCabecalho];
   const criticas: NovaCriticaSus[] = todas.map((c) => ({
     chave: chaveDaCritica(c),
     regra: c.regra,

@@ -166,6 +166,8 @@ export const mensagensSus = {
         'Produção acima do teto financeiro ou da programação físico-orçamentária da competência (Programação e tetos SUS)',
       'producao-acima-da-cota':
         'Produção acima da cota do procedimento para o município ou setor (remaneje a cota ou justifique)',
+      'procedimento-vedado-prestador':
+        'Procedimento vedado ao tipo de prestador do estabelecimento (regra do cadastro SUS do estabelecimento)',
     },
   },
   ciha: {

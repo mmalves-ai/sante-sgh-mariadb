@@ -230,16 +230,20 @@ export class SusController {
       };
   }
 
-  /** As habilitações do cadastro do estabelecimento (sem banco próprio ou na falha da leitura, o parâmetro vale). */
-  private async habilitacoesCadastradas(
+  /**
+   * O cadastro SUS do estabelecimento (06-SUS linha 61): as habilitações com vigência e as regras por tipo de prestador e
+   * do serviço automático. Só sem banco próprio o parâmetro de texto vale; a falha da leitura não é engolida (a crítica
+   * com a lista errada seria pior que a recusa da operação).
+   */
+  private async cadastroSusDoEstabelecimento(
     s: SessaoCadastro,
-  ): Promise<Pick<ParametrosSus, 'habilitacoesCadastradas'>> {
+    tipoPrestador: string,
+  ): Promise<Pick<ParametrosSus, 'habilitacoesCadastradas' | 'regrasDaCritica'>> {
     if (!this.estabelecimentoSus) return {};
-    try {
-      return { habilitacoesCadastradas: await this.estabelecimentoSus.habilitacoesCadastradas(s.porta) };
-    } catch {
-      return {};
-    }
+    return {
+      habilitacoesCadastradas: await this.estabelecimentoSus.habilitacoesCadastradas(s.porta),
+      regrasDaCritica: await this.estabelecimentoSus.regrasDaCritica(s.porta, tipoPrestador),
+    };
   }
 
   /** Os parâmetros do faturamento SUS resolvidos para o estabelecimento da sessão. */
@@ -281,7 +285,7 @@ export class SusController {
         : null,
       fontePorConvenio: fontesDoParametro(texto('faturamento.sus.ciha.fontePorConvenio')),
       habilitacoes: habilitacoesDoParametro(texto('faturamento.sus.habilitacoes')),
-      ...(await this.habilitacoesCadastradas(s)),
+      ...(await this.cadastroSusDoEstabelecimento(s, texto('faturamento.sus.tipoPrestador'))),
       apac: { uf: texto('faturamento.sus.apac.uf').trim() },
       bpa: {
         orgaoOrigem: texto('faturamento.sus.bpa.orgaoOrigem').trim(),

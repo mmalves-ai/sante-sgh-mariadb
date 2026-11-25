@@ -152,11 +152,11 @@ export function habilitacoesDaCompetencia(
 
 export interface HabilitacaoDoCnes {
   readonly codigo: string;
-  readonly vigenciaInicio?: string | null;
-  readonly vigenciaFim?: string | null;
-  readonly numeroPortaria?: string | null;
-  readonly dataPortaria?: string | null;
-  readonly leitosHabilitados?: number | null;
+  readonly vigenciaInicio?: string | null | undefined;
+  readonly vigenciaFim?: string | null | undefined;
+  readonly numeroPortaria?: string | null | undefined;
+  readonly dataPortaria?: string | null | undefined;
+  readonly leitosHabilitados?: number | null | undefined;
 }
 
 export interface ConciliacaoCnes {
@@ -288,6 +288,10 @@ export interface ProducaoParaRegraSus {
   readonly grupo: number | null;
   readonly servicoClassificacao: number | null;
   readonly instrumento: number | null;
+  /** Os grupos SIGTAP do procedimento em todos os níveis (grupo, subgrupo e forma): a regra de grupo alcança qualquer um. */
+  readonly grupos?: readonly number[];
+  /** Os instrumentos de registro possíveis da saída (BPA consolidado e individualizado, por exemplo). */
+  readonly instrumentos?: readonly number[];
 }
 
 const pesoAlvo = (r: AlvoRegraSus): number =>
@@ -309,9 +313,11 @@ export function permissaoPorTipoPrestador(
       r.tipoPrestador === x.tipoPrestador &&
       (r.estabelecimento === null || r.estabelecimento === x.estabelecimento) &&
       (r.naturezaJuridica === null || r.naturezaJuridica === x.naturezaJuridica) &&
-      (r.instrumento === null || r.instrumento === x.instrumento) &&
+      (r.instrumento === null ||
+        r.instrumento === x.instrumento ||
+        (x.instrumentos ?? []).includes(r.instrumento)) &&
       (r.procedimento === null || r.procedimento === x.procedimento) &&
-      (r.grupo === null || r.grupo === x.grupo) &&
+      (r.grupo === null || r.grupo === x.grupo || (x.grupos ?? []).includes(r.grupo)) &&
       (r.servicoClassificacao === null || r.servicoClassificacao === x.servicoClassificacao),
   );
   if (alcanca.length === 0) return null;
@@ -380,4 +386,128 @@ export function servicoClassificacaoAutomatico(
     )
     .sort((a, b) => a.prioridade - b.prioridade || a.id - b.id)[0];
   return r ? { servicoClassificacao: r.servicoClassificacao, regra: r.id } : null;
+}
+
+/** Os códigos oficiais do instrumento de registro (tabela de registros da SIGTAP) de cada saída. */
+export const CODIGOS_INSTRUMENTO_SUS = {
+  bpa: ['01', '02'],
+  aih: ['03', '04', '05'],
+  apac: ['06', '07'],
+} as const;
+export type SaidaRegraSus = keyof typeof CODIGOS_INSTRUMENTO_SUS;
+
+/**
+ * As regras do estabelecimento que a crítica da competência aplica: o tipo de prestador e a natureza jurídica do
+ * estabelecimento, as regras por tipo de prestador (do estabelecimento e as gerais), as do serviço automático, os grupos
+ * SIGTAP com o código (para alcançar o procedimento pelo prefixo) e os instrumentos de registro pelo código oficial.
+ */
+export interface RegrasDaCriticaSus {
+  readonly estabelecimento: number;
+  readonly tipoPrestador: number | null;
+  readonly naturezaJuridica: number | null;
+  readonly prestador: readonly RegraPrestadorSus[];
+  readonly servico: readonly RegraServicoClassificacaoSus[];
+  readonly grupos: readonly { readonly id: number; readonly codigo: string }[];
+  readonly instrumentos: Readonly<Record<string, number>>;
+}
+
+/** Um item da produção a conferir: o procedimento SIGTAP (id e código de 10 dígitos) e onde ele está. */
+export interface ItemParaRegraPrestadorSus {
+  readonly conta: number | null;
+  readonly atendimento: number | null;
+  readonly item: number | null;
+  readonly sigtap: number;
+  readonly codigo: string;
+  readonly urgencia?: boolean;
+}
+
+/** A crítica do procedimento vedado ao tipo de prestador (forma de CriticaCiha, para a mesma chave e gravação). */
+export interface VedacaoPrestadorSus {
+  readonly regra: 'procedimento-vedado-prestador';
+  readonly gravidade: 'bloqueante';
+  readonly conta: number | null;
+  readonly atendimento: number | null;
+  readonly item: number | null;
+  readonly detalhe: Readonly<Record<string, string | number | null>>;
+}
+
+/**
+ * Confere cada item da saída contra as regras por tipo de prestador vigentes na competência. O serviço e classificação
+ * do item é o do serviço automático (a regra ativa de menor prioridade), e é com ele que a regra de serviço alcança o
+ * item. Sem tipo de prestador informado no estabelecimento, nenhuma regra alcança (nada a vedar). Um item vedado vira
+ * uma crítica bloqueante, com a regra que vedou e o serviço aplicado no detalhe.
+ */
+export function vedacoesPorTipoPrestador(
+  cad: RegrasDaCriticaSus,
+  itens: readonly ItemParaRegraPrestadorSus[],
+  competencia: string,
+  saida: SaidaRegraSus,
+): VedacaoPrestadorSus[] {
+  if (cad.tipoPrestador === null || cad.prestador.length === 0) return [];
+  const instrumentos = CODIGOS_INSTRUMENTO_SUS[saida]
+    .map((c) => cad.instrumentos[c])
+    .filter((x): x is number => x !== undefined);
+  const r: VedacaoPrestadorSus[] = [];
+  for (const i of itens) {
+    const grupos = cad.grupos
+      .filter((g) => g.codigo !== '' && i.codigo.startsWith(g.codigo))
+      .map((g) => g.id);
+    const forma = [...cad.grupos]
+      .filter((g) => grupos.includes(g.id))
+      .sort((a, b) => b.codigo.length - a.codigo.length)[0];
+    const regraAutomatica = servicoAutomaticoDoItem(cad.servico, grupos, i);
+    const p = permissaoPorTipoPrestador(
+      cad.prestador,
+      {
+        estabelecimento: cad.estabelecimento,
+        tipoPrestador: cad.tipoPrestador,
+        naturezaJuridica: cad.naturezaJuridica,
+        procedimento: i.sigtap,
+        grupo: forma?.id ?? null,
+        grupos,
+        servicoClassificacao: regraAutomatica?.servicoClassificacao ?? null,
+        instrumento: null,
+        instrumentos,
+      },
+      competencia,
+    );
+    if (p && !p.permitido)
+      r.push({
+        regra: 'procedimento-vedado-prestador',
+        gravidade: 'bloqueante',
+        conta: i.conta,
+        atendimento: i.atendimento,
+        item: i.item,
+        detalhe: {
+          sigtap: i.codigo,
+          regraPrestador: p.regra,
+          servicoClassificacao: regraAutomatica?.servicoClassificacao ?? null,
+          regraServico: regraAutomatica?.regra ?? null,
+        },
+      });
+  }
+  return r;
+}
+
+/** O serviço automático do item: a regra de grupo alcança a forma, o subgrupo e o grupo; vale a de menor prioridade. */
+function servicoAutomaticoDoItem(
+  regras: readonly RegraServicoClassificacaoSus[],
+  grupos: readonly number[],
+  i: ItemParaRegraPrestadorSus,
+): { servicoClassificacao: number; regra: number } | null {
+  const ordem = new Map(regras.map((r) => [r.id, r]));
+  const achados = (grupos.length ? grupos : [null]).flatMap((g) => {
+    const x = servicoClassificacaoAutomatico(regras, {
+      procedimento: i.sigtap,
+      grupo: g,
+      setor: null,
+      local: null,
+      urgencia: i.urgencia ?? false,
+    });
+    return x ? [x] : [];
+  });
+  achados.sort(
+    (a, b) => ordem.get(a.regra)!.prioridade - ordem.get(b.regra)!.prioridade || a.regra - b.regra,
+  );
+  return achados[0] ?? null;
 }

@@ -1474,6 +1474,24 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     dono: 'faturamento',
     origem: 'ficha do M51, regra 3; leiaute do CIHA01 1.0.4.0 (TP_FREMU)',
   },
+  // 06-SUS linha 61: o tipo de prestador SUS do estabelecimento (código do domínio da SIGTAP), que as regras por tipo de
+  // prestador do cadastro SUS conferem na crítica do BPA, da APAC e da AIH. Vazio: nenhuma regra por tipo alcança.
+  {
+    chave: 'faturamento.sus.tipoPrestador',
+    modulo: 'faturamento',
+    descricao:
+      'Tipo de prestador SUS do estabelecimento (código do domínio da SIGTAP): as regras por tipo de prestador do cadastro SUS valem para ele',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['estabelecimento'],
+    critico: true,
+    formato: {
+      expressao: '^$|^[0-9A-Za-z]{1,10}$',
+      mensagem: 'Use o código do tipo de prestador (até 10 caracteres).',
+    },
+    dono: 'faturamento',
+    origem: 'ficha F78-06, 06-SUS linha 61 (regras por tipo de prestador)',
+  },
   // M51 (etapa 2): BPA e validador de compatibilidade. As habilitações do CNES (o outro sistema não as guarda) e os dados
   // do cabeçalho do BPA-Mag (órgão de origem e de destino, CNPJ do prestador). Desligado por estabelecimento (DP-35).
   {

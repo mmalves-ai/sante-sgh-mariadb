@@ -9,6 +9,8 @@ import {
   habilitacoesDaCompetencia,
   habilitacoesNaCompetencia,
   permissaoPorTipoPrestador,
+  type RegrasDaCriticaSus,
+  vedacoesPorTipoPrestador,
   type RegraPrestadorSus,
   servicoClassificacaoAutomatico,
   vigenteNaCompetenciaSus,
@@ -224,5 +226,76 @@ describe('serviço e classificação automático', () => {
     });
     expect(servicoClassificacaoAutomatico([r, r2, r3], { ...x, urgencia: true })?.regra).toBe(3);
     expect(servicoClassificacaoAutomatico([r], { ...x, grupo: 5 })).toBeNull();
+  });
+});
+
+describe('crítica da produção pelas regras do estabelecimento', () => {
+  const veda: RegraPrestadorSus = {
+    id: 7,
+    estabelecimento: null,
+    tipoPrestador: 10,
+    naturezaJuridica: null,
+    instrumento: null,
+    procedimento: null,
+    grupo: null,
+    servicoClassificacao: 50,
+    permitido: false,
+    vigenciaInicio: '2026-01-01',
+    vigenciaFim: '2026-03-31',
+  };
+  const cad: RegrasDaCriticaSus = {
+    estabelecimento: 9,
+    tipoPrestador: 10,
+    naturezaJuridica: null,
+    prestador: [veda],
+    servico: [
+      {
+        id: 3,
+        servicoClassificacao: 50,
+        procedimento: null,
+        grupo: 1,
+        setor: null,
+        local: null,
+        urgencia: false,
+        prioridade: 10,
+        ativo: true,
+      },
+    ],
+    grupos: [
+      { id: 1, codigo: '03' },
+      { id: 2, codigo: '0301' },
+      { id: 4, codigo: '04' },
+    ],
+    instrumentos: { '01': 101, '02': 102, '06': 106 },
+  };
+  const item = { conta: 5, atendimento: 6, item: 8, sigtap: 100, codigo: '0301010072' };
+
+  it('veda o procedimento cujo serviço automático a regra do tipo de prestador veda', () => {
+    expect(vedacoesPorTipoPrestador(cad, [item], '202602', 'bpa')).toEqual([
+      {
+        regra: 'procedimento-vedado-prestador',
+        gravidade: 'bloqueante',
+        conta: 5,
+        atendimento: 6,
+        item: 8,
+        detalhe: { sigtap: '0301010072', regraPrestador: 7, servicoClassificacao: 50, regraServico: 3 },
+      },
+    ]);
+  });
+  it('fora da vigência, de outro grupo ou sem tipo de prestador, nada veda', () => {
+    expect(vedacoesPorTipoPrestador(cad, [item], '202604', 'bpa')).toEqual([]);
+    expect(vedacoesPorTipoPrestador(cad, [{ ...item, codigo: '0401010015' }], '202602', 'bpa')).toEqual([]);
+    expect(vedacoesPorTipoPrestador({ ...cad, tipoPrestador: null }, [item], '202602', 'bpa')).toEqual([]);
+  });
+  it('a regra do instrumento alcança só a saída dele; a regra do estabelecimento libera a geral', () => {
+    const soApac = { ...veda, servicoClassificacao: null, grupo: 2, instrumento: 106 };
+    expect(vedacoesPorTipoPrestador({ ...cad, prestador: [soApac] }, [item], '202602', 'bpa')).toEqual([]);
+    expect(vedacoesPorTipoPrestador({ ...cad, prestador: [soApac] }, [item], '202602', 'apac')).toHaveLength(
+      1,
+    );
+    const libera = { ...veda, id: 8, estabelecimento: 9, permitido: true };
+    expect(vedacoesPorTipoPrestador({ ...cad, prestador: [veda, libera] }, [item], '202602', 'bpa')).toEqual(
+      [],
+    );
   });
 });

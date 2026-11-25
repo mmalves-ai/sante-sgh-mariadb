@@ -7,11 +7,12 @@
 // competência; a conciliação com o cadastro nacional (prévia sem gravar; aplicada inclui e encerra na véspera); o
 // serviço próprio e o terceirizado sem prestador recusado; as regras por tipo de prestador e do serviço automático; o
 // isolamento por estabelecimento. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
-import { habilitacoesNaCompetencia } from '@sgh/dominio-faturamento';
+import { habilitacoesDaCompetencia, habilitacoesNaCompetencia } from '@sgh/dominio-faturamento';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { PortaEstabelecimentoSusPropria } from './estabelecimento-sus-propria.js';
+import { vedacoesDaSaida } from './montagem.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
@@ -28,6 +29,11 @@ async function limpar(e: Escritor): Promise<void> {
     P2,
   ]);
   await e.executar(`DELETE FROM regra_prestador_sus WHERE estabelecimento_id IN ${ests}`, [P, P2]);
+  await e.executar(
+    `DELETE FROM regra_prestador_sus WHERE estabelecimento_id IS NULL
+        AND tipo_prestador_dominio_sigtap_id IN (SELECT id FROM dominio_sigtap WHERE versao_fonte = ?)`,
+    [FONTE],
+  );
   await e.executar(`DELETE FROM regra_servico_classificacao_sus WHERE estabelecimento_id IN ${ests}`, [
     P,
     P2,
@@ -285,5 +291,74 @@ describe.skipIf(SEM_BANCO)('PortaEstabelecimentoSusPropria contra o MariaDB (con
     expect(outro.regrasServico).toEqual([]);
     const op = await porta.opcoes(ctx());
     expect(op.tiposPrestador.some((t) => t.id === m.tipo)).toBe(true);
+  });
+
+  it('a regra geral pede a permissão do cliente; a crítica da competência aplica o cadastro gravado', async () => {
+    // Regra geral: sem a permissão de administração do cliente, recusada sem gravar; com ela, grava sem estabelecimento.
+    const geral = {
+      tipoPrestador: m.tipo,
+      grupo: m.grupo,
+      permitido: false,
+      geral: true,
+      vigenciaInicio: '2026-01-01',
+    };
+    const contarGerais = async () =>
+      (
+        await ler<{ n: number }>(
+          'SELECT COUNT(*) AS n FROM regra_prestador_sus WHERE estabelecimento_id IS NULL AND tipo_prestador_dominio_sigtap_id = ?',
+          [m.tipo],
+        )
+      )[0]!.n;
+    await expect(porta.incluirRegraPrestador(ctx(), geral)).rejects.toMatchObject(recusa);
+    expect(Number(await contarGerais())).toBe(0);
+    const rg = await porta.incluirRegraPrestador(ctx(), geral, true);
+    expect(Number(await contarGerais())).toBe(1);
+
+    // A crítica: o serviço automático do grupo dá o serviço do item, e a regra do estabelecimento (gravada no teste
+    // anterior) veda esse serviço na competência; o item de outro grupo passa. O tipo de prestador vem do parâmetro.
+    await porta.incluirRegraServico(ctx(), {
+      servicoClassificacao: m.servSigtap,
+      grupo: m.grupo,
+      prioridade: 5,
+    });
+    const regras = await porta.regrasDaCritica(ctx(), 'c2123tp');
+    expect(regras.tipoPrestador).toBe(m.tipo);
+    expect(regras.prestador.map((r) => r.id)).toContain(rg.id);
+    const codigos = new Map([
+      [900000001, '9801010010'],
+      [900000002, '0301010072'],
+    ]);
+    const itens = [
+      { conta: 1, atendimento: 1, item: 1, sigtap: 900000001, procedimento: null },
+      { conta: 1, atendimento: 1, item: 2, sigtap: 900000002, procedimento: null },
+      { conta: 1, atendimento: 1, item: 3, sigtap: null, procedimento: 77 },
+    ];
+    const ved = vedacoesDaSaida(regras, '202602', 'bpa', codigos, itens, (x) =>
+      x === 77 ? 900000001 : null,
+    );
+    expect(ved.map((v) => [v.item, v.regra, v.gravidade, v.detalhe['servicoClassificacao']])).toEqual([
+      [1, 'procedimento-vedado-prestador', 'bloqueante', m.servSigtap],
+      [3, 'procedimento-vedado-prestador', 'bloqueante', m.servSigtap],
+    ]);
+    // Sem tipo de prestador no parâmetro, nenhuma regra alcança.
+    expect(
+      vedacoesDaSaida(await porta.regrasDaCritica(ctx(), ''), '202602', 'bpa', codigos, itens, () => null),
+    ).toEqual([]);
+    // A geral encerrada no fim de janeiro e a do estabelecimento ainda vigente: em fevereiro, a do estabelecimento veda.
+    await expect(
+      porta.encerrarRegraPrestador(ctx(), rg.id, { vigenciaFim: '2026-01-31', versao: 1 }),
+    ).rejects.toMatchObject(recusa);
+    await porta.encerrarRegraPrestador(ctx(), rg.id, { vigenciaFim: '2026-01-31', versao: 1 }, true);
+    expect(
+      await ler("SELECT DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS f FROM regra_prestador_sus WHERE id = ?", [
+        rg.id,
+      ]),
+    ).toEqual([{ f: '2026-01-31' }]);
+
+    // As habilitações da crítica: com o cadastro, as vigentes na competência valem no lugar do parâmetro de texto.
+    const cadastradas = await porta.habilitacoesCadastradas(ctx());
+    const daCompetencia = habilitacoesDaCompetencia(cadastradas, '202602', new Set(['0001']));
+    expect(daCompetencia.has('0001')).toBe(false);
+    expect([...daCompetencia].sort()).toEqual([...habilitacoesNaCompetencia(cadastradas, '202602')].sort());
   });
 });

@@ -87,6 +87,13 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     { criticidade: 'sensivel' },
   ),
   p('faturamento.susCadastro.editar', 'Editar os leitos de UTI habilitados e os domínios SIH e SIA'),
+  // A regra por tipo de prestador geral (sem estabelecimento) vale para todos os estabelecimentos do cliente: criar ou
+  // encerrar uma é administração do cliente, não do estabelecimento (06-SUS linha 61).
+  p(
+    'faturamento.regraPrestadorGeral.editar',
+    'Criar e encerrar as regras por tipo de prestador SUS que valem para todos os estabelecimentos do cliente',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'], criticidade: 'sensivel' },
+  ),
   // Os médicos solicitantes SUS vão pelo CRUD genérico (M51, etapa 2): as permissões
   // `faturamento.susSolicitante.{ler,criar,editar,exportar}` são geradas do domínio (dominios-m51.ts), com as opções
   // 920 e 1100 do módulo A.P.A.C.

@@ -26,7 +26,7 @@ import {
   habilitacoesDaCompetencia,
 } from '@sgh/dominio-faturamento';
 import { conferirTetosDiarias, type LinhaCapacidadeSus } from '@sgh/dominio-internacao';
-import { cnesDaCompetencia, type ParametrosSus } from './montagem.js';
+import { cnesDaCompetencia, type ParametrosSus, vedacoesDaSaida } from './montagem.js';
 import type { DadosAihLidos, DiariasUtiGravadas } from './porta-aih.js';
 import { type AihRegistro, type EquivalenciaSus, type ItemAih, type NovaCriticaSus } from './tipos.js';
 
@@ -99,6 +99,7 @@ export function montarAihs(
   const idDoCodigo = new Map(dados.porCodigo.map((x) => [x.codigo, x.id]));
   for (const x of dados.procedimentos) if (!idDoCodigo.has(x.codigo)) idDoCodigo.set(x.codigo, x.id);
   const eq = new Map(equivalencias.map((x) => [x.procedimento, x.sigtap]));
+  const codigoDoId = new Map([...idDoCodigo].map(([codigo, id]) => [id, codigo]));
   const leitosUti = new Map<number, number>();
   for (const l of dados.leitosUti) leitosUti.set(l.tipo, (leitosUti.get(l.tipo) ?? 0) + l.leitos);
   const uti = utiPorAcomodacaoDoParametro(pAih.utiPorAcomodacao);
@@ -187,10 +188,28 @@ export function montarAihs(
     const leitos = principal ? compat.leitos(principal.procedimento.id) : null;
     const especialidade =
       internacao.especialidadeLeito ?? (leitos && leitos.size === 1 ? Number([...leitos][0]) || null : null);
-    const extras: CriticaCiha[] =
-      especialidade === null
+    const extras: CriticaCiha[] = [
+      ...(especialidade === null
         ? [criticaDe('dado-minimo-ausente', i.conta, { campo: 'especialidadeLeito' })]
-        : [];
+        : []),
+      // O procedimento vedado ao tipo de prestador pelas regras do cadastro SUS do estabelecimento (06-SUS linha 61).
+      ...vedacoesDaSaida(
+        p.regrasDaCritica,
+        comp,
+        'aih',
+        codigoDoId,
+        dados.itens
+          .filter((x) => contasDaAih.has(x.conta))
+          .map((x) => ({
+            conta: x.conta,
+            atendimento: i.atendimento,
+            item: x.item,
+            sigtap: x.sigtap,
+            procedimento: x.procedimento,
+          })),
+        (x) => eq.get(x) ?? null,
+      ),
+    ];
     const criticas = [...r.criticas, ...extras].map((c) => ({
       ...c,
       detalhe: { ...c.detalhe, aih: a.id, registro: a.registro },

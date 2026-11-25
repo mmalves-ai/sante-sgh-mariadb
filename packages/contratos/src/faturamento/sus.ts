@@ -103,6 +103,8 @@ export const REGRAS_CRITICA_SUS = [
   // vigor (a gravidade sai do limite: bloqueante quando ele bloqueia, aviso quando não).
   'producao-acima-do-teto',
   'producao-acima-da-cota',
+  // Regras por tipo de prestador do cadastro SUS do estabelecimento (06-SUS linha 61): o procedimento vedado ao tipo.
+  'procedimento-vedado-prestador',
 ] as const;
 export type RegraCriticaSus = (typeof REGRAS_CRITICA_SUS)[number];
 
@@ -148,6 +150,7 @@ export const GRAVIDADE_DA_REGRA_SUS: Readonly<Record<RegraCriticaSus, GravidadeC
   'diarias-uti-sem-capacidade': 'aviso',
   'producao-acima-do-teto': 'aviso',
   'producao-acima-da-cota': 'aviso',
+  'procedimento-vedado-prestador': 'bloqueante',
 };
 
 /** Situação da crítica: aberta, corrigida na origem (a nova crítica não a acusa) ou justificada (só aviso). */

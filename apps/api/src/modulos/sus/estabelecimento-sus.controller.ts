@@ -35,7 +35,11 @@ import {
 export const PERMISSOES_ESTABELECIMENTO_SUS = {
   ler: 'faturamento.sus.ler',
   editar: 'faturamento.susCadastro.editar',
+  /** A regra geral (todos os estabelecimentos do cliente) pede também esta, de administração do cliente. */
+  editarGeral: 'faturamento.regraPrestadorGeral.editar',
 } as const;
+const podeGeral = (req: RequisicaoAutorizada): boolean =>
+  (req.sgh?.sessao.permissoes ?? []).includes(PERMISSOES_ESTABELECIMENTO_SUS.editarGeral);
 const TRILHA = 'cadastro SUS do estabelecimento pelo executor (trilha na mesma transação)';
 
 @Controller('sus/estabelecimento')
@@ -122,7 +126,7 @@ export class EstabelecimentoSusController {
   @Permissao(PERMISSOES_ESTABELECIMENTO_SUS.editar)
   @AuditadoNoHandler(TRILHA)
   incluirRegraPrestador(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.incluirRegraPrestador(c, corpo));
+    return this.com(req, (p, c) => p.incluirRegraPrestador(c, corpo, podeGeral(req)));
   }
 
   @Post('regras-prestador/:id/encerrar')
@@ -134,7 +138,7 @@ export class EstabelecimentoSusController {
     @Param('id', ParseIntPipe) id: number,
     @Body() corpo: unknown,
   ) {
-    return this.com(req, (p, c) => p.encerrarRegraPrestador(c, id, corpo));
+    return this.com(req, (p, c) => p.encerrarRegraPrestador(c, id, corpo, podeGeral(req)));
   }
 
   @Post('regras-servico')

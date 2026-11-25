@@ -23,6 +23,7 @@ import {
   fimDoMesSus,
   type HabilitacaoEstabelecimentoVigencia,
   normalHabilitacao,
+  type RegrasDaCriticaSus,
 } from '@sgh/dominio-faturamento';
 import { type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -208,6 +209,12 @@ export interface OpcoesCadastroSus {
   readonly locais: readonly Opcao[];
 }
 
+const MSG_GERAL = {
+  campo: 'geral',
+  mensagem:
+    'A regra geral vale para todos os estabelecimentos do cliente: criar ou encerrar uma pede a permissão de administração do cliente (faturamento.regraPrestadorGeral.editar).',
+};
+
 const VIGENTE = (a: string) =>
   `(${a}.vigencia_inicio <= CURRENT_DATE AND (${a}.vigencia_fim IS NULL OR ${a}.vigencia_fim >= CURRENT_DATE))`;
 const opcao = (r: Linha): Opcao => ({
@@ -344,6 +351,81 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
         vigenciaFim: dataIso(r['vigencia_fim']),
       })),
     );
+  }
+
+  /**
+   * As regras que a crítica do BPA, da APAC e da AIH aplica (06-SUS linha 61): as por tipo de prestador do estabelecimento
+   * e as gerais, as do serviço automático, os grupos SIGTAP com o código e os instrumentos de registro pelo código
+   * oficial; o tipo de prestador do estabelecimento sai do código do parâmetro e a natureza jurídica, do cadastro.
+   */
+  regrasDaCritica(c: ContextoPortaPropria, codigoTipoPrestador: string): Promise<RegrasDaCriticaSus> {
+    return this.ler(c, 'regras-critica', async (l, est) => {
+      const tipo = codigoTipoPrestador.trim()
+        ? await l.consultar(
+            "SELECT id FROM dominio_sigtap WHERE lista = 'tipo_prestador' AND codigo_sigtap = ? ORDER BY id DESC LIMIT 1",
+            [codigoTipoPrestador.trim()],
+          )
+        : [];
+      const natureza = await l.consultar('SELECT natureza_juridica_id FROM estabelecimento WHERE id = ?', [
+        est.id,
+      ]);
+      const prestador = await l.consultar(
+        `SELECT id, estabelecimento_id, tipo_prestador_dominio_sigtap_id, natureza_juridica_id, procedimento_sigtap_id,
+                grupo_sigtap_id, servico_classificacao_sigtap_id, instrumento_dominio_sigtap_id, permitido,
+                vigencia_inicio, vigencia_fim
+           FROM regra_prestador_sus
+          WHERE estabelecimento_id = ? OR estabelecimento_id IS NULL LIMIT 5000`,
+        [est.id],
+      );
+      const servico = await l.consultar(
+        `SELECT id, servico_classificacao_sigtap_id, procedimento_sigtap_id, grupo_sigtap_id, setor_funcional_id,
+                local_atendimento_id, urgencia, prioridade, ativo
+           FROM regra_servico_classificacao_sus WHERE estabelecimento_id = ? LIMIT 5000`,
+        [est.id],
+      );
+      const grupos = await l.consultar(
+        `SELECT g.id, g.codigo_sigtap FROM grupo_sigtap g
+          WHERE g.id IN (SELECT grupo_sigtap_id FROM regra_prestador_sus
+                          WHERE grupo_sigtap_id IS NOT NULL AND (estabelecimento_id = ? OR estabelecimento_id IS NULL))
+             OR g.id IN (SELECT grupo_sigtap_id FROM regra_servico_classificacao_sus
+                          WHERE grupo_sigtap_id IS NOT NULL AND estabelecimento_id = ?)`,
+        [est.id, est.id],
+      );
+      const instrumentos = await l.consultar(
+        "SELECT id, codigo_sigtap FROM dominio_sigtap WHERE lista = 'instrumento_registro' ORDER BY id",
+      );
+      return {
+        estabelecimento: est.id,
+        tipoPrestador: tipo[0] ? num(tipo[0]['id']) : null,
+        naturezaJuridica: natureza[0] ? numOuNull(natureza[0]['natureza_juridica_id']) : null,
+        prestador: prestador.map((r) => ({
+          id: num(r['id']),
+          estabelecimento: numOuNull(r['estabelecimento_id']),
+          tipoPrestador: num(r['tipo_prestador_dominio_sigtap_id']),
+          naturezaJuridica: numOuNull(r['natureza_juridica_id']),
+          procedimento: numOuNull(r['procedimento_sigtap_id']),
+          grupo: numOuNull(r['grupo_sigtap_id']),
+          servicoClassificacao: numOuNull(r['servico_classificacao_sigtap_id']),
+          instrumento: numOuNull(r['instrumento_dominio_sigtap_id']),
+          permitido: bool(r['permitido']),
+          vigenciaInicio: dataIso(r['vigencia_inicio'])!,
+          vigenciaFim: dataIso(r['vigencia_fim']),
+        })),
+        servico: servico.map((r) => ({
+          id: num(r['id']),
+          servicoClassificacao: num(r['servico_classificacao_sigtap_id']),
+          procedimento: numOuNull(r['procedimento_sigtap_id']),
+          grupo: numOuNull(r['grupo_sigtap_id']),
+          setor: numOuNull(r['setor_funcional_id']),
+          local: numOuNull(r['local_atendimento_id']),
+          urgencia: bool(r['urgencia']),
+          prioridade: num(r['prioridade']),
+          ativo: bool(r['ativo']),
+        })),
+        grupos: grupos.map((r) => ({ id: num(r['id']), codigo: txt(r['codigo_sigtap']) })),
+        instrumentos: Object.fromEntries(instrumentos.map((r) => [txt(r['codigo_sigtap']), num(r['id'])])),
+      };
+    });
   }
 
   /** As listas do formulário (catálogos oficiais vigentes e cadastros do estabelecimento). */
@@ -632,8 +714,17 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
     return num(p['id']);
   }
 
-  async incluirRegraPrestador(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
+  /**
+   * Inclui a regra por tipo de prestador. A regra geral (sem estabelecimento) vale para todos os estabelecimentos do
+   * cliente: só com `podeGeral` (a permissão `faturamento.regraPrestadorGeral.editar`, conferida no controller).
+   */
+  async incluirRegraPrestador(
+    c: ContextoPortaPropria,
+    entrada: unknown,
+    podeGeral = false,
+  ): Promise<{ id: number }> {
     const e = entradaValida(esquemaRegraPrestador, entrada);
+    if (e.geral && !podeGeral) throw recusaRegra('Regra recusada', [MSG_GERAL]);
     return this.gravar(c, 'faturamento.sus.regraprest.incluir', TABELAS, async (tx, est) => {
       const tipo = await tx.uma("SELECT id FROM dominio_sigtap WHERE id = ? AND lista = 'tipo_prestador'", [
         e.tipoPrestador,
@@ -669,15 +760,18 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
     c: ContextoPortaPropria,
     alvo: number,
     entrada: unknown,
+    podeGeral = false,
   ): Promise<{ id: number }> {
     const e = entradaValida(esquemaEncerrar, entrada);
     return this.gravar(c, 'faturamento.sus.regraprest.encerrar', TABELAS, async (tx, est) => {
       const atual = await tx.uma(
-        `SELECT vigencia_inicio, vigencia_fim FROM regra_prestador_sus
+        `SELECT vigencia_inicio, vigencia_fim, estabelecimento_id FROM regra_prestador_sus
           WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)`,
         [alvo, est.id],
       );
       if (!atual) throw naoEncontrado('Regra por tipo de prestador');
+      if (atual['estabelecimento_id'] === null && !podeGeral)
+        throw recusaRegra('Regra recusada', [MSG_GERAL]);
       this.conferirFim(dataIso(atual['vigencia_inicio'])!, dataIso(atual['vigencia_fim']), e.vigenciaFim);
       await tx.alterar('regra_prestador_sus', alvo, e.versao, { vigencia_fim: e.vigenciaFim });
       return { tabela: 'regra_prestador_sus', id: alvo };
