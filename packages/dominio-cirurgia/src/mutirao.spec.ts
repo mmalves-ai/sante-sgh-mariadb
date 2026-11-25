@@ -1,6 +1,7 @@
 // Regras dos projetos e mutirões cirúrgicos do SUS (F8, 04-CC linha 108). Massa sintética.
 import { describe, expect, it } from 'vitest';
 import {
+  producaoDoDocumento,
   acompanharMetas,
   conferirJustificativa,
   conferirMudancaSituacao,
@@ -163,4 +164,34 @@ describe('acompanharMetas (meta contra produção)', () => {
     expect(r.decorrido).toBe(0);
     expect(r.metas[0]?.ritmo).toBe('no_ritmo');
   });
+});
+
+describe('producaoDoDocumento (mesma fonte para vínculo e produção)', () => {
+  it('usa as linhas lançadas e ignora o cabeçalho quando há linha', () =>
+    expect(
+      producaoDoDocumento(
+        [
+          { sigtap: 10, quantidade: 2 },
+          { sigtap: 11, quantidade: 1 },
+        ],
+        { realizado: 99, solicitado: 98 },
+      ),
+    ).toEqual([
+      { sigtap: 10, quantidade: 2 },
+      { sigtap: 11, quantidade: 1 },
+    ]));
+  it('sem linha, conta o realizado do cabeçalho com quantidade 1', () =>
+    expect(producaoDoDocumento([], { realizado: 99, solicitado: 98 })).toEqual([
+      { sigtap: 99, quantidade: 1 },
+    ]));
+  it('sem linha nem realizado, conta o solicitado; sem nenhum, nada', () => {
+    expect(producaoDoDocumento([], { realizado: null, solicitado: 98 })).toEqual([
+      { sigtap: 98, quantidade: 1 },
+    ]);
+    expect(producaoDoDocumento([], { realizado: null, solicitado: null })).toEqual([]);
+  });
+  it('linha com quantidade zero não conta e cai no cabeçalho', () =>
+    expect(producaoDoDocumento([{ sigtap: 10, quantidade: 0 }], { realizado: 99, solicitado: null })).toEqual(
+      [{ sigtap: 99, quantidade: 1 }],
+    ));
 });

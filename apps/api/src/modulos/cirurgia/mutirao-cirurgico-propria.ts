@@ -19,7 +19,10 @@ import {
   conferirMudancaSituacao,
   conferirVinculo,
   documentoSemProducao,
+  type CabecalhoDocumentoSus,
   type DocumentoSus,
+  type ProcedimentoProduzido,
+  producaoDoDocumento,
   projetoEditavel,
   type SituacaoMutirao,
   type TipoDocumentoMutirao,
@@ -159,24 +162,50 @@ const SQL_METAS = `
    ORDER BY m.sequencia`;
 
 /**
- * A produção do projeto por SIGTAP: os procedimentos das AIH e das APAC com vínculo vigente, fora das situações que
- * não valem como produção.
+ * A produção do projeto por documento: as AIH e as APAC com vínculo vigente, fora das situações que não valem como
+ * produção, com as linhas de procedimento lançadas (uma linha nula quando não há) e o procedimento do cabeçalho.
+ * `producaoDoDocumento` do domínio decide o que conta, a mesma regra da elegibilidade do vínculo (`documentos`).
  */
 const SQL_PRODUCAO = `
-  SELECT x.sigtap, SUM(x.quantidade) AS quantidade FROM (
-    SELECT cp.procedimento_sigtap_id AS sigtap, cp.quantidade
-      FROM vinculo_mutirao_cirurgico v
-      JOIN conta_aih ca ON ca.id = v.conta_aih_id AND ca.excluido_em IS NULL
-                       AND ca.situacao NOT IN ('negada', 'cancelada', 'rejeitada')
-      JOIN conta_aih_procedimento cp ON cp.conta_aih_id = ca.id AND cp.excluido_em IS NULL
-     WHERE v.projeto_mutirao_cirurgico_id = ? AND v.situacao = 'vigente'
-    UNION ALL
-    SELECT ap.procedimento_sigtap_id AS sigtap, ap.quantidade
-      FROM vinculo_mutirao_cirurgico v
-      JOIN apac a ON a.id = v.apac_id AND a.excluido_em IS NULL AND a.situacao NOT IN ('cancelada', 'rejeitada')
-      JOIN apac_procedimento ap ON ap.apac_id = a.id AND ap.excluido_em IS NULL
-     WHERE v.projeto_mutirao_cirurgico_id = ? AND v.situacao = 'vigente'
-  ) x GROUP BY x.sigtap`;
+  SELECT 'aih' AS tipo, ca.id AS documento, cp.procedimento_sigtap_id AS sigtap, cp.quantidade,
+         ca.realizado_procedimento_sigtap_id AS realizado, ca.solicitado_procedimento_sigtap_id AS solicitado
+    FROM vinculo_mutirao_cirurgico v
+    JOIN conta_aih ca ON ca.id = v.conta_aih_id AND ca.excluido_em IS NULL
+                     AND ca.situacao NOT IN ('negada', 'cancelada', 'rejeitada')
+    LEFT JOIN conta_aih_procedimento cp ON cp.conta_aih_id = ca.id AND cp.excluido_em IS NULL
+   WHERE v.projeto_mutirao_cirurgico_id = ? AND v.situacao = 'vigente'
+  UNION ALL
+  SELECT 'apac' AS tipo, a.id AS documento, ap.procedimento_sigtap_id AS sigtap, ap.quantidade,
+         a.principal_procedimento_sigtap_id AS realizado, NULL AS solicitado
+    FROM vinculo_mutirao_cirurgico v
+    JOIN apac a ON a.id = v.apac_id AND a.excluido_em IS NULL AND a.situacao NOT IN ('cancelada', 'rejeitada')
+    LEFT JOIN apac_procedimento ap ON ap.apac_id = a.id AND ap.excluido_em IS NULL
+   WHERE v.projeto_mutirao_cirurgico_id = ? AND v.situacao = 'vigente'`;
+
+/** Soma a produção por SIGTAP a partir das linhas por documento de `SQL_PRODUCAO`. */
+function producaoPorSigtap(linhas: readonly Linha[]): Map<number, number> {
+  const porDocumento = new Map<
+    string,
+    { linhas: ProcedimentoProduzido[]; cabecalho: CabecalhoDocumentoSus }
+  >();
+  for (const r of linhas) {
+    const chave = `${String(r['tipo'])}:${num(r['documento'])}`;
+    let d = porDocumento.get(chave);
+    if (!d) {
+      d = {
+        linhas: [],
+        cabecalho: { realizado: numOuNull(r['realizado']), solicitado: numOuNull(r['solicitado']) },
+      };
+      porDocumento.set(chave, d);
+    }
+    if (r['sigtap'] != null) d.linhas.push({ sigtap: num(r['sigtap']), quantidade: num(r['quantidade']) });
+  }
+  const total = new Map<number, number>();
+  for (const d of porDocumento.values())
+    for (const x of producaoDoDocumento(d.linhas, d.cabecalho))
+      total.set(x.sigtap, (total.get(x.sigtap) ?? 0) + x.quantidade);
+  return total;
+}
 
 /** Os vínculos do projeto (vigentes e retirados), por paciente. */
 const SQL_VINCULOS = `
@@ -668,10 +697,9 @@ export class PortaMutiraoCirurgicoPropria extends PortaEstabelecimentoPropria {
 
   private async acompanhar(l: Leitor, p: ReturnType<typeof projetoLido>, metasLidas?: Linha[]) {
     const metas = metasLidas ?? (await l.consultar<Linha>(SQL_METAS, [p.id]));
-    const producao = (await l.consultar<Linha>(SQL_PRODUCAO, [p.id, p.id])).map((x) => ({
-      sigtap: num(x['sigtap']),
-      quantidade: num(x['quantidade']),
-    }));
+    const producao = [...producaoPorSigtap(await l.consultar<Linha>(SQL_PRODUCAO, [p.id, p.id]))].map(
+      ([sigtap, quantidade]) => ({ sigtap, quantidade }),
+    );
     // A meta sem SIGTAP (procedimento alterado depois) entra com o id negativo: sem produção, mas com a previsão.
     const a = acompanharMetas(
       metas.map((m) => ({
@@ -707,12 +735,7 @@ export class PortaMutiraoCirurgicoPropria extends PortaEstabelecimentoPropria {
         WHERE m.projeto_mutirao_cirurgico_id = ? AND m.excluido_em IS NULL`,
       [projeto],
     );
-    const producao = new Map(
-      (await tx.consultar<Linha>(SQL_PRODUCAO, [projeto, projeto])).map((x) => [
-        num(x['sigtap']),
-        num(x['quantidade']),
-      ]),
-    );
+    const producao = producaoPorSigtap(await tx.consultar<Linha>(SQL_PRODUCAO, [projeto, projeto]));
     let total = 0;
     for (const m of metas) {
       const nova = Math.round(producao.get(num(m['procedimento_sigtap_id'])) ?? 0);
@@ -753,8 +776,8 @@ export class PortaMutiraoCirurgicoPropria extends PortaEstabelecimentoPropria {
                     pf.nome AS paciente,
                     (SELECT GROUP_CONCAT(ap.procedimento_sigtap_id) FROM apac_procedimento ap
                       WHERE ap.apac_id = a.id AND ap.excluido_em IS NULL) AS sigtaps,
-                    a.principal_procedimento_sigtap_id AS solicitado_procedimento_sigtap_id,
-                    NULL AS realizado_procedimento_sigtap_id,
+                    a.principal_procedimento_sigtap_id AS realizado_procedimento_sigtap_id,
+                    NULL AS solicitado_procedimento_sigtap_id,
                     (SELECT v.projeto_mutirao_cirurgico_id FROM vinculo_mutirao_cirurgico v
                       WHERE v.apac_id = a.id AND v.situacao = 'vigente') AS projeto_atual
                FROM apac a
@@ -766,12 +789,15 @@ export class PortaMutiraoCirurgicoPropria extends PortaEstabelecimentoPropria {
             [estabelecimento, porId ? filtro.id : filtro.numero],
           );
     return rs.map((r) => {
-      const sigtaps = String(r['sigtaps'] ?? '')
+      // A mesma regra da produção (`producaoDoDocumento`): as linhas lançadas; sem linha, o cabeçalho.
+      const lancadas = String(r['sigtaps'] ?? '')
         .split(',')
         .filter(Boolean)
-        .map(Number);
-      for (const k of ['solicitado_procedimento_sigtap_id', 'realizado_procedimento_sigtap_id'])
-        if (r[k] != null) sigtaps.push(num(r[k]));
+        .map((s) => ({ sigtap: Number(s), quantidade: 1 }));
+      const sigtaps = producaoDoDocumento(lancadas, {
+        realizado: numOuNull(r['realizado_procedimento_sigtap_id']),
+        solicitado: numOuNull(r['solicitado_procedimento_sigtap_id']),
+      }).map((x) => x.sigtap);
       const doc: DocumentoSus = {
         tipo,
         situacao: String(r['situacao']),

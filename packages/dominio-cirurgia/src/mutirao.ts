@@ -130,7 +130,7 @@ export interface DocumentoSus {
   readonly situacao: string;
   /** Data da internação (AIH) ou início da validade (APAC). */
   readonly data: string;
-  /** Os procedimentos SIGTAP da conta (principal e demais). */
+  /** Os procedimentos SIGTAP que contam como produção do documento (`producaoDoDocumento`). */
   readonly sigtaps: readonly number[];
   /** O projeto em que o documento já está marcado (nulo: em nenhum). */
   readonly projetoAtual: number | null;
@@ -148,6 +148,33 @@ const DOCUMENTO_SEM_PRODUCAO: Record<TipoDocumentoMutirao, readonly string[]> = 
   aih: ['negada', 'cancelada', 'rejeitada'],
   apac: ['cancelada', 'rejeitada'],
 };
+
+/** Um procedimento SIGTAP do documento com a quantidade que vale como produção. */
+export interface ProcedimentoProduzido {
+  readonly sigtap: number;
+  readonly quantidade: number;
+}
+
+/** O procedimento do cabeçalho do documento: o realizado (AIH) ou o principal (APAC), e o solicitado (AIH). */
+export interface CabecalhoDocumentoSus {
+  readonly realizado: number | null;
+  readonly solicitado: number | null;
+}
+
+/**
+ * Os procedimentos que contam como produção da AIH ou da APAC, a mesma fonte para a elegibilidade do vínculo e para a
+ * meta contra a produção: as linhas lançadas na conta (ou na APAC); sem linha lançada, o procedimento do cabeçalho
+ * (o realizado ou o principal, e, enquanto não há realizado, o solicitado) com quantidade 1.
+ */
+export function producaoDoDocumento(
+  linhas: readonly ProcedimentoProduzido[],
+  cabecalho: CabecalhoDocumentoSus,
+): ProcedimentoProduzido[] {
+  const lancadas = linhas.filter((l) => l.quantidade > 0);
+  if (lancadas.length) return [...lancadas];
+  const doCabecalho = cabecalho.realizado ?? cabecalho.solicitado;
+  return doCabecalho === null ? [] : [{ sigtap: doCabecalho, quantidade: 1 }];
+}
 
 /** Situações em que a AIH ou a APAC não conta como produção do projeto. */
 export const documentoSemProducao = (tipo: TipoDocumentoMutirao, situacao: string): boolean =>

@@ -7,7 +7,8 @@
 // Prova o que fica no banco: justificativas (código repetido recusado); o projeto planejado com a portaria (vigência
 // invertida recusada sem escrita); a meta exige o SIGTAP e não repete; insumo e fornecedor (retirado e devolvido pela
 // mesma linha); a AIH recusada com o projeto planejado; em andamento, a AIH marcada com a justificativa e a produção
-// recalculada em `quantidade_realizada`; a mesma AIH de novo, a AIH fora da vigência, a cancelada e a justificativa
+// recalculada em `quantidade_realizada`; a AIH sem linha de procedimento conta o realizado do cabeçalho (quantidade 1),
+// e a que só tem o solicitado na meta mas o realizado fora dela é recusada (a mesma fonte no vínculo e na produção); a mesma AIH de novo, a AIH fora da vigência, a cancelada e a justificativa
 // só de retirada recusadas; a APAC marcada; o acompanhamento por paciente; a retirada exige a justificativa de
 // alteração com o complemento e fica no histórico (a meta volta a zero) e a AIH pode ser marcada de novo; cancelar
 // exige o motivo; encerrado não muda metas; outro estabelecimento recebe 404 sem escrita.
@@ -66,6 +67,8 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
     aih: number;
     aihFora: number;
     aihCancelada: number;
+    aihCabecalho: number;
+    aihTrocada: number;
     apac: number;
   };
   const ctx = (hospital = P) => ({ cliente: CLIENTE, hospital, usuario: m.usuario, correlacao: P });
@@ -94,10 +97,22 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
       const usuario = await um('SELECT MIN(id) AS id FROM usuario WHERE excluido_em IS NULL');
       const sigtapA = await um('SELECT MIN(id) AS id FROM procedimento_sigtap');
       const sigtapB = await um('SELECT MAX(id) AS id FROM procedimento_sigtap');
+      const sigtapC = await um(
+        `SELECT MIN(id) AS id FROM procedimento_sigtap WHERE id NOT IN (${sigtapA}, ${sigtapB})`,
+      );
       const dominio = await um('SELECT MIN(id) AS id FROM dominio_sus');
       const fornecedor = await um('SELECT MIN(id) AS id FROM empresa_fornecedora WHERE excluido_em IS NULL');
       const item = await um('SELECT MIN(id) AS id FROM item_faturavel WHERE excluido_em IS NULL');
-      if (!usuario || !sigtapA || !sigtapB || sigtapA === sigtapB || !dominio || !fornecedor || !item)
+      if (
+        !usuario ||
+        !sigtapA ||
+        !sigtapB ||
+        !sigtapC ||
+        sigtapA === sigtapB ||
+        !dominio ||
+        !fornecedor ||
+        !item
+      )
         throw new Error(
           'O cliente de teste precisa de usuário, SIGTAP, domínio SUS, fornecedor e item faturável.',
         );
@@ -123,7 +138,7 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
       const procApac = await proc('B', sigtapB);
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       try {
-        const aih = async (n: string, data: string, situacao: string) => {
+        const aih = async (n: string, data: string, situacao: string, cabecalho?: { realizado: number }) => {
           const id = await min('conta_aih', {
             estabelecimento_id: est,
             internacao_id: 990000001,
@@ -133,10 +148,13 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
             data_internacao: data,
             carater_dominio_sus_id: dominio,
             solicitado_procedimento_sigtap_id: sigtapA,
+            ...(cabecalho ? { realizado_procedimento_sigtap_id: cabecalho.realizado } : {}),
             codigo_cid10_principal: 'H25',
             situacao,
             ...(situacao === 'cancelada' ? { motivo_situacao: 'Cancelada na massa sintética' } : {}),
           });
+          // Sem linha de procedimento: só o cabeçalho da AIH diz o que foi feito.
+          if (cabecalho) return id;
           await min('conta_aih_procedimento', {
             conta_aih_id: id,
             sequencia: 1,
@@ -175,6 +193,8 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
           aih: await aih('1', '2030-03-02', 'fechada'),
           aihFora: await aih('2', '2031-01-10', 'fechada'),
           aihCancelada: await aih('3', '2030-03-03', 'cancelada'),
+          aihCabecalho: await aih('4', '2030-03-04', 'fechada', { realizado: sigtapA }),
+          aihTrocada: await aih('5', '2030-03-06', 'fechada', { realizado: sigtapC }),
           apac,
         };
       } finally {
@@ -295,12 +315,28 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
       await expect(porta.vincular(ctx(), projeto, 'aih', recusado)).rejects.toMatchObject(recusa(422));
     await porta.vincular(ctx(), projeto, 'apac', { documento: m.apac, justificativa: inc });
     expect((await metas(projeto)).map((x) => x['realizada'])).toEqual([2, 1]);
+
+    // AIH só com o cabeçalho: o realizado na meta vale como 1 na produção; o realizado fora da meta é recusado,
+    // mesmo com o solicitado na meta (a elegibilidade usa a mesma fonte da produção).
+    const soCabecalho = await porta.buscarDocumento(ctx(), projeto, { tipo: 'aih', numero: '2041900000004' });
+    expect(soCabecalho.documentos[0]?.problemas).toEqual([]);
+    const trocada = await porta.buscarDocumento(ctx(), projeto, { tipo: 'aih', numero: '2041900000005' });
+    expect(trocada.documentos[0]?.problemas.map((x) => x.mensagem).join(' ')).toMatch(
+      /Nenhum procedimento da AIH está entre as metas/,
+    );
+    await expect(
+      porta.vincular(ctx(), projeto, 'aih', { documento: m.aihTrocada, justificativa: inc }),
+    ).rejects.toMatchObject(recusa(422));
+    expect(
+      await porta.vincular(ctx(), projeto, 'aih', { documento: m.aihCabecalho, justificativa: inc }),
+    ).toMatchObject({ realizada: 4 });
+    expect((await metas(projeto)).map((x) => x['realizada'])).toEqual([3, 1]);
     const vs = await ler(
       `SELECT tipo_documento, conta_aih_id, apac_id, situacao, criado_por, documento_vigente IS NOT NULL AS unico
          FROM vinculo_mutirao_cirurgico WHERE projeto_mutirao_cirurgico_id = ? ORDER BY id`,
       [projeto],
     );
-    expect(vs).toHaveLength(2);
+    expect(vs).toHaveLength(3);
     expect(vs[0]).toMatchObject({
       tipo_documento: 'aih',
       conta_aih_id: m.aih,
@@ -315,9 +351,9 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
       /já está marcada neste projeto/,
     );
     const d = await porta.detalhe(ctx(), projeto);
-    expect(d.acompanhamento).toMatchObject({ prevista: 14, realizada: 3 });
+    expect(d.acompanhamento).toMatchObject({ prevista: 14, realizada: 4 });
     expect(d.metas.map((x) => [x.realizada, x.saldo])).toEqual([
-      [2, 8],
+      [3, 7],
       [1, 3],
     ]);
     expect(d.vinculos.filter((x) => x.tipo === 'aih')[0]?.paciente).toMatch(/SINTETICO/);
@@ -349,12 +385,12 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
     );
     expect(r).toMatchObject({ situacao: 'retirado', retirado: 1, j: alt, documento_vigente: null });
     expect(Number(r?.['retirado_por'])).toBe(m.usuario);
-    expect((await metas(projeto)).map((x) => x['realizada'])).toEqual([0, 1]);
+    expect((await metas(projeto)).map((x) => x['realizada'])).toEqual([1, 1]);
     await porta.vincular(ctx(), projeto, 'aih', { documento: m.aih, justificativa: inc });
     expect(
       await ler('SELECT situacao FROM vinculo_mutirao_cirurgico WHERE conta_aih_id = ? ORDER BY id', [m.aih]),
     ).toEqual([{ situacao: 'retirado' }, { situacao: 'vigente' }]);
-    expect((await metas(projeto)).map((x) => x['realizada'])).toEqual([2, 1]);
+    expect((await metas(projeto)).map((x) => x['realizada'])).toEqual([3, 1]);
   });
 
   it('cancelar exige o motivo; encerrado não muda metas; outro estabelecimento recebe 404 sem escrita', async () => {
@@ -385,7 +421,7 @@ describe.skipIf(SEM_BANCO)('PortaMutiraoCirurgicoPropria contra o MariaDB (contr
     const painel = await porta.painel(ctx());
     expect(painel.projetos.find((x) => x.id === projeto)).toMatchObject({
       situacao: 'encerrado',
-      realizada: 3,
+      realizada: 4,
     });
   });
 });
