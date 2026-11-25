@@ -5,13 +5,16 @@
 // A leitura liga a dose ao produto e ao lote do estoque (GTIN do cadastro, código da embalagem, DataMatrix GS1 com a
 // validade que desempata o lote); o pendente passado adiante volta no fechamento do turno seguinte; a composição de cada
 // fechamento (travados e pendentes) e a justificativa ficam gravadas e sobrevivem à reabertura.
-import { randomUUID } from 'node:crypto';
-import { turnoDoInstante } from '@sgh/dominio-enfermagem';
+import { createHash, randomUUID } from 'node:crypto';
+import { paragrafosDoRegistroTurno, turnoDoInstante } from '@sgh/dominio-enfermagem';
 import { type ContextoNucleo, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sqlLimparTrilha } from '../../teste/limpar-trilha.spec-util.js';
+import { PortaDocumentosPropria } from '../pep/documentos-porta-propria.js';
+import { ServicoDocumentos } from '../pep/documentos-servico.js';
 import { fusoDe, instanteDe } from './banco-apoio.js';
 import {
+  CODIGO_TIPO_REGISTRO_TURNO,
   fechamentosDoDia,
   fecharChecagemTx,
   type PedidoFechamento,
@@ -57,11 +60,13 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
   const gs1 = (validade: string, lote: string) =>
     `(01)${CAIXA_A}(17)${validade.slice(2, 4)}${validade.slice(5, 7)}${validade.slice(8, 10)}(10)${lote}`;
   let horaReal = '';
+  /** Conta sem vínculo de profissional (o registro no prontuário precisa do autor). */
+  let semVinculo = 0;
 
-  const ctx = (est = m!.est): ContextoNucleo => ({
+  const ctx = (est = m!.est, usuario = m!.usuario): ContextoNucleo => ({
     cliente: CLIENTE,
     estabelecimento: est,
-    usuario: m!.usuario,
+    usuario,
     correlacao: `t-${MARCA}-${randomUUID().slice(0, 8)}`,
   });
   const op = (c: ContextoNucleo) => ({ ...c, chaveIdempotencia: `t-${MARCA}-${randomUUID()}` });
@@ -289,20 +294,14 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
           )
         )?.id,
       );
-      // O registro do turno vai ao prontuário (C1-023): tipo de documento e situação "lançado" do cliente.
-      await garantir(
+      // O registro do turno vai ao prontuário (C1-023): o tipo de documento do registro de enfermagem e a situação
+      // "lançado" vêm da migração 06_PEP/99_fechamento_checagem_cadastro (todo cliente nasce com eles); nada semeado aqui.
+      semVinculo = await garantir(
         e,
-        "SELECT id FROM tipo_documento_clinico WHERE categoria IN ('relatorio','outro') AND ativo LIMIT 1",
-        [],
-        "INSERT INTO tipo_documento_clinico (codigo, descricao, categoria, criado_em) VALUES (?, 'Relatório sintético', 'relatorio', ?)",
-        [`${MARCA}-REL`, agora],
-      );
-      await garantir(
-        e,
-        "SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo LIMIT 1",
-        [],
-        "INSERT INTO situacao_documento_prontuario (codigo, descricao, categoria, criado_em) VALUES (?, 'Lançado (sintético)', 'lancado', ?)",
-        [`${MARCA}-LANC`, agora],
+        'SELECT id FROM usuario WHERE login = ?',
+        [`${MARCA}.semvinculo`],
+        "INSERT INTO usuario (login, nome, tipo_conta, dispensa_cpf, criado_em) VALUES (?, 'USUARIO SINTETICO SEM VINCULO', 'pessoa', TRUE, ?)",
+        [`${MARCA}.semvinculo`, agora],
       );
       const tipo = await garantir(
         e,
@@ -469,6 +468,21 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
     });
     expect(anterior).toMatchObject({ travados: 1, pendentes: [hp], pendentesAnteriores: [] });
 
+    // O registro no prontuário precisa do autor de enfermagem: a conta sem vínculo de profissional e o profissional
+    // sem ocupação de enfermagem são recusados, e nada do fechamento fica gravado (a transação volta inteira).
+    const justificativa = 'Dose das 3 min passada ao próximo turno, paciente no exame';
+    await expect(fechar(ctx(m!.est, semVinculo), { justificativa })).rejects.toMatchObject({
+      problema: { codigo: 'sem-profissional' },
+    });
+    await expect(fechar(ctx(m!.est, m!.usuario2), { justificativa })).rejects.toMatchObject({
+      problema: { codigo: 'autor-nao-e-da-enfermagem' },
+    });
+    expect(
+      await uma(
+        'SELECT COUNT(*) AS n FROM fechamento_horario_checagem WHERE estabelecimento_id = ? AND data_referencia = ? AND fechado_por_usuario_id IN (?, ?)',
+        [m!.est, data, semVinculo, m!.usuario2],
+      ),
+    ).toMatchObject({ n: 0 });
     const c = ctx();
     await expect(fechar(c)).rejects.toMatchObject({ problema: { codigo: 'pendencias-sem-justificativa' } });
     const r = await fechar(c, {
@@ -517,7 +531,7 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
     expect(
       await uma(
         `SELECT d.entidade_origem AS o, d.paciente_id AS pa, d.atendimento_id AS at, d.profissional_id AS pr, d.estabelecimento_id AS e,
-                d.titulo, sd.categoria AS sit, td.categoria AS cat, d.numero_versao AS v, d.excluido_em IS NULL AS vivo,
+                d.titulo, sd.categoria AS sit, td.categoria AS cat, td.codigo AS tc, d.numero_versao AS v, d.excluido_em IS NULL AS vivo,
                 JSON_LENGTH(JSON_EXTRACT(d.conteudo, '$.hash_conteudo')) AS temHash,
                 (SELECT COUNT(*) FROM documento_prontuario_evento ev WHERE ev.documento_prontuario_id = d.id AND ev.acao = 'criacao') AS ev
            FROM documento_prontuario d
@@ -533,6 +547,8 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
       pr: m!.profissional,
       e: m!.est,
       sit: 'lancado',
+      cat: 'relatorio',
+      tc: CODIGO_TIPO_REGISTRO_TURNO,
       v: 1,
       vivo: 1,
       temHash: 1,
@@ -541,6 +557,55 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
     expect(
       String((await uma('SELECT titulo FROM documento_prontuario WHERE id = ?', [doc]))?.['titulo'] ?? ''),
     ).toMatch(/^Registro de checagem do turno (diurno|noturno) de \d{2}\/\d{2}\/\d{4}$/);
+    // O conteúdo inteiro fica no documento: a letra de cada horário no instante, a justificativa, e o hash se recalcula.
+    const bruto = (await uma('SELECT conteudo FROM documento_prontuario WHERE id = ?', [doc]))?.['conteudo'];
+    const gravado = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as {
+      hash_conteudo: string;
+      registro: Record<string, unknown>;
+    };
+    expect(createHash('sha256').update(JSON.stringify(gravado.registro)).digest('hex')).toBe(
+      gravado.hash_conteudo,
+    );
+    expect(gravado.registro).toMatchObject({
+      tipo: 'registro_checagem_turno',
+      administrados: 3,
+      nao_administrados: 1,
+      justificativa_pendencias: justificativa,
+      pendentes_de_turno_anterior: [hp],
+    });
+    const porHorario = new Map(
+      (gravado.registro['horarios'] as { horario: number; letra: string; papel: string; item: string }[]).map(
+        (x) => [x.horario, x],
+      ),
+    );
+    expect(porHorario.get(h[1]!)).toMatchObject({
+      letra: 'N',
+      papel: 'travado',
+      item: 'MEDICAMENTO SINTETICO',
+    });
+    expect(porHorario.get(hp)).toMatchObject({ letra: 'P', papel: 'pendente', turno_anterior: true });
+    // A PEP abre o documento pelo próprio id: a prévia e o conteúdo da assinatura trazem os parágrafos do registro.
+    const servico = new ServicoDocumentos(new PortaDocumentosPropria(nucleo, CLIENTE));
+    const cd = {
+      rede: 'rede-sintetica',
+      hospital: MARCA,
+      cliente: CLIENTE,
+      estabelecimento: null,
+      usuario: m!.usuario,
+      correlacao: `${MARCA}-pep`,
+    };
+    const paragrafos = paragrafosDoRegistroTurno(gravado.registro)!;
+    expect(paragrafos).toContain(`Justificativa das pendências: ${justificativa}`);
+    expect(paragrafos.filter((x) => x.includes('MEDICAMENTO SINTETICO: não administrado'))).toHaveLength(1);
+    const previa = await servico.previa(cd, doc, m!.login);
+    expect(previa).toMatchObject({
+      documento: doc,
+      titulo: 'Registro de enfermagem do turno',
+      hash: gravado.hash_conteudo,
+    });
+    expect(previa.paragrafos).toEqual(paragrafos);
+    const lido = await servico.porta.documentoSgh(cd, doc);
+    expect((await servico.conteudoParaAssinatura(cd, lido!)).conteudo.corpo).toEqual(paragrafos);
     for (const [x, esperado] of [
       [h[0]!, r.id],
       [h[1]!, r.id],

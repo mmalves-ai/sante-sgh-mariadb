@@ -229,12 +229,16 @@ export async function documentoProntuario(
     referencia: Date;
     hash: string;
     comoSuporte: boolean;
+    /** O tipo de documento preferido pelo código (ex.: o registro de enfermagem do turno), dentro da categoria. */
+    codigoTipo?: string;
+    /** O conteúdo estruturado do registro (o que o hash resume), gravado no documento para ler e assinar. */
+    estruturado?: Readonly<Record<string, unknown>>;
   },
 ): Promise<number> {
   const tipo = await tx.uma(
     `SELECT id FROM tipo_documento_clinico WHERE categoria IN (?, 'outro') AND ativo = TRUE
-      ORDER BY (categoria = ?) DESC, (ordem IS NULL), ordem, id LIMIT 1`,
-    [d.categoria, d.categoria],
+      ORDER BY (codigo = ?) DESC, (categoria = ?) DESC, (ordem IS NULL), ordem, id LIMIT 1`,
+    [d.categoria, d.codigoTipo ?? '', d.categoria],
   );
   if (!tipo)
     throw recusar(
@@ -267,7 +271,11 @@ export async function documentoProntuario(
     lancado_em: agora,
     numero_versao: 1,
     confidencial: false,
-    conteudo: JSON.stringify({ hash_conteudo: d.hash, como_suporte: d.comoSuporte }),
+    conteudo: JSON.stringify({
+      hash_conteudo: d.hash,
+      como_suporte: d.comoSuporte,
+      ...(d.estruturado ? { registro: d.estruturado } : {}),
+    }),
     origem: 'sistema',
   });
   await tx.incluir('documento_prontuario_evento', {

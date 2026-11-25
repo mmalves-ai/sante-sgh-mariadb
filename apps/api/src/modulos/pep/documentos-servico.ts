@@ -120,6 +120,7 @@ import {
 } from '@sgh/dominio-pep';
 import { linhasComMarcaTelemedicina } from '@sgh/dominio-atendimento';
 import { type ConteudoPep, type ModeloPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
+import { paragrafosDoRegistroTurno } from '@sgh/dominio-enfermagem';
 import type { ContextoOperacao } from '@sgh/nucleo';
 import {
   type ContextoGravacaoPep,
@@ -186,7 +187,19 @@ export const TITULO_DOCUMENTO_SGH: Readonly<Record<string, string>> = {
   'pedido-exame': 'Pedido de exames',
   alergia: 'Alergias',
   'registro-clinico': 'Registro clínico',
+  'registro-enfermagem-turno': 'Registro de enfermagem do turno',
 };
+
+/** O documento se abre pelo próprio id (não pelo da origem): os só do novo e o registro de enfermagem do turno. */
+function abrePeloDocumento(d: Pick<DocumentoProprioLido, 'origemTabela' | 'tipo'>): boolean {
+  const tipo = tipoAbertoDaOrigem(d);
+  return (
+    tipo === 'tcle' ||
+    tipo === 'rel-transferencia' ||
+    tipo === 'declaracao-obito' ||
+    d.origemTabela === 'fechamento_checagem_paciente'
+  );
+}
 
 function idadeEmAnos(nascimento: string | null, agora: Date): number | null {
   if (!nascimento) return null;
@@ -883,6 +896,12 @@ export class ServicoDocumentos {
     if (d.origemTabela === 'SGH_PEP_REL_TRANSF' && d.atendimento) {
       const t = (await this.porta.transferencias(c, d.atendimento)).find((x) => x.id === d.origemId);
       return t ? [`Destino: ${t.destino}`, `Registrado em ${t.em}`] : [];
+    }
+    if (d.origemTabela === 'fechamento_checagem_paciente') {
+      // O conteúdo gravado no próprio documento (o mesmo que o hash resume), em parágrafos pelo domínio.
+      const p = paragrafosDoRegistroTurno((d as DocumentoProprioLido & { registro?: unknown }).registro);
+      if (p) return p;
+      throw new ErroProblema('indisponivel', 409, 'O conteúdo do registro do turno não está gravado.');
     }
     if (d.origemTabela === 'SGH_PEP_OBITO') {
       const o = await this.porta.obito(c, d.paciente);
@@ -2220,17 +2239,8 @@ export class ServicoDocumentos {
     let paragrafos: string[];
     try {
       paragrafos = [
-        ...(
-          await this.abrir(
-            c,
-            d.paciente,
-            tipo,
-            tipo === 'tcle' || tipo === 'rel-transferencia' || tipo === 'declaracao-obito'
-              ? d.id
-              : d.origemId,
-            'autor',
-          )
-        ).paragrafos,
+        ...(await this.abrir(c, d.paciente, tipo, abrePeloDocumento(d) ? d.id : d.origemId, 'autor'))
+          .paragrafos,
       ];
     } catch {
       paragrafos = [`${TITULO_DOCUMENTO_SGH[d.tipo] ?? 'Documento'} de ${d.criadoEm ?? ''}.`];
@@ -2253,13 +2263,7 @@ export class ServicoDocumentos {
     const modelo = modeloDoTipo(d.tipo);
     // Sem substituto: se o conteúdo emitido não se lê, o erro sobe e não há prévia (o que se assina com ICP é
     // exatamente o documento emitido, regras 4 e 8; o serviço da assinatura recusa com "conteudo-indisponivel").
-    const a = await this.abrir(
-      c,
-      d.paciente,
-      tipo,
-      tipo === 'tcle' || tipo === 'rel-transferencia' || tipo === 'declaracao-obito' ? d.id : d.origemId,
-      'autor',
-    );
+    const a = await this.abrir(c, d.paciente, tipo, abrePeloDocumento(d) ? d.id : d.origemId, 'autor');
     const paragrafos = [...a.paragrafos];
     const profissional = a.profissional ?? d.usuario;
     const emitidoEm = a.emitidoEm ?? d.criadoEm ?? '';

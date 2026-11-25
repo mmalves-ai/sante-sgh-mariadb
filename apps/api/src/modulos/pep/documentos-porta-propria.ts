@@ -156,6 +156,7 @@ const TIPO_DA_ORIGEM: Readonly<Record<string, string>> = {
   alergia_paciente: 'alergia',
   relatorio_transferencia: 'rel-transferencia',
   declaracao_obito: 'declaracao-obito',
+  fechamento_checagem_paciente: 'registro-enfermagem-turno',
 };
 /** Sem origem conhecida: pela categoria do tipo de documento clínico do cliente. */
 const TIPO_DA_CATEGORIA: Readonly<Record<string, string>> = {
@@ -182,7 +183,12 @@ export function tipoDeNegocio(origem: string, categoriaTipo: string): string {
 }
 
 /** Linha do documento → tipo de negócio (vocabulário neutro). */
-export function documentoLido(x: Record<string, unknown>, fuso: string): DocumentoProprioLido {
+/** O documento lido com o conteúdo estruturado gravado nele (o registro de enfermagem do turno, C1-023). */
+export type DocumentoComRegistro = DocumentoProprioLido & {
+  readonly registro?: Readonly<Record<string, unknown>> | null;
+};
+
+export function documentoLido(x: Record<string, unknown>, fuso: string): DocumentoComRegistro {
   const conteudo = conteudoDe(x['conteudo']);
   const assinatura = conteudoDe(x['dados_assinatura']);
   const assinadoEm = x['concluido_em'] ?? x['assinado_em'] ?? null;
@@ -209,6 +215,10 @@ export function documentoLido(x: Record<string, unknown>, fuso: string): Documen
     assinadoEm: dataHora(assinadoEm, fuso),
     suspenso: !CATEGORIAS_ASSINAVEIS.includes(categoria) && categoria !== 'assinado',
     comoSuporte: conteudo['como_suporte'] === true || assinatura['comoSuporte'] === true,
+    // Só o documento com conteúdo estruturado gravado (o registro de enfermagem do turno) traz o campo.
+    ...(conteudo['registro'] && typeof conteudo['registro'] === 'object'
+      ? { registro: conteudo['registro'] as Record<string, unknown> }
+      : {}),
   };
 }
 

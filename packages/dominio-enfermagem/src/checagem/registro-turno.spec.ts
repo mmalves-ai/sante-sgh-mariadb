@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { RecusaRegistroTurno, registrosDoTurno, type HorarioDoRegistro } from './registro-turno.js';
+import {
+  conferirAutorRegistroTurno,
+  type HorarioDoRegistro,
+  paragrafosDoRegistroTurno,
+  RecusaRegistroTurno,
+  registrosDoTurno,
+} from './registro-turno.js';
 
 const h = (
   id: number,
@@ -62,5 +68,60 @@ describe('registro do fechamento do turno no prontuário (03-PEP L113)', () => {
   });
   it('fechamento vazio não gera documento', () => {
     expect(registrosDoTurno([], CAB)).toEqual([]);
+  });
+  it('o conteúdo guarda a letra de cada horário no instante e se lê em parágrafos (o que se assina)', () => {
+    const r = registrosDoTurno(
+      [
+        { ...h(2, 1, 'N'), previsto: '2026-11-25T14:00', item: 'DIPIRONA 1 G' },
+        { ...h(1, 1, 'A'), previsto: '2026-11-25T08:00', item: 'DIPIRONA 1 G' },
+        { ...h(3, 1, 'P', 'pendente', true), previsto: '2026-11-25T06:00', item: null },
+      ],
+      CAB,
+    );
+    expect(r[0]!.conteudo['horarios']).toEqual([
+      {
+        horario: 3,
+        previsto: '2026-11-25T06:00',
+        item: null,
+        letra: 'P',
+        papel: 'pendente',
+        turno_anterior: true,
+      },
+      {
+        horario: 1,
+        previsto: '2026-11-25T08:00',
+        item: 'DIPIRONA 1 G',
+        letra: 'A',
+        papel: 'travado',
+        turno_anterior: false,
+      },
+      {
+        horario: 2,
+        previsto: '2026-11-25T14:00',
+        item: 'DIPIRONA 1 G',
+        letra: 'N',
+        papel: 'travado',
+        turno_anterior: false,
+      },
+    ]);
+    // Gravado e lido de volta (JSON), o conteúdo dá os mesmos parágrafos.
+    expect(paragrafosDoRegistroTurno(JSON.parse(JSON.stringify(r[0]!.conteudo)))).toEqual([
+      'Checagem do turno diurno de 25/11/2026, unidade U1.',
+      'Administrados: 1; não administrados: 1; suspensos: 0; pendentes passados ao turno seguinte: 1.',
+      '25/11 06:00 - horário 3: pendente (passa ao turno seguinte) (veio do turno anterior).',
+      '25/11 08:00 - DIPIRONA 1 G: administrado.',
+      '25/11 14:00 - DIPIRONA 1 G: não administrado.',
+      'Justificativa das pendências: Paciente em exame externo',
+    ]);
+    expect(paragrafosDoRegistroTurno({ tipo: 'outro' })).toBeNull();
+    expect(paragrafosDoRegistroTurno(null)).toBeNull();
+  });
+  it('o autor do registro é da enfermagem (enfermeiro 2235, técnico e auxiliar 3222)', () => {
+    expect(() => conferirAutorRegistroTurno(['223505'])).not.toThrow();
+    expect(() => conferirAutorRegistroTurno(['225125', '3222-05'])).not.toThrow();
+    for (const cbos of [[], ['225125']])
+      expect(() => conferirAutorRegistroTurno(cbos)).toThrow(
+        expect.objectContaining({ codigo: 'autor-nao-e-da-enfermagem' }),
+      );
   });
 });

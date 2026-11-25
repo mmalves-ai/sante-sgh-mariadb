@@ -15,6 +15,7 @@
 // apaga o documento: ele fica no histórico e o novo fechamento gera outro.
 import { createHash } from 'node:crypto';
 import {
+  conferirAutorRegistroTurno,
   conferirFechamentoChecagem,
   conferirReabertura,
   RecusaRegistroTurno,
@@ -25,7 +26,7 @@ import {
 import { type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { documentoProntuario, sessao, TABELAS_DOCUMENTO } from '../pep/documentos-propria-operacoes.js';
 import type { AnotacaoGravacao } from './gravacao-direta.js';
-import { fusoDe, instanteDe } from './banco-apoio.js';
+import { civilDe, fusoDe, instanteDe } from './banco-apoio.js';
 import { letraDaSituacao } from './operacoes.js';
 
 export const TABELAS_FECHAMENTO = [
@@ -35,6 +36,9 @@ export const TABELAS_FECHAMENTO = [
   'horario_administracao',
   ...TABELAS_DOCUMENTO,
 ] as const;
+
+/** O tipo de documento do registro de enfermagem do turno (migração 06_PEP/99_fechamento_checagem_cadastro). */
+export const CODIGO_TIPO_REGISTRO_TURNO = 'registro_enfermagem_turno';
 
 /** Quanto antes do turno o pendente passado adiante ainda é procurado. */
 const ARRASTE_MS = 24 * 3_600_000;
@@ -128,12 +132,13 @@ export async function fecharChecagemTx(
   const { inicio, fim } = await janelaDe(tx, est, p.data, p.turno);
   const linhas = await tx.consultarParaAtualizar<Record<string, unknown>>(
     `SELECT h.id, h.versao, h.suspenso, h.atendimento_id, a.paciente_id, h.situacao_checagem_id, sc.categoria, f.situacao AS fechamento,
-            h.previsto_em < ? AS anterior,
+            h.previsto_em < ? AS anterior, h.previsto_em, pi.descricao AS item,
             EXISTS (SELECT 1 FROM fechamento_checagem_horario fc
                      WHERE fc.horario_administracao_id = h.id AND fc.papel = 'pendente') AS passou_pendente
        FROM horario_administracao h
        JOIN situacao_checagem sc ON sc.id = h.situacao_checagem_id
        JOIN atendimento a ON a.id = h.atendimento_id
+       LEFT JOIN prescricao_item pi ON pi.id = h.prescricao_item_id
        LEFT JOIN internacao i ON i.atendimento_id = a.id AND i.situacao = 'ativa' AND i.excluido_em IS NULL
        LEFT JOIN unidade_internacao ui ON ui.id = i.unidade_internacao_id
        LEFT JOIN fechamento_horario_checagem f ON f.id = h.fechamento_horario_checagem_id
@@ -154,10 +159,16 @@ export async function fecharChecagemTx(
   const situacao = new Map(linhas.map((h) => [Number(h['id']), Number(h['situacao_checagem_id'])]));
   const anteriores = new Set(linhas.filter((h) => Number(h['anterior']) === 1).map((h) => Number(h['id'])));
   const letra = new Map(linhas.map((h) => [Number(h['id']), letraDaSituacao(h['categoria'], h['suspenso'])]));
+  const fuso = await fusoDe(tx, est);
   const doPaciente = new Map(
     linhas.map((h) => [
       Number(h['id']),
-      { atendimento: Number(h['atendimento_id']), paciente: Number(h['paciente_id']) },
+      {
+        atendimento: Number(h['atendimento_id']),
+        paciente: Number(h['paciente_id']),
+        previsto: civilDe(h['previsto_em'], fuso)?.slice(0, 16) ?? null,
+        item: h['item'] === null || h['item'] === undefined ? null : String(h['item']),
+      },
     ]),
   );
   const r = resumirFechamento(
@@ -203,6 +214,7 @@ export async function fecharChecagemTx(
   const documentos = await registrarNoProntuario(
     tx,
     est,
+    fuso,
     id,
     p,
     fim,
@@ -244,6 +256,7 @@ export async function fecharChecagemTx(
 async function registrarNoProntuario(
   tx: TxOperacao,
   est: number,
+  fuso: string,
   fechamento: number,
   p: PedidoFechamento,
   fim: Date,
@@ -262,12 +275,24 @@ async function registrarNoProntuario(
     throw e;
   }
   if (registros.length === 0) return [];
-  const s = await sessao(tx, { id: est, fuso: await fusoDe(tx, est) }, null, false);
+  const s = await sessao(tx, { id: est, fuso }, null, false);
   if (s.profissional === null)
     throw recusa(
       'sem-profissional',
       'A conta da sessão não tem vínculo de profissional vigente neste estabelecimento: o registro do turno no prontuário precisa do autor.',
     );
+  // O autor do registro de enfermagem é da enfermagem (ocupações do profissional, regra do domínio).
+  const cbos = await tx.consultar<{ c: string }>(
+    `SELECT o.codigo_cbo AS c FROM profissional_ocupacao po JOIN ocupacao_cbo o ON o.id = po.ocupacao_cbo_id
+      WHERE po.profissional_id = ? AND po.ativo = TRUE AND po.excluido_em IS NULL`,
+    [s.profissional],
+  );
+  try {
+    conferirAutorRegistroTurno(cbos.map((x) => String(x.c)));
+  } catch (e) {
+    if (e instanceof RecusaRegistroTurno) throw recusa(e.codigo, e.message);
+    throw e;
+  }
   const agora = new Date();
   const referencia = fim.getTime() < agora.getTime() ? fim : agora;
   const feitos: DocumentoDoFechamento[] = [];
@@ -291,6 +316,9 @@ async function registrarNoProntuario(
       referencia,
       hash: createHash('sha256').update(JSON.stringify(g.conteudo)).digest('hex'),
       comoSuporte: false,
+      codigoTipo: CODIGO_TIPO_REGISTRO_TURNO,
+      // O conteúdo vai inteiro ao documento: a prévia e a assinatura o leem, e o hash se recalcula a partir dele.
+      estruturado: g.conteudo,
     });
     await tx.alterar('fechamento_checagem_paciente', linha, 1, { documento_prontuario_id: documento });
     feitos.push({ atendimento: g.atendimento, paciente: g.paciente, documento });
