@@ -146,4 +146,14 @@ describe('itens estruturados da receita (C2-021)', () => {
     const rtf = rtfDaReceitaEmVias('controle-especial', [item]);
     expect(textoCorrido(rtfParaTexto(rtf))).toMatch(/2ª via: paciente/);
   });
+
+  it('a linha que fecha a via (marca da telemedicina) sai em cada via', () => {
+    const marca = ['', 'MARCA SINTETICA'];
+    expect(
+      corpoDaReceitaEmVias('controle-especial', [item], undefined, marca).filter(
+        (l) => l === 'MARCA SINTETICA',
+      ),
+    ).toHaveLength(2);
+    expect(corpoDaReceitaEmVias('simples', [item], undefined, marca).at(-1)).toBe('MARCA SINTETICA');
+  });
 });

@@ -2,10 +2,12 @@
 // linha de receita_medica_item na mesma transação da receita: o texto como sai impresso (medicamento, concentração,
 // forma, via, posologia, quantidade) e, ao lado, o que a farmácia confere e escritura (quantidade e duração em número,
 // a unidade da duração pelo cadastro e o item do catálogo quando o nome é o de um item prescritível). O receituário é
-// conferido pela classe do medicamento no catálogo (controlado só no de controle especial, Portaria 344/98;
-// antimicrobiano nunca na receita simples, RDC 471/2021) antes de gravar; a recusa não grava nada.
-// A leitura devolve os itens de volta ao formato da receita, para o documento impresso em vias (receita.ts do domínio).
-// Tabelas: receita_medica_item, item_prescritivel, unidade_duracao_tratamento.
+// conferido pela classe do medicamento no catálogo (controlado, pela marca do item ou pela lista do princípio, só no
+// de controle especial, Portaria 344/98; antimicrobiano nunca na receita simples, RDC 471/2021) antes de gravar; a
+// recusa não grava nada. A leitura devolve os itens no formato da receita, como dado estruturado ao lado do documento
+// emitido (o documento impresso é o gravado na emissão, nunca remontado).
+// Tabelas: receita_medica_item, item_prescritivel, principio_ativo, lista_controle_especial, insumo_principio_ativo,
+// unidade_duracao_tratamento.
 import type { ItemReceita, TipoReceita } from '@sgh/contratos';
 import {
   conferirItensDoTipo,
@@ -28,9 +30,19 @@ export async function gravarItensReceita(
 ): Promise<number> {
   const es = itensEstruturados(itens);
   const nomes = [...new Set(es.map((e) => e.medicamento.toUpperCase()))];
+  // Controlado pela mesma regra da busca do catálogo que a tela usa (prescricao-propria-catalogo.ts): a marca do item
+  // ou um princípio ativo (o do item ou os do insumo ligado) numa lista de controle especial (Portaria 344/98).
   const catalogo = await tx.consultar(
-    `SELECT id, UPPER(descricao) AS nome, controlado, antimicrobiano FROM item_prescritivel
-      WHERE excluido_em IS NULL AND UPPER(descricao) IN (${marcadores(nomes.length)})`,
+    `SELECT ip.id, UPPER(ip.descricao) AS nome, ip.antimicrobiano,
+            ip.controlado OR EXISTS (
+              SELECT 1 FROM principio_ativo pa
+                JOIN lista_controle_especial lce ON lce.id = pa.lista_controle_especial_id
+               WHERE lce.codigo_lista IS NOT NULL
+                 AND (pa.id = ip.principio_ativo_id
+                      OR pa.id IN (SELECT ipa.principio_ativo_id FROM insumo_principio_ativo ipa
+                                    WHERE ipa.insumo_id = ip.insumo_id AND ipa.excluido_em IS NULL))) AS controlado
+       FROM item_prescritivel ip
+      WHERE ip.excluido_em IS NULL AND UPPER(ip.descricao) IN (${marcadores(nomes.length)})`,
     nomes,
   );
   // O item do catálogo só é ligado quando o nome é de um item só (nome repetido no cadastro fica sem ligação).

@@ -283,13 +283,18 @@ export function conferirItensDoTipo(
   return r;
 }
 
-/** Corpo do documento impresso: uma via por receituário (2 vias no controle especial e no antimicrobiano). */
+/**
+ * Corpo do documento impresso: uma via por receituário (2 vias no controle especial e no antimicrobiano). É gerado na
+ * emissão e gravado como o documento emitido; a leitura serve o que foi gravado, nunca remonta. `fimDaVia` são linhas
+ * que fecham cada via (a marca da telemedicina, quando o atendimento foi teleconsulta).
+ */
 export function corpoDaReceitaEmVias(
   tipo: TipoReceita,
   itens: readonly ItemReceita[],
   orientacoes?: string,
+  fimDaVia: readonly string[] = [],
 ): string[] {
-  const corpo = linhasDaReceita(itens, orientacoes);
+  const corpo = [...linhasDaReceita(itens, orientacoes), ...fimDaVia];
   const r = receituario(tipo);
   if (r.vias === 1) return [r.titulo, '', ...corpo];
   return [
@@ -310,6 +315,7 @@ export function rtfDaReceitaEmVias(
   tipo: TipoReceita,
   itens: readonly ItemReceita[],
   orientacoes?: string,
+  fimDaVia: readonly string[] = [],
 ): string {
-  return rtfDoCampo(paragrafosDoTexto(corpoDaReceitaEmVias(tipo, itens, orientacoes).join('\n')));
+  return rtfDoCampo(paragrafosDoTexto(corpoDaReceitaEmVias(tipo, itens, orientacoes, fimDaVia).join('\n')));
 }

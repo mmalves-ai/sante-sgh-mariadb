@@ -256,6 +256,9 @@ describe('prontuário de uso diário (M23)', () => {
       await get(medico, `/api/pep/paciente/1001/documentos/receita/${lista.documentos[0].id}`)
     ).json();
     expect(doc.paragrafos.join(' ')).toContain('CLONAZEPAM');
+    // C2-021: o documento emitido sai em 2 vias no controle especial (Portaria 344/98) e é servido como foi gravado.
+    expect(doc.paragrafos.join(' ')).toMatch(/1ª via: retenção da farmácia[\s\S]*2ª via: paciente/);
+    expect(doc.paragrafos.join(' ').split('CLONAZEPAM').length - 1).toBe(2);
     expect(doc.prova.hash).toMatch(/^[0-9a-f]{64}$/);
 
     const modelos = (await get(medico, '/api/pep/paciente/1001/atestados')).json().modelos;

@@ -8,6 +8,7 @@ import { ErroOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { catalogoManifestacoes, historicoDaAlergia } from './alergias-historico-propria.js';
 import { rtfDaReceitaEmVias, rtfParaTexto, textoCorrido } from '@sgh/dominio-pep';
+import { lerReceita } from './documentos-propria-painel.js';
 import { operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
 import { lerItensReceita } from './receita-itens-propria.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
@@ -27,6 +28,9 @@ const ITEM_RX = {
 };
 /** Nome do item sintético do catálogo (antimicrobiano), em maiúsculas como o cadastro. */
 const ATB = `${P.toUpperCase()} AMOXICILINA SINTETICA`;
+/** Controlado só pela lista do princípio ativo (a marca do item fica FALSE) e controlado pela marca do item. */
+const CTRL_LISTA = `${P.toUpperCase()} CLONAZEPAM SINTETICO`;
+const CTRL_MARCA = `${P.toUpperCase()} MORFINA SINTETICA`;
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const x = await e.uma(sel, p);
@@ -316,6 +320,48 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         `INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, antimicrobiano, criado_em)
          VALUES (?, ?, ?, TRUE, ?)`,
         [`${P}amx`, ATB, tipoMed, agora],
+      );
+      // C2-021: receituário de controle especial, uma lista de controle especial, um princípio nela e dois controlados
+      // do catálogo (um só pela lista do princípio, outro só pela marca do item), todos sintéticos.
+      await garantir(
+        e,
+        'SELECT id FROM tipo_receita WHERE codigo = ?',
+        [`${P}ce`],
+        `INSERT INTO tipo_receita (codigo, descricao, padrao, controle_especial, numero_vias, validade_dias, criado_em)
+         VALUES (?, ?, TRUE, TRUE, 2, 30, ?)`,
+        [`${P}ce`, 'Receita de controle especial sintética', agora],
+      );
+      const listaCe = await garantir(
+        e,
+        'SELECT id FROM lista_controle_especial WHERE codigo_lista = ?',
+        [P.toUpperCase()],
+        `INSERT INTO lista_controle_especial (codigo_lista, descricao, vigencia_inicio, versao_fonte, criado_em)
+         VALUES (?, 'Lista sintética', '2026-01-01', 'teste', ?)`,
+        [P.toUpperCase(), agora],
+      );
+      const principioCe = await garantir(
+        e,
+        'SELECT id FROM principio_ativo WHERE codigo_dcb = ?',
+        [`${P}pc`],
+        `INSERT INTO principio_ativo (codigo_dcb, descricao, lista_controle_especial_id, versao_fonte, criado_em)
+         VALUES (?, 'Princípio controlado sintético', ?, 'teste', ?)`,
+        [`${P}pc`, listaCe, agora],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM item_prescritivel WHERE codigo = ?',
+        [`${P}clz`],
+        `INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, principio_ativo_id, controlado, criado_em)
+         VALUES (?, ?, ?, ?, FALSE, ?)`,
+        [`${P}clz`, CTRL_LISTA, tipoMed, principioCe, agora],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM item_prescritivel WHERE codigo = ?',
+        [`${P}mrf`],
+        `INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, controlado, criado_em)
+         VALUES (?, ?, ?, TRUE, ?)`,
+        [`${P}mrf`, CTRL_MARCA, tipoMed, agora],
       );
       for (const cat of ['outro', 'receita', 'atestado', 'declaracao', 'sumario', 'laudo'])
         await garantir(
@@ -760,6 +806,8 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         usoContinuo: false,
       },
     ];
+    // O documento emitido sai em vias na emissão (como o serviço monta) e é gravado assim.
+    const emitido = rtfDaReceitaEmVias('antimicrobiano', itens, 'Retornar se piorar');
     const r = await ops()['pep.emitirDocumento']!(
       C(),
       {
@@ -768,7 +816,7 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         tipo: 'receita-antimicrobiano',
         itens,
         orientacoes: 'Retornar se piorar',
-        rtf: '{\\rtf1 atb sintetica}',
+        rtf: emitido,
       },
       ctx('rx-atb'),
     );
@@ -809,21 +857,25 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(Number(ls[1]!['catalogo'])).toBe(0);
     expect(Number(ls[1]!['quantidade'])).toBe(1);
     expect(Number(ls[1]!['duracao_tratamento'])).toBe(3);
-    // O documento impresso sai dos itens gravados, em 2 vias.
+    // Os itens voltam como dado estruturado ao lado do documento.
     const lidos = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (l) =>
       lerItensReceita(l, Number(r['origem'])),
     );
     expect(lidos.map((i) => i.medicamento)).toEqual([ATB.toLowerCase(), 'PARACETAMOL SINTETICO']);
     expect(lidos[0]!.duracao).toBe('7 dias');
-    const texto = textoCorrido(
-      rtfParaTexto(rtfDaReceitaEmVias('antimicrobiano', lidos, 'Retornar se piorar')),
-    );
+    // receita_medica.conteudo guarda o documento emitido, em 2 vias; a leitura da porta própria (lerReceita) serve
+    // exatamente o gravado, sem remontar.
+    const gravado = await uma('SELECT conteudo FROM receita_medica WHERE id = ?', [r['origem']]);
+    expect(gravado?.['conteudo']).toBe(emitido);
+    const lida = await lerReceita(nucleo, CLIENTE, C(), Number(r['origem']));
+    expect(lida).toMatchObject({ titulo: 'Receita de antimicrobiano', rtf: emitido });
+    const texto = textoCorrido(rtfParaTexto(lida!.rtf!));
     expect(texto).toMatch(/1ª via: retenção da farmácia/);
     expect(texto).toMatch(/2ª via: paciente/);
     expect(texto.split(ATB.toLowerCase()).length - 1).toBe(2);
   });
 
-  it('receita (C2-021): antimicrobiano do catálogo na receita simples e controle especial sem quantidade em número recusam sem gravar', async () => {
+  it('receita (C2-021): antimicrobiano na simples, antimicrobiano e controle especial sem quantidade em número e controlado (pela lista do princípio ou pela marca) fora do controle especial recusam sem gravar', async () => {
     const antes = await uma('SELECT COUNT(*) AS n FROM receita_medica WHERE paciente_id = ?', [ids.paciente]);
     expect(
       await codigo(
@@ -855,10 +907,43 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         ),
       ),
     ).toBe('receituario-incompativel');
+    const recusa = async (tipo: string, medicamento: string, quantidade: string, n: string) =>
+      codigo(
+        ops()['pep.emitirDocumento']!(
+          C(),
+          {
+            ...baseDoc(),
+            familia: 'receita',
+            tipo,
+            itens: [{ ...ITEM_RX, medicamento, quantidade }],
+            rtf: '{\\rtf1 recusa sintetica}',
+          },
+          ctx(n),
+        ),
+      );
+    expect(await recusa('receita-controlada', CTRL_LISTA, 'caixa', 'rx-rec3')).toBe(
+      'receituario-incompativel',
+    );
+    expect(await recusa('receita', CTRL_LISTA, '30 comprimidos', 'rx-rec4')).toBe('receituario-incompativel');
+    expect(
+      await recusa('receita-antimicrobiano', CTRL_LISTA.toLowerCase(), '30 comprimidos', 'rx-rec5'),
+    ).toBe('receituario-incompativel');
+    expect(await recusa('receita', CTRL_MARCA, '10 ampolas', 'rx-rec6')).toBe('receituario-incompativel');
     const depois = await uma('SELECT COUNT(*) AS n FROM receita_medica WHERE paciente_id = ?', [
       ids.paciente,
     ]);
     expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
+    // No receituário de controle especial o controlado pela lista do princípio grava, com o documento em 2 vias.
+    const itensCe = [{ ...ITEM_RX, medicamento: CTRL_LISTA, quantidade: '30 comprimidos' }];
+    const emitido = rtfDaReceitaEmVias('controle-especial', itensCe);
+    const ce = await ops()['pep.emitirDocumento']!(
+      C(),
+      { ...baseDoc(), familia: 'receita', tipo: 'receita-controlada', itens: itensCe, rtf: emitido },
+      ctx('rx-ce'),
+    );
+    const lida = await lerReceita(nucleo, CLIENTE, C(), Number(ce['origem']));
+    expect(lida).toMatchObject({ titulo: 'Receita de controle especial', rtf: emitido });
+    expect(textoCorrido(rtfParaTexto(lida!.rtf!)).split(CTRL_LISTA).length - 1).toBe(2);
   });
 
   it('atestado: exige os dias; emite com a versão "emissao" e o vínculo ao documento', async () => {

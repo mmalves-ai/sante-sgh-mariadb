@@ -280,6 +280,7 @@ describe('receitas, atestados, fichas e fila', () => {
     situacao: 'suspensa',
     suspensa_em: new Date('2026-11-20T14:00:00Z'),
     justificativa_suspensao: 'motivo',
+    conteudo: '{\\rtf1 documento emitido sintetico}',
     orientacoes: null,
     origem_receita_medica_id: null,
     controle_especial: 1,
@@ -297,14 +298,26 @@ describe('receitas, atestados, fichas e fila', () => {
       suspensoEm: '2026-11-20T11:00:00',
       retratos: { htPaciente: 100, htAtendimento: 9 },
       cbo: '225125',
+      // C2-021: serve o documento gravado na emissão, sem remontar dos itens.
+      rtf: '{\\rtf1 documento emitido sintetico}',
     });
-    // A receita do estabelecimento, depois os itens estruturados dela (C2-021; sem itens, segue o texto gravado).
-    expect(sqls.at(-2)!.sql).toMatch(/x\.estabelecimento_id = \? AND x\.excluido_em IS NULL/);
-    expect(sqls.at(-1)!.sql).toMatch(
-      /FROM receita_medica_item i[\s\S]*WHERE i\.receita_medica_id = \? AND i\.excluido_em IS NULL/,
-    );
+    expect(sqls.at(-1)!.sql).toMatch(/x\.estabelecimento_id = \? AND x\.excluido_em IS NULL/);
+    expect(sqls.some((q) => /receita_medica_item/.test(q.sql))).toBe(false);
     const [d] = await documentos(nucleo, 'cli', C, 100, 'receita');
-    expect(d).toMatchObject({ familia: 'receita', suspenso: true, tpPadrao: TP_PADRAO_CONTROLADA });
+    expect(d).toMatchObject({
+      familia: 'receita',
+      suspenso: true,
+      tipo: 'receita-controlada',
+      tpPadrao: TP_PADRAO_CONTROLADA,
+    });
+    // O antimicrobiano tem tipo próprio na lista (não vira a receita simples).
+    const atb = duble({
+      uma: () => receita,
+      consultar: () => [{ ...receita, controle_especial: 0, antimicrobiano: 1 }],
+    });
+    expect((await documentos(atb.nucleo, 'cli', C, 100, 'receita'))[0]).toMatchObject({
+      tipo: 'receita-antimicrobiano',
+    });
   });
 
   it('documento da trilha: nenhum no banco próprio (como a memória)', async () => {

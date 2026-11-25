@@ -1167,6 +1167,8 @@ export interface DocumentoResumoLido {
   readonly atendimento: number | null;
   readonly suspenso: boolean;
   readonly corrige: number | null;
+  /** Tipo do documento (receita, receita-controlada, receita-antimicrobiano); null fora da receita. */
+  readonly tipo: string | null;
   readonly tpPadrao: number | null;
 }
 

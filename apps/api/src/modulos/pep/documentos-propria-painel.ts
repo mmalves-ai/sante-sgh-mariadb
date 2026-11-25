@@ -16,10 +16,9 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import { rtfDaReceitaEmVias, situacaoDoPaciente, tipoDaClasse, tiposBaseDoFiltro } from '@sgh/dominio-pep';
+import { situacaoDoPaciente, tipoDaClasse, tiposBaseDoFiltro } from '@sgh/dominio-pep';
 import type { ContextoDocs } from './documentos-porta.js';
 import { type NucleoDocumentosPep, recusaPendente } from './documentos-propria-comum.js';
-import { lerItensReceita } from './receita-itens-propria.js';
 import { dataHora, fusoValido } from './registro-propria-comum.js';
 import {
   type CabecalhoDocumentoLido,
@@ -45,6 +44,12 @@ export const TETO_IDS = 300;
 /** O tipo de receita que o serviço trata como "controle especial" (tpPadrao 4) e o simples (1). */
 export const TP_PADRAO_CONTROLADA = 4;
 export const TP_PADRAO_SIMPLES = 1;
+/** Tipo do documento de cada receituário próprio (o mesmo do emitir). */
+const TIPO_DOCUMENTO_DA_RECEITA = {
+  simples: 'receita',
+  'controle-especial': 'receita-controlada',
+  antimicrobiano: 'receita-antimicrobiano',
+} as const;
 
 interface Est {
   readonly id: number;
@@ -526,7 +531,8 @@ const TITULO_ATESTADO: Readonly<Record<string, string>> = {
 
 const SQL_RECEITA = `
   SELECT x.id, x.estabelecimento_id, x.paciente_id, x.atendimento_id, x.emitida_em, x.situacao, x.suspensa_em,
-         x.justificativa_suspensao, x.orientacoes, x.origem_receita_medica_id, t.controle_especial, t.antimicrobiano,
+         x.justificativa_suspensao, x.conteudo, x.orientacoes, x.origem_receita_medica_id, t.controle_especial,
+         t.antimicrobiano,
          pf.nome AS profissional, ${SQL_CBO_DO_PROFISSIONAL('x.prescritor_profissional_id')} AS cbo
     FROM receita_medica x
     JOIN tipo_receita t ON t.id = x.tipo_receita_id
@@ -556,7 +562,8 @@ function receitaLida(x: Record<string, unknown>, fuso: string): DocumentoHistori
     atendimento: numOuNull(x['atendimento_id']),
     suspensoEm: dataHora(x['suspensa_em'], fuso),
     justificativaSuspensao: textoOuNull(x['justificativa_suspensao']),
-    rtf: textoOuNull(x['orientacoes']),
+    // O documento emitido e gravado (C2-021: já nas vias do receituário); a receita sem ele mostra as orientações.
+    rtf: textoOuNull(x['conteudo']) ?? textoOuNull(x['orientacoes']),
     xml: null,
     retratos: { htPaciente: num(x['paciente_id']), htAtendimento: num(x['atendimento_id']) },
     modelo: null,
@@ -593,18 +600,9 @@ export function lerReceita(
 ): Promise<DocumentoHistoricoLido | null> {
   if (!valido(id)) return Promise.resolve(null);
   return ler(nucleo, cliente, c, 'receita', async (l, est) => {
+    // Registro clínico emitido: serve o documento gravado na emissão, sem remontar dos itens (C2-021).
     const x = await l.uma(`${SQL_RECEITA} AND x.id = ?`, [est.id, id]);
-    if (!x) return null;
-    const d = receitaLida(x, est.fuso);
-    // C2-021: a receita com itens estruturados sai deles, nas vias do receituário (2 no controle especial e no
-    // antimicrobiano); a sem itens (anterior aos itens) segue com o texto gravado.
-    const itens = await lerItensReceita(l, d.id);
-    if (itens.length === 0) return d;
-    const tipo = tipoDaClasse({
-      controleEspecial: x['controle_especial'],
-      antimicrobiano: x['antimicrobiano'],
-    });
-    return { ...d, rtf: rtfDaReceitaEmVias(tipo, itens, textoOuNull(x['orientacoes']) ?? undefined) };
+    return x ? receitaLida(x, est.fuso) : null;
   });
 }
 
@@ -704,6 +702,12 @@ export function documentos(
         atendimento: d.atendimento,
         suspenso: String(x['situacao']) !== (receita ? 'emitida' : 'valido'),
         corrige: d.corrige,
+        // Tipo próprio pela classe gravada (C2-021: o antimicrobiano não vira receita simples na lista).
+        tipo: receita
+          ? TIPO_DOCUMENTO_DA_RECEITA[
+              tipoDaClasse({ controleEspecial: x['controle_especial'], antimicrobiano: x['antimicrobiano'] })
+            ]
+          : null,
         tpPadrao: receita
           ? Number(x['controle_especial'])
             ? TP_PADRAO_CONTROLADA

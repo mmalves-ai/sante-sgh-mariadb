@@ -74,6 +74,7 @@ import {
   RecusaHistoricoAlergia,
   conferirItensDoTipo,
   conferirReceita,
+  corpoDaReceitaEmVias,
   documentoAtestado,
   documentoExameExterno,
   documentoPedidoExame,
@@ -86,7 +87,6 @@ import {
   hashDaAlergia,
   itensComKit,
   LIMITES_CRITICOS_PADRAO,
-  linhasDaReceita,
   mudancaValida,
   montarSumario,
   episodioNasJanelas,
@@ -105,7 +105,6 @@ import {
   podeGravarPedido,
   podePraticar,
   problemasVigentes,
-  rtfDaReceita,
   rtfDoCampo,
   rtfParaTexto,
   situacaoDasAlergias,
@@ -1529,6 +1528,7 @@ export class ServicoDocumentos {
         id: d.id,
         tipo:
           n?.tipo ??
+          d.tipo ??
           (familia === 'receita' ? (d.tpPadrao === 4 ? 'receita-controlada' : 'receita') : 'atestado'),
         titulo: d.titulo,
         emitidoEm: d.em,
@@ -1600,10 +1600,15 @@ export class ServicoDocumentos {
     const { dataHoraClinica } = await this.retroativo(c, e.dataHora);
     // M50, etapa 4: a marca da telemedicina no fim do texto (no RTF e no documento) quando o atendimento foi teleconsulta.
     const tele = await this.marcaTelemedicina(c, e.atendimento);
-    const linhasReceita = linhasComMarcaTelemedicina(linhasDaReceita(e.itens, e.orientacoes), tele);
-    const rtf = tele
-      ? rtfDoCampo(paragrafosDoTexto(linhasReceita.join('\n')))
-      : rtfDaReceita(e.itens, e.orientacoes);
+    // C2-021: o documento emitido já sai nas vias do receituário (2 no controle especial e no antimicrobiano, Portaria
+    // 344/98 e RDC 471/2021), com a marca da telemedicina em cada via; é ele que fica gravado e é servido na leitura.
+    const linhasReceita = corpoDaReceitaEmVias(
+      e.tipo,
+      e.itens,
+      e.orientacoes,
+      linhasComMarcaTelemedicina([], tele),
+    );
+    const rtf = rtfDoCampo(paragrafosDoTexto(linhasReceita.join('\n')));
     const cab = cabecalhoDoAto(
       await this.porta.cabecalhoDocumento(c, retratos, prof.cbo, SITUACAO_DOC.lancado, TIPO_ATO.receita),
       dataHoraClinica,
