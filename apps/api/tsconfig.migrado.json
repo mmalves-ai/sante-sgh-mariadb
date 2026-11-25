@@ -1654,6 +1654,11 @@
     "src/modulos/adt/pre-internacao.int.spec.ts",
     "src/modulos/farmacia/gravador-parametros.ts",
     "src/modulos/farmacia/parametros-integracao.int.spec.ts",
-    "src/modulos/financeiro/aplicacao/adiantamento.int.spec.ts"
+    "src/modulos/financeiro/aplicacao/adiantamento.int.spec.ts",
+    "src/modulos/financeiro/periodo-propria.ts",
+    "src/modulos/financeiro/periodo.controller.ts",
+    "src/modulos/financeiro/periodo-permissao.spec.ts",
+    "src/modulos/financeiro/aplicacao/periodo-financeiro.int.spec.ts",
+    "src/modulos/financeiro/api/periodo-rotas.int.spec.ts"
   ]
 }
