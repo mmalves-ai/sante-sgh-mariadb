@@ -138,6 +138,10 @@ import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from './conta-estoque.js';
 import { TABELAS_VINCULO_PEDIDO_CONTRATO, vincularPedidoNaCompra } from './contrato-porta-propria.js';
+import {
+  controlarOrcamentoDoDocumento,
+  TABELAS_CONTROLE_NO_DOCUMENTO,
+} from '../orcamento/controle-orcamentario-propria.js';
 import { conferirParcialDoLocal, conferirPolitica } from './politica-local-propria.js';
 import {
   chaveDaTela,
@@ -189,6 +193,8 @@ import {
 export type NucleoSuprimentos = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 export const TABELAS_GRAVACAO_SUPRIMENTOS = [
+  // C2-112: a aprovação do pedido reserva o saldo orçado (orcamento/controle-orcamentario-propria.ts).
+  ...TABELAS_CONTROLE_NO_DOCUMENTO,
   'inventario_estoque',
   'inventario_estoque_contagem',
   'inventario_estoque_item',
@@ -356,6 +362,14 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSuprimentos {
         justificativa_aprovacao: a.justificativa.trim() || null,
         valor_total: valor.total,
       });
+      // C2-112 (07-FIN linha 130): aprovado, o pedido reserva o saldo orçado pela regra que vale; o bloqueio sem
+      // exceção recusa a aprovação inteira; no alerta, a aprovação pelo aprovador da alçada é a ciência.
+      if (a.decisao === 'aprovado')
+        await controlarOrcamentoDoDocumento(tx, est, usuario, {
+          tipoDocumento: 'pedido_compra',
+          documento: n(pedido['id']),
+          ciente: true,
+        });
       return { id: n(pedido['id']), valor: valor.total, nivel };
     },
 
