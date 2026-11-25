@@ -15,10 +15,14 @@
 //     só IDs, códigos e o hash) na mesma transação, e a comunicação fica 'enviada' com enviado_em e
 //     integracao_mensagem_id. Sem o serviço web cadastrado, recusa (o envio por outro canal é a transição 'enviar');
 //   - retorno (C1-108): lê a mensagem de integração ligada; recibo aceito com protocolo confirma, recusado rejeita com o
-//     motivo da operadora, erro ou descarte falha com o código; ainda na fila, nada muda.
+//     motivo da operadora, erro ou descarte falha com o código; ainda na fila, nada muda;
+//   - disparar (C2-070): ao internar e ao registrar a saída, as comunicações devidas (domínio `comunicacoesDevidas`)
+//     nascem pendentes sozinhas, origem 'sistema'; com o serviço web cadastrado para a fonte, já saem para a outbox na
+//     mesma transação (enviadas, com a mensagem ligada). Nada nasce de novo quando o tipo já existe (nem o cancelado).
 import { ErroLoteTiss, mensagemComunicacaoBeneficiario } from '@sgh/dominio-faturamento';
 import {
   type AcaoComunicacao,
+  comunicacoesDevidas,
   conferirMensagemComunicacao,
   conferirNovaComunicacao,
   conferirTransmissao,
@@ -32,7 +36,7 @@ import {
   tipoInternacaoDaModalidade,
   transicaoComunicacao,
 } from '@sgh/dominio-internacao';
-import { gravarOutbox, type Leitor } from '@sgh/nucleo';
+import { gravarOutbox, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   type ContextoPortaPropria,
@@ -380,30 +384,130 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
         if (p.length) throw recusaRegra('Envio recusado', p);
         const m = await this.montar(tx, id, est.id);
         if (!m.xml || !m.hash) throw recusaRegra('Envio recusado', m.problemas);
-        const agora = new Date();
-        const mensagem = await gravarOutbox(tx, {
-          estabelecimento: est.id,
-          ponto: PONTO_COMUNICACAO_OPERADORA,
-          entidade: 'comunicacao_internacao_operadora',
-          entidadeId: id,
-          chave: `${PONTO_COMUNICACAO_OPERADORA}:${id}:${e.versao}`,
-          carga: {
-            comunicacao: id,
-            internacao: num(r['internacao_id']),
-            fonte,
-            servicoWeb: servico,
-            tipo,
-            hash: m.hash,
-          },
-          usuario,
-          agora,
-        });
-        await tx.alterar('comunicacao_internacao_operadora', id, e.versao, {
-          situacao: 'enviada',
-          enviado_em: agora,
-          integracao_mensagem_id: mensagem,
+        const mensagem = await this.paraOutbox(tx, est.id, usuario, {
+          id,
+          versao: e.versao,
+          internacao: num(r['internacao_id']),
+          fonte,
+          servico: servico!,
+          tipo,
+          hash: m.hash,
         });
         return { tabela: 'comunicacao_internacao_operadora', id, situacao: 'enviada', mensagem };
+      },
+    );
+  }
+
+  /** A saída para a outbox (só IDs, códigos e o hash) e a comunicação 'enviada' com a mensagem ligada. */
+  private async paraOutbox(
+    tx: TxOperacao,
+    est: number,
+    usuario: number,
+    x: {
+      id: number;
+      versao: number;
+      internacao: number;
+      fonte: number;
+      servico: number;
+      tipo: TipoComunicacaoOperadora;
+      hash: string;
+    },
+  ): Promise<number> {
+    const agora = new Date();
+    const mensagem = await gravarOutbox(tx, {
+      estabelecimento: est,
+      ponto: PONTO_COMUNICACAO_OPERADORA,
+      entidade: 'comunicacao_internacao_operadora',
+      entidadeId: x.id,
+      chave: `${PONTO_COMUNICACAO_OPERADORA}:${x.id}:${x.versao}`,
+      carga: {
+        comunicacao: x.id,
+        internacao: x.internacao,
+        fonte: x.fonte,
+        servicoWeb: x.servico,
+        tipo: x.tipo,
+        hash: x.hash,
+      },
+      usuario,
+      agora,
+    });
+    await tx.alterar('comunicacao_internacao_operadora', x.id, x.versao, {
+      situacao: 'enviada',
+      enviado_em: agora,
+      integracao_mensagem_id: mensagem,
+    });
+    return mensagem;
+  }
+
+  /**
+   * C2-070: gera as comunicações devidas da internação (internação e, com a alta, a saída) e, com o serviço web
+   * cadastrado para a fonte, já as envia para a outbox. Chamado ao internar e ao registrar a saída; idempotente.
+   */
+  async disparar(
+    c: ContextoPortaPropria,
+    internacao: number,
+  ): Promise<{ geradas: { id: number; tipo: string; situacao: string }[] }> {
+    return this.gravar(
+      c,
+      'internacao.comunicacaooperadora.disparar',
+      ['comunicacao_internacao_operadora', 'integracao_mensagem'],
+      async (tx, est, usuario) => {
+        const trava = await tx.consultarParaAtualizar(
+          'SELECT id FROM internacao WHERE id = ? AND estabelecimento_id = ?',
+          [internacao, est.id],
+        );
+        if (!trava.length) throw naoEncontrado('Internação');
+        const d = await lerInternacao(tx, internacao, est.id);
+        const existentes = (
+          await tx.consultar(
+            `SELECT tipo, situacao FROM comunicacao_internacao_operadora
+              WHERE internacao_id = ? AND excluido_em IS NULL`,
+            [internacao],
+          )
+        ).map((r) => ({
+          tipo: String(r['tipo']) as TipoComunicacaoOperadora,
+          situacao: String(r['situacao']) as SituacaoComunicacaoOperadora,
+        }));
+        const devidas = comunicacoesDevidas({
+          tipoFonte: d.tipoFonte,
+          registroAns: d.registroAns,
+          numeroCarteira: d.carteira,
+          altaRegistrada: d.altaEm !== null,
+          altaPorObito: d.altaPorObito,
+          existentes,
+        });
+        const servico = devidas.length ? await servicoWebDaFonte(tx, est.id, d.fonte) : null;
+        const geradas: { id: number; tipo: string; situacao: string }[] = [];
+        for (const tipo of devidas) {
+          const id = await tx.incluir('comunicacao_internacao_operadora', {
+            internacao_id: internacao,
+            fonte_pagadora_id: d.fonte,
+            tipo,
+            situacao: 'pendente',
+            origem: 'sistema',
+          });
+          let situacao = 'pendente';
+          if (
+            servico !== null &&
+            conferirTransmissao({ situacao: 'pendente', tipo, servicoWeb: true }).length === 0
+          ) {
+            const m = await this.montar(tx, id, est.id);
+            if (m.xml && m.hash) {
+              await this.paraOutbox(tx, est.id, usuario, {
+                id,
+                versao: 1,
+                internacao,
+                fonte: d.fonte,
+                servico,
+                tipo,
+                hash: m.hash,
+              });
+              situacao = 'enviada';
+            }
+          }
+          geradas.push({ id, tipo, situacao });
+        }
+        return { tabela: 'comunicacao_internacao_operadora', id: geradas[0]?.id ?? null, geradas };
       },
     );
   }

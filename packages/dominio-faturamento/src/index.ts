@@ -39,6 +39,7 @@ export * from './conta/ajustes.js';
 // F3.1 (02-CAD linha 25): configuração TISS por fonte pagadora e faixa de numeração de guias.
 export * from './tiss/configuracao.js';
 export * from './tiss/elegibilidade.js';
+export * from './tiss/elegibilidade-transmissao.js';
 export * from './tiss/autorizacao-previa.js';
 export * from './tiss/opme-guia.js';
 export * from './tiss/apresentacao.js';

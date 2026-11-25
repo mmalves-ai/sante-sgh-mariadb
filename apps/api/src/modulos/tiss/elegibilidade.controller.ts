@@ -2,6 +2,7 @@
 //   GET  /api/tiss/elegibilidade/pacientes/:paciente     coberturas com a última elegibilidade e as consultas (visão por paciente)
 //   POST /api/tiss/elegibilidade                         { cobertura, atendimento? } registra a consulta (ou devolve a do dia)
 //   POST /api/tiss/elegibilidade/:id/resposta            { situacao, motivoNegativa?, motivoGlosa?, codigoValidacao?, versao }
+//   POST /api/tiss/elegibilidade/:id/retorno             lê o retorno do serviço web da operadora e grava (C2-070)
 // Tudo ligado para todos; quem consulta e registra a resposta é decidido pelas permissões do cargo.
 import {
   Body,
@@ -62,5 +63,13 @@ export class ElegibilidadeController {
   @Permissao(PERMISSOES_ELEGIBILIDADE.gravar)
   responder(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
     return this.com(req, (p, c) => p.responder(c, id, b));
+  }
+
+  @Post(':id/retorno')
+  @AuditadoNoHandler('executor: trilha na mesma transação da consulta de elegibilidade')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ELEGIBILIDADE.gravar)
+  retorno(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    return this.com(req, (p, c) => p.retorno(c, id));
   }
 }

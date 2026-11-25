@@ -6,6 +6,7 @@
 //   POST /api/internacao/comunicacoes-operadora/:id/transicao           { acao, versao, protocolo?, resposta? }
 //   POST /api/internacao/comunicacoes-operadora/:id/transmitir          { versao } sai pelo serviço web da operadora (C1-108)
 //   POST /api/internacao/comunicacoes-operadora/:id/retorno             lê o retorno do serviço web e aplica (C1-108)
+//   POST /api/internacao/comunicacoes-operadora/internacoes/:int/disparar gera as devidas e envia pelo serviço web (C2-070)
 import {
   Body,
   Controller,
@@ -68,6 +69,14 @@ export class ComunicacaoOperadoraController {
     @Body() corpo: unknown,
   ) {
     return this.com(req, (p, c) => p.registrar(c, int, corpo));
+  }
+
+  @Post('internacoes/:int/disparar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_COMUNICACAO_OPERADORA.registrar)
+  @AuditadoNoHandler(TRILHA)
+  disparar(@Req() req: RequisicaoAutorizada, @Param('int', ParseIntPipe) int: number) {
+    return this.com(req, (p, c) => p.disparar(c, int));
   }
 
   @Get(':id/mensagem')

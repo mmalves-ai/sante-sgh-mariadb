@@ -29,14 +29,25 @@ const esquemaPaciente = z.object({
       codigoValidacao: z.string().nullable(),
       por: z.string().nullable(),
       versao: z.number(),
+      // C2-070: saiu pelo serviço web da operadora (o retorno é lido, não digitado).
+      pelaOperadora: z.boolean().default(false),
     }),
   ),
 });
 export type ElegibilidadePaciente = z.infer<typeof esquemaPaciente>;
-const resultado = z.object({ id: z.number(), situacao: z.string(), reaproveitada: z.boolean().optional() });
+const resultado = z.object({
+  id: z.number(),
+  situacao: z.string(),
+  reaproveitada: z.boolean().optional(),
+  enviada: z.boolean().optional(),
+  aguardando: z.boolean().optional(),
+});
 
 export const lerElegibilidade = (paciente: number) => ler(`${E}/pacientes/${paciente}`, esquemaPaciente);
 export const consultarElegibilidade = (cobertura: number) =>
   enviar(E, { cobertura }, resultado, chave('consultar'));
 export const responderElegibilidade = (id: number, corpo: unknown) =>
   enviar(`${E}/${id}/resposta`, corpo, resultado, chave('responder'));
+/** C2-070: lê o retorno do serviço web da operadora e grava a resposta (na fila, nada muda). */
+export const lerRetornoElegibilidade = (id: number) =>
+  enviar(`${E}/${id}/retorno`, {}, resultado, chave('retorno'));

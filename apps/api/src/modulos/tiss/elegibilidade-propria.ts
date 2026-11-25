@@ -6,13 +6,25 @@
 //     consulta do dia é devolvida (menos cliques, sem consulta repetida à operadora);
 //   - responder: a consulta fica 'elegivel', 'inelegivel' (com o motivo), 'erro' ou 'sem_resposta', com o instante da
 //     resposta e o código de validação; a cobertura guarda a última elegibilidade (instante e se foi aprovada). A
-//     consulta respondida não muda mais: nova situação é nova consulta (o histórico fica inteiro).
+//     consulta respondida não muda mais: nova situação é nova consulta (o histórico fica inteiro);
+//   - serviço web (C2-070): com o serviço web de elegibilidade cadastrado e ativo para a fonte no estabelecimento
+//     (endpoint_tiss_fonte_pagadora da transação 'elegibilidade'), a consulta nova já sai para a outbox na mesma
+//     transação (`integracao_mensagem` pendente no ponto tiss.elegibilidade, só IDs e códigos, nunca a carteira) e fica
+//     pendente com integracao_mensagem_id; fora de produção o transmissor usa destino falso (regra 6);
+//   - retorno (C2-070): lê a mensagem ligada; na fila, nada muda; o recibo vira a resposta pela mesma gravação da
+//     resposta à mão (situação, motivo, código de validação e a última elegibilidade da cobertura).
 import {
   conferirPedidoElegibilidade,
   conferirRespostaElegibilidade,
+  conferirTransmissaoElegibilidade,
   elegibilidadeDoDia,
+  PONTO_ELEGIBILIDADE,
+  type RespostaElegibilidade,
+  respostaElegibilidadeDoRetorno,
   type SituacaoElegibilidade,
+  type SituacaoMensagemElegibilidade,
 } from '@sgh/dominio-faturamento';
+import { gravarOutbox, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   type ContextoPortaPropria,
@@ -27,7 +39,20 @@ import {
 
 export const PORTA_ELEGIBILIDADE = Symbol('PORTA_ELEGIBILIDADE');
 
-const TABELAS = ['consulta_elegibilidade', 'cobertura_paciente'];
+const TABELAS = ['consulta_elegibilidade', 'cobertura_paciente', 'integracao_mensagem'];
+
+/** O serviço web de elegibilidade cadastrado e ativo para a fonte, no estabelecimento. */
+async function servicoWebElegibilidade(l: Leitor, est: number, fonte: number): Promise<number | null> {
+  const r = await l.uma(
+    `SELECT ep.id FROM endpoint_tiss_fonte_pagadora ep
+       JOIN transacao_tiss_webservice t ON t.id = ep.transacao_tiss_webservice_id
+      WHERE ep.estabelecimento_id = ? AND ep.fonte_pagadora_id = ? AND ep.forma_envio = 'servico_web'
+        AND ep.ativo = TRUE AND t.ativo = TRUE AND t.tipo_transacao = 'elegibilidade'
+      ORDER BY ep.id DESC LIMIT 1`,
+    [est, fonte],
+  );
+  return r ? num(r['id']) : null;
+}
 
 const id = z.number().int().positive();
 const esquemaConsulta = z
@@ -82,6 +107,8 @@ export interface ConsultaElegibilidadeLida {
   readonly codigoValidacao: string | null;
   readonly por: string | null;
   readonly versao: number;
+  /** C2-070: saiu pelo serviço web da operadora (mensagem de integração ligada). */
+  readonly pelaOperadora: boolean;
 }
 
 export class PortaElegibilidadePropria extends PortaEstabelecimentoPropria {
@@ -129,6 +156,7 @@ export class PortaElegibilidadePropria extends PortaEstabelecimentoPropria {
         codigoValidacao: txtOuNull(x['codigo_validacao']),
         por: txtOuNull(x['login']),
         versao: num(x['versao']),
+        pelaOperadora: x['integracao_mensagem_id'] !== null && x['integracao_mensagem_id'] !== undefined,
       }));
       return { coberturas, consultas };
     });
@@ -137,12 +165,12 @@ export class PortaElegibilidadePropria extends PortaEstabelecimentoPropria {
   consultar(
     c: ContextoPortaPropria,
     entrada: unknown,
-  ): Promise<{ id: number; situacao: SituacaoElegibilidade; reaproveitada: boolean }> {
+  ): Promise<{ id: number; situacao: SituacaoElegibilidade; reaproveitada: boolean; enviada: boolean }> {
     const e = entradaValida(esquemaConsulta, entrada);
     return this.gravar(
       c,
       'tiss.elegibilidade.consultar',
-      ['consulta_elegibilidade'],
+      ['consulta_elegibilidade', 'integracao_mensagem'],
       async (tx, est, usuario) => {
         const cp = await tx.uma(
           `SELECT id, paciente_id, fonte_pagadora_id, plano_fonte_pagadora_id, numero_carteira, validade
@@ -193,6 +221,7 @@ export class PortaElegibilidadePropria extends PortaEstabelecimentoPropria {
             id: num(u['id']),
             situacao: 'elegivel' as const,
             reaproveitada: true,
+            enviada: false,
           };
         const novo = await tx.incluir('consulta_elegibilidade', {
           estabelecimento_id: est.id,
@@ -208,11 +237,39 @@ export class PortaElegibilidadePropria extends PortaEstabelecimentoPropria {
           solicitada_em: agora,
           solicitada_por_usuario_id: usuario,
         });
+        const fonte = num(cp['fonte_pagadora_id']);
+        const servico = await servicoWebElegibilidade(tx, est.id, fonte);
+        const enviada =
+          conferirTransmissaoElegibilidade({
+            situacao: 'pendente',
+            jaEnviada: false,
+            servicoWeb: servico !== null,
+          }).length === 0;
+        if (enviada) {
+          const mensagem = await gravarOutbox(tx, {
+            estabelecimento: est.id,
+            ponto: PONTO_ELEGIBILIDADE,
+            entidade: 'consulta_elegibilidade',
+            entidadeId: novo,
+            chave: `${PONTO_ELEGIBILIDADE}:${novo}`,
+            carga: {
+              consulta: novo,
+              cobertura: e.cobertura,
+              fonte,
+              servicoWeb: servico,
+              identificacao: e.identificacao,
+            },
+            usuario,
+            agora,
+          });
+          await tx.alterar('consulta_elegibilidade', novo, 1, { integracao_mensagem_id: mensagem });
+        }
         return {
           tabela: 'consulta_elegibilidade',
           id: novo,
           situacao: 'pendente' as const,
           reaproveitada: false,
+          enviada,
         };
       },
     );
@@ -241,25 +298,82 @@ export class PortaElegibilidadePropria extends PortaEstabelecimentoPropria {
         )
           problemas.push({ campo: 'motivoGlosa', mensagem: 'Motivo de negativa inexistente.' });
         if (problemas.length) throw recusaRegra('Resposta recusada', problemas);
-        const agora = new Date();
-        await tx.alterar('consulta_elegibilidade', consulta, e.versao, {
-          situacao: e.situacao,
-          respondida_em: agora,
-          motivo_negativa: e.situacao === 'elegivel' ? null : e.motivoNegativa,
-          motivo_glosa_id: e.situacao === 'inelegivel' ? e.motivoGlosa : null,
-          codigo_validacao: e.situacao === 'elegivel' ? e.codigoValidacao : null,
-        });
-        const cob = numOuNull(ce['cobertura_paciente_id']);
-        if (cob !== null && (e.situacao === 'elegivel' || e.situacao === 'inelegivel')) {
-          const v = await tx.uma('SELECT versao FROM cobertura_paciente WHERE id = ?', [cob]);
-          if (v)
-            await tx.alterar('cobertura_paciente', cob, num(v['versao']), {
-              ultima_elegibilidade_em: agora,
-              ultima_elegibilidade_aprovada: e.situacao === 'elegivel',
-            });
-        }
+        await aplicarResposta(tx, consulta, e.versao, numOuNull(ce['cobertura_paciente_id']), e);
         return { tabela: 'consulta_elegibilidade', id: consulta, situacao: e.situacao };
       },
     );
+  }
+
+  /** C2-070: lê o retorno do serviço web na mensagem ligada e grava a resposta; ainda na fila, devolve `aguardando`. */
+  retorno(
+    c: ContextoPortaPropria,
+    consulta: number,
+  ): Promise<{ id: number; situacao: SituacaoElegibilidade; aguardando: boolean }> {
+    return this.gravar(
+      c,
+      'tiss.elegibilidade.retorno',
+      ['consulta_elegibilidade', 'cobertura_paciente'],
+      async (tx, est) => {
+        const ce = (
+          await tx.consultarParaAtualizar<Record<string, unknown>>(
+            `SELECT ce.id, ce.situacao, ce.versao, ce.cobertura_paciente_id, ce.integracao_mensagem_id,
+                    im.situacao AS situacao_envio, im.resposta AS retorno, im.erro
+               FROM consulta_elegibilidade ce
+               LEFT JOIN integracao_mensagem im ON im.id = ce.integracao_mensagem_id
+              WHERE ce.id = ? AND ce.estabelecimento_id = ? AND ce.excluido_em IS NULL`,
+            [consulta, est.id],
+          )
+        )[0];
+        if (!ce) throw naoEncontrado('Consulta de elegibilidade');
+        const situacao = String(ce['situacao']) as SituacaoElegibilidade;
+        if (ce['integracao_mensagem_id'] === null || ce['situacao_envio'] === null)
+          throw recusaRegra('Retorno recusado', [
+            {
+              campo: 'canal',
+              mensagem: 'A consulta não saiu pelo serviço web: registre a resposta da operadora à mão.',
+            },
+          ]);
+        if (situacao !== 'pendente')
+          throw recusaRegra('Retorno recusado', [
+            { campo: 'consulta', mensagem: 'A consulta já tem resposta: faça uma nova consulta.' },
+          ]);
+        const r = respostaElegibilidadeDoRetorno({
+          situacaoMensagem: String(ce['situacao_envio']) as SituacaoMensagemElegibilidade,
+          resposta: txtOuNull(ce['retorno']),
+          erro: txtOuNull(ce['erro']),
+        });
+        if (!r) return { tabela: 'consulta_elegibilidade', id: consulta, situacao, aguardando: true };
+        const p = conferirRespostaElegibilidade(situacao, r);
+        if (p.length) throw recusaRegra('Retorno recusado', p);
+        await aplicarResposta(tx, consulta, num(ce['versao']), numOuNull(ce['cobertura_paciente_id']), r);
+        return { tabela: 'consulta_elegibilidade', id: consulta, situacao: r.situacao, aguardando: false };
+      },
+    );
+  }
+}
+
+/** Grava a resposta (à mão ou do serviço web) e a última elegibilidade da cobertura. */
+async function aplicarResposta(
+  tx: TxOperacao,
+  consulta: number,
+  versao: number,
+  cob: number | null,
+  e: RespostaElegibilidade,
+): Promise<void> {
+  const agora = new Date();
+  await tx.alterar('consulta_elegibilidade', consulta, versao, {
+    situacao: e.situacao,
+    respondida_em: agora,
+    motivo_negativa: e.situacao === 'elegivel' ? null : e.motivoNegativa,
+    motivo_glosa_id: e.situacao === 'inelegivel' ? e.motivoGlosa : null,
+    codigo_validacao: e.situacao === 'elegivel' ? e.codigoValidacao : null,
+  });
+  if (cob !== null && (e.situacao === 'elegivel' || e.situacao === 'inelegivel')) {
+    const v = await tx.uma('SELECT versao FROM cobertura_paciente WHERE id = ?', [cob]);
+    if (v)
+      await tx.alterar('cobertura_paciente', cob, num(v['versao']), {
+        ultima_elegibilidade_em: agora,
+        ultima_elegibilidade_aprovada: e.situacao === 'elegivel',
+      });
   }
 }

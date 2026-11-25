@@ -3,6 +3,8 @@
 // as coberturas ativas com a última elegibilidade, um clique para consultar (a elegível do dia é reaproveitada pelo
 // servidor) e a resposta da operadora registrada na própria linha da consulta pendente, validada na hora pela regra do
 // domínio (a negativa exige o motivo; o código de validação só na elegível). O histórico fica inteiro.
+// C2-070: com o serviço web da operadora cadastrado, a consulta já sai por ele no mesmo clique; a linha pendente mostra
+// "Ler o retorno" (o recibo vira a resposta sozinho) em vez do formulário à mão.
 import { conferirRespostaElegibilidade } from '@sgh/dominio-faturamento';
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { reactive, ref } from 'vue';
@@ -12,6 +14,7 @@ import {
   consultarElegibilidade,
   type ElegibilidadePaciente,
   lerElegibilidade,
+  lerRetornoElegibilidade,
   responderElegibilidade,
 } from '../api-elegibilidade.js';
 
@@ -72,7 +75,13 @@ const consultar = (cobertura: number) =>
   tentar(async () => {
     const r = await consultarElegibilidade(cobertura);
     await recarregar();
-    return r.reaproveitada ? k('reaproveitada') : k('registrada');
+    return r.reaproveitada ? k('reaproveitada') : r.enviada ? k('enviada') : k('registrada');
+  });
+const lerRetorno = (id: number) =>
+  tentar(async () => {
+    const r = await lerRetornoElegibilidade(id);
+    await recarregar();
+    return r.aguardando ? k('aguardando') : k('respondida');
   });
 const responder = (id: number, versao: number) =>
   tentar(async () => {
@@ -158,6 +167,15 @@ if (pacienteTexto.value) void abrir();
             <td>{{ c.fontePagadora }} · {{ c.carteira }}</td>
             <td data-testid="eleg-situacao">{{ k(`situacoes.${c.situacao}`) }}</td>
             <td v-if="c.situacao !== 'pendente'">{{ c.codigoValidacao ?? c.motivoNegativa ?? '' }}</td>
+            <td v-else-if="c.pelaOperadora" class="linha">
+              <span data-testid="eleg-pela-operadora">{{ k('pelaOperadora') }}</span>
+              <SanteBotao
+                variante="secundario"
+                :rotulo="k('lerRetorno')"
+                data-testid="eleg-ler-retorno"
+                @acionar="lerRetorno(c.id)"
+              />
+            </td>
             <td v-else-if="resposta[c.id]" class="linha">
               <SanteSelecao
                 v-model="resposta[c.id]!.situacao"
