@@ -228,10 +228,12 @@ describe.skipIf(SEM_BANCO)(
       ).toEqual({
         id: a!.id,
         requisicaoCancelada: false,
+        conta: 'sem_lancamento',
       });
       expect(await servico.cancelarItem(c, b!.id, { motivo: dup })).toEqual({
         id: b!.id,
         requisicaoCancelada: true,
+        conta: 'sem_lancamento',
       });
       expect(codigoDe(await servico.cancelarItem(c, b!.id, { motivo: dup }).catch((e: unknown) => e))).toBe(
         'item-nao-cancelavel',

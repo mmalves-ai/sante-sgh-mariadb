@@ -4,6 +4,7 @@
 //                                                (exceção nova só com sadt.requisicao.autorizarExcecao)
 //   GET  /api/sadt/pedidos/atendimentos?busca    busca do atendimento por número, prontuário ou nome
 //   GET  /api/sadt/pedidos/atendimentos/:id      cabeçalho do paciente e as requisições com os itens
+//   POST /api/sadt/pedidos/atendimentos/:id/conta  lança na conta os exames pendentes de cobrança do atendimento
 //   POST /api/sadt/itens/:id/cancelar            cancela o item com o motivo do cadastro
 //   GET  /api/sadt/itens/:id/eventos             a trilha clínica do item pedido
 //   GET  /api/sadt/pedidos/motivos               motivos ativos de cancelamento e de recoleta
@@ -77,6 +78,14 @@ export class PedidoSadtController {
     const r = await this.s.pedidosDoAtendimento(sessaoDe(req).porta, idDaRota(id));
     if (r === null) throw new ErroProblema('nao-encontrado', 404, 'Registro não encontrado');
     return { ...r, podeAutorizarExcecao: autorizaExcecao(req) };
+  }
+
+  @Post('pedidos/atendimentos/:id/conta')
+  @HttpCode(200)
+  @Permissao('sadt.requisicao.criar')
+  @AuditadoNoHandler('os itens da conta e os exames cobrados com a trilha_auditoria na mesma transação')
+  lancarNaConta(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    return this.s.lancarPendentesNaConta(sessaoDe(req).porta, idDaRota(id));
   }
 
   @Get('pedidos/motivos')
