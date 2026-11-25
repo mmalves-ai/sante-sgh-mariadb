@@ -33,6 +33,13 @@ export const rotasAdministracao: RouteRecordRaw[] = [
     meta: { permissao: C.usuarioLer },
   },
   {
+    // 01-ADM L59: alçadas de aprovação (quem aprova cada documento, em que níveis e faixas); abre da lista e da ficha.
+    path: '/administracao/acesso/alcadas',
+    name: 'adm.alcadas',
+    component: () => import('./telas/AlcadasTela.vue'),
+    meta: { permissao: C.usuarioLer },
+  },
+  {
     // 01-ADM L61: login único corporativo (provedor de identidade, perfil por grupo e contas ligadas).
     path: '/administracao/acesso/provedores-identidade',
     name: 'adm.provedoresIdentidade',

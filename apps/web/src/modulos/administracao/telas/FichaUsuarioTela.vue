@@ -34,6 +34,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
+import AlcadasDaConta from '../componentes/AlcadasDaConta.vue';
 import AplicarModelo from '../componentes/AplicarModelo.vue';
 import AtalhoVinculoConta from '../componentes/AtalhoVinculoConta.vue';
 import ConselhoUsuario from '../componentes/ConselhoUsuario.vue';
@@ -1066,6 +1067,8 @@ const rotuloFiltroFlag = (f: FiltroFlag) =>
             <router-link to="/administracao/acesso/perfis">{{ t('adm.ficha.papeisTexto') }}</router-link>
           </p>
         </section>
+        <!-- 01-ADM L59: em que alçadas de aprovação a conta aprova (direto ou pelo perfil). -->
+        <AlcadasDaConta :login="props.login" />
         <!-- W1-01 (parte 11d): conferência do conselho no vínculo usuário–profissional (quem gere acessos). -->
         <ConselhoUsuario v-if="podeGerirPin" :login="props.login" />
         <!-- W1-01 (parte 12a): "Aplicar acessos de…" (usuário-modelo; diferença antes de gravar). -->

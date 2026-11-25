@@ -16,6 +16,8 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import { buscarOpcoesUsuarios, criarUsuario, listarUsuarios } from '../api.js';
+import AtalhoAlcadas from '../componentes/AtalhoAlcadas.vue';
+import AtalhoVinculoConta from '../componentes/AtalhoVinculoConta.vue';
 import CpfUsuarios from '../componentes/CpfUsuarios.vue';
 import IdentidadeUsuarios from '../componentes/IdentidadeUsuarios.vue';
 import SenhasSecundariasUsuarios from '../componentes/SenhasSecundariasUsuarios.vue';
@@ -277,6 +279,8 @@ function clicarLinha(e: MouseEvent, login: string): void {
           data-testid="novo-usuario"
           @acionar="abrir"
         />
+        <AtalhoVinculoConta v-if="podeCriar" />
+        <AtalhoAlcadas />
       </div>
     </header>
 
