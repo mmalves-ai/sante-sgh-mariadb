@@ -7,13 +7,17 @@
 // apuração (linhas por centro, substituição pela versão lida e aprovação) gravadas e relidas.
 // Resultado por fonte pagadora (receita contra custo): contas de duas fontes gravadas na apuração; a receita bruta, a
 // glosa, o recurso, a receita líquida, o custo e a margem por fonte somam as contas de cada uma; outro estabelecimento
-// não vê nem grava as contas.
+// não vê nem grava as contas. Do faturamento ao resultado: a coleta lê as contas fechadas no mês (itens, glosa e recurso
+// acatado por item, sem o item excluído nem a conta aberta), a apuração pelo serviço grava cada conta na fonte da própria
+// conta, e a fonte trocada na entrada é recusada sem gravar nada.
 // Massa SINTÉTICA (centros e domínios fictícios), limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { ESTATISTICAS_CUSTO, TIPOS_DADO_ESTATISTICA } from '@sgh/contratos';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaCustosMemoria } from './porta-memoria.js';
 import { codigoEstatisticaNoBanco, PortaCustosPropria } from './porta-propria.js';
+import type { SessaoCustos } from './servico.js';
+import { ServicoApuracaoCustos } from './servico-apuracao.js';
 import type { ContextoCustos, TrilhaCustos } from './tipos.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -68,6 +72,24 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
         await e.executar(
           `DELETE k FROM custo_conta_paciente k JOIN apuracao_custo a ON a.id = k.apuracao_custo_id
             WHERE a.estabelecimento_id = ? AND a.competencia IN ('2026-04-01', '2026-05-01')`,
+          [est],
+        );
+        // O faturamento sintético das contas: o recurso, a glosa e os itens antes das contas.
+        await e.executar(
+          "DELETE i FROM recurso_glosa_item i JOIN recurso_glosa r ON r.id = i.recurso_glosa_id WHERE r.estabelecimento_id = ? AND r.numero LIKE 'F2203-%'",
+          [est],
+        );
+        await e.executar("DELETE FROM recurso_glosa WHERE estabelecimento_id = ? AND numero LIKE 'F2203-%'", [
+          est,
+        ]);
+        await e.executar(
+          "DELETE i FROM glosa_item i JOIN glosa g ON g.id = i.glosa_id WHERE g.estabelecimento_id = ? AND g.numero LIKE 'F2203-%'",
+          [est],
+        );
+        await e.executar("DELETE FROM glosa WHERE estabelecimento_id = ? AND numero LIKE 'F2203-%'", [est]);
+        await e.executar(
+          `DELETE i FROM conta_hospitalar_item i JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id
+            WHERE c.estabelecimento_id = ? AND c.numero LIKE 'F2203-CH%'`,
           [est],
         );
         await e.executar(
@@ -653,9 +675,11 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
     expect(nomes.size).toBe(0);
   });
 
+  /** As fontes pagadoras e as contas sintéticas de maio (o teste do faturamento ao resultado usa as mesmas). */
+  const fontes = { a: 0, b: 0 };
+  const contas: number[] = [];
+
   it('resultado por fonte pagadora: contas de duas fontes; receita, glosa, custo e margem por fonte', async () => {
-    const fontes = { a: 0, b: 0 };
-    const contas: number[] = [];
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-massa' }, async (e) => {
       const agora = new Date();
       const fonte = (codigo: string, nome: string) =>
@@ -857,5 +881,233 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
     const nomes = await porta.nomesConvenios(ctxA, [fontes.a, fontes.b]);
     expect([nomes.get(fontes.a), nomes.get(fontes.b)]).toEqual(['OPERADORA A F2203', 'OPERADORA B F2203']);
     expect(await porta.resultadoAgrupado(ctxB, apuracao.id, 'convenio')).toEqual([]);
+  });
+  it('do faturamento ao resultado por fonte: a coleta lê as contas fechadas e a apuração grava na fonte da conta', async () => {
+    expect(contas).toHaveLength(3);
+    const agora = new Date();
+    // As contas de maio ganham itens no centro da UTI, a glosa e o recurso acatado de um item, e fecham em maio.
+    // Fora da conta: o item excluído e a conta ainda aberta (da fonte B) não entram.
+    const extra = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-fat' }, async (e) => {
+      const usuario = await garantir(
+        e,
+        'SELECT id FROM usuario WHERE login = ?',
+        ['f2203.faturista'],
+        "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+        ['f2203.faturista', 'USUARIO SINTETICO F2203', agora],
+      );
+      const grupo = await garantir(
+        e,
+        'SELECT id FROM grupo_faturamento WHERE codigo = ?',
+        ['F2203-GF'],
+        "INSERT INTO grupo_faturamento (codigo, descricao, tipo_grupo, criado_em) VALUES ('F2203-GF', 'GRUPO F2203', 'servico_hospitalar', ?)",
+        [agora],
+      );
+      const faturavel = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        ['99322030'],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES ('99322030', 'PROCEDIMENTO F2203', 'taxa', ?, ?)",
+        [grupo, agora],
+      );
+      const motivo = await garantir(
+        e,
+        'SELECT id FROM motivo_glosa WHERE codigo_tuss = ?',
+        ['F223'],
+        "INSERT INTO motivo_glosa (codigo_tuss, descricao, vigencia_inicio, versao_fonte, criado_em) VALUES ('F223', 'MOTIVO SINTETICO F2203', '2026-01-01', 'teste', ?)",
+        [agora],
+      );
+      let seq = 0;
+      const item = (conta: number, reais: number, excluido = false) =>
+        e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+             valor_unitario, valor_total, centro_custo_id, situacao, excluido_em, criado_em)
+           VALUES (?, ?, ?, '2026-05-10 09:00:00', 1, ?, ?, ?, 'lancado', ?, ?)`,
+          [conta, ++seq, faturavel, reais, reais, centroUti, excluido ? agora : null, agora],
+        );
+      const a1 = await item(contas[0]!, 60);
+      await item(contas[0]!, 40);
+      await item(contas[1]!, 50);
+      const b1 = await item(contas[2]!, 80);
+      await item(contas[2]!, 9.99, true);
+      const glosa = async (n: number, fonte: number, conta: number, alvo: number, reais: number) => {
+        const g = await e.inserir(
+          `INSERT INTO glosa (estabelecimento_id, numero, fonte_pagadora_id, procedencia, data_glosa, valor_glosado,
+             conta_hospitalar_id, criado_em) VALUES (?, ?, ?, 'digitacao', '2026-05-25', ?, ?, ?)`,
+          [estA, `F2203-GL${n}`, fonte, reais, conta, agora],
+        );
+        return e.inserir(
+          `INSERT INTO glosa_item (glosa_id, sequencia, motivo_glosa_id, valor_glosado, conta_hospitalar_item_id, criado_em)
+           VALUES (?, 1, ?, ?, ?, ?)`,
+          [g, motivo, reais, alvo, agora],
+        );
+      };
+      const glosaA = await glosa(1, fontes.a, contas[0]!, a1, 15);
+      await glosa(2, fontes.b, contas[2]!, b1, 20);
+      const recurso = await e.inserir(
+        `INSERT INTO recurso_glosa (estabelecimento_id, numero, fonte_pagadora_id, objeto, enviado_em, situacao,
+           valor_recursado, valor_acatado, criado_em) VALUES (?, 'F2203-RG1', ?, 'item', ?, 'acatado', 10, 5, ?)`,
+        [estA, fontes.a, agora, agora],
+      );
+      await e.inserir(
+        `INSERT INTO recurso_glosa_item (recurso_glosa_id, sequencia, glosa_item_id, conta_hospitalar_item_id, justificativa,
+           valor_recursado, valor_acatado, numero_demonstrativo_retorno, retornado_em, criado_em)
+         VALUES (?, 1, ?, ?, 'Justificativa sintética', 10, 5, 'F2203-DEM1', '2026-05-28', ?)`,
+        [recurso, glosaA, a1, agora],
+      );
+      await e.executar(
+        `UPDATE conta_hospitalar SET situacao = 'fechada', fechada_em = '2026-05-20 10:00:00', fechada_por_usuario_id = ?
+          WHERE id IN (?, ?, ?)`,
+        [usuario, contas[0], contas[1], contas[2]],
+      );
+      // Uma conta aberta da fonte B, com item, no mesmo mês: não entra no resultado.
+      const at = await e.uma<{ atendimento_id: number; paciente_id: number; tipo_conta_id: number }>(
+        'SELECT atendimento_id, paciente_id, tipo_conta_id FROM conta_hospitalar WHERE id = ?',
+        [contas[2]],
+      );
+      const aberta = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id,
+           natureza, competencia, inicio_em, criado_em)
+         VALUES (?, 'F2203-CH9', ?, ?, ?, ?, 'ambulatorial', '2026-05-01', '2026-05-10 08:00:00', ?)`,
+        [estA, at?.atendimento_id, at?.paciente_id, fontes.b, at?.tipo_conta_id, agora],
+      );
+      await item(aberta, 70);
+      return { aberta };
+    });
+
+    // A coleta da porta: a bruta, a glosa, o recurso e a fonte de cada conta saem do faturamento gravado.
+    const fontesMaio = await porta.fontesCusteio(ctxA, {
+      ano: 2026,
+      mes: 5,
+      inicio: '2026-05-01',
+      fim: '2026-05-31',
+      competencia: '2026-05',
+      limiteLinhaCentavos: 1_000_000,
+    });
+    expect(fontesMaio.contasFechadas).toBe(3);
+    expect(fontesMaio.truncado).toBe(false);
+    expect(
+      fontesMaio.itensConta.map((x) => [x.conta, x.convenio, x.cdc, x.bruta, x.glosa, x.recurso]),
+    ).toEqual([
+      [contas[0], fontes.a, centroUti, 10_000, 1_500, 500],
+      [contas[1], fontes.a, centroUti, 5_000, 0, 0],
+      [contas[2], fontes.b, centroUti, 8_000, 2_000, 0],
+    ]);
+    expect(fontesMaio.itensConta.some((x) => x.conta === extra.aberta)).toBe(false);
+
+    // A apuração pelo serviço contra o MariaDB (a UTI vira o centro produtivo; a apuração de maio é substituída).
+    const uti = await porta.centro(ctxA, centroUti);
+    await porta.classificar(
+      ctxA,
+      {
+        centro: centroUti,
+        classe: 'produtivo',
+        ordemRateio: null,
+        criterio: null,
+        unidadeMensuracao: unidade,
+        observacao: null,
+        versao: uti?.classificacao?.versao ?? null,
+      },
+      'teste',
+      trilha('centro_custo', centroUti),
+    );
+    const sessao: SessaoCustos = {
+      rede: ctxA.rede,
+      hospital: ctxA.hospital,
+      estabelecimento: estA,
+      usuario: null,
+      correlacao,
+      login: 'teste',
+      pode: () => true,
+      trilha: (_evento, _operacao, tabela, id) => trilha(tabela, id),
+    };
+    const apurada = await new ServicoApuracaoCustos(porta).apurar(
+      sessao,
+      { competencia: '2026-05', limiteLinhaSaida: 1_000_000, justificativa: null },
+      '2026-11-25',
+    );
+    const gravadas = await ler<{
+      n: unknown;
+      fontes: unknown;
+      bruta: unknown;
+      glosa: unknown;
+      recurso: unknown;
+    }>(
+      `SELECT COUNT(*) AS n, COUNT(DISTINCT k.fonte_pagadora_id) AS fontes, SUM(k.valor_receita) AS bruta,
+              SUM(k.valor_glosa) AS glosa, SUM(k.valor_recurso) AS recurso
+         FROM custo_conta_paciente k JOIN conta_hospitalar ch ON ch.id = k.conta_hospitalar_id
+        WHERE k.apuracao_custo_id = ? AND k.fonte_pagadora_id = ch.fonte_pagadora_id`,
+      [apurada.id],
+    );
+    expect([Number(gravadas?.n), Number(gravadas?.fontes)]).toEqual([3, 2]);
+    expect(Number(gravadas?.bruta)).toBeCloseTo(230, 2);
+    expect(Number(gravadas?.glosa)).toBeCloseTo(35, 2);
+    expect(Number(gravadas?.recurso)).toBeCloseTo(5, 2);
+    const grupos = await porta.resultadoAgrupado(ctxA, apurada.id, 'convenio');
+    const porFonte = new Map(grupos.map((g) => [g.chave, g]));
+    expect(grupos).toHaveLength(2);
+    expect(porFonte.get(String(fontes.a))).toMatchObject({
+      contas: 2,
+      receitaBruta: 15_000,
+      glosa: 1_500,
+      recurso: 500,
+      receitaLiquida: 14_000,
+    });
+    expect(porFonte.get(String(fontes.b))).toMatchObject({
+      contas: 1,
+      receitaBruta: 8_000,
+      glosa: 2_000,
+      recurso: 0,
+      receitaLiquida: 6_000,
+    });
+    for (const g of grupos) expect(g.margem).toBe(g.receitaLiquida - g.custo);
+
+    // A fonte trocada na entrada da apuração é recusada e nada é gravado: nem apuração nova, nem custo por conta.
+    const antes = await ler<{ a: unknown; k: unknown }>(
+      `SELECT (SELECT COUNT(*) FROM apuracao_custo WHERE estabelecimento_id = ?) AS a,
+              (SELECT COUNT(*) FROM custo_conta_paciente k JOIN apuracao_custo x ON x.id = k.apuracao_custo_id
+                WHERE x.estabelecimento_id = ?) AS k`,
+      [estA, estA],
+    );
+    const trocada = {
+      competencia: '2026-05',
+      substitui: { id: apurada.id, versao: apurada.versao },
+      rotuloParcial: null,
+      limiteLinha: 1_000_000,
+      custoProdutivos: 0,
+      totais: '{}',
+      completude: '{}',
+      pendencias: '[]',
+      impressao: 'c'.repeat(64),
+      justificativa: null,
+      duracaoMs: 1,
+      linhas: [],
+      contas: [
+        {
+          conta: contas[2]!,
+          numero: 3,
+          tipoConta: 'F2203-EXT',
+          convenio: fontes.a,
+          procedimento: null,
+          receitaBruta: 8_000,
+          glosa: 2_000,
+          recurso: 0,
+          receitaLiquida: 6_000,
+          custo: 0,
+          margem: 6_000,
+          parcelas: [],
+        },
+      ],
+    };
+    await expect(
+      porta.gravarApuracao(ctxA, trocada, 'teste', trilha('apuracao_custo', null)),
+    ).rejects.toMatchObject({ problema: { codigo: 'conta-fonte-divergente' } });
+    const depois = await ler<{ a: unknown; k: unknown }>(
+      `SELECT (SELECT COUNT(*) FROM apuracao_custo WHERE estabelecimento_id = ?) AS a,
+              (SELECT COUNT(*) FROM custo_conta_paciente k JOIN apuracao_custo x ON x.id = k.apuracao_custo_id
+                WHERE x.estabelecimento_id = ?) AS k`,
+      [estA, estA],
+    );
+    expect([Number(depois?.a), Number(depois?.k)]).toEqual([Number(antes?.a), Number(antes?.k)]);
+    expect((await porta.apuracao(ctxA, apurada.id))?.situacao).toBe('apurada');
   });
 });

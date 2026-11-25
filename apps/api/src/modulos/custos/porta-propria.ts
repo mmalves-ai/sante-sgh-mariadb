@@ -1119,17 +1119,24 @@ export class PortaCustosPropria implements PortaCustos {
         }
         for (const k of x.contas) {
           const conta = await tx.uma(
-            `SELECT ch.atendimento_id, at.entrada_em FROM conta_hospitalar ch JOIN atendimento at ON at.id = ch.atendimento_id
+            `SELECT ch.atendimento_id, ch.fonte_pagadora_id, at.entrada_em FROM conta_hospitalar ch
+               JOIN atendimento at ON at.id = ch.atendimento_id
               WHERE ch.id = ? AND ch.estabelecimento_id = ? AND ch.excluido_em IS NULL`,
             [k.conta, est],
           );
           if (!conta)
             throw recusa('conta-inexistente', 'Uma conta da apuração não existe neste estabelecimento.');
+          // O resultado por fonte pagadora fica na fonte da própria conta: a que vier diferente recusa a apuração inteira.
+          if (numOuNull(conta['fonte_pagadora_id']) !== k.convenio)
+            throw recusa(
+              'conta-fonte-divergente',
+              `A fonte pagadora da conta ${k.numero} na apuração não é a da conta no faturamento: nada foi gravado.`,
+            );
           await tx.incluir('custo_conta_paciente', {
             apuracao_custo_id: id,
             conta_hospitalar_id: k.conta,
             atendimento_id: num(conta['atendimento_id']),
-            fonte_pagadora_id: k.convenio,
+            fonte_pagadora_id: numOuNull(conta['fonte_pagadora_id']),
             data_atendimento: dataIso(conta['entrada_em']),
             valor_receita: reais(k.receitaBruta),
             valor_glosa: reais(k.glosa),
