@@ -5,7 +5,7 @@
 //   PUT /api/cadastros/profissionais/:id                     dados (cadastro.profissional.editar, versão lida)
 //   POST|PUT /api/cadastros/profissionais/:id/registros[/:r] registro novo; ativar, inativar (motivo e a permissão de
 //                                     inativar), conselho e sigla
-//   PUT /api/cadastros/profissionais/:id/{especialidades,lotacao,credenciamentos}  do registro do profissional
+//   PUT /api/cadastros/profissionais/:id/{especialidades,credenciamentos}  do registro do profissional
 //   GET /api/cadastros/profissionais/logins                  logins que podem ser ligados (gestão de acessos)
 //   PUT /api/cadastros/profissionais/:id/login               liga, troca ou desliga o login do registro (gestão de
 //                                     acessos, senha de novo, justificativa; ninguém mexe no próprio login)
@@ -55,7 +55,6 @@ import {
   esquemaEspecialidadeProfissional,
   esquemaIncluirRegistroProfissional,
   esquemaIncluirSolicitante,
-  esquemaLotacaoProfissional,
   type OpcoesProfissional,
   type ProfissionalGravado,
   type RegistroProfissionalGravado,
@@ -457,18 +456,6 @@ export class ProfissionaisController {
       'cadastro.definirEspecialidadeProfissional',
       esquemaEspecialidadeProfissional,
     );
-  }
-
-  /** D-PROF-39: lotação do registro numa unidade com a carga horária. */
-  @Put('profissionais/:id/lotacao')
-  @Permissao('cadastro.profissional.editar')
-  @AuditadoNoHandler('executor: SGH_TRILHA na mesma transação da receita (memória: registrador da API)')
-  async lotacao(
-    @Param('id') id: string,
-    @Body() corpo: unknown,
-    @Req() req: RequisicaoAutorizada,
-  ): Promise<RegistroProfissionalGravado> {
-    return this.gravarDoRegistro(req, id, corpo, 'cadastro.lotarProfissional', esquemaLotacaoProfissional);
   }
 
   /** D-PROF-39: credenciar ou descredenciar o registro num convênio. */

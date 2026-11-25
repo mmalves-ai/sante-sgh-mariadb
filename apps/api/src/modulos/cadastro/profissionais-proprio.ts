@@ -4,8 +4,9 @@
 // (CBO), profissional_especialidade (especialidade pelo registro) e profissional_fonte_pagadora (credenciamento do
 // registro no convênio, com vigência). Melhorias: a pessoa que já existe (paciente, colaborador) ganha o papel de
 // profissional sem duplicar a pessoa; o descredenciamento fecha a vigência (nunca apaga); a exclusão por engano marca
-// excluido_em (nada some do banco). Pendentes (pedido de modelo): a lotação por unidade assistencial (lotacao_profissional
-// não tem a unidade) e o vínculo do login (histórico próprio do vínculo, com o motivo), que respondem 501.
+// excluido_em (nada some do banco). A lotação por estabelecimento e unidade tem porta própria
+// (cadastro-ligacoes-proprio.ts, F3.1); pendente (pedido de modelo): o vínculo do login (histórico próprio do vínculo,
+// com o motivo), que responde 501.
 import { createHash } from 'node:crypto';
 import {
   esquemaAlterarProfissional,

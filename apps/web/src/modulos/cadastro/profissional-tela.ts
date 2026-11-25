@@ -137,7 +137,6 @@ export const OPERACOES_DA_ACAO: Readonly<Record<string, readonly string[]>> = {
   acaoDados: ['cadastro.alterarProfissional'],
   acaoRegistros: ['cadastro.incluirRegistroProfissional', 'cadastro.alterarRegistroProfissional'],
   acaoEspecialidades: ['cadastro.definirEspecialidadeProfissional'],
-  acaoLotacao: ['cadastro.lotarProfissional'],
   acaoConvenios: ['cadastro.credenciarProfissional'],
   acaoLogin: ['cadastro.vincularLoginProfissional'],
   acaoSituacao: ['cadastro.inativarProfissional', 'cadastro.reativarProfissional'],
@@ -183,7 +182,6 @@ export function indisponiveis(
     acaoDados: editar,
     acaoRegistros: editar,
     acaoEspecialidades: editar,
-    acaoLotacao: editar,
     acaoConvenios: editar,
     acaoLogin: pode(PERMISSAO_VINCULO_LOGIN),
     acaoSituacao: pode('cadastro.profissional.excluir'),
@@ -194,15 +192,6 @@ export function indisponiveis(
   if (pode(PERMISSAO_VINCULO_LOGIN) && acaoLigada(f, 'acaoLogin') && !f.registros.some(registroReal))
     add(T('semRegistro'), T('acaoLogin'));
   return [...grupos.entries()].map(([motivo, acoes]) => ({ motivo, acoes }));
-}
-
-/** Horas por mês da lotação: só inteiro de 0 a 744 (recusa vírgula e ponto em vez de juntar os dígitos). */
-export function horasValidas(v: string): number | null {
-  const x = v.trim();
-  if (x === '') return 0;
-  if (!/^\d{1,3}$/.test(x)) return null;
-  const n = Number(x);
-  return n <= 744 ? n : null;
 }
 
 /** A tecla da lista de abas (setas, Home e End): o índice de destino, ou -1. */

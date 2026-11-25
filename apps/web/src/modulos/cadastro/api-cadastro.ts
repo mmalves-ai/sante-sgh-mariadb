@@ -15,7 +15,6 @@ import {
   esquemaOpcoesProfissional,
   esquemaProfissionalGravado,
   esquemaRegistroProfissionalGravado,
-  type LotacaoProfissionalEntrada,
   type OpcoesProfissional,
   type ProfissionalGravado,
   type RegistroNovoProfissional,
@@ -364,14 +363,6 @@ export async function definirEspecialidadeProfissional(
   buscar: typeof fetch = fetch,
 ): Promise<void> {
   await lerJson(await buscar(`${PR}/${id}/especialidades`, escrita('PUT', e)), z.unknown());
-}
-
-export async function lotarProfissional(
-  id: number,
-  e: LotacaoProfissionalEntrada,
-  buscar: typeof fetch = fetch,
-): Promise<void> {
-  await lerJson(await buscar(`${PR}/${id}/lotacao`, escrita('PUT', e)), z.unknown());
 }
 
 export async function credenciarProfissional(

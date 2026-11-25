@@ -238,7 +238,6 @@ export const ESCRITAS_TELAS_ONDA_0: Readonly<Record<string, readonly string[]>> 
     'cadastro.incluirRegistroProfissional',
     'cadastro.alterarRegistroProfissional',
     'cadastro.definirEspecialidadeProfissional',
-    'cadastro.lotarProfissional',
     'cadastro.credenciarProfissional',
     'cadastro.vincularLoginProfissional',
     'cadastro.inativarProfissional',

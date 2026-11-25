@@ -10,7 +10,6 @@ import {
   esquemaIncluirRegistroProfissional,
   esquemaExcluirProfissional,
   esquemaExcluirRegistroProfissional,
-  esquemaLotacaoProfissional,
   esquemaSituacaoProfissional,
   esquemaVincularLoginProfissional,
   mensagemOutroLoginNoProfissional,
@@ -65,7 +64,6 @@ export const OPERACOES_PROFISSIONAL_TELA = [
   'cadastro.incluirRegistroProfissional',
   'cadastro.alterarRegistroProfissional',
   'cadastro.definirEspecialidadeProfissional',
-  'cadastro.lotarProfissional',
   'cadastro.credenciarProfissional',
   'cadastro.vincularLoginProfissional',
   'cadastro.inativarProfissional',
@@ -782,27 +780,6 @@ export class ProfissionaisMemoria {
           if (x.ativo === e.ativo) throw recusa('sem-alteracao', 'A especialidade já está nesta situação.');
           x.ativo = e.ativo;
         } else p.especialidades.push({ registro: e.registro, codigo: e.especialidade, ativo: e.ativo });
-        return { resultado: { registro: e.registro, profissional: p.id }, profissional: p };
-      }
-      case 'cadastro.lotarProfissional': {
-        const e = analisar(esquemaLotacaoProfissional, bruta);
-        const { p } = this.registroReal(e.registro);
-        if (!UNIDADES[e.unidade])
-          throw recusa('unidade-inexistente', 'Unidade não encontrada.', { campos: ['unidade'] });
-        const novo = {
-          registro: e.registro,
-          unidade: e.unidade,
-          horasAmbulatorio: e.horasAmbulatorio,
-          horasHospital: e.horasHospital,
-          horasOutros: e.horasOutros,
-          ativo: e.ativo,
-        };
-        const i = p.lotacao.findIndex((x) => x.registro === e.registro && x.unidade === e.unidade);
-        if (i >= 0) {
-          if (JSON.stringify(p.lotacao[i]) === JSON.stringify(novo))
-            throw recusa('sem-alteracao', 'A lotação já está assim.');
-          p.lotacao[i] = novo;
-        } else p.lotacao.push(novo);
         return { resultado: { registro: e.registro, profissional: p.id }, profissional: p };
       }
       case 'cadastro.credenciarProfissional': {

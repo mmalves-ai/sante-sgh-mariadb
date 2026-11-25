@@ -348,22 +348,6 @@ describe.skipIf(SEM_BANCO)('gravações do profissional no banco próprio (clien
     );
     expect(Number(trilha?.n)).toBeGreaterThanOrEqual(2);
 
-    // Pendências de modelo: 501.
-    expect(
-      (
-        await falha(
-          gravar('cadastro.lotarProfissional', {
-            registro: reg,
-            unidade: 1,
-            horasAmbulatorio: 1,
-            horasHospital: 1,
-            horasOutros: 0,
-            ativo: true,
-          }),
-        )
-      ).status,
-    ).toBe(501);
-
     // Login ligado (aqui, o histórico de um vínculo do usuário já encerrado) impede excluir, com a frase da memória.
     await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'prof-proprio-login' }, (e) =>
       e.executar(

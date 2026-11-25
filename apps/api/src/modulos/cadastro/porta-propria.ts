@@ -1172,12 +1172,7 @@ export class PortaCadastroPropria implements PortaCadastro {
     ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<Record<string, number>>> {
     const op = operacaoProfissionalPropria(operacao);
-    if (!op)
-      return pendente(
-        operacao === 'cadastro.lotarProfissional'
-          ? 'A lotação do profissional numa unidade'
-          : 'O vínculo do login com o profissional',
-      );
+    if (!op) return pendente('O vínculo do login com o profissional');
     const r = await this.executor.executar(op, this.cliente, entrada, await this.contextoNucleo(ctx));
     return { resultado: r.resultado, trilha: r.trilha };
   }
