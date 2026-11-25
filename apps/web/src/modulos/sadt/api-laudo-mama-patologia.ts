@@ -61,6 +61,10 @@ const achado = z.object({
 });
 export type AchadoMamaLido = z.infer<typeof achado>;
 
+/** Laudo do mesmo exame que foi retificado (histórico; nada se apaga). */
+const retificado = z.object({ id: z.number(), liberadoEm: txt, retificadoEm: txt, motivo: txt });
+export type LaudoRetificado = z.infer<typeof retificado>;
+
 const esquemaMama = z.object({
   exame,
   laudo: z
@@ -95,9 +99,11 @@ const esquemaMama = z.object({
       recomendacao: txt,
     }),
   ),
+  retificados: z.array(retificado),
   emExecucao: z.boolean(),
   alertas: z.array(z.string()),
   opcoes: z.object({
+    assinante: nr,
     profissionais: z.array(profissional),
     categorias: z.array(z.object({ categoria: z.string(), rotulo: z.string() })),
     tipos: z.array(opcao),
@@ -155,9 +161,11 @@ const esquemaAp = z.object({
   anteriores: z.array(
     z.object({ id: z.number(), numero: z.string(), tipoExame: z.string(), resultado: txt, liberadoEm: txt }),
   ),
+  retificados: z.array(retificado),
   emExecucao: z.boolean(),
   alertas: z.array(z.string()),
   opcoes: z.object({
+    assinante: nr,
     profissionais: z.array(profissional),
     graus: z.array(profissional),
     tiposExame: z.array(opcao),
@@ -242,6 +250,20 @@ export const liberarLaudoAnatomopatologico = (laudo: number, versao: number) =>
     { versao },
     liberado,
     novaChave('laudo-ap-liberar'),
+  );
+export const retificarLaudoMama = (laudo: number, versao: number, motivo: string) =>
+  enviar(
+    `${P}/mama/laudos/${laudo}/retificar`,
+    { versao, motivo },
+    gravado,
+    novaChave('laudo-mama-retificar'),
+  );
+export const retificarLaudoAnatomopatologico = (laudo: number, versao: number, motivo: string) =>
+  enviar(
+    `${P}/anatomopatologico/laudos/${laudo}/retificar`,
+    { versao, motivo },
+    gravado,
+    novaChave('laudo-ap-retificar'),
   );
 export const lerPecasEnviadas = (de: string, ate: string) =>
   ler(`${P}/pecas-enviadas?${q(de, ate)}`, esquemaPecas);

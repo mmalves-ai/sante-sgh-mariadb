@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conferirAutorLaudo,
+  conferirRetificacaoEspecializado,
+  numeroRetificacao,
   type AchadoMama,
   alertasLaudoAnatomopatologico,
   alertasLaudoMama,
@@ -272,5 +275,30 @@ describe('laudo anatomopatológico', () => {
     const a = ap().amostras[0]!;
     expect(amostraMudou(a, { ...a })).toBe(false);
     expect(amostraMudou(a, { ...a, descricao: 'Outra' })).toBe(true);
+  });
+});
+
+describe('autoria e retificação', () => {
+  const medico = { profissional: 7, cbo: '225125', conselhoAtivo: true };
+  it('só o médico da sessão com conselho ativo libera; outro indicado no rascunho é recusado', () => {
+    expect(conferirAutorLaudo(medico, null, 'laudista')).toEqual([]);
+    expect(conferirAutorLaudo(medico, 7, 'patologista')).toEqual([]);
+    expect(conferirAutorLaudo(null, null, 'laudista')[0]?.campo).toBe('laudista');
+    expect(conferirAutorLaudo({ ...medico, cbo: '223505' }, null, 'laudista')[0]?.mensagem).toMatch(
+      /privativo de médico/,
+    );
+    expect(conferirAutorLaudo({ ...medico, conselhoAtivo: false }, null, 'patologista')[0]?.mensagem).toMatch(
+      /não está ativa/,
+    );
+    expect(conferirAutorLaudo(medico, 8, 'laudista')[0]?.mensagem).toMatch(/outro médico/);
+  });
+  it('retificação só do liberado e com motivo; número com a ordem', () => {
+    expect(conferirRetificacaoEspecializado('liberado', 'Categoria da mama direita revista')).toEqual([]);
+    expect(
+      conferirRetificacaoEspecializado('rascunho', 'Categoria da mama direita revista').map((p) => p.campo),
+    ).toEqual(['situacao']);
+    expect(conferirRetificacaoEspecializado('liberado', ' curto ').map((p) => p.campo)).toEqual(['motivo']);
+    expect(numeroRetificacao('AP-000012', 1)).toBe('AP-000012-R1');
+    expect(numeroRetificacao('AP-000012-R1', 2)).toBe('AP-000012-R2');
   });
 });

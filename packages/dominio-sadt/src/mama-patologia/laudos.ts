@@ -8,6 +8,10 @@
 //     identificadas, macroscopia e microscopia, adequabilidade da amostra no exame citológico, resultado, grau
 //     histológico do tumor maligno e os achados estruturados (margens, invasão, linfonodos, receptores).
 // Rascunho confere só a coerência do que foi preenchido; a liberação confere o laudo completo.
+// Quem libera é o médico da sessão, com inscrição ativa no conselho (autoria: CFM e SBIS); o laudo liberado só muda por
+// retificação com motivo, que o deixa no histórico e abre um laudo novo ligado a ele.
+
+import { ehMedico, type VinculoProfissional } from '@sgh/contratos';
 
 export const TIPOS_MAMOGRAFIA = ['rastreamento', 'diagnostica'] as const;
 export const COMPOSICOES_MAMA = [
@@ -137,7 +141,6 @@ export interface LaudoMama {
   readonly laudista: number | null;
   readonly achados: readonly AchadoMama[];
 }
-
 export interface ProblemaLaudo {
   readonly campo: string;
   readonly mensagem: string;
@@ -479,4 +482,54 @@ export function fichaSiscanMamografia(l: LaudoMama & { readonly liberadoEm: stri
     intervaloControleMeses: l.intervaloControleMeses,
     liberadoEm: l.liberadoEm,
   };
+}
+
+/**
+ * Quem assina o laudo de mamografia ou o anatomopatológico é o profissional da sessão: médico (CBO da família 225),
+ * com a inscrição no conselho ativa. Se o rascunho indica outro profissional, a liberação é recusada (ninguém assina
+ * pelo outro). `campo` é o da tela ('laudista' ou 'patologista').
+ */
+export interface AutorLaudo extends VinculoProfissional {
+  readonly profissional: number;
+}
+
+export function conferirAutorLaudo(
+  v: AutorLaudo | null,
+  indicado: number | null,
+  campo: 'laudista' | 'patologista',
+): ProblemaLaudo[] {
+  if (!v)
+    return [
+      { campo, mensagem: 'A sua conta não tem vínculo com profissional: só o médico do laudo o libera.' },
+    ];
+  if (!ehMedico(v.cbo))
+    return [{ campo, mensagem: 'O laudo é privativo de médico: a sua ocupação não o assina.' }];
+  if (!v.conselhoAtivo)
+    return [
+      { campo, mensagem: 'A sua inscrição no conselho não está ativa: o laudo não pode ser assinado.' },
+    ];
+  if (indicado !== null && indicado !== v.profissional)
+    return [{ campo, mensagem: 'O laudo indica outro médico: só ele o libera, ou troque para você.' }];
+  return [];
+}
+
+/** Motivo da retificação: ao menos 10 caracteres. */
+export const MOTIVO_RETIFICACAO_MINIMO = 10;
+
+/** Só o laudo liberado se retifica, e com motivo; o retificado fica no histórico e o novo nasce em rascunho. */
+export function conferirRetificacaoEspecializado(situacao: string, motivo: string | null): ProblemaLaudo[] {
+  const p: ProblemaLaudo[] = [];
+  if (situacao !== 'liberado')
+    p.push({ campo: 'situacao', mensagem: 'Só o laudo liberado se retifica; o rascunho se corrige direto.' });
+  if ((motivo ?? '').trim().length < MOTIVO_RETIFICACAO_MINIMO)
+    p.push({
+      campo: 'motivo',
+      mensagem: `Diga o motivo da retificação (ao menos ${MOTIVO_RETIFICACAO_MINIMO} caracteres).`,
+    });
+  return p;
+}
+
+/** Número do laudo anatomopatológico retificado: o mesmo número com a ordem da retificação (AP-12 → AP-12-R1). */
+export function numeroRetificacao(numero: string, ordem: number): string {
+  return `${numero.replace(/-R\d+$/, '')}-R${ordem}`;
 }

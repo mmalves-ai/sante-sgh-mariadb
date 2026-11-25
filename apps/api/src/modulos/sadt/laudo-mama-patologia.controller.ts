@@ -3,10 +3,12 @@
 //   GET  /api/sadt/laudos-especializados/fila?tipo=mama|anatomopatologico&de=&ate=
 //   GET  /api/sadt/laudos-especializados/mama/itens/:item            exame, laudo, achados, laudos anteriores, opções
 //   POST /api/sadt/laudos-especializados/mama/itens/:item            rascunho (cria ou altera pela versão)
-//   POST /api/sadt/laudos-especializados/mama/laudos/:laudo/liberar  { versao }
+//   POST /api/sadt/laudos-especializados/mama/laudos/:laudo/liberar  { versao }  (assina o médico da sessão)
+//   POST /api/sadt/laudos-especializados/mama/laudos/:laudo/retificar  { versao, motivo }  (rascunho novo ligado)
 //   GET  /api/sadt/laudos-especializados/anatomopatologico/itens/:item
 //   POST /api/sadt/laudos-especializados/anatomopatologico/itens/:item
 //   POST /api/sadt/laudos-especializados/anatomopatologico/laudos/:laudo/liberar  { versao }
+//   POST /api/sadt/laudos-especializados/anatomopatologico/laudos/:laudo/retificar  { versao, motivo }
 //   GET  /api/sadt/laudos-especializados/pecas-enviadas?de=&ate=     peças da cirurgia ainda sem laudo
 //   POST /api/sadt/laudos-especializados/pecas-enviadas/:descricao/receber  { item }
 //   GET  /api/sadt/laudos-especializados/siscan/mamografia?de=&ate=  fichas do resultado de mamografia
@@ -37,6 +39,7 @@ export const PERMISSOES_LAUDO_MAMA_PATOLOGIA = {
   ler: 'sadt.laudo.ler',
   redigir: 'sadt.laudo.criar',
   liberar: 'sadt.laudo.assinar',
+  retificar: 'sadt.laudo.assinar',
 } as const;
 
 @Controller('sadt/laudos-especializados')
@@ -98,6 +101,20 @@ export class LaudoMamaPatologiaController {
     return this.com(req, (p, c) => p.liberarMama(c, laudo, corpo));
   }
 
+  @Post('mama/laudos/:laudo/retificar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_LAUDO_MAMA_PATOLOGIA.retificar)
+  @AuditadoNoHandler(
+    'laudo de mamografia retificado com motivo e rascunho novo ligado, pelo executor (trilha na mesma transação)',
+  )
+  retificarMama(
+    @Req() req: RequisicaoAutorizada,
+    @Param('laudo', ParseIntPipe) laudo: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.retificarMama(c, laudo, corpo));
+  }
+
   @Get('anatomopatologico/itens/:item')
   @Permissao(PERMISSOES_LAUDO_MAMA_PATOLOGIA.ler)
   abrirAnatomopatologico(@Req() req: RequisicaoAutorizada, @Param('item', ParseIntPipe) item: number) {
@@ -126,6 +143,20 @@ export class LaudoMamaPatologiaController {
     @Body() corpo: unknown,
   ) {
     return this.com(req, (p, c) => p.liberarAnatomopatologico(c, laudo, corpo));
+  }
+
+  @Post('anatomopatologico/laudos/:laudo/retificar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_LAUDO_MAMA_PATOLOGIA.retificar)
+  @AuditadoNoHandler(
+    'laudo anatomopatológico retificado com motivo e rascunho novo ligado, pelo executor (trilha na mesma transação)',
+  )
+  retificarAnatomopatologico(
+    @Req() req: RequisicaoAutorizada,
+    @Param('laudo', ParseIntPipe) laudo: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.retificarAnatomopatologico(c, laudo, corpo));
   }
 
   @Get('pecas-enviadas')

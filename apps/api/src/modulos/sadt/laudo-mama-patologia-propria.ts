@@ -11,7 +11,10 @@
 //     marca de exclusão e volta reativada se a mesma identificação reaparecer; o laudo anatomopatológico recebe o
 //     número pela sequência do estabelecimento;
 //   - liberar: confere o laudo completo, grava liberado (com quem e quando) e marca o exame pedido como realizado;
-//     laudo liberado não muda mais;
+//     assina o profissional da sessão (vínculo da conta), médico com inscrição ativa no conselho; o rascunho que indica
+//     outro profissional é recusado; laudo liberado não muda mais;
+//   - retificar: o laudo liberado vira 'retificado' (motivo, quando e quem) e um laudo novo do mesmo exame nasce em
+//     rascunho ligado a ele, com os achados (ou as amostras) copiados; nada se apaga;
 //   - peças enviadas: as descrições cirúrgicas com envio de peça ainda sem laudo, com os pedidos de anatomia
 //     patológica abertos do mesmo paciente; receber cria o laudo em rascunho no pedido escolhido, ligado à descrição,
 //     com a coleta no fim da cirurgia, o recebimento agora, o cirurgião como solicitante e a peça como amostra A;
@@ -24,16 +27,20 @@ import {
   alertasLaudoAnatomopatologico,
   alertasLaudoMama,
   type AmostraAnatomopatologica,
+  type AutorLaudo,
   amostraMudou,
   CATEGORIAS_MAMA,
   categoriaMaisGrave,
   COMPOSICOES_MAMA,
   conferirLaudoAnatomopatologico,
+  conferirAutorLaudo,
   conferirLaudoMama,
+  conferirRetificacaoEspecializado,
   CONTORNOS_ACHADO_MAMA,
   type DadosEstruturadosAnatomopatologico,
   DENSIDADES_ACHADO_MAMA,
   DISTRIBUICOES_CALCIFICACAO,
+  ehMedico,
   fichaSiscanMamografia,
   FORMAS_ACHADO_MAMA,
   HER2_ESCORES,
@@ -41,6 +48,7 @@ import {
   type LaudoAnatomopatologico,
   type LaudoMama,
   MARGENS_CIRURGICAS,
+  numeroRetificacao,
   QUADRANTES_MAMA,
   RECOMENDACOES_MAMA,
   RESULTADOS_ANATOMOPATOLOGICO,
@@ -176,6 +184,14 @@ const esquemaAp = z
   .strict();
 const esquemaVersao = z.object({ versao: id }).strict();
 const esquemaReceber = z.object({ item: id }).strict();
+const esquemaRetificar = z.object({ versao: id, motivo: z.string().trim().max(500) }).strict();
+
+/** O profissional da conta: pela mesma pessoa ou pelo vínculo vigente da conta. */
+const DO_USUARIO = `(pr.pessoa_fisica_id = u.pessoa_fisica_id OR EXISTS (SELECT 1 FROM usuario_vinculo_profissional v
+  WHERE v.usuario_id = u.id AND v.profissional_id = pr.id AND v.excluido_em IS NULL AND v.vigencia_inicio <= CURRENT_DATE
+    AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= CURRENT_DATE)))`;
+/** O laudo vigente do exame: o retificado e o cancelado ficam no histórico. */
+const VIGENTE = "situacao NOT IN ('retificado','cancelado') AND excluido_em IS NULL";
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const esquemaFila = z.object({ de: data, ate: data, tipo: z.enum(['mama', 'anatomopatologico']) }).strict();
 const esquemaPeriodo = z.object({ de: data, ate: data }).strict();
@@ -354,9 +370,9 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
           ? `(SELECT CONCAT_WS('|', x.id, x.situacao, COALESCE(cd.categoria, ''), COALESCE(ce.categoria, ''))
                FROM laudo_mama x LEFT JOIN categoria_achado_mama cd ON cd.id = x.categoria_direita_id
                LEFT JOIN categoria_achado_mama ce ON ce.id = x.categoria_esquerda_id
-              WHERE x.exame_item_id = ei.id AND x.excluido_em IS NULL LIMIT 1)`
+              WHERE x.exame_item_id = ei.id AND x.situacao NOT IN ('retificado','cancelado') AND x.excluido_em IS NULL LIMIT 1)`
           : `(SELECT CONCAT_WS('|', x.id, x.situacao, COALESCE(x.resultado, ''), x.numero)
-               FROM laudo_anatomopatologico x WHERE x.exame_item_id = ei.id AND x.excluido_em IS NULL LIMIT 1)`;
+               FROM laudo_anatomopatologico x WHERE x.exame_item_id = ei.id AND x.situacao NOT IN ('retificado','cancelado') AND x.excluido_em IS NULL LIMIT 1)`;
       const linhas = await l.consultar<Linha>(
         `SELECT q.*, ${laudo} AS laudo FROM (${SQL_ITENS}${FILTRO[p.tipo]}
            AND re.solicitado_em >= ? AND re.solicitado_em < DATE_ADD(?, INTERVAL 1 DAY)) q
@@ -389,7 +405,7 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
     return this.ler(c, 'abrir-mama', async (l, est) => {
       const i = await this.item(l, est.id, item, 'mama');
       const [reg] = await l.consultar<Linha>(
-        `${SQL_MAMA} WHERE lm.exame_item_id = ? AND lm.excluido_em IS NULL`,
+        `${SQL_MAMA} WHERE lm.exame_item_id = ? AND lm.situacao NOT IN ('retificado','cancelado') AND lm.excluido_em IS NULL`,
         [item],
       );
       const laudo = reg ? mamaLido(reg) : null;
@@ -426,9 +442,11 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
         achados,
         achadosCorrigidos: corrigidos,
         anteriores,
+        retificados: await this.retificados(l, MAMA, item),
         emExecucao: itemEmExecucao(String(i['situacao_item'])),
         alertas: laudo ? alertasLaudoMama(laudo) : [],
         opcoes: {
+          assinante: (await this.assinante(l, c.usuario))?.profissional ?? null,
           profissionais: await this.profissionais(l),
           categorias: CATEGORIAS_MAMA.map((k) => ({ ...k })),
           tipos: opcoes(TIPOS_MAMOGRAFIA),
@@ -450,7 +468,7 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
     return this.ler(c, 'abrir-ap', async (l, est) => {
       const i = await this.item(l, est.id, item, 'anatomopatologico');
       const reg = await l.uma(
-        'SELECT * FROM laudo_anatomopatologico WHERE exame_item_id = ? AND excluido_em IS NULL',
+        `SELECT * FROM laudo_anatomopatologico WHERE exame_item_id = ? AND ${VIGENTE}`,
         [item],
       );
       const laudo = reg ? apLido(reg) : null;
@@ -483,9 +501,11 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
         laudo,
         amostras,
         anteriores,
+        retificados: await this.retificados(l, AP, item),
         emExecucao: itemEmExecucao(String(i['situacao_item'])),
         alertas: laudo ? alertasLaudoAnatomopatologico(laudo) : [],
         opcoes: {
+          assinante: (await this.assinante(l, c.usuario))?.profissional ?? null,
           profissionais: await this.profissionais(l),
           graus,
           tiposExame: opcoes(TIPOS_EXAME_ANATOMOPATOLOGICO),
@@ -528,7 +548,7 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
             `SELECT q.* FROM (${SQL_ITENS}${FILTRO.anatomopatologico}
                AND re.paciente_id IN (${pacientes.map(() => '?').join(', ')})) q
               WHERE NOT EXISTS (SELECT 1 FROM laudo_anatomopatologico x
-                                 WHERE x.exame_item_id = q.item AND x.excluido_em IS NULL)
+                                 WHERE x.exame_item_id = q.item AND x.situacao NOT IN ('retificado','cancelado') AND x.excluido_em IS NULL)
               ORDER BY q.solicitado_em DESC LIMIT 1000`,
             [est.id, ...pacientes],
           )
@@ -617,7 +637,7 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
         laudista_profissional_id: e.laudista,
       };
       const [atual] = await tx.consultarParaAtualizar<Linha>(
-        'SELECT id, situacao, versao FROM laudo_mama WHERE exame_item_id = ? AND excluido_em IS NULL',
+        `SELECT id, situacao, versao FROM laudo_mama WHERE exame_item_id = ? AND ${VIGENTE}`,
         [item],
       );
       let laudo: number;
@@ -660,13 +680,19 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
       );
       if (!r) throw naoEncontrado('Laudo de mamografia');
       if (r['situacao'] !== 'rascunho') throw encerrado();
-      const m = mamaLido(r);
+      const lido = mamaLido(r);
+      const autor = await this.autor(tx, c.usuario, lido.laudista, 'laudista');
+      const m = { ...lido, laudista: autor };
       const achados = (await this.achados(tx, laudo)).map(semId);
       const l: LaudoMama = { ...m, achados };
       const problemas = conferirLaudoMama(l, 'liberar', new Date().getUTCFullYear());
       if (problemas.length) throw recusaRegra('Laudo de mamografia incompleto', problemas);
       const agora = new Date();
-      const versao = await tx.alterar(MAMA, laudo, e.versao, { situacao: 'liberado', liberado_em: agora });
+      const versao = await tx.alterar(MAMA, laudo, e.versao, {
+        situacao: 'liberado',
+        liberado_em: agora,
+        laudista_profissional_id: autor,
+      });
       await this.marcarRealizado(tx, num(r['exame_item_id']), agora, usuario, m.laudista);
       return { tabela: MAMA, id: laudo, versao, alertas: alertasLaudoMama(l) };
     });
@@ -689,7 +715,7 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
       }
       const colunas = this.colunasAp(e);
       const [atual] = await tx.consultarParaAtualizar<Linha>(
-        'SELECT id, situacao FROM laudo_anatomopatologico WHERE exame_item_id = ? AND excluido_em IS NULL',
+        `SELECT id, situacao FROM laudo_anatomopatologico WHERE exame_item_id = ? AND ${VIGENTE}`,
         [item],
       );
       let laudo: number;
@@ -738,7 +764,9 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
       );
       if (!r) throw naoEncontrado('Laudo anatomopatológico');
       if (r['situacao'] !== 'rascunho' && r['situacao'] !== 'em_revisao') throw encerrado();
-      const a = apLido(r);
+      const lido = apLido(r);
+      const autor = await this.autor(tx, c.usuario, lido.patologista, 'patologista');
+      const a = { ...lido, patologista: autor };
       const amostras = (await this.amostras(tx, laudo)).map(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars -- descarta o id e a sequência
         ({ id: _i, sequencia: _s, ...x }): AmostraAnatomopatologica => x,
@@ -751,9 +779,158 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
         situacao: 'liberado',
         liberado_em: agora,
         liberado_por_usuario_id: usuario,
+        patologista_profissional_id: autor,
       });
       await this.marcarRealizado(tx, num(r['exame_item_id']), agora, usuario, a.patologista);
       return { tabela: AP, id: laudo, versao, alertas: alertasLaudoAnatomopatologico(l) };
+    });
+  }
+
+  /** Retifica o laudo de mamografia liberado: ele vai ao histórico e um rascunho novo, ligado a ele, o substitui. */
+  async retificarMama(c: ContextoPortaPropria, laudo: number, entrada: unknown) {
+    const e = entradaValida(esquemaRetificar, entrada);
+    return this.gravar(c, 'sadt.laudo-mama.retificar', [MAMA, ACHADO], async (tx, est, usuario) => {
+      const [r] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT * FROM laudo_mama WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [laudo, est.id],
+      );
+      if (!r) throw naoEncontrado('Laudo de mamografia');
+      const problemas = conferirRetificacaoEspecializado(String(r['situacao']), e.motivo);
+      if (problemas.length) throw recusaRegra('Retificação recusada', problemas);
+      const autor = await this.autor(tx, c.usuario, null, 'laudista');
+      const agora = new Date();
+      await tx.alterar(MAMA, laudo, e.versao, {
+        situacao: 'retificado',
+        motivo_retificacao: e.motivo,
+        retificado_em: agora,
+        retificado_por_usuario_id: usuario,
+      });
+      const copia = Object.fromEntries(
+        [
+          'estabelecimento_id',
+          'exame_item_id',
+          'paciente_id',
+          'atendimento_id',
+          'tipo_mamografia',
+          'nodulo_palpavel',
+          'historico_familiar_cancer',
+          'mamografia_anterior',
+          'mamografia_anterior_ano',
+          'anamnese',
+          'composicao_mama_direita',
+          'composicao_mama_esquerda',
+          'categoria_direita_id',
+          'categoria_esquerda_id',
+          'recomendacao',
+          'intervalo_controle_meses',
+          'conclusao',
+        ].map((k) => [k, r[k] ?? null]),
+      );
+      const novo = await tx.incluir(MAMA, {
+        ...copia,
+        laudo_retificado_id: laudo,
+        laudista_profissional_id: autor,
+        situacao: 'rascunho',
+      });
+      const achados = await tx.consultar<Linha>(
+        'SELECT * FROM achado_mama WHERE laudo_mama_id = ? AND excluido_em IS NULL ORDER BY sequencia',
+        [laudo],
+      );
+      let sequencia = 0;
+      for (const a of achados) {
+        const campos = Object.fromEntries(
+          Object.entries(a).filter(
+            ([k]) =>
+              !['id', 'laudo_mama_id', 'sequencia', 'versao'].includes(k) &&
+              !/^(criado|alterado|excluido)_/.test(k),
+          ),
+        );
+        await tx.incluir(ACHADO, { ...campos, laudo_mama_id: novo, sequencia: ++sequencia });
+      }
+      return { tabela: MAMA, id: novo, versao: 1, retificado: laudo, achados: sequencia };
+    });
+  }
+
+  /** Retifica o laudo anatomopatológico liberado: o mesmo número com a ordem (AP-1-R1), amostras copiadas. */
+  async retificarAnatomopatologico(c: ContextoPortaPropria, laudo: number, entrada: unknown) {
+    const e = entradaValida(esquemaRetificar, entrada);
+    return this.gravar(c, 'sadt.laudo-ap.retificar', [AP, AMOSTRA], async (tx, est, usuario) => {
+      const [r] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT * FROM laudo_anatomopatologico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [laudo, est.id],
+      );
+      if (!r) throw naoEncontrado('Laudo anatomopatológico');
+      const problemas = conferirRetificacaoEspecializado(String(r['situacao']), e.motivo);
+      if (problemas.length) throw recusaRegra('Retificação recusada', problemas);
+      const autor = await this.autor(tx, c.usuario, null, 'patologista');
+      const ordem = num(
+        (
+          await tx.uma(
+            "SELECT COUNT(*) AS n FROM laudo_anatomopatologico WHERE exame_item_id = ? AND situacao = 'retificado'",
+            [num(r['exame_item_id'])],
+          )
+        )?.['n'],
+      );
+      const agora = new Date();
+      await tx.alterar(AP, laudo, e.versao, {
+        situacao: 'retificado',
+        motivo_retificacao: e.motivo,
+        retificado_em: agora,
+        retificado_por_usuario_id: usuario,
+      });
+      const copia = Object.fromEntries(
+        [
+          'estabelecimento_id',
+          'exame_item_id',
+          'paciente_id',
+          'atendimento_id',
+          'descricao_cirurgica_id',
+          'setor_diagnostico_id',
+          'tipo_exame',
+          'solicitante_profissional_id',
+          'coleta_em',
+          'recebido_laboratorio_em',
+          'dados_clinicos',
+          'macroscopia',
+          'microscopia',
+          'diagnostico',
+          'conclusao',
+          'nota',
+          'topografia_termo_id',
+          'morfologia_termo_id',
+          'diagnostico_termo_id',
+          'grau_histologico_id',
+          'adequabilidade_amostra',
+          'resultado',
+          'dados_estruturados',
+        ].map((k) => [k, r[k] ?? null]),
+      );
+      if (copia['dados_estruturados'] !== null && typeof copia['dados_estruturados'] === 'object')
+        copia['dados_estruturados'] = JSON.stringify(copia['dados_estruturados']);
+      const numero = numeroRetificacao(String(r['numero']), ordem + 1);
+      const novo = await tx.incluir(AP, {
+        ...copia,
+        numero,
+        laudo_retificado_id: laudo,
+        patologista_profissional_id: autor,
+        situacao: 'rascunho',
+      });
+      const amostras = await tx.consultar<Linha>(
+        'SELECT * FROM amostra_anatomopatologica WHERE laudo_anatomopatologico_id = ? AND excluido_em IS NULL ORDER BY sequencia',
+        [laudo],
+      );
+      let sequencia = 0;
+      for (const a of amostras) {
+        const campos = Object.fromEntries(
+          Object.entries(a).filter(
+            ([k]) =>
+              !['id', 'laudo_anatomopatologico_id', 'sequencia', 'versao'].includes(k) &&
+              !/^(criado|alterado|excluido)_/.test(k),
+          ),
+        );
+        await tx.incluir(AMOSTRA, { ...campos, laudo_anatomopatologico_id: novo, sequencia: ++sequencia });
+      }
+      return { tabela: AP, id: novo, versao: 1, numero, retificado: laudo, amostras: sequencia };
     });
   }
 
@@ -787,7 +964,7 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
           { campo: 'item', mensagem: 'O pedido escolhido é de outro paciente.' },
         ]);
       const doItem = await tx.uma(
-        'SELECT id FROM laudo_anatomopatologico WHERE exame_item_id = ? AND excluido_em IS NULL',
+        `SELECT id FROM laudo_anatomopatologico WHERE exame_item_id = ? AND ${VIGENTE}`,
         [e.item],
       );
       if (doItem)
@@ -903,6 +1080,55 @@ export class PortaLaudoMamaPatologiaPropria extends PortaEstabelecimentoPropria 
           WHERE p.situacao = 'ativo' AND p.excluido_em IS NULL ORDER BY pf.nome LIMIT 3000`,
       )
     ).map((r) => ({ id: num(r['id']), rotulo: String(r['rotulo']) }));
+  }
+
+  /** O vínculo profissional da conta que assina (o de médico com inscrição ativa primeiro). */
+  private async assinante(l: Leitor, usuario: number | null): Promise<AutorLaudo | null> {
+    if (usuario === null) return null;
+    const vs = await l.consultar<Linha>(
+      `SELECT pr.id, COALESCE(oc.codigo_cbo, '') AS cbo, (ic.situacao = 'ativa' AND pr.situacao = 'ativo') AS ativo
+         FROM usuario u
+         JOIN profissional pr ON pr.excluido_em IS NULL AND ${DO_USUARIO}
+         JOIN inscricao_conselho ic ON ic.profissional_id = pr.id AND ic.excluido_em IS NULL
+         LEFT JOIN ocupacao_cbo oc ON oc.id = ic.ocupacao_cbo_id
+        WHERE u.id = ? AND u.excluido_em IS NULL ORDER BY ic.principal DESC, ic.id`,
+      [usuario],
+    );
+    const lista = vs.map((r) => ({
+      profissional: num(r['id']),
+      cbo: String(r['cbo']),
+      conselhoAtivo: Boolean(num(r['ativo'])),
+    }));
+    return lista.find((v) => v.conselhoAtivo && ehMedico(v.cbo)) ?? lista[0] ?? null;
+  }
+
+  /** Quem assina: o médico da sessão com inscrição ativa; o rascunho que indica outro profissional é recusado. */
+  private async autor(
+    tx: TxOperacao,
+    usuario: number | null,
+    indicado: number | null,
+    campo: 'laudista' | 'patologista',
+  ): Promise<number> {
+    const v = await this.assinante(tx, usuario);
+    const problemas = conferirAutorLaudo(v, indicado, campo);
+    if (problemas.length) throw recusaRegra('Assinatura recusada', problemas);
+    return v!.profissional;
+  }
+
+  /** Os laudos retificados do mesmo exame, do mais recente ao mais antigo (histórico; nada se apaga). */
+  private async retificados(l: Leitor, tabela: typeof MAMA | typeof AP, item: number) {
+    const sql =
+      tabela === MAMA
+        ? `SELECT id, liberado_em, retificado_em, motivo_retificacao FROM laudo_mama
+            WHERE exame_item_id = ? AND situacao = 'retificado' AND excluido_em IS NULL ORDER BY retificado_em DESC`
+        : `SELECT id, liberado_em, retificado_em, motivo_retificacao FROM laudo_anatomopatologico
+            WHERE exame_item_id = ? AND situacao = 'retificado' AND excluido_em IS NULL ORDER BY retificado_em DESC`;
+    return (await l.consultar<Linha>(sql, [item])).map((r) => ({
+      id: num(r['id']),
+      liberadoEm: iso(r['liberado_em']),
+      retificadoEm: iso(r['retificado_em']),
+      motivo: txtOuNull(r['motivo_retificacao']),
+    }));
   }
 
   private async profissionalExiste(tx: TxOperacao, profissional: number): Promise<void> {

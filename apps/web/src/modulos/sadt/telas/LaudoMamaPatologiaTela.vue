@@ -20,6 +20,7 @@ import {
   conferirLaudoAnatomopatologico,
   conferirLaudoMama,
   type LaudoAnatomopatologico,
+  MOTIVO_RETIFICACAO_MINIMO,
   type LaudoMama,
 } from '@sgh/dominio-sadt';
 import { SanteBotao, SanteCampoTexto, SanteData, SanteHora, SanteSelecao } from '@sgh/ui';
@@ -37,6 +38,8 @@ import {
   liberarLaudoAnatomopatologico,
   liberarLaudoMama,
   receberPeca,
+  retificarLaudoAnatomopatologico,
+  retificarLaudoMama,
   salvarLaudoAnatomopatologico,
   salvarLaudoMama,
   type TipoLaudoEspecializado,
@@ -141,6 +144,13 @@ const M = {
   falta: 'Para liberar falta:',
   gravado: 'Laudo gravado.',
   liberadoMsg: 'Laudo liberado.',
+  retificar: 'Retificar o laudo',
+  motivoRetificacao: 'Motivo da retificação',
+  motivoCurto: 'Diga o motivo (ao menos {n} caracteres).',
+  retificadoMsg: 'Laudo retificado: o rascunho novo está aberto para correção.',
+  retificados: 'Retificações deste exame',
+  retificadoItem: 'Liberado em {l}, retificado em {r}: {m}',
+  assinaSessao: 'Quem libera assina: o médico desta sessão, com inscrição ativa no conselho.',
   pecasNenhuma: 'Nenhuma peça enviada pela cirurgia aguardando recebimento no período.',
   cirurgia: 'Cirurgia {n} · {c}',
   pedido: 'Pedido de anatomia patológica',
@@ -382,7 +392,7 @@ function preencherMama(x: ExameMama): void {
     recomendacao: l?.recomendacao ?? '',
     intervalo: t(l?.intervaloControleMeses),
     conclusao: l?.conclusao ?? '',
-    laudista: t(l?.laudista),
+    laudista: t(l?.laudista ?? x.opcoes.assinante),
     achados: x.achados.map((a) => ({
       chave: ++chaves,
       id: a.id,
@@ -545,7 +555,7 @@ function preencherAp(x: ExameAnatomopatologico): void {
     grau: t(l?.grauHistologico),
     adequabilidade: l?.adequabilidade ?? '',
     resultado: l?.resultado ?? '',
-    patologista: t(l?.patologista),
+    patologista: t(l?.patologista ?? x.opcoes.assinante),
     margens: tx('margens'),
     tumor: tx('tamanhoTumorMm'),
     linfEx: tx('linfonodosExaminados'),
@@ -694,6 +704,21 @@ const salvarELiberar = () =>
       ? liberarLaudoMama(s.id, s.versao)
       : liberarLaudoAnatomopatologico(s.id, s.versao));
     mensagem.value = M.liberadoMsg;
+  });
+// ── Retificação (só o liberado; com motivo; o novo rascunho abre no lugar) ──
+const motivo = ref('');
+const podeRetificar = computed(
+  () => podeLiberar.value && laudoAtual.value?.situacao === 'liberado' && (aberto.value?.emExecucao ?? false),
+);
+const motivoCurto = computed(() => motivo.value.trim().length < MOTIVO_RETIFICACAO_MINIMO);
+const retificar = () =>
+  rodar(async () => {
+    const l = laudoAtual.value!;
+    await (aba.value === 'mama'
+      ? retificarLaudoMama(l.id, l.versao, motivo.value.trim())
+      : retificarLaudoAnatomopatologico(l.id, l.versao, motivo.value.trim()));
+    motivo.value = '';
+    mensagem.value = M.retificadoMsg;
   });
 const receber = (descricao: number, pedidos: { item: number }[]) =>
   rodar(async () => {
@@ -889,6 +914,39 @@ function baixarCsv(): void {
         <p v-if="laudoAtual?.situacao === 'liberado'" data-testid="lmp-liberado">
           {{ tr(M.liberadoEm, { d: quando(laudoAtual.liberadoEm) }) }}
         </p>
+        <div v-if="podeRetificar" data-testid="lmp-retificacao">
+          <SanteCampoTexto
+            v-model="motivo"
+            :rotulo="M.motivoRetificacao"
+            :max-bytes="500"
+            multilinha
+            data-testid="lmp-motivo-retificacao"
+          />
+          <p v-if="motivo && motivoCurto" class="erro-campo" data-testid="lmp-motivo-curto">
+            {{ tr(M.motivoCurto, { n: MOTIVO_RETIFICACAO_MINIMO }) }}
+          </p>
+          <SanteBotao
+            variante="texto"
+            :rotulo="M.retificar"
+            :desabilitado="ocupado || motivoCurto"
+            data-testid="lmp-retificar"
+            @acionar="retificar"
+          />
+        </div>
+        <details v-if="aberto.retificados.length" data-testid="lmp-retificados">
+          <summary>{{ M.retificados }} ({{ aberto.retificados.length }})</summary>
+          <ul>
+            <li v-for="r in aberto.retificados" :key="r.id">
+              {{
+                tr(M.retificadoItem, {
+                  l: quando(r.liberadoEm),
+                  r: quando(r.retificadoEm),
+                  m: r.motivo ?? '',
+                })
+              }}
+            </li>
+          </ul>
+        </details>
         <ul v-if="alertas.length" class="alertas">
           <li v-for="a in alertas" :key="a" class="erro-campo" data-testid="lmp-alerta">{{ a }}</li>
         </ul>
@@ -1317,6 +1375,7 @@ function baixarCsv(): void {
             @acionar="salvarELiberar"
           />
         </div>
+        <p v-if="editavel && podeLiberar" data-testid="lmp-assina-sessao">{{ M.assinaSessao }}</p>
         <div v-if="editavel && falta.length" data-testid="lmp-falta">
           <strong>{{ M.falta }}</strong>
           <ul>

@@ -10,7 +10,11 @@
 // recusada com a recomendação errada e aceita certa, com o exame marcado realizado e o laudo imutável; a ficha do
 // SISCAN; o laudo anatomopatológico com o número da sequência, amostras alteradas no lugar, retirada marcada e
 // reativada; liberação do maligno exige o grau; a peça da cirurgia listada com os pedidos da paciente, recebida no
-// pedido escolhido (laudo ligado à descrição, amostra A, cirurgião solicitante) e não recebida duas vezes.
+// pedido escolhido (laudo ligado à descrição, amostra A, cirurgião solicitante) e não recebida duas vezes; a
+// liberação assinada só pelo médico da sessão (conta sintética ligada ao médico pela pessoa, inscrição ativa com CBO de
+// médico): recusada sem vínculo, com outro médico indicado, com inscrição suspensa e com CBO de outra ocupação, sem
+// escrita; a retificação com motivo (migração 10_SADT/90b): o liberado vira retificado e o rascunho novo, ligado a ele,
+// leva os achados ou as amostras e o número com a ordem.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -27,6 +31,14 @@ const COD = (s: string) => `${P}${s}`.toUpperCase();
 async function limpar(e: Escritor): Promise<void> {
   const ests = 'SELECT id FROM estabelecimento WHERE codigo IN (?, ?)';
   const par = [P, P2];
+  await e.executar(
+    `UPDATE laudo_mama SET laudo_retificado_id = NULL WHERE estabelecimento_id IN (${ests})`,
+    par,
+  );
+  await e.executar(
+    `UPDATE laudo_anatomopatologico SET laudo_retificado_id = NULL WHERE estabelecimento_id IN (${ests})`,
+    par,
+  );
   await e.executar(
     `DELETE FROM achado_mama WHERE laudo_mama_id IN (SELECT id FROM laudo_mama WHERE estabelecimento_id IN (${ests}))`,
     par,
@@ -57,10 +69,21 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM setor_diagnostico WHERE estabelecimento_id IN (${ests})`, par);
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN (${ests})`, par);
   const pf = 'SELECT id FROM pessoa_fisica WHERE nome LIKE ?';
+  const contas = [`${P}.medico`, `${P}.outro`];
+  await e.executar('UPDATE usuario SET pessoa_fisica_id = NULL WHERE login IN (?, ?)', contas);
+  await e.executar(
+    `DELETE FROM inscricao_conselho WHERE profissional_id IN (SELECT id FROM profissional WHERE pessoa_fisica_id IN (${pf}))`,
+    [`% ${COD('')}`],
+  );
   await e.executar(`DELETE FROM profissional WHERE pessoa_fisica_id IN (${pf})`, [`% ${COD('')}`]);
   await e.executar(`DELETE FROM paciente WHERE pessoa_fisica_id IN (${pf})`, [`% ${COD('')}`]);
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`% ${COD('')}`]);
   await limparTrilhaDaMassa(e, { codigos: par });
+  await e.executar(
+    'DELETE FROM idempotencia_operacao WHERE usuario_id IN (SELECT id FROM usuario WHERE login IN (?, ?))',
+    contas,
+  );
+  await e.executar('DELETE FROM usuario WHERE login IN (?, ?)', contas);
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', par);
 }
 
@@ -69,6 +92,9 @@ describe.skipIf(SEM_BANCO)('PortaLaudoMamaPatologiaPropria contra o MariaDB (con
   let porta: PortaLaudoMamaPatologiaPropria;
   let m: {
     usuario: number;
+    outro: number;
+    inscricao: number;
+    cboOutro: number;
     paciente: number;
     medico: number;
     cirurgiao: number;
@@ -125,14 +151,28 @@ describe.skipIf(SEM_BANCO)('PortaLaudoMamaPatologiaPropria contra o MariaDB (con
       await limpar(e);
       const agora = new Date();
       const um = async (sql: string) => Number((await e.uma(sql))?.['id'] ?? 0);
-      const usuario = await um('SELECT MIN(id) AS id FROM usuario WHERE excluido_em IS NULL');
+      const usuarioBase = await um('SELECT MIN(id) AS id FROM usuario WHERE excluido_em IS NULL');
+      const cboMedico = await um("SELECT id FROM ocupacao_cbo WHERE codigo_cbo = '225125'");
+      const cboOutro = await um("SELECT id FROM ocupacao_cbo WHERE codigo_cbo = '223505'");
+      const conselho = await um('SELECT MIN(id) AS id FROM conselho_classe');
+      const uf = await um('SELECT MIN(id) AS id FROM unidade_federativa');
       const categoria = await um('SELECT MIN(id) AS id FROM categoria_atendimento');
       const caraterTiss = await um('SELECT MIN(id) AS id FROM carater_atendimento_tiss');
       const fonte = await um('SELECT MIN(id) AS id FROM fonte_pagadora');
       const grau = await um("SELECT id FROM grau_histologico WHERE codigo = 'NOTTINGHAM_2'");
-      if (!usuario || !categoria || !caraterTiss || !fonte || !grau)
+      if (
+        !usuarioBase ||
+        !categoria ||
+        !caraterTiss ||
+        !fonte ||
+        !grau ||
+        !cboMedico ||
+        !cboOutro ||
+        !conselho ||
+        !uf
+      )
         throw new Error(
-          'O cliente de teste precisa de usuário, categoria, caráter, fonte pagadora e da migração 90.',
+          'O cliente de teste precisa de usuário, categoria, caráter, fonte pagadora, ocupações, conselho, UF e da migração 90.',
         );
       const novoEst = (codigo: string) =>
         e.inserir(
@@ -155,6 +195,23 @@ describe.skipIf(SEM_BANCO)('PortaLaudoMamaPatologiaPropria contra o MariaDB (con
         });
       const medico = await prof('LAUDO');
       const cirurgiao = await prof('CIRURGIA');
+      // A conta sintética do médico (mesma pessoa) e outra conta sem vínculo profissional.
+      const pfMedico = Number(
+        (await e.uma('SELECT pessoa_fisica_id AS id FROM profissional WHERE id = ?', [medico]))?.['id'],
+      );
+      const conta = (login: string, pessoa: number | null) =>
+        e.inserir(
+          "INSERT INTO usuario (login, nome, tipo_conta, pessoa_fisica_id, criado_em) VALUES (?, ?, 'servico', ?, ?)",
+          [login, `USUARIO SINTETICO ${login}`, pessoa, agora],
+        );
+      const usuario = await conta(`${P}.medico`, pfMedico);
+      const outro = await conta(`${P}.outro`, null);
+      const inscricao = await e.inserir(
+        `INSERT INTO inscricao_conselho (profissional_id, sequencia, conselho_classe_id, unidade_federativa_id,
+           numero_inscricao, principal, situacao, ocupacao_cbo_id, criado_em, versao)
+         VALUES (?, 1, ?, ?, ?, TRUE, 'ativa', ?, ?, 1)`,
+        [medico, conselho, uf, `${P}1`.slice(0, 20), cboMedico, agora],
+      );
       const atendimento = await min('atendimento', {
         estabelecimento_id: est,
         numero: `${P}-A`,
@@ -260,7 +317,21 @@ describe.skipIf(SEM_BANCO)('PortaLaudoMamaPatologiaPropria contra o MariaDB (con
          VALUES (?, ?, 'Técnica sintética', TRUE, 'Segmento de mama direita (sintético)', 'concluida', ?, ?)`,
         [ato, cirurgiao, agora, agora],
       );
-      return { usuario, paciente, medico, cirurgiao, itemMama, itemUs, itemAp1, itemAp2, descricao, grau };
+      return {
+        usuario,
+        outro,
+        inscricao,
+        cboOutro,
+        paciente,
+        medico,
+        cirurgiao,
+        itemMama,
+        itemUs,
+        itemAp1,
+        itemAp2,
+        descricao,
+        grau,
+      };
     });
     porta = new PortaLaudoMamaPatologiaPropria(nucleo, CLIENTE);
   }, 120_000);
@@ -471,5 +542,114 @@ describe.skipIf(SEM_BANCO)('PortaLaudoMamaPatologiaPropria contra o MariaDB (con
     await expect(porta.receberPeca(ctx(), m.descricao, { item: m.itemAp2 })).rejects.toMatchObject({
       problema: { status: 409 },
     });
+  });
+
+  it('autoria: só o médico da sessão, com inscrição ativa e CBO de médico, libera; recusas sem escrita', async () => {
+    const ab = await porta.abrirAnatomopatologico(ctx(), m.itemAp2);
+    expect(ab.opcoes.assinante).toBe(m.medico);
+    const corpo = {
+      tipoExame: 'histopatologia',
+      coletaEm: '2030-03-10T09:30:00.000Z',
+      recebidoEm: '2030-03-10T12:00:00.000Z',
+      macroscopia: 'Segmento sintético.',
+      microscopia: 'Tecido mamário sintético sem atipias.',
+      diagnostico: 'Alteração benigna sintética.',
+      resultado: 'benigno',
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- descarta o id e a sequência
+      amostras: ab.amostras.map(({ sequencia: _s, ...a }) => a),
+    };
+    await porta.salvarAnatomopatologico(ctx(), m.itemAp2, { ...corpo, versao: 1, patologista: m.cirurgiao });
+    const id = ab.laudo!.id;
+    await expect(porta.liberarAnatomopatologico(ctx(), id, { versao: 2 })).rejects.toMatchObject({
+      problema: { status: 422, campos: ['patologista'] },
+    });
+    await porta.salvarAnatomopatologico(ctx(), m.itemAp2, { ...corpo, versao: 2, patologista: null });
+    await expect(
+      porta.liberarAnatomopatologico({ ...ctx(), usuario: m.outro }, id, { versao: 3 }),
+    ).rejects.toMatchObject({ problema: { status: 422, campos: ['patologista'] } });
+    const inscricao = (k: string, v: unknown) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+        e.executar(`UPDATE inscricao_conselho SET ${k} = ? WHERE id = ?`, [v, m.inscricao]),
+      );
+    await inscricao('situacao', 'suspensa');
+    await expect(porta.liberarAnatomopatologico(ctx(), id, { versao: 3 })).rejects.toMatchObject({
+      problema: { status: 422, campos: ['patologista'] },
+    });
+    await inscricao('situacao', 'ativa');
+    const cbo = Number(
+      (await ler('SELECT ocupacao_cbo_id AS c FROM inscricao_conselho WHERE id = ?', [m.inscricao]))[0]!['c'],
+    );
+    await inscricao('ocupacao_cbo_id', m.cboOutro);
+    await expect(porta.liberarAnatomopatologico(ctx(), id, { versao: 3 })).rejects.toMatchObject({
+      problema: { status: 422, campos: ['patologista'] },
+    });
+    await inscricao('ocupacao_cbo_id', cbo);
+    const [antes] = await ler('SELECT situacao, versao FROM laudo_anatomopatologico WHERE id = ?', [id]);
+    expect(antes).toMatchObject({ situacao: 'rascunho', versao: 3 });
+    await porta.liberarAnatomopatologico(ctx(), id, { versao: 3 });
+    const [g] = await ler(
+      'SELECT situacao, patologista_profissional_id AS pat, liberado_por_usuario_id AS por FROM laudo_anatomopatologico WHERE id = ?',
+      [id],
+    );
+    expect(g).toMatchObject({ situacao: 'liberado', pat: m.medico, por: m.usuario });
+  });
+
+  it('retificação: o liberado vira retificado com motivo e o rascunho novo, ligado, leva achados e amostras', async () => {
+    const lm = await laudoMama();
+    const id = Number(lm!['id']);
+    const versao = Number(lm!['versao']);
+    await expect(porta.retificarMama(ctx(), id, { versao, motivo: 'curto' })).rejects.toMatchObject({
+      problema: { status: 422, campos: ['motivo'] },
+    });
+    await expect(
+      porta.retificarMama({ ...ctx(), usuario: m.outro }, id, {
+        versao,
+        motivo: 'Categoria da mama direita revista',
+      }),
+    ).rejects.toMatchObject({ problema: { status: 422, campos: ['laudista'] } });
+    const r = await porta.retificarMama(ctx(), id, { versao, motivo: 'Categoria da mama direita revista' });
+    const linhas = await ler(
+      `SELECT id, situacao, laudo_retificado_id AS ret, motivo_retificacao AS motivo, retificado_por_usuario_id AS por,
+              laudista_profissional_id AS laudista,
+              (SELECT COUNT(*) FROM achado_mama a WHERE a.laudo_mama_id = lm.id AND a.excluido_em IS NULL) AS achados
+         FROM laudo_mama lm WHERE exame_item_id = ? ORDER BY id`,
+      [m.itemMama],
+    );
+    expect(linhas.map((x) => [x['situacao'], x['ret'], x['motivo'], x['por'], Number(x['achados'])])).toEqual(
+      [
+        ['retificado', null, 'Categoria da mama direita revista', m.usuario, 1],
+        ['rascunho', id, null, null, 1],
+      ],
+    );
+    expect(linhas[1]).toMatchObject({ id: r.id, laudista: m.medico });
+    const ab = await porta.abrirMama(ctx(), m.itemMama);
+    expect(ab.laudo).toMatchObject({ id: r.id, situacao: 'rascunho', categoriaDireita: '4B' });
+    expect(ab.retificados.map((x) => x.id)).toEqual([id]);
+    const hoje = new Date().toISOString().slice(0, 10);
+    expect((await porta.siscanMamografia(ctx(), { de: hoje, ate: hoje })).fichas).toHaveLength(0);
+    await expect(
+      porta.retificarMama(ctx(), r.id, { versao: 1, motivo: 'Categoria da mama direita revista' }),
+    ).rejects.toMatchObject({ problema: { status: 422, campos: ['situacao'] } });
+
+    const [ap] = await ler('SELECT id, numero, versao FROM laudo_anatomopatologico WHERE exame_item_id = ?', [
+      m.itemAp1,
+    ]);
+    const ra = await porta.retificarAnatomopatologico(ctx(), Number(ap!['id']), {
+      versao: Number(ap!['versao']),
+      motivo: 'Grau histológico revisto na lâmina',
+    });
+    expect(ra.numero).toBe(`${String(ap!['numero'])}-R1`);
+    const [novo] = await ler(
+      `SELECT situacao, laudo_retificado_id AS ret, grau_histologico_id AS grau, patologista_profissional_id AS pat,
+              (SELECT COUNT(*) FROM amostra_anatomopatologica x WHERE x.laudo_anatomopatologico_id = l.id) AS amostras
+         FROM laudo_anatomopatologico l WHERE id = ?`,
+      [ra.id],
+    );
+    expect(novo).toMatchObject({ situacao: 'rascunho', ret: Number(ap!['id']), grau: m.grau, pat: m.medico });
+    expect(Number(novo!['amostras'])).toBe(3);
+    const [velho] = await ler('SELECT situacao FROM laudo_anatomopatologico WHERE id = ?', [
+      Number(ap!['id']),
+    ]);
+    expect(velho).toMatchObject({ situacao: 'retificado' });
   });
 });
