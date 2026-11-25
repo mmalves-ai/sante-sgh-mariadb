@@ -15,6 +15,7 @@ import {
   lerRetidoEmAberto,
   lerApoioRetencao,
 } from '../api-contabil-fiscal.js';
+import { buscarMunicipiosRetencao, type MunicipioEncontrado } from '../api-retencao-sofrida.js';
 import BuscaFornecedor from './BuscaFornecedor.vue';
 
 const props = defineProps<{ competencia: string; podeEditar: boolean; podeRecolher: boolean }>();
@@ -54,6 +55,11 @@ const { t } = useI18n({
       inicio: 'Início da vigência',
       incluir: 'Incluir regra',
       escolha: 'Escolha',
+      municipio: 'Município do serviço (ISS)',
+      municipioDica: 'Digite o começo do nome do município',
+      municipioEscolhido: 'Escolhido: {nome}',
+      municipioNenhum: 'Nenhum município encontrado.',
+      municipioFalta: 'A regra do ISS é do município do serviço: escolha o município.',
       invalida: 'Preencha tributo, descrição (3 letras ou mais), alíquota e início da vigência.',
       gerar: 'Gerar título do recolhimento',
       nada: 'Nenhuma retenção em aberto.',
@@ -98,6 +104,25 @@ const nova = reactive({
   faixaFim: '',
   vigenciaInicio: hoje(),
 });
+// O ISS retido é do município do serviço: a regra do ISS só entra com o município, escolhido pelo nome.
+const ehIss = computed(
+  () => (apoio.data.value?.tributos ?? []).find((x) => x.id === nova.tributo)?.sigla.toUpperCase() === 'ISS',
+);
+const municipio = ref<MunicipioEncontrado | null>(null);
+const termoMunicipio = ref('');
+const municipios = useQuery({
+  queryKey: computed(() => ['financeiro', 'busca-municipio', termoMunicipio.value.trim()]),
+  queryFn: () => buscarMunicipiosRetencao(termoMunicipio.value.trim()),
+  enabled: computed(() => ehIss.value && termoMunicipio.value.trim().length >= 2 && !municipio.value),
+});
+function digitarMunicipio(v: string) {
+  termoMunicipio.value = v;
+  municipio.value = null;
+}
+function escolherMunicipio(m: MunicipioEncontrado) {
+  municipio.value = m;
+  termoMunicipio.value = `${m.nome} (${m.uf})`;
+}
 const num = (v: string) => Number(String(v).replace(',', '.'));
 const opcional = (v: string) => (String(v).trim() === '' ? null : num(v));
 /** Validação na hora: o botão só liga com o mínimo que o servidor exige (o servidor confere o resto). */
@@ -109,6 +134,7 @@ const novaPronta = computed(
     num(nova.aliquota) <= 100 &&
     num(nova.percentualBase) > 0 &&
     num(nova.percentualBase) <= 100 &&
+    (!ehIss.value || !!municipio.value) &&
     /^\d{4}-\d{2}-\d{2}$/.test(nova.vigenciaInicio),
 );
 const incluir = () =>
@@ -120,7 +146,7 @@ const incluir = () =>
         descricao: nova.descricao.trim(),
         momento: nova.momento,
         participante: nova.participante,
-        municipio: null,
+        municipio: ehIss.value ? (municipio.value?.id ?? null) : null,
         percentualBase: num(nova.percentualBase),
         aliquota: num(nova.aliquota),
         faixaInicio: opcional(nova.faixaInicio),
@@ -252,6 +278,33 @@ const recolher = (tributo: number, receita: string | null) =>
           :opcoes="PARTICIPANTES.map((x) => ({ valor: x, rotulo: t(`participantes.${x}`) }))"
           data-testid="rt-nova-participante"
         />
+      </span>
+      <span v-if="ehIss" class="campo">
+        <label for="rt-nova-municipio">{{ t('municipio') }}</label>
+        <input
+          id="rt-nova-municipio"
+          :value="termoMunicipio"
+          :placeholder="t('municipioDica')"
+          maxlength="80"
+          autocomplete="off"
+          required
+          data-testid="rt-nova-municipio"
+          @input="digitarMunicipio(($event.target as HTMLInputElement).value)"
+        />
+        <small v-if="municipio" class="secundario" role="status" data-testid="rt-nova-municipio-escolhido">
+          {{ t('municipioEscolhido', { nome: `${municipio.nome} (${municipio.uf})` }) }}
+        </small>
+        <ul
+          v-else-if="municipios.data.value?.length"
+          class="lista-simples"
+          data-testid="rt-nova-municipio-achados"
+        >
+          <li v-for="m in municipios.data.value" :key="m.id">
+            <button type="button" @click="escolherMunicipio(m)">{{ m.nome }} ({{ m.uf }})</button>
+          </li>
+        </ul>
+        <small v-else-if="municipios.data.value" class="secundario">{{ t('municipioNenhum') }}</small>
+        <small v-else class="secundario">{{ t('municipioFalta') }}</small>
       </span>
       <span
         v-for="c in [

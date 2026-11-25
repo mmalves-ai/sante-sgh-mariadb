@@ -131,6 +131,18 @@ export async function saldoRetencaoSofrida(l: Leitor, est: number) {
   ).map((s) => ({ ...s, tributoId: ids.get(s.tributo) ?? 0 }));
 }
 
+/** Busca do município pelo nome (a regra do ISS retido é do município do serviço; a tela nunca pede o código). */
+export async function buscarMunicipiosRetencao(l: Leitor, termo: string) {
+  const t = termo.trim().slice(0, 80);
+  if (t.length < 2) return [];
+  const linhas = await l.consultar(
+    `SELECT m.id, m.nome, u.sigla AS uf FROM municipio_ibge m JOIN unidade_federativa u ON u.id = m.unidade_federativa_id
+      WHERE m.nome LIKE ? ORDER BY m.nome LIMIT 20`,
+    [`${t.replace(/[\\%_]/g, '\\$&')}%`],
+  );
+  return linhas.map((r) => ({ id: numero(r['id']), nome: texto(r['nome']), uf: texto(r['uf']) }));
+}
+
 // ── Registrar e estornar ───────────────────────────────────────────────────────────────────────────────────────
 
 export const esquemaRetencaoSofrida = z.union([

@@ -3,6 +3,7 @@
 //   GET  /api/financeiro/retencao-sofrida/titulo/:id?data=AAAA-MM-DD   retido, saldo da parcela e sugestão da regra
 //   POST /api/financeiro/retencao-sofrida/registrar   { titulo, versao?, data, itens[{ tributo, base, aliquota, valor }] }
 //   POST /api/financeiro/retencao-sofrida/estornar    { titulo, retencao, motivo }
+//   GET  /api/financeiro/retencao-sofrida/municipios?termo=        município do serviço, para a regra do ISS
 //   GET  /api/financeiro/retencao-sofrida/saldo       o saldo a compensar por tributo
 //   POST /api/financeiro/retencao-sofrida/compensar   { competencia: AAAA-MM, tributo }
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
@@ -17,6 +18,7 @@ import { contextoOperacao, problemaDoCadastro, sessaoDe } from '../cadastro/comu
 import { corpo } from '../exames/public-api.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import {
+  buscarMunicipiosRetencao,
   esquemaCompensacaoSofrida,
   esquemaRetencaoSofrida,
   OPERACOES_RETENCAO_SOFRIDA,
@@ -126,6 +128,12 @@ export class RetencaoSofridaController {
       corpo(esquemaRetencaoSofrida, { acao: 'estornar', ...corpo(esquemaEstornar, b) }),
       'Retenção estornada; o valor voltou ao saldo da parcela.',
     );
+  }
+
+  @Get('municipios')
+  @Permissao('financeiro.parametro.ler')
+  municipios(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.ler(req, (l) => buscarMunicipiosRetencao(l, String(termo ?? '')));
   }
 
   @Get('saldo')

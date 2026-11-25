@@ -11,6 +11,7 @@ import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import ReinfEventosPainel from '../componentes/ReinfEventosPainel.vue';
 import RetencoesPainel from '../componentes/RetencoesPainel.vue';
+import SaldoCompensarPainel from '../componentes/SaldoCompensarPainel.vue';
 import TabelaRegistros from '../componentes/TabelaRegistros.vue';
 import { gerarDeclaracao, listarDeclaracoes, novaChave } from '../api-financeiro.js';
 import { usarFinanceiro } from '../usar-financeiro.js';
@@ -113,6 +114,12 @@ async function gerar() {
       :competencia="periodo"
       :pode-editar="tem('financeiro.parametro.editar')"
       :pode-recolher="tem('financeiro.tituloPagar.criar')"
+    />
+    <!-- F3.8, 07-FIN linha 109: o tributo retido pelos tomadores e o saldo a compensar na apuração da competência. -->
+    <SaldoCompensarPainel
+      v-if="tipo === 'reinf'"
+      :competencia="periodo"
+      :pode="tem('financeiro.reinf.gerar')"
     />
   </section>
 </template>

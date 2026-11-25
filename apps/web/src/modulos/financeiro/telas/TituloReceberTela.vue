@@ -9,6 +9,7 @@ import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import GlosaDoTitulo from '../componentes/GlosaDoTitulo.vue';
+import RetencaoSofridaTitulo from '../componentes/RetencaoSofridaTitulo.vue';
 import { baixaManual, lerTituloReceber, novaChave } from '../api-financeiro.js';
 import { data, opcoesContas, reais, usarFinanceiro } from '../usar-financeiro.js';
 
@@ -105,6 +106,13 @@ async function baixar() {
       <RouterLink :to="`/financeiro/receber/demonstrativos?titulo=${id}`" data-testid="trd-glosa">
         {{ t('financeiro.demonstrativos.registrar') }}
       </RouterLink>
+      <!-- F3.8, 07-FIN linha 109: o tributo retido pelo tomador entra antes da baixa; o dinheiro a receber é o que sobra. -->
+      <RetencaoSofridaTitulo
+        :titulo="n"
+        :data="form.dataRecebimento"
+        :pode="pode('baixarManual')"
+        @saldo="(s) => (form.valorRecebido = String(s))"
+      />
       <form
         v-if="titulo.data.value.situacao !== 'recebido'"
         class="formulario"
