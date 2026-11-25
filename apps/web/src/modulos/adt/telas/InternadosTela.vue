@@ -19,6 +19,8 @@ const { t } = useI18n();
 const rota = useRoute();
 // C1-074: atalho para os gases medicinais do paciente (registro da enfermagem).
 const podeGases = computed(() => podeNaSessao('enfermagem.horario.ler'));
+// C1-108: atalho da comunicação da internação e da alta à operadora, por internação.
+const podeComunicar = computed(() => podeNaSessao('internacao.internacao.ler'));
 const ACOES = ['guias', 'trocas', 'procedimentos', 'alta', 'impressos'] as const;
 const acaoDaRota = computed(() => {
   const a = rota.query['acao'];
@@ -132,6 +134,13 @@ const incoerencias = useQuery({ queryKey: ['adt', 'incoerencias'], queryFn: () =
                 :aria-label="t('adt.gases.abrirDe', { reg: i.reg })"
                 :data-testid="`int-gases-${i.reg}`"
                 >{{ t('adt.gases.abrir') }}</RouterLink
+              >
+              <RouterLink
+                v-if="podeComunicar"
+                :to="`/internacao/${i.reg}/comunicacoes-operadora`"
+                :aria-label="t('adt.leitosSus.comunicacao.abrirDe', { reg: i.reg })"
+                :data-testid="`int-comunicacoes-${i.reg}`"
+                >{{ t('adt.leitosSus.comunicacao.abrir') }}</RouterLink
               >
             </td>
           </tr>

@@ -3,8 +3,18 @@
 // Visão por internação: registrar a comunicação (os dados vêm da internação, nada redigitado), ver a mensagem de
 // comunicação de beneficiário e acompanhar a situação. Os botões mostram só as ações que a situação admite (a mesma
 // tabela de transições do domínio); o motivo é pedido na hora quando a ação exige.
-import { TIPOS_COMUNICACAO_OPERADORA, transicaoComunicacao as regraTransicao } from '@sgh/dominio-internacao';
-import type { AcaoComunicacao, SituacaoComunicacaoOperadora } from '@sgh/dominio-internacao';
+// C1-108: a pendente de internação, alta ou óbito sai pelo serviço web da operadora num clique (a mensagem montada dos
+// dados gravados vai à fila de integração); a enviada por ele lê o retorno (confirma, rejeita ou falha sozinha).
+import {
+  eventoDaMensagem,
+  TIPOS_COMUNICACAO_OPERADORA,
+  transicaoComunicacao as regraTransicao,
+} from '@sgh/dominio-internacao';
+import type {
+  AcaoComunicacao,
+  SituacaoComunicacaoOperadora,
+  TipoComunicacaoOperadora,
+} from '@sgh/dominio-internacao';
 import { SanteSelecao } from '@sgh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
@@ -13,8 +23,10 @@ import {
   type Comunicacao,
   lerComunicacoes,
   lerMensagemComunicacao,
+  lerRetornoComunicacao,
   registrarComunicacao,
   transicaoComunicacao,
+  transmitirComunicacao,
 } from '../api-leitos-sus.js';
 import ErroAdt from '../componentes/ErroAdt.vue';
 
@@ -76,6 +88,20 @@ const aplicar = (c: Comunicacao, a: AcaoComunicacao) => {
     }),
   );
 };
+const podeTransmitir = (c: Comunicacao) =>
+  c.situacao === 'pendente' && eventoDaMensagem(c.tipo as TipoComunicacaoOperadora) !== null;
+const transmitir = (c: Comunicacao) => {
+  avisos.value = [];
+  acao.mutate(() => transmitirComunicacao(c.id, c.versao));
+};
+const lerRetorno = (c: Comunicacao) => {
+  avisos.value = [];
+  acao.mutate(async () => {
+    const r = await lerRetornoComunicacao(c.id);
+    if (r.aguardando) avisos.value = [t('adt.leitosSus.comunicacao.aguardando')];
+    return r;
+  });
+};
 const verMensagem = async (c: Comunicacao) => {
   const r = await lerMensagemComunicacao(c.id);
   mensagem.value = r.xml;
@@ -118,7 +144,17 @@ const verMensagem = async (c: Comunicacao) => {
       <tbody>
         <tr v-for="c in lista.data.value.itens" :key="c.id" :data-testid="`com-op-${c.tipo}`">
           <td>{{ t(`adt.leitosSus.comunicacao.tipos.${c.tipo}`) }}</td>
-          <td>{{ t(`adt.leitosSus.comunicacao.situacoes.${c.situacao}`) }}</td>
+          <td>
+            {{ t(`adt.leitosSus.comunicacao.situacoes.${c.situacao}`) }}
+            <span v-if="c.situacaoEnvio" class="secundario" :data-testid="`com-op-envio-${c.id}`">
+              ·
+              {{
+                t('adt.leitosSus.comunicacao.pelaIntegracao', {
+                  situacao: t(`adt.leitosSus.comunicacao.envios.${c.situacaoEnvio}`),
+                })
+              }}
+            </span>
+          </td>
           <td>{{ c.protocolo ?? '—' }}</td>
           <td>{{ c.enviadoEm?.slice(0, 16).replace('T', ' ') ?? '—' }}</td>
           <td>{{ c.respondidoEm?.slice(0, 16).replace('T', ' ') ?? '—' }}</td>
@@ -136,6 +172,24 @@ const verMensagem = async (c: Comunicacao) => {
                 {{ t(`adt.leitosSus.comunicacao.acoes.${a}`) }}
               </button>
             </template>
+            <button
+              v-if="podeTransmitir(c)"
+              type="button"
+              :disabled="acao.isPending.value"
+              :data-testid="`com-op-transmitir-${c.id}`"
+              @click="transmitir(c)"
+            >
+              {{ t('adt.leitosSus.comunicacao.transmitir') }}
+            </button>
+            <button
+              v-if="c.pelaIntegracao && c.situacao === 'enviada'"
+              type="button"
+              :disabled="acao.isPending.value"
+              :data-testid="`com-op-retorno-${c.id}`"
+              @click="lerRetorno(c)"
+            >
+              {{ t('adt.leitosSus.comunicacao.lerRetorno') }}
+            </button>
             <button type="button" @click="verMensagem(c)">
               {{ t('adt.leitosSus.comunicacao.mensagem') }}
             </button>

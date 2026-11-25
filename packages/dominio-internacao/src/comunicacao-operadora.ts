@@ -217,3 +217,103 @@ export function conferirMensagemComunicacao(d: DadosMensagemComunicacao): {
     problemas: [],
   };
 }
+
+/** Ponto de integração da comunicação de beneficiário pelo serviço web da operadora (outbox). */
+export const PONTO_COMUNICACAO_OPERADORA = 'tiss.comunicacao_beneficiario';
+
+/**
+ * Confere se a comunicação pode sair pelo serviço web da operadora: só a pendente, só internação, alta ou óbito (os
+ * tipos com mensagem própria) e só com o serviço web da comunicação de beneficiário cadastrado e ativo para a fonte.
+ */
+export function conferirTransmissao(c: {
+  readonly situacao: SituacaoComunicacaoOperadora;
+  readonly tipo: TipoComunicacaoOperadora;
+  readonly servicoWeb: boolean;
+}): ProblemaComunicacao[] {
+  const p: ProblemaComunicacao[] = [];
+  if (c.situacao !== 'pendente')
+    p.push({ campo: 'situacao', mensagem: `A comunicação ${c.situacao} não sai pelo serviço web.` });
+  if (!eventoDaMensagem(c.tipo))
+    p.push({ campo: 'tipo', mensagem: 'Este tipo segue pela guia de prorrogação, sem mensagem própria.' });
+  if (!c.servicoWeb)
+    p.push({
+      campo: 'canal',
+      mensagem:
+        'A operadora não tem o serviço web da comunicação de beneficiário cadastrado: envie por outro canal e marque enviada.',
+    });
+  return p;
+}
+
+export type SituacaoMensagemIntegracao = 'pendente' | 'enviada' | 'processada' | 'erro' | 'descartada';
+
+export interface RetornoDaIntegracao {
+  readonly acao: AcaoComunicacao;
+  readonly protocolo: string | null;
+  readonly resposta: string | null;
+}
+
+/**
+ * Lê o retorno do serviço web na mensagem de integração e diz o que acontece com a comunicação enviada:
+ *   - mensagem ainda na fila ou só entregue ao serviço (pendente, enviada): nada, aguarda o retorno;
+ *   - erro ou descartada: a comunicação falha, com o código do erro (sem conteúdo da mensagem);
+ *   - processada: o recibo da operadora (JSON com `aceita`, `protocolo` e `motivo`). Aceita com protocolo confirma;
+ *     recusada rejeita com o motivo da operadora; recibo ilegível ou aceita sem protocolo falha (a equipe confere).
+ * Só a comunicação 'enviada' lê retorno.
+ */
+export function retornoDaIntegracao(e: {
+  readonly situacaoComunicacao: SituacaoComunicacaoOperadora;
+  readonly situacaoMensagem: SituacaoMensagemIntegracao;
+  readonly resposta: string | null;
+  readonly erro: string | null;
+}): { retorno: RetornoDaIntegracao | null; problemas: ProblemaComunicacao[] } {
+  if (e.situacaoComunicacao !== 'enviada')
+    return {
+      retorno: null,
+      problemas: [
+        { campo: 'situacao', mensagem: `A comunicação ${e.situacaoComunicacao} não espera retorno.` },
+      ],
+    };
+  if (e.situacaoMensagem === 'pendente' || e.situacaoMensagem === 'enviada')
+    return { retorno: null, problemas: [] };
+  const corta = (s: string) => s.trim().slice(0, 2000);
+  if (e.situacaoMensagem === 'erro' || e.situacaoMensagem === 'descartada')
+    return {
+      retorno: {
+        acao: 'falhar',
+        protocolo: null,
+        resposta: corta(
+          `Falha no envio pelo serviço web${e.erro?.trim() ? ` (${e.erro.trim().slice(0, 200)})` : ''}.`,
+        ),
+      },
+      problemas: [],
+    };
+  let recibo: unknown;
+  try {
+    recibo = e.resposta ? JSON.parse(e.resposta) : null;
+  } catch {
+    recibo = null;
+  }
+  const r = recibo && typeof recibo === 'object' ? (recibo as Record<string, unknown>) : null;
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  if (!r || typeof r['aceita'] !== 'boolean')
+    return {
+      retorno: { acao: 'falhar', protocolo: null, resposta: 'Retorno da operadora ilegível.' },
+      problemas: [],
+    };
+  if (r['aceita'] === false)
+    return {
+      retorno: {
+        acao: 'rejeitar',
+        protocolo: texto(r['protocolo'])?.slice(0, 50) ?? null,
+        resposta: corta(texto(r['motivo']) ?? 'Recusada pela operadora.'),
+      },
+      problemas: [],
+    };
+  const protocolo = texto(r['protocolo']);
+  if (!protocolo)
+    return {
+      retorno: { acao: 'falhar', protocolo: null, resposta: 'A operadora aceitou sem informar o protocolo.' },
+      problemas: [],
+    };
+  return { retorno: { acao: 'confirmar', protocolo: protocolo.slice(0, 50), resposta: null }, problemas: [] };
+}

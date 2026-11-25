@@ -76,5 +76,18 @@ export const mensagensLeitosSus = {
     enviadoEm: 'Enviada em',
     respondidoEm: 'Respondida em',
     vazio: 'Nenhuma comunicação nesta internação.',
+    transmitir: 'Enviar pelo serviço web',
+    lerRetorno: 'Ler retorno',
+    aguardando: 'A operadora ainda não respondeu.',
+    pelaIntegracao: 'Serviço web: {situacao}',
+    envios: {
+      pendente: 'na fila',
+      enviada: 'entregue',
+      processada: 'respondida',
+      erro: 'com erro',
+      descartada: 'descartada',
+    },
+    abrir: 'Operadora',
+    abrirDe: 'Comunicação à operadora da internação {reg}',
   },
 };

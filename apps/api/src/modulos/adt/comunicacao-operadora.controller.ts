@@ -4,6 +4,8 @@
 //   POST /api/internacao/comunicacoes-operadora/internacoes/:int        { tipo } nasce pendente, dos dados da internação
 //   GET  /api/internacao/comunicacoes-operadora/:id/mensagem            prévia da mensagem de comunicação de beneficiário
 //   POST /api/internacao/comunicacoes-operadora/:id/transicao           { acao, versao, protocolo?, resposta? }
+//   POST /api/internacao/comunicacoes-operadora/:id/transmitir          { versao } sai pelo serviço web da operadora (C1-108)
+//   POST /api/internacao/comunicacoes-operadora/:id/retorno             lê o retorno do serviço web e aplica (C1-108)
 import {
   Body,
   Controller,
@@ -80,5 +82,25 @@ export class ComunicacaoOperadoraController {
   @AuditadoNoHandler(TRILHA)
   transicao(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.transicao(c, id, corpo));
+  }
+
+  @Post(':id/transmitir')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_COMUNICACAO_OPERADORA.registrar)
+  @AuditadoNoHandler(TRILHA)
+  transmitir(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.transmitir(c, id, corpo));
+  }
+
+  @Post(':id/retorno')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_COMUNICACAO_OPERADORA.registrar)
+  @AuditadoNoHandler(TRILHA)
+  retorno(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    return this.com(req, (p, c) => p.retorno(c, id));
   }
 }

@@ -96,6 +96,8 @@ export const esquemaComunicacao = z.object({
   resposta: z.string().nullable(),
   criadoEm: z.string(),
   versao: z.number(),
+  pelaIntegracao: z.boolean(),
+  situacaoEnvio: z.string().nullable(),
 });
 export type Comunicacao = z.infer<typeof esquemaComunicacao>;
 
@@ -115,3 +117,13 @@ export const transicaoComunicacao = (
   id: number,
   corpo: { acao: string; versao: number; protocolo?: string | null; resposta?: string | null },
 ) => enviar(`${C}/${id}/transicao`, corpo, comId, novaChave('com-operadora-transicao'));
+/** C1-108: envia pelo serviço web da operadora (outbox) e lê o retorno. */
+export const transmitirComunicacao = (id: number, versao: number) =>
+  enviar(`${C}/${id}/transmitir`, { versao }, comId, novaChave('com-operadora-transmitir'));
+export const lerRetornoComunicacao = (id: number) =>
+  enviar(
+    `${C}/${id}/retorno`,
+    {},
+    z.object({ id: z.number(), situacao: z.string(), aguardando: z.boolean() }),
+    novaChave('com-operadora-retorno'),
+  );

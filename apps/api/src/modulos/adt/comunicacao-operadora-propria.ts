@@ -8,20 +8,31 @@
 //     carteira da mãe, data do evento, tipo de internação da modalidade e motivo de encerramento da alta pelo código de
 //     troca do motivo de saída — prévia sem gravar;
 //   - transição (enviar, confirmar, rejeitar, falhar, reenviar, cancelar): situação, protocolo, resposta e as datas
-//     de envio e de resposta, com a versão lida; nada é apagado (cancelar guarda o motivo).
+//     de envio e de resposta, com a versão lida; nada é apagado (cancelar guarda o motivo);
+//   - transmitir (C1-108): a pendente de internação, alta ou óbito sai pelo serviço web da comunicação de beneficiário
+//     cadastrado para a fonte (endpoint_tiss_fonte_pagadora da transação comunicacao_beneficiario, ativo): a mensagem é
+//     montada e conferida, a saída vai à outbox (`integracao_mensagem` pendente no ponto tiss.comunicacao_beneficiario,
+//     só IDs, códigos e o hash) na mesma transação, e a comunicação fica 'enviada' com enviado_em e
+//     integracao_mensagem_id. Sem o serviço web cadastrado, recusa (o envio por outro canal é a transição 'enviar');
+//   - retorno (C1-108): lê a mensagem de integração ligada; recibo aceito com protocolo confirma, recusado rejeita com o
+//     motivo da operadora, erro ou descarte falha com o código; ainda na fila, nada muda.
 import { ErroLoteTiss, mensagemComunicacaoBeneficiario } from '@sgh/dominio-faturamento';
 import {
   type AcaoComunicacao,
   conferirMensagemComunicacao,
   conferirNovaComunicacao,
+  conferirTransmissao,
+  PONTO_COMUNICACAO_OPERADORA,
+  retornoDaIntegracao,
   SITUACOES_COMUNICACAO_VIVAS,
   type SituacaoComunicacaoOperadora,
+  type SituacaoMensagemIntegracao,
   TIPOS_COMUNICACAO_OPERADORA,
   type TipoComunicacaoOperadora,
   tipoInternacaoDaModalidade,
   transicaoComunicacao,
 } from '@sgh/dominio-internacao';
-import type { Leitor } from '@sgh/nucleo';
+import { gravarOutbox, type Leitor } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   type ContextoPortaPropria,
@@ -35,7 +46,7 @@ import {
 
 export const PORTA_COMUNICACAO_OPERADORA = Symbol('PORTA_COMUNICACAO_OPERADORA');
 
-const TABELAS = ['comunicacao_internacao_operadora'];
+const TABELAS = ['comunicacao_internacao_operadora', 'integracao_mensagem'];
 const ACOES = ['enviar', 'confirmar', 'rejeitar', 'falhar', 'reenviar', 'cancelar'] as const;
 
 const esquemaRegistrar = z.object({ tipo: z.enum(TIPOS_COMUNICACAO_OPERADORA) }).strict();
@@ -47,6 +58,7 @@ const esquemaTransicao = z
     resposta: z.string().trim().max(2000).nullable().default(null),
   })
   .strict();
+const esquemaVersao = z.object({ versao: z.number().int().positive() }).strict();
 
 export interface ComunicacaoLida {
   readonly id: number;
@@ -58,6 +70,10 @@ export interface ComunicacaoLida {
   readonly resposta: string | null;
   readonly criadoEm: string;
   readonly versao: number;
+  /** Saiu pelo serviço web da operadora (mensagem de integração ligada). */
+  readonly pelaIntegracao: boolean;
+  /** Situação da mensagem de integração (pendente, enviada, processada, erro, descartada), se houver. */
+  readonly situacaoEnvio: string | null;
 }
 
 const iso = (v: unknown): string | null =>
@@ -136,7 +152,22 @@ const comunicacaoLida = (r: Record<string, unknown>): ComunicacaoLida => ({
   resposta: txtOuNull(r['resposta']),
   criadoEm: iso(r['criado_em'])!,
   versao: num(r['versao']),
+  pelaIntegracao: r['integracao_mensagem_id'] !== null && r['integracao_mensagem_id'] !== undefined,
+  situacaoEnvio: txtOuNull(r['situacao_envio']),
 });
+
+/** O serviço web da comunicação de beneficiário cadastrado e ativo para a fonte, no estabelecimento. */
+async function servicoWebDaFonte(l: Leitor, est: number, fonte: number): Promise<number | null> {
+  const r = await l.uma(
+    `SELECT ep.id FROM endpoint_tiss_fonte_pagadora ep
+       JOIN transacao_tiss_webservice t ON t.id = ep.transacao_tiss_webservice_id
+      WHERE ep.estabelecimento_id = ? AND ep.fonte_pagadora_id = ? AND ep.forma_envio = 'servico_web'
+        AND ep.ativo = TRUE AND t.ativo = TRUE AND t.tipo_transacao = 'comunicacao_beneficiario'
+      ORDER BY ep.id DESC LIMIT 1`,
+    [est, fonte],
+  );
+  return r ? num(r['id']) : null;
+}
 
 export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropria {
   constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
@@ -149,8 +180,9 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
       await lerInternacao(l, internacao, est.id);
       return (
         await l.consultar(
-          `SELECT * FROM comunicacao_internacao_operadora
-            WHERE internacao_id = ? AND excluido_em IS NULL ORDER BY id DESC LIMIT 200`,
+          `SELECT co.*, im.situacao AS situacao_envio FROM comunicacao_internacao_operadora co
+             LEFT JOIN integracao_mensagem im ON im.id = co.integracao_mensagem_id
+            WHERE co.internacao_id = ? AND co.excluido_em IS NULL ORDER BY co.id DESC LIMIT 200`,
           [internacao],
         )
       ).map(comunicacaoLida);
@@ -204,58 +236,70 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
     id: number,
   ): Promise<{ xml: string | null; problemas: { campo: string; mensagem: string }[] }> {
     return this.ler(c, 'mensagem', async (l, est) => {
-      const r = await l.uma(
-        `SELECT co.id, co.tipo, co.internacao_id FROM comunicacao_internacao_operadora co
-           JOIN internacao i ON i.id = co.internacao_id
-          WHERE co.id = ? AND i.estabelecimento_id = ? AND co.excluido_em IS NULL`,
-        [id, est.id],
-      );
-      if (!r) throw naoEncontrado('Comunicação');
-      const d = await lerInternacao(l, num(r['internacao_id']), est.id);
-      const tipo = String(r['tipo']) as TipoComunicacaoOperadora;
-      const conferida = conferirMensagemComunicacao({
-        tipo,
-        registroAns: d.registroAns ?? '',
-        numeroCarteira: d.carteira ?? '',
-        recemNascido: d.recemNascido,
-        eventoEm: tipo === 'internacao' ? d.entrada : (d.altaEm ?? d.entrada),
-        tipoInternacao: d.tipoInternacao,
-        motivoEncerramento: d.motivoTiss,
-      });
-      const m = conferida.dados;
-      if (!m) return { xml: null, problemas: conferida.problemas };
-      if (!d.codigoPrestador.trim())
-        return {
-          xml: null,
-          problemas: [
-            { campo: 'prestador', mensagem: 'O hospital não tem o código de prestador na operadora.' },
-          ],
-        };
-      const agora = new Date().toISOString();
-      try {
-        const msg = mensagemComunicacaoBeneficiario(
-          {
-            sequencialTransacao: String(id),
-            data: agora.slice(0, 10),
-            hora: agora.slice(11, 19),
-            codigoPrestadorNaOperadora: d.codigoPrestador,
-            registroANS: d.registroAns!,
-          },
-          {
-            beneficiario: { numeroCarteira: m.numeroCarteira, atendimentoRN: m.recemNascido },
-            dataEvento: m.dataEvento,
-            tipoEvento: m.tipoEvento,
-            tipoInternacao: m.tipoInternacao,
-            motivoEncerramento: m.motivoEncerramento,
-          },
-        );
-        return { xml: msg.xml, problemas: [] };
-      } catch (erro) {
-        if (erro instanceof ErroLoteTiss)
-          return { xml: null, problemas: [{ campo: 'mensagem', mensagem: erro.message }] };
-        throw erro;
-      }
+      const r = await this.montar(l, id, est.id);
+      return { xml: r.xml, problemas: r.problemas };
     });
+  }
+
+  /** Monta a mensagem dos dados gravados da comunicação e da internação (a mesma na prévia e no envio). */
+  private async montar(
+    l: Leitor,
+    id: number,
+    estId: number,
+  ): Promise<{ xml: string | null; hash: string | null; problemas: { campo: string; mensagem: string }[] }> {
+    const est = { id: estId };
+    const r = await l.uma(
+      `SELECT co.id, co.tipo, co.internacao_id FROM comunicacao_internacao_operadora co
+         JOIN internacao i ON i.id = co.internacao_id
+        WHERE co.id = ? AND i.estabelecimento_id = ? AND co.excluido_em IS NULL`,
+      [id, est.id],
+    );
+    if (!r) throw naoEncontrado('Comunicação');
+    const d = await lerInternacao(l, num(r['internacao_id']), est.id);
+    const tipo = String(r['tipo']) as TipoComunicacaoOperadora;
+    const conferida = conferirMensagemComunicacao({
+      tipo,
+      registroAns: d.registroAns ?? '',
+      numeroCarteira: d.carteira ?? '',
+      recemNascido: d.recemNascido,
+      eventoEm: tipo === 'internacao' ? d.entrada : (d.altaEm ?? d.entrada),
+      tipoInternacao: d.tipoInternacao,
+      motivoEncerramento: d.motivoTiss,
+    });
+    const m = conferida.dados;
+    if (!m) return { xml: null, hash: null, problemas: conferida.problemas };
+    if (!d.codigoPrestador.trim())
+      return {
+        xml: null,
+        hash: null,
+        problemas: [
+          { campo: 'prestador', mensagem: 'O hospital não tem o código de prestador na operadora.' },
+        ],
+      };
+    const agora = new Date().toISOString();
+    try {
+      const msg = mensagemComunicacaoBeneficiario(
+        {
+          sequencialTransacao: String(id),
+          data: agora.slice(0, 10),
+          hora: agora.slice(11, 19),
+          codigoPrestadorNaOperadora: d.codigoPrestador,
+          registroANS: d.registroAns!,
+        },
+        {
+          beneficiario: { numeroCarteira: m.numeroCarteira, atendimentoRN: m.recemNascido },
+          dataEvento: m.dataEvento,
+          tipoEvento: m.tipoEvento,
+          tipoInternacao: m.tipoInternacao,
+          motivoEncerramento: m.motivoEncerramento,
+        },
+      );
+      return { xml: msg.xml, hash: msg.hash, problemas: [] };
+    } catch (erro) {
+      if (erro instanceof ErroLoteTiss)
+        return { xml: null, hash: null, problemas: [{ campo: 'mensagem', mensagem: erro.message }] };
+      throw erro;
+    }
   }
 
   async transicao(
@@ -295,6 +339,125 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
         if (e.resposta) valores['resposta'] = e.resposta;
         await tx.alterar('comunicacao_internacao_operadora', id, e.versao, valores);
         return { tabela: 'comunicacao_internacao_operadora', id, situacao: t.para };
+      },
+    );
+  }
+
+  /**
+   * Envia a comunicação pendente pelo serviço web da operadora: confere (domínio), monta a mensagem dos dados gravados,
+   * grava a saída na outbox na mesma transação e marca 'enviada' com a mensagem ligada. O relay transmite depois do
+   * COMMIT; o retorno é lido por `retorno`.
+   */
+  async transmitir(
+    c: ContextoPortaPropria,
+    id: number,
+    entrada: unknown,
+  ): Promise<{ id: number; situacao: string; mensagem: number }> {
+    const e = entradaValida(esquemaVersao, entrada);
+    return this.gravar(
+      c,
+      'internacao.comunicacaooperadora.transmitir',
+      ['comunicacao_internacao_operadora', 'integracao_mensagem'],
+      async (tx, est, usuario) => {
+        const r = (
+          await tx.consultarParaAtualizar<Record<string, unknown>>(
+            `SELECT co.id, co.tipo, co.situacao, co.internacao_id, co.fonte_pagadora_id
+               FROM comunicacao_internacao_operadora co
+               JOIN internacao i ON i.id = co.internacao_id
+              WHERE co.id = ? AND i.estabelecimento_id = ? AND co.excluido_em IS NULL`,
+            [id, est.id],
+          )
+        )[0];
+        if (!r) throw naoEncontrado('Comunicação');
+        const fonte = num(r['fonte_pagadora_id']);
+        const servico = await servicoWebDaFonte(tx, est.id, fonte);
+        const tipo = String(r['tipo']) as TipoComunicacaoOperadora;
+        const p = conferirTransmissao({
+          situacao: String(r['situacao']) as SituacaoComunicacaoOperadora,
+          tipo,
+          servicoWeb: servico !== null,
+        });
+        if (p.length) throw recusaRegra('Envio recusado', p);
+        const m = await this.montar(tx, id, est.id);
+        if (!m.xml || !m.hash) throw recusaRegra('Envio recusado', m.problemas);
+        const agora = new Date();
+        const mensagem = await gravarOutbox(tx, {
+          estabelecimento: est.id,
+          ponto: PONTO_COMUNICACAO_OPERADORA,
+          entidade: 'comunicacao_internacao_operadora',
+          entidadeId: id,
+          chave: `${PONTO_COMUNICACAO_OPERADORA}:${id}:${e.versao}`,
+          carga: {
+            comunicacao: id,
+            internacao: num(r['internacao_id']),
+            fonte,
+            servicoWeb: servico,
+            tipo,
+            hash: m.hash,
+          },
+          usuario,
+          agora,
+        });
+        await tx.alterar('comunicacao_internacao_operadora', id, e.versao, {
+          situacao: 'enviada',
+          enviado_em: agora,
+          integracao_mensagem_id: mensagem,
+        });
+        return { tabela: 'comunicacao_internacao_operadora', id, situacao: 'enviada', mensagem };
+      },
+    );
+  }
+
+  /**
+   * Lê o retorno do serviço web na mensagem de integração ligada e aplica a transição (confirmar, rejeitar ou falhar)
+   * com a versão lida; sem retorno ainda, nada muda e devolve `aguardando`.
+   */
+  async retorno(
+    c: ContextoPortaPropria,
+    id: number,
+  ): Promise<{ id: number; situacao: string; aguardando: boolean }> {
+    return this.gravar(
+      c,
+      'internacao.comunicacaooperadora.retorno',
+      ['comunicacao_internacao_operadora'],
+      async (tx, est) => {
+        const r = (
+          await tx.consultarParaAtualizar<Record<string, unknown>>(
+            `SELECT co.situacao, co.versao, co.integracao_mensagem_id, im.situacao AS situacao_envio,
+                    im.resposta AS retorno, im.erro
+               FROM comunicacao_internacao_operadora co
+               JOIN internacao i ON i.id = co.internacao_id
+               LEFT JOIN integracao_mensagem im ON im.id = co.integracao_mensagem_id
+              WHERE co.id = ? AND i.estabelecimento_id = ? AND co.excluido_em IS NULL`,
+            [id, est.id],
+          )
+        )[0];
+        if (!r) throw naoEncontrado('Comunicação');
+        const situacao = String(r['situacao']) as SituacaoComunicacaoOperadora;
+        if (r['integracao_mensagem_id'] === null || r['situacao_envio'] === null)
+          throw recusaRegra('Retorno recusado', [
+            {
+              campo: 'canal',
+              mensagem: 'A comunicação não saiu pelo serviço web: informe a resposta à mão.',
+            },
+          ]);
+        const lido = retornoDaIntegracao({
+          situacaoComunicacao: situacao,
+          situacaoMensagem: String(r['situacao_envio']) as SituacaoMensagemIntegracao,
+          resposta: txtOuNull(r['retorno']),
+          erro: txtOuNull(r['erro']),
+        });
+        if (lido.problemas.length) throw recusaRegra('Retorno recusado', lido.problemas);
+        if (!lido.retorno)
+          return { tabela: 'comunicacao_internacao_operadora', id, situacao, aguardando: true };
+        const t = transicaoComunicacao({ situacao, ...lido.retorno });
+        if (!t.para) throw recusaRegra('Retorno recusado', t.problemas);
+        const valores: Record<string, unknown> = { situacao: t.para };
+        if (lido.retorno.acao !== 'falhar') valores['respondido_em'] = new Date();
+        if (lido.retorno.protocolo) valores['protocolo'] = lido.retorno.protocolo;
+        if (lido.retorno.resposta) valores['resposta'] = lido.retorno.resposta;
+        await tx.alterar('comunicacao_internacao_operadora', id, num(r['versao']), valores);
+        return { tabela: 'comunicacao_internacao_operadora', id, situacao: t.para, aguardando: false };
       },
     );
   }
