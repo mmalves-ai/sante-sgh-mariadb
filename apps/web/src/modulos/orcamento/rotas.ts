@@ -10,4 +10,11 @@ export const rotasOrcamento: RouteRecordRaw[] = [
     component: () => import('./OrcamentoTela.vue'),
     meta: { permissao: 'financeiro.orcamento.ler' },
   },
+  // C2-107 (07-FIN linha 128): projetos como centro de resultado, aberta pelo orçamento empresarial.
+  {
+    path: '/financeiro/orcamento/projetos',
+    name: 'financeiro.orcamento.projetos',
+    component: () => import('./ProjetosResultadoTela.vue'),
+    meta: { permissao: 'financeiro.orcamento.ler' },
+  },
 ];

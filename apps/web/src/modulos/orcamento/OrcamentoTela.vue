@@ -49,6 +49,11 @@ const ouVazio = (v: number | string | null) =>
   <section class="tela-orcamento" aria-labelledby="orc-titulo" data-testid="tela-orcamento">
     <h1 id="orc-titulo">{{ t('orcamentoEmpresarial.titulo') }}</h1>
     <p>{{ t('orcamentoEmpresarial.subtitulo') }}</p>
+    <p>
+      <RouterLink :to="{ name: 'financeiro.orcamento.projetos' }" data-testid="orc-ir-projetos">{{
+        t('orcamentoEmpresarial.projetos.irProjetos')
+      }}</RouterLink>
+    </p>
     <ErroOrcamento v-if="apoio.isError.value" :erro="apoio.error.value" />
     <p v-else-if="!a" role="status">{{ t('orcamentoEmpresarial.carregando') }}</p>
     <template v-else>

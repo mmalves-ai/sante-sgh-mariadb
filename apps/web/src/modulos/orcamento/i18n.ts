@@ -2,6 +2,7 @@
 // vue-i18n: nada de barra vertical (plural) nem arroba (mensagem ligada) nos textos.
 import { mensagensEstatisticasOrcamento } from './i18n-estatisticas.js';
 import { mensagensPremissasOrcamento } from './i18n-premissas.js';
+import { mensagensProjetoResultado } from './i18n-projeto-resultado.js';
 
 export const mensagensOrcamento = {
   titulo: 'Orçamento empresarial',
@@ -20,6 +21,8 @@ export const mensagensOrcamento = {
   },
   premissasCenarios: mensagensPremissasOrcamento,
   estatisticas: mensagensEstatisticasOrcamento,
+  // C2-107 (07-FIN linha 128): projeto como centro de resultado.
+  projetos: mensagensProjetoResultado,
   versoes: {
     titulo: 'Versões do orçamento',
     ano: 'Ano',
