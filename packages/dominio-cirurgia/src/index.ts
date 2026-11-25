@@ -39,3 +39,7 @@ export * from './autorizacao-convenio.js';
 // F8 (04-CC linha 104): documentos obrigatórios antes da cirurgia, com bloqueio do início.
 export * from './documentos-pre-operatorio.js';
 export * from './profilaxia-cirurgica.js';
+// F8 (04-CC linha 108): projetos e mutirões cirúrgicos do SUS (portaria, metas SIGTAP, AIH e APAC marcadas).
+export * from './mutirao.js';
+// F7 (05-SUP linha 29): central de material esterilizado (caixas, ciclo com indicadores, etiqueta, rastreio).
+export * from './cme/cme.js';
