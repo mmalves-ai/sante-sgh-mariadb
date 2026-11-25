@@ -455,6 +455,11 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f22l0314-limpa' }, async (e) => {
     const locais = `SELECT id FROM local_estoque WHERE codigo LIKE ?`;
     const ests = `SELECT id FROM estabelecimento WHERE codigo LIKE ?`;
+    // Etiqueta de identificação (F3.6-3) da massa: aponta para lote, movimento e local; sai antes deles, com as doses.
+    const etqs = `SELECT id FROM etiqueta_identificacao WHERE estabelecimento_id IN (${ests})`;
+    for (const t of ['dose_dispensada', 'dose_unitarizada'])
+      await e.executar(`DELETE FROM ${t} WHERE etiqueta_identificacao_id IN (${etqs})`, [like]);
+    await e.executar(`DELETE FROM etiqueta_identificacao WHERE estabelecimento_id IN (${ests})`, [like]);
     // Estoque (F2.4): os movimentos e os documentos ligam-se em ciclo (item ↔ movimento): solta antes de apagar.
     await e.executar(
       `UPDATE documento_estoque_item SET movimento_estoque_id = NULL WHERE documento_estoque_id IN (SELECT id FROM documento_estoque WHERE estabelecimento_id IN (${ests}))`,
@@ -562,6 +567,11 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
     await e.executar('DELETE FROM local_estoque WHERE codigo LIKE ?', [like]);
     await e.executar('DELETE FROM centro_custo WHERE codigo LIKE ?', [like]);
     await e.executar('DELETE FROM classificacao_centro_custo WHERE codigo LIKE ?', [like]);
+    // Código de barras do produto (F3.6-3, leitura da identificação): sai antes do produto.
+    await e.executar(
+      'DELETE FROM insumo_codigo_barras WHERE insumo_id IN (SELECT id FROM insumo WHERE codigo LIKE ?)',
+      [like],
+    );
     await e.executar('DELETE FROM insumo WHERE codigo LIKE ?', [like]);
     await e.executar('DELETE FROM grupo_insumo WHERE codigo LIKE ?', [like]);
     await e.executar('DELETE FROM unidade_medida WHERE codigo LIKE ?', [like]);
