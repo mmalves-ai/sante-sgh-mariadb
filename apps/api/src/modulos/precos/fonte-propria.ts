@@ -57,6 +57,8 @@ import {
   indicesConvenioPropria,
   indicesNaDataPropria,
   porteAnestesicoNaDataPropria,
+  indicesDiferenciadosNaDataPropria,
+  type AlvoIndiceDiferenciado,
   porteNaDataPropria,
   portesPropria,
   type RegimePorte,
@@ -269,7 +271,7 @@ const componentesDe = (r: Linha) => ({
 
 const SQL_ITENS_HONORARIO = `
   SELECT pp.id, COALESCE(pp.descricao_cobranca, it.descricao) AS nome, pp.ativo, pp.quantidade_indice,
-         pp.modelo_valor, po.codigo AS porte,
+         pp.modelo_valor, po.codigo AS porte, pp.item_faturavel_id, it.porte_anestesico,
          v.vigencia_inicio, v.valor_honorario, v.valor_custo_operacional, v.valor_filme, v.valor_anestesia,
          v.valor_outros,
          (SELECT COUNT(*) FROM preco_procedimento_valor x WHERE x.preco_procedimento_id = pp.id AND ${VALOR_VALIDO}) AS vigencias,
@@ -298,6 +300,14 @@ function itemHonorarioDe(r: Linha): ItemParaReajuste {
     cope: null,
     filmeM2: null,
     ato: null,
+    itemFaturavel:
+      r['item_faturavel_id'] === null || r['item_faturavel_id'] === undefined
+        ? null
+        : n(r['item_faturavel_id']),
+    porteAnestesico:
+      r['porte_anestesico'] === null || r['porte_anestesico'] === undefined
+        ? null
+        : String(r['porte_anestesico']),
     vigencia: vig,
     valores: vig ? componentesDe(r) : null,
     vigencias: n(r['vigencias']),
@@ -998,6 +1008,11 @@ export class FontePrecosPropria implements FontePrecos {
 
   porteNaData(c: CtxPrecos, conv: number, porte: string, data: string) {
     return this.ler(c, (l, est) => porteNaDataPropria(l, est, conv, porte, data));
+  }
+
+  /** Índices do setor executante e do procedimento no acordo na data (a precedência é do domínio). */
+  indicesDiferenciadosNaData(c: CtxPrecos, conv: number, data: string, alvo: AlvoIndiceDiferenciado) {
+    return this.ler(c, (l, est) => indicesDiferenciadosNaDataPropria(l, est, conv, data, alvo));
   }
 
   /** Porte anestésico do acordo pela tabela de honorários do regime vigente na data do atendimento. */

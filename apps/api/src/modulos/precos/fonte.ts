@@ -9,6 +9,7 @@ import type { DesfazerReajusteEntrada, EstadoOperacao } from '@sgh/contratos';
 import type { ContextoNucleo, ContextoOperacao, ResultadoOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 import type { NomeOperacaoPreco } from './operacoes.js';
+import type { AlvoIndiceDiferenciado, RegimePorte } from './indices-propria.js';
 import type {
   AlteracaoPlano,
   AutoriaPreco,
@@ -162,6 +163,21 @@ export interface FontePrecos {
   edicoes(c: CtxPrecos): Promise<{ id: number; versao: number }[]>;
   indicesNaData(c: CtxPrecos, conv: number, data: string): Promise<Map<number, number>>;
   porteNaData(c: CtxPrecos, conv: number, porte: string, data: string): Promise<number | null>;
+  /** Índices do setor executante e do procedimento no acordo na data (06-FAT linha 5; só a fonte própria). */
+  indicesDiferenciadosNaData?(
+    c: CtxPrecos,
+    conv: number,
+    data: string,
+    alvo: AlvoIndiceDiferenciado,
+  ): Promise<{ setor: Map<number, number>; item: Map<number, number> }>;
+  /** Porte anestésico do acordo pela tabela de honorários do regime vigente na data (só a fonte própria). */
+  porteAnestesicoNaData?(
+    c: CtxPrecos,
+    conv: number,
+    regime: RegimePorte,
+    porte: string,
+    data: string,
+  ): Promise<{ tabela: number; valor: number; valorHorarioEspecial: number | null } | null>;
   /**
    * `conv`: um convênio, a lista do escopo da sessão (vazia = nenhum) ou null = todos (só sem restrição).
    * `profissional`: registro no conselho (dígitos) ou trecho do nome, sem acento.

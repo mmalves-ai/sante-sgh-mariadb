@@ -221,6 +221,10 @@ export interface ItemHonorarioPreco {
   readonly cope: number | null;
   readonly filmeM2: number | null;
   readonly ato: number | null;
+  /** Item cobrável do item da tabela (índice do procedimento no acordo). */
+  readonly itemFaturavel?: number | null;
+  /** Porte anestésico do procedimento (0 a 8), quando houver. */
+  readonly porteAnestesico?: string | null;
   readonly vigencia: string | null;
   readonly valores: Componentes | null;
   readonly vigencias: number;

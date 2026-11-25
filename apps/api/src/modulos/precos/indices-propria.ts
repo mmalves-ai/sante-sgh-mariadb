@@ -311,3 +311,94 @@ export async function porteAnestesicoNaDataPropria(
     valorHorarioEspecial: he === null || he === undefined ? null : Number(he),
   };
 }
+
+/** Onde o item é executado, para o índice diferenciado (06-FAT linha 5). */
+export interface AlvoIndiceDiferenciado {
+  /** Item cobrável (procedimento) do item da tabela: o índice do procedimento no acordo. */
+  readonly itemFaturavel: number | null;
+  /** Setor executante: o índice do setor no acordo. */
+  readonly setor: number | null;
+  /** Regime de atendimento (padrão TISS): restringe o índice do setor; sem ele, só a linha que vale para todos. */
+  readonly regimeAtendimento: number | null;
+}
+
+const valorSetor = (r: Linha): number | null => {
+  const tipo = String(r['tipo_indice'] ?? '');
+  const esp =
+    tipo === 'coeficiente_honorario'
+      ? r['s_honorario']
+      : tipo === 'custo_operacional'
+        ? r['s_custo_operacional']
+        : tipo === 'filme'
+          ? r['s_filme_m2']
+          : null;
+  const v = esp ?? r['s_indice'];
+  return v === null || v === undefined ? null : Number(v);
+};
+
+/**
+ * Índices diferenciados na data: o do setor executante (valor_indice_setor sobre o valor do índice do acordo vigente na
+ * data; o mais específico, com regime e grupo do procedimento, vence o geral do setor) e o do procedimento no acordo
+ * (valor_indice_item; sem índice, é o CH principal). Ambos só para o estabelecimento com acordo vigente na data; o
+ * inativo nunca vale; o do setor só vale sobre o valor do índice ainda vigente na data (o substituído por uma vigência
+ * nova leva junto o diferenciado). A precedência entre os níveis é do @sgh/dominio-preco (resolverIndices).
+ */
+export async function indicesDiferenciadosNaDataPropria(
+  l: Leitor,
+  est: number,
+  conv: number,
+  data: string,
+  alvo: AlvoIndiceDiferenciado,
+): Promise<{ setor: Map<number, number>; item: Map<number, number> }> {
+  const setor = new Map<number, number>();
+  const item = new Map<number, number>();
+  const ac = await acordo(l, conv, est, data);
+  if (!ac.existe) return { setor, item };
+  if (alvo.setor !== null) {
+    const e = escopo('v', conv, ac);
+    const ls = await l.consultar(
+      `SELECT ic.tipo_indice, s.valor_indice AS s_indice, s.valor_honorario AS s_honorario,
+              s.valor_custo_operacional AS s_custo_operacional, s.valor_filme_m2 AS s_filme_m2
+         FROM valor_indice_setor s
+         JOIN valor_indice v ON v.id = s.valor_indice_id
+         JOIN indice_cobranca ic ON ic.id = v.indice_cobranca_id
+         JOIN setor_funcional sf ON sf.id = s.setor_funcional_id AND sf.estabelecimento_id = ?
+        WHERE s.ativo = TRUE AND ic.ativo = TRUE AND v.operacao <> 'exclusao' AND s.setor_funcional_id = ?
+          AND ${e.sql}
+          AND v.vigencia_inicio <= ? AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= ?)
+          AND NOT EXISTS (SELECT 1 FROM valor_indice v2
+                           WHERE v2.indice_cobranca_id = v.indice_cobranca_id AND v2.operacao <> 'exclusao'
+                             AND v2.fonte_pagadora_id <=> v.fonte_pagadora_id AND v2.tabela_preco_id <=> v.tabela_preco_id
+                             AND v2.vigencia_inicio > v.vigencia_inicio AND v2.vigencia_inicio <= ?)
+          AND (s.regime_atendimento_id IS NULL OR s.regime_atendimento_id <=> ?)
+          AND (s.grupo_faturamento_id IS NULL OR s.grupo_faturamento_id =
+               (SELECT it.grupo_faturamento_id FROM item_faturavel it WHERE it.id = ?))
+        ORDER BY (v.fonte_pagadora_id IS NULL), (s.regime_atendimento_id IS NULL), (s.grupo_faturamento_id IS NULL),
+                 v.vigencia_inicio DESC, s.id DESC`,
+      [est, alvo.setor, ...e.p, data, data, data, alvo.regimeAtendimento, alvo.itemFaturavel],
+      { teto: 200 },
+    );
+    for (const r of ls) {
+      const chave = CHAVE_DO_TIPO_INDICE[String(r['tipo_indice'])];
+      const v = valorSetor(r);
+      if (chave !== undefined && v !== null && !setor.has(chave)) setor.set(chave, v);
+    }
+  }
+  if (alvo.itemFaturavel !== null) {
+    const ls = await l.consultar(
+      `SELECT COALESCE(ic.tipo_indice, 'coeficiente_honorario') AS tipo_indice, x.valor_indice
+         FROM valor_indice_item x LEFT JOIN indice_cobranca ic ON ic.id = x.indice_cobranca_id
+        WHERE x.fonte_pagadora_id = ? AND x.item_faturavel_id = ? AND x.ativo = TRUE
+          AND (x.indice_cobranca_id IS NULL OR ic.ativo = TRUE)
+          AND x.vigencia_inicio <= ? AND (x.vigencia_fim IS NULL OR x.vigencia_fim >= ?)
+        ORDER BY x.vigencia_inicio DESC, x.id DESC`,
+      [conv, alvo.itemFaturavel, data, data],
+      { teto: 50 },
+    );
+    for (const r of ls) {
+      const chave = CHAVE_DO_TIPO_INDICE[String(r['tipo_indice'])];
+      if (chave !== undefined && !item.has(chave)) item.set(chave, Number(r['valor_indice']));
+    }
+  }
+  return { setor, item };
+}

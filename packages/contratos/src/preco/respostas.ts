@@ -352,13 +352,15 @@ export const esquemaValorVigente = z.object({
   dataBase: z.string(),
   vigencia: z.string().nullable(),
   valores: esquemaComponentes.nullable(),
-  /** Soma dos 5 componentes da vigência de valor do procedimento; igual à grade. */
-  total: z.number().nullable(),
-  modelo: z.enum(['VALOR', 'PORTE', 'CH']).nullable(),
   /**
-   * Só explicação (modelos CH e PORTE): o valor pela regra do modelo com os índices do convênio. Nunca é o
-   * total; o novo não calcula a conta (o motor é o do legado). null no modelo VALOR ou se falta índice.
+   * Total do item na data: modelo VALOR = soma dos 5 componentes da vigência; CH e PORTE = índice do acordo ×
+   * quantidade (com o porte anestésico do acordo). null quando falta a vigência ou um índice (dito em falta).
    */
+  total: z.number().nullable(),
+  /** De onde saiu o total: dos índices (CH ou PORTE) ou da vigência do valor (VALOR). */
+  origemTotal: z.enum(['indice', 'vigencia']).nullable().optional(),
+  modelo: z.enum(['VALOR', 'PORTE', 'CH']).nullable(),
+  /** Modelos CH e PORTE: o valor pela regra do modelo com os índices do convênio (igual ao total). null no VALOR. */
   estimativaPeloModelo: z.number().nullable(),
   passos: z.array(z.string()),
   falta: z.array(z.string()),

@@ -1,6 +1,6 @@
 // M12, correção da verificação, pela HTTP com a sessão real sobre a fonte sintética e a fonte de preços EM
-// MEMÓRIA (nada conecta a banco; dados sintéticos): o total da consulta é a soma dos componentes (soma dos
-// componentes) também nos modelos CH e PORTE; os casos de sante-api test/valores.test.js; a comparação da
+// MEMÓRIA (nada conecta a banco; dados sintéticos): o total da consulta sai do modelo do item (índice do
+// acordo nos modelos CH e PORTE, a vigência no VALOR); os casos de sante-api test/valores.test.js; a comparação da
 // importação com o valor anterior; corrigir e encerrar o plano; portes pelo convênio; credenciamento pelo
 // profissional e o valor da consulta só no Particular; vigências de diárias e mat/med; o desfazer pré-confere
 // todas as partes e retoma o que falta.
@@ -86,26 +86,43 @@ const enviar = (s: Sessao, metodo: 'POST' | 'PATCH', url: string, payload: unkno
     payload: payload as Record<string, unknown>,
   });
 
-describe('consulta de valor vigente: o total é a regra da sante-api (soma dos 5 componentes)', () => {
-  it('modelo CH e PORTE: total = soma dos componentes, igual à grade; o modelo fica só na explicação', async () => {
+describe('consulta de valor vigente: o total sai do modelo do item (06-FAT linha 5)', () => {
+  it('modelo CH e PORTE: total = índice do acordo × quantidade; a grade mostra a vigência; VALOR soma a vigência', async () => {
     const s = await entrar('SINT.FATURISTA');
     const ch = (
       await get(s, '/api/precos/consulta?convenio=53&tipo=honorario&item=53001&data=2026-06-01')
     ).json();
-    // 100 + 7,5 + 1,25 + 0 + 0,5 (TBVLRTHM); o modelo CH daria 0,5 × 12,5 = 6,25.
-    expect(ch).toMatchObject({ modelo: 'CH', total: 109.25, estimativaPeloModelo: 6.25, falta: [] });
+    // Modelo CH: 0,5 × 12,5 = 6,25 (nunca a soma da vigência 100 + 7,5 + 1,25 + 0 + 0,5 = 109,25).
+    expect(ch).toMatchObject({
+      modelo: 'CH',
+      total: 6.25,
+      origemTotal: 'indice',
+      estimativaPeloModelo: 6.25,
+      falta: [],
+    });
+    // A grade da tabela (sem convênio) segue mostrando a vigência do valor.
     const grade = (await get(s, '/api/precos/honorarios/53/itens?data=2026-06-01&busca=53001')).json();
-    expect(grade.itens[0].total).toBe(ch.total);
+    expect(grade.itens[0].total).toBe(109.25);
     const porte = (
       await get(s, '/api/precos/consulta?convenio=71&tipo=honorario&item=71001&data=2026-06-01')
     ).json();
-    // 100 + 15 + 0 + 30 + 2; o modelo PORTE daria 210 × 1.
-    expect(porte).toMatchObject({ modelo: 'PORTE', total: 147, estimativaPeloModelo: 210 });
-    expect(porte.passos.join(' ')).toMatch(/estimativa, não é o total/);
+    // Modelo PORTE: 210 × 1 (a vigência 100 + 15 + 0 + 30 + 2 = 147 não vale).
+    expect(porte).toMatchObject({
+      modelo: 'PORTE',
+      total: 210,
+      origemTotal: 'indice',
+      estimativaPeloModelo: 210,
+    });
+    expect(porte.passos.join(' ')).toMatch(/Total pelo índice/);
     const valor = (
       await get(s, '/api/precos/consulta?convenio=305&tipo=honorario&item=305001&data=2026-06-01')
     ).json();
-    expect(valor).toMatchObject({ modelo: 'VALOR', total: 100, estimativaPeloModelo: null });
+    expect(valor).toMatchObject({
+      modelo: 'VALOR',
+      total: 100,
+      origemTotal: 'vigencia',
+      estimativaPeloModelo: null,
+    });
   });
 
   it('casos de sante-api test/valores.test.js: sem tabela da conta, item inexistente, convênio inexistente', async () => {

@@ -28,7 +28,6 @@ import {
   type Confirmacao,
   convenioAceitaAtendimento,
   conveniosDaTabela,
-  explicarValor,
   fatiar,
   lerArquivoPreco,
   modeloDaTabela,
@@ -39,6 +38,8 @@ import {
   tabelaCompartilhada,
   totalComponentes,
   vigenteEm,
+  resolverIndices,
+  totalDoHonorario,
 } from '@sgh/dominio-preco';
 import {
   campoDeConsulta,
@@ -684,6 +685,12 @@ export class ServicoPrecos {
       conta: 'externa' | 'internacao';
       item: number;
       data: string | null;
+      /** Setor executante (índice do setor no acordo). */
+      setor?: number | null;
+      /** Regime de atendimento (padrão TISS) para o índice do setor. */
+      regimeAtendimento?: number | null;
+      /** Horário especial: o porte anestésico pelo valor do horário especial. */
+      horarioEspecial?: boolean;
     },
   ): Promise<ValorVigente | null> {
     const conv = await this.fonte.convenio(c, q.convenio);
@@ -724,43 +731,59 @@ export class ServicoPrecos {
           passos: [`Item ${q.item} não existe na tabela ${tab}.`],
           falta: ['item'],
         };
-      const ind = await this.fonte.indicesNaData(c, conv.codigo, data);
+      // O total do item sai do modelo dele (06-FAT linha 5): VALOR pela vigência; CH e PORTE pelo índice do acordo na
+      // data × a quantidade do item (o do procedimento vence o do setor, que vence o do acordo), mais o porte
+      // anestésico do acordo no regime da conta. Faltando índice, o total é nulo e a falta é dita.
+      const acordo = await this.fonte.indicesNaData(c, conv.codigo, data);
+      const dif = this.fonte.indicesDiferenciadosNaData
+        ? await this.fonte.indicesDiferenciadosNaData(c, conv.codigo, data, {
+            itemFaturavel: i.itemFaturavel ?? null,
+            setor: q.setor ?? null,
+            regimeAtendimento: q.regimeAtendimento ?? null,
+          })
+        : null;
+      const indices = resolverIndices({ acordo, setor: dif?.setor ?? null, item: dif?.item ?? null });
       const porte = i.porte ? await this.fonte.porteNaData(c, conv.codigo, i.porte, data) : null;
-      const ato = i.ato && i.ato > 7 ? i.ato : 1;
-      const ex = explicarValor(
-        { ch: i.ch, porte: i.porte, fracaoPorte: i.fracaoPorte, cope: i.cope, filmeM2: i.filmeM2 },
-        i.valores,
-        { ch: ind.get(ato) ?? ind.get(1) ?? null, filme: ind.get(4) ?? null, uco: ind.get(5) ?? null, porte },
-      );
-      // O total é a soma dos 5 componentes do valor na vigência, o mesmo
-      // da grade e das vigências. A regra do modelo (CH ou PORTE, pelos índices) fica só como explicação.
-      const total = i.valores ? totalComponentes(i.valores) : null;
-      const explicacao = ex.modelo === 'VALOR' ? [] : ex.passos;
+      const porteAnestesico =
+        i.porteAnestesico && this.fonte.porteAnestesicoNaData
+          ? await this.fonte.porteAnestesicoNaData(
+              c,
+              conv.codigo,
+              q.conta === 'internacao' ? 'internacao' : 'ambulatorial',
+              i.porteAnestesico,
+              data,
+            )
+          : null;
+      const t = totalDoHonorario({
+        item: {
+          ch: i.ch,
+          porte: i.porte,
+          fracaoPorte: i.fracaoPorte,
+          cope: i.cope,
+          filmeM2: i.filmeM2,
+          porteAnestesico: i.porteAnestesico ?? null,
+        },
+        vigente: i.valores,
+        indices,
+        porte,
+        porteAnestesico,
+        horarioEspecial: q.horarioEspecial === true,
+      });
       return {
         ...base,
         tabela: tab,
         item: { codigo: i.codigo, nome: i.nome },
         vigencia: i.vigencia,
         valores: i.valores,
-        total,
-        modelo: ex.modelo,
-        estimativaPeloModelo: ex.modelo === 'VALOR' ? null : ex.total,
+        total: t.total,
+        origemTotal: t.origem,
+        modelo: t.modelo,
+        estimativaPeloModelo: t.modelo === 'VALOR' ? null : t.total,
         passos: [
           `Tabela ${tab} (${q.conta === 'externa' ? 'conta externa' : 'conta de internação'}); vigência ${i.vigencia ?? 'nenhuma'} (maior data ≤ ${data}).`,
-          i.valores
-            ? `Total = CH + custo operacional + filme + anestesia + outros = ${[
-                i.valores.ch,
-                i.valores.co,
-                i.valores.filme,
-                i.valores.anes,
-                i.valores.outros,
-              ].join(' + ')} = ${total}.`
-            : 'Sem vigência do valor na data.',
-          ...(explicacao.length > 0
-            ? [`Explicação pelo modelo ${ex.modelo} (estimativa, não é o total): ${explicacao.join(' ')}`]
-            : []),
+          ...t.passos,
         ],
-        falta: i.valores ? [] : ['vigência na data'],
+        falta: [...t.falta],
       };
     }
     if (q.tipo === 'diaria') {

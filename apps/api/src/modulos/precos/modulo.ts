@@ -13,6 +13,8 @@ import { FONTE_PRECOS, type FontePrecos, fontePrecosIndisponivel } from './fonte
 import { FontePrecosMemoria } from './fonte-memoria.js';
 import { FontePrecosPropria } from './fonte-propria.js';
 import { ImportacoesController } from './importacoes.controller.js';
+import { GravadorIndices } from './indices-gravacao.js';
+import { GRAVADOR_INDICES, IndicesController, LEITOR_INDICES, LeitorIndices } from './indices.controller.js';
 import { MotorController } from './motor.controller.js';
 import { PrecosController } from './precos.controller.js';
 import { LeitorRegrasAcordo } from './regras-acordo-propria.js';
@@ -56,6 +58,7 @@ export async function moduloPrecos(
       MotorController,
       AgendaPrecoController,
       RegrasAcordoController,
+      IndicesController,
       CobrancaController,
     ],
     providers: [
@@ -68,6 +71,15 @@ export async function moduloPrecos(
       {
         provide: GRAVADOR_REGRAS_ACORDO,
         useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new GravadorRegrasAcordo(ctx.nucleo) : null,
+      },
+      // 06-FAT linha 5: valor do índice e do porte por vigência (só com o banco próprio; sem ele, 503).
+      {
+        provide: GRAVADOR_INDICES,
+        useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new GravadorIndices(ctx.nucleo) : null,
+      },
+      {
+        provide: LEITOR_INDICES,
+        useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new LeitorIndices(ctx.nucleo) : null,
       },
       // ADR 0009: regra de preço particular, credenciamento e agenda estruturada (só com o banco próprio; sem ele, 503).
       {
