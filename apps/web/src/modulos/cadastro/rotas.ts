@@ -15,6 +15,20 @@ export const rotasCadastro: RouteRecordRaw[] = [
     meta: { permissao: 'organizacao.estrutura.ler' },
   },
   {
+    // F8 (02-CAD linha 10): pacientes com acesso restrito ao prontuário e a marca de cada um, com a liberação nominal.
+    path: '/cadastros/pacientes/acesso-restrito',
+    name: 'cadastro.acessoRestrito',
+    component: () => import('./telas/AcessoRestritoTela.vue'),
+    meta: { permissao: 'cadastro.acessoRestrito.ler' },
+  },
+  {
+    path: `/cadastros/pacientes/:id${id}/acesso-restrito`,
+    name: 'cadastro.paciente.acessoRestrito',
+    component: () => import('./telas/AcessoRestritoTela.vue'),
+    props: true,
+    meta: { permissao: 'cadastro.acessoRestrito.ler' },
+  },
+  {
     path: '/cadastros/pacientes',
     name: 'cadastro.pacientes',
     component: () => import('./telas/BuscaPacientesTela.vue'),
@@ -54,6 +68,9 @@ export const rotasCadastro: RouteRecordRaw[] = [
     component: () => import('./telas/LinhasCuidadoTela.vue'),
     meta: {
       permissao: 'cadastro.linhaCuidado.ler',
+      // Quem mantém o catálogo (cadastro.linhaCuidado.editar, do administrador do sistema, que pela segregação não
+      // recebe a leitura clínica) também abre a tela: vê o catálogo com as contagens, nunca a lista nominal.
+      permissaoOu: ['cadastro.linhaCuidado.editar'],
       menu: 'Cadastros > Pacientes (cadastro único) > Programas e linhas de cuidado',
     },
   },

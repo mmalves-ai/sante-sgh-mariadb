@@ -2,6 +2,10 @@
 // a própria sobre o banco do cliente quando o núcleo existe; sem núcleo, a memória sintética só em dev/ci; fora disso,
 // a indisponível (503, falha fechada). Os testes passam a porta pelas opções.
 import { type DynamicModule, Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AcessoRestritoController } from './acesso-restrito.controller.js';
+import { InterceptadorAcessoRestrito } from './acesso-restrito.interceptor.js';
+import { ACESSO_RESTRITO, AcessoRestritoProprio } from './acesso-restrito-proprio.js';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { ligarMapaEstabelecimentos } from './contexto-nucleo.js';
@@ -93,6 +97,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   const provisorio = ctx.nucleo && cliente ? new ProfissionalProvisorioProprio(ctx.nucleo, cliente) : null;
   // F8 (02-CAD linha 22): equipes médicas e cooperativas do profissional, só no banco do cliente.
   const equipes = ctx.nucleo && cliente ? new EquipesCooperativasPropria(ctx.nucleo, cliente) : null;
+  // F8 (02-CAD linha 10): paciente com acesso restrito e o filtro comum das rotas clínicas, só no banco do cliente.
+  const restrito = ctx.nucleo && cliente ? new AcessoRestritoProprio(ctx.nucleo, cliente) : null;
   return {
     module: ModuloCadastro,
     controllers: [
@@ -110,6 +116,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       LinhasCuidadoController,
       ProfissionalProvisorioController,
       EquipesCooperativasController,
+      AcessoRestritoController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: porta },
@@ -126,6 +133,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       { provide: LINHAS_CUIDADO, useValue: linhasCuidado },
       { provide: PROFISSIONAL_PROVISORIO, useValue: provisorio },
       { provide: EQUIPES_COOPERATIVAS, useValue: equipes },
+      { provide: ACESSO_RESTRITO, useValue: restrito },
+      { provide: APP_INTERCEPTOR, useClass: InterceptadorAcessoRestrito },
     ],
     exports: [PORTA_CADASTRO],
   };

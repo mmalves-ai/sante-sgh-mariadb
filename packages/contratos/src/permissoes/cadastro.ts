@@ -273,6 +273,28 @@ export const PERMISSOES_CADASTRO_M11 = [
     categoria: 'clinica',
     criticidade: 'sensivel',
   },
+  // F8 (02-CAD linha 10): paciente com acesso restrito (confidencial, VIP, proteção judicial, vítima de violência,
+  // colaborador). Marcar, encerrar e liberar nominalmente é da diretoria clínica e de quem cuida da privacidade; ver as
+  // marcas e liberações, também do auditor. A leitura clínica do paciente marcado é filtrada em todos os módulos.
+  {
+    codigo: 'cadastro.acessoRestrito.ler',
+    descricao: 'Ver as marcas de acesso restrito do paciente e os profissionais e equipes liberados',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['diretoria-clinica', 'auditor', 'administrador-sistema'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'cadastro.acessoRestrito.editar',
+    descricao:
+      'Marcar o paciente com acesso restrito, encerrar a marca e liberar ou revogar profissional ou equipe',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['diretoria-clinica', 'administrador-sistema'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
 ] as const satisfies readonly DeclaracaoPermissao[];
 
 export type PermissaoCadastro = (typeof PERMISSOES_CADASTRO_M11)[number]['codigo'];
