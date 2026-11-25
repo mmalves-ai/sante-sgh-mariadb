@@ -44,6 +44,7 @@ import { mensagensContabil } from '../modulos/contabil/i18n.js';
 import { mensagensPatrimonio } from '../modulos/patrimonio/i18n.js';
 import { mensagensPessoas } from '../modulos/pessoas/i18n.js';
 import { mensagensEstruturaGestao } from '../modulos/cadastro/i18n-estrutura.js';
+import { mensagensIdentidadeEstabelecimento } from '../modulos/cadastro/i18n-identidade.js';
 import { mensagensLigacoes } from '../modulos/cadastro/i18n-ligacoes.js';
 import { mensagensCalendario } from '../modulos/cadastro/i18n-calendario.js';
 import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
@@ -2410,6 +2411,7 @@ export const mensagensWeb = {
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,
   estruturaGestao: mensagensEstruturaGestao,
+  identidadeEstabelecimento: mensagensIdentidadeEstabelecimento,
   complementoProfissional: mensagensComplementoProfissional,
   // M52.5: SESMT (ASO, vacinas, acidentes e CAT, riscos e EPI).
   sesmt: mensagensSesmt,

@@ -9,6 +9,8 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { tipoDoProblema } from '@sgh/contratos';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import IdentidadeLogotipos from '../componentes/IdentidadeLogotipos.vue';
+import IdentidadeMantenedora from '../componentes/IdentidadeMantenedora.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import {
   alterarEstabelecimento,
@@ -29,7 +31,7 @@ const { t, te } = useI18n();
 const cliente = useQueryClient();
 const consulta = useQuery({ queryKey: ['cadastro', 'estrutura-gestao'], queryFn: lerEstrutura });
 const dados = computed(() => consulta.data.value);
-const aba = ref<'estabelecimento' | 'unidades' | 'setores'>('estabelecimento');
+const aba = ref<'estabelecimento' | 'unidades' | 'setores' | 'logotipos' | 'mantenedora'>('estabelecimento');
 const erro = ref<unknown>(null);
 const ok = ref(false);
 /**
@@ -187,6 +189,18 @@ const nomeUnidade = (id: number | null) =>
       >
         {{ t(`estruturaGestao.abas.${a}`) }}
       </button>
+      <!-- F3.1 (02-CAD linha 26): logotipos e mantenedora, cada um com a sua leitura e as suas mensagens. -->
+      <button
+        v-for="a in ['logotipos', 'mantenedora'] as const"
+        :key="a"
+        type="button"
+        role="tab"
+        :aria-selected="aba === a"
+        :data-testid="`aba-${a}`"
+        @click="((aba = a), (erro = null), (ok = false))"
+      >
+        {{ t(`identidadeEstabelecimento.abas.${a}`) }}
+      </button>
     </div>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <MensagemErro v-if="erro" :erro="erro" />
@@ -194,7 +208,9 @@ const nomeUnidade = (id: number | null) =>
       <li v-for="r in recusas" :key="r">{{ r }}</li>
     </ul>
     <p v-if="ok" role="status" data-testid="gravado">{{ t('estruturaGestao.comum.gravado') }}</p>
-    <p v-if="consulta.isPending.value">{{ t('estruturaGestao.comum.carregando') }}</p>
+    <IdentidadeLogotipos v-if="aba === 'logotipos'" />
+    <IdentidadeMantenedora v-else-if="aba === 'mantenedora'" />
+    <p v-else-if="consulta.isPending.value">{{ t('estruturaGestao.comum.carregando') }}</p>
 
     <template v-else-if="dados">
       <!-- Estabelecimento -->
