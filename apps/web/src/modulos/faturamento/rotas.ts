@@ -124,6 +124,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/OpmeLiberacaoTela.vue'),
     meta: { permissao: 'faturamento.autorizacao.ler' },
   },
+  // 06-FAT linha 30: regra de apresentação TISS por fonte pagadora (itens por guia e valores padrão de campo).
+  {
+    path: '/faturamento/apresentacao-tiss',
+    name: 'faturamento.apresentacaoTiss',
+    component: () => import('./telas/ApresentacaoTissTela.vue'),
+    meta: { permissao: 'convenio.contrato.ler' },
+  },
   {
     path: '/faturamento/guias-convenio',
     name: 'faturamento.guiasConvenio',

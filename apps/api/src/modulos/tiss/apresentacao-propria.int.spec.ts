@@ -241,7 +241,12 @@ describe.skipIf(SEM_BANCO)('regra de apresentação TISS na fonte própria (Mari
   it('a leitura devolve a regra, o item desativado e o valor padrão com a vigência', async () => {
     const a = await ler();
     expect(a.regras).toHaveLength(1);
-    expect(a.regras[0]).toMatchObject({ id: regra, limiteGuiasLote: 50, ordenacaoGuias: 'data_atendimento' });
+    expect(a.regras[0]).toMatchObject({
+      id: regra,
+      versaoPadraoTissId: ids.versaoTiss,
+      limiteGuiasLote: 50,
+      ordenacaoGuias: 'data_atendimento',
+    });
     expect(a.itens).toHaveLength(1);
     expect(a.itens[0]).toMatchObject({ itemId: ids.item, ativo: false, codigoApresentacao: '90000001' });
     expect(a.padroes[0]).toMatchObject({

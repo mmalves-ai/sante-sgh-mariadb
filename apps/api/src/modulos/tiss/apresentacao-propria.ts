@@ -60,8 +60,9 @@ function estabelecimentoDe(ctx: ContextoOperacao): number {
 
 // ── Leitura ─────────────────────────────────────────────────────────────────────────────────────────
 
-const regraDe = (r: Linha): RegraApresentacao & { versao: number } => ({
+const regraDe = (r: Linha): RegraApresentacao & { versao: number; versaoPadraoTissId: number } => ({
   id: n(r['id']),
+  versaoPadraoTissId: n(r['versao_padrao_tiss_id']),
   tipoContaId: nn(r['tipo_conta_id']),
   registroAns: txn(r['registro_ans']),
   codigoContratadoOperadora: txn(r['codigo_contratado_operadora']),

@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 489, M: 198, P: 57, N: 234 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 490, M: 198, P: 57, N: 235 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(489);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(490);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -602,6 +602,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cadastros/pacientes/acesso-restrito', // cadastros.pacientes-cadastro-unico.acesso-restrito-ao-prontuario
         '/enfermagem/limites-sinais', // C2-003
         '/faturamento/opme-liberacao', // faturamento.convenios-tiss.liberacao-de-opme-acima-do-limite
+        '/faturamento/apresentacao-tiss', // faturamento.convenios-tiss.apresentacao-tiss-por-fonte-pagadora
         '/financeiro/aprovacao/fluxos', // C2-016 (07-FIN linha 65)
         '/financeiro/aprovacoes', // C2-016 (07-FIN linha 65)
         '/financeiro/receber/cobranca-bancaria', // C2-031 (07-FIN linha 78)

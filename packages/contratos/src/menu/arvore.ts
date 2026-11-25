@@ -3,6 +3,8 @@
 // que o usuário vê, de tools/matriz/src/rotulos-de-produto.ts.
 import type { ContagemMenu, ItemMenu } from './tipos.js';
 
+// C2-086 (06-FAT L30, F3): o item "Apresentação TISS por fonte pagadora" dos convênios entrou à mão (mesmo motivo); a
+// contagem acompanha.
 // C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
 // C2-068 (04-INT L83, F8): o item "Ambulância e maqueiros" dos leitos entrou à mão (mesmo motivo); a contagem
 // acompanha.
@@ -119,7 +121,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":489,"M":198,"P":57,"N":234};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":490,"M":198,"P":57,"N":235};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -359,6 +361,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.convenios-tiss.guias-tiss-emissao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Guias TISS"],"titulo":"Guias TISS","selo":"M","fase":3,"rota":"/faturamento/guias","permissao":"faturamento.guia.ler"},
   {"id":"faturamento.convenios-tiss.guias-do-convenio-no-hospital","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Guias do convênio"],"titulo":"Guias do convênio","selo":"N","fase":3,"rota":"/faturamento/guias-convenio","permissao":"faturamento.guia.ler"},
   {"id":"faturamento.convenios-tiss.liberacao-de-opme-acima-do-limite","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Liberação de OPME acima do limite"],"titulo":"Liberação de OPME acima do limite","selo":"N","fase":7,"rota":"/faturamento/opme-liberacao","permissao":"faturamento.autorizacao.ler"},
+  {"id":"faturamento.convenios-tiss.apresentacao-tiss-por-fonte-pagadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Apresentação TISS por fonte pagadora"],"titulo":"Apresentação TISS por fonte pagadora","selo":"N","fase":3,"rota":"/faturamento/apresentacao-tiss","permissao":"convenio.contrato.ler"},
   {"id":"faturamento.convenios-tiss.remessa-e-lotes-tiss-xml-envio-protocolo","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Remessa e lotes TISS"],"titulo":"Remessa e lotes TISS","selo":"M","fase":3,"rota":"/faturamento/lotes","permissao":"faturamento.lote.ler"},
   {"id":"faturamento.convenios-tiss.webservices-tiss-por-operadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Webservices TISS por operadora"],"titulo":"Webservices TISS por operadora","selo":"P","fase":3,"rota":"/integracao/tiss","permissao":"integracao.tiss.ler"},
   {"id":"faturamento.convenios-tiss.fechamento-de-competencia-por-convenio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Fechamento de competência por convênio"],"titulo":"Fechamento de competência por convênio","selo":"M","fase":3,"rota":"/faturamento/competencias","permissao":"faturamento.competencia.ler"},
