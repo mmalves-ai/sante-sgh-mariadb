@@ -37,6 +37,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.remessa.ler' },
   },
   {
+    // F3.8, 07-FIN linha 66: retorno do banco, remessa por Pix e dados bancários do credor.
+    path: '/financeiro/pagar/pagamento-eletronico',
+    name: 'financeiro.pagar.pagamentoEletronico',
+    component: () => import('./telas/PagamentoEletronicoTela.vue'),
+    meta: { permissao: 'financeiro.remessa.ler' },
+  },
+  {
     path: '/financeiro/pagar/adiantamentos',
     name: 'financeiro.pagar.adiantamentos',
     component: () => import('./telas/AdiantamentosTela.vue'),

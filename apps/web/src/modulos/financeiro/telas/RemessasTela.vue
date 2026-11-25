@@ -76,6 +76,11 @@ async function gerar() {
         {{ t('financeiro.tabelasDoItem') }}
       </RouterLink>
     </p>
+    <p>
+      <RouterLink to="/financeiro/pagar/pagamento-eletronico" data-testid="remessas-pagamento-eletronico">
+        {{ t('financeiro.pagamentoEletronico.atalho') }}
+      </RouterLink>
+    </p>
     <p
       v-if="gravacao.data.value?.destinoExterno === 'simulador'"
       class="secundario"
