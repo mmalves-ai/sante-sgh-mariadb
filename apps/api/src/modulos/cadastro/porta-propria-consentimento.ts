@@ -14,6 +14,7 @@
 //     código numérico da especialidade (o da rota), em ordem de código do procedimento.
 // Leituras: somente leitura. Gravações: uma operação do Executor por chamada (trilha e idempotência na transação).
 import { randomUUID } from 'node:crypto';
+import { type RecusaSignatario, signatarioDoConsentimento } from '@sgh/dominio-cadastro';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -27,6 +28,7 @@ import {
 import { z } from 'zod';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
+import { situacaoRepresentacao } from './representacao-paciente-propria.js';
 import type { ConsentimentoPaciente, OpcaoDominio, RegistroTrilhaTela } from './tipos.js';
 
 /** Código do tipo de termo LGPD do consentimento registrado no balcão (catálogo tipo_termo_lgpd do cliente). */
@@ -54,7 +56,16 @@ const SIGNATARIO_DO_BANCO: Readonly<Record<number, 'paciente' | 'representante_l
 };
 const SIGNATARIO_DA_TELA: Readonly<Record<string, number>> = { paciente: 1, representante_legal: 2 };
 /** Papéis do responsável que representam o paciente legalmente. */
-const PAPEIS_REPRESENTANTE = ['responsavel_legal', 'guardiao_legal', 'curador', 'tutor'] as const;
+/** Recusas de quem assina o consentimento (regra do domínio: menor e incapaz são representados). */
+const MENSAGEM_SIGNATARIO: Record<RecusaSignatario, string> = {
+  'paciente-menor':
+    'O paciente é menor de idade: o consentimento é assinado pelo representante legal cadastrado nos responsáveis.',
+  'paciente-incapaz':
+    'O paciente tem incapacidade registrada: o consentimento é assinado pelo curador cadastrado nos responsáveis.',
+  'representante-ausente': 'O paciente não tem representante legal vigente no cadastro de responsáveis.',
+  'curador-ausente':
+    'O paciente tem incapacidade registrada e não tem curador vigente no cadastro de responsáveis.',
+};
 /** Teto de termos lidos por paciente. */
 const TETO_TERMOS = 500;
 
@@ -108,24 +119,18 @@ const operacaoRegistrar = (trilha: RegistroTrilhaTela) =>
           'Catálogo incompleto',
           'O tipo de termo do consentimento no balcão não está cadastrado neste cliente. Nada foi gravado.',
         );
-      let responsavel: number | null = null;
-      if (e.signatario === 'representante_legal') {
-        const r = await tx.uma(
-          `SELECT id FROM responsavel_paciente
-            WHERE paciente_id = ? AND papel IN (${PAPEIS_REPRESENTANTE.map(() => '?').join(', ')})
-              AND excluido_em IS NULL AND vigencia_inicio <= CURRENT_DATE
-              AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)
-            ORDER BY contato_principal DESC, id LIMIT 1`,
-          [e.paciente, ...PAPEIS_REPRESENTANTE],
-        );
-        if (!r)
-          throw recusa(
-            'representante-ausente',
-            'O paciente não tem representante legal vigente no cadastro de responsáveis.',
-            { campos: ['signatario'] },
-          );
-        responsavel = Number(r['id']);
-      }
+      // Quem assina (regra do domínio): o menor de idade e o incapaz não assinam; pelo incapaz, só o curador.
+      const rep = await situacaoRepresentacao(tx, e.paciente);
+      const assina = signatarioDoConsentimento({
+        signatario: e.signatario,
+        nascimentoPaciente: rep.nascimento,
+        incapaz: rep.incapacidade !== null,
+        vigentes: rep.vigentes,
+        hoje: rep.hoje,
+      });
+      if (assina.recusa !== null)
+        throw recusa(assina.recusa, MENSAGEM_SIGNATARIO[assina.recusa], { campos: ['signatario'] });
+      const responsavel = assina.vinculo;
       const agora = new Date();
       await garantirSequencia(
         tx,

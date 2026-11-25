@@ -15,6 +15,8 @@ import { LinhasCuidadoController } from './linhas-cuidado.controller.js';
 import { LINHAS_CUIDADO, LinhasCuidadoPropria } from './linhas-cuidado-proprio.js';
 import { FichaComplementarController } from './ficha-complementar.controller.js';
 import { FICHA_COMPLEMENTAR, FichaComplementarPropria } from './ficha-complementar-proprio.js';
+import { RepresentacaoPacienteController } from './representacao-paciente.controller.js';
+import { REPRESENTACAO_PACIENTE, RepresentacaoPacientePropria } from './representacao-paciente-propria.js';
 import { CadastroVinculosProprio } from './paciente-vinculos-proprio.js';
 import { PacienteVinculosController, VINCULOS_CADASTRO } from './paciente-vinculos.controller.js';
 import { PacientesController } from './pacientes.controller.js';
@@ -55,6 +57,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   const vinculos = ctx.nucleo && cliente ? new CadastroVinculosProprio(ctx.nucleo, cliente) : null;
   // F3.1: ficha complementar (regras de campo, contatos e responsáveis), também só no banco do cliente.
   const ficha = ctx.nucleo && cliente ? new FichaComplementarPropria(ctx.nucleo, cliente) : null;
+  // F3.1 (02-CAD linha 4): incapacidade do paciente e comprovante da representação, só no banco do cliente.
+  const representacao = ctx.nucleo && cliente ? new RepresentacaoPacientePropria(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linha 16): complemento do profissional (fiscal, conta, RQE e assinatura), só no banco do cliente.
   const complemento = ctx.nucleo && cliente ? new ProfissionalComplementoProprio(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linhas 17, 18 e 20): especialidade, lotação e solicitante, só no banco do cliente.
@@ -73,6 +77,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       ProfissionaisController,
       PacienteVinculosController,
       FichaComplementarController,
+      RepresentacaoPacienteController,
       ProfissionalComplementoController,
       CadastroLigacoesController,
       EstruturaGestaoController,
@@ -83,6 +88,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       { provide: PORTA_CADASTRO, useValue: porta },
       { provide: VINCULOS_CADASTRO, useValue: vinculos },
       { provide: FICHA_COMPLEMENTAR, useValue: ficha },
+      { provide: REPRESENTACAO_PACIENTE, useValue: representacao },
       { provide: COMPLEMENTO_PROFISSIONAL, useValue: complemento },
       { provide: LIGACOES_CADASTRO, useValue: ligacoes },
       { provide: CALENDARIO_CADASTRO, useValue: calendario },
