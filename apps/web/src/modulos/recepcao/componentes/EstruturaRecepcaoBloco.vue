@@ -91,12 +91,24 @@ function abrirPonto(p: PontoDaEstrutura | null): void {
   nome.value = p?.descricao ?? '';
   textoSenha.value = p?.textoSenha ?? '';
   tocouSugestao.value = p !== null;
-  forma.value = { item: 'ponto', ponto: p, id: p?.id ?? null, versao: p?.versao ?? null, tipoPreservado: null };
+  forma.value = {
+    item: 'ponto',
+    ponto: p,
+    id: p?.id ?? null,
+    versao: p?.versao ?? null,
+    tipoPreservado: null,
+  };
 }
 function abrirGuiche(p: PontoDaEstrutura, g: GuicheDaEstrutura | null): void {
   numero.value = String(g?.numero ?? proximoGuiche(p.guiches.map((x) => x.numero)));
   nome.value = g?.descricao ?? '';
-  forma.value = { item: 'guiche', ponto: p, id: g?.id ?? null, versao: g?.versao ?? null, tipoPreservado: null };
+  forma.value = {
+    item: 'guiche',
+    ponto: p,
+    id: g?.id ?? null,
+    versao: g?.versao ?? null,
+    tipoPreservado: null,
+  };
 }
 function abrirServico(p: PontoDaEstrutura, s: ServicoDaEstrutura | null): void {
   const preservado = s && s.tipo !== 'geral' && s.tipo !== 'diverso' ? s.tipo : null;
@@ -146,7 +158,11 @@ const corpo = computed<Record<string, unknown> | null>(() => {
   const f = forma.value;
   if (!f) return null;
   if (f.item === 'ponto')
-    return { codigo: codigo.value.trim(), descricao: nome.value.trim(), textoSenha: textoSenha.value.trim() || null };
+    return {
+      codigo: codigo.value.trim(),
+      descricao: nome.value.trim(),
+      textoSenha: textoSenha.value.trim() || null,
+    };
   if (f.item === 'guiche') {
     const n = inteiroOuNulo(numero.value);
     return typeof n === 'number' ? { numero: n, descricao: nome.value.trim() || null } : null;
@@ -171,17 +187,17 @@ const recusa = computed<string | null>(() => {
   const c = corpo.value;
   if (!f) return null;
   if (!c) return k('numeroInvalido');
-  if (f.item === 'ponto')
-    return (
-      recusasDoPonto(c as never, pontos.value, f.id)[0]?.mensagem ?? null
-    );
+  if (f.item === 'ponto') return recusasDoPonto(c as never, pontos.value, f.id)[0]?.mensagem ?? null;
   if (!f.ponto) return null;
   if (f.item === 'guiche') return recusasDoGuiche(c as never, f.ponto.guiches, f.id)[0]?.mensagem ?? null;
   const aceitos = grupos.value.map((g) => g.codigo);
   if (grupo.value && !aceitos.includes(grupo.value)) aceitos.push(grupo.value);
   return (
     recusasDoServico(
-      { ...(c as never as Parameters<typeof recusasDoServico>[0]), tipo: f.tipoPreservado ? 'geral' : tipo.value },
+      {
+        ...(c as never as Parameters<typeof recusasDoServico>[0]),
+        tipo: f.tipoPreservado ? 'geral' : tipo.value,
+      },
       f.ponto.servicos,
       aceitos,
       f.id,
@@ -196,10 +212,15 @@ const recusaVisivel = computed(() =>
 const tituloDialogo = computed(() => {
   const f = forma.value;
   if (!f) return '';
-  if (f.item === 'ponto') return f.id === null ? k('novaRecepcao') : k('editarRecepcao', { nome: f.ponto?.descricao });
+  if (f.item === 'ponto')
+    return f.id === null ? k('novaRecepcao') : k('editarRecepcao', { nome: f.ponto?.descricao });
   if (f.item === 'guiche')
-    return f.id === null ? k('novoGuicheEm', { nome: f.ponto?.descricao }) : k('editarGuiche', { numero: numero.value });
-  return f.id === null ? k('novoServicoEm', { nome: f.ponto?.descricao }) : k('editarServico', { nome: nome.value });
+    return f.id === null
+      ? k('novoGuicheEm', { nome: f.ponto?.descricao })
+      : k('editarGuiche', { numero: numero.value });
+  return f.id === null
+    ? k('novoServicoEm', { nome: f.ponto?.descricao })
+    : k('editarServico', { nome: nome.value });
 });
 const opcoesTipo = computed(() => [
   { valor: 'geral', rotulo: k('tipos.geral') },
@@ -367,7 +388,12 @@ const reativar = (a: Alvo) =>
       <p v-if="p.servicos.length === 0" class="secundario">{{ k('semServico') }}</p>
       <table v-else class="tabela" :data-testid="`servicos-${p.codigo}`">
         <caption class="visualmente-oculto">
-          {{ k('servicos') }}: {{ p.descricao }}
+          {{
+            k('servicos')
+          }}:
+          {{
+            p.descricao
+          }}
         </caption>
         <thead>
           <tr>
@@ -390,7 +416,11 @@ const reativar = (a: Alvo) =>
               </span>
             </td>
             <td>
-              {{ s.prioritaria ? nomeDoGrupo(s.grupoPrioridade) || t('recepcao.geradores.prioritaria') : k('normal') }}
+              {{
+                s.prioritaria
+                  ? nomeDoGrupo(s.grupoPrioridade) || t('recepcao.geradores.prioritaria')
+                  : k('normal')
+              }}
             </td>
             <td>{{ s.limiteDia ?? '—' }}</td>
             <td>{{ s.ativo ? k('ativo') : k('inativo') }}</td>
@@ -470,8 +500,16 @@ const reativar = (a: Alvo) =>
             data-testid="estrutura-tipo"
           />
           <p v-else class="secundario">{{ k('tipo') }}: {{ k('tipos.outro') }}</p>
-          <SanteSelecao v-model="grupo" :rotulo="k('grupo')" :opcoes="opcoesGrupo" data-testid="estrutura-grupo" />
-          <label><input v-model="prioritaria" type="checkbox" :disabled="grupo !== ''" /> {{ k('prioritaria') }}</label>
+          <SanteSelecao
+            v-model="grupo"
+            :rotulo="k('grupo')"
+            :opcoes="opcoesGrupo"
+            data-testid="estrutura-grupo"
+          />
+          <label
+            ><input v-model="prioritaria" type="checkbox" :disabled="grupo !== ''" />
+            {{ k('prioritaria') }}</label
+          >
           <div class="campo">
             <label for="estrutura-limite">{{ k('limiteDia') }}</label>
             <input id="estrutura-limite" v-model="limiteDia" type="number" min="1" max="9999" />

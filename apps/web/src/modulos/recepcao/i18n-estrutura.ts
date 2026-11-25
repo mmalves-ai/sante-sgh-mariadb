@@ -3,7 +3,8 @@ export const mensagensEstruturaRecepcao = {
   titulo: 'Montar a recepção',
   texto:
     'Cadastre a recepção, os guichês e os serviços de senha (os botões do balcão e do totem). Nada é apagado: o que sai de uso é desativado e o histórico continua guardado.',
-  vazio: 'Nenhuma recepção cadastrada. Comece pela recepção; depois inclua os guichês e os serviços de senha.',
+  vazio:
+    'Nenhuma recepção cadastrada. Comece pela recepção; depois inclua os guichês e os serviços de senha.',
   novaRecepcao: 'Nova recepção',
   recepcao: 'Recepção',
   editarRecepcao: 'Alterar a recepção {nome}',
