@@ -160,6 +160,22 @@ export function quebrarResumoInternacao(conta: ContaTiss, cortes: readonly strin
   });
 }
 
+/**
+ * As datas de corte do resumo quebrado por período: a cada `dias` dias desde a entrada (o corte é o último dia de cada
+ * parte), só as que ficam antes da alta. Dias fora de 1 a 366 não quebram.
+ */
+export function cortesPorPeriodo(inicio: string, fim: string, dias: number): string[] {
+  if (!Number.isInteger(dias) || dias < 1 || dias > 366) return [];
+  const base = Date.parse(`${inicio}T00:00:00Z`);
+  const cortes: string[] = [];
+  for (let k = 1; k <= 400; k++) {
+    const d = new Date(base + (k * dias - 1) * 86_400_000).toISOString().slice(0, 10);
+    if (d >= fim) break;
+    cortes.push(d);
+  }
+  return cortes;
+}
+
 export type CriterioSpSadt = 'prestador' | 'data';
 
 /**

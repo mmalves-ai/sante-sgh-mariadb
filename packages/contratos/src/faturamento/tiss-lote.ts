@@ -75,6 +75,8 @@ export interface DadosPrestador {
   readonly codigoPrestador: string;
   readonly cnes: string;
   readonly nome: string;
+  /** Contratado por CNPJ ou CPF, pela regra de apresentação da fonte (sem ela, o código na operadora). */
+  readonly identificacao?: { readonly tipo: 'codigo' | 'cnpj' | 'cpf'; readonly valor: string };
 }
 
 export interface DadosLoteTiss {

@@ -26,6 +26,13 @@ import {
   type ValorPadraoCampo,
   aplicarValoresPadrao,
   valorApresentado,
+  cortesPorPeriodo,
+  identificacaoContratado,
+  numerarGuias,
+  quebrarResumoInternacao,
+  separarSpSadt,
+  type IdentificacaoContratado,
+  type TipoIdentificacaoContratado,
 } from '@sgh/dominio-faturamento';
 import { tipoAtendimentoDaConta } from '@sgh/dominio-preco';
 import {
@@ -60,7 +67,23 @@ function estabelecimentoDe(ctx: ContextoOperacao): number {
 
 // ── Leitura ─────────────────────────────────────────────────────────────────────────────────────────
 
-const regraDe = (r: Linha): RegraApresentacao & { versao: number; versaoPadraoTissId: number } => ({
+/** O que a regra decide no montador (06-FAT linha 30): identificação do contratado, série, quebra e separação. */
+interface RegraMontador {
+  readonly identificacaoContratado: TipoIdentificacaoContratado;
+  readonly cnpjContratado: string | null;
+  readonly cpfContratado: string | null;
+  readonly numeracaoGuia: 'hospital' | 'operadora' | 'sequencial_lote';
+  readonly prefixoNumeroGuia: string | null;
+  readonly larguraNumeroGuia: number;
+  readonly proximoNumeroGuia: number | null;
+  readonly quebraResumoInternacao: 'nao_quebra' | 'por_periodo' | 'por_prestador' | 'por_limite_itens';
+  readonly diasCorteResumo: number | null;
+  readonly geracaoSpSadt: 'por_atendimento' | 'por_prestador' | 'por_procedimento' | 'por_data';
+}
+
+const regraDe = (
+  r: Linha,
+): RegraApresentacao & RegraMontador & { versao: number; versaoPadraoTissId: number } => ({
   id: n(r['id']),
   versaoPadraoTissId: n(r['versao_padrao_tiss_id']),
   tipoContaId: nn(r['tipo_conta_id']),
@@ -72,6 +95,22 @@ const regraDe = (r: Linha): RegraApresentacao & { versao: number; versaoPadraoTi
   agrupaItens: bool(r['agrupa_itens']),
   omiteGuiaSemValor: bool(r['omite_guia_sem_valor']),
   usaFaturamentoEletronico: bool(r['usa_faturamento_eletronico']),
+  identificacaoContratado:
+    texto(r['identificacao_contratado']) === 'cnpj'
+      ? 'cnpj'
+      : texto(r['identificacao_contratado']) === 'cpf'
+        ? 'cpf'
+        : 'codigo',
+  cnpjContratado: txn(r['cnpj_contratado']),
+  cpfContratado: txn(r['cpf_contratado']),
+  numeracaoGuia: (texto(r['numeracao_guia']) || 'hospital') as RegraMontador['numeracaoGuia'],
+  prefixoNumeroGuia: txn(r['prefixo_numero_guia']),
+  larguraNumeroGuia: n(r['largura_numero_guia']) || 8,
+  proximoNumeroGuia: nn(r['proximo_numero_guia']),
+  quebraResumoInternacao: (texto(r['quebra_resumo_internacao']) ||
+    'nao_quebra') as RegraMontador['quebraResumoInternacao'],
+  diasCorteResumo: nn(r['dias_corte_resumo']),
+  geracaoSpSadt: (texto(r['geracao_sp_sadt']) || 'por_atendimento') as RegraMontador['geracaoSpSadt'],
   ativo: bool(r['ativo']),
   versao: n(r['versao']),
 });
@@ -159,6 +198,8 @@ export interface LoteApresentado {
   readonly valores: ReadonlyMap<number, number>;
   readonly registroAns: string | null;
   readonly codigoPrestador: string | null;
+  /** Contratado por CNPJ ou CPF quando a regra pede (sem ela, o código na operadora). */
+  readonly identificacao: IdentificacaoContratado | null;
   readonly avisos: string[];
 }
 
@@ -216,7 +257,13 @@ export async function apresentarLote(
   };
   const avisos: string[] = [];
   const barrados: string[] = [];
-  const saida: { conta: ContaTiss; regra: RegraApresentacao | null }[] = [];
+  const saida: {
+    conta: ContaTiss;
+    regra: RegraApresentacao | null;
+    executantes: (number | null)[];
+  }[] = [];
+  const montadorDe = (rg: RegraApresentacao | null) =>
+    rg ? (regras.find((x) => x.id === rg.id) ?? null) : null;
   const conferidas: { rotulo: string; regra: RegraApresentacao | null }[] = [];
   const omitidas: number[] = [];
   const valores = new Map<number, number>();
@@ -326,7 +373,18 @@ export async function apresentarLote(
         `A conta ${rotulo} ficou sem itens para a guia pela regra de apresentação da fonte pagadora.`,
       );
     valores.set(id, valorApresentado(vp.conta));
-    saida.push({ conta: vp.conta, regra });
+    // A série do hospital numera a guia que ainda não tem número próprio (a que leva o número da conta).
+    const rm = montadorDe(regra);
+    const numeraPelaSerie =
+      rm?.numeracaoGuia === 'hospital' &&
+      rm.proximoNumeroGuia !== null &&
+      vp.conta.numeroGuia === texto(c.linha['numero']).slice(0, 20);
+    saida.push({
+      conta: numeraPelaSerie ? { ...vp.conta, numeroGuia: '' } : vp.conta,
+      regra,
+      // O executante de cada item só vale quando a regra não juntou nem tirou itens (mesma ordem da conta).
+      executantes: vp.conta.itens.length === origem.length ? origem.map((o) => o.profissionalId) : [],
+    });
   }
   if (barrados.length) {
     const resumo = `${barrados.length} item(ns) sem credenciamento para cobrar nesta fonte pagadora (${barrados
@@ -341,12 +399,59 @@ export async function apresentarLote(
   if (!saida.length)
     throw recusa('lote-vazio', 'Todas as guias ficaram sem valor e a fonte pagadora não recebe guia zerada.');
   const ordenadas = ordenarGuias(saida, r.regra?.ordenacaoGuias ?? 'numero_guia');
+  // Regras do montador (padrão TISS 4.x): quebra do resumo por período, SP/SADT por executante ou por data, série
+  // de numeração do hospital e contratado por CNPJ ou CPF. A quebra reparte os itens: o total da conta não muda.
+  const partes: ContaTiss[] = [];
+  for (const g of ordenadas) {
+    const rm = montadorDe(g.regra);
+    let cs = [g.conta];
+    if (rm?.quebraResumoInternacao === 'por_periodo' && rm.diasCorteResumo)
+      cs = cs.flatMap((c) =>
+        quebrarResumoInternacao(c, cortesPorPeriodo(c.inicio.data, c.fim.data, rm.diasCorteResumo ?? 0)),
+      );
+    if (rm?.geracaoSpSadt === 'por_data') cs = cs.flatMap((c) => separarSpSadt(c, 'data'));
+    else if (rm?.geracaoSpSadt === 'por_prestador')
+      cs = cs.flatMap((c) => separarSpSadt(c, 'prestador', g.executantes));
+    if (cs.length > 1)
+      avisos.push(
+        `a conta ${g.conta.numeroGuia || 'sem número'} vai em ${cs.length} guias pela regra da fonte pagadora`,
+      );
+    partes.push(...cs);
+  }
+  const rl = montadorDe(r.regra);
+  let numeradas = partes;
+  if (rl?.numeracaoGuia === 'hospital' && rl.proximoNumeroGuia !== null) {
+    const num = numerarGuias(partes, {
+      prefixo: rl.prefixoNumeroGuia ?? '',
+      proximo: rl.proximoNumeroGuia,
+      largura: rl.larguraNumeroGuia,
+    });
+    if (num.erros.length) throw recusa('numeracao-guia', num.erros.join(' '));
+    if (num.proximo !== rl.proximoNumeroGuia)
+      await tx.alterar('regra_apresentacao_tiss', rl.id, rl.versao, { proximo_numero_guia: num.proximo });
+    numeradas = num.guias;
+  } else if (partes.some((p) => !p.numeroGuia))
+    throw recusa(
+      'numeracao-guia',
+      'A guia ficou sem número: a série da regra de apresentação não está ligada.',
+    );
+  let identificacao: IdentificacaoContratado | null = null;
+  if (rl && rl.identificacaoContratado !== 'codigo') {
+    const idc = identificacaoContratado(
+      rl.identificacaoContratado,
+      rl.codigoContratadoOperadora ?? '',
+      rl.identificacaoContratado === 'cnpj' ? rl.cnpjContratado : rl.cpfContratado,
+    );
+    if (idc.erro) throw recusa('contratado-invalido', idc.erro);
+    identificacao = idc.identificacao;
+  }
   return {
-    montadas: ordenadas.map((g) => g.conta),
+    montadas: numeradas,
     omitidas,
     valores,
     registroAns: r.regra?.registroAns ?? null,
     codigoPrestador: r.regra?.codigoContratadoOperadora ?? null,
+    identificacao,
     avisos,
   };
 }
@@ -443,6 +548,24 @@ const esquemaRegra = z.object({
   agrupaItens: z.boolean().default(false),
   omiteGuiaSemValor: z.boolean().default(false),
   usaFaturamentoEletronico: z.boolean().default(true),
+  identificacaoContratado: z.enum(['codigo', 'cnpj', 'cpf']).default('codigo'),
+  documentoContratado: z.string().trim().max(18).nullable().default(null),
+  numeracaoGuia: z.enum(['hospital', 'operadora', 'sequencial_lote']).default('hospital'),
+  prefixoNumeroGuia: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9-]{1,10}$/)
+    .nullable()
+    .default(null),
+  larguraNumeroGuia: z.number().int().min(1).max(20).default(8),
+  proximoNumeroGuia: z.number().int().min(1).nullable().default(null),
+  quebraResumoInternacao: z
+    .enum(['nao_quebra', 'por_periodo', 'por_prestador', 'por_limite_itens'])
+    .default('nao_quebra'),
+  diasCorteResumo: z.number().int().min(1).max(366).nullable().default(null),
+  geracaoSpSadt: z
+    .enum(['por_atendimento', 'por_prestador', 'por_procedimento', 'por_data'])
+    .default('por_atendimento'),
   ativo: z.boolean().default(true),
 });
 
@@ -543,8 +666,44 @@ const opGravarRegra = definirOperacao({
   entrada: esquemaRegra,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    // A identificação do contratado é conferida no domínio (dígito do CNPJ ou do CPF) antes de gravar.
+    const idc = identificacaoContratado(
+      e.identificacaoContratado,
+      e.codigoContratadoOperadora ?? '',
+      e.documentoContratado,
+    );
+    if (e.identificacaoContratado !== 'codigo' && idc.erro)
+      throw recusa('contratado-invalido', idc.erro, { campos: ['documentoContratado'] });
+    if (e.quebraResumoInternacao === 'por_periodo' && e.diasCorteResumo === null)
+      throw recusa(
+        'corte-resumo-ausente',
+        'Informe de quantos em quantos dias o resumo de internação é quebrado.',
+        {
+          campos: ['diasCorteResumo'],
+        },
+      );
+    if (e.proximoNumeroGuia !== null && (e.prefixoNumeroGuia ?? '').length + e.larguraNumeroGuia > 20)
+      throw recusa(
+        'serie-longa',
+        'O prefixo e a largura da série passam dos 20 caracteres do número da guia.',
+        {
+          campos: ['prefixoNumeroGuia', 'larguraNumeroGuia'],
+        },
+      );
+    const doc = idc.identificacao?.tipo === 'codigo' ? null : (idc.identificacao?.valor ?? null);
     const valores = {
       tipo_conta_id: e.tipoContaId,
+      identificacao_contratado:
+        e.identificacaoContratado === 'codigo' ? 'codigo_operadora' : e.identificacaoContratado,
+      cnpj_contratado: e.identificacaoContratado === 'cnpj' ? doc : null,
+      cpf_contratado: e.identificacaoContratado === 'cpf' ? doc : null,
+      numeracao_guia: e.numeracaoGuia,
+      prefixo_numero_guia: e.prefixoNumeroGuia,
+      largura_numero_guia: e.larguraNumeroGuia,
+      proximo_numero_guia: e.proximoNumeroGuia,
+      quebra_resumo_internacao: e.quebraResumoInternacao,
+      dias_corte_resumo: e.quebraResumoInternacao === 'por_periodo' ? e.diasCorteResumo : null,
+      geracao_sp_sadt: e.geracaoSpSadt,
       versao_padrao_tiss_id: e.versaoPadraoTissId,
       registro_ans: e.registroAns,
       codigo_contratado_operadora: e.codigoContratadoOperadora,

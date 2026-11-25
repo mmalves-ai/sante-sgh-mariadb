@@ -199,6 +199,7 @@ export function cabecalhoDoLote(p: DadosPrestador, sequencial: string, agora: Da
     hora: iso.slice(11, 19),
     codigoPrestadorNaOperadora: p.codigoPrestador,
     registroANS: p.registroAns,
+    ...(p.identificacao && p.identificacao.tipo !== 'codigo' ? { identificacao: p.identificacao } : {}),
   };
 }
 

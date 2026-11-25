@@ -8,6 +8,7 @@ import { cabecalho, consulta, honorario, recurso, resumoInternacao, spSadt } fro
 import { mensagemLoteGuias, mensagemRecursoGlosa } from './lote.js';
 import {
   centavosDaConta,
+  cortesPorPeriodo,
   cnpjValido,
   cpfValido,
   identificacaoContratado,
@@ -189,5 +190,14 @@ describe('quebra do resumo de internação e separação da SP/SADT', () => {
     const c = conta(itens, { numeroGuia: '12345678901234567890' });
     const partes = quebrarResumoInternacao(c, ['2026-10-10']);
     expect(partes.map((p) => p.numeroGuia)).toEqual(['123456789012345678-1', '123456789012345678-2']);
+  });
+
+  it('cortes por período: a cada N dias desde a entrada, só antes da alta; dias fora do intervalo não quebram', () => {
+    expect(cortesPorPeriodo('2026-10-01', '2026-10-25', 10)).toEqual(['2026-10-10', '2026-10-20']);
+    expect(cortesPorPeriodo('2026-10-01', '2026-10-10', 10)).toEqual([]);
+    expect(cortesPorPeriodo('2026-10-01', '2026-10-25', 0)).toEqual([]);
+    const c = conta(itens);
+    const partes = quebrarResumoInternacao(c, cortesPorPeriodo(c.inicio.data, c.fim.data, 10));
+    expect(partes.reduce((s, p) => s + centavosDaConta(p), 0)).toBe(centavosDaConta(c));
   });
 });
