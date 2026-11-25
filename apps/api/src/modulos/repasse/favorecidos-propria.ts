@@ -14,6 +14,7 @@ import {
   donoDaConta,
   type EnquadramentoDoFornecedor,
   type FavorecidoVigente,
+  planejarEnquadramento,
   planejarFavorecido,
   retencoesDoFavorecido,
   validarEncerramento,
@@ -39,6 +40,22 @@ import {
 
 export const PORTA_FAVORECIDOS_REPASSE = Symbol('PORTA_FAVORECIDOS_REPASSE');
 
+/** O que o controlador usa da porta: a própria (MariaDB) ou a em memória da fonte sintética (E2E). */
+export type PortaFavorecidosRepasse = Pick<
+  PortaFavorecidosRepassePropria,
+  | 'listarFavorecidos'
+  | 'listarAlvos'
+  | 'listarContas'
+  | 'incluirFavorecido'
+  | 'encerrarFavorecido'
+  | 'listarTributos'
+  | 'incluirEnquadramento'
+  | 'listarPrestadores'
+  | 'incluirPrestador'
+  | 'alterarPrestador'
+  | 'incluirContaPrestador'
+>;
+
 type Linha = Record<string, unknown>;
 
 const id = z.number().int().positive();
@@ -51,7 +68,7 @@ const dataTexto = (v: unknown): string | null =>
       ? v.toISOString().slice(0, 10)
       : String(v).slice(0, 10);
 
-const esquemaFavorecido = z
+export const esquemaFavorecido = z
   .object({
     profissional: id,
     fontePagadora: id.nullable().default(null),
@@ -72,7 +89,7 @@ const digitos = (n: number) =>
     .transform((s) => s.replace(/\D/g, ''))
     .refine((s) => s.length === n);
 
-const esquemaPrestador = z
+export const esquemaPrestador = z
   .object({
     codigo: z.string().trim().min(1).max(30),
     nome: z.string().trim().min(1).max(150),
@@ -91,6 +108,18 @@ const esquemaPrestador = z
     email: z.string().trim().max(254).nullable().default(null),
     telefone: z.string().trim().max(20).nullable().default(null),
     observacao: z.string().trim().max(1000).nullable().default(null),
+  })
+  .strict();
+
+export const esquemaEnquadramento = z
+  .object({
+    tributo: id.nullable().default(null),
+    regime: z.string().trim().min(1).max(30),
+    retem: z.boolean().default(true),
+    aliquotaIss: z.number().nullable().default(null),
+    fundamentoLegal: z.string().trim().max(300).nullable().default(null),
+    inicio: data,
+    fim: data.nullable().default(null),
   })
   .strict();
 
@@ -195,7 +224,12 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
     super(
       nucleo,
       cliente,
-      ['favorecido_repasse', 'prestador_terceiro', 'conta_bancaria_credor'],
+      [
+        'favorecido_repasse',
+        'prestador_terceiro',
+        'conta_bancaria_credor',
+        'enquadramento_tributario_participante',
+      ],
       'repasse.favorecidos',
     );
   }
@@ -420,6 +454,85 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
       await tx.alterar('favorecido_repasse', favorecido, x.versao, { vigencia_fim: x.fim });
       return { tabela: 'favorecido_repasse', id: favorecido };
     });
+  }
+
+  /** Os tributos ativos, para o enquadramento do fornecedor (nulo no enquadramento: vale para todos). */
+  listarTributos(c: ContextoPortaPropria): Promise<{ id: number; codigo: string; descricao: string }[]> {
+    return this.ler(c, 'tributos', async (l) =>
+      (
+        await l.consultar<Linha>(
+          'SELECT id, codigo, descricao FROM tributo WHERE ativo ORDER BY codigo LIMIT 200',
+          [],
+        )
+      ).map((x) => ({ id: num(x['id']), codigo: String(x['codigo']), descricao: String(x['descricao']) })),
+    );
+  }
+
+  /**
+   * Inclui o enquadramento tributário do fornecedor do favorecido (o cadastro fiscal do contas a pagar), neste
+   * estabelecimento: o anterior aberto do mesmo tributo termina no dia de antes (planejarEnquadramento), nada apagado.
+   */
+  async incluirEnquadramento(
+    c: ContextoPortaPropria,
+    fornecedor: number,
+    entrada: unknown,
+  ): Promise<{ id: number; encerrados: number[] }> {
+    const x = entradaValida(esquemaEnquadramento, entrada);
+    const pre = planejarEnquadramento(x, []);
+    if (pre.problemas.length) throw recusaRegra('Enquadramento recusado', pre.problemas);
+    return this.gravar(
+      c,
+      'repasse.favorecido.enquadramento',
+      ['enquadramento_tributario_participante'],
+      async (tx, est) => {
+        const f = await tx.uma<Linha>(
+          'SELECT id FROM empresa_fornecedora WHERE id = ? AND excluido_em IS NULL',
+          [fornecedor],
+        );
+        if (!f) throw naoEncontrado('Fornecedor');
+        if (x.tributo !== null && !(await tx.uma('SELECT id FROM tributo WHERE id = ?', [x.tributo])))
+          throw naoEncontrado('Tributo');
+        const existentes = await tx.consultarParaAtualizar<Linha>(
+          `SELECT id, tributo_id, vigencia_inicio, vigencia_fim, versao
+             FROM enquadramento_tributario_participante
+            WHERE empresa_fornecedora_id = ? AND estabelecimento_id = ? AND ativo`,
+          [fornecedor, est.id],
+        );
+        const plano = planejarEnquadramento(
+          x,
+          existentes.map((e) => ({
+            id: num(e['id']),
+            tributo: numOuNull(e['tributo_id']),
+            inicio: dataTexto(e['vigencia_inicio'])!,
+            fim: dataTexto(e['vigencia_fim']),
+          })),
+        );
+        if (plano.problemas.length) throw recusaRegra('Enquadramento recusado', plano.problemas);
+        for (const enc of plano.encerrar) {
+          const v = existentes.find((e) => num(e['id']) === enc.id);
+          await tx.alterar('enquadramento_tributario_participante', enc.id, num(v?.['versao']), {
+            vigencia_fim: enc.fim,
+          });
+        }
+        const novo = await tx.incluir('enquadramento_tributario_participante', {
+          estabelecimento_id: est.id,
+          empresa_fornecedora_id: fornecedor,
+          tributo_id: x.tributo,
+          regime: x.regime,
+          retem_tributo: x.retem,
+          aliquota_iss: x.aliquotaIss,
+          fundamento_legal: x.fundamentoLegal,
+          vigencia_inicio: x.inicio,
+          vigencia_fim: x.fim,
+          ativo: true,
+        });
+        return {
+          tabela: 'enquadramento_tributario_participante',
+          id: novo,
+          encerrados: plano.encerrar.map((e) => e.id),
+        };
+      },
+    );
   }
 
   // ── Prestadores terceiros ──────────────────────────────────────────────────────────────────────────────

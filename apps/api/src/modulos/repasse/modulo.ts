@@ -19,6 +19,7 @@ import { portaRepasseIndisponivel, PortaRepassePropria } from './porta-propria.j
 import { GERADOR_PDF_REPASSE, RepasseController } from './repasse.controller.js';
 import { FavorecidosRepasseController } from './favorecidos.controller.js';
 import { PORTA_FAVORECIDOS_REPASSE, PortaFavorecidosRepassePropria } from './favorecidos-propria.js';
+import { PortaFavorecidosRepasseMemoria } from './favorecidos-memoria.js';
 import { FONTE_FISCAL_REPASSE, fonteFiscalRepasse } from './fonte-fiscal.js';
 import { RemuneracaoVariavelController } from './remuneracao-variavel.controller.js';
 import { VariavelFaixaController } from './variavel-faixa.controller.js';
@@ -82,7 +83,7 @@ export async function moduloRepasse(
       RateioCustoController,
     ],
     providers: [
-      // Favorecidos e prestadores terceiros (06-FAT linha 46): só com o banco do cliente (sem ele, 503).
+      // Favorecidos e prestadores terceiros (06-FAT linha 46): com o banco do cliente, a porta própria.
       ...(ctx.nucleo && ctx.configuracao.clientePadrao
         ? [
             {
@@ -110,6 +111,10 @@ export async function moduloRepasse(
               useValue: fonteFiscalRepasse(ctx.nucleo, ctx.configuracao.clientePadrao),
             },
           ]
+        : []),
+      // Na fonte sintética (E2E, sem banco do cliente), os favorecidos ficam na porta em memória.
+      ...(!ctx.nucleo && fontesSinteticas(ctx.env)
+        ? [{ provide: PORTA_FAVORECIDOS_REPASSE, useValue: new PortaFavorecidosRepasseMemoria() }]
         : []),
       { provide: PORTA_REPASSE, useValue: porta },
       { provide: GERADOR_PDF_REPASSE, useValue: geradorPdf },

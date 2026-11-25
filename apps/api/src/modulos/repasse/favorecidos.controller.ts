@@ -1,10 +1,13 @@
-// Favorecidos do repasse e prestadores terceiros (F3.7, 06-FAT linha 46). Rotas (porta própria; sem banco do
-// cliente, 503):
+// Favorecidos do repasse e prestadores terceiros (F3.7, 06-FAT linha 46). Rotas (porta própria; na fonte sintética, a em
+// memória; sem as duas, 503):
 //   GET  /api/repasse/favorecidos?profissional=        favorecidos (vigentes e encerrados) do profissional ou de todos
 //   GET  /api/repasse/favorecidos/alvos?tipo=&busca=   empresas, cooperativas, profissionais ou fontes pagadoras
 //   GET  /api/repasse/favorecidos/contas?tipo=&id=     contas ativas do credor do tipo (documento só com o final)
 //   POST /api/repasse/favorecidos                      inclui; o anterior do mesmo tipo e fonte termina no dia de antes
 //   POST /api/repasse/favorecidos/:id/encerrar         { versao, fim } encerra a vigência (nada apagado)
+//   GET  /api/repasse/favorecidos/tributos              tributos ativos (para o enquadramento do fornecedor)
+//   POST /api/repasse/favorecidos/fornecedores/:id/enquadramentos  enquadramento tributário do fornecedor (o mesmo
+//        cadastro do contas a pagar); o anterior aberto do mesmo tributo termina no dia de antes
 //   GET  /api/repasse/prestadores-terceiros?busca=     prestadores terceiros (ativos primeiro)
 //   POST /api/repasse/prestadores-terceiros            inclui o prestador (documento, CNES, percentual, base)
 //   POST /api/repasse/prestadores-terceiros/:id        { versao, ativo?, percentualRepasse?, baseRepasse?, ... }
@@ -28,7 +31,7 @@ import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
-import { PORTA_FAVORECIDOS_REPASSE, type PortaFavorecidosRepassePropria } from './favorecidos-propria.js';
+import { PORTA_FAVORECIDOS_REPASSE, type PortaFavorecidosRepasse } from './favorecidos-propria.js';
 
 export const PERMISSOES_FAVORECIDOS_REPASSE = {
   ler: 'repasse.cooperativa.ler',
@@ -55,12 +58,12 @@ export class FavorecidosRepasseController {
   constructor(
     @Optional()
     @Inject(PORTA_FAVORECIDOS_REPASSE)
-    private readonly porta: PortaFavorecidosRepassePropria | null = null,
+    private readonly porta: PortaFavorecidosRepasse | null = null,
   ) {}
 
   private async com<T>(
     req: RequisicaoAutorizada,
-    fn: (p: PortaFavorecidosRepassePropria, c: ReturnType<typeof sessaoDe>['porta']) => Promise<T>,
+    fn: (p: PortaFavorecidosRepasse, c: ReturnType<typeof sessaoDe>['porta']) => Promise<T>,
   ) {
     if (!this.porta) throw new ErroProblema('indisponivel', 503, 'Recurso sem banco próprio neste ambiente');
     const s = sessaoDe(req);
@@ -124,6 +127,24 @@ export class FavorecidosRepasseController {
     @Body() corpo: unknown,
   ) {
     return this.com(req, (p, c) => p.encerrarFavorecido(c, id, corpo));
+  }
+
+  @Get('favorecidos/tributos')
+  @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.ler)
+  tributos(@Req() req: RequisicaoAutorizada) {
+    return this.com(req, async (p, c) => ({ itens: await p.listarTributos(c) }));
+  }
+
+  @Post('favorecidos/fornecedores/:id/enquadramentos')
+  @AuditadoNoHandler('executor: trilha na mesma transação do cadastro de favorecidos')
+  @HttpCode(201)
+  @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.editar)
+  incluirEnquadramento(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.incluirEnquadramento(c, id, corpo));
   }
 
   @Get('prestadores-terceiros')

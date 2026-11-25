@@ -60,6 +60,9 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
       await e.executar('DELETE FROM lancamento_repasse WHERE estabelecimento_id = ?', [ids.est]);
       await limparTrilhaDaMassa(e, { ids: [ids.est] });
       await e.executar('DELETE FROM favorecido_repasse WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM enquadramento_tributario_participante WHERE estabelecimento_id = ?', [
+        ids.est,
+      ]);
       await e.executar(
         'DELETE FROM conta_bancaria_credor WHERE prestador_terceiro_id IN (SELECT id FROM prestador_terceiro WHERE estabelecimento_id = ?)',
         [ids.est],
@@ -375,5 +378,47 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f3711' }, (e) =>
       e.executar('DELETE FROM conta_bancaria_credor WHERE prestador_terceiro_id = ?', [p.id]),
     );
+  });
+
+  it('enquadramento do fornecedor: o novo termina o anterior no dia de antes; mesmo início, recusa; nada apagado', async () => {
+    const a = await porta.incluirEnquadramento(c(), ids.fornecedor, {
+      regime: 'lucro_presumido',
+      aliquotaIss: 2,
+      inicio: '2026-01-01',
+    });
+    const b = await porta.incluirEnquadramento(c(), ids.fornecedor, {
+      regime: 'simples_nacional',
+      retem: false,
+      aliquotaIss: 3.5,
+      fundamentoLegal: 'LC 123/2006',
+      inicio: '2026-11-01',
+    });
+    expect(b.encerrados).toEqual([a.id]);
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-f3711' }, (l) =>
+      l.consultar<Record<string, unknown>>(
+        `SELECT id, regime, retem_tributo AS r, aliquota_iss AS a, vigencia_fim AS f, ativo, criado_por AS cp
+           FROM enquadramento_tributario_participante WHERE estabelecimento_id = ? ORDER BY id`,
+        [ids.est],
+      ),
+    );
+    expect(
+      linhas.map((x) => [Number(x['id']), x['regime'], Boolean(x['r']), Number(x['a']), Boolean(x['ativo'])]),
+    ).toEqual([
+      [a.id, 'lucro_presumido', true, 2, true],
+      [b.id, 'simples_nacional', false, 3.5, true],
+    ]);
+    const fim = linhas[0]!['f'];
+    expect(String(fim instanceof Date ? fim.toISOString() : fim).slice(0, 10)).toBe('2026-10-31');
+    expect(linhas[1]!['f']).toBeNull();
+    expect(Number(linhas[1]!['cp'])).toBe(ids.usuario);
+    expect(
+      await recusa(porta.incluirEnquadramento(c(), ids.fornecedor, { regime: 'mei', inicio: '2026-11-01' })),
+    ).toBe('regra-violada');
+    expect(
+      await recusa(
+        porta.incluirEnquadramento(c(), ids.fornecedor, { regime: 'decisao_judicial', inicio: '2026-12-01' }),
+      ),
+    ).toBe('regra-violada');
+    expect((await porta.listarTributos(c())).every((t) => t.id > 0 && t.codigo.length > 0)).toBe(true);
   });
 });
