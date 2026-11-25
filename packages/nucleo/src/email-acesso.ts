@@ -1,8 +1,10 @@
-// Família acesso-email (modulos-proprios-2): o e-mail da porta de entrada (link do "Esqueci a senha" e código do
+// @sgh/nucleo, e-mail de acesso (família acesso-email, modulos-proprios-2): o e-mail da porta de entrada (link do "Esqueci a senha" e código do
 // segundo fator). Envio direto por SMTP (SMTP_URL), sem dependência nova (node:net), no mesmo formato do cliente SMTP
 // do worker. Regra 6: fora de produção o SMTP_URL só pode apontar para a captura local (Mailpit em loopback); outro
 // destino recusa a montagem (a API nem parte com ele). Sem SMTP_URL: sem envio (os recursos que dependem dele ficam
 // indisponíveis, nunca caem calados). Texto só com o necessário: nunca senha, resumo ou dado clínico.
+// Mora no núcleo porque a API (sessao/email-acesso.ts reexporta) e a ferramenta plataforma:criar-admin usam o mesmo
+// código (a fronteira de módulos não deixa tools/ importar a API).
 import { execFile } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { connect, type Socket } from 'node:net';
@@ -26,9 +28,12 @@ export const ENDERECO_EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}$/;
 export const REMETENTE_ACESSO_PADRAO = 'nao-responda@sgh.local';
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
-/** E-mail do dono (canal de avisos da obra): DONO_EMAIL do ambiente, senão o padrão de tools/obra/avisar_dono.py. */
-export function emailDoDono(env: Readonly<Record<string, string | undefined>>): string {
-  return (env['DONO_EMAIL']?.trim() || 'mmalves@hal-ai.com').toLowerCase();
+/**
+ * E-mail do dono (canal de avisos da obra): DONO_EMAIL do ambiente. Sem DONO_EMAIL (ou vazio), null: o canal fica
+ * desligado. Nenhum endereço fixo no produto.
+ */
+export function emailDoDono(env: Readonly<Record<string, string | undefined>>): string | null {
+  return env['DONO_EMAIL']?.trim().toLowerCase() || null;
 }
 
 /**
@@ -42,7 +47,9 @@ export function envioPeloCanalDoDono(
   return {
     destino: 'smtp',
     async enviar(m) {
-      if (m.para.toLowerCase() !== emailDoDono(env))
+      const dono = emailDoDono(env);
+      if (!dono) throw new Error('recusado: canal do dono desligado (sem DONO_EMAIL)');
+      if (m.para.toLowerCase() !== dono)
         throw new Error('recusado: o canal do dono só entrega ao e-mail do dono');
       if (/[\r\n]/.test(m.assunto)) throw new Error('Assunto inválido.');
       const dir = mkdtempSync(join(tmpdir(), 'acesso-'));
@@ -91,18 +98,39 @@ export function emailAcessoMemoria(): PortaEmailAcesso & { readonly enviadas: Me
  * O envio pelo ambiente: SMTP_URL (smtp://host:porta) e EMAIL_REMETENTE. Fora de produção (AMBIENTE diferente de
  * `producao`), só loopback; senão lança (a montagem é recusada). Sem SMTP_URL, null.
  */
-export function emailAcessoDoAmbiente(env: NodeJS.ProcessEnv): PortaEmailAcesso | null {
+export function emailAcessoDoAmbiente(
+  env: Readonly<Record<string, string | undefined>>,
+  avisar: (texto: string) => void = (texto) => console.warn(texto),
+): PortaEmailAcesso | null {
   const url = env['SMTP_URL']?.trim();
   // Canal do dono (decisão do dono, 24/11/2026: "para o admin, que sou eu, pode mandar"): fora de produção, com
   // ACESSO_EMAIL_CANAL_DONO=sim, o e-mail de acesso cujo destinatário é o dono vai à caixa real dele pelo canal de
   // avisos da obra (SES); qualquer outro destinatário segue para a captura local (SMTP em loopback) ou é recusado.
-  if ((env['AMBIENTE'] ?? 'dev') !== 'producao' && env['ACESSO_EMAIL_CANAL_DONO']?.trim() === 'sim') {
+  // Sem DONO_EMAIL o canal fica desligado e vale o comportamento normal, com aviso na montagem (só o nome das chaves,
+  // nunca valor): o lançador do dev que liga o canal precisa definir DONO_EMAIL junto.
+  const emailDono = emailDoDono(env);
+  if (
+    !emailDono &&
+    (env['AMBIENTE'] ?? 'dev') !== 'producao' &&
+    env['ACESSO_EMAIL_CANAL_DONO']?.trim() === 'sim'
+  )
+    avisar(
+      'E-mail de acesso: ACESSO_EMAIL_CANAL_DONO=sim sem DONO_EMAIL; o canal do dono fica desligado e vale o envio ' +
+        (url
+          ? 'pela captura local (SMTP_URL).'
+          : 'normal, que sem SMTP_URL deixa a recuperação e o código por e-mail indisponíveis.'),
+    );
+  if (
+    emailDono &&
+    (env['AMBIENTE'] ?? 'dev') !== 'producao' &&
+    env['ACESSO_EMAIL_CANAL_DONO']?.trim() === 'sim'
+  ) {
     const dono = envioPeloCanalDoDono(env, env['SGH_RAIZ_REPOSITORIO']?.trim() || process.cwd());
     const resto = url ? emailAcessoDoAmbiente({ ...env, ACESSO_EMAIL_CANAL_DONO: '' }) : null;
     return {
       destino: 'smtp',
       enviar: (m) =>
-        m.para.toLowerCase() === emailDoDono(env)
+        m.para.toLowerCase() === emailDono
           ? dono.enviar(m)
           : resto
             ? resto.enviar(m)

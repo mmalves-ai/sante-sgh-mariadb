@@ -6,9 +6,53 @@ import { emailAcessoDoAmbiente, emailDoDono, envioPeloCanalDoDono } from './emai
 const MSG = { assunto: 'Recuperar a senha', texto: 'link de uso único' };
 
 describe('canal do dono na porta de e-mail', () => {
-  it('o e-mail do dono vem de DONO_EMAIL, senão o padrão do aviso da obra', () => {
+  it('o e-mail do dono vem só de DONO_EMAIL; sem ele (ou vazio), null', () => {
     expect(emailDoDono({ DONO_EMAIL: ' Dono@Exemplo.dev ' })).toBe('dono@exemplo.dev');
-    expect(emailDoDono({})).toBe('mmalves@hal-ai.com');
+    expect(emailDoDono({})).toBeNull();
+    expect(emailDoDono({ DONO_EMAIL: '' })).toBeNull();
+  });
+
+  it('sem DONO_EMAIL o canal recusa qualquer envio', async () => {
+    const porta = envioPeloCanalDoDono({}, '/inexistente');
+    await expect(porta.enviar({ para: 'dono@exemplo.dev', ...MSG })).rejects.toThrow(
+      'canal do dono desligado',
+    );
+  });
+
+  it('ligado com DONO_EMAIL vazio: comportamento normal (sem SMTP_URL, sem envio), com aviso só de chaves', () => {
+    const avisos: string[] = [];
+    const avisar = (t: string) => avisos.push(t);
+    expect(
+      emailAcessoDoAmbiente({ AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim', DONO_EMAIL: '' }, avisar),
+    ).toBeNull();
+    expect(emailAcessoDoAmbiente({ AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim' }, avisar)).toBeNull();
+    expect(avisos).toHaveLength(2);
+    expect(avisos[0]).toMatch(/ACESSO_EMAIL_CANAL_DONO=sim sem DONO_EMAIL/);
+    expect(avisos[0]).toMatch(/indisponíveis/);
+    const comSmtp = emailAcessoDoAmbiente(
+      { AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim', SMTP_URL: 'smtp://127.0.0.1:1025' },
+      avisar,
+    );
+    expect(comSmtp?.destino).toBe('smtp');
+    expect(avisos[2]).toMatch(/captura local/);
+    expect(avisos[2]).not.toMatch(/127\.0\.0\.1/);
+  });
+
+  it('sem aviso quando o canal está desligado, em produção ou com DONO_EMAIL', () => {
+    const avisos: string[] = [];
+    const avisar = (t: string) => avisos.push(t);
+    emailAcessoDoAmbiente({ AMBIENTE: 'dev' }, avisar);
+    emailAcessoDoAmbiente({ AMBIENTE: 'producao', ACESSO_EMAIL_CANAL_DONO: 'sim' }, avisar);
+    emailAcessoDoAmbiente(
+      {
+        AMBIENTE: 'dev',
+        ACESSO_EMAIL_CANAL_DONO: 'sim',
+        DONO_EMAIL: 'dono@exemplo.dev',
+        SGH_RAIZ_REPOSITORIO: '/inexistente',
+      },
+      avisar,
+    );
+    expect(avisos).toEqual([]);
   });
 
   it('o canal recusa outro destinatário sem chamar o envio', async () => {

@@ -13,6 +13,20 @@ PRIVS_CLIENTE = ("SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENC
                  " LOCK TABLES, CREATE VIEW, SHOW VIEW")
 PADROES_MOTOR = ("cliente_%", "conector_ctl_%")
 
+# Situação da base do painel de carga (situacao_base.py): resumo por tabela gravado no fim de cada tabela lida inteira
+DDL_RESUMO_TABELA = """CREATE TABLE IF NOT EXISTS {b}.conector_resumo_tabela (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  tabela_origem VARCHAR(63) NOT NULL,
+  registros_origem BIGINT UNSIGNED NOT NULL COMMENT 'Contagem da origem na fotografia em que a tabela foi lida inteira',
+  na_base BIGINT UNSIGNED NOT NULL COMMENT 'Linhas da origem registradas no destino (gravadas ou iguais)',
+  recusadas BIGINT UNSIGNED NOT NULL COMMENT 'Linhas recusadas abertas',
+  execucao_id BIGINT UNSIGNED NOT NULL COMMENT 'conector_execucao.id que leu a tabela inteira',
+  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_conector_resumo_tabela (tabela_origem)
+) COMMENT='Situação da base por tabela da origem, no fim de cada tabela lida inteira (painel de carga)'
+"""
+
 DDL = """
 CREATE TABLE IF NOT EXISTS {b}.imagem (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -160,8 +174,8 @@ CREATE TABLE IF NOT EXISTS {b}.conciliacao (
   criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
   alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
   UNIQUE KEY uq_conciliacao (execucao_id, entidade)
-) COMMENT='Conciliação por entidade em cada execução (contagens e soma de controle)'
-"""
+) COMMENT='Conciliação por entidade em cada execução (contagens e soma de controle)';
+""" + DDL_RESUMO_TABELA
 
 
 def nome_ctl(codigo):

@@ -49,3 +49,17 @@ intocadas.
   fim dela). A carga completa deve ser agendada fora do pico; o sincronismo diferencial é curto.
 - A pausa encerra a transação; a retomada abre outra fotografia, e o hash por linha evita regravar o que já
   entrou.
+
+## Continuidade entre origens com a mesma base (2026-11-24)
+
+Quando a origem de um cliente muda de forma sem mudar de base (a cópia do arquivo passa a ser lida pelo servidor
+Firebird, ou o servidor troca de endereço), o administrador declara em `cliente_origem.continua_de_origem_id`
+(plataforma 0094, `plataforma.declarar_continuidade`, com evento `origem_continua_de` no cliente) qual origem anterior
+a nova continua. Só com essa declaração a continuação de uma importação aproveita as marcas de tabela concluída das
+execuções da origem anterior (regra 6 do `continuar.py`), aceitando o resumo da imagem dela como o da mesma base. Se
+as duas origens têm identidade técnica comparável (ODS, tamanho de página, data de criação), ela precisa bater: prova
+que difere recusa a herança, e a carga relê tudo como antes. Sem campo comum para comparar, vale a declaração, que
+fica registrada no evento com a situação `sem_prova`. Sem declaração, nada muda. No diferencial, o bloco de 10 mil ids
+cujo resumo e contagem batem com o guardado em `conector_bloco`, e cujas linhas estão todas carregadas com o mesmo
+hash e sem recusa aberta, é pulado inteiro (`CONECTOR_SALTO_BLOCOS`, ligado por padrão); qualquer dúvida desce linha a
+linha.

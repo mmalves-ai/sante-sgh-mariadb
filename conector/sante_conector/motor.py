@@ -20,6 +20,7 @@ pausa no próximo ponto seguro (`pausando` -> `pausada`, continuável), log da e
 `contadores.conciliacao_carga` (recusadas; `conferido=false` quando há recusa). A conciliação da leitura (gstat ou
 transação) chama-se `conciliacao_leitura`.
 """
+import collections
 import contextlib
 import datetime
 import json
@@ -31,6 +32,7 @@ import time
 import pymysql
 
 from . import (banco, caminho, carga, carga_mapa, continuar, controle, disco, imagem, mapa, origem, plataforma,
+               situacao_base,
                preco_origem, registro_log, relatorio)
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
@@ -97,6 +99,8 @@ class Painel:
     no log a cada LOG_S. Toda mudança de estado do motor passa por `estado`, que para na pausa pedida (ponto seguro)."""
     LEITURA_PAUSA_S = 5.0
     LOG_S = 60.0
+    JANELA_VELOCIDADE_S = 60.0  # média móvel da velocidade (linhas por segundo) e previsão do fim
+    PREPARO_S = 2.0  # batimento do preparo (continuação): no máximo a cada PREPARO_S
 
     def __init__(self, conn, eid, cont, log, estado=None):
         self.conn, self.eid, self.cont, self.log = conn, eid, cont, log
@@ -105,6 +109,9 @@ class Painel:
         self._ult_pausa, self._ult_log = float("-inf"), time.monotonic()
         self.pausando = False
         self.sem_pausa = False  # da conciliação em diante a carga está inteira: termina, não pausa
+        self.base = None  # situacao_base.SituacaoBase: "Já na base" (calculada uma vez, depois do plano)
+        self._amostras = collections.deque()  # (relógio, linhas processadas POR ESTA execução)
+        self._ult_preparo = float("-inf")
 
     def _evento(self, tipo, t):
         pl = self.placar
@@ -112,6 +119,54 @@ class Painel:
             self.log.tabela_inicio(t, pl.nomes.get(t), pl.contagens.get(t, 0))
         else:
             self.log.tabela_fim(t, pl.nomes.get(t), pl.contagens.get(t, 0), pl.tabela(t))
+            if self.base is not None:
+                self.base.fim(t)
+
+    def progresso_json(self):
+        """`contadores.progresso`: o Placar (conferência desta execução) e, com a situação calculada, `base`."""
+        j = self.placar.json()
+        self._velocidade(j)
+        if self.base is not None:
+            try:
+                j["base"] = self.base.json()
+            except Exception:  # noqa: BLE001 - o painel nunca derruba a carga
+                pass
+        return j
+
+    def _velocidade(self, j):
+        """`linhas_por_segundo` (média móvel de JANELA_VELOCIDADE_S) e `previsao_fim` (ISO, UTC) no progresso. A
+        velocidade é a das linhas processadas por ESTA execução (commits da carga): as tabelas puladas pela
+        continuação, que entram de uma vez em `linhas_processadas`, não inflam a média. A previsão usa o que falta
+        de `linhas_total`. Sem amostra de pelo menos 5 s, os campos ficam fora."""
+        agora = time.monotonic()
+        proc = sum(int(v[0]) for v in self.placar.por_tabela.values())
+        am = self._amostras
+        if am and proc < am[-1][1]:
+            am.clear()
+        am.append((agora, proc))
+        while len(am) > 2 and am[1][0] <= agora - self.JANELA_VELOCIDADE_S:
+            am.popleft()
+        dt = agora - am[0][0]
+        if dt < 5.0:
+            return
+        v = (proc - am[0][1]) / dt
+        j["linhas_por_segundo"] = round(v, 1)
+        faltam = max(0, int(j.get("linhas_total") or 0) - int(j.get("linhas_processadas") or 0))
+        j["previsao_fim"] = ((datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=faltam / v))
+                             .isoformat(timespec="seconds") if v > 0 else None)
+
+    def batimento_preparo(self, etapa):
+        """Batimento do preparo (continuação: tabelas concluídas; dezenas de minutos na base real antes desta rodada):
+        progresso e leitura da pausa no máximo a cada PREPARO_S; com a pausa pedida, levanta PausaPedida (nada da
+        carga foi gravado ainda: a execução termina `pausada`, não `falhou`). Devolve fn(i, n)."""
+        def fn(i, n):
+            if time.monotonic() - self._ult_preparo < self.PREPARO_S:
+                return
+            self._ult_preparo = time.monotonic()
+            self.progresso(None, "%s (%d de %d tabelas)" % (etapa, i, n))
+            if self.pausando:
+                raise carga.PausaPedida()
+        return fn
 
     def checar_pausa(self, forcar=False):
         if self.sem_pausa:
@@ -146,7 +201,7 @@ class Painel:
     def _contadores(self, extra=None):
         c = dict(self.cont, **(extra or {}))
         if self.placar.contagens:
-            c["progresso"] = self.placar.json()
+            c["progresso"] = self.progresso_json()
         return c
 
     def progresso(self, pct=None, etapa=None, extra=None):
@@ -159,7 +214,7 @@ class Painel:
         if time.monotonic() - self._ult_log >= self.LOG_S:
             self._ult_log = time.monotonic()
             if self.placar.contagens:
-                self.log.batimento(self.placar.json())
+                self.log.batimento(self.progresso_json())
             else:
                 self.log.linha("batimento: %s" % (self.etapa or "-"))
 
@@ -177,7 +232,7 @@ class Painel:
         if self.checar_pausa(forcar=True):
             raise carga.PausaPedida()
         if "contadores" in kw and kw["contadores"] is not None and self.placar.contagens:
-            kw["contadores"] = dict(kw["contadores"], progresso=self.placar.json())
+            kw["contadores"] = dict(kw["contadores"], progresso=self.progresso_json())
         plataforma.mudar_estado(self.conn, self.eid, novo, **kw)
         self.estado_atual = novo
         if novo == "conciliando":  # pausando -> concluida não existe: o pedido tardio fica para a próxima execução
@@ -195,16 +250,30 @@ def identidade_sha(ident):
     return hashlib.sha256(json.dumps(ident, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
 
 
+def nome_na_contagem(t, i, total):
+    """Nome da tabela sendo contada para a tela: o de DESTINO (carga própria) ou o rótulo genérico; nunca o nome da
+    tabela da origem (ADR 0023)."""
+    return (carga.MAPA.get(t) or {}).get("entidade") or "tabela %d de %d" % (i, total)
+
+
 def _contar(lt, painel, cont):
     tabelas = lt.tabelas()
     contagens, t_ult = {}, 0.0
+    n = len(tabelas)
     for i, t in enumerate(tabelas, 1):
-        contagens[t] = lt.contar(t)
-        if time.time() - t_ult > 2 or i == len(tabelas):
+        if time.time() - t_ult > 2:  # antes de contar: a tela diz qual tabela está sendo contada agora
             t_ult = time.time()
-            painel.progresso(1 + 4 * i / max(1, len(tabelas)), "contadas %d de %d tabelas" % (i, len(tabelas)),
-                             extra=dict(tabelas_lidas=i, tabelas_total=len(tabelas),
-                                        registros_lidos=sum(contagens.values())))
+            painel.progresso(1 + 4 * (i - 1) / max(1, n), "contando as tabelas da origem (preparo): %d de %d"
+                             % (i, n), extra=dict(tabelas_lidas=i - 1, tabelas_total=n,
+                                                  registros_lidos=sum(contagens.values()),
+                                                  progresso={"etapa": "contagem",
+                                                             "tabela_contando": nome_na_contagem(t, i, n),
+                                                             "tabelas_contadas": i - 1, "tabelas_total": n}))
+        contagens[t] = lt.contar(t)
+    painel.progresso(5, "contadas %d de %d tabelas" % (n, n),
+                     extra=dict(tabelas_lidas=n, tabelas_total=n, registros_lidos=sum(contagens.values()),
+                                progresso={"etapa": "contagem", "tabela_contando": None, "tabelas_contadas": n,
+                                           "tabelas_total": n}))
     painel.log.linha("contagem: %d tabelas, %d registros" % (len(tabelas), sum(contagens.values())))
     return tabelas, contagens
 
@@ -278,8 +347,12 @@ def _carregar(conn, eid, ex, ctl, usuario, senha, iid, tabelas, contagens, sha_a
     pular, de = frozenset(), (ex["contadores"] or {}).get("continuar_de")
     if de:
         try:
+            t0 = time.monotonic()
             cc0 = continuar.concluidas(conn, ctl, int(de), plano, contagens, sha_antes,
-                                       lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"))
+                                       lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"),
+                                       batimento=painel.batimento_preparo(
+                                           "continuação: conferindo as tabelas já concluídas"))
+            painel.log.linha("continuação: tabelas concluídas decididas em %.1f s" % (time.monotonic() - t0))
         except continuar.SemImagem:  # pausada (ou caída) antes da imagem: nada concluído, roda tudo (hash pula)
             cc0 = {"origem": {}, "regra": "sem_imagem", "duas_fases": []}
         pular = dict(cc0["origem"])  # {tabela: execução que a concluiu (pendências repetidas dela)}
@@ -294,6 +367,24 @@ def _carregar(conn, eid, ex, ctl, usuario, senha, iid, tabelas, contagens, sha_a
                                                                                         len(plano)))
         painel.progresso(5, "continuando a execução %d: %d de %d tabelas já concluídas"
                          % (int(de), len(pular), len(plano)))
+    # situação da base (painel honesto): uma vez por execução, depois do plano e da continuação
+    try:
+        sb = situacao_base.SituacaoBase(conn, ctl, eid, painel.placar,
+                                        lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"),
+                                        reprocessar=carga.reprocessar_recusadas())
+        b = sb.calcular()
+        painel.base = sb
+        cont["situacao_base"] = {k: b[k] for k in ("linhas_origem", "linhas_na_base", "linhas_recusadas",
+                                                   "tabelas_sem_situacao", "tabelas_recusas_desconhecidas",
+                                                   "fontes", "calculo_ms", "recusas_ms")}
+        painel.log.linha("situação da base: %d de %d linhas na base, %d recusadas, %d tabelas sem situação,"
+                         " %d com recusadas desconhecidas (%d ms)"
+                         % (b["linhas_na_base"], b["linhas_origem"], b["linhas_recusadas"],
+                            b["tabelas_sem_situacao"], b["tabelas_recusas_desconhecidas"], b["calculo_ms"]))
+        painel.progresso(None, None)
+    except Exception as e:  # noqa: BLE001 - sem a situação, a tela cai no andamento da execução
+        cont["situacao_base"] = {"falhou": type(e).__name__}
+        painel.log.linha("situação da base indisponível: %s" % type(e).__name__)
     if not (any(t in carga.MAPA for t in tabelas) or plano):
         return
     cc = banco.conectar(ex["banco_nome"], usuario=usuario, senha=senha, autocommit=False)
@@ -403,7 +494,7 @@ def _pausar(conn, eid, cont, painel, log):
     cont["continuavel"] = True
     cont["pausa"] = {"etapa": ex["etapa"], "percentual": ex["percentual"]}
     if painel is not None and painel.placar.contagens:
-        cont["progresso"] = painel.placar.json()
+        cont["progresso"] = painel.progresso_json()
     if ex["estado"] != "pausando":
         plataforma.mudar_estado(conn, eid, "pausando", etapa=("pausando: %s" % (ex["etapa"] or ""))[:120])
     plataforma.mudar_estado(conn, eid, "pausada", etapa=("pausada: %s" % (ex["etapa"] or "").replace(
@@ -554,7 +645,7 @@ def executar(trab, eid):
             pend["total"] = pend.get("total", 0) + 1
             pend.setdefault("por_regra", {})["imagem:relatorio_falhou:alta"] = 1
         if painel.placar.contagens:
-            cont["progresso"] = painel.placar.json()
+            cont["progresso"] = painel.progresso_json()
         plataforma.mudar_estado(conn, eid, "concluida", etapa="concluída", percentual=100, contadores=cont,
                                 imagem_sha256=sha_antes)
         log.etapa("concluida")
@@ -572,7 +663,7 @@ def executar(trab, eid):
         motivo = _motivo(e)
         log.excecao(e, _motivo_log(e), getattr(e, "detalhe", None))
         if painel is not None and painel.placar.contagens:
-            cont["progresso"] = painel.placar.json()
+            cont["progresso"] = painel.progresso_json()
             log.recusas(painel.placar.regras)
         if "relatorio" not in cont:  # a execução que falha também deixa o relatório do que chegou a fazer
             try:

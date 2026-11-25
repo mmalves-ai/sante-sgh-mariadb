@@ -225,6 +225,9 @@ class RegraConcluidas(unittest.TestCase):
         self.assertEqual((r["tabelas"], r["origem"]), ({"B"}, {"B": 7}))
         self.assertRaises(continuar.NaoContinuavel, continuar.concluidas, self.root, self.ctl, 8, plano, cont,
                           "a" * 64)  # sem a cadeia, a 8 sem imagem não continua
+        # a ponta da cadeia caiu antes da imagem e não continua outra (a 30 não gravou nada): não derruba a cadeia
+        r = continuar.concluidas(self.root, self.ctl, 9, plano, cont, "a" * 64, {9: {"continuar_de": 30}}.get)
+        self.assertIn("+cadeia(30:sem_imagem)", r["regra"])
         # chave antiga que sumiu do arquivo (imagem anterior) além das n de agora: roda de novo, mesmo marcada
         for k, i in (("1", img), ("2", img), ("velha", img + 99)):
             self._x("INSERT INTO {b}.conector_origem (tabela_origem, chave_original, entidade_destino, id_destino,"
@@ -236,12 +239,186 @@ class RegraConcluidas(unittest.TestCase):
         plano_f = plano + [{"tabela": "F", "destinos": ["dest_f"]}]
         r = continuar.concluidas(self.root, self.ctl, 7, plano_f, dict(cont, F=2), "a" * 64)
         self.assertEqual(r["tabelas"], {"B"})
+        # uma varredura do conector_origem por tabela na continuação inteira: a contagem fica em cache entre os elos
+        # da cadeia (antes, cada elo refazia a varredura de todas as tabelas, minutos por elo na base real)
+        with self.root.cursor() as c:
+            c.execute("SELECT id FROM `%s`.imagem WHERE execucao_id=9" % self.ctl)
+            img9 = c.fetchone()[0]
+        self._x("INSERT INTO {b}.conector_tabela_concluida (execucao_id, imagem_id, tabela_origem, onda, origem,"
+                " criado_em) VALUES (9, %s, 'B', 0, 'carregada', UTC_TIMESTAMP(3))", (img9,))
+        self.root.commit()
+        varreduras = []
+
+        class _Conta:
+            def __init__(s, conn):
+                s.conn = conn
+
+            def cursor(s):
+                cur = s.conn.cursor()
+                original = cur.execute
+
+                def execute(sql, args=None):
+                    if "conector_origem" in sql:
+                        varreduras.append(args[0])
+                    return original(sql, args)
+                cur.execute = execute
+                return cur
+
+            def __getattr__(s, nome):
+                return getattr(s.conn, nome)
+
+        r = continuar.concluidas(_Conta(self.root), self.ctl, 9, plano_f, dict(cont, F=2), "a" * 64, cadeia.get)
+        self.assertEqual((r["tabelas"], r["origem"]), ({"B"}, {"B": 9}))
+        self.assertEqual(sorted(varreduras), ["B", "F"])  # B marcada na 9 e na 7: contada uma vez só
         # coluna em duas fases (autorreferência): a referência adiada só existe na memória até o _fase2; nunca pulada
         plano_b = [dict(p, duas_fases={p["tabela"]}, colunas={"dest_b": [{"coluna": "PAI", "destino": "pai_id",
                                                                          "referencia": "B"}]})
                    if p["tabela"] == "B" else p for p in plano]
         r = continuar.concluidas(self.root, self.ctl, 7, plano_b, cont, "a" * 64)
         self.assertEqual((r["tabelas"], r["duas_fases"]), (set(), ["B"]))
+
+
+    def _imagem(self, eid, sha, contagens, arquivo="x.fdb", tamanho=1):
+        img = self._x("INSERT INTO {b}.imagem (execucao_id, arquivo, tamanho_bytes, sha256, corte_em, ods_versao,"
+                      " pagina_bytes, tabelas, registros_total, generators, somente_leitura, criado_em) VALUES"
+                      " (%s, %s, %s, %s, UTC_TIMESTAMP(), 12, 8192, 5, 10, 0, 1, UTC_TIMESTAMP(3))",
+                      (eid, arquivo, tamanho, sha))
+        for t, n in contagens.items():
+            self._x("INSERT INTO {b}.imagem_tabela (imagem_id, tabela_origem, registros, criado_em)"
+                    " VALUES (%s, %s, %s, UTC_TIMESTAMP(3))", (img, t, n))
+        return img
+
+    def _origem(self, linhas):
+        for t, k, i in linhas:
+            self._x("INSERT INTO {b}.conector_origem (tabela_origem, chave_original, entidade_destino, id_destino,"
+                    " hash_linha, imagem_id, criado_em) VALUES (%s, %s, 'e', 1, %s, %s, UTC_TIMESTAMP(3))",
+                    (t, k, bytes(16), i))
+
+    def _marcar(self, eid, img, tabelas, origem="carregada"):
+        for t in tabelas:
+            self._x("INSERT INTO {b}.conector_tabela_concluida (execucao_id, imagem_id, tabela_origem, onda, origem,"
+                    " criado_em) VALUES (%s, %s, %s, 0, %s, UTC_TIMESTAMP(3))", (eid, img, t, origem))
+
+    def test_prova_da_mesma_base_sem_ler_o_conector_origem(self):
+        """Rodada retomada-rapida (a): com toda imagem do controle do MESMO resumo (arquivo idêntico) e a mesma
+        contagem da tabela, a tabela marcada é pulada sem nenhuma consulta ao conector_origem (o preparo da execução
+        24 da ProntoCardio levava 14,6 min contando 94 M chaves). Resumos diferentes, mesmo aceitos como a base
+        declarada, ou contagem diferente: conta pelo índice. Dedução: para na primeira chave de outra imagem."""
+        cont = {"A": 2, "B": 2, "C": 2}
+        i8 = self._imagem(8, "b" * 64, cont)
+        self._origem([("A", "2", i8), ("A", "3", i8), ("B", "1", i8)])
+        self._marcar(8, i8, ["A", "B"])
+        self.root.commit()
+        plano = [{"tabela": t, "destinos": ["dest_" + t.lower()]} for t in "ABC"]
+        cache, bat = {}, []
+        r = continuar.concluidas(self.root, self.ctl, 8, plano, cont, {"a" * 64, "b" * 64}, _cache=cache,
+                                 batimento=lambda i, n: bat.append((i, n)))
+        self.assertEqual((r["tabelas"], r["regra"], cache.get("consultas", 0)), ({"A", "B"}, "marca", 0))
+        self.assertEqual(bat, [(0, 3), (1, 3), (2, 3)])  # batimento a cada tabela examinada (pausa no preparo)
+        # base declarada (imagem 7, outro resumo aceito) com a MESMA contagem e chaves diferentes: A tinha {1,2} na 7
+        # e tem {2,3} na 8; o conector_origem fica com 1→7, 2→8, 3→8 (3 chaves para n=2). A prova não vale: conta
+        # pelo índice e A roda de novo (a chave 1 sumiu do arquivo)
+        i7 = self._imagem(7, "a" * 64, cont)
+        self._origem([("A", "1", i7), ("C", "1", i7), ("C", "2", i7)])
+        self.root.commit()
+        cache = {}
+        r = continuar.concluidas(self.root, self.ctl, 8, plano, cont, {"a" * 64, "b" * 64}, _cache=cache)
+        self.assertEqual((r["tabelas"], cache["consultas"]), ({"B"}, 2))
+        # só o resumo desta execução (a imagem 7 é de outra base para ela): conta pelo índice, mesmo resultado
+        cache = {}
+        r = continuar.concluidas(self.root, self.ctl, 8, plano, cont, "b" * 64, _cache=cache)
+        self.assertEqual((r["tabelas"], cache["consultas"]), ({"B"}, 2))
+        # chave a mais em B (linha que sumiu, lida de outra base): a contagem pelo índice recusa a tabela
+        i6 = self._imagem(6, "c" * 64, dict(cont, B=3))
+        self._origem([("B", "velha", i6), ("B", "2", i8), ("B", "3", i8)])
+        self.root.commit()
+        cache = {}
+        r = continuar.concluidas(self.root, self.ctl, 8, plano, cont, {"a" * 64, "b" * 64}, _cache=cache)
+        self.assertEqual((r["tabelas"], cache["consultas"]), (set(), 2))
+        # a pausa pedida no preparo sobe do batimento (motor.Painel.batimento_preparo levanta a PausaPedida)
+        from sante_conector import carga
+
+        def pausa(i, n):
+            if i == 1:
+                raise carga.PausaPedida()
+        self.assertRaises(carga.PausaPedida, continuar.concluidas, self.root, self.ctl, 8, plano, cont, "b" * 64,
+                          batimento=pausa)
+        # dedução (a 7 sem marca): C tem as 2 chaves da imagem 7 e nenhuma de outra; A tem chave da imagem 8
+        cache = {}
+        r = continuar.concluidas(self.root, self.ctl, 7, plano, cont, {"a" * 64, "b" * 64}, _cache=cache)
+        self.assertEqual((r["tabelas"], r["regra"]), ({"C"}, "deducao"))
+
+    def test_servidor_mesmo_resumo_nao_prova_a_mesma_base(self):
+        """Leitura direta do servidor: o sha256 da imagem é a identidade da base (não o conteúdo) e fica igual numa base
+        viva. E0 leu A com {1,2}; no hospital a 1 foi apagada e a 3 incluída (A continua com 2 linhas); E1 releu A,
+        gravou {2,3} e marcou A. Mesmo resumo e mesma contagem nas duas imagens: a prova da mesma base NÃO vale, conta
+        pelo índice (3 chaves > 2) e A roda de novo (a chave 1 entraria nas vistas refeitas, regra 3)."""
+        cont = {"A": 2}
+        x = "d" * 64
+        i0 = self._imagem(10, x, cont, arquivo="servidor:base", tamanho=0)
+        i1 = self._imagem(11, x, cont, arquivo="servidor:base", tamanho=0)
+        self._origem([("A", "1", i0), ("A", "2", i1), ("A", "3", i1)])
+        self._marcar(11, i1, ["A"])
+        self.root.commit()
+        plano = [{"tabela": "A", "destinos": ["dest_a"]}]
+        cache = {}
+        r = continuar.concluidas(self.root, self.ctl, 11, plano, cont, x, _cache=cache)
+        self.assertEqual((r["tabelas"], r["regra"], cache["consultas"]), (set(), "marca", 1))
+
+    def test_pendencias_herdadas_por_tabela_e_em_segundo_plano(self):
+        """Rodada retomada-rapida (b): as pendências herdadas não são copiadas (ficam na execução que as gerou e todo
+        leitor segue a cadeia); a contagem para o resumo sai por tabela, com batimento e pausa entre as tabelas, ou em
+        segundo plano (PendenciasHerdadas), com o MESMO resultado; a pausa no meio não grava nada."""
+        from sante_conector import banco, carga, controle
+        i1 = self._imagem(1, "a" * 64, {"A": 3, "B": 2})
+        self._marcar(1, i1, ["A", "B"])
+        controle.gravar_cadeia(self.root, self.ctl, 2, 1)
+        for t, k, r in (("A", "1", "x"), ("A", "2", "x"), ("A", "3", "y"), ("B", "1", "x"), ("Z", "1", "x")):
+            self._x("INSERT INTO {b}.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                    " criado_em) VALUES (1, %s, %s, %s, 'media', UTC_TIMESTAMP(3))", (t, k, r))
+        self.root.commit()
+        cn = banco.conectar(self.ctl, autocommit=True)
+        ctl = "`%s`" % self.ctl
+
+        class _Cm:
+            def __init__(s):
+                s.ctl, s.cr, s.pend_repetidas = ctl, cn, []
+
+            def _c(s):
+                return cn.cursor()
+        try:
+            origem = {"A": 1, "B": 1}
+            m1, prog = _Cm(), []
+            self.assertEqual(continuar.repetir_pendencias(m1, origem, prog.append), 4)
+            self.assertEqual(prog, [3, 4])  # batimento depois de cada tabela
+            esperado = sorted(m1.pend_repetidas)
+            self.assertEqual(esperado, [("A", "x", "media", None, 2), ("A", "y", "media", None, 1),
+                                        ("B", "x", "media", None, 1)])
+            m2 = _Cm()
+            h = continuar.PendenciasHerdadas(m2, origem).iniciar()
+            self.assertIsNotNone(h._linha)  # conexão própria (mesmas credenciais da conexão da carga)
+            self.assertEqual(h.esperar(), 4)
+            self.assertEqual(sorted(m2.pend_repetidas), esperado)
+            m3 = _Cm()  # sem conexão própria: conta no esperar, na conexão da carga
+            h = continuar.PendenciasHerdadas(m3, origem, conectar=lambda: 1 / 0).iniciar()
+            self.assertIsNone(h._linha)
+            bat3 = []  # a reserva mantém o batimento por tabela (feitas, total)
+            self.assertEqual((h.esperar(lambda f, t: bat3.append((f, t))), sorted(m3.pend_repetidas)), (4, esperado))
+            self.assertEqual(bat3, [(1, 2), (2, 2)])
+            m4 = _Cm()  # cancelada (pausa): nada fica pela metade; quem esperar recebe a contagem inteira
+
+            def pausa():
+                raise carga.PausaPedida()
+            self.assertRaises(carga.PausaPedida, continuar.repetir_pendencias, m4, origem, None, (), pausa)
+            self.assertEqual(m4.pend_repetidas, [])
+            h = continuar.PendenciasHerdadas(m4, origem).iniciar()
+            h.cancelar()
+            self.assertEqual((h.esperar(), sorted(m4.pend_repetidas)), (4, esperado))
+            with self.root.cursor() as c:  # nada copiado: só as 5 pendências da execução 1
+                c.execute("SELECT COUNT(*), MAX(execucao_id) FROM %s.pendencia" % ctl)
+                self.assertEqual(c.fetchone(), (5, 1))
+        finally:
+            cn.close()
 
 
 # ------------------------------------------------------------------ plataforma (MariaDB)

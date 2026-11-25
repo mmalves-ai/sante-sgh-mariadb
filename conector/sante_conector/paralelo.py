@@ -67,7 +67,8 @@ _FORA = frozenset({"lt", "cr", "progresso", "_tab_atual", "mapa_exec", "plano", 
                    "_prox_id", "_bloco", "_atualizar", "_linha", "_grp", "_grupos", "tipos", "seq", "_adiando",
                    "_esvaziando", "_adiar_linha", "_cab_varrido", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
                    "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar", "pular", "continuar_de", "memoria",
-                   "_carregar_existente", "_registrar", "placar", "_placar_envio", "_pl_base", "_parando"})
+                   "_carregar_existente", "_registrar", "placar", "_placar_envio", "_pl_base", "_parando",
+                   "_salto", "_salto_armado", "_h_salto"})
 _SO_CACHE = set()  # no gravador: tabelas do plano cujo de-para só foi LIDO do banco (não volta ao coordenador)
 ESTADO_MIN = 20000
 

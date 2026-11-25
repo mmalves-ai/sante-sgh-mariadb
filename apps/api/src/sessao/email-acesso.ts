@@ -1,5 +1,5 @@
-// O e-mail da porta de entrada mora no núcleo (@sgh/nucleo, email-acesso.ts), para a API e as ferramentas
-// (plataforma:criar-admin) usarem o mesmo caminho sem a ferramenta importar a aplicação.
+// Família acesso-email (modulos-proprios-2): o e-mail da porta de entrada. O código mora em @sgh/nucleo
+// (email-acesso.ts), dividido com a ferramenta plataforma:criar-admin; aqui só a reexportação, sem mudar o comportamento.
 export {
   ENDERECO_EMAIL,
   REMETENTE_ACESSO_PADRAO,

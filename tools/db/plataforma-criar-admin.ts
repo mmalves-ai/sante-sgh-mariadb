@@ -5,11 +5,12 @@
 // (/plataforma/convite); o segundo fator é cadastrado no primeiro login fora de dev/ci.
 //
 // - Convite igual ao da API: o mesmo token e resumo (novoConvite, SHA-256 do token) e a mesma validade (72 horas,
-//   CONVITE_HORAS do domínio de acesso, o mesmo que o serviço da plataforma usa).
+//   CONVITE_HORAS de @sgh/dominio-acesso, a mesma do serviço da plataforma).
 // - Auditoria: evento em conta_plataforma_evento com o ator nulo (inicialização, sem conta que agiu), a estação
 //   TERMINAL e o motivo no detalhe; a conta fica com criado_por nulo.
-// - Envio pelo MESMO caminho da API: emailAcessoDoAmbiente do @sgh/nucleo (SMTP_URL; fora de produção, só a captura local em
-//   loopback). Sem envio configurado, recusa antes de gravar.
+// - Envio pelo MESMO caminho da API: emailAcessoDoAmbiente de @sgh/nucleo (SMTP_URL; fora de produção, só a captura
+//   local em loopback). Sem envio configurado, recusa antes de gravar. --entregar-ao-dono usa o canal do dono, que
+//   exige DONO_EMAIL no ambiente (sem ele, recusa).
 // Travas:
 // - recusa em produção (AMBIENTE=producao): lá a primeira conta é do procedimento de implantação;
 // - recusa se já houver conta da plataforma ATIVA com senha (o comando é só a inicialização; o resto é pela tela);
@@ -31,7 +32,7 @@ import {
   envioPeloCanalDoDono,
 } from '@sgh/nucleo';
 
-/** Validade do convite, em horas: a mesma do serviço da plataforma (CONVITE_HORAS do domínio de acesso). */
+/** Validade do convite, em horas: a do domínio (CONVITE_HORAS), a mesma do serviço da plataforma. */
 export const CONVITE_HORAS_INICIAL = CONVITE_HORAS;
 /** Evento de criação da conta (o mesmo código do catálogo de auditoria usado pela API para criar conta). */
 export const EVENTO_CRIADA = 'suporte.conta.criada';
@@ -210,8 +211,21 @@ export async function executar(argv: readonly string[], d: Dependencias): Promis
   return decisao;
 }
 
-// O canal do dono mora na porta de e-mail da API (um só código para o comando e para a recuperação de senha).
+// O canal do dono mora no núcleo (um só código para o comando e para a recuperação de senha da API).
 export { emailDoDono, envioPeloCanalDoDono };
+
+/**
+ * O envio do comando: pelo canal do dono (--entregar-ao-dono), que exige DONO_EMAIL, ou pelo ambiente (SMTP_URL).
+ * Sem DONO_EMAIL, --entregar-ao-dono recusa antes de gravar (nenhum endereço fixo no produto).
+ */
+export function envioDoComando(env: Ambiente, peloDono: boolean, raiz: string): PortaEmailAcesso | null {
+  if (!peloDono) return emailAcessoDoAmbiente(env);
+  if (!emailDoDono(env))
+    throw new Error(
+      'recusado: --entregar-ao-dono exige DONO_EMAIL no ambiente (o e-mail do dono): nada foi gravado',
+    );
+  return envioPeloCanalDoDono(env, raiz);
+}
 
 async function principal(argvBruto: readonly string[]): Promise<number> {
   const { env } = ambienteEfetivo();
@@ -229,7 +243,7 @@ async function principal(argvBruto: readonly string[]): Promise<number> {
   try {
     await executar(argv, {
       env: endereco ? { ...env, WEB_ENDERECO: endereco } : env,
-      email: peloDono ? envioPeloCanalDoDono(env, raiz) : emailAcessoDoAmbiente(env as NodeJS.ProcessEnv),
+      email: envioDoComando(env, peloDono, raiz),
       escrever: (fn) => nucleo.escreverPlataforma('plataforma-criar-admin', fn),
     });
   } finally {

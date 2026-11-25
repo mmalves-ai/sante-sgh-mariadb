@@ -27,6 +27,10 @@ import {
   pausarCarga,
   retomarCarga,
   segmentosCarga,
+  amostraDe,
+  velocidadeConferencia,
+  duracaoTexto,
+  type AmostraConferencia,
   testarOrigem,
   urlLogCarga,
 } from '../api-carga.js';
@@ -71,13 +75,52 @@ const ativa = computed(() => cargaAtiva(execucao.value?.estado));
 const seg = computed(() => segmentosCarga(progresso.value, execucao.value?.percentual ?? 0));
 const acoes = computed(() => carga.value?.acoes ?? { iniciar: false, pausar: false, retomar: false });
 const senhaDefinida = computed(() => conector.value?.origem?.senhaDefinida === true);
+const base = computed(() => (seg.value.daBase ? (progresso.value?.base ?? null) : null));
+const contando = computed(() =>
+  progresso.value?.etapa === 'contagem' && !(progresso.value?.linhasTotal ?? 0) ? progresso.value : null,
+);
+// velocidade da conferência: diferença entre dois batimentos distintos (o motor grava a cada ≤ 15 s)
+const amostraAnterior = ref<AmostraConferencia | null>(null);
+const amostraAtual = ref<AmostraConferencia | null>(null);
+watch(progresso, (p) => {
+  const a = amostraDe(p);
+  if (!a) return;
+  if (amostraAtual.value && a.em === amostraAtual.value.em) return;
+  if (amostraAtual.value && a.linhas < amostraAtual.value.linhas) amostraAnterior.value = null;
+  else amostraAnterior.value = amostraAtual.value;
+  amostraAtual.value = a;
+});
+// velocidade: a do motor (média de 1 min e previsão do fim) quando vem no progresso; senão, entre dois batimentos
+const velocidade = computed(() => {
+  if (!ativa.value) return null;
+  const p = progresso.value;
+  if (p?.linhasPorSegundo !== null && p?.linhasPorSegundo !== undefined) {
+    const fim = p.previsaoFim ? Date.parse(p.previsaoFim) : Number.NaN;
+    return {
+      linhasPorSegundo: Math.round(p.linhasPorSegundo),
+      segundosRestantes: Number.isFinite(fim) ? Math.max(0, Math.round((fim - Date.now()) / 1000)) : null,
+    };
+  }
+  return velocidadeConferencia(amostraAnterior.value, amostraAtual.value, p?.linhasTotal ?? 0);
+});
+const percentualConferencia = computed(() => {
+  const p = progresso.value;
+  return p && p.linhasTotal > 0 ? Math.floor(Math.min(100, (100 * p.linhasProcessadas) / p.linhasTotal)) : 0;
+});
 const textoBarra = computed(() =>
-  t('carga.progresso.barraTexto', {
-    percentual: seg.value.percentual,
-    gravadas: n(seg.value.linhasGravadas),
-    recusadas: n(seg.value.linhasRecusadas),
-    restante: n(seg.value.linhasRestantes),
-  }),
+  seg.value.daBase
+    ? t('carga.progresso.baseBarraTexto', {
+        percentual: seg.value.percentual,
+        naBase: n(seg.value.linhasGravadas),
+        recusadas: n(seg.value.linhasRecusadas),
+        faltam: n(seg.value.linhasRestantes),
+      })
+    : t('carga.progresso.barraTexto', {
+        percentual: seg.value.percentual,
+        gravadas: n(seg.value.linhasGravadas),
+        recusadas: n(seg.value.linhasRecusadas),
+        restante: n(seg.value.linhasRestantes),
+      }),
 );
 const recusasPorTabela = computed(() =>
   [...(progresso.value?.recusasPorTabela ?? [])]
@@ -484,7 +527,25 @@ onBeforeUnmount(() => {
         data-testid="carga-pausada"
       />
 
-      <div class="carga__atual">
+      <div v-if="contando" class="carga__atual" data-testid="carga-contando">
+        <span class="carga__rotulo">{{ t('carga.progresso.contandoTitulo') }}</span>
+        <p :class="['carga__tabela', { 'carga__tabela--ativa': ativa }]">
+          <span class="carga__pulso" aria-hidden="true" />
+          <strong v-if="contando.tabelaContando">{{
+            t('carga.progresso.contandoTabela', { tabela: contando.tabelaContando })
+          }}</strong>
+          <span class="carga__secundario">
+            {{
+              t('carga.progresso.contandoN', {
+                feitas: n(contando.tabelasContadas),
+                total: n(contando.tabelasTotal),
+              })
+            }}
+          </span>
+        </p>
+      </div>
+
+      <div v-else class="carga__atual">
         <span class="carga__rotulo">{{ t('carga.progresso.tabelaAtual') }}</span>
         <p
           v-if="progresso?.tabelaAtual"
@@ -505,11 +566,23 @@ onBeforeUnmount(() => {
         <p v-else class="carga__secundario">{{ t('carga.progresso.nenhumaTabela') }}</p>
       </div>
 
+      <template v-if="base">
+        <span class="carga__rotulo">{{ t('carga.progresso.baseTitulo') }}</span>
+        <p data-testid="carga-base">
+          <strong>{{
+            t('carga.progresso.baseTexto', {
+              naBase: n(base.linhasNaBase),
+              origem: n(base.linhasOrigem),
+              percentual: seg.percentual,
+            })
+          }}</strong>
+        </p>
+      </template>
       <div class="carga__barra-linha">
         <div
           class="carga__barra"
           role="progressbar"
-          :aria-label="t('carga.progresso.barra')"
+          :aria-label="seg.daBase ? t('carga.progresso.baseBarra') : t('carga.progresso.barra')"
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-valuenow="seg.percentual"
@@ -532,29 +605,66 @@ onBeforeUnmount(() => {
       <ul class="carga__legenda">
         <li>
           <span class="carga__amostra carga__seg--gravado" aria-hidden="true" />{{
-            t('carga.progresso.gravado', { n: n(seg.linhasGravadas) })
+            seg.daBase
+              ? t('carga.progresso.baseNa', { n: n(seg.linhasGravadas) })
+              : t('carga.progresso.gravado', { n: n(seg.linhasGravadas) })
           }}
         </li>
         <li>
           <span class="carga__amostra carga__seg--recusado" aria-hidden="true" />{{
-            t('carga.progresso.recusado', { n: n(seg.linhasRecusadas) })
+            seg.daBase
+              ? t('carga.progresso.baseRecusadas', { n: n(seg.linhasRecusadas) })
+              : t('carga.progresso.recusado', { n: n(seg.linhasRecusadas) })
           }}
         </li>
         <li>
           <span class="carga__amostra carga__amostra--restante" aria-hidden="true" />{{
-            t('carga.progresso.restante', { n: n(seg.linhasRestantes) })
+            seg.daBase
+              ? t('carga.progresso.baseFaltam', { n: n(seg.linhasRestantes) })
+              : t('carga.progresso.restante', { n: n(seg.linhasRestantes) })
           }}
         </li>
       </ul>
 
-      <ul v-if="progresso" class="carga__numeros" data-testid="carga-numeros">
+      <p v-if="base?.tabelasSemSituacao" class="carga__secundario" data-testid="carga-base-sem-situacao">
+        {{ t('carga.progresso.baseSemSituacao', { n: n(base.tabelasSemSituacao) }) }}
+      </p>
+      <p
+        v-if="base?.tabelasRecusasDesconhecidas"
+        class="carga__secundario"
+        data-testid="carga-base-recusas-desconhecidas"
+      >
+        {{ t('carga.progresso.baseRecusasDesconhecidas', { n: n(base.tabelasRecusasDesconhecidas) }) }}
+      </p>
+
+      <span v-if="progresso && !contando" class="carga__rotulo">{{
+        t('carga.progresso.conferenciaTitulo')
+      }}</span>
+      <ul v-if="progresso && !contando" class="carga__numeros" data-testid="carga-numeros">
         <li>
           {{
-            t('carga.progresso.linhas', {
+            t('carga.progresso.conferenciaLinhas', {
               processadas: n(progresso.linhasProcessadas),
               total: n(progresso.linhasTotal),
+              percentual: percentualConferencia,
             })
           }}
+        </li>
+        <li data-testid="carga-iguais">
+          {{ t('carga.progresso.conferidasIguais', { n: n(progresso.puladasIguais) }) }}
+        </li>
+        <li data-testid="carga-gravadas">
+          {{ t('carga.progresso.gravadasNovas', { n: n(progresso.gravadas) }) }}
+        </li>
+        <li data-testid="carga-recusadas-exec">
+          {{ t('carga.progresso.recusadasExec', { n: n(progresso.recusadas) }) }}
+        </li>
+        <li>{{ t('carga.progresso.avisosExec', { n: n(progresso.pendenciasAviso) }) }}</li>
+        <li v-if="velocidade" data-testid="carga-velocidade">
+          {{ t('carga.progresso.velocidade', { n: n(velocidade.linhasPorSegundo) }) }}
+        </li>
+        <li v-if="velocidade && velocidade.segundosRestantes !== null" data-testid="carga-previsao">
+          {{ t('carga.progresso.previsao', { quando: duracaoTexto(velocidade.segundosRestantes) }) }}
         </li>
         <li v-if="progresso.ondas" data-testid="carga-onda">
           {{ t('carga.progresso.onda', { onda: progresso.onda ?? 0, ondas: progresso.ondas }) }}
@@ -566,12 +676,6 @@ onBeforeUnmount(() => {
               total: n(progresso.tabelasTotal),
             })
           }}
-        </li>
-        <li v-if="progresso.puladasIguais">
-          {{ t('carga.progresso.puladas', { n: n(progresso.puladasIguais) }) }}
-        </li>
-        <li v-if="progresso.pendenciasAviso">
-          {{ t('carga.progresso.avisos', { n: n(progresso.pendenciasAviso) }) }}
         </li>
       </ul>
 
@@ -625,6 +729,25 @@ onBeforeUnmount(() => {
           <tr v-for="r in recusasPorTabela" :key="r.tabela">
             <td>{{ r.tabela }}</td>
             <td>{{ n(r.recusadas) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <table v-if="base?.porTabelaTop?.length" class="carga__tabela-recusas" data-testid="carga-top-faltam">
+        <caption>
+          {{
+            t('carga.progresso.baseTop')
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ t('carga.progresso.tabela') }}</th>
+            <th scope="col">{{ t('carga.progresso.baseFaltamColuna') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in base.porTabelaTop" :key="r.tabela">
+            <td>{{ r.tabela }}</td>
+            <td>{{ n(r.faltam) }}</td>
           </tr>
         </tbody>
       </table>

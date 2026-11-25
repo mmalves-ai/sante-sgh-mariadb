@@ -182,12 +182,19 @@ import pymysql
 from . import sincronizar as sincronizar_mod
 from . import carga, continuar, continuidade, depara, mapa, paralelo, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
-from .leitor import hash_linha
+from .leitor import hash_bloco, hash_linha
 from .pendencia import Propagador
 from .texto import texto_para_cp1252
 
 VERSAO = "mapa-2026-11-21"
 LOTE_COMMIT = 2000
+
+
+def salto_ligado(ambiente=None):
+    """CONECTOR_SALTO_BLOCOS (padrão ligado; 0/nao/false desliga): no diferencial, o bloco de 10 mil ids igual ao
+    guardado é pulado inteiro (CargaMapa._saltar_bloco)."""
+    ambiente = os.environ if ambiente is None else ambiente
+    return (ambiente.get("CONECTOR_SALTO_BLOCOS") or "1").strip().lower() not in ("0", "n", "nao", "não", "false")
 GRAVIDADE_REGRA = {"valor_presumido": "baixa", "codigo_colisao_caixa": "media", "estabelecimento_indefinido": "alta",
                    "data_sentinela": "baixa", "hora_com_data": "baixa", "hora_sem_data": "media",
                    "valor_fora_do_dominio": "media", "hora_invalida": "media", "catalogo_codigo_inexistente": "media",
@@ -808,11 +815,25 @@ class CargaMapa(carga.Carga):
         self.tipos = {n: c.get("codigo_tipo") for n, c in cols.items()}
         ch = p["chave"]
         if len(ch) == 1 and self.lt.chave_primaria(t) == ch and cols[ch[0]]["codigo_tipo"] in TIPOS_INT:
+            # só a leitura do laço da tabela (armada em _tabela, consumida aqui na primeira linha): leituras aninhadas
+            # de outra tabela (pai, grupos) nunca saltam
+            salto = self.__dict__.pop("_salto_armado", None)
             for ini, fim in (self._faixas_so if self._faixas_so is not None else self.lt.faixas(t, ch[0])):
                 nomes, it = self.lt.ler_faixa(t, ch[0], ini, fim, colunas=p["lidas"])
                 self._bloco = ini
-                for x in it:
-                    yield dict(zip(nomes, x)), None
+                if salto is None:
+                    for x in it:
+                        yield dict(zip(nomes, x)), None
+                    continue
+                # diferencial: o bloco inteiro é lido, resumido e comparado com o guardado antes de qualquer linha
+                ls = [dict(zip(nomes, x)) for x in it]
+                hs = [bytes.fromhex(hash_linha([d[c] for c in p["lidas"]])) for d in ls]
+                if self._saltar_bloco(p, ini, ls, hs):
+                    continue
+                for d, h in zip(ls, hs):
+                    self._h_salto = h  # o hash já calculado (o laço da tabela não recalcula)
+                    yield d, None
+                self._h_salto = None
             self._bloco = None
             return
         self._bloco = None
@@ -2397,6 +2418,7 @@ class CargaMapa(carga.Carga):
         blocos = {}
         adiavel = self._adiavel(p)
         nulas = self._nulas_duas_fases(p)
+        self._salto = self._salto_armado = self._preparar_salto(p, ents, blocos, seqs, nulas)
         for linha, ch_sem in self._linhas_mapa(p):
             n += 1
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
@@ -2404,7 +2426,7 @@ class CargaMapa(carga.Carga):
                 k = (col, self._chave(linha[col]))
                 cont_seq[k] = cont_seq.get(k, 0) + 1
                 self.seq[col] = cont_seq[k]
-            h = bytes.fromhex(hash_linha([linha[c] for c in p["lidas"]]))
+            h = self.__dict__.get("_h_salto") or bytes.fromhex(hash_linha([linha[c] for c in p["lidas"]]))
             if self._bloco is not None:
                 blocos.setdefault(self._bloco, []).append(h)
             self._grp = self._grupos[1][chave] if self._grupos else None
@@ -2651,6 +2673,9 @@ class CargaMapa(carga.Carga):
             if n % LOTE_COMMIT == 0:
                 self._commit()
         self._atualizar = None
+        if self._salto is not None:
+            n += self._salto["linhas"]
+        self._salto = self._h_salto = self._salto_armado = None
         if blocos:
             sincronizar_mod.blocos(self, t, blocos)
         self._commit()
@@ -2660,6 +2685,61 @@ class CargaMapa(carga.Carga):
             n, seg = n + ant["linhas"], seg + ant["segundos"]
         self.por_tabela[t] = {"linhas": n, "segundos": round(seg, 3),
                               "linhas_por_segundo": round(n / seg, 1) if seg > 0 else None}
+
+    # ----- salto de blocos iguais (diferencial) -----
+    def _preparar_salto(self, p, ents, blocos, seqs, nulas):
+        """Contexto do salto de blocos da tabela, ou None (caminho linha a linha de sempre). Só no diferencial
+        (há estado guardado da tabela e resumo de bloco guardado), chave inteira única lida em ordem de id, e nada
+        que dependa de ver cada linha nesta execução: contador por sequência (`#seq:`), cabeçalho agrupado (agregados
+        recalculados de todas as linhas lidas) e coluna em duas fases (referência adiada refeita da linha)."""
+        t = p["tabela"]
+        if not salto_ligado() or not self.existente.get(t) or seqs or self._grupos or nulas or len(p["chave"]) != 1:
+            return None
+        guardados = {int(b): (bytes(h), int(n)) for b, h, n in self._todas(
+            "SELECT bloco, hash_bloco, linhas FROM %s.conector_bloco WHERE tabela_origem=%%s" % self.ctl, (t,))}
+        if not guardados:
+            return None
+        # chaves com pendência aberta grave (recusa) na tabela: o bloco que tem uma é reprocessado linha a linha. O
+        # mesmo conjunto que a reemissão dos avisos carrega uma vez por tabela (agrupado pela chave, índice da
+        # pendência por tabela e situação)
+        self._reemitir_avisos(t, "\x00")  # carrega self._avisos_ant[t] (nenhuma chave real é "\x00")
+        graves = {k for k, rs in self._avisos_ant.get(t, {}).items() if any(g in ("critica", "alta") for _, g in rs)}
+        return {"tabela": t, "ents": ents, "blocos": blocos, "guardados": guardados, "graves": graves, "linhas": 0}
+
+    def _saltar_bloco(self, p, ini, ls, hs):
+        """Bloco `ini` (10 mil ids) inteiro igual ao da execução anterior: pulado sem passar linha a linha, com o MESMO
+        efeito da linha "igual" (chave vista, soma da origem pelo que foi gravado, avisos reemitidos, puladas_iguais).
+        Exige, nesta ordem: resumo do bloco guardado igual ao calculado agora e mesma contagem de linhas (nenhuma
+        linha nova nem apagada no bloco); e cada linha já carregada (com destino), com o mesmo hash, sem exclusão
+        lógica, sem recusa aberta grave e sem secundário a completar. Qualquer dúvida: False (linha a linha)."""
+        sx = self._salto
+        t = sx["tabela"]
+        g = sx["guardados"].get(int(ini))
+        if g is None or g[1] != len(hs) or not hs:
+            return False
+        if bytes.fromhex(hash_bloco([h.hex() for h in hs])) != g[0]:
+            return False
+        ex, exc, graves = self.existente.get(t, {}), self._excluidas.get(t, ()), sx["graves"]
+        ch = p["chave"][0]
+        chaves = [self._chave(d[ch]) for d in ls]
+        for chave, h in zip(chaves, hs):
+            ant = ex.get(chave)
+            if (ant is None or ant[0] is None or ant[1] != h or ant[1] == carga.HASH_ZERO or chave in exc
+                    or chave in graves or self._secundarias_a_completar(p, chave)):
+                return False
+        vistas = self.vistas.setdefault(t, set())
+        for chave in chaves:
+            ant = ex[chave]
+            vistas.add(chave)
+            self._reemitir_avisos(t, chave, None)
+            self._secundarias_ja_carregadas(p, sx["ents"], chave, "igual", ant)
+        self.cont["puladas_iguais"] += len(hs)
+        self.cont["blocos_saltados"] = self.cont.get("blocos_saltados", 0) + 1
+        self.cont["linhas_saltadas"] = self.cont.get("linhas_saltadas", 0) + len(hs)
+        sx["blocos"][int(ini)] = hs  # o resumo segue guardado (igual: nada a regravar; nunca "sumiu")
+        sx["linhas"] += len(hs)
+        self._commit()  # ponto seguro a cada bloco pulado: placar, batimento e pausa como no laço da tabela
+        return True
 
     @staticmethod
     def _desdobrado(p, dt):
@@ -2792,13 +2872,13 @@ class CargaMapa(carga.Carga):
         self._garantir("historico_mescla_migracao", continuidade.DDL_MESCLA)
         self._garantir("segredo_cofre", continuidade.DDL_COFRE)
         self.cr.commit()
-        if self.pular:  # continuação: as concluídas pela interrompida ficam marcadas também nesta, com as pendências
+        self._herdadas = None
+        if self.pular:  # continuação: as concluídas pela interrompida ficam marcadas também nesta
             pul = [t for t in self.tabelas if t in self.pular]
-            # pendências antes da marca: com a marca gravada e as pendências não, a próxima continuação herdaria a
-            # tabela desta execução sem as pendências; sem a marca, herda da anterior (cadeia, continuar.py)
-            self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(
-                self, {t: self.pular_de[t] for t in pul},
-                lambda n: self.progresso(0, "pendências herdadas das tabelas já concluídas (%d)" % n))
+            # pendências herdadas: nada é copiado (ficam na execução em que nasceram e todo leitor segue a cadeia;
+            # a marca `continuada` não as leva); só a CONTAGEM para o resumo, em segundo plano até a conciliação
+            # (rodada retomada-rapida: a agregação das 41 M herdadas da execução 24 segurava a carga 17 min)
+            self._herdadas = continuar.PendenciasHerdadas(self, {t: self.pular_de[t] for t in pul}).iniciar()
             continuar.marcar(self, pul, None, "continuada")
             # de-para oficial usado pelas puladas: carregado como na leitura delas (a pendência global de catálogo
             # ausente, tabela '-', sai uma vez por execução, também quando só uma tabela pulada o usa)
@@ -2808,12 +2888,17 @@ class CargaMapa(carga.Carga):
                         for c in cs:
                             if c.get("depara") and depara.conhecido(c["depara"]):
                                 self._depara(c["depara"])
-        paralelo.carregar(self, contagens)  # um leitor e N gravadores (CONECTOR_GRAVADORES; 1 = ordem do plano)
-        self._fase2()
-        if self.sinc:
-            sincronizar_mod.excluir_apagadas(self)
-        sincronizar_mod.sequencias(self)
-        res = self.conciliar(contagens)
+        try:
+            paralelo.carregar(self, contagens)  # um leitor e N gravadores (CONECTOR_GRAVADORES; 1 = ordem do plano)
+            self._fase2()
+            if self.sinc:
+                sincronizar_mod.excluir_apagadas(self)
+            sincronizar_mod.sequencias(self)
+            res = self.conciliar(contagens)
+        except BaseException:  # pausa ou falha: a contagem em segundo plano para (nada dela foi gravado)
+            if self._herdadas is not None:
+                self._herdadas.cancelar()
+            raise
         res["carga"]["memoria"] = self.memoria
         res["sincronizar"] = sincronizar_mod.resumo(self)
         res["filho_pai"] = self._conferir_filho_pai()
@@ -2942,6 +3027,10 @@ class CargaMapa(carga.Carga):
             self._fechar_estado(p)
         carga.aplicar_limite_recusa(res)
         principal = {p["tabela"]: self._nome_ent(p["tabela"], p["destinos"][0]) for p in self.plano}
+        h, self._herdadas = getattr(self, "_herdadas", None), None
+        if h is not None:  # contagem das pendências herdadas (segundo plano desde o início da carga)
+            self.cont["pendencias_repetidas"] = h.esperar(lambda f, n: self.progresso(
+                1.0, "conciliação: pendências herdadas das tabelas já concluídas (%d de %d tabelas)" % (f, n)))
         pend = carga.resumo_pendencias(self.pend, self.pend_repetidas, lambda t: principal.get(t, "outra"))
         with self._c() as c:
             for ent, r in res.items():
