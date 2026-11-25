@@ -5,6 +5,13 @@
 //     grade (a lista de espera vê o horário livre);
 //   - sem sucesso e sem resultado que encerre as tentativas, a próxima tentativa fica programada sozinha até o limite.
 // Regra pura (sem banco): a porta própria lê o estado, chama `decidirContato` e grava o que a decisão manda.
+//
+// Divergência intencional do passo "a resposta interpretada cancela" (registrada): a resposta "não" à mensagem NÃO
+// cancela a consulta sozinha. Ela vira confirmação recusada e põe a marcação no topo da fila da central, que liga e só
+// então registra "desistiu". Motivos: a resposta livre por mensagem é ambígua (muitas vezes é pedido de outro horário,
+// que se resolve remarcando, não cancelando); cancelar exige a permissão de cancelar consulta, que a mensageria não tem;
+// e a vaga liberada por engano não volta (outro paciente pode ocupá-la). Ver `RESPOSTA_NEGATIVA_CANCELA_SOZINHA`.
+// Ao liberar a vaga pela desistência, a porta sinaliza os pedidos da lista de espera que servem ao horário.
 
 export const CANAIS_CONTATO = ['telefone', 'whatsapp', 'sms', 'email', 'presencial', 'outro'] as const;
 export type CanalContato = (typeof CANAIS_CONTATO)[number];
@@ -31,6 +38,10 @@ export type EfeitoResultadoContato = (typeof EFEITOS_RESULTADO_CONTATO)[number];
 export const LIMITE_TENTATIVAS_CONTATO = 3;
 /** Intervalo até a próxima tentativa automática, em horas. */
 export const INTERVALO_NOVA_TENTATIVA_HORAS = 4;
+/** A resposta negativa à mensagem não cancela sozinha: a central confirma a desistência (divergência registrada). */
+export const RESPOSTA_NEGATIVA_CANCELA_SOZINHA = false;
+/** Situações da marcação em que ainda cabe contato antes da consulta. */
+const MARCACAO_ABERTA = ['aguardando', 'confirmada'];
 /** Tolerância do relógio para o contato informado (o atendente registra logo depois de desligar). */
 const TOLERANCIA_FUTURO_MS = 5 * 60_000;
 
@@ -137,7 +148,9 @@ export function decidirContato(e: EntradaDecisaoContato): DecisaoContato {
   if (!e.resultado.sucesso && !e.resultado.encerraTentativas) {
     const prox = new Date(e.agora.getTime() + INTERVALO_NOVA_TENTATIVA_HORAS * 3_600_000);
     const antesDaConsulta = !e.marcacao || prox.getTime() < e.marcacao.inicioEm.getTime();
-    if (tentativa < limite && antesDaConsulta) novaTentativaEm = prox;
+    const aberta = !e.marcacao || MARCACAO_ABERTA.includes(e.marcacao.significado);
+    if (!aberta) alertas.push('A marcação já foi encerrada: a central não liga de novo sozinha.');
+    else if (tentativa < limite && antesDaConsulta) novaTentativaEm = prox;
     else
       alertas.push(`Tentativas encerradas (${tentativa} de ${limite}): a central não liga de novo sozinha.`);
   }
@@ -169,17 +182,59 @@ export function ordemFilaContato(a: ItemFilaContato, b: ItemFilaContato): number
   return peso(a) - peso(b) || a.inicioEm.getTime() - b.inicioEm.getTime() || a.tentativas - b.tentativas;
 }
 
-/** Validação na hora do contato programado (sem banco). */
+/**
+ * Validação na hora do contato programado (sem banco). Com marcação, ela tem de estar aguardando confirmação e no
+ * futuro, e o contato tem de ser antes da consulta: o pendente de marcação encerrada ou passada ficaria fora da fila.
+ */
 export function validarProgramacaoContato(e: {
   canal: string;
   motivo: string;
   programadoPara: Date;
   agora: Date;
+  marcacao?: MarcacaoDoContato | null;
 }): string | null {
   if (!(CANAIS_CONTATO as readonly string[]).includes(e.canal)) return 'Escolha o canal do contato.';
   if (!(MOTIVOS_CONTATO as readonly string[]).includes(e.motivo)) return 'Escolha o motivo do contato.';
   if (Number.isNaN(e.programadoPara.getTime())) return 'Informe quando ligar.';
   if (e.programadoPara.getTime() < e.agora.getTime() - TOLERANCIA_FUTURO_MS)
     return 'O contato programado precisa ser para agora ou depois.';
+  const m = e.marcacao ?? null;
+  if (MOTIVOS_DA_MARCACAO.includes(e.motivo as MotivoContato) && !m)
+    return 'Confirmação e lembrete são de uma marcação: escolha a consulta.';
+  if (m) {
+    if (m.significado !== 'aguardando')
+      return 'A marcação já não aguarda confirmação (confirmada, cancelada, falta ou chegada).';
+    if (m.inicioEm.getTime() <= e.agora.getTime()) return 'A consulta já passou: não há o que programar.';
+    if (e.programadoPara.getTime() >= m.inicioEm.getTime())
+      return 'O contato programado precisa ser antes da consulta.';
+  }
+  return null;
+}
+
+/**
+ * O contato programado (pendente) só é feito com a mesma marcação em que foi programado: registrar com outra consulta
+ * mudaria o histórico da tentativa e deixaria o pendente da outra órfão.
+ */
+export function conferirPendenteDoContato(e: {
+  marcacaoDoPendente: number | null;
+  marcacaoInformada: number | null;
+}): string | null {
+  return e.marcacaoDoPendente === e.marcacaoInformada
+    ? null
+    : 'O contato programado é de outra consulta: registre-o na consulta em que foi programado.';
+}
+
+/**
+ * Depois do registro, os demais contatos programados da mesma marcação são encerrados (situação "cancelado", com o
+ * motivo) quando a marcação deixa de aguardar confirmação: pelo efeito do próprio contato ou porque já não aguardava.
+ */
+export function encerrarPendentesDaMarcacao(e: {
+  efeito: EfeitoResultadoContato | null;
+  significadoAntes: string;
+}): string | null {
+  if (e.efeito === 'confirmar') return 'Consulta confirmada no contato ativo: contato programado encerrado.';
+  if (e.efeito === 'cancelar') return 'Consulta cancelada pela desistência: contato programado encerrado.';
+  if (e.significadoAntes !== 'aguardando')
+    return 'A consulta já não aguarda confirmação: contato programado encerrado.';
   return null;
 }

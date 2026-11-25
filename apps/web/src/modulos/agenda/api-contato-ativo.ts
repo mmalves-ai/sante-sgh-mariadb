@@ -33,6 +33,8 @@ export const esquemaContato = z.object({
   informante: z.string().nullable(),
   descricao: z.string().nullable(),
   anterior: z.number().nullable(),
+  /** Pendente de consulta que já não aguarda confirmação (órfão): a central cancela. */
+  marcacaoEncerrada: z.boolean(),
 });
 export type ContatoLido = z.infer<typeof esquemaContato>;
 
@@ -62,6 +64,8 @@ const esquemaGravacao = z
         efeito: z.string().nullable().optional(),
         novaTentativa: z.number().nullable().optional(),
         alertas: z.array(z.string()).optional(),
+        pendentesEncerrados: z.number().optional(),
+        esperaCompativel: z.number().nullable().optional(),
       })
       .passthrough(),
   })
@@ -104,3 +108,13 @@ export interface EntradaRegistro {
 export const registrarContato = (e: EntradaRegistro, chave: string) => enviar(P, e, chave);
 export const cancelarContatoProgramado = (id: number, motivo: string, chave: string) =>
   enviar(`${P}/${id}/cancelar`, { motivo }, chave);
+
+export interface EntradaProgramacao {
+  paciente: number;
+  marcacao: number | null;
+  canal: Canal;
+  motivo: string;
+  programadoPara: string;
+  assunto: string | null;
+}
+export const programarContato = (e: EntradaProgramacao, chave: string) => enviar(`${P}/programar`, e, chave);

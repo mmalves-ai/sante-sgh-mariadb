@@ -4,6 +4,8 @@
 // devolve a vaga), grava e a fila se atualiza; o histórico do paciente abre na mesma tela. O contato ativo só existe no
 // banco do cliente (na fonte sintética a API responde 503): as respostas são simuladas pelo Playwright com massa
 // SINTÉTICA, no contrato do servidor. O efeito no banco está em apps/api/src/modulos/agenda/contato-ativo.int.spec.ts.
+// Segundo caso: os programados fora da fila (busca ativa avulsa e o pendente de consulta já encerrada) são feitos na
+// própria lista, e a programação (da linha da consulta e do histórico do paciente) é validada na hora.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -62,10 +64,35 @@ const item = (marcacao: number, negativa: boolean, horas: number) => ({
   programadoPara: null,
 });
 
+const programado = (id: number, marcacao: number | null, motivo: string, encerrada: boolean) => ({
+  id,
+  paciente: 9403,
+  nome: 'PACIENTE SINTETICO C2040 3',
+  marcacao,
+  canal: 'telefone',
+  motivo,
+  situacao: 'pendente',
+  resultado: null,
+  programadoPara: new Date(Date.now() - 3_600_000).toISOString(),
+  contatoEm: null,
+  informante: null,
+  descricao: null,
+  anterior: null,
+  marcacaoEncerrada: encerrada,
+});
+/** Data e hora local no formato do campo datetime-local. */
+const campo = (horas: number) => {
+  const d = new Date(Date.now() + horas * 3_600_000);
+  const z = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
+};
+
 function simular(page: Page) {
   const st = {
     itens: [item(2, true, 50), item(1, false, 30)],
+    programados: [programado(9701, null, 'busca_ativa', false), programado(9702, 5, 'lembrete', true)],
     corpos: [] as Record<string, unknown>[],
+    programacoes: [] as Record<string, unknown>[],
   };
   void page.route('**/api/agenda/contato-ativo**', (r) => {
     const url = new URL(r.request().url());
@@ -86,15 +113,41 @@ function simular(page: Page) {
           informante: null,
           descricao: 'Viaja na data (sintético).',
           anterior: null,
+          marcacaoEncerrada: false,
         },
       ]);
-    if (r.request().method() === 'GET') return json(r, { itens: st.itens, programados: [] });
+    if (r.request().method() === 'GET') return json(r, { itens: st.itens, programados: st.programados });
     const corpo = r.request().postDataJSON() as Record<string, unknown>;
+    if (url.pathname.endsWith('/programar')) {
+      st.programacoes.push(corpo);
+      return json(r, {
+        ok: true,
+        resultado: { contato: 9801 },
+        repetida: false,
+        mensagem: 'Contato programado.',
+      });
+    }
     st.corpos.push(corpo);
+    if (corpo['pendente'] !== null && corpo['marcacao'] === null) {
+      st.programados = st.programados.filter((c) => c.id !== corpo['pendente']);
+      return json(r, {
+        ok: true,
+        resultado: { contato: Number(corpo['pendente']), efeito: null, novaTentativa: 9802, alertas: [] },
+        repetida: false,
+        mensagem: 'Contato registrado.',
+      });
+    }
     st.itens = st.itens.filter((i) => i.marcacao !== corpo['marcacao']);
     return json(r, {
       ok: true,
-      resultado: { contato: 9601, efeito: 'cancelar', novaTentativa: null, alertas: [] },
+      resultado: {
+        contato: 9601,
+        efeito: 'cancelar',
+        novaTentativa: null,
+        alertas: [],
+        pendentesEncerrados: 1,
+        esperaCompativel: 2,
+      },
       repetida: false,
       mensagem: 'Contato registrado.',
     });
@@ -130,14 +183,93 @@ test.describe('@C2-040 contato ativo antes da consulta', () => {
       motivo: 'confirmacao_marcacao',
       resultado: 'desistiu',
       descricao: 'Viaja na data.',
+      pendente: null,
     });
     await expect(page.getByTestId('contato-item-2')).toHaveCount(0);
+    // A vaga liberada avisa a lista de espera, com o atalho.
+    await expect(page.getByTestId('contato-mensagem')).toContainText(
+      '1 contato programado da consulta encerrado',
+    );
+    await expect(page.getByTestId('contato-espera')).toContainText('2 pedidos da lista de espera');
+    await expect(page.getByTestId('contato-espera').getByRole('link')).toHaveAttribute(
+      'href',
+      '/agenda/espera',
+    );
 
     // Visão por paciente: o histórico abre na mesma tela.
     await page.getByTestId('contato-historico-1').click();
     await expect(page.getByTestId('contato-historico')).toContainText('Paciente desistiu da consulta');
 
     await semViolacaoAxe(page, 'contato ativo antes da consulta');
+    expect(externas).toEqual([]);
+  });
+
+  test('programados fora da fila são feitos na lista e a programação valida na hora', async ({ page }) => {
+    const externas = vigiarExternas(page);
+    const st = simular(page);
+    await entrar(page, 'sint.gestor.agenda');
+    await page.goto('/agenda/consultas/contato-ativo');
+
+    // O pendente de consulta já encerrada aparece marcado (a central cancela).
+    await expect(page.getByTestId('contato-orfao-9702')).toContainText('Consulta já encerrada');
+    await expect(page.getByTestId('contato-orfao-9701')).toHaveCount(0);
+
+    // Registrar o programado avulso (busca ativa): resultado que confirma é recusado na hora; sem sucesso grava.
+    await page.getByTestId('contato-programado-registrar-9701').click();
+    const edicao = page.getByTestId('contato-edicao');
+    await expect(edicao).toContainText('Busca ativa');
+    await escolher(edicao.getByLabel('Resultado'), 'confirmou');
+    await expect(page.getByTestId('contato-recusa')).toContainText('contato avulso');
+    await expect(page.getByTestId('contato-gravar')).toBeDisabled();
+    await escolher(edicao.getByLabel('Resultado'), 'nao_atendeu');
+    await expect(page.getByTestId('contato-previsao')).toContainText('próxima tentativa');
+    await page.getByTestId('contato-gravar').click();
+    await expect(page.getByTestId('contato-mensagem')).toContainText('Nova tentativa programada.');
+    expect(st.corpos[0]).toMatchObject({
+      paciente: 9403,
+      marcacao: null,
+      pendente: 9701,
+      motivo: 'busca_ativa',
+      resultado: 'nao_atendeu',
+    });
+    await expect(page.getByTestId('contato-programado-9701')).toHaveCount(0);
+
+    // Programar da linha da consulta: lembrete, a data no passado é recusada na hora.
+    await page.getByTestId('contato-programar-1').click();
+    const prog = page.getByTestId('contato-programacao');
+    await page.getByTestId('programar-quando').fill(campo(-24));
+    await expect(page.getByTestId('programar-recusa')).toContainText('agora ou depois');
+    await expect(page.getByTestId('programar-gravar')).toBeDisabled();
+    await page.getByTestId('programar-quando').fill(campo(40));
+    await expect(page.getByTestId('programar-recusa')).toContainText('antes da consulta');
+    await page.getByTestId('programar-quando').fill(campo(2));
+    await expect(page.getByTestId('programar-recusa')).toHaveCount(0);
+    await escolher(prog.getByLabel('Canal'), 'whatsapp');
+    await page.getByTestId('programar-gravar').click();
+    await expect(page.getByTestId('contato-mensagem')).toHaveText('Contato programado.');
+    expect(st.programacoes[0]).toMatchObject({
+      paciente: 9401,
+      marcacao: 1,
+      canal: 'whatsapp',
+      motivo: 'lembrete',
+    });
+
+    // Programar do histórico do paciente, sem consulta: resultado de exame.
+    await page.getByTestId('contato-historico-1').click();
+    await page.getByTestId('contato-historico-programar').click();
+    await escolher(prog.getByLabel('Motivo'), 'lembrete');
+    await expect(page.getByTestId('programar-recusa')).toContainText('escolha a consulta');
+    await escolher(prog.getByLabel('Motivo'), 'resultado_exame');
+    await page.getByTestId('programar-assunto').locator('input, textarea').first().fill('Retorno do exame.');
+    await page.getByTestId('programar-gravar').click();
+    expect(st.programacoes[1]).toMatchObject({
+      paciente: 9401,
+      marcacao: null,
+      motivo: 'resultado_exame',
+      assunto: 'Retorno do exame.',
+    });
+
+    await semViolacaoAxe(page, 'contato ativo: programados e programação');
     expect(externas).toEqual([]);
   });
 });

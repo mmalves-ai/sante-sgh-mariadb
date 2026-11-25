@@ -3,8 +3,11 @@ import {
   decidirContato,
   type EntradaDecisaoContato,
   type ItemFilaContato,
+  conferirPendenteDoContato,
+  encerrarPendentesDaMarcacao,
   LIMITE_TENTATIVAS_CONTATO,
   ordemFilaContato,
+  RESPOSTA_NEGATIVA_CANCELA_SOZINHA,
   validarProgramacaoContato,
 } from './contato-ativo.js';
 
@@ -121,11 +124,64 @@ describe('fila e programação', () => {
   });
 
   it('valida a programação na hora', () => {
-    const ok = { canal: 'telefone', motivo: 'lembrete', programadoPara: amanha, agora };
+    const ok = { canal: 'telefone', motivo: 'busca_ativa', programadoPara: amanha, agora };
     expect(validarProgramacaoContato(ok)).toBe(null);
     expect(validarProgramacaoContato({ ...ok, programadoPara: new Date('2030-03-09T00:00:00Z') })).toMatch(
       /agora ou depois/,
     );
     expect(validarProgramacaoContato({ ...ok, canal: '' })).toMatch(/canal/);
+    expect(validarProgramacaoContato({ ...ok, motivo: 'lembrete' })).toMatch(/escolha a consulta/);
+  });
+
+  it('com marcação, só a que aguarda, no futuro e com o contato antes da consulta', () => {
+    const depois = new Date('2030-03-12T12:00:00Z');
+    const m = (significado: string, inicioEm = depois) => ({ significado, inicioEm });
+    const ok = { canal: 'telefone', motivo: 'lembrete', programadoPara: amanha, agora };
+    expect(validarProgramacaoContato({ ...ok, marcacao: m('aguardando') })).toBe(null);
+    for (const sig of ['confirmada', 'cancelada', 'falta'])
+      expect(validarProgramacaoContato({ ...ok, marcacao: m(sig) })).toMatch(/não aguarda/);
+    expect(
+      validarProgramacaoContato({ ...ok, marcacao: m('aguardando', new Date('2030-03-10T08:00:00Z')) }),
+    ).toMatch(/já passou/);
+    expect(validarProgramacaoContato({ ...ok, marcacao: m('aguardando', amanha) })).toMatch(
+      /antes da consulta/,
+    );
+  });
+});
+
+describe('pendentes da marcação', () => {
+  it('o pendente só é feito na mesma marcação', () => {
+    expect(conferirPendenteDoContato({ marcacaoDoPendente: 7, marcacaoInformada: 7 })).toBe(null);
+    expect(conferirPendenteDoContato({ marcacaoDoPendente: null, marcacaoInformada: null })).toBe(null);
+    expect(conferirPendenteDoContato({ marcacaoDoPendente: 7, marcacaoInformada: 8 })).toMatch(
+      /outra consulta/,
+    );
+    expect(conferirPendenteDoContato({ marcacaoDoPendente: 7, marcacaoInformada: null })).toMatch(
+      /outra consulta/,
+    );
+  });
+
+  it('encerra os demais pendentes quando a marcação deixa de aguardar', () => {
+    expect(encerrarPendentesDaMarcacao({ efeito: 'confirmar', significadoAntes: 'aguardando' })).toMatch(
+      /confirmada/,
+    );
+    expect(encerrarPendentesDaMarcacao({ efeito: 'cancelar', significadoAntes: 'confirmada' })).toMatch(
+      /desistência/,
+    );
+    expect(encerrarPendentesDaMarcacao({ efeito: null, significadoAntes: 'confirmada' })).toMatch(
+      /não aguarda/,
+    );
+    expect(encerrarPendentesDaMarcacao({ efeito: null, significadoAntes: 'aguardando' })).toBe(null);
+  });
+
+  it('sem sucesso em marcação encerrada não programa nova tentativa', () => {
+    const d = decidirContato(
+      base({ resultado: R.naoAtendeu, marcacao: { significado: 'cancelada', inicioEm: amanha } }),
+    );
+    expect(d).toMatchObject({ ok: true, novaTentativaEm: null });
+  });
+
+  it('a resposta negativa à mensagem não cancela sozinha (divergência registrada)', () => {
+    expect(RESPOSTA_NEGATIVA_CANCELA_SOZINHA).toBe(false);
   });
 });

@@ -4,12 +4,20 @@
 //   - registrar a tentativa (ligação, mensagem, e-mail) com o resultado padronizado; o resultado que confirma deixa a
 //     marcação confirmada (confirmacao_marcacao), o da desistência cancela com o motivo "desistência do paciente" e
 //     libera a vaga (cancelamento_marcacao, horário livre), e o sem sucesso programa a próxima tentativa até o limite;
-//   - programar um contato e cancelar um programado (nunca apaga: situação "cancelado").
+//   - programar um contato e cancelar um programado (nunca apaga: situação "cancelado");
+//   - quando a marcação deixa de aguardar confirmação no registro, os demais pendentes dela são encerrados com o motivo;
+//     os pendentes que ficaram órfãos por outro caminho (confirmação pela mensagem, cancelamento ou falta na agenda)
+//     aparecem entre os programados, marcados como de consulta encerrada, para a central cancelar;
+//   - ao liberar a vaga pela desistência, devolve quantos pedidos da lista de espera servem ao horário (mesma agenda ou
+//     especialidade da agenda), para a central ofertar pela lista de espera.
+// A resposta "não" à mensagem não cancela sozinha: divergência registrada no domínio (RESPOSTA_NEGATIVA_CANCELA_SOZINHA).
 // A regra é do domínio (@sgh/dominio-agenda: decidirContato, ordemFilaContato, validarProgramacaoContato).
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   CANAIS_CONTATO,
+  conferirPendenteDoContato,
   decidirContato,
+  encerrarPendentesDaMarcacao,
   type EfeitoResultadoContato,
   MOTIVOS_CONTATO,
   ordemFilaContato,
@@ -113,6 +121,8 @@ export interface ContatoLido {
   readonly informante: string | null;
   readonly descricao: string | null;
   readonly anterior: number | null;
+  /** Pendente de uma consulta que já não aguarda confirmação ou já passou (órfão: a central cancela). */
+  readonly marcacaoEncerrada: boolean;
 }
 
 export interface ContextoContato {
@@ -128,7 +138,12 @@ export type ContextoGravacaoContato = ContextoContato & {
 };
 
 const COLUNAS_CONTATO = `c.id, c.paciente_id, pf.nome, c.marcacao_horario_id, c.canal, c.motivo, c.situacao,
-  r.descricao AS resultado, c.programado_para, c.contato_em, c.informante, c.descricao, c.anterior_contato_ativo_id`;
+  r.descricao AS resultado, c.programado_para, c.contato_em, c.informante, c.descricao, c.anterior_contato_ativo_id,
+  (c.marcacao_horario_id IS NOT NULL AND (sm.significado <> 'aguardando' OR hm.inicio_em <= ?)) AS marcacao_encerrada`;
+/** Junções da marcação do contato (para saber se o pendente ficou órfão). */
+const JUNCAO_MARCACAO = `LEFT JOIN marcacao_horario mm ON mm.id = c.marcacao_horario_id
+             LEFT JOIN situacao_marcacao sm ON sm.id = mm.situacao_marcacao_id
+             LEFT JOIN horario_agenda hm ON hm.id = mm.horario_agenda_id`;
 const contatoDe = (x: Linha): ContatoLido => ({
   id: num(x['id']),
   paciente: num(x['paciente_id']),
@@ -143,11 +158,13 @@ const contatoDe = (x: Linha): ContatoLido => ({
   informante: txtOuNulo(x['informante']),
   descricao: txtOuNulo(x['descricao']),
   anterior: numOuNulo(x['anterior_contato_ativo_id']),
+  marcacaoEncerrada: bool(x['marcacao_encerrada']),
 });
 
 /** O estabelecimento da sessão que grava (o executor já recusa a escrita sem ele; aqui o tipo fica explícito). */
 function estabelecimentoDaGravacao(ctx: ContextoOperacao): number {
-  if (ctx.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  if (ctx.estabelecimento === null)
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   return ctx.estabelecimento;
 }
 
@@ -157,7 +174,16 @@ export class ContatoAtivoPropria {
   private readonly registrarOp = definirOperacao<
     EntradaRegistrarContato,
     // Os alertas vão numa linha cada (o resultado guardado pela idempotência só tem valores simples).
-    { contato: number; efeito: string | null; novaTentativa: number | null; alertas: string }
+    {
+      contato: number;
+      efeito: string | null;
+      novaTentativa: number | null;
+      alertas: string;
+      /** Pendentes da mesma marcação encerrados no registro. */
+      pendentesEncerrados: number;
+      /** Vaga liberada pela desistência: pedidos da lista de espera que servem ao horário; nulo sem vaga liberada. */
+      esperaCompativel: number | null;
+    }
   >({
     nome: 'agenda.contato_ativo_registrar',
     tabelas: [
@@ -166,6 +192,8 @@ export class ContatoAtivoPropria {
       'confirmacao_marcacao',
       'cancelamento_marcacao',
       'horario_agenda',
+      'lista_espera',
+      'agenda_especialidade',
     ],
     entrada: esquemaRegistrarContato as unknown as z.ZodType<EntradaRegistrarContato>,
     gravar: (tx, e, ctx) => this.gravarRegistro(tx, e, ctx),
@@ -173,7 +201,7 @@ export class ContatoAtivoPropria {
   });
   private readonly programarOp = definirOperacao<EntradaProgramarContato, { contato: number }>({
     nome: 'agenda.contato_ativo_programar',
-    tabelas: ['contato_ativo'],
+    tabelas: ['contato_ativo', 'marcacao_horario'],
     entrada: esquemaProgramarContato as unknown as z.ZodType<EntradaProgramarContato>,
     gravar: (tx, e, ctx) => this.gravarProgramacao(tx, e, ctx),
     alvo: (_e, r) => ({ tabela: 'contato_ativo', id: r.contato }),
@@ -326,10 +354,12 @@ export class ContatoAtivoPropria {
              JOIN paciente p ON p.id = c.paciente_id
              JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
              LEFT JOIN resultado_contato r ON r.id = c.resultado_contato_id
+             ${JUNCAO_MARCACAO}
             WHERE c.estabelecimento_id = ? AND c.situacao = 'pendente' AND c.excluido_em IS NULL
-              AND c.marcacao_horario_id IS NULL AND (c.programado_para IS NULL OR c.programado_para <= ?)
+              AND (c.programado_para IS NULL OR c.programado_para <= ?)
+              AND (c.marcacao_horario_id IS NULL OR sm.significado <> 'aguardando' OR hm.inicio_em <= ?)
             ORDER BY c.programado_para LIMIT 200`,
-          [est, ate],
+          [agora, est, ate, agora],
         )
       ).map(contatoDe);
       return { itens, programados };
@@ -346,9 +376,10 @@ export class ContatoAtivoPropria {
              JOIN paciente p ON p.id = c.paciente_id
              JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
              LEFT JOIN resultado_contato r ON r.id = c.resultado_contato_id
+             ${JUNCAO_MARCACAO}
             WHERE c.estabelecimento_id = ? AND c.paciente_id = ? AND c.excluido_em IS NULL
             ORDER BY COALESCE(c.contato_em, c.programado_para, c.criado_em) DESC, c.id DESC LIMIT 300`,
-          [est, paciente],
+          [this.agora(), est, paciente],
         )
       ).map(contatoDe),
     );
@@ -433,6 +464,11 @@ export class ContatoAtivoPropria {
         throw recusa('contato-ja-feito', 'Este contato programado já foi feito ou cancelado.');
       if (num(p['paciente_id']) !== e.paciente)
         throw recusa('paciente-diferente', 'O contato programado é de outro paciente.');
+      const outra = conferirPendenteDoContato({
+        marcacaoDoPendente: numOuNulo(p['marcacao_horario_id']),
+        marcacaoInformada: e.marcacao,
+      });
+      if (outra) throw recusa('pendente-de-outra-marcacao', outra);
       pendente = p;
     }
     const tentativas = await tx.uma(
@@ -487,7 +523,29 @@ export class ContatoAtivoPropria {
       });
     }
     if (m && d.efeito === 'confirmar') await this.confirmar(tx, ctx, m, e.canal, agora);
-    if (m && d.efeito === 'cancelar') await this.cancelarPorDesistencia(tx, ctx, m, e.descricao, agora);
+    let esperaCompativel: number | null = null;
+    if (m && d.efeito === 'cancelar')
+      esperaCompativel = await this.cancelarPorDesistencia(tx, ctx, m, e.descricao, agora);
+    let pendentesEncerrados = 0;
+    const motivoEncerrar = m
+      ? encerrarPendentesDaMarcacao({ efeito: d.efeito, significadoAntes: String(m['significado']) })
+      : null;
+    if (m && motivoEncerrar) {
+      const outros = await tx.consultarParaAtualizar(
+        `SELECT id, versao FROM contato_ativo
+          WHERE marcacao_horario_id = ? AND estabelecimento_id = ? AND situacao = 'pendente' AND excluido_em IS NULL
+            AND id <> ?`,
+        [m['id'], est, contato],
+        { teto: 100 },
+      );
+      for (const o of outros)
+        await tx.alterar('contato_ativo', num(o['id']), num(o['versao']), {
+          situacao: 'cancelado',
+          descricao: motivoEncerrar,
+          usuario_id: ctx.usuario,
+        });
+      pendentesEncerrados = outros.length;
+    }
     let novaTentativa: number | null = null;
     if (d.novaTentativaEm)
       novaTentativa = await tx.incluir('contato_ativo', {
@@ -501,7 +559,14 @@ export class ContatoAtivoPropria {
         assunto: 'Nova tentativa programada pela central',
         programado_para: d.novaTentativaEm,
       });
-    return { contato, efeito: d.efeito, novaTentativa, alertas: d.alertas.join('\n') };
+    return {
+      contato,
+      efeito: d.efeito,
+      novaTentativa,
+      alertas: d.alertas.join('\n'),
+      pendentesEncerrados,
+      esperaCompativel,
+    };
   }
 
   private async confirmar(tx: TxOperacao, ctx: ContextoOperacao, m: Linha, canal: string, agora: Date) {
@@ -543,7 +608,7 @@ export class ContatoAtivoPropria {
     m: Linha,
     complemento: string | null,
     agora: Date,
-  ) {
+  ): Promise<number> {
     const motivo = await this.idPor(
       tx,
       "SELECT id FROM motivo_cancelamento_operacao WHERE codigo = 'desistencia_paciente' AND ativo",
@@ -570,27 +635,45 @@ export class ContatoAtivoPropria {
       ),
     });
     const [h] = await tx.consultarParaAtualizar(
-      'SELECT id, versao, tipo_horario, vagas_ocupadas FROM horario_agenda WHERE id = ?',
+      'SELECT id, versao, tipo_horario, vagas_ocupadas, agenda_servico_id FROM horario_agenda WHERE id = ?',
       [m['horario_agenda_id']],
       { teto: 1 },
     );
-    if (h)
-      await tx.alterar('horario_agenda', num(h['id']), num(h['versao']), {
-        vagas_ocupadas: Math.max(0, num(h['vagas_ocupadas']) - 1),
-        situacao: h['tipo_horario'] === 'encaixe' ? 'cancelado' : 'livre',
-      });
+    if (!h) return 0;
+    await tx.alterar('horario_agenda', num(h['id']), num(h['versao']), {
+      vagas_ocupadas: Math.max(0, num(h['vagas_ocupadas']) - 1),
+      situacao: h['tipo_horario'] === 'encaixe' ? 'cancelado' : 'livre',
+    });
+    if (h['tipo_horario'] === 'encaixe') return 0;
+    // A vaga voltou à grade: os pedidos aguardando da lista de espera que servem a ela (a mesma agenda ou uma
+    // especialidade da agenda), para a central ofertar pela lista de espera (a oferta confere a ordem e a prioridade).
+    const n = await tx.uma(
+      `SELECT COUNT(*) AS n FROM lista_espera le
+        WHERE le.estabelecimento_id = ? AND le.situacao = 'aguardando' AND le.excluido_em IS NULL
+          AND (le.agenda_servico_id = ? OR le.especialidade_medica_id IN (
+                SELECT ae.especialidade_medica_id FROM agenda_especialidade ae
+                 WHERE ae.agenda_servico_id = ? AND ae.excluido_em IS NULL))`,
+      [ctx.estabelecimento, h['agenda_servico_id'], h['agenda_servico_id']],
+    );
+    return num(n?.['n'] ?? 0);
   }
 
   private async gravarProgramacao(tx: TxOperacao, e: EntradaProgramarContato, ctx: ContextoOperacao) {
+    await this.exigirPaciente(tx, e.paciente);
+    const m =
+      e.marcacao !== null
+        ? await this.travarMarcacao(tx, estabelecimentoDaGravacao(ctx), e.marcacao, e.paciente)
+        : null;
     const motivo = validarProgramacaoContato({
       canal: e.canal,
       motivo: e.motivo,
       programadoPara: new Date(e.programadoPara),
       agora: this.agora(),
+      marcacao: m
+        ? { significado: String(m['significado']), inicioEm: new Date(m['inicio_em'] as string) }
+        : null,
     });
     if (motivo) throw recusa('programacao-invalida', motivo);
-    await this.exigirPaciente(tx, e.paciente);
-    if (e.marcacao !== null) await this.travarMarcacao(tx, estabelecimentoDaGravacao(ctx), e.marcacao, e.paciente);
     const contato = await tx.incluir('contato_ativo', {
       estabelecimento_id: ctx.estabelecimento,
       paciente_id: e.paciente,

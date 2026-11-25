@@ -5,6 +5,10 @@
 // fica realizado. Outra marcação: "não atendeu" → contato sem sucesso e a próxima tentativa programada sozinha → a
 // tentativa programada é feita com "confirmou" → a marcação fica confirmada. Sem a permissão de cancelar, a desistência
 // é recusada e nada muda. Programar e cancelar o programado (nunca apaga). Histórico por paciente.
+// Pendentes: o registro que confirma ou cancela encerra os demais pendentes da marcação; o pendente de outra marcação é
+// recusado; programar em marcação que não aguarda é recusado; o pendente órfão (marcação confirmada por outro caminho)
+// aparece entre os programados como de consulta encerrada. A vaga liberada pela desistência sinaliza os pedidos da
+// lista de espera que servem ao horário (o aguardando da mesma agenda conta; o cancelado não).
 // Massa SINTÉTICA (estabelecimento, paciente, agenda e marcações fictícios), limpa antes e depois.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,6 +28,7 @@ async function limpar(e: Escritor): Promise<void> {
   );
   for (const t of [
     'contato_ativo',
+    'lista_espera',
     'cancelamento_marcacao',
     'confirmacao_marcacao',
     'marcacao_horario',
@@ -43,7 +48,15 @@ async function limpar(e: Escritor): Promise<void> {
 describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let porta: ContatoAtivoPropria;
-  let m: { login: string; paciente: number; m1: number; m2: number; h1: number };
+  let m: {
+    login: string;
+    paciente: number;
+    m1: number;
+    m2: number;
+    h1: number;
+    m3: number;
+    orfao: number;
+  };
   const agora = new Date();
   const em = (horas: number) => new Date(agora.getTime() + horas * 3_600_000);
   let n = 0;
@@ -159,7 +172,35 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
          VALUES (?, ?, 1, ?, ?, TRUE, ?, ?, 'Resposta negativa na mensagem (sintética).', ?)`,
         [est, b.id, canal, recusada, agora, agora, agora],
       );
-      return { login: String(u['login']), paciente, m1: a.id, m2: b.id, h1: b.h };
+      // m3: daqui a 40 h, confirmada por outro caminho (a resposta "sim" da mensagem) com um pendente que ficou órfão.
+      const c = await marcacao(3, em(40));
+      await e.executar(
+        `UPDATE marcacao_horario SET situacao_marcacao_id =
+           (SELECT id FROM situacao_marcacao WHERE significado = 'confirmada' AND ativo ORDER BY ordem, id LIMIT 1)
+          WHERE id = ?`,
+        [c.id],
+      );
+      const orfao = await e.inserir(
+        `INSERT INTO contato_ativo (estabelecimento_id, paciente_id, marcacao_horario_id, canal, motivo, situacao,
+         programado_para, criado_em) VALUES (?, ?, ?, 'telefone', 'lembrete', 'pendente', ?, ?)`,
+        [est, paciente, c.id, em(-1), agora],
+      );
+      // Lista de espera da agenda: um pedido aguardando (serve à vaga) e um cancelado (não conta).
+      for (const sit of ['aguardando', 'cancelado'])
+        await e.executar(
+          `INSERT INTO lista_espera (estabelecimento_id, paciente_id, agenda_servico_id, situacao, entrada_em,
+           responsavel_usuario_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [est, paciente, agenda, sit, agora, usuario, agora],
+        );
+      return {
+        login: String(u['login']),
+        paciente,
+        m1: a.id,
+        m2: b.id,
+        h1: b.h,
+        m3: c.id,
+        orfao: Number(orfao),
+      };
     });
   }, 120_000);
 
@@ -180,6 +221,8 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
     const f = await porta.fila(ctx(), 3);
     expect(f.itens.map((i) => i.marcacao)).toEqual([m.m2, m.m1]);
     expect(f.itens[0]).toMatchObject({ respostaNegativa: true, tentativas: 0, telefone: '11999990040' });
+    // O pendente órfão da m3 (confirmada pela mensagem) aparece entre os programados, como de consulta encerrada.
+    expect(f.programados.map((x) => [x.id, x.marcacaoEncerrada])).toEqual([[m.orfao, true]]);
 
     // 2) Sem a permissão de cancelar, a desistência é recusada e nada muda.
     const base = {
@@ -188,6 +231,14 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
       motivo: 'confirmacao_marcacao',
       contatoEm: new Date().toISOString(),
     };
+    // Um contato programado na m2 (lembrete), que a desistência vai encerrar.
+    const pm2 = await porta.programar(ctx(), {
+      paciente: m.paciente,
+      marcacao: m.m2,
+      canal: 'whatsapp',
+      motivo: 'lembrete',
+      programadoPara: em(10).toISOString(),
+    });
     const semPermissao = await erro(
       porta.registrar(ctx(false), { ...base, marcacao: m.m2, resultado: 'desistiu' }),
     );
@@ -201,7 +252,31 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
       resultado: 'desistiu',
       descricao: 'Paciente viaja na data (sintético).',
     });
-    expect(d.resultado).toMatchObject({ efeito: 'cancelar', novaTentativa: null });
+    expect(d.resultado).toMatchObject({
+      efeito: 'cancelar',
+      novaTentativa: null,
+      pendentesEncerrados: 1,
+      esperaCompativel: 1,
+    });
+    const encerrado = await ler('SELECT situacao, descricao FROM contato_ativo WHERE id = ?', [
+      pm2.resultado.contato,
+    ]);
+    expect(encerrado[0]).toMatchObject({ situacao: 'cancelado' });
+    expect(String(encerrado[0]!['descricao'])).toMatch(/desistência/);
+    // Programar na marcação cancelada é recusado (o pendente ficaria fora da fila).
+    expect(
+      (
+        await erro(
+          porta.programar(ctx(), {
+            paciente: m.paciente,
+            marcacao: m.m2,
+            canal: 'telefone',
+            motivo: 'lembrete',
+            programadoPara: em(5).toISOString(),
+          }),
+        )
+      ).codigo,
+    ).toBe('programacao-invalida');
     expect(await situacao(m.m2)).toBe('cancelada');
     const canc = await ler(
       `SELECT mc.codigo, c.solicitante, c.horario_liberado FROM cancelamento_marcacao c
@@ -240,6 +315,29 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
     expect(f2.itens.map((i) => i.marcacao)).toEqual([m.m1]);
     expect(f2.itens[0]).toMatchObject({ tentativas: 1, contatoPendente: na.resultado.novaTentativa });
 
+    // O pendente da m1 não pode ser feito com outra marcação (nem sem marcação).
+    expect(
+      (
+        await erro(
+          porta.registrar(ctx(), {
+            ...base,
+            motivo: 'busca_ativa',
+            marcacao: null,
+            pendente: na.resultado.novaTentativa,
+            resultado: 'nao_atendeu',
+          }),
+        )
+      ).codigo,
+    ).toBe('pendente-de-outra-marcacao');
+    // Outro pendente na m1 (lembrete por SMS), que a confirmação vai encerrar.
+    const pm1 = await porta.programar(ctx(), {
+      paciente: m.paciente,
+      marcacao: m.m1,
+      canal: 'sms',
+      motivo: 'lembrete',
+      programadoPara: em(6).toISOString(),
+    });
+
     // 5) A tentativa programada é feita: confirmou. O programado vira realizado (sem linha nova) e a marcação confirma.
     const ok = await porta.registrar(ctx(), {
       ...base,
@@ -248,7 +346,17 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
       canal: 'whatsapp',
       resultado: 'confirmou',
     });
-    expect(ok.resultado).toMatchObject({ contato: na.resultado.novaTentativa, efeito: 'confirmar' });
+    expect(ok.resultado).toMatchObject({
+      contato: na.resultado.novaTentativa,
+      efeito: 'confirmar',
+      pendentesEncerrados: 1,
+      esperaCompativel: null,
+    });
+    expect(
+      (await ler('SELECT situacao FROM contato_ativo WHERE id = ?', [pm1.resultado.contato]))[0],
+    ).toEqual({
+      situacao: 'cancelado',
+    });
     expect(await situacao(m.m1)).toBe('confirmada');
     const conf = await ler(
       `SELECT c.automatica, s.significado, c.observacao FROM confirmacao_marcacao c
@@ -259,6 +367,8 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
       { automatica: 0, significado: 'confirmada', observacao: 'Confirmada no contato ativo da central.' },
     ]);
     expect((await porta.fila(ctx(), 3)).itens).toEqual([]);
+    // O órfão da m3 é cancelado pela central.
+    await porta.cancelar(ctx(), { id: m.orfao, motivo: 'Consulta já confirmada pela mensagem.' });
 
     // 6) Programar uma busca ativa sem marcação e cancelar o programado (fica, com a situação cancelado).
     const pr = await porta.programar(ctx(), {
@@ -286,9 +396,13 @@ describe.skipIf(SEM_BANCO)('02-REC L39 contato ativo antes da consulta (contrato
       'contato-ja-feito',
     );
 
-    // 7) Visão por paciente: os 4 contatos (desistiu, não atendeu, confirmou, programado cancelado), nada apagado.
+    // 7) Visão por paciente: os 7 contatos (desistiu, não atendeu, confirmou; os pendentes encerrados da m1 e da m2, o
+    // órfão e o programado cancelados), nada apagado.
     const hist = await porta.historico(ctx(), m.paciente);
     expect(hist.map((x) => x.situacao).sort()).toEqual([
+      'cancelado',
+      'cancelado',
+      'cancelado',
       'cancelado',
       'realizado',
       'realizado',
