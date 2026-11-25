@@ -570,6 +570,10 @@ describe.skipIf(SEM_BANCO)('estrutura e configuração TISS no banco próprio (f
     ).rejects.toMatchObject({
       problema: { codigo: 'faixa-sobreposta' },
     });
+    // Outro tipo de guia com o mesmo prefixo, tamanho e números: o número da guia é único por fonte pagadora.
+    await expect(ts.incluirFaixa(c(), { ...base, tipoGuia: 'internacao' }, t('x'))).rejects.toMatchObject({
+      problema: { codigo: 'faixa-repete-numero-de-outro-tipo' },
+    });
     const opReservar = definirOperacao({
       nome: 'teste.tiss.reservar-numero',
       tabelas: ['faixa_numeracao_guia'],

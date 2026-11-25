@@ -7,6 +7,7 @@ import {
   faixaNoFim,
   faixaParaEmitir,
   formatarNumeroGuia,
+  numerosCoincidem,
   origemNumeroGuia,
   tipoFaixaDaGuia,
   vigenciasQueCruzam,
@@ -131,6 +132,34 @@ describe('faixa de numeração de guias', () => {
       errosFaixa({ ...faixa, numeroInicial: 100, numeroFinal: 200 }, [{ ...usada, proximoNumero: 101 }]),
     ).toEqual(['faixa-sobreposta']);
     expect(errosFaixa({ ...faixa, prefixo: 'ABCDEFGHIJ', tamanhoFixo: 11 }, [])).toEqual(['numero-longo']);
+  });
+  it('faixa de outro tipo de guia da mesma fonte pagadora não pode escrever o mesmo número de guia', () => {
+    const outra = {
+      id: 9,
+      numeroInicial: 1,
+      numeroFinal: 2000,
+      proximoNumero: 1,
+      situacao: 'ativa',
+      tipoGuia: 'internacao',
+      prefixo: faixa.prefixo,
+      tamanhoFixo: faixa.tamanhoFixo,
+    };
+    expect(errosFaixa(faixa, [outra])).toEqual(['faixa-repete-numero-de-outro-tipo']);
+    // Prefixo diferente escreve outro número: as duas faixas convivem.
+    expect(errosFaixa(faixa, [{ ...outra, prefixo: 'ZZ' }])).toEqual([]);
+    // Números que não se cruzam convivem, e a encerrada sem uso não reserva nada.
+    expect(errosFaixa(faixa, [{ ...outra, numeroInicial: 5000, numeroFinal: 6000 }])).toEqual([]);
+    expect(errosFaixa(faixa, [{ ...outra, situacao: 'encerrada' }])).toEqual([]);
+    // A do mesmo tipo segue conflitando pelo intervalo, qualquer que seja o prefixo.
+    expect(errosFaixa(faixa, [{ ...outra, tipoGuia: faixa.tipoGuia, prefixo: 'ZZ' }])).toEqual([
+      'faixa-sobreposta',
+    ]);
+    // Tamanho fixo diferente só distingue enquanto o número não ocupa o maior tamanho.
+    const semPrefixo = { prefixo: null, tamanhoFixo: 4 };
+    expect(numerosCoincidem(semPrefixo, { prefixo: null, tamanhoFixo: 4 }, 9)).toBe(true);
+    expect(numerosCoincidem(semPrefixo, { prefixo: null, tamanhoFixo: null }, 999)).toBe(false);
+    expect(numerosCoincidem(semPrefixo, { prefixo: null, tamanhoFixo: null }, 1000)).toBe(true);
+    expect(numerosCoincidem(semPrefixo, { prefixo: 'A', tamanhoFixo: 4 }, 9)).toBe(false);
   });
   it('escolhe a faixa vigente mais antiga e consome em ordem até esgotar', () => {
     const f = {

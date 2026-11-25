@@ -129,7 +129,10 @@ const SQL_PROFISSIONAL = `
    WHERE p.id = ? AND p.excluido_em IS NULL
    ORDER BY ic.principal DESC, ic.sequencia`;
 
-/** Guia TISS mais recente da conta para o tipo (quando o faturamento já a montou), com os códigos da TISS. */
+/**
+ * Guia TISS mais recente da conta para o tipo e a fonte pagadora da conta (quando o faturamento já a montou), com os
+ * códigos da TISS. A guia de outra fonte pagadora (conta que trocou de convênio) não vale para esta apresentação.
+ */
 const SQL_GUIA_DA_CONTA = `
   SELECT g.id, g.numero_guia_prestador, g.numero_guia_operadora, g.atendimento_recem_nascido, g.senha,
          g.data_autorizacao, g.executante_profissional_id, g.solicitante_profissional_id, g.tipo_faturamento,
@@ -142,7 +145,8 @@ const SQL_GUIA_DA_CONTA = `
     LEFT JOIN termo_terminologia me ON me.id = g.motivo_encerramento_termo_terminologia_id
     LEFT JOIN termo_terminologia tc ON tc.id = g.tipo_consulta_termo_terminologia_id
     LEFT JOIN termo_terminologia ta ON ta.id = g.tipo_atendimento_termo_terminologia_id
-   WHERE g.conta_hospitalar_id = ? AND g.tipo_guia = ? AND g.excluido_em IS NULL AND g.situacao <> 'cancelada'
+   WHERE g.conta_hospitalar_id = ? AND g.tipo_guia = ? AND g.fonte_pagadora_id = ? AND g.excluido_em IS NULL
+     AND g.situacao <> 'cancelada'
    ORDER BY g.id DESC LIMIT 1`;
 
 /** Tipo de guia do lote → tipo da guia TISS montada (guia_tiss.tipo_guia). */
@@ -244,7 +248,11 @@ async function contaTiss(
       WHERE a.id = ? AND a.excluido_em IS NULL`,
     [ct['atendimento_id']],
   );
-  const guia = await tx.uma<Linha>(SQL_GUIA_DA_CONTA, [n(ct['id']), TIPO_GUIA_TISS[tipoGuia]]);
+  const guia = await tx.uma<Linha>(SQL_GUIA_DA_CONTA, [
+    n(ct['id']),
+    TIPO_GUIA_TISS[tipoGuia],
+    n(ct['fonte_pagadora_id']),
+  ]);
   const autorizacao = ct['guia_fonte_pagadora_id']
     ? await tx.uma<Linha>(
         'SELECT numero_guia_operadora, data_autorizacao, senha FROM guia_fonte_pagadora WHERE id = ? AND excluido_em IS NULL',

@@ -93,6 +93,10 @@ const MENSAGENS: Record<string, [string, string]> = {
   'tamanho-insuficiente': ['O tamanho fixo não comporta o número final.', 'tamanhoFixo'],
   'numero-longo': ['Prefixo e número passam das 20 posições da guia.', 'tamanhoFixo'],
   'faixa-sobreposta': ['A faixa cruza outra faixa deste tipo de guia.', 'numeroInicial'],
+  'faixa-repete-numero-de-outro-tipo': [
+    'A faixa repete números de uma faixa de outro tipo de guia desta fonte pagadora: o número da guia é único por fonte pagadora. Use outro prefixo ou outro intervalo.',
+    'numeroInicial',
+  ],
 };
 function recusarErros(erros: readonly string[]): void {
   if (!erros.length) return;
@@ -269,9 +273,10 @@ const opIncluirFaixa = (t: RegistroTrilhaTela) =>
       if (!(await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ?', [e.fontePagadora])))
         throw naoAchado('Fonte pagadora');
       const existentes = await tx.consultarParaAtualizar(
-        `SELECT id, numero_inicial, numero_final, proximo_numero, situacao FROM faixa_numeracao_guia
-          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ?`,
-        [ctx.estabelecimento, e.fontePagadora, e.tipoGuia],
+        `SELECT id, numero_inicial, numero_final, proximo_numero, situacao, tipo_guia, prefixo, tamanho_fixo
+           FROM faixa_numeracao_guia
+          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ?`,
+        [ctx.estabelecimento, e.fontePagadora],
       );
       recusarErros(
         errosFaixa(
@@ -282,6 +287,9 @@ const opIncluirFaixa = (t: RegistroTrilhaTela) =>
             numeroFinal: Number(x['numero_final']),
             proximoNumero: Number(x['proximo_numero']),
             situacao: String(x['situacao']),
+            tipoGuia: String(x['tipo_guia']),
+            prefixo: texto(x['prefixo']),
+            tamanhoFixo: num(x['tamanho_fixo']),
           })),
         ),
       );

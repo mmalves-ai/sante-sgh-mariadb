@@ -104,6 +104,26 @@ export interface FaixaGravada {
   /** Próximo número a emitir: na faixa encerrada, os números antes dele já foram usados em guias. */
   readonly proximoNumero: number;
   readonly situacao: string;
+  /** Tipo de guia da faixa gravada; ausente = o mesmo tipo da faixa nova. */
+  readonly tipoGuia?: string;
+  readonly prefixo?: string | null;
+  readonly tamanhoFixo?: number | null;
+}
+
+/**
+ * Faixas de tipos de guia diferentes da mesma fonte pagadora escrevem o mesmo número de guia? O número da guia do
+ * prestador é único por fonte pagadora (não por tipo de guia): com o mesmo prefixo, o número coincide quando o
+ * tamanho fixo é igual ou quando o número já ocupa o maior dos dois tamanhos (os zeros à esquerda não o distinguem).
+ */
+export function numerosCoincidem(
+  a: { readonly prefixo: string | null; readonly tamanhoFixo: number | null },
+  b: { readonly prefixo: string | null; readonly tamanhoFixo: number | null },
+  maiorNumeroComum: number,
+): boolean {
+  if ((a.prefixo ?? '') !== (b.prefixo ?? '')) return false;
+  const ta = a.tamanhoFixo ?? 0;
+  const tb = b.tamanhoFixo ?? 0;
+  return ta === tb || String(maiorNumeroComum).length >= Math.max(ta, tb);
 }
 
 /**
@@ -138,13 +158,25 @@ export function errosFaixa(d: DadosFaixa, existentes: readonly FaixaGravada[]): 
     e.push('tamanho-insuficiente');
   if (formatarNumeroGuia(d.prefixo, d.tamanhoFixo, d.numeroFinal).length > 20) e.push('numero-longo');
   if (d.vigenciaFim !== null && d.vigenciaFim < d.vigenciaInicio) e.push('vigencia-invertida');
+  const cruza = (x: FaixaGravada): { inicio: number; fim: number } | null => {
+    const r = trechoReservado(x);
+    return r !== null && r.inicio <= d.numeroFinal && d.numeroInicial <= r.fim
+      ? { inicio: Math.max(r.inicio, d.numeroInicial), fim: Math.min(r.fim, d.numeroFinal) }
+      : null;
+  };
+  const mesmoTipo = (x: FaixaGravada) => x.tipoGuia === undefined || x.tipoGuia === d.tipoGuia;
+  if (existentes.some((x) => mesmoTipo(x) && cruza(x) !== null)) e.push('faixa-sobreposta');
+  // Faixa de outro tipo de guia da mesma fonte pagadora: só conflita quando escreveria o mesmo número de guia.
   if (
     existentes.some((x) => {
-      const r = trechoReservado(x);
-      return r !== null && r.inicio <= d.numeroFinal && d.numeroInicial <= r.fim;
+      const c = mesmoTipo(x) ? null : cruza(x);
+      return (
+        c !== null &&
+        numerosCoincidem(d, { prefixo: x.prefixo ?? null, tamanhoFixo: x.tamanhoFixo ?? null }, c.fim)
+      );
     })
   )
-    e.push('faixa-sobreposta');
+    e.push('faixa-repete-numero-de-outro-tipo');
   return e;
 }
 
@@ -208,7 +240,8 @@ export type OrigemNumeroGuia = 'guia' | 'faixa' | 'conta';
 
 /**
  * Número da guia na emissão (02-CAD linha 25): a guia que já tem número fica com ele (número emitido nunca muda
- * nem é reemitido); quando a operadora fornece faixa para o tipo de guia (faixa ativa ou esgotada, mesmo fora da
+ * nem é reemitido, inclusive o da guia que veio da importação, mesmo fora da faixa: a operadora já o conhece; quem
+ * chama só passa a guia da mesma fonte pagadora do lote); quando a operadora fornece faixa para o tipo de guia (faixa ativa ou esgotada, mesmo fora da
  * vigência), o número sai da faixa, e sem número disponível a emissão é recusada; sem faixa, a numeração é a do
  * hospital (o número da conta). Faixa só encerrada não prende a numeração: o hospital a encerrou.
  */
