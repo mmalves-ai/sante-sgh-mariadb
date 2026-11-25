@@ -214,4 +214,44 @@ test.describe('Incapacidade do paciente e comprovantes da representação @F31 @
     await expect(page.getByTestId('form-incapacidade')).toBeVisible();
     await semViolacaoAxe(page, '/cadastros/pacientes/:id/contatos');
   });
+
+  test('abertura do atendimento: escolhido o paciente, a tela avisa o incapaz sem curador e leva aos responsáveis', async ({
+    page,
+  }) => {
+    // Paciente da fonte sintética (o mesmo do E2E da regra de campo na abertura); só a rota da representação é simulada.
+    const DA_FONTE = 1001;
+    let alertas: unknown[] = [];
+    await entrar(page, 'SINT.ADMIN');
+    await page.route(`**/api/cadastros/pacientes/${DA_FONTE}/incapacidades`, (rota) =>
+      json(rota, {
+        incapaz: alertas.length > 0,
+        itens: [],
+        alertas,
+        documentos: ['sentenca_curatela', 'curatela_provisoria', 'laudo_medico'],
+      }),
+    );
+    alertas = [
+      {
+        alerta: 'incapaz-sem-curador',
+        mensagem:
+          'Paciente com incapacidade registrada e sem curador vigente no cadastro: inclua o curador na ficha.',
+      },
+    ];
+    await page.goto('/recepcao/atendimento/novo?modulo=4');
+    await expect(page.getByTestId('tela-abrir-atendimento')).toBeVisible();
+    await expect(page.getByTestId('abrir-atd-representacao')).toHaveCount(0);
+    await page.getByTestId('abrir-atd-termo').fill('JOSE DA SILVA');
+    await page.getByTestId('abrir-atd-buscar').click();
+    await page.getByTestId(`abrir-atd-paciente-${DA_FONTE}`).click();
+    await expect(page.getByTestId('abrir-atd-paciente-escolhido')).toBeVisible();
+    const aviso = page.getByTestId('abrir-atd-representacao');
+    await expect(aviso).toContainText('sem curador vigente');
+    const atalho = page.getByTestId('abrir-atd-ver-responsaveis');
+    await expect(atalho).toHaveAttribute('href', new RegExp(`/cadastros/pacientes/${DA_FONTE}/contatos$`));
+    await expect(atalho).toHaveAttribute('target', '_blank');
+    await semViolacaoAxe(page, '/recepcao/atendimento/novo (representação)');
+    // Paciente não identificado (emergência): o aviso do cadastro some e a abertura segue.
+    await page.getByTestId('abrir-atd-nao-identificado').check();
+    await expect(page.getByTestId('abrir-atd-representacao')).toHaveCount(0);
+  });
 });
