@@ -75,6 +75,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.tituloReceber.ler' },
   },
   {
+    // F3.8, 07-FIN linha 89: parcelas a receber das administradoras de cartão e taxas com vigência.
+    path: '/financeiro/receber/cartao',
+    name: 'financeiro.receber.cartao',
+    component: () => import('./telas/CartaoTela.vue'),
+    meta: { permissao: 'financeiro.movimento.ler' },
+  },
+  {
     path: '/financeiro/receber/renegociacoes',
     name: 'financeiro.receber.renegociacoes',
     component: () => import('./telas/RenegociacoesTela.vue'),

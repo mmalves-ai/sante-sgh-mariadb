@@ -6,6 +6,7 @@ import { SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import { lerFluxoCaixa } from '../api-financeiro.js';
 import { data, num, paraCsv, reais, usarFinanceiro } from '../usar-financeiro.js';
@@ -61,6 +62,11 @@ function exportar() {
   <section class="tela-agenda" aria-labelledby="fc-titulo" data-testid="tela-fin-fluxo-caixa">
     <h1 id="fc-titulo">{{ t('financeiro.fluxo.titulo') }}</h1>
     <p>{{ t('financeiro.fluxo.texto') }}</p>
+    <p v-if="tem('financeiro.movimento.ler')">
+      <RouterLink to="/financeiro/receber/cartao" data-testid="fc-cartao">
+        {{ t('financeiro.cartao.atalho') }}
+      </RouterLink>
+    </p>
     <form class="filtros" @submit.prevent="pedido = { ...filtro }">
       <span class="campo">
         <label for="fc-de">{{ t('financeiro.de') }}</label>

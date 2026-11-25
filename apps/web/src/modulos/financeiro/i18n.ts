@@ -2,10 +2,13 @@
 // e a exportação contábil. Sem nome de sistema antigo (ADR 0023) nem "outro sistema" (escopo estrito do verificador).
 import { mensagensAcordosFinanceiro } from './i18n-acordos.js';
 import { mensagensBaixaFinanceiro } from './i18n-baixa.js';
+import { mensagensCartaoFinanceiro } from './i18n-cartao.js';
 import { mensagensGestaoFinanceiro } from './i18n-gestao.js';
 import { mensagensPagamentoEletronico } from './i18n-pagamento-eletronico.js';
 
 export const mensagensFinanceiro = {
+  // F3.8, 07-FIN linha 89: cartão de débito e crédito (i18n-cartao.ts).
+  cartao: mensagensCartaoFinanceiro,
   // F3.8, 07-FIN linha 76: acordos de renegociação e baixa pelo demonstrativo (i18n-acordos.ts).
   acordos: mensagensAcordosFinanceiro,
   // F3.8, 07-FIN linhas 98 e 99: reclassificação e permissões (i18n-gestao.ts).

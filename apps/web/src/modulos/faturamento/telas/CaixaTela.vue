@@ -18,6 +18,7 @@ import {
   receber,
 } from '../api-faturamento.js';
 import AvisoFaturamento from '../componentes/AvisoFaturamento.vue';
+import CartaoRecebimento, { type CartaoEscolhido } from '../componentes/CartaoRecebimento.vue';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../componentes/MensagemFaturamento.vue';
 import { numero, quando, reais, usarFaturamento } from '../usar-faturamento.js';
@@ -41,6 +42,20 @@ const recibos = useQuery({
 const saldoInicial = ref('0');
 const contado = ref('');
 const rec = ref({ orcamento: '', forma: 'pix', valor: '', comprovante: '' });
+// F3.8 (07-FIN linha 89): a administradora, a bandeira e as parcelas do cartão (nulo fora do cartão).
+const cartao = ref<CartaoEscolhido | null>(null);
+const emCartao = computed(() => rec.value.forma.startsWith('cartao'));
+const pagamentoDaTela = () => {
+  const c = emCartao.value ? cartao.value : null;
+  return {
+    forma: rec.value.forma,
+    valor: numero(rec.value.valor),
+    comprovante: rec.value.comprovante || null,
+    ...(c
+      ? { parcelas: c.parcelas, cartao: { administradora: c.administradora, bandeira: c.bandeira } }
+      : {}),
+  };
+};
 const recibo = ref({ pagamento: 0, pagador: '', referente: '' });
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
@@ -107,9 +122,7 @@ const opcoesOrcamento = computed(() => [
                 {
                   caixa: aberto!.id,
                   orcamento: rec.orcamento ? Number(rec.orcamento) : null,
-                  pagamentos: [
-                    { forma: rec.forma, valor: numero(rec.valor), comprovante: rec.comprovante || null },
-                  ],
+                  pagamentos: [pagamentoDaTela()],
                 },
                 novaChave('receber'),
               ),
@@ -136,6 +149,7 @@ const opcoesOrcamento = computed(() => [
             ><label for="cx-valor">{{ t('faturamento.valor') }}</label
             ><input id="cx-valor" v-model="rec.valor" inputmode="decimal" size="8" data-testid="cx-valor"
           /></span>
+          <CartaoRecebimento v-if="emCartao" v-model="cartao" :forma="rec.forma" :valor="numero(rec.valor)" />
           <span class="campo"
             ><label for="cx-comp">{{ t('faturamento.caixa.comprovante') }}</label
             ><input id="cx-comp" v-model="rec.comprovante" maxlength="40"
