@@ -197,6 +197,12 @@ export function problemaDoCadastro(e: unknown): ErroProblema {
             : {}),
           ...(p.podeInativar !== undefined ? { podeInativar: p.podeInativar } : {}),
         });
+      // A recusa da regra do domínio (422 com o código e a frase da regra) chega ao usuário com o motivo, nunca como 500.
+      if (p.status === 422)
+        return new ErroProblema('recusa-de-negocio', 422, p.title, p.detail, {
+          codigo,
+          campos: [...(p.campos ?? [])].map(campoDe),
+        });
       return new ErroProblema('erro-interno', 500, 'Erro inesperado');
   }
 }

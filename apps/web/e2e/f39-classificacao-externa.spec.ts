@@ -101,7 +101,7 @@ test.describe('F3.9 classificação de risco externa @F3.9', () => {
           status: 422,
           contentType: 'application/problem+json',
           body: JSON.stringify({
-            type: 'about:blank',
+            type: 'urn:sgh:problema:recusa-de-negocio',
             title: 'Envio recusado',
             status: 422,
             codigo: 'envio-anterior-falhou',
