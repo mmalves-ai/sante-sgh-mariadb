@@ -10,7 +10,7 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { moduloAgenda, pacientesSinteticos } from './modulo.js';
-import { PortaAgendaMemoria } from './porta-memoria.js';
+import { GRUPOS_PRIORIDADE_SINTETICOS, PortaAgendaMemoria } from './porta-memoria.js';
 
 const HOJE = '2026-10-21'; // quarta-feira
 const AMANHA = '2026-10-22';
@@ -422,5 +422,75 @@ describe('fechamento do dia', () => {
     expect((await post(s, `/marcacoes/${a}/falta`)).statusCode).toBe(200);
     expect((await post(s, `/marcacoes/${b}/falta`)).statusCode).toBe(200);
     expect((await get(s, '/dia?data=2026-10-20&agenda=902')).json().candidatosAFalta).toEqual([]);
+  });
+});
+
+// 02-AGE linha 49 na porta da agenda em MEMÓRIA (dev/ci, fonte do E2E f32-marcar-prioridade-legal): as opções trazem
+// os grupos de prioridade legal sintéticos, a marcação e o encaixe gravam o grupo escolhido pela regra do domínio
+// (grupo inexistente recusado, nada gravado) e a marcação devolve a descrição e o peso que o painel do dia usa.
+const ctxP = (k: string) => ({
+  rede: 'sintetica',
+  hospital: '1',
+  login: 'SINT.AGENDA',
+  correlacao: `c-${k}`,
+  chaveIdempotencia: `k-${k}`,
+});
+const novaP = () =>
+  new PortaAgendaMemoria(
+    null,
+    async (_c, ids) => pacientesSinteticos(ids),
+    () => ({ hoje: HOJE, hora: '07:00' }),
+  );
+const baseP = { agenda: 901, data: AMANHA, paciente: 1001, convenio: 10, retorno: false, canal: 'telefone' };
+
+describe('prioridade legal na marcação (porta em memória)', () => {
+  it('as opções trazem os grupos ativos com código numérico e nome', async () => {
+    const o = await novaP().opcoes();
+    expect(o.gruposPrioridadeLegal).toEqual(
+      GRUPOS_PRIORIDADE_SINTETICOS.map((g) => ({ codigo: g.id, nome: g.descricao })),
+    );
+    expect(o.gruposPrioridadeLegal.length).toBe(4);
+  });
+
+  it('marcação e encaixe gravam o grupo; a marcação devolve descrição e peso; sem grupo fica nulo', async () => {
+    const p = novaP();
+    const m1 = await p.executar(ctxP('1'), 'agenda.agendarConsulta', {
+      ...baseP,
+      hora: '08:00',
+      prioridadeLegal: 3,
+    });
+    const m2 = await p.executar(ctxP('2'), 'agenda.encaixar', {
+      ...baseP,
+      hora: '08:07',
+      motivo: 'Retorno SINTETICO',
+      prioridadeLegal: 1,
+    });
+    const m3 = await p.executar(ctxP('3'), 'agenda.agendarConsulta', { ...baseP, hora: '08:15' });
+    const dia = (await p.marcacoesDoDia(ctxP('x'), AMANHA)).itens;
+    const de = (r: { resultado: unknown }) =>
+      dia.find((x) => x.id === (r.resultado as { marcacao: number }).marcacao);
+    expect(de(m1)).toMatchObject({ prioridadeLegal: 'Gestante', pesoPrioridadeLegal: 2, encaixe: false });
+    expect(de(m2)).toMatchObject({
+      prioridadeLegal: 'Acima de 80 anos',
+      pesoPrioridadeLegal: 1,
+      encaixe: true,
+    });
+    expect(de(m3)).toMatchObject({ prioridadeLegal: null, pesoPrioridadeLegal: null });
+  });
+
+  it('grupo inexistente é recusado e nada é gravado', async () => {
+    const p = novaP();
+    await expect(
+      p.executar(ctxP('9'), 'agenda.encaixar', {
+        ...baseP,
+        hora: '08:09',
+        motivo: 'x SINTETICO',
+        prioridadeLegal: 99,
+      }),
+    ).rejects.toMatchObject({ problema: { codigo: 'prioridade-invalida' } });
+    expect((await p.marcacoesDoDia(ctxP('x'), AMANHA)).itens).toEqual([]);
+    expect((await p.horarios(ctxP('x'), 901, AMANHA, AMANHA)).itens.some((h) => h.hora === '08:09')).toBe(
+      false,
+    );
   });
 });

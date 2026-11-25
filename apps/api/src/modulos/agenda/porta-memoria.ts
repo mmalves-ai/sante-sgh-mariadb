@@ -5,6 +5,7 @@
 // real. O estado interno é privado e sintético; tudo o que sai pela porta está nos tipos neutros (tipos.ts).
 import { existsSync, readFileSync } from 'node:fs';
 import { type EstadoOperacao, textoDoMotivo } from '@sgh/contratos';
+import { type GrupoPrioridadeCadastro, prioridadeNaMarcacao } from '@sgh/dominio-agenda';
 import { ErroOperacao, recusa } from '@sgh/nucleo';
 import { OPERACOES_AGENDA as OPERACOES_CONHECIDAS, operacaoAgenda } from './operacoes.js';
 import type { ContextoAgenda, ContextoGravacao, GravadorAgenda, PortaAgenda } from './porta.js';
@@ -158,6 +159,8 @@ interface MarcacaoM {
   celular: string;
   obs: string | null;
   senha: boolean;
+  /** 02-AGE 49: grupo de prioridade legal gravado na marcação (id de GRUPOS_PRIORIDADE_SINTETICOS). */
+  prioridadeLegal?: number | null;
 }
 interface CancelamentoM {
   protocolo: number;
@@ -226,6 +229,17 @@ interface Estado {
   /** M39: os pedidos "por fora" já aplicados (E2E). */
   porFora: Set<string>;
 }
+
+/**
+ * 02-AGE 49: grupos de prioridade legal sintéticos (os mesmos da estrutura da recepção em memória), com peso (menor
+ * chama antes). O paciente sintético não tem nascimento nem cadastro de prioridade: vale o grupo escolhido na marcação.
+ */
+export const GRUPOS_PRIORIDADE_SINTETICOS: readonly GrupoPrioridadeCadastro[] = [
+  { id: 1, descricao: 'Acima de 80 anos', ativo: true, peso: 1, idadeMinima: 80 },
+  { id: 2, descricao: '60 a 79 anos', ativo: true, peso: 3, idadeMinima: 60 },
+  { id: 3, descricao: 'Gestante', ativo: true, peso: 2, idadeMinima: null },
+  { id: 4, descricao: 'Pessoa com deficiência', ativo: true, peso: 2, idadeMinima: null },
+];
 
 export const CONVENIOS_SINTETICOS = [
   { codigo: 10, nome: `PARTICULAR ${M}`, ativo: true },
@@ -817,9 +831,16 @@ export class PortaAgendaMemoria implements PortaAgenda {
         } else h = this.vaga(s, a, e['data'], e['hora']);
         const p = await this.pacienteM(c, e['paciente']);
         this.exigirCoberturaM(a, e['convenio']);
+        // 02-AGE 49: a mesma regra do domínio da porta própria (grupo informado inexistente ou inativo é recusado).
+        const prio = prioridadeNaMarcacao(GRUPOS_PRIORIDADE_SINTETICOS, {
+          informada: e['prioridadeLegal'] ?? null,
+          data: e['data'],
+        });
+        if (!prio.ok) throw recusa(prio.codigo, prio.motivo, { campos: ['prioridadeLegal'] });
         if (op === 'agenda.encaixar') s.horarios.push(h);
         Object.assign(h, { paciente: p.nome, conv: e['convenio'], retorno: e['retorno'] ? 'S' : 'N' });
         const m = this.novaMarcacao(s, a, h, p, e as never, login);
+        m.prioridadeLegal = prio.grupo;
         s.ext.set(m.id, {
           marcacao: m.id,
           canal: e['canal'],
@@ -1248,6 +1269,10 @@ export class PortaAgendaMemoria implements PortaAgenda {
     return {
       convenios: CONVENIOS_SINTETICOS.map((x) => ({ ...x })),
       especialidades: ESPECIALIDADES_SINTETICAS.map((x) => ({ ...x })),
+      gruposPrioridadeLegal: GRUPOS_PRIORIDADE_SINTETICOS.filter((g) => g.ativo).map((g) => ({
+        codigo: g.id,
+        nome: g.descricao,
+      })),
       locais: [
         { codigo: 11, nome: `CONSULTORIO 1 ${M}` },
         { codigo: 12, nome: `CONSULTORIO 2 ${M}` },
@@ -1337,6 +1362,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
   private marcacaoNeutra(s: Estado, m: MarcacaoM): Marcacao {
     const a = s.agendas.find((x) => x.id === m.agenda);
     const h = s.horarios.find((x) => x.agenda === m.agenda && x.data === m.data && x.hora === m.hora);
+    const grupo = GRUPOS_PRIORIDADE_SINTETICOS.find((g) => g.id === m.prioridadeLegal);
     return {
       id: m.id,
       agenda: m.agenda,
@@ -1358,6 +1384,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
       canal: m.canal,
       marcadaEm: m.dtAge,
       marcadaPor: m.usuario,
+      prioridadeLegal: grupo?.descricao ?? null,
+      pesoPrioridadeLegal: grupo?.peso ?? null,
     };
   }
   async marcacoesDaJanela(c: ContextoAgenda, agenda: number, de: string, ate: string) {
