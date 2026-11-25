@@ -17,7 +17,7 @@ import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
-import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import type { ServicoLaudoRedacao } from './aplicacao/laudo-redacao.js';
@@ -45,8 +45,7 @@ export class LaudoRedacaoController {
   constructor(@Inject(SERVICO_LAUDO_REDACAO) private readonly servico: ServicoLaudoRedacao | null) {}
 
   private get s(): ServicoLaudoRedacao {
-    if (!this.servico)
-      throw new ErroProblema('indisponivel', 503, 'A redação do laudo precisa do banco do cliente.');
+    if (!this.servico) throw semBancoDoCliente('A redação do laudo precisa do banco do cliente.');
     return this.servico;
   }
 

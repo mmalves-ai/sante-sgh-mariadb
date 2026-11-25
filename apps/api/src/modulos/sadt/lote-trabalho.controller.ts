@@ -8,7 +8,7 @@ import { Body, Controller, Get, HttpCode, Inject, Post, Query, Req } from '@nest
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
-import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
@@ -26,8 +26,7 @@ export class LoteTrabalhoController {
   constructor(@Inject(SERVICO_LOTE_TRABALHO) private readonly servico: ServicoLoteTrabalho | null) {}
 
   private get s(): ServicoLoteTrabalho {
-    if (!this.servico)
-      throw new ErroProblema('indisponivel', 503, 'O lote de trabalho precisa do banco do cliente.');
+    if (!this.servico) throw semBancoDoCliente('O lote de trabalho precisa do banco do cliente.');
     return this.servico;
   }
 

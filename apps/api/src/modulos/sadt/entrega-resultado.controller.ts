@@ -17,6 +17,7 @@ import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
@@ -40,8 +41,7 @@ export class EntregaResultadoController {
   constructor(@Inject(SERVICO_ENTREGA_RESULTADO) private readonly servico: ServicoEntregaResultado | null) {}
 
   private get s(): ServicoEntregaResultado {
-    if (!this.servico)
-      throw new ErroProblema('indisponivel', 503, 'A entrega de resultados precisa do banco do cliente.');
+    if (!this.servico) throw semBancoDoCliente('A entrega de resultados precisa do banco do cliente.');
     return this.servico;
   }
 

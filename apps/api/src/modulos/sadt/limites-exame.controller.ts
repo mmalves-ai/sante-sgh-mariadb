@@ -13,6 +13,7 @@ import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nest
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
@@ -34,12 +35,7 @@ export class LimitesExameController {
   constructor(@Inject(SERVICO_LIMITES_EXAME) private readonly servico: ServicoLimitesExame | null) {}
 
   private get s(): ServicoLimitesExame {
-    if (!this.servico)
-      throw new ErroProblema(
-        'indisponivel',
-        503,
-        'Os limites do pedido de exame precisam do banco do cliente.',
-      );
+    if (!this.servico) throw semBancoDoCliente('Os limites do pedido de exame precisam do banco do cliente.');
     return this.servico;
   }
 

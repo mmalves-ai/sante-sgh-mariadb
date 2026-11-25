@@ -26,6 +26,7 @@ import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
 import { FONTE_DOCUMENTO, type FonteDocumento } from '../documento/public-api.js';
 import { corpo } from '../exames/public-api.js';
@@ -78,8 +79,7 @@ export class PedidoSadtController {
   }
 
   private get s(): ServicoPedidoSadt {
-    if (!this.servico)
-      throw new ErroProblema('indisponivel', 503, 'O pedido de exames precisa do banco do cliente.');
+    if (!this.servico) throw semBancoDoCliente('O pedido de exames precisa do banco do cliente.');
     return this.servico;
   }
 

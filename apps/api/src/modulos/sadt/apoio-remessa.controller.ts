@@ -15,7 +15,7 @@ import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from
 import { EVENTOS_AUDITAVEIS, PERMISSOES_M34_CODIGOS as P } from '@sgh/contratos';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
-import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
 import type { ServicoApoioRemessa } from './aplicacao/apoio-remessa-propria.js';
 
@@ -26,8 +26,7 @@ export class ApoioRemessaController {
   constructor(@Inject(SERVICO_APOIO_REMESSA) private readonly servico: ServicoApoioRemessa | null) {}
 
   private get s(): ServicoApoioRemessa {
-    if (!this.servico)
-      throw new ErroProblema('indisponivel', 503, 'O laboratório de apoio precisa do banco do cliente.');
+    if (!this.servico) throw semBancoDoCliente('O laboratório de apoio precisa do banco do cliente.');
     return this.servico;
   }
 

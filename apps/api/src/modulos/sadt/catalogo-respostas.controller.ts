@@ -10,6 +10,7 @@ import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, 
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { contextoOperacao, idDaRota, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
@@ -25,9 +26,7 @@ export class CatalogoRespostasSadtController {
 
   private p(): PortaRespostasSadtPropria {
     if (!this.porta)
-      throw new ErroProblema(
-        'indisponivel',
-        503,
+      throw semBancoDoCliente(
         'Catálogo indisponível',
         'As respostas e os textos padrão só existem com o banco do cliente.',
       );

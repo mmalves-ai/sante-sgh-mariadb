@@ -13,6 +13,7 @@ import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { semBancoDoCliente } from './sem-banco-cliente.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import {
@@ -28,8 +29,7 @@ export class EscalaExecucaoController {
   constructor(@Inject(SERVICO_ESCALA_EXECUCAO) private readonly servico: ServicoEscalaExecucao | null) {}
 
   private get s(): ServicoEscalaExecucao {
-    if (!this.servico)
-      throw new ErroProblema('indisponivel', 503, 'A escala de execução precisa do banco do cliente.');
+    if (!this.servico) throw semBancoDoCliente('A escala de execução precisa do banco do cliente.');
     return this.servico;
   }
 

@@ -43,12 +43,10 @@ export const valoresDoBanco = (
     texto: e.numerico === null ? e.alfa : null,
   }));
 
-/** 503 do tipo "indisponivel" sem código de recusa: a rota do banco do cliente não existe neste ambiente. */
+/** 503 com o código próprio "sem-banco-cliente" (sadt/sem-banco-cliente.ts no servidor): a rota do banco do cliente
+ * não existe neste ambiente. O 503 de outra causa não cai na fonte em memória. */
 const semBanco = (e: unknown): boolean =>
-  e instanceof ErroApi &&
-  e.status === 503 &&
-  codigoDaRecusa(e) === null &&
-  String(e.problema?.type ?? '').endsWith('indisponivel');
+  e instanceof ErroApi && e.status === 503 && codigoDaRecusa(e) === 'sem-banco-cliente';
 
 async function gravar(
   url: string,

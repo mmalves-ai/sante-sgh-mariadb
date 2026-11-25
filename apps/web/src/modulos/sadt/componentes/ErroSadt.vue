@@ -1,20 +1,18 @@
 <script setup lang="ts">
 // Erro do diagnóstico: a recusa de negócio conhecida (código do Problem Details) com o texto da aplicação; o resto, a
-// mensagem geral com o código de correlação (nunca o texto do servidor). O 503 do tipo "indisponivel" sem código (a
-// função precisa do banco do cliente e a fonte de dados não o tem) vira o aviso próprio, não um erro genérico.
+// mensagem geral com o código de correlação (nunca o texto do servidor). A função que precisa do banco do cliente
+// recusa com o código próprio "sem-banco-cliente" (sadt/sem-banco-cliente.ts no servidor), que vira o aviso próprio
+// como as outras recusas; o 503 de outra causa (gerador de PDF fora do ar, 503 cru) segue na mensagem geral.
 import { SanteAlerta } from '@sgh/ui';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ErroApi } from '../../../casca/erros/problem-details.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { codigoDaRecusa } from '../api-sadt.js';
 
 const props = defineProps<{ erro: unknown }>();
 const { t, te } = useI18n();
-const semBanco = (e: unknown): boolean =>
-  e instanceof ErroApi && e.status === 503 && String(e.problema?.type ?? '').endsWith('indisponivel');
 const chave = computed(() => {
-  const c = codigoDaRecusa(props.erro) ?? (semBanco(props.erro) ? 'indisponivel' : null);
+  const c = codigoDaRecusa(props.erro);
   return c && te(`sadt.recusas.${c}`) ? `sadt.recusas.${c}` : null;
 });
 </script>
