@@ -2,8 +2,8 @@
 // real (cliente de teste; f22_o1 por padrão). Prova o que fica no banco: com o cadastro do paciente incompleto no
 // escopo da recepção (tipo de atendimento, convênio, módulo de recepção), a abertura é recusada com os campos que
 // faltam e NENHUM atendimento é gravado; fora do escopo da regra, com o cadastro completado ou com o cadastro
-// provisório (não identificado), o atendimento abre. A mãe declarada desconhecida atende a regra do nome da mãe, e o
-// módulo de recepção sai do local de atendimento em que a recepção abre. Massa SINTÉTICA; as regras são só do estabelecimento da massa e
+// provisório (não identificado), o atendimento abre. O módulo de recepção sai do local de atendimento em que a
+// recepção abre. Massa SINTÉTICA; as regras são só do estabelecimento da massa e
 // saem no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -188,8 +188,8 @@ describe.skipIf(SEM_BANCO)('regra de campo do cadastro na abertura do atendiment
     expect(Number(p.resultado['reg'])).toBeGreaterThan(0);
     expect(await atendimentosDe(provisorio)).toBe(antes + 1);
 
-    // A mãe declarada desconhecida atende a regra do nome da mãe: a urgência abre sem nome inventado, e a conferência
-    // da tela diz o mesmo.
+    // Nome da mãe vazio com a coluna mae_desconhecida marcada é o que o cadastro grava hoje para TODO nome vazio (não
+    // é declaração de quem cadastrou): a regra continua recusando, na tela e na gravação, até o nome ser informado.
     const mae = (nome: string | null, desconhecida: boolean) =>
       escrever(async (e) => {
         await e.executar(
@@ -204,16 +204,12 @@ describe.skipIf(SEM_BANCO)('regra de campo do cadastro na abertura do atendiment
         tipoAtendimento: 'urgencia',
         fontePagadora: m.fonte,
       }),
-    ).toEqual([]);
+    ).toEqual([{ campo: 'nomeMae', rotulo: ROTULO }]);
     const d = await atendimentosDe(paciente);
-    await abrir(paciente, { tipo: 'pa', carater: 'urgencia' });
-    expect(await atendimentosDe(paciente)).toBe(d + 1);
-    // Sem a declaração e sem o nome, volta a recusar; com o nome, abre.
-    await mae(null, false);
     await expect(abrir(paciente, { tipo: 'pa', carater: 'urgencia' })).rejects.toMatchObject(
       incompleto(['nomeMae']),
     );
-    expect(await atendimentosDe(paciente)).toBe(d + 1);
+    expect(await atendimentosDe(paciente)).toBe(d);
     await mae(`MAE SINTETICA ${MARCA}`, false);
     const n = await atendimentosDe(paciente);
     const a = await abrir(paciente, { tipo: 'pa', carater: 'urgencia' });

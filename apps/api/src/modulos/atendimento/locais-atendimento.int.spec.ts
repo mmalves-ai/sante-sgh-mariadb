@@ -274,4 +274,72 @@ describe.skipIf(SEM_BANCO)('manutenção dos locais de atendimento (banco própr
       ),
     ).toBeGreaterThanOrEqual(7);
   });
+
+  it('grava o módulo de recepção do local (F3.1, 02-CAD linha 2): escolhe, mantém sem informar, retira e recusa o inexistente', async () => {
+    const CODIGO = 'F322L-MOD';
+    const modulo = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f322l' }, async (e) =>
+      garantir(
+        e,
+        'SELECT id FROM modulo_recepcao WHERE codigo = ?',
+        [CODIGO],
+        'INSERT INTO modulo_recepcao (codigo, descricao, criado_em) VALUES (?, ?, ?)',
+        [CODIGO, 'MODULO SINTETICO F322L', new Date()],
+      ),
+    );
+    const moduloDe = async (local: number) =>
+      (
+        await ler<{ m: number | null }>(
+          'SELECT modulo_recepcao_id AS m FROM local_atendimento WHERE id = ?',
+          [local],
+        )
+      )[0]!.m;
+    const dados = (extra: Record<string, unknown>) =>
+      manter({
+        acao: 'dados',
+        local: ids.l3,
+        descricao: 'CONSULTORIO SINTETICO C3',
+        permiteEncaminhamento: false,
+        ativo: true,
+        ...extra,
+      });
+    try {
+      expect(await moduloDe(ids.l3)).toBeNull();
+      await dados({ moduloRecepcao: modulo });
+      expect(Number(await moduloDe(ids.l3))).toBe(modulo);
+      // Sem informar o módulo, a alteração dos dados não mexe nele.
+      await dados({});
+      expect(Number(await moduloDe(ids.l3))).toBe(modulo);
+      const lista = await locais.lista({ hospital: EST, login: LOGINS[0] });
+      expect(lista.locais.find((x) => x.id === ids.l3)!.moduloRecepcao).toBe(modulo);
+      expect(lista.locais.find((x) => x.id === ids.l2)!.moduloRecepcao).toBeNull();
+      expect(lista.modulos.map((x) => x.id)).toContain(modulo);
+      // Módulo inexistente: recusado, e o do local fica como estava.
+      await expect(dados({ moduloRecepcao: 999999999 })).rejects.toMatchObject(
+        recusada('modulo-recepcao-invalido'),
+      );
+      expect(Number(await moduloDe(ids.l3))).toBe(modulo);
+      // O local novo já nasce com o módulo.
+      const novo = (
+        await manter({
+          acao: 'incluir',
+          codigo: 'C4',
+          descricao: 'CONSULTORIO SINTETICO C4',
+          recepcao: ids.recepcao,
+          permiteEncaminhamento: false,
+          moduloRecepcao: modulo,
+        })
+      ).resultado.local;
+      expect(Number(await moduloDe(novo))).toBe(modulo);
+      await dados({ moduloRecepcao: null });
+      expect(await moduloDe(ids.l3)).toBeNull();
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f322l' }, async (e) => {
+        await e.executar(
+          'UPDATE local_atendimento SET modulo_recepcao_id = NULL WHERE estabelecimento_id = ?',
+          [ids.est],
+        );
+        await e.executar('DELETE FROM modulo_recepcao WHERE codigo = ?', [CODIGO]);
+      });
+    }
+  });
 });

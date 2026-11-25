@@ -863,8 +863,7 @@ export async function lerDadosDoCadastro(
   paciente: number,
 ): Promise<Record<string, unknown>> {
   const p = await l.uma(
-    `SELECT pf.id, pf.nome, pf.data_nascimento, pf.sexo_id, pf.cpf, pf.nome_mae, pf.mae_desconhecida,
-            pf.naturalidade_municipio_ibge_id,
+    `SELECT pf.id, pf.nome, pf.data_nascimento, pf.sexo_id, pf.cpf, pf.nome_mae, pf.naturalidade_municipio_ibge_id,
             (SELECT m.unidade_federativa_id FROM municipio_ibge m WHERE m.id = pf.naturalidade_municipio_ibge_id) AS uf_naturalidade
        FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ? AND p.excluido_em IS NULL`,
     [paciente],
@@ -894,8 +893,9 @@ export async function lerDadosDoCadastro(
     sexo: num(p['sexo_id']),
     cpf: texto(p['cpf']),
     nomeMae: texto(p['nome_mae']),
-    // A mãe declarada desconhecida atende a regra do nome da mãe (regra do domínio).
-    maeDesconhecida: bool(p['mae_desconhecida']),
+    // A coluna mae_desconhecida NÃO entra aqui: hoje o cadastro a grava como "nome da mãe vazio" (não é uma declaração
+    // de quem cadastrou), e lê-la como declaração faria a regra do nome da mãe nunca recusar ninguém. O domínio já
+    // aceita a declaração explícita (maeDesconhecida === true) quando a ficha do paciente passar a tê-la.
     naturalidade: num(p['naturalidade_municipio_ibge_id']),
     ufNaturalidade: num(p['uf_naturalidade']),
     cep: texto(en?.['cep']),

@@ -18,8 +18,13 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import CadastroPendenteAbertura from '../../cadastro/componentes/CadastroPendenteAbertura.vue';
+import RecusaCadastroIncompleto from '../../cadastro/componentes/RecusaCadastroIncompleto.vue';
 import RepresentacaoNaAbertura from '../../cadastro/componentes/RepresentacaoNaAbertura.vue';
-import { consultaDeRotaDoEscopo, escopoDaAbertura } from '../../cadastro/escopo-regra-campo.js';
+import {
+  camposDaRecusaDeCadastro,
+  consultaDeRotaDoEscopo,
+  escopoDaAbertura,
+} from '../../cadastro/escopo-regra-campo.js';
 import {
   buscarCid,
   buscarMedicos,
@@ -206,6 +211,8 @@ const completo = computed(
 );
 
 const erro = ref<unknown>(null);
+// A admissão recusada por cadastro incompleto (regra de campo, 02-CAD linha 2) mostra os campos e o atalho da ficha.
+const recusaDeCadastro = computed(() => camposDaRecusaDeCadastro(erro.value) !== null);
 const ocupado = ref(false);
 const feito = ref<{ reg: number; mensagem: string } | null>(null);
 async function gravar(): Promise<void> {
@@ -296,7 +303,7 @@ const textoLeito = (k: string) => {
         }}</RouterLink>
       </p>
       <p v-if="pulseira" role="status" data-testid="pulseira-enviada">{{ pulseira }}</p>
-      <ErroAdt v-if="erro" :erro="erro" />
+      <ErroAdt v-if="erro && !recusaDeCadastro" :erro="erro" />
     </template>
     <template v-else>
       <section class="painel" aria-labelledby="admissao-paciente">
@@ -505,7 +512,14 @@ const textoLeito = (k: string) => {
           data-testid="admissao-gravar"
           @acionar="gravar"
         />
-        <ErroAdt v-if="erro" :erro="erro" />
+        <RecusaCadastroIncompleto
+          v-if="paciente && recusaDeCadastro"
+          :erro="erro"
+          :id-paciente="paciente.id"
+          tipo="internacao"
+          :convenio="convenio"
+        />
+        <ErroAdt v-else-if="erro" :erro="erro" />
       </section>
     </template>
   </section>

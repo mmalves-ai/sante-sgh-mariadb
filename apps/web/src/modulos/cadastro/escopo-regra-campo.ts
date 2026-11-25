@@ -82,3 +82,44 @@ export function escopoDaAbertura(a: {
 export function consultaDeRotaDoEscopo(e: EscopoRegraCampo | null | undefined): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(consultaDoEscopo(e).slice(1)));
 }
+
+// ── Recusa da abertura pelo servidor ──
+// Quando o aviso prévio não apareceu (sem acesso à leitura do cadastro, consulta em erro, cadastro alterado depois do
+// aviso), a gravação volta recusada com o código `cadastro-incompleto` e os campos que faltam. A tela mostra os campos
+// pelo rótulo padrão (os mesmos do domínio: CAMPOS_REGRA_PACIENTE, @sgh/dominio-cadastro) e o atalho para a ficha.
+export const ROTULOS_CAMPO_CADASTRO: Readonly<Record<string, string>> = Object.freeze({
+  nome: 'Nome',
+  nascimento: 'Data de nascimento',
+  sexo: 'Sexo',
+  cpf: 'CPF',
+  naturalidade: 'Naturalidade',
+  cep: 'CEP',
+  nomeMae: 'Nome da mãe',
+  ufNaturalidade: 'UF da naturalidade',
+  logradouro: 'Logradouro',
+  numero: 'Número',
+  complemento: 'Complemento',
+  bairro: 'Bairro',
+  celular: 'Celular',
+  telefone: 'Telefone',
+  email: 'E-mail',
+  contatoNome: 'Nome do contato',
+  contatoTelefone: 'Telefone do contato',
+});
+
+/**
+ * Os campos do cadastro que faltam, pelo rótulo, quando o erro da gravação é a recusa `cadastro-incompleto` (o erro da
+ * API traz o Problem Details em `problema`); nulo quando o erro é outro.
+ */
+export function camposDaRecusaDeCadastro(erro: unknown): string[] | null {
+  const p = erro && typeof erro === 'object' ? (erro as { readonly problema?: unknown }).problema : undefined;
+  if (!p || typeof p !== 'object') return null;
+  const o = p as Readonly<Record<string, unknown>>;
+  if (o['codigo'] !== 'cadastro-incompleto') return null;
+  const campos = Array.isArray(o['campos']) ? o['campos'] : [];
+  return campos
+    .filter((c): c is string => typeof c === 'string' && c !== '')
+    .map((c) =>
+      Object.prototype.hasOwnProperty.call(ROTULOS_CAMPO_CADASTRO, c) ? (ROTULOS_CAMPO_CADASTRO[c] ?? c) : c,
+    );
+}

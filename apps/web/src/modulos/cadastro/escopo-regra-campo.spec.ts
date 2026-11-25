@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  camposDaRecusaDeCadastro,
   consultaDeRotaDoEscopo,
   consultaDoEscopo,
   escopoDaAbertura,
@@ -47,5 +48,19 @@ describe('escopo da regra de campo na ficha do paciente (F3.1, 02-CAD linha 2)',
       consultaDeRotaDoEscopo(escopoDaAbertura({ tipo: 'toString', convenio: '0', modulo: 'x' })),
     ).toEqual({});
     expect(consultaDeRotaDoEscopo(null)).toEqual({});
+  });
+
+  it('a recusa do servidor vira a lista dos campos pelo rótulo; outro erro não é a recusa do cadastro', () => {
+    const recusa = {
+      problema: { codigo: 'cadastro-incompleto', campos: ['celular', 'nomeMae', 'toString', 7] },
+    };
+    expect(camposDaRecusaDeCadastro(recusa)).toEqual(['Celular', 'Nome da mãe', 'toString']);
+    expect(camposDaRecusaDeCadastro({ problema: { codigo: 'cadastro-incompleto' } })).toEqual([]);
+    expect(
+      camposDaRecusaDeCadastro({ problema: { codigo: 'convenio-inativo', campos: ['convenio'] } }),
+    ).toBeNull();
+    expect(camposDaRecusaDeCadastro({ problema: null })).toBeNull();
+    expect(camposDaRecusaDeCadastro(new Error('rede'))).toBeNull();
+    expect(camposDaRecusaDeCadastro(null)).toBeNull();
   });
 });

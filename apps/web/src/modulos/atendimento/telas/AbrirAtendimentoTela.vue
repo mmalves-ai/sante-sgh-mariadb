@@ -23,9 +23,14 @@ import { useRoute, useRouter } from 'vue-router';
 import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import { type Coberturas, lerCoberturas } from '../../cadastro/api-vinculos.js';
 import CadastroPendenteAbertura from '../../cadastro/componentes/CadastroPendenteAbertura.vue';
+import RecusaCadastroIncompleto from '../../cadastro/componentes/RecusaCadastroIncompleto.vue';
 import RepresentacaoNaAbertura from '../../cadastro/componentes/RepresentacaoNaAbertura.vue';
 import OrigemNaAbertura from '../../cadastro/componentes/OrigemNaAbertura.vue';
-import { consultaDeRotaDoEscopo, escopoDaAbertura } from '../../cadastro/escopo-regra-campo.js';
+import {
+  camposDaRecusaDeCadastro,
+  consultaDeRotaDoEscopo,
+  escopoDaAbertura,
+} from '../../cadastro/escopo-regra-campo.js';
 import { dataBr } from '../../agenda/formato.js';
 import {
   abrirAtendimento,
@@ -54,7 +59,8 @@ const q = (k: string) => (typeof rota.query[k] === 'string' ? Number(rota.query[
 const senha = q('senha');
 const local = q('local');
 const marcacao = q('marcacao');
-// Módulo de recepção em que a tela foi aberta (`?modulo=`): entra no escopo da regra de campo do cadastro.
+// Módulo de recepção da regra de campo do cadastro: com a senha do guichê, o servidor tira o módulo do local de
+// atendimento (`local`), na conferência da tela e na gravação; `?modulo=` só vale sem local ou com local sem módulo.
 const moduloRecepcao = q('modulo');
 
 // ── Paciente ──
@@ -582,6 +588,7 @@ async function abrir(): Promise<void> {
           :tipo="tipo"
           :convenio="convenio"
           :modulo="moduloRecepcao"
+          :local="local"
         />
         <RepresentacaoNaAbertura v-if="!naoIdentificado" :id-paciente="paciente.id" />
       </template>
@@ -753,7 +760,15 @@ async function abrir(): Promise<void> {
       />
       <span v-else class="secundario">{{ t('atendimento.semAcao') }}</span>
     </p>
-    <ErroAtendimento v-if="erro" :erro="erro" />
+    <RecusaCadastroIncompleto
+      v-if="paciente && camposDaRecusaDeCadastro(erro)"
+      :erro="erro"
+      :id-paciente="paciente.id"
+      :tipo="tipo"
+      :convenio="convenio"
+      :modulo="moduloRecepcao"
+    />
+    <ErroAtendimento v-else-if="erro" :erro="erro" />
   </section>
 </template>
 

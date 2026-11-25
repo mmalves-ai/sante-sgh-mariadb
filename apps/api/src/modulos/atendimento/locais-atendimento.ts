@@ -47,6 +47,8 @@ export const esquemaManterLocal = z.discriminatedUnion('acao', [
       descricao: z.string().trim().min(1).max(150),
       recepcao: z.number().int().positive(),
       permiteEncaminhamento: z.boolean(),
+      /** Módulo de recepção em que o local trabalha (escopo da regra de campo do cadastro); sem ele, nenhum. */
+      moduloRecepcao: z.number().int().positive().nullable().optional(),
     })
     .strict(),
   z
@@ -56,6 +58,8 @@ export const esquemaManterLocal = z.discriminatedUnion('acao', [
       descricao: z.string().trim().min(1).max(150),
       permiteEncaminhamento: z.boolean(),
       ativo: z.boolean(),
+      /** Ausente: o módulo do local não muda; nulo: o local deixa de ter módulo. */
+      moduloRecepcao: z.number().int().positive().nullable().optional(),
     })
     .strict(),
   z
@@ -97,6 +101,8 @@ export interface LocalAtendimentoVisao {
   readonly descricao: string;
   readonly recepcao: number;
   readonly recepcaoDescricao: string;
+  /** Módulo de recepção em que o local trabalha (nulo: nenhum). */
+  readonly moduloRecepcao: number | null;
   readonly permiteEncaminhamento: boolean;
   readonly ativo: boolean;
   readonly horario: readonly FaixaHorarioLocal[];
@@ -113,6 +119,8 @@ export interface LocalAtendimentoVisao {
 
 export interface LocaisDaUnidade {
   readonly recepcoes: readonly { id: number; descricao: string }[];
+  /** Módulos de recepção ativos, para a escolha do módulo do local. */
+  readonly modulos: readonly { id: number; descricao: string }[];
   readonly locais: readonly LocalAtendimentoVisao[];
 }
 
@@ -206,8 +214,15 @@ export class LocaisAtendimentoPropria {
             est,
           )
         ).map((x) => ({ id: num(x['id']), descricao: String(x['descricao']) }));
+        const modulos = (
+          await l.consultar(
+            'SELECT id, descricao FROM modulo_recepcao WHERE ativo ORDER BY descricao, id',
+            [],
+          )
+        ).map((x) => ({ id: num(x['id']), descricao: String(x['descricao']) }));
         const locais = await l.consultar(
-          `SELECT la.id, la.codigo, la.descricao, la.ponto_recepcao_id, pr.descricao AS recepcao, la.permite_encaminhamento, la.ativo
+          `SELECT la.id, la.codigo, la.descricao, la.ponto_recepcao_id, la.modulo_recepcao_id, pr.descricao AS recepcao,
+                  la.permite_encaminhamento, la.ativo
              FROM local_atendimento la JOIN ponto_recepcao pr ON pr.id = la.ponto_recepcao_id
             WHERE la.estabelecimento_id = ? AND la.excluido_em IS NULL ORDER BY la.descricao`,
           est,
@@ -260,6 +275,7 @@ export class LocaisAtendimentoPropria {
         );
         return {
           recepcoes,
+          modulos,
           locais: locais.map((x) => {
             const id = num(x['id']);
             return {
@@ -268,6 +284,7 @@ export class LocaisAtendimentoPropria {
               descricao: String(x['descricao']),
               recepcao: num(x['ponto_recepcao_id']),
               recepcaoDescricao: String(x['recepcao']),
+              moduloRecepcao: x['modulo_recepcao_id'] === null ? null : num(x['modulo_recepcao_id']),
               permiteEncaminhamento: bool(x['permite_encaminhamento']),
               ativo: bool(x['ativo']),
               horario: horarios.get(id) ?? [],
@@ -320,6 +337,16 @@ export class LocaisAtendimentoPropria {
     return { resultado: r.resultado, repetida: r.repetida };
   }
 
+  /** O módulo de recepção escolhido para o local tem de existir e estar ativo (ausente ou nulo: nada a conferir). */
+  private async exigirModulo(tx: TxOperacao, modulo: number | null | undefined): Promise<void> {
+    if (modulo === null || modulo === undefined) return;
+    const x = await tx.uma('SELECT id FROM modulo_recepcao WHERE id = ? AND ativo', [modulo]);
+    if (!x)
+      throw recusa('modulo-recepcao-invalido', 'O módulo de recepção escolhido não existe ou está inativo.', {
+        campos: ['moduloRecepcao'],
+      });
+  }
+
   private async gravar(
     tx: TxOperacao,
     e: EntradaManterLocal,
@@ -337,9 +364,11 @@ export class LocaisAtendimentoPropria {
         [est, e.codigo],
       );
       if (dup) throw recusa('local-codigo-repetido', 'Já existe um local com este código na unidade.');
+      await this.exigirModulo(tx, e.moduloRecepcao);
       const id = await tx.incluir('local_atendimento', {
         estabelecimento_id: est,
         ponto_recepcao_id: e.recepcao,
+        modulo_recepcao_id: e.moduloRecepcao ?? null,
         codigo: e.codigo,
         descricao: e.descricao,
         permite_encaminhamento: e.permiteEncaminhamento,
@@ -371,10 +400,12 @@ export class LocaisAtendimentoPropria {
             'Retire os locais de encaminhamento antes de desmarcar "encaminha para outros locais".',
           );
       }
+      await this.exigirModulo(tx, e.moduloRecepcao);
       await tx.alterar('local_atendimento', e.local, num(local['versao']), {
         descricao: e.descricao,
         permite_encaminhamento: e.permiteEncaminhamento,
         ativo: e.ativo,
+        ...(e.moduloRecepcao !== undefined ? { modulo_recepcao_id: e.moduloRecepcao } : {}),
       });
       return { local: e.local, acao: e.acao, itens: 1 };
     }

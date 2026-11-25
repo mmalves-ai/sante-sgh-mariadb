@@ -3,8 +3,8 @@
 // banco: com o cadastro do paciente incompleto no escopo da internação (tipo "internacao" ou o convênio), a operação
 // internacao.internar é recusada com os campos que faltam e NADA é gravado (nem atendimento, nem internação, nem
 // ocupação de leito; o leito continua na mesma situação); a regra de outro tipo de atendimento não vale na admissão;
-// a mãe declarada desconhecida atende a regra do nome da mãe; o cadastro provisório (não identificado) não é barrado;
-// sem a regra, a mesma admissão grava. As regras são só do estabelecimento da massa e saem no fim.
+// o cadastro provisório (não identificado) não é barrado; com o cadastro completado no que a regra pede, a mesma
+// admissão grava. As regras são só do estabelecimento da massa e saem no fim.
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -135,11 +135,11 @@ describe.skipIf(SEM_BANCO_ADT)(
       expect(await retrato(p1!)).toEqual(antes);
     });
 
-    it('a mãe declarada desconhecida atende a regra; sem a regra do convênio, a admissão grava', async () => {
+    it('cadastro completado no que a regra pede: a mesma admissão grava atendimento, internação e leito', async () => {
       const [p1] = M().pacientes;
-      await maeEEmail(p1!, null, true);
+      // Nome da mãe informado: ainda falta o e-mail exigido pelo convênio, e só ele volta na recusa.
+      await maeEEmail(p1!, 'MAE SINTETICA L0301G', false);
       const antes = await retrato(p1!);
-      // Ainda falta o e-mail exigido pelo convênio: só ele volta na recusa.
       await expect(internar(p1!, '01')).rejects.toMatchObject(incompleto(['email']));
       expect(await retrato(p1!)).toEqual(antes);
       await limparRegras();

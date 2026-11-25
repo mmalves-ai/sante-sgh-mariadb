@@ -120,8 +120,9 @@ export function regrasNoEscopo(regras: readonly RegraCampo[], e: EscopoRegra): M
 const vazio = (v: unknown): boolean =>
   v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 
-// Campo que o cadastro pode declarar ausente: a declaração atende a obrigatoriedade (a mãe registrada como
-// desconhecida não deixa o paciente sem saída, nem obriga a digitar um nome falso).
+// Campo que o cadastro pode declarar ausente: a declaração EXPLÍCITA (verdadeiro nos dados conferidos) atende a
+// obrigatoriedade: a mãe declarada desconhecida não deixa o paciente sem saída, nem obriga a digitar um nome falso.
+// Quem monta os dados só manda a declaração quando ela foi feita por uma pessoa; "nome vazio" não é declaração.
 const DECLARADO_AUSENTE: Readonly<Record<string, string>> = Object.freeze({ nomeMae: 'maeDesconhecida' });
 const falta = (dados: Readonly<Record<string, unknown>>, campo: string): boolean => {
   const declaracao = Object.prototype.hasOwnProperty.call(DECLARADO_AUSENTE, campo)
