@@ -9,7 +9,9 @@
 // autorizada no pedido, senha na conta, consulta respondida); a resposta repetida recusada; o cancelamento com o
 // motivo, e o do rascunho pelo webservice sem enviada_em; o limite de OPME (valor passado, OPME sem valor, procedimento
 // sem item faturável), a guia só com OPME e o pedido complementar sem guia principal recusados; o pedido pelo portal
-// enviado sem XML.
+// enviado sem XML; a internação com a hipótese diagnóstica (CID-10 do catálogo, na mensagem) e recusada sem ela; a
+// prorrogação pelo webservice na guia própria, com a guia referenciada pelo número da operadora; a autorização ligada
+// aos itens da conta (quantidade coberta, refazer não duplica).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -25,6 +27,19 @@ const CARTEIRA = 'SINTF7862A01';
 async function limpar(e: Escritor): Promise<void> {
   const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
   const sol = `(SELECT id FROM solicitacao_autorizacao WHERE estabelecimento_id IN ${est})`;
+  const itensConta = `(SELECT ci.id FROM conta_hospitalar_item ci JOIN conta_hospitalar ch ON ch.id = ci.conta_hospitalar_id WHERE ch.estabelecimento_id IN ${est})`;
+  await e.executar(
+    `DELETE FROM conta_hospitalar_item_autorizacao WHERE conta_hospitalar_item_id IN ${itensConta}`,
+    [P],
+  );
+  await e.executar(
+    `DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (SELECT id FROM conta_hospitalar WHERE estabelecimento_id IN ${est})`,
+    [P],
+  );
+  await e.executar(
+    `DELETE FROM solicitacao_autorizacao_diagnostico WHERE solicitacao_autorizacao_id IN ${sol}`,
+    [P],
+  );
   await e.executar(`DELETE FROM consulta_situacao_autorizacao WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(
     `DELETE FROM resposta_autorizacao_item WHERE resposta_autorizacao_id IN (SELECT id FROM resposta_autorizacao WHERE estabelecimento_id IN ${est})`,
@@ -70,6 +85,9 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
     est: number;
     fonte: number;
     motivo: number;
+    cid: string;
+    itemConta: number;
+    outroItemConta: number;
   };
   const ctx = () => ({ cliente: CLIENTE, hospital: P, usuario: m.usuario, correlacao: P });
   const um = async (sql: string, p: unknown[] = []) =>
@@ -141,7 +159,25 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
          VALUES (?, ?, ?, 1000, '2026-01-01', ?)`,
         [est, fonte, faturavel, agora],
       );
+      const cid = String(
+        (
+          await e.uma(
+            `SELECT t.codigo_termo FROM termo_terminologia t JOIN terminologia g ON g.id = t.terminologia_id
+              WHERE g.codigo = 'cid10' AND t.nivel = 4 AND t.ativo = TRUE ORDER BY t.id LIMIT 1`,
+          )
+        )?.['codigo_termo'] ?? '',
+      );
+      if (!cid) throw new Error('O cliente de teste precisa do catálogo da CID-10 carregado.');
+      const itemConta = (s: number) =>
+        e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+             valor_unitario, valor_total, criado_em) VALUES (?, ?, ?, '2026-11-20 10:00:00', 1, 100, 100, ?)`,
+          [conta, s, faturavel, agora],
+        );
       return {
+        cid,
+        itemConta: await itemConta(1),
+        outroItemConta: await itemConta(2),
         usuario,
         paciente,
         cobertura,
@@ -373,6 +409,7 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
       diarias: 3,
       dataAdmissao: '2026-11-26',
       indicacaoClinica: 'Indicação sintética',
+      diagnosticos: [{ cid: m.cid }],
       itens: [
         item({ itemFaturavel: faturavel, quantidade: 1 }),
         item({
@@ -464,5 +501,100 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
         [m.duplicado, m.duplicado],
       ),
     ).toMatchObject({ ativo: 0, suc: m.externo, n: 0 });
+  });
+
+  it('internação com CID, prorrogação eletrônica e autorização ligada aos itens da conta', async () => {
+    const internacao = (x: Record<string, unknown> = {}) => ({
+      tipo: 'internacao',
+      cobertura: m.cobertura,
+      conta: m.conta,
+      solicitanteExterno: m.externo,
+      regime: 'hospitalar',
+      diarias: 2,
+      dataAdmissao: '2026-11-26',
+      indicacaoClinica: 'Indicação sintética',
+      diagnosticos: [{ cid: m.cid, tipoDoenca: 'aguda', tempo: 3, unidadeTempo: 'dia' }],
+      itens: [item({ itemFaturavel: m.faturavel, quantidade: 2 })],
+      ...x,
+    });
+    // Sem CID, com CID fora do catálogo ou com forma errada: recusado na hora, nada gravado.
+    await expect(porta.criar(ctx(), internacao({ diagnosticos: [] }))).rejects.toMatchObject(recusa);
+    await expect(porta.criar(ctx(), internacao({ diagnosticos: [{ cid: 'U999' }] }))).rejects.toMatchObject(
+      recusa,
+    );
+    await expect(porta.criar(ctx(), internacao({ diagnosticos: [{ cid: '12' }] }))).rejects.toMatchObject(
+      recusa,
+    );
+    const i = await porta.criar(ctx(), internacao());
+    expect(
+      await todos(
+        `SELECT d.sequencia, d.principal, d.tipo_doenca, d.tempo_doenca, d.unidade_tempo_doenca, t.codigo_termo AS cid
+           FROM solicitacao_autorizacao_diagnostico d JOIN termo_terminologia t ON t.id = d.cid_termo_terminologia_id
+          WHERE d.solicitacao_autorizacao_id = ?`,
+        [i.id],
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        sequencia: 1,
+        principal: 1,
+        tipo_doenca: 'aguda',
+        tempo_doenca: 3,
+        unidade_tempo_doenca: 'dia',
+        cid: m.cid,
+      }),
+    ]);
+    await porta.enviar(ctx(), i.id, { versao: 1 });
+    expect((await porta.xml(ctx(), i.id)).xml).toContain(`<ans:diagnosticoCID>${m.cid}</ans:diagnosticoCID>`);
+    const vI = async () =>
+      Number((await um('SELECT versao FROM solicitacao_autorizacao WHERE id = ?', [i.id]))['versao']);
+    await porta.registrarTransmissao(ctx(), i.id, { versao: await vI(), canal: 'portal' });
+    // Antes da resposta, a conta não se liga.
+    await expect(porta.ligarConta(ctx(), i.id)).rejects.toMatchObject(recusa);
+    await porta.responder(ctx(), i.id, {
+      senha: 'SINT7862I',
+      numeroGuiaOperadora: 'OPSINT7862',
+      itens: [{ sequencia: 1, quantidadeAutorizada: 1 }],
+      versao: await vI(),
+    });
+    expect(await um('SELECT situacao FROM solicitacao_autorizacao WHERE id = ?', [i.id])).toMatchObject({
+      situacao: 'autorizada_parcial',
+    });
+
+    // Prorrogação pelo webservice: a guia própria, referenciando a internação pelo número que a operadora deu.
+    const pr = await porta.criar(ctx(), {
+      tipo: 'prorrogacao',
+      principal: i.id,
+      cobertura: m.cobertura,
+      solicitanteExterno: m.externo,
+      diarias: 3,
+      indicacaoClinica: 'Evolução sintética pede mais dias',
+      itens: [item({ quantidade: 1 })],
+    });
+    expect(await porta.enviar(ctx(), pr.id, { versao: 1 })).toMatchObject({ situacao: 'pronta_envio' });
+    const xp = (await porta.xml(ctx(), pr.id)).xml;
+    expect(xp).toContain('<ans:solicitacaoProrrogacao>');
+    expect(xp).toContain('<ans:nrGuiaReferenciada>OPSINT7862</ans:nrGuiaReferenciada>');
+    expect(xp).toContain('<ans:qtDiariasAdicionais>3</ans:qtDiariasAdicionais>');
+    expect(
+      await um(
+        'SELECT situacao, enviada_em, arquivo_id IS NOT NULL AS xml FROM solicitacao_autorizacao WHERE id = ?',
+        [pr.id],
+      ),
+    ).toMatchObject({ situacao: 'pronta_envio', enviada_em: null, xml: 1 });
+
+    // A autorização parcial (1 de 2) cobre um dos dois itens lançados na conta; refazer não duplica.
+    expect(await porta.ligarConta(ctx(), i.id)).toMatchObject({ ligados: 1, semCobertura: 1 });
+    expect(await porta.ligarConta(ctx(), i.id)).toMatchObject({ ligados: 0, semCobertura: 1 });
+    const lig = await todos(
+      `SELECT cia.conta_hospitalar_item_id AS item, cia.sequencial_item_guia AS seq, cia.quantidade_coberta AS q,
+              cia.guia_fonte_pagadora_id AS guia, ri.quantidade_autorizada AS aut
+         FROM conta_hospitalar_item_autorizacao cia JOIN resposta_autorizacao_item ri ON ri.id = cia.resposta_autorizacao_item_id
+         JOIN conta_hospitalar_item ci ON ci.id = cia.conta_hospitalar_item_id WHERE ci.conta_hospitalar_id = ?`,
+      [m.conta],
+    );
+    expect(lig).toHaveLength(1);
+    expect(lig[0]).toMatchObject({ item: m.itemConta, seq: 1, guia: null });
+    expect(Number(lig[0]!['q'])).toBe(1);
+    expect((await porta.detalhe(ctx(), i.id)).itensDaContaCobertos).toBe(1);
   });
 });

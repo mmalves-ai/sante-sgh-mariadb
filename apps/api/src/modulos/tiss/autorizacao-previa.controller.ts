@@ -11,6 +11,7 @@
 //   POST /api/tiss/autorizacoes/:id/resposta          resposta da operadora por item
 //   POST /api/tiss/autorizacoes/:id/andamento         registra a consulta do andamento
 //   POST /api/tiss/autorizacoes/:id/cancelamento      { versao, motivo }
+//   POST /api/tiss/autorizacoes/:id/conta             liga a autorização aos itens da conta (quantidade coberta)
 // Tudo ligado para todos; quem faz o quê é decidido pelas permissões do cargo.
 import {
   Body,
@@ -133,6 +134,14 @@ export class AutorizacaoPreviaController {
   @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.solicitar)
   andamento(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
     return this.com(req, (p, c) => p.consultarAndamento(c, id));
+  }
+
+  @Post(':id/conta')
+  @AuditadoNoHandler(TRILHA)
+  @HttpCode(200)
+  @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.responder)
+  ligarConta(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    return this.com(req, (p, c) => p.ligarConta(c, id));
   }
 
   @Post(':id/cancelamento')

@@ -650,7 +650,7 @@ export interface DiagnosticoPedido {
 }
 
 /** O código da CID-10 sem ponto e em maiúsculas (como no catálogo oficial), ou nulo se não tem a forma da CID-10. */
-export function normalizarCid(cid: string): string | null {
+export function cidDoPedido(cid: string): string | null {
   const c = cid.trim().toUpperCase().replace('.', '');
   return /^[A-Z]\d{2}[0-9X]?$/.test(c) ? c : null;
 }
@@ -674,7 +674,7 @@ export function conferirDiagnosticosAutorizacao(
   const vistos = new Set<string>();
   diagnosticos.forEach((d, n) => {
     const campo = `diagnosticos.${n}`;
-    const cid = normalizarCid(d.cid);
+    const cid = cidDoPedido(d.cid);
     if (!cid)
       r.push({ campo, mensagem: `Diagnóstico ${n + 1}: o código não tem a forma da CID-10 (A00 ou A00.0).` });
     else if (vistos.has(cid)) r.push({ campo, mensagem: `Diagnóstico ${n + 1}: CID repetido.` });

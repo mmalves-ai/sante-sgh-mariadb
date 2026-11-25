@@ -11,7 +11,7 @@ import {
   lerRespostaAutorizacao,
   mensagemSolicitacaoAutorizacao,
   type PedidoAutorizacao,
-  normalizarCid,
+  cidDoPedido,
   podeMudar,
   proximaConsultaAndamento,
 } from './autorizacao-previa.js';
@@ -340,9 +340,9 @@ describe('hipóteses diagnósticas do pedido', () => {
     ...x,
   });
   it('normaliza a CID-10 e recusa o que não tem a forma', () => {
-    expect(normalizarCid('m17.1')).toBe('M171');
-    expect(normalizarCid('I10')).toBe('I10');
-    expect(normalizarCid('17.1')).toBeNull();
+    expect(cidDoPedido('m17.1')).toBe('M171');
+    expect(cidDoPedido('I10')).toBe('I10');
+    expect(cidDoPedido('17.1')).toBeNull();
   });
   it('internação pede o CID; até quatro, sem repetir, tempo com unidade', () => {
     expect(conferirDiagnosticosAutorizacao('sp_sadt', [])).toEqual([]);

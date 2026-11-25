@@ -15,11 +15,19 @@
 //   - responder: `resposta_autorizacao` + `resposta_autorizacao_item` (quantidade e valor autorizados por item, negativa
 //     com motivo); o pedido muda para a situação derivada dos itens, cada item pedido guarda a quantidade autorizada,
 //     a senha vai à conta hospitalar ligada que ainda não tem senha e a consulta de andamento aberta fica respondida;
+//   - criar também grava as hipóteses diagnósticas em `solicitacao_autorizacao_diagnostico` (CID-10 do catálogo oficial,
+//     sequência 1 é a principal; a internação não nasce sem CID) e a mensagem da internação leva os CIDs; a prorrogação
+//     da internação sai na guia eletrônica própria (solicitacaoProrrogacao), referenciando a guia da internação pelo
+//     número na operadora (ou o do hospital, sem resposta ainda);
+//   - ligarConta: cada item autorizado da última resposta cobre os itens da conta ligada do mesmo item faturável, em
+//     `conta_hospitalar_item_autorizacao` (sequencial do item na guia e quantidade coberta); refazer não duplica;
 //   - consultarAndamento: nova linha em `consulta_situacao_autorizacao` (tentativa seguinte, próxima consulta marcada);
 //   - cancelar: o pedido fica 'cancelado' com o motivo na observação; o que não saiu segue sem enviada_em (CHECK da
 //     migração 12_FAT/99_autorizacao_envio). Nada se apaga.
 import {
   avaliarLimiteOpme,
+  casarAutorizacaoComConta,
+  conferirDiagnosticosAutorizacao,
   conferirPedidoAutorizacao,
   conferirPedidoDeLiberacao,
   conferirProcedimentoDaOpme,
@@ -28,6 +36,7 @@ import {
   type ItemPedidoAutorizacao,
   lerRespostaAutorizacao,
   mensagemSolicitacaoAutorizacao,
+  cidDoPedido,
   podeMudar,
   proximaConsultaAndamento,
   SITUACOES_EM_ANDAMENTO,
@@ -76,6 +85,9 @@ const TABELAS = [
   ...TABELAS_OPME_AUTORIZADA,
   'solicitacao_autorizacao',
   'solicitacao_autorizacao_item',
+  'solicitacao_autorizacao_diagnostico',
+  'conta_hospitalar_item_autorizacao',
+  'conta_hospitalar_item',
   'resposta_autorizacao',
   'resposta_autorizacao_item',
   'consulta_situacao_autorizacao',
@@ -132,6 +144,20 @@ const esquemaCriar = z
     /** Justificativa de quem pede a OPME acima do limite do procedimento: o pedido nasce retido até a alçada liberar. */
     justificativaLimite: texto(1000),
     itens: z.array(esquemaItem).max(99),
+    /** Hipóteses diagnósticas (CID-10); a primeira é a principal. */
+    diagnosticos: z
+      .array(
+        z
+          .object({
+            cid: z.string().trim().max(10),
+            tipoDoenca: z.enum(['aguda', 'cronica']).nullable().default(null),
+            tempo: z.number().nullable().default(null),
+            unidadeTempo: z.enum(['dia', 'mes', 'ano']).nullable().default(null),
+          })
+          .strict(),
+      )
+      .max(10)
+      .default([]),
   })
   .strict();
 const esquemaUrgencia = z
@@ -422,10 +448,35 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       consultadaEm: iso(x['consultada_em']),
       proximaEm: iso(x['proxima_consulta_em']),
     }));
+    const diagnosticos = (
+      await l.consultar(
+        `SELECT d.sequencia, d.principal, d.tipo_doenca, d.tempo_doenca, d.unidade_tempo_doenca, t.codigo_termo, t.descricao
+           FROM solicitacao_autorizacao_diagnostico d JOIN termo_terminologia t ON t.id = d.cid_termo_terminologia_id
+          WHERE d.solicitacao_autorizacao_id = ? AND d.excluido_em IS NULL ORDER BY d.sequencia`,
+        [solicitacao],
+      )
+    ).map((x) => ({
+      sequencia: num(x['sequencia']),
+      principal: !!num(x['principal']),
+      cid: String(x['codigo_termo']),
+      descricao: String(x['descricao']),
+      tipoDoenca: txtOuNull(x['tipo_doenca']),
+      tempo: numOuNull(x['tempo_doenca']),
+      unidadeTempo: txtOuNull(x['unidade_tempo_doenca']),
+    }));
+    const ligadosConta = await l.uma(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(cia.quantidade_coberta), 0) AS q FROM conta_hospitalar_item_autorizacao cia
+         JOIN resposta_autorizacao_item ri ON ri.id = cia.resposta_autorizacao_item_id
+         JOIN resposta_autorizacao r ON r.id = ri.resposta_autorizacao_id
+        WHERE r.solicitacao_autorizacao_id = ? AND cia.excluido_em IS NULL`,
+      [solicitacao],
+    );
     return {
       id: num(s['id']),
       numero: String(s['numero']),
       tipo: String(s['tipo']) as TipoSolicitacaoAutorizacao,
+      diagnosticos,
+      itensDaContaCobertos: num(ligadosConta?.['n'] ?? 0),
       situacao: String(s['situacao']) as SituacaoSolicitacaoAutorizacao,
       canal: String(s['canal']),
       fontePagadora: String(s['fonte']),
@@ -455,6 +506,7 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       [
         'solicitacao_autorizacao',
         'solicitacao_autorizacao_item',
+        'solicitacao_autorizacao_diagnostico',
         'sequencia_negocio',
         ...TABELAS_LIBERACAO_OPME,
       ],
@@ -480,6 +532,24 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
           indicacaoClinica: e.indicacaoClinica,
           itens,
         });
+        problemas.push(...conferirDiagnosticosAutorizacao(e.tipo, e.diagnosticos));
+        // O CID vem do catálogo oficial carregado (categoria ou subcategoria ativa), nunca digitado solto.
+        const cids: number[] = [];
+        for (const [n, d] of e.diagnosticos.entries()) {
+          const cid = cidDoPedido(d.cid);
+          if (!cid) continue;
+          const t = await tx.uma(
+            `SELECT t.id FROM termo_terminologia t JOIN terminologia g ON g.id = t.terminologia_id
+              WHERE g.codigo = 'cid10' AND t.codigo_termo = ? AND t.ativo = TRUE AND t.nivel IN (3, 4) LIMIT 1`,
+            [cid],
+          );
+          if (t) cids.push(num(t['id']));
+          else
+            problemas.push({
+              campo: `diagnosticos.${n}`,
+              mensagem: `Diagnóstico ${n + 1}: o CID ${cid} não está no catálogo da CID-10 carregado.`,
+            });
+        }
         const paciente = num(cp['paciente_id']);
         const confere = async (sql: string, v: unknown[], campo: string, mensagem: string) => {
           if (!(await tx.uma(sql, v))) problemas.push({ campo, mensagem });
@@ -619,6 +689,16 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
             ordem_opcao: i.opcaoFabricante,
             justificativa: i.justificativa,
           });
+        for (const [n, d] of e.diagnosticos.entries())
+          await tx.incluir('solicitacao_autorizacao_diagnostico', {
+            solicitacao_autorizacao_id: novo,
+            sequencia: n + 1,
+            cid_termo_terminologia_id: cids[n],
+            principal: n === 0,
+            tipo_doenca: d.tipoDoenca,
+            tempo_doenca: d.tempo,
+            unidade_tempo_doenca: d.unidadeTempo,
+          });
         const liberacao = retencao
           ? await abrirLiberacaoOpme(tx, {
               est: est.id,
@@ -691,11 +771,23 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
     const carater = await l.uma('SELECT urgencia FROM carater_atendimento_tiss WHERE id = ?', [
       s['carater_atendimento_tiss_id'],
     ]);
+    // A guia referenciada: o número que a operadora deu à guia principal; sem resposta ainda, o do hospital.
     const principal = s['principal_solicitacao_autorizacao_id']
-      ? await l.uma('SELECT numero FROM solicitacao_autorizacao WHERE id = ?', [
-          s['principal_solicitacao_autorizacao_id'],
-        ])
+      ? await l.uma(
+          `SELECT COALESCE((SELECT r.numero_guia_operadora FROM resposta_autorizacao r
+                             WHERE r.solicitacao_autorizacao_id = sa.id AND r.excluido_em IS NULL AND r.numero_guia_operadora IS NOT NULL
+                             ORDER BY r.recebida_em DESC, r.id DESC LIMIT 1), sa.numero) AS numero
+             FROM solicitacao_autorizacao sa WHERE sa.id = ?`,
+          [s['principal_solicitacao_autorizacao_id']],
+        )
       : null;
+    const cids = (
+      await l.consultar(
+        `SELECT t.codigo_termo FROM solicitacao_autorizacao_diagnostico d JOIN termo_terminologia t ON t.id = d.cid_termo_terminologia_id
+          WHERE d.solicitacao_autorizacao_id = ? AND d.excluido_em IS NULL ORDER BY d.sequencia`,
+        [s['id']],
+      )
+    ).map((x) => String(x['codigo_termo']));
     const itens = (
       await l.consultar(
         'SELECT * FROM solicitacao_autorizacao_item WHERE solicitacao_autorizacao_id = ? AND excluido_em IS NULL ORDER BY sequencia',
@@ -744,11 +836,95 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       tipoInternacao: s['tipo'] === 'internacao' ? (cirurgica ? '2' : '1') : null,
       diarias: numOuNull(s['diarias_solicitadas']),
       dataAdmissao: dataIso(s['data_provavel_admissao']),
-      cids: [],
+      cids,
       acidente: (txtOuNull(s['indicacao_acidente']) as DadosMensagemSolicitacao['acidente']) ?? null,
       observacao: txtOuNull(s['observacao']),
       itens,
     };
+  }
+
+  /**
+   * Liga a autorização aos itens da conta: cada item autorizado da última resposta cobre os itens lançados na conta do
+   * pedido com o mesmo item faturável, até a quantidade autorizada. Refazer só cobre o que ainda falta.
+   */
+  ligarConta(
+    c: ContextoPortaPropria,
+    solicitacao: number,
+  ): Promise<{ ligados: number; semCobertura: number }> {
+    return this.gravar(
+      c,
+      'tiss.autorizacao.ligar_conta',
+      ['conta_hospitalar_item_autorizacao'],
+      async (tx, est) => {
+        const s = await this.lerPedido(tx, est.id, solicitacao);
+        const situacao = String(s['situacao']);
+        const problemas = [];
+        if (s['conta_hospitalar_id'] === null || s['conta_hospitalar_id'] === undefined)
+          problemas.push({ campo: 'conta', mensagem: 'O pedido não está ligado a uma conta.' });
+        if (situacao !== 'autorizada' && situacao !== 'autorizada_parcial')
+          problemas.push({
+            campo: 'situacao',
+            mensagem: 'Só o pedido autorizado (total ou parcial) cobre a conta.',
+          });
+        if (problemas.length) throw recusaRegra('Ligação recusada', problemas);
+        const resposta = await tx.uma(
+          `SELECT id FROM resposta_autorizacao WHERE solicitacao_autorizacao_id = ? AND excluido_em IS NULL
+            ORDER BY recebida_em DESC, id DESC LIMIT 1`,
+          [solicitacao],
+        );
+        if (!resposta)
+          throw recusaRegra('Ligação recusada', [
+            { campo: 'resposta', mensagem: 'O pedido não tem resposta.' },
+          ]);
+        const autorizados = (
+          await tx.consultar(
+            `SELECT ri.id, ri.sequencia, ri.quantidade_autorizada, si.item_faturavel_id,
+                    (SELECT COALESCE(SUM(cia.quantidade_coberta), 0) FROM conta_hospitalar_item_autorizacao cia
+                      WHERE cia.resposta_autorizacao_item_id = ri.id AND cia.excluido_em IS NULL) AS coberta
+               FROM resposta_autorizacao_item ri
+               JOIN solicitacao_autorizacao_item si ON si.solicitacao_autorizacao_id = ? AND si.sequencia = ri.sequencia
+                AND si.excluido_em IS NULL
+              WHERE ri.resposta_autorizacao_id = ? AND ri.quantidade_autorizada > 0 ORDER BY ri.sequencia`,
+            [solicitacao, resposta['id']],
+          )
+        ).map((x) => ({
+          respostaItem: num(x['id']),
+          sequencia: num(x['sequencia']),
+          itemFaturavel: numOuNull(x['item_faturavel_id']),
+          quantidadeAutorizada: Number(x['quantidade_autorizada']),
+          jaCoberta: Number(x['coberta']),
+        }));
+        const conta = (
+          await tx.consultar(
+            `SELECT ci.id, ci.item_faturavel_id, ci.quantidade,
+                    (SELECT COALESCE(SUM(cia.quantidade_coberta), 0) FROM conta_hospitalar_item_autorizacao cia
+                      WHERE cia.conta_hospitalar_item_id = ci.id AND cia.excluido_em IS NULL) AS coberta
+               FROM conta_hospitalar_item ci
+              WHERE ci.conta_hospitalar_id = ? AND ci.excluido_em IS NULL ORDER BY ci.realizado_em, ci.sequencia, ci.id`,
+            [s['conta_hospitalar_id']],
+          )
+        ).map((x) => ({
+          contaItem: num(x['id']),
+          itemFaturavel: num(x['item_faturavel_id']),
+          quantidade: Number(x['quantidade']),
+          jaCoberta: Number(x['coberta']),
+        }));
+        const r = casarAutorizacaoComConta(autorizados, conta);
+        for (const g of r.ligacoes)
+          await tx.incluir('conta_hospitalar_item_autorizacao', {
+            conta_hospitalar_item_id: g.contaItem,
+            resposta_autorizacao_item_id: g.respostaItem,
+            sequencial_item_guia: g.sequencia,
+            quantidade_coberta: g.quantidadeCoberta,
+          });
+        return {
+          tabela: 'solicitacao_autorizacao',
+          id: solicitacao,
+          ligados: r.ligacoes.length,
+          semCobertura: r.semCobertura.length,
+        };
+      },
+    );
   }
 
   private async lerPedido(l: Consulta, est: number, solicitacao: number) {
