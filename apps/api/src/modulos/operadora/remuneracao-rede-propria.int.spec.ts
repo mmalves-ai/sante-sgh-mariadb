@@ -16,6 +16,7 @@ import {
   SEM_BANCO,
   trilhaTela,
 } from './infra/massa-operadora.spec-util.js';
+import { PortaContasOperadoraPropria } from './contas-porta-propria.js';
 import { PortaRemuneracaoRedePropria } from './remuneracao-rede-propria.js';
 
 const COD = 'C120';
@@ -88,6 +89,11 @@ describe.skipIf(SEM_BANCO)('remuneração e pagamento do prestador (MariaDB, cli
       await e.executar(
         'DELETE FROM calendario_pagamento_rede WHERE operadora_saude_id = ? AND YEAR(competencia) = 2031',
         [m.operadora],
+      );
+      await e.executar(
+        `DELETE FROM aliquota_tributo_vigencia WHERE estabelecimento_id = ? AND vigencia_inicio = ? AND aplicacao = 'retencao_pagar'
+            AND tributo_id IN (SELECT id FROM tributo WHERE codigo IN ('IRRF','ISS'))`,
+        [m.est, COMP],
       );
       await e.executar(
         'DELETE FROM reajuste_contrato_rede WHERE contrato_rede_prestador_id IN (SELECT id FROM contrato_rede_prestador WHERE numero = ?)',
@@ -443,30 +449,130 @@ describe.skipIf(SEM_BANCO)('remuneração e pagamento do prestador (MariaDB, cli
       1000,
     ]);
 
-    const conta = (await escrever((e) =>
-      e.inserir(
-        `INSERT INTO lote_conta_recebida (estabelecimento_id, operadora_saude_id, prestador_rede_id, numero_protocolo, numero_lote_prestador,
-           tipo_guia, competencia, canal_envio, quantidade_guias, valor_apresentado, valor_glosado, valor_liberado, recebido_em, situacao, criado_em)
-         VALUES (?, ?, ?, ?, ?, 'consulta', '2031-03-01', 'portal', 1, 10500, 500, 10000, NOW(3), 'analisada', NOW(3))`,
-        [m.est, m.operadora, m.prestador, `${COD}${Date.now() % 1e9}`, `${COD}-${Date.now() % 1e9}`],
-      ),
-    )) as number;
-    const lote = {
+    // O cadastro manda a alíquota e o mínimo: IRRF 1,5% com mínimo de R$ 10,00 e ISS 5% na data do pagamento.
+    const pessoa = String(
+      (await um('SELECT pessoa FROM prestador_rede WHERE id = ?', [m.prestador]))['pessoa'],
+    );
+    await escrever(async (e) => {
+      for (const [t, aliq, min] of [
+        [irrf, 1.5, 10],
+        [iss, 5, null],
+      ] as const)
+        await e.executar(
+          `INSERT INTO aliquota_tributo_vigencia (estabelecimento_id, tributo_id, aplicacao, tipo_pessoa, aliquota,
+             valor_minimo_retencao, vigencia_inicio, ativo, criado_em) VALUES (?, ?, 'retencao_pagar', ?, ?, ?, ?, TRUE, NOW(3))`,
+          [m.est, t, pessoa, aliq, min, COMP],
+        );
+    });
+    const novaConta = (liberado: number) =>
+      escrever((e) =>
+        e.inserir(
+          `INSERT INTO lote_conta_recebida (estabelecimento_id, operadora_saude_id, prestador_rede_id, numero_protocolo, numero_lote_prestador,
+             tipo_guia, competencia, canal_envio, quantidade_guias, valor_apresentado, valor_glosado, valor_liberado, recebido_em, situacao, criado_em)
+           VALUES (?, ?, ?, ?, ?, 'consulta', '2031-03-01', 'portal', 1, ?, 500, ?, NOW(3), 'analisada', NOW(3))`,
+          [
+            m.est,
+            m.operadora,
+            m.prestador,
+            `${COD}${Date.now() % 1e9}`,
+            `${COD}-${Date.now() % 1e9}`,
+            liberado + 500,
+            liberado,
+          ],
+        ),
+      ) as Promise<number>;
+    const conta = await novaConta(10000);
+    const pequena = await novaConta(500);
+    const contas = new PortaContasOperadoraPropria(
+      nucleo,
+      CLIENTE,
+      { elegibilidade: async () => null },
+      { prestador: async () => null, prestadores: async () => ({ itens: [], proxima: null }) },
+      { autorizacoesPorSenha: async () => [], designacoes: async () => [] },
+    );
+    const pagarAvulso = (id: number) =>
+      recusada(
+        contas.gravar(c, trilhaTela(m, 'lote_conta_recebida', 'x'), (g) =>
+          g.pagar({
+            id,
+            versao: 1,
+            usuario: 'x',
+            valor: 1,
+            data: '2031-04-10',
+            documento: 'TED',
+            situacao: 'paga',
+          }),
+        ),
+      );
+    const base = {
       prestador: m.prestador,
       competencia: COMP,
       vencimento: '2031-04-10',
+      mensagemPrestador: null,
+    };
+    // Mínimo de retenção do cadastro: 1,5% de R$ 500,00 = R$ 7,50, abaixo de R$ 10,00: calculado e não retido.
+    const lp0 = await porta.criarLote(
+      c,
+      m.operadora,
+      { ...base, contas: [pequena], tributos: [{ tributo: irrf, aliquota: null, deducao: 0 }] },
+      trilha('operadora.remuneracao.lote.criado'),
+    );
+    expect([
+      lp0.calculo.tributos[0]?.aliquota,
+      lp0.calculo.tributos[0]?.imposto,
+      lp0.calculo.valorTributos,
+    ]).toEqual([1.5, 7.5, 0]);
+    // A conta num lote calculado não é paga pelo pagamento avulso (pagaria duas vezes).
+    expect(await pagarAvulso(pequena)).toBe('conta-em-lote-pagamento');
+    await porta.cancelarLote(c, lp0.id, 1, trilha('operadora.remuneracao.lote.cancelado'));
+    // Retenção acima do bruto e exceção sem motivo são recusadas.
+    expect(
+      await recusada(
+        porta.criarLote(
+          c,
+          m.operadora,
+          {
+            ...base,
+            contas: [pequena],
+            tributos: [
+              { tributo: irrf, aliquota: 60, deducao: 0, motivo: 'Teste do limite' },
+              { tributo: iss, aliquota: 60, deducao: 0, motivo: 'Teste do limite' },
+            ],
+          },
+          trilha('x'),
+        ),
+      ),
+    ).toBe('retencao-acima-do-bruto');
+    expect(
+      await recusada(
+        porta.criarLote(
+          c,
+          m.operadora,
+          { ...base, contas: [conta], tributos: [{ tributo: iss, aliquota: 2, deducao: 0 }] },
+          trilha('x'),
+        ),
+      ),
+    ).toBe('excecao-sem-motivo');
+    const lote = {
+      ...base,
       contas: [conta],
       tributos: [
-        { tributo: irrf, aliquota: 1.5, deducao: 0, minimo: 10 },
-        { tributo: iss, aliquota: 2, deducao: 0, minimo: null },
+        { tributo: irrf, aliquota: null, deducao: 0 },
+        { tributo: iss, aliquota: 2, deducao: 0, motivo: 'Alíquota do contrato do prestador' },
       ],
-      mensagemPrestador: null,
     };
     expect(await recusada(porta.criarLote(c, m.operadora, { ...lote, contas: [] }, trilha('x')))).toBe(
       'lote-vazio',
     );
     const l = await porta.criarLote(c, m.operadora, lote, trilha('operadora.remuneracao.lote.criado'));
     expect([l.calculo.valorTributos, l.calculo.liquidoLote]).toEqual([350, 9650]);
+    expect(l.excecoes).toEqual([iss]);
+    const det = await ler(
+      'SELECT aliquota, detalhamento FROM lote_pagamento_rede_tributo WHERE lote_pagamento_rede_id = ? ORDER BY sequencia',
+      [l.id],
+    );
+    expect(det.map((r) => Number(r['aliquota']))).toEqual([1.5, 2]);
+    expect(String(det[1]?.['detalhamento'])).toContain('Exceção: alíquota 2%');
     expect(await recusada(porta.criarLote(c, m.operadora, lote, trilha('x')))).toBe('conta-indisponivel');
 
     const f = await porta.fecharLote(
@@ -520,6 +626,14 @@ describe.skipIf(SEM_BANCO)('remuneração e pagamento do prestador (MariaDB, cli
     expect(await recusada(porta.fecharLote(c, l.id, { versao: 2, natureza, documento }, trilha('x')))).toBe(
       'lote-nao-calculado',
     );
+    // A conta do lote fechado fica paga pelo título e não pode ser paga de novo.
+    const pg = await um(
+      'SELECT situacao, valor_pago, pago_em IS NOT NULL AS data, documento_pagamento FROM lote_conta_recebida WHERE id = ?',
+      [conta],
+    );
+    expect([pg['situacao'], Number(pg['valor_pago']), Number(pg['data'])]).toEqual(['paga', 10000, 1]);
+    expect(String(pg['documento_pagamento'])).toContain(f.tituloNumero);
+    expect(await pagarAvulso(conta)).toBe('conta-nao-analisada');
     const visao = await porta.prestadorPagamento(c, m.operadora, m.prestador);
     expect(visao.lotes.find((x) => x.id === l.id)?.tituloNumero).toBe(f.tituloNumero);
   });

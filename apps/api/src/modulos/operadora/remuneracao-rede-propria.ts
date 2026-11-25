@@ -38,7 +38,11 @@ import {
   type RegraValoracaoCadastro,
   type TabelaRemuneracaoCadastro,
   type TipoValorTabela,
-  type TributoDoLote,
+  problemasDoCalculoPagamento,
+  resolverTributoDoLote,
+  type TributoDoCadastro,
+  type TributoInformado,
+  type TributoResolvido,
   type Valoracao,
   valorar,
   valorDoItem,
@@ -84,6 +88,7 @@ export const TABELAS_REMUNERACAO_REDE = [
   'lote_pagamento_rede_tributo',
   'lancamento_avulso_prestador',
   'empresa_fornecedora',
+  'lote_conta_recebida',
   'titulo_pagar',
   'parcela_pagar',
   'retencao_titulo',
@@ -150,7 +155,7 @@ export interface NovoLote {
   competencia: string;
   vencimento: string;
   contas: number[];
-  tributos: TributoDoLote[];
+  tributos: TributoInformado[];
   mensagemPrestador: string | null;
 }
 
@@ -1062,7 +1067,6 @@ export class PortaRemuneracaoRedePropria {
     exigir(problemasDoLotePagamento(e));
     return this.gravar(c, 'operadora.remuneracao.lote.criar', trilha, async (tx, est) => {
       await PortaRemuneracaoRedePropria.operadora(tx, est, op);
-      await PortaRemuneracaoRedePropria.prestador(tx, est, e.prestador);
       const contas = await tx.consultarParaAtualizar(
         `SELECT c.id, c.valor_apresentado, c.valor_glosado, c.valor_liberado FROM lote_conta_recebida c
           WHERE c.estabelecimento_id = ? AND c.operadora_saude_id = ? AND c.prestador_rede_id = ? AND c.situacao = 'analisada'
@@ -1080,23 +1084,15 @@ export class PortaRemuneracaoRedePropria {
             campos: ['contas'],
           },
         );
-      if (e.tributos.length) {
-        const ts = await tx.consultar(
-          `SELECT id FROM tributo WHERE ativo = TRUE AND id IN (${e.tributos.map(() => '?').join(', ')})`,
-          e.tributos.map((t) => t.tributo),
-          { teto: e.tributos.length },
-        );
-        if (ts.length !== e.tributos.length)
-          throw recusa('referencia-inexistente', 'Um tributo não existe no cadastro.', {
-            campos: ['tributos'],
-          });
-      }
+      const p = await PortaRemuneracaoRedePropria.prestador(tx, est, e.prestador);
+      const tributos = await tributosDoCadastro(tx, est, p, e.tributos, e.vencimento);
       const bruto = contas.reduce((s, x) => s + num0(x['valor_liberado']), 0);
       if (!(bruto > 0))
         throw recusa('lote-sem-valor', 'As contas escolhidas não têm valor liberado.', {
           campos: ['contas'],
         });
-      const calc = calcularPagamento(bruto, e.tributos, [], e.competencia);
+      const calc = calcularPagamento(bruto, tributos, [], e.competencia);
+      exigir(problemasDoCalculoPagamento(calc));
       const carimbo = { usuario: c.usuario ?? null, agora: new Date() };
       await garantirSequencia(
         tx,
@@ -1144,8 +1140,16 @@ export class PortaRemuneracaoRedePropria {
           valor_deducao: t.deducao,
           valor_imposto: t.imposto,
           valor_retido: t.retido,
+          detalhamento: (tributos[k]?.detalhamento ?? '').slice(0, 1000) || null,
         });
-      return { id, versao: 1, tabela: 'lote_pagamento_rede', numero: numeroLote, calculo: calc };
+      return {
+        id,
+        versao: 1,
+        tabela: 'lote_pagamento_rede',
+        numero: numeroLote,
+        calculo: calc,
+        excecoes: tributos.filter((t) => t.excecao).map((t) => t.tributo),
+      };
     });
   }
 
@@ -1224,7 +1228,10 @@ export class PortaRemuneracaoRedePropria {
         await tx.alterar('lote_pagamento_rede_tributo', Number(t['id']), Number(t['versao']), {
           retencao_titulo_id: ret,
           tipo_documento_financeiro_id: x.documento,
-          detalhamento: `Retenção ${k + 1} do título ${titulo.numero}`,
+          detalhamento: [texto(t['detalhamento']), `Retenção ${k + 1} do título ${titulo.numero}`]
+            .filter(Boolean)
+            .join('; ')
+            .slice(0, 1000),
         });
       }
       const itens = await tx.consultarParaAtualizar(
@@ -1236,6 +1243,31 @@ export class PortaRemuneracaoRedePropria {
         await tx.alterar('lote_pagamento_rede_item', Number(i['id']), Number(i['versao']), {
           titulo_pagar_id: titulo.titulo,
         });
+      // A conta do lote fechado fica paga pelo título (valor liberado, data e documento), na mesma transação: sai do
+      // painel "a pagar" e não pode ser paga de novo pelo pagamento avulso da conta.
+      const contas = await tx.consultarParaAtualizar(
+        `SELECT c.id, c.versao, c.situacao, i.valor_pago FROM lote_pagamento_rede_item i
+           JOIN lote_conta_recebida c ON c.id = i.lote_conta_recebida_id
+          WHERE i.lote_pagamento_rede_id = ? AND i.situacao <> 'estornado'`,
+        [id],
+        { teto: 5000 },
+      );
+      for (const k of contas) {
+        if (textoObrigatorio(k['situacao']) !== 'analisada')
+          throw recusa(
+            'conta-indisponivel',
+            'Uma conta do lote não está mais analisada (paga ou devolvida).',
+            {
+              campos: ['contas'],
+            },
+          );
+        await tx.alterar('lote_conta_recebida', Number(k['id']), Number(k['versao']), {
+          situacao: 'paga',
+          valor_pago: num0(k['valor_pago']),
+          pago_em: hojeIso(),
+          documento_pagamento: `${titulo.numero} (${textoObrigatorio(lote['numero'])})`.slice(0, 60),
+        });
+      }
       const versaoAd = new Map(adiant.map((a) => [Number(a['id']), a] as const));
       for (const comp of calc.compensacoes) {
         const a = versaoAd.get(comp.id);
@@ -1315,6 +1347,77 @@ function regraDe(r: Record<string, unknown>): RegraParaEscolha & { versao: numbe
     inicio: dataIso(r['vigencia_inicio']) ?? '',
     fim: dataIso(r['vigencia_fim']),
   };
+}
+
+/**
+ * Os tributos do lote pelo cadastro, na data do pagamento: a alíquota de retenção vigente para o tipo de pessoa do
+ * prestador, o mínimo de retenção (o da vigência, senão o do tributo) e o enquadramento tributário vigente do
+ * fornecedor com o documento do prestador (o do tributo vale sobre o geral).
+ */
+async function tributosDoCadastro(
+  tx: TxOperacao,
+  est: number,
+  p: Record<string, unknown>,
+  informados: readonly TributoInformado[],
+  data: string,
+): Promise<TributoResolvido[]> {
+  if (!informados.length) return [];
+  const pessoa = texto(p['pessoa']) === 'fisica' ? 'fisica' : 'juridica';
+  const vigencia = `FROM aliquota_tributo_vigencia v WHERE v.tributo_id = t.id AND v.estabelecimento_id = ?
+      AND v.aplicacao = 'retencao_pagar' AND v.ativo = TRUE AND v.tipo_pessoa IN ('todas', ?)
+      AND v.vigencia_inicio <= ? AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= ?)
+    ORDER BY v.tipo_pessoa = 'todas', v.vigencia_inicio DESC LIMIT 1`;
+  const ts = await tx.consultar(
+    `SELECT t.id, t.codigo, t.valor_minimo_retencao AS minimo_tributo,
+            (SELECT v.aliquota ${vigencia}) AS aliquota,
+            (SELECT v.valor_minimo_retencao ${vigencia}) AS minimo_vigencia
+       FROM tributo t
+      WHERE t.ativo = TRUE AND t.incidencia IN ('retido','ambos') AND t.id IN (${informados.map(() => '?').join(', ')})`,
+    [est, pessoa, data, data, est, pessoa, data, data, ...informados.map((t) => t.tributo)],
+    { teto: informados.length },
+  );
+  if (ts.length !== informados.length)
+    throw recusa('referencia-inexistente', 'Um tributo retido não existe no cadastro.', {
+      campos: ['tributos'],
+    });
+  const documento = texto(p['cnpj']) ?? texto(p['cpf']);
+  const enqs = documento
+    ? await tx.consultar(
+        `SELECT e.tributo_id, e.regime, e.retem_tributo, e.aliquota_iss
+           FROM enquadramento_tributario_participante e
+           JOIN empresa_fornecedora f ON f.id = e.empresa_fornecedora_id
+          WHERE e.ativo = TRUE AND (e.estabelecimento_id IS NULL OR e.estabelecimento_id = ?) AND f.excluido_em IS NULL
+            AND (f.cnpj = ? OR f.cpf = ?) AND e.vigencia_inicio <= ? AND (e.vigencia_fim IS NULL OR e.vigencia_fim >= ?)
+          ORDER BY e.tributo_id IS NULL, e.vigencia_inicio DESC`,
+        [est, documento, documento, data, data],
+        { teto: 100 },
+      )
+    : [];
+  const porId = new Map(ts.map((r) => [Number(r['id']), r] as const));
+  const problemas: ProblemaRemuneracao[] = [];
+  const out: TributoResolvido[] = [];
+  for (const inf of informados) {
+    const r = porId.get(inf.tributo)!;
+    const enq = enqs.find((x) => inteiro(x['tributo_id']) === inf.tributo || x['tributo_id'] === null);
+    const cad: TributoDoCadastro = {
+      tributo: inf.tributo,
+      codigo: textoObrigatorio(r['codigo']),
+      aliquota: numero(r['aliquota']),
+      minimo: numero(r['minimo_vigencia']) ?? numero(r['minimo_tributo']),
+      enquadramento: enq
+        ? {
+            regime: textoObrigatorio(enq['regime']),
+            retem: booleano(enq['retem_tributo']),
+            aliquotaIss: numero(enq['aliquota_iss']),
+          }
+        : null,
+    };
+    const x = resolverTributoDoLote(cad, inf);
+    problemas.push(...x.problemas);
+    if (x.tributo) out.push(x.tributo);
+  }
+  exigir(problemas);
+  return out;
 }
 
 /** Credor do título: o profissional (prestador pessoa física da saúde) ou a empresa pelo documento (criada se faltar). */

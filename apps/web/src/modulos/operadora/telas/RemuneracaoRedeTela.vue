@@ -5,6 +5,8 @@
 // - Pagamento: visão pelo prestador (contas analisadas sem lote, adiantamentos, lotes), lote com tributos e fechamento
 //   que gera o título no contas a pagar, adiantamento com título; reajuste do contrato;
 // - Calendário: competências do ano com entrega, corte e pagamento, e o fechamento.
+// - Pacotes: pacote negociado (principal, itens dentro e fora, diárias, valor global), validado na hora.
+// Os tributos do lote vêm do cadastro tributário (alíquota, mínimo, enquadramento); a alíquota digitada é exceção.
 // A validação é do servidor (domínio); a tela confere o óbvio antes de enviar.
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { computed, ref, watch } from 'vue';
@@ -13,6 +15,7 @@ import { mensagensRemuneracaoRede } from '../i18n-remuneracao.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import { lerTelaCobranca } from '../api-cobranca.js';
 import {
+  buscarItensFaturaveis,
   buscarProcedimentos,
   type CalendarioPagamento,
   cancelarLote,
@@ -22,17 +25,20 @@ import {
   incluirAdiantamento,
   incluirCalendario,
   incluirItem,
+  incluirPacote,
   incluirRegra,
   incluirTabela,
   type ItemTabela,
   lerCalendario,
   lerItens,
+  lerPacotes,
   lerOpcoes,
   lerPrestador,
   lerRegras,
   lerTabelas,
   type Opcao,
   type OpcoesRemuneracao,
+  type PacoteRemuneracao,
   reajustarContrato,
   type RegraValoracao,
   type ResultadoValoracao,
@@ -46,7 +52,7 @@ const podeEditar = computed(() => pode('operadora.prestador.editar'));
 const podePagar = computed(() => pode('operadora.conta.pagar'));
 const erro = ref<string | null>(null);
 const aviso = ref<string | null>(null);
-const aba = ref<'tabelas' | 'regras' | 'pagamento' | 'calendario'>('tabelas');
+const aba = ref<'tabelas' | 'regras' | 'pacotes' | 'pagamento' | 'calendario'>('tabelas');
 const operadoras = ref<{ valor: number | null; rotulo: string }[]>([]);
 const operadora = ref<number | null>(null);
 const vazio: OpcoesRemuneracao = {
@@ -98,6 +104,7 @@ void tentar(async () => {
 watch(operadora, async (op) => {
   tabelas.value = [];
   regras.value = [];
+  pacotes.value = [];
   if (!op) return;
   opcoes.value = (await tentar(() => lerOpcoes(op))) ?? vazio;
   await recarregarCadastro();
@@ -107,6 +114,7 @@ async function recarregarCadastro() {
   if (!op) return;
   tabelas.value = (await tentar(() => lerTabelas(op))) ?? [];
   regras.value = (await tentar(() => lerRegras(op))) ?? [];
+  pacotes.value = (await tentar(() => lerPacotes(op))) ?? [];
   opcoes.value = (await tentar(() => lerOpcoes(op))) ?? opcoes.value;
 }
 
@@ -276,7 +284,19 @@ async function simular() {
 const prestador = ref<number | null>(null);
 const visao = ref<VisaoPrestador | null>(null);
 const marcadas = ref<number[]>([]);
-const tributosLote = ref<{ tributo: number | null; aliquota: string }[]>([]);
+const tributosLote = ref<{ tributo: number | null; aliquota: string; motivo: string }[]>([]);
+// Validação na hora: tributo sem repetição; a alíquota digitada é exceção ao cadastro e precisa do motivo.
+const problemaLote = computed(() => {
+  const ts = tributosLote.value.filter((x) => x.tributo !== null);
+  if (new Set(ts.map((x) => x.tributo)).size !== ts.length) return t('tributoRepetido');
+  for (const x of ts) {
+    if (!x.aliquota.trim()) continue;
+    const a = numeroBr(x.aliquota);
+    if (a === null || a < 0 || a > 100) return t('aliquotaInvalida');
+    if (x.motivo.trim().length < 5) return t('faltaMotivoExcecao');
+  }
+  return null;
+});
 const nl = ref({ competencia: '', vencimento: '' });
 const fech = ref({ natureza: null as number | null, documento: null as number | null });
 const brutoMarcado = computed(
@@ -294,7 +314,7 @@ async function abrirPrestador() {
 }
 async function gerarLote() {
   const op = operadora.value;
-  if (!op || !prestador.value || !marcadas.value.length) return;
+  if (!op || !prestador.value || !marcadas.value.length || problemaLote.value) return;
   const r = await tentar(
     () =>
       criarLote(op, {
@@ -306,9 +326,9 @@ async function gerarLote() {
           .filter((t) => t.tributo !== null)
           .map((t) => ({
             tributo: t.tributo,
-            aliquota: numeroBr(t.aliquota) ?? 0,
+            aliquota: numeroBr(t.aliquota),
             deducao: 0,
-            minimo: null,
+            motivo: nulo(t.motivo),
           })),
         mensagemPrestador: null,
       }),
@@ -381,6 +401,89 @@ async function salvarReajuste() {
 }
 
 // ------------------------------------------------------------------ calendário
+// ------------------------------------------------------------------ pacotes
+const TIPOS_PACOTE = ['clinico', 'cirurgico', 'obstetrico', 'diagnostico', 'terapeutico', 'outro'] as const;
+const pacotes = ref<PacoteRemuneracao[]>([]);
+const np = ref({
+  codigo: '',
+  descricao: '',
+  prestador: null as number | null,
+  tipo: 'cirurgico' as string,
+  regime: null as string | null,
+  diarias: '',
+  valor: '',
+  inicio: '',
+  fim: '',
+});
+const buscaItem = ref('');
+const achadosItem = ref<Opcao[]>([]);
+watch(buscaItem, async (b) => {
+  achadosItem.value = b.trim().length >= 2 ? ((await tentar(() => buscarItensFaturaveis(b))) ?? []) : [];
+});
+const itemEscolhido = ref<number | null>(null);
+const principal = ref<{ id: number; rotulo: string } | null>(null);
+const itensPacote = ref<
+  { item: number; rotulo: string; inclusao: 'incluido' | 'excluido'; quantidade: string }[]
+>([]);
+const rotuloAchado = (id: number) => achadosItem.value.find((o) => o.id === id)?.rotulo ?? String(id);
+function definirPrincipal() {
+  if (itemEscolhido.value === null) return;
+  principal.value = { id: itemEscolhido.value, rotulo: rotuloAchado(itemEscolhido.value) };
+}
+function adicionarAoPacote(inclusao: 'incluido' | 'excluido') {
+  const id = itemEscolhido.value;
+  if (id === null) return;
+  itensPacote.value.push({ item: id, rotulo: rotuloAchado(id), inclusao, quantidade: '' });
+}
+const problemaPacote = computed(() => {
+  const x = np.value;
+  if (!x.codigo.trim() || !x.descricao.trim()) return t('faltaCodigoNome');
+  if (!principal.value) return t('faltaPrincipal');
+  if (!((numeroBr(x.valor) ?? 0) > 0)) return t('faltaValorGlobal');
+  if (x.regime === 'ambulatorial' && (numeroBr(x.diarias) ?? 0) > 0) return t('diariasAmbulatorial');
+  if (!x.inicio) return t('faltaInicio');
+  if (x.fim && x.fim < x.inicio) return t('fimAntes');
+  const ids = itensPacote.value.map((i) => i.item);
+  if (new Set(ids).size !== ids.length) return t('itemRepetido');
+  if (itensPacote.value.some((i) => i.item === principal.value!.id && i.inclusao === 'excluido'))
+    return t('principalExcluido');
+  if (itensPacote.value.some((i) => i.quantidade.trim() && !((numeroBr(i.quantidade) ?? 0) > 0)))
+    return t('quantidadeInvalida');
+  return null;
+});
+async function salvarPacote() {
+  const op = operadora.value;
+  if (!op || problemaPacote.value || !principal.value) return;
+  const x = np.value;
+  const r = await tentar(
+    () =>
+      incluirPacote(op, {
+        codigo: x.codigo.trim(),
+        descricao: x.descricao.trim(),
+        prestador: x.prestador,
+        principal: principal.value!.id,
+        tipo: x.tipo,
+        regime: x.regime,
+        diarias: x.diarias.trim() ? Number(x.diarias) : null,
+        valorGlobal: numeroBr(x.valor),
+        inicio: x.inicio,
+        fim: nulo(x.fim),
+        inclusoes: null,
+        itens: itensPacote.value.map((i) => ({
+          item: i.item,
+          inclusao: i.inclusao,
+          quantidade: numeroBr(i.quantidade),
+        })),
+      }),
+    t('pacoteIncluido'),
+  );
+  if (r) {
+    principal.value = null;
+    itensPacote.value = [];
+    await recarregarCadastro();
+  }
+}
+
 const ano = ref(String(new Date().getFullYear()));
 const calendario = ref<CalendarioPagamento[]>([]);
 const nc = ref({
@@ -443,6 +546,7 @@ async function fecharCompetencia(c: CalendarioPagamento) {
         :opcoes="[
           { valor: 'tabelas', rotulo: t('abaTabelas') },
           { valor: 'regras', rotulo: t('abaRegras') },
+          { valor: 'pacotes', rotulo: t('abaPacotes') },
           { valor: 'pagamento', rotulo: t('abaPagamento') },
           { valor: 'calendario', rotulo: t('abaCalendario') },
         ]"
@@ -700,6 +804,130 @@ async function fecharCompetencia(c: CalendarioPagamento) {
       </fieldset>
     </template>
 
+    <template v-if="operadora && aba === 'pacotes'">
+      <table class="remun__tabela" data-testid="remun-pacotes">
+        <thead>
+          <tr>
+            <th>{{ t('codigo') }}</th>
+            <th>{{ t('descricao') }}</th>
+            <th>{{ t('principal') }}</th>
+            <th>{{ t('tipoPacote') }}</th>
+            <th>{{ t('prestador') }}</th>
+            <th>{{ t('itens') }}</th>
+            <th>{{ t('valorGlobal') }}</th>
+            <th>{{ t('vigencia') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="k in pacotes" :key="k.id" :data-testid="`remun-pacote-${k.codigo}`">
+            <td>{{ k.codigo }}</td>
+            <td>{{ k.descricao }}</td>
+            <td>{{ k.principal }}</td>
+            <td>{{ t(`tipo_${k.tipo}`) }}</td>
+            <td>{{ k.prestadorNome ?? t('todos') }}</td>
+            <td>{{ k.itens }}</td>
+            <td>{{ moeda(k.valorGlobal) }}</td>
+            <td>{{ t('periodo', { de: dataBr(k.inicio), ate: dataBr(k.fim) }) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <fieldset v-if="podeEditar" class="remun__form" data-testid="remun-novo-pacote">
+        <legend>{{ t('novoPacote') }}</legend>
+        <SanteCampoTexto :max-bytes="30" id="remun-k-codigo" v-model="np.codigo" :rotulo="t('codigo')" />
+        <SanteCampoTexto
+          :max-bytes="150"
+          id="remun-k-descricao"
+          v-model="np.descricao"
+          :rotulo="t('descricao')"
+        />
+        <SanteSelecao
+          id="remun-k-prestador"
+          v-model="np.prestador"
+          :rotulo="t('prestador')"
+          :opcoes="lista(opcoes.prestadores, t('todos'))"
+        />
+        <SanteSelecao
+          id="remun-k-tipo"
+          v-model="np.tipo"
+          :rotulo="t('tipoPacote')"
+          :opcoes="TIPOS_PACOTE.map((x) => ({ valor: x, rotulo: t(`tipo_${x}`) }))"
+        />
+        <SanteSelecao
+          id="remun-k-regime"
+          v-model="np.regime"
+          :rotulo="t('regime')"
+          :opcoes="[
+            { valor: null, rotulo: t('nenhum') },
+            ...['ambulatorial', 'internacao', 'hospital_dia'].map((x) => ({
+              valor: x,
+              rotulo: t(`regime_${x}`),
+            })),
+          ]"
+        />
+        <SanteCampoTexto :max-bytes="3" id="remun-k-diarias" v-model="np.diarias" :rotulo="t('diarias')" />
+        <SanteCampoTexto :max-bytes="20" id="remun-k-valor" v-model="np.valor" :rotulo="t('valorGlobal')" />
+        <SanteCampoTexto
+          :max-bytes="10"
+          id="remun-k-inicio"
+          v-model="np.inicio"
+          :rotulo="t('inicioVigencia')"
+        />
+        <SanteCampoTexto :max-bytes="10" id="remun-k-fim" v-model="np.fim" :rotulo="t('fimVigencia')" />
+        <SanteCampoTexto :max-bytes="60" id="remun-k-busca" v-model="buscaItem" :rotulo="t('procurarItem')" />
+        <SanteSelecao
+          id="remun-k-item"
+          v-model="itemEscolhido"
+          :rotulo="t('itemFaturavel')"
+          :opcoes="lista(achadosItem, t('escolha'))"
+        />
+        <div class="remun__linha">
+          <SanteBotao
+            :desabilitado="itemEscolhido === null"
+            data-testid="remun-k-principal"
+            @click="definirPrincipal"
+            :rotulo="t('definirPrincipal')"
+          />
+          <SanteBotao
+            :desabilitado="itemEscolhido === null"
+            data-testid="remun-k-incluido"
+            @click="adicionarAoPacote('incluido')"
+            :rotulo="t('adicionarIncluido')"
+          />
+          <SanteBotao
+            :desabilitado="itemEscolhido === null"
+            data-testid="remun-k-excluido"
+            @click="adicionarAoPacote('excluido')"
+            :rotulo="t('adicionarExcluido')"
+          />
+        </div>
+        <p class="remun__dica" data-testid="remun-k-principal-escolhido">
+          {{ t('principal') }}: {{ principal?.rotulo ?? '—' }}
+        </p>
+        <div
+          v-for="(i, k) in itensPacote"
+          :key="k"
+          class="remun__linha remun__dica"
+          :data-testid="`remun-k-linha-${k}`"
+        >
+          <span>{{ i.rotulo }} ({{ t(i.inclusao) }})</span>
+          <SanteCampoTexto
+            :max-bytes="10"
+            :id="`remun-k-qtd-${k}`"
+            v-model="i.quantidade"
+            :rotulo="t('quantidadePadrao')"
+          />
+          <SanteBotao @click="itensPacote.splice(k, 1)" :rotulo="t('remover')" />
+        </div>
+        <p v-if="problemaPacote" class="remun__dica" data-testid="remun-k-problema">{{ problemaPacote }}</p>
+        <SanteBotao
+          :desabilitado="!!problemaPacote"
+          data-testid="remun-k-salvar"
+          @click="salvarPacote"
+          :rotulo="t('incluirPacote')"
+        />
+      </fieldset>
+    </template>
+
     <template v-if="operadora && aba === 'pagamento'">
       <div class="remun__linha">
         <SanteSelecao
@@ -778,16 +1006,25 @@ async function fecharCompetencia(c: CalendarioPagamento) {
               :max-bytes="150"
               :id="`remun-l-aliq-${k}`"
               v-model="tr.aliquota"
-              :rotulo="t('aliquota')"
+              :rotulo="t('aliquotaExcecao')"
+            />
+            <SanteCampoTexto
+              v-if="tr.aliquota.trim()"
+              :max-bytes="300"
+              :id="`remun-l-motivo-${k}`"
+              v-model="tr.motivo"
+              :rotulo="t('motivoExcecao')"
             />
           </div>
+          <p class="remun__dica">{{ t('dicaTributoCadastro') }}</p>
+          <p v-if="problemaLote" class="remun__dica" data-testid="remun-l-problema">{{ problemaLote }}</p>
           <SanteBotao
             data-testid="remun-l-tributo"
-            @click="tributosLote.push({ tributo: null, aliquota: '' })"
+            @click="tributosLote.push({ tributo: null, aliquota: '', motivo: '' })"
             :rotulo="t('adicionarTributo')"
           />
           <SanteBotao
-            :desabilitado="!marcadas.length"
+            :desabilitado="!marcadas.length || !!problemaLote"
             data-testid="remun-l-calcular"
             @click="gerarLote"
             :rotulo="t('calcularLote')"

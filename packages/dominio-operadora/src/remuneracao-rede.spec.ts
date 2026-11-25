@@ -10,6 +10,7 @@ import {
   problemasDaRegraValoracao,
   problemasDaTabelaRemuneracao,
   problemasDoAdiantamento,
+  problemasDoCalculoPagamento,
   problemasDoCalendario,
   problemasDoItemTabela,
   problemasDoLotePagamento,
@@ -18,6 +19,7 @@ import {
   proximoReajuste,
   reajustarUnidade,
   reajustarValor,
+  resolverTributoDoLote,
   type RegraParaEscolha,
   valorar,
   valorDoItem,
@@ -317,11 +319,72 @@ describe('adiantamento e lote de pagamento', () => {
           vencimento: '2026-04-10',
           contas: [],
           tributos: [
-            { tributo: 1, aliquota: 1, deducao: 0, minimo: null },
-            { tributo: 1, aliquota: 120, deducao: 0, minimo: null },
+            { tributo: 1, aliquota: 1, deducao: 0 },
+            { tributo: 1, aliquota: 120, deducao: 0 },
           ],
         }),
       ),
     ).toEqual(['competencia-invalida', 'lote-vazio', 'tributo-repetido', 'tributo-invalido']);
+  });
+});
+
+describe('tributos do lote pelo cadastro', () => {
+  const irrf = { tributo: 7, codigo: 'IRRF', aliquota: 1.5, minimo: 10, enquadramento: null };
+  it('sem alíquota informada vale a do cadastro, com o mínimo de retenção do cadastro', () => {
+    const r = resolverTributoDoLote(irrf, { tributo: 7, aliquota: null, deducao: 0 });
+    expect(r.problemas).toEqual([]);
+    expect(r.tributo).toMatchObject({ aliquota: 1.5, minimo: 10, excecao: false });
+    // 1,5% de R$ 600,00 = R$ 9,00, abaixo do mínimo de R$ 10,00: não retém; de R$ 1.000,00 = R$ 15,00 retém.
+    expect(calcularPagamento(600, [r.tributo!], [], '2026-04-01').tributos[0]).toMatchObject({
+      imposto: 9,
+      retido: 0,
+    });
+    expect(calcularPagamento(1000, [r.tributo!], [], '2026-04-01').valorTributos).toBe(15);
+  });
+  it('alíquota diferente do cadastro é exceção e exige o motivo, que fica no detalhamento', () => {
+    expect(codigos(resolverTributoDoLote(irrf, { tributo: 7, aliquota: 3, deducao: 0 }).problemas)).toEqual([
+      'excecao-sem-motivo',
+    ]);
+    const r = resolverTributoDoLote(irrf, {
+      tributo: 7,
+      aliquota: 3,
+      deducao: 0,
+      motivo: 'Decisão do contrato',
+    });
+    expect(r.tributo).toMatchObject({ aliquota: 3, minimo: 10, excecao: true });
+    expect(r.tributo!.detalhamento).toContain('Exceção');
+  });
+  it('sem alíquota vigente no cadastro, pede a alíquota e o motivo', () => {
+    expect(
+      codigos(
+        resolverTributoDoLote({ ...irrf, aliquota: null }, { tributo: 7, aliquota: null, deducao: 0 })
+          .problemas,
+      ),
+    ).toEqual(['aliquota-sem-cadastro']);
+  });
+  it('o enquadramento do favorecido: não retém, ou alíquota própria de ISS', () => {
+    const naoRetem = resolverTributoDoLote(
+      { ...irrf, enquadramento: { regime: 'simples_nacional', retem: false, aliquotaIss: null } },
+      { tributo: 7, aliquota: null, deducao: 0 },
+    );
+    expect(naoRetem.tributo).toMatchObject({ aliquota: 0, minimo: null, excecao: false });
+    const iss = resolverTributoDoLote(
+      {
+        tributo: 9,
+        codigo: 'ISS',
+        aliquota: 5,
+        minimo: null,
+        enquadramento: { regime: 'lucro_presumido', retem: true, aliquotaIss: 2 },
+      },
+      { tributo: 9, aliquota: null, deducao: 0 },
+    );
+    expect(iss.tributo).toMatchObject({ aliquota: 2, excecao: false });
+  });
+  it('as retenções não passam do bruto', () => {
+    const t = (id: number) => ({ tributo: id, aliquota: 60, deducao: 0, minimo: null });
+    expect(
+      codigos(problemasDoCalculoPagamento(calcularPagamento(1000, [t(1), t(2)], [], '2026-04-01'))),
+    ).toEqual(['retencao-acima-do-bruto']);
+    expect(problemasDoCalculoPagamento(calcularPagamento(1000, [t(1)], [], '2026-04-01'))).toEqual([]);
   });
 });

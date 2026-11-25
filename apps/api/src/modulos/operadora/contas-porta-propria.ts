@@ -769,6 +769,18 @@ export class PortaContasOperadoraPropria
         const x = await lote(a.id);
         if (txt(x['situacao']) !== 'analisada')
           throw recusa('conta-nao-analisada', 'Só a conta analisada pode ser paga.');
+        // A conta que está num lote de pagamento do prestador (não cancelado) é paga pelo lote, com o título a pagar:
+        // pagá-la aqui também a pagaria duas vezes.
+        const emLote = await tx.uma(
+          `SELECT lp.numero FROM lote_pagamento_rede_item i JOIN lote_pagamento_rede lp ON lp.id = i.lote_pagamento_rede_id
+            WHERE i.lote_conta_recebida_id = ? AND lp.situacao <> 'cancelado' AND i.situacao <> 'estornado' LIMIT 1`,
+          [a.id],
+        );
+        if (emLote)
+          throw recusa(
+            'conta-em-lote-pagamento',
+            `A conta está no lote de pagamento ${txt(emLote['numero'])}; o pagamento sai pelo lote.`,
+          );
         const versao = await tx.alterar('lote_conta_recebida', a.id, a.versao, {
           situacao: a.situacao,
           valor_pago: a.valor,

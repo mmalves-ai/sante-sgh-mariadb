@@ -4,6 +4,8 @@ import { escolher, esperarSemSelectNativo } from './combos.js';
 // 08-SGO L102 (C2-120): remuneração e pagamento do prestador. Fonte sintética (rotas da API respondidas aqui): a tela
 // mostra a tabela negociada em unidades com o valor calculado na hora, a visão pelo prestador com as contas analisadas
 // sem lote, calcula o lote com o tributo retido e o fecha gerando o título no contas a pagar. Sem <select> nativo.
+// Os tributos vêm do cadastro (alíquota vazia); a alíquota digitada é exceção e só segue com o motivo. Pacotes: o
+// principal, os itens dentro e fora, a validação na hora (ambulatorial sem diárias) e a inclusão.
 const A = '**/api/operadora/remuneracao-rede';
 const op = (id: number, rotulo: string) => ({ id, rotulo });
 
@@ -21,7 +23,7 @@ async function prepararApi(page: Page) {
         tabelas: [op(9, 'T1 — TABELA SINTETICA')],
         grupos: [],
         indices: [],
-        tributos: [op(3, 'IRRF — Imposto de renda')],
+        tributos: [op(3, 'IRRF — Imposto de renda'), op(8, 'ISS — Imposto sobre serviços')],
         naturezas: [op(4, 'D1 — Serviços de saúde')],
         documentos: [op(6, 'Nota fiscal')],
         contratos: [],
@@ -125,6 +127,47 @@ async function prepararApi(page: Page) {
     fechado = true;
     await r.fulfill({ json: { id: 80, versao: 2, titulo: 33, tituloNumero: 'TP-33' } });
   });
+  await page.route(`${A}/1/pacotes`, async (r) => {
+    if (r.request().method() === 'POST') {
+      corpos['pacote'] = r.request().postDataJSON();
+      await r.fulfill({ status: 201, json: { id: 90, versao: 1 } });
+      return;
+    }
+    await r.fulfill({
+      json: corpos['pacote']
+        ? [
+            {
+              id: 90,
+              versao: 1,
+              codigo: 'PK1',
+              descricao: 'PACOTE SINTETICO',
+              tipo: 'cirurgico',
+              regime: 'internacao',
+              diarias: 2,
+              valorGlobal: 2500,
+              inicio: '2031-01-01',
+              fim: null,
+              prestadorNome: null,
+              principal: '31000001 — CIRURGIA SINTETICA',
+              itens: 3,
+            },
+          ]
+        : [],
+    });
+  });
+  await page.route(
+    (u) =>
+      u.pathname.endsWith('/api/operadora/remuneracao-rede/procedimentos') &&
+      u.searchParams.get('tipo') === 'item',
+    (r) =>
+      r.fulfill({
+        json: [
+          op(21, '31000001 — CIRURGIA SINTETICA'),
+          op(22, '60000001 — DIARIA SINTETICA'),
+          op(23, '70000001 — ORTESE SINTETICA'),
+        ],
+      }),
+  );
   return corpos;
 }
 
@@ -144,16 +187,26 @@ test.describe('remuneração e pagamento do prestador @C2-120', () => {
     await page.getByTestId('remun-conta-PROT-1').check();
     await page.getByLabel('Competência (mês) (AAAA-MM)').fill('2031-04');
     await page.getByLabel('Vencimento (AAAA-MM-DD)').fill('2031-04-10');
+    // IRRF pelo cadastro (alíquota vazia); ISS com alíquota de exceção, que só segue com o motivo.
     await page.getByTestId('remun-l-tributo').click();
     await escolher(page.locator('#remun-l-trib-0'), { rotulo: /IRRF/ });
-    await page.getByLabel('Alíquota (%)').fill('1,5');
+    await page.getByTestId('remun-l-tributo').click();
+    await escolher(page.locator('#remun-l-trib-1'), { rotulo: /ISS/ });
+    await page.locator('#remun-l-aliq-1').fill('2');
+    await expect(page.getByTestId('remun-l-problema')).toContainText('precisa do motivo');
+    await expect(page.getByTestId('remun-l-calcular')).toBeDisabled();
+    await page.locator('#remun-l-motivo-1').fill('Alíquota do contrato');
+    await expect(page.getByTestId('remun-l-problema')).toHaveCount(0);
     await page.getByTestId('remun-l-calcular').click();
     await expect(page.getByTestId('remun-aviso')).toContainText('Lote calculado');
     expect(corpos['lote']).toMatchObject({
       prestador: 5,
       competencia: '2031-04-01',
       contas: [70],
-      tributos: [{ tributo: 3, aliquota: 1.5 }],
+      tributos: [
+        { tributo: 3, aliquota: null, deducao: 0, motivo: null },
+        { tributo: 8, aliquota: 2, deducao: 0, motivo: 'Alíquota do contrato' },
+      ],
     });
 
     await escolher(page.locator('#remun-p-natureza'), { rotulo: /Serviços de saúde/ });
@@ -161,5 +214,49 @@ test.describe('remuneração e pagamento do prestador @C2-120', () => {
     await page.getByTestId('remun-lote-fechar').click();
     await expect(page.getByTestId('remun-lote-PR-1')).toContainText('TP-33');
     expect(corpos['fechar']).toEqual({ versao: 1, natureza: 4, documento: 6 });
+  });
+
+  test('pacote: principal, itens dentro e fora, validação na hora e inclusão', async ({ page }) => {
+    const corpos = await prepararApi(page);
+    await page.goto('/operadora/remuneracao-rede');
+    await escolher(page.getByTestId('remun-aba'), { rotulo: 'Pacotes' });
+    await expect(page.getByTestId('remun-pacotes')).toBeVisible();
+    await page.locator('#remun-k-codigo').fill('PK1');
+    await page.locator('#remun-k-descricao').fill('PACOTE SINTETICO');
+    await escolher(page.locator('#remun-k-regime'), { rotulo: 'Ambulatorial' });
+    await page.locator('#remun-k-diarias').fill('2');
+    await page.locator('#remun-k-valor').fill('2.500,00');
+    await page.locator('#remun-k-inicio').fill('2031-01-01');
+    await expect(page.getByTestId('remun-k-problema')).toContainText('principal');
+    await expect(page.getByTestId('remun-k-salvar')).toBeDisabled();
+    await page.locator('#remun-k-busca').fill('sintetica');
+    await escolher(page.locator('#remun-k-item'), { rotulo: /CIRURGIA SINTETICA/ });
+    await page.getByTestId('remun-k-principal').click();
+    await expect(page.getByTestId('remun-k-principal-escolhido')).toContainText('CIRURGIA SINTETICA');
+    await expect(page.getByTestId('remun-k-problema')).toContainText('ambulatorial não inclui diárias');
+    await escolher(page.locator('#remun-k-regime'), { rotulo: 'Internação' });
+    await escolher(page.locator('#remun-k-item'), { rotulo: /DIARIA SINTETICA/ });
+    await page.getByTestId('remun-k-incluido').click();
+    await page.locator('#remun-k-qtd-0').fill('2');
+    await escolher(page.locator('#remun-k-item'), { rotulo: /ORTESE SINTETICA/ });
+    await page.getByTestId('remun-k-excluido').click();
+    await expect(page.getByTestId('remun-k-problema')).toHaveCount(0);
+    await esperarSemSelectNativo(page.getByTestId('remuneracao-rede'));
+    await page.getByTestId('remun-k-salvar').click();
+    await expect(page.getByTestId('remun-aviso')).toContainText('Pacote incluído');
+    expect(corpos['pacote']).toMatchObject({
+      codigo: 'PK1',
+      principal: 21,
+      tipo: 'cirurgico',
+      regime: 'internacao',
+      diarias: 2,
+      valorGlobal: 2500,
+      inicio: '2031-01-01',
+      itens: [
+        { item: 22, inclusao: 'incluido', quantidade: 2 },
+        { item: 23, inclusao: 'excluido', quantidade: null },
+      ],
+    });
+    await expect(page.getByTestId('remun-pacote-PK1')).toContainText('R$');
   });
 });

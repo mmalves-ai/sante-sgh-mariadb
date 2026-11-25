@@ -504,11 +504,113 @@ export function calcularPagamento(
   };
 }
 
+/** O tributo como a tela o pede no lote: a alíquota só vem quando é exceção ao cadastro, e então com o motivo. */
+export interface TributoInformado {
+  tributo: number;
+  aliquota: number | null;
+  deducao: number;
+  motivo?: string | null;
+}
+
+/**
+ * O tributo como o cadastro manda, na data do pagamento: a alíquota vigente de retenção para o tipo de pessoa do
+ * prestador, o mínimo de retenção (o da vigência, senão o do tributo) e o enquadramento tributário do favorecido
+ * (não retém, ou alíquota própria de ISS).
+ */
+export interface TributoDoCadastro {
+  tributo: number;
+  codigo: string;
+  aliquota: number | null;
+  minimo: number | null;
+  enquadramento: { regime: string; retem: boolean; aliquotaIss: number | null } | null;
+}
+export interface TributoResolvido extends TributoDoLote {
+  excecao: boolean;
+  detalhamento: string;
+}
+
+/**
+ * Resolve o tributo do lote pelo cadastro. Sem retenção pelo enquadramento, a alíquota é zero; a alíquota própria de
+ * ISS do enquadramento vale sobre a do cadastro. A alíquota informada diferente da do cadastro é exceção e exige o
+ * motivo, que fica registrado no detalhamento. O mínimo de retenção é sempre o do cadastro.
+ */
+export function resolverTributoDoLote(
+  cad: TributoDoCadastro,
+  inf: TributoInformado,
+): { tributo: TributoResolvido | null; problemas: ProblemaRemuneracao[] } {
+  const enq = cad.enquadramento;
+  const naoRetem = enq !== null && !enq.retem;
+  const doCadastro = naoRetem
+    ? 0
+    : cad.codigo.toUpperCase() === 'ISS' && enq?.aliquotaIss != null
+      ? enq.aliquotaIss
+      : cad.aliquota;
+  const partes: string[] = [];
+  if (naoRetem) partes.push(`Sem retenção pelo enquadramento (${enq.regime})`);
+  else if (doCadastro !== null) partes.push(`Alíquota do cadastro ${doCadastro}%`);
+  if (inf.aliquota === null) {
+    if (doCadastro === null)
+      return {
+        tributo: null,
+        problemas: [
+          p(
+            'aliquota-sem-cadastro',
+            'tributos',
+            `O tributo ${cad.codigo} não tem alíquota de retenção vigente no cadastro; informe a alíquota e o motivo.`,
+          ),
+        ],
+      };
+    return {
+      tributo: {
+        tributo: cad.tributo,
+        aliquota: doCadastro,
+        deducao: inf.deducao,
+        minimo: naoRetem ? null : cad.minimo,
+        excecao: false,
+        detalhamento: partes.join('; '),
+      },
+      problemas: [],
+    };
+  }
+  const excecao = doCadastro === null || inf.aliquota !== doCadastro;
+  const motivo = inf.motivo?.trim() ?? '';
+  if (excecao && motivo.length < 5)
+    return {
+      tributo: null,
+      problemas: [
+        p(
+          'excecao-sem-motivo',
+          'tributos',
+          `A alíquota de ${cad.codigo} difere do cadastro; informe o motivo da exceção.`,
+        ),
+      ],
+    };
+  if (excecao) partes.push(`Exceção: alíquota ${inf.aliquota}% — ${motivo.slice(0, 300)}`);
+  return {
+    tributo: {
+      tributo: cad.tributo,
+      aliquota: inf.aliquota,
+      deducao: inf.deducao,
+      minimo: cad.minimo,
+      excecao,
+      detalhamento: partes.join('; '),
+    },
+    problemas: [],
+  };
+}
+
+/** O cálculo não fecha quando as retenções somam mais que o bruto (o líquido ficaria negativo). */
+export function problemasDoCalculoPagamento(c: CalculoPagamento): ProblemaRemuneracao[] {
+  return c.valorTributos > c.bruto
+    ? [p('retencao-acima-do-bruto', 'tributos', 'As retenções somam mais que o valor bruto do lote.')]
+    : [];
+}
+
 export function problemasDoLotePagamento(x: {
   competencia: string;
   vencimento: string;
   contas: readonly number[];
-  tributos: readonly TributoDoLote[];
+  tributos: readonly TributoInformado[];
 }): ProblemaRemuneracao[] {
   const out: ProblemaRemuneracao[] = [];
   if (!DATA.test(x.competencia) || !x.competencia.endsWith('-01'))
@@ -524,7 +626,7 @@ export function problemasDoLotePagamento(x: {
     if (vistos.has(t.tributo))
       out.push(p('tributo-repetido', 'tributos', 'O mesmo tributo aparece duas vezes.'));
     vistos.add(t.tributo);
-    if (!(t.aliquota >= 0 && t.aliquota <= 100) || t.deducao < 0)
+    if ((t.aliquota !== null && !(t.aliquota >= 0 && t.aliquota <= 100)) || t.deducao < 0)
       out.push(p('tributo-invalido', 'tributos', 'Alíquota entre 0% e 100% e dedução não negativa.'));
   }
   return out;

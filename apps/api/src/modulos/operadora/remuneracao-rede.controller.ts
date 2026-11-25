@@ -167,9 +167,10 @@ const esquemaLote = z
         z
           .object({
             tributo: id,
-            aliquota: z.number().min(0).max(100),
+            // Nula: vale a alíquota do cadastro (vigência e enquadramento); informada e diferente, é exceção com motivo.
+            aliquota: z.number().min(0).max(100).nullable().default(null),
             deducao: dinheiro.default(0),
-            minimo: dinheiro.nullable().default(null),
+            motivo: textoNulo(300),
           })
           .strict(),
       )

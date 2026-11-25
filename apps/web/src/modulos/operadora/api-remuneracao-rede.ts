@@ -145,6 +145,27 @@ const visaoPrestador = z.object({
 });
 export type VisaoPrestador = z.infer<typeof visaoPrestador>;
 
+const pacote = z.object({
+  id: n,
+  versao: n,
+  codigo: z.string(),
+  descricao: z.string(),
+  tipo: z.string(),
+  regime: tn,
+  diarias: nn,
+  valorGlobal: n,
+  inicio: z.string(),
+  fim: tn,
+  prestadorNome: tn,
+  principal: z.string(),
+  itens: n,
+});
+export type PacoteRemuneracao = z.infer<typeof pacote>;
+export const lerPacotes = (op: number) => ler(`${A}/${op}/pacotes`, z.array(pacote));
+export const buscarItensFaturaveis = (busca: string) =>
+  ler(`${A}/procedimentos?tipo=item&busca=${encodeURIComponent(busca)}`, z.array(opcao));
+export const incluirPacote = (op: number, corpo: Record<string, unknown>) =>
+  enviar(`${A}/${op}/pacotes`, corpo, gravado, novaChave('remun-pacote'));
 export const lerOpcoes = (op: number) => ler(`${A}/${op}/opcoes`, esquemaOpcoes);
 export const lerTabelas = (op: number) => ler(`${A}/${op}/tabelas`, z.array(tabela));
 export const lerItens = (t: number) => ler(`${A}/tabela/${t}/itens`, z.array(item));
