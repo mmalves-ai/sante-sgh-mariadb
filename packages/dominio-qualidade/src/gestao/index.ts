@@ -13,3 +13,7 @@ export * from './indicadores-seguranca.js';
 export * from './revisao-prontuario.js';
 export * from './revisao-prontuario-plano.js';
 export * from './comissao-composicao.js';
+// C2-060: controles estruturados do risco (catálogo, tipo e eficácia).
+export * from './controles-risco.js';
+// C2-066: gestão estratégica (mapa BSC, iniciativas com ações e horas, reunião de análise crítica).
+export * from './gestao-estrategica.js';
