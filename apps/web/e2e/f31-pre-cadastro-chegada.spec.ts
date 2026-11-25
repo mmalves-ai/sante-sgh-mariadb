@@ -31,7 +31,8 @@ interface Pedido {
   readonly corpo: Record<string, unknown>;
 }
 
-async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
+/** `jaGravado`: a recepção abre a tela com o pré-cadastro que a central já gravou (outra pessoa, outro navegador). */
+async function simular(page: Page, pedidos: Pedido[], jaGravado = false): Promise<void> {
   const pendente = {
     id: PRE,
     nome: 'PRE SINTETICO CHEGADA',
@@ -42,7 +43,7 @@ async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
     paciente: null,
     marcacoes: 2,
   };
-  let gravado = false;
+  let gravado = jaGravado;
   await page.route('**/api/cadastros/vinculos/opcoes', (r) =>
     json(r, {
       fontes: [{ id: 3, nome: 'OPERADORA SINTETICA', particular: false, exigeValidade: true }],
@@ -94,15 +95,14 @@ async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
   });
 }
 
-test.describe('@F3.1 pré-cadastro e chegada', () => {
+// A central de marcação (agenda.marcacao.agendar) grava o pré-cadastro; a recepção (cadastro.paciente.criar) recebe a
+// chegada. Cada cargo com o seu nível de acesso e na SUA sessão de navegador (um teste por cargo, como no hospital):
+// nada da sessão da central sobra na da recepção.
+test.describe('@F3.1 @F3.1-03 pré-cadastro e chegada', () => {
   test.describe.configure({ timeout: 240_000 });
 
-  test('central grava o mínimo; na chegada a ficha nova abre preenchida e gravar liga o pré-cadastro; axe', async ({
-    page,
-  }) => {
+  test('central de marcação grava o mínimo e o pendente aparece na lista; axe', async ({ page }) => {
     const pedidos: Pedido[] = [];
-    // A central de marcação (agenda.marcacao.agendar) grava o pré-cadastro; a recepção (cadastro.paciente.criar)
-    // recebe a chegada. Cada cargo com o seu nível de acesso; as rotas simuladas valem para a página toda.
     await entrar(page, 'SINT.AGENDA');
     await simular(page, pedidos);
 
@@ -122,10 +122,23 @@ test.describe('@F3.1 pré-cadastro e chegada', () => {
         celular: '(31) 99999-0155',
       });
 
-    // Chegada, na recepção: um clique mostra o que a ficha nova recebe e leva a ela preenchida.
-    await expect(page.getByTestId('lista-pre-cadastros')).toContainText('PRE SINTETICO CHEGADA');
+    // Gravou: a tela avisa e relê a lista, com o pendente e o cancelamento (com motivo) à mão da central.
+    await expect(page.getByTestId('pre-cadastros').getByText('Pré-cadastro gravado.')).toBeVisible();
+    const lista = page.getByTestId('lista-pre-cadastros');
+    await expect(lista).toContainText('PRE SINTETICO CHEGADA');
+    await expect(lista.getByRole('button', { name: 'Cancelar pré-cadastro' })).toBeVisible();
+  });
+
+  test('recepção: na chegada a ficha nova abre preenchida e gravar liga o pré-cadastro; axe', async ({
+    page,
+  }) => {
+    const pedidos: Pedido[] = [];
     await entrar(page, 'SINT.RECEPCAO');
+    await simular(page, pedidos, true);
+
+    // Chegada, na recepção: um clique mostra o que a ficha nova recebe e leva a ela preenchida.
     await page.goto('/cadastros/pacientes/pre-cadastros');
+    await expect(page.getByTestId('pre-cadastros')).toBeVisible();
     await expect(page.getByTestId('novo-pre-cadastro')).toHaveCount(0);
     const lista = page.getByTestId('lista-pre-cadastros');
     await expect(lista).toContainText('PRE SINTETICO CHEGADA');
