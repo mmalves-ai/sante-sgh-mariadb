@@ -60,6 +60,10 @@ import { EntregaResultadoController, SERVICO_ENTREGA_RESULTADO } from './entrega
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
 import { SERVICO_SOROTECA, SorotecaController } from './soroteca.controller.js';
 import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
+import {
+  MicrobiologiaCadastroController,
+  SERVICO_CADASTRO_MICROBIOLOGIA,
+} from './microbiologia-cadastro.controller.js';
 
 export interface OpcoesModuloSadt {
   /** Testes: as portas já montadas. */
@@ -162,6 +166,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       EscalaExecucaoController,
       InterfaceEquipamentoController,
       MicrobiologiaController,
+      MicrobiologiaCadastroController,
     ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
@@ -292,6 +297,16 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoMicrobiologia } = await import('./aplicacao/microbiologia-propria.js');
           return new ServicoMicrobiologia(ctx.nucleo);
+        },
+      },
+      // Cadastro do antibiograma: painéis e pontos de corte (05-SADT linha 12), só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_CADASTRO_MICROBIOLOGIA,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoCadastroMicrobiologia } =
+            await import('./aplicacao/microbiologia-cadastro-propria.js');
+          return new ServicoCadastroMicrobiologia(ctx.nucleo);
         },
       },
       // A central de avisos (o sino) é a comunicação do módulo acesso: sem ele, o aviso do crítico fica no painel do SADT.

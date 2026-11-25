@@ -43,6 +43,7 @@ const dataIso = (v: unknown): string =>
 const marcas = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 
 export const TABELAS_MICROBIOLOGIA = [
+  'resultado_exame',
   'resultado_cultura',
   'isolado_microbiano',
   'resultado_sensibilidade',
@@ -219,7 +220,7 @@ export class ServicoMicrobiologia {
         ),
       );
       const ps = await l.consultar(
-        'SELECT id, codigo, descricao, microrganismo_id, material_biologico_id, metodo, norma_referencia FROM painel_antibiograma WHERE ativo = TRUE ORDER BY descricao LIMIT 500',
+        'SELECT id, codigo, descricao, microrganismo_id, material_biologico_id, metodo, norma_referencia, versao FROM painel_antibiograma WHERE ativo = TRUE ORDER BY descricao LIMIT 500',
         [],
       );
       const its = ps.length
@@ -230,6 +231,8 @@ export class ServicoMicrobiologia {
         : [];
       const paineis = ps.map((p) => ({
         id: n(p['id']),
+        codigo: String(p['codigo'] ?? ''),
+        versao: n(p['versao']),
         nome: String(p['descricao'] ?? ''),
         microrganismo: nn(p['microrganismo_id']),
         material: nn(p['material_biologico_id']),
@@ -252,6 +255,57 @@ export class ServicoMicrobiologia {
     );
     if (!r) throw recusa('nao-encontrado', 'O resultado do exame não existe neste estabelecimento.');
     return { paciente: n(r['paciente_id']), atendimento: n(r['atendimento_id']) };
+  }
+
+  /** A cultura pelo exame pedido (a tela da digitação): o resultado, quando já existe, e a cultura dele. */
+  culturaDoExame(c: ContextoSadt, exameItem: number) {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
+      const ei = await l.uma(
+        `SELECT ei.id FROM exame_item ei JOIN requisicao_exame rq ON rq.id = ei.requisicao_exame_id
+          WHERE ei.id = ? AND rq.estabelecimento_id = ? AND ei.excluido_em IS NULL`,
+        [exameItem, est],
+      );
+      if (!ei) throw recusa('nao-encontrado', 'O exame não existe neste estabelecimento.');
+      const re = await l.uma(
+        'SELECT id FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL',
+        [exameItem],
+      );
+      return {
+        resultado: re ? n(re['id']) : null,
+        cultura: re ? await this.lerCultura(l, n(re['id'])) : null,
+      };
+    });
+  }
+
+  /** O resultado do exame pedido no estabelecimento; sem ele, nasce em digitação (o exame cancelado recusa). */
+  private async resultadoDoExame(tx: TxOperacao, exameItem: number, est: number): Promise<number> {
+    const [ei] = await tx.consultarParaAtualizar(
+      `SELECT ei.id, ei.situacao, rq.paciente_id, COALESCE(ei.setor_diagnostico_id, rq.setor_diagnostico_id) AS setor
+         FROM exame_item ei JOIN requisicao_exame rq ON rq.id = ei.requisicao_exame_id AND rq.excluido_em IS NULL
+        WHERE ei.id = ? AND rq.estabelecimento_id = ? AND ei.excluido_em IS NULL`,
+      [exameItem, est],
+    );
+    if (!ei) throw recusa('nao-encontrado', 'O exame não existe neste estabelecimento.');
+    if (['cancelado', 'recusado'].includes(String(ei['situacao'])))
+      throw recusa('exame-cancelado', 'O exame foi cancelado ou recusado: não recebe cultura.');
+    const re = await tx.uma(
+      'SELECT id FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL',
+      [exameItem],
+    );
+    if (re) return n(re['id']);
+    if (ei['setor'] === null) throw recusa('sem-setor', 'O exame não tem setor de execução.');
+    const agora = new Date();
+    return tx.incluir('resultado_exame', {
+      exame_item_id: exameItem,
+      paciente_id: n(ei['paciente_id']),
+      setor_diagnostico_id: n(ei['setor']),
+      forma_entrada: 'digitado',
+      situacao: 'em_digitacao',
+      resultado_em: agora,
+      digitado_por_usuario_id: tx.contexto.usuario,
+      digitado_em: agora,
+    });
   }
 
   /** A cultura do resultado com isolados, antibiograma e o texto do laudo; nula quando ainda não foi digitada. */
@@ -374,7 +428,7 @@ export class ServicoMicrobiologia {
   /** Grava a cultura inteira do resultado (cabeçalho, isolados e antibiograma) numa transação. */
   async registrar(
     c: ContextoSadt,
-    resultado: number,
+    alvo: number | { readonly exameItem: number },
     entrada: unknown,
     o: { readonly retificacao: boolean } = { retificacao: false },
   ) {
@@ -395,6 +449,9 @@ export class ServicoMicrobiologia {
       'resultado_cultura',
       e.motivoRetificacao,
       async (tx, est) => {
+        // Pela digitação, a cultura chega pelo exame pedido: o resultado ainda não digitado nasce aqui, em digitação.
+        const resultado =
+          typeof alvo === 'number' ? alvo : await this.resultadoDoExame(tx, alvo.exameItem, est);
         const doResultado = await this.resultadoDoEstabelecimento(tx, resultado, est);
         const f = await tx.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
         const hoje = relogioNoFuso(String(f?.['fuso_horario'] ?? '') || FUSO_PADRAO).hoje;

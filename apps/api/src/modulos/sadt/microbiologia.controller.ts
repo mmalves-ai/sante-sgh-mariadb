@@ -3,6 +3,8 @@
 // (comissão de controle de infecção hospitalar). Sem o banco do cliente, 503.
 //   GET  /api/sadt/microbiologia/cadastro                         materiais, microrganismos, antimicrobianos e painéis
 //   GET  /api/sadt/microbiologia/culturas/:resultado              a cultura do resultado, com o texto do laudo
+//   GET  /api/sadt/microbiologia/exames/:item/cultura             a cultura pelo exame pedido (tela da digitação)
+//   POST /api/sadt/microbiologia/exames/:item/cultura             grava a cultura pelo exame pedido (abre o resultado)
 //   GET  /api/sadt/microbiologia/culturas/:resultado/versoes      versões substituídas pelas retificações, com o laudo
 //   POST /api/sadt/microbiologia/culturas/:resultado              grava a cultura (parcial ou final)
 //   POST /api/sadt/microbiologia/culturas/:resultado/retificar    retifica a cultura final (com motivo)
@@ -35,6 +37,22 @@ export class MicrobiologiaController {
   @Permissao('sadt.resultado.ler')
   cultura(@Param('resultado') resultado: string, @Req() req: RequisicaoAutorizada) {
     return this.s.cultura(sessaoDe(req).porta, idDaRota(resultado));
+  }
+
+  @Get('exames/:item/cultura')
+  @Permissao('sadt.resultado.ler')
+  culturaDoExame(@Param('item') item: string, @Req() req: RequisicaoAutorizada) {
+    return this.s.culturaDoExame(sessaoDe(req).porta, idDaRota(item));
+  }
+
+  @Post('exames/:item/cultura')
+  @HttpCode(200)
+  @Permissao('sadt.resultado.digitar')
+  @AuditadoNoHandler(
+    'o resultado em digitação (quando falta), a cultura, os isolados e o antibiograma com a trilha_auditoria na mesma transação (Executor)',
+  )
+  registrarPorExame(@Param('item') item: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.s.registrar(sessaoDe(req).porta, { exameItem: idDaRota(item) }, b);
   }
 
   @Get('culturas/:resultado/versoes')

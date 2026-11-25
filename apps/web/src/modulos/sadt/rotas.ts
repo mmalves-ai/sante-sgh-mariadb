@@ -50,6 +50,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/PostosColetaTela.vue'),
     meta: { permissao: 'sadt.amostra.ler' },
   },
+  // F7 (05-SADT linha 12): painéis de antibiograma e pontos de corte (a cultura fica na digitação do resultado).
+  {
+    path: '/sadt/microbiologia/cadastro',
+    name: 'sadt.microbiologia.cadastro',
+    component: () => import('./telas/AntibiogramaCadastroTela.vue'),
+    meta: { permissao: 'sadt.catalogo.ler' },
+  },
   // F3.5 (05-SADT linha 19): a escala de execução por setor (grade da semana) e a fila do setor.
   {
     path: '/sadt/escala-execucao',

@@ -13,6 +13,7 @@ import { useRoute } from 'vue-router';
 import { digitarResultado } from '../api-resultado.js';
 import { lerDigitacao, listarExamesSadt, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
+import CulturaPainel from '../componentes/CulturaPainel.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
 import PacienteSadt from '../componentes/PacienteSadt.vue';
 import VariaveisSadt from '../componentes/VariaveisSadt.vue';
@@ -35,6 +36,11 @@ const ficha = useQuery({
   queryKey: computed(() => ['sadt', 'digitacao', aberto.value]),
   queryFn: () => lerDigitacao(aberto.value as number),
   enabled: computed(() => aberto.value !== null),
+});
+// Cultura e antibiograma (05-SADT linha 12): aberta da ficha do exame (ou direto por ?cultura=1).
+const culturaAberta = ref(rota.query['cultura'] === '1');
+watch(aberto, (novo, antigo) => {
+  if (antigo !== null && novo !== antigo) culturaAberta.value = false;
 });
 const valores = ref<Record<number, string>>({});
 const variaveis = ref<Record<number, string>>({});
@@ -326,6 +332,15 @@ async function gravar(): Promise<void> {
         data-testid="digitacao-gravar"
         @acionar="gravar"
       />
+      <SanteBotao
+        variante="secundario"
+        :rotulo="
+          culturaAberta ? t('sadt.microbiologia.cultura.fechar') : t('sadt.microbiologia.cultura.abrir')
+        "
+        data-testid="digitacao-cultura"
+        @acionar="culturaAberta = !culturaAberta"
+      />
+      <CulturaPainel v-if="culturaAberta && aberto !== null" :exame="aberto" />
     </section>
     <p v-if="mensagem" role="status" data-testid="digitacao-mensagem">{{ mensagem }}</p>
     <ErroSadt v-if="erro" :erro="erro" />
