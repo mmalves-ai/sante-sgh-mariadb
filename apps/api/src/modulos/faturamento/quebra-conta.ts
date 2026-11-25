@@ -20,7 +20,7 @@ import {
   trechosDaQuebra,
 } from '@sgh/dominio-faturamento';
 import type { TxOperacao } from '@sgh/nucleo';
-import { regrasContaDo } from './regras-comerciais-propria.js';
+import { regrasContaDo } from './regras-conta-leitura.js';
 import { contaAceitaLancamento } from './regras-conta.js';
 
 type Linha = Record<string, unknown>;

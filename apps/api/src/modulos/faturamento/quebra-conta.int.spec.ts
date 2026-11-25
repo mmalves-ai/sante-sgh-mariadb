@@ -7,7 +7,12 @@
 //   "quebrar_conta" semanal: um trecho por semana até a de hoje, a conta de cada trecho vencido com fim_em no último
 //   instante do domingo local, as seguintes com tipo de cobrança "parcial", conta_pai_id na original, mesma fonte, tipo
 //   e acomodação, competência do novo início, número seguinte do atendimento e vínculo atendimento_conta; rodar de novo
-//   não quebra nada (idempotente); a conta de outra fonte (sem regra que valha) não é tocada. No fim, a massa é apagada.
+//   não quebra nada (idempotente); a conta de outra fonte (sem regra que valha) não é tocada;
+// - faturamento da quebra: a internação longa tem regra de diária da acomodação e a rotina, antes da regra de quebra,
+//   lança na conta original uma diária por dia; depois da quebra, cada conta de trecho guarda só as diárias dos dias do
+//   seu trecho, as da conta original para dias dos trechos seguintes ficam estornadas nela (item e controle em
+//   "estornado", não apagados) e lançadas na conta do trecho certo; a segunda rotina não lança nem estorna nada.
+// No fim, a massa é apagada.
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { instanteParaDataHora } from '@sgh/contratos';
@@ -19,7 +24,9 @@ import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { abrirContaDaEntrada, apurarLancamentosDoDia, TABELAS_CONTA_ENTRADA } from './conta-entrada.js';
 import { ServicoRegrasComerciais } from './regras-comerciais.controller.js';
 
-const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
+// f22_o3: o cliente de teste da apuração da conta da internação (conta-entrada.int.spec), com a origem do lançamento
+// automático (12_FAT/93) que a apuração grava.
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'F862';
 const FUSO = 'America/Sao_Paulo';
@@ -94,7 +101,23 @@ describe.skipIf(SEM_BANCO)('regra de conta na entrada e na rotina de quebra (Mar
       'UPDATE conta_hospitalar SET conta_pai_id = NULL, tipo_cobranca = ? WHERE estabelecimento_id = ?',
       ['total', est],
     );
+    await e.executar(
+      'DELETE l FROM lancamento_automatico_conta l JOIN conta_hospitalar c ON c.id = l.conta_hospitalar_id WHERE c.estabelecimento_id = ?',
+      [est],
+    );
+    await e.executar(
+      `DELETE m FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id
+         JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id WHERE c.estabelecimento_id = ?`,
+      [est],
+    );
+    await e.executar(
+      'DELETE i FROM conta_hospitalar_item i JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id WHERE c.estabelecimento_id = ?',
+      [est],
+    );
     await e.executar('DELETE FROM conta_hospitalar WHERE estabelecimento_id = ?', [est]);
+    await e.executar('DELETE FROM ocupacao_leito WHERE estabelecimento_id = ?', [est]);
+    await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [est]);
+    await e.executar('DELETE FROM regra_diaria WHERE estabelecimento_id = ?', [est]);
     await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [est]);
     await e.executar(
       'DELETE x FROM regra_criacao_conta_excecao x JOIN regra_criacao_conta r ON r.id = x.regra_criacao_conta_id WHERE r.estabelecimento_id = ?',
@@ -255,6 +278,95 @@ describe.skipIf(SEM_BANCO)('regra de conta na entrada e na rotina de quebra (Mar
         );
       ids['contaLonga'] = await conta(ids['atLonga'] as number, ids['fonteC'] as number, `${P}-3-1`);
       ids['contaSemRegra'] = await conta(ids['atSemRegra'] as number, ids['fonteA'] as number, `${P}-4-1`);
+      // A internação da conta longa, numa acomodação física da categoria da massa, e a regra de diária dessa categoria
+      // (sem preço: a diária entra com a pendência de preço, o que basta para provar onde ela fica).
+      const porEst = (tabela: string, codigo: string, cols: string, vals: unknown[]) =>
+        garantir(
+          e,
+          `SELECT id FROM ${tabela} WHERE estabelecimento_id = ? AND codigo = ?`,
+          [ids['est'], codigo],
+          `INSERT INTO ${tabela} (estabelecimento_id, codigo, ${cols}, criado_em) VALUES (?, ?, ${vals.map(() => '?').join(', ')}, ?)`,
+          [ids['est'], codigo, ...vals, agora],
+        );
+      const ua = await porEst('unidade_assistencial', `${P}UA`, 'nome, tipo_unidade', [
+        'UNIDADE SINTETICA',
+        'internacao',
+      ]);
+      const setor = await porEst('setor_funcional', `${P}SET`, 'nome, tipo', [
+        'SETOR SINTETICO',
+        'assistencial',
+      ]);
+      const ui = await porEst(
+        'unidade_internacao',
+        `${P}UI`,
+        'unidade_assistencial_id, descricao, tipo, intensiva, setor_funcional_id',
+        [ua, 'UNIDADE INTERNACAO SINTETICA', 'enfermaria', false, setor],
+      );
+      const bloco = await porEst('bloco_internacao', `${P}B`, 'nome', ['BLOCO SINTETICO']);
+      const acomFisica = await porEst(
+        'acomodacao',
+        `${P}Q1`,
+        'bloco_internacao_id, unidade_internacao_id, categoria_acomodacao_id, nome',
+        [bloco, ui, ids['acomodacao'], 'QUARTO SINTETICO'],
+      );
+      const situacaoLeito = await garantir(
+        e,
+        "SELECT id FROM situacao_leito WHERE situacao_base = 'ocupado' ORDER BY id LIMIT 1",
+        [],
+        "INSERT INTO situacao_leito (codigo, descricao, situacao_base, criado_em) VALUES (?, 'OCUPADO', 'ocupado', ?)",
+        [`${P}OCUP`, agora],
+      );
+      const leito = await porEst(
+        'leito_hospitalar',
+        `${P}L1`,
+        'unidade_internacao_id, acomodacao_id, bloco_internacao_id, situacao_leito_id',
+        [ui, acomFisica, bloco, situacaoLeito],
+      );
+      const caraterAdm = await cat('carater_admissao', `${P}CA`, ', urgencia', [false]);
+      const modalidade = await cat('modalidade_internacao', `${P}MI`);
+      const especialidade = await cat('especialidade_medica', `${P}EM`);
+      const internacao = await e.inserir(
+        `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada, carater_admissao_id,
+           modalidade_internacao_id, unidade_internacao_id, leito_hospitalar_id, acomodacao_id, especialidade_medica_id,
+           medico_assistente_profissional_id, fonte_pagadora_id, situacao, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)`,
+        [
+          ids['est'],
+          `${P}-IN3`,
+          ids['atLonga'],
+          ids['paciente'],
+          inicio,
+          caraterAdm,
+          modalidade,
+          ui,
+          leito,
+          acomFisica,
+          especialidade,
+          ids['prof'],
+          ids['fonteC'],
+          agora,
+        ],
+      );
+      await e.inserir(
+        `INSERT INTO ocupacao_leito (estabelecimento_id, internacao_id, leito_hospitalar_id, unidade_internacao_id,
+           acomodacao_id, data_hora_inicio, situacao, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'ativa', ?)`,
+        [ids['est'], internacao, leito, ui, acomFisica, inicio, agora],
+      );
+      const grupo = Number(
+        (await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM grupo_faturamento', []))?.id,
+      );
+      ids['itemDiaria'] = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        [`${P}DIA`],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, situacao, criado_em) VALUES (?, ?, 'diaria', ?, 'ativo', ?)",
+        [`${P}DIA`, `DIARIA SINTETICA ${P}`, grupo, agora],
+      );
+      await e.inserir(
+        `INSERT INTO regra_diaria (estabelecimento_id, categoria_acomodacao_id, item_faturavel_id, quantidade, hora_virada,
+           vigencia_inicio, ativo, criado_em) VALUES (?, ?, ?, 1, '12:00:00', '2020-01-01', TRUE, ?)`,
+        [ids['est'], ids['acomodacao'], ids['itemDiaria'], agora],
+      );
     });
     s = new ServicoRegrasComerciais(nucleo);
   });
@@ -316,6 +428,21 @@ describe.skipIf(SEM_BANCO)('regra de conta na entrada e na rotina de quebra (Mar
   });
 
   it('quebra: a rotina diária quebra a conta de internação por semana até hoje, idempotente', async () => {
+    // Antes da regra de quebra: a rotina lança na conta original uma diária por dia da internação.
+    const diariasDe = async (conta: number, situacao: string) =>
+      (
+        await linhas(
+          `SELECT DATE_FORMAT(l.dia_referencia, '%Y-%m-%d') AS dia, i.situacao AS item, i.excluido_em, l.motivo_estorno
+             FROM lancamento_automatico_conta l JOIN conta_hospitalar_item i ON i.id = l.conta_hospitalar_item_id
+            WHERE l.conta_hospitalar_id = ? AND l.chave = 'diaria' AND l.situacao = ? ORDER BY l.dia_referencia, l.id`,
+          [conta, situacao],
+        )
+      ).map((x) => ({ ...x, dia: String(x['dia']) }));
+    const r0 = await rotina();
+    expect(r0['quebradas']).toBe(0);
+    const antes = (await diariasDe(ids['contaLonga'] as number, 'lancado')).map((x) => x.dia);
+    expect(antes.length).toBeGreaterThanOrEqual(20);
+    expect(new Set(antes).size).toBe(antes.length);
     await s.gravar('salvar-regra-conta', op(), {
       acao: 'quebrar_conta',
       fonteOrigemId: ids['fonteC'],
@@ -370,10 +497,46 @@ describe.skipIf(SEM_BANCO)('regra de conta na entrada e na rotina de quebra (Mar
     );
     expect(semRegra).toMatchObject({ fim_em: null });
     expect(Number(semRegra?.['n'])).toBe(1);
-    // Idempotente: rodar de novo não quebra nem abre nada.
+    // Faturamento da quebra: cada conta guarda só as diárias do seu trecho; juntas, os mesmos dias de antes, sem dobra.
+    const noTrecho = (dia: string, k: number) =>
+      dia >= trechos[k]!.inicio && (k === trechos.length - 1 || dia <= trechos[k]!.fim);
+    const depois: string[] = [];
+    for (const [k, c] of contas.entries()) {
+      const dias = (await diariasDe(Number(c['id']), 'lancado')).map((x) => x.dia);
+      expect(dias.length).toBeGreaterThan(0);
+      expect(dias.filter((d) => !noTrecho(d, k))).toEqual([]);
+      depois.push(...dias);
+      if (k > 0) expect(await diariasDe(Number(c['id']), 'estornado')).toEqual([]);
+    }
+    expect([...depois].sort()).toEqual(antes);
+    // As da conta original para dias dos trechos seguintes ficam estornadas nela, com o item estornado e não apagado.
+    const foraDoPrimeiro = antes.filter((d) => !noTrecho(d, 0));
+    expect(foraDoPrimeiro.length).toBeGreaterThan(0);
+    const estornadas = await diariasDe(ids['contaLonga'] as number, 'estornado');
+    expect(estornadas.map((x) => x.dia)).toEqual(foraDoPrimeiro);
+    estornadas.forEach((x) =>
+      expect(x).toMatchObject({ item: 'estornado', excluido_em: null, motivo_estorno: 'regra_alterada' }),
+    );
+    expect(Number(r['estornados'])).toBeGreaterThanOrEqual(foraDoPrimeiro.length);
+    expect(Number(r['lancados'])).toBeGreaterThanOrEqual(foraDoPrimeiro.length);
+    const contarLinhas = async () =>
+      Number(
+        (
+          await linhas(
+            `SELECT COUNT(*) AS n FROM lancamento_automatico_conta l JOIN conta_hospitalar c ON c.id = l.conta_hospitalar_id
+              WHERE c.atendimento_id = ?`,
+            [ids['atLonga']],
+          )
+        )[0]?.['n'],
+      );
+    const linhasAntes = await contarLinhas();
+    // Idempotente: rodar de novo não quebra, não abre, não lança nem estorna nada.
     const r2 = await rotina();
     expect(r2['quebradas']).toBe(0);
     expect(r2['abertasPelaQuebra']).toBe(0);
+    expect(r2['lancados']).toBe(0);
+    expect(r2['estornados']).toBe(0);
+    expect(await contarLinhas()).toBe(linhasAntes);
     const [qtd] = await linhas('SELECT COUNT(*) AS n FROM conta_hospitalar WHERE atendimento_id = ?', [
       ids['atLonga'],
     ]);
